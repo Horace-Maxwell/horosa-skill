@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from horosa_skill import __version__
 from horosa_skill.config import Settings
 from horosa_skill.engine.client import HorosaApiClient
+from horosa_skill.engine.js_client import HorosaJsEngineClient
 from horosa_skill.engine.registry import TOOL_DEFINITIONS, ToolDefinition
 from horosa_skill.engine.router import select_tools
 from horosa_skill.errors import DispatchResolutionError, HorosaSkillError, ToolTransportError, ToolValidationError
@@ -32,6 +33,30 @@ def _generic_summary(tool_name: str, data: dict[str, Any]) -> list[str]:
         selected = data.get("selected_sections", [])
         if selected:
             summary.append(f"当前导出将保留 {len(selected)} 个目标分段。")
+        return summary
+    if tool_name == "qimen":
+        pan = data.get("pan", {})
+        summary = ["已运行本地奇门遁甲 headless 算法。"]
+        if pan.get("juText"):
+            summary.append(f"局数：{pan['juText']}。")
+        if pan.get("zhiFu") and pan.get("zhiShi"):
+            summary.append(f"值符 {pan['zhiFu']}，值使 {pan['zhiShi']}。")
+        return summary
+    if tool_name == "taiyi":
+        pan = data.get("pan", {})
+        summary = ["已运行本地太乙 headless 算法。"]
+        if pan.get("zhao"):
+            summary.append(f"命式：{pan['zhao']}。")
+        if pan.get("kook"):
+            summary.append(f"局式：{pan['kook']}。")
+        return summary
+    if tool_name == "jinkou":
+        result = data.get("jinkou", {})
+        summary = ["已运行本金口诀 headless 算法。"]
+        if result.get("guiName") and result.get("jiangName"):
+            summary.append(f"贵神 {result['guiName']}，将神 {result['jiangName']}。")
+        if result.get("wangElem"):
+            summary.append(f"旺神五行：{result['wangElem']}。")
         return summary
     lines = [f"工具 `{tool_name}` 已返回结构化结果。"]
     keys = sorted(data.keys())
@@ -84,10 +109,186 @@ def _extract_entities(input_normalized: dict[str, Any], query_text: str | None =
 
 
 class HorosaSkillService:
-    def __init__(self, settings: Settings, client: HorosaApiClient | None = None, store: MemoryStore | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        client: HorosaApiClient | None = None,
+        store: MemoryStore | None = None,
+        js_client: HorosaJsEngineClient | None = None,
+    ) -> None:
         self.settings = settings
         self.client = client or HorosaApiClient(settings.server_root)
         self.store = store or MemoryStore(settings)
+        self.js_client = js_client or HorosaJsEngineClient(settings)
+
+    def _unwrap_result(self, payload: Any) -> Any:
+        current = payload
+        for _ in range(4):
+            if not isinstance(current, dict):
+                return current
+            if isinstance(current.get("Result"), dict):
+                current = current["Result"]
+                continue
+            if isinstance(current.get("result"), dict):
+                current = current["result"]
+                continue
+            return current
+        return current
+
+    def _call_remote(self, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
+        data = self.client.call(endpoint, payload)
+        unwrapped = self._unwrap_result(data)
+        if not isinstance(unwrapped, dict):
+            raise ToolTransportError(
+                "Horosa endpoint returned a non-object result payload.",
+                code="transport.invalid_result_shape",
+                details={"endpoint": endpoint},
+            )
+        return unwrapped
+
+    def _augment_export_payload(self, *, technique: str, snapshot_text: str | None) -> dict[str, Any] | None:
+        if not snapshot_text:
+            return None
+        try:
+            return parse_export_content(technique=technique, content=snapshot_text)
+        except ValueError:
+            return None
+
+    def _run_qimen_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        year = int(str(payload["date"])[:4])
+        nongli = payload.get("nongli")
+        if not isinstance(nongli, dict):
+            nongli = self._call_remote(
+                "/nongli/time",
+                {
+                    "date": payload["date"],
+                    "time": payload["time"],
+                    "zone": payload["zone"],
+                    "lon": payload["lon"],
+                    "lat": payload["lat"],
+                    "gpsLat": payload.get("gpsLat"),
+                    "gpsLon": payload.get("gpsLon"),
+                    "after23NewDay": payload.get("after23NewDay", False),
+                    "timeAlg": payload.get("timeAlg", 0),
+                    "ad": payload.get("ad", 1),
+                },
+            )
+        prev_year = payload.get("jieqi_year_prev")
+        if not isinstance(prev_year, dict):
+            prev_year = self._call_remote(
+                "/jieqi/year",
+                {
+                    "year": year - 1,
+                    "zone": payload["zone"],
+                    "lat": payload["lat"],
+                    "lon": payload["lon"],
+                    "time": payload["time"],
+                    "gpsLat": payload.get("gpsLat"),
+                    "gpsLon": payload.get("gpsLon"),
+                    "ad": payload.get("ad", 1),
+                    "timeAlg": payload.get("timeAlg", 0),
+                },
+            )
+        current_year = payload.get("jieqi_year_current")
+        if not isinstance(current_year, dict):
+            current_year = self._call_remote(
+                "/jieqi/year",
+                {
+                    "year": year,
+                    "zone": payload["zone"],
+                    "lat": payload["lat"],
+                    "lon": payload["lon"],
+                    "time": payload["time"],
+                    "gpsLat": payload.get("gpsLat"),
+                    "gpsLon": payload.get("gpsLon"),
+                    "ad": payload.get("ad", 1),
+                    "timeAlg": payload.get("timeAlg", 0),
+                },
+            )
+        js_result = self.js_client.run(
+            "qimen",
+            {
+                **payload,
+                "nongli": nongli,
+                "jieqi_year_prev": prev_year,
+                "jieqi_year_current": current_year,
+            },
+        )
+        snapshot_text = js_result.get("snapshot_text")
+        return {
+            "pan": js_result.get("data", {}),
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="qimen", snapshot_text=snapshot_text),
+            "prerequisites": {
+                "nongli": nongli,
+                "jieqi_year_prev": prev_year,
+                "jieqi_year_current": current_year,
+            },
+        }
+
+    def _run_taiyi_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        nongli = payload.get("nongli")
+        if not isinstance(nongli, dict):
+            nongli = self._call_remote(
+                "/nongli/time",
+                {
+                    "date": payload["date"],
+                    "time": payload["time"],
+                    "zone": payload["zone"],
+                    "lon": payload["lon"],
+                    "lat": payload["lat"],
+                    "gpsLat": payload.get("gpsLat"),
+                    "gpsLon": payload.get("gpsLon"),
+                    "after23NewDay": payload.get("after23NewDay", False),
+                    "timeAlg": payload.get("timeAlg", 0),
+                    "ad": payload.get("ad", 1),
+                },
+            )
+        js_result = self.js_client.run("taiyi", {**payload, "nongli": nongli})
+        snapshot_text = js_result.get("snapshot_text")
+        return {
+            "pan": js_result.get("data", {}),
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="taiyi", snapshot_text=snapshot_text),
+            "prerequisites": {
+                "nongli": nongli,
+            },
+        }
+
+    def _run_jinkou_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        liureng = payload.get("liureng")
+        if not isinstance(liureng, dict):
+            remote = self._call_remote(
+                "/liureng/gods",
+                {
+                    "date": payload["date"],
+                    "time": payload["time"],
+                    "zone": payload["zone"],
+                    "lat": payload["lat"],
+                    "lon": payload["lon"],
+                    "after23NewDay": payload.get("after23NewDay", False),
+                    "yue": payload.get("yue"),
+                    "isDiurnal": payload.get("isDiurnal"),
+                    "ad": payload.get("ad", 1),
+                },
+            )
+            liureng = remote.get("liureng", remote)
+        js_result = self.js_client.run(
+            "jinkou",
+            {
+                **payload,
+                "liureng": liureng,
+            },
+        )
+        snapshot_text = js_result.get("snapshot_text")
+        return {
+            "jinkou": js_result.get("data", {}),
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="jinkou", snapshot_text=snapshot_text),
+            "prerequisites": {
+                "liureng": liureng,
+            },
+        }
 
     def list_tools(self) -> list[dict[str, Any]]:
         return [
@@ -119,6 +320,12 @@ class HorosaSkillService:
                     code="tool.invalid_export_technique",
                     details={"tool_name": definition.name, "technique": payload.get("technique")},
                 ) from exc
+        if definition.name == "qimen":
+            return self._run_qimen_tool(payload)
+        if definition.name == "taiyi":
+            return self._run_taiyi_tool(payload)
+        if definition.name == "jinkou":
+            return self._run_jinkou_tool(payload)
         raise ToolValidationError(
             f"Unsupported local tool: {definition.name}",
             code="tool.unsupported_local_tool",
@@ -156,7 +363,7 @@ class HorosaSkillService:
                 response_data = self._run_local_tool(definition, input_normalized)
             else:
                 assert definition.endpoint is not None
-                response_data = self.client.call(definition.endpoint, input_normalized)
+                response_data = self._call_remote(definition.endpoint, input_normalized)
             summary = _generic_summary(tool_name, response_data)
             warnings: list[str] = []
             envelope = ToolEnvelope(

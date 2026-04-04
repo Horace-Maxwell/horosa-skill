@@ -1,10 +1,11 @@
 [project]
 name = "horosa-skill"
-version = "0.2.0"
+version = "0.3.0"
 description = "GitHub-first Horosa AI skill distribution with CLI, MCP, and local structured memory."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+  "cryptography>=45.0.0",
   "httpx>=0.28.0",
   "mcp[cli]>=1.17.0",
   "pydantic>=2.8.0",

@@ -17,7 +17,7 @@ This subproject intentionally ships only the skill layer. It does not bundle the
 ```bash
 cd horosa-skill
 uv sync
-uv run horosa-skill install --archive /path/to/runtime-payload.tar.gz
+uv run horosa-skill install
 uv run horosa-skill doctor
 uv run horosa-skill serve
 ```
@@ -42,7 +42,7 @@ uv run horosa-skill tool list
 Install or refresh the offline runtime:
 
 ```bash
-uv run horosa-skill install --manifest-url https://example.com/runtime-manifest.json
+uv run horosa-skill install
 ```
 
 Check runtime health:
@@ -124,6 +124,7 @@ Key settings:
 - `HOROSA_SKILL_OUTPUT_DIR`
 - `HOROSA_RUNTIME_ROOT`
 - `HOROSA_RUNTIME_MANIFEST_URL`
+- `HOROSA_RUNTIME_RELEASE_REPO`
 - `HOROSA_RUNTIME_PLATFORM`
 - `HOROSA_RUNTIME_START_TIMEOUT_SECONDS`
 - `HOROSA_SKILL_HOST`
@@ -138,6 +139,7 @@ docker compose up --build
 ## Current v1 Tool Coverage
 
 - `export_registry`, `export_parse`
+- `qimen`, `taiyi`, `jinkou`
 - `chart`, `chart13`
 - `solarreturn`, `lunarreturn`, `solararc`, `givenyear`, `profection`, `pd`, `pdchart`, `zr`, `relative`, `india_chart`
 - `ziwei_birth`, `ziwei_rules`
@@ -146,6 +148,10 @@ docker compose up --build
 - `jieqi_year`, `nongli_time`
 - `gua_desc`, `gua_meiyi`
 
+Explicit shipping exclusion:
+
+- `fengshui`
+
 The current source of truth for the AI export registry is the main 星阙 app file `Horosa-Web/astrostudyui/src/utils/aiExport.js`. This lightweight repo vendors the export schema and parsing behavior so users do not need the full 星阙 app just to consume the AI export protocol.
 
-The offline runtime packaging flow is prepared through `scripts/sync_vendored_runtime_sources.sh`, `scripts/package_runtime_payload.sh`, `scripts/build_runtime_release.sh`, `scripts/build_runtime_release_windows.ps1`, `scripts/scaffold_windows_runtime.py`, and `scripts/generate_release_manifest.py`, so GitHub Releases can host the full Java/Python + ephemeris payload while this repository stays self-contained.
+The offline runtime packaging flow is implemented through `scripts/sync_vendored_runtime_sources.sh`, `scripts/package_runtime_payload.sh`, `scripts/build_runtime_release.sh`, `scripts/build_runtime_release_windows.py`, `scripts/build_runtime_release_windows.ps1`, `scripts/generate_release_manifest.py`, and `scripts/verify_runtime_release.py`, so GitHub Releases can host the full Java/Python/Node + ephemeris payload while this repository stays self-contained.

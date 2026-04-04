@@ -193,9 +193,10 @@ wheels = [
 
 [[package]]
 name = "horosa-skill"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
+    { name = "cryptography" },
     { name = "httpx" },
     { name = "mcp", extra = ["cli"] },
     { name = "pydantic" },
@@ -209,6 +210,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cryptography", specifier = ">=45.0.0" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.17.0" },
     { name = "pydantic", specifier = ">=2.8.0" },

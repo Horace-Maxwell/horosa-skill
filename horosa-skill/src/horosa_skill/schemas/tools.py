@@ -168,6 +168,31 @@ class GuaNamesInput(FlexibleModel):
     name: list[str]
 
 
+class QimenInput(BirthInput):
+    after23NewDay: bool | None = False
+    timeAlg: int | None = 0
+    options: dict[str, Any] = Field(default_factory=dict)
+    context: dict[str, Any] = Field(default_factory=dict)
+    nongli: dict[str, Any] | None = None
+    jieqi_year_prev: dict[str, Any] | None = None
+    jieqi_year_current: dict[str, Any] | None = None
+
+
+class TaiyiInput(BirthInput):
+    after23NewDay: bool | None = False
+    timeAlg: int | None = 0
+    gender: str | int | None = None
+    options: dict[str, Any] = Field(default_factory=dict)
+    nongli: dict[str, Any] | None = None
+
+
+class JinKouInput(LiuRengGodsInput):
+    diFen: str | None = None
+    guirengType: int | None = None
+    options: dict[str, Any] = Field(default_factory=dict)
+    liureng: dict[str, Any] | None = None
+
+
 class DispatchSubjectInput(FlexibleModel):
     name: str | None = None
     birth: BirthInput | ZiWeiBirthInput | BaZiBirthInput | LiuRengGodsInput | NongliTimeInput | None = None

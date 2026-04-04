@@ -184,9 +184,17 @@ def memory_query(
     after: str | None = typer.Option(None, help="Only return runs created after this ISO timestamp."),
     before: str | None = typer.Option(None, help="Only return runs created before this ISO timestamp."),
     limit: int = typer.Option(20, help="Maximum runs to return."),
+    include_payload: bool = typer.Option(True, "--include-payload/--no-include-payload", help="Embed saved JSON payloads in the query output."),
 ) -> None:
     service = _service()
-    data = service.store.query_runs(tool=tool, entity=entity, after=after, before=before, limit=limit)
+    data = service.store.query_runs(
+        tool=tool,
+        entity=entity,
+        after=after,
+        before=before,
+        limit=limit,
+        include_payload=include_payload,
+    )
     _print_json(data)
 
 

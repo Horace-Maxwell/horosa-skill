@@ -18,6 +18,7 @@ from urllib.parse import urlparse
 import httpx
 
 from horosa_skill.config import Settings
+from horosa_skill.engine.client import HorosaApiClient
 from horosa_skill.errors import RuntimeInstallError, RuntimeValidationError
 
 
@@ -86,11 +87,7 @@ class HorosaRuntimeManager:
         if source is None:
             manifest_location = manifest_url or self.settings.runtime_manifest_url
             if not manifest_location:
-                raise RuntimeInstallError(
-                    "No runtime archive or manifest URL provided.",
-                    code="runtime.install_missing_source",
-                    details={"platform": platform_name},
-                )
+                manifest_location = self.settings.default_runtime_manifest_url
             manifest_data = self._read_json_location(manifest_location)
             platforms = manifest_data.get("platforms", {})
             asset_meta = platforms.get(platform_name)
@@ -208,6 +205,7 @@ class HorosaRuntimeManager:
             "paths": {
                 "python": str(self.current_dir / python_path),
                 "java": str(self.current_dir / java_path),
+                "node": str(self.current_dir / self._relative_manifest_path(manifest, "runtimes", "node")),
                 "start_script": str(self.current_dir / start_script),
                 "stop_script": str(self.current_dir / stop_script),
             },
@@ -434,6 +432,7 @@ class HorosaRuntimeManager:
             "runtimes": {
                 "python": str(self._platform_path("runtime/mac/python/bin/python3", "runtime/windows/python/python.exe")),
                 "java": str(self._platform_path("runtime/mac/java/bin/java", "runtime/windows/java/bin/java.exe")),
+                "node": str(self._platform_path("runtime/mac/node/bin/node", "runtime/windows/node/node.exe")),
             },
             "artifacts": {
                 "horosa_web_root": "Horosa-Web",
@@ -441,6 +440,7 @@ class HorosaRuntimeManager:
                 "flatlib_root": "Horosa-Web/flatlib-ctrad2/flatlib",
                 "swefiles_root": "Horosa-Web/flatlib-ctrad2/flatlib/resources/swefiles",
                 "boot_jar": str(self._platform_path("runtime/mac/bundle/astrostudyboot.jar", "runtime/windows/bundle/astrostudyboot.jar")),
+                "horosa_core_js_root": "horosa-core-js",
             },
         }
 
@@ -502,6 +502,15 @@ class HorosaRuntimeManager:
         except Exception:
             return False
 
+    def _backend_reachable(self, backend_url: str) -> bool:
+        parsed = urlparse(backend_url)
+        if not parsed.scheme or not parsed.netloc:
+            return False
+        server_root = f"{parsed.scheme}://{parsed.netloc}"
+        endpoint = parsed.path if parsed.path not in {"", "/"} else "/common/time"
+        client = HorosaApiClient(server_root, timeout=3.0)
+        return client.probe(endpoint=endpoint)
+
     def _required_paths(self, manifest: dict[str, Any] | None = None) -> list[tuple[str, Path, str]]:
         return [
             ("manifest", Path("runtime-manifest.json"), "file"),
@@ -513,16 +522,13 @@ class HorosaRuntimeManager:
             ("stop_script", self._relative_manifest_path(manifest, "services", "stop_script"), "file"),
             ("java_runtime", self._relative_manifest_path(manifest, "runtimes", "java"), "file"),
             ("python_runtime", self._relative_manifest_path(manifest, "runtimes", "python"), "file"),
+            ("node_runtime", self._relative_manifest_path(manifest, "runtimes", "node"), "file"),
             ("boot_jar", self._relative_manifest_path(manifest, "artifacts", "boot_jar"), "file"),
+            ("horosa_core_js_root", self._relative_manifest_path(manifest, "artifacts", "horosa_core_js_root"), "dir"),
         ]
 
     def _optional_paths(self, manifest: dict[str, Any] | None = None) -> list[tuple[str, Path, str, bool]]:
-        results: list[tuple[str, Path, str, bool]] = []
-        if manifest and isinstance(manifest.get("runtimes"), dict):
-            node_path = manifest["runtimes"].get("node")
-            if isinstance(node_path, str) and node_path.strip():
-                results.append(("node_runtime", Path(node_path), "file", False))
-        return results
+        return []
 
     def _relative_manifest_path(self, manifest: dict[str, Any] | None, section: str, key: str) -> Path:
         if manifest and isinstance(manifest.get(section), dict):
@@ -538,8 +544,12 @@ class HorosaRuntimeManager:
         if manifest and isinstance(manifest.get("services"), dict):
             backend_url = str(manifest["services"].get("backend_url") or backend_url)
             chart_url = str(manifest["services"].get("chart_url") or chart_url)
+        backend_probe = backend_url
+        parsed_backend = urlparse(backend_url)
+        if parsed_backend.scheme and parsed_backend.netloc and parsed_backend.path in {"", "/"}:
+            backend_probe = backend_url.rstrip("/") + "/common/time"
         return [
-            {"label": "java_backend", "url": backend_url, "reachable": self._http_reachable(backend_url)},
+            {"label": "java_backend", "url": backend_probe, "reachable": self._backend_reachable(backend_probe)},
             {"label": "python_chart", "url": chart_url, "reachable": self._http_reachable(chart_url)},
         ]
 

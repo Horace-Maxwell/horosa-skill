@@ -25,6 +25,10 @@ def test_memory_store_writes_artifact(tmp_path) -> None:
     assert ref.run_id == run_id
     assert ref.tool_name == "chart"
     assert (tmp_path / "runs").exists()
-    artifact = json.loads((tmp_path / "runs").rglob("*.json").__next__().read_text(encoding="utf-8"))
+    artifact_path = (tmp_path / "runs").rglob("*.json").__next__()
+    assert artifact_path.parent.parent.parent.parent == (tmp_path / "runs")
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert artifact["tool"] == "chart"
 
+    queried = store.query_runs(tool="chart", include_payload=True)
+    assert queried[0]["artifacts"][0]["payload"]["tool"] == "chart"

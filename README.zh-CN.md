@@ -100,6 +100,7 @@ Horosa Skill 就是这层交付层。
 ```bash
 cd horosa-skill
 uv sync
+uv run horosa-skill install
 uv run horosa-skill doctor
 uv run horosa-skill serve
 ```
@@ -131,7 +132,7 @@ uv run horosa-skill doctor
 
 ```bash
 cd horosa-skill
-uv run horosa-skill install --manifest-url https://example.com/runtime-manifest.json
+uv run horosa-skill install
 uv run horosa-skill doctor
 ```
 
@@ -208,6 +209,7 @@ echo '{
 
 - [Offline Runtime Releases](./docs/OFFLINE_RUNTIME_RELEASES.md)
 - [Runtime Manifest Spec](./docs/RUNTIME_MANIFEST_SPEC.md)
+- [Algorithm Coverage](./docs/ALGORITHM_COVERAGE.md)
 - [Vendored Runtime Sources](./vendor/README.md)
 
 ## 本地存储模型
@@ -234,14 +236,14 @@ echo '{
 - 本地 memory store
 - runtime install、doctor、stop 命令
 - runtime 启停管理
-- macOS 本地 runtime 打包链
-- Windows runtime scaffold 和 release helpers
+- release manifest 驱动的安装入口
+- macOS 与 Windows runtime release 包
+- `qimen`、`taiyi`、`jinkou` 的 headless JS runtime
+- runtime archive 校验脚本
 
-仍在推进：
+明确不纳入本次发布：
 
-- 真正可发布的 Windows runtime payload
-- 覆盖所有前端本地算法的 headless JS runtime
-- 正式 GitHub Releases 发布流程
+- `fengshui`
 
 ## 设计参考
 

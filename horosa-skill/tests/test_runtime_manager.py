@@ -13,12 +13,14 @@ def create_runtime_archive(tmp_path: Path) -> Path:
     payload_root = tmp_path / "runtime-payload"
     (payload_root / "Horosa-Web/astropy").mkdir(parents=True, exist_ok=True)
     (payload_root / "Horosa-Web/flatlib-ctrad2/flatlib/resources/swefiles").mkdir(parents=True, exist_ok=True)
+    (payload_root / "horosa-core-js/bin").mkdir(parents=True, exist_ok=True)
     (payload_root / "runtime/mac/java/bin").mkdir(parents=True, exist_ok=True)
     (payload_root / "runtime/mac/python/bin").mkdir(parents=True, exist_ok=True)
     (payload_root / "runtime/mac/node/bin").mkdir(parents=True, exist_ok=True)
     (payload_root / "runtime/mac/bundle").mkdir(parents=True, exist_ok=True)
     (payload_root / "Horosa-Web/start_horosa_local.sh").write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
     (payload_root / "Horosa-Web/stop_horosa_local.sh").write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+    (payload_root / "horosa-core-js/bin/cli.mjs").write_text("export {};\n", encoding="utf-8")
     (payload_root / "runtime/mac/java/bin/java").write_text("", encoding="utf-8")
     (payload_root / "runtime/mac/python/bin/python3").write_text("", encoding="utf-8")
     (payload_root / "runtime/mac/node/bin/node").write_text("", encoding="utf-8")
@@ -64,6 +66,41 @@ def test_doctor_reports_installed_runtime(tmp_path: Path) -> None:
     assert report["manifest"]["version"] == "1.2.3"
     assert any(item["label"] == "java_runtime" for item in report["files"])
     assert any(item["label"] == "python_runtime" for item in report["files"])
+    assert any(item["label"] == "node_runtime" for item in report["files"])
+    assert any(item["label"] == "horosa_core_js_root" for item in report["files"])
+
+
+def test_install_runtime_from_manifest_file_url(tmp_path: Path) -> None:
+    archive = create_runtime_archive(tmp_path)
+    manifest = tmp_path / "runtime-manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "version": "1.2.3",
+                "platforms": {
+                    "darwin-arm64": {
+                        "url": archive.resolve().as_uri(),
+                        "sha256": "",
+                        "archive_type": "tar.gz",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+        runtime_platform="darwin-arm64",
+    )
+    manager = HorosaRuntimeManager(settings)
+
+    result = manager.install(manifest_url=manifest.resolve().as_uri())
+
+    assert result["ok"] is True
+    assert result["manifest"]["version"] == "1.2.3"
+    assert (settings.runtime_current_dir / "runtime-manifest.json").is_file()
 
 
 def test_start_and_stop_runtime_updates_state(tmp_path: Path) -> None:

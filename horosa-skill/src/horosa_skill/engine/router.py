@@ -28,6 +28,12 @@ def select_tools(request: DispatchInput) -> list[str]:
             add("liureng_runyear")
         else:
             add("liureng_gods")
+    if _contains_any(text, ["奇门", "qimen"]):
+        add("qimen")
+    if _contains_any(text, ["太乙", "taiyi", "太一"]):
+        add("taiyi")
+    if _contains_any(text, ["金口诀", "jinkou"]):
+        add("jinkou")
     if _contains_any(text, ["节气", "jieqi"]):
         add("jieqi_year")
     if _contains_any(text, ["农历", "nongli"]):
@@ -76,4 +82,3 @@ def select_tools(request: DispatchInput) -> list[str]:
         )
 
     return selected
-

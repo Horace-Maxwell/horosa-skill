@@ -197,6 +197,7 @@ class MemoryStore:
         after: str | None = None,
         before: str | None = None,
         limit: int = 20,
+        include_payload: bool = True,
     ) -> list[dict[str, Any]]:
         sql = [
             """
@@ -227,9 +228,26 @@ class MemoryStore:
             rows = conn.execute("\n".join(sql), params).fetchall()
             results = []
             for row in rows:
-                artifacts = conn.execute(
-                    "SELECT tool_name, kind, path, created_at FROM artifacts WHERE run_id = ? ORDER BY id DESC",
-                    (row["id"],),
+                artifact_sql = """
+                    SELECT tool_name, kind, path, created_at
+                    FROM artifacts
+                    WHERE run_id = ?
+                """
+                artifact_params: list[Any] = [row["id"]]
+                if tool:
+                    artifact_sql += " ORDER BY CASE WHEN tool_name = ? THEN 0 ELSE 1 END, id DESC"
+                    artifact_params.append(tool)
+                else:
+                    artifact_sql += " ORDER BY id DESC"
+                artifacts = conn.execute(artifact_sql, artifact_params).fetchall()
+                tool_calls = conn.execute(
+                    """
+                    SELECT tool_name, ok, input_json, summary_json, warnings_json, error_json, created_at
+                    FROM tool_calls
+                    WHERE run_id = ?
+                    ORDER BY CASE WHEN tool_name = ? THEN 0 ELSE 1 END, id DESC
+                    """,
+                    (row["id"], tool or ""),
                 ).fetchall()
                 results.append(
                     {
@@ -238,17 +256,43 @@ class MemoryStore:
                         "query_text": row["query_text"],
                         "created_at": row["created_at"],
                         "updated_at": row["updated_at"],
-                        "artifacts": [dict(artifact) for artifact in artifacts],
+                        "tool_calls": [self._tool_call_record_to_dict(item) for item in tool_calls],
+                        "artifacts": [self._artifact_record_to_dict(artifact, include_payload=include_payload) for artifact in artifacts],
                     }
                 )
         return results
 
     def _write_artifact(self, *, run_id: str, tool_name: str, payload: dict[str, Any], tool_call_id: int | None) -> Path:
         now = datetime.now(timezone.utc)
-        target_dir = self.output_dir / "runs" / now.strftime("%Y") / now.strftime("%m") / now.strftime("%d")
+        target_dir = self.output_dir / now.strftime("%Y") / now.strftime("%m") / now.strftime("%d")
         target_dir.mkdir(parents=True, exist_ok=True)
         suffix = f"{tool_call_id}" if tool_call_id is not None else "dispatch"
         target_path = target_dir / f"{run_id}_{tool_name}_{suffix}.json"
         target_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         return target_path
 
+    def _artifact_record_to_dict(self, artifact: sqlite3.Row, *, include_payload: bool) -> dict[str, Any]:
+        record = dict(artifact)
+        if include_payload:
+            path = Path(record["path"])
+            if path.is_file():
+                try:
+                    record["payload"] = json.loads(path.read_text(encoding="utf-8"))
+                except Exception:
+                    record["payload"] = None
+        return record
+
+    def _tool_call_record_to_dict(self, tool_call: sqlite3.Row) -> dict[str, Any]:
+        record = dict(tool_call)
+        for key in ("input_json", "summary_json", "warnings_json", "error_json"):
+            value = record.get(key)
+            if isinstance(value, str):
+                try:
+                    record[key.removesuffix("_json")] = json.loads(value)
+                except Exception:
+                    record[key.removesuffix("_json")] = value
+            elif value is None:
+                record[key.removesuffix("_json")] = None
+            del record[key]
+        record["ok"] = bool(record["ok"])
+        return record

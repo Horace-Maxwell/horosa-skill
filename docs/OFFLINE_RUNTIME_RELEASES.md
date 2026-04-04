@@ -38,17 +38,20 @@ Do not treat these three locations as interchangeable.
 3. Upload the generated archive to GitHub Releases.
 4. Generate a release manifest that points to those archives.
 5. Publish the manifest URL for `horosa-skill install`.
+6. Verify the release archives before upload.
 
 ## Scripts In This Repo
 
 - `horosa-skill/scripts/build_runtime_release.sh`
-  Builds a macOS runtime archive directly from vendored sources in this repository.
+  Builds the macOS and Windows runtime archives, emits `runtime-manifest.json`, writes `SHA256SUMS.txt`, and runs archive verification.
 - `horosa-skill/scripts/package_runtime_payload.sh`
   Assembles the runtime payload tarball from `vendor/runtime-source`.
 - `horosa-skill/scripts/build_runtime_release_windows.ps1`
   Packages a staged Windows `runtime-payload/` directory into a release zip.
 - `horosa-skill/scripts/generate_release_manifest.py`
   Generates a manifest JSON containing version, URLs, checksums, and archive type.
+- `horosa-skill/scripts/verify_runtime_release.py`
+  Validates that the generated runtime archives really contain the required runtime payload layout.
 - `horosa-skill/scripts/scaffold_windows_runtime.py`
   Creates a Windows runtime directory skeleton with manifest and PowerShell entrypoints.
 - `horosa-skill/scripts/sync_vendored_runtime_sources.sh`
@@ -56,22 +59,17 @@ Do not treat these three locations as interchangeable.
 
 ## Current Windows Reality
 
-The current Windows source chain is now useful for `horosa-skill`, but it is still a preparation chain rather than a final payload archive.
+The repository now produces a real Windows runtime archive:
 
-What it gives us now:
+- embedded Java runtime
+- embedded Python runtime
+- embedded Node runtime
+- local wheels unpacked into the payload
+- `astrostudyboot.jar`
+- `horosa-core-js`
+- runtime manifest and startup scripts
 
-- `prepareruntime/Prepare_Runtime_Windows.ps1`
-- `runtime/windows/bundle/runtime.manifest.json`
-- offline Python wheels
-- URL templates for Java, Python, and `astrostudyboot.jar`
-
-What still must exist before a true `horosa-skill` Windows release is complete:
-
-- actual `runtime/windows/java`
-- actual `runtime/windows/python`
-- actual `runtime/windows/bundle/astrostudyboot.jar`
-- frontend build output in the final runtime payload
-- packaged Node runtime for the future headless JS layer
+In this macOS development environment, Windows verification is structural rather than native-process execution. The release zip is built and checked for required contents here, and should still be validated on a real Windows machine before public release sign-off.
 
 ## Example Manifest
 

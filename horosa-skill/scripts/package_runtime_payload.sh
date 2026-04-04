@@ -10,7 +10,10 @@ DIST_ROOT="${SKILL_ROOT}/dist/runtime"
 JAVA_SOURCE_DIR="${SOURCE_ROOT}/runtime/mac/java"
 PYTHON_SOURCE_DIR="${SOURCE_ROOT}/runtime/mac/python"
 BOOT_JAR_SOURCE="${SOURCE_ROOT}/runtime/mac/bundle/astrostudyboot.jar"
+CORE_JS_ROOT="${SKILL_ROOT}/horosa-core-js"
 ARCHIVE_PLATFORM="${ARCHIVE_PLATFORM:-darwin-arm64}"
+NODE_VERSION_LINE_URL="${NODE_VERSION_LINE_URL:-https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt}"
+DOWNLOAD_ROOT="${BUILD_ROOT}/downloads"
 
 RSYNC_FILTERS=(
   "--exclude=.DS_Store"
@@ -77,6 +80,38 @@ build_embedded_java_runtime() {
   rsync -a "${RSYNC_FILTERS[@]}" "${src_java}" "$(dirname "${dest_java}")/"
 }
 
+resolve_node_archive_name() {
+  local arch_suffix="darwin-arm64"
+  if [[ "${ARCHIVE_PLATFORM}" == *"x64"* ]]; then
+    arch_suffix="darwin-x64"
+  fi
+  curl -fsSL "${NODE_VERSION_LINE_URL}" | awk "/node-v.*-${arch_suffix}\\.tar\\.gz/{print \$2; exit}"
+}
+
+ensure_node_runtime() {
+  local dest_root="$1"
+  local node_src="${SOURCE_ROOT}/runtime/mac/node"
+  if [ -x "${node_src}/bin/node" ]; then
+    rsync -a "${RSYNC_FILTERS[@]}" "${node_src}" "${STAGE_ROOT}/runtime/mac/"
+    return 0
+  fi
+
+  mkdir -p "${DOWNLOAD_ROOT}"
+  local archive_name
+  archive_name="$(resolve_node_archive_name)"
+  if [ -z "${archive_name}" ]; then
+    echo "failed to resolve latest macOS Node.js archive name" >&2
+    exit 1
+  fi
+  local archive_path="${DOWNLOAD_ROOT}/${archive_name}"
+  if [ ! -f "${archive_path}" ]; then
+    curl -fL "https://nodejs.org/dist/latest-v22.x/${archive_name}" -o "${archive_path}"
+  fi
+  rm -rf "${dest_root}"
+  mkdir -p "${dest_root}"
+  tar -xzf "${archive_path}" -C "${dest_root}" --strip-components=1
+}
+
 require_path "${SOURCE_ROOT}/Horosa-Web/start_horosa_local.sh"
 require_path "${SOURCE_ROOT}/Horosa-Web/stop_horosa_local.sh"
 require_path "${SOURCE_ROOT}/Horosa-Web/scripts/repairEmbeddedPythonRuntime.py"
@@ -87,6 +122,7 @@ require_path "${SOURCE_ROOT}/Horosa-Web/flatlib-ctrad2"
 require_path "${JAVA_SOURCE_DIR}"
 require_path "${PYTHON_SOURCE_DIR}"
 require_path "${BOOT_JAR_SOURCE}"
+require_path "${CORE_JS_ROOT}/bin/cli.mjs"
 
 rm -rf "${BUILD_ROOT}"
 mkdir -p "${STAGE_ROOT}/Horosa-Web/astrostudyui/scripts"
@@ -107,11 +143,13 @@ rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/flatlib-ctrad2/flatlib
 if [ -f "${SOURCE_ROOT}/Horosa-Web/flatlib-ctrad2/LICENSE" ]; then
   rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/flatlib-ctrad2/LICENSE" "${STAGE_ROOT}/Horosa-Web/flatlib-ctrad2/"
 fi
-rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/astrostudyui/dist-file" "${STAGE_ROOT}/Horosa-Web/astrostudyui/"
+rsync -a "${RSYNC_FILTERS[@]}" --exclude='fengshui' "${SOURCE_ROOT}/Horosa-Web/astrostudyui/dist-file" "${STAGE_ROOT}/Horosa-Web/astrostudyui/"
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/astrostudyui/scripts/warmHorosaRuntime.js" "${STAGE_ROOT}/Horosa-Web/astrostudyui/scripts/"
 build_embedded_java_runtime "${JAVA_SOURCE_DIR}" "${STAGE_ROOT}/runtime/mac/java"
 rsync -a "${RSYNC_FILTERS[@]}" "${PYTHON_SOURCE_DIR}" "${STAGE_ROOT}/runtime/mac/"
+ensure_node_runtime "${STAGE_ROOT}/runtime/mac/node"
 cp -f "${BOOT_JAR_SOURCE}" "${STAGE_ROOT}/runtime/mac/bundle/astrostudyboot.jar"
+rsync -a "${RSYNC_FILTERS[@]}" "${CORE_JS_ROOT}" "${STAGE_ROOT}/"
 
 rm -rf \
   "${STAGE_ROOT}/runtime/mac/python/lib/python3.12/ensurepip" \
@@ -146,6 +184,7 @@ manifest = {
     "runtimes": {
         "python": "runtime/mac/python/bin/python3",
         "java": "runtime/mac/java/bin/java",
+        "node": "runtime/mac/node/bin/node",
     },
     "artifacts": {
         "horosa_web_root": "Horosa-Web",
@@ -153,6 +192,7 @@ manifest = {
         "flatlib_root": "Horosa-Web/flatlib-ctrad2/flatlib",
         "swefiles_root": "Horosa-Web/flatlib-ctrad2/flatlib/resources/swefiles",
         "boot_jar": "runtime/mac/bundle/astrostudyboot.jar",
+        "horosa_core_js_root": "horosa-core-js",
     },
 }
 (stage_root / "runtime-manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

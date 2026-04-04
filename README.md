@@ -100,6 +100,7 @@ Horosa Skill is the delivery layer for exactly that.
 ```bash
 cd horosa-skill
 uv sync
+uv run horosa-skill install
 uv run horosa-skill doctor
 uv run horosa-skill serve
 ```
@@ -131,7 +132,7 @@ If you publish runtime assets through GitHub Releases:
 
 ```bash
 cd horosa-skill
-uv run horosa-skill install --manifest-url https://example.com/runtime-manifest.json
+uv run horosa-skill install
 uv run horosa-skill doctor
 ```
 
@@ -208,6 +209,7 @@ See:
 
 - [Offline Runtime Releases](./docs/OFFLINE_RUNTIME_RELEASES.md)
 - [Runtime Manifest Spec](./docs/RUNTIME_MANIFEST_SPEC.md)
+- [Algorithm Coverage](./docs/ALGORITHM_COVERAGE.md)
 - [Vendored Runtime Sources](./vendor/README.md)
 
 ## Local Storage Model
@@ -234,14 +236,14 @@ Implemented now:
 - local memory store
 - runtime install, doctor, and stop commands
 - runtime start or stop orchestration
-- local vendored runtime packaging for macOS
-- Windows runtime scaffold and release helpers
+- release manifest driven install flow
+- production runtime archives for macOS and Windows
+- headless JS runtime for `qimen`, `taiyi`, and `jinkou`
+- runtime archive verification tooling
 
-Still in progress:
+Shipping exclusions:
 
-- production Windows runtime payload
-- fully packaged headless JS runtime for all frontend-local algorithms
-- public GitHub Release publishing flow
+- `fengshui`
 
 ## Design References
 

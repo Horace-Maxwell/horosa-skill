@@ -5,6 +5,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+DEFAULT_RELEASE_REPO = "Horace-Maxwell/horosa-skill"
+
 
 def _default_home_dir() -> Path:
     if os.name == "nt":
@@ -31,9 +33,11 @@ class Settings(BaseModel):
     output_dir: Path | None = None
     runtime_manifest_url: str | None = None
     runtime_platform: str | None = None
+    runtime_release_repo: str = DEFAULT_RELEASE_REPO
     local_backend_port: int = 9999
     local_chart_port: int = 8899
     runtime_start_timeout_seconds: float = 15.0
+    js_engine_timeout_seconds: float = 60.0
     host: str = "127.0.0.1"
     port: int = 8765
     log_level: str = "INFO"
@@ -51,9 +55,11 @@ class Settings(BaseModel):
             runtime_root=Path(os.environ.get("HOROSA_RUNTIME_ROOT", str(_default_runtime_root()))),
             runtime_manifest_url=os.environ.get("HOROSA_RUNTIME_MANIFEST_URL"),
             runtime_platform=os.environ.get("HOROSA_RUNTIME_PLATFORM"),
+            runtime_release_repo=os.environ.get("HOROSA_RUNTIME_RELEASE_REPO", DEFAULT_RELEASE_REPO),
             local_backend_port=int(os.environ.get("HOROSA_LOCAL_BACKEND_PORT", "9999")),
             local_chart_port=int(os.environ.get("HOROSA_LOCAL_CHART_PORT", "8899")),
             runtime_start_timeout_seconds=float(os.environ.get("HOROSA_RUNTIME_START_TIMEOUT_SECONDS", "15")),
+            js_engine_timeout_seconds=float(os.environ.get("HOROSA_JS_ENGINE_TIMEOUT_SECONDS", "60")),
             host=os.environ.get("HOROSA_SKILL_HOST", "127.0.0.1"),
             port=int(os.environ.get("HOROSA_SKILL_PORT", "8765")),
             log_level=os.environ.get("HOROSA_SKILL_LOG_LEVEL", "INFO"),
@@ -74,3 +80,7 @@ class Settings(BaseModel):
     @property
     def runtime_state_path(self) -> Path:
         return self.runtime_root / "runtime-state.json"
+
+    @property
+    def default_runtime_manifest_url(self) -> str:
+        return f"https://github.com/{self.runtime_release_repo}/releases/latest/download/runtime-manifest.json"
