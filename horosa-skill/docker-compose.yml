@@ -1,0 +1,15 @@
+services:
+  horosa-skill:
+    build: .
+    ports:
+      - "8765:8765"
+    environment:
+      HOROSA_SERVER_ROOT: ${HOROSA_SERVER_ROOT:-http://host.docker.internal:9999}
+      HOROSA_SKILL_HOST: 0.0.0.0
+      HOROSA_SKILL_PORT: 8765
+    volumes:
+      - horosa_skill_data:/root/.horosa-skill
+
+volumes:
+  horosa_skill_data:
+

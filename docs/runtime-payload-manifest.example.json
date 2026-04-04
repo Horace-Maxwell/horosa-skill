@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "version": "0.2.0",
+  "platform": "darwin-arm64",
+  "runtime_layout_version": 1,
+  "export_registry_version": 6,
+  "services": {
+    "backend_url": "http://127.0.0.1:9999",
+    "chart_url": "http://127.0.0.1:8899",
+    "start_script": "Horosa-Web/start_horosa_local.sh",
+    "stop_script": "Horosa-Web/stop_horosa_local.sh"
+  },
+  "runtimes": {
+    "python": "runtime/mac/python/bin/python3",
+    "java": "runtime/mac/java/bin/java"
+  },
+  "artifacts": {
+    "horosa_web_root": "Horosa-Web",
+    "astropy_root": "Horosa-Web/astropy",
+    "flatlib_root": "Horosa-Web/flatlib-ctrad2/flatlib",
+    "swefiles_root": "Horosa-Web/flatlib-ctrad2/flatlib/resources/swefiles",
+    "boot_jar": "runtime/mac/bundle/astrostudyboot.jar"
+  }
+}

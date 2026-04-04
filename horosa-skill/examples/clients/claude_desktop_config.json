@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "horosa": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "<PATH_TO_REPO>/horosa-skill",
+        "horosa-skill",
+        "serve",
+        "--transport",
+        "stdio"
+      ],
+      "cwd": "<PATH_TO_REPO>/horosa-skill"
+    }
+  }
+}
+

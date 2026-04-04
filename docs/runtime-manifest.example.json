@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "platforms": {
+    "darwin-arm64": {
+      "url": "https://github.com/example/horosa-skill-repo/releases/download/runtime-v0.2.0/horosa-runtime-darwin-arm64.tar.gz",
+      "sha256": "REPLACE_WITH_REAL_SHA256",
+      "archive_type": "tar.gz"
+    },
+    "win32-x64": {
+      "url": "https://github.com/example/horosa-skill-repo/releases/download/runtime-v0.2.0/horosa-runtime-win32-x64.zip",
+      "sha256": "REPLACE_WITH_REAL_SHA256",
+      "archive_type": "zip"
+    }
+  }
+}
