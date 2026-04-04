@@ -29,6 +29,24 @@ Current vendored inputs can include:
 - `runtime/mac/python`
 - `runtime/mac/java`
 - `runtime/mac/bundle/astrostudyboot.jar`
+- `runtime/windows/bundle/runtime.manifest.json`
+- `runtime/windows/bundle/wheels`
+- `runtime/windows/bundle/*.url.txt`
+- `prepareruntime/Prepare_Runtime_Windows.ps1`
+- `prepareruntime/Prepare_Runtime_Windows.bat`
+
+## Windows-Specific Note
+
+The Windows source repository currently gives this project two important things:
+
+- a Windows runtime preparation flow
+- an offline wheel bundle and runtime manifest template
+
+That is enough to keep the local project folder self-contained for Windows runtime preparation inputs.
+
+It is not the same thing as a fully materialized Windows runtime payload.
+
+The final Windows runtime payload still needs the real packaged Java, Python, backend jar, frontend build output, and eventually Node runtime to be materialized into the release archive layout.
 
 ## Why This Exists
 

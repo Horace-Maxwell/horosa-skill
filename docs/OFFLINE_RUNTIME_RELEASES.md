@@ -52,7 +52,26 @@ Do not treat these three locations as interchangeable.
 - `horosa-skill/scripts/scaffold_windows_runtime.py`
   Creates a Windows runtime directory skeleton with manifest and PowerShell entrypoints.
 - `horosa-skill/scripts/sync_vendored_runtime_sources.sh`
-  Pulls the current required runtime subset from a local development tree into `vendor/runtime-source`.
+  Pulls the current required runtime subset from a local development tree into `vendor/runtime-source`. It can also ingest Windows preparation inputs from a separate local Windows source repo via `HOROSA_WINDOWS_SOURCE_ROOT`.
+
+## Current Windows Reality
+
+The current Windows source chain is now useful for `horosa-skill`, but it is still a preparation chain rather than a final payload archive.
+
+What it gives us now:
+
+- `prepareruntime/Prepare_Runtime_Windows.ps1`
+- `runtime/windows/bundle/runtime.manifest.json`
+- offline Python wheels
+- URL templates for Java, Python, and `astrostudyboot.jar`
+
+What still must exist before a true `horosa-skill` Windows release is complete:
+
+- actual `runtime/windows/java`
+- actual `runtime/windows/python`
+- actual `runtime/windows/bundle/astrostudyboot.jar`
+- frontend build output in the final runtime payload
+- packaged Node runtime for the future headless JS layer
 
 ## Example Manifest
 

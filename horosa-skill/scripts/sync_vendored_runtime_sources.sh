@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SOURCE_ROOT="${HOROSA_SOURCE_ROOT:-$(cd "${ROOT}/.." && pwd)}"
+WINDOWS_SOURCE_ROOT="${HOROSA_WINDOWS_SOURCE_ROOT:-}"
 VENDOR_ROOT="${ROOT}/vendor/runtime-source"
 
 RSYNC_FILTERS=(
@@ -69,5 +70,22 @@ fi
 
 find "${VENDOR_ROOT}" -type d \( -name '.pytest_cache' -o -name '.cache' -o -name '__pycache__' -o -name '.horosa-logs' \) -prune -exec rm -rf {} + 2>/dev/null || true
 find "${VENDOR_ROOT}" \( -name '.DS_Store' -o -name '._*' -o -name '*.pyc' -o -name '*.pyo' -o -name '*.map' -o -name '*.tmp' -o -name '*.temp' -o -name '*.pid' \) -delete 2>/dev/null || true
+
+if [ -n "${WINDOWS_SOURCE_ROOT}" ]; then
+  WINDOWS_SOURCE_ROOT="$(cd "${WINDOWS_SOURCE_ROOT}" && pwd)"
+  WINDOWS_RUNTIME_ROOT="${WINDOWS_SOURCE_ROOT}/local/workspace/runtime/windows"
+  WINDOWS_PREP_ROOT="${WINDOWS_SOURCE_ROOT}/prepareruntime"
+
+  require_path "${WINDOWS_RUNTIME_ROOT}"
+  require_path "${WINDOWS_PREP_ROOT}/Prepare_Runtime_Windows.ps1"
+  require_path "${WINDOWS_PREP_ROOT}/Prepare_Runtime_Windows.bat"
+
+  mkdir -p "${VENDOR_ROOT}/runtime"
+  rm -rf "${VENDOR_ROOT}/runtime/windows"
+  rm -rf "${VENDOR_ROOT}/prepareruntime"
+
+  rsync -a "${RSYNC_FILTERS[@]}" "${WINDOWS_RUNTIME_ROOT}/" "${VENDOR_ROOT}/runtime/windows/"
+  rsync -a "${RSYNC_FILTERS[@]}" "${WINDOWS_PREP_ROOT}/" "${VENDOR_ROOT}/prepareruntime/"
+fi
 
 echo "vendored runtime sources ready at ${VENDOR_ROOT}"
