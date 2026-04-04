@@ -33,7 +33,7 @@ class BirthInput(FlexibleModel):
     pdtype: Any | None = None
     pdMethod: Any | None = None
     pdTimeKey: Any | None = None
-    pdaspects: list[str] | None = None
+    pdaspects: list[int | str] | None = None
     gpsLat: float | None = None
     gpsLon: float | None = None
     includePrimaryDirection: bool | None = None

@@ -1,6 +1,14 @@
+import json
+from pathlib import Path
+
+import pytest
+
 from horosa_skill.config import Settings
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.service import HorosaSkillService
+
+
+FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "export_snapshots"
 
 
 def make_service(tmp_path) -> HorosaSkillService:
@@ -11,6 +19,10 @@ def make_service(tmp_path) -> HorosaSkillService:
     )
     store = MemoryStore(settings)
     return HorosaSkillService(settings, store=store)
+
+
+def load_export_fixture_catalog() -> list[dict]:
+    return json.loads((FIXTURE_ROOT / "catalog.json").read_text(encoding="utf-8"))
 
 
 def test_export_registry_returns_ai_export_catalog(tmp_path) -> None:
@@ -76,3 +88,38 @@ def test_export_parse_can_persist_memory(tmp_path) -> None:
     assert result.memory_ref is not None
     queried = service.store.query_runs(tool="export_parse")
     assert len(queried) == 1
+
+
+@pytest.mark.parametrize("fixture_case", load_export_fixture_catalog(), ids=lambda case: case["name"])
+def test_export_parse_fixture_catalog_matches_app_snapshot_shapes(tmp_path, fixture_case) -> None:
+    service = make_service(tmp_path)
+    content = (FIXTURE_ROOT / fixture_case["fixture_file"]).read_text(encoding="utf-8")
+
+    result = service.run_tool(
+        "export_parse",
+        {
+            "technique": fixture_case["technique"],
+            "content": content,
+            "selected_sections": fixture_case["selected_sections"],
+        },
+        save_result=True,
+    )
+
+    assert result.ok is True
+    assert result.memory_ref is not None
+    assert result.data["section_titles_detected"] == fixture_case["expected_detected"]
+    assert result.data["selected_sections"] == fixture_case["selected_sections"]
+    assert result.data["export_text"]
+    assert result.data["settings_used"]["sections"][fixture_case["technique"]] == fixture_case["selected_sections"]
+
+    for expected in fixture_case["expected_in_export"]:
+        assert expected in result.data["export_text"]
+
+    for excluded in fixture_case["expected_excluded"]:
+        assert excluded not in result.data["export_text"]
+
+    queried = service.store.query_runs(tool="export_parse", include_payload=True)
+    assert len(queried) == 1
+    payload = queried[0]["artifacts"][0]["payload"]
+    assert payload["data"]["selected_sections"] == fixture_case["selected_sections"]
+    assert payload["data"]["section_titles_detected"] == fixture_case["expected_detected"]

@@ -11,10 +11,39 @@ from horosa_skill.engine.js_client import HorosaJsEngineClient
 from horosa_skill.engine.registry import TOOL_DEFINITIONS, ToolDefinition
 from horosa_skill.engine.router import select_tools
 from horosa_skill.errors import DispatchResolutionError, HorosaSkillError, ToolTransportError, ToolValidationError
-from horosa_skill.exports import build_export_registry, parse_export_content
+from horosa_skill.exports import build_export_registry, get_technique_info, parse_export_content
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.schemas.common import DispatchEnvelope, ErrorInfo, ToolEnvelope
 from horosa_skill.schemas.tools import DispatchInput
+
+
+TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
+    "chart": "astrochart",
+    "chart13": "astrochart_like",
+    "solarreturn": "solarreturn",
+    "lunarreturn": "lunarreturn",
+    "solararc": "solararc",
+    "givenyear": "givenyear",
+    "profection": "profection",
+    "pd": "primarydirect",
+    "pdchart": "primarydirchart",
+    "zr": "zodialrelease",
+    "relative": "relative",
+    "india_chart": "indiachart",
+    "ziwei_birth": "ziwei",
+    "ziwei_rules": "ziwei",
+    "bazi_birth": "bazi",
+    "bazi_direct": "bazi",
+    "liureng_gods": "liureng",
+    "liureng_runyear": "liureng",
+    "jieqi_year": "jieqi",
+    "nongli_time": "generic",
+    "gua_desc": "sixyao",
+    "gua_meiyi": "sixyao",
+    "qimen": "qimen",
+    "taiyi": "taiyi",
+    "jinkou": "jinkou",
+}
 
 
 def _generic_summary(tool_name: str, data: dict[str, Any]) -> list[str]:
@@ -106,6 +135,182 @@ def _extract_entities(input_normalized: dict[str, Any], query_text: str | None =
                 add(nested_name)
 
     return entities
+
+
+def _stringify_export_body(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, (int, float, bool)):
+        return str(value)
+    if isinstance(value, list):
+        return "\n".join(item for item in (_stringify_export_body(one) for one in value) if item).strip()
+    if isinstance(value, dict):
+        lines: list[str] = []
+        for key, item in value.items():
+            item_text = _stringify_export_body(item)
+            if item_text:
+                lines.append(f"{key}: {item_text}")
+        return "\n".join(lines).strip()
+    return str(value).strip()
+
+
+def _pick_section_data(title: str, *, input_normalized: dict[str, Any], response_data: dict[str, Any]) -> Any:
+    normalized_title = title.strip()
+    chart = response_data.get("chart")
+    pan = response_data.get("pan")
+    bazi = response_data.get("bazi")
+    liureng = response_data.get("liureng")
+    jinkou = response_data.get("jinkou")
+    predictives = response_data.get("predictives")
+
+    if normalized_title in {"起盘信息", "出生时间", "关系起盘信息", "节气盘参数"}:
+        return input_normalized
+    if normalized_title in {"星盘信息", "合成图盘", "影响图盘-星盘A", "影响图盘-星盘B"}:
+        return chart or response_data
+    if normalized_title in {"宫位宫头", "宫位总览"}:
+        if isinstance(chart, dict) and chart.get("houses") is not None:
+            return chart.get("houses")
+        return chart or response_data
+    if normalized_title in {"星与虚点", "行星"}:
+        if isinstance(chart, dict):
+            return chart.get("planets") or chart.get("stars") or chart
+        return response_data.get("planets") or response_data
+    if normalized_title == "相位":
+        if isinstance(chart, dict) and chart.get("aspects") is not None:
+            return chart.get("aspects")
+        return response_data.get("aspects") or response_data
+    if normalized_title == "希腊点":
+        if isinstance(chart, dict):
+            return chart.get("greekPoints") or chart.get("lots") or {}
+        return response_data.get("greekPoints") or response_data.get("lots") or {}
+    if normalized_title == "可能性":
+        if isinstance(chart, dict):
+            return chart.get("possibility") or chart.get("possibilities") or {}
+        return response_data.get("possibility") or response_data.get("possibilities") or {}
+    if normalized_title in {"主/界限法设置", "主限法盘设置", "十年大运设置"}:
+        return {"input": input_normalized, "predictives": predictives or response_data}
+    if normalized_title in {"主/界限法表格", "主限法盘说明", "法达星限表格", "基于X点推运", "基于X起运"}:
+        return predictives or response_data
+    if normalized_title in {"四柱与三元", "流年行运概略", "神煞（四柱与三元）"}:
+        return bazi or response_data
+    if normalized_title in {"十二盘式", "十二地盘/十二天盘/十二贵神对应", "四课", "三传", "行年", "旬日", "旺衰", "基础神煞", "干煞", "月煞", "支煞", "岁煞", "十二长生", "大格", "小局", "参考", "概览"}:
+        return liureng or response_data
+    if normalized_title in {"金口诀速览", "金口诀四位", "四位神煞"}:
+        return jinkou or response_data
+    if normalized_title in {"盘型", "盘面要素", "奇门演卦", "八宫详解", "九宫方盘"}:
+        return pan or response_data
+    if normalized_title in {"太乙盘", "十六宫标记"}:
+        return pan or response_data
+    if normalized_title in {"卦象", "六爻与动爻", "卦辞与断语", "本卦", "六爻", "潜藏", "亲和"}:
+        return response_data
+    return response_data
+
+
+def _build_generated_export_snapshot(
+    *,
+    technique: str,
+    input_normalized: dict[str, Any],
+    response_data: dict[str, Any],
+    snapshot_text: str | None = None,
+    parsed_snapshot: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    technique_info = get_technique_info(technique)
+    if technique_info is None:
+        return None
+
+    selected_sections = list(technique_info["preset_sections"])
+    settings_used = {
+        "version": build_export_registry(technique=technique)["settings_version"],
+        "sections": {technique: selected_sections},
+        "planetInfo": {},
+        "astroMeaning": {},
+    }
+    if technique_info["supports_planet_info"]:
+        settings_used["planetInfo"][technique] = technique_info["planet_info_default"]
+    if technique_info["supports_astro_meaning"] or technique_info["supports_hover_meaning"]:
+        settings_used["astroMeaning"][technique] = technique_info["astro_meaning_default"]
+
+    parsed_sections_by_title = {}
+    if isinstance(parsed_snapshot, dict):
+        for section in parsed_snapshot.get("sections", []):
+            if isinstance(section, dict) and section.get("title"):
+                parsed_sections_by_title[section["title"]] = section
+
+    sections: list[dict[str, Any]] = []
+    rendered_blocks: list[str] = []
+    for index, title in enumerate(selected_sections, start=1):
+        parsed_section = parsed_sections_by_title.get(title, {})
+        section_data = _pick_section_data(title, input_normalized=input_normalized, response_data=response_data)
+        body = parsed_section.get("body") or _stringify_export_body(section_data)
+        content = parsed_section.get("content") or (f"[{title}]\n{body}".strip() if body else f"[{title}]")
+        rendered_blocks.append(content)
+        sections.append(
+            {
+                "index": index,
+                "raw_title": parsed_section.get("raw_title", title),
+                "title": title,
+                "included": True,
+                "body": body,
+                "content": content,
+                "data": section_data,
+            }
+        )
+
+    export_text = "\n\n".join(block for block in rendered_blocks if block.strip()).strip()
+    return {
+        "technique": technique_info,
+        "settings_used": settings_used,
+        "section_titles_detected": [section["title"] for section in sections],
+        "selected_sections": selected_sections,
+        "unknown_detected_sections": [],
+        "missing_selected_sections": [],
+        "sections": sections,
+        "raw_text": snapshot_text or (parsed_snapshot.get("raw_text", "") if isinstance(parsed_snapshot, dict) else ""),
+        "filtered_text": export_text,
+        "export_text": export_text,
+        "format_source": "snapshot_parser" if parsed_snapshot else "generated_template",
+        "snapshot_text": snapshot_text,
+    }
+
+
+def _attach_export_contract(tool_name: str, input_normalized: dict[str, Any], response_data: dict[str, Any]) -> dict[str, Any]:
+    technique = TOOL_EXPORT_TECHNIQUE_MAP.get(tool_name)
+    if not technique:
+        return response_data
+
+    snapshot_text = response_data.get("snapshot_text") if isinstance(response_data.get("snapshot_text"), str) else None
+    parsed_snapshot = response_data.get("export_snapshot") if isinstance(response_data.get("export_snapshot"), dict) else None
+    export_format = _build_generated_export_snapshot(
+        technique=technique,
+        input_normalized=input_normalized,
+        response_data=response_data,
+        snapshot_text=snapshot_text,
+        parsed_snapshot=parsed_snapshot,
+    )
+    if export_format is None:
+        return response_data
+
+    augmented = dict(response_data)
+    augmented["export_snapshot"] = export_format
+    augmented["export_format"] = {
+        "technique": export_format["technique"],
+        "selected_sections": export_format["selected_sections"],
+        "format_source": export_format["format_source"],
+        "snapshot_text": export_format["snapshot_text"],
+        "sections": [
+            {
+                "index": section["index"],
+                "title": section["title"],
+                "included": section["included"],
+                "body": section["body"],
+                "data": section["data"],
+            }
+            for section in export_format["sections"]
+        ],
+    }
+    return augmented
 
 
 class HorosaSkillService:
@@ -364,6 +569,7 @@ class HorosaSkillService:
             else:
                 assert definition.endpoint is not None
                 response_data = self._call_remote(definition.endpoint, input_normalized)
+            response_data = _attach_export_contract(tool_name, input_normalized, response_data)
             summary = _generic_summary(tool_name, response_data)
             warnings: list[str] = []
             envelope = ToolEnvelope(

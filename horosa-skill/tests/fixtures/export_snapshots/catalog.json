@@ -1,0 +1,132 @@
+[
+  {
+    "name": "qimen_live_snapshot",
+    "technique": "qimen",
+    "fixture_file": "qimen_live_snapshot.txt",
+    "selected_sections": ["起盘信息", "八宫详解", "奇门演卦", "九宫方盘"],
+    "expected_detected": ["起盘信息", "盘面要素", "八宫详解", "奇门演卦", "九宫方盘"],
+    "expected_in_export": ["值符值使演卦：天泽履之乾为天", "坎一宫：值符=天蓬；值使=休门；门方演卦=坎为水", "坎一宫：壬 值符 休门 天蓬 戊"],
+    "expected_excluded": ["右侧栏目私货"],
+    "source_refs": [
+      "Horosa-Web/astrostudyui/src/components/dunjia/DunJiaCalc.js#buildDunJiaSnapshotText",
+      "Horosa-Web/astrostudyui/src/utils/aiExport.js#AI_EXPORT_PRESET_SECTIONS.qimen"
+    ]
+  },
+  {
+    "name": "liureng_live_snapshot",
+    "technique": "liureng",
+    "fixture_file": "liureng_live_snapshot.txt",
+    "selected_sections": ["起盘信息", "四课", "三传", "大格", "概览"],
+    "expected_detected": ["起盘信息", "十二盘式", "四课", "三传", "大格", "概览"],
+    "expected_in_export": ["四课一：戌加申，为用。", "课式：涉害", "1. 天将发用来意诀 · 贵人顺行"],
+    "expected_excluded": ["十二盘式：伏吟"],
+    "source_refs": [
+      "Horosa-Web/astrostudyui/src/components/lrzhan/LiuRengMain.js#buildLiuRengSnapshotText",
+      "Horosa-Web/astrostudyui/src/utils/aiExport.js#AI_EXPORT_PRESET_SECTIONS.liureng"
+    ]
+  },
+  {
+    "name": "jinkou_live_snapshot",
+    "technique": "jinkou",
+    "fixture_file": "jinkou_live_snapshot.txt",
+    "selected_sections": ["起盘信息", "金口诀速览", "金口诀四位", "四位神煞"],
+    "expected_detected": ["起盘信息", "金口诀速览", "金口诀四位", "四位神煞", "行年"],
+    "expected_in_export": ["地分：酉", "贵神：天乙（贵人）", "将神：登明"],
+    "expected_excluded": ["行年干支：乙巳"],
+    "source_refs": [
+      "Horosa-Web/astrostudyui/src/components/jinkou/JinKouMain.js#buildJinKouSnapshotText",
+      "Horosa-Web/astrostudyui/src/utils/aiExport.js#AI_EXPORT_PRESET_SECTIONS.jinkou"
+    ]
+  },
+  {
+    "name": "taiyi_live_snapshot",
+    "technique": "taiyi",
+    "fixture_file": "taiyi_live_snapshot.txt",
+    "selected_sections": ["起盘信息", "太乙盘", "十六宫标记"],
+    "expected_detected": ["起盘信息", "太乙盘", "十六宫标记"],
+    "expected_in_export": ["主算：二十四局", "太乙在离宫，文昌在坎宫。", "乾宫：君基、臣基"],
+    "expected_excluded": [],
+    "source_refs": [
+      "Horosa-Web/astrostudyui/src/components/taiyi/TaiYiCalc.js#buildTaiyiSnapshotText",
+      "Horosa-Web/astrostudyui/src/utils/aiExport.js#AI_EXPORT_PRESET_SECTIONS.taiyi"
+    ]
+  },
+  {
+    "name": "bazi_live_snapshot",
+    "technique": "bazi",
+    "fixture_file": "bazi_live_snapshot.txt",
+    "selected_sections": ["起盘信息", "四柱与三元", "流年行运概略", "神煞（四柱与三元）"],
+    "expected_detected": ["起盘信息", "四柱与三元", "流年行运概略", "神煞（四柱与三元）"],
+    "expected_in_export": ["乾造：甲子年 丙寅月 辛酉日 戊子时", "流年：2026 丙午，主事偏财。", "年柱神煞：整柱=天乙贵人"],
+    "expected_excluded": [],
+    "source_refs": [
+      "Horosa-Web/astrostudyui/src/components/cntradition/BaZi.js#buildBaziSnapshotText",
+      "Horosa-Web/astrostudyui/src/utils/aiExport.js#AI_EXPORT_PRESET_SECTIONS.bazi"
+    ]
+  },
+  {
+    "name": "ziwei_live_snapshot",
+    "technique": "ziwei",
+    "fixture_file": "ziwei_live_snapshot.txt",
+    "selected_sections": ["起盘信息"],
+    "expected_detected": ["起盘信息", "宫位总览"],
+    "expected_in_export": ["命宫：命宫（甲子）", "命宫天干：甲"],
+    "expected_excluded": ["兄弟宫：大限=13~22"],
+    "source_refs": [
+      "Horosa-Web/astrostudyui/src/components/ziwei/ZiWeiMain.js#buildZiWeiSnapshotText",
+      "Horosa-Web/astrostudyui/src/utils/aiExport.js#AI_EXPORT_PRESET_SECTIONS.ziwei"
+    ]
+  },
+  {
+    "name": "jieqi_live_snapshot",
+    "technique": "jieqi",
+    "fixture_file": "jieqi_live_snapshot.txt",
+    "selected_sections": ["节气盘参数", "春分星盘", "春分宿盘", "夏至星盘"],
+    "expected_detected": ["节气盘参数", "春分星盘", "春分宿盘", "夏至星盘", "夏至宿盘"],
+    "expected_in_export": ["说明：以下包含二分二至（春分、夏至、秋分、冬至）的星盘与宿盘专用导出。", "春分宿盘主星：虚宿", "夏至星盘要点：太阳入巨蟹。"],
+    "expected_excluded": ["夏至宿盘主星：鬼宿"],
+    "source_refs": [
+      "Horosa-Web/astrostudyui/src/components/jieqi/JieQiChartsMain.js#buildJieQiSnapshotText",
+      "Horosa-Web/astrostudyui/src/utils/aiExport.js#AI_EXPORT_PRESET_SECTIONS.jieqi"
+    ]
+  },
+  {
+    "name": "sanshiunited_live_snapshot",
+    "technique": "sanshiunited",
+    "fixture_file": "sanshiunited_live_snapshot.txt",
+    "selected_sections": ["起盘信息", "概览", "太乙", "六壬大格", "六壬参考", "六壬概览", "八宫详解"],
+    "expected_detected": ["起盘信息", "概览", "太乙", "六壬大格", "六壬小局", "六壬参考", "六壬概览", "八宫详解"],
+    "expected_in_export": ["局数：阳遁九局", "太乙在离宫，主算二十四局。", "1. 贵人顺行格", "坎宫：遁甲：天盘干：壬；八神：值符；九星：天蓬；地盘干：戊"],
+    "expected_excluded": ["2. 三光贵人格"],
+    "source_refs": [
+      "Horosa-Web/astrostudyui/src/components/sanshi/SanShiUnitedMain.js#buildSanShiUnitedSnapshotText",
+      "Horosa-Web/astrostudyui/src/utils/aiExport.js#AI_EXPORT_PRESET_SECTIONS.sanshiunited"
+    ]
+  },
+  {
+    "name": "tongshefa_live_snapshot",
+    "technique": "tongshefa",
+    "fixture_file": "tongshefa_live_snapshot.txt",
+    "selected_sections": ["本卦", "潜藏", "亲和"],
+    "expected_detected": ["本卦", "六爻", "潜藏", "亲和"],
+    "expected_in_export": ["卦名：天风姤", "潜藏：互卦为乾。", "亲和：错卦为地雷复。"],
+    "expected_excluded": ["第一爻：阳动"],
+    "source_refs": [
+      "Horosa-Web/astrostudyui/src/components/tongshefa/TongSheFaMain.js#buildTongSheFaSnapshot",
+      "Horosa-Web/astrostudyui/src/utils/aiExport.js#AI_EXPORT_PRESET_SECTIONS.tongshefa"
+    ]
+  },
+  {
+    "name": "sixyao_live_snapshot",
+    "technique": "sixyao",
+    "fixture_file": "sixyao_live_snapshot.txt",
+    "selected_sections": ["起盘信息", "卦象", "卦辞与断语"],
+    "expected_detected": ["起盘信息", "卦象", "六爻与动爻", "卦辞与断语"],
+    "expected_in_export": ["起卦时间：2026-04-04 21:18", "本卦：泽火革，变卦：天火同人。", "卦辞：革，己日乃孚。"],
+    "expected_excluded": ["第一爻：阳爻(动)"],
+    "source_refs": [
+      "Horosa-Web/astrostudyui/src/components/guazhan/GuaZhanMain.js#buildGuaSnapshotText",
+      "Horosa-Web/astrostudyui/src/utils/aiExport.js#AI_EXPORT_PRESET_SECTIONS.sixyao"
+    ]
+  }
+]
