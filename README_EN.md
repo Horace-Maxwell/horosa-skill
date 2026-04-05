@@ -1,4 +1,6 @@
-[简体中文](./README.md) | **English**
+<div align="center">
+  <a href="./README.md">简体中文</a> · <strong>English</strong>
+</div>
 
 <div align="center">
   <h1>Horosa Skill</h1>
@@ -18,33 +20,21 @@
   </p>
 
   <p>
-    <img src="https://img.shields.io/github/stars/Horace-Maxwell/horosa-skill?style=for-the-badge" alt="GitHub stars" />
-    <img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge" alt="Release" />
-    <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-0f766e?style=for-the-badge" alt="Platforms" />
-    <img src="https://img.shields.io/badge/runtime-offline%20first-111827?style=for-the-badge" alt="Offline runtime" />
-    <img src="https://img.shields.io/badge/MCP-ready-111827?style=for-the-badge" alt="MCP ready" />
-    <img src="https://img.shields.io/badge/storage-SQLite%20%2B%20JSON-111827?style=for-the-badge" alt="SQLite and JSON" />
+    <img src="https://img.shields.io/github/stars/Horace-Maxwell/horosa-skill?style=flat-square" alt="GitHub stars" />
+    <img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square" alt="Release" />
+    <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-0f766e?style=flat-square" alt="Platforms" />
+    <img src="https://img.shields.io/badge/runtime-offline%20first-111827?style=flat-square" alt="Offline runtime" />
+    <img src="https://img.shields.io/badge/MCP-ready-111827?style=flat-square" alt="MCP ready" />
+    <img src="https://img.shields.io/badge/storage-SQLite%20%2B%20JSON-111827?style=flat-square" alt="SQLite and JSON" />
   </p>
 
   <p>
-    <a href="./LICENSE">
-      <img src="https://img.shields.io/badge/License-Apache--2.0-1f2937?style=for-the-badge" alt="License" />
-    </a>
-    <a href="./CONTRIBUTING.md">
-      <img src="https://img.shields.io/badge/Contributing-Guide-0f766e?style=for-the-badge" alt="Contributing" />
-    </a>
-    <a href="./SECURITY.md">
-      <img src="https://img.shields.io/badge/Security-Policy-991b1b?style=for-the-badge" alt="Security" />
-    </a>
-    <a href="./SUPPORT.md">
-      <img src="https://img.shields.io/badge/Support-Paths-1d4ed8?style=for-the-badge" alt="Support" />
-    </a>
-    <a href="./CITATION.cff">
-      <img src="https://img.shields.io/badge/Citation-CFF-7c3aed?style=for-the-badge" alt="Citation" />
-    </a>
-    <a href="./CHANGELOG.md">
-      <img src="https://img.shields.io/badge/Changelog-Keep%20a%20Changelog-f59e0b?style=for-the-badge" alt="Changelog" />
-    </a>
+    <a href="./LICENSE">License</a> ·
+    <a href="./CONTRIBUTING.md">Contributing</a> ·
+    <a href="./SECURITY.md">Security</a> ·
+    <a href="./SUPPORT.md">Support</a> ·
+    <a href="./CITATION.cff">Citation</a> ·
+    <a href="./CHANGELOG.md">Changelog</a>
   </p>
 </div>
 
