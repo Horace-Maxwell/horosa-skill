@@ -49,7 +49,7 @@ If the goal is “clone once, install once, and let AI call real Horosa methods 
 | --- | --- | --- |
 | Offline runtime | macOS and Windows release assets installable from GitHub Releases | Users can run locally after install, including offline usage |
 | AI surface | `MCP server` + `JSON-first CLI` + `ask / dispatch` orchestration | Claude, Codex, Open WebUI, and OpenClaw can all integrate cleanly |
-| Method execution | 37 callable tools across charts, predictive work, and occult domains | This is a real local capability surface, not just prompt glue |
+| Method execution | 39 callable tools across charts, predictive work, occult domains, export tooling, and hover knowledge access | This is a real local capability surface, not just prompt glue |
 | Output contract | Every supported method emits stable envelopes plus `export_snapshot` / `export_format` | Machines can consume outputs repeatedly without guesswork |
 | Local memory | SQLite + JSON artifacts + run manifest + answer write-back | Every invocation becomes a durable local record |
 | Distribution model | Lightweight repository plus heavyweight release assets | Public history stays clean while runtime payloads stay complete |
@@ -59,6 +59,7 @@ If the goal is “clone once, install once, and let AI call real Horosa methods 
 | Domain | Methods available now |
 | --- | --- |
 | Export and orchestration | `export_registry`, `export_parse`, `horosa_dispatch` |
+| Xingque hover knowledge | `knowledge_registry`, `knowledge_read` |
 | Core charts | `chart`, `chart13`, `hellen_chart`, `guolao_chart`, `india_chart`, `relative`, `germany` |
 | Predictive methods | `solarreturn`, `lunarreturn`, `solararc`, `givenyear`, `profection`, `pd`, `pdchart`, `zr`, `firdaria`, `decennials` |
 | Chinese occult backbone | `ziwei_birth`, `ziwei_rules`, `bazi_birth`, `bazi_direct`, `liureng_gods`, `liureng_runyear`, `qimen`, `taiyi`, `jinkou` |
@@ -81,6 +82,24 @@ This project does not only run tools. It also exposes Xingque’s export registr
 ### Explicit shipping exclusion
 
 - `fengshui`
+
+## Bundled Xingque Hover Knowledge Is Also Available
+
+This repository now ships a local bundled knowledge layer for Xingque hover / popover content, so AI systems and users can read those explanations on demand without depending on the original app source tree.
+
+Current bundled domains:
+
+- Astrology: `planet`, `sign`, `house`, `lot`, `aspect`
+- Da Liu Ren: `shen`, `house`
+- Qimen Dunjia: `stem`, `door`, `star`, `god`
+
+That means users can directly read:
+
+- full hover explanations for chart planets, signs, houses, aspects, and lots
+- full hover content for LiuReng earthly branch shen entries and house overlays
+- full hover content for Qimen stems, doors, stars, and gods
+
+Those reads are also persisted and queryable like any other tool call.
 
 ## Why The Output Layer Matters
 
@@ -231,6 +250,23 @@ echo '{"date":"1990-01-01","time":"12:00","zone":"8","lat":"31n14","lon":"121e28
   | uv run horosa-skill tool run chart --stdin
 ```
 
+### Read bundled Xingque hover knowledge directly
+
+```bash
+echo '{"domain":"astro","category":"planet","key":"Sun"}' \
+  | uv run horosa-skill knowledge read --stdin
+```
+
+```bash
+echo '{"domain":"liureng","category":"shen","key":"子"}' \
+  | uv run horosa-skill knowledge read --stdin
+```
+
+```bash
+echo '{"domain":"qimen","category":"door","key":"休门"}' \
+  | uv run horosa-skill knowledge read --stdin
+```
+
 ### Run one Phase 2 local method
 
 ```bash
@@ -291,7 +327,8 @@ Already implemented:
 - macOS and Windows runtime release assets
 - local MCP server and JSON-first CLI
 - full Xingque AI export registry and parser
-- stable structured outputs across 37 callable tools
+- stable structured outputs across 39 callable tools
+- bundled and queryable hover knowledge for chart, LiuReng, and Qimen
 - dispatch-level child export contracts
 - SQLite + JSON artifacts + run manifest data model
 - AI answer write-back and retrieval workflow

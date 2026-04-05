@@ -43,6 +43,8 @@ def build_sample_payloads() -> dict[str, dict]:
             ),
             "selected_sections": ["起盘信息", "八宫详解", "奇门演卦"],
         },
+        "knowledge_registry": {"domain": "astro"},
+        "knowledge_read": {"domain": "qimen", "category": "door", "key": "休门"},
         "qimen": dict(east_birth),
         "taiyi": dict(east_birth),
         "jinkou": {**east_birth, "diFen": "酉", "guirengType": 0},

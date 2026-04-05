@@ -304,6 +304,22 @@ class ExportParseInput(FlexibleModel):
     astro_meaning: AstroMeaningSettingInput | None = None
 
 
+class KnowledgeRegistryInput(FlexibleModel):
+    domain: str | None = None
+
+
+class KnowledgeReadInput(FlexibleModel):
+    domain: str
+    category: str
+    key: str | None = None
+    aspect_degree: int | str | None = None
+    object_a: str | None = None
+    object_b: str | None = None
+    jiang_name: str | None = None
+    tian_branch: str | None = None
+    di_branch: str | None = None
+
+
 class MemoryAnswerInput(FlexibleModel):
     run_id: str
     user_question: str | None = None

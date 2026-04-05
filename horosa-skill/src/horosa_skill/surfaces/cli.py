@@ -23,9 +23,11 @@ app = typer.Typer(
 tool_app = typer.Typer(help="Direct atomic method calls such as chart, qimen, liureng, and bazi.")
 memory_app = typer.Typer(help="Inspect local records, show a single run, or attach the AI's final answer.")
 export_app = typer.Typer(help="Inspect the Xingque AI export registry and parse exported text into structured JSON.")
+knowledge_app = typer.Typer(help="Read bundled Xingque hover knowledge such as 星盘释义、大六壬地支提示、奇门象意。")
 app.add_typer(tool_app, name="tool")
 app.add_typer(memory_app, name="memory")
 app.add_typer(export_app, name="export")
+app.add_typer(knowledge_app, name="knowledge")
 
 
 def _service() -> HorosaSkillService:
@@ -163,6 +165,32 @@ def export_parse(
     service = _service()
     try:
         result = service.run_tool("export_parse", payload, save_result=save_result)
+    except ToolValidationError as exc:
+        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
+        raise typer.Exit(code=2)
+    _print_json(result.model_dump(mode="json"))
+
+
+@knowledge_app.command("registry")
+def knowledge_registry(
+    domain: str | None = typer.Option(None, help="Optional knowledge domain filter: astro, liureng, qimen."),
+    save_result: bool = typer.Option(False, help="Persist the result in local memory."),
+) -> None:
+    service = _service()
+    result = service.run_tool("knowledge_registry", {"domain": domain} if domain else {}, save_result=save_result)
+    _print_json(result.model_dump(mode="json"))
+
+
+@knowledge_app.command("read")
+def knowledge_read(
+    stdin: bool = typer.Option(False, "--stdin", help="Read a JSON object from stdin."),
+    input_file: Optional[Path] = typer.Option(None, "--input", help="Read a JSON object from a file."),
+    save_result: bool = typer.Option(False, help="Persist the result in local memory."),
+) -> None:
+    payload = _load_payload(stdin=stdin, input_file=input_file)
+    service = _service()
+    try:
+        result = service.run_tool("knowledge_read", payload, save_result=save_result)
     except ToolValidationError as exc:
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)

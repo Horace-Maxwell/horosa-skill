@@ -22,6 +22,7 @@ from horosa_skill.engine.registry import TOOL_DEFINITIONS, ToolDefinition
 from horosa_skill.engine.router import select_tools
 from horosa_skill.errors import DispatchResolutionError, HorosaSkillError, ToolTransportError, ToolValidationError
 from horosa_skill.exports import build_export_registry, get_technique_info, parse_export_content
+from horosa_skill.knowledge import build_knowledge_registry, read_knowledge_entry
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.schemas.common import DispatchEnvelope, ErrorInfo, ToolEnvelope
 from horosa_skill.schemas.tools import DispatchInput, MemoryAnswerInput
@@ -82,6 +83,19 @@ def _generic_summary(tool_name: str, data: dict[str, Any]) -> list[str]:
         selected = data.get("selected_sections", [])
         if selected:
             summary.append(f"当前导出将保留 {len(selected)} 个目标分段。")
+        return summary
+    if tool_name == "knowledge_registry":
+        domains = data.get("domains", [])
+        summary = [f"已输出 {len(domains)} 个悬浮知识域的可读目录。"]
+        if domains:
+            summary.append(f"当前包含：{'、'.join(one.get('domain', '') for one in domains if one.get('domain'))}。")
+        return summary
+    if tool_name == "knowledge_read":
+        summary = ["已读取星阙悬浮知识，并转换为稳定的本地可读文档。"]
+        if data.get("domain") and data.get("category"):
+            summary.append(f"知识域：{data['domain']} / {data['category']}。")
+        if data.get("title"):
+            summary.append(f"条目：{data['title']}。")
         return summary
     if tool_name == "qimen":
         pan = data.get("pan", {})
@@ -2859,6 +2873,10 @@ class HorosaSkillService:
                     code="tool.invalid_export_technique",
                     details={"tool_name": definition.name, "technique": payload.get("technique")},
                 ) from exc
+        if definition.name == "knowledge_registry":
+            return build_knowledge_registry(domain=payload.get("domain"))
+        if definition.name == "knowledge_read":
+            return read_knowledge_entry(payload)
         if definition.name == "qimen":
             return self._run_qimen_tool(payload)
         if definition.name == "taiyi":

@@ -3,6 +3,7 @@ from horosa_skill.exports.parser import parse_export_content
 from horosa_skill.engine.client import HorosaApiClient
 from horosa_skill.engine.js_client import HorosaJsEngineClient
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
+from horosa_skill.knowledge import build_knowledge_registry
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.service import TOOL_EXPORT_TECHNIQUE_MAP, HorosaSkillService
 from horosa_skill.testing_payloads import build_sample_payloads
@@ -238,6 +239,52 @@ def test_local_tool_call_always_attaches_complete_export_contract(tmp_path) -> N
     assert result.data["export_format"]["format_source"] == "snapshot_parser"
     assert result.data["export_format"]["selected_sections"] == ["起盘信息", "盘型", "盘面要素", "奇门演卦", "八宫详解", "九宫方盘"]
     assert any(section["title"] == "奇门演卦" for section in result.data["export_format"]["sections"])
+
+
+def test_knowledge_registry_and_read_are_queryable_and_persisted(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    store = MemoryStore(settings)
+    service = HorosaSkillService(settings, client=FakeClient(), store=store, js_client=FakeJsClient())
+
+    registry = service.run_tool("knowledge_registry", {"domain": "astro"}, save_result=False)
+    assert registry.ok is True
+    assert registry.data["domains"][0]["domain"] == "astro"
+    assert any(category["name"] == "planet" for category in registry.data["domains"][0]["categories"])
+
+    liureng = service.run_tool("knowledge_read", {"domain": "liureng", "category": "shen", "key": "子"}, save_result=True)
+    assert liureng.ok is True
+    assert liureng.memory_ref is not None
+    assert liureng.data["title"] == "神后子神"
+    assert "类象" in liureng.data["rendered_text"]
+
+    qimen = service.run_tool("knowledge_read", {"domain": "qimen", "category": "door", "key": "休门"}, save_result=False)
+    assert qimen.ok is True
+    assert qimen.data["key"] == "休门"
+    assert "休养" in qimen.data["rendered_text"]
+
+    astro = service.run_tool(
+        "knowledge_read",
+        {"domain": "astro", "category": "aspect", "aspect_degree": 90, "object_a": "Sun", "object_b": "Jupiter"},
+        save_result=False,
+    )
+    assert astro.ok is True
+    assert astro.data["title"].startswith("太阳 - 木星")
+    assert "相位角：90°" in astro.data["tips"]
+
+    queried = store.query_runs(tool="knowledge_read", include_payload=True)
+    assert len(queried) == 1
+    payload = queried[0]["artifacts"][0]["payload"]
+    assert payload["data"]["domain"] == "liureng"
+    assert payload["data"]["category"] == "shen"
+
+
+def test_knowledge_registry_bundle_has_expected_domains() -> None:
+    registry = build_knowledge_registry()
+    assert [item["domain"] for item in registry["domains"]] == ["astro", "liureng", "qimen"]
 
 
 def test_phase2_tools_attach_export_contracts(tmp_path) -> None:

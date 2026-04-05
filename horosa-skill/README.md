@@ -20,6 +20,8 @@
   - `ask`
   - `export registry`
   - `export parse`
+  - `knowledge registry`
+  - `knowledge read`
 - 本地数据管理
   - SQLite
   - JSON artifacts
@@ -82,6 +84,17 @@
 - `export_registry`
 - `export_parse`
 - `horosa_dispatch`
+
+### 星阙悬浮知识库
+
+- `knowledge_registry`
+- `knowledge_read`
+
+已接入：
+
+- 星盘悬浮：`planet`、`sign`、`house`、`lot`、`aspect`
+- 大六壬悬浮：`shen`、`house`
+- 奇门悬浮：`stem`、`door`、`star`、`god`
 
 明确排除：
 
@@ -168,6 +181,13 @@ echo '{
   "technique":"qimen",
   "content":"[起盘信息]\n参数\n\n[八宫]\n八宫内容\n\n[演卦]\n演卦内容"
 }' | uv run horosa-skill export parse --stdin
+```
+
+### 读取星阙悬浮知识
+
+```bash
+echo '{"domain":"astro","category":"planet","key":"Sun"}' \
+  | uv run horosa-skill knowledge read --stdin
 ```
 
 ## 本地记录系统会保存什么

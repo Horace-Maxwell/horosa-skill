@@ -15,6 +15,8 @@ from horosa_skill.schemas.tools import (
     GuaNamesInput,
     JinKouInput,
     JieQiYearInput,
+    KnowledgeReadInput,
+    KnowledgeRegistryInput,
     LiuRengGodsInput,
     LiuRengRunYearInput,
     NongliTimeInput,
@@ -50,6 +52,8 @@ class ToolDefinition:
 TOOL_DEFINITIONS: dict[str, ToolDefinition] = {
     "export_registry": ToolDefinition("export_registry", "export", "registry", None, ExportRegistryInput, "Return the full 星阙 AI 导出设置 registry in machine-readable JSON.", execution="local"),
     "export_parse": ToolDefinition("export_parse", "export", "parse", None, ExportParseInput, "Convert 星阙 AI 导出文本快照 into structured JSON sections.", execution="local"),
+    "knowledge_registry": ToolDefinition("knowledge_registry", "knowledge", "registry", None, KnowledgeRegistryInput, "List bundled Xingque hover knowledge domains, categories, and keys.", execution="local"),
+    "knowledge_read": ToolDefinition("knowledge_read", "knowledge", "read", None, KnowledgeReadInput, "Read bundled Xingque hover knowledge for astrology, 六壬, and 奇门.", execution="local"),
     "qimen": ToolDefinition("qimen", "cn", "qimen", None, QimenInput, "Run the local 奇门遁甲 engine with headless frontend parity.", execution="local"),
     "taiyi": ToolDefinition("taiyi", "cn", "taiyi", None, TaiyiInput, "Run the local 太乙 engine with headless frontend parity.", execution="local"),
     "jinkou": ToolDefinition("jinkou", "cn", "jinkou", None, JinKouInput, "Run the local 金口诀 engine with headless frontend parity.", execution="local"),

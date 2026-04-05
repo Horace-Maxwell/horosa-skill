@@ -76,6 +76,7 @@ def run_self_check(*, rounds: int = 2) -> dict:
         service = HorosaSkillService(settings)
         tool_results: list[dict] = []
         dispatch_result: dict | None = None
+        knowledge_result: dict | None = None
         manager.start_local_services()
         try:
             for tool_name in TOOL_DEFINITIONS:
@@ -157,6 +158,59 @@ def run_self_check(*, rounds: int = 2) -> dict:
                     for name, contract in dispatch.result_export_contracts.items()
                 },
             }
+            knowledge_cases = {
+                "astro_aspect": {
+                    "domain": "astro",
+                    "category": "aspect",
+                    "aspect_degree": 90,
+                    "object_a": "Sun",
+                    "object_b": "Jupiter",
+                },
+                "liureng_shen": {
+                    "domain": "liureng",
+                    "category": "shen",
+                    "key": "子",
+                },
+                "qimen_door": {
+                    "domain": "qimen",
+                    "category": "door",
+                    "key": "休门",
+                },
+            }
+            knowledge_reads: dict[str, dict] = {}
+            for case_name, case_payload in knowledge_cases.items():
+                result = service.run_tool("knowledge_read", copy.deepcopy(case_payload), save_result=True)
+                queried = service.store.query_runs(tool="knowledge_read", include_payload=True, limit=20)
+                matched = next(
+                    (
+                        run
+                        for run in queried
+                        if run.get("artifacts")
+                        and run["artifacts"][0].get("payload", {}).get("data", {}).get("domain") == case_payload["domain"]
+                        and run["artifacts"][0].get("payload", {}).get("data", {}).get("category") == case_payload["category"]
+                    ),
+                    None,
+                )
+                artifact_payload = matched["artifacts"][0]["payload"] if matched else {}
+                knowledge_reads[case_name] = {
+                    "ok": result.ok,
+                    "domain": result.data.get("domain"),
+                    "category": result.data.get("category"),
+                    "title": result.data.get("title"),
+                    "rendered_text_nonempty": bool(result.data.get("rendered_text")),
+                    "lines_nonempty": bool(result.data.get("lines")),
+                    "memory_ref": result.memory_ref.model_dump(mode="json") if result.memory_ref else None,
+                    "artifact_payload_ok": artifact_payload.get("ok") is True if isinstance(artifact_payload, dict) else False,
+                    "artifact_rendered_text_nonempty": bool(
+                        artifact_payload.get("data", {}).get("rendered_text")
+                    )
+                    if isinstance(artifact_payload, dict)
+                    else False,
+                }
+            knowledge_result = {
+                "ok": all(item["ok"] and item["rendered_text_nonempty"] and item["artifact_payload_ok"] and item["artifact_rendered_text_nonempty"] for item in knowledge_reads.values()),
+                "cases": knowledge_reads,
+            }
         finally:
             manager.stop_local_services()
 
@@ -172,6 +226,10 @@ def run_self_check(*, rounds: int = 2) -> dict:
         and dispatch_result["selected_tools_covered"]
         and all(dispatch_result["result_export_contracts_ok"].values())
     )
+    knowledge_ok = bool(
+        knowledge_result
+        and knowledge_result["ok"]
+    )
     return {
         "generated_at": datetime.now(ZoneInfo("America/Los_Angeles")).isoformat(),
         "tool_count": len(tool_results),
@@ -179,9 +237,10 @@ def run_self_check(*, rounds: int = 2) -> dict:
         "extra_payloads": extra_payloads,
         "tools": tool_results,
         "dispatch": dispatch_result,
+        "knowledge": knowledge_result,
         "failed_tools": failed_tools,
         "missing_export_contract_tools": missing_export,
-        "ok": not missing_payloads and not extra_payloads and not failed_tools and not missing_export and dispatch_ok,
+        "ok": not missing_payloads and not extra_payloads and not failed_tools and not missing_export and dispatch_ok and knowledge_ok,
     }
 
 

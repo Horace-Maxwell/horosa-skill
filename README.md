@@ -55,7 +55,7 @@
 | --- | --- | --- |
 | 离线 runtime | 通过 GitHub Releases 安装 macOS / Windows 完整 runtime | 安装后可断网运行，不依赖远程算法服务 |
 | AI 调用接口 | `MCP server` + `JSON-first CLI` + `ask / dispatch` | Claude、Codex、Open WebUI、OpenClaw 都能接 |
-| 技法执行 | 37 个可调用工具，覆盖星盘、推运、术数、导出协议 | 不是 demo，而是可直接使用的多技法本地能力面 |
+| 技法执行 | 39 个可调用工具，覆盖星盘、推运、术数、导出协议与悬浮知识读取 | 不是 demo，而是可直接使用的多技法本地能力面 |
 | 输出协议 | 每个技法返回统一 envelope，并附带 `export_snapshot` / `export_format` | 机器和人都能稳定消费，不需要猜字段 |
 | 数据管理 | SQLite + JSON artifacts + run manifest + AI answer write-back | 一次调用就是一条可追溯记录 |
 | 发布策略 | 轻仓库 + 重 Release | GitHub 页面专业、清楚，不拖慢协作 |
@@ -65,6 +65,7 @@
 | 领域 | 当前可用方法 |
 | --- | --- |
 | 导出协议与调度 | `export_registry`、`export_parse`、`horosa_dispatch` |
+| 星阙悬浮知识库 | `knowledge_registry`、`knowledge_read` |
 | 核心星盘 | `chart`、`chart13`、`hellen_chart`、`guolao_chart`、`india_chart`、`relative`、`germany` |
 | 推运与时运 | `solarreturn`、`lunarreturn`、`solararc`、`givenyear`、`profection`、`pd`、`pdchart`、`zr`、`firdaria`、`decennials` |
 | 中文术数主干 | `ziwei_birth`、`ziwei_rules`、`bazi_birth`、`bazi_direct`、`liureng_gods`、`liureng_runyear`、`qimen`、`taiyi`、`jinkou` |
@@ -87,6 +88,24 @@
 ### 明确排除项
 
 - `fengshui`
+
+## 星阙悬浮知识库也已经接进来了
+
+现在这个仓库不只会“算”，也能在需要的时候直接读取星阙 app 里的 hover / popover 知识内容，而且这些内容已经打包进 repo 内的本地 bundle，不再依赖原 app 源目录。
+
+当前已接入：
+
+- 星盘悬浮：`planet`、`sign`、`house`、`lot`、`aspect`
+- 大六壬悬浮：`shen`、`house`
+- 奇门遁甲悬浮：`stem`、`door`、`star`、`god`
+
+这意味着 AI 或用户现在可以在想看的时候直接调：
+
+- 星盘里行星、星座、宫位、相位、lots 的完整 hover 文本
+- 大六壬里地支神与将盘组合的 hover 文本
+- 奇门里天干、八门、九星、八神的 hover 文本
+
+而且这些读取结果也会和别的工具一样被落库、检索、回看。
 
 ## 对 AI 来说，这个仓库最重要的不是“算”，而是“稳定可消费”
 
@@ -237,6 +256,23 @@ echo '{"date":"1990-01-01","time":"12:00","zone":"8","lat":"31n14","lon":"121e28
   | uv run horosa-skill tool run chart --stdin
 ```
 
+### 直接读取星阙悬浮知识
+
+```bash
+echo '{"domain":"astro","category":"planet","key":"Sun"}' \
+  | uv run horosa-skill knowledge read --stdin
+```
+
+```bash
+echo '{"domain":"liureng","category":"shen","key":"子"}' \
+  | uv run horosa-skill knowledge read --stdin
+```
+
+```bash
+echo '{"domain":"qimen","category":"door","key":"休门"}' \
+  | uv run horosa-skill knowledge read --stdin
+```
+
 ### 直接运行 Phase 2 本地技法
 
 ```bash
@@ -302,7 +338,8 @@ echo '{
 - macOS / Windows runtime release 资产
 - 本地 MCP server 与 JSON-first CLI
 - 完整星阙 AI 导出 registry 与 parser
-- 37 个可调用工具的结构化稳定输出
+- 39 个可调用工具的结构化稳定输出
+- 星盘 / 六壬 / 奇门悬浮知识库的本地 bundle 化与按需读取
 - `dispatch` 汇总层 export contract
 - SQLite + JSON artifact + run manifest 数据管理
 - AI answer 回写与检索链路
