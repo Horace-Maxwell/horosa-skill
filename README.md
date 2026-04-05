@@ -5,17 +5,7 @@
   <p><strong>把星阙 / Horosa 变成任何 AI 都能本地调用的离线玄学能力层。</strong></p>
   <p>下载仓库，安装一次离线 runtime，然后让 Claude、Codex、Open WebUI、OpenClaw 等 AI 在你的机器上直接调用真实算法、读取完整 AI 导出协议、输出稳定结构化结果，并把每次分析沉淀为可检索的本地记录。</p>
 
-  <p>
-    <a href="https://github.com/Horace-Maxwell/horosa-skill">
-      <img src="https://img.shields.io/badge/GitHub-Repository-111827?style=for-the-badge&logo=github" alt="Repository" />
-    </a>
-    <a href="https://github.com/Horace-Maxwell/horosa-skill/releases">
-      <img src="https://img.shields.io/badge/GitHub-Releases-1d4ed8?style=for-the-badge&logo=github" alt="Releases" />
-    </a>
-    <a href="./README_EN.md">
-      <img src="https://img.shields.io/badge/Read%20in-English-0f766e?style=for-the-badge" alt="Read in English" />
-    </a>
-  </p>
+  <p><a href="https://github.com/Horace-Maxwell/horosa-skill"><img src="https://img.shields.io/badge/GitHub-Repository-111827?style=for-the-badge&logo=github" alt="Repository" /></a><a href="https://github.com/Horace-Maxwell/horosa-skill/releases"><img src="https://img.shields.io/badge/GitHub-Releases-1d4ed8?style=for-the-badge&logo=github" alt="Releases" /></a><a href="./README_EN.md"><img src="https://img.shields.io/badge/Read%20in-English-0f766e?style=for-the-badge" alt="Read in English" /></a></p>
 
   <p>
     <img src="https://img.shields.io/github/stars/Horace-Maxwell/horosa-skill?style=flat-square" alt="GitHub stars" />
@@ -26,29 +16,9 @@
     <img src="https://img.shields.io/badge/storage-SQLite%20%2B%20JSON-111827?style=flat-square" alt="SQLite and JSON" />
   </p>
 
-  <p>
-    <a href="./LICENSE">
-      <img src="https://img.shields.io/badge/License-Apache--2.0-374151?style=flat-square" alt="License" />
-    </a>
-    <a href="./CONTRIBUTING.md">
-      <img src="https://img.shields.io/badge/Contributing-Guide-0f766e?style=flat-square" alt="Contributing" />
-    </a>
-    <a href="./SECURITY.md">
-      <img src="https://img.shields.io/badge/Security-Policy-991b1b?style=flat-square" alt="Security" />
-    </a>
-  </p>
+  <p><a href="./LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-374151?style=flat-square" alt="License" /></a><a href="./CONTRIBUTING.md"><img src="https://img.shields.io/badge/Contributing-Guide-0f766e?style=flat-square" alt="Contributing" /></a><a href="./SECURITY.md"><img src="https://img.shields.io/badge/Security-Policy-991b1b?style=flat-square" alt="Security" /></a></p>
 
-  <p>
-    <a href="./SUPPORT.md">
-      <img src="https://img.shields.io/badge/Support-Paths-1d4ed8?style=flat-square" alt="Support" />
-    </a>
-    <a href="./CITATION.cff">
-      <img src="https://img.shields.io/badge/Citation-CFF-7c3aed?style=flat-square" alt="Citation" />
-    </a>
-    <a href="./CHANGELOG.md">
-      <img src="https://img.shields.io/badge/Changelog-Updates-f59e0b?style=flat-square" alt="Changelog" />
-    </a>
-  </p>
+  <p><a href="./SUPPORT.md"><img src="https://img.shields.io/badge/Support-Paths-1d4ed8?style=flat-square" alt="Support" /></a><a href="./CITATION.cff"><img src="https://img.shields.io/badge/Citation-CFF-7c3aed?style=flat-square" alt="Citation" /></a><a href="./CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-Updates-f59e0b?style=flat-square" alt="Changelog" /></a></p>
 </div>
 
 ## 项目定位
