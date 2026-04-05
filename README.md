@@ -27,6 +27,15 @@
   </p>
 </div>
 
+## 仓库信息
+
+- [License](./LICENSE)
+- [Code of Conduct](./CODE_OF_CONDUCT.md)
+- [Contributing](./CONTRIBUTING.md)
+- [Security](./SECURITY.md)
+- [Support](./SUPPORT.md)
+- [Citation](./CITATION.cff)
+
 ## 项目定位
 
 星阙本身已经有完整的本地算法、星历、导出设置和多技法体系。`Horosa Skill` 做的不是“再造一个简化版占算器”，而是把这些能力整理成一个适合 GitHub 分发、适合 AI 调用、适合长期本地管理的产品化接口层。
