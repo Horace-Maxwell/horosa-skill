@@ -55,35 +55,132 @@
 | --- | --- | --- |
 | 离线 runtime | 通过 GitHub Releases 安装 macOS / Windows 完整 runtime | 安装后可断网运行，不依赖远程算法服务 |
 | AI 调用接口 | `MCP server` + `JSON-first CLI` + `ask / dispatch` | Claude、Codex、Open WebUI、OpenClaw 都能接 |
-| 技法执行 | 39 个可调用工具，覆盖星盘、推运、术数、导出协议与悬浮知识读取 | 不是 demo，而是可直接使用的多技法本地能力面 |
+| 技法执行 | `39` 个可调用工具，覆盖星盘、推运、术数、导出协议与悬浮知识读取 | 不是 demo，而是可直接使用的多技法本地能力面 |
 | 输出协议 | 每个技法返回统一 envelope，并附带 `export_snapshot` / `export_format` | 机器和人都能稳定消费，不需要猜字段 |
+| 知识读取 | 内置星阙 hover 知识 bundle，可按需读取星盘 / 六壬 / 奇门悬浮内容 | 不只是算，还能把“解释层”交给 AI 随时调用 |
 | 数据管理 | SQLite + JSON artifacts + run manifest + AI answer write-back | 一次调用就是一条可追溯记录 |
 | 发布策略 | 轻仓库 + 重 Release | GitHub 页面专业、清楚，不拖慢协作 |
 
+### 功能卖点
+
+- 真离线：算法、星历、导出协议、知识读取都在本机完成，不依赖云端算命 API。
+- 真 AI 接口：不是 prompt 拼接，而是明确 schema、明确工具、明确结构化输出。
+- 真长期可管：每次调用都会留下 run 记录、artifact、manifest、AI 最终回答。
+- 真星阙一致性：输出不是随意摘要，而是按星阙 app 的 AI 导出完全体和 hover 文档风格清洗。
+- 真 GitHub-first：公开仓库保持清爽，runtime 放 Releases，用户体验接近成熟产品仓库。
+
 ### 当前可直接调用的技法与工具
 
-| 领域 | 当前可用方法 |
-| --- | --- |
-| 导出协议与调度 | `export_registry`、`export_parse`、`horosa_dispatch` |
-| 星阙悬浮知识库 | `knowledge_registry`、`knowledge_read` |
-| 核心星盘 | `chart`、`chart13`、`hellen_chart`、`guolao_chart`、`india_chart`、`relative`、`germany` |
-| 推运与时运 | `solarreturn`、`lunarreturn`、`solararc`、`givenyear`、`profection`、`pd`、`pdchart`、`zr`、`firdaria`、`decennials` |
-| 中文术数主干 | `ziwei_birth`、`ziwei_rules`、`bazi_birth`、`bazi_direct`、`liureng_gods`、`liureng_runyear`、`qimen`、`taiyi`、`jinkou` |
-| Phase 2 本地技法 | `tongshefa`、`sanshiunited`、`suzhan`、`sixyao`、`otherbu` |
-| 节气 / 农历 / 卦义 | `jieqi_year`、`nongli_time`、`gua_desc`、`gua_meiyi` |
+#### 导出协议、调度与知识层
+
+| 工具 ID | 中文名称 | 作用 |
+| --- | --- | --- |
+| `export_registry` | 星阙 AI 导出协议注册表 | 返回所有 technique、section、设置项、可选导出块的机器可读总表 |
+| `export_parse` | 星阙 AI 导出正文解析器 | 把星阙风格导出文本重新解析成稳定 JSON 分段 |
+| `horosa_dispatch` | 总调度器 | 接收自然语言意图并自动分派到对应技法 |
+| `knowledge_registry` | 悬浮知识目录 | 列出当前内置的星盘 / 六壬 / 奇门知识域与可读 key |
+| `knowledge_read` | 悬浮知识读取器 | 读取星阙 app 悬浮窗口中的完整说明文档并落库 |
+
+#### 核心星盘与派生星盘
+
+| 工具 ID | 中文名称 | 作用 |
+| --- | --- | --- |
+| `chart` | 标准星盘 | 生成基础西洋星盘与完整 AI 导出正文 |
+| `chart13` | 13 宫扩展盘 | 生成 `chart13` 形态的星盘输出 |
+| `hellen_chart` | 希腊星盘 | 生成希腊占星取向的星盘导出 |
+| `guolao_chart` | 七政四余盘 | 生成七政四余 / 果老法盘面 |
+| `india_chart` | 印度盘 | 生成印度占星盘面 |
+| `relative` | 合盘 / 关系盘 | 生成双人关系、合盘、relative 输出 |
+| `germany` | 量化盘 / 中点盘 | 生成中点结构与量化分析输出 |
+
+#### 推运、返照与时运系统
+
+| 工具 ID | 中文名称 | 作用 |
+| --- | --- | --- |
+| `solarreturn` | 太阳返照 | 计算太阳返照盘 |
+| `lunarreturn` | 月亮返照 | 计算月返盘 |
+| `solararc` | 太阳弧推运 | 计算太阳弧推运结果 |
+| `givenyear` | 指定年推运 | 按指定年份生成推运输出 |
+| `profection` | 小限 / 年运推限 | 计算 profection |
+| `pd` | 本初方向 / 主限 | 计算 primary directions |
+| `pdchart` | 主限盘 | 生成可读的主限盘面 |
+| `zr` | 黄道释放 | 计算 zodiacal release |
+| `firdaria` | 法达星限 | 生成法达星限结构与时间轴 |
+| `decennials` | 十年大运 / 十年星限 | 生成 decennials 时间分层输出 |
+
+#### 中文术数主干
+
+| 工具 ID | 中文名称 | 作用 |
+| --- | --- | --- |
+| `ziwei_birth` | 紫微斗数命盘 | 生成紫微命盘 |
+| `ziwei_rules` | 紫微规则库 | 返回紫微规则与结构信息 |
+| `bazi_birth` | 八字命盘 | 生成四柱八字命盘 |
+| `bazi_direct` | 八字直断 | 生成八字直断输出 |
+| `liureng_gods` | 大六壬起课 | 生成大六壬四课三传与神煞结构 |
+| `liureng_runyear` | 大六壬行年 | 生成六壬行年 / 年运输出 |
+| `qimen` | 奇门遁甲 | 生成奇门盘、宫位细节与演卦 |
+| `taiyi` | 太乙神数 | 生成太乙盘与十六宫标记 |
+| `jinkou` | 金口诀 | 生成金口诀盘面与速览结果 |
+
+#### Phase 2 本地技法
+
+| 工具 ID | 中文名称 | 作用 |
+| --- | --- | --- |
+| `tongshefa` | 统摄法 | 生成统摄法卦象、六爻、潜藏、亲和关系 |
+| `sanshiunited` | 三式合一 | 聚合奇门、太乙、大六壬并统一导出 |
+| `suzhan` | 宿占 / 宿盘 | 生成宿占结构与宿曜信息 |
+| `sixyao` | 六爻 / 易卦 | 生成本卦、之卦、爻变、问题导向输出 |
+| `otherbu` | 西洋游戏 / 占星骰子 | 生成星骰与对应解读结构 |
+
+#### 节气、农历与卦义辅助
+
+| 工具 ID | 中文名称 | 作用 |
+| --- | --- | --- |
+| `jieqi_year` | 全年节气盘 | 生成全年节气节点与节气相关结构 |
+| `nongli_time` | 农历换算 | 生成农历时间、干支等基础信息 |
+| `gua_desc` | 卦义说明 | 查询卦名与卦辞等基础释义 |
+| `gua_meiyi` | 梅易卦义 | 查询梅花易数取向的卦义说明 |
 
 ### 已完成机器建模的星阙 AI 导出协议
 
-除了“能算”，这个仓库还把星阙的 AI 导出协议整理成机器可读的 registry surface，覆盖这些 technique 域：
+除了“能算”，这个仓库还把星阙的 AI 导出协议整理成机器可读的 registry surface。下面这些 `technique` 域都已经建模，并能被导出 / 解析 / 回放：
 
-- `astrochart`、`astrochart_like`、`indiachart`、`relative`
-- `primarydirect`、`primarydirchart`、`zodialrelease`、`firdaria`、`decennials`
-- `solarreturn`、`lunarreturn`、`solararc`、`givenyear`、`profection`
-- `bazi`、`ziwei`、`suzhan`、`sixyao`、`tongshefa`
-- `liureng`、`jinkou`、`qimen`、`taiyi`、`sanshiunited`
-- `guolao`、`germany`
-- `jieqi`、`jieqi_meta`、`jieqi_chunfen`、`jieqi_xiazhi`、`jieqi_qiufen`、`jieqi_dongzhi`
-- `otherbu`、`generic`
+| technique ID | 中文对应 | 说明 |
+| --- | --- | --- |
+| `astrochart` | 标准星盘导出 | 标准西占星盘完整导出 |
+| `astrochart_like` | 类星盘导出 | 与标准星盘接近的盘型 |
+| `indiachart` | 印度盘导出 | 印占相关盘型 |
+| `relative` | 合盘导出 | 关系盘 / 双人盘 |
+| `primarydirect` | 主限导出 | primary directions 结果 |
+| `primarydirchart` | 主限盘导出 | 主限盘视图 |
+| `zodialrelease` | 黄道释放导出 | zodiacal release |
+| `firdaria` | 法达星限导出 | 法达时间轴 |
+| `decennials` | 十年星限导出 | decennials 时间层级 |
+| `solarreturn` | 太阳返照导出 | solar return |
+| `lunarreturn` | 月返导出 | lunar return |
+| `solararc` | 太阳弧导出 | solar arc 推运 |
+| `givenyear` | 指定年导出 | 指定年份分析 |
+| `profection` | 小限导出 | profection |
+| `bazi` | 八字导出 | 四柱八字相关输出 |
+| `ziwei` | 紫微导出 | 紫微斗数相关输出 |
+| `suzhan` | 宿占导出 | 宿盘 / 宿曜结构 |
+| `sixyao` | 六爻导出 | 易卦 / 六爻输出 |
+| `tongshefa` | 统摄法导出 | 统摄法结构 |
+| `liureng` | 大六壬导出 | 四课、三传、神煞、大格、小局 |
+| `jinkou` | 金口诀导出 | 金口诀结构化正文 |
+| `qimen` | 奇门导出 | 奇门盘型、八宫、九宫方盘、演卦 |
+| `taiyi` | 太乙导出 | 太乙盘与宫位标记 |
+| `sanshiunited` | 三式合一导出 | 三式聚合结果 |
+| `guolao` | 七政四余导出 | 七政四余盘 |
+| `germany` | 量化盘导出 | 中点与量化分析 |
+| `jieqi` | 节气主导出 | 节气盘主结构 |
+| `jieqi_meta` | 节气元信息导出 | 节气基础元数据 |
+| `jieqi_chunfen` | 春分导出 | 春分节气域 |
+| `jieqi_xiazhi` | 夏至导出 | 夏至节气域 |
+| `jieqi_qiufen` | 秋分导出 | 秋分节气域 |
+| `jieqi_dongzhi` | 冬至导出 | 冬至节气域 |
+| `otherbu` | 占星骰子导出 | 西洋游戏 / 骰子输出 |
+| `generic` | 通用导出 | 农历时间等通用型结果 |
 
 ### 明确排除项
 

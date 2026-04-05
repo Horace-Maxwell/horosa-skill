@@ -35,60 +35,62 @@
 
 ## 当前已经接进来的技法
 
+完整双语能力矩阵请看根目录 [README.md](../README.md) 和 [README_EN.md](../README_EN.md)。这里保留运行层视角，强调“你在这个子项目里具体能调什么”。
+
 ### 核心星盘与派生盘
 
-- `chart`
-- `chart13`
-- `hellen_chart`
-- `guolao_chart`
-- `india_chart`
-- `relative`
-- `germany`
+- `chart`：标准星盘
+- `chart13`：13 宫扩展盘
+- `hellen_chart`：希腊星盘
+- `guolao_chart`：七政四余盘
+- `india_chart`：印度盘
+- `relative`：合盘 / 关系盘
+- `germany`：量化盘 / 中点盘
 
 ### 推运与时运
 
-- `solarreturn`
-- `lunarreturn`
-- `solararc`
-- `givenyear`
-- `profection`
-- `pd`
-- `pdchart`
-- `zr`
-- `firdaria`
-- `decennials`
+- `solarreturn`：太阳返照
+- `lunarreturn`：月返
+- `solararc`：太阳弧推运
+- `givenyear`：指定年推运
+- `profection`：小限
+- `pd`：主限 / 本初方向
+- `pdchart`：主限盘
+- `zr`：黄道释放
+- `firdaria`：法达星限
+- `decennials`：十年大运 / 十年星限
 
 ### 中文术数与扩展技法
 
-- `ziwei_birth`
-- `ziwei_rules`
-- `bazi_birth`
-- `bazi_direct`
-- `liureng_gods`
-- `liureng_runyear`
-- `qimen`
-- `taiyi`
-- `jinkou`
-- `tongshefa`
-- `sanshiunited`
-- `suzhan`
-- `sixyao`
-- `otherbu`
-- `jieqi_year`
-- `nongli_time`
-- `gua_desc`
-- `gua_meiyi`
+- `ziwei_birth`：紫微斗数命盘
+- `ziwei_rules`：紫微规则库
+- `bazi_birth`：八字命盘
+- `bazi_direct`：八字直断
+- `liureng_gods`：大六壬起课
+- `liureng_runyear`：大六壬行年
+- `qimen`：奇门遁甲
+- `taiyi`：太乙神数
+- `jinkou`：金口诀
+- `tongshefa`：统摄法
+- `sanshiunited`：三式合一
+- `suzhan`：宿占 / 宿盘
+- `sixyao`：六爻 / 易卦
+- `otherbu`：西洋游戏 / 占星骰子
+- `jieqi_year`：全年节气盘
+- `nongli_time`：农历换算
+- `gua_desc`：卦义说明
+- `gua_meiyi`：梅易卦义
 
 ### 导出与调度
 
-- `export_registry`
-- `export_parse`
-- `horosa_dispatch`
+- `export_registry`：星阙 AI 导出协议注册表
+- `export_parse`：星阙 AI 导出正文解析器
+- `horosa_dispatch`：自然语言总调度器
 
 ### 星阙悬浮知识库
 
-- `knowledge_registry`
-- `knowledge_read`
+- `knowledge_registry`：悬浮知识目录
+- `knowledge_read`：悬浮知识读取器
 
 已接入：
 

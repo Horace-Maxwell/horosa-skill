@@ -49,35 +49,132 @@ If the goal is “clone once, install once, and let AI call real Horosa methods 
 | --- | --- | --- |
 | Offline runtime | macOS and Windows release assets installable from GitHub Releases | Users can run locally after install, including offline usage |
 | AI surface | `MCP server` + `JSON-first CLI` + `ask / dispatch` orchestration | Claude, Codex, Open WebUI, and OpenClaw can all integrate cleanly |
-| Method execution | 39 callable tools across charts, predictive work, occult domains, export tooling, and hover knowledge access | This is a real local capability surface, not just prompt glue |
+| Method execution | `39` callable tools across charts, predictive work, occult domains, export tooling, and hover knowledge access | This is a real local capability surface, not just prompt glue |
 | Output contract | Every supported method emits stable envelopes plus `export_snapshot` / `export_format` | Machines can consume outputs repeatedly without guesswork |
+| Knowledge access | Local bundled Xingque hover knowledge for astrology, LiuReng, and Qimen | AI can ask for explanation layers as well as raw calculation layers |
 | Local memory | SQLite + JSON artifacts + run manifest + answer write-back | Every invocation becomes a durable local record |
 | Distribution model | Lightweight repository plus heavyweight release assets | Public history stays clean while runtime payloads stay complete |
 
+### Feature pillars
+
+- Real offline execution: no cloud divination API dependency after runtime install.
+- Real tool surface: not prompt glue, but explicit schemas, explicit tools, and stable contracts.
+- Real lifecycle storage: runs, artifacts, manifests, user questions, and final AI answers are persisted together.
+- Real Xingque fidelity: outputs are cleaned toward Xingque export and hover-document style instead of loose summaries.
+- Real GitHub packaging: lightweight public history, heavyweight runtime in Releases, product-like repo presentation.
+
 ### Directly callable tools
 
-| Domain | Methods available now |
-| --- | --- |
-| Export and orchestration | `export_registry`, `export_parse`, `horosa_dispatch` |
-| Xingque hover knowledge | `knowledge_registry`, `knowledge_read` |
-| Core charts | `chart`, `chart13`, `hellen_chart`, `guolao_chart`, `india_chart`, `relative`, `germany` |
-| Predictive methods | `solarreturn`, `lunarreturn`, `solararc`, `givenyear`, `profection`, `pd`, `pdchart`, `zr`, `firdaria`, `decennials` |
-| Chinese occult backbone | `ziwei_birth`, `ziwei_rules`, `bazi_birth`, `bazi_direct`, `liureng_gods`, `liureng_runyear`, `qimen`, `taiyi`, `jinkou` |
-| Phase 2 local methods | `tongshefa`, `sanshiunited`, `suzhan`, `sixyao`, `otherbu` |
-| Seasonal / calendar / hexagram utilities | `jieqi_year`, `nongli_time`, `gua_desc`, `gua_meiyi` |
+#### Export, orchestration, and knowledge
+
+| Tool ID | Name | Purpose |
+| --- | --- | --- |
+| `export_registry` | Xingque export registry | Return the full machine-readable export registry |
+| `export_parse` | Export text parser | Parse Xingque-style export text back into structured JSON |
+| `horosa_dispatch` | Natural-language dispatcher | Choose methods from user intent and run them coherently |
+| `knowledge_registry` | Hover knowledge catalog | List bundled astrology / LiuReng / Qimen knowledge domains and keys |
+| `knowledge_read` | Hover knowledge reader | Read bundled Xingque hover content on demand and persist it |
+
+#### Core charts and derived charts
+
+| Tool ID | Name | Purpose |
+| --- | --- | --- |
+| `chart` | Standard chart | Generate the main western chart with full export output |
+| `chart13` | Chart13 variant | Generate the `chart13` flavor |
+| `hellen_chart` | Hellenistic chart | Generate a Hellenistic-leaning chart output |
+| `guolao_chart` | Seven Governors / Guolao chart | Generate 七政四余 output |
+| `india_chart` | Indian chart | Generate Indian astrology output |
+| `relative` | Relationship / relative chart | Generate two-person or relational chart structures |
+| `germany` | Midpoint / quantitative chart | Generate midpoint-based analysis output |
+
+#### Predictive and timing systems
+
+| Tool ID | Name | Purpose |
+| --- | --- | --- |
+| `solarreturn` | Solar return | Compute solar return output |
+| `lunarreturn` | Lunar return | Compute lunar return output |
+| `solararc` | Solar arc directions | Compute solar arc results |
+| `givenyear` | Given-year analysis | Generate year-specific predictive output |
+| `profection` | Profection | Compute annual profection |
+| `pd` | Primary directions | Compute primary directions |
+| `pdchart` | Primary direction chart | Render the chart-style primary direction output |
+| `zr` | Zodiacal release | Compute zodiacal release |
+| `firdaria` | Firdaria | Generate Firdaria timelines |
+| `decennials` | Decennials | Generate decennial timing layers |
+
+#### Chinese occult backbone
+
+| Tool ID | Name | Purpose |
+| --- | --- | --- |
+| `ziwei_birth` | Zi Wei birth chart | Generate Zi Wei chart output |
+| `ziwei_rules` | Zi Wei rules | Return Zi Wei rules and structure info |
+| `bazi_birth` | BaZi birth chart | Generate Four Pillars chart output |
+| `bazi_direct` | BaZi direct reading | Generate direct-interpretation BaZi output |
+| `liureng_gods` | Da Liu Ren main reading | Generate Da Liu Ren course / gods output |
+| `liureng_runyear` | Da Liu Ren annual timing | Generate LiuReng run-year output |
+| `qimen` | Qimen Dunjia | Generate Qimen layout, palace details, and divination sections |
+| `taiyi` | Taiyi | Generate Taiyi output and palace markers |
+| `jinkou` | Jinkou Jue | Generate Jinkou output |
+
+#### Phase 2 local methods
+
+| Tool ID | Name | Purpose |
+| --- | --- | --- |
+| `tongshefa` | Tong She Fa | Generate the Tong She Fa structure |
+| `sanshiunited` | San Shi United | Aggregate Qimen, Taiyi, and LiuReng into one result |
+| `suzhan` | Su Zhan / lunar mansion chart | Generate宿占 output |
+| `sixyao` | Six Yao / hexagram reading | Generate base hexagram, changed hexagram, and line state output |
+| `otherbu` | Astrology dice / western game method | Generate dice-like western symbolic output |
+
+#### Calendar and hexagram support
+
+| Tool ID | Name | Purpose |
+| --- | --- | --- |
+| `jieqi_year` | Annual Jieqi grid | Generate annual solar-term structures |
+| `nongli_time` | Lunar calendar conversion | Convert to Nongli / Ganzhi time information |
+| `gua_desc` | Hexagram description | Return hexagram name and core text |
+| `gua_meiyi` | Mei Yi hexagram explanation | Return Meiyi-oriented hexagram explanation |
 
 ### Xingque AI export protocol domains already modeled
 
-This project does not only run tools. It also exposes Xingque’s export registry as a machine-readable protocol surface across:
+This repository also exposes Xingque’s export registry as a machine-readable protocol layer. The following `technique` domains are already modeled and reusable:
 
-- `astrochart`, `astrochart_like`, `indiachart`, `relative`
-- `primarydirect`, `primarydirchart`, `zodialrelease`, `firdaria`, `decennials`
-- `solarreturn`, `lunarreturn`, `solararc`, `givenyear`, `profection`
-- `bazi`, `ziwei`, `suzhan`, `sixyao`, `tongshefa`
-- `liureng`, `jinkou`, `qimen`, `taiyi`, `sanshiunited`
-- `guolao`, `germany`
-- `jieqi`, `jieqi_meta`, `jieqi_chunfen`, `jieqi_xiazhi`, `jieqi_qiufen`, `jieqi_dongzhi`
-- `otherbu`, `generic`
+| technique ID | Meaning |
+| --- | --- |
+| `astrochart` | standard chart export |
+| `astrochart_like` | chart-like export variant |
+| `indiachart` | Indian chart export |
+| `relative` | relationship chart export |
+| `primarydirect` | primary directions export |
+| `primarydirchart` | primary directions chart export |
+| `zodialrelease` | zodiacal release export |
+| `firdaria` | Firdaria export |
+| `decennials` | decennials export |
+| `solarreturn` | solar return export |
+| `lunarreturn` | lunar return export |
+| `solararc` | solar arc export |
+| `givenyear` | given-year export |
+| `profection` | profection export |
+| `bazi` | BaZi export |
+| `ziwei` | Zi Wei export |
+| `suzhan` | Su Zhan export |
+| `sixyao` | Six Yao export |
+| `tongshefa` | Tong She Fa export |
+| `liureng` | Da Liu Ren export |
+| `jinkou` | Jinkou export |
+| `qimen` | Qimen export |
+| `taiyi` | Taiyi export |
+| `sanshiunited` | unified three-method export |
+| `guolao` | seven governors export |
+| `germany` | midpoint / quantitative export |
+| `jieqi` | main Jieqi export |
+| `jieqi_meta` | Jieqi metadata export |
+| `jieqi_chunfen` | spring equinox domain |
+| `jieqi_xiazhi` | summer solstice domain |
+| `jieqi_qiufen` | autumn equinox domain |
+| `jieqi_dongzhi` | winter solstice domain |
+| `otherbu` | western game / dice export |
+| `generic` | generic export domain |
 
 ### Explicit shipping exclusion
 
