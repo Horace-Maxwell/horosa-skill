@@ -1,6 +1,4 @@
-<div align="center">
-  <a href="./README.md">简体中文</a> · <strong>English</strong>
-</div>
+[简体中文](./README.md) | **English**
 
 <div align="center">
   <h1>Horosa Skill</h1>
@@ -29,12 +27,27 @@
   </p>
 
   <p>
-    <a href="./LICENSE">License</a> ·
-    <a href="./CONTRIBUTING.md">Contributing</a> ·
-    <a href="./SECURITY.md">Security</a> ·
-    <a href="./SUPPORT.md">Support</a> ·
-    <a href="./CITATION.cff">Citation</a> ·
-    <a href="./CHANGELOG.md">Changelog</a>
+    <a href="./LICENSE">
+      <img src="https://img.shields.io/badge/License-Apache--2.0-374151?style=flat-square" alt="License" />
+    </a>
+    <a href="./CONTRIBUTING.md">
+      <img src="https://img.shields.io/badge/Contributing-Guide-0f766e?style=flat-square" alt="Contributing" />
+    </a>
+    <a href="./SECURITY.md">
+      <img src="https://img.shields.io/badge/Security-Policy-991b1b?style=flat-square" alt="Security" />
+    </a>
+  </p>
+
+  <p>
+    <a href="./SUPPORT.md">
+      <img src="https://img.shields.io/badge/Support-Paths-1d4ed8?style=flat-square" alt="Support" />
+    </a>
+    <a href="./CITATION.cff">
+      <img src="https://img.shields.io/badge/Citation-CFF-7c3aed?style=flat-square" alt="Citation" />
+    </a>
+    <a href="./CHANGELOG.md">
+      <img src="https://img.shields.io/badge/Changelog-Updates-f59e0b?style=flat-square" alt="Changelog" />
+    </a>
   </p>
 </div>
 
