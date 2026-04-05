@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+title: "Horosa Skill"
+message: "If you use Horosa Skill in research, articles, or public knowledge work, please cite this repository."
+type: software
+authors:
+  - family-names: "Maxwell"
+    given-names: "Horace"
+repository-code: "https://github.com/Horace-Maxwell/horosa-skill"
+url: "https://github.com/Horace-Maxwell/horosa-skill"
+license: "Apache-2.0"
+version: "0.3.0"
+date-released: "2026-04-05"
+abstract: "Horosa Skill is a local-first AI skill layer for Horosa/Xingque, bundling offline runtime installation, structured export contracts, MCP and CLI invocation, and local artifact management."
+keywords:
+  - astrology
+  - divination
+  - mcp
+  - offline-runtime
+  - ai-tools
+  - horosa
