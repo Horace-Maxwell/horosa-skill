@@ -5,9 +5,11 @@ This project is intentionally split so the repository can stay clean while the l
 ## Public Repository Surface
 
 - `README.md`
-  The main GitHub landing page and first-run instructions.
+  Default Chinese GitHub landing page and first-run instructions.
+- `README_EN.md`
+  English landing page for the same product surface.
 - `README.zh-CN.md`
-  Chinese landing page for the same product surface.
+  Compatibility entry that forwards readers to the default Chinese and English READMEs.
 - `docs/`
   Maintainer-facing documentation, release notes, specs, and example manifests.
 - `horosa-skill/`

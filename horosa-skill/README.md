@@ -1,18 +1,93 @@
-# Horosa Skill
+# Horosa Skill Core
 
-`horosa-skill` turns the existing Horosa calculation services and 星阙 AI 导出设置 into a GitHub-first local skill distribution:
+`horosa-skill` 是这个仓库真正可运行的核心子项目。它把星阙 / Horosa 的本地算法、AI 导出协议、离线 runtime、MCP 暴露层和本地数据管理统一进一个 Python 包里。
 
-- offline runtime installer and doctor commands
-- MCP server for AI clients
-- JSON-first CLI for direct testing
-- machine-readable 星阙 AI 导出 registry
-- AI 导出文本快照 -> structured JSON parser
-- Local SQLite memory plus JSON artifacts
-- Streamable HTTP mode for Open WebUI / OpenClaw
+如果根目录 README 讲的是“这个项目是什么”，这里讲的是“这个包具体能做什么”。
 
-This subproject intentionally ships only the skill layer. It does not bundle the original Horosa desktop/runtime source tree.
+## 这个子项目包含什么
 
-## Quick Start
+- 离线 runtime 安装与诊断
+  - `install`
+  - `doctor`
+  - `serve`
+  - `stop`
+- MCP 服务层
+  - Streamable HTTP
+  - stdio
+- JSON-first CLI
+  - `tool run`
+  - `dispatch`
+  - `ask`
+  - `export registry`
+  - `export parse`
+- 本地数据管理
+  - SQLite
+  - JSON artifacts
+  - run manifest
+  - AI answer write-back
+- 星阙 AI 导出协议机器建模
+  - export registry
+  - export snapshot parsing
+  - per-tool `export_snapshot`
+  - per-tool `export_format`
+
+## 当前已经接进来的技法
+
+### 核心星盘与派生盘
+
+- `chart`
+- `chart13`
+- `hellen_chart`
+- `guolao_chart`
+- `india_chart`
+- `relative`
+- `germany`
+
+### 推运与时运
+
+- `solarreturn`
+- `lunarreturn`
+- `solararc`
+- `givenyear`
+- `profection`
+- `pd`
+- `pdchart`
+- `zr`
+- `firdaria`
+- `decennials`
+
+### 中文术数与扩展技法
+
+- `ziwei_birth`
+- `ziwei_rules`
+- `bazi_birth`
+- `bazi_direct`
+- `liureng_gods`
+- `liureng_runyear`
+- `qimen`
+- `taiyi`
+- `jinkou`
+- `tongshefa`
+- `sanshiunited`
+- `suzhan`
+- `sixyao`
+- `otherbu`
+- `jieqi_year`
+- `nongli_time`
+- `gua_desc`
+- `gua_meiyi`
+
+### 导出与调度
+
+- `export_registry`
+- `export_parse`
+- `horosa_dispatch`
+
+明确排除：
+
+- `fengshui`
+
+## 快速开始
 
 ```bash
 cd horosa-skill
@@ -22,124 +97,32 @@ uv run horosa-skill doctor
 uv run horosa-skill serve
 ```
 
-That starts a local Streamable HTTP MCP server on `http://127.0.0.1:8765/mcp`.
+## 最短工作流
 
-For stdio clients such as Claude Desktop, run:
-
-```bash
-cd horosa-skill
-uv run horosa-skill serve --transport stdio
-```
-
-## Recommended First Workflow
-
-If you want the least confusing path:
+### 1. 安装 runtime
 
 ```bash
-cd horosa-skill
-uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor
 ```
 
-Then ask the dispatcher to choose methods:
+### 2. 直接让调度器选技法
 
 ```bash
 echo '{
-  "query":"请综合奇门、六壬和星盘做当前状态分析",
+  "query":"请综合奇门、六壬和星盘分析当前状态",
   "birth":{"date":"1990-01-01","time":"12:00","zone":"8","lat":"31n14","lon":"121e28"},
   "save_result": true
 }' | uv run horosa-skill ask --stdin
 ```
 
-Then inspect the exact run:
+### 3. 查看某一次完整记录
 
 ```bash
 uv run horosa-skill memory show <run_id>
 ```
 
-If your AI produced a final narrative answer after calling tools, attach it back:
-
-```bash
-echo '{
-  "run_id":"<run_id>",
-  "ai_answer":"先稳后升，宜先整理资源再扩张。",
-  "ai_answer_structured":{"trend":"up_later"}
-}' | uv run horosa-skill memory answer --stdin
-```
-
-## CLI Examples
-
-List tools:
-
-```bash
-uv run horosa-skill tool list
-```
-
-Install or refresh the offline runtime:
-
-```bash
-uv run horosa-skill install
-```
-
-Check runtime health:
-
-```bash
-uv run horosa-skill doctor
-```
-
-Stop a managed runtime:
-
-```bash
-uv run horosa-skill stop
-```
-
-Run a tool from stdin:
-
-```bash
-echo '{"date":"1990-01-01","time":"12:00","zone":"8","lat":"31n14","lon":"121e28"}' \
-  | uv run horosa-skill tool run chart --stdin
-```
-
-Dump the AI export registry:
-
-```bash
-uv run horosa-skill export registry --technique qimen
-```
-
-Convert exported snapshot text into structured JSON:
-
-```bash
-echo '{
-  "technique":"qimen",
-  "content":"[起盘信息]\n参数\n\n[右侧栏目]\n忽略\n\n[八宫]\n八宫内容\n\n[演卦]\n演卦内容",
-  "selected_sections":["起盘信息","八宫详解","奇门演卦"]
-}' | uv run horosa-skill export parse --stdin
-```
-
-Run the dispatcher:
-
-```bash
-echo '{
-  "query":"请先起本命盘并给出主运势方向",
-  "birth":{"date":"1990-01-01","time":"12:00","zone":"8","lat":"31n14","lon":"121e28"},
-  "save_result": true
-}' | uv run horosa-skill dispatch --stdin
-```
-
-Query local memory:
-
-```bash
-uv run horosa-skill memory query --tool chart --limit 5
-```
-
-Show one exact run:
-
-```bash
-uv run horosa-skill memory show <run_id>
-```
-
-Attach the AI's final answer to an existing run:
+### 4. 回写 AI 最终回答
 
 ```bash
 echo '{
@@ -150,30 +133,76 @@ echo '{
 }' | uv run horosa-skill memory answer --stdin
 ```
 
-## AI Client Setup
+## 常用命令
 
-Example config snippets live in `examples/clients/`.
+### 列出工具
 
-- Claude Desktop: `examples/clients/claude_desktop_config.json`
-- Codex: `examples/clients/codex-config.toml`
-- Open WebUI: `examples/clients/openwebui-streamable-http.md`
-- OpenClaw: `examples/clients/openclaw-mcp.md`
+```bash
+uv run horosa-skill tool list
+```
 
-Maintainer docs for runtime packaging and repository layout live one level up under `../docs/`.
-Vendored offline runtime sources live under `../vendor/runtime-source`.
+### 直接运行单个方法
 
-## Environment
+```bash
+echo '{"date":"1990-01-01","time":"12:00","zone":"8","lat":"31n14","lon":"121e28"}' \
+  | uv run horosa-skill tool run chart --stdin
+```
 
-Copy `.env.example` if you want to override defaults:
+### 运行本地 Phase 2 技法
+
+```bash
+echo '{"taiyin":"巽","taiyang":"坤","shaoyang":"震","shaoyin":"震"}' \
+  | uv run horosa-skill tool run tongshefa --stdin
+```
+
+### 导出 registry
+
+```bash
+uv run horosa-skill export registry --technique qimen
+```
+
+### 解析星阙 AI 导出正文
+
+```bash
+echo '{
+  "technique":"qimen",
+  "content":"[起盘信息]\n参数\n\n[八宫]\n八宫内容\n\n[演卦]\n演卦内容"
+}' | uv run horosa-skill export parse --stdin
+```
+
+## 本地记录系统会保存什么
+
+每次 run 会持久化：
+
+- run 元信息
+- tool call 记录
+- entity 索引
+- JSON artifact
+- run manifest
+- query_text
+- user_question
+- ai_answer_text
+- ai_answer_structured
+
+对应管理命令：
+
+- `uv run horosa-skill memory query`
+- `uv run horosa-skill memory show <run_id>`
+- `uv run horosa-skill memory answer --stdin`
+
+## 环境变量
+
+可以复制 `.env.example` 再按需覆盖：
 
 ```bash
 cp .env.example .env
 ```
 
-Key settings:
+常见项：
 
 - `HOROSA_SERVER_ROOT`
 - `HOROSA_CHART_SERVER_ROOT`
+- `HOROSA_SKILL_DATA_DIR`
 - `HOROSA_SKILL_DB_PATH`
 - `HOROSA_SKILL_OUTPUT_DIR`
 - `HOROSA_RUNTIME_ROOT`
@@ -184,28 +213,10 @@ Key settings:
 - `HOROSA_SKILL_HOST`
 - `HOROSA_SKILL_PORT`
 
-## Docker
+## 相关文档
 
-```bash
-docker compose up --build
-```
-
-## Current v1 Tool Coverage
-
-- `export_registry`, `export_parse`
-- `qimen`, `taiyi`, `jinkou`
-- `chart`, `chart13`
-- `solarreturn`, `lunarreturn`, `solararc`, `givenyear`, `profection`, `pd`, `pdchart`, `zr`, `relative`, `india_chart`
-- `ziwei_birth`, `ziwei_rules`
-- `bazi_birth`, `bazi_direct`
-- `liureng_gods`, `liureng_runyear`
-- `jieqi_year`, `nongli_time`
-- `gua_desc`, `gua_meiyi`
-
-Explicit shipping exclusion:
-
-- `fengshui`
-
-The current source of truth for the AI export registry is the main 星阙 app file `Horosa-Web/astrostudyui/src/utils/aiExport.js`. This lightweight repo vendors the export schema and parsing behavior so users do not need the full 星阙 app just to consume the AI export protocol.
-
-The offline runtime packaging flow is implemented through `scripts/sync_vendored_runtime_sources.sh`, `scripts/package_runtime_payload.sh`, `scripts/build_runtime_release.sh`, `scripts/build_runtime_release_windows.py`, `scripts/build_runtime_release_windows.ps1`, `scripts/generate_release_manifest.py`, and `scripts/verify_runtime_release.py`, so GitHub Releases can host the full Java/Python/Node + ephemeris payload while this repository stays self-contained.
+- [根目录中文首页](../README.md)
+- [Root English README](../README_EN.md)
+- [客户端配置示例](./examples/clients)
+- [Runtime 发布说明](../docs/OFFLINE_RUNTIME_RELEASES.md)
+- [算法覆盖矩阵](../docs/ALGORITHM_COVERAGE.md)

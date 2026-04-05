@@ -1,19 +1,19 @@
-[简体中文](./README.zh-CN.md) | **English**
+**简体中文** | [English](./README_EN.md)
 
 <div align="center">
   <h1>Horosa Skill</h1>
-  <p><strong>Offline-first AI infrastructure for Xingque / Horosa.</strong></p>
-  <p>Install once, run real Xingque methods locally, expose them to Claude, Codex, Open WebUI, or OpenClaw through MCP, and persist every result as structured memory.</p>
+  <p><strong>把星阙 / Horosa 变成任何 AI 都能本地调用的离线玄学能力层。</strong></p>
+  <p>下载仓库，安装一次离线 runtime，然后让 Claude、Codex、Open WebUI、OpenClaw 等 AI 在你的机器上直接调用真实算法、读取完整 AI 导出协议、输出稳定结构化结果，并把每次分析沉淀为可检索的本地记录。</p>
 
   <p>
     <a href="https://github.com/Horace-Maxwell/horosa-skill">
-      <img src="https://img.shields.io/badge/Browse-Repository-0f172a?style=for-the-badge&logo=github" alt="Browse Repository" />
+      <img src="https://img.shields.io/badge/GitHub-Repository-111827?style=for-the-badge&logo=github" alt="Repository" />
     </a>
     <a href="https://github.com/Horace-Maxwell/horosa-skill/releases">
-      <img src="https://img.shields.io/badge/Browse-Releases-1d4ed8?style=for-the-badge&logo=github" alt="Browse Releases" />
+      <img src="https://img.shields.io/badge/GitHub-Releases-1d4ed8?style=for-the-badge&logo=github" alt="Releases" />
     </a>
-    <a href="./README.zh-CN.md">
-      <img src="https://img.shields.io/badge/Read%20in-Chinese-0f766e?style=for-the-badge" alt="Read in Chinese" />
+    <a href="./README_EN.md">
+      <img src="https://img.shields.io/badge/Read%20in-English-0f766e?style=for-the-badge" alt="Read in English" />
     </a>
   </p>
 
@@ -21,65 +21,137 @@
     <img src="https://img.shields.io/github/stars/Horace-Maxwell/horosa-skill?style=for-the-badge" alt="GitHub stars" />
     <img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge" alt="Release" />
     <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-0f766e?style=for-the-badge" alt="Platforms" />
-    <img src="https://img.shields.io/badge/runtime-offline%20first-111827?style=for-the-badge" alt="Offline first runtime" />
+    <img src="https://img.shields.io/badge/runtime-offline%20first-111827?style=for-the-badge" alt="Offline runtime" />
     <img src="https://img.shields.io/badge/MCP-ready-111827?style=for-the-badge" alt="MCP ready" />
-    <img src="https://img.shields.io/badge/structured-JSON%20artifacts-111827?style=for-the-badge" alt="Structured JSON artifacts" />
+    <img src="https://img.shields.io/badge/storage-SQLite%20%2B%20JSON-111827?style=for-the-badge" alt="SQLite and JSON" />
   </p>
 </div>
 
-![Horosa Skill hero](./docs/media/hero-banner.svg)
+## 项目定位
 
-## Why This Repo Exists
+星阙本身已经有完整的本地算法、星历、导出设置和多技法体系。`Horosa Skill` 做的不是“再造一个简化版占算器”，而是把这些能力整理成一个适合 GitHub 分发、适合 AI 调用、适合长期本地管理的产品化接口层。
 
-Xingque already has deep metaphysical logic, rich export content, and a serious local runtime story. What it did not have was a GitHub-first delivery layer that modern AI tools can call cleanly.
+它解决的是五件事：
 
-Horosa Skill is that delivery layer:
+- 让用户从 GitHub 直接获取项目，并通过 GitHub Releases 安装完整离线 runtime。
+- 让 AI 通过 `MCP` 或 `JSON-first CLI` 调用真正的星阙方法，而不是调用一层松散 prompt。
+- 让每个技法的输出都变成高机器可读、稳定 section 化的“星阙 AI 导出完全体”文档。
+- 让每次工具调用、用户问题、AI 最终回答、结构化摘要都落到本地，可回看、可检索、可复用。
+- 让仓库保持轻量、清晰、可维护，而不是把大体积 runtime 和开发缓存全部塞进 Git 历史。
 
-- offline runtime install from GitHub Releases
-- local MCP server plus JSON-first CLI
-- stable structured envelopes instead of loose text
-- machine-readable Xingque export protocol
-- local SQLite plus JSON artifact storage for retrieval and reuse
+如果你的目标是：
 
-If the goal is "clone the repo, install once, and let AI call real Horosa methods locally without a remote service," this repo is built for exactly that.
+- “别人 clone 这个仓库后，就能让自己的 AI 在本机直接调用星阙”
+- “调用结果不是杂乱文本，而是稳定 JSON + 星阙式导出快照”
+- “每次问卜、起盘、推运都能自动写成本地知识记录”
 
-## What Ships Today
+这个仓库就是围绕这个目标设计的。
 
-### Directly callable methods
+## 现在它已经能做什么
 
-| Domain | Methods available now |
+### 一句话能力总览
+
+| 能力层 | 当前已经实现的内容 | 对使用者意味着什么 |
+| --- | --- | --- |
+| 离线 runtime | 通过 GitHub Releases 安装 macOS / Windows 完整 runtime | 安装后可断网运行，不依赖远程算法服务 |
+| AI 调用接口 | `MCP server` + `JSON-first CLI` + `ask / dispatch` | Claude、Codex、Open WebUI、OpenClaw 都能接 |
+| 技法执行 | 37 个可调用工具，覆盖星盘、推运、术数、导出协议 | 不是 demo，而是可直接使用的多技法本地能力面 |
+| 输出协议 | 每个技法返回统一 envelope，并附带 `export_snapshot` / `export_format` | 机器和人都能稳定消费，不需要猜字段 |
+| 数据管理 | SQLite + JSON artifacts + run manifest + AI answer write-back | 一次调用就是一条可追溯记录 |
+| 发布策略 | 轻仓库 + 重 Release | GitHub 页面专业、清楚，不拖慢协作 |
+
+### 当前可直接调用的技法与工具
+
+| 领域 | 当前可用方法 |
 | --- | --- |
-| Export + orchestration | `export_registry`, `export_parse`, `horosa_dispatch` |
-| Core astrology | `chart`, `chart13`, `hellen_chart`, `guolao_chart`, `india_chart`, `relative`, `germany` |
-| Predictive astrology | `solarreturn`, `lunarreturn`, `solararc`, `givenyear`, `profection`, `pd`, `pdchart`, `zr`, `firdaria`, `decennials` |
-| Chinese metaphysics | `ziwei_birth`, `ziwei_rules`, `bazi_birth`, `bazi_direct`, `liureng_gods`, `liureng_runyear`, `qimen`, `taiyi`, `jinkou`, `tongshefa`, `sanshiunited`, `suzhan`, `sixyao`, `jieqi_year`, `nongli_time`, `gua_desc`, `gua_meiyi` |
-| Other occult modules | `otherbu` |
+| 导出协议与调度 | `export_registry`、`export_parse`、`horosa_dispatch` |
+| 核心星盘 | `chart`、`chart13`、`hellen_chart`、`guolao_chart`、`india_chart`、`relative`、`germany` |
+| 推运与时运 | `solarreturn`、`lunarreturn`、`solararc`、`givenyear`、`profection`、`pd`、`pdchart`、`zr`、`firdaria`、`decennials` |
+| 中文术数主干 | `ziwei_birth`、`ziwei_rules`、`bazi_birth`、`bazi_direct`、`liureng_gods`、`liureng_runyear`、`qimen`、`taiyi`、`jinkou` |
+| Phase 2 本地技法 | `tongshefa`、`sanshiunited`、`suzhan`、`sixyao`、`otherbu` |
+| 节气 / 农历 / 卦义 | `jieqi_year`、`nongli_time`、`gua_desc`、`gua_meiyi` |
 
-### Export protocol domains already modeled
+### 已完成机器建模的星阙 AI 导出协议
 
-Horosa Skill does not only expose tools. It also models Xingque's AI export registry as a machine-readable protocol surface, including:
+除了“能算”，这个仓库还把星阙的 AI 导出协议整理成机器可读的 registry surface，覆盖这些 technique 域：
 
-- `astrochart`, `indiachart`, `astrochart_like`, `relative`
-- `primarydirect`, `primarydirchart`, `zodialrelease`, `firdaria`, `profection`, `solararc`, `solarreturn`, `lunarreturn`, `givenyear`, `decennials`
-- `bazi`, `ziwei`, `suzhan`, `sixyao`, `tongshefa`, `liureng`, `jinkou`, `qimen`, `sanshiunited`, `taiyi`
-- `guolao`, `germany`, `jieqi`, `jieqi_meta`, `jieqi_chunfen`, `jieqi_xiazhi`, `jieqi_qiufen`, `jieqi_dongzhi`
-- `otherbu`, `generic`
+- `astrochart`、`astrochart_like`、`indiachart`、`relative`
+- `primarydirect`、`primarydirchart`、`zodialrelease`、`firdaria`、`decennials`
+- `solarreturn`、`lunarreturn`、`solararc`、`givenyear`、`profection`
+- `bazi`、`ziwei`、`suzhan`、`sixyao`、`tongshefa`
+- `liureng`、`jinkou`、`qimen`、`taiyi`、`sanshiunited`
+- `guolao`、`germany`
+- `jieqi`、`jieqi_meta`、`jieqi_chunfen`、`jieqi_xiazhi`、`jieqi_qiufen`、`jieqi_dongzhi`
+- `otherbu`、`generic`
 
-### Explicit shipping exclusion
+### 明确排除项
 
 - `fengshui`
 
-## What Makes This Repo Different
+## 对 AI 来说，这个仓库最重要的不是“算”，而是“稳定可消费”
 
-| Capability | What it means |
-| --- | --- |
-| Real offline runtime | The calculation stack, ephemeris, export logic, and MCP surface can run locally after install |
-| Structured result contract | Every tool returns `ok`, `tool`, `version`, `input_normalized`, `data`, `summary`, `warnings`, `memory_ref`, `error` |
-| Export-aware outputs | Supported methods also attach `export_snapshot` and `export_format` so AI can consume the same semantic structure every time |
-| Retrieval-ready memory | Results land in SQLite and JSON artifacts for later search, replay, and chaining |
-| Release-based distribution | The repo stays lightweight while full runtimes ship through GitHub Releases |
+每个工具调用最终都会返回统一 envelope：
 
-## Quick Start
+```json
+{
+  "ok": true,
+  "tool": "qimen",
+  "version": "0.3.0",
+  "input_normalized": {},
+  "data": {},
+  "summary": [],
+  "warnings": [],
+  "memory_ref": {},
+  "error": null
+}
+```
+
+对于已经接入星阙导出协议的技法，还会额外带：
+
+- `data.export_snapshot`
+- `data.export_format`
+- `data.export_snapshot.snapshot_text`
+- `data.export_snapshot.sections`
+- `data.export_snapshot.selected_sections`
+
+这意味着：
+
+- AI 不需要自己从自由文本里乱猜结构。
+- 同一个技法连续多次调用，都会得到同一套格式化 contract。
+- `horosa_dispatch` 的汇总层也显式带每个子结果的 export contract。
+- 最终落库到 JSON artifact 后，结构不会丢失。
+
+## 数据管理已经不是“把结果存一下”，而是完整本地记录系统
+
+本地数据默认写到：
+
+- macOS / Linux：`~/.horosa-skill/`
+- Windows：`%APPDATA%/HorosaSkill/`
+
+每一次 run 会沉淀这些内容：
+
+- run 元信息
+- tool call 记录
+- entity 索引
+- JSON artifact
+- `run manifest`
+- 原始 `query_text`
+- 用户问题 `user_question`
+- AI 最终回答 `ai_answer_text`
+- 可选结构化回答 `ai_answer_structured`
+
+现在支持的典型管理动作：
+
+- `memory query`
+  按 tool、entity、run_id 查询历史记录
+- `memory show <run_id>`
+  精确回看某一次完整调用
+- `memory answer --stdin`
+  把 AI 最终回答回写到已有记录
+
+这让它不只是“工具层”，而是“工具层 + 可追溯知识库”。
+
+## 快速开始
 
 ```bash
 cd horosa-skill
@@ -89,24 +161,22 @@ uv run horosa-skill doctor
 uv run horosa-skill serve
 ```
 
-Default MCP endpoint:
+默认 MCP 地址：
 
 ```text
 http://127.0.0.1:8765/mcp
 ```
 
-For stdio clients such as Claude Desktop:
+如果你要给 Claude Desktop 这类 stdio 客户端使用：
 
 ```bash
 cd horosa-skill
 uv run horosa-skill serve --transport stdio
 ```
 
-## Least Confusing Workflow
+## 最短可用路径
 
-If you only want the shortest path, use these 4 steps:
-
-1. Install and verify the offline runtime
+### 1. 安装并验证离线 runtime
 
 ```bash
 cd horosa-skill
@@ -115,133 +185,108 @@ uv run horosa-skill install
 uv run horosa-skill doctor
 ```
 
-2. Let the dispatcher choose methods for you
+### 2. 让调度器自动选技法
 
 ```bash
 echo '{
-  "query":"Please use qimen, liureng, and chart methods to analyze the current situation",
+  "query":"请综合奇门、六壬和星盘分析当前状态",
   "birth":{"date":"1990-01-01","time":"12:00","zone":"8","lat":"31n14","lon":"121e28"},
   "save_result": true
 }' | uv run horosa-skill ask --stdin
 ```
 
-3. Inspect one exact record
+### 3. 回看某一条完整记录
 
 ```bash
 uv run horosa-skill memory show <run_id>
 ```
 
-4. Write the AI's final answer back into that record
+### 4. 把 AI 最终回答写回这条记录
 
 ```bash
 echo '{
   "run_id":"<run_id>",
-  "user_question":"What does this mean for my career next?",
-  "ai_answer":"The pattern is cautious first, then gradually upward.",
+  "user_question":"我接下来事业走势如何？",
+  "ai_answer":"先稳后升，宜先整理资源再扩张。",
   "ai_answer_structured":{"trend":"up_later"}
 }' | uv run horosa-skill memory answer --stdin
 ```
 
-## Example Flows
+## 典型调用方式
 
-Run the export registry:
+### 查看完整导出 registry
 
 ```bash
 cd horosa-skill
 uv run horosa-skill export registry
 ```
 
-Parse Xingque export text into structured JSON:
+### 把星阙导出正文解析成结构化 JSON
 
 ```bash
-cd horosa-skill
 echo '{
-  "technique": "qimen",
-  "content": "[起盘信息]\n参数\n\n[八宫]\n八宫内容\n\n[演卦]\n演卦内容"
+  "technique":"qimen",
+  "content":"[起盘信息]\n参数\n\n[八宫]\n八宫内容\n\n[演卦]\n演卦内容"
 }' | uv run horosa-skill export parse --stdin
 ```
 
-Run a tool directly:
+### 直接调用某个工具
 
 ```bash
 echo '{"date":"1990-01-01","time":"12:00","zone":"8","lat":"31n14","lon":"121e28"}' \
   | uv run horosa-skill tool run chart --stdin
 ```
 
-Run a Phase 2 local method directly:
+### 直接运行 Phase 2 本地技法
 
 ```bash
 echo '{"taiyin":"巽","taiyang":"坤","shaoyang":"震","shaoyin":"震"}' \
   | uv run horosa-skill tool run tongshefa --stdin
 ```
 
-Run the dispatcher:
+### 运行统一调度器
 
 ```bash
 echo '{
-  "query":"Please use qimen, liureng, and chart methods to analyze the current situation",
+  "query":"请综合奇门、六壬和星盘做当前状态分析",
   "birth":{"date":"1990-01-01","time":"12:00","zone":"8","lat":"31n14","lon":"121e28"},
   "save_result": true
 }' | uv run horosa-skill dispatch --stdin
 ```
 
-## AI Client Integrations
+## 当前支持的 AI 客户端
 
-- [Claude Desktop config](./horosa-skill/examples/clients/claude_desktop_config.json)
-- [Codex config](./horosa-skill/examples/clients/codex-config.toml)
-- [Open WebUI setup](./horosa-skill/examples/clients/openwebui-streamable-http.md)
-- [OpenClaw setup](./horosa-skill/examples/clients/openclaw-mcp.md)
+- [Claude Desktop 配置示例](./horosa-skill/examples/clients/claude_desktop_config.json)
+- [Codex 配置示例](./horosa-skill/examples/clients/codex-config.toml)
+- [Open WebUI 接入说明](./horosa-skill/examples/clients/openwebui-streamable-http.md)
+- [OpenClaw 接入说明](./horosa-skill/examples/clients/openclaw-mcp.md)
 
-## Runtime Model
+## Release 与 runtime 策略
 
-This project keeps three layers separate on purpose:
+这个仓库故意拆成三层：
 
-| Layer | Lives where | Why |
+| 层 | 放在哪里 | 作用 |
 | --- | --- | --- |
-| Public repo | GitHub repository | code, docs, CLI, MCP surface, examples, release scripts |
-| Maintainer packaging input | local `vendor/runtime-source/` | large runtime sources needed to build release assets |
-| End-user runtime | `~/.horosa/runtime/current` on macOS or `%LOCALAPPDATA%/Horosa/runtime/current` on Windows | installed offline runtime used by real tool execution |
+| 公开仓库层 | GitHub repo | 代码、文档、CLI、MCP、测试、示例、打包脚本 |
+| 维护者本地打包输入层 | `vendor/runtime-source/` | 构建离线 runtime release 所需的大体积输入 |
+| 最终用户运行层 | `~/.horosa/runtime/current` 或 `%LOCALAPPDATA%/Horosa/runtime/current` | 用户安装后真实执行算法的本地 runtime |
 
-That separation keeps the repository reviewable without making runtime builds depend on random sibling directories.
+这样可以同时满足：
 
-## Local Storage Model
+- GitHub 页面足够干净
+- Release 资产足够完整
+- 本地运行足够离线
+- 维护者打包流程不依赖外部兄弟目录
 
-Structured results are stored locally by default:
+## 仓库结构
 
-- macOS / Linux: `~/.horosa-skill/`
-- Windows: `%APPDATA%/HorosaSkill/`
-
-Each saved run can persist:
-
-- run metadata
-- tool call records
-- entity references
-- JSON artifacts under `runs/<YYYY>/<MM>/<DD>/`
-- one `run manifest` for easier per-run inspection and management
-
-Each record can now also keep:
-
-- the original query / user question
-- every tool result for that run
-- the AI's final answer
-- optional `ai_answer_structured` JSON
-
-Recommended pattern for external AI clients:
-
-1. call `ask` or `tool run`
-2. keep the returned `memory_ref.run_id`
-3. write the final AI answer with `memory answer`
-4. inspect the full record later with `memory show <run_id>`
-
-## Repository Layout
-
-| Path | Role |
+| 路径 | 说明 |
 | --- | --- |
-| [`horosa-skill/`](./horosa-skill) | Python package, CLI, MCP server, tests, examples, and release scripts |
-| [`docs/`](./docs) | Runtime specs, coverage docs, release notes, and maintainership docs |
-| [`vendor/`](./vendor) | Local runtime source area for offline packaging |
+| [`horosa-skill/`](./horosa-skill) | 核心 Python 包、CLI、MCP server、tests、examples、release scripts |
+| [`docs/`](./docs) | runtime 规范、算法覆盖矩阵、Release 文档、维护文档 |
+| [`vendor/`](./vendor) | 本地 runtime 打包输入区 |
 
-Useful docs:
+建议顺手看的文档：
 
 - [Repo Layout](./docs/REPO_LAYOUT.md)
 - [Offline Runtime Releases](./docs/OFFLINE_RUNTIME_RELEASES.md)
@@ -249,21 +294,18 @@ Useful docs:
 - [Algorithm Coverage](./docs/ALGORITHM_COVERAGE.md)
 - [Vendored Runtime Sources](./vendor/README.md)
 
-## Current Status
+## 当前状态
 
-Implemented now:
+已完成：
 
-- offline runtime install, doctor, serve, and stop flow
-- macOS and Windows runtime release assets
-- local MCP plus JSON-first CLI
-- full export registry and export parser
-- structured storage with SQLite plus JSON artifacts
-- fixed export contracts across supported methods
-- headless local engines for `qimen`, `taiyi`, `jinkou`, and `tongshefa`
-- local aggregator support for `sanshiunited`
-- direct support for `hellen_chart`, `guolao_chart`, `germany`, `firdaria`, `decennials`, `suzhan`, `sixyao`, and `otherbu`
-- full self-check coverage for call, output, storage, and retrieval
+- GitHub-first 离线 runtime 安装链
+- macOS / Windows runtime release 资产
+- 本地 MCP server 与 JSON-first CLI
+- 完整星阙 AI 导出 registry 与 parser
+- 37 个可调用工具的结构化稳定输出
+- `dispatch` 汇总层 export contract
+- SQLite + JSON artifact + run manifest 数据管理
+- AI answer 回写与检索链路
+- 从 GitHub fresh clone 后重新安装 runtime 的实测闭环
 
-## Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md).
+如果你需要的是一个“把星阙变成 AI 可调用基础设施”的仓库，而不是一堆分散脚本，这个 repo 现在已经是按这个方向搭好的。
