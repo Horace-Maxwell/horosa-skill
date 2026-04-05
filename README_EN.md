@@ -25,6 +25,27 @@
     <img src="https://img.shields.io/badge/MCP-ready-111827?style=for-the-badge" alt="MCP ready" />
     <img src="https://img.shields.io/badge/storage-SQLite%20%2B%20JSON-111827?style=for-the-badge" alt="SQLite and JSON" />
   </p>
+
+  <p>
+    <a href="./LICENSE">
+      <img src="https://img.shields.io/badge/License-Apache--2.0-1f2937?style=for-the-badge" alt="License" />
+    </a>
+    <a href="./CONTRIBUTING.md">
+      <img src="https://img.shields.io/badge/Contributing-Guide-0f766e?style=for-the-badge" alt="Contributing" />
+    </a>
+    <a href="./SECURITY.md">
+      <img src="https://img.shields.io/badge/Security-Policy-991b1b?style=for-the-badge" alt="Security" />
+    </a>
+    <a href="./SUPPORT.md">
+      <img src="https://img.shields.io/badge/Support-Paths-1d4ed8?style=for-the-badge" alt="Support" />
+    </a>
+    <a href="./CITATION.cff">
+      <img src="https://img.shields.io/badge/Citation-CFF-7c3aed?style=for-the-badge" alt="Citation" />
+    </a>
+    <a href="./CHANGELOG.md">
+      <img src="https://img.shields.io/badge/Changelog-Keep%20a%20Changelog-f59e0b?style=for-the-badge" alt="Changelog" />
+    </a>
+  </p>
 </div>
 
 ## What This Repository Is
