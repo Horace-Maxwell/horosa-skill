@@ -315,23 +315,42 @@ class HorosaRuntimeManager:
                     "group_id": trace["group_id"],
                 }
 
+            recovered_partial_state = False
+            recovery_details: dict[str, Any] | None = None
+            if self._any_services_reachable(initial_status):
+                recovery_details = self.stop_local_services()
+                recovered_partial_state = True
+
             env = os.environ.copy()
             env.setdefault("HOROSA_SERVER_PORT", str(self.settings.local_backend_port))
             env.setdefault("HOROSA_CHART_PORT", str(self.settings.local_chart_port))
 
             command = self._platform_command(script)
-            completed = subprocess.run(
-                command,
-                cwd=str(script.parent),
+            completed, readiness = self._run_start_command(
+                command=command,
+                script=script,
                 env=env,
-                capture_output=True,
-                text=True,
-            )
-            readiness = self._wait_for_service_state(
-                expected_reachable=True,
-                timeout_seconds=self.settings.runtime_start_timeout_seconds,
                 manifest=manifest,
             )
+            retried_after_cleanup = False
+            combined_output = f"{completed.stdout}\n{completed.stderr}".lower()
+            if (
+                completed.returncode != 0
+                and not readiness["ready"]
+                and (
+                    self._any_services_reachable(readiness["endpoints"])
+                    or "pid files already exist" in combined_output
+                )
+            ):
+                recovery_details = self.stop_local_services()
+                recovered_partial_state = True
+                retried_after_cleanup = True
+                completed, readiness = self._run_start_command(
+                    command=command,
+                    script=script,
+                    env=env,
+                    manifest=manifest,
+                )
             startup_warning: dict[str, Any] | None = None
             if completed.returncode != 0 and readiness["ready"]:
                 startup_warning = {
@@ -342,6 +361,7 @@ class HorosaRuntimeManager:
                         "returncode": completed.returncode,
                         "stdout": completed.stdout[-4000:],
                         "stderr": completed.stderr[-4000:],
+                        "retried_after_cleanup": retried_after_cleanup,
                     },
                 }
             elif completed.returncode != 0:
@@ -374,6 +394,7 @@ class HorosaRuntimeManager:
                     "platform": manifest.get("platform") if manifest else (self.settings.runtime_platform or _platform_key()),
                     "command": command,
                     "startup_warning": startup_warning,
+                    "recovered_partial_state": recovered_partial_state,
                 }
             )
             trace["command"] = command
@@ -385,6 +406,8 @@ class HorosaRuntimeManager:
                 "stderr": completed.stderr[-4000:],
                 "endpoints": readiness["endpoints"],
                 "warning": startup_warning,
+                "recovered_partial_state": recovered_partial_state,
+                "recovery": recovery_details,
                 "trace_id": trace["trace_id"],
                 "group_id": trace["group_id"],
             }
@@ -651,6 +674,31 @@ class HorosaRuntimeManager:
 
     def _all_services_reachable(self, endpoints: list[dict[str, Any]]) -> bool:
         return bool(endpoints) and all(bool(item.get("reachable")) for item in endpoints)
+
+    def _any_services_reachable(self, endpoints: list[dict[str, Any]]) -> bool:
+        return any(bool(item.get("reachable")) for item in endpoints)
+
+    def _run_start_command(
+        self,
+        *,
+        command: list[str],
+        script: Path,
+        env: dict[str, str],
+        manifest: dict[str, Any] | None,
+    ) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
+        completed = subprocess.run(
+            command,
+            cwd=str(script.parent),
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        readiness = self._wait_for_service_state(
+            expected_reachable=True,
+            timeout_seconds=self.settings.runtime_start_timeout_seconds,
+            manifest=manifest,
+        )
+        return completed, readiness
 
     def _wait_for_service_state(
         self,

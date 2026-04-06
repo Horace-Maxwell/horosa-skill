@@ -321,3 +321,131 @@ def test_start_runtime_succeeds_when_script_returns_nonzero_but_services_become_
     assert started["ok"] is True
     assert started["warning"]["code"] == "runtime.start_nonzero_but_ready"
     assert manager.load_runtime_state()["status"] == "running_with_warnings"
+
+
+def test_start_runtime_recovers_partial_state_before_launch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    archive = create_runtime_archive(tmp_path)
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+        runtime_start_timeout_seconds=0.5,
+    )
+    manager = HorosaRuntimeManager(settings)
+    manager.install(archive=str(archive))
+
+    service_states = iter(
+        [
+            [
+                {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": True},
+                {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": False},
+            ],
+            [
+                {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": True},
+                {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": True},
+            ],
+        ]
+    )
+
+    def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+        return next(service_states)
+
+    def fake_wait_for_service_state(
+        self: HorosaRuntimeManager,
+        *,
+        expected_reachable: bool,
+        timeout_seconds: float,
+        manifest: dict | None,
+    ) -> dict[str, object]:
+        return {
+            "ready": True,
+            "endpoints": [
+                {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": expected_reachable},
+                {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": expected_reachable},
+            ],
+        }
+
+    stop_calls: list[str] = []
+
+    def fake_stop_local_services() -> dict[str, object]:
+        stop_calls.append("stop")
+        return {"ok": True, "already_stopped": False}
+
+    manager._service_status = MethodType(fake_service_status, manager)
+    manager._wait_for_service_state = MethodType(fake_wait_for_service_state, manager)
+    monkeypatch.setattr(manager, "stop_local_services", fake_stop_local_services)
+
+    started = manager.start_local_services()
+
+    assert started["ok"] is True
+    assert started["recovered_partial_state"] is True
+    assert stop_calls == ["stop"]
+
+
+def test_start_runtime_retries_after_failed_launch_with_stale_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    archive = create_runtime_archive(tmp_path)
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+        runtime_start_timeout_seconds=0.5,
+    )
+    manager = HorosaRuntimeManager(settings)
+    manager.install(archive=str(archive))
+
+    def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+        return [
+            {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": False},
+            {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": False},
+        ]
+
+    run_results = iter(
+        [
+            (
+                subprocess.CompletedProcess(args=["bash"], returncode=1, stdout="pid files already exist", stderr=""),
+                {
+                    "ready": False,
+                    "endpoints": [
+                        {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": True},
+                        {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": False},
+                    ],
+                },
+            ),
+            (
+                subprocess.CompletedProcess(args=["bash"], returncode=0, stdout="ok", stderr=""),
+                {
+                    "ready": True,
+                    "endpoints": [
+                        {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": True},
+                        {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": True},
+                    ],
+                },
+            ),
+        ]
+    )
+
+    def fake_run_start_command(
+        self: HorosaRuntimeManager,
+        *,
+        command: list[str],
+        script: Path,
+        env: dict[str, str],
+        manifest: dict | None,
+    ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
+        return next(run_results)
+
+    stop_calls: list[str] = []
+
+    def fake_stop_local_services() -> dict[str, object]:
+        stop_calls.append("stop")
+        return {"ok": True, "already_stopped": False}
+
+    manager._service_status = MethodType(fake_service_status, manager)
+    manager._run_start_command = MethodType(fake_run_start_command, manager)
+    monkeypatch.setattr(manager, "stop_local_services", fake_stop_local_services)
+
+    started = manager.start_local_services()
+
+    assert started["ok"] is True
+    assert started["recovered_partial_state"] is True
+    assert stop_calls == ["stop"]
