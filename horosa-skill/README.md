@@ -16,6 +16,8 @@
 - `uv run horosa-skill benchmark run`
 - `uv run horosa-skill benchmark run --skip-runtime`
 - `uv run horosa-skill trace latest`
+- `uv run horosa-skill client openclaw-config --format mcporter`
+- `uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace`
 
 ## 这个子项目包含什么
 
@@ -132,6 +134,13 @@ uv run horosa-skill serve
 ```bash
 uv run horosa-skill install
 uv run horosa-skill doctor
+```
+
+如果你主要是接 OpenClaw / mcporter，也可以直接生成当前路径版配置并做一次最小联通检查：
+
+```bash
+uv run horosa-skill client openclaw-config --format mcporter
+uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace
 ```
 
 ### 2. 直接让调度器选技法

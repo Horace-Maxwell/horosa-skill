@@ -299,6 +299,13 @@ uv run horosa-skill install
 uv run horosa-skill doctor
 ```
 
+If OpenClaw / mcporter is your main target, you can now generate a ready-to-paste config that already contains the current absolute path:
+
+```bash
+uv run horosa-skill client openclaw-config --format mcporter
+uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace
+```
+
 ### 2. Let the dispatcher select methods
 
 ```bash
@@ -391,6 +398,13 @@ echo '{
 - [Codex config example](./horosa-skill/examples/clients/codex-config.toml)
 - [Open WebUI setup](./horosa-skill/examples/clients/openwebui-streamable-http.md)
 - [OpenClaw setup](./horosa-skill/examples/clients/openclaw-mcp.md)
+
+For OpenClaw / mcporter, the lowest-friction path is:
+
+```bash
+cd horosa-skill
+uv run horosa-skill client openclaw-config --format mcporter
+```
 
 ## Runtime And Release Strategy
 

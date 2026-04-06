@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import shlex
+import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import typer
 
@@ -28,12 +30,14 @@ export_app = typer.Typer(help="Inspect the Xingque AI export registry and parse 
 knowledge_app = typer.Typer(help="Read bundled Xingque hover knowledge such as 星盘释义、大六壬地支提示、奇门象意。")
 benchmark_app = typer.Typer(help="Run HorosaBench benchmark cases for routing, export parity, and knowledge quality.")
 trace_app = typer.Typer(help="Inspect recent local trace records for tool runs, dispatches, and runtime operations.")
+client_app = typer.Typer(help="Generate ready-to-paste client configs and run client-facing smoke checks such as OpenClaw / mcporter.")
 app.add_typer(tool_app, name="tool")
 app.add_typer(memory_app, name="memory")
 app.add_typer(export_app, name="export")
 app.add_typer(knowledge_app, name="knowledge")
 app.add_typer(benchmark_app, name="benchmark")
 app.add_typer(trace_app, name="trace")
+app.add_typer(client_app, name="client")
 
 
 def _service() -> HorosaSkillService:
@@ -66,6 +70,84 @@ def _load_payload(*, stdin: bool, input_file: Optional[Path]) -> dict:
 
 def _print_json(data: object) -> None:
     typer.echo(json.dumps(data, ensure_ascii=False, indent=2))
+
+
+def _package_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+def _resolve_skill_root(path: Path) -> Path:
+    candidate = path.expanduser().resolve()
+    if (candidate / "pyproject.toml").exists():
+        return candidate
+    nested = candidate / "horosa-skill"
+    if (nested / "pyproject.toml").exists():
+        return nested
+    raise typer.BadParameter("Path must point to the horosa-skill package directory or the repo root that contains it.")
+
+
+def _build_openclaw_server_block(
+    *,
+    skill_root: Path,
+    isolate_home: Path | None,
+) -> dict[str, Any]:
+    skill_root = skill_root.expanduser().resolve()
+    if isolate_home is None:
+        return {
+            "command": "uv",
+            "args": [
+                "run",
+                "--directory",
+                str(skill_root),
+                "horosa-skill",
+                "serve",
+                "--transport",
+                "stdio",
+            ],
+            "cwd": str(skill_root),
+        }
+
+    home_dir = isolate_home.expanduser().resolve()
+    return {
+        "command": "/bin/zsh",
+        "args": [
+            "-lc",
+            (
+                f"export HOME={shlex.quote(str(home_dir))}; "
+                f"exec uv run --directory {shlex.quote(str(skill_root))} "
+                "horosa-skill serve --transport stdio"
+            ),
+        ],
+        "cwd": str(skill_root),
+    }
+
+
+def _build_openclaw_config(
+    *,
+    skill_root: Path,
+    server_name: str,
+    format_name: str,
+    isolate_home: Path | None,
+) -> dict[str, Any]:
+    server_block = _build_openclaw_server_block(
+        skill_root=skill_root,
+        isolate_home=isolate_home,
+    )
+    if format_name == "mcporter":
+        return {"mcpServers": {server_name: server_block}}
+    if format_name == "openclaw":
+        return {"mcp": {"servers": {server_name: server_block}}}
+    raise typer.BadParameter("`--format` must be either `mcporter` or `openclaw`.")
+
+
+def _run_subprocess_json(command: list[str], *, cwd: Path) -> dict[str, Any]:
+    result = subprocess.run(command, cwd=str(cwd), capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "Command failed")
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Command did not return JSON: {' '.join(command)}") from exc
 
 
 @app.command()
@@ -255,6 +337,180 @@ def trace_latest(
             "events": tracer.read_latest(limit=max(1, limit)),
         }
     )
+
+
+@client_app.command("openclaw-config")
+def client_openclaw_config(
+    skill_root: Path = typer.Option(
+        _package_root(),
+        help="Path to the horosa-skill package directory, or the repo root that contains it.",
+    ),
+    format_name: str = typer.Option(
+        "mcporter",
+        "--format",
+        help="Output config format: mcporter or openclaw.",
+    ),
+    server_name: str = typer.Option("horosa", help="Server name key written into the MCP config."),
+    isolate_home: Path | None = typer.Option(
+        None,
+        help="Optional HOME directory to embed for fully isolated installs and smoke tests.",
+    ),
+    write: Path | None = typer.Option(
+        None,
+        help="Optional output file path. When set, the config is written there and also printed to stdout.",
+    ),
+) -> None:
+    resolved_skill_root = _resolve_skill_root(skill_root)
+    payload = _build_openclaw_config(
+        skill_root=resolved_skill_root,
+        server_name=server_name,
+        format_name=format_name,
+        isolate_home=isolate_home,
+    )
+    if write is not None:
+        output_path = write.expanduser().resolve()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    _print_json(payload)
+
+
+@client_app.command("openclaw-check")
+def client_openclaw_check(
+    workspace: Path = typer.Option(
+        Path.home() / ".openclaw" / "workspace",
+        help="OpenClaw workspace root. The default assumes ~/.openclaw/workspace.",
+    ),
+    config: Path | None = typer.Option(
+        None,
+        help="Explicit mcporter config path. Defaults to <workspace>/config/mcporter.json.",
+    ),
+    full: bool = typer.Option(
+        False,
+        help="Run the exhaustive 39-tool OpenClaw self-check instead of a quick smoke check.",
+    ),
+    output: Path | None = typer.Option(
+        None,
+        help="Optional report path. Defaults to a JSON file in the Horosa data directory.",
+    ),
+) -> None:
+    settings = Settings.from_env()
+    workspace_root = workspace.expanduser().resolve()
+    config_path = (config.expanduser().resolve() if config is not None else workspace_root / "config" / "mcporter.json")
+    if not config_path.exists():
+        raise typer.BadParameter(f"mcporter config not found: {config_path}")
+
+    default_output = settings.data_dir / ("openclaw_full_check.json" if full else "openclaw_smoke_check.json")
+    output_path = (output.expanduser().resolve() if output is not None else default_output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if full:
+        script_path = _package_root() / "scripts" / "run_openclaw_full_self_check.py"
+        command = [
+            sys.executable,
+            str(script_path),
+            "--workspace",
+            str(workspace_root),
+            "--output",
+            str(output_path),
+        ]
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        if output_path.exists():
+            report = json.loads(output_path.read_text(encoding="utf-8"))
+            _print_json(report)
+        else:
+            typer.echo(result.stderr or result.stdout, err=True)
+        if result.returncode != 0:
+            raise typer.Exit(code=2)
+        return
+
+    list_result = _run_subprocess_json(
+        [
+            "mcporter",
+            "list",
+            "horosa",
+            "--json",
+            "--config",
+            str(config_path),
+            "--root",
+            str(workspace_root),
+        ],
+        cwd=workspace_root,
+    )
+    registry_result = _run_subprocess_json(
+        [
+            "mcporter",
+            "call",
+            "horosa.horosa_knowledge_registry",
+            "--output",
+            "json",
+            "--config",
+            str(config_path),
+            "--root",
+            str(workspace_root),
+        ],
+        cwd=workspace_root,
+    )
+    chart_payload = {
+        "date": "2026-04-04",
+        "time": "15:58:35",
+        "zone": "+08:00",
+        "lat": "26n04",
+        "lon": "119e19",
+    }
+    chart_result = _run_subprocess_json(
+        [
+            "mcporter",
+            "call",
+            "horosa.horosa_astro_chart",
+            "--args",
+            json.dumps(chart_payload, ensure_ascii=False),
+            "--output",
+            "json",
+            "--config",
+            str(config_path),
+            "--root",
+            str(workspace_root),
+        ],
+        cwd=workspace_root,
+    )
+    run_id = (chart_result.get("memory_ref") or {}).get("run_id")
+    memory_show = _run_subprocess_json(
+        [
+            "mcporter",
+            "call",
+            "horosa.horosa_memory_show",
+            "--args",
+            json.dumps({"run_id": run_id, "include_payload": False}, ensure_ascii=False),
+            "--output",
+            "json",
+            "--config",
+            str(config_path),
+            "--root",
+            str(workspace_root),
+        ],
+        cwd=workspace_root,
+    )
+    report = {
+        "workspace": str(workspace_root),
+        "config": str(config_path),
+        "server_visible": list_result.get("status") == "ok",
+        "listed_tool_count": len(list_result.get("tools", [])),
+        "knowledge_registry_ok": registry_result.get("ok") is True,
+        "chart_ok": chart_result.get("ok") is True,
+        "memory_show_ok": memory_show.get("ok") is True,
+        "run_id": run_id,
+        "artifact_path": (chart_result.get("memory_ref") or {}).get("artifact_path"),
+        "ok": (
+            list_result.get("status") == "ok"
+            and registry_result.get("ok") is True
+            and chart_result.get("ok") is True
+            and memory_show.get("ok") is True
+        ),
+    }
+    output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    _print_json(report)
+    if not report["ok"]:
+        raise typer.Exit(code=2)
 
 
 @memory_app.command("query")
