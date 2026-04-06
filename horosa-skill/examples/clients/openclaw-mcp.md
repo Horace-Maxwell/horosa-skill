@@ -13,7 +13,35 @@ uv run horosa-skill install
 uv run horosa-skill doctor
 ```
 
-### 2. 把下面这段 MCP 配置粘进 OpenClaw / mcporter
+### 2. 直接生成当前仓库可用的 OpenClaw / mcporter 配置
+
+如果你已经在 `horosa-skill` 目录里，最省心的方式是直接生成一份带当前绝对路径的配置：
+
+```bash
+uv run horosa-skill client openclaw-config --format mcporter
+```
+
+如果你想顺手写到某个文件里：
+
+```bash
+uv run horosa-skill client openclaw-config \
+  --format mcporter \
+  --write ~/.openclaw/workspace/config/mcporter.json
+```
+
+写完后还可以直接做一次最小联通检查：
+
+```bash
+uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace
+```
+
+如果你要跑完整 `39` 工具检查：
+
+```bash
+uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace --full
+```
+
+### 3. 手动粘贴配置时，使用下面这段 MCP 配置
 
 把 `<ABSOLUTE_PATH_TO_REPO>` 替换成你的仓库绝对路径。
 
@@ -61,7 +89,7 @@ uv run horosa-skill doctor
 }
 ```
 
-### 3. 验证接入
+### 4. 验证接入
 
 ```bash
 mcporter list horosa --json

@@ -305,6 +305,13 @@ uv run horosa-skill install
 uv run horosa-skill doctor
 ```
 
+如果你主要是接 OpenClaw / mcporter，现在可以直接生成当前仓库绝对路径版配置：
+
+```bash
+uv run horosa-skill client openclaw-config --format mcporter
+uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace
+```
+
 ### 2. 让调度器自动选技法
 
 ```bash
@@ -397,6 +404,13 @@ echo '{
 - [Codex 配置示例](./horosa-skill/examples/clients/codex-config.toml)
 - [Open WebUI 接入说明](./horosa-skill/examples/clients/openwebui-streamable-http.md)
 - [OpenClaw 接入说明](./horosa-skill/examples/clients/openclaw-mcp.md)
+
+对 OpenClaw / mcporter，推荐优先使用下面这条生成器命令，减少手改 JSON 和路径出错：
+
+```bash
+cd horosa-skill
+uv run horosa-skill client openclaw-config --format mcporter
+```
 
 ## Release 与 runtime 策略
 
