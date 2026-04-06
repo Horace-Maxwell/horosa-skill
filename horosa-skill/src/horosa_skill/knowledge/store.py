@@ -95,6 +95,71 @@ def load_knowledge_bundles() -> dict[str, dict[str, Any]]:
     }
 
 
+@lru_cache(maxsize=1)
+def load_knowledge_index() -> dict[str, Any]:
+    try:
+        return _load_json("index.json")
+    except FileNotFoundError:
+        bundles = load_knowledge_bundles()
+        return {
+            "schema_version": 1,
+            "bundle_version": 1,
+            "source": "xingque_hover_docs",
+            "build_timestamp": None,
+            "upstream_source_marker": "xingque_hover_docs",
+            "domains": [
+                {
+                    "domain": "astro",
+                    "categories": [
+                        {"name": key, "count": len(value), "keys_sample": sorted(value)[:20]}
+                        for key, value in bundles["astro"].get("categories", {}).items()
+                    ],
+                    "missing_categories": [],
+                    "fallback_categories": [],
+                },
+                {
+                    "domain": "liureng",
+                    "categories": [
+                        {"name": "shen", "count": len(bundles["liureng"].get("shen_entries", {})), "keys_sample": sorted(bundles["liureng"].get("shen_entries", {}))[:20]},
+                        {"name": "house", "count": len(bundles["liureng"].get("jiang_info", {})), "keys_sample": sorted(bundles["liureng"].get("jiang_info", {}))[:20]},
+                    ],
+                    "missing_categories": [],
+                    "fallback_categories": [],
+                },
+                {
+                    "domain": "qimen",
+                    "categories": [
+                        {"name": key, "count": len(value), "keys_sample": sorted(value)[:20]}
+                        for key, value in bundles["qimen"].get("categories", {}).items()
+                    ],
+                    "missing_categories": [],
+                    "fallback_categories": [],
+                },
+            ],
+        }
+
+
+def _domain_index(domain: str) -> dict[str, Any]:
+    for item in load_knowledge_index().get("domains", []):
+        if item.get("domain") == domain:
+            return item
+    return {}
+
+
+def _knowledge_provenance(*, domain: str, category: str | None = None, key: str | None = None) -> dict[str, Any]:
+    index = load_knowledge_index()
+    return {
+        "source_domain": "xingque_hover_docs",
+        "domain": domain,
+        "category": category,
+        "key": key,
+        "bundle_version": index.get("bundle_version"),
+        "build_timestamp": index.get("build_timestamp"),
+        "upstream_source_marker": index.get("upstream_source_marker", "xingque_hover_docs"),
+        "coverage": _domain_index(domain),
+    }
+
+
 def _normalize_house_key(key: str) -> str:
     text = (key or "").strip()
     if not text:
@@ -242,11 +307,15 @@ def _build_liureng_house_entry(bundle: dict[str, Any], jiang_name: str, tian_bra
         "lines": [line for line in tips if line and line != "=="],
         "rendered_text": _tips_to_rendered_text(jiang_name or normalized_name, tips),
         "source": "xingque_hover_docs",
+        "bundle_version": load_knowledge_index().get("bundle_version"),
+        "provenance": _knowledge_provenance(domain="liureng", category="house", key=normalized_name),
+        "citation": f"Xingque hover knowledge · liureng/house/{normalized_name}",
     }
 
 
 def build_knowledge_registry(domain: str | None = None) -> dict[str, Any]:
     bundles = load_knowledge_bundles()
+    index = load_knowledge_index()
     domains = [domain] if domain else sorted(bundles)
     result_domains: list[dict[str, Any]] = []
     for name in domains:
@@ -296,11 +365,20 @@ def build_knowledge_registry(domain: str | None = None) -> dict[str, Any]:
             {
                 "domain": name,
                 "source": "xingque_hover_docs",
+                "bundle_version": index.get("bundle_version"),
+                "provenance": _knowledge_provenance(domain=name),
                 "categories": categories,
             }
         )
     return {
         "source": "xingque_hover_docs",
+        "bundle_version": index.get("bundle_version"),
+        "provenance": {
+            "source_domain": "xingque_hover_docs",
+            "bundle_version": index.get("bundle_version"),
+            "build_timestamp": index.get("build_timestamp"),
+            "upstream_source_marker": index.get("upstream_source_marker", "xingque_hover_docs"),
+        },
         "domains": result_domains,
     }
 
@@ -346,6 +424,9 @@ def read_knowledge_entry(payload: dict[str, Any]) -> dict[str, Any]:
                 "lines": [tip for tip in tips if tip and tip != "=="],
                 "rendered_text": _tips_to_rendered_text(title, tips),
                 "source": "xingque_hover_docs",
+                "bundle_version": load_knowledge_index().get("bundle_version"),
+                "provenance": _knowledge_provenance(domain=domain, category=category, key=aspect_key),
+                "citation": f"Xingque hover knowledge · {domain}/{category}/{aspect_key}",
             }
         normalized_key = _normalize_astro_key(category, key)
         entry = categories.get(category, {}).get(normalized_key)
@@ -366,6 +447,9 @@ def read_knowledge_entry(payload: dict[str, Any]) -> dict[str, Any]:
             "lines": [tip for tip in tips if tip and tip != "=="],
             "rendered_text": _tips_to_rendered_text(entry.get("title", normalized_key), tips),
             "source": "xingque_hover_docs",
+            "bundle_version": load_knowledge_index().get("bundle_version"),
+            "provenance": _knowledge_provenance(domain=domain, category=category, key=normalized_key),
+            "citation": f"Xingque hover knowledge · {domain}/{category}/{normalized_key}",
         }
 
     if domain == "liureng":
@@ -390,6 +474,9 @@ def read_knowledge_entry(payload: dict[str, Any]) -> dict[str, Any]:
                 "lines": [tip for tip in tips if tip and tip != "=="],
                 "rendered_text": _tips_to_rendered_text(entry.get("title", normalized_key), tips),
                 "source": "xingque_hover_docs",
+                "bundle_version": load_knowledge_index().get("bundle_version"),
+                "provenance": _knowledge_provenance(domain=domain, category=category, key=normalized_key),
+                "citation": f"Xingque hover knowledge · {domain}/{category}/{normalized_key}",
             }
         if category == "house":
             return _build_liureng_house_entry(
@@ -424,4 +511,7 @@ def read_knowledge_entry(payload: dict[str, Any]) -> dict[str, Any]:
         "lines": lines,
         "rendered_text": rendered_text,
         "source": "xingque_hover_docs",
+        "bundle_version": load_knowledge_index().get("bundle_version"),
+        "provenance": _knowledge_provenance(domain=domain, category=category, key=normalized_key),
+        "citation": f"Xingque hover knowledge · {domain}/{category}/{normalized_key}",
     }

@@ -8,10 +8,12 @@ from typing import Optional
 import typer
 
 from horosa_skill.config import Settings
+from horosa_skill.benchmark import run_benchmark
 from horosa_skill.errors import RuntimeError, ToolValidationError
 from horosa_skill.runtime import HorosaRuntimeManager
 from horosa_skill.service import HorosaSkillService
 from horosa_skill.surfaces.mcp_server import run_mcp_server
+from horosa_skill.tracing import TraceRecorder
 
 app = typer.Typer(
     help=(
@@ -24,10 +26,14 @@ tool_app = typer.Typer(help="Direct atomic method calls such as chart, qimen, li
 memory_app = typer.Typer(help="Inspect local records, show a single run, or attach the AI's final answer.")
 export_app = typer.Typer(help="Inspect the Xingque AI export registry and parse exported text into structured JSON.")
 knowledge_app = typer.Typer(help="Read bundled Xingque hover knowledge such as 星盘释义、大六壬地支提示、奇门象意。")
+benchmark_app = typer.Typer(help="Run HorosaBench benchmark cases for routing, export parity, and knowledge quality.")
+trace_app = typer.Typer(help="Inspect recent local trace records for tool runs, dispatches, and runtime operations.")
 app.add_typer(tool_app, name="tool")
 app.add_typer(memory_app, name="memory")
 app.add_typer(export_app, name="export")
 app.add_typer(knowledge_app, name="knowledge")
+app.add_typer(benchmark_app, name="benchmark")
+app.add_typer(trace_app, name="trace")
 
 
 def _service() -> HorosaSkillService:
@@ -36,6 +42,10 @@ def _service() -> HorosaSkillService:
 
 def _runtime_manager(settings: Settings | None = None) -> HorosaRuntimeManager:
     return HorosaRuntimeManager(settings or Settings.from_env())
+
+
+def _tracer(settings: Settings | None = None) -> TraceRecorder:
+    return TraceRecorder(settings or Settings.from_env())
 
 
 def _load_payload(*, stdin: bool, input_file: Optional[Path]) -> dict:
@@ -218,6 +228,31 @@ def ask(
     input_file: Optional[Path] = typer.Option(None, "--input", help="Read a JSON object from a file."),
 ) -> None:
     dispatch(stdin=stdin, input_file=input_file)
+
+
+@benchmark_app.command("run")
+def benchmark_run(
+    dataset: Optional[Path] = typer.Option(None, help="Optional benchmark dataset JSON path."),
+    skip_runtime: bool = typer.Option(False, help="Skip runtime-backed cases and run only local knowledge / metadata checks."),
+    save_result: bool = typer.Option(False, help="Persist benchmark tool outputs into the local record layer."),
+) -> None:
+    settings = Settings.from_env()
+    report = run_benchmark(settings=settings, dataset_path=dataset, skip_runtime=skip_runtime, save_result=save_result)
+    _print_json(report)
+
+
+@trace_app.command("latest")
+def trace_latest(
+    limit: int = typer.Option(30, help="How many recent trace rows to print from the newest local trace file."),
+) -> None:
+    tracer = _tracer()
+    _print_json(
+        {
+            "enabled": tracer.enabled,
+            "files": [str(path) for path in tracer.latest_trace_files(limit=3)],
+            "events": tracer.read_latest(limit=max(1, limit)),
+        }
+    )
 
 
 @memory_app.command("query")

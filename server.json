@@ -1,0 +1,56 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/registry/main/schema/server.schema.json",
+  "name": "horosa-skill",
+  "title": "Horosa Skill",
+  "description": "Local-first offline Horosa / Xingque MCP server with structured export contracts, bundled hover knowledge, local memory, and release-managed runtime payloads.",
+  "version": "0.3.0",
+  "homepage": "https://github.com/Horace-Maxwell/horosa-skill",
+  "repository": "https://github.com/Horace-Maxwell/horosa-skill",
+  "license": "Apache-2.0",
+  "category": "knowledge-and-reasoning",
+  "tags": [
+    "mcp",
+    "horosa",
+    "xingque",
+    "astrology",
+    "metaphysics",
+    "offline-first",
+    "local-memory"
+  ],
+  "transports": [
+    "stdio",
+    "streamable-http"
+  ],
+  "platforms": [
+    "macOS",
+    "Windows"
+  ],
+  "packages": [
+    {
+      "registryType": "github",
+      "identifier": "Horace-Maxwell/horosa-skill",
+      "version": "0.3.0",
+      "transport": "stdio",
+      "runtime": {
+        "command": "uv",
+        "args": [
+          "run",
+          "horosa-skill",
+          "serve",
+          "--transport",
+          "stdio"
+        ]
+      },
+      "local": {
+        "install": [
+          "uv sync --dev",
+          "uv run horosa-skill install"
+        ],
+        "start": [
+          "uv run horosa-skill serve --transport stdio"
+        ]
+      },
+      "releaseManifest": "https://github.com/Horace-Maxwell/horosa-skill/releases/latest/download/runtime-manifest.json"
+    }
+  ]
+}

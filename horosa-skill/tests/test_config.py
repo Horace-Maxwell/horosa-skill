@@ -15,6 +15,10 @@ def test_settings_from_env_uses_safe_fallbacks(monkeypatch, tmp_path: Path) -> N
     monkeypatch.setenv("HOROSA_JS_ENGINE_TIMEOUT_SECONDS", "-5")
     monkeypatch.setenv("HOROSA_SKILL_PORT", "bad")
     monkeypatch.setenv("HOROSA_SKILL_LOG_LEVEL", "debug")
+    monkeypatch.setenv("HOROSA_TRACE_ENABLED", "no")
+    monkeypatch.setenv("HOROSA_TRACE_CAPTURE_PAYLOADS", "yes")
+    monkeypatch.setenv("HOROSA_TRACE_CAPTURE_AI_ANSWERS", "1")
+    monkeypatch.setenv("HOROSA_TRACE_OTLP_ENDPOINT", "https://example.com/trace")
 
     settings = Settings.from_env()
 
@@ -29,13 +33,19 @@ def test_settings_from_env_uses_safe_fallbacks(monkeypatch, tmp_path: Path) -> N
     assert settings.js_engine_timeout_seconds == 60.0
     assert settings.port == 8765
     assert settings.log_level == "DEBUG"
+    assert settings.trace_enabled is False
+    assert settings.trace_capture_payloads is True
+    assert settings.trace_capture_ai_answers is True
+    assert settings.trace_otlp_endpoint == "https://example.com/trace"
 
 
 def test_settings_from_env_expands_user_paths(monkeypatch) -> None:
     monkeypatch.setenv("HOROSA_SKILL_DB_PATH", "~/horosa-test/memory.db")
     monkeypatch.setenv("HOROSA_SKILL_OUTPUT_DIR", "~/horosa-test/runs")
+    monkeypatch.setenv("HOROSA_TRACE_DIR", "~/horosa-test/traces")
 
     settings = Settings.from_env()
 
     assert str(settings.db_path).startswith(str(Path.home()))
     assert str(settings.output_dir).startswith(str(Path.home()))
+    assert str(settings.trace_dir).startswith(str(Path.home()))

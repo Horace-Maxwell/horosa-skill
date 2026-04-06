@@ -1,0 +1,216 @@
+{
+  "schema_version": 1,
+  "bundle_version": 1,
+  "source": "xingque_hover_docs",
+  "build_timestamp": "2026-04-05T00:31:55Z",
+  "upstream_source_marker": "xingque_hover_docs",
+  "domains": [
+    {
+      "domain": "astro",
+      "missing_categories": [],
+      "fallback_categories": [],
+      "categories": [
+        {
+          "name": "planet",
+          "count": 12,
+          "keys_sample": [
+            "Jupiter",
+            "Mars",
+            "Mercury",
+            "Moon",
+            "Neptune",
+            "North Node",
+            "Pluto",
+            "Saturn",
+            "South Node",
+            "Sun",
+            "Uranus",
+            "Venus"
+          ]
+        },
+        {
+          "name": "sign",
+          "count": 12,
+          "keys_sample": [
+            "Aquarius",
+            "Aries",
+            "Cancer",
+            "Capricorn",
+            "Gemini",
+            "Leo",
+            "Libra",
+            "Pisces",
+            "Sagittarius",
+            "Scorpio",
+            "Taurus",
+            "Virgo"
+          ]
+        },
+        {
+          "name": "house",
+          "count": 12,
+          "keys_sample": [
+            "House1",
+            "House10",
+            "House11",
+            "House12",
+            "House2",
+            "House3",
+            "House4",
+            "House5",
+            "House6",
+            "House7",
+            "House8",
+            "House9"
+          ]
+        },
+        {
+          "name": "lot",
+          "count": 16,
+          "keys_sample": [
+            "Pars Brothers",
+            "Pars Diseases",
+            "Pars Father",
+            "Pars Fortuna",
+            "Pars Jupiter",
+            "Pars Life",
+            "Pars Mars",
+            "Pars Mercury",
+            "Pars Mother",
+            "Pars Radix",
+            "Pars Saturn",
+            "Pars Sons",
+            "Pars Spirit",
+            "Pars Venus",
+            "Pars Wedding [Female]",
+            "Pars Wedding [Male]"
+          ]
+        },
+        {
+          "name": "aspect",
+          "count": 9,
+          "keys_sample": [
+            "0",
+            "120",
+            "135",
+            "150",
+            "180",
+            "30",
+            "45",
+            "60",
+            "90"
+          ]
+        }
+      ]
+    },
+    {
+      "domain": "liureng",
+      "missing_categories": [],
+      "fallback_categories": [],
+      "categories": [
+        {
+          "name": "shen",
+          "count": 12,
+          "keys_sample": [
+            "丑",
+            "亥",
+            "午",
+            "卯",
+            "子",
+            "寅",
+            "巳",
+            "戌",
+            "未",
+            "申",
+            "辰",
+            "酉"
+          ]
+        },
+        {
+          "name": "house",
+          "count": 12,
+          "keys_sample": [
+            "元武",
+            "六合",
+            "勾陈",
+            "天乙",
+            "天后",
+            "天空",
+            "太常",
+            "太阴",
+            "朱雀",
+            "白虎",
+            "螣蛇",
+            "青龙"
+          ]
+        }
+      ]
+    },
+    {
+      "domain": "qimen",
+      "missing_categories": [],
+      "fallback_categories": [],
+      "categories": [
+        {
+          "name": "stem",
+          "count": 10,
+          "keys_sample": [
+            "丁",
+            "丙",
+            "乙",
+            "壬",
+            "己",
+            "庚",
+            "戊",
+            "甲",
+            "癸",
+            "辛"
+          ]
+        },
+        {
+          "name": "door",
+          "count": 8,
+          "keys_sample": [
+            "休门",
+            "伤门",
+            "开门",
+            "惊门",
+            "景门",
+            "杜门",
+            "死门",
+            "生门"
+          ]
+        },
+        {
+          "name": "star",
+          "count": 9,
+          "keys_sample": [
+            "天任",
+            "天冲",
+            "天心",
+            "天柱",
+            "天禽",
+            "天芮",
+            "天英",
+            "天蓬",
+            "天辅"
+          ]
+        },
+        {
+          "name": "god",
+          "count": 8,
+          "keys_sample": [
+            "九地",
+            "九天",
+            "值符",
+            "六合",
+            "太阴",
+            "玄武",
+            "白虎",
+            "螣蛇"
+          ]
+        }
+      ]
+    }
+  ]
+}

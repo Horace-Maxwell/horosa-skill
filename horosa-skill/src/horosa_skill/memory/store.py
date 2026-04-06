@@ -44,6 +44,7 @@ class MemoryStore:
                     entrypoint TEXT NOT NULL,
                     query_text TEXT,
                     subject_json TEXT,
+                    group_id TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
@@ -57,6 +58,9 @@ class MemoryStore:
                     summary_json TEXT NOT NULL,
                     warnings_json TEXT NOT NULL,
                     error_json TEXT,
+                    trace_id TEXT,
+                    group_id TEXT,
+                    evaluation_case_id TEXT,
                     created_at TEXT NOT NULL,
                     FOREIGN KEY(run_id) REFERENCES runs(id)
                 );
@@ -89,6 +93,10 @@ class MemoryStore:
             self._ensure_column(conn, "runs", "ai_answer_text", "TEXT")
             self._ensure_column(conn, "runs", "ai_answer_json", "TEXT")
             self._ensure_column(conn, "runs", "answer_meta_json", "TEXT")
+            self._ensure_column(conn, "runs", "group_id", "TEXT")
+            self._ensure_column(conn, "tool_calls", "trace_id", "TEXT")
+            self._ensure_column(conn, "tool_calls", "group_id", "TEXT")
+            self._ensure_column(conn, "tool_calls", "evaluation_case_id", "TEXT")
             conn.commit()
 
     def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
@@ -99,22 +107,30 @@ class MemoryStore:
         if column not in columns:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
-    def create_run(self, *, entrypoint: str, query_text: str | None = None, subject: dict[str, Any] | None = None) -> str:
+    def create_run(
+        self,
+        *,
+        entrypoint: str,
+        query_text: str | None = None,
+        subject: dict[str, Any] | None = None,
+        group_id: str | None = None,
+    ) -> str:
         run_id = uuid.uuid4().hex
         now = utc_now_iso()
         with self.connect() as conn:
             conn.execute(
                 """
                 INSERT INTO runs (
-                    id, entrypoint, query_text, subject_json, created_at, updated_at,
+                    id, entrypoint, query_text, subject_json, group_id, created_at, updated_at,
                     user_question_text, ai_answer_text, ai_answer_json, answer_meta_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run_id,
                     entrypoint,
                     query_text,
                     json.dumps(subject or {}, ensure_ascii=False),
+                    group_id,
                     now,
                     now,
                     query_text,
@@ -159,13 +175,19 @@ class MemoryStore:
         summary: list[str],
         warnings: list[str],
         error: dict[str, Any] | None,
+        trace_id: str | None = None,
+        group_id: str | None = None,
+        evaluation_case_id: str | None = None,
     ) -> MemoryRef:
         now = utc_now_iso()
         with self.connect() as conn:
             cursor = conn.execute(
                 """
-                INSERT INTO tool_calls (run_id, tool_name, ok, input_json, summary_json, warnings_json, error_json, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO tool_calls (
+                    run_id, tool_name, ok, input_json, summary_json, warnings_json, error_json,
+                    trace_id, group_id, evaluation_case_id, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run_id,
@@ -175,11 +197,23 @@ class MemoryStore:
                     json.dumps(summary, ensure_ascii=False),
                     json.dumps(warnings, ensure_ascii=False),
                     json.dumps(error, ensure_ascii=False) if error else None,
+                    trace_id,
+                    group_id,
+                    evaluation_case_id,
                     now,
                 ),
             )
             tool_call_id = int(cursor.lastrowid)
-            artifact_path = self._write_artifact(run_id=run_id, tool_name=tool_name, payload=envelope_dict, tool_call_id=tool_call_id, kind="tool_result")
+            artifact_path = self._write_artifact(
+                run_id=run_id,
+                tool_name=tool_name,
+                payload=envelope_dict,
+                tool_call_id=tool_call_id,
+                kind="tool_result",
+                trace_id=trace_id,
+                group_id=group_id,
+                evaluation_case_id=evaluation_case_id,
+            )
             artifact_cursor = conn.execute(
                 """
                 INSERT INTO artifacts (run_id, tool_call_id, tool_name, kind, path, created_at)
@@ -187,7 +221,7 @@ class MemoryStore:
                 """,
                 (run_id, tool_call_id, tool_name, "tool_result", str(artifact_path), now),
             )
-            conn.execute("UPDATE runs SET updated_at = ? WHERE id = ?", (now, run_id))
+            conn.execute("UPDATE runs SET updated_at = ?, group_id = COALESCE(group_id, ?) WHERE id = ?", (now, group_id, run_id))
             conn.commit()
         self._refresh_run_manifest(run_id)
         return MemoryRef(
@@ -196,11 +230,29 @@ class MemoryStore:
             artifact_path=str(artifact_path),
             tool_call_id=tool_call_id,
             artifact_id=int(artifact_cursor.lastrowid),
+            trace_id=trace_id,
+            group_id=group_id,
         )
 
-    def record_dispatch_result(self, *, run_id: str, payload: dict[str, Any]) -> MemoryRef:
+    def record_dispatch_result(
+        self,
+        *,
+        run_id: str,
+        payload: dict[str, Any],
+        trace_id: str | None = None,
+        group_id: str | None = None,
+    ) -> MemoryRef:
         now = utc_now_iso()
-        artifact_path = self._write_artifact(run_id=run_id, tool_name="horosa_dispatch", payload=payload, tool_call_id=None, kind="dispatch_result")
+        artifact_path = self._write_artifact(
+            run_id=run_id,
+            tool_name="horosa_dispatch",
+            payload=payload,
+            tool_call_id=None,
+            kind="dispatch_result",
+            trace_id=trace_id,
+            group_id=group_id,
+            evaluation_case_id=None,
+        )
         with self.connect() as conn:
             cursor = conn.execute(
                 """
@@ -209,7 +261,7 @@ class MemoryStore:
                 """,
                 (run_id, "horosa_dispatch", "dispatch_result", str(artifact_path), now),
             )
-            conn.execute("UPDATE runs SET updated_at = ? WHERE id = ?", (now, run_id))
+            conn.execute("UPDATE runs SET updated_at = ?, group_id = COALESCE(group_id, ?) WHERE id = ?", (now, group_id, run_id))
             conn.commit()
         self._refresh_run_manifest(run_id)
         return MemoryRef(
@@ -217,6 +269,8 @@ class MemoryStore:
             tool_name="horosa_dispatch",
             artifact_path=str(artifact_path),
             artifact_id=int(cursor.lastrowid),
+            trace_id=trace_id,
+            group_id=group_id,
         )
 
     def attach_ai_response(
@@ -276,7 +330,7 @@ class MemoryStore:
         sql = [
             """
             SELECT DISTINCT runs.id, runs.entrypoint, runs.query_text, runs.created_at, runs.updated_at
-                , runs.subject_json, runs.user_question_text, runs.ai_answer_text, runs.ai_answer_json, runs.answer_meta_json
+                , runs.subject_json, runs.group_id, runs.user_question_text, runs.ai_answer_text, runs.ai_answer_json, runs.answer_meta_json
             FROM runs
             LEFT JOIN tool_calls ON tool_calls.run_id = runs.id
             LEFT JOIN entities ON entities.run_id = runs.id
@@ -320,7 +374,7 @@ class MemoryStore:
                 artifacts = conn.execute(artifact_sql, artifact_params).fetchall()
                 tool_calls = conn.execute(
                     """
-                    SELECT tool_name, ok, input_json, summary_json, warnings_json, error_json, created_at
+                    SELECT tool_name, ok, input_json, summary_json, warnings_json, error_json, trace_id, group_id, evaluation_case_id, created_at
                     FROM tool_calls
                     WHERE run_id = ?
                     ORDER BY CASE WHEN tool_name = ? THEN 0 ELSE 1 END, id DESC
@@ -333,6 +387,7 @@ class MemoryStore:
                         "entrypoint": row["entrypoint"],
                         "query_text": row["query_text"],
                         "subject": self._parse_json_field(row["subject_json"]),
+                        "group_id": row["group_id"],
                         "user_question": row["user_question_text"] or row["query_text"],
                         "ai_answer_text": row["ai_answer_text"],
                         "ai_answer_structured": self._parse_json_field(row["ai_answer_json"]),
@@ -345,13 +400,32 @@ class MemoryStore:
                 )
         return results
 
-    def _write_artifact(self, *, run_id: str, tool_name: str, payload: dict[str, Any], tool_call_id: int | None, kind: str) -> Path:
+    def _write_artifact(
+        self,
+        *,
+        run_id: str,
+        tool_name: str,
+        payload: dict[str, Any],
+        tool_call_id: int | None,
+        kind: str,
+        trace_id: str | None,
+        group_id: str | None,
+        evaluation_case_id: str | None,
+    ) -> Path:
         now = datetime.now(timezone.utc)
         target_dir = self.output_dir / now.strftime("%Y") / now.strftime("%m") / now.strftime("%d")
         target_dir.mkdir(parents=True, exist_ok=True)
         suffix = f"{tool_call_id}" if tool_call_id is not None else "dispatch"
         target_path = target_dir / f"{run_id}_{tool_name}_{suffix}.json"
-        artifact_payload = self._build_record_payload(run_id=run_id, tool_name=tool_name, kind=kind, payload=payload)
+        artifact_payload = self._build_record_payload(
+            run_id=run_id,
+            tool_name=tool_name,
+            kind=kind,
+            payload=payload,
+            trace_id=trace_id,
+            group_id=group_id,
+            evaluation_case_id=evaluation_case_id,
+        )
         target_path.write_text(json.dumps(artifact_payload, ensure_ascii=False, indent=2), encoding="utf-8")
         return target_path
 
@@ -367,7 +441,17 @@ class MemoryStore:
                 return value
         return value
 
-    def _build_record_payload(self, *, run_id: str, tool_name: str, kind: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _build_record_payload(
+        self,
+        *,
+        run_id: str,
+        tool_name: str,
+        kind: str,
+        payload: dict[str, Any],
+        trace_id: str | None,
+        group_id: str | None,
+        evaluation_case_id: str | None,
+    ) -> dict[str, Any]:
         artifact_payload = dict(payload)
         run = self._get_run_row(run_id)
         subject = self._parse_json_field(run["subject_json"]) if run is not None else {}
@@ -381,6 +465,9 @@ class MemoryStore:
             "entrypoint": run["entrypoint"] if run is not None else None,
             "created_at": run["created_at"] if run is not None else None,
             "updated_at": run["updated_at"] if run is not None else None,
+            "trace_id": trace_id,
+            "group_id": group_id or (run["group_id"] if run is not None else None),
+            "evaluation_case_id": evaluation_case_id,
             "subject": subject or {},
         }
         artifact_payload["conversation"] = {
@@ -413,11 +500,15 @@ class MemoryStore:
                     for key, value in raw_payload.items()
                     if key not in {"record_meta", "conversation"}
                 }
+            record_meta = raw_payload.get("record_meta", {}) if isinstance(raw_payload, dict) else {}
             updated_payload = self._build_record_payload(
                 run_id=run_id,
                 tool_name=row["tool_name"],
                 kind=row["kind"],
                 payload=base_payload if isinstance(base_payload, dict) else {},
+                trace_id=record_meta.get("trace_id"),
+                group_id=record_meta.get("group_id"),
+                evaluation_case_id=record_meta.get("evaluation_case_id"),
             )
             path.write_text(json.dumps(updated_payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -428,7 +519,7 @@ class MemoryStore:
                 raise ValueError(f"Unknown run_id: {run_id}")
             tool_calls = conn.execute(
                 """
-                SELECT tool_name, ok, input_json, summary_json, warnings_json, error_json, created_at
+                SELECT tool_name, ok, input_json, summary_json, warnings_json, error_json, trace_id, group_id, evaluation_case_id, created_at
                 FROM tool_calls
                 WHERE run_id = ?
                 ORDER BY id ASC
@@ -451,6 +542,7 @@ class MemoryStore:
                 "entrypoint": run["entrypoint"],
                 "query_text": run["query_text"],
                 "subject": self._parse_json_field(run["subject_json"]) or {},
+                "group_id": run["group_id"],
                 "user_question": run["user_question_text"] or run["query_text"],
                 "ai_answer_text": run["ai_answer_text"],
                 "ai_answer_structured": self._parse_json_field(run["ai_answer_json"]),

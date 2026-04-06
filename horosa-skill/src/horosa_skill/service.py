@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timezone, datetime
 from typing import Any
 
 from pydantic import ValidationError
@@ -26,6 +27,7 @@ from horosa_skill.knowledge import build_knowledge_registry, read_knowledge_entr
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.schemas.common import DispatchEnvelope, ErrorInfo, ToolEnvelope
 from horosa_skill.schemas.tools import DispatchInput, MemoryAnswerInput
+from horosa_skill.tracing import TraceRecorder
 
 
 TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
@@ -295,6 +297,22 @@ def _render_snapshot_text(sections: list[tuple[str, str]]) -> str:
         clean_body = (body or "").strip() or "无"
         blocks.append(f"[{title}]\n{clean_body}".strip())
     return "\n\n".join(blocks).strip()
+
+
+def _build_export_provenance(technique: str, snapshot_text: str | None) -> dict[str, Any]:
+    technique_info = get_technique_info(technique)
+    registry = build_export_registry(technique=technique)
+    return {
+        "source_domain": "xingque_ai_export",
+        "technique": technique,
+        "category": technique_info.get("label"),
+        "snapshot_key": technique_info.get("snapshot_key"),
+        "bundle_version": registry.get("settings_version"),
+        "section_migration_version": registry.get("section_migration_version"),
+        "upstream_source_marker": "aiExport.js",
+        "build_timestamp": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "snapshot_text_present": bool(snapshot_text),
+    }
 
 
 def _render_qimen_palace_sections(qimen_pan: dict[str, Any]) -> list[tuple[str, str]]:
@@ -2326,6 +2344,11 @@ def _build_generated_export_snapshot(
         )
 
     export_text = "\n\n".join(block for block in rendered_blocks if block.strip()).strip()
+    provenance = _build_export_provenance(technique, snapshot_text)
+    citation = (
+        f"Xingque AI export · {technique_info.get('label', technique)} · "
+        f"settings v{provenance.get('bundle_version')} · source {provenance.get('upstream_source_marker')}"
+    )
     return {
         "technique": technique_info,
         "settings_used": settings_used,
@@ -2339,6 +2362,9 @@ def _build_generated_export_snapshot(
         "export_text": export_text,
         "format_source": "snapshot_parser" if parsed_snapshot else "generated_template",
         "snapshot_text": snapshot_text,
+        "bundle_version": provenance.get("bundle_version"),
+        "provenance": provenance,
+        "citation": citation,
     }
 
 
@@ -2375,6 +2401,9 @@ def _attach_export_contract(tool_name: str, input_normalized: dict[str, Any], re
         "selected_sections": export_format["selected_sections"],
         "format_source": export_format["format_source"],
         "snapshot_text": export_format["snapshot_text"],
+        "bundle_version": export_format.get("bundle_version"),
+        "provenance": export_format.get("provenance"),
+        "citation": export_format.get("citation"),
         "sections": [
             {
                 "index": section["index"],
@@ -2405,6 +2434,9 @@ def _build_dispatch_export_contract(result: ToolEnvelope) -> dict[str, Any]:
         "selected_sections": list(export_format.get("selected_sections", [])) if isinstance(export_format, dict) else [],
         "format_source": export_format.get("format_source") if isinstance(export_format, dict) else None,
         "snapshot_text": export_format.get("snapshot_text") if isinstance(export_format, dict) else None,
+        "bundle_version": export_format.get("bundle_version") if isinstance(export_format, dict) else None,
+        "provenance": export_format.get("provenance") if isinstance(export_format, dict) else None,
+        "citation": export_format.get("citation") if isinstance(export_format, dict) else None,
         "export_snapshot": export_snapshot if isinstance(export_snapshot, dict) else None,
         "export_format": export_format if isinstance(export_format, dict) else None,
         "error": result.error.model_dump(mode="json") if result.error else None,
@@ -2423,6 +2455,7 @@ class HorosaSkillService:
         self.client = client or HorosaApiClient(settings.server_root)
         self.store = store or MemoryStore(settings)
         self.js_client = js_client or HorosaJsEngineClient(settings)
+        self.tracer = TraceRecorder(settings)
 
     def _unwrap_result(self, payload: Any) -> Any:
         current = payload
@@ -2917,99 +2950,137 @@ class HorosaSkillService:
         save_result: bool = True,
         run_id: str | None = None,
         query_text: str | None = None,
+        group_id: str | None = None,
+        evaluation_case_id: str | None = None,
     ) -> ToolEnvelope:
         if tool_name not in TOOL_DEFINITIONS:
             raise ToolValidationError(f"Unknown tool: {tool_name}", code="tool.unknown", details={"tool_name": tool_name})
 
         definition = TOOL_DEFINITIONS[tool_name]
+        workflow_group_id = group_id or self.tracer.new_group_id()
+        with self.tracer.span(
+            workflow_name="tool.run",
+            group_id=workflow_group_id,
+            metadata={
+                "entrypoint": "tool",
+                "tool_name": tool_name,
+                "runtime_target": definition.execution,
+                "query_text": query_text,
+                "payload": payload,
+                "evaluation_case_id": evaluation_case_id,
+            },
+        ) as trace:
+            try:
+                validated = definition.input_model.model_validate(payload)
+            except ValidationError as exc:
+                trace["error_code"] = "tool.invalid_payload"
+                raise ToolValidationError(
+                    f"Invalid payload for tool `{tool_name}`.",
+                    code="tool.invalid_payload",
+                    details={"errors": exc.errors()},
+                ) from exc
 
-        try:
-            validated = definition.input_model.model_validate(payload)
-        except ValidationError as exc:
-            raise ToolValidationError(
-                f"Invalid payload for tool `{tool_name}`.",
-                code="tool.invalid_payload",
-                details={"errors": exc.errors()},
-            ) from exc
+            input_normalized = validated.model_dump(exclude_none=True)
+            memory_ref = None
 
-        input_normalized = validated.model_dump(exclude_none=True)
-        memory_ref = None
+            try:
+                if definition.execution == "local":
+                    response_data = self._run_local_tool(definition, input_normalized)
+                else:
+                    assert definition.endpoint is not None
+                    response_data = self._call_remote(definition.endpoint, input_normalized)
+                response_data = _attach_export_contract(tool_name, input_normalized, response_data)
+                summary = _generic_summary(tool_name, response_data)
+                warnings: list[str] = []
+                envelope = ToolEnvelope(
+                    ok=True,
+                    tool=tool_name,
+                    version=__version__,
+                    input_normalized=input_normalized,
+                    data=response_data,
+                    summary=summary,
+                    warnings=warnings,
+                    memory_ref=None,
+                    error=None,
+                    trace_id=trace["trace_id"],
+                    group_id=trace["group_id"],
+                )
+            except HorosaSkillError as exc:
+                trace["error_code"] = exc.code
+                envelope = ToolEnvelope(
+                    ok=False,
+                    tool=tool_name,
+                    version=__version__,
+                    input_normalized=input_normalized,
+                    data={},
+                    summary=[f"工具 `{tool_name}` 调用失败。"],
+                    warnings=[],
+                    memory_ref=None,
+                    error=ErrorInfo(code=exc.code, message=str(exc), details=exc.details),
+                    trace_id=trace["trace_id"],
+                    group_id=trace["group_id"],
+                )
 
-        try:
-            if definition.execution == "local":
-                response_data = self._run_local_tool(definition, input_normalized)
-            else:
-                assert definition.endpoint is not None
-                response_data = self._call_remote(definition.endpoint, input_normalized)
-            response_data = _attach_export_contract(tool_name, input_normalized, response_data)
-            summary = _generic_summary(tool_name, response_data)
-            warnings: list[str] = []
-            envelope = ToolEnvelope(
-                ok=True,
-                tool=tool_name,
-                version=__version__,
-                input_normalized=input_normalized,
-                data=response_data,
-                summary=summary,
-                warnings=warnings,
-                memory_ref=None,
-                error=None,
-            )
-        except HorosaSkillError as exc:
-            envelope = ToolEnvelope(
-                ok=False,
-                tool=tool_name,
-                version=__version__,
-                input_normalized=input_normalized,
-                data={},
-                summary=[f"工具 `{tool_name}` 调用失败。"],
-                warnings=[],
-                memory_ref=None,
-                error=ErrorInfo(code=exc.code, message=str(exc), details=exc.details),
-            )
+            if save_result:
+                effective_run_id = run_id or self.store.create_run(
+                    entrypoint="tool",
+                    query_text=query_text,
+                    subject=input_normalized,
+                    group_id=trace["group_id"],
+                )
+                self.store.record_entities(effective_run_id, _extract_entities(input_normalized, query_text))
+                memory_ref = self.store.record_tool_result(
+                    run_id=effective_run_id,
+                    tool_name=tool_name,
+                    ok=envelope.ok,
+                    input_normalized=input_normalized,
+                    envelope_dict=envelope.model_dump(mode="json"),
+                    summary=envelope.summary,
+                    warnings=envelope.warnings,
+                    error=envelope.error.model_dump(mode="json") if envelope.error else None,
+                    trace_id=trace["trace_id"],
+                    group_id=trace["group_id"],
+                    evaluation_case_id=evaluation_case_id,
+                )
+                envelope.memory_ref = memory_ref
+                trace["run_id"] = effective_run_id
+                trace["artifact_path"] = memory_ref.artifact_path
 
-        if save_result:
-            effective_run_id = run_id or self.store.create_run(
-                entrypoint="tool",
-                query_text=query_text,
-                subject=input_normalized,
-            )
-            self.store.record_entities(effective_run_id, _extract_entities(input_normalized, query_text))
-            memory_ref = self.store.record_tool_result(
-                run_id=effective_run_id,
-                tool_name=tool_name,
-                ok=envelope.ok,
-                input_normalized=input_normalized,
-                envelope_dict=envelope.model_dump(mode="json"),
-                summary=envelope.summary,
-                warnings=envelope.warnings,
-                error=envelope.error.model_dump(mode="json") if envelope.error else None,
-            )
-            envelope.memory_ref = memory_ref
-
-        return envelope
+            trace["success"] = envelope.ok
+            trace["input_normalized"] = input_normalized
+            trace["summary"] = envelope.summary
+            trace["warnings"] = envelope.warnings
+            return envelope
 
     def record_ai_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
-        try:
-            request = MemoryAnswerInput.model_validate(payload)
-        except ValidationError as exc:
-            raise ToolValidationError(
-                "Invalid payload for memory answer record.",
-                code="memory.answer.invalid_payload",
-                details={"errors": exc.errors()},
-            ) from exc
+        with self.tracer.span(
+            workflow_name="memory.answer",
+            metadata={"entrypoint": "memory.answer", "payload": payload},
+        ) as trace:
+            try:
+                request = MemoryAnswerInput.model_validate(payload)
+            except ValidationError as exc:
+                trace["error_code"] = "memory.answer.invalid_payload"
+                raise ToolValidationError(
+                    "Invalid payload for memory answer record.",
+                    code="memory.answer.invalid_payload",
+                    details={"errors": exc.errors()},
+                ) from exc
 
-        result = self.store.attach_ai_response(
-            run_id=request.run_id,
-            user_question=request.user_question,
-            ai_answer=request.ai_answer,
-            ai_answer_structured=request.ai_answer_structured,
-            answer_meta=request.answer_meta,
-        )
-        result["summary"] = ["已将 AI 回答写回对应 run 记录，并同步更新本地 manifest 与 artifact。"]
-        return result
+            result = self.store.attach_ai_response(
+                run_id=request.run_id,
+                user_question=request.user_question,
+                ai_answer=request.ai_answer,
+                ai_answer_structured=request.ai_answer_structured,
+                answer_meta=request.answer_meta,
+            )
+            result["summary"] = ["已将 AI 回答写回对应 run 记录，并同步更新本地 manifest 与 artifact。"]
+            result["trace_id"] = trace["trace_id"]
+            result["group_id"] = trace["group_id"]
+            trace["run_id"] = request.run_id
+            return result
 
-    def dispatch(self, payload: dict[str, Any]) -> DispatchEnvelope:
+    def dispatch(self, payload: dict[str, Any], *, evaluation_case_id: str | None = None) -> DispatchEnvelope:
         try:
             request = DispatchInput.model_validate(payload)
         except ValidationError as exc:
@@ -3038,78 +3109,103 @@ class HorosaSkillService:
         results: dict[str, ToolEnvelope] = {}
         result_export_contracts: dict[str, dict[str, Any]] = {}
 
-        run_id = self.store.create_run(
-            entrypoint="dispatch",
-            query_text=request.query,
-            subject=request.model_dump(exclude_none=True),
-        ) if request.save_result else None
-
-        def birth_payload() -> dict[str, Any]:
-            if request.birth is not None:
-                return request.birth.model_dump(exclude_none=True)
-            if request.subject and request.subject.birth is not None:
-                return request.subject.birth.model_dump(exclude_none=True)
-            return {}
-
-        base_birth = birth_payload()
-        for tool_name in selected_tools:
-            if tool_name == "relative":
-                payload_for_tool = {
-                    "inner": request.subject.inner.model_dump(exclude_none=True) if request.subject and request.subject.inner else {},
-                    "outer": request.subject.outer.model_dump(exclude_none=True) if request.subject and request.subject.outer else {},
-                    "hsys": request.preferences.get("hsys", 0),
-                    "zodiacal": request.preferences.get("zodiacal", 0),
-                    "relative": request.preferences.get("relative", 0),
-                }
-            elif tool_name in {"gua_desc", "gua_meiyi"}:
-                gua_names = []
-                if request.subject and request.subject.gua_names:
-                    gua_names = request.subject.gua_names
-                elif "gua_names" in request.context:
-                    gua_names = list(request.context["gua_names"])
-                payload_for_tool = {"name": gua_names}
-            elif tool_name == "jieqi_year":
-                year = request.subject.year if request.subject and request.subject.year is not None else None
-                if year is None and base_birth.get("date"):
-                    year = str(base_birth["date"])[:4]
-                payload_for_tool = {
-                    "year": year,
-                    "zone": base_birth.get("zone", request.context.get("zone", "8")),
-                    "lat": base_birth.get("lat", request.context.get("lat", "0n00")),
-                    "lon": base_birth.get("lon", request.context.get("lon", "0e00")),
-                    "time": request.context.get("time"),
-                }
-            else:
-                payload_for_tool = dict(base_birth)
-
-            normalized_inputs[tool_name] = payload_for_tool
-            results[tool_name] = self.run_tool(
-                tool_name,
-                payload_for_tool,
-                save_result=request.save_result,
-                run_id=run_id,
+        workflow_group_id = self.tracer.new_group_id()
+        with self.tracer.span(
+            workflow_name="dispatch.run",
+            group_id=workflow_group_id,
+            metadata={
+                "entrypoint": "dispatch",
+                "payload": request.model_dump(exclude_none=True),
+                "query_text": request.query,
+                "selected_tools": selected_tools,
+                "evaluation_case_id": evaluation_case_id,
+            },
+        ) as trace:
+            run_id = self.store.create_run(
+                entrypoint="dispatch",
                 query_text=request.query,
+                subject=request.model_dump(exclude_none=True),
+                group_id=trace["group_id"],
+            ) if request.save_result else None
+
+            def birth_payload() -> dict[str, Any]:
+                if request.birth is not None:
+                    return request.birth.model_dump(exclude_none=True)
+                if request.subject and request.subject.birth is not None:
+                    return request.subject.birth.model_dump(exclude_none=True)
+                return {}
+
+            base_birth = birth_payload()
+            for tool_name in selected_tools:
+                if tool_name == "relative":
+                    payload_for_tool = {
+                        "inner": request.subject.inner.model_dump(exclude_none=True) if request.subject and request.subject.inner else {},
+                        "outer": request.subject.outer.model_dump(exclude_none=True) if request.subject and request.subject.outer else {},
+                        "hsys": request.preferences.get("hsys", 0),
+                        "zodiacal": request.preferences.get("zodiacal", 0),
+                        "relative": request.preferences.get("relative", 0),
+                    }
+                elif tool_name in {"gua_desc", "gua_meiyi"}:
+                    gua_names = []
+                    if request.subject and request.subject.gua_names:
+                        gua_names = request.subject.gua_names
+                    elif "gua_names" in request.context:
+                        gua_names = list(request.context["gua_names"])
+                    payload_for_tool = {"name": gua_names}
+                elif tool_name == "jieqi_year":
+                    year = request.subject.year if request.subject and request.subject.year is not None else None
+                    if year is None and base_birth.get("date"):
+                        year = str(base_birth["date"])[:4]
+                    payload_for_tool = {
+                        "year": year,
+                        "zone": base_birth.get("zone", request.context.get("zone", "8")),
+                        "lat": base_birth.get("lat", request.context.get("lat", "0n00")),
+                        "lon": base_birth.get("lon", request.context.get("lon", "0e00")),
+                        "time": request.context.get("time"),
+                    }
+                else:
+                    payload_for_tool = dict(base_birth)
+
+                normalized_inputs[tool_name] = payload_for_tool
+                results[tool_name] = self.run_tool(
+                    tool_name,
+                    payload_for_tool,
+                    save_result=request.save_result,
+                    run_id=run_id,
+                    query_text=request.query,
+                    group_id=trace["group_id"],
+                    evaluation_case_id=evaluation_case_id,
+                )
+                result_export_contracts[tool_name] = _build_dispatch_export_contract(results[tool_name])
+
+            summary = [f"horosa_dispatch 选择了 {len(selected_tools)} 个工具：{', '.join(selected_tools)}。"]
+            summary.extend([line for result in results.values() for line in result.summary[:1]])
+
+            envelope = DispatchEnvelope(
+                ok=all(result.ok for result in results.values()),
+                version=__version__,
+                selected_tools=selected_tools,
+                normalized_inputs=normalized_inputs,
+                results=results,
+                result_export_contracts=result_export_contracts,
+                summary=summary[:6],
+                warnings=[],
+                memory_ref=None,
+                error=None,
+                trace_id=trace["trace_id"],
+                group_id=trace["group_id"],
             )
-            result_export_contracts[tool_name] = _build_dispatch_export_contract(results[tool_name])
 
-        summary = [f"horosa_dispatch 选择了 {len(selected_tools)} 个工具：{', '.join(selected_tools)}。"]
-        summary.extend([line for result in results.values() for line in result.summary[:1]])
+            if request.save_result and run_id is not None:
+                self.store.record_entities(run_id, _extract_entities(request.model_dump(exclude_none=True), request.query))
+                envelope.memory_ref = self.store.record_dispatch_result(
+                    run_id=run_id,
+                    payload=envelope.model_dump(mode="json"),
+                    trace_id=trace["trace_id"],
+                    group_id=trace["group_id"],
+                )
+                trace["run_id"] = run_id
+                trace["artifact_path"] = envelope.memory_ref.artifact_path if envelope.memory_ref else None
 
-        envelope = DispatchEnvelope(
-            ok=all(result.ok for result in results.values()),
-            version=__version__,
-            selected_tools=selected_tools,
-            normalized_inputs=normalized_inputs,
-            results=results,
-            result_export_contracts=result_export_contracts,
-            summary=summary[:6],
-            warnings=[],
-            memory_ref=None,
-            error=None,
-        )
-
-        if request.save_result and run_id is not None:
-            self.store.record_entities(run_id, _extract_entities(request.model_dump(exclude_none=True), request.query))
-            envelope.memory_ref = self.store.record_dispatch_result(run_id=run_id, payload=envelope.model_dump(mode="json"))
-
-        return envelope
+            trace["success"] = envelope.ok
+            return envelope

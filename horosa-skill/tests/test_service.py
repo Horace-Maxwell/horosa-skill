@@ -505,3 +505,77 @@ def test_service_can_attach_ai_answer_to_existing_run(tmp_path) -> None:
     assert by_tool
     assert by_tool[0]["ai_answer_text"] == "先稳后升，宜先整理资源再扩张。"
     assert by_tool[0]["artifacts"][0]["payload"]["conversation"]["ai_answer_structured"] == {"trend": "up_later"}
+
+
+def test_service_emits_trace_and_provenance_for_tool_results(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+        trace_dir=tmp_path / "traces",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+
+    result = service.run_tool(
+        "chart",
+        {"date": "1990-01-01", "time": "12:00", "zone": "8", "lat": "31n14", "lon": "121e28"},
+        save_result=True,
+        evaluation_case_id="chart_case",
+    )
+
+    assert result.trace_id
+    assert result.group_id
+    assert result.memory_ref is not None
+    assert result.memory_ref.trace_id == result.trace_id
+    assert result.memory_ref.group_id == result.group_id
+    assert result.data["export_snapshot"]["provenance"]["source_domain"] == "xingque_ai_export"
+    assert result.data["export_format"]["provenance"]["bundle_version"] == result.data["export_snapshot"]["bundle_version"]
+    assert settings.trace_dir.exists()
+    trace_files = sorted(settings.trace_dir.glob("*.jsonl"))
+    assert trace_files
+    assert result.trace_id in trace_files[0].read_text(encoding="utf-8")
+
+
+def test_knowledge_results_include_provenance(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+
+    result = service.run_tool("knowledge_read", {"domain": "qimen", "category": "door", "key": "休门"}, save_result=False)
+
+    assert result.ok is True
+    assert result.data["bundle_version"] == 1
+    assert result.data["provenance"]["domain"] == "qimen"
+    assert result.data["provenance"]["category"] == "door"
+    assert result.data["citation"] == "Xingque hover knowledge · qimen/door/休门"
+
+
+def test_dispatch_emits_group_trace_for_children(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+        trace_dir=tmp_path / "traces",
+    )
+    store = MemoryStore(settings)
+    service = HorosaSkillService(settings, client=FakeClient(), store=store, js_client=FakeJsClient())
+
+    result = service.dispatch(
+        {
+            "query": "请用奇门和六壬综合分析",
+            "birth": {"date": "2028/04/06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
+            "save_result": True,
+        },
+        evaluation_case_id="dispatch_case",
+    )
+
+    assert result.trace_id
+    assert result.group_id
+    for item in result.results.values():
+        assert item.group_id == result.group_id
+        assert item.trace_id
+    queried = store.query_runs(run_id=result.memory_ref.run_id, include_payload=True)
+    assert queried[0]["group_id"] == result.group_id

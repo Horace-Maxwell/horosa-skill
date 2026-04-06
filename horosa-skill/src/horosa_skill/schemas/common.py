@@ -17,6 +17,8 @@ class MemoryRef(BaseModel):
     artifact_path: str
     tool_call_id: int | None = None
     artifact_id: int | None = None
+    trace_id: str | None = None
+    group_id: str | None = None
 
 
 class ToolEnvelope(BaseModel):
@@ -30,6 +32,8 @@ class ToolEnvelope(BaseModel):
     summary: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     memory_ref: MemoryRef | None = None
+    trace_id: str | None = None
+    group_id: str | None = None
     error: ErrorInfo | None = None
 
 
@@ -44,4 +48,6 @@ class DispatchEnvelope(BaseModel):
     summary: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     memory_ref: MemoryRef | None = None
+    trace_id: str | None = None
+    group_id: str | None = None
     error: ErrorInfo | None = None

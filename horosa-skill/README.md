@@ -4,6 +4,19 @@
 
 如果根目录 README 讲的是“这个项目是什么”，这里讲的是“这个包具体能做什么”。
 
+## 新增工程能力
+
+- tracing：本地 JSONL trace、`trace_id`、`group_id`
+- benchmark：`HorosaBench` 本地评测集
+- provenance：知识库与导出协议都带来源字段
+- release metadata：`server.json`、SBOM、GitHub release workflow
+
+## 常用命令
+
+- `uv run horosa-skill benchmark run`
+- `uv run horosa-skill benchmark run --skip-runtime`
+- `uv run horosa-skill trace latest`
+
 ## 这个子项目包含什么
 
 - 离线 runtime 安装与诊断
