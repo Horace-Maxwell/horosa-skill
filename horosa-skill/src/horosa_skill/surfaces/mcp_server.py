@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from horosa_skill.config import Settings
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.schemas.common import DispatchEnvelope, ToolEnvelope
-from horosa_skill.schemas.tools import DispatchInput, MemoryAnswerInput
+from horosa_skill.schemas.tools import DispatchInput, MemoryAnswerInput, MemoryQueryInput, MemoryShowInput
 from horosa_skill.service import HorosaSkillService
 
 
@@ -96,6 +96,22 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
     horosa_memory_record_answer.__signature__ = _signature_for_input_model(MemoryAnswerInput)
     horosa_memory_record_answer.__annotations__ = {"return": dict[str, Any]}
     mcp.tool(name="horosa_memory_record_answer")(horosa_memory_record_answer)
+
+    def horosa_memory_query(**kwargs: Any) -> dict[str, Any]:
+        return service.query_memory(
+            _normalize_mcp_request(_merge_mcp_arguments(kwargs), MemoryQueryInput)
+        )
+    horosa_memory_query.__signature__ = _signature_for_input_model(MemoryQueryInput)
+    horosa_memory_query.__annotations__ = {"return": dict[str, Any]}
+    mcp.tool(name="horosa_memory_query")(horosa_memory_query)
+
+    def horosa_memory_show(**kwargs: Any) -> dict[str, Any]:
+        return service.show_memory(
+            _normalize_mcp_request(_merge_mcp_arguments(kwargs), MemoryShowInput)
+        )
+    horosa_memory_show.__signature__ = _signature_for_input_model(MemoryShowInput)
+    horosa_memory_show.__annotations__ = {"return": dict[str, Any]}
+    mcp.tool(name="horosa_memory_show")(horosa_memory_show)
 
     for definition in TOOL_DEFINITIONS.values():
         input_model = definition.input_model

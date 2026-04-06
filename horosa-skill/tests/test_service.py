@@ -220,6 +220,31 @@ def test_service_tool_call_persists_memory(tmp_path) -> None:
     assert len(queried) == 1
 
 
+def test_service_memory_query_and_show(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    store = MemoryStore(settings)
+    service = HorosaSkillService(settings, client=FakeClient(), store=store, js_client=FakeJsClient())
+
+    result = service.run_tool(
+        "chart",
+        {"date": "1990-01-01", "time": "12:00", "zone": "8", "lat": "31n14", "lon": "121e28", "name": "Horosa Smoke"},
+    )
+
+    assert result.memory_ref is not None
+    query_result = service.query_memory({"tool": "chart", "entity": "Horosa Smoke", "limit": 5})
+    assert query_result["ok"] is True
+    assert query_result["count"] == 1
+    assert query_result["results"][0]["run_id"] == result.memory_ref.run_id
+
+    show_result = service.show_memory({"run_id": result.memory_ref.run_id})
+    assert show_result["ok"] is True
+    assert show_result["result"]["run_id"] == result.memory_ref.run_id
+
+
 def test_local_tool_call_always_attaches_complete_export_contract(tmp_path) -> None:
     settings = Settings(
         server_root="http://127.0.0.1:9999",

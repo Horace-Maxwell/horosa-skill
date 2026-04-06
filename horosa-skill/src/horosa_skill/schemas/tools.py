@@ -158,7 +158,11 @@ class NongliTimeInput(FlexibleModel):
     date: str
     time: str
     zone: str
+    lat: str | None = None
     lon: str
+    gpsLat: float | None = None
+    gpsLon: float | None = None
+    gender: bool | None = None
     after23NewDay: bool | None = False
     timeAlg: int | None = 0
     ad: int | None = 1
@@ -326,3 +330,18 @@ class MemoryAnswerInput(FlexibleModel):
     ai_answer: str
     ai_answer_structured: dict[str, Any] | list[Any] | None = None
     answer_meta: dict[str, Any] = Field(default_factory=dict)
+
+
+class MemoryQueryInput(FlexibleModel):
+    run_id: str | None = None
+    tool: str | None = None
+    entity: str | None = None
+    after: str | None = None
+    before: str | None = None
+    limit: int = 20
+    include_payload: bool = True
+
+
+class MemoryShowInput(FlexibleModel):
+    run_id: str
+    include_payload: bool = True

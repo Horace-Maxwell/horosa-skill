@@ -26,7 +26,7 @@ from horosa_skill.exports import build_export_registry, get_technique_info, pars
 from horosa_skill.knowledge import build_knowledge_registry, read_knowledge_entry
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.schemas.common import DispatchEnvelope, ErrorInfo, ToolEnvelope
-from horosa_skill.schemas.tools import DispatchInput, MemoryAnswerInput
+from horosa_skill.schemas.tools import DispatchInput, MemoryAnswerInput, MemoryQueryInput, MemoryShowInput
 from horosa_skill.tracing import TraceRecorder
 
 
@@ -3079,6 +3079,80 @@ class HorosaSkillService:
             result["group_id"] = trace["group_id"]
             trace["run_id"] = request.run_id
             return result
+
+    def query_memory(self, payload: dict[str, Any]) -> dict[str, Any]:
+        with self.tracer.span(
+            workflow_name="memory.query",
+            metadata={"entrypoint": "memory.query", "payload": payload},
+        ) as trace:
+            try:
+                request = MemoryQueryInput.model_validate(payload)
+            except ValidationError as exc:
+                trace["error_code"] = "memory.query.invalid_payload"
+                raise ToolValidationError(
+                    "Invalid payload for memory query.",
+                    code="memory.query.invalid_payload",
+                    details={"errors": exc.errors()},
+                ) from exc
+
+            results = self.store.query_runs(
+                run_id=request.run_id,
+                tool=request.tool,
+                entity=request.entity,
+                after=request.after,
+                before=request.before,
+                limit=max(1, request.limit),
+                include_payload=request.include_payload,
+            )
+            trace["result_count"] = len(results)
+            return {
+                "ok": True,
+                "count": len(results),
+                "results": results,
+                "trace_id": trace["trace_id"],
+                "group_id": trace["group_id"],
+                "summary": [f"已检索到 {len(results)} 条本地 run 记录。"],
+            }
+
+    def show_memory(self, payload: dict[str, Any]) -> dict[str, Any]:
+        with self.tracer.span(
+            workflow_name="memory.show",
+            metadata={"entrypoint": "memory.show", "payload": payload},
+        ) as trace:
+            try:
+                request = MemoryShowInput.model_validate(payload)
+            except ValidationError as exc:
+                trace["error_code"] = "memory.show.invalid_payload"
+                raise ToolValidationError(
+                    "Invalid payload for memory show.",
+                    code="memory.show.invalid_payload",
+                    details={"errors": exc.errors()},
+                ) from exc
+
+            results = self.store.query_runs(
+                run_id=request.run_id,
+                limit=1,
+                include_payload=request.include_payload,
+            )
+            if not results:
+                trace["error_code"] = "memory.run.not_found"
+                return {
+                    "ok": False,
+                    "code": "memory.run.not_found",
+                    "message": f"Run not found: {request.run_id}",
+                    "details": {},
+                    "trace_id": trace["trace_id"],
+                    "group_id": trace["group_id"],
+                }
+
+            trace["run_id"] = request.run_id
+            return {
+                "ok": True,
+                "result": results[0],
+                "trace_id": trace["trace_id"],
+                "group_id": trace["group_id"],
+                "summary": ["已读取对应 run 的本地完整记录。"],
+            }
 
     def dispatch(self, payload: dict[str, Any], *, evaluation_case_id: str | None = None) -> DispatchEnvelope:
         try:

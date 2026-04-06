@@ -252,7 +252,7 @@ class HorosaRuntimeManager:
             for entry in files:
                 if not entry["exists"]:
                     issues.append(f"missing:{entry['label']}")
-            if installed and not any(item["reachable"] for item in endpoints):
+            if installed and not self._all_services_reachable(endpoints):
                 issues.append("services:not_running")
 
             trace["issues"] = issues
@@ -293,7 +293,7 @@ class HorosaRuntimeManager:
                 )
 
             initial_status = self._service_status(manifest)
-            if any(item["reachable"] for item in initial_status):
+            if self._all_services_reachable(initial_status):
                 if self.load_runtime_state() is None:
                     self._write_runtime_state(
                         {
@@ -327,7 +327,24 @@ class HorosaRuntimeManager:
                 capture_output=True,
                 text=True,
             )
-            if completed.returncode != 0:
+            readiness = self._wait_for_service_state(
+                expected_reachable=True,
+                timeout_seconds=self.settings.runtime_start_timeout_seconds,
+                manifest=manifest,
+            )
+            startup_warning: dict[str, Any] | None = None
+            if completed.returncode != 0 and readiness["ready"]:
+                startup_warning = {
+                    "code": "runtime.start_nonzero_but_ready",
+                    "message": "Runtime start script exited non-zero, but all required services became reachable.",
+                    "details": {
+                        "command": command,
+                        "returncode": completed.returncode,
+                        "stdout": completed.stdout[-4000:],
+                        "stderr": completed.stderr[-4000:],
+                    },
+                }
+            elif completed.returncode != 0:
                 raise RuntimeInstallError(
                     "Failed to start local Horosa runtime.",
                     code="runtime.start_failed",
@@ -335,13 +352,9 @@ class HorosaRuntimeManager:
                         "command": command,
                         "stdout": completed.stdout[-4000:],
                         "stderr": completed.stderr[-4000:],
+                        "endpoints": readiness["endpoints"],
                     },
                 )
-            readiness = self._wait_for_service_state(
-                expected_reachable=True,
-                timeout_seconds=self.settings.runtime_start_timeout_seconds,
-                manifest=manifest,
-            )
             if not readiness["ready"]:
                 raise RuntimeInstallError(
                     "Local Horosa runtime did not become ready in time.",
@@ -355,11 +368,12 @@ class HorosaRuntimeManager:
             self._write_runtime_state(
                 {
                     "managed": True,
-                    "status": "running",
+                    "status": "running_with_warnings" if startup_warning else "running",
                     "updated_at": self._utc_now(),
                     "manifest_version": manifest.get("version") if manifest else None,
                     "platform": manifest.get("platform") if manifest else (self.settings.runtime_platform or _platform_key()),
                     "command": command,
+                    "startup_warning": startup_warning,
                 }
             )
             trace["command"] = command
@@ -370,6 +384,7 @@ class HorosaRuntimeManager:
                 "stdout": completed.stdout[-4000:],
                 "stderr": completed.stderr[-4000:],
                 "endpoints": readiness["endpoints"],
+                "warning": startup_warning,
                 "trace_id": trace["trace_id"],
                 "group_id": trace["group_id"],
             }
@@ -633,6 +648,9 @@ class HorosaRuntimeManager:
             {"label": "java_backend", "url": backend_probe, "reachable": self._backend_reachable(backend_probe)},
             {"label": "python_chart", "url": chart_url, "reachable": self._http_reachable(chart_url)},
         ]
+
+    def _all_services_reachable(self, endpoints: list[dict[str, Any]]) -> bool:
+        return bool(endpoints) and all(bool(item.get("reachable")) for item in endpoints)
 
     def _wait_for_service_state(
         self,
