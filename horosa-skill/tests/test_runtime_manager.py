@@ -588,3 +588,79 @@ def test_start_runtime_reports_patched_files_on_windows(tmp_path: Path, monkeypa
 
     assert started["ok"] is True
     assert len(started["patched_files"]) == 2
+
+
+def test_start_runtime_sets_windows_home_env_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    archive = create_windows_runtime_archive(tmp_path)
+    home_root = tmp_path / "isolated-home"
+    settings = Settings(
+        data_dir=home_root / ".horosa-skill",
+        runtime_root=home_root / ".horosa" / "runtime",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+        runtime_platform="win32-x64",
+        runtime_start_timeout_seconds=0.5,
+    )
+    manager = HorosaRuntimeManager(settings)
+    manager.install(archive=str(archive))
+
+    monkeypatch.setattr("horosa_skill.runtime.manager.os.name", "nt", raising=False)
+    monkeypatch.setattr(manager, "_apply_runtime_overrides", lambda manifest: [])
+    monkeypatch.delenv("HOME", raising=False)
+    monkeypatch.delenv("USERPROFILE", raising=False)
+    monkeypatch.delenv("HOMEDRIVE", raising=False)
+    monkeypatch.delenv("HOMEPATH", raising=False)
+
+    def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+        return [
+            {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": False},
+            {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": False},
+        ]
+
+    captured_env: dict[str, str] = {}
+
+    def fake_run_start_command(
+        self: HorosaRuntimeManager,
+        *,
+        command: list[str],
+        script: Path,
+        env: dict[str, str],
+        manifest: dict | None,
+    ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
+        captured_env.update(env)
+        return (
+            subprocess.CompletedProcess(args=command, returncode=0, stdout="ok", stderr=""),
+            {
+                "ready": True,
+                "endpoints": [
+                    {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": True},
+                    {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": True},
+                ],
+            },
+        )
+
+    manager._service_status = MethodType(fake_service_status, manager)
+    manager._run_start_command = MethodType(fake_run_start_command, manager)
+
+    started = manager.start_local_services()
+
+    assert started["ok"] is True
+    assert captured_env["HOME"] == str(home_root)
+    assert captured_env["USERPROFILE"] == str(home_root)
+
+
+def test_repo_windows_start_template_bootstraps_python_paths() -> None:
+    template = (
+        Path(__file__).resolve().parents[1]
+        / "scripts"
+        / "runtime_templates"
+        / "windows"
+        / "start_horosa_local.ps1"
+    )
+
+    content = template.read_text(encoding="utf-8")
+
+    assert "runpy.run_path" in content
+    assert "$env:HOME" in content
+    assert "$env:USERPROFILE" in content
+    assert "PYTHONIOENCODING" in content

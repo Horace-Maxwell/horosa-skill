@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import os
 import shlex
 import shutil
 from pathlib import Path
+from typing import Any
 
 
 def resolve_mcporter_command() -> list[str]:
@@ -42,3 +44,27 @@ def isolated_runtime_root(home_dir: Path) -> Path:
 def isolated_data_dir(home_dir: Path) -> Path:
     home = home_dir.expanduser().resolve()
     return home / ".horosa-skill"
+
+
+def extract_json_value(raw: str) -> Any:
+    text = raw.strip()
+    if not text:
+        raise ValueError("No JSON content was found.")
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    decoder = json.JSONDecoder()
+    candidates = [index for index, char in enumerate(text) if char in "[{"]
+    for index in candidates:
+        try:
+            value, end = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            continue
+        remainder = text[index + end :].strip()
+        if not remainder:
+            return value
+
+    raise ValueError("No JSON content was found.")

@@ -59,3 +59,14 @@ def test_isolated_paths_are_derived_from_home(tmp_path: Path) -> None:
 
     assert client_tools.isolated_runtime_root(home) == home.resolve() / ".horosa" / "runtime"
     assert client_tools.isolated_data_dir(home) == home.resolve() / ".horosa-skill"
+
+
+def test_extract_json_value_accepts_prefixed_diagnostic_output() -> None:
+    payload = client_tools.extract_json_value("warning: bootstrap still warming\n{\"status\":\"ok\",\"tools\":[]}\n")
+
+    assert payload == {"status": "ok", "tools": []}
+
+
+def test_extract_json_value_rejects_non_json_output() -> None:
+    with pytest.raises(ValueError, match="No JSON content was found"):
+        client_tools.extract_json_value("offline\nstill warming up\n")
