@@ -125,7 +125,9 @@ def serve(
     try:
         run_mcp_server(settings, transport=transport)
     finally:
-        if started_now:
+        # For stdio clients such as OpenClaw/mcporter, keeping the runtime warm
+        # avoids a full local Java+Python restart on every tool call.
+        if started_now and transport != "stdio":
             try:
                 manager.stop_local_services()
             except RuntimeError:

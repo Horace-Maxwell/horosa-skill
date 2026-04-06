@@ -1,26 +1,106 @@
-# OpenClaw
+# OpenClaw / mcporter
 
-OpenClaw docs support saved MCP server definitions with `stdio`, `sse`, and `streamable-http`.
+推荐优先使用 `stdio` 方式接入。对 OpenClaw / mcporter 这类本地 MCP 客户端，Horosa Skill 现在会在首次调用后保持离线 runtime 热启动，这样后续每次工具调用都不会再重新完整拉起 Java + Python runtime。
 
-## Streamable HTTP
+## 最短可用路径
 
-Start Horosa Skill:
+### 1. 安装仓库依赖与离线 runtime
 
 ```bash
 cd horosa-skill
 uv sync
+uv run horosa-skill install
+uv run horosa-skill doctor
+```
+
+### 2. 把下面这段 MCP 配置粘进 OpenClaw / mcporter
+
+把 `<ABSOLUTE_PATH_TO_REPO>` 替换成你的仓库绝对路径。
+
+```json
+{
+  "mcpServers": {
+    "horosa": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "<ABSOLUTE_PATH_TO_REPO>/horosa-skill",
+        "horosa-skill",
+        "serve",
+        "--transport",
+        "stdio"
+      ],
+      "cwd": "<ABSOLUTE_PATH_TO_REPO>/horosa-skill"
+    }
+  }
+}
+```
+
+如果你是直接维护 `~/.openclaw/openclaw.json`，把它放进：
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "horosa": {
+        "command": "uv",
+        "args": [
+          "run",
+          "--directory",
+          "<ABSOLUTE_PATH_TO_REPO>/horosa-skill",
+          "horosa-skill",
+          "serve",
+          "--transport",
+          "stdio"
+        ],
+        "cwd": "<ABSOLUTE_PATH_TO_REPO>/horosa-skill"
+      }
+    }
+  }
+}
+```
+
+### 3. 验证接入
+
+```bash
+mcporter list horosa --json
+mcporter call horosa.horosa_knowledge_registry --output json
+mcporter call horosa.horosa_astro_chart --args '{"date":"2026-04-04","time":"15:58:35","zone":"+08:00","lat":"26n04","lon":"119e19"}' --output json
+```
+
+## 为什么推荐 `stdio`
+
+- OpenClaw / mcporter 复制粘贴配置就能接入，不需要额外开 HTTP 服务窗口。
+- Horosa Skill 会自动拉起本机离线 runtime。
+- 首次调用后 runtime 会保持热启动，后续工具调用明显更快。
+- 需要彻底关闭本机 runtime 时，只要执行：
+
+```bash
+cd horosa-skill
+uv run horosa-skill stop
+```
+
+## 可选：Streamable HTTP
+
+如果你更喜欢显式启动一个本地 MCP 服务，也可以这样：
+
+```bash
+cd horosa-skill
+uv sync
+uv run horosa-skill install
 uv run horosa-skill serve
 ```
 
-Register it:
+然后在 OpenClaw / mcporter 里注册：
 
-```bash
-openclaw mcp set horosa '{"url":"http://127.0.0.1:8765/mcp","transport":"streamable-http"}'
+```json
+{
+  "mcpServers": {
+    "horosa": {
+      "url": "http://127.0.0.1:8765/mcp",
+      "transport": "streamable-http"
+    }
+  }
+}
 ```
-
-## Stdio
-
-```bash
-openclaw mcp set horosa '{"command":"uv","args":["run","--directory","<PATH_TO_REPO>/horosa-skill","horosa-skill","serve","--transport","stdio"],"cwd":"<PATH_TO_REPO>/horosa-skill"}'
-```
-
