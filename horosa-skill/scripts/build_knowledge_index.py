@@ -12,16 +12,34 @@ def _bundle_path(name: str):
     return files("horosa_skill.knowledge.data").joinpath(name)
 
 
+def _read_bundle(name: str) -> dict[str, Any]:
+    return json.loads(_bundle_path(name).read_text(encoding="utf-8"))
+
+
+def _normalize_timestamp(value: str) -> datetime:
+    normalized = value.replace("Z", "+00:00")
+    timestamp = datetime.fromisoformat(normalized)
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+    return timestamp.astimezone(timezone.utc)
+
+
 def _stable_build_timestamp() -> str:
+    bundles = [_read_bundle("astro.json"), _read_bundle("liureng.json"), _read_bundle("qimen.json")]
+    generated_times = [bundle.get("generated_at") for bundle in bundles if isinstance(bundle.get("generated_at"), str)]
+    if generated_times:
+        latest = max(_normalize_timestamp(value) for value in generated_times)
+        return latest.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
     paths = [_bundle_path("astro.json"), _bundle_path("liureng.json"), _bundle_path("qimen.json")]
     latest = max(Path(path).stat().st_mtime for path in paths)
     return datetime.fromtimestamp(latest, tz=timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def build_index() -> dict[str, Any]:
-    astro = json.loads(_bundle_path("astro.json").read_text(encoding="utf-8"))
-    liureng = json.loads(_bundle_path("liureng.json").read_text(encoding="utf-8"))
-    qimen = json.loads(_bundle_path("qimen.json").read_text(encoding="utf-8"))
+    astro = _read_bundle("astro.json")
+    liureng = _read_bundle("liureng.json")
+    qimen = _read_bundle("qimen.json")
     return {
         "schema_version": 1,
         "bundle_version": 1,
