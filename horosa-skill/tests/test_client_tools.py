@@ -1,0 +1,61 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from horosa_skill import client_tools
+
+
+def test_resolve_mcporter_command_prefers_env_override(monkeypatch) -> None:
+    monkeypatch.setenv("HOROSA_MCPORTER_BIN", "/custom/mcporter --flag")
+
+    command = client_tools.resolve_mcporter_command()
+
+    assert command == ["/custom/mcporter", "--flag"]
+
+
+def test_resolve_mcporter_command_uses_cmd_on_windows(monkeypatch) -> None:
+    monkeypatch.delenv("HOROSA_MCPORTER_BIN", raising=False)
+    monkeypatch.setattr(client_tools.os, "name", "nt", raising=False)
+
+    def fake_which(name: str) -> str | None:
+        if name == "mcporter.cmd":
+            return r"C:\Users\maxwe\AppData\Roaming\npm\mcporter.cmd"
+        return None
+
+    monkeypatch.setattr(client_tools.shutil, "which", fake_which)
+
+    command = client_tools.resolve_mcporter_command()
+
+    assert command == [r"C:\Users\maxwe\AppData\Roaming\npm\mcporter.cmd"]
+
+
+def test_resolve_mcporter_command_falls_back_to_npx(monkeypatch) -> None:
+    monkeypatch.delenv("HOROSA_MCPORTER_BIN", raising=False)
+
+    def fake_which(name: str) -> str | None:
+        if name == "npx":
+            return "/usr/local/bin/npx"
+        return None
+
+    monkeypatch.setattr(client_tools.shutil, "which", fake_which)
+
+    command = client_tools.resolve_mcporter_command()
+
+    assert command == ["/usr/local/bin/npx", "mcporter"]
+
+
+def test_resolve_mcporter_command_raises_when_missing(monkeypatch) -> None:
+    monkeypatch.delenv("HOROSA_MCPORTER_BIN", raising=False)
+    monkeypatch.setattr(client_tools.shutil, "which", lambda name: None)
+
+    with pytest.raises(FileNotFoundError, match="mcporter was not found"):
+        client_tools.resolve_mcporter_command()
+
+
+def test_isolated_paths_are_derived_from_home(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+
+    assert client_tools.isolated_runtime_root(home) == home.resolve() / ".horosa" / "runtime"
+    assert client_tools.isolated_data_dir(home) == home.resolve() / ".horosa-skill"

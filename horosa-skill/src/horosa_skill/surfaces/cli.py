@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import subprocess
 import sys
@@ -11,6 +12,7 @@ import typer
 
 from horosa_skill.config import Settings
 from horosa_skill.benchmark import run_benchmark
+from horosa_skill.client_tools import isolated_data_dir, isolated_runtime_root, resolve_mcporter_command
 from horosa_skill.errors import RuntimeError, ToolValidationError
 from horosa_skill.runtime import HorosaRuntimeManager
 from horosa_skill.service import HorosaSkillService
@@ -108,12 +110,30 @@ def _build_openclaw_server_block(
         }
 
     home_dir = isolate_home.expanduser().resolve()
+    runtime_root = isolated_runtime_root(home_dir)
+    data_dir = isolated_data_dir(home_dir)
+    if os.name == "nt":
+        return {
+            "command": os.environ.get("COMSPEC", "cmd.exe"),
+            "args": [
+                "/d",
+                "/s",
+                "/c",
+                (
+                    f'set "HOROSA_RUNTIME_ROOT={runtime_root}" && '
+                    f'set "HOROSA_SKILL_DATA_DIR={data_dir}" && '
+                    f'uv run --directory "{skill_root}" horosa-skill serve --transport stdio'
+                ),
+            ],
+            "cwd": str(skill_root),
+        }
     return {
         "command": "/bin/zsh",
         "args": [
             "-lc",
             (
-                f"export HOME={shlex.quote(str(home_dir))}; "
+                f"export HOROSA_RUNTIME_ROOT={shlex.quote(str(runtime_root))}; "
+                f"export HOROSA_SKILL_DATA_DIR={shlex.quote(str(data_dir))}; "
                 f"exec uv run --directory {shlex.quote(str(skill_root))} "
                 "horosa-skill serve --transport stdio"
             ),
@@ -141,7 +161,10 @@ def _build_openclaw_config(
 
 
 def _run_subprocess_json(command: list[str], *, cwd: Path) -> dict[str, Any]:
-    result = subprocess.run(command, cwd=str(cwd), capture_output=True, text=True, check=False)
+    try:
+        result = subprocess.run(command, cwd=str(cwd), capture_output=True, text=True, check=False)
+    except FileNotFoundError as exc:
+        raise RuntimeError(str(exc), code="client.command_not_found", details={"command": command, "cwd": str(cwd)}) from exc
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "Command failed")
     try:
@@ -425,7 +448,7 @@ def client_openclaw_check(
 
     list_result = _run_subprocess_json(
         [
-            "mcporter",
+            *resolve_mcporter_command(),
             "list",
             "horosa",
             "--json",
@@ -438,7 +461,7 @@ def client_openclaw_check(
     )
     registry_result = _run_subprocess_json(
         [
-            "mcporter",
+            *resolve_mcporter_command(),
             "call",
             "horosa.horosa_knowledge_registry",
             "--output",
@@ -459,7 +482,7 @@ def client_openclaw_check(
     }
     chart_result = _run_subprocess_json(
         [
-            "mcporter",
+            *resolve_mcporter_command(),
             "call",
             "horosa.horosa_astro_chart",
             "--args",
@@ -476,7 +499,7 @@ def client_openclaw_check(
     run_id = (chart_result.get("memory_ref") or {}).get("run_id")
     memory_show = _run_subprocess_json(
         [
-            "mcporter",
+            *resolve_mcporter_command(),
             "call",
             "horosa.horosa_memory_show",
             "--args",

@@ -96,5 +96,29 @@ def test_build_openclaw_config_supports_isolated_home(tmp_path: Path) -> None:
 
     server = payload["mcp"]["servers"]["horosa"]
     assert server["command"] == "/bin/zsh"
-    assert "export HOME=" in server["args"][1]
+    assert "export HOROSA_RUNTIME_ROOT=" in server["args"][1]
+    assert "export HOROSA_SKILL_DATA_DIR=" in server["args"][1]
     assert "horosa-skill serve --transport stdio" in server["args"][1]
+
+
+def test_build_openclaw_config_supports_isolated_home_on_windows(tmp_path: Path, monkeypatch) -> None:
+    skill_root = tmp_path / "horosa-skill"
+    home_dir = tmp_path / "home"
+    skill_root.mkdir()
+
+    monkeypatch.setattr(cli.os, "name", "nt", raising=False)
+    monkeypatch.setenv("COMSPEC", "C:\\Windows\\System32\\cmd.exe")
+
+    payload = cli._build_openclaw_config(
+        skill_root=skill_root,
+        server_name="horosa",
+        format_name="mcporter",
+        isolate_home=home_dir,
+    )
+
+    server = payload["mcpServers"]["horosa"]
+    assert server["command"] == "C:\\Windows\\System32\\cmd.exe"
+    assert server["args"][0:3] == ["/d", "/s", "/c"]
+    assert 'set "HOROSA_RUNTIME_ROOT=' in server["args"][3]
+    assert 'set "HOROSA_SKILL_DATA_DIR=' in server["args"][3]
+    assert 'uv run --directory "' in server["args"][3]
