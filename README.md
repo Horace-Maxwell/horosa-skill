@@ -447,3 +447,112 @@ echo '{
 - 从 GitHub fresh clone 后重新安装 runtime 的实测闭环
 
 如果你需要的是一个“把星阙变成 AI 可调用基础设施”的仓库，而不是一堆分散脚本，这个 repo 现在已经是按这个方向搭好的。
+
+## 快速验真清单
+
+如果你想在第一次 clone 之后快速确认“这不是空壳仓库”，可以直接按这组最小检查走：
+
+```bash
+cd horosa-skill
+uv sync
+uv run horosa-skill install
+uv run horosa-skill doctor
+uv run pytest -q
+uv run python scripts/run_benchmark.py
+uv run python scripts/run_full_self_check.py --rounds 1
+```
+
+你应该重点看这几类信号：
+
+- `doctor` 能确认 runtime 已安装，并在服务启动后给出 `issues: []`
+- `pytest` 能通过当前工程测试
+- `HorosaBench` 能验证调度、导出 parity、知识读取
+- `run_full_self_check` 能验证全部工具的调用、导出、落库、检索和 dispatch 汇总层
+
+如果你是第一次评估这个仓库，这组命令比“随便跑一个 tool”更能说明项目是否真的完整。
+
+## Release 完整性与 provenance
+
+这个仓库现在不只是“能打包 runtime”，还补上了可验证的 release 侧元数据与追溯链：
+
+- 运行时资产来自 GitHub Releases，而不是直接塞进 Git 历史
+- 仓库提供 `server.json`，方便 MCP 生态识别与收录
+- 仓库提供 SBOM 生成脚本，用于导出依赖与 runtime manifest 的机器可读清单
+- trace、artifact、run manifest、knowledge bundle、export snapshot 都已经带版本或 provenance 信息
+- release / benchmark / self-check / README / `server.json` 都已经进入工程校验链
+
+建议配套阅读：
+
+- 运维说明：[`docs/OPERATIONS.md`](./docs/OPERATIONS.md)
+- 评测体系：[`docs/EVALUATION.md`](./docs/EVALUATION.md)
+- 数据契约：[`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md)
+- MCP 元数据：[`server.json`](./server.json)
+
+## MCP / AI 客户端接入建议
+
+如果你是把 Horosa Skill 接给 AI，而不是把它当成普通 CLI 工具，推荐按这个顺序来理解：
+
+1. 先 `install + doctor`
+2. 再用 `stdio MCP` 接 Claude、Codex、Open WebUI、OpenClaw
+3. 如果某个客户端只能吃 HTTP / OpenAPI，再加一层 bridge
+
+推荐这样分工：
+
+- `horosa_dispatch`：自然语言入口
+- 原子 `tool run`：确定性脚本与调试
+- `knowledge_read`：读取星阙悬浮知识
+- `memory answer`：把 AI 最终回答回写到同一次记录
+
+也就是说，这个仓库同时提供：
+
+- 算法层
+- 导出层
+- 知识层
+- 调度层
+- 记录层
+- 观测层
+
+## 这套仓库当前最适合谁
+
+它最适合四类人：
+
+- 普通使用者：想让自己的 AI 在本机直接调用星阙方法
+- 高级用户：想把每次分析沉淀成可检索本地记录
+- 维护者：想要一个轻仓库 + 重 release 的长期发布结构
+- 研究者：想研究 tool routing、导出协议、知识读取与 process-level evaluation
+
+如果你是研究导向用户，最值得继续看的入口是：
+
+- [`docs/EVALUATION.md`](./docs/EVALUATION.md)
+- [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
+- [`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md)
+
+## FAQ / 边界说明
+
+### 为什么 release workflow 不是完全 GitHub-hosted 的纯云构建？
+
+因为这个项目的完整 runtime 依赖本地维护的 runtime source、平台运行时和打包资产。仓库保持轻量是目标，但完整 runtime 仍需要可靠的本地打包输入，所以 release 侧采用“轻仓库 + 重 release + 明确校验”的策略。
+
+### 为什么 README 一直强调 `export_snapshot` 和 `export_format`？
+
+因为这个项目最核心的价值之一就是“让 AI 稳定消费星阙输出”。如果没有这层 contract，AI 只能读松散文本，后续检索、比对、回写、研究评测都会变脆。
+
+### 为什么同时保留 SQLite 和 JSON？
+
+因为两者职责不同：
+
+- SQLite 负责结构化索引与查询
+- JSON artifact 负责长期归档、可携带、可 diff、可审阅
+
+### 为什么 `fengshui` 还没有进当前发布面？
+
+因为当前目标是“已经完整、已经 headless、已经可离线验证”的能力面。`fengshui` 目前仍明确排除，不把未完成 headless 化的能力伪装成可发布功能。
+
+### 这个仓库最重要的质量信号是什么？
+
+不是 badge，也不是截图，而是这四件事能不能同时成立：
+
+- tool 真能调用
+- 导出真是稳定结构化
+- 结果真会落库和回写
+- benchmark / self-check 真能持续跑通
