@@ -21,6 +21,14 @@
   <p><a href="./SUPPORT.md"><img src="https://img.shields.io/badge/Support-Paths-1d4ed8?style=flat-square" alt="Support" /></a>&nbsp;<a href="./CITATION.cff"><img src="https://img.shields.io/badge/Citation-CFF-7c3aed?style=flat-square" alt="Citation" /></a>&nbsp;<a href="./CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-Updates-f59e0b?style=flat-square" alt="Changelog" /></a></p>
 </div>
 
+## Docs
+
+- Operations: [`docs/OPERATIONS.md`](./docs/OPERATIONS.md)
+- Evaluation: [`docs/EVALUATION.md`](./docs/EVALUATION.md)
+- Architecture: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
+- Data Contracts: [`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md)
+- MCP Metadata: [`server.json`](./server.json)
+
 ## What This Repository Is
 
 Xingque already had the hard parts: deep local algorithms, ephemeris-backed runtime behavior, rich AI export settings, and serious occult method coverage. `Horosa Skill` is the GitHub-first delivery surface that makes those capabilities usable by modern AI systems without turning the repo into a giant runtime dump.
@@ -47,6 +55,8 @@ If the goal is “clone once, install once, and let AI call real Horosa methods 
 | Output contract | Every supported method emits stable envelopes plus `export_snapshot` / `export_format` | Machines can consume outputs repeatedly without guesswork |
 | Knowledge access | Local bundled Xingque hover knowledge for astrology, LiuReng, and Qimen | AI can ask for explanation layers as well as raw calculation layers |
 | Local memory | SQLite + JSON artifacts + run manifest + answer write-back | Every invocation becomes a durable local record |
+| Observability | Local JSONL traces with `trace_id` / `group_id` and run alignment | Operators can understand which run, tool, and artifact produced a failure |
+| Evaluation | `run_full_self_check` plus `HorosaBench` benchmark cases | Quality is measured, not just assumed |
 | Distribution model | Lightweight repository plus heavyweight release assets | Public history stays clean while runtime payloads stay complete |
 
 ### Feature pillars

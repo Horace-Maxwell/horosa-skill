@@ -21,6 +21,14 @@
   <p><a href="./SUPPORT.md"><img src="https://img.shields.io/badge/Support-Paths-1d4ed8?style=flat-square" alt="Support" /></a>&nbsp;<a href="./CITATION.cff"><img src="https://img.shields.io/badge/Citation-CFF-7c3aed?style=flat-square" alt="Citation" /></a>&nbsp;<a href="./CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-Updates-f59e0b?style=flat-square" alt="Changelog" /></a></p>
 </div>
 
+## 文档入口
+
+- 工程运维：[`docs/OPERATIONS.md`](./docs/OPERATIONS.md)
+- 评测体系：[`docs/EVALUATION.md`](./docs/EVALUATION.md)
+- 架构设计：[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
+- 数据契约：[`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md)
+- MCP 元数据：[`server.json`](./server.json)
+
 ## 项目定位
 
 星阙本身已经有完整的本地算法、星历、导出设置和多技法体系。`Horosa Skill` 做的不是“再造一个简化版占算器”，而是把这些能力整理成一个适合 GitHub 分发、适合 AI 调用、适合长期本地管理的产品化接口层。
@@ -53,6 +61,8 @@
 | 输出协议 | 每个技法返回统一 envelope，并附带 `export_snapshot` / `export_format` | 机器和人都能稳定消费，不需要猜字段 |
 | 知识读取 | 内置星阙 hover 知识 bundle，可按需读取星盘 / 六壬 / 奇门悬浮内容 | 不只是算，还能把“解释层”交给 AI 随时调用 |
 | 数据管理 | SQLite + JSON artifacts + run manifest + AI answer write-back | 一次调用就是一条可追溯记录 |
+| 观测与排障 | 本地 JSONL trace、`trace_id/group_id`、artifact/run 对齐 | 能定位“哪次调度、哪个工具、哪条记录”出了问题 |
+| 评测体系 | `run_full_self_check` + `HorosaBench` benchmark | 不只是“能跑”，而是能持续验证选工具、导出和知识质量 |
 | 发布策略 | 轻仓库 + 重 Release | GitHub 页面专业、清楚，不拖慢协作 |
 
 ### 功能卖点

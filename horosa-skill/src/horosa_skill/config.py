@@ -67,6 +67,18 @@ def _env_float(name: str, default: float, *, minimum: float | None = None) -> fl
     return value
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw_value = _env_text(name)
+    if raw_value is None:
+        return default
+    normalized = raw_value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
 class Settings(BaseModel):
     server_root: str = Field(default="http://127.0.0.1:9999")
     chart_server_root: str = Field(default="http://127.0.0.1:8899")
@@ -84,12 +96,18 @@ class Settings(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8765
     log_level: str = "INFO"
+    trace_enabled: bool = True
+    trace_dir: Path | None = None
+    trace_capture_payloads: bool = False
+    trace_capture_ai_answers: bool = False
+    trace_otlp_endpoint: str | None = None
 
     @classmethod
     def from_env(cls) -> "Settings":
         data_dir = _env_path("HOROSA_SKILL_DATA_DIR", _default_home_dir())
         db_path_env = _env_text("HOROSA_SKILL_DB_PATH")
         output_dir_env = _env_text("HOROSA_SKILL_OUTPUT_DIR")
+        trace_dir_env = _env_text("HOROSA_TRACE_DIR")
         return cls(
             server_root=_env_text("HOROSA_SERVER_ROOT", "http://127.0.0.1:9999") or "http://127.0.0.1:9999",
             chart_server_root=_env_text("HOROSA_CHART_SERVER_ROOT", "http://127.0.0.1:8899") or "http://127.0.0.1:8899",
@@ -107,6 +125,11 @@ class Settings(BaseModel):
             host=_env_text("HOROSA_SKILL_HOST", "127.0.0.1") or "127.0.0.1",
             port=_env_int("HOROSA_SKILL_PORT", 8765, minimum=1, maximum=65535),
             log_level=(_env_text("HOROSA_SKILL_LOG_LEVEL", "INFO") or "INFO").upper(),
+            trace_enabled=_env_bool("HOROSA_TRACE_ENABLED", True),
+            trace_dir=Path(trace_dir_env).expanduser() if trace_dir_env else data_dir / "traces",
+            trace_capture_payloads=_env_bool("HOROSA_TRACE_CAPTURE_PAYLOADS", False),
+            trace_capture_ai_answers=_env_bool("HOROSA_TRACE_CAPTURE_AI_ANSWERS", False),
+            trace_otlp_endpoint=_env_text("HOROSA_TRACE_OTLP_ENDPOINT"),
         )
 
     def ensure_dirs(self) -> None:
@@ -116,6 +139,8 @@ class Settings(BaseModel):
         assert self.output_dir is not None
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        if self.trace_dir is not None:
+            self.trace_dir.mkdir(parents=True, exist_ok=True)
 
     @property
     def runtime_current_dir(self) -> Path:

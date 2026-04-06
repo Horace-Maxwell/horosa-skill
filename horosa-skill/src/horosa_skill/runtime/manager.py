@@ -20,6 +20,7 @@ import httpx
 from horosa_skill.config import Settings
 from horosa_skill.engine.client import HorosaApiClient
 from horosa_skill.errors import RuntimeInstallError, RuntimeValidationError
+from horosa_skill.tracing import TraceRecorder
 
 
 def _platform_key() -> str:
@@ -58,6 +59,7 @@ class HorosaRuntimeManager:
         self.settings = settings
         self.runtime_root = settings.runtime_root
         self.current_dir = settings.runtime_current_dir
+        self.tracer = TraceRecorder(settings)
 
     def load_installed_manifest(self, *, strict: bool = False) -> dict[str, Any] | None:
         manifest_path = self.current_dir / "runtime-manifest.json"
@@ -111,303 +113,329 @@ class HorosaRuntimeManager:
         platform_key: str | None = None,
         force: bool = False,
     ) -> dict[str, Any]:
-        platform_name = platform_key or self.settings.runtime_platform or _platform_key()
-        source = archive
-        expected_sha256: str | None = None
-        asset_meta: dict[str, Any] | None = None
-        manifest_data: dict[str, Any] | None = None
+        with self.tracer.span(
+            workflow_name="runtime.install",
+            metadata={"entrypoint": "runtime.install", "archive": archive, "manifest_url": manifest_url, "force": force},
+        ) as trace:
+            platform_name = platform_key or self.settings.runtime_platform or _platform_key()
+            source = archive
+            expected_sha256: str | None = None
+            asset_meta: dict[str, Any] | None = None
+            manifest_data: dict[str, Any] | None = None
 
-        if source is None:
-            manifest_location = manifest_url or self.settings.runtime_manifest_url
-            if not manifest_location:
-                manifest_location = self.settings.default_runtime_manifest_url
-            manifest_data = self._read_json_location(manifest_location)
-            platforms = manifest_data.get("platforms", {})
-            asset_meta = platforms.get(platform_name)
-            if not isinstance(asset_meta, dict):
-                raise RuntimeInstallError(
-                    f"Runtime manifest does not include platform `{platform_name}`.",
-                    code="runtime.install_missing_platform",
-                    details={"platform": platform_name, "manifest_url": manifest_location},
+            if source is None:
+                manifest_location = manifest_url or self.settings.runtime_manifest_url
+                if not manifest_location:
+                    manifest_location = self.settings.default_runtime_manifest_url
+                manifest_data = self._read_json_location(manifest_location)
+                platforms = manifest_data.get("platforms", {})
+                asset_meta = platforms.get(platform_name)
+                if not isinstance(asset_meta, dict):
+                    raise RuntimeInstallError(
+                        f"Runtime manifest does not include platform `{platform_name}`.",
+                        code="runtime.install_missing_platform",
+                        details={"platform": platform_name, "manifest_url": manifest_location},
+                    )
+                source = str(asset_meta.get("url") or "").strip()
+                expected_sha256 = str(asset_meta.get("sha256") or "").strip() or None
+                if not source:
+                    raise RuntimeInstallError(
+                        f"Runtime asset URL missing for platform `{platform_name}`.",
+                        code="runtime.install_missing_url",
+                        details={"platform": platform_name, "manifest_url": manifest_location},
+                    )
+
+            self.runtime_root.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory(prefix="horosa-runtime-install-") as temp_dir_raw:
+                temp_dir = Path(temp_dir_raw)
+                archive_path = self._materialize_archive(source, temp_dir)
+                if expected_sha256 and _sha256_file(archive_path).lower() != expected_sha256.lower():
+                    raise RuntimeValidationError(
+                        "Runtime archive checksum mismatch.",
+                        code="runtime.install_sha256_mismatch",
+                        details={"archive": str(archive_path), "expected_sha256": expected_sha256},
+                    )
+
+                extract_dir = temp_dir / "extract"
+                extract_dir.mkdir(parents=True, exist_ok=True)
+                self._extract_archive(archive_path, extract_dir)
+                payload_root = self._locate_payload_root(extract_dir)
+                manifest = self._validate_payload_root(payload_root)
+                (payload_root / "runtime-manifest.json").write_text(
+                    json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8",
                 )
-            source = str(asset_meta.get("url") or "").strip()
-            expected_sha256 = str(asset_meta.get("sha256") or "").strip() or None
-            if not source:
-                raise RuntimeInstallError(
-                    f"Runtime asset URL missing for platform `{platform_name}`.",
-                    code="runtime.install_missing_url",
-                    details={"platform": platform_name, "manifest_url": manifest_location},
-                )
 
-        self.runtime_root.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix="horosa-runtime-install-") as temp_dir_raw:
-            temp_dir = Path(temp_dir_raw)
-            archive_path = self._materialize_archive(source, temp_dir)
-            if expected_sha256 and _sha256_file(archive_path).lower() != expected_sha256.lower():
-                raise RuntimeValidationError(
-                    "Runtime archive checksum mismatch.",
-                    code="runtime.install_sha256_mismatch",
-                    details={"archive": str(archive_path), "expected_sha256": expected_sha256},
-                )
+                previous_dir = self.runtime_root / "previous"
+                if previous_dir.exists():
+                    shutil.rmtree(previous_dir)
+                if self.current_dir.exists():
+                    if not force:
+                        current_manifest = self.load_installed_manifest()
+                        if current_manifest == manifest:
+                            return {
+                                "ok": True,
+                                "installed": True,
+                                "changed": False,
+                                "platform": platform_name,
+                                "runtime_root": str(self.runtime_root),
+                                "current_dir": str(self.current_dir),
+                                "manifest": manifest,
+                                "trace_id": trace["trace_id"],
+                                "group_id": trace["group_id"],
+                            }
+                    self.current_dir.replace(previous_dir)
 
-            extract_dir = temp_dir / "extract"
-            extract_dir.mkdir(parents=True, exist_ok=True)
-            self._extract_archive(archive_path, extract_dir)
-            payload_root = self._locate_payload_root(extract_dir)
-            manifest = self._validate_payload_root(payload_root)
-            (payload_root / "runtime-manifest.json").write_text(
-                json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
-                encoding="utf-8",
-            )
+                target_parent = self.current_dir.parent
+                target_parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(payload_root), str(self.current_dir))
+                if previous_dir.exists():
+                    shutil.rmtree(previous_dir)
 
-            previous_dir = self.runtime_root / "previous"
-            if previous_dir.exists():
-                shutil.rmtree(previous_dir)
-            if self.current_dir.exists():
-                if not force:
-                    current_manifest = self.load_installed_manifest()
-                    if current_manifest == manifest:
-                        return {
-                            "ok": True,
-                            "installed": True,
-                            "changed": False,
-                            "platform": platform_name,
-                            "runtime_root": str(self.runtime_root),
-                            "current_dir": str(self.current_dir),
-                            "manifest": manifest,
-                        }
-                self.current_dir.replace(previous_dir)
-
-            target_parent = self.current_dir.parent
-            target_parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(payload_root), str(self.current_dir))
-            if previous_dir.exists():
-                shutil.rmtree(previous_dir)
-
-        return {
-            "ok": True,
-            "installed": True,
-            "changed": True,
-            "platform": platform_name,
-            "runtime_root": str(self.runtime_root),
-            "current_dir": str(self.current_dir),
-            "manifest": manifest,
-            "asset": asset_meta or {},
-            "release_manifest": manifest_data or {},
-        }
+            trace["platform"] = platform_name
+            trace["manifest_version"] = manifest.get("version")
+            return {
+                "ok": True,
+                "installed": True,
+                "changed": True,
+                "platform": platform_name,
+                "runtime_root": str(self.runtime_root),
+                "current_dir": str(self.current_dir),
+                "manifest": manifest,
+                "asset": asset_meta or {},
+                "release_manifest": manifest_data or {},
+                "trace_id": trace["trace_id"],
+                "group_id": trace["group_id"],
+            }
 
     def doctor(self) -> dict[str, Any]:
-        manifest_issue: dict[str, Any] | None = None
-        runtime_state_issue: dict[str, Any] | None = None
-        installed = self.current_dir.exists()
-        try:
-            manifest = self.load_installed_manifest(strict=True)
-        except RuntimeValidationError as exc:
-            manifest = None
-            manifest_issue = {"code": exc.code, "message": str(exc), "details": exc.details}
-        try:
-            runtime_state = self.load_runtime_state(strict=True)
-        except RuntimeValidationError as exc:
-            runtime_state = None
-            runtime_state_issue = {"code": exc.code, "message": str(exc), "details": exc.details}
-        required = [(label, path, kind, True) for label, path, kind in self._required_paths(manifest)]
-        optional = self._optional_paths(manifest)
-        files = []
-        for label, relative_path, kind, required_flag in [*required, *optional]:
-            absolute = self.current_dir / relative_path
-            exists = absolute.is_dir() if kind == "dir" else absolute.is_file()
-            files.append(
-                {
-                    "label": label,
-                    "path": str(absolute),
-                    "exists": exists,
-                    "required": required_flag,
-                }
-            )
+        with self.tracer.span(workflow_name="runtime.doctor", metadata={"entrypoint": "runtime.doctor"}) as trace:
+            manifest_issue: dict[str, Any] | None = None
+            runtime_state_issue: dict[str, Any] | None = None
+            installed = self.current_dir.exists()
+            try:
+                manifest = self.load_installed_manifest(strict=True)
+            except RuntimeValidationError as exc:
+                manifest = None
+                manifest_issue = {"code": exc.code, "message": str(exc), "details": exc.details}
+            try:
+                runtime_state = self.load_runtime_state(strict=True)
+            except RuntimeValidationError as exc:
+                runtime_state = None
+                runtime_state_issue = {"code": exc.code, "message": str(exc), "details": exc.details}
+            required = [(label, path, kind, True) for label, path, kind in self._required_paths(manifest)]
+            optional = self._optional_paths(manifest)
+            files = []
+            for label, relative_path, kind, required_flag in [*required, *optional]:
+                absolute = self.current_dir / relative_path
+                exists = absolute.is_dir() if kind == "dir" else absolute.is_file()
+                files.append(
+                    {
+                        "label": label,
+                        "path": str(absolute),
+                        "exists": exists,
+                        "required": required_flag,
+                    }
+                )
 
-        python_path = self._relative_manifest_path(manifest, "runtimes", "python")
-        java_path = self._relative_manifest_path(manifest, "runtimes", "java")
-        start_script = self._relative_manifest_path(manifest, "services", "start_script")
-        stop_script = self._relative_manifest_path(manifest, "services", "stop_script")
-        endpoints = self._service_status(manifest)
+            python_path = self._relative_manifest_path(manifest, "runtimes", "python")
+            java_path = self._relative_manifest_path(manifest, "runtimes", "java")
+            start_script = self._relative_manifest_path(manifest, "services", "start_script")
+            stop_script = self._relative_manifest_path(manifest, "services", "stop_script")
+            endpoints = self._service_status(manifest)
 
-        issues = []
-        if manifest_issue:
-            issues.append(manifest_issue["code"])
-        if runtime_state_issue:
-            issues.append(runtime_state_issue["code"])
-        for entry in files:
-            if not entry["exists"]:
-                issues.append(f"missing:{entry['label']}")
-        if installed and not any(item["reachable"] for item in endpoints):
-            issues.append("services:not_running")
+            issues = []
+            if manifest_issue:
+                issues.append(manifest_issue["code"])
+            if runtime_state_issue:
+                issues.append(runtime_state_issue["code"])
+            for entry in files:
+                if not entry["exists"]:
+                    issues.append(f"missing:{entry['label']}")
+            if installed and not any(item["reachable"] for item in endpoints):
+                issues.append("services:not_running")
 
-        return {
-            "ok": not issues,
-            "installed": installed,
-            "platform": self.settings.runtime_platform or _platform_key(),
-            "runtime_root": str(self.runtime_root),
-            "current_dir": str(self.current_dir),
-            "manifest": manifest,
-            "manifest_issue": manifest_issue,
-            "runtime_state": runtime_state,
-            "runtime_state_issue": runtime_state_issue,
-            "paths": {
-                "python": str(self.current_dir / python_path),
-                "java": str(self.current_dir / java_path),
-                "node": str(self.current_dir / self._relative_manifest_path(manifest, "runtimes", "node")),
-                "start_script": str(self.current_dir / start_script),
-                "stop_script": str(self.current_dir / stop_script),
-            },
-            "files": files,
-            "endpoints": endpoints,
-            "issues": issues,
-        }
+            trace["issues"] = issues
+            return {
+                "ok": not issues,
+                "installed": installed,
+                "platform": self.settings.runtime_platform or _platform_key(),
+                "runtime_root": str(self.runtime_root),
+                "current_dir": str(self.current_dir),
+                "manifest": manifest,
+                "manifest_issue": manifest_issue,
+                "runtime_state": runtime_state,
+                "runtime_state_issue": runtime_state_issue,
+                "paths": {
+                    "python": str(self.current_dir / python_path),
+                    "java": str(self.current_dir / java_path),
+                    "node": str(self.current_dir / self._relative_manifest_path(manifest, "runtimes", "node")),
+                    "start_script": str(self.current_dir / start_script),
+                    "stop_script": str(self.current_dir / stop_script),
+                },
+                "files": files,
+                "endpoints": endpoints,
+                "issues": issues,
+                "trace_id": trace["trace_id"],
+                "group_id": trace["group_id"],
+            }
 
     def start_local_services(self) -> dict[str, Any]:
-        self._require_runtime()
-        manifest = self.load_installed_manifest(strict=True)
-        script = self.current_dir / self._relative_manifest_path(manifest, "services", "start_script")
-        if not script.exists():
-            raise RuntimeValidationError(
-                f"Runtime start script missing: {script}",
-                code="runtime.start_script_missing",
-                details={"path": str(script)},
-            )
+        with self.tracer.span(workflow_name="runtime.start", metadata={"entrypoint": "runtime.start"}) as trace:
+            self._require_runtime()
+            manifest = self.load_installed_manifest(strict=True)
+            script = self.current_dir / self._relative_manifest_path(manifest, "services", "start_script")
+            if not script.exists():
+                raise RuntimeValidationError(
+                    f"Runtime start script missing: {script}",
+                    code="runtime.start_script_missing",
+                    details={"path": str(script)},
+                )
 
-        initial_status = self._service_status(manifest)
-        if any(item["reachable"] for item in initial_status):
-            if self.load_runtime_state() is None:
+            initial_status = self._service_status(manifest)
+            if any(item["reachable"] for item in initial_status):
+                if self.load_runtime_state() is None:
+                    self._write_runtime_state(
+                        {
+                            "managed": False,
+                            "status": "already_running",
+                            "updated_at": self._utc_now(),
+                            "manifest_version": manifest.get("version") if manifest else None,
+                            "platform": manifest.get("platform") if manifest else (self.settings.runtime_platform or _platform_key()),
+                        }
+                    )
+                return {
+                    "ok": True,
+                    "already_running": True,
+                    "command": None,
+                    "stdout": "",
+                    "stderr": "",
+                    "endpoints": initial_status,
+                    "trace_id": trace["trace_id"],
+                    "group_id": trace["group_id"],
+                }
+
+            env = os.environ.copy()
+            env.setdefault("HOROSA_SERVER_PORT", str(self.settings.local_backend_port))
+            env.setdefault("HOROSA_CHART_PORT", str(self.settings.local_chart_port))
+
+            command = self._platform_command(script)
+            completed = subprocess.run(
+                command,
+                cwd=str(script.parent),
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            if completed.returncode != 0:
+                raise RuntimeInstallError(
+                    "Failed to start local Horosa runtime.",
+                    code="runtime.start_failed",
+                    details={
+                        "command": command,
+                        "stdout": completed.stdout[-4000:],
+                        "stderr": completed.stderr[-4000:],
+                    },
+                )
+            readiness = self._wait_for_service_state(
+                expected_reachable=True,
+                timeout_seconds=self.settings.runtime_start_timeout_seconds,
+                manifest=manifest,
+            )
+            if not readiness["ready"]:
+                raise RuntimeInstallError(
+                    "Local Horosa runtime did not become ready in time.",
+                    code="runtime.start_timeout",
+                    details={
+                        "command": command,
+                        "timeout_seconds": self.settings.runtime_start_timeout_seconds,
+                        "endpoints": readiness["endpoints"],
+                    },
+                )
+            self._write_runtime_state(
+                {
+                    "managed": True,
+                    "status": "running",
+                    "updated_at": self._utc_now(),
+                    "manifest_version": manifest.get("version") if manifest else None,
+                    "platform": manifest.get("platform") if manifest else (self.settings.runtime_platform or _platform_key()),
+                    "command": command,
+                }
+            )
+            trace["command"] = command
+            return {
+                "ok": True,
+                "already_running": False,
+                "command": command,
+                "stdout": completed.stdout[-4000:],
+                "stderr": completed.stderr[-4000:],
+                "endpoints": readiness["endpoints"],
+                "trace_id": trace["trace_id"],
+                "group_id": trace["group_id"],
+            }
+
+    def stop_local_services(self) -> dict[str, Any]:
+        with self.tracer.span(workflow_name="runtime.stop", metadata={"entrypoint": "runtime.stop"}) as trace:
+            self._require_runtime()
+            manifest = self.load_installed_manifest(strict=True)
+            script = self.current_dir / self._relative_manifest_path(manifest, "services", "stop_script")
+            initial_status = self._service_status(manifest)
+            if not any(item["reachable"] for item in initial_status):
+                self._clear_runtime_state()
+                return {
+                    "ok": True,
+                    "already_stopped": True,
+                    "command": None,
+                    "stdout": "",
+                    "stderr": "",
+                    "returncode": 0,
+                    "endpoints": initial_status,
+                    "trace_id": trace["trace_id"],
+                    "group_id": trace["group_id"],
+                }
+            if not script.exists():
+                raise RuntimeValidationError(
+                    f"Runtime stop script missing: {script}",
+                    code="runtime.stop_script_missing",
+                    details={"path": str(script)},
+                )
+            command = self._platform_command(script)
+            completed = subprocess.run(
+                command,
+                cwd=str(script.parent),
+                env=os.environ.copy(),
+                capture_output=True,
+                text=True,
+            )
+            shutdown = self._wait_for_service_state(
+                expected_reachable=False,
+                timeout_seconds=max(3.0, min(self.settings.runtime_start_timeout_seconds, 10.0)),
+                manifest=manifest,
+            )
+            if completed.returncode == 0 and shutdown["ready"]:
+                self._clear_runtime_state()
+            else:
                 self._write_runtime_state(
                     {
-                        "managed": False,
-                        "status": "already_running",
+                        "managed": True,
+                        "status": "stop_requested",
                         "updated_at": self._utc_now(),
                         "manifest_version": manifest.get("version") if manifest else None,
                         "platform": manifest.get("platform") if manifest else (self.settings.runtime_platform or _platform_key()),
                     }
                 )
+            trace["command"] = command
             return {
-                "ok": True,
-                "already_running": True,
-                "command": None,
-                "stdout": "",
-                "stderr": "",
-                "endpoints": initial_status,
-            }
-
-        env = os.environ.copy()
-        env.setdefault("HOROSA_SERVER_PORT", str(self.settings.local_backend_port))
-        env.setdefault("HOROSA_CHART_PORT", str(self.settings.local_chart_port))
-
-        command = self._platform_command(script)
-        completed = subprocess.run(
-            command,
-            cwd=str(script.parent),
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-        if completed.returncode != 0:
-            raise RuntimeInstallError(
-                "Failed to start local Horosa runtime.",
-                code="runtime.start_failed",
-                details={
-                    "command": command,
-                    "stdout": completed.stdout[-4000:],
-                    "stderr": completed.stderr[-4000:],
-                },
-            )
-        readiness = self._wait_for_service_state(
-            expected_reachable=True,
-            timeout_seconds=self.settings.runtime_start_timeout_seconds,
-            manifest=manifest,
-        )
-        if not readiness["ready"]:
-            raise RuntimeInstallError(
-                "Local Horosa runtime did not become ready in time.",
-                code="runtime.start_timeout",
-                details={
-                    "command": command,
-                    "timeout_seconds": self.settings.runtime_start_timeout_seconds,
-                    "endpoints": readiness["endpoints"],
-                },
-            )
-        self._write_runtime_state(
-            {
-                "managed": True,
-                "status": "running",
-                "updated_at": self._utc_now(),
-                "manifest_version": manifest.get("version") if manifest else None,
-                "platform": manifest.get("platform") if manifest else (self.settings.runtime_platform or _platform_key()),
+                "ok": completed.returncode == 0 and shutdown["ready"],
+                "already_stopped": False,
                 "command": command,
+                "stdout": completed.stdout[-4000:],
+                "stderr": completed.stderr[-4000:],
+                "returncode": completed.returncode,
+                "endpoints": shutdown["endpoints"],
+                "trace_id": trace["trace_id"],
+                "group_id": trace["group_id"],
             }
-        )
-        return {
-            "ok": True,
-            "already_running": False,
-            "command": command,
-            "stdout": completed.stdout[-4000:],
-            "stderr": completed.stderr[-4000:],
-            "endpoints": readiness["endpoints"],
-        }
-
-    def stop_local_services(self) -> dict[str, Any]:
-        self._require_runtime()
-        manifest = self.load_installed_manifest(strict=True)
-        script = self.current_dir / self._relative_manifest_path(manifest, "services", "stop_script")
-        initial_status = self._service_status(manifest)
-        if not any(item["reachable"] for item in initial_status):
-            self._clear_runtime_state()
-            return {
-                "ok": True,
-                "already_stopped": True,
-                "command": None,
-                "stdout": "",
-                "stderr": "",
-                "returncode": 0,
-                "endpoints": initial_status,
-            }
-        if not script.exists():
-            raise RuntimeValidationError(
-                f"Runtime stop script missing: {script}",
-                code="runtime.stop_script_missing",
-                details={"path": str(script)},
-            )
-        command = self._platform_command(script)
-        completed = subprocess.run(
-            command,
-            cwd=str(script.parent),
-            env=os.environ.copy(),
-            capture_output=True,
-            text=True,
-        )
-        shutdown = self._wait_for_service_state(
-            expected_reachable=False,
-            timeout_seconds=max(3.0, min(self.settings.runtime_start_timeout_seconds, 10.0)),
-            manifest=manifest,
-        )
-        if completed.returncode == 0 and shutdown["ready"]:
-            self._clear_runtime_state()
-        else:
-            self._write_runtime_state(
-                {
-                    "managed": True,
-                    "status": "stop_requested",
-                    "updated_at": self._utc_now(),
-                    "manifest_version": manifest.get("version") if manifest else None,
-                    "platform": manifest.get("platform") if manifest else (self.settings.runtime_platform or _platform_key()),
-                }
-            )
-        return {
-            "ok": completed.returncode == 0 and shutdown["ready"],
-            "already_stopped": False,
-            "command": command,
-            "stdout": completed.stdout[-4000:],
-            "stderr": completed.stderr[-4000:],
-            "returncode": completed.returncode,
-            "endpoints": shutdown["endpoints"],
-        }
 
     def _require_runtime(self) -> None:
         if not self.current_dir.exists():

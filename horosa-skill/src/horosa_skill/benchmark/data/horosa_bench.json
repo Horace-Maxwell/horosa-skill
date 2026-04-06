@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "metadata": {
+    "name": "HorosaBench",
+    "version": "0.1.0",
+    "description": "Local benchmark suite for Horosa Skill tool routing, export parity, and bundled hover knowledge quality."
+  },
+  "cases": [
+    {
+      "id": "dispatch_qimen_liureng_combo",
+      "kind": "dispatch",
+      "requires_runtime": true,
+      "payload": {
+        "query": "请综合奇门和六壬分析测试对象甲当前状态",
+        "subject": {
+          "name": "甲"
+        },
+        "birth": {
+          "date": "2026-04-04",
+          "time": "15:58:35",
+          "zone": "+08:00",
+          "lat": "26n04",
+          "lon": "119e19",
+          "gpsLat": 26.07,
+          "gpsLon": 119.32,
+          "ad": 1,
+          "after23NewDay": false,
+          "timeAlg": 0
+        },
+        "save_result": false
+      },
+      "expected_selected_tools": [
+        "liureng_gods",
+        "qimen"
+      ]
+    },
+    {
+      "id": "chart_export_parity",
+      "kind": "tool",
+      "tool": "chart",
+      "sample_payload": "chart",
+      "requires_runtime": true,
+      "expected_technique": "astrochart",
+      "required_sections": [
+        "起盘信息",
+        "宫位宫头",
+        "星与虚点"
+      ],
+      "required_fragments": [
+        "宫头：",
+        "日 ("
+      ]
+    },
+    {
+      "id": "qimen_export_parity",
+      "kind": "tool",
+      "tool": "qimen",
+      "sample_payload": "qimen",
+      "requires_runtime": true,
+      "expected_technique": "qimen",
+      "required_sections": [
+        "起盘信息",
+        "盘型",
+        "八宫详解"
+      ],
+      "required_fragments": [
+        "值符",
+        "值使"
+      ]
+    },
+    {
+      "id": "knowledge_qimen_door",
+      "kind": "knowledge",
+      "requires_runtime": false,
+      "payload": {
+        "domain": "qimen",
+        "category": "door",
+        "key": "休门"
+      },
+      "required_fragments": [
+        "休门"
+      ]
+    }
+  ]
+}

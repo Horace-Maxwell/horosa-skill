@@ -26,7 +26,10 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/horosa_skill"]
-include = ["src/horosa_skill/knowledge/data/*.json"]
+include = [
+  "src/horosa_skill/knowledge/data/*.json",
+  "src/horosa_skill/benchmark/data/*.json",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
