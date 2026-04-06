@@ -12,7 +12,7 @@ import typer
 
 from horosa_skill.config import Settings
 from horosa_skill.benchmark import run_benchmark
-from horosa_skill.client_tools import isolated_data_dir, isolated_runtime_root, resolve_mcporter_command
+from horosa_skill.client_tools import extract_json_value, isolated_data_dir, isolated_runtime_root, resolve_mcporter_command
 from horosa_skill.errors import RuntimeError, ToolValidationError
 from horosa_skill.runtime import HorosaRuntimeManager
 from horosa_skill.service import HorosaSkillService
@@ -120,6 +120,8 @@ def _build_openclaw_server_block(
                 "/s",
                 "/c",
                 (
+                    f'set "HOME={home_dir}" && '
+                    f'set "USERPROFILE={home_dir}" && '
                     f'set "HOROSA_RUNTIME_ROOT={runtime_root}" && '
                     f'set "HOROSA_SKILL_DATA_DIR={data_dir}" && '
                     f'uv run --directory "{skill_root}" horosa-skill serve --transport stdio'
@@ -132,6 +134,7 @@ def _build_openclaw_server_block(
         "args": [
             "-lc",
             (
+                f"export HOME={shlex.quote(str(home_dir))}; "
                 f"export HOROSA_RUNTIME_ROOT={shlex.quote(str(runtime_root))}; "
                 f"export HOROSA_SKILL_DATA_DIR={shlex.quote(str(data_dir))}; "
                 f"exec uv run --directory {shlex.quote(str(skill_root))} "
@@ -162,15 +165,44 @@ def _build_openclaw_config(
 
 def _run_subprocess_json(command: list[str], *, cwd: Path) -> dict[str, Any]:
     try:
-        result = subprocess.run(command, cwd=str(cwd), capture_output=True, text=True, check=False)
+        result = subprocess.run(
+            command,
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
     except FileNotFoundError as exc:
         raise RuntimeError(str(exc), code="client.command_not_found", details={"command": command, "cwd": str(cwd)}) from exc
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "Command failed")
-    try:
-        return json.loads(result.stdout)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"Command did not return JSON: {' '.join(command)}") from exc
+    parsed: dict[str, Any] | None = None
+    for candidate in (result.stdout, result.stderr):
+        try:
+            candidate_value = extract_json_value(candidate or "")
+        except ValueError:
+            continue
+        if isinstance(candidate_value, dict):
+            parsed = candidate_value
+            break
+    if result.returncode != 0 and parsed is None:
+        raise RuntimeError(
+            result.stderr.strip() or result.stdout.strip() or "Command failed",
+            code="client.command_failed",
+            details={"command": command, "cwd": str(cwd), "returncode": result.returncode},
+        )
+    if parsed is not None:
+        return parsed
+    raise RuntimeError(
+        f"Command did not return JSON: {' '.join(command)}",
+        code="client.invalid_json",
+        details={
+            "command": command,
+            "cwd": str(cwd),
+            "stdout": (result.stdout or "")[-4000:],
+            "stderr": (result.stderr or "")[-4000:],
+        },
+    )
 
 
 @app.command()
@@ -433,6 +465,8 @@ def client_openclaw_check(
             str(script_path),
             "--workspace",
             str(workspace_root),
+            "--config",
+            str(config_path),
             "--output",
             str(output_path),
         ]

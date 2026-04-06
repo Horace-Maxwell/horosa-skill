@@ -326,6 +326,14 @@ class HorosaRuntimeManager:
             env = os.environ.copy()
             env.setdefault("HOROSA_SERVER_PORT", str(self.settings.local_backend_port))
             env.setdefault("HOROSA_CHART_PORT", str(self.settings.local_chart_port))
+            home_value = self._default_home_value()
+            env.setdefault("HOME", home_value)
+            if os.name == "nt":
+                env.setdefault("USERPROFILE", home_value)
+                drive, tail = os.path.splitdrive(home_value)
+                if drive:
+                    env.setdefault("HOMEDRIVE", drive)
+                    env.setdefault("HOMEPATH", tail or "\\")
 
             command = self._platform_command(script)
             completed, readiness = self._run_start_command(
@@ -758,3 +766,19 @@ class HorosaRuntimeManager:
 
     def _utc_now(self) -> str:
         return datetime.now(UTC).isoformat()
+
+    def _default_home_value(self) -> str:
+        home = os.environ.get("HOME", "").strip()
+        if home:
+            return home
+        userprofile = os.environ.get("USERPROFILE", "").strip()
+        if userprofile:
+            return userprofile
+        data_dir = self.settings.data_dir
+        if data_dir.name == ".horosa-skill":
+            return str(data_dir.parent)
+        runtime_root = self.settings.runtime_root
+        runtime_parts = [part.lower() for part in runtime_root.parts]
+        if len(runtime_parts) >= 2 and runtime_parts[-1] == "runtime" and runtime_parts[-2] == ".horosa":
+            return str(runtime_root.parent.parent)
+        return str(Path.home())

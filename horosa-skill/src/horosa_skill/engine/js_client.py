@@ -31,6 +31,8 @@ class HorosaJsEngineClient:
             [str(node_bin), str(cli_path), "run", tool_name],
             input=json.dumps(payload, ensure_ascii=False),
             text=True,
+            encoding="utf-8",
+            errors="replace",
             capture_output=True,
             cwd=str(engine_root),
             timeout=self.settings.js_engine_timeout_seconds,
