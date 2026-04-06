@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import tarfile
+import zipfile
 from pathlib import Path
 from types import MethodType
 
@@ -33,6 +34,54 @@ def create_runtime_archive(tmp_path: Path) -> Path:
     archive_path = tmp_path / "runtime-payload.tar.gz"
     with tarfile.open(archive_path, "w:gz") as archive:
         archive.add(payload_root, arcname="runtime-payload")
+    return archive_path
+
+
+def create_windows_runtime_archive(tmp_path: Path) -> Path:
+    payload_root = tmp_path / "runtime-payload"
+    (payload_root / "Horosa-Web/astropy").mkdir(parents=True, exist_ok=True)
+    (payload_root / "Horosa-Web/flatlib-ctrad2/flatlib/resources/swefiles").mkdir(parents=True, exist_ok=True)
+    (payload_root / "horosa-core-js/bin").mkdir(parents=True, exist_ok=True)
+    (payload_root / "runtime/windows/java/bin").mkdir(parents=True, exist_ok=True)
+    (payload_root / "runtime/windows/python").mkdir(parents=True, exist_ok=True)
+    (payload_root / "runtime/windows/node").mkdir(parents=True, exist_ok=True)
+    (payload_root / "runtime/windows/bundle").mkdir(parents=True, exist_ok=True)
+    (payload_root / "Horosa-Web/start_horosa_local.ps1").write_text("Write-Host 'old start'\n", encoding="utf-8")
+    (payload_root / "Horosa-Web/stop_horosa_local.ps1").write_text("Write-Host 'old stop'\n", encoding="utf-8")
+    (payload_root / "runtime/windows/java/bin/java.exe").write_text("", encoding="utf-8")
+    (payload_root / "runtime/windows/python/python.exe").write_text("", encoding="utf-8")
+    (payload_root / "runtime/windows/node/node.exe").write_text("", encoding="utf-8")
+    (payload_root / "runtime/windows/bundle/astrostudyboot.jar").write_text("", encoding="utf-8")
+    (payload_root / "runtime-manifest.json").write_text(
+        json.dumps(
+            {
+                "version": "1.2.3",
+                "platform": "win32-x64",
+                "services": {
+                    "start_script": "Horosa-Web/start_horosa_local.ps1",
+                    "stop_script": "Horosa-Web/stop_horosa_local.ps1",
+                },
+                "runtimes": {
+                    "python": "runtime/windows/python/python.exe",
+                    "java": "runtime/windows/java/bin/java.exe",
+                    "node": "runtime/windows/node/node.exe",
+                },
+                "artifacts": {
+                    "horosa_web_root": "Horosa-Web",
+                    "astropy_root": "Horosa-Web/astropy",
+                    "flatlib_root": "Horosa-Web/flatlib-ctrad2/flatlib",
+                    "swefiles_root": "Horosa-Web/flatlib-ctrad2/flatlib/resources/swefiles",
+                    "boot_jar": "runtime/windows/bundle/astrostudyboot.jar",
+                    "horosa_core_js_root": "horosa-core-js",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    archive_path = tmp_path / "runtime-payload.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        for path in payload_root.rglob("*"):
+            archive.write(path, path.relative_to(payload_root.parent))
     return archive_path
 
 
@@ -449,3 +498,93 @@ def test_start_runtime_retries_after_failed_launch_with_stale_state(tmp_path: Pa
     assert started["ok"] is True
     assert started["recovered_partial_state"] is True
     assert stop_calls == ["stop"]
+
+
+def test_install_patches_windows_runtime_templates(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    archive = create_windows_runtime_archive(tmp_path)
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+        runtime_platform="win32-x64",
+    )
+    manager = HorosaRuntimeManager(settings)
+
+    manager.install(archive=str(archive))
+    manifest = manager.load_installed_manifest(strict=True)
+    monkeypatch.setattr("horosa_skill.runtime.manager.os.name", "nt", raising=False)
+    monkeypatch.setattr(manager, "_runtime_template_root", lambda: tmp_path / "template-root")
+    windows_template_root = manager._runtime_template_root() / "windows"
+    windows_template_root.mkdir(parents=True, exist_ok=True)
+    (windows_template_root / "start_horosa_local.ps1").write_text(
+        'Start-Process -RedirectStandardOutput "a" -RedirectStandardError "b"\n',
+        encoding="utf-8",
+    )
+    (windows_template_root / "stop_horosa_local.ps1").write_text(
+        'Write-Host "stop requested"\n',
+        encoding="utf-8",
+    )
+    manager._apply_runtime_overrides(manifest)
+
+    start_script = settings.runtime_current_dir / "Horosa-Web/start_horosa_local.ps1"
+    stop_script = settings.runtime_current_dir / "Horosa-Web/stop_horosa_local.ps1"
+    assert "RedirectStandardOutput" in start_script.read_text(encoding="utf-8")
+    assert "Write-Host \"stop requested\"" in stop_script.read_text(encoding="utf-8")
+
+
+def test_start_runtime_reports_patched_files_on_windows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    archive = create_windows_runtime_archive(tmp_path)
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+        runtime_platform="win32-x64",
+        runtime_start_timeout_seconds=0.5,
+    )
+    manager = HorosaRuntimeManager(settings)
+    manager.install(archive=str(archive))
+    monkeypatch.setattr("horosa_skill.runtime.manager.os.name", "nt", raising=False)
+    monkeypatch.setattr(manager, "_runtime_template_root", lambda: tmp_path / "template-root")
+    windows_template_root = manager._runtime_template_root() / "windows"
+    windows_template_root.mkdir(parents=True, exist_ok=True)
+    (windows_template_root / "start_horosa_local.ps1").write_text(
+        'Start-Process -RedirectStandardOutput "a" -RedirectStandardError "b"\n',
+        encoding="utf-8",
+    )
+    (windows_template_root / "stop_horosa_local.ps1").write_text(
+        'Write-Host "stop requested"\n',
+        encoding="utf-8",
+    )
+
+    def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+        return [
+            {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": False},
+            {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": False},
+        ]
+
+    def fake_wait_for_service_state(
+        self: HorosaRuntimeManager,
+        *,
+        expected_reachable: bool,
+        timeout_seconds: float,
+        manifest: dict | None,
+    ) -> dict[str, object]:
+        return {
+            "ready": True,
+            "endpoints": [
+                {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": expected_reachable},
+                {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": expected_reachable},
+            ],
+        }
+
+    def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=["powershell"], returncode=0, stdout="ok", stderr="")
+
+    manager._service_status = MethodType(fake_service_status, manager)
+    manager._wait_for_service_state = MethodType(fake_wait_for_service_state, manager)
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    started = manager.start_local_services()
+
+    assert started["ok"] is True
+    assert len(started["patched_files"]) == 2

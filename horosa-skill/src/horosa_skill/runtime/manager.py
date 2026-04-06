@@ -189,6 +189,7 @@ class HorosaRuntimeManager:
                 target_parent = self.current_dir.parent
                 target_parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(payload_root), str(self.current_dir))
+                self._apply_runtime_overrides(manifest)
                 if previous_dir.exists():
                     shutil.rmtree(previous_dir)
 
@@ -284,6 +285,7 @@ class HorosaRuntimeManager:
         with self.tracer.span(workflow_name="runtime.start", metadata={"entrypoint": "runtime.start"}) as trace:
             self._require_runtime()
             manifest = self.load_installed_manifest(strict=True)
+            patched_files = self._apply_runtime_overrides(manifest)
             script = self.current_dir / self._relative_manifest_path(manifest, "services", "start_script")
             if not script.exists():
                 raise RuntimeValidationError(
@@ -398,6 +400,7 @@ class HorosaRuntimeManager:
                 }
             )
             trace["command"] = command
+            trace["patched_files"] = patched_files
             return {
                 "ok": True,
                 "already_running": False,
@@ -406,6 +409,7 @@ class HorosaRuntimeManager:
                 "stderr": completed.stderr[-4000:],
                 "endpoints": readiness["endpoints"],
                 "warning": startup_warning,
+                "patched_files": patched_files,
                 "recovered_partial_state": recovered_partial_state,
                 "recovery": recovery_details,
                 "trace_id": trace["trace_id"],
@@ -612,6 +616,31 @@ class HorosaRuntimeManager:
                 return ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script)]
             return [str(script)]
         return ["/bin/bash", str(script)]
+
+    def _apply_runtime_overrides(self, manifest: dict[str, Any] | None) -> list[str]:
+        if os.name != "nt":
+            return []
+        template_root = self._runtime_template_root() / "windows"
+        if not template_root.exists():
+            return []
+
+        patched: list[str] = []
+        overrides = {
+            "services.start_script": template_root / "start_horosa_local.ps1",
+            "services.stop_script": template_root / "stop_horosa_local.ps1",
+        }
+        for field, source in overrides.items():
+            if not source.exists():
+                continue
+            section, key = field.split(".", 1)
+            destination = self.current_dir / self._relative_manifest_path(manifest, section, key)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+            patched.append(str(destination))
+        return patched
+
+    def _runtime_template_root(self) -> Path:
+        return Path(__file__).resolve().parents[3] / "scripts" / "runtime_templates"
 
     def _http_reachable(self, url: str) -> bool:
         try:

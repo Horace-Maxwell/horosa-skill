@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
+from horosa_skill.client_tools import resolve_mcporter_command
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.testing_payloads import build_sample_payloads
 
@@ -18,7 +17,7 @@ DEFAULT_OUTPUT = Path.home() / ".horosa-skill" / "self_check_report_openclaw_ful
 
 def _run_mcporter(workspace: Path, selector: str, payload: dict[str, Any], *, timeout_ms: int = 120000) -> dict[str, Any]:
     command = [
-        "mcporter",
+        *resolve_mcporter_command(),
         "call",
         selector,
         "--args",
@@ -41,7 +40,7 @@ def _run_mcporter(workspace: Path, selector: str, payload: dict[str, Any], *, ti
 
 
 def _run_mcporter_list(workspace: Path, *, timeout_ms: int = 120000) -> dict[str, Any]:
-    command = ["mcporter", "list", "horosa", "--json"]
+    command = [*resolve_mcporter_command(), "list", "horosa", "--json"]
     result = subprocess.run(
         command,
         cwd=str(workspace),

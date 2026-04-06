@@ -10,8 +10,10 @@ $BackendPort = if ($env:HOROSA_SERVER_PORT) { $env:HOROSA_SERVER_PORT } else { "
 $LogRoot = if ($env:HOROSA_LOG_ROOT) { $env:HOROSA_LOG_ROOT } else { Join-Path $Root ".horosa-local-logs" }
 $RunTag = Get-Date -Format "yyyyMMdd_HHmmss"
 $LogDir = Join-Path $LogRoot $RunTag
-$PyLog = Join-Path $LogDir "astropy.log"
-$JavaLog = Join-Path $LogDir "astrostudyboot.log"
+$PyOutLog = Join-Path $LogDir "astropy.stdout.log"
+$PyErrLog = Join-Path $LogDir "astropy.stderr.log"
+$JavaOutLog = Join-Path $LogDir "astrostudyboot.stdout.log"
+$JavaErrLog = Join-Path $LogDir "astrostudyboot.stderr.log"
 $PyPidPath = Join-Path $Root ".horosa_py.pid"
 $JavaPidPath = Join-Path $Root ".horosa_java.pid"
 
@@ -22,9 +24,9 @@ if (-not (Test-Path $JavaBin)) { throw "java runtime not found: $JavaBin" }
 if (-not (Test-Path $JarPath)) { throw "astrostudyboot.jar not found: $JarPath" }
 
 $PythonPath = "{0};{1}" -f (Join-Path $Root "astropy"), (Join-Path $Root "flatlib-ctrad2")
-$PyCommand = "set PYTHONPATH=$PythonPath&&set HOROSA_CHART_PORT=$ChartPort&&`"$PythonBin`" `"$Root\\astropy\\websrv\\webchartsrv.py`""
-$PyProc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", $PyCommand -WorkingDirectory $Root -RedirectStandardOutput $PyLog -RedirectStandardError $PyLog -PassThru -WindowStyle Hidden
-$JavaProc = Start-Process -FilePath $JavaBin -ArgumentList "-jar", $JarPath, "--server.port=$BackendPort", "--astrosrv=http://127.0.0.1:$ChartPort", "--mongodb.ip=127.0.0.1", "--redis.ip=127.0.0.1" -WorkingDirectory $Root -RedirectStandardOutput $JavaLog -RedirectStandardError $JavaLog -PassThru -WindowStyle Hidden
+$PyCommand = "set ""PYTHONPATH=$PythonPath"" && set ""HOROSA_CHART_PORT=$ChartPort"" && `"$PythonBin`" `"$Root\\astropy\\websrv\\webchartsrv.py`""
+$PyProc = Start-Process -FilePath "cmd.exe" -ArgumentList "/d", "/s", "/c", $PyCommand -WorkingDirectory $Root -RedirectStandardOutput $PyOutLog -RedirectStandardError $PyErrLog -PassThru -WindowStyle Hidden
+$JavaProc = Start-Process -FilePath $JavaBin -ArgumentList "-jar", $JarPath, "--server.port=$BackendPort", "--astrosrv=http://127.0.0.1:$ChartPort", "--mongodb.ip=127.0.0.1", "--redis.ip=127.0.0.1" -WorkingDirectory $Root -RedirectStandardOutput $JavaOutLog -RedirectStandardError $JavaErrLog -PassThru -WindowStyle Hidden
 
 $PyProc.Id | Set-Content -Encoding utf8 $PyPidPath
 $JavaProc.Id | Set-Content -Encoding utf8 $JavaPidPath
