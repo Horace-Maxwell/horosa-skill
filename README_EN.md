@@ -436,3 +436,112 @@ Already implemented:
 - real fresh-clone validation from GitHub plus runtime reinstall
 
 If you need a repository that turns Xingque into AI-callable infrastructure rather than a pile of loose scripts, this project is already operating in that direction.
+
+## Quick Verification Checklist
+
+If you want to prove to yourself that this is not just a polished shell, run the smallest serious verification path:
+
+```bash
+cd horosa-skill
+uv sync
+uv run horosa-skill install
+uv run horosa-skill doctor
+uv run pytest -q
+uv run python scripts/run_benchmark.py
+uv run python scripts/run_full_self_check.py --rounds 1
+```
+
+What matters in those results:
+
+- `doctor` confirms the runtime is installed and reports `issues: []` once services are up
+- `pytest` validates the engineering test suite
+- `HorosaBench` validates routing, export parity, and knowledge reads
+- `run_full_self_check` validates all callable tools, export contracts, persistence, retrieval, and dispatch aggregation
+
+For a first-time evaluator, this says far more than “one tool happened to run once.”
+
+## Release Integrity And Provenance
+
+This repository now ships more than runtime packaging. It also includes the metadata and verification surfaces needed for auditable releases:
+
+- runtime assets are distributed through GitHub Releases instead of bloating Git history
+- `server.json` is present so MCP tooling can identify the server cleanly
+- an SBOM generator is included for project dependencies and runtime-manifest-aware output
+- traces, artifacts, run manifests, knowledge bundles, and export snapshots now carry versioning or provenance data
+- release checks, benchmark checks, self-checks, README checks, and `server.json` validation are part of the engineering surface
+
+Recommended follow-up documents:
+
+- Operations: [`docs/OPERATIONS.md`](./docs/OPERATIONS.md)
+- Evaluation: [`docs/EVALUATION.md`](./docs/EVALUATION.md)
+- Data contracts: [`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md)
+- MCP metadata: [`server.json`](./server.json)
+
+## Recommended MCP / AI Integration Model
+
+If you are wiring Horosa Skill into AI systems rather than treating it as a standalone CLI, this is the cleanest mental model:
+
+1. `install + doctor`
+2. attach the server through `stdio MCP`
+3. add an HTTP / OpenAPI bridge only if a client cannot consume MCP directly
+
+A practical split of responsibilities:
+
+- `horosa_dispatch`: natural-language entrypoint
+- atomic `tool run`: deterministic scripting and debugging
+- `knowledge_read`: bundled Xingque hover-knowledge access
+- `memory answer`: write the final AI answer back into the same run record
+
+So the repository is not only a calculation surface. It also exposes:
+
+- calculation
+- export contracts
+- bundled knowledge
+- dispatch
+- local memory
+- observability
+
+## Who This Repository Fits Best
+
+This repository is especially strong for four groups:
+
+- end users who want their own AI to call real Horosa methods locally
+- advanced users who want every analysis persisted into queryable local memory
+- maintainers who want a lightweight repo plus heavyweight release strategy
+- researchers who care about tool routing, export contracts, hover-knowledge access, and process-level evaluation
+
+If you are approaching it from a research perspective, start here:
+
+- [`docs/EVALUATION.md`](./docs/EVALUATION.md)
+- [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
+- [`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md)
+
+## FAQ / Boundary Notes
+
+### Why is the release workflow not purely GitHub-hosted cloud build output?
+
+Because the complete runtime still depends on maintained local runtime sources, platform runtimes, and packaging inputs. The goal is a lightweight public repository, but that does not remove the need for heavyweight, controlled runtime inputs during release assembly.
+
+### Why do `export_snapshot` and `export_format` matter so much?
+
+Because one of the core values of this project is making Xingque output stably consumable by AI systems. Without that contract layer, downstream retrieval, comparison, replay, and evaluation become fragile.
+
+### Why keep both SQLite and JSON artifacts?
+
+Because they serve different purposes:
+
+- SQLite is the structured local index and query layer
+- JSON artifacts are the durable, portable, diffable archival layer
+
+### Why is `fengshui` still excluded?
+
+Because the current public surface is intentionally limited to capabilities that are already headless, already verifiable offline, and already reliable enough to ship as a maintained local-first interface.
+
+### What is the strongest quality signal in this repository?
+
+Not the badge wall and not the screenshots. It is whether these four things remain true together:
+
+- tools really run
+- exports remain structurally stable
+- results really persist and can be queried back
+- benchmark and self-check continue to pass
