@@ -3,6 +3,7 @@ name = "horosa-skill"
 version = "0.3.0"
 description = "GitHub-first Horosa AI skill distribution with CLI, MCP, and local structured memory."
 readme = "README.md"
+license = "AGPL-3.0-only"
 requires-python = ">=3.12"
 dependencies = [
   "cryptography>=45.0.0",

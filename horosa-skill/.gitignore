@@ -1,0 +1,16 @@
+.venv/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+
+build/
+dist/
+runs/
+
+memory.db
+*.log
+*.log.*
+*.sqlite
+*.sqlite3
+
+.horosa-local-logs/

@@ -4,6 +4,12 @@
 
 如果根目录 README 讲的是“这个项目是什么”，这里讲的是“这个包具体能做什么”。
 
+## License / 许可证
+
+这个子项目现在采用 `GNU AGPL-3.0-only` 许可证发布。完整文本见 [LICENSE](LICENSE)。
+
+This subproject is distributed under `GNU AGPL-3.0-only`. See [LICENSE](LICENSE) for the full text.
+
 ## 新增工程能力
 
 - tracing：本地 JSONL trace、`trace_id`、`group_id`
