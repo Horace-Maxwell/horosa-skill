@@ -16,7 +16,7 @@
     <img src="https://img.shields.io/badge/storage-SQLite%20%2B%20JSON-111827?style=flat-square" alt="SQLite and JSON" />
   </p>
 
-  <p><a href="./LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-374151?style=flat-square" alt="License" /></a>&nbsp;<a href="./CONTRIBUTING.md"><img src="https://img.shields.io/badge/Contributing-Guide-0f766e?style=flat-square" alt="Contributing" /></a>&nbsp;<a href="./SECURITY.md"><img src="https://img.shields.io/badge/Security-Policy-991b1b?style=flat-square" alt="Security" /></a></p>
+  <p><a href="./LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-374151?style=flat-square" alt="License" /></a>&nbsp;<a href="./CONTRIBUTING.md"><img src="https://img.shields.io/badge/Contributing-Guide-0f766e?style=flat-square" alt="Contributing" /></a>&nbsp;<a href="./SECURITY.md"><img src="https://img.shields.io/badge/Security-Policy-991b1b?style=flat-square" alt="Security" /></a></p>
 
   <p><a href="./SUPPORT.md"><img src="https://img.shields.io/badge/Support-Paths-1d4ed8?style=flat-square" alt="Support" /></a>&nbsp;<a href="./CITATION.cff"><img src="https://img.shields.io/badge/Citation-CFF-7c3aed?style=flat-square" alt="Citation" /></a>&nbsp;<a href="./CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-Updates-f59e0b?style=flat-square" alt="Changelog" /></a></p>
 </div>
@@ -32,6 +32,8 @@
 ## What This Repository Is
 
 Xingque already had the hard parts: deep local algorithms, ephemeris-backed runtime behavior, rich AI export settings, and serious occult method coverage. `Horosa Skill` is the GitHub-first delivery surface that makes those capabilities usable by modern AI systems without turning the repo into a giant runtime dump.
+
+This repository is now published under `GNU AGPL-3.0-only`. The root [LICENSE](./LICENSE) governs the repository as a whole, while the package metadata under `horosa-skill/` mirrors the same license so Python, Node, and MCP-facing tooling can detect it correctly.
 
 This repository is built to solve five practical problems:
 

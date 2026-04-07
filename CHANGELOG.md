@@ -12,6 +12,12 @@ and this project follows a release-oriented changelog style.
 - Community and repository metadata files for a more complete public GitHub
   surface.
 
+### Changed
+
+- Switched repository-level public licensing metadata from Apache-2.0 to
+  `GNU AGPL-3.0-only`, including root docs, citation metadata, and MCP server
+  metadata.
+
 ## [0.3.0] - 2026-04-05
 
 ### Added

@@ -7,7 +7,7 @@ authors:
     given-names: "Horace"
 repository-code: "https://github.com/Horace-Maxwell/horosa-skill"
 url: "https://github.com/Horace-Maxwell/horosa-skill"
-license: "Apache-2.0"
+license: "AGPL-3.0-only"
 version: "0.3.0"
 date-released: "2026-04-05"
 abstract: "Horosa Skill is a local-first AI skill layer for Horosa/Xingque, bundling offline runtime installation, structured export contracts, MCP and CLI invocation, and local artifact management."
