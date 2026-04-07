@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -134,6 +136,74 @@ def test_build_openclaw_config_supports_isolated_home_on_windows(tmp_path: Path,
     assert server["env"]["USERPROFILE"] == str(home_dir.resolve())
     assert server["env"]["HOROSA_RUNTIME_ROOT"] == str((home_dir / ".horosa" / "runtime").resolve())
     assert server["env"]["HOROSA_SKILL_DATA_DIR"] == str((home_dir / ".horosa-skill").resolve())
+
+
+def test_openclaw_setup_bootstraps_workspace_and_runs_smoke(monkeypatch, tmp_path: Path) -> None:
+    skill_root = tmp_path / "repo" / "horosa-skill"
+    skill_root.mkdir(parents=True)
+    (skill_root / "pyproject.toml").write_text("[project]\nname='horosa-skill'\n", encoding="utf-8")
+    workspace = tmp_path / "workspace"
+    expected_home = (workspace / ".horosa-home").resolve()
+    captured: dict[str, object] = {}
+    smoke_calls: list[dict[str, Path]] = []
+
+    class ManagerStub:
+        def install(self) -> dict[str, object]:
+            assert os.environ["HOME"] == str(expected_home)
+            return {"ok": True, "installed": True, "changed": True}
+
+        def start_local_services(self) -> dict[str, object]:
+            return {"ok": True, "already_running": False}
+
+        def doctor(self) -> dict[str, object]:
+            return {"issues": [], "endpoints": [{"label": "java_backend", "reachable": True}]}
+
+    def fake_smoke_check(*, workspace_root: Path, config_path: Path, output_path: Path) -> dict[str, object]:
+        smoke_calls.append(
+            {
+                "workspace_root": workspace_root,
+                "config_path": config_path,
+                "output_path": output_path,
+            }
+        )
+        return {"ok": True, "server_visible": True, "listed_tool_count": 43}
+
+    monkeypatch.setattr(cli, "resolve_uv_command", lambda: ["/usr/local/bin/uv"])
+    monkeypatch.setattr(cli, "_runtime_manager", lambda settings_arg: ManagerStub())
+    monkeypatch.setattr(cli, "_run_openclaw_smoke_check", fake_smoke_check)
+    monkeypatch.setattr(cli, "_print_json", lambda data: captured.setdefault("report", data))
+
+    original_home = os.environ.get("HOME")
+
+    cli.client_openclaw_setup(
+        workspace=workspace,
+        skill_root=skill_root,
+        server_name="horosa",
+        isolate_home=None,
+        config=None,
+        skip_smoke=False,
+    )
+
+    config_path = (workspace / "config" / "mcporter.json").resolve()
+    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    server = payload["mcpServers"]["horosa"]
+
+    assert server["env"]["HOME"] == str(expected_home)
+    if os.name == "nt":
+        assert server["env"]["USERPROFILE"] == str(expected_home)
+    else:
+        assert "USERPROFILE" not in server["env"]
+    assert smoke_calls == [
+        {
+            "workspace_root": workspace.resolve(),
+            "config_path": config_path,
+            "output_path": (expected_home / ".horosa-skill" / "openclaw_setup_smoke_check.json"),
+        }
+    ]
+    assert captured["report"]["ok"] is True
+    assert captured["report"]["config"] == str(config_path)
+    assert captured["report"]["smoke"]["ok"] is True
+    assert os.environ.get("HOME") == original_home
 
 
 def test_run_subprocess_json_accepts_diagnostic_prefix(monkeypatch, tmp_path: Path) -> None:
