@@ -33,6 +33,7 @@ def test_resolve_mcporter_command_uses_cmd_on_windows(monkeypatch) -> None:
 
 def test_resolve_mcporter_command_falls_back_to_npx(monkeypatch) -> None:
     monkeypatch.delenv("HOROSA_MCPORTER_BIN", raising=False)
+    monkeypatch.setattr(client_tools.os, "name", "posix", raising=False)
 
     def fake_which(name: str) -> str | None:
         if name == "npx":
@@ -46,8 +47,25 @@ def test_resolve_mcporter_command_falls_back_to_npx(monkeypatch) -> None:
     assert command == ["/usr/local/bin/npx", "mcporter"]
 
 
+def test_resolve_mcporter_command_falls_back_to_windows_appdata(monkeypatch, tmp_path: Path) -> None:
+    npm_root = tmp_path / "Roaming" / "npm"
+    npm_root.mkdir(parents=True)
+    mcporter_cmd = npm_root / "mcporter.cmd"
+    mcporter_cmd.write_text("@echo off\n", encoding="utf-8")
+
+    monkeypatch.delenv("HOROSA_MCPORTER_BIN", raising=False)
+    monkeypatch.setattr(client_tools.os, "name", "nt", raising=False)
+    monkeypatch.setattr(client_tools.shutil, "which", lambda name: None)
+    monkeypatch.setenv("APPDATA", str(tmp_path / "Roaming"))
+
+    command = client_tools.resolve_mcporter_command()
+
+    assert command == [str(mcporter_cmd)]
+
+
 def test_resolve_mcporter_command_raises_when_missing(monkeypatch) -> None:
     monkeypatch.delenv("HOROSA_MCPORTER_BIN", raising=False)
+    monkeypatch.setattr(client_tools.os, "name", "posix", raising=False)
     monkeypatch.setattr(client_tools.shutil, "which", lambda name: None)
 
     with pytest.raises(FileNotFoundError, match="mcporter was not found"):
@@ -85,6 +103,24 @@ def test_resolve_uv_command_uses_exe_on_windows(monkeypatch) -> None:
     command = client_tools.resolve_uv_command()
 
     assert command == [r"C:\Users\maxwe\AppData\Roaming\Python\Python313\Scripts\uv.exe"]
+
+
+def test_resolve_uv_command_falls_back_to_windows_appdata_python_scripts(monkeypatch, tmp_path: Path) -> None:
+    scripts_root = tmp_path / "Roaming" / "Python" / "Python313" / "Scripts"
+    scripts_root.mkdir(parents=True)
+    uv_exe = scripts_root / "uv.exe"
+    uv_exe.write_text("", encoding="utf-8")
+
+    monkeypatch.delenv("HOROSA_UV_BIN", raising=False)
+    monkeypatch.setattr(client_tools.os, "name", "nt", raising=False)
+    monkeypatch.setattr(client_tools.shutil, "which", lambda name: None)
+    monkeypatch.setenv("APPDATA", str(tmp_path / "Roaming"))
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    monkeypatch.delenv("USERPROFILE", raising=False)
+
+    command = client_tools.resolve_uv_command()
+
+    assert command == [str(uv_exe)]
 
 
 def test_isolated_paths_are_derived_from_home(tmp_path: Path) -> None:
