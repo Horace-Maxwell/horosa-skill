@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import os
@@ -63,7 +64,211 @@ WINDOWS_BOOT_CACHE_CONFIG_PATH = "BOOT-INF/classes/conf/properties/cache/caches.
 WINDOWS_BOOT_WEBPARAMS_PATH = "BOOT-INF/classes/conf/properties/param/webparams.properties"
 WINDOWS_BOOT_LOG4J_PATH = "BOOT-INF/classes/log4j2.xml"
 WINDOWS_BOOT_BOUNDLESS_PREFIX = "BOOT-INF/lib/boundless-"
+WINDOWS_LOCAL_CACHE_FACTORY_CLASS_PATH = "BOOT-INF/classes/horosa/offline/LocalCacheFactory.class"
+WINDOWS_LOCAL_CACHE_FACTORY_INNER_CLASS_PATH = "BOOT-INF/classes/horosa/offline/LocalCacheFactory$LocalCache.class"
+WINDOWS_LOCAL_CACHE_FACTORY_CLASS_B64 = (
+    "yv66vgAAAD0AXwoAAgADBwAEDAAFAAYBABBqYXZhL2xhbmcvT2JqZWN0AQAGPGluaXQ+AQADKClWCQAIAAkHAAoMAAsADAEAIGhvcm9zYS9vZmZsaW5lL0xv"
+    "Y2FsQ2FjaGVGYWN0b3J5AQAEbmFtZQEAEkxqYXZhL2xhbmcvU3RyaW5nOwoADgAPBwAQDAARABIBABBqYXZhL2xhbmcvU3RyaW5nAQAHaXNCbGFuawEAAygp"
+    "WggAFAEAB2RlZmF1bHQJAAgAFgwAFwAYAQAGQ0FDSEVTAQAoTGphdmEvdXRpbC9jb25jdXJyZW50L0NvbmN1cnJlbnRIYXNoTWFwOxIAAAAaDAAbABwBAAVh"
+    "cHBseQEAHygpTGphdmEvdXRpbC9mdW5jdGlvbi9GdW5jdGlvbjsKAB4AHwcAIAwAIQAiAQAmamF2YS91dGlsL2NvbmN1cnJlbnQvQ29uY3VycmVudEhhc2hN"
+    "YXABAA9jb21wdXRlSWZBYnNlbnQBAEMoTGphdmEvbGFuZy9PYmplY3Q7TGphdmEvdXRpbC9mdW5jdGlvbi9GdW5jdGlvbjspTGphdmEvbGFuZy9PYmplY3Q7"
+    "BwAkAQAWYm91bmRsZXNzL3R5cGVzL0lDYWNoZQkAJgAnBwAoDAApACoBABFqYXZhL2xhbmcvQm9vbGVhbgEABUZBTFNFAQATTGphdmEvbGFuZy9Cb29sZWFu"
+    "OwoACAADCgAIAC0MAC4ALwEAC2ZhY3RvcnlOYW1lAQAVKExqYXZhL2xhbmcvU3RyaW5nOylWCgAeAAMHADIBACNib3VuZGxlc3MvdHlwZXMvY2FjaGUvSUNh"
+    "Y2hlRmFjdG9yeQEACVNpZ25hdHVyZQEAaUxqYXZhL3V0aWwvY29uY3VycmVudC9Db25jdXJyZW50SGFzaE1hcDxMamF2YS9sYW5nL1N0cmluZztMaG9yb3Nh"
+    "L29mZmxpbmUvTG9jYWxDYWNoZUZhY3RvcnkkTG9jYWxDYWNoZTs+OwEABENvZGUBAA9MaW5lTnVtYmVyVGFibGUBAAVidWlsZAEACGdldENhY2hlAQAaKClM"
+    "Ym91bmRsZXNzL3R5cGVzL0lDYWNoZTsBAA1TdGFja01hcFRhYmxlAQAFY2xvc2UBAAxuZWVkTWVtQ2FjaGUBABUoKUxqYXZhL2xhbmcvQm9vbGVhbjsBAAxu"
+    "ZWVkQ29tcHJlc3MBAAtuZWVkSHlzdHJpeAEAFCgpTGphdmEvbGFuZy9TdHJpbmc7AQAMc3Bhd25GYWN0b3J5AQA5KExqYXZhL2xhbmcvU3RyaW5nOylMYm91"
+    "bmRsZXNzL3R5cGVzL2NhY2hlL0lDYWNoZUZhY3Rvcnk7AQAIPGNsaW5pdD4BAApTb3VyY2VGaWxlAQAWTG9jYWxDYWNoZUZhY3RvcnkuamF2YQEAC05lc3RN"
+    "ZW1iZXJzBwBIAQAraG9yb3NhL29mZmxpbmUvTG9jYWxDYWNoZUZhY3RvcnkkTG9jYWxDYWNoZQEAEEJvb3RzdHJhcE1ldGhvZHMQAEsBACYoTGphdmEvbGFu"
+    "Zy9PYmplY3Q7KUxqYXZhL2xhbmcvT2JqZWN0Ow8IAE0KAEcATgwABQAvEABQAQBBKExqYXZhL2xhbmcvU3RyaW5nOylMaG9yb3NhL29mZmxpbmUvTG9jYWxD"
+    "YWNoZUZhY3RvcnkkTG9jYWxDYWNoZTsPBgBSCgBTAFQHAFUMAFYAVwEAImphdmEvbGFuZy9pbnZva2UvTGFtYmRhTWV0YWZhY3RvcnkBAAttZXRhZmFjdG9y"
+    "eQEAzChMamF2YS9sYW5nL2ludm9rZS9NZXRob2RIYW5kbGVzJExvb2t1cDtMamF2YS9sYW5nL1N0cmluZztMamF2YS9sYW5nL2ludm9rZS9NZXRob2RUeXBl"
+    "O0xqYXZhL2xhbmcvaW52b2tlL01ldGhvZFR5cGU7TGphdmEvbGFuZy9pbnZva2UvTWV0aG9kSGFuZGxlO0xqYXZhL2xhbmcvaW52b2tlL01ldGhvZFR5cGU7"
+    "KUxqYXZhL2xhbmcvaW52b2tlL0NhbGxTaXRlOwEADElubmVyQ2xhc3NlcwEACkxvY2FsQ2FjaGUHAFsBACVqYXZhL2xhbmcvaW52b2tlL01ldGhvZEhhbmRs"
+    "ZXMkTG9va3VwBwBdAQAeamF2YS9sYW5nL2ludm9rZS9NZXRob2RIYW5kbGVzAQAGTG9va3VwADEACAACAAEAMQACABoAFwAYAAEAMwAAAAIANAACAAsADAAA"
+    "AAsAAQAFAAYAAQA1AAAAHQABAAEAAAAFKrcAAbEAAAABADYAAAAGAAEAAAAYAAEANwAvAAEANQAAABkAAAACAAAAAbEAAAABADYAAAAGAAEAAAAfAAEAOAA5"
+    "AAEANQAAAFUAAwACAAAAKyq0AAfGAA0qtAAHtgANmQAIEhOnAAcqtAAHTLIAFSu6ABkAALYAHcAAI7AAAAACADYAAAAKAAIAAAAjABsAJAA6AAAACAADEQRD"
+    "BwAOAAEAOwAGAAEANQAAABkAAAABAAAAAbEAAAABADYAAAAGAAEAAAAqAAEAPAA9AAEANQAAABwAAQABAAAABLIAJbAAAAABADYAAAAGAAEAAAAuAAEAPgA9"
+    "AAEANQAAABwAAQABAAAABLIAJbAAAAABADYAAAAGAAEAAAAzAAEAPwA9AAEANQAAABwAAQABAAAABLIAJbAAAAABADYAAAAGAAEAAAA4AAEALgBAAAEANQAA"
+    "AB0AAQABAAAABSq0AAewAAAAAQA2AAAABgABAAAAPQABAC4ALwABADUAAAAiAAIAAgAAAAYqK7UAB7EAAAABADYAAAAKAAIAAABCAAUAQwABAEEAQgABADUA"
+    "AAAvAAIAAwAAAA+7AAhZtwArTSwrtgAsLLAAAAABADYAAAAOAAMAAABHAAgASAANAEkACABDAAYAAQA1AAAAIwACAAAAAAALuwAeWbcAMLMAFbEAAAABADYA"
+    "AAAGAAEAAAAZAAQARAAAAAIARQBGAAAABAABAEcASQAAAAwAAQBRAAMASgBMAE8AWAAAABIAAgBHAAgAWQAYAFoAXABeABk="
+)
 
+WINDOWS_LOCAL_CACHE_FACTORY_INNER_CLASS_B64 = (
+    "yv66vgAAAD0B9AoAAgADBwAEDAAFAAYBABBqYXZhL2xhbmcvT2JqZWN0AQAGPGluaXQ+AQADKClWBwAIAQAmamF2YS91dGlsL2NvbmN1cnJlbnQvQ29uY3Vy"
+    "cmVudEhhc2hNYXAKAAcAAwkACwAMBwANDAAOAA8BACtob3Jvc2Evb2ZmbGluZS9Mb2NhbENhY2hlRmFjdG9yeSRMb2NhbENhY2hlAQAHZW50cmllcwEAKExq"
+    "YXZhL3V0aWwvY29uY3VycmVudC9Db25jdXJyZW50SGFzaE1hcDsHABEBAClqYXZhL3V0aWwvY29uY3VycmVudC9Db3B5T25Xcml0ZUFycmF5TGlzdAoAEAAD"
+    "CQALABQMABUAFgEABGRvY3MBACtMamF2YS91dGlsL2NvbmN1cnJlbnQvQ29weU9uV3JpdGVBcnJheUxpc3Q7CQALABgMABkAGgEABG5hbWUBABJMamF2YS9s"
+    "YW5nL1N0cmluZzsKAAsAHAwAHQAeAQANZGVlcENvcHlWYWx1ZQEAJihMamF2YS9sYW5nL09iamVjdDspTGphdmEvbGFuZy9PYmplY3Q7CgAHACAMACEAIgEA"
+    "A3B1dAEAOChMamF2YS9sYW5nL09iamVjdDtMamF2YS9sYW5nL09iamVjdDspTGphdmEvbGFuZy9PYmplY3Q7CgAHACQMACUAHgEAA2dldAoABwAnDAAoACkB"
+    "AAtjb250YWluc0tleQEAFShMamF2YS9sYW5nL09iamVjdDspWgoABwArDAAsAB4BAAZyZW1vdmUKAAcALgwALwAGAQAFY2xlYXIKABAALgoACwAyDAAhADMB"
+    "ACcoTGphdmEvbGFuZy9TdHJpbmc7TGphdmEvbGFuZy9PYmplY3Q7KVYHADUBAA1qYXZhL3V0aWwvTWFwCwA0ACQKAAsAOAwAOQA6AQAOZW5zdXJlRW50cnlN"
+    "YXABACMoTGphdmEvbGFuZy9TdHJpbmc7KUxqYXZhL3V0aWwvTWFwOwsANAAgCgALAD0MAD4APwEAB3B1dEhhc2gBADkoTGphdmEvbGFuZy9TdHJpbmc7TGph"
+    "dmEvbGFuZy9TdHJpbmc7TGphdmEvbGFuZy9PYmplY3Q7KVYKAEEAQgcAQwwARABFAQAQamF2YS9sYW5nL1N0cmluZwEAB3ZhbHVlT2YBACYoTGphdmEvbGFu"
+    "Zy9PYmplY3Q7KUxqYXZhL2xhbmcvU3RyaW5nOwoACwBHDABIAEkBAAdjb3B5TWFwAQAgKExqYXZhL3V0aWwvTWFwOylMamF2YS91dGlsL01hcDsKAAsASwwA"
+    "TABNAQAGc2V0TWFwAQAkKExqYXZhL2xhbmcvT2JqZWN0O0xqYXZhL3V0aWwvTWFwOylWCgAQAE8MAFAAKQEAA2FkZAoACwBSDABQAFMBABIoTGphdmEvdXRp"
+    "bC9NYXA7KVYKAAcAVQwAVgBXAQAEc2l6ZQEAAygpSQoAEABVCgAQAFoMAFsAXAEABnN0cmVhbQEAGygpTGphdmEvdXRpbC9zdHJlYW0vU3RyZWFtOxIAAABe"
+    "DABfAGABAAR0ZXN0AQBxKExob3Jvc2Evb2ZmbGluZS9Mb2NhbENhY2hlRmFjdG9yeSRMb2NhbENhY2hlO0xqYXZhL2xhbmcvU3RyaW5nO0xqYXZhL2xhbmcv"
+    "U3RyaW5nOylMamF2YS91dGlsL2Z1bmN0aW9uL1ByZWRpY2F0ZTsLAGIAYwcAZAwAZQBmAQAXamF2YS91dGlsL3N0cmVhbS9TdHJlYW0BAAZmaWx0ZXIBADko"
+    "TGphdmEvdXRpbC9mdW5jdGlvbi9QcmVkaWNhdGU7KUxqYXZhL3V0aWwvc3RyZWFtL1N0cmVhbTsLAGIAaAwAaQBqAQAFY291bnQBAAMoKUoSAAEAbAwAXwBt"
+    "AQBgKExob3Jvc2Evb2ZmbGluZS9Mb2NhbENhY2hlRmFjdG9yeSRMb2NhbENhY2hlO0xqYXZhL2xhbmcvU3RyaW5nO0opTGphdmEvdXRpbC9mdW5jdGlvbi9Q"
+    "cmVkaWNhdGU7EgACAG8MAF8AcAEAcChMaG9yb3NhL29mZmxpbmUvTG9jYWxDYWNoZUZhY3RvcnkkTG9jYWxDYWNoZTtbTGJvdW5kbGVzcy90eXBlcy9jYWNo"
+    "ZS9GaWx0ZXJDb25kOylMamF2YS91dGlsL2Z1bmN0aW9uL1ByZWRpY2F0ZTsKAAsAcgwAaQBzAQAmKFtMYm91bmRsZXNzL3R5cGVzL2NhY2hlL0ZpbHRlckNv"
+    "bmQ7KUoHAHUBABFqYXZhL2xhbmcvSW50ZWdlcgN/////CgALAHgMAHkAegEACmZpbmRWYWx1ZXMBAFYoSUxib3VuZGxlc3MvdHlwZXMvY2FjaGUvU29ydENv"
+    "bmQ7W0xib3VuZGxlc3MvdHlwZXMvY2FjaGUvRmlsdGVyQ29uZDspTGphdmEvdXRpbC9MaXN0OwcAfAEAE2phdmEvdXRpbC9BcnJheUxpc3QKAHsAAwoAEAB/"
+    "DACAAIEBAAhpdGVyYXRvcgEAFigpTGphdmEvdXRpbC9JdGVyYXRvcjsLAIMAhAcAhQwAhgCHAQASamF2YS91dGlsL0l0ZXJhdG9yAQAHaGFzTmV4dAEAAygp"
+    "WgsAgwCJDACKAIsBAARuZXh0AQAUKClMamF2YS9sYW5nL09iamVjdDsKAAsAjQwAjgCPAQAKbWF0Y2hlc0FsbAEANShMamF2YS91dGlsL01hcDtbTGJvdW5k"
+    "bGVzcy90eXBlcy9jYWNoZS9GaWx0ZXJDb25kOylaCwCRAE8HAJIBAA5qYXZhL3V0aWwvTGlzdAsAkQBVCgB7AJUMAAUAlgEAGShMamF2YS91dGlsL0NvbGxl"
+    "Y3Rpb247KVYLAJEAfwoAEACZDAAsACkHAJsBACBib3VuZGxlc3MvdHlwZXMvY2FjaGUvRmlsdGVyQ29uZAoACwCdDAAsAHMKAAsAnwwAoAChAQAJcmVhZEZp"
+    "ZWxkAQA1KExqYXZhL3V0aWwvTWFwO0xqYXZhL2xhbmcvU3RyaW5nOylMamF2YS9sYW5nL09iamVjdDsKAKMApAcApQwApgCnAQARamF2YS91dGlsL09iamVj"
+    "dHMBAAZlcXVhbHMBACcoTGphdmEvbGFuZy9PYmplY3Q7TGphdmEvbGFuZy9PYmplY3Q7KVoHAKkBABFqYXZhL3V0aWwvSGFzaFNldAoAqAADCwCsAE8HAK0B"
+    "AA1qYXZhL3V0aWwvU2V0BwCvAQARamF2YS91dGlsL0hhc2hNYXAKAK4AAwoACwCyDACzALQBAAtlbnN1cmVEZXF1ZQEAKihMamF2YS9sYW5nL1N0cmluZzsp"
+    "TGphdmEvdXRpbC9BcnJheURlcXVlOwoAtgC3BwC4DAC5ALoBABRqYXZhL3V0aWwvQXJyYXlEZXF1ZQEACGFkZEZpcnN0AQAVKExqYXZhL2xhbmcvT2JqZWN0"
+    "OylWCgC2AFUKALYAvQwAvgCLAQAJcG9sbEZpcnN0CgC2AMAMAMEAugEAB2FkZExhc3QKALYAwwwAxACLAQAIcG9sbExhc3QKAMYAxwcAyAwAyQDKAQAOamF2"
+    "YS9sYW5nL01hdGgBAANtYXgBAAUoSkopSgoAxgDMDADNAMoBAANtaW4LAJEAzwwA0ACHAQAHaXNFbXB0eQoA0gDTBwDUDADVANYBABVqYXZhL3V0aWwvQ29s"
+    "bGVjdGlvbnMBAAllbXB0eUxpc3QBABIoKUxqYXZhL3V0aWwvTGlzdDsLAJEA2AwA2QDaAQAHc3ViTGlzdAEAFChJSSlMamF2YS91dGlsL0xpc3Q7CgDcAN0H"
+    "AN4MAEQA3wEADmphdmEvbGFuZy9Mb25nAQATKEopTGphdmEvbGFuZy9Mb25nOwoACwDhDADiAOMBAAtudW1iZXJWYWx1ZQEAKihMamF2YS9sYW5nL09iamVj"
+    "dDspTGphdmEvbWF0aC9CaWdEZWNpbWFsOwkA5QDmBwDnDADoAOkBABRqYXZhL21hdGgvQmlnRGVjaW1hbAEABFpFUk8BABZMamF2YS9tYXRoL0JpZ0RlY2lt"
+    "YWw7CgDlAOsMAEQA7AEAGShKKUxqYXZhL21hdGgvQmlnRGVjaW1hbDsKAOUA7gwAUADvAQAuKExqYXZhL21hdGgvQmlnRGVjaW1hbDspTGphdmEvbWF0aC9C"
+    "aWdEZWNpbWFsOwoA5QDxDADyAGoBAAlsb25nVmFsdWUKAAsA9AwA9QD2AQADaW5jAQAWKExqYXZhL2xhbmcvU3RyaW5nO0opSgoACwD4DAD5APYBAANkZWMJ"
+    "APsA/AcA/QwA/gAPAQAgaG9yb3NhL29mZmxpbmUvTG9jYWxDYWNoZUZhY3RvcnkBAAZDQUNIRVMSAAMBAAwBAQECAQAFYXBwbHkBAB8oKUxqYXZhL3V0aWwv"
+    "ZnVuY3Rpb24vRnVuY3Rpb247CgAHAQQMAQUBBgEAD2NvbXB1dGVJZkFic2VudAEAQyhMamF2YS9sYW5nL09iamVjdDtMamF2YS91dGlsL2Z1bmN0aW9uL0Z1"
+    "bmN0aW9uOylMamF2YS9sYW5nL09iamVjdDsHAQgBABZib3VuZGxlc3MvdHlwZXMvSUNhY2hlCgC2AAMKAAsBCwwBDAENAQAHbWF0Y2hlcwEANChMamF2YS91"
+    "dGlsL01hcDtMYm91bmRsZXNzL3R5cGVzL2NhY2hlL0ZpbHRlckNvbmQ7KVoIAQ8BAAlvdGhlckNvbmQKAAsBEQwBEgETAQAHcmVmbGVjdAEAOChMamF2YS9s"
+    "YW5nL09iamVjdDtMamF2YS9sYW5nL1N0cmluZzspTGphdmEvbGFuZy9PYmplY3Q7BwEVAQAjW0xib3VuZGxlc3MvdHlwZXMvY2FjaGUvRmlsdGVyQ29uZDsI"
+    "ARcBAAVtaXhPcAcBGQEALGJvdW5kbGVzcy90eXBlcy9jYWNoZS9GaWx0ZXJDb25kJE1peE9wZXJhdG9yCgALARsMARwBDQEADW1hdGNoZXNTaW5nbGUJARgB"
+    "HgwBHwEgAQACT3IBAC5MYm91bmRsZXNzL3R5cGVzL2NhY2hlL0ZpbHRlckNvbmQkTWl4T3BlcmF0b3I7CgCaASIMASMBJAEACGdldEZpZWxkAQAUKClMamF2"
+    "YS9sYW5nL1N0cmluZzsKAJoBJgwBJwCLAQAIZ2V0VmFsdWUKAJoBKQwBKgEkAQAFZ2V0T3AKAEEBLAwBLQCHAQAHaXNCbGFuawgBLwEAAkVxCgBBATEMATIB"
+    "MwEAEGVxdWFsc0lnbm9yZUNhc2UBABUoTGphdmEvbGFuZy9TdHJpbmc7KVoIATUBAAJOZQgBNwEABkV4aXN0cwgBOQEABExpa2UKAAsBOwwBPABFAQAJc3Ry"
+    "aW5naWZ5CgBBAT4MAT8BQAEACGNvbnRhaW5zAQAbKExqYXZhL2xhbmcvQ2hhclNlcXVlbmNlOylaCAFCAQACSW4HAUQBABRqYXZhL3V0aWwvQ29sbGVjdGlv"
+    "bgsBQwB/CgDlAUcMAUgBSQEACWNvbXBhcmVUbwEAGShMamF2YS9tYXRoL0JpZ0RlY2ltYWw7KUkIAUsBAAJMdAgBTQEAA0x0ZQgBTwEAAkd0CAFRAQADR3Rl"
+    "CAFTAQACXC4KAEEBVQwBVgFXAQAFc3BsaXQBACcoTGphdmEvbGFuZy9TdHJpbmc7KVtMamF2YS9sYW5nL1N0cmluZzsKAAIBWQwBWgFbAQAIZ2V0Q2xhc3MB"
+    "ABMoKUxqYXZhL2xhbmcvQ2xhc3M7CgFdAV4HAV8MAWABYQEAD2phdmEvbGFuZy9DbGFzcwEAEGdldERlY2xhcmVkRmllbGQBAC0oTGphdmEvbGFuZy9TdHJp"
+    "bmc7KUxqYXZhL2xhbmcvcmVmbGVjdC9GaWVsZDsKAWMBZAcBZQwBZgFnAQAXamF2YS9sYW5nL3JlZmxlY3QvRmllbGQBAA1zZXRBY2Nlc3NpYmxlAQAEKFop"
+    "VgoBYwAkBwFqAQAmamF2YS9sYW5nL1JlZmxlY3RpdmVPcGVyYXRpb25FeGNlcHRpb24HAWwBABBqYXZhL2xhbmcvTnVtYmVyCgACAW4MAW8BJAEACHRvU3Ry"
+    "aW5nCgDlAXEMAAUBcgEAFShMamF2YS9sYW5nL1N0cmluZzspVgcBdAEAH2phdmEvbGFuZy9OdW1iZXJGb3JtYXRFeGNlcHRpb24IAXYBAAALAKwAfwsANAF5"
+    "DAF6AXsBAAhlbnRyeVNldAEAESgpTGphdmEvdXRpbC9TZXQ7BwF9AQATamF2YS91dGlsL01hcCRFbnRyeQsBfAF/DAGAAIsBAAZnZXRLZXkLAXwBJgEACVNp"
+    "Z25hdHVyZQEATkxqYXZhL3V0aWwvY29uY3VycmVudC9Db25jdXJyZW50SGFzaE1hcDxMamF2YS9sYW5nL1N0cmluZztMamF2YS9sYW5nL09iamVjdDs+OwEA"
+    "YkxqYXZhL3V0aWwvY29uY3VycmVudC9Db3B5T25Xcml0ZUFycmF5TGlzdDxMamF2YS91dGlsL01hcDxMamF2YS9sYW5nL1N0cmluZztMamF2YS9sYW5nL09i"
+    "amVjdDs+Oz47AQAEQ29kZQEAD0xpbmVOdW1iZXJUYWJsZQEAJihMamF2YS9sYW5nL1N0cmluZzspTGphdmEvbGFuZy9PYmplY3Q7AQAVKExqYXZhL2xhbmcv"
+    "U3RyaW5nOylKAQANU3RhY2tNYXBUYWJsZQEAKChMamF2YS9sYW5nL1N0cmluZztMamF2YS9sYW5nL09iamVjdDtJKVYBACgoTGphdmEvbGFuZy9TdHJpbmc7"
+    "TGphdmEvbGFuZy9PYmplY3Q7SilWAQApKExqYXZhL2xhbmcvU3RyaW5nO0xqYXZhL2xhbmcvT2JqZWN0O0lJKVYBACkoTGphdmEvbGFuZy9TdHJpbmc7TGph"
+    "dmEvbGFuZy9PYmplY3Q7SkopVgEAB2dldEhhc2gBADgoTGphdmEvbGFuZy9TdHJpbmc7TGphdmEvbGFuZy9TdHJpbmc7KUxqYXZhL2xhbmcvT2JqZWN0OwEA"
+    "DXB1dEZpZWxkVmFsdWUBAAZnZXRNYXABACMoTGphdmEvbGFuZy9PYmplY3Q7KUxqYXZhL3V0aWwvTWFwOwEASShMamF2YS9sYW5nL09iamVjdDspTGphdmEv"
+    "dXRpbC9NYXA8TGphdmEvbGFuZy9TdHJpbmc7TGphdmEvbGFuZy9PYmplY3Q7PjsBAEooTGphdmEvbGFuZy9PYmplY3Q7TGphdmEvdXRpbC9NYXA8TGphdmEv"
+    "bGFuZy9TdHJpbmc7TGphdmEvbGFuZy9PYmplY3Q7PjspVgEAJShMamF2YS9sYW5nL09iamVjdDtMamF2YS91dGlsL01hcDtJKVYBAEsoTGphdmEvbGFuZy9P"
+    "YmplY3Q7TGphdmEvdXRpbC9NYXA8TGphdmEvbGFuZy9TdHJpbmc7TGphdmEvbGFuZy9PYmplY3Q7PjtJKVYBADgoTGphdmEvdXRpbC9NYXA8TGphdmEvbGFu"
+    "Zy9TdHJpbmc7TGphdmEvbGFuZy9PYmplY3Q7PjspVgEAEyhMamF2YS91dGlsL01hcDtJKVYBADkoTGphdmEvdXRpbC9NYXA8TGphdmEvbGFuZy9TdHJpbmc7"
+    "TGphdmEvbGFuZy9PYmplY3Q7PjtJKVYBACcoTGphdmEvbGFuZy9TdHJpbmc7TGphdmEvbGFuZy9TdHJpbmc7KUoBAApjb3VudFRvdGFsAQALY291bnRWYWx1"
+    "ZXMBADUoW0xib3VuZGxlc3MvdHlwZXMvY2FjaGUvRmlsdGVyQ29uZDspTGphdmEvdXRpbC9MaXN0OwEAbChbTGJvdW5kbGVzcy90eXBlcy9jYWNoZS9GaWx0"
+    "ZXJDb25kOylMamF2YS91dGlsL0xpc3Q8TGphdmEvdXRpbC9NYXA8TGphdmEvbGFuZy9TdHJpbmc7TGphdmEvbGFuZy9PYmplY3Q7Pjs+OwEANihJW0xib3Vu"
+    "ZGxlc3MvdHlwZXMvY2FjaGUvRmlsdGVyQ29uZDspTGphdmEvdXRpbC9MaXN0OwEAbShJW0xib3VuZGxlc3MvdHlwZXMvY2FjaGUvRmlsdGVyQ29uZDspTGph"
+    "dmEvdXRpbC9MaXN0PExqYXZhL3V0aWwvTWFwPExqYXZhL2xhbmcvU3RyaW5nO0xqYXZhL2xhbmcvT2JqZWN0Oz47PjsBAFUoTGJvdW5kbGVzcy90eXBlcy9j"
+    "YWNoZS9Tb3J0Q29uZDtbTGJvdW5kbGVzcy90eXBlcy9jYWNoZS9GaWx0ZXJDb25kOylMamF2YS91dGlsL0xpc3Q7AQCMKExib3VuZGxlc3MvdHlwZXMvY2Fj"
+    "aGUvU29ydENvbmQ7W0xib3VuZGxlc3MvdHlwZXMvY2FjaGUvRmlsdGVyQ29uZDspTGphdmEvdXRpbC9MaXN0PExqYXZhL3V0aWwvTWFwPExqYXZhL2xhbmcv"
+    "U3RyaW5nO0xqYXZhL2xhbmcvT2JqZWN0Oz47PjsBAI0oSUxib3VuZGxlc3MvdHlwZXMvY2FjaGUvU29ydENvbmQ7W0xib3VuZGxlc3MvdHlwZXMvY2FjaGUv"
+    "RmlsdGVyQ29uZDspTGphdmEvdXRpbC9MaXN0PExqYXZhL3V0aWwvTWFwPExqYXZhL2xhbmcvU3RyaW5nO0xqYXZhL2xhbmcvT2JqZWN0Oz47PjsBACUoTGJv"
+    "dW5kbGVzcy90eXBlcy9jYWNoZS9GaWx0ZXJDb25kOylKAQAHZ2V0TGlzdAEANihMamF2YS9sYW5nL1N0cmluZztMamF2YS9sYW5nL09iamVjdDspTGphdmEv"
+    "dXRpbC9MaXN0OwEAbShMamF2YS9sYW5nL1N0cmluZztMamF2YS9sYW5nL09iamVjdDspTGphdmEvdXRpbC9MaXN0PExqYXZhL3V0aWwvTWFwPExqYXZhL2xh"
+    "bmcvU3RyaW5nO0xqYXZhL2xhbmcvT2JqZWN0Oz47PjsBAAtkcm9wRGF0YVNldAEAC2dldERpc3RpbmN0AQBJKExqYXZhL2xhbmcvU3RyaW5nOylMamF2YS91"
+    "dGlsL01hcDxMamF2YS9sYW5nL1N0cmluZztMamF2YS9sYW5nL09iamVjdDs+OwEAC2NyZWF0ZUluZGV4AQAWKExqYXZhL2xhbmcvU3RyaW5nO1opVgEABWxw"
+    "dXNoAQAoKExqYXZhL2xhbmcvU3RyaW5nO1tMamF2YS9sYW5nL1N0cmluZzspSgcBsAEAE1tMamF2YS9sYW5nL1N0cmluZzsHAbIBABNqYXZhL2xhbmcvVGhy"
+    "b3dhYmxlAQAEbHBvcAEAJihMamF2YS9sYW5nL1N0cmluZzspTGphdmEvbGFuZy9TdHJpbmc7AQAFcnB1c2gBAARycG9wAQAFbHJhbmcBACYoTGphdmEvbGFu"
+    "Zy9TdHJpbmc7SkopTGphdmEvdXRpbC9MaXN0OwEAOihMamF2YS9sYW5nL1N0cmluZztKSilMamF2YS91dGlsL0xpc3Q8TGphdmEvbGFuZy9TdHJpbmc7PjsB"
+    "AARsbGVuAQAkKExqYXZhL2xhbmcvU3RyaW5nOylMamF2YS9sYW5nL0xvbmc7AQAGZXhwaXJlAQAlKExqYXZhL2xhbmcvU3RyaW5nO0kpTGphdmEvbGFuZy9M"
+    "b25nOwEACGV4cGlyZUF0AQAlKExqYXZhL2xhbmcvU3RyaW5nO0opTGphdmEvbGFuZy9Mb25nOwEAB3B1Ymxpc2gBADYoTGphdmEvbGFuZy9TdHJpbmc7TGph"
+    "dmEvbGFuZy9TdHJpbmc7KUxqYXZhL2xhbmcvTG9uZzsBAApzcGF3bkNhY2hlAQAsKExqYXZhL2xhbmcvU3RyaW5nOylMYm91bmRsZXNzL3R5cGVzL0lDYWNo"
+    "ZTsBAD4oTGphdmEvbGFuZy9TdHJpbmc7KUxqYXZhL3V0aWwvQXJyYXlEZXF1ZTxMamF2YS9sYW5nL1N0cmluZzs+OwEAWyhMamF2YS91dGlsL01hcDxMamF2"
+    "YS9sYW5nL1N0cmluZztMamF2YS9sYW5nL09iamVjdDs+O1tMYm91bmRsZXNzL3R5cGVzL2NhY2hlL0ZpbHRlckNvbmQ7KVoBAFooTGphdmEvdXRpbC9NYXA8"
+    "TGphdmEvbGFuZy9TdHJpbmc7TGphdmEvbGFuZy9PYmplY3Q7PjtMYm91bmRsZXNzL3R5cGVzL2NhY2hlL0ZpbHRlckNvbmQ7KVoBAFsoTGphdmEvdXRpbC9N"
+    "YXA8TGphdmEvbGFuZy9TdHJpbmc7TGphdmEvbGFuZy9PYmplY3Q7PjtMamF2YS9sYW5nL1N0cmluZzspTGphdmEvbGFuZy9PYmplY3Q7AQBKKExqYXZhL3V0"
+    "aWwvTWFwPCoqPjspTGphdmEvdXRpbC9NYXA8TGphdmEvbGFuZy9TdHJpbmc7TGphdmEvbGFuZy9PYmplY3Q7PjsBAA5sYW1iZGEkY291bnQkMgEANShbTGJv"
+    "dW5kbGVzcy90eXBlcy9jYWNoZS9GaWx0ZXJDb25kO0xqYXZhL3V0aWwvTWFwOylaAQAObGFtYmRhJGNvdW50JDEBACUoTGphdmEvbGFuZy9TdHJpbmc7Skxq"
+    "YXZhL3V0aWwvTWFwOylaAQAObGFtYmRhJGNvdW50JDABADYoTGphdmEvbGFuZy9TdHJpbmc7TGphdmEvbGFuZy9TdHJpbmc7TGphdmEvdXRpbC9NYXA7KVoB"
+    "AApTb3VyY2VGaWxlAQAWTG9jYWxDYWNoZUZhY3RvcnkuamF2YQEACE5lc3RIb3N0AQAQQm9vdHN0cmFwTWV0aG9kcxAAKQ8FAdUKAAsB1gwBzQHOEAHYAQAS"
+    "KExqYXZhL3V0aWwvTWFwOylaDwUB2goACwHbDAHLAcwPBQHdCgALAd4MAckByhAAHg8IAeEKAAsBcRAB4wEAQShMamF2YS9sYW5nL1N0cmluZzspTGhvcm9z"
+    "YS9vZmZsaW5lL0xvY2FsQ2FjaGVGYWN0b3J5JExvY2FsQ2FjaGU7DwYB5QoB5gHnBwHoDAHpAeoBACJqYXZhL2xhbmcvaW52b2tlL0xhbWJkYU1ldGFmYWN0"
+    "b3J5AQALbWV0YWZhY3RvcnkBAMwoTGphdmEvbGFuZy9pbnZva2UvTWV0aG9kSGFuZGxlcyRMb29rdXA7TGphdmEvbGFuZy9TdHJpbmc7TGphdmEvbGFuZy9p"
+    "bnZva2UvTWV0aG9kVHlwZTtMamF2YS9sYW5nL2ludm9rZS9NZXRob2RUeXBlO0xqYXZhL2xhbmcvaW52b2tlL01ldGhvZEhhbmRsZTtMamF2YS9sYW5nL2lu"
+    "dm9rZS9NZXRob2RUeXBlOylMamF2YS9sYW5nL2ludm9rZS9DYWxsU2l0ZTsBAAxJbm5lckNsYXNzZXMBAApMb2NhbENhY2hlAQALTWl4T3BlcmF0b3IBAAVF"
+    "bnRyeQcB8AEAJWphdmEvbGFuZy9pbnZva2UvTWV0aG9kSGFuZGxlcyRMb29rdXAHAfIBAB5qYXZhL2xhbmcvaW52b2tlL01ldGhvZEhhbmRsZXMBAAZMb29r"
+    "dXAAMAALAAIAAQEHAAMAEgAZABoAAAASAA4ADwABAYIAAAACAYMAEgAVABYAAQGCAAAAAgGEAD4AAAAFAXIAAQGFAAAASAADAAIAAAAgKrcAASq7AAdZtwAJ"
+    "tQAKKrsAEFm3ABK1ABMqK7UAF7EAAAABAYYAAAAWAAUAAABRAAQATgAPAE8AGgBSAB8AUwABACEAMwABAYUAAAArAAQAAwAAAA8qtAAKKyostgAbtgAfV7EA"
+    "AAABAYYAAAAKAAIAAABXAA4AWAABACUBhwABAYUAAAAlAAMAAgAAAA0qKrQACiu2ACO2ABuwAAAAAQGGAAAABgABAAAAXAABACgBMwABAYUAAAAhAAIAAgAA"
+    "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"
+)
 
 class HorosaRuntimeManager:
     def __init__(self, settings: Settings) -> None:
@@ -173,6 +378,7 @@ class HorosaRuntimeManager:
                 self._extract_archive(archive_path, extract_dir)
                 payload_root = self._locate_payload_root(extract_dir)
                 manifest = self._validate_payload_root(payload_root)
+                manifest = self._bind_service_urls(manifest)
                 (payload_root / "runtime-manifest.json").write_text(
                     json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
                     encoding="utf-8",
@@ -598,6 +804,14 @@ class HorosaRuntimeManager:
             },
         }
 
+    def _bind_service_urls(self, manifest: dict[str, Any]) -> dict[str, Any]:
+        bound_manifest = dict(manifest)
+        services = dict(bound_manifest.get("services") or {})
+        services["backend_url"] = self.settings.server_root.rstrip("/")
+        services["chart_url"] = self.settings.chart_server_root.rstrip("/")
+        bound_manifest["services"] = services
+        return bound_manifest
+
     def _validate_payload_root(self, payload_root: Path) -> dict[str, Any]:
         manifest_path = payload_root / "runtime-manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -652,11 +866,9 @@ class HorosaRuntimeManager:
         return ["/bin/bash", str(script)]
 
     def _apply_runtime_overrides(self, manifest: dict[str, Any] | None) -> list[str]:
-        if os.name != "nt":
-            return []
         template_root = self._runtime_template_root() / "windows"
         patched: list[str] = []
-        if template_root.exists():
+        if os.name == "nt" and template_root.exists():
             overrides = {
                 "services.start_script": template_root / "start_horosa_local.ps1",
                 "services.stop_script": template_root / "stop_horosa_local.ps1",
@@ -671,7 +883,7 @@ class HorosaRuntimeManager:
                 patched.append(str(destination))
 
         boot_jar = self.current_dir / self._relative_manifest_path(manifest, "artifacts", "boot_jar")
-        if boot_jar.is_file():
+        if boot_jar.is_file() and self._boot_jar_supports_patch(boot_jar):
             self._patch_windows_boot_jar(manifest, boot_jar)
             patched.append(str(boot_jar))
         return patched
@@ -684,14 +896,15 @@ class HorosaRuntimeManager:
             WINDOWS_BOOT_CACHE_CONFIG_PATH: self._rewrite_windows_cache_config(
                 self._read_archive_entry_text(jar_path, WINDOWS_BOOT_CACHE_CONFIG_PATH)
             ).encode("utf-8"),
-            WINDOWS_BOOT_WEBPARAMS_PATH: self._rewrite_windows_webparams(
-                self._read_archive_entry_text(jar_path, WINDOWS_BOOT_WEBPARAMS_PATH)
-            ).encode("utf-8"),
-            WINDOWS_BOOT_LOG4J_PATH: self._rewrite_windows_log4j(
+            WINDOWS_BOOT_LOG4J_PATH: self._rewrite_runtime_log4j(
                 self._read_archive_entry_text(jar_path, WINDOWS_BOOT_LOG4J_PATH)
             ).encode("utf-8"),
             **self._compile_windows_runtime_patch_classes(manifest, jar_path),
         }
+        if os.name == "nt":
+            replacements[WINDOWS_BOOT_WEBPARAMS_PATH] = self._rewrite_windows_webparams(
+                self._read_archive_entry_text(jar_path, WINDOWS_BOOT_WEBPARAMS_PATH)
+            ).encode("utf-8")
         self._rewrite_zip_archive(jar_path, replacements)
 
     def _read_archive_entry_text(self, archive_path: Path, entry_name: str) -> str:
@@ -753,8 +966,8 @@ class HorosaRuntimeManager:
             updated += "\n"
         return updated
 
-    def _rewrite_windows_log4j(self, content: str) -> str:
-        log_root = self._windows_log_root()
+    def _rewrite_runtime_log4j(self, content: str) -> str:
+        log_root = self._runtime_log_root()
         replaced = False
 
         def apply_basedir(match: re.Match[str]) -> str:
@@ -776,11 +989,11 @@ class HorosaRuntimeManager:
             if updated != content:
                 return updated
         raise RuntimeValidationError(
-            "Windows log override could not locate the backend log root property.",
+            "Runtime log override could not locate the backend log root property.",
             code="runtime.windows_patch_invalid_log4j",
         )
 
-    def _windows_log_root(self) -> str:
+    def _runtime_log_root(self) -> str:
         home_value = self._default_home_value().rstrip("\\/")
         return home_value.replace("\\", "/") + "/.horosa-logs/astrostudyboot"
 
@@ -789,68 +1002,10 @@ class HorosaRuntimeManager:
         manifest: dict[str, Any] | None,
         jar_path: Path,
     ) -> dict[str, bytes]:
-        source_root = self._runtime_template_root() / "windows" / "java"
-        source_path = source_root / "horosa" / "offline" / "LocalCacheFactory.java"
-        if not source_path.is_file():
-            raise RuntimeValidationError(
-                "Windows runtime patch source is missing.",
-                code="runtime.windows_patch_missing_source",
-                details={"path": str(source_path)},
-            )
-
-        java_path = self.current_dir / self._relative_manifest_path(manifest, "runtimes", "java")
-        javac_path = java_path.with_name("javac.exe")
-        if not javac_path.is_file():
-            raise RuntimeValidationError(
-                "Windows runtime patch requires `javac.exe` in the bundled Java runtime.",
-                code="runtime.windows_patch_missing_javac",
-                details={"path": str(javac_path)},
-            )
-
-        with tempfile.TemporaryDirectory(prefix="horosa-runtime-java-") as temp_dir_raw:
-            temp_dir = Path(temp_dir_raw)
-            boundless_jar = temp_dir / "boundless.jar"
-            self._extract_boot_lib(jar_path, WINDOWS_BOOT_BOUNDLESS_PREFIX, boundless_jar)
-
-            classes_dir = temp_dir / "classes"
-            classes_dir.mkdir(parents=True, exist_ok=True)
-            compiled = subprocess.run(
-                [
-                    str(javac_path),
-                    "-encoding",
-                    "UTF-8",
-                    "-cp",
-                    str(boundless_jar),
-                    "-d",
-                    str(classes_dir),
-                    str(source_path),
-                ],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if compiled.returncode != 0:
-                raise RuntimeInstallError(
-                    "Failed to compile the Windows local-cache compatibility classes.",
-                    code="runtime.windows_patch_compile_failed",
-                    details={
-                        "javac": str(javac_path),
-                        "source": str(source_path),
-                        "stdout": compiled.stdout[-4000:],
-                        "stderr": compiled.stderr[-4000:],
-                    },
-                )
-
-            entries: dict[str, bytes] = {}
-            for class_file in classes_dir.rglob("*.class"):
-                arcname = f"BOOT-INF/classes/{class_file.relative_to(classes_dir).as_posix()}"
-                entries[arcname] = class_file.read_bytes()
-            if not entries:
-                raise RuntimeValidationError(
-                    "Windows runtime patch did not produce any compatibility classes.",
-                    code="runtime.windows_patch_compile_failed",
-                )
-            return entries
+        return {
+            WINDOWS_LOCAL_CACHE_FACTORY_CLASS_PATH: base64.b64decode(WINDOWS_LOCAL_CACHE_FACTORY_CLASS_B64),
+            WINDOWS_LOCAL_CACHE_FACTORY_INNER_CLASS_PATH: base64.b64decode(WINDOWS_LOCAL_CACHE_FACTORY_INNER_CLASS_B64),
+        }
 
     def _extract_boot_lib(self, jar_path: Path, prefix: str, target_path: Path) -> None:
         try:
@@ -897,6 +1052,15 @@ class HorosaRuntimeManager:
                 new_info.external_attr = 0o644 << 16
                 target.writestr(new_info, data)
         temp_path.replace(archive_path)
+
+    def _boot_jar_supports_patch(self, jar_path: Path) -> bool:
+        if not zipfile.is_zipfile(jar_path):
+            return False
+        try:
+            with zipfile.ZipFile(jar_path) as archive:
+                return WINDOWS_BOOT_CACHE_CONFIG_PATH in archive.namelist()
+        except (OSError, zipfile.BadZipFile):
+            return False
 
     def _http_reachable(self, url: str) -> bool:
         try:
@@ -948,6 +1112,12 @@ class HorosaRuntimeManager:
         if manifest and isinstance(manifest.get("services"), dict):
             backend_url = str(manifest["services"].get("backend_url") or backend_url)
             chart_url = str(manifest["services"].get("chart_url") or chart_url)
+        explicit_backend_url = os.environ.get("HOROSA_SERVER_ROOT", "").strip()
+        explicit_chart_url = os.environ.get("HOROSA_CHART_SERVER_ROOT", "").strip()
+        if explicit_backend_url:
+            backend_url = explicit_backend_url.rstrip("/")
+        if explicit_chart_url:
+            chart_url = explicit_chart_url.rstrip("/")
         backend_probe = backend_url
         parsed_backend = urlparse(backend_url)
         if parsed_backend.scheme and parsed_backend.netloc and parsed_backend.path in {"", "/"}:

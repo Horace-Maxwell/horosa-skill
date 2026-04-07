@@ -139,6 +139,26 @@ def test_install_runtime_from_local_archive(tmp_path: Path) -> None:
     assert (settings.runtime_current_dir / "runtime-manifest.json").is_file()
 
 
+def test_install_runtime_binds_service_urls_to_current_settings(tmp_path: Path) -> None:
+    archive = create_runtime_archive(tmp_path)
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+        server_root="http://127.0.0.1:34528",
+        chart_server_root="http://127.0.0.1:34529",
+    )
+    manager = HorosaRuntimeManager(settings)
+
+    result = manager.install(archive=str(archive))
+    installed_manifest = json.loads((settings.runtime_current_dir / "runtime-manifest.json").read_text(encoding="utf-8"))
+
+    assert result["manifest"]["services"]["backend_url"] == "http://127.0.0.1:34528"
+    assert result["manifest"]["services"]["chart_url"] == "http://127.0.0.1:34529"
+    assert installed_manifest["services"]["backend_url"] == "http://127.0.0.1:34528"
+    assert installed_manifest["services"]["chart_url"] == "http://127.0.0.1:34529"
+
+
 def test_doctor_reports_installed_runtime(tmp_path: Path) -> None:
     archive = create_runtime_archive(tmp_path)
     settings = Settings(
@@ -157,6 +177,35 @@ def test_doctor_reports_installed_runtime(tmp_path: Path) -> None:
     assert any(item["label"] == "python_runtime" for item in report["files"])
     assert any(item["label"] == "node_runtime" for item in report["files"])
     assert any(item["label"] == "horosa_core_js_root" for item in report["files"])
+
+
+def test_service_status_prefers_explicit_env_urls_over_manifest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+        server_root="http://127.0.0.1:34528",
+        chart_server_root="http://127.0.0.1:34529",
+    )
+    manager = HorosaRuntimeManager(settings)
+    seen: dict[str, str] = {}
+
+    monkeypatch.setenv("HOROSA_SERVER_ROOT", "http://127.0.0.1:34528")
+    monkeypatch.setenv("HOROSA_CHART_SERVER_ROOT", "http://127.0.0.1:34529")
+    monkeypatch.setattr(manager, "_backend_reachable", lambda url: seen.setdefault("backend", url) or True)
+    monkeypatch.setattr(manager, "_http_reachable", lambda url: seen.setdefault("chart", url) or True)
+
+    manager._service_status(
+        {
+            "services": {
+                "backend_url": "http://127.0.0.1:9999",
+                "chart_url": "http://127.0.0.1:8899",
+            }
+        }
+    )
+
+    assert seen["backend"] == "http://127.0.0.1:34528/common/time"
+    assert seen["chart"] == "http://127.0.0.1:34529"
 
 
 def test_install_runtime_from_manifest_file_url(tmp_path: Path) -> None:
@@ -550,7 +599,10 @@ def test_install_patches_windows_runtime_templates(tmp_path: Path, monkeypatch: 
     monkeypatch.setattr(
         manager,
         "_compile_windows_runtime_patch_classes",
-        lambda manifest, jar_path: {"BOOT-INF/classes/horosa/offline/LocalCacheFactory.class": b"class-bytes"},
+        lambda manifest, jar_path: {
+            "BOOT-INF/classes/horosa/offline/LocalCacheFactory.class": b"class-bytes",
+            "BOOT-INF/classes/horosa/offline/LocalCacheFactory$LocalCache.class": b"class-bytes",
+        },
     )
 
     manager.install(archive=str(archive))
@@ -587,6 +639,7 @@ def test_install_patches_windows_runtime_templates(tmp_path: Path, monkeypatch: 
             == '<Configuration><Properties><Property name="basedir">C:/Users/maxwe/.horosa-logs/astrostudyboot</Property></Properties></Configuration>\n'
         )
         assert archive.read("BOOT-INF/classes/horosa/offline/LocalCacheFactory.class") == b"class-bytes"
+        assert archive.read("BOOT-INF/classes/horosa/offline/LocalCacheFactory$LocalCache.class") == b"class-bytes"
 
 
 def test_start_runtime_reports_patched_files_on_windows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -602,7 +655,10 @@ def test_start_runtime_reports_patched_files_on_windows(tmp_path: Path, monkeypa
     monkeypatch.setattr(
         manager,
         "_compile_windows_runtime_patch_classes",
-        lambda manifest, jar_path: {"BOOT-INF/classes/horosa/offline/LocalCacheFactory.class": b"class-bytes"},
+        lambda manifest, jar_path: {
+            "BOOT-INF/classes/horosa/offline/LocalCacheFactory.class": b"class-bytes",
+            "BOOT-INF/classes/horosa/offline/LocalCacheFactory$LocalCache.class": b"class-bytes",
+        },
     )
     manager.install(archive=str(archive))
     monkeypatch.setattr("horosa_skill.runtime.manager.os.name", "nt", raising=False)
@@ -667,7 +723,10 @@ def test_start_runtime_skips_windows_jar_patch_when_services_are_already_running
     monkeypatch.setattr(
         manager,
         "_compile_windows_runtime_patch_classes",
-        lambda manifest, jar_path: {"BOOT-INF/classes/horosa/offline/LocalCacheFactory.class": b"class-bytes"},
+        lambda manifest, jar_path: {
+            "BOOT-INF/classes/horosa/offline/LocalCacheFactory.class": b"class-bytes",
+            "BOOT-INF/classes/horosa/offline/LocalCacheFactory$LocalCache.class": b"class-bytes",
+        },
     )
     manager.install(archive=str(archive))
     monkeypatch.setattr("horosa_skill.runtime.manager.os.name", "nt", raising=False)
@@ -706,7 +765,10 @@ def test_start_runtime_sets_windows_home_env_defaults(tmp_path: Path, monkeypatc
     monkeypatch.setattr(
         manager,
         "_compile_windows_runtime_patch_classes",
-        lambda manifest, jar_path: {"BOOT-INF/classes/horosa/offline/LocalCacheFactory.class": b"class-bytes"},
+        lambda manifest, jar_path: {
+            "BOOT-INF/classes/horosa/offline/LocalCacheFactory.class": b"class-bytes",
+            "BOOT-INF/classes/horosa/offline/LocalCacheFactory$LocalCache.class": b"class-bytes",
+        },
     )
     manager.install(archive=str(archive))
 

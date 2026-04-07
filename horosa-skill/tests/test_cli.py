@@ -113,6 +113,9 @@ def test_build_openclaw_config_supports_isolated_home(tmp_path: Path, monkeypatc
     assert server["env"]["HOME"] == str(home_dir.resolve())
     assert server["env"]["HOROSA_RUNTIME_ROOT"] == str((home_dir / ".horosa" / "runtime").resolve())
     assert server["env"]["HOROSA_SKILL_DATA_DIR"] == str((home_dir / ".horosa-skill").resolve())
+    assert server["env"]["HOROSA_SERVER_ROOT"].startswith("http://127.0.0.1:")
+    assert server["env"]["HOROSA_CHART_SERVER_ROOT"].startswith("http://127.0.0.1:")
+    assert int(server["env"]["HOROSA_LOCAL_CHART_PORT"]) == int(server["env"]["HOROSA_LOCAL_BACKEND_PORT"]) + 1
 
 
 def test_build_openclaw_config_supports_isolated_home_on_windows(tmp_path: Path, monkeypatch) -> None:
@@ -138,6 +141,9 @@ def test_build_openclaw_config_supports_isolated_home_on_windows(tmp_path: Path,
     assert server["env"]["USERPROFILE"] == str(home_dir.resolve())
     assert server["env"]["HOROSA_RUNTIME_ROOT"] == str((home_dir / ".horosa" / "runtime").resolve())
     assert server["env"]["HOROSA_SKILL_DATA_DIR"] == str((home_dir / ".horosa-skill").resolve())
+    assert server["env"]["HOROSA_SERVER_ROOT"].startswith("http://127.0.0.1:")
+    assert server["env"]["HOROSA_CHART_SERVER_ROOT"].startswith("http://127.0.0.1:")
+    assert int(server["env"]["HOROSA_LOCAL_CHART_PORT"]) == int(server["env"]["HOROSA_LOCAL_BACKEND_PORT"]) + 1
 
 
 def test_openclaw_setup_bootstraps_workspace_and_runs_smoke(monkeypatch, tmp_path: Path) -> None:
@@ -152,6 +158,11 @@ def test_openclaw_setup_bootstraps_workspace_and_runs_smoke(monkeypatch, tmp_pat
     class ManagerStub:
         def install(self) -> dict[str, object]:
             assert os.environ["HOME"] == str(expected_home)
+            assert os.environ["HOROSA_RUNTIME_ROOT"] == str((expected_home / ".horosa" / "runtime").resolve())
+            assert os.environ["HOROSA_SKILL_DATA_DIR"] == str((expected_home / ".horosa-skill").resolve())
+            assert os.environ["HOROSA_SERVER_ROOT"].startswith("http://127.0.0.1:")
+            assert os.environ["HOROSA_CHART_SERVER_ROOT"].startswith("http://127.0.0.1:")
+            assert int(os.environ["HOROSA_LOCAL_CHART_PORT"]) == int(os.environ["HOROSA_LOCAL_BACKEND_PORT"]) + 1
             return {"ok": True, "installed": True, "changed": True}
 
         def start_local_services(self) -> dict[str, object]:

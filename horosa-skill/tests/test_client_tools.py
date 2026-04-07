@@ -130,6 +130,18 @@ def test_isolated_paths_are_derived_from_home(tmp_path: Path) -> None:
     assert client_tools.isolated_data_dir(home) == home.resolve() / ".horosa-skill"
 
 
+def test_isolated_runtime_ports_are_stable_and_distinct(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+
+    backend_port, chart_port = client_tools.isolated_runtime_ports(home)
+    backend_port_repeat, chart_port_repeat = client_tools.isolated_runtime_ports(home)
+
+    assert (backend_port, chart_port) == (backend_port_repeat, chart_port_repeat)
+    assert chart_port == backend_port + 1
+    assert 20000 <= backend_port < 60000
+    assert 20001 <= chart_port <= 60001
+
+
 def test_extract_json_value_accepts_prefixed_diagnostic_output() -> None:
     payload = client_tools.extract_json_value("warning: bootstrap still warming\n{\"status\":\"ok\",\"tools\":[]}\n")
 
