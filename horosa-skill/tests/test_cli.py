@@ -5,6 +5,8 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from horosa_skill.config import Settings
 from horosa_skill.surfaces import cli
 
@@ -145,7 +147,7 @@ def test_openclaw_setup_bootstraps_workspace_and_runs_smoke(monkeypatch, tmp_pat
     workspace = tmp_path / "workspace"
     expected_home = (workspace / ".horosa-home").resolve()
     captured: dict[str, object] = {}
-    smoke_calls: list[dict[str, Path]] = []
+    smoke_calls: list[dict[str, object]] = []
 
     class ManagerStub:
         def install(self) -> dict[str, object]:
@@ -158,12 +160,13 @@ def test_openclaw_setup_bootstraps_workspace_and_runs_smoke(monkeypatch, tmp_pat
         def doctor(self) -> dict[str, object]:
             return {"issues": [], "endpoints": [{"label": "java_backend", "reachable": True}]}
 
-    def fake_smoke_check(*, workspace_root: Path, config_path: Path, output_path: Path) -> dict[str, object]:
+    def fake_smoke_check(*, workspace_root: Path, config_path: Path, output_path: Path, include_list: bool = True) -> dict[str, object]:
         smoke_calls.append(
             {
                 "workspace_root": workspace_root,
                 "config_path": config_path,
                 "output_path": output_path,
+                "include_list": include_list,
             }
         )
         return {"ok": True, "server_visible": True, "listed_tool_count": 43}
@@ -198,12 +201,100 @@ def test_openclaw_setup_bootstraps_workspace_and_runs_smoke(monkeypatch, tmp_pat
             "workspace_root": workspace.resolve(),
             "config_path": config_path,
             "output_path": (expected_home / ".horosa-skill" / "openclaw_setup_smoke_check.json"),
+            "include_list": False,
         }
     ]
     assert captured["report"]["ok"] is True
     assert captured["report"]["config"] == str(config_path)
+    assert captured["report"]["config_written_to"] == str(config_path)
+    assert captured["report"]["local_home"] == str(expected_home)
+    assert captured["report"]["ready_for_openclaw"] is True
     assert captured["report"]["smoke"]["ok"] is True
     assert os.environ.get("HOME") == original_home
+
+
+def test_doctor_adds_user_facing_summary(monkeypatch, tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        runtime_root=tmp_path / "runtime",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    captured: dict[str, object] = {}
+
+    class ManagerStub:
+        def doctor(self) -> dict[str, object]:
+            return {
+                "ok": True,
+                "installed": True,
+                "issues": ["services:not_running"],
+                "endpoints": [{"label": "java_backend", "reachable": False}],
+            }
+
+    monkeypatch.setattr(cli.Settings, "from_env", classmethod(lambda cls: settings))
+    monkeypatch.setattr(cli, "_runtime_manager", lambda settings_arg: ManagerStub())
+    monkeypatch.setattr(cli, "_print_json", lambda data: captured.setdefault("report", data))
+
+    cli.doctor()
+
+    report = captured["report"]
+    assert report["ready_for_openclaw"] is False
+    assert report["status"] == "needs_attention"
+    assert "not running yet" in report["user_summary"]
+    assert "openclaw-setup" in report["next_action"]
+
+
+def test_openclaw_check_reports_missing_config_as_user_facing_error(monkeypatch, tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    errors: list[str] = []
+
+    monkeypatch.setattr(cli.typer, "echo", lambda message, err=False: errors.append(message))
+
+    with pytest.raises(cli.typer.Exit):
+        cli.client_openclaw_check(workspace=workspace, config=None, full=False, output=tmp_path / "report.json")
+
+    payload = json.loads(errors[0])
+    assert payload["code"] == "client.config_missing"
+    assert payload["ready_for_openclaw"] is False
+    assert "config not found" in payload["user_summary"].lower()
+    assert "openclaw-setup" in payload["next_action"]
+
+
+def test_openclaw_check_wraps_runtime_error_for_users(monkeypatch, tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    config_path = workspace / "config" / "mcporter.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text("{}", encoding="utf-8")
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        runtime_root=tmp_path / "runtime",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    errors: list[str] = []
+
+    monkeypatch.setattr(cli.Settings, "from_env", classmethod(lambda cls: settings))
+    monkeypatch.setattr(
+        cli,
+        "_run_openclaw_smoke_check",
+        lambda **kwargs: (_ for _ in ()).throw(
+            cli.RuntimeError(
+                "missing mcporter",
+                code="client.command_not_found",
+                details={"command": ["mcporter"], "cwd": str(workspace)},
+            )
+        ),
+    )
+    monkeypatch.setattr(cli.typer, "echo", lambda message, err=False: errors.append(message))
+
+    with pytest.raises(cli.typer.Exit):
+        cli.client_openclaw_check(workspace=workspace, config=config_path, full=False, output=tmp_path / "report.json")
+
+    payload = json.loads(errors[0])
+    assert payload["ready_for_openclaw"] is False
+    assert "could not find `mcporter`" in payload["user_summary"]
+    assert "HOROSA_MCPORTER_BIN" in payload["next_action"]
 
 
 def test_run_subprocess_json_accepts_diagnostic_prefix(monkeypatch, tmp_path: Path) -> None:

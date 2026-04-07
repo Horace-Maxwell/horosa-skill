@@ -29,7 +29,7 @@ from horosa_skill.tracing import TraceRecorder
 
 app = typer.Typer(
     help=(
-        "Horosa Skill CLI. Recommended path: install -> doctor -> serve. "
+        "Horosa Skill CLI. Recommended OpenClaw path: `client openclaw-setup`. "
         "Use `ask` / `dispatch` for natural-language orchestration, `tool run` for direct method calls, "
         "and `memory show/query/answer` for local record management."
     )
@@ -40,7 +40,7 @@ export_app = typer.Typer(help="Inspect the Xingque AI export registry and parse 
 knowledge_app = typer.Typer(help="Read bundled Xingque hover knowledge such as 星盘释义、大六壬地支提示、奇门象意。")
 benchmark_app = typer.Typer(help="Run HorosaBench benchmark cases for routing, export parity, and knowledge quality.")
 trace_app = typer.Typer(help="Inspect recent local trace records for tool runs, dispatches, and runtime operations.")
-client_app = typer.Typer(help="Generate ready-to-paste client configs, run one-command setup, and smoke check OpenClaw / mcporter.")
+client_app = typer.Typer(help="Default OpenClaw entry: `openclaw-setup`. Also generate configs and run smoke checks for OpenClaw / mcporter.")
 app.add_typer(tool_app, name="tool")
 app.add_typer(memory_app, name="memory")
 app.add_typer(export_app, name="export")
@@ -178,6 +178,211 @@ def _timed_call(callback):
     return result, round(time.perf_counter() - started_at, 3)
 
 
+def _quote_cli_arg(value: str) -> str:
+    return f'"{value}"' if any(char.isspace() for char in value) else value
+
+
+def _format_cli_command(parts: list[str]) -> str:
+    return " ".join(_quote_cli_arg(part) for part in parts)
+
+
+def _openclaw_setup_command(workspace_root: Path | str = "<your-openclaw-workspace>") -> str:
+    return _format_cli_command(
+        [
+            "uv",
+            "run",
+            "horosa-skill",
+            "client",
+            "openclaw-setup",
+            "--workspace",
+            str(workspace_root),
+        ]
+    )
+
+
+def _openclaw_check_command(workspace_root: Path | str, config_path: Path | str | None = None) -> str:
+    command = [
+        "uv",
+        "run",
+        "horosa-skill",
+        "client",
+        "openclaw-check",
+        "--workspace",
+        str(workspace_root),
+    ]
+    if config_path is not None:
+        command.extend(["--config", str(config_path)])
+    return _format_cli_command(command)
+
+
+def _doctor_summary(report: dict[str, Any]) -> dict[str, Any]:
+    issues = [str(issue) for issue in report.get("issues", [])]
+    reachable_endpoints = [
+        endpoint.get("label")
+        for endpoint in report.get("endpoints", [])
+        if endpoint.get("reachable") is True
+    ]
+    installed = report.get("installed") is True
+    ready_for_openclaw = installed and not issues
+    if ready_for_openclaw:
+        user_summary = "Ready. The offline runtime is installed and the local Horosa endpoints are responding."
+        next_action = "Open OpenClaw, or rerun `uv run horosa-skill client openclaw-check --workspace <your-openclaw-workspace>` any time you want a fresh smoke report."
+    elif not installed:
+        user_summary = "The offline runtime is not installed yet."
+        next_action = f"Run `{_openclaw_setup_command()}` to install the runtime, write a config, and verify the OpenClaw path."
+    elif issues == ["services:not_running"]:
+        user_summary = "The runtime files are installed, but the local Horosa services are not running yet."
+        next_action = f"Run `{_openclaw_setup_command()}` to start the runtime and verify the OpenClaw path."
+    else:
+        user_summary = "Horosa still has runtime issues that need attention before OpenClaw will be fully ready."
+        next_action = "Review the `issues` list below, fix the blocking item, then rerun `uv run horosa-skill doctor`."
+    return {
+        "status": "ready" if ready_for_openclaw else "needs_attention",
+        "ready_for_openclaw": ready_for_openclaw,
+        "user_summary": user_summary,
+        "next_action": next_action,
+        "reachable_endpoints": reachable_endpoints,
+    }
+
+
+def _failed_smoke_checks(report: dict[str, Any]) -> list[str]:
+    failures: list[str] = []
+    for field in ("server_visible", "knowledge_registry_ok", "chart_ok", "memory_show_ok"):
+        if report.get(field) is not True:
+            failures.append(field)
+    return failures
+
+
+def _smoke_summary(
+    report: dict[str, Any],
+    *,
+    workspace_root: Path,
+    config_path: Path,
+) -> dict[str, Any]:
+    failed_checks = _failed_smoke_checks(report)
+    ready_for_openclaw = report.get("ok") is True
+    list_checked = report.get("list_checked", True)
+    if ready_for_openclaw:
+        if list_checked:
+            user_summary = (
+                f"Ready. OpenClaw can see Horosa, list {report.get('listed_tool_count', 0)} tools, "
+                "run a chart, save the result, and read it back."
+            )
+        else:
+            user_summary = "Ready. Horosa passed the quick OpenClaw smoke check: call, compute, save, and readback all worked."
+        next_action = f"Open OpenClaw and use the config at {config_path}."
+    elif "server_visible" in failed_checks or "knowledge_registry_ok" in failed_checks:
+        user_summary = "OpenClaw did not get a healthy response from the Horosa server."
+        next_action = f"Run `{_openclaw_check_command(workspace_root, config_path)}` after you confirm the runtime is installed and mcporter is available."
+    elif "chart_ok" in failed_checks:
+        user_summary = "OpenClaw reached Horosa, but the chart test call did not finish successfully."
+        next_action = f"Run `{_openclaw_check_command(workspace_root, config_path)}` again after `uv run horosa-skill doctor` confirms the runtime is healthy."
+    else:
+        user_summary = "OpenClaw computed a result, but the saved chart could not be read back cleanly."
+        next_action = f"Run `{_openclaw_check_command(workspace_root, config_path)}` again to confirm the readback path."
+    return {
+        "status": "ready" if ready_for_openclaw else "needs_attention",
+        "ready_for_openclaw": ready_for_openclaw,
+        "user_summary": user_summary,
+        "next_action": next_action,
+        "recheck_command": _openclaw_check_command(workspace_root, config_path),
+        "failed_checks": failed_checks,
+        "checks": {
+            "server_visible": report.get("server_visible") is True,
+            "knowledge_registry_ok": report.get("knowledge_registry_ok") is True,
+            "chart_ok": report.get("chart_ok") is True,
+            "memory_show_ok": report.get("memory_show_ok") is True,
+        },
+    }
+
+
+def _setup_summary(
+    *,
+    workspace_root: Path,
+    config_path: Path,
+    home_dir: Path,
+    doctor_issues: list[str],
+    smoke_report: dict[str, Any] | None,
+    skip_smoke: bool,
+) -> dict[str, Any]:
+    smoke_ready = (smoke_report or {}).get("ok") is True
+    ready_for_openclaw = not doctor_issues and (skip_smoke or smoke_ready)
+    if ready_for_openclaw and not skip_smoke:
+        user_summary = "Ready. Horosa installed the runtime, wrote the OpenClaw config, and passed the quick smoke check."
+        next_action = f"Open OpenClaw and use the config at {config_path}."
+    elif ready_for_openclaw:
+        user_summary = "Setup finished and the local runtime looks healthy, but the smoke check was skipped."
+        next_action = f"Run `{_openclaw_check_command(workspace_root, config_path)}` before relying on the OpenClaw path."
+    elif doctor_issues:
+        user_summary = "Setup finished the install, but the local runtime still needs attention before OpenClaw is fully ready."
+        next_action = "Run `uv run horosa-skill doctor` to inspect the runtime issues, then rerun the setup command."
+    else:
+        user_summary = "Setup wrote the config, but the OpenClaw smoke check did not complete every required step."
+        next_action = f"Run `{_openclaw_check_command(workspace_root, config_path)}` again after `uv run horosa-skill doctor` looks healthy."
+    return {
+        "status": "ready" if ready_for_openclaw else "needs_attention",
+        "ready_for_openclaw": ready_for_openclaw,
+        "user_summary": user_summary,
+        "next_action": next_action,
+        "default_entry": _openclaw_setup_command(workspace_root),
+        "recheck_command": _openclaw_check_command(workspace_root, config_path),
+        "config_written_to": str(config_path),
+        "local_home": str(home_dir),
+    }
+
+
+def _friendly_runtime_error_payload(
+    exc: RuntimeError,
+    *,
+    action_label: str,
+    workspace_root: Path | None = None,
+    config_path: Path | None = None,
+) -> dict[str, Any]:
+    retry_command: str | None = None
+    if action_label == "OpenClaw setup" and workspace_root is not None:
+        retry_command = _openclaw_setup_command(workspace_root)
+    elif workspace_root is not None:
+        retry_command = _openclaw_check_command(workspace_root, config_path)
+
+    next_action = "Review the error details below and rerun the command."
+    user_summary = f"{action_label} did not finish successfully."
+    code = exc.code or ""
+    command = [str(part) for part in exc.details.get("command", [])] if isinstance(exc.details, dict) else []
+    command_text = " ".join(command).lower()
+    if code == "client.command_not_found" and "mcporter" in command_text:
+        user_summary = f"{action_label} could not find `mcporter` on this machine."
+        next_action = (
+            "Install it with `npm i -g mcporter`, or set `HOROSA_MCPORTER_BIN`, "
+            + (f"then rerun `{retry_command}`." if retry_command else "then rerun the command.")
+        )
+    elif code == "client.command_not_found" and "uv" in command_text:
+        user_summary = f"{action_label} could not find `uv`."
+        next_action = "Install uv, or set `HOROSA_UV_BIN`, then rerun the command."
+    elif code.startswith("runtime.install") or code == "runtime.not_installed":
+        user_summary = f"{action_label} could not finish installing the offline runtime."
+        next_action = "Check your network access to the Horosa runtime release and rerun the setup command."
+    elif code.startswith("runtime.start"):
+        user_summary = f"{action_label} installed the runtime, but the local Horosa services did not start cleanly."
+        next_action = "Run `uv run horosa-skill doctor` for more details, then rerun the setup command."
+    elif code in {"client.command_failed", "client.invalid_json"}:
+        user_summary = f"{action_label} started the OpenClaw client command, but it did not return a clean JSON result."
+        next_action = "Run `uv run horosa-skill doctor` and make sure mcporter can start Horosa, then retry the smoke check."
+
+    payload = {
+        "ok": False,
+        "status": "needs_attention",
+        "ready_for_openclaw": False,
+        "user_summary": user_summary,
+        "next_action": next_action,
+        "code": exc.code,
+        "message": str(exc),
+        "details": exc.details,
+    }
+    if retry_command is not None:
+        payload["retry_command"] = retry_command
+    return payload
+
+
 def _build_openclaw_config(
     *,
     skill_root: Path,
@@ -251,21 +456,24 @@ def _run_openclaw_smoke_check(
     workspace_root: Path,
     config_path: Path,
     output_path: Path,
+    include_list: bool = True,
 ) -> dict[str, Any]:
     call_timeout_ms = 120000
-    list_result = _run_subprocess_json(
-        [
-            *resolve_mcporter_command(),
-            "list",
-            "horosa",
-            "--json",
-            "--config",
-            str(config_path),
-            "--root",
-            str(workspace_root),
-        ],
-        cwd=workspace_root,
-    )
+    list_result: dict[str, Any] | None = None
+    if include_list:
+        list_result = _run_subprocess_json(
+            [
+                *resolve_mcporter_command(),
+                "list",
+                "horosa",
+                "--json",
+                "--config",
+                str(config_path),
+                "--root",
+                str(workspace_root),
+            ],
+            cwd=workspace_root,
+        )
     registry_result = _run_subprocess_json(
         [
             *resolve_mcporter_command(),
@@ -348,20 +556,22 @@ def _run_openclaw_smoke_check(
     report = {
         "workspace": str(workspace_root),
         "config": str(config_path),
-        "server_visible": list_result.get("status") == "ok",
-        "listed_tool_count": len(list_result.get("tools", [])),
+        "list_checked": include_list,
+        "server_visible": (list_result or {}).get("status") == "ok" if include_list else registry_result.get("ok") is True,
+        "listed_tool_count": len((list_result or {}).get("tools", [])) if include_list else None,
         "knowledge_registry_ok": registry_result.get("ok") is True,
         "chart_ok": chart_result.get("ok") is True,
         "memory_show_ok": memory_show.get("ok") is True,
         "run_id": run_id,
         "artifact_path": (chart_result.get("memory_ref") or {}).get("artifact_path"),
         "ok": (
-            list_result.get("status") == "ok"
-            and registry_result.get("ok") is True
+            (registry_result.get("ok") is True)
             and chart_result.get("ok") is True
             and memory_show.get("ok") is True
+            and ((list_result or {}).get("status") == "ok" if include_list else True)
         ),
     }
+    report.update(_smoke_summary(report, workspace_root=workspace_root, config_path=config_path))
     _write_json_file(output_path, report)
     return report
 
@@ -386,7 +596,9 @@ def install(
 def doctor() -> None:
     settings = Settings.from_env()
     manager = _runtime_manager(settings)
-    _print_json(manager.doctor())
+    report = manager.doctor()
+    report.update(_doctor_summary(report))
+    _print_json(report)
 
 
 @app.command()
@@ -647,10 +859,23 @@ def client_openclaw_setup(
                         workspace_root=workspace_root,
                         config_path=config_path,
                         output_path=smoke_output,
+                        include_list=False,
                     )
                 )
         except RuntimeError as exc:
-            typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
+            typer.echo(
+                json.dumps(
+                    _friendly_runtime_error_payload(
+                        exc,
+                        action_label="OpenClaw setup",
+                        workspace_root=workspace_root,
+                        config_path=config_path,
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                err=True,
+            )
             raise typer.Exit(code=2)
 
     doctor_issues = doctor_result.get("issues", [])
@@ -682,7 +907,9 @@ def client_openclaw_setup(
         "ok": (not doctor_issues) and (skip_smoke or (smoke_report or {}).get("ok") is True),
         "workspace": str(workspace_root),
         "config": str(config_path),
+        "config_written_to": str(config_path),
         "isolate_home": str(home_dir),
+        "local_home": str(home_dir),
         "runtime_root": env_overrides["HOROSA_RUNTIME_ROOT"],
         "data_dir": env_overrides["HOROSA_SKILL_DATA_DIR"],
         "timings": {
@@ -707,6 +934,16 @@ def client_openclaw_setup(
             ]
         ),
     }
+    report.update(
+        _setup_summary(
+            workspace_root=workspace_root,
+            config_path=config_path,
+            home_dir=home_dir,
+            doctor_issues=doctor_issues,
+            smoke_report=smoke_report,
+            skip_smoke=skip_smoke,
+        )
+    )
     _print_json(report)
     if not report["ok"]:
         raise typer.Exit(code=2)
@@ -735,7 +972,24 @@ def client_openclaw_check(
     workspace_root = workspace.expanduser().resolve()
     config_path = (config.expanduser().resolve() if config is not None else workspace_root / "config" / "mcporter.json")
     if not config_path.exists():
-        raise typer.BadParameter(f"mcporter config not found: {config_path}")
+        typer.echo(
+            json.dumps(
+                {
+                    "ok": False,
+                    "status": "needs_attention",
+                    "ready_for_openclaw": False,
+                    "user_summary": "OpenClaw config not found yet.",
+                    "next_action": f"Run `{_openclaw_setup_command(workspace_root)}` to create a ready-to-use config and smoke test it.",
+                    "code": "client.config_missing",
+                    "message": f"mcporter config not found: {config_path}",
+                    "details": {"config": str(config_path), "workspace": str(workspace_root)},
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            err=True,
+        )
+        raise typer.Exit(code=2)
 
     default_output = settings.data_dir / ("openclaw_full_check.json" if full else "openclaw_smoke_check.json")
     output_path = (output.expanduser().resolve() if output is not None else default_output)
@@ -770,7 +1024,19 @@ def client_openclaw_check(
             output_path=output_path,
         )
     except RuntimeError as exc:
-        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
+        typer.echo(
+            json.dumps(
+                _friendly_runtime_error_payload(
+                    exc,
+                    action_label="OpenClaw smoke check",
+                    workspace_root=workspace_root,
+                    config_path=config_path,
+                ),
+                ensure_ascii=False,
+                indent=2,
+            ),
+            err=True,
+        )
         raise typer.Exit(code=2)
     _print_json(report)
     if not report["ok"]:
