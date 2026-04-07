@@ -1144,11 +1144,11 @@ class HorosaRuntimeManager:
         if os.name == "nt":
             # Detached Windows runtime children can keep inherited pipe handles
             # alive, so file-backed capture avoids hanging on communicate().
-            temp_dir = Path(tempfile.mkdtemp(prefix="horosa-runtime-start-"))
-            stdout_path = temp_dir / "stdout.log"
-            stderr_path = temp_dir / "stderr.log"
+            temp_dir = tempfile.mkdtemp(prefix="horosa-runtime-start-")
+            stdout_path = os.path.join(temp_dir, "stdout.log")
+            stderr_path = os.path.join(temp_dir, "stderr.log")
             try:
-                with stdout_path.open("wb") as stdout_handle, stderr_path.open("wb") as stderr_handle:
+                with open(stdout_path, "wb") as stdout_handle, open(stderr_path, "wb") as stderr_handle:
                     completed_result = subprocess.run(
                         command,
                         cwd=str(script.parent),
@@ -1160,8 +1160,8 @@ class HorosaRuntimeManager:
                 completed = subprocess.CompletedProcess(
                     args=completed_result.args,
                     returncode=completed_result.returncode,
-                    stdout=stdout_path.read_text(encoding="utf-8", errors="replace"),
-                    stderr=stderr_path.read_text(encoding="utf-8", errors="replace"),
+                    stdout=open(stdout_path, "r", encoding="utf-8", errors="replace").read(),
+                    stderr=open(stderr_path, "r", encoding="utf-8", errors="replace").read(),
                 )
             finally:
                 shutil.rmtree(temp_dir, ignore_errors=True)
