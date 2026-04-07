@@ -208,6 +208,105 @@ def test_service_status_prefers_explicit_env_urls_over_manifest(tmp_path: Path, 
     assert seen["chart"] == "http://127.0.0.1:34529"
 
 
+def test_run_start_command_uses_file_backed_capture_on_windows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+        runtime_platform="win32-x64",
+    )
+    manager = HorosaRuntimeManager(settings)
+    script = tmp_path / "Horosa-Web" / "start_horosa_local.ps1"
+    script.parent.mkdir(parents=True, exist_ok=True)
+    script.write_text("Write-Host 'start'\n", encoding="utf-8")
+
+    monkeypatch.setattr("horosa_skill.runtime.manager.os.name", "nt", raising=False)
+    monkeypatch.setattr(
+        manager,
+        "_wait_for_service_state",
+        lambda **_: {
+            "ready": True,
+            "endpoints": [
+                {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": True},
+                {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": True},
+            ],
+        },
+    )
+
+    seen: dict[str, object] = {}
+
+    def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        seen.update(kwargs)
+        stdout_handle = kwargs["stdout"]
+        stderr_handle = kwargs["stderr"]
+        stdout_handle.write(b"services are ready.\n")
+        stderr_handle.write(b"chart warmup warning\n")
+        return subprocess.CompletedProcess(args=kwargs.get("args", args[0] if args else []), returncode=0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    completed, readiness = manager._run_start_command(
+        command=["powershell", "-File", str(script)],
+        script=script,
+        env={"HOME": str(tmp_path)},
+        manifest=None,
+    )
+
+    assert getattr(seen.get("stdout"), "name", "").endswith("stdout.log")
+    assert getattr(seen.get("stderr"), "name", "").endswith("stderr.log")
+    assert seen.get("check") is False
+    assert completed.stdout == "services are ready.\n"
+    assert completed.stderr == "chart warmup warning\n"
+    assert readiness["ready"] is True
+
+
+def test_run_start_command_keeps_pipe_capture_on_posix(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    manager = HorosaRuntimeManager(settings)
+    script = tmp_path / "Horosa-Web" / "start_horosa_local.sh"
+    script.parent.mkdir(parents=True, exist_ok=True)
+    script.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+
+    monkeypatch.setattr("horosa_skill.runtime.manager.os.name", "posix", raising=False)
+    monkeypatch.setattr(
+        manager,
+        "_wait_for_service_state",
+        lambda **_: {
+            "ready": True,
+            "endpoints": [
+                {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": True},
+                {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": True},
+            ],
+        },
+    )
+
+    seen: dict[str, object] = {}
+
+    def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        seen.update(kwargs)
+        return subprocess.CompletedProcess(args=kwargs.get("args", args[0] if args else []), returncode=0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    completed, readiness = manager._run_start_command(
+        command=["/bin/bash", str(script)],
+        script=script,
+        env={"HOME": str(tmp_path)},
+        manifest=None,
+    )
+
+    assert seen.get("capture_output") is True
+    assert seen.get("text") is True
+    assert seen.get("check") is False
+    assert completed.stdout == "ok"
+    assert completed.stderr == ""
+    assert readiness["ready"] is True
+
+
 def test_install_runtime_from_manifest_file_url(tmp_path: Path) -> None:
     archive = create_runtime_archive(tmp_path)
     manifest = tmp_path / "runtime-manifest.json"
