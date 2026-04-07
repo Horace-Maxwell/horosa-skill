@@ -32,3 +32,33 @@ jobs:
       - name: Run HorosaBench local-only smoke
         working-directory: ./horosa-skill
         run: uv run python scripts/run_benchmark.py --skip-runtime
+
+  windows-smoke:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        working-directory: ./horosa-skill
+        run: uv sync --dev
+      - name: Run unit tests
+        working-directory: ./horosa-skill
+        run: uv run pytest -q
+      - name: Run Windows OpenClaw smoke
+        working-directory: ./horosa-skill
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'horosa-openclaw'
+          if (Test-Path $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+          $workspace = Join-Path $root 'workspace'
+          $config = Join-Path $workspace 'config\mcporter.json'
+          $manualHome = Join-Path $root 'manual-home'
+          New-Item -ItemType Directory -Path $workspace -Force | Out-Null
+          uv run horosa-skill client openclaw-config --format mcporter --isolate-home $manualHome --write $config
+          uv run horosa-skill client openclaw-setup --workspace $workspace
+          uv run horosa-skill client openclaw-check --workspace $workspace
