@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import glob
 import json
 import os
 import shlex
@@ -15,50 +16,60 @@ def _split_command_override(raw: str) -> list[str]:
     return [part[1:-1] if len(part) >= 2 and part[0] == part[-1] == '"' else part for part in parts]
 
 
-def _first_existing_path(candidates: list[Path]) -> str | None:
+def _first_existing_path(candidates: list[str]) -> str | None:
     for candidate in candidates:
-        if candidate.is_file():
-            return str(candidate)
+        if os.path.isfile(candidate):
+            return candidate
     return None
 
 
-def _windows_uv_fallbacks() -> list[Path]:
-    candidates: list[Path] = []
+def _windows_uv_fallbacks() -> list[str]:
+    candidates: list[str] = []
     local_appdata = os.environ.get("LOCALAPPDATA", "").strip()
     appdata = os.environ.get("APPDATA", "").strip()
     userprofile = os.environ.get("USERPROFILE", "").strip()
 
     if local_appdata:
-        candidates.append(Path(local_appdata) / "Programs" / "uv" / "uv.exe")
-        candidates.extend(sorted((Path(local_appdata) / "Programs" / "Python").glob("Python*\\Scripts\\uv.exe"), reverse=True))
+        candidates.append(os.path.join(local_appdata, "Programs", "uv", "uv.exe"))
+        candidates.extend(
+            sorted(
+                glob.glob(os.path.join(local_appdata, "Programs", "Python", "Python*", "Scripts", "uv.exe")),
+                reverse=True,
+            )
+        )
     if appdata:
-        candidates.extend(sorted((Path(appdata) / "Python").glob("Python*\\Scripts\\uv.exe"), reverse=True))
+        candidates.extend(
+            sorted(
+                glob.glob(os.path.join(appdata, "Python", "Python*", "Scripts", "uv.exe")),
+                reverse=True,
+            )
+        )
     if userprofile:
-        candidates.append(Path(userprofile) / ".local" / "bin" / "uv.exe")
+        candidates.append(os.path.join(userprofile, ".local", "bin", "uv.exe"))
     return candidates
 
 
-def _windows_mcporter_fallbacks() -> list[Path]:
+def _windows_mcporter_fallbacks() -> list[str]:
     appdata = os.environ.get("APPDATA", "").strip()
     if not appdata:
         return []
-    npm_root = Path(appdata) / "npm"
+    npm_root = os.path.join(appdata, "npm")
     return [
-        npm_root / "mcporter.cmd",
-        npm_root / "mcporter.exe",
-        npm_root / "mcporter",
+        os.path.join(npm_root, "mcporter.cmd"),
+        os.path.join(npm_root, "mcporter.exe"),
+        os.path.join(npm_root, "mcporter"),
     ]
 
 
-def _windows_npx_fallbacks() -> list[Path]:
+def _windows_npx_fallbacks() -> list[str]:
     appdata = os.environ.get("APPDATA", "").strip()
     if not appdata:
         return []
-    npm_root = Path(appdata) / "npm"
+    npm_root = os.path.join(appdata, "npm")
     return [
-        npm_root / "npx.cmd",
-        npm_root / "npx.exe",
-        npm_root / "npx",
+        os.path.join(npm_root, "npx.cmd"),
+        os.path.join(npm_root, "npx.exe"),
+        os.path.join(npm_root, "npx"),
     ]
 
 
@@ -68,8 +79,8 @@ def _resolve_command(
     candidates: list[str],
     error_message: str,
     npx_package: str | None = None,
-    windows_fallbacks: list[Path] | None = None,
-    windows_npx_fallbacks: list[Path] | None = None,
+    windows_fallbacks: list[str] | None = None,
+    windows_npx_fallbacks: list[str] | None = None,
 ) -> list[str]:
     override = os.environ.get(override_env, "").strip()
     if override:
@@ -103,8 +114,8 @@ def _resolve_command(
 
 def resolve_mcporter_command() -> list[str]:
     candidates = ["mcporter"]
-    windows_fallbacks: list[Path] | None = None
-    windows_npx_fallbacks: list[Path] | None = None
+    windows_fallbacks: list[str] | None = None
+    windows_npx_fallbacks: list[str] | None = None
     if os.name == "nt":
         candidates = ["mcporter.cmd", "mcporter.exe", "mcporter"]
         windows_fallbacks = _windows_mcporter_fallbacks()
@@ -124,7 +135,7 @@ def resolve_mcporter_command() -> list[str]:
 
 def resolve_uv_command() -> list[str]:
     candidates = ["uv"]
-    windows_fallbacks: list[Path] | None = None
+    windows_fallbacks: list[str] | None = None
     if os.name == "nt":
         candidates = ["uv.exe", "uv.cmd", "uv"]
         windows_fallbacks = _windows_uv_fallbacks()
