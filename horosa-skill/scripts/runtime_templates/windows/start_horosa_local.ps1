@@ -14,6 +14,7 @@ $PyOutLog = Join-Path $LogDir "astropy.stdout.log"
 $PyErrLog = Join-Path $LogDir "astropy.stderr.log"
 $JavaOutLog = Join-Path $LogDir "astrostudyboot.stdout.log"
 $JavaErrLog = Join-Path $LogDir "astrostudyboot.stderr.log"
+$PyBootstrapPath = Join-Path $LogDir "astropy_bootstrap.py"
 $PyPidPath = Join-Path $Root ".horosa_py.pid"
 $JavaPidPath = Join-Path $Root ".horosa_java.pid"
 
@@ -62,8 +63,9 @@ for path in [r"$FlatlibRoot", r"$AstropyRoot"]:
 
 runpy.run_path(r"$ChartEntry", run_name="__main__")
 "@
+Set-Content -LiteralPath $PyBootstrapPath -Value $PyBootCode -Encoding utf8
 
-$PyProc = Start-Process -FilePath $PythonBin -ArgumentList "-c", $PyBootCode -WorkingDirectory $Root -RedirectStandardOutput $PyOutLog -RedirectStandardError $PyErrLog -PassThru -WindowStyle Hidden
+$PyProc = Start-Process -FilePath $PythonBin -ArgumentList @($PyBootstrapPath) -WorkingDirectory $Root -RedirectStandardOutput $PyOutLog -RedirectStandardError $PyErrLog -PassThru -WindowStyle Hidden
 $JavaProc = Start-Process -FilePath $JavaBin -ArgumentList "-jar", $JarPath, "--server.port=$BackendPort", "--astrosrv=http://127.0.0.1:$ChartPort", "--mongodb.ip=127.0.0.1", "--redis.ip=127.0.0.1" -WorkingDirectory $Root -RedirectStandardOutput $JavaOutLog -RedirectStandardError $JavaErrLog -PassThru -WindowStyle Hidden
 
 $PyProc.Id | Set-Content -Encoding utf8 $PyPidPath

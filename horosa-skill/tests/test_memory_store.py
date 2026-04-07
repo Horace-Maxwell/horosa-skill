@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from horosa_skill.config import Settings
 from horosa_skill.memory.store import MemoryStore
@@ -28,7 +29,7 @@ def test_memory_store_writes_artifact(tmp_path) -> None:
     assert ref.run_id == run_id
     assert ref.tool_name == "chart"
     assert (tmp_path / "runs").exists()
-    artifact_path = tmp_path / "runs" / ref.artifact_path.split("/runs/", 1)[1]
+    artifact_path = Path(ref.artifact_path)
     assert artifact_path.parent.parent.parent.parent == (tmp_path / "runs")
     artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert artifact["tool"] == "chart"

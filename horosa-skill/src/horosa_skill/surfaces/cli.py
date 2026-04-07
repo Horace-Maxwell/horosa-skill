@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 import os
-import shlex
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from typing import Any, Optional
 
@@ -12,7 +12,13 @@ import typer
 
 from horosa_skill.config import Settings
 from horosa_skill.benchmark import run_benchmark
-from horosa_skill.client_tools import extract_json_value, isolated_data_dir, isolated_runtime_root, resolve_mcporter_command
+from horosa_skill.client_tools import (
+    extract_json_value,
+    isolated_data_dir,
+    isolated_runtime_root,
+    resolve_mcporter_command,
+    resolve_uv_command,
+)
 from horosa_skill.errors import RuntimeError, ToolValidationError
 from horosa_skill.runtime import HorosaRuntimeManager
 from horosa_skill.service import HorosaSkillService
@@ -48,6 +54,16 @@ def _service() -> HorosaSkillService:
 
 def _runtime_manager(settings: Settings | None = None) -> HorosaRuntimeManager:
     return HorosaRuntimeManager(settings or Settings.from_env())
+
+
+def _start_stdio_runtime_warmup(manager: HorosaRuntimeManager) -> None:
+    def _warmup() -> None:
+        try:
+            manager.start_local_services()
+        except RuntimeError:
+            pass
+
+    threading.Thread(target=_warmup, name="horosa-stdio-runtime-warmup", daemon=True).start()
 
 
 def _tracer(settings: Settings | None = None) -> TraceRecorder:
@@ -94,55 +110,39 @@ def _build_openclaw_server_block(
     isolate_home: Path | None,
 ) -> dict[str, Any]:
     skill_root = skill_root.expanduser().resolve()
+    uv_command = resolve_uv_command()
+    serve_args = [
+        "run",
+        "--directory",
+        str(skill_root),
+        "horosa-skill",
+        "serve",
+        "--transport",
+        "stdio",
+    ]
     if isolate_home is None:
         return {
-            "command": "uv",
-            "args": [
-                "run",
-                "--directory",
-                str(skill_root),
-                "horosa-skill",
-                "serve",
-                "--transport",
-                "stdio",
-            ],
+            "command": uv_command[0],
+            "args": [*uv_command[1:], *serve_args],
             "cwd": str(skill_root),
         }
 
     home_dir = isolate_home.expanduser().resolve()
     runtime_root = isolated_runtime_root(home_dir)
     data_dir = isolated_data_dir(home_dir)
-    if os.name == "nt":
-        return {
-            "command": os.environ.get("COMSPEC", "cmd.exe"),
-            "args": [
-                "/d",
-                "/s",
-                "/c",
-                (
-                    f'set "HOME={home_dir}" && '
-                    f'set "USERPROFILE={home_dir}" && '
-                    f'set "HOROSA_RUNTIME_ROOT={runtime_root}" && '
-                    f'set "HOROSA_SKILL_DATA_DIR={data_dir}" && '
-                    f'uv run --directory "{skill_root}" horosa-skill serve --transport stdio'
-                ),
-            ],
-            "cwd": str(skill_root),
-        }
-    return {
-        "command": "/bin/zsh",
-        "args": [
-            "-lc",
-            (
-                f"export HOME={shlex.quote(str(home_dir))}; "
-                f"export HOROSA_RUNTIME_ROOT={shlex.quote(str(runtime_root))}; "
-                f"export HOROSA_SKILL_DATA_DIR={shlex.quote(str(data_dir))}; "
-                f"exec uv run --directory {shlex.quote(str(skill_root))} "
-                "horosa-skill serve --transport stdio"
-            ),
-        ],
+    server_block = {
+        "command": uv_command[0],
+        "args": [*uv_command[1:], *serve_args],
         "cwd": str(skill_root),
+        "env": {
+            "HOME": str(home_dir),
+            "HOROSA_RUNTIME_ROOT": str(runtime_root),
+            "HOROSA_SKILL_DATA_DIR": str(data_dir),
+        },
     }
+    if os.name == "nt":
+        server_block["env"]["USERPROFILE"] = str(home_dir)
+    return server_block
 
 
 def _build_openclaw_config(
@@ -205,6 +205,14 @@ def _run_subprocess_json(command: list[str], *, cwd: Path) -> dict[str, Any]:
     )
 
 
+def _is_mcporter_timeout_response(payload: dict[str, Any]) -> bool:
+    issue = payload.get("issue")
+    if not isinstance(issue, dict) or issue.get("kind") != "offline":
+        return False
+    text = f"{payload.get('error', '')}\n{issue.get('rawMessage', '')}".lower()
+    return "timed out" in text
+
+
 @app.command()
 def install(
     archive: str | None = typer.Option(None, help="Local archive path or URL to a runtime asset."),
@@ -251,16 +259,20 @@ def serve(
     settings.host = host
     settings.port = port
     manager = _runtime_manager(settings)
+    service = HorosaSkillService(settings, runtime_manager=manager)
     started_now = False
     if not skip_runtime_start:
-        try:
-            start_result = manager.start_local_services()
-            started_now = not start_result.get("already_running", False)
-        except RuntimeError as exc:
-            typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
-            raise typer.Exit(code=2)
+        if transport == "stdio":
+            _start_stdio_runtime_warmup(manager)
+        else:
+            try:
+                start_result = manager.start_local_services()
+                started_now = not start_result.get("already_running", False)
+            except RuntimeError as exc:
+                typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
+                raise typer.Exit(code=2)
     try:
-        run_mcp_server(settings, transport=transport)
+        run_mcp_server(settings, transport=transport, service=service)
     finally:
         # For stdio clients such as OpenClaw/mcporter, keeping the runtime warm
         # avoids a full local Java+Python restart on every tool call.
@@ -480,6 +492,7 @@ def client_openclaw_check(
             raise typer.Exit(code=2)
         return
 
+    call_timeout_ms = 120000
     list_result = _run_subprocess_json(
         [
             *resolve_mcporter_command(),
@@ -504,6 +517,8 @@ def client_openclaw_check(
             str(config_path),
             "--root",
             str(workspace_root),
+            "--timeout",
+            str(call_timeout_ms),
         ],
         cwd=workspace_root,
     )
@@ -527,9 +542,30 @@ def client_openclaw_check(
             str(config_path),
             "--root",
             str(workspace_root),
+            "--timeout",
+            str(call_timeout_ms),
         ],
         cwd=workspace_root,
     )
+    if _is_mcporter_timeout_response(chart_result):
+        chart_result = _run_subprocess_json(
+            [
+                *resolve_mcporter_command(),
+                "call",
+                "horosa.horosa_astro_chart",
+                "--args",
+                json.dumps(chart_payload, ensure_ascii=False),
+                "--output",
+                "json",
+                "--config",
+                str(config_path),
+                "--root",
+                str(workspace_root),
+                "--timeout",
+                str(call_timeout_ms),
+            ],
+            cwd=workspace_root,
+        )
     run_id = (chart_result.get("memory_ref") or {}).get("run_id")
     memory_show = _run_subprocess_json(
         [
@@ -544,6 +580,8 @@ def client_openclaw_check(
             str(config_path),
             "--root",
             str(workspace_root),
+            "--timeout",
+            str(call_timeout_ms),
         ],
         cwd=workspace_root,
     )

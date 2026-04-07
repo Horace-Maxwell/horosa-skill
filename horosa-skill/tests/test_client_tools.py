@@ -54,6 +54,39 @@ def test_resolve_mcporter_command_raises_when_missing(monkeypatch) -> None:
         client_tools.resolve_mcporter_command()
 
 
+def test_resolve_uv_command_prefers_env_override(monkeypatch) -> None:
+    monkeypatch.setenv("HOROSA_UV_BIN", "python -m uv")
+
+    command = client_tools.resolve_uv_command()
+
+    assert command == ["python", "-m", "uv"]
+
+
+def test_resolve_uv_command_preserves_windows_override_path(monkeypatch) -> None:
+    monkeypatch.setattr(client_tools.os, "name", "nt", raising=False)
+    monkeypatch.setenv("HOROSA_UV_BIN", r'"C:\Program Files\uv\uv.exe" --flag')
+
+    command = client_tools.resolve_uv_command()
+
+    assert command == [r"C:\Program Files\uv\uv.exe", "--flag"]
+
+
+def test_resolve_uv_command_uses_exe_on_windows(monkeypatch) -> None:
+    monkeypatch.delenv("HOROSA_UV_BIN", raising=False)
+    monkeypatch.setattr(client_tools.os, "name", "nt", raising=False)
+
+    def fake_which(name: str) -> str | None:
+        if name == "uv.exe":
+            return r"C:\Users\maxwe\AppData\Roaming\Python\Python313\Scripts\uv.exe"
+        return None
+
+    monkeypatch.setattr(client_tools.shutil, "which", fake_which)
+
+    command = client_tools.resolve_uv_command()
+
+    assert command == [r"C:\Users\maxwe\AppData\Roaming\Python\Python313\Scripts\uv.exe"]
+
+
 def test_isolated_paths_are_derived_from_home(tmp_path: Path) -> None:
     home = tmp_path / "home"
 

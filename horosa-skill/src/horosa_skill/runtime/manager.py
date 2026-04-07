@@ -4,16 +4,19 @@ import hashlib
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import tarfile
 import tempfile
+import threading
 import time
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 import httpx
 
@@ -54,12 +57,21 @@ def _is_url(value: str) -> bool:
     return parsed.scheme in {"http", "https", "file"}
 
 
+WINDOWS_LOCAL_CACHE_FACTORY = "horosa.offline.LocalCacheFactory"
+WINDOWS_LOCAL_CACHE_CONFIG = "offline"
+WINDOWS_BOOT_CACHE_CONFIG_PATH = "BOOT-INF/classes/conf/properties/cache/caches.json"
+WINDOWS_BOOT_WEBPARAMS_PATH = "BOOT-INF/classes/conf/properties/param/webparams.properties"
+WINDOWS_BOOT_LOG4J_PATH = "BOOT-INF/classes/log4j2.xml"
+WINDOWS_BOOT_BOUNDLESS_PREFIX = "BOOT-INF/lib/boundless-"
+
+
 class HorosaRuntimeManager:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.runtime_root = settings.runtime_root
         self.current_dir = settings.runtime_current_dir
         self.tracer = TraceRecorder(settings)
+        self._service_lock = threading.Lock()
 
     def load_installed_manifest(self, *, strict: bool = False) -> dict[str, Any] | None:
         manifest_path = self.current_dir / "runtime-manifest.json"
@@ -282,147 +294,149 @@ class HorosaRuntimeManager:
             }
 
     def start_local_services(self) -> dict[str, Any]:
-        with self.tracer.span(workflow_name="runtime.start", metadata={"entrypoint": "runtime.start"}) as trace:
-            self._require_runtime()
-            manifest = self.load_installed_manifest(strict=True)
-            patched_files = self._apply_runtime_overrides(manifest)
-            script = self.current_dir / self._relative_manifest_path(manifest, "services", "start_script")
-            if not script.exists():
-                raise RuntimeValidationError(
-                    f"Runtime start script missing: {script}",
-                    code="runtime.start_script_missing",
-                    details={"path": str(script)},
-                )
+        with self._service_lock:
+            with self.tracer.span(workflow_name="runtime.start", metadata={"entrypoint": "runtime.start"}) as trace:
+                self._require_runtime()
+                manifest = self.load_installed_manifest(strict=True)
+                patched_files: list[str] = []
+                initial_status = self._service_status(manifest)
+                if self._all_services_reachable(initial_status):
+                    if self.load_runtime_state() is None:
+                        self._write_runtime_state(
+                            {
+                                "managed": False,
+                                "status": "already_running",
+                                "updated_at": self._utc_now(),
+                                "manifest_version": manifest.get("version") if manifest else None,
+                                "platform": manifest.get("platform") if manifest else (self.settings.runtime_platform or _platform_key()),
+                            }
+                        )
+                    return {
+                        "ok": True,
+                        "already_running": True,
+                        "command": None,
+                        "stdout": "",
+                        "stderr": "",
+                        "endpoints": initial_status,
+                        "trace_id": trace["trace_id"],
+                        "group_id": trace["group_id"],
+                    }
 
-            initial_status = self._service_status(manifest)
-            if self._all_services_reachable(initial_status):
-                if self.load_runtime_state() is None:
-                    self._write_runtime_state(
-                        {
-                            "managed": False,
-                            "status": "already_running",
-                            "updated_at": self._utc_now(),
-                            "manifest_version": manifest.get("version") if manifest else None,
-                            "platform": manifest.get("platform") if manifest else (self.settings.runtime_platform or _platform_key()),
-                        }
+                recovered_partial_state = False
+                recovery_details: dict[str, Any] | None = None
+                if self._any_services_reachable(initial_status):
+                    recovery_details = self.stop_local_services()
+                    recovered_partial_state = True
+
+                patched_files = self._apply_runtime_overrides(manifest)
+                script = self.current_dir / self._relative_manifest_path(manifest, "services", "start_script")
+                if not script.exists():
+                    raise RuntimeValidationError(
+                        f"Runtime start script missing: {script}",
+                        code="runtime.start_script_missing",
+                        details={"path": str(script)},
                     )
-                return {
-                    "ok": True,
-                    "already_running": True,
-                    "command": None,
-                    "stdout": "",
-                    "stderr": "",
-                    "endpoints": initial_status,
-                    "trace_id": trace["trace_id"],
-                    "group_id": trace["group_id"],
-                }
 
-            recovered_partial_state = False
-            recovery_details: dict[str, Any] | None = None
-            if self._any_services_reachable(initial_status):
-                recovery_details = self.stop_local_services()
-                recovered_partial_state = True
+                env = os.environ.copy()
+                env.setdefault("HOROSA_SERVER_PORT", str(self.settings.local_backend_port))
+                env.setdefault("HOROSA_CHART_PORT", str(self.settings.local_chart_port))
+                home_value = self._default_home_value()
+                env.setdefault("HOME", home_value)
+                if os.name == "nt":
+                    env.setdefault("USERPROFILE", home_value)
+                    drive, tail = os.path.splitdrive(home_value)
+                    if drive:
+                        env.setdefault("HOMEDRIVE", drive)
+                        env.setdefault("HOMEPATH", tail or "\\")
 
-            env = os.environ.copy()
-            env.setdefault("HOROSA_SERVER_PORT", str(self.settings.local_backend_port))
-            env.setdefault("HOROSA_CHART_PORT", str(self.settings.local_chart_port))
-            home_value = self._default_home_value()
-            env.setdefault("HOME", home_value)
-            if os.name == "nt":
-                env.setdefault("USERPROFILE", home_value)
-                drive, tail = os.path.splitdrive(home_value)
-                if drive:
-                    env.setdefault("HOMEDRIVE", drive)
-                    env.setdefault("HOMEPATH", tail or "\\")
-
-            command = self._platform_command(script)
-            completed, readiness = self._run_start_command(
-                command=command,
-                script=script,
-                env=env,
-                manifest=manifest,
-            )
-            retried_after_cleanup = False
-            combined_output = f"{completed.stdout}\n{completed.stderr}".lower()
-            if (
-                completed.returncode != 0
-                and not readiness["ready"]
-                and (
-                    self._any_services_reachable(readiness["endpoints"])
-                    or "pid files already exist" in combined_output
-                )
-            ):
-                recovery_details = self.stop_local_services()
-                recovered_partial_state = True
-                retried_after_cleanup = True
+                command = self._platform_command(script)
                 completed, readiness = self._run_start_command(
                     command=command,
                     script=script,
                     env=env,
                     manifest=manifest,
                 )
-            startup_warning: dict[str, Any] | None = None
-            if completed.returncode != 0 and readiness["ready"]:
-                startup_warning = {
-                    "code": "runtime.start_nonzero_but_ready",
-                    "message": "Runtime start script exited non-zero, but all required services became reachable.",
-                    "details": {
+                retried_after_cleanup = False
+                combined_output = f"{completed.stdout}\n{completed.stderr}".lower()
+                if (
+                    completed.returncode != 0
+                    and not readiness["ready"]
+                    and (
+                        self._any_services_reachable(readiness["endpoints"])
+                        or "pid files already exist" in combined_output
+                    )
+                ):
+                    recovery_details = self.stop_local_services()
+                    recovered_partial_state = True
+                    retried_after_cleanup = True
+                    completed, readiness = self._run_start_command(
+                        command=command,
+                        script=script,
+                        env=env,
+                        manifest=manifest,
+                    )
+                startup_warning: dict[str, Any] | None = None
+                if completed.returncode != 0 and readiness["ready"]:
+                    startup_warning = {
+                        "code": "runtime.start_nonzero_but_ready",
+                        "message": "Runtime start script exited non-zero, but all required services became reachable.",
+                        "details": {
+                            "command": command,
+                            "returncode": completed.returncode,
+                            "stdout": completed.stdout[-4000:],
+                            "stderr": completed.stderr[-4000:],
+                            "retried_after_cleanup": retried_after_cleanup,
+                        },
+                    }
+                elif completed.returncode != 0:
+                    raise RuntimeInstallError(
+                        "Failed to start local Horosa runtime.",
+                        code="runtime.start_failed",
+                        details={
+                            "command": command,
+                            "stdout": completed.stdout[-4000:],
+                            "stderr": completed.stderr[-4000:],
+                            "endpoints": readiness["endpoints"],
+                        },
+                    )
+                if not readiness["ready"]:
+                    raise RuntimeInstallError(
+                        "Local Horosa runtime did not become ready in time.",
+                        code="runtime.start_timeout",
+                        details={
+                            "command": command,
+                            "timeout_seconds": self.settings.runtime_start_timeout_seconds,
+                            "endpoints": readiness["endpoints"],
+                        },
+                    )
+                self._write_runtime_state(
+                    {
+                        "managed": True,
+                        "status": "running_with_warnings" if startup_warning else "running",
+                        "updated_at": self._utc_now(),
+                        "manifest_version": manifest.get("version") if manifest else None,
+                        "platform": manifest.get("platform") if manifest else (self.settings.runtime_platform or _platform_key()),
                         "command": command,
-                        "returncode": completed.returncode,
-                        "stdout": completed.stdout[-4000:],
-                        "stderr": completed.stderr[-4000:],
-                        "retried_after_cleanup": retried_after_cleanup,
-                    },
-                }
-            elif completed.returncode != 0:
-                raise RuntimeInstallError(
-                    "Failed to start local Horosa runtime.",
-                    code="runtime.start_failed",
-                    details={
-                        "command": command,
-                        "stdout": completed.stdout[-4000:],
-                        "stderr": completed.stderr[-4000:],
-                        "endpoints": readiness["endpoints"],
-                    },
+                        "startup_warning": startup_warning,
+                        "recovered_partial_state": recovered_partial_state,
+                    }
                 )
-            if not readiness["ready"]:
-                raise RuntimeInstallError(
-                    "Local Horosa runtime did not become ready in time.",
-                    code="runtime.start_timeout",
-                    details={
-                        "command": command,
-                        "timeout_seconds": self.settings.runtime_start_timeout_seconds,
-                        "endpoints": readiness["endpoints"],
-                    },
-                )
-            self._write_runtime_state(
-                {
-                    "managed": True,
-                    "status": "running_with_warnings" if startup_warning else "running",
-                    "updated_at": self._utc_now(),
-                    "manifest_version": manifest.get("version") if manifest else None,
-                    "platform": manifest.get("platform") if manifest else (self.settings.runtime_platform or _platform_key()),
+                trace["command"] = command
+                trace["patched_files"] = patched_files
+                return {
+                    "ok": True,
+                    "already_running": False,
                     "command": command,
-                    "startup_warning": startup_warning,
+                    "stdout": completed.stdout[-4000:],
+                    "stderr": completed.stderr[-4000:],
+                    "endpoints": readiness["endpoints"],
+                    "warning": startup_warning,
+                    "patched_files": patched_files,
                     "recovered_partial_state": recovered_partial_state,
+                    "recovery": recovery_details,
+                    "trace_id": trace["trace_id"],
+                    "group_id": trace["group_id"],
                 }
-            )
-            trace["command"] = command
-            trace["patched_files"] = patched_files
-            return {
-                "ok": True,
-                "already_running": False,
-                "command": command,
-                "stdout": completed.stdout[-4000:],
-                "stderr": completed.stderr[-4000:],
-                "endpoints": readiness["endpoints"],
-                "warning": startup_warning,
-                "patched_files": patched_files,
-                "recovered_partial_state": recovered_partial_state,
-                "recovery": recovery_details,
-                "trace_id": trace["trace_id"],
-                "group_id": trace["group_id"],
-            }
 
     def stop_local_services(self) -> dict[str, Any]:
         with self.tracer.span(workflow_name="runtime.stop", metadata={"entrypoint": "runtime.stop"}) as trace:
@@ -499,7 +513,7 @@ class HorosaRuntimeManager:
         if _is_url(source):
             parsed = urlparse(source)
             if parsed.scheme == "file":
-                return Path(parsed.path)
+                return self._file_url_to_path(source)
             filename = Path(parsed.path).name or "runtime-archive"
             target = temp_dir / filename
             with httpx.Client(timeout=120.0, follow_redirects=True) as client:
@@ -513,12 +527,24 @@ class HorosaRuntimeManager:
         if _is_url(location):
             parsed = urlparse(location)
             if parsed.scheme == "file":
-                return json.loads(Path(parsed.path).read_text(encoding="utf-8"))
+                return json.loads(self._file_url_to_path(location).read_text(encoding="utf-8"))
             with httpx.Client(timeout=60.0, follow_redirects=True) as client:
                 response = client.get(location)
                 response.raise_for_status()
                 return response.json()
         return json.loads(Path(location).expanduser().read_text(encoding="utf-8"))
+
+    def _file_url_to_path(self, location: str) -> Path:
+        parsed = urlparse(location)
+        path_text = url2pathname(parsed.path or "")
+        if parsed.netloc and parsed.netloc not in {"", "localhost"}:
+            if os.name == "nt":
+                path_text = f"\\\\{parsed.netloc}{path_text}"
+            else:
+                path_text = f"//{parsed.netloc}{path_text}"
+        elif os.name == "nt" and path_text.startswith("\\") and len(path_text) >= 3 and path_text[2] == ":":
+            path_text = path_text[1:]
+        return Path(path_text)
 
     def _extract_archive(self, archive_path: Path, extract_dir: Path) -> None:
         name = archive_path.name.lower()
@@ -629,26 +655,248 @@ class HorosaRuntimeManager:
         if os.name != "nt":
             return []
         template_root = self._runtime_template_root() / "windows"
-        if not template_root.exists():
-            return []
-
         patched: list[str] = []
-        overrides = {
-            "services.start_script": template_root / "start_horosa_local.ps1",
-            "services.stop_script": template_root / "stop_horosa_local.ps1",
-        }
-        for field, source in overrides.items():
-            if not source.exists():
-                continue
-            section, key = field.split(".", 1)
-            destination = self.current_dir / self._relative_manifest_path(manifest, section, key)
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, destination)
-            patched.append(str(destination))
+        if template_root.exists():
+            overrides = {
+                "services.start_script": template_root / "start_horosa_local.ps1",
+                "services.stop_script": template_root / "stop_horosa_local.ps1",
+            }
+            for field, source in overrides.items():
+                if not source.exists():
+                    continue
+                section, key = field.split(".", 1)
+                destination = self.current_dir / self._relative_manifest_path(manifest, section, key)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, destination)
+                patched.append(str(destination))
+
+        boot_jar = self.current_dir / self._relative_manifest_path(manifest, "artifacts", "boot_jar")
+        if boot_jar.is_file():
+            self._patch_windows_boot_jar(manifest, boot_jar)
+            patched.append(str(boot_jar))
         return patched
 
     def _runtime_template_root(self) -> Path:
         return Path(__file__).resolve().parents[3] / "scripts" / "runtime_templates"
+
+    def _patch_windows_boot_jar(self, manifest: dict[str, Any] | None, jar_path: Path) -> None:
+        replacements = {
+            WINDOWS_BOOT_CACHE_CONFIG_PATH: self._rewrite_windows_cache_config(
+                self._read_archive_entry_text(jar_path, WINDOWS_BOOT_CACHE_CONFIG_PATH)
+            ).encode("utf-8"),
+            WINDOWS_BOOT_WEBPARAMS_PATH: self._rewrite_windows_webparams(
+                self._read_archive_entry_text(jar_path, WINDOWS_BOOT_WEBPARAMS_PATH)
+            ).encode("utf-8"),
+            WINDOWS_BOOT_LOG4J_PATH: self._rewrite_windows_log4j(
+                self._read_archive_entry_text(jar_path, WINDOWS_BOOT_LOG4J_PATH)
+            ).encode("utf-8"),
+            **self._compile_windows_runtime_patch_classes(manifest, jar_path),
+        }
+        self._rewrite_zip_archive(jar_path, replacements)
+
+    def _read_archive_entry_text(self, archive_path: Path, entry_name: str) -> str:
+        try:
+            with zipfile.ZipFile(archive_path) as archive:
+                return archive.read(entry_name).decode("utf-8")
+        except KeyError as exc:
+            raise RuntimeValidationError(
+                f"Runtime archive is missing `{entry_name}`.",
+                code="runtime.windows_patch_missing_entry",
+                details={"archive": str(archive_path), "entry": entry_name},
+            ) from exc
+        except (OSError, zipfile.BadZipFile, UnicodeDecodeError) as exc:
+            raise RuntimeValidationError(
+                "Runtime archive could not be patched for Windows local mode.",
+                code="runtime.windows_patch_invalid_archive",
+                details={"archive": str(archive_path), "entry": entry_name, "error": str(exc)},
+            ) from exc
+
+    def _rewrite_windows_cache_config(self, content: str) -> str:
+        payload = json.loads(content)
+        if not isinstance(payload, dict):
+            raise RuntimeValidationError(
+                "Windows cache override expects an object.",
+                code="runtime.windows_patch_invalid_cache_config",
+            )
+        entries = payload.get("cachefactoryclass")
+        if not isinstance(entries, list) or not entries:
+            raise RuntimeValidationError(
+                "Windows cache override expects `cachefactoryclass` to be a non-empty array.",
+                code="runtime.windows_patch_invalid_cache_config",
+            )
+        rewritten: list[dict[str, Any]] = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                raise RuntimeValidationError(
+                    "Windows cache override expects every cache entry to be an object.",
+                    code="runtime.windows_patch_invalid_cache_config",
+                )
+            patched = dict(entry)
+            patched["class"] = WINDOWS_LOCAL_CACHE_FACTORY
+            patched["config"] = WINDOWS_LOCAL_CACHE_CONFIG
+            rewritten.append(patched)
+        payload["needlocalmemcache"] = False
+        payload["needcompress"] = False
+        payload["needhystrix"] = False
+        payload["cachefactoryclass"] = rewritten
+        return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+
+    def _rewrite_windows_webparams(self, content: str) -> str:
+        updated = re.sub(
+            r"(?m)^webencrypt\.rsaparam\.class=.*$",
+            "webencrypt.rsaparam.class=",
+            content,
+        )
+        if "webencrypt.rsaparam.class=" not in updated:
+            updated = updated.rstrip("\n") + "\nwebencrypt.rsaparam.class=\n"
+        if not updated.endswith("\n"):
+            updated += "\n"
+        return updated
+
+    def _rewrite_windows_log4j(self, content: str) -> str:
+        log_root = self._windows_log_root()
+        replaced = False
+
+        def apply_basedir(match: re.Match[str]) -> str:
+            nonlocal replaced
+            replaced = True
+            return f"{match.group(1)}{log_root}{match.group(2)}"
+
+        updated = re.sub(
+            r'(<Property\s+name="basedir">).*?(</Property>)',
+            apply_basedir,
+            content,
+            count=1,
+            flags=re.DOTALL,
+        )
+        if replaced:
+            return updated
+        if updated == content:
+            updated = updated.replace("${env:HOME}/.horosa-logs/astrostudyboot", log_root)
+            if updated != content:
+                return updated
+        raise RuntimeValidationError(
+            "Windows log override could not locate the backend log root property.",
+            code="runtime.windows_patch_invalid_log4j",
+        )
+
+    def _windows_log_root(self) -> str:
+        home_value = self._default_home_value().rstrip("\\/")
+        return home_value.replace("\\", "/") + "/.horosa-logs/astrostudyboot"
+
+    def _compile_windows_runtime_patch_classes(
+        self,
+        manifest: dict[str, Any] | None,
+        jar_path: Path,
+    ) -> dict[str, bytes]:
+        source_root = self._runtime_template_root() / "windows" / "java"
+        source_path = source_root / "horosa" / "offline" / "LocalCacheFactory.java"
+        if not source_path.is_file():
+            raise RuntimeValidationError(
+                "Windows runtime patch source is missing.",
+                code="runtime.windows_patch_missing_source",
+                details={"path": str(source_path)},
+            )
+
+        java_path = self.current_dir / self._relative_manifest_path(manifest, "runtimes", "java")
+        javac_path = java_path.with_name("javac.exe")
+        if not javac_path.is_file():
+            raise RuntimeValidationError(
+                "Windows runtime patch requires `javac.exe` in the bundled Java runtime.",
+                code="runtime.windows_patch_missing_javac",
+                details={"path": str(javac_path)},
+            )
+
+        with tempfile.TemporaryDirectory(prefix="horosa-runtime-java-") as temp_dir_raw:
+            temp_dir = Path(temp_dir_raw)
+            boundless_jar = temp_dir / "boundless.jar"
+            self._extract_boot_lib(jar_path, WINDOWS_BOOT_BOUNDLESS_PREFIX, boundless_jar)
+
+            classes_dir = temp_dir / "classes"
+            classes_dir.mkdir(parents=True, exist_ok=True)
+            compiled = subprocess.run(
+                [
+                    str(javac_path),
+                    "-encoding",
+                    "UTF-8",
+                    "-cp",
+                    str(boundless_jar),
+                    "-d",
+                    str(classes_dir),
+                    str(source_path),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if compiled.returncode != 0:
+                raise RuntimeInstallError(
+                    "Failed to compile the Windows local-cache compatibility classes.",
+                    code="runtime.windows_patch_compile_failed",
+                    details={
+                        "javac": str(javac_path),
+                        "source": str(source_path),
+                        "stdout": compiled.stdout[-4000:],
+                        "stderr": compiled.stderr[-4000:],
+                    },
+                )
+
+            entries: dict[str, bytes] = {}
+            for class_file in classes_dir.rglob("*.class"):
+                arcname = f"BOOT-INF/classes/{class_file.relative_to(classes_dir).as_posix()}"
+                entries[arcname] = class_file.read_bytes()
+            if not entries:
+                raise RuntimeValidationError(
+                    "Windows runtime patch did not produce any compatibility classes.",
+                    code="runtime.windows_patch_compile_failed",
+                )
+            return entries
+
+    def _extract_boot_lib(self, jar_path: Path, prefix: str, target_path: Path) -> None:
+        try:
+            with zipfile.ZipFile(jar_path) as archive:
+                for entry in archive.infolist():
+                    if entry.filename.startswith(prefix) and entry.filename.endswith(".jar"):
+                        target_path.write_bytes(archive.read(entry.filename))
+                        return
+        except (OSError, zipfile.BadZipFile) as exc:
+            raise RuntimeValidationError(
+                "Runtime archive could not be read while preparing Windows compatibility classes.",
+                code="runtime.windows_patch_invalid_archive",
+                details={"archive": str(jar_path), "error": str(exc)},
+            ) from exc
+        raise RuntimeValidationError(
+            "Runtime archive does not contain the bundled `boundless` library required for Windows compatibility.",
+            code="runtime.windows_patch_missing_boundless",
+            details={"archive": str(jar_path)},
+        )
+
+    def _rewrite_zip_archive(self, archive_path: Path, replacements: dict[str, bytes]) -> None:
+        temp_path = archive_path.with_suffix(f"{archive_path.suffix}.tmp")
+        with zipfile.ZipFile(archive_path) as source, zipfile.ZipFile(temp_path, "w") as target:
+            target.comment = source.comment
+            seen: set[str] = set()
+            for info in source.infolist():
+                seen.add(info.filename)
+                data = replacements.get(info.filename, source.read(info.filename))
+                new_info = zipfile.ZipInfo(info.filename, date_time=info.date_time)
+                new_info.compress_type = info.compress_type
+                new_info.comment = info.comment
+                new_info.extra = info.extra
+                new_info.internal_attr = info.internal_attr
+                new_info.external_attr = info.external_attr
+                new_info.create_system = info.create_system
+                new_info.flag_bits = info.flag_bits
+                target.writestr(new_info, data)
+
+            for entry_name, data in replacements.items():
+                if entry_name in seen:
+                    continue
+                new_info = zipfile.ZipInfo(entry_name)
+                new_info.compress_type = zipfile.ZIP_DEFLATED
+                new_info.external_attr = 0o644 << 16
+                target.writestr(new_info, data)
+        temp_path.replace(archive_path)
 
     def _http_reachable(self, url: str) -> bool:
         try:
