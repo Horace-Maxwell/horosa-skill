@@ -13,6 +13,9 @@ class FakeClient(HorosaApiClient):
     def __init__(self) -> None:
         super().__init__("http://fake")
 
+    def probe(self, endpoint: str = "/common/time", payload: dict | None = None) -> bool:
+        return True
+
     def call(self, endpoint: str, payload: dict) -> dict:
         house_signs = [
             ("House8", 0.0),
@@ -193,6 +196,26 @@ class FakeJsClient(HorosaJsEngineClient):
         raise AssertionError(f"Unexpected local tool: {tool_name}")
 
 
+class FakeRuntimeManager:
+    def __init__(self) -> None:
+        self.started = 0
+
+    def start_local_services(self) -> dict[str, object]:
+        self.started += 1
+        return {"ok": True, "already_running": False}
+
+
+class ProbeClient(FakeClient):
+    def __init__(self, *, probe_ok: bool) -> None:
+        super().__init__()
+        self.probe_ok = probe_ok
+        self.probe_calls = 0
+
+    def probe(self, endpoint: str = "/common/time", payload: dict | None = None) -> bool:
+        self.probe_calls += 1
+        return self.probe_ok
+
+
 def test_service_tool_call_persists_memory(tmp_path) -> None:
     settings = Settings(
         server_root="http://127.0.0.1:9999",
@@ -218,6 +241,61 @@ def test_service_tool_call_persists_memory(tmp_path) -> None:
     assert "福点 (8th; -)" in result.data["export_snapshot"]["export_text"]
     queried = store.query_runs(tool="chart")
     assert len(queried) == 1
+
+
+def test_service_starts_runtime_before_first_remote_call_when_probe_fails(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    runtime_manager = FakeRuntimeManager()
+    client = ProbeClient(probe_ok=False)
+    service = HorosaSkillService(
+        settings,
+        client=client,
+        store=MemoryStore(settings),
+        js_client=FakeJsClient(),
+        runtime_manager=runtime_manager,
+    )
+
+    result = service.run_tool(
+        "chart",
+        {"date": "1990-01-01", "time": "12:00", "zone": "8", "lat": "31n14", "lon": "121e28"},
+        save_result=False,
+    )
+
+    assert result.ok is True
+    assert runtime_manager.started == 1
+    assert client.probe_calls == 1
+
+
+def test_service_skips_runtime_restart_after_remote_runtime_is_confirmed(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    runtime_manager = FakeRuntimeManager()
+    client = ProbeClient(probe_ok=False)
+    service = HorosaSkillService(
+        settings,
+        client=client,
+        store=MemoryStore(settings),
+        js_client=FakeJsClient(),
+        runtime_manager=runtime_manager,
+    )
+
+    for _ in range(2):
+        result = service.run_tool(
+            "chart",
+            {"date": "1990-01-01", "time": "12:00", "zone": "8", "lat": "31n14", "lon": "121e28"},
+            save_result=False,
+        )
+        assert result.ok is True
+
+    assert runtime_manager.started == 1
+    assert client.probe_calls == 1
 
 
 def test_service_memory_query_and_show(tmp_path) -> None:

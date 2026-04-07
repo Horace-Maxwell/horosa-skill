@@ -10,6 +10,9 @@ class FakeLocalClient(HorosaApiClient):
     def __init__(self) -> None:
         super().__init__("http://fake")
 
+    def probe(self, endpoint: str = "/common/time", payload: dict | None = None) -> bool:
+        return True
+
     def call(self, endpoint: str, payload: dict) -> dict:
         if endpoint == "/nongli/time":
             return {
