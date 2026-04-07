@@ -134,7 +134,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
     return mcp
 
 
-def run_mcp_server(settings: Settings, *, transport: str) -> None:
-    service = HorosaSkillService(settings)
+def run_mcp_server(settings: Settings, *, transport: str, service: HorosaSkillService | None = None) -> None:
+    service = service or HorosaSkillService(settings)
     server = create_mcp_server(service, settings)
     server.run(transport=transport)

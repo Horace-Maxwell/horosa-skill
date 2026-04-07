@@ -22,6 +22,7 @@ def _run_mcporter(
     payload: dict[str, Any],
     *,
     timeout_ms: int = 120000,
+    allow_retry: bool = True,
 ) -> dict[str, Any]:
     command = [
         *resolve_mcporter_command(),
@@ -53,9 +54,28 @@ def _run_mcporter(
         except ValueError:
             parsed = None
         if isinstance(parsed, dict):
+            if allow_retry and _is_timeout_response(parsed):
+                return _run_mcporter(
+                    workspace,
+                    config_path,
+                    selector,
+                    payload,
+                    timeout_ms=timeout_ms,
+                    allow_retry=False,
+                )
             return parsed
         raise RuntimeError(result.stderr.strip() or result.stdout.strip() or f"mcporter call failed: {selector}")
-    return extract_json_value(result.stdout)
+    parsed = extract_json_value(result.stdout)
+    if allow_retry and isinstance(parsed, dict) and _is_timeout_response(parsed):
+        return _run_mcporter(
+            workspace,
+            config_path,
+            selector,
+            payload,
+            timeout_ms=timeout_ms,
+            allow_retry=False,
+        )
+    return parsed
 
 
 def _run_mcporter_list(workspace: Path, config_path: Path, *, timeout_ms: int = 120000) -> dict[str, Any]:
@@ -93,6 +113,14 @@ def _run_mcporter_list(workspace: Path, config_path: Path, *, timeout_ms: int = 
 def _assert(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
+
+
+def _is_timeout_response(payload: dict[str, Any]) -> bool:
+    issue = payload.get("issue")
+    if not isinstance(issue, dict) or issue.get("kind") != "offline":
+        return False
+    text = f"{payload.get('error', '')}\n{issue.get('rawMessage', '')}".lower()
+    return "timed out" in text
 
 
 def _has_export_contract(tool_name: str, response: dict[str, Any]) -> bool:

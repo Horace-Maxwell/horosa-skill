@@ -25,6 +25,7 @@ from horosa_skill.errors import DispatchResolutionError, HorosaSkillError, ToolT
 from horosa_skill.exports import build_export_registry, get_technique_info, parse_export_content
 from horosa_skill.knowledge import build_knowledge_registry, read_knowledge_entry
 from horosa_skill.memory.store import MemoryStore
+from horosa_skill.runtime import HorosaRuntimeManager
 from horosa_skill.schemas.common import DispatchEnvelope, ErrorInfo, ToolEnvelope
 from horosa_skill.schemas.tools import DispatchInput, MemoryAnswerInput, MemoryQueryInput, MemoryShowInput
 from horosa_skill.tracing import TraceRecorder
@@ -2450,12 +2451,15 @@ class HorosaSkillService:
         client: HorosaApiClient | None = None,
         store: MemoryStore | None = None,
         js_client: HorosaJsEngineClient | None = None,
+        runtime_manager: HorosaRuntimeManager | None = None,
     ) -> None:
         self.settings = settings
         self.client = client or HorosaApiClient(settings.server_root)
         self.store = store or MemoryStore(settings)
         self.js_client = js_client or HorosaJsEngineClient(settings)
+        self.runtime_manager = runtime_manager or HorosaRuntimeManager(settings)
         self.tracer = TraceRecorder(settings)
+        self._remote_runtime_ready = False
 
     def _unwrap_result(self, payload: Any) -> Any:
         current = payload
@@ -2472,7 +2476,10 @@ class HorosaSkillService:
         return current
 
     def _call_remote(self, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
+        if not self._remote_runtime_ready and not self.client.probe("/common/time"):
+            self.runtime_manager.start_local_services()
         data = self.client.call(endpoint, payload)
+        self._remote_runtime_ready = True
         unwrapped = self._unwrap_result(data)
         if not isinstance(unwrapped, dict):
             raise ToolTransportError(
