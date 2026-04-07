@@ -1141,13 +1141,39 @@ class HorosaRuntimeManager:
         env: dict[str, str],
         manifest: dict[str, Any] | None,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
-        completed = subprocess.run(
-            command,
-            cwd=str(script.parent),
-            env=env,
-            capture_output=True,
-            text=True,
-        )
+        if os.name == "nt":
+            # Detached Windows runtime children can keep inherited pipe handles
+            # alive, so file-backed capture avoids hanging on communicate().
+            temp_dir = Path(tempfile.mkdtemp(prefix="horosa-runtime-start-"))
+            stdout_path = temp_dir / "stdout.log"
+            stderr_path = temp_dir / "stderr.log"
+            try:
+                with stdout_path.open("wb") as stdout_handle, stderr_path.open("wb") as stderr_handle:
+                    completed_result = subprocess.run(
+                        command,
+                        cwd=str(script.parent),
+                        env=env,
+                        stdout=stdout_handle,
+                        stderr=stderr_handle,
+                        check=False,
+                    )
+                completed = subprocess.CompletedProcess(
+                    args=completed_result.args,
+                    returncode=completed_result.returncode,
+                    stdout=stdout_path.read_text(encoding="utf-8", errors="replace"),
+                    stderr=stderr_path.read_text(encoding="utf-8", errors="replace"),
+                )
+            finally:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+        else:
+            completed = subprocess.run(
+                command,
+                cwd=str(script.parent),
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
         readiness = self._wait_for_service_state(
             expected_reachable=True,
             timeout_seconds=self.settings.runtime_start_timeout_seconds,
