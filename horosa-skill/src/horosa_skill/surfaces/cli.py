@@ -17,6 +17,7 @@ from horosa_skill.benchmark import run_benchmark
 from horosa_skill.client_tools import (
     extract_json_value,
     isolated_data_dir,
+    isolated_runtime_ports,
     isolated_runtime_root,
     resolve_mcporter_command,
     resolve_uv_command,
@@ -141,10 +142,15 @@ def _build_openclaw_server_block(
 
 def _isolated_env_vars(home_dir: Path) -> dict[str, str]:
     resolved_home = home_dir.expanduser().resolve()
+    backend_port, chart_port = isolated_runtime_ports(resolved_home)
     env = {
         "HOME": str(resolved_home),
         "HOROSA_RUNTIME_ROOT": str(isolated_runtime_root(resolved_home)),
         "HOROSA_SKILL_DATA_DIR": str(isolated_data_dir(resolved_home)),
+        "HOROSA_LOCAL_BACKEND_PORT": str(backend_port),
+        "HOROSA_LOCAL_CHART_PORT": str(chart_port),
+        "HOROSA_SERVER_ROOT": f"http://127.0.0.1:{backend_port}",
+        "HOROSA_CHART_SERVER_ROOT": f"http://127.0.0.1:{chart_port}",
     }
     if os.name == "nt":
         env["USERPROFILE"] = str(resolved_home)

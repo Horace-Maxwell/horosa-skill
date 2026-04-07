@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import glob
+import hashlib
 import json
 import os
 import shlex
@@ -157,6 +158,15 @@ def isolated_runtime_root(home_dir: Path) -> Path:
 def isolated_data_dir(home_dir: Path) -> Path:
     home = home_dir.expanduser().resolve()
     return home / ".horosa-skill"
+
+
+def isolated_runtime_ports(home_dir: Path) -> tuple[int, int]:
+    home = str(home_dir.expanduser().resolve())
+    digest = hashlib.sha256(home.encode("utf-8")).digest()
+    offset = int.from_bytes(digest[:2], "big") % 20000
+    backend_port = 20000 + (offset * 2)
+    chart_port = backend_port + 1
+    return backend_port, chart_port
 
 
 def extract_json_value(raw: str) -> Any:
