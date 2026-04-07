@@ -19,6 +19,11 @@ This repository is the public-facing distribution and runtime-packaging layer fo
 3. Prefer changes that preserve offline operation and local-first behavior.
 4. Preserve structured JSON contracts unless versioned intentionally.
 
+## License
+
+By submitting a contribution to this repository, you agree that the change is
+offered under the repository's current `GNU AGPL-3.0-only` license.
+
 ## Development
 
 ```bash

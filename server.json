@@ -6,7 +6,7 @@
   "version": "0.3.0",
   "homepage": "https://github.com/Horace-Maxwell/horosa-skill",
   "repository": "https://github.com/Horace-Maxwell/horosa-skill",
-  "license": "Apache-2.0",
+  "license": "AGPL-3.0-only",
   "category": "knowledge-and-reasoning",
   "tags": [
     "mcp",
