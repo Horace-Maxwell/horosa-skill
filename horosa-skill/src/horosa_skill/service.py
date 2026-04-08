@@ -23,6 +23,7 @@ from horosa_skill.engine.registry import TOOL_DEFINITIONS, ToolDefinition
 from horosa_skill.engine.router import select_tools
 from horosa_skill.errors import DispatchResolutionError, HorosaSkillError, ToolTransportError, ToolValidationError
 from horosa_skill.exports import build_export_registry, get_technique_info, parse_export_content
+from horosa_skill.input_normalization import normalize_request_payload
 from horosa_skill.knowledge import build_knowledge_registry, read_knowledge_entry
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.runtime import HorosaRuntimeManager
@@ -2478,7 +2479,29 @@ class HorosaSkillService:
     def _call_remote(self, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
         if not self._remote_runtime_ready and not self.client.probe("/common/time"):
             self.runtime_manager.start_local_services()
-        data = self.client.call(endpoint, payload)
+        try:
+            data = self.client.call(endpoint, payload)
+        except ToolTransportError as exc:
+            body = str(exc.details.get("body", ""))
+            if exc.code == "transport.http_error" and "200001" in body and "param error" in body:
+                payload_preview = {
+                    key: payload.get(key)
+                    for key in ("date", "time", "zone", "lat", "lon", "gpsLat", "gpsLon", "dirZone", "dirLat", "dirLon")
+                    if key in payload
+                }
+                raise ToolTransportError(
+                    "Horosa backend rejected the birth parameters.",
+                    code="tool.backend_param_error",
+                    details={
+                        **exc.details,
+                        "payload_preview": payload_preview,
+                        "hint": (
+                            "Use timezone like `+08:00` and compact coordinates like `31n13` / `121e28`, or send decimal "
+                            "coordinates so Horosa Skill can normalize them automatically."
+                        ),
+                    },
+                ) from exc
+            raise
         self._remote_runtime_ready = True
         unwrapped = self._unwrap_result(data)
         if not isinstance(unwrapped, dict):
@@ -2978,6 +3001,7 @@ class HorosaSkillService:
             },
         ) as trace:
             try:
+                payload = normalize_request_payload(payload)
                 validated = definition.input_model.model_validate(payload)
             except ValidationError as exc:
                 trace["error_code"] = "tool.invalid_payload"

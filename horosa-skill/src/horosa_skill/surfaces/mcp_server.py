@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from horosa_skill.config import Settings
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
+from horosa_skill.input_normalization import normalize_request_payload
 from horosa_skill.schemas.common import DispatchEnvelope, ToolEnvelope
 from horosa_skill.schemas.tools import DispatchInput, MemoryAnswerInput, MemoryQueryInput, MemoryShowInput
 from horosa_skill.service import HorosaSkillService
@@ -29,6 +30,7 @@ def _normalize_mcp_request(raw_request: Any, model: type[BaseModel]) -> dict[str
     if not isinstance(payload, dict):
         raise ValueError("request must be an object or a JSON object string")
 
+    payload = normalize_request_payload(payload)
     normalized = model.model_validate(payload)
     return normalized.model_dump(exclude_none=True)
 
