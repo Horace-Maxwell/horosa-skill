@@ -1,3 +1,5 @@
+import pytest
+
 from horosa_skill.config import Settings
 from horosa_skill.exports.parser import parse_export_content
 from horosa_skill.engine.client import HorosaApiClient
@@ -214,6 +216,16 @@ class ProbeClient(FakeClient):
     def probe(self, endpoint: str = "/common/time", payload: dict | None = None) -> bool:
         self.probe_calls += 1
         return self.probe_ok
+
+
+class CaptureClient(FakeClient):
+    def __init__(self) -> None:
+        super().__init__()
+        self.calls: list[tuple[str, dict]] = []
+
+    def call(self, endpoint: str, payload: dict) -> dict:
+        self.calls.append((endpoint, dict(payload)))
+        return super().call(endpoint, payload)
 
 
 def test_service_tool_call_persists_memory(tmp_path) -> None:
@@ -465,6 +477,45 @@ def test_phase2_tools_attach_export_contracts(tmp_path) -> None:
     assert decennials.data["export_snapshot"]["technique"]["key"] == "decennials"
     assert sixyao.ok is True
     assert sixyao.data["export_snapshot"]["technique"]["key"] == "sixyao"
+
+
+@pytest.mark.parametrize("tool_name", ["chart", "guolao_chart"])
+def test_service_normalizes_human_friendly_birth_fields_before_remote_calls(tmp_path, tool_name: str) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    client = CaptureClient()
+    service = HorosaSkillService(settings, client=client, store=MemoryStore(settings), js_client=FakeJsClient())
+
+    result = service.run_tool(
+        tool_name,
+        {
+            "date": "1995-06-03",
+            "time": "5:30",
+            "zone": "8",
+            "lat": "31.2167",
+            "lon": "121.4667",
+            "ad": 1,
+        },
+        save_result=False,
+    )
+
+    assert result.ok is True
+    assert result.input_normalized["zone"] == "+08:00"
+    assert result.input_normalized["lat"] == "31n13"
+    assert result.input_normalized["lon"] == "121e28"
+    assert result.input_normalized["gpsLat"] == pytest.approx(31.2167)
+    assert result.input_normalized["gpsLon"] == pytest.approx(121.4667)
+    assert client.calls, "expected remote client call to be captured"
+    endpoint, remote_payload = client.calls[0]
+    assert endpoint == "/chart"
+    assert remote_payload["zone"] == "+08:00"
+    assert remote_payload["lat"] == "31n13"
+    assert remote_payload["lon"] == "121e28"
+    assert remote_payload["gpsLat"] == pytest.approx(31.2167)
+    assert remote_payload["gpsLon"] == pytest.approx(121.4667)
 
 
 def test_all_callable_techniques_keep_non_empty_structured_export_contracts(tmp_path) -> None:
