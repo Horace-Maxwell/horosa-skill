@@ -6,6 +6,11 @@ from typing import Any
 _COMPACT_COORD_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([NSEWnsew])\s*(\d+(?:\.\d+)?)\s*$")
 _DECIMAL_RE = re.compile(r"^[+-]?\d+(?:\.\d+)?$")
 _ZONE_HM_RE = re.compile(r"^(?P<sign>[+-]?)(?P<hours>\d{1,2})(?::(?P<minutes>\d{1,2}))?$")
+_DATE_RE = re.compile(r"^(?P<year>\d{4})(?P<sep>[-/])(?P<month>\d{1,2})(?P=sep)(?P<day>\d{1,2})$")
+_TIME_RE = re.compile(r"^(?P<hour>\d{1,2}):(?P<minute>\d{1,2})(?::(?P<second>\d{1,2}))?$")
+_DATETIME_RE = re.compile(
+    r"^(?P<date>\d{4}[-/]\d{1,2}[-/]\d{1,2})(?P<sep>[T\s]+)(?P<time>\d{1,2}:\d{1,2}(?::\d{1,2})?)$"
+)
 
 
 def normalize_request_payload(payload: Any) -> Any:
@@ -15,9 +20,60 @@ def normalize_request_payload(payload: Any) -> Any:
         return payload
 
     normalized = {key: normalize_request_payload(value) for key, value in payload.items()}
+    _normalize_date_like_fields(normalized)
     _normalize_zone_fields(normalized)
     _normalize_coordinate_fields(normalized)
     return normalized
+
+
+def _normalize_date_like_fields(payload: dict[str, Any]) -> None:
+    for key in ("date", "datetime", "guaDate", "guaTime", "time"):
+        if key not in payload:
+            continue
+        normalized = _normalize_date_like_value(key, payload.get(key))
+        if normalized is not None:
+            payload[key] = normalized
+
+
+def _normalize_date_like_value(key: str, value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return text
+
+    if key in {"date", "guaDate"}:
+        return _normalize_date_value(text)
+    if key in {"time", "guaTime"}:
+        return _normalize_time_value(text)
+    if key == "datetime":
+        return _normalize_datetime_value(text)
+    return text
+
+
+def _normalize_date_value(text: str) -> str:
+    match = _DATE_RE.match(text)
+    if not match:
+        return text
+    return f"{int(match.group('year')):04d}-{int(match.group('month')):02d}-{int(match.group('day')):02d}"
+
+
+def _normalize_time_value(text: str) -> str:
+    match = _TIME_RE.match(text)
+    if not match:
+        return text
+    second = int(match.group("second") or "0")
+    return f"{int(match.group('hour')):02d}:{int(match.group('minute')):02d}:{second:02d}"
+
+
+def _normalize_datetime_value(text: str) -> str:
+    match = _DATETIME_RE.match(text)
+    if not match:
+        return text
+    date_text = _normalize_date_value(match.group("date"))
+    time_text = _normalize_time_value(match.group("time"))
+    separator = "T" if "T" in match.group("sep") else " "
+    return f"{date_text}{separator}{time_text}"
 
 
 def _normalize_zone_fields(payload: dict[str, Any]) -> None:
@@ -67,6 +123,15 @@ def _normalize_zone_value(value: Any) -> str | None:
         return text
 
     text = text.upper().replace("UTC", "").replace("GMT", "").strip()
+    if ":" not in text:
+        compact_match = re.fullmatch(r"(?P<sign>[+-]?)(?P<digits>\d{3,4})", text)
+        if compact_match:
+            sign = compact_match.group("sign") or "+"
+            digits = compact_match.group("digits")
+            hours = int(digits[:-2])
+            minutes = int(digits[-2:])
+            if minutes < 60:
+                return _format_zone_offset((-1 if sign == "-" else 1) * (hours + minutes / 60))
     match = _ZONE_HM_RE.match(text)
     if not match:
         if _DECIMAL_RE.match(text):
