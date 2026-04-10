@@ -518,6 +518,45 @@ def test_service_normalizes_human_friendly_birth_fields_before_remote_calls(tmp_
     assert remote_payload["gpsLon"] == pytest.approx(121.4667)
 
 
+@pytest.mark.parametrize("tool_name", ["nongli_time", "qimen", "sixyao"])
+def test_service_normalizes_single_digit_nongli_dates_before_remote_calls(tmp_path, tool_name: str) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    client = CaptureClient()
+    service = HorosaSkillService(settings, client=client, store=MemoryStore(settings), js_client=FakeJsClient())
+
+    payload = {
+        "date": "2028/4/6",
+        "time": "9:3",
+        "zone": "8",
+        "lat": "31.2167",
+        "lon": "121.4667",
+        "ad": 1,
+    }
+    if tool_name == "sixyao":
+        payload["question"] = "测试六爻输出"
+
+    result = service.run_tool(tool_name, payload, save_result=False)
+
+    assert result.ok is True
+    assert result.input_normalized["date"] == "2028-04-06"
+    assert result.input_normalized["time"] == "09:03:00"
+    assert result.input_normalized["zone"] == "+08:00"
+    assert result.input_normalized["lat"] == "31n13"
+    assert result.input_normalized["lon"] == "121e28"
+
+    nongli_calls = [call_payload for endpoint, call_payload in client.calls if endpoint == "/nongli/time"]
+    assert nongli_calls, "expected /nongli/time to be called with normalized values"
+    assert nongli_calls[0]["date"] == "2028-04-06"
+    assert nongli_calls[0]["time"] == "09:03:00"
+    assert nongli_calls[0]["zone"] == "+08:00"
+    assert nongli_calls[0]["lat"] == "31n13"
+    assert nongli_calls[0]["lon"] == "121e28"
+
+
 def test_all_callable_techniques_keep_non_empty_structured_export_contracts(tmp_path) -> None:
     settings = Settings(
         server_root="http://127.0.0.1:9999",
