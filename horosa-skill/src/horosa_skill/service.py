@@ -92,6 +92,30 @@ def _slash_date_prefix(value: Any) -> Any:
     return f"{value[:4]}/{value[5:7]}/{value[8:10]}{value[10:]}"
 
 
+def _dash_date_prefix(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    if len(value) < 10 or value[4] != "/" or value[7] != "/":
+        return value
+    return f"{value[:4]}-{value[5:7]}-{value[8:10]}{value[10:]}"
+
+
+def _java_zone_hour(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    if len(text) != 6 or text[0] not in "+-" or text[3] != ":":
+        return value
+    hours = text[1:3]
+    minutes = text[4:6]
+    if not (hours.isdigit() and minutes == "00"):
+        return value
+    signed = int(hours)
+    if text[0] == "-":
+        signed = -signed
+    return str(signed)
+
+
 def _java_chart_payload(endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
     if endpoint not in _JAVA_CHART_DATE_ENDPOINTS:
         return payload
@@ -100,6 +124,48 @@ def _java_chart_payload(endpoint: str, payload: dict[str, Any]) -> dict[str, Any
         if key in normalized:
             normalized[key] = _slash_date_prefix(normalized[key])
     return normalized
+
+
+def _java_chart_payload_candidates(endpoint: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
+    first = _java_chart_payload(endpoint, payload)
+    if endpoint not in _JAVA_CHART_DATE_ENDPOINTS:
+        return [first]
+
+    variants: list[dict[str, Any]] = []
+
+    def add(candidate: dict[str, Any]) -> None:
+        if candidate not in variants:
+            variants.append(candidate)
+
+    date_variants = [dict(first)]
+    dashed = dict(first)
+    for key in ("date", "datetime"):
+        if key in dashed:
+            dashed[key] = _dash_date_prefix(dashed[key])
+    if dashed != first:
+        date_variants.append(dashed)
+
+    zone_hour = _java_zone_hour(first.get("zone"))
+    zone_values = [first.get("zone")]
+    if zone_hour != first.get("zone"):
+        zone_values.append(zone_hour)
+
+    for date_candidate in date_variants:
+        for zone_value in zone_values:
+            candidate = dict(date_candidate)
+            if "zone" in candidate:
+                candidate["zone"] = zone_value
+            add(candidate)
+
+            gps_lon = candidate.get("gpsLon")
+            if isinstance(gps_lon, (int, float)) and gps_lon < 0:
+                absolute_lon = dict(candidate)
+                absolute_lon["gpsLon"] = abs(gps_lon)
+                add(absolute_lon)
+
+            without_gps = {key: value for key, value in candidate.items() if key not in {"gpsLat", "gpsLon"}}
+            add(without_gps)
+    return variants
 
 
 def _generic_summary(tool_name: str, data: dict[str, Any]) -> list[str]:
@@ -2546,30 +2612,46 @@ class HorosaSkillService:
     def _call_remote(self, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
         if not self._remote_runtime_ready and not self.client.probe("/common/time"):
             self.runtime_manager.start_local_services()
-        remote_payload = _java_chart_payload(endpoint, payload)
-        try:
-            data = self.client.call(endpoint, remote_payload)
-        except ToolTransportError as exc:
-            body = str(exc.details.get("body", ""))
-            if exc.code == "transport.http_error" and "200001" in body and "param error" in body:
-                payload_preview = {
-                    key: remote_payload.get(key)
+        candidate_payloads = _java_chart_payload_candidates(endpoint, payload)
+        param_errors: list[tuple[dict[str, Any], ToolTransportError]] = []
+        for remote_payload in candidate_payloads:
+            try:
+                data = self.client.call(endpoint, remote_payload)
+                break
+            except ToolTransportError as exc:
+                body = str(exc.details.get("body", ""))
+                is_param_error = exc.code == "transport.http_error" and "200001" in body and "param error" in body
+                if not is_param_error:
+                    raise
+                param_errors.append((remote_payload, exc))
+        else:
+            remote_payload, exc = param_errors[-1]
+            payload_preview = {
+                key: remote_payload.get(key)
+                for key in ("date", "time", "zone", "lat", "lon", "gpsLat", "gpsLon", "dirZone", "dirLat", "dirLon")
+                if key in remote_payload
+            }
+            attempted_payloads = [
+                {
+                    key: attempted.get(key)
                     for key in ("date", "time", "zone", "lat", "lon", "gpsLat", "gpsLon", "dirZone", "dirLat", "dirLon")
-                    if key in remote_payload
+                    if key in attempted
                 }
-                raise ToolTransportError(
-                    "Horosa backend rejected the birth parameters.",
-                    code="tool.backend_param_error",
-                    details={
-                        **exc.details,
-                        "payload_preview": payload_preview,
-                        "hint": (
-                            "Use timezone like `+08:00` and compact coordinates like `31n13` / `121e28`, or send decimal "
-                            "coordinates so Horosa Skill can normalize them automatically."
-                        ),
-                    },
-                ) from exc
-            raise
+                for attempted, _error in param_errors
+            ]
+            raise ToolTransportError(
+                "Horosa backend rejected the birth parameters.",
+                code="tool.backend_param_error",
+                details={
+                    **exc.details,
+                    "payload_preview": payload_preview,
+                    "attempted_payloads": attempted_payloads,
+                    "hint": (
+                        "Use timezone like `+08:00` and compact coordinates like `31n13` / `121e28`, or send decimal "
+                        "coordinates so Horosa Skill can normalize them automatically."
+                    ),
+                },
+            ) from exc
         self._remote_runtime_ready = True
         unwrapped = self._unwrap_result(data)
         if not isinstance(unwrapped, dict):

@@ -8,9 +8,10 @@ from horosa_skill.exports.parser import parse_export_content
 from horosa_skill.engine.client import HorosaApiClient
 from horosa_skill.engine.js_client import HorosaJsEngineClient
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
+from horosa_skill.errors import ToolTransportError
 from horosa_skill.knowledge import build_knowledge_registry
 from horosa_skill.memory.store import MemoryStore
-from horosa_skill.service import TOOL_EXPORT_TECHNIQUE_MAP, HorosaSkillService, _java_chart_payload
+from horosa_skill.service import TOOL_EXPORT_TECHNIQUE_MAP, HorosaSkillService, _java_chart_payload, _java_chart_payload_candidates
 from horosa_skill.testing_payloads import build_sample_payloads
 
 
@@ -568,6 +569,55 @@ def test_java_chart_payload_slashes_datetime_only_for_chart_family() -> None:
 
     nongli_payload = _java_chart_payload("/nongli/time", {"date": "2028-04-06"})
     assert nongli_payload["date"] == "2028-04-06"
+
+
+def test_java_chart_payload_candidates_cover_windows_runtime_variants() -> None:
+    candidates = _java_chart_payload_candidates(
+        "/chart",
+        {"date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "gpsLon": -174.5},
+    )
+
+    assert {"date": "2028/04/06", "time": "09:33:00", "zone": "+08:00", "gpsLon": -174.5} in candidates
+    assert {"date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "gpsLon": -174.5} in candidates
+    assert {"date": "2028/04/06", "time": "09:33:00", "zone": "8", "gpsLon": -174.5} in candidates
+    assert {"date": "2028/04/06", "time": "09:33:00", "zone": "+08:00", "gpsLon": 174.5} in candidates
+    assert {"date": "2028-04-06", "time": "09:33:00", "zone": "8", "gpsLon": 174.5} in candidates
+    assert {"date": "2028-04-06", "time": "09:33:00", "zone": "8"} in candidates
+
+
+def test_service_retries_chart_payload_variants_after_backend_param_error(tmp_path) -> None:
+    class RetryChartClient(FakeClient):
+        def __init__(self) -> None:
+            super().__init__()
+            self.calls: list[tuple[str, dict]] = []
+
+        def call(self, endpoint: str, payload: dict) -> dict:
+            self.calls.append((endpoint, dict(payload)))
+            if endpoint == "/chart" and payload.get("zone") != "8":
+                raise ToolTransportError(
+                    "backend rejected payload",
+                    code="transport.http_error",
+                    details={"endpoint": endpoint, "status_code": 500, "body": '{"ResultCode":200001,"Result":"param error"}'},
+                )
+            return super().call(endpoint, payload)
+
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    client = RetryChartClient()
+    service = HorosaSkillService(settings, client=client, store=MemoryStore(settings), js_client=FakeJsClient())
+
+    result = service.run_tool(
+        "chart",
+        {"date": "2026-04-04", "time": "15:58:35", "zone": "+08:00", "lat": "26n04", "lon": "119e19"},
+        save_result=False,
+    )
+
+    assert result.ok is True
+    assert result.input_normalized["zone"] == "+08:00"
+    assert any(payload.get("zone") == "8" for endpoint, payload in client.calls if endpoint == "/chart")
 
 
 def test_sanshiunited_subresults_use_compact_export_contracts(tmp_path) -> None:
