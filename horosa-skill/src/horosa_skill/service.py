@@ -81,6 +81,27 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
 }
 
 
+_JAVA_CHART_DATE_ENDPOINTS = {"/chart", "/chart13", "/india/chart"}
+
+
+def _slash_date_prefix(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    if len(value) < 10 or value[4] != "-" or value[7] != "-":
+        return value
+    return f"{value[:4]}/{value[5:7]}/{value[8:10]}{value[10:]}"
+
+
+def _java_chart_payload(endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
+    if endpoint not in _JAVA_CHART_DATE_ENDPOINTS:
+        return payload
+    normalized = dict(payload)
+    for key in ("date", "datetime"):
+        if key in normalized:
+            normalized[key] = _slash_date_prefix(normalized[key])
+    return normalized
+
+
 def _generic_summary(tool_name: str, data: dict[str, Any]) -> list[str]:
     if tool_name == "export_registry":
         count = len(data.get("techniques", []))
@@ -2455,6 +2476,41 @@ def _build_dispatch_export_contract(result: ToolEnvelope) -> dict[str, Any]:
     }
 
 
+def _build_compact_subresult_contract(result: ToolEnvelope) -> dict[str, Any]:
+    data = result.data if isinstance(result.data, dict) else {}
+    export_snapshot = data.get("export_snapshot") if isinstance(data.get("export_snapshot"), dict) else None
+    export_format = data.get("export_format") if isinstance(data.get("export_format"), dict) else None
+    section_titles = []
+    if isinstance(export_format, dict):
+        for section in export_format.get("sections", []):
+            if isinstance(section, dict) and section.get("title"):
+                section_titles.append(section["title"])
+    return {
+        "ok": result.ok,
+        "tool": result.tool,
+        "version": result.version,
+        "input_normalized": result.input_normalized,
+        "summary": list(result.summary),
+        "warnings": list(result.warnings),
+        "memory_ref": result.memory_ref.model_dump(mode="json") if result.memory_ref else None,
+        "trace_id": result.trace_id,
+        "group_id": result.group_id,
+        "export_contract": {
+            "has_export_snapshot": isinstance(export_snapshot, dict),
+            "has_export_format": isinstance(export_format, dict),
+            "technique": export_snapshot.get("technique") if isinstance(export_snapshot, dict) else None,
+            "selected_sections": list(export_format.get("selected_sections", [])) if isinstance(export_format, dict) else [],
+            "format_source": export_format.get("format_source") if isinstance(export_format, dict) else None,
+            "section_count": len(section_titles),
+            "section_titles": section_titles,
+            "bundle_version": export_format.get("bundle_version") if isinstance(export_format, dict) else None,
+            "provenance": export_format.get("provenance") if isinstance(export_format, dict) else None,
+            "citation": export_format.get("citation") if isinstance(export_format, dict) else None,
+        },
+        "error": result.error.model_dump(mode="json") if result.error else None,
+    }
+
+
 class HorosaSkillService:
     def __init__(
         self,
@@ -2490,15 +2546,16 @@ class HorosaSkillService:
     def _call_remote(self, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
         if not self._remote_runtime_ready and not self.client.probe("/common/time"):
             self.runtime_manager.start_local_services()
+        remote_payload = _java_chart_payload(endpoint, payload)
         try:
-            data = self.client.call(endpoint, payload)
+            data = self.client.call(endpoint, remote_payload)
         except ToolTransportError as exc:
             body = str(exc.details.get("body", ""))
             if exc.code == "transport.http_error" and "200001" in body and "param error" in body:
                 payload_preview = {
-                    key: payload.get(key)
+                    key: remote_payload.get(key)
                     for key in ("date", "time", "zone", "lat", "lon", "gpsLat", "gpsLon", "dirZone", "dirLat", "dirLon")
-                    if key in payload
+                    if key in remote_payload
                 }
                 raise ToolTransportError(
                     "Horosa backend rejected the birth parameters.",
@@ -2753,9 +2810,9 @@ class HorosaSkillService:
             "taiyi": taiyi_result.data.get("pan", {}),
             "liureng": liureng_result.data.get("liureng", {}),
             "subresults": {
-                "qimen": qimen_result.model_dump(mode="json"),
-                "taiyi": taiyi_result.model_dump(mode="json"),
-                "liureng_gods": liureng_result.model_dump(mode="json"),
+                "qimen": _build_compact_subresult_contract(qimen_result),
+                "taiyi": _build_compact_subresult_contract(taiyi_result),
+                "liureng_gods": _build_compact_subresult_contract(liureng_result),
             },
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="sanshiunited", snapshot_text=snapshot_text),
