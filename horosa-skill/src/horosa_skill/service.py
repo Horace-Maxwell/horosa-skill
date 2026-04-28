@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timezone, datetime
+from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
@@ -26,9 +27,18 @@ from horosa_skill.exports import build_export_registry, get_technique_info, pars
 from horosa_skill.input_normalization import normalize_request_payload
 from horosa_skill.knowledge import build_knowledge_registry, read_knowledge_entry
 from horosa_skill.memory.store import MemoryStore
+from horosa_skill.reports import ReportBuilder, render_report
 from horosa_skill.runtime import HorosaRuntimeManager
 from horosa_skill.schemas.common import DispatchEnvelope, ErrorInfo, ToolEnvelope
-from horosa_skill.schemas.tools import DispatchInput, MemoryAnswerInput, MemoryQueryInput, MemoryShowInput
+from horosa_skill.schemas.tools import (
+    DispatchInput,
+    MemoryAnswerInput,
+    MemoryQueryInput,
+    MemoryShowInput,
+    ReportFromToolInput,
+    ReportRenderInput,
+    ReportTemplateInput,
+)
 from horosa_skill.tracing import TraceRecorder
 
 
@@ -2460,6 +2470,7 @@ class HorosaSkillService:
         self.js_client = js_client or HorosaJsEngineClient(settings)
         self.runtime_manager = runtime_manager or HorosaRuntimeManager(settings)
         self.tracer = TraceRecorder(settings)
+        self.report_builder = ReportBuilder()
         self._remote_runtime_ready = False
 
     def _unwrap_result(self, payload: Any) -> Any:
@@ -3130,6 +3141,8 @@ class HorosaSkillService:
                 run_id=request.run_id,
                 tool=request.tool,
                 entity=request.entity,
+                text=request.text,
+                artifact_kind=request.artifact_kind,
                 after=request.after,
                 before=request.before,
                 limit=max(1, request.limit),
@@ -3184,6 +3197,269 @@ class HorosaSkillService:
                 "group_id": trace["group_id"],
                 "summary": ["已读取对应 run 的本地完整记录。"],
             }
+
+    def report_template(self, payload: dict[str, Any]) -> dict[str, Any]:
+        with self.tracer.span(
+            workflow_name="report.template",
+            metadata={"entrypoint": "report.template", "payload": payload},
+        ) as trace:
+            try:
+                request = ReportTemplateInput.model_validate(payload)
+                run, source_artifact = self._load_report_source(request.run_id, request.tool_name)
+            except ValidationError as exc:
+                trace["error_code"] = "report.template.invalid_payload"
+                raise ToolValidationError(
+                    "Invalid payload for report template.",
+                    code="report.template.invalid_payload",
+                    details={"errors": exc.errors()},
+                ) from exc
+            template = self.report_builder.build_template(
+                run=run,
+                source_artifact=source_artifact,
+                language=request.language,
+            )
+            template["trace_id"] = trace["trace_id"]
+            template["group_id"] = trace["group_id"]
+            trace["run_id"] = request.run_id
+            trace["tool_name"] = template.get("tool_name")
+            return template
+
+    def report_render(self, payload: dict[str, Any]) -> dict[str, Any]:
+        with self.tracer.span(
+            workflow_name="report.render",
+            metadata={"entrypoint": "report.render", "payload": payload},
+        ) as trace:
+            try:
+                request = ReportRenderInput.model_validate(payload)
+                normalized_format = self._normalize_report_format(request.format)
+                run, source_artifact = self._load_report_source(request.run_id, request.tool_name)
+                source_tool_name = str(source_artifact.get("tool_name") or request.tool_name or "")
+                answer_writeback = self._record_report_ai_if_present(
+                    run=run,
+                    tool_name=source_tool_name,
+                    ai_report=request.ai_report,
+                    format_name=normalized_format,
+                )
+                if answer_writeback:
+                    run, source_artifact = self._load_report_source(request.run_id, request.tool_name)
+                document = self.report_builder.build_document(
+                    run=run,
+                    source_artifact=source_artifact,
+                    language=request.language,
+                    title=request.title,
+                    ai_report=request.ai_report,
+                    include_raw_json=request.include_raw_json,
+                )
+                tool_name = str(document["source"]["tool_name"])
+                output_path = (
+                    Path(request.output_path).expanduser().resolve()
+                    if request.output_path
+                    else self.store.default_report_path(
+                        run_id=request.run_id,
+                        tool_name=tool_name,
+                        format_name=normalized_format,
+                    )
+                )
+                rendered = render_report(document, output_path=output_path, format_name=normalized_format)
+                artifact = self.store.record_report_artifact(
+                    run_id=request.run_id,
+                    tool_name=tool_name,
+                    format_name=normalized_format,
+                    path=Path(rendered["path"]),
+                    trace_id=trace["trace_id"],
+                    group_id=trace["group_id"],
+                )
+            except ValidationError as exc:
+                trace["error_code"] = "report.render.invalid_payload"
+                raise ToolValidationError(
+                    "Invalid payload for report render.",
+                    code="report.render.invalid_payload",
+                    details={"errors": exc.errors()},
+                ) from exc
+            except ValueError as exc:
+                trace["error_code"] = "report.render.failed"
+                raise ToolValidationError(
+                    str(exc),
+                    code="report.render.failed",
+                    details={"payload": payload},
+                ) from exc
+
+            result = {
+                **artifact,
+                "document_schema": document["schema"],
+                "title": document["title"],
+                "source": document["source"],
+                "answer_writeback": answer_writeback,
+                "summary": [f"已生成 {normalized_format.upper()} 结构化报告：{artifact['artifact_path']}"],
+                "trace_id": trace["trace_id"],
+                "group_id": trace["group_id"],
+            }
+            trace["run_id"] = request.run_id
+            trace["artifact_path"] = artifact["artifact_path"]
+            trace["success"] = True
+            return result
+
+    def report_from_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        with self.tracer.span(
+            workflow_name="report.from_tool",
+            metadata={"entrypoint": "report.from_tool", "payload": payload},
+        ) as trace:
+            try:
+                request = ReportFromToolInput.model_validate(payload)
+                normalized_format = self._normalize_report_format(request.format)
+            except ValidationError as exc:
+                trace["error_code"] = "report.from_tool.invalid_payload"
+                raise ToolValidationError(
+                    "Invalid payload for report from tool.",
+                    code="report.from_tool.invalid_payload",
+                    details={"errors": exc.errors()},
+                ) from exc
+
+            result = self.run_tool(
+                request.tool_name,
+                request.payload,
+                save_result=True,
+                query_text=request.question,
+                group_id=trace["group_id"],
+            )
+            if not result.memory_ref:
+                raise ToolValidationError(
+                    "Tool result was not saved and cannot be rendered as a report.",
+                    code="report.from_tool.unsaved_result",
+                    details={"tool_name": request.tool_name},
+                )
+            rendered = self.report_render(
+                {
+                    "run_id": result.memory_ref.run_id,
+                    "tool_name": request.tool_name,
+                    "format": normalized_format,
+                    "language": request.language,
+                    "title": request.title,
+                    "ai_report": request.ai_report,
+                    "include_raw_json": request.include_raw_json,
+                    "output_path": request.output_path,
+                }
+            )
+            rendered["tool_result"] = {
+                "ok": result.ok,
+                "tool": result.tool,
+                "input_normalized": result.input_normalized,
+                "summary": result.summary,
+                "memory_ref": result.memory_ref.model_dump(mode="json") if result.memory_ref else None,
+                "trace_id": result.trace_id,
+                "group_id": result.group_id,
+            }
+            rendered["summary"] = [
+                f"已调用 `{request.tool_name}` 并生成 {normalized_format.upper()} 结构化报告。",
+                *rendered.get("summary", []),
+            ]
+            trace["run_id"] = result.memory_ref.run_id
+            trace["artifact_path"] = rendered.get("artifact_path")
+            trace["success"] = True
+            return rendered
+
+    def _normalize_report_format(self, value: str) -> str:
+        normalized = str(value or "").lower().strip()
+        if normalized not in {"json", "docx", "pdf"}:
+            raise ValueError("format must be one of: json, docx, pdf")
+        return normalized
+
+    def _record_report_ai_if_present(
+        self,
+        *,
+        run: dict[str, Any],
+        tool_name: str,
+        ai_report: dict[str, Any],
+        format_name: str,
+    ) -> dict[str, Any] | None:
+        if not ai_report:
+            return None
+        answer_text = self._report_ai_answer_text(ai_report)
+        if not answer_text:
+            return None
+        result = self.store.attach_ai_response(
+            run_id=run["run_id"],
+            user_question=run.get("user_question") or run.get("query_text"),
+            ai_answer=answer_text,
+            ai_answer_structured=ai_report,
+            answer_meta={
+                "source": "report_render",
+                "tool_name": tool_name,
+                "format": format_name,
+                "schema": "horosa.skill.report.answer_writeback.v1",
+            },
+        )
+        return {
+            "ok": result["ok"],
+            "run_id": result["run_id"],
+            "source": "report_render",
+            "tool_name": tool_name,
+            "format": format_name,
+            "answer_text_chars": len(answer_text),
+            "manifest_path": result.get("manifest_path"),
+        }
+
+    def _report_ai_answer_text(self, ai_report: dict[str, Any]) -> str:
+        for key in ("direct_answer", "answer_text", "executive_summary", "summary", "answer"):
+            value = ai_report.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        sections = ai_report.get("analysis_sections")
+        if isinstance(sections, list):
+            for section in sections:
+                if isinstance(section, dict):
+                    value = section.get("body") or section.get("content")
+                    if isinstance(value, str) and value.strip():
+                        return value.strip()
+                elif isinstance(section, str) and section.strip():
+                    return section.strip()
+        return ""
+
+    def _load_report_source(self, run_id: str, tool_name: str | None) -> tuple[dict[str, Any], dict[str, Any]]:
+        runs = self.store.query_runs(run_id=run_id, tool=tool_name, include_payload=True, limit=1)
+        if not runs:
+            raise ToolValidationError(
+                f"Run not found: {run_id}",
+                code="report.run_not_found",
+                details={"run_id": run_id, "tool_name": tool_name},
+            )
+        run = runs[0]
+        artifacts = run.get("artifacts") if isinstance(run.get("artifacts"), list) else []
+        candidates = [
+            artifact
+            for artifact in artifacts
+            if artifact.get("kind") == "tool_result"
+            and isinstance(artifact.get("payload"), dict)
+            and (tool_name is None or artifact.get("tool_name") == tool_name)
+        ]
+        if not candidates and tool_name is None:
+            candidates = [
+                artifact
+                for artifact in artifacts
+                if artifact.get("kind") == "dispatch_result"
+                and isinstance(artifact.get("payload"), dict)
+            ]
+        if not candidates:
+            raise ToolValidationError(
+                "No reportable tool artifact found for this run.",
+                code="report.source_not_found",
+                details={"run_id": run_id, "tool_name": tool_name},
+            )
+        source = candidates[0]
+        payload = source.get("payload")
+        data = payload.get("data") if isinstance(payload, dict) else {}
+        source_tool = str(source.get("tool_name") or "")
+        if source.get("kind") == "tool_result" and source_tool in TOOL_EXPORT_TECHNIQUE_MAP and not (
+            isinstance(data, dict)
+            and isinstance(data.get("export_snapshot"), dict)
+            and isinstance(data.get("export_format"), dict)
+        ):
+            raise ToolValidationError(
+                "Selected artifact does not contain a complete export contract.",
+                code="report.export_contract_missing",
+                details={"run_id": run_id, "tool_name": source.get("tool_name")},
+            )
+        return run, source
 
     def dispatch(self, payload: dict[str, Any], *, evaluation_case_id: str | None = None) -> DispatchEnvelope:
         try:

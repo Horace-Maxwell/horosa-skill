@@ -11,7 +11,15 @@ from horosa_skill.config import Settings
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.input_normalization import normalize_request_payload
 from horosa_skill.schemas.common import DispatchEnvelope, ToolEnvelope
-from horosa_skill.schemas.tools import DispatchInput, MemoryAnswerInput, MemoryQueryInput, MemoryShowInput
+from horosa_skill.schemas.tools import (
+    DispatchInput,
+    MemoryAnswerInput,
+    MemoryQueryInput,
+    MemoryShowInput,
+    ReportFromToolInput,
+    ReportRenderInput,
+    ReportTemplateInput,
+)
 from horosa_skill.service import HorosaSkillService
 
 
@@ -114,6 +122,38 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
     horosa_memory_show.__signature__ = _signature_for_input_model(MemoryShowInput)
     horosa_memory_show.__annotations__ = {"return": dict[str, Any]}
     mcp.tool(name="horosa_memory_show")(horosa_memory_show)
+
+    def horosa_report_template(**kwargs: Any) -> dict[str, Any]:
+        return service.report_template(
+            _normalize_mcp_request(_merge_mcp_arguments(kwargs), ReportTemplateInput)
+        )
+    horosa_report_template.__signature__ = _signature_for_input_model(ReportTemplateInput)
+    horosa_report_template.__annotations__ = {"return": dict[str, Any]}
+    mcp.tool(name="horosa_report_template")(horosa_report_template)
+
+    def horosa_report_render(**kwargs: Any) -> dict[str, Any]:
+        return service.report_render(
+            _normalize_mcp_request(_merge_mcp_arguments(kwargs), ReportRenderInput)
+        )
+    horosa_report_render.__signature__ = _signature_for_input_model(ReportRenderInput)
+    horosa_report_render.__annotations__ = {"return": dict[str, Any]}
+    mcp.tool(name="horosa_report_render")(horosa_report_render)
+
+    def horosa_report_from_run(**kwargs: Any) -> dict[str, Any]:
+        return service.report_render(
+            _normalize_mcp_request(_merge_mcp_arguments(kwargs), ReportRenderInput)
+        )
+    horosa_report_from_run.__signature__ = _signature_for_input_model(ReportRenderInput)
+    horosa_report_from_run.__annotations__ = {"return": dict[str, Any]}
+    mcp.tool(name="horosa_report_from_run")(horosa_report_from_run)
+
+    def horosa_report_from_tool(**kwargs: Any) -> dict[str, Any]:
+        return service.report_from_tool(
+            _normalize_mcp_request(_merge_mcp_arguments(kwargs), ReportFromToolInput)
+        )
+    horosa_report_from_tool.__signature__ = _signature_for_input_model(ReportFromToolInput)
+    horosa_report_from_tool.__annotations__ = {"return": dict[str, Any]}
+    mcp.tool(name="horosa_report_from_tool")(horosa_report_from_tool)
 
     for definition in TOOL_DEFINITIONS.values():
         input_model = definition.input_model

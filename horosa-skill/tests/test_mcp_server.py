@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from horosa_skill.schemas.tools import BirthInput, DispatchInput, KnowledgeReadInput, KnowledgeRegistryInput, MemoryQueryInput
+from horosa_skill.schemas.tools import BirthInput, DispatchInput, KnowledgeReadInput, KnowledgeRegistryInput, MemoryQueryInput, ReportRenderInput
 from horosa_skill.surfaces.mcp_server import _merge_mcp_arguments, _normalize_mcp_request
 
 
@@ -37,10 +37,17 @@ def test_merge_mcp_arguments_prefers_request_when_present() -> None:
 
 def test_normalize_mcp_request_accepts_flattened_memory_query_fields() -> None:
     payload = _normalize_mcp_request(
-        _merge_mcp_arguments({"tool": "chart", "entity": "Horosa Smoke", "limit": 5}),
+        _merge_mcp_arguments({"tool": "chart", "entity": "Horosa Smoke", "text": "事业", "artifact_kind": "report_pdf", "limit": 5}),
         MemoryQueryInput,
     )
-    assert payload == {"tool": "chart", "entity": "Horosa Smoke", "limit": 5, "include_payload": True}
+    assert payload == {
+        "tool": "chart",
+        "entity": "Horosa Smoke",
+        "text": "事业",
+        "artifact_kind": "report_pdf",
+        "limit": 5,
+        "include_payload": True,
+    }
 
 
 def test_normalize_mcp_request_coerces_human_friendly_birth_fields() -> None:
@@ -61,3 +68,22 @@ def test_normalize_mcp_request_coerces_human_friendly_birth_fields() -> None:
     assert payload["lon"] == "121e28"
     assert payload["gpsLat"] == pytest.approx(31.2167)
     assert payload["gpsLon"] == pytest.approx(121.4667)
+
+
+def test_normalize_mcp_request_accepts_report_render_fields() -> None:
+    payload = _normalize_mcp_request(
+        _merge_mcp_arguments(
+            {
+                "run_id": "run-1",
+                "tool_name": "chart",
+                "format": "pdf",
+                "ai_report": {"executive_summary": "摘要"},
+            }
+        ),
+        ReportRenderInput,
+    )
+
+    assert payload["run_id"] == "run-1"
+    assert payload["tool_name"] == "chart"
+    assert payload["format"] == "pdf"
+    assert payload["ai_report"]["executive_summary"] == "摘要"
