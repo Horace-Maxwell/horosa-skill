@@ -9,7 +9,7 @@ def build_sample_payloads() -> dict[str, dict]:
         "lat": "41n26",
         "lon": "174w30",
         "gpsLat": -41.433333,
-        "gpsLon": 174.5,
+        "gpsLon": -174.5,
         "hsys": 1,
         "tradition": False,
         "predictive": True,

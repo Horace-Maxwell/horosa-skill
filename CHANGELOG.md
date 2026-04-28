@@ -7,6 +7,21 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-04-28
+
+### Fixed
+
+- Send Java chart-family runtime payload dates with slash-formatted date prefixes
+  while preserving normalized API inputs, fixing Windows `/chart` backend
+  `200001 param error` failures seen through Cursor/OpenClaw-style MCP calls.
+- Corrected the self-check sample longitude sign for west-longitude birth data.
+
+### Changed
+
+- CI now includes the Windows OpenClaw path plus full Horosa self-check coverage,
+  so chart, report, memory, retrieval, dispatch, and AI answer write-back flows
+  are verified on Windows before release confidence claims.
+
 ## [0.4.0] - 2026-04-28
 
 ### Added
