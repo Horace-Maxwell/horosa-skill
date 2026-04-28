@@ -324,6 +324,59 @@ def test_run_subprocess_json_accepts_diagnostic_prefix(monkeypatch, tmp_path: Pa
     assert payload == {"status": "ok", "tools": []}
 
 
+def test_openclaw_smoke_falls_back_to_headless_tool_when_chart_fails(monkeypatch, tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    config_path = workspace / "config" / "mcporter.json"
+    output_path = tmp_path / "smoke.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text("{}", encoding="utf-8")
+    commands: list[list[str]] = []
+
+    def fake_run_subprocess_json(command: list[str], *, cwd: Path) -> dict[str, object]:
+        commands.append(command)
+        if "list" in command:
+            return {"status": "ok", "tools": ["chart", "qimen"]}
+        if any("horosa_knowledge_registry" in item for item in command):
+            return {"ok": True}
+        if any("horosa_astro_chart" in item for item in command):
+            return {
+                "ok": False,
+                "error": {"code": "tool.backend_param_error", "message": "200001 param error"},
+            }
+        if any("horosa_cn_qimen" in item for item in command):
+            return {
+                "ok": True,
+                "memory_ref": {"run_id": "qimen-run", "artifact_path": str(tmp_path / "qimen.json")},
+            }
+        if any("horosa_memory_show" in item for item in command):
+            args_index = command.index("--args") + 1
+            assert json.loads(command[args_index])["run_id"] == "qimen-run"
+            return {"ok": True}
+        raise AssertionError(command)
+
+    monkeypatch.setattr(cli, "resolve_mcporter_command", lambda: ["mcporter"])
+    monkeypatch.setattr(cli, "_run_subprocess_json", fake_run_subprocess_json)
+
+    report = cli._run_openclaw_smoke_check(
+        workspace_root=workspace,
+        config_path=config_path,
+        output_path=output_path,
+    )
+
+    assert report["ok"] is True
+    assert report["chart_ok"] is False
+    assert report["chart_error"]["code"] == "tool.backend_param_error"
+    assert report["fallback_tool"] == "horosa_cn_qimen"
+    assert report["fallback_tool_ok"] is True
+    assert report["compute_ok"] is True
+    assert report["compute_tool"] == "horosa_cn_qimen"
+    assert report["run_id"] == "qimen-run"
+    assert "chart_ok" not in report["failed_checks"]
+    assert "compute_ok" not in report["failed_checks"]
+    assert json.loads(output_path.read_text(encoding="utf-8"))["run_id"] == "qimen-run"
+    assert len(commands) == 5
+
+
 def test_openclaw_check_uses_extended_timeout_for_tool_calls(monkeypatch, tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     config_path = workspace / "config" / "mcporter.json"
