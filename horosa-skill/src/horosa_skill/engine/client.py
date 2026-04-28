@@ -203,3 +203,63 @@ class HorosaApiClient:
                 code="transport.invalid_json",
                 details={"endpoint": endpoint, "message": str(exc)},
             ) from exc
+
+
+class HorosaPlainJsonClient:
+    def __init__(
+        self,
+        server_root: str,
+        timeout: float = 60.0,
+        *,
+        transport: httpx.BaseTransport | None = None,
+    ) -> None:
+        self.server_root = server_root.rstrip("/")
+        self.timeout = timeout
+        self.transport = transport
+
+    def probe(self, endpoint: str = "/", payload: dict[str, Any] | None = None) -> bool:
+        url = f"{self.server_root}{endpoint}"
+        try:
+            with httpx.Client(timeout=min(self.timeout, 5.0), transport=self.transport, follow_redirects=True) as client:
+                if payload is None:
+                    response = client.get(url)
+                else:
+                    response = client.post(url, json=payload)
+                return response.status_code < 500
+        except Exception:
+            return False
+
+    def call(self, endpoint: str, payload: dict[str, Any]) -> Any:
+        url = f"{self.server_root}{endpoint}"
+        try:
+            with httpx.Client(timeout=self.timeout, transport=self.transport) as client:
+                response = client.post(url, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                if isinstance(data, dict) and data.get("err"):
+                    raise ToolTransportError(
+                        "Horosa chart server rejected the request payload.",
+                        code="tool.backend_param_error",
+                        details={"endpoint": endpoint, "status_code": response.status_code, "body": response.text[:1000]},
+                    )
+                return data
+        except ToolTransportError:
+            raise
+        except httpx.HTTPStatusError as exc:
+            raise ToolTransportError(
+                f"Horosa chart server returned HTTP {exc.response.status_code}.",
+                code="transport.http_error",
+                details={"endpoint": endpoint, "status_code": exc.response.status_code, "body": exc.response.text[:1000]},
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise ToolTransportError(
+                "Could not reach the Horosa chart server.",
+                code="transport.connection_error",
+                details={"endpoint": endpoint, "message": str(exc)},
+            ) from exc
+        except ValueError as exc:
+            raise ToolTransportError(
+                "Horosa chart server returned invalid JSON.",
+                code="transport.invalid_json",
+                details={"endpoint": endpoint, "message": str(exc)},
+            ) from exc
