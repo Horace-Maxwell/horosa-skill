@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from horosa_skill import __version__
 from horosa_skill.config import Settings
-from horosa_skill.engine.client import HorosaApiClient
+from horosa_skill.engine.client import HorosaApiClient, HorosaPlainJsonClient
 from horosa_skill.engine.decennials import (
     DECENNIAL_CALENDAR_ACTUAL,
     DECENNIAL_CALENDAR_TRADITIONAL,
@@ -82,6 +82,23 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
 
 
 _JAVA_CHART_DATE_ENDPOINTS = {"/chart", "/chart13", "/india/chart"}
+_PYTHON_CHART_ENDPOINTS = {
+    "/chart",
+    "/chart13",
+    "/predict/solarreturn",
+    "/predict/lunarreturn",
+    "/predict/solararc",
+    "/predict/givenyear",
+    "/predict/profection",
+    "/predict/pd",
+    "/predict/pdchart",
+    "/predict/zr",
+    "/predict/dice",
+    "/modern/relative",
+    "/india/chart",
+    "/germany/midpoint",
+    "/jieqi/year",
+}
 
 
 def _slash_date_prefix(value: Any) -> Any:
@@ -166,6 +183,10 @@ def _java_chart_payload_candidates(endpoint: str, payload: dict[str, Any]) -> li
             without_gps = {key: value for key, value in candidate.items() if key not in {"gpsLat", "gpsLon"}}
             add(without_gps)
     return variants
+
+
+def _chart_server_endpoint(endpoint: str) -> str:
+    return "/" if endpoint == "/chart" else endpoint
 
 
 def _generic_summary(tool_name: str, data: dict[str, Any]) -> list[str]:
@@ -2582,18 +2603,21 @@ class HorosaSkillService:
         self,
         settings: Settings,
         client: HorosaApiClient | None = None,
+        chart_client: HorosaPlainJsonClient | HorosaApiClient | None = None,
         store: MemoryStore | None = None,
         js_client: HorosaJsEngineClient | None = None,
         runtime_manager: HorosaRuntimeManager | None = None,
     ) -> None:
         self.settings = settings
         self.client = client or HorosaApiClient(settings.server_root)
+        self.chart_client = chart_client or (client if client is not None else HorosaPlainJsonClient(settings.chart_server_root))
         self.store = store or MemoryStore(settings)
         self.js_client = js_client or HorosaJsEngineClient(settings)
         self.runtime_manager = runtime_manager or HorosaRuntimeManager(settings)
         self.tracer = TraceRecorder(settings)
         self.report_builder = ReportBuilder()
-        self._remote_runtime_ready = False
+        self._java_runtime_ready = False
+        self._chart_runtime_ready = False
 
     def _unwrap_result(self, payload: Any) -> Any:
         current = payload
@@ -2610,13 +2634,18 @@ class HorosaSkillService:
         return current
 
     def _call_remote(self, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
-        if not self._remote_runtime_ready and not self.client.probe("/common/time"):
+        use_chart_server = endpoint in _PYTHON_CHART_ENDPOINTS
+        client = self.chart_client if use_chart_server else self.client
+        probe_endpoint = "/" if use_chart_server else "/common/time"
+        runtime_ready = self._chart_runtime_ready if use_chart_server else self._java_runtime_ready
+        if not runtime_ready and not client.probe(probe_endpoint):
             self.runtime_manager.start_local_services()
         candidate_payloads = _java_chart_payload_candidates(endpoint, payload)
         param_errors: list[tuple[dict[str, Any], ToolTransportError]] = []
+        remote_endpoint = _chart_server_endpoint(endpoint) if use_chart_server else endpoint
         for remote_payload in candidate_payloads:
             try:
-                data = self.client.call(endpoint, remote_payload)
+                data = client.call(remote_endpoint, remote_payload)
                 break
             except ToolTransportError as exc:
                 body = str(exc.details.get("body", ""))
@@ -2644,6 +2673,8 @@ class HorosaSkillService:
                 code="tool.backend_param_error",
                 details={
                     **exc.details,
+                    "endpoint": endpoint,
+                    "runtime_target": "python_chart" if use_chart_server else "java_backend",
                     "payload_preview": payload_preview,
                     "attempted_payloads": attempted_payloads,
                     "hint": (
@@ -2652,13 +2683,16 @@ class HorosaSkillService:
                     ),
                 },
             ) from exc
-        self._remote_runtime_ready = True
+        if use_chart_server:
+            self._chart_runtime_ready = True
+        else:
+            self._java_runtime_ready = True
         unwrapped = self._unwrap_result(data)
         if not isinstance(unwrapped, dict):
             raise ToolTransportError(
                 "Horosa endpoint returned a non-object result payload.",
                 code="transport.invalid_result_shape",
-                details={"endpoint": endpoint},
+                details={"endpoint": endpoint, "runtime_target": "python_chart" if use_chart_server else "java_backend"},
             )
         return unwrapped
 
