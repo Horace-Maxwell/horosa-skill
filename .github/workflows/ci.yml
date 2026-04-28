@@ -62,3 +62,9 @@ jobs:
           uv run horosa-skill client openclaw-config --format mcporter --isolate-home $manualHome --write $config
           uv run horosa-skill client openclaw-setup --workspace $workspace
           uv run horosa-skill client openclaw-check --workspace $workspace
+          $configJson = Get-Content -Raw -LiteralPath $config | ConvertFrom-Json
+          $serverEnv = $configJson.mcpServers.horosa.env
+          foreach ($entry in $serverEnv.PSObject.Properties) {
+            Set-Item -Path "Env:$($entry.Name)" -Value ([string]$entry.Value)
+          }
+          uv run python scripts/run_full_self_check.py --rounds 1
