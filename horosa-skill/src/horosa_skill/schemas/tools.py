@@ -336,6 +336,8 @@ class MemoryQueryInput(FlexibleModel):
     run_id: str | None = None
     tool: str | None = None
     entity: str | None = None
+    text: str | None = None
+    artifact_kind: str | None = None
     after: str | None = None
     before: str | None = None
     limit: int = 20
@@ -345,3 +347,32 @@ class MemoryQueryInput(FlexibleModel):
 class MemoryShowInput(FlexibleModel):
     run_id: str
     include_payload: bool = True
+
+
+class ReportTemplateInput(FlexibleModel):
+    run_id: str
+    tool_name: str | None = None
+    language: str = "zh-CN"
+
+
+class ReportRenderInput(FlexibleModel):
+    run_id: str
+    tool_name: str | None = None
+    format: str = "pdf"
+    language: str = "zh-CN"
+    title: str | None = None
+    ai_report: dict[str, Any] = Field(default_factory=dict)
+    include_raw_json: bool = False
+    output_path: str | None = None
+
+
+class ReportFromToolInput(FlexibleModel):
+    tool_name: str
+    payload: dict[str, Any]
+    format: str = "pdf"
+    language: str = "zh-CN"
+    title: str | None = None
+    question: str | None = None
+    ai_report: dict[str, Any] = Field(default_factory=dict)
+    include_raw_json: bool = False
+    output_path: str | None = None

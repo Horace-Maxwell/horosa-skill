@@ -42,6 +42,7 @@ knowledge_app = typer.Typer(help="Read bundled Xingque hover knowledge such as æ
 benchmark_app = typer.Typer(help="Run HorosaBench benchmark cases for routing, export parity, and knowledge quality.")
 trace_app = typer.Typer(help="Inspect recent local trace records for tool runs, dispatches, and runtime operations.")
 client_app = typer.Typer(help="Default OpenClaw entry: `openclaw-setup`. Also generate configs and run smoke checks for OpenClaw / mcporter.")
+report_app = typer.Typer(help="Generate structured Horosa reports as JSON, DOCX, or PDF artifacts.")
 app.add_typer(tool_app, name="tool")
 app.add_typer(memory_app, name="memory")
 app.add_typer(export_app, name="export")
@@ -49,6 +50,7 @@ app.add_typer(knowledge_app, name="knowledge")
 app.add_typer(benchmark_app, name="benchmark")
 app.add_typer(trace_app, name="trace")
 app.add_typer(client_app, name="client")
+app.add_typer(report_app, name="report")
 
 
 def _service() -> HorosaSkillService:
@@ -87,6 +89,12 @@ def _load_payload(*, stdin: bool, input_file: Optional[Path]) -> dict:
     if not isinstance(data, dict):
         raise typer.BadParameter("Input JSON must be an object.")
     return data
+
+
+def _load_optional_payload(*, stdin: bool, input_file: Optional[Path]) -> dict:
+    if not stdin and input_file is None:
+        return {}
+    return _load_payload(stdin=stdin, input_file=input_file)
 
 
 def _print_json(data: object) -> None:
@@ -967,7 +975,7 @@ def client_openclaw_check(
     ),
     full: bool = typer.Option(
         False,
-        help="Run the exhaustive 39-tool OpenClaw self-check instead of a quick smoke check.",
+        help="Run the exhaustive all-tool OpenClaw self-check instead of a quick smoke check.",
     ),
     output: Path | None = typer.Option(
         None,
@@ -1049,11 +1057,95 @@ def client_openclaw_check(
         raise typer.Exit(code=2)
 
 
+@report_app.command("template")
+def report_template(
+    run_id: str = typer.Option(..., "--run-id", help="Run id to turn into an AI-fillable report template."),
+    tool: str | None = typer.Option(None, "--tool", help="Optional tool name for dispatch or multi-tool runs."),
+    language: str = typer.Option("zh-CN", "--language", help="Report language tag."),
+) -> None:
+    service = _service()
+    try:
+        result = service.report_template({"run_id": run_id, "tool_name": tool, "language": language})
+    except ToolValidationError as exc:
+        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
+        raise typer.Exit(code=2)
+    _print_json(result)
+
+
+@report_app.command("render")
+def report_render(
+    run_id: str = typer.Option(..., "--run-id", help="Run id to render."),
+    format_name: str = typer.Option("pdf", "--format", help="Output format: json, docx, or pdf."),
+    tool: str | None = typer.Option(None, "--tool", help="Optional tool name for dispatch or multi-tool runs."),
+    output: Path | None = typer.Option(None, "--output", help="Optional output path. Defaults to the Horosa memory output directory."),
+    title: str | None = typer.Option(None, "--title", help="Optional report title."),
+    language: str = typer.Option("zh-CN", "--language", help="Report language tag."),
+    include_raw_json: bool = typer.Option(False, "--include-raw-json/--no-include-raw-json", help="Embed the full source envelope in the report JSON."),
+    stdin: bool = typer.Option(False, "--stdin", help="Read optional ai_report JSON from stdin."),
+    input_file: Optional[Path] = typer.Option(None, "--input", help="Read optional ai_report JSON from a file."),
+) -> None:
+    ai_payload = _load_optional_payload(stdin=stdin, input_file=input_file)
+    ai_report = ai_payload.get("ai_report", ai_payload)
+    service = _service()
+    try:
+        result = service.report_render(
+            {
+                "run_id": run_id,
+                "tool_name": tool,
+                "format": format_name,
+                "language": language,
+                "title": title,
+                "ai_report": ai_report,
+                "include_raw_json": include_raw_json,
+                "output_path": str(output.expanduser()) if output else None,
+            }
+        )
+    except ToolValidationError as exc:
+        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
+        raise typer.Exit(code=2)
+    _print_json(result)
+
+
+@report_app.command("from-tool")
+def report_from_tool(
+    tool: str = typer.Argument(..., help="Tool name such as chart, qimen, liureng_gods, or sixyao."),
+    format_name: str = typer.Option("pdf", "--format", help="Output format: json, docx, or pdf."),
+    output: Path | None = typer.Option(None, "--output", help="Optional output path. Defaults to the Horosa memory output directory."),
+    question: str | None = typer.Option(None, "--question", help="Optional user question to store with this report run."),
+    title: str | None = typer.Option(None, "--title", help="Optional report title."),
+    language: str = typer.Option("zh-CN", "--language", help="Report language tag."),
+    include_raw_json: bool = typer.Option(False, "--include-raw-json/--no-include-raw-json", help="Embed the full source envelope in the report JSON."),
+    stdin: bool = typer.Option(False, "--stdin", help="Read the tool payload JSON from stdin."),
+    input_file: Optional[Path] = typer.Option(None, "--input", help="Read the tool payload JSON from a file."),
+) -> None:
+    payload = _load_payload(stdin=stdin, input_file=input_file)
+    service = _service()
+    try:
+        result = service.report_from_tool(
+            {
+                "tool_name": tool,
+                "payload": payload,
+                "format": format_name,
+                "language": language,
+                "title": title,
+                "question": question,
+                "include_raw_json": include_raw_json,
+                "output_path": str(output.expanduser()) if output else None,
+            }
+        )
+    except ToolValidationError as exc:
+        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
+        raise typer.Exit(code=2)
+    _print_json(result)
+
+
 @memory_app.command("query")
 def memory_query(
     run_id: str | None = typer.Option(None, help="Filter by exact run id."),
     tool: str | None = typer.Option(None, help="Filter by tool name."),
     entity: str | None = typer.Option(None, help="Filter by entity name."),
+    text: str | None = typer.Option(None, help="Search query text, user question, AI answer, subject, tool, artifact path, or artifact kind."),
+    artifact_kind: str | None = typer.Option(None, help="Filter by artifact kind, for example report_json, report_docx, report_pdf, or tool_result."),
     after: str | None = typer.Option(None, help="Only return runs created after this ISO timestamp."),
     before: str | None = typer.Option(None, help="Only return runs created before this ISO timestamp."),
     limit: int = typer.Option(20, help="Maximum runs to return."),
@@ -1064,6 +1156,8 @@ def memory_query(
         run_id=run_id,
         tool=tool,
         entity=entity,
+        text=text,
+        artifact_kind=artifact_kind,
         after=after,
         before=before,
         limit=limit,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -11,7 +12,14 @@ from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.testing_payloads import build_sample_payloads
 
 
-DEFAULT_WORKSPACE = Path("/Users/horacedong/.openclaw/workspace")
+def _default_openclaw_workspace() -> Path:
+    raw = os.environ.get("OPENCLAW_WORKSPACE")
+    if raw:
+        return Path(raw).expanduser()
+    return Path.home() / ".openclaw" / "workspace"
+
+
+DEFAULT_WORKSPACE = _default_openclaw_workspace()
 DEFAULT_OUTPUT = Path.home() / ".horosa-skill" / "self_check_report_openclaw_full.json"
 
 
@@ -195,6 +203,7 @@ def main() -> int:
         "tools": {},
         "dispatch": {},
         "answer_writeback": {},
+        "report_export": {},
         "memory_tools": {},
         "ok": False,
     }
@@ -271,15 +280,55 @@ def main() -> int:
         result_record = show_after.get("result", {})
         _assert(result_record.get("ai_answer_text") == "这是 OpenClaw 全量联调写回测试。", "memory_show missing ai_answer_text")
         report["answer_writeback"] = {"ok": True, "run_id": run_id, "manifest_path": answer_result.get("manifest_path")}
+
+        template_result = _run_mcporter(
+            workspace,
+            config_path,
+            "horosa.horosa_report_template",
+            {"run_id": run_id, "tool_name": "chart"},
+        )
+        _assert(template_result.get("schema") == "horosa.skill.report.template.v1", "report_template failed")
+        render_result = _run_mcporter(
+            workspace,
+            config_path,
+            "horosa.horosa_report_render",
+            {
+                "run_id": run_id,
+                "tool_name": "chart",
+                "format": "pdf",
+                "ai_report": {"executive_summary": "OpenClaw 报告导出联调摘要。"},
+            },
+        )
+        artifact_path = render_result.get("artifact_path")
+        _assert(render_result.get("ok") is True, "report_render failed")
+        _assert(isinstance(artifact_path, str) and Path(artifact_path).exists(), "report artifact missing")
+        show_report = _run_mcporter(workspace, config_path, "horosa.horosa_memory_show", {"run_id": run_id, "include_payload": False})
+        artifact_kinds = {artifact.get("kind") for artifact in show_report.get("result", {}).get("artifacts", [])}
+        _assert("report_pdf" in artifact_kinds, "memory_show missing report_pdf artifact")
+        report["report_export"] = {
+            "ok": True,
+            "run_id": run_id,
+            "artifact_path": artifact_path,
+            "file_size": render_result.get("file_size"),
+            "sha256": render_result.get("sha256"),
+        }
     except Exception as exc:  # noqa: BLE001
         report["answer_writeback"] = {"ok": False, "error": str(exc)}
+        report["report_export"] = {"ok": False, "error": str(exc)}
 
     report["memory_tools"] = {
         "show_available": "horosa_memory_show",
         "query_available": "horosa_memory_query",
         "record_answer_available": "horosa_memory_record_answer",
+        "report_template_available": "horosa_report_template",
+        "report_render_available": "horosa_report_render",
     }
-    report["ok"] = not report["failed_tools"] and report["dispatch"].get("ok") is True and report["answer_writeback"].get("ok") is True
+    report["ok"] = (
+        not report["failed_tools"]
+        and report["dispatch"].get("ok") is True
+        and report["answer_writeback"].get("ok") is True
+        and report["report_export"].get("ok") is True
+    )
 
     output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))

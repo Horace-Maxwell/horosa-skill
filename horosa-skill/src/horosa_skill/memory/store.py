@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import uuid
@@ -273,6 +274,58 @@ class MemoryStore:
             group_id=group_id,
         )
 
+    def default_report_path(self, *, run_id: str, tool_name: str, format_name: str) -> Path:
+        now = datetime.now(timezone.utc)
+        target_dir = self.output_dir / now.strftime("%Y") / now.strftime("%m") / now.strftime("%d")
+        target_dir.mkdir(parents=True, exist_ok=True)
+        safe_tool = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in tool_name)
+        stamp = now.strftime("%Y%m%dT%H%M%SZ")
+        return target_dir / f"{run_id}_{safe_tool}_report_{stamp}.{format_name.lower()}"
+
+    def record_report_artifact(
+        self,
+        *,
+        run_id: str,
+        tool_name: str,
+        format_name: str,
+        path: Path,
+        trace_id: str | None = None,
+        group_id: str | None = None,
+    ) -> dict[str, Any]:
+        if self._get_run_row(run_id) is None:
+            raise ValueError(f"Unknown run_id: {run_id}")
+        if not path.is_file():
+            raise ValueError(f"Report artifact does not exist: {path}")
+        now = utc_now_iso()
+        kind = f"report_{format_name.lower()}"
+        payload = path.read_bytes()
+        with self.connect() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO artifacts (run_id, tool_call_id, tool_name, kind, path, created_at)
+                VALUES (?, NULL, ?, ?, ?, ?)
+                """,
+                (run_id, tool_name, kind, str(path), now),
+            )
+            conn.execute("UPDATE runs SET updated_at = ?, group_id = COALESCE(group_id, ?) WHERE id = ?", (now, group_id, run_id))
+            conn.commit()
+        manifest = self._refresh_run_manifest(run_id)
+        return {
+            "ok": True,
+            "run_id": run_id,
+            "tool_name": tool_name,
+            "kind": kind,
+            "format": format_name.lower(),
+            "artifact_path": str(path),
+            "artifact_id": int(cursor.lastrowid),
+            "file_size": len(payload),
+            "sha256": hashlib.sha256(payload).hexdigest(),
+            "created_at": now,
+            "trace_id": trace_id,
+            "group_id": group_id,
+            "manifest_path": manifest["path"],
+        }
+
     def attach_ai_response(
         self,
         *,
@@ -322,6 +375,8 @@ class MemoryStore:
         run_id: str | None = None,
         tool: str | None = None,
         entity: str | None = None,
+        text: str | None = None,
+        artifact_kind: str | None = None,
         after: str | None = None,
         before: str | None = None,
         limit: int = 20,
@@ -334,6 +389,7 @@ class MemoryStore:
             FROM runs
             LEFT JOIN tool_calls ON tool_calls.run_id = runs.id
             LEFT JOIN entities ON entities.run_id = runs.id
+            LEFT JOIN artifacts ON artifacts.run_id = runs.id
             WHERE 1=1
             """
         ]
@@ -347,14 +403,22 @@ class MemoryStore:
         if entity:
             sql.append("AND (entities.display_name LIKE ? OR entities.entity_key LIKE ?)")
             params.extend([f"%{entity}%", f"%{entity}%"])
+        if artifact_kind:
+            sql.append("AND artifacts.kind = ?")
+            params.append(artifact_kind)
         if after:
             sql.append("AND runs.created_at >= ?")
             params.append(after)
         if before:
             sql.append("AND runs.created_at <= ?")
             params.append(before)
+        candidate_limit = max(1, limit)
+        if text:
+            # Text search also scans artifact file contents, so fetch a wider local candidate window
+            # before applying the final in-process filter.
+            candidate_limit = max(candidate_limit * 20, 200)
         sql.append("ORDER BY runs.created_at DESC LIMIT ?")
-        params.append(limit)
+        params.append(candidate_limit)
 
         with self.connect() as conn:
             rows = conn.execute("\n".join(sql), params).fetchall()
@@ -372,6 +436,12 @@ class MemoryStore:
                 else:
                     artifact_sql += " ORDER BY id DESC"
                 artifacts = conn.execute(artifact_sql, artifact_params).fetchall()
+                if artifact_kind:
+                    artifacts = [artifact for artifact in artifacts if artifact["kind"] == artifact_kind]
+                artifact_records = [
+                    self._artifact_record_to_dict(artifact, include_payload=include_payload)
+                    for artifact in artifacts
+                ]
                 tool_calls = conn.execute(
                     """
                     SELECT tool_name, ok, input_json, summary_json, warnings_json, error_json, trace_id, group_id, evaluation_case_id, created_at
@@ -381,6 +451,8 @@ class MemoryStore:
                     """,
                     (row["id"], tool or ""),
                 ).fetchall()
+                if text and not self._run_matches_text(row=row, tool_calls=tool_calls, artifacts=artifact_records, text=text):
+                    continue
                 results.append(
                     {
                         "run_id": row["id"],
@@ -395,9 +467,12 @@ class MemoryStore:
                         "created_at": row["created_at"],
                         "updated_at": row["updated_at"],
                         "tool_calls": [self._tool_call_record_to_dict(item) for item in tool_calls],
-                        "artifacts": [self._artifact_record_to_dict(artifact, include_payload=include_payload) for artifact in artifacts],
+                        "artifacts": artifact_records,
+                        "artifact_summary": self._artifact_summary(artifact_records),
                     }
                 )
+                if len(results) >= limit:
+                    break
         return results
 
     def _write_artifact(
@@ -598,14 +673,99 @@ class MemoryStore:
 
     def _artifact_record_to_dict(self, artifact: sqlite3.Row, *, include_payload: bool) -> dict[str, Any]:
         record = dict(artifact)
+        path = Path(record["path"])
+        record["exists"] = path.is_file()
+        record["file_size"] = path.stat().st_size if record["exists"] else 0
+        record["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest() if record["exists"] else None
         if include_payload:
-            path = Path(record["path"])
-            if path.is_file():
+            if record["exists"]:
                 try:
                     record["payload"] = json.loads(path.read_text(encoding="utf-8"))
                 except Exception:
                     record["payload"] = None
         return record
+
+    def _artifact_summary(self, artifacts: list[dict[str, Any]]) -> dict[str, Any]:
+        counts_by_kind: dict[str, int] = {}
+        report_artifacts: list[dict[str, Any]] = []
+        for artifact in artifacts:
+            kind = str(artifact.get("kind") or "")
+            counts_by_kind[kind] = counts_by_kind.get(kind, 0) + 1
+            if kind.startswith("report_"):
+                report_artifacts.append(
+                    {
+                        "kind": kind,
+                        "tool_name": artifact.get("tool_name"),
+                        "path": artifact.get("path"),
+                        "exists": artifact.get("exists"),
+                        "file_size": artifact.get("file_size"),
+                        "sha256": artifact.get("sha256"),
+                        "created_at": artifact.get("created_at"),
+                    }
+                )
+        latest_report = report_artifacts[0] if report_artifacts else None
+        return {
+            "total": len(artifacts),
+            "counts_by_kind": counts_by_kind,
+            "report_count": len(report_artifacts),
+            "report_artifacts": report_artifacts,
+            "latest_report": latest_report,
+            "has_reports": bool(report_artifacts),
+        }
+
+    def _run_matches_text(
+        self,
+        *,
+        row: sqlite3.Row,
+        tool_calls: list[sqlite3.Row],
+        artifacts: list[dict[str, Any]],
+        text: str,
+    ) -> bool:
+        needle = text.casefold().strip()
+        if not needle:
+            return True
+        values: list[Any] = [
+            row["id"],
+            row["entrypoint"],
+            row["query_text"],
+            row["subject_json"],
+            row["group_id"],
+            row["user_question_text"],
+            row["ai_answer_text"],
+            row["ai_answer_json"],
+            row["answer_meta_json"],
+            row["created_at"],
+            row["updated_at"],
+        ]
+        for tool_call in tool_calls:
+            values.extend(
+                [
+                    tool_call["tool_name"],
+                    tool_call["input_json"],
+                    tool_call["summary_json"],
+                    tool_call["warnings_json"],
+                    tool_call["error_json"],
+                    tool_call["trace_id"],
+                    tool_call["group_id"],
+                    tool_call["evaluation_case_id"],
+                ]
+            )
+        for artifact in artifacts:
+            values.extend([artifact.get("tool_name"), artifact.get("kind"), artifact.get("path"), artifact.get("created_at")])
+            payload = artifact.get("payload")
+            if payload is not None:
+                values.append(json.dumps(payload, ensure_ascii=False, default=str))
+            artifact_path = Path(str(artifact.get("path") or ""))
+            if artifact_path.is_file() and self._path_contains_text(artifact_path, needle):
+                return True
+        return any(needle in str(value).casefold() for value in values if value is not None)
+
+    def _path_contains_text(self, path: Path, needle: str) -> bool:
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            return needle in str(path).casefold()
+        return needle in text.casefold()
 
     def _tool_call_record_to_dict(self, tool_call: sqlite3.Row) -> dict[str, Any]:
         record = dict(tool_call)

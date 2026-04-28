@@ -7,16 +7,28 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-04-28
+
 ### Added
 
 - Community and repository metadata files for a more complete public GitHub
   surface.
+- Cross-platform structured report layer for JSON, DOCX, and PDF artifacts.
+- Report template, render, from-tool, and from-run surfaces across CLI and MCP.
+- Machine-readable report contracts with delivery checklists, section coverage,
+  search indexes, targeted answer requirements, and provenance.
+- Local memory integration for report artifacts, AI answer write-back,
+  artifact summaries, and text/artifact-kind retrieval.
+- Full self-check coverage for report generation, storage, retrieval,
+  targeted analysis, and delivery readiness across callable tools.
 
 ### Changed
 
 - Switched repository-level public licensing metadata from Apache-2.0 to
   `GNU AGPL-3.0-only`, including root docs, citation metadata, and MCP server
   metadata.
+- Version metadata is aligned across the Python package, MCP server metadata,
+  citation file, README examples, and the headless JS package.
 
 ## [0.3.0] - 2026-04-05
 
