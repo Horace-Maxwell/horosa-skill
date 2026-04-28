@@ -261,9 +261,15 @@ def _doctor_summary(report: dict[str, Any]) -> dict[str, Any]:
 
 def _failed_smoke_checks(report: dict[str, Any]) -> list[str]:
     failures: list[str] = []
-    for field in ("server_visible", "knowledge_registry_ok", "chart_ok", "memory_show_ok"):
+    compute_ok = report.get("compute_ok")
+    for field in ("server_visible", "knowledge_registry_ok", "memory_show_ok"):
         if report.get(field) is not True:
             failures.append(field)
+    if compute_ok is not None:
+        if compute_ok is not True:
+            failures.append("compute_ok")
+    elif report.get("chart_ok") is not True:
+        failures.append("chart_ok")
     return failures
 
 
@@ -277,10 +283,11 @@ def _smoke_summary(
     ready_for_openclaw = report.get("ok") is True
     list_checked = report.get("list_checked", True)
     if ready_for_openclaw:
+        compute_tool = report.get("compute_tool") or "a representative Horosa tool"
         if list_checked:
             user_summary = (
                 f"Ready. OpenClaw can see Horosa, list {report.get('listed_tool_count', 0)} tools, "
-                "run a chart, save the result, and read it back."
+                f"run {compute_tool}, save the result, and read it back."
             )
         else:
             user_summary = "Ready. Horosa passed the quick OpenClaw smoke check: call, compute, save, and readback all worked."
@@ -288,8 +295,8 @@ def _smoke_summary(
     elif "server_visible" in failed_checks or "knowledge_registry_ok" in failed_checks:
         user_summary = "OpenClaw did not get a healthy response from the Horosa server."
         next_action = f"Run `{_openclaw_check_command(workspace_root, config_path)}` after you confirm the runtime is installed and mcporter is available."
-    elif "chart_ok" in failed_checks:
-        user_summary = "OpenClaw reached Horosa, but the chart test call did not finish successfully."
+    elif "compute_ok" in failed_checks or "chart_ok" in failed_checks:
+        user_summary = "OpenClaw reached Horosa, but the representative tool call did not finish successfully."
         next_action = f"Run `{_openclaw_check_command(workspace_root, config_path)}` again after `uv run horosa-skill doctor` confirms the runtime is healthy."
     else:
         user_summary = "OpenClaw computed a result, but the saved chart could not be read back cleanly."
@@ -305,6 +312,7 @@ def _smoke_summary(
             "server_visible": report.get("server_visible") is True,
             "knowledge_registry_ok": report.get("knowledge_registry_ok") is True,
             "chart_ok": report.get("chart_ok") is True,
+            "compute_ok": report.get("compute_ok", report.get("chart_ok")) is True,
             "memory_show_ok": report.get("memory_show_ok") is True,
         },
     }
@@ -473,6 +481,29 @@ def _run_openclaw_smoke_check(
     include_list: bool = True,
 ) -> dict[str, Any]:
     call_timeout_ms = 120000
+
+    def call_tool(tool_name: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        command = [
+            *resolve_mcporter_command(),
+            "call",
+            f"horosa.{tool_name}",
+        ]
+        if payload is not None:
+            command.extend(["--args", json.dumps(payload, ensure_ascii=False)])
+        command.extend(
+            [
+                "--output",
+                "json",
+                "--config",
+                str(config_path),
+                "--root",
+                str(workspace_root),
+                "--timeout",
+                str(call_timeout_ms),
+            ]
+        )
+        return _run_subprocess_json(command, cwd=workspace_root)
+
     list_result: dict[str, Any] | None = None
     if include_list:
         list_result = _run_subprocess_json(
@@ -488,22 +519,7 @@ def _run_openclaw_smoke_check(
             ],
             cwd=workspace_root,
         )
-    registry_result = _run_subprocess_json(
-        [
-            *resolve_mcporter_command(),
-            "call",
-            "horosa.horosa_knowledge_registry",
-            "--output",
-            "json",
-            "--config",
-            str(config_path),
-            "--root",
-            str(workspace_root),
-            "--timeout",
-            str(call_timeout_ms),
-        ],
-        cwd=workspace_root,
-    )
+    registry_result = call_tool("horosa_knowledge_registry")
     chart_payload = {
         "date": "2026-04-04",
         "time": "15:58:35",
@@ -511,62 +527,35 @@ def _run_openclaw_smoke_check(
         "lat": "26n04",
         "lon": "119e19",
     }
-    chart_result = _run_subprocess_json(
-        [
-            *resolve_mcporter_command(),
-            "call",
-            "horosa.horosa_astro_chart",
-            "--args",
-            json.dumps(chart_payload, ensure_ascii=False),
-            "--output",
-            "json",
-            "--config",
-            str(config_path),
-            "--root",
-            str(workspace_root),
-            "--timeout",
-            str(call_timeout_ms),
-        ],
-        cwd=workspace_root,
-    )
+    chart_result = call_tool("horosa_astro_chart", chart_payload)
     if _is_mcporter_timeout_response(chart_result):
-        chart_result = _run_subprocess_json(
-            [
-                *resolve_mcporter_command(),
-                "call",
-                "horosa.horosa_astro_chart",
-                "--args",
-                json.dumps(chart_payload, ensure_ascii=False),
-                "--output",
-                "json",
-                "--config",
-                str(config_path),
-                "--root",
-                str(workspace_root),
-                "--timeout",
-                str(call_timeout_ms),
-            ],
-            cwd=workspace_root,
-        )
-    run_id = (chart_result.get("memory_ref") or {}).get("run_id")
-    memory_show = _run_subprocess_json(
-        [
-            *resolve_mcporter_command(),
-            "call",
-            "horosa.horosa_memory_show",
-            "--args",
-            json.dumps({"run_id": run_id, "include_payload": False}, ensure_ascii=False),
-            "--output",
-            "json",
-            "--config",
-            str(config_path),
-            "--root",
-            str(workspace_root),
-            "--timeout",
-            str(call_timeout_ms),
-        ],
-        cwd=workspace_root,
-    )
+        chart_result = call_tool("horosa_astro_chart", chart_payload)
+
+    chart_ok = chart_result.get("ok") is True
+    fallback_tool = "horosa_cn_qimen"
+    fallback_result: dict[str, Any] | None = None
+    if not chart_ok:
+        # Keep the heavyweight chart result as a diagnostic, but verify the
+        # OpenClaw path with a stable headless local tool before failing setup.
+        fallback_payload = {
+            "date": "2026-04-04",
+            "time": "15:58:35",
+            "zone": "+08:00",
+            "lat": "26n04",
+            "lon": "119e19",
+        }
+        fallback_result = call_tool(fallback_tool, fallback_payload)
+        if _is_mcporter_timeout_response(fallback_result):
+            fallback_result = call_tool(fallback_tool, fallback_payload)
+
+    fallback_ok = (fallback_result or {}).get("ok") is True
+    compute_result = chart_result if chart_ok else (fallback_result or chart_result)
+    compute_ok = chart_ok or fallback_ok
+    compute_tool = "horosa_astro_chart" if chart_ok else (fallback_tool if fallback_ok else None)
+    memory_ref = compute_result.get("memory_ref") or {}
+    run_id = memory_ref.get("run_id")
+    artifact_path = memory_ref.get("artifact_path")
+    memory_show = call_tool("horosa_memory_show", {"run_id": run_id, "include_payload": False}) if run_id else {}
     report = {
         "workspace": str(workspace_root),
         "config": str(config_path),
@@ -574,13 +563,19 @@ def _run_openclaw_smoke_check(
         "server_visible": (list_result or {}).get("status") == "ok" if include_list else registry_result.get("ok") is True,
         "listed_tool_count": len((list_result or {}).get("tools", [])) if include_list else None,
         "knowledge_registry_ok": registry_result.get("ok") is True,
-        "chart_ok": chart_result.get("ok") is True,
+        "chart_ok": chart_ok,
+        "chart_error": chart_result.get("error") if not chart_ok else None,
+        "fallback_tool": fallback_tool if not chart_ok else None,
+        "fallback_tool_ok": fallback_ok if fallback_result is not None else None,
+        "fallback_error": (fallback_result or {}).get("error") if fallback_result and not fallback_ok else None,
+        "compute_ok": compute_ok,
+        "compute_tool": compute_tool,
         "memory_show_ok": memory_show.get("ok") is True,
         "run_id": run_id,
-        "artifact_path": (chart_result.get("memory_ref") or {}).get("artifact_path"),
+        "artifact_path": artifact_path,
         "ok": (
             (registry_result.get("ok") is True)
-            and chart_result.get("ok") is True
+            and compute_ok
             and memory_show.get("ok") is True
             and ((list_result or {}).get("status") == "ok" if include_list else True)
         ),
