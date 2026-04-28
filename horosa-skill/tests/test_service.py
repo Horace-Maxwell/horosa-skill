@@ -10,7 +10,7 @@ from horosa_skill.engine.js_client import HorosaJsEngineClient
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.knowledge import build_knowledge_registry
 from horosa_skill.memory.store import MemoryStore
-from horosa_skill.service import TOOL_EXPORT_TECHNIQUE_MAP, HorosaSkillService
+from horosa_skill.service import TOOL_EXPORT_TECHNIQUE_MAP, HorosaSkillService, _java_chart_payload
 from horosa_skill.testing_payloads import build_sample_payloads
 
 
@@ -519,11 +519,77 @@ def test_service_normalizes_human_friendly_birth_fields_before_remote_calls(tmp_
     assert client.calls, "expected remote client call to be captured"
     endpoint, remote_payload = client.calls[0]
     assert endpoint == "/chart"
+    assert result.input_normalized["date"] == "1995-06-03"
+    assert remote_payload["date"] == "1995/06/03"
     assert remote_payload["zone"] == "+08:00"
     assert remote_payload["lat"] == "31n13"
     assert remote_payload["lon"] == "121e28"
     assert remote_payload["gpsLat"] == pytest.approx(31.2167)
     assert remote_payload["gpsLon"] == pytest.approx(121.4667)
+
+
+def test_service_sends_slash_dates_to_java_chart_family_without_changing_input(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    client = CaptureClient()
+    service = HorosaSkillService(settings, client=client, store=MemoryStore(settings), js_client=FakeJsClient())
+
+    result = service.run_tool(
+        "chart",
+        {
+            "date": "2028/04/06",
+            "time": "09:33",
+            "zone": "+00:00",
+            "lat": "41n26",
+            "lon": "174w30",
+            "gpsLat": -41.433333,
+            "gpsLon": -174.5,
+        },
+        save_result=False,
+    )
+
+    assert result.ok is True
+    assert result.input_normalized["date"] == "2028-04-06"
+    chart_payloads = [call_payload for endpoint, call_payload in client.calls if endpoint == "/chart"]
+    assert chart_payloads
+    assert chart_payloads[0]["date"] == "2028/04/06"
+
+
+def test_java_chart_payload_slashes_datetime_only_for_chart_family() -> None:
+    chart_payload = _java_chart_payload(
+        "/chart",
+        {"date": "2028-04-06", "datetime": "2031-04-06 09:33:00", "time": "09:33:00"},
+    )
+    assert chart_payload["date"] == "2028/04/06"
+    assert chart_payload["datetime"] == "2031/04/06 09:33:00"
+
+    nongli_payload = _java_chart_payload("/nongli/time", {"date": "2028-04-06"})
+    assert nongli_payload["date"] == "2028-04-06"
+
+
+def test_sanshiunited_subresults_use_compact_export_contracts(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+
+    result = service.run_tool("sanshiunited", build_sample_payloads()["sanshiunited"], save_result=False)
+
+    assert result.ok is True
+    subresults = result.data["subresults"]
+    assert sorted(subresults) == ["liureng_gods", "qimen", "taiyi"]
+    for subresult in subresults.values():
+        assert "data" not in subresult
+        assert "export_snapshot" not in subresult
+        assert "export_format" not in subresult
+        assert subresult["export_contract"]["has_export_snapshot"] is True
+        assert subresult["export_contract"]["has_export_format"] is True
+        assert subresult["export_contract"]["section_titles"]
 
 
 @pytest.mark.parametrize("tool_name", ["nongli_time", "qimen", "sixyao"])
