@@ -519,7 +519,7 @@ def test_service_normalizes_human_friendly_birth_fields_before_remote_calls(tmp_
     assert result.input_normalized["gpsLon"] == pytest.approx(121.4667)
     assert client.calls, "expected remote client call to be captured"
     endpoint, remote_payload = client.calls[0]
-    assert endpoint == "/chart"
+    assert endpoint == "/"
     assert result.input_normalized["date"] == "1995-06-03"
     assert remote_payload["date"] == "1995/06/03"
     assert remote_payload["zone"] == "+08:00"
@@ -529,7 +529,7 @@ def test_service_normalizes_human_friendly_birth_fields_before_remote_calls(tmp_
     assert remote_payload["gpsLon"] == pytest.approx(121.4667)
 
 
-def test_service_sends_slash_dates_to_java_chart_family_without_changing_input(tmp_path) -> None:
+def test_service_sends_slash_dates_to_python_chart_server_without_changing_input(tmp_path) -> None:
     settings = Settings(
         server_root="http://127.0.0.1:9999",
         db_path=tmp_path / "memory.db",
@@ -554,7 +554,7 @@ def test_service_sends_slash_dates_to_java_chart_family_without_changing_input(t
 
     assert result.ok is True
     assert result.input_normalized["date"] == "2028-04-06"
-    chart_payloads = [call_payload for endpoint, call_payload in client.calls if endpoint == "/chart"]
+    chart_payloads = [call_payload for endpoint, call_payload in client.calls if endpoint == "/"]
     assert chart_payloads
     assert chart_payloads[0]["date"] == "2028/04/06"
 
@@ -593,7 +593,7 @@ def test_service_retries_chart_payload_variants_after_backend_param_error(tmp_pa
 
         def call(self, endpoint: str, payload: dict) -> dict:
             self.calls.append((endpoint, dict(payload)))
-            if endpoint == "/chart" and payload.get("zone") != "8":
+            if endpoint == "/" and payload.get("zone") != "8":
                 raise ToolTransportError(
                     "backend rejected payload",
                     code="transport.http_error",
@@ -617,7 +617,7 @@ def test_service_retries_chart_payload_variants_after_backend_param_error(tmp_pa
 
     assert result.ok is True
     assert result.input_normalized["zone"] == "+08:00"
-    assert any(payload.get("zone") == "8" for endpoint, payload in client.calls if endpoint == "/chart")
+    assert any(payload.get("zone") == "8" for endpoint, payload in client.calls if endpoint == "/")
 
 
 def test_sanshiunited_subresults_use_compact_export_contracts(tmp_path) -> None:
