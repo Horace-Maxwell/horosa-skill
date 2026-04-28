@@ -48,6 +48,10 @@ This subproject is distributed under `GNU AGPL-3.0-only`. See [LICENSE](LICENSE)
   - JSON artifacts
   - run manifest
   - AI answer write-back
+- 结构化报告导出
+  - report template
+  - JSON / DOCX / PDF artifacts
+  - report artifact 回写本地 manifest
 - 星阙 AI 导出协议机器建模
   - export registry
   - export snapshot parsing
@@ -176,6 +180,23 @@ echo '{
 }' | uv run horosa-skill memory answer --stdin
 ```
 
+### 5. 生成结构化报告
+
+AI 客户端推荐先读取模板，再把自己的分析写回，最后让 Horosa Skill 本地渲染文件：
+
+```bash
+uv run horosa-skill report template --run-id <run_id> --tool chart
+uv run horosa-skill report render --run-id <run_id> --tool chart --format docx
+uv run horosa-skill report render --run-id <run_id> --tool chart --format pdf
+```
+
+也可以一次性调用某个技法并直接生成报告：
+
+```bash
+echo '{"date":"2028-04-06","time":"09:33","zone":"8","lat":"31n13","lon":"121e28"}' \
+  | uv run horosa-skill report from-tool qimen --stdin --format pdf --question "请生成奇门结构化报告"
+```
+
 ## 常用命令
 
 ### 列出工具
@@ -233,12 +254,19 @@ echo '{"domain":"astro","category":"planet","key":"Sun"}' \
 - user_question
 - ai_answer_text
 - ai_answer_structured
+- report_json / report_docx / report_pdf artifact
+- artifact `exists` / `file_size` / `sha256` 元信息，方便确认文件仍可用
+- 每条 run 的 `artifact_summary` 会汇总报告数量、类型计数和最新报告路径，AI 客户端不用自己遍历文件列表
+- `report render` / `report from-tool` 入参里的 AI 分析会自动写回 `ai_answer_text` / `ai_answer_structured`，后续可按关键词检索
 
 对应管理命令：
 
 - `uv run horosa-skill memory query`
+- `uv run horosa-skill memory query --text "事业走势" --artifact-kind report_pdf`
 - `uv run horosa-skill memory show <run_id>`
 - `uv run horosa-skill memory answer --stdin`
+- `uv run horosa-skill report template --run-id <run_id>`
+- `uv run horosa-skill report render --run-id <run_id> --format pdf`
 
 ## 环境变量
 

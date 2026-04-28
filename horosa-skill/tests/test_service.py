@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import pytest
 
 from horosa_skill.config import Settings
@@ -334,6 +337,11 @@ def test_service_memory_query_and_show(tmp_path) -> None:
     assert show_result["ok"] is True
     assert show_result["result"]["run_id"] == result.memory_ref.run_id
 
+    text_query = service.query_memory({"text": "Horosa Smoke", "limit": 5})
+    assert text_query["ok"] is True
+    assert text_query["count"] == 1
+    assert text_query["results"][0]["run_id"] == result.memory_ref.run_id
+
 
 def test_local_tool_call_always_attaches_complete_export_contract(tmp_path) -> None:
     settings = Settings(
@@ -607,6 +615,145 @@ def test_all_callable_techniques_keep_clean_contracts_across_repeated_saved_runs
             assert all(section["title"] for section in export_format["sections"]), tool_name
 
 
+def test_all_callable_techniques_can_generate_report_json_artifacts(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    store = MemoryStore(settings)
+    service = HorosaSkillService(settings, client=FakeClient(), store=store, js_client=FakeJsClient())
+    payloads = build_sample_payloads()
+
+    for tool_name, technique_key in TOOL_EXPORT_TECHNIQUE_MAP.items():
+        result = service.run_tool(tool_name, payloads[tool_name], save_result=True, query_text=f"生成 {tool_name} 报告")
+        assert result.memory_ref is not None, tool_name
+        template = service.report_template({"run_id": result.memory_ref.run_id, "tool_name": tool_name})
+        assert template["schema"] == "horosa.skill.report.template.v1", tool_name
+        assert template["technique"] == technique_key, tool_name
+        assert template["source_export_sections"], tool_name
+        assert template["coverage_contract"]["all_source_export_sections_required"] is True, tool_name
+        assert template["coverage_contract"]["source_export_section_count"] == len(template["source_export_sections"]), tool_name
+        assert template["source_context"]["export_text"], tool_name
+        assert template["source_context"]["export_sections"], tool_name
+        assert all(section["body"] for section in template["source_context"]["export_sections"]), tool_name
+        assert template["targeted_analysis_contract"]["answer_priority"] == "directly_answer_user_question_first", tool_name
+        assert template["question_analysis"]["has_question"] is True, tool_name
+        assert template["targeted_analysis_contract"]["question_analysis"]["raw_question"] == f"生成 {tool_name} 报告", tool_name
+        assert template["targeted_analysis_contract"]["answer_plan"], tool_name
+        assert template["targeted_analysis_contract"]["targeted_answer_requirements"], tool_name
+        assert template["ai_fillable"]["targeted_answer_requirements"], tool_name
+        assert template["ai_fillable"]["answer_plan"], tool_name
+        assert template["ai_fillable"]["analysis_focus"] == f"生成 {tool_name} 报告", tool_name
+        assert "direct_answer" in template["ai_fillable"], tool_name
+
+        ai_sections = [
+            {
+                "title": section["title"],
+                "body": f"解释 {section['title']}",
+                "evidence_lines": [section["title"]],
+                "relevance_to_question": "用于回答用户问题。",
+            }
+            for section in template["source_export_sections"]
+        ]
+        rendered = service.report_render(
+            {
+                "run_id": result.memory_ref.run_id,
+                "tool_name": tool_name,
+                "format": "json",
+                "ai_report": {
+                    "analysis_focus": f"生成 {tool_name} 报告",
+                    "direct_answer": "已根据用户问题完成针对性分析。",
+                    "executive_summary": "报告摘要。",
+                    "analysis_sections": ai_sections,
+                    "evidence": [{"source": tool_name, "line": "测试证据"}],
+                    "recommendations": ["保留报告。"],
+                    "limitations": [],
+                },
+            }
+        )
+        path = Path(rendered["artifact_path"])
+        assert rendered["ok"] is True, tool_name
+        assert path.is_file(), tool_name
+        assert rendered["file_size"] > 100, tool_name
+        report_payload = json.loads(path.read_text(encoding="utf-8"))
+        assert report_payload["schema"] == "horosa.skill.report.v1", tool_name
+        assert report_payload["source"]["tool_name"] == tool_name, tool_name
+        assert report_payload["source"]["technique"] == technique_key, tool_name
+        assert report_payload["sections"], tool_name
+        assert report_payload["coverage"]["all_source_export_sections_required"] is True, tool_name
+        assert report_payload["coverage"]["must_explain_sections"] == [
+            section["title"] for section in template["source_export_sections"]
+        ], tool_name
+        assert report_payload["targeted_analysis_contract"]["user_question"] == f"生成 {tool_name} 报告", tool_name
+        assert report_payload["question_analysis"]["has_question"] is True, tool_name
+        assert report_payload["report_index"]["question_analysis"]["raw_question"] == f"生成 {tool_name} 报告", tool_name
+        assert report_payload["report_index"]["answer_plan"], tool_name
+        assert report_payload["report_index"]["targeted_answer_requirements"], tool_name
+        assert report_payload["targeted_analysis_contract"]["targeted_answer_requirements"], tool_name
+        assert report_payload["report_index"]["analysis_focus"] == f"生成 {tool_name} 报告", tool_name
+        assert report_payload["report_index"]["coverage_status"] == "complete", tool_name
+        assert report_payload["report_index"]["ready_to_deliver"] is True, tool_name
+        assert report_payload["report_index"]["delivery_missing"] == [], tool_name
+        assert report_payload["report_index"]["delivery_checks"]["has_targeted_requirements"] is True, tool_name
+        assert report_payload["ai_coverage_status"]["missing_sections"] == [], tool_name
+        assert report_payload["ai_coverage_status"]["has_direct_answer"] is True, tool_name
+        assert report_payload["ai_coverage_status"]["has_evidence"] is True, tool_name
+        assert report_payload["section_coverage_matrix"]["all_sections_covered"] is True, tool_name
+        assert report_payload["section_coverage_matrix"]["missing_section_titles"] == [], tool_name
+        assert report_payload["section_coverage_matrix"]["source_section_count"] == len(template["source_export_sections"]), tool_name
+        assert report_payload["content_outline"], tool_name
+        assert len(report_payload["content_outline"]) == len(report_payload["sections"]), tool_name
+        assert report_payload["content_outline"][0]["title"] == "报告元信息", tool_name
+        assert report_payload["sections"][0]["id"] == "report_metadata", tool_name
+        assert "逐章解释覆盖矩阵" in report_payload["plain_text"], tool_name
+        assert "报告元信息" in report_payload["plain_text"], tool_name
+        assert result.memory_ref.run_id in report_payload["plain_text"], tool_name
+        assert tool_name in report_payload["plain_text"], tool_name
+        assert "星阙 AI 导出正文" in report_payload["plain_text"], tool_name
+        assert template["source_export_sections"][0]["title"] in report_payload["plain_text"], tool_name
+        assert report_payload["search_index"]["schema"] == "horosa.skill.report.search_index.v1", tool_name
+        assert report_payload["search_index"]["tool_name"] == tool_name, tool_name
+        assert report_payload["search_index"]["technique"] == technique_key, tool_name
+        assert f"生成 {tool_name} 报告" in report_payload["search_index"]["keywords"], tool_name
+        assert template["source_export_sections"][0]["title"] in report_payload["search_index"]["section_titles"], tool_name
+        assert "逐章解释覆盖矩阵" in report_payload["search_index"]["search_text"], tool_name
+        assert "交付检查清单" in report_payload["search_index"]["search_text"], tool_name
+        assert report_payload["report_quality"]["source_complete"] is True, tool_name
+        assert report_payload["report_quality"]["ai_analysis_complete"] is True, tool_name
+        assert report_payload["report_quality"]["ready_for_human_reading"] is True, tool_name
+        assert report_payload["delivery_checklist"]["schema"] == "horosa.skill.report.delivery_checklist.v1", tool_name
+        assert report_payload["delivery_checklist"]["ready_to_deliver"] is True, tool_name
+        assert report_payload["delivery_checklist"]["missing"] == [], tool_name
+        assert report_payload["delivery_checklist"]["checks"]["source_sections_covered"] is True, tool_name
+        assert report_payload["delivery_checklist"]["checks"]["has_targeted_requirements"] is True, tool_name
+        assert report_payload["delivery_checklist"]["checks"]["has_search_index"] is True, tool_name
+        section_ids = {section["id"] for section in report_payload["sections"]}
+        assert {
+            "report_metadata",
+            "report_quality",
+            "delivery_checklist",
+            "coverage_contract",
+            "section_coverage_matrix",
+            "targeted_analysis_contract",
+            "question_analysis",
+            "ai_interpretation",
+            "recommendations_limitations",
+            "xingque_export_text",
+            "provenance",
+        }.issubset(section_ids), tool_name
+        queried = store.query_runs(run_id=result.memory_ref.run_id, include_payload=True)
+        assert "report_json" in {artifact["kind"] for artifact in queried[0]["artifacts"]}, tool_name
+        report_artifact = next(artifact for artifact in queried[0]["artifacts"] if artifact["kind"] == "report_json")
+        assert report_artifact["exists"] is True, tool_name
+        assert report_artifact["file_size"] > 100, tool_name
+        assert report_artifact["sha256"], tool_name
+        assert report_artifact["payload"]["report_index"]["tool_name"] == tool_name, tool_name
+        assert report_artifact["payload"]["report_index"]["storage"]["managed_by"] == "horosa_skill.memory", tool_name
+        assert report_artifact["payload"]["report_index"]["ready_to_deliver"] is True, tool_name
+        assert report_artifact["payload"]["report_index"]["delivery_missing"] == [], tool_name
+
+
 def test_all_callable_techniques_final_export_text_matches_max_section_contract(tmp_path) -> None:
     settings = Settings(
         server_root="http://127.0.0.1:9999",
@@ -692,12 +839,317 @@ def test_service_can_attach_ai_answer_to_existing_run(tmp_path) -> None:
     )
 
     assert updated["ok"] is True
-    queried = store.query_runs(entity="我接下来事业走势如何", include_payload=True)
-    assert queried == []
+    queried = store.query_runs(text="我接下来事业走势如何", include_payload=True)
+    assert queried
+    assert queried[0]["run_id"] == result.memory_ref.run_id
     by_tool = store.query_runs(tool="qimen", include_payload=True)
     assert by_tool
     assert by_tool[0]["ai_answer_text"] == "先稳后升，宜先整理资源再扩张。"
     assert by_tool[0]["artifacts"][0]["payload"]["conversation"]["ai_answer_structured"] == {"trend": "up_later"}
+
+
+def test_service_can_build_report_template_and_render_json_docx_pdf(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    store = MemoryStore(settings)
+    service = HorosaSkillService(settings, client=FakeClient(), store=store, js_client=FakeJsClient())
+
+    result = service.run_tool(
+        "chart",
+        {"date": "2026-04-04", "time": "15:58:35", "zone": "8", "lat": "26n04", "lon": "119e19"},
+        save_result=True,
+        query_text="请生成当前星盘报告",
+    )
+    assert result.memory_ref is not None
+    service.record_ai_answer(
+        {
+            "run_id": result.memory_ref.run_id,
+            "ai_answer": "这是一份结构化报告测试回答。",
+            "ai_answer_structured": {
+                "executive_summary": "星盘报告摘要。",
+                "analysis_focus": "检查后天宫位",
+                "direct_answer": "后天宫位信息可以被报告引用。",
+                "analysis_sections": [{"title": "起盘信息", "body": "后天宫位与星体信息齐全。", "evidence_lines": ["宫位宫头"]}],
+                "evidence": [{"source_section_title": "宫位宫头", "source_line": "第八宫 宫头"}],
+                "recommendations": ["保留完整导出正文。"],
+                "limitations": ["测试环境不代表真实解读。"],
+            },
+        }
+    )
+
+    template = service.report_template({"run_id": result.memory_ref.run_id, "tool_name": "chart"})
+    assert template["schema"] == "horosa.skill.report.template.v1"
+    assert template["tool_name"] == "chart"
+    assert template["technique"] == "astrochart"
+    assert template["source_export_sections"]
+    assert template["source_context"]["export_sections"][0]["body"]
+    assert template["coverage_contract"]["must_explain_sections"]
+    assert template["targeted_analysis_contract"]["required_ai_fields"]
+    assert template["question_analysis"]["focus_domains"] == ["general_reading"]
+    assert template["targeted_analysis_contract"]["answer_plan"]
+    assert template["ai_fillable"]["direct_answer"] == ""
+    service.record_ai_answer(
+        {
+            "run_id": result.memory_ref.run_id,
+            "ai_answer": "这是一份覆盖全部星盘导出章节的结构化报告测试回答。",
+            "ai_answer_structured": {
+                "executive_summary": "星盘报告摘要。",
+                "analysis_focus": "检查后天宫位",
+                "direct_answer": "后天宫位信息可以被报告引用。",
+                "analysis_sections": [
+                    {
+                        "title": section["title"],
+                        "body": f"{section['title']} 已纳入报告解释。",
+                        "evidence_lines": [section["title"]],
+                        "relevance_to_question": "用于检查星盘报告是否完整覆盖原始导出。",
+                    }
+                    for section in template["source_export_sections"]
+                ],
+                "evidence": [{"source_section_title": "宫位宫头", "source_line": "第八宫 宫头"}],
+                "recommendations": ["保留完整导出正文。"],
+                "limitations": ["测试环境不代表真实解读。"],
+            },
+        }
+    )
+
+    rendered_json = service.report_render(
+        {
+            "run_id": result.memory_ref.run_id,
+            "tool_name": "chart",
+            "format": "json",
+            "include_raw_json": True,
+        }
+    )
+    rendered_docx = service.report_render({"run_id": result.memory_ref.run_id, "tool_name": "chart", "format": "docx"})
+    rendered_pdf = service.report_render({"run_id": result.memory_ref.run_id, "tool_name": "chart", "format": "pdf"})
+
+    for rendered in (rendered_json, rendered_docx, rendered_pdf):
+        path = Path(rendered["artifact_path"])
+        assert path.is_file()
+        assert rendered["file_size"] > 100
+        assert rendered["sha256"]
+
+    assert Path(rendered_json["artifact_path"]).read_text(encoding="utf-8").startswith("{")
+    report_payload = json.loads(Path(rendered_json["artifact_path"]).read_text(encoding="utf-8"))
+    assert report_payload["coverage"]["source_export_section_count"] == len(template["source_export_sections"])
+    assert report_payload["coverage"]["source_export_text_chars"] > 0
+    assert report_payload["report_index"]["has_ai_answer"] is True
+    assert report_payload["report_index"]["question_analysis"]["has_question"] is True
+    assert report_payload["report_index"]["answer_plan"]
+    assert report_payload["report_index"]["targeted_answer_requirements"]
+    assert report_payload["report_index"]["storage"]["managed_by"] == "horosa_skill.memory"
+    assert report_payload["report_index"]["ready_to_deliver"] is True
+    assert report_payload["report_index"]["delivery_missing"] == []
+    assert report_payload["report_quality"]["source_complete"] is True
+    assert report_payload["report_quality"]["ready_for_human_reading"] is True
+    assert report_payload["delivery_checklist"]["ready_to_deliver"] is True
+    assert report_payload["delivery_checklist"]["missing"] == []
+    assert report_payload["delivery_checklist"]["checks"]["has_ai_direct_answer"] is True
+    assert report_payload["delivery_checklist"]["checks"]["has_provenance"] is True
+    assert report_payload["section_coverage_matrix"]["source_section_count"] == len(template["source_export_sections"])
+    assert report_payload["content_outline"][0]["title"] == "报告元信息"
+    assert report_payload["sections"][0]["items"]["run_id"] == result.memory_ref.run_id
+    assert "报告元信息" in report_payload["plain_text"]
+    assert "交付检查清单" in report_payload["plain_text"]
+    assert "AI 解盘正文" in report_payload["plain_text"]
+    assert "来源追溯" in report_payload["plain_text"]
+    assert report_payload["search_index"]["plain_text_chars"] == len(report_payload["plain_text"])
+    assert "检查后天宫位" in report_payload["search_index"]["keywords"]
+    section_titles = {section["title"] for section in report_payload["sections"]}
+    assert {
+        "报告质量检查",
+        "报告元信息",
+        "交付检查清单",
+        "AI 解释覆盖清单",
+        "逐章解释覆盖矩阵",
+        "针对性解盘要求",
+        "用户问题拆解",
+        "AI 解盘正文",
+        "建议、限制与追问",
+        "来源追溯",
+    }.issubset(section_titles)
+    assert Path(rendered_docx["artifact_path"]).read_bytes().startswith(b"PK")
+    assert Path(rendered_pdf["artifact_path"]).read_bytes().startswith(b"%PDF")
+    queried = store.query_runs(run_id=result.memory_ref.run_id, include_payload=False)
+    artifact_kinds = {artifact["kind"] for artifact in queried[0]["artifacts"]}
+    assert {"report_json", "report_docx", "report_pdf"}.issubset(artifact_kinds)
+    for artifact in queried[0]["artifacts"]:
+        assert artifact["exists"] is True
+        assert artifact["file_size"] > 0
+        assert artifact["sha256"]
+
+    report_pdf_runs = store.query_runs(
+        run_id=result.memory_ref.run_id,
+        text="后天宫位",
+        artifact_kind="report_pdf",
+        include_payload=False,
+    )
+    assert report_pdf_runs
+    assert report_pdf_runs[0]["artifacts"]
+    assert {artifact["kind"] for artifact in report_pdf_runs[0]["artifacts"]} == {"report_pdf"}
+    assert report_pdf_runs[0]["artifact_summary"]["has_reports"] is True
+    assert report_pdf_runs[0]["artifact_summary"]["counts_by_kind"]["report_pdf"] == 1
+    assert report_pdf_runs[0]["artifact_summary"]["latest_report"]["kind"] == "report_pdf"
+
+    report_json_plain_text_runs = store.query_runs(
+        text="逐章解释覆盖矩阵",
+        artifact_kind="report_json",
+        include_payload=False,
+    )
+    assert any(run["run_id"] == result.memory_ref.run_id for run in report_json_plain_text_runs)
+
+
+def test_service_can_render_report_from_tool_in_one_call(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+
+    rendered = service.report_from_tool(
+        {
+            "tool_name": "qimen",
+            "payload": {"date": "2028-04-06", "time": "09:33:00", "zone": "8", "lat": "31n13", "lon": "121e28"},
+            "format": "json",
+            "question": "请生成奇门结构化报告",
+            "ai_report": {"executive_summary": "奇门报告摘要。"},
+        }
+    )
+
+    assert rendered["ok"] is True
+    assert rendered["format"] == "json"
+    assert Path(rendered["artifact_path"]).is_file()
+    assert rendered["tool_result"]["ok"] is True
+    assert rendered["source"]["tool_name"] == "qimen"
+    assert rendered["answer_writeback"]["ok"] is True
+    assert rendered["answer_writeback"]["answer_text_chars"] > 0
+    run_id = rendered["tool_result"]["memory_ref"]["run_id"]
+    stored = service.store.query_runs(run_id=run_id, text="奇门报告摘要", include_payload=True)
+    assert stored
+    assert stored[0]["ai_answer_text"] == "奇门报告摘要。"
+    assert stored[0]["ai_answer_structured"]["executive_summary"] == "奇门报告摘要。"
+    assert stored[0]["answer_meta"]["source"] == "report_render"
+    assert stored[0]["artifact_summary"]["has_reports"] is True
+    assert stored[0]["artifact_summary"]["counts_by_kind"]["report_json"] == 1
+
+
+def test_report_contract_targets_user_question_and_memory_retrieval(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    store = MemoryStore(settings)
+    service = HorosaSkillService(settings, client=FakeClient(), store=store, js_client=FakeJsClient())
+
+    question = "我接下来事业什么时候适合换工作？是否应该跳槽？"
+    result = service.run_tool(
+        "qimen",
+        {"date": "2028-04-06", "time": "09:33:00", "zone": "8", "lat": "31n13", "lon": "121e28"},
+        save_result=True,
+        query_text=question,
+    )
+    assert result.memory_ref is not None
+
+    template = service.report_template({"run_id": result.memory_ref.run_id, "tool_name": "qimen"})
+    assert template["question_analysis"]["focus_domains"] == ["career", "timing", "decision"]
+    assert template["question_analysis"]["needs_timing"] is True
+    assert template["question_analysis"]["needs_decision_support"] is True
+    requirement_ids = {
+        item["id"]
+        for item in template["targeted_analysis_contract"]["targeted_answer_requirements"]
+    }
+    assert {"focus_career", "timing_window", "decision_support"}.issubset(requirement_ids)
+    assert template["ai_fillable"]["targeted_answer_requirements"]
+
+    ai_sections = [
+        {
+            "title": section["title"],
+            "body": f"{section['title']} 用于判断事业换工作节奏与跳槽风险。",
+            "evidence_lines": [section["title"]],
+            "relevance_to_question": "直接服务于事业、时间窗口和是否跳槽的判断。",
+        }
+        for section in template["source_export_sections"]
+    ]
+    rendered = service.report_render(
+        {
+            "run_id": result.memory_ref.run_id,
+            "tool_name": "qimen",
+            "format": "json",
+            "ai_report": {
+                "analysis_focus": question,
+                "direct_answer": "可以准备换工作，但需要等待更清晰的时间窗口再正式跳槽。",
+                "executive_summary": "事业问题以先准备、后行动为宜。",
+                "analysis_sections": ai_sections,
+                "evidence": [{"source_section_title": template["source_export_sections"][0]["title"], "source_line": "奇门自检线索"}],
+                "recommendations": ["先整理作品和资源，再选择合适窗口投递。"],
+                "limitations": ["真实决策仍需结合行业机会与个人现实约束。"],
+                "follow_up_questions": ["可以继续追问具体月份或目标公司方向。"],
+            },
+        }
+    )
+
+    report_payload = json.loads(Path(rendered["artifact_path"]).read_text(encoding="utf-8"))
+    assert report_payload["delivery_checklist"]["ready_to_deliver"] is True
+    assert report_payload["delivery_checklist"]["checks"]["has_targeted_requirements"] is True
+    assert report_payload["targeted_analysis_contract"]["question_analysis"]["focus_domains"] == ["career", "timing", "decision"]
+    assert report_payload["report_index"]["ready_to_deliver"] is True
+    assert report_payload["report_index"]["delivery_missing"] == []
+    report_requirement_ids = {
+        item["id"]
+        for item in report_payload["report_index"]["targeted_answer_requirements"]
+    }
+    assert {"focus_career", "timing_window", "decision_support"}.issubset(report_requirement_ids)
+    assert "时间窗口" in report_payload["search_index"]["keywords"]
+    assert "决策建议" in report_payload["search_index"]["keywords"]
+    assert "换工作" in report_payload["plain_text"]
+    assert "跳槽" in report_payload["plain_text"]
+
+    by_question = store.query_runs(text="跳槽", artifact_kind="report_json", include_payload=True)
+    assert any(run["run_id"] == result.memory_ref.run_id for run in by_question)
+    by_requirement = store.query_runs(text="时间窗口", artifact_kind="report_json", include_payload=False)
+    assert any(run["run_id"] == result.memory_ref.run_id for run in by_requirement)
+    stored = service.show_memory({"run_id": result.memory_ref.run_id, "include_payload": True})
+    assert stored["ok"] is True
+    assert stored["result"]["ai_answer_text"].startswith("可以准备换工作")
+    assert stored["result"]["ai_answer_structured"]["analysis_focus"] == question
+    assert stored["result"]["answer_meta"]["source"] == "report_render"
+    assert stored["result"]["artifact_summary"]["has_reports"] is True
+    assert stored["result"]["artifact_summary"]["latest_report"]["kind"] == "report_json"
+
+
+def test_report_question_analysis_understands_natural_timing_and_decision_words(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+
+    result = service.run_tool(
+        "qimen",
+        {"date": "2028-04-06", "time": "09:33:00", "zone": "8", "lat": "31n13", "lon": "121e28"},
+        save_result=True,
+        query_text="重点分析事业、时间窗口、决策建议，并保留原始技法依据。",
+    )
+    assert result.memory_ref is not None
+
+    template = service.report_template({"run_id": result.memory_ref.run_id, "tool_name": "qimen"})
+    assert template["question_analysis"]["focus_domains"] == ["career", "timing", "decision"]
+    assert "时间窗口" in template["question_analysis"]["keywords_detected"]
+    assert "决策" in template["question_analysis"]["keywords_detected"]
+    assert "建议" in template["question_analysis"]["keywords_detected"]
+    assert template["question_analysis"]["needs_timing"] is True
+    assert template["question_analysis"]["needs_decision_support"] is True
+    requirement_ids = {
+        item["id"]
+        for item in template["targeted_analysis_contract"]["targeted_answer_requirements"]
+    }
+    assert {"focus_career", "timing_window", "decision_support"}.issubset(requirement_ids)
 
 
 def test_service_emits_trace_and_provenance_for_tool_results(tmp_path) -> None:
