@@ -866,9 +866,12 @@ class HorosaRuntimeManager:
         return ["/bin/bash", str(script)]
 
     def _apply_runtime_overrides(self, manifest: dict[str, Any] | None) -> list[str]:
+        if os.name != "nt":
+            return []
+
         template_root = self._runtime_template_root() / "windows"
         patched: list[str] = []
-        if os.name == "nt" and template_root.exists():
+        if template_root.exists():
             overrides = {
                 "services.start_script": template_root / "start_horosa_local.ps1",
                 "services.stop_script": template_root / "stop_horosa_local.ps1",
@@ -882,11 +885,10 @@ class HorosaRuntimeManager:
                 shutil.copy2(source, destination)
                 patched.append(str(destination))
 
-        if os.name == "nt":
-            boot_jar = self.current_dir / self._relative_manifest_path(manifest, "artifacts", "boot_jar")
-            if boot_jar.is_file() and self._boot_jar_supports_patch(boot_jar):
-                self._patch_windows_boot_jar(manifest, boot_jar)
-                patched.append(str(boot_jar))
+        boot_jar = self.current_dir / self._relative_manifest_path(manifest, "artifacts", "boot_jar")
+        if boot_jar.is_file() and self._boot_jar_supports_patch(boot_jar):
+            self._patch_windows_boot_jar(manifest, boot_jar)
+            patched.append(str(boot_jar))
         return patched
 
     def _runtime_template_root(self) -> Path:
