@@ -882,10 +882,11 @@ class HorosaRuntimeManager:
                 shutil.copy2(source, destination)
                 patched.append(str(destination))
 
-        boot_jar = self.current_dir / self._relative_manifest_path(manifest, "artifacts", "boot_jar")
-        if boot_jar.is_file() and self._boot_jar_supports_patch(boot_jar):
-            self._patch_windows_boot_jar(manifest, boot_jar)
-            patched.append(str(boot_jar))
+        if os.name == "nt":
+            boot_jar = self.current_dir / self._relative_manifest_path(manifest, "artifacts", "boot_jar")
+            if boot_jar.is_file() and self._boot_jar_supports_patch(boot_jar):
+                self._patch_windows_boot_jar(manifest, boot_jar)
+                patched.append(str(boot_jar))
         return patched
 
     def _runtime_template_root(self) -> Path:

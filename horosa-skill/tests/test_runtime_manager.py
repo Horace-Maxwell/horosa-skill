@@ -741,6 +741,31 @@ def test_install_patches_windows_runtime_templates(tmp_path: Path, monkeypatch: 
         assert archive.read("BOOT-INF/classes/horosa/offline/LocalCacheFactory$LocalCache.class") == b"class-bytes"
 
 
+def test_posix_runtime_overrides_do_not_patch_boot_jar(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    archive = create_runtime_archive(tmp_path)
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+        runtime_platform="darwin-arm64",
+    )
+    manager = HorosaRuntimeManager(settings)
+    manager.install(archive=str(archive))
+    manifest = manager.load_installed_manifest(strict=True)
+    boot_jar = settings.runtime_current_dir / "runtime/mac/bundle/astrostudyboot.jar"
+    with zipfile.ZipFile(boot_jar, "w") as archive_file:
+        archive_file.writestr("BOOT-INF/classes/conf/properties/cache/caches.json", "{}")
+
+    monkeypatch.setattr("horosa_skill.runtime.manager.os.name", "posix", raising=False)
+    monkeypatch.setattr(
+        manager,
+        "_patch_windows_boot_jar",
+        lambda manifest, jar_path: (_ for _ in ()).throw(AssertionError("Windows jar patch must not run on POSIX")),
+    )
+
+    assert manager._apply_runtime_overrides(manifest) == []
+
+
 def test_start_runtime_reports_patched_files_on_windows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     archive = create_windows_runtime_archive(tmp_path)
     settings = Settings(
