@@ -47,6 +47,11 @@ def test_memory_store_writes_artifact(tmp_path) -> None:
     manifest = [item for item in queried[0]["artifacts"] if item["kind"] == "run_manifest"]
     assert manifest
     assert manifest[0]["payload"]["kind"] == "horosa.skill.run.manifest"
+    manifest_tool_artifact = next(item for item in manifest[0]["payload"]["artifacts"] if item["kind"] == "tool_result")
+    assert manifest_tool_artifact["exists"] is True
+    assert manifest_tool_artifact["file_size"] > 0
+    assert manifest_tool_artifact["sha256"]
+    assert manifest[0]["payload"]["artifact_summary"]["counts_by_kind"]["tool_result"] == 1
 
 
 def test_memory_store_attach_ai_response_updates_artifacts_and_manifest(tmp_path) -> None:
@@ -88,6 +93,10 @@ def test_memory_store_attach_ai_response_updates_artifacts_and_manifest(tmp_path
     manifest = [item for item in queried[0]["artifacts"] if item["kind"] == "run_manifest"][0]["payload"]
     assert manifest["run"]["ai_answer_text"] == "整体先抑后扬。"
     assert manifest["run"]["group_id"] == "dispatch-group"
+    assert manifest["artifact_summary"]["total"] == len(manifest["artifacts"])
+    assert all(item["exists"] is True for item in manifest["artifacts"])
+    assert all(item["file_size"] > 0 for item in manifest["artifacts"])
+    assert all(item["sha256"] for item in manifest["artifacts"])
     exact = store.query_runs(run_id=run_id, include_payload=True)
     assert len(exact) == 1
     assert exact[0]["run_id"] == run_id
