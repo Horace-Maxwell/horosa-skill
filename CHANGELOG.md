@@ -7,6 +7,24 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-04-28
+
+### Fixed
+
+- Polished human-facing DOCX/PDF report rendering so natural-language AI
+  answers become the primary consultation body without leaking machine-only
+  schema, provenance, coverage, run identifiers, raw export dumps, or fallback
+  section prose into the final document.
+- Kept complete source coverage, delivery checks, provenance, and artifact
+  metadata in the JSON report and memory manifest, preserving machine
+  readability while making the PDF/DOCX report suitable for direct client
+  reading.
+
+### Added
+
+- Added a Windows Codex stability prompt for cross-platform report, OpenClaw,
+  memory, and MCP verification.
+
 ## [0.4.1] - 2026-04-28
 
 ### Fixed

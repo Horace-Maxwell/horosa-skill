@@ -19,3 +19,11 @@ horosa-skill/dist/
 horosa-skill/build/
 
 vendor/runtime-source/
+
+# Local report QA artifacts generated during manual audits.
+ds_technique_reports/
+all_technique_reports/
+horosa_*_report.json
+horosa_*_report.docx
+horosa_*_report.pdf
+.tmp_report_preview/

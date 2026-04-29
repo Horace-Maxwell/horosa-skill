@@ -609,6 +609,11 @@ class MemoryStore:
                 "SELECT entity_type, entity_key, display_name, metadata_json, created_at FROM entities WHERE run_id = ? ORDER BY id ASC",
                 (run_id,),
             ).fetchall()
+        artifact_records = [
+            self._artifact_manifest_record(row)
+            for row in artifacts
+            if row["kind"] != "run_manifest"
+        ]
         return {
             "kind": "horosa.skill.run.manifest",
             "schema_version": 1,
@@ -636,8 +641,18 @@ class MemoryStore:
                 for row in entities
             ],
             "tool_calls": [self._tool_call_record_to_dict(row) for row in tool_calls],
-            "artifacts": [dict(row) for row in artifacts if row["kind"] != "run_manifest"],
+            "artifacts": artifact_records,
+            "artifact_summary": self._artifact_summary(artifact_records),
         }
+
+    def _artifact_manifest_record(self, artifact: sqlite3.Row) -> dict[str, Any]:
+        record = dict(artifact)
+        path = Path(str(record.get("path") or ""))
+        exists = path.is_file()
+        record["exists"] = exists
+        record["file_size"] = path.stat().st_size if exists else 0
+        record["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest() if exists else None
+        return record
 
     def _refresh_run_manifest(self, run_id: str) -> dict[str, Any]:
         manifest_payload = self._build_run_manifest_payload(run_id)

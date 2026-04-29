@@ -1,4 +1,6 @@
 import json
+import re
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -167,6 +169,45 @@ class FakeClient(HorosaApiClient):
         if endpoint == "/chart13":
             return chart_payload
         return chart_payload
+
+
+def sample_final_ai_report(question: str, *, source_title: str = "起盘信息") -> dict:
+    return {
+        "analysis_focus": question,
+        "answer_text": (
+            "我先直接给结论：这件事可以推进，但不适合盲目加速。"
+            "从盘面材料看，当前更适合先确认资源、风险和时间窗口，再把行动拆成几个可验证步骤。"
+            "如果用户问的是事业或财务，就要把机会和风险分开处理：事业可以准备，财务不要把不确定性放大成高杠杆。"
+        ),
+        "direct_answer": "结论上：已根据真实盘面和用户问题完成针对性判断，建议稳健推进、分阶段验证。",
+        "executive_summary": "先看起盘结果，再围绕问题拆解机会、风险、时间窗口和行动建议。",
+        "consultation_basis": [
+            "以本次工具算出的真实盘面结果为依据。",
+            "围绕用户问题提取关键章节、证据线索和现实行动含义。",
+        ],
+        "reading_steps": [
+            "确认输入的时间、地点和用户事情。",
+            "读取工具输出的盘面结构、导出正文和章节。",
+            "围绕问题给出结论、证据、建议和限制。",
+        ],
+        "analysis_sections": [
+            {
+                "title": "问题结论",
+                "body": "本次分析不是泛泛解释技法，而是把盘面结果转成用户能直接使用的判断。",
+                "evidence_lines": [source_title],
+                "relevance_to_question": "直接回应用户问题。",
+            },
+            {
+                "title": "行动建议",
+                "body": "行动上建议先确认现实条件，再分阶段推进，避免把不确定性扩大成高风险决策。",
+                "evidence_lines": [source_title],
+                "relevance_to_question": "把盘面结论转成行动框架。",
+            },
+        ],
+        "evidence": [{"source_section_title": source_title, "source_line": "测试盘面线索"}],
+        "recommendations": ["保留报告和原始盘面，后续可复盘。", "如有具体选择，再追问时间窗口和风险边界。"],
+        "limitations": ["报告用于辅助判断，不替代现实尽调。"],
+    }
 
 
 class FakeJsClient(HorosaJsEngineClient):
@@ -761,6 +802,9 @@ def test_all_callable_techniques_can_generate_report_json_artifacts(tmp_path) ->
         assert template["ai_fillable"]["targeted_answer_requirements"], tool_name
         assert template["ai_fillable"]["answer_plan"], tool_name
         assert template["ai_fillable"]["analysis_focus"] == f"生成 {tool_name} 报告", tool_name
+        assert template["conversation_brief"]["role"].startswith("你是接入 Horosa Skill 的 AI 解盘助手"), tool_name
+        assert "像在 AI 对话窗口中完成一次认真解盘" in "\n".join(template["conversation_brief"]["output_style"]), tool_name
+        assert "answer_text" in template["ai_fillable"], tool_name
         assert "direct_answer" in template["ai_fillable"], tool_name
 
         ai_sections = [
@@ -868,6 +912,165 @@ def test_all_callable_techniques_can_generate_report_json_artifacts(tmp_path) ->
         assert report_artifact["payload"]["report_index"]["storage"]["managed_by"] == "horosa_skill.memory", tool_name
         assert report_artifact["payload"]["report_index"]["ready_to_deliver"] is True, tool_name
         assert report_artifact["payload"]["report_index"]["delivery_missing"] == [], tool_name
+
+
+def test_all_callable_techniques_can_generate_human_readable_pdf_and_docx(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    store = MemoryStore(settings)
+    service = HorosaSkillService(settings, client=FakeClient(), store=store, js_client=FakeJsClient())
+    payloads = build_sample_payloads()
+    bad_terms = ["待 AI", "AI 后续应", "这份报告已把"]
+
+    for tool_name in TOOL_EXPORT_TECHNIQUE_MAP:
+        question = f"请针对这个人的事业、财务和决策风险生成可直接阅读的 {tool_name} 咨询报告。"
+        result = service.run_tool(tool_name, payloads[tool_name], save_result=True, query_text=question)
+        assert result.memory_ref is not None, tool_name
+
+        rendered_json = service.report_render(
+            {
+                "run_id": result.memory_ref.run_id,
+                "tool_name": tool_name,
+                "format": "json",
+                "ai_report": sample_final_ai_report(question),
+            }
+        )
+        report_payload = json.loads(Path(rendered_json["artifact_path"]).read_text(encoding="utf-8"))
+        assert report_payload["report_quality"]["ready_for_human_reading"] is True, tool_name
+        assert report_payload["delivery_checklist"]["ready_to_deliver"] is True, tool_name
+        assert report_payload["delivery_checklist"]["missing"] == [], tool_name
+        assert report_payload["ai_report"]["direct_answer"], tool_name
+        assert report_payload["ai_report"]["consultation_basis"], tool_name
+        assert report_payload["ai_report"]["reading_steps"], tool_name
+        assert report_payload["ai_report"]["analysis_sections"], tool_name
+        assert not any(term in report_payload["plain_text"] for term in bad_terms), tool_name
+
+        rendered_pdf = service.report_render(
+            {"run_id": result.memory_ref.run_id, "tool_name": tool_name, "format": "pdf"}
+        )
+        rendered_docx = service.report_render(
+            {"run_id": result.memory_ref.run_id, "tool_name": tool_name, "format": "docx"}
+        )
+        pdf_path = Path(rendered_pdf["artifact_path"])
+        docx_path = Path(rendered_docx["artifact_path"])
+        assert pdf_path.read_bytes().startswith(b"%PDF"), tool_name
+        assert docx_path.read_bytes().startswith(b"PK"), tool_name
+        assert rendered_pdf["file_size"] > 500, tool_name
+        assert rendered_docx["file_size"] > 5000, tool_name
+        with zipfile.ZipFile(docx_path) as archive:
+            docx_text = re.sub("<[^>]+>", "", archive.read("word/document.xml").decode("utf-8"))
+        assert "起盘依据" in docx_text, tool_name
+        assert "解盘步骤" in docx_text, tool_name
+        assert not any(term in docx_text for term in ["Run ID", "来源追溯", "report_metadata", "Horosa Skill"]), tool_name
+        if tool_name in {"bazi_birth", "bazi_direct"}:
+            assert "大运流年与阶段判断" in docx_text, tool_name
+
+
+def test_all_callable_techniques_without_question_generate_overall_reading_docx(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    store = MemoryStore(settings)
+    service = HorosaSkillService(settings, client=FakeClient(), store=store, js_client=FakeJsClient())
+    payloads = build_sample_payloads()
+
+    for tool_name in TOOL_EXPORT_TECHNIQUE_MAP:
+        result = service.run_tool(tool_name, payloads[tool_name], save_result=True)
+        assert result.memory_ref is not None, tool_name
+        rendered = service.report_render(
+            {
+                "run_id": result.memory_ref.run_id,
+                "tool_name": tool_name,
+                "format": "docx",
+                "ai_report": sample_final_ai_report("整体综合解盘"),
+            }
+        )
+        with zipfile.ZipFile(Path(rendered["artifact_path"])) as archive:
+            docx_text = re.sub("<[^>]+>", "", archive.read("word/document.xml").decode("utf-8"))
+        assert "解读目标" in docx_text, tool_name
+        assert "综合命局咨询" in docx_text or "整体综合解盘" in docx_text, tool_name
+        assert "解读目标无" not in docx_text, tool_name
+        assert "起盘依据" in docx_text, tool_name
+        assert "解盘步骤" in docx_text, tool_name
+        assert "核心结论" in docx_text, tool_name
+        assert not any(term in docx_text for term in ["Run ID", "来源追溯", "report_metadata", "Horosa Skill"]), tool_name
+
+
+def test_bazi_report_promotes_liunian_output_into_human_reading(tmp_path) -> None:
+    class BaziFlowClient(FakeClient):
+        def call(self, endpoint: str, payload: dict) -> dict:
+            def column(ganzi: str) -> dict:
+                return {"ganzi": ganzi, "stem": {"name": ganzi[0]}, "branch": {"name": ganzi[1]}}
+
+            return {
+                "bazi": {
+                    "nongli": {"birth": "1995-06-03 05:18:42"},
+                    "fourColumns": {
+                        "year": column("乙亥"),
+                        "month": column("辛巳"),
+                        "day": column("乙卯"),
+                        "time": column("己卯"),
+                    },
+                    "mainDirection": [
+                        {"year": 2019, "ganzi": "甲申"},
+                        {"year": 2029, "ganzi": "乙酉"},
+                    ],
+                    "direction": [
+                        {
+                            "mainDirect": {"ganzi": "甲申"},
+                            "startYear": 2019,
+                            "subDirect": [
+                                {"date": "2026", "ganzi": "丙午"},
+                                {"date": "2027", "ganzi": "丁未"},
+                                {"date": "2028", "ganzi": "戊申"},
+                            ],
+                        }
+                    ],
+                }
+            }
+
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=BaziFlowClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    result = service.run_tool(
+        "bazi_birth",
+        {
+            "date": "1995-06-03",
+            "time": "05:30:00",
+            "zone": "+08:00",
+            "lat": "31n13",
+            "lon": "121e28",
+            "gender": True,
+            "timeAlg": 0,
+        },
+        save_result=True,
+        query_text="这个人未来三年事业和财务风险如何？",
+    )
+
+    rendered = service.report_render(
+        {
+            "run_id": result.memory_ref.run_id,
+            "tool_name": "bazi_birth",
+            "format": "docx",
+            "ai_report": sample_final_ai_report("这个人未来三年事业和财务风险如何？"),
+        }
+    )
+    with zipfile.ZipFile(Path(rendered["artifact_path"])) as archive:
+        docx_text = re.sub("<[^>]+>", "", archive.read("word/document.xml").decode("utf-8"))
+    assert "大运流年与阶段判断" in docx_text
+    assert "2026" in docx_text
+    assert "2027" in docx_text
+    assert "2028" in docx_text
+    assert "事业判断上" in docx_text
+    assert "财务判断上" in docx_text
 
 
 def test_all_callable_techniques_final_export_text_matches_max_section_contract(tmp_path) -> None:
@@ -1153,6 +1356,91 @@ def test_service_can_render_report_from_tool_in_one_call(tmp_path) -> None:
     assert stored[0]["artifact_summary"]["counts_by_kind"]["report_json"] == 1
 
 
+def test_report_from_tool_without_ai_report_returns_analysis_packet_not_final_report(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+
+    result = service.report_from_tool(
+        {
+            "tool_name": "qimen",
+            "payload": {"date": "2028-04-06", "time": "09:33:00", "zone": "8", "lat": "31n13", "lon": "121e28"},
+            "format": "pdf",
+            "question": "这个事情能不能推进？风险在哪里？",
+        }
+    )
+
+    assert result["ok"] is True
+    assert result["mode"] == "analysis_required"
+    assert result["needs_ai_analysis"] is True
+    assert result["final_report_generated"] is False
+    assert result["artifact_path"] is None
+    assert result["tool_result"]["ok"] is True
+    assert result["report_template"]["source_context"]["export_text"]
+    assert result["report_template"]["source_context"]["export_sections"]
+    assert result["report_template"]["targeted_analysis_contract"]["targeted_answer_requirements"]
+    assert result["report_template"]["conversation_brief"]["role"].startswith("你是接入 Horosa Skill 的 AI 解盘助手")
+    assert "完整对话式解盘正文" in result["report_template"]["conversation_brief"]["final_ai_report_contract"]["answer_text"]
+    assert result["ai_process"]["input"]
+    assert result["ai_process"]["conversation_brief"]["plate_context"]["tool_name"] == "qimen"
+    assert result["ai_process"]["process"]
+    assert result["ai_process"]["output"].startswith("最终报告必须来自 AI")
+    assert "answer_text" in result["ai_process"]["ai_report_skeleton"]
+    assert result["ai_process"]["next_call"]["payload"]["run_id"] == result["run_id"]
+    assert result["ai_process"]["next_call"]["payload"]["ai_report"] == "<AI fills this object from ai_report_skeleton>"
+
+    stored = service.show_memory({"run_id": result["run_id"], "include_payload": True})
+    assert stored["ok"] is True
+    assert stored["result"]["artifact_summary"]["has_reports"] is False
+    assert stored["result"]["ai_answer_text"] is None
+    artifact_kinds = {artifact["kind"] for artifact in stored["result"]["artifacts"]}
+    assert "tool_result" in artifact_kinds
+    assert "report_pdf" not in artifact_kinds
+
+
+def test_report_from_tool_accepts_freeform_ai_answer_text(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    answer_text = (
+        "结论上，这件事可以推进，但不适合在信息不足时突然加速。"
+        "我会先看奇门盘里的起局信息、值符值使和宫位关系，再把这些线索转成现实行动建议。"
+        "事业上适合先整理资源和选择窗口，财务上要避免高杠杆，决策上要把可验证的小步骤放在前面。"
+    )
+
+    rendered = service.report_from_tool(
+        {
+            "tool_name": "qimen",
+            "payload": {"date": "2028-04-06", "time": "09:33:00", "zone": "8", "lat": "31n13", "lon": "121e28"},
+            "format": "docx",
+            "question": "这个事情能不能推进？风险在哪里？",
+            "ai_answer_text": answer_text,
+        }
+    )
+
+    assert rendered["ok"] is True
+    assert rendered["answer_writeback"]["ok"] is True
+    run_id = rendered["tool_result"]["memory_ref"]["run_id"]
+    stored = service.show_memory({"run_id": run_id, "include_payload": True})
+    assert stored["result"]["ai_answer_text"] == answer_text
+    assert stored["result"]["ai_answer_structured"]["answer_text"] == answer_text
+    with zipfile.ZipFile(Path(rendered["artifact_path"])) as archive:
+        docx_text = re.sub("<[^>]+>", "", archive.read("word/document.xml").decode("utf-8"))
+    assert "完整解盘正文" in docx_text
+    assert "这件事可以推进" in docx_text
+    assert "可读解读" not in docx_text
+    assert "关键线索" not in docx_text
+    assert "本次咨询使用" not in docx_text
+    assert "盘面返回的核心摘要" not in docx_text
+    assert "Run ID" not in docx_text
+
+
 def test_report_contract_targets_user_question_and_memory_retrieval(tmp_path) -> None:
     settings = Settings(
         server_root="http://127.0.0.1:9999",
@@ -1236,6 +1524,220 @@ def test_report_contract_targets_user_question_and_memory_retrieval(tmp_path) ->
     assert stored["result"]["answer_meta"]["source"] == "report_render"
     assert stored["result"]["artifact_summary"]["has_reports"] is True
     assert stored["result"]["artifact_summary"]["latest_report"]["kind"] == "report_json"
+
+
+def test_targeted_consultation_report_roundtrip_persists_and_retrieves_ai_analysis(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    store = MemoryStore(settings)
+    service = HorosaSkillService(settings, client=FakeClient(), store=store, js_client=FakeJsClient())
+
+    question = "这个人未来三年事业、财务和决策风险应该怎么判断？是否适合换工作或做更激进的投资？"
+    result = service.run_tool(
+        "qimen",
+        {"date": "2028-04-06", "time": "09:33:00", "zone": "8", "lat": "31n13", "lon": "121e28"},
+        save_result=True,
+        query_text=question,
+    )
+    assert result.memory_ref is not None
+
+    template = service.report_template({"run_id": result.memory_ref.run_id, "tool_name": "qimen"})
+    assert template["question_analysis"]["focus_domains"] == ["career", "wealth", "timing", "decision"]
+    source_title = template["source_export_sections"][0]["title"]
+    ai_report = {
+        "analysis_focus": question,
+        "direct_answer": "结论上：可以准备换工作，但不宜裸辞；财务上不建议高杠杆或激进投资。",
+        "executive_summary": "此局适合先做机会筛选和资源整理，等时间窗口清楚后再行动。",
+        "consultation_basis": [
+            "以奇门局的起局时间、值符值使、门星神仪和宫位互动作为判断依据。",
+            "把事业、财务、风险和时间窗口分开判断，避免只给抽象结论。",
+        ],
+        "reading_steps": [
+            "先确认用局和用户问题。",
+            "再看事业相关宫位、门星神仪与动静变化。",
+            "最后把财务风险、行动窗口和现实约束合并成建议。",
+        ],
+        "analysis_sections": [
+            {
+                "title": "事业策略",
+                "body": "事业上可以主动准备换工作，但应先建立备选机会，不宜裸辞。",
+                "evidence_lines": [source_title],
+                "relevance_to_question": "直接回答是否适合换工作。",
+            },
+            {
+                "title": "财务风险",
+                "body": "财务判断偏保守，暂时不建议高杠杆、借贷扩张或激进投资。",
+                "evidence_lines": [source_title],
+                "relevance_to_question": "直接回答是否适合做更激进的投资。",
+            },
+            {
+                "title": "行动窗口",
+                "body": "更适合先观察机会质量，再选择阻力较小的窗口推进。",
+                "evidence_lines": [source_title],
+                "relevance_to_question": "给出时间和行动节奏。",
+            },
+        ],
+        "evidence": [{"source_section_title": source_title, "source_line": "奇门起局与宫位线索"}],
+        "recommendations": [
+            "先整理简历、作品和目标岗位，再分批投递。",
+            "投资部分以现金流安全为先，暂缓高杠杆配置。",
+            "如果出现明确 offer，再结合薪资、团队和行业周期做最终决策。",
+        ],
+        "limitations": ["本报告提供决策辅助，不替代现实尽调、合同审核和财务规划。"],
+        "follow_up_questions": ["可以继续追问具体月份、目标行业或某个 offer 是否值得接。"],
+    }
+
+    rendered_json = service.report_render(
+        {
+            "run_id": result.memory_ref.run_id,
+            "tool_name": "qimen",
+            "format": "json",
+            "ai_report": ai_report,
+        }
+    )
+    assert rendered_json["answer_writeback"]["ok"] is True
+    rendered_docx = service.report_render({"run_id": result.memory_ref.run_id, "tool_name": "qimen", "format": "docx"})
+    rendered_pdf = service.report_render({"run_id": result.memory_ref.run_id, "tool_name": "qimen", "format": "pdf"})
+
+    report_payload = json.loads(Path(rendered_json["artifact_path"]).read_text(encoding="utf-8"))
+    assert report_payload["report_index"]["ready_to_deliver"] is True
+    assert report_payload["delivery_checklist"]["ready_to_deliver"] is True
+    assert report_payload["report_quality"]["ready_for_human_reading"] is True
+    assert report_payload["ai_report"]["analysis_focus"] == question
+    assert "不宜裸辞" in report_payload["ai_report"]["direct_answer"]
+    assert "高杠杆" in report_payload["plain_text"]
+    assert "换工作" in report_payload["search_index"]["keywords"]
+    assert "激进投资" in report_payload["search_index"]["keywords"]
+
+    with zipfile.ZipFile(Path(rendered_docx["artifact_path"])) as archive:
+        docx_text = re.sub("<[^>]+>", "", archive.read("word/document.xml").decode("utf-8"))
+    assert "解读目标" in docx_text
+    assert "起盘依据" in docx_text
+    assert "解盘步骤" in docx_text
+    assert "核心结论" in docx_text
+    assert "事业策略" in docx_text
+    assert "财务风险" in docx_text
+    assert "不宜裸辞" in docx_text
+    assert "高杠杆" in docx_text
+    assert not any(term in docx_text for term in ["Run ID", "来源追溯", "report_metadata", "Horosa Skill"])
+    assert Path(rendered_pdf["artifact_path"]).read_bytes().startswith(b"%PDF")
+
+    shown = service.show_memory({"run_id": result.memory_ref.run_id, "include_payload": True})
+    assert shown["ok"] is True
+    stored_run = shown["result"]
+    assert stored_run["ai_answer_text"] == ai_report["direct_answer"]
+    assert stored_run["ai_answer_structured"]["analysis_focus"] == question
+    assert stored_run["answer_meta"]["source"] == "report_render"
+    artifact_kinds = {artifact["kind"] for artifact in stored_run["artifacts"]}
+    assert {"tool_result", "report_json", "report_docx", "report_pdf", "run_manifest"}.issubset(artifact_kinds)
+    assert stored_run["artifact_summary"]["has_reports"] is True
+    assert stored_run["artifact_summary"]["counts_by_kind"]["report_json"] == 1
+    assert stored_run["artifact_summary"]["counts_by_kind"]["report_docx"] == 1
+    assert stored_run["artifact_summary"]["counts_by_kind"]["report_pdf"] == 1
+    for artifact in stored_run["artifacts"]:
+        assert artifact["exists"] is True
+        assert artifact["file_size"] > 0
+        assert artifact["sha256"]
+
+    by_question = service.query_memory(
+        {"text": "激进投资", "artifact_kind": "report_json", "include_payload": True, "limit": 5}
+    )
+    assert by_question["ok"] is True
+    assert any(item["run_id"] == result.memory_ref.run_id for item in by_question["results"])
+    matched = next(item for item in by_question["results"] if item["run_id"] == result.memory_ref.run_id)
+    assert matched["artifact_summary"]["has_reports"] is True
+    assert matched["artifacts"][0]["kind"] == "report_json"
+    assert matched["artifacts"][0]["payload"]["report_index"]["ready_to_deliver"] is True
+    assert "高杠杆" in json.dumps(matched["artifacts"][0]["payload"], ensure_ascii=False)
+
+    by_answer = service.query_memory(
+        {"text": "不宜裸辞", "tool": "qimen", "include_payload": False, "limit": 5}
+    )
+    assert by_answer["ok"] is True
+    assert any(item["run_id"] == result.memory_ref.run_id for item in by_answer["results"])
+
+
+def test_report_manifest_preserves_ai_answer_and_report_artifact_index(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+
+    rendered = service.report_from_tool(
+        {
+            "tool_name": "bazi_birth",
+            "payload": {
+                "date": "1995-06-03",
+                "time": "05:30:00",
+                "zone": "+08:00",
+                "lat": "31n13",
+                "lon": "121e28",
+                "gender": True,
+            },
+            "format": "json",
+            "question": "未来三年事业和财务怎么规划？是否适合激进投资？",
+            "ai_report": {
+                "analysis_focus": "未来三年事业、财务和投资风险。",
+                "direct_answer": "结论上：事业宜稳中求进，财务不宜激进投资。",
+                "executive_summary": "先保现金流，再筛选更确定的机会。",
+                "analysis_sections": [
+                    {
+                        "title": "事业规划",
+                        "body": "适合准备机会，但不宜仓促转向。",
+                        "evidence_lines": ["起盘信息"],
+                        "relevance_to_question": "回应事业规划。",
+                    },
+                    {
+                        "title": "财务规划",
+                        "body": "不宜激进投资，应先控制风险和现金流。",
+                        "evidence_lines": ["起盘信息"],
+                        "relevance_to_question": "回应财务规划。",
+                    },
+                ],
+                "recommendations": ["先保现金流。", "投资降低杠杆。"],
+                "limitations": ["仍需结合现实收入、行业和负债情况。"],
+                "evidence": [{"source_section_title": "起盘信息", "source_line": "样本起盘线索"}],
+            },
+        }
+    )
+    assert rendered["ok"] is True
+    run_id = rendered["tool_result"]["memory_ref"]["run_id"]
+    service.report_render({"run_id": run_id, "tool_name": "bazi_birth", "format": "docx"})
+    service.report_render({"run_id": run_id, "tool_name": "bazi_birth", "format": "pdf"})
+
+    shown = service.show_memory({"run_id": run_id, "include_payload": True})
+    manifest_artifact = next(artifact for artifact in shown["result"]["artifacts"] if artifact["kind"] == "run_manifest")
+    manifest = manifest_artifact["payload"]
+    assert manifest["run"]["id"] == run_id
+    assert manifest["run"]["user_question"] == "未来三年事业和财务怎么规划？是否适合激进投资？"
+    assert manifest["run"]["ai_answer_text"] == "结论上：事业宜稳中求进，财务不宜激进投资。"
+    assert manifest["run"]["ai_answer_structured"]["analysis_focus"] == "未来三年事业、财务和投资风险。"
+    assert manifest["run"]["answer_meta"]["source"] == "report_render"
+    manifest_kinds = {artifact["kind"] for artifact in manifest["artifacts"]}
+    assert {"tool_result", "report_json", "report_docx", "report_pdf"}.issubset(manifest_kinds)
+    manifest_paths = [Path(artifact["path"]) for artifact in manifest["artifacts"]]
+    assert all(path.is_file() for path in manifest_paths)
+    assert manifest["artifact_summary"]["has_reports"] is True
+    assert manifest["artifact_summary"]["counts_by_kind"]["report_json"] == 1
+    assert manifest["artifact_summary"]["counts_by_kind"]["report_docx"] == 1
+    assert manifest["artifact_summary"]["counts_by_kind"]["report_pdf"] == 1
+    for artifact in manifest["artifacts"]:
+        assert artifact["exists"] is True
+        assert artifact["file_size"] > 0
+        assert artifact["sha256"]
+
+    queried = service.query_memory(
+        {"text": "激进投资", "artifact_kind": "run_manifest", "include_payload": True, "limit": 5}
+    )
+    assert queried["ok"] is True
+    assert any(item["run_id"] == run_id for item in queried["results"])
+    matched = next(item for item in queried["results"] if item["run_id"] == run_id)
+    assert matched["artifacts"][0]["payload"]["run"]["ai_answer_text"].endswith("财务不宜激进投资。")
 
 
 def test_report_question_analysis_understands_natural_timing_and_decision_words(tmp_path) -> None:
