@@ -362,6 +362,7 @@ class ReportRenderInput(FlexibleModel):
     language: str = "zh-CN"
     title: str | None = None
     ai_report: dict[str, Any] = Field(default_factory=dict)
+    ai_answer_text: str | None = None
     include_raw_json: bool = False
     output_path: str | None = None
 
@@ -374,5 +375,6 @@ class ReportFromToolInput(FlexibleModel):
     title: str | None = None
     question: str | None = None
     ai_report: dict[str, Any] = Field(default_factory=dict)
+    ai_answer_text: str | None = None
     include_raw_json: bool = False
     output_path: str | None = None

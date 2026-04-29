@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from datetime import timezone, datetime
 from pathlib import Path
 from typing import Any
@@ -2649,7 +2650,9 @@ class HorosaSkillService:
                 break
             except ToolTransportError as exc:
                 body = str(exc.details.get("body", ""))
-                is_param_error = exc.code == "transport.http_error" and "200001" in body and "param error" in body
+                is_param_error = exc.code == "tool.backend_param_error" or (
+                    exc.code == "transport.http_error" and "200001" in body and "param error" in body
+                )
                 if not is_param_error:
                     raise
                 param_errors.append((remote_payload, exc))
@@ -3407,10 +3410,32 @@ class HorosaSkillService:
                 normalized_format = self._normalize_report_format(request.format)
                 run, source_artifact = self._load_report_source(request.run_id, request.tool_name)
                 source_tool_name = str(source_artifact.get("tool_name") or request.tool_name or "")
+                normalized_ai_report = self._normalize_report_ai_payload(
+                    ai_report=request.ai_report,
+                    ai_answer_text=request.ai_answer_text,
+                )
+                if not normalized_ai_report and not self._run_has_report_ai(run):
+                    template = self.report_builder.build_template(
+                        run=run,
+                        source_artifact=source_artifact,
+                        language=request.language,
+                    )
+                    trace["run_id"] = request.run_id
+                    trace["tool_name"] = source_tool_name
+                    trace["success"] = True
+                    return self._report_ai_required_response(
+                        run_id=request.run_id,
+                        tool_name=source_tool_name,
+                        format_name=normalized_format,
+                        template=template,
+                        tool_result=None,
+                        trace_id=trace["trace_id"],
+                        group_id=trace["group_id"],
+                    )
                 answer_writeback = self._record_report_ai_if_present(
                     run=run,
                     tool_name=source_tool_name,
-                    ai_report=request.ai_report,
+                    ai_report=normalized_ai_report,
                     format_name=normalized_format,
                 )
                 if answer_writeback:
@@ -3420,7 +3445,7 @@ class HorosaSkillService:
                     source_artifact=source_artifact,
                     language=request.language,
                     title=request.title,
-                    ai_report=request.ai_report,
+                    ai_report=normalized_ai_report,
                     include_raw_json=request.include_raw_json,
                 )
                 tool_name = str(document["source"]["tool_name"])
@@ -3501,6 +3526,37 @@ class HorosaSkillService:
                     code="report.from_tool.unsaved_result",
                     details={"tool_name": request.tool_name},
                 )
+            normalized_ai_report = self._normalize_report_ai_payload(
+                ai_report=request.ai_report,
+                ai_answer_text=request.ai_answer_text,
+            )
+            if not normalized_ai_report:
+                run, source_artifact = self._load_report_source(result.memory_ref.run_id, request.tool_name)
+                template = self.report_builder.build_template(
+                    run=run,
+                    source_artifact=source_artifact,
+                    language=request.language,
+                )
+                trace["run_id"] = result.memory_ref.run_id
+                trace["tool_name"] = request.tool_name
+                trace["success"] = True
+                return self._report_ai_required_response(
+                    run_id=result.memory_ref.run_id,
+                    tool_name=request.tool_name,
+                    format_name=normalized_format,
+                    template=template,
+                    tool_result={
+                        "ok": result.ok,
+                        "tool": result.tool,
+                        "input_normalized": result.input_normalized,
+                        "summary": result.summary,
+                        "memory_ref": result.memory_ref.model_dump(mode="json") if result.memory_ref else None,
+                        "trace_id": result.trace_id,
+                        "group_id": result.group_id,
+                    },
+                    trace_id=trace["trace_id"],
+                    group_id=trace["group_id"],
+                )
             rendered = self.report_render(
                 {
                     "run_id": result.memory_ref.run_id,
@@ -3508,7 +3564,7 @@ class HorosaSkillService:
                     "format": normalized_format,
                     "language": request.language,
                     "title": request.title,
-                    "ai_report": request.ai_report,
+                    "ai_report": normalized_ai_report,
                     "include_raw_json": request.include_raw_json,
                     "output_path": request.output_path,
                 }
@@ -3531,11 +3587,104 @@ class HorosaSkillService:
             trace["success"] = True
             return rendered
 
+    def _report_ai_required_response(
+        self,
+        *,
+        run_id: str,
+        tool_name: str,
+        format_name: str,
+        template: dict[str, Any],
+        tool_result: dict[str, Any] | None,
+        trace_id: str,
+        group_id: str,
+    ) -> dict[str, Any]:
+        ai_fillable = template.get("ai_fillable") if isinstance(template.get("ai_fillable"), dict) else {}
+        conversation_brief = template.get("conversation_brief") if isinstance(template.get("conversation_brief"), dict) else {}
+        return {
+            "ok": True,
+            "mode": "analysis_required",
+            "needs_ai_analysis": True,
+            "final_report_generated": False,
+            "artifact_path": None,
+            "format": format_name,
+            "run_id": run_id,
+            "tool_name": tool_name,
+            "tool_result": tool_result,
+            "report_template": template,
+            "ai_process": {
+                "schema": "horosa.skill.report.ai_process.v1",
+                "input": "用户的时间、地点、事情和工具 payload 已保存到本地 run。",
+                "conversation_brief": conversation_brief,
+                "process": [
+                    "读取 conversation_brief，明确用户问题、盘面上下文、解盘方法和输出口吻。",
+                    "阅读 report_template.source_context.export_text/export_sections 中的真实起盘结果。",
+                    "像在 AI 对话窗口里正式解盘一样，先给结论，再给盘面依据、推理过程、风险边界和建议。",
+                    "把完整正文写入 ai_report.answer_text，同时填写 direct_answer、executive_summary、analysis_sections、recommendations、limitations、evidence。",
+                    "最后调用 horosa_report_render 或 horosa_report_from_tool，并把 ai_report 一起传入，生成最终 JSON/DOCX/PDF 和 memory。",
+                ],
+                "output": "最终报告必须来自 AI 对真实盘结果和用户问题的分析；未填写 ai_report 时不会生成假装完成的最终解读报告。",
+                "ai_report_skeleton": {
+                    "analysis_focus": ai_fillable.get("analysis_focus", ""),
+                    "answer_text": ai_fillable.get("answer_text", ""),
+                    "direct_answer": ai_fillable.get("direct_answer", ""),
+                    "executive_summary": ai_fillable.get("executive_summary", ""),
+                    "analysis_sections": ai_fillable.get("analysis_sections", []),
+                    "recommendations": ai_fillable.get("recommendations", []),
+                    "limitations": ai_fillable.get("limitations", []),
+                    "evidence": ai_fillable.get("evidence", []),
+                    "follow_up_questions": ai_fillable.get("follow_up_questions", []),
+                },
+                "next_call": {
+                    "tool": "horosa_report_render",
+                    "payload": {
+                        "run_id": run_id,
+                        "tool_name": tool_name,
+                        "format": format_name,
+                        "ai_report": "<AI fills this object from ai_report_skeleton>",
+                    },
+                },
+            },
+            "summary": [
+                "已完成起盘和本地保存；尚未生成最终报告，因为缺少 AI 对真实盘结果和用户问题的解读。",
+                "请让接入的 AI 按 report_template 填写 ai_report 后，再调用 horosa_report_render 生成 PDF/DOCX/JSON 与 memory。",
+            ],
+            "trace_id": trace_id,
+            "group_id": group_id,
+        }
+
     def _normalize_report_format(self, value: str) -> str:
         normalized = str(value or "").lower().strip()
         if normalized not in {"json", "docx", "pdf"}:
             raise ValueError("format must be one of: json, docx, pdf")
         return normalized
+
+    def _normalize_report_ai_payload(
+        self,
+        *,
+        ai_report: dict[str, Any],
+        ai_answer_text: str | None,
+    ) -> dict[str, Any]:
+        normalized = copy.deepcopy(ai_report) if isinstance(ai_report, dict) else {}
+        answer_text = str(ai_answer_text or "").strip()
+        if answer_text and not normalized.get("answer_text"):
+            normalized["answer_text"] = answer_text
+        if answer_text and not normalized.get("direct_answer"):
+            normalized["direct_answer"] = self._first_nonempty_line(answer_text)
+        return normalized
+
+    def _first_nonempty_line(self, text: str) -> str:
+        for line in str(text or "").splitlines():
+            stripped = line.strip(" #*-：:")
+            if stripped:
+                return stripped[:240]
+        return str(text or "").strip()[:240]
+
+    def _run_has_report_ai(self, run: dict[str, Any]) -> bool:
+        structured = run.get("ai_answer_structured")
+        if isinstance(structured, dict) and self._report_ai_answer_text(structured):
+            return True
+        answer = run.get("ai_answer_text")
+        return isinstance(answer, str) and bool(answer.strip())
 
     def _record_report_ai_if_present(
         self,
@@ -3573,7 +3722,7 @@ class HorosaSkillService:
         }
 
     def _report_ai_answer_text(self, ai_report: dict[str, Any]) -> str:
-        for key in ("direct_answer", "answer_text", "executive_summary", "summary", "answer"):
+        for key in ("answer_text", "direct_answer", "executive_summary", "summary", "answer"):
             value = ai_report.get(key)
             if isinstance(value, str) and value.strip():
                 return value.strip()
