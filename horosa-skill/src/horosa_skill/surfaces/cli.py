@@ -77,7 +77,11 @@ def _tracer(settings: Settings | None = None) -> TraceRecorder:
 
 def _load_payload(*, stdin: bool, input_file: Optional[Path]) -> dict:
     if stdin:
-        raw = sys.stdin.read()
+        stream = getattr(sys.stdin, "buffer", None)
+        if stream is not None:
+            raw = stream.read().decode("utf-8-sig")
+        else:
+            raw = sys.stdin.read()
     elif input_file is not None:
         raw = input_file.read_text(encoding="utf-8")
     else:
@@ -98,7 +102,14 @@ def _load_optional_payload(*, stdin: bool, input_file: Optional[Path]) -> dict:
 
 
 def _print_json(data: object) -> None:
-    typer.echo(json.dumps(data, ensure_ascii=False, indent=2))
+    text = json.dumps(data, ensure_ascii=False, indent=2)
+    stream = getattr(sys.stdout, "buffer", None)
+    if stream is not None:
+        stream.write(text.encode("utf-8"))
+        stream.write(b"\n")
+        stream.flush()
+        return
+    typer.echo(text)
 
 
 def _package_root() -> Path:

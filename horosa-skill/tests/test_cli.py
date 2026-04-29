@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import io
 import os
 import subprocess
 from pathlib import Path
@@ -54,6 +55,29 @@ def test_streamable_http_serve_stops_runtime_after_exit(monkeypatch) -> None:
 
     assert manager.started == 1
     assert manager.stopped == 1
+
+
+def test_load_payload_decodes_utf8_stdin_bytes_when_text_encoding_is_legacy(monkeypatch) -> None:
+    raw = json.dumps({"question": "这个事情能不能推进？风险在哪里？"}, ensure_ascii=False).encode("utf-8")
+    stdin = io.TextIOWrapper(io.BytesIO(raw), encoding="cp1252", errors="surrogateescape")
+    monkeypatch.setattr(cli.sys, "stdin", stdin)
+
+    payload = cli._load_payload(stdin=True, input_file=None)
+
+    assert payload["question"] == "这个事情能不能推进？风险在哪里？"
+
+
+def test_print_json_writes_utf8_bytes_when_stdout_encoding_is_legacy(monkeypatch) -> None:
+    class StdoutStub:
+        def __init__(self) -> None:
+            self.buffer = io.BytesIO()
+
+    stdout = StdoutStub()
+    monkeypatch.setattr(cli.sys, "stdout", stdout)
+
+    cli._print_json({"message": "核心结论"})
+
+    assert json.loads(stdout.buffer.getvalue().decode("utf-8")) == {"message": "核心结论"}
 
 
 def test_resolve_skill_root_accepts_package_dir(tmp_path: Path) -> None:
