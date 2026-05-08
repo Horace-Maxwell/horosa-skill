@@ -752,6 +752,7 @@ def test_posix_runtime_overrides_patch_boot_jar_without_windows_scripts(tmp_path
     manager = HorosaRuntimeManager(settings)
     manager.install(archive=str(archive))
     manifest = manager.load_installed_manifest(strict=True)
+    manifest["artifacts"]["boot_jar"] = "runtime/mac/bundle/astrostudyboot.jar"
     boot_jar = settings.runtime_current_dir / "runtime/mac/bundle/astrostudyboot.jar"
     with zipfile.ZipFile(boot_jar, "w") as archive_file:
         archive_file.writestr(
