@@ -7,7 +7,7 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
-## [1.3.4] - 2026-05-08
+## [0.5.0] - 2026-05-08
 
 ### Fixed
 
