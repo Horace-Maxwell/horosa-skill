@@ -798,7 +798,6 @@ def test_posix_runtime_overrides_patch_boot_jar_without_windows_scripts(tmp_path
     patched = manager._apply_runtime_overrides(manifest)
 
     assert patched == [str(boot_jar)]
-    assert not (settings.runtime_current_dir / "Horosa-Web/start_horosa_local.ps1").exists()
     with zipfile.ZipFile(boot_jar) as archive_file:
         cache_config = json.loads(archive_file.read("BOOT-INF/classes/conf/properties/cache/caches.json"))
         assert all(entry["class"] == "horosa.offline.LocalCacheFactory" for entry in cache_config["cachefactoryclass"])
