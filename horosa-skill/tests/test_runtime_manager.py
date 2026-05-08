@@ -741,7 +741,7 @@ def test_install_patches_windows_runtime_templates(tmp_path: Path, monkeypatch: 
         assert archive.read("BOOT-INF/classes/horosa/offline/LocalCacheFactory$LocalCache.class") == b"class-bytes"
 
 
-def test_posix_runtime_overrides_do_not_patch_boot_jar(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_posix_runtime_overrides_patch_boot_jar_without_windows_scripts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     archive = create_runtime_archive(tmp_path)
     settings = Settings(
         runtime_root=tmp_path / "runtime-root",
@@ -754,16 +754,59 @@ def test_posix_runtime_overrides_do_not_patch_boot_jar(tmp_path: Path, monkeypat
     manifest = manager.load_installed_manifest(strict=True)
     boot_jar = settings.runtime_current_dir / "runtime/mac/bundle/astrostudyboot.jar"
     with zipfile.ZipFile(boot_jar, "w") as archive_file:
-        archive_file.writestr("BOOT-INF/classes/conf/properties/cache/caches.json", "{}")
+        archive_file.writestr(
+            "BOOT-INF/classes/conf/properties/cache/caches.json",
+            json.dumps(
+                {
+                    "needlocalmemcache": False,
+                    "needcompress": False,
+                    "needhystrix": False,
+                    "cachefactoryclass": [
+                        {
+                            "default": True,
+                            "name": "comm",
+                            "class": "boundless.types.cache.RedisCacheFactory",
+                            "config": "classpath:conf/properties/cache/rediscomm.properties",
+                        },
+                        {
+                            "name": "clientapps",
+                            "class": "boundless.types.cache.MongoCacheFactory",
+                            "config": "classpath:conf/properties/cache/clientapps.properties",
+                        },
+                    ],
+                }
+            ),
+        )
+        archive_file.writestr(
+            "BOOT-INF/classes/log4j2.xml",
+            '<Configuration><Properties><Property name="basedir">${env:HOME}/.horosa-logs/astrostudyboot</Property></Properties></Configuration>\n',
+        )
+        archive_file.writestr("BOOT-INF/lib/boundless-1.2.1.2.jar", b"boundless")
 
     monkeypatch.setattr("horosa_skill.runtime.manager.os.name", "posix", raising=False)
     monkeypatch.setattr(
         manager,
-        "_patch_windows_boot_jar",
-        lambda manifest, jar_path: (_ for _ in ()).throw(AssertionError("Windows jar patch must not run on POSIX")),
+        "_compile_windows_runtime_patch_classes",
+        lambda manifest, jar_path: {
+            "BOOT-INF/classes/horosa/offline/LocalCacheFactory.class": b"class-bytes",
+            "BOOT-INF/classes/horosa/offline/LocalCacheFactory$LocalCache.class": b"class-bytes",
+        },
     )
+    monkeypatch.setenv("HOME", "/Users/horacedong")
 
-    assert manager._apply_runtime_overrides(manifest) == []
+    patched = manager._apply_runtime_overrides(manifest)
+
+    assert patched == [str(boot_jar)]
+    assert not (settings.runtime_current_dir / "Horosa-Web/start_horosa_local.ps1").exists()
+    with zipfile.ZipFile(boot_jar) as archive_file:
+        cache_config = json.loads(archive_file.read("BOOT-INF/classes/conf/properties/cache/caches.json"))
+        assert all(entry["class"] == "horosa.offline.LocalCacheFactory" for entry in cache_config["cachefactoryclass"])
+        assert (
+            archive_file.read("BOOT-INF/classes/log4j2.xml").decode("utf-8")
+            == '<Configuration><Properties><Property name="basedir">/Users/horacedong/.horosa-logs/astrostudyboot</Property></Properties></Configuration>\n'
+        )
+        assert archive_file.read("BOOT-INF/classes/horosa/offline/LocalCacheFactory.class") == b"class-bytes"
+        assert archive_file.read("BOOT-INF/classes/horosa/offline/LocalCacheFactory$LocalCache.class") == b"class-bytes"
 
 
 def test_start_runtime_reports_patched_files_on_windows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

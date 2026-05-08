@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import time
 from datetime import timezone, datetime
 from pathlib import Path
 from typing import Any
@@ -2641,51 +2642,62 @@ class HorosaSkillService:
         runtime_ready = self._chart_runtime_ready if use_chart_server else self._java_runtime_ready
         if not runtime_ready and not client.probe(probe_endpoint):
             self.runtime_manager.start_local_services()
-        candidate_payloads = _java_chart_payload_candidates(endpoint, payload)
-        param_errors: list[tuple[dict[str, Any], ToolTransportError]] = []
         remote_endpoint = _chart_server_endpoint(endpoint) if use_chart_server else endpoint
-        for remote_payload in candidate_payloads:
-            try:
-                data = client.call(remote_endpoint, remote_payload)
-                break
-            except ToolTransportError as exc:
-                body = str(exc.details.get("body", ""))
-                is_param_error = exc.code == "tool.backend_param_error" or (
-                    exc.code == "transport.http_error" and "200001" in body and "param error" in body
-                )
-                if not is_param_error:
-                    raise
-                param_errors.append((remote_payload, exc))
-        else:
-            remote_payload, exc = param_errors[-1]
-            payload_preview = {
-                key: remote_payload.get(key)
-                for key in ("date", "time", "zone", "lat", "lon", "gpsLat", "gpsLon", "dirZone", "dirLat", "dirLon")
-                if key in remote_payload
-            }
-            attempted_payloads = [
-                {
-                    key: attempted.get(key)
+        connection_retry_used = False
+        data: dict[str, Any] | None = None
+        while True:
+            candidate_payloads = _java_chart_payload_candidates(endpoint, payload)
+            param_errors: list[tuple[dict[str, Any], ToolTransportError]] = []
+            for remote_payload in candidate_payloads:
+                try:
+                    data = client.call(remote_endpoint, remote_payload)
+                    break
+                except ToolTransportError as exc:
+                    body = str(exc.details.get("body", ""))
+                    is_param_error = exc.code == "tool.backend_param_error" or (
+                        exc.code == "transport.http_error" and "200001" in body and "param error" in body
+                    )
+                    if not is_param_error:
+                        if exc.code == "transport.connection_error" and not connection_retry_used:
+                            connection_retry_used = True
+                            self.runtime_manager.start_local_services()
+                            time.sleep(1.0)
+                            break
+                        raise
+                    param_errors.append((remote_payload, exc))
+            else:
+                remote_payload, exc = param_errors[-1]
+                payload_preview = {
+                    key: remote_payload.get(key)
                     for key in ("date", "time", "zone", "lat", "lon", "gpsLat", "gpsLon", "dirZone", "dirLat", "dirLon")
-                    if key in attempted
+                    if key in remote_payload
                 }
-                for attempted, _error in param_errors
-            ]
-            raise ToolTransportError(
-                "Horosa backend rejected the birth parameters.",
-                code="tool.backend_param_error",
-                details={
-                    **exc.details,
-                    "endpoint": endpoint,
-                    "runtime_target": "python_chart" if use_chart_server else "java_backend",
-                    "payload_preview": payload_preview,
-                    "attempted_payloads": attempted_payloads,
-                    "hint": (
-                        "Use timezone like `+08:00` and compact coordinates like `31n13` / `121e28`, or send decimal "
-                        "coordinates so Horosa Skill can normalize them automatically."
-                    ),
-                },
-            ) from exc
+                attempted_payloads = [
+                    {
+                        key: attempted.get(key)
+                        for key in ("date", "time", "zone", "lat", "lon", "gpsLat", "gpsLon", "dirZone", "dirLat", "dirLon")
+                        if key in attempted
+                    }
+                    for attempted, _error in param_errors
+                ]
+                raise ToolTransportError(
+                    "Horosa backend rejected the birth parameters.",
+                    code="tool.backend_param_error",
+                    details={
+                        **exc.details,
+                        "endpoint": endpoint,
+                        "runtime_target": "python_chart" if use_chart_server else "java_backend",
+                        "payload_preview": payload_preview,
+                        "attempted_payloads": attempted_payloads,
+                        "hint": (
+                            "Use timezone like `+08:00` and compact coordinates like `31n13` / `121e28`, or send decimal "
+                            "coordinates so Horosa Skill can normalize them automatically."
+                        ),
+                    },
+                ) from exc
+            if data is not None:
+                break
+            continue
         if use_chart_server:
             self._chart_runtime_ready = True
         else:
