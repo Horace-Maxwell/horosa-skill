@@ -615,15 +615,94 @@ def test_java_chart_payload_slashes_datetime_only_for_chart_family() -> None:
 def test_java_chart_payload_candidates_cover_windows_runtime_variants() -> None:
     candidates = _java_chart_payload_candidates(
         "/chart",
-        {"date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "gpsLon": -174.5},
+        {
+            "date": "2028-04-06",
+            "time": "09:33:00",
+            "zone": "+08:00",
+            "lat": "41n26",
+            "lon": "174w30",
+            "gpsLat": -41.433333,
+            "gpsLon": -174.5,
+        },
     )
 
-    assert {"date": "2028/04/06", "time": "09:33:00", "zone": "+08:00", "gpsLon": -174.5} in candidates
-    assert {"date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "gpsLon": -174.5} in candidates
-    assert {"date": "2028/04/06", "time": "09:33:00", "zone": "8", "gpsLon": -174.5} in candidates
-    assert {"date": "2028/04/06", "time": "09:33:00", "zone": "+08:00", "gpsLon": 174.5} in candidates
-    assert {"date": "2028-04-06", "time": "09:33:00", "zone": "8", "gpsLon": 174.5} in candidates
-    assert {"date": "2028-04-06", "time": "09:33:00", "zone": "8"} in candidates
+    assert {
+        "date": "2028/04/06",
+        "time": "09:33:00",
+        "zone": "+08:00",
+        "lat": "41n26",
+        "lon": "174w30",
+        "gpsLat": -41.433333,
+        "gpsLon": -174.5,
+    } in candidates
+    assert {
+        "date": "2028-04-06",
+        "time": "09:33:00",
+        "zone": "+08:00",
+        "lat": "41n26",
+        "lon": "174w30",
+        "gpsLat": -41.433333,
+        "gpsLon": -174.5,
+    } in candidates
+    assert {
+        "date": "2028/04/06",
+        "time": "09:33:00",
+        "zone": "8",
+        "lat": "41n26",
+        "lon": "174w30",
+        "gpsLat": -41.433333,
+        "gpsLon": -174.5,
+    } in candidates
+    assert {
+        "date": "2028/04/06",
+        "time": "09:33:00",
+        "zone": "+08:00",
+        "lat": "41n26",
+        "lon": "174w30",
+        "gpsLat": -41.433333,
+        "gpsLon": 174.5,
+    } in candidates
+    assert {
+        "date": "2028-04-06",
+        "time": "09:33:00",
+        "zone": "8",
+        "lat": "41n26",
+        "lon": "174w30",
+        "gpsLat": -41.433333,
+        "gpsLon": 174.5,
+    } in candidates
+    assert {
+        "date": "2028-04-06",
+        "time": "09:33:00",
+        "zone": "8",
+        "lat": "41n26",
+        "lon": "174w30",
+    } in candidates
+    assert {
+        "date": "2028/04/06",
+        "time": "09:33:00",
+        "zone": "+08:00",
+        "gpsLat": -41.433333,
+        "gpsLon": -174.5,
+    } in candidates
+    assert {
+        "date": "2028/04/06",
+        "time": "09:33:00",
+        "zone": "+08:00",
+        "lat": -41.433333,
+        "lon": -174.5,
+        "gpsLat": -41.433333,
+        "gpsLon": -174.5,
+    } in candidates
+    assert {
+        "date": "2028/04/06",
+        "time": "09:33:00",
+        "zone": "+08:00",
+        "lat": -41.433333,
+        "lon": 174.5,
+        "gpsLat": -41.433333,
+        "gpsLon": 174.5,
+    } in candidates
 
 
 def test_service_retries_chart_payload_variants_after_backend_param_error(tmp_path) -> None:
