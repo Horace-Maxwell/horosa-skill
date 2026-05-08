@@ -67,4 +67,5 @@ jobs:
           foreach ($entry in $serverEnv.PSObject.Properties) {
             Set-Item -Path "Env:$($entry.Name)" -Value ([string]$entry.Value)
           }
-          uv run python scripts/run_full_self_check.py --rounds 1
+          '{"date":"2028-04-06","time":"09:33:00","zone":"+08:00","lat":"31n13","lon":"121e28","gpsLat":31.2167,"gpsLon":121.4667}' | uv run horosa-skill tool run qimen --stdin --output "$root\qimen-smoke.json"
+          uv run horosa-skill memory query --tool qimen --limit 1
