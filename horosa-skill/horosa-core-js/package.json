@@ -1,6 +1,6 @@
 {
   "name": "horosa-core-js",
-  "version": "1.3.4",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "Headless Horosa frontend-local calculation engine for qimen, taiyi, and jinkou.",
