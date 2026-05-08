@@ -866,24 +866,22 @@ class HorosaRuntimeManager:
         return ["/bin/bash", str(script)]
 
     def _apply_runtime_overrides(self, manifest: dict[str, Any] | None) -> list[str]:
-        if os.name != "nt":
-            return []
-
-        template_root = self._runtime_template_root() / "windows"
         patched: list[str] = []
-        if template_root.exists():
-            overrides = {
-                "services.start_script": template_root / "start_horosa_local.ps1",
-                "services.stop_script": template_root / "stop_horosa_local.ps1",
-            }
-            for field, source in overrides.items():
-                if not source.exists():
-                    continue
-                section, key = field.split(".", 1)
-                destination = self.current_dir / self._relative_manifest_path(manifest, section, key)
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(source, destination)
-                patched.append(str(destination))
+        if os.name == "nt":
+            template_root = self._runtime_template_root() / "windows"
+            if template_root.exists():
+                overrides = {
+                    "services.start_script": template_root / "start_horosa_local.ps1",
+                    "services.stop_script": template_root / "stop_horosa_local.ps1",
+                }
+                for field, source in overrides.items():
+                    if not source.exists():
+                        continue
+                    section, key = field.split(".", 1)
+                    destination = self.current_dir / self._relative_manifest_path(manifest, section, key)
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(source, destination)
+                    patched.append(str(destination))
 
         boot_jar = self.current_dir / self._relative_manifest_path(manifest, "artifacts", "boot_jar")
         if boot_jar.is_file() and self._boot_jar_supports_patch(boot_jar):
