@@ -182,6 +182,26 @@ def _java_chart_payload_candidates(endpoint: str, payload: dict[str, Any]) -> li
                 absolute_lon["gpsLon"] = abs(gps_lon)
                 add(absolute_lon)
 
+            gps_lat = candidate.get("gpsLat")
+            gps_lon = candidate.get("gpsLon")
+            if isinstance(gps_lat, (int, float)) and isinstance(gps_lon, (int, float)):
+                # Some Windows chart-runtime builds reject compact `31n13`/`121e28`
+                # before falling through to gpsLat/gpsLon. Try decimal-only
+                # variants so user-facing clients do not have to hand-edit payloads.
+                gps_only = {key: value for key, value in candidate.items() if key not in {"lat", "lon"}}
+                add(gps_only)
+
+                decimal_lat_lon = dict(candidate)
+                decimal_lat_lon["lat"] = gps_lat
+                decimal_lat_lon["lon"] = gps_lon
+                add(decimal_lat_lon)
+
+                if gps_lon < 0:
+                    decimal_abs_lon = dict(decimal_lat_lon)
+                    decimal_abs_lon["lon"] = abs(gps_lon)
+                    decimal_abs_lon["gpsLon"] = abs(gps_lon)
+                    add(decimal_abs_lon)
+
             without_gps = {key: value for key, value in candidate.items() if key not in {"gpsLat", "gpsLon"}}
             add(without_gps)
     return variants
