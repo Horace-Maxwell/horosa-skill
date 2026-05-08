@@ -7,6 +7,22 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [1.3.4] - 2026-05-08
+
+### Fixed
+
+- Corrected the headless Qimen/Dunjia Tianpan heavenly-stem flying logic so it
+  starts from the Earth-pan palace of the hour Xun-head Liuyi stem and flies to
+  the Earth-pan palace of the current hour stem, matching legacy Horosa output.
+- Synchronized the same fixed Qimen result into `sanshiunited`, because the
+  San Shi United aggregation now remains covered by a regression test that
+  checks its embedded Qimen Tianpan.
+
+### Added
+
+- Added a golden regression case for `1998-02-20 20:48:00` / `壬戌` hour:
+  `阳遁九局上元` with Tianpan stems `1庚 2丙 3丁 4戊 6己 7壬 8辛 9乙`.
+
 ## [0.4.2] - 2026-04-28
 
 ### Fixed

@@ -936,33 +936,15 @@ function panSky(ganzhi, qmju){
 	const rotate = meta.yy === '阳' ? CLOCKWISE_EIGHTGUA : [...CLOCKWISE_EIGHTGUA].reverse();
 	const earth = panEarth(qmju);
 	const earthR = invertMap(earth);
-	const zfzs = zhifuNZhishi(ganzhi, qmju);
 	const fuHead = JJ[getXunHead(ganzhi.time)] || '戊';
-	const fuLocation = earthR[ganzhi.time.substring(0, 1)];
-	const fuHeadLocation = zfzs.值符星宫[1];
-	const fuHeadLocation2 = earthR[fuHead];
-	const ganHead = zfzs.值符天干[1];
-	const zhifu = zfzs.值符星宫[0].replace(/芮/g, '禽');
-
-	let a = rotate.map((g)=>earth[g]);
-	let startGong = fuHeadLocation === '中' ? '坤' : fuHeadLocation;
-	if(startGong !== '坤' && rotate.indexOf(startGong) < 0){
-		startGong = '坤';
-	}
-	let startGan = fuHead;
-	if(a.indexOf(startGan) < 0){
-		startGan = ganHead && a.indexOf(ganHead) >= 0 ? ganHead : earth[startGong];
-	}
-
-	if(fuHeadLocation !== '中' && zhifu !== '禽' && fuHeadLocation2 === '中'){
-		startGan = earth[startGong] || startGan;
-	}
-	if(fuLocation === undefined || fuLocation === null){
-		startGan = earth[startGong] || startGan;
-	}
-
-	const ganReorder = newList(a, startGan);
-	const gongReorder = newList(rotate, startGong);
+	const timeGan = getGanzhiGan(ganzhi.time);
+	const normalizeTianpanGong = (gong)=>gong === '中' ? '坤' : gong;
+	const sourceGong = normalizeTianpanGong(earthR[fuHead]);
+	const targetGong = normalizeTianpanGong(earthR[timeGan]);
+	const safeSourceGong = rotate.indexOf(sourceGong) >= 0 ? sourceGong : rotate[0];
+	const safeTargetGong = rotate.indexOf(targetGong) >= 0 ? targetGong : safeSourceGong;
+	const ganReorder = newList(rotate, safeSourceGong).map((g)=>earth[g]);
+	const gongReorder = newList(rotate, safeTargetGong);
 	const out = zipToMap(gongReorder, ganReorder);
 	out.中 = earth.中;
 	return out;
