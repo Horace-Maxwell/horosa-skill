@@ -537,6 +537,17 @@ def _run_openclaw_smoke_check(
         "zone": "+08:00",
         "lat": "26n04",
         "lon": "119e19",
+        "gpsLat": 26.066667,
+        "gpsLon": 119.316667,
+        "hsys": 1,
+        "tradition": False,
+        "predictive": True,
+        "zodiacal": 0,
+        "simpleAsp": False,
+        "strongRecption": False,
+        "virtualPointReceiveAsp": True,
+        "southchart": False,
+        "ad": 1,
     }
     chart_result = call_tool("horosa_astro_chart", chart_payload)
     if _is_mcporter_timeout_response(chart_result):

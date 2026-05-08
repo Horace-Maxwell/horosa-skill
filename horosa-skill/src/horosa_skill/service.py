@@ -3799,7 +3799,19 @@ class HorosaSkillService:
                 code="report.source_not_found",
                 details={"run_id": run_id, "tool_name": tool_name},
             )
-        source = candidates[0]
+        def has_complete_export_contract(artifact: dict[str, Any]) -> bool:
+            payload = artifact.get("payload")
+            data = payload.get("data") if isinstance(payload, dict) else {}
+            source_tool = str(artifact.get("tool_name") or "")
+            if artifact.get("kind") != "tool_result" or source_tool not in TOOL_EXPORT_TECHNIQUE_MAP:
+                return True
+            return (
+                isinstance(data, dict)
+                and isinstance(data.get("export_snapshot"), dict)
+                and isinstance(data.get("export_format"), dict)
+            )
+
+        source = next((artifact for artifact in candidates if has_complete_export_contract(artifact)), candidates[0])
         payload = source.get("payload")
         data = payload.get("data") if isinstance(payload, dict) else {}
         source_tool = str(source.get("tool_name") or "")
@@ -3811,7 +3823,13 @@ class HorosaSkillService:
             raise ToolValidationError(
                 "Selected artifact does not contain a complete export contract.",
                 code="report.export_contract_missing",
-                details={"run_id": run_id, "tool_name": source.get("tool_name")},
+                details={
+                    "run_id": run_id,
+                    "tool_name": source.get("tool_name"),
+                    "artifact_count": len(candidates),
+                    "source_ok": payload.get("ok") if isinstance(payload, dict) else None,
+                    "source_error": payload.get("error") if isinstance(payload, dict) else None,
+                },
             )
         return run, source
 
