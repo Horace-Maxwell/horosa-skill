@@ -218,7 +218,7 @@
 {
   "ok": true,
   "tool": "qimen",
-  "version": "1.3.4",
+  "version": "0.5.0",
   "input_normalized": {},
   "data": {},
   "summary": [],
