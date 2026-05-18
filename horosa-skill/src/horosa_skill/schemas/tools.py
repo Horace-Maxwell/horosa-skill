@@ -7,6 +7,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class FlexibleModel(BaseModel):
     model_config = ConfigDict(extra="allow")
+    agent_confirmed_settings: bool | None = None
+    defaults_accepted: bool | None = None
+    clarification_notes: str | None = None
 
 
 class PlanetInfoSettingInput(FlexibleModel):

@@ -303,7 +303,14 @@ def test_report_from_tool_cli_forwards_ai_answer_and_structured_report(monkeypat
     ai_report_path = tmp_path / "ai-report.json"
     ai_answer_path = tmp_path / "answer.txt"
     output_path = tmp_path / "report.docx"
-    tool_payload.write_text('{"date":"2028-04-06","time":"09:33:00","zone":"+08:00","lat":"31n13","lon":"121e28"}', encoding="utf-8")
+    tool_payload.write_text(
+        (
+            '{"date":"2028-04-06","time":"09:33:00","zone":"+08:00",'
+            '"lat":"31n13","lon":"121e28","agent_confirmed_settings":true,'
+            '"clarification_notes":"test fixture confirmed settings"}'
+        ),
+        encoding="utf-8",
+    )
     ai_report_path.write_text('{"ai_report":{"direct_answer":"可以推进。","recommendations":["先小步验证。"]}}', encoding="utf-8")
     ai_answer_path.write_text("完整解盘正文。", encoding="utf-8")
     captured: dict[str, object] = {}
@@ -445,6 +452,10 @@ def test_openclaw_smoke_falls_back_to_headless_tool_when_chart_fails(monkeypatch
     assert "compute_ok" not in report["failed_checks"]
     assert json.loads(output_path.read_text(encoding="utf-8"))["run_id"] == "qimen-run"
     assert len(commands) == 5
+    chart_args = json.loads(commands[2][commands[2].index("--args") + 1])
+    fallback_args = json.loads(commands[3][commands[3].index("--args") + 1])
+    assert chart_args["agent_confirmed_settings"] is True
+    assert fallback_args["agent_confirmed_settings"] is True
 
 
 def test_openclaw_check_uses_extended_timeout_for_tool_calls(monkeypatch, tmp_path: Path) -> None:
