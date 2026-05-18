@@ -8,6 +8,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -35,6 +36,7 @@ jobs:
 
   windows-smoke:
     runs-on: windows-latest
+    timeout-minutes: 45
     defaults:
       run:
         shell: pwsh
@@ -51,6 +53,7 @@ jobs:
         working-directory: ./horosa-skill
         run: uv run pytest -q
       - name: Run Windows OpenClaw smoke
+        timeout-minutes: 35
         working-directory: ./horosa-skill
         run: |
           $root = Join-Path $env:RUNNER_TEMP 'horosa-openclaw'
