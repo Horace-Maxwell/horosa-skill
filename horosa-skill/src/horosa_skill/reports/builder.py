@@ -147,12 +147,14 @@ class ReportBuilder:
                 "把盘面线索翻译成人能听懂的现实含义，不要只重复术语。",
                 "如果问题涉及时间窗口、选择、风险或财务，必须给出阶段判断和保守/进取边界。",
                 "如果盘面材料不足以判断，直接说明不足，不要硬编。",
+                "不要把空字段或缺失章节解释成需要 MongoDB、7897 端口、星阙桌面应用、远程数据库或外部服务；Horosa Skill 的公开能力以本地离线 runtime 为准。",
             ],
             "output_style": [
                 "像在 AI 对话窗口中完成一次认真解盘后给出的最终回复。",
                 "中文、自然、有结论、有依据、有行动建议。",
                 "不要输出代码、JSON 字段名、schema、run_id、内部路径或机器日志。",
                 "不要说“待 AI 分析”“模板要求”“根据框架应当”，要直接给用户可读结论。",
+                "如果工具返回错误或材料不足，只说明本次本地工具返回不足，并建议重新运行 doctor/openclaw-check 或补齐输入；不要臆造 MongoDB/桌面端依赖。",
             ],
             "final_ai_report_contract": {
                 "answer_text": "完整对话式解盘正文，适合作为报告主体。",
@@ -1627,6 +1629,7 @@ class ReportBuilder:
             "section_policy": "Each analysis section should map to a source export section when possible.",
             "evidence_policy": "Every important conclusion should cite a source_section_title, source_line, field name, or original export clue.",
             "memory_policy": "The final report artifact is stored in Horosa memory and can be retrieved later for comparison or experience improvement.",
+            "dependency_hallucination_policy": "Never claim that Horosa Skill requires MongoDB, port 7897, Xingque Desktop, or an external database for Liureng/Qimen/Sanshi output. If a field is missing, report it as a local tool/result issue with the run context.",
             "must_explain_sections": coverage.get("must_explain_sections", []),
         }
 

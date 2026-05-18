@@ -115,9 +115,12 @@ class LiuRengGodsInput(FlexibleModel):
     zone: str
     lat: str
     lon: str
+    gpsLat: float | None = None
+    gpsLon: float | None = None
     after23NewDay: bool | None = False
     yue: str | None = None
     isDiurnal: bool | None = None
+    guirengType: int | None = 0
     ad: int | None = 1
 
 

@@ -141,6 +141,11 @@ class FakeClient(HorosaApiClient):
             return {"year": payload["year"], "jieqi24": [{"name": "春分"}, {"name": "夏至"}]}
         if endpoint == "/liureng/gods":
             return {"liureng": {"layout": "ok", "fourColumns": {"year": {"ganzi": "丙午"}}}}
+        if endpoint == "/liureng/runyear":
+            return {
+                "liureng": {"layout": "ok", "fourColumns": {"year": {"ganzi": "丙午"}}},
+                "runyear": {"year": "甲子", "age": 38},
+            }
         if endpoint == "/germany/midpoint":
             return {
                 "midpoints": [
@@ -239,6 +244,23 @@ class FakeJsClient(HorosaJsEngineClient):
             return {
                 "data": {"guiName": "天乙", "jiangName": "登明", "wangElem": "木"},
                 "snapshot_text": "[起盘信息]\n日期：2026-04-04 21:18\n\n[金口诀速览]\n地分：酉",
+            }
+        if tool_name == "liureng":
+            return {
+                "data": {
+                    "layout": {"downZi": ["子"], "upZi": ["申"], "houseTianJiang": ["青龙"]},
+                    "ke": {"raw": [["青龙", "申", "甲"]], "lines": ["一课：地盘=甲，天盘=申，贵神=青龙"]},
+                    "sanChuan": {"name": "涉害课", "cuang": ["甲申", "乙酉", "丙戌"], "liuQin": ["官鬼", "父母", "兄弟"], "tianJiang": ["青龙", "六合", "太常"]},
+                    "runtime_note": "local_headless_liureng",
+                },
+                "snapshot_text": (
+                    "[起盘信息]\n日期：2026-04-04 21:18\n\n"
+                    "[十二盘式]\n月将：申；占时：巳；贵人：丑\n\n"
+                    "[十二地盘/十二天盘/十二贵神对应]\n1. 地盘子 -> 天盘申 -> 贵神青龙\n\n"
+                    "[四课]\n一课：地盘=甲，天盘=申，贵神=青龙\n\n"
+                    "[三传]\n课式：涉害课\n初传：干支=甲申；六亲=官鬼；贵神=青龙\n\n"
+                    "[概览]\n四课、三传已由本地 headless 六壬引擎根据离线盘面生成。"
+                ),
             }
         raise AssertionError(f"Unexpected local tool: {tool_name}")
 
@@ -353,6 +375,53 @@ def test_service_skips_runtime_restart_after_remote_runtime_is_confirmed(tmp_pat
 
     assert runtime_manager.started == 1
     assert client.probe_calls == 1
+
+
+def test_liureng_headless_export_includes_courses_transmissions_without_mongodb_claims(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    client = CaptureClient()
+    service = HorosaSkillService(settings, client=client, store=MemoryStore(settings), js_client=FakeJsClient())
+
+    result = service.run_tool(
+        "liureng_gods",
+        {
+            "date": "2028-04-06",
+            "time": "09:33:00",
+            "zone": "+08:00",
+            "lat": "31n13",
+            "lon": "121e28",
+            "gpsLat": 31.2167,
+            "gpsLon": 121.4667,
+            "after23NewDay": False,
+        },
+        query_text="请用大六壬分析这件事",
+    )
+
+    assert result.ok is True
+    assert result.memory_ref is not None
+    export_text = result.data["export_snapshot"]["export_text"]
+    assert "四课" in result.data["export_snapshot"]["selected_sections"]
+    assert "三传" in result.data["export_snapshot"]["selected_sections"]
+    assert "一课：地盘=甲，天盘=申，贵神=青龙" in export_text
+    assert "课式：涉害课" in export_text
+    assert "MongoDB" not in export_text
+    assert "7897" not in export_text
+    liureng_call = next(payload for endpoint, payload in client.calls if endpoint == "/liureng/gods")
+    assert "gpsLat" not in liureng_call
+    assert "gpsLon" not in liureng_call
+    chart_call = next(payload for endpoint, payload in client.calls if endpoint in {"/chart", "/"})
+    assert chart_call["gpsLat"] == 31.2167
+    assert chart_call["gpsLon"] == 121.4667
+
+    template = service.report_template({"run_id": result.memory_ref.run_id, "tool_name": "liureng_gods"})
+    brief_text = json.dumps(template["conversation_brief"], ensure_ascii=False)
+    contract_text = json.dumps(template["targeted_analysis_contract"], ensure_ascii=False)
+    assert "不要把空字段或缺失章节解释成需要 MongoDB" in brief_text
+    assert "Never claim that Horosa Skill requires MongoDB" in contract_text
 
 
 def test_service_memory_query_and_show(tmp_path) -> None:

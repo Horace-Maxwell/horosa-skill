@@ -18,7 +18,30 @@ class HorosaJsEngineClient:
 
     def run(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
         node_bin = self._resolve_node_binary()
-        engine_root = self._resolve_engine_root()
+        errors: list[dict[str, Any]] = []
+        for engine_root in self._candidate_engine_roots():
+            try:
+                return self._run_with_engine_root(node_bin=node_bin, engine_root=engine_root, tool_name=tool_name, payload=payload)
+            except ToolTransportError as exc:
+                errors.append({"code": exc.code, "message": str(exc), "details": exc.details})
+                error_obj = exc.details.get("error") if isinstance(exc.details, dict) else None
+                message = error_obj.get("message") if isinstance(error_obj, dict) else ""
+                if "Unsupported horosa-core-js tool" not in str(message):
+                    raise
+        raise ToolTransportError(
+            "horosa-core-js execution failed.",
+            code="js_engine.execution_failed",
+            details={"tool": tool_name, "attempts": errors},
+        )
+
+    def _run_with_engine_root(
+        self,
+        *,
+        node_bin: Path,
+        engine_root: Path,
+        tool_name: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
         cli_path = engine_root / "bin" / "cli.mjs"
         if not cli_path.is_file():
             raise ToolTransportError(
@@ -91,11 +114,16 @@ class HorosaJsEngineClient:
         return Path("node")
 
     def _resolve_engine_root(self) -> Path:
+        return self._candidate_engine_roots()[0]
+
+    def _candidate_engine_roots(self) -> list[Path]:
+        candidates: list[Path] = []
+
         env_override = os.environ.get("HOROSA_CORE_JS_ROOT")
         if env_override:
             candidate = Path(env_override).expanduser().resolve()
             if candidate.is_dir():
-                return candidate
+                candidates.append(candidate)
 
         manifest = self.runtime_manager.load_installed_manifest()
         if manifest and isinstance(manifest.get("artifacts"), dict):
@@ -103,6 +131,17 @@ class HorosaJsEngineClient:
             if isinstance(relative, str) and relative.strip():
                 candidate = self.settings.runtime_current_dir / relative
                 if candidate.is_dir():
-                    return candidate
+                    candidates.append(candidate)
 
-        return Path(__file__).resolve().parents[3] / "horosa-core-js"
+        source_candidate = Path(__file__).resolve().parents[3] / "horosa-core-js"
+        if source_candidate.is_dir():
+            candidates.append(source_candidate)
+
+        unique: list[Path] = []
+        seen: set[str] = set()
+        for candidate in candidates:
+            key = str(candidate.resolve())
+            if key not in seen:
+                seen.add(key)
+                unique.append(candidate)
+        return unique or [source_candidate]
