@@ -1,0 +1,25 @@
+---
+description: Horosa Skill MCP usage rules for Cursor agents
+alwaysApply: true
+---
+
+# Horosa Skill MCP Rules
+
+When a user asks for any Horosa / 星阙 metaphysics output, use the Horosa MCP tools instead of hand-calculating.
+
+Required tool routing:
+
+- 大六壬起课 / 当前时间起大六壬: `horosa_cn_liureng_gods`
+- 大六壬行年: `horosa_cn_liureng_runyear`
+- 奇门遁甲: `horosa_cn_qimen`
+- 三式合一: `horosa_cn_sanshiunited`
+- 太乙: `horosa_cn_taiyi`
+- 金口诀: `horosa_cn_jinkou`
+- 八字: `horosa_cn_bazi_birth` or `horosa_cn_bazi_direct`
+- 星盘: `horosa_astro_chart`
+
+Do not use `Exec`, Python snippets, web snippets, or handwritten calendar formulas to recreate these methods. Those bypass Horosa's runtime, Xingque-compatible defaults, export contract, memory, and report layer.
+
+For 大六壬, the Xingque-compatible default is `guirengType: 2` (`星占法贵人`). Do not change it unless the user explicitly asks for another贵人体系.
+
+Use returned `export_snapshot.export_text` and `export_format.sections` as the source of truth. If something is missing, rerun Horosa `doctor` / `openclaw-check`; do not claim MongoDB, port 7897, Xingque Desktop, or remote database dependencies unless Horosa diagnostics explicitly report them.
