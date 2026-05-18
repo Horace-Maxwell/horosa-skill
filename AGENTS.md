@@ -6,6 +6,30 @@ These rules are for Codex, Cursor, Claude, OpenClaw, Open WebUI, and any agent c
 
 When the user asks for a Horosa technique result, call the Horosa MCP/CLI tool. Do not write ad-hoc Python, JavaScript, shell scripts, web-search snippets, or calendar formulas to recreate the method.
 
+## Clarify Settings Before Calling
+
+Do not silently call a technique with guessed settings when those settings change the result. If the user did not provide enough context, ask a concise question with concrete options first.
+
+Use `horosa_agent_guidance` before direct tool calls when settings are unclear:
+
+```json
+{"tool_name":"liureng_gods","intent":"当前时间起大六壬"}
+```
+
+Equivalent CLI:
+
+```bash
+uv run horosa-skill agent guidance --tool liureng_gods --intent "当前时间起大六壬"
+```
+
+Hard rule:
+
+- If the user says “当前时间”, you may use current local date/time/timezone.
+- If location matters and no location is provided, ask whether to use client/current location or a specified city/longitude/latitude.
+- If a method has multiple result-changing systems, ask the user to choose or explicitly accept Xingque defaults.
+- If gender, house system, zodiacal system, 起局方式, 贵人体系, 六爻 lines, 地分, target year, or report format matters and is missing, ask before calling.
+- Only use defaults without asking when the user says “默认 / 按星阙 / 快速起盘 / 你来决定”.
+
 This is especially important for:
 
 - 大六壬: use `horosa_cn_liureng_gods` / `liureng_gods`.
@@ -48,4 +72,3 @@ Horosa Skill follows Xingque-compatible defaults:
 Never tell users that 大六壬 requires MongoDB, port `7897`, Xingque Desktop, a remote database, or an external service unless a current Horosa `doctor` or `openclaw-check` result explicitly says so.
 
 If a section is missing, say that the local tool did not return that section and rerun `doctor` / `openclaw-check`; do not invent a dependency.
-

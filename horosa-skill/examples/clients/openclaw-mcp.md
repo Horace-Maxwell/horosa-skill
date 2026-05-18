@@ -22,6 +22,20 @@ uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace
 
 OpenClaw 里如果同时有 `Exec` / shell 工具和 Horosa MCP 工具，必须优先调用 Horosa MCP。不要让 Agent 用 Python、Shell、Web Search 或手写干支公式来“自己算”星阙技法。
 
+同时不要在用户缺少关键设置时直接调用。先调用：
+
+```text
+horosa_agent_guidance
+```
+
+例如：
+
+```json
+{"tool_name":"liureng_gods","intent":"当前时间起大六壬"}
+```
+
+它会告诉 Agent 哪些字段必须问、哪些默认值可以在用户同意后使用。缺少地点、性别、宫制、黄道体系、起局方式、贵人体系、六爻爻线、金口诀地分、目标年份或报告格式时，都应该先问用户给选项。
+
 典型映射：
 
 - “用当前时间起一个大六壬盘” -> `horosa_cn_liureng_gods`
@@ -71,7 +85,7 @@ uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace --fu
 ## 常见提示与误报
 
 - 如果默认 `uv run horosa-skill doctor` 显示 `installed=false`，但 `openclaw-check` 是 `ok=true`，通常是因为 OpenClaw 使用了隔离 HOME。以 `openclaw-check` 的结果为准，或用同一组 `HOROSA_RUNTIME_ROOT` / `HOROSA_SKILL_DATA_DIR` 运行 doctor。
-- 如果 full check 偶发出现 `No JSON content was found`，请升级到 `0.5.3` 或更新 main；新版本会从 mcporter/stdio 混合输出里提取第一个完整 JSON，避免诊断文本污染结果。
+- 如果 full check 偶发出现 `No JSON content was found`，请升级到 `0.5.4` 或更新 main；新版本会从 mcporter/stdio 混合输出里提取第一个完整 JSON，避免诊断文本污染结果。
 - 如果 OpenClaw gateway 报 `PATH missing` 或其他插件 manifest warning，只要 `horosa-skill client openclaw-check` 是 `ok=true`，这类 warning 通常不是 Horosa MCP 的阻塞项。
 
 ### 3. 手动粘贴配置时，使用下面这段 MCP 配置

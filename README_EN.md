@@ -31,6 +31,14 @@
 - Agent Skill: [`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md)
 - Agent Repo Rules: [`AGENTS.md`](./AGENTS.md)
 
+Before an agent calls a technique with unclear settings, it should ask:
+
+```bash
+uv run horosa-skill agent guidance --tool liureng_gods --intent "current-time Daliuren pan"
+```
+
+The matching MCP tool is `horosa_agent_guidance`; it tells AI clients which fields must be clarified and which Xingque defaults are safe only after user acceptance.
+
 ## What This Repository Is
 
 Xingque already had the hard parts: deep local algorithms, ephemeris-backed runtime behavior, rich AI export settings, and serious occult method coverage. `Horosa Skill` is the GitHub-first delivery surface that makes those capabilities usable by modern AI systems without turning the repo into a giant runtime dump.
@@ -214,7 +222,7 @@ Every tool returns a stable envelope:
 {
   "ok": true,
   "tool": "qimen",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "input_normalized": {},
   "data": {},
   "summary": [],

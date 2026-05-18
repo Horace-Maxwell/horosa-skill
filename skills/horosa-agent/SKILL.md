@@ -12,12 +12,47 @@ Do not hand-calculate Horosa techniques with `Exec`, shell, Python, JavaScript s
 
 1. Understand the user's question.
 2. Choose the smallest matching Horosa tool.
-3. Normalize time, place, timezone, and question text.
-4. Call the tool.
-5. Read `export_snapshot.export_text`, `export_format.sections`, and `summary`.
-6. If the user wants a human-readable answer, explain the calculated chart/pan directly in the chat.
-7. If the user wants a file, call the report tools and save JSON/DOCX/PDF artifacts.
-8. If the user asks follow-up questions, use memory tools to retrieve prior runs and AI answers.
+3. If required context or result-changing settings are missing, call `horosa_agent_guidance` or follow the guidance table below.
+4. Ask the user one concise clarification question with concrete options when settings are unclear.
+5. Normalize time, place, timezone, and question text.
+6. Call the tool.
+7. Read `export_snapshot.export_text`, `export_format.sections`, and `summary`.
+8. If the user wants a human-readable answer, explain the calculated chart/pan directly in the chat.
+9. If the user wants a file, call the report tools and save JSON/DOCX/PDF artifacts.
+10. If the user asks follow-up questions, use memory tools to retrieve prior runs and AI answers.
+
+## Clarification Rule
+
+This is a hard rule: if the user omitted a setting that changes the result, ask before calling. Do not silently pick a value just because the schema has a default.
+
+Use this MCP helper:
+
+```json
+{"tool_name":"liureng_gods","intent":"当前时间起大六壬"}
+```
+
+or CLI:
+
+```bash
+uv run horosa-skill agent guidance --tool liureng_gods --intent "当前时间起大六壬"
+```
+
+Ask before calling when these are missing:
+
+- Time/date/timezone/place for birth/event methods.
+- Gender for Ziwei, Bazi direct/luck flow, LiuReng runyear, or any gender-sensitive report.
+- House system / zodiacal system / traditional settings for astrology charts when the user cares about chart style.
+- Qimen 起局方式、命式性别、拆补/置闰/茅山等 method settings when the user expects a non-default pan.
+- LiuReng 贵人体系 and昼夜贵人 if the user does not accept Xingque defaults.
+- Jinkou 地分 and贵人体系.
+- SixYao lines, gua code, or起卦方式.
+- Report format and whether AI analysis text is ready.
+
+Allowed shortcuts:
+
+- If the user says “当前时间”, use current local date/time/timezone.
+- If the user says “按星阙默认 / 默认 / 快速起盘 / 你来决定”, use documented safe defaults and mention that defaults were used.
+- If a stored memory run already contains the setting, reuse it and cite the run.
 
 ## Do Not Hallucinate Dependencies
 

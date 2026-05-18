@@ -7,6 +7,24 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-05-18
+
+### Added
+
+- Added `horosa_agent_guidance` and `horosa-skill agent guidance` so AI clients can
+  inspect which settings must be clarified before calling each Horosa tool.
+- Added full guidance coverage for every registered tool, including astrology,
+  predictive methods, Bazi, Ziwei, Daliuren, Qimen, Taiyi, Jinkou, Six Yao,
+  Sanshi United, knowledge, export, and report/memory workflows.
+
+### Changed
+
+- Updated Agent, Cursor, and OpenClaw instructions to require clarification for
+  result-changing settings such as location, gender, house system, zodiacal
+  system, Qimen setup, Daliuren noble-person system, Jinkou `diFen`, Six Yao
+  lines, target year/date, and report format.
+- Added tests that fail if a registered tool is missing agent guidance coverage.
+
 ## [0.5.3] - 2026-05-18
 
 ### Fixed
