@@ -1238,6 +1238,38 @@ def test_all_callable_techniques_final_export_text_matches_max_section_contract(
         assert reparsed["unknown_detected_sections"] == [], tool_name
 
 
+def test_all_callable_techniques_do_not_emit_bare_empty_or_dependency_hallucination_sections(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    payloads = build_sample_payloads()
+    forbidden_claim_terms = [
+        "MongoDB",
+        "7897",
+        "星阙桌面",
+        "桌面应用",
+        "远程数据库",
+        "外部数据库",
+        "外部服务",
+        "无法输出",
+        "需要安装",
+    ]
+
+    for tool_name in TOOL_EXPORT_TECHNIQUE_MAP:
+        result = service.run_tool(tool_name, payloads[tool_name], save_result=False, query_text=f"审计 {tool_name}")
+        export_snapshot = result.data["export_snapshot"]
+        export_text = export_snapshot["export_text"]
+        assert not any(term in export_text for term in forbidden_claim_terms), tool_name
+        for section in export_snapshot["sections"]:
+            body = section.get("body", "").strip()
+            assert body and body != "无", f"{tool_name}:{section.get('title')}"
+            if "未返回" in body:
+                assert "不能臆造" in body, f"{tool_name}:{section.get('title')}"
+
+
 def test_dispatch_exposes_child_export_contracts_explicitly(tmp_path) -> None:
     settings = Settings(
         server_root="http://127.0.0.1:9999",

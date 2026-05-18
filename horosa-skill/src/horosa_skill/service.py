@@ -458,6 +458,13 @@ def _stringify_export_body(value: Any) -> str:
     return str(value).strip()
 
 
+def _missing_detail_text(title: str) -> str:
+    return (
+        f"本次本地计算结果未返回「{title}」细项；"
+        "报告只能基于已返回盘面判断，不能臆造外部依赖、桌面端服务或不存在的数据。"
+    )
+
+
 def _section_map_from_export(export_snapshot: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     if not isinstance(export_snapshot, dict):
         return {}
@@ -472,9 +479,10 @@ def _section_map_from_export(export_snapshot: dict[str, Any] | None) -> dict[str
 
 
 def _section_body(export_snapshot: dict[str, Any] | None, title: str, default: str = "无") -> str:
+    fallback = _missing_detail_text(title) if default == "无" else default
     section = _section_map_from_export(export_snapshot).get(title)
     if not section:
-        return default
+        return fallback
     body = section.get("body")
     if isinstance(body, str) and body.strip():
         return body.strip()
@@ -484,13 +492,13 @@ def _section_body(export_snapshot: dict[str, Any] | None, title: str, default: s
         text = "\n".join(content_lines).strip()
         if text:
             return text
-    return default
+    return fallback
 
 
 def _render_snapshot_text(sections: list[tuple[str, str]]) -> str:
     blocks: list[str] = []
     for title, body in sections:
-        clean_body = (body or "").strip() or "无"
+        clean_body = (body or "").strip() or _missing_detail_text(title)
         blocks.append(f"[{title}]\n{clean_body}".strip())
     return "\n\n".join(blocks).strip()
 
@@ -524,7 +532,7 @@ def _render_qimen_palace_sections(qimen_pan: dict[str, Any]) -> list[tuple[str, 
     }
     cells = qimen_pan.get("cells")
     if not isinstance(cells, list):
-        return [(title, "无") for title in palace_map.values()]
+        return [(title, _missing_detail_text(title)) for title in palace_map.values()]
 
     by_num = {
         cell.get("palaceNum"): cell
@@ -1908,7 +1916,7 @@ def _build_relative_snapshot_text(payload: dict[str, Any], response: dict[str, A
 
     rendered: list[tuple[str, str]] = [("关系起盘信息", _join_lines(lines[1:]))]
     for title, body_lines in sections:
-        rendered.append((title, _join_lines(body_lines) or "无"))
+        rendered.append((title, _join_lines(body_lines) or _missing_detail_text(title)))
     rendered.append(
         (
             "合成图盘",
@@ -1922,7 +1930,7 @@ def _build_relative_snapshot_text(payload: dict[str, Any], response: dict[str, A
             "影响图盘-星盘A",
             embedded_chart_text(response["inner"])
             if isinstance(response.get("inner"), dict) and isinstance(response["inner"].get("chart"), dict)
-            else "无",
+            else _missing_detail_text("影响图盘-星盘A"),
         )
     )
     rendered.append(
@@ -1930,7 +1938,7 @@ def _build_relative_snapshot_text(payload: dict[str, Any], response: dict[str, A
             "影响图盘-星盘B",
             embedded_chart_text(response["outer"])
             if isinstance(response.get("outer"), dict) and isinstance(response["outer"].get("chart"), dict)
-            else "无",
+            else _missing_detail_text("影响图盘-星盘B"),
         )
     )
     return _render_snapshot_text(rendered)
@@ -2024,7 +2032,11 @@ def _build_bazi_snapshot_text(payload: dict[str, Any], response: dict[str, Any])
         [
             ("起盘信息", _join_lines(base_lines)),
             ("四柱与三元", _join_lines(four_lines)),
-            ("流年行运概略", _join_lines(direction_lines) or "无"),
+            (
+                "流年行运概略",
+                _join_lines(direction_lines)
+                or "本次八字结果未返回大运/流年明细；如问题涉及阶段走势，请优先使用 bazi_direct 或补齐性别、起运与节气设置后重算，不能臆造外部依赖。",
+            ),
             ("神煞（四柱与三元）", _join_lines(god_lines)),
         ]
     )
@@ -2239,8 +2251,12 @@ def _build_gua_lookup_snapshot_text(tool_name: str, payload: dict[str, Any], res
         [
             ("起盘信息", _join_lines([f"查询：{'、'.join(queried) if queried else '无'}", f"来源：{tool_name}"])),
             ("卦象", _join_lines(gua_lines) or "无"),
-            ("六爻与动爻", "无"),
-            ("卦辞与断语", _join_lines(desc_lines) or "无"),
+            ("六爻与动爻", "此工具为卦义查询，不包含起卦六爻与动爻排盘；如需完整六爻盘，请调用 sixyao。"),
+            (
+                "卦辞与断语",
+                _join_lines(desc_lines)
+                or "本次卦义查询未返回卦辞断语；请基于已返回卦象说明，不能臆造不存在的数据来源。",
+            ),
         ]
     )
 
