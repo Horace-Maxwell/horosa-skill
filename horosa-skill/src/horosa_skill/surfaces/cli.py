@@ -1131,11 +1131,26 @@ def report_from_tool(
     question: str | None = typer.Option(None, "--question", help="Optional user question to store with this report run."),
     title: str | None = typer.Option(None, "--title", help="Optional report title."),
     language: str = typer.Option("zh-CN", "--language", help="Report language tag."),
+    ai_answer_text: str | None = typer.Option(None, "--ai-answer-text", help="Free-form AI analysis text to render directly into the final report."),
+    ai_answer_file: Optional[Path] = typer.Option(None, "--ai-answer-file", help="Read free-form AI analysis text from a UTF-8 file."),
+    ai_report_file: Optional[Path] = typer.Option(None, "--ai-report-file", help="Read structured ai_report JSON from a UTF-8 file."),
     include_raw_json: bool = typer.Option(False, "--include-raw-json/--no-include-raw-json", help="Embed the full source envelope in the report JSON."),
     stdin: bool = typer.Option(False, "--stdin", help="Read the tool payload JSON from stdin."),
     input_file: Optional[Path] = typer.Option(None, "--input", help="Read the tool payload JSON from a file."),
 ) -> None:
     payload = _load_payload(stdin=stdin, input_file=input_file)
+    ai_report: dict[str, Any] = {}
+    if ai_report_file is not None:
+        raw_ai_report = json.loads(ai_report_file.read_text(encoding="utf-8"))
+        if not isinstance(raw_ai_report, dict):
+            raise typer.BadParameter("--ai-report-file must contain a JSON object.")
+        ai_report = raw_ai_report.get("ai_report", raw_ai_report)
+        if not isinstance(ai_report, dict):
+            raise typer.BadParameter("--ai-report-file ai_report must be a JSON object.")
+    final_ai_answer_text = ai_answer_text
+    if ai_answer_file is not None:
+        file_text = ai_answer_file.read_text(encoding="utf-8").strip()
+        final_ai_answer_text = f"{final_ai_answer_text}\n\n{file_text}".strip() if final_ai_answer_text else file_text
     service = _service()
     try:
         result = service.report_from_tool(
@@ -1146,6 +1161,8 @@ def report_from_tool(
                 "language": language,
                 "title": title,
                 "question": question,
+                "ai_report": ai_report,
+                "ai_answer_text": final_ai_answer_text,
                 "include_raw_json": include_raw_json,
                 "output_path": str(output.expanduser()) if output else None,
             }

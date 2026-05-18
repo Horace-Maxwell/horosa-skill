@@ -32,6 +32,10 @@ and this project follows a release-oriented changelog style.
 - Added `skills/horosa-agent/SKILL.md`, an agent-facing usage skill that
   explains tool selection, report generation, memory write-back, OpenClaw
   checks, and anti-hallucination rules for MCP/CLI clients.
+- Added CLI support for `report from-tool --ai-answer-text`,
+  `--ai-answer-file`, and `--ai-report-file`, allowing agents to create final
+  JSON/DOCX/PDF reports from a calculation payload and completed AI analysis in
+  one command.
 
 ## [0.4.2] - 2026-04-28
 

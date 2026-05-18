@@ -296,6 +296,50 @@ def test_openclaw_check_reports_missing_config_as_user_facing_error(monkeypatch,
     assert "openclaw-setup" in payload["next_action"]
 
 
+def test_report_from_tool_cli_forwards_ai_answer_and_structured_report(monkeypatch, tmp_path: Path) -> None:
+    tool_payload = tmp_path / "payload.json"
+    ai_report_path = tmp_path / "ai-report.json"
+    ai_answer_path = tmp_path / "answer.txt"
+    output_path = tmp_path / "report.docx"
+    tool_payload.write_text('{"date":"2028-04-06","time":"09:33:00","zone":"+08:00","lat":"31n13","lon":"121e28"}', encoding="utf-8")
+    ai_report_path.write_text('{"ai_report":{"direct_answer":"可以推进。","recommendations":["先小步验证。"]}}', encoding="utf-8")
+    ai_answer_path.write_text("完整解盘正文。", encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    class ServiceStub:
+        def report_from_tool(self, payload: dict[str, object]) -> dict[str, object]:
+            captured["payload"] = payload
+            return {"ok": True, "artifact_path": str(output_path), "format": "docx"}
+
+    monkeypatch.setattr(cli, "_service", lambda: ServiceStub())
+    monkeypatch.setattr(cli, "_print_json", lambda data: captured.setdefault("printed", data))
+
+    cli.report_from_tool(
+        tool="liureng_gods",
+        format_name="docx",
+        output=output_path,
+        question="这件事能不能推进？",
+        title="大六壬报告",
+        language="zh-CN",
+        ai_answer_text="结论先说：",
+        ai_answer_file=ai_answer_path,
+        ai_report_file=ai_report_path,
+        include_raw_json=False,
+        stdin=False,
+        input_file=tool_payload,
+    )
+
+    payload = captured["payload"]
+    assert payload["tool_name"] == "liureng_gods"
+    assert payload["format"] == "docx"
+    assert payload["question"] == "这件事能不能推进？"
+    assert payload["title"] == "大六壬报告"
+    assert payload["ai_report"]["direct_answer"] == "可以推进。"
+    assert payload["ai_answer_text"] == "结论先说：\n\n完整解盘正文。"
+    assert payload["output_path"] == str(output_path)
+    assert captured["printed"]["ok"] is True
+
+
 def test_openclaw_check_wraps_runtime_error_for_users(monkeypatch, tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     config_path = workspace / "config" / "mcporter.json"

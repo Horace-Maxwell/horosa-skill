@@ -180,6 +180,18 @@ uv run horosa-skill tool run liureng_gods --stdin
 
 Then pass JSON on stdin.
 
+For a one-command report after the AI has already written the analysis:
+
+```bash
+uv run horosa-skill report from-tool liureng_gods \
+  --format docx \
+  --question "用户的问题" \
+  --ai-answer-file answer.txt \
+  --input payload.json
+```
+
+Use `--ai-answer-text` for a short inline answer, `--ai-answer-file` for a full prose answer, and `--ai-report-file` for structured JSON with fields such as `direct_answer`, `analysis_sections`, `evidence`, `recommendations`, and `limitations`.
+
 ## Cross-Platform Notes
 
 - macOS paths use `~/.horosa/runtime/current`.
