@@ -39,7 +39,7 @@ uv run horosa-skill agent guidance --tool liureng_gods --intent "当前时间起
 
 同名 MCP 工具是 `horosa_agent_guidance`，用于告诉 AI 哪些字段必须先问用户、哪些星阙默认值可以在用户接受后使用。
 
-计算工具和 `horosa_dispatch` 现在有硬性门禁：Agent 没有先确认设置时会收到 `agent_guidance.required`，需要在用户确认后传入 `agent_confirmed_settings: true`，或在用户明确接受默认值后传入 `defaults_accepted: true`。
+计算工具和 `horosa_dispatch` 现在有硬性门禁：Agent 没有先确认设置时会收到 `agent_guidance.required`，需要在用户确认后传入 `agent_confirmed_settings: true`，或在用户明确接受默认值后传入 `defaults_accepted: true`。如果返回里有 `details.agent_recovery.prompt_to_user`，AI 客户端必须停止调用并把这段问题发给用户确认，不能绕过或自行补参。
 
 ## 项目定位
 
@@ -230,7 +230,7 @@ uv run horosa-skill agent guidance --tool liureng_gods --intent "当前时间起
 {
   "ok": true,
   "tool": "qimen",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "input_normalized": {},
   "data": {},
   "summary": [],
