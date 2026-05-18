@@ -1442,6 +1442,17 @@ export function calcDunJia(fields, nongli, options, context){
 		return null;
 	}
 	const opts = {
+		sex: 1,
+		dateType: 0,
+		leapMonthType: 0,
+		xuShiSuiType: 0,
+		jieQiType: 1,
+		paiPanType: 3,
+		zhiShiType: 0,
+		yueJiaQiJuType: 1,
+		yearGanZhiType: 2,
+		monthGanZhiType: 1,
+		dayGanZhiType: 0,
 		qijuMethod: 'zhirun',
 		kongMode: 'day',
 		yimaMode: 'day',

@@ -270,6 +270,28 @@ def _doctor_summary(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _doctor_environment_context(settings: Settings) -> dict[str, Any]:
+    explicit_runtime_root = "HOROSA_RUNTIME_ROOT" in os.environ
+    explicit_data_dir = "HOROSA_SKILL_DATA_DIR" in os.environ
+    explicit_home = "HOME" in os.environ or (os.name == "nt" and "USERPROFILE" in os.environ)
+    workspace_hint = os.environ.get("OPENCLAW_WORKSPACE")
+    default_openclaw_workspace = Path.home() / ".openclaw" / "workspace"
+    return {
+        "runtime_root": str(settings.runtime_root),
+        "data_dir": str(settings.data_dir),
+        "home": str(Path.home()),
+        "uses_explicit_runtime_root": explicit_runtime_root,
+        "uses_explicit_data_dir": explicit_data_dir,
+        "uses_explicit_home": explicit_home,
+        "openclaw_workspace_hint": workspace_hint or str(default_openclaw_workspace),
+        "note": (
+            "`doctor` checks the current process environment. If OpenClaw was set up with "
+            "an isolated HOME/env block, use `client openclaw-check --workspace <workspace>` "
+            "or run doctor with the same HOROSA_RUNTIME_ROOT/HOROSA_SKILL_DATA_DIR values."
+        ),
+    }
+
+
 def _failed_smoke_checks(report: dict[str, Any]) -> list[str]:
     failures: list[str] = []
     compute_ok = report.get("compute_ok")
@@ -628,6 +650,7 @@ def doctor() -> None:
     settings = Settings.from_env()
     manager = _runtime_manager(settings)
     report = manager.doctor()
+    report["environment"] = _doctor_environment_context(settings)
     report.update(_doctor_summary(report))
     _print_json(report)
 

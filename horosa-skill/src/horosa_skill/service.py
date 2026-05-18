@@ -2970,7 +2970,7 @@ class HorosaSkillService:
                 "liureng": liureng,
                 "runyear": runyear,
                 "chart": chart,
-                "guirengType": payload.get("guirengType", 0),
+                "guirengType": payload.get("guirengType", 2),
             },
         )
         snapshot_text = js_result.get("snapshot_text")
