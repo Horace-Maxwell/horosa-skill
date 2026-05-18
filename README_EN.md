@@ -29,6 +29,7 @@
 - Data Contracts: [`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md)
 - MCP Metadata: [`server.json`](./server.json)
 - Agent Skill: [`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md)
+- Agent Repo Rules: [`AGENTS.md`](./AGENTS.md)
 
 ## What This Repository Is
 
@@ -213,7 +214,7 @@ Every tool returns a stable envelope:
 {
   "ok": true,
   "tool": "qimen",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "input_normalized": {},
   "data": {},
   "summary": [],

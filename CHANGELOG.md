@@ -7,6 +7,19 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-05-18
+
+### Fixed
+
+- Strengthened the `liureng_gods` MCP tool description so OpenClaw, Cursor, and
+  other agents route current-time 大六壬 requests through Horosa instead of
+  hand-written shell/Python calculations.
+- Added repository-level agent rules and Cursor rules that explicitly forbid
+  manual recalculation of Horosa techniques and point 大六壬, 奇门, 三式合一, and
+  report generation to the correct MCP tools.
+- Expanded the Horosa agent skill and OpenClaw docs with current-time 大六壬
+  routing guidance and Xingque-compatible `guirengType=2` defaults.
+
 ## [0.5.2] - 2026-05-18
 
 ### Fixed

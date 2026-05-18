@@ -6,6 +6,8 @@ Use this skill when an AI agent is connected to Horosa Skill through MCP, CLI, C
 
 Horosa Skill is local-first. After `horosa-skill install`, algorithms should run through the local runtime, local headless JS engines, and local storage. Do not tell users that a missing field requires MongoDB, port 7897, Xingque Desktop, a remote database, or an external service unless a current `doctor` / `openclaw-check` result explicitly says so. If output is missing, describe it as a local tool/result/input issue and suggest a concrete recheck.
 
+Do not hand-calculate Horosa techniques with `Exec`, shell, Python, JavaScript snippets, web search, or memory-only formulas. If the user asks for a pan/result, call the Horosa MCP or CLI tool and treat the returned `export_snapshot` as the source of truth. Manual scripts bypass Xingque-compatible defaults, true-solar-time handling, runtime parity fixes, memory, and reports.
+
 ## Preferred Agent Workflow
 
 1. Understand the user's question.
@@ -112,6 +114,14 @@ For birth-based methods, include as much as possible:
 For gender-sensitive tools, include `gender`. For Bazi and Ziwei, include `timeAlg`, `after23NewDay`, and direct/luck-flow options when the user asks about timing.
 
 For Daliuren, the Xingque-compatible default is `guirengType: 2` (`星占法贵人`). Only use `guirengType: 0` (`六壬法贵人`) or `guirengType: 1` (`遁甲法贵人`) when the user explicitly asks for that noble-person system or an existing case record already specifies it.
+
+For current-time Daliuren requests such as "用当前时间起一个大六壬盘", do this:
+
+1. Read the current local date, time, and timezone.
+2. Include location/longitude/latitude if the user or client environment provides them.
+3. Call `horosa_cn_liureng_gods` / `liureng_gods`.
+4. Explain only from returned 四课、三传、旬日、神煞、概览 sections.
+5. Do not run an ad-hoc calendar script to compute 干支、天盘、四课、三传.
 
 ## Report Workflow
 

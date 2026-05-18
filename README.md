@@ -29,6 +29,7 @@
 - 数据契约：[`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md)
 - MCP 元数据：[`server.json`](./server.json)
 - Agent 使用 Skill：[`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md)
+- Agent 仓库规则：[`AGENTS.md`](./AGENTS.md)
 
 ## 项目定位
 
@@ -219,7 +220,7 @@
 {
   "ok": true,
   "tool": "qimen",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "input_normalized": {},
   "data": {},
   "summary": [],
