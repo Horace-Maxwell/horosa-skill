@@ -28,6 +28,7 @@
 - 架构设计：[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
 - 数据契约：[`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md)
 - MCP 元数据：[`server.json`](./server.json)
+- Agent 使用 Skill：[`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md)
 
 ## 项目定位
 

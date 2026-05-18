@@ -17,11 +17,21 @@ and this project follows a release-oriented changelog style.
 - Synchronized the same fixed Qimen result into `sanshiunited`, because the
   San Shi United aggregation now remains covered by a regression test that
   checks its embedded Qimen Tianpan.
+- Completed the local headless LiuReng export surface so `liureng_gods` and
+  `liureng_runyear` emit four lessons, three transmissions, and pan sections
+  without implying any MongoDB, port 7897, desktop-app, or external-service
+  dependency.
+- Hardened every callable divination export against bare empty sections and
+  dependency hallucination wording, with regression coverage across all
+  machine-readable export contracts.
 
 ### Added
 
 - Added a golden regression case for `1998-02-20 20:48:00` / `壬戌` hour:
   `阳遁九局上元` with Tianpan stems `1庚 2丙 3丁 4戊 6己 7壬 8辛 9乙`.
+- Added `skills/horosa-agent/SKILL.md`, an agent-facing usage skill that
+  explains tool selection, report generation, memory write-back, OpenClaw
+  checks, and anti-hallucination rules for MCP/CLI clients.
 
 ## [0.4.2] - 2026-04-28
 
