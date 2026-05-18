@@ -9,6 +9,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from horosa_skill import __version__
+from horosa_skill.agent_guidance import build_validation_recovery
 from horosa_skill.config import Settings
 from horosa_skill.engine.client import HorosaApiClient, HorosaPlainJsonClient
 from horosa_skill.engine.decennials import (
@@ -3347,10 +3348,18 @@ class HorosaSkillService:
                 validated = definition.input_model.model_validate(payload)
             except ValidationError as exc:
                 trace["error_code"] = "tool.invalid_payload"
+                errors = exc.errors()
                 raise ToolValidationError(
                     f"Invalid payload for tool `{tool_name}`.",
                     code="tool.invalid_payload",
-                    details={"errors": exc.errors()},
+                    details={
+                        "errors": errors,
+                        "agent_recovery": build_validation_recovery(
+                            operation_name=f"tool.{tool_name}",
+                            tool_name=tool_name,
+                            errors=errors,
+                        ),
+                    },
                 ) from exc
 
             input_normalized = validated.model_dump(exclude_none=True)
@@ -3434,10 +3443,14 @@ class HorosaSkillService:
                 request = MemoryAnswerInput.model_validate(payload)
             except ValidationError as exc:
                 trace["error_code"] = "memory.answer.invalid_payload"
+                errors = exc.errors()
                 raise ToolValidationError(
                     "Invalid payload for memory answer record.",
                     code="memory.answer.invalid_payload",
-                    details={"errors": exc.errors()},
+                    details={
+                        "errors": errors,
+                        "agent_recovery": build_validation_recovery(operation_name="memory_record_answer", errors=errors),
+                    },
                 ) from exc
 
             result = self.store.attach_ai_response(
@@ -3462,10 +3475,14 @@ class HorosaSkillService:
                 request = MemoryQueryInput.model_validate(payload)
             except ValidationError as exc:
                 trace["error_code"] = "memory.query.invalid_payload"
+                errors = exc.errors()
                 raise ToolValidationError(
                     "Invalid payload for memory query.",
                     code="memory.query.invalid_payload",
-                    details={"errors": exc.errors()},
+                    details={
+                        "errors": errors,
+                        "agent_recovery": build_validation_recovery(operation_name="memory_query", errors=errors),
+                    },
                 ) from exc
 
             results = self.store.query_runs(
@@ -3498,10 +3515,14 @@ class HorosaSkillService:
                 request = MemoryShowInput.model_validate(payload)
             except ValidationError as exc:
                 trace["error_code"] = "memory.show.invalid_payload"
+                errors = exc.errors()
                 raise ToolValidationError(
                     "Invalid payload for memory show.",
                     code="memory.show.invalid_payload",
-                    details={"errors": exc.errors()},
+                    details={
+                        "errors": errors,
+                        "agent_recovery": build_validation_recovery(operation_name="memory_show", errors=errors),
+                    },
                 ) from exc
 
             results = self.store.query_runs(
@@ -3539,10 +3560,14 @@ class HorosaSkillService:
                 run, source_artifact = self._load_report_source(request.run_id, request.tool_name)
             except ValidationError as exc:
                 trace["error_code"] = "report.template.invalid_payload"
+                errors = exc.errors()
                 raise ToolValidationError(
                     "Invalid payload for report template.",
                     code="report.template.invalid_payload",
-                    details={"errors": exc.errors()},
+                    details={
+                        "errors": errors,
+                        "agent_recovery": build_validation_recovery(operation_name="report_template", errors=errors),
+                    },
                 ) from exc
             template = self.report_builder.build_template(
                 run=run,
@@ -3624,10 +3649,14 @@ class HorosaSkillService:
                 )
             except ValidationError as exc:
                 trace["error_code"] = "report.render.invalid_payload"
+                errors = exc.errors()
                 raise ToolValidationError(
                     "Invalid payload for report render.",
                     code="report.render.invalid_payload",
-                    details={"errors": exc.errors()},
+                    details={
+                        "errors": errors,
+                        "agent_recovery": build_validation_recovery(operation_name="report_render", errors=errors),
+                    },
                 ) from exc
             except ValueError as exc:
                 trace["error_code"] = "report.render.failed"
@@ -3662,10 +3691,14 @@ class HorosaSkillService:
                 normalized_format = self._normalize_report_format(request.format)
             except ValidationError as exc:
                 trace["error_code"] = "report.from_tool.invalid_payload"
+                errors = exc.errors()
                 raise ToolValidationError(
                     "Invalid payload for report from tool.",
                     code="report.from_tool.invalid_payload",
-                    details={"errors": exc.errors()},
+                    details={
+                        "errors": errors,
+                        "agent_recovery": build_validation_recovery(operation_name="report_from_tool", errors=errors),
+                    },
                 ) from exc
 
             result = self.run_tool(
@@ -3960,10 +3993,18 @@ class HorosaSkillService:
         try:
             request = DispatchInput.model_validate(payload)
         except ValidationError as exc:
+            errors = exc.errors()
             raise ToolValidationError(
                 "Invalid payload for horosa_dispatch.",
                 code="dispatch.invalid_payload",
-                details={"errors": exc.errors()},
+                details={
+                    "errors": errors,
+                    "agent_recovery": build_validation_recovery(
+                        operation_name="horosa_dispatch",
+                        tool_name="dispatch",
+                        errors=errors,
+                    ),
+                },
             ) from exc
 
         try:

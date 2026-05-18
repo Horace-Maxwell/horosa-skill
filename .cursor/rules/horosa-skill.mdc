@@ -28,4 +28,6 @@ If the user did not provide location, gender, house system, 起局方式, 贵人
 
 Runtime enforcement: calculation tools and `horosa_dispatch` reject unconfirmed calls with `agent_guidance.required`. After clarification, include `agent_confirmed_settings: true`; when the user explicitly accepts defaults, include `defaults_accepted: true`; include `clarification_notes` when possible.
 
+If a tool returns `details.agent_recovery`, stop and ask the user with `details.agent_recovery.prompt_to_user`. Do not retry or switch tools until the user answers or accepts defaults.
+
 Use returned `export_snapshot.export_text` and `export_format.sections` as the source of truth. If something is missing, rerun Horosa `doctor` / `openclaw-check`; do not claim MongoDB, port 7897, Xingque Desktop, or remote database dependencies unless Horosa diagnostics explicitly report them.

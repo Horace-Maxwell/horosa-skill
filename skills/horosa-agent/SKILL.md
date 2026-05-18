@@ -60,6 +60,9 @@ Runtime enforcement:
 - After asking the user, include `agent_confirmed_settings: true`.
 - If the user explicitly accepts defaults, include `defaults_accepted: true`.
 - Include `clarification_notes` with a short summary such as `"user accepted Xingque defaults for guirengType and automatic day/night noble-person"`.
+- If a response contains `details.agent_recovery`, you must stop and ask the user with `details.agent_recovery.prompt_to_user`.
+- Do not call another calculation tool as a workaround for a blocked or incomplete call.
+- Do not mark `agent_confirmed_settings` true unless the user actually answered the missing settings.
 
 ## Do Not Hallucinate Dependencies
 

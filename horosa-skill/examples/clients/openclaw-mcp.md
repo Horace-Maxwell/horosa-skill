@@ -45,6 +45,8 @@ horosa_agent_guidance
 }
 ```
 
+如果返回中包含 `details.agent_recovery.prompt_to_user`，OpenClaw / Agent 必须停止继续调用，并把这段问题发给用户确认；不能通过换工具、手写代码或自行补默认值绕过。
+
 典型映射：
 
 - “用当前时间起一个大六壬盘” -> `horosa_cn_liureng_gods`
@@ -94,7 +96,7 @@ uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace --fu
 ## 常见提示与误报
 
 - 如果默认 `uv run horosa-skill doctor` 显示 `installed=false`，但 `openclaw-check` 是 `ok=true`，通常是因为 OpenClaw 使用了隔离 HOME。以 `openclaw-check` 的结果为准，或用同一组 `HOROSA_RUNTIME_ROOT` / `HOROSA_SKILL_DATA_DIR` 运行 doctor。
-- 如果 full check 偶发出现 `No JSON content was found`，请升级到 `0.5.5` 或更新 main；新版本会从 mcporter/stdio 混合输出里提取第一个完整 JSON，并且会在未确认关键设置时返回清晰的 `agent_guidance.required` 提示。
+- 如果 full check 偶发出现 `No JSON content was found`，请升级到 `0.5.6` 或更新 main；新版本会从 mcporter/stdio 混合输出里提取第一个完整 JSON，并且会在未确认关键设置时返回清晰的 `agent_guidance.required` 提示。
 - 如果 OpenClaw gateway 报 `PATH missing` 或其他插件 manifest warning，只要 `horosa-skill client openclaw-check` 是 `ok=true`，这类 warning 通常不是 Horosa MCP 的阻塞项。
 
 ### 3. 手动粘贴配置时，使用下面这段 MCP 配置

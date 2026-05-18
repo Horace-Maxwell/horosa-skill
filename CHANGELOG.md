@@ -7,6 +7,21 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-05-18
+
+### Added
+
+- Added `details.agent_recovery` to guidance and invalid-payload failures so AI
+  clients receive a direct `prompt_to_user` instead of guessing how to recover.
+- Added regression coverage proving every enforced tool has user-facing
+  clarification questions and incomplete payloads produce an ask-user recovery
+  contract.
+
+### Changed
+
+- Strengthened Agent, Cursor, OpenClaw, and skill instructions: clients must stop
+  tool use when `agent_recovery` is returned and ask the user before retrying.
+
 ## [0.5.5] - 2026-05-18
 
 ### Added
