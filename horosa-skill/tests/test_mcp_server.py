@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from horosa_skill.schemas.tools import BirthInput, DispatchInput, KnowledgeReadInput, KnowledgeRegistryInput, MemoryQueryInput, ReportRenderInput
+from horosa_skill.schemas.tools import AgentGuidanceInput, BirthInput, DispatchInput, KnowledgeReadInput, KnowledgeRegistryInput, MemoryQueryInput, ReportRenderInput
 from horosa_skill.surfaces.mcp_server import _merge_mcp_arguments, _normalize_mcp_request
 
 
@@ -87,3 +87,16 @@ def test_normalize_mcp_request_accepts_report_render_fields() -> None:
     assert payload["tool_name"] == "chart"
     assert payload["format"] == "pdf"
     assert payload["ai_report"]["executive_summary"] == "摘要"
+
+
+def test_normalize_mcp_request_accepts_agent_guidance_fields() -> None:
+    payload = _normalize_mcp_request(
+        {"tool_name": "horosa_cn_liureng_gods", "intent": "当前时间起大六壬", "include_all": False},
+        AgentGuidanceInput,
+    )
+
+    assert payload == {
+        "tool_name": "horosa_cn_liureng_gods",
+        "intent": "当前时间起大六壬",
+        "include_all": False,
+    }
