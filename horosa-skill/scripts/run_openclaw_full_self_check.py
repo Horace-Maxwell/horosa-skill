@@ -237,6 +237,8 @@ def main() -> int:
 
     try:
         dispatch_payload = {
+            "agent_confirmed_settings": True,
+            "clarification_notes": "OpenClaw full self-check confirmed dispatch settings.",
             "query": "请起一局奇门遁甲并返回结构化结果",
             "birth": payloads["qimen"],
             "save_result": True,

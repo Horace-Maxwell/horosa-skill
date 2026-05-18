@@ -7,9 +7,10 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
 
-from horosa_skill.agent_guidance import build_agent_guidance
+from horosa_skill.agent_guidance import build_agent_guidance, validate_agent_preflight
 from horosa_skill.config import Settings
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
+from horosa_skill.errors import ToolValidationError
 from horosa_skill.input_normalization import normalize_request_payload
 from horosa_skill.schemas.common import DispatchEnvelope, ToolEnvelope
 from horosa_skill.schemas.tools import (
@@ -81,6 +82,15 @@ def _merge_mcp_arguments(kwargs: dict[str, Any]) -> dict[str, Any] | str | None:
     return kwargs
 
 
+def _enforce_agent_preflight(tool_name: str, payload: dict[str, Any]) -> None:
+    if not isinstance(payload, dict):
+        return
+    preflight = validate_agent_preflight(tool_name, payload)
+    if preflight.get("ok"):
+        return
+    raise ToolValidationError(preflight["message"], code=preflight["code"], details=preflight)
+
+
 def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMCP:
     mcp = FastMCP(
         "Horosa Skill",
@@ -96,7 +106,10 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
     )
 
     def horosa_dispatch(**kwargs: Any) -> DispatchEnvelope:
-        return service.dispatch(_normalize_mcp_request(_merge_mcp_arguments(kwargs), DispatchInput))
+        raw_payload = _merge_mcp_arguments(kwargs)
+        if isinstance(raw_payload, dict):
+            _enforce_agent_preflight("dispatch", raw_payload)
+        return service.dispatch(_normalize_mcp_request(raw_payload, DispatchInput))
     horosa_dispatch.__signature__ = _signature_for_input_model(DispatchInput)
     horosa_dispatch.__annotations__ = {"return": DispatchEnvelope}
     mcp.tool(name="horosa_dispatch")(horosa_dispatch)
@@ -165,8 +178,14 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
     mcp.tool(name="horosa_report_from_run")(horosa_report_from_run)
 
     def horosa_report_from_tool(**kwargs: Any) -> dict[str, Any]:
+        raw_payload = _merge_mcp_arguments(kwargs)
+        if isinstance(raw_payload, dict):
+            tool_name = raw_payload.get("tool_name")
+            payload = raw_payload.get("payload")
+            if isinstance(tool_name, str) and isinstance(payload, dict):
+                _enforce_agent_preflight(tool_name, payload)
         return service.report_from_tool(
-            _normalize_mcp_request(_merge_mcp_arguments(kwargs), ReportFromToolInput)
+            _normalize_mcp_request(raw_payload, ReportFromToolInput)
         )
     horosa_report_from_tool.__signature__ = _signature_for_input_model(ReportFromToolInput)
     horosa_report_from_tool.__annotations__ = {"return": dict[str, Any]}
@@ -177,9 +196,12 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
 
         def _factory(tool_name: str, model: Any) -> Any:
             def _tool(**kwargs: Any) -> ToolEnvelope:
+                raw_payload = _merge_mcp_arguments(kwargs)
+                if isinstance(raw_payload, dict):
+                    _enforce_agent_preflight(tool_name, raw_payload)
                 return service.run_tool(
                     tool_name,
-                    _normalize_mcp_request(_merge_mcp_arguments(kwargs), model),
+                    _normalize_mcp_request(raw_payload, model),
                 )
 
             _tool.__name__ = TOOL_DEFINITIONS[tool_name].mcp_name

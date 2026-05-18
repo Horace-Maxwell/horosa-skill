@@ -12,7 +12,7 @@ from typing import Any, Optional
 
 import typer
 
-from horosa_skill.agent_guidance import build_agent_guidance
+from horosa_skill.agent_guidance import build_agent_guidance, validate_agent_preflight
 from horosa_skill.config import Settings
 from horosa_skill.benchmark import run_benchmark
 from horosa_skill.client_tools import (
@@ -113,6 +113,13 @@ def _print_json(data: object) -> None:
         stream.flush()
         return
     typer.echo(text)
+
+
+def _enforce_agent_preflight(tool_name: str, payload: dict[str, Any]) -> None:
+    preflight = validate_agent_preflight(tool_name, payload)
+    if preflight.get("ok"):
+        return
+    raise ToolValidationError(preflight["message"], code=preflight["code"], details=preflight)
 
 
 def _package_root() -> Path:
@@ -556,7 +563,12 @@ def _run_openclaw_smoke_check(
             cwd=workspace_root,
         )
     registry_result = call_tool("horosa_knowledge_registry")
+    confirmed_payload = {
+        "agent_confirmed_settings": True,
+        "clarification_notes": "OpenClaw smoke check fixture with explicit test settings.",
+    }
     chart_payload = {
+        **confirmed_payload,
         "date": "2026-04-04",
         "time": "15:58:35",
         "zone": "+08:00",
@@ -585,6 +597,7 @@ def _run_openclaw_smoke_check(
         # Keep the heavyweight chart result as a diagnostic, but verify the
         # OpenClaw path with a stable headless local tool before failing setup.
         fallback_payload = {
+            **confirmed_payload,
             "date": "2026-04-04",
             "time": "15:58:35",
             "zone": "+08:00",
@@ -721,6 +734,7 @@ def tool_run(
     payload = _load_payload(stdin=stdin, input_file=input_file)
     service = _service()
     try:
+        _enforce_agent_preflight(tool_name, payload)
         result = service.run_tool(tool_name, payload, save_result=save_result, query_text=query_text)
     except ToolValidationError as exc:
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
@@ -799,6 +813,7 @@ def dispatch(
     payload = _load_payload(stdin=stdin, input_file=input_file)
     service = _service()
     try:
+        _enforce_agent_preflight("dispatch", payload)
         result = service.dispatch(payload)
     except ToolValidationError as exc:
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
@@ -1190,6 +1205,7 @@ def report_from_tool(
         final_ai_answer_text = f"{final_ai_answer_text}\n\n{file_text}".strip() if final_ai_answer_text else file_text
     service = _service()
     try:
+        _enforce_agent_preflight(tool, payload)
         result = service.report_from_tool(
             {
                 "tool_name": tool,

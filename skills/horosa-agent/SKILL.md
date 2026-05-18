@@ -54,6 +54,13 @@ Allowed shortcuts:
 - If the user says “按星阙默认 / 默认 / 快速起盘 / 你来决定”, use documented safe defaults and mention that defaults were used.
 - If a stored memory run already contains the setting, reuse it and cite the run.
 
+Runtime enforcement:
+
+- Calculation tools and `horosa_dispatch` reject unconfirmed calls with `agent_guidance.required`.
+- After asking the user, include `agent_confirmed_settings: true`.
+- If the user explicitly accepts defaults, include `defaults_accepted: true`.
+- Include `clarification_notes` with a short summary such as `"user accepted Xingque defaults for guirengType and automatic day/night noble-person"`.
+
 ## Do Not Hallucinate Dependencies
 
 Never say:

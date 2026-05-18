@@ -4,6 +4,7 @@ from horosa_skill.agent_guidance import (
     TOOL_GUIDANCE,
     assert_guidance_covers_registered_tools,
     build_agent_guidance,
+    validate_agent_preflight,
 )
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
 
@@ -39,3 +40,34 @@ def test_guidance_all_includes_all_tools_and_report_memory_notes() -> None:
     assert set(guidance["tools"]) == set(TOOL_DEFINITIONS)
     assert "horosa_report_render" in guidance["report_and_memory"]
     assert "horosa_memory_query" in guidance["report_and_memory"]
+
+
+def test_agent_preflight_blocks_unconfirmed_calculation_tools() -> None:
+    gate = validate_agent_preflight("liureng_gods", {"date": "2026-05-18"})
+
+    assert gate["ok"] is False
+    assert gate["code"] == "agent_guidance.required"
+    assert "agent_confirmed_settings" in gate["confirmation_fields"]
+    assert any(item["field"] == "guirengType" for item in gate["ask_if_missing"])
+
+
+def test_agent_preflight_allows_confirmed_calculation_tools() -> None:
+    gate = validate_agent_preflight("qimen", {"agent_confirmed_settings": True})
+
+    assert gate["ok"] is True
+    assert gate["mode"] == "agent_confirmed_settings"
+
+
+def test_agent_preflight_exempts_registry_tools() -> None:
+    gate = validate_agent_preflight("knowledge_registry", {})
+
+    assert gate["ok"] is True
+    assert gate["enforced"] is False
+
+
+def test_agent_preflight_blocks_unconfirmed_dispatch() -> None:
+    gate = validate_agent_preflight("dispatch", {"query": "帮我起一个盘"})
+
+    assert gate["ok"] is False
+    assert gate["code"] == "agent_guidance.required"
+    assert any(item["field"] == "target technique" for item in gate["ask_if_missing"])

@@ -7,6 +7,25 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-05-18
+
+### Added
+
+- Added a hard agent preflight gate for CLI, MCP, and report-from-tool calls:
+  calculation tools now reject unconfirmed requests with
+  `agent_guidance.required` instead of letting AI clients silently assume
+  result-changing settings.
+- Added shared confirmation fields across tool schemas:
+  `agent_confirmed_settings`, `defaults_accepted`, and `clarification_notes`.
+
+### Changed
+
+- Updated Agent, Cursor, OpenClaw, and README guidance so AI clients must call
+  `horosa_agent_guidance` first, ask the user for missing required settings, and
+  only call calculation tools after explicit confirmation or accepted defaults.
+- Updated full-check fixtures so self-checks exercise the same confirmed-call
+  contract that real AI clients must follow.
+
 ## [0.5.4] - 2026-05-18
 
 ### Added

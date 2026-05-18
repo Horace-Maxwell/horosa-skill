@@ -2,7 +2,12 @@ from __future__ import annotations
 
 
 def build_sample_payloads() -> dict[str, dict]:
+    confirmed = {
+        "agent_confirmed_settings": True,
+        "clarification_notes": "self-check fixture with explicit test settings",
+    }
     base_birth = {
+        **confirmed,
         "date": "2028/04/06",
         "time": "09:33:00",
         "zone": "+00:00",
@@ -23,6 +28,7 @@ def build_sample_payloads() -> dict[str, dict]:
         "pos": "Wellington",
     }
     east_birth = {
+        **confirmed,
         "date": "2028-04-06",
         "time": "09:33:00",
         "zone": "+08:00",
@@ -63,6 +69,7 @@ def build_sample_payloads() -> dict[str, dict]:
         "jinkou": {**east_birth, "diFen": "酉", "guirengType": 0},
         "suzhan": {**base_birth, "szchart": 0, "szshape": 0, "houseStartMode": 1, "doubingSu28": True},
         "sixyao": {
+            **confirmed,
             "date": "2028-04-06",
             "time": "09:33:00",
             "zone": "+08:00",
@@ -82,12 +89,13 @@ def build_sample_payloads() -> dict[str, dict]:
                 {"value": 1, "change": True, "god": "玄武", "name": "上爻"},
             ],
         },
-        "tongshefa": {"taiyin": "巽", "taiyang": "坤", "shaoyang": "震", "shaoyin": "震"},
+        "tongshefa": {**confirmed, "taiyin": "巽", "taiyang": "坤", "shaoyang": "震", "shaoyin": "震"},
         "sanshiunited": dict(east_birth),
         "chart": dict(chart_birth),
         "chart13": {**chart_birth, "predictive": 0},
         "hellen_chart": {**base_birth, "predictive": 0},
         "guolao_chart": {
+            **confirmed,
             "date": "2028/04/06",
             "time": "09:33:00",
             "zone": "+08:00",
@@ -115,6 +123,7 @@ def build_sample_payloads() -> dict[str, dict]:
         "decennials": {**base_birth, "startMode": "sect_light", "orderType": "zodiacal", "dayMethod": "valens", "calendarType": "calendar_360", "aiMode": "l1_all"},
         "otherbu": {**base_birth, "question": "测试占星骰子", "planet": "Sun", "sign": "Aries", "house": 2},
         "relative": {
+            **confirmed,
             "inner": {**chart_birth, "name": "甲"},
             "outer": {**chart_birth, "date": "1992/03/02", "time": "08:18:00", "name": "乙"},
             "hsys": 0,
@@ -140,6 +149,7 @@ def build_sample_payloads() -> dict[str, dict]:
             "guaAfter23NewDay": False,
         },
         "jieqi_year": {
+            **confirmed,
             "year": 2028,
             "zone": "+08:00",
             "lat": "31n13",
@@ -153,6 +163,7 @@ def build_sample_payloads() -> dict[str, dict]:
             "ad": 1,
         },
         "nongli_time": {
+            **confirmed,
             "date": "2028-04-06",
             "time": "09:33:00",
             "zone": "+08:00",

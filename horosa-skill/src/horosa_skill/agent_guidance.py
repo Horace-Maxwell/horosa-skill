@@ -19,6 +19,8 @@ GLOBAL_AGENT_RULES: list[str] = [
 
 COMMON_LOCATION_FIELDS = ["date", "time", "zone/timezone", "lat/lon or gpsLat/gpsLon/location"]
 COMMON_BIRTH_FIELDS = ["birth date", "birth time", "birth timezone", "birth place / longitude / latitude"]
+CONFIRMATION_FIELDS = ["agent_confirmed_settings", "defaults_accepted", "clarification_notes"]
+PREFLIGHT_EXEMPT_TOOLS = {"export_registry", "export_parse", "knowledge_registry", "knowledge_read", "ziwei_rules", "gua_desc", "gua_meiyi"}
 
 
 def _policy(
@@ -401,12 +403,69 @@ def _with_common_fields(tool_name: str, policy: dict[str, Any]) -> dict[str, Any
         result["technical_required_fields"] = [name for name, field in fields.items() if field.is_required()]
         result["accepted_fields"] = sorted(fields)
         result["description"] = definition.description
+    result["hard_gate"] = {
+        "enabled": tool_name not in PREFLIGHT_EXEMPT_TOOLS,
+        "pass_condition": "Provide `agent_confirmed_settings: true` after asking the user, or `defaults_accepted: true` when the user explicitly accepts Xingque/default settings.",
+        "confirmation_fields": CONFIRMATION_FIELDS,
+        "failure_code": "agent_guidance.required",
+    }
     result["agent_should"] = [
         "ask_missing_result_changing_options_before_call",
         "use_safe_defaults_only_with_disclosure_or_user_acceptance",
         "store final answer with memory tools when user asks for follow-up continuity",
     ]
     return result
+
+
+def validate_agent_preflight(tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Return a structured gate result before a calculation tool is allowed to run."""
+
+    if tool_name in PREFLIGHT_EXEMPT_TOOLS:
+        return {"ok": True, "tool_name": tool_name, "enforced": False}
+    is_dispatch = tool_name in {"dispatch", "horosa_dispatch"}
+    if tool_name not in TOOL_GUIDANCE and not is_dispatch:
+        return {"ok": True, "tool_name": tool_name, "enforced": False}
+
+    confirmed = payload.get("agent_confirmed_settings") is True
+    defaults_accepted = payload.get("defaults_accepted") is True
+    if confirmed or defaults_accepted:
+        return {
+            "ok": True,
+            "tool_name": tool_name,
+            "enforced": True,
+            "mode": "agent_confirmed_settings" if confirmed else "defaults_accepted",
+        }
+
+    if is_dispatch:
+        ask_if_missing = [
+            {"field": "target technique", "question": "你想调用哪一种技法？", "options": ["星盘", "大六壬", "奇门", "八字", "紫微", "其他"]},
+            {"field": "date/time", "question": "使用当前时间，还是指定时间？"},
+            {"field": "location", "question": "地点、经纬度、时区用哪里？"},
+            {"field": "question", "question": "这次要问的具体事情是什么？"},
+        ]
+        safe_defaults = [{"field": "routing", "value": "dispatch selection", "meaning": "仅在用户确认目标和默认设置后自动选择工具"}]
+        do_not_assume = ["Do not dispatch to a calculation tool before confirming result-changing settings."]
+    else:
+        guidance = build_agent_guidance(tool_name=tool_name)
+        policy = guidance["tools"][tool_name]
+        ask_if_missing = policy.get("ask_if_missing", [])
+        safe_defaults = policy.get("safe_defaults", [])
+        do_not_assume = policy.get("do_not_assume", [])
+    return {
+        "ok": False,
+        "tool_name": tool_name,
+        "enforced": True,
+        "code": "agent_guidance.required",
+        "message": (
+            "This Horosa tool is protected by the agent guidance gate. "
+            "Ask the user for missing result-changing settings first, or pass "
+            "`agent_confirmed_settings: true` / `defaults_accepted: true` after explicit confirmation."
+        ),
+        "ask_if_missing": ask_if_missing,
+        "safe_defaults": safe_defaults,
+        "do_not_assume": do_not_assume,
+        "confirmation_fields": CONFIRMATION_FIELDS,
+    }
 
 
 def build_agent_guidance(

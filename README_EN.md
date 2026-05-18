@@ -39,6 +39,8 @@ uv run horosa-skill agent guidance --tool liureng_gods --intent "current-time Da
 
 The matching MCP tool is `horosa_agent_guidance`; it tells AI clients which fields must be clarified and which Xingque defaults are safe only after user acceptance.
 
+Calculation tools and `horosa_dispatch` now enforce this gate: unconfirmed calls return `agent_guidance.required`. After clarification, pass `agent_confirmed_settings: true`; when the user explicitly accepts defaults, pass `defaults_accepted: true`.
+
 ## What This Repository Is
 
 Xingque already had the hard parts: deep local algorithms, ephemeris-backed runtime behavior, rich AI export settings, and serious occult method coverage. `Horosa Skill` is the GitHub-first delivery surface that makes those capabilities usable by modern AI systems without turning the repo into a giant runtime dump.
@@ -222,7 +224,7 @@ Every tool returns a stable envelope:
 {
   "ok": true,
   "tool": "qimen",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "input_normalized": {},
   "data": {},
   "summary": [],
