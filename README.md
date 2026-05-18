@@ -219,7 +219,7 @@
 {
   "ok": true,
   "tool": "qimen",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "input_normalized": {},
   "data": {},
   "summary": [],
