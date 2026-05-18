@@ -7,16 +7,10 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
-## [0.5.0] - 2026-05-08
+## [0.5.1] - 2026-05-18
 
 ### Fixed
 
-- Corrected the headless Qimen/Dunjia Tianpan heavenly-stem flying logic so it
-  starts from the Earth-pan palace of the hour Xun-head Liuyi stem and flies to
-  the Earth-pan palace of the current hour stem, matching legacy Horosa output.
-- Synchronized the same fixed Qimen result into `sanshiunited`, because the
-  San Shi United aggregation now remains covered by a regression test that
-  checks its embedded Qimen Tianpan.
 - Completed the local headless LiuReng export surface so `liureng_gods` and
   `liureng_runyear` emit four lessons, three transmissions, and pan sections
   without implying any MongoDB, port 7897, desktop-app, or external-service
@@ -27,8 +21,6 @@ and this project follows a release-oriented changelog style.
 
 ### Added
 
-- Added a golden regression case for `1998-02-20 20:48:00` / `壬戌` hour:
-  `阳遁九局上元` with Tianpan stems `1庚 2丙 3丁 4戊 6己 7壬 8辛 9乙`.
 - Added `skills/horosa-agent/SKILL.md`, an agent-facing usage skill that
   explains tool selection, report generation, memory write-back, OpenClaw
   checks, and anti-hallucination rules for MCP/CLI clients.
@@ -36,6 +28,27 @@ and this project follows a release-oriented changelog style.
   `--ai-answer-file`, and `--ai-report-file`, allowing agents to create final
   JSON/DOCX/PDF reports from a calculation payload and completed AI analysis in
   one command.
+
+### Changed
+
+- Added timeout guards to CI and release workflows so accidental hangs fail
+  visibly instead of blocking cross-platform validation indefinitely.
+
+## [0.5.0] - 2026-05-08
+
+### Fixed
+
+- Corrected the headless Qimen/Dunjia Tianpan heavenly-stem flying logic so it
+  starts from the Earth-pan palace of the hour Xun-head Liuyi stem and flies to
+  the Earth-pan palace of the current hour stem, matching legacy Horosa output.
+- Synchronized the same fixed Qimen result into `sanshiunited`, because the
+  San Shi United aggregation now remains covered by a regression test that
+  checks its embedded Qimen Tianpan.
+
+### Added
+
+- Added a golden regression case for `1998-02-20 20:48:00` / `壬戌` hour:
+  `阳遁九局上元` with Tianpan stems `1庚 2丙 3丁 4戊 6己 7壬 8辛 9乙`.
 
 ## [0.4.2] - 2026-04-28
 
