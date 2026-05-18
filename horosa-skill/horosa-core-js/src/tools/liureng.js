@@ -608,10 +608,14 @@ function buildSanChuan(layout, keRaw, chartObj) {
   return new SanChuanBuilder(layout, keRaw, chartObj).build();
 }
 
+function missingDetailText(title) {
+  return `本次本地计算结果未返回「${title}」细项；报告只能基于已返回盘面判断，不能臆造外部依赖、桌面端服务或不存在的数据。`;
+}
+
 function mapSectionLines(title, obj) {
   const lines = [`[${title}]`];
   if (!obj || typeof obj !== 'object' || !Object.keys(obj).length) {
-    lines.push('无', '');
+    lines.push(missingDetailText(title), '');
     return lines;
   }
   Object.keys(obj).forEach((key) => {
@@ -636,14 +640,14 @@ function buildSnapshotText(payload, liureng, runyear, chartObj, data) {
     lines.push(`四柱：${valueText(cols.year)}年 ${valueText(cols.month)}月 ${valueText(cols.day)}日 ${valueText(cols.time)}时`);
   }
   lines.push('贵人体系：六壬法贵人');
-  lines.push(`十二盘式：${data.panStyleName || '无'}`);
+  lines.push(`十二盘式：${data.panStyleName || '本次本地结果未定'}`);
   lines.push('');
 
   lines.push('[十二盘式]');
   if (data.layout) {
     lines.push(`月将：${data.layout.yue}；占时：${data.layout.timezi}；贵人：${data.layout.guizi}`);
   } else {
-    lines.push('无');
+    lines.push(missingDetailText('十二盘式'));
   }
   lines.push('');
 
@@ -653,7 +657,7 @@ function buildSnapshotText(payload, liureng, runyear, chartObj, data) {
       lines.push(`${i + 1}. 地盘${data.layout.downZi[i]} -> 天盘${data.layout.upZi[i]} -> 贵神${data.layout.houseTianJiang[i]}`);
     }
   } else {
-    lines.push('无');
+    lines.push(missingDetailText('十二地盘/十二天盘/十二贵神对应'));
   }
   lines.push('');
 
@@ -661,7 +665,7 @@ function buildSnapshotText(payload, liureng, runyear, chartObj, data) {
   if (data.ke && data.ke.lines.length) {
     lines.push(...data.ke.lines);
   } else {
-    lines.push('无');
+    lines.push(missingDetailText('四课'));
   }
   lines.push('');
 
@@ -672,7 +676,7 @@ function buildSnapshotText(payload, liureng, runyear, chartObj, data) {
       lines.push(`${name}：干支=${data.sanChuan.cuang[index] || '无'}；六亲=${data.sanChuan.liuQin[index] || '无'}；贵神=${data.sanChuan.tianJiang[index] || '无'}`);
     });
   } else {
-    lines.push('无');
+    lines.push(missingDetailText('三传'));
   }
   lines.push('');
 
@@ -681,7 +685,7 @@ function buildSnapshotText(payload, liureng, runyear, chartObj, data) {
     lines.push(`行年干支：${valueText(runyear.year)}`);
     lines.push(`年龄：${valueText(runyear.age)}岁`);
   } else {
-    lines.push('无');
+    lines.push(missingDetailText('行年'));
   }
   lines.push('');
 
@@ -692,10 +696,10 @@ function buildSnapshotText(payload, liureng, runyear, chartObj, data) {
   lines.push(...mapSectionLines('月煞', liureng.godsMonth));
   lines.push(...mapSectionLines('支煞', liureng.godsZi));
   lines.push(...mapSectionLines('岁煞', liureng.godsYear && liureng.godsYear.taisui1 ? liureng.godsYear.taisui1 : liureng.godsYear));
-  lines.push('[十二长生]', '无', '');
-  lines.push('[大格]', data.sanChuan ? `课式：${data.sanChuan.name}` : '无', '');
-  lines.push('[小局]', '无', '');
-  lines.push('[参考]', '无', '');
+  lines.push('[十二长生]', missingDetailText('十二长生'), '');
+  lines.push('[大格]', data.sanChuan ? `课式：${data.sanChuan.name}` : missingDetailText('大格'), '');
+  lines.push('[小局]', missingDetailText('小局'), '');
+  lines.push('[参考]', missingDetailText('参考'), '');
   lines.push('[概览]');
   if (data.sanChuan) {
     lines.push(`四课、三传已由本地 headless 六壬引擎根据离线盘面生成。`);
