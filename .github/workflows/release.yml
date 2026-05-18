@@ -14,6 +14,7 @@ permissions:
 jobs:
   build-release:
     runs-on: self-hosted
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
