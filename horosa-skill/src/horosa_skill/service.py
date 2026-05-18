@@ -207,6 +207,60 @@ def _java_chart_payload_candidates(endpoint: str, payload: dict[str, Any]) -> li
     return variants
 
 
+def _only_payload_keys(payload: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
+    return {key: payload[key] for key in keys if key in payload and payload[key] is not None}
+
+
+def _liureng_remote_payload(tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+    if tool_name == "liureng_runyear":
+        return _only_payload_keys(
+            payload,
+            (
+                "date",
+                "time",
+                "zone",
+                "lat",
+                "lon",
+                "after23NewDay",
+                "ad",
+                "gender",
+                "guaYearGanZi",
+                "guaDate",
+                "guaTime",
+                "guaZone",
+                "guaLon",
+                "guaLat",
+                "guaAd",
+                "guaAfter23NewDay",
+            ),
+        )
+    return _only_payload_keys(
+        payload,
+        ("date", "time", "zone", "lat", "lon", "after23NewDay", "ad", "yue", "isDiurnal"),
+    )
+
+
+def _liureng_chart_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in {
+            "date": payload.get("guaDate") or payload.get("date"),
+            "time": payload.get("guaTime") or payload.get("time"),
+            "zone": payload.get("guaZone") or payload.get("zone"),
+            "lat": payload.get("guaLat") or payload.get("lat"),
+            "lon": payload.get("guaLon") or payload.get("lon"),
+            "gpsLat": payload.get("gpsLat"),
+            "gpsLon": payload.get("gpsLon"),
+            "ad": payload.get("guaAd") or payload.get("ad", 1),
+            "hsys": 0,
+            "tradition": False,
+            "predictive": False,
+            "zodiacal": 0,
+        }.items()
+        if value is not None
+    }
+
+
 def _chart_server_endpoint(endpoint: str) -> str:
     return "/" if endpoint == "/chart" else endpoint
 
@@ -2046,6 +2100,12 @@ def _build_liureng_snapshot_text(payload: dict[str, Any], response: dict[str, An
             f"四柱：{_gz_text(four.get('year'))}年 {_gz_text(four.get('month'))}月 {_gz_text(four.get('day'))}日 {_gz_text(four.get('time'))}时"
         )
     sections: list[tuple[str, str]] = [("起盘信息", _join_lines(base_lines))]
+    key_aliases = {
+        "十二盘式": ("panStyle", "panStyleName", "pan_style"),
+        "十二地盘/十二天盘/十二贵神对应": ("layout", "pan", "twelvePan"),
+        "四课": ("keText", "ke", "fourLessons", "fourLesson", "sike", "courses"),
+        "三传": ("sanChuan", "sanchuan", "threeTransmissions", "threeTransmission", "transmissions"),
+    }
     for title, key in [
         ("十二盘式", "panStyle"),
         ("十二地盘/十二天盘/十二贵神对应", "layout"),
@@ -2068,9 +2128,17 @@ def _build_liureng_snapshot_text(payload: dict[str, Any], response: dict[str, An
         if title == "行年":
             body = _stringify_export_body(runyear) or "无"
         else:
-            body = _stringify_export_body(liureng.get(key)) if isinstance(liureng, dict) else ""
+            body = ""
+            if isinstance(liureng, dict):
+                for candidate_key in key_aliases.get(title, (key,)):
+                    body = _stringify_export_body(liureng.get(candidate_key))
+                    if body:
+                        break
             if not body and isinstance(response, dict):
-                body = _stringify_export_body(response.get(key))
+                for candidate_key in key_aliases.get(title, (key,)):
+                    body = _stringify_export_body(response.get(candidate_key))
+                    if body:
+                        break
         sections.append((title, body or "无"))
     return _render_snapshot_text(sections)
 
@@ -2845,17 +2913,7 @@ class HorosaSkillService:
         if not isinstance(liureng, dict):
             remote = self._call_remote(
                 "/liureng/gods",
-                {
-                    "date": payload["date"],
-                    "time": payload["time"],
-                    "zone": payload["zone"],
-                    "lat": payload["lat"],
-                    "lon": payload["lon"],
-                    "after23NewDay": payload.get("after23NewDay", False),
-                    "yue": payload.get("yue"),
-                    "isDiurnal": payload.get("isDiurnal"),
-                    "ad": payload.get("ad", 1),
-                },
+                _liureng_remote_payload("liureng_gods", payload),
             )
             liureng = remote.get("liureng", remote)
         js_result = self.js_client.run(
@@ -2874,6 +2932,53 @@ class HorosaSkillService:
                 "liureng": liureng,
             },
         }
+
+    def _run_liureng_tool(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+        endpoint = "/liureng/runyear" if tool_name == "liureng_runyear" else "/liureng/gods"
+        remote = self._call_remote(endpoint, _liureng_remote_payload(tool_name, payload))
+        liureng = remote.get("liureng", remote)
+        runyear = remote.get("runyear") or remote.get("runYear")
+        chart: dict[str, Any] = {}
+        chart_error: dict[str, Any] | None = None
+        try:
+            chart = self._call_remote("/chart", _liureng_chart_payload(payload))
+        except HorosaSkillError as exc:
+            chart_error = {"code": exc.code, "message": str(exc), "details": exc.details}
+        except Exception as exc:
+            chart_error = {"code": "liureng.chart_context_unavailable", "message": str(exc), "details": {}}
+
+        js_result = self.js_client.run(
+            "liureng",
+            {
+                **payload,
+                "liureng": liureng,
+                "runyear": runyear,
+                "chart": chart,
+                "guirengType": payload.get("guirengType", 0),
+            },
+        )
+        snapshot_text = js_result.get("snapshot_text")
+        data = js_result.get("data", {}) if isinstance(js_result.get("data"), dict) else {}
+        result = {
+            "liureng": {
+                **(liureng if isinstance(liureng, dict) else {}),
+                "layout": data.get("layout"),
+                "ke": data.get("ke", {}).get("raw") if isinstance(data.get("ke"), dict) else None,
+                "keText": data.get("ke", {}).get("lines") if isinstance(data.get("ke"), dict) else None,
+                "sanChuan": data.get("sanChuan"),
+                "panStyle": data.get("panStyleName"),
+            },
+            "runyear": runyear,
+            "headless_liureng": data,
+            "snapshot_text": snapshot_text,
+            "prerequisites": {
+                "remote_payload": _liureng_remote_payload(tool_name, payload),
+                "chart_available": bool(chart),
+                "chart_error": chart_error,
+            },
+        }
+        result["export_snapshot"] = self._augment_export_payload(technique="liureng", snapshot_text=snapshot_text)
+        return result
 
     def _run_tongshefa_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         js_result = self.js_client.run("tongshefa", payload)
@@ -3165,6 +3270,8 @@ class HorosaSkillService:
             return self._run_taiyi_tool(payload)
         if definition.name == "jinkou":
             return self._run_jinkou_tool(payload)
+        if definition.name in {"liureng_gods", "liureng_runyear"}:
+            return self._run_liureng_tool(definition.name, payload)
         if definition.name == "suzhan":
             return self._run_suzhan_tool(payload)
         if definition.name == "sixyao":
