@@ -7,6 +7,29 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-05-18
+
+### Fixed
+
+- Made OpenClaw/mcporter JSON parsing tolerant of trailing diagnostic text after
+  a valid JSON body, preventing occasional false `No JSON content was found`
+  failures during full self-checks.
+- Added explicit `doctor` environment context so default `~/.horosa` checks are
+  not confused with OpenClaw isolated HOME/runtime installs.
+- Filled missing Qimen headless defaults so exported pan text no longer leaks
+  `undefined` for pan type or birth-sex labels when clients omit optional
+  options.
+- Aligned LiuReng's default noble-person system with the Xingque UI default
+  (`星占法贵人`) while still allowing explicit `guirengType` overrides, and
+  added regression coverage for the default pan output.
+
+### Changed
+
+- Documented OpenClaw troubleshooting for isolated HOME, full-check JSON
+  extraction, and non-Horosa gateway PATH/plugin warnings.
+- Clarified agent-facing LiuReng defaults so connected clients do not silently
+  interpret Xingque-style LiuReng pans with the wrong noble-person system.
+
 ## [0.5.1] - 2026-05-18
 
 ### Fixed

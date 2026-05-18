@@ -111,6 +111,8 @@ For birth-based methods, include as much as possible:
 
 For gender-sensitive tools, include `gender`. For Bazi and Ziwei, include `timeAlg`, `after23NewDay`, and direct/luck-flow options when the user asks about timing.
 
+For Daliuren, the Xingque-compatible default is `guirengType: 2` (`星占法贵人`). Only use `guirengType: 0` (`六壬法贵人`) or `guirengType: 1` (`遁甲法贵人`) when the user explicitly asks for that noble-person system or an existing case record already specifies it.
+
 ## Report Workflow
 
 When the user wants a structured report:

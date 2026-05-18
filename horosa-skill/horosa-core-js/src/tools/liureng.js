@@ -58,6 +58,30 @@ const ZI_HAN_GAN = {
   丑: '癸',
 };
 const DAY_GUI = {
+  甲: '未',
+  乙: '申',
+  丙: '酉',
+  丁: '亥',
+  戊: '午',
+  己: '子',
+  庚: '丑',
+  辛: '寅',
+  壬: '卯',
+  癸: '巳',
+};
+const NIGHT_GUI = {
+  甲: '丑',
+  乙: '子',
+  丙: '亥',
+  丁: '酉',
+  戊: '寅',
+  己: '申',
+  庚: '未',
+  辛: '午',
+  壬: '巳',
+  癸: '卯',
+};
+const DAY_GUI_LIURENG = {
   甲: '丑',
   乙: '子',
   丙: '亥',
@@ -69,7 +93,7 @@ const DAY_GUI = {
   壬: '巳',
   癸: '巳',
 };
-const NIGHT_GUI = {
+const NIGHT_GUI_LIURENG = {
   甲: '未',
   乙: '申',
   丙: '酉',
@@ -81,6 +105,35 @@ const NIGHT_GUI = {
   壬: '卯',
   癸: '卯',
 };
+const DAY_GUI_DUNJIA = {
+  甲: '未',
+  乙: '申',
+  丙: '酉',
+  丁: '亥',
+  戊: '丑',
+  己: '子',
+  庚: '丑',
+  辛: '寅',
+  壬: '卯',
+  癸: '巳',
+};
+const NIGHT_GUI_DUNJIA = {
+  甲: '丑',
+  乙: '子',
+  丙: '亥',
+  丁: '酉',
+  戊: '未',
+  己: '申',
+  庚: '未',
+  辛: '午',
+  壬: '巳',
+  癸: '卯',
+};
+const GUI_RENG_SYSTEMS = [
+  { key: 0, label: '六壬法贵人', day: DAY_GUI_LIURENG, night: NIGHT_GUI_LIURENG },
+  { key: 1, label: '遁甲法贵人', day: DAY_GUI_DUNJIA, night: NIGHT_GUI_DUNJIA },
+  { key: 2, label: '星占法贵人', day: DAY_GUI, night: NIGHT_GUI },
+];
 const GAN_HE = {
   甲: '己',
   乙: '庚',
@@ -253,7 +306,17 @@ function getGuiZi(chartObj, guirengType) {
   if (!dayGan) {
     return '';
   }
-  return (chartObj.isDiurnal ? DAY_GUI : NIGHT_GUI)[dayGan] || '';
+  const parsedType = Number.parseInt(`${guirengType}`, 10);
+  const normalizedType = Number.isInteger(parsedType) ? parsedType : 2;
+  const system = GUI_RENG_SYSTEMS.find((item) => item.key === normalizedType) || GUI_RENG_SYSTEMS[2];
+  return (chartObj.isDiurnal ? system.day : system.night)[dayGan] || '';
+}
+
+function getGuiRengLabel(guirengType) {
+  const parsedType = Number.parseInt(`${guirengType}`, 10);
+  const normalizedType = Number.isInteger(parsedType) ? parsedType : 2;
+  const system = GUI_RENG_SYSTEMS.find((item) => item.key === normalizedType) || GUI_RENG_SYSTEMS[2];
+  return system.label;
 }
 
 function buildLayout(payload, chartObj) {
@@ -280,7 +343,8 @@ function buildLayout(payload, chartObj) {
     upZi[i] = ZI_LIST[idx];
   }
   const houseTianJiang = TIAN_JIANG.slice();
-  const guizi = getGuiZi(chartObj, payload.guirengType ?? 0);
+  const guirengType = payload.guirengType ?? 2;
+  const guizi = getGuiZi(chartObj, guirengType);
   let houseidx = 0;
   for (let i = 0; i < 12; i += 1) {
     if (ZI_LIST[yueIndexs[i]] === guizi) {
@@ -298,7 +362,7 @@ function buildLayout(payload, chartObj) {
       houseTianJiang[i] = TIAN_JIANG[(i - houseidx + 12) % 12];
     }
   }
-  return { yue, timezi, guizi, downZi, upZi, houseTianJiang };
+  return { yue, timezi, guizi, guirengType, guirengLabel: getGuiRengLabel(guirengType), downZi, upZi, houseTianJiang };
 }
 
 function buildKe(layout, chartObj) {
@@ -639,7 +703,7 @@ function buildSnapshotText(payload, liureng, runyear, chartObj, data) {
   if (cols.year || cols.month || cols.day || cols.time) {
     lines.push(`四柱：${valueText(cols.year)}年 ${valueText(cols.month)}月 ${valueText(cols.day)}日 ${valueText(cols.time)}时`);
   }
-  lines.push('贵人体系：六壬法贵人');
+  lines.push(`贵人体系：${data.layout ? data.layout.guirengLabel : getGuiRengLabel(payload.guirengType ?? 2)}`);
   lines.push(`十二盘式：${data.panStyleName || '本次本地结果未定'}`);
   lines.push('');
 
