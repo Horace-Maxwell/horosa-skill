@@ -39,7 +39,7 @@ uv run horosa-skill agent guidance --tool liureng_gods --intent "current-time Da
 
 The matching MCP tool is `horosa_agent_guidance`; it tells AI clients which fields must be clarified and which Xingque defaults are safe only after user acceptance.
 
-Calculation tools and `horosa_dispatch` now enforce this gate: unconfirmed calls return `agent_guidance.required`. After clarification, pass `agent_confirmed_settings: true`; when the user explicitly accepts defaults, pass `defaults_accepted: true`.
+Calculation tools and `horosa_dispatch` now enforce this gate: unconfirmed calls return `agent_guidance.required`. After clarification, pass `agent_confirmed_settings: true`; when the user explicitly accepts defaults, pass `defaults_accepted: true`. If a response contains `details.agent_recovery.prompt_to_user`, the AI client must stop tool use and ask the user that question instead of retrying or inventing settings.
 
 ## What This Repository Is
 
@@ -224,7 +224,7 @@ Every tool returns a stable envelope:
 {
   "ok": true,
   "tool": "qimen",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "input_normalized": {},
   "data": {},
   "summary": [],

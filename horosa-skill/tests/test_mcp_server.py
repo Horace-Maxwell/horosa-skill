@@ -3,8 +3,7 @@ from __future__ import annotations
 import pytest
 
 from horosa_skill.schemas.tools import AgentGuidanceInput, BirthInput, DispatchInput, KnowledgeReadInput, KnowledgeRegistryInput, MemoryQueryInput, ReportRenderInput
-from horosa_skill.errors import ToolValidationError
-from horosa_skill.surfaces.mcp_server import _enforce_agent_preflight, _merge_mcp_arguments, _normalize_mcp_request
+from horosa_skill.surfaces.mcp_server import _agent_preflight_error, _merge_mcp_arguments, _normalize_mcp_request
 
 
 def test_normalize_mcp_request_accepts_json_string_for_empty_request() -> None:
@@ -104,19 +103,21 @@ def test_normalize_mcp_request_accepts_agent_guidance_fields() -> None:
 
 
 def test_mcp_agent_preflight_blocks_unconfirmed_calculation_tool() -> None:
-    with pytest.raises(ToolValidationError) as exc_info:
-        _enforce_agent_preflight("liureng_gods", {"date": "2026-05-18"})
+    error = _agent_preflight_error("liureng_gods", {"date": "2026-05-18"})
 
-    assert exc_info.value.code == "agent_guidance.required"
-    assert any(item["field"] == "guirengType" for item in exc_info.value.details["ask_if_missing"])
+    assert error is not None
+    assert error["code"] == "agent_guidance.required"
+    assert error["details"]["agent_recovery"]["must_ask_user"] is True
+    assert any(item["field"] == "guirengType" for item in error["details"]["ask_if_missing"])
 
 
 def test_mcp_agent_preflight_allows_confirmed_calculation_tool() -> None:
-    _enforce_agent_preflight("liureng_gods", {"agent_confirmed_settings": True})
+    assert _agent_preflight_error("liureng_gods", {"agent_confirmed_settings": True}) is None
 
 
 def test_mcp_agent_preflight_blocks_unconfirmed_dispatch() -> None:
-    with pytest.raises(ToolValidationError) as exc_info:
-        _enforce_agent_preflight("dispatch", {"query": "帮我起一个盘"})
+    error = _agent_preflight_error("dispatch", {"query": "帮我起一个盘"})
 
-    assert exc_info.value.code == "agent_guidance.required"
+    assert error is not None
+    assert error["code"] == "agent_guidance.required"
+    assert error["details"]["agent_recovery"]["must_ask_user"] is True

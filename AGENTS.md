@@ -36,6 +36,9 @@ Runtime gate:
 - After asking the user, pass `agent_confirmed_settings: true`.
 - If the user explicitly accepts defaults, pass `defaults_accepted: true`.
 - Add `clarification_notes` summarizing what was confirmed.
+- If any tool returns `agent_guidance.required` or an `*.invalid_payload` error with `details.agent_recovery`, stop immediately and ask the user using `details.agent_recovery.prompt_to_user`.
+- Do not retry the same tool until the user answered the missing settings or explicitly accepted defaults.
+- Never satisfy the gate by setting `agent_confirmed_settings: true` yourself without a user answer.
 
 This is especially important for:
 

@@ -10,7 +10,7 @@ from horosa_skill.exports.parser import parse_export_content
 from horosa_skill.engine.client import HorosaApiClient
 from horosa_skill.engine.js_client import HorosaJsEngineClient
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
-from horosa_skill.errors import ToolTransportError
+from horosa_skill.errors import ToolTransportError, ToolValidationError
 from horosa_skill.knowledge import build_knowledge_registry
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.service import TOOL_EXPORT_TECHNIQUE_MAP, HorosaSkillService, _java_chart_payload, _java_chart_payload_candidates
@@ -329,6 +329,24 @@ def test_service_tool_call_persists_memory(tmp_path) -> None:
     assert "福点 (8th; -)" in result.data["export_snapshot"]["export_text"]
     queried = store.query_runs(tool="chart")
     assert len(queried) == 1
+
+
+def test_invalid_tool_payload_returns_agent_recovery_prompt(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+
+    with pytest.raises(ToolValidationError) as exc_info:
+        service.run_tool("chart", {"agent_confirmed_settings": True}, save_result=False)
+
+    assert exc_info.value.code == "tool.invalid_payload"
+    recovery = exc_info.value.details["agent_recovery"]
+    assert recovery["must_ask_user"] is True
+    assert "调用 `chart` 前需要先确认" in recovery["prompt_to_user"]
+    assert any(item["field"] == "date/time/place" for item in recovery["ask_if_missing"])
 
 
 def test_service_starts_runtime_before_first_remote_call_when_probe_fails(tmp_path) -> None:

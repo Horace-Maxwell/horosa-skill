@@ -23,6 +23,47 @@ CONFIRMATION_FIELDS = ["agent_confirmed_settings", "defaults_accepted", "clarifi
 PREFLIGHT_EXEMPT_TOOLS = {"export_registry", "export_parse", "knowledge_registry", "knowledge_read", "ziwei_rules", "gua_desc", "gua_meiyi"}
 
 
+def _prompt_from_guidance(tool_name: str, ask_if_missing: list[dict[str, Any]], safe_defaults: list[dict[str, Any]]) -> str:
+    if not ask_if_missing:
+        return (
+            "我还缺少这次调用所需的关键参数。请补充必要输入，或明确说明是否按星阙默认设置继续。"
+        )
+    lines = [f"调用 `{tool_name}` 前需要先确认这些会影响结果的设置："]
+    for index, item in enumerate(ask_if_missing[:6], start=1):
+        question = str(item.get("question") or item.get("field") or "请补充这个参数。")
+        options = item.get("options")
+        if isinstance(options, list) and options:
+            question = f"{question} 可选：{' / '.join(str(option) for option in options)}"
+        lines.append(f"{index}. {question}")
+    if safe_defaults:
+        defaults = "; ".join(f"{item.get('field')}={item.get('value')}" for item in safe_defaults[:5])
+        lines.append(f"如果你想快速继续，也可以明确说“按星阙默认”，我会使用：{defaults}。")
+    return "\n".join(lines)
+
+
+def _agent_recovery(
+    *,
+    tool_name: str,
+    ask_if_missing: list[dict[str, Any]],
+    safe_defaults: list[dict[str, Any]],
+    do_not_assume: list[str],
+    reason: str,
+) -> dict[str, Any]:
+    return {
+        "must_ask_user": True,
+        "reason": reason,
+        "prompt_to_user": _prompt_from_guidance(tool_name, ask_if_missing, safe_defaults),
+        "ask_if_missing": ask_if_missing,
+        "safe_defaults": safe_defaults,
+        "do_not_assume": do_not_assume,
+        "retry_requires_one_of": [
+            {"agent_confirmed_settings": True, "meaning": "Use after the user explicitly answered the clarification."},
+            {"defaults_accepted": True, "meaning": "Use only after the user explicitly accepted Horosa/Xingque defaults."},
+        ],
+        "retry_should_include": ["clarification_notes"],
+    }
+
+
 def _policy(
     *,
     intent: str,
@@ -465,7 +506,52 @@ def validate_agent_preflight(tool_name: str, payload: dict[str, Any]) -> dict[st
         "safe_defaults": safe_defaults,
         "do_not_assume": do_not_assume,
         "confirmation_fields": CONFIRMATION_FIELDS,
+        "agent_recovery": _agent_recovery(
+            tool_name=tool_name,
+            ask_if_missing=ask_if_missing,
+            safe_defaults=safe_defaults,
+            do_not_assume=do_not_assume,
+            reason="missing_agent_confirmation",
+        ),
     }
+
+
+def build_validation_recovery(
+    *,
+    operation_name: str,
+    errors: list[dict[str, Any]],
+    tool_name: str | None = None,
+) -> dict[str, Any]:
+    """Build a user-askable recovery contract for incomplete or invalid payloads."""
+
+    target = tool_name or operation_name
+    if tool_name in TOOL_GUIDANCE or tool_name in {"dispatch", "horosa_dispatch"}:
+        gate = validate_agent_preflight(tool_name, {})
+        ask_if_missing = gate.get("ask_if_missing", [])
+        safe_defaults = gate.get("safe_defaults", [])
+        do_not_assume = gate.get("do_not_assume", [])
+    else:
+        missing_fields = []
+        for error in errors:
+            loc = error.get("loc")
+            if isinstance(loc, (list, tuple)) and loc:
+                missing_fields.append(".".join(str(part) for part in loc))
+        ask_if_missing = [
+            {
+                "field": field,
+                "question": f"请补充 `{field}`，这是 `{operation_name}` 继续执行所需的参数。",
+            }
+            for field in missing_fields[:8]
+        ]
+        safe_defaults = []
+        do_not_assume = ["Do not invent missing IDs, file paths, run IDs, or user questions."]
+    return _agent_recovery(
+        tool_name=target,
+        ask_if_missing=ask_if_missing,
+        safe_defaults=safe_defaults,
+        do_not_assume=do_not_assume,
+        reason="invalid_or_incomplete_payload",
+    )
 
 
 def build_agent_guidance(

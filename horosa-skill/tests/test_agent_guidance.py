@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from horosa_skill.agent_guidance import (
+    PREFLIGHT_EXEMPT_TOOLS,
     TOOL_GUIDANCE,
     assert_guidance_covers_registered_tools,
+    build_validation_recovery,
     build_agent_guidance,
     validate_agent_preflight,
 )
@@ -42,6 +44,17 @@ def test_guidance_all_includes_all_tools_and_report_memory_notes() -> None:
     assert "horosa_memory_query" in guidance["report_and_memory"]
 
 
+def test_all_enforced_tools_have_user_questions() -> None:
+    guidance = build_agent_guidance(include_all=True)
+
+    missing = [
+        tool_name
+        for tool_name, policy in guidance["tools"].items()
+        if tool_name not in PREFLIGHT_EXEMPT_TOOLS and not policy["ask_if_missing"]
+    ]
+    assert missing == []
+
+
 def test_agent_preflight_blocks_unconfirmed_calculation_tools() -> None:
     gate = validate_agent_preflight("liureng_gods", {"date": "2026-05-18"})
 
@@ -49,6 +62,8 @@ def test_agent_preflight_blocks_unconfirmed_calculation_tools() -> None:
     assert gate["code"] == "agent_guidance.required"
     assert "agent_confirmed_settings" in gate["confirmation_fields"]
     assert any(item["field"] == "guirengType" for item in gate["ask_if_missing"])
+    assert gate["agent_recovery"]["must_ask_user"] is True
+    assert "调用 `liureng_gods` 前需要先确认" in gate["agent_recovery"]["prompt_to_user"]
 
 
 def test_agent_preflight_allows_confirmed_calculation_tools() -> None:
@@ -71,3 +86,15 @@ def test_agent_preflight_blocks_unconfirmed_dispatch() -> None:
     assert gate["ok"] is False
     assert gate["code"] == "agent_guidance.required"
     assert any(item["field"] == "target technique" for item in gate["ask_if_missing"])
+
+
+def test_validation_recovery_returns_prompt_for_incomplete_payload() -> None:
+    recovery = build_validation_recovery(
+        operation_name="tool.chart",
+        tool_name="chart",
+        errors=[{"loc": ("date",), "msg": "Field required", "type": "missing"}],
+    )
+
+    assert recovery["must_ask_user"] is True
+    assert "调用 `chart` 前需要先确认" in recovery["prompt_to_user"]
+    assert any(item["field"] == "date/time/place" for item in recovery["ask_if_missing"])
