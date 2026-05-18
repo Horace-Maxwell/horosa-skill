@@ -28,6 +28,7 @@
 - Architecture: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
 - Data Contracts: [`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md)
 - MCP Metadata: [`server.json`](./server.json)
+- Agent Skill: [`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md)
 
 ## What This Repository Is
 
