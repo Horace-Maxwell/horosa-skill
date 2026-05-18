@@ -327,6 +327,12 @@ class KnowledgeReadInput(FlexibleModel):
     di_branch: str | None = None
 
 
+class AgentGuidanceInput(FlexibleModel):
+    tool_name: str | None = None
+    intent: str | None = None
+    include_all: bool = False
+
+
 class MemoryAnswerInput(FlexibleModel):
     run_id: str
     user_question: str | None = None

@@ -1,0 +1,462 @@
+from __future__ import annotations
+
+from copy import deepcopy
+from typing import Any
+
+from horosa_skill.engine.registry import TOOL_DEFINITIONS
+
+
+GUIDANCE_SCHEMA = "horosa.skill.agent_guidance.v1"
+
+GLOBAL_AGENT_RULES: list[str] = [
+    "Do not hand-calculate Horosa methods with shell, Python, JavaScript, web snippets, or memorized formulas.",
+    "Before calling a calculation tool, check whether the user supplied the fields and method settings that change the result.",
+    "If a required or result-changing setting is missing, ask a short clarification question with concrete options instead of silently inventing a value.",
+    "Use Horosa/Xingque defaults only when the user accepts defaults, asks for a quick/default reading, or the setting is explicitly documented as safe to default.",
+    "For current-time questions, using the current local date/time/timezone is allowed, but location and technique-specific settings still need clarification when they matter.",
+    "After a tool call, treat export_snapshot.export_text, export_format.sections, and summary as the source of truth.",
+]
+
+COMMON_LOCATION_FIELDS = ["date", "time", "zone/timezone", "lat/lon or gpsLat/gpsLon/location"]
+COMMON_BIRTH_FIELDS = ["birth date", "birth time", "birth timezone", "birth place / longitude / latitude"]
+
+
+def _policy(
+    *,
+    intent: str,
+    required_context: list[str],
+    ask_if_missing: list[dict[str, Any]],
+    safe_defaults: list[dict[str, Any]] | None = None,
+    do_not_assume: list[str] | None = None,
+    output_contract: list[str] | None = None,
+) -> dict[str, Any]:
+    return {
+        "intent": intent,
+        "must_have_context": required_context,
+        "ask_if_missing": ask_if_missing,
+        "safe_defaults": safe_defaults or [],
+        "do_not_assume": do_not_assume or [],
+        "output_contract": output_contract
+        or [
+            "Use ok=true result only.",
+            "Read export_snapshot.export_text and export_format.sections before explaining.",
+            "Persist or report only through Horosa memory/report tools when requested.",
+        ],
+    }
+
+
+ASTRO_BIRTH_POLICY = _policy(
+    intent="Birth/event astrology chart calculation.",
+    required_context=COMMON_BIRTH_FIELDS,
+    ask_if_missing=[
+        {"field": "date/time/place", "question": "请提供出生/事件的日期、时间、时区和地点。"},
+        {"field": "hsys", "question": "宫制要用哪一种？", "options": ["整宫制/Whole Sign（默认推荐）", "Placidus", "其他指定宫制"]},
+        {"field": "zodiacal", "question": "黄道体系要用哪一种？", "options": ["回归黄道（默认推荐）", "恒星黄道"]},
+        {"field": "tradition", "question": "是否需要传统占星扩展项？", "options": ["需要", "不需要/默认"]},
+    ],
+    safe_defaults=[
+        {"field": "hsys", "value": 0, "meaning": "Whole Sign / 整宫制"},
+        {"field": "zodiacal", "value": 0, "meaning": "Tropical / 回归黄道"},
+        {"field": "ad", "value": 1, "meaning": "公历纪年"},
+    ],
+    do_not_assume=["birth time", "birthplace", "timezone"],
+)
+
+PREDICTIVE_POLICY = _policy(
+    intent="Predictive astrology calculation based on a natal chart and a target time.",
+    required_context=COMMON_BIRTH_FIELDS + ["target/prediction date or year"],
+    ask_if_missing=[
+        {"field": "natal data", "question": "请提供本命出生日期、时间、时区和地点。"},
+        {"field": "target time", "question": "要推哪一年/哪一天/哪个事件时间？"},
+        {"field": "technique settings", "question": "是否沿用星阙默认推运设置？", "options": ["沿用默认", "指定主限/释放/返照等参数"]},
+    ],
+    safe_defaults=[
+        {"field": "hsys", "value": 0, "meaning": "Whole Sign / 整宫制"},
+        {"field": "zodiacal", "value": 0, "meaning": "Tropical / 回归黄道"},
+    ],
+    do_not_assume=["target date/year", "birth time", "timezone"],
+)
+
+EVENT_METHOD_POLICY = _policy(
+    intent="Event-time Chinese method pan calculation.",
+    required_context=COMMON_LOCATION_FIELDS + ["question/topic"],
+    ask_if_missing=[
+        {"field": "date/time", "question": "是用当前时间，还是你要指定一个起盘时间？", "options": ["当前时间", "指定时间"]},
+        {"field": "location", "question": "起盘地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
+        {"field": "question", "question": "这次主要问什么事？", "options": ["事业/财务", "感情/关系", "健康", "出行/失物/选择", "整体局势"]},
+        {"field": "after23NewDay", "question": "23 点后是否按次日换日？", "options": ["按星阙默认", "23 点后换日", "23 点后不换日"]},
+    ],
+    safe_defaults=[
+        {"field": "ad", "value": 1, "meaning": "公历"},
+        {"field": "after23NewDay", "value": False, "meaning": "星阙默认，除非用户指定"},
+    ],
+    do_not_assume=["location for location-sensitive methods", "question context"],
+)
+
+
+TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
+    "export_registry": _policy(
+        intent="Inspect Xingque export registry.",
+        required_context=[],
+        ask_if_missing=[{"field": "technique", "question": "要查看全部导出 registry，还是某个技法？", "options": ["全部", "指定 technique"]}],
+        safe_defaults=[{"field": "technique", "value": None, "meaning": "return all techniques"}],
+    ),
+    "export_parse": _policy(
+        intent="Parse Xingque export text.",
+        required_context=["technique", "content"],
+        ask_if_missing=[
+            {"field": "technique", "question": "这段导出正文属于哪个 technique？"},
+            {"field": "content", "question": "请提供完整星阙 AI 导出正文。"},
+            {"field": "selected_sections", "question": "是否只解析指定 section？", "options": ["全部解析", "指定 section"]},
+        ],
+        do_not_assume=["technique when content is ambiguous"],
+    ),
+    "knowledge_registry": _policy(
+        intent="List bundled hover knowledge.",
+        required_context=[],
+        ask_if_missing=[{"field": "domain", "question": "要看全部知识域，还是只看 astro/liureng/qimen？", "options": ["全部", "astro", "liureng", "qimen"]}],
+        safe_defaults=[{"field": "domain", "value": None, "meaning": "return all domains"}],
+    ),
+    "knowledge_read": _policy(
+        intent="Read bundled Xingque hover knowledge.",
+        required_context=["domain", "category", "key or structured lookup fields"],
+        ask_if_missing=[
+            {"field": "domain", "question": "要读哪个知识域？", "options": ["astro", "liureng", "qimen"]},
+            {"field": "category/key", "question": "请给出分类和 key，例如 planet/日、shen/子、door/休门。"},
+        ],
+        do_not_assume=["category", "key"],
+    ),
+    "qimen": _policy(
+        intent="奇门遁甲起盘。",
+        required_context=COMMON_LOCATION_FIELDS + ["question/topic"],
+        ask_if_missing=[
+            {"field": "date/time", "question": "奇门用当前时间还是指定时间？", "options": ["当前时间", "指定时间"]},
+            {"field": "location", "question": "起盘地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
+            {"field": "question", "question": "这局主要问什么事？"},
+            {"field": "qijuMethod", "question": "起局方式是否沿用星阙默认？", "options": ["星阙默认", "指定置闰/拆补/茅山等"]},
+            {"field": "sex", "question": "如果是命盘/人事局，请确认性别；纯事件局可沿用默认。", "options": ["男", "女", "事件局/不指定"]},
+        ],
+        safe_defaults=[
+            {"field": "paiPanType", "value": 3, "meaning": "时家奇门"},
+            {"field": "sex", "value": 1, "meaning": "星阙默认；涉及命式时应先问"},
+            {"field": "after23NewDay", "value": False, "meaning": "星阙默认"},
+        ],
+        do_not_assume=["question", "location", "non-default qijuMethod"],
+    ),
+    "taiyi": _policy(
+        intent="太乙起盘。",
+        required_context=COMMON_LOCATION_FIELDS + ["question/topic"],
+        ask_if_missing=[
+            {"field": "date/time", "question": "太乙用当前时间还是指定时间？", "options": ["当前时间", "指定时间"]},
+            {"field": "location", "question": "起盘地点用哪里？"},
+            {"field": "gender/options", "question": "是否需要指定性别或太乙参数？", "options": ["沿用星阙默认", "指定参数"]},
+        ],
+        safe_defaults=[{"field": "timeAlg", "value": 0, "meaning": "星阙默认"}],
+        do_not_assume=["location", "custom options"],
+    ),
+    "jinkou": _policy(
+        intent="金口诀起课。",
+        required_context=COMMON_LOCATION_FIELDS + ["question/topic", "diFen/地分 when the method requires it"],
+        ask_if_missing=[
+            {"field": "diFen", "question": "金口诀地分/方位用哪一支？如不确定，请说明取数方式。"},
+            {"field": "guirengType", "question": "贵人体系用哪一种？", "options": ["六壬法贵人（星阙金口诀默认）", "星占法贵人", "遁甲法贵人"]},
+            {"field": "question", "question": "这课主要问什么事？"},
+        ],
+        safe_defaults=[{"field": "guirengType", "value": 0, "meaning": "金口诀星阙默认"}],
+        do_not_assume=["diFen"],
+    ),
+    "liureng_gods": _policy(
+        intent="大六壬正盘：四课、三传、贵神、神煞。",
+        required_context=COMMON_LOCATION_FIELDS + ["question/topic"],
+        ask_if_missing=[
+            {"field": "date/time", "question": "大六壬用当前时间还是指定时间？", "options": ["当前时间", "指定时间"]},
+            {"field": "location", "question": "起课地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
+            {"field": "question", "question": "这课主要问什么事？"},
+            {"field": "guirengType", "question": "贵人体系用哪一种？", "options": ["星占法贵人（星阙默认/推荐）", "六壬法贵人", "遁甲法贵人"]},
+            {"field": "isDiurnal", "question": "昼夜贵人是否由 Horosa 自动判定？", "options": ["自动判定", "指定昼贵", "指定夜贵"]},
+        ],
+        safe_defaults=[
+            {"field": "guirengType", "value": 2, "meaning": "星占法贵人 / Xingque default"},
+            {"field": "isDiurnal", "value": None, "meaning": "由本地 runtime 根据时间判定"},
+            {"field": "after23NewDay", "value": False, "meaning": "星阙默认"},
+        ],
+        do_not_assume=["question", "location", "non-default guirengType"],
+    ),
+    "liureng_runyear": _policy(
+        intent="大六壬行年/年运。",
+        required_context=COMMON_LOCATION_FIELDS + ["gender", "target year/date when different from base time"],
+        ask_if_missing=[
+            {"field": "gender", "question": "行年需要性别，请选择。", "options": ["男", "女"]},
+            {"field": "guaDate/guaYearGanZi", "question": "要看哪一年/哪一段行年？"},
+            {"field": "guirengType", "question": "贵人体系是否沿用星阙默认星占法贵人？", "options": ["星占法贵人", "六壬法贵人", "遁甲法贵人"]},
+        ],
+        safe_defaults=[{"field": "guirengType", "value": 2, "meaning": "星占法贵人"}],
+        do_not_assume=["gender", "target year"],
+    ),
+    "sanshiunited": _policy(
+        intent="三式合一：奇门、太乙、大六壬聚合。",
+        required_context=COMMON_LOCATION_FIELDS + ["question/topic"],
+        ask_if_missing=[
+            {"field": "date/time/location", "question": "三式合一用当前时间地点还是指定时间地点？", "options": ["当前时间地点", "指定时间地点"]},
+            {"field": "question", "question": "这次要三式合参判断什么事？"},
+            {"field": "submethod settings", "question": "子技法设置是否沿用星阙默认？", "options": ["全部沿用默认", "指定奇门/太乙/六壬参数"]},
+        ],
+        safe_defaults=[{"field": "liureng guirengType", "value": 2, "meaning": "通过六壬工具使用星阙默认"}],
+        do_not_assume=["question"],
+    ),
+    "sixyao": _policy(
+        intent="六爻/易卦。",
+        required_context=COMMON_LOCATION_FIELDS + ["question", "lines or gua_code"],
+        ask_if_missing=[
+            {"field": "question", "question": "这卦要问什么事？"},
+            {"field": "lines/gua_code", "question": "卦怎么来？", "options": ["用户给六爻阴阳动静", "用户给本卦/变卦", "使用指定起卦法后再算"]},
+        ],
+        do_not_assume=["lines", "gua_code", "question"],
+    ),
+    "tongshefa": _policy(
+        intent="统摄法。",
+        required_context=["taiyin", "taiyang", "shaoyang", "shaoyin or explicit acceptance of defaults"],
+        ask_if_missing=[
+            {"field": "four symbols", "question": "统摄法四象参数用默认还是指定？", "options": ["沿用默认", "指定太阴/太阳/少阳/少阴"]},
+        ],
+        safe_defaults=[
+            {"field": "taiyin/taiyang/shaoyang/shaoyin", "value": "巽/坤/震/震", "meaning": "current contract default; ask if user expects custom setup"}
+        ],
+    ),
+    "suzhan": _policy(
+        intent="宿占/宿盘。",
+        required_context=COMMON_BIRTH_FIELDS,
+        ask_if_missing=[
+            {"field": "date/time/place", "question": "请提供出生/事件日期、时间、时区和地点。"},
+            {"field": "szchart/szshape/houseStartMode", "question": "宿占盘式和形制是否沿用星阙默认？", "options": ["沿用默认", "指定盘式/形制"]},
+        ],
+        safe_defaults=[{"field": "doubingSu28", "value": True, "meaning": "星阙默认"}],
+    ),
+    "hellen_chart": ASTRO_BIRTH_POLICY,
+    "guolao_chart": ASTRO_BIRTH_POLICY,
+    "germany": ASTRO_BIRTH_POLICY,
+    "chart": ASTRO_BIRTH_POLICY,
+    "chart13": ASTRO_BIRTH_POLICY,
+    "india_chart": ASTRO_BIRTH_POLICY,
+    "relative": _policy(
+        intent="Relationship / relative chart.",
+        required_context=["inner person birth data", "outer person birth data"],
+        ask_if_missing=[
+            {"field": "inner/outer", "question": "请分别提供双方出生日期、时间、时区和地点。"},
+            {"field": "relative", "question": "关系盘类型用哪一种？", "options": ["星阙默认", "指定关系盘参数"]},
+        ],
+        safe_defaults=[{"field": "relative", "value": 0, "meaning": "星阙默认"}],
+        do_not_assume=["either party's birth time/place"],
+    ),
+    "solarreturn": PREDICTIVE_POLICY,
+    "lunarreturn": PREDICTIVE_POLICY,
+    "solararc": PREDICTIVE_POLICY,
+    "givenyear": PREDICTIVE_POLICY,
+    "profection": PREDICTIVE_POLICY,
+    "pd": PREDICTIVE_POLICY,
+    "pdchart": PREDICTIVE_POLICY,
+    "zr": PREDICTIVE_POLICY,
+    "firdaria": PREDICTIVE_POLICY,
+    "decennials": _policy(
+        intent="Decennials / 十年大运 timeline.",
+        required_context=COMMON_BIRTH_FIELDS,
+        ask_if_missing=[
+            {"field": "birth data", "question": "请提供出生日期、时间、时区和地点。"},
+            {"field": "timeline settings", "question": "十年大运算法设置是否沿用星阙默认？", "options": ["沿用默认", "指定起算/历法/排序/日法"]},
+        ],
+        safe_defaults=[
+            {"field": "startMode", "value": "sect_light", "meaning": "sect light"},
+            {"field": "orderType", "value": "zodiacal", "meaning": "zodiacal order"},
+            {"field": "dayMethod", "value": "valens", "meaning": "Valens day method"},
+        ],
+        do_not_assume=["birth time"],
+    ),
+    "otherbu": _policy(
+        intent="西洋游戏 / 占星骰子。",
+        required_context=["question", "sign/house/planet if not rolling randomly"],
+        ask_if_missing=[
+            {"field": "question", "question": "这次占问的问题是什么？"},
+            {"field": "dice values", "question": "骰子结果由用户指定还是需要随机/默认？", "options": ["用户指定星座/宫位/行星", "使用默认示例", "先询问用户掷骰结果"]},
+        ],
+        safe_defaults=[
+            {"field": "sign/house/planet", "value": "Aries/0/Sun", "meaning": "placeholder default; should not be used as real divination unless user accepts"}
+        ],
+        do_not_assume=["random dice result"],
+    ),
+    "ziwei_birth": _policy(
+        intent="紫微斗数命盘。",
+        required_context=COMMON_BIRTH_FIELDS + ["gender"],
+        ask_if_missing=[
+            {"field": "birth data", "question": "请提供出生日期、时间、时区和地点。"},
+            {"field": "gender", "question": "紫微需要性别，请选择。", "options": ["男", "女"]},
+            {"field": "after23NewDay/timeAlg", "question": "子时换日和时间算法是否沿用星阙默认？", "options": ["沿用默认", "指定"]},
+        ],
+        safe_defaults=[{"field": "after23NewDay", "value": False, "meaning": "星阙默认"}],
+        do_not_assume=["gender", "birth time"],
+    ),
+    "ziwei_rules": _policy(
+        intent="Fetch Ziwei rule metadata.",
+        required_context=[],
+        ask_if_missing=[],
+        safe_defaults=[{"field": "request", "value": {}, "meaning": "rules have no required input"}],
+    ),
+    "bazi_birth": _policy(
+        intent="八字命盘。",
+        required_context=COMMON_BIRTH_FIELDS,
+        ask_if_missing=[
+            {"field": "birth data", "question": "请提供出生日期、时间、时区和地点。"},
+            {"field": "timeAlg/byLon/after23NewDay", "question": "真太阳时、经度校正、子时换日是否沿用星阙默认？", "options": ["沿用默认", "指定设置"]},
+        ],
+        safe_defaults=[
+            {"field": "timeAlg", "value": 0, "meaning": "星阙默认"},
+            {"field": "byLon", "value": False, "meaning": "星阙默认"},
+            {"field": "after23NewDay", "value": False, "meaning": "星阙默认"},
+        ],
+        do_not_assume=["birth time", "timezone", "birthplace"],
+    ),
+    "bazi_direct": _policy(
+        intent="八字大运/流年/direct flow.",
+        required_context=COMMON_BIRTH_FIELDS + ["gender"],
+        ask_if_missing=[
+            {"field": "birth data", "question": "请提供出生日期、时间、时区和地点。"},
+            {"field": "gender", "question": "排大运需要性别，请选择。", "options": ["男", "女"]},
+            {"field": "adjustJieqi", "question": "节气校正是否沿用星阙默认？", "options": ["沿用默认", "指定校正"]},
+        ],
+        safe_defaults=[{"field": "adjustJieqi", "value": False, "meaning": "星阙默认"}],
+        do_not_assume=["gender"],
+    ),
+    "jieqi_year": _policy(
+        intent="节气年盘。",
+        required_context=["year", "zone", "lat/lon"],
+        ask_if_missing=[
+            {"field": "year", "question": "要生成哪一年的节气盘？"},
+            {"field": "location", "question": "地点/经纬度用哪里？"},
+            {"field": "jieqis", "question": "要全部节气还是指定节气？", "options": ["全部", "指定节气"]},
+        ],
+        safe_defaults=[{"field": "jieqis", "value": None, "meaning": "all configured/default jieqis"}],
+    ),
+    "nongli_time": _policy(
+        intent="农历/干支时间。",
+        required_context=["date", "time", "zone", "lon", "lat when available"],
+        ask_if_missing=[
+            {"field": "date/time", "question": "请提供要换算的日期、时间和时区。"},
+            {"field": "location", "question": "请提供经度；如需真太阳时也请提供纬度。"},
+            {"field": "after23NewDay/timeAlg", "question": "子时换日和时间算法是否沿用默认？", "options": ["沿用默认", "指定"]},
+        ],
+        do_not_assume=["timezone", "longitude"],
+    ),
+    "gua_desc": _policy(
+        intent="卦辞/卦义查询。",
+        required_context=["name list"],
+        ask_if_missing=[{"field": "name", "question": "要查询哪些卦名？请给出一个或多个卦名。"}],
+        do_not_assume=["hexagram name"],
+    ),
+    "gua_meiyi": _policy(
+        intent="梅易卦义查询。",
+        required_context=["name list"],
+        ask_if_missing=[{"field": "name", "question": "要查询哪些卦名？请给出一个或多个卦名。"}],
+        do_not_assume=["hexagram name"],
+    ),
+}
+
+
+REPORT_AND_MEMORY_GUIDANCE: dict[str, dict[str, Any]] = {
+    "horosa_report_template": _policy(
+        intent="Prepare a structured report template for an existing run.",
+        required_context=["run_id", "tool_name when a run has multiple results"],
+        ask_if_missing=[
+            {"field": "run_id", "question": "要基于哪一次计算生成报告？请提供 run_id 或先查询 memory。"},
+            {"field": "tool_name", "question": "如果这个 run 有多个工具结果，要为哪个工具生成报告？"},
+        ],
+    ),
+    "horosa_report_render": _policy(
+        intent="Render JSON/DOCX/PDF report artifact.",
+        required_context=["run_id", "format", "AI analysis text/structured answer for final human report"],
+        ask_if_missing=[
+            {"field": "format", "question": "报告格式要哪一种？", "options": ["PDF", "DOCX", "JSON"]},
+            {"field": "ai_answer_text/ai_report", "question": "是否已经有针对用户问题的 AI 解读正文？没有的话先写解读再渲染。"},
+        ],
+        safe_defaults=[{"field": "format", "value": "pdf", "meaning": "默认 PDF；用户要可编辑文档时用 DOCX"}],
+    ),
+    "horosa_memory_query": _policy(
+        intent="Search local Horosa memory.",
+        required_context=["one of run_id/tool/entity/text/artifact_kind/time range"],
+        ask_if_missing=[{"field": "query", "question": "要按 run_id、技法、对象名、关键词还是 artifact 类型检索？"}],
+    ),
+    "horosa_memory_show": _policy(
+        intent="Show one local memory run.",
+        required_context=["run_id"],
+        ask_if_missing=[{"field": "run_id", "question": "要查看哪一次记录？请提供 run_id，或先用 memory_query 查找。"}],
+    ),
+}
+
+
+def _with_common_fields(tool_name: str, policy: dict[str, Any]) -> dict[str, Any]:
+    definition = TOOL_DEFINITIONS.get(tool_name)
+    result = deepcopy(policy)
+    if definition is not None:
+        fields = definition.input_model.model_fields
+        result["tool_name"] = tool_name
+        result["mcp_name"] = definition.mcp_name
+        result["technical_required_fields"] = [name for name, field in fields.items() if field.is_required()]
+        result["accepted_fields"] = sorted(fields)
+        result["description"] = definition.description
+    result["agent_should"] = [
+        "ask_missing_result_changing_options_before_call",
+        "use_safe_defaults_only_with_disclosure_or_user_acceptance",
+        "store final answer with memory tools when user asks for follow-up continuity",
+    ]
+    return result
+
+
+def build_agent_guidance(
+    *,
+    tool_name: str | None = None,
+    intent: str | None = None,
+    include_all: bool = False,
+) -> dict[str, Any]:
+    """Return machine-readable guidance for agents before they call tools."""
+
+    if include_all:
+        tools = {name: _with_common_fields(name, TOOL_GUIDANCE[name]) for name in sorted(TOOL_GUIDANCE)}
+    elif tool_name:
+        if tool_name not in TOOL_GUIDANCE:
+            aliases = {definition.mcp_name: name for name, definition in TOOL_DEFINITIONS.items()}
+            mapped = aliases.get(tool_name)
+            if mapped is None:
+                return {
+                    "ok": False,
+                    "schema": GUIDANCE_SCHEMA,
+                    "error": {
+                        "code": "agent_guidance.unknown_tool",
+                        "message": f"Unknown tool for guidance: {tool_name}",
+                    },
+                    "known_tools": sorted(TOOL_GUIDANCE),
+                }
+            tool_name = mapped
+        tools = {tool_name: _with_common_fields(tool_name, TOOL_GUIDANCE[tool_name])}
+    else:
+        tools = {}
+
+    return {
+        "ok": True,
+        "schema": GUIDANCE_SCHEMA,
+        "intent": intent,
+        "global_rules": GLOBAL_AGENT_RULES,
+        "default_workflow": [
+            "Classify user intent and choose candidate tool.",
+            "Call horosa_agent_guidance for that tool when settings are unclear.",
+            "Ask the user one concise clarification question with concrete options when guidance says ask_if_missing.",
+            "Only call the calculation tool after required context and result-changing settings are clear.",
+            "Explain from returned export sections, then store/report if requested.",
+        ],
+        "tools": tools,
+        "report_and_memory": deepcopy(REPORT_AND_MEMORY_GUIDANCE) if include_all else {},
+    }
+
+
+def assert_guidance_covers_registered_tools() -> None:
+    missing = sorted(set(TOOL_DEFINITIONS) - set(TOOL_GUIDANCE))
+    extra = sorted(set(TOOL_GUIDANCE) - set(TOOL_DEFINITIONS))
+    if missing or extra:
+        raise AssertionError(f"agent guidance mismatch: missing={missing}, extra={extra}")

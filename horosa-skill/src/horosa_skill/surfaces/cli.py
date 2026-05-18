@@ -12,6 +12,7 @@ from typing import Any, Optional
 
 import typer
 
+from horosa_skill.agent_guidance import build_agent_guidance
 from horosa_skill.config import Settings
 from horosa_skill.benchmark import run_benchmark
 from horosa_skill.client_tools import (
@@ -43,6 +44,7 @@ benchmark_app = typer.Typer(help="Run HorosaBench benchmark cases for routing, e
 trace_app = typer.Typer(help="Inspect recent local trace records for tool runs, dispatches, and runtime operations.")
 client_app = typer.Typer(help="Default OpenClaw entry: `openclaw-setup`. Also generate configs and run smoke checks for OpenClaw / mcporter.")
 report_app = typer.Typer(help="Generate structured Horosa reports as JSON, DOCX, or PDF artifacts.")
+agent_app = typer.Typer(help="Show agent-safe tool routing and clarification guidance before calculation.")
 app.add_typer(tool_app, name="tool")
 app.add_typer(memory_app, name="memory")
 app.add_typer(export_app, name="export")
@@ -51,6 +53,7 @@ app.add_typer(benchmark_app, name="benchmark")
 app.add_typer(trace_app, name="trace")
 app.add_typer(client_app, name="client")
 app.add_typer(report_app, name="report")
+app.add_typer(agent_app, name="agent")
 
 
 def _service() -> HorosaSkillService:
@@ -723,6 +726,17 @@ def tool_run(
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
     _print_json(result.model_dump(mode="json"))
+
+
+@agent_app.command("guidance")
+def agent_guidance(
+    tool_name: str | None = typer.Option(None, "--tool", help="Tool name or MCP tool name, such as liureng_gods or horosa_cn_liureng_gods."),
+    intent: str | None = typer.Option(None, "--intent", help="Optional user intent text to echo back in the guidance payload."),
+    include_all: bool = typer.Option(False, "--all", help="Return guidance for every registered calculation/export tool."),
+) -> None:
+    """Return machine-readable guidance that tells agents what to ask before tool calls."""
+
+    _print_json(build_agent_guidance(tool_name=tool_name, intent=intent, include_all=include_all))
 
 
 @export_app.command("registry")

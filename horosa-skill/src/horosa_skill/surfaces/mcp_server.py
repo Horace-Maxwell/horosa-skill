@@ -7,11 +7,13 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
 
+from horosa_skill.agent_guidance import build_agent_guidance
 from horosa_skill.config import Settings
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.input_normalization import normalize_request_payload
 from horosa_skill.schemas.common import DispatchEnvelope, ToolEnvelope
 from horosa_skill.schemas.tools import (
+    AgentGuidanceInput,
     DispatchInput,
     MemoryAnswerInput,
     MemoryQueryInput,
@@ -98,6 +100,21 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
     horosa_dispatch.__signature__ = _signature_for_input_model(DispatchInput)
     horosa_dispatch.__annotations__ = {"return": DispatchEnvelope}
     mcp.tool(name="horosa_dispatch")(horosa_dispatch)
+
+    def horosa_agent_guidance(**kwargs: Any) -> dict[str, Any]:
+        payload = _normalize_mcp_request(_merge_mcp_arguments(kwargs), AgentGuidanceInput)
+        return build_agent_guidance(
+            tool_name=payload.get("tool_name"),
+            intent=payload.get("intent"),
+            include_all=payload.get("include_all", False),
+        )
+    horosa_agent_guidance.__doc__ = (
+        "Return machine-readable guidance for agents before calling Horosa tools. "
+        "Use this to decide which user settings must be clarified instead of silently defaulted."
+    )
+    horosa_agent_guidance.__signature__ = _signature_for_input_model(AgentGuidanceInput)
+    horosa_agent_guidance.__annotations__ = {"return": dict[str, Any]}
+    mcp.tool(name="horosa_agent_guidance")(horosa_agent_guidance)
 
     def horosa_memory_record_answer(**kwargs: Any) -> dict[str, Any]:
         return service.record_ai_answer(

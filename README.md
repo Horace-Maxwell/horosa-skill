@@ -31,6 +31,14 @@
 - Agent 使用 Skill：[`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md)
 - Agent 仓库规则：[`AGENTS.md`](./AGENTS.md)
 
+Agent 在调用技法前如果不确定用户设置，应先查：
+
+```bash
+uv run horosa-skill agent guidance --tool liureng_gods --intent "当前时间起大六壬"
+```
+
+同名 MCP 工具是 `horosa_agent_guidance`，用于告诉 AI 哪些字段必须先问用户、哪些星阙默认值可以在用户接受后使用。
+
 ## 项目定位
 
 星阙本身已经有完整的本地算法、星历、导出设置和多技法体系。`Horosa Skill` 做的不是“再造一个简化版占算器”，而是把这些能力整理成一个适合 GitHub 分发、适合 AI 调用、适合长期本地管理的产品化接口层。
@@ -220,7 +228,7 @@
 {
   "ok": true,
   "tool": "qimen",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "input_normalized": {},
   "data": {},
   "summary": [],
