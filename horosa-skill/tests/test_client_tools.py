@@ -148,6 +148,14 @@ def test_extract_json_value_accepts_prefixed_diagnostic_output() -> None:
     assert payload == {"status": "ok", "tools": []}
 
 
+def test_extract_json_value_accepts_trailing_diagnostic_output() -> None:
+    payload = client_tools.extract_json_value(
+        "warming complete\n{\"ok\":true,\"tool\":\"tongshefa\"}\nstdio closed after JSON\n"
+    )
+
+    assert payload == {"ok": True, "tool": "tongshefa"}
+
+
 def test_extract_json_value_rejects_non_json_output() -> None:
     with pytest.raises(ValueError, match="No JSON content was found"):
         client_tools.extract_json_value("offline\nstill warming up\n")

@@ -120,6 +120,42 @@ class QimenGoldenLocalClient(FakeLocalClient):
         return super().call(endpoint, payload)
 
 
+class LiuRengParityLocalClient(FakeLocalClient):
+    def call(self, endpoint: str, payload: dict) -> dict:
+        if endpoint == "/liureng/gods":
+            return {
+                "Result": {
+                    "liureng": {
+                        "nongli": {"dayGanZi": "戊申", "time": "癸巳", "birth": "2028-04-06 09:35:18"},
+                        "fourColumns": {
+                            "year": {"ganzi": "戊申"},
+                            "month": {"ganzi": "丙辰"},
+                            "day": {"ganzi": "戊申"},
+                            "time": {"ganzi": "癸巳"},
+                        },
+                        "xun": {"旬空": "寅卯", "旬首": "甲辰"},
+                        "season": {},
+                        "gods": {},
+                        "godsGan": {},
+                        "godsMonth": {},
+                        "godsZi": {},
+                        "godsYear": {"taisui1": {}},
+                    }
+                }
+            }
+        if endpoint in {"/chart", "/"}:
+            return {
+                "Result": {
+                    "chart": {
+                        "isDiurnal": True,
+                        "nongli": {"dayGanZi": "戊申", "time": "癸巳"},
+                        "objects": [{"id": "Sun", "sign": "Aries"}],
+                    }
+                }
+            }
+        return super().call(endpoint, payload)
+
+
 def pick_outer_palaces(map_obj: dict) -> dict:
     return {key: map_obj[key] for key in ["1", "2", "3", "4", "6", "7", "8", "9"]}
 
@@ -163,6 +199,10 @@ def test_qimen_local_tool_runs_headless_engine(tmp_path) -> None:
     assert result.ok is True
     assert result.data["pan"]["juText"]
     assert result.data["export_snapshot"] is not None
+    snapshot_text = result.data["snapshot_text"]
+    assert "undefined" not in snapshot_text
+    assert "奇门遁甲方盘（时家奇门）" in snapshot_text
+    assert "命式：男" in snapshot_text
 
 
 def test_qimen_tianpan_matches_legacy_horosa_golden_case(tmp_path) -> None:
@@ -194,6 +234,9 @@ def test_qimen_tianpan_matches_legacy_horosa_golden_case(tmp_path) -> None:
     assert pan["zhiFu"] == "天禽"
     assert pan["zhiShi"] == "死门"
     assert "天盘：庚 丙 丁 戊 癸 己 壬 辛 乙" in result.data["snapshot_text"]
+    assert "undefined" not in result.data["snapshot_text"]
+    assert "奇门遁甲方盘（时家奇门）" in result.data["snapshot_text"]
+    assert "命式：男" in result.data["snapshot_text"]
 
 
 def test_sanshiunited_uses_fixed_qimen_tianpan_golden_case(tmp_path) -> None:
@@ -263,6 +306,30 @@ def test_jinkou_local_tool_runs_headless_engine(tmp_path) -> None:
     assert result.ok is True
     assert result.data["jinkou"]["guiName"] == "青龙"
     assert result.data["jinkou"]["wangElem"]
+
+
+def test_liureng_defaults_to_xingque_astrology_guiren_system(tmp_path) -> None:
+    service = make_service(tmp_path, client=LiuRengParityLocalClient())
+
+    result = service.run_tool(
+        "liureng_gods",
+        {
+            "date": "2028-04-06",
+            "time": "09:33:00",
+            "zone": "+08:00",
+            "lat": "31n13",
+            "lon": "121e28",
+        },
+        save_result=False,
+    )
+
+    assert result.ok is True
+    layout = result.data["headless_liureng"]["layout"]
+    assert layout["guirengType"] == 2
+    assert layout["guirengLabel"] == "星占法贵人"
+    assert layout["guizi"] == "午"
+    assert "贵人体系：星占法贵人" in result.data["snapshot_text"]
+    assert "MongoDB" not in result.data["snapshot_text"]
 
 
 def test_tongshefa_local_tool_runs_headless_engine(tmp_path) -> None:

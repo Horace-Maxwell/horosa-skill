@@ -189,5 +189,10 @@ def extract_json_value(raw: str) -> Any:
         remainder = text[index + end :].strip()
         if not remainder:
             return value
+        if isinstance(value, (dict, list)):
+            # Some stdio clients prepend or append human diagnostics around the
+            # JSON body. The self-check path needs the first complete JSON
+            # value, not a perfect stdout stream.
+            return value
 
     raise ValueError("No JSON content was found.")

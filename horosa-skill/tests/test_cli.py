@@ -277,6 +277,8 @@ def test_doctor_adds_user_facing_summary(monkeypatch, tmp_path: Path) -> None:
     assert report["status"] == "needs_attention"
     assert "not running yet" in report["user_summary"]
     assert "openclaw-setup" in report["next_action"]
+    assert report["environment"]["runtime_root"] == str(settings.runtime_root)
+    assert "current process environment" in report["environment"]["note"]
 
 
 def test_openclaw_check_reports_missing_config_as_user_facing_error(monkeypatch, tmp_path: Path) -> None:

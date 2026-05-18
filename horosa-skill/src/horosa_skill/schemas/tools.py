@@ -120,7 +120,7 @@ class LiuRengGodsInput(FlexibleModel):
     after23NewDay: bool | None = False
     yue: str | None = None
     isDiurnal: bool | None = None
-    guirengType: int | None = 0
+    guirengType: int | None = 2
     ad: int | None = 1
 
 
