@@ -4012,6 +4012,15 @@ class HorosaSkillService:
                 return {}
 
             base_birth = birth_payload()
+            confirmation = {
+                key: value
+                for key, value in {
+                    "agent_confirmed_settings": request.agent_confirmed_settings,
+                    "defaults_accepted": request.defaults_accepted,
+                    "clarification_notes": request.clarification_notes,
+                }.items()
+                if value is not None
+            }
             for tool_name in selected_tools:
                 if tool_name == "relative":
                     payload_for_tool = {
@@ -4042,6 +4051,7 @@ class HorosaSkillService:
                 else:
                     payload_for_tool = dict(base_birth)
 
+                payload_for_tool.update(confirmation)
                 normalized_inputs[tool_name] = payload_for_tool
                 results[tool_name] = self.run_tool(
                     tool_name,

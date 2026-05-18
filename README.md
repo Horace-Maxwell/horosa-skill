@@ -39,6 +39,8 @@ uv run horosa-skill agent guidance --tool liureng_gods --intent "当前时间起
 
 同名 MCP 工具是 `horosa_agent_guidance`，用于告诉 AI 哪些字段必须先问用户、哪些星阙默认值可以在用户接受后使用。
 
+计算工具和 `horosa_dispatch` 现在有硬性门禁：Agent 没有先确认设置时会收到 `agent_guidance.required`，需要在用户确认后传入 `agent_confirmed_settings: true`，或在用户明确接受默认值后传入 `defaults_accepted: true`。
+
 ## 项目定位
 
 星阙本身已经有完整的本地算法、星历、导出设置和多技法体系。`Horosa Skill` 做的不是“再造一个简化版占算器”，而是把这些能力整理成一个适合 GitHub 分发、适合 AI 调用、适合长期本地管理的产品化接口层。
@@ -228,7 +230,7 @@ uv run horosa-skill agent guidance --tool liureng_gods --intent "当前时间起
 {
   "ok": true,
   "tool": "qimen",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "input_normalized": {},
   "data": {},
   "summary": [],

@@ -30,6 +30,13 @@ Hard rule:
 - If gender, house system, zodiacal system, 起局方式, 贵人体系, 六爻 lines, 地分, target year, or report format matters and is missing, ask before calling.
 - Only use defaults without asking when the user says “默认 / 按星阙 / 快速起盘 / 你来决定”.
 
+Runtime gate:
+
+- Calculation tools and `horosa_dispatch` will reject unconfirmed calls with `agent_guidance.required`.
+- After asking the user, pass `agent_confirmed_settings: true`.
+- If the user explicitly accepts defaults, pass `defaults_accepted: true`.
+- Add `clarification_notes` summarizing what was confirmed.
+
 This is especially important for:
 
 - 大六壬: use `horosa_cn_liureng_gods` / `liureng_gods`.
