@@ -18,6 +18,19 @@ uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace
 
 不要只看默认 `uv run horosa-skill doctor`，因为默认 doctor 检查的是当前 shell 的 `HOME` / `HOROSA_RUNTIME_ROOT`，不一定等于 OpenClaw 配置里的隔离 HOME。
 
+## Agent 调用纪律
+
+OpenClaw 里如果同时有 `Exec` / shell 工具和 Horosa MCP 工具，必须优先调用 Horosa MCP。不要让 Agent 用 Python、Shell、Web Search 或手写干支公式来“自己算”星阙技法。
+
+典型映射：
+
+- “用当前时间起一个大六壬盘” -> `horosa_cn_liureng_gods`
+- “起奇门盘” -> `horosa_cn_qimen`
+- “三式合一” -> `horosa_cn_sanshiunited`
+- “生成报告 / PDF / DOCX” -> 先调用技法工具，再调用 `horosa_report_template` / `horosa_report_render`
+
+如果 Agent 自己写脚本算大六壬，结果会绕过 Horosa 的真太阳时、星阙默认贵人体系、runtime parity、memory 和 report，因此不能作为正式结果。大六壬默认贵人体系为 `guirengType=2` / `星占法贵人`；只有用户明确要求时才切换到 `六壬法贵人` 或 `遁甲法贵人`。
+
 ### 1. 安装仓库依赖与离线 runtime
 
 ```bash
@@ -58,7 +71,7 @@ uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace --fu
 ## 常见提示与误报
 
 - 如果默认 `uv run horosa-skill doctor` 显示 `installed=false`，但 `openclaw-check` 是 `ok=true`，通常是因为 OpenClaw 使用了隔离 HOME。以 `openclaw-check` 的结果为准，或用同一组 `HOROSA_RUNTIME_ROOT` / `HOROSA_SKILL_DATA_DIR` 运行 doctor。
-- 如果 full check 偶发出现 `No JSON content was found`，请升级到 `0.5.2` 或更新 main；新版本会从 mcporter/stdio 混合输出里提取第一个完整 JSON，避免诊断文本污染结果。
+- 如果 full check 偶发出现 `No JSON content was found`，请升级到 `0.5.3` 或更新 main；新版本会从 mcporter/stdio 混合输出里提取第一个完整 JSON，避免诊断文本污染结果。
 - 如果 OpenClaw gateway 报 `PATH missing` 或其他插件 manifest warning，只要 `horosa-skill client openclaw-check` 是 `ok=true`，这类 warning 通常不是 Horosa MCP 的阻塞项。
 
 ### 3. 手动粘贴配置时，使用下面这段 MCP 配置

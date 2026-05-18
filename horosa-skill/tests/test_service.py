@@ -17,6 +17,15 @@ from horosa_skill.service import TOOL_EXPORT_TECHNIQUE_MAP, HorosaSkillService, 
 from horosa_skill.testing_payloads import build_sample_payloads
 
 
+def test_liureng_tool_description_prevents_manual_agent_calculation() -> None:
+    description = TOOL_DEFINITIONS["liureng_gods"].description
+
+    assert "当前" in description or "current-time" in description
+    assert "do not hand-calculate" in description
+    assert "shell/Python" in description
+    assert "Xingque-compatible" in description
+
+
 class FakeClient(HorosaApiClient):
     def __init__(self) -> None:
         super().__init__("http://fake")
