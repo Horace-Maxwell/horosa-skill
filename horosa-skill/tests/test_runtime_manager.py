@@ -173,6 +173,8 @@ def test_doctor_reports_installed_runtime(tmp_path: Path) -> None:
     report = manager.doctor()
 
     assert report["installed"] is True
+    assert report["manifest_version"] == "1.2.3"
+    assert report["runtime_payload_version"] == "1.2.3"
     assert report["manifest"]["version"] == "1.2.3"
     assert any(item["label"] == "java_runtime" for item in report["files"])
     assert any(item["label"] == "python_runtime" for item in report["files"])

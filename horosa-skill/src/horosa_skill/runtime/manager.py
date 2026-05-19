@@ -475,12 +475,16 @@ class HorosaRuntimeManager:
                 issues.append("services:not_running")
 
             trace["issues"] = issues
+            manifest_version = manifest.get("version") if manifest else None
+            runtime_payload_version = manifest.get("runtime_payload_version") if manifest else None
             return {
                 "ok": not issues,
                 "installed": installed,
                 "platform": self.settings.runtime_platform or _platform_key(),
                 "runtime_root": str(self.runtime_root),
                 "current_dir": str(self.current_dir),
+                "manifest_version": manifest_version,
+                "runtime_payload_version": runtime_payload_version,
                 "manifest": manifest,
                 "manifest_issue": manifest_issue,
                 "runtime_state": runtime_state,

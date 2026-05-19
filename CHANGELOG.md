@@ -7,6 +7,23 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.5.10] - 2026-05-18
+
+### Fixed
+
+- Aligned the package `__version__` and headless JS engine metadata with the
+  public release version so tool envelopes no longer report an older version.
+- Added top-level `manifest_version` and `runtime_payload_version` fields to
+  `doctor` output so external checkers do not misread a healthy manifest as
+  `null`.
+- Added timeout protection to the OpenClaw full-check mcporter call path.
+- Clarified full-check counting with `business_tool_count` versus
+  `listed_tool_count` so agents do not confuse 39 business tools with all
+  OpenClaw-visible helper tools.
+- Added native-MCP attachment as a global agent guidance rule: when
+  `clientToolCount: 0`, agents must ask the user/admin to fix OpenClaw setup
+  instead of falling back to shell calculations.
+
 ## [0.5.9] - 2026-05-18
 
 ### Fixed

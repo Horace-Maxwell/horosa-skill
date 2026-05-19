@@ -55,6 +55,7 @@ def _run_mcporter(
         encoding="utf-8",
         errors="replace",
         check=False,
+        timeout=timeout_ms / 1000,
     )
     if result.returncode != 0:
         try:
@@ -198,6 +199,9 @@ def main() -> int:
         "workspace": str(workspace),
         "server": "horosa",
         "tool_count": 0,
+        "business_tool_count": 0,
+        "listed_tool_count": None,
+        "tool_count_note": "business_tool_count/tool_count counts registered Horosa business tools; listed_tool_count counts all OpenClaw-visible MCP tools including memory/report/guidance helpers.",
         "passed_tools": [],
         "failed_tools": {},
         "tools": {},
@@ -229,6 +233,7 @@ def main() -> int:
 
     for tool_name in TOOL_DEFINITIONS:
         report["tool_count"] += 1
+        report["business_tool_count"] += 1
         try:
             report["tools"][tool_name] = _check_one_tool(workspace, config_path, tool_name, payloads[tool_name])
             report["passed_tools"].append(tool_name)

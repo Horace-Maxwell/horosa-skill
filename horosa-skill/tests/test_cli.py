@@ -180,20 +180,26 @@ def test_openclaw_setup_bootstraps_workspace_and_runs_smoke(monkeypatch, tmp_pat
     smoke_calls: list[dict[str, object]] = []
 
     class ManagerStub:
-        def install(self) -> dict[str, object]:
+        def install(self, manifest_url: str | None = None) -> dict[str, object]:
+            assert manifest_url == "file:///tmp/runtime-manifest.json"
             assert os.environ["HOME"] == str(expected_home)
             assert os.environ["HOROSA_RUNTIME_ROOT"] == str((expected_home / ".horosa" / "runtime").resolve())
             assert os.environ["HOROSA_SKILL_DATA_DIR"] == str((expected_home / ".horosa-skill").resolve())
             assert os.environ["HOROSA_SERVER_ROOT"].startswith("http://127.0.0.1:")
             assert os.environ["HOROSA_CHART_SERVER_ROOT"].startswith("http://127.0.0.1:")
             assert int(os.environ["HOROSA_LOCAL_CHART_PORT"]) == int(os.environ["HOROSA_LOCAL_BACKEND_PORT"]) + 1
-            return {"ok": True, "installed": True, "changed": True}
+            return {"ok": True, "installed": True, "changed": True, "manifest": {"version": "0.5.10", "runtime_payload_version": "0.5.10"}}
 
         def start_local_services(self) -> dict[str, object]:
             return {"ok": True, "already_running": False}
 
         def doctor(self) -> dict[str, object]:
-            return {"issues": [], "endpoints": [{"label": "java_backend", "reachable": True}]}
+            return {
+                "issues": [],
+                "manifest_version": "0.5.10",
+                "runtime_payload_version": "0.5.10",
+                "endpoints": [{"label": "java_backend", "reachable": True}],
+            }
 
     def fake_smoke_check(*, workspace_root: Path, config_path: Path, output_path: Path, include_list: bool = True) -> dict[str, object]:
         smoke_calls.append(
@@ -220,6 +226,7 @@ def test_openclaw_setup_bootstraps_workspace_and_runs_smoke(monkeypatch, tmp_pat
         isolate_home=None,
         config=None,
         skip_smoke=False,
+        manifest_url="file:///tmp/runtime-manifest.json",
     )
 
     config_path = (workspace / "config" / "mcporter.json").resolve()
@@ -244,6 +251,9 @@ def test_openclaw_setup_bootstraps_workspace_and_runs_smoke(monkeypatch, tmp_pat
     assert captured["report"]["config_written_to"] == str(config_path)
     assert captured["report"]["local_home"] == str(expected_home)
     assert captured["report"]["ready_for_openclaw"] is True
+    assert captured["report"]["install"]["version"] == "0.5.10"
+    assert captured["report"]["install"]["runtime_payload_version"] == "0.5.10"
+    assert captured["report"]["doctor"]["manifest_version"] == "0.5.10"
     assert captured["report"]["smoke"]["ok"] is True
     assert os.environ.get("HOME") == original_home
 
@@ -262,6 +272,8 @@ def test_doctor_adds_user_facing_summary(monkeypatch, tmp_path: Path) -> None:
             return {
                 "ok": True,
                 "installed": True,
+                "manifest_version": "0.5.10",
+                "runtime_payload_version": "0.5.10",
                 "issues": ["services:not_running"],
                 "endpoints": [{"label": "java_backend", "reachable": False}],
             }
@@ -275,6 +287,8 @@ def test_doctor_adds_user_facing_summary(monkeypatch, tmp_path: Path) -> None:
     report = captured["report"]
     assert report["ready_for_openclaw"] is False
     assert report["status"] == "needs_attention"
+    assert report["manifest_version"] == "0.5.10"
+    assert report["runtime_payload_version"] == "0.5.10"
     assert "not running yet" in report["user_summary"]
     assert "openclaw-setup" in report["next_action"]
     assert report["environment"]["runtime_root"] == str(settings.runtime_root)
