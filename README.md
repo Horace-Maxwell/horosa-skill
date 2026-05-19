@@ -31,6 +31,41 @@
 - Agent 使用 Skill：[`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md)
 - Agent 仓库规则：[`AGENTS.md`](./AGENTS.md)
 
+## 最新稳定基线
+
+当前公开版本：`Horosa Skill 0.5.6`
+
+这一版的核心变化不是多加一个工具，而是把“AI 不能乱补参数”做成硬性协议。只要技法会受时间、地点、时区、性别、事项、宫制、历法、起局方式等设置影响，agent 在用户没有确认前就不能继续调用。工具会返回结构化阻断结果，并给出可直接转发给用户的追问文本。
+
+本机完整实测结果：
+
+| 检查项 | 结果 |
+| --- | --- |
+| 可调用工具 | `39 / 39` |
+| 未确认参数时强制追问 | `32` 个技法工具触发 `must_ask_user=true` |
+| 安全豁免工具 | `7` 个 registry / knowledge / parser 类工具直接可读 |
+| 全工具调用 | `39 / 39 ok=true` |
+| 本地 memory 写入 | `39 / 39` |
+| memory query / show | `39 / 39` |
+| report JSON artifact | `39 / 39` |
+| 星阙式导出结构 | 业务技法均带 `export_snapshot` / `export_format` |
+| GitHub CI | Linux/macOS 单测 + Windows OpenClaw smoke 通过 |
+| Release runtime | macOS / Windows `v0.5.6` assets 已上传并校验 |
+
+关于 `solarreturn`、`lunarreturn`、`solararc`、`givenyear`、`profection`、`pd`、`pdchart`、`zr` 这批推运工具：当前版本已经复核为可用，不应再被 agent 标记为“Java `/predict/*` 不可用”。如果某个客户端仍然这样回答，优先检查它是否在使用旧 runtime、是否绕过 MCP 直接手算、是否没有运行 `doctor` / `openclaw-check --full`。
+
+完整本地输入输出审计产物示例：
+
+- `HOROSA_IO_AUDIT_*/all_tool_inputs_outputs_full.json`
+- `HOROSA_IO_AUDIT_*/all_tool_inputs_outputs.jsonl`
+- `HOROSA_IO_AUDIT_*/all_tool_inputs_outputs_summary.md`
+
+这些文件不会自动提交进 Git；它们用于你在本机复核每个工具的输入、输出、memory、report 和 preflight 行为。
+
+## Agent 硬性调用规则
+
+这是接入 Cursor、OpenClaw、Claude、Codex、Open WebUI 时最重要的规则。
+
 Agent 在调用技法前如果不确定用户设置，应先查：
 
 ```bash
@@ -40,6 +75,53 @@ uv run horosa-skill agent guidance --tool liureng_gods --intent "当前时间起
 同名 MCP 工具是 `horosa_agent_guidance`，用于告诉 AI 哪些字段必须先问用户、哪些星阙默认值可以在用户接受后使用。
 
 计算工具和 `horosa_dispatch` 现在有硬性门禁：Agent 没有先确认设置时会收到 `agent_guidance.required`，需要在用户确认后传入 `agent_confirmed_settings: true`，或在用户明确接受默认值后传入 `defaults_accepted: true`。如果返回里有 `details.agent_recovery.prompt_to_user`，AI 客户端必须停止调用并把这段问题发给用户确认，不能绕过或自行补参。
+
+标准流程：
+
+1. 用户说出需求，例如“帮我用当前时间起一个大六壬盘”。
+2. Agent 先判断参数是否足够；不够就调用 `horosa_agent_guidance` 或直接询问用户。
+3. 用户明确回答时间、地点、事项、默认值是否接受。
+4. Agent 再调用真实技法工具，并传入 `agent_confirmed_settings: true` 与 `clarification_notes`。
+5. 工具返回结果后，Agent 用 `export_snapshot` / `export_format` 做解释，而不是自己手算。
+
+错误示例：
+
+```json
+{
+  "date": "2026-05-18",
+  "time": "13:14:00"
+}
+```
+
+这会被拦截，因为缺少用户确认、地点、时区、事项等关键上下文。
+
+正确示例：
+
+```json
+{
+  "agent_confirmed_settings": true,
+  "clarification_notes": "用户确认：用 2026-05-18 13:14:00，America/Los_Angeles，旧金山，事项为当前工作决策。",
+  "date": "2026-05-18",
+  "time": "13:14:00",
+  "zone": "-07:00",
+  "lat": "37n46",
+  "lon": "122w25",
+  "gpsLat": 37.7667,
+  "gpsLon": -122.4167,
+  "after23NewDay": false
+}
+```
+
+如果用户说“按星阙默认继续”，可以改用：
+
+```json
+{
+  "defaults_accepted": true,
+  "clarification_notes": "用户明确接受星阙默认设置。"
+}
+```
+
+但 agent 不能替用户擅自写 `defaults_accepted: true`。
 
 ## 项目定位
 
@@ -330,8 +412,10 @@ uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace
 
 ```bash
 echo '{
+  "agent_confirmed_settings": true,
+  "clarification_notes": "用户确认：使用示例出生资料，地点上海，时区 +08:00，按星阙默认技法参数。",
   "query":"请综合奇门、六壬和星盘分析当前状态",
-  "birth":{"date":"1990-01-01","time":"12:00","zone":"8","lat":"31n14","lon":"121e28"},
+  "birth":{"date":"1990-01-01","time":"12:00","zone":"+08:00","lat":"31n14","lon":"121e28"},
   "save_result": true
 }' | uv run horosa-skill ask --stdin
 ```
@@ -374,7 +458,17 @@ echo '{
 ### 直接调用某个工具
 
 ```bash
-echo '{"date":"1990-01-01","time":"12:00","zone":"8","lat":"31n14","lon":"121e28"}' \
+echo '{
+  "agent_confirmed_settings": true,
+  "clarification_notes": "用户确认：示例星盘使用上海、+08:00、整宫/回归黄道等星阙默认设置。",
+  "date":"1990-01-01",
+  "time":"12:00",
+  "zone":"+08:00",
+  "lat":"31n14",
+  "lon":"121e28",
+  "gpsLat":31.2333,
+  "gpsLon":121.4667
+}' \
   | uv run horosa-skill tool run chart --stdin
 ```
 
@@ -398,7 +492,14 @@ echo '{"domain":"qimen","category":"door","key":"休门"}' \
 ### 直接运行 Phase 2 本地技法
 
 ```bash
-echo '{"taiyin":"巽","taiyang":"坤","shaoyang":"震","shaoyin":"震"}' \
+echo '{
+  "agent_confirmed_settings": true,
+  "clarification_notes": "用户确认：统摄法四象参数由用户指定。",
+  "taiyin":"巽",
+  "taiyang":"坤",
+  "shaoyang":"震",
+  "shaoyin":"震"
+}' \
   | uv run horosa-skill tool run tongshefa --stdin
 ```
 
@@ -406,8 +507,10 @@ echo '{"taiyin":"巽","taiyang":"坤","shaoyang":"震","shaoyin":"震"}' \
 
 ```bash
 echo '{
+  "agent_confirmed_settings": true,
+  "clarification_notes": "用户确认：使用示例出生资料，按星阙默认调度设置综合奇门、六壬和星盘。",
   "query":"请综合奇门、六壬和星盘做当前状态分析",
-  "birth":{"date":"1990-01-01","time":"12:00","zone":"8","lat":"31n14","lon":"121e28"},
+  "birth":{"date":"1990-01-01","time":"12:00","zone":"+08:00","lat":"31n14","lon":"121e28"},
   "save_result": true
 }' | uv run horosa-skill dispatch --stdin
 ```
@@ -464,15 +567,18 @@ uv run horosa-skill client openclaw-config --format mcporter
 已完成：
 
 - GitHub-first 离线 runtime 安装链
-- macOS / Windows runtime release 资产
+- macOS / Windows `v0.5.6` runtime release 资产
 - 本地 MCP server 与 JSON-first CLI
 - 完整星阙 AI 导出 registry 与 parser
 - 39 个可调用工具的结构化稳定输出
+- 32 个需确认设置的技法工具强制 agent 追问用户
+- 7 个安全读取类工具明确豁免 preflight
 - 星盘 / 六壬 / 奇门悬浮知识库的本地 bundle 化与按需读取
 - `dispatch` 汇总层 export contract
 - SQLite + JSON artifact + run manifest 数据管理
 - AI answer 回写与检索链路
-- 从 GitHub fresh clone 后重新安装 runtime 的实测闭环
+- 从 GitHub fresh clone / GitHub Release 重新安装 runtime 的实测闭环
+- GitHub CI 中的 Windows OpenClaw smoke 验证
 
 如果你需要的是一个“把星阙变成 AI 可调用基础设施”的仓库，而不是一堆分散脚本，这个 repo 现在已经是按这个方向搭好的。
 
@@ -539,6 +645,63 @@ uv run python scripts/run_full_self_check.py --rounds 1
 - 调度层
 - 记录层
 - 观测层
+
+## 输出是否和星阙一致
+
+当前 README 里的“星阙一致”指两层含义：
+
+1. **导出结构一致**：业务技法输出会生成星阙式 `export_snapshot.export_text`，再由 `snapshot_parser` 解析成 `export_format`。完整自检会逐项确认 selected sections 没有缺失、没有未知 section。
+2. **算法路径一致**：Skill 不允许 agent 自己用 shell、Python 小脚本或联网搜索手算玄学盘。大六壬、奇门、三式合一、星盘等都必须走 Horosa Skill 本地 runtime / headless engine。
+
+实测信号：
+
+```text
+tool_count: 39
+failed_tools: []
+missing_export_contract_tools: []
+ok: true
+```
+
+需要注意：如果要证明某个具体输入和当前星阙桌面 UI 的每一个字段逐值一致，应该把星阙 app 对同一输入导出的 golden snapshot 放进 fixtures，再做逐字段 diff。当前仓库已经保证 Skill 侧所有业务技法都产出星阙式 AI 导出结构，并且可以被同一 parser 稳定回读。
+
+## 实测与审计
+
+本仓库推荐用三类验证来判断它是否可靠，而不是只看单次输出：
+
+```bash
+cd horosa-skill
+uv run pytest -q
+uv run python scripts/run_full_self_check.py --rounds 1
+uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace --full
+```
+
+完整自检覆盖：
+
+- 每个工具是否能调用
+- 每个工具是否能输出统一 envelope
+- 每个业务技法是否带 `export_snapshot` / `export_format`
+- 每个导出正文是否能重新解析
+- 每次 run 是否写入 memory
+- `memory show/query` 是否能找回
+- report JSON / DOCX / PDF 是否能生成并登记 artifact
+- `horosa_dispatch` 汇总层是否保留子工具 export contract
+- OpenClaw / mcporter 是否能看到 MCP 工具并完成 smoke/full check
+
+如果你需要把所有输入输出都保存成审计文件，可以用项目现有 testing payloads 自行跑一轮记录。最近一次本机审计结果为：
+
+```json
+{
+  "version": "0.5.6",
+  "tool_count": 39,
+  "records_count": 39,
+  "errors_count": 0,
+  "preflight_blocked_count": 32,
+  "preflight_exempt_ok_count": 7,
+  "all_outputs_ok": true,
+  "all_memory_saved": true,
+  "all_reports_generated": true
+}
+```
 
 ## 这套仓库当前最适合谁
 
