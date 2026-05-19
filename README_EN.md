@@ -62,8 +62,11 @@ Full local audit artifacts are generated outside Git as:
 - `HOROSA_IO_AUDIT_*/all_tool_inputs_outputs_full.json`
 - `HOROSA_IO_AUDIT_*/all_tool_inputs_outputs.jsonl`
 - `HOROSA_IO_AUDIT_*/all_tool_inputs_outputs_summary.md`
+- `HOROSA_IO_AUDIT_*/predictive_tools_full_export_sections.md`
 
 They record tool input, tool output, preflight behavior, memory writes, report generation, and retrieval checks.
+
+For predictive tools, do not judge the output from a short prefix preview. `solarreturn`, `lunarreturn`, `solararc`, `givenyear`, `profection`, `pd`, `pdchart`, and `zr` normally write natal-chart sections first, followed by the return/progression/transit chart or primary-direction table. A 1200-character preview can stop before the predictive chart appears. Inspect the full artifact through `export_format.sections`, or generate `predictive_tools_full_export_sections.md`. See [`docs/EXPORT_AUDIT_GUIDE.md`](./docs/EXPORT_AUDIT_GUIDE.md).
 
 ## Hard Agent Rules
 

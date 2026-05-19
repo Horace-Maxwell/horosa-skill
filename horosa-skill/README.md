@@ -95,7 +95,7 @@ This subproject is distributed under `GNU AGPL-3.0-only`. See [LICENSE](LICENSE)
 - `pdchart`：本命资料 + `datetime` + `dirZone` + 主限方法字段，输出主限法盘星体表格和相位。
 - `zr` / `firdaria` / `decennials`：本命资料 + 用户是否接受星阙默认时间轴设置，输出对应时间轴。
 
-完整说明见根目录 [`docs/INPUT_CONTRACTS.md`](../docs/INPUT_CONTRACTS.md)。Agent 应先用 `uv run horosa-skill agent guidance --tool <tool>` 或 MCP `horosa_agent_guidance` 检查必问项，再调用真实工具。
+完整说明见根目录 [`docs/INPUT_CONTRACTS.md`](../docs/INPUT_CONTRACTS.md)。审计推运类输出时不要只看短预览，因为正文通常先写本命盘，返照盘、推运盘、流年盘或主限表格在后续 section；按 `export_format.sections` 或 [`docs/EXPORT_AUDIT_GUIDE.md`](../docs/EXPORT_AUDIT_GUIDE.md) 检查完整内容。Agent 应先用 `uv run horosa-skill agent guidance --tool <tool>` 或 MCP `horosa_agent_guidance` 检查必问项，再调用真实工具。
 
 ### 中文术数与扩展技法
 
