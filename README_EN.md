@@ -31,6 +31,41 @@
 - Agent Skill: [`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md)
 - Agent Repo Rules: [`AGENTS.md`](./AGENTS.md)
 
+## Current Stable Baseline
+
+Current public version: `Horosa Skill 0.5.6`
+
+The most important change in this line is not just another tool. It makes “do not invent missing settings” a hard protocol. If a technique depends on time, location, timezone, gender, question context, house system, calendar options, or method-specific settings, the agent must ask first. Unconfirmed calls return a structured blocking response with a user-facing recovery prompt.
+
+Latest local verification:
+
+| Check | Result |
+| --- | --- |
+| Callable tools | `39 / 39` |
+| Forced clarification before unsafe calls | `32` tools return `must_ask_user=true` |
+| Safe exempt tools | `7` registry / knowledge / parser tools |
+| Tool execution | `39 / 39 ok=true` |
+| Local memory write | `39 / 39` |
+| memory query / show | `39 / 39` |
+| report JSON artifact | `39 / 39` |
+| Xingque-style export structure | Business methods emit `export_snapshot` / `export_format` |
+| GitHub CI | Linux/macOS tests plus Windows OpenClaw smoke pass |
+| Release runtime | macOS / Windows `v0.5.6` assets uploaded and verified |
+
+For the predictive tools `solarreturn`, `lunarreturn`, `solararc`, `givenyear`, `profection`, `pd`, `pdchart`, and `zr`: the current version verifies them as usable. Agents should not label Java `/predict/*` tools as unavailable. If a client still says that, first check whether it is using an old runtime, bypassing MCP with hand-written calculations, or skipping `doctor` / `openclaw-check --full`.
+
+Full local audit artifacts are generated outside Git as:
+
+- `HOROSA_IO_AUDIT_*/all_tool_inputs_outputs_full.json`
+- `HOROSA_IO_AUDIT_*/all_tool_inputs_outputs.jsonl`
+- `HOROSA_IO_AUDIT_*/all_tool_inputs_outputs_summary.md`
+
+They record tool input, tool output, preflight behavior, memory writes, report generation, and retrieval checks.
+
+## Hard Agent Rules
+
+This is the most important integration rule for Cursor, OpenClaw, Claude, Codex, Open WebUI, and similar clients.
+
 Before an agent calls a technique with unclear settings, it should ask:
 
 ```bash
@@ -40,6 +75,51 @@ uv run horosa-skill agent guidance --tool liureng_gods --intent "current-time Da
 The matching MCP tool is `horosa_agent_guidance`; it tells AI clients which fields must be clarified and which Xingque defaults are safe only after user acceptance.
 
 Calculation tools and `horosa_dispatch` now enforce this gate: unconfirmed calls return `agent_guidance.required`. After clarification, pass `agent_confirmed_settings: true`; when the user explicitly accepts defaults, pass `defaults_accepted: true`. If a response contains `details.agent_recovery.prompt_to_user`, the AI client must stop tool use and ask the user that question instead of retrying or inventing settings.
+
+Recommended flow:
+
+1. The user asks for a reading, for example “cast a current-time Da Liu Ren pan.”
+2. The agent checks whether time, place, question, and method settings are complete.
+3. If anything is unclear, the agent asks the user or calls `horosa_agent_guidance`.
+4. Only after the user confirms, the agent calls the real tool with `agent_confirmed_settings: true` and `clarification_notes`.
+5. The agent interprets `export_snapshot` / `export_format`; it must not hand-calculate the occult method in shell, Python, or web snippets.
+
+Bad example:
+
+```json
+{
+  "date": "2026-05-18",
+  "time": "13:14:00"
+}
+```
+
+Correct example:
+
+```json
+{
+  "agent_confirmed_settings": true,
+  "clarification_notes": "User confirmed: 2026-05-18 13:14:00, America/Los_Angeles, San Francisco, question is current work decision.",
+  "date": "2026-05-18",
+  "time": "13:14:00",
+  "zone": "-07:00",
+  "lat": "37n46",
+  "lon": "122w25",
+  "gpsLat": 37.7667,
+  "gpsLon": -122.4167,
+  "after23NewDay": false
+}
+```
+
+If the user explicitly says “use Xingque defaults,” an agent may pass:
+
+```json
+{
+  "defaults_accepted": true,
+  "clarification_notes": "User explicitly accepted Xingque defaults."
+}
+```
+
+The agent must never set `defaults_accepted: true` on the user’s behalf.
 
 ## What This Repository Is
 
@@ -249,6 +329,63 @@ That means:
 - `horosa_dispatch` also exposes export contracts for every child result.
 - Stored JSON artifacts preserve the same cleaned structure.
 
+## How Close Is This To Xingque Output?
+
+In this repository, “Xingque-compatible” means two concrete things:
+
+1. **Export-structure parity**: business methods generate Xingque-style `export_snapshot.export_text`, then parse it through the same `snapshot_parser` path into `export_format`. Full self-check confirms selected sections are not missing and no unknown sections are introduced.
+2. **Algorithm-path parity**: agents are not allowed to hand-calculate Qimen, LiuReng, charts, or any other method with shell snippets, ad-hoc Python, or web searches. Calls must go through Horosa Skill’s local runtime / headless engine.
+
+Current verification signal:
+
+```text
+tool_count: 39
+failed_tools: []
+missing_export_contract_tools: []
+ok: true
+```
+
+If you need proof that one exact input matches the current Xingque desktop UI field by field, export a golden snapshot from the Xingque app for that same input and compare it as a fixture. The Skill side already guarantees that business-method outputs are Xingque-style AI export documents that can be parsed back through the same contract layer.
+
+## Verification And Audit
+
+Use these checks to evaluate the project instead of relying on one lucky manual call:
+
+```bash
+cd horosa-skill
+uv run pytest -q
+uv run python scripts/run_full_self_check.py --rounds 1
+uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace --full
+```
+
+The full check covers:
+
+- every callable tool
+- the unified envelope
+- `export_snapshot` / `export_format`
+- export-text re-parsing
+- memory writes
+- `memory show/query`
+- report JSON / DOCX / PDF artifact generation
+- `horosa_dispatch` child export contracts
+- OpenClaw / mcporter visibility and smoke/full checks
+
+Latest local all-tool audit:
+
+```json
+{
+  "version": "0.5.6",
+  "tool_count": 39,
+  "records_count": 39,
+  "errors_count": 0,
+  "preflight_blocked_count": 32,
+  "preflight_exempt_ok_count": 7,
+  "all_outputs_ok": true,
+  "all_memory_saved": true,
+  "all_reports_generated": true
+}
+```
+
 ## Local Data Management
 
 By default, local records are stored under:
@@ -324,8 +461,10 @@ uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace
 
 ```bash
 echo '{
+  "agent_confirmed_settings": true,
+  "clarification_notes": "User confirmed the sample birth data, Shanghai, +08:00, and Xingque default method settings.",
   "query":"Please combine qimen, liureng, and chart methods to analyze the current state",
-  "birth":{"date":"1990-01-01","time":"12:00","zone":"8","lat":"31n14","lon":"121e28"},
+  "birth":{"date":"1990-01-01","time":"12:00","zone":"+08:00","lat":"31n14","lon":"121e28"},
   "save_result": true
 }' | uv run horosa-skill ask --stdin
 ```
@@ -368,7 +507,17 @@ echo '{
 ### Run one atomic tool directly
 
 ```bash
-echo '{"date":"1990-01-01","time":"12:00","zone":"8","lat":"31n14","lon":"121e28"}' \
+echo '{
+  "agent_confirmed_settings": true,
+  "clarification_notes": "User confirmed the sample chart input, Shanghai, +08:00, and Xingque default chart settings.",
+  "date":"1990-01-01",
+  "time":"12:00",
+  "zone":"+08:00",
+  "lat":"31n14",
+  "lon":"121e28",
+  "gpsLat":31.2333,
+  "gpsLon":121.4667
+}' \
   | uv run horosa-skill tool run chart --stdin
 ```
 
@@ -392,7 +541,14 @@ echo '{"domain":"qimen","category":"door","key":"休门"}' \
 ### Run one Phase 2 local method
 
 ```bash
-echo '{"taiyin":"巽","taiyang":"坤","shaoyang":"震","shaoyin":"震"}' \
+echo '{
+  "agent_confirmed_settings": true,
+  "clarification_notes": "User confirmed the Tong She Fa four-symbol parameters.",
+  "taiyin":"巽",
+  "taiyang":"坤",
+  "shaoyang":"震",
+  "shaoyin":"震"
+}' \
   | uv run horosa-skill tool run tongshefa --stdin
 ```
 
@@ -400,8 +556,10 @@ echo '{"taiyin":"巽","taiyang":"坤","shaoyang":"震","shaoyin":"震"}' \
 
 ```bash
 echo '{
+  "agent_confirmed_settings": true,
+  "clarification_notes": "User confirmed the sample birth data and Xingque default dispatcher settings.",
   "query":"Please analyze the current situation using qimen, liureng, and chart methods",
-  "birth":{"date":"1990-01-01","time":"12:00","zone":"8","lat":"31n14","lon":"121e28"},
+  "birth":{"date":"1990-01-01","time":"12:00","zone":"+08:00","lat":"31n14","lon":"121e28"},
   "save_result": true
 }' | uv run horosa-skill dispatch --stdin
 ```
@@ -453,15 +611,18 @@ Useful documents:
 Already implemented:
 
 - GitHub-first offline runtime install flow
-- macOS and Windows runtime release assets
+- macOS and Windows `v0.5.6` runtime release assets
 - local MCP server and JSON-first CLI
 - full Xingque AI export registry and parser
 - stable structured outputs across 39 callable tools
+- forced agent clarification for 32 setting-sensitive technique tools
+- explicit preflight exemption for 7 safe registry / knowledge / parser tools
 - bundled and queryable hover knowledge for chart, LiuReng, and Qimen
 - dispatch-level child export contracts
 - SQLite + JSON artifacts + run manifest data model
 - AI answer write-back and retrieval workflow
-- real fresh-clone validation from GitHub plus runtime reinstall
+- real fresh-clone / GitHub Release runtime reinstall validation
+- Windows OpenClaw smoke in GitHub CI
 
 If you need a repository that turns Xingque into AI-callable infrastructure rather than a pile of loose scripts, this project is already operating in that direction.
 
