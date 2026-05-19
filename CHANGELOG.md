@@ -7,6 +7,22 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.5.9] - 2026-05-18
+
+### Fixed
+
+- Added release verification for the embedded `runtime-payload/runtime-manifest.json`
+  so macOS and Windows runtime archives can no longer ship with stale internal
+  version metadata.
+- Stamped `runtime_payload_version` into generated macOS and Windows runtime
+  payload manifests.
+- Added subprocess timeouts to OpenClaw / mcporter smoke checks so a stuck stdio
+  session returns a structured `client.command_timeout` diagnostic instead of
+  hanging forever.
+- Clarified OpenClaw agent setup: named agents must use the same workspace that
+  receives the generated mcporter config, and `clientToolCount: 0` means the
+  agent has not received Horosa MCP tools.
+
 ## [0.5.8] - 2026-05-18
 
 ### Added
