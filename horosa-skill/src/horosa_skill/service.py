@@ -1067,6 +1067,61 @@ def _build_star_and_lot_position_lines(chart_wrap: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _as_chart_wrap(value: Any, *, fallback_lots: Any = None, fallback_aspects: Any = None) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    if isinstance(value.get("chart"), dict):
+        wrapper = dict(value)
+    elif isinstance(value.get("objects"), list) or isinstance(value.get("houses"), list):
+        wrapper = {"chart": value}
+    else:
+        return {}
+    if fallback_lots is not None and "lots" not in wrapper:
+        wrapper["lots"] = fallback_lots
+    if fallback_aspects is not None and "aspects" not in wrapper:
+        wrapper["aspects"] = fallback_aspects
+    return wrapper
+
+
+def _top_level_chart_wrap(response: dict[str, Any]) -> dict[str, Any]:
+    return _as_chart_wrap(
+        response.get("chart"),
+        fallback_lots=response.get("lots"),
+        fallback_aspects=response.get("aspects"),
+    )
+
+
+def _chart_wrap_from_response(response: dict[str, Any], key: str) -> dict[str, Any]:
+    return _as_chart_wrap(
+        response.get(key),
+        fallback_lots=response.get("lots"),
+        fallback_aspects=response.get("aspects"),
+    )
+
+
+def _chart_position_table_lines(chart_wrap: dict[str, Any], *, limit: int | None = None) -> list[str]:
+    object_map = _get_objects_map(chart_wrap)
+    rows = ["| 星体/虚点 | 位置 | 宫位 | 速度 |", "| --- | --- | --- | --- |"]
+    count = 0
+    for object_id in [*ASTRO_OBJECT_ORDER, *ASTRO_LOT_ORDER]:
+        obj = object_map.get(object_id)
+        if not isinstance(obj, dict) or obj.get("sign") is None or obj.get("signlon") is None:
+            continue
+        rows.append(
+            "| "
+            f"{_astro_msg(object_id, short=True)} | "
+            f"{_format_sign_degree(obj.get('sign'), obj.get('signlon'))}{_format_retrograde_text(obj)} | "
+            f"{_astro_msg(obj.get('house')) or '—'} | "
+            f"{_format_speed(obj) if obj.get('lonspeed') is not None else '—'} |"
+        )
+        count += 1
+        if limit is not None and count >= limit:
+            break
+    if count == 0:
+        rows.append("| 无 | 无 | 无 | 无 |")
+    return rows
+
+
 def _keep_reception_line(item: dict[str, Any] | None, *, abnormal: bool = False) -> bool:
     if not isinstance(item, dict):
         return False
@@ -2262,22 +2317,57 @@ def _build_gua_lookup_snapshot_text(tool_name: str, payload: dict[str, Any], res
     )
 
 
-def _build_predictive_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
-    star_lines = _build_star_and_lot_position_lines(response)[:20]
-    setup_lines = [
-        f"出生时间：{response.get('params', {}).get('birth', '无')}",
-        f"推运时间：{payload.get('datetime', '无')}",
-        f"推运时区：{payload.get('dirZone') or payload.get('zone', '无')}",
-        f"推运地点：{payload.get('dirLon') or payload.get('lon', '—')} {payload.get('dirLat') or payload.get('lat', '—')}",
-    ]
-    aspect_lines = _build_aspect_section(response)
-    return _render_snapshot_text(
-        [
-            ("星盘信息", _join_lines(star_lines) or "无"),
-            ("起盘信息", _join_lines(setup_lines)),
-            ("相位", _join_lines(aspect_lines) or "无"),
-        ]
+def _predictive_chart_label(tool_name: str) -> str:
+    return {
+        "solarreturn": "返照盘",
+        "lunarreturn": "返照盘",
+        "givenyear": "流年盘",
+        "solararc": "推运盘",
+        "profection": "推运盘",
+    }.get(tool_name, "推运盘")
+
+
+def _predictive_chart_wrap(response: dict[str, Any]) -> dict[str, Any]:
+    return (
+        _chart_wrap_from_response(response, "dirChart")
+        or _top_level_chart_wrap(response)
     )
+
+
+def _natal_chart_wrap(response: dict[str, Any]) -> dict[str, Any]:
+    return (
+        _chart_wrap_from_response(response, "natalChart")
+        or _chart_wrap_from_response(response, "birthChart")
+        or _chart_wrap_from_response(response, "baseChart")
+    )
+
+
+def _build_predictive_snapshot_text(tool_name: str, payload: dict[str, Any], response: dict[str, Any]) -> str:
+    natal_wrap = _natal_chart_wrap(response)
+    predictive_wrap = _predictive_chart_wrap(response)
+    chart_label = _predictive_chart_label(tool_name)
+    predictive_params = response.get("dirParams") if isinstance(response.get("dirParams"), dict) else {}
+    exact_datetime = response.get("date") or payload.get("datetime") or "无"
+    birth_lines = _build_base_info_lines(natal_wrap, payload) if natal_wrap else [
+        f"出生时间：{payload.get('date', '—')} {payload.get('time', '—')}",
+        f"出生时区：{payload.get('zone', '—')}",
+        f"出生地点：{payload.get('lon', '—')} {payload.get('lat', '—')}",
+    ]
+    predictive_setup_lines = [
+        f"技法：{tool_name}",
+        f"目标时间：{payload.get('datetime', '无')}",
+        f"后台实际成盘时间：{exact_datetime}",
+        f"推运时区：{predictive_params.get('zone') or payload.get('dirZone') or payload.get('zone', '无')}",
+        f"推运地点：{predictive_params.get('lon') or payload.get('dirLon') or payload.get('lon', '—')} {predictive_params.get('lat') or payload.get('dirLat') or payload.get('lat', '—')}",
+    ]
+    sections = [
+        ("本命盘起盘信息", _join_lines(birth_lines) or "无"),
+        ("本命盘星与虚点", _join_lines(_build_star_and_lot_position_lines(natal_wrap)) if natal_wrap else "无"),
+        (f"{chart_label}起盘信息", _join_lines(predictive_setup_lines)),
+        (f"{chart_label}星与虚点", _join_lines(_build_star_and_lot_position_lines(predictive_wrap)) or "无"),
+        (f"{chart_label}相位", _join_lines(_build_aspect_section(predictive_wrap)) or "无"),
+    ]
+    return _render_snapshot_text(sections)
 
 
 def _primary_direction_method_text(value: Any) -> str:
@@ -2296,31 +2386,44 @@ def _pd_obj_text(value: Any, chart_wrap: dict[str, Any]) -> str:
         if object_id:
             return _astro_msg_with_house(object_id, chart_wrap, short=True)
         return _stringify_export_body(value)
+    text = _msg(value)
+    if "_" in text:
+        parts = text.split("_")
+        prefix = parts[0]
+        aspect = parts[-1] if parts and parts[-1].lstrip("-").isdigit() else ""
+        object_id = "_".join(parts[1:-1] if aspect else parts[1:]).replace("_", " ")
+        prefix_text = {"D": "推运", "S": "纬照", "N": "本命"}.get(prefix, prefix)
+        object_text = _astro_msg_with_house(object_id, chart_wrap, short=True) or _astro_msg(object_id, short=True) or object_id
+        return f"{prefix_text}{object_text}{(' ' + _aspect_text(aspect)) if aspect else ''}".strip()
     return _astro_msg_with_house(value, chart_wrap, short=True) or _planet_label(value)
 
 
-def _build_primarydirect_snapshot_text(response: dict[str, Any]) -> str:
-    params = response.get("params", {}) if isinstance(response, dict) else {}
+def _build_primarydirect_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
+    params = response.get("params", {}) if isinstance(response, dict) and isinstance(response.get("params"), dict) else payload
     predictives = response.get("predictives", {}) if isinstance(response, dict) else {}
-    pds = predictives.get("primaryDirection", []) if isinstance(predictives, dict) else []
+    pds = response.get("pd")
+    if pds is None and isinstance(predictives, dict):
+        pds = predictives.get("primaryDirection", [])
+    natal_wrap = _natal_chart_wrap(response) or _top_level_chart_wrap(response)
     show_pd_bounds = not (params.get("showPdBounds") in {0, False})
     degree_label = "赤经" if params.get("pdMethod") == "horosa_legacy" else "Arc"
-    rows = [f"| {degree_label} | 迫星 | 应星 | 日期 |", "| --- | --- | --- | --- |"]
+    rows = [f"| {degree_label} | 迫星 | 应星 | 类型 | 日期 |", "| --- | --- | --- | --- | --- |"]
     if not isinstance(pds, list) or not pds:
-        rows.append("| 无 | 无 | 无 | 无 |")
+        rows.append("| 无 | 无 | 无 | 无 | 无 |")
     else:
         for row in pds:
             if not isinstance(row, list):
                 continue
             degree = _msg(row[0]) or "无"
-            promittor = _pd_obj_text(row[1] if len(row) > 1 else None, response) or "无"
-            significator = _pd_obj_text(row[2] if len(row) > 2 else None, response) or "无"
+            promittor = _pd_obj_text(row[1] if len(row) > 1 else None, natal_wrap) or "无"
+            significator = _pd_obj_text(row[2] if len(row) > 2 else None, natal_wrap) or "无"
+            pd_type = _msg(row[3] if len(row) > 3 else None) or "无"
             date = _msg(row[4] if len(row) > 4 else None) or "无"
-            rows.append(f"| {degree} | {promittor} | {significator} | {date} |")
+            rows.append(f"| {degree} | {promittor} | {significator} | {pd_type} | {date} |")
     return _render_snapshot_text(
         [
             ("出生时间", f"出生时间：{params.get('birth', '无')}"),
-            ("星盘信息", _join_lines([f"经纬度：{params.get('lon', '—')} {params.get('lat', '—')}", f"时区：{params.get('zone', '—')}"])),
+            ("本命盘星与虚点", _join_lines(_build_star_and_lot_position_lines(natal_wrap)) or "无"),
             (
                 "主/界限法设置",
                 _join_lines(
@@ -2337,12 +2440,14 @@ def _build_primarydirect_snapshot_text(response: dict[str, Any]) -> str:
 
 
 def _build_pdchart_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
-    params = response.get("params", {}) if isinstance(response, dict) else {}
+    params = response.get("params", {}) if isinstance(response, dict) and isinstance(response.get("params"), dict) else payload
     current_arc = response.get("currentArc") or response.get("arc") or response.get("pdArc") or "无"
+    natal_wrap = _natal_chart_wrap(response)
+    pd_wrap = _top_level_chart_wrap(response)
     return _render_snapshot_text(
         [
             ("出生时间", f"出生时间：{params.get('birth', '无')}"),
-            ("星盘信息", _join_lines([f"经纬度：{params.get('lon', '—')} {params.get('lat', '—')}", f"时区：{params.get('zone', '—')}"])),
+            ("本命盘星与虚点", _join_lines(_build_star_and_lot_position_lines(natal_wrap)) or "无"),
             (
                 "主限法盘设置",
                 _join_lines(
@@ -2354,6 +2459,8 @@ def _build_pdchart_snapshot_text(payload: dict[str, Any], response: dict[str, An
                     ]
                 ),
             ),
+            ("主限法盘星体表格", _join_lines(_chart_position_table_lines(pd_wrap)) or "无"),
+            ("主限法盘相位", _join_lines(_build_aspect_section(pd_wrap)) or "无"),
             (
                 "主限法盘说明",
                 _join_lines(
@@ -2368,32 +2475,53 @@ def _build_pdchart_snapshot_text(payload: dict[str, Any], response: dict[str, An
 
 
 def _build_zr_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
-    params = response.get("params", {}) if isinstance(response, dict) else {}
+    params = response.get("params", {}) if isinstance(response, dict) and isinstance(response.get("params"), dict) else payload
     predictives = response.get("predictives", {}) if isinstance(response, dict) else {}
     zr_data = None
     for key in ("zodialRelease", "zodiacalRelease", "zr", "zodialrelease"):
+        if response.get(key) is not None:
+            zr_data = response.get(key)
+            break
         if isinstance(predictives, dict) and predictives.get(key) is not None:
             zr_data = predictives.get(key)
             break
     lines = [f"出生时间：{params.get('birth', '无')}", f"经纬度：{params.get('lon', '—')} {params.get('lat', '—')}", f"时区：{params.get('zone', '—')}"]
+    natal_wrap = _natal_chart_wrap(response) or _top_level_chart_wrap(response)
     base_point = payload.get("basePoint") or response.get("basePoint") or "X点"
     zr_lines: list[str] = []
+    def push_zr(items: Any, *, level_limit: int = 3) -> None:
+        if not isinstance(items, list):
+            return
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            level = item.get("level", "")
+            sign = _astro_msg(item.get("sign"))
+            date = item.get("date", "无")
+            days = item.get("days", "无")
+            zr_lines.append(f"L{level}：{sign}；开始：{date}；时长：{days}日")
+            if level_limit > 1:
+                sublevel = item.get("sublevel")
+                if isinstance(sublevel, list):
+                    for sub in sublevel[:6]:
+                        if isinstance(sub, dict):
+                            zr_lines.append(
+                                f"  L{sub.get('level', '')}：{_astro_msg(sub.get('sign'))}；开始：{sub.get('date', '无')}；时长：{sub.get('days', '无')}日"
+                            )
     if isinstance(zr_data, list):
-        for idx, item in enumerate(zr_data, start=1):
-            if isinstance(item, dict):
-                zr_lines.append(f"L1-{idx}：{item.get('planet', item.get('name', '无'))}-{item.get('date', '无')}")
+        push_zr(zr_data)
     elif isinstance(zr_data, dict):
         zr_lines.append(_stringify_export_body(zr_data))
-    return _render_snapshot_text([("起盘信息", _join_lines(lines)), ("星盘信息", _join_lines(_build_star_and_lot_position_lines(response)[:20]) or "无"), (f"基于{base_point}推运", _join_lines(zr_lines) or "无推运数据")])
+    return _render_snapshot_text([("起盘信息", _join_lines(lines)), ("本命盘星与虚点", _join_lines(_build_star_and_lot_position_lines(natal_wrap)) or "无"), (f"基于{base_point}推运", _join_lines(zr_lines) or "无推运数据")])
 
 
 def _auto_snapshot_text_for_tool(tool_name: str, input_normalized: dict[str, Any], response_data: dict[str, Any]) -> str | None:
     if tool_name in {"chart", "chart13", "hellen_chart", "india_chart"} and _is_astro_chart_payload(response_data):
         return _build_astro_snapshot_text(input_normalized, response_data)
     if tool_name in {"solarreturn", "lunarreturn", "solararc", "givenyear", "profection"}:
-        return _build_predictive_snapshot_text(input_normalized, response_data)
+        return _build_predictive_snapshot_text(tool_name, input_normalized, response_data)
     if tool_name == "pd":
-        return _build_primarydirect_snapshot_text(response_data)
+        return _build_primarydirect_snapshot_text(input_normalized, response_data)
     if tool_name == "pdchart":
         return _build_pdchart_snapshot_text(input_normalized, response_data)
     if tool_name == "zr":
@@ -2823,6 +2951,24 @@ class HorosaSkillService:
             return parse_export_content(technique=technique, content=snapshot_text)
         except ValueError:
             return None
+
+    def _attach_predictive_chart_context(self, tool_name: str, payload: dict[str, Any], response: dict[str, Any]) -> dict[str, Any]:
+        if tool_name not in {"solarreturn", "lunarreturn", "solararc", "givenyear", "profection", "pd", "pdchart", "zr"}:
+            return response
+        enriched = dict(response)
+        if "params" not in enriched:
+            enriched["params"] = {
+                **payload,
+                "birth": f"{payload.get('date', '—')} {payload.get('time', '—')}",
+            }
+        if not any(key in enriched for key in ("natalChart", "birthChart", "baseChart")):
+            natal_payload = {**payload, "predictive": 0}
+            natal_payload.pop("datetime", None)
+            natal_payload.pop("dirZone", None)
+            natal_payload.pop("dirLat", None)
+            natal_payload.pop("dirLon", None)
+            enriched["natalChart"] = self._call_remote("/chart", natal_payload)
+        return enriched
 
     def _run_qimen_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         year = int(str(payload["date"])[:4])
@@ -3371,6 +3517,7 @@ class HorosaSkillService:
                 else:
                     assert definition.endpoint is not None
                     response_data = self._call_remote(definition.endpoint, input_normalized)
+                    response_data = self._attach_predictive_chart_context(tool_name, input_normalized, response_data)
                 response_data = _attach_export_contract(tool_name, input_normalized, response_data)
                 summary = _generic_summary(tool_name, response_data)
                 warnings: list[str] = []
