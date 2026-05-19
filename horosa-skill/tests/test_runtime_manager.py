@@ -132,6 +132,7 @@ def test_install_runtime_from_local_archive(tmp_path: Path) -> None:
 
     assert result["ok"] is True
     assert result["manifest"]["version"] == "1.2.3"
+    assert result["manifest"]["runtime_payload_version"] == "1.2.3"
     assert result["manifest"]["schema_version"] == 1
     assert result["manifest"]["services"]["start_script"] == str(
         manager._platform_path("Horosa-Web/start_horosa_local.sh", "Horosa-Web/start_horosa_local.ps1")

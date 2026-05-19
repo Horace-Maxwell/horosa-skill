@@ -409,7 +409,7 @@ def test_openclaw_smoke_falls_back_to_headless_tool_when_chart_fails(monkeypatch
     config_path.write_text("{}", encoding="utf-8")
     commands: list[list[str]] = []
 
-    def fake_run_subprocess_json(command: list[str], *, cwd: Path) -> dict[str, object]:
+    def fake_run_subprocess_json(command: list[str], *, cwd: Path, timeout_seconds: float = 180.0) -> dict[str, object]:
         commands.append(command)
         if "list" in command:
             return {"status": "ok", "tools": ["chart", "qimen"]}
@@ -456,6 +456,8 @@ def test_openclaw_smoke_falls_back_to_headless_tool_when_chart_fails(monkeypatch
     fallback_args = json.loads(commands[3][commands[3].index("--args") + 1])
     assert chart_args["agent_confirmed_settings"] is True
     assert fallback_args["agent_confirmed_settings"] is True
+    list_command = commands[0]
+    assert list_command.count("--root") == 1
 
 
 def test_openclaw_check_uses_extended_timeout_for_tool_calls(monkeypatch, tmp_path: Path) -> None:
@@ -473,7 +475,7 @@ def test_openclaw_check_uses_extended_timeout_for_tool_calls(monkeypatch, tmp_pa
     commands: list[list[str]] = []
     chart_calls = 0
 
-    def fake_run_subprocess_json(command: list[str], *, cwd: Path) -> dict[str, object]:
+    def fake_run_subprocess_json(command: list[str], *, cwd: Path, timeout_seconds: float = 180.0) -> dict[str, object]:
         nonlocal chart_calls
         commands.append(command)
         if "list" in command:
@@ -501,3 +503,16 @@ def test_openclaw_check_uses_extended_timeout_for_tool_calls(monkeypatch, tmp_pa
     assert "--timeout" not in list_command
     for command in (knowledge_command, first_chart_command, second_chart_command, memory_command):
         assert command[-2:] == ["--timeout", "120000"]
+
+
+def test_run_subprocess_json_times_out_cleanly(monkeypatch, tmp_path: Path) -> None:
+    def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(cmd=["mcporter"], timeout=1, output="warming", stderr="stuck")
+
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    with pytest.raises(cli.RuntimeError) as exc_info:
+        cli._run_subprocess_json(["mcporter", "list"], cwd=tmp_path, timeout_seconds=1)
+
+    assert exc_info.value.code == "client.command_timeout"
+    assert exc_info.value.details["timeout_seconds"] == 1

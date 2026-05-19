@@ -831,6 +831,7 @@ class HorosaRuntimeManager:
             "version": str(manifest["version"]),
             "platform": str(manifest.get("platform") or self.settings.runtime_platform or _platform_key()),
             "runtime_layout_version": int(manifest.get("runtime_layout_version", 1)),
+            "runtime_payload_version": str(manifest.get("runtime_payload_version") or manifest["version"]),
             "export_registry_version": int(manifest.get("export_registry_version", 6)),
             "services": {**defaults["services"], **(manifest.get("services") or {})},
             "runtimes": {**defaults["runtimes"], **(manifest.get("runtimes") or {})},
