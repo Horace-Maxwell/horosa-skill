@@ -34,7 +34,7 @@
 
 ## Current Stable Baseline
 
-Current public version: `Horosa Skill 0.5.10`
+Current public version: `Horosa Skill 0.5.11`
 
 The most important change in this line is not just another tool. It makes “do not invent missing settings” a hard protocol. If a technique depends on time, location, timezone, gender, question context, house system, calendar options, or method-specific settings, the agent must ask first. Unconfirmed calls return a structured blocking response with a user-facing recovery prompt.
 
@@ -51,7 +51,7 @@ Latest local verification:
 | report JSON artifact | `39 / 39` |
 | Xingque-style export structure | Business methods emit `export_snapshot` / `export_format` |
 | GitHub CI | Linux/macOS tests plus Windows OpenClaw smoke pass |
-| Release runtime | macOS / Windows `v0.5.10` assets uploaded and verified |
+| Release runtime | macOS / Windows `v0.5.11` assets uploaded and verified |
 
 For the predictive tools `solarreturn`, `lunarreturn`, `solararc`, `givenyear`, `profection`, `pd`, `pdchart`, and `zr`: the current version verifies them as usable. Agents should not label Java `/predict/*` tools as unavailable. If a client still says that, first check whether it is using an old runtime, bypassing MCP with hand-written calculations, or skipping `doctor` / `openclaw-check --full`.
 
@@ -323,7 +323,7 @@ Every tool returns a stable envelope:
 {
   "ok": true,
   "tool": "qimen",
-  "version": "0.5.10",
+  "version": "0.5.11",
   "input_normalized": {},
   "data": {},
   "summary": [],
@@ -393,7 +393,7 @@ Latest local all-tool audit:
 
 ```json
 {
-  "version": "0.5.10",
+  "version": "0.5.11",
   "tool_count": 39,
   "records_count": 39,
   "errors_count": 0,
@@ -472,9 +472,16 @@ uv run horosa-skill doctor
 If OpenClaw / mcporter is your main target, you can now generate a ready-to-paste config that already contains the current absolute path:
 
 ```bash
-uv run horosa-skill client openclaw-config --format mcporter
+uv run horosa-skill client openclaw-setup --workspace ~/.openclaw/workspace
 uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace
 ```
+
+`openclaw-setup` writes both required OpenClaw surfaces:
+
+- `~/.openclaw/workspace/config/mcporter.json` for `openclaw-check` / mcporter smoke tests.
+- `~/.openclaw/openclaw.json` under `mcp.servers.horosa` for native OpenClaw agent tool attachment.
+
+If `openclaw-check` passes but an agent trace still shows `clientToolCount: 0`, restart OpenClaw or open a new agent session. Do not let the agent fall back to shell/Python hand calculations.
 
 ### 2. Let the dispatcher select methods
 
@@ -594,7 +601,7 @@ For OpenClaw / mcporter, the lowest-friction path is:
 
 ```bash
 cd horosa-skill
-uv run horosa-skill client openclaw-config --format mcporter
+uv run horosa-skill client openclaw-setup --workspace ~/.openclaw/workspace
 ```
 
 ## Runtime And Release Strategy
@@ -630,7 +637,7 @@ Useful documents:
 Already implemented:
 
 - GitHub-first offline runtime install flow
-- macOS and Windows `v0.5.10` runtime release assets
+- macOS and Windows `v0.5.11` runtime release assets
 - local MCP server and JSON-first CLI
 - full Xingque AI export registry and parser
 - stable structured outputs across 39 callable tools
