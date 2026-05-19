@@ -6,6 +6,15 @@ Use this skill when an AI agent is connected to Horosa Skill through MCP, CLI, C
 
 Horosa Skill is local-first. After `horosa-skill install`, algorithms should run through the local runtime, local headless JS engines, and local storage. Do not tell users that a missing field requires MongoDB, port 7897, Xingque Desktop, a remote database, or an external service unless a current `doctor` / `openclaw-check` result explicitly says so. If output is missing, describe it as a local tool/result/input issue and suggest a concrete recheck.
 
+If the client exposes native Horosa MCP tools, call those tools directly. In OpenClaw traces this means the agent should see Horosa tools such as `horosa_cn_qimen`, `horosa_cn_liureng_gods`, `horosa_astro_chart`, `horosa_agent_guidance`, `horosa_memory_show`, and `horosa_report_render`. If the trace shows `clientToolCount: 0` or no `horosa_*` tools are available, the MCP server was not attached to that agent session. Stop and tell the user/admin to run:
+
+```bash
+uv run horosa-skill client openclaw-setup --workspace <the-agent-workspace>
+uv run horosa-skill client openclaw-check --workspace <the-agent-workspace> --full
+```
+
+Do not silently fall back to hand-written Python, shell calculations, web snippets, or unscoped CLI calls. CLI fallback is only acceptable as a diagnostic, and it must use the exact `HOME`, `HOROSA_RUNTIME_ROOT`, and `HOROSA_SKILL_DATA_DIR` env block from the generated mcporter config.
+
 Do not hand-calculate Horosa techniques with `Exec`, shell, Python, JavaScript snippets, web search, or memory-only formulas. If the user asks for a pan/result, call the Horosa MCP or CLI tool and treat the returned `export_snapshot` as the source of truth. Manual scripts bypass Xingque-compatible defaults, true-solar-time handling, runtime parity fixes, memory, and reports.
 
 ## Preferred Agent Workflow
@@ -251,6 +260,8 @@ For OpenClaw onboarding:
 ```bash
 uv run horosa-skill client openclaw-setup --workspace <workspace>
 ```
+
+For named OpenClaw agents, `<workspace>` must be the workspace actually used by that agent, for example `~/.openclaw/workspace-horosabot`. Passing `~/.openclaw/workspace` while the agent runs in `workspace-horosabot` verifies the wrong environment.
 
 For a direct tool call:
 

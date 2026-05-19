@@ -45,6 +45,20 @@ def _archive_entries(path: Path) -> set[str]:
     raise SystemExit(f"unsupported archive type: {path}")
 
 
+def _read_archive_text(path: Path, entry_name: str) -> str:
+    if path.name.endswith(".tar.gz"):
+        with tarfile.open(path, "r:gz") as archive:
+            member = archive.getmember(entry_name)
+            file_obj = archive.extractfile(member)
+            if file_obj is None:
+                raise SystemExit(f"{path.name} has unreadable entry: {entry_name}")
+            return file_obj.read().decode("utf-8")
+    if path.suffix.lower() == ".zip":
+        with zipfile.ZipFile(path) as archive:
+            return archive.read(entry_name).decode("utf-8")
+    raise SystemExit(f"unsupported archive type: {path}")
+
+
 def _assert_entries(path: Path, platform_key: str) -> None:
     entries = _archive_entries(path)
     missing: list[str] = []
@@ -56,6 +70,26 @@ def _assert_entries(path: Path, platform_key: str) -> None:
             missing.append(required)
     if missing:
         raise SystemExit(f"{path.name} is missing required entries:\n- " + "\n- ".join(missing))
+
+
+def _assert_payload_manifest(path: Path, platform_key: str, expected_version: str) -> None:
+    raw = _read_archive_text(path, "runtime-payload/runtime-manifest.json")
+    try:
+        payload_manifest = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"{path.name} contains invalid runtime-payload/runtime-manifest.json: {exc}") from exc
+    version = payload_manifest.get("version")
+    payload_version = payload_manifest.get("runtime_payload_version", version)
+    platform = payload_manifest.get("platform")
+    errors: list[str] = []
+    if version != expected_version:
+        errors.append(f"version={version!r} expected {expected_version!r}")
+    if payload_version != expected_version:
+        errors.append(f"runtime_payload_version={payload_version!r} expected {expected_version!r}")
+    if platform != platform_key:
+        errors.append(f"platform={platform!r} expected {platform_key!r}")
+    if errors:
+        raise SystemExit(f"{path.name} has stale or mismatched embedded runtime manifest: " + "; ".join(errors))
 
 
 def _validate_manifest(path: Path) -> dict:
@@ -87,6 +121,11 @@ def main() -> None:
     _assert_entries(darwin_archive, "darwin-arm64")
     _assert_entries(windows_archive, "win32-x64")
     manifest = _validate_manifest(manifest_path)
+    expected_version = str(manifest.get("version") or "")
+    if not expected_version:
+        raise SystemExit(f"manifest version is missing: {manifest_path}")
+    _assert_payload_manifest(darwin_archive, "darwin-arm64", expected_version)
+    _assert_payload_manifest(windows_archive, "win32-x64", expected_version)
 
     print(
         json.dumps(

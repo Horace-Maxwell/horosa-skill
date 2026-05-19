@@ -6,6 +6,7 @@ import subprocess
 import sys
 import threading
 import time
+from importlib.metadata import PackageNotFoundError, version as package_version
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Optional
@@ -54,6 +55,30 @@ app.add_typer(trace_app, name="trace")
 app.add_typer(client_app, name="client")
 app.add_typer(report_app, name="report")
 app.add_typer(agent_app, name="agent")
+
+
+def _version_callback(value: bool) -> None:
+    if not value:
+        return
+    try:
+        resolved = package_version("horosa-skill")
+    except PackageNotFoundError:
+        resolved = "unknown"
+    typer.echo(f"horosa-skill {resolved}")
+    raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        help="Show the installed Horosa Skill package version and exit.",
+        callback=_version_callback,
+        is_eager=True,
+    ),
+) -> None:
+    """Horosa Skill command line entrypoint."""
 
 
 def _service() -> HorosaSkillService:
@@ -432,6 +457,13 @@ def _friendly_runtime_error_payload(
     elif code in {"client.command_failed", "client.invalid_json"}:
         user_summary = f"{action_label} started the OpenClaw client command, but it did not return a clean JSON result."
         next_action = "Run `uv run horosa-skill doctor` and make sure mcporter can start Horosa, then retry the smoke check."
+    elif code == "client.command_timeout":
+        user_summary = f"{action_label} started the OpenClaw client command, but the subprocess did not return in time."
+        next_action = (
+            "Stop any stuck `horosa-skill serve --transport stdio` / `mcporter` processes, "
+            "rerun `uv run horosa-skill client openclaw-setup --workspace <workspace>`, "
+            "then retry the smoke check."
+        )
 
     payload = {
         "ok": False,
@@ -466,7 +498,7 @@ def _build_openclaw_config(
     raise typer.BadParameter("`--format` must be either `mcporter` or `openclaw`.")
 
 
-def _run_subprocess_json(command: list[str], *, cwd: Path) -> dict[str, Any]:
+def _run_subprocess_json(command: list[str], *, cwd: Path, timeout_seconds: float = 180.0) -> dict[str, Any]:
     try:
         result = subprocess.run(
             command,
@@ -476,9 +508,22 @@ def _run_subprocess_json(command: list[str], *, cwd: Path) -> dict[str, Any]:
             encoding="utf-8",
             errors="replace",
             check=False,
+            timeout=timeout_seconds,
         )
     except FileNotFoundError as exc:
         raise RuntimeError(str(exc), code="client.command_not_found", details={"command": command, "cwd": str(cwd)}) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            f"Command timed out after {timeout_seconds} seconds: {' '.join(command)}",
+            code="client.command_timeout",
+            details={
+                "command": command,
+                "cwd": str(cwd),
+                "timeout_seconds": timeout_seconds,
+                "stdout": (exc.stdout or "")[-4000:] if isinstance(exc.stdout, str) else "",
+                "stderr": (exc.stderr or "")[-4000:] if isinstance(exc.stderr, str) else "",
+            },
+        ) from exc
     parsed: dict[str, Any] | None = None
     for candidate in (result.stdout, result.stderr):
         try:
@@ -545,7 +590,7 @@ def _run_openclaw_smoke_check(
                 str(call_timeout_ms),
             ]
         )
-        return _run_subprocess_json(command, cwd=workspace_root)
+        return _run_subprocess_json(command, cwd=workspace_root, timeout_seconds=150)
 
     list_result: dict[str, Any] | None = None
     if include_list:
@@ -561,6 +606,7 @@ def _run_openclaw_smoke_check(
                 str(workspace_root),
             ],
             cwd=workspace_root,
+            timeout_seconds=60,
         )
     registry_result = call_tool("horosa_knowledge_registry")
     confirmed_payload = {
