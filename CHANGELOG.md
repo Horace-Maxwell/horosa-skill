@@ -7,6 +7,22 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.5.12] - 2026-05-18
+
+### Fixed
+
+- Added legacy payload retries for Java date-dependent endpoints such as
+  `/nongli/time`, `/jieqi/year`, and Liureng helpers. If a bundled runtime
+  rejects the validated Xingque-style payload with `200001 param error`, Horosa
+  Skill now retries slash-date, zone-hour, GPS-only, and decimal coordinate
+  variants before surfacing a structured error.
+- Hardened the Qimen / Taiyi / Sixyao prerequisite path so agent attempts with
+  common date/time/coordinate formats no longer collapse into a raw
+  `/nongli/time` `Index 1 out of bounds for length 1` backend error.
+- Clarified OpenClaw diagnostics: `clientToolCount: 0` in a stale trajectory is
+  not authoritative when `openclaw mcp list`, `listed_tool_count`, or direct
+  `horosa__...` tool calls prove that Horosa is attached.
+
 ## [0.5.11] - 2026-05-18
 
 ### Fixed

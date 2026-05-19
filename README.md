@@ -34,7 +34,7 @@
 
 ## 最新稳定基线
 
-当前公开版本：`Horosa Skill 0.5.11`
+当前公开版本：`Horosa Skill 0.5.12`
 
 这一版的核心变化不是多加一个工具，而是把“AI 不能乱补参数”做成硬性协议。只要技法会受时间、地点、时区、性别、事项、宫制、历法、起局方式等设置影响，agent 在用户没有确认前就不能继续调用。工具会返回结构化阻断结果，并给出可直接转发给用户的追问文本。
 
@@ -51,7 +51,7 @@
 | report JSON artifact | `39 / 39` |
 | 星阙式导出结构 | 业务技法均带 `export_snapshot` / `export_format` |
 | GitHub CI | Linux/macOS 单测 + Windows OpenClaw smoke 通过 |
-| Release runtime | macOS / Windows `v0.5.11` assets 已上传并校验 |
+| Release runtime | macOS / Windows `v0.5.12` assets 已上传并校验 |
 
 关于 `solarreturn`、`lunarreturn`、`solararc`、`givenyear`、`profection`、`pd`、`pdchart`、`zr` 这批推运工具：当前版本已经复核为可用，不应再被 agent 标记为“Java `/predict/*` 不可用”。如果某个客户端仍然这样回答，优先检查它是否在使用旧 runtime、是否绕过 MCP 直接手算、是否没有运行 `doctor` / `openclaw-check --full`。
 
@@ -331,7 +331,7 @@ uv run horosa-skill agent guidance --tool liureng_gods --intent "当前时间起
 {
   "ok": true,
   "tool": "qimen",
-  "version": "0.5.11",
+  "version": "0.5.12",
   "input_normalized": {},
   "data": {},
   "summary": [],
@@ -432,7 +432,9 @@ uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace
 - `~/.openclaw/workspace/config/mcporter.json`：用于 `openclaw-check` / mcporter smoke。
 - `~/.openclaw/openclaw.json` 的 `mcp.servers.horosa`：用于 OpenClaw agent 原生挂载 `horosa_*` MCP tools。
 
-如果 `openclaw-check` 通过但 agent trace 里还是 `clientToolCount: 0`，请重启 OpenClaw 或开启新的 agent session；不要让 agent 退回 Shell / Python 手算。
+如果 `openclaw-check` 通过、`openclaw mcp list` 能看到 `horosa`、或真实会话里已经出现 `horosa__...` 工具，但 agent trace 里还是 `clientToolCount: 0`，这个字段只能视为旧 trajectory 统计噪音，不能当成“Horosa 未挂载”的依据。请重启 OpenClaw 或开启新的 agent session；不要让 agent 退回 Shell / Python 手算。
+
+如果 agent 用过少参数直接试跑奇门 / 太乙 / 六爻，导致 `/nongli/time` 返回 `200001 param error`，先让 agent 通过 `horosa_agent_guidance` 补问日期、时间、时区、经纬度与默认设置；Horosa Skill 也会自动对 Java 日期接口重试星阙兼容格式，避免把后端格式错误误判为算法不可用。
 
 ### 2. 让调度器自动选技法
 
@@ -593,7 +595,7 @@ uv run horosa-skill client openclaw-setup --workspace ~/.openclaw/workspace
 已完成：
 
 - GitHub-first 离线 runtime 安装链
-- macOS / Windows `v0.5.11` runtime release 资产
+- macOS / Windows `v0.5.12` runtime release 资产
 - 本地 MCP server 与 JSON-first CLI
 - 完整星阙 AI 导出 registry 与 parser
 - 39 个可调用工具的结构化稳定输出
@@ -717,7 +719,7 @@ uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace --fu
 
 ```json
 {
-  "version": "0.5.11",
+  "version": "0.5.12",
   "tool_count": 39,
   "records_count": 39,
   "errors_count": 0,

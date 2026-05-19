@@ -85,6 +85,12 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
 
 
 _JAVA_CHART_DATE_ENDPOINTS = {"/chart", "/chart13", "/india/chart"}
+_JAVA_DATE_FALLBACK_ENDPOINTS = {
+    "/nongli/time",
+    "/jieqi/year",
+    "/liureng/gods",
+    "/liureng/runyear",
+}
 _PYTHON_CHART_ENDPOINTS = {
     "/chart",
     "/chart13",
@@ -148,7 +154,7 @@ def _java_chart_payload(endpoint: str, payload: dict[str, Any]) -> dict[str, Any
 
 def _java_chart_payload_candidates(endpoint: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
     first = _java_chart_payload(endpoint, payload)
-    if endpoint not in _JAVA_CHART_DATE_ENDPOINTS:
+    if endpoint not in _JAVA_CHART_DATE_ENDPOINTS and endpoint not in _JAVA_DATE_FALLBACK_ENDPOINTS:
         return [first]
 
     variants: list[dict[str, Any]] = []
@@ -159,11 +165,23 @@ def _java_chart_payload_candidates(endpoint: str, payload: dict[str, Any]) -> li
 
     date_variants = [dict(first)]
     dashed = dict(first)
-    for key in ("date", "datetime"):
+    slash = dict(first)
+    for key in ("date", "datetime", "guaDate"):
         if key in dashed:
             dashed[key] = _dash_date_prefix(dashed[key])
-    if dashed != first:
-        date_variants.append(dashed)
+        if key in slash:
+            slash[key] = _slash_date_prefix(slash[key])
+    if endpoint in _JAVA_CHART_DATE_ENDPOINTS:
+        if dashed != first:
+            date_variants.append(dashed)
+    else:
+        # Nongli/jieqi/liureng endpoints are less consistent across bundled
+        # Java runtime builds. Keep the validated Xingque-style payload first,
+        # then retry the slash date variant that older local backends accept.
+        if slash != first:
+            date_variants.append(slash)
+        if dashed != first and dashed not in date_variants:
+            date_variants.append(dashed)
 
     zone_hour = _java_zone_hour(first.get("zone"))
     zone_values = [first.get("zone")]
