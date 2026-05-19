@@ -232,6 +232,69 @@ def _write_json_file(path: Path, payload: object) -> Path:
     return output_path
 
 
+def _default_openclaw_native_config_path() -> Path:
+    return Path.home() / ".openclaw" / "openclaw.json"
+
+
+def _read_json_object(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            f"OpenClaw native config is not valid JSON: {path}",
+            code="openclaw.native_config.invalid_json",
+            details={"path": str(path), "error": str(exc)},
+        ) from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError(
+            f"OpenClaw native config must be a JSON object: {path}",
+            code="openclaw.native_config.invalid_shape",
+            details={"path": str(path), "actual_type": type(payload).__name__},
+        )
+    return payload
+
+
+def _merge_openclaw_native_config(
+    existing: dict[str, Any],
+    *,
+    server_name: str,
+    server_block: dict[str, Any],
+) -> dict[str, Any]:
+    merged = dict(existing)
+    mcp_section = merged.get("mcp")
+    if not isinstance(mcp_section, dict):
+        mcp_section = {}
+    else:
+        mcp_section = dict(mcp_section)
+    servers = mcp_section.get("servers")
+    if not isinstance(servers, dict):
+        servers = {}
+    else:
+        servers = dict(servers)
+    servers[server_name] = server_block
+    mcp_section["servers"] = servers
+    merged["mcp"] = mcp_section
+    return merged
+
+
+def _write_openclaw_native_config(
+    *,
+    path: Path,
+    server_name: str,
+    server_block: dict[str, Any],
+) -> Path:
+    output_path = path.expanduser().resolve()
+    existing = _read_json_object(output_path)
+    payload = _merge_openclaw_native_config(
+        existing,
+        server_name=server_name,
+        server_block=server_block,
+    )
+    return _write_json_file(output_path, payload)
+
+
 def _timed_call(callback):
     started_at = time.perf_counter()
     result = callback()
@@ -390,6 +453,7 @@ def _setup_summary(
     *,
     workspace_root: Path,
     config_path: Path,
+    native_config_path: Path | None,
     home_dir: Path,
     doctor_issues: list[str],
     smoke_report: dict[str, Any] | None,
@@ -417,6 +481,7 @@ def _setup_summary(
         "default_entry": _openclaw_setup_command(workspace_root),
         "recheck_command": _openclaw_check_command(workspace_root, config_path),
         "config_written_to": str(config_path),
+        "native_config_written_to": str(native_config_path) if native_config_path is not None else None,
         "local_home": str(home_dir),
     }
 
@@ -952,6 +1017,16 @@ def client_openclaw_setup(
         None,
         help="Optional mcporter config path. Defaults to <workspace>/config/mcporter.json.",
     ),
+    native_config: Path | None = typer.Option(
+        None,
+        "--native-config",
+        help="Optional OpenClaw native config path. Defaults to ~/.openclaw/openclaw.json.",
+    ),
+    write_native_config: bool = typer.Option(
+        True,
+        "--write-native-config/--no-write-native-config",
+        help="Also merge Horosa into OpenClaw's native mcp.servers config so agent sessions can see horosa_* tools.",
+    ),
     skip_smoke: bool = typer.Option(
         False,
         help="Skip the final smoke check if you only want install + config generation.",
@@ -966,6 +1041,11 @@ def client_openclaw_setup(
     workspace_root = workspace.expanduser().resolve()
     workspace_root.mkdir(parents=True, exist_ok=True)
     config_path = (config.expanduser().resolve() if config is not None else workspace_root / "config" / "mcporter.json")
+    native_config_path = (
+        native_config.expanduser().resolve()
+        if native_config is not None
+        else _default_openclaw_native_config_path().expanduser().resolve()
+    )
     home_dir = (isolate_home.expanduser().resolve() if isolate_home is not None else workspace_root / ".horosa-home")
     env_overrides = _isolated_env_vars(home_dir)
 
@@ -976,6 +1056,13 @@ def client_openclaw_setup(
         isolate_home=home_dir,
     )
     _write_json_file(config_path, payload)
+    native_config_written_to: Path | None = None
+    if write_native_config:
+        native_config_written_to = _write_openclaw_native_config(
+            path=native_config_path,
+            server_name=server_name,
+            server_block=payload["mcpServers"][server_name],
+        )
 
     with _temporary_env(env_overrides):
         settings = Settings.from_env()
@@ -1045,6 +1132,14 @@ def client_openclaw_setup(
         "workspace": str(workspace_root),
         "config": str(config_path),
         "config_written_to": str(config_path),
+        "native_config": str(native_config_written_to) if native_config_written_to is not None else None,
+        "native_config_written_to": str(native_config_written_to) if native_config_written_to is not None else None,
+        "native_config_note": (
+            "Horosa was merged into OpenClaw native mcp.servers. Restart OpenClaw or start a new agent session "
+            "if an existing session still reports clientToolCount: 0."
+            if native_config_written_to is not None
+            else "Skipped native OpenClaw config write. mcporter checks may pass, but agent sessions may not see horosa_* tools until mcp.servers is configured."
+        ),
         "isolate_home": str(home_dir),
         "local_home": str(home_dir),
         "runtime_root": env_overrides["HOROSA_RUNTIME_ROOT"],
@@ -1061,12 +1156,20 @@ def client_openclaw_setup(
         "smoke": smoke_report,
         "next_steps": (
             [
-                f"Open OpenClaw and use the generated mcporter config at {config_path}.",
+                (
+                    f"Restart OpenClaw or start a new agent session so it reloads native MCP config at {native_config_written_to}."
+                    if native_config_written_to is not None
+                    else f"Open OpenClaw and use the generated mcporter config at {config_path}."
+                ),
                 f"Re-run `uv run horosa-skill client openclaw-check --workspace {workspace_root} --config {config_path}` whenever you want a fresh smoke report.",
             ]
             if not skip_smoke
             else [
-                f"Open OpenClaw and use the generated mcporter config at {config_path}.",
+                (
+                    f"Restart OpenClaw or start a new agent session so it reloads native MCP config at {native_config_written_to}."
+                    if native_config_written_to is not None
+                    else f"Open OpenClaw and use the generated mcporter config at {config_path}."
+                ),
                 f"Run `uv run horosa-skill client openclaw-check --workspace {workspace_root} --config {config_path}` to verify the setup when convenient.",
             ]
         ),
@@ -1075,6 +1178,7 @@ def client_openclaw_setup(
         _setup_summary(
             workspace_root=workspace_root,
             config_path=config_path,
+            native_config_path=native_config_written_to,
             home_dir=home_dir,
             doctor_issues=doctor_issues,
             smoke_report=smoke_report,

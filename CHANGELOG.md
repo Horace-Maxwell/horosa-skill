@@ -7,6 +7,20 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.5.11] - 2026-05-18
+
+### Fixed
+
+- `client openclaw-setup` now writes both the workspace `mcporter.json` and the
+  native OpenClaw `mcp.servers.horosa` entry in `~/.openclaw/openclaw.json`.
+  This closes the gap where mcporter smoke checks passed but new OpenClaw agent
+  sessions still showed `clientToolCount: 0`.
+- Setup output now reports `native_config_written_to` and explicitly tells users
+  to restart OpenClaw or open a new agent session after native MCP config
+  changes.
+- OpenClaw docs now distinguish mcporter smoke configuration from native agent
+  MCP attachment, reducing accidental shell/Python fallback behavior.
+
 ## [0.5.10] - 2026-05-18
 
 ### Fixed

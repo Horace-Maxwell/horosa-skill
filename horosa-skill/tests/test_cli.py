@@ -188,7 +188,7 @@ def test_openclaw_setup_bootstraps_workspace_and_runs_smoke(monkeypatch, tmp_pat
             assert os.environ["HOROSA_SERVER_ROOT"].startswith("http://127.0.0.1:")
             assert os.environ["HOROSA_CHART_SERVER_ROOT"].startswith("http://127.0.0.1:")
             assert int(os.environ["HOROSA_LOCAL_CHART_PORT"]) == int(os.environ["HOROSA_LOCAL_BACKEND_PORT"]) + 1
-            return {"ok": True, "installed": True, "changed": True, "manifest": {"version": "0.5.10", "runtime_payload_version": "0.5.10"}}
+            return {"ok": True, "installed": True, "changed": True, "manifest": {"version": "0.5.11", "runtime_payload_version": "0.5.11"}}
 
         def start_local_services(self) -> dict[str, object]:
             return {"ok": True, "already_running": False}
@@ -196,8 +196,8 @@ def test_openclaw_setup_bootstraps_workspace_and_runs_smoke(monkeypatch, tmp_pat
         def doctor(self) -> dict[str, object]:
             return {
                 "issues": [],
-                "manifest_version": "0.5.10",
-                "runtime_payload_version": "0.5.10",
+                "manifest_version": "0.5.11",
+                "runtime_payload_version": "0.5.11",
                 "endpoints": [{"label": "java_backend", "reachable": True}],
             }
 
@@ -225,6 +225,8 @@ def test_openclaw_setup_bootstraps_workspace_and_runs_smoke(monkeypatch, tmp_pat
         server_name="horosa",
         isolate_home=None,
         config=None,
+        native_config=tmp_path / ".openclaw" / "openclaw.json",
+        write_native_config=True,
         skip_smoke=False,
         manifest_url="file:///tmp/runtime-manifest.json",
     )
@@ -232,8 +234,11 @@ def test_openclaw_setup_bootstraps_workspace_and_runs_smoke(monkeypatch, tmp_pat
     config_path = (workspace / "config" / "mcporter.json").resolve()
     payload = json.loads(config_path.read_text(encoding="utf-8"))
     server = payload["mcpServers"]["horosa"]
+    native_config_path = (tmp_path / ".openclaw" / "openclaw.json").resolve()
+    native_payload = json.loads(native_config_path.read_text(encoding="utf-8"))
 
     assert server["env"]["HOME"] == str(expected_home)
+    assert native_payload["mcp"]["servers"]["horosa"] == server
     if os.name == "nt":
         assert server["env"]["USERPROFILE"] == str(expected_home)
     else:
@@ -249,11 +254,13 @@ def test_openclaw_setup_bootstraps_workspace_and_runs_smoke(monkeypatch, tmp_pat
     assert captured["report"]["ok"] is True
     assert captured["report"]["config"] == str(config_path)
     assert captured["report"]["config_written_to"] == str(config_path)
+    assert captured["report"]["native_config"] == str(native_config_path)
+    assert captured["report"]["native_config_written_to"] == str(native_config_path)
     assert captured["report"]["local_home"] == str(expected_home)
     assert captured["report"]["ready_for_openclaw"] is True
-    assert captured["report"]["install"]["version"] == "0.5.10"
-    assert captured["report"]["install"]["runtime_payload_version"] == "0.5.10"
-    assert captured["report"]["doctor"]["manifest_version"] == "0.5.10"
+    assert captured["report"]["install"]["version"] == "0.5.11"
+    assert captured["report"]["install"]["runtime_payload_version"] == "0.5.11"
+    assert captured["report"]["doctor"]["manifest_version"] == "0.5.11"
     assert captured["report"]["smoke"]["ok"] is True
     assert os.environ.get("HOME") == original_home
 
@@ -272,8 +279,8 @@ def test_doctor_adds_user_facing_summary(monkeypatch, tmp_path: Path) -> None:
             return {
                 "ok": True,
                 "installed": True,
-                "manifest_version": "0.5.10",
-                "runtime_payload_version": "0.5.10",
+                "manifest_version": "0.5.11",
+                "runtime_payload_version": "0.5.11",
                 "issues": ["services:not_running"],
                 "endpoints": [{"label": "java_backend", "reachable": False}],
             }
@@ -287,8 +294,8 @@ def test_doctor_adds_user_facing_summary(monkeypatch, tmp_path: Path) -> None:
     report = captured["report"]
     assert report["ready_for_openclaw"] is False
     assert report["status"] == "needs_attention"
-    assert report["manifest_version"] == "0.5.10"
-    assert report["runtime_payload_version"] == "0.5.10"
+    assert report["manifest_version"] == "0.5.11"
+    assert report["runtime_payload_version"] == "0.5.11"
     assert "not running yet" in report["user_summary"]
     assert "openclaw-setup" in report["next_action"]
     assert report["environment"]["runtime_root"] == str(settings.runtime_root)
