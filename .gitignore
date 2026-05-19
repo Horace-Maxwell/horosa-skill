@@ -21,6 +21,7 @@ horosa-skill/build/
 vendor/runtime-source/
 
 # Local report QA artifacts generated during manual audits.
+HOROSA_IO_AUDIT_*/
 ds_technique_reports/
 all_technique_reports/
 horosa_*_report.json

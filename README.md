@@ -62,8 +62,11 @@
 - `HOROSA_IO_AUDIT_*/all_tool_inputs_outputs_full.json`
 - `HOROSA_IO_AUDIT_*/all_tool_inputs_outputs.jsonl`
 - `HOROSA_IO_AUDIT_*/all_tool_inputs_outputs_summary.md`
+- `HOROSA_IO_AUDIT_*/predictive_tools_full_export_sections.md`
 
 这些文件不会自动提交进 Git；它们用于你在本机复核每个工具的输入、输出、memory、report 和 preflight 行为。
+
+审计推运类工具时不要只看短预览。`solarreturn`、`lunarreturn`、`solararc`、`givenyear`、`profection`、`pd`、`pdchart`、`zr` 等工具的星阙式正文通常先写本命盘，再写返照盘、推运盘、流年盘或主限表格；如果只截取前 1200 字，可能只看到本命盘。正确做法是打开完整 artifact，按 `export_format.sections` 或 `predictive_tools_full_export_sections.md` 检查每个 section。详细说明见 [`docs/EXPORT_AUDIT_GUIDE.md`](./docs/EXPORT_AUDIT_GUIDE.md)。
 
 ## Agent 硬性调用规则
 
@@ -718,6 +721,16 @@ uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace --fu
   "all_reports_generated": true
 }
 ```
+
+推运类工具的审计需要额外看完整 section，而不是只看正文前缀。完整推运 section 检查会确认：
+
+- `solarreturn` / `lunarreturn` 包含本命盘、返照盘和返照盘相位。
+- `givenyear` 包含本命盘、流年盘和流年盘相位。
+- `solararc` / `profection` 包含本命盘、推运盘和推运盘相位。
+- `pd` / `pdchart` 包含真实主限表格、主限法盘表格、相位和说明。
+- `zr` / `firdaria` / `decennials` 包含对应时间轴或表格。
+
+参见 [`docs/EXPORT_AUDIT_GUIDE.md`](./docs/EXPORT_AUDIT_GUIDE.md)。
 
 ## 这套仓库当前最适合谁
 

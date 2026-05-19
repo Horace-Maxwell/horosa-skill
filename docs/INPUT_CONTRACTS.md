@@ -114,10 +114,13 @@ horosa_agent_guidance({ "tool_name": "solarreturn" })
 
 - `export_snapshot.export_text` 非空。
 - `export_format.sections` 包含对应的本命盘、目标盘、相位或表格章节。
+- 不要只看 `export_text` 的短预览；这些工具通常先写本命盘，返照盘 / 推运盘 / 流年盘 / 主限表格可能在后续 section。
 - `pd` 的表格有真实行；不能只有标题。
 - `zr` 的时间轴有层级行；不能显示“无数据”。
 - `memory_show` 能读回该 run。
 - 需要报告时，`report_render` 能生成 JSON / DOCX / PDF artifact。
+
+完整审计建议见 [`EXPORT_AUDIT_GUIDE.md`](./EXPORT_AUDIT_GUIDE.md)。如果本地生成了 `HOROSA_IO_AUDIT_*/predictive_tools_full_export_sections.md`，优先看这份按 section 展开的文件，而不是 `all_tool_inputs_outputs_summary.md` 里的短预览。
 
 ## 常用 CLI
 
@@ -127,4 +130,3 @@ uv run horosa-skill agent guidance --tool pdchart
 echo '<payload.json>' | uv run horosa-skill tool run solarreturn --stdin
 echo '<payload.json>' | uv run horosa-skill report from-tool solarreturn --stdin --format pdf --question "请分析这一年事业与关系走势"
 ```
-
