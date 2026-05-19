@@ -39,7 +39,7 @@ uv run horosa-skill client openclaw-setup --workspace ~/.openclaw/workspace-horo
 uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace-horosabot --full
 ```
 
-如果 trace 显示 `clientToolCount: 0`，说明该 agent 会话没有拿到 Horosa MCP tools。此时不要让模型退回 shell 手算或无 env 的 CLI 调用；先修 OpenClaw/mcporter 配置，让 agent 能看到 `horosa_*` 工具。
+如果 trace 显示 `clientToolCount: 0`，但 `openclaw mcp list` 能看到 `horosa`，或真实对话里已经出现并能调用 `horosa__...` 工具，这个字段就是旧 trajectory 的统计噪音，不能当作未挂载依据。此时只需要重启 OpenClaw / 开新 session 让统计刷新。只有当 `openclaw mcp list`、真实工具列表和 `openclaw-check` 都看不到 Horosa 时，才按未挂载处理。无论哪种情况，都不要让模型退回 shell 手算或无 env 的 CLI 调用。
 
 如果 `openclaw-check --full` 通过，但 `openclaw mcp list` 仍提示 `No MCP servers configured in ~/.openclaw/openclaw.json`，说明只写了 workspace 的 mcporter 配置，没有写 OpenClaw 原生配置。重新运行：
 
@@ -127,9 +127,10 @@ uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace --fu
 ## 常见提示与误报
 
 - 如果默认 `uv run horosa-skill doctor` 显示 `installed=false`，但 `openclaw-check` 是 `ok=true`，通常是因为 OpenClaw 使用了隔离 HOME。以 `openclaw-check` 的结果为准，或用同一组 `HOROSA_RUNTIME_ROOT` / `HOROSA_SKILL_DATA_DIR` 运行 doctor。
-- 如果 full check 偶发出现 `No JSON content was found`，请升级到 `0.5.11` 或更新 main；新版本会从 mcporter/stdio 混合输出里提取第一个完整 JSON，并且会在未确认关键设置时返回清晰的 `agent_guidance.required` 提示。
-- 如果 `openclaw-check` 或 agent session 长时间没有 JSON 输出，请升级到 `0.5.11` 或更新 main；新版会给 mcporter subprocess 加超时，并返回 `client.command_timeout` 诊断，而不是无限挂住。
-- 如果 release runtime 外层版本和内部 `runtime-payload/runtime-manifest.json` 不一致，请使用 `v0.5.11` 或更新后的 release；构建验证现在会拒绝这种 stale embedded manifest。
+- 如果 agent 用“最小参数”直接试跑奇门 / 太乙 / 六爻并触发 `/nongli/time` 的 `200001 param error`，先让它调用 `horosa_agent_guidance` 补问日期、时间、时区、经纬度和默认设置。`v0.5.12` 起也会自动对 Java 日期接口重试星阙兼容 payload，避免把格式问题误判成算法不可用。
+- 如果 full check 偶发出现 `No JSON content was found`，请升级到 `0.5.12` 或更新 main；新版本会从 mcporter/stdio 混合输出里提取第一个完整 JSON，并且会在未确认关键设置时返回清晰的 `agent_guidance.required` 提示。
+- 如果 `openclaw-check` 或 agent session 长时间没有 JSON 输出，请升级到 `0.5.12` 或更新 main；新版会给 mcporter subprocess 加超时，并返回 `client.command_timeout` 诊断，而不是无限挂住。
+- 如果 release runtime 外层版本和内部 `runtime-payload/runtime-manifest.json` 不一致，请使用 `v0.5.12` 或更新后的 release；构建验证现在会拒绝这种 stale embedded manifest。
 - 如果 OpenClaw gateway 报 `PATH missing` 或其他插件 manifest warning，只要 `horosa-skill client openclaw-check` 是 `ok=true`，这类 warning 通常不是 Horosa MCP 的阻塞项。
 
 ### 3. 手动粘贴配置时，使用下面这段 MCP 配置

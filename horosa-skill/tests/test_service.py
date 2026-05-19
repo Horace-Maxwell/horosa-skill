@@ -874,6 +874,56 @@ def test_java_chart_payload_candidates_cover_windows_runtime_variants() -> None:
     } in candidates
 
 
+def test_nongli_payload_candidates_keep_validated_payload_first_then_legacy_slash_fallback() -> None:
+    candidates = _java_chart_payload_candidates(
+        "/nongli/time",
+        {
+            "date": "2028-04-06",
+            "time": "09:03:00",
+            "zone": "+08:00",
+            "lat": "31n13",
+            "lon": "121e28",
+            "gpsLat": 31.2167,
+            "gpsLon": 121.4667,
+        },
+    )
+
+    assert candidates[0] == {
+        "date": "2028-04-06",
+        "time": "09:03:00",
+        "zone": "+08:00",
+        "lat": "31n13",
+        "lon": "121e28",
+        "gpsLat": 31.2167,
+        "gpsLon": 121.4667,
+    }
+    assert {
+        "date": "2028/04/06",
+        "time": "09:03:00",
+        "zone": "+08:00",
+        "lat": "31n13",
+        "lon": "121e28",
+        "gpsLat": 31.2167,
+        "gpsLon": 121.4667,
+    } in candidates
+    assert {
+        "date": "2028/04/06",
+        "time": "09:03:00",
+        "zone": "8",
+        "lat": "31n13",
+        "lon": "121e28",
+        "gpsLat": 31.2167,
+        "gpsLon": 121.4667,
+    } in candidates
+    assert {
+        "date": "2028/04/06",
+        "time": "09:03:00",
+        "zone": "+08:00",
+        "gpsLat": 31.2167,
+        "gpsLon": 121.4667,
+    } in candidates
+
+
 def test_service_retries_chart_payload_variants_after_backend_param_error(tmp_path) -> None:
     class RetryChartClient(FakeClient):
         def __init__(self) -> None:
@@ -907,6 +957,53 @@ def test_service_retries_chart_payload_variants_after_backend_param_error(tmp_pa
     assert result.ok is True
     assert result.input_normalized["zone"] == "+08:00"
     assert any(payload.get("zone") == "8" for endpoint, payload in client.calls if endpoint == "/")
+
+
+def test_service_retries_nongli_time_legacy_payload_after_backend_param_error(tmp_path) -> None:
+    class RetryNongliClient(FakeClient):
+        def __init__(self) -> None:
+            super().__init__()
+            self.calls: list[tuple[str, dict]] = []
+
+        def call(self, endpoint: str, payload: dict) -> dict:
+            self.calls.append((endpoint, dict(payload)))
+            if endpoint == "/nongli/time" and "/" not in str(payload.get("date", "")):
+                raise ToolTransportError(
+                    "backend rejected payload",
+                    code="transport.http_error",
+                    details={
+                        "endpoint": endpoint,
+                        "status_code": 500,
+                        "body": '{"ResultCode":200001,"Result":"param error Index 1 out of bounds for length 1"}',
+                    },
+                )
+            return super().call(endpoint, payload)
+
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    client = RetryNongliClient()
+    service = HorosaSkillService(settings, client=client, store=MemoryStore(settings), js_client=FakeJsClient())
+
+    result = service.run_tool(
+        "qimen",
+        {
+            "date": "2028/4/6",
+            "time": "9:3",
+            "zone": "8",
+            "lat": "31.2167",
+            "lon": "121.4667",
+            "ad": 1,
+        },
+        save_result=False,
+    )
+
+    assert result.ok is True
+    nongli_calls = [call_payload for endpoint, call_payload in client.calls if endpoint == "/nongli/time"]
+    assert nongli_calls[0]["date"] == "2028-04-06"
+    assert any(call_payload["date"] == "2028/04/06" for call_payload in nongli_calls)
 
 
 def test_sanshiunited_subresults_use_compact_export_contracts(tmp_path) -> None:

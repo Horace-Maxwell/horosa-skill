@@ -2,7 +2,7 @@
 
 ## 版本面
 
-- tool envelope：`0.5.11`
+- tool envelope：`0.5.12`
 - export contract：`horosa.ai.export.settings.v1`
 - record schema：`horosa.skill.record.v1`
 - run manifest schema：`horosa.skill.run.manifest`
