@@ -7,7 +7,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
 
-from horosa_skill.agent_guidance import build_agent_guidance, validate_agent_preflight
+from horosa_skill.agent_guidance import build_agent_guidance, build_tool_docstring, validate_agent_preflight
 from horosa_skill.config import Settings
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.errors import ToolValidationError
@@ -252,7 +252,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
                     return _mcp_error_payload(exc)
 
             _tool.__name__ = TOOL_DEFINITIONS[tool_name].mcp_name
-            _tool.__doc__ = TOOL_DEFINITIONS[tool_name].description
+            _tool.__doc__ = build_tool_docstring(tool_name)
             _tool.__signature__ = _signature_for_input_model(model)
             _tool.__annotations__ = {"return": ToolEnvelope}
             return mcp.tool(name=TOOL_DEFINITIONS[tool_name].mcp_name)(_tool)

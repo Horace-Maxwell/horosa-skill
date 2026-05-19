@@ -352,6 +352,31 @@ class CaptureClient(FakeClient):
         return super().call(endpoint, payload)
 
 
+def test_service_tool_list_exposes_input_contracts(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+
+    tools = {tool["name"]: tool for tool in service.list_tools()}
+
+    assert tools["solarreturn"]["input_contract"]["required_for_real_call"] == [
+        "date",
+        "time",
+        "zone",
+        "lat",
+        "lon",
+        "datetime",
+        "dirZone",
+        "dirLat",
+        "dirLon",
+    ]
+    assert tools["pd"]["input_contract"]["target_fields"]["pdaspects"].startswith("纳入表格")
+    assert "主限法盘星体表格" in tools["pdchart"]["input_contract"]["output_contract"]
+
+
 def test_service_tool_call_persists_memory(tmp_path) -> None:
     settings = Settings(
         server_root="http://127.0.0.1:9999",

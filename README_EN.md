@@ -27,13 +27,14 @@
 - Evaluation: [`docs/EVALUATION.md`](./docs/EVALUATION.md)
 - Architecture: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
 - Data Contracts: [`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md)
+- Input Contracts: [`docs/INPUT_CONTRACTS.md`](./docs/INPUT_CONTRACTS.md)
 - MCP Metadata: [`server.json`](./server.json)
 - Agent Skill: [`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md)
 - Agent Repo Rules: [`AGENTS.md`](./AGENTS.md)
 
 ## Current Stable Baseline
 
-Current public version: `Horosa Skill 0.5.7`
+Current public version: `Horosa Skill 0.5.8`
 
 The most important change in this line is not just another tool. It makes “do not invent missing settings” a hard protocol. If a technique depends on time, location, timezone, gender, question context, house system, calendar options, or method-specific settings, the agent must ask first. Unconfirmed calls return a structured blocking response with a user-facing recovery prompt.
 
@@ -50,9 +51,11 @@ Latest local verification:
 | report JSON artifact | `39 / 39` |
 | Xingque-style export structure | Business methods emit `export_snapshot` / `export_format` |
 | GitHub CI | Linux/macOS tests plus Windows OpenClaw smoke pass |
-| Release runtime | macOS / Windows `v0.5.7` assets uploaded and verified |
+| Release runtime | macOS / Windows `v0.5.8` assets uploaded and verified |
 
 For the predictive tools `solarreturn`, `lunarreturn`, `solararc`, `givenyear`, `profection`, `pd`, `pdchart`, and `zr`: the current version verifies them as usable. Agents should not label Java `/predict/*` tools as unavailable. If a client still says that, first check whether it is using an old runtime, bypassing MCP with hand-written calculations, or skipping `doctor` / `openclaw-check --full`.
+
+More importantly, these tools now expose explicit input contracts. Return/progression tools need more than natal data: the agent must also confirm target time, target location/timezone, or primary-direction method settings. See [`docs/INPUT_CONTRACTS.md`](./docs/INPUT_CONTRACTS.md). The same contract is exposed through CLI `tool list`, `horosa_agent_guidance`, and MCP tool docstrings.
 
 Full local audit artifacts are generated outside Git as:
 
@@ -200,6 +203,19 @@ If the goal is “clone once, install once, and let AI call real Horosa methods 
 | `firdaria` | Firdaria | Generate Firdaria timelines |
 | `decennials` | Decennials | Generate decennial timing layers |
 
+Predictive tools have non-optional input and output expectations:
+
+| Tool | Confirm before calling | Output must include |
+| --- | --- | --- |
+| `solarreturn` / `lunarreturn` | natal data + return target `datetime` + return location/timezone `dirLat` / `dirLon` / `dirZone` | natal chart + return chart + return aspects |
+| `givenyear` | natal data + target year/time `datetime` + directed location/timezone `dir*` | natal chart + given-year chart + aspects |
+| `solararc` / `profection` | natal data + target `datetime` + `dirZone` | natal chart + progressed/profection chart + aspects |
+| `pd` | natal data + `pdtype` + `pdMethod` + `pdTimeKey` + `pdaspects` | primary-direction settings + real table rows |
+| `pdchart` | natal data + target `datetime` + `dirZone` + primary-direction method fields | natal chart + primary-direction chart table + aspects |
+| `zr` / `firdaria` / `decennials` | natal data + whether the user accepts Xingque default timeline settings | timeline / layered period output |
+
+If those fields are missing, the agent must ask the user or call `horosa_agent_guidance` and forward the recovery prompt. It must not silently invent settings.
+
 #### Chinese occult backbone
 
 | Tool ID | Name | Purpose |
@@ -304,7 +320,7 @@ Every tool returns a stable envelope:
 {
   "ok": true,
   "tool": "qimen",
-  "version": "0.5.7",
+  "version": "0.5.8",
   "input_normalized": {},
   "data": {},
   "summary": [],
@@ -374,7 +390,7 @@ Latest local all-tool audit:
 
 ```json
 {
-  "version": "0.5.7",
+  "version": "0.5.8",
   "tool_count": 39,
   "records_count": 39,
   "errors_count": 0,
@@ -611,7 +627,7 @@ Useful documents:
 Already implemented:
 
 - GitHub-first offline runtime install flow
-- macOS and Windows `v0.5.7` runtime release assets
+- macOS and Windows `v0.5.8` runtime release assets
 - local MCP server and JSON-first CLI
 - full Xingque AI export registry and parser
 - stable structured outputs across 39 callable tools

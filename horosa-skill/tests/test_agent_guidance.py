@@ -4,6 +4,8 @@ from horosa_skill.agent_guidance import (
     PREFLIGHT_EXEMPT_TOOLS,
     TOOL_GUIDANCE,
     assert_guidance_covers_registered_tools,
+    build_tool_docstring,
+    build_tool_input_contract,
     build_validation_recovery,
     build_agent_guidance,
     validate_agent_preflight,
@@ -42,6 +44,17 @@ def test_guidance_all_includes_all_tools_and_report_memory_notes() -> None:
     assert set(guidance["tools"]) == set(TOOL_DEFINITIONS)
     assert "horosa_report_render" in guidance["report_and_memory"]
     assert "horosa_memory_query" in guidance["report_and_memory"]
+    assert guidance["tools"]["solarreturn"]["input_contract"]["required_for_real_call"] == [
+        "date",
+        "time",
+        "zone",
+        "lat",
+        "lon",
+        "datetime",
+        "dirZone",
+        "dirLat",
+        "dirLon",
+    ]
 
 
 def test_all_enforced_tools_have_user_questions() -> None:
@@ -64,6 +77,23 @@ def test_agent_preflight_blocks_unconfirmed_calculation_tools() -> None:
     assert any(item["field"] == "guirengType" for item in gate["ask_if_missing"])
     assert gate["agent_recovery"]["must_ask_user"] is True
     assert "调用 `liureng_gods` 前需要先确认" in gate["agent_recovery"]["prompt_to_user"]
+
+
+def test_predictive_input_contracts_are_explicit_for_agents() -> None:
+    solarreturn = build_tool_input_contract("solarreturn")
+    pd = build_tool_input_contract("pd")
+    pdchart_doc = build_tool_docstring("pdchart")
+
+    assert solarreturn["schema"] == "horosa.skill.input_contract.v1"
+    assert solarreturn["confirmation_required"] is True
+    assert {"datetime", "dirZone", "dirLat", "dirLon"} <= set(solarreturn["required_for_real_call"])
+    assert "返照盘星与虚点" in solarreturn["output_contract"]
+    assert solarreturn["example_payload"]["agent_confirmed_settings"] is True
+
+    assert {"pdtype", "pdMethod", "pdTimeKey", "pdaspects"} <= set(pd["required_for_real_call"])
+    assert "主限表格" in pd["output_contract"]
+    assert "Required input for a real call" in pdchart_doc
+    assert "主限法盘星体表格" in pdchart_doc
 
 
 def test_agent_preflight_allows_confirmed_calculation_tools() -> None:
