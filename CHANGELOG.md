@@ -7,6 +7,26 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.5.7] - 2026-05-18
+
+### Fixed
+
+- Reworked predictive astrology export snapshots so `solarreturn`,
+  `lunarreturn`, `solararc`, `givenyear`, and `profection` now explicitly emit
+  both the natal chart and the corresponding return/progressed chart sections.
+- Fixed `pd` primary direction exports to render the actual returned direction
+  table instead of an empty placeholder.
+- Fixed `pdchart` exports to include a readable primary-direction chart position
+  table and aspect section.
+- Fixed `zr` exports to surface zodiacal release timeline rows from the runtime
+  response instead of reporting empty data.
+
+### Added
+
+- Added regression tests that fail unless predictive methods contain substantive
+  natal/progressed chart content, primary direction tables, and zodiacal release
+  rows.
+
 ## [0.5.6] - 2026-05-18
 
 ### Added
