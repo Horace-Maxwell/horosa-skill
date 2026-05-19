@@ -7,6 +7,23 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.5.8] - 2026-05-18
+
+### Added
+
+- Added a shared `input_contract` surface for Horosa tools so CLI `tool list`,
+  MCP tool docstrings, and agent guidance expose the same required inputs, safe
+  defaults, and output expectations.
+- Added `docs/INPUT_CONTRACTS.md` with explicit predictive-tool input tables and
+  examples for return charts, progressions, primary directions, zodiacal
+  releasing, Firdaria, and decennials.
+
+### Fixed
+
+- Made predictive tools harder for AI clients to misuse by documenting required
+  target fields such as `datetime`, `dirZone`, `dirLat`, `dirLon`, `pdMethod`,
+  `pdTimeKey`, and `pdaspects` directly in machine-readable guidance.
+
 ## [0.5.7] - 2026-05-18
 
 ### Fixed

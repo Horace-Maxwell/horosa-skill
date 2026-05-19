@@ -27,13 +27,14 @@
 - 评测体系：[`docs/EVALUATION.md`](./docs/EVALUATION.md)
 - 架构设计：[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
 - 数据契约：[`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md)
+- 输入契约：[`docs/INPUT_CONTRACTS.md`](./docs/INPUT_CONTRACTS.md)
 - MCP 元数据：[`server.json`](./server.json)
 - Agent 使用 Skill：[`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md)
 - Agent 仓库规则：[`AGENTS.md`](./AGENTS.md)
 
 ## 最新稳定基线
 
-当前公开版本：`Horosa Skill 0.5.7`
+当前公开版本：`Horosa Skill 0.5.8`
 
 这一版的核心变化不是多加一个工具，而是把“AI 不能乱补参数”做成硬性协议。只要技法会受时间、地点、时区、性别、事项、宫制、历法、起局方式等设置影响，agent 在用户没有确认前就不能继续调用。工具会返回结构化阻断结果，并给出可直接转发给用户的追问文本。
 
@@ -50,9 +51,11 @@
 | report JSON artifact | `39 / 39` |
 | 星阙式导出结构 | 业务技法均带 `export_snapshot` / `export_format` |
 | GitHub CI | Linux/macOS 单测 + Windows OpenClaw smoke 通过 |
-| Release runtime | macOS / Windows `v0.5.7` assets 已上传并校验 |
+| Release runtime | macOS / Windows `v0.5.8` assets 已上传并校验 |
 
 关于 `solarreturn`、`lunarreturn`、`solararc`、`givenyear`、`profection`、`pd`、`pdchart`、`zr` 这批推运工具：当前版本已经复核为可用，不应再被 agent 标记为“Java `/predict/*` 不可用”。如果某个客户端仍然这样回答，优先检查它是否在使用旧 runtime、是否绕过 MCP 直接手算、是否没有运行 `doctor` / `openclaw-check --full`。
+
+更重要的是：这些工具现在有明确输入契约。返照/推运类不是只给本命资料就能严肃调用，必须同时确认目标时间、目标地点/时区或主限方法。完整字段表见 [`docs/INPUT_CONTRACTS.md`](./docs/INPUT_CONTRACTS.md)，CLI 和 MCP 也会通过 `tool list`、`horosa_agent_guidance`、tool docstring 暴露同一份 contract。
 
 完整本地输入输出审计产物示例：
 
@@ -208,6 +211,19 @@ uv run horosa-skill agent guidance --tool liureng_gods --intent "当前时间起
 | `firdaria` | 法达星限 | 生成法达星限结构与时间轴 |
 | `decennials` | 十年大运 / 十年星限 | 生成 decennials 时间分层输出 |
 
+推运类工具的关键输入和正确输出不能省略：
+
+| 工具 | 调用前必须确认 | 输出必须包含 |
+| --- | --- | --- |
+| `solarreturn` / `lunarreturn` | 本命资料 + 返照目标时间 `datetime` + 返照地点/时区 `dirLat` / `dirLon` / `dirZone` | 本命盘 + 返照盘 + 返照盘相位 |
+| `givenyear` | 本命资料 + 指定年/目标时间 `datetime` + 流年地点/时区 `dir*` | 本命盘 + 流年盘 + 流年盘相位 |
+| `solararc` / `profection` | 本命资料 + 推运目标时间 `datetime` + `dirZone` | 本命盘 + 推运盘 + 推运盘相位 |
+| `pd` | 本命资料 + `pdtype` + `pdMethod` + `pdTimeKey` + `pdaspects` | 主限设置 + 真实主限表格 |
+| `pdchart` | 本命资料 + 目标时间 `datetime` + `dirZone` + 主限方法字段 | 本命盘 + 主限法盘星体表格 + 主限相位 |
+| `zr` / `firdaria` / `decennials` | 本命资料 + 是否接受星阙默认时间轴设置 | 对应时间轴/层级表 |
+
+如果这些字段不完整，Agent 应先追问用户，或调用 `horosa_agent_guidance` 获取可直接转发的追问文本，不能自行补参。
+
 #### 中文术数主干
 
 | 工具 ID | 中文名称 | 作用 |
@@ -312,7 +328,7 @@ uv run horosa-skill agent guidance --tool liureng_gods --intent "当前时间起
 {
   "ok": true,
   "tool": "qimen",
-  "version": "0.5.7",
+  "version": "0.5.8",
   "input_normalized": {},
   "data": {},
   "summary": [],
@@ -567,7 +583,7 @@ uv run horosa-skill client openclaw-config --format mcporter
 已完成：
 
 - GitHub-first 离线 runtime 安装链
-- macOS / Windows `v0.5.7` runtime release 资产
+- macOS / Windows `v0.5.8` runtime release 资产
 - 本地 MCP server 与 JSON-first CLI
 - 完整星阙 AI 导出 registry 与 parser
 - 39 个可调用工具的结构化稳定输出
@@ -691,7 +707,7 @@ uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace --fu
 
 ```json
 {
-  "version": "0.5.7",
+  "version": "0.5.8",
   "tool_count": 39,
   "records_count": 39,
   "errors_count": 0,

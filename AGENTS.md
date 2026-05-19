@@ -28,6 +28,7 @@ Hard rule:
 - If location matters and no location is provided, ask whether to use client/current location or a specified city/longitude/latitude.
 - If a method has multiple result-changing systems, ask the user to choose or explicitly accept Xingque defaults.
 - If gender, house system, zodiacal system, 起局方式, 贵人体系, 六爻 lines, 地分, target year, or report format matters and is missing, ask before calling.
+- For predictive astrology, natal data is not enough. Ask for target `datetime`, target location/timezone `dirLat` / `dirLon` / `dirZone`, or primary-direction settings when the selected tool needs them.
 - Only use defaults without asking when the user says “默认 / 按星阙 / 快速起盘 / 你来决定”.
 
 Runtime gate:
@@ -47,6 +48,17 @@ This is especially important for:
 - 奇门遁甲: use `horosa_cn_qimen` / `qimen`.
 - 三式合一: use `horosa_cn_sanshiunited` / `sanshiunited`.
 - 太乙、金口诀、八字、紫微、星盘、推运 and all other registered Horosa tools.
+
+Predictive tool contracts:
+
+- `solarreturn` / `lunarreturn`: birth data + `datetime` + `dirZone` + `dirLat` + `dirLon`; output must include natal chart, return chart, and return aspects.
+- `givenyear`: birth data + `datetime` + `dirZone` + `dirLat` + `dirLon`; output must include natal chart, given-year chart, and aspects.
+- `solararc` / `profection`: birth data + `datetime` + `dirZone`; output must include natal chart, progressed/profection chart, and aspects.
+- `pd`: birth data + `pdtype` + `pdMethod` + `pdTimeKey` + `pdaspects`; output must include real primary-direction table rows.
+- `pdchart`: birth data + `datetime` + `dirZone` + primary-direction method settings; output must include primary-direction chart table and aspects.
+- `zr` / `firdaria` / `decennials`: birth data plus confirmed/default timeline settings; output must include timeline rows.
+
+The same contracts are exposed through `uv run horosa-skill tool list`, `uv run horosa-skill agent guidance --tool <tool>`, MCP `horosa_agent_guidance`, and MCP tool docstrings.
 
 Manual calculations can easily disagree with Xingque/Horosa because they bypass:
 

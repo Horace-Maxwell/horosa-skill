@@ -21,6 +21,167 @@ COMMON_LOCATION_FIELDS = ["date", "time", "zone/timezone", "lat/lon or gpsLat/gp
 COMMON_BIRTH_FIELDS = ["birth date", "birth time", "birth timezone", "birth place / longitude / latitude"]
 CONFIRMATION_FIELDS = ["agent_confirmed_settings", "defaults_accepted", "clarification_notes"]
 PREFLIGHT_EXEMPT_TOOLS = {"export_registry", "export_parse", "knowledge_registry", "knowledge_read", "ziwei_rules", "gua_desc", "gua_meiyi"}
+INPUT_CONTRACT_SCHEMA = "horosa.skill.input_contract.v1"
+
+
+COMMON_ASTRO_PAYLOAD_EXAMPLE: dict[str, Any] = {
+    "date": "1995-06-03",
+    "time": "05:30",
+    "zone": "+08:00",
+    "lat": "31n13",
+    "lon": "121e28",
+    "hsys": 0,
+    "zodiacal": 0,
+    "agent_confirmed_settings": True,
+    "clarification_notes": "User confirmed birth time, birthplace, timezone, Whole Sign houses, and tropical zodiac.",
+}
+
+PREDICTIVE_INPUT_CONTRACTS: dict[str, dict[str, Any]] = {
+    "solarreturn": {
+        "human_name": "太阳返照",
+        "required_fields": ["date", "time", "zone", "lat", "lon", "datetime", "dirZone", "dirLat", "dirLon"],
+        "must_ask": ["本命出生时间地点", "返照目标年份/日期", "返照地点与时区"],
+        "target_fields": {
+            "datetime": "返照目标时间或目标年份中的参考时间，格式建议 YYYY-MM-DD HH:mm:ss。",
+            "dirZone": "返照盘地点时区；如 +08:00。",
+            "dirLat/dirLon": "返照盘地点经纬度；若用户没有指定返照地点，必须先询问是否用出生地/现居地。",
+        },
+        "output_contract": ["本命盘起盘信息", "本命盘星与虚点", "返照盘起盘信息", "返照盘星与虚点", "返照盘相位"],
+        "example_payload": {
+            **COMMON_ASTRO_PAYLOAD_EXAMPLE,
+            "datetime": "2031-04-06 09:33:00",
+            "dirZone": "+08:00",
+            "dirLat": "31n13",
+            "dirLon": "121e28",
+        },
+    },
+    "lunarreturn": {
+        "human_name": "月亮返照",
+        "required_fields": ["date", "time", "zone", "lat", "lon", "datetime", "dirZone", "dirLat", "dirLon"],
+        "must_ask": ["本命出生时间地点", "月返目标月份/日期", "月返地点与时区"],
+        "target_fields": {
+            "datetime": "月返目标时间或目标月份中的参考时间，格式建议 YYYY-MM-DD HH:mm:ss。",
+            "dirZone": "月返盘地点时区。",
+            "dirLat/dirLon": "月返盘地点经纬度；不要静默假定等于出生地。",
+        },
+        "output_contract": ["本命盘起盘信息", "本命盘星与虚点", "返照盘起盘信息", "返照盘星与虚点", "返照盘相位"],
+        "example_payload": {
+            **COMMON_ASTRO_PAYLOAD_EXAMPLE,
+            "datetime": "2031-04-06 09:33:00",
+            "dirZone": "+08:00",
+            "dirLat": "31n13",
+            "dirLon": "121e28",
+        },
+    },
+    "givenyear": {
+        "human_name": "指定年推运 / 流年盘",
+        "required_fields": ["date", "time", "zone", "lat", "lon", "datetime", "dirZone", "dirLat", "dirLon"],
+        "must_ask": ["本命出生时间地点", "要看的年份/日期", "流年盘地点与时区"],
+        "target_fields": {
+            "datetime": "指定年中的目标时间，格式建议 YYYY-MM-DD HH:mm:ss。",
+            "dirZone": "流年盘地点时区。",
+            "dirLat/dirLon": "流年盘地点经纬度。",
+        },
+        "output_contract": ["本命盘起盘信息", "本命盘星与虚点", "流年盘起盘信息", "流年盘星与虚点", "流年盘相位"],
+        "example_payload": {
+            **COMMON_ASTRO_PAYLOAD_EXAMPLE,
+            "datetime": "2031-04-06 09:33:00",
+            "dirZone": "+08:00",
+            "dirLat": "31n13",
+            "dirLon": "121e28",
+        },
+    },
+    "solararc": {
+        "human_name": "太阳弧推运",
+        "required_fields": ["date", "time", "zone", "lat", "lon", "datetime", "dirZone"],
+        "must_ask": ["本命出生时间地点", "推运目标时间", "目标时区"],
+        "target_fields": {
+            "datetime": "太阳弧推运目标时间，格式建议 YYYY-MM-DD HH:mm:ss。",
+            "dirZone": "推运盘目标时区。",
+        },
+        "output_contract": ["本命盘起盘信息", "本命盘星与虚点", "推运盘起盘信息", "推运盘星与虚点", "推运盘相位"],
+        "example_payload": {
+            **COMMON_ASTRO_PAYLOAD_EXAMPLE,
+            "datetime": "2031-04-06 09:33:00",
+            "dirZone": "+08:00",
+        },
+    },
+    "profection": {
+        "human_name": "小限 / 年运推限",
+        "required_fields": ["date", "time", "zone", "lat", "lon", "datetime", "dirZone"],
+        "must_ask": ["本命出生时间地点", "小限目标年份/时间", "目标时区"],
+        "target_fields": {
+            "datetime": "小限目标时间，格式建议 YYYY-MM-DD HH:mm:ss。",
+            "dirZone": "目标时区。",
+        },
+        "output_contract": ["本命盘起盘信息", "本命盘星与虚点", "推运盘起盘信息", "推运盘星与虚点", "推运盘相位"],
+        "example_payload": {
+            **COMMON_ASTRO_PAYLOAD_EXAMPLE,
+            "datetime": "2031-04-06 09:33:00",
+            "dirZone": "+08:00",
+        },
+    },
+    "pd": {
+        "human_name": "本初方向 / 主限表",
+        "required_fields": ["date", "time", "zone", "lat", "lon", "pdtype", "pdMethod", "pdTimeKey", "pdaspects"],
+        "must_ask": ["本命出生时间地点", "主限方法", "时间钥匙", "相位列表"],
+        "target_fields": {
+            "pdtype": "主限类型；0 为当前星阙常用主限表配置。",
+            "pdMethod": "主限方法，如 astroapp_alchabitius / horosa_legacy。",
+            "pdTimeKey": "时间钥匙，如 Ptolemy。",
+            "pdaspects": "纳入表格的相位角度，例如 [0, 60, 90, 120, 180]。",
+        },
+        "output_contract": ["主限设置", "主限表格"],
+        "example_payload": {
+            **COMMON_ASTRO_PAYLOAD_EXAMPLE,
+            "pdtype": 0,
+            "pdMethod": "astroapp_alchabitius",
+            "pdTimeKey": "Ptolemy",
+            "pdaspects": [0, 60, 90, 120, 180],
+        },
+    },
+    "pdchart": {
+        "human_name": "主限法盘",
+        "required_fields": ["date", "time", "zone", "lat", "lon", "datetime", "dirZone", "pdtype", "pdMethod", "pdTimeKey"],
+        "must_ask": ["本命出生时间地点", "主限盘目标时间", "主限方法", "时间钥匙"],
+        "target_fields": {
+            "datetime": "主限法盘目标时间，格式建议 YYYY-MM-DD HH:mm:ss。",
+            "dirZone": "目标时区。",
+            "pdtype/pdMethod/pdTimeKey": "主限法盘算法设置。",
+        },
+        "output_contract": ["本命盘星与虚点", "主限法盘星体表格", "主限法盘相位"],
+        "example_payload": {
+            **COMMON_ASTRO_PAYLOAD_EXAMPLE,
+            "datetime": "2031-04-06 09:33:00",
+            "dirZone": "+08:00",
+            "pdtype": 0,
+            "pdMethod": "astroapp_alchabitius",
+            "pdTimeKey": "Ptolemy",
+            "showPdBounds": 1,
+        },
+    },
+    "zr": {
+        "human_name": "黄道释放",
+        "required_fields": ["date", "time", "zone", "lat", "lon"],
+        "must_ask": ["本命出生时间地点", "是否指定释放起点/层级"],
+        "target_fields": {
+            "startSign": "可选；指定释放起始星座，不给则按星阙默认。",
+            "stopLevelIdx": "可选；释放层级深度，不给则按星阙默认。",
+        },
+        "output_contract": ["黄道释放设置", "黄道释放时间轴"],
+        "example_payload": {**COMMON_ASTRO_PAYLOAD_EXAMPLE},
+    },
+    "firdaria": {
+        "human_name": "法达星限",
+        "required_fields": ["date", "time", "zone", "lat", "lon"],
+        "must_ask": ["本命出生时间地点", "是否沿用日夜与星阙默认排序"],
+        "target_fields": {
+            "date/time/zone/lat/lon": "本命信息；法达星限以本命盘日夜和星体顺序展开时间轴。",
+        },
+        "output_contract": ["法达星限时间轴"],
+        "example_payload": {**COMMON_ASTRO_PAYLOAD_EXAMPLE},
+    },
+}
 
 
 def _prompt_from_guidance(tool_name: str, ask_if_missing: list[dict[str, Any]], safe_defaults: list[dict[str, Any]]) -> str:
@@ -444,6 +605,7 @@ def _with_common_fields(tool_name: str, policy: dict[str, Any]) -> dict[str, Any
         result["technical_required_fields"] = [name for name, field in fields.items() if field.is_required()]
         result["accepted_fields"] = sorted(fields)
         result["description"] = definition.description
+        result["input_contract"] = build_tool_input_contract(tool_name)
     result["hard_gate"] = {
         "enabled": tool_name not in PREFLIGHT_EXEMPT_TOOLS,
         "pass_condition": "Provide `agent_confirmed_settings: true` after asking the user, or `defaults_accepted: true` when the user explicitly accepts Xingque/default settings.",
@@ -456,6 +618,79 @@ def _with_common_fields(tool_name: str, policy: dict[str, Any]) -> dict[str, Any
         "store final answer with memory tools when user asks for follow-up continuity",
     ]
     return result
+
+
+def _model_field_contract(tool_name: str) -> dict[str, Any]:
+    definition = TOOL_DEFINITIONS[tool_name]
+    fields = definition.input_model.model_fields
+    return {
+        "technical_required_fields": [name for name, field in fields.items() if field.is_required()],
+        "accepted_fields": sorted(fields),
+    }
+
+
+def build_tool_input_contract(tool_name: str) -> dict[str, Any]:
+    """Return the user-facing input contract exposed through CLI, MCP, and docs."""
+
+    if tool_name not in TOOL_DEFINITIONS:
+        return {
+            "schema": INPUT_CONTRACT_SCHEMA,
+            "ok": False,
+            "error": {"code": "input_contract.unknown_tool", "message": f"Unknown tool: {tool_name}"},
+        }
+
+    definition = TOOL_DEFINITIONS[tool_name]
+    policy = TOOL_GUIDANCE.get(tool_name)
+    contract: dict[str, Any] = {
+        "schema": INPUT_CONTRACT_SCHEMA,
+        "ok": True,
+        "tool_name": tool_name,
+        "mcp_name": definition.mcp_name,
+        "description": definition.description,
+        "confirmation_required": tool_name not in PREFLIGHT_EXEMPT_TOOLS,
+        "confirmation_fields": CONFIRMATION_FIELDS if tool_name not in PREFLIGHT_EXEMPT_TOOLS else [],
+        "technical": _model_field_contract(tool_name),
+        "user_context_required": deepcopy(policy.get("must_have_context", [])) if policy else [],
+        "ask_if_missing": deepcopy(policy.get("ask_if_missing", [])) if policy else [],
+        "safe_defaults": deepcopy(policy.get("safe_defaults", [])) if policy else [],
+        "do_not_assume": deepcopy(policy.get("do_not_assume", [])) if policy else [],
+        "output_contract": deepcopy(policy.get("output_contract", [])) if policy else [],
+        "example_payload": {},
+    }
+    if tool_name in PREDICTIVE_INPUT_CONTRACTS:
+        predictive = deepcopy(PREDICTIVE_INPUT_CONTRACTS[tool_name])
+        contract["predictive_contract"] = predictive
+        contract["required_for_real_call"] = predictive["required_fields"]
+        contract["target_fields"] = predictive["target_fields"]
+        contract["output_contract"] = predictive["output_contract"]
+        contract["example_payload"] = predictive["example_payload"]
+    elif policy:
+        contract["required_for_real_call"] = contract["technical"]["technical_required_fields"]
+    return contract
+
+
+def build_tool_docstring(tool_name: str) -> str:
+    """Build a concise MCP-visible docstring with the same input contract as the CLI."""
+
+    definition = TOOL_DEFINITIONS[tool_name]
+    contract = build_tool_input_contract(tool_name)
+    lines = [definition.description]
+    if contract.get("confirmation_required"):
+        lines.append(
+            "Agent gate: ask the user for result-changing settings first, then pass "
+            "`agent_confirmed_settings=true` or `defaults_accepted=true` with `clarification_notes`."
+        )
+    required = contract.get("required_for_real_call") or contract.get("technical", {}).get("technical_required_fields", [])
+    if required:
+        lines.append("Required input for a real call: " + ", ".join(str(item) for item in required) + ".")
+    target_fields = contract.get("target_fields")
+    if isinstance(target_fields, dict) and target_fields:
+        field_notes = "; ".join(f"{key}: {value}" for key, value in list(target_fields.items())[:5])
+        lines.append("Timing/target fields: " + field_notes)
+    output_contract = contract.get("output_contract") or []
+    if output_contract:
+        lines.append("Expected output sections: " + ", ".join(str(item) for item in output_contract) + ".")
+    return "\n".join(lines)
 
 
 def validate_agent_preflight(tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:

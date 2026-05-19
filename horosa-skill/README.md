@@ -37,6 +37,7 @@ This subproject is distributed under `GNU AGPL-3.0-only`. See [LICENSE](LICENSE)
   - stdio
 - JSON-first CLI
   - `tool run`
+  - `tool list`，包含每个工具的 `input_contract`
   - `dispatch`
   - `ask`
   - `export registry`
@@ -84,6 +85,17 @@ This subproject is distributed under `GNU AGPL-3.0-only`. See [LICENSE](LICENSE)
 - `zr`：黄道释放
 - `firdaria`：法达星限
 - `decennials`：十年大运 / 十年星限
+
+推运工具必须带目标输入，不允许只用本命资料直接调用：
+
+- `solarreturn` / `lunarreturn`：本命资料 + `datetime` + `dirZone` + `dirLat` + `dirLon`，输出本命盘和返照盘。
+- `givenyear`：本命资料 + 指定年/目标时间 `datetime` + `dir*`，输出本命盘和流年盘。
+- `solararc` / `profection`：本命资料 + `datetime` + `dirZone`，输出本命盘和推运盘。
+- `pd`：本命资料 + `pdtype` + `pdMethod` + `pdTimeKey` + `pdaspects`，输出真实主限表格。
+- `pdchart`：本命资料 + `datetime` + `dirZone` + 主限方法字段，输出主限法盘星体表格和相位。
+- `zr` / `firdaria` / `decennials`：本命资料 + 用户是否接受星阙默认时间轴设置，输出对应时间轴。
+
+完整说明见根目录 [`docs/INPUT_CONTRACTS.md`](../docs/INPUT_CONTRACTS.md)。Agent 应先用 `uv run horosa-skill agent guidance --tool <tool>` 或 MCP `horosa_agent_guidance` 检查必问项，再调用真实工具。
 
 ### 中文术数与扩展技法
 

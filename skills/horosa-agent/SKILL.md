@@ -47,6 +47,7 @@ Ask before calling when these are missing:
 - Jinkou 地分 and贵人体系.
 - SixYao lines, gua code, or起卦方式.
 - Report format and whether AI analysis text is ready.
+- Predictive astrology target fields: return/progression target `datetime`, directed location/timezone `dirLat` / `dirLon` / `dirZone`, and primary-direction method settings.
 
 Allowed shortcuts:
 
@@ -157,6 +158,28 @@ For birth-based methods, include as much as possible:
 ```
 
 For gender-sensitive tools, include `gender`. For Bazi and Ziwei, include `timeAlg`, `after23NewDay`, and direct/luck-flow options when the user asks about timing.
+
+For predictive astrology tools, do not call with natal data alone. These are the minimum real-call contracts:
+
+```json
+{
+  "solarreturn_or_lunarreturn": "birth data + datetime + dirZone + dirLat + dirLon; output must include natal chart + return chart + return aspects",
+  "givenyear": "birth data + datetime + dirZone + dirLat + dirLon; output must include natal chart + given-year chart + aspects",
+  "solararc_or_profection": "birth data + datetime + dirZone; output must include natal chart + progressed/profection chart + aspects",
+  "pd": "birth data + pdtype + pdMethod + pdTimeKey + pdaspects; output must include a real primary-direction table",
+  "pdchart": "birth data + datetime + dirZone + pdtype + pdMethod + pdTimeKey; output must include a primary-direction chart table",
+  "zr_firdaria_decennials": "birth data + confirmed/default timeline settings; output must include timeline rows"
+}
+```
+
+Use this before any predictive call:
+
+```bash
+uv run horosa-skill agent guidance --tool solarreturn
+uv run horosa-skill tool list
+```
+
+If the user asks “看今年运势” without giving target year/date and location, ask for the missing values. Do not silently use the current date or birth location unless the user accepts that default.
 
 For Daliuren, the Xingque-compatible default is `guirengType: 2` (`星占法贵人`). Only use `guirengType: 0` (`六壬法贵人`) or `guirengType: 1` (`遁甲法贵人`) when the user explicitly asks for that noble-person system or an existing case record already specifies it.
 

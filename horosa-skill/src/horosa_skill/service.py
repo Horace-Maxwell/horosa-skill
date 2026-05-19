@@ -9,7 +9,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from horosa_skill import __version__
-from horosa_skill.agent_guidance import build_validation_recovery
+from horosa_skill.agent_guidance import build_tool_input_contract, build_validation_recovery
 from horosa_skill.config import Settings
 from horosa_skill.engine.client import HorosaApiClient, HorosaPlainJsonClient
 from horosa_skill.engine.decennials import (
@@ -3401,6 +3401,7 @@ class HorosaSkillService:
                 "execution": tool.execution,
                 "endpoint": tool.endpoint,
                 "description": tool.description,
+                "input_contract": build_tool_input_contract(tool.name),
             }
             for tool in TOOL_DEFINITIONS.values()
         ]
