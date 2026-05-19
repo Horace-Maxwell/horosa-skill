@@ -1067,6 +1067,35 @@ def test_service_normalizes_single_digit_nongli_dates_before_remote_calls(tmp_pa
     assert nongli_calls[0]["lon"] == "121e28"
 
 
+def test_service_normalizes_iana_zone_before_nongli_remote_calls(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    client = CaptureClient()
+    service = HorosaSkillService(settings, client=client, store=MemoryStore(settings), js_client=FakeJsClient())
+
+    result = service.run_tool(
+        "qimen",
+        {
+            "date": "2026-05-18",
+            "time": "13:14",
+            "zone": "America/Los_Angeles",
+            "lat": "34.0522",
+            "lon": "-118.2437",
+            "ad": 1,
+        },
+        save_result=False,
+    )
+
+    assert result.ok is True
+    assert result.input_normalized["zone"] == "-07:00"
+    nongli_calls = [call_payload for endpoint, call_payload in client.calls if endpoint == "/nongli/time"]
+    assert nongli_calls, "expected /nongli/time to be called with normalized IANA timezone"
+    assert nongli_calls[0]["zone"] == "-07:00"
+
+
 def test_all_callable_techniques_keep_non_empty_structured_export_contracts(tmp_path) -> None:
     settings = Settings(
         server_root="http://127.0.0.1:9999",

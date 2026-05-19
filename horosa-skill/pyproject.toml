@@ -1,6 +1,6 @@
 [project]
 name = "horosa-skill"
-version = "0.5.12"
+version = "0.5.13"
 description = "GitHub-first Horosa AI skill distribution with CLI, MCP, and local structured memory."
 readme = "README.md"
 license = "AGPL-3.0-only"
@@ -12,6 +12,7 @@ dependencies = [
   "pydantic>=2.8.0",
   "python-docx>=1.1.2",
   "reportlab>=4.2.0",
+  "tzdata>=2025.2",
   "typer>=0.16.0",
 ]
 
