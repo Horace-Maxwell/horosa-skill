@@ -39,3 +39,28 @@ def test_normalize_request_payload_pads_decimal_coordinate_birth_inputs() -> Non
     assert normalized["lon"] == "121e28"
     assert normalized["gpsLat"] == 31.2167
     assert normalized["gpsLon"] == 121.4667
+
+
+def test_normalize_request_payload_converts_iana_timezones_from_event_datetime() -> None:
+    normalized = normalize_request_payload(
+        {
+            "date": "2026-05-18",
+            "time": "13:14",
+            "zone": "America/Los_Angeles",
+            "datetime": "2026-12-01 09:00",
+            "dirZone": "America/Los_Angeles",
+            "guaDate": "2026-01-15",
+            "guaTime": "08:30",
+            "guaZone": "America/New_York",
+        }
+    )
+
+    assert normalized["zone"] == "-07:00"
+    assert normalized["dirZone"] == "-08:00"
+    assert normalized["guaZone"] == "-05:00"
+
+
+def test_normalize_request_payload_leaves_unknown_iana_zone_when_datetime_is_missing() -> None:
+    normalized = normalize_request_payload({"zone": "America/Los_Angeles"})
+
+    assert normalized["zone"] == "America/Los_Angeles"

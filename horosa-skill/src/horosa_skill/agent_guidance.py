@@ -15,6 +15,7 @@ GLOBAL_AGENT_RULES: list[str] = [
     "If a required or result-changing setting is missing, ask a short clarification question with concrete options instead of silently inventing a value.",
     "Use Horosa/Xingque defaults only when the user accepts defaults, asks for a quick/default reading, or the setting is explicitly documented as safe to default.",
     "For current-time questions, using the current local date/time/timezone is allowed, but location and technique-specific settings still need clarification when they matter.",
+    "Timezone may be a fixed offset like +08:00 or an IANA name like America/Los_Angeles; Horosa normalizes IANA names by the chart date/time before calling the runtime.",
     "After a tool call, treat export_snapshot.export_text, export_format.sections, and summary as the source of truth.",
 ]
 

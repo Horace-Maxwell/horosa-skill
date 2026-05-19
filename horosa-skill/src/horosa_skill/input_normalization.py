@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 _COMPACT_COORD_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([NSEWnsew])\s*(\d+(?:\.\d+)?)\s*$")
 _DECIMAL_RE = re.compile(r"^[+-]?\d+(?:\.\d+)?$")
@@ -80,7 +82,7 @@ def _normalize_zone_fields(payload: dict[str, Any]) -> None:
     for key in ("zone", "dirZone", "guaZone"):
         if key not in payload:
             continue
-        normalized = _normalize_zone_value(payload.get(key))
+        normalized = _normalize_zone_value(payload.get(key), payload=payload, key=key)
         if normalized is not None:
             payload[key] = normalized
 
@@ -112,7 +114,7 @@ def _normalize_coordinate_fields(payload: dict[str, Any]) -> None:
                 payload[value_key] = _format_compact_coordinate(gps_decimal, axis=axis)
 
 
-def _normalize_zone_value(value: Any) -> str | None:
+def _normalize_zone_value(value: Any, *, payload: dict[str, Any] | None = None, key: str = "zone") -> str | None:
     if value is None:
         return None
     if isinstance(value, (int, float)) and not isinstance(value, bool):
@@ -122,9 +124,13 @@ def _normalize_zone_value(value: Any) -> str | None:
     if not text:
         return text
 
-    text = text.upper().replace("UTC", "").replace("GMT", "").strip()
-    if ":" not in text:
-        compact_match = re.fullmatch(r"(?P<sign>[+-]?)(?P<digits>\d{3,4})", text)
+    iana_offset = _normalize_iana_zone_value(text, payload=payload, key=key)
+    if iana_offset is not None:
+        return iana_offset
+
+    offset_text = text.upper().replace("UTC", "").replace("GMT", "").strip()
+    if ":" not in offset_text:
+        compact_match = re.fullmatch(r"(?P<sign>[+-]?)(?P<digits>\d{3,4})", offset_text)
         if compact_match:
             sign = compact_match.group("sign") or "+"
             digits = compact_match.group("digits")
@@ -132,10 +138,10 @@ def _normalize_zone_value(value: Any) -> str | None:
             minutes = int(digits[-2:])
             if minutes < 60:
                 return _format_zone_offset((-1 if sign == "-" else 1) * (hours + minutes / 60))
-    match = _ZONE_HM_RE.match(text)
+    match = _ZONE_HM_RE.match(offset_text)
     if not match:
-        if _DECIMAL_RE.match(text):
-            return _format_zone_offset(float(text))
+        if _DECIMAL_RE.match(offset_text):
+            return _format_zone_offset(float(offset_text))
         return str(value)
 
     sign = -1 if match.group("sign") == "-" else 1
@@ -145,6 +151,64 @@ def _normalize_zone_value(value: Any) -> str | None:
         return str(value)
     total_hours = sign * (hours + minutes / 60)
     return _format_zone_offset(total_hours)
+
+
+def _normalize_iana_zone_value(text: str, *, payload: dict[str, Any] | None, key: str) -> str | None:
+    if "/" not in text:
+        return None
+    try:
+        zone = ZoneInfo(text)
+    except (ZoneInfoNotFoundError, ValueError):
+        return None
+
+    reference = _reference_datetime_for_zone(payload or {}, key)
+    if reference is None:
+        return None
+    offset = reference.replace(tzinfo=zone).utcoffset()
+    if offset is None:
+        return None
+    return _format_zone_offset(offset.total_seconds() / 3600)
+
+
+def _reference_datetime_for_zone(payload: dict[str, Any], key: str) -> datetime | None:
+    if key == "guaZone":
+        reference = _combine_date_time(payload.get("guaDate"), payload.get("guaTime"))
+        if reference is not None:
+            return reference
+    if key == "dirZone":
+        reference = _parse_datetime_text(payload.get("datetime"))
+        if reference is not None:
+            return reference
+    return _combine_date_time(payload.get("date"), payload.get("time")) or _parse_datetime_text(payload.get("datetime"))
+
+
+def _combine_date_time(date_value: Any, time_value: Any) -> datetime | None:
+    if date_value is None or time_value is None:
+        return None
+    date_text = str(date_value).strip()
+    time_text = str(time_value).strip()
+    date_match = _DATE_RE.match(date_text)
+    time_match = _TIME_RE.match(time_text)
+    if not date_match or not time_match:
+        return None
+    return datetime(
+        int(date_match.group("year")),
+        int(date_match.group("month")),
+        int(date_match.group("day")),
+        int(time_match.group("hour")),
+        int(time_match.group("minute")),
+        int(time_match.group("second") or "0"),
+    )
+
+
+def _parse_datetime_text(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    match = _DATETIME_RE.match(text)
+    if not match:
+        return None
+    return _combine_date_time(match.group("date"), match.group("time"))
 
 
 def _format_zone_offset(offset_hours: float) -> str:

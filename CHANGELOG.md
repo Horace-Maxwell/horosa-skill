@@ -7,6 +7,20 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.5.13] - 2026-05-18
+
+### Fixed
+
+- Normalized IANA timezone names such as `America/Los_Angeles` and
+  `Asia/Shanghai` into date-aware numeric offsets before calling Java date
+  endpoints. This closes the remaining `/nongli/time` failure where
+  full-parameter Qimen worked with `-07:00`, but a minimal OpenClaw call using
+  `America/Los_Angeles` still surfaced `Index 1 out of bounds for length 1`.
+- Added Windows-safe `tzdata` packaging so the same IANA timezone normalization
+  works on both macOS and Windows fresh installs.
+- Added regression coverage for DST-sensitive timezone conversion and Qimen /
+  Nongli remote payloads.
+
 ## [0.5.12] - 2026-05-18
 
 ### Fixed
