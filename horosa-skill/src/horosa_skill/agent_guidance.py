@@ -9,6 +9,7 @@ from horosa_skill.engine.registry import TOOL_DEFINITIONS
 GUIDANCE_SCHEMA = "horosa.skill.agent_guidance.v1"
 
 GLOBAL_AGENT_RULES: list[str] = [
+    "If the client does not expose native horosa_* MCP tools, stop and ask the user/admin to run OpenClaw setup/check; do not fall back to shell or hand-written calculations.",
     "Do not hand-calculate Horosa methods with shell, Python, JavaScript, web snippets, or memorized formulas.",
     "Before calling a calculation tool, check whether the user supplied the fields and method settings that change the result.",
     "If a required or result-changing setting is missing, ask a short clarification question with concrete options instead of silently inventing a value.",

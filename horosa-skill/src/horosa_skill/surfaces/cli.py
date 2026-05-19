@@ -956,6 +956,11 @@ def client_openclaw_setup(
         False,
         help="Skip the final smoke check if you only want install + config generation.",
     ),
+    manifest_url: str | None = typer.Option(
+        None,
+        "--manifest-url",
+        help="Optional runtime manifest URL. Defaults to the public GitHub Release manifest for the installed package version.",
+    ),
 ) -> None:
     resolved_skill_root = _resolve_skill_root(skill_root)
     workspace_root = workspace.expanduser().resolve()
@@ -976,7 +981,7 @@ def client_openclaw_setup(
         settings = Settings.from_env()
         manager = _runtime_manager(settings)
         try:
-            install_result, install_seconds = _timed_call(lambda: manager.install())
+            install_result, install_seconds = _timed_call(lambda: manager.install(manifest_url=manifest_url))
             start_result, start_seconds = _timed_call(lambda: manager.start_local_services())
             doctor_result, doctor_seconds = _timed_call(manager.doctor)
             smoke_report: dict[str, Any] | None = None
@@ -1014,6 +1019,7 @@ def client_openclaw_setup(
         "platform": install_result.get("platform"),
         "runtime_root": install_result.get("runtime_root"),
         "version": ((install_result.get("manifest") or {}).get("version")),
+        "runtime_payload_version": ((install_result.get("manifest") or {}).get("runtime_payload_version")),
     }
     runtime_summary = {
         "ok": start_result.get("ok"),
@@ -1026,6 +1032,8 @@ def client_openclaw_setup(
     }
     doctor_summary = {
         "issues": doctor_issues,
+        "manifest_version": doctor_result.get("manifest_version"),
+        "runtime_payload_version": doctor_result.get("runtime_payload_version"),
         "reachable_endpoints": [
             endpoint.get("label")
             for endpoint in doctor_result.get("endpoints", [])
