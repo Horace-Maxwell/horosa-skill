@@ -175,6 +175,54 @@ class FakeClient(HorosaApiClient):
                 "diceChart": chart_payload,
                 "chart": chart_payload,
             }
+        if endpoint in {"/predict/solarreturn", "/predict/lunarreturn", "/predict/givenyear"}:
+            return {
+                "date": payload.get("datetime", "2031-04-06 09:33:00"),
+                "chart": chart_payload["chart"],
+                "lots": chart_payload["lots"],
+                "dirParams": {
+                    "date": "2031-04-06",
+                    "time": "09:33:00",
+                    "zone": payload.get("dirZone", payload.get("zone", "+08:00")),
+                    "lat": payload.get("dirLat", payload.get("lat", "31n13")),
+                    "lon": payload.get("dirLon", payload.get("lon", "121e28")),
+                },
+                "dirChart": chart_payload,
+            }
+        if endpoint in {"/predict/solararc", "/predict/profection"}:
+            return {
+                "date": payload.get("datetime", "2031-04-06 09:33:00"),
+                "chart": chart_payload["chart"],
+                "lots": chart_payload["lots"],
+                "aspects": chart_payload["aspects"],
+            }
+        if endpoint == "/predict/pd":
+            return {
+                "pd": [
+                    [0.25, "D_Moon_120", "N_Saturn_0", "Z", "2031-04-06 09:33:00"],
+                    [1.5, "S_Sun_90", "N_MC_0", "Z", "2032-08-12 10:00:00"],
+                ]
+            }
+        if endpoint == "/predict/pdchart":
+            return {
+                "date": payload.get("datetime", "2031-04-06 09:33:00"),
+                "arc": 3.0,
+                "chart": chart_payload["chart"],
+                "lots": chart_payload["lots"],
+                "aspects": chart_payload["aspects"],
+            }
+        if endpoint == "/predict/zr":
+            return {
+                "zr": [
+                    {
+                        "sign": "Aries",
+                        "level": 1,
+                        "date": "2028-04-06",
+                        "days": 15,
+                        "sublevel": [{"sign": "Taurus", "level": 2, "date": "2028-04-21", "days": 8}],
+                    }
+                ]
+            }
         if endpoint == "/gua/desc":
             return {
                 payload["name"][0]: {"name": "乾为天", "卦辞": "元亨利贞"},
@@ -916,6 +964,75 @@ def test_all_callable_techniques_keep_non_empty_structured_export_contracts(tmp_
         assert result.data["export_format"]["selected_sections"], tool_name
         assert result.data["export_format"]["sections"], tool_name
         assert all(section["title"] for section in result.data["export_format"]["sections"]), tool_name
+
+
+def test_predictive_tools_export_real_natal_and_timed_chart_content(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    payloads = build_sample_payloads()
+
+    expected_sections = {
+        "solarreturn": ["本命盘星与虚点", "返照盘星与虚点", "返照盘相位"],
+        "lunarreturn": ["本命盘星与虚点", "返照盘星与虚点", "返照盘相位"],
+        "givenyear": ["本命盘星与虚点", "流年盘星与虚点", "流年盘相位"],
+        "solararc": ["本命盘星与虚点", "推运盘星与虚点", "推运盘相位"],
+        "profection": ["本命盘星与虚点", "推运盘星与虚点", "推运盘相位"],
+    }
+    for tool_name, sections in expected_sections.items():
+        result = service.run_tool(tool_name, payloads[tool_name], save_result=False)
+        export_format = result.data["export_format"]
+        text = export_format["snapshot_text"]
+        assert all(section in export_format["selected_sections"] for section in sections), tool_name
+        assert "本命盘" in text, tool_name
+        assert any(label in text for label in ("返照盘", "推运盘", "流年盘")), tool_name
+        assert "日 (" in text and "月 (" in text, tool_name
+        assert "标准相位" in text, tool_name
+
+
+def test_primary_direction_exports_tables_and_pdchart_positions(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    payloads = build_sample_payloads()
+
+    pd_result = service.run_tool("pd", payloads["pd"], save_result=False)
+    pd_text = pd_result.data["export_format"]["snapshot_text"]
+    assert "主/界限法表格" in pd_text
+    assert "| Arc | 迫星 | 应星 | 类型 | 日期 |" in pd_text
+    assert "推运月" in pd_text
+    assert "本命土" in pd_text
+    assert "2031-04-06" in pd_text
+
+    pdchart_result = service.run_tool("pdchart", payloads["pdchart"], save_result=False)
+    pdchart_text = pdchart_result.data["export_format"]["snapshot_text"]
+    assert "本命盘星与虚点" in pdchart_text
+    assert "主限法盘星体表格" in pdchart_text
+    assert "| 星体/虚点 | 位置 | 宫位 | 速度 |" in pdchart_text
+    assert "主限法盘相位" in pdchart_text
+
+
+def test_zodiacal_release_exports_timeline_rows(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    payloads = build_sample_payloads()
+
+    result = service.run_tool("zr", payloads["zr"], save_result=False)
+    text = result.data["export_format"]["snapshot_text"]
+    assert "本命盘星与虚点" in text
+    assert "基于X点推运" in text
+    assert "L1：牡羊" in text
+    assert "L2：金牛" in text
 
 
 def test_all_callable_techniques_keep_clean_contracts_across_repeated_saved_runs(tmp_path) -> None:
