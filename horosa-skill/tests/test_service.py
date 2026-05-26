@@ -144,6 +144,13 @@ class FakeClient(HorosaApiClient):
             "liureng": {"ke": ["一课"], "overview": ["概览"]},
             "nongli": {"bazi": {"guolaoGods": {"ziGods": {"子": {"allGods": ["青龙"], "taisuiGods": ["岁驾"]}}}}},
         }
+        if endpoint == "/qimen/pan":
+            # ken (kinqimen) success shape — `source` is what _require_ken_pan checks.
+            return {"source": "kinqimen", "selected": {"排局": "陽遁九局上"}, "raw": {"排局": "陽遁九局上"}, "mode": "hour", "sections": []}
+        if endpoint == "/taiyi/pan":
+            return {"source": "kintaiyi", "raw": {}, "kook": {"text": "二十四局"}, "palace16": []}
+        if endpoint == "/jinkou/pan":
+            return {"source": "kinjinkou", "rows": [{"name": "贵神"}], "raw": {}}
         if endpoint == "/nongli/time":
             return {"birth": f"{payload['date']} {payload['time']}", "nongli": "丙午年二月十七"}
         if endpoint == "/jieqi/year":
@@ -573,6 +580,39 @@ def test_local_tool_call_always_attaches_complete_export_contract(tmp_path) -> N
     assert result.data["export_format"]["format_source"] == "snapshot_parser"
     assert result.data["export_format"]["selected_sections"] == ["起盘信息", "盘型", "盘面要素", "奇门演卦", "八宫详解", "九宫方盘"]
     assert any(section["title"] == "奇门演卦" for section in result.data["export_format"]["sections"])
+
+
+def test_qimen_fails_loudly_when_ken_returns_failure_envelope(tmp_path) -> None:
+    """Regression: ken endpoints return HTTP 200 with ``{"ResultCode": -1, "Result": "..."}`` on
+    failure. Because that envelope is still a dict, ``_call_remote`` does not raise. It must NOT be
+    forwarded to the JS layer (which would silently fall back to its local scaffold compute and
+    produce a chart that does NOT match 星阙). ken is the sole compute authority, so a failed ken
+    response has to surface as a loud ``tool.ken_compute_failed`` error. ``_require_ken_pan`` guards
+    qimen/taiyi/jinkou identically; qimen exercises the path here."""
+
+    class KenFailureClient(FakeClient):
+        def call(self, endpoint: str, payload: dict) -> dict:
+            if endpoint == "/qimen/pan":
+                return {"ResultCode": -1, "Result": "qimen calculation failed"}
+            return super().call(endpoint, payload)
+
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=KenFailureClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+
+    result = service.run_tool(
+        "qimen",
+        {"date": "2026-04-04", "time": "21:18", "zone": "+08:00", "lat": "31n14", "lon": "121e28"},
+        save_result=False,
+    )
+
+    assert result.ok is False
+    assert result.error is not None
+    assert result.error.code == "tool.ken_compute_failed"
+    assert result.error.details.get("engine") == "kinqimen"
 
 
 def test_knowledge_registry_and_read_are_queryable_and_persisted(tmp_path) -> None:

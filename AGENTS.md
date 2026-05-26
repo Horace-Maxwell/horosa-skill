@@ -121,6 +121,24 @@ desktop app value-for-value.
   `normalizeKinqimenData` / `normalizeBackendPan` / `normalizeKinjinkouData`, then `build*SnapshotText`
   emits the `export_snapshot` sections. ken stays the sole compute authority; the JS falls back to the
   local scaffold only when `ken_response` is missing/malformed (graceful, but not the normal path).
+
+## ⚠️ ken endpoints fail with HTTP 200 — guard on `source`, never trust the status code
+
+The chart-service ken handlers (`web{qimen,taiyi,jinkou}srv.py`) wrap everything in
+`try/except` and on **any** exception return **HTTP 200** with `{"ResultCode": -1/1, "Result":
+"<engine> ... failed"}` (a string `Result`). Pitfalls this creates:
+
+- `_call_remote` only raises on transport/param errors, and `_unwrap_result` returns that failure
+  envelope unchanged (it's still a dict). So a ken failure looks like a successful call.
+- If you forward it to the JS formatter, the JS guard (`ken.selected || ken.raw` etc.) is falsy and
+  the formatter **silently falls back to the old local-engine chart** — a wrong result with no error.
+
+The fix already in place: `service.py::_require_ken_pan` checks `ken_response.get("source") == engine`
+right after each `_call_remote("/…/pan", …)` and raises `tool.ken_compute_failed` otherwise. **Keep this
+guard.** If you add another ken-backed technique, call `_require_ken_pan` on its response too, and never
+rely on HTTP status alone to decide whether ken succeeded. Regression test:
+`tests/test_service.py::test_qimen_fails_loudly_when_ken_returns_failure_envelope`. Note this means test
+fakes for ken endpoints must return a body with the right `source` (see `FakeClient` in `test_service.py`).
 - `tongshefa` is pure headless JS (no ken engine). `sanshiunited` composes ken 奇门+太乙 with the 大六壬 leg.
 
 ## Re-vendoring the JS engines from 星阙

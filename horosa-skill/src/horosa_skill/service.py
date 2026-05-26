@@ -3024,6 +3024,36 @@ class HorosaSkillService:
             enriched["natalChart"] = self._call_remote("/chart", natal_payload)
         return enriched
 
+    def _require_ken_pan(self, ken_response: Any, *, engine: str, endpoint: str) -> None:
+        """Fail loudly when the ken backend did not actually compute a pan.
+
+        The ken chart endpoints (`/qimen/pan`, `/taiyi/pan`, `/jinkou/pan`) return HTTP 200
+        even on failure, with an envelope like ``{"ResultCode": -1, "Result": "<engine> ...
+        failed"}`` (a string ``Result``). That envelope is still a ``dict``, so ``_call_remote``
+        does not treat it as a transport error. If we forwarded it to the JS layer, the formatter
+        would silently fall back to its *local* scaffold compute — producing a chart that does
+        NOT match 星阙. ken is the sole compute authority for these techniques, so a failed ken
+        response must surface as a loud error instead of a silent local-engine fallback.
+        """
+        if isinstance(ken_response, dict) and ken_response.get("source") == engine:
+            return
+        detail_result = ken_response.get("Result") if isinstance(ken_response, dict) else ken_response
+        raise ToolTransportError(
+            f"Horosa ken ({engine}) engine did not return a valid pan.",
+            code="tool.ken_compute_failed",
+            details={
+                "endpoint": endpoint,
+                "engine": engine,
+                "ken_result": detail_result,
+                "hint": (
+                    f"{engine} is the sole compute authority for this technique; the chart "
+                    "service raised on these parameters (it returns HTTP 200 with a failure "
+                    "envelope). Check the chart-service log and the input fields — the skill "
+                    "will not silently fall back to a local-engine chart."
+                ),
+            },
+        )
+
     def _run_qimen_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         year = int(str(payload["date"])[:4])
         nongli = payload.get("nongli")
@@ -3072,6 +3102,7 @@ class HorosaSkillService:
                 "jiedelta": (nongli or {}).get("jiedelta", ""),
             },
         )
+        self._require_ken_pan(ken_response, engine="kinqimen", endpoint="/qimen/pan")
         js_result = self.js_client.run(
             "qimen",
             {
@@ -3125,6 +3156,7 @@ class HorosaSkillService:
                 "jiedelta": (nongli or {}).get("jiedelta", ""),
             },
         )
+        self._require_ken_pan(ken_response, engine="kintaiyi", endpoint="/taiyi/pan")
         js_result = self.js_client.run("taiyi", {**payload, "nongli": nongli, "ken_response": ken_response})
         snapshot_text = js_result.get("snapshot_text")
         return {
@@ -3156,6 +3188,7 @@ class HorosaSkillService:
                 "time": payload.get("time"),
             },
         )
+        self._require_ken_pan(ken_response, engine="kinjinkou", endpoint="/jinkou/pan")
         js_result = self.js_client.run("jinkou", {**payload, "liureng": liureng, "ken_response": ken_response})
         snapshot_text = js_result.get("snapshot_text")
         return {
