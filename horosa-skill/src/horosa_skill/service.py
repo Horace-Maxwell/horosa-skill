@@ -1328,9 +1328,14 @@ def _build_info_section(chart_wrap: dict[str, Any], fields: dict[str, Any]) -> l
 
 def _build_aspect_section(chart_wrap: dict[str, Any]) -> list[str]:
     aspects = chart_wrap.get("aspects", {}) if isinstance(chart_wrap, dict) else {}
-    normal = aspects.get("normalAsp", {}) if isinstance(aspects, dict) else {}
-    immediate = aspects.get("immediateAsp", {}) if isinstance(aspects, dict) else {}
-    sign_asp = aspects.get("signAsp", {}) if isinstance(aspects, dict) else {}
+    normal = aspects.get("normalAsp") if isinstance(aspects, dict) else None
+    immediate = aspects.get("immediateAsp") if isinstance(aspects, dict) else None
+    sign_asp = aspects.get("signAsp") if isinstance(aspects, dict) else None
+    # Some chart types (e.g. india_chart) return these as empty lists instead of dicts; coerce any
+    # non-dict to {} so the per-object `.get()` lookups below don't raise `'list' object has no attribute 'get'`.
+    normal = normal if isinstance(normal, dict) else {}
+    immediate = immediate if isinstance(immediate, dict) else {}
+    sign_asp = sign_asp if isinstance(sign_asp, dict) else {}
     lines = ["标准相位"]
     for object_id in ASTRO_POINT_ORDER:
         one = normal.get(object_id)
@@ -1460,6 +1465,8 @@ def _build_lots_section(chart_wrap: dict[str, Any]) -> list[str]:
 def _build_possibility_section(chart_wrap: dict[str, Any]) -> list[str]:
     predict = chart_wrap.get("predict", {}) if isinstance(chart_wrap, dict) else {}
     planet_sign = predict.get("PlanetSign", {}) if isinstance(predict, dict) else {}
+    if not isinstance(planet_sign, dict):  # some chart types return this empty as a list, not a dict
+        planet_sign = {}
     lines: list[str] = []
     for key, items in planet_sign.items():
         lines.append(_astro_msg(key, short=True))

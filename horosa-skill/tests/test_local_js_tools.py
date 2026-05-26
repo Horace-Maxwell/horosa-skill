@@ -268,3 +268,19 @@ def test_cli_coerces_null_or_scalar_payload_instead_of_crashing(tmp_path) -> Non
     result = service.js_client.run("liureng", None)
     assert isinstance(result, dict)
     assert isinstance(result.get("data"), dict)
+
+
+@requires_runtime
+def test_india_chart_builds_clean_export_despite_empty_western_aspects(tmp_path) -> None:
+    """Regression: india_chart returns normalAsp/immediateAsp/signAsp as empty LISTS (Indian charts
+    have no Western aspects). `_build_aspect_section` used to crash with `'list' object has no
+    attribute 'get'`; india_chart must now produce a clean ok=True envelope with an export contract."""
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "india_chart",
+        {"date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gpsLat": 31.2167, "gpsLon": 121.4667},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    assert isinstance(result.data.get("export_snapshot"), dict)
+    assert isinstance(result.data.get("export_format"), dict)
