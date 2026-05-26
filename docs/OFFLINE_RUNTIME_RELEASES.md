@@ -26,8 +26,15 @@ Do not treat these three locations as interchangeable.
 ## What A Release Must Contain
 
 - Python calculation layer and required dependencies
+- ken engines `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}` backing the chart-service
+  `/qimen/pan` · `/taiyi/pan` · `/jinkou/pan` mounts (奇门 / 太乙 / 金口, and 三式合一's 奇门+太乙)
+- the ken Python dependencies in the wheel/site-packages set, **in addition to** the base chart deps
+  (`cn2an` / `sxtwl` / `cnlunar` / `swisseph`): `bidict` (kinqimen), `numpy` · `kerykeion` ·
+  `ephem` (kintaiyi), `pendulum` (kinjinkou). macOS's embedded Python already carries these; the
+  Windows `runtime/windows/bundle/wheels` set MUST include them too or the chart service will fail to
+  mount the ken endpoints.
 - Java aggregation layer and boot jar
-- Node runtime for headless JS calculation modules
+- Node runtime for headless JS calculation modules (统摄法 + ken-response → aiExport.js formatting)
 - Swiss Ephemeris data and any other local astronomical assets
 - `runtime-manifest.json`
 
@@ -64,12 +71,19 @@ The repository now produces a real Windows runtime archive:
 - embedded Java runtime
 - embedded Python runtime
 - embedded Node runtime
-- local wheels unpacked into the payload
+- local wheels unpacked into the payload (must include the ken deps: `bidict`, `numpy`,
+  `kerykeion`, `ephem`, `pendulum`)
+- ken engines under `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}`
 - `astrostudyboot.jar`
 - `horosa-core-js`
 - runtime manifest and startup scripts
 
-In this macOS development environment, Windows verification is structural rather than native-process execution. The release zip is built and checked for required contents here, and should still be validated on a real Windows machine before public release sign-off.
+`build_runtime_release_windows.py` bundles the three ken engines and patches the staged
+`kentang/registry.py` mount so the chart service still boots when other (out-of-scope) ken
+engines are absent; `start_horosa_local.ps1` puts `Horosa-Web/vendor` on `PYTHONPATH` so
+`import kinqimen` / `kintaiyi` / `kinjinkou` resolve.
+
+In this macOS development environment, Windows verification is structural rather than native-process execution. The release zip is built and checked for required contents here, and should still be validated on a real Windows machine before public release sign-off — in particular, confirm the chart service boots and `/qimen/pan` · `/taiyi/pan` · `/jinkou/pan` respond.
 
 ## Example Manifest
 

@@ -26,6 +26,7 @@ if (-not (Test-Path $JarPath)) { throw "astrostudyboot.jar not found: $JarPath" 
 
 $AstropyRoot = Join-Path $Root "astropy"
 $FlatlibRoot = Join-Path $Root "flatlib-ctrad2"
+$VendorRoot = Join-Path $Root "vendor"
 $ChartEntry = Join-Path $AstropyRoot "websrv\\webchartsrv.py"
 
 if (-not $env:HOME) {
@@ -49,7 +50,9 @@ if (-not $env:HOMEPATH -and $env:HOMEDRIVE) {
 }
 
 $env:HOROSA_CHART_PORT = $ChartPort
-$env:PYTHONPATH = "{0};{1}" -f $AstropyRoot, $FlatlibRoot
+# vendor/ carries the ken engines (kinqimen/kintaiyi/kinjinkou) the chart service mounts;
+# keep it on PYTHONPATH to mirror the macOS launcher's PYTHONPATH_ASTRO.
+$env:PYTHONPATH = "{0};{1};{2}" -f $AstropyRoot, $FlatlibRoot, $VendorRoot
 $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
 
@@ -57,7 +60,7 @@ $PyBootCode = @"
 import runpy
 import sys
 
-for path in [r"$FlatlibRoot", r"$AstropyRoot"]:
+for path in [r"$FlatlibRoot", r"$AstropyRoot", r"$VendorRoot"]:
     if path not in sys.path:
         sys.path.insert(0, path)
 
