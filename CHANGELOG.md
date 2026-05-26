@@ -9,6 +9,13 @@ and this project follows a release-oriented changelog style.
 
 ### Fixed
 
+- **`india_chart` no longer crashes (`'list' object has no attribute 'get'`).** Indian charts return
+  `normalAsp`/`immediateAsp`/`signAsp` as empty *lists* (no Western aspects), but `_build_aspect_section`
+  assumed dicts and called `.get()` on them — so `india_chart` failed with `tool.internal_error` and the
+  full self-check crashed at its `report_template` step. The aspect builder (and `_build_possibility_section`)
+  now coerce non-dict aspect/predict fields to `{}`. `india_chart` produces a clean export again; the full
+  39-tool self-check passes end-to-end. (Surfaced by the new `run_tool` internal-error guard, which turned
+  a raw crash into a structured error.) Regression test added.
 - **Release verifier no longer greenlights an empty required directory (false-confidence gate).**
   `verify_runtime_release.py` checked directory requirements with `entry.startswith(required)`, which
   for a `.zip` matched an empty directory's own marker entry (`…/swefiles/`) — so a maintainer-zipped
