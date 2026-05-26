@@ -46,6 +46,7 @@
 | --- | --- |
 | 可调用工具 | `39 / 39` |
 | 奇门 / 太乙 / 金口 / 三式合一 计算后端 | 统一走 `ken`（`kinqimen` / `kintaiyi` / `kinjinkou`），盘面与星阙桌面端同源 |
+| 统摄法 / 十年大运 | headless 实现与星阙逐值对齐（京房八宫五行；`Math.round` / `Math.ceil` 一致；对照星阙 `decennials.test.js` 金标） |
 | 未确认参数时强制追问 | `32` 个技法工具触发 `must_ask_user=true` |
 | 安全豁免工具 | `7` 个 registry / knowledge / parser 类工具直接可读 |
 | 全工具调用 | `39 / 39 ok=true` |
@@ -164,6 +165,8 @@ uv run horosa-skill agent guidance --tool liureng_gods --intent "当前时间起
 - **kinjinkou**（金口诀）— MIT License — <https://github.com/kentang2017/kinjinkou>
 
 这三个引擎依据其各自的 MIT 许可证使用；完整的版权声明与许可证文本随离线 runtime 一并打包在 `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}/LICENSE`，分发时一并保留。
+
+许可证归属说明：上面三个 `ken` 引擎是**第三方 MIT** 组件（作者 kentang2017）。本仓库其余的术数实现——统摄法（`tongshefa.js`）、十年大运（`engine/decennials.py`）、以及奇门/太乙/金口/大六壬/星盘等的 `aiExport.js` 格式化与 headless 适配——均为**星阙自有算法**，按本仓库根目录的 `GNU AGPL-3.0-only` 授权；其中统摄法与十年大运是星阙前端引擎（`astrostudyui`）的 headless 移植，已与星阙逐值对齐（京房八宫五行 / `Math.round` 等）。传统术数体系本身（京房八宫、希腊十年星限等）属公共知识，不构成第三方版权。
 
 ## 现在它已经能做什么
 
