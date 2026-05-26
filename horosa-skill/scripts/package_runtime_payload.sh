@@ -119,6 +119,9 @@ require_path "${SOURCE_ROOT}/Horosa-Web/astrostudyui/dist-file"
 require_path "${SOURCE_ROOT}/Horosa-Web/astrostudyui/scripts/warmHorosaRuntime.js"
 require_path "${SOURCE_ROOT}/Horosa-Web/astropy"
 require_path "${SOURCE_ROOT}/Horosa-Web/flatlib-ctrad2"
+require_path "${SOURCE_ROOT}/Horosa-Web/vendor/kinqimen"
+require_path "${SOURCE_ROOT}/Horosa-Web/vendor/kintaiyi"
+require_path "${SOURCE_ROOT}/Horosa-Web/vendor/kinjinkou"
 require_path "${JAVA_SOURCE_DIR}"
 require_path "${PYTHON_SOURCE_DIR}"
 require_path "${BOOT_JAR_SOURCE}"
@@ -139,7 +142,42 @@ rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/scripts/repairEmbedded
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/astropy/__init__.py" "${STAGE_ROOT}/Horosa-Web/astropy/"
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/astropy/astrostudy" "${STAGE_ROOT}/Horosa-Web/astropy/"
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/astropy/websrv" "${STAGE_ROOT}/Horosa-Web/astropy/"
-rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/flatlib-ctrad2/flatlib" "${STAGE_ROOT}/Horosa-Web/flatlib-ctrad2/"
+# ken engines for the chart-service qimen/taiyi/jinkou mounts (embedded Python already
+# carries their deps: bidict / numpy / kerykeion / ephem / pendulum).
+mkdir -p "${STAGE_ROOT}/Horosa-Web/vendor"
+for ken_engine in kinqimen kintaiyi kinjinkou; do
+  rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/vendor/${ken_engine}" "${STAGE_ROOT}/Horosa-Web/vendor/"
+done
+# The bundled chart service only ships the qimen/taiyi/jinkou ken engines, but the upstream
+# kentang registry lists many more (wangji/wuzhao/kinastro-*/...). Make the staged mount skip
+# any service whose engine is not bundled so the chart service still boots offline.
+KENTANG_REGISTRY="${STAGE_ROOT}/Horosa-Web/astropy/websrv/kentang/registry.py"
+if [ -f "${KENTANG_REGISTRY}" ]; then
+  KENTANG_REGISTRY_PATH="${KENTANG_REGISTRY}" python3 - <<'PY'
+import os, pathlib
+p = pathlib.Path(os.environ["KENTANG_REGISTRY_PATH"])
+text = p.read_text(encoding="utf-8")
+needle = (
+    "def mount_kentang_services(cherrypy):\n"
+    "    for spec in KENTANG_SERVICE_SPECS:\n"
+    "        cherrypy.tree.mount(_load_service(spec), spec[\"mount\"])\n"
+)
+replacement = (
+    "def mount_kentang_services(cherrypy):\n"
+    "    import sys as _sys\n"
+    "    for spec in KENTANG_SERVICE_SPECS:\n"
+    "        try:\n"
+    "            cherrypy.tree.mount(_load_service(spec), spec[\"mount\"])\n"
+    "        except Exception as _exc:  # offline payload may omit some ken engines\n"
+    "            print(f\"[kentang] skipping {spec.get('mount')}: {_exc}\", file=_sys.stderr)\n"
+)
+if needle in text:
+    p.write_text(text.replace(needle, replacement), encoding="utf-8")
+    print("patched staged kentang mount to skip unavailable engines")
+else:
+    print("WARNING: kentang mount signature not found; staged registry left unpatched", flush=True)
+PY
+fi
 if [ -f "${SOURCE_ROOT}/Horosa-Web/flatlib-ctrad2/LICENSE" ]; then
   rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/flatlib-ctrad2/LICENSE" "${STAGE_ROOT}/Horosa-Web/flatlib-ctrad2/"
 fi

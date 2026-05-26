@@ -38,6 +38,11 @@ require_path "${SOURCE_ROOT}/Horosa-Web/start_horosa_local.sh"
 require_path "${SOURCE_ROOT}/Horosa-Web/stop_horosa_local.sh"
 require_path "${SOURCE_ROOT}/Horosa-Web/astropy"
 require_path "${SOURCE_ROOT}/Horosa-Web/flatlib-ctrad2"
+# ken engines backing the chart-service qimen/taiyi/jinkou endpoints (kinastro etc. are
+# out of skill scope and intentionally not vendored).
+require_path "${SOURCE_ROOT}/Horosa-Web/vendor/kinqimen"
+require_path "${SOURCE_ROOT}/Horosa-Web/vendor/kintaiyi"
+require_path "${SOURCE_ROOT}/Horosa-Web/vendor/kinjinkou"
 require_path "${SOURCE_ROOT}/Horosa-Web/astrostudyui/dist-file"
 require_path "${SOURCE_ROOT}/runtime/mac/python"
 require_path "${SOURCE_ROOT}/runtime/mac/java"
@@ -56,6 +61,10 @@ rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/astrostudyui/scripts/w
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/astrostudyui/src/utils/aiExport.js" "${VENDOR_ROOT}/Horosa-Web/astrostudyui/src/utils/"
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/astropy" "${VENDOR_ROOT}/Horosa-Web/"
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/flatlib-ctrad2" "${VENDOR_ROOT}/Horosa-Web/"
+mkdir -p "${VENDOR_ROOT}/Horosa-Web/vendor"
+for ken_engine in kinqimen kintaiyi kinjinkou; do
+  rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/vendor/${ken_engine}" "${VENDOR_ROOT}/Horosa-Web/vendor/"
+done
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/runtime/mac/python" "${VENDOR_ROOT}/runtime/mac/"
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/runtime/mac/java" "${VENDOR_ROOT}/runtime/mac/"
 

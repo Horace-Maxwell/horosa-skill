@@ -323,7 +323,7 @@ Every tool returns a stable envelope:
 {
   "ok": true,
   "tool": "qimen",
-  "version": "0.5.13",
+  "version": "0.6.0",
   "input_normalized": {},
   "data": {},
   "summary": [],

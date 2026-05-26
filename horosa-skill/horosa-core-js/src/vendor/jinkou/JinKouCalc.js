@@ -1,11 +1,11 @@
 import * as LRConst from '../liureng/LRConst.js';
 
 export const JinKouElementColor = {
-	'木': '#006400',
-	'火': '#c81808',
-	'土': '#704214',
-	'金': '#ffcf40',
-	'水': '#0a2e81',
+	'木': '#2f9f68',
+	'火': '#d64a35',
+	'土': '#b7842f',
+	'金': '#d6a64f',
+	'水': '#4da3ff',
 };
 
 const JinKouWuXingOrder = ['木', '火', '土', '金', '水'];
@@ -1341,6 +1341,131 @@ export function buildJinKouData(liureng, options){
 			diFen: diFen,
 			xunKong: xunKongBranches.length ? xunKongBranches.join('') : '无',
 			siDaKong: siDaKong ? siDaKong : '无',
+		},
+	};
+}
+
+function safeText(value){
+	return value === undefined || value === null ? '' : `${value}`;
+}
+
+function parseFieldsDateTime(fields){
+	if(!fields || !fields.date || !fields.time){
+		return null;
+	}
+	const dateStr = fields.date.value.format('YYYY-MM-DD');
+	const timeStr = fields.time.value.format('HH:mm:ss');
+	const d = dateStr.split('-').map((item)=>parseInt(item, 10));
+	const t = timeStr.split(':').map((item)=>parseInt(item, 10));
+	if(d.length < 3 || t.length < 2){
+		return null;
+	}
+	return {
+		year: d[0],
+		month: d[1],
+		day: d[2],
+		hour: t[0],
+		minute: t[1],
+		second: t[2] || 0,
+		date: dateStr,
+		time: timeStr,
+	};
+}
+
+function parseDateTimeText(text){
+	const raw = safeText(text).trim();
+	const match = raw.match(/^(-?\d{1,6})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+	if(!match){
+		return null;
+	}
+	return {
+		year: parseInt(match[1], 10),
+		month: parseInt(match[2], 10),
+		day: parseInt(match[3], 10),
+		hour: parseInt(match[4], 10),
+		minute: parseInt(match[5], 10),
+		second: parseInt(match[6] || '0', 10),
+		date: `${match[1].padStart(4, '0')}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`,
+		time: `${match[4].padStart(2, '0')}:${match[5].padStart(2, '0')}:${(match[6] || '0').padStart(2, '0')}`,
+	};
+}
+
+function resolveCalculationDateTime(fields, nongli, options){
+	if(options && options.timeBasis === 'trueSolar'){
+		return parseDateTimeText(nongli && nongli.birth) || parseFieldsDateTime(fields);
+	}
+	return parseFieldsDateTime(fields);
+}
+
+function cleanDisplay(value, def = '—'){
+	const text = safeText(value).trim();
+	if(!text || text === 'None'){
+		return def;
+	}
+	return text;
+}
+
+function normalizeBackendRow(row, fallbackRow){
+	const elem = cleanDisplay(row && row.element, '');
+	const sign = cleanDisplay(row && row.sign, '');
+	const season = cleanDisplay(row && row.season, '');
+	const label = cleanDisplay(row && row.label, fallbackRow ? fallbackRow.label : '');
+	return {
+		...(fallbackRow || {}),
+		label: label,
+		gan: cleanDisplay(row && row.gan, '-'),
+		content: cleanDisplay(row && row.content, '—'),
+		shenjiang: cleanDisplay(row && row.shenjiang, '-'),
+		power: cleanDisplay(row && row.power, elem || sign || season ? `${elem}${sign}${season}` : '—'),
+		kong: fallbackRow && fallbackRow.kong ? fallbackRow.kong : '—',
+		elem: elem,
+		sign: sign,
+		season: season,
+		nayin: cleanDisplay(row && row.nayin, ''),
+		ganZhi: cleanDisplay(row && row.ganZhi, ''),
+		branch: cleanDisplay(row && row.branch, ''),
+		isYong: !!(row && row.isYong),
+		contentColor: JinKouElementColor[elem] ? JinKouElementColor[elem] : '#262626',
+		ganColor: JinKouElementColor[elem] ? JinKouElementColor[elem] : (fallbackRow ? fallbackRow.ganColor : '#262626'),
+		powerColor: JinKouElementColor[elem] ? JinKouElementColor[elem] : '#262626',
+	};
+}
+
+export function normalizeKinjinkouData(backendPan, fallbackData){
+	if(!backendPan || !backendPan.rows){
+		return fallbackData;
+	}
+	const fallback = fallbackData || {};
+	const fallbackRows = fallback.rows || [];
+	const rows = backendPan.rows.map((row, idx)=>normalizeBackendRow(row, fallbackRows[idx]));
+	const yongRow = rows.find((row)=>row.isYong);
+	return {
+		...fallback,
+		ready: true,
+		source: 'kinjinkou',
+		backend: backendPan,
+		diFen: cleanDisplay(backendPan.difen, fallback.diFen || '子'),
+		timeZi: cleanDisplay(backendPan.zhanshi, fallback.timeZi || ''),
+		yuejiang: cleanDisplay(backendPan.yuejiang, fallback.yuejiang || ''),
+		xunKongBranches: fallback.xunKongBranches || [],
+		siDaKong: cleanDisplay(backendPan.siDaKong, fallback.siDaKong || '无'),
+		yongYao: {
+			...(fallback.yongYao || {}),
+			...(backendPan.yongYao || {}),
+			label: yongRow ? yongRow.label : (backendPan.yongYao ? backendPan.yongYao.label : ''),
+			sign: yongRow ? yongRow.sign : (backendPan.yongYao ? backendPan.yongYao.sign : ''),
+		},
+		rows: rows,
+		plates: backendPan.plates || [],
+		sections: backendPan.sections || [],
+		shenshaRows: fallback.shenshaRows || [],
+		topInfo: {
+			...(fallback.topInfo || {}),
+			diFen: cleanDisplay(backendPan.difen, fallback.topInfo ? fallback.topInfo.diFen : '子'),
+			xunKong: cleanDisplay(backendPan.xunKong, fallback.topInfo ? fallback.topInfo.xunKong : '无'),
+			siDaKong: cleanDisplay(backendPan.siDaKong, fallback.topInfo ? fallback.topInfo.siDaKong : '无'),
+			yuejiang: cleanDisplay(backendPan.yuejiang, ''),
+			zhanshi: cleanDisplay(backendPan.zhanshi, ''),
 		},
 	};
 }

@@ -1,5 +1,5 @@
-import { unwrapNamedObject } from '../shared/unpack.js';
-import { buildJinKouData } from '../vendor/jinkou/JinKouCalc.js';
+import { unwrapNamedObject, unwrapResultEnvelope } from '../shared/unpack.js';
+import { buildJinKouData, normalizeKinjinkouData } from '../vendor/jinkou/JinKouCalc.js';
 import { resolveJinKouDiFen } from '../vendor/jinkou/JinKouState.js';
 
 function normalizeTimeBranch(timeValue) {
@@ -58,10 +58,16 @@ export function runJinkou(payload) {
   if (payload.isDiurnal !== undefined && options.isDiurnal === undefined) {
     options.isDiurnal = payload.isDiurnal;
   }
-  const data = buildJinKouData(liureng, options);
-  if (!data || data.ready !== true) {
+  const fallback = buildJinKouData(liureng, options);
+  if (!fallback || fallback.ready !== true) {
     throw new Error('Jinkou calculation returned no result.');
   }
+  // ken (kinjinkou) is the compute authority; normalizeKinjinkouData overlays it onto the
+  // local scaffold so buildJinkouSnapshotText still emits 星阙 aiExport.js sections.
+  const ken = unwrapResultEnvelope(payload.ken_response ?? payload.kenResponse);
+  const data = ken && typeof ken === 'object' && Array.isArray(ken.rows)
+    ? normalizeKinjinkouData(ken, fallback)
+    : fallback;
   return {
     tool: 'jinkou',
     technique: 'jinkou',

@@ -107,6 +107,9 @@ _PYTHON_CHART_ENDPOINTS = {
     "/india/chart",
     "/germany/midpoint",
     "/jieqi/year",
+    "/qimen/pan",
+    "/taiyi/pan",
+    "/jinkou/pan",
 }
 
 
@@ -316,7 +319,7 @@ def _generic_summary(tool_name: str, data: dict[str, Any]) -> list[str]:
         return summary
     if tool_name == "qimen":
         pan = data.get("pan", {})
-        summary = ["已运行本地奇门遁甲 headless 算法。"]
+        summary = ["已通过 ken 后端运行奇门遁甲。"]
         if pan.get("juText"):
             summary.append(f"局数：{pan['juText']}。")
         if pan.get("zhiFu") and pan.get("zhiShi"):
@@ -324,15 +327,17 @@ def _generic_summary(tool_name: str, data: dict[str, Any]) -> list[str]:
         return summary
     if tool_name == "taiyi":
         pan = data.get("pan", {})
-        summary = ["已运行本地太乙 headless 算法。"]
+        summary = ["已通过 ken 后端运行太乙。"]
         if pan.get("zhao"):
             summary.append(f"命式：{pan['zhao']}。")
-        if pan.get("kook"):
-            summary.append(f"局式：{pan['kook']}。")
+        kook = pan.get("kook")
+        kook_text = kook.get("text") if isinstance(kook, dict) else kook
+        if kook_text:
+            summary.append(f"局式：{kook_text}。")
         return summary
     if tool_name == "jinkou":
         result = data.get("jinkou", {})
-        summary = ["已运行本金口诀 headless 算法。"]
+        summary = ["已通过 ken 后端运行金口诀。"]
         if result.get("guiName") and result.get("jiangName"):
             summary.append(f"贵神 {result['guiName']}，将神 {result['jiangName']}。")
         if result.get("wangElem"):
@@ -520,6 +525,37 @@ def _render_snapshot_text(sections: list[tuple[str, str]]) -> str:
         clean_body = (body or "").strip() or _missing_detail_text(title)
         blocks.append(f"[{title}]\n{clean_body}".strip())
     return "\n\n".join(blocks).strip()
+
+
+def _ken_datetime_parts(payload: dict[str, Any]) -> dict[str, int]:
+    date_text = str(payload.get("date") or "")
+    time_text = str(payload.get("time") or "")
+    date_bits = [int(p) for p in date_text.split("-") if p.strip().lstrip("-").isdigit()]
+    time_bits = [int(p) for p in time_text.split(":") if p.strip().isdigit()]
+    while len(date_bits) < 3:
+        date_bits.append(1)
+    while len(time_bits) < 3:
+        time_bits.append(0)
+    return {
+        "year": date_bits[0],
+        "month": date_bits[1],
+        "day": date_bits[2],
+        "hour": time_bits[0],
+        "minute": time_bits[1],
+        "second": time_bits[2],
+    }
+
+
+def _ken_qimen_mode(options: dict[str, Any]) -> str:
+    explicit = options.get("qimenMode")
+    if isinstance(explicit, str) and explicit:
+        return explicit
+    mode_by_paipan = {0: "year", 2: "golden", 4: "minute", 5: "overall"}
+    pai_pan = options.get("paiPanType")
+    try:
+        return mode_by_paipan.get(int(pai_pan), "hour")
+    except (TypeError, ValueError):
+        return "hour"
 
 
 def _build_export_provenance(technique: str, snapshot_text: str | None) -> dict[str, Any]:
@@ -3011,34 +3047,31 @@ class HorosaSkillService:
         if not isinstance(prev_year, dict):
             prev_year = self._call_remote(
                 "/jieqi/year",
-                {
-                    "year": year - 1,
-                    "zone": payload["zone"],
-                    "lat": payload["lat"],
-                    "lon": payload["lon"],
-                    "time": payload["time"],
-                    "gpsLat": payload.get("gpsLat"),
-                    "gpsLon": payload.get("gpsLon"),
-                    "ad": payload.get("ad", 1),
-                    "timeAlg": payload.get("timeAlg", 0),
-                },
+                {"year": year - 1, "zone": payload["zone"], "lat": payload["lat"], "lon": payload["lon"], "time": payload["time"], "gpsLat": payload.get("gpsLat"), "gpsLon": payload.get("gpsLon"), "ad": payload.get("ad", 1), "timeAlg": payload.get("timeAlg", 0)},
             )
         current_year = payload.get("jieqi_year_current")
         if not isinstance(current_year, dict):
             current_year = self._call_remote(
                 "/jieqi/year",
-                {
-                    "year": year,
-                    "zone": payload["zone"],
-                    "lat": payload["lat"],
-                    "lon": payload["lon"],
-                    "time": payload["time"],
-                    "gpsLat": payload.get("gpsLat"),
-                    "gpsLon": payload.get("gpsLon"),
-                    "ad": payload.get("ad", 1),
-                    "timeAlg": payload.get("timeAlg", 0),
-                },
+                {"year": year, "zone": payload["zone"], "lat": payload["lat"], "lon": payload["lon"], "time": payload["time"], "gpsLat": payload.get("gpsLat"), "gpsLon": payload.get("gpsLon"), "ad": payload.get("ad", 1), "timeAlg": payload.get("timeAlg", 0)},
             )
+        options = payload.get("options") or {}
+        qiju_method = "zhirun" if str(options.get("qijuMethod") or "").strip() == "zhirun" else "chaibu"
+        # ken is the compute authority; the JS layer only reformats this into aiExport.js sections.
+        ken_response = self._call_remote(
+            "/qimen/pan",
+            {
+                **_ken_datetime_parts(payload),
+                "zone": payload.get("zone"),
+                "qimenMode": _ken_qimen_mode(options),
+                "qijuMethod": qiju_method,
+                "option": 2 if qiju_method == "zhirun" else 1,
+                "date": payload.get("date"),
+                "time": payload.get("time"),
+                "realSunTime": (nongli or {}).get("birth", ""),
+                "jiedelta": (nongli or {}).get("jiedelta", ""),
+            },
+        )
         js_result = self.js_client.run(
             "qimen",
             {
@@ -3046,6 +3079,7 @@ class HorosaSkillService:
                 "nongli": nongli,
                 "jieqi_year_prev": prev_year,
                 "jieqi_year_current": current_year,
+                "ken_response": ken_response,
             },
         )
         snapshot_text = js_result.get("snapshot_text")
@@ -3053,11 +3087,7 @@ class HorosaSkillService:
             "pan": js_result.get("data", {}),
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="qimen", snapshot_text=snapshot_text),
-            "prerequisites": {
-                "nongli": nongli,
-                "jieqi_year_prev": prev_year,
-                "jieqi_year_current": current_year,
-            },
+            "prerequisites": {"nongli": nongli, "jieqi_year_prev": prev_year, "jieqi_year_current": current_year},
         }
 
     def _run_taiyi_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -3078,15 +3108,30 @@ class HorosaSkillService:
                     "ad": payload.get("ad", 1),
                 },
             )
-        js_result = self.js_client.run("taiyi", {**payload, "nongli": nongli})
+        options = payload.get("options") or {}
+        sex = options.get("sex") or payload.get("gender") or "男"
+        ken_response = self._call_remote(
+            "/taiyi/pan",
+            {
+                **_ken_datetime_parts(payload),
+                "zone": payload.get("zone"),
+                "style": options.get("style", 3),
+                "tn": options.get("tn", 0),
+                "sex": sex,
+                "enableGameTheory": bool(options.get("gameTheory") in (1, True, "1")),
+                "date": payload.get("date"),
+                "time": payload.get("time"),
+                "realSunTime": (nongli or {}).get("birth", ""),
+                "jiedelta": (nongli or {}).get("jiedelta", ""),
+            },
+        )
+        js_result = self.js_client.run("taiyi", {**payload, "nongli": nongli, "ken_response": ken_response})
         snapshot_text = js_result.get("snapshot_text")
         return {
             "pan": js_result.get("data", {}),
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="taiyi", snapshot_text=snapshot_text),
-            "prerequisites": {
-                "nongli": nongli,
-            },
+            "prerequisites": {"nongli": nongli},
         }
 
     def _run_jinkou_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -3097,21 +3142,27 @@ class HorosaSkillService:
                 _liureng_remote_payload("liureng_gods", payload),
             )
             liureng = remote.get("liureng", remote)
-        js_result = self.js_client.run(
-            "jinkou",
+        options = payload.get("options") or {}
+        difen = payload.get("diFen") or options.get("diFen") or "子"
+        ken_response = self._call_remote(
+            "/jinkou/pan",
             {
-                **payload,
-                "liureng": liureng,
+                **_ken_datetime_parts(payload),
+                "zone": payload.get("zone"),
+                "difen": difen,
+                "yuejiang": options.get("yueJiang") or options.get("yuejiang") or "",
+                "zhanshi": options.get("zhanShi") or options.get("zhanshi") or "",
+                "date": payload.get("date"),
+                "time": payload.get("time"),
             },
         )
+        js_result = self.js_client.run("jinkou", {**payload, "liureng": liureng, "ken_response": ken_response})
         snapshot_text = js_result.get("snapshot_text")
         return {
             "jinkou": js_result.get("data", {}),
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="jinkou", snapshot_text=snapshot_text),
-            "prerequisites": {
-                "liureng": liureng,
-            },
+            "prerequisites": {"liureng": liureng},
         }
 
     def _run_liureng_tool(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
