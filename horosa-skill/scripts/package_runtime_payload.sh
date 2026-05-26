@@ -178,6 +178,7 @@ else:
     print("WARNING: kentang mount signature not found; staged registry left unpatched", flush=True)
 PY
 fi
+rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/flatlib-ctrad2/flatlib" "${STAGE_ROOT}/Horosa-Web/flatlib-ctrad2/"
 if [ -f "${SOURCE_ROOT}/Horosa-Web/flatlib-ctrad2/LICENSE" ]; then
   rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/flatlib-ctrad2/LICENSE" "${STAGE_ROOT}/Horosa-Web/flatlib-ctrad2/"
 fi
@@ -195,7 +196,11 @@ rm -rf \
   "${STAGE_ROOT}/runtime/mac/python/share" \
   "${STAGE_ROOT}/runtime/mac/python/Resources/English.lproj/Documentation" \
   "${STAGE_ROOT}/runtime/mac/python/lib/python3.12/config-3.12-darwin"
-find "${STAGE_ROOT}/runtime/mac/python/lib" -type d \( -name 'test' -o -name 'tests' -o -name '__pycache__' -o -name 'idlelib' -o -name 'turtledemo' \) -prune -exec rm -rf {} + 2>/dev/null || true
+# Drop __pycache__ everywhere, but only strip STDLIB test/idlelib/turtledemo dirs — never
+# descend into site-packages, whose package tests (e.g. astropy/tests, required by kintaiyi's
+# `import astropy`) must be kept or the bundled chart service can't mount the taiyi ken engine.
+find "${STAGE_ROOT}/runtime/mac/python/lib" -type d -name '__pycache__' -prune -exec rm -rf {} + 2>/dev/null || true
+find "${STAGE_ROOT}/runtime/mac/python/lib" -type d -name 'site-packages' -prune -o -type d \( -name 'test' -o -name 'tests' -o -name 'idlelib' -o -name 'turtledemo' \) -prune -exec rm -rf {} + 2>/dev/null || true
 find "${STAGE_ROOT}" -type d \( -name '.horosa-logs' -o -name '.pytest_cache' -o -name '.cache' -o -name '__pycache__' \) -prune -exec rm -rf {} + 2>/dev/null || true
 find "${STAGE_ROOT}" -type d -name '_CodeSignature' -prune -exec rm -rf {} + 2>/dev/null || true
 find "${STAGE_ROOT}" \( -name '._*' -o -name '.DS_Store' \) -exec rm -rf {} + 2>/dev/null || true
