@@ -3,7 +3,9 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+import os
 import re
+import tempfile
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -27,17 +29,29 @@ HUMAN_RENDER_HIDDEN_SECTION_IDS = {
 
 
 def render_report(document: dict[str, Any], *, output_path: Path, format_name: str) -> dict[str, Any]:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
     normalized = format_name.lower()
-    if normalized == "json":
-        output_path.write_text(json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
-    elif normalized == "docx":
-        _render_docx(document, output_path)
-    elif normalized == "pdf":
-        _render_pdf(document, output_path)
-    else:
+    if normalized not in {"json", "docx", "pdf"}:
         raise ValueError("format must be one of: json, docx, pdf")
-    payload = output_path.read_bytes()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Render to a temp sibling first, then atomically os.replace() into place. A mid-render failure
+    # (python-docx / reportlab raising, disk error) thus can never leave a truncated/corrupt artifact
+    # at output_path — the destination is only touched once a complete file exists.
+    fd, tmp_name = tempfile.mkstemp(dir=str(output_path.parent), prefix=f".{output_path.name}.", suffix=".tmp")
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+    try:
+        if normalized == "json":
+            tmp_path.write_text(json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
+        elif normalized == "docx":
+            _render_docx(document, tmp_path)
+        else:  # pdf
+            _render_pdf(document, tmp_path)
+        payload = tmp_path.read_bytes()
+        os.replace(str(tmp_path), str(output_path))
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
     return {
         "path": str(output_path),
         "format": normalized,

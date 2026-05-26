@@ -108,8 +108,13 @@ class TraceRecorder:
         if not self.enabled or self.trace_dir is None:
             return
         target = self.trace_dir / f"{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.jsonl"
-        with target.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+        try:
+            with target.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+        except Exception:
+            # Best-effort local trace recorder: a write failure (unwritable/deleted dir, disk
+            # full, serialization error) must never crash or mask the operation being traced.
+            pass
         self._emit_otlp(event)
 
     def _emit_otlp(self, event: dict[str, Any]) -> None:

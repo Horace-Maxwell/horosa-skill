@@ -241,3 +241,13 @@ A global stability pass hardened these; keep them true when you touch the releva
   local `--archive` raises `RuntimeError` (which `install` catches), not a raw tarfile error. Never kill
   chart services by process-name (`pkill -f webchartsrv.py` would also kill a live :8899) — the stop
   script already scopes kills by the runtime root path; keep it that way.
+- **`js_client` keeps the transport contract.** Every Node failure becomes a `ToolTransportError`:
+  a missing/unstartable Node → `js_engine.node_unavailable`, a timeout → `js_engine.timeout`. The
+  `subprocess.run` call is wrapped — don't let a raw `OSError`/`TimeoutExpired` escape.
+- **Tracing is best-effort.** `TraceRecorder._write_event` swallows local-write failures (like
+  `_emit_otlp`); a trace write must never crash or mask the traced operation.
+- **`evaluation_lock` self-heals.** `acquire_evaluation_lock` reclaims a stale lock (dead PID on POSIX,
+  or age threshold when liveness is unknown) but never reclaims a *live* owner. A crashed run must not
+  deadlock future evaluations; a long live run must not be stolen from.
+- **Report rendering is atomic.** `render_report` renders to a temp sibling then `os.replace()`s — never
+  write a report format directly to its final `output_path` (a mid-render failure would corrupt it).
