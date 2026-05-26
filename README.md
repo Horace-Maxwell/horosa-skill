@@ -34,15 +34,18 @@
 
 ## 最新稳定基线
 
-当前公开版本：`Horosa Skill 0.5.13`
+当前公开版本：`Horosa Skill 0.6.0`
 
-这一版的核心变化不是多加一个工具，而是把“AI 不能乱补参数”做成硬性协议。只要技法会受时间、地点、时区、性别、事项、宫制、历法、起局方式等设置影响，agent 在用户没有确认前就不能继续调用。工具会返回结构化阻断结果，并给出可直接转发给用户的追问文本。
+这一版的核心变化是**把奇门遁甲、太乙神数、金口诀（以及三式合一中的奇门 + 太乙）统一到星阙的 `ken` 计算后端**。`kinqimen` / `kintaiyi` / `kinjinkou` 三个引擎挂载在本地 Python chart 服务上，独占盘面计算权；headless JS 层不再自己起盘，而是把 ken 返回结果通过星阙的 `normalizeKinqimenData` / `normalizeBackendPan` / `normalizeKinjinkouData` 重新格式化成 `aiExport.js` 的 section 结构。结果是：Skill 的盘面与星阙桌面端走**同一套后端、逐值同源**，对外导出仍然是稳定的星阙式 `export_snapshot` / `export_format` contract。三个引擎已随离线 runtime 一起打包，macOS / Windows 均可断网运行。
+
+在此之前确立、并在本版继续生效的硬性协议是“AI 不能乱补参数”：只要技法会受时间、地点、时区、性别、事项、宫制、历法、起局方式等设置影响，agent 在用户没有确认前就不能继续调用。工具会返回结构化阻断结果，并给出可直接转发给用户的追问文本。
 
 本机完整实测结果：
 
 | 检查项 | 结果 |
 | --- | --- |
 | 可调用工具 | `39 / 39` |
+| 奇门 / 太乙 / 金口 / 三式合一 计算后端 | 统一走 `ken`（`kinqimen` / `kintaiyi` / `kinjinkou`），盘面与星阙桌面端同源 |
 | 未确认参数时强制追问 | `32` 个技法工具触发 `must_ask_user=true` |
 | 安全豁免工具 | `7` 个 registry / knowledge / parser 类工具直接可读 |
 | 全工具调用 | `39 / 39 ok=true` |
@@ -50,8 +53,9 @@
 | memory query / show | `39 / 39` |
 | report JSON artifact | `39 / 39` |
 | 星阙式导出结构 | 业务技法均带 `export_snapshot` / `export_format` |
+| 工程测试 | `164 / 164 pass`（含 ken 后端实时集成测试） |
 | GitHub CI | Linux/macOS 单测 + Windows OpenClaw smoke 通过 |
-| Release runtime | macOS / Windows `v0.5.13` assets 已上传并校验 |
+| Release runtime | macOS / Windows `v0.6.0` assets（含 ken 引擎）已打包并校验 |
 
 关于 `solarreturn`、`lunarreturn`、`solararc`、`givenyear`、`profection`、`pd`、`pdchart`、`zr` 这批推运工具：当前版本已经复核为可用，不应再被 agent 标记为“Java `/predict/*` 不可用”。如果某个客户端仍然这样回答，优先检查它是否在使用旧 runtime、是否绕过 MCP 直接手算、是否没有运行 `doctor` / `openclaw-check --full`。
 
@@ -237,16 +241,16 @@ uv run horosa-skill agent guidance --tool liureng_gods --intent "当前时间起
 | `bazi_direct` | 八字直断 | 生成八字直断输出 |
 | `liureng_gods` | 大六壬起课 | 生成大六壬四课三传与神煞结构 |
 | `liureng_runyear` | 大六壬行年 | 生成六壬行年 / 年运输出 |
-| `qimen` | 奇门遁甲 | 生成奇门盘、宫位细节与演卦 |
-| `taiyi` | 太乙神数 | 生成太乙盘与十六宫标记 |
-| `jinkou` | 金口诀 | 生成金口诀盘面与速览结果 |
+| `qimen` | 奇门遁甲 | 由 ken（`kinqimen`）起盘，生成奇门盘、宫位细节与演卦 |
+| `taiyi` | 太乙神数 | 由 ken（`kintaiyi`）起盘，生成太乙盘与十六宫标记 |
+| `jinkou` | 金口诀 | 由 ken（`kinjinkou`）起盘，生成金口诀盘面与速览结果 |
 
 #### Phase 2 本地技法
 
 | 工具 ID | 中文名称 | 作用 |
 | --- | --- | --- |
 | `tongshefa` | 统摄法 | 生成统摄法卦象、六爻、潜藏、亲和关系 |
-| `sanshiunited` | 三式合一 | 聚合奇门、太乙、大六壬并统一导出 |
+| `sanshiunited` | 三式合一 | 聚合 ken 的奇门 + 太乙与大六壬并统一导出 |
 | `suzhan` | 宿占 / 宿盘 | 生成宿占结构与宿曜信息 |
 | `sixyao` | 六爻 / 易卦 | 生成本卦、之卦、爻变、问题导向输出 |
 | `otherbu` | 西洋游戏 / 占星骰子 | 生成星骰与对应解读结构 |
@@ -597,7 +601,8 @@ uv run horosa-skill client openclaw-setup --workspace ~/.openclaw/workspace
 已完成：
 
 - GitHub-first 离线 runtime 安装链
-- macOS / Windows `v0.5.13` runtime release 资产
+- 奇门 / 太乙 / 金口 / 三式合一统一走星阙 `ken` 后端（`kinqimen` / `kintaiyi` / `kinjinkou`），盘面与星阙桌面端同源
+- macOS / Windows `v0.6.0` runtime release 资产（已随包内置 ken 引擎）
 - 本地 MCP server 与 JSON-first CLI
 - 完整星阙 AI 导出 registry 与 parser
 - 39 个可调用工具的结构化稳定输出
@@ -681,7 +686,7 @@ uv run python scripts/run_full_self_check.py --rounds 1
 当前 README 里的“星阙一致”指两层含义：
 
 1. **导出结构一致**：业务技法输出会生成星阙式 `export_snapshot.export_text`，再由 `snapshot_parser` 解析成 `export_format`。完整自检会逐项确认 selected sections 没有缺失、没有未知 section。
-2. **算法路径一致**：Skill 不允许 agent 自己用 shell、Python 小脚本或联网搜索手算玄学盘。大六壬、奇门、三式合一、星盘等都必须走 Horosa Skill 本地 runtime / headless engine。
+2. **算法路径一致**：Skill 不允许 agent 自己用 shell、Python 小脚本或联网搜索手算玄学盘。大六壬、奇门、三式合一、星盘等都必须走 Horosa Skill 本地 runtime / headless engine。其中奇门、太乙、金口诀（以及三式合一里的奇门 + 太乙）由星阙的 `ken` 后端（`kinqimen` / `kintaiyi` / `kinjinkou`）独占计算，与星阙桌面端同源，JS 层只负责把 ken 结果重排成 `aiExport.js` 的 section。
 
 实测信号：
 
@@ -721,7 +726,7 @@ uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace --fu
 
 ```json
 {
-  "version": "0.5.13",
+  "version": "0.6.0",
   "tool_count": 39,
   "records_count": 39,
   "errors_count": 0,

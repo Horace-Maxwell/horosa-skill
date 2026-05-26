@@ -12,6 +12,7 @@ This subproject is distributed under `GNU AGPL-3.0-only`. See [LICENSE](LICENSE)
 
 ## 新增工程能力
 
+- ken 后端统一（v0.6.0）：奇门 / 太乙 / 金口诀（及三式合一的奇门 + 太乙）由星阙 `ken` 引擎（`kinqimen` / `kintaiyi` / `kinjinkou`）独占计算，headless JS 仅把 ken 结果重排成 `aiExport.js` section
 - tracing：本地 JSONL trace、`trace_id`、`group_id`
 - benchmark：`HorosaBench` 本地评测集
 - provenance：知识库与导出协议都带来源字段
@@ -105,11 +106,11 @@ This subproject is distributed under `GNU AGPL-3.0-only`. See [LICENSE](LICENSE)
 - `bazi_direct`：八字直断
 - `liureng_gods`：大六壬起课
 - `liureng_runyear`：大六壬行年
-- `qimen`：奇门遁甲
-- `taiyi`：太乙神数
-- `jinkou`：金口诀
+- `qimen`：奇门遁甲（由星阙 `ken` 后端 `kinqimen` 计算）
+- `taiyi`：太乙神数（由星阙 `ken` 后端 `kintaiyi` 计算）
+- `jinkou`：金口诀（由星阙 `ken` 后端 `kinjinkou` 计算）
 - `tongshefa`：统摄法
-- `sanshiunited`：三式合一
+- `sanshiunited`：三式合一（聚合 ken 的奇门 + 太乙与大六壬）
 - `suzhan`：宿占 / 宿盘
 - `sixyao`：六爻 / 易卦
 - `otherbu`：西洋游戏 / 占星骰子

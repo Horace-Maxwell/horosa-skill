@@ -34,15 +34,18 @@
 
 ## Current Stable Baseline
 
-Current public version: `Horosa Skill 0.5.13`
+Current public version: `Horosa Skill 0.6.0`
 
-The most important change in this line is not just another tool. It makes “do not invent missing settings” a hard protocol. If a technique depends on time, location, timezone, gender, question context, house system, calendar options, or method-specific settings, the agent must ask first. Unconfirmed calls return a structured blocking response with a user-facing recovery prompt.
+The headline change in this line is **unifying Qimen Dunjia, Taiyi, and Jinkou Jue (and the Qimen + Taiyi inside San Shi United) onto Xingque's `ken` compute backend**. The `kinqimen` / `kintaiyi` / `kinjinkou` engines run on the local Python chart service and own all chart computation; the headless JS layer no longer computes charts itself — it reformats the ken response into `aiExport.js` sections via Xingque's `normalizeKinqimenData` / `normalizeBackendPan` / `normalizeKinjinkouData`. The result: the Skill's charts come from the **same backend as the Xingque desktop app, value-for-value identical**, while the outward export stays the stable Xingque-style `export_snapshot` / `export_format` contract. All three engines ship inside the offline runtime, so macOS and Windows both run them fully offline.
+
+The hard protocol established earlier and still in force here is "do not invent missing settings": if a technique depends on time, location, timezone, gender, question context, house system, calendar options, or method-specific settings, the agent must ask first. Unconfirmed calls return a structured blocking response with a user-facing recovery prompt.
 
 Latest local verification:
 
 | Check | Result |
 | --- | --- |
 | Callable tools | `39 / 39` |
+| Qimen / Taiyi / Jinkou / San Shi United compute backend | Unified on `ken` (`kinqimen` / `kintaiyi` / `kinjinkou`), same source as the Xingque desktop app |
 | Forced clarification before unsafe calls | `32` tools return `must_ask_user=true` |
 | Safe exempt tools | `7` registry / knowledge / parser tools |
 | Tool execution | `39 / 39 ok=true` |
@@ -50,8 +53,9 @@ Latest local verification:
 | memory query / show | `39 / 39` |
 | report JSON artifact | `39 / 39` |
 | Xingque-style export structure | Business methods emit `export_snapshot` / `export_format` |
+| Engineering tests | `164 / 164 pass` (incl. live ken-backend integration tests) |
 | GitHub CI | Linux/macOS tests plus Windows OpenClaw smoke pass |
-| Release runtime | macOS / Windows `v0.5.13` assets uploaded and verified |
+| Release runtime | macOS / Windows `v0.6.0` assets (with ken engines bundled) packaged and verified |
 
 For the predictive tools `solarreturn`, `lunarreturn`, `solararc`, `givenyear`, `profection`, `pd`, `pdchart`, and `zr`: the current version verifies them as usable. Agents should not label Java `/predict/*` tools as unavailable. If a client still says that, first check whether it is using an old runtime, bypassing MCP with hand-written calculations, or skipping `doctor` / `openclaw-check --full`.
 
@@ -229,16 +233,16 @@ If those fields are missing, the agent must ask the user or call `horosa_agent_g
 | `bazi_direct` | BaZi direct reading | Generate direct-interpretation BaZi output |
 | `liureng_gods` | Da Liu Ren main reading | Generate Da Liu Ren course / gods output |
 | `liureng_runyear` | Da Liu Ren annual timing | Generate LiuReng run-year output |
-| `qimen` | Qimen Dunjia | Generate Qimen layout, palace details, and divination sections |
-| `taiyi` | Taiyi | Generate Taiyi output and palace markers |
-| `jinkou` | Jinkou Jue | Generate Jinkou output |
+| `qimen` | Qimen Dunjia | Computed by ken (`kinqimen`); generates Qimen layout, palace details, and divination sections |
+| `taiyi` | Taiyi | Computed by ken (`kintaiyi`); generates Taiyi output and palace markers |
+| `jinkou` | Jinkou Jue | Computed by ken (`kinjinkou`); generates Jinkou output |
 
 #### Phase 2 local methods
 
 | Tool ID | Name | Purpose |
 | --- | --- | --- |
 | `tongshefa` | Tong She Fa | Generate the Tong She Fa structure |
-| `sanshiunited` | San Shi United | Aggregate Qimen, Taiyi, and LiuReng into one result |
+| `sanshiunited` | San Shi United | Aggregate ken's Qimen + Taiyi with LiuReng into one result |
 | `suzhan` | Su Zhan / lunar mansion chart | Generate宿占 output |
 | `sixyao` | Six Yao / hexagram reading | Generate base hexagram, changed hexagram, and line state output |
 | `otherbu` | Astrology dice / western game method | Generate dice-like western symbolic output |
@@ -353,7 +357,7 @@ That means:
 In this repository, “Xingque-compatible” means two concrete things:
 
 1. **Export-structure parity**: business methods generate Xingque-style `export_snapshot.export_text`, then parse it through the same `snapshot_parser` path into `export_format`. Full self-check confirms selected sections are not missing and no unknown sections are introduced.
-2. **Algorithm-path parity**: agents are not allowed to hand-calculate Qimen, LiuReng, charts, or any other method with shell snippets, ad-hoc Python, or web searches. Calls must go through Horosa Skill’s local runtime / headless engine.
+2. **Algorithm-path parity**: agents are not allowed to hand-calculate Qimen, LiuReng, charts, or any other method with shell snippets, ad-hoc Python, or web searches. Calls must go through Horosa Skill’s local runtime / headless engine. Qimen, Taiyi, and Jinkou (and the Qimen + Taiyi inside San Shi United) are computed exclusively by Xingque's `ken` backend (`kinqimen` / `kintaiyi` / `kinjinkou`), identical to the desktop app; the JS layer only reformats the ken result into `aiExport.js` sections.
 
 Current verification signal:
 
@@ -393,7 +397,7 @@ Latest local all-tool audit:
 
 ```json
 {
-  "version": "0.5.13",
+  "version": "0.6.0",
   "tool_count": 39,
   "records_count": 39,
   "errors_count": 0,
@@ -641,7 +645,8 @@ Useful documents:
 Already implemented:
 
 - GitHub-first offline runtime install flow
-- macOS and Windows `v0.5.13` runtime release assets
+- Qimen / Taiyi / Jinkou / San Shi United unified on Xingque's `ken` backend (`kinqimen` / `kintaiyi` / `kinjinkou`), same source as the desktop app
+- macOS and Windows `v0.6.0` runtime release assets (ken engines bundled in)
 - local MCP server and JSON-first CLI
 - full Xingque AI export registry and parser
 - stable structured outputs across 39 callable tools

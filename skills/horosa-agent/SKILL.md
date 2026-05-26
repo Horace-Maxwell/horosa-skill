@@ -290,3 +290,20 @@ Use `--ai-answer-text` for a short inline answer, `--ai-answer-file` for a full 
 - Do not emit `/bin/zsh`, `export HOME=...`, or POSIX-only commands in Windows configs.
 - Do not emit `.cmd`-only commands in macOS configs.
 - Use Horosa client config commands rather than hand-writing MCP JSON whenever possible.
+
+## Maintainer Notes (ken backend)
+
+This skill guide is for AI clients **using** Horosa Skill. If you are **modifying or building** the
+repo, the full maintainer playbook (re-vendoring the JS engines, offline-runtime packaging gotchas,
+`pkill` caveat, venv repair, local verification) lives in the repo's harness doc
+[`AGENTS.md`](../../AGENTS.md) under "Maintainer & Build Notes". The two facts most relevant to
+debugging user-facing results:
+
+- **`qimen` / `taiyi` / `jinkou` (and `sanshiunited`'s 奇门 + 太乙) are computed by 星阙's `ken` backend**
+  (`kinqimen` / `kintaiyi` / `kinjinkou`) on the chart service (`:8899`), not by the JS layer. The JS
+  only reformats the ken response into `aiExport.js` sections. A healthy result carries
+  `pan.source == "kinqimen"` / `"kintaiyi"` and `jinkou.source == "kinjinkou"`.
+- **If those tools return `source: null`** (or a chart that doesn't match 星阙), the runtime in use is
+  almost certainly **pre-ken**: re-install the current runtime release, or for development set
+  `HOROSA_CORE_JS_ROOT` to the repo's `horosa-core-js`. This is a stale-runtime issue, not an algorithm
+  failure — do not tell the user the technique is unavailable.

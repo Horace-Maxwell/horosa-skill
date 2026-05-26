@@ -32,13 +32,24 @@ and this project follows a release-oriented changelog style.
   / ephem / pendulum), and the staged chart-service kentang mount skips any engine that
   is not bundled so the chart service still boots offline.
 
+### Documentation
+
+- Rewrote `README.md` / `README_EN.md` and refreshed `horosa-skill/README.md` to lead with the
+  ken compute model and bump the baseline to `0.6.0`.
+- Added a "ken 计算后端" section to `docs/ARCHITECTURE.md`, a ken note to the Windows report-stability
+  prompt, and a "Maintainer & Build Notes (ken backend)" section to the repo harness doc `AGENTS.md`
+  plus a maintainer cross-reference in `skills/horosa-agent/SKILL.md` (re-vendoring transform, offline
+  packaging gotchas, the `pkill webchartsrv.py` caveat, venv repair, stale-runtime fallback, local
+  verification).
+
 ### Verified
 
 - qimen / taiyi / jinkou / sanshiunited run end-to-end against the live ken chart
   service (`:8899`); each emits its 星阙 aiExport.js sections (qimen:
   起盘信息/盘型/盘面要素/奇门演卦/八宫详解/九宫方盘; taiyi: 起盘信息/太乙盘/十六宫标记;
   jinkou: 起盘信息/金口诀速览/金口诀四位/四位神煞) with a clean export contract
-  (no missing / unknown sections). Full skill test suite green.
+  (no missing / unknown sections). Full skill test suite green (164 passed, incl. live ken
+  integration tests).
 
 ## [0.5.13] - 2026-05-18
 
