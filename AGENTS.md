@@ -94,3 +94,93 @@ Horosa Skill follows Xingque-compatible defaults:
 Never tell users that 大六壬 requires MongoDB, port `7897`, Xingque Desktop, a remote database, or an external service unless a current Horosa `doctor` or `openclaw-check` result explicitly says so.
 
 If a section is missing, say that the local tool did not return that section and rerun `doctor` / `openclaw-check`; do not invent a dependency.
+
+---
+
+# Maintainer & Build Notes (ken backend, offline runtime)
+
+The section above is for AI **clients consuming** Horosa Skill. This section is for any agent or
+maintainer **modifying / building / releasing** this repository. **Standing rule: whenever you hit a
+new gotcha while working on this repo, append it here** so the next agent sees it. Keep these notes in
+*this* repo — never write skill-repo build lessons into the upstream 星阙 (`Horosa-Primary Direction Trial`)
+working tree; the skill repo is self-contained and ships its own agent guidance.
+
+## Compute model: ken is authoritative, JS only formats
+
+`qimen` / `taiyi` / `jinkou`, and the 奇门 + 太乙 legs of `sanshiunited`, are computed by 星阙's **ken
+backend** — the `kinqimen` / `kintaiyi` / `kinjinkou` Python engines mounted on the chart service
+(`:8899`) at `/qimen/pan` · `/taiyi/pan` · `/jinkou/pan`. The skill's charts therefore match the 星阙
+desktop app value-for-value.
+
+- `service.py`: `_run_{qimen,taiyi,jinkou}_tool` fetch the JS-scaffold prerequisites (nongli + jieqi for
+  qimen, liureng for jinkou), call the ken endpoint via `_call_remote`, then pass `ken_response` into
+  `js_client.run(...)`. The three ken endpoints are listed in `_PYTHON_CHART_ENDPOINTS` so they route to
+  the chart server (`:8899`), not Java (`:9999`).
+- `horosa-core-js` does **not** compute these — it is a **ken-response → aiExport.js formatter**.
+  `tools/{qimen,taiyi,jinkou}.js` overlay the ken response onto a local scaffold via 星阙's
+  `normalizeKinqimenData` / `normalizeBackendPan` / `normalizeKinjinkouData`, then `build*SnapshotText`
+  emits the `export_snapshot` sections. ken stays the sole compute authority; the JS falls back to the
+  local scaffold only when `ken_response` is missing/malformed (graceful, but not the normal path).
+- `tongshefa` is pure headless JS (no ken engine). `sanshiunited` composes ken 奇门+太乙 with the 大六壬 leg.
+
+## Re-vendoring the JS engines from 星阙
+
+When refreshing `horosa-core-js/src/vendor/{dunjia,taiyi,jinkou}` from 星阙's frontend engines, copy the
+**full** 星阙 files and apply exactly this headless transform:
+
+- add `.js` to sibling imports;
+- drop the 3 backend imports (`request` / `{ServerRoot,ResultKey}` / `{buildKentangEndpoint}`);
+- drop **only** the `fetch*Pan` network helpers;
+- **keep** the `normalize*` overlay functions (`normalizeKinqimenData`, `normalizeBackendPan`,
+  `normalizeKinjinkouData`) — these are what turn a ken response into a 星阙 pan object.
+
+For taiyi, build the snapshot from `{ ...pan, sections: undefined }` — ken's in-app detail `sections`
+are not part of the aiExport contract and will otherwise show up as unknown sections.
+
+## Offline runtime packaging gotchas (these have bitten us)
+
+- **flatlib must survive the strip.** `scripts/package_runtime_payload.sh` must keep its
+  `flatlib-ctrad2/flatlib` rsync line. Dropping it makes the bundled chart service fail with
+  `ModuleNotFoundError: No module named 'flatlib'`.
+- **`site-packages` tests must survive the strip.** The python-strip removes `test`/`tests` dirs, but it
+  must `-prune` `site-packages` first. If `site-packages/astropy/tests` gets removed, `kintaiyi`'s
+  `import astropy` fails and the `/taiyi/pan` mount is silently skipped.
+- **ken deps must be bundled.** The chart service needs `bidict` (kinqimen), `numpy` · `kerykeion` ·
+  `ephem` (kintaiyi), `pendulum` (kinjinkou) **on top of** the base chart deps. macOS's embedded Python
+  already has them; the Windows `runtime/windows/bundle/wheels` set MUST include them too.
+- **Windows `PYTHONPATH` must include `Horosa-Web/vendor`.** `start_horosa_local.ps1` puts the vendor
+  root on `PYTHONPATH` so `import kinqimen/kintaiyi/kinjinkou` resolve. `package_runtime_payload.sh` and
+  `build_runtime_release_windows.py` both bundle `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}`.
+- **Graceful kentang mount.** The packaging scripts patch the *staged* `kentang/registry.py` mount to
+  skip engines that aren't bundled, so the chart service still boots offline (`_load_service` does a bare
+  `__import__` and would otherwise hard-fail on a missing engine).
+
+## `pkill` will take down the live 星阙 stack
+
+Both the bundled offline chart service and the live 星阙 dev chart service run `webchartsrv.py`. Running
+`pkill -f webchartsrv.py` to stop a test service (e.g. on `:8896`) **also kills the live 星阙 `:8899`**.
+Stop services by port/PID, not by process-name match.
+
+## Verifying skill changes locally
+
+1. Fix the venv if it's broken: the skill `.venv` symlinking miniconda trips macOS library-validation on
+   `pydantic_core`. Rebuild with `uv venv --clear --python-preference only-managed --python 3.12 && uv sync`
+   (uv-managed CPython has no library-validation).
+2. Bring up the 星阙 stack: `cd Horosa-Web && HOROSA_SKIP_UI_BUILD=1 ./start_horosa_local.sh` → Java `:9999`
+   + chart `:8899`.
+3. Run `uv run pytest`. The qimen/taiyi/jinkou/sanshi cases in `tests/test_local_js_tools.py` are
+   `@requires_runtime` integration tests that **skip** when `:8899`/`:9999` are down — a green run with
+   them skipped is not a full verification. Acceptance: each emits its aiExport sections with a clean
+   export contract (`missing_selected_sections == []` and `unknown_detected_sections == []`).
+
+## The installed runtime can be stale (CLI/MCP fall back to local compute)
+
+`js_client` resolves the JS engine via `HOROSA_CORE_JS_ROOT` → installed-manifest
+`horosa_core_js_root` (`~/.horosa/runtime/current/horosa-core-js`) → the package's bundled
+`horosa-core-js`. If the **installed** runtime predates the ken migration, it lacks
+`normalizeKinqimenData`, so a real CLI/MCP call returns the local scaffold (`source: null`) instead of
+ken (`source: kinqimen`). Two fixes:
+
+- For development, point at the repo's engine: `HOROSA_CORE_JS_ROOT="$PWD/horosa-core-js"`.
+- For users, **re-install the matching runtime release** — both runtime builders rsync the repo's
+  (ken-fed) `horosa-core-js` into the payload, so a fresh install carries the formatter.

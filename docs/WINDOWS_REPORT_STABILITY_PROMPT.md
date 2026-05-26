@@ -132,6 +132,8 @@ $Payload = '{"date":"2028-04-06","time":"09:33:00","zone":"8","lat":"31n13","lon
 $Payload | uv run horosa-skill report from-tool qimen --stdin --format pdf --question "这个事情能不能推进？风险在哪里？"
 ```
 
+> 说明（v0.6.0）：`qimen` / `taiyi` / `jinkou`（及 `sanshiunited` 里的奇门 + 太乙）现在由星阙 `ken` 后端（`kinqimen` / `kintaiyi` / `kinjinkou`）计算，需要本地 chart 服务在线。安装版 runtime 已内置这三个引擎，`doctor` 通过即代表 chart 服务可起；若 `report from-tool qimen` 报无法连接后端，先确认 runtime 是 v0.6.0、chart 服务已启动，而不是误判算法不可用。
+
 期望：
 
 - 如果没有提供 `ai_report` 或 `ai_answer_text`，结果应返回 `mode=analysis_required` 或等价结构。
