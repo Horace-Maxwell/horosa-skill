@@ -114,6 +114,31 @@ def rsync_copy(src: Path, dst: Path, *, extra_excludes: list[str] | None = None)
     subprocess.run(cmd, check=True)
 
 
+def _make_kentang_mount_graceful(registry_path: Path) -> None:
+    """The bundled chart service ships only the qimen/taiyi/jinkou ken engines, but the
+    upstream kentang registry lists many more. Patch the staged mount to skip any service
+    whose engine is not bundled so the chart service still boots offline."""
+    if not registry_path.is_file():
+        return
+    text = registry_path.read_text(encoding="utf-8")
+    needle = (
+        "def mount_kentang_services(cherrypy):\n"
+        "    for spec in KENTANG_SERVICE_SPECS:\n"
+        "        cherrypy.tree.mount(_load_service(spec), spec[\"mount\"])\n"
+    )
+    replacement = (
+        "def mount_kentang_services(cherrypy):\n"
+        "    import sys as _sys\n"
+        "    for spec in KENTANG_SERVICE_SPECS:\n"
+        "        try:\n"
+        "            cherrypy.tree.mount(_load_service(spec), spec[\"mount\"])\n"
+        "        except Exception as _exc:  # offline payload may omit some ken engines\n"
+        "            print(f\"[kentang] skipping {spec.get('mount')}: {_exc}\", file=_sys.stderr)\n"
+    )
+    if needle in text:
+        registry_path.write_text(text.replace(needle, replacement), encoding="utf-8")
+
+
 def unpack_wheels(wheels_root: Path, site_packages: Path) -> None:
     site_packages.mkdir(parents=True, exist_ok=True)
     for wheel in sorted(wheels_root.glob("*.whl")):
@@ -169,6 +194,9 @@ def build() -> Path:
     require_path(SOURCE_ROOT / "Horosa-Web" / "start_horosa_local.sh")
     require_path(SOURCE_ROOT / "Horosa-Web" / "astropy")
     require_path(SOURCE_ROOT / "Horosa-Web" / "flatlib-ctrad2")
+    require_path(SOURCE_ROOT / "Horosa-Web" / "vendor" / "kinqimen")
+    require_path(SOURCE_ROOT / "Horosa-Web" / "vendor" / "kintaiyi")
+    require_path(SOURCE_ROOT / "Horosa-Web" / "vendor" / "kinjinkou")
     require_path(SOURCE_ROOT / "Horosa-Web" / "astrostudyui" / "dist-file")
     require_path(SOURCE_ROOT / "Horosa-Web" / "astrostudyui" / "scripts" / "warmHorosaRuntime.js")
     require_path(SOURCE_ROOT / "Horosa-Web" / "scripts" / "repairEmbeddedPythonRuntime.py")
@@ -186,6 +214,11 @@ def build() -> Path:
     (horosa_web_root / "scripts").mkdir(parents=True, exist_ok=True)
 
     rsync_copy(SOURCE_ROOT / "Horosa-Web" / "astropy", horosa_web_root / "")
+    # ken engines for the chart-service qimen/taiyi/jinkou mounts.
+    (horosa_web_root / "vendor").mkdir(parents=True, exist_ok=True)
+    for ken_engine in ("kinqimen", "kintaiyi", "kinjinkou"):
+        rsync_copy(SOURCE_ROOT / "Horosa-Web" / "vendor" / ken_engine, horosa_web_root / "vendor" / "")
+    _make_kentang_mount_graceful(horosa_web_root / "astropy" / "websrv" / "kentang" / "registry.py")
     rsync_copy(SOURCE_ROOT / "Horosa-Web" / "flatlib-ctrad2" / "flatlib", horosa_web_root / "flatlib-ctrad2" / "")
     if (SOURCE_ROOT / "Horosa-Web" / "flatlib-ctrad2" / "LICENSE").is_file():
         (horosa_web_root / "flatlib-ctrad2").mkdir(parents=True, exist_ok=True)

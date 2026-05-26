@@ -331,7 +331,7 @@ uv run horosa-skill agent guidance --tool liureng_gods --intent "当前时间起
 {
   "ok": true,
   "tool": "qimen",
-  "version": "0.5.13",
+  "version": "0.6.0",
   "input_normalized": {},
   "data": {},
   "summary": [],

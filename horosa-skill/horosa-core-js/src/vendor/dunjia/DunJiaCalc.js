@@ -28,9 +28,10 @@ export const JIEQI_OPTIONS = [
 
 export const PAIPAN_OPTIONS = [
 	{ value: 0, label: '年家奇门' },
-	{ value: 1, label: '月家奇门' },
-	{ value: 2, label: '日家奇门' },
+	{ value: 2, label: '金函日家' },
 	{ value: 3, label: '时家奇门' },
+	{ value: 4, label: '刻家奇门' },
+	{ value: 5, label: '综合排盘' },
 ];
 
 export const ZHISHI_OPTIONS = [
@@ -66,7 +67,7 @@ export const DAY_SWITCH_OPTIONS = [
 ];
 
 export const QIJU_METHOD_OPTIONS = [
-	{ value: 'zhirun', label: '置润' },
+	{ value: 'zhirun', label: '置闰' },
 	{ value: 'chaibu', label: '拆补' },
 ];
 
@@ -394,6 +395,16 @@ function normalizeText(s){
 		.replace(/種/g, '种')
 		.replace(/蟄/g, '蛰')
 		.replace(/驚/g, '惊')
+		.replace(/時/g, '时')
+		.replace(/盤/g, '盘')
+		.replace(/門/g, '门')
+		.replace(/節/g, '节')
+		.replace(/氣/g, '气')
+		.replace(/閏/g, '闰')
+		.replace(/馬/g, '马')
+		.replace(/飛/g, '飞')
+		.replace(/長/g, '长')
+		.replace(/運/g, '运')
 		.replace(/處/g, '处')
 		.replace(/陰/g, '阴')
 		.replace(/陽/g, '阳')
@@ -704,6 +715,210 @@ function normalizeQijuMethod(method){
 	return method === 'zhirun' ? 'zhirun' : 'chaibu';
 }
 
+export function isKinqimenMode(paiPanType){
+	const type = normalizeNum(paiPanType, 3);
+	return type !== 1;
+}
+
+function getKinqimenMode(paiPanType){
+	const type = normalizeNum(paiPanType, 3);
+	if(type === 0){
+		return 'year';
+	}
+	if(type === 4){
+		return 'minute';
+	}
+	if(type === 2){
+		return 'golden';
+	}
+	if(type === 5){
+		return 'overall';
+	}
+	return 'hour';
+}
+
+function getRawValue(obj, keys, def = ''){
+	for(let i=0; i<keys.length; i++){
+		if(obj && obj[keys[i]] !== undefined && obj[keys[i]] !== null){
+			return obj[keys[i]];
+		}
+	}
+	return def;
+}
+
+function normalizeGuaName(gua){
+	return normalizeText(gua)
+		.replace(/離/g, '离')
+		.replace(/兌/g, '兑')
+		.replace(/乾/g, '乾');
+}
+
+function normalizeGuaMap(mapObj){
+	const out = {};
+	Object.keys(mapObj || {}).forEach((key)=>{
+		const gua = normalizeGuaName(key);
+		out[gua] = normalizeText(mapObj[key]);
+	});
+	return out;
+}
+
+function parseKinqimenGanzhi(rawText, fallbackGanzhi){
+	const text = normalizeText(rawText || '');
+	const match = text.match(/([甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥])年([甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥])月([甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥])日([甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥])时(?:([甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥])分)?/);
+	if(!match){
+		return fallbackGanzhi || {};
+	}
+	return {
+		...(fallbackGanzhi || {}),
+		year: match[1] || '',
+		month: match[2] || '',
+		day: match[3] || '',
+		time: match[4] || '',
+		minute: match[5] || '',
+	};
+}
+
+function normalizeZhiFuZhiShi(zfzs){
+	const zhiFuStar = getRawValue(zfzs, ['值符星宮', '值符星宫'], []);
+	const zhiShiDoor = getRawValue(zfzs, ['值使門宮', '值使门宫'], []);
+	const zhiFuGan = getRawValue(zfzs, ['值符天干'], '');
+	return {
+		zhiFuGan,
+		zhiFuStar: Array.isArray(zhiFuStar) ? zhiFuStar.map((item)=>normalizeText(item)) : [],
+		zhiShiDoor: Array.isArray(zhiShiDoor) ? zhiShiDoor.map((item)=>normalizeText(item)) : [],
+	};
+}
+
+function normalizeBackendSections(sections){
+	if(!Array.isArray(sections)){
+		return [];
+	}
+	return sections.map((section)=>({
+		title: normalizeText(section && section.title ? section.title : ''),
+		rows: Array.isArray(section && section.rows) ? section.rows.map((row)=>({
+			label: normalizeText(row && row.label ? row.label : ''),
+			value: normalizeText(row && row.value ? row.value : '—') || '—',
+		})) : [],
+	})).filter((section)=>section.title || section.rows.length);
+}
+
+function mergeKinqimenMaps(raw, fallbackPan, opts){
+	const shiftPalace = normalizeShiftPalace(opts && opts.shiftPalace);
+	const tianpanRaw = normalizeGuaMap(getRawValue(raw, ['天盤', '天盘'], {}));
+	const dipanRaw = normalizeGuaMap(getRawValue(raw, ['地盤', '地盘'], {}));
+	const menRaw = normalizeGuaMap(getRawValue(raw, ['門', '门'], {}));
+	const starRaw = normalizeGuaMap(getRawValue(raw, ['星'], {}));
+	const shenRaw = normalizeGuaMap(getRawValue(raw, ['神'], {}));
+	const diPanBase = Object.keys(dipanRaw).length ? convertGuaMapToPos(dipanRaw) : (fallbackPan.diPan || {});
+	const tianPanBase = Object.keys(tianpanRaw).length ? convertGuaMapToPos(tianpanRaw) : (fallbackPan.tianPan || {});
+	const menBase = Object.keys(menRaw).length ? convertGuaMapToPos(menRaw) : (fallbackPan.renPan || {});
+	const starBase = Object.keys(starRaw).length ? convertGuaMapToPos(starRaw) : {};
+	const shenBase = Object.keys(shenRaw).length ? convertGuaMapToPos(shenRaw) : (fallbackPan.shenPan || {});
+	const diPan = rotateOuterMapByShift(diPanBase, shiftPalace);
+	const tianPan = rotateOuterMapByShift(tianPanBase, shiftPalace);
+	const renPan = rotateOuterMapByShift(menBase, shiftPalace);
+	const tianXing = rotateOuterMapByShift(Object.keys(starBase).length ? starBase : (fallbackPan.tianXing || {}), shiftPalace);
+	const shenPan = rotateOuterMapByShift(shenBase, shiftPalace);
+	return { diPan, tianPan, renPan, tianXing, shenPan };
+}
+
+export function normalizeKinqimenData(backendPan, fallbackPan, options, nongli){
+	if(!backendPan || !fallbackPan){
+		return fallbackPan;
+	}
+	const raw = backendPan.selected || backendPan.raw || {};
+	const opts = options || {};
+	const maps = mergeKinqimenMaps(raw, fallbackPan, opts);
+	const zfzs = normalizeZhiFuZhiShi(getRawValue(raw, ['值符值使'], {}));
+	const zhiFuPalaceRaw = zfzs.zhiFuStar[1] || '';
+	const zhiShiPalaceRaw = zfzs.zhiShiDoor[1] || '';
+	const shiftPalace = normalizeShiftPalace(opts.shiftPalace);
+	const zhiFuPalace = zhiFuPalaceRaw ? rotateOuterPalaceNum(GUA_POS_MAP[zhiFuPalaceRaw] || 5, shiftPalace) : fallbackPan.zhiFuPalace;
+	const zhiShiPalace = zhiShiPalaceRaw ? rotateOuterPalaceNum(GUA_POS_MAP[zhiShiPalaceRaw] || 5, shiftPalace) : fallbackPan.zhiShiPalace;
+	const zhiFuShort = (zfzs.zhiFuStar[0] || '').replace(/禽/g, '芮');
+	const zhiShiShort = zfzs.zhiShiDoor[0] || '';
+	const xunkong = getRawValue(raw, ['旬空'], fallbackPan.xunkong || {});
+	const kongWang = getKongByMode(opts.kongMode, {
+		日空: normalizeText(xunkong && xunkong.日空 ? xunkong.日空 : ''),
+		时空: normalizeText((xunkong && (xunkong.時空 || xunkong.时空)) || ''),
+	}) || fallbackPan.kongWang;
+	const kongWangMeta = resolveKongWangPalaces(kongWang);
+	const horse = getRawValue(raw, ['馬星', '马星'], {});
+	const yiMaZhi = normalizeText((horse && (horse.驛馬 || horse.驿马)) || '');
+	const yiMaPalace = BRANCH_TO_POS[yiMaZhi] || (fallbackPan.yiMa ? fallbackPan.yiMa.palace : 0);
+	const yiMa = {
+		...(fallbackPan.yiMa || {}),
+		yimaZhi: yiMaZhi || (fallbackPan.yiMa ? fallbackPan.yiMa.yimaZhi : ''),
+		palace: yiMaPalace,
+		text: yiMaPalace ? `驿马：${yiMaZhi}（${PALACE_NAME[yiMaPalace]}${yiMaPalace}宫）` : (fallbackPan.yiMa ? fallbackPan.yiMa.text : '驿马：无'),
+		raw: horse,
+	};
+	const specials = resolveSpecials(maps.tianPan);
+	const menPo = resolveMenPo(maps.renPan);
+	const cells = buildCells(maps.diPan, maps.tianPan, maps.renPan, maps.shenPan, maps.tianXing, zhiFuPalace, zhiShiPalace, {
+		jiXingPalaces: specials.jiXingPalaces,
+		ruMuPalaces: specials.ruMuPalaces,
+		menPoPalaces: menPo.palaces,
+		kongWangPalaces: kongWangMeta.palaces,
+		yimaPalace: yiMaPalace,
+	});
+	const qimenModeLabel = normalizeText(backendPan.modeLabel || '');
+	const juText = normalizeText(getRawValue(raw, ['排局', '局'], fallbackPan.juText));
+	const ganzhi = parseKinqimenGanzhi(getRawValue(raw, ['干支'], ''), fallbackPan.ganzhi);
+	return {
+		...fallbackPan,
+		source: 'kinqimen',
+		backend: backendPan,
+		raw,
+		allRaw: backendPan.allRaw || {},
+		sections: normalizeBackendSections(backendPan.sections),
+		qimenMode: backendPan.mode || getKinqimenMode(opts.paiPanType),
+		qimenModeLabel,
+		qimenCapabilities: backendPan.capabilities || null,
+		juText: juText || fallbackPan.juText,
+		jieqiText: normalizeText(getRawValue(raw, ['節氣', '节气'], fallbackPan.jieqiText)) || fallbackPan.jieqiText,
+		yinYangDun: juText.indexOf('阴遁') >= 0 ? '阴遁' : (juText.indexOf('阳遁') >= 0 ? '阳遁' : fallbackPan.yinYangDun),
+		sanYuan: juText.indexOf('上元') >= 0 || juText.endsWith('上') ? '上元' : (juText.indexOf('中元') >= 0 || juText.endsWith('中') ? '中元' : (juText.indexOf('下元') >= 0 || juText.endsWith('下') ? '下元' : fallbackPan.sanYuan)),
+		juShu: (juText.match(/[一二三四五六七八九]/) || [fallbackPan.juShu || ''])[0],
+		ganzhi,
+		xunShou: normalizeText(getRawValue(raw, ['旬首'], fallbackPan.xunShou)),
+		fuTou: normalizeText(getRawValue(raw, ['旬首'], fallbackPan.fuTou)),
+		xunkong,
+		kongWang,
+		zhiFu: zhiFuShort ? (JIU_XING_NAME[zhiFuShort] || zhiFuShort) : fallbackPan.zhiFu,
+		zhiShi: zhiShiShort ? (BA_MEN_NAME[zhiShiShort] || `${zhiShiShort}门`) : fallbackPan.zhiShi,
+		zhiFuPalace,
+		zhiShiPalace,
+		diPan: maps.diPan,
+		tianPan: maps.tianPan,
+		renPan: maps.renPan,
+		shenPan: maps.shenPan,
+		tianGan: maps.tianPan,
+		tianXing: maps.tianXing,
+		diPanList: mapListByPos(maps.diPan),
+		tianPanList: mapListByPos(maps.tianPan),
+		renPanList: mapListByPos(maps.renPan),
+		shenPanList: mapListByPos(maps.shenPan),
+		jiXingPalaces: specials.jiXingPalaces,
+		ruMuPalaces: specials.ruMuPalaces,
+		liuYiJiXing: specials.liuYi,
+		qiYiRuMu: specials.ruMu,
+		menPo,
+		kongWangDesc: kongWangMeta.list,
+		kongWangPalaces: kongWangMeta.palaces,
+		yiMa,
+		cells,
+		options: {
+			...(fallbackPan.options || {}),
+			qimenEngineLabel: '',
+			qimenModeLabel,
+			paiPanLabel: getOptionLabel(PAIPAN_OPTIONS, opts.paiPanType),
+			qijuMethodLabel: normalizeText(backendPan.qijuMethod) === 'zhirun' ? '置闰' : (normalizeText(getRawValue(raw, ['排盤方式', '排盘方式'], '')) || (fallbackPan.options ? fallbackPan.options.qijuMethodLabel : '')),
+		},
+		lunarText: fallbackPan.lunarText || (nongli ? `${nongli.year || ''}年${nongli.leap ? '闰' : ''}${nongli.month || ''}${nongli.day || ''}` : ''),
+	};
+}
+
 function resolvePaiPanMeta(opts, ganzhi, jieqi, dateParts, context){
 	const paiPanType = normalizeNum(opts && opts.paiPanType, 3);
 	if(paiPanType === 0){
@@ -781,9 +996,12 @@ function buildGanzhiForQimen(nongli, dateParts, opts, context){
 		|| (nongli ? nongli.time : '')
 	);
 	const computedTime = getHourGanZhi(day, calcDateTime.hour);
-	const time = normalizeTimeAlg(opts && opts.timeAlg) === 0
+	const switchedLateZi = calcDateTime.hour === 23 && !!(opts && opts.after23NewDay);
+	const time = switchedLateZi
 		? (computedTime || preciseTime)
-		: (preciseTime || computedTime);
+		: (normalizeTimeAlg(opts && opts.timeAlg) === 0
+		? (computedTime || preciseTime)
+		: (preciseTime || computedTime));
 	return {
 		year: normalizeGanZhi(
 			(bazi && bazi.year && bazi.year.ganzi)
@@ -936,7 +1154,29 @@ function panSky(ganzhi, qmju){
 	const rotate = meta.yy === '阳' ? CLOCKWISE_EIGHTGUA : [...CLOCKWISE_EIGHTGUA].reverse();
 	const earth = panEarth(qmju);
 	const earthR = invertMap(earth);
+	const zfzs = zhifuNZhishi(ganzhi, qmju);
 	const fuHead = JJ[getXunHead(ganzhi.time)] || '戊';
+	const ganHead = zfzs.值符天干[1];
+	const starGong = zfzs.值符星宫[1];
+	const earthOnRing = rotate.map((g)=>earth[g]);
+	if(starGong === '中'){
+		const gongReorder = newList(rotate, '坤');
+		let ganReorder;
+		if(panGod(ganzhi, qmju).坤 !== '符'){
+			ganReorder = newList(earthOnRing, earth.坤);
+		}else if(earth.坤 === ganHead){
+			ganReorder = newList(earthOnRing, earthOnRing[earthOnRing.length - 1]);
+		}else{
+			try{
+				ganReorder = newList(earthOnRing, ganHead);
+			}catch(e){
+				ganReorder = newList(earthOnRing, earth.坤);
+			}
+		}
+		const out = zipToMap(gongReorder, ganReorder);
+		out.中 = earth.中;
+		return out;
+	}
 	const timeGan = getGanzhiGan(ganzhi.time);
 	const normalizeTianpanGong = (gong)=>gong === '中' ? '坤' : gong;
 	const sourceGong = normalizeTianpanGong(earthR[fuHead]);
@@ -1312,11 +1552,8 @@ function qimenJuNameZhirun(dateParts, dayGanzhi, yearSeeds, fallbackJieqi, after
 		return qimenJuNameChaibu(fallbackJieqi || '', dayGanzhi);
 	}
 	const jieqi = jqrz.substring(0, 2);
-	const rizhu = jqrz.substring(2, 4);
-	const idx = getGanzhiIndex(rizhu);
-	const futou = Math.floor(idx / 15) * 15;
-	const yuanId = Math.floor((idx - futou) / 5);
-	const yuan = ['上元', '中元', '下元'][yuanId] || '上元';
+	const yuan = findYuan(dayGanzhi);
+	const yuanId = yuan === '上元' ? 0 : (yuan === '中元' ? 1 : 2);
 	const code = JIEQI2JU[jieqi] || '一七四阳';
 	const yy = code.substring(code.length - 1);
 	return `${yy}遁${code.substring(yuanId, yuanId + 1)}局${yuan}`;
@@ -1458,7 +1695,7 @@ export function calcDunJia(fields, nongli, options, context){
 		yimaMode: 'day',
 		timeAlg: 0,
 		shiftPalace: 0,
-		after23NewDay: 1,
+		after23NewDay: 0,
 		fengJu: false,
 		...(options || {}),
 	};
@@ -1504,10 +1741,7 @@ export function calcDunJia(fields, nongli, options, context){
 
 	const zhiFuPalace = rotateOuterPalaceNum(GUA_POS_MAP[zfzs.值符星宫[1]] || 5, shiftPalace);
 	const zhiShiPalace = rotateOuterPalaceNum(GUA_POS_MAP[zfzs.值使门宫[1]] || 5, shiftPalace);
-	let zhiFu = JIU_XING_NAME[(zfzs.值符星宫[0] || '').replace(/禽/g, '芮')] || `${(zfzs.值符星宫[0] || '').replace(/禽/g, '芮')}`;
-	if((zfzs.值符星宫[0] || '') === '禽'){
-		zhiFu = '天禽';
-	}
+	const zhiFu = JIU_XING_NAME[(zfzs.值符星宫[0] || '').replace(/禽/g, '芮')] || `${(zfzs.值符星宫[0] || '').replace(/禽/g, '芮')}`;
 	const zhiShi = BA_MEN_NAME[zfzs.值使门宫[0]] || `${zfzs.值使门宫[0]}门`;
 
 	const cells = buildCells(diPan, tianPan, men, shen, star, zhiFuPalace, zhiShiPalace, {

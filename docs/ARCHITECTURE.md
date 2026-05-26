@@ -16,8 +16,8 @@ Horosa Skill 由五层组成：
 flowchart TD
   A["Claude / Codex / Open WebUI / OpenClaw"] --> B["MCP server / CLI"]
   B --> C["HorosaSkillService"]
-  C --> D["Remote-compatible Java/Python runtime"]
-  C --> E["horosa-core-js (qimen / taiyi / jinkou / phase2 tools)"]
+  C --> D["Remote-compatible Java/Python runtime (incl. ken: kinqimen / kintaiyi / kinjinkou)"]
+  C --> E["horosa-core-js (统摄法 engine + ken-response → aiExport.js formatting)"]
   C --> F["Export contract builder"]
   C --> G["Knowledge bundle reader"]
   C --> H["MemoryStore + JSON artifacts + manifests"]

@@ -7,6 +7,39 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-25
+
+### Changed
+
+- Unified 奇门遁甲 / 太乙 / 金口诀 (and the 奇门 + 太乙 legs of 三式合一) onto the
+  Horosa **ken** backend, matching what 星阙 itself now computes. These techniques
+  previously ran the headless JS engine's *local* algorithm; they now call the
+  ken chart-service endpoints (`/qimen/pan` → kinqimen, `/taiyi/pan` → kintaiyi,
+  `/jinkou/pan` → kinjinkou) so the skill and the product produce identical charts.
+- The bundled `horosa-core-js` engine is repurposed as a **ken-response formatter**:
+  ken stays the sole compute authority, and `normalizeKinqimenData` /
+  `normalizeBackendPan` / `normalizeKinjinkouData` + `buildDunJiaSnapshotText` /
+  `buildTaiyiSnapshotText` / `buildJinkouSnapshotText` reformat the ken response into
+  星阙 `aiExport.js` sections, so the structured `export_snapshot` contract is unchanged.
+- `三式合一` (`sanshiunited`) inherits ken automatically — it composes the ken
+  奇门 + 太乙 results with the 大六壬 leg.
+- `统摄法` (tongshefa) keeps its pure headless JS engine (it has no ken backend).
+
+### Added
+
+- The offline runtime payload now bundles the `kinqimen` / `kintaiyi` / `kinjinkou`
+  ken engines (embedded Python already carries their deps: bidict / numpy / kerykeion
+  / ephem / pendulum), and the staged chart-service kentang mount skips any engine that
+  is not bundled so the chart service still boots offline.
+
+### Verified
+
+- qimen / taiyi / jinkou / sanshiunited run end-to-end against the live ken chart
+  service (`:8899`); each emits its 星阙 aiExport.js sections (qimen:
+  起盘信息/盘型/盘面要素/奇门演卦/八宫详解/九宫方盘; taiyi: 起盘信息/太乙盘/十六宫标记;
+  jinkou: 起盘信息/金口诀速览/金口诀四位/四位神煞) with a clean export contract
+  (no missing / unknown sections). Full skill test suite green.
+
 ## [0.5.13] - 2026-05-18
 
 ### Fixed

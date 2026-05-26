@@ -13,6 +13,13 @@ export const TAIYI_ACCUM_OPTIONS = [
 	{ value: 3, label: '太乙局' },
 ];
 
+export const TAIYI_METHOD_SOURCE_OPTIONS = [
+	{ value: 0, source: '《太乙統宗寶鑑》' },
+	{ value: 1, source: '《太乙金鏡式經》' },
+	{ value: 2, source: '《太乙淘金歌》' },
+	{ value: 3, source: '《太乙局》' },
+];
+
 const DI_ZHI = '子丑寅卯辰巳午未申酉戌亥'.split('');
 const GONG16_ORDER = '子丑艮寅卯辰巽巳午未坤申酉戌乾亥'.split('');
 const GONG16_NUM = [8, 8, 3, 3, 4, 4, 9, 9, 2, 2, 7, 7, 6, 6, 1, 1];
@@ -698,6 +705,8 @@ export function calcTaiyiPanFromKintaiyi(fields, nongli, options){
 		setVGenPalace: num2gong(setVGen),
 		options: {
 			styleLabel: getTaiyiStyleLabel(style),
+			methodLabel: style === 5 ? '命法不适用' : getTaiyiAccumLabel(tnForPan),
+			methodSource: style === 5 ? '命法不适用' : getTaiyiMethodSource(tnForPan),
 			accumLabel: getTaiyiAccumLabel(tnForPan),
 			sexLabel: sex,
 		},
@@ -726,7 +735,10 @@ export function buildTaiyiSnapshotLines(pan){
 	}
 	const lines = [];
 	lines.push(`盘式：${pan.options ? pan.options.styleLabel : ''}`);
-	lines.push(`积年法：${pan.options ? pan.options.accumLabel : ''}`);
+	lines.push(`古法公式：${pan.options ? (pan.options.methodLabel || pan.options.accumLabel) : ''}`);
+	if(pan.options && pan.options.methodSource && pan.options.methodSource !== '命法不适用'){
+		lines.push(`古法出处：${pan.options.methodSource}`);
+	}
 	if(pan.jiyuan){
 		lines.push(`纪元：${pan.jiyuan}`);
 	}
@@ -743,4 +755,9 @@ export function buildTaiyiSnapshotLines(pan){
 	lines.push(`三风/五风/八风：${pan.threewindPalace}/${pan.fivewindPalace}/${pan.eightwindPalace}`);
 	lines.push(`大游/小游：${pan.bigyoPalace}/${pan.smyoPalace}`);
 	return lines;
+}
+
+export function getTaiyiMethodSource(value){
+	const one = TAIYI_METHOD_SOURCE_OPTIONS.find((item)=>item.value === value);
+	return one ? one.source : '';
 }

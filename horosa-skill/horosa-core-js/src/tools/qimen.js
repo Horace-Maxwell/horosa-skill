@@ -1,7 +1,7 @@
 import { buildLocalJieqiYearSeed } from '../shared/localNongliAdapter.js';
 import { makeFields, normalizeDateTimeInput } from '../shared/fields.js';
 import { unwrapNamedObject, unwrapResultEnvelope } from '../shared/unpack.js';
-import { buildJieqiYearSeed, buildDunJiaSnapshotText, calcDunJia } from '../vendor/dunjia/DunJiaCalc.js';
+import { buildJieqiYearSeed, buildDunJiaSnapshotText, calcDunJia, normalizeKinqimenData } from '../vendor/dunjia/DunJiaCalc.js';
 
 function inferYear(dateText) {
   return parseInt(`${dateText}`.slice(0, 4), 10);
@@ -29,10 +29,16 @@ export function runQimen(payload) {
       [year]: buildYearSeed(normalized.jieqi_year_current, year, normalized.zone),
     },
   };
-  const pan = calcDunJia(fields, nongli, normalized.options || {}, context);
-  if (!pan) {
+  const fallback = calcDunJia(fields, nongli, normalized.options || {}, context);
+  if (!fallback) {
     throw new Error('Qimen calculation returned no result.');
   }
+  // ken is the sole compute authority: overlay the kinqimen backend response onto the
+  // local scaffold so buildDunJiaSnapshotText still emits 星阙 aiExport.js sections.
+  const ken = unwrapResultEnvelope(payload.ken_response ?? payload.kenResponse);
+  const pan = ken && typeof ken === 'object' && (ken.selected || ken.raw)
+    ? normalizeKinqimenData(ken, fallback, normalized.options || {}, nongli)
+    : fallback;
   return {
     tool: 'qimen',
     technique: 'qimen',
