@@ -7,6 +7,14 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+### Fixed
+
+- **JS CLI tolerates a null/scalar payload.** `bin/cli.mjs` now coerces a parsed payload that is `null`
+  or a scalar (stdin literally `null`, a number, a string) to `{}`, so the tools degrade like any other
+  malformed input instead of throwing `Cannot read properties of null` on `payload.field`
+  (`liureng`/`taiyi`/`qimen`). Defensive only — the Python service always sends a validated object;
+  the regression covers the JS boundary directly.
+
 ## [0.6.2] - 2026-05-26
 
 ### Aligned with 星阙 (value-identical)
