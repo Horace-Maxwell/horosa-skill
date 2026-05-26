@@ -150,7 +150,11 @@ def patch_embedded_python(runtime_root: Path) -> None:
     pth_path = next(runtime_root.glob("python*._pth"), None)
     if pth_path is None:
         raise SystemExit(f"missing python ._pth file under {runtime_root}")
-    pth_path.write_text("python311.zip\n.\nLib\nLib\\site-packages\nimport site\n", encoding="utf-8")
+    # Derive the stdlib zip name from the discovered ._pth (e.g. python311._pth -> python311.zip)
+    # instead of hardcoding a version, so a future embed bump (3.11 -> 3.12) does not silently
+    # point the interpreter at a non-existent zip and lose its stdlib.
+    stdlib_zip = f"{pth_path.stem}.zip"
+    pth_path.write_text(f"{stdlib_zip}\n.\nLib\nLib\\site-packages\nimport site\n", encoding="utf-8")
 
 
 def write_manifest(version: str) -> None:
