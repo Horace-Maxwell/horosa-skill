@@ -50,16 +50,35 @@ class HorosaJsEngineClient:
                 details={"path": str(cli_path)},
             )
 
-        completed = subprocess.run(
-            [str(node_bin), str(cli_path), "run", tool_name],
-            input=json.dumps(payload, ensure_ascii=False),
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            capture_output=True,
-            cwd=str(engine_root),
-            timeout=self.settings.js_engine_timeout_seconds,
-        )
+        try:
+            completed = subprocess.run(
+                [str(node_bin), str(cli_path), "run", tool_name],
+                input=json.dumps(payload, ensure_ascii=False),
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                cwd=str(engine_root),
+                timeout=self.settings.js_engine_timeout_seconds,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise ToolTransportError(
+                "horosa-core-js timed out.",
+                code="js_engine.timeout",
+                details={
+                    "tool": tool_name,
+                    "timeout_seconds": self.settings.js_engine_timeout_seconds,
+                    "node_bin": str(node_bin),
+                },
+            ) from exc
+        except OSError as exc:
+            # FileNotFoundError (Node not installed / unresolved), PermissionError, etc. — keep the
+            # "every failure is a ToolTransportError" contract so the surface returns a clean error.
+            raise ToolTransportError(
+                "horosa-core-js could not be launched (Node runtime not found or not executable).",
+                code="js_engine.node_unavailable",
+                details={"tool": tool_name, "node_bin": str(node_bin), "error": str(exc)},
+            ) from exc
         try:
             parsed = json.loads(completed.stdout or "{}")
         except ValueError as exc:

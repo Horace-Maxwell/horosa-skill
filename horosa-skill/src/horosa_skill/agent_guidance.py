@@ -770,6 +770,8 @@ def build_validation_recovery(
     else:
         missing_fields = []
         for error in errors:
+            if not isinstance(error, dict):
+                continue
             loc = error.get("loc")
             if isinstance(loc, (list, tuple)) and loc:
                 missing_fields.append(".".join(str(part) for part in loc))
