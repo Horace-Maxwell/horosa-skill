@@ -147,6 +147,16 @@ This repository is built to solve five practical problems:
 
 If the goal is “clone once, install once, and let AI call real Horosa methods locally on any machine,” this repo is designed for exactly that.
 
+## Acknowledgements: the bundled open-source engines (ken)
+
+The Qimen Dunjia / Taiyi / Jinkou Jue charts (and the Qimen + Taiyi inside San Shi United) are computed by three open-source Python engines from **[kentang2017](https://github.com/kentang2017)**. Xingque integrates these engines in its backend, and Horosa Skill reuses the same compute path and ships them inside the offline runtime. With thanks to the author:
+
+- **kinqimen** (Qimen Dunjia) — MIT License — <https://github.com/kentang2017/kinqimen>
+- **kintaiyi** (Taiyi) — MIT License — <https://github.com/kentang2017/kintaiyi>
+- **kinjinkou** (Jinkou Jue) — MIT License — <https://github.com/kentang2017/kinjinkou>
+
+These engines are used under their respective MIT licenses; the full copyright and license text is bundled with the offline runtime at `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}/LICENSE` and preserved on distribution.
+
 ## What It Can Do Today
 
 ### High-level capability map

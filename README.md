@@ -155,6 +155,16 @@ uv run horosa-skill agent guidance --tool liureng_gods --intent "当前时间起
 
 这个仓库就是围绕这个目标设计的。
 
+## 致谢：内置的开源术数引擎（ken）
+
+奇门遁甲 / 太乙神数 / 金口诀（以及三式合一中的奇门 + 太乙）的盘面，由 **[kentang2017](https://github.com/kentang2017)** 开源的三个 Python 引擎计算。星阙在后端接入了这套引擎，Horosa Skill 复用同一计算路径并将其随离线 runtime 一起分发。在此向作者致谢：
+
+- **kinqimen**（奇门遁甲）— MIT License — <https://github.com/kentang2017/kinqimen>
+- **kintaiyi**（太乙神数）— MIT License — <https://github.com/kentang2017/kintaiyi>
+- **kinjinkou**（金口诀）— MIT License — <https://github.com/kentang2017/kinjinkou>
+
+这三个引擎依据其各自的 MIT 许可证使用；完整的版权声明与许可证文本随离线 runtime 一并打包在 `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}/LICENSE`，分发时一并保留。
+
 ## 现在它已经能做什么
 
 ### 一句话能力总览
