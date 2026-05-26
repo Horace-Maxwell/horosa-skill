@@ -296,8 +296,9 @@ Use `--ai-answer-text` for a short inline answer, `--ai-answer-file` for a full 
 This skill guide is for AI clients **using** Horosa Skill. If you are **modifying or building** the
 repo, the full maintainer playbook (re-vendoring the JS engines, offline-runtime packaging gotchas,
 `pkill` caveat, venv repair, local verification, **and the "Stability invariants" — `run_tool` always
-returns an envelope / surfaces never crash / input normalization degrades**) lives in the repo's
-harness doc [`AGENTS.md`](../../AGENTS.md) under "Maintainer & Build Notes".
+returns an envelope; surfaces, the Node/`js_client` layer, tracing, the evaluation lock, and report
+rendering all fail safe**) lives in the repo's harness doc [`AGENTS.md`](../../AGENTS.md) under
+"Maintainer & Build Notes".
 
 For client behaviour this means: a tool that fails returns `ok=False` with an `error.code` (e.g.
 `tool.internal_error` for an unexpected backend/format error, `tool.ken_compute_failed` for a ken

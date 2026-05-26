@@ -559,7 +559,7 @@ def _ken_qimen_mode(options: dict[str, Any]) -> str:
 
 
 def _build_export_provenance(technique: str, snapshot_text: str | None) -> dict[str, Any]:
-    technique_info = get_technique_info(technique)
+    technique_info = get_technique_info(technique) or {}
     registry = build_export_registry(technique=technique)
     return {
         "source_domain": "xingque_ai_export",

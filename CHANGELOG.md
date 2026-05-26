@@ -27,6 +27,19 @@ and this project follows a release-oriented changelog style.
   renderer/IO error into a structured `tool.internal_error` payload.
 - **`install` reports a clean error for a missing local `--archive`** instead of a raw
   tarfile/shutil traceback; the Windows runtime-start path no longer leaks file handles + a temp dir.
+- **Trace writes are best-effort.** A local JSONL trace-write failure (unwritable/deleted trace dir,
+  disk full) no longer escapes the span's `finally` and crashes or masks the operation being traced.
+- **Node failures stay within the transport contract.** `js_client` now wraps a missing/unstartable
+  Node runtime (`FileNotFoundError`) as `js_engine.node_unavailable` and a Node timeout as
+  `js_engine.timeout`, instead of letting a raw `OSError`/`TimeoutExpired` escape the engine layer.
+- **Evaluation lock recovers from a crashed run.** `acquire_evaluation_lock` now reclaims a stale lock
+  left by a `kill -9`/OOM/power-loss run (dead recorded PID on POSIX, or an age threshold when liveness
+  is indeterminate — Windows/corrupt lock), instead of deadlocking every future evaluation for 60s +
+  failure until manual deletion. A live owner is never reclaimed.
+- **Report rendering is atomic.** `render_report` writes to a temp sibling and `os.replace()`s into
+  place, so a mid-render DOCX/PDF failure can never leave a truncated/corrupt artifact at the target.
+- Defensive guards: `_build_export_provenance` tolerates an unknown technique (no `NoneType` deref);
+  `build_validation_recovery` skips non-dict error entries.
 
 ## [0.6.1] - 2026-05-26
 
