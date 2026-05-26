@@ -57,3 +57,45 @@ def test_assert_payload_manifest_rejects_stale_version(tmp_path: Path) -> None:
 
     with pytest.raises(SystemExit, match="stale or mismatched embedded runtime manifest"):
         verify_runtime_release._assert_payload_manifest(archive, "win32-x64", "0.5.9")
+
+
+_WIN_FILE_ENTRIES = [
+    "runtime-payload/runtime-manifest.json",
+    "runtime-payload/Horosa-Web/start_horosa_local.ps1",
+    "runtime-payload/Horosa-Web/stop_horosa_local.ps1",
+    "runtime-payload/Horosa-Web/astropy/__init__.py",
+    "runtime-payload/Horosa-Web/vendor/kinqimen/__init__.py",
+    "runtime-payload/Horosa-Web/vendor/kintaiyi/__init__.py",
+    "runtime-payload/Horosa-Web/vendor/kinjinkou/__init__.py",
+    "runtime-payload/runtime/windows/python/python.exe",
+    "runtime-payload/runtime/windows/java/bin/java.exe",
+    "runtime-payload/runtime/windows/node/node.exe",
+    "runtime-payload/runtime/windows/bundle/astrostudyboot.jar",
+    "runtime-payload/horosa-core-js/bin/cli.mjs",
+]
+_SWEFILES_DIR = "runtime-payload/Horosa-Web/flatlib-ctrad2/flatlib/resources/swefiles/"
+
+
+def _write_full_win_zip(path: Path, *, swefiles_empty: bool) -> None:
+    with zipfile.ZipFile(path, "w") as archive:
+        for name in _WIN_FILE_ENTRIES:
+            archive.writestr(name, b"x")
+        if swefiles_empty:
+            archive.writestr(_SWEFILES_DIR, b"")  # bare directory-marker entry, no files inside
+        else:
+            archive.writestr(_SWEFILES_DIR + "seas_18.se1", b"ephemeris")
+
+
+def test_assert_entries_rejects_empty_required_directory(tmp_path: Path) -> None:
+    # Regression: a zip whose required dir (swefiles) is only a bare marker must FAIL — previously
+    # `startswith(required)` matched the marker against itself and greenlit a broken runtime.
+    archive = tmp_path / "runtime.zip"
+    _write_full_win_zip(archive, swefiles_empty=True)
+    with pytest.raises(SystemExit, match="missing required entries"):
+        verify_runtime_release._assert_entries(archive, "win32-x64")
+
+
+def test_assert_entries_accepts_required_directory_with_a_real_file(tmp_path: Path) -> None:
+    archive = tmp_path / "runtime.zip"
+    _write_full_win_zip(archive, swefiles_empty=False)
+    verify_runtime_release._assert_entries(archive, "win32-x64")  # must not raise
