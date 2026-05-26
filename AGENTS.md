@@ -220,6 +220,21 @@ ken (`source: kinqimen`). Two fixes:
 - For users, **re-install the matching runtime release** — both runtime builders rsync the repo's
   (ken-fed) `horosa-core-js` into the payload, so a fresh install carries the formatter.
 
+## Headless engine alignment (tongshefa / decennials)
+
+These two techniques are the skill's own headless reimplementations (no ken backend). Keep them
+value-identical to 星阙:
+
+- **`tongshefa.js`**: a hexagram's element comes from its **京房本宫 palace** (`HEXAGRAM_PALACE_ELEM`,
+  mirrored from 星阙 `GuaConst.js Gua64[i].house.elem`), NOT the upper trigram — they differ for 32/64
+  hexagrams. Use `hexElem(hex)` for `left_elem`/`right_elem`/`main_relation`. The aiExport contract is
+  **本卦/六爻/潜藏/亲和 only** (matches 星阙 `aiExport.js`); 星阙's najia/六合/升降 UI detail is deliberately
+  out of scope — do not add it to the export.
+- **`engine/decennials.py`** is a port of 星阙 `utils/decennials.js`. JS uses `Math.round` (half-up) and
+  `Math.ceil`; Python's `round` is banker's rounding. Use `_js_round` (= `floor(x+0.5)`) for every JS
+  `Math.round`, and `math.ceil` for the L1 count. Cross-check against 星阙's `decennials.test.js` golden
+  vectors (`tests/test_decennials.py`) whenever you touch the period math.
+
 ## Stability invariants (don't regress these)
 
 A global stability pass hardened these; keep them true when you touch the relevant code:

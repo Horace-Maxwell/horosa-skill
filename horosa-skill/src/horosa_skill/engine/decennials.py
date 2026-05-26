@@ -1,7 +1,18 @@
 from __future__ import annotations
 
+import math
 from datetime import datetime, timedelta, timezone
 from typing import Any
+
+
+def _js_round(value: float) -> int:
+    """Match JavaScript ``Math.round`` (round half toward +infinity).
+
+    Python's built-in ``round`` is banker's rounding (half-to-even), so ``round(2.5) == 2`` while
+    ``Math.round(2.5) === 3``. The 星阙 ``decennials.js`` source uses ``Math.round`` throughout, so the
+    port must mirror it exactly to stay value-identical.
+    """
+    return math.floor(value + 0.5)
 
 
 DECENNIAL_START_MODE_SECT_LIGHT = "sect_light"
@@ -177,7 +188,7 @@ def _get_rounded_distribution(total_value: float, order: list[str], round_unit: 
         if index == len(order) - 1 and preserve_last:
             value = total_value - consumed
         elif round_unit > 0:
-            value = round(exact / round_unit) * round_unit
+            value = _js_round(exact / round_unit) * round_unit
         value = max(0.0, value)
         consumed += value
         segments.append({"planet": planet, "value": value})
@@ -198,18 +209,18 @@ def _minutes_from_level_four(total_minutes: float, order: list[str]) -> list[dic
 
 
 def _scale_nominal_minutes(total_minutes: float, calendar_type: str | None) -> int:
-    normalized = max(0, round(float(total_minutes or 0)))
+    normalized = max(0, _js_round(float(total_minutes or 0)))
     if calendar_type != DECENNIAL_CALENDAR_ACTUAL:
         return normalized
-    return round(normalized * ACTUAL_YEAR_SCALE_NUMERATOR / ACTUAL_YEAR_SCALE_DENOMINATOR)
+    return _js_round(normalized * ACTUAL_YEAR_SCALE_NUMERATOR / ACTUAL_YEAR_SCALE_DENOMINATOR)
 
 
 def _scale_nominal_segments(segments: list[dict[str, Any]], calendar_type: str | None, round_unit: int = 1) -> list[dict[str, Any]]:
     if calendar_type != DECENNIAL_CALENDAR_ACTUAL:
-        return [{"planet": item["planet"], "value": max(0, round(float(item["value"] or 0)))} for item in segments]
+        return [{"planet": item["planet"], "value": max(0, _js_round(float(item["value"] or 0)))} for item in segments]
     unit = round_unit if round_unit > 0 else 1
     total_nominal = sum(max(0.0, float(item["value"] or 0)) for item in segments)
-    total_scaled = round(_scale_nominal_minutes(total_nominal, calendar_type) / unit) * unit
+    total_scaled = _js_round(_scale_nominal_minutes(total_nominal, calendar_type) / unit) * unit
     scaled: list[dict[str, Any]] = []
     consumed = 0
     cumulative_exact = 0.0
@@ -219,7 +230,7 @@ def _scale_nominal_segments(segments: list[dict[str, Any]], calendar_type: str |
         if index == len(segments) - 1:
             value = total_scaled - consumed
         else:
-            value = round(cumulative_exact / unit) * unit - consumed
+            value = _js_round(cumulative_exact / unit) * unit - consumed
         value = max(0, value)
         consumed += value
         scaled.append({"planet": item["planet"], "value": value})
@@ -232,7 +243,7 @@ def _format_range(start_moment: datetime, end_moment: datetime, with_time: bool)
 
 
 def _format_nominal_offset(total_minutes: int, level: int) -> str:
-    minutes = max(0, round(total_minutes or 0))
+    minutes = max(0, _js_round(total_minutes or 0))
     years, minutes = divmod(minutes, MINUTES_PER_YEAR)
     months, minutes = divmod(minutes, MINUTES_PER_MONTH)
     days, minutes = divmod(minutes, MINUTES_PER_DAY)
@@ -377,7 +388,12 @@ def _resolve_l1_count(birth_moment: datetime | None, now_moment: datetime, calen
         return 7
     age_minutes = max(0.0, (now_moment - birth_moment).total_seconds() / 60.0)
     l1_minutes = _scale_nominal_minutes(TOTAL_L1_DAYS * MINUTES_PER_DAY, calendar_type)
-    return max(7, int((age_minutes + l1_minutes - 1) // l1_minutes) + 2)
+    if l1_minutes <= 0:
+        return 7
+    # JS: Math.max(7, Math.ceil(ageMinutes / l1Minutes) + 2). The previous integer "(x+n-1)//n"
+    # ceil-trick floored fractional ages (age_minutes is a float), dropping the final L1 lord for
+    # any chart landing in the first <1 minute after a ~10.6-year boundary.
+    return max(7, math.ceil(age_minutes / l1_minutes) + 2)
 
 
 def build_decennial_timeline(chart_obj: dict[str, Any], settings: dict[str, Any] | None = None) -> dict[str, Any]:

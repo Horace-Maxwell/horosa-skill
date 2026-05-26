@@ -3,7 +3,7 @@
   "name": "horosa-skill",
   "title": "Horosa Skill",
   "description": "Local-first offline Horosa / Xingque MCP server with structured export contracts, bundled hover knowledge, local memory, and release-managed runtime payloads.",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "homepage": "https://github.com/Horace-Maxwell/horosa-skill",
   "repository": "https://github.com/Horace-Maxwell/horosa-skill",
   "license": "AGPL-3.0-only",
@@ -29,7 +29,7 @@
     {
       "registryType": "github",
       "identifier": "Horace-Maxwell/horosa-skill",
-      "version": "0.6.1",
+      "version": "0.6.2",
       "transport": "stdio",
       "runtime": {
         "command": "uv",
