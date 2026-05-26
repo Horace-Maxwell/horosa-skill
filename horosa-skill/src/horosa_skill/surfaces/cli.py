@@ -1248,7 +1248,18 @@ def client_openclaw_check(
             "--output",
             str(output_path),
         ]
-        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        try:
+            result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=900)
+        except subprocess.TimeoutExpired:
+            typer.echo(
+                json.dumps(
+                    {"ok": False, "code": "openclaw_check.timeout", "message": "openclaw-check --full exceeded 900s and was aborted (a child MCP/runtime process is likely wedged)."},
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                err=True,
+            )
+            raise typer.Exit(code=2)
         if output_path.exists():
             report = json.loads(output_path.read_text(encoding="utf-8"))
             _print_json(report)
@@ -1351,7 +1362,12 @@ def report_from_tool(
     payload = _load_payload(stdin=stdin, input_file=input_file)
     ai_report: dict[str, Any] = {}
     if ai_report_file is not None:
-        raw_ai_report = json.loads(ai_report_file.read_text(encoding="utf-8"))
+        try:
+            raw_ai_report = json.loads(ai_report_file.read_text(encoding="utf-8"))
+        except OSError as exc:
+            raise typer.BadParameter(f"--ai-report-file could not be read: {exc}")
+        except json.JSONDecodeError as exc:
+            raise typer.BadParameter(f"--ai-report-file is not valid JSON: {exc}")
         if not isinstance(raw_ai_report, dict):
             raise typer.BadParameter("--ai-report-file must contain a JSON object.")
         ai_report = raw_ai_report.get("ai_report", raw_ai_report)
@@ -1359,7 +1375,10 @@ def report_from_tool(
             raise typer.BadParameter("--ai-report-file ai_report must be a JSON object.")
     final_ai_answer_text = ai_answer_text
     if ai_answer_file is not None:
-        file_text = ai_answer_file.read_text(encoding="utf-8").strip()
+        try:
+            file_text = ai_answer_file.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise typer.BadParameter(f"--ai-answer-file could not be read: {exc}")
         final_ai_answer_text = f"{final_ai_answer_text}\n\n{file_text}".strip() if final_ai_answer_text else file_text
     service = _service()
     try:

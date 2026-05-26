@@ -96,6 +96,20 @@ def _mcp_error_payload(exc: ToolValidationError) -> dict[str, Any]:
     }
 
 
+def _mcp_internal_error_payload(exc: Exception) -> dict[str, Any]:
+    # Last-resort structured error so an unexpected failure (e.g. a DOCX/PDF renderer or disk
+    # I/O error during report generation) returns cleanly instead of breaking the MCP session.
+    message = str(exc) or exc.__class__.__name__
+    details = {"exception_type": type(exc).__name__}
+    return {
+        "ok": False,
+        "code": "tool.internal_error",
+        "message": message,
+        "details": details,
+        "error": {"code": "tool.internal_error", "message": message, "details": details},
+    }
+
+
 def _agent_preflight_error(tool_name: str, payload: dict[str, Any]) -> dict[str, Any] | None:
     if not isinstance(payload, dict):
         return None
@@ -188,6 +202,8 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
             )
         except ToolValidationError as exc:
             return _mcp_error_payload(exc)
+        except Exception as exc:  # noqa: BLE001 - never break the MCP session on a report/IO error
+            return _mcp_internal_error_payload(exc)
     horosa_report_template.__signature__ = _signature_for_input_model(ReportTemplateInput)
     horosa_report_template.__annotations__ = {"return": dict[str, Any]}
     mcp.tool(name="horosa_report_template")(horosa_report_template)
@@ -199,6 +215,8 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
             )
         except ToolValidationError as exc:
             return _mcp_error_payload(exc)
+        except Exception as exc:  # noqa: BLE001 - never break the MCP session on a report/IO error
+            return _mcp_internal_error_payload(exc)
     horosa_report_render.__signature__ = _signature_for_input_model(ReportRenderInput)
     horosa_report_render.__annotations__ = {"return": dict[str, Any]}
     mcp.tool(name="horosa_report_render")(horosa_report_render)
@@ -210,6 +228,8 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
             )
         except ToolValidationError as exc:
             return _mcp_error_payload(exc)
+        except Exception as exc:  # noqa: BLE001 - never break the MCP session on a report/IO error
+            return _mcp_internal_error_payload(exc)
     horosa_report_from_run.__signature__ = _signature_for_input_model(ReportRenderInput)
     horosa_report_from_run.__annotations__ = {"return": dict[str, Any]}
     mcp.tool(name="horosa_report_from_run")(horosa_report_from_run)
@@ -229,6 +249,8 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
             )
         except ToolValidationError as exc:
             return _mcp_error_payload(exc)
+        except Exception as exc:  # noqa: BLE001 - never break the MCP session on a report/IO error
+            return _mcp_internal_error_payload(exc)
     horosa_report_from_tool.__signature__ = _signature_for_input_model(ReportFromToolInput)
     horosa_report_from_tool.__annotations__ = {"return": dict[str, Any]}
     mcp.tool(name="horosa_report_from_tool")(horosa_report_from_tool)

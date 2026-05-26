@@ -3652,6 +3652,30 @@ class HorosaSkillService:
                     trace_id=trace["trace_id"],
                     group_id=trace["group_id"],
                 )
+            except Exception as exc:  # noqa: BLE001 - last-resort guard: a surface/dispatch must never crash
+                # Tool execution and the snapshot/summary/export post-processing touch backend-shaped
+                # data and can raise unexpected ValueError/KeyError/IndexError/TypeError. Convert those
+                # into a structured ok=False envelope instead of letting a traceback escape the CLI or
+                # break the MCP session / abort a whole dispatch. (Bad-payload ValidationError is handled
+                # separately above and intentionally still raises.)
+                trace["error_code"] = "tool.internal_error"
+                envelope = ToolEnvelope(
+                    ok=False,
+                    tool=tool_name,
+                    version=__version__,
+                    input_normalized=input_normalized,
+                    data={},
+                    summary=[f"工具 `{tool_name}` 调用时发生内部错误。"],
+                    warnings=[],
+                    memory_ref=None,
+                    error=ErrorInfo(
+                        code="tool.internal_error",
+                        message=str(exc),
+                        details={"exception_type": type(exc).__name__},
+                    ),
+                    trace_id=trace["trace_id"],
+                    group_id=trace["group_id"],
+                )
 
             if save_result:
                 effective_run_id = run_id or self.store.create_run(

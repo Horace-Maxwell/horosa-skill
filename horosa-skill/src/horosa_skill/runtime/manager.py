@@ -731,7 +731,12 @@ class HorosaRuntimeManager:
                 response.raise_for_status()
                 target.write_bytes(response.content)
             return target
-        return Path(source).expanduser().resolve()
+        local_path = Path(source).expanduser().resolve()
+        if not local_path.is_file():
+            # Surface a clean RuntimeError (which `install` handles) instead of letting a
+            # raw tarfile/shutil error escape later from _extract_archive.
+            raise RuntimeError(f"Runtime archive not found: {local_path}")
+        return local_path
 
     def _read_json_location(self, location: str) -> dict[str, Any]:
         if _is_url(location):
@@ -1163,13 +1168,19 @@ class HorosaRuntimeManager:
                         stderr=stderr_handle,
                         check=False,
                     )
+                with open(stdout_path, "r", encoding="utf-8", errors="replace") as stdout_reader:
+                    captured_stdout = stdout_reader.read()
+                with open(stderr_path, "r", encoding="utf-8", errors="replace") as stderr_reader:
+                    captured_stderr = stderr_reader.read()
                 completed = subprocess.CompletedProcess(
                     args=completed_result.args,
                     returncode=completed_result.returncode,
-                    stdout=open(stdout_path, "r", encoding="utf-8", errors="replace").read(),
-                    stderr=open(stderr_path, "r", encoding="utf-8", errors="replace").read(),
+                    stdout=captured_stdout,
+                    stderr=captured_stderr,
                 )
             finally:
+                # Close the readers (above) before rmtree — on Windows an open handle
+                # blocks deletion and would leak the temp dir.
                 shutil.rmtree(temp_dir, ignore_errors=True)
         else:
             completed = subprocess.run(

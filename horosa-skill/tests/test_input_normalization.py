@@ -64,3 +64,25 @@ def test_normalize_request_payload_leaves_unknown_iana_zone_when_datetime_is_mis
     normalized = normalize_request_payload({"zone": "America/Los_Angeles"})
 
     assert normalized["zone"] == "America/Los_Angeles"
+
+
+def test_normalize_request_payload_does_not_crash_on_calendar_invalid_date_with_iana_zone() -> None:
+    # Regression: the date/time regexes accept digit-shaped but calendar-invalid values
+    # (e.g. 2020-02-30). With an IANA zone name this used to reach datetime() and raise
+    # ValueError straight out of normalization. It must degrade, not crash.
+    normalized = normalize_request_payload(
+        {"zone": "Asia/Shanghai", "date": "2020-02-30", "time": "12:00:00"}
+    )
+
+    assert normalized["date"] == "2020-02-30"
+    # Could not derive a reference instant, so the IANA name is left for the backend to reject.
+    assert normalized["zone"] == "Asia/Shanghai"
+
+
+def test_normalize_request_payload_normalizes_utc_designators_to_zero_offset() -> None:
+    for token in ("Z", "z", "UTC", "GMT", "utc"):
+        normalized = normalize_request_payload({"zone": token})
+        assert normalized["zone"] == "+00:00", token
+    # UTC with an explicit offset must still parse, not collapse to +00:00.
+    assert normalize_request_payload({"zone": "UTC+8"})["zone"] == "+08:00"
+    assert normalize_request_payload({"zone": "GMT+05:30"})["zone"] == "+05:30"

@@ -129,6 +129,9 @@ def _normalize_zone_value(value: Any, *, payload: dict[str, Any] | None = None, 
         return iana_offset
 
     offset_text = text.upper().replace("UTC", "").replace("GMT", "").strip()
+    if offset_text in ("", "Z"):
+        # Bare UTC / GMT / Z (and "UTC"/"GMT" alone) -> canonical zero offset.
+        return "+00:00"
     if ":" not in offset_text:
         compact_match = re.fullmatch(r"(?P<sign>[+-]?)(?P<digits>\d{3,4})", offset_text)
         if compact_match:
@@ -191,14 +194,20 @@ def _combine_date_time(date_value: Any, time_value: Any) -> datetime | None:
     time_match = _TIME_RE.match(time_text)
     if not date_match or not time_match:
         return None
-    return datetime(
-        int(date_match.group("year")),
-        int(date_match.group("month")),
-        int(date_match.group("day")),
-        int(time_match.group("hour")),
-        int(time_match.group("minute")),
-        int(time_match.group("second") or "0"),
-    )
+    try:
+        return datetime(
+            int(date_match.group("year")),
+            int(date_match.group("month")),
+            int(date_match.group("day")),
+            int(time_match.group("hour")),
+            int(time_match.group("minute")),
+            int(time_match.group("second") or "0"),
+        )
+    except ValueError:
+        # The regexes accept digit-shaped but calendar-invalid values (month 13, day 45,
+        # hour 99, ...). Degrade like a regex miss instead of crashing normalization — the
+        # backend will reject the bad date with a structured param error.
+        return None
 
 
 def _parse_datetime_text(value: Any) -> datetime | None:
