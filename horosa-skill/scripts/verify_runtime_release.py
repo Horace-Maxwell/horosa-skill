@@ -47,7 +47,7 @@ REQUIRED_ENTRIES = {
 def _archive_entries(path: Path) -> set[str]:
     if path.name.endswith(".tar.gz"):
         with tarfile.open(path, "r:gz") as archive:
-            return {member.name if member.isdir() else member.name for member in archive.getmembers()}
+            return {member.name for member in archive.getmembers()}
     if path.suffix.lower() == ".zip":
         with zipfile.ZipFile(path) as archive:
             return set(archive.namelist())
@@ -73,7 +73,15 @@ def _assert_entries(path: Path, platform_key: str) -> None:
     missing: list[str] = []
     for required in REQUIRED_ENTRIES[platform_key]:
         if required.endswith("/"):
-            if not any(entry.startswith(required) for entry in entries):
+            # Require a real file strictly INSIDE the directory, not merely a directory-marker entry.
+            # A zip can carry an empty required dir as a bare `…/swefiles/` marker; the old
+            # `startswith(required)` matched that marker against itself and greenlit an archive whose
+            # ephemeris / astropy / ken-engine dir was empty (broken at runtime). tar stores dir
+            # members without a trailing slash, so this also makes tar and zip validate identically.
+            if not any(
+                entry.startswith(required) and len(entry) > len(required) and not entry.endswith("/")
+                for entry in entries
+            ):
                 missing.append(required)
         elif required not in entries:
             missing.append(required)
