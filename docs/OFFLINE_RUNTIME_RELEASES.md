@@ -47,6 +47,11 @@ Do not treat these three locations as interchangeable.
 5. Publish the manifest URL for `horosa-skill install`.
 6. Verify the release archives before upload.
 
+> **Building the Windows archive** (which needs win32 wheels and native Windows verification) is a
+> Windows-only step. A complete, self-contained runbook for a Windows agent (or a person) lives at
+> [`WINDOWS_RELEASE_BUILD_PROMPT.md`](./WINDOWS_RELEASE_BUILD_PROMPT.md) — build, native ken/tongshefa
+> verification, manifest+checksums over both platforms, and release finalization.
+
 ## Scripts In This Repo
 
 - `horosa-skill/scripts/build_runtime_release.sh`
