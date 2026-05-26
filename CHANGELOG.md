@@ -9,6 +9,13 @@ and this project follows a release-oriented changelog style.
 
 ### Fixed
 
+- **Release verifier no longer greenlights an empty required directory (false-confidence gate).**
+  `verify_runtime_release.py` checked directory requirements with `entry.startswith(required)`, which
+  for a `.zip` matched an empty directory's own marker entry (`…/swefiles/`) — so a maintainer-zipped
+  Windows payload with an empty `swefiles/` (ephemeris), `astropy/`, or `vendor/kin*/` (ken engines)
+  could pass verification while being broken at runtime; tar and zip also validated at different
+  strictness. It now requires a real file strictly *inside* each required directory (tar + zip
+  identical). Also removed a dead `isdir()` ternary. Regression tests added.
 - **JS CLI tolerates a null/scalar payload.** `bin/cli.mjs` now coerces a parsed payload that is `null`
   or a scalar (stdin literally `null`, a number, a string) to `{}`, so the tools degrade like any other
   malformed input instead of throwing `Cannot read properties of null` on `payload.field`

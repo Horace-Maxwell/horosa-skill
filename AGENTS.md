@@ -189,6 +189,10 @@ are not part of the aiExport contract and will otherwise show up as unknown sect
 - **Graceful kentang mount.** The packaging scripts patch the *staged* `kentang/registry.py` mount to
   skip engines that aren't bundled, so the chart service still boots offline (`_load_service` does a bare
   `__import__` and would otherwise hard-fail on a missing engine).
+- **`verify_runtime_release.py` checks real files inside required dirs.** A directory requirement
+  (`swefiles/`, `astropy/`, `vendor/kin*/`) passes only if the archive holds a real file strictly
+  inside it — an empty dir-marker entry fails (a bare `…/swefiles/` in a hand-built zip used to pass).
+  When hand-zipping the Windows payload, make sure those dirs are actually populated, not just present.
 
 ## `pkill` will take down the live 星阙 stack
 
