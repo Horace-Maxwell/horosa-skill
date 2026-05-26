@@ -257,3 +257,14 @@ def test_tongshefa_uses_jingfang_palace_element_not_upper_trigram(tmp_path) -> N
     assert data["left_elem"] == "木"
     assert data["right_elem"] == "金"  # palace 乾宫, NOT upper trigram 离/火
     assert data["main_relation"] == "实克思"
+
+
+def test_cli_coerces_null_or_scalar_payload_instead_of_crashing(tmp_path) -> None:
+    """Regression: a null / scalar payload (stdin literally `null`) used to null-deref-crash the JS
+    tools (`payload.liureng` / `normalizeDateTimeInput(null)`). cli.mjs now coerces it to {}, so a
+    no-backend formatter like liureng degrades to a structured result instead of throwing."""
+    service = make_service(tmp_path)
+    # json.dumps(None) -> "null" on stdin; must return a dict (ok=true), not raise ToolTransportError.
+    result = service.js_client.run("liureng", None)
+    assert isinstance(result, dict)
+    assert isinstance(result.get("data"), dict)
