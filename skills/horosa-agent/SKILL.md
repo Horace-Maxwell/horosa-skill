@@ -296,8 +296,18 @@ Use `--ai-answer-text` for a short inline answer, `--ai-answer-file` for a full 
 This skill guide is for AI clients **using** Horosa Skill. If you are **modifying or building** the
 repo, the full maintainer playbook (re-vendoring the JS engines, offline-runtime packaging gotchas,
 `pkill` caveat, venv repair, local verification) lives in the repo's harness doc
-[`AGENTS.md`](../../AGENTS.md) under "Maintainer & Build Notes". The two facts most relevant to
-debugging user-facing results:
+[`AGENTS.md`](../../AGENTS.md) under "Maintainer & Build Notes".
+
+**Standing rule (force-sync on every issue):** when you fix a problem or learn a gotcha, update **both**
+this skill doc **and** [`AGENTS.md`](../../AGENTS.md) in the same change, keeping them in sync — never
+leave one stale.
+
+**Engine credit (MIT):** the ken engines are open-source and MIT-licensed, by **kentang2017** —
+`kinqimen` / `kintaiyi` / `kinjinkou`. Their `LICENSE` files ship inside the offline runtime under
+`Horosa-Web/vendor/*/LICENSE` and must never be stripped; the acknowledgement is in `README.md` /
+`README_EN.md`. See the harness doc for the full MIT obligation.
+
+The two facts most relevant to debugging user-facing results:
 
 - **`qimen` / `taiyi` / `jinkou` (and `sanshiunited`'s 奇门 + 太乙) are computed by 星阙's `ken` backend**
   (`kinqimen` / `kintaiyi` / `kinjinkou`) on the chart service (`:8899`), not by the JS layer. The JS
