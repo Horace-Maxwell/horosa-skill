@@ -258,7 +258,9 @@ A global stability pass hardened these; keep them true when you touch the releva
   script already scopes kills by the runtime root path; keep it that way.
 - **`js_client` keeps the transport contract.** Every Node failure becomes a `ToolTransportError`:
   a missing/unstartable Node → `js_engine.node_unavailable`, a timeout → `js_engine.timeout`. The
-  `subprocess.run` call is wrapped — don't let a raw `OSError`/`TimeoutExpired` escape.
+  `subprocess.run` call is wrapped — don't let a raw `OSError`/`TimeoutExpired` escape. On the JS side,
+  `bin/cli.mjs` always prints a JSON `{ok:...}` envelope to stdout (never a bare stack trace) and
+  coerces a `null`/scalar parsed payload to `{}` so tools don't null-deref on `payload.field`.
 - **Tracing is best-effort.** `TraceRecorder._write_event` swallows local-write failures (like
   `_emit_otlp`); a trace write must never crash or mask the traced operation.
 - **`evaluation_lock` self-heals.** `acquire_evaluation_lock` reclaims a stale lock (dead PID on POSIX,

@@ -35,7 +35,11 @@ async function main() {
 
   try {
     const raw = await readStdin();
-    const payload = raw.trim() ? JSON.parse(raw) : {};
+    const parsed = raw.trim() ? JSON.parse(raw) : {};
+    // Coerce a null / scalar payload (e.g. stdin is literally `null`, a number, or a string) to {}
+    // so tools degrade to a structured "insufficient input" result instead of throwing on
+    // `payload.field`. Objects and arrays pass through unchanged (they already degrade gracefully).
+    const payload = parsed && typeof parsed === 'object' ? parsed : {};
     const result = runTool(arg, payload);
     printJson({ ok: true, ...result });
   } catch (error) {
