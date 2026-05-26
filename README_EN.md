@@ -46,6 +46,7 @@ Latest local verification:
 | --- | --- |
 | Callable tools | `39 / 39` |
 | Qimen / Taiyi / Jinkou / San Shi United compute backend | Unified on `ken` (`kinqimen` / `kintaiyi` / `kinjinkou`), same source as the Xingque desktop app |
+| Tongshefa / decennials | Headless implementations value-aligned with Xingque (京房 palace element; `Math.round` / `Math.ceil` parity; cross-checked against Xingque's `decennials.test.js`) |
 | Forced clarification before unsafe calls | `32` tools return `must_ask_user=true` |
 | Safe exempt tools | `7` registry / knowledge / parser tools |
 | Tool execution | `39 / 39 ok=true` |
@@ -156,6 +157,8 @@ The Qimen Dunjia / Taiyi / Jinkou Jue charts (and the Qimen + Taiyi inside San S
 - **kinjinkou** (Jinkou Jue) — MIT License — <https://github.com/kentang2017/kinjinkou>
 
 These engines are used under their respective MIT licenses; the full copyright and license text is bundled with the offline runtime at `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}/LICENSE` and preserved on distribution.
+
+License attribution: the three `ken` engines above are **third-party MIT** components (by kentang2017). Everything else in this repo — 统摄法 (`tongshefa.js`), decennials (`engine/decennials.py`), and the `aiExport.js` formatting / headless adapters for qimen / taiyi / jinkou / liureng / charts — is **Xingque's own work**, licensed under this repository's `GNU AGPL-3.0-only`. tongshefa and decennials are headless ports of Xingque's frontend engines (`astrostudyui`), verified value-identical to Xingque (京房八宫 palace element, JS `Math.round` parity, etc.). The underlying traditional systems themselves (the 京房 eight-palace scheme, Hellenistic decennials, …) are public knowledge and carry no third-party copyright.
 
 ## What It Can Do Today
 

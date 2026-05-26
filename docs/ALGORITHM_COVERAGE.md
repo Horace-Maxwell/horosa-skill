@@ -30,6 +30,7 @@ Can this method be called locally after `horosa-skill install`, without dependin
 | Predictive | `pd` | local Java + Python | Included | Runs through the local runtime services. |
 | Predictive | `pdchart` | local Java + Python | Included | Runs through the local runtime services. |
 | Predictive | `zr` | local Java + Python | Included | Runs through the local runtime services. |
+| Predictive | `decennials` | local Python (headless port) | Included | 十年大运 — headless Python port of 星阙 `utils/decennials.js`; value-aligned (`Math.round`/`Math.ceil` parity), cross-checked against 星阙's `decennials.test.js`. No backend / no ken. |
 | Chinese Metaphysics | `ziwei_birth` | local Java + Python | Included | Runs through the local runtime services. |
 | Chinese Metaphysics | `ziwei_rules` | local Java + Python | Included | Runs through the local runtime services. |
 | Chinese Metaphysics | `bazi_birth` | local Java + Python | Included | Runs through the local runtime services. |
@@ -44,7 +45,7 @@ Can this method be called locally after `horosa-skill install`, without dependin
 | Chinese Metaphysics | `taiyi` | local Python ken (kintaiyi) + Node formatter | Included | Computed by the `kintaiyi` ken engine (`/taiyi/pan`); reformatted by `horosa-core-js`. |
 | Chinese Metaphysics | `jinkou` | local Python ken (kinjinkou) + Node formatter | Included | Computed by the `kinjinkou` ken engine (`/jinkou/pan`); reformatted by `horosa-core-js`. |
 | Chinese Metaphysics | `sanshiunited` | local Python ken + Java + Node | Included | 三式合一 composes the ken 奇门 + 太乙 with the 大六壬 leg. |
-| Chinese Metaphysics | `tongshefa` | local Node headless JS | Included | Pure headless 统摄法 engine in `horosa-core-js` (no ken backend). |
+| Chinese Metaphysics | `tongshefa` | local Node headless JS | Included | Pure headless 统摄法 engine in `horosa-core-js` (no ken backend); aligned with 星阙 `TongSheFaMain.js` — hexagram element from the 京房本宫 palace; aiExport contract 本卦/六爻/潜藏/亲和. |
 | Chinese Metaphysics | `fengshui` | n/a | Excluded | Explicitly excluded from this shipping scope. |
 
 ## Runtime Layers

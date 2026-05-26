@@ -13,6 +13,7 @@ This subproject is distributed under `GNU AGPL-3.0-only`. See [LICENSE](LICENSE)
 ## 新增工程能力
 
 - ken 后端统一（v0.6.0）：奇门 / 太乙 / 金口诀（及三式合一的奇门 + 太乙）由星阙 `ken` 引擎（`kinqimen` / `kintaiyi` / `kinjinkou`）独占计算，headless JS 仅把 ken 结果重排成 `aiExport.js` section
+- headless 引擎对齐（v0.6.2）：统摄法（`tongshefa.js`）与十年大运（`engine/decennials.py`）已与星阙逐值对齐（京房八宫五行、`Math.round`/`Math.ceil` 一致），对照星阙 `decennials.test.js` 金标
 - tracing：本地 JSONL trace、`trace_id`、`group_id`
 - benchmark：`HorosaBench` 本地评测集
 - provenance：知识库与导出协议都带来源字段
