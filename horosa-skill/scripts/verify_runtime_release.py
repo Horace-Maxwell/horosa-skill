@@ -14,6 +14,11 @@ REQUIRED_ENTRIES = {
         "runtime-payload/Horosa-Web/stop_horosa_local.sh",
         "runtime-payload/Horosa-Web/astropy/",
         "runtime-payload/Horosa-Web/flatlib-ctrad2/flatlib/resources/swefiles/",
+        # ken engines back /qimen/pan · /taiyi/pan · /jinkou/pan — without these the chart
+        # service mounts no ken endpoints and qimen/taiyi/jinkou fail at runtime.
+        "runtime-payload/Horosa-Web/vendor/kinqimen/",
+        "runtime-payload/Horosa-Web/vendor/kintaiyi/",
+        "runtime-payload/Horosa-Web/vendor/kinjinkou/",
         "runtime-payload/runtime/mac/python/bin/python3",
         "runtime-payload/runtime/mac/java/bin/java",
         "runtime-payload/runtime/mac/node/bin/node",
@@ -26,6 +31,10 @@ REQUIRED_ENTRIES = {
         "runtime-payload/Horosa-Web/stop_horosa_local.ps1",
         "runtime-payload/Horosa-Web/astropy/",
         "runtime-payload/Horosa-Web/flatlib-ctrad2/flatlib/resources/swefiles/",
+        # ken engines back /qimen/pan · /taiyi/pan · /jinkou/pan (see darwin note).
+        "runtime-payload/Horosa-Web/vendor/kinqimen/",
+        "runtime-payload/Horosa-Web/vendor/kintaiyi/",
+        "runtime-payload/Horosa-Web/vendor/kinjinkou/",
         "runtime-payload/runtime/windows/python/python.exe",
         "runtime-payload/runtime/windows/java/bin/java.exe",
         "runtime-payload/runtime/windows/node/node.exe",
