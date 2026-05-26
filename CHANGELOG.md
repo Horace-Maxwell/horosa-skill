@@ -7,6 +7,27 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`run_tool` never crashes the surface anymore.** Tool execution + the snapshot/summary/export
+  post-processing touch backend-shaped data and could raise unexpected `ValueError`/`KeyError`/
+  `IndexError`/`TypeError` that escaped as a CLI traceback, broke the MCP session, or aborted a whole
+  `dispatch`. `run_tool` now wraps any unexpected error into a clean `ok=False` envelope
+  (`tool.internal_error`). Bad-payload `ValidationError` still raises `tool.invalid_payload` as before.
+- **Input normalization no longer crashes on calendar-invalid dates.** The date/time regexes accept
+  digit-shaped but invalid values (`2020-02-30`, month `13`); paired with an IANA timezone name this
+  reached `datetime()` and raised straight out of normalization. It now degrades gracefully and lets
+  the backend reject the bad date with a structured error.
+- **UTC designators normalize to a real offset.** `Z` / `UTC` / `GMT` were passed through verbatim
+  instead of `+00:00`; now canonicalized (while `UTC+8` / `GMT+05:30` still parse correctly).
+- **`report from-tool` no longer dumps a traceback** on a missing/invalid `--ai-report-file` /
+  `--ai-answer-file`; these are now clean `BadParameter` errors.
+- **`openclaw-check --full` can no longer hang forever** — added a 900s subprocess timeout.
+- **MCP report tools never break the session** — `horosa_report_*` now convert an unexpected
+  renderer/IO error into a structured `tool.internal_error` payload.
+- **`install` reports a clean error for a missing local `--archive`** instead of a raw
+  tarfile/shutil traceback; the Windows runtime-start path no longer leaks file handles + a temp dir.
+
 ## [0.6.1] - 2026-05-26
 
 ### Fixed

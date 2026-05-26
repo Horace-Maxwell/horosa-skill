@@ -2357,3 +2357,36 @@ def test_dispatch_emits_group_trace_for_children(tmp_path) -> None:
         assert item.trace_id
     queried = store.query_runs(run_id=result.memory_ref.run_id, include_payload=True)
     assert queried[0]["group_id"] == result.group_id
+
+
+def test_run_tool_wraps_unexpected_exception_into_error_envelope(tmp_path) -> None:
+    """Regression: an unexpected (non-HorosaSkillError) exception during tool execution or
+    snapshot/summary/export post-processing must surface as a clean ok=False envelope
+    (`tool.internal_error`), never crash the CLI / break the MCP session / abort a dispatch."""
+
+    class ExplodingClient(FakeClient):
+        def call(self, endpoint: str, payload: dict) -> dict:
+            # `/chart` is rewritten to "/" by _chart_server_endpoint before reaching the
+            # client, so raise on both forms to be robust.
+            if endpoint in {"/chart", "/"}:
+                raise ValueError("boom from backend")
+            return super().call(endpoint, payload)
+
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=ExplodingClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+
+    result = service.run_tool(
+        "chart",
+        {"date": "1990-01-01", "time": "12:00", "zone": "+08:00", "lat": "31n14", "lon": "121e28"},
+        save_result=False,
+    )
+
+    assert result.ok is False
+    assert result.error is not None
+    assert result.error.code == "tool.internal_error"
+    assert "boom from backend" in result.error.message
+    assert result.error.details.get("exception_type") == "ValueError"

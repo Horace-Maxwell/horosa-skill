@@ -219,3 +219,25 @@ ken (`source: kinqimen`). Two fixes:
 - For development, point at the repo's engine: `HOROSA_CORE_JS_ROOT="$PWD/horosa-core-js"`.
 - For users, **re-install the matching runtime release** — both runtime builders rsync the repo's
   (ken-fed) `horosa-core-js` into the payload, so a fresh install carries the formatter.
+
+## Stability invariants (don't regress these)
+
+A global stability pass hardened these; keep them true when you touch the relevant code:
+
+- **`run_tool` always returns a `ToolEnvelope`, never lets an unexpected exception escape.** Tool
+  execution + the snapshot/summary/export post-processing run inside a try that catches
+  `HorosaSkillError` **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`.
+  Only invalid-payload `ValidationError` (raised *before* that try) intentionally surfaces as
+  `tool.invalid_payload`. Do not add a tool/post-processing path that can raise out of `run_tool` —
+  it would crash the CLI, break the MCP session, or abort a whole `dispatch`.
+- **Surfaces never dump a traceback.** CLI file reads (`--ai-report-file` / `--ai-answer-file`) raise
+  clean `typer.BadParameter`; the MCP `horosa_report_*` handlers wrap unexpected renderer/IO errors via
+  `_mcp_internal_error_payload`; subprocess calls carry timeouts (incl. `openclaw-check --full`, 900s).
+- **`input_normalization` degrades, never crashes.** The date/time regexes are shape-only (they accept
+  month `13`, day `45`), so anything that builds a `datetime` from them must tolerate `ValueError`
+  (see `_combine_date_time`). IANA-zone→offset conversion uses the *chart date*, not `now()`. `Z`/`UTC`/
+  `GMT` → `+00:00`. Compact coords like `121e28` are parsed as 121°28′ (NOT float scientific notation).
+- **Runtime manager:** close file handles before `shutil.rmtree` on the Windows start path; a missing
+  local `--archive` raises `RuntimeError` (which `install` catches), not a raw tarfile error. Never kill
+  chart services by process-name (`pkill -f webchartsrv.py` would also kill a live :8899) — the stop
+  script already scopes kills by the runtime root path; keep it that way.
