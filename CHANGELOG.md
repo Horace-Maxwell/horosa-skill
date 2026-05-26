@@ -7,6 +7,26 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-05-26
+
+### Aligned with 星阙 (value-identical)
+
+- **统摄法 (tongshefa) element source.** The headless engine derived each hexagram's element from its
+  *upper trigram*; 星阙 takes it from the 京房本宫 palace (`Gua64[i].house.elem`). These disagree for
+  32 of 64 hexagrams (e.g. 火地晋 → 金 not 火; 天泽履 → 土 not 金), so `left_elem` / `right_elem` and the
+  headline `main_relation` were wrong for half of all inputs. Added the 64-hexagram 京房 palace-element
+  table (mirrored from `GuaConst.js`) and a `hexElem()` lookup; verified all 64 names resolve and the
+  tongshefa aiExport contract (本卦/六爻/潜藏/亲和) is unchanged. The najia/六合/升降 detail that 星阙
+  renders is UI-only — it is not part of the `aiExport.js` tongshefa contract, so the skill stays a
+  faithful subset.
+- **decennials (十年大运) port.** Two value bugs vs 星阙's `utils/decennials.js`: (1) `resolve_l1_count`
+  used an integer ceil-trick on a *float* age, dropping the final L1 lord for any chart landing in the
+  first <1 minute after a ~10.6-year boundary — now uses `math.ceil` like the JS; (2) Python's `round`
+  is banker's rounding while JS uses `Math.round` (half-up), so the period-distribution math could
+  diverge by ±1 minute (±5 at the valens step) in the 365.25-day calendar mode — added a `_js_round`
+  helper. Cross-checked the port against 星阙's own `decennials.test.js` golden vectors (traditional +
+  365.25 calendar + hephaistio) — value-identical. Both fixes are pure compute, fully cross-platform.
+
 ### Fixed
 
 - **`run_tool` never crashes the surface anymore.** Tool execution + the snapshot/summary/export

@@ -86,6 +86,27 @@ const HEXAGRAM_NAMES = {
 const SHENG = { 木: '火', 火: '土', 土: '金', 金: '水', 水: '木' };
 const KE = { 木: '土', 土: '水', 水: '火', 火: '金', 金: '木' };
 
+// 京房八宫 palace element per hexagram, mirrored from 星阙 GuaConst.js (`Gua64[i].house.elem`).
+// 统摄法 derives a hexagram's element from its 京房本宫五行 — NOT its upper trigram. These disagree
+// for 32 of 64 hexagrams (e.g. 火地晋 → 金 not 火; 天泽履 → 土 not 金), so the palace table is required.
+const HEXAGRAM_PALACE_ELEM = (() => {
+  const palaces = [
+    ['金', ['乾为天', '天风姤', '天山遁', '天地否', '风地观', '山地剥', '火地晋', '火天大有']], // 乾宫
+    ['水', ['坎为水', '水泽节', '水雷屯', '水火既济', '泽火革', '雷火丰', '地火明夷', '地水师']], // 坎宫
+    ['土', ['艮为山', '山火贲', '山天大畜', '山泽损', '火泽睽', '天泽履', '风泽中孚', '风山渐']], // 艮宫
+    ['木', ['震为雷', '雷地豫', '雷水解', '雷风恒', '地风升', '水风井', '泽风大过', '泽雷随']], // 震宫
+    ['木', ['巽为风', '风天小畜', '风火家人', '风雷益', '天雷无妄', '火雷噬嗑', '山雷颐', '山风蛊']], // 巽宫
+    ['火', ['离为火', '火山旅', '火风鼎', '火水未济', '山水蒙', '风水涣', '天水讼', '天火同人']], // 离宫
+    ['土', ['坤为地', '地雷复', '地泽临', '地天泰', '雷天大壮', '泽天夬', '水天需', '水地比']], // 坤宫
+    ['金', ['兑为泽', '泽水困', '泽地萃', '泽山咸', '水山蹇', '地山谦', '雷山小过', '雷泽归妹']], // 兑宫
+  ];
+  const map = {};
+  for (const [elem, names] of palaces) {
+    for (const name of names) map[name] = elem;
+  }
+  return map;
+})();
+
 function normalizeSelection(payload) {
   const next = { ...DEFAULT_SELECTION };
   for (const key of Object.keys(next)) {
@@ -129,6 +150,12 @@ function buildOppositeHex(hex) {
   const lower = getBaguaByLines(lines.slice(0, 3)) || BAGUA.乾;
   const upper = getBaguaByLines(lines.slice(3, 6)) || BAGUA.乾;
   return buildHex(upper, lower);
+}
+
+function hexElem(hex) {
+  // Mirror 星阙 getHexElem: the 京房本宫 palace element, falling back to the upper trigram only if
+  // the hexagram name is unknown (it never is — HEXAGRAM_PALACE_ELEM covers all 64).
+  return (hex && HEXAGRAM_PALACE_ELEM[hex.name]) || (hex && hex.upper ? hex.upper.elem : '');
 }
 
 function relationByElem(leftElem, rightElem) {
@@ -187,9 +214,9 @@ export function runTongSheFa(payload) {
     mutualRight,
     oppositeLeft,
     oppositeRight,
-    left_elem: baseLeft.upper.elem,
-    right_elem: baseRight.upper.elem,
-    main_relation: relationByElem(baseLeft.upper.elem, baseRight.upper.elem),
+    left_elem: hexElem(baseLeft),
+    right_elem: hexElem(baseRight),
+    main_relation: relationByElem(hexElem(baseLeft), hexElem(baseRight)),
   };
   return {
     tool: 'tongshefa',

@@ -238,3 +238,22 @@ def test_tongshefa_local_tool_runs_headless_engine(tmp_path) -> None:
     assert result.ok is True
     assert result.data["tongshefa"]["baseLeft"]["name"]
     assert result.data["export_snapshot"] is not None
+
+
+def test_tongshefa_uses_jingfang_palace_element_not_upper_trigram(tmp_path) -> None:
+    # Alignment regression: 统摄法 takes a hexagram's element from its 京房本宫 palace, not its upper
+    # trigram. left=风雷益 (巽/震, palace 巽宫 木), right=火地晋 (离/坤, palace 乾宫 金 — upper trigram
+    # would wrongly give 火). 星阙 expects right_elem=金 and main_relation=实克思.
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "tongshefa",
+        {"taiyin": "巽", "taiyang": "离", "shaoyang": "震", "shaoyin": "坤"},
+        save_result=False,
+    )
+    assert result.ok is True
+    data = result.data["tongshefa"]
+    assert data["baseLeft"]["name"] == "风雷益"
+    assert data["baseRight"]["name"] == "火地晋"
+    assert data["left_elem"] == "木"
+    assert data["right_elem"] == "金"  # palace 乾宫, NOT upper trigram 离/火
+    assert data["main_relation"] == "实克思"
