@@ -30,7 +30,7 @@ no ken engine and stays a pure headless JS calculation.
 ## Public repository surface (top level)
 
 - `README.md` / `README_EN.md` / `README.zh-CN.md` — Chinese / English landing pages (zh-CN forwards).
-- `CHANGELOG.md` — release-oriented change log (current: `0.6.0`).
+- `CHANGELOG.md` — release-oriented change log (current: `0.6.1`).
 - `server.json` — Model Context Protocol registry metadata (name, version, packages, transports).
 - `CITATION.cff` — citation metadata; version kept in lockstep with the package.
 - `LICENSE` — GNU AGPL-3.0-only.
