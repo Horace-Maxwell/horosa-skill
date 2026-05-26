@@ -100,10 +100,27 @@ If a section is missing, say that the local tool did not return that section and
 # Maintainer & Build Notes (ken backend, offline runtime)
 
 The section above is for AI **clients consuming** Horosa Skill. This section is for any agent or
-maintainer **modifying / building / releasing** this repository. **Standing rule: whenever you hit a
-new gotcha while working on this repo, append it here** so the next agent sees it. Keep these notes in
-*this* repo — never write skill-repo build lessons into the upstream 星阙 (`Horosa-Primary Direction Trial`)
-working tree; the skill repo is self-contained and ships its own agent guidance.
+maintainer **modifying / building / releasing** this repository.
+
+**Standing rule (force-sync on every issue):** whenever you hit a problem, gotcha, or fix while working
+on this repo, you MUST update **both** docs in the same change and keep them in sync — this harness doc
+(`AGENTS.md`) **and** the skill doc (`skills/horosa-agent/SKILL.md`). Do not update one and leave the
+other stale. Keep these notes in *this* repo — never write skill-repo lessons into the upstream 星阙
+(`Horosa-Primary Direction Trial`) working tree; the skill repo is self-contained and ships its own
+agent guidance.
+
+## Third-party engine provenance & MIT obligation (ken)
+
+The ken engines are open-source, **MIT-licensed**, by **kentang2017**: `kinqimen`
+(<https://github.com/kentang2017/kinqimen>), `kintaiyi` (<https://github.com/kentang2017/kintaiyi>),
+`kinjinkou` (<https://github.com/kentang2017/kinjinkou>). MIT requires the copyright + license text to
+travel with every distribution, so:
+
+- **Never strip `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}/LICENSE`** from the runtime payload.
+  The packaging strip must leave these `LICENSE` files intact; `verify_runtime_release.py` requires the
+  engine dirs, and the LICENSE files ship inside them.
+- The acknowledgement lives in `README.md` / `README_EN.md` ("致谢 / Acknowledgements") and in the
+  GitHub release notes. If you bump or re-vendor an engine, keep that credit accurate.
 
 ## Compute model: ken is authoritative, JS only formats
 
