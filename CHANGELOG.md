@@ -7,6 +7,26 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-05-26
+
+### Fixed
+
+- **Silent ken→local divergence.** The ken chart endpoints return HTTP 200 even on failure
+  (`{"ResultCode": -1, "Result": "<engine> ... failed"}`). Because that envelope is still a dict,
+  `_call_remote` did not treat it as an error, and the JS formatter would silently fall back to its
+  *local* scaffold compute — producing a qimen/taiyi/jinkou chart that does not match 星阙, with no
+  error surfaced. Added `_require_ken_pan` (checks the `source` marker) to `_run_{qimen,taiyi,jinkou}_tool`
+  so a failed ken response now raises `tool.ken_compute_failed` instead of degrading silently
+  (`sanshiunited` inherits the guard via its qimen/taiyi legs). Regression test added.
+- `verify_runtime_release.py` now requires the `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}`
+  engine dirs in both platform archives, so a release that drops the ken engines fails verification
+  instead of shipping a runtime that cannot mount `/qimen/pan` · `/taiyi/pan` · `/jinkou/pan`.
+- `build_runtime_release_windows.ps1`: fixed a `param()`-ordering parse error (the script never ran),
+  the archive prefix (now keeps the required `runtime-payload/` root), and the output filename
+  (now `horosa-runtime-<platform>-v<version>.zip`, matching the Python builder + verifier).
+- `build_runtime_release_windows.py`: derive the embedded-Python stdlib zip name from the discovered
+  `._pth` instead of hardcoding `python311.zip`, so a future embed bump cannot silently orphan the stdlib.
+
 ## [0.6.0] - 2026-05-25
 
 ### Changed
@@ -31,24 +51,6 @@ and this project follows a release-oriented changelog style.
   ken engines (embedded Python already carries their deps: bidict / numpy / kerykeion
   / ephem / pendulum), and the staged chart-service kentang mount skips any engine that
   is not bundled so the chart service still boots offline.
-
-### Fixed
-
-- **Silent ken→local divergence.** The ken chart endpoints return HTTP 200 even on failure
-  (`{"ResultCode": -1, "Result": "<engine> ... failed"}`). Because that envelope is still a dict,
-  `_call_remote` did not treat it as an error, and the JS formatter would silently fall back to its
-  *local* scaffold compute — producing a qimen/taiyi/jinkou chart that does not match 星阙, with no
-  error surfaced. Added `_require_ken_pan` (checks the `source` marker) to `_run_{qimen,taiyi,jinkou}_tool`
-  so a failed ken response now raises `tool.ken_compute_failed` instead of degrading silently
-  (`sanshiunited` inherits the guard via its qimen/taiyi legs). Regression test added.
-- `verify_runtime_release.py` now requires the `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}`
-  engine dirs in both platform archives, so a release that drops the ken engines fails verification
-  instead of shipping a runtime that cannot mount `/qimen/pan` · `/taiyi/pan` · `/jinkou/pan`.
-- `build_runtime_release_windows.ps1`: fixed a `param()`-ordering parse error (the script never ran),
-  the archive prefix (now keeps the required `runtime-payload/` root), and the output filename
-  (now `horosa-runtime-<platform>-v<version>.zip`, matching the Python builder + verifier).
-- `build_runtime_release_windows.py`: derive the embedded-Python stdlib zip name from the discovered
-  `._pth` instead of hardcoding `python311.zip`, so a future embed bump cannot silently orphan the stdlib.
 
 ### Documentation
 
