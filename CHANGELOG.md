@@ -7,6 +7,36 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-27
+
+### Added — 星阙 v2.2.0 数算 + 调波盘 modules
+
+- **`canping` (邵子参评数 / 金锁银匙).** New local tool mirroring 星阙's `CanPingMain` + `canpingLocal`:
+  year-纳音 定部 → 四柱起数 → 本命/大运 歲運条文. The four pillars are computed **in-process** by a
+  newly vendored bazi chain (`horosa-core-js/src/vendor/bazi/` → the `lunar-javascript` npm package),
+  not the ken backend — so it runs with no chart-service round-trip. Export contract `['起盘','本命',
+  '大运']` (the snapshot's `大运·歲運` label legacy-maps to `大运`; the full 1–120 流年 table is exposed
+  under `data.canping.series`, matching 星阙 where 流年 lives in the UI table, not the snapshot).
+- **`heluo` (河洛理数).** New local tool mirroring 星阙's `HeLuoMain` + `heluoLocal`: 天地数 → 先天/后天卦
+  与元堂 → 命运篇 judge + 大限·岁运 with 元堂爻辞. Also pillar-driven in-process; the 命运篇 needs the real
+  节气, so the formatter ports `HeLuoMain.solarTerm` (uses `lunar-javascript`'s JieQi table). Export
+  contract `['起命','先天卦','后天卦','命运篇','大限']` (the dynamic `先天·<卦>…`/`后天·<卦>…`/`大限·岁运`
+  labels legacy-map to the declared section names).
+- **`harmonic` (调波盘).** New backend chart-extra tool (`POST /astroextra/harmonic` on the Python chart
+  service): 本命黄经×调波数 → 调波位置 + 同频(合相). Returns structured `positions`/`conjunctions`/`chart`
+  plus a readable snapshot. 星阙 has no aiExport contract for 调波盘 (UI/lab-only), so the skill exposes
+  it as structured data without a formal export technique.
+- Tool count is now **42** (was 39): `canping`, `heluo` (`horosa_cn_*`) and `harmonic`
+  (`horosa_astro_harmonic`) are exposed on every surface (MCP/CLI/router/agent-guidance/reports).
+
+### Build
+
+- **Offline runtime now bundles `lunar-javascript`.** `package_runtime_payload.sh` and the Windows
+  builder run `npm install --omit=dev` in `horosa-core-js` before copying it, and
+  `verify_runtime_release.py` now requires `horosa-core-js/node_modules/lunar-javascript/package.json`
+  in both archives — without the bundled package, `canping`/`heluo` would throw
+  "Cannot find package 'lunar-javascript'" at runtime. `horosa-core-js` declares it as a dependency.
+
 ## [0.6.3] - 2026-05-27
 
 ### Aligned with 星阙

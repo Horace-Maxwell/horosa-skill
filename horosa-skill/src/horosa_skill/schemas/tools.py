@@ -210,6 +210,34 @@ class TongSheFaInput(FlexibleModel):
     shaoyin: str | None = "震"
 
 
+class CanPingInput(FlexibleModel):
+    # 邵子参评数（金锁银匙）computes its four pillars from the bazi chain in-process (not the ken
+    # backend), so it only needs the birth date/time plus longitude+zone for the true-solar option.
+    # `lat` is deliberately not required — canping's bazi only consumes lon for the time correction.
+    date: str
+    time: str
+    zone: str | None = None
+    lon: str | None = None
+    gender: str | int | None = None
+    # timeAlg=0 → 真太阳时 (longitude + equation-of-time); any other value → clock time. Default 1
+    # (clock time) mirrors 星阙 CanPingMain.js's `fieldVal(f, 'timeAlg', 1)`.
+    timeAlg: int | None = 1
+    # method: 'ming' (明法·月支反向取日宫) or 'gu' (古法·八字日支为日宫).
+    method: str | None = "ming"
+
+
+class HeLuoInput(FlexibleModel):
+    # 河洛理数 computes its four pillars from the bazi chain in-process (not the ken backend); it needs
+    # the birth date/time plus longitude+zone for the true-solar option. `lat` is not required.
+    date: str
+    time: str
+    zone: str | None = None
+    lon: str | None = None
+    gender: str | int | None = None
+    # timeAlg=0 → 真太阳时; any other value → clock time. Default 1 mirrors 星阙 HeLuoMain.js.
+    timeAlg: int | None = 1
+
+
 class SanShiUnitedInput(FlexibleModel):
     date: str
     time: str
@@ -236,6 +264,14 @@ class SuZhanInput(BirthInput):
 
 class GermanyInput(BirthInput):
     predictive: bool | None = False
+
+
+class HarmonicInput(BirthInput):
+    # 调波盘 (harmonic chart) is a backend chart-extra computation (POST /astroextra/harmonic on the
+    # Python chart service). harmonic = the H-number (1–360, 星阙 default 9); orb = conjunction orb.
+    predictive: bool | None = False
+    harmonic: int | None = 9
+    orb: float | None = 2.0
 
 
 class OtherBuInput(BirthInput):

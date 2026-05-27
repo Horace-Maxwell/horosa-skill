@@ -76,6 +76,8 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "suzhan": "suzhan",
     "sixyao": "sixyao",
     "tongshefa": "tongshefa",
+    "canping": "canping",
+    "heluo": "heluo",
     "sanshiunited": "sanshiunited",
     "germany": "germany",
     "firdaria": "firdaria",
@@ -106,6 +108,7 @@ _PYTHON_CHART_ENDPOINTS = {
     "/modern/relative",
     "/india/chart",
     "/germany/midpoint",
+    "/astroextra/harmonic",
     "/jieqi/year",
     "/qimen/pan",
     "/taiyi/pan",
@@ -363,6 +366,38 @@ def _generic_summary(tool_name: str, data: dict[str, Any]) -> list[str]:
             summary.append(f"本卦：左{model['baseLeft']['name']}，右{model['baseRight']['name']}。")
         if model.get("main_relation"):
             summary.append(f"主关系：{model['main_relation']}。")
+        return summary
+    if tool_name == "canping":
+        model = data.get("canping", {})
+        summary = ["已运行本地邵子参评数（金锁银匙）算法。"]
+        if model.get("element") and model.get("partName"):
+            summary.append(f"年纳音：{model['element']}（{model['partName']}）。")
+        if model.get("dayPalaceBranch") and model.get("mingGong"):
+            summary.append(f"日宫支 {model['dayPalaceBranch']}，命宫 {model['mingGong']}。")
+        benming = model.get("benming") if isinstance(model.get("benming"), dict) else {}
+        verses = benming.get("verses") if isinstance(benming.get("verses"), dict) else {}
+        if verses.get("numShun") and verses.get("numNi"):
+            summary.append(f"本命数：顺 {verses['numShun']} / 逆 {verses['numNi']}。")
+        return summary
+    if tool_name == "heluo":
+        model = data.get("heluo", {})
+        summary = ["已运行本地河洛理数算法。"]
+        chart = model.get("chart") if isinstance(model.get("chart"), dict) else {}
+        xian = chart.get("xian") if isinstance(chart.get("xian"), dict) else {}
+        hou = chart.get("hou") if isinstance(chart.get("hou"), dict) else {}
+        if xian.get("name") and hou.get("name"):
+            summary.append(f"先天卦 {xian['name']} → 后天卦 {hou['name']}。")
+        if chart.get("tian") is not None and chart.get("di") is not None:
+            summary.append(f"天数 {chart['tian']}（{chart.get('tianGua', '')}）／地数 {chart['di']}（{chart.get('diGua', '')}）。")
+        return summary
+    if tool_name == "harmonic":
+        summary = [f"已生成调波盘（H{data.get('harmonic', '—')}）。"]
+        positions = data.get("positions")
+        if isinstance(positions, list):
+            summary.append(f"调波位置点数：{len(positions)}。")
+        conjunctions = data.get("conjunctions")
+        if isinstance(conjunctions, list) and conjunctions:
+            summary.append(f"同频合相：{len(conjunctions)} 组。")
         return summary
     if tool_name == "sanshiunited":
         summary = ["已运行本地三式合一聚合算法。"]
@@ -1709,6 +1744,48 @@ def _build_otherbu_snapshot_text(payload: dict[str, Any], response: dict[str, An
             ),
             ("骰子盘宫位与星体", "\n".join(chart_lines(response.get("diceChart"))).strip() or "无"),
             ("天象盘宫位与星体", "\n".join(chart_lines(response.get("chart"))).strip() or "无"),
+        ]
+    )
+
+
+def _build_harmonic_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
+    harmonic = response.get("harmonic", payload.get("harmonic", 9))
+    positions = response.get("positions") or []
+    conjunctions = response.get("conjunctions") or []
+    pos_lines: list[str] = []
+    for p in positions:
+        if not isinstance(p, dict):
+            continue
+        deg, minute = _split_degree(p.get("signlon", p.get("lon")))
+        natal_deg, natal_min = _split_degree(p.get("natalLon"))
+        pos_lines.append(
+            f"{_planet_label(p.get('id'))}：本命 {natal_deg}˚{natal_min}分 → 调波 {_astro_msg(p.get('sign'))} {deg}˚{minute}分"
+        )
+    conj_lines: list[str] = []
+    for c in conjunctions:
+        if not isinstance(c, dict):
+            continue
+        try:
+            orb_text = f"{float(c.get('orb')):.2f}°"
+        except (TypeError, ValueError):
+            orb_text = f"{c.get('orb')}"
+        conj_lines.append(f"{_planet_label(c.get('a'))} ☌ {_planet_label(c.get('b'))}（误差 {orb_text}）")
+    return _render_snapshot_text(
+        [
+            (
+                "起盘信息",
+                "\n".join(
+                    [
+                        f"日期：{payload.get('date', '—')} {payload.get('time', '—')}",
+                        f"时区：{payload.get('zone', '—')}",
+                        f"经纬度：{payload.get('lon', '—')} {payload.get('lat', '—')}",
+                        f"调波数：H{harmonic}",
+                        f"容许度(orb)：{payload.get('orb', 2)}°",
+                    ]
+                ),
+            ),
+            ("调波位置", "\n".join(pos_lines).strip() or "无"),
+            ("同频合相", "\n".join(conj_lines).strip() or "无"),
         ]
     )
 
@@ -3261,6 +3338,30 @@ class HorosaSkillService:
             "export_snapshot": self._augment_export_payload(technique="tongshefa", snapshot_text=snapshot_text),
         }
 
+    def _run_canping_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # canping is computed entirely in-process by horosa-core-js (bazi chain → 金锁银匙 起数),
+        # not the ken backend. The JS returns the canping model + the 星阙-identical snapshot text.
+        js_result = self.js_client.run("canping", payload)
+        snapshot_text = js_result.get("snapshot_text")
+        return {
+            "canping": js_result.get("data", {}),
+            "input_normalized": js_result.get("input_normalized", {}),
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="canping", snapshot_text=snapshot_text),
+        }
+
+    def _run_heluo_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # heluo (河洛理数) is also a 原生·非 ken tool: the JS computes the chart (起命/先天/后天), 大限/
+        # 岁运, and 命运篇 judge in-process and returns the 星阙-identical snapshot text.
+        js_result = self.js_client.run("heluo", payload)
+        snapshot_text = js_result.get("snapshot_text")
+        return {
+            "heluo": js_result.get("data", {}),
+            "input_normalized": js_result.get("input_normalized", {}),
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="heluo", snapshot_text=snapshot_text),
+        }
+
     def _run_sanshiunited_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         shared = {
             "date": payload["date"],
@@ -3391,6 +3492,28 @@ class HorosaSkillService:
         }
         result["export_snapshot"] = self._augment_export_payload(technique="germany", snapshot_text=snapshot_text)
         return result
+
+    def _run_harmonic_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 调波盘: a backend chart-extra computation on the Python chart service (/astroextra/harmonic).
+        # 星阙 has no aiExport contract for 调波盘 (it is a UI/lab-only auxiliary chart), so this returns
+        # the structured data (positions/conjunctions/chart) plus a readable snapshot_text for the AI,
+        # but no formal export technique (harmonic is intentionally absent from TOOL_EXPORT_TECHNIQUE_MAP).
+        try:
+            harmonic_num = max(1, min(int(payload.get("harmonic", 9)), 360))
+        except (TypeError, ValueError):
+            harmonic_num = 9
+        orb = payload.get("orb", 2.0)
+        remote_payload = {**payload, "predictive": 0, "harmonic": harmonic_num, "orb": orb}
+        response = self._call_remote("/astroextra/harmonic", remote_payload)
+        snapshot_text = _build_harmonic_snapshot_text(remote_payload, response)
+        return {
+            "harmonic": response.get("harmonic", harmonic_num),
+            "positions": response.get("positions", []),
+            "conjunctions": response.get("conjunctions", []),
+            "chart": response.get("chart"),
+            "raw": response,
+            "snapshot_text": snapshot_text,
+        }
 
     def _run_otherbu_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         remote_payload = {
@@ -3551,6 +3674,10 @@ class HorosaSkillService:
             return self._run_sixyao_tool(payload)
         if definition.name == "tongshefa":
             return self._run_tongshefa_tool(payload)
+        if definition.name == "canping":
+            return self._run_canping_tool(payload)
+        if definition.name == "heluo":
+            return self._run_heluo_tool(payload)
         if definition.name == "sanshiunited":
             return self._run_sanshiunited_tool(payload)
         if definition.name == "hellen_chart":
@@ -3559,6 +3686,8 @@ class HorosaSkillService:
             return self._run_guolao_chart_tool(payload)
         if definition.name == "germany":
             return self._run_germany_tool(payload)
+        if definition.name == "harmonic":
+            return self._run_harmonic_tool(payload)
         if definition.name == "firdaria":
             return self._run_firdaria_tool(payload)
         if definition.name == "decennials":

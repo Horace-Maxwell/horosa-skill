@@ -119,6 +119,9 @@ Use these user intents:
 - Jinkou Jue: `jinkou`
 - Sanshi United: `sanshiunited`
 - Tongshefa: `tongshefa`
+- Shaozi Canping (邵子参评数 / 金锁银匙): `canping`
+- Heluo Lishu (河洛理数): `heluo`
+- Harmonic chart (调波盘): `harmonic`
 - Six Yao: `sixyao`
 - Gua description: `gua_desc`, `gua_meiyi`
 - Suzhan: `suzhan`

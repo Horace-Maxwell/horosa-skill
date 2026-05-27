@@ -40,6 +40,12 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("sixyao")
     if _contains_any(text, ["统摄法", "tongshefa"]):
         add("tongshefa")
+    if _contains_any(text, ["参评数", "邵子", "金锁银匙", "canping"]):
+        add("canping")
+    if _contains_any(text, ["河洛理数", "河洛", "heluo"]):
+        add("heluo")
+    if _contains_any(text, ["调波盘", "调波", "谐波盘", "harmonic"]):
+        add("harmonic")
     if _contains_any(text, ["三式合一", "sanshi", "sanshiunited"]):
         add("sanshiunited")
     if _contains_any(text, ["节气", "jieqi"]):

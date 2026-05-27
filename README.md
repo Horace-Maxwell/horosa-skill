@@ -44,15 +44,15 @@
 
 | 检查项 | 结果 |
 | --- | --- |
-| 可调用工具 | `39 / 39` |
+| 可调用工具 | `42 / 42` |
 | 奇门 / 太乙 / 金口 / 三式合一 计算后端 | 统一走 `ken`（`kinqimen` / `kintaiyi` / `kinjinkou`），盘面与星阙桌面端同源 |
 | 统摄法 / 十年大运 | headless 实现与星阙逐值对齐（京房八宫五行；`Math.round` / `Math.ceil` 一致；对照星阙 `decennials.test.js` 金标） |
 | 未确认参数时强制追问 | `32` 个技法工具触发 `must_ask_user=true` |
 | 安全豁免工具 | `7` 个 registry / knowledge / parser 类工具直接可读 |
-| 全工具调用 | `39 / 39 ok=true` |
-| 本地 memory 写入 | `39 / 39` |
-| memory query / show | `39 / 39` |
-| report JSON artifact | `39 / 39` |
+| 全工具调用 | `42 / 42 ok=true` |
+| 本地 memory 写入 | `42 / 42` |
+| memory query / show | `42 / 42` |
+| report JSON artifact | `42 / 42` |
 | 星阙式导出结构 | 业务技法均带 `export_snapshot` / `export_format` |
 | 工程测试 | `164 / 164 pass`（含 ken 后端实时集成测试） |
 | GitHub CI | Linux/macOS 单测 + Windows OpenClaw smoke 通过 |
@@ -176,7 +176,7 @@ uv run horosa-skill agent guidance --tool liureng_gods --intent "当前时间起
 | --- | --- | --- |
 | 离线 runtime | 通过 GitHub Releases 安装 macOS / Windows 完整 runtime | 安装后可断网运行，不依赖远程算法服务 |
 | AI 调用接口 | `MCP server` + `JSON-first CLI` + `ask / dispatch` | Claude、Codex、Open WebUI、OpenClaw 都能接 |
-| 技法执行 | `39` 个可调用工具，覆盖星盘、推运、术数、导出协议与悬浮知识读取 | 不是 demo，而是可直接使用的多技法本地能力面 |
+| 技法执行 | `42` 个可调用工具，覆盖星盘、推运、术数、导出协议与悬浮知识读取 | 不是 demo，而是可直接使用的多技法本地能力面 |
 | 输出协议 | 每个技法返回统一 envelope，并附带 `export_snapshot` / `export_format` | 机器和人都能稳定消费，不需要猜字段 |
 | 知识读取 | 内置星阙 hover 知识 bundle，可按需读取星盘 / 六壬 / 奇门悬浮内容 | 不只是算，还能把“解释层”交给 AI 随时调用 |
 | 数据管理 | SQLite + JSON artifacts + run manifest + AI answer write-back | 一次调用就是一条可追溯记录 |
@@ -263,6 +263,9 @@ uv run horosa-skill agent guidance --tool liureng_gods --intent "当前时间起
 | 工具 ID | 中文名称 | 作用 |
 | --- | --- | --- |
 | `tongshefa` | 统摄法 | 生成统摄法卦象、六爻、潜藏、亲和关系 |
+| `canping` | 邵子参评数 / 金锁银匙 | 四柱起数、年纳音定部、本命 / 大运歲運条文（本地 in-process，依赖打包的 `lunar-javascript`） |
+| `heluo` | 河洛理数 | 天地数起先天 / 后天卦与元堂、命运篇、大限·岁运（含元堂爻辞；本地 in-process） |
+| `harmonic` | 调波盘 | 本命黄经×调波数取调波位置、同频合相（后端 `/astroextra/harmonic`） |
 | `sanshiunited` | 三式合一 | 聚合 ken 的奇门 + 太乙与大六壬并统一导出 |
 | `suzhan` | 宿占 / 宿盘 | 生成宿占结构与宿曜信息 |
 | `sixyao` | 六爻 / 易卦 | 生成本卦、之卦、爻变、问题导向输出 |
@@ -302,6 +305,8 @@ uv run horosa-skill agent guidance --tool liureng_gods --intent "当前时间起
 | `suzhan` | 宿占导出 | 宿盘 / 宿曜结构 |
 | `sixyao` | 六爻导出 | 易卦 / 六爻输出 |
 | `tongshefa` | 统摄法导出 | 统摄法结构 |
+| `canping` | 邵子参评数导出 | 起盘、本命、大运（歲運条文） |
+| `heluo` | 河洛理数导出 | 起命、先天卦、后天卦、命运篇、大限 |
 | `liureng` | 大六壬导出 | 四课、三传、神煞、大格、小局 |
 | `jinkou` | 金口诀导出 | 金口诀结构化正文 |
 | `qimen` | 奇门导出 | 奇门盘型、八宫、九宫方盘、演卦 |
@@ -618,7 +623,7 @@ uv run horosa-skill client openclaw-setup --workspace ~/.openclaw/workspace
 - macOS / Windows `v0.6.3` runtime release 资产（已随包内置 ken 引擎）
 - 本地 MCP server 与 JSON-first CLI
 - 完整星阙 AI 导出 registry 与 parser
-- 39 个可调用工具的结构化稳定输出
+- 42 个可调用工具的结构化稳定输出
 - 32 个需确认设置的技法工具强制 agent 追问用户
 - 7 个安全读取类工具明确豁免 preflight
 - 星盘 / 六壬 / 奇门悬浮知识库的本地 bundle 化与按需读取
@@ -704,7 +709,7 @@ uv run python scripts/run_full_self_check.py --rounds 1
 实测信号：
 
 ```text
-tool_count: 39
+tool_count: 42
 failed_tools: []
 missing_export_contract_tools: []
 ok: true
@@ -740,8 +745,8 @@ uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace --fu
 ```json
 {
   "version": "0.6.3",
-  "tool_count": 39,
-  "records_count": 39,
+  "tool_count": 42,
+  "records_count": 42,
   "errors_count": 0,
   "preflight_blocked_count": 32,
   "preflight_exempt_ok_count": 7,

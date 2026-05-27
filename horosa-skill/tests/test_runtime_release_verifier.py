@@ -72,6 +72,7 @@ _WIN_FILE_ENTRIES = [
     "runtime-payload/runtime/windows/node/node.exe",
     "runtime-payload/runtime/windows/bundle/astrostudyboot.jar",
     "runtime-payload/horosa-core-js/bin/cli.mjs",
+    "runtime-payload/horosa-core-js/node_modules/lunar-javascript/package.json",
 ]
 _SWEFILES_DIR = "runtime-payload/Horosa-Web/flatlib-ctrad2/flatlib/resources/swefiles/"
 

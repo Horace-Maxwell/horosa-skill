@@ -127,6 +127,15 @@ require_path "${PYTHON_SOURCE_DIR}"
 require_path "${BOOT_JAR_SOURCE}"
 require_path "${CORE_JS_ROOT}/bin/cli.mjs"
 
+# 邵子参评数 (canping) / 河洛理数 (heluo) compute their four pillars in-process via the vendored bazi
+# chain, which imports the `lunar-javascript` npm package. Install the production dep so the unfiltered
+# rsync of horosa-core-js below bundles node_modules into the payload (RSYNC_FILTERS has no
+# node_modules exclusion). Without this, a clean/CI build ships a runtime where canping/heluo throw
+# "Cannot find package 'lunar-javascript'" at runtime.
+echo "installing horosa-core-js production deps (lunar-javascript)…"
+( cd "${CORE_JS_ROOT}" && npm install --omit=dev --no-audit --no-fund --loglevel=error )
+require_path "${CORE_JS_ROOT}/node_modules/lunar-javascript/package.json"
+
 rm -rf "${BUILD_ROOT}"
 mkdir -p "${STAGE_ROOT}/Horosa-Web/astrostudyui/scripts"
 mkdir -p "${STAGE_ROOT}/Horosa-Web/scripts"

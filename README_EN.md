@@ -44,15 +44,15 @@ Latest local verification:
 
 | Check | Result |
 | --- | --- |
-| Callable tools | `39 / 39` |
+| Callable tools | `42 / 42` |
 | Qimen / Taiyi / Jinkou / San Shi United compute backend | Unified on `ken` (`kinqimen` / `kintaiyi` / `kinjinkou`), same source as the Xingque desktop app |
 | Tongshefa / decennials | Headless implementations value-aligned with Xingque (京房 palace element; `Math.round` / `Math.ceil` parity; cross-checked against Xingque's `decennials.test.js`) |
 | Forced clarification before unsafe calls | `32` tools return `must_ask_user=true` |
 | Safe exempt tools | `7` registry / knowledge / parser tools |
-| Tool execution | `39 / 39 ok=true` |
-| Local memory write | `39 / 39` |
-| memory query / show | `39 / 39` |
-| report JSON artifact | `39 / 39` |
+| Tool execution | `42 / 42 ok=true` |
+| Local memory write | `42 / 42` |
+| memory query / show | `42 / 42` |
+| report JSON artifact | `42 / 42` |
 | Xingque-style export structure | Business methods emit `export_snapshot` / `export_format` |
 | Engineering tests | `164 / 164 pass` (incl. live ken-backend integration tests) |
 | GitHub CI | Linux/macOS tests plus Windows OpenClaw smoke pass |
@@ -168,7 +168,7 @@ License attribution: the three `ken` engines above are **third-party MIT** compo
 | --- | --- | --- |
 | Offline runtime | macOS and Windows release assets installable from GitHub Releases | Users can run locally after install, including offline usage |
 | AI surface | `MCP server` + `JSON-first CLI` + `ask / dispatch` orchestration | Claude, Codex, Open WebUI, and OpenClaw can all integrate cleanly |
-| Method execution | `39` callable tools across charts, predictive work, occult domains, export tooling, and hover knowledge access | This is a real local capability surface, not just prompt glue |
+| Method execution | `42` callable tools across charts, predictive work, occult domains, export tooling, and hover knowledge access | This is a real local capability surface, not just prompt glue |
 | Output contract | Every supported method emits stable envelopes plus `export_snapshot` / `export_format` | Machines can consume outputs repeatedly without guesswork |
 | Knowledge access | Local bundled Xingque hover knowledge for astrology, LiuReng, and Qimen | AI can ask for explanation layers as well as raw calculation layers |
 | Local memory | SQLite + JSON artifacts + run manifest + answer write-back | Every invocation becomes a durable local record |
@@ -255,6 +255,9 @@ If those fields are missing, the agent must ask the user or call `horosa_agent_g
 | Tool ID | Name | Purpose |
 | --- | --- | --- |
 | `tongshefa` | Tong She Fa | Generate the Tong She Fa structure |
+| `canping` | Shaozi Canping / 金锁银匙 | Four-pillar 起数, year-nayin part, 本命/大运 verses (local in-process; needs the bundled `lunar-javascript`) |
+| `heluo` | Heluo Lishu / 河洛理数 | 天地数 → 先天/后天 gua + 元堂, 命运篇, 大限·岁运 with 元堂爻辞 (local in-process) |
+| `harmonic` | Harmonic chart / 调波盘 | natal lon × harmonic → harmonic positions + same-frequency conjunctions (backend `/astroextra/harmonic`) |
 | `sanshiunited` | San Shi United | Aggregate ken's Qimen + Taiyi with LiuReng into one result |
 | `suzhan` | Su Zhan / lunar mansion chart | Generate宿占 output |
 | `sixyao` | Six Yao / hexagram reading | Generate base hexagram, changed hexagram, and line state output |
@@ -294,6 +297,8 @@ This repository also exposes Xingque’s export registry as a machine-readable p
 | `suzhan` | Su Zhan export |
 | `sixyao` | Six Yao export |
 | `tongshefa` | Tong She Fa export |
+| `canping` | Shaozi Canping export (起盘 / 本命 / 大运) |
+| `heluo` | Heluo Lishu export (起命 / 先天卦 / 后天卦 / 命运篇 / 大限) |
 | `liureng` | Da Liu Ren export |
 | `jinkou` | Jinkou export |
 | `qimen` | Qimen export |
@@ -375,7 +380,7 @@ In this repository, “Xingque-compatible” means two concrete things:
 Current verification signal:
 
 ```text
-tool_count: 39
+tool_count: 42
 failed_tools: []
 missing_export_contract_tools: []
 ok: true
@@ -411,8 +416,8 @@ Latest local all-tool audit:
 ```json
 {
   "version": "0.6.3",
-  "tool_count": 39,
-  "records_count": 39,
+  "tool_count": 42,
+  "records_count": 42,
   "errors_count": 0,
   "preflight_blocked_count": 32,
   "preflight_exempt_ok_count": 7,
@@ -662,7 +667,7 @@ Already implemented:
 - macOS and Windows `v0.6.3` runtime release assets (ken engines bundled in)
 - local MCP server and JSON-first CLI
 - full Xingque AI export registry and parser
-- stable structured outputs across 39 callable tools
+- stable structured outputs across 42 callable tools
 - forced agent clarification for 32 setting-sensitive technique tools
 - explicit preflight exemption for 7 safe registry / knowledge / parser tools
 - bundled and queryable hover knowledge for chart, LiuReng, and Qimen

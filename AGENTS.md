@@ -157,6 +157,11 @@ rely on HTTP status alone to decide whether ken succeeded. Regression test:
 `tests/test_service.py::test_qimen_fails_loudly_when_ken_returns_failure_envelope`. Note this means test
 fakes for ken endpoints must return a body with the right `source` (see `FakeClient` in `test_service.py`).
 - `tongshefa` is pure headless JS (no ken engine). `sanshiunited` composes ken 奇门+太乙 with the 大六壬 leg.
+- `canping` (邵子参评数) and `heluo` (河洛理数) are **原生·非 ken** tools: they compute their four pillars
+  **in-process** via the vendored bazi chain (`horosa-core-js/src/vendor/bazi/` → the `lunar-javascript`
+  npm package), then do their own 起数/起卦 + 条文 lookup. No chart-service round-trip. `harmonic` (调波盘)
+  is the opposite — a backend chart-extra (`/astroextra/harmonic`) with no aiExport contract (UI/lab-only
+  in 星阙), so the skill returns structured `positions`/`conjunctions`/`chart` + a readable snapshot only.
 
 ## Re-vendoring the JS engines from 星阙
 
@@ -172,6 +177,29 @@ When refreshing `horosa-core-js/src/vendor/{dunjia,taiyi,jinkou}` from 星阙's 
 For taiyi, build the snapshot from `{ ...pan, sections: undefined }` — ken's in-app detail `sections`
 are not part of the aiExport contract and will otherwise show up as unknown sections.
 
+### Re-vendoring the 数算 engines (canping / heluo) — different from the ken formatters
+
+`canping`/`heluo` are NOT ken-fed; they are vendored **whole** from 星阙 with almost no transform:
+
+- vendor `src/vendor/bazi/{ZWConst.js,baziShenShaLocal.js,baziLunarLocal.js}` (the bazi chain),
+  `src/vendor/canping/{canpingLocal.js,data/canpingTiaowen.json}`, and
+  `src/vendor/heluo/{heluoLocal.js,data/heluoTiaowen.json}`;
+- the **only** edits are (1) point sibling imports at the vendored copies and (2) add the JSON import
+  attribute: `import X from './data/*.json' with { type: 'json' };` — **without it raw Node throws
+  "needs an import attribute of type: json"** (this bit us). `heluoLocal.js` deliberately imports only
+  `heluoTiaowen.json` (NOT `heluoNihaixiaRaw.json` — the 倪海厦 data is already compiled into the tiaowen).
+- 星阙 has a real **section-name mismatch**: `canpingLocal.buildSnapshotText` emits `[大运·歲運]` and
+  `heluoLocal` emits `[先天·<卦>…]/[后天·<卦>…]/[大限·岁运]`, but `aiExport.js` declares `大运`/`先天卦`/
+  `后天卦`/`大限`. The skill keeps the snapshot **byte-identical** and reconciles via
+  `map_legacy_section_title` in `exports/registry.py` (same mechanism as `三传(…)→三传`). canping's `流年`
+  is intentionally NOT in the contract — 星阙's snapshot omits it (the accurate 流年 table is in
+  `data.canping.series`).
+- the formatter (`src/tools/{canping,heluo}.js`) mirrors `CanPingMain.js`/`HeLuoMain.js`'s `getModel`:
+  `buildLocalBaziResult(params).bazi` → pillars → `calculate`/`judge`/`daYun` → `buildSnapshotText`.
+  heluo additionally ports `HeLuoMain.solarTerm` (the 命运篇 needs the real 节气 from `lunar-javascript`).
+  `timeAlg` default is **1** (clock time) to match 星阙's `fieldVal(f,'timeAlg',1)` — note `timeAlg===0`
+  means 真太阳时 (the only value that triggers the longitude+EoT correction).
+
 ## Offline runtime packaging gotchas (these have bitten us)
 
 - **flatlib must survive the strip.** `scripts/package_runtime_payload.sh` must keep its
@@ -183,6 +211,14 @@ are not part of the aiExport contract and will otherwise show up as unknown sect
 - **ken deps must be bundled.** The chart service needs `bidict` (kinqimen), `numpy` · `kerykeion` ·
   `ephem` (kintaiyi), `pendulum` (kinjinkou) **on top of** the base chart deps. macOS's embedded Python
   already has them; the Windows `runtime/windows/bundle/wheels` set MUST include them too.
+- **`lunar-javascript` must be bundled for 数算.** `canping`/`heluo` compute pillars in-process via
+  `horosa-core-js/src/vendor/bazi/` → the `lunar-javascript` npm package. Both builders
+  (`package_runtime_payload.sh` + `build_runtime_release_windows.py`) now run `npm install --omit=dev`
+  in `horosa-core-js` before copying it (the core-js copy has **no** `node_modules` rsync/ignore
+  exclusion, so `node_modules/lunar-javascript` rides along). `verify_runtime_release.py` requires
+  `horosa-core-js/node_modules/lunar-javascript/package.json` in both archives. Without it, canping/heluo
+  throw `Cannot find package 'lunar-javascript'` at runtime — the rest of the runtime still boots, so this
+  fails silently unless the verifier catches it.
 - **Windows `PYTHONPATH` must include `Horosa-Web/vendor`.** `start_horosa_local.ps1` puts the vendor
   root on `PYTHONPATH` so `import kinqimen/kintaiyi/kinjinkou` resolve. `package_runtime_payload.sh` and
   `build_runtime_release_windows.py` both bundle `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}`.

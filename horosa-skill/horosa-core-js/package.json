@@ -1,11 +1,14 @@
 {
   "name": "horosa-core-js",
-  "version": "0.6.3",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "description": "Headless Horosa engine: local 统摄法 (tongshefa) calculation plus ken-response formatting for qimen/taiyi/jinkou into 星阙 aiExport.js sections.",
   "license": "AGPL-3.0-only",
   "bin": {
     "horosa-core-js": "./bin/cli.mjs"
+  },
+  "dependencies": {
+    "lunar-javascript": "^1.7.7"
   }
 }

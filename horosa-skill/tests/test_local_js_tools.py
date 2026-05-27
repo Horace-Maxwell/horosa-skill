@@ -259,6 +259,96 @@ def test_tongshefa_uses_jingfang_palace_element_not_upper_trigram(tmp_path) -> N
     assert data["main_relation"] == "实克思"
 
 
+def test_canping_local_tool_runs_headless_engine(tmp_path) -> None:
+    # canping (邵子参评数 / 金锁银匙) is a 原生·非 ken tool: the four pillars are computed in-process by
+    # the vendored bazi chain (lunar-javascript), then canpingLocal does the 金锁银匙 起数 + 条文 lookup.
+    # No live runtime needed (like tongshefa). Pillars for this case are 丙午/庚寅/壬戌/辛亥 → 水部.
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "canping",
+        {"date": "2026-02-17", "time": "21:50:07", "zone": "+08:00", "lon": "120e00", "gender": 1, "timeAlg": 1, "method": "ming"},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    data = result.data["canping"]
+    assert data["element"] == "水"
+    assert data["partName"] == "水部"
+    assert data["dayPalaceBranch"] == "亥"
+    assert data["mingGong"] == "卯"
+    assert data["benming"]["verses"]["numShun"] == 2152
+    assert data["benming"]["verses"]["numNi"] == 3352
+    assert len(data["dayun"]) == 9
+    # The accurate per-year 流年 table lives in series (1–120), not the snapshot.
+    assert len(data["series"]["rows"]) == 120
+    snapshot = result.data["snapshot_text"]
+    assert "[起盘]" in snapshot
+    assert "[本命]" in snapshot
+    assert "[大运·歲運]" in snapshot
+    # Export contract is clean: 大运·歲運 legacy-maps to 大运, matching the ['起盘','本命','大运'] preset.
+    _assert_clean_export(result)
+
+
+def test_canping_method_gu_changes_day_palace(tmp_path) -> None:
+    # 明法 takes the day-palace branch from the month branch reversed (寅→亥); 古法 takes it from the
+    # bazi day branch (壬戌→戌). Same birth input, different 取法 ⇒ different 日宫支.
+    service = make_service(tmp_path)
+    base = {"date": "2026-02-17", "time": "21:50:07", "zone": "+08:00", "lon": "120e00", "gender": 1, "timeAlg": 1}
+    ming = service.run_tool("canping", {**base, "method": "ming"}, save_result=False)
+    gu = service.run_tool("canping", {**base, "method": "gu"}, save_result=False)
+    assert ming.data["canping"]["dayPalaceBranch"] == "亥"
+    assert gu.data["canping"]["dayPalaceBranch"] == "戌"
+
+
+def test_heluo_local_tool_runs_headless_engine(tmp_path) -> None:
+    # heluo (河洛理数) is a 原生·非 ken tool: pillars come from the vendored bazi chain, then heluoLocal
+    # does 起命/先天/后天/命运篇/大限. The 命运篇 needs the real 节气 (lunar-javascript JieQi table), so
+    # the formatter ports HeLuoMain.solarTerm. For this birth: 先天 火風鼎 → 后天 水火既濟.
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "heluo",
+        {"date": "2026-02-17", "time": "21:50:07", "zone": "+08:00", "lon": "120e00", "gender": 1, "timeAlg": 1},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    data = result.data["heluo"]
+    assert data["chart"]["xian"]["name"] == "火風鼎"
+    assert data["chart"]["hou"]["name"] == "水火既濟"
+    assert data["chart"]["tian"] == 19
+    assert data["chart"]["di"] == 44
+    assert isinstance(data["dayun"]["all"], list) and data["dayun"]["all"]
+    assert data["solarTerm"]["term"] == "立春"  # 命运篇 depends on this
+    snapshot = result.data["snapshot_text"]
+    assert "[起命]" in snapshot
+    assert "[先天·火風鼎 元堂爻辞]" in snapshot
+    assert "[后天·水火既濟 元堂爻辞]" in snapshot
+    assert "[命运篇]" in snapshot
+    assert "[大限·岁运]" in snapshot
+    # The dynamic 先天·…/后天·…/大限·岁运 labels legacy-map to 先天卦/后天卦/大限 ⇒ clean export.
+    _assert_clean_export(result)
+
+
+@requires_runtime
+def test_harmonic_runs_via_chart_service(tmp_path) -> None:
+    # 调波盘 is a backend chart-extra on the Python chart service (/astroextra/harmonic). 星阙 has no
+    # aiExport contract for it, so the skill returns structured positions/conjunctions + a readable
+    # snapshot_text but no formal export technique (harmonic is not in TOOL_EXPORT_TECHNIQUE_MAP).
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "harmonic",
+        {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "harmonic": 9, "orb": 2},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    data = result.data
+    assert data["harmonic"] == 9
+    assert isinstance(data["positions"], list) and data["positions"]
+    assert all(isinstance(p, dict) and "natalLon" in p and "sign" in p for p in data["positions"])
+    assert isinstance(data["conjunctions"], list)
+    assert data.get("chart")  # full chart obj (same shape as /chart) for downstream rendering
+    assert "[起盘信息]" in data["snapshot_text"]
+    assert "[调波位置]" in data["snapshot_text"]
+
+
 def test_cli_coerces_null_or_scalar_payload_instead_of_crashing(tmp_path) -> None:
     """Regression: a null / scalar payload (stdin literally `null`) used to null-deref-crash the JS
     tools (`payload.liureng` / `normalizeDateTimeInput(null)`). cli.mjs now coerces it to {}, so a

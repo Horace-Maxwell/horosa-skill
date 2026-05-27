@@ -1,3 +1,5 @@
+import { runCanping } from './canping.js';
+import { runHeluo } from './heluo.js';
 import { runJinkou } from './jinkou.js';
 import { runLiureng } from './liureng.js';
 import { runQimen } from './qimen.js';
@@ -10,6 +12,8 @@ const TOOL_RUNNERS = {
   jinkou: runJinkou,
   liureng: runLiureng,
   tongshefa: runTongSheFa,
+  canping: runCanping,
+  heluo: runHeluo,
 };
 
 export function listTools() {

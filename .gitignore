@@ -18,6 +18,10 @@ horosa-skill/.coverage
 horosa-skill/dist/
 horosa-skill/build/
 
+# horosa-core-js JS deps (lunar-javascript) — a build artifact. The runtime builders run
+# `npm install --omit=dev` and bundle node_modules into the payload; package-lock.json IS committed.
+horosa-skill/horosa-core-js/node_modules/
+
 vendor/runtime-source/
 
 # Local report QA artifacts generated during manual audits.
