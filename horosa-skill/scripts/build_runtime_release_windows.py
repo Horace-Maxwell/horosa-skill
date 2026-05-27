@@ -107,11 +107,13 @@ def rsync_copy(src: Path, dst: Path, *, extra_excludes: list[str] | None = None)
     ]
     if extra_excludes:
         excludes.extend(extra_excludes)
-    cmd = ["rsync", "-a"]
-    for pattern in excludes:
-        cmd.append(f"--exclude={pattern}")
-    cmd.extend([str(src), str(dst)])
-    subprocess.run(cmd, check=True)
+    # Portable equivalent of `rsync -a SRC DST/` (DST is a directory, SRC has no trailing
+    # slash): copy SRC *into* DST, i.e. to DST/<src.name>, merging into any existing tree and
+    # skipping the excluded names. Uses shutil rather than the rsync binary so the same builder
+    # runs on Windows (which has no rsync) as well as macOS/Linux.
+    target = dst / src.name
+    target.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(src, target, ignore=shutil.ignore_patterns(*excludes), dirs_exist_ok=True)
 
 
 def _make_kentang_mount_graceful(registry_path: Path) -> None:
