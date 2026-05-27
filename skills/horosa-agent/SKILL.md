@@ -294,8 +294,9 @@ Use `--ai-answer-text` for a short inline answer, `--ai-answer-file` for a full 
 ## Maintainer Notes (ken backend)
 
 This skill guide is for AI clients **using** Horosa Skill. If you are **modifying or building** the
-repo, the full maintainer playbook (re-vendoring the JS engines, offline-runtime packaging gotchas,
-`pkill` caveat, venv repair, local verification, the **tongshefa/decennials 星阙-alignment notes** —
+repo, the full maintainer playbook (re-vendoring the JS engines, offline-runtime packaging gotchas
+(incl. the cross-platform Windows build — no `rsync`/POSIX-only binaries), `pkill` caveat, venv repair,
+local verification, the **tongshefa/decennials 星阙-alignment notes** —
 京房 palace element + JS-`Math.round` parity, **and the "Stability invariants" — `run_tool` always
 returns an envelope; surfaces, the Node/`js_client` layer, tracing, the evaluation lock, and report
 rendering all fail safe**) lives in the repo's harness doc [`AGENTS.md`](../../AGENTS.md) under

@@ -15,6 +15,15 @@ and this project follows a release-oriented changelog style.
   `unknown` on Windows (stale locks there are reclaimed by the age threshold, never by killing a PID).
   The PID-reclaim test is marked POSIX-only; the age-reclaim path stays cross-platform. Fixes the
   `windows-smoke` CI job. (Found by inspecting GitHub CI after the macOS work.)
+- **Windows runtime builder no longer requires `rsync`.** `build_runtime_release_windows.py` shelled out
+  to the `rsync` binary for its in-payload copies, which does not exist on Windows — so the "Windows"
+  builder crashed on its first copy (`FileNotFoundError: [WinError 2]`) and could only run on a machine
+  that already had rsync. `rsync_copy()` now uses a portable `shutil.copytree` (same copy-into-DST
+  semantics, same exclude set, `dirs_exist_ok=True`), so the single builder produces the win32-x64
+  payload natively on Windows as well as macOS/Linux. Verified by building and natively running
+  `horosa-runtime-win32-x64-v0.6.2.zip`: chart service boots and `/qimen/pan` · `/taiyi/pan` ·
+  `/jinkou/pan` return `ResultCode 0` with `source` `kinqimen`/`kintaiyi`/`kinjinkou`, and tongshefa
+  (bundled node) returns `右卦 火地晋` → `right_elem 金` / `main_relation 实克思`.
 - **`india_chart` no longer crashes (`'list' object has no attribute 'get'`).** Indian charts return
   `normalAsp`/`immediateAsp`/`signAsp` as empty *lists* (no Western aspects), but `_build_aspect_section`
   assumed dicts and called `.get()` on them — so `india_chart` failed with `tool.internal_error` and the

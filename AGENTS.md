@@ -193,6 +193,15 @@ are not part of the aiExport contract and will otherwise show up as unknown sect
   (`swefiles/`, `astropy/`, `vendor/kin*/`) passes only if the archive holds a real file strictly
   inside it — an empty dir-marker entry fails (a bare `…/swefiles/` in a hand-built zip used to pass).
   When hand-zipping the Windows payload, make sure those dirs are actually populated, not just present.
+- **The Windows builder must not shell out to `rsync`.** `build_runtime_release_windows.py`'s
+  `rsync_copy()` used to invoke the `rsync` binary for its in-payload copies — which does not exist on
+  Windows, so the *Windows* builder died on its very first copy (`FileNotFoundError: [WinError 2]`) and
+  could only ever run on a machine that happened to have rsync. It now uses a portable
+  `shutil.copytree(src, dst/src.name, ignore=ignore_patterns(*excludes), dirs_exist_ok=True)` — same
+  "copy SRC into DST" semantics, same exclude set, merging into existing trees — so the single builder
+  runs natively on Windows as well as macOS/Linux. Keep runtime-build copies dependency-free this way;
+  do not reintroduce a POSIX-only binary (`rsync`, `cp`, `tar`…) into a path that must also run on
+  Windows. (`download()` already uses `curl`, which Windows 10/11 ship natively.)
 
 ## `pkill` will take down the live 星阙 stack
 
@@ -221,7 +230,7 @@ Stop services by port/PID, not by process-name match.
 ken (`source: kinqimen`). Two fixes:
 
 - For development, point at the repo's engine: `HOROSA_CORE_JS_ROOT="$PWD/horosa-core-js"`.
-- For users, **re-install the matching runtime release** — both runtime builders rsync the repo's
+- For users, **re-install the matching runtime release** — both runtime builders copy the repo's
   (ken-fed) `horosa-core-js` into the payload, so a fresh install carries the formatter.
 
 ## Headless engine alignment (tongshefa / decennials)
