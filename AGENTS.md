@@ -269,6 +269,8 @@ A global stability pass hardened these; keep them true when you touch the releva
   `_emit_otlp`); a trace write must never crash or mask the traced operation.
 - **`evaluation_lock` self-heals.** `acquire_evaluation_lock` reclaims a stale lock (dead PID on POSIX,
   or age threshold when liveness is unknown) but never reclaims a *live* owner. A crashed run must not
-  deadlock future evaluations; a long live run must not be stolen from.
+  deadlock future evaluations; a long live run must not be stolen from. **Never call `os.kill(pid, 0)`
+  on Windows** to probe liveness — on Windows `os.kill` maps to `TerminateProcess`, so it would *kill*
+  the lock owner. `_pid_liveness` returns `unknown` on Windows (→ age-based reclaim); keep it that way.
 - **Report rendering is atomic.** `render_report` renders to a temp sibling then `os.replace()`s — never
   write a report format directly to its final `output_path` (a mid-render failure would corrupt it).

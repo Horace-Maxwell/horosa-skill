@@ -9,6 +9,12 @@ and this project follows a release-oriented changelog style.
 
 ### Fixed
 
+- **`evaluation_lock` no longer risks killing a live process on Windows (and the Windows CI is green).**
+  `_pid_liveness` probed with `os.kill(pid, 0)`, which is a safe no-op on POSIX but maps to
+  `TerminateProcess` on Windows — i.e. it would *terminate* a live lock owner. It now short-circuits to
+  `unknown` on Windows (stale locks there are reclaimed by the age threshold, never by killing a PID).
+  The PID-reclaim test is marked POSIX-only; the age-reclaim path stays cross-platform. Fixes the
+  `windows-smoke` CI job. (Found by inspecting GitHub CI after the macOS work.)
 - **`india_chart` no longer crashes (`'list' object has no attribute 'get'`).** Indian charts return
   `normalAsp`/`immediateAsp`/`signAsp` as empty *lists* (no Western aspects), but `_build_aspect_section`
   assumed dicts and called `.get()` on them — so `india_chart` failed with `tool.internal_error` and the

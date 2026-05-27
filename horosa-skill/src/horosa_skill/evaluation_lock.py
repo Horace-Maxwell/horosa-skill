@@ -103,8 +103,16 @@ def _reclaim_if_stale(lock_path: Path, *, stale_after_seconds: float) -> bool:
 
 
 def _pid_liveness(pid: Any) -> str:
-    """Return 'alive' | 'dead' | 'unknown' for a recorded PID, cross-platform."""
+    """Return 'alive' | 'dead' | 'unknown' for a recorded PID.
+
+    POSIX only: ``os.kill(pid, 0)`` is a safe no-op liveness probe on POSIX. On Windows ``os.kill``
+    has NO signal-0 semantics — for any non-CTRL signal it calls ``TerminateProcess``, i.e. it would
+    *kill* the target rather than probe it. So on Windows we never call it and return ``unknown``;
+    a crashed-run lock there is reclaimed by the age threshold instead of by PID liveness.
+    """
     if not isinstance(pid, int) or pid <= 0:
+        return "unknown"
+    if os.name == "nt":
         return "unknown"
     try:
         os.kill(pid, 0)
@@ -113,7 +121,7 @@ def _pid_liveness(pid: Any) -> str:
     except PermissionError:
         return "alive"  # exists but owned by another user
     except OSError:
-        return "unknown"  # e.g. Windows, where signal 0 is not supported
+        return "unknown"
     return "alive"
 
 
