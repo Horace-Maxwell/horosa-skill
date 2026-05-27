@@ -7,6 +7,17 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+### Aligned with 星阙
+
+- **taiyi 四柱 now prefer the ken engine's 节气-corrected pillars.** 星阙 v2.1.8 fixed the month-pillar
+  节气-boundary in the bazi engines (kinwuzhao/kinastro/kintaiyi) and switched taiyi's displayed 年/月/日/时柱
+  from raw 农历 to the fixed bazi. The skill computes taiyi via kintaiyi, so its `pan.ganzhi` already
+  carries that fix; `applyNongliDisplay` now prefers `pan.ganzhi` over `/nongli/time` `*GanZi` (falling
+  back only if ken omits it) — same-engine, internally consistent, no `lunar-javascript` dependency.
+  NOTE: the *bundled* ken engines in the shipped v0.6.2 runtime archive predate this fix; offline
+  taiyi/qimen compute is only fully corrected after a runtime rebuild that re-vendors 星阙's current
+  `kintaiyi` (v2.1.8) + `kinqimen` (v2.1.6).
+
 ### Fixed
 
 - **`evaluation_lock` no longer risks killing a live process on Windows (and the Windows CI is green).**

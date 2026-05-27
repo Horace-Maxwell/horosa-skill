@@ -128,11 +128,14 @@ function applyNongliDisplay(pan, nongli){
 		lunarText: formatNongliText(nongli) || pan.lunarText,
 		realSunTime: safeText(nongli.birth) || pan.realSunTime,
 		jiedelta: safeText(nongli.jiedelta) || pan.jiedelta,
+		// 四柱优先取 ken 引擎(kintaiyi)算出的 pan.ganzhi —— 它带 v2.1.8 月柱节气边界修正，且与太乙盘同源；
+		// 仅在 ken 未给出时回退到 /nongli/time。对应星阙 v2.1.8「用修正后的八字而非原始农历」的意图
+		// (星阙前端用 buildLocalBaziResult 本地八字；skill 是 ken 架构,故用同引擎的 pan.ganzhi 等效对齐)。
 		ganzhi: {
-			year: pickPillar(nongli, 'year', 'yearGanZi') || (pan.ganzhi && pan.ganzhi.year) || '',
-			month: pickPillar(nongli, 'month', 'monthGanZi') || (pan.ganzhi && pan.ganzhi.month) || '',
-			day: pickPillar(nongli, 'day', 'dayGanZi') || (pan.ganzhi && pan.ganzhi.day) || '',
-			time: pickPillar(nongli, 'time', 'timeGanZi') || safeText(nongli.time) || (pan.ganzhi && pan.ganzhi.time) || '',
+			year: (pan.ganzhi && pan.ganzhi.year) || pickPillar(nongli, 'year', 'yearGanZi') || '',
+			month: (pan.ganzhi && pan.ganzhi.month) || pickPillar(nongli, 'month', 'monthGanZi') || '',
+			day: (pan.ganzhi && pan.ganzhi.day) || pickPillar(nongli, 'day', 'dayGanZi') || '',
+			time: (pan.ganzhi && pan.ganzhi.time) || pickPillar(nongli, 'time', 'timeGanZi') || safeText(nongli.time) || '',
 			minute: (pan.ganzhi && pan.ganzhi.minute) || '',
 		},
 	};
