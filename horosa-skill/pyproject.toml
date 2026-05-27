@@ -1,6 +1,6 @@
 [project]
 name = "horosa-skill"
-version = "0.6.2"
+version = "0.6.3"
 description = "GitHub-first Horosa AI skill distribution with CLI, MCP, and local structured memory."
 readme = "README.md"
 license = "AGPL-3.0-only"
