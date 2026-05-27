@@ -264,6 +264,21 @@ def build() -> Path:
     unpack_wheels(SOURCE_ROOT / "runtime" / "windows" / "bundle" / "wheels", runtime_windows_root / "python" / "Lib" / "site-packages")
 
     shutil.copy2(SOURCE_ROOT / "runtime" / "mac" / "bundle" / "astrostudyboot.jar", runtime_windows_root / "bundle" / "astrostudyboot.jar")
+
+    # canping/heluo compute their four pillars in-process via the vendored bazi chain, which imports
+    # the `lunar-javascript` npm package. Install the production dep so the core-js copy below bundles
+    # node_modules into the payload. Without it, a clean Windows build ships a runtime where
+    # canping/heluo throw "Cannot find package 'lunar-javascript'" at runtime.
+    print("installing horosa-core-js production deps (lunar-javascript)…")
+    npm_cmd = shutil.which("npm") or shutil.which("npm.cmd")
+    if not npm_cmd:
+        raise SystemExit("npm not found on PATH; install Node.js so horosa-core-js deps (lunar-javascript) can be bundled")
+    subprocess.run(
+        [npm_cmd, "install", "--omit=dev", "--no-audit", "--no-fund", "--loglevel=error"],
+        cwd=str(CORE_JS_ROOT),
+        check=True,
+    )
+    require_path(CORE_JS_ROOT / "node_modules" / "lunar-javascript" / "package.json")
     rsync_copy(CORE_JS_ROOT, PAYLOAD_ROOT / "")
 
     write_manifest(version)

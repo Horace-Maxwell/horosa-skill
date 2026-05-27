@@ -429,6 +429,32 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "taiyin/taiyang/shaoyang/shaoyin", "value": "巽/坤/震/震", "meaning": "current contract default; ask if user expects custom setup"}
         ],
     ),
+    "canping": _policy(
+        intent="邵子参评数 / 金锁银匙：以年纳音定部、四柱起数、查本命/大运/流年歲運条文。",
+        required_context=["birth date", "birth time", "longitude (真太阳时可选)", "gender", "method (明法/古法)"],
+        ask_if_missing=[
+            {"field": "date/time/place", "question": "请提供出生日期、时间、经度（真太阳时用）和性别。"},
+            {"field": "method", "question": "取法用明法还是古法？", "options": ["明法（月支反向取日宫·默认）", "古法（八字日支为日宫）"]},
+            {"field": "timeAlg", "question": "用真太阳时还是钟表时？", "options": ["钟表时（星阙参评数默认）", "真太阳时（按经度+均时差校正）"]},
+        ],
+        safe_defaults=[
+            {"field": "method", "value": "ming", "meaning": "明法·月支反向取日宫（星阙默认）"},
+            {"field": "timeAlg", "value": 1, "meaning": "钟表时，对应 CanPingMain.js 的默认"},
+        ],
+        do_not_assume=["gender", "method"],
+    ),
+    "heluo": _policy(
+        intent="河洛理数：以四柱天地数起先天/后天卦与元堂，推命运篇与大限·岁运（含元堂爻辞）。",
+        required_context=["birth date", "birth time", "longitude (真太阳时可选)", "gender"],
+        ask_if_missing=[
+            {"field": "date/time/place", "question": "请提供出生日期、时间、经度（真太阳时用）和性别。"},
+            {"field": "timeAlg", "question": "用真太阳时还是钟表时？", "options": ["钟表时（星阙河洛默认）", "真太阳时（按经度+均时差校正）"]},
+        ],
+        safe_defaults=[
+            {"field": "timeAlg", "value": 1, "meaning": "钟表时，对应 HeLuoMain.js 的默认"},
+        ],
+        do_not_assume=["gender"],
+    ),
     "suzhan": _policy(
         intent="宿占/宿盘。",
         required_context=COMMON_BIRTH_FIELDS,
@@ -441,6 +467,19 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     "hellen_chart": ASTRO_BIRTH_POLICY,
     "guolao_chart": ASTRO_BIRTH_POLICY,
     "germany": ASTRO_BIRTH_POLICY,
+    "harmonic": _policy(
+        intent="调波盘 / harmonic chart：本命各点黄经×调波数取调波位置，并找同频(合相)。",
+        required_context=COMMON_BIRTH_FIELDS + ["harmonic number (调波数)"],
+        ask_if_missing=[
+            {"field": "date/time/place", "question": "请提供出生/事件日期、时间、时区和地点。"},
+            {"field": "harmonic", "question": "用哪个调波数？", "options": ["H9（星阙默认）", "H5", "H7", "指定其它调波数（1–360）"]},
+        ],
+        safe_defaults=[
+            {"field": "harmonic", "value": 9, "meaning": "星阙调波盘默认 H9"},
+            {"field": "orb", "value": 2.0, "meaning": "同频合相容许度，星阙默认 2°"},
+        ],
+        do_not_assume=["harmonic number"],
+    ),
     "chart": ASTRO_BIRTH_POLICY,
     "chart13": ASTRO_BIRTH_POLICY,
     "india_chart": ASTRO_BIRTH_POLICY,

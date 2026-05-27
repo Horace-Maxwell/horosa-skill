@@ -89,6 +89,8 @@ AI_EXPORT_TECHNIQUES = [
     {"key": "jieqi_dongzhi", "label": "节气盘-冬至"},
     {"key": "otherbu", "label": "西洋游戏"},
     {"key": "fengshui", "label": "风水"},
+    {"key": "canping", "label": "邵子参评数"},
+    {"key": "heluo", "label": "河洛理数"},
     {"key": "generic", "label": "其他页面"},
 ]
 
@@ -123,6 +125,16 @@ AI_EXPORT_PRESET_SECTIONS = {
     **JIEQI_SETTING_PRESETS,
     "otherbu": ["起盘信息", "骰子结果", "骰子盘宫位与星体", "天象盘宫位与星体"],
     "fengshui": ["起盘信息", "标记判定", "冲突清单", "建议汇总", "纳气建议"],
+    # 星阙 aiExport.js declares canping as ['起盘','本命','大运','流年'], but its module snapshot
+    # (CanPingMain.saveSnap → canpingLocal.buildSnapshotText with no liunianBranch) only ever emits
+    # 起盘/本命/大运·歲運 — 流年 is omitted (calculate()'s single-liunian path pairs the taisui with
+    # dayun[0], the inaccurate one). The accurate per-year 流年 lives in the `series` table, which the
+    # skill exposes under data.canping.series. So this preset reflects the sections the snapshot
+    # actually carries, keeping the export contract clean instead of永远-missing 流年.
+    "canping": ["起盘", "本命", "大运"],
+    # 河洛理数: matches 星阙 aiExport.js exactly. The snapshot emits 起命/先天·<卦>/后天·<卦>/命运篇/
+    # 大限·岁运; the dynamic 先天·…/后天·…/大限·岁运 labels legacy-map to 先天卦/后天卦/大限 below.
+    "heluo": ["起命", "先天卦", "后天卦", "命运篇", "大限"],
     "generic": ["起盘信息"],
 }
 
@@ -196,6 +208,21 @@ def map_legacy_section_title(key: str, title: str | None) -> str:
             return "卦象"
         if normalized == "卦辞":
             return "卦辞与断语"
+    elif key == "canping":
+        # 星阙 canpingLocal.buildSnapshotText emits the 歲運-suffixed label [大运·歲運]. Map it back to
+        # the canonical 大运 section name so the snapshot (kept byte-identical to 星阙) parses cleanly.
+        if normalized == "大运·歲運":
+            return "大运"
+    elif key == "heluo":
+        # 星阙 heluoLocal.buildSnapshotText emits dynamic section labels carrying the gua name —
+        # [先天·<卦> 元堂爻辞] / [后天·<卦> 元堂爻辞] / [大限·岁运]. Map them onto the declared aiExport
+        # sections 先天卦/后天卦/大限 (same prefix-mapping pattern 星阙 uses for liureng's 三传(…)).
+        if normalized.startswith("先天·"):
+            return "先天卦"
+        if normalized.startswith("后天·"):
+            return "后天卦"
+        if normalized == "大限·岁运":
+            return "大限"
     return normalized
 
 

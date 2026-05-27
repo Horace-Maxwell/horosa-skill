@@ -84,11 +84,17 @@ no ken engine and stays a pure headless JS calculation.
 
 - `bin/cli.mjs` — `run <tool>` / `list` entry; reads a JSON payload on stdin, returns `{ok, ...}`.
 - `src/tools/` — `index.js` (runner registry) + `qimen.js` / `taiyi.js` / `jinkou.js` (ken-response
-  formatters) + `tongshefa.js` (standalone 统摄法 engine).
-- `src/vendor/` — engine code vendored from the 星阙 frontend, kept as **formatters** for the ken
-  response: `dunjia/{DunJiaCalc,DunJiaBaGongRules}.js`, `taiyi/{TaiYiCalc,core/TaiYiCore}.js`,
-  `jinkou/{JinKouCalc,JinKouState}.js`, `liureng/LRConst.js`. Each keeps `normalize*Data` +
-  `build*SnapshotText`; only the backend `fetch*Pan` calls are stripped (Python does the ken fetch).
+  formatters) + `tongshefa.js` (standalone 统摄法 engine) + `canping.js` / `heluo.js` (数算 engines that
+  compute pillars in-process via the vendored bazi chain).
+- `src/vendor/` — engine code vendored from the 星阙 frontend. Two kinds:
+  - **ken-response formatters** (keep `normalize*Data` + `build*SnapshotText`; only the backend
+    `fetch*Pan` calls are stripped, Python does the ken fetch): `dunjia/{DunJiaCalc,DunJiaBaGongRules}.js`,
+    `taiyi/{TaiYiCalc,core/TaiYiCore}.js`, `jinkou/{JinKouCalc,JinKouState}.js`, `liureng/LRConst.js`.
+  - **原生·非 ken 数算 engines** (computed wholly in-process, only edit = JSON import attribute): the bazi
+    chain `bazi/{ZWConst,baziShenShaLocal,baziLunarLocal}.js` (→ the `lunar-javascript` npm package),
+    `canping/{canpingLocal.js,data/canpingTiaowen.json}`, `heluo/{heluoLocal.js,data/heluoTiaowen.json}`.
+- `node_modules/lunar-javascript` — runtime dependency of the bazi chain (declared in `package.json`),
+  installed via `npm install --omit=dev` and bundled into the offline runtime payload.
 - `src/shared/` — `fields.js`, `unpack.js`, `localNongliAdapter.js` helpers.
 
 ### scripts/ (maintainer utilities)

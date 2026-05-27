@@ -309,6 +309,47 @@ class FakeJsClient(HorosaJsEngineClient):
                 "data": {"guiName": "天乙", "jiangName": "登明", "wangElem": "木"},
                 "snapshot_text": "[起盘信息]\n日期：2026-04-04 21:18\n\n[金口诀速览]\n地分：酉",
             }
+        if tool_name == "canping":
+            return {
+                "data": {
+                    "method": "ming",
+                    "gender": "男",
+                    "element": "水",
+                    "partName": "水部",
+                    "dayPalaceBranch": "亥",
+                    "mingGong": "卯",
+                    "benming": {"verses": {"numShun": 2152, "numNi": 3352}},
+                    "dayun": [{"ageStart": 1, "ageEnd": 10, "branch": "卯"}],
+                    "series": {"rows": [{"age": 1, "ganzhi": "丙午"}]},
+                },
+                "input_normalized": {"fourPillars": {"yearGz": "丙午", "monthBranch": "寅", "dayBranch": "戌", "hourBranch": "亥"}},
+                "snapshot_text": (
+                    "[起盘]\n年纳音：水（水部）  取法：明法(月支反向)\n日宫支：亥  命宫：卯\n\n"
+                    "[本命]\n顺 2152：海底珊瑚枝，月里栽丹桂。\n逆 3352：雨漲長江急，煙波萬頃潮。\n\n"
+                    "[大运·歲運]\n1-10岁 卯：顺2544 戰勝頭歌回，論功先後處。 ／ 逆2944 清秋天宇闊，雁字寫長空。"
+                ),
+            }
+        if tool_name == "heluo":
+            return {
+                "data": {
+                    "gender": "男",
+                    "chart": {
+                        "tian": 19, "di": 44, "tianGua": "離", "diGua": "巽",
+                        "xian": {"name": "火風鼎", "yuan": 3},
+                        "hou": {"name": "水火既濟", "yuan": 6},
+                    },
+                    "dayun": {"all": [{"ageStart": 1, "ageEnd": 9, "gua": "火風鼎", "pos": 3, "yang": True}]},
+                    "judge": {"xie": True},
+                },
+                "input_normalized": {"fourPillars": {"year": "丙午", "month": "庚寅", "day": "壬戌", "hour": "辛亥"}},
+                "snapshot_text": (
+                    "[起命]\n天数19→離　地数44→巽\n先天卦：火風鼎　元堂 九三\n后天卦：水火既濟　元堂 上六\n\n"
+                    "[先天·火風鼎 元堂爻辞]\n摘要：此爻是鼎之賢。\n诗歌：象曰：鼎耳革。失其義也。\n\n"
+                    "[后天·水火既濟 元堂爻辞]\n摘要：此爻是才足以濟世。\n诗歌：象曰：濡其首厲。何可久也？\n\n"
+                    "[命运篇]\n天元气 艮(无)　地元气 離(有)\n化工 坎(有:坎)　葉\n\n"
+                    "[大限·岁运]\n1-9岁 火風鼎 九三（阳9）"
+                ),
+            }
         if tool_name == "liureng":
             return {
                 "data": {

@@ -24,6 +24,9 @@ REQUIRED_ENTRIES = {
         "runtime-payload/runtime/mac/node/bin/node",
         "runtime-payload/runtime/mac/bundle/astrostudyboot.jar",
         "runtime-payload/horosa-core-js/bin/cli.mjs",
+        # canping/heluo compute pillars via the vendored bazi chain → lunar-javascript; without the
+        # bundled npm package those tools throw "Cannot find package 'lunar-javascript'" at runtime.
+        "runtime-payload/horosa-core-js/node_modules/lunar-javascript/package.json",
     ],
     "win32-x64": [
         "runtime-payload/runtime-manifest.json",
@@ -40,6 +43,8 @@ REQUIRED_ENTRIES = {
         "runtime-payload/runtime/windows/node/node.exe",
         "runtime-payload/runtime/windows/bundle/astrostudyboot.jar",
         "runtime-payload/horosa-core-js/bin/cli.mjs",
+        # canping/heluo need the bundled lunar-javascript (see darwin note).
+        "runtime-payload/horosa-core-js/node_modules/lunar-javascript/package.json",
     ],
 }
 

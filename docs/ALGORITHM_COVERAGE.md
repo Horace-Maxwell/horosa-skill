@@ -46,6 +46,9 @@ Can this method be called locally after `horosa-skill install`, without dependin
 | Chinese Metaphysics | `jinkou` | local Python ken (kinjinkou) + Node formatter | Included | Computed by the `kinjinkou` ken engine (`/jinkou/pan`); reformatted by `horosa-core-js`. |
 | Chinese Metaphysics | `sanshiunited` | local Python ken + Java + Node | Included | 三式合一 composes the ken 奇门 + 太乙 with the 大六壬 leg. |
 | Chinese Metaphysics | `tongshefa` | local Node headless JS | Included | Pure headless 统摄法 engine in `horosa-core-js` (no ken backend); aligned with 星阙 `TongSheFaMain.js` — hexagram element from the 京房本宫 palace; aiExport contract 本卦/六爻/潜藏/亲和. |
+| Chinese Metaphysics (数算) | `canping` | local Node headless JS + lunar-javascript | Included | 邵子参评数 / 金锁银匙. Pure in-process: pillars from the vendored bazi chain (`src/vendor/bazi/` → `lunar-javascript`), then 金锁银匙 起数 + 条文 (`src/vendor/canping/`). Aligned with 星阙 `CanPingMain.js`/`canpingLocal.js`; aiExport contract 起盘/本命/大运 (full 流年 table in `data.canping.series`). |
+| Chinese Metaphysics (数算) | `heluo` | local Node headless JS + lunar-javascript | Included | 河洛理数. In-process: pillars → 天地数 → 先天/后天卦与元堂 → 命运篇 + 大限·岁运 (`src/vendor/heluo/`); 命运篇 uses real 节气 via `lunar-javascript`. Aligned with 星阙 `HeLuoMain.js`/`heluoLocal.js`; aiExport contract 起命/先天卦/后天卦/命运篇/大限. |
+| Western (chart-extra) | `harmonic` | local Python chart-extra + Node summary | Included | 调波盘. Backend computation (`/astroextra/harmonic` on the chart service): 本命黄经×调波数 → 调波位置 + 同频(合相). 星阙 has no aiExport contract for 调波盘 (UI/lab-only); the skill returns structured `positions`/`conjunctions`/`chart` + a readable snapshot. |
 | Chinese Metaphysics | `fengshui` | n/a | Excluded | Explicitly excluded from this shipping scope. |
 
 ## Runtime Layers
@@ -53,7 +56,7 @@ Can this method be called locally after `horosa-skill install`, without dependin
 - Local Java aggregation layer: `astrostudyboot.jar`
 - Local Python calculation layer: `astropy`, `flatlib`, Swiss Ephemeris files, embedded Python deps
 - Local Python ken layer: `kinqimen` / `kintaiyi` / `kinjinkou` mounted on the chart service (`/qimen/pan`, `/taiyi/pan`, `/jinkou/pan`)
-- Local JS layer: `horosa-core-js` (统摄法 engine + ken-response → aiExport.js formatting) executed via bundled Node runtime
+- Local JS layer: `horosa-core-js` (统摄法 + 数算 canping/heluo engines + ken-response → aiExport.js formatting) executed via bundled Node runtime. The 数算 tools compute four pillars in-process via the vendored bazi chain (`src/vendor/bazi/`), which depends on the bundled `lunar-javascript` npm package (`horosa-core-js/node_modules/lunar-javascript`, shipped in the runtime payload).
 
 ## Acceptance Notes
 
