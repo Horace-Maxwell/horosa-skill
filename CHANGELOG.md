@@ -7,6 +7,16 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+### Changed
+
+- **Harness docs: installed an enforced Problem-Logging Protocol.** `AGENTS.md` now opens with a
+  `🔴 MANDATORY: Problem-Logging Protocol` (first section, read-first) requiring every problem/gotcha/fix
+  to be logged in `AGENTS.md` (+ `SKILL.md` when client-facing, + `CHANGELOG.md`, + a code-level guard
+  when machine-assertable) in the same change, with a self-audit gate on every release / bug-check pass.
+  `skills/horosa-agent/SKILL.md`'s Maintainer Notes mirror it. The v0.7.0 build/CI/Node-floor lessons are
+  recorded in the packaging-gotchas section, and the (deferred) v2.2.1 晚子时 section in both docs now
+  carries a `STATUS: PENDING` banner so its target spec is not mistaken for shipped behavior.
+
 ### Fixed
 
 - **0.7.0 release: completed the version-string bump.** The v0.7.0 commit bumped `pyproject.toml` to

@@ -2,6 +2,39 @@
 
 These rules are for Codex, Cursor, Claude, OpenClaw, Open WebUI, and any agent connected to this repository or its MCP server.
 
+---
+
+## 🔴 MANDATORY: Problem-Logging Protocol (read this first, every session)
+
+**This is an enforced rule, not advice. Any agent or maintainer who hits a problem, gotcha, surprising
+behavior, wrong assumption, or ships a fix while working in this repo MUST record it in THIS file
+(`AGENTS.md`) before the work is considered done.** No exception is too small — if it bit you, it will
+bite the next agent. The whole point of this repo's harness doc is to be the single, permanent sink for
+every lesson learned.
+
+**What "record it" means — do ALL of these in the same change that fixes/discovers the problem:**
+
+1. **Append a gotcha bullet to the most relevant `## … gotchas` / invariants section of this file**
+   (e.g. *Offline runtime packaging gotchas*, *Stability invariants*, the ken/JS-engine sections). State
+   the **symptom**, the **root cause**, and the **fix / guard** so the next agent recognizes it fast.
+2. **Sync `skills/horosa-agent/SKILL.md`** if the lesson affects how an AI *client* calls the tools
+   (payload fields, gating, section contracts). Maintainer/build-only lessons stay in `AGENTS.md` only,
+   but never leave the two docs contradicting each other.
+3. **Add a `CHANGELOG.md` `[Unreleased]` entry** for any code/behavior/build/CI change.
+4. **If it's a release/build/CI gap, add a code-level guard** (a `verify_*` check, a CI step, a schema
+   constraint, a `require_path`) so the gotcha can't silently recur — a doc note alone is not enough for
+   anything that a script or CI can assert.
+
+**Self-audit gate (every release + every "check for bugs" pass):** re-read the gotcha sections, confirm
+each still holds, and confirm anything you just learned has been written down here. Treat an undocumented
+recurring problem as a regression.
+
+**Scope rule:** keep every lesson in *this* repo (`AGENTS.md` + `SKILL.md`). **Never** write skill-repo
+lessons into the upstream 星阙 (`Horosa-Primary Direction Trial`) working tree — the skill repo is
+self-contained and ships its own agent guidance.
+
+---
+
 ## Do Not Hand-Calculate Horosa Methods
 
 When the user asks for a Horosa technique result, call the Horosa MCP/CLI tool. Do not write ad-hoc Python, JavaScript, shell scripts, web-search snippets, or calendar formulas to recreate the method.
@@ -102,12 +135,11 @@ If a section is missing, say that the local tool did not return that section and
 The section above is for AI **clients consuming** Horosa Skill. This section is for any agent or
 maintainer **modifying / building / releasing** this repository.
 
-**Standing rule (force-sync on every issue):** whenever you hit a problem, gotcha, or fix while working
-on this repo, you MUST update **both** docs in the same change and keep them in sync — this harness doc
-(`AGENTS.md`) **and** the skill doc (`skills/horosa-agent/SKILL.md`). Do not update one and leave the
-other stale. Keep these notes in *this* repo — never write skill-repo lessons into the upstream 星阙
-(`Horosa-Primary Direction Trial`) working tree; the skill repo is self-contained and ships its own
-agent guidance.
+**Standing rule (force-sync on every issue):** this is the same enforced protocol stated at the top of
+this file under **🔴 MANDATORY: Problem-Logging Protocol** — every problem/gotcha/fix gets written into
+`AGENTS.md` (+ `SKILL.md` when client-facing, + `CHANGELOG.md`, + a code guard when assertable), in the
+same change, kept in sync, and never written into the upstream 星阙 tree. If you are reading this section
+first, scroll up and read that protocol now; it governs everything below.
 
 ## Third-party engine provenance & MIT obligation (ken)
 
@@ -219,6 +251,23 @@ are not part of the aiExport contract and will otherwise show up as unknown sect
   `horosa-core-js/node_modules/lunar-javascript/package.json` in both archives. Without it, canping/heluo
   throw `Cannot find package 'lunar-javascript'` at runtime — the rest of the runtime still boots, so this
   fails silently unless the verifier catches it.
+- **CI/test must `npm install` `lunar-javascript` before `pytest` (it does now).** `node_modules` is
+  gitignored, and the `canping`/`heluo` tests in `tests/test_local_js_tools.py` are **not**
+  `@requires_runtime`-gated, so they run in CI and shell out to bundled Node → the vendored bazi chain →
+  `import 'lunar-javascript'`. Before v0.7.0, `horosa-core-js` had **zero** npm deps so CI never needed
+  `npm install`; v0.7.0 added the first one and turned CI red (3 `ERR_MODULE_NOT_FOUND` failures) while
+  the local `186 green` hid it (dev tree already had `node_modules`). Both `ci.yml` jobs and `release.yml`
+  now run `actions/setup-node@v4` + `npm ci --omit=dev` in `horosa-core-js`. **Lesson:** whenever you add
+  a JS test that isn't `@requires_runtime`, confirm CI installs whatever that test's `node` needs.
+- **`with { type: 'json' }` raises the Node floor for ALL JS tools.** The vendored 数算 JSON
+  (`canpingTiaowen.json` / `heluoTiaowen.json`) is imported with the import-attribute syntax
+  (`import X from './x.json' with { type: 'json' }`), which requires **Node ≥ 20.10**. Because
+  `src/tools/index.js` imports `canping.js`/`heluo.js` at the top, an older Node fails to load the whole
+  module graph with a *syntax* error — i.e. qimen/taiyi/jinkou/tongshefa break too, not just 数算. The
+  bundled runtime ships Node 22 (safe) and `package.json` declares `engines.node >=20.10.0`; the risk is
+  only a dev/PATH `node` that's too old. Don't downgrade the bundled Node below 20.10, and if you add
+  another raw-`node` JSON import keep using the `with { type: 'json' }` attribute (not the deprecated
+  `assert { type: 'json' }`).
 - **Windows `PYTHONPATH` must include `Horosa-Web/vendor`.** `start_horosa_local.ps1` puts the vendor
   root on `PYTHONPATH` so `import kinqimen/kintaiyi/kinjinkou` resolve. `package_runtime_payload.sh` and
   `build_runtime_release_windows.py` both bundle `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}`.
@@ -290,6 +339,96 @@ value-identical to 星阙:
   `Math.ceil`; Python's `round` is banker's rounding. Use `_js_round` (= `floor(x+0.5)`) for every JS
   `Math.round`, and `math.ceil` for the L1 count. Cross-check against 星阙's `decennials.test.js` golden
   vectors (`tests/test_decennials.py`) whenever you touch the period math.
+
+## Day boundary + late-zi-hour — two independent global switches (upstream v2.2.1+)
+
+> **⏳ STATUS as of v0.7.0: PENDING / not yet wired in the skill.** This section is the **spec + upstream
+> reference** for an alignment that has **not** shipped. Concretely, today: the skill does **not** forward
+> `lateZiHourUseNextDay` (grep confirms 0 occurrences in `src/`), and the bundled ken engines predate
+> v2.2.1 (`vendor/runtime-source` kintaiyi lacks the `_get_after23`/`_get_hour_gan_next` markers). So the
+> shipped skill mirrors **pre-v2.2.1** behavior: the default `(after23=1, lateZi=1)` is correct, but the
+> non-default `hour==23` cases will not match until the alignment lands. **Do the v2.2.1 round** (re-sync
+> vendor ken → thread `lateZiHourUseNextDay` through every chart-flow payload + schema → rebuild both
+> runtimes → release) before treating the matrix below as live skill behavior.
+
+This is **upstream 星阙 context** that the skill must mirror, not skill-local invariants. Stick to the
+self-check fixture below in tests/fakes; if a real backend call returns four pillars that disagree, the
+runtime is pre-v2.2.1 (re-install) — do **not** patch the skill to mask the discrepancy.
+
+Two independent flags control `hour ∈ [23:00, 24:00)`:
+
+| Field | Default | Effect |
+|---|---|---|
+| `after23NewDay` (`1`/`0`) | `1` | `1` advances day pillar at 23:00; `0` keeps day pillar until 24:00. |
+| `lateZiHourUseNextDay` (`1`/`0`) | `1` | `1` starts hour stem from next-day day stem; `0` starts from today's day stem. |
+
+Outside `hour == 23` both flags are no-ops.
+
+**Self-check matrix — `2026-05-27 23:30:00`, direct-time mode:**
+
+```
+┌────────────────┬──────────────┬──────────────────────┐
+│                │ lateZi = 1   │ lateZi = 0           │
+├────────────────┼──────────────┼──────────────────────┤
+│ after23 = 1    │ 壬寅 庚子    │ 壬寅 庚子 (equiv.)   │
+│ after23 = 0    │ 辛丑 庚子    │ 辛丑 戊子 ← only 新  │
+└────────────────┴──────────────┴──────────────────────┘
+```
+
+**Skill payloads must forward both flags verbatim.** Any chart-flow tool that builds Chinese pillars
+(`bazi_*`, `ziwei_*`, `liureng_*`, `qimen`, `taiyi`, `jinkou`, `sanshiunited`, `canping`, `heluo`,
+`nongli_time`, `jieqi_year`, `chart` for Bazi-aware paths) must thread both `after23NewDay` and
+`lateZiHourUseNextDay` from the user payload down to the engine call. Java `:9999` reads them through
+`ChartController.getParams()`'s **whitelist** — silent dropping there was the v2.2.1 root-cause bug
+upstream; if you ever add a new chart-flow payload field, audit every `getParams()`-style controller
+the same way. The Python chart service (`:8899`) reads them on every chart-creating endpoint.
+
+**The export snapshot carries the active rule.** `aiExport.js` injects a leading
+`排盘规则: 日柱开关【…】+ 时柱开关【…】。本盘四柱按此规则计算。` line. Tool formatters MUST preserve this
+line; reports and AI answers MUST quote it back so the consultant can verify which convention the chart
+was built under. Stripping it produces silently-wrong analyses when the user has flipped either switch.
+
+**Upstream root-cause references** (for maintainers debugging a value mismatch — the skill itself
+shouldn't replicate these fixes, but knowing they exist saves hours):
+
+1. **`ChartController.getParams()` is a whitelist** — fields not explicitly `params.put(...)` are dropped
+   silently, defaults take over. Audit ALL `getParams()`-style controllers when adding a chart-flow
+   field upstream.
+2. **`mvn package` ≠ live process update** — replacing `runtime/mac/bundle/astrostudyboot.jar` doesn't
+   reload the JVM; `lsof -ti :9999` + `ps -p <PID> -o lstart=` to confirm the process started AFTER the
+   jar mtime, or kill + `start_horosa_local.sh` cycle.
+3. **`lunar-javascript` hardcodes `timeGanIndex = (dayGanIndexExact … )`** — `setSect()` shifts only the
+   day pillar, never the hour pillar. To honor `lateZiHourUseNextDay = 0`, the frontend must compute the
+   hour stem itself using `getDayGanIndexExact2()` (today, no shift).
+4. **Triple cache (JVM mem + Redis + `.horosa-cache/paramhash/`)** — new key fields auto-miss, but type
+   changes can hit stale entries; clear `redis-cli KEYS "*chart*"` + `.horosa-cache/` when debugging.
+5. **Client-side `chartMem` cache (`services/astro.js`)** keys by `JSON.stringify(values)`; new fields
+   auto-miss, but `requestOptions.cache = false` forces refresh.
+6. **AI snapshots must carry the rule line** — see above; otherwise downstream models default-assume
+   `1/1` and explain pillars that don't match the chart.
+
+Authoritative upstream doc: `Horosa-Web/docs/global-day-boundary-v2.2.1.md` (in the 星阙 working tree,
+not this repo). When this section drifts from upstream, treat upstream as truth and sync — do not edit
+upstream from inside the skill repo.
+
+### Bonus upstream trap (v2.2.1) — AI-analysis SSE Issue #8
+
+The skill talks to its own ken backend, not 星阙's `chat/stream` SSE proxy, so this does NOT affect
+skill compute paths. It's documented here because if a user ever debugs 星阙 desktop and asks "why did
+my Ollama chat just go silent and then die", the answer is upstream:
+
+- **Catch block in `AIAnalysisProxyService.chatStream` used to swallow the first-cause exception**:
+  `sendEvent` inside catch rethrew `ClientAbortException` as `RuntimeException`, killing the
+  `ai-analysis-chat-stream` thread, and the original Ollama error went only into a
+  `safeErrorMessage(...)` SSE frame that never reached the client. Upstream fix: `QueueLog.error(...)`
+  first, then nested try around `sendEvent` + `completeWithError`.
+- **The three `stream***` methods used to send zero bytes until the first delta**: with a local Ollama
+  TTFT of 10–60 s, browsers/Chromium/middleware time the SSE socket out as idle. Upstream fix: each
+  stream method is now wrapped in `withHeartbeat`, which emits `: keep-alive` every 15 s.
+
+If a skill user reports flaky 星阙 AI streaming, point them at upstream v2.2.1 and the
+`release_preflight.sh` sentinel `[7]` that gates both lines (`QueueLog.error(AppLoggers.ErrorLogger` and
+`keep-alive`) in `AIAnalysisProxyService.java`.
 
 ## Stability invariants (don't regress these)
 
