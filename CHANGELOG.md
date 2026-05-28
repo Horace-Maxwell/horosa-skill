@@ -7,6 +7,15 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+### Fixed
+
+- **0.7.0 release: completed the version-string bump.** The v0.7.0 commit bumped `pyproject.toml` to
+  `0.7.0` but left `__init__.py.__version__`, `server.json` (the MCP registry manifest, ×2), `CITATION.cff`,
+  and the "current version" references in `README.md` / `README_EN.md` at `0.6.3` — so `horosa-skill
+  --version` and the MCP-registry-declared version were stale for the 0.7.0 line. All five files now read
+  `0.7.0`. `docs/DATA_CONTRACTS.md`'s `tool envelope: 0.6.3` was left as-is (it tracks an independent
+  envelope-schema version, not the package version).
+
 ## [0.7.0] - 2026-05-27
 
 ### Added — 星阙 v2.2.0 数算 + 调波盘 modules

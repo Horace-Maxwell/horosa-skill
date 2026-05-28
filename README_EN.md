@@ -34,7 +34,7 @@
 
 ## Current Stable Baseline
 
-Current public version: `Horosa Skill 0.6.3`
+Current public version: `Horosa Skill 0.7.0`
 
 The headline change in this line is **unifying Qimen Dunjia, Taiyi, and Jinkou Jue (and the Qimen + Taiyi inside San Shi United) onto Xingque's `ken` compute backend**. The `kinqimen` / `kintaiyi` / `kinjinkou` engines run on the local Python chart service and own all chart computation; the headless JS layer no longer computes charts itself — it reformats the ken response into `aiExport.js` sections via Xingque's `normalizeKinqimenData` / `normalizeBackendPan` / `normalizeKinjinkouData`. The result: the Skill's charts come from the **same backend as the Xingque desktop app, value-for-value identical**, while the outward export stays the stable Xingque-style `export_snapshot` / `export_format` contract. All three engines ship inside the offline runtime, so macOS and Windows both run them fully offline.
 
@@ -56,7 +56,7 @@ Latest local verification:
 | Xingque-style export structure | Business methods emit `export_snapshot` / `export_format` |
 | Engineering tests | `164 / 164 pass` (incl. live ken-backend integration tests) |
 | GitHub CI | Linux/macOS tests plus Windows OpenClaw smoke pass |
-| Release runtime | macOS / Windows `v0.6.3` assets (with ken engines bundled) packaged and verified |
+| Release runtime | macOS / Windows `v0.7.0` assets (with ken engines bundled) packaged and verified |
 
 For the predictive tools `solarreturn`, `lunarreturn`, `solararc`, `givenyear`, `profection`, `pd`, `pdchart`, and `zr`: the current version verifies them as usable. Agents should not label Java `/predict/*` tools as unavailable. If a client still says that, first check whether it is using an old runtime, bypassing MCP with hand-written calculations, or skipping `doctor` / `openclaw-check --full`.
 
@@ -345,7 +345,7 @@ Every tool returns a stable envelope:
 {
   "ok": true,
   "tool": "qimen",
-  "version": "0.6.3",
+  "version": "0.7.0",
   "input_normalized": {},
   "data": {},
   "summary": [],
@@ -415,7 +415,7 @@ Latest local all-tool audit:
 
 ```json
 {
-  "version": "0.6.3",
+  "version": "0.7.0",
   "tool_count": 42,
   "records_count": 42,
   "errors_count": 0,
@@ -664,7 +664,7 @@ Already implemented:
 
 - GitHub-first offline runtime install flow
 - Qimen / Taiyi / Jinkou / San Shi United unified on Xingque's `ken` backend (`kinqimen` / `kintaiyi` / `kinjinkou`), same source as the desktop app
-- macOS and Windows `v0.6.3` runtime release assets (ken engines bundled in)
+- macOS and Windows `v0.7.0` runtime release assets (ken engines bundled in)
 - local MCP server and JSON-first CLI
 - full Xingque AI export registry and parser
 - stable structured outputs across 42 callable tools
