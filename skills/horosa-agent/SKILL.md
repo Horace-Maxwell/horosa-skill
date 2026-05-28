@@ -169,7 +169,47 @@ For birth-based methods, include as much as possible:
 }
 ```
 
-For gender-sensitive tools, include `gender`. For Bazi and Ziwei, include `timeAlg`, `after23NewDay`, and direct/luck-flow options when the user asks about timing.
+For gender-sensitive tools, include `gender`. For Bazi and Ziwei, include `timeAlg`, `after23NewDay`, `lateZiHourUseNextDay`, and direct/luck-flow options when the user asks about timing.
+
+### Day boundary + late-zi-hour rules (v2.2.1+) — two independent switches
+
+> **⏳ STATUS as of v0.7.0: PENDING — not yet wired in the skill.** The skill does **not** yet forward
+> `lateZiHourUseNextDay`, and the shipped offline runtime's ken engines predate v2.2.1. So today only the
+> default `(after23NewDay=1, lateZiHourUseNextDay=1)` is guaranteed correct; the non-default `hour==23`
+> rows below are the **target spec** for the pending v2.2.1 alignment, not current shipped behavior. Until
+> that ships, if you must be exact about an `hour==23` non-default case, tell the user it requires the
+> v2.2.1 runtime. (Maintainers: see the matching PENDING banner + the alignment to-do in `AGENTS.md`.)
+
+For ANY hour-23 input (`time` ∈ `23:00:00`–`23:59:59`), the four pillars depend on **two** independent settings. Treat them as separate flags — the user may have set one or both globally in 星阙 desktop, and predictive runs must mirror what the user sees on screen.
+
+| Field | Values | Default | Effect at `hour == 23` |
+|---|---|---|---|
+| `after23NewDay` | `1` / `0` | `1` | `1` = "23点算第二天" → day pillar advances to next day. `0` = "24点算第二天" → day pillar stays today. |
+| `lateZiHourUseNextDay` | `1` / `0` | `1` | `1` = "晚子时按次日日柱计算" → hour stem起 from next-day day stem. `0` = "晚子时按当日柱计算" → hour stem起 from today's day stem. |
+
+**Outside of `hour == 23`, both flags are no-ops.** They do not change anything in `[00:00, 23:00)`. Don't ask the user about them unless the time is actually in that window.
+
+**Self-check matrix — `2026-05-27 23:30:00`, direct-time mode:**
+
+| `after23NewDay` | `lateZiHourUseNextDay` | 日柱 | 时柱 |
+|---|---|---|---|
+| 1 (default) | 1 (default) | 壬寅 | 庚子 |
+| 1 | 0 | 壬寅 | 庚子 *(day pillar already advanced, equivalent)* |
+| 0 | 1 | 辛丑 | 庚子 |
+| 0 | 0 | 辛丑 | **戊子** ← only case where the new switch changes anything |
+
+If a tool returns four pillars that don't match this matrix for that fixture, the runtime is stale (predates v2.2.1) — tell the user to re-install the runtime release, do not blame the technique.
+
+**When asking the user about the two switches:**
+
+- If the user explicitly mentions 晚子时 / 子时 / 23 点 / 24 点 in the question, ask which mode they want before calling. Concrete options:
+  - 日柱开关: 「23点算第二天 (默认)」 / 「24点算第二天」
+  - 时柱开关: 「晚子时按次日日柱计算 (默认)」 / 「晚子时按当日柱计算」
+- If a stored case/memory already contains either field, reuse it and cite the saved run.
+- If the user says 「默认 / 按星阙 / 你来决定」, use `after23NewDay: 1` + `lateZiHourUseNextDay: 1` (current shipping default), and mention that defaults were used.
+- The flags belong on every chart-flow payload (`chart`, `bazi_birth`, `bazi_direct`, `ziwei_birth`, `liureng_gods`, `liureng_runyear`, `qimen`, `taiyi`, `jinkou`, `sanshiunited`, `canping`, `heluo`, `nongli_time`, `jieqi_year`). Tools that don't read them ignore them harmlessly — but tools that DO read them silently pick `1`/`1` if absent, which can produce a chart that disagrees with the user's 星阙 desktop settings.
+
+**AI explanation hook — always quote the active rule.** The export snapshot now includes a `排盘规则: 日柱开关【…】+ 时柱开关【…】。本盘四柱按此规则计算。` line in `export_snapshot.export_text`. When you write the interpretation, mirror that line back to the user so they can verify the chart was built under the same convention they assumed. Don't strip it from the report.
 
 For predictive astrology tools, do not call with natal data alone. These are the minimum real-call contracts:
 
@@ -310,9 +350,15 @@ For client behaviour this means: a tool that fails returns `ok=False` with an `e
 miss) — it does not throw. Read the `error` and relay it; do not assume a crash means the tool is
 unavailable.
 
-**Standing rule (force-sync on every issue):** when you fix a problem or learn a gotcha, update **both**
-this skill doc **and** [`AGENTS.md`](../../AGENTS.md) in the same change, keeping them in sync — never
-leave one stale.
+**🔴 MANDATORY — Problem-Logging Protocol (enforced):** every problem, gotcha, surprising behavior, or
+fix you hit while working in this repo MUST be recorded in [`AGENTS.md`](../../AGENTS.md) — see its
+top-of-file **🔴 MANDATORY: Problem-Logging Protocol** for the full rule. In the same change: append a
+gotcha bullet to the relevant `AGENTS.md` section (symptom → root cause → guard), sync **this** skill doc
+when the lesson is client-facing (payload fields, gating, section contracts), add a `CHANGELOG.md`
+`[Unreleased]` entry, and add a code-level guard (`verify_*` / CI step / schema constraint) whenever the
+gotcha is machine-assertable. A doc note alone is not enough for anything CI or a script can check. Never
+leave `AGENTS.md` and this doc contradicting each other, and never write skill-repo lessons into the
+upstream 星阙 tree.
 
 **Engine credit (MIT):** the ken engines are open-source and MIT-licensed, by **kentang2017** —
 `kinqimen` / `kintaiyi` / `kinjinkou`. Their `LICENSE` files ship inside the offline runtime under
