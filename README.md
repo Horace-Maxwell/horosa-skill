@@ -54,7 +54,7 @@
 | memory query / show | `42 / 42` |
 | report JSON artifact | `42 / 42` |
 | 星阙式导出结构 | 业务技法均带 `export_snapshot` / `export_format` |
-| 工程测试 | `164 / 164 pass`（含 ken 后端实时集成测试） |
+| 工程测试 | `186 / 186 pass`（含 ken 后端实时集成测试） |
 | GitHub CI | Linux/macOS 单测 + Windows OpenClaw smoke 通过 |
 | Release runtime | macOS / Windows `v0.7.0` assets（含 ken 引擎）已打包并校验 |
 

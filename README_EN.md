@@ -54,7 +54,7 @@ Latest local verification:
 | memory query / show | `42 / 42` |
 | report JSON artifact | `42 / 42` |
 | Xingque-style export structure | Business methods emit `export_snapshot` / `export_format` |
-| Engineering tests | `164 / 164 pass` (incl. live ken-backend integration tests) |
+| Engineering tests | `186 / 186 pass` (incl. live ken-backend integration tests) |
 | GitHub CI | Linux/macOS tests plus Windows OpenClaw smoke pass |
 | Release runtime | macOS / Windows `v0.7.0` assets (with ken engines bundled) packaged and verified |
 
