@@ -238,6 +238,13 @@ are not part of the aiExport contract and will otherwise show up as unknown sect
   runs natively on Windows as well as macOS/Linux. Keep runtime-build copies dependency-free this way;
   do not reintroduce a POSIX-only binary (`rsync`, `cp`, `tar`…) into a path that must also run on
   Windows. (`download()` already uses `curl`, which Windows 10/11 ship natively.)
+- **Release version bumps must cover *every* release-version-bearing file.** A pyproject-only bump leaves
+  `src/horosa_skill/__init__.py.__version__` (CLI `--version`), `server.json` (the MCP-registry-declared
+  version, ×2), `CITATION.cff`, and the "current version" references in `README.md` / `README_EN.md` stale.
+  When releasing vX.Y.Z bump **all five** in the same commit; `git grep -n "<OLD>"` after the bump should
+  show only legitimate historical references (CHANGELOG history, this gotcha line, the Windows-release
+  handoff doc). `docs/DATA_CONTRACTS.md`'s `tool envelope: <ver>` tracks an independent envelope-schema
+  version — do **not** bump it just because it shares a number with the package.
 
 ## `pkill` will take down the live 星阙 stack
 
