@@ -15,6 +15,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # canping/heluo compute their four pillars in-process via horosa-core-js's vendored bazi chain,
+      # which imports the `lunar-javascript` npm package. node_modules is gitignored, so a fresh CI
+      # checkout must install it or the (non-runtime-gated) canping/heluo tests fail with
+      # ERR_MODULE_NOT_FOUND. Mirrors the runtime builders' `npm install --omit=dev`.
+      - name: Install horosa-core-js deps (lunar-javascript)
+        working-directory: ./horosa-skill/horosa-core-js
+        run: npm ci --omit=dev
       - name: Install dependencies
         working-directory: ./horosa-skill
         run: uv sync --dev
@@ -46,6 +56,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # See the test job: canping/heluo need horosa-core-js's lunar-javascript dep (node_modules is
+      # gitignored). `npm ci` is cross-platform; setup-node provides npm on the Windows runner too.
+      - name: Install horosa-core-js deps (lunar-javascript)
+        working-directory: ./horosa-skill/horosa-core-js
+        run: npm ci --omit=dev
       - name: Install dependencies
         working-directory: ./horosa-skill
         run: uv sync --dev
