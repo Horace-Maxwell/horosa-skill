@@ -21,6 +21,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # build_runtime_release.sh runs `npm install --omit=dev` in horosa-core-js to bundle
+      # lunar-javascript (needed by canping/heluo) into the runtime payload — so node/npm must be on
+      # PATH even on a self-hosted runner.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - name: Install dependencies
         working-directory: ./horosa-skill
         run: uv sync --dev

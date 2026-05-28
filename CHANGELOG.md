@@ -15,6 +15,14 @@ and this project follows a release-oriented changelog style.
   --version` and the MCP-registry-declared version were stale for the 0.7.0 line. All five files now read
   `0.7.0`. `docs/DATA_CONTRACTS.md`'s `tool envelope: 0.6.3` was left as-is (it tracks an independent
   envelope-schema version, not the package version).
+- **CI now installs the `lunar-javascript` JS dependency before running tests.** v0.7.0 added
+  `lunar-javascript` as `horosa-core-js`'s first npm dependency (needed by the in-process `canping` /
+  `heluo` engines), but `node_modules` is gitignored and the CI workflow had no `npm install` step — so
+  a fresh checkout failed the three non-runtime-gated `canping` / `heluo` tests with
+  `ERR_MODULE_NOT_FOUND`. Both `ci.yml` jobs (`test` + `windows-smoke`) now run `actions/setup-node@v4`
+  + `npm ci --omit=dev` in `horosa-core-js` before `pytest`; `release.yml` gains `setup-node` so the
+  runtime build's own `npm install` has node on PATH (incl. self-hosted runners). Verified by hiding
+  `node_modules` locally (repro'd the failure) then restoring via `npm ci` (3 tests green).
 
 ## [0.7.0] - 2026-05-27
 
