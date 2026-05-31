@@ -80,6 +80,9 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "heluo": "heluo",
     "sanshiunited": "sanshiunited",
     "germany": "germany",
+    "agepoint": "agepoint",
+    "distributions": "distributions",
+    "mundane": "mundane",
     "firdaria": "firdaria",
     "decennials": "decennials",
     "otherbu": "otherbu",
@@ -109,6 +112,8 @@ _PYTHON_CHART_ENDPOINTS = {
     "/india/chart",
     "/germany/midpoint",
     "/astroextra/harmonic",
+    "/predict/agepoint",
+    "/predict/dist",
     "/jieqi/year",
     "/qimen/pan",
     "/taiyi/pan",
@@ -398,6 +403,28 @@ def _generic_summary(tool_name: str, data: dict[str, Any]) -> list[str]:
         conjunctions = data.get("conjunctions")
         if isinstance(conjunctions, list) and conjunctions:
             summary.append(f"同频合相：{len(conjunctions)} 组。")
+        return summary
+    if tool_name == "agepoint":
+        summary = ["已生成年龄推进点（Age Point / Huber）时间线。"]
+        points = data.get("points")
+        if isinstance(points, list):
+            summary.append(f"年龄点数：{len(points)}。")
+            key_ages = [p for p in points if isinstance(p, dict) and p.get("aspectTo")]
+            if key_ages:
+                summary.append(f"合本命关键岁数：{len(key_ages)} 处。")
+        return summary
+    if tool_name == "distributions":
+        summary = ["已生成界推运（分配法 / Distributions）时间线。"]
+        rows = data.get("distributions")
+        if isinstance(rows, list):
+            summary.append(f"分配期数：{len(rows)}。")
+        return summary
+    if tool_name == "mundane":
+        summary = ["已生成世俗入宫盘（mundane ingress）。"]
+        if data.get("ingressTerm") and data.get("ingressYear"):
+            summary.append(f"{data['ingressYear']} 年「{data['ingressTerm']}」入宫。")
+        if data.get("ingressMoment"):
+            summary.append(f"入宫时刻：{data['ingressMoment']}。")
         return summary
     if tool_name == "sanshiunited":
         summary = ["已运行本地三式合一聚合算法。"]
@@ -1510,6 +1537,85 @@ def _build_possibility_section(chart_wrap: dict[str, Any]) -> list[str]:
     return lines
 
 
+# 寿命引擎产出小写 key → chart id (= 星阙 LIFESPAN_KEY_TO_ID), 再经 _astro_msg 显示中文.
+_LIFESPAN_KEY_TO_ID = {
+    "sun": "Sun", "moon": "Moon", "mercury": "Mercury", "venus": "Venus",
+    "mars": "Mars", "jupiter": "Jupiter", "saturn": "Saturn", "asc": "Asc", "mc": "MC",
+    "fortune": "Pars Fortuna", "syzygy": "Syzygy", "north_node": "North Node", "south_node": "South Node",
+}
+
+
+def _lifespan_name(key: Any) -> str:
+    if not key:
+        return "-"
+    lk = f"{key}".lower()
+    if lk in _LIFESPAN_KEY_TO_ID:
+        return _astro_msg(_LIFESPAN_KEY_TO_ID[lk])
+    cap = lk[:1].upper() + lk[1:]
+    mapped = _astro_msg(cap)
+    return mapped if mapped and mapped != cap else f"{key}"
+
+
+def _sign_degree(lon: Any) -> str:
+    # lon → "Y˚<座>Z分" (simplified lonToSignDegree; the term clause is dropped — sign+degree is faithful).
+    try:
+        value = float(lon) % 360.0
+    except (TypeError, ValueError):
+        return ""
+    if value < 0:
+        value += 360.0
+    sign_idx = int(value // 30) % 12
+    signs = ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo", "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"]
+    deg, minute = _split_degree(value)
+    return f"{deg}˚{_astro_msg(signs[sign_idx])}{minute}分"
+
+
+def _build_natal_extra_sections(extras: dict[str, Any]) -> dict[str, str]:
+    """Format the v2.4.0 本命增补 sections (12分度 / 主宰星链 / 寿命格局) from astroextra's structured data."""
+    out: dict[str, str] = {}
+    dodeca = extras.get("dodeca") if isinstance(extras.get("dodeca"), list) else []
+    if dodeca:
+        lines = [f"{_astro_msg(d.get('id'))}：本命 {_sign_degree(d.get('natalLon'))} → 12分度 {_sign_degree(d.get('dodecaLon'))}" for d in dodeca if isinstance(d, dict)]
+        out["12分度"] = "\n".join(lines)
+    dispositor = extras.get("dispositor") if isinstance(extras.get("dispositor"), list) else []
+    if dispositor:
+        lines = [f"{_astro_msg(d.get('id'))}：{' → '.join(_astro_msg(k) for k in (d.get('chain') or []))}" for d in dispositor if isinstance(d, dict)]
+        out["主宰星链"] = "\n".join(lines)
+    ls = extras.get("lifespan") if isinstance(extras.get("lifespan"), dict) else None
+    if ls:
+        lines = [f"区分：{'昼生盘' if ls.get('isDiurnal') else '夜生盘'}"]
+        hy = ls.get("hyleg") if isinstance(ls.get("hyleg"), dict) else None
+        if hy:
+            pos = _sign_degree(hy.get("lon")) if hy.get("lon") is not None else ""
+            house = f"（第{hy.get('house')}宫）" if hy.get("house") else ""
+            lines.append(f"生命主(Hyleg)：{_lifespan_name(hy.get('key'))} {pos}{house}")
+        else:
+            lines.append("生命主(Hyleg)：未定")
+        alc = ls.get("alcocoden") if isinstance(ls.get("alcocoden"), dict) else None
+        if alc and alc.get("alcocoden"):
+            lines.append(f"寿主星(Alcocoden)：{_lifespan_name(alc.get('alcocoden'))}")
+            if alc.get("aspectToHyleg"):
+                lines.append(f"与生命主相照：{alc.get('aspectToHyleg')}")
+            if alc.get("predictedYears") is not None:
+                lines.append(f"预测寿数 ≈ {alc.get('predictedYears')} 年（基础 {alc.get('baseYears')} 年）")
+        else:
+            lines.append("寿主星(Alcocoden)：未能确定")
+        rulers = ls.get("rulers") if isinstance(ls.get("rulers"), dict) else None
+        if rulers:
+            parts = []
+            if rulers.get("epikratetor"):
+                parts.append(f"占控星 {_lifespan_name(rulers.get('epikratetor'))}")
+            if rulers.get("oikodespotes"):
+                parts.append(f"家主星 {_lifespan_name(rulers.get('oikodespotes'))}")
+            if rulers.get("kurios"):
+                parts.append(f"盘主星 {_lifespan_name(rulers.get('kurios'))}")
+            if parts:
+                concordant = "（家主=盘主，格局相合）" if rulers.get("concordant") else ""
+                lines.append(f"盘主体系：{'；'.join(parts)}{concordant}")
+        out["寿命格局"] = "\n".join(lines)
+    return out
+
+
 def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
     sections = [
         ("起盘信息", _build_base_info_lines(response, payload)),
@@ -1519,9 +1625,19 @@ def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
         ("相位", _build_aspect_section(response)),
         ("行星", _build_planet_section(response)),
         ("希腊点", _build_lots_section(response)),
-        ("可能性", _build_possibility_section(response)),
     ]
-    return _render_snapshot_text([(title, "\n".join(lines).strip()) for title, lines in sections if lines])
+    rendered = [(title, "\n".join(lines).strip()) for title, lines in sections if lines]
+    # v2.4.0 本命增补: insert 12分度 / 主宰星链 / 寿命格局 before 可能性, when astroextra stashed them.
+    extras = response.get("_natalExtras") if isinstance(response.get("_natalExtras"), dict) else None
+    if extras:
+        for title in ("12分度", "主宰星链", "寿命格局"):
+            body = extras.get(title)
+            if body and f"{body}".strip():
+                rendered.append((title, f"{body}".strip()))
+    possibility = _build_possibility_section(response)
+    if possibility:
+        rendered.append(("可能性", "\n".join(possibility).strip()))
+    return _render_snapshot_text(rendered)
 
 
 def _is_astro_chart_payload(response_data: dict[str, Any]) -> bool:
@@ -1788,6 +1904,53 @@ def _build_harmonic_snapshot_text(payload: dict[str, Any], response: dict[str, A
             ("同频合相", "\n".join(conj_lines).strip() or "无"),
         ]
     )
+
+
+def _build_agepoint_snapshot_text(response: dict[str, Any]) -> str:
+    # Port of 星阙 AstroAgePoint.buildAgePointSnapshotText. response = {agepoint: {points: [...]}}.
+    ap = response.get("agepoint") if isinstance(response.get("agepoint"), dict) else {}
+    points = ap.get("points") if isinstance(ap.get("points"), list) else []
+    if not points:
+        # 无年龄推进点数据 = 该技法在本盘缺失（与 star阙 "挂载显示缺失" 一致）。
+        return _render_snapshot_text([("年龄推进点（Age Point / Huber）", "（本盘无年龄推进点数据）")])
+    lines = ["年龄点自上升点起，沿 Koch 宫顺行，每宫 6 年、72 年回归上升；落于本命星处（合相）为人生关键节点。"]
+    key_ages = [p for p in points if isinstance(p, dict) and p.get("aspectTo")]
+    if key_ages:
+        lines.append("")
+        lines.append("关键岁数（合本命）：" + "；".join(f"{p.get('age')}岁合{_astro_msg(p.get('aspectTo'))}" for p in key_ages))
+    lines.append("")
+    lines.append("| 年龄 | 落座 | 宫 | 合本命 |")
+    lines.append("| --- | --- | --- | --- |")
+    for p in points:
+        if not isinstance(p, dict):
+            continue
+        signlon = p.get("signlon")
+        sign = _astro_msg(p.get("sign")) + (f" {signlon}°" if signlon is not None else "")
+        aspect_to = _astro_msg(p.get("aspectTo")) if p.get("aspectTo") else "—"
+        lines.append(f"| {p.get('age')}岁 | {sign} | {p.get('house')}宫 | {aspect_to} |")
+    return _render_snapshot_text([("年龄推进点（Age Point / Huber）", "\n".join(lines))])
+
+
+def _build_distributions_snapshot_text(response: dict[str, Any]) -> str:
+    # Port of 星阙 AstroDistributions.buildDistributionsSnapshotText. response = {dist: [...]}.
+    rows = response.get("dist") if isinstance(response.get("dist"), list) else []
+    if not rows:
+        return _render_snapshot_text([("界推运（分配法 / Distributions）", "（本盘无界推运数据）")])
+    lines = [
+        "上升点经主限运动穿越各埃及界；分配星=界主星，参与星=该期间内上升点触及的行星。",
+        "",
+        "| 分配星 | 界(座) | 参与星 | 起 | 止 |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        participants = row.get("participants") if isinstance(row.get("participants"), list) else []
+        part = "、".join(_astro_msg(x) for x in participants) if participants else "—"
+        lines.append(
+            f"| {_astro_msg(row.get('distributor'))} | {_astro_msg(row.get('sign'))} | {part} | {row.get('startDate') or '-'} | {row.get('endDate') or '-'} |"
+        )
+    return _render_snapshot_text([("界推运（分配法 / Distributions）", "\n".join(lines))])
 
 
 def _build_firdaria_snapshot_text(response: dict[str, Any]) -> str:
@@ -3108,6 +3271,28 @@ class HorosaSkillService:
             enriched["natalChart"] = self._call_remote("/chart", natal_payload)
         return enriched
 
+    def _attach_natal_extras(self, tool_name: str, response_data: dict[str, Any]) -> dict[str, Any]:
+        # v2.4.0 西占: enrich the astrochart (and mundane) export with 12分度 / 主宰星链 / 寿命格局.
+        # These are computed by the vendored JS astroextra formatter (Ptolemy hyleg engine) from the
+        # chart object. Only `chart` (astrochart) and `mundane` carry them in 星阙; never fail the
+        # chart if the enrichment errors.
+        if tool_name not in {"chart", "mundane"}:
+            return response_data
+        if not isinstance(response_data, dict) or not _is_astro_chart_payload(response_data):
+            return response_data
+        try:
+            js = self.js_client.run("astroextra", {"chart": response_data})
+            extras_data = js.get("data") if isinstance(js, dict) else None
+            if isinstance(extras_data, dict):
+                sections = _build_natal_extra_sections(extras_data)
+                if sections:
+                    enriched = dict(response_data)
+                    enriched["_natalExtras"] = sections
+                    return enriched
+        except Exception:
+            pass
+        return response_data
+
     def _require_ken_pan(self, ken_response: Any, *, engine: str, endpoint: str) -> None:
         """Fail loudly when the ken backend did not actually compute a pan.
 
@@ -3515,6 +3700,99 @@ class HorosaSkillService:
             "snapshot_text": snapshot_text,
         }
 
+    def _run_agepoint_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 年龄推进点 (Age Point / Huber): backend /predict/agepoint computes the whole Koch-house cycle.
+        remote_payload = {**payload, "predictive": payload.get("predictive", 1)}
+        response = self._call_remote("/predict/agepoint", remote_payload)
+        snapshot_text = _build_agepoint_snapshot_text(response)
+        agepoint = response.get("agepoint") if isinstance(response.get("agepoint"), dict) else {}
+        result = {
+            "agepoint": agepoint,
+            "points": agepoint.get("points", []),
+            "raw": response,
+            "snapshot_text": snapshot_text,
+        }
+        result["export_snapshot"] = self._augment_export_payload(technique="agepoint", snapshot_text=snapshot_text)
+        return result
+
+    def _run_distributions_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 界推运 (Distributions / 分配法): backend /predict/dist computes the full-life term timeline.
+        remote_payload = {**payload, "predictive": payload.get("predictive", 1)}
+        response = self._call_remote("/predict/dist", remote_payload)
+        snapshot_text = _build_distributions_snapshot_text(response)
+        result = {
+            "distributions": response.get("dist", []),
+            "raw": response,
+            "snapshot_text": snapshot_text,
+        }
+        result["export_snapshot"] = self._augment_export_payload(technique="distributions", snapshot_text=snapshot_text)
+        return result
+
+    def _run_mundane_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 世俗入宫盘 (mundane ingress): (1) get the precise solar-term ingress moment for the year via
+        # /jieqi/year, (2) cast a /chart at that moment, (3) enrich with the v2.4.0 natal extras, then
+        # (4) prepend a [世俗入宫] section to the astrochart snapshot. Mirrors 星阙 MundaneMain.
+        year = f"{payload.get('year', '')}".strip()
+        term = f"{payload.get('ingressTerm') or '春分'}".strip()
+        zone = payload.get("zone") or "+08:00"
+        lon = payload.get("lon")
+        lat = payload.get("lat")
+        seed_payload = {
+            "year": year,
+            "ad": payload.get("ad", 1),
+            "zone": zone,
+            "lon": lon or "116e23",
+            "lat": "23n26",  # jieqi MOMENT is global; lat only affects the (unused) seed chart.
+            "gpsLat": 23.43,
+            "gpsLon": payload.get("gpsLon") if payload.get("gpsLon") is not None else 116.38,
+            "timeAlg": 0,
+            "jieqis": [term],
+            "seedOnly": 1,
+        }
+        seed_response = self._call_remote("/jieqi/year", seed_payload)
+        jieqi24 = seed_response.get("jieqi24") if isinstance(seed_response, dict) else None
+        ingress_time = ""
+        if isinstance(jieqi24, list):
+            for entry in jieqi24:
+                if isinstance(entry, dict) and f"{entry.get('jieqi')}".strip() == term and entry.get("time"):
+                    ingress_time = f"{entry.get('time')}".strip()
+                    break
+        if not ingress_time:
+            raise ToolValidationError(
+                f"无法取得 {year} 年「{term}」的入宫时刻。",
+                code="tool.mundane_ingress_unavailable",
+                details={"year": year, "ingressTerm": term, "jieqi24_count": len(jieqi24) if isinstance(jieqi24, list) else 0},
+            )
+        date_part, _, time_part = ingress_time.partition(" ")
+        chart_payload = {
+            "date": date_part,
+            "time": time_part or "00:00:00",
+            "zone": zone,
+            "lat": lat or "23n26",
+            "lon": lon or "116e23",
+            "gpsLat": payload.get("gpsLat"),
+            "gpsLon": payload.get("gpsLon"),
+            "ad": payload.get("ad", 1),
+            "hsys": payload.get("hsys", 0),
+            "tradition": payload.get("tradition", False),
+            "predictive": 0,
+        }
+        chart_response = self._call_remote("/chart", chart_payload)
+        chart_response = self._attach_natal_extras("mundane", chart_response)
+        head = "\n".join(["[世俗入宫]", f"入宫节气：{term}", f"年份：{year or '-'}", f"入宫时刻：{ingress_time}"])
+        body = _build_astro_snapshot_text(chart_payload, chart_response)
+        snapshot_text = f"{head}\n\n{body}".strip()
+        result = {
+            "ingressTerm": term,
+            "ingressYear": year,
+            "ingressMoment": ingress_time,
+            "chart": chart_response.get("chart"),
+            "raw": chart_response,
+            "snapshot_text": snapshot_text,
+        }
+        result["export_snapshot"] = self._augment_export_payload(technique="mundane", snapshot_text=snapshot_text)
+        return result
+
     def _run_otherbu_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         remote_payload = {
             **payload,
@@ -3688,6 +3966,12 @@ class HorosaSkillService:
             return self._run_germany_tool(payload)
         if definition.name == "harmonic":
             return self._run_harmonic_tool(payload)
+        if definition.name == "agepoint":
+            return self._run_agepoint_tool(payload)
+        if definition.name == "distributions":
+            return self._run_distributions_tool(payload)
+        if definition.name == "mundane":
+            return self._run_mundane_tool(payload)
         if definition.name == "firdaria":
             return self._run_firdaria_tool(payload)
         if definition.name == "decennials":
@@ -3757,6 +4041,7 @@ class HorosaSkillService:
                     assert definition.endpoint is not None
                     response_data = self._call_remote(definition.endpoint, input_normalized)
                     response_data = self._attach_predictive_chart_context(tool_name, input_normalized, response_data)
+                response_data = self._attach_natal_extras(tool_name, response_data)
                 response_data = _attach_export_contract(tool_name, input_normalized, response_data)
                 summary = _generic_summary(tool_name, response_data)
                 warnings: list[str] = []

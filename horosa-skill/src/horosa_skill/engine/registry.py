@@ -4,11 +4,13 @@ from dataclasses import dataclass
 from typing import Type
 
 from horosa_skill.schemas.tools import (
+    AgePointInput,
     BaZiBirthInput,
     BaZiDirectInput,
     BirthInput,
     CanPingInput,
     DecennialsInput,
+    DistributionsInput,
     ExportParseInput,
     ExportRegistryInput,
     FirdariaInput,
@@ -18,6 +20,7 @@ from horosa_skill.schemas.tools import (
     HeLuoInput,
     JinKouInput,
     JieQiYearInput,
+    MundaneInput,
     KnowledgeReadInput,
     KnowledgeRegistryInput,
     LiuRengGodsInput,
@@ -72,6 +75,9 @@ TOOL_DEFINITIONS: dict[str, ToolDefinition] = {
     "guolao_chart": ToolDefinition("guolao_chart", "astro", "guolao_chart", None, BirthInput, "Generate the 七政四余 chart output.", execution="local"),
     "germany": ToolDefinition("germany", "astro", "germany", None, GermanyInput, "Generate the 量化盘 / midpoint analysis output.", execution="local"),
     "harmonic": ToolDefinition("harmonic", "astro", "harmonic", None, HarmonicInput, "Generate the 调波盘 / harmonic chart (本命黄经×调波数), with 调波位置 and 同频合相.", execution="local"),
+    "agepoint": ToolDefinition("agepoint", "predict", "agepoint", None, AgePointInput, "Generate the 年龄推进点 / Age Point (Huber) timeline — Koch-house age cycle with natal contacts.", execution="local"),
+    "distributions": ToolDefinition("distributions", "predict", "distributions", None, DistributionsInput, "Generate the 界推运 / Distributions (分配法) timeline — Asc through the Egyptian bounds with distributor + participants.", execution="local"),
+    "mundane": ToolDefinition("mundane", "astro", "mundane", None, MundaneInput, "Generate the 世俗入宫盘 / mundane ingress chart — cast at the precise solar-term (春分/夏至/秋分/冬至) ingress moment of a year.", execution="local"),
     "solarreturn": ToolDefinition("solarreturn", "predict", "solarreturn", "/predict/solarreturn", PredictiveInput, "Compute the solar return chart."),
     "lunarreturn": ToolDefinition("lunarreturn", "predict", "lunarreturn", "/predict/lunarreturn", PredictiveInput, "Compute the lunar return chart."),
     "solararc": ToolDefinition("solararc", "predict", "solararc", "/predict/solararc", PredictiveInput, "Compute solar arc directions."),

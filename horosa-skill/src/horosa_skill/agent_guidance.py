@@ -467,6 +467,19 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     "hellen_chart": ASTRO_BIRTH_POLICY,
     "guolao_chart": ASTRO_BIRTH_POLICY,
     "germany": ASTRO_BIRTH_POLICY,
+    "agepoint": ASTRO_BIRTH_POLICY,
+    "distributions": ASTRO_BIRTH_POLICY,
+    "mundane": _policy(
+        intent="世俗入宫盘 / mundane ingress：在某年某节气(春分/夏至/秋分/冬至)的精确入宫时刻排世俗盘。",
+        required_context=["year", "入宫节气(春分/夏至/秋分/冬至)", "观测地点 lon/lat/zone"],
+        ask_if_missing=[
+            {"field": "year", "question": "要看哪一年的入宫盘？"},
+            {"field": "ingressTerm", "question": "用哪个入宫节气？", "options": ["春分（白羊入宫·年盘默认）", "夏至", "秋分", "冬至"]},
+            {"field": "location", "question": "观测地点的经纬度与时区？（通常用首都/关切地）"},
+        ],
+        safe_defaults=[{"field": "ingressTerm", "value": "春分", "meaning": "白羊入宫，世俗年盘的标准起点"}],
+        do_not_assume=["year", "location"],
+    ),
     "harmonic": _policy(
         intent="调波盘 / harmonic chart：本命各点黄经×调波数取调波位置，并找同频(合相)。",
         required_context=COMMON_BIRTH_FIELDS + ["harmonic number (调波数)"],

@@ -154,7 +154,15 @@ class FakeClient(HorosaApiClient):
         if endpoint == "/nongli/time":
             return {"birth": f"{payload['date']} {payload['time']}", "nongli": "丙午年二月十七"}
         if endpoint == "/jieqi/year":
-            return {"year": payload["year"], "jieqi24": [{"name": "春分"}, {"name": "夏至"}]}
+            # entries carry both `name` (jieqi_year tool) and `jieqi`+`time` (mundane ingress lookup).
+            term = (payload.get("jieqis") or [None])[0]
+            entries = [
+                {"name": "春分", "jieqi": "春分", "time": "2025-03-20 17:01:41"},
+                {"name": "夏至", "jieqi": "夏至", "time": "2025-06-21 10:42:00"},
+            ]
+            if term and term not in {"春分", "夏至"}:
+                entries.append({"name": term, "jieqi": term, "time": "2025-09-23 06:19:00"})
+            return {"year": payload["year"], "jieqi24": entries}
         if endpoint == "/liureng/gods":
             return {"liureng": {"layout": "ok", "fourColumns": {"year": {"ganzi": "丙午"}}}}
         if endpoint == "/liureng/runyear":
@@ -328,6 +336,20 @@ class FakeJsClient(HorosaJsEngineClient):
                     "[本命]\n顺 2152：海底珊瑚枝，月里栽丹桂。\n逆 3352：雨漲長江急，煙波萬頃潮。\n\n"
                     "[大运·歲運]\n1-10岁 卯：顺2544 戰勝頭歌回，論功先後處。 ／ 逆2944 清秋天宇闊，雁字寫長空。"
                 ),
+            }
+        if tool_name == "astroextra":
+            # v2.4.0 本命增补 (12分度 / 主宰星链 / 寿命格局) for chart + mundane astrochart exports.
+            return {
+                "data": {
+                    "dodeca": [{"id": "Sun", "natalLon": 10.0, "dodecaLon": 120.0}],
+                    "dispositor": [{"id": "Sun", "chain": ["Sun", "Mars"]}],
+                    "lifespan": {
+                        "isDiurnal": True,
+                        "hyleg": {"key": "sun", "lon": 10.0, "house": 1},
+                        "alcocoden": {"alcocoden": "mars", "aspectToHyleg": "三合", "baseYears": 80, "predictedYears": 75},
+                        "rulers": {"epikratetor": "sun", "oikodespotes": "mars", "kurios": "jupiter", "concordant": False},
+                    },
+                },
             }
         if tool_name == "heluo":
             return {

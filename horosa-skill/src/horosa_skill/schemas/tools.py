@@ -274,6 +274,33 @@ class HarmonicInput(BirthInput):
     orb: float | None = 2.0
 
 
+class AgePointInput(BirthInput):
+    # 年龄推进点 (Age Point / Huber): backend /predict/agepoint computes the whole Koch-house age-point
+    # cycle from the natal chart (no separate target time). Needs predictive on so the predict engine runs.
+    predictive: bool | None = True
+
+
+class DistributionsInput(BirthInput):
+    # 界推运 (Distributions / 分配法): backend /predict/dist computes the full-life term-distribution
+    # timeline (Asc by primary motion through the Egyptian bounds). Natal params only.
+    predictive: bool | None = True
+
+
+class MundaneInput(FlexibleModel):
+    # 世俗入宫盘 (mundane ingress chart): cast at the precise solar-term ingress moment of a given year.
+    # date/time are DERIVED from the ingress (jieqi) computation, so the inputs are year + 入宫节气 + place.
+    year: int | str
+    ingressTerm: str | None = "春分"  # 春分 / 夏至 / 秋分 / 冬至 (the four cardinal ingresses)
+    zone: str | None = "+08:00"
+    lat: str | None = None
+    lon: str | None = None
+    gpsLat: float | None = None
+    gpsLon: float | None = None
+    ad: int | None = 1
+    hsys: int | None = 0
+    tradition: bool | None = False
+
+
 class OtherBuInput(BirthInput):
     tradition: bool | None = False
     sign: str | None = "Aries"

@@ -1,3 +1,4 @@
+import { runAstroExtra } from './astroextra.js';
 import { runCanping } from './canping.js';
 import { runHeluo } from './heluo.js';
 import { runJinkou } from './jinkou.js';
@@ -14,6 +15,7 @@ const TOOL_RUNNERS = {
   tongshefa: runTongSheFa,
   canping: runCanping,
   heluo: runHeluo,
+  astroextra: runAstroExtra,
 };
 
 export function listTools() {

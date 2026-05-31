@@ -31,6 +31,13 @@ RUNTIME_UP = _server_up("127.0.0.1", 8899) and _server_up("127.0.0.1", 9999)
 requires_runtime = pytest.mark.skipif(
     not RUNTIME_UP, reason="Horosa runtime not listening on :9999 (Java) + :8899 (chart/ken)"
 )
+# Chart-only gate: harmonic / agepoint / distributions are pure Python chart-service computations
+# (/astroextra/*, /predict/*) and do NOT need the Java backend on :9999. Gating them on the chart
+# service alone lets them run whenever :8899 is up, not only when the full stack is.
+CHART_UP = _server_up("127.0.0.1", 8899)
+requires_chart = pytest.mark.skipif(
+    not CHART_UP, reason="Horosa chart service not listening on :8899"
+)
 
 
 class FakeLocalClient(HorosaApiClient):
@@ -327,7 +334,7 @@ def test_heluo_local_tool_runs_headless_engine(tmp_path) -> None:
     _assert_clean_export(result)
 
 
-@requires_runtime
+@requires_chart
 def test_harmonic_runs_via_chart_service(tmp_path) -> None:
     # 调波盘 is a backend chart-extra on the Python chart service (/astroextra/harmonic). 星阙 has no
     # aiExport contract for it, so the skill returns structured positions/conjunctions + a readable
@@ -347,6 +354,87 @@ def test_harmonic_runs_via_chart_service(tmp_path) -> None:
     assert data.get("chart")  # full chart obj (same shape as /chart) for downstream rendering
     assert "[起盘信息]" in data["snapshot_text"]
     assert "[调波位置]" in data["snapshot_text"]
+
+
+@requires_chart
+def test_agepoint_runs_via_chart_service(tmp_path) -> None:
+    # 年龄推进点 (Age Point / Huber): backend /predict/agepoint computes the Koch-house age cycle.
+    # 星阙 v2.4.0 西占技法. Needs only the chart service (:8899), not the Java backend.
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "agepoint",
+        {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "hsys": 1, "predictive": 1},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    data = result.data
+    assert isinstance(data["points"], list) and data["points"]
+    assert all(isinstance(p, dict) and "age" in p and "house" in p for p in data["points"])
+    assert "[年龄推进点（Age Point / Huber）]" in data["snapshot_text"]
+    _assert_clean_export(result)
+
+
+@requires_chart
+def test_distributions_runs_via_chart_service(tmp_path) -> None:
+    # 界推运 (Distributions / 分配法): backend /predict/dist — Asc through the Egyptian bounds.
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "distributions",
+        {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "hsys": 1, "predictive": 1},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    rows = result.data["distributions"]
+    assert isinstance(rows, list) and rows
+    assert all(isinstance(r, dict) and "distributor" in r and "startDate" in r for r in rows)
+    assert "[界推运（分配法 / Distributions）]" in result.data["snapshot_text"]
+    _assert_clean_export(result)
+
+
+@requires_chart
+def test_chart_carries_v240_natal_extras(tmp_path) -> None:
+    # 星阙 v2.4.0 西占: the astrochart export now carries 12分度 / 主宰星链 / 寿命格局, computed by the
+    # vendored JS astroextra formatter (Ptolemy hyleg engine) from the /chart response. (可能性 is data-
+    # dependent and intentionally not asserted.)
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "chart",
+        {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "hsys": 1, "tradition": False, "predictive": 0},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    snapshot = result.data["snapshot_text"]
+    for section in ("[12分度]", "[主宰星链]", "[寿命格局]"):
+        assert section in snapshot, section
+    # 寿命格局 must carry the Hyleg/Alcocoden lines from the vendored lifespan engine.
+    assert "生命主(Hyleg)" in snapshot
+    assert "寿主星(Alcocoden)" in snapshot
+    detected = (result.data.get("export_snapshot") or {}).get("section_titles_detected") or []
+    assert "12分度" in detected and "主宰星链" in detected and "寿命格局" in detected
+
+
+@requires_chart
+def test_mundane_ingress_chart(tmp_path) -> None:
+    # 世俗入宫盘 (mundane ingress, 星阙 v2.4.0): (1) /jieqi/year → the precise 春分 ingress moment,
+    # (2) /chart at that moment, (3) natal extras, (4) a [世俗入宫] head prepended to the astro snapshot.
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "mundane",
+        {"year": 2025, "ingressTerm": "春分", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gpsLat": 31.2167, "gpsLon": 121.4667, "hsys": 1},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    data = result.data
+    assert data["ingressTerm"] == "春分"
+    assert data["ingressMoment"]  # the precise solar-term ingress timestamp
+    snapshot = data["snapshot_text"]
+    assert "[世俗入宫]" in snapshot
+    assert "入宫节气：春分" in snapshot
+    # The body reuses the astrochart snapshot with the v2.4.0 natal extras.
+    assert "[起盘信息]" in snapshot
+    assert "[寿命格局]" in snapshot
+    detected = (data.get("export_snapshot") or {}).get("section_titles_detected") or []
+    assert "世俗入宫" in detected
 
 
 def test_cli_coerces_null_or_scalar_payload_instead_of_crashing(tmp_path) -> None:
