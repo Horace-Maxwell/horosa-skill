@@ -7,8 +7,33 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-05-31
+
+### Added — 星阙 v2.4.0 西占 (Western) techniques
+
+- **`agepoint` (年龄推进点 / Age Point · Huber).** New predictive tool backed by the chart service's
+  `/predict/agepoint` — the Koch-house age-point cycle (每宫 6 年, 72 年回归上升) with natal contacts.
+  Export contract `['年龄推进点（Age Point / Huber）']`.
+- **`distributions` (界推运 / Distributions · 分配法).** New predictive tool backed by `/predict/dist` —
+  the Ascendant's primary motion through the Egyptian bounds (distributor + participants timeline).
+  Export contract `['界推运（分配法 / Distributions）']`.
+- **`mundane` (世俗入宫盘 / mundane ingress chart).** New composite tool: it gets the precise solar-term
+  ingress moment (春分/夏至/秋分/冬至) for a year via `/jieqi/year`, casts a `/chart` at that instant, and
+  prepends a `[世俗入宫]` section to the astrochart snapshot. Export contract is the astrochart set led by
+  `世俗入宫`.
+- **本命增补: the astrochart export now carries 12分度 / 主宰星链 / 寿命格局.** The `chart` (and `mundane`)
+  astrochart snapshot is enriched with the v2.4.0 Dodekatemoria, dispositor chains, and Hyleg/Alcocoden
+  寿命格局. These are computed by a newly vendored 星阙 `divination/` engine subtree
+  (`horosa-core-js/src/vendor/divination/` — chartFacts + the Ptolemy lifespan engine + signs/dignities/
+  planets/houseMeanings) via a new `astroextra` JS formatter; the skill's Python layer formats them with
+  `_astro_msg`. Tool count is now **45** (was 42).
+
 ### Changed
 
+- **Offline runtime re-vendored to 星阙 v2.4.0.** `vendor/runtime-source` was re-synced from 星阙's
+  current tree so the bundled chart service carries `/predict/agepoint`, `/predict/dist`,
+  `/astroextra/greatconj`, and the v2.4.0-enriched `/chart`. (The ken engines came along too; existing
+  qimen/taiyi/jinkou behavior is unchanged.)
 - **Harness docs: installed an enforced Problem-Logging Protocol.** `AGENTS.md` now opens with a
   `🔴 MANDATORY: Problem-Logging Protocol` (first section, read-first) requiring every problem/gotcha/fix
   to be logged in `AGENTS.md` (+ `SKILL.md` when client-facing, + `CHANGELOG.md`, + a code-level guard

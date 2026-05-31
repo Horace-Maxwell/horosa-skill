@@ -232,6 +232,37 @@ are not part of the aiExport contract and will otherwise show up as unknown sect
   `timeAlg` default is **1** (clock time) to match 星阙's `fieldVal(f,'timeAlg',1)` — note `timeAlg===0`
   means 真太阳时 (the only value that triggers the longitude+EoT correction).
 
+### v2.4.0 西占 (Western) techniques — agepoint / distributions / mundane / natal extras
+
+These are 星阙 v2.4.0 additions; integrating them required **re-vendoring `vendor/runtime-source` from
+星阙 v2.4.0** (the bundled chart service then carries `/predict/agepoint`, `/predict/dist`,
+`/astroextra/greatconj`, and the enriched `/chart`). Patterns:
+
+- **`agepoint` / `distributions` are simple backend predict tools** (like harmonic): `_call_remote`
+  (`/predict/agepoint` → `{agepoint:{points:[…]}}`; `/predict/dist` → `{dist:[…]}`) + a Python snapshot
+  builder (`_build_agepoint_snapshot_text` / `_build_distributions_snapshot_text`, ports of 星阙's frontend
+  builders). Both endpoints are in `_PYTHON_CHART_ENDPOINTS`. Each has a single-section export contract.
+- **本命增补 (12分度 / 主宰星链 / 寿命格局) is JS-computed, Python-formatted.** 星阙 computes these in the
+  frontend (`astroAiSnapshot.js`), reading the chart object. The skill vendored the needed 星阙
+  `divination/` engine subtree into `horosa-core-js/src/vendor/divination/` (chartFacts + the Ptolemy
+  **lifespan** engine + `data/{signs,dignities,planets,houseMeanings}` + `engine/utils` — a clean 8-file
+  closure, no npm deps) and wrote `src/vendor/astroextra/natalExtras.js` + the `astroextra` JS tool that
+  return **structured** data (dodeca pairs / dispositor chains / the runLifespan res). `service.py`'s
+  `_attach_natal_extras` (only for `chart` + `mundane`) calls it via `js_client`, and
+  `_build_natal_extra_sections` formats the 3 sections with `_astro_msg` — so the JS does compute, Python
+  does the Chinese formatting (no `AstroText`/`whichTerm` vendored). They are inserted into the astrochart
+  snapshot before `可能性`; the `astrochart` preset gained the 3 sections.
+- **`mundane` (世俗入宫盘) is a composite** local tool: `/jieqi/year` (seedOnly, `jieqis:[term]`) → find
+  the `jieqi24` entry whose `jieqi==term` → its `time` is the precise ingress moment → `/chart` at that
+  instant → `_attach_natal_extras('mundane', …)` → prepend a `[世俗入宫]` head to the astrochart snapshot.
+  Input is **year + 入宫节气 + place** (date/time are derived, not user input).
+- **Re-vendoring `vendor/runtime-source` (the skill's copy) is allowed and READ-ONLY on 星阙.**
+  `sync_vendored_runtime_sources.sh` with `HOROSA_SOURCE_ROOT=<星阙 tree>` does it. After it, re-apply the
+  graceful-kentang-mount patch to the vendor's `astropy/websrv/kentang/registry.py` if you run the chart
+  service directly from `vendor/` (the **build** scripts patch the staged copy automatically; the raw
+  vendor hard-fails on `mount_kentang_services` because the kentang registry lists engines like `kinwangji`
+  that the skill doesn't vendor).
+
 ## Offline runtime packaging gotchas (these have bitten us)
 
 - **flatlib must survive the strip.** `scripts/package_runtime_payload.sh` must keep its
@@ -342,14 +373,14 @@ value-identical to 星阙:
 
 ## Day boundary + late-zi-hour — two independent global switches (upstream v2.2.1+)
 
-> **⏳ STATUS as of v0.7.0: PENDING / not yet wired in the skill.** This section is the **spec + upstream
-> reference** for an alignment that has **not** shipped. Concretely, today: the skill does **not** forward
-> `lateZiHourUseNextDay` (grep confirms 0 occurrences in `src/`), and the bundled ken engines predate
-> v2.2.1 (`vendor/runtime-source` kintaiyi lacks the `_get_after23`/`_get_hour_gan_next` markers). So the
-> shipped skill mirrors **pre-v2.2.1** behavior: the default `(after23=1, lateZi=1)` is correct, but the
-> non-default `hour==23` cases will not match until the alignment lands. **Do the v2.2.1 round** (re-sync
-> vendor ken → thread `lateZiHourUseNextDay` through every chart-flow payload + schema → rebuild both
-> runtimes → release) before treating the matrix below as live skill behavior.
+> **⏳ STATUS as of v0.8.0: PARTIALLY landed — runtime YES, skill-side wiring still PENDING.** As of the
+> v2.4.0 re-vendor, the bundled ken engine **does** carry the v2.2.1 lateZi code (`vendor/runtime-source`
+> kintaiyi now has the `_get_after23`/`_get_hour_gan_next` markers). But the **skill still does not forward
+> `lateZiHourUseNextDay`** (grep confirms 0 occurrences in `src/`), so the flag is **accepted-but-ignored**:
+> the default `(after23=1, lateZi=1)` is correct, but a non-default `hour==23` request won't take effect
+> until the skill threads the flag through every chart-flow payload + schema. **Remaining v2.2.1 round:**
+> thread `lateZiHourUseNextDay` through the payloads/schema (the runtime already supports it) — no re-sync
+> needed. Until then, treat the non-default rows of the matrix below as the target spec, not live behavior.
 
 This is **upstream 星阙 context** that the skill must mirror, not skill-local invariants. Stick to the
 self-check fixture below in tests/fakes; if a real backend call returns four pillars that disagree, the
@@ -465,3 +496,15 @@ A global stability pass hardened these; keep them true when you touch the releva
   the lock owner. `_pid_liveness` returns `unknown` on Windows (→ age-based reclaim); keep it that way.
 - **Report rendering is atomic.** `render_report` renders to a temp sibling then `os.replace()`s — never
   write a report format directly to its final `output_path` (a mid-render failure would corrupt it).
+
+## 西占(占星)新功能 — AI导出 / AI分析 / 命盘事盘储存 必查 (upstream 星阙)
+
+新增占星功能（判读/预测/辅盘盘）默认只渲染成 tab，**不会**自动接入 AI导出 / AI分析 / 命盘事盘储存——漏接 = 用户眼里「不全面/不稳定」。全链路接入点 + 缺口 + 已修/待修详见 `Horosa-Web/docs/西占新功能-AI导出与储存接入清单.md`。要点：
+
+- **判读类**(寿命/12分度/主宰链…) → 写 `utils/astroAiSnapshot.js` 的 section builder + `utils/aiExport.js` 段名并升 `AI_EXPORT_SETTINGS_VERSION`，才进 AI导出。
+- **预测类**(界推运/Huber…) → 仿 `AstroDirectMain.buildPrimaryDirectSnapshotText` 写 `buildXxxSnapshotText` + 在 `utils/aiAnalysisContext.regenerateChartTechniqueSnapshot` switch 加 case。
+- **希腊点/阿拉伯点** → 只要进 `AstroConst.LOTS` 就**自动**进 AI导出「希腊点」段(`buildLotsSection`)。
+- **新 chart-calc 参数(如 orbs/容许度)** → 四点存/取，否则**存盘后丢**：`models/user.js` 命盘 fields 定义 + 存档复制(~498，镜像 after23NewDay)、`utils/localcharts.js buildLocalChartRecord`、`models/astro.js` 重建 fields(~566)。**铁律：勿连带改坏 pdMethod/主限法。**
+- **DivinationChartShell 事盘** → `utils/localcases.js CASE_TYPE_OPTIONS` 注册 module；技法 `state.extra` 现已**通用存取**(`divinationCaseSave` 写 `payload.extra` + `applyRestoreIfAny` 读 `c.payload.extra`)，新 module 不必再逐个改 extra 逻辑。
+- **陷阱**：predictHook 的 hook prop 只管 UI 实时刷新；**AI 分析不遍历 hook、走专用 builder**——别以为传了 hook prop 就接入了 AI。
+- 本轮已修：世俗盘(mundane) 事盘注册 + 通用 extra 存取。待修(已在清单文档逐点写明，加性低回归、单独谨慎做)：orbs 随命盘存档、各新分析的 AI导出 builder。

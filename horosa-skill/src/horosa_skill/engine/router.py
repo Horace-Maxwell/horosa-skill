@@ -88,6 +88,12 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("hellen_chart")
     if _contains_any(text, ["量化盘", "germany", "midpoint", "中点盘"]):
         add("germany")
+    if _contains_any(text, ["年龄推进点", "年龄点", "age point", "agepoint", "huber", "胡伯"]):
+        add("agepoint")
+    if _contains_any(text, ["界推运", "分配法", "distributions", "distribution"]):
+        add("distributions")
+    if _contains_any(text, ["世俗盘", "世俗入宫", "入宫盘", "mundane", "ingress", "时代纪元"]):
+        add("mundane")
     if _contains_any(text, ["西洋游戏", "dice", "占星骰子", "otherbu"]):
         add("otherbu")
     if _contains_any(text, ["13宫", "chart13"]):

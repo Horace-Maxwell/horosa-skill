@@ -122,6 +122,9 @@ Use these user intents:
 - Shaozi Canping (邵子参评数 / 金锁银匙): `canping`
 - Heluo Lishu (河洛理数): `heluo`
 - Harmonic chart (调波盘): `harmonic`
+- Age Point / 年龄推进点 (Huber, v2.4.0): `agepoint`
+- Distributions / 界推运 (分配法, v2.4.0): `distributions`
+- Mundane ingress / 世俗入宫盘 (v2.4.0): `mundane` — input is year + 入宫节气 (春分/夏至/秋分/冬至) + place
 - Six Yao: `sixyao`
 - Gua description: `gua_desc`, `gua_meiyi`
 - Suzhan: `suzhan`
@@ -173,12 +176,13 @@ For gender-sensitive tools, include `gender`. For Bazi and Ziwei, include `timeA
 
 ### Day boundary + late-zi-hour rules (v2.2.1+) — two independent switches
 
-> **⏳ STATUS as of v0.7.0: PENDING — not yet wired in the skill.** The skill does **not** yet forward
-> `lateZiHourUseNextDay`, and the shipped offline runtime's ken engines predate v2.2.1. So today only the
-> default `(after23NewDay=1, lateZiHourUseNextDay=1)` is guaranteed correct; the non-default `hour==23`
-> rows below are the **target spec** for the pending v2.2.1 alignment, not current shipped behavior. Until
-> that ships, if you must be exact about an `hour==23` non-default case, tell the user it requires the
-> v2.2.1 runtime. (Maintainers: see the matching PENDING banner + the alignment to-do in `AGENTS.md`.)
+> **⏳ STATUS as of v0.8.0: runtime ready, skill wiring still PENDING.** The v0.8.0 offline runtime's ken
+> engine **does** carry the v2.2.1 lateZi code (re-vendored from 星阙 v2.4.0), but the skill **does not yet
+> forward `lateZiHourUseNextDay`** — so the flag is accepted-but-ignored. Today only the default
+> `(after23NewDay=1, lateZiHourUseNextDay=1)` is guaranteed correct; the non-default `hour==23` rows below
+> are the **target spec** for the remaining skill-side wiring, not current shipped behavior. If you must be
+> exact about an `hour==23` non-default case, tell the user that switch isn't threaded yet.
+> (Maintainers: see the matching banner + the remaining wiring to-do in `AGENTS.md`.)
 
 For ANY hour-23 input (`time` ∈ `23:00:00`–`23:59:59`), the four pillars depend on **two** independent settings. Treat them as separate flags — the user may have set one or both globally in 星阙 desktop, and predictive runs must mirror what the user sees on screen.
 
