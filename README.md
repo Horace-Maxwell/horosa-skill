@@ -34,7 +34,7 @@
 
 ## 最新稳定基线
 
-当前公开版本：`Horosa Skill 0.9.0`
+当前公开版本：`Horosa Skill 0.9.1`
 
 这一版的核心变化是**把奇门遁甲、太乙神数、金口诀（以及三式合一中的奇门 + 太乙）统一到星阙的 `ken` 计算后端**。`kinqimen` / `kintaiyi` / `kinjinkou` 三个引擎挂载在本地 Python chart 服务上，独占盘面计算权；headless JS 层不再自己起盘，而是把 ken 返回结果通过星阙的 `normalizeKinqimenData` / `normalizeBackendPan` / `normalizeKinjinkouData` 重新格式化成 `aiExport.js` 的 section 结构。结果是：Skill 的盘面与星阙桌面端走**同一套后端、逐值同源**，对外导出仍然是稳定的星阙式 `export_snapshot` / `export_format` contract。三个引擎已随离线 runtime 一起打包，macOS / Windows 均可断网运行。
 
@@ -44,19 +44,19 @@
 
 | 检查项 | 结果 |
 | --- | --- |
-| 可调用工具 | `59 / 59` |
+| 可调用工具 | `68 / 68` |
 | 奇门 / 太乙 / 金口 / 三式合一 计算后端 | 统一走 `ken`（`kinqimen` / `kintaiyi` / `kinjinkou`），盘面与星阙桌面端同源 |
 | 统摄法 / 十年大运 | headless 实现与星阙逐值对齐（京房八宫五行；`Math.round` / `Math.ceil` 一致；对照星阙 `decennials.test.js` 金标） |
-| 未确认参数时强制追问 | `46` 个技法工具触发 `must_ask_user=true` |
+| 未确认参数时强制追问 | `55` 个技法工具触发 `must_ask_user=true` |
 | 安全豁免工具 | `7` 个 registry / knowledge / parser 类工具直接可读 |
-| 全工具调用 | `59 / 59 ok=true` |
-| 本地 memory 写入 | `59 / 59` |
-| memory query / show | `59 / 59` |
-| report JSON artifact | `59 / 59` |
+| 全工具调用 | `68 / 68 ok=true` |
+| 本地 memory 写入 | `68 / 68` |
+| memory query / show | `68 / 68` |
+| report JSON artifact | `68 / 68` |
 | 星阙式导出结构 | 业务技法均带 `export_snapshot` / `export_format` |
 | 工程测试 | `190 / 190 pass`（含 ken 后端实时集成测试） |
 | GitHub CI | Linux/macOS 单测 + Windows OpenClaw smoke 通过 |
-| Release runtime | macOS / Windows `v0.9.0` assets（含 ken 引擎）已打包并校验 |
+| Release runtime | macOS / Windows `v0.9.1` assets（含 ken 引擎）已打包并校验 |
 
 关于 `solarreturn`、`lunarreturn`、`solararc`、`givenyear`、`profection`、`pd`、`pdchart`、`zr` 这批推运工具：当前版本已经复核为可用，不应再被 agent 标记为“Java `/predict/*` 不可用”。如果某个客户端仍然这样回答，优先检查它是否在使用旧 runtime、是否绕过 MCP 直接手算、是否没有运行 `doctor` / `openclaw-check --full`。
 
@@ -353,7 +353,7 @@ uv run horosa-skill agent guidance --tool liureng_gods --intent "当前时间起
 {
   "ok": true,
   "tool": "qimen",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "input_normalized": {},
   "data": {},
   "summary": [],
@@ -620,7 +620,7 @@ uv run horosa-skill client openclaw-setup --workspace ~/.openclaw/workspace
 
 - GitHub-first 离线 runtime 安装链
 - 奇门 / 太乙 / 金口 / 三式合一统一走星阙 `ken` 后端（`kinqimen` / `kintaiyi` / `kinjinkou`），盘面与星阙桌面端同源
-- macOS / Windows `v0.9.0` runtime release 资产（已随包内置 ken 引擎）
+- macOS / Windows `v0.9.1` runtime release 资产（已随包内置 ken 引擎）
 - 本地 MCP server 与 JSON-first CLI
 - 完整星阙 AI 导出 registry 与 parser
 - 42 个可调用工具的结构化稳定输出
@@ -744,7 +744,7 @@ uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace --fu
 
 ```json
 {
-  "version": "0.9.0",
+  "version": "0.9.1",
   "tool_count": 42,
   "records_count": 42,
   "errors_count": 0,

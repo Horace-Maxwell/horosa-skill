@@ -64,9 +64,10 @@ def main() -> None:
     write_text(payload_root / "runtime/windows/bundle/astrostudyboot.jar.placeholder", "")
     write_text(payload_root / "Horosa-Web/astropy/.keep", "")
     write_text(payload_root / "Horosa-Web/flatlib-ctrad2/flatlib/resources/swefiles/.keep", "")
-    # ken engines backing the chart-service qimen/taiyi/jinkou mounts + the 5 standalone 神数 engines
+    # ken engines backing the chart-service qimen/taiyi/jinkou mounts + all 14 神数 (5 standalone + kinastro)
     for ken_engine in ("kinqimen", "kintaiyi", "kinjinkou", "kinwangji", "kinwuzhao", "taixuanshifa", "jingjue", "shenyishu"):
         write_text(payload_root / "Horosa-Web/vendor" / ken_engine / ".keep", "")
+    write_text(payload_root / "Horosa-Web/vendor/kinastro/astro/.keep", "")
     write_text(
         payload_root / "runtime-manifest.json",
         json.dumps(build_manifest(args.version), ensure_ascii=False, indent=2) + "\n",

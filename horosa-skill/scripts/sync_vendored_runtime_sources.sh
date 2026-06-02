@@ -49,6 +49,7 @@ require_path "${SOURCE_ROOT}/Horosa-Web/vendor/kinwuzhao"
 require_path "${SOURCE_ROOT}/Horosa-Web/vendor/taixuanshifa"
 require_path "${SOURCE_ROOT}/Horosa-Web/vendor/jingjue"
 require_path "${SOURCE_ROOT}/Horosa-Web/vendor/shenyishu"
+require_path "${SOURCE_ROOT}/Horosa-Web/vendor/kinastro/astro"
 require_path "${SOURCE_ROOT}/Horosa-Web/astrostudyui/dist-file"
 require_path "${SOURCE_ROOT}/runtime/mac/python"
 require_path "${SOURCE_ROOT}/runtime/mac/java"
@@ -71,6 +72,14 @@ mkdir -p "${VENDOR_ROOT}/Horosa-Web/vendor"
 for ken_engine in kinqimen kintaiyi kinjinkou kinwangji kinwuzhao taixuanshifa jingjue shenyishu; do
   rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/vendor/${ken_engine}" "${VENDOR_ROOT}/Horosa-Web/vendor/"
 done
+# kinastro engine backs the 9 kinastro-* 神数 (shaozi/tieban/fendjing/beiji/nanji/chunzi/xianqin/
+# cetian/qizhengkin). Vendor only the engine (`astro/` + root .py + interpretations + LICENSE); the
+# ~26 MB tools/cities geocoding DB + the streamlit ui/frontend/docs are not needed for ganzhi 神数.
+rsync -a "${RSYNC_FILTERS[@]}" \
+  --exclude='tools' --exclude='ui' --exclude='frontend' --exclude='docs' --exclude='wiki' \
+  --exclude='examples' --exclude='tests' --exclude='styles' --exclude='scripts' \
+  --exclude='.streamlit' --exclude='.github' --exclude='.devcontainer' --exclude='.git' \
+  "${SOURCE_ROOT}/Horosa-Web/vendor/kinastro" "${VENDOR_ROOT}/Horosa-Web/vendor/"
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/runtime/mac/python" "${VENDOR_ROOT}/runtime/mac/"
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/runtime/mac/java" "${VENDOR_ROOT}/runtime/mac/"
 

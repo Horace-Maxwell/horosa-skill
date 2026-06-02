@@ -26,6 +26,8 @@ REQUIRED_ENTRIES = {
         "runtime-payload/Horosa-Web/vendor/taixuanshifa/",
         "runtime-payload/Horosa-Web/vendor/jingjue/",
         "runtime-payload/Horosa-Web/vendor/shenyishu/",
+        # kinastro engine backs the 9 kinastro-* 神数 (/shaozi/pan … /qizhengkin/pan).
+        "runtime-payload/Horosa-Web/vendor/kinastro/astro/",
         "runtime-payload/runtime/mac/python/bin/python3",
         "runtime-payload/runtime/mac/java/bin/java",
         "runtime-payload/runtime/mac/node/bin/node",
@@ -51,6 +53,8 @@ REQUIRED_ENTRIES = {
         "runtime-payload/Horosa-Web/vendor/taixuanshifa/",
         "runtime-payload/Horosa-Web/vendor/jingjue/",
         "runtime-payload/Horosa-Web/vendor/shenyishu/",
+        # kinastro engine backs the 9 kinastro-* 神数 (see darwin note).
+        "runtime-payload/Horosa-Web/vendor/kinastro/astro/",
         "runtime-payload/runtime/windows/python/python.exe",
         "runtime-payload/runtime/windows/java/bin/java.exe",
         "runtime-payload/runtime/windows/node/node.exe",

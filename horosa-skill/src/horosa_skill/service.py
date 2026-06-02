@@ -96,6 +96,15 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "taixuan": "taixuan",
     "jingjue": "jingjue",
     "shenyishu": "shenyishu",
+    "shaozi": "shaozi",
+    "tieban": "tieban",
+    "fendjing": "fendjing",
+    "beiji": "beiji",
+    "nanji": "nanji",
+    "chunzi": "chunzi",
+    "xianqin": "xianqin",
+    "cetian": "cetian",
+    "qizhengkin": "qizhengkin",
     "mundane": "mundane",
     "firdaria": "firdaria",
     "decennials": "decennials",
@@ -141,6 +150,16 @@ _PYTHON_CHART_ENDPOINTS = {
     "/taixuan/pan",
     "/jingjue/pan",
     "/shenyishu/pan",
+    # 9 kinastro-* 神数
+    "/shaozi/pan",
+    "/tieban/pan",
+    "/fendjing/pan",
+    "/beiji/pan",
+    "/nanji/pan",
+    "/chunzi/pan",
+    "/xianqin/pan",
+    "/cetian/pan",
+    "/qizhengkin/pan",
 }
 
 
@@ -2228,11 +2247,22 @@ def _build_persiandirected_snapshot_text(response: dict[str, Any]) -> str:
 
 
 _SHENSHU_ENDPOINTS = {
+    # 5 standalone engines
     "wangji": "/wangji/pan",
     "wuzhao": "/wuzhao/pan",
     "taixuan": "/taixuan/pan",
     "jingjue": "/jingjue/pan",
     "shenyishu": "/shenyishu/pan",
+    # 9 kinastro-* engines (shared kinastro engine)
+    "shaozi": "/shaozi/pan",
+    "tieban": "/tieban/pan",
+    "fendjing": "/fendjing/pan",
+    "beiji": "/beiji/pan",
+    "nanji": "/nanji/pan",
+    "chunzi": "/chunzi/pan",
+    "xianqin": "/xianqin/pan",
+    "cetian": "/cetian/pan",
+    "qizhengkin": "/qizhengkin/pan",
 }
 
 
@@ -4132,6 +4162,10 @@ class HorosaSkillService:
             "after23NewDay": payload.get("after23NewDay", 1),
             "lateZiHourUseNextDay": payload.get("lateZiHourUseNextDay", 1),
         }
+        # cetian / qizhengkin / xianqin also read gender + place; forward them when present (no-op for the rest).
+        for extra in ("gender", "lat", "lon", "gpsLat", "gpsLon", "zone"):
+            if payload.get(extra) is not None:
+                remote_payload[extra] = payload.get(extra)
         options = payload.get("options")
         if isinstance(options, dict):
             remote_payload.update(options)

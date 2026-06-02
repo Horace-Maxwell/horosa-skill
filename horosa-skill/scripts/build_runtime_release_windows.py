@@ -229,6 +229,13 @@ def build() -> Path:
     (horosa_web_root / "vendor").mkdir(parents=True, exist_ok=True)
     for ken_engine in ("kinqimen", "kintaiyi", "kinjinkou", "kinwangji", "kinwuzhao", "taixuanshifa", "jingjue", "shenyishu"):
         rsync_copy(SOURCE_ROOT / "Horosa-Web" / "vendor" / ken_engine, horosa_web_root / "vendor" / "")
+    # kinastro engine for the 9 kinastro-* 神数 (engine only; drop tools/cities + streamlit ui/docs).
+    if (SOURCE_ROOT / "Horosa-Web" / "vendor" / "kinastro").is_dir():
+        rsync_copy(
+            SOURCE_ROOT / "Horosa-Web" / "vendor" / "kinastro",
+            horosa_web_root / "vendor" / "",
+            extra_excludes=["tools", "ui", "frontend", "docs", "wiki", "examples", "tests", "styles", "scripts", ".streamlit", ".github", ".devcontainer", ".git"],
+        )
     _make_kentang_mount_graceful(horosa_web_root / "astropy" / "websrv" / "kentang" / "registry.py")
     rsync_copy(SOURCE_ROOT / "Horosa-Web" / "flatlib-ctrad2" / "flatlib", horosa_web_root / "flatlib-ctrad2" / "")
     if (SOURCE_ROOT / "Horosa-Web" / "flatlib-ctrad2" / "LICENSE").is_file():

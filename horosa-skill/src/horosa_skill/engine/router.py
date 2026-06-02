@@ -123,6 +123,24 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("jingjue")
     if _contains_any(text, ["神乙数", "神乙", "shenyishu"]):
         add("shenyishu")
+    if _contains_any(text, ["邵子神数", "邵子数", "shaozi"]):
+        add("shaozi")
+    if _contains_any(text, ["铁板神数", "铁板", "tieban"]):
+        add("tieban")
+    if _contains_any(text, ["分经神数", "两头钳", "fendjing", "fenjing"]):
+        add("fendjing")
+    if _contains_any(text, ["北极神数", "北极经", "beiji"]):
+        add("beiji")
+    if _contains_any(text, ["南极神数", "南极经", "nanji"]):
+        add("nanji")
+    if _contains_any(text, ["淳子神数", "淳子", "chunzi"]):
+        add("chunzi")
+    if _contains_any(text, ["演禽", "禽星", "xianqin", "七政演禽"]):
+        add("xianqin")
+    if _contains_any(text, ["策天", "飞星紫微", "策天飞星", "cetian"]):
+        add("cetian")
+    if _contains_any(text, ["张果星宗", "张果", "七政四余钦", "qizhengkin", "qizheng"]):
+        add("qizhengkin")
     if _contains_any(text, ["西洋游戏", "dice", "占星骰子", "otherbu"]):
         add("otherbu")
     if _contains_any(text, ["13宫", "chart13"]):

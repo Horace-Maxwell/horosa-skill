@@ -7,6 +7,24 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-06-02
+
+### Added — the 9 kinastro-* 神数 (total now 68; all 14 神数 complete)
+
+- **All 9 remaining kinastro-* 神数 are now shipped**, completing the 14-技法 神数 family:
+  `shaozi` (邵子神数), `tieban` (铁板神数), `fendjing` (分经神数·两头钳), `beiji` (北极神数),
+  `nanji` (南极神数), `chunzi` (淳子神数), `xianqin` (演禽), `cetian` (策天飞星·紫微),
+  `qizhengkin` (七政四余·张果星宗). Each is a kentang engine mounted on the chart service that
+  returns a backend-built `snapshot` matching its export preset (same pattern as the 5 standalone
+  神数; cetian/qizhengkin/xianqin also take gender + place).
+- These were **deferred in v0.9.0** on the assumption the shared `kinastro` engine was unusable
+  offline. That was wrong: the engine imports cleanly under the bundled Python and every srv builds a
+  `snapshot` — the v0.9.0 live probe only returned `basic`-only data because the *running* app was an
+  older build. The offline runtime now vendors the kinastro **engine only** (`astro/` + root modules,
+  ~31 MB) — the 26 MB `tools/cities` geocoding DB + the streamlit ui/docs are excluded (not needed for
+  ganzhi-based 神数). Verified in-process: all 9 produce snapshots under the trimmed bundled engine,
+  and the kentang mount sim mounts all 17 engines (3 ken + 14 神数).
+
 ## [0.9.0] - 2026-06-02
 
 ### Added — 星阙 v2.5.0 推运 (7) + 卜卦/择日 + 5 standalone 神数 (14 new tools, total now 59)
