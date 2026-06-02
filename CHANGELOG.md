@@ -7,6 +7,44 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-06-02
+
+### Added — 星阙 v2.5.0 推运 (7) + 卜卦/择日 + 5 standalone 神数 (14 new tools, total now 59)
+
+- **v2.5.0 推运 (7 techniques).** Completes the predictive set:
+  - `jaynesprog` (赤纬推运 / Jayne Declination), `vedicprog` (恒星推运 / Vedic Sidereal),
+    `planetaryarc` (行星弧 / Planetary Arc) — backend predict tools (`/astroextra/jaynesprog`,
+    `/astroextra/progressions` sidereal, `/predict/planetaryarc`) + Python snapshot builders.
+  - `planetaryages` (行星年龄 / Ages of Man), `yearsystem129` (129年系统), `persiandirected`
+    (波斯向运 / Persian Directed, 1°/年) — frontend builders ported to Python (read pre-computed chart
+    data / pure arithmetic), reusing `_astro_msg` / `_aspect_label`.
+  - `balbillus` (Balbillus 129年系统 · 旺距削减主限) — the 247-line recursive algorithm is vendored as
+    JS verbatim (`horosa-core-js/src/vendor/astroextra/balbillus.js` + a minimal `progConst.js` stub +
+    `moment`) and dispatched through a new `progextra` JS tool.
+  - Each has a single-section export contract.
+- **`horary` (卜卦) + `election` (择日).** 星阙's entire `divination/` engine (~3200 lines of pure logic)
+  is vendored into `horosa-core-js/src/vendor/divination/`. `horary` runs radicality / significators (14
+  question categories) / perfection / moon story / verdict / timing; `election` runs hard flags / per-topic
+  rule packs (28 topics) / scoring / recommendations. Both cast a traditional chart at the question/candidate
+  moment and read back the JS-resolved category/topic (unknown → general/marriage). 9- and 7-section export
+  contracts mirroring 星阙's `aiExport.js`.
+- **5 standalone 神数 (`wangji` 皇极经世 / `wuzhao` 五兆 / `taixuan` 太玄 / `jingjue` 京氏易 /
+  `shenyishu` 神乙数).** kentang engines mounted on the chart service; each returns a backend-built
+  `snapshot` whose sections already match the export preset, so the skill just calls `/{key}/pan` and
+  exports it. The offline runtime now vendors these 5 engines (`sync_vendored_runtime_sources.sh`).
+  The 9 kinastro-* 神数 (shaozi/tieban/fendjing/beiji/nanji/chunzi/xianqin/cetian/qizhengkin) are
+  **deferred** — they share a ~61 MB engine and return degraded data on the current chart service
+  (documented in AGENTS.md).
+
+### Changed
+
+- **Offline runtime re-vendored to 星阙 v2.5.0** so the bundled chart service carries the v2.5.0 predict
+  endpoints (`/astroextra/jaynesprog`, `/astroextra/progressions`, `/predict/planetaryarc`) and the 5
+  standalone 神数 kentang mounts. The kentang graceful-mount patch now mounts those 5 (engines vendored)
+  while still skipping the 9 kinastro-* (engine not vendored).
+- **`_PYTHON_CHART_ENDPOINTS`** gained the v2.5.0 predict endpoints + the 5 神数 `/{key}/pan` mounts
+  (kentang mounts only reach the chart service :8899 when listed here).
+
 ## [0.8.0] - 2026-05-31
 
 ### Added — 星阙 v2.4.0 西占 (Western) techniques
