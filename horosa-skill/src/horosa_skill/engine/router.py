@@ -94,6 +94,14 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("distributions")
     if _contains_any(text, ["世俗盘", "世俗入宫", "入宫盘", "mundane", "ingress", "时代纪元"]):
         add("mundane")
+    if _contains_any(text, ["赤纬推运", "jayne", "jaynesprog"]):
+        add("jaynesprog")
+    if _contains_any(text, ["恒星推运", "vedic", "vedicprog", "印度推运"]):
+        add("vedicprog")
+    if _contains_any(text, ["行星弧", "planetary arc", "planetaryarc", "月亮弧"]):
+        add("planetaryarc")
+    if _contains_any(text, ["行星年龄", "人生七阶", "ages of man", "planetaryages"]):
+        add("planetaryages")
     if _contains_any(text, ["西洋游戏", "dice", "占星骰子", "otherbu"]):
         add("otherbu")
     if _contains_any(text, ["13宫", "chart13"]):
