@@ -3,6 +3,7 @@ import { runCanping } from './canping.js';
 import { runHeluo } from './heluo.js';
 import { runJinkou } from './jinkou.js';
 import { runLiureng } from './liureng.js';
+import { runProgExtra } from './progextra.js';
 import { runQimen } from './qimen.js';
 import { runTaiyi } from './taiyi.js';
 import { runTongSheFa } from './tongshefa.js';
@@ -16,6 +17,7 @@ const TOOL_RUNNERS = {
   canping: runCanping,
   heluo: runHeluo,
   astroextra: runAstroExtra,
+  progextra: runProgExtra,
 };
 
 export function listTools() {
