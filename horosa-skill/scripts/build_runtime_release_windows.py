@@ -203,6 +203,11 @@ def build() -> Path:
     require_path(SOURCE_ROOT / "Horosa-Web" / "vendor" / "kinqimen")
     require_path(SOURCE_ROOT / "Horosa-Web" / "vendor" / "kintaiyi")
     require_path(SOURCE_ROOT / "Horosa-Web" / "vendor" / "kinjinkou")
+    require_path(SOURCE_ROOT / "Horosa-Web" / "vendor" / "kinwangji")
+    require_path(SOURCE_ROOT / "Horosa-Web" / "vendor" / "kinwuzhao")
+    require_path(SOURCE_ROOT / "Horosa-Web" / "vendor" / "taixuanshifa")
+    require_path(SOURCE_ROOT / "Horosa-Web" / "vendor" / "jingjue")
+    require_path(SOURCE_ROOT / "Horosa-Web" / "vendor" / "shenyishu")
     require_path(SOURCE_ROOT / "Horosa-Web" / "astrostudyui" / "dist-file")
     require_path(SOURCE_ROOT / "Horosa-Web" / "astrostudyui" / "scripts" / "warmHorosaRuntime.js")
     require_path(SOURCE_ROOT / "Horosa-Web" / "scripts" / "repairEmbeddedPythonRuntime.py")
@@ -220,9 +225,9 @@ def build() -> Path:
     (horosa_web_root / "scripts").mkdir(parents=True, exist_ok=True)
 
     rsync_copy(SOURCE_ROOT / "Horosa-Web" / "astropy", horosa_web_root / "")
-    # ken engines for the chart-service qimen/taiyi/jinkou mounts.
+    # ken engines for the chart-service qimen/taiyi/jinkou mounts + the 5 standalone 神数 engines.
     (horosa_web_root / "vendor").mkdir(parents=True, exist_ok=True)
-    for ken_engine in ("kinqimen", "kintaiyi", "kinjinkou"):
+    for ken_engine in ("kinqimen", "kintaiyi", "kinjinkou", "kinwangji", "kinwuzhao", "taixuanshifa", "jingjue", "shenyishu"):
         rsync_copy(SOURCE_ROOT / "Horosa-Web" / "vendor" / ken_engine, horosa_web_root / "vendor" / "")
     _make_kentang_mount_graceful(horosa_web_root / "astropy" / "websrv" / "kentang" / "registry.py")
     rsync_copy(SOURCE_ROOT / "Horosa-Web" / "flatlib-ctrad2" / "flatlib", horosa_web_root / "flatlib-ctrad2" / "")

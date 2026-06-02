@@ -79,16 +79,26 @@ The repository now produces a real Windows runtime archive:
 - local wheels unpacked into the payload (must include the ken deps: `bidict`, `numpy`,
   `kerykeion`, `ephem`, `pendulum`)
 - ken engines under `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}`
+- **(v0.9.0+) the 5 standalone 神数 engines** under
+  `Horosa-Web/vendor/{kinwangji,kinwuzhao,taixuanshifa,jingjue,shenyishu}`
 - `astrostudyboot.jar`
 - `horosa-core-js`
 - runtime manifest and startup scripts
 
-`build_runtime_release_windows.py` bundles the three ken engines and patches the staged
-`kentang/registry.py` mount so the chart service still boots when other (out-of-scope) ken
-engines are absent; `start_horosa_local.ps1` puts `Horosa-Web/vendor` on `PYTHONPATH` so
-`import kinqimen` / `kintaiyi` / `kinjinkou` resolve.
+`build_runtime_release_windows.py` must bundle the three ken engines **+ the 5 standalone 神数
+engines** (kinwangji/kinwuzhao/taixuanshifa/jingjue/shenyishu — mirror the mac
+`package_runtime_payload.sh` engine loop) and patch the staged `kentang/registry.py` mount so the
+chart service still boots when the 9 out-of-scope kinastro-* 神数 engines are absent;
+`start_horosa_local.ps1` puts `Horosa-Web/vendor` on `PYTHONPATH` so `import kinqimen` / `kintaiyi`
+/ `kinjinkou` / `kinwangji` / `kinwuzhao` / `taixuanshifa` / `jingjue` / `shenyishu` resolve.
 
-In this macOS development environment, Windows verification is structural rather than native-process execution. The release zip is built and checked for required contents here, and should still be validated on a real Windows machine before public release sign-off — in particular, confirm the chart service boots and `/qimen/pan` · `/taiyi/pan` · `/jinkou/pan` respond.
+> **⚠️ v0.9.0 Windows sync TODO (maintainer):** the Windows builder + `verify_runtime_release.py`
+> Windows entry list were updated to require the 5 神数 engines, but the Windows build itself was NOT
+> re-run on this macOS dev box. Before the Windows v0.9.0 zip ships, confirm
+> `build_runtime_release_windows.py` actually copies all 8 engines and that
+> `/wangji/pan` · `/wuzhao/pan` · `/taixuan/pan` · `/jingjue/pan` · `/shenyishu/pan` respond.
+
+In this macOS development environment, Windows verification is structural rather than native-process execution. The release zip is built and checked for required contents here, and should still be validated on a real Windows machine before public release sign-off — in particular, confirm the chart service boots and `/qimen/pan` · `/taiyi/pan` · `/jinkou/pan` + the 5 神数 `/{key}/pan` respond.
 
 ## Example Manifest
 
