@@ -286,6 +286,36 @@ class DistributionsInput(BirthInput):
     predictive: bool | None = True
 
 
+class JaynesProgInput(BirthInput):
+    # Jayne 赤纬推运 (v2.5.0): secondary progression to a target date, then declination parallels.
+    predictive: bool | None = True
+    targetDate: str | None = None
+    targetTime: str | None = "12:00:00"
+    orb: float | None = 1.0
+
+
+class VedicProgInput(BirthInput):
+    # 恒星推运 Vedic (v2.5.0): progressions under the sidereal zodiac.
+    predictive: bool | None = True
+    targetDate: str | None = None
+    targetTime: str | None = "12:00:00"
+    orb: float | None = 1.5
+
+
+class PlanetaryArcInput(BirthInput):
+    # 行星弧 (v2.5.0): directs the whole chart by the secondary-progressed arc of arcSource (default Moon).
+    predictive: bool | None = True
+    datetime: str | None = None
+    asporb: float | None = 1.0
+    arcSource: str | None = "Moon"
+
+
+class PlanetaryAgesInput(BirthInput):
+    # 行星年龄 (v2.5.0): Ptolemy seven ages — reads the natal chart, marks the band of asOf (default: none).
+    predictive: bool | None = False
+    asOf: str | None = None
+
+
 class MundaneInput(FlexibleModel):
     # 世俗入宫盘 (mundane ingress chart): cast at the precise solar-term ingress moment of a given year.
     # date/time are DERIVED from the ingress (jieqi) computation, so the inputs are year + 入宫节气 + place.

@@ -82,6 +82,10 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "germany": "germany",
     "agepoint": "agepoint",
     "distributions": "distributions",
+    "jaynesprog": "jaynesprog",
+    "vedicprog": "vedicprog",
+    "planetaryarc": "planetaryarc",
+    "planetaryages": "planetaryages",
     "mundane": "mundane",
     "firdaria": "firdaria",
     "decennials": "decennials",
@@ -114,6 +118,9 @@ _PYTHON_CHART_ENDPOINTS = {
     "/astroextra/harmonic",
     "/predict/agepoint",
     "/predict/dist",
+    "/astroextra/jaynesprog",
+    "/astroextra/progressions",
+    "/predict/planetaryarc",
     "/jieqi/year",
     "/qimen/pan",
     "/taiyi/pan",
@@ -1953,6 +1960,133 @@ def _build_distributions_snapshot_text(response: dict[str, Any]) -> str:
     return _render_snapshot_text([("界推运（分配法 / Distributions）", "\n".join(lines))])
 
 
+def _aspect_label(deg: Any) -> str:
+    mapped = ASTRO_TEXT_MAP.get(f"Asp{deg}")
+    return mapped if mapped else f"{deg}°"
+
+
+def _fmt_num(value: Any, digits: int = 3) -> str:
+    try:
+        return f"{round(float(value), digits)}"
+    except (TypeError, ValueError):
+        return f"{value}" if value is not None else ""
+
+
+_PROGRESSION_EVENT_POINTS = ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Asc", "MC"]
+
+
+def _build_jaynesprog_snapshot_text(response: dict[str, Any]) -> str:
+    # Port of 星阙 AstroJaynesProgressions.buildJaynesProgSnapshotText. response = {methods:[{method,parallels}]}.
+    methods = response.get("methods") if isinstance(response.get("methods"), list) else []
+    sec = next((m for m in methods if isinstance(m, dict) and m.get("method") == "secondary"), methods[0] if methods else None)
+    parallels = sec.get("parallels") if isinstance(sec, dict) and isinstance(sec.get("parallels"), list) else []
+    if not parallels:
+        return _render_snapshot_text([("赤纬推运（Jayne Declination）", "（本盘无赤纬推运数据）")])
+    type_label = {"parallel": "平行", "contraparallel": "反平行"}
+    lines = [
+        "Charles Jayne 赤纬推运：推运后看赤纬平行/反平行（下表为二次推运，截至目标日）。",
+        "",
+        "| 推运点 | 类型 | 本命点 | 误差 |",
+        "| --- | --- | --- | --- |",
+    ]
+    for p in parallels[:80]:
+        if not isinstance(p, dict):
+            continue
+        lines.append(f"| {_astro_msg(p.get('a'))} | {type_label.get(p.get('type'), p.get('type'))} | {_astro_msg(p.get('b'))} | {_fmt_num(p.get('orb'), 3)} |")
+    return _render_snapshot_text([("赤纬推运（Jayne Declination）", "\n".join(lines))])
+
+
+def _build_vedicprog_snapshot_text(response: dict[str, Any]) -> str:
+    # Port of 星阙 AstroVedicProgressions.buildVedicProgSnapshotText. response = {methods:[{method,positions}]}.
+    methods = response.get("methods") if isinstance(response.get("methods"), list) else []
+    sec = next((m for m in methods if isinstance(m, dict) and m.get("method") == "secondary"), methods[0] if methods else None)
+    positions = sec.get("positions") if isinstance(sec, dict) and isinstance(sec.get("positions"), list) else []
+    rows = [p for p in positions if isinstance(p, dict) and p.get("id") in _PROGRESSION_EVENT_POINTS]
+    if not rows:
+        return _render_snapshot_text([("恒星推运（Vedic Sidereal）", "（本盘无恒星推运数据）")])
+    lines = [
+        "二次/三次/小限推运在恒星黄道（sidereal）下计算；下表为二次推运（截至目标日）。",
+        "",
+        "| 点 | 恒星推运位置 |",
+        "| --- | --- |",
+    ]
+    for p in rows:
+        deg, minute = _split_degree(p.get("signlon", p.get("lon")))
+        lines.append(f"| {_astro_msg(p.get('id'))} | {_astro_msg(p.get('sign'))} {deg}˚{minute}分 |")
+    return _render_snapshot_text([("恒星推运（Vedic Sidereal）", "\n".join(lines))])
+
+
+def _build_planetaryarc_snapshot_text(response: dict[str, Any]) -> str:
+    # Port of 星阙 AstroPlanetaryArc.formatArcSnapshot. response = {chart:{aspects:[{directId,objects:[{aspect,natalId,delta}]}]}}.
+    chart = response.get("chart") if isinstance(response.get("chart"), dict) else {}
+    aspects = chart.get("aspects") if isinstance(chart.get("aspects"), list) else []
+    rows: list[str] = []
+    for row in aspects:
+        if not isinstance(row, dict):
+            continue
+        for o in row.get("objects") or []:
+            if len(rows) >= 120 or not isinstance(o, dict):
+                continue
+            delta = o.get("delta")
+            delta_text = f"{round(float(delta) * 1000) / 1000}" if isinstance(delta, (int, float)) else ""
+            rows.append(f"| {_astro_msg(row.get('directId'))} | {_aspect_label(o.get('aspect'))} | {_astro_msg(o.get('natalId'))} | {delta_text} |")
+    if not rows:
+        return _render_snapshot_text([("行星弧（Planetary Arc）", "（本盘无行星弧数据）")])
+    body = ["行星弧(默认月亮弧)：以所选天体的二次推运移动量为弧推进全盘，看向运星对本命的相位。", "", "| 向运星 | 相位 | 本命星 | 误差 |", "| --- | --- | --- | --- |"] + rows
+    return _render_snapshot_text([("行星弧（Planetary Arc）", "\n".join(body))])
+
+
+# 托勒密人生七阶 (Ports of Man) — fixed age bands, each ruled by a classical planet (= 星阙 PLANETARY_AGES).
+_PLANETARY_AGES = [
+    ("Moon", 0, 4), ("Mercury", 4, 14), ("Venus", 14, 22), ("Sun", 22, 41),
+    ("Mars", 41, 56), ("Jupiter", 56, 68), ("Saturn", 68, None),
+]
+
+
+def _years_between(birth: str, as_of: str | None) -> float | None:
+    # birth/as_of are "YYYY-MM-DD[ HH:MM:SS]"; returns fractional years, or None if unparseable / no as_of.
+    if not birth or not as_of:
+        return None
+    import datetime as _dt
+
+    def _parse(s: str) -> _dt.datetime | None:
+        s = f"{s}".strip().replace("/", "-")
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+            try:
+                return _dt.datetime.strptime(s, fmt)
+            except ValueError:
+                continue
+        return None
+
+    b, a = _parse(birth), _parse(as_of)
+    if b is None or a is None:
+        return None
+    return (a - b).days / 365.2425
+
+
+def _build_planetaryages_snapshot_text(response: dict[str, Any], as_of: str | None) -> str:
+    # Port of 星阙 planetaryAges.buildPlanetaryAgesSnapshotText (reads the chart; pure JS → pure Python).
+    chart = response.get("chart") if isinstance(response.get("chart"), dict) else {}
+    params = response.get("params") if isinstance(response.get("params"), dict) else (chart.get("params") if isinstance(chart.get("params"), dict) else {})
+    objects = chart.get("objects") if isinstance(chart.get("objects"), list) else []
+    obj_by_id = {o.get("id"): o for o in objects if isinstance(o, dict)}
+    cur_age = _years_between(params.get("birth", ""), as_of)
+    lines = ["托勒密人生七阶：各年龄带由一颗古典行星主管，当前年龄所落之带为主运行星。"]
+    if cur_age is not None:
+        lines.append(f"当前年龄：约 {int(cur_age)} 岁")
+    lines += ["", "| 年龄带 | 主管 | 本命落座 | 当前 |", "| --- | --- | --- | --- |"]
+    for planet, frm, to in _PLANETARY_AGES:
+        rng = f"{frm}+岁" if to is None else f"{frm}-{to}岁"
+        active = cur_age is not None and cur_age >= frm and (to is None or cur_age < to)
+        o = obj_by_id.get(planet)
+        pos = "-"
+        if isinstance(o, dict) and o.get("sign"):
+            signlon = o.get("signlon")
+            pos = _astro_msg(o.get("sign")) + (f" {int(signlon)}°" if signlon is not None else "")
+        lines.append(f"| {rng} | {_astro_msg(planet)} | {pos} | {'●' if active else ''} |")
+    return _render_snapshot_text([("行星年龄（Ages of Man）", "\n".join(lines))])
+
+
 def _build_firdaria_snapshot_text(response: dict[str, Any]) -> str:
     chart = response.get("chart", {}) if isinstance(response, dict) else {}
     params = response.get("params", {}) if isinstance(response, dict) else {}
@@ -3728,6 +3862,69 @@ class HorosaSkillService:
         result["export_snapshot"] = self._augment_export_payload(technique="distributions", snapshot_text=snapshot_text)
         return result
 
+    def _progression_target(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # These v2.5.0 progressions are "as of a target date". Default the target to the chart date if
+        # the agent didn't pass one (a valid, if trivial, request); the agent should pass targetDate for
+        # a meaningful analysis horizon.
+        return {
+            "targetDate": payload.get("targetDate") or payload.get("date"),
+            "targetTime": payload.get("targetTime") or "12:00:00",
+        }
+
+    def _run_jaynesprog_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # Jayne 赤纬推运 (v2.5.0): /astroextra/jaynesprog — secondary progression + declination parallels.
+        remote_payload = {**payload, **self._progression_target(payload), "orb": payload.get("orb", 1.0)}
+        response = self._call_remote("/astroextra/jaynesprog", remote_payload)
+        snapshot_text = _build_jaynesprog_snapshot_text(response)
+        return {
+            "methods": response.get("methods", []),
+            "raw": response,
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="jaynesprog", snapshot_text=snapshot_text),
+        }
+
+    def _run_vedicprog_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 恒星推运 Vedic (v2.5.0): /astroextra/progressions with zodiacal=1 (sidereal).
+        remote_payload = {**payload, **self._progression_target(payload), "zodiacal": 1, "orb": payload.get("orb", 1.5)}
+        response = self._call_remote("/astroextra/progressions", remote_payload)
+        snapshot_text = _build_vedicprog_snapshot_text(response)
+        return {
+            "methods": response.get("methods", []),
+            "raw": response,
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="vedicprog", snapshot_text=snapshot_text),
+        }
+
+    def _run_planetaryarc_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 行星弧 (v2.5.0): /predict/planetaryarc — directs the whole chart by the arc of arcSource (default Moon).
+        remote_payload = {
+            **payload,
+            "datetime": payload.get("datetime") or payload.get("targetDate") or payload.get("date"),
+            "asporb": payload.get("asporb", 1),
+            "arcSource": payload.get("arcSource", "Moon"),
+        }
+        response = self._call_remote("/predict/planetaryarc", remote_payload)
+        snapshot_text = _build_planetaryarc_snapshot_text(response)
+        return {
+            "chart": response.get("chart"),
+            "raw": response,
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="planetaryarc", snapshot_text=snapshot_text),
+        }
+
+    def _run_planetaryages_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 行星年龄 (v2.5.0): Ptolemy seven ages of man — reads the natal chart, marks the current band.
+        chart_payload = {**payload, "predictive": 0}
+        response = self._call_remote("/chart", chart_payload)
+        as_of = payload.get("asOf") or payload.get("targetDate")
+        snapshot_text = _build_planetaryages_snapshot_text(response, as_of)
+        return {
+            "chart": response.get("chart"),
+            "raw": response,
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="planetaryages", snapshot_text=snapshot_text),
+        }
+
     def _run_mundane_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 世俗入宫盘 (mundane ingress): (1) get the precise solar-term ingress moment for the year via
         # /jieqi/year, (2) cast a /chart at that moment, (3) enrich with the v2.4.0 natal extras, then
@@ -3970,6 +4167,14 @@ class HorosaSkillService:
             return self._run_agepoint_tool(payload)
         if definition.name == "distributions":
             return self._run_distributions_tool(payload)
+        if definition.name == "jaynesprog":
+            return self._run_jaynesprog_tool(payload)
+        if definition.name == "vedicprog":
+            return self._run_vedicprog_tool(payload)
+        if definition.name == "planetaryarc":
+            return self._run_planetaryarc_tool(payload)
+        if definition.name == "planetaryages":
+            return self._run_planetaryages_tool(payload)
         if definition.name == "mundane":
             return self._run_mundane_tool(payload)
         if definition.name == "firdaria":
