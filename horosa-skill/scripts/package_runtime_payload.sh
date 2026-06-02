@@ -151,15 +151,16 @@ rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/scripts/repairEmbedded
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/astropy/__init__.py" "${STAGE_ROOT}/Horosa-Web/astropy/"
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/astropy/astrostudy" "${STAGE_ROOT}/Horosa-Web/astropy/"
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/astropy/websrv" "${STAGE_ROOT}/Horosa-Web/astropy/"
-# ken engines for the chart-service qimen/taiyi/jinkou mounts (embedded Python already
-# carries their deps: bidict / numpy / kerykeion / ephem / pendulum).
+# ken engines for the chart-service qimen/taiyi/jinkou mounts + the 5 standalone 神数 engines
+# (wangji/wuzhao/taixuan/jingjue/shenyishu). Embedded Python already carries their deps
+# (bidict / numpy / kerykeion / ephem / pendulum).
 mkdir -p "${STAGE_ROOT}/Horosa-Web/vendor"
-for ken_engine in kinqimen kintaiyi kinjinkou; do
+for ken_engine in kinqimen kintaiyi kinjinkou kinwangji kinwuzhao taixuanshifa jingjue shenyishu; do
   rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/vendor/${ken_engine}" "${STAGE_ROOT}/Horosa-Web/vendor/"
 done
-# The bundled chart service only ships the qimen/taiyi/jinkou ken engines, but the upstream
-# kentang registry lists many more (wangji/wuzhao/kinastro-*/...). Make the staged mount skip
-# any service whose engine is not bundled so the chart service still boots offline.
+# The bundled chart service ships the qimen/taiyi/jinkou ken engines + the 5 standalone 神数 engines,
+# but the upstream kentang registry lists 9 more (kinastro-* shaozi/tieban/…). Make the staged mount
+# skip any service whose engine is not bundled so the chart service still boots offline.
 KENTANG_REGISTRY="${STAGE_ROOT}/Horosa-Web/astropy/websrv/kentang/registry.py"
 if [ -f "${KENTANG_REGISTRY}" ]; then
   KENTANG_REGISTRY_PATH="${KENTANG_REGISTRY}" python3 - <<'PY'
