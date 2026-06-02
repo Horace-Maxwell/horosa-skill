@@ -91,6 +91,11 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "persiandirected": "persiandirected",
     "horary": "horary",
     "election": "election",
+    "wangji": "wangji",
+    "wuzhao": "wuzhao",
+    "taixuan": "taixuan",
+    "jingjue": "jingjue",
+    "shenyishu": "shenyishu",
     "mundane": "mundane",
     "firdaria": "firdaria",
     "decennials": "decennials",
@@ -130,6 +135,12 @@ _PYTHON_CHART_ENDPOINTS = {
     "/qimen/pan",
     "/taiyi/pan",
     "/jinkou/pan",
+    # 神数 family (v2.5.x) — kentang mounts on the chart service (:8899), each returns a backend-built `snapshot`.
+    "/wangji/pan",
+    "/wuzhao/pan",
+    "/taixuan/pan",
+    "/jingjue/pan",
+    "/shenyishu/pan",
 }
 
 
@@ -2216,6 +2227,32 @@ def _build_persiandirected_snapshot_text(response: dict[str, Any]) -> str:
     return _render_snapshot_text([("波斯向运（Persian Directed）", "\n".join(lines))])
 
 
+_SHENSHU_ENDPOINTS = {
+    "wangji": "/wangji/pan",
+    "wuzhao": "/wuzhao/pan",
+    "taixuan": "/taixuan/pan",
+    "jingjue": "/jingjue/pan",
+    "shenyishu": "/shenyishu/pan",
+}
+
+
+def _split_birth_ymdhm(payload: dict[str, Any]) -> dict[str, int]:
+    # 神数 engines take split year/month/day/hour/minute (ganzhi-based). Derive from date "YYYY-MM-DD"/
+    # "YYYY/MM/DD" (+ optional time "HH:MM[:SS]"). Falls back to a 0-time when only the date parses.
+    import datetime as _dt
+
+    date_raw = f"{payload.get('date', '')}".strip().replace("/", "-")
+    time_raw = f"{payload.get('time', '')}".strip()
+    combined = f"{date_raw} {time_raw}".strip()
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            dt = _dt.datetime.strptime(combined if "%H" in fmt else date_raw, fmt)
+            return {"year": dt.year, "month": dt.month, "day": dt.day, "hour": dt.hour, "minute": dt.minute}
+        except ValueError:
+            continue
+    return {"year": 2025, "month": 1, "day": 1, "hour": 0, "minute": 0}
+
+
 def _build_firdaria_snapshot_text(response: dict[str, Any]) -> str:
     chart = response.get("chart", {}) if isinstance(response, dict) else {}
     params = response.get("params", {}) if isinstance(response, dict) else {}
@@ -4082,6 +4119,37 @@ class HorosaSkillService:
         # Balbillus 129年系统（旺距削减）: vendored JS builder (see horosa-core-js progextra).
         return self._run_progextra_js_tool(payload, "balbillus")
 
+    def _run_shenshu_tool(self, payload: dict[str, Any], key: str) -> dict[str, Any]:
+        # 神数 family (wangji / wuzhao / taixuan / jingjue / shenyishu): each is a kentang engine mounted on
+        # the chart service (:8899) that returns a backend-built `snapshot` text whose [小节] headers already
+        # match 星阙's aiExport preset. The skill splits date/time into year/month/day/hour/minute, forwards
+        # the晚子时 switches + any technique-specific overrides (payload.options), and exports the snapshot.
+        endpoint = _SHENSHU_ENDPOINTS[key]
+        remote_payload: dict[str, Any] = {
+            **_split_birth_ymdhm(payload),
+            "date": payload.get("date"),
+            "time": payload.get("time"),
+            "after23NewDay": payload.get("after23NewDay", 1),
+            "lateZiHourUseNextDay": payload.get("lateZiHourUseNextDay", 1),
+        }
+        options = payload.get("options")
+        if isinstance(options, dict):
+            remote_payload.update(options)
+        response = self._call_remote(endpoint, remote_payload)
+        if isinstance(response, dict) and response.get("ResultCode") not in (None, 0):
+            raise ToolValidationError(
+                f"{key} 引擎返回错误：{response.get('Result')}",
+                code="tool.shenshu_engine_error",
+                details={"technique": key, "result": response.get("Result")},
+            )
+        snapshot_text = f"{response.get('snapshot') if isinstance(response, dict) else ''}".strip()
+        return {
+            "engine": response.get("engine") if isinstance(response, dict) else key,
+            "raw": response,
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique=key, snapshot_text=snapshot_text),
+        }
+
     def _run_horary_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 卜卦 (horary): cast the traditional chart at the question moment, then run the vendored 星阙
         # horary engine (runHorary + buildHorarySnapshot) over it. category drives the quesited house.
@@ -4425,6 +4493,8 @@ class HorosaSkillService:
             return self._run_horary_tool(payload)
         if definition.name == "election":
             return self._run_election_tool(payload)
+        if definition.name in _SHENSHU_ENDPOINTS:
+            return self._run_shenshu_tool(payload, definition.name)
         if definition.name == "mundane":
             return self._run_mundane_tool(payload)
         if definition.name == "firdaria":

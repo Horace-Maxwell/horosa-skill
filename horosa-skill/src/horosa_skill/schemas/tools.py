@@ -339,6 +339,17 @@ class ElectionInput(BirthInput):
     predictive: bool | None = False
 
 
+class ShenShuInput(FlexibleModel):
+    # 神数 family (wangji 皇极经世 / wuzhao 五兆 / taixuan 太玄 / jingjue 京房易/靖瞶 / shenyishu 神乙数):
+    # ganzhi-based, so only date (+ optional time) + the 晚子时 switches are needed; lat/lon/zone are not used.
+    # `options` passes any technique-specific override straight to the engine (e.g. wuzhao mode/number, seed).
+    date: str
+    time: str | None = "00:00:00"
+    after23NewDay: int | None = 1
+    lateZiHourUseNextDay: int | None = 1
+    options: dict | None = None
+
+
 class YearSystem129Input(BirthInput):
     # 129年系统 (v2.5.0): seven planets each rule their 小年 (土30木12火15日19金8水20月25 = 129y), computed server-side.
     predictive: bool | None = True

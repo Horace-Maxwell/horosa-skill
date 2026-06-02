@@ -113,6 +113,16 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("horary")
     if _contains_any(text, ["择日", "择吉", "election", "electional", "选时", "用事时刻"]):
         add("election")
+    if _contains_any(text, ["皇极经世", "心易发微", "wangji", "邵雍数"]):
+        add("wangji")
+    if _contains_any(text, ["五兆", "wuzhao"]):
+        add("wuzhao")
+    if _contains_any(text, ["太玄", "揲蓍", "taixuan"]):
+        add("taixuan")
+    if _contains_any(text, ["京氏易", "靖瞶", "jingjue"]):
+        add("jingjue")
+    if _contains_any(text, ["神乙数", "神乙", "shenyishu"]):
+        add("shenyishu")
     if _contains_any(text, ["西洋游戏", "dice", "占星骰子", "otherbu"]):
         add("otherbu")
     if _contains_any(text, ["13宫", "chart13"]):
