@@ -19,6 +19,13 @@ REQUIRED_ENTRIES = {
         "runtime-payload/Horosa-Web/vendor/kinqimen/",
         "runtime-payload/Horosa-Web/vendor/kintaiyi/",
         "runtime-payload/Horosa-Web/vendor/kinjinkou/",
+        # 5 standalone 神数 engines back /wangji/pan · /wuzhao/pan · /taixuan/pan · /jingjue/pan ·
+        # /shenyishu/pan — without these the kentang mount skips them and the 神数 tools fail offline.
+        "runtime-payload/Horosa-Web/vendor/kinwangji/",
+        "runtime-payload/Horosa-Web/vendor/kinwuzhao/",
+        "runtime-payload/Horosa-Web/vendor/taixuanshifa/",
+        "runtime-payload/Horosa-Web/vendor/jingjue/",
+        "runtime-payload/Horosa-Web/vendor/shenyishu/",
         "runtime-payload/runtime/mac/python/bin/python3",
         "runtime-payload/runtime/mac/java/bin/java",
         "runtime-payload/runtime/mac/node/bin/node",
@@ -38,6 +45,12 @@ REQUIRED_ENTRIES = {
         "runtime-payload/Horosa-Web/vendor/kinqimen/",
         "runtime-payload/Horosa-Web/vendor/kintaiyi/",
         "runtime-payload/Horosa-Web/vendor/kinjinkou/",
+        # 5 standalone 神数 engines (see darwin note).
+        "runtime-payload/Horosa-Web/vendor/kinwangji/",
+        "runtime-payload/Horosa-Web/vendor/kinwuzhao/",
+        "runtime-payload/Horosa-Web/vendor/taixuanshifa/",
+        "runtime-payload/Horosa-Web/vendor/jingjue/",
+        "runtime-payload/Horosa-Web/vendor/shenyishu/",
         "runtime-payload/runtime/windows/python/python.exe",
         "runtime-payload/runtime/windows/java/bin/java.exe",
         "runtime-payload/runtime/windows/node/node.exe",
