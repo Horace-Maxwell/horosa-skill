@@ -545,6 +545,80 @@ def test_persiandirected_runs_via_chart_service(tmp_path) -> None:
     _assert_clean_export(result)
 
 
+@requires_chart
+def test_horary_runs_via_chart_service(tmp_path) -> None:
+    # 卜卦 (horary): traditional chart at the question moment → vendored 星阙 horary engine
+    # (runHorary + buildHorarySnapshot). category drives the quesited house.
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "horary",
+        {"date": "2026-06-02", "time": "14:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gpsLat": 31.2167, "gpsLon": 121.4667, "hsys": 0, "tradition": 1, "category": "marriage"},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    snapshot = result.data["snapshot_text"]
+    for section in ("[起卦信息]", "[根本性]", "[征象星指派]", "[裁决]"):
+        assert section in snapshot, section
+    assert result.data["category"] == "marriage"
+    detected = (result.data.get("export_snapshot") or {}).get("section_titles_detected") or []
+    assert "起卦信息" in detected and "裁决" in detected
+    _assert_clean_export(result)
+
+
+@requires_chart
+def test_horary_unknown_category_falls_back_to_general(tmp_path) -> None:
+    # An unrecognized category must degrade to 'general', never crash the engine.
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "horary",
+        {"date": "2026-06-02", "time": "14:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gpsLat": 31.2167, "gpsLon": 121.4667, "hsys": 0, "tradition": 1, "category": "no_such_category"},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    assert result.data["category"] == "general"
+    assert "[起卦信息]" in result.data["snapshot_text"]
+
+
+@requires_chart
+def test_election_runs_via_chart_service(tmp_path) -> None:
+    # 择日 (electional): traditional chart at a candidate moment → vendored 星阙 election engine
+    # (runElection + buildElectionSnapshot). topicId drives the rule pack + hard flags + scoring.
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "election",
+        {"date": "2026-06-02", "time": "14:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gpsLat": 31.2167, "gpsLon": 121.4667, "hsys": 0, "tradition": 1, "topicId": "surgery"},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    snapshot = result.data["snapshot_text"]
+    for section in ("[起盘信息]", "[总评]", "[红线]", "[建议]"):
+        assert section in snapshot, section
+    assert result.data["topicId"] == "surgery"
+    overall = result.data["judgment"]["overall"]
+    assert isinstance(overall, dict) and "score" in overall
+    export = result.data.get("export_snapshot") or {}
+    detected = export.get("section_titles_detected") or []
+    assert "总评" in detected
+    assert export.get("unknown_detected_sections") == []
+    # 用事专属 only appears when the topic rule-pack produced items, and 星阙's own preset lists 应期
+    # which its builder never emits — both are legitimately absent, so only those two may be "missing".
+    assert set(export.get("missing_selected_sections") or []) <= {"用事专属", "应期"}
+
+
+@requires_chart
+def test_election_unknown_topic_falls_back_to_marriage(tmp_path) -> None:
+    # An unrecognized topicId must degrade to 'marriage', never crash the engine.
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "election",
+        {"date": "2026-06-02", "time": "14:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gpsLat": 31.2167, "gpsLon": 121.4667, "hsys": 0, "tradition": 1, "topicId": "no_such_topic"},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    assert result.data["topicId"] == "marriage"
+    assert "[起盘信息]" in result.data["snapshot_text"]
+
+
 def test_cli_coerces_null_or_scalar_payload_instead_of_crashing(tmp_path) -> None:
     """Regression: a null / scalar payload (stdin literally `null`) used to null-deref-crash the JS
     tools (`payload.liureng` / `normalizeDateTimeInput(null)`). cli.mjs now coerces it to {}, so a

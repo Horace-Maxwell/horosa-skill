@@ -405,6 +405,38 @@ class FakeJsClient(HorosaJsEngineClient):
                     ),
                 }
             return {"tool": "progextra", "technique": technique, "data": {"ok": False}, "snapshot_text": ""}
+        if tool_name == "horary":
+            return {
+                "tool": "horary",
+                "category": payload.get("category", "general"),
+                "data": {"ok": True, "verdict": "倾向：不成 / 受阻", "significators": {"querentKey": "venus", "quesitedKey": "mars"}},
+                "snapshot_text": (
+                    "[起卦信息]\n问题类别：对象/婚姻\n时主星（活跃征象）：金星\n"
+                    "[根本性]\n适合判断。\n"
+                    "[征象星指派]\n问卜者 = 1宫主 金星 ＋ 月亮\n对象/婚姻 = 7宫主 火星（自然征象星 金星）\n"
+                    "[完成分析]\n- 两征象星刚出相位 → 事已过/绝对失败。\n完成度三分：安全征象 3/3 → all\n"
+                    "[月亮的故事]\n- 月刚离开 水星（对分(冲)，已过 1.3°）→ 事情来由/已过\n"
+                    "[相位全览]\n- 太阳 六合 土星（入相/将成，差 0.6°）\n"
+                    "[裁决]\n倾向：不成 / 受阻（建议另择时再问）\nQuery：①能否成事=否 ②好坏=凶 ③真假=真\n"
+                    "[应期方位]\n无准确相位，应期不定；方位：—\n"
+                    "[描述]\n- 问卜者：金星 体貌温和\n"
+                    "（裁决只呈现证据与倾向，不替用户下命定结论。）"
+                ),
+            }
+        if tool_name == "election":
+            return {
+                "tool": "election",
+                "topicId": payload.get("topicId", "marriage"),
+                "data": {"ok": True, "topic": "结婚/订婚", "overall": {"score": 0, "gradeCn": "不宜（含红线）"}, "hard_flags": 6},
+                "snapshot_text": (
+                    "[起盘信息]\n用事类型：结婚/订婚\n起盘时刻：戴戒指 + 互相宣示成为夫妻。\n"
+                    "[总评]\n0/100　不宜（含红线）\n结婚/订婚择日：不宜（含红线）（0 分）。\n没有完美的择日盘：仅供参考。\n"
+                    "[红线]\n- [high] 月亮逢刑（90°）：不安定、缺生产力 → 应避\n"
+                    "[分项]\n月亮状态（40/100）\n  · 月亮逢刑\n"
+                    "[用事专属]（满足 1/3）\n- ✓ 宜：金星有力\n- ✗ 忌：水逆\n"
+                    "[建议]\n- 另择月相吉、月无刑冲的时段。"
+                ),
+            }
         if tool_name == "liureng":
             return {
                 "data": {

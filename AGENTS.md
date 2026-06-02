@@ -263,6 +263,55 @@ These are 星阙 v2.4.0 additions; integrating them required **re-vendoring `ven
   vendor hard-fails on `mount_kentang_services` because the kentang registry lists engines like `kinwangji`
   that the skill doesn't vendor).
 
+### v2.5.0 推运 (7) + 卜卦/择日 — JS-vendor vs Python-port decision tree
+
+星阙 v2.5.0 added 7 推运 (jaynesprog / vedicprog / planetaryarc / planetaryages / balbillus /
+yearsystem129 / persiandirected) plus the **horary (卜卦)** and **election (择日)** divination engines.
+The integration rule that emerged:
+
+- **Backend-computed (has a `/predict/*` or `/astroextra/*` endpoint) → Python.** jaynesprog
+  (`/astroextra/jaynesprog`), vedicprog (`/astroextra/progressions` zodiacal=1), planetaryarc
+  (`/predict/planetaryarc`) — `_call_remote` + a Python snapshot builder. Add the endpoint to
+  `_PYTHON_CHART_ENDPOINTS`. **These 3 endpoints did NOT exist in the v2.4.0 `vendor/runtime-source`** —
+  they need the v2.5.0 re-sync (`sync_vendored_runtime_sources.sh`) before the bundled runtime can serve
+  them; the LIVE 星阙 app (:8899) already has them, which is why the live `@requires_chart` tests pass
+  pre-rebuild.
+- **Frontend, reads pre-computed chart data → Python.** planetaryages (reads `chart.objects` +
+  `params.birth`), yearsystem129 (reads `predictives.yearsystem129`, which `/chart` only emits when cast
+  with `predictive` truthy — `getPredictivesObj`), persiandirected (pure 1°/年 arithmetic off
+  `chart.objects`/`houses`/`birth`). Ported to Python reusing `_astro_msg` / `_aspect_label` /
+  `_split_degree`.
+- **Frontend, algorithm-heavy / risky to re-derive → vendor the JS verbatim.** balbillus (247-line
+  129年旺距削减 with recursive sub-periods). Vendored `astrostudyui/src/utils/balbillus.js` →
+  `horosa-core-js/src/vendor/astroextra/balbillus.js`, redirecting its `AstroConst`/`AstroText` imports to
+  a tiny **`progConst.js` stub** (7 classical planet ids + `LIST_SIGNS` + `AstroTxtMsg` — avoids vendoring
+  the 1128-line AstroConst). Needs `moment` (added to `horosa-core-js/package.json`). Dispatched through a
+  new **`progextra` JS tool** (`technique` → builder map) called from `_run_progextra_js_tool`.
+- **卜卦/择日 = vendor the whole `divination/` tree.** It's ~3200 lines of **pure logic with only relative
+  imports** (no React/antd). Copy the entire `astrostudyui/src/divination/` into
+  `horosa-core-js/src/vendor/divination/` (this also re-syncs the v0.8.0 lifespan subset to upstream), then
+  **add `.js` to every relative import** (Node ESM needs explicit extensions; a one-shot regex over
+  `from '…'` does it — 22 files). Two thin JS tools `horary.js` / `election.js` call
+  `runHorary(chartResp, category)`+`buildHorarySnapshot` / `runElection(chartResp, topicId)`+
+  `buildElectionSnapshot`. Python `_run_horary_tool` / `_run_election_tool` cast a **traditional**
+  (`tradition:1`, `predictive:0`) chart at the question/candidate moment, pass the `/chart` response as
+  `payload.chart`, and read back the JS-resolved `category`/`topicId` (the engine falls back unknown →
+  `general`/`marriage`).
+
+Gotchas that bit us here:
+- **`buildFacts(result)` wants the full `/chart` response** (it reads `result.chart.objects`, `result.objectMap`,
+  `result.aspects`, …), so pass the whole response object as `chart`, not just `chart.objects`.
+- **election preset has dead/conditional sections.** 星阙's `aiExport.js` election preset lists `应期`
+  (its builder **never** emits it) and `用事专属` (only when the topic rule-pack produced items). We mirror the
+  preset for fidelity, but `_assert_clean_export` (which requires `missing_selected_sections == []`) is too
+  strict for election — assert `missing ⊆ {用事专属, 应期}` instead. horary's 9 sections are all reliably
+  emitted (描述 is technically conditional but present for normal charts), so horary keeps strict clean-export.
+- **Router: 卜卦 also contains the generic 卦.** The 梅花易数/卦 branch (`["梅易","卦","gua"]`) must exclude
+  horary phrasing (`卜卦/horary/起卦/占问`) or `卜卦问婚姻` mis-routes to `gua_desc`.
+- **Offline test fakes must cover the new JS tools.** `FakeJsClient.run` needs `progextra` (balbillus snapshot),
+  `horary`, `election` handlers, and `FakeClient` `/chart` needs `predictives.yearsystem129`, or the offline
+  export-contract suite falls back to `generated_template` and fails.
+
 ## Offline runtime packaging gotchas (these have bitten us)
 
 - **flatlib must survive the strip.** `scripts/package_runtime_payload.sh` must keep its

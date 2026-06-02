@@ -89,6 +89,8 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "balbillus": "balbillus",
     "yearsystem129": "yearsystem129",
     "persiandirected": "persiandirected",
+    "horary": "horary",
+    "election": "election",
     "mundane": "mundane",
     "firdaria": "firdaria",
     "decennials": "decennials",
@@ -4080,6 +4082,60 @@ class HorosaSkillService:
         # Balbillus 129年系统（旺距削减）: vendored JS builder (see horosa-core-js progextra).
         return self._run_progextra_js_tool(payload, "balbillus")
 
+    def _run_horary_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 卜卦 (horary): cast the traditional chart at the question moment, then run the vendored 星阙
+        # horary engine (runHorary + buildHorarySnapshot) over it. category drives the quesited house.
+        category = f"{payload.get('category') or 'general'}".strip() or "general"
+        chart_payload = {**payload, "predictive": 0, "tradition": payload.get("tradition", 1)}
+        for stale in ("datetime", "dirZone", "dirLat", "dirLon", "category"):
+            chart_payload.pop(stale, None)
+        response = self._call_remote("/chart", chart_payload)
+        snapshot_text, data = "", {}
+        try:
+            js = self.js_client.run("horary", {"chart": response, "category": category})
+            if isinstance(js, dict):
+                snapshot_text = f"{js.get('snapshot_text') or ''}".strip()
+                data = js.get("data") if isinstance(js.get("data"), dict) else {}
+                # the JS engine resolves an unknown category back to 'general'; reflect that.
+                category = f"{js.get('category') or category}".strip() or category
+        except Exception:
+            snapshot_text = ""
+        return {
+            "chart": response.get("chart"),
+            "category": category,
+            "judgment": data,
+            "raw": response,
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="horary", snapshot_text=snapshot_text),
+        }
+
+    def _run_election_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 择日 (electional): cast the traditional chart at a candidate moment, then run the vendored 星阙
+        # election engine (runElection + buildElectionSnapshot). topicId drives the rule pack + hard flags.
+        topic_id = f"{payload.get('topicId') or payload.get('topic') or 'marriage'}".strip() or "marriage"
+        chart_payload = {**payload, "predictive": 0, "tradition": payload.get("tradition", 1)}
+        for stale in ("datetime", "dirZone", "dirLat", "dirLon", "topicId", "topic"):
+            chart_payload.pop(stale, None)
+        response = self._call_remote("/chart", chart_payload)
+        snapshot_text, data = "", {}
+        try:
+            js = self.js_client.run("election", {"chart": response, "topicId": topic_id})
+            if isinstance(js, dict):
+                snapshot_text = f"{js.get('snapshot_text') or ''}".strip()
+                data = js.get("data") if isinstance(js.get("data"), dict) else {}
+                # the JS engine resolves an unknown topicId back to 'marriage'; reflect that.
+                topic_id = f"{js.get('topicId') or topic_id}".strip() or topic_id
+        except Exception:
+            snapshot_text = ""
+        return {
+            "chart": response.get("chart"),
+            "topicId": topic_id,
+            "judgment": data,
+            "raw": response,
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="election", snapshot_text=snapshot_text),
+        }
+
     def _run_yearsystem129_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 129年系统: data is computed server-side and carried in response.predictives.yearsystem129
         # only when the chart is cast with predictive truthy.
@@ -4365,6 +4421,10 @@ class HorosaSkillService:
             return self._run_yearsystem129_tool(payload)
         if definition.name == "persiandirected":
             return self._run_persiandirected_tool(payload)
+        if definition.name == "horary":
+            return self._run_horary_tool(payload)
+        if definition.name == "election":
+            return self._run_election_tool(payload)
         if definition.name == "mundane":
             return self._run_mundane_tool(payload)
         if definition.name == "firdaria":

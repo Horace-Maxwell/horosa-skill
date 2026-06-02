@@ -321,6 +321,24 @@ class BalbillusInput(BirthInput):
     predictive: bool | None = False
 
 
+class HoraryInput(BirthInput):
+    # 卜卦 (horary): the chart is cast at the QUESTION moment (date/time/place = when the question was asked).
+    # category picks the quesited house: general/wealth/family/property/pregnancy/health/marriage/lawsuit/
+    # theft/death/travel/career/hope/enemy (unknown → general).
+    category: str | None = "general"
+    tradition: bool | None = True
+    predictive: bool | None = False
+
+
+class ElectionInput(BirthInput):
+    # 择日 (electional): the chart is cast at a CANDIDATE moment (date/time/place = the time being evaluated).
+    # topicId picks the rule pack + hard flags: marriage/business/move_in/buy_property/trade/buy_car/contract/
+    # surgery/travel/job_hunt/... (see TOPIC_MASTER; unknown → marriage).
+    topicId: str | None = "marriage"
+    tradition: bool | None = True
+    predictive: bool | None = False
+
+
 class YearSystem129Input(BirthInput):
     # 129年系统 (v2.5.0): seven planets each rule their 小年 (土30木12火15日19金8水20月25 = 129y), computed server-side.
     predictive: bool | None = True

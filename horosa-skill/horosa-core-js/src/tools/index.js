@@ -1,6 +1,8 @@
 import { runAstroExtra } from './astroextra.js';
 import { runCanping } from './canping.js';
+import { runElectionTool } from './election.js';
 import { runHeluo } from './heluo.js';
+import { runHoraryTool } from './horary.js';
 import { runJinkou } from './jinkou.js';
 import { runLiureng } from './liureng.js';
 import { runProgExtra } from './progextra.js';
@@ -18,6 +20,8 @@ const TOOL_RUNNERS = {
   heluo: runHeluo,
   astroextra: runAstroExtra,
   progextra: runProgExtra,
+  horary: runHoraryTool,
+  election: runElectionTool,
 };
 
 export function listTools() {
