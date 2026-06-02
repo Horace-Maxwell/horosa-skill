@@ -102,6 +102,12 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("planetaryarc")
     if _contains_any(text, ["行星年龄", "人生七阶", "ages of man", "planetaryages"]):
         add("planetaryages")
+    if _contains_any(text, ["balbillus", "巴比留斯", "旺距削减"]):
+        add("balbillus")
+    if _contains_any(text, ["129年系统", "129年", "yearsystem129", "小年"]):
+        add("yearsystem129")
+    if _contains_any(text, ["波斯向运", "persian directed", "persiandirected", "象征向运"]):
+        add("persiandirected")
     if _contains_any(text, ["西洋游戏", "dice", "占星骰子", "otherbu"]):
         add("otherbu")
     if _contains_any(text, ["13宫", "chart13"]):

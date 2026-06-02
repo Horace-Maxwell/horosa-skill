@@ -86,6 +86,9 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "vedicprog": "vedicprog",
     "planetaryarc": "planetaryarc",
     "planetaryages": "planetaryages",
+    "balbillus": "balbillus",
+    "yearsystem129": "yearsystem129",
+    "persiandirected": "persiandirected",
     "mundane": "mundane",
     "firdaria": "firdaria",
     "decennials": "decennials",
@@ -2087,6 +2090,130 @@ def _build_planetaryages_snapshot_text(response: dict[str, Any], as_of: str | No
     return _render_snapshot_text([("行星年龄（Ages of Man）", "\n".join(lines))])
 
 
+def _build_yearsystem129_snapshot_text(response: dict[str, Any]) -> str:
+    # Port of 星阙 AstroYearSystem129.buildYearSystem129SnapshotText. The 129-year data is computed
+    # server-side (perpredict.getYearSystem129) and carried in response.predictives.yearsystem129
+    # whenever the chart is cast with predictive truthy.
+    predictives = response.get("predictives") if isinstance(response.get("predictives"), dict) else {}
+    data = predictives.get("yearsystem129") if isinstance(predictives.get("yearsystem129"), list) else []
+    if not data:
+        return _render_snapshot_text([("129年系统表格", "（本盘无 129 年系统数据）")])
+    lines = [
+        "七政各管其小年（土30木12火15日19金8水20月25 = 129 年一轮），按 sect 起始、含子限。（succession 序实验性，待校准）",
+        "",
+        "| 主限 | 子限 | 日期 |",
+        "| --- | --- | --- |",
+    ]
+    for main in data:
+        if not isinstance(main, dict):
+            continue
+        subs = main.get("subDirect") if isinstance(main.get("subDirect"), list) else []
+        main_name = _astro_msg(main.get("mainDirect"))
+        if not subs:
+            lines.append(f"| {main_name} | - | - |")
+            continue
+        for sub in subs:
+            if not isinstance(sub, dict):
+                continue
+            lines.append(f"| {main_name} | {_astro_msg(sub.get('subDirect'))} | {sub.get('date') or '-'} |")
+    return _render_snapshot_text([("129年系统表格", "\n".join(lines))])
+
+
+_PERSIAN_MOVERS = ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn"]
+_PERSIAN_ASPECTS = [0, 60, 90, 120, 180]
+_PERSIAN_SIGN_ORDER = [
+    "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+    "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
+]
+
+
+def _persian_lon_of(obj: dict[str, Any] | None) -> float | None:
+    if not isinstance(obj, dict):
+        return None
+    lon = obj.get("lon")
+    if lon is not None:
+        try:
+            return float(lon)
+        except (TypeError, ValueError):
+            return None
+    sign = obj.get("sign")
+    signlon = obj.get("signlon")
+    if sign in _PERSIAN_SIGN_ORDER and signlon is not None:
+        try:
+            return _PERSIAN_SIGN_ORDER.index(sign) * 30 + float(signlon)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _build_persiandirected_snapshot_text(response: dict[str, Any]) -> str:
+    # Port of 星阙 AstroPersianDirected.buildPersianHits + buildPersianDirectedSnapshotText (pure arithmetic):
+    # symbolic 1°/year direction — every planet/point advances +1° per year, natal cusps fixed; list the hits.
+    import datetime as _dt
+
+    chart = response.get("chart") if isinstance(response.get("chart"), dict) else {}
+    params = response.get("params") if isinstance(response.get("params"), dict) else {}
+    objects = chart.get("objects") if isinstance(chart.get("objects"), list) else []
+    houses = chart.get("houses") if isinstance(chart.get("houses"), list) else []
+    rate, cap = 1.0, 90  # persian rate 1°/年, direct, maxAge 90
+
+    by_id: dict[str, float] = {}
+    for o in objects:
+        if isinstance(o, dict):
+            lon = _persian_lon_of(o)
+            if lon is not None:
+                by_id[o.get("id")] = lon % 360
+    targets: list[tuple[str, float]] = [(oid, lon) for oid, lon in by_id.items()]
+    for i, h in enumerate(houses):
+        lon = _persian_lon_of(h)
+        if lon is not None:
+            targets.append((f"{i + 1}宫头", lon % 360))
+
+    birth_raw = f"{params.get('birth', '')}".strip().replace("/", "-")
+    birth_dt = None
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            birth_dt = _dt.datetime.strptime(birth_raw, fmt)
+            break
+        except ValueError:
+            continue
+
+    hits: list[dict[str, Any]] = []
+    for p in _PERSIAN_MOVERS:
+        pl = by_id.get(p)
+        if pl is None:
+            continue
+        for tid, tlon in targets:
+            if tid == p:
+                continue
+            for a in _PERSIAN_ASPECTS:
+                for s in (1, -1):
+                    if a in (0, 180) and s == -1:
+                        continue
+                    target = (tlon + s * a) % 360
+                    arc = (target - pl) % 360
+                    age = arc / rate
+                    if 0 < age <= cap:
+                        date = ""
+                        if birth_dt is not None:
+                            date = (birth_dt + _dt.timedelta(days=age * 365.2421904)).strftime("%Y-%m-%d")
+                        hits.append({"age": round(age * 100) / 100, "promittor": p, "aspect": a, "significator": tid, "date": date})
+    hits.sort(key=lambda h: h["age"])
+    if not hits:
+        return _render_snapshot_text([("波斯向运（Persian Directed）", "（本盘无波斯向运应期）")])
+    lines = [
+        "黄经象征向运(1°/年)：所有行星/点每年 +1°,本命宫头不动；下表为向运星触及本命的应期。",
+        "",
+        "| 年龄 | 日期 | 向运星 | 相位 | 本命对象 |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for h in hits[:120]:
+        sig = h["significator"]
+        sig_name = sig if "宫头" in f"{sig}" else _astro_msg(sig)
+        lines.append(f"| {h['age']} | {h['date'] or '-'} | {_astro_msg(h['promittor'])} | {_aspect_label(h['aspect'])} | {sig_name} |")
+    return _render_snapshot_text([("波斯向运（Persian Directed）", "\n".join(lines))])
+
+
 def _build_firdaria_snapshot_text(response: dict[str, Any]) -> str:
     chart = response.get("chart", {}) if isinstance(response, dict) else {}
     params = response.get("params", {}) if isinstance(response, dict) else {}
@@ -3925,6 +4052,63 @@ class HorosaSkillService:
             "export_snapshot": self._augment_export_payload(technique="planetaryages", snapshot_text=snapshot_text),
         }
 
+    def _run_progextra_js_tool(self, payload: dict[str, Any], technique: str) -> dict[str, Any]:
+        # v2.5.0 推运 builders that are too algorithm-heavy to re-port (balbillus 129年旺距削减 / persiandirected /
+        # yearsystem129): cast the natal /chart, then run the vendored 星阙 frontend builder via horosa-core-js,
+        # which emits the single-section snapshot text directly.
+        chart_payload = {**payload, "predictive": 0}
+        chart_payload.pop("datetime", None)
+        chart_payload.pop("dirZone", None)
+        chart_payload.pop("dirLat", None)
+        chart_payload.pop("dirLon", None)
+        response = self._call_remote("/chart", chart_payload)
+        snapshot_text = ""
+        try:
+            js = self.js_client.run("progextra", {"technique": technique, "chart": response})
+            if isinstance(js, dict):
+                snapshot_text = f"{js.get('snapshot_text') or ''}".strip()
+        except Exception:
+            snapshot_text = ""
+        return {
+            "chart": response.get("chart"),
+            "raw": response,
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique=technique, snapshot_text=snapshot_text),
+        }
+
+    def _run_balbillus_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # Balbillus 129年系统（旺距削减）: vendored JS builder (see horosa-core-js progextra).
+        return self._run_progextra_js_tool(payload, "balbillus")
+
+    def _run_yearsystem129_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 129年系统: data is computed server-side and carried in response.predictives.yearsystem129
+        # only when the chart is cast with predictive truthy.
+        chart_payload = {**payload, "predictive": 1}
+        chart_payload.pop("datetime", None)
+        chart_payload.pop("dirZone", None)
+        response = self._call_remote("/chart", chart_payload)
+        snapshot_text = _build_yearsystem129_snapshot_text(response)
+        return {
+            "chart": response.get("chart"),
+            "raw": response,
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="yearsystem129", snapshot_text=snapshot_text),
+        }
+
+    def _run_persiandirected_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 波斯向运 (Persian Directed): pure arithmetic off the natal chart objects/houses/birth (1°/year).
+        chart_payload = {**payload, "predictive": 0}
+        chart_payload.pop("datetime", None)
+        chart_payload.pop("dirZone", None)
+        response = self._call_remote("/chart", chart_payload)
+        snapshot_text = _build_persiandirected_snapshot_text(response)
+        return {
+            "chart": response.get("chart"),
+            "raw": response,
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="persiandirected", snapshot_text=snapshot_text),
+        }
+
     def _run_mundane_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 世俗入宫盘 (mundane ingress): (1) get the precise solar-term ingress moment for the year via
         # /jieqi/year, (2) cast a /chart at that moment, (3) enrich with the v2.4.0 natal extras, then
@@ -4175,6 +4359,12 @@ class HorosaSkillService:
             return self._run_planetaryarc_tool(payload)
         if definition.name == "planetaryages":
             return self._run_planetaryages_tool(payload)
+        if definition.name == "balbillus":
+            return self._run_balbillus_tool(payload)
+        if definition.name == "yearsystem129":
+            return self._run_yearsystem129_tool(payload)
+        if definition.name == "persiandirected":
+            return self._run_persiandirected_tool(payload)
         if definition.name == "mundane":
             return self._run_mundane_tool(payload)
         if definition.name == "firdaria":

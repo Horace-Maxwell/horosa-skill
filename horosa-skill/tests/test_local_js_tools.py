@@ -437,6 +437,114 @@ def test_mundane_ingress_chart(tmp_path) -> None:
     assert "世俗入宫" in detected
 
 
+@requires_chart
+def test_jaynesprog_runs_via_chart_service(tmp_path) -> None:
+    # Jayne 赤纬推运 (v2.5.0): secondary progression + declination parallels (/astroextra/jaynesprog).
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "jaynesprog",
+        {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "hsys": 1, "predictive": 1, "targetDate": "2028-04-06"},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    assert "[赤纬推运（Jayne Declination）]" in result.data["snapshot_text"]
+    _assert_clean_export(result)
+
+
+@requires_chart
+def test_vedicprog_runs_via_chart_service(tmp_path) -> None:
+    # 恒星推运 Vedic (v2.5.0): progressions under the sidereal zodiac (/astroextra/progressions).
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "vedicprog",
+        {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "hsys": 1, "predictive": 1, "targetDate": "2028-04-06"},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    assert "[恒星推运（Vedic Sidereal）]" in result.data["snapshot_text"]
+    _assert_clean_export(result)
+
+
+@requires_chart
+def test_planetaryarc_runs_via_chart_service(tmp_path) -> None:
+    # 行星弧 (v2.5.0): whole chart directed by arcSource's secondary arc (/predict/planetaryarc).
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "planetaryarc",
+        {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "hsys": 1, "predictive": 1, "datetime": "2028-04-06"},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    assert "[行星弧（Planetary Arc）]" in result.data["snapshot_text"]
+    _assert_clean_export(result)
+
+
+@requires_chart
+def test_planetaryages_runs_via_chart_service(tmp_path) -> None:
+    # 行星年龄 (v2.5.0): Ptolemy seven ages — reads the natal chart, marks the current band.
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "planetaryages",
+        {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "hsys": 1, "asOf": "2028-04-06"},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    snapshot = result.data["snapshot_text"]
+    assert "[行星年龄（Ages of Man）]" in snapshot
+    assert "年龄带" in snapshot
+    _assert_clean_export(result)
+
+
+@requires_chart
+def test_balbillus_runs_via_chart_service(tmp_path) -> None:
+    # Balbillus 129年系统 (v2.5.0): 旺距削减主限 — vendored JS builder via horosa-core-js (progextra).
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "balbillus",
+        {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "hsys": 1, "predictive": 0},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    snapshot = result.data["snapshot_text"]
+    assert "[Balbillus]" in snapshot
+    assert "旺距削减" in snapshot
+    assert "| 主限 | 子限 |" in snapshot
+    _assert_clean_export(result)
+
+
+@requires_chart
+def test_yearsystem129_runs_via_chart_service(tmp_path) -> None:
+    # 129年系统 (v2.5.0): seven-planet succession, computed server-side and carried in predictives.
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "yearsystem129",
+        {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "hsys": 1, "predictive": 1},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    snapshot = result.data["snapshot_text"]
+    assert "[129年系统表格]" in snapshot
+    assert "129 年一轮" in snapshot
+    _assert_clean_export(result)
+
+
+@requires_chart
+def test_persiandirected_runs_via_chart_service(tmp_path) -> None:
+    # 波斯向运 (v2.5.0): symbolic 1°/year direction — pure arithmetic off the natal chart objects/houses.
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "persiandirected",
+        {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "hsys": 1, "predictive": 0},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    snapshot = result.data["snapshot_text"]
+    assert "[波斯向运（Persian Directed）]" in snapshot
+    assert "1°/年" in snapshot
+    assert "| 年龄 | 日期 |" in snapshot
+    _assert_clean_export(result)
+
+
 def test_cli_coerces_null_or_scalar_payload_instead_of_crashing(tmp_path) -> None:
     """Regression: a null / scalar payload (stdin literally `null`) used to null-deref-crash the JS
     tools (`payload.liureng` / `normalizeDateTimeInput(null)`). cli.mjs now coerces it to {}, so a

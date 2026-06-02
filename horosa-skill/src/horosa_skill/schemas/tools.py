@@ -316,6 +316,21 @@ class PlanetaryAgesInput(BirthInput):
     asOf: str | None = None
 
 
+class BalbillusInput(BirthInput):
+    # Balbillus 129年系统 (v2.5.0): 旺距削减主限 — reads the natal chart, splits life into recursive sub-periods.
+    predictive: bool | None = False
+
+
+class YearSystem129Input(BirthInput):
+    # 129年系统 (v2.5.0): seven planets each rule their 小年 (土30木12火15日19金8水20月25 = 129y), computed server-side.
+    predictive: bool | None = True
+
+
+class PersianDirectedInput(BirthInput):
+    # 波斯向运 (v2.5.0): symbolic 1°/year direction — every planet/point advances +1°/年, natal cusps fixed.
+    predictive: bool | None = False
+
+
 class MundaneInput(FlexibleModel):
     # 世俗入宫盘 (mundane ingress chart): cast at the precise solar-term ingress moment of a given year.
     # date/time are DERIVED from the ingress (jieqi) computation, so the inputs are year + 入宫节气 + place.
