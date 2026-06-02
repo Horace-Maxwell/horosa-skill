@@ -476,6 +476,26 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     "balbillus": ASTRO_BIRTH_POLICY,
     "yearsystem129": ASTRO_BIRTH_POLICY,
     "persiandirected": ASTRO_BIRTH_POLICY,
+    "horary": _policy(
+        intent="卜卦 / horary：盘的时刻是「提问的当下」（占者收到问题、心中疑问成形的那一刻），不是当事人的出生时间。按问题类别取事项宫。",
+        required_context=["提问时刻 date/time/zone", "提问地点 lon/lat", "问题类别 category"],
+        ask_if_missing=[
+            {"field": "date/time/place", "question": "请提供「提问当下」的日期、时间、时区和地点（卜卦以提问时刻起盘，不是出生时间）。"},
+            {"field": "category", "question": "问的是哪一类事？", "options": ["综合 general", "财物 wealth", "婚姻/对象 marriage", "事业/职位 career", "疾病 health", "官非/对手 lawsuit", "失物/盗贼 theft", "子嗣 pregnancy", "房产 property", "旅行 travel", "愿望 hope", "死亡/遗产 death", "私敌 enemy", "兄弟/亲属 family"]},
+        ],
+        safe_defaults=[{"field": "category", "value": "general", "meaning": "综合判断：事项守护星取月亮下一个入相的星 / 相关宫主"}],
+        do_not_assume=["提问时刻（绝不可编造，必须是占者真实收到问题的时刻）", "问题类别"],
+    ),
+    "election": _policy(
+        intent="择日 / electional：评估某个「候选时刻」适不适合做某事；盘的时刻是被评估的候选时间，topicId 决定用事规则包与红线。",
+        required_context=["候选时刻 date/time/zone", "举事地点 lon/lat", "用事类型 topicId"],
+        ask_if_missing=[
+            {"field": "date/time/place", "question": "请提供要评估的候选日期、时间、时区和举事地点。"},
+            {"field": "topicId", "question": "做什么事（用事类型）？", "options": ["结婚 marriage", "开业/创业 business", "入宅/迁居 move_in", "购屋 buy_property", "买卖交易 trade", "购车 buy_car", "签约 contract", "手术 surgery", "出行 travel", "求职 job_hunt", "其它（见 TOPIC_MASTER）"]},
+        ],
+        safe_defaults=[{"field": "topicId", "value": "marriage", "meaning": "默认按结婚用事规则包评估"}],
+        do_not_assume=["候选时刻", "用事类型"],
+    ),
     "mundane": _policy(
         intent="世俗入宫盘 / mundane ingress：在某年某节气(春分/夏至/秋分/冬至)的精确入宫时刻排世俗盘。",
         required_context=["year", "入宫节气(春分/夏至/秋分/冬至)", "观测地点 lon/lat/zone"],

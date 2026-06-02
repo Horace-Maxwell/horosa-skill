@@ -52,7 +52,8 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("jieqi_year")
     if _contains_any(text, ["农历", "nongli"]):
         add("nongli_time")
-    if _contains_any(text, ["梅易", "卦", "gua"]):
+    # 卜卦 (Western horary) also contains the generic "卦" — keep it out of the 梅花易数/卦象 branch.
+    if _contains_any(text, ["梅易", "卦", "gua"]) and not _contains_any(text, ["卜卦", "horary", "起卦", "占问"]):
         if _contains_any(text, ["梅易", "meiyi"]):
             add("gua_meiyi")
         else:
@@ -108,6 +109,10 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("yearsystem129")
     if _contains_any(text, ["波斯向运", "persian directed", "persiandirected", "象征向运"]):
         add("persiandirected")
+    if _contains_any(text, ["卜卦", "horary", "占问", "起卦"]):
+        add("horary")
+    if _contains_any(text, ["择日", "择吉", "election", "electional", "选时", "用事时刻"]):
+        add("election")
     if _contains_any(text, ["西洋游戏", "dice", "占星骰子", "otherbu"]):
         add("otherbu")
     if _contains_any(text, ["13宫", "chart13"]):

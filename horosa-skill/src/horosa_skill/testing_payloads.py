@@ -119,6 +119,8 @@ def build_sample_payloads() -> dict[str, dict]:
         "balbillus": {**chart_birth, "predictive": 0},
         "yearsystem129": {**chart_birth, "predictive": 1},
         "persiandirected": {**chart_birth, "predictive": 0},
+        "horary": {**chart_birth, "hsys": 0, "tradition": True, "predictive": 0, "category": "marriage"},
+        "election": {**chart_birth, "hsys": 0, "tradition": True, "predictive": 0, "topicId": "marriage"},
         "mundane": {**confirmed, "year": 2025, "ingressTerm": "春分", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gpsLat": 31.2167, "gpsLon": 121.4667, "ad": 1, "hsys": 1},
         "sanshiunited": dict(east_birth),
         "chart": dict(chart_birth),
