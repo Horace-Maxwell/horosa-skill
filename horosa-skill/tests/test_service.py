@@ -138,7 +138,22 @@ class FakeClient(HorosaApiClient):
                             {"subDirect": "Mercury", "date": "2001-01-01"},
                         ],
                     }
-                ]
+                ],
+                "yearsystem129": [
+                    {
+                        "mainDirect": "Moon",
+                        "subDirect": [
+                            {"subDirect": "Moon", "date": "1990-01-01"},
+                            {"subDirect": "Saturn", "date": "1993-08-17"},
+                        ],
+                    },
+                    {
+                        "mainDirect": "Saturn",
+                        "subDirect": [
+                            {"subDirect": "Saturn", "date": "2015-01-01"},
+                        ],
+                    },
+                ],
             },
             "bazi": {"fourColumns": {"year": {"ganzi": "甲子"}}},
             "liureng": {"ke": ["一课"], "overview": ["概览"]},
@@ -372,6 +387,24 @@ class FakeJsClient(HorosaJsEngineClient):
                     "[大限·岁运]\n1-9岁 火風鼎 九三（阳9）"
                 ),
             }
+        if tool_name == "progextra":
+            # v2.5.0 推运 vendored builders (balbillus etc.) — return the single-section snapshot directly.
+            technique = payload.get("technique")
+            if technique == "balbillus":
+                return {
+                    "tool": "progextra",
+                    "technique": "balbillus",
+                    "data": {"ok": True},
+                    "snapshot_text": (
+                        "[Balbillus]\n"
+                        "Balbillus 法（129 年系统 · 旺距削减）：主限长度 = 小年 × (1 − 离擢升度角距/360)。\n\n"
+                        "| 主限 | 子限 | 起始日期 | 时长(年) |\n"
+                        "| --- | --- | --- | --- |\n"
+                        "| 太阳(15.62年) | 太阳 | 1990-01-01 | 1.30 |\n"
+                        "| 太阳(15.62年) | 木星 | 1991-04-21 | 0.64 |"
+                    ),
+                }
+            return {"tool": "progextra", "technique": technique, "data": {"ok": False}, "snapshot_text": ""}
         if tool_name == "liureng":
             return {
                 "data": {

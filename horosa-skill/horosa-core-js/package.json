@@ -13,6 +13,7 @@
     "node": ">=20.10.0"
   },
   "dependencies": {
-    "lunar-javascript": "^1.7.7"
+    "lunar-javascript": "^1.7.7",
+    "moment": "^2.30.1"
   }
 }

@@ -473,6 +473,9 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     "vedicprog": ASTRO_BIRTH_POLICY,
     "planetaryarc": ASTRO_BIRTH_POLICY,
     "planetaryages": ASTRO_BIRTH_POLICY,
+    "balbillus": ASTRO_BIRTH_POLICY,
+    "yearsystem129": ASTRO_BIRTH_POLICY,
+    "persiandirected": ASTRO_BIRTH_POLICY,
     "mundane": _policy(
         intent="世俗入宫盘 / mundane ingress：在某年某节气(春分/夏至/秋分/冬至)的精确入宫时刻排世俗盘。",
         required_context=["year", "入宫节气(春分/夏至/秋分/冬至)", "观测地点 lon/lat/zone"],
