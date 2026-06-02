@@ -251,6 +251,21 @@ def _policy(
     }
 
 
+SHENSHU_POLICY = _policy(
+    intent="神数 (皇极经世/五兆/太玄/京氏易/神乙数)：以干支起数，只需日期(可含时间)即可起盘，不需经纬度。",
+    required_context=["date (公历日期)", "time (可选，影响时柱)"],
+    ask_if_missing=[
+        {"field": "date", "question": "请提供起盘的公历日期（年月日）。"},
+        {"field": "time", "question": "几点起盘？（可选；影响时柱，留空按 00:00 起）"},
+    ],
+    safe_defaults=[
+        {"field": "time", "value": "00:00:00", "meaning": "未给时间时按子初起时柱"},
+        {"field": "after23NewDay", "value": 1, "meaning": "23 点后归次日（星阙默认）"},
+    ],
+    do_not_assume=["date"],
+)
+
+
 ASTRO_BIRTH_POLICY = _policy(
     intent="Birth/event astrology chart calculation.",
     required_context=COMMON_BIRTH_FIELDS,
@@ -496,6 +511,11 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         safe_defaults=[{"field": "topicId", "value": "marriage", "meaning": "默认按结婚用事规则包评估"}],
         do_not_assume=["候选时刻", "用事类型"],
     ),
+    "wangji": SHENSHU_POLICY,
+    "wuzhao": SHENSHU_POLICY,
+    "taixuan": SHENSHU_POLICY,
+    "jingjue": SHENSHU_POLICY,
+    "shenyishu": SHENSHU_POLICY,
     "mundane": _policy(
         intent="世俗入宫盘 / mundane ingress：在某年某节气(春分/夏至/秋分/冬至)的精确入宫时刻排世俗盘。",
         required_context=["year", "入宫节气(春分/夏至/秋分/冬至)", "观测地点 lon/lat/zone"],

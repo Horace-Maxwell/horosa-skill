@@ -619,6 +619,34 @@ def test_election_unknown_topic_falls_back_to_marriage(tmp_path) -> None:
     assert "[起盘信息]" in result.data["snapshot_text"]
 
 
+_SHENSHU_EXPECTED = {
+    "wangji": ("[起盘]", "[心易发微]"),
+    "wuzhao": ("[起盘]", "[特殊标记]"),
+    "taixuan": ("[起盘]", "[表]"),
+    "jingjue": ("[起课]", "[十六卦]"),
+    "shenyishu": ("[起盘]", "[吉凶]"),
+}
+
+
+@requires_chart
+@pytest.mark.parametrize("technique", sorted(_SHENSHU_EXPECTED))
+def test_shenshu_runs_via_chart_service(tmp_path, technique) -> None:
+    # 神数 family (wangji/wuzhao/taixuan/jingjue/shenyishu): kentang engines mounted on the chart service
+    # (:8899) that return a backend-built `snapshot` whose [小节] headers already match the export preset.
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        technique,
+        {"date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    snapshot = result.data["snapshot_text"]
+    assert snapshot, f"{technique} returned an empty snapshot"
+    first, last = _SHENSHU_EXPECTED[technique]
+    assert first in snapshot and last in snapshot, f"{technique}: {first}/{last} missing"
+    _assert_clean_export(result)
+
+
 def test_cli_coerces_null_or_scalar_payload_instead_of_crashing(tmp_path) -> None:
     """Regression: a null / scalar payload (stdin literally `null`) used to null-deref-crash the JS
     tools (`payload.liureng` / `normalizeDateTimeInput(null)`). cli.mjs now coerces it to {}, so a

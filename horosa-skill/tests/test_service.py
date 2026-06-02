@@ -260,6 +260,22 @@ class FakeClient(HorosaApiClient):
             }
         if endpoint == "/chart13":
             return chart_payload
+        _SHENSHU_FAKE = {
+            "/wangji/pan": ("kinwangji", "[起盘]\n干支：戊寅\n[元会运世]\n运卦：乾\n[天道卦]\n天道：泰\n[人事卦]\n人事：否\n[历史年表]\n年表：—\n[心易发微]\n断：吉"),
+            "/wuzhao/pan": ("kinwuzhao", "[起盘]\n干支：戊寅\n[揲筮]\n揲法：—\n[兆]\n兆象：—\n[木乡]\n木：—\n[火乡]\n火：—\n[土乡]\n土：—\n[金乡]\n金：—\n[水乡]\n水：—\n[特殊标记]\n标记：—"),
+            "/taixuan/pan": ("taixuanshifa", "[起盘]\n干支：戊寅\n[玄首]\n首：中\n[方州部家]\n方州部家：—\n[表]\n表：—"),
+            "/jingjue/pan": ("jingjue", "[起课]\n干支：戊寅\n[卦辞]\n辞：—\n[三分]\n三分：—\n[十六卦]\n卦：—"),
+            "/shenyishu/pan": ("shenyishu", "[起盘]\n干支：戊寅\n[干支与五行]\n五行：木\n[神卦]\n卦：—\n[五行法则]\n法：—\n[兵占]\n占：—\n[主客判断]\n主客：—\n[神煞]\n煞：—\n[长生]\n长生：—\n[吉凶]\n断：吉"),
+        }
+        if endpoint in _SHENSHU_FAKE:
+            engine, snapshot = _SHENSHU_FAKE[endpoint]
+            return {
+                "source": engine,
+                "engine": engine,
+                "dateStr": payload.get("date", f"{payload.get('year', 2025)}-01-01"),
+                "timeStr": payload.get("time", "00:00:00"),
+                "snapshot": snapshot,
+            }
         return chart_payload
 
 

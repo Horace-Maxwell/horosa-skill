@@ -312,6 +312,30 @@ Gotchas that bit us here:
   `horary`, `election` handlers, and `FakeClient` `/chart` needs `predictives.yearsystem129`, or the offline
   export-contract suite falls back to `generated_template` and fails.
 
+### 神数 family (14) — split into 2 tiers; only 5 are currently shipped
+
+The kentang registry (`astropy/websrv/kentang/registry.py`) mounts **14 神数 engines on the chart
+service (:8899)**: wangji / wuzhao / taixuan / jingjue / shenyishu (5 standalone engines) + shaozi /
+tieban / fendjing / beiji / nanji / chunzi / xianqin / cetian / qizhengkin (9 sharing the **`kinastro`**
+engine). The split that decides feasibility:
+
+- **Tier 1 — 5 standalone engines: SHIPPED.** `vendor/{kinwangji,kinwuzhao,taixuanshifa,jingjue,shenyishu}`
+  (~5.2 MB total). Each `web{key}srv.py` builds a `response["snapshot"]` whose `[小节]` headers already
+  match 星阙's `aiExport.js` preset, so the skill needs **no snapshot builder** — just POST `/{key}/pan`
+  and export `response.snapshot`. Wiring: one shared `_run_shenshu_tool(payload, key)` + `_split_birth_ymdhm`
+  (神数 take split year/month/day/hour/minute, not date/time strings) + a `ShenShuInput` (FlexibleModel:
+  date + optional time + 晚子时 switches + an `options` passthrough for engine-specific overrides like
+  wuzhao mode/number). **CRITICAL routing gotcha:** kentang mounts only reach :8899 if the endpoint is in
+  `_PYTHON_CHART_ENDPOINTS` — otherwise `_call_remote` sends them to the Java :9999 server and they 500.
+  Add `/wangji/pan` … `/shenyishu/pan` there (alongside `/qimen/pan`).
+- **Tier 2 — 9 kinastro-* engines: DEFERRED (honestly flagged).** Blocked by: (1) the shared `kinastro`
+  engine is **~61 MB** (`from astro.{shaozi,…} import …` with heavy submodules) — a 12× runtime bloat;
+  (2) on the current live :8899 they return **degraded `basic`-only data with no `snapshot`/`sections`**
+  (the `web{key}srv.py` builds `pan["snapshot"]` only when the full `astro.*` compute succeeds; it silently
+  returns `{ResultCode:-1}` or partial data otherwise). Shipping these needs a kinastro re-vendor + a verify
+  that the offline runtime computes complete charts — a separate, large task. They are intentionally NOT
+  registered as skill tools yet.
+
 ## Offline runtime packaging gotchas (these have bitten us)
 
 - **flatlib must survive the strip.** `scripts/package_runtime_payload.sh` must keep its
