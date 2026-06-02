@@ -158,9 +158,17 @@ mkdir -p "${STAGE_ROOT}/Horosa-Web/vendor"
 for ken_engine in kinqimen kintaiyi kinjinkou kinwangji kinwuzhao taixuanshifa jingjue shenyishu; do
   rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/vendor/${ken_engine}" "${STAGE_ROOT}/Horosa-Web/vendor/"
 done
-# The bundled chart service ships the qimen/taiyi/jinkou ken engines + the 5 standalone 神数 engines,
-# but the upstream kentang registry lists 9 more (kinastro-* shaozi/tieban/…). Make the staged mount
-# skip any service whose engine is not bundled so the chart service still boots offline.
+# kinastro engine for the 9 kinastro-* 神数 (engine only; exclude tools/cities + streamlit ui/docs).
+if [ -d "${SOURCE_ROOT}/Horosa-Web/vendor/kinastro" ]; then
+  rsync -a "${RSYNC_FILTERS[@]}" \
+    --exclude='tools' --exclude='ui' --exclude='frontend' --exclude='docs' --exclude='wiki' \
+    --exclude='examples' --exclude='tests' --exclude='styles' --exclude='scripts' \
+    --exclude='.streamlit' --exclude='.github' --exclude='.devcontainer' --exclude='.git' \
+    "${SOURCE_ROOT}/Horosa-Web/vendor/kinastro" "${STAGE_ROOT}/Horosa-Web/vendor/"
+fi
+# The bundled chart service ships qimen/taiyi/jinkou + all 14 神数 (5 standalone + 9 kinastro-*).
+# The graceful-mount patch is still applied (defensive): if any engine fails to import the staged
+# mount skips it so the chart service still boots offline.
 KENTANG_REGISTRY="${STAGE_ROOT}/Horosa-Web/astropy/websrv/kentang/registry.py"
 if [ -f "${KENTANG_REGISTRY}" ]; then
   KENTANG_REGISTRY_PATH="${KENTANG_REGISTRY}" python3 - <<'PY'

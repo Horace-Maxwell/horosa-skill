@@ -312,12 +312,13 @@ Gotchas that bit us here:
   `horary`, `election` handlers, and `FakeClient` `/chart` needs `predictives.yearsystem129`, or the offline
   export-contract suite falls back to `generated_template` and fails.
 
-### 神数 family (14) — split into 2 tiers; only 5 are currently shipped
+### 神数 family (14) — ALL SHIPPED (v0.9.1)
 
 The kentang registry (`astropy/websrv/kentang/registry.py`) mounts **14 神数 engines on the chart
 service (:8899)**: wangji / wuzhao / taixuan / jingjue / shenyishu (5 standalone engines) + shaozi /
 tieban / fendjing / beiji / nanji / chunzi / xianqin / cetian / qizhengkin (9 sharing the **`kinastro`**
-engine). The split that decides feasibility:
+engine). Both groups are now integrated — the wiring is identical (backend `snapshot` → export), the
+only difference is which engine dir is vendored:
 
 - **Tier 1 — 5 standalone engines: SHIPPED.** `vendor/{kinwangji,kinwuzhao,taixuanshifa,jingjue,shenyishu}`
   (~5.2 MB total). Each `web{key}srv.py` builds a `response["snapshot"]` whose `[小节]` headers already
@@ -328,13 +329,25 @@ engine). The split that decides feasibility:
   wuzhao mode/number). **CRITICAL routing gotcha:** kentang mounts only reach :8899 if the endpoint is in
   `_PYTHON_CHART_ENDPOINTS` — otherwise `_call_remote` sends them to the Java :9999 server and they 500.
   Add `/wangji/pan` … `/shenyishu/pan` there (alongside `/qimen/pan`).
-- **Tier 2 — 9 kinastro-* engines: DEFERRED (honestly flagged).** Blocked by: (1) the shared `kinastro`
-  engine is **~61 MB** (`from astro.{shaozi,…} import …` with heavy submodules) — a 12× runtime bloat;
-  (2) on the current live :8899 they return **degraded `basic`-only data with no `snapshot`/`sections`**
-  (the `web{key}srv.py` builds `pan["snapshot"]` only when the full `astro.*` compute succeeds; it silently
-  returns `{ResultCode:-1}` or partial data otherwise). Shipping these needs a kinastro re-vendor + a verify
-  that the offline runtime computes complete charts — a separate, large task. They are intentionally NOT
-  registered as skill tools yet.
+- **Tier 2 — 9 kinastro-* engines: SHIPPED (v0.9.1).** All 9 share the `kinastro` engine
+  (`from astro.{shaozi,fendjing,chunzi,cetian_ziwei,…} import …`). Same shared `_run_shenshu_tool`;
+  cetian/qizhengkin/xianqin also forward `gender` + place. **The v0.9.0 "deferred" call was WRONG:** the
+  live :8899 returned `basic`-only data only because the user's *running* app was an older build — the
+  current source's `web{key}srv.py` all set `pan["snapshot"] = build_snapshot(pan)`, and the engine
+  imports + computes cleanly under the bundled Python. Vendor the **engine only**: `vendor/kinastro`
+  with `--exclude=tools` (the 26 MB `tools/cities` geocoding DB is not needed for ganzhi 神数) +
+  `--exclude={ui,frontend,docs,wiki,examples,tests,styles,scripts,.streamlit,…}` → ~31 MB (`astro/` is
+  32 MB raw). `ensure_kinastro_path()` puts `vendor/kinastro` on `sys.path` so `import astro.shaozi`
+  resolves; `streamlit` is a kinastro import but it's already in the bundled site-packages (the
+  `@cache_data`-without-runtime warning is harmless). **Validate offline by invoking each
+  `web{key}srv` class's `pan()` with a mocked `cherrypy.request` from a NEUTRAL CWD** (NOT `cd $HW`, or
+  the local `Horosa-Web/astropy/__init__.py` shadows PyPI astropy → `No module named astropy.units`).
+- **The 9 kinastro-* have NO live `@requires_chart` test** — the user's running app is an older build
+  without their snapshots, so a live test would red. They're covered by the offline FakeClient contract
+  suite (the fake synthesizes a preset-covering snapshot) + the in-process srv validation.
+- **Some kinastro presets have conditional sections** (tieban/chunzi/cetian emit fewer than the full
+  `aiExport.js` preset for a given input). The FakeClient emits the FULL preset so the offline contract
+  is clean; real exports may show a few `missing_selected_sections` — that's expected (like election).
 
 ## Offline runtime packaging gotchas (these have bitten us)
 
