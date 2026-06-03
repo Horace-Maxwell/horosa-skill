@@ -2,788 +2,366 @@
 
 <div align="center">
   <h1>Horosa Skill</h1>
-  <p><strong>Turn Xingque / Horosa into a local-first occult capability layer that any AI can call.</strong></p>
-  <p>Clone the repo, install one offline runtime, and let Claude, Codex, Open WebUI, OpenClaw, or any MCP-capable client invoke real Xingque methods locally, consume full export contracts, and persist every analysis as structured memory.</p>
+  <p><strong>Turn Xingque / Horosa into an offline metaphysics capability layer any AI can call locally.</strong></p>
+  <p>Clone the repo, install the offline runtime once, and let Claude, Codex, Open WebUI, OpenClaw, etc. call <strong>68</strong> real techniques on your own machine — Western natal / predictive / horary / electional, BaZi / Zi Wei / Da Liu Ren / the Three Styles, and all <strong>14 Shen Shu</strong> systems — read the full Xingque AI-export protocol, return stable structured output, and persist every analysis as a retrievable local record. Works offline, value-for-value identical to the Xingque desktop app.</p>
 
-  <p><a href="https://github.com/Horace-Maxwell/horosa-skill"><img src="https://img.shields.io/badge/GitHub-Repository-111827?style=for-the-badge&logo=github" alt="Repository" /></a>&nbsp;<a href="https://github.com/Horace-Maxwell/horosa-skill/releases"><img src="https://img.shields.io/badge/GitHub-Releases-1d4ed8?style=for-the-badge&logo=github" alt="Releases" /></a>&nbsp;<a href="./README.md"><img src="https://img.shields.io/badge/Read%20in-Chinese-0f766e?style=for-the-badge" alt="Read in Chinese" /></a></p>
+  <p><a href="https://github.com/Horace-Maxwell/horosa-skill"><img src="https://img.shields.io/badge/GitHub-Repository-111827?style=for-the-badge&logo=github" alt="Repository" /></a>&nbsp;<a href="https://github.com/Horace-Maxwell/horosa-skill/releases"><img src="https://img.shields.io/badge/GitHub-Releases-1d4ed8?style=for-the-badge&logo=github" alt="Releases" /></a>&nbsp;<a href="./README.md"><img src="https://img.shields.io/badge/阅读-简体中文-0f766e?style=for-the-badge" alt="Read in Chinese" /></a></p>
 
   <p>
     <img src="https://img.shields.io/github/stars/Horace-Maxwell/horosa-skill?style=flat-square" alt="GitHub stars" />
     <img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square" alt="Release" />
+    <img src="https://img.shields.io/badge/tools-68-1d4ed8?style=flat-square" alt="68 tools" />
     <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-0f766e?style=flat-square" alt="Platforms" />
     <img src="https://img.shields.io/badge/runtime-offline%20first-111827?style=flat-square" alt="Offline runtime" />
     <img src="https://img.shields.io/badge/MCP-ready-111827?style=flat-square" alt="MCP ready" />
     <img src="https://img.shields.io/badge/storage-SQLite%20%2B%20JSON-111827?style=flat-square" alt="SQLite and JSON" />
   </p>
 
-  <p><a href="./LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-374151?style=flat-square" alt="License" /></a>&nbsp;<a href="./CONTRIBUTING.md"><img src="https://img.shields.io/badge/Contributing-Guide-0f766e?style=flat-square" alt="Contributing" /></a>&nbsp;<a href="./SECURITY.md"><img src="https://img.shields.io/badge/Security-Policy-991b1b?style=flat-square" alt="Security" /></a></p>
-
-  <p><a href="./SUPPORT.md"><img src="https://img.shields.io/badge/Support-Paths-1d4ed8?style=flat-square" alt="Support" /></a>&nbsp;<a href="./CITATION.cff"><img src="https://img.shields.io/badge/Citation-CFF-7c3aed?style=flat-square" alt="Citation" /></a>&nbsp;<a href="./CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-Updates-f59e0b?style=flat-square" alt="Changelog" /></a></p>
+  <p><a href="./LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-374151?style=flat-square" alt="License" /></a>&nbsp;<a href="./CONTRIBUTING.md"><img src="https://img.shields.io/badge/Contributing-Guide-0f766e?style=flat-square" alt="Contributing" /></a>&nbsp;<a href="./SECURITY.md"><img src="https://img.shields.io/badge/Security-Policy-991b1b?style=flat-square" alt="Security" /></a>&nbsp;<a href="./SUPPORT.md"><img src="https://img.shields.io/badge/Support-Paths-1d4ed8?style=flat-square" alt="Support" /></a>&nbsp;<a href="./CITATION.cff"><img src="https://img.shields.io/badge/Citation-CFF-7c3aed?style=flat-square" alt="Citation" /></a>&nbsp;<a href="./CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-Updates-f59e0b?style=flat-square" alt="Changelog" /></a></p>
 </div>
 
-## Docs
+---
 
-- Operations: [`docs/OPERATIONS.md`](./docs/OPERATIONS.md)
-- Evaluation: [`docs/EVALUATION.md`](./docs/EVALUATION.md)
-- Architecture: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
-- Data Contracts: [`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md)
-- Input Contracts: [`docs/INPUT_CONTRACTS.md`](./docs/INPUT_CONTRACTS.md)
-- MCP Metadata: [`server.json`](./server.json)
-- Agent Skill: [`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md)
-- Agent Repo Rules: [`AGENTS.md`](./AGENTS.md)
+## In one sentence
 
-## Current Stable Baseline
+Xingque already has a complete local engine, ephemeris, export settings, and a multi-technique system. **Horosa Skill does not rebuild a simplified calculator** — it packages those capabilities into a product-grade interface layer made for GitHub distribution, AI invocation, and long-term local management: the engine runs on your machine, the output is stable JSON + Xingque-style export snapshots, and every call is automatically written as a retrievable local knowledge record.
 
-Current public version: `Horosa Skill 0.9.2`
+It solves five things:
 
-The headline change in this line is **unifying Qimen Dunjia, Taiyi, and Jinkou Jue (and the Qimen + Taiyi inside San Shi United) onto Xingque's `ken` compute backend**. The `kinqimen` / `kintaiyi` / `kinjinkou` engines run on the local Python chart service and own all chart computation; the headless JS layer no longer computes charts itself — it reformats the ken response into `aiExport.js` sections via Xingque's `normalizeKinqimenData` / `normalizeBackendPan` / `normalizeKinjinkouData`. The result: the Skill's charts come from the **same backend as the Xingque desktop app, value-for-value identical**, while the outward export stays the stable Xingque-style `export_snapshot` / `export_format` contract. All three engines ship inside the offline runtime, so macOS and Windows both run them fully offline.
+- **Get it and use it** — clone from GitHub, install the full offline runtime from GitHub Releases, then run offline.
+- **A real AI interface** — call genuine Xingque methods over `MCP` or a `JSON-first CLI`, not a loose prompt layer.
+- **Stable & consumable** — every technique returns a uniform envelope + Xingque-style `export_snapshot` / `export_format`; neither machine nor human has to guess fields.
+- **Manageable long-term** — one call = one traceable record (run / artifact / manifest / final AI answer).
+- **Light repo** — code, docs, CLI, MCP, tests in Git; the heavy runtime in Releases.
 
-The hard protocol established earlier and still in force here is "do not invent missing settings": if a technique depends on time, location, timezone, gender, question context, house system, calendar options, or method-specific settings, the agent must ask first. Unconfirmed calls return a structured blocking response with a user-facing recovery prompt.
+License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICENSE)). The three bundled third-party `ken` engines are used under their own MIT licenses (see [Credits](#credits-the-bundled-open-source-ken-engines)).
 
-Latest local verification:
+## Documentation map
+
+| Doc | Content |
+| --- | --- |
+| [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | Architecture |
+| [`docs/INPUT_CONTRACTS.md`](./docs/INPUT_CONTRACTS.md) | Per-tool input contracts (required fields) |
+| [`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md) | Output / envelope / export data contracts |
+| [`docs/EXPORT_AUDIT_GUIDE.md`](./docs/EXPORT_AUDIT_GUIDE.md) | Section-by-section audit method for predictive exports |
+| [`docs/OPERATIONS.md`](./docs/OPERATIONS.md) · [`docs/EVALUATION.md`](./docs/EVALUATION.md) | Operations · evaluation |
+| [`docs/OFFLINE_RUNTIME_RELEASES.md`](./docs/OFFLINE_RUNTIME_RELEASES.md) | Offline runtime packaging & release |
+| [`server.json`](./server.json) · [`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md) · [`AGENTS.md`](./AGENTS.md) | MCP metadata · agent skill · repo rules |
+
+## Current stable baseline
+
+**Current public version: `Horosa Skill 0.9.2` (68 callable tools).**
+
+This release line brings the capability surface roughly to parity with the desktop app:
+
+- **Full Western astrology** — natal and derived charts, 10 classic return/progression/timeline tools, 3 v2.4.0 Western additions (Age Point / Distributions / mundane ingress), 7 v2.5.0 progressions (Jayne declination / Vedic sidereal / Planetary Arc / Ages of Man / Balbillus / 129-year system / Persian Directed), plus full **horary** and **electional** judgment engines.
+- **Chinese metaphysics core** — BaZi, Zi Wei, Da Liu Ren, Qi Men, Tai Yi, Jin Kou Jue, the Three Styles unified, Tong She Fa, He Luo Li Shu, Shao Zi Can Ping Shu, harmonic charts, Su Zhan, Liu Yao.
+- **All 14 Shen Shu** — 5 standalone (Huang Ji Jing Shi / Wu Zhao / Tai Xuan / Jing Fang Yi / Shen Yi Shu) + 9 (Shao Zi / Tie Ban / Fen Jing / Bei Ji / Nan Ji / Chun Zi / Yan Qin / Ce Tian / Qi Zheng·Zhang Guo).
+- **Same backend** — Qi Men / Tai Yi / Jin Kou Jue (and the Qi Men + Tai Yi inside the Three Styles) run on Xingque's `ken` backend (`kinqimen` / `kintaiyi` / `kinjinkou`); the 14 Shen Shu run on kentang engines mounted on the Xingque chart service; results are reformatted by the headless JS layer into `aiExport.js` sections. **The Skill and the Xingque desktop app share one backend, value-for-value identical.**
+
+A hard protocol runs throughout: **the AI may not invent parameters**. Whenever a technique is affected by time, place, timezone, gender, topic, house system, calendar, or casting method, the agent cannot proceed until the user confirms — the tool returns a structured block with a question you can forward verbatim.
+
+Local end-to-end signals:
 
 | Check | Result |
 | --- | --- |
-| Callable tools | `68 / 68` |
-| Qimen / Taiyi / Jinkou / San Shi United compute backend | Unified on `ken` (`kinqimen` / `kintaiyi` / `kinjinkou`), same source as the Xingque desktop app |
-| Tongshefa / decennials | Headless implementations value-aligned with Xingque (京房 palace element; `Math.round` / `Math.ceil` parity; cross-checked against Xingque's `decennials.test.js`) |
-| Forced clarification before unsafe calls | `32` tools return `must_ask_user=true` |
-| Safe exempt tools | `7` registry / knowledge / parser tools |
-| Tool execution | `68 / 68 ok=true` |
-| Local memory write | `68 / 68` |
-| memory query / show | `68 / 68` |
-| report JSON artifact | `68 / 68` |
-| Xingque-style export structure | Business methods emit `export_snapshot` / `export_format` |
-| Engineering tests | `190 / 190 pass` (incl. live ken-backend integration tests) |
-| GitHub CI | Linux/macOS tests plus Windows OpenClaw smoke pass |
-| Release runtime | macOS / Windows `v0.9.2` assets (with ken engines bundled) packaged and verified |
+| Callable tools | `68 / 68 ok=true` |
+| Engineering tests | `227 / 227 pass` (ken / Shen Shu live integration + offline golden unit tests) |
+| Forced clarification when params unconfirmed | `61` technique tools trigger `must_ask_user=true` |
+| Safe-exempt tools | `7` registry / knowledge / parser tools are directly readable |
+| Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`63` export techniques modeled) |
+| Local memory / report | `68 / 68` writes + `68 / 68` JSON artifacts |
+| Qi Men / Tai Yi / Jin Kou / Three Styles | unified on `ken`, same as the desktop app |
+| Tong She Fa / Decennials | headless, value-for-value with Xingque (`decennials.test.js` golden) |
+| GitHub CI | Linux/macOS unit tests + horosa-core-js JS golden self-check + Windows OpenClaw smoke |
+| Release runtime | macOS / Windows `v0.9.x` assets (ken + 14 Shen Shu engines bundled) packaged and verified |
 
-For the predictive tools `solarreturn`, `lunarreturn`, `solararc`, `givenyear`, `profection`, `pd`, `pdchart`, and `zr`: the current version verifies them as usable. Agents should not label Java `/predict/*` tools as unavailable. If a client still says that, first check whether it is using an old runtime, bypassing MCP with hand-written calculations, or skipping `doctor` / `openclaw-check --full`.
+> About `solarreturn` / `lunarreturn` / `solararc` / `givenyear` / `profection` / `pd` / `pdchart` / `zr`: these predictive tools are verified working in this version and should not be flagged by an agent as "Java `/predict/*` unavailable". If a client still says so, check whether it is on an old runtime, bypassing MCP to hand-compute, or hasn't run `doctor` / `openclaw-check --full`.
 
-More importantly, these tools now expose explicit input contracts. Return/progression tools need more than natal data: the agent must also confirm target time, target location/timezone, or primary-direction method settings. See [`docs/INPUT_CONTRACTS.md`](./docs/INPUT_CONTRACTS.md). The same contract is exposed through CLI `tool list`, `horosa_agent_guidance`, and MCP tool docstrings.
+## Capability map (68 tools)
 
-Full local audit artifacts are generated outside Git as:
+> Every business technique returns a uniform envelope plus a Xingque-style `export_snapshot` / `export_format`. Tools marked ⓟ are setting-sensitive and require parameter confirmation before calling.
 
-- `HOROSA_IO_AUDIT_*/all_tool_inputs_outputs_full.json`
-- `HOROSA_IO_AUDIT_*/all_tool_inputs_outputs.jsonl`
-- `HOROSA_IO_AUDIT_*/all_tool_inputs_outputs_summary.md`
-- `HOROSA_IO_AUDIT_*/predictive_tools_full_export_sections.md`
+### Western astrology · natal & derived charts
 
-They record tool input, tool output, preflight behavior, memory writes, report generation, and retrieval checks.
+| Tool ID | Name | Notes |
+| --- | --- | --- |
+| `chart` ⓟ | Standard chart | Western natal chart + full AI export (Dodekatemoria / dispositor chain / hyleg lifespan) |
+| `chart13` ⓟ | 13-house variant | `chart13` form |
+| `hellen_chart` ⓟ | Hellenistic chart | Hellenistic-oriented chart |
+| `india_chart` ⓟ | Indian chart | Vedic chart |
+| `guolao_chart` ⓟ | Seven Governors (Guolao) | Seven Governors / Guo Lao chart |
+| `relative` ⓟ | Synastry / relationship | Two-person relationship, composite, relative output |
+| `germany` ⓟ | Cosmobiology / midpoints | Midpoint structures and quantitative analysis |
 
-For predictive tools, do not judge the output from a short prefix preview. `solarreturn`, `lunarreturn`, `solararc`, `givenyear`, `profection`, `pd`, `pdchart`, and `zr` normally write natal-chart sections first, followed by the return/progression/transit chart or primary-direction table. A 1200-character preview can stop before the predictive chart appears. Inspect the full artifact through `export_format.sections`, or generate `predictive_tools_full_export_sections.md`. See [`docs/EXPORT_AUDIT_GUIDE.md`](./docs/EXPORT_AUDIT_GUIDE.md).
+### Western astrology · returns / progressions / timelines (20)
 
-## Hard Agent Rules
+| Tool ID | Name | Notes |
+| --- | --- | --- |
+| `solarreturn` ⓟ | Solar return | natal + return chart + aspects |
+| `lunarreturn` ⓟ | Lunar return | natal + lunar return + aspects |
+| `solararc` ⓟ | Solar arc | natal + directed chart + aspects |
+| `givenyear` ⓟ | Given-year | natal + given-year chart + aspects |
+| `profection` ⓟ | Profection | profection timeline |
+| `pd` ⓟ | Primary directions | real primary-direction table |
+| `pdchart` ⓟ | Primary-direction chart | readable PD chart + aspects |
+| `zr` ⓟ | Zodiacal release | ZR timeline |
+| `firdaria` ⓟ | Firdaria | Firdaria structure & timeline |
+| `decennials` ⓟ | Decennials | decennials timeline (headless, Xingque golden) |
+| `agepoint` ⓟ | Age Point / Huber | Koch-house age-point cycle (6 yrs/house) |
+| `distributions` ⓟ | Distributions | Asc through the Egyptian bounds |
+| `mundane` ⓟ | Mundane ingress | chart cast at a year's solar-term ingress moment |
+| `jaynesprog` ⓟ | Jayne declination | secondary progression + declination parallels |
+| `vedicprog` ⓟ | Vedic sidereal progression | progressions under the sidereal zodiac |
+| `planetaryarc` ⓟ | Planetary Arc | whole chart directed by arcSource's secondary arc |
+| `planetaryages` ⓟ | Ages of Man | Ptolemy seven ages + current band |
+| `yearsystem129` ⓟ | 129-year system | seven-planet succession, 129-year cycle |
+| `persiandirected` ⓟ | Persian Directed | symbolic 1°/year direction hit-list |
+| `balbillus` ⓟ | Balbillus 129-year | exaltation-distance reduction + recursive sub-periods (vendored JS, identical to Xingque) |
 
-This is the most important integration rule for Cursor, OpenClaw, Claude, Codex, Open WebUI, and similar clients.
+### Western divination · horary / electional
 
-Before an agent calls a technique with unclear settings, it should ask:
+| Tool ID | Name | Notes |
+| --- | --- | --- |
+| `horary` ⓟ | Horary | radicality / significators (14 categories) / perfection / moon story / verdict / timing |
+| `election` ⓟ | Electional | hard flags / 28 topic rule packs / scoring / cast moment / recommendations |
 
-```bash
-uv run horosa-skill agent guidance --tool liureng_gods --intent "current-time Daliuren pan"
-```
+### Chinese metaphysics core
 
-The matching MCP tool is `horosa_agent_guidance`; it tells AI clients which fields must be clarified and which Xingque defaults are safe only after user acceptance.
+| Tool ID | Name | Notes |
+| --- | --- | --- |
+| `bazi_birth` ⓟ / `bazi_direct` ⓟ | BaZi chart / direct reading | Four Pillars chart / direct reading |
+| `ziwei_birth` ⓟ | Zi Wei Dou Shu | Zi Wei chart (`ziwei_rules` returns the rule base) |
+| `liureng_gods` ⓟ / `liureng_runyear` ⓟ | Da Liu Ren / yearly | four lessons & three transmissions / runyear |
+| `qimen` ⓟ | Qi Men Dun Jia | cast by ken (`kinqimen`), palace detail + gua |
+| `taiyi` ⓟ | Tai Yi Shen Shu | cast by ken (`kintaiyi`), 16-palace marks |
+| `jinkou` ⓟ | Jin Kou Jue | cast by ken (`kinjinkou`), quick reading |
+| `sanshiunited` ⓟ | Three Styles unified | aggregates ken Qi Men + Tai Yi with Da Liu Ren |
 
-Calculation tools and `horosa_dispatch` now enforce this gate: unconfirmed calls return `agent_guidance.required`. After clarification, pass `agent_confirmed_settings: true`; when the user explicitly accepts defaults, pass `defaults_accepted: true`. If a response contains `details.agent_recovery.prompt_to_user`, the AI client must stop tool use and ask the user that question instead of retrying or inventing settings.
+### Local metaphysics · numerology · divination
 
-Recommended flow:
+| Tool ID | Name | Notes |
+| --- | --- | --- |
+| `tongshefa` ⓟ | Tong She Fa | gua, six lines, hidden, affinity (headless, Xingque parity) |
+| `canping` ⓟ | Shao Zi Can Ping Shu | four-pillar numbers, verses (in-process, bundled `lunar-javascript`) |
+| `heluo` ⓟ | He Luo Li Shu | pre/post-heaven gua, fate chapter, decade fortunes (in-process) |
+| `harmonic` ⓟ | Harmonic chart | natal longitude × harmonic number, same-frequency conjunctions |
+| `suzhan` ⓟ | Su Zhan | mansion-divination structure |
+| `sixyao` ⓟ | Liu Yao / I Ching | hexagram, changing lines, question-oriented output |
+| `otherbu` ⓟ | Astro dice | astrological dice + reading |
 
-1. The user asks for a reading, for example “cast a current-time Da Liu Ren pan.”
-2. The agent checks whether time, place, question, and method settings are complete.
-3. If anything is unclear, the agent asks the user or calls `horosa_agent_guidance`.
-4. Only after the user confirms, the agent calls the real tool with `agent_confirmed_settings: true` and `clarification_notes`.
-5. The agent interprets `export_snapshot` / `export_format`; it must not hand-calculate the occult method in shell, Python, or web snippets.
+### Shen Shu (all 14)
 
-Bad example:
+> kentang engines mounted on the Xingque chart service; the backend emits the `snapshot` directly, with section headers matching the aiExport preset. `shaozi` / `tieban` / `cetian` / `qizhengkin` / `xianqin` also take gender (+ place).
+
+| Tool ID | Name | Engine |
+| --- | --- | --- |
+| `wangji` ⓟ | Huang Ji Jing Shi · Xin Yi Fa Wei | standalone |
+| `wuzhao` ⓟ | Wu Zhao | standalone |
+| `taixuan` ⓟ | Tai Xuan · milfoil | standalone |
+| `jingjue` ⓟ | Jing Fang Yi · Jing Jue | standalone |
+| `shenyishu` ⓟ | Shen Yi Shu | standalone |
+| `shaozi` ⓟ | Shao Zi Shen Shu | kinastro |
+| `tieban` ⓟ | Tie Ban Shen Shu | kinastro |
+| `fendjing` ⓟ | Fen Jing Shen Shu · Liang Tou Qian | kinastro |
+| `beiji` ⓟ | Bei Ji Shen Shu | kinastro |
+| `nanji` ⓟ | Nan Ji Shen Shu | kinastro |
+| `chunzi` ⓟ | Chun Zi Shen Shu | kinastro |
+| `xianqin` ⓟ | Yan Qin | kinastro |
+| `cetian` ⓟ | Ce Tian Fei Xing · Zi Wei | kinastro |
+| `qizhengkin` ⓟ | Seven Governors · Zhang Guo | kinastro |
+
+### Solar terms / lunar calendar / gua · protocol / dispatch / knowledge
+
+| Tool ID | Name | Notes |
+| --- | --- | --- |
+| `jieqi_year` ⓟ / `nongli_time` ⓟ | Year solar terms / lunar time | solar-term nodes / lunar ganzhi |
+| `gua_desc` / `gua_meiyi` | Gua meaning / Mei Yi gua | hexagram names & texts / Plum-Blossom gua |
+| `export_registry` / `export_parse` | Export registry / parser | machine-readable export table / parse Xingque export text back to JSON |
+| `horosa_dispatch` | Dispatcher | takes natural-language intent and routes to the right technique |
+| `knowledge_registry` / `knowledge_read` | Hover-knowledge catalog / reader | list / read Xingque in-app hover knowledge and persist it |
+
+> **Explicitly excluded:** `fengshui` (not yet headless; we don't disguise unfinished capability as shippable). The 9 kinastro-* Shen Shu deferred in v0.9.0 are all shipped in v0.9.1.
+
+## Hard rules for agents
+
+This is the **most important** rule when wiring into Cursor, OpenClaw, Claude, Codex, Open WebUI.
+
+If an agent is unsure of the user's settings before calling a technique, it should first query `horosa_agent_guidance` (CLI: `uv run horosa-skill agent guidance --tool <tool> --intent "..."`) — it tells the AI which fields must be asked first and which Xingque defaults may be used once the user accepts.
+
+Calculation tools and `horosa_dispatch` are gated: if the agent didn't confirm settings it gets `agent_guidance.required`, and must pass `agent_confirmed_settings: true` after the user confirms, or `defaults_accepted: true` after the user explicitly accepts defaults. If the response has `details.agent_recovery.prompt_to_user`, the AI client must stop and forward that question to the user — it may not bypass or self-fill.
+
+Standard flow: ① user states a need → ② agent checks if params suffice; if not, call `horosa_agent_guidance` or ask the user → ③ user confirms time/place/topic/whether to accept defaults → ④ agent calls the real tool with `agent_confirmed_settings: true` + `clarification_notes` → ⑤ explain from `export_snapshot` / `export_format`, not from a hand calculation.
+
+❌ Blocked (missing confirmation, place, timezone, topic):
 
 ```json
-{
-  "date": "2026-05-18",
-  "time": "13:14:00"
-}
+{ "date": "2026-05-18", "time": "13:14:00" }
 ```
 
-Correct example:
+✅ Correct (user confirmation + full context):
 
 ```json
 {
   "agent_confirmed_settings": true,
-  "clarification_notes": "User confirmed: 2026-05-18 13:14:00, America/Los_Angeles, San Francisco, question is current work decision.",
-  "date": "2026-05-18",
-  "time": "13:14:00",
-  "zone": "-07:00",
-  "lat": "37n46",
-  "lon": "122w25",
-  "gpsLat": 37.7667,
-  "gpsLon": -122.4167,
+  "clarification_notes": "User confirmed: 2026-05-18 13:14:00, America/Los_Angeles, San Francisco, topic = current work decision.",
+  "date": "2026-05-18", "time": "13:14:00", "zone": "-07:00",
+  "lat": "37n46", "lon": "122w25", "gpsLat": 37.7667, "gpsLon": -122.4167,
   "after23NewDay": false
 }
 ```
 
-If the user explicitly says “use Xingque defaults,” an agent may pass:
+When the user says "use Xingque defaults", switch to `{ "defaults_accepted": true, "clarification_notes": "User explicitly accepted Xingque defaults." }` — but the agent **must not** set `defaults_accepted: true` on the user's behalf.
+
+> Timezone accepts both fixed offsets (`+08:00` / `-07:00`) and IANA names (`America/Los_Angeles` / `Asia/Shanghai`); Horosa Skill normalizes to a backend-stable offset using the chart's date and time.
+
+## Output protocol: the point is "stably consumable", not just "compute"
+
+Every tool call returns a uniform envelope:
 
 ```json
 {
-  "defaults_accepted": true,
-  "clarification_notes": "User explicitly accepted Xingque defaults."
+  "ok": true, "tool": "qimen", "version": "0.9.2",
+  "input_normalized": {}, "data": {}, "summary": [],
+  "warnings": [], "memory_ref": {}, "error": null
 }
 ```
 
-The agent must never set `defaults_accepted: true` on the user’s behalf.
+Techniques wired into the Xingque export protocol also carry `data.export_snapshot` (with `.snapshot_text` / `.sections` / `.selected_sections`) and `data.export_format`. So: the AI doesn't guess structure from free text; repeated calls of one technique return the same contract; `horosa_dispatch`'s aggregation layer carries each sub-result's export contract; and the structure survives into the JSON artifact. Full field tables: [`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md) and [`docs/INPUT_CONTRACTS.md`](./docs/INPUT_CONTRACTS.md).
 
-## What This Repository Is
+## Data management: a full local record system
 
-Xingque already had the hard parts: deep local algorithms, ephemeris-backed runtime behavior, rich AI export settings, and serious occult method coverage. `Horosa Skill` is the GitHub-first delivery surface that makes those capabilities usable by modern AI systems without turning the repo into a giant runtime dump.
-
-This repository is now published under `GNU AGPL-3.0-only`. The root [LICENSE](./LICENSE) governs the repository as a whole, while the package metadata under `horosa-skill/` mirrors the same license so Python, Node, and MCP-facing tooling can detect it correctly.
-
-This repository is built to solve five practical problems:
-
-- Install a complete offline runtime from GitHub Releases.
-- Expose real Xingque methods through `MCP` and a `JSON-first CLI`.
-- Turn every method output into a high-signal, sectioned, machine-readable export contract.
-- Persist every run, query, tool result, and final AI answer into a local retrieval-friendly record layer.
-- Keep the repository lightweight and reviewable while shipping full runtime assets separately.
-
-If the goal is “clone once, install once, and let AI call real Horosa methods locally on any machine,” this repo is designed for exactly that.
-
-## Acknowledgements: the bundled open-source engines (ken)
-
-The Qimen Dunjia / Taiyi / Jinkou Jue charts (and the Qimen + Taiyi inside San Shi United) are computed by three open-source Python engines from **[kentang2017](https://github.com/kentang2017)**. Xingque integrates these engines in its backend, and Horosa Skill reuses the same compute path and ships them inside the offline runtime. With thanks to the author:
-
-- **kinqimen** (Qimen Dunjia) — MIT License — <https://github.com/kentang2017/kinqimen>
-- **kintaiyi** (Taiyi) — MIT License — <https://github.com/kentang2017/kintaiyi>
-- **kinjinkou** (Jinkou Jue) — MIT License — <https://github.com/kentang2017/kinjinkou>
-
-These engines are used under their respective MIT licenses; the full copyright and license text is bundled with the offline runtime at `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}/LICENSE` and preserved on distribution.
-
-License attribution: the three `ken` engines above are **third-party MIT** components (by kentang2017). Everything else in this repo — 统摄法 (`tongshefa.js`), decennials (`engine/decennials.py`), and the `aiExport.js` formatting / headless adapters for qimen / taiyi / jinkou / liureng / charts — is **Xingque's own work**, licensed under this repository's `GNU AGPL-3.0-only`. tongshefa and decennials are headless ports of Xingque's frontend engines (`astrostudyui`), verified value-identical to Xingque (京房八宫 palace element, JS `Math.round` parity, etc.). The underlying traditional systems themselves (the 京房 eight-palace scheme, Hellenistic decennials, …) are public knowledge and carry no third-party copyright.
-
-## What It Can Do Today
-
-### High-level capability map
-
-| Layer | What ships now | What that means |
-| --- | --- | --- |
-| Offline runtime | macOS and Windows release assets installable from GitHub Releases | Users can run locally after install, including offline usage |
-| AI surface | `MCP server` + `JSON-first CLI` + `ask / dispatch` orchestration | Claude, Codex, Open WebUI, and OpenClaw can all integrate cleanly |
-| Method execution | `68` callable tools across charts, predictive work, occult domains, export tooling, and hover knowledge access | This is a real local capability surface, not just prompt glue |
-| Output contract | Every supported method emits stable envelopes plus `export_snapshot` / `export_format` | Machines can consume outputs repeatedly without guesswork |
-| Knowledge access | Local bundled Xingque hover knowledge for astrology, LiuReng, and Qimen | AI can ask for explanation layers as well as raw calculation layers |
-| Local memory | SQLite + JSON artifacts + run manifest + answer write-back | Every invocation becomes a durable local record |
-| Observability | Local JSONL traces with `trace_id` / `group_id` and run alignment | Operators can understand which run, tool, and artifact produced a failure |
-| Evaluation | `run_full_self_check` plus `HorosaBench` benchmark cases | Quality is measured, not just assumed |
-| Distribution model | Lightweight repository plus heavyweight release assets | Public history stays clean while runtime payloads stay complete |
-
-### Feature pillars
-
-- Real offline execution: no cloud divination API dependency after runtime install.
-- Real tool surface: not prompt glue, but explicit schemas, explicit tools, and stable contracts.
-- Real lifecycle storage: runs, artifacts, manifests, user questions, and final AI answers are persisted together.
-- Real Xingque fidelity: outputs are cleaned toward Xingque export and hover-document style instead of loose summaries.
-- Real GitHub packaging: lightweight public history, heavyweight runtime in Releases, product-like repo presentation.
-
-### Directly callable tools
-
-#### Export, orchestration, and knowledge
-
-| Tool ID | Name | Purpose |
-| --- | --- | --- |
-| `export_registry` | Xingque export registry | Return the full machine-readable export registry |
-| `export_parse` | Export text parser | Parse Xingque-style export text back into structured JSON |
-| `horosa_dispatch` | Natural-language dispatcher | Choose methods from user intent and run them coherently |
-| `knowledge_registry` | Hover knowledge catalog | List bundled astrology / LiuReng / Qimen knowledge domains and keys |
-| `knowledge_read` | Hover knowledge reader | Read bundled Xingque hover content on demand and persist it |
-
-#### Core charts and derived charts
-
-| Tool ID | Name | Purpose |
-| --- | --- | --- |
-| `chart` | Standard chart | Generate the main western chart with full export output |
-| `chart13` | Chart13 variant | Generate the `chart13` flavor |
-| `hellen_chart` | Hellenistic chart | Generate a Hellenistic-leaning chart output |
-| `guolao_chart` | Seven Governors / Guolao chart | Generate 七政四余 output |
-| `india_chart` | Indian chart | Generate Indian astrology output |
-| `relative` | Relationship / relative chart | Generate two-person or relational chart structures |
-| `germany` | Midpoint / quantitative chart | Generate midpoint-based analysis output |
-
-#### Predictive and timing systems
-
-| Tool ID | Name | Purpose |
-| --- | --- | --- |
-| `solarreturn` | Solar return | Compute solar return output |
-| `lunarreturn` | Lunar return | Compute lunar return output |
-| `solararc` | Solar arc directions | Compute solar arc results |
-| `givenyear` | Given-year analysis | Generate year-specific predictive output |
-| `profection` | Profection | Compute annual profection |
-| `pd` | Primary directions | Compute primary directions |
-| `pdchart` | Primary direction chart | Render the chart-style primary direction output |
-| `zr` | Zodiacal release | Compute zodiacal release |
-| `firdaria` | Firdaria | Generate Firdaria timelines |
-| `decennials` | Decennials | Generate decennial timing layers |
-
-Predictive tools have non-optional input and output expectations:
-
-| Tool | Confirm before calling | Output must include |
-| --- | --- | --- |
-| `solarreturn` / `lunarreturn` | natal data + return target `datetime` + return location/timezone `dirLat` / `dirLon` / `dirZone` | natal chart + return chart + return aspects |
-| `givenyear` | natal data + target year/time `datetime` + directed location/timezone `dir*` | natal chart + given-year chart + aspects |
-| `solararc` / `profection` | natal data + target `datetime` + `dirZone` | natal chart + progressed/profection chart + aspects |
-| `pd` | natal data + `pdtype` + `pdMethod` + `pdTimeKey` + `pdaspects` | primary-direction settings + real table rows |
-| `pdchart` | natal data + target `datetime` + `dirZone` + primary-direction method fields | natal chart + primary-direction chart table + aspects |
-| `zr` / `firdaria` / `decennials` | natal data + whether the user accepts Xingque default timeline settings | timeline / layered period output |
-
-If those fields are missing, the agent must ask the user or call `horosa_agent_guidance` and forward the recovery prompt. It must not silently invent settings.
-
-#### Chinese occult backbone
-
-| Tool ID | Name | Purpose |
-| --- | --- | --- |
-| `ziwei_birth` | Zi Wei birth chart | Generate Zi Wei chart output |
-| `ziwei_rules` | Zi Wei rules | Return Zi Wei rules and structure info |
-| `bazi_birth` | BaZi birth chart | Generate Four Pillars chart output |
-| `bazi_direct` | BaZi direct reading | Generate direct-interpretation BaZi output |
-| `liureng_gods` | Da Liu Ren main reading | Generate Da Liu Ren course / gods output |
-| `liureng_runyear` | Da Liu Ren annual timing | Generate LiuReng run-year output |
-| `qimen` | Qimen Dunjia | Computed by ken (`kinqimen`); generates Qimen layout, palace details, and divination sections |
-| `taiyi` | Taiyi | Computed by ken (`kintaiyi`); generates Taiyi output and palace markers |
-| `jinkou` | Jinkou Jue | Computed by ken (`kinjinkou`); generates Jinkou output |
-
-#### Phase 2 local methods
-
-| Tool ID | Name | Purpose |
-| --- | --- | --- |
-| `tongshefa` | Tong She Fa | Generate the Tong She Fa structure |
-| `canping` | Shaozi Canping / 金锁银匙 | Four-pillar 起数, year-nayin part, 本命/大运 verses (local in-process; needs the bundled `lunar-javascript`) |
-| `heluo` | Heluo Lishu / 河洛理数 | 天地数 → 先天/后天 gua + 元堂, 命运篇, 大限·岁运 with 元堂爻辞 (local in-process) |
-| `harmonic` | Harmonic chart / 调波盘 | natal lon × harmonic → harmonic positions + same-frequency conjunctions (backend `/astroextra/harmonic`) |
-| `sanshiunited` | San Shi United | Aggregate ken's Qimen + Taiyi with LiuReng into one result |
-| `suzhan` | Su Zhan / lunar mansion chart | Generate宿占 output |
-| `sixyao` | Six Yao / hexagram reading | Generate base hexagram, changed hexagram, and line state output |
-| `otherbu` | Astrology dice / western game method | Generate dice-like western symbolic output |
-
-#### Calendar and hexagram support
-
-| Tool ID | Name | Purpose |
-| --- | --- | --- |
-| `jieqi_year` | Annual Jieqi grid | Generate annual solar-term structures |
-| `nongli_time` | Lunar calendar conversion | Convert to Nongli / Ganzhi time information |
-| `gua_desc` | Hexagram description | Return hexagram name and core text |
-| `gua_meiyi` | Mei Yi hexagram explanation | Return Meiyi-oriented hexagram explanation |
-
-### Xingque AI export protocol domains already modeled
-
-This repository also exposes Xingque’s export registry as a machine-readable protocol layer. The following `technique` domains are already modeled and reusable:
-
-| technique ID | Meaning |
-| --- | --- |
-| `astrochart` | standard chart export |
-| `astrochart_like` | chart-like export variant |
-| `indiachart` | Indian chart export |
-| `relative` | relationship chart export |
-| `primarydirect` | primary directions export |
-| `primarydirchart` | primary directions chart export |
-| `zodialrelease` | zodiacal release export |
-| `firdaria` | Firdaria export |
-| `decennials` | decennials export |
-| `solarreturn` | solar return export |
-| `lunarreturn` | lunar return export |
-| `solararc` | solar arc export |
-| `givenyear` | given-year export |
-| `profection` | profection export |
-| `bazi` | BaZi export |
-| `ziwei` | Zi Wei export |
-| `suzhan` | Su Zhan export |
-| `sixyao` | Six Yao export |
-| `tongshefa` | Tong She Fa export |
-| `canping` | Shaozi Canping export (起盘 / 本命 / 大运) |
-| `heluo` | Heluo Lishu export (起命 / 先天卦 / 后天卦 / 命运篇 / 大限) |
-| `liureng` | Da Liu Ren export |
-| `jinkou` | Jinkou export |
-| `qimen` | Qimen export |
-| `taiyi` | Taiyi export |
-| `sanshiunited` | unified three-method export |
-| `guolao` | seven governors export |
-| `germany` | midpoint / quantitative export |
-| `jieqi` | main Jieqi export |
-| `jieqi_meta` | Jieqi metadata export |
-| `jieqi_chunfen` | spring equinox domain |
-| `jieqi_xiazhi` | summer solstice domain |
-| `jieqi_qiufen` | autumn equinox domain |
-| `jieqi_dongzhi` | winter solstice domain |
-| `otherbu` | western game / dice export |
-| `generic` | generic export domain |
-
-### Explicit shipping exclusion
-
-- `fengshui`
-
-## Bundled Xingque Hover Knowledge Is Also Available
-
-This repository now ships a local bundled knowledge layer for Xingque hover / popover content, so AI systems and users can read those explanations on demand without depending on the original app source tree.
-
-Current bundled domains:
-
-- Astrology: `planet`, `sign`, `house`, `lot`, `aspect`
-- Da Liu Ren: `shen`, `house`
-- Qimen Dunjia: `stem`, `door`, `star`, `god`
-
-That means users can directly read:
-
-- full hover explanations for chart planets, signs, houses, aspects, and lots
-- full hover content for LiuReng earthly branch shen entries and house overlays
-- full hover content for Qimen stems, doors, stars, and gods
-
-Those reads are also persisted and queryable like any other tool call.
-
-## Why The Output Layer Matters
-
-Every tool returns a stable envelope:
-
-```json
-{
-  "ok": true,
-  "tool": "qimen",
-  "version": "0.9.2",
-  "input_normalized": {},
-  "data": {},
-  "summary": [],
-  "warnings": [],
-  "memory_ref": {},
-  "error": null
-}
-```
-
-Methods wired into the Xingque export system also attach:
-
-- `data.export_snapshot`
-- `data.export_format`
-- `data.export_snapshot.snapshot_text`
-- `data.export_snapshot.sections`
-- `data.export_snapshot.selected_sections`
-
-That means:
-
-- AI systems do not need to reverse-engineer loose prose.
-- Repeated calls keep the same semantic structure.
-- `horosa_dispatch` also exposes export contracts for every child result.
-- Stored JSON artifacts preserve the same cleaned structure.
-
-## How Close Is This To Xingque Output?
-
-In this repository, “Xingque-compatible” means two concrete things:
-
-1. **Export-structure parity**: business methods generate Xingque-style `export_snapshot.export_text`, then parse it through the same `snapshot_parser` path into `export_format`. Full self-check confirms selected sections are not missing and no unknown sections are introduced.
-2. **Algorithm-path parity**: agents are not allowed to hand-calculate Qimen, LiuReng, charts, or any other method with shell snippets, ad-hoc Python, or web searches. Calls must go through Horosa Skill’s local runtime / headless engine. Qimen, Taiyi, and Jinkou (and the Qimen + Taiyi inside San Shi United) are computed exclusively by Xingque's `ken` backend (`kinqimen` / `kintaiyi` / `kinjinkou`), identical to the desktop app; the JS layer only reformats the ken result into `aiExport.js` sections.
-
-Current verification signal:
-
-```text
-tool_count: 42
-failed_tools: []
-missing_export_contract_tools: []
-ok: true
-```
-
-If you need proof that one exact input matches the current Xingque desktop UI field by field, export a golden snapshot from the Xingque app for that same input and compare it as a fixture. The Skill side already guarantees that business-method outputs are Xingque-style AI export documents that can be parsed back through the same contract layer.
-
-## Verification And Audit
-
-Use these checks to evaluate the project instead of relying on one lucky manual call:
+Local data defaults to `~/.horosa-skill/` (Windows: `%APPDATA%/HorosaSkill/`). Each run persists: run metadata, tool-call records, an entity index, JSON artifacts, a `run manifest`, the raw `query_text`, the user's `user_question`, the final `ai_answer_text`, and optional `ai_answer_structured`.
 
 ```bash
-cd horosa-skill
-uv run pytest -q
-uv run python scripts/run_full_self_check.py --rounds 1
-uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace --full
+uv run horosa-skill memory query                 # query history by tool / entity / run_id
+uv run horosa-skill memory show <run_id>          # replay one full call
+echo '{"run_id":"<run_id>","user_question":"...","ai_answer":"...","ai_answer_structured":{}}' \
+  | uv run horosa-skill memory answer --stdin     # write the final AI answer back to a record
 ```
 
-The full check covers:
+This makes it not just a "tool layer" but a "tool layer + traceable knowledge base".
 
-- every callable tool
-- the unified envelope
-- `export_snapshot` / `export_format`
-- export-text re-parsing
-- memory writes
-- `memory show/query`
-- report JSON / DOCX / PDF artifact generation
-- `horosa_dispatch` child export contracts
-- OpenClaw / mcporter visibility and smoke/full checks
-
-Latest local all-tool audit:
-
-```json
-{
-  "version": "0.9.2",
-  "tool_count": 42,
-  "records_count": 42,
-  "errors_count": 0,
-  "preflight_blocked_count": 32,
-  "preflight_exempt_ok_count": 7,
-  "all_outputs_ok": true,
-  "all_memory_saved": true,
-  "all_reports_generated": true
-}
-```
-
-## Local Data Management
-
-By default, local records are stored under:
-
-- macOS / Linux: `~/.horosa-skill/`
-- Windows: `%APPDATA%/HorosaSkill/`
-
-Each run can store:
-
-- run metadata
-- tool call records
-- entity references
-- JSON artifacts
-- one `run manifest`
-- original `query_text`
-- `user_question`
-- final `ai_answer_text`
-- optional `ai_answer_structured`
-
-This project already supports:
-
-- `memory query`
-  query history by tool, entity, or run id
-- `memory show <run_id>`
-  inspect one exact run end-to-end
-- `memory answer --stdin`
-  write the AI’s final answer back into an existing run
-
-So the repository is not just an execution layer. It is also a local retrieval layer.
-
-## Quick Start
+## Quick start
 
 ```bash
 cd horosa-skill
 uv sync
-uv run horosa-skill install
-uv run horosa-skill doctor
-uv run horosa-skill serve
+uv run horosa-skill install      # install the offline runtime from a GitHub Release
+uv run horosa-skill doctor       # confirm runtime is ready (expect issues: [])
+uv run horosa-skill serve        # start local MCP (default http://127.0.0.1:8765/mcp)
 ```
 
-Default MCP endpoint:
+For stdio clients like Claude Desktop: `uv run horosa-skill serve --transport stdio`.
 
-```text
-http://127.0.0.1:8765/mcp
-```
-
-For stdio-based clients such as Claude Desktop:
-
-```bash
-cd horosa-skill
-uv run horosa-skill serve --transport stdio
-```
-
-## Fastest Usable Workflow
-
-### 1. Install and verify the offline runtime
-
-```bash
-cd horosa-skill
-uv sync
-uv run horosa-skill install
-uv run horosa-skill doctor
-```
-
-If OpenClaw / mcporter is your main target, you can now generate a ready-to-paste config that already contains the current absolute path:
-
-```bash
-uv run horosa-skill client openclaw-setup --workspace ~/.openclaw/workspace
-uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace
-```
-
-`openclaw-setup` writes both required OpenClaw surfaces:
-
-- `~/.openclaw/workspace/config/mcporter.json` for `openclaw-check` / mcporter smoke tests.
-- `~/.openclaw/openclaw.json` under `mcp.servers.horosa` for native OpenClaw agent tool attachment.
-
-If `openclaw-check` passes, `openclaw mcp list` can see `horosa`, or a real session already exposes `horosa__...` tools, a stale `clientToolCount: 0` in the trajectory is only diagnostic noise. Do not treat it as proof that Horosa is detached. Restart OpenClaw or open a new agent session, and do not let the agent fall back to shell/Python hand calculations.
-
-If an agent tries to run Qimen / Taiyi / Six Yao with under-specified inputs and sees `/nongli/time` return `200001 param error`, make it call `horosa_agent_guidance` and ask the user for date, time, timezone, coordinates, and default settings first. Horosa Skill also retries Java date endpoints with Xingque-compatible payload variants so backend formatting errors are not mistaken for unavailable algorithms.
-
-Timezone input may be either a fixed offset such as `+08:00` / `-07:00` or an IANA name such as `America/Los_Angeles` / `Asia/Shanghai`. Horosa Skill normalizes IANA names with the chart date and time before calling the runtime, so `2026-05-18 13:14 America/Los_Angeles` is sent to Java as `-07:00`.
-
-### 2. Let the dispatcher select methods
+### Let the dispatcher pick the technique
 
 ```bash
 echo '{
   "agent_confirmed_settings": true,
-  "clarification_notes": "User confirmed the sample birth data, Shanghai, +08:00, and Xingque default method settings.",
-  "query":"Please combine qimen, liureng, and chart methods to analyze the current state",
+  "clarification_notes": "User confirmed: sample birth data, Shanghai, +08:00, Xingque defaults.",
+  "query":"Analyze my current situation across Qi Men, Liu Ren, and the chart",
   "birth":{"date":"1990-01-01","time":"12:00","zone":"+08:00","lat":"31n14","lon":"121e28"},
   "save_result": true
 }' | uv run horosa-skill ask --stdin
 ```
 
-### 3. Inspect one exact run
+### Call a single tool / read hover knowledge / parse export text
 
 ```bash
-uv run horosa-skill memory show <run_id>
-```
-
-### 4. Attach the AI’s final answer
-
-```bash
-echo '{
-  "run_id":"<run_id>",
-  "user_question":"What does this imply for my career next?",
-  "ai_answer":"The pattern is cautious first, then gradually upward.",
-  "ai_answer_structured":{"trend":"up_later"}
-}' | uv run horosa-skill memory answer --stdin
-```
-
-## Common Usage Patterns
-
-### Dump the export registry
-
-```bash
-cd horosa-skill
+echo '{"agent_confirmed_settings":true,"clarification_notes":"sample chart, Shanghai defaults","date":"1990-01-01","time":"12:00","zone":"+08:00","lat":"31n14","lon":"121e28","gpsLat":31.2333,"gpsLon":121.4667}' \
+  | uv run horosa-skill tool run chart --stdin
+echo '{"domain":"qimen","category":"door","key":"休门"}' | uv run horosa-skill knowledge read --stdin
+echo '{"technique":"qimen","content":"[起盘信息]\n参数\n\n[八宫]\n八宫内容"}' | uv run horosa-skill export parse --stdin
 uv run horosa-skill export registry
 ```
 
-### Parse Xingque export text into structured JSON
+> If an agent calls Qi Men / Tai Yi / Liu Yao with too few params and `/nongli/time` returns `200001 param error`, have it use `horosa_agent_guidance` to ask for date / time / timezone / lat-lon and defaults first; Horosa Skill also retries Xingque-compatible date formats against the Java endpoint so a backend format error isn't mistaken for an unavailable algorithm.
 
-```bash
-echo '{
-  "technique":"qimen",
-  "content":"[起盘信息]\nparams\n\n[八宫]\nbody\n\n[演卦]\nbody"
-}' | uv run horosa-skill export parse --stdin
-```
-
-### Run one atomic tool directly
-
-```bash
-echo '{
-  "agent_confirmed_settings": true,
-  "clarification_notes": "User confirmed the sample chart input, Shanghai, +08:00, and Xingque default chart settings.",
-  "date":"1990-01-01",
-  "time":"12:00",
-  "zone":"+08:00",
-  "lat":"31n14",
-  "lon":"121e28",
-  "gpsLat":31.2333,
-  "gpsLon":121.4667
-}' \
-  | uv run horosa-skill tool run chart --stdin
-```
-
-### Read bundled Xingque hover knowledge directly
-
-```bash
-echo '{"domain":"astro","category":"planet","key":"Sun"}' \
-  | uv run horosa-skill knowledge read --stdin
-```
-
-```bash
-echo '{"domain":"liureng","category":"shen","key":"子"}' \
-  | uv run horosa-skill knowledge read --stdin
-```
-
-```bash
-echo '{"domain":"qimen","category":"door","key":"休门"}' \
-  | uv run horosa-skill knowledge read --stdin
-```
-
-### Run one Phase 2 local method
-
-```bash
-echo '{
-  "agent_confirmed_settings": true,
-  "clarification_notes": "User confirmed the Tong She Fa four-symbol parameters.",
-  "taiyin":"巽",
-  "taiyang":"坤",
-  "shaoyang":"震",
-  "shaoyin":"震"
-}' \
-  | uv run horosa-skill tool run tongshefa --stdin
-```
-
-### Run the unified dispatcher
-
-```bash
-echo '{
-  "agent_confirmed_settings": true,
-  "clarification_notes": "User confirmed the sample birth data and Xingque default dispatcher settings.",
-  "query":"Please analyze the current situation using qimen, liureng, and chart methods",
-  "birth":{"date":"1990-01-01","time":"12:00","zone":"+08:00","lat":"31n14","lon":"121e28"},
-  "save_result": true
-}' | uv run horosa-skill dispatch --stdin
-```
-
-## AI Client Integrations
+## Supported AI clients
 
 - [Claude Desktop config example](./horosa-skill/examples/clients/claude_desktop_config.json)
 - [Codex config example](./horosa-skill/examples/clients/codex-config.toml)
-- [Open WebUI setup](./horosa-skill/examples/clients/openwebui-streamable-http.md)
-- [OpenClaw setup](./horosa-skill/examples/clients/openclaw-mcp.md)
+- [Open WebUI integration](./horosa-skill/examples/clients/openwebui-streamable-http.md)
+- [OpenClaw integration](./horosa-skill/examples/clients/openclaw-mcp.md)
 
-For OpenClaw / mcporter, the lowest-friction path is:
+For OpenClaw / mcporter, prefer the generator to avoid hand-editing JSON and paths:
 
 ```bash
 cd horosa-skill
 uv run horosa-skill client openclaw-setup --workspace ~/.openclaw/workspace
+uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace
 ```
 
-## Runtime And Release Strategy
+> If `openclaw-check` passes and `horosa__...` tools appear in a real session but the agent trace still shows `clientToolCount: 0`, that's stale trajectory-stat noise — restart OpenClaw or open a new session; don't let the agent fall back to Shell / Python hand-computation.
 
-This repository intentionally separates three layers:
+## Credits: the bundled open-source ken engines
 
-| Layer | Lives where | Purpose |
+Qi Men Dun Jia / Tai Yi Shen Shu / Jin Kou Jue (and the Qi Men + Tai Yi inside the Three Styles) are computed by three open-source Python engines from **[kentang2017](https://github.com/kentang2017)**. Xingque wired them into its backend; Horosa Skill reuses the same compute path and ships them with the offline runtime:
+
+- **kinqimen** (Qi Men Dun Jia) — MIT — <https://github.com/kentang2017/kinqimen>
+- **kintaiyi** (Tai Yi Shen Shu) — MIT — <https://github.com/kentang2017/kintaiyi>
+- **kinjinkou** (Jin Kou Jue) — MIT — <https://github.com/kentang2017/kinjinkou>
+
+Full copyright and license text ships in `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}/LICENSE` and is preserved on distribution.
+
+**License attribution:** the three `ken` engines above are third-party MIT components (by kentang2017). Every other metaphysics implementation here — Tong She Fa, Decennials, and the `aiExport.js` formatting + headless adapters for Qi Men / Tai Yi / Jin Kou / Da Liu Ren / charts / progressions / horary / electional / Shen Shu — is **Xingque's own algorithm**, licensed under the root `GNU AGPL-3.0-only`. The traditional systems themselves (Jing Fang's eight palaces, Hellenistic decennials, etc.) are public knowledge and constitute no third-party copyright.
+
+## Release & runtime strategy
+
+The repo is intentionally split into three layers:
+
+| Layer | Where | Role |
 | --- | --- | --- |
-| Public repo layer | GitHub repository | code, docs, CLI, MCP, tests, examples, release scripts |
-| Maintainer packaging input | `vendor/runtime-source/` | large local inputs required to build offline runtime releases |
-| End-user runtime | `~/.horosa/runtime/current` or `%LOCALAPPDATA%/Horosa/runtime/current` | the actual installed runtime used for local execution |
+| Public repo | GitHub repo | code, docs, CLI, MCP, tests, examples, packaging scripts |
+| Maintainer packaging inputs | `vendor/runtime-source/` | large inputs to build the offline runtime (not in Git history) |
+| End-user runtime | `~/.horosa/runtime/current` / `%LOCALAPPDATA%/Horosa/runtime/current` | the local runtime users actually execute after install |
 
-This keeps the GitHub surface clean while still preserving full offline distribution.
+This keeps the GitHub page clean, the Release assets complete, local execution offline, and the maintainer packaging flow independent of sibling directories. Further reading: [Offline Runtime Releases](./docs/OFFLINE_RUNTIME_RELEASES.md) · [Runtime Manifest Spec](./docs/RUNTIME_MANIFEST_SPEC.md) · [Repo Layout](./docs/REPO_LAYOUT.md).
 
-## Repository Layout
+## Repository layout
 
-| Path | Role |
+| Path | Description |
 | --- | --- |
-| [`horosa-skill/`](./horosa-skill) | core Python package, CLI, MCP server, tests, examples, release scripts |
-| [`docs/`](./docs) | runtime specs, coverage docs, release documentation, maintainer notes |
-| [`vendor/`](./vendor) | local runtime packaging input area |
+| [`horosa-skill/`](./horosa-skill) | Core Python package, CLI, MCP server, `horosa-core-js` (headless JS engines), tests, examples, release scripts |
+| [`docs/`](./docs) | runtime spec, algorithm coverage, release docs, maintainer docs |
+| [`vendor/`](./vendor) | local runtime packaging inputs |
 
-Useful documents:
+## Verification checklist
 
-- [Repo Layout](./docs/REPO_LAYOUT.md)
-- [Offline Runtime Releases](./docs/OFFLINE_RUNTIME_RELEASES.md)
-- [Runtime Manifest Spec](./docs/RUNTIME_MANIFEST_SPEC.md)
-- [Algorithm Coverage](./docs/ALGORITHM_COVERAGE.md)
-- [Vendored Runtime Sources](./vendor/README.md)
-
-## Current Status
-
-Already implemented:
-
-- GitHub-first offline runtime install flow
-- Qimen / Taiyi / Jinkou / San Shi United unified on Xingque's `ken` backend (`kinqimen` / `kintaiyi` / `kinjinkou`), same source as the desktop app
-- macOS and Windows `v0.9.2` runtime release assets (ken engines bundled in)
-- local MCP server and JSON-first CLI
-- full Xingque AI export registry and parser
-- stable structured outputs across 68 callable tools
-- forced agent clarification for 32 setting-sensitive technique tools
-- explicit preflight exemption for 7 safe registry / knowledge / parser tools
-- bundled and queryable hover knowledge for chart, LiuReng, and Qimen
-- dispatch-level child export contracts
-- SQLite + JSON artifacts + run manifest data model
-- AI answer write-back and retrieval workflow
-- real fresh-clone / GitHub Release runtime reinstall validation
-- Windows OpenClaw smoke in GitHub CI
-
-If you need a repository that turns Xingque into AI-callable infrastructure rather than a pile of loose scripts, this project is already operating in that direction.
-
-## Quick Verification Checklist
-
-If you want to prove to yourself that this is not just a polished shell, run the smallest serious verification path:
+After a fresh clone, to confirm "this isn't an empty shell", run this minimal set:
 
 ```bash
 cd horosa-skill
 uv sync
 uv run horosa-skill install
-uv run horosa-skill doctor
-uv run pytest -q
-uv run python scripts/run_benchmark.py
-uv run python scripts/run_full_self_check.py --rounds 1
+uv run horosa-skill doctor                              # expect issues: []
+uv run pytest -q                                        # 227 passed
+uv run python scripts/run_benchmark.py                  # HorosaBench: dispatch / export parity / knowledge
+uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```
 
-What matters in those results:
+The full self-check covers: each tool is callable → returns a uniform envelope → business techniques carry `export_snapshot` / `export_format` → export text re-parses → the run is written to memory → `memory show/query` retrieves it → report JSON/DOCX/PDF generate and register artifacts → `horosa_dispatch`'s aggregation layer keeps sub-tool export contracts → OpenClaw / mcporter see the MCP tools and complete smoke/full check.
 
-- `doctor` confirms the runtime is installed and reports `issues: []` once services are up
-- `pytest` validates the engineering test suite
-- `HorosaBench` validates routing, export parity, and knowledge reads
-- `run_full_self_check` validates all callable tools, export contracts, persistence, retrieval, and dispatch aggregation
+> **When auditing predictive / Shen Shu tools, don't read only the short preview.** Their Xingque-style body usually writes the natal chart first, then the return / progressed / annual / primary-direction / Shen Shu tables; a 1200-char prefix may show only the natal chart. Open the full artifact and check each `export_format.sections`. See [`docs/EXPORT_AUDIT_GUIDE.md`](./docs/EXPORT_AUDIT_GUIDE.md).
 
-For a first-time evaluator, this says far more than “one tool happened to run once.”
+## Is the output identical to Xingque?
 
-## Release Integrity And Provenance
+"Identical to Xingque" means two things:
 
-This repository now ships more than runtime packaging. It also includes the metadata and verification surfaces needed for auditable releases:
+1. **Identical export structure** — business techniques generate a Xingque-style `export_snapshot.export_text`, parsed by `snapshot_parser` into `export_format`; the full self-check confirms no missing or unknown sections.
+2. **Identical compute path** — the Skill forbids agents from hand-computing charts with shell / Python / web search. Qi Men / Tai Yi / Jin Kou and the Qi Men+Tai Yi in the Three Styles are computed exclusively by the ken backend; the 14 Shen Shu by the kentang engines on the chart service; horary / electional / Balbillus by the vendored Xingque frontend engines — all same-source.
 
-- runtime assets are distributed through GitHub Releases instead of bloating Git history
-- `server.json` is present so MCP tooling can identify the server cleanly
-- an SBOM generator is included for project dependencies and runtime-manifest-aware output
-- traces, artifacts, run manifests, knowledge bundles, and export snapshots now carry versioning or provenance data
-- release checks, benchmark checks, self-checks, README checks, and `server.json` validation are part of the engineering surface
+> Content fidelity was byte-checked: running Xingque's actual frontend builder on the same chart, the ages / aspects / promittors / significators are identical; only Persian Directed's hit dates differ by ≤1 day (moment's fractional-day truncation + JS↔Python float), which is astrologically negligible and documented (see [`horosa-skill/docs/v091-fidelity-spotcheck.md`](./horosa-skill/docs/v091-fidelity-spotcheck.md)). To prove a specific input matches the Xingque desktop UI field-for-field, put Xingque's golden snapshot for that input into fixtures and diff.
 
-Recommended follow-up documents:
+## FAQ / boundaries
 
-- Operations: [`docs/OPERATIONS.md`](./docs/OPERATIONS.md)
-- Evaluation: [`docs/EVALUATION.md`](./docs/EVALUATION.md)
-- Data contracts: [`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md)
-- MCP metadata: [`server.json`](./server.json)
+**Why isn't the release a pure cloud build?** Because the full runtime depends on locally maintained runtime sources and platform runtimes. Keeping the repo light is a goal, but the full runtime still needs reliable local packaging inputs — hence "light repo + heavy release + explicit verification".
 
-## Recommended MCP / AI Integration Model
+**Why keep stressing `export_snapshot` / `export_format`?** Because one of the project's core values is "let the AI stably consume Xingque output". Without this contract the AI can only read loose text, and retrieval / comparison / write-back / evaluation all become brittle.
 
-If you are wiring Horosa Skill into AI systems rather than treating it as a standalone CLI, this is the cleanest mental model:
+**Why keep both SQLite and JSON?** SQLite handles structured indexing and queries; JSON artifacts handle long-term archival — portable, diffable, reviewable.
 
-1. `install + doctor`
-2. attach the server through `stdio MCP`
-3. add an HTTP / OpenAPI bridge only if a client cannot consume MCP directly
+**Why isn't `fengshui` in the surface yet?** The current goal is the "complete, headless, offline-verifiable" surface. `fengshui` stays excluded; we don't disguise an un-headless capability as shippable.
 
-A practical split of responsibilities:
-
-- `horosa_dispatch`: natural-language entrypoint
-- atomic `tool run`: deterministic scripting and debugging
-- `knowledge_read`: bundled Xingque hover-knowledge access
-- `memory answer`: write the final AI answer back into the same run record
-
-So the repository is not only a calculation surface. It also exposes:
-
-- calculation
-- export contracts
-- bundled knowledge
-- dispatch
-- local memory
-- observability
-
-## Who This Repository Fits Best
-
-This repository is especially strong for four groups:
-
-- end users who want their own AI to call real Horosa methods locally
-- advanced users who want every analysis persisted into queryable local memory
-- maintainers who want a lightweight repo plus heavyweight release strategy
-- researchers who care about tool routing, export contracts, hover-knowledge access, and process-level evaluation
-
-If you are approaching it from a research perspective, start here:
-
-- [`docs/EVALUATION.md`](./docs/EVALUATION.md)
-- [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
-- [`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md)
-
-## FAQ / Boundary Notes
-
-### Why is the release workflow not purely GitHub-hosted cloud build output?
-
-Because the complete runtime still depends on maintained local runtime sources, platform runtimes, and packaging inputs. The goal is a lightweight public repository, but that does not remove the need for heavyweight, controlled runtime inputs during release assembly.
-
-### Why do `export_snapshot` and `export_format` matter so much?
-
-Because one of the core values of this project is making Xingque output stably consumable by AI systems. Without that contract layer, downstream retrieval, comparison, replay, and evaluation become fragile.
-
-### Why keep both SQLite and JSON artifacts?
-
-Because they serve different purposes:
-
-- SQLite is the structured local index and query layer
-- JSON artifacts are the durable, portable, diffable archival layer
-
-### Why is `fengshui` still excluded?
-
-Because the current public surface is intentionally limited to capabilities that are already headless, already verifiable offline, and already reliable enough to ship as a maintained local-first interface.
-
-### What is the strongest quality signal in this repository?
-
-Not the badge wall and not the screenshots. It is whether these four things remain true together:
-
-- tools really run
-- exports remain structurally stable
-- results really persist and can be queried back
-- benchmark and self-check continue to pass
+**What's the most important quality signal?** Not badges or screenshots, but whether these four hold at once: tools really call · exports are really stable structured · results really persist and write back · benchmark / self-check really keep passing.
