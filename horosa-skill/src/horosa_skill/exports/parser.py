@@ -126,8 +126,16 @@ def parse_export_content(
         ]
     )
 
+    optional_norm = {normalize_section_title(item) for item in technique_info.get("optional_sections", [])}
     unknown_detected = [title for title in detected_titles if normalize_section_title(title) not in {normalize_section_title(item) for item in preset_sections}]
-    missing_selected = [title for title in selected_normalized if normalize_section_title(title) not in {normalize_section_title(item) for item in detected_titles}]
+    # A selected section counts as "missing" only if the snapshot didn't emit it AND it isn't one of the
+    # technique's optional sections (星阙-UI-only search panels / mode-conditional sections — see registry).
+    missing_selected = [
+        title
+        for title in selected_normalized
+        if normalize_section_title(title) not in {normalize_section_title(item) for item in detected_titles}
+        and normalize_section_title(title) not in optional_norm
+    ]
     settings_used = {
         "version": AI_EXPORT_SETTINGS_VERSION,
         "sections": {technique: selected_normalized},
