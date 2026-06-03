@@ -510,6 +510,39 @@ class CaptureClient(FakeClient):
         return super().call(endpoint, payload)
 
 
+class OldBuildShenShuClient(FakeClient):
+    """Simulates an OLDER 星阙 chart-service build: 神数 /{key}/pan returns structured `basic` data but
+    NO `snapshot` field (the build predates the engine's build_snapshot()). The skill must surface this
+    as a clean transport error rather than a silently-empty reading."""
+
+    def call(self, endpoint: str, payload: dict) -> dict:
+        if endpoint.endswith("/pan") and endpoint.lstrip("/").split("/")[0] in {
+            "shaozi", "tieban", "fendjing", "beiji", "nanji", "chunzi", "xianqin", "cetian", "qizhengkin",
+            "wangji", "wuzhao", "taixuan", "jingjue", "shenyishu",
+        }:
+            return {"source": "kinastro", "engine": "kinastro-old", "basic": {"year_gz": "戊寅"}}  # no `snapshot`
+        return super().call(endpoint, payload)
+
+
+def test_shenshu_old_backend_without_snapshot_errors_clearly(tmp_path) -> None:
+    settings = Settings(server_root="http://127.0.0.1:9999", db_path=tmp_path / "m.db", output_dir=tmp_path / "runs")
+    service = HorosaSkillService(settings, client=OldBuildShenShuClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    result = service.run_tool("shaozi", {"date": "1998-02-20", "time": "20:48:00", "gender": 1}, save_result=False)
+    assert result.ok is False
+    assert result.error is not None
+    assert result.error.code == "transport.shenshu_snapshot_unavailable"
+    assert "过旧" in result.error.message or "snapshot" in result.error.message.lower()
+
+
+def test_shenshu_unparseable_date_errors_clearly(tmp_path) -> None:
+    settings = Settings(server_root="http://127.0.0.1:9999", db_path=tmp_path / "m.db", output_dir=tmp_path / "runs")
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    result = service.run_tool("wuzhao", {"date": "not-a-date", "time": "20:48:00"}, save_result=False)
+    assert result.ok is False
+    assert result.error is not None
+    assert result.error.code == "tool.shenshu_bad_date"
+
+
 def test_service_tool_list_exposes_input_contracts(tmp_path) -> None:
     settings = Settings(
         server_root="http://127.0.0.1:9999",

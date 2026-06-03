@@ -599,10 +599,9 @@ def test_election_runs_via_chart_service(tmp_path) -> None:
     export = result.data.get("export_snapshot") or {}
     detected = export.get("section_titles_detected") or []
     assert "总评" in detected
-    assert export.get("unknown_detected_sections") == []
-    # 用事专属 only appears when the topic rule-pack produced items, and 星阙's own preset lists 应期
-    # which its builder never emits — both are legitimately absent, so only those two may be "missing".
-    assert set(export.get("missing_selected_sections") or []) <= {"用事专属", "应期"}
+    # 用事专属 (conditional) + 应期 (never emitted) are now declared optional in the export registry, so
+    # the export reads clean (P1-1) — no missing/unknown sections.
+    _assert_clean_export(result)
 
 
 @requires_chart
@@ -619,26 +618,50 @@ def test_election_unknown_topic_falls_back_to_marriage(tmp_path) -> None:
     assert "[起盘信息]" in result.data["snapshot_text"]
 
 
+# All 14 神数: (first section, a reliably-emitted later section). The 5 standalone work against any
+# recent chart service; the 9 kinastro-* (shaozi…qizhengkin) only emit a snapshot on a current build —
+# an OLDER live app returns no snapshot, which now surfaces as a clean transport error (see P0-3), and
+# the test SKIPS that technique rather than failing (so it greens on the user's old :8899 yet really
+# exercises the engine on the bundled v0.9.2 runtime).
 _SHENSHU_EXPECTED = {
+    # 5 standalone engines
     "wangji": ("[起盘]", "[心易发微]"),
     "wuzhao": ("[起盘]", "[特殊标记]"),
     "taixuan": ("[起盘]", "[表]"),
     "jingjue": ("[起课]", "[十六卦]"),
     "shenyishu": ("[起盘]", "[吉凶]"),
+    # 9 kinastro-* engines
+    "shaozi": ("[起盘]", "[条文]"),
+    "tieban": ("[起盘]", "[条文]"),
+    "fendjing": ("[起盘]", "[六段断语]"),
+    "beiji": ("[起盘]", "[大运]"),
+    "nanji": ("[起盘]", "[密码]"),
+    "chunzi": ("[起盘]", "[候选条文]"),
+    "xianqin": ("[起盘]", "[吞啖合战]"),
+    "cetian": ("[起盘]", "[农历与命身]"),
+    "qizhengkin": ("[起盘]", "[星曜]"),
+}
+
+# kinastro-* need gender (+ place for cetian/qizhengkin/xianqin) to compute a full chart.
+_SHENSHU_PAYLOAD_EXTRA = {
+    "shaozi": {"gender": 1},
+    "tieban": {"gender": 1},
+    "xianqin": {"gender": 1, "lat": "31n13", "lon": "121e28", "gpsLat": 31.2167, "gpsLon": 121.4667, "zone": "+08:00"},
+    "cetian": {"gender": 1, "lat": "31n13", "lon": "121e28", "gpsLat": 31.2167, "gpsLon": 121.4667, "zone": "+08:00"},
+    "qizhengkin": {"gender": 1, "lat": "31n13", "lon": "121e28", "gpsLat": 31.2167, "gpsLon": 121.4667, "zone": "+08:00"},
 }
 
 
 @requires_chart
 @pytest.mark.parametrize("technique", sorted(_SHENSHU_EXPECTED))
 def test_shenshu_runs_via_chart_service(tmp_path, technique) -> None:
-    # 神数 family (wangji/wuzhao/taixuan/jingjue/shenyishu): kentang engines mounted on the chart service
-    # (:8899) that return a backend-built `snapshot` whose [小节] headers already match the export preset.
+    # 神数 family: kentang engines mounted on the chart service (:8899) that return a backend-built
+    # `snapshot` whose [小节] headers already match the export preset.
     service = make_service(tmp_path)
-    result = service.run_tool(
-        technique,
-        {"date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1},
-        save_result=False,
-    )
+    payload = {"date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1, **_SHENSHU_PAYLOAD_EXTRA.get(technique, {})}
+    result = service.run_tool(technique, payload, save_result=False)
+    if not result.ok and result.error and result.error.code == "transport.shenshu_snapshot_unavailable":
+        pytest.skip(f"chart service build too old to emit a {technique} snapshot")
     assert result.ok is True, result.error
     snapshot = result.data["snapshot_text"]
     assert snapshot, f"{technique} returned an empty snapshot"

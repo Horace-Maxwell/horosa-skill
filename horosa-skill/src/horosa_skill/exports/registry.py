@@ -171,7 +171,7 @@ AI_EXPORT_PRESET_SECTIONS = {
     "chunzi": ["起盘", "四柱", "代码来源", "结构解析", "候选条文", "代码查询", "批量代码查询", "关键词检索", "多标签检索", "宿名检索", "时辰检索"],
     "xianqin": ["起盘", "三宫", "三星", "衍生星", "十二宫", "吞啖合战", "情性与格局", "二十八宿禽", "十二宫顺序", "三元起宿", "合宿表", "科名月宿", "四季得时", "情性赋全表", "二十八宿正像", "吞啖合战规则", "贵贱赋摘要"],
     "cetian": ["起盘", "农历与命身", "四化", "飞星", "格局", "命宮", "兄弟宮", "夫妻宮", "子女宮", "財帛宮", "疾厄宮", "遷移宮", "交友宮", "官祿宮", "田宅宮", "福德宮", "父母宮", "星曜属性", "正曜副曜", "宫干四化表", "飞化规则", "古法格局规则", "三合组"],
-    "qizhengkin": ["起盘", "四柱", "星曜", "十二宫", "神煞", "年限", "流时", "择日", "张果断语", "命宫解读"],
+    "qizhengkin": ["起盘", "四柱", "星曜", "十二宫", "神煞", "年限", "流时", "择日", "今制宿度", "古制宿度", "张果断语", "命宫解读"],
     "mundane": ["世俗入宫", "起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "希腊点", "12分度", "主宰星链", "寿命格局", "可能性"],
     "jieqi": ["节气盘参数", "春分星盘", "春分宿盘", "夏至星盘", "夏至宿盘", "秋分星盘", "秋分宿盘", "冬至星盘", "冬至宿盘"],
     **JIEQI_SETTING_PRESETS,
@@ -194,6 +194,20 @@ AI_EXPORT_FORBIDDEN_SECTIONS = {
     "liureng": ["右侧栏目"],
     "qimen": ["右侧栏目"],
     "sanshiunited": ["右侧栏目"],
+}
+
+# Sections that a preset lists (mirrored verbatim from 星阙's aiExport.js) but that the HEADLESS snapshot
+# does not reliably emit — either 星阙-UI-only interactive panels (检索/查询 search boxes) or mode/data-
+# conditional sections. They are still valid export targets when present, but their ABSENCE must not mark
+# the export "dirty" (i.e. they are excluded from `missing_selected_sections`).
+AI_EXPORT_OPTIONAL_SECTIONS = {
+    # 择日: 用事专属 only when the topic rule-pack produced items; 应期 is never emitted by 星阙's builder.
+    "election": ["用事专属", "应期"],
+    # 神数 kinastro-* — UI search panels + mode/data-conditional sections.
+    "tieban": ["算盘定部", "计算摘要", "六亲佐证"],
+    "beiji": ["条文检索"],
+    "chunzi": ["代码查询", "批量代码查询", "关键词检索", "多标签检索"],
+    "qizhengkin": ["流时", "命宫解读"],
 }
 
 
@@ -316,6 +330,7 @@ def get_technique_info(key: str) -> dict[str, Any] | None:
         "label": base["label"],
         "preset_sections": deepcopy(AI_EXPORT_PRESET_SECTIONS.get(key, [])),
         "forbidden_sections": deepcopy(AI_EXPORT_FORBIDDEN_SECTIONS.get(key, [])),
+        "optional_sections": deepcopy(AI_EXPORT_OPTIONAL_SECTIONS.get(key, [])),
         "supports_planet_info": supports_planet_info,
         "planet_info_default": deepcopy(AI_EXPORT_PLANET_INFO_DEFAULT) if supports_planet_info else None,
         "supports_astro_meaning": supports_astro_meaning,
