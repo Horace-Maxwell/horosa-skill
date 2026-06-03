@@ -28,6 +28,8 @@ REQUIRED_ENTRIES = {
         "runtime-payload/Horosa-Web/vendor/shenyishu/",
         # kinastro engine backs the 9 kinastro-* 神数 (/shaozi/pan … /qizhengkin/pan).
         "runtime-payload/Horosa-Web/vendor/kinastro/astro/",
+        # 邵子神数 verse JSON, generated from the CSV at package time (without it 邵子 emits placeholders).
+        "runtime-payload/Horosa-Web/vendor/kinastro/astro/shaozi/data/shaozi_tiaowen_6144.json",
         "runtime-payload/runtime/mac/python/bin/python3",
         "runtime-payload/runtime/mac/java/bin/java",
         "runtime-payload/runtime/mac/node/bin/node",

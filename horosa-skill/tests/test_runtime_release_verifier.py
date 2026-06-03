@@ -73,6 +73,7 @@ _WIN_FILE_ENTRIES = [
     "runtime-payload/Horosa-Web/vendor/jingjue/__init__.py",
     "runtime-payload/Horosa-Web/vendor/shenyishu/__init__.py",
     "runtime-payload/Horosa-Web/vendor/kinastro/astro/__init__.py",
+    "runtime-payload/Horosa-Web/vendor/kinastro/astro/shaozi/data/shaozi_tiaowen_6144.json",
     "runtime-payload/runtime/windows/python/python.exe",
     "runtime-payload/runtime/windows/java/bin/java.exe",
     "runtime-payload/runtime/windows/node/node.exe",
