@@ -7,6 +7,25 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+### Build / Docs
+
+- **v0.9.1 Windows runtime shipped + natively verified.** Built `horosa-runtime-win32-x64-v0.9.1.zip`
+  on Windows from a re-synced 星阙 v2.5.0 `vendor/runtime-source` (now bundling all 14 神数 engines: the
+  5 standalone `kinwangji`/`kinwuzhao`/`taixuanshifa`/`jingjue`/`shenyishu` + the engine-only `kinastro`
+  for the 9 kinastro-*). Natively confirmed the bundled chart service: `/qimen|/taiyi|/jinkou/pan` →
+  `ResultCode 0` with the right `source`; **all 14 神数 `/{key}/pan` return a real `Result.snapshot`**;
+  tongshefa/canping/heluo via the bundled node; `verify_runtime_release.py` passes both archives;
+  `install` + `doctor` green (`issues: []`). Uploaded to the `v0.9.1` release and flipped it to public
+  `latest` (supersedes v0.7.0). No code changes were needed — the cross-platform build scripts already
+  handled it.
+- **Docs synced for the Windows v0.9.1 ship (Problem-Logging Protocol).** `docs/OFFLINE_RUNTIME_RELEASES.md`
+  now lists the `kinastro` engine input and replaces the open *v0.9.0 Windows sync TODO* with the
+  completed v0.9.1 native result; `docs/WINDOWS_RELEASE_BUILD_PROMPT.md` is re-versioned v0.8.0→v0.9.1
+  (it was stale at v0.8.0 while main was v0.9.1) and lists the 神数 engines as required vendor inputs;
+  `AGENTS.md` records three lessons — the 神数 snapshot nests at `Result.snapshot` (native-probe gotcha),
+  the engine-only kinastro trim is natively sufficient, and `start_horosa_local.ps1`'s 180s readiness
+  gate false-fails on a Mongo/Redis-less box even though the services do come up.
+
 ## [0.9.1] - 2026-06-02
 
 ### Added — the 9 kinastro-* 神数 (total now 68; all 14 神数 complete)

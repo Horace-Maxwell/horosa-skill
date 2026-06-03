@@ -348,6 +348,16 @@ only difference is which engine dir is vendored:
 - **Some kinastro presets have conditional sections** (tieban/chunzi/cetian emit fewer than the full
   `aiExport.js` preset for a given input). The FakeClient emits the FULL preset so the offline contract
   is clean; real exports may show a few `missing_selected_sections` — that's expected (like election).
+- **NATIVELY CONFIRMED on Windows (v0.9.1 release build).** Booting the bundled `win32-x64` chart service
+  and POSTing to each `/{key}/pan`, **all 14 神数 returned `ResultCode 0` with a real `Result.snapshot`** —
+  the 5 standalone (`source` `kinwangji`/`kinwuzhao`/`taixuanshifa`/`jingjue`/`shenyishu`) and all 9
+  kinastro-* (`source: kinastro`, snapshots 540–6000 chars). So the engine-only kinastro trim (above)
+  is sufficient and the "deferred" worry is fully retired on Windows too — not just structurally.
+- **Native-probe gotcha: the snapshot is nested at `Result.snapshot`, not top-level.** The raw chart-service
+  response is `{ResultCode, Result:{source, engine, snapshot, raw, …}}` (the skill's `_call_remote` unwraps
+  `Result` for `_run_shenshu_tool`, which then reads `response["snapshot"]`). If you probe `/{key}/pan` with
+  raw HTTP and read a top-level `snapshot`/`engine`, you'll wrongly see "empty" and think the engine failed.
+  Read `Result.snapshot` / `Result.source`.
 
 ## Offline runtime packaging gotchas (these have bitten us)
 
@@ -410,7 +420,18 @@ only difference is which engine dir is vendored:
   When releasing vX.Y.Z bump **all five** in the same commit; `git grep -n "<OLD>"` after the bump should
   show only legitimate historical references (CHANGELOG history, this gotcha line, the Windows-release
   handoff doc). `docs/DATA_CONTRACTS.md`'s `tool envelope: <ver>` tracks an independent envelope-schema
-  version — do **not** bump it just because it shares a number with the package.
+  version — do **not** bump it just because it shares a number with the package. (v0.9.1 note: the mac
+  side bumped all five correctly this round — `__version__` read `0.9.1` straight away.)
+- **`start_horosa_local.ps1`'s 180s readiness gate is too short on a box without Mongo/Redis, but the
+  services still come up.** On a clean machine the Java backend retries Mongo/Redis connects on boot and
+  takes >180s to answer `/common/time`, so the launcher hits its deadline and `throw`s "Windows Horosa
+  runtime did not become ready in time." This is a FALSE failure: `Start-Process` already detached both
+  the chart (`:8899`) and Java (`:9999`) processes, they keep coming up, and `horosa-skill doctor` goes
+  green (`issues: []`) ~30–60s later. When self-checking after `install`: start the stack, ignore the
+  launcher throw, then poll `doctor` (or the two endpoints) for a few minutes rather than trusting the
+  launcher's exit code. (Candidate fix: raise the deadline to ~300s, or gate "ready" on the chart service
+  alone since that is what the ken/神数 endpoints need.) Verified harmless across the v0.7.0 and v0.9.1
+  Windows release builds.
 
 ## `pkill` will take down the live 星阙 stack
 
