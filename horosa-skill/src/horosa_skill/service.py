@@ -2231,6 +2231,11 @@ def _build_persiandirected_snapshot_text(response: dict[str, Any]) -> str:
                     if 0 < age <= cap:
                         date = ""
                         if birth_dt is not None:
+                            # NOTE: 星阙 dates this via moment `birth.add(age*365.2421904, 'days')`, which
+                            # TRUNCATES the fractional day; our full-precision timedelta + JS-vs-Python
+                            # floating-point in `arc` make the 应期 DATE differ from 星阙 by ≤1 day on
+                            # ~40% of rows (the ages/aspects/targets are byte-identical). For 应期 this is
+                            # astrologically negligible; see docs/v091-fidelity-spotcheck.md.
                             date = (birth_dt + _dt.timedelta(days=age * 365.2421904)).strftime("%Y-%m-%d")
                         hits.append({"age": round(age * 100) / 100, "promittor": p, "aspect": a, "significator": tid, "date": date})
     hits.sort(key=lambda h: h["age"])
