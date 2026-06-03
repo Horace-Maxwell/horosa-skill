@@ -25,6 +25,9 @@ jobs:
       - name: Install horosa-core-js deps (lunar-javascript)
         working-directory: ./horosa-skill/horosa-core-js
         run: npm ci --omit=dev
+      - name: Run horosa-core-js JS golden self-check (horary/election/balbillus)
+        working-directory: ./horosa-skill/horosa-core-js
+        run: npm test
       - name: Install dependencies
         working-directory: ./horosa-skill
         run: uv sync --dev
@@ -64,6 +67,9 @@ jobs:
       - name: Install horosa-core-js deps (lunar-javascript)
         working-directory: ./horosa-skill/horosa-core-js
         run: npm ci --omit=dev
+      - name: Run horosa-core-js JS golden self-check (horary/election/balbillus)
+        working-directory: ./horosa-skill/horosa-core-js
+        run: npm test
       - name: Install dependencies
         working-directory: ./horosa-skill
         run: uv sync --dev
