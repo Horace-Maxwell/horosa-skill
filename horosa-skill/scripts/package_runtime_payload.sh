@@ -165,6 +165,13 @@ if [ -d "${SOURCE_ROOT}/Horosa-Web/vendor/kinastro" ]; then
     --exclude='examples' --exclude='tests' --exclude='styles' --exclude='scripts' \
     --exclude='.streamlit' --exclude='.github' --exclude='.devcontainer' --exclude='.git' \
     "${SOURCE_ROOT}/Horosa-Web/vendor/kinastro" "${STAGE_ROOT}/Horosa-Web/vendor/"
+  # 邵子神数: upstream ships only the verse CSV (no shaozi_tiaowen_6144.json), so 邵子 readings come
+  # back with placeholder verses. Generate the JSON the engine expects into the staged payload so the
+  # bundled runtime emits real 判词. Does NOT touch the 星阙 source tree.
+  SHAOZI_DATA="${STAGE_ROOT}/Horosa-Web/vendor/kinastro/astro/shaozi/data"
+  if [ -f "${SHAOZI_DATA}/shaozi_tiaowen.csv" ]; then
+    python3 "${SKILL_ROOT}/scripts/gen_shaozi_tiaowen.py" "${SHAOZI_DATA}"
+  fi
 fi
 # The bundled chart service ships qimen/taiyi/jinkou + all 14 神数 (5 standalone + 9 kinastro-*).
 # The graceful-mount patch is still applied (defensive): if any engine fails to import the staged
