@@ -81,24 +81,30 @@ The repository now produces a real Windows runtime archive:
 - ken engines under `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}`
 - **(v0.9.0+) the 5 standalone 神数 engines** under
   `Horosa-Web/vendor/{kinwangji,kinwuzhao,taixuanshifa,jingjue,shenyishu}`
+- **(v0.9.1+) the shared `kinastro` engine** (engine only — `Horosa-Web/vendor/kinastro/astro/` + root
+  modules; the ~26 MB `tools/cities` geocoding DB + the streamlit ui/frontend/docs are excluded) backing
+  the 9 kinastro-* 神数 (`/shaozi/pan` … `/qizhengkin/pan`)
 - `astrostudyboot.jar`
 - `horosa-core-js`
 - runtime manifest and startup scripts
 
 `build_runtime_release_windows.py` must bundle the three ken engines **+ the 5 standalone 神数
-engines** (kinwangji/kinwuzhao/taixuanshifa/jingjue/shenyishu — mirror the mac
-`package_runtime_payload.sh` engine loop) and patch the staged `kentang/registry.py` mount so the
-chart service still boots when the 9 out-of-scope kinastro-* 神数 engines are absent;
-`start_horosa_local.ps1` puts `Horosa-Web/vendor` on `PYTHONPATH` so `import kinqimen` / `kintaiyi`
-/ `kinjinkou` / `kinwangji` / `kinwuzhao` / `taixuanshifa` / `jingjue` / `shenyishu` resolve.
+engines** (kinwangji/kinwuzhao/taixuanshifa/jingjue/shenyishu) **+ the shared `kinastro` engine**
+(engine-only, for the 9 kinastro-* 神数 — mirror the mac `package_runtime_payload.sh` engine loop +
+kinastro trim) and patch the staged `kentang/registry.py` mount so the chart service still boots and
+gracefully skips any engine that is genuinely absent; `start_horosa_local.ps1` puts `Horosa-Web/vendor`
+on `PYTHONPATH` so `import kinqimen` / `kintaiyi` / `kinjinkou` / `kinwangji` / `kinwuzhao` /
+`taixuanshifa` / `jingjue` / `shenyishu` / `kinastro` resolve.
 
-> **⚠️ v0.9.0 Windows sync TODO (maintainer):** the Windows builder + `verify_runtime_release.py`
-> Windows entry list were updated to require the 5 神数 engines, but the Windows build itself was NOT
-> re-run on this macOS dev box. Before the Windows v0.9.0 zip ships, confirm
-> `build_runtime_release_windows.py` actually copies all 8 engines and that
-> `/wangji/pan` · `/wuzhao/pan` · `/taixuan/pan` · `/jingjue/pan` · `/shenyishu/pan` respond.
+> **✅ v0.9.1 Windows sync DONE (was a v0.9.0 TODO):** the Windows v0.9.1 zip was built **and natively
+> verified on a real Windows machine** (not just structurally on the mac dev box). Confirmed: the bundled
+> chart service boots and `/qimen/pan` · `/taiyi/pan` · `/jinkou/pan` return `ResultCode 0` with the
+> right `source`; **all 14 神数 respond with a real `Result.snapshot`** — the 5 standalone
+> (`/wangji` · `/wuzhao` · `/taixuan` · `/jingjue` · `/shenyishu`) **and** the 9 kinastro-*
+> (`/shaozi` … `/qizhengkin`, `source: kinastro`) under the trimmed engine-only kinastro; tongshefa /
+> canping / heluo work via the bundled node; `verify_runtime_release.py` passes both archives.
 
-In this macOS development environment, Windows verification is structural rather than native-process execution. The release zip is built and checked for required contents here, and should still be validated on a real Windows machine before public release sign-off — in particular, confirm the chart service boots and `/qimen/pan` · `/taiyi/pan` · `/jinkou/pan` + the 5 神数 `/{key}/pan` respond.
+In this macOS development environment, Windows verification is structural rather than native-process execution. The release zip is built and checked for required contents here, and should still be validated on a real Windows machine before public release sign-off — in particular, confirm the chart service boots and `/qimen/pan` · `/taiyi/pan` · `/jinkou/pan` + all 14 神数 `/{key}/pan` respond. (Done for v0.9.1 — see the note above.)
 
 ## Example Manifest
 
