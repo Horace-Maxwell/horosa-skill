@@ -359,6 +359,34 @@ only difference is which engine dir is vendored:
   raw HTTP and read a top-level `snapshot`/`engine`, you'll wrongly see "empty" and think the engine failed.
   Read `Result.snapshot` / `Result.source`.
 
+### v0.9.2 hardening lessons (audit pass — tests/robustness/fidelity/runtime)
+
+- **`f"{response.get('snapshot')}"` produces the literal string `"None"` when the key is absent** (a truthy
+  6-char string → a garbage "None" export that silently passed). Always guard `raw = response.get("snapshot")`
+  then `f"{raw}".strip() if raw else ""`. This bit `_run_shenshu_tool`; the same `f"{...or ''}"` idiom is safe
+  only because of the explicit `or ''`.
+- **Don't silently fall back in compute runners.** `_split_birth_ymdhm` used to substitute `2025-01-01` on an
+  unparseable date (wrong-moment chart, no error). Now it raises `tool.shenshu_bad_date`; `_run_shenshu_tool`
+  raises `transport.shenshu_snapshot_unavailable` on a no-snapshot (old-backend) response; horary/election/
+  progextra log + attach `snapshot_error` instead of a bare `except: pass`.
+- **persiandirected dates differ from 星阙 by ≤1 day** (~40% of rows). Root cause: 星阙's moment
+  `add(N,'days')` TRUNCATES the fractional day (JS `Date.setDate` floors), AND `arc % 360` has JS↔Python
+  float noise that rounds to the same 2-dp age but flips a day at the integer boundary. Matching the truncation
+  made it worse (float noise dominates). The ages/aspects/targets are byte-identical; the ≤1-day 应期 date is
+  astrologically negligible and documented (`docs/v091-fidelity-spotcheck.md`). To verify a hand-port's
+  fidelity, extract the 星阙 builder's pure functions + run them on the same fixture and diff — but mind
+  `moment` (CJS, `createRequire`) and the React-class lines.
+- **Runtime-slim reality: `pyarrow`(119M)/`pandas`(40M) are astropy deps, NOT streamlit-only.** kintaiyi needs
+  `import astropy.units` → astropy needs pyarrow+pandas. Stripping them breaks taiyi. streamlit is imported
+  pervasively across `kinastro/astro/*` (st.markdown ×1817 …) so it can't be stripped without a fragile stub.
+  **Only `plotly`(40M) is safely strippable** (streamlit-only + lazily imported for `st.plotly_chart`, never hit
+  headless). Verified `import streamlit` + cetian snapshot + `astropy.units` all OK without it.
+- **Export presets are a SUPERSET; some sections are 星阙-UI-only or conditional.** `AI_EXPORT_OPTIONAL_SECTIONS`
+  (registry) lists sections a preset names but the headless snapshot may not emit (检索/查询 panels, mode/topic
+  conditional). The parser excludes them from `missing_selected_sections` so real exports read clean; strict
+  techniques keep an empty optional set. Also: a preset copied from `aiExport.js` can MISS sections the backend
+  actually emits (qizhengkin 今制宿度/古制宿度) → they surface as `unknown_detected_sections`; add them to the preset.
+
 ## Offline runtime packaging gotchas (these have bitten us)
 
 - **flatlib must survive the strip.** `scripts/package_runtime_payload.sh` must keep its
