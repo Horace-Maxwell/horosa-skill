@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import logging
 import time
 from datetime import timezone, datetime
 from pathlib import Path
@@ -43,6 +44,8 @@ from horosa_skill.schemas.tools import (
     ReportTemplateInput,
 )
 from horosa_skill.tracing import TraceRecorder
+
+logger = logging.getLogger(__name__)
 
 
 TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
@@ -2268,19 +2271,23 @@ _SHENSHU_ENDPOINTS = {
 
 def _split_birth_ymdhm(payload: dict[str, Any]) -> dict[str, int]:
     # 神数 engines take split year/month/day/hour/minute (ganzhi-based). Derive from date "YYYY-MM-DD"/
-    # "YYYY/MM/DD" (+ optional time "HH:MM[:SS]"). Falls back to a 0-time when only the date parses.
-    import datetime as _dt
-
+    # "YYYY/MM/DD" (+ optional time "HH:MM[:SS]"). Raises ToolValidationError on an unparseable date
+    # rather than silently substituting a default (which would compute a chart for the wrong moment).
     date_raw = f"{payload.get('date', '')}".strip().replace("/", "-")
     time_raw = f"{payload.get('time', '')}".strip()
     combined = f"{date_raw} {time_raw}".strip()
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
         try:
-            dt = _dt.datetime.strptime(combined if "%H" in fmt else date_raw, fmt)
+            dt = datetime.strptime(combined if "%H" in fmt else date_raw, fmt)
             return {"year": dt.year, "month": dt.month, "day": dt.day, "hour": dt.hour, "minute": dt.minute}
         except ValueError:
             continue
-    return {"year": 2025, "month": 1, "day": 1, "hour": 0, "minute": 0}
+    raise ToolValidationError(
+        f"无法解析神数起盘日期/时间：date={payload.get('date')!r} time={payload.get('time')!r}。"
+        "请提供公历日期（YYYY-MM-DD，可含 HH:MM[:SS] 时间）。",
+        code="tool.shenshu_bad_date",
+        details={"date": payload.get("date"), "time": payload.get("time")},
+    )
 
 
 def _build_firdaria_snapshot_text(response: dict[str, Any]) -> str:
@@ -4136,8 +4143,8 @@ class HorosaSkillService:
             js = self.js_client.run("progextra", {"technique": technique, "chart": response})
             if isinstance(js, dict):
                 snapshot_text = f"{js.get('snapshot_text') or ''}".strip()
-        except Exception:
-            snapshot_text = ""
+        except Exception as exc:
+            logger.warning("progextra JS engine failed (technique=%s): %s", technique, exc)
         return {
             "chart": response.get("chart"),
             "raw": response,
@@ -4176,7 +4183,19 @@ class HorosaSkillService:
                 code="tool.shenshu_engine_error",
                 details={"technique": key, "result": response.get("Result")},
             )
-        snapshot_text = f"{response.get('snapshot') if isinstance(response, dict) else ''}".strip()
+        raw_snapshot = response.get("snapshot") if isinstance(response, dict) else None
+        snapshot_text = f"{raw_snapshot}".strip() if raw_snapshot else ""
+        if not snapshot_text:
+            # A reachable engine that returns no `snapshot` is an OLD chart-service build: the 神数 srv
+            # only emits `snapshot` once the current source's build_snapshot() is present. Fail loudly
+            # instead of returning a hollow export, so the agent can tell the user to update 星阙 / use
+            # the bundled runtime (rather than silently producing an empty reading).
+            raise ToolTransportError(
+                f"{key} 引擎未返回 snapshot（命中的图表服务构建过旧，缺该神数的 snapshot 输出）。"
+                "请更新 星阙 App 或改用 skill 自带的离线 runtime。",
+                code="transport.shenshu_snapshot_unavailable",
+                details={"technique": key, "endpoint": endpoint, "engine": response.get("engine") if isinstance(response, dict) else None},
+            )
         return {
             "engine": response.get("engine") if isinstance(response, dict) else key,
             "raw": response,
@@ -4192,7 +4211,7 @@ class HorosaSkillService:
         for stale in ("datetime", "dirZone", "dirLat", "dirLon", "category"):
             chart_payload.pop(stale, None)
         response = self._call_remote("/chart", chart_payload)
-        snapshot_text, data = "", {}
+        snapshot_text, data, snapshot_error = "", {}, None
         try:
             js = self.js_client.run("horary", {"chart": response, "category": category})
             if isinstance(js, dict):
@@ -4200,9 +4219,10 @@ class HorosaSkillService:
                 data = js.get("data") if isinstance(js.get("data"), dict) else {}
                 # the JS engine resolves an unknown category back to 'general'; reflect that.
                 category = f"{js.get('category') or category}".strip() or category
-        except Exception:
-            snapshot_text = ""
-        return {
+        except Exception as exc:  # don't fail the chart, but don't hide the empty snapshot either
+            snapshot_error = str(exc)
+            logger.warning("horary JS engine failed (category=%s): %s", category, exc)
+        result = {
             "chart": response.get("chart"),
             "category": category,
             "judgment": data,
@@ -4210,6 +4230,9 @@ class HorosaSkillService:
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="horary", snapshot_text=snapshot_text),
         }
+        if snapshot_error:
+            result["snapshot_error"] = snapshot_error
+        return result
 
     def _run_election_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 择日 (electional): cast the traditional chart at a candidate moment, then run the vendored 星阙
@@ -4219,7 +4242,7 @@ class HorosaSkillService:
         for stale in ("datetime", "dirZone", "dirLat", "dirLon", "topicId", "topic"):
             chart_payload.pop(stale, None)
         response = self._call_remote("/chart", chart_payload)
-        snapshot_text, data = "", {}
+        snapshot_text, data, snapshot_error = "", {}, None
         try:
             js = self.js_client.run("election", {"chart": response, "topicId": topic_id})
             if isinstance(js, dict):
@@ -4227,9 +4250,10 @@ class HorosaSkillService:
                 data = js.get("data") if isinstance(js.get("data"), dict) else {}
                 # the JS engine resolves an unknown topicId back to 'marriage'; reflect that.
                 topic_id = f"{js.get('topicId') or topic_id}".strip() or topic_id
-        except Exception:
-            snapshot_text = ""
-        return {
+        except Exception as exc:  # don't fail the chart, but don't hide the empty snapshot either
+            snapshot_error = str(exc)
+            logger.warning("election JS engine failed (topicId=%s): %s", topic_id, exc)
+        result = {
             "chart": response.get("chart"),
             "topicId": topic_id,
             "judgment": data,
@@ -4237,6 +4261,9 @@ class HorosaSkillService:
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="election", snapshot_text=snapshot_text),
         }
+        if snapshot_error:
+            result["snapshot_error"] = snapshot_error
+        return result
 
     def _run_yearsystem129_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 129年系统: data is computed server-side and carried in response.predictives.yearsystem129
