@@ -34,7 +34,7 @@
 
 ## 最新稳定基线
 
-当前公开版本：`Horosa Skill 0.9.1`
+当前公开版本：`Horosa Skill 0.9.2`
 
 这一版的核心变化是**把奇门遁甲、太乙神数、金口诀（以及三式合一中的奇门 + 太乙）统一到星阙的 `ken` 计算后端**。`kinqimen` / `kintaiyi` / `kinjinkou` 三个引擎挂载在本地 Python chart 服务上，独占盘面计算权；headless JS 层不再自己起盘，而是把 ken 返回结果通过星阙的 `normalizeKinqimenData` / `normalizeBackendPan` / `normalizeKinjinkouData` 重新格式化成 `aiExport.js` 的 section 结构。结果是：Skill 的盘面与星阙桌面端走**同一套后端、逐值同源**，对外导出仍然是稳定的星阙式 `export_snapshot` / `export_format` contract。三个引擎已随离线 runtime 一起打包，macOS / Windows 均可断网运行。
 
@@ -56,7 +56,7 @@
 | 星阙式导出结构 | 业务技法均带 `export_snapshot` / `export_format` |
 | 工程测试 | `190 / 190 pass`（含 ken 后端实时集成测试） |
 | GitHub CI | Linux/macOS 单测 + Windows OpenClaw smoke 通过 |
-| Release runtime | macOS / Windows `v0.9.1` assets（含 ken 引擎）已打包并校验 |
+| Release runtime | macOS / Windows `v0.9.2` assets（含 ken 引擎）已打包并校验 |
 
 关于 `solarreturn`、`lunarreturn`、`solararc`、`givenyear`、`profection`、`pd`、`pdchart`、`zr` 这批推运工具：当前版本已经复核为可用，不应再被 agent 标记为“Java `/predict/*` 不可用”。如果某个客户端仍然这样回答，优先检查它是否在使用旧 runtime、是否绕过 MCP 直接手算、是否没有运行 `doctor` / `openclaw-check --full`。
 
@@ -353,7 +353,7 @@ uv run horosa-skill agent guidance --tool liureng_gods --intent "当前时间起
 {
   "ok": true,
   "tool": "qimen",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "input_normalized": {},
   "data": {},
   "summary": [],
@@ -620,7 +620,7 @@ uv run horosa-skill client openclaw-setup --workspace ~/.openclaw/workspace
 
 - GitHub-first 离线 runtime 安装链
 - 奇门 / 太乙 / 金口 / 三式合一统一走星阙 `ken` 后端（`kinqimen` / `kintaiyi` / `kinjinkou`），盘面与星阙桌面端同源
-- macOS / Windows `v0.9.1` runtime release 资产（已随包内置 ken 引擎）
+- macOS / Windows `v0.9.2` runtime release 资产（已随包内置 ken 引擎）
 - 本地 MCP server 与 JSON-first CLI
 - 完整星阙 AI 导出 registry 与 parser
 - 42 个可调用工具的结构化稳定输出
@@ -744,7 +744,7 @@ uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace --fu
 
 ```json
 {
-  "version": "0.9.1",
+  "version": "0.9.2",
   "tool_count": 42,
   "records_count": 42,
   "errors_count": 0,

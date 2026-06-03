@@ -1,6 +1,6 @@
 {
   "name": "horosa-core-js",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "private": true,
   "type": "module",
   "description": "Headless Horosa engine: local 统摄法 (tongshefa) calculation plus ken-response formatting for qimen/taiyi/jinkou into 星阙 aiExport.js sections.",

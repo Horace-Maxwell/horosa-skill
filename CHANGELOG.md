@@ -7,24 +7,50 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
-### Build / Docs
+## [0.9.2] - 2026-06-02
+
+### Hardening — tests, robustness, fidelity, runtime (no new tools; still 68)
+
+An audit-driven hardening pass over the v0.9.x work (3 read-only Explore audits + manual
+verification). No behaviour change for valid input.
+
+- **Tests (P0).** Golden + invariant unit tests for the hand-ported Python 推运 builders
+  (persiandirected/yearsystem129/planetaryages) against a fixed chart fixture; all 14 神数 now
+  parametrized live with a skip-guard for older backends; an OldBuildClient + bad-date regression
+  test; a node golden self-check (`horosa-core-js/test/selfcheck.mjs`) for the vendored horary /
+  election / balbillus engines, wired into CI (`npm test` in both jobs). 227 Python tests pass.
+- **Robustness (P0-3).** `_split_birth_ymdhm` now raises `tool.shenshu_bad_date` instead of silently
+  substituting 2025-01-01; `_run_shenshu_tool` raises `transport.shenshu_snapshot_unavailable` when an
+  old backend returns no snapshot; horary/election/progextra log + surface swallowed JS errors. **Fixed
+  a real pre-existing bug**: `f"{response.get('snapshot')}"` produced the literal string `"None"` when
+  the snapshot was absent (truthy → garbage export).
+- **邵子神数 verse fix (P0-5).** Upstream ships 邵子 with only the verse CSV (no 6144 JSON), so every
+  reading came back with 【條文待補充】 placeholders. The package step now generates
+  `shaozi_tiaowen_6144.json` from the CSV (without touching the 星阙 tree) so the bundled runtime emits
+  real 判词 (~75% corpus coverage — the rest fall back, as upstream).
+- **Export contracts (P1-1).** New `AI_EXPORT_OPTIONAL_SECTIONS`: conditional / 星阙-UI-only sections
+  (election 用事专属/应期; tieban/beiji/chunzi/qizhengkin search panels & mode-conditional sections) no
+  longer mark exports "dirty". Completed the qizhengkin preset (今制宿度/古制宿度).
+- **Fidelity spot-check (P1-2).** Ran 星阙's actual frontend builder against the same fixture: ages /
+  aspects / 向运星 / 本命对象 are byte-identical; only persiandirected's 应期 DATE differs by ≤1 day on
+  ~40% of rows (moment fractional-day truncation + JS↔Python float). Documented as astrologically
+  negligible (`docs/v091-fidelity-spotcheck.md`). yearsystem129 / planetaryages / balbillus / horary /
+  election are faithful by construction.
+- **Runtime slim (P2-1).** Dropped `plotly` (~40 MB, streamlit-only, lazily imported). The plan's larger
+  target was infeasible — `pyarrow`/`pandas` are astropy dependencies (taiyi needs them), so they stay.
+- **De-brand (P2-2).** The pd `pdMethod` guidance description no longer names the borrowed app; the
+  functional enum value remains in the example payload (the chart service's API contract).
+
+### Build / Docs (Windows v0.9.1, by the Windows maintainer)
 
 - **v0.9.1 Windows runtime shipped + natively verified.** Built `horosa-runtime-win32-x64-v0.9.1.zip`
-  on Windows from a re-synced 星阙 v2.5.0 `vendor/runtime-source` (now bundling all 14 神数 engines: the
-  5 standalone `kinwangji`/`kinwuzhao`/`taixuanshifa`/`jingjue`/`shenyishu` + the engine-only `kinastro`
-  for the 9 kinastro-*). Natively confirmed the bundled chart service: `/qimen|/taiyi|/jinkou/pan` →
-  `ResultCode 0` with the right `source`; **all 14 神数 `/{key}/pan` return a real `Result.snapshot`**;
-  tongshefa/canping/heluo via the bundled node; `verify_runtime_release.py` passes both archives;
-  `install` + `doctor` green (`issues: []`). Uploaded to the `v0.9.1` release and flipped it to public
-  `latest` (supersedes v0.7.0). No code changes were needed — the cross-platform build scripts already
-  handled it.
-- **Docs synced for the Windows v0.9.1 ship (Problem-Logging Protocol).** `docs/OFFLINE_RUNTIME_RELEASES.md`
-  now lists the `kinastro` engine input and replaces the open *v0.9.0 Windows sync TODO* with the
-  completed v0.9.1 native result; `docs/WINDOWS_RELEASE_BUILD_PROMPT.md` is re-versioned v0.8.0→v0.9.1
-  (it was stale at v0.8.0 while main was v0.9.1) and lists the 神数 engines as required vendor inputs;
-  `AGENTS.md` records three lessons — the 神数 snapshot nests at `Result.snapshot` (native-probe gotcha),
-  the engine-only kinastro trim is natively sufficient, and `start_horosa_local.ps1`'s 180s readiness
-  gate false-fails on a Mongo/Redis-less box even though the services do come up.
+  on Windows from a re-synced 星阙 v2.5.0 `vendor/runtime-source` (all 14 神数 engines: the 5 standalone
+  + the engine-only `kinastro` for the 9 kinastro-*). Natively confirmed: `/qimen|/taiyi|/jinkou/pan` →
+  `ResultCode 0`; **all 14 神数 `/{key}/pan` return a real `Result.snapshot`**; tongshefa/canping/heluo
+  via the bundled node; `verify_runtime_release.py` passes both archives; `install` + `doctor` green.
+  Uploaded to the `v0.9.1` release and flipped it to public `latest` (supersedes v0.7.0).
+- **Docs synced** (`OFFLINE_RUNTIME_RELEASES.md` kinastro input + completed-TODO,
+  `WINDOWS_RELEASE_BUILD_PROMPT.md` v0.8.0→v0.9.1, `AGENTS.md` 3 native-build lessons).
 
 ## [0.9.1] - 2026-06-02
 
