@@ -129,7 +129,7 @@ PREDICTIVE_INPUT_CONTRACTS: dict[str, dict[str, Any]] = {
         "must_ask": ["本命出生时间地点", "主限方法", "时间钥匙", "相位列表"],
         "target_fields": {
             "pdtype": "主限类型；0 为当前星阙常用主限表配置。",
-            "pdMethod": "主限方法，如 astroapp_alchabitius / horosa_legacy。",
+            "pdMethod": "主限方法标识（半弧 Alchabitius 等）；取值见 example_payload / docs/INPUT_CONTRACTS.md。",
             "pdTimeKey": "时间钥匙，如 Ptolemy。",
             "pdaspects": "纳入表格的相位角度，例如 [0, 60, 90, 120, 180]。",
         },
