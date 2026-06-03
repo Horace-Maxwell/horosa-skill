@@ -231,6 +231,11 @@ find "${STAGE_ROOT}" -type d -name '_CodeSignature' -prune -exec rm -rf {} + 2>/
 find "${STAGE_ROOT}" \( -name '._*' -o -name '.DS_Store' \) -exec rm -rf {} + 2>/dev/null || true
 find "${STAGE_ROOT}" \( -name '*.pyc' -o -name '*.pyo' -o -name '*.map' -o -name '*.tmp' -o -name '*.temp' -o -name '*.pid' \) -delete 2>/dev/null || true
 find "${STAGE_ROOT}/runtime/mac/python/lib" -type f \( -name '*.a' -o -name '*.o' \) -delete 2>/dev/null || true
+# Drop plotly (~40 MB): it is required ONLY by streamlit (verified: pyarrow/pandas are astropy deps and
+# MUST stay), and streamlit imports plotly lazily (only for st.plotly_chart, never hit by the headless
+# 神数 compute path). Verified import streamlit + cetian snapshot + astropy.units all OK without it.
+SITE_PKGS="${STAGE_ROOT}/runtime/mac/python/lib/python3.12/site-packages"
+rm -rf "${SITE_PKGS}/plotly" "${SITE_PKGS}"/plotly-*.dist-info 2>/dev/null || true
 /usr/bin/python3 "${STAGE_ROOT}/Horosa-Web/scripts/repairEmbeddedPythonRuntime.py" --repair "${STAGE_ROOT}/runtime/mac/python"
 
 STAGE_ROOT_ENV="${STAGE_ROOT}" VERSION_ENV="${VERSION}" PLATFORM_ENV="${ARCHIVE_PLATFORM}" python3 - <<'PY'
