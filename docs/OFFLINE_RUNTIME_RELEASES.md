@@ -6,6 +6,19 @@ Complete offline runtime payloads are published as GitHub Release assets, but th
 
 That local folder is allowed to exist on disk without being committed to the repository.
 
+## Supported Platforms
+
+| Platform | Key | Archive type | Build script |
+|---|---|---|---|
+| macOS (Apple Silicon) | `darwin-arm64` | tar.gz | `package_runtime_payload.sh` |
+| Windows (x64) | `win32-x64` | zip | `build_runtime_release_windows.py` |
+| Linux (x64) | `linux-x64` | tar.gz | `build_runtime_release_linux.py` (requires pre-built Linux Python runtime) |
+
+> **Note on Linux:** The Python chart service uses native extensions (`swisseph`, `ephem`) that must be
+> compiled for Linux x64. The `build_runtime_release_linux.py` script handles Java (via jlink) and
+> Node.js automatically, but the pre-built Python runtime with wheel dependencies must be provided
+> manually. See the script's docstring for details.
+
 ## Runtime Placement Policy
 
 Use this rule set consistently:

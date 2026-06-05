@@ -65,6 +65,32 @@ REQUIRED_ENTRIES = {
         # canping/heluo need the bundled lunar-javascript (see darwin note).
         "runtime-payload/horosa-core-js/node_modules/lunar-javascript/package.json",
     ],
+    "linux-x64": [
+        "runtime-payload/runtime-manifest.json",
+        "runtime-payload/Horosa-Web/start_horosa_local.sh",
+        "runtime-payload/Horosa-Web/stop_horosa_local.sh",
+        "runtime-payload/Horosa-Web/astropy/",
+        "runtime-payload/Horosa-Web/flatlib-ctrad2/flatlib/resources/swefiles/",
+        # ken engines back /qimen/pan · /taiyi/pan · /jinkou/pan (see darwin note).
+        "runtime-payload/Horosa-Web/vendor/kinqimen/",
+        "runtime-payload/Horosa-Web/vendor/kintaiyi/",
+        "runtime-payload/Horosa-Web/vendor/kinjinkou/",
+        # 5 standalone 神数 engines (see darwin note).
+        "runtime-payload/Horosa-Web/vendor/kinwangji/",
+        "runtime-payload/Horosa-Web/vendor/kinwuzhao/",
+        "runtime-payload/Horosa-Web/vendor/taixuanshifa/",
+        "runtime-payload/Horosa-Web/vendor/jingjue/",
+        "runtime-payload/Horosa-Web/vendor/shenyishu/",
+        # kinastro engine backs the 9 kinastro-* 神数 (see darwin note).
+        "runtime-payload/Horosa-Web/vendor/kinastro/astro/",
+        "runtime-payload/runtime/linux/python/bin/python3",
+        "runtime-payload/runtime/linux/java/bin/java",
+        "runtime-payload/runtime/linux/node/bin/node",
+        "runtime-payload/runtime/linux/bundle/astrostudyboot.jar",
+        "runtime-payload/horosa-core-js/bin/cli.mjs",
+        # canping/heluo need the bundled lunar-javascript (see darwin note).
+        "runtime-payload/horosa-core-js/node_modules/lunar-javascript/package.json",
+    ],
 }
 
 
@@ -98,10 +124,6 @@ def _assert_entries(path: Path, platform_key: str) -> None:
     for required in REQUIRED_ENTRIES[platform_key]:
         if required.endswith("/"):
             # Require a real file strictly INSIDE the directory, not merely a directory-marker entry.
-            # A zip can carry an empty required dir as a bare `…/swefiles/` marker; the old
-            # `startswith(required)` matched that marker against itself and greenlit an archive whose
-            # ephemeris / astropy / ken-engine dir was empty (broken at runtime). tar stores dir
-            # members without a trailing slash, so this also makes tar and zip validate identically.
             if not any(
                 entry.startswith(required) and len(entry) > len(required) and not entry.endswith("/")
                 for entry in entries
@@ -138,9 +160,13 @@ def _validate_manifest(path: Path) -> dict:
     platforms = data.get("platforms")
     if not isinstance(platforms, dict):
         raise SystemExit(f"manifest missing platforms object: {path}")
-    for key in ("darwin-arm64", "win32-x64"):
-        if key not in platforms:
-            raise SystemExit(f"manifest missing platform entry: {key}")
+    # At least one platform must be present; any of darwin-arm64, win32-x64, linux-x64.
+    recognized = {"darwin-arm64", "win32-x64", "linux-x64"}
+    if not any(k in platforms for k in recognized):
+        raise SystemExit(f"manifest must include at least one recognized platform ({', '.join(sorted(recognized))})")
+    for key in list(platforms):
+        if key not in recognized:
+            continue
         item = platforms[key]
         for field in ("url", "sha256", "archive_type"):
             if not isinstance(item.get(field), str) or not item[field].strip():
@@ -150,31 +176,47 @@ def _validate_manifest(path: Path) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Verify Horosa runtime release archives and manifest.")
-    parser.add_argument("--darwin-archive", required=True)
-    parser.add_argument("--windows-archive", required=True)
-    parser.add_argument("--manifest", required=True)
+    parser.add_argument("--darwin-archive", default=None, help="Path to the macOS (darwin-arm64) runtime archive.")
+    parser.add_argument("--windows-archive", default=None, help="Path to the Windows (win32-x64) runtime archive.")
+    parser.add_argument("--linux-archive", default=None, help="Path to the Linux (linux-x64) runtime archive.")
+    parser.add_argument("--manifest", required=True, help="Path to the release manifest JSON.")
     args = parser.parse_args()
 
-    darwin_archive = Path(args.darwin_archive).expanduser().resolve()
-    windows_archive = Path(args.windows_archive).expanduser().resolve()
     manifest_path = Path(args.manifest).expanduser().resolve()
-
-    _assert_entries(darwin_archive, "darwin-arm64")
-    _assert_entries(windows_archive, "win32-x64")
     manifest = _validate_manifest(manifest_path)
     expected_version = str(manifest.get("version") or "")
     if not expected_version:
         raise SystemExit(f"manifest version is missing: {manifest_path}")
-    _assert_payload_manifest(darwin_archive, "darwin-arm64", expected_version)
-    _assert_payload_manifest(windows_archive, "win32-x64", expected_version)
+
+    verified_archives: dict[str, str] = {}
+
+    if args.darwin_archive:
+        darwin_archive = Path(args.darwin_archive).expanduser().resolve()
+        _assert_entries(darwin_archive, "darwin-arm64")
+        _assert_payload_manifest(darwin_archive, "darwin-arm64", expected_version)
+        verified_archives["darwin"] = str(darwin_archive)
+
+    if args.windows_archive:
+        windows_archive = Path(args.windows_archive).expanduser().resolve()
+        _assert_entries(windows_archive, "win32-x64")
+        _assert_payload_manifest(windows_archive, "win32-x64", expected_version)
+        verified_archives["windows"] = str(windows_archive)
+
+    if args.linux_archive:
+        linux_archive = Path(args.linux_archive).expanduser().resolve()
+        _assert_entries(linux_archive, "linux-x64")
+        _assert_payload_manifest(linux_archive, "linux-x64", expected_version)
+        verified_archives["linux"] = str(linux_archive)
+
+    if not verified_archives:
+        parser.error("At least one archive (darwin, windows, or linux) must be provided.")
 
     print(
         json.dumps(
             {
                 "ok": True,
                 "version": manifest.get("version"),
-                "darwin_archive": str(darwin_archive),
-                "windows_archive": str(windows_archive),
+                "verified_archives": verified_archives,
                 "manifest": str(manifest_path),
             },
             ensure_ascii=False,

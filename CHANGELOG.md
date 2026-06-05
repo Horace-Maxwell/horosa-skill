@@ -7,6 +7,28 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+### Added — Linux (linux-x64) platform support
+
+- **`manager.py`**: `_platform_path()` now accepts a third `linux_relative` argument; `_manifest_defaults()`
+  uses `runtime/linux/...` paths for Python, Java, Node, and `boot_jar` when the OS is Linux.
+- **`scripts/scaffold_linux_runtime.py`** (new): Linux counterpart of `scaffold_windows_runtime.py`.
+  Creates the full `runtime-payload/` directory skeleton with Linux-appropriate paths, start/stop scripts,
+  and placeholder files.
+- **`scripts/build_runtime_release_linux.py`** (new): Python script that builds a `horosa-runtime-linux-x64`
+  tar.gz archive by downloading Node.js and running `jlink` for Java. Python runtime must be provided
+  manually (see docstring).
+- **`scripts/build_runtime_release.sh`**: Now optionally builds the Linux archive and includes it in
+  the release manifest, checksums, and verification.
+- **`scripts/generate_release_manifest.py`**: Added `--linux-archive` / `--linux-url` CLI options and
+  `_classify_archive_type()` helper.
+- **`scripts/verify_runtime_release.py`**: Added `linux-x64` required entries and `--linux-archive` CLI
+  option. `_validate_manifest` now accepts `linux-x64` alongside `darwin-arm64` / `win32-x64`.
+- **`server.json`**: Added `Linux` to the `platforms` list.
+- **`docs/runtime-manifest.example.json`**: Added `linux-x64` platform entry.
+- **`docs/OFFLINE_RUNTIME_RELEASES.md`**: Added Linux platform table and build note.
+- **`horosa-skill/.env.example`**: Added `HOROSA_RUNTIME_PLATFORM=linux-x64` example.
+- **`README.md`**: Badge updated to show `macOS | Windows | Linux`.
+
 ## [0.9.2] - 2026-06-02
 
 ### Hardening — tests, robustness, fidelity, runtime (no new tools; still 68)
