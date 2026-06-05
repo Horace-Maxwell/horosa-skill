@@ -23,7 +23,8 @@
   ],
   "platforms": [
     "macOS",
-    "Windows"
+    "Windows",
+    "Linux"
   ],
   "packages": [
     {
