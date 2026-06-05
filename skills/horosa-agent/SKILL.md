@@ -375,6 +375,7 @@ The two facts most relevant to debugging user-facing results:
   (`kinqimen` / `kintaiyi` / `kinjinkou`) on the chart service (`:8899`), not by the JS layer. The JS
   only reformats the ken response into `aiExport.js` sections. A healthy result carries
   `pan.source == "kinqimen"` / `"kintaiyi"` and `jinkou.source == "kinjinkou"`.
+  - 奇门的「化解 / 用神分论 / 六害 / 取象」由 JS 层（`DunJiaFaCalc`/`DunJiaFaDoc`）在 kinqimen `pan` 上叠加格式化，随 AI 快照一并返回（新增 8 段：六害总览/化解方案/八门化气大阵/用神分论/财富七要/事业七要/恋爱姻缘/孤辰寡宿）；这是 JS 格式化层、非后端缺失，勿误判。
 - **If those tools return `source: null`** (or a chart that doesn't match 星阙), the runtime in use is
   almost certainly **pre-ken**: re-install the current runtime release, or for development set
   `HOROSA_CORE_JS_ROOT` to the repo's `horosa-core-js`. This is a stale-runtime issue, not an algorithm
