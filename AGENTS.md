@@ -643,3 +643,12 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **DivinationChartShell 事盘** → `utils/localcases.js CASE_TYPE_OPTIONS` 注册 module；技法 `state.extra` 现已**通用存取**(`divinationCaseSave` 写 `payload.extra` + `applyRestoreIfAny` 读 `c.payload.extra`)，新 module 不必再逐个改 extra 逻辑。
 - **陷阱**：predictHook 的 hook prop 只管 UI 实时刷新；**AI 分析不遍历 hook、走专用 builder**——别以为传了 hook prop 就接入了 AI。
 - 本轮已修：世俗盘(mundane) 事盘注册 + 通用 extra 存取。待修(已在清单文档逐点写明，加性低回归、单独谨慎做)：orbs 随命盘存档、各新分析的 AI导出 builder。
+
+## 奇门遁甲 法奇门叠加层 (upstream 星阙；AI导出/导出设置/挂载/命盘事盘储存 四同步已含)
+
+星阙 v-next 给奇门加了荀爽法奇门「断 + 解」层（纯前端 JS，consume kinqimen 的 `pan`，不改 ken 引擎/不重编 jar）：六害完整（补 **庚/白虎** + 危害排序 击刑>入墓>庚>白虎>门迫>空亡）、**逐宫合并化解**（灭象/布阵/解刑墓庚虎迫空；庚击刑→乙巳、庚单独→只乙、庚入墓→冲，本宫优先；卡片只写「怎么做」+ 物象例 + 龙/蛇/虎脚注替代）、用神分论（识破人心/财富七要/事业七要/恋爱姻缘/解孤辰寡宿）、取象/神煞 hover。
+
+- **对 AI 客户端的影响（必知）**：qimen 的 AI 快照（`components/dunjia/DunJiaCalc.js:buildDunJiaSnapshotText`）末尾新增 8 段 `[六害总览][化解方案][八门化气大阵][用神分论][财富七要][事业七要][恋爱姻缘][孤辰寡宿]`。**AI导出 / 导出设置段表（`utils/aiExport.js` `AI_EXPORT_PRESET_SECTIONS.qimen` 同步 +8）/ AI分析挂载（`aiAnalysisContext` 复用同 builder）/ 命盘·事盘储存（快照随 pan 重生成）四处全同步**——都走同一个 builder + 同一段表，新增段必同步「builder + 段表」两处。求测事项（识破人心/财富/事业/婚恋）是 localStorage 偏好、不进 fields，**无网测**（仅荀爽）。
+- **口径**：六害化解以荀爽视频 docx 为准（用户给的 md 掺了个人补充，已回退）；**八神显示已归一 `勾→虎 / 雀→玄`（白虎玄武）于 `DunJiaCalc.buildCells`**——盘面/hover/八宫/化解/快照一致。qimen 仍由 ken（`kinqimen`,:8899）算 pan，化解/用神/六害是 **JS 层格式化**，`pan.source=="kinqimen"` 守恒不变。
+- **再 vendor 星阙 JS 时**（见 §Re-vendoring the JS engines from 星阙）会带入新文件 `components/dunjia/DunJiaFaCalc.js` + `DunJiaFaDoc.js`，并改 `DunJiaMain.js` / `DunJiaCalc.js` / `QimenXiangDoc.js` / `utils/aiExport.js`。星阙侧自检：jest `dunjia/__tests__/DunJiaFaCalc.test.js`+`DunJiaFaDoc.test.js`、preflight `[26]`。
+
