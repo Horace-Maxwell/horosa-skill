@@ -50,12 +50,14 @@
 
 ## 最新稳定基线
 
-**当前公开版本：`Horosa Skill 0.9.2`（68 个可调用工具）。**
+**当前公开版本：`Horosa Skill 0.10.0`（68 个可调用工具）。**
 
 这一条发布线把星阙的能力面补到了与桌面端基本对齐：
 
 - **西洋占星全链路** — 本命与派生盘、10 个经典推运/返照/时运、3 个 v2.4.0 西占（年龄推进点 / 界推运 / 世俗入宫盘）、7 个 v2.5.0 推运（赤纬 / 恒星 / 行星弧 / 行星年龄 / Balbillus / 129年系统 / 波斯向运），外加**卜卦（horary）与择日（election）**两套完整判断引擎。
+- **主限法全方位法（v2.5.4）** — 主限表支持 Alcabitius / Placidus / Regiomontanus / Campanus / Topocentric 五种方位法 + In Zodiaco/In Mundo 坐标系 + 顺逆向 + Naibod 时间钥匙 + 映点/界作迫星；**中点盘**升级为汉堡学派量化盘（90° 盘 + 8 颗 TNP + 行星图/映点/中点列表）。
 - **中文术数主干** — 八字、紫微、大六壬、奇门、太乙、金口诀、三式合一、统摄法、河洛理数、邵子参评数、调波盘、宿占、六爻。
+- **解读层同步（v0.10.0）** — 七政四余补**大限/相位**段、金口诀补 **20 段解读层**（用神强弱 / 四位生克 / 应期 / 地支关系 / 分类用神）、大六壬补**常用神煞**、奇门补**法奇门叠加层**（六害 / 化解 / 八门化气大阵 / 用神分论 / 七要 / 孤辰寡宿）。
 - **全 14 路神数** — 5 路标准（皇极经世 / 五兆 / 太玄 / 京氏易 / 神乙数）+ 9 路（邵子 / 铁板 / 分经 / 北极 / 南极 / 淳子 / 演禽 / 策天飞星 / 七政四余·张果）。
 - **同源后端** — 奇门 / 太乙 / 金口诀（及三式合一里的奇门 + 太乙）走星阙 `ken` 后端（`kinqimen` / `kintaiyi` / `kinjinkou`）独占计算；14 路神数走星阙 chart 服务上挂载的 kentang 引擎；返回结果由 headless JS 层重排成 `aiExport.js` 的 section 结构。**Skill 与星阙桌面端走同一套后端、逐值同源。**
 
@@ -66,7 +68,7 @@
 | 检查项 | 结果 |
 | --- | --- |
 | 可调用工具 | `68 / 68 ok=true` |
-| 工程测试 | `227 / 227 pass`（含 ken / 神数 后端实时集成测试 + 离线 golden 单测） |
+| 工程测试 | `233 / 233 pass`（含 ken / 神数 后端实时集成测试 + 离线 golden 单测） |
 | 未确认参数时强制追问 | `61` 个技法工具触发 `must_ask_user=true` |
 | 安全豁免工具 | `7` 个 registry / knowledge / parser 类工具直接可读 |
 | 星阙式导出结构 | 每个业务技法均带 `export_snapshot` / `export_format`（已建模 `63` 个导出 technique） |
@@ -221,7 +223,7 @@ Agent 在调用技法前如果不确定用户设置，应先查 `horosa_agent_gu
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.9.2",
+  "ok": true, "tool": "qimen", "version": "0.10.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -353,7 +355,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 227 passed
+uv run pytest -q                                        # 233 passed
 uv run python scripts/run_benchmark.py                  # HorosaBench：调度 / 导出 parity / 知识读取
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```

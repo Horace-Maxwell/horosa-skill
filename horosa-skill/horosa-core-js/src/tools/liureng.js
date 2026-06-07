@@ -1,3 +1,5 @@
+import { computeFrontendShenSha } from '../vendor/liureng/LRShenShaDoc.js';
+
 const ZI_LIST = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
 const GAN_LIST = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
 const SIGN_TO_YUE = {
@@ -770,6 +772,24 @@ function buildSnapshotText(payload, liureng, runyear, chartObj, data) {
     lines.push(`三传：${data.sanChuan.cuang.join(' -> ')}；贵神：${data.sanChuan.tianJiang.join(' -> ')}`);
   } else {
     lines.push('本次盘面材料不足，无法生成四课三传；请检查日期、时间、时区、经纬度和本地 runtime 状态。');
+  }
+  // 常用神煞（星阙 v2.5.x 六壬 Phase 4）：按日干支补算 9 常用神煞 + 是否入课传。
+  // 毕法/占断向导需 星阙 完整盘面 context（~40 字段），headless 引擎暂不组装 → 未接入（见 AGENTS）。
+  const dayGanZi = chartObj?.nongli?.dayGanZi || '';
+  const BRANCHES = '子丑寅卯辰巳午未申酉戌亥';
+  const courseBranches = [];
+  (data?.ke?.raw || []).forEach((row) => {
+    (row || []).forEach((b) => {
+      if (b && BRANCHES.includes(b) && !courseBranches.includes(b)) courseBranches.push(b);
+    });
+  });
+  const shensha = computeFrontendShenSha(stemOf(dayGanZi), branchOf(dayGanZi), courseBranches);
+  lines.push('');
+  lines.push('[常用神煞]');
+  if (shensha.length) {
+    shensha.forEach((s) => lines.push(`${s.name}：${s.branch}${s.inCourse ? '（入课传）' : ''}（${s.brief}）`));
+  } else {
+    lines.push('无');
   }
   return lines.join('\n').trim();
 }

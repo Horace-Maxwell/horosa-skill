@@ -7,6 +7,35 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-06-07
+
+### Sync — Xingque v2.5.2 → v2.6.x feature parity (no new tools; still 68)
+
+Brings the Skill up to the desktop app's current feature surface. All changes extend
+existing tools (parameters / snapshot sections); the tool count stays 68.
+
+- **Primary Direction, all house systems (A)** — `pd`/`pdchart` accept `pdMethod`
+  (`core_alchabitius`/`placidus`/`regiomontanus`/`campanus`/`topocentric`), `pdtype`
+  (In Zodiaco/In Mundo), `pdDirect`/`pdConverse`, `pdAntiscia`/`pdTerms`, `pdTimeKey`
+  (`Ptolemy`/`Naibod`); the directions-settings snapshot section now surfaces all of them.
+  De-branded the legacy PD-method alias to the canonical `core_alchabitius` (identical output).
+- **Midpoint chart → Hamburg/Uranian dial (B)** — `germany` snapshot expands 4 → 10 sections
+  (planets / TNP bodies / 90° dial / planetary pictures / antiscia / midpoint list); ports
+  `uranianDial.js` to Python.
+- **Qi Zheng Si Yu major-period + aspects (C)** — `guolao_chart` snapshot adds `大限` (ported
+  `lifeDegree`+`buildGuolaoLimitTable`, golden-tested) and `相位`. Uses the default life mode
+  (headless has no per-chart UI prefs). `政余格局` (Moira pattern DSL) is left optional —
+  see AGENTS.
+- **Jin Kou Jue reading layer (D)** — `jinkou` snapshot expands 4 → 20 sections (yong-strength,
+  four-position interactions, timing, branch relations, related shen-sha, categorized
+  significators); vendors `JinKouDoc`/`JinKouSnapshot`/`LRZhangSheng` + the 太玄数/刑冲害破 tables.
+- **Da Liu Ren common shen-sha (E)** — `liureng_gods` snapshot adds `常用神煞`. 毕法/占断向导
+  left out (need the full ~40-field layout context) — see AGENTS.
+- **Qi Men Fa Qi Men overlay (F)** — `qimen` snapshot expands 6 → 14 sections (six-harm /
+  resolutions / eight-gate array / significator analysis / wealth & career seven-essentials /
+  romance / gu-gua); validated against the live `kinqimen` pan.
+- **Zi Wei self-transformation (G)** — rides the re-synced jar (compute-layer correctness fix).
+
 ## [0.9.2] - 2026-06-02
 
 ### Hardening — tests, robustness, fidelity, runtime (no new tools; still 68)
