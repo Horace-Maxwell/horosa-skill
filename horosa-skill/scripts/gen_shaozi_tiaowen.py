@@ -48,7 +48,11 @@ def main(argv: list[str]) -> int:
         print(f"[gen-shaozi] CSV parsed 0 verses ({csv_path}); leaving JSON unwritten", file=sys.stderr)
         return 0
 
-    json_path.write_text(json.dumps(db, ensure_ascii=False, indent=0), encoding="utf-8")
+    # newline="\n" so the JSON is byte-identical across platforms: Path.write_text would otherwise
+    # translate "\n" → "\r\n" on Windows (json.dumps(indent=0) puts each entry on its own line), making
+    # the Windows-built file differ from the macOS-built one purely by line endings. Content is the same
+    # either way (the engine parses both), but LF keeps the two platform builds reproducible.
+    json_path.write_text(json.dumps(db, ensure_ascii=False, indent=0), encoding="utf-8", newline="\n")
     print(f"[gen-shaozi] wrote {len(db)} verses -> {json_path}")
     return 0
 
