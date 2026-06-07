@@ -387,6 +387,30 @@ only difference is which engine dir is vendored:
   techniques keep an empty optional set. Also: a preset copied from `aiExport.js` can MISS sections the backend
   actually emits (qizhengkin 今制宿度/古制宿度) → they surface as `unknown_detected_sections`; add them to the preset.
 
+### v0.10.0 sync lessons (Xingque v2.5.4/v2.6.x parity — no new tools, still 68)
+
+- **PD full-house params flow through `PerChart`, not the web layer.** `webpredictsrv.py:pd()` is just
+  `PerChart(data) → getPredict() → getPrimaryDirection()`; `perchart.py` reads `pdMethod/pdDirect/pdAntiscia/...`
+  from the request, `perpredict.py` reads them via `getattr(self.perchart, ...)`. So A only needed schema fields
+  + a vendor re-sync (`input_normalized` is `model_dump(exclude_none=True)` → unset params fall back to the
+  upstream defaults: direct/converse on, antiscia/terms off). Don't grep the web srv for the param — grep `perchart.py`.
+- **JS re-vendor dependency closure is the #1 trap.** The jinkou 解读层 crashed on `LRConst.TaiXuanNum` undefined —
+  the curated `vendor/liureng/LRConst.js` (131-line, AstroConst-free) was missing 6 new constants
+  (`TaiXuanNum/ZiCong/ZiHai/ZiPo/ZiSangHe/ZiXing`). Do NOT re-vendor the full upstream `LRConst.js` (it `import`s
+  `AstroConst` from a path that doesn't exist headless); append only the new pure constants. Always do a
+  `node -e "import('...')"` load-check AND a real-data run after vendoring, not just a load-check.
+- **qimen 法奇门 = surgical add, not a 2086-line re-vendor.** `DunJiaFaDoc.js` is pure; `DunJiaFaCalc.js` imports
+  only `DunJiaFaDoc`. The existing `DunJiaCalc.js` works, so just add `import { buildFaQimenAnalysis }` + the +8-section
+  block before its `return`. `buildFaQimenAnalysis(pan)` is compatible with the skill's kinqimen pan (live-verified);
+  all 8 法 headers emit when `fa` is truthy. Preset = the builder's actual sections (14: skill has no `九宫与宫内星体`).
+- **Two items left out, honestly flagged** (`能接多少接多少、跑不通如实标出`): guolao `政余格局` (`buildLocalMoiraPatterns`
+  is a ~280-line Moira DSL subsystem — `AI_EXPORT_OPTIONAL_SECTIONS["guolao"]`) and liureng `毕法/占断向导`
+  (`matchBiFa` needs a ~40-field layout context the headless engine doesn't assemble — vendored docs dropped,
+  not exposed). Both can be a focused follow-up; neither blocks the export contract.
+- **Live services make the @requires_* tests run.** When `:8899` (chart/ken) and `:9999` (Java) are up, pytest runs
+  the integration tests for real (233 passed, 0 skipped). That validated B/C/A against real Python compute and the
+  qimen/jinkou 解读层 against the real ken backend — the best signal available. CI (services down) skips them.
+
 ## Offline runtime packaging gotchas (these have bitten us)
 
 - **flatlib must survive the strip.** `scripts/package_runtime_payload.sh` must keep its

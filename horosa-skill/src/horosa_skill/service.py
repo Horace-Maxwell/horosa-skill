@@ -718,6 +718,109 @@ def _render_qimen_palace_sections(qimen_pan: dict[str, Any]) -> list[tuple[str, 
     return sections
 
 
+# ── 七政四余·大限（命度→十二宫）+ 相位：星阙 GuoLaoMoiraWheel/GuoLaoChartMain 的 Python 移植 ──
+# 默认 lifeMode=ASC（headless 无 UI 偏好；不支持 per-盘命主显示偏好——见 README/AGENTS）。
+# 政余格局（buildLocalMoiraPatterns）是 ~280 行 Moira DSL 子系统，本版未移植，列为可选段（如实标出）。
+_GUOLAO_LIMIT_SEQ = [11.0, 10.0, 11.0, 15.0, 8.0, 7.0, 11.0, 4.5, 4.5, 4.5, 5.0, 5.0]
+_GUOLAO_HOUSE_BRANCH = ("命宫", "财帛", "兄弟", "田宅", "男女", "奴仆", "夫妻", "疾厄", "迁移", "官禄", "福德", "相貌")
+_GUOLAO_ASP_STATES = (("Applicative", "入相"), ("Exact", "精确"), ("Separative", "离相"), ("None", "容许"))
+
+
+def _js_round(value: Any) -> int:
+    # JS Math.round（half-up）；age/span 恒正，int(x+0.5) 等价（含 0.5 进位与 星阙 一致）。
+    try:
+        return int(float(value) + 0.5)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _guolao_norm(deg: Any) -> float:
+    try:
+        val = float(deg) % 360
+    except (TypeError, ValueError):
+        return 0.0
+    return val + 360 if val < 0 else val
+
+
+def _guolao_object_ra(obj: Any, prefer_lon: bool) -> float | None:
+    if not isinstance(obj, dict):
+        return None
+    if prefer_lon and obj.get("lon") is not None:
+        raw = obj.get("lon")
+    elif obj.get("ra") is not None:
+        raw = obj.get("ra")
+    else:
+        raw = obj.get("lon")
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _guolao_life_degree(chart: dict[str, Any]) -> float:
+    # 命度（默认 ASC 模式）：primary=ASC 赤经，缺则命主度(LifeMasterDeg74)，再缺则太阳。
+    objects = chart.get("objects") if isinstance(chart, dict) else []
+    params = chart.get("params") if isinstance(chart, dict) else {}
+    prefer_lon = isinstance(params, dict) and (str(params.get("doubingSu28")) == "4" or str(params.get("guolaoZhengSidereal")) == "1")
+    by_id = {o.get("id"): o for o in objects or [] if isinstance(o, dict)}
+    asc = _guolao_object_ra(by_id.get("Asc"), prefer_lon)
+    life = _guolao_object_ra(by_id.get("LifeMasterDeg74"), prefer_lon)
+    sun = _guolao_object_ra(by_id.get("Sun"), prefer_lon)
+    val = asc if asc is not None else (life if life is not None else sun)
+    return 0.0 if val is None else val
+
+
+def _guolao_limit_table(life: float, birth_year: int) -> list[dict[str, Any]]:
+    in_sign = _guolao_norm(life) % 30
+    segs = [max(1, _js_round(9 + in_sign / 3))] + _GUOLAO_LIMIT_SEQ[1:]
+    rows: list[dict[str, Any]] = []
+    age = 1.0
+    for k in range(12):
+        span = max(0.5, float(segs[k]) if k < len(segs) else 0.0)
+        from_age = _js_round(age)
+        to_age = _js_round(age + span) - 1
+        rows.append({
+            "index": k + 1, "palace": _GUOLAO_HOUSE_BRANCH[k], "years": _js_round(span * 10) / 10,
+            "from_age": from_age, "to_age": to_age,
+            "from_year": birth_year + from_age - 1, "to_year": birth_year + to_age - 1,
+        })
+        age += span
+    return rows
+
+
+def _build_guolao_limit_lines(chart: dict[str, Any], payload: dict[str, Any]) -> list[str]:
+    life = _guolao_life_degree(chart)
+    try:
+        birth_year = int(str(payload.get("date", "")).split("/")[0])
+    except (TypeError, ValueError):
+        birth_year = 0
+    return [
+        f"第{r['index']}限 {r['palace']}：{r['from_age']}-{r['to_age']}岁（{r['from_year']}-{r['to_year']}年），约{r['years']}年"
+        for r in _guolao_limit_table(life, birth_year)
+    ]
+
+
+def _build_guolao_aspect_lines(chart: dict[str, Any], response: dict[str, Any]) -> list[str]:
+    aspects = (chart.get("aspects") if isinstance(chart, dict) else None) or (response.get("aspects") if isinstance(response, dict) else None)
+    normal = aspects.get("normalAsp") if isinstance(aspects, dict) and isinstance(aspects.get("normalAsp"), dict) else aspects
+    lines: list[str] = []
+    if not isinstance(normal, dict):
+        return lines
+    for key, bucket in normal.items():
+        if not isinstance(bucket, dict):
+            continue
+        for field, state in _GUOLAO_ASP_STATES:
+            for asp in bucket.get(field) or []:
+                if not isinstance(asp, dict) or not asp.get("id"):
+                    continue
+                try:
+                    orb_text = f"，误差{_round3(float(asp.get('orb')))}"
+                except (TypeError, ValueError):
+                    orb_text = ""
+                lines.append(f"{_planet_label(key)} {_aspect_text(asp.get('asp'))} {_planet_label(asp.get('id'))}（{state}{orb_text}）")
+    return lines
+
+
 def _build_guolao_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
     chart = response.get("chart", {})
     houses = chart.get("houses") if isinstance(chart, dict) else []
@@ -764,6 +867,8 @@ def _build_guolao_snapshot_text(payload: dict[str, Any], response: dict[str, Any
             ),
             ("七政四余宫位与二十八宿星曜", "\n".join(house_lines).strip() or "无"),
             ("神煞", "\n".join(gods_lines).strip() or "无"),
+            ("大限", "\n".join(_build_guolao_limit_lines(chart, payload)).strip() or "无"),
+            ("相位", "\n".join(_build_guolao_aspect_lines(chart, response)).strip() or "无"),
         ]
     )
 
@@ -1799,6 +1904,128 @@ def _build_suzhan_snapshot_text(payload: dict[str, Any], response: dict[str, Any
     )
 
 
+# ── 汉堡学派 (Uranian) 中点盘核心：星阙 utils/uranianDial.js 的 Python 移植（纯函数）──
+# 90° 盘：行星/三王/角点/TNP 折叠到 0–90°；行星图 A+B−C=D；映点 Spiegelpunkt；中点列表。
+_DIAL_IDS = (
+    "Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn",
+    "Uranus", "Neptune", "Pluto", "North Node", "South Node", "Asc", "MC",
+)
+_DIAL_PLANETS = ("Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto")
+_DIAL_PERSONAL = {"Sun", "Moon", "Asc", "MC", "North Node", "South Node", "AriesPoint"}
+_DIAL_URANIAN = {"Cupido", "Hades", "Zeus", "Kronos", "Apollon", "Admetos", "Vulcanus", "Poseidon"}
+
+
+def _dial_norm360(x: float) -> float:
+    return ((x % 360) + 360) % 360
+
+
+def _dial_mid(a: float, b: float) -> float:
+    m = _dial_norm360((a + b) / 2)
+    if abs(m - _dial_norm360(a)) > 90:
+        m = _dial_norm360(m + 180)
+    return m
+
+
+def _dial_sep(lon_a: float, lon_b: float, base: float) -> float:
+    d = abs(_dial_norm360(lon_a - lon_b) % base)
+    return min(d, base - d)
+
+
+def _dial_antiscion(lon: float) -> float:
+    return _dial_norm360(180 - lon)
+
+
+def _dial_rank(has_personal: bool, has_tnp: bool) -> int:
+    return 0 if has_personal else (1 if has_tnp else 2)
+
+
+def _dial_points(objects: Any, tnp: Any) -> list[dict[str, Any]]:
+    pts: list[dict[str, Any]] = []
+    for obj in objects or []:
+        if isinstance(obj, dict) and obj.get("id") in _DIAL_IDS:
+            try:
+                pts.append({"id": obj.get("id"), "lon": float(obj.get("lon"))})
+            except (TypeError, ValueError):
+                continue
+    for item in tnp or []:
+        if isinstance(item, dict) and item.get("lon") is not None:
+            try:
+                pts.append({"id": item.get("id"), "lon": float(item.get("lon"))})
+            except (TypeError, ValueError):
+                continue
+    pts.append({"id": "AriesPoint", "lon": 0.0})
+    return pts
+
+
+def _dial_planetary_pictures(points: list[dict[str, Any]], base: float = 90.0, orb: float = 1.0, limit: int = 40) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    n = len(points)
+    for i in range(n):
+        for j in range(n):
+            if i == j:
+                continue
+            a, b = points[i], points[j]
+            if not (a["id"] in _DIAL_PERSONAL or a["id"] in _DIAL_URANIAN or b["id"] in _DIAL_PERSONAL or b["id"] in _DIAL_URANIAN):
+                continue  # 至少一锚点（个人点/TNP）
+            for k in range(n):
+                if k in (i, j):
+                    continue
+                c = points[k]
+                lon = _dial_norm360(a["lon"] + b["lon"] - c["lon"])
+                for m in range(n):
+                    if m in (i, j, k):
+                        continue
+                    d = points[m]
+                    sep = _dial_sep(lon, d["lon"], base)
+                    if sep > orb:
+                        continue
+                    key = "|".join(sorted([str(a["id"]), str(b["id"])])) + f"|{c['id']}|{d['id']}"
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    ids = (a["id"], b["id"], c["id"], d["id"])
+                    out.append({
+                        "a": a["id"], "b": b["id"], "c": c["id"], "d": d["id"], "sep": sep,
+                        "hp": any(x in _DIAL_PERSONAL for x in ids), "ht": any(x in _DIAL_URANIAN for x in ids),
+                    })
+    out.sort(key=lambda p: (_dial_rank(p["hp"], p["ht"]), p["sep"]))
+    return out[:limit]
+
+
+def _dial_midpoint_list(points: list[dict[str, Any]], base: float = 90.0) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    n = len(points)
+    for i in range(n):
+        for j in range(i + 1, n):
+            a, b = points[i], points[j]
+            out.append({
+                "a": a["id"], "b": b["id"], "lon": _dial_mid(a["lon"], b["lon"]),
+                "hp": a["id"] in _DIAL_PERSONAL or b["id"] in _DIAL_PERSONAL,
+                "ht": a["id"] in _DIAL_URANIAN or b["id"] in _DIAL_URANIAN,
+            })
+    out.sort(key=lambda p: (_dial_rank(p["hp"], p["ht"]), p["lon"]))
+    return out
+
+
+def _dial_spiegel(points: list[dict[str, Any]], base: float = 90.0, orb: float = 1.0) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    n = len(points)
+    for i in range(n):
+        for j in range(i + 1, n):
+            a, b = points[i], points[j]
+            sep = _dial_sep(_dial_antiscion(a["lon"]), b["lon"], base)
+            if sep > orb:
+                continue
+            out.append({
+                "a": a["id"], "b": b["id"], "sep": sep,
+                "hp": a["id"] in _DIAL_PERSONAL or b["id"] in _DIAL_PERSONAL,
+                "ht": a["id"] in _DIAL_URANIAN or b["id"] in _DIAL_URANIAN,
+            })
+    out.sort(key=lambda p: (_dial_rank(p["hp"], p["ht"]), p["sep"]))
+    return out
+
+
 def _build_germany_snapshot_text(payload: dict[str, Any], chart_response: dict[str, Any], germany_result: dict[str, Any]) -> str:
     chart = chart_response.get("chart", {}) if isinstance(chart_response, dict) else {}
     houses = chart.get("houses") if isinstance(chart, dict) else []
@@ -1841,6 +2068,39 @@ def _build_germany_snapshot_text(payload: dict[str, Any], chart_response: dict[s
                     f"与中点({_planet_label(id_a)} | {_planet_label(id_b)}) 成 {asp.get('aspect', '—')} 相位，误差{asp.get('delta', '—')}"
                 )
             aspect_lines.append("")
+    tnp = germany_result.get("tnp", []) if isinstance(germany_result, dict) else []
+    tnp_error = germany_result.get("tnpError") if isinstance(germany_result, dict) else None
+    # 行星：十曜扁平位置。
+    obj_by_id = {obj.get("id"): obj for obj in objects or [] if isinstance(obj, dict)}
+    planet_lines: list[str] = []
+    for pid in _DIAL_PLANETS:
+        obj = obj_by_id.get(pid)
+        if not isinstance(obj, dict):
+            continue
+        deg, minute = _split_degree(obj.get("signlon", obj.get("lon")))
+        planet_lines.append(f"{_planet_label(pid)} {deg}˚{_msg(obj.get('sign'))}{minute}分")
+    # TNP星体：8 颗汉堡虚星。
+    tnp_lines: list[str] = []
+    for item in tnp or []:
+        if not isinstance(item, dict):
+            continue
+        deg, minute = _split_degree(item.get("signlon", item.get("lon")))
+        tnp_lines.append(f"{_planet_label(item.get('id'))} {deg}˚{_msg(item.get('sign'))}{minute}分")
+    if tnp_error:
+        tnp_lines.append("（部分 TNP 历表不可用）")
+    # 90°中点盘 / 行星图 / 映点 / 中点列表（base=90、orb=1 Witte 标准）。
+    dial_points = _dial_points(objects, tnp)
+    dial_factor_lines = [
+        f"{_planet_label(p['id'])} = {(_dial_norm360(p['lon']) % 90):.2f}°"
+        for p in sorted(dial_points, key=lambda q: _dial_norm360(q["lon"]) % 90)
+        if p["id"] != "AriesPoint"
+    ]
+    picture_lines = [
+        f"{_planet_label(p['a'])} + {_planet_label(p['b'])} − {_planet_label(p['c'])} = {_planet_label(p['d'])}（误差{p['sep']:.2f}°）"
+        for p in _dial_planetary_pictures(dial_points)
+    ]
+    spiegel_lines = [f"{_planet_label(p['a'])} ⟷ {_planet_label(p['b'])}（误差{p['sep']:.2f}°）" for p in _dial_spiegel(dial_points)]
+    mplist_lines = [f"{_planet_label(p['a'])} / {_planet_label(p['b'])} = {p['lon']:.2f}°" for p in _dial_midpoint_list(dial_points)[:120]]
     return _render_snapshot_text(
         [
             (
@@ -1854,8 +2114,14 @@ def _build_germany_snapshot_text(payload: dict[str, Any], chart_response: dict[s
                 ),
             ),
             ("宫位宫头", "\n".join(house_lines).strip() or "无"),
+            ("行星", "\n".join(planet_lines).strip() or "无"),
             ("中点", "\n".join(midpoint_lines).strip() or "暂无中点数据"),
+            ("TNP星体", "\n".join(tnp_lines).strip() or "暂无 TNP 数据"),
             ("中点相位", "\n".join(aspect_lines).strip() or "暂无中点相位数据"),
+            ("90°中点盘", "\n".join(dial_factor_lines).strip() or "暂无可折叠因子"),
+            ("行星图", "\n".join(picture_lines).strip() or "暂无行星图"),
+            ("映点", "\n".join(spiegel_lines).strip() or "暂无映点接触"),
+            ("中点列表", "\n".join(mplist_lines).strip() or "暂无中点"),
         ]
     )
 
@@ -3014,13 +3280,38 @@ def _build_predictive_snapshot_text(tool_name: str, payload: dict[str, Any], res
 
 
 def _primary_direction_method_text(value: Any) -> str:
-    mapping = {"horosa_legacy": "Horosa原方法", "astroapp_alchabitius": "AstroAPP-Alchabitius"}
+    # 主限法全方位法 v10 (星阙 v2.5.4)：核心 Alcabitius + 4 全方位法 (Placidus/Regiomontanus/Campanus/Topocentric)。
+    # core_alchabitius = 规范键；任何未知键经后端 fallback 至 core_alchabitius，同义。
+    mapping = {
+        "horosa_legacy": "传统赤经法",
+        "core_alchabitius": "Alcabitius 半弧法",
+        "placidus": "Placidus 半弧法",
+        "regiomontanus": "Regiomontanus 位置圈",
+        "campanus": "Campanus",
+        "topocentric": "Topocentric (Polich-Page)",
+    }
     return mapping.get(_msg(value), _msg(value) or "无")
 
 
 def _primary_direction_time_key_text(value: Any) -> str:
-    mapping = {"Ptolemy": "Ptolemy", "Naibod": "Naibod", "Cardan": "Cardan"}
+    mapping = {"Ptolemy": "Ptolemy（托勒密 1°/年）", "Naibod": "Naibod（奈博德平太阳速）", "Cardan": "Cardan"}
     return mapping.get(_msg(value), _msg(value) or "无")
+
+
+def _primary_direction_dir_text(params: dict[str, Any]) -> str:
+    # pdDirect/pdConverse 默认都开（顺逆按年龄交错）；显式 0/False 才关。
+    direct = params.get("pdDirect") not in {0, False, "0"}
+    converse = params.get("pdConverse") not in {0, False, "0"}
+    if direct and converse:
+        return "顺向+逆向（按年龄交错）"
+    if converse:
+        return "仅逆向 (converse)"
+    return "仅顺向 (direct)"
+
+
+def _primary_direction_type_text(value: Any) -> str:
+    # pdtype 0 = In Zodiaco（黄道）, 1 = In Mundo（世俗）。
+    return "In Mundo（世俗）" if _msg(value) in {"1", "True"} else "In Zodiaco（黄道）"
 
 
 def _pd_obj_text(value: Any, chart_wrap: dict[str, Any]) -> str:
@@ -3072,7 +3363,11 @@ def _build_primarydirect_snapshot_text(payload: dict[str, Any], response: dict[s
                 _join_lines(
                     [
                         f"推运方法：{_primary_direction_method_text(params.get('pdMethod'))}",
+                        f"坐标系：{_primary_direction_type_text(params.get('pdtype'))}",
+                        f"推运方向：{_primary_direction_dir_text(params)}",
                         f"度数换算：{_primary_direction_time_key_text(params.get('pdTimeKey'))}",
+                        f"映点(antiscia)作迫星：{'是' if params.get('pdAntiscia') in {1, True, '1'} else '否'}",
+                        f"界(terms)作迫星：{'是' if params.get('pdTerms') in {1, True, '1'} else '否'}",
                         f"显示界限法：{'是' if show_pd_bounds else '否'}",
                     ]
                 ),

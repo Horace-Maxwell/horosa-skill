@@ -1,5 +1,6 @@
 import * as LRConst from '../liureng/LRConst.js';
 import { buildQimenBaGongSnapshotLines, buildQimenFuShiYiGua } from './DunJiaBaGongRules.js';
+import { buildFaQimenAnalysis } from './DunJiaFaCalc.js';
 
 export const SEX_OPTIONS = [
 	{ value: 1, label: '男' },
@@ -1889,6 +1890,79 @@ export function buildDunJiaSnapshotText(pan){
 	pan.cells.forEach((cell)=>{
 		lines.push(`${cell.palaceName}${cell.palaceNum}宫：${cell.tianGan || '—'} ${cell.god || '—'} ${cell.door || '—'} ${cell.tianXing || '—'} ${cell.diGan || '—'}`);
 	});
+
+	// —— 法奇门叠加层（六害 / 化解 / 八门化气大阵 / 用神分论 / 七要 / 孤辰寡宿）；全量输出供 AI 导出·挂载·储存 ——
+	const fa = buildFaQimenAnalysis(pan, { faceToFace: true });
+	if(fa){
+		const posTxt = (it)=>(it && it.palaceNum ? `${it.palaceName}${it.palaceNum}宫` : '未现');
+		lines.push('');
+		lines.push('[六害总览]');
+		if(fa.dangers.length){
+			lines.push('危害递减：击刑＞入墓＞庚＞白虎＞门迫＞空亡；天干＞一切，先解击刑天干。');
+			fa.dangers.forEach((d)=>lines.push(`${d.type}·${d.palaceName}${d.palaceNum}宫(${d.direction})｜${d.symbol}`));
+		}else{
+			lines.push('本局四纲八宫未现六害。');
+		}
+		if(fa.panType.type){ lines.push(`盘型：${fa.panType.type}局——${fa.panType.text}`); }
+
+		lines.push('');
+		lines.push('[化解方案]');
+		if(fa.jieHua.length){
+			fa.jieHua.forEach((j)=>{
+				const dz = j.dangers.map((x)=>x.type).join('+');
+				const mieTxt = j.mie.length ? ' 灭象：' + j.mie.join(' ') : '';
+				const buTxt = j.placements.length ? ' 布阵：' + j.placements.map((p)=>p.where + p.text).join('；') : '';
+				const shiTxt = ` 时机:本宫${j.benZhi || ''}日/${j.ben || ''} 对宫${j.duiZhi || ''}日/${j.dui || ''}`;
+				lines.push(`${j.palaceName}${j.palaceNum}宫·${j.direction}（${dz}，天盘干${j.tianGan}）：${mieTxt}${buTxt}${shiTxt}${j.notes.length ? '｜' + j.notes.join(' ') : ''}`);
+			});
+		}else{
+			lines.push('无需化解。');
+		}
+
+		lines.push('');
+		lines.push('[八门化气大阵]');
+		fa.protect.forEach((r)=>lines.push(`${r.label}${r.gan ? '(' + r.gan + ')' : ''}：${r.palaceNum ? r.palaceName + r.palaceNum + '宫·' + r.direction : '未现'}${r.hazards.length ? ' [' + r.hazards.join('/') + ']' : ' [平稳]'}`));
+
+		lines.push('');
+		lines.push('[用神分论]');
+		if(fa.yongShen){
+			lines.push(fa.yongShen.yongShenText);
+			lines.push(`日干:${fa.yongShen.dayGan.symbol}(${posTxt(fa.yongShen.dayGan)})　时干:${fa.yongShen.timeGan.symbol}(${posTxt(fa.yongShen.timeGan)})${fa.yongShen.ganHe ? '　干合/配偶:' + fa.yongShen.ganHe.symbol + '(' + posTxt(fa.yongShen.ganHe) + ')' : ''}`);
+			lines.push(`符使:值符${posTxt(fa.yongShen.zhiFu)}/值使${posTxt(fa.yongShen.zhiShi)}`);
+			lines.push(`六亲:${fa.yongShen.liuQin.map((r)=>r.rel.split('·')[1] + r.symbol + posTxt(r)).join(' ')}`);
+		}
+
+		lines.push('');
+		lines.push('[财富七要]');
+		if(fa.wealth){
+			fa.wealth.items.forEach((it)=>lines.push(`${it.name}:${posTxt(it)}${it.hazards && it.hazards.length ? '[' + it.hazards.join('/') + ']' : ''}`));
+			lines.push(`月令:${fa.wealth.month.zhi}(${fa.wealth.month.wuxing}) ${fa.wealth.month.relation}`);
+			if(fa.wealth.ganCai.length){ lines.push(`干财:${fa.wealth.ganCai.map((c)=>c.src + c.symbol + posTxt(c)).join(' ')}`); }
+		}
+
+		lines.push('');
+		lines.push('[事业七要]');
+		if(fa.career){
+			fa.career.items.forEach((it)=>lines.push(`${it.name}:${posTxt(it)}${it.hazards && it.hazards.length ? '[' + it.hazards.join('/') + ']' : ''}`));
+			lines.push(`符使:${fa.career.fuShi.map((r)=>r.rel + posTxt(r)).join(' ')}`);
+			lines.push(`诸干:${fa.career.zhuGan.map((r)=>r.rel.split('·')[1] + r.symbol + posTxt(r)).join(' ')}`);
+			if(fa.career.industryHint){ lines.push(fa.career.industryHint); }
+		}
+
+		lines.push('');
+		lines.push('[恋爱姻缘]');
+		if(fa.romance){
+			fa.romance.zhengYuan.forEach((z)=>lines.push(`${z.name}:${z.symbol || ''}${posTxt(z)}`));
+			lines.push(`三奇桃花:${fa.romance.taoHua.sanQi.map((s)=>s.gan + posTxt(s)).join(' ')}`);
+			lines.push(`沐浴位:${fa.romance.taoHua.muYu.zhi}(${fa.romance.taoHua.muYu.palaceNum ? fa.romance.taoHua.muYu.palaceName + fa.romance.taoHua.muYu.palaceNum + '宫' : '—'})`);
+			if(fa.romance.trouble.length){ lines.push(`情感不顺:${fa.romance.trouble.join(' ')}`); }
+			if(fa.romance.zhanTaoHua){ lines.push(fa.romance.zhanTaoHua); }
+		}
+
+		lines.push('');
+		lines.push('[孤辰寡宿]');
+		lines.push(fa.guGua.length ? fa.guGua.map((g)=>`${g.name}(${g.zhi}):${g.jie}`).join('；') : '无');
+	}
 
 	return lines.join('\n');
 }

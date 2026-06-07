@@ -1,6 +1,7 @@
 import { unwrapNamedObject, unwrapResultEnvelope } from '../shared/unpack.js';
 import { buildJinKouData, normalizeKinjinkouData } from '../vendor/jinkou/JinKouCalc.js';
 import { resolveJinKouDiFen } from '../vendor/jinkou/JinKouState.js';
+import { buildJinKouSnapshotText } from '../vendor/jinkou/JinKouSnapshot.js';
 
 function normalizeTimeBranch(timeValue) {
   const text = `${timeValue || ''}`;
@@ -8,36 +9,14 @@ function normalizeTimeBranch(timeValue) {
   return match ? match[0] : '';
 }
 
-function buildJinkouSnapshotText(liureng, jinkouData, options) {
-  const nongli = liureng && liureng.nongli ? liureng.nongli : {};
-  const rows = Array.isArray(jinkouData.rows) ? jinkouData.rows : [];
-  const lines = [
-    '[起盘信息]',
-    `日干支：${nongli.dayGanZi || ''}`,
-    `时辰：${nongli.time || ''}`,
-    `月干支：${nongli.monthGanZi || ''}`,
-    `地分：${jinkouData.diFen || options.diFen || ''}`,
-    '',
-    '[金口诀速览]',
-    `月将：${jinkouData.jiangName || ''}${jinkouData.jiangZi ? `(${jinkouData.jiangZi})` : ''}`,
-    `贵神：${jinkouData.guiName || ''}${jinkouData.guiZi ? `(${jinkouData.guiZi})` : ''}`,
-    `人元：${jinkouData.renYuanGan || ''}`,
-    `旺神：${jinkouData.wangElem || ''}`,
-    `四大空亡：${jinkouData.siDaKong || ''}`,
-    '',
-    '[金口诀四位]',
-  ];
-  rows.forEach((row) => {
-    lines.push(`${row.label}：内容=${row.content || ''}；神将=${row.shenjiang || ''}；五行=${row.elem || ''}；状态=${row.power || ''}`);
-  });
-  if (Array.isArray(jinkouData.shenshaRows) && jinkouData.shenshaRows.length > 0) {
-    lines.push('');
-    lines.push('[四位神煞]');
-    jinkouData.shenshaRows.forEach((row) => {
-      lines.push(`${row.label}：${row.value || ''}`);
-    });
-  }
-  return lines.join('\n').trim();
+function buildJinkouParams(payload) {
+  return {
+    date: payload.date || '',
+    time: payload.time || '',
+    zone: payload.zone || '',
+    lat: payload.lat || '',
+    lon: payload.lon || '',
+  };
 }
 
 export function runJinkou(payload) {
@@ -63,16 +42,27 @@ export function runJinkou(payload) {
     throw new Error('Jinkou calculation returned no result.');
   }
   // ken (kinjinkou) is the compute authority; normalizeKinjinkouData overlays it onto the
-  // local scaffold so buildJinkouSnapshotText still emits 星阙 aiExport.js sections.
+  // local scaffold so the 星阙 snapshot builder emits all aiExport.js sections (含解读层).
   const ken = unwrapResultEnvelope(payload.ken_response ?? payload.kenResponse);
   const data = ken && typeof ken === 'object' && Array.isArray(ken.rows)
     ? normalizeKinjinkouData(ken, fallback)
     : fallback;
+  // 星阙 buildJinKouSnapshotText(params, liureng, runyear, jinkouData, wuxing, guirengType, gender)：
+  // 20 段含解读层（用神强弱/四位生克/应期/地支关系/相关神煞/分类用神·求财）。runyear=null（金口诀非行年盘）。
+  const snapshot_text = buildJinKouSnapshotText(
+    buildJinkouParams(payload),
+    liureng,
+    payload.runyear ?? null,
+    data,
+    data.wangElem || '',
+    options.guirengType,
+    payload.gender,
+  );
   return {
     tool: 'jinkou',
     technique: 'jinkou',
     input_normalized: { ...payload, options },
     data,
-    snapshot_text: buildJinkouSnapshotText(liureng, data, options),
+    snapshot_text,
   };
 }

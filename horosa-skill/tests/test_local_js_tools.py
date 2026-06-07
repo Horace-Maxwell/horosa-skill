@@ -159,6 +159,9 @@ def test_qimen_runs_via_ken_backend(tmp_path) -> None:
     assert isinstance(pan.get("cells"), list) and pan["cells"]
     assert "[起盘信息]" in result.data["snapshot_text"]
     assert "[九宫方盘]" in result.data["snapshot_text"]
+    # 法奇门叠加层 (星阙 v-next)：六害/化解/八门化气大阵/用神分论/七要/孤辰寡宿。
+    for header in ("[六害总览]", "[化解方案]", "[八门化气大阵]", "[用神分论]", "[财富七要]", "[孤辰寡宿]"):
+        assert header in result.data["snapshot_text"], header
     _assert_clean_export(result)
 
 
@@ -233,6 +236,31 @@ def test_liureng_defaults_to_xingque_astrology_guiren_system(tmp_path) -> None:
     assert layout["guizi"] == "午"
     assert "贵人体系：星占法贵人" in result.data["snapshot_text"]
     assert "MongoDB" not in result.data["snapshot_text"]
+    # 六壬 Phase 4 (星阙 v2.5.x)：常用神煞段按日干支补算 + 入课传标记。
+    assert "[常用神煞]" in result.data["snapshot_text"]
+
+
+class JinKouLocalClient(LiuRengParityLocalClient):
+    def call(self, endpoint: str, payload: dict) -> dict:
+        if endpoint == "/jinkou/pan":
+            # 无 rows → runJinkou 走本地 buildJinKouData fallback，驱动真实 JS 解读层。
+            return {"Result": {"source": "kinjinkou"}}
+        return super().call(endpoint, payload)
+
+
+def test_jinkou_local_emits_interpretation_layer(tmp_path) -> None:
+    # 金口诀解读层 (星阙 v2.5.x)：真实 JS buildJinKouSnapshotText 出 20 段含解读层。
+    service = make_service(tmp_path, client=JinKouLocalClient())
+    result = service.run_tool(
+        "jinkou",
+        {"date": "1998-03-02", "time": "08:18:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "options": {"diFen": "午"}},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    text = result.data["snapshot_text"]
+    for header in ("[金口诀三盘]", "[用神强弱]", "[四位生克]", "[应期]", "[地支关系]", "[相关神煞]", "[分类用神·求财]", "[十二长生]"):
+        assert header in text, header
+    _assert_clean_export(result)
 
 
 def test_tongshefa_local_tool_runs_headless_engine(tmp_path) -> None:
@@ -622,7 +650,7 @@ def test_election_unknown_topic_falls_back_to_marriage(tmp_path) -> None:
 # recent chart service; the 9 kinastro-* (shaozi…qizhengkin) only emit a snapshot on a current build —
 # an OLDER live app returns no snapshot, which now surfaces as a clean transport error (see P0-3), and
 # the test SKIPS that technique rather than failing (so it greens on the user's old :8899 yet really
-# exercises the engine on the bundled v0.9.2 runtime).
+# exercises the engine on the bundled v0.10.0 runtime).
 _SHENSHU_EXPECTED = {
     # 5 standalone engines
     "wangji": ("[起盘]", "[心易发微]"),
