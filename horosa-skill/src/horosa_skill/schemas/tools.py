@@ -37,6 +37,13 @@ class BirthInput(FlexibleModel):
     pdMethod: Any | None = None
     pdTimeKey: Any | None = None
     pdaspects: list[int | str] | None = None
+    # 主限法全方位法 v10 (星阙 v2.5.4)：顺/逆向、映点(antiscia)、界(terms) promissor 开关 + 年限上限。
+    # 仅在显式设置时透传（model_dump(exclude_none=True)），缺省走后端默认（顺逆都开/映点界关/100 年）。
+    pdDirect: Any | None = None
+    pdConverse: Any | None = None
+    pdAntiscia: Any | None = None
+    pdTerms: Any | None = None
+    pdYears: Any | None = None
     gpsLat: float | None = None
     gpsLon: float | None = None
     includePrimaryDirection: bool | None = None

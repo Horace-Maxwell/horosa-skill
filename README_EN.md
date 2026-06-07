@@ -50,12 +50,14 @@ License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICEN
 
 ## Current stable baseline
 
-**Current public version: `Horosa Skill 0.9.2` (68 callable tools).**
+**Current public version: `Horosa Skill 0.10.0` (68 callable tools).**
 
 This release line brings the capability surface roughly to parity with the desktop app:
 
 - **Full Western astrology** — natal and derived charts, 10 classic return/progression/timeline tools, 3 v2.4.0 Western additions (Age Point / Distributions / mundane ingress), 7 v2.5.0 progressions (Jayne declination / Vedic sidereal / Planetary Arc / Ages of Man / Balbillus / 129-year system / Persian Directed), plus full **horary** and **electional** judgment engines.
+- **Primary Direction, all house systems (v2.5.4)** — the directions table now supports Alcabitius / Placidus / Regiomontanus / Campanus / Topocentric, In Zodiaco/In Mundo frames, direct+converse, Naibod time key, and antiscia/terms as promissors; the **midpoint chart** is upgraded to a Hamburg/Uranian 90° dial (8 TNP + planetary pictures / antiscia / midpoint list).
 - **Chinese metaphysics core** — BaZi, Zi Wei, Da Liu Ren, Qi Men, Tai Yi, Jin Kou Jue, the Three Styles unified, Tong She Fa, He Luo Li Shu, Shao Zi Can Ping Shu, harmonic charts, Su Zhan, Liu Yao.
+- **Interpretation layers (v0.10.0)** — Qi Zheng Si Yu gains **major-period (大限) + aspects**, Jin Kou Jue gains a **20-section reading layer** (yong-strength / four-position interactions / timing / branch relations / categorized significators), Da Liu Ren gains **common shen-sha**, and Qi Men gains the **Fa Qi Men overlay** (six-harm / resolutions / eight-gate array / significator analysis / seven essentials / gu-gua).
 - **All 14 Shen Shu** — 5 standalone (Huang Ji Jing Shi / Wu Zhao / Tai Xuan / Jing Fang Yi / Shen Yi Shu) + 9 (Shao Zi / Tie Ban / Fen Jing / Bei Ji / Nan Ji / Chun Zi / Yan Qin / Ce Tian / Qi Zheng·Zhang Guo).
 - **Same backend** — Qi Men / Tai Yi / Jin Kou Jue (and the Qi Men + Tai Yi inside the Three Styles) run on Xingque's `ken` backend (`kinqimen` / `kintaiyi` / `kinjinkou`); the 14 Shen Shu run on kentang engines mounted on the Xingque chart service; results are reformatted by the headless JS layer into `aiExport.js` sections. **The Skill and the Xingque desktop app share one backend, value-for-value identical.**
 
@@ -66,7 +68,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `68 / 68 ok=true` |
-| Engineering tests | `227 / 227 pass` (ken / Shen Shu live integration + offline golden unit tests) |
+| Engineering tests | `233 / 233 pass` (ken / Shen Shu live integration + offline golden unit tests) |
 | Forced clarification when params unconfirmed | `61` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `7` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`63` export techniques modeled) |
@@ -221,7 +223,7 @@ Every tool call returns a uniform envelope:
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.9.2",
+  "ok": true, "tool": "qimen", "version": "0.10.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -336,7 +338,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 227 passed
+uv run pytest -q                                        # 233 passed
 uv run python scripts/run_benchmark.py                  # HorosaBench: dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

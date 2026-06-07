@@ -196,6 +196,10 @@ class FakeClient(HorosaApiClient):
                         {"aspect": 90, "delta": 0.125, "midpoint": {"idA": "Venus", "idB": "Mars"}},
                     ]
                 },
+                "tnp": [
+                    {"id": "Cupido", "lon": 33.5, "sign": "Taurus", "signlon": 3.5},
+                    {"id": "Hades", "lon": 132.0, "sign": "Leo", "signlon": 12.0},
+                ],
             }
         if endpoint == "/predict/dice":
             return {
@@ -331,9 +335,13 @@ class FakeJsClient(HorosaJsEngineClient):
 
     def run(self, tool_name: str, payload: dict[str, object]) -> dict:
         if tool_name == "qimen":
+            # 法奇门叠加层 (星阙 v-next)：snapshot 含全 14 段 preset（含六害/化解/八门化气大阵/用神分论/七要/孤辰寡宿）。
+            from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS as _PRESETS
+
+            sections = _PRESETS.get("qimen", [])
             return {
                 "data": {"juText": "阳遁九局", "zhiFu": "天蓬", "zhiShi": "休门"},
-                "snapshot_text": "[起盘信息]\n日期：2026-04-04 21:18\n\n[奇门演卦]\n值符值使演卦：天泽履之乾为天",
+                "snapshot_text": "\n".join(f"[{title}]\n{title}：—" for title in sections),
             }
         if tool_name == "taiyi":
             return {
@@ -351,9 +359,13 @@ class FakeJsClient(HorosaJsEngineClient):
                 "snapshot_text": "[本卦]\n左卦：风雷益\n右卦：地雷复\n\n[六爻]\n第六爻：左阳 / 右阴 / 已变\n\n[潜藏]\n左潜藏：山地剥\n\n[亲和]\n左亲和：泽风大过",
             }
         if tool_name == "jinkou":
+            # 解读层 (星阙 v2.5.x)：snapshot 含全 20 段 preset（含用神强弱/四位生克/应期/地支关系/相关神煞）。
+            from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS as _PRESETS
+
+            sections = _PRESETS.get("jinkou", [])
             return {
                 "data": {"guiName": "天乙", "jiangName": "登明", "wangElem": "木"},
-                "snapshot_text": "[起盘信息]\n日期：2026-04-04 21:18\n\n[金口诀速览]\n地分：酉",
+                "snapshot_text": "\n".join(f"[{title}]\n{title}：—" for title in sections),
             }
         if tool_name == "canping":
             return {
@@ -762,8 +774,12 @@ def test_local_tool_call_always_attaches_complete_export_contract(tmp_path) -> N
     assert result.ok is True
     assert result.data["export_snapshot"]["technique"]["key"] == "qimen"
     assert result.data["export_format"]["format_source"] == "snapshot_parser"
-    assert result.data["export_format"]["selected_sections"] == ["起盘信息", "盘型", "盘面要素", "奇门演卦", "八宫详解", "九宫方盘"]
+    assert result.data["export_format"]["selected_sections"] == [
+        "起盘信息", "盘型", "盘面要素", "奇门演卦", "八宫详解", "九宫方盘",
+        "六害总览", "化解方案", "八门化气大阵", "用神分论", "财富七要", "事业七要", "恋爱姻缘", "孤辰寡宿",
+    ]
     assert any(section["title"] == "奇门演卦" for section in result.data["export_format"]["sections"])
+    assert any(section["title"] == "化解方案" for section in result.data["export_format"]["sections"])
 
 
 def test_qimen_fails_loudly_when_ken_returns_failure_envelope(tmp_path) -> None:
@@ -1391,6 +1407,102 @@ def test_primary_direction_exports_tables_and_pdchart_positions(tmp_path) -> Non
     assert "主限法盘星体表格" in pdchart_text
     assert "| 星体/虚点 | 位置 | 宫位 | 速度 |" in pdchart_text
     assert "主限法盘相位" in pdchart_text
+
+
+def test_primary_direction_full_house_settings_surface(tmp_path) -> None:
+    # 主限法全方位法 v10 (星阙 v2.5.4)：Placidus + In Mundo + 仅逆向 + 映点 + 界 全部出现在设置段。
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    payloads = build_sample_payloads()
+    payload = {
+        **payloads["pd"],
+        "pdMethod": "placidus",
+        "pdtype": 1,
+        "pdDirect": 0,
+        "pdConverse": 1,
+        "pdAntiscia": 1,
+        "pdTerms": 1,
+        "pdTimeKey": "Naibod",
+    }
+    text = service.run_tool("pd", payload, save_result=False).data["export_format"]["snapshot_text"]
+    assert "Placidus 半弧法" in text
+    assert "In Mundo（世俗）" in text
+    assert "仅逆向 (converse)" in text
+    assert "Naibod" in text
+    assert "映点(antiscia)作迫星：是" in text
+    assert "界(terms)作迫星：是" in text
+
+
+def test_germany_uranian_snapshot_has_full_sections(tmp_path) -> None:
+    # 中点盘 Uranian (星阙 v2.5.2)：10 段含 行星/TNP星体/90°中点盘/行星图/映点/中点列表。
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    result = service.run_tool(
+        "germany",
+        {"date": "2028/04/06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
+        save_result=False,
+    )
+    text = result.data["export_format"]["snapshot_text"]
+    for header in ("行星", "TNP星体", "90°中点盘", "行星图", "映点", "中点列表"):
+        assert header in text, header
+    assert "Cupido" in text or "Hades" in text  # TNP 渲染
+
+
+def test_uranian_dial_math_matches_upstream() -> None:
+    # 移植自 星阙 utils/uranianDial.js 的纯函数校验。
+    from horosa_skill.service import _dial_antiscion, _dial_mid, _dial_planetary_pictures, _dial_sep
+
+    assert abs(_dial_antiscion(15.0) - 165.0) < 1e-9  # 15°白羊 回照 → 165
+    assert abs(_dial_mid(10.0, 20.0) - 15.0) < 1e-9
+    assert abs(_dial_mid(350.0, 10.0) - 0.0) < 1e-9  # 跨 0° 近中点 = 0，非 180
+    pts = [
+        {"id": "Sun", "lon": 0.0},
+        {"id": "Moon", "lon": 90.0},
+        {"id": "Asc", "lon": 0.0},
+        {"id": "MC", "lon": 90.0},
+    ]
+    pics = _dial_planetary_pictures(pts, 90.0, 1.0)
+    assert pics, "Sun+Moon−Asc=MC 应命中一张行星图"
+
+
+def test_guolao_limit_table_matches_upstream_algorithm() -> None:
+    # 七政四余·大限：移植自 星阙 GuoLaoMoiraWheel.buildGuolaoLimitTable（JS Math.round half-up）。
+    from horosa_skill.service import _guolao_limit_table
+
+    rows = _guolao_limit_table(0.0, 2000)
+    assert len(rows) == 12
+    assert rows[0] == {"index": 1, "palace": "命宫", "years": 9.0, "from_age": 1, "to_age": 9, "from_year": 2000, "to_year": 2008}
+    assert rows[1]["palace"] == "财帛" and (rows[1]["from_age"], rows[1]["to_age"]) == (10, 19)
+    assert rows[3]["palace"] == "田宅" and rows[3]["years"] == 15.0
+    # 首限年数随命度入宫度变化：life=15° → 9 + 15/3 = 14。
+    assert _guolao_limit_table(15.0, 2000)[0]["to_age"] == 14
+
+
+def test_guolao_snapshot_has_limit_and_aspect_sections(tmp_path) -> None:
+    # 七政四余 大限 + 相位 段（星阙 v2.5.x Moira 还原度）。
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    result = service.run_tool(
+        "guolao_chart",
+        {"date": "1998/03/02", "time": "08:18:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
+        save_result=False,
+    )
+    text = result.data["export_format"]["snapshot_text"]
+    assert "大限" in text
+    assert "第1限 命宫" in text
+    assert "相位" in text
 
 
 def test_zodiacal_release_exports_timeline_rows(tmp_path) -> None:

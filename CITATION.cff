@@ -8,8 +8,8 @@ authors:
 repository-code: "https://github.com/Horace-Maxwell/horosa-skill"
 url: "https://github.com/Horace-Maxwell/horosa-skill"
 license: "AGPL-3.0-only"
-version: "0.9.2"
-date-released: "2026-06-02"
+version: "0.10.0"
+date-released: "2026-06-07"
 abstract: "Horosa Skill is a local-first AI skill layer for Horosa/Xingque, bundling offline runtime installation, structured export contracts, MCP and CLI invocation, and local artifact management."
 keywords:
   - astrology
