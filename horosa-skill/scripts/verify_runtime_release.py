@@ -57,6 +57,9 @@ REQUIRED_ENTRIES = {
         "runtime-payload/Horosa-Web/vendor/shenyishu/",
         # kinastro engine backs the 9 kinastro-* 神数 (see darwin note).
         "runtime-payload/Horosa-Web/vendor/kinastro/astro/",
+        # 邵子神数 verse JSON, generated from the CSV at package time (see darwin note) — the Windows
+        # builder must generate it too, else 邵子 emits placeholder verses on Windows.
+        "runtime-payload/Horosa-Web/vendor/kinastro/astro/shaozi/data/shaozi_tiaowen_6144.json",
         "runtime-payload/runtime/windows/python/python.exe",
         "runtime-payload/runtime/windows/java/bin/java.exe",
         "runtime-payload/runtime/windows/node/node.exe",
