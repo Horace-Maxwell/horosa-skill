@@ -484,6 +484,26 @@ only difference is which engine dir is vendored:
   launcher's exit code. (Candidate fix: raise the deadline to ~300s, or gate "ready" on the chart service
   alone since that is what the ken/神数 endpoints need.) Verified harmless across the v0.7.0 and v0.9.1
   Windows release builds.
+- **The two runtime builders MUST stay in lockstep — every `package_runtime_payload.sh` (mac) step needs
+  a parallel `build_runtime_release_windows.py` (Windows) step, and `verify_runtime_release.py` must list
+  new required entries for BOTH platforms.** v0.10.0 broke this: the mac packager gained (1) a
+  `gen_shaozi_tiaowen.py` call (so 邵子神数 emits real verses) and (2) a plotly strip, and the verifier
+  added `…/shaozi/data/shaozi_tiaowen_6144.json` to the **darwin-arm64** list only — but the Windows
+  builder and the win32-x64 verifier list were left untouched. A Windows build would then have silently
+  shipped placeholder 邵子 verses *and still passed verify*. Fixed by adding both steps to the Windows
+  builder and the shaozi entry to the win32-x64 verifier list. **Rule: when you touch one builder or add a
+  required artifact, grep the other builder + both `REQUIRED_ENTRIES` lists in the same change.**
+- **邵子神数 `完整条文` placeholder is upstream-faithful, not a bug.** The shaozi engine looks up two verse
+  ids; `基础条文` uses an id that IS in the upstream CSV (real verse after generation), but `完整条文` uses
+  an id scheme not covered by the 6144-verse CSV, so it falls back to the engine's `【条文待補充】`. macOS
+  behaves identically (same CSV → same generated JSON → same missing id). Don't "fix" it by faking verses.
+  A coarse `grep 條文待補充` over the snapshot will false-positive on this expected fallback — check that
+  `基础条文` is a real verse instead.
+- **`gen_shaozi_tiaowen.py` must write LF (`newline="\n"`).** Without it, `Path.write_text` emits CRLF on
+  Windows, so the Windows-built `shaozi_tiaowen_6144.json` differs from the macOS-built one purely by line
+  endings (same content, +1 byte/line). Inert functionally; the explicit LF keeps the two platform builds
+  byte-reproducible. (The shipped v0.10.0 win zip predates this fix and carries CRLF — verified
+  content-identical to mac's LF copy, so it is fine; future builds are byte-clean.)
 
 ## `pkill` will take down the live 星阙 stack
 

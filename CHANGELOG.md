@@ -7,6 +7,32 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+### Fixed — v0.10.0 Windows half + cross-platform build parity
+
+- **v0.10.0 was published as `latest` with no `runtime-manifest.json` and no Windows zip — `install` was
+  404-broken for *both* platforms.** `horosa-skill install` resolves
+  `releases/latest/download/runtime-manifest.json`, which did not exist on the v0.10.0 release (it shipped
+  only the darwin tarball + `SHA256SUMS.txt`). Built + natively verified the win32-x64 v0.10.0 runtime on
+  Windows, regenerated the dual-platform `runtime-manifest.json` + `SHA256SUMS.txt`, and uploaded all three
+  to the v0.10.0 release — restoring `install` for macOS and Windows. (v0.10.0 was already `latest`, so no
+  flip was needed; adding the assets fixed the broken state.)
+- **`build_runtime_release_windows.py` reached cross-platform parity with `package_runtime_payload.sh`.**
+  The v0.10.0 mac packaging script gained two steps the Windows builder lacked, so a Windows build would
+  have silently regressed:
+  - **邵子神数 verse generation.** Now runs `gen_shaozi_tiaowen.py` over the staged
+    `kinastro/astro/shaozi/data/` so `shaozi_tiaowen_6144.json` is generated (4608 verses) and 邵子's
+    `基础条文` emits a real verse instead of a placeholder. `verify_runtime_release.py` now requires this
+    file on **win32-x64** too (it previously listed it for darwin-arm64 only — an asymmetry that would
+    let a placeholder-only Windows build pass). Natively confirmed: `基础条文` resolves a real verse;
+    `完整条文` falls back to the engine placeholder because its id is absent from the upstream CSV — this
+    is upstream-faithful and **identical on macOS** (verified the mac archive's JSON is content-identical
+    and also lacks that id).
+  - **plotly strip (~40 MB).** Removed from the embedded site-packages (streamlit-only, never on the
+    headless 神数 path; pyarrow/pandas kept). Native cetian/qizhengkin snapshots still build.
+- **`gen_shaozi_tiaowen.py` now writes the JSON with `newline="\n"`** so the Windows-built file is
+  byte-identical to the macOS-built one (Path.write_text otherwise emits CRLF on Windows — same content,
+  different bytes). Functionally inert; keeps the two platform builds reproducible.
+
 ## [0.10.0] - 2026-06-07
 
 ### Sync — Xingque v2.5.2 → v2.6.x feature parity (no new tools; still 68)

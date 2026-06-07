@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 import zipfile
 from pathlib import Path
 
@@ -236,6 +237,16 @@ def build() -> Path:
             horosa_web_root / "vendor" / "",
             extra_excludes=["tools", "ui", "frontend", "docs", "wiki", "examples", "tests", "styles", "scripts", ".streamlit", ".github", ".devcontainer", ".git"],
         )
+        # 邵子神数: upstream ships only the verse CSV (no shaozi_tiaowen_6144.json), so without the
+        # generated JSON 邵子 readings come back with placeholder verses. Generate the JSON the engine
+        # expects into the staged payload (parity with package_runtime_payload.sh). gen_shaozi_tiaowen.py
+        # is stdlib-only and a no-op if the CSV is absent; it never touches the 星阙 source tree.
+        shaozi_data = horosa_web_root / "vendor" / "kinastro" / "astro" / "shaozi" / "data"
+        if (shaozi_data / "shaozi_tiaowen.csv").is_file():
+            subprocess.run(
+                [sys.executable, str(SKILL_ROOT / "scripts" / "gen_shaozi_tiaowen.py"), str(shaozi_data)],
+                check=True,
+            )
     _make_kentang_mount_graceful(horosa_web_root / "astropy" / "websrv" / "kentang" / "registry.py")
     rsync_copy(SOURCE_ROOT / "Horosa-Web" / "flatlib-ctrad2" / "flatlib", horosa_web_root / "flatlib-ctrad2" / "")
     if (SOURCE_ROOT / "Horosa-Web" / "flatlib-ctrad2" / "LICENSE").is_file():
@@ -273,7 +284,15 @@ def build() -> Path:
     with zipfile.ZipFile(python_archive) as zf:
         zf.extractall(runtime_windows_root / "python")
     patch_embedded_python(runtime_windows_root / "python")
-    unpack_wheels(SOURCE_ROOT / "runtime" / "windows" / "bundle" / "wheels", runtime_windows_root / "python" / "Lib" / "site-packages")
+    win_site_packages = runtime_windows_root / "python" / "Lib" / "site-packages"
+    unpack_wheels(SOURCE_ROOT / "runtime" / "windows" / "bundle" / "wheels", win_site_packages)
+
+    # Drop plotly (~40 MB): it is required ONLY by streamlit (lazy import for st.plotly_chart, never hit
+    # by the headless 神数 compute path), while pyarrow/pandas are astropy deps and MUST stay. Parity with
+    # package_runtime_payload.sh (verified there: streamlit import + cetian snapshot + astropy.units all
+    # OK without it). The §4 native check (cetian/qizhengkin snapshots) re-confirms it on Windows.
+    for plotly_path in list(win_site_packages.glob("plotly")) + list(win_site_packages.glob("plotly-*.dist-info")):
+        shutil.rmtree(plotly_path, ignore_errors=True)
 
     shutil.copy2(SOURCE_ROOT / "runtime" / "mac" / "bundle" / "astrostudyboot.jar", runtime_windows_root / "bundle" / "astrostudyboot.jar")
 
