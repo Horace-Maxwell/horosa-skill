@@ -1298,13 +1298,19 @@ def _build_base_info_lines(chart_wrap: dict[str, Any], fields: dict[str, Any]) -
     if zodiacal_text or hsys_text:
         lines.append(f"{zodiacal_text}，{hsys_text}")
     # 恒星黄道 (星阙 v2.6.4)：sidereal 盘附岁差(ayanāṃśa)名，区分 Lahiri/Raman/Fagan 等不同制。
-    # chart.zodiacal 是已本地化的字符串("恒星黄道")，故以后端解析后的 chart.siderealAyanamsa 为准
-    # ('' = 回归黄道)；旧后端缺该字段时，回退到「请求为恒星黄道则用请求 ayan 或缺省 lahiri」。
-    ayan_key = chart.get("siderealAyanamsa")
+    # chart.zodiacal 是已本地化的字符串("恒星黄道")，故以后端解析后的字段为准（西洋盘=siderealAyanamsa，
+    # 印占盘=siderealModeKey + 数值 ayanamsaValue）；旧后端缺字段时，回退「请求为恒星黄道→请求 ayan/缺省 lahiri」。
+    ayan_key = chart.get("siderealAyanamsa") or chart.get("siderealModeKey")
     if not ayan_key and str(fields.get("zodiacal")) in {"1", "True", "true"}:
-        ayan_key = fields.get("siderealAyanamsa") or "lahiri"
+        ayan_key = fields.get("siderealAyanamsa") or fields.get("indiaAyanamsa") or "lahiri"
+    if not ayan_key and (fields.get("indiaHsys") is not None or fields.get("indiaAyanamsa") is not None):
+        ayan_key = fields.get("indiaAyanamsa") or "lahiri"  # 印占盘恒为恒星黄道
     if ayan_key:
-        lines.append(f"恒星黄道岁差：{sidereal_ayanamsa_label(ayan_key)}")
+        ayan_value = chart.get("ayanamsaValue")
+        if ayan_value not in (None, ""):
+            lines.append(f"恒星黄道岁差：{sidereal_ayanamsa_label(ayan_key)}（{ayan_value}）")
+        else:
+            lines.append(f"恒星黄道岁差：{sidereal_ayanamsa_label(ayan_key)}")
     lines.append(PLANET_HOUSE_INFO_NOTE)
     if chart.get("dayerStar"):
         lines.append(f"日主星：{_astro_msg(chart['dayerStar'], short=True)}")

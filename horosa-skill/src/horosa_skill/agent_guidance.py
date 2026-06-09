@@ -568,7 +568,41 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     ),
     "chart": ASTRO_BIRTH_POLICY,
     "chart13": ASTRO_BIRTH_POLICY,
-    "india_chart": ASTRO_BIRTH_POLICY,
+    "india_chart": _policy(
+        intent="印度占星(Vedic)恒星黄道盘：分宫制全 24 制(indiaHsys 0–24) + 黄道岁差全 47(indiaAyanamsa)。",
+        required_context=COMMON_BIRTH_FIELDS,
+        ask_if_missing=[
+            {"field": "date/time/place", "question": "请提供出生日期、时间、时区和地点。"},
+            {
+                "field": "indiaHsys",
+                "question": "分宫制取哪一种？（共 24 制，缺省整宫/Rashi）",
+                "options": [
+                    "0 整宫/Rashi（默认）",
+                    "5 等宫 / Lagna Bhava",
+                    "7 Sripati（Bhāva Chalit）",
+                    "3 KP / Placidus",
+                    "其它（2 Regio / 4 Koch / 6 Vehlow / 8 Alcabitus / 10 Campanus / 13 Topocentric 等，见 INDIA_HOUSE_SYSTEM_LABELS）",
+                ],
+            },
+            {
+                "field": "indiaAyanamsa",
+                "question": "黄道岁差(ayanāṃśa)取哪一制？（共 47 制，缺省 lahiri）",
+                "options": [
+                    "lahiri（默认）",
+                    "raman",
+                    "krishnamurti / KP",
+                    "yukteshwar / true_citra / fagan_bradley",
+                    "其它（共 47 制，见 SIDEREAL_AYANAMSA_LABELS）",
+                ],
+            },
+        ],
+        safe_defaults=[
+            {"field": "indiaHsys", "value": 0, "meaning": "整宫制 / Rashi"},
+            {"field": "indiaAyanamsa", "value": "lahiri", "meaning": "印占缺省 Lahiri"},
+            {"field": "ad", "value": 1, "meaning": "公历纪年"},
+        ],
+        do_not_assume=["birth time", "birthplace", "timezone"],
+    ),
     "relative": _policy(
         intent="Relationship / relative chart.",
         required_context=["inner person birth data", "outer person birth data"],
