@@ -3072,6 +3072,18 @@ def _collect_house_stars(house: Any) -> list[str]:
     return stars
 
 
+def _ziwei_star_names(value: Any) -> list[str]:
+    names: list[str] = []
+    if isinstance(value, list):
+        for item in value:
+            text = _msg(item.get("name") or item.get("id")) if isinstance(item, dict) else _msg(item)
+            if text:
+                # 四化标注（紫微 P1 流派四化随 jar）：星体若带 sihua 化象，附「(化X)」。
+                hua = item.get("sihua") or item.get("hua") if isinstance(item, dict) else None
+                names.append(f"{text}（化{_msg(hua)}）" if hua else text)
+    return names
+
+
 def _build_ziwei_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
     chart = response.get("chart", response if isinstance(response, dict) else {})
     houses = chart.get("houses") if isinstance(chart, dict) else []
@@ -3082,6 +3094,20 @@ def _build_ziwei_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
         f"性别：{payload.get('gender', '—')}",
         f"时间算法：{'直接时间' if str(payload.get('timeAlg', 0)) == '1' else '真太阳时'}",
     ]
+    # 命主/身主/五行局/斗君/年命（星阙 P0 杂曜与全盘信息一并落盘）。
+    extra = [
+        ("命主", chart.get("lifeMaster")),
+        ("身主", chart.get("bodyMaster")),
+        ("五行局", chart.get("wuxingJuText") or chart.get("wuxingJu")),
+        ("斗君", chart.get("doujun")),
+        ("子斗", chart.get("zidou")),
+        ("年命", f"{_msg(chart.get('yearGan'))}{_msg(chart.get('yearZi'))}".strip() or None),
+    ]
+    for label, val in extra:
+        text = _msg(val)
+        if text:
+            lines.append(f"{label}：{text}")
+
     overview: list[str] = []
     for index, house in enumerate(houses or [], start=1):
         if not isinstance(house, dict):
@@ -3090,16 +3116,40 @@ def _build_ziwei_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
         ganzi = _msg(house.get("ganzi")) or "无"
         direction = house.get("direction")
         direction_text = f"{direction[0]}~{direction[1]}" if isinstance(direction, list) and len(direction) == 2 else "无"
-        stars = "、".join(_collect_house_stars(house)) or "无"
-        overview.append(f"{name}：大限={direction_text}，干支={ganzi}")
-        overview.append(f"星曜：{stars}")
+        # 主星 / 辅星 / 煞星 / 杂曜 (星阙 P0：杂曜补显 OthersGood/OthersBad/Small)，分类列出。
+        main = _ziwei_star_names(house.get("starsMain"))
+        assist = _ziwei_star_names(house.get("starsAssist"))
+        evil = _ziwei_star_names(house.get("starsEvil"))
+        misc = _ziwei_star_names(house.get("starsOthersGood")) + _ziwei_star_names(house.get("starsOthersBad")) + _ziwei_star_names(house.get("starsSmall"))
+        small_dir = house.get("smallDirection")
+        small_text = "、".join(str(a) for a in small_dir) if isinstance(small_dir, list) else _msg(small_dir)
+        overview.append(f"{name}（干支={ganzi}，大限={direction_text}{('，小限=' + small_text) if small_text else ''}）")
+        overview.append(f"主星：{'、'.join(main) or '无'}；辅星：{'、'.join(assist) or '无'}")
+        overview.append(f"煞星：{'、'.join(evil) or '无'}；杂曜：{'、'.join(misc) or '无'}")
         overview.append("")
-    return _render_snapshot_text(
-        [
-            ("起盘信息", _join_lines(lines)),
-            ("宫位总览", _join_lines(overview) or "无"),
-        ]
-    )
+
+    # 命中格局（星阙 P2：格局随流派四化 + 新增格局/天伤天使安星，由 jar 返回 response.patterns）。
+    patterns = response.get("patterns")
+    pattern_lines: list[str] = []
+    if isinstance(patterns, list):
+        for pat in patterns:
+            if not isinstance(pat, dict):
+                continue
+            pname = _msg(pat.get("name"))
+            if not pname:
+                continue
+            cat = _msg(pat.get("category"))
+            broke = "（破格）" if pat.get("broken") else ""
+            duan = _msg(pat.get("duanyi"))
+            head = f"{pname}（{cat}）{broke}" if cat else f"{pname}{broke}"
+            pattern_lines.append(f"{head}：{duan}" if duan else head)
+
+    blocks = [
+        ("起盘信息", _join_lines(lines)),
+        ("宫位总览", _join_lines(overview) or "无"),
+        ("命中格局", _join_lines(pattern_lines) or "无"),
+    ]
+    return _render_snapshot_text(blocks)
 
 
 def _append_map_section_snapshot(blocks: list[tuple[str, str]], title: str, data: Any) -> None:

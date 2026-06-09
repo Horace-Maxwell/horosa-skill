@@ -287,6 +287,33 @@ class FakeClient(HorosaApiClient):
                 "timeStr": payload.get("time", "00:00:00"),
                 "snapshot": snapshot,
             }
+        if endpoint in ("/ziwei/birth", "/ziwei/rules"):
+            # 紫微 P0–P2 (星阙 v2.6.x)：houses 带 主/辅/煞/杂曜 + 大限/小限；顶层 patterns 命中格局。
+            return {
+                "chart": {
+                    "lifeMaster": "巨门",
+                    "bodyMaster": "天相",
+                    "wuxingJuText": "土五局",
+                    "doujun": "巳",
+                    "houses": [
+                        {
+                            "name": "命宫",
+                            "ganzi": "甲子",
+                            "direction": [5, 14],
+                            "smallDirection": [1, 13, 25],
+                            "starsMain": [{"name": "紫微", "sihua": "权"}],
+                            "starsAssist": [{"name": "左辅"}],
+                            "starsEvil": [{"name": "擎羊"}],
+                            "starsOthersGood": [{"name": "三台"}],
+                            "starsSmall": [{"name": "天才"}],
+                        }
+                    ],
+                },
+                "patterns": [
+                    {"name": "府相朝垣", "category": "富贵", "broken": False, "duanyi": "天府天相来朝命垣，仓廪充盈。"},
+                    {"name": "禄逢冲破", "category": "破格", "broken": True, "duanyi": "禄逢羊陀火铃冲破，得而复失。"},
+                ],
+            }
         return chart_payload
 
 

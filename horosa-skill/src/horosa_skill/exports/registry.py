@@ -136,7 +136,7 @@ AI_EXPORT_PRESET_SECTIONS = {
     "givenyear": ["本命盘起盘信息", "本命盘星与虚点", "流年盘起盘信息", "流年盘星与虚点", "流年盘相位"],
     "decennials": ["起盘信息", "星盘信息", "十年大运设置", "基于X起运"],
     "bazi": ["起盘信息", "四柱与三元", "流年行运概略", "神煞（四柱与三元）"],
-    "ziwei": ["起盘信息", "宫位总览"],
+    "ziwei": ["起盘信息", "宫位总览", "命中格局"],
     "suzhan": ["起盘信息", "宿盘宫位与二十八宿星曜"],
     "sixyao": ["起盘信息", "卦象", "六爻与动爻", "卦辞与断语"],
     "tongshefa": ["本卦", "六爻", "潜藏", "亲和"],
@@ -209,6 +209,8 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     # 六壬 Phase4 (星阙 v2.5.x)：毕法（已命中）只在 refContext 成功且有命中时出；占断向导只在指定占类
     # (zhanCategory ≠ general) 时出 → 两者列为可选段，避免无命中/未指定占类时误报 missing。
     "liureng": ["毕法（已命中）", "占断向导"],
+    # 紫微 P2 (星阙 v2.6.x)：命中格局随 jar 返回的 patterns；本盘未命中所收录格局时为空 → 可选段。
+    "ziwei": ["命中格局"],
     # 择日: 用事专属 only when the topic rule-pack produced items; 应期 is never emitted by 星阙's builder.
     "election": ["用事专属", "应期"],
     # 七政四余: 政余格局 = Moira 格局 DSL（~280 行子系统），headless 版未移植 → 可选段（如实标出）。
