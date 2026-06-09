@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from horosa_skill import __version__
 from horosa_skill.agent_guidance import build_tool_input_contract, build_validation_recovery
+from horosa_skill.astro_sidereal import nakshatra_lord_cn, sidereal_ayanamsa_label
 from horosa_skill.config import Settings
 from horosa_skill.engine.client import HorosaApiClient, HorosaPlainJsonClient
 from horosa_skill.engine.decennials import (
@@ -958,7 +959,9 @@ ASTRO_TEXT_MAP: dict[str, str] = {
     "Pars Radix": "光耀点",
     "Whole Sign": "整宫制",
     "Tropical": "回归黄道",
-    "Sidereal": "恒星黄道，岁差:Lahiri",
+    # 恒星黄道 (星阙 v2.6.4)：原 '恒星黄道，岁差:Lahiri' 硬编码 Lahiri 会误标 Raman/Fagan 盘。
+    # 去硬编码 → 真实岁差名由 _build_base_info_lines 另起一行（sidereal_ayanamsa_label）补上。
+    "Sidereal": "恒星黄道",
     "ruler": "本垣",
     "exalt": "擢升",
     "dayTrip": "日三分",
@@ -1294,6 +1297,14 @@ def _build_base_info_lines(chart_wrap: dict[str, Any], fields: dict[str, Any]) -
     hsys_text = _astro_msg(hsys)
     if zodiacal_text or hsys_text:
         lines.append(f"{zodiacal_text}，{hsys_text}")
+    # 恒星黄道 (星阙 v2.6.4)：sidereal 盘附岁差(ayanāṃśa)名，区分 Lahiri/Raman/Fagan 等不同制。
+    # chart.zodiacal 是已本地化的字符串("恒星黄道")，故以后端解析后的 chart.siderealAyanamsa 为准
+    # ('' = 回归黄道)；旧后端缺该字段时，回退到「请求为恒星黄道则用请求 ayan 或缺省 lahiri」。
+    ayan_key = chart.get("siderealAyanamsa")
+    if not ayan_key and str(fields.get("zodiacal")) in {"1", "True", "true"}:
+        ayan_key = fields.get("siderealAyanamsa") or "lahiri"
+    if ayan_key:
+        lines.append(f"恒星黄道岁差：{sidereal_ayanamsa_label(ayan_key)}")
     lines.append(PLANET_HOUSE_INFO_NOTE)
     if chart.get("dayerStar"):
         lines.append(f"日主星：{_astro_msg(chart['dayerStar'], short=True)}")
@@ -1766,6 +1777,29 @@ def _build_natal_extra_sections(extras: dict[str, Any]) -> dict[str, str]:
     return out
 
 
+def _build_nakshatra_lines(response: dict[str, Any]) -> list[str]:
+    """西洋月宿 (星阙 v2.6.4)：恒星黄道盘的 perchart 响应在 chart.nakshatras 带 27 宿，
+    逐行星列「宿名(梵)·宿(中)·宿主·第N足」。取数路径是 chart.nakshatras（非顶层），仅 sidereal 出。"""
+    chart = response.get("chart", {}) if isinstance(response, dict) else {}
+    nakshatras = chart.get("nakshatras") if isinstance(chart, dict) else None
+    if not isinstance(nakshatras, dict) or not nakshatras:
+        return []
+    lines: list[str] = []
+    for obj_id, info in nakshatras.items():
+        if not isinstance(info, dict):
+            continue
+        name = _msg(info.get("name"))
+        label = _msg(info.get("label"))
+        lord = nakshatra_lord_cn(info.get("lord"))
+        pada = info.get("pada")
+        parts = [p for p in (name, label) if p]
+        head = "·".join(parts) if parts else "—"
+        suffix = f"，宿主{lord}" if lord else ""
+        pada_text = f"，第{pada}足" if pada else ""
+        lines.append(f"{_planet_label(obj_id)}：{head}{suffix}{pada_text}")
+    return lines
+
+
 def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
     sections = [
         ("起盘信息", _build_base_info_lines(response, payload)),
@@ -1774,6 +1808,7 @@ def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
         ("信息", _build_info_section(response, payload)),
         ("相位", _build_aspect_section(response)),
         ("行星", _build_planet_section(response)),
+        ("月宿", _build_nakshatra_lines(response)),
         ("希腊点", _build_lots_section(response)),
     ]
     rendered = [(title, "\n".join(lines).strip()) for title, lines in sections if lines]

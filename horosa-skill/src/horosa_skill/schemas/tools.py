@@ -33,6 +33,10 @@ class BirthInput(FlexibleModel):
     predictive: bool | None = True
     southchart: bool | None = False
     zodiacal: int | bool | None = 0
+    # 恒星黄道 ayanāṃśa (星阙 v2.6.4)：仅在 zodiacal=1(恒星) 时生效，选 47 个岁差模式之一
+    # (lahiri/raman/krishnamurti/fagan_bradley/…，见 astro_sidereal.SIDEREAL_AYANAMSA_LABELS)。
+    # 缺省(不传) == Lahiri，向后兼容回归黄道盘不受影响。贯穿全西洋技法盘(命占/合盘/中点/卜卦/三式/节气)。
+    siderealAyanamsa: Any | None = None
     pdtype: Any | None = None
     pdMethod: Any | None = None
     pdTimeKey: Any | None = None
@@ -80,6 +84,7 @@ class RelativeInput(FlexibleModel):
     outer: RelativePartyInput
     hsys: int | None = 0
     zodiacal: int | None = 0
+    siderealAyanamsa: Any | None = None
     relative: int | None = 0
 
 
