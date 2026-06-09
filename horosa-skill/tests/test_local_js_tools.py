@@ -419,6 +419,28 @@ def test_distributions_runs_via_chart_service(tmp_path) -> None:
     _assert_clean_export(result)
 
 
+@requires_runtime
+def test_ziwei_patterns_and_enriched_overview(tmp_path) -> None:
+    # 星阙 v2.6.x 紫微 P0–P2：起盘信息补 命主/身主/五行局/斗君；宫位总览分 主/辅/煞/杂曜 + 大限/小限；
+    # 新增「命中格局」段（随 jar 的 patterns：流派四化/新格局/天伤天使安星）。需 Java :9999。
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "ziwei_birth",
+        {"date": "1985-11-07", "time": "23:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gender": True},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    snap = result.data["snapshot_text"]
+    assert "命主：" in snap and "五行局：" in snap  # 起盘信息 enriched
+    assert "主星：" in snap and "杂曜：" in snap  # 宫位总览 structured (P0 杂曜补显)
+    assert "[命中格局]" in snap
+    # 至少一条命中格局带断语；该盘已知含「府相朝垣」
+    assert "府相朝垣" in snap
+    patterns = result.data.get("patterns")
+    assert isinstance(patterns, list) and patterns
+    _assert_clean_export(result)
+
+
 @requires_chart
 def test_guolao_zhengyu_patterns(tmp_path) -> None:
     # 星阙 v2.6.x 七政四余 政余格局 (Moira DSL)：vendored buildLocalMoiraPatterns 评估盘面物象格局。
