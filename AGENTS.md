@@ -403,10 +403,19 @@ only difference is which engine dir is vendored:
   only `DunJiaFaDoc`. The existing `DunJiaCalc.js` works, so just add `import { buildFaQimenAnalysis }` + the +8-section
   block before its `return`. `buildFaQimenAnalysis(pan)` is compatible with the skill's kinqimen pan (live-verified);
   all 8 法 headers emit when `fa` is truthy. Preset = the builder's actual sections (14: skill has no `九宫与宫内星体`).
-- **Two items left out, honestly flagged** (`能接多少接多少、跑不通如实标出`): guolao `政余格局` (`buildLocalMoiraPatterns`
-  is a ~280-line Moira DSL subsystem — `AI_EXPORT_OPTIONAL_SECTIONS["guolao"]`) and liureng `毕法/占断向导`
-  (`matchBiFa` needs a ~40-field layout context the headless engine doesn't assemble — vendored docs dropped,
-  not exposed). Both can be a focused follow-up; neither blocks the export contract.
+- **liureng `毕法/占断向导` — DONE in v0.11.0** (was deferred in v0.10.0): the ~40-field layout context IS assemblable
+  headless. `buildLiuRengReferenceContext` + `buildLiuRengLayout`/`buildKeData`/`buildSanChuanData` are pure
+  module-level functions (20-fn / ~570-LOC closure, zero `this.`/React) — extracted verbatim into
+  `vendor/liureng/liurengRefContext.js`. The 三传 engine is `ChuangChart.genCuangs()` (plain class; vendored with
+  the 3 draw-only imports — GraphHelper/helper/LRShenJiangDoc — replaced by no-op stubs since only genCuangs runs).
+  Deps: full `LRConst.js` (re-vendored 21→52 exports superset; has GanJiZi/GuiRengs/GanZiWuXing/getGuiZi), `LRPanStyle.js`,
+  a 12-LOC `constants/AstroConst.js` shim (LIST_SIGNS + Sun/Moon). Wired in `tools/liureng.js`: `[毕法（已命中）]` always
+  (refCtx success), `[占断向导]` only when `payload.zhanCategory` ∈ {hunyin/taichan/jibing/caiyun/…}. Both in the liureng
+  preset + `AI_EXPORT_OPTIONAL_SECTIONS["liureng"]` (conditional → no false missing). **坑**: missing a module-level const
+  in the closure (JiaZiList/ERFAN_SU_TO_BRANCH) → silent `ReferenceError` caught by try/catch → refCtx null → 毕法 absent;
+  and a missing `ChuangChart` import → 三传 null → only non-三传 毕法 fire. Always trace refCtx + sanChuan on a real 盘.
+- **One item still left out, honestly flagged** (`能接多少接多少、跑不通如实标出`): guolao `政余格局` (`buildLocalMoiraPatterns`
+  is a ~280-line Moira DSL subsystem — `AI_EXPORT_OPTIONAL_SECTIONS["guolao"]`); addressed in v0.11.0 E (JS vendor).
 - **Live services make the @requires_* tests run.** When `:8899` (chart/ken) and `:9999` (Java) are up, pytest runs
   the integration tests for real (233 passed, 0 skipped). That validated B/C/A against real Python compute and the
   qimen/jinkou 解读层 against the real ken backend — the best signal available. CI (services down) skips them.
