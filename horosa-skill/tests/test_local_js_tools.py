@@ -442,6 +442,37 @@ def test_chart_carries_v240_natal_extras(tmp_path) -> None:
 
 
 @requires_chart
+def test_chart_sidereal_ayanamsa_and_nakshatra(tmp_path) -> None:
+    # 星阙 v2.6.4 恒星黄道 47 岁差 + 西洋月宿 nakshatra：sidereal 盘(zodiacal=1) 按 siderealAyanamsa
+    # 真实标注岁差名（Raman ≠ Lahiri，修原 '岁差:Lahiri' 硬编码 bug），并按 chart.nakshatras 出「月宿」段。
+    service = make_service(tmp_path)
+    base = {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "hsys": 1}
+
+    raman = service.run_tool("chart", {**base, "zodiacal": 1, "siderealAyanamsa": "raman"}, save_result=False)
+    assert raman.ok is True, raman.error
+    rsnap = raman.data["snapshot_text"]
+    assert "恒星黄道岁差：Raman" in rsnap  # 真实岁差，非硬编码 Lahiri
+    assert "[月宿]" in rsnap and "宿主" in rsnap
+    rexp = raman.data["export_snapshot"]
+    assert rexp["unknown_detected_sections"] == []  # 月宿 已登记，不算 unknown
+    assert "月宿" not in rexp["missing_selected_sections"]  # 已产出，不算 missing
+    assert "月宿" in (rexp.get("section_titles_detected") or [])
+
+    # 缺省恒星黄道 → Lahiri（不是 Raman）
+    lahiri = service.run_tool("chart", {**base, "zodiacal": 1}, save_result=False)
+    assert lahiri.ok is True, lahiri.error
+    assert "恒星黄道岁差：Lahiri / Chitrapaksha" in lahiri.data["snapshot_text"]
+
+    # 回归黄道 → 无岁差行、无月宿段
+    trop = service.run_tool("chart", {**base}, save_result=False)
+    assert trop.ok is True, trop.error
+    tsnap = trop.data["snapshot_text"]
+    assert "恒星黄道岁差" not in tsnap
+    assert "[月宿]" not in tsnap
+    assert "月宿" not in (trop.data["export_snapshot"].get("section_titles_detected") or [])
+
+
+@requires_chart
 def test_mundane_ingress_chart(tmp_path) -> None:
     # 世俗入宫盘 (mundane ingress, 星阙 v2.4.0): (1) /jieqi/year → the precise 春分 ingress moment,
     # (2) /chart at that moment, (3) natal extras, (4) a [世俗入宫] head prepended to the astro snapshot.

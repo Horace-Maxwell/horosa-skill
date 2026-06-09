@@ -277,12 +277,24 @@ ASTRO_BIRTH_POLICY = _policy(
     ask_if_missing=[
         {"field": "date/time/place", "question": "请提供出生/事件的日期、时间、时区和地点。"},
         {"field": "hsys", "question": "宫制要用哪一种？", "options": ["整宫制/Whole Sign（默认推荐）", "Placidus", "其他指定宫制"]},
-        {"field": "zodiacal", "question": "黄道体系要用哪一种？", "options": ["回归黄道（默认推荐）", "恒星黄道"]},
+        {"field": "zodiacal", "question": "黄道体系要用哪一种？", "options": ["回归黄道（默认推荐）", "恒星黄道（需配 siderealAyanamsa）"]},
+        {
+            "field": "siderealAyanamsa",
+            "question": "若用恒星黄道，岁差(ayanāṃśa)取哪一制？（仅 zodiacal=1 时生效，缺省=lahiri）",
+            "options": [
+                "lahiri（默认）",
+                "raman",
+                "krishnamurti / KP",
+                "fagan_bradley",
+                "yukteshwar / true_citra / ss_revati 等（共 47 制，见 SIDEREAL_AYANAMSA_LABELS）",
+            ],
+        },
         {"field": "tradition", "question": "是否需要传统占星扩展项？", "options": ["需要", "不需要/默认"]},
     ],
     safe_defaults=[
         {"field": "hsys", "value": 0, "meaning": "Whole Sign / 整宫制"},
         {"field": "zodiacal", "value": 0, "meaning": "Tropical / 回归黄道"},
+        {"field": "siderealAyanamsa", "value": "lahiri", "meaning": "恒星黄道缺省 Lahiri（仅 zodiacal=1 生效）"},
         {"field": "ad", "value": 1, "meaning": "公历纪年"},
     ],
     do_not_assume=["birth time", "birthplace", "timezone"],
