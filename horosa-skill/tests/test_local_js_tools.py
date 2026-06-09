@@ -420,6 +420,26 @@ def test_distributions_runs_via_chart_service(tmp_path) -> None:
 
 
 @requires_chart
+def test_guolao_zhengyu_patterns(tmp_path) -> None:
+    # 星阙 v2.6.x 七政四余 政余格局 (Moira DSL)：vendored buildLocalMoiraPatterns 评估盘面物象格局。
+    # 1985-03-21 固定盘命中喜格「金水相涵」+ 忌格「孛犯太阳」(盘面物象，不依赖 七政神煞)。
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "guolao_chart",
+        {"date": "1985-03-21", "time": "10:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    snap = result.data["snapshot_text"]
+    assert "[政余格局]" in snap
+    assert "金水相涵" in snap and "孛犯太阳" in snap
+    assert "喜格：" in snap and "忌格：" in snap
+    names = [p.get("name") for p in (result.data.get("guolaoPatterns") or [])]
+    assert "金水相涵" in names and "孛犯太阳" in names
+    _assert_clean_export(result)
+
+
+@requires_chart
 def test_chart_carries_v240_natal_extras(tmp_path) -> None:
     # 星阙 v2.4.0 西占: the astrochart export now carries 12分度 / 主宰星链 / 寿命格局, computed by the
     # vendored JS astroextra formatter (Ptolemy hyleg engine) from the /chart response. (可能性 is data-

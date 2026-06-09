@@ -12,10 +12,12 @@ import { runProgExtra } from '../src/tools/progextra.js';
 import { runLiureng, normalizeChart } from '../src/tools/liureng.js';
 import { buildLiuRengReferenceContext } from '../src/vendor/liureng/liurengRefContext.js';
 import { matchBiFa } from '../src/vendor/liureng/LRBiFaDoc.js';
+import { runGuolaoMoira } from '../src/tools/guolaoMoira.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const chart = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_traditional.json'), 'utf8'));
 const liurengFix = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_liureng.json'), 'utf8'));
+const guolaoFix = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_guolao.json'), 'utf8'));
 
 let failures = 0;
 function check(name, fn) {
@@ -98,6 +100,18 @@ check('liureng snapshot carries 毕法 + 占断向导 sections', () => {
   assert(s.includes('[毕法（已命中）]'), 'missing 毕法 section');
   assert(/\n\d+\.\s/.test(s), 'no numbered 毕法 entries');
   assert(s.includes('[占断向导]') && s.includes('占事：婚姻'), 'missing 占断向导 for hunyin');
+});
+
+// 七政四余 政余格局 (星阙 v2.6.x Moira DSL)：buildLocalMoiraPatterns verbatim 抽取。固定盘
+// 1985-03-21 应命中喜格「金水相涵」+ 忌格「孛犯太阳」(盘面物象格局，不依赖 七政神煞)。
+check('guolaoMoira evaluates 政余格局 patterns', () => {
+  const r = runGuolaoMoira(guolaoFix);
+  const names = (r.data.patterns || []).map((p) => p.name);
+  assert(!r.data.error, `should not error: ${r.data.error}`);
+  assert(names.includes('金水相涵'), `expected 金水相涵, got ${names.join(',')}`);
+  assert(names.includes('孛犯太阳'), `expected 孛犯太阳, got ${names.join(',')}`);
+  const s = r.snapshot_text || '';
+  assert(s.includes('喜格：') && s.includes('忌格：'), 'snapshot missing 喜格/忌格 lines');
 });
 
 if (failures > 0) {

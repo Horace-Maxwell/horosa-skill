@@ -414,8 +414,17 @@ only difference is which engine dir is vendored:
   preset + `AI_EXPORT_OPTIONAL_SECTIONS["liureng"]` (conditional → no false missing). **坑**: missing a module-level const
   in the closure (JiaZiList/ERFAN_SU_TO_BRANCH) → silent `ReferenceError` caught by try/catch → refCtx null → 毕法 absent;
   and a missing `ChuangChart` import → 三传 null → only non-三传 毕法 fire. Always trace refCtx + sanChuan on a real 盘.
-- **One item still left out, honestly flagged** (`能接多少接多少、跑不通如实标出`): guolao `政余格局` (`buildLocalMoiraPatterns`
-  is a ~280-line Moira DSL subsystem — `AI_EXPORT_OPTIONAL_SECTIONS["guolao"]`); addressed in v0.11.0 E (JS vendor).
+- **guolao `政余格局` — DONE in v0.11.0** (was deferred): `buildLocalMoiraPatterns` (Moira DSL) + its 34-fn/~600-LOC
+  pure closure (zero `this.`) extracted verbatim into `vendor/guolao/guolaoMoira.js`; runs via `js_client.run("guolao_moira")`
+  in `_run_guolao_chart_tool`, appended as the `[政余格局]` section. Deps chained out: `vendor/suzhan/SZConst.js` (with a
+  hardcoded `localStorage` no-op shim — node 25's experimental global localStorage throws without a flag), the real
+  `constants/AstroText.js` (name maps) + an extended `constants/AstroConst.js` shim (planets/nodes/points the maps key on),
+  and inline `GUOLAO_LIFE_MODE_*` + `getStored*` default stubs (headless has no UI prefs → ASC 命度 / su28=2).
+  **Honest limitation** (`能接多少接多少、跑不通如实标出`): the 七政神煞 (官/福/疾/天贵/玉贵/岁驾) come from a *separate*
+  kinastro qizheng engine (`fetchKinastroQizheng`), which the skill's western-`/chart`-only guolao path never fetches — so
+  `guolaoGods` is absent and the **god-dependent patterns** (八杀朝天/日月拱官/官福失垣/…) can't fire. The **chart-object
+  patterns** (孛犯太阳/罗犯太阳/金水相涵/日月失所/命坐两歧/孤月独明) DO fire (golden: 1985-03-21 → 金水相涵 + 孛犯太阳).
+  The 神煞 section was already empty for the same reason (pre-existing). Closing it = wiring the qizhengkin gods in (future).
 - **Live services make the @requires_* tests run.** When `:8899` (chart/ken) and `:9999` (Java) are up, pytest runs
   the integration tests for real (233 passed, 0 skipped). That validated B/C/A against real Python compute and the
   qimen/jinkou 解读层 against the real ken backend — the best signal available. CI (services down) skips them.

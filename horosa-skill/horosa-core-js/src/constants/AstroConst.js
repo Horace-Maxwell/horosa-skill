@@ -23,6 +23,18 @@ export const LIST_SIGNS = [
 
 export const SUN = 'Sun';
 export const MOON = 'Moon';
+// 七政四余 政余格局 (guolaoMoira) 闭包 + AstroText 名表另需的对象 id（flatlib 标识，与排盘响应 objects[].id 一致）。
+export const MERCURY = 'Mercury';
+export const VENUS = 'Venus';
+export const MARS = 'Mars';
+export const JUPITER = 'Jupiter';
+export const SATURN = 'Saturn';
+export const NORTH_NODE = 'North Node';
+export const SOUTH_NODE = 'South Node';
+export const DARKMOON = 'Dark Moon';
+export const PURPLE_CLOUDS = 'Purple Clouds';
+export const ASC = 'Asc';
+export const LIFEMASTERDEG74 = 'LifeMasterDeg74';
 
 // UI 配色 stub（headless 不渲染）；SignFill / 按星座取色被调用时返回 undefined。
 export const AstroColor = { SignFill: {} };
