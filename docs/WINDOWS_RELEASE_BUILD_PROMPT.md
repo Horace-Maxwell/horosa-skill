@@ -2,7 +2,7 @@
 
 > **Read this whole file, then do the work.** You are a Claude Code agent running on a **Windows**
 > machine. A teammate (Claude Code on macOS) finished all the code/test/doc/release work for **Horosa
-> Skill v0.10.0** but cannot build or natively verify the **Windows** offline runtime — that requires
+> Skill v0.11.0** but cannot build or natively verify the **Windows** offline runtime — that requires
 > win32 wheels and native Windows execution. That is your job. Work carefully and confirm with the
 > user before any destructive or irreversible step (especially the final "publish as latest").
 
@@ -18,24 +18,28 @@ agents. Repo: `https://github.com/Horace-Maxwell/horosa-skill` (AGPL-3.0). The P
   (`kinqimen` / `kintaiyi` / `kinjinkou`) mounted on the local Python **chart service** (`:8899`) at
   `/qimen/pan` · `/taiyi/pan` · `/jinkou/pan`. The JS layer only reformats ken's response into
   `aiExport.js` sections. `tongshefa` is pure headless JS; `decennials` is headless Python.
-- **Why v0.10.0:** a **星阙 v2.5.2→v2.6.x parity sync — no new tools, still 68.** It extends existing
+- **Why v0.11.0:** a **星阙 v2.5.2→v2.6.x parity sync — no new tools, still 68.** It extends existing
   tools (PD all-house-systems, Hamburg/Uranian midpoint dial, 七政四余 大限/相位, 金口诀 reading layer,
   大六壬 常用神煞, 奇门 法奇门 overlay). The runtime is re-vendored to the current 星阙, so re-syncing the
   vendor source (§2/§3) is REQUIRED. The full 14 神数 (5 standalone + the shared `kinastro` engine) and the
   数算 line (canping/heluo via `lunar-javascript`, so `npm` must be on PATH) carry over from v0.9.x.
-  **New build steps in v0.10.0 (already wired into `build_runtime_release_windows.py` — no manual action):**
+  **Build steps added in v0.10.0 (already wired into `build_runtime_release_windows.py` — no manual action):**
   (1) it runs `gen_shaozi_tiaowen.py` over the staged `kinastro/.../shaozi/data/` so 邵子神数 emits real
   verses (without it 邵子's `基础条文` is a placeholder), and (2) it strips plotly (~40 MB, streamlit-only).
   `verify_runtime_release.py` requires `…/shaozi/data/shaozi_tiaowen_6144.json` on **both** platforms.
-- **Current state:** main is at v0.10.0 and **v0.10.0 has shipped on both platforms** (darwin + win32-x64
+- **Current state:** main is at v0.11.0 and **v0.11.0 has shipped on both platforms** (darwin + win32-x64
   zips + dual-platform `runtime-manifest.json` + `SHA256SUMS.txt`), and it is the public `releases/latest`.
   There is **no pending Windows build right now.** If you are reading this for the *next* version vX.Y.Z:
   the mac side will publish a `vX.Y.Z` prerelease carrying only the darwin archive (+ maybe SHA256SUMS) —
   your job is to produce the win32-x64 zip, regenerate the dual-platform manifest + checksums, upload, and
-  (after the user confirms) flip it to latest. **Heads-up gotcha that bit v0.10.0:** the mac side has
-  twice published the new version *already flipped to `latest`* but **without a `runtime-manifest.json`**,
-  which 404s `releases/latest/download/runtime-manifest.json` and breaks `install` for BOTH platforms until
-  you upload the regenerated manifest — check that first.
+  (after the user confirms) flip it to latest. **Heads-up gotcha (hit on v0.10.0 AND v0.11.0):** the mac
+  side keeps publishing the new version *already flipped to `latest`* but with an **incomplete release** —
+  two variants seen: (a) **no `runtime-manifest.json` at all** (v0.10.0) → `releases/latest/download/runtime-manifest.json`
+  404s and `install` breaks on BOTH platforms; (b) a **darwin-only manifest + no win32 zip** (v0.11.0) →
+  mac installs but Windows `install` finds no `win32-x64` entry / 404s the zip. **Always check first:**
+  `gh release view vX.Y.Z --json assets` (want darwin tar.gz + win32 zip + manifest + SHA256SUMS) and that
+  the manifest JSON lists **both** `darwin-arm64` and `win32-x64`. The fix is to build the win half +
+  regenerate the **dual-platform** manifest/checksums + upload (no flip needed — it's already latest).
 - **Read `AGENTS.md` first** (repo root) — its "Maintainer & Build Notes" + "Stability invariants"
   sections are authoritative. **Standing rule:** if you hit any problem/gotcha/fix, update **both**
   `AGENTS.md` and `skills/horosa-agent/SKILL.md` in the same change (keep them in sync), and log it in
@@ -43,12 +47,12 @@ agents. Repo: `https://github.com/Horace-Maxwell/horosa-skill` (AGPL-3.0). The P
 
 ## 1. Goal (acceptance criteria)
 
-1. Build `horosa-skill/dist/runtime/horosa-runtime-win32-x64-v0.10.0.zip`.
+1. Build `horosa-skill/dist/runtime/horosa-runtime-win32-x64-v0.11.0.zip`.
 2. **Natively verify on Windows** that the bundled chart service boots and the ken endpoints + the
    corrected tongshefa work (commands in §4). This is the part macOS could not do.
 3. Regenerate `runtime-manifest.json` + `SHA256SUMS.txt` covering **both** platform archives, and run
    `verify_runtime_release.py` against both.
-4. Upload the Windows zip (+ refreshed manifest/checksums) to the `v0.10.0` GitHub release, then — only
+4. Upload the Windows zip (+ refreshed manifest/checksums) to the `v0.11.0` GitHub release, then — only
    after the user confirms — flip it from prerelease to the public **latest** release.
 
 ## 2. Prerequisites — confirm with the user before building
@@ -85,7 +89,7 @@ You need these present; **ask the user** where they live if not obvious:
   horosa-skill/scripts/sync_vendored_runtime_sources.sh` — `HOROSA_SOURCE_ROOT` (the dir containing
   `Horosa-Web/`) brings in the **current ken engines** + astropy + flatlib + the Java jar, and
   `HOROSA_WINDOWS_SOURCE_ROOT` brings in `runtime/windows/{python,java,bundle/wheels}`. **Re-syncing is
-  required for v0.10.0** — that is how the build picks up the current `kinqimen`/`kintaiyi`. Confirm the
+  required for v0.11.0** — that is how the build picks up the current `kinqimen`/`kintaiyi`. Confirm the
   win32 wheels are produced (typically `pip download --only-binary=:all: --platform win_amd64
   --python-version 311` of the dep set, or built on this machine).
 
@@ -93,15 +97,15 @@ You need these present; **ask the user** where they live if not obvious:
 
 ```powershell
 # from the repo root
-git fetch origin; git checkout main; git pull        # must include v0.10.0 (pyproject version == 0.10.0)
+git fetch origin; git checkout main; git pull        # must include v0.11.0 (pyproject version == 0.11.0)
 cd horosa-skill
 uv sync
-uv run python -c "from horosa_skill import __version__; print(__version__)"   # expect 0.10.0
+uv run python -c "from horosa_skill import __version__; print(__version__)"   # expect 0.11.0
 
 # build the win32-x64 zip (downloads Node/Java/embedded-Python, unpacks the win32 wheels, bundles
 # Horosa-Web + ken engines + horosa-core-js, writes the embedded runtime-manifest.json)
 uv run python scripts/build_runtime_release_windows.py
-dir dist\runtime\horosa-runtime-win32-x64-v0.10.0.zip
+dir dist\runtime\horosa-runtime-win32-x64-v0.11.0.zip
 ```
 
 If `build_runtime_release_windows.py` exits with `missing required path: …`, that input (§2) is absent —
@@ -114,10 +118,10 @@ Extract the zip to a scratch dir and confirm the runtime actually runs.
 ```powershell
 $dst = "$env:TEMP\horosa-v062-verify"
 Remove-Item -Recurse -Force $dst -ErrorAction SilentlyContinue
-Expand-Archive dist\runtime\horosa-runtime-win32-x64-v0.10.0.zip -DestinationPath $dst
+Expand-Archive dist\runtime\horosa-runtime-win32-x64-v0.11.0.zip -DestinationPath $dst
 $payload = Join-Path $dst "runtime-payload"
 
-# (a) embedded manifest must read 0.10.0
+# (a) embedded manifest must read 0.11.0
 Get-Content (Join-Path $payload "runtime-manifest.json")
 
 # (b) start the chart service on a NON-default port (do NOT collide with anything on 8899)
@@ -144,7 +148,7 @@ $cli  = Join-Path $payload "horosa-core-js\bin\cli.mjs"
 ```
 
 Acceptance: all three ken endpoints return `ResultCode 0` with `source` = `kinqimen`/`kintaiyi`/`kinjinkou`;
-tongshefa returns `right_elem=金 / main_relation=实克思`; the embedded manifest says `0.10.0`.
+tongshefa returns `right_elem=金 / main_relation=实克思`; the embedded manifest says `0.11.0`.
 
 Also run the unit suite on Windows for cross-platform coverage (the ken integration tests need the live
 chart service — point the skill at your running `:8896` or bring up the full stack):
@@ -156,49 +160,49 @@ uv run pytest -q
 
 ## 5. Regenerate manifest + checksums over BOTH archives, then verify both
 
-The macOS archive already exists on the `v0.10.0` release — download it next to the Windows zip so the
+The macOS archive already exists on the `v0.11.0` release — download it next to the Windows zip so the
 manifest and `SHA256SUMS.txt` cover both platforms.
 
 ```powershell
 cd horosa-skill
-gh release download v0.10.0 --repo Horace-Maxwell/horosa-skill `
-  --pattern "horosa-runtime-darwin-arm64-v0.10.0.tar.gz" --dir dist\runtime
+gh release download v0.11.0 --repo Horace-Maxwell/horosa-skill `
+  --pattern "horosa-runtime-darwin-arm64-v0.11.0.tar.gz" --dir dist\runtime
 
 uv run python scripts/generate_release_manifest.py `
-  --version 0.10.0 `
-  --darwin-archive dist\runtime\horosa-runtime-darwin-arm64-v0.10.0.tar.gz `
-  --darwin-url https://github.com/Horace-Maxwell/horosa-skill/releases/latest/download/horosa-runtime-darwin-arm64-v0.10.0.tar.gz `
-  --windows-archive dist\runtime\horosa-runtime-win32-x64-v0.10.0.zip `
-  --windows-url https://github.com/Horace-Maxwell/horosa-skill/releases/latest/download/horosa-runtime-win32-x64-v0.10.0.zip `
+  --version 0.11.0 `
+  --darwin-archive dist\runtime\horosa-runtime-darwin-arm64-v0.11.0.tar.gz `
+  --darwin-url https://github.com/Horace-Maxwell/horosa-skill/releases/latest/download/horosa-runtime-darwin-arm64-v0.11.0.tar.gz `
+  --windows-archive dist\runtime\horosa-runtime-win32-x64-v0.11.0.zip `
+  --windows-url https://github.com/Horace-Maxwell/horosa-skill/releases/latest/download/horosa-runtime-win32-x64-v0.11.0.zip `
   --output dist\runtime\runtime-manifest.json
 
 # checksums over both archives (regenerate SHA256SUMS.txt for both)
 cd dist\runtime
-(Get-FileHash horosa-runtime-darwin-arm64-v0.10.0.tar.gz -Algorithm SHA256).Hash.ToLower() + "  horosa-runtime-darwin-arm64-v0.10.0.tar.gz" | Out-File SHA256SUMS.txt -Encoding ascii
-(Get-FileHash horosa-runtime-win32-x64-v0.10.0.zip -Algorithm SHA256).Hash.ToLower() + "  horosa-runtime-win32-x64-v0.10.0.zip" | Out-File SHA256SUMS.txt -Append -Encoding ascii
+(Get-FileHash horosa-runtime-darwin-arm64-v0.11.0.tar.gz -Algorithm SHA256).Hash.ToLower() + "  horosa-runtime-darwin-arm64-v0.11.0.tar.gz" | Out-File SHA256SUMS.txt -Encoding ascii
+(Get-FileHash horosa-runtime-win32-x64-v0.11.0.zip -Algorithm SHA256).Hash.ToLower() + "  horosa-runtime-win32-x64-v0.11.0.zip" | Out-File SHA256SUMS.txt -Append -Encoding ascii
 cd ..\..
 
 # verify BOTH archives structurally (this checks required entries incl. real files inside swefiles/,
 # astropy/, vendor/kin*/ — an empty required dir now correctly FAILS).
 uv run python scripts/verify_runtime_release.py `
-  --darwin-archive dist\runtime\horosa-runtime-darwin-arm64-v0.10.0.tar.gz `
-  --windows-archive dist\runtime\horosa-runtime-win32-x64-v0.10.0.zip `
+  --darwin-archive dist\runtime\horosa-runtime-darwin-arm64-v0.11.0.tar.gz `
+  --windows-archive dist\runtime\horosa-runtime-win32-x64-v0.11.0.zip `
   --manifest dist\runtime\runtime-manifest.json
 ```
 
 `verify_runtime_release.py` must exit 0. If it reports a missing entry, the Windows zip is incomplete —
 fix the input/build, don't loosen the verifier.
 
-## 6. Finalize the v0.10.0 release (confirm with the user first)
+## 6. Finalize the v0.11.0 release (confirm with the user first)
 
 ```powershell
-gh release upload v0.10.0 --repo Horace-Maxwell/horosa-skill `
-  horosa-skill\dist\runtime\horosa-runtime-win32-x64-v0.10.0.zip `
+gh release upload v0.11.0 --repo Horace-Maxwell/horosa-skill `
+  horosa-skill\dist\runtime\horosa-runtime-win32-x64-v0.11.0.zip `
   horosa-skill\dist\runtime\runtime-manifest.json `
   horosa-skill\dist\runtime\SHA256SUMS.txt --clobber
 
-# ONLY after the user confirms they want v0.10.0 to become the public latest:
-gh release edit v0.10.0 --repo Horace-Maxwell/horosa-skill --draft=false --prerelease=false --latest
+# ONLY after the user confirms they want v0.11.0 to become the public latest:
+gh release edit v0.11.0 --repo Horace-Maxwell/horosa-skill --draft=false --prerelease=false --latest
 ```
 
 After flipping to latest, sanity-check a fresh install path on a clean Windows box if possible:
@@ -217,6 +221,6 @@ After flipping to latest, sanity-check a fresh install path on a clean Windows b
   incomplete.
 - **Keep edits cross-platform.** Don't break the macOS/POSIX paths; the same scripts build both platforms.
 - **Report back to the user** with: the Windows zip SHA256, the three ken endpoint results, the tongshefa
-  result, `verify_runtime_release.py` output, and whether you flipped v0.10.0 to latest. If you changed
+  result, `verify_runtime_release.py` output, and whether you flipped v0.11.0 to latest. If you changed
   anything in the repo, push to `main` and update `CHANGELOG.md` + `AGENTS.md`/skill doc per the
   force-sync rule.
