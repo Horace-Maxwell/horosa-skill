@@ -793,7 +793,7 @@ def test_election_unknown_topic_falls_back_to_marriage(tmp_path) -> None:
 # recent chart service; the 9 kinastro-* (shaozi…qizhengkin) only emit a snapshot on a current build —
 # an OLDER live app returns no snapshot, which now surfaces as a clean transport error (see P0-3), and
 # the test SKIPS that technique rather than failing (so it greens on the user's old :8899 yet really
-# exercises the engine on the bundled v0.10.0 runtime).
+# exercises the engine on the bundled v0.11.0 runtime).
 _SHENSHU_EXPECTED = {
     # 5 standalone engines
     "wangji": ("[起盘]", "[心易发微]"),
