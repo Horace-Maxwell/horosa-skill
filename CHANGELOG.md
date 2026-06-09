@@ -33,6 +33,29 @@ and this project follows a release-oriented changelog style.
   byte-identical to the macOS-built one (Path.write_text otherwise emits CRLF on Windows — same content,
   different bytes). Functionally inert; keeps the two platform builds reproducible.
 
+## [0.11.0] - 2026-06-08
+
+### Sync — Xingque v2.6.3 → v2.6.5 parity + two v0.10.0 deferrals finished (no new tools; still 68)
+
+Re-synced the bundled runtime from Xingque HEAD and wired the AI-consumable additions.
+All changes extend existing tools (parameters / snapshot sections); no new tool was added.
+
+- **Sidereal ayanāṃśa (v2.6.4)** — `siderealAyanamsa` on every BirthInput-derived Western tool
+  (47 modes; absent → backend default Lahiri, tropical charts unchanged). The snapshot now prints the
+  real ayanāṃśa name, fixing an inherited hardcoded-"Lahiri" bug that mislabelled Raman/Fagan charts.
+- **Western nakshatra (v2.6.4)** — a `月宿` section (planet → mansion / lord / pada) on sidereal charts,
+  read from `chart.nakshatras`.
+- **India chart full (v2.6.4)** — new `IndiaChartInput` with `indiaHsys` (0–24 house systems) +
+  `indiaAyanamsa` (47), plus enumerating guidance and a golden test against SE ayanāṃśa baselines.
+- **Da Liu Ren Bi-Fa (deferred from v0.10.0)** — the 100 Bi-Fa rules + divination guide, via a verbatim
+  vendor of `buildLiuRengReferenceContext` + the `ChuangChart` 三传 engine (pure closures, draw-only deps stubbed).
+- **Qi Zheng Si Yu Zheng-Yu patterns (deferred from v0.10.0)** — the Moira-DSL `buildLocalMoiraPatterns`
+  vendored verbatim; chart-object patterns fire (god-dependent ones limited by the upstream gods gap, flagged).
+- **Zi Wei P0–P2 (v2.6.x)** — the ziwei snapshot gains matched patterns (命中格局), secondary stars (杂曜),
+  school-specific si-hua tags, plus 命主/身主/五行局/斗君 and structured 主/辅/煞/杂 + 大限/小限 overview.
+- **Python geo robustness** — float lat/lon handled (v2.6.5), via the runtime re-sync.
+>>>>>>> d45ebaf (v0.11.0 release prep: bump 0.10.0→0.11.0 + CHANGELOG + README (zh/en))
+
 ## [0.10.0] - 2026-06-07
 
 ### Sync — Xingque v2.5.2 → v2.6.x feature parity (no new tools; still 68)
