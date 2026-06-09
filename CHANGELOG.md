@@ -7,6 +7,23 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+### Fixed — v0.11.0 Windows half + a stray CHANGELOG conflict marker
+
+- **v0.11.0 was published as `latest` with a darwin-only `runtime-manifest.json` and no Windows zip — so
+  `install` worked on macOS but broke on Windows.** Unlike v0.10.0 (which had *no* manifest, breaking both
+  platforms), v0.11.0's manifest existed but listed only the `darwin-arm64` platform, and the win32 zip
+  404'd — a Windows `install` finds no `win32-x64` entry / asset. Built + natively verified the win32-x64
+  v0.11.0 runtime, regenerated the **dual-platform** `runtime-manifest.json` + `SHA256SUMS.txt`, and
+  uploaded all three to the v0.11.0 release (already `latest`; the upload alone restores Windows install).
+  Native check: `/qimen|/taiyi|/jinkou/pan` → `ResultCode 0` + right source; all 14 神数 return a real
+  `Result.snapshot` (shaozi `基础条文` real); tongshefa/canping/heluo OK; `verify_runtime_release.py`
+  passes both archives; win zip sha256 `13159b8268748547fef09bae4a54c454ce20526b8601715c8859c2dabac5e5e2`.
+  No build-script changes were needed — the v0.10.0 parity work (shaozi gen + plotly strip) carried over,
+  and the LF fix landed (the v0.11.0 win zip's `shaozi_tiaowen_6144.json` is now LF, byte-clean).
+- **Removed a committed git conflict marker from `CHANGELOG.md`.** The v0.11.0 release-prep merge left a
+  stray `>>>>>>> d45ebaf …` line in the changelog on `main` (the `<<<<<<<`/`=======` halves were already
+  resolved away). Deleted it; the surrounding content was intact.
+
 ### Fixed — v0.10.0 Windows half + cross-platform build parity
 
 - **v0.10.0 was published as `latest` with no `runtime-manifest.json` and no Windows zip — `install` was
@@ -54,7 +71,6 @@ All changes extend existing tools (parameters / snapshot sections); no new tool 
 - **Zi Wei P0–P2 (v2.6.x)** — the ziwei snapshot gains matched patterns (命中格局), secondary stars (杂曜),
   school-specific si-hua tags, plus 命主/身主/五行局/斗君 and structured 主/辅/煞/杂 + 大限/小限 overview.
 - **Python geo robustness** — float lat/lon handled (v2.6.5), via the runtime re-sync.
->>>>>>> d45ebaf (v0.11.0 release prep: bump 0.10.0→0.11.0 + CHANGELOG + README (zh/en))
 
 ## [0.10.0] - 2026-06-07
 

@@ -541,6 +541,20 @@ only difference is which engine dir is vendored:
   shipped placeholder 邵子 verses *and still passed verify*. Fixed by adding both steps to the Windows
   builder and the shaozi entry to the win32-x64 verifier list. **Rule: when you touch one builder or add a
   required artifact, grep the other builder + both `REQUIRED_ENTRIES` lists in the same change.**
+- **A new release published as `latest` is repeatedly missing its Windows half — ALWAYS check the release
+  manifest first.** The mac side has shipped three `latest` releases incomplete: v0.10.0 had **no**
+  `runtime-manifest.json` at all (`releases/latest/download/runtime-manifest.json` 404 → `install` broke on
+  BOTH platforms); v0.11.0 had a **darwin-only** manifest + no win32 zip (mac installs, **Windows** install
+  finds no `win32-x64` entry / 404s the zip). The Windows runtime is built off-repo on a Windows box, so a
+  mac-only release publish leaves it out. **First diagnostic when "check sync" / a new version appears:**
+  `gh release view vX.Y.Z --json assets` (expect darwin tar.gz + win32 zip + runtime-manifest.json +
+  SHA256SUMS.txt) and `curl -sI https://github.com/Horace-Maxwell/horosa-skill/releases/latest/download/runtime-manifest.json`
+  then confirm the manifest JSON has **both** `darwin-arm64` and `win32-x64` platforms. If the win half is
+  missing: build it, regenerate the **dual-platform** manifest + SHA256SUMS, and upload — the release is
+  usually already `latest`, so the upload alone (no flip) restores Windows `install`.
+- **Watch for committed git conflict markers after a mac-side merge.** v0.11.0's release-prep left a stray
+  `>>>>>>> <sha>` line in `CHANGELOG.md` on `main`. `git grep -nE '^(<<<<<<<|=======|>>>>>>>)'` after every
+  fetch/ff; delete any stray marker (the surrounding content is usually already resolved).
 - **邵子神数 `完整条文` placeholder is upstream-faithful, not a bug.** The shaozi engine looks up two verse
   ids; `基础条文` uses an id that IS in the upstream CSV (real verse after generation), but `完整条文` uses
   an id scheme not covered by the 6144-verse CSV, so it falls back to the engine's `【条文待補充】`. macOS
