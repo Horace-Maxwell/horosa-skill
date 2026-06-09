@@ -121,9 +121,9 @@ AI_EXPORT_TECHNIQUES = [
 ]
 
 AI_EXPORT_PRESET_SECTIONS = {
-    "astrochart": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "希腊点", "12分度", "主宰星链", "寿命格局", "可能性"],
-    "indiachart": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "希腊点", "可能性"],
-    "astrochart_like": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "希腊点", "可能性"],
+    "astrochart": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "12分度", "主宰星链", "寿命格局", "可能性"],
+    "indiachart": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "可能性"],
+    "astrochart_like": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "可能性"],
     "relative": ["关系起盘信息", "A对B相位", "B对A相位", "A对B中点相位", "B对A中点相位", "A对B映点", "A对B反映点", "B对A映点", "B对A反映点", "合成图盘", "影响图盘-星盘A", "影响图盘-星盘B"],
     "primarydirect": ["出生时间", "本命盘星与虚点", "主/界限法设置", "主/界限法表格"],
     "primarydirchart": ["出生时间", "本命盘星与虚点", "主限法盘设置", "主限法盘星体表格", "主限法盘相位", "主限法盘说明"],
@@ -201,6 +201,11 @@ AI_EXPORT_FORBIDDEN_SECTIONS = {
 # conditional sections. They are still valid export targets when present, but their ABSENCE must not mark
 # the export "dirty" (i.e. they are excluded from `missing_selected_sections`).
 AI_EXPORT_OPTIONAL_SECTIONS = {
+    # 月宿 (星阙 v2.6.4 西洋月宿)：仅恒星黄道(zodiacal=1)盘的 perchart 响应带 nakshatras，
+    # 回归黄道盘不产出 → 列为可选段，避免 tropical 盘误报 missing。
+    "astrochart": ["月宿"],
+    "astrochart_like": ["月宿"],
+    "indiachart": ["月宿"],
     # 择日: 用事专属 only when the topic rule-pack produced items; 应期 is never emitted by 星阙's builder.
     "election": ["用事专属", "应期"],
     # 七政四余: 政余格局 = Moira 格局 DSL（~280 行子系统），headless 版未移植 → 可选段（如实标出）。
