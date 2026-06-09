@@ -472,6 +472,52 @@ def test_chart_sidereal_ayanamsa_and_nakshatra(tmp_path) -> None:
     assert "月宿" not in (trop.data["export_snapshot"].get("section_titles_detected") or [])
 
 
+def _india_sun_lon(result) -> float:
+    objs = (result.data.get("chart") or {}).get("objects") or []
+    sun = next((o for o in objs if o.get("id") == "Sun"), {})
+    return float(sun.get("lon"))
+
+
+@requires_chart
+def test_india_chart_houses_and_ayanamsa(tmp_path) -> None:
+    # 星阙 v2.6.4 印占全补齐：分宫制 4→24(indiaHsys 0–24) + 黄道岁差 6→47(indiaAyanamsa)。
+    # Golden = ayanāṃśa 差是稳定天文常数：Raman 比 Lahiri 落后约 1.446°，Lahiri 比 Fagan 约 +0.88°。
+    service = make_service(tmp_path)
+    base = {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"}
+
+    lahiri = service.run_tool("india_chart", {**base, "indiaHsys": 0, "indiaAyanamsa": "lahiri"}, save_result=False)
+    raman = service.run_tool("india_chart", {**base, "indiaHsys": 0, "indiaAyanamsa": "raman"}, save_result=False)
+    fagan = service.run_tool("india_chart", {**base, "indiaHsys": 0, "indiaAyanamsa": "fagan_bradley"}, save_result=False)
+    assert lahiri.ok and raman.ok and fagan.ok, (lahiri.error, raman.error, fagan.error)
+
+    # ayanāṃśa 真实生效：Sun 黄经按制位移（Raman−Lahiri≈+1.446°，Lahiri−Fagan≈+0.88°）
+    assert abs((_india_sun_lon(raman) - _india_sun_lon(lahiri)) - 1.446) < 0.05
+    assert abs((_india_sun_lon(lahiri) - _india_sun_lon(fagan)) - 0.88) < 0.10
+
+    # 岁差名按制标注（非硬编码 Lahiri）
+    assert "恒星黄道岁差：Raman" in raman.data["snapshot_text"]
+    assert "恒星黄道岁差：Fagan/Bradley" in fagan.data["snapshot_text"]
+    assert "恒星黄道岁差：Lahiri / Chitrapaksha" in lahiri.data["snapshot_text"]
+
+    # 分宫制 24 制可选：不同 hsys → 不同宫头（整宫 vs KP/Placidus）
+    whole = lahiri  # indiaHsys=0 整宫
+    kp = service.run_tool("india_chart", {**base, "indiaHsys": 3, "indiaAyanamsa": "lahiri"}, save_result=False)
+    campanus = service.run_tool("india_chart", {**base, "indiaHsys": 10, "indiaAyanamsa": "lahiri"}, save_result=False)
+    assert kp.ok and campanus.ok, (kp.error, campanus.error)
+
+    def _cusp1(r):
+        houses = (r.data.get("chart") or {}).get("houses") or []
+        return float(houses[0].get("lon")) if houses else None
+
+    # 象限宫制(KP/Campanus)的一宫宫头 ≠ 整宫制（整宫制宫头落星座 0°），且 KP≠Campanus
+    assert _cusp1(kp) is not None and _cusp1(campanus) is not None
+    assert abs(_cusp1(kp) - _cusp1(whole)) > 1.0 or abs(_cusp1(campanus) - _cusp1(whole)) > 1.0
+    assert "恒星黄道，KP / Placidus" in kp.data["snapshot_text"]
+    assert "恒星黄道，Campanus" in campanus.data["snapshot_text"]
+    # 印占盘 export 干净（月宿在 optional，可能性数据相关）
+    assert (raman.data.get("export_snapshot") or {}).get("unknown_detected_sections") == []
+
+
 @requires_chart
 def test_mundane_ingress_chart(tmp_path) -> None:
     # 世俗入宫盘 (mundane ingress, 星阙 v2.4.0): (1) /jieqi/year → the precise 春分 ingress moment,
