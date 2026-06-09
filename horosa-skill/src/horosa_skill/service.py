@@ -721,7 +721,9 @@ def _render_qimen_palace_sections(qimen_pan: dict[str, Any]) -> list[tuple[str, 
 
 # ── 七政四余·大限（命度→十二宫）+ 相位：星阙 GuoLaoMoiraWheel/GuoLaoChartMain 的 Python 移植 ──
 # 默认 lifeMode=ASC（headless 无 UI 偏好；不支持 per-盘命主显示偏好——见 README/AGENTS）。
-# 政余格局（buildLocalMoiraPatterns）是 ~280 行 Moira DSL 子系统，本版未移植，列为可选段（如实标出）。
+# 政余格局（buildLocalMoiraPatterns Moira DSL）v0.11.0 起 JS vendor（guolaoMoira.js）评估：盘面物象
+# 格局（孛犯太阳/金水相涵/命坐两歧 等）可出；依赖 七政神煞(官福疾) 的格局受限于 guolaoGods 未随
+# /chart 返回（kinastro qizheng 另路，如实标出）。见 _run_guolao_chart_tool 的 js_client 调用。
 _GUOLAO_LIMIT_SEQ = [11.0, 10.0, 11.0, 15.0, 8.0, 7.0, 11.0, 4.5, 4.5, 4.5, 5.0, 5.0]
 _GUOLAO_HOUSE_BRANCH = ("命宫", "财帛", "兄弟", "田宅", "男女", "奴仆", "夫妻", "疾厄", "迁移", "官禄", "福德", "相貌")
 _GUOLAO_ASP_STATES = (("Applicative", "入相"), ("Exact", "精确"), ("Separative", "离相"), ("None", "容许"))
@@ -822,7 +824,7 @@ def _build_guolao_aspect_lines(chart: dict[str, Any], response: dict[str, Any]) 
     return lines
 
 
-def _build_guolao_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
+def _build_guolao_snapshot_text(payload: dict[str, Any], response: dict[str, Any], pattern_text: str | None = None) -> str:
     chart = response.get("chart", {})
     houses = chart.get("houses") if isinstance(chart, dict) else []
     objects = chart.get("objects") if isinstance(chart, dict) else []
@@ -869,6 +871,10 @@ def _build_guolao_snapshot_text(payload: dict[str, Any], response: dict[str, Any
             ("七政四余宫位与二十八宿星曜", "\n".join(house_lines).strip() or "无"),
             ("神煞", "\n".join(gods_lines).strip() or "无"),
             ("大限", "\n".join(_build_guolao_limit_lines(chart, payload)).strip() or "无"),
+            # 政余格局 (星阙 v2.6.x Moira DSL)：由 vendored guolaoMoira.js (buildLocalMoiraPatterns) 评估，
+            # 经 js_client 注入。盘面物象格局（孛犯太阳/金水相涵/命坐两歧 等）可出；依赖 七政神煞(官福疾)
+            # 的格局受限于上游 guolaoGods 未随 /chart 返回（kinastro qizheng 另路，如实标出，见 AGENTS）。
+            ("政余格局", (pattern_text or "").strip() or "无"),
             ("相位", "\n".join(_build_guolao_aspect_lines(chart, response)).strip() or "无"),
         ]
     )
@@ -4325,9 +4331,21 @@ class HorosaSkillService:
             "zodiacal": payload.get("zodiacal", 0),
         }
         response = self._call_remote("/chart", remote_payload)
-        snapshot_text = _build_guolao_snapshot_text(remote_payload, response)
+        # 政余格局 (星阙 v2.6.x Moira DSL)：vendored JS buildLocalMoiraPatterns 评估盘面物象格局。
+        # 失败不阻塞既有段（→ '无'），与 星阙 buildGuolaoPatternSection 的 try/catch 一致。
+        pattern_text: str | None = None
+        patterns: Any = None
+        try:
+            js = self.js_client.run("guolao_moira", {"chart": response, "fields": {}, "params": response})
+            if isinstance(js, dict):
+                pattern_text = js.get("snapshot_text")
+                patterns = js.get("data", {}).get("patterns") if isinstance(js.get("data"), dict) else None
+        except Exception as exc:  # noqa: BLE001 - degrade to '无', never break the guolao chart
+            logger.warning("guolao_moira pattern eval failed: %s", exc)
+        snapshot_text = _build_guolao_snapshot_text(remote_payload, response, pattern_text=pattern_text)
         response = dict(response)
         response["snapshot_text"] = snapshot_text
+        response["guolaoPatterns"] = patterns
         response["export_snapshot"] = self._augment_export_payload(technique="guolao", snapshot_text=snapshot_text)
         return response
 
