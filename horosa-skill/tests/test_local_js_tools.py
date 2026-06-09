@@ -441,6 +441,30 @@ def test_chart_carries_v240_natal_extras(tmp_path) -> None:
     assert "12分度" in detected and "主宰星链" in detected and "寿命格局" in detected
 
 
+@requires_runtime
+def test_liureng_bifa_and_zhanduan(tmp_path) -> None:
+    # 星阙 v2.5.x 六壬 Phase4：buildLiuRengReferenceContext(~75 字段) + matchBiFa(100法) verbatim 抽取，
+    # 概览后接 [毕法（已命中）]；指定占类(zhanCategory) 时再出 [占断向导]。需 Java :9999 + chart :8899。
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "liureng_gods",
+        {"date": "2026-04-04", "time": "21:18:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28",
+         "gpsLat": 31.22, "gpsLon": 121.48, "guirengType": 2, "zhanCategory": "hunyin"},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    snap = result.data["snapshot_text"]
+    assert "[常用神煞]" in snap
+    assert "[毕法（已命中）]" in snap
+    # 至少命中 1 条编号毕法（释/依据成对）
+    import re as _re
+
+    assert _re.search(r"\n\d+\.\s.+：", snap), "no numbered 毕法 entry"
+    assert "[占断向导]" in snap and "占事：婚姻" in snap
+    # 毕法/占断 已登记 preset+optional → 导出干净
+    _assert_clean_export(result)
+
+
 @requires_chart
 def test_chart_sidereal_ayanamsa_and_nakshatra(tmp_path) -> None:
     # 星阙 v2.6.4 恒星黄道 47 岁差 + 西洋月宿 nakshatra：sidereal 盘(zodiacal=1) 按 siderealAyanamsa
