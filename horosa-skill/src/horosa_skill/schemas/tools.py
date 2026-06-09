@@ -65,6 +65,14 @@ class BirthInput(FlexibleModel):
     stopLevelIdx: int | None = None
 
 
+class IndiaChartInput(BirthInput):
+    # 印度占星 (星阙 v2.6.4)：分宫制 4→全 24 制(indiaHsys 0–24)、黄道岁差 6→全 47(indiaAyanamsa)。
+    # 印占恒星黄道引擎 pyswisseph，与西洋 siderealAyanamsa 共用 47 套岁差键。缺省 hsys=0(整宫)/lahiri。
+    # 后端 webindiasrv 读 indiaHsys/indiaAyanamsa（亦兼容 hsys/ayanamsa/siderealMode）。
+    indiaHsys: Any | None = None
+    indiaAyanamsa: Any | None = None
+
+
 class PredictiveInput(BirthInput):
     predictive: bool | None = False
 
