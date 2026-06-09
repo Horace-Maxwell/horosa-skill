@@ -489,6 +489,15 @@ class FakeJsClient(HorosaJsEngineClient):
                     "[概览]\n四课、三传已由本地 headless 六壬引擎根据离线盘面生成。"
                 ),
             }
+        if tool_name == "guolao_moira":
+            # 七政四余 政余格局：headless buildLocalMoiraPatterns 的离线替身（喜/忌格各一）。
+            return {
+                "snapshot_text": "喜格：金水相涵（政余喜格：金水同宫，且不以冬令破格。）\n忌格：孛犯太阳（政余忌格：孛与太阳同宫。）",
+                "data": {"patterns": [
+                    {"name": "金水相涵", "level": "good", "detail": "政余喜格：金水同宫，且不以冬令破格。"},
+                    {"name": "孛犯太阳", "level": "bad", "detail": "政余忌格：孛与太阳同宫。"},
+                ]},
+            }
         raise AssertionError(f"Unexpected local tool: {tool_name}")
 
 
