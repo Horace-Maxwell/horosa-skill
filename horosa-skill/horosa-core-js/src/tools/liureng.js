@@ -1,4 +1,7 @@
 import { computeFrontendShenSha } from '../vendor/liureng/LRShenShaDoc.js';
+import { buildLiuRengReferenceContext } from '../vendor/liureng/liurengRefContext.js';
+import { matchBiFa } from '../vendor/liureng/LRBiFaDoc.js';
+import { ZHANDUAN_DOC } from '../vendor/liureng/LRZhanDuanDoc.js';
 
 const ZI_LIST = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
 const GAN_LIST = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
@@ -274,7 +277,7 @@ function stemOf(value) {
   return match ? match[0] : '';
 }
 
-function normalizeChart(payload) {
+export function normalizeChart(payload) {
   const chart = payload.chart && payload.chart.chart ? payload.chart.chart : payload.chart;
   const liureng = payload.liureng || {};
   const chartObj = chart && typeof chart === 'object' ? { ...chart } : {};
@@ -773,23 +776,80 @@ function buildSnapshotText(payload, liureng, runyear, chartObj, data) {
   } else {
     lines.push('本次盘面材料不足，无法生成四课三传；请检查日期、时间、时区、经纬度和本地 runtime 状态。');
   }
-  // 常用神煞（星阙 v2.5.x 六壬 Phase 4）：按日干支补算 9 常用神煞 + 是否入课传。
-  // 毕法/占断向导需 星阙 完整盘面 context（~40 字段），headless 引擎暂不组装 → 未接入（见 AGENTS）。
+  // 六壬解读层（星阙 v2.5.x 六壬 Phase 4）：常用神煞 + 毕法100法 + 占断向导。
+  // refCtx = buildLiuRengReferenceContext(~75 字段) 是 星阙 原样抽取的纯函数闭包；
+  // 喂 matchBiFa(毕法) / ZHANDUAN_DOC(占断)。失败时回退到旧的日干支解析 + 仅常用神煞。
   const dayGanZi = chartObj?.nongli?.dayGanZi || '';
   const BRANCHES = '子丑寅卯辰巳午未申酉戌亥';
-  const courseBranches = [];
-  (data?.ke?.raw || []).forEach((row) => {
-    (row || []).forEach((b) => {
-      if (b && BRANCHES.includes(b) && !courseBranches.includes(b)) courseBranches.push(b);
+  let refCtx = null;
+  try {
+    refCtx = buildLiuRengReferenceContext(
+      liureng || {},
+      chartObj,
+      payload?.guirengType != null ? payload.guirengType : 2,
+      runyear || null,
+      payload?.castOverride || null,
+    );
+  } catch (e) {
+    refCtx = null;
+  }
+  let ssDayGan = refCtx ? refCtx.dayGan : stemOf(dayGanZi);
+  let ssDayZhi = refCtx ? refCtx.dayZhi : branchOf(dayGanZi);
+  let courseBranches = refCtx ? (refCtx.courseBranches || []) : [];
+  if (!courseBranches.length) {
+    (data?.ke?.raw || []).forEach((row) => {
+      (row || []).forEach((b) => {
+        if (b && BRANCHES.includes(b) && !courseBranches.includes(b)) courseBranches.push(b);
+      });
     });
-  });
-  const shensha = computeFrontendShenSha(stemOf(dayGanZi), branchOf(dayGanZi), courseBranches);
+  }
+  const shensha = computeFrontendShenSha(ssDayGan, ssDayZhi, courseBranches);
   lines.push('');
   lines.push('[常用神煞]');
   if (shensha.length) {
     shensha.forEach((s) => lines.push(`${s.name}：${s.branch}${s.inCourse ? '（入课传）' : ''}（${s.brief}）`));
   } else {
     lines.push('无');
+  }
+
+  // 毕法100法：matchBiFa 机械命中之断诀（烈度须合时令旺衰、年命制化，非定数）。
+  if (refCtx) {
+    let bifaHits = [];
+    try { bifaHits = matchBiFa(refCtx) || []; } catch (e) { bifaHits = []; }
+    lines.push('');
+    lines.push('[毕法（已命中）]');
+    lines.push('（以下为机械命中之断诀，烈度须合时令旺衰、年命制化，非定数）');
+    if (bifaHits.length) {
+      bifaHits.forEach((b) => {
+        lines.push(`${b.no}. ${b.name}：${b.verse}`);
+        if (b.explain) lines.push(`释：${b.explain}`);
+        if (b.evidence && b.evidence.length) lines.push(`依据：${b.evidence.join('；')}`);
+      });
+    } else {
+      lines.push('无（本盘未机械命中可判定之毕法）');
+    }
+
+    // 占断向导：仅当指定占类(payload.zhanCategory != general)时输出该占类的用神/神将/宜忌/三传提示。
+    const zhanKey = payload?.zhanCategory || 'general';
+    if (zhanKey && zhanKey !== 'general' && ZHANDUAN_DOC[zhanKey]) {
+      const zd = ZHANDUAN_DOC[zhanKey];
+      lines.push('');
+      lines.push('[占断向导]');
+      lines.push(`占事：${zd.name}`);
+      lines.push(`主用神：${(zd.mainYong || []).map((y) => `${y.role}=${y.mean}`).join('；')}`);
+      const yongLuo = [];
+      if (refCtx.ke1Up) yongLuo.push(`日干上神=${refCtx.ke1Up}`);
+      if (refCtx.ke3Up) yongLuo.push(`日支上神=${refCtx.ke3Up}`);
+      if (refCtx.runYearBranch) yongLuo.push(`年命上神位=${refCtx.runYearBranch}`);
+      if (yongLuo.length) lines.push(`用神落点：${yongLuo.join('；')}`);
+      const godValues = refCtx.branchGodMap ? Object.keys(refCtx.branchGodMap).map((k) => refCtx.branchGodMap[k]) : [];
+      const present = (zd.keyJiang || []).filter((j) => godValues.indexOf(j) >= 0);
+      const absent = (zd.keyJiang || []).filter((j) => present.indexOf(j) < 0);
+      lines.push(`关键神将：现=${present.join('、') || '—'}；缺=${absent.join('、') || '—'}`);
+      lines.push(`宜：${(zd.favor || []).join('；')}`);
+      lines.push(`忌：${(zd.avoid || []).join('；')}`);
+      if (zd.sanChuanTip) lines.push(`三传提示：${zd.sanChuanTip}`);
+    }
   }
   return lines.join('\n').trim();
 }

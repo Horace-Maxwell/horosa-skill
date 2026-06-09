@@ -9,9 +9,13 @@ import { dirname, join } from 'node:path';
 import { runHoraryTool } from '../src/tools/horary.js';
 import { runElectionTool } from '../src/tools/election.js';
 import { runProgExtra } from '../src/tools/progextra.js';
+import { runLiureng, normalizeChart } from '../src/tools/liureng.js';
+import { buildLiuRengReferenceContext } from '../src/vendor/liureng/liurengRefContext.js';
+import { matchBiFa } from '../src/vendor/liureng/LRBiFaDoc.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const chart = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_traditional.json'), 'utf8'));
+const liurengFix = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_liureng.json'), 'utf8'));
 
 let failures = 0;
 function check(name, fn) {
@@ -72,6 +76,28 @@ check('progextra unknown technique returns empty, not a crash', () => {
   const r = runProgExtra({ technique: 'no_such', chart });
   assert(r.data.ok === false, 'unknown technique should be ok=false');
   assert(r.snapshot_text === '', 'unknown technique should have empty snapshot');
+});
+
+// 六壬毕法 (星阙 v2.5.x Phase4)：buildLiuRengReferenceContext + matchBiFa verbatim 抽取，
+// 在固定盘上应组装出有效 ~75 字段 context 并机械命中若干毕法。
+check('liureng refContext builds + matchBiFa hits', () => {
+  const chartObj = normalizeChart(liurengFix);  // unwrap raw /chart response → nongli/objects at top
+  const ctx = buildLiuRengReferenceContext(liurengFix.liureng, chartObj, 2, null, null);
+  assert(ctx && ctx.dayGanZi && ctx.dayGanZi.length === 2, 'context missing dayGanZi');
+  assert(Array.isArray(ctx.sanChuanBranches) && ctx.sanChuanBranches.length === 3, 'sanChuan should have 3 branches');
+  assert(Array.isArray(ctx.keUpBranches) && ctx.keUpBranches.length >= 1, 'keUp branches missing');
+  const hits = matchBiFa(ctx);
+  assert(Array.isArray(hits) && hits.length >= 1, 'matchBiFa should hit ≥1 毕法 on this 盘');
+  assert(hits.every((h) => h.no && h.name && h.verse), 'each 毕法 hit needs no/name/verse');
+});
+
+check('liureng snapshot carries 毕法 + 占断向导 sections', () => {
+  const r = runLiureng({ ...liurengFix, zhanCategory: 'hunyin' });
+  const s = r.snapshot_text || '';
+  assert(s.includes('[常用神煞]'), 'missing 常用神煞');
+  assert(s.includes('[毕法（已命中）]'), 'missing 毕法 section');
+  assert(/\n\d+\.\s/.test(s), 'no numbered 毕法 entries');
+  assert(s.includes('[占断向导]') && s.includes('占事：婚姻'), 'missing 占断向导 for hunyin');
 });
 
 if (failures > 0) {
