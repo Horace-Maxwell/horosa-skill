@@ -39,6 +39,11 @@ export function runQimen(payload) {
   const pan = ken && typeof ken === 'object' && (ken.selected || ken.raw)
     ? normalizeKinqimenData(ken, fallback, normalized.options || {}, nongli)
     : fallback;
+  // 法奇门「相关人员」生年干：Python 侧已归一化为 [{name, yearGan}]；按上游四同步语义
+  // stamp 到 pan（显式数组为准；缺省不 stamp → computeProtect 不出「生年干·」行）。
+  if (Array.isArray(payload.faRelatedPeople)) {
+    pan.faRelatedPeople = payload.faRelatedPeople;
+  }
   return {
     tool: 'qimen',
     technique: 'qimen',

@@ -209,6 +209,10 @@ class QimenInput(BirthInput):
     nongli: dict[str, Any] | None = None
     jieqi_year_prev: dict[str, Any] | None = None
     jieqi_year_current: dict[str, Any] | None = None
+    # 法奇门「相关人员」(星阙 相关人员批)：[{name, yearGan}] 或 [{name, birth}]（birth=公历
+    # YYYY-MM-DD[ HH:mm:ss]，skill 经 /nongli/time yearJieqi 按立春界解析年干）。提供后
+    # [八门化气大阵] 段逐人多出「生年干·姓名」保护行；缺省不出该类行，段表不变。
+    faRelatedPeople: list[dict[str, Any]] | None = None
 
 
 class TaiyiInput(BirthInput):
