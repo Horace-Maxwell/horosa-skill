@@ -936,6 +936,8 @@ ASTRO_TEXT_MAP: dict[str, str] = {
     "MoonSun": "日月中点",
     "SaturnMars": "火土中点",
     "JupiterVenus": "金木中点",
+    # 主限法 v12 (星阙 v2.6.6)：宿命点应星行 id N_Vertex_0（仅 In-Zodiaco 核出）。
+    "Vertex": "宿命点",
     "LifeMasterDeg74": "七政命度点",
     "Asc": "上升",
     "Desc": "下降",
@@ -1029,6 +1031,8 @@ ASTRO_SHORT_TEXT_MAP: dict[str, str] = {
     "MoonSun": "日月中点",
     "SaturnMars": "火土中点",
     "JupiterVenus": "金木中点",
+    # 主限法 v12 (星阙 v2.6.6)：宿命点应星行 id N_Vertex_0（仅 In-Zodiaco 核出）。
+    "Vertex": "宿命点",
     "LifeMasterDeg74": "七政命度点",
 }
 
@@ -3377,21 +3381,53 @@ def _build_predictive_snapshot_text(tool_name: str, payload: dict[str, Any], res
 
 
 def _primary_direction_method_text(value: Any) -> str:
-    # 主限法全方位法 v10 (星阙 v2.5.4)：核心 Alcabitius + 4 全方位法 (Placidus/Regiomontanus/Campanus/Topocentric)。
-    # core_alchabitius = 规范键；任何未知键经后端 fallback 至 core_alchabitius，同义。
+    # 主限法 v12 (星阙 v2.6.6)：仅保留逐位核验的核5方位法（In-Zodiaco 全走核 kernel）。
+    # core_alchabitius = 规范键；任何未知/未核验键经后端 fallback 至 core_alchabitius，同义。
     mapping = {
         "horosa_legacy": "传统赤经法",
         "core_alchabitius": "Alcabitius 半弧法",
-        "placidus": "Placidus 半弧法",
-        "regiomontanus": "Regiomontanus 位置圈",
-        "campanus": "Campanus",
-        "topocentric": "Topocentric (Polich-Page)",
+        "meridian": "Meridian",
+        "porphyry": "Porphyry",
+        "equal_ecliptic": "Equal（黄道）",
+        "equal_hour_circle": "Equal（时圈）",
     }
-    return mapping.get(_msg(value), _msg(value) or "无")
+    raw = _msg(value)
+    if raw in mapping:
+        return mapping[raw]
+    if not raw:
+        return "无"
+    # /predict/pd 的 params 回显是原样输入；白名单外的方位法（如旧 placidus）引擎内已按
+    # 核5白名单回退 core_alchabitius 计算（行集与显式 core 逐位一致，live 测试钉死），如实标注。
+    return f"{raw}（未核验，引擎回退 Alcabitius 半弧法）"
 
 
 def _primary_direction_time_key_text(value: Any) -> str:
-    mapping = {"Ptolemy": "Ptolemy（托勒密 1°/年）", "Naibod": "Naibod（奈博德平太阳速）", "Cardan": "Cardan"}
+    # 时间钥匙 22 项 (星阙 v2.6.6)：静态常数 + 每盘真算 (Simmonite/Kepler/Brahe 取本命太阳日速)
+    # + 动态弧 (TrueSolarArc/SymbolicSolarArc 逐弧查星历)。标签与上游方法下拉一致。
+    mapping = {
+        "Ptolemy": "Ptolemy（托勒密 1°/年）",
+        "Naibod": "Naibod（奈博德平太阳速）",
+        "TrueSolarArc": "真太阳弧",
+        "SymbolicSolarArc": "太阳弧（黄经）",
+        "Cardano": "Cardano",
+        "Umar": "Umar al-Tabari",
+        "Wollner": "Wöllner",
+        "Plantiko": "Plantiko",
+        "Simmonite": "Simmonite",
+        "SynodicYear": "Synodic Year",
+        "Kepler": "Kepler",
+        "Brahe": "Brahe",
+        "Kundig": "Kündig",
+        "SymbolicDegree": "Symbolic Degree",
+        "SymbolicYear": "Symbolic Year",
+        "SymbolicMoon": "Symbolic Moon",
+        "SymbolicMonth": "Symbolic Month",
+        "Quarterly": "Quarterly",
+        "Quinary": "Quinary",
+        "Duodenary": "Duodenary",
+        "Novenary": "Novenary",
+        "SelfMeasure": "Self-Measure",
+    }
     return mapping.get(_msg(value), _msg(value) or "无")
 
 

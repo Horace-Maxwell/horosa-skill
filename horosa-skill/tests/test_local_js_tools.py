@@ -9,7 +9,9 @@ engine and runs as a pure headless JS tool.
 """
 from __future__ import annotations
 
+import os
 import socket
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -17,6 +19,17 @@ from horosa_skill.config import Settings
 from horosa_skill.engine.client import HorosaApiClient
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.service import HorosaSkillService
+
+# Honor the same env overrides as Settings.from_env so the live suite can be pointed at an
+# alternate backend instance (e.g. one started from vendor/runtime-source on a free port)
+# instead of whatever happens to occupy the default :8899/:9999.
+CHART_SERVER_ROOT = os.environ.get("HOROSA_CHART_SERVER_ROOT") or "http://127.0.0.1:8899"
+JAVA_SERVER_ROOT = os.environ.get("HOROSA_SERVER_ROOT") or "http://127.0.0.1:9999"
+
+
+def _root_host_port(root: str, default_port: int) -> tuple[str, int]:
+    parts = urlsplit(root)
+    return parts.hostname or "127.0.0.1", parts.port or default_port
 
 
 def _server_up(host: str, port: int) -> bool:
@@ -27,16 +40,19 @@ def _server_up(host: str, port: int) -> bool:
         return False
 
 
-RUNTIME_UP = _server_up("127.0.0.1", 8899) and _server_up("127.0.0.1", 9999)
+_CHART_HOST_PORT = _root_host_port(CHART_SERVER_ROOT, 8899)
+_JAVA_HOST_PORT = _root_host_port(JAVA_SERVER_ROOT, 9999)
+RUNTIME_UP = _server_up(*_CHART_HOST_PORT) and _server_up(*_JAVA_HOST_PORT)
 requires_runtime = pytest.mark.skipif(
-    not RUNTIME_UP, reason="Horosa runtime not listening on :9999 (Java) + :8899 (chart/ken)"
+    not RUNTIME_UP,
+    reason=f"Horosa runtime not listening on {JAVA_SERVER_ROOT} (Java) + {CHART_SERVER_ROOT} (chart/ken)",
 )
 # Chart-only gate: harmonic / agepoint / distributions are pure Python chart-service computations
 # (/astroextra/*, /predict/*) and do NOT need the Java backend on :9999. Gating them on the chart
-# service alone lets them run whenever :8899 is up, not only when the full stack is.
-CHART_UP = _server_up("127.0.0.1", 8899)
+# service alone lets them run whenever the chart service is up, not only when the full stack is.
+CHART_UP = _server_up(*_CHART_HOST_PORT)
 requires_chart = pytest.mark.skipif(
-    not CHART_UP, reason="Horosa chart service not listening on :8899"
+    not CHART_UP, reason=f"Horosa chart service not listening on {CHART_SERVER_ROOT}"
 )
 
 
@@ -126,8 +142,8 @@ class LiuRengParityLocalClient(FakeLocalClient):
 
 def make_service(tmp_path, client: HorosaApiClient | None = None) -> HorosaSkillService:
     settings = Settings(
-        server_root="http://127.0.0.1:9999",
-        chart_server_root="http://127.0.0.1:8899",
+        server_root=JAVA_SERVER_ROOT,
+        chart_server_root=CHART_SERVER_ROOT,
         runtime_root=tmp_path / "runtime",
         db_path=tmp_path / "memory.db",
         output_dir=tmp_path / "runs",
@@ -866,3 +882,87 @@ def test_india_chart_builds_clean_export_despite_empty_western_aspects(tmp_path)
     assert result.ok is True, result.error
     assert isinstance(result.data.get("export_snapshot"), dict)
     assert isinstance(result.data.get("export_format"), dict)
+
+
+def _pd_live_payload(**overrides):
+    payload = {
+        "date": "1990-04-06",
+        "time": "09:33:00",
+        "zone": "+08:00",
+        "lat": "31n13",
+        "lon": "121e28",
+        "pdtype": 0,
+        "pdMethod": "core_alchabitius",
+        "pdTimeKey": "Ptolemy",
+        "pdaspects": [0, 90, 180],
+    }
+    payload.update(overrides)
+    return payload
+
+
+@requires_chart
+def test_pd_v12_engine_rev_and_core5_fallback(tmp_path) -> None:
+    """主限法 v12 (星阙 v2.6.6)：(1) 服务心跳回显 pd_method_sync_v12——防陈旧进程跑旧引擎；
+    (2) 未核验方位法（placidus）按核5白名单在引擎内回退 core_alchabitius——行集与显式 core 逐位一致。
+    pd 行结构: [arc, prom, sig, type, date]。"""
+    import httpx
+
+    heartbeat = httpx.get(f"{CHART_SERVER_ROOT}/", timeout=10).json()
+    assert heartbeat.get("pdSyncRev") == "pd_method_sync_v12"
+
+    service = make_service(tmp_path)
+    core = service.run_tool("pd", _pd_live_payload(), save_result=False)
+    fallback = service.run_tool("pd", _pd_live_payload(pdMethod="placidus"), save_result=False)
+    assert core.ok is True, core.error
+    assert fallback.ok is True, fallback.error
+    core_rows = [tuple(row) for row in core.data.get("pd") or []]
+    fallback_rows = [tuple(row) for row in fallback.data.get("pd") or []]
+    assert core_rows
+    assert core_rows == fallback_rows
+
+
+@requires_chart
+def test_pd_v12_per_chart_time_key_diverges_from_ptolemy(tmp_path) -> None:
+    """v12 时间钥匙防吞门（注记坑#6）：Kepler（每盘真算·本命太阳日速）与 Ptolemy 同弧行但日期分叉。
+    若引擎陈旧、未知键被静默按 Ptolemy 标度换算，日期将逐行相同——此测试必红。"""
+    service = make_service(tmp_path)
+    ptolemy = service.run_tool("pd", _pd_live_payload(), save_result=False)
+    kepler = service.run_tool("pd", _pd_live_payload(pdTimeKey="Kepler"), save_result=False)
+    assert ptolemy.ok is True and kepler.ok is True
+    p_dates = {(row[1], row[2], round(float(row[0]), 6)): row[4] for row in ptolemy.data.get("pd") or []}
+    k_dates = {(row[1], row[2], round(float(row[0]), 6)): row[4] for row in kepler.data.get("pd") or []}
+    common = [key for key in p_dates if key in k_dates]
+    assert common
+    assert any(p_dates[key] != k_dates[key] for key in common)
+
+
+@requires_chart
+def test_pd_v12_pdyears_3000_emits_per_revolution_rows(tmp_path) -> None:
+    """v12 pdYears 上限 360→3000：>360 年应出多圈复发行（同迫星/应星对弧值 +360°×n 重现，
+    经 _extendCorePdRecurrences），且最大弧远超 360°。"""
+    service = make_service(tmp_path)
+    result = service.run_tool("pd", _pd_live_payload(pdYears=3000, pdaspects=[0]), save_result=False)
+    assert result.ok is True, result.error
+    rows = result.data.get("pd") or []
+    assert rows
+    arcs_by_pair: dict[tuple, list[float]] = {}
+    for row in rows:
+        arcs_by_pair.setdefault((row[1], row[2]), []).append(float(row[0]))
+    assert any(
+        abs(later - earlier - 360.0) < 1e-6
+        for arcs in arcs_by_pair.values()
+        for earlier in arcs
+        for later in arcs
+    )
+    assert max(float(row[0]) for row in rows) > 360.0
+
+
+@requires_chart
+def test_pd_v12_vertex_significator_rows_in_zodiaco(tmp_path) -> None:
+    """v12 宿命点应星：In-Zodiaco 下出 N_Vertex_0 应星行，快照渲染为「宿命点」。"""
+    service = make_service(tmp_path)
+    result = service.run_tool("pd", _pd_live_payload(), save_result=False)
+    assert result.ok is True, result.error
+    rows = result.data.get("pd") or []
+    assert any("Vertex" in str(row[2]) for row in rows)
+    assert "宿命点" in result.data["export_format"]["snapshot_text"]

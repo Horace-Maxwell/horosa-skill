@@ -1446,7 +1446,7 @@ def test_primary_direction_exports_tables_and_pdchart_positions(tmp_path) -> Non
 
 
 def test_primary_direction_full_house_settings_surface(tmp_path) -> None:
-    # 主限法全方位法 v10 (星阙 v2.5.4)：Placidus + In Mundo + 仅逆向 + 映点 + 界 全部出现在设置段。
+    # 主限法 v12 (星阙 v2.6.6)：核5方位法 + In Mundo + 仅逆向 + 映点 + 界 + 新时间钥匙 全部出现在设置段。
     settings = Settings(
         server_root="http://127.0.0.1:9999",
         db_path=tmp_path / "memory.db",
@@ -1456,21 +1456,44 @@ def test_primary_direction_full_house_settings_surface(tmp_path) -> None:
     payloads = build_sample_payloads()
     payload = {
         **payloads["pd"],
-        "pdMethod": "placidus",
+        "pdMethod": "meridian",
         "pdtype": 1,
         "pdDirect": 0,
         "pdConverse": 1,
         "pdAntiscia": 1,
         "pdTerms": 1,
-        "pdTimeKey": "Naibod",
+        "pdTimeKey": "Kundig",
     }
     text = service.run_tool("pd", payload, save_result=False).data["export_format"]["snapshot_text"]
-    assert "Placidus 半弧法" in text
+    assert "Meridian" in text
     assert "In Mundo（世俗）" in text
     assert "仅逆向 (converse)" in text
-    assert "Naibod" in text
+    assert "Kündig" in text
     assert "映点(antiscia)作迫星：是" in text
     assert "界(terms)作迫星：是" in text
+
+
+def test_primary_direction_core5_method_labels() -> None:
+    # 主限法 v12 核5：每个公开方位法都有专属标签；未核验旧键（placidus 等）不再有标签（后端会回退 core_alchabitius）。
+    from horosa_skill.service import _primary_direction_method_text, _primary_direction_time_key_text
+
+    assert _primary_direction_method_text("core_alchabitius") == "Alcabitius 半弧法"
+    assert _primary_direction_method_text("meridian") == "Meridian"
+    assert _primary_direction_method_text("porphyry") == "Porphyry"
+    assert _primary_direction_method_text("equal_ecliptic") == "Equal（黄道）"
+    assert _primary_direction_method_text("equal_hour_circle") == "Equal（时圈）"
+    assert _primary_direction_method_text("horosa_legacy") == "传统赤经法"
+    # 移除的未核验方位法：params 回显是原样输入，标签如实标注引擎回退（行集等同 core，live 测试钉死）。
+    assert _primary_direction_method_text("placidus") == "placidus（未核验，引擎回退 Alcabitius 半弧法）"
+    # 时间钥匙 22 项全部有标签（上游下拉一致）。
+    for key in (
+        "Ptolemy", "Naibod", "TrueSolarArc", "SymbolicSolarArc", "Cardano", "Umar", "Wollner",
+        "Plantiko", "Simmonite", "SynodicYear", "Kepler", "Brahe", "Kundig", "SymbolicDegree",
+        "SymbolicYear", "SymbolicMoon", "SymbolicMonth", "Quarterly", "Quinary", "Duodenary",
+        "Novenary", "SelfMeasure",
+    ):
+        label = _primary_direction_time_key_text(key)
+        assert label and label != "无", key
 
 
 def test_germany_uranian_snapshot_has_full_sections(tmp_path) -> None:
