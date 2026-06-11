@@ -157,7 +157,10 @@ def patch_embedded_python(runtime_root: Path) -> None:
     # instead of hardcoding a version, so a future embed bump (3.11 -> 3.12) does not silently
     # point the interpreter at a non-existent zip and lose its stdlib.
     stdlib_zip = f"{pth_path.stem}.zip"
-    pth_path.write_text(f"{stdlib_zip}\n.\nLib\nLib\\site-packages\nimport site\n", encoding="utf-8")
+    # newline="\n": this script runs natively on Windows; without it write_text translates \n -> \r\n,
+    # breaking the LF byte-parity the release artifacts are held to (._pth itself tolerates CRLF, the
+    # cross-platform reproducibility gate does not).
+    pth_path.write_text(f"{stdlib_zip}\n.\nLib\nLib\\site-packages\nimport site\n", encoding="utf-8", newline="\n")
 
 
 def write_manifest(version: str) -> None:
