@@ -104,7 +104,7 @@ Use these user intents:
 - Solar arc: `solararc`
 - Given-year prediction: `givenyear`
 - Annual profection: `profection`
-- Primary directions: `pd`, `pdchart`
+- Primary directions: `pd`, `pdchart` — engine at 星阙 v2.6.6 PD v12 parity: 5 verified methods (`core_alchabitius`/`meridian`/`porphyry`/`equal_ecliptic`/`equal_hour_circle`; unknown values fall back to `core_alchabitius` inside the engine), 22 time keys (incl. per-chart Simmonite/Kepler/Brahe and dynamic TrueSolarArc/SymbolicSolarArc), Vertex significator rows (In-Zodiaco only), `pdYears` up to 3000 with per-revolution recurrence rows.
 - Zodiacal releasing: `zr`
 - Firdaria: `firdaria`
 - Decennials: `decennials`

@@ -128,15 +128,15 @@ PREDICTIVE_INPUT_CONTRACTS: dict[str, dict[str, Any]] = {
         "required_fields": ["date", "time", "zone", "lat", "lon", "pdtype", "pdMethod", "pdTimeKey", "pdaspects"],
         "must_ask": ["本命出生时间地点", "主限方法", "时间钥匙", "相位列表"],
         "target_fields": {
-            "pdtype": "坐标系：0=In Zodiaco（黄道，默认），1=In Mundo（世俗/赤经空间）。",
-            "pdMethod": "方位法：core_alchabitius（Alcabitius 半弧，默认）/ placidus / regiomontanus / campanus / topocentric / horosa_legacy（传统赤经）。",
-            "pdTimeKey": "时间钥匙：Ptolemy（托勒密 1°/年，默认）或 Naibod（奈博德平太阳速）。",
+            "pdtype": "坐标系：0=In Zodiaco（黄道，默认；宿命点 Vertex 应星行仅此坐标系核出），1=In Mundo（世俗/赤经空间）。",
+            "pdMethod": "方位法（核5，逐位核验）：core_alchabitius（Alcabitius 半弧，默认）/ meridian / porphyry / equal_ecliptic（Equal 黄道）/ equal_hour_circle（Equal 时圈）/ horosa_legacy（传统赤经）。未知值后端回退 core_alchabitius。",
+            "pdTimeKey": "时间钥匙（22 项）：Ptolemy（托勒密 1°/年，默认）/ Naibod / TrueSolarArc（真太阳弧）/ SymbolicSolarArc（太阳弧·黄经）/ Cardano / Umar / Wollner / Plantiko / Simmonite / SynodicYear / Kepler / Brahe / Kundig / SymbolicDegree / SymbolicYear / SymbolicMoon / SymbolicMonth / Quarterly / Quinary / Duodenary / Novenary / SelfMeasure（Simmonite/Kepler/Brahe 按本命太阳日速每盘真算）。",
             "pdaspects": "纳入表格的相位角度，例如 [0, 60, 90, 120, 180]。",
             "pdDirect": "顺向开关（1 开/0 关，默认开）。",
             "pdConverse": "逆向开关（1 开/0 关，默认开；与顺向按年龄交错）。",
             "pdAntiscia": "映点/反映点作迫星（1 开/0 关，默认关）。",
             "pdTerms": "界(terms)边界作迫星（1 开/0 关，默认关）。",
-            "pdYears": "推算年限上限（默认 100）。",
+            "pdYears": "推算年限上限（默认 100，上限 3000；>360 年出多圈复发行：同迫星/应星弧 +360°×n）。",
         },
         "output_contract": ["主限设置", "主限表格"],
         "example_payload": {
@@ -154,7 +154,7 @@ PREDICTIVE_INPUT_CONTRACTS: dict[str, dict[str, Any]] = {
         "target_fields": {
             "datetime": "主限法盘目标时间，格式建议 YYYY-MM-DD HH:mm:ss。",
             "dirZone": "目标时区。",
-            "pdtype/pdMethod/pdTimeKey": "主限法盘算法设置（pdMethod: core_alchabitius/placidus/regiomontanus/campanus/topocentric；pdTimeKey: Ptolemy/Naibod）。逆向用 direction='converse'。",
+            "pdtype/pdMethod/pdTimeKey": "主限法盘算法设置（pdMethod 核5: core_alchabitius/meridian/porphyry/equal_ecliptic/equal_hour_circle，另有 horosa_legacy；pdTimeKey 同 pd 工具 22 项，常用 Ptolemy/Naibod/TrueSolarArc）。逆向用 direction='converse'。",
         },
         "output_contract": ["本命盘星与虚点", "主限法盘星体表格", "主限法盘相位"],
         "example_payload": {
