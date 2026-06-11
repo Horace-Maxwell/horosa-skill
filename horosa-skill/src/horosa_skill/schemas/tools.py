@@ -41,8 +41,11 @@ class BirthInput(FlexibleModel):
     pdMethod: Any | None = None
     pdTimeKey: Any | None = None
     pdaspects: list[int | str] | None = None
-    # 主限法全方位法 v10 (星阙 v2.5.4)：顺/逆向、映点(antiscia)、界(terms) promissor 开关 + 年限上限。
-    # 仅在显式设置时透传（model_dump(exclude_none=True)），缺省走后端默认（顺逆都开/映点界关/100 年）。
+    # 主限法 v12 (星阙 v2.6.6)：顺/逆向、映点(antiscia)、界(terms) promissor 开关 + 年限上限。
+    # pdMethod 取核5（core_alchabitius/meridian/porphyry/equal_ecliptic/equal_hour_circle，另 horosa_legacy）；
+    # pdTimeKey 22 项（含每盘真算 Simmonite/Kepler/Brahe + 动态 TrueSolarArc/SymbolicSolarArc）；
+    # pdYears 上限 3000（>360 出多圈复发行）。仅在显式设置时透传（model_dump(exclude_none=True)），
+    # 缺省走后端默认（顺逆都开/映点界关/100 年）。
     pdDirect: Any | None = None
     pdConverse: Any | None = None
     pdAntiscia: Any | None = None
