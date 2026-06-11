@@ -50,7 +50,7 @@
 
 ## 最新稳定基线
 
-**当前公开版本：`Horosa Skill 0.11.0`（68 个可调用工具）。**
+**当前公开版本：`Horosa Skill 0.12.0`（68 个可调用工具）。**
 
 这一条发布线把星阙的能力面补到了与桌面端基本对齐：
 
@@ -69,7 +69,7 @@
 | 检查项 | 结果 |
 | --- | --- |
 | 可调用工具 | `68 / 68 ok=true` |
-| 工程测试 | `245 / 245 pass`（含 ken / 神数 后端实时集成测试 + 离线 golden 单测 + node JS golden） |
+| 工程测试 | `252 / 252 pass`（含 ken / 神数 后端实时集成测试 + 离线 golden 单测 + node JS golden） |
 | 未确认参数时强制追问 | `61` 个技法工具触发 `must_ask_user=true` |
 | 安全豁免工具 | `7` 个 registry / knowledge / parser 类工具直接可读 |
 | 星阙式导出结构 | 每个业务技法均带 `export_snapshot` / `export_format`（已建模 `63` 个导出 technique） |
@@ -77,7 +77,7 @@
 | 奇门 / 太乙 / 金口 / 三式 | 统一走 `ken`，与星阙桌面端同源 |
 | 统摄法 / 十年大运 | headless 实现与星阙逐值对齐（京房八宫五行；对照星阙 `decennials.test.js` 金标） |
 | GitHub CI | Linux/macOS 单测 + horosa-core-js JS golden 自检 + Windows OpenClaw smoke 通过 |
-| Release runtime | macOS / Windows `v0.9.x` assets（含 ken + 14 神数引擎）已打包并校验 |
+| Release runtime | macOS / Windows `v0.11.x+` assets（含 ken + 14 神数引擎）已打包并校验 |
 
 > 关于 `solarreturn` / `lunarreturn` / `solararc` / `givenyear` / `profection` / `pd` / `pdchart` / `zr` 这批推运工具：当前版本已复核可用，不应再被 agent 标记为「Java `/predict/*` 不可用」。若某客户端仍这样回答，优先检查它是否在用旧 runtime、是否绕过 MCP 手算、是否没跑 `doctor` / `openclaw-check --full`。
 
@@ -224,7 +224,7 @@ Agent 在调用技法前如果不确定用户设置，应先查 `horosa_agent_gu
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.11.0",
+  "ok": true, "tool": "qimen", "version": "0.12.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -356,7 +356,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 233 passed
+uv run pytest -q                                        # 252 passed（本机后端全起；纯离线 207 passed + 45 skipped）
 uv run python scripts/run_benchmark.py                  # HorosaBench：调度 / 导出 parity / 知识读取
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```

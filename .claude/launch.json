@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "horosa-ui",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-lc", "cd Horosa-Web/astrostudyui && export NODE_OPTIONS=--openssl-legacy-provider && PORT=8000 npx umi dev"],
+      "port": 8000
+    }
+  ]
+}

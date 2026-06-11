@@ -32,3 +32,14 @@ horosa_*_report.json
 horosa_*_report.docx
 horosa_*_report.pdf
 .tmp_report_preview/
+
+# java instances launched with the repo as cwd write log4j logs under a literal
+# "${env:HOME:-...}" directory (unexpanded property path) — never commit runtime logs.
+${env:HOME*
+.horosa-logs/
+
+# local agent/session state — never upload
+.claude/
+*.local.md
+notes-local*
+.horosa-cache/

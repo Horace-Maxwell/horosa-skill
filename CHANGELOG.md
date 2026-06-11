@@ -7,6 +7,45 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-06-11
+
+星阙 v2.6.6 批对齐（上游待发版；vendor 源 = 开源仓 Horosa-Public）。无新工具，仍 68 个。
+
+### Changed — 主限法 v12 · 核5方位法收敛（行为变更，如实声明）
+
+- **方位法白名单收敛为逐位核验的核5**：`core_alchabitius`（默认）/ `meridian` / `porphyry` /
+  `equal_ecliptic` / `equal_hour_circle`（另保留 `horosa_legacy` 传统赤经）。v0.10.0 起暴露的
+  Placidus / Regiomontanus / Campanus / Topocentric 属未达逐位核验的方位法，已随上游 v2.6.6 方法集收敛从引擎移除——**旧值不报错**：引擎内静默回退 `core_alchabitius` 计算（行集与显式 core
+  逐位一致，live 测试钉死），skill 快照设置段对此类值如实标注「未核验，引擎回退」。
+- **In-Mundo 行集增多是修复非回归**：显示窗口径换为单参数判据（弧 pre-norm |Δ|<107.5），旧三分支
+  λ 窗的世俗核符号错配已修。
+- **时间钥匙 9→22 项**：新增 TrueSolarArc（真太阳弧）/ SymbolicSolarArc（太阳弧·黄经，逐弧查星历）
+  动态键；Simmonite / Kepler / Brahe 由常数改**每盘真算**（本命太阳日速，live 测试验证与 Ptolemy
+  日期全面分叉）；Kündig 等其余静态键补齐；修标签键名 Cardan→Cardano。
+- **pdYears 上限 360→3000**：>360 年出多圈复发行（同迫星/应星对弧 +360°×n，live 实测 168 组复发对）。
+- **宿命点 (Vertex) 应星**：仅 In-Zodiaco 核出，行 id `N_Vertex_0`，快照渲染「宿命点」。
+- 引擎层随同：PD 校准 golden 更名 `golden_alcabitius_ptolemy_v266`；响应回显 `pdSyncRev =
+  pd_method_sync_v12`（live 测试以心跳回显作防陈旧进程门）。
+
+### Added — 奇门 faRelatedPeople（法奇门相关人员）
+
+- `qimen` 新可选输入 `faRelatedPeople: [{name, yearGan}]` 或 `[{name, birth}]`——birth（公历）经
+  `/nongli/time` 的 `yearJieqi` 按**立春界**解析年干（与上游 `birthToYearGan` 同口径；1991-02-03
+  立春前 → 庚 已 live 钉死）。提供后 `[八门化气大阵]` 段逐人多出「生年干·姓名」保护行；缺省不出
+  该类行（段表不变，export contract 不动）。
+
+### Fixed — 随 vendor 重同步带入的上游排盘修正批
+
+- 重同步带入星阙 2026-06-10 排盘计算修正批：日返/月返种子根因（distance 全角度域单式）、返照相位
+  归一化 [0,180]、合盘/组合盘相位与映点归一化、恒星合相跨 0°、围攻独立 pairOrb、时主星 floor、
+  均时差表转录修正、半时区 ±HH:MM 解析（上游 pytest 60 全绿 + golden byte-perfect 验证）。
+- 测试装具：live gate 与 `make_service` 改为尊重 `HOROSA_CHART_SERVER_ROOT` / `HOROSA_SERVER_ROOT`
+  环境变量（此前写死 `:8899/:9999`，env 覆盖静默失效——本轮即据此把整套 live 验证指到 skill 自己
+  vendored 的引擎实例上）。
+- 发布工程硬化：`build_runtime_release_windows.py` 的 `._pth` 写入强制 LF（Windows 原生构建下
+  `write_text` 会 CRLF 化破坏字节奇偶）；`release.yml` 加 `repository_owner` 闸（fork 推 `v*` tag
+  不再排队自托管 runner）。
+
 ### Fixed — v0.11.0 Windows half + a stray CHANGELOG conflict marker
 
 - **v0.11.0 was published as `latest` with a darwin-only `runtime-manifest.json` and no Windows zip — so
