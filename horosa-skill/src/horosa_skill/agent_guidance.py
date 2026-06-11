@@ -365,7 +365,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         do_not_assume=["category", "key"],
     ),
     "qimen": _policy(
-        intent="奇门遁甲起盘。",
+        intent="奇门遁甲起盘。可选 faRelatedPeople=[{name, yearGan|birth}]（法奇门相关人员：提供后[八门化气大阵]段逐人多出「生年干·姓名」保护行；birth 为公历生日时按立春界自动解析年干；缺省不出该类行）。",
         required_context=COMMON_LOCATION_FIELDS + ["question/topic"],
         ask_if_missing=[
             {"field": "date/time", "question": "奇门用当前时间还是指定时间？", "options": ["当前时间", "指定时间"]},

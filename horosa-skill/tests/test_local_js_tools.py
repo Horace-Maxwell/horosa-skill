@@ -182,6 +182,44 @@ def test_qimen_runs_via_ken_backend(tmp_path) -> None:
 
 
 @requires_runtime
+def test_qimen_fa_related_people_year_gan_rows(tmp_path) -> None:
+    """法奇门「相关人员」(星阙 相关人员批)：faRelatedPeople 提供后 [八门化气大阵] 段逐人出
+    「生年干·姓名」保护行；birth 经 /nongli/time yearJieqi 按立春界解析年干（1991-02-03 在
+    1991 立春前 → 归 1990 庚午年 → 庚）；不提供则不出「生年干·」行（段表不变）。"""
+    service = make_service(tmp_path)
+    base = {
+        "date": "1998-02-20",
+        "time": "20:48:00",
+        "zone": "+08:00",
+        "lat": "31n13",
+        "lon": "121e28",
+        "options": {"qijuMethod": "chaibu"},
+    }
+    with_people = service.run_tool(
+        "qimen",
+        {
+            **base,
+            "faRelatedPeople": [
+                {"name": "甲方", "yearGan": "庚"},
+                {"name": "乙方", "birth": "1991-02-03"},
+            ],
+        },
+        save_result=False,
+    )
+    assert with_people.ok is True, with_people.error
+    text = with_people.data["snapshot_text"]
+    assert "生年干·甲方" in text
+    assert "生年干·乙方" in text
+    yifang_line = next(line for line in text.splitlines() if "生年干·乙方" in line)
+    assert "庚" in yifang_line
+    _assert_clean_export(with_people)
+
+    without = service.run_tool("qimen", base, save_result=False)
+    assert without.ok is True
+    assert "生年干·" not in without.data["snapshot_text"]
+
+
+@requires_runtime
 def test_taiyi_runs_via_ken_backend(tmp_path) -> None:
     service = make_service(tmp_path)
     result = service.run_tool(

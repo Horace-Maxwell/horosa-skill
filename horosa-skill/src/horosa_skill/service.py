@@ -4093,6 +4093,55 @@ class HorosaSkillService:
             },
         )
 
+    _TIAN_GAN = ("甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸")
+
+    def _normalize_fa_related_people(self, payload: dict[str, Any]) -> list[dict[str, Any]] | None:
+        """法奇门「相关人员」：把 [{name, yearGan|birth}] 归一化为上游 stamp 形状 [{name, yearGan}]。
+
+        yearGan 直接收十天干字符；birth（公历 YYYY-MM-DD[ HH:mm:ss]）走 /nongli/time 的
+        yearJieqi（立春界年干支）取年干——与上游 birthToYearGan 同口径（1-2 月出生立春前后
+        归属不同年）。解析不出的人员跳过：computeProtect 对 falsy yearGan 同样不出行。
+        """
+        raw = payload.get("faRelatedPeople")
+        if not isinstance(raw, list):
+            return None
+        normalized: list[dict[str, Any]] = []
+        for person in raw:
+            if not isinstance(person, dict):
+                continue
+            name = str(person.get("name") or "").strip() or "相关人员"
+            year_gan = str(person.get("yearGan") or "").strip()
+            if year_gan not in self._TIAN_GAN:
+                year_gan = ""
+                birth = str(person.get("birth") or "").strip()
+                if birth:
+                    birth_date, _, birth_time = birth.partition(" ")
+                    birth_time = birth_time.strip() or "12:00:00"
+                    if len(birth_time) == 5:
+                        birth_time = f"{birth_time}:00"
+                    try:
+                        person_nongli = self._call_remote(
+                            "/nongli/time",
+                            {
+                                "date": birth_date,
+                                "time": birth_time,
+                                "zone": payload.get("zone"),
+                                "lat": payload.get("lat"),
+                                "lon": payload.get("lon"),
+                                "gpsLat": payload.get("gpsLat"),
+                                "gpsLon": payload.get("gpsLon"),
+                                "ad": 1,
+                            },
+                        )
+                        year_jieqi = str((person_nongli or {}).get("yearJieqi") or "")
+                        if year_jieqi[:1] in self._TIAN_GAN:
+                            year_gan = year_jieqi[0]
+                    except Exception:
+                        year_gan = ""
+            if year_gan:
+                normalized.append({"name": name, "yearGan": year_gan})
+        return normalized
+
     def _run_qimen_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         year = int(str(payload["date"])[:4])
         nongli = payload.get("nongli")
@@ -4142,16 +4191,17 @@ class HorosaSkillService:
             },
         )
         self._require_ken_pan(ken_response, engine="kinqimen", endpoint="/qimen/pan")
-        js_result = self.js_client.run(
-            "qimen",
-            {
-                **payload,
-                "nongli": nongli,
-                "jieqi_year_prev": prev_year,
-                "jieqi_year_current": current_year,
-                "ken_response": ken_response,
-            },
-        )
+        js_payload = {
+            **payload,
+            "nongli": nongli,
+            "jieqi_year_prev": prev_year,
+            "jieqi_year_current": current_year,
+            "ken_response": ken_response,
+        }
+        fa_related_people = self._normalize_fa_related_people(payload)
+        if fa_related_people is not None:
+            js_payload["faRelatedPeople"] = fa_related_people
+        js_result = self.js_client.run("qimen", js_payload)
         snapshot_text = js_result.get("snapshot_text")
         return {
             "pan": js_result.get("data", {}),
