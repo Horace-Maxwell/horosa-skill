@@ -387,6 +387,39 @@ only difference is which engine dir is vendored:
   techniques keep an empty optional set. Also: a preset copied from `aiExport.js` can MISS sections the backend
   actually emits (qizhengkin 今制宿度/古制宿度) → they surface as `unknown_detected_sections`; add them to the preset.
 
+### v0.12.0 sync lessons (主限法 v12 核5收敛 + 排盘修正批 + faRelatedPeople — vendor 源 = Horosa-Public)
+
+- **vendor 源 = 开源仓 Horosa-Public**（`HOROSA_SOURCE_ROOT=/Users/horacedong/Desktop/Horosa-Public`；
+  sync 脚本默认根是 Desktop、其下无 Horosa-Web，必须显式传）。Public 的 PD 引擎天然就是核5+legacy 白名单
+  （perchart 白名单 ↔ `_PD_METHOD_REGISTRY` 6 键锁步），v12 核 kernel 完整（Vertex/多圈/每盘钥匙/显示窗）。
+  同步后核法：vendored astropy 与 Horosa-Public 逐文件 `diff -q` 全同 + `PD_SYNC_REV==pd_method_sync_v12`
+  + golden v266 在位。**同步与核对一律以 Horosa-Public 为唯一来源。**
+- **`/predict/pd` 的 params 回显是原样输入，不是引擎解析值**：送 `placidus` 回显仍 `placidus`，但引擎内已
+  回退 core_alchabitius（行集与显式 core 逐位一致，live 测试钉死）。skill 快照对白名单外键如实标注
+  「未核验，引擎回退 Alcabitius 半弧法」，不静默换标签。
+- **live 验证必须打 skill 自己 vendored 的引擎实例，不是 :8899/:9999 上恰好在跑的东西**——默认端口上
+  常驻的服务不保证与 vendored 引擎同版本（陈旧实例会掩盖白名单/钥匙问题）。本轮把 tests 的
+  gate+`make_service` 从写死 `:8899/:9999` 改为尊重 `HOROSA_CHART_SERVER_ROOT`/`HOROSA_SERVER_ROOT`
+  （此前 env 覆盖静默无效，一次「带覆盖的全绿」实际测的是默认端口上的旧实例）。
+  起 vendored 实例：chart 要 `PYTHONPATH=<vendor>/Horosa-Web/astropy`
+  + `HOROSA_CHART_PORT`（脚本只自动解析 flatlib，不解析自身包根）；java 用 vendored
+  `runtime/mac/java/bin/java -jar runtime/mac/bundle/astrostudyboot.jar --server.port=… --astrosrv=…`
+  （root 500 = 正常无路由）。
+- **防陈旧进程门已制度化为 live 测试**：chart 心跳 `GET /` 回显 `pdSyncRev`，断言 ==`pd_method_sync_v12`
+  再信任结果（v12 注记坑#6：陈旧引擎把未知时间钥匙静默按 Ptolemy 算）。**钥匙分叉探针别用 Kündig**（静态
+  标度 1.0 与 Ptolemy 同日期）——用每盘真算的 Kepler（live：321/321 行日期分叉）。
+- **pd 表行是列表不是字典**：`[arc, prom, sig, type, date]`；3000 年多圈 = 同 (prom,sig) 弧 +360°×n
+  （live 实测 168 组复发对，max arc 2995.5°）。宿命点行 id `N_Vertex_0` 仅 In-Zodiaco；skill 侧
+  `ASTRO_TEXT_MAP["Vertex"]="宿命点"`（主短两表都要）。
+- **faRelatedPeople 透传**：vendored `computeProtect` 吃 `pan.faRelatedPeople=[{name, yearGan}]`（显式数组
+  为准，缺省不出行）。skill 在 Python 侧把 `{name, birth}` 经 `/nongli/time` 的 `yearJieqi`（立春界）归一化
+  为年干（1991-02-03 → 庚，立春前归前一年，live 钉死），JS 保持上游 verbatim 只 stamp。上游的
+  `birthToYearGan` 依赖 lunar-javascript，skill 不引这个依赖——走自家 nongli 后端同口径。
+- **排盘修正批随重同步自动带入**（日返/月返种子、合盘/组合盘归一化、恒星跨0°、围攻 orb、均时差等，上游
+  pytest 60 + golden byte-perfect 已验）；skill 结构断言型测试全绿，无需改动。
+- 界 (term) promissor row id = `T_<ruler>_<sign-name>`（非经度）；上游 dial 的 `_PD_CHART_METHOD_HSYS`
+  只在 skill 暴露 dial 时才相关（目前只暴露 PD 表）。
+
 ### v0.11.0 sync lessons (Xingque v2.6.3→v2.6.5 parity + 2 v0.10.0 deferrals — no new tools, still 68)
 
 - **Sidereal ayanāṃśa is pure Python passthrough.** `perchart.py` reads `data.get('siderealAyanamsa')` and emits
@@ -759,3 +792,16 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **后续批：相关人员(生年干) + 命盘/事盘（纯前端，不影响 ken 引擎/快照段数）**：星阙左栏加「相关人员」多选（从命盘库选人，各人**生年干**＝`birthToYearGan` 按立春算）喂 **八门化气大阵**保护清单——`computeProtect` 删占位「示本盘年干」、改读 `pan.faRelatedPeople`，**未选则不出生年干行**。对 AI 客户端：**快照仍是同 8 段，无新顶层段**；只是 `[八门化气大阵]` 段内容可多出「生年干·姓名」逐人行（折叠进现有段，段表不动）。另加左栏「盘类」选择器：命盘→复用命盘库 `localCharts`（一等人命盘、跨技法可用，**保存恒弹新增星盘抽屉**、信息预填完整、奇门设置存 `payload.qimen`）；事盘→`localCases`（现状）。**四同步挂载加固**：`aiAnalysisContext.js` 的重算路径（`regenerateQimenSnapshot`、亦被三式合一调用）已补 stamp `faRelatedPeople`（兼容事盘 `payload.faRelatedPeople`/命盘 `payload.qimen.faRelatedPeople`）+ `computeProtect` 全局兜底 `window.__horosa_qimen_related_people`，确保 AI 挂载不漏相关人员。
 - **再 vendor 星阙 JS 时**（见 §Re-vendoring the JS engines from 星阙）会带入新文件 `components/dunjia/DunJiaFaCalc.js` + `DunJiaFaDoc.js`，并改 `DunJiaMain.js` / `DunJiaCalc.js` / `QimenXiangDoc.js` / `utils/aiExport.js`（及命盘往返的 `models/astro.js` / `models/user.js` / `components/user/ChartAddFormComp.js`，均 guarded 增量、占星零回归）。星阙侧自检：jest `dunjia/__tests__/DunJiaFaCalc.test.js`+`DunJiaCalc.test.js`+`DunJiaFaDoc.test.js`、preflight `[26]`。
 
+
+## 主限法 v12 批(upstream 星阙 v2.6.6 — ✅ 已于 v0.12.0 同步完成,vendor 源=Horosa-Public)
+
+> 下面 7 条是当时的同步清单,留作历史核对参照;实际执行结论与坑见上方「v0.12.0 sync lessons」节
+> (全部逐条核到:核5白名单/22钥匙/Vertex/3000多圈/golden v266/pdSyncRev 心跳门/钥匙分叉 live 测试)。
+
+1. **显示窗口径换了**:行星对显示窗 = 「弧 pre-norm 原值 |Δ| < 107.5」单参数判据(`_passesCoreDisplayWindow`),旧三分支 λ 窗 + EPS 已删。世俗(In-Mundo)核旧窗符号错配修复 → **In-Mundo 行星对行显著增多是修复非回归**,skill 的 golden/selfcheck 若按旧行数断言会假红。
+2. **宿命点(Vertex)应星新增**(仅黄道向运;世俗核不出):行 id `N_Vertex_0`,闭式直算。snapshot/导出段如列方向行,新应星会出现。
+3. **时间钥匙修真**:Simmonite/Kepler/Brahe 由常数改**每盘真算**(本命太阳日速);新增 `Kündig`(静态 1.0)与 `SymbolicSolarArc`(动态,逐弧查星历)。同步时 `STATIC_TIME_KEY_SCALES` 集合与 `PER_CHART_TIME_KEY_FALLBACK` 一起带。
+4. **pdYears 上限 360→3000**:`perchart.py` 夹断 3000;`perpredict._extendCorePdRecurrences` 统一旧「180+ 互补行」与多圈复发(基弧+360m)。≤360 逐位等价旧式;skill 侧若有 pdYears 校验/文档要同步上限。
+5. **golden 改名** `golden_alcabitius_ptolemy_v266.ndjson.gz`(v253 删),manifest 同步;`PD_SYNC_REV = pd_method_sync_v12`(helper.py/webchartsrv.py + 前端 + Java 4 控制器——skill 只 vendor Python 也要带 rev,响应 params.pdSyncRev 会回显)。
+6. **坑·陈旧 Python 进程静默吞新钥匙**:长驻 webchartsrv 不重启时,新动态钥匙会**静默按 Ptolemy 算日期**(未知 key 不报错走默认 scale)。skill 打包运行时若复用旧进程同坑;验证法 = 直接 POST 对比 Ptolemy vs 新键日期是否分叉。
+7. 同步自检建议:vendored 引擎跑 `pdYears=3000` 应出多圈行(同 (prom,sig) 链上 arc+360k、日期逐圈递增);`pdYears=100` 行集与 v2.6.5 vendor 比对 — 仅显示窗/宿命点差异属预期。

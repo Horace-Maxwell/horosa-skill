@@ -50,7 +50,7 @@ License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICEN
 
 ## Current stable baseline
 
-**Current public version: `Horosa Skill 0.11.0` (68 callable tools).**
+**Current public version: `Horosa Skill 0.12.0` (68 callable tools).**
 
 This release line brings the capability surface roughly to parity with the desktop app:
 
@@ -69,7 +69,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `68 / 68 ok=true` |
-| Engineering tests | `245 / 245 pass` (ken / Shen Shu live integration + offline golden unit tests + node JS golden) |
+| Engineering tests | `252 / 252 pass` (ken / Shen Shu live integration + offline golden unit tests + node JS golden) |
 | Forced clarification when params unconfirmed | `61` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `7` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`63` export techniques modeled) |
@@ -77,7 +77,7 @@ Local end-to-end signals:
 | Qi Men / Tai Yi / Jin Kou / Three Styles | unified on `ken`, same as the desktop app |
 | Tong She Fa / Decennials | headless, value-for-value with Xingque (`decennials.test.js` golden) |
 | GitHub CI | Linux/macOS unit tests + horosa-core-js JS golden self-check + Windows OpenClaw smoke |
-| Release runtime | macOS / Windows `v0.9.x` assets (ken + 14 Shen Shu engines bundled) packaged and verified |
+| Release runtime | macOS / Windows `v0.11.x+` assets (ken + 14 Shen Shu engines bundled) packaged and verified |
 
 > About `solarreturn` / `lunarreturn` / `solararc` / `givenyear` / `profection` / `pd` / `pdchart` / `zr`: these predictive tools are verified working in this version and should not be flagged by an agent as "Java `/predict/*` unavailable". If a client still says so, check whether it is on an old runtime, bypassing MCP to hand-compute, or hasn't run `doctor` / `openclaw-check --full`.
 
@@ -224,7 +224,7 @@ Every tool call returns a uniform envelope:
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.11.0",
+  "ok": true, "tool": "qimen", "version": "0.12.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -339,7 +339,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 233 passed
+uv run pytest -q                                        # 252 passed with local backends up; 207 passed + 45 skipped offline
 uv run python scripts/run_benchmark.py                  # HorosaBench: dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```
