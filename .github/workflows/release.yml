@@ -13,6 +13,9 @@ permissions:
 
 jobs:
   build-release:
+    # Owner guard: forks pushing v* tags must not queue jobs against the maintainer's
+    # self-hosted runner (also avoids 24h phantom queued runs on forks).
+    if: github.repository_owner == 'Horace-Maxwell'
     runs-on: self-hosted
     timeout-minutes: 180
     steps:
