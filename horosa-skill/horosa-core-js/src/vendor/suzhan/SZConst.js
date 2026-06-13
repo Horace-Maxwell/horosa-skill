@@ -27,7 +27,7 @@ if(chartshape === undefined || chartshape === null){
 	chartshape = SZChart_Square;
 }else{
 	try{
-		chartshape = parseInt(chartshape);
+		chartshape = parseInt(chartshape, 10);
 	}catch(e){
 		chartshape = SZChart_Square;
 	}
