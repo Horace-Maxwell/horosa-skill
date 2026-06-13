@@ -1,0 +1,91 @@
+name: release-completeness
+
+# Guards against the recurring "latest release is missing its Windows half" failure: v0.10.0 shipped
+# as `latest` with NO runtime-manifest.json (install broke on both platforms), and v0.11.0 / v0.12.0
+# shipped with a darwin-only manifest + no win32 zip (Windows install broke). The Windows runtime is
+# built off-CI on a real Windows box and uploaded by hand, so a mac-only publish silently omits it and
+# nothing caught it until a human noticed. This job re-inspects the PUBLISHED `latest` release and fails
+# loudly if it is not a complete, dual-platform release.
+
+on:
+  schedule:
+    - cron: "0 */6 * * *" # every 6 hours
+  workflow_dispatch:
+  release:
+    types: [published, edited, released]
+
+permissions:
+  contents: read
+
+jobs:
+  check-latest-release-complete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Resolve the published `latest` release
+        id: latest
+        run: |
+          set -euo pipefail
+          tag="$(gh api "repos/${REPO}/releases/latest" --jq '.tag_name')"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "Published latest release: ${tag}"
+
+      - name: Assert the latest runtime-manifest.json is complete and dual-platform
+        env:
+          TAG: ${{ steps.latest.outputs.tag }}
+        run: |
+          set -euo pipefail
+          base="https://github.com/${REPO}/releases/latest/download"
+
+          # 1) The default install manifest URL must resolve (this is what `horosa-skill install` fetches).
+          manifest_url="${base}/runtime-manifest.json"
+          echo "Fetching ${manifest_url}"
+          if ! curl -fsSL "${manifest_url}" -o manifest.json; then
+            echo "::error::runtime-manifest.json is MISSING from latest release ${TAG} — install is broken on all platforms (this was the v0.10.0 failure)."
+            exit 1
+          fi
+          cat manifest.json
+          python3 - "$TAG" <<'PY'
+          import json, sys, urllib.request
+
+          tag = sys.argv[1]
+          with open("manifest.json", encoding="utf-8") as fh:
+              manifest = json.load(fh)
+
+          errors = []
+          version = manifest.get("version")
+          if not version:
+              errors.append("manifest has no `version`")
+          elif tag not in (version, f"v{version}"):
+              errors.append(f"manifest version {version!r} does not match latest tag {tag!r}")
+
+          platforms = manifest.get("platforms") or {}
+          for key in ("darwin-arm64", "win32-x64"):
+              entry = platforms.get(key)
+              if not isinstance(entry, dict):
+                  errors.append(f"manifest is missing the `{key}` platform (this is the v0.11.0/v0.12.0 Windows-broken-latest failure)")
+                  continue
+              for field in ("url", "sha256", "archive_type"):
+                  val = entry.get(field)
+                  if not isinstance(val, str) or not val.strip():
+                      errors.append(f"{key}.{field} is missing or empty")
+              url = entry.get("url")
+              if isinstance(url, str) and url.strip():
+                  req = urllib.request.Request(url, method="HEAD")
+                  try:
+                      with urllib.request.urlopen(req, timeout=30) as resp:
+                          if resp.status != 200:
+                              errors.append(f"{key} archive url returned HTTP {resp.status}: {url}")
+                  except Exception as exc:  # noqa: BLE001 - any failure means the asset is not downloadable
+                      errors.append(f"{key} archive url is not reachable ({exc}): {url}")
+
+          if errors:
+              print("::error::latest release is INCOMPLETE:")
+              for e in errors:
+                  print(f"::error::  - {e}")
+              sys.exit(1)
+          print(f"OK: latest release {tag} has a complete dual-platform manifest (darwin-arm64 + win32-x64), both archives reachable.")
+          PY

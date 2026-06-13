@@ -40,6 +40,9 @@ jobs:
       - name: Verify server.json
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_server_json.py
+      - name: Verify macOS/Windows runtime-builder parity
+        working-directory: ./horosa-skill
+        run: uv run python scripts/verify_builder_parity.py
       - name: Verify bundled knowledge index
         working-directory: ./horosa-skill
         run: uv run python scripts/build_knowledge_index.py --check

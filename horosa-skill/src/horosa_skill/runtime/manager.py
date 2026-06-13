@@ -680,6 +680,8 @@ class HorosaRuntimeManager:
                 env=os.environ.copy(),
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
             shutdown = self._wait_for_service_state(
                 expected_reachable=False,
@@ -1189,6 +1191,8 @@ class HorosaRuntimeManager:
                 env=env,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 check=False,
             )
         readiness = self._wait_for_service_state(

@@ -7,6 +7,38 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+### Fixed — v0.12.0 Windows half (3rd recurrence) + recurrence guards + launcher hardening
+
+- **v0.12.0 shipped as `latest` with a darwin-only manifest and no win32 zip — Windows install broke (3rd
+  consecutive recurrence after v0.10.0/v0.11.0).** Built + natively verified the win32-x64 v0.12.0 runtime,
+  regenerated the dual-platform `runtime-manifest.json` + `SHA256SUMS.txt`, and uploaded all three to the
+  v0.12.0 release (already `latest`; upload alone restores Windows install). Native check: `/qimen|/taiyi|
+  /jinkou/pan` → `ResultCode 0` + right source; all 14 神数 real `Result.snapshot`; tongshefa/canping/heluo
+  OK; win zip sha256 `edabd313203d5eb5463b3da1eebe34f6c23a54b6abc51f3a5760ad93171df8e5`.
+- **New CI guard `release-completeness.yml` (stops the recurrence).** On schedule + workflow_dispatch +
+  release events it re-inspects the published `latest`: fails loudly if `releases/latest/download/runtime-manifest.json`
+  is missing, lacks either the `darwin-arm64` or `win32-x64` platform, has empty url/sha256, has a version
+  that mismatches the latest tag, or if either platform archive URL is not HTTP 200. This single ubuntu job
+  (default GITHUB_TOKEN) would have caught v0.10.0, v0.11.0, and v0.12.0.
+- **New builder-parity lint `verify_builder_parity.py` (wired into CI `test` job).** Asserts the macOS
+  (`package_runtime_payload.sh`) and Windows (`build_runtime_release_windows.py`) builders both vendor the
+  same 8 standalone engines + kinastro, both run shaozi-gen + plotly-strip + lunar-javascript install, and
+  that `verify_runtime_release.py` REQUIRED_ENTRIES requires the engines/shaozi-JSON/lunar-javascript on
+  BOTH platforms — catching the class of drift that caused the v0.10.0 shaozi/plotly gap.
+- **Windows launcher hardening (baked into the v0.12.0 zip).** `start_horosa_local.ps1`: stale/already-running
+  guard (stops a prior owned instance + emits the manager's `pid files already exist` marker before
+  relaunch, so it never orphans processes); port-collision fast-fail (clear `port N already in use by PID …`
+  instead of a silent 300s hang — verified fails in ~2s); readiness window raised 180s→300s for slow Java
+  warmup; **`-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8` on the Java launch** (the bundled Temurin 17 is
+  pre-JEP-400 and defaults to the OS code page, which cannot represent the CJK star/格局/神煞 tables).
+  `stop_horosa_local.ps1`: only force-kills a PID that still maps to OUR runtime image (no more killing a
+  recycled/foreign PID), confirms exit before removing the pid file, and exits non-zero if a process survives.
+- **`manager.py` stop/start subprocess captures now pass `encoding="utf-8", errors="replace"`** so CJK
+  launcher output can't raise `UnicodeDecodeError` (or mojibake) under a non-UTF-8 Windows code page.
+- **Doc accuracy:** README "Release runtime" row → `v0.12.0`; the late-zi-hour PENDING banner in `AGENTS.md`
+  + `SKILL.md` corrected (the flag is now wired in the 神数 path — the old "0 occurrences in src/" claim was
+  stale — but is still not threaded through the bazi/ziwei/liureng/qimen chart-flow payloads).
+
 ## [0.12.0] - 2026-06-11
 
 星阙 v2.6.6 批对齐（上游待发版；vendor 源 = 开源仓 Horosa-Public）。无新工具，仍 68 个。
