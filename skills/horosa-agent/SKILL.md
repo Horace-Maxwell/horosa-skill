@@ -125,6 +125,10 @@ Use these user intents:
 - Age Point / 年龄推进点 (Huber, v2.4.0): `agepoint`
 - Distributions / 界推运 (分配法, v2.4.0): `distributions`
 - Mundane ingress / 世俗入宫盘 (v2.4.0): `mundane` — input is year + 入宫节气 (春分/夏至/秋分/冬至) + place
+- Triplicity-ruler periods / 三分主星推运 (v2.6.x): `triplicityrulers`
+- Numeric keypoints / 数字相位推运 (v2.6.x): `keypoints`
+- Progressed lunation phase / 月相推运 (v2.6.x): `lunationphase`
+- Multiple returns / 多重回归 (v2.6.x): `extrareturns` — Saturn / Jupiter / lunar-node returns
 - Six Yao: `sixyao`
 - Gua description: `gua_desc`, `gua_meiyi`
 - Suzhan: `suzhan`

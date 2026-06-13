@@ -387,6 +387,27 @@ only difference is which engine dir is vendored:
   techniques keep an empty optional set. Also: a preset copied from `aiExport.js` can MISS sections the backend
   actually emits (qizhengkin 今制宿度/古制宿度) → they surface as `unknown_detected_sections`; add them to the preset.
 
+### v0.13.0 sync lessons (4 未同步 AI 技法 + 太乙/八字 段口径 — vendor 源 = Horosa-Public, 68→72)
+
+- **审计前先查自家「明确排除项」+ 过 headless-readiness 闸。** 第三轮把 `fengshui` 误当可补缺口——它是 canvas +
+  户型图上传 + 交互点位驱动（`new FengShuiEngine(canvas,…)`，无 birth/time 输入），无法 headless；仓内 SKILL.md/README×2
+  早有「明确排除·风水未完成 headless 化」政策。教训：上游有 engine 文件 ≠ 可进公开 skill；每个候选先 grep 排除政策，
+  再确认其 `buildXxxSnapshotText` 是纯 `chart/data→text`（无 canvas/DOM/上传/点击依赖）。
+- **AI-export 技法的权威清单 = `aiExport.js` 的 `EXPORT_TECHNIQUES` + `EXPORT_PRESET_SECTIONS`**（不是组件目录）。本轮
+  4 个缺口（triplicityrulers/keypoints/lunationphase/extrareturns）都在该表里却无 skill 工具。`utils/triplicityRulers.js`
+  用 `AstroConst.SignsProp` → shim 必须补该表（v0.11 闭合教训复发点：load 过、真盘崩）。
+- **请求型 builder（如 extrareturns 逐体拉 `/astroextra/planetreturn`）不能塞进 headless JS**（JS 层不发 HTTP）——
+  后端调用放 Python（`_run_*_tool` 循环 `_call_remote`），JS 只做纯格式化；或直接 Python 拼段（extrareturns 即此）。
+- **后端「整段 sections」可能被旧 vendor 层 strip 掉**：太乙的 13 段解读 kintaiyi 后端本就返回（top-level `sections`），
+  但 `tools/taiyi.js` 历史上 `sections: undefined` 整体丢弃。排查法：抓 `js_client.run` 实际收到的 `ken_response`，
+  grep `sections`/段名，再决定是「透传」还是「重 vendor builder」。条件出现的段：**同时进 preset（present 不 unknown）
+  + optional（absent 不 missing）**——单进 optional 不够（parser 的 unknown 只减 preset，见 `exports/parser.py:130`）。
+- **CI 起不了后端**：GitHub Linux runner 无 Linux 运行时（Linux PR 已拒；运行时 macOS/Windows-only + gitignore）。
+  别造「boot runtime」假 job；CI 网 = offline FakeClient 契约 + export-fixture 契约，全套 live 在本机 vendored 实例发布前跑。
+- **`04caa37`（Windows v0.12.0）带来的两道闸**：`release-completeness.yml`（发布后查 latest 是否双平台——darwin-only latest
+  过渡期必红=预期信号）+ `verify_builder_parity.py`（mac/win builder 锁步 + REQUIRED_ENTRIES 对称）。新技法是 horosa-core-js
+  内的 JS+Python（随包带入，不改 payload/REQUIRED_ENTRIES），故 parity 不受影响——但发布前要跑 `verify_builder_parity.py`。
+
 ### v0.12.0 sync lessons (主限法 v12 核5收敛 + 排盘修正批 + faRelatedPeople — vendor 源 = Horosa-Public)
 
 - **vendor 源 = 开源仓 Horosa-Public**（`HOROSA_SOURCE_ROOT=/Users/horacedong/Desktop/Horosa-Public`；
