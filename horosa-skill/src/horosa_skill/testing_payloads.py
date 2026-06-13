@@ -122,6 +122,7 @@ def build_sample_payloads() -> dict[str, dict]:
         "triplicityrulers": {**chart_birth, "predictive": 0},
         "keypoints": {**chart_birth, "predictive": 0},
         "lunationphase": {**chart_birth, "predictive": 0},
+        "extrareturns": {**chart_birth, "predictive": 0},
         "horary": {**chart_birth, "hsys": 0, "tradition": True, "predictive": 0, "category": "marriage"},
         "election": {**chart_birth, "hsys": 0, "tradition": True, "predictive": 0, "topicId": "marriage"},
         "wangji": {**confirmed, "date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1},

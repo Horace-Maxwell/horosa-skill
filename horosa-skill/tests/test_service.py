@@ -264,6 +264,9 @@ class FakeClient(HorosaApiClient):
             }
         if endpoint == "/chart13":
             return chart_payload
+        if endpoint == "/astroextra/planetreturn":
+            # 多重回归: per-body return dates. Synthesize a couple so [多重回归] emits + export stays clean.
+            return {"returns": [{"which": 1, "date": "2019-05-10"}, {"which": 2, "date": "2048-11-02"}]}
         # 神数 family — synthesize a snapshot whose [小节] headers cover the full export preset, so the
         # offline export-contract suite round-trips cleanly for all 14 (5 standalone + 9 kinastro-*).
         from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS as _PRESETS

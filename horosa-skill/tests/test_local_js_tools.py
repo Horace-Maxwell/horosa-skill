@@ -778,6 +778,22 @@ def test_keypoints_runs_via_chart_service(tmp_path) -> None:
 
 
 @requires_chart
+def test_extrareturns_runs_via_chart_service(tmp_path) -> None:
+    # 多重回归 (星阙 v2.6.x): Saturn/Jupiter/Node returns — Python loops /astroextra/planetreturn per body.
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "extrareturns",
+        {"date": "1990-04-06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    snapshot = result.data["snapshot_text"]
+    assert "[多重回归]" in snapshot
+    assert "土星返照" in snapshot and "第1回" in snapshot
+    _assert_clean_export(result)
+
+
+@requires_chart
 def test_lunationphase_runs_via_chart_service(tmp_path) -> None:
     # 月相推运 (星阙 v2.6.x): natal Sun-Moon elongation advanced by the secondary rate → 8-phase timeline.
     service = make_service(tmp_path)
