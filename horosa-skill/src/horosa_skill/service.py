@@ -96,6 +96,7 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "triplicityrulers": "triplicityrulers",
     "keypoints": "keypoints",
     "lunationphase": "lunationphase",
+    "extrareturns": "extrareturns",
     "horary": "horary",
     "election": "election",
     "wangji": "wangji",
@@ -146,6 +147,7 @@ _PYTHON_CHART_ENDPOINTS = {
     "/predict/dist",
     "/astroextra/jaynesprog",
     "/astroextra/progressions",
+    "/astroextra/planetreturn",
     "/predict/planetaryarc",
     "/jieqi/year",
     "/qimen/pan",
@@ -4654,6 +4656,34 @@ class HorosaSkillService:
         # Balbillus 129年系统（旺距削减）: vendored JS builder (see horosa-core-js progextra).
         return self._run_progextra_js_tool(payload, "balbillus")
 
+    # 多重回归 (星阙 v2.6.x): 土/木/月交三体返照。上游前端 buildExtraReturnsSnapshotText 是「请求型」——
+    # 逐体拉 /astroextra/planetreturn。skill 把这三次后端调用放在 Python 侧（headless JS 不发 HTTP），
+    # 再按上游同格式拼 [多重回归] 段。
+    _EXTRARETURNS_BODIES = (("Saturn", "土星返照", "≈29.5 年"), ("Jupiter", "木星返照", "≈11.9 年"), ("Node", "月交返照", "≈18.6 年"))
+
+    def _run_extrareturns_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        remote_base = {**payload, "predictive": 0}
+        for key in ("datetime", "dirZone", "dirLat", "dirLon"):
+            remote_base.pop(key, None)
+        lines = ["[多重回归]"]
+        for body_key, cn, period in self._EXTRARETURNS_BODIES:
+            try:
+                resp = self._call_remote("/astroextra/planetreturn", {**remote_base, "body": body_key, "count": 4})
+            except Exception as exc:
+                logger.warning("extrareturns planetreturn failed (body=%s): %s", body_key, exc)
+                continue
+            rows = resp.get("returns") if isinstance(resp, dict) else None
+            if not isinstance(rows, list) or not rows:
+                continue
+            cells = [f"第{r.get('which')}回 {r.get('date')}" for r in rows if isinstance(r, dict) and r.get("date")]
+            if cells:
+                lines.append(f"{cn}（{period}）：" + "，".join(cells))
+        snapshot_text = "\n".join(lines) if len(lines) > 1 else ""
+        return {
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="extrareturns", snapshot_text=snapshot_text),
+        }
+
     def _run_shenshu_tool(self, payload: dict[str, Any], key: str) -> dict[str, Any]:
         # 神数 family (wangji / wuzhao / taixuan / jingjue / shenyishu): each is a kentang engine mounted on
         # the chart service (:8899) that returns a backend-built `snapshot` text whose [小节] headers already
@@ -5050,6 +5080,8 @@ class HorosaSkillService:
             return self._run_persiandirected_tool(payload)
         if definition.name in {"triplicityrulers", "keypoints", "lunationphase"}:
             return self._run_progextra_js_tool(payload, definition.name)
+        if definition.name == "extrareturns":
+            return self._run_extrareturns_tool(payload)
         if definition.name == "horary":
             return self._run_horary_tool(payload)
         if definition.name == "election":
