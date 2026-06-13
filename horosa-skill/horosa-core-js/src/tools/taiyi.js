@@ -21,8 +21,10 @@ export function runTaiyi(payload) {
     technique: 'taiyi',
     input_normalized: normalized,
     data: pan,
-    // 星阙 aiExport for taiyi is 起盘信息/太乙盘/十六宫标记 only; drop ken's in-app detail
-    // `sections` from the snapshot (kept in `data`) so the export contract stays clean.
-    snapshot_text: buildTaiyiSnapshotText({ ...pan, sections: undefined }),
+    // 星阙 v2.6.x: the kintaiyi backend returns the rich 太乙 reading `sections`
+    // (太乙诸神/风游/主客定算/八门与宿曜/十二神/断法/七大兵法 + 博弈/命法/命宫行限 when applicable).
+    // normalizeBackendPan drops the backend's 起盘 section (the builder already emits [起盘信息]);
+    // the rest are emitted and registered as optional sections so the export contract stays clean.
+    snapshot_text: buildTaiyiSnapshotText(pan),
   };
 }
