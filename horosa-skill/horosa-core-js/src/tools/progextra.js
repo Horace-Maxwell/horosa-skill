@@ -1,10 +1,16 @@
-// progextra: run a vendored 星阙 v2.5.0 progression builder (balbillus / persiandirected / yearsystem129)
-// on a chart object. These are pure frontend builders (read the chart, output the single-section text);
-// the skill passes the /chart response as payload.chart. Returns { snapshot_text }.
+// progextra: run a vendored 星阙 progression builder (balbillus / triplicityrulers / keypoints /
+// lunationphase) on a chart object. These are pure frontend builders (read the chart, output the
+// single-section text); the skill passes the /chart response as payload.chart. Returns { snapshot_text }.
 import { buildBalbillusSnapshotText } from '../vendor/astroextra/balbillus.js';
+import { buildTriplicityRulersSnapshotText } from '../vendor/astroextra/triplicityRulers.js';
+import { buildKeypointsSnapshotText } from '../vendor/astroextra/keypoints120.js';
+import { buildLunationPhaseSnapshotText } from '../vendor/astroextra/lunationPhase.js';
 
 const BUILDERS = {
   balbillus: buildBalbillusSnapshotText,
+  triplicityrulers: buildTriplicityRulersSnapshotText, // 三分主星推运 (星阙 v2.6.x)
+  keypoints: buildKeypointsSnapshotText, // 数字相位推运
+  lunationphase: buildLunationPhaseSnapshotText, // 月相推运
 };
 
 export function runProgExtra(payload) {
