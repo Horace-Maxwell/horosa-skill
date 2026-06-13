@@ -596,10 +596,12 @@ only difference is which engine dir is vendored:
   builder and the shaozi entry to the win32-x64 verifier list. **Rule: when you touch one builder or add a
   required artifact, grep the other builder + both `REQUIRED_ENTRIES` lists in the same change.**
 - **A new release published as `latest` is repeatedly missing its Windows half — ALWAYS check the release
-  manifest first. There is now a CI guard for this.** The mac side has shipped THREE `latest` releases
-  incomplete: v0.10.0 had **no** `runtime-manifest.json` at all (`releases/latest/download/runtime-manifest.json`
-  404 → `install` broke on BOTH platforms); v0.11.0 AND v0.12.0 had a **darwin-only** manifest + no win32
-  zip (mac installs, **Windows** install finds no `win32-x64` entry / 404s the zip). The Windows runtime is
+  manifest first. The CI guard now catches this automatically.** The mac side has shipped FOUR `latest`
+  releases incomplete: v0.10.0 had **no** `runtime-manifest.json` at all (`releases/latest/download/runtime-manifest.json`
+  404 → `install` broke on BOTH platforms); v0.11.0, v0.12.0, AND v0.13.0 had a **darwin-only** manifest +
+  no win32 zip (mac installs, **Windows** install finds no `win32-x64` entry / 404s the zip). **v0.13.0 was
+  the first one auto-caught**: `release-completeness.yml` fired on the release event and failed, exactly as
+  designed — so going forward you can rely on that red check instead of noticing by hand. The Windows runtime is
   built off-repo on a Windows box, so a mac-only release publish leaves it out. **First diagnostic when
   "check sync" / a new version appears:** `gh release view vX.Y.Z --json assets` (expect darwin tar.gz +
   win32 zip + runtime-manifest.json + SHA256SUMS.txt) and confirm
