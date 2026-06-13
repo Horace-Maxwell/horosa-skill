@@ -93,6 +93,7 @@ AI_EXPORT_TECHNIQUES = [
     {"key": "triplicityrulers", "label": "星运-三分主星"},
     {"key": "keypoints", "label": "星运-数字相位"},
     {"key": "lunationphase", "label": "星运-月相"},
+    {"key": "extrareturns", "label": "星运-多重回归"},
     {"key": "horary", "label": "卜卦盘"},
     {"key": "election", "label": "择日盘"},
     {"key": "wangji", "label": "皇极经世"},
@@ -162,6 +163,7 @@ AI_EXPORT_PRESET_SECTIONS = {
     "triplicityrulers": ["三分主星推运"],
     "keypoints": ["数字相位推运"],
     "lunationphase": ["月相推运"],
+    "extrareturns": ["多重回归"],
     "horary": ["起卦信息", "根本性", "征象星指派", "完成分析", "月亮的故事", "相位全览", "裁决", "应期方位", "描述"],
     "election": ["起盘信息", "总评", "红线", "分项", "用事专属", "应期", "建议"],
     "wangji": ["起盘", "元会运世", "天道卦", "人事卦", "历史年表", "心易发微"],
@@ -221,6 +223,8 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     "election": ["用事专属", "应期"],
     # 七政四余: 政余格局 = Moira 格局 DSL（~280 行子系统），headless 版未移植 → 可选段（如实标出）。
     "guolao": ["政余格局"],
+    # 多重回归: 单段技法；某体若无返照数据则该体行不出，三体皆空时整段不出 → 列为可选段，避免误报 missing。
+    "extrareturns": ["多重回归"],
     # 太乙 (星阙 v2.6.x): kintaiyi 后端返回的 太乙解读段（起盘信息/太乙盘/十六宫标记为 builder 恒出，
     # 进 preset）。其余按起局式/选项条件出（命法/博弈/某些式不出）→ 列为可选段，避免随式误报 missing。
     "taiyi": ["太乙诸神", "风游", "主客定算", "八门与宿曜", "十二神", "断法", "七大兵法", "博弈", "命法", "命宫行限"],

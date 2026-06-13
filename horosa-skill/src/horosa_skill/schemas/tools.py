@@ -363,6 +363,11 @@ class LunationPhaseInput(BirthInput):
     predictive: bool | None = False
 
 
+class ExtraReturnsInput(BirthInput):
+    # 多重回归 (星阙 v2.6.x): 土/木/月交三体返照——逐体走后端 /astroextra/planetreturn 取最近数回返照日期。
+    predictive: bool | None = False
+
+
 class HoraryInput(BirthInput):
     # 卜卦 (horary): the chart is cast at the QUESTION moment (date/time/place = when the question was asked).
     # category picks the quesited house: general/wealth/family/property/pregnancy/health/marriage/lawsuit/
