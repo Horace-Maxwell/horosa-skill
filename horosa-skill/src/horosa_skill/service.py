@@ -93,6 +93,9 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "balbillus": "balbillus",
     "yearsystem129": "yearsystem129",
     "persiandirected": "persiandirected",
+    "triplicityrulers": "triplicityrulers",
+    "keypoints": "keypoints",
+    "lunationphase": "lunationphase",
     "horary": "horary",
     "election": "election",
     "wangji": "wangji",
@@ -5045,6 +5048,8 @@ class HorosaSkillService:
             return self._run_yearsystem129_tool(payload)
         if definition.name == "persiandirected":
             return self._run_persiandirected_tool(payload)
+        if definition.name in {"triplicityrulers", "keypoints", "lunationphase"}:
+            return self._run_progextra_js_tool(payload, definition.name)
         if definition.name == "horary":
             return self._run_horary_tool(payload)
         if definition.name == "election":

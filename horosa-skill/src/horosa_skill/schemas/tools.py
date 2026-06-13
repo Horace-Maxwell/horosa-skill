@@ -348,6 +348,21 @@ class BalbillusInput(BirthInput):
     predictive: bool | None = False
 
 
+class TriplicityRulersInput(BirthInput):
+    # 三分主星推运 (星阙 v2.6.x): 区间光体所在座的三颗三分主星按昼夜换序，划分人生各阶段。纯前端切分本命盘。
+    predictive: bool | None = False
+
+
+class KeypointsInput(BirthInput):
+    # 数字相位推运 (星阙 v2.6.x): 七星小年数 + 自释放点起第 k 座挂钩，凡年龄为 k 或小年倍数即激活。纯前端切分本命盘。
+    predictive: bool | None = False
+
+
+class LunationPhaseInput(BirthInput):
+    # 月相推运 (星阙 v2.6.x): 由本命日月黄经差 + 次限推进率(约12.19°/年)求推运八相时间轴。纯前端切分本命盘。
+    predictive: bool | None = False
+
+
 class HoraryInput(BirthInput):
     # 卜卦 (horary): the chart is cast at the QUESTION moment (date/time/place = when the question was asked).
     # category picks the quesited house: general/wealth/family/property/pregnancy/health/marriage/lawsuit/

@@ -744,6 +744,56 @@ def test_balbillus_runs_via_chart_service(tmp_path) -> None:
 
 
 @requires_chart
+def test_triplicityrulers_runs_via_chart_service(tmp_path) -> None:
+    # 三分主星推运 (星阙 v2.6.x): sect light's triplicity rulers split life into stages — vendored
+    # frontend builder via progextra (needs AstroConst.SignsProp closure).
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "triplicityrulers",
+        {"date": "1990-04-06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    snapshot = result.data["snapshot_text"]
+    assert "[三分主星推运]" in snapshot
+    assert ("昼生盘" in snapshot or "夜生盘" in snapshot)
+    assert "三分主星" in snapshot
+    _assert_clean_export(result)
+
+
+@requires_chart
+def test_keypoints_runs_via_chart_service(tmp_path) -> None:
+    # 数字相位推运 (星阙 v2.6.x): period-numbers + release-point sign distances activate planets by year.
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "keypoints",
+        {"date": "1990-04-06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    snapshot = result.data["snapshot_text"]
+    assert "[数字相位推运]" in snapshot
+    assert "释放点" in snapshot
+    _assert_clean_export(result)
+
+
+@requires_chart
+def test_lunationphase_runs_via_chart_service(tmp_path) -> None:
+    # 月相推运 (星阙 v2.6.x): natal Sun-Moon elongation advanced by the secondary rate → 8-phase timeline.
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "lunationphase",
+        {"date": "1990-04-06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    snapshot = result.data["snapshot_text"]
+    assert "[月相推运]" in snapshot
+    assert "本命月相" in snapshot
+    _assert_clean_export(result)
+
+
+@requires_chart
 def test_yearsystem129_runs_via_chart_service(tmp_path) -> None:
     # 129年系统 (v2.5.0): seven-planet succession, computed server-side and carried in predictives.
     service = make_service(tmp_path)
