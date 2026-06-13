@@ -7,6 +7,34 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-06-12
+
+第三轮 Horosa-Public 对齐：补 4 个未同步 AI 技法 + 太乙/八字 段欠暴露修复（68 → 72 工具）。vendor 源 = 开源仓 Horosa-Public。
+
+### Added — 4 个未同步 AI-export 技法（68 → 72）
+
+- **三分主星推运 `triplicityrulers`** / **数字相位推运 `keypoints`** / **月相推运 `lunationphase`**：纯前端 chart→text builder，
+  从 Horosa-Public `utils/{triplicityRulers,keypoints120,lunationPhase}.js` verbatim vendored 进 `horosa-core-js`，
+  经既有 progextra 通路（/chart → builder）出单段快照。依赖闭合：AstroConst shim 补 `SignsProp`（庙旺陷落+三分主星表）。
+- **多重回归 `extrareturns`**：土/木/月交三体返照——上游 builder 是「请求型」（逐体拉 `/astroextra/planetreturn`），
+  headless JS 不发 HTTP，故 Python 侧逐体调用后按上游同格式拼 `[多重回归]`。
+- 每个新技法都有 live 测试（段头 + clean export）+ 离线 export-fixture 契约。
+
+### Changed — 太乙 / 八字 段口径对齐 Horosa-Public
+
+- **太乙**：kintaiyi 后端返回的 `sections`（太乙诸神/风游/主客定算/八门与宿曜/十二神/断法/七大兵法 + 博弈/命法/命宫行限）
+  此前被 `tools/taiyi.js` 整体 strip，现透传（preset 3→13；按起局式条件出的段列 optional）；后端 `起盘` 段去重（builder 已出 `[起盘信息]`）。
+- **八字**：`大运` 此前并入 `流年行运概略`，现拆为独立段（对齐 Public aiExport bazi 段口径，preset 4→5）；`大运` 列 optional
+  （起运/性别缺则不出）。`多运限·指定时段` 后端响应无该数据、skill 无「指定时间窗」输入入口 → 未接入，列 optional 并如实标注（不伪造）。
+
+### Notes — 如实标出 / 未纳入
+
+- **风水/阳宅法 `fengshui` 仍明确排除**：审计核实其为 canvas + 户型图 + 交互点位驱动，无法 headless（无 birth/time 输入），
+  与仓内既有「明确排除·风水未完成 headless 化」政策一致。
+- **CI live-test job 未新增**：GitHub Linux runner 无 Linux 运行时（运行时 macOS/Windows-only 且 gitignore），无法在 CI 起后端；
+  CI 覆盖由 offline FakeClient 契约测试 + export-fixture 契约承担，全套 live 测试在本机 vendored 运行时发布前跑。
+- **质量**：export-fixture catalog +4（新技法 offline 解析契约）；`SZConst.js` parseInt 显式 radix 硬化。
+
 ### Fixed — v0.12.0 Windows half (3rd recurrence) + recurrence guards + launcher hardening
 
 - **v0.12.0 shipped as `latest` with a darwin-only manifest and no win32 zip — Windows install broke (3rd
