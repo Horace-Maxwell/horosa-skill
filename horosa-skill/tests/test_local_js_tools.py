@@ -233,7 +233,13 @@ def test_taiyi_runs_via_ken_backend(tmp_path) -> None:
     assert pan.get("zhao")
     kook = pan.get("kook")
     assert (kook.get("text") if isinstance(kook, dict) else kook)
-    assert "[太乙盘]" in result.data["snapshot_text"]
+    snapshot = result.data["snapshot_text"]
+    assert "[太乙盘]" in snapshot
+    # 星阙 v2.6.x: the kintaiyi backend's rich 太乙 reading sections now surface (previously stripped).
+    # The backend's 起盘 section is dropped (the builder emits [起盘信息]); these come through.
+    for header in ("[太乙诸神]", "[风游]", "[主客定算]", "[八门与宿曜]", "[断法]", "[七大兵法]"):
+        assert header in snapshot, header
+    assert "[起盘]" not in snapshot  # no doubled 起盘 (builder emits 起盘信息)
     _assert_clean_export(result)
 
 

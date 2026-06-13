@@ -210,8 +210,15 @@ export function normalizeBackendPan(pan, options, nongli){
 		return null;
 	}
 	const opt = options || {};
+	// The kintaiyi backend returns a 起盘 section that duplicates what buildTaiyiSnapshotText
+	// already emits as [起盘信息]; drop it so the snapshot has no doubled起盘 block. The remaining
+	// reading sections (太乙诸神/风游/… ) flow through to the snapshot + export contract.
+	const backendSections = Array.isArray(pan.sections)
+		? pan.sections.filter((section) => section && section.title !== '起盘')
+		: pan.sections;
 	return applyNongliDisplay({
 		...pan,
+		sections: backendSections,
 		tenching: opt.tenching !== undefined ? opt.tenching : 0,
 		rotation: opt.rotation || '固定',
 		options: buildOptions(opt, pan),
