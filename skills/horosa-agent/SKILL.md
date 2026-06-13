@@ -176,12 +176,13 @@ For gender-sensitive tools, include `gender`. For Bazi and Ziwei, include `timeA
 
 ### Day boundary + late-zi-hour rules (v2.2.1+) — two independent switches
 
-> **⏳ STATUS as of v0.8.0: runtime ready, skill wiring still PENDING.** The v0.8.0 offline runtime's ken
-> engine **does** carry the v2.2.1 lateZi code (re-vendored from 星阙 v2.4.0), but the skill **does not yet
-> forward `lateZiHourUseNextDay`** — so the flag is accepted-but-ignored. Today only the default
-> `(after23NewDay=1, lateZiHourUseNextDay=1)` is guaranteed correct; the non-default `hour==23` rows below
-> are the **target spec** for the remaining skill-side wiring, not current shipped behavior. If you must be
-> exact about an `hour==23` non-default case, tell the user that switch isn't threaded yet.
+> **⏳ STATUS as of v0.12.0: runtime ready, skill wiring PARTIAL.** The offline runtime's ken engine carries
+> the v2.2.1 lateZi code, and the skill **now forwards `lateZiHourUseNextDay` in the 神数 path** (it is a
+> schema field and is passed through for wangji/wuzhao/.../the 9 kinastro-* 神数). It is **not yet threaded
+> through the bazi / ziwei / liureng / qimen chart-flow payloads**, so for those the non-default `hour==23`
+> rows below remain the **target spec**, not current shipped behavior — only the default
+> `(after23NewDay=1, lateZiHourUseNextDay=1)` is guaranteed correct there. If you must be exact about an
+> `hour==23` non-default case for a chart-flow technique, tell the user that switch isn't threaded yet.
 > (Maintainers: see the matching banner + the remaining wiring to-do in `AGENTS.md`.)
 
 For ANY hour-23 input (`time` ∈ `23:00:00`–`23:59:59`), the four pillars depend on **two** independent settings. Treat them as separate flags — the user may have set one or both globally in 星阙 desktop, and predictive runs must mirror what the user sees on screen.

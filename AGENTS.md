@@ -575,16 +575,36 @@ only difference is which engine dir is vendored:
   builder and the shaozi entry to the win32-x64 verifier list. **Rule: when you touch one builder or add a
   required artifact, grep the other builder + both `REQUIRED_ENTRIES` lists in the same change.**
 - **A new release published as `latest` is repeatedly missing its Windows half — ALWAYS check the release
-  manifest first.** The mac side has shipped three `latest` releases incomplete: v0.10.0 had **no**
-  `runtime-manifest.json` at all (`releases/latest/download/runtime-manifest.json` 404 → `install` broke on
-  BOTH platforms); v0.11.0 had a **darwin-only** manifest + no win32 zip (mac installs, **Windows** install
-  finds no `win32-x64` entry / 404s the zip). The Windows runtime is built off-repo on a Windows box, so a
-  mac-only release publish leaves it out. **First diagnostic when "check sync" / a new version appears:**
-  `gh release view vX.Y.Z --json assets` (expect darwin tar.gz + win32 zip + runtime-manifest.json +
-  SHA256SUMS.txt) and `curl -sI https://github.com/Horace-Maxwell/horosa-skill/releases/latest/download/runtime-manifest.json`
-  then confirm the manifest JSON has **both** `darwin-arm64` and `win32-x64` platforms. If the win half is
-  missing: build it, regenerate the **dual-platform** manifest + SHA256SUMS, and upload — the release is
-  usually already `latest`, so the upload alone (no flip) restores Windows `install`.
+  manifest first. There is now a CI guard for this.** The mac side has shipped THREE `latest` releases
+  incomplete: v0.10.0 had **no** `runtime-manifest.json` at all (`releases/latest/download/runtime-manifest.json`
+  404 → `install` broke on BOTH platforms); v0.11.0 AND v0.12.0 had a **darwin-only** manifest + no win32
+  zip (mac installs, **Windows** install finds no `win32-x64` entry / 404s the zip). The Windows runtime is
+  built off-repo on a Windows box, so a mac-only release publish leaves it out. **First diagnostic when
+  "check sync" / a new version appears:** `gh release view vX.Y.Z --json assets` (expect darwin tar.gz +
+  win32 zip + runtime-manifest.json + SHA256SUMS.txt) and confirm
+  `releases/latest/download/runtime-manifest.json` has **both** `darwin-arm64` and `win32-x64` platforms.
+  If the win half is missing: build it, regenerate the **dual-platform** manifest + SHA256SUMS, and upload —
+  the release is usually already `latest`, so the upload alone (no flip) restores Windows `install`.
+  **Automated since v0.12.0:** `.github/workflows/release-completeness.yml` (schedule + dispatch + release
+  events) fails if the published `latest` lacks either platform / an archive 404s, and
+  `scripts/verify_builder_parity.py` (CI `test` job) fails if the two builders or the verifier contract
+  drift. If either alarms, the fix is this same build-the-Windows-half flow.
+- **Windows launcher hardening (v0.12.0) — keep these when re-vendoring the templates.** The
+  `scripts/runtime_templates/windows/{start,stop}_horosa_local.ps1` templates carry: PID-ownership checks
+  (only kill a PID still mapping to our own python.exe/java.exe image — never a recycled/foreign PID),
+  a port-collision fast-fail (clear error in ~2s instead of a 300s hang), a stale/already-running guard
+  that emits the `pid files already exist` marker the manager keys on, a 300s readiness window, and
+  `-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8` on the Java launch (bundled Temurin 17 is pre-JEP-400 →
+  OS-codepage default mojibakes CJK jar tables). The readiness gate intentionally still requires BOTH
+  chart + Java (a chart-only gate would need a matching change to `manager._wait_for_service_state`, which
+  requires ALL endpoints — left as a future option, noted in the start script). **CRITICAL gotcha in the
+  PID-ownership check (bit the first v0.12.0 build):** the expected image path is built with
+  `Join-Path $RuntimeRoot ...` where `$RuntimeRoot = "$Root\..\runtime\windows"`, so it contains a literal
+  `..`; `Get-Process .Path` is OS-normalized (no `..`), so a raw `$proc.Path -ieq $expectedExe` **never
+  matches** and the ownership check silently skips the kill (stop becomes a no-op that still deletes the
+  pid file → processes leak). Both templates wrap the exe paths in `[System.IO.Path]::GetFullPath(...)`
+  to normalize before comparing — keep that when editing. Verified: with the fix, stop actually kills both
+  PIDs; without it, both survive. Test stop-actually-kills after any change to these scripts.
 - **Watch for committed git conflict markers after a mac-side merge.** v0.11.0's release-prep left a stray
   `>>>>>>> <sha>` line in `CHANGELOG.md` on `main`. `git grep -nE '^(<<<<<<<|=======|>>>>>>>)'` after every
   fetch/ff; delete any stray marker (the surrounding content is usually already resolved).
@@ -647,14 +667,16 @@ value-identical to 星阙:
 
 ## Day boundary + late-zi-hour — two independent global switches (upstream v2.2.1+)
 
-> **⏳ STATUS as of v0.8.0: PARTIALLY landed — runtime YES, skill-side wiring still PENDING.** As of the
-> v2.4.0 re-vendor, the bundled ken engine **does** carry the v2.2.1 lateZi code (`vendor/runtime-source`
-> kintaiyi now has the `_get_after23`/`_get_hour_gan_next` markers). But the **skill still does not forward
-> `lateZiHourUseNextDay`** (grep confirms 0 occurrences in `src/`), so the flag is **accepted-but-ignored**:
-> the default `(after23=1, lateZi=1)` is correct, but a non-default `hour==23` request won't take effect
-> until the skill threads the flag through every chart-flow payload + schema. **Remaining v2.2.1 round:**
-> thread `lateZiHourUseNextDay` through the payloads/schema (the runtime already supports it) — no re-sync
-> needed. Until then, treat the non-default rows of the matrix below as the target spec, not live behavior.
+> **⏳ STATUS as of v0.12.0: PARTIALLY landed — runtime YES, skill-side wiring PARTIAL.** The bundled ken
+> engine carries the v2.2.1 lateZi code (`vendor/runtime-source` kintaiyi has the `_get_after23`/
+> `_get_hour_gan_next` markers). The skill **now forwards `lateZiHourUseNextDay` in the 神数 path** — it is a
+> `ShenShuInput` schema field (`tools.py`) and `_run_shenshu_tool` passes it through (`service.py`), so the
+> earlier "0 occurrences in `src/`" note is **stale/false**. But it is **still NOT threaded through the
+> bazi / ziwei / liureng / qimen chart-flow payloads** (those forward only `after23NewDay`), so for those
+> techniques a non-default `hour==23` request is still accepted-but-ignored. **Remaining v2.2.1 round:**
+> thread `lateZiHourUseNextDay` through the remaining chart-flow payloads + schema (runtime already supports
+> it) — no re-sync needed. Treat the non-default rows of the matrix below as the target spec for those
+> techniques, not live behavior.
 
 This is **upstream 星阙 context** that the skill must mirror, not skill-local invariants. Stick to the
 self-check fixture below in tests/fakes; if a real backend call returns four pillars that disagree, the
