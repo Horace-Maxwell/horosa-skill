@@ -7,6 +7,23 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+### Fixed — v0.13.0 Windows half (4th recurrence — auto-caught by the new CI guard)
+
+- **v0.13.0 shipped as `latest` with a darwin-only manifest and no win32 zip — Windows install broke
+  again (4th consecutive: v0.10.0/v0.11.0/v0.12.0/v0.13.0).** This time **the `release-completeness`
+  CI guard added in v0.12.0 fired on the release event and FAILED automatically** — it worked exactly as
+  designed, surfacing the gap without a human noticing. Built + natively verified the win32-x64 v0.13.0
+  runtime, regenerated the dual-platform `runtime-manifest.json` + `SHA256SUMS.txt`, and uploaded to the
+  v0.13.0 release (already `latest`; upload alone restores Windows install). win zip sha256
+  `627a5411e120c08b53ce5fec24f25ca8c667a8e641a611c65b53593d4bfc7eeb`.
+- **Native Windows verification:** `/qimen|/taiyi|/jinkou/pan` → `ResultCode 0` + right source (and
+  **taiyi now carries its v0.13.0 sections** on the bundled runtime); all 14 神数 return a real
+  `Result.snapshot` (shaozi 基础条文 a real verse); tongshefa (火地晋 / 实克思) + canping + heluo via the
+  bundled node. No build/launcher/verify changes were needed — v0.13.0's +4 tools
+  (triplicityrulers/keypoints/lunationphase/extrareturns) are skill-layer code that rides the existing
+  runtime, and the v0.12.0 launcher hardening (port guard, java UTF-8, GetFullPath PID-ownership) + shaozi
+  gen + plotly strip carried over automatically.
+
 ## [0.13.0] - 2026-06-12
 
 第三轮 Horosa-Public 对齐：补 4 个未同步 AI 技法 + 太乙/八字 段欠暴露修复（68 → 72 工具）。vendor 源 = 开源仓 Horosa-Public。
