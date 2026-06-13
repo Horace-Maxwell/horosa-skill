@@ -466,6 +466,24 @@ class FakeJsClient(HorosaJsEngineClient):
                         "| 太阳(15.62年) | 木星 | 1991-04-21 | 0.64 |"
                     ),
                 }
+            _PROGEXTRA_FAKE = {
+                "triplicityrulers": (
+                    "[三分主星推运]\n昼生盘，区间光体=太阳（白羊），三分主星依其落宫与状态主导人生各阶段（三分（0–25 / 25–50 / 50–75））。\n\n"
+                    "| 阶段 | 主星 | 年龄段 | 日期段 | 落宫 | 状态 |\n| --- | --- | --- | --- | --- | --- |\n"
+                    "| 主三分主星 | 太阳 | 0–25岁 | 1990~2015 | 第11宫·续宫·中 | 平 |"
+                ),
+                "keypoints": (
+                    "[数字相位推运]\n释放点=身（月亮起）。各星与「自释放点起第 k 个星座」挂钩数字 k。\n\n"
+                    "星位挂钩：太阳=第1座(小年18)\n\n"
+                    "| 年龄 | 因数 | 位置激活 | 小年激活 |\n| --- | --- | --- | --- |\n| 1 | 质数 | 太阳 | - |"
+                ),
+                "lunationphase": (
+                    "[月相推运]\n本命月相=朔 · 新月（日月差 10.0°）。次限推运日月差每年约 12.1908°。\n\n"
+                    "| 起始年龄 | 日期 | 月相 | 关键词 |\n| --- | --- | --- | --- |\n| 0.0 岁(本命) | 1990-04-06 | 朔 · 新月 | 萌发 · 新启 · 直觉行动 |"
+                ),
+            }
+            if technique in _PROGEXTRA_FAKE:
+                return {"tool": "progextra", "technique": technique, "data": {"ok": True}, "snapshot_text": _PROGEXTRA_FAKE[technique]}
             return {"tool": "progextra", "technique": technique, "data": {"ok": False}, "snapshot_text": ""}
         if tool_name == "horary":
             return {
