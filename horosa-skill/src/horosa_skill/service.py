@@ -3034,33 +3034,39 @@ def _build_bazi_snapshot_text(payload: dict[str, Any], response: dict[str, Any])
         f"命宫：{gz_gods(four.get('ming'))}",
         f"身宫：{gz_gods(four.get('shen'))}",
     ]
-    direction_lines: list[str] = []
+    # 星阙 v2.6.x aiExport splits 大运 (the luck-period steps) from 流年行运概略 (the per-大运 年运 detail);
+    # the skill mirrors that split (起运/性别 缺失时 direction 为空 → 大运段不出, 故列为可选段).
+    dayun_lines: list[str] = []
+    liunian_lines: list[str] = []
     for idx, item in enumerate(bazi.get("mainDirection") or [], start=1):
         if isinstance(item, dict):
-            direction_lines.append(f"第{idx}步：{item.get('year', '—')} {_gz_text(item)}")
+            dayun_lines.append(f"第{idx}步：{item.get('year', '—')} {_gz_text(item)}")
     for block in bazi.get("direction") or []:
         if not isinstance(block, dict):
             continue
-        line = f"大运：{_gz_text(block.get('mainDirect'))} 起于{block.get('startYear', '—')}年"
+        main_gz = _gz_text(block.get("mainDirect"))
+        dayun_lines.append(f"大运：{main_gz} 起于{block.get('startYear', '—')}年")
         subs = []
         for sub in block.get("subDirect") or []:
             if isinstance(sub, dict):
                 subs.append(f"{sub.get('date', '—')} {_gz_text(sub)}")
-        direction_lines.append(line)
         if subs:
-            direction_lines.append("流年：" + "；".join(subs))
-    return _render_snapshot_text(
-        [
-            ("起盘信息", _join_lines(base_lines)),
-            ("四柱与三元", _join_lines(four_lines)),
-            (
-                "流年行运概略",
-                _join_lines(direction_lines)
-                or "本次八字结果未返回大运/流年明细；如问题涉及阶段走势，请优先使用 bazi_direct 或补齐性别、起运与节气设置后重算，不能臆造外部依赖。",
-            ),
-            ("神煞（四柱与三元）", _join_lines(god_lines)),
-        ]
+            liunian_lines.append(f"{main_gz}大运 流年：" + "；".join(subs))
+    sections: list[tuple[str, str]] = [
+        ("起盘信息", _join_lines(base_lines)),
+        ("四柱与三元", _join_lines(four_lines)),
+        ("神煞（四柱与三元）", _join_lines(god_lines)),
+    ]
+    if dayun_lines:
+        sections.append(("大运", _join_lines(dayun_lines)))
+    sections.append(
+        (
+            "流年行运概略",
+            _join_lines(liunian_lines)
+            or "本次八字结果未返回大运/流年明细；如问题涉及阶段走势，请优先使用 bazi_direct 或补齐性别、起运与节气设置后重算，不能臆造外部依赖。",
+        )
     )
+    return _render_snapshot_text(sections)
 
 
 def _collect_house_stars(house: Any) -> list[str]:

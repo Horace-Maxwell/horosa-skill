@@ -55,9 +55,9 @@
     "name": "bazi_live_snapshot",
     "technique": "bazi",
     "fixture_file": "bazi_live_snapshot.txt",
-    "selected_sections": ["起盘信息", "四柱与三元", "流年行运概略", "神煞（四柱与三元）"],
-    "expected_detected": ["起盘信息", "四柱与三元", "流年行运概略", "神煞（四柱与三元）"],
-    "expected_in_export": ["乾造：甲子年 丙寅月 辛酉日 戊子时", "流年：2026 丙午，主事偏财。", "年柱神煞：整柱=天乙贵人"],
+    "selected_sections": ["起盘信息", "四柱与三元", "神煞（四柱与三元）", "大运", "流年行运概略"],
+    "expected_detected": ["起盘信息", "四柱与三元", "神煞（四柱与三元）", "大运", "流年行运概略"],
+    "expected_in_export": ["乾造：甲子年 丙寅月 辛酉日 戊子时", "大运：辛巳 起于2024年", "辛巳大运 流年：2026 丙午，主事偏财。", "年柱神煞：整柱=天乙贵人"],
     "expected_excluded": [],
     "source_refs": [
       "Horosa-Web/astrostudyui/src/components/cntradition/BaZi.js#buildBaziSnapshotText",
