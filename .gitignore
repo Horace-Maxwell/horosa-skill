@@ -40,6 +40,9 @@ ${env:HOME*
 
 # local agent/session state — never upload
 .claude/
+.cursor/
+.editorconfig
+.gitattributes
 *.local.md
 notes-local*
 .horosa-cache/
