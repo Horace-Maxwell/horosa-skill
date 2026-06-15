@@ -7,6 +7,22 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+### Added — Linux (linux-x64) groundwork (🧪 experimental)
+
+- **`scripts/scaffold_linux_runtime.py`** (new): Linux counterpart of `scaffold_windows_runtime.py`.
+- **`scripts/build_runtime_release_linux.py`** (new): Build script for Linux runtime archives.
+  Downloads Node.js linux-x64 binary, creates a minimal JRE via `jlink`, extracts a pre-compiled
+  portable CPython 3.12 from python-build-standalone, and installs chart-service dependencies
+  (`swisseph`, `numpy`, `cherrypy`, etc.) via pip. 邵子神数 verse JSON is generated from the
+  vendor-supplied CSV during the build. The start script is patched to use `runtime/linux/` paths.
+- **`scripts/generate_release_manifest.py`**: Added `--linux-archive` / `--linux-url` CLI options.
+- **`scripts/verify_runtime_release.py`**: Added `linux-x64` required entries and `--linux-archive`.
+- **`docs`**: Linux entries in `runtime-manifest.example.json` and `OFFLINE_RUNTIME_RELEASES.md`.
+- **`docs/OFFLINE_RUNTIME_RELEASES.md`**: Marked Linux as experimental (🧪).
+
+> **Note:** No `linux-x64` runtime asset has been shipped yet. Linux is not advertised in the
+> README badge or `server.json` until the first validated asset exists.
+
 ## [0.14.0] - 2026-06-14
 
 第四轮 Horosa-Public 对齐：补**古典占星**——`[古典]` + `[古典格局]` 两段进 chart 家族导出（星阙 v2.6.7）。工具数不变（**72**，两段补到既有 chart 工具，非新工具）。vendor 源 = 开源仓 Horosa-Public。
