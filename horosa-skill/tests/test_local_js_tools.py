@@ -543,6 +543,33 @@ def test_chart_carries_v240_natal_extras(tmp_path) -> None:
     assert "12分度" in detected and "主宰星链" in detected and "寿命格局" in detected
 
 
+@requires_chart
+def test_chart_carries_v267_classical(tmp_path) -> None:
+    # 星阙 v2.6.7 古典占星: astrochart 导出新增 [古典] (buildClassicalSection — 逐曜古典状态/上升宿/围攻/围绕/
+    # Melothesia) 与 [古典格局] (buildClassicalAnalysisSection ← /astroextra/analysis — 护卫/优势相位/传光/
+    # 逐题主星/偶然尊贵/Almuten/分布/气质…)。两段均由 vendored 公式从 /chart + analyze_chart 派生。
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "chart",
+        {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "hsys": 1, "tradition": False, "predictive": 0},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    snapshot = result.data["snapshot_text"]
+    assert "[古典]" in snapshot and "[古典格局]" in snapshot
+    # [古典]: 逐曜古典状态 + 身体部位(Melothesia) 对任一有效本命盘恒在。
+    assert "逐曜古典状态" in snapshot
+    assert "身体部位(Melothesia)" in snapshot
+    # [古典格局]: 逐题主星 / 偶然尊贵 / Almuten 总主 由 analyze_chart 对全盘逐题逐曜评估，恒在。
+    assert "逐题主星" in snapshot
+    assert "偶然尊贵" in snapshot
+    assert "Almuten 总主" in snapshot
+    detected = (result.data.get("export_snapshot") or {}).get("section_titles_detected") or []
+    assert "古典" in detected and "古典格局" in detected
+    # 两段均已登记 preset → 不算 unknown（可能性 data-dependent，本盘可缺，故不查 missing）。
+    assert (result.data.get("export_snapshot") or {}).get("unknown_detected_sections") == []
+
+
 @requires_runtime
 def test_liureng_bifa_and_zhanduan(tmp_path) -> None:
     # 星阙 v2.5.x 六壬 Phase4：buildLiuRengReferenceContext(~75 字段) + matchBiFa(100法) verbatim 抽取，

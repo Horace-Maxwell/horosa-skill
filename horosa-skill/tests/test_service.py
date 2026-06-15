@@ -267,6 +267,31 @@ class FakeClient(HorosaApiClient):
         if endpoint == "/astroextra/planetreturn":
             # 多重回归: per-body return dates. Synthesize a couple so [多重回归] emits + export stays clean.
             return {"returns": [{"which": 1, "date": "2019-05-10"}, {"which": 2, "date": "2048-11-02"}]}
+        if endpoint == "/astroextra/analysis":
+            # 古典格局派生分析 (星阙 v2.6.7 analyze_chart) 的离线替身：合成护卫/优势相位/度数围攻 + 传光/聚光/
+            # 不合意/交点弯曲 + 逐题主星 + 偶然尊贵 + Almuten + 分布/气质，使 [古典格局] 段离线稳定 emit。
+            return {
+                "classicalPatterns": {
+                    "doryphory": [{"planet": "Venus", "light": "Sun", "elong": 28.4}],
+                    "overcoming": [{"over": "Mars", "overSign": "Aries", "under": "Venus", "underSign": "Taurus", "aspect": "square"}],
+                    "besieging": [{"planet": "Mercury", "left": "Mars", "right": "Saturn"}],
+                },
+                "aspectDynamics": {
+                    "translation": [{"mover": "Moon", "from": "Saturn", "to": "Jupiter"}],
+                    "collection": [{"collector": "Saturn", "p1": "Sun", "p2": "Moon"}],
+                    "aversion": [{"a": "Sun", "b": "Saturn"}],
+                    "bending": [{"planet": "Moon", "at": "北弯"}],
+                },
+                "topicAlmuten": [{"topic": "婚配", "house": 7, "significator": "Venus", "almuten": "Mars"}],
+                "accidentalDignity": [{"planet": "Saturn", "score": 12, "factors": ["角宫+5", "行速+2", "自由光+5"]}],
+                "almutem": {"winner": "Saturn", "totals": {"Saturn": 30, "Jupiter": 29, "Venus": 26}},
+                "distribution": {
+                    "elements": {"Fire": 3, "Earth": 1, "Air": 2, "Water": 4},
+                    "modes": {"Cardinal": 2, "Fixed": 2, "Mutable": 6},
+                    "hemispheres": {"east": 2, "west": 8},
+                },
+                "temperament": {"temperaments": {"Choleric": 3, "Phlegmatic": 6}, "qualities": {"Hot": 5, "Cold": 7}},
+            }
         # 神数 family — synthesize a snapshot whose [小节] headers cover the full export preset, so the
         # offline export-contract suite round-trips cleanly for all 14 (5 standalone + 9 kinastro-*).
         from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS as _PRESETS
@@ -735,6 +760,50 @@ def test_service_skips_runtime_restart_after_remote_runtime_is_confirmed(tmp_pat
 
     assert runtime_manager.started == 1
     assert client.probe_calls == 1
+
+
+def test_chart_classical_sections_emit_offline(tmp_path) -> None:
+    # 星阙 v2.6.7 古典占星 (hermetic)：FakeClient 的 /astroextra/analysis 替身提供派生格局后，chart 导出应稳定
+    # 含 [古典] (buildClassicalSection ← /chart objects: Melothesia 等) 与 [古典格局]
+    # (buildClassicalAnalysisSection ← analyze_chart: 护卫/优势相位/传光/逐题主星/偶然尊贵/Almuten/分布/气质)。
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    result = service.run_tool(
+        "chart",
+        {"date": "1990-01-01", "time": "12:00", "zone": "+08:00", "lat": "31n14", "lon": "121e28"},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    snapshot = result.data["snapshot_text"]
+    assert "[古典]" in snapshot and "[古典格局]" in snapshot
+    # [古典]: FakeClient 各曜带 sign 但无逐曜古典状态字段，故离线仅 身体部位(Melothesia) 恒在；
+    # 逐曜古典状态/围攻/围绕 等富集内容由 live 测试 + catalog fixture 覆盖。
+    assert "身体部位(Melothesia)" in snapshot
+    # [古典格局]: 桩数据派生的逐键内容，逐条核对建造器输出形态。
+    for marker in (
+        "护卫：金 护卫 日",                 # doryphory
+        "优势相位：火(牡羊) 凌驾 金(金牛)·四分",   # overcoming
+        "度数围攻：水 被 火/土 度数围攻",        # besieging
+        "传光：月 自 土 传光予 木",             # translation
+        "聚光：土 聚 日、月 之光",              # collection
+        "不合意：日 与 土 不合意",              # aversion
+        "交点弯曲：月 交点弯曲（北弯）",          # bending
+        "婚配（7宫·自然象征金）主星火",          # topicAlmuten
+        "偶然尊贵",
+        "土 12（角宫+5·行速+2·自由光+5）",      # accidentalDignity
+        "Almuten 总主：土",                   # almutem
+        "分布权重",
+        "气质评估",
+    ):
+        assert marker in snapshot, marker
+    export = result.data.get("export_snapshot") or {}
+    detected = export.get("section_titles_detected") or []
+    assert "古典" in detected and "古典格局" in detected
+    assert export.get("unknown_detected_sections") == []
 
 
 def test_liureng_headless_export_includes_courses_transmissions_without_mongodb_claims(tmp_path) -> None:

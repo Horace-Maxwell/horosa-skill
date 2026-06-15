@@ -148,6 +148,7 @@ _PYTHON_CHART_ENDPOINTS = {
     "/astroextra/jaynesprog",
     "/astroextra/progressions",
     "/astroextra/planetreturn",
+    "/astroextra/analysis",
     "/predict/planetaryarc",
     "/jieqi/year",
     "/qimen/pan",
@@ -1821,6 +1822,353 @@ def _build_nakshatra_lines(response: dict[str, Any]) -> list[str]:
     return lines
 
 
+# ── 古典占星 (星阙 v2.6.7)：[古典] 逐曜状态/围攻/围绕/身体部位 + [古典格局] analyze_chart 派生分析 ──
+# Ports astroAiSnapshot.js#buildClassicalSection + buildClassicalAnalysisSection verbatim; reuses the
+# skill's _astro_msg / _format_sign_degree / _round3 helpers. Both are pure dict→text builders.
+_CLS_STATUS_IDS = ("Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn")
+_CLS_PHASE = {"cazimi": "核心", "combust": "焦伤", "underBeams": "日光束下", "free": "自由光"}
+_CLS_PHASE_EVENT = {"morningRising": "晨星初现", "eveningSetting": "昏星初没"}
+_CLS_QUALITY = {"B": "明度", "D": "暗度", "E": "空度", "S": "烟度"}
+_CLS_SPECIAL = {"pitted": "陷度", "azemene": "慢病度", "fortune": "增福度"}
+_CLS_APOGEE = {"rising": "升·趋远地点", "falling": "降·趋近地点"}
+_CLS_NUM = {"increasing": "数增·渐疾", "decreasing": "数减·渐迟"}
+_CLS_LIGHT = {"waxing": "光增·渐盈", "waning": "光减·渐亏"}
+_CLS_SEASON = {"春": "春·主宰", "夏": "夏·宰执", "秋": "秋·受制", "冬": "冬·被执", "中": "中"}
+_CLS_MEAN_ATK = {
+    "Sun": "精神阴暗·心灵扭曲", "Moon": "凶死夭折·绝症残疾", "Mercury": "智力特异·语言障碍",
+    "Venus": "欲望混乱·专断残暴", "Jupiter": "世俗无成·离经叛道", "Mars": "自身受困崩坏", "Saturn": "自身受困崩坏",
+}
+_CLS_OVR_ASP = {"sextile": "六分", "square": "四分", "trine": "三分", "conjunction": "合", "opposition": "冲"}
+_CLS_LOT_CN = {
+    "Pars Fortuna": "福点", "Pars Fortunae": "福点", "Pars Spirit": "精神点", "Pars Faith": "信仰点", "Pars Substance": "资财点",
+    "Pars Wedding [Male]": "婚姻点(男)", "Pars Wedding [Female]": "婚姻点(女)", "Pars Sons": "子女点",
+    "Pars Father": "父亲点", "Pars Mother": "母亲点", "Pars Brothers": "兄弟点", "Pars Diseases": "疾厄点",
+    "Pars Death": "死亡点", "Pars Travel": "旅行点", "Pars Friends": "朋友点", "Pars Enemies": "仇敌点",
+    "Pars Saturn": "土星点", "Pars Jupiter": "木星点", "Pars Mars": "火星点", "Pars Venus": "金星点",
+    "Pars Mercury": "水星点", "Pars Horsemanship": "骑术点", "Pars Life": "生命点", "Pars Radix": "根基点",
+    "Pars Eros": "爱欲点", "Pars Necessity": "必然点", "Pars Courage": "勇气点", "Pars Victory": "胜利点", "Pars Nemesis": "报应点",
+}
+_CLS_ELEM = {"Fire": "火", "Earth": "土", "Air": "风", "Water": "水"}
+_CLS_MODE = {"Cardinal": "始", "Fixed": "固", "Mutable": "变"}
+_CLS_HEMI = {"east": "东", "west": "西", "above": "地平上", "below": "地平下"}
+_CLS_TEMPER = {"Choleric": "胆汁(热干)", "Melancholic": "忧郁(冷干)", "Sanguine": "多血(热湿)", "Phlegmatic": "黏液(冷湿)"}
+_CLS_QUAL = {"Hot": "热", "Cold": "冷", "Dry": "干", "Humid": "湿"}
+_MELOTHESIA = {
+    "aries": ["头", "脸", "眼", "鼻", "耳"], "taurus": ["喉", "颈", "甲状腺"],
+    "gemini": ["手臂", "肩", "肺", "神经", "气管"], "cancer": ["胃", "胸", "子宫", "卵巢", "牙"],
+    "leo": ["心脏", "脊椎", "背", "脊髓"], "virgo": ["小肠", "胰", "脾", "腹", "十二指肠"],
+    "libra": ["下背", "肾", "静脉", "卵巢"], "scorpio": ["生殖", "排泄", "结肠", "膀胱", "摄护腺"],
+    "sagittarius": ["大腿", "臀", "坐骨神经", "肝", "动脉"], "capricorn": ["膝", "关节", "胆囊", "头发", "皮肤"],
+    "aquarius": ["小腿", "踝", "血液循环", "脊髓"], "pisces": ["脚掌", "淋巴"],
+}
+
+
+def _cls_msg(value: Any) -> str:
+    # = frontend msg(id): short Chinese name for planet/sign/lot ids; falls back to the id text.
+    return _astro_msg(value, short=True) or f"{value if value is not None else ''}"
+
+
+def _cls_num(val: Any, digits: int) -> str:
+    try:
+        return f"{float(val):.{digits}f}"
+    except (TypeError, ValueError):
+        return ""
+
+
+def _degree_position(signlon: Any) -> str:
+    try:
+        d = (float(signlon) % 30 + 30) % 30
+    except (TypeError, ValueError):
+        return ""
+    return "上方" if d < 10 else ("中间" if d < 20 else "下方")
+
+
+def _build_besiegement_lines(chart_response: dict[str, Any]) -> list[str]:
+    surround = chart_response.get("surround") if isinstance(chart_response.get("surround"), dict) else {}
+    besiegements = surround.get("besiegement") or []
+    lines: list[str] = []
+    for b in besiegements:
+        if not isinstance(b, dict) or not isinstance(b.get("besiegers"), list):
+            continue
+        besiegers_txt = []
+        for x in b["besiegers"]:
+            if not isinstance(x, dict):
+                continue
+            s = f"{_cls_msg(x.get('id'))}（{_CLS_SEASON.get(x.get('season'), x.get('season'))}"
+            if x.get("retro"):
+                s += "·逆行"
+            if x.get("restrained"):
+                s += "·日木制约凶减半"
+            if x.get("counterBesieged"):
+                s += "·围魏救赵"
+            besiegers_txt.append(f"{s}）")
+        head = f"{_cls_msg(b.get('target'))}{'（逆行）' if b.get('targetRetro') else ''} 被 {' 与 '.join(besiegers_txt)} {b.get('kind')}（{b.get('nature')}）"
+        if b.get("severe"):
+            head += "·凶剧见血"
+        lines.append(head)
+        defense = b.get("defense") or []
+        if defense:
+            d = "，".join(
+                f"{_cls_msg(y.get('id'))}（{'以身作盾' if y.get('byBody') else '遥光'}·护{_cls_msg(y.get('against')) if y.get('against') else y.get('side')}侧·{'强' if y.get('strong') else '弱'}）"
+                for y in defense if isinstance(y, dict)
+            )
+            lines.append(f"协防：{d}")
+        kind = b.get("kind")
+        mean = _CLS_MEAN_ATK.get(b.get("target"), "") if kind == "围攻" else ("致富·舒适自由·财帛丰盈" if kind == "围荣" else "致贵·领袖魅力·载众载民")
+        if mean:
+            lines.append(f"断语：{mean}")
+    return lines
+
+
+def _build_encircle_lines(object_map: dict[str, Any]) -> list[str]:
+    bodies = [object_map[i] for i in _CLS_STATUS_IDS if isinstance(object_map.get(i), dict) and isinstance(object_map[i].get("lon"), (int, float))]
+    if len(bodies) < 3:
+        return []
+    sorted_b = sorted(bodies, key=lambda o: o["lon"])
+    n = len(sorted_b)
+    norm = lambda x: ((x % 360) + 360) % 360
+    lines: list[str] = []
+    for i in range(n):
+        mid, left, right = sorted_b[i], sorted_b[(i - 1) % n], sorted_b[(i + 1) % n]
+        span = norm(mid["lon"] - left["lon"]) + norm(right["lon"] - mid["lon"])
+        if span < 90:
+            lines.append(f"{_cls_msg(left.get('id'))} 与 {_cls_msg(right.get('id'))} 围绕 {_cls_msg(mid.get('id'))}（跨{span:.1f}°）")
+    return lines
+
+
+def _classical_object_map(chart_response: dict[str, Any]) -> dict[str, Any]:
+    chart = chart_response.get("chart") if isinstance(chart_response.get("chart"), dict) else {}
+    out: dict[str, Any] = {}
+    for o in chart.get("objects") or []:
+        if isinstance(o, dict) and o.get("id"):
+            out[o["id"]] = o
+    for o in chart_response.get("lots") or []:
+        if isinstance(o, dict) and o.get("id"):
+            out[o["id"]] = o
+    return out
+
+
+def _build_classical_section(chart_response: dict[str, Any]) -> list[str]:
+    lines: list[str] = []
+    om = _classical_object_map(chart_response)
+    profile: list[str] = []
+    for pid in _CLS_STATUS_IDS:
+        o = om.get(pid)
+        if not isinstance(o, dict):
+            continue
+        parts: list[str] = []
+        if o.get("outOfBounds"):
+            mode = ("远行" if o.get("oobMode") == "going" else "回归") if (pid == "Moon" and o.get("oobMode")) else ""
+            parts.append(f"出界+{_cls_num(o.get('oobDelta'), 2)}°{f'（{mode}）' if mode else ''}")
+        if o.get("phase"):
+            p = _CLS_PHASE.get(o["phase"], o["phase"])
+            if o.get("phasisElong") is not None:
+                p += f"（距日{_cls_num(o.get('phasisElong'), 1)}°）"
+            if o.get("phasisEvent"):
+                p += f"·{_CLS_PHASE_EVENT.get(o['phasisEvent'], o['phasisEvent'])}"
+            parts.append(p)
+        if o.get("joy"):
+            parts.append(f"喜乐（{o.get('joyHouse')}宫）")
+        if o.get("ofSect") is not None:
+            parts.append("同宗" if o.get("ofSect") else "异宗")
+        if o.get("feral"):
+            parts.append("野逸")
+        if o.get("degreeQuality"):
+            parts.append(_CLS_QUALITY.get(o["degreeQuality"], f"{o['degreeQuality']}度"))
+        if o.get("degreeGender"):
+            parts.append("阳性度" if o["degreeGender"] == "masculine" else "阴性度")
+        if isinstance(o.get("specialDegree"), dict):
+            tags = [_CLS_SPECIAL.get(k, k) for k, v in o["specialDegree"].items() if v]
+            if tags:
+                parts.append("·".join(tags))
+        if isinstance(o.get("mansion"), dict) and o["mansion"].get("cn"):
+            parts.append(f"月站{o['mansion']['cn']}（{o['mansion'].get('nature')}）")
+        if o.get("apogeeDir"):
+            a = _CLS_APOGEE.get(o["apogeeDir"], o["apogeeDir"])
+            if o.get("numberTrend"):
+                a += f"·{_CLS_NUM.get(o['numberTrend'], '')}"
+            if o.get("lightTrend"):
+                a += f"·{_CLS_LIGHT.get(o['lightTrend'], '')}"
+            parts.append(a)
+        dl: list[str] = []
+        if o.get("monomoiria"):
+            dl.append(f"单度主星{_cls_msg(o['monomoiria'])}")
+        if o.get("ninthPart"):
+            dl.append(f"九分{_cls_msg(o['ninthPart'])}")
+        if isinstance(o.get("dignities"), dict) and o["dignities"].get("face"):
+            dl.append(f"面主{_cls_msg(o['dignities']['face'])}")
+        if o.get("darijan"):
+            dl.append(f"Darijan{_cls_msg(o['darijan'])}")
+        if dl:
+            parts.append("·".join(dl))
+        if parts:
+            profile.append(f"{_cls_msg(pid)}：{'；'.join(parts)}")
+    if profile:
+        lines.append("逐曜古典状态")
+        lines.extend(profile)
+    asc = om.get("Asc")
+    if isinstance(asc, dict) and isinstance(asc.get("mansion"), dict) and asc["mansion"].get("cn"):
+        m = asc["mansion"]
+        lines.append(f"上升宿：{m['cn']}（{m.get('nature')} · {m.get('use')}）")
+    bsg = _build_besiegement_lines(chart_response)
+    if bsg:
+        lines.append("围攻详断")
+        lines.extend(bsg)
+    enc = _build_encircle_lines(om)
+    if enc:
+        lines.append("围绕")
+        lines.extend(enc)
+    melo: list[str] = []
+    for pid in _CLS_STATUS_IDS:
+        o = om.get(pid)
+        if not isinstance(o, dict) or not o.get("sign"):
+            continue
+        parts_m = _MELOTHESIA.get(str(o["sign"]).lower())
+        if not parts_m:
+            continue
+        pos = _degree_position(o.get("signlon")) if o.get("signlon") is not None else ""
+        melo.append(f"{_cls_msg(pid)}：{pos + '·' if pos else ''}{'、'.join(parts_m)}")
+    if melo:
+        lines.append("身体部位(Melothesia)")
+        lines.extend(melo)
+    return lines
+
+
+def _build_classical_analysis_section(analysis: dict[str, Any]) -> list[str]:
+    if not isinstance(analysis, dict):
+        return []
+    lines: list[str] = []
+    cp = analysis.get("classicalPatterns") or {}
+    dory = [f"{_cls_msg(d.get('planet'))} 护卫 {_cls_msg(d.get('light'))}（距{_round3(d.get('elong'))}°）" for d in (cp.get("doryphory") or []) if isinstance(d, dict)]
+    over = [f"{_cls_msg(o.get('over'))}({_cls_msg(o.get('overSign'))}) 凌驾 {_cls_msg(o.get('under'))}({_cls_msg(o.get('underSign'))})·{_CLS_OVR_ASP.get(o.get('aspect'), o.get('aspect'))}" for o in (cp.get("overcoming") or []) if isinstance(o, dict)]
+    bsgd = [f"{_cls_msg(b.get('planet'))} 被 {_cls_msg(b.get('left'))}/{_cls_msg(b.get('right'))} 度数围攻" for b in (cp.get("besieging") or []) if isinstance(b, dict)]
+    if dory or over or bsgd:
+        lines.append("古典格局")
+        if dory:
+            lines.append(f"护卫：{'；'.join(dory)}")
+        if over:
+            lines.append(f"优势相位：{'；'.join(over)}")
+        if bsgd:
+            lines.append(f"度数围攻：{'；'.join(bsgd)}")
+    ad = analysis.get("aspectDynamics") or {}
+    trans = [f"{_cls_msg(t.get('mover'))} 自 {_cls_msg(t.get('from'))} 传光予 {_cls_msg(t.get('to'))}" for t in (ad.get("translation") or []) if isinstance(t, dict)]
+    coll = [f"{_cls_msg(c.get('collector'))} 聚 {_cls_msg(c.get('p1'))}、{_cls_msg(c.get('p2'))} 之光" for c in (ad.get("collection") or []) if isinstance(c, dict)]
+    aver = [f"{_cls_msg(v.get('a'))} 与 {_cls_msg(v.get('b'))} 不合意" for v in (ad.get("aversion") or []) if isinstance(v, dict)]
+    bend = [f"{_cls_msg(b.get('planet'))} 交点弯曲{f'（{b.get('at')}）' if b.get('at') else ''}" for b in (ad.get("bending") or []) if isinstance(b, dict)]
+    if trans or coll or aver or bend:
+        lines.append("相位动态")
+        if trans:
+            lines.append(f"传光：{'；'.join(trans)}")
+        if coll:
+            lines.append(f"聚光：{'；'.join(coll)}")
+        if aver:
+            lines.append(f"不合意：{'；'.join(aver)}")
+        if bend:
+            lines.append(f"交点弯曲：{'；'.join(bend)}")
+    ta = [f"{t.get('topic')}（{t.get('house')}宫{('·自然象征' + _cls_msg(t.get('significator'))) if t.get('significator') else ''}）主星{_cls_msg(t.get('almuten'))}" for t in (analysis.get("topicAlmuten") or []) if isinstance(t, dict) and t.get("almuten")]
+    if ta:
+        lines.append("逐题主星")
+        lines.append("；".join(ta))
+    acc = [f"{_cls_msg(r.get('planet'))} {r.get('score')}（{'·'.join(r.get('factors') or [])}）" for r in (analysis.get("accidentalDignity") or []) if isinstance(r, dict) and r.get("planet")]
+    if acc:
+        lines.append("偶然尊贵")
+        lines.extend(acc)
+    fs = [f"{_cls_msg(s.get('point'))} 合 {s.get('cn') or s.get('star')}{'·比尼' if s.get('behenian') else ''}{('·王者' + str(s.get('royal'))) if s.get('royal') else ''}" for s in (analysis.get("fixedStarHits") or []) if isinstance(s, dict)]
+    if fs:
+        lines.append("恒星触发")
+        lines.append("；".join(fs))
+    ph = analysis.get("planetaryHours")
+    if isinstance(ph, dict) and ph.get("dayRuler"):
+        lines.append(f"行星时：值日星 {_cls_msg(ph.get('dayRuler'))}（日出 {ph.get('sunrise')} / 日落 {ph.get('sunset')}）")
+        hours = ph.get("hours") if isinstance(ph.get("hours"), list) else []
+        if hours:
+            fmt = lambda h: f"{h.get('index') if h.get('diurnal') else (h.get('index', 0) - 12)}.{_cls_msg(h.get('ruler'))}{'←当前' if h.get('current') else ''}"
+            day = [fmt(h) for h in hours if isinstance(h, dict) and h.get("diurnal")]
+            night = [fmt(h) for h in hours if isinstance(h, dict) and not h.get("diurnal")]
+            if day:
+                lines.append(f"昼时：{' / '.join(day)}")
+            if night:
+                lines.append(f"夜时：{' / '.join(night)}")
+    eg = analysis.get("egyptianCalendar")
+    if isinstance(eg, dict) and (eg.get("siriusRising") or eg.get("decanIndex")):
+        eparts: list[str] = []
+        if eg.get("siriusRising"):
+            eparts.append(f"天狼偕日升 {eg.get('siriusRising')}")
+        if eg.get("siriusYear"):
+            eparts.append(f"岁年 {eg.get('siriusYear')}")
+        if eg.get("decanIndex"):
+            eparts.append(f"上升第{eg.get('decanIndex')}旬（{_cls_msg(eg.get('decanSign'))}）面主{_cls_msg(eg.get('decanRuler'))}")
+        if eparts:
+            lines.append(f"埃及历：{'；'.join(eparts)}")
+    bab = [f"{_cls_msg(b.get('planet'))} 合参照星 {b.get('cn') or b.get('star')}" for b in (analysis.get("babylonianStars") or []) if isinstance(b, dict) and b.get("conj")]
+    if bab:
+        lines.append("巴比伦参照星")
+        lines.append("；".join(bab))
+    pats = [f"{p.get('label') or p.get('type')}（{'·'.join(_cls_msg(x) for x in (p.get('points') or []))}{(',顶点' + _cls_msg(p.get('apex'))) if p.get('apex') else ''}）" for p in (analysis.get("patterns") or []) if isinstance(p, dict)]
+    if pats:
+        lines.append("相位格局")
+        lines.append("；".join(pats))
+    dist = analysis.get("distribution")
+    if isinstance(dist, dict) and (dist.get("elements") or dist.get("modes") or dist.get("hemispheres")):
+        kv = lambda obj, mp: " ".join(f"{mp.get(k, k)}{v}" for k, v in (obj or {}).items())
+        dl2: list[str] = []
+        if dist.get("elements"):
+            dl2.append(f"元素 {kv(dist['elements'], _CLS_ELEM)}")
+        if dist.get("modes"):
+            dl2.append(f"模态 {kv(dist['modes'], _CLS_MODE)}")
+        if dist.get("hemispheres"):
+            dl2.append(f"半球 {kv(dist['hemispheres'], _CLS_HEMI)}")
+        if dl2:
+            lines.append("分布权重")
+            lines.append("；".join(dl2))
+    temp = analysis.get("temperament")
+    if isinstance(temp, dict) and (temp.get("temperaments") or temp.get("qualities")):
+        kv = lambda obj, mp: " ".join(f"{mp.get(k, k)}{v}" for k, v in (obj or {}).items())
+        tl: list[str] = []
+        if temp.get("temperaments"):
+            tl.append(f"气质 {kv(temp['temperaments'], _CLS_TEMPER)}")
+        if temp.get("qualities"):
+            tl.append(f"性质 {kv(temp['qualities'], _CLS_QUAL)}")
+        if tl:
+            lines.append("气质评估")
+            lines.append("；".join(tl))
+    am = analysis.get("almutem")
+    if isinstance(am, dict) and am.get("winner"):
+        totals = sorted(((k, v) for k, v in (am.get("totals") or {}).items() if v and v > 0), key=lambda t: t[1], reverse=True)
+        lines.append(f"Almuten 总主：{_cls_msg(am.get('winner'))}")
+        if totals:
+            lines.append("Almuten 逐星得分：")
+            lines.extend(f"{_cls_msg(k)} {v}" for k, v in totals)
+    bn = [b for b in (analysis.get("bonification") or []) if isinstance(b, dict) and b.get("planet") and ((b.get("bonified") or []) or (b.get("maltreated") or []))]
+    if bn:
+        lines.append("吉化/凶化")
+        for b in bn:
+            ok = "、".join(f"{_cls_msg(x.get('by'))}·{x.get('rel') or '会合'}" for x in (b.get("bonified") or []) if isinstance(x, dict))
+            bad = "、".join(f"{_cls_msg(x.get('by'))}·{x.get('rel') or '会合'}" for x in (b.get("maltreated") or []) if isinstance(x, dict))
+            segs = []
+            if ok:
+                segs.append(f"受惠[{ok}]")
+            if bad:
+                segs.append(f"受厄[{bad}]")
+            lines.append(f"{_cls_msg(b.get('planet'))}：{'；'.join(segs)}")
+    extra = [l for l in (analysis.get("extraLots") or []) if isinstance(l, dict) and l.get("label")]
+    if extra:
+        lines.append("阿拉伯点(扩展)")
+        for l in extra[:60]:
+            cn_label = _CLS_LOT_CN.get(l.get("label"), l.get("label"))
+            cat = f"（{l.get('category')}）" if l.get("category") else ""
+            if l.get("sign") and l.get("signlon") is not None:
+                dg = _format_sign_degree(l.get("sign"), l.get("signlon"))
+            elif l.get("lon") is not None:
+                dg = _lon_to_sign_degree(l.get("lon"))
+            elif l.get("sign"):
+                dg = _cls_msg(l.get("sign"))
+            else:
+                dg = ""
+            lines.append(f"{cn_label}{cat}：{dg or '-'}")
+    return lines
+
+
 def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
     sections = [
         ("起盘信息", _build_base_info_lines(response, payload)),
@@ -1833,13 +2181,24 @@ def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
         ("希腊点", _build_lots_section(response)),
     ]
     rendered = [(title, "\n".join(lines).strip()) for title, lines in sections if lines]
-    # v2.4.0 本命增补: insert 12分度 / 主宰星链 / 寿命格局 before 可能性, when astroextra stashed them.
+    # v2.4.0 本命增补: 12分度 / 主宰星链 / 寿命格局; v2.6.7 古典占星: 古典 / 古典格局.
+    # 星阙顺序: …主宰星链, 古典, 古典格局, 寿命格局, 可能性 → 古典两段插在 主宰星链 与 寿命格局 之间.
     extras = response.get("_natalExtras") if isinstance(response.get("_natalExtras"), dict) else None
     if extras:
-        for title in ("12分度", "主宰星链", "寿命格局"):
+        for title in ("12分度", "主宰星链"):
             body = extras.get(title)
             if body and f"{body}".strip():
                 rendered.append((title, f"{body}".strip()))
+    classical = _build_classical_section(response)
+    if classical:
+        rendered.append(("古典", "\n".join(classical).strip()))
+    classical_analysis = _build_classical_analysis_section(response.get("_classicalAnalysis") or {})
+    if classical_analysis:
+        rendered.append(("古典格局", "\n".join(classical_analysis).strip()))
+    if extras:
+        body = extras.get("寿命格局")
+        if body and f"{body}".strip():
+            rendered.append(("寿命格局", f"{body}".strip()))
     possibility = _build_possibility_section(response)
     if possibility:
         rendered.append(("可能性", "\n".join(possibility).strip()))
@@ -4074,6 +4433,45 @@ class HorosaSkillService:
             pass
         return response_data
 
+    # 古典格局派生分析 (星阙 v2.6.7): astrochart/astrochart_like 的 [古典格局] 段来自 /astroextra/analysis
+    # (护卫/优势相位/相位动态/逐题主星/偶然尊贵/恒星/行星时/埃及历/巴比伦/格局/分布/气质/almutem/吉化-extraLots)。
+    # 与前端同源:按需 fetch、优雅降级(失败→不挂载→该段不出)。[古典](逐曜状态/围攻/围绕)直接读 /chart 响应,无需此 fetch。
+    _CLASSICAL_ANALYSIS_TOOLS = {"chart", "chart13", "hellen_chart"}
+
+    def _attach_classical_analysis(self, tool_name: str, payload: dict[str, Any], response_data: dict[str, Any]) -> dict[str, Any]:
+        if tool_name not in self._CLASSICAL_ANALYSIS_TOOLS:
+            return response_data
+        if not isinstance(response_data, dict) or not _is_astro_chart_payload(response_data):
+            return response_data
+        for key in ("date", "zone", "lat", "lon"):
+            if not payload.get(key):
+                return response_data
+        try:
+            analysis = self._call_remote(
+                "/astroextra/analysis",
+                {
+                    "date": payload.get("date"),
+                    "time": payload.get("time"),
+                    "zone": payload.get("zone"),
+                    "lat": payload.get("lat"),
+                    "lon": payload.get("lon"),
+                    "gpsLat": payload.get("gpsLat"),
+                    "gpsLon": payload.get("gpsLon"),
+                    "ad": payload.get("ad", 1),
+                    "hsys": payload.get("hsys"),
+                    "zodiacal": payload.get("zodiacal"),
+                    "siderealAyanamsa": payload.get("siderealAyanamsa"),
+                    "fixedStarOrb": 1,
+                },
+            )
+            if isinstance(analysis, dict) and analysis:
+                enriched = dict(response_data)
+                enriched["_classicalAnalysis"] = analysis
+                return enriched
+        except Exception as exc:
+            logger.warning("classical /astroextra/analysis failed (tool=%s): %s", tool_name, exc)
+        return response_data
+
     def _require_ken_pan(self, ken_response: Any, *, engine: str, endpoint: str) -> None:
         """Fail loudly when the ken backend did not actually compute a pan.
 
@@ -5166,6 +5564,7 @@ class HorosaSkillService:
                     response_data = self._call_remote(definition.endpoint, input_normalized)
                     response_data = self._attach_predictive_chart_context(tool_name, input_normalized, response_data)
                 response_data = self._attach_natal_extras(tool_name, response_data)
+                response_data = self._attach_classical_analysis(tool_name, input_normalized, response_data)
                 response_data = _attach_export_contract(tool_name, input_normalized, response_data)
                 summary = _generic_summary(tool_name, response_data)
                 warnings: list[str] = []
