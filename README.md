@@ -50,13 +50,14 @@
 
 ## 最新稳定基线
 
-**当前公开版本：`Horosa Skill 0.13.0`（72 个可调用工具）。**
+**当前公开版本：`Horosa Skill 0.14.0`（72 个可调用工具）。**
 
 这一条发布线把星阙的能力面补到了与桌面端基本对齐：
 
 - **西洋占星全链路** — 本命与派生盘、10 个经典推运/返照/时运、3 个 v2.4.0 西占（年龄推进点 / 界推运 / 世俗入宫盘）、7 个 v2.5.0 推运（赤纬 / 恒星 / 行星弧 / 行星年龄 / Balbillus / 129年系统 / 波斯向运），外加**卜卦（horary）与择日（election）**两套完整判断引擎。
 - **主限法 v12 核验方位法（v2.6.6）** — 主限表收敛为**逐位核验的核5方位法**（Alcabitius / Meridian / Porphyry / Equal·黄道 / Equal·时圈；未核验值引擎内回退 Alcabitius）+ In Zodiaco/In Mundo 坐标系 + 顺逆向 + **22 项时间钥匙**（含每盘真算 Simmonite/Kepler/Brahe 与真太阳弧/太阳弧动态键）+ 映点/界作迫星 + **宿命点(Vertex)应星**行 + **pdYears 上限 3000**（多圈复发行）；**中点盘**为汉堡学派量化盘（90° 盘 + 8 颗 TNP + 行星图/映点/中点列表）。
 - **恒星黄道与印占全补（v2.6.4）** — 全西洋技法盘支持 **47 套岁差(ayanāṃśa)** 恒星黄道（缺省 Lahiri，向后兼容回归盘）+ **西洋月宿(nakshatra)** 行；印度占星分宫制 **4→24 制**、黄道岁差 **6→47 制**。
+- **古典占星补全（v2.6.7）** — chart 家族（本命 / 13 宫 / 希腊化 / 印度 / 世俗入宫）导出新增 **[古典]**（逐曜古典状态：出界 / 相位显隐 / 喜乐 / 同异宗 / 度数性质 / 月站 / 远近地点 / 单度主星·九分·面主·Darijan；上升宿；**围攻详断**与**围绕**；Melothesia 身体部位）与 **[古典格局]**（护卫 / 优势相位 / 度数围攻 / 传光聚光 / 不合意 / 交点弯曲 / 逐题主星 / **偶然尊贵** / 恒星触发 / 行星时 / 埃及历 / 巴比伦参照星 / 相位格局 / 分布权重 / 气质评估 / **Almuten 总主** / 吉化凶化 / 阿拉伯点扩展）；两段由 vendored 公式从 `/chart`（含 `surround.besiegement`）与 `analyze_chart` 后端逐值派生（本命三盘带两段，印度 / 世俗仅带 [古典]）。
 - **中文术数主干** — 八字、紫微、大六壬、奇门、太乙、金口诀、三式合一、统摄法、河洛理数、邵子参评数、调波盘、宿占、六爻。
 - **解读层同步（v0.10.0 / v0.11.0）** — 七政四余补**大限/相位/政余格局**（Moira DSL）、金口诀补 **20 段解读层**、大六壬补**常用神煞 + 毕法100法 + 占断向导**、奇门补**法奇门叠加层**（六害 / 化解 / 八门化气大阵 / 用神分论 / 七要 / 孤辰寡宿）、紫微补**命中格局/杂曜/流派四化**（含天伤天使安星）。
 - **全 14 路神数** — 5 路标准（皇极经世 / 五兆 / 太玄 / 京氏易 / 神乙数）+ 9 路（邵子 / 铁板 / 分经 / 北极 / 南极 / 淳子 / 演禽 / 策天飞星 / 七政四余·张果）。
@@ -69,7 +70,7 @@
 | 检查项 | 结果 |
 | --- | --- |
 | 可调用工具 | `72 / 72 ok=true` |
-| 工程测试 | `260 / 260 pass`（含 ken / 神数 后端实时集成测试 + 离线 golden 单测 + node JS golden） |
+| 工程测试 | `263 / 263 pass`（含 ken / 神数 后端实时集成测试 + 离线 golden 单测 + node JS golden） |
 | 未确认参数时强制追问 | `61` 个技法工具触发 `must_ask_user=true` |
 | 安全豁免工具 | `7` 个 registry / knowledge / parser 类工具直接可读 |
 | 星阙式导出结构 | 每个业务技法均带 `export_snapshot` / `export_format`（已建模 `63` 个导出 technique） |
@@ -77,7 +78,7 @@
 | 奇门 / 太乙 / 金口 / 三式 | 统一走 `ken`，与星阙桌面端同源 |
 | 统摄法 / 十年大运 | headless 实现与星阙逐值对齐（京房八宫五行；对照星阙 `decennials.test.js` 金标） |
 | GitHub CI | Linux/macOS 单测 + horosa-core-js JS golden 自检 + Windows OpenClaw smoke 通过 |
-| Release runtime | macOS / Windows `v0.13.0` assets（含 ken + 14 神数引擎）已打包并校验 |
+| Release runtime | macOS / Windows `v0.14.0` assets（含 ken + 14 神数引擎）已打包并校验 |
 
 > 关于 `solarreturn` / `lunarreturn` / `solararc` / `givenyear` / `profection` / `pd` / `pdchart` / `zr` 这批推运工具：当前版本已复核可用，不应再被 agent 标记为「Java `/predict/*` 不可用」。若某客户端仍这样回答，优先检查它是否在用旧 runtime、是否绕过 MCP 手算、是否没跑 `doctor` / `openclaw-check --full`。
 
@@ -228,7 +229,7 @@ Agent 在调用技法前如果不确定用户设置，应先查 `horosa_agent_gu
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.13.0",
+  "ok": true, "tool": "qimen", "version": "0.14.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
