@@ -627,6 +627,13 @@ only difference is which engine dir is vendored:
   events) fails if the published `latest` lacks either platform / an archive 404s, and
   `scripts/verify_builder_parity.py` (CI `test` job) fails if the two builders or the verifier contract
   drift. If either alarms, the fix is this same build-the-Windows-half flow.
+  **One-command remediation (v0.14.0):** on the Windows build box, `python scripts/sync_windows_release.py`
+  detects whether the current `latest` is missing its Windows half and (when run with `--upload`) runs the
+  whole build → download-darwin → dual-platform manifest + SHA256SUMS → `verify_runtime_release.py` →
+  upload pipeline. Safe by default (no `--upload` = build + verify only, no irreversible action), idempotent
+  (no-op + exit 0 when already in sync), and it gates the upload behind `verify_runtime_release.py`. It
+  reads the version from `pyproject.toml`, so `git pull` to the release commit first. This is the canonical
+  way to clear a `release-completeness` red — prefer it over doing the steps by hand.
 - **Windows launcher hardening (v0.12.0) — keep these when re-vendoring the templates.** The
   `scripts/runtime_templates/windows/{start,stop}_horosa_local.ps1` templates carry: PID-ownership checks
   (only kill a PID still mapping to our own python.exe/java.exe image — never a recycled/foreign PID),
