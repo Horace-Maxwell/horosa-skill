@@ -367,5 +367,50 @@
       "Horosa-Web/astrostudyui/src/components/astro/AstroExtraReturns.js#buildExtraReturnsSnapshotText",
       "Horosa-Web/astrostudyui/src/utils/aiExport.js#AI_EXPORT_PRESET_SECTIONS"
     ]
+  },
+  {
+    "name": "astrochart_classical_live_snapshot",
+    "technique": "astrochart",
+    "fixture_file": "astrochart_classical_live_snapshot.txt",
+    "selected_sections": [
+      "起盘信息",
+      "行星",
+      "古典",
+      "古典格局"
+    ],
+    "expected_detected": [
+      "起盘信息",
+      "宫位宫头",
+      "星与虚点",
+      "信息",
+      "相位",
+      "行星",
+      "希腊点",
+      "12分度",
+      "主宰星链",
+      "古典",
+      "古典格局",
+      "寿命格局"
+    ],
+    "expected_in_export": [
+      "逐曜古典状态",
+      "围攻详断",
+      "身体部位(Melothesia)",
+      "古典格局",
+      "优势相位",
+      "逐题主星",
+      "偶然尊贵",
+      "Almuten 总主：土"
+    ],
+    "expected_excluded": [
+      "[信息]",
+      "生命主(Hyleg)",
+      "主宰星链"
+    ],
+    "source_refs": [
+      "Horosa-Web/astrostudyui/src/utils/astroAiSnapshot.js#buildClassicalSection",
+      "Horosa-Web/astrostudyui/src/utils/astroAiSnapshot.js#buildClassicalAnalysisSection",
+      "Horosa-Web/astrostudyui/src/utils/aiExport.js#AI_EXPORT_PRESET_SECTIONS.astrochart"
+    ]
   }
 ]
