@@ -46,3 +46,6 @@ ${env:HOME*
 *.local.md
 notes-local*
 .horosa-cache/
+
+# changelog kept local-only — never upload (full git history purged)
+CHANGELOG.md
