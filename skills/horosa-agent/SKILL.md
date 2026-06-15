@@ -99,6 +99,7 @@ Use these user intents:
 - Qizheng Siyi / Guolao: `guolao_chart`
 - Indian chart: `india_chart`
 - Relationship chart: `relative`
+- Classical / traditional dignities reading (古典占星, v2.6.7): no separate tool — `chart` / `chart13` / `hellen_chart` exports automatically carry `[古典]` (per-planet classical status, besiegement, encirclement, Melothesia) and `[古典格局]` (doryphory / overcoming / translation·collection / topic almutens / accidental dignity / Almuten figuris / temperament / Arabic lots); `india_chart` / `mundane` carry `[古典]` only. Just run the chart tool.
 - Solar return: `solarreturn`
 - Lunar return: `lunarreturn`
 - Solar arc: `solararc`

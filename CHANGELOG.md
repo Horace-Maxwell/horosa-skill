@@ -7,6 +7,17 @@ and this project follows a release-oriented changelog style.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-06-14
+
+第四轮 Horosa-Public 对齐：补**古典占星**——`[古典]` + `[古典格局]` 两段进 chart 家族导出（星阙 v2.6.7）。工具数不变（**72**，两段补到既有 chart 工具，非新工具）。vendor 源 = 开源仓 Horosa-Public。
+
+### Added — 古典占星（chart 家族 +2 导出段，72 工具不变）
+
+- **`[古典]`（`buildClassicalSection`）** — `chart` / `chart13` / `hellen_chart` / `india_chart` / `mundane` 导出新增：**逐曜古典状态**（出界 / 相位显隐 phasis / 喜乐 / 同异宗 sect / 度数性质·性别 / 月站 mansion / 远近地点·数增减·光增减 / 单度主星·九分·面主·Darijan）、**上升宿**、**围攻详断** besiegement、**围绕** encirclement、**Melothesia 身体部位**；逐值源自后端 `/chart`（含 `surround.besiegement`）。
+- **`[古典格局]`（`buildClassicalAnalysisSection`）** — `chart` / `chart13` / `hellen_chart` 导出新增：护卫 doryphory / 优势相位 overcoming / 度数围攻、传光·聚光 / 不合意 / 交点弯曲、**逐题主星** topic-almuten、**偶然尊贵** accidental dignity、恒星触发 / 行星时 / 埃及历 / 巴比伦参照星、相位格局 / 分布权重 / 气质评估、**Almuten 总主**、吉化·凶化、阿拉伯点(扩展)；逐值源自后端 `/astroextra/analysis`（`analyze_chart`），仅本命三盘挂接，印度 / 世俗仅出 `[古典]`。
+- 两段 builder 由上游 `astroAiSnapshot.js` 的 `buildClassicalSection` / `buildClassicalAnalysisSection` **逐值移植为 Python**（skill 自建后端驱动快照，不解析前端 `aiExport.js`）；`/astroextra/analysis` 归入 `_PYTHON_CHART_ENDPOINTS`（与 chart 服务同源、不触 Java 探针）；preset + optional **双列登记**（条件段缺省时 graceful）。
+- **测试**：live `test_chart_carries_v267_classical`（chart 富集两段 + 段头/detected/clean）+ 离线 `test_chart_classical_sections_emit_offline`（FakeClient `/astroextra/analysis` 桩逐键核对建造器输出）+ export-fixture catalog `astrochart_classical_live_snapshot`（离线解析契约）；`263 / 263 pass`。
+
 ### Fixed — v0.13.0 Windows half (4th recurrence — auto-caught by the new CI guard)
 
 - **v0.13.0 shipped as `latest` with a darwin-only manifest and no win32 zip — Windows install broke

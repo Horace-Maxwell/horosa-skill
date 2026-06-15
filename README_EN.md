@@ -50,13 +50,14 @@ License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICEN
 
 ## Current stable baseline
 
-**Current public version: `Horosa Skill 0.13.0` (72 callable tools).**
+**Current public version: `Horosa Skill 0.14.0` (72 callable tools).**
 
 This release line brings the capability surface roughly to parity with the desktop app:
 
 - **Full Western astrology** — natal and derived charts, 10 classic return/progression/timeline tools, 3 v2.4.0 Western additions (Age Point / Distributions / mundane ingress), 7 v2.5.0 progressions (Jayne declination / Vedic sidereal / Planetary Arc / Ages of Man / Balbillus / 129-year system / Persian Directed), plus full **horary** and **electional** judgment engines.
 - **Primary Direction v12, verified methods (v2.6.6)** — the directions table converges on the **5 per-row-verified methods** (Alcabitius / Meridian / Porphyry / Equal-ecliptic / Equal-hour-circle; unverified values fall back to Alcabitius inside the engine), In Zodiaco/In Mundo frames, direct+converse, **22 time keys** (incl. per-chart Simmonite/Kepler/Brahe and dynamic True/Symbolic Solar Arc), antiscia/terms as promissors, **Vertex significator rows**, and **pdYears up to 3000** with per-revolution recurrence rows; the **midpoint chart** is a Hamburg/Uranian 90° dial (8 TNP + planetary pictures / antiscia / midpoint list).
 - **Sidereal zodiac & full India (v2.6.4)** — every Western technique chart supports **47 ayanāṃśa** sidereal modes (default Lahiri, tropical charts unchanged) + a **nakshatra (西洋月宿)** row; Vedic India charts go from 4→**24 house systems** and 6→**47 ayanāṃśa**.
+- **Classical astrology completion (v2.6.7)** — the chart family (natal / 13-house / Hellenistic / India / mundane ingress) gains a **[古典] (Classical)** section (per-planet classical status: out-of-bounds / phasis / joy / sect / degree quality / lunar mansion / apogee / monomoiria·ninth-part·face·Darijan; Ascendant mansion; **besiegement** and **encirclement**; Melothesia body parts) and a **[古典格局] (Classical patterns)** section (doryphory / overcoming / degree-besiegement / translation·collection of light / aversion / nodal bending / topic almutens / **accidental dignity** / fixed-star hits / planetary hours / Egyptian calendar / Babylonian reference stars / aspect patterns / distribution weights / temperament / **Almuten figuris** / bonification·maltreatment / extended Arabic lots); both are derived value-for-value by vendored formulas from `/chart` (incl. `surround.besiegement`) and `analyze_chart` (the three natal charts carry both; India / mundane carry [古典] only).
 - **Chinese metaphysics core** — BaZi, Zi Wei, Da Liu Ren, Qi Men, Tai Yi, Jin Kou Jue, the Three Styles unified, Tong She Fa, He Luo Li Shu, Shao Zi Can Ping Shu, harmonic charts, Su Zhan, Liu Yao.
 - **Interpretation layers (v0.10.0 / v0.11.0)** — Qi Zheng Si Yu gains **major-period + aspects + Zheng-Yu patterns** (Moira DSL), Jin Kou Jue a **20-section reading layer**, Da Liu Ren **common shen-sha + the 100 Bi-Fa rules + divination guide**, Qi Men the **Fa Qi Men overlay**, and Zi Wei **matched patterns / secondary stars / school-specific si-hua** (incl. Tian-Shang/Tian-Shi placement).
 - **All 14 Shen Shu** — 5 standalone (Huang Ji Jing Shi / Wu Zhao / Tai Xuan / Jing Fang Yi / Shen Yi Shu) + 9 (Shao Zi / Tie Ban / Fen Jing / Bei Ji / Nan Ji / Chun Zi / Yan Qin / Ce Tian / Qi Zheng·Zhang Guo).
@@ -69,7 +70,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `72 / 72 ok=true` |
-| Engineering tests | `260 / 260 pass` (ken / Shen Shu live integration + offline golden unit tests + node JS golden) |
+| Engineering tests | `263 / 263 pass` (ken / Shen Shu live integration + offline golden unit tests + node JS golden) |
 | Forced clarification when params unconfirmed | `61` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `7` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`63` export techniques modeled) |
@@ -77,7 +78,7 @@ Local end-to-end signals:
 | Qi Men / Tai Yi / Jin Kou / Three Styles | unified on `ken`, same as the desktop app |
 | Tong She Fa / Decennials | headless, value-for-value with Xingque (`decennials.test.js` golden) |
 | GitHub CI | Linux/macOS unit tests + horosa-core-js JS golden self-check + Windows OpenClaw smoke |
-| Release runtime | macOS / Windows `v0.13.0` assets (ken + 14 Shen Shu engines bundled) packaged and verified |
+| Release runtime | macOS / Windows `v0.14.0` assets (ken + 14 Shen Shu engines bundled) packaged and verified |
 
 > About `solarreturn` / `lunarreturn` / `solararc` / `givenyear` / `profection` / `pd` / `pdchart` / `zr`: these predictive tools are verified working in this version and should not be flagged by an agent as "Java `/predict/*` unavailable". If a client still says so, check whether it is on an old runtime, bypassing MCP to hand-compute, or hasn't run `doctor` / `openclaw-check --full`.
 
@@ -228,7 +229,7 @@ Every tool call returns a uniform envelope:
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.13.0",
+  "ok": true, "tool": "qimen", "version": "0.14.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
