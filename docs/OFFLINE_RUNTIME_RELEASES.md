@@ -6,6 +6,20 @@ Complete offline runtime payloads are published as GitHub Release assets, but th
 
 That local folder is allowed to exist on disk without being committed to the repository.
 
+## Supported Platforms
+
+| Platform | Key | Archive type | Build script |
+|---|---|---|---|
+| macOS (Apple Silicon) | `darwin-arm64` | tar.gz | `package_runtime_payload.sh` |
+| Windows (x64) | `win32-x64` | zip | `build_runtime_release_windows.py` |
+| Linux (x64) 🧪 | `linux-x64` | tar.gz | `build_runtime_release_linux.py` |
+
+> **🧪 Experimental — Linux support:** The `build_runtime_release_linux.py` script handles Java
+> (via jlink) and Node.js automatically, and installs chart-service dependencies via pip when a
+> pre-built Python runtime is available. No `linux-x64` runtime asset has been shipped yet — the
+> build script and verifier are ready, but the first release requires a maintainer-provided Python
+> runtime binary or a CI step that builds one.
+
 ## Runtime Placement Policy
 
 Use this rule set consistently:
@@ -66,8 +80,14 @@ Do not treat these three locations as interchangeable.
   Validates that the generated runtime archives really contain the required runtime payload layout.
 - `horosa-skill/scripts/scaffold_windows_runtime.py`
   Creates a Windows runtime directory skeleton with manifest and PowerShell entrypoints.
+- `horosa-skill/scripts/scaffold_linux_runtime.py`
+  Creates a Linux runtime directory skeleton with manifest and POSIX shell entrypoints.
+- `horosa-skill/scripts/build_runtime_release_linux.py`
+  Assembles the Linux runtime payload tar.gz from `vendor/runtime-source`, installing Python chart deps (swisseph, numpy, cherrypy, etc.), Node.js, Java (jlink), and generating 邵子神数 verse JSON from CSV.
 - `horosa-skill/scripts/sync_vendored_runtime_sources.sh`
   Pulls the current required runtime subset from a local development tree into `vendor/runtime-source`. It can also ingest Windows preparation inputs from a separate local Windows source repo via `HOROSA_WINDOWS_SOURCE_ROOT`.
+- `horosa-skill/scripts/sync_windows_release.py`
+  Windows release syncing helper (created during Windows initial release workflow).
 
 ## Current Windows Reality
 

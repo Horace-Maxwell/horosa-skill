@@ -801,16 +801,16 @@ class HorosaRuntimeManager:
                 "stop_script": str(self._platform_path("Horosa-Web/stop_horosa_local.sh", "Horosa-Web/stop_horosa_local.ps1")),
             },
             "runtimes": {
-                "python": str(self._platform_path("runtime/mac/python/bin/python3", "runtime/windows/python/python.exe")),
-                "java": str(self._platform_path("runtime/mac/java/bin/java", "runtime/windows/java/bin/java.exe")),
-                "node": str(self._platform_path("runtime/mac/node/bin/node", "runtime/windows/node/node.exe")),
+                "python": str(self._platform_path("runtime/mac/python/bin/python3", "runtime/windows/python/python.exe", "runtime/linux/python/bin/python3")),
+                "java": str(self._platform_path("runtime/mac/java/bin/java", "runtime/windows/java/bin/java.exe", "runtime/linux/java/bin/java")),
+                "node": str(self._platform_path("runtime/mac/node/bin/node", "runtime/windows/node/node.exe", "runtime/linux/node/bin/node")),
             },
             "artifacts": {
                 "horosa_web_root": "Horosa-Web",
                 "astropy_root": "Horosa-Web/astropy",
                 "flatlib_root": "Horosa-Web/flatlib-ctrad2/flatlib",
                 "swefiles_root": "Horosa-Web/flatlib-ctrad2/flatlib/resources/swefiles",
-                "boot_jar": str(self._platform_path("runtime/mac/bundle/astrostudyboot.jar", "runtime/windows/bundle/astrostudyboot.jar")),
+                "boot_jar": str(self._platform_path("runtime/mac/bundle/astrostudyboot.jar", "runtime/windows/bundle/astrostudyboot.jar", "runtime/linux/bundle/astrostudyboot.jar")),
                 "horosa_core_js_root": "horosa-core-js",
             },
         }
@@ -865,10 +865,12 @@ class HorosaRuntimeManager:
                     )
         return normalized
 
-    def _platform_path(self, posix_relative: str, windows_relative: str) -> Path:
+    def _platform_path(self, mac_relative: str, windows_relative: str, linux_relative: str | None = None) -> Path:
         if os.name == "nt":
             return Path(windows_relative)
-        return Path(posix_relative)
+        if os.name == "posix" and platform.system().lower() == "linux":
+            return Path(linux_relative if linux_relative is not None else mac_relative)
+        return Path(mac_relative)
 
     def _platform_command(self, script: Path) -> list[str]:
         if os.name == "nt":
