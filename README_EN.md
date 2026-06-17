@@ -50,7 +50,7 @@ License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICEN
 
 ## Current stable baseline
 
-**Current public version: `Horosa Skill 0.14.0` (72 callable tools).**
+**Current public version: `Horosa Skill 0.14.1` (72 callable tools).**
 
 This release line brings the capability surface roughly to parity with the desktop app:
 
@@ -70,7 +70,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `72 / 72 ok=true` |
-| Engineering tests | `263 / 263 pass` (ken / Shen Shu live integration + offline golden unit tests + node JS golden) |
+| Engineering tests | `264 / 264 pass` (ken / Shen Shu live integration + offline golden unit tests + node JS golden) |
 | Forced clarification when params unconfirmed | `61` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `7` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`63` export techniques modeled) |
@@ -78,7 +78,7 @@ Local end-to-end signals:
 | Qi Men / Tai Yi / Jin Kou / Three Styles | unified on `ken`, same as the desktop app |
 | Tong She Fa / Decennials | headless, value-for-value with Xingque (`decennials.test.js` golden) |
 | GitHub CI | Linux/macOS unit tests + horosa-core-js JS golden self-check + Windows OpenClaw smoke |
-| Release runtime | macOS / Windows `v0.14.0` assets (ken + 14 Shen Shu engines bundled) packaged and verified |
+| Release runtime | macOS / Windows `v0.14.1` assets (ken + 14 Shen Shu engines bundled) packaged and verified |
 
 > About `solarreturn` / `lunarreturn` / `solararc` / `givenyear` / `profection` / `pd` / `pdchart` / `zr`: these predictive tools are verified working in this version and should not be flagged by an agent as "Java `/predict/*` unavailable". If a client still says so, check whether it is on an old runtime, bypassing MCP to hand-compute, or hasn't run `doctor` / `openclaw-check --full`.
 
@@ -229,7 +229,7 @@ Every tool call returns a uniform envelope:
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.14.0",
+  "ok": true, "tool": "qimen", "version": "0.14.1",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
