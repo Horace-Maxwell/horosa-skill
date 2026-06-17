@@ -1064,6 +1064,33 @@ def test_phase2_tools_attach_export_contracts(tmp_path) -> None:
     assert sixyao.data["export_snapshot"]["technique"]["key"] == "sixyao"
 
 
+def test_sixyao_time_based_gua_varies_with_time_and_is_deterministic() -> None:
+    # 回归 #12: lines 空时曾写死返回 既济(101010)→益(100011)，与起卦时间无关。修复后按四柱干支 +
+    # 时辰以时起卦 (梅花易数)：不同时间不同卦、恰一动爻、同输入确定一致、不再是写死的既济→益。
+    from horosa_skill.service import _time_based_gua_lines, _derive_gua_code, _derive_changed_gua_code
+
+    cases = [
+        ({"yearGanZi": "癸卯", "monthGanZi": "甲子", "dayGanZi": "甲子"}, "00:00:00"),
+        ({"yearGanZi": "甲辰", "monthGanZi": "庚午", "dayGanZi": "庚戌"}, "06:30:00"),
+        ({"yearGanZi": "乙巳", "monthGanZi": "己卯", "dayGanZi": "戊子"}, "18:45:00"),
+        ({"yearGanZi": "丙午", "monthGanZi": "甲午", "dayGanZi": "壬戌"}, "12:52:00"),
+        ({"yearGanZi": "丙午", "monthGanZi": "庚子", "dayGanZi": "庚辰"}, "23:59:00"),
+    ]
+    combos = set()
+    for nongli, t in cases:
+        lines = _time_based_gua_lines(nongli, {"time": t})
+        assert len(lines) == 6
+        assert all(line["value"] in (0, 1) for line in lines)
+        assert sum(1 for line in lines if line["change"]) == 1  # 以时起卦恰一个动爻
+        combos.add((_derive_gua_code(lines), _derive_changed_gua_code(lines)))
+    assert len(combos) >= 4, combos  # 不再固定单一卦象 (修复前为 1)
+    assert ("101010", "100011") not in combos  # 写死的 既济→益 不再出现
+    n = {"yearGanZi": "丙午", "monthGanZi": "甲午", "dayGanZi": "壬戌"}
+    assert _derive_gua_code(_time_based_gua_lines(n, {"time": "12:52:00"})) == _derive_gua_code(
+        _time_based_gua_lines(n, {"time": "12:52:00"})
+    )
+
+
 @pytest.mark.parametrize("tool_name", ["chart", "guolao_chart"])
 def test_service_normalizes_human_friendly_birth_fields_before_remote_calls(tmp_path, tool_name: str) -> None:
     settings = Settings(

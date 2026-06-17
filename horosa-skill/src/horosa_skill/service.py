@@ -2267,6 +2267,60 @@ def _derive_changed_gua_code(lines: list[dict[str, Any]]) -> str:
     return "".join(chars) or "000000"
 
 
+# 以时起卦 (梅花易数): lines 未提供时按四柱干支 + 时辰确定性生成六爻，不同起卦时间 → 不同卦象。
+_SIXYAO_DIZHI = "子丑寅卯辰巳午未申酉戌亥"
+# 先天八卦数 → 自下而上三爻 (1=阳 0=阴): 乾1 兑2 离3 震4 巽5 坎6 艮7 坤8。
+_SIXYAO_TRIGRAM = {1: (1, 1, 1), 2: (1, 1, 0), 3: (1, 0, 1), 4: (1, 0, 0),
+                   5: (0, 1, 1), 6: (0, 1, 0), 7: (0, 0, 1), 8: (0, 0, 0)}
+_SIXYAO_GODS = ("青龙", "朱雀", "勾陈", "腾蛇", "白虎", "玄武")
+_SIXYAO_NAMES = ("初爻", "二爻", "三爻", "四爻", "五爻", "上爻")
+# 日干起六神: 甲乙→青龙起, 丙丁→朱雀, 戊→勾陈, 己→腾蛇, 庚辛→白虎, 壬癸→玄武 (从初爻起，循环)。
+_SIXYAO_GOD_START = {"甲": 0, "乙": 0, "丙": 1, "丁": 1, "戊": 2, "己": 3, "庚": 4, "辛": 4, "壬": 5, "癸": 5}
+
+
+def _gz_zhi_index(gz: Any) -> int:
+    """从干支字符串取地支序 (子1…亥12)；取不到返回 0。"""
+    for ch in reversed(str(gz or "")):
+        idx = _SIXYAO_DIZHI.find(ch)
+        if idx >= 0:
+            return idx + 1
+    return 0
+
+
+def _hour_zhi_index(time_str: Any) -> int:
+    """从 HH:MM 取时辰地支序 (子1…亥12)；23/0 点皆子时。"""
+    try:
+        hour = int(str(time_str or "0").split(":")[0]) % 24
+    except (ValueError, IndexError):
+        hour = 0
+    return ((hour + 1) // 2) % 12 + 1
+
+
+def _time_based_gua_lines(nongli: dict[str, Any], payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """以时起卦: 上卦=(年支+月支+日支)%8，下卦=+时支后%8，动爻=同式%6 (余0取末)。
+    卦码 = 下卦三爻(初二三) + 上卦三爻(四五上)。六神按日干起。"""
+    base = (
+        _gz_zhi_index(nongli.get("yearGanZi") or nongli.get("yearJieqi") or nongli.get("year"))
+        + _gz_zhi_index(nongli.get("monthGanZi"))
+        + _gz_zhi_index(nongli.get("dayGanZi"))
+    )
+    hour_zhi = _hour_zhi_index(payload.get("time") or nongli.get("time"))
+    upper = base % 8 or 8
+    lower = (base + hour_zhi) % 8 or 8
+    moving = (base + hour_zhi) % 6 or 6
+    yao = list(_SIXYAO_TRIGRAM[lower]) + list(_SIXYAO_TRIGRAM[upper])
+    god0 = _SIXYAO_GOD_START.get(str(nongli.get("dayGanZi") or "")[:1], 0)
+    return [
+        {
+            "value": yao[idx],
+            "change": (idx + 1) == moving,
+            "god": _SIXYAO_GODS[(god0 + idx) % 6],
+            "name": _SIXYAO_NAMES[idx],
+        }
+        for idx in range(6)
+    ]
+
+
 def _extract_gua_detail(raw: Any, code: str) -> dict[str, Any]:
     if isinstance(raw, dict):
         if isinstance(raw.get(code), dict):
@@ -5377,14 +5431,8 @@ class HorosaSkillService:
         )
         lines = _normalize_gua_lines(payload.get("lines"))
         if not lines:
-            lines = [
-                {"value": 1, "change": False, "god": "青龙", "name": "初爻"},
-                {"value": 0, "change": False, "god": "朱雀", "name": "二爻"},
-                {"value": 1, "change": True, "god": "勾陈", "name": "三爻"},
-                {"value": 0, "change": False, "god": "腾蛇", "name": "四爻"},
-                {"value": 1, "change": False, "god": "白虎", "name": "五爻"},
-                {"value": 0, "change": True, "god": "玄武", "name": "上爻"},
-            ]
+            # 未手动摇卦 (lines 空) → 以时起卦，按四柱干支 + 时辰确定性生成 (不同时间不同卦)。
+            lines = _time_based_gua_lines(nongli, payload)
         current_code = payload.get("gua_code") or _derive_gua_code(lines)
         changed_code = payload.get("changed_code") or _derive_changed_gua_code(lines)
         descs = self._call_remote("/gua/desc", {"name": [current_code, changed_code]})
