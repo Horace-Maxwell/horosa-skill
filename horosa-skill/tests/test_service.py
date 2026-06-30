@@ -281,6 +281,11 @@ class FakeClient(HorosaApiClient):
                     "collection": [{"collector": "Saturn", "p1": "Sun", "p2": "Moon"}],
                     "aversion": [{"a": "Sun", "b": "Saturn"}],
                     "bending": [{"planet": "Moon", "at": "北弯"}],
+                    # 连接学说后四式 (空亡/阻止/挫败/收回)
+                    "void": [{"planet": "Moon", "mode": "sign"}],
+                    "prohibition": [{"blocker": "Mars", "between": "Venus", "to": "Jupiter"}],
+                    "frustration": [{"frustrated": "Venus", "via": "Jupiter", "to": "Saturn"}],
+                    "refranation": [{"planet": "Mercury", "to": "Sun"}],
                 },
                 "topicAlmuten": [{"topic": "婚配", "house": 7, "significator": "Venus", "almuten": "Mars"}],
                 "accidentalDignity": [{"planet": "Saturn", "score": 12, "factors": ["角宫+5", "行速+2", "自由光+5"]}],
@@ -792,6 +797,10 @@ def test_chart_classical_sections_emit_offline(tmp_path) -> None:
         "聚光：土 聚 日、月 之光",              # collection
         "不合意：日 与 土 不合意",              # aversion
         "交点弯曲：月 交点弯曲（北弯）",          # bending
+        "空亡：月 空亡（本座内不再成相）",        # void
+        "阻止：火 阻止 金→木 入相",             # prohibition
+        "挫败：金 挫败（木 先成相 土）",          # frustration
+        "收回：水 收回（趋留撤离 日）",          # refranation
         "婚配（7宫·自然象征金）主星火",          # topicAlmuten
         "偶然尊贵",
         "土 12（角宫+5·行速+2·自由光+5）",      # accidentalDignity

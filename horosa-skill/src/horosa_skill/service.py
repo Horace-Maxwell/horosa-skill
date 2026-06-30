@@ -2055,7 +2055,12 @@ def _build_classical_analysis_section(analysis: dict[str, Any]) -> list[str]:
     coll = [f"{_cls_msg(c.get('collector'))} 聚 {_cls_msg(c.get('p1'))}、{_cls_msg(c.get('p2'))} 之光" for c in (ad.get("collection") or []) if isinstance(c, dict)]
     aver = [f"{_cls_msg(v.get('a'))} 与 {_cls_msg(v.get('b'))} 不合意" for v in (ad.get("aversion") or []) if isinstance(v, dict)]
     bend = [f"{_cls_msg(b.get('planet'))} 交点弯曲{f'（{b.get('at')}）' if b.get('at') else ''}" for b in (ad.get("bending") or []) if isinstance(b, dict)]
-    if trans or coll or aver or bend:
+    # 连接学说后四式：空亡（指定星离座前不再成相）/ 阻止（更快之星先到截断入相）/ 挫败（受体移情致甲落空）/ 收回（趋留撤离）。
+    voidc = [f"{_cls_msg(x.get('planet'))} 空亡（{'30°内' if x.get('mode') == 'classical' else '本座内'}不再成相）" for x in (ad.get("void") or []) if isinstance(x, dict)]
+    prohib = [f"{_cls_msg(p.get('blocker'))} 阻止 {_cls_msg(p.get('between'))}→{_cls_msg(p.get('to'))} 入相" for p in (ad.get("prohibition") or []) if isinstance(p, dict)]
+    frust = [f"{_cls_msg(x.get('frustrated'))} 挫败（{_cls_msg(x.get('via'))} 先成相 {_cls_msg(x.get('to'))}）" for x in (ad.get("frustration") or []) if isinstance(x, dict)]
+    refran = [f"{_cls_msg(r.get('planet'))} 收回（趋留撤离 {_cls_msg(r.get('to'))}）" for r in (ad.get("refranation") or []) if isinstance(r, dict)]
+    if trans or coll or aver or bend or voidc or prohib or frust or refran:
         lines.append("相位动态")
         if trans:
             lines.append(f"传光：{'；'.join(trans)}")
@@ -2065,6 +2070,14 @@ def _build_classical_analysis_section(analysis: dict[str, Any]) -> list[str]:
             lines.append(f"不合意：{'；'.join(aver)}")
         if bend:
             lines.append(f"交点弯曲：{'；'.join(bend)}")
+        if voidc:
+            lines.append(f"空亡：{'；'.join(voidc)}")
+        if prohib:
+            lines.append(f"阻止：{'；'.join(prohib)}")
+        if frust:
+            lines.append(f"挫败：{'；'.join(frust)}")
+        if refran:
+            lines.append(f"收回：{'；'.join(refran)}")
     ta = [f"{t.get('topic')}（{t.get('house')}宫{('·自然象征' + _cls_msg(t.get('significator'))) if t.get('significator') else ''}）主星{_cls_msg(t.get('almuten'))}" for t in (analysis.get("topicAlmuten") or []) if isinstance(t, dict) and t.get("almuten")]
     if ta:
         lines.append("逐题主星")
