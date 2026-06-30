@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import re
 import time
 from datetime import timezone, datetime
 from pathlib import Path
@@ -2182,6 +2183,359 @@ def _build_classical_analysis_section(analysis: dict[str, Any]) -> list[str]:
     return lines
 
 
+# ── 格局速览 (pattern overview)：龙脉/孤月独明/先验权力/心性·智识/职业·行事/强吉木星/后天凶星 ──
+# 纯派生自 /chart 活盘对象(objects: lon/lonspeed/sign/selfDignity/ruleHouses/house/feral/aboveHorizon)
+# + isDiurnal + 北交 + mutuals/receptions/aspects.normalAsp 及主宰星链。供 [古典格局] 段尾「格局速览」子块。绝不抛(失败回空)。
+_PO_TRAD_KEYS = ("sun", "moon", "mercury", "venus", "mars", "jupiter", "saturn")
+_PO_KEY_TO_ID = {"sun": "Sun", "moon": "Moon", "mercury": "Mercury", "venus": "Venus", "mars": "Mars", "jupiter": "Jupiter", "saturn": "Saturn"}
+_PO_ID_TO_KEY = {v: k for k, v in _PO_KEY_TO_ID.items()}
+_PO_SEVEN_IDS = ("Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn")
+_PO_SIGN_DOMICILE = {
+    "aries": "mars", "taurus": "venus", "gemini": "mercury", "cancer": "moon",
+    "leo": "sun", "virgo": "mercury", "libra": "venus", "scorpio": "mars",
+    "sagittarius": "jupiter", "capricorn": "saturn", "aquarius": "saturn", "pisces": "jupiter",
+}
+_PO_SIGN_MODALITY = {
+    "aries": "cardinal", "cancer": "cardinal", "libra": "cardinal", "capricorn": "cardinal",
+    "taurus": "fixed", "leo": "fixed", "scorpio": "fixed", "aquarius": "fixed",
+    "gemini": "mutable", "virgo": "mutable", "sagittarius": "mutable", "pisces": "mutable",
+}
+_PO_MODALITY_CN = {"cardinal": "转宫", "fixed": "定宫", "mutable": "二体宫"}
+_PO_MALEFIC_HOUSES = frozenset({6, 8, 12})
+_PO_JUP_WEAK_HOUSES = frozenset({3, 6, 8, 12})
+
+
+def _po_norm360(x: Any) -> float:
+    try:
+        return ((float(x) % 360.0) + 360.0) % 360.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _po_house_num(h: Any) -> int | None:
+    if isinstance(h, bool):
+        return None
+    if isinstance(h, (int, float)):
+        return int(h)
+    m = re.search(r"(\d+)", str(h if h is not None else ""))
+    return int(m.group(1)) if m else None
+
+
+def _po_sign_key(s: Any) -> str | None:
+    return str(s).lower() if s else None
+
+
+def _po_dign_token(sd: Any) -> str:
+    if not isinstance(sd, list):
+        return ""
+    if "ruler" in sd:
+        return "庙"
+    if "exalt" in sd:
+        return "旺"
+    if "exile" in sd:
+        return "陷"
+    if "fall" in sd:
+        return "落"
+    return ""
+
+
+def _po_compute_dispositors(objects: list[Any]) -> dict[str, Any]:
+    # 七政各落座的本垣主，顺链至「落自家座」终极主宰或互容成环；返回 {step: key->本垣主key, loops: [环key数组]}。
+    pos: dict[str, str | None] = {}
+    for o in objects or []:
+        if not isinstance(o, dict):
+            continue
+        key = _PO_ID_TO_KEY.get(o.get("id"))
+        if key:
+            pos[key] = _po_sign_key(o.get("sign"))
+    step: dict[str, str] = {}
+    for k in _PO_TRAD_KEYS:
+        sign = pos.get(k)
+        dom = _PO_SIGN_DOMICILE.get(sign) if sign else None
+        if dom is not None:
+            step[k] = dom
+    loops: list[list[str]] = []
+    for start in _PO_TRAD_KEYS:
+        if start not in step:
+            continue
+        path: list[str] = []
+        seen: set[str] = set()
+        cur: str | None = start
+        while cur is not None and cur in step:
+            if cur in seen:
+                loops.append(path[path.index(cur):])
+                break
+            seen.add(cur)
+            path.append(cur)
+            nxt = step[cur]
+            if nxt == cur:
+                break
+            cur = nxt
+    uniq: list[list[str]] = []
+    seen_loop: set[str] = set()
+    for c in loops:
+        key = ">".join(sorted(c))
+        if key not in seen_loop:
+            seen_loop.add(key)
+            uniq.append(c)
+    return {"step": step, "loops": uniq}
+
+
+def _po_pair_linked(id_a: Any, id_b: Any, response: dict[str, Any], by_id: dict[str, Any]) -> bool:
+    def in_list(lst: Any) -> bool:
+        for it in lst or []:
+            if not isinstance(it, dict):
+                continue
+            x = it["planetA"].get("id") if isinstance(it.get("planetA"), dict) else it.get("beneficiary")
+            y = it["planetB"].get("id") if isinstance(it.get("planetB"), dict) else it.get("supplier")
+            if (x == id_a and y == id_b) or (x == id_b and y == id_a):
+                return True
+        return False
+    m = response.get("mutuals") or {}
+    r = response.get("receptions") or {}
+    if in_list(m.get("normal")) or in_list(m.get("abnormal")) or in_list(r.get("normal")) or in_list(r.get("abnormal")):
+        return True
+    na = (response.get("aspects") or {}).get("normalAsp") if isinstance(response.get("aspects"), dict) else None
+    row = na.get(id_a) if isinstance(na, dict) else None
+    if isinstance(row, dict):
+        for cat in ("Exact", "Applicative", "Separative"):
+            for x in (row.get(cat) or []):
+                if isinstance(x, dict) and x.get("id") == id_b:
+                    try:
+                        if int(x.get("asp")) == 0:
+                            return True
+                    except (TypeError, ValueError):
+                        pass
+    return False
+
+
+def _pattern_overview(response: dict[str, Any]) -> dict[str, Any]:
+    perchart = response.get("chart") if isinstance(response.get("chart"), dict) else {}
+    objects = perchart.get("objects") if isinstance(perchart.get("objects"), list) else []
+    if not objects:
+        return {}
+    by_id = {o.get("id"): o for o in objects if isinstance(o, dict) and o.get("id")}
+    seven = [by_id[i] for i in _PO_SEVEN_IDS if i in by_id]
+    is_day = bool(perchart.get("isDiurnal"))
+    disp = _po_compute_dispositors(objects)
+
+    def rule_houses(o: Any) -> list[int]:
+        if not isinstance(o, dict):
+            return []
+        return [n for n in (_po_house_num(h) for h in (o.get("ruleHouses") or [])) if n is not None]
+
+    def house_of(o: Any) -> int | None:
+        return _po_house_num(o.get("house")) if isinstance(o, dict) else None
+
+    def afflict_flags(o: Any) -> list[str]:
+        f: list[str] = []
+        if not isinstance(o, dict):
+            return f
+        try:
+            if float(o.get("lonspeed") or 0) < 0:
+                f.append("逆")
+        except (TypeError, ValueError):
+            pass
+        if o.get("feral"):
+            f.append("野逸")
+        t = _po_dign_token(o.get("selfDignity"))
+        if t in ("陷", "落"):
+            f.append(t)
+        return f
+
+    # 龙截龙拥：北交黄经为轴分盘，统计 7 真星各半
+    nn = by_id.get("North Node")
+    if not nn or nn.get("lon") is None or len(seven) < 7:
+        dragon: dict[str, Any] = {"has": False}
+    else:
+        axis = _po_norm360(nn.get("lon"))
+        side_a: list[Any] = []
+        side_b: list[Any] = []
+        for o in seven:
+            (side_a if _po_norm360((o.get("lon") or 0) - axis) < 180 else side_b).append(o)
+        small = side_a if len(side_a) <= len(side_b) else side_b
+        if len(small) == 0:
+            dragon = {"has": True, "kind": "龙拥", "note": f"七星聚一侧（{'昼' if is_day else '夜'}限）"}
+        elif len(small) == 1:
+            lone = small[0]
+            dragon = {"has": True, "kind": "龙截", "lone": lone.get("id"), "loneHouse": house_of(lone), "loneSign": lone.get("sign"), "loneRules": rule_houses(lone)}
+        elif len(small) == 2 and _po_pair_linked(small[0].get("id"), small[1].get("id"), response, by_id):
+            dragon = {"has": True, "kind": "龙截", "pair": [small[0].get("id"), small[1].get("id")], "note": "两星联结"}
+        else:
+            dragon = {"has": False}
+
+    # 孤月独明：夜生且 7 星中唯月在地平上
+    if is_day:
+        lone_moon = {"has": False}
+    else:
+        def above(o: Any) -> bool:
+            ah = o.get("aboveHorizon")
+            if ah is not None:
+                return bool(ah)
+            h = house_of(o)
+            return h is not None and 7 <= h <= 12
+        above_list = [o for o in seven if above(o)]
+        lone_moon = {"has": len(above_list) == 1 and above_list[0].get("id") == "Moon"}
+
+    # 月水心性智识：座·模式·主宰星·主宰星资质·受损旗标
+    def mm_one(planet_id: str) -> dict[str, Any] | None:
+        o = by_id.get(planet_id)
+        if not o:
+            return None
+        sign_k = _po_sign_key(o.get("sign"))
+        modality = _PO_MODALITY_CN.get(_PO_SIGN_MODALITY.get(sign_k or "", ""), "")
+        dk = disp["step"].get(_PO_ID_TO_KEY.get(planet_id, ""))
+        disp_id = _PO_KEY_TO_ID.get(dk) if dk else None
+        disp_obj = by_id.get(disp_id) if disp_id else None
+        return {"sign": o.get("sign"), "modality": modality, "ruler": disp_id,
+                "rulerDign": _po_dign_token(disp_obj.get("selfDignity")) if disp_obj else "", "flags": afflict_flags(o)}
+    moon_mercury = {"moon": mm_one("Moon"), "mercury": mm_one("Mercury")}
+
+    # 职业/行事(东升西没)：西没=黄经在前，取最近为第一
+    def first_occidental(ref_id: str) -> str | None:
+        ref = by_id.get(ref_id)
+        if not ref:
+            return None
+        occ = sorted(
+            ({"id": o.get("id"), "d": _po_norm360((o.get("lon") or 0) - (ref.get("lon") or 0))} for o in seven if o.get("id") != ref_id),
+            key=lambda x: x["d"],
+        )
+        occ = [x for x in occ if 0 < x["d"] < 180]
+        occ.sort(key=lambda x: x["d"])
+        return occ[0]["id"] if occ else None
+
+    def detail_of(pid: str | None) -> dict[str, Any] | None:
+        o = by_id.get(pid) if pid else None
+        if not o:
+            return None
+        return {"id": pid, "sign": o.get("sign"), "house": house_of(o)}
+    vocation = {"career": detail_of(first_occidental("Moon")), "style": detail_of(first_occidental("Sun"))}
+
+    # 强吉木星：不主 {3,6,8,12}(例外 ruleHouses=={6,9}) + 照耀星数(遵当前容许度 normalAsp)
+    jup = by_id.get("Jupiter")
+    if not jup:
+        jupiter: dict[str, Any] = {"present": False}
+    else:
+        rh = rule_houses(jup)
+        rh_set = set(rh)
+        is69 = len(rh_set) == 2 and 6 in rh_set and 9 in rh_set
+        strong = (not any(h in _PO_JUP_WEAK_HOUSES for h in rh)) or is69
+        lit: list[str] = []
+        na = (response.get("aspects") or {}).get("normalAsp") if isinstance(response.get("aspects"), dict) else None
+        ja = na.get("Jupiter") if isinstance(na, dict) else None
+        if isinstance(ja, dict):
+            for cat in ("Exact", "Applicative", "Separative", "None"):
+                for a in (ja.get(cat) or []):
+                    aid = a.get("id") if isinstance(a, dict) else None
+                    if aid in _PO_SEVEN_IDS and aid != "Jupiter" and aid not in lit:
+                        lit.append(aid)
+        jupiter = {"present": True, "strong": strong, "sign": jup.get("sign"),
+                   "dign": _po_dign_token(jup.get("selfDignity")), "lit": lit, "litCount": len(lit)}
+
+    # 后天凶星：主宰 6/8/12 者
+    afflicted = [o.get("id") for o in seven if any(h in _PO_MALEFIC_HOUSES for h in rule_houses(o))]
+
+    # 先验权力：8th 与 12th 或 8th 与 1th 之联结(接纳/互容/主宰环)；夜生 → 八杀朝天大贵
+    def in_or_rules(o: Any, h: int) -> bool:
+        if not o:
+            return False
+        return house_of(o) == h or h in rule_houses(o)
+
+    def apriori_link(oa: Any, ob: Any) -> str | None:
+        if not oa or not ob:
+            return None
+        if (in_or_rules(oa, 8) and in_or_rules(ob, 12)) or (in_or_rules(oa, 12) and in_or_rules(ob, 8)):
+            return "8·12"
+        if (in_or_rules(oa, 8) and in_or_rules(ob, 1)) or (in_or_rules(oa, 1) and in_or_rules(ob, 8)):
+            return "8·1"
+        return None
+    apriori: dict[str, Any] = {"has": False, "links": []}
+
+    def check_apriori(a_id: Any, b_id: Any, kind: str) -> None:
+        w = apriori_link(by_id.get(a_id), by_id.get(b_id))
+        if w:
+            apriori["has"] = True
+            apriori["links"].append({"a": a_id, "b": b_id, "which": w, "kind": kind})
+    m = response.get("mutuals") or {}
+    r = response.get("receptions") or {}
+    for it in list(m.get("normal") or []) + list(m.get("abnormal") or []):
+        if isinstance(it, dict):
+            pa = it["planetA"].get("id") if isinstance(it.get("planetA"), dict) else None
+            pb = it["planetB"].get("id") if isinstance(it.get("planetB"), dict) else None
+            check_apriori(pa, pb, "互容")
+    for it in list(r.get("normal") or []) + list(r.get("abnormal") or []):
+        if isinstance(it, dict):
+            check_apriori(it.get("beneficiary"), it.get("supplier"), "接纳")
+    for lp in disp["loops"]:
+        ids = [i for i in (_PO_KEY_TO_ID.get(k) for k in lp) if i]
+        for x in range(len(ids)):
+            for y in range(x + 1, len(ids)):
+                check_apriori(ids[x], ids[y], "主宰环")
+    apriori["eightKill"] = apriori["has"] and not is_day
+
+    return {"dragon": dragon, "loneMoon": lone_moon, "moonMercury": moon_mercury,
+            "vocation": vocation, "jupiter": jupiter, "afflictedRulers": afflicted, "apriori": apriori}
+
+
+def _pattern_overview_lines(response: dict[str, Any]) -> list[str]:
+    try:
+        data = _pattern_overview(response)
+    except Exception:  # noqa: BLE001 — 格局速览失败绝不连累整段，回空降级
+        return []
+    if not data:
+        return []
+    lines: list[str] = []
+    d = data.get("dragon") or {}
+    if d.get("has"):
+        if d.get("kind") == "龙拥":
+            lines.append(f"龙脉：龙拥（{d.get('note') or '七星聚一侧'}）")
+        elif d.get("pair"):
+            lines.append(f"龙脉：龙截 {''.join(_cls_msg(x) for x in d['pair'])}（两星联结）")
+        else:
+            rules = d.get("loneRules") or []
+            house_suf = f"·{d.get('loneHouse')}宫" if d.get("loneHouse") else ""
+            rules_suf = f"·主{'/'.join(str(h) for h in rules)}宫" if rules else ""
+            lines.append(f"龙脉：龙截 {_cls_msg(d.get('lone'))}（{_cls_msg(d.get('loneSign'))}{house_suf}{rules_suf}）")
+    if (data.get("loneMoon") or {}).get("has"):
+        lines.append("孤月独明：是（夜生·唯月在地平上）")
+    ap = data.get("apriori") or {}
+    if ap.get("has"):
+        link_txt = "、".join(f"{_cls_msg(lk['a'])}{lk['kind']}{_cls_msg(lk['b'])}({lk['which']})" for lk in (ap.get("links") or []))
+        tail = "·夜生·八杀朝天大贵" if ap.get("eightKill") else "·昼生·非八杀朝天"
+        lines.append(f"先验权力：{link_txt}{tail}")
+    mm = data.get("moonMercury") or {}
+
+    def one_mm(o: dict[str, Any] | None) -> str:
+        if not o:
+            return ""
+        out = _cls_msg(o.get("sign"))
+        if o.get("modality"):
+            out += f"·{o['modality']}"
+        if o.get("ruler"):
+            out += f"·主{_cls_msg(o['ruler'])}{o.get('rulerDign') or ''}"
+        if o.get("flags"):
+            out += f"·{''.join(o['flags'])}"
+        return out
+    if mm.get("moon"):
+        lines.append(f"心性(月)：{one_mm(mm['moon'])}")
+    if mm.get("mercury"):
+        lines.append(f"智识(水)：{one_mm(mm['mercury'])}")
+    v = data.get("vocation") or {}
+    for label, item in (("职业(月第一西没)", v.get("career")), ("行事(日第一西没)", v.get("style"))):
+        if item:
+            house_suf = f"·{item.get('house')}宫" if item.get("house") else ""
+            lines.append(f"{label}：{_cls_msg(item.get('id'))} {_cls_msg(item.get('sign'))}{house_suf}")
+    j = data.get("jupiter") or {}
+    if j.get("present"):
+        lit = j.get("lit") or []
+        lit_txt = f"（{'、'.join(_cls_msg(x) for x in lit)}）" if lit else ""
+        dign_suf = f"·{j['dign']}" if j.get("dign") else ""
+        lines.append(f"木星：{'强吉' if j.get('strong') else '非强吉'}·{_cls_msg(j.get('sign'))}{dign_suf}·照耀{j.get('litCount')}星{lit_txt}")
+    if data.get("afflictedRulers"):
+        lines.append(f"后天凶星：{'、'.join(_cls_msg(x) for x in data['afflictedRulers'])}")
+    return lines
+
+
 def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
     sections = [
         ("起盘信息", _build_base_info_lines(response, payload)),
@@ -2206,6 +2560,12 @@ def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
     if classical:
         rendered.append(("古典", "\n".join(classical).strip()))
     classical_analysis = _build_classical_analysis_section(response.get("_classicalAnalysis") or {})
+    # 格局速览 (龙脉/孤月独明/先验权力/…) 仅随 [古典格局] 段一并出 —— 即仅 _classicalAnalysis 已挂载的
+    # chart 家族(astrochart/astrochart_like)；india/mundane 等无 [古典格局] preset 的盘不挂，避免 unknown 段。
+    if response.get("_classicalAnalysis") is not None:
+        pov = _pattern_overview_lines(response)
+        if pov:
+            classical_analysis = (classical_analysis or []) + ["格局速览"] + pov
     if classical_analysis:
         rendered.append(("古典格局", "\n".join(classical_analysis).strip()))
     if extras:

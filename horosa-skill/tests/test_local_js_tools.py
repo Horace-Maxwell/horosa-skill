@@ -564,6 +564,10 @@ def test_chart_carries_v267_classical(tmp_path) -> None:
     assert "逐题主星" in snapshot
     assert "偶然尊贵" in snapshot
     assert "Almuten 总主" in snapshot
+    # [古典格局] 尾「格局速览」(派生自活盘对象 + 主宰星链)：心性·智识·职业·行事·木星·后天凶星 对任一本命盘恒在。
+    assert "格局速览" in snapshot
+    for marker in ("心性(月)：", "智识(水)：", "职业(月第一西没)：", "行事(日第一西没)：", "木星：", "后天凶星："):
+        assert marker in snapshot, marker
     detected = (result.data.get("export_snapshot") or {}).get("section_titles_detected") or []
     assert "古典" in detected and "古典格局" in detected
     # 两段均已登记 preset → 不算 unknown（可能性 data-dependent，本盘可缺，故不查 missing）。
