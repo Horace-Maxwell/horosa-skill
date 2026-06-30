@@ -126,7 +126,7 @@ AI_EXPORT_TECHNIQUES = [
 
 AI_EXPORT_PRESET_SECTIONS = {
     "astrochart": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "12分度", "主宰星链", "古典", "古典格局", "寿命格局", "可能性"],
-    "indiachart": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "古典", "可能性"],
+    "indiachart": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "古典", "可能性", "大运Dasha"],
     "astrochart_like": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "古典", "古典格局", "可能性"],
     "relative": ["关系起盘信息", "A对B相位", "B对A相位", "A对B中点相位", "B对A中点相位", "A对B映点", "A对B反映点", "B对A映点", "B对A反映点", "合成图盘", "影响图盘-星盘A", "影响图盘-星盘B"],
     "primarydirect": ["出生时间", "本命盘星与虚点", "主/界限法设置", "主/界限法表格"],
@@ -153,7 +153,7 @@ AI_EXPORT_PRESET_SECTIONS = {
     "germany": ["起盘信息", "宫位宫头", "行星", "中点", "TNP星体", "中点相位", "90°中点盘", "行星图", "映点", "中点列表"],
     "agepoint": ["年龄推进点（Age Point / Huber）"],
     "distributions": ["界推运（分配法 / Distributions）"],
-    "jaynesprog": ["赤纬推运（Jayne Declination）"],
+    "jaynesprog": ["赤纬推运（Declination）", "本命盘配置", "时段盘 赤纬平行/反平行"],
     "vedicprog": ["恒星推运（Vedic Sidereal）"],
     "planetaryarc": ["行星弧（Planetary Arc）"],
     "planetaryages": ["行星年龄（Ages of Man）"],
@@ -217,7 +217,7 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     # [古典格局] 仅 /astroextra/analysis 成功(astrochart/astrochart_like)时出 → 列可选段, 优雅降级不误报 missing。
     "astrochart": ["月宿", "古典", "古典格局"],
     "astrochart_like": ["月宿", "古典", "古典格局"],
-    "indiachart": ["月宿", "古典"],
+    "indiachart": ["月宿", "古典", "大运Dasha"],
     "mundane": ["古典"],
     # 六壬 Phase4 (星阙 v2.5.x)：毕法（已命中）只在 refContext 成功且有命中时出；占断向导只在指定占类
     # (zhanCategory ≠ general) 时出 → 两者列为可选段，避免无命中/未指定占类时误报 missing。
@@ -230,6 +230,9 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     "guolao": ["政余格局"],
     # 多重回归: 单段技法；某体若无返照数据则该体行不出，三体皆空时整段不出 → 列为可选段，避免误报 missing。
     "extrareturns": ["多重回归"],
+    # 赤纬推运 (jaynesprog): [本命盘配置](本命星与虚点/宫位宫头) 需另取本命盘，headless 工具仅 fetch
+    # /astroextra/jaynesprog（平行表）→ 不挂该段 → 列可选段，缺失不误报。
+    "jaynesprog": ["本命盘配置"],
     # 八字: 大运段仅在 direction 计算成功(起运/性别齐备)时出 → 可选；多运限·指定时段是前端「指定时间窗」
     # 功能，后端 /bazi 响应不带该数据、skill 无该输入入口 → 未接入，列可选段(如实标出，不伪造)。
     "bazi": ["大运", "多运限·指定时段"],

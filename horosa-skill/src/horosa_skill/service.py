@@ -2536,6 +2536,77 @@ def _pattern_overview_lines(response: dict[str, Any]) -> list[str]:
     return lines
 
 
+# ── 印度律盘 Vimshottari 大运（120 年周期）：后端 jyotish.dasha.vimshottari 已算好，挂载 [大运Dasha] 段 ──
+_DASHA_SYS_LABEL = {
+    "vimshottari": "Vimshottari（120 年周期）",
+    "yogini": "Yogini（36 年 · 8 女神）",
+    "ashtottari": "Ashtottari（108 年 · Ardradi）",
+    "tribhagi": "Tribhāgī（Vimśottarī÷3 · 3 遍×40=120 年）",
+}
+
+
+def _dasha_lord_name(lord: Any) -> str:
+    return (lord.get("label") or lord.get("key") or "—") if isinstance(lord, dict) else "—"
+
+
+def _dasha_fmt_date(d: Any) -> str:
+    s = f"{d if d is not None else ''}"
+    m = re.match(r"^(\d{4}-\d{2}-\d{2})", s)
+    return m.group(1) if m else (s or "—")
+
+
+def _dasha_n1(x: Any) -> float:
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _dasha_date_only(s: Any) -> Any:
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", f"{s if s is not None else ''}")
+    if not m:
+        return None
+    try:
+        return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3))).date()
+    except ValueError:
+        return None
+
+
+def _build_vimshottari_dasha_lines(response: dict[str, Any]) -> list[str]:
+    jy = response.get("jyotish")
+    dasha_root = jy.get("dasha") if isinstance(jy, dict) else None
+    v = dasha_root.get("vimshottari") if isinstance(dasha_root, dict) else None
+    mahadashas = v.get("mahadashas") if isinstance(v, dict) else None
+    if not isinstance(v, dict) or not v.get("available") or not isinstance(mahadashas, list) or not mahadashas:
+        return []
+    out: list[str] = []
+    nak = v.get("moonNakshatra") or {}
+    out.append(f"系统：{_DASHA_SYS_LABEL['vimshottari']}")
+    out.append(f"月宿：{nak.get('label') or nak.get('name') or nak.get('key') or '—'}（宿主星 {_dasha_lord_name(v.get('firstLord'))}）")
+    out.append(f"首运：已历 {_dasha_n1(v.get('firstElapsedYears')):.1f} 年、余 {_dasha_n1(v.get('firstBalanceYears')):.1f} 年")
+    active = next((m for m in mahadashas if isinstance(m, dict) and m.get("active")), None)
+    if active:
+        out.append(f"当前大运（Mahadasha）：{_dasha_lord_name(active.get('lord'))}（{_dasha_fmt_date(active.get('start'))} → {_dasha_fmt_date(active.get('end'))}，{_dasha_n1(active.get('startAge')):.0f}–{_dasha_n1(active.get('endAge')):.0f} 岁）")
+        antars = active.get("antardashas")
+        if isinstance(antars, list) and antars:
+            today = datetime.now().date()
+            for srow in antars:
+                if not isinstance(srow, dict):
+                    continue
+                st = _dasha_date_only(srow.get("start"))
+                en = _dasha_date_only(srow.get("end"))
+                if st and en and st <= today < en:
+                    out.append(f"当前小运（Antardasha）：{_dasha_lord_name(srow.get('lord'))}（{_dasha_fmt_date(srow.get('start'))} → {_dasha_fmt_date(srow.get('end'))}）")
+                    break
+    out.append("大运序列：")
+    for m in mahadashas:
+        if not isinstance(m, dict):
+            continue
+        mark = "▶ " if m.get("active") else ("· " if m.get("birthBalance") else "  ")
+        out.append(f"{mark}{_dasha_lord_name(m.get('lord'))} {_dasha_fmt_date(m.get('start'))} → {_dasha_fmt_date(m.get('end'))}（{_dasha_n1(m.get('years')):.1f} 年，{_dasha_n1(m.get('startAge')):.0f}–{_dasha_n1(m.get('endAge')):.0f} 岁）")
+    return out
+
+
 def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
     sections = [
         ("起盘信息", _build_base_info_lines(response, payload)),
@@ -2575,6 +2646,10 @@ def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
     possibility = _build_possibility_section(response)
     if possibility:
         rendered.append(("可能性", "\n".join(possibility).strip()))
+    # 印度律盘专属：Vimshottari 大运（仅 india_chart 响应带 jyotish.dasha → 其余盘自然跳过）。
+    dasha_lines = _build_vimshottari_dasha_lines(response)
+    if dasha_lines:
+        rendered.append(("大运Dasha", "\n".join(dasha_lines).strip()))
     return _render_snapshot_text(rendered)
 
 
@@ -3127,19 +3202,17 @@ def _build_jaynesprog_snapshot_text(response: dict[str, Any]) -> str:
     sec = next((m for m in methods if isinstance(m, dict) and m.get("method") == "secondary"), methods[0] if methods else None)
     parallels = sec.get("parallels") if isinstance(sec, dict) and isinstance(sec.get("parallels"), list) else []
     if not parallels:
-        return _render_snapshot_text([("赤纬推运（Jayne Declination）", "（本盘无赤纬推运数据）")])
+        return _render_snapshot_text([("赤纬推运（Declination）", "（本盘无赤纬推运数据）")])
     type_label = {"parallel": "平行", "contraparallel": "反平行"}
-    lines = [
-        "Charles Jayne 赤纬推运：推运后看赤纬平行/反平行（下表为二次推运，截至目标日）。",
-        "",
-        "| 推运点 | 类型 | 本命点 | 误差 |",
-        "| --- | --- | --- | --- |",
-    ]
+    table = ["| 推运点 | 类型 | 本命点 | 误差 |", "| --- | --- | --- | --- |"]
     for p in parallels[:80]:
         if not isinstance(p, dict):
             continue
-        lines.append(f"| {_astro_msg(p.get('a'))} | {type_label.get(p.get('type'), p.get('type'))} | {_astro_msg(p.get('b'))} | {_fmt_num(p.get('orb'), 3)} |")
-    return _render_snapshot_text([("赤纬推运（Jayne Declination）", "\n".join(lines))])
+        table.append(f"| {_astro_msg(p.get('a'))} | {type_label.get(p.get('type'), p.get('type'))} | {_astro_msg(p.get('b'))} | {_fmt_num(p.get('orb'), 3)} |")
+    return _render_snapshot_text([
+        ("赤纬推运（Declination）", "赤纬推运：推运后看赤纬平行/反平行（下表为二次推运，截至目标日）。"),
+        ("时段盘 赤纬平行/反平行", "\n".join(table)),
+    ])
 
 
 def _build_vedicprog_snapshot_text(response: dict[str, Any]) -> str:

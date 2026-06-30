@@ -673,6 +673,12 @@ def test_india_chart_houses_and_ayanamsa(tmp_path) -> None:
     assert "恒星黄道，Campanus" in campanus.data["snapshot_text"]
     # 印占盘 export 干净（月宿在 optional，可能性数据相关）
     assert (raman.data.get("export_snapshot") or {}).get("unknown_detected_sections") == []
+    # Vimshottari 大运 [大运Dasha]（后端 jyotish.dasha.vimshottari）：系统/月宿/首运/大运序列 由出生唯一确定，恒在。
+    dasha_snap = lahiri.data["snapshot_text"]
+    assert "[大运Dasha]" in dasha_snap
+    assert "系统：Vimshottari（120 年周期）" in dasha_snap
+    for marker in ("月宿：", "首运：已历", "当前大运（Mahadasha）：", "大运序列："):
+        assert marker in dasha_snap, marker
 
 
 @requires_chart
@@ -709,7 +715,9 @@ def test_jaynesprog_runs_via_chart_service(tmp_path) -> None:
         save_result=False,
     )
     assert result.ok is True, result.error
-    assert "[赤纬推运（Jayne Declination）]" in result.data["snapshot_text"]
+    snap = result.data["snapshot_text"]
+    assert "[赤纬推运（Declination）]" in snap
+    assert "[时段盘 赤纬平行/反平行]" in snap
     _assert_clean_export(result)
 
 
