@@ -101,6 +101,7 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "horary": "horary",
     "election": "election",
     "geomancy": "geomancy",
+    "tarot": "tarot",
     "wangji": "wangji",
     "wuzhao": "wuzhao",
     "taixuan": "taixuan",
@@ -6004,6 +6005,33 @@ class HorosaSkillService:
         result["export_snapshot"] = self._augment_export_payload(technique="decennials", snapshot_text=snapshot_text)
         return result
 
+    def _run_tarot_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 塔罗：以起卦时刻确定性抽牌（seed 由 年月日时分 派生，或用户显式 seed），core-js tarot 引擎 SHA-256种子洗牌+解读。
+        seed = payload.get("seed")
+        if not seed:
+            parts = _ken_datetime_parts(payload)
+            seed = f"{parts['year']:04d}{parts['month']:02d}{parts['day']:02d}{parts['hour']:02d}{parts['minute']:02d}"
+        js_payload: dict[str, Any] = {
+            "seed": str(seed),
+            "question": payload.get("question") or "",
+            "spread": payload.get("spread") or "three",
+            "deck": payload.get("deck") or "rws",
+        }
+        if payload.get("usesReversals") is False:
+            js_payload["usesReversals"] = False
+        try:
+            result = self.js_client.run("tarot", js_payload)
+        except ToolTransportError:
+            result = {}
+        snapshot_text = result.get("snapshot_text") if isinstance(result, dict) else ""
+        return {
+            "deck": (isinstance(result, dict) and result.get("deck")) or js_payload["deck"],
+            "spread": (isinstance(result, dict) and result.get("spread")) or js_payload["spread"],
+            "seed": str(seed),
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="tarot", snapshot_text=snapshot_text),
+        }
+
     def _run_geomancy_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 天文地占：以起卦时刻确定性起卦（castMethod='time' + timeSeed 由 年月日时分 派生，同盘可复现），
         # 后端 /geomancy/reading 由 4 母卦推 16 图形 + 十二宫图形入宫 + 判官/见证/解读技法。
@@ -6118,6 +6146,8 @@ class HorosaSkillService:
             return self._run_sixyao_tool(payload)
         if definition.name == "geomancy":
             return self._run_geomancy_tool(payload)
+        if definition.name == "tarot":
+            return self._run_tarot_tool(payload)
         if definition.name == "tongshefa":
             return self._run_tongshefa_tool(payload)
         if definition.name == "canping":

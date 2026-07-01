@@ -543,6 +543,20 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         safe_defaults=[{"field": "questionType", "value": "custom", "meaning": "自定问类：按主问句判事项宫"}],
         do_not_assume=["起卦时刻（须是真实起卦当下）", "所问内容"],
     ),
+    "tarot": _policy(
+        intent="塔罗 / tarot：以「起卦时刻」确定性抽牌（SHA-256(种子)→洗牌，同刻同盘可复现），按牌阵逐位取牌 + 正逆位 + 花色/元素/大牌统计 + Yes/No 定局与精华牌。",
+        required_context=["起卦时刻 date/time（派生种子）", "所问 question", "牌阵 spread"],
+        ask_if_missing=[
+            {"field": "date/time", "question": "请提供起卦的日期与时间（塔罗以起卦时刻确定性抽牌）。也可直接给 seed。"},
+            {"field": "question", "question": "想问什么？请给出具体问题。"},
+            {"field": "spread", "question": "用哪种牌阵？", "options": ["三张·过去现在未来 three", "凯尔特十字 celtic", "单张 one", "关系 relationship", "其它（见 SPREADS）"]},
+        ],
+        safe_defaults=[
+            {"field": "spread", "value": "three", "meaning": "默认三张牌阵（过去·现在·未来）"},
+            {"field": "deck", "value": "rws", "meaning": "默认韦特-史密斯牌（RWS 78 张）"},
+        ],
+        do_not_assume=["起卦时刻/种子（决定抽到的牌，须真实）", "所问内容"],
+    ),
     "wangji": SHENSHU_POLICY,
     "wuzhao": SHENSHU_POLICY,
     "taixuan": SHENSHU_POLICY,

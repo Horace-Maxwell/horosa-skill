@@ -396,6 +396,16 @@ class GeomancyInput(BirthInput):
     tradition: bool | None = None
 
 
+class TarotInput(BirthInput):
+    # 塔罗：以起卦时刻确定性抽牌（date/time 派生种子，同刻同盘可复现；lat/lon/zone 仅为一致复用，不参与抽牌）。
+    # spread 牌阵(默认 three 三张·过去现在未来)，deck 牌系(默认 rws 韦特)，question 所问。seed 显式种子(可选，覆盖时间种子)。
+    question: str | None = None
+    spread: str | None = "three"
+    deck: str | None = "rws"
+    seed: str | None = None
+    usesReversals: bool | None = True
+
+
 class ShenShuInput(FlexibleModel):
     # 神数 family (wangji 皇极经世 / wuzhao 五兆 / taixuan 太玄 / jingjue 京房易/靖瞶 / shenyishu 神乙数):
     # ganzhi-based, so only date (+ optional time) + the 晚子时 switches are needed; lat/lon/zone are not used.

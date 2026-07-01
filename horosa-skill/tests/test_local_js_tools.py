@@ -666,6 +666,26 @@ def test_geomancy_deterministic_cast_and_sections(tmp_path) -> None:
     assert len((export.get("export_text") or "").splitlines()) < 200
 
 
+@requires_runtime
+def test_tarot_deterministic_draw_and_sections(tmp_path) -> None:
+    # 塔罗（core-js tarot 引擎，SHA-256种子洗牌确定性抽牌）：[起卦信息]/[牌阵直断]/[牌阵细论]/[综合建议]。
+    service = make_service(tmp_path)
+    base = {"date": "2026-06-30", "time": "14:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "question": "事业能否升迁", "spread": "three"}
+    r1 = service.run_tool("tarot", base, save_result=False)
+    r2 = service.run_tool("tarot", base, save_result=False)
+    assert r1.ok is True, r1.error
+    # 以时抽牌确定性：同刻同牌
+    assert r1.data["snapshot_text"] == r2.data["snapshot_text"]
+    snap = r1.data["snapshot_text"]
+    for header in ("[起卦信息]", "[牌阵直断]", "[牌阵细论]", "[综合建议]"):
+        assert header in snap, header
+    # 逐位含牌 + 定局
+    assert "位置1" in snap and "定局:" in snap
+    export = r1.data.get("export_snapshot") or {}
+    assert export.get("unknown_detected_sections") == []
+    assert len((export.get("export_text") or "").splitlines()) < 200
+
+
 @requires_chart
 def test_chart_sidereal_ayanamsa_and_nakshatra(tmp_path) -> None:
     # 星阙 v2.6.4 恒星黄道 47 岁差 + 西洋月宿 nakshatra：sidereal 盘(zodiacal=1) 按 siderealAyanamsa

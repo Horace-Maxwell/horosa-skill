@@ -440,6 +440,18 @@ class FakeJsClient(HorosaJsEngineClient):
                     "逐爻(初→上)：六神│伏神│本爻│世应│旺衰│状态│神煞\n第1爻：勾陈 卯木子孙 旺"
                 ),
             }
+        if tool_name == "tarot":
+            # 塔罗：离线替身给结构化 [起卦信息]/[牌阵直断]/[牌阵细论]/[综合建议]，供 tarot 契约 round-trip。
+            return {
+                "deck": "rws",
+                "spread": payload.get("spread") or "three",
+                "snapshot_text": (
+                    "[起卦信息]\n【Rider–Waite–Smith (RWS)】三张(过去·现在·未来)(种子:test)\n所问:事业能否升迁\n\n"
+                    "[牌阵直断]\n定局:Yes/No=NO 否 · 精华牌 17 The Star 星星\n\n"
+                    "[牌阵细论]\n位置1(过去)：6 The Lovers 恋人（逆位）\n  含义:失败、愚妄之谋\n\n"
+                    "[综合建议]\n综合:主导元素:火(行动/意志)；大牌占比:67%"
+                ),
+            }
         if tool_name == "bazi_geju":
             # 八字格局 (baziGeju 引擎)：离线替身给 [五行力量]/[格局·用神]/[盲派结构]，供 bazi 契约 round-trip。
             return {
