@@ -386,6 +386,16 @@ class ElectionInput(BirthInput):
     predictive: bool | None = False
 
 
+class GeomancyInput(BirthInput):
+    # 天文地占 (astronomical geomancy): 以起卦时刻(date/time/place)确定性起卦(castMethod='time' + timeSeed 由时刻派生)。
+    # 后端由 4 母卦推 16 图形 + 十二宫图形入宫 + 判官/见证/解读技法。question 为所问，questionType 择 11 类问类。
+    # profile = 地占传本流派（european_classical/planetary/modern/arabic_raml/india_ramal/sikidy/hakata）。
+    question: str | None = None
+    questionType: str | None = "custom"
+    profile: str | None = "european_classical"
+    tradition: bool | None = None
+
+
 class ShenShuInput(FlexibleModel):
     # 神数 family (wangji 皇极经世 / wuzhao 五兆 / taixuan 太玄 / jingjue 京房易/靖瞶 / shenyishu 神乙数):
     # ganzhi-based, so only date (+ optional time) + the 晚子时 switches are needed; lat/lon/zone are not used.

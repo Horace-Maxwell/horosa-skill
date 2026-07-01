@@ -532,6 +532,17 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         safe_defaults=[{"field": "topicId", "value": "marriage", "meaning": "默认按结婚用事规则包评估"}],
         do_not_assume=["候选时刻", "用事类型"],
     ),
+    "geomancy": _policy(
+        intent="天文地占 / astronomical geomancy：以「起卦时刻」确定性起卦（castMethod='time'，由 date/time 派生 timeSeed，同刻可复现），由 4 母卦推 16 图形入十二宫，取判官/见证/解读技法断吉凶。",
+        required_context=["起卦时刻 date/time/zone", "起卦地点 lon/lat", "所问 question", "问类 questionType"],
+        ask_if_missing=[
+            {"field": "date/time/place", "question": "请提供起卦的日期、时间、时区和地点（地占以起卦时刻确定性起卦）。"},
+            {"field": "question", "question": "所问何事？请给出具体问题。"},
+            {"field": "questionType", "question": "问的是哪一类？", "options": ["综合/自定 custom", "财物 wealth", "婚姻 marriage", "事业 career", "疾病 health", "官非 lawsuit", "失物 theft", "子嗣 pregnancy", "房产 property", "旅行 travel", "愿望 hope", "私敌 enemy"]},
+        ],
+        safe_defaults=[{"field": "questionType", "value": "custom", "meaning": "自定问类：按主问句判事项宫"}],
+        do_not_assume=["起卦时刻（须是真实起卦当下）", "所问内容"],
+    ),
     "wangji": SHENSHU_POLICY,
     "wuzhao": SHENSHU_POLICY,
     "taixuan": SHENSHU_POLICY,

@@ -118,6 +118,7 @@ AI_EXPORT_TECHNIQUES = [
     {"key": "jieqi_qiufen", "label": "节气盘-秋分"},
     {"key": "jieqi_dongzhi", "label": "节气盘-冬至"},
     {"key": "otherbu", "label": "西洋游戏"},
+    {"key": "geomancy", "label": "天文地占"},
     {"key": "fengshui", "label": "风水"},
     {"key": "canping", "label": "邵子参评数"},
     {"key": "heluo", "label": "河洛理数"},
@@ -186,6 +187,9 @@ AI_EXPORT_PRESET_SECTIONS = {
     "jieqi": ["节气盘参数", "春分星盘", "春分宿盘", "夏至星盘", "夏至宿盘", "秋分星盘", "秋分宿盘", "冬至星盘", "冬至宿盘"],
     **JIEQI_SETTING_PRESETS,
     "otherbu": ["起盘信息", "骰子结果", "骰子盘宫位与星体", "天象盘宫位与星体"],
+    # 天文地占（源 preset ['判定','解读技法','十二宫·图形入宫','十六图形']）+ 起卦信息(问题/问类/上升图形)，
+    # 与 skill 惯例一致。解读技法随后端 technique 出、判定/入宫/十六图形每盘必出。
+    "geomancy": ["起卦信息", "判定", "解读技法", "十二宫·图形入宫", "十六图形"],
     "fengshui": ["起盘信息", "标记判定", "冲突清单", "建议汇总", "纳气建议"],
     # 星阙 aiExport.js declares canping as ['起盘','本命','大运','流年'], but its module snapshot
     # (CanPingMain.saveSnap → canpingLocal.buildSnapshotText with no liunianBranch) only ever emits

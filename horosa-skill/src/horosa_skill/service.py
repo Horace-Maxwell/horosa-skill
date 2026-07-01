@@ -100,6 +100,7 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "extrareturns": "extrareturns",
     "horary": "horary",
     "election": "election",
+    "geomancy": "geomancy",
     "wangji": "wangji",
     "wuzhao": "wuzhao",
     "taixuan": "taixuan",
@@ -150,6 +151,7 @@ _PYTHON_CHART_ENDPOINTS = {
     "/astroextra/progressions",
     "/astroextra/planetreturn",
     "/astroextra/analysis",
+    "/geomancy/reading",
     "/predict/planetaryarc",
     "/jieqi/year",
     "/qimen/pan",
@@ -3615,6 +3617,101 @@ def _build_decennials_snapshot_text(response: dict[str, Any], settings: dict[str
     )
 
 
+# ── 天文地占 (astronomical geomancy)：4 母卦→16 图形 + 十二宫图形入宫 + 判官/见证/解读技法。port GeomancyMain.buildGeomancySnapshotText ──
+_GEO_TRAD = {"european_classical": "古典定局派", "european_planetary": "行星共鸣派", "european_modern": "现代综合派", "arabic_raml": "阿拉伯沙占派", "india_ramal": "印度骰占派", "sikidy": "异或表盘", "hakata": "四片盘"}
+_GEO_PERF = {"occupation": "入主成局", "conjunction": "会合成局", "mutation": "互变成局", "translation": "传递成局", "none": "未成局"}
+_GEO_ASP = {"conjunction": "合", "sextile": "六分(吉)", "square": "刑(凶)", "trine": "拱(吉)", "opposition": "冲", "none": "无相位"}
+_GEO_SLOT = ["母一", "母二", "母三", "母四", "女一", "女二", "女三", "女四", "甥一", "甥二", "甥三", "甥四", "右证", "左证", "判官", "调和"]
+
+
+def _geo_figure_line(fig: Any, role: str) -> str:
+    if not isinstance(fig, dict):
+        return ""
+    parts = [p for p in [fig.get("nameZh") or fig.get("nameEn")] if p]
+    if fig.get("planetZh"):
+        parts.append(f"行星{fig['planetZh']}")
+    if fig.get("elementZh"):
+        parts.append(fig["elementZh"])
+    if fig.get("keywordsZh"):
+        parts.append(fig["keywordsZh"])
+    return f"{role}：{' · '.join(parts)}" if parts else ""
+
+
+def _build_geomancy_snapshot_text(response: dict[str, Any]) -> str:
+    reading = response.get("reading") if isinstance(response.get("reading"), dict) else {}
+    info = [
+        f"问题：{reading.get('question') or '—'}",
+        f"问类：{reading.get('questionTypeZh') or reading.get('questionType') or '—'}",
+        f"上升图形：{(reading.get('ascendantFigure') or {}).get('nameZh') or ''}（上升星座 {reading.get('ascendantSignZh') or ''}）",
+    ]
+    tb: list[str] = []
+    if reading.get("profileId") and reading.get("profileId") != "european_classical":
+        tb.append(f"流派={_GEO_TRAD.get(reading['profileId'], reading['profileId'])}")
+    if reading.get("zodiacSystem") == "planetary":
+        tb.append("黄道=行星归属体系")
+    if reading.get("readingScope") and reading.get("readingScope") != "L3":
+        tb.append(f"范围={reading['readingScope']}")
+    if tb:
+        info.append(f"传本设置：{'、'.join(tb)}")
+    judge: list[str] = []
+    for fig, role in ((reading.get("judge"), "判官"), (reading.get("reconciler"), "调和者"), (reading.get("rightWitness"), "右证(过去/问者)"), (reading.get("leftWitness"), "左证(现在/所问)")):
+        ln = _geo_figure_line(fig, role)
+        if ln:
+            judge.append(ln)
+    if reading.get("primaryHouse"):
+        judge.append(f"主宫：第 {reading['primaryHouse']} 宫")
+    tech: list[str] = []
+    t = reading.get("technique")
+    if isinstance(t, dict):
+        perf = t.get("perfection")
+        if perf and perf != "none":
+            tech.append(f"完美：{_GEO_PERF.get(perf, perf)}")
+        elif t.get("perfection_by_aspect"):
+            tech.append(f"完美：借相位({_GEO_ASP.get(t['perfection_by_aspect'], t['perfection_by_aspect'])})成局")
+        else:
+            tech.append("完美：未成局")
+        tech.append(f"相位：{_GEO_ASP.get(t.get('aspect'), t.get('aspect'))}")
+        if t.get("prohibition"):
+            tech.append(f"阻碍：第 {t['prohibition']} 宫强凶图阻断")
+        pp = t.get("points_parity")
+        if isinstance(pp, dict):
+            tech.append(f"点数是否：总 {pp.get('total')} 点·{'偶→是/稳' if pp.get('parity') == 'even' else '奇→否/动'}")
+        tm = t.get("timing")
+        if isinstance(tm, dict):
+            tech.append(f"应期：{'速' if tm.get('speed') == 'fast' else '迟'}·以「{tm.get('unit')}」计")
+        vp = t.get("via_puncti")
+        if isinstance(vp, dict):
+            tech.append(f"点之路：{'贯通' if vp.get('through') else '断于' + str(vp.get('broken_at'))}")
+        if t.get("natural_cosignificator"):
+            tech.append("自然共主：月亮")
+    house_lines: list[str] = []
+    for h in (reading.get("houses") or []):
+        if not isinstance(h, dict):
+            continue
+        fig = h.get("figure") or {}
+        roles = h.get("roles") or []
+        role = "【所问】" if "quesited" in roles else ("【问者】" if "querent" in roles else "")
+        reading_note = f" — {h['reading']}" if h.get("reading") else ""
+        house_lines.append(f"第{h.get('house')}宫({h.get('nameZh') or ''}){role}：{fig.get('nameZh') or fig.get('nameEn') or ''}{reading_note}")
+    fig_lines: list[str] = []
+    for i, f in enumerate(reading.get("figures16") or []):
+        if not isinstance(f, dict):
+            continue
+        slot = _GEO_SLOT[i] if i < len(_GEO_SLOT) else f"图{i + 1}"
+        elem = f"·{f['elementZh']}" if f.get("elementZh") else ""
+        fig_lines.append(f"{slot}：{f.get('nameZh') or f.get('nameEn')}（{f.get('planetZh') or ''}{elem}）")
+    sections: list[tuple[str, str]] = [("起卦信息", "\n".join(info).strip())]
+    if judge:
+        sections.append(("判定", "\n".join(judge).strip()))
+    if tech:
+        sections.append(("解读技法", "\n".join(tech).strip()))
+    if house_lines:
+        sections.append(("十二宫·图形入宫", "\n".join(house_lines).strip()))
+    if fig_lines:
+        sections.append(("十六图形", "\n".join(fig_lines).strip()))
+    return _render_snapshot_text(sections)
+
+
 def _build_sixyao_snapshot_text(payload: dict[str, Any], nongli: dict[str, Any], current_code: str, changed_code: str, lines: list[dict[str, Any]], descs: dict[str, Any], struct_text: str = "") -> str:
     question = payload.get("question")
     current_desc = _extract_gua_detail(descs, current_code)
@@ -5907,6 +6004,29 @@ class HorosaSkillService:
         result["export_snapshot"] = self._augment_export_payload(technique="decennials", snapshot_text=snapshot_text)
         return result
 
+    def _run_geomancy_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 天文地占：以起卦时刻确定性起卦（castMethod='time' + timeSeed 由 年月日时分 派生，同盘可复现），
+        # 后端 /geomancy/reading 由 4 母卦推 16 图形 + 十二宫图形入宫 + 判官/见证/解读技法。
+        parts = _ken_datetime_parts(payload)
+        time_seed = int(f"{parts['year']:04d}{parts['month']:02d}{parts['day']:02d}{parts['hour']:02d}{parts['minute']:02d}")
+        response = self._call_remote(
+            "/geomancy/reading",
+            {
+                "question": payload.get("question") or "",
+                "questionType": payload.get("questionType") or "custom",
+                "castMethod": "time",
+                "timeSeed": time_seed,
+                "profile": payload.get("profile") or "european_classical",
+            },
+        )
+        snapshot_text = _build_geomancy_snapshot_text(response if isinstance(response, dict) else {})
+        return {
+            "reading": response.get("reading") if isinstance(response, dict) else None,
+            "figures": response.get("figures") if isinstance(response, dict) else None,
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="geomancy", snapshot_text=snapshot_text),
+        }
+
     def _run_sixyao_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         nongli = self._call_remote(
             "/nongli/time",
@@ -5996,6 +6116,8 @@ class HorosaSkillService:
             return self._run_suzhan_tool(payload)
         if definition.name == "sixyao":
             return self._run_sixyao_tool(payload)
+        if definition.name == "geomancy":
+            return self._run_geomancy_tool(payload)
         if definition.name == "tongshefa":
             return self._run_tongshefa_tool(payload)
         if definition.name == "canping":

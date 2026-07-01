@@ -201,6 +201,29 @@ class FakeClient(HorosaApiClient):
                     {"id": "Hades", "lon": 132.0, "sign": "Leo", "signlon": 12.0},
                 ],
             }
+        if endpoint == "/geomancy/reading":
+            # 天文地占：合成 reading（4母→16图形/十二宫/判官见证/解读技法），供 geomancy 契约 round-trip。
+            def _gfig(nz, pz, ez):
+                return {"nameZh": nz, "nameEn": nz, "planetZh": pz, "elementZh": ez}
+
+            return {
+                "reading": {
+                    "question": payload.get("question") or "",
+                    "questionType": payload.get("questionType") or "custom",
+                    "questionTypeZh": "事业",
+                    "ascendantFigure": _gfig("获得", "太阳", "火"),
+                    "ascendantSignZh": "白羊",
+                    "judge": _gfig("道路", "太阴", "水"),
+                    "reconciler": _gfig("会合", "水星", "风"),
+                    "rightWitness": _gfig("牢狱", "土星", "地"),
+                    "leftWitness": _gfig("获得", "太阳", "火"),
+                    "primaryHouse": 10,
+                    "technique": {"perfection": "occupation", "aspect": "trine", "points_parity": {"total": 68, "parity": "even"}, "timing": {"speed": "slow", "unit": "月"}},
+                    "houses": [{"house": 1, "nameZh": "命宫", "roles": ["querent"], "figure": _gfig("获得", "太阳", "火"), "reading": "问者得力"}],
+                    "figures16": [_gfig("获得", "太阳", "火") for _ in range(16)],
+                },
+                "figures": [],
+            }
         if endpoint == "/predict/dice":
             return {
                 "planet": payload.get("planet", "Sun"),
