@@ -408,6 +408,15 @@ class FakeJsClient(HorosaJsEngineClient):
                 "data": {"zhao": "阳遁", "kook": "二十四局"},
                 "snapshot_text": "[起盘信息]\n日期：2026-04-04 21:18\n\n[太乙盘]\n主算：二十四局",
             }
+        if tool_name == "liuyao":
+            # 六爻断卦结构 (analyzeLiuyao 引擎)：离线替身给结构化 [断卦结构] 段，供 sixyao 契约 round-trip。
+            return {
+                "data": {},
+                "snapshot_text": (
+                    "[断卦结构]\n流派：通用\n卦序：坎宫·三世(世3应6)\n"
+                    "逐爻(初→上)：六神│伏神│本爻│世应│旺衰│状态│神煞\n第1爻：勾陈 卯木子孙 旺"
+                ),
+            }
         if tool_name == "tongshefa":
             return {
                 "data": {

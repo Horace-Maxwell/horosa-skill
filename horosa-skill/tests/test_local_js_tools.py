@@ -604,6 +604,28 @@ def test_liureng_bifa_and_zhanduan(tmp_path) -> None:
     _assert_clean_export(result)
 
 
+@requires_runtime
+def test_sixyao_carries_liuyao_struct(tmp_path) -> None:
+    # 六爻断卦结构（core-js analyzeLiuyao 引擎）：纳甲/世应/六亲/用神/旺衰/飞伏/六神/动变。
+    # 未手动摇卦(lines 空) → 以时起卦；[断卦结构] 由引擎派生，插于 六爻与动爻 与 卦辞与断语 之间。
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "sixyao",
+        {"date": "2026-06-30", "time": "14:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "question": "事业"},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    snap = result.data["snapshot_text"]
+    assert "[断卦结构]" in snap
+    assert "卦序：" in snap and "逐爻(初→上)：" in snap
+    import re as _re
+
+    # 逐爻含纳甲六亲(子孙/妻财/官鬼/父母/兄弟 之一)，且标出世/应
+    assert _re.search(r"第[1-6]爻：.*(子孙|妻财|官鬼|父母|兄弟)", snap)
+    assert "(世)" in snap and "(应)" in snap
+    _assert_clean_export(result)
+
+
 @requires_chart
 def test_chart_sidereal_ayanamsa_and_nakshatra(tmp_path) -> None:
     # 星阙 v2.6.4 恒星黄道 47 岁差 + 西洋月宿 nakshatra：sidereal 盘(zodiacal=1) 按 siderealAyanamsa

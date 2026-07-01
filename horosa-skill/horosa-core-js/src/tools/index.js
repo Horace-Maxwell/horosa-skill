@@ -6,6 +6,7 @@ import { runHeluo } from './heluo.js';
 import { runHoraryTool } from './horary.js';
 import { runJinkou } from './jinkou.js';
 import { runLiureng } from './liureng.js';
+import { runLiuyao } from './liuyao.js';
 import { runProgExtra } from './progextra.js';
 import { runQimen } from './qimen.js';
 import { runTaiyi } from './taiyi.js';
@@ -16,6 +17,7 @@ const TOOL_RUNNERS = {
   taiyi: runTaiyi,
   jinkou: runJinkou,
   liureng: runLiureng,
+  liuyao: runLiuyao,
   tongshefa: runTongSheFa,
   canping: runCanping,
   heluo: runHeluo,

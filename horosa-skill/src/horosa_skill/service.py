@@ -3615,7 +3615,7 @@ def _build_decennials_snapshot_text(response: dict[str, Any], settings: dict[str
     )
 
 
-def _build_sixyao_snapshot_text(payload: dict[str, Any], nongli: dict[str, Any], current_code: str, changed_code: str, lines: list[dict[str, Any]], descs: dict[str, Any]) -> str:
+def _build_sixyao_snapshot_text(payload: dict[str, Any], nongli: dict[str, Any], current_code: str, changed_code: str, lines: list[dict[str, Any]], descs: dict[str, Any], struct_text: str = "") -> str:
     question = payload.get("question")
     current_desc = _extract_gua_detail(descs, current_code)
     changed_desc = _extract_gua_detail(descs, changed_code)
@@ -3639,25 +3639,31 @@ def _build_sixyao_snapshot_text(payload: dict[str, Any], nongli: dict[str, Any],
     judge_lines.append(f"之卦：{changed_desc.get('name', changed_code)}")
     if changed_desc.get("卦辞"):
         judge_lines.append(f"之卦卦辞：{changed_desc['卦辞']}")
-    return _render_snapshot_text(
-        [
-            (
-                "起盘信息",
-                "\n".join(
-                    [
-                        f"日期：{payload.get('date', '—')} {payload.get('time', '—')}",
-                        f"时区：{payload.get('zone', '—')}",
-                        f"经纬度：{payload.get('lon', '—')} {payload.get('lat', '—')}",
-                        f"起卦时间：{nongli.get('birth', '无')}",
-                        f"干支：年{nongli.get('yearJieqi') or nongli.get('year') or nongli.get('yearGanZi') or '无'} 月{nongli.get('monthGanZi', '无')} 日{nongli.get('dayGanZi', '无')} 时{nongli.get('time', '无')}",
-                    ]
-                ),
+    sections: list[tuple[str, str]] = [
+        (
+            "起盘信息",
+            "\n".join(
+                [
+                    f"日期：{payload.get('date', '—')} {payload.get('time', '—')}",
+                    f"时区：{payload.get('zone', '—')}",
+                    f"经纬度：{payload.get('lon', '—')} {payload.get('lat', '—')}",
+                    f"起卦时间：{nongli.get('birth', '无')}",
+                    f"干支：年{nongli.get('yearJieqi') or nongli.get('year') or nongli.get('yearGanZi') or '无'} 月{nongli.get('monthGanZi', '无')} 日{nongli.get('dayGanZi', '无')} 时{nongli.get('time', '无')}",
+                ]
             ),
-            ("卦象", "\n".join([f"本卦：{current_desc.get('name', current_code)}", f"之卦：{changed_desc.get('name', changed_code)}"]).strip()),
-            ("六爻与动爻", "\n".join(line_texts).strip() or "暂无爻线数据"),
-            ("卦辞与断语", "\n".join(judge_lines).strip() or "无"),
-        ]
-    )
+        ),
+        ("卦象", "\n".join([f"本卦：{current_desc.get('name', current_code)}", f"之卦：{changed_desc.get('name', changed_code)}"]).strip()),
+        ("六爻与动爻", "\n".join(line_texts).strip() or "暂无爻线数据"),
+    ]
+    # 断卦结构（六爻全流派）：由 core-js analyzeLiuyao 引擎派生（纳甲/世应/六亲/用神/旺衰/飞伏/六神/动变）。
+    # struct_text 以 "[断卦结构]" 段头开头 → 去头留正文（_render_snapshot_text 会补回 [标题]）；失败/无 node 时为空则不出该段。
+    struct_body = (struct_text or "").strip()
+    if struct_body.startswith("[断卦结构]"):
+        struct_body = struct_body[len("[断卦结构]"):].lstrip("\n")
+    if struct_body:
+        sections.append(("断卦结构", struct_body))
+    sections.append(("卦辞与断语", "\n".join(judge_lines).strip() or "无"))
+    return _render_snapshot_text(sections)
 
 
 def _join_lines(lines: list[Any]) -> str:
@@ -5882,7 +5888,15 @@ class HorosaSkillService:
         current_code = payload.get("gua_code") or _derive_gua_code(lines)
         changed_code = payload.get("changed_code") or _derive_changed_gua_code(lines)
         descs = self._call_remote("/gua/desc", {"name": [current_code, changed_code]})
-        snapshot_text = _build_sixyao_snapshot_text(payload, nongli, current_code, changed_code, lines, descs)
+        # 断卦结构（六爻全流派 analyzeLiuyao 引擎，core-js）：纳甲/世应/六亲/用神/旺衰/飞伏/六神/动变。
+        # 优雅降级：无 node / 引擎失败 → struct_text 空 → 快照不出 [断卦结构] 段（列 optional，不误报 missing）。
+        struct_text = ""
+        try:
+            struct = self.js_client.run("liuyao", {"lines": lines, "nongli": nongli})
+            struct_text = struct.get("snapshot_text") or ""
+        except ToolTransportError:
+            struct_text = ""
+        snapshot_text = _build_sixyao_snapshot_text(payload, nongli, current_code, changed_code, lines, descs, struct_text)
         result = {
             "nongli": nongli,
             "current_code": current_code,
