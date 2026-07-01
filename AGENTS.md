@@ -611,12 +611,12 @@ only difference is which engine dir is vendored:
   builder and the shaozi entry to the win32-x64 verifier list. **Rule: when you touch one builder or add a
   required artifact, grep the other builder + both `REQUIRED_ENTRIES` lists in the same change.**
 - **A new release published as `latest` is repeatedly missing its Windows half — ALWAYS check the release
-  manifest first. The CI guard now catches this automatically.** The mac side has shipped FOUR `latest`
-  releases incomplete: v0.10.0 had **no** `runtime-manifest.json` at all (`releases/latest/download/runtime-manifest.json`
-  404 → `install` broke on BOTH platforms); v0.11.0, v0.12.0, AND v0.13.0 had a **darwin-only** manifest +
-  no win32 zip (mac installs, **Windows** install finds no `win32-x64` entry / 404s the zip). **v0.13.0 was
-  the first one auto-caught**: `release-completeness.yml` fired on the release event and failed, exactly as
-  designed — so going forward you can rely on that red check instead of noticing by hand. The Windows runtime is
+  manifest first. The CI guard now catches this automatically.** The mac side has shipped this incomplete on
+  **every minor since v0.10.0**: v0.10.0 had **no** `runtime-manifest.json` at all (`releases/latest/download/runtime-manifest.json`
+  404 → `install` broke on BOTH platforms); v0.11.0 through **v0.16.0** shipped a **darwin-only** manifest +
+  no win32 zip (mac installs, **Windows** install finds no `win32-x64` entry / 404s the zip). **Auto-caught
+  since v0.13.0**: `release-completeness.yml` fires on the release event and fails, exactly as designed —
+  so rely on that red check instead of noticing by hand (it flagged v0.14.0/v0.15.0/v0.16.0 too). The Windows runtime is
   built off-repo on a Windows box, so a mac-only release publish leaves it out. **First diagnostic when
   "check sync" / a new version appears:** `gh release view vX.Y.Z --json assets` (expect darwin tar.gz +
   win32 zip + runtime-manifest.json + SHA256SUMS.txt) and confirm
@@ -633,7 +633,11 @@ only difference is which engine dir is vendored:
   upload pipeline. Safe by default (no `--upload` = build + verify only, no irreversible action), idempotent
   (no-op + exit 0 when already in sync), and it gates the upload behind `verify_runtime_release.py`. It
   reads the version from `pyproject.toml`, so `git pull` to the release commit first. This is the canonical
-  way to clear a `release-completeness` red — prefer it over doing the steps by hand.
+  way to clear a `release-completeness` red — prefer it over doing the steps by hand. **Battle-tested
+  end-to-end on v0.16.0 (2026-07-01):** re-populate `vendor/runtime-source` from the Windows workspace,
+  build, native-verify (chart `:8899` compute — the new `/geomancy/reading` + `/astroextra/*` mundane
+  endpoints returned real data, confirming the source tree was fresh), then the sync tool packaged +
+  uploaded and the guard went green + a public `install --force` matched the sha.
 - **Windows launcher hardening (v0.12.0) — keep these when re-vendoring the templates.** The
   `scripts/runtime_templates/windows/{start,stop}_horosa_local.ps1` templates carry: PID-ownership checks
   (only kill a PID still mapping to our own python.exe/java.exe image — never a recycled/foreign PID),
