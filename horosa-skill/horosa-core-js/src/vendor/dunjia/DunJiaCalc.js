@@ -1819,6 +1819,42 @@ export function calcDunJia(fields, nongli, options, context){
 	};
 }
 
+// 旺相休囚死(§17.1)：以月令五行定符号能量。各符号五行 + 月支→月令五行 + 旺衰口诀表。
+const WS_STAR_WUXING = { 蓬: '水', 任: '土', 冲: '木', 辅: '木', 英: '火', 芮: '土', 禽: '土', 内: '土', 柱: '金', 心: '金' };
+const WS_MEN_WUXING = { 休: '水', 生: '土', 伤: '木', 杜: '木', 景: '火', 死: '土', 惊: '金', 开: '金' };
+const WS_PALACE_GUA_WUXING = { 1: '木', 2: '火', 3: '土', 4: '木', 5: '土', 6: '金', 7: '土', 8: '水', 9: '金' };
+const WS_BRANCH_WUXING = { 寅: '木', 卯: '木', 巳: '火', 午: '火', 申: '金', 酉: '金', 亥: '水', 子: '水', 辰: '土', 戌: '土', 丑: '土', 未: '土' };
+const WANGSHUAI_BY_MONTH = {
+	木: { 木: '旺', 火: '相', 水: '休', 金: '囚', 土: '死' },
+	火: { 火: '旺', 土: '相', 木: '休', 水: '囚', 金: '死' },
+	金: { 金: '旺', 水: '相', 土: '休', 火: '囚', 木: '死' },
+	水: { 水: '旺', 木: '相', 金: '休', 土: '囚', 火: '死' },
+	土: { 土: '旺', 金: '相', 火: '休', 木: '囚', 水: '死' },
+};
+function wangShuaiOf(elem, monthElem){
+	if(!elem || !monthElem || !WANGSHUAI_BY_MONTH[monthElem]){ return ''; }
+	return WANGSHUAI_BY_MONTH[monthElem][elem] || '';
+}
+// 输入排好的 pan，返回 月令五行 + 各宫 星/门/宫 的旺相休囚死。纯派生（不改盘）。
+export function buildQimenWangShuai(pan){
+	if(!pan || !pan.ganzhi){ return null; }
+	const monthBranch = `${pan.ganzhi.month || ''}`.substring(1, 2);
+	const monthElem = WS_BRANCH_WUXING[monthBranch] || '';
+	const cells = Array.isArray(pan.cells) ? pan.cells : [];
+	const palaces = cells.filter((c)=>!c.isCenter).map((c)=>{
+		const starElem = WS_STAR_WUXING[c.tianXing] || '';
+		const menElem = WS_MEN_WUXING[c.door] || '';
+		const gongElem = WS_PALACE_GUA_WUXING[c.palaceNum] || '';
+		return {
+			palaceNum: c.palaceNum, palaceName: c.palaceName,
+			star: c.tianXing, starWuxing: starElem, starWangShuai: wangShuaiOf(starElem, monthElem),
+			door: c.door, doorWuxing: menElem, doorWangShuai: wangShuaiOf(menElem, monthElem),
+			gongWuxing: gongElem, gongWangShuai: wangShuaiOf(gongElem, monthElem),
+		};
+	});
+	return { monthBranch, monthElem, palaces };
+}
+
 export function buildDunJiaSnapshotText(pan){
 	if(!pan){
 		return '';
@@ -1890,6 +1926,17 @@ export function buildDunJiaSnapshotText(pan){
 	pan.cells.forEach((cell)=>{
 		lines.push(`${cell.palaceName}${cell.palaceNum}宫：${cell.tianGan || '—'} ${cell.god || '—'} ${cell.door || '—'} ${cell.tianXing || '—'} ${cell.diGan || '—'}`);
 	});
+
+	// 旺相休囚死(§17.1)：以月令五行定各符号能量，供「看旺衰」断盘——旺相则吉力大凶有挡，休囚死则吉力弱凶更凶。
+	const wangShuai = buildQimenWangShuai(pan);
+	if(wangShuai && wangShuai.monthElem){
+		lines.push('');
+		lines.push('[旺相休囚死·月令能量]');
+		lines.push(`月令：${wangShuai.monthBranch}（${wangShuai.monthElem}令）。当令者旺、我生者相、生我者休、克我者囚、我克者死；旺相有力，休囚死无力。`);
+		wangShuai.palaces.forEach((p)=>{
+			lines.push(`${p.palaceName}${p.palaceNum}宫：星${p.star || '—'}(${p.starWuxing || '—'}·${p.starWangShuai || '—'}) 门${p.door || '—'}(${p.doorWuxing || '—'}·${p.doorWangShuai || '—'}) 宫(${p.gongWuxing || '—'}·${p.gongWangShuai || '—'})`);
+		});
+	}
 
 	// —— 法奇门叠加层（六害 / 化解 / 八门化气大阵 / 用神分论 / 七要 / 孤辰寡宿）；全量输出供 AI 导出·挂载·储存 ——
 	const fa = buildFaQimenAnalysis(pan, { faceToFace: true });

@@ -175,6 +175,9 @@ def test_qimen_runs_via_ken_backend(tmp_path) -> None:
     assert isinstance(pan.get("cells"), list) and pan["cells"]
     assert "[起盘信息]" in result.data["snapshot_text"]
     assert "[九宫方盘]" in result.data["snapshot_text"]
+    # 旺相休囚死·月令能量：以月令五行定各宫 星/门/宫 的旺相休囚死（当令者旺…）。
+    assert "[旺相休囚死·月令能量]" in result.data["snapshot_text"]
+    assert "月令：" in result.data["snapshot_text"]
     # 法奇门叠加层 (星阙 v-next)：六害/化解/八门化气大阵/用神分论/七要/孤辰寡宿。
     for header in ("[六害总览]", "[化解方案]", "[八门化气大阵]", "[用神分论]", "[财富七要]", "[孤辰寡宿]"):
         assert header in result.data["snapshot_text"], header

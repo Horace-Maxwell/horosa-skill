@@ -910,7 +910,7 @@ def test_local_tool_call_always_attaches_complete_export_contract(tmp_path) -> N
     assert result.data["export_snapshot"]["technique"]["key"] == "qimen"
     assert result.data["export_format"]["format_source"] == "snapshot_parser"
     assert result.data["export_format"]["selected_sections"] == [
-        "起盘信息", "盘型", "盘面要素", "奇门演卦", "八宫详解", "九宫方盘",
+        "起盘信息", "盘型", "盘面要素", "奇门演卦", "八宫详解", "九宫方盘", "旺相休囚死·月令能量",
         "六害总览", "化解方案", "八门化气大阵", "用神分论", "财富七要", "事业七要", "恋爱姻缘", "孤辰寡宿",
     ]
     assert any(section["title"] == "奇门演卦" for section in result.data["export_format"]["sections"])
