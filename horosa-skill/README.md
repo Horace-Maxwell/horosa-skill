@@ -115,6 +115,8 @@ This subproject is distributed under `GNU AGPL-3.0-only`. See [LICENSE](LICENSE)
 - `suzhan`：宿占 / 宿盘
 - `sixyao`：六爻 / 易卦
 - `otherbu`：西洋游戏 / 占星骰子
+- `geomancy`：天文地占（4 母卦 → 16 图形，十二宫图形入宫 + 判官/见证，以起卦时刻确定性起卦）
+- `tarot`：塔罗（韦特 78 牌，确定性抽牌 + 牌阵直断 / 细论 / 综合建议）
 - `jieqi_year`：全年节气盘
 - `nongli_time`：农历换算
 - `gua_desc`：卦义说明
