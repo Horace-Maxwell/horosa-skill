@@ -152,6 +152,13 @@ _PYTHON_CHART_ENDPOINTS = {
     "/astroextra/progressions",
     "/astroextra/planetreturn",
     "/astroextra/analysis",
+    # 世俗盘子盘群（新月/满月/日月食/行星周期/地区盘）依赖的 astroextra 精算端点。
+    "/astroextra/prenatal_syzygy",
+    "/astroextra/eclipsedetail",
+    "/astroextra/greatconj",
+    "/astroextra/planetcycles",
+    "/astroextra/barbault",
+    "/astroextra/relocation",
     "/geomancy/reading",
     "/predict/planetaryarc",
     "/jieqi/year",
@@ -2608,6 +2615,125 @@ def _build_vimshottari_dasha_lines(response: dict[str, Any]) -> list[str]:
         mark = "▶ " if m.get("active") else ("· " if m.get("birthBalance") else "  ")
         out.append(f"{mark}{_dasha_lord_name(m.get('lord'))} {_dasha_fmt_date(m.get('start'))} → {_dasha_fmt_date(m.get('end'))}（{_dasha_n1(m.get('years')):.1f} 年，{_dasha_n1(m.get('startAge')):.0f}–{_dasha_n1(m.get('endAge')):.0f} 岁）")
     return out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 世俗盘子盘群：年度入宫盘之外，围绕定盘展开的新月/满月/日月食/地区盘/行星周期等子盘。
+# 子盘时刻均由后端精算端点求得（prenatal_syzygy 朔望、eclipsedetail 食时长、greatconj/barbault
+# 慢星周期、jieqi/year 四季入宫），再以入宫盘同制起 /chart；纯确定性、无 UI 依赖。静态释义块
+# （世俗宫义/地理分野）采占星通行定则。食端点仅回全球食时长（食时长定则的关键量）不回极大时刻，
+# 故日/月食段呈影响时长判词而非整轮盘，如实标注。
+_MUNDANE_HOUSE_MEANINGS = [
+    "1宫：国家整体、国民、国运气象与当年基调",
+    "2宫：国库财政、货币、贸易收入、国家资产",
+    "3宫：交通通讯、媒体舆论、邻国往来、基础教育",
+    "4宫：土地农业、矿产、反对党、国土与气候",
+    "5宫：出生率与青年、文体娱乐、股市投机、外交使节",
+    "6宫：公共卫生、劳工军警、公务体系、疫病",
+    "7宫：外交与盟约、对外战争、公开对手、国际关系",
+    "8宫：国债与死亡率、税收、外资、危机与转型",
+    "9宫：司法宗教、高等教育、长途外贸、国际法",
+    "10宫：政府元首、执政威望、国家声誉与权力",
+    "11宫：立法议会、执政盟友、国家愿景与社团",
+    "12宫：隐患与敌谍、监狱医院、幕后势力、集体潜困",
+]
+_MUNDANE_PTOLEMAIC_ALLOCATION = [
+    "白羊：不列颠、法兰西、日耳曼、叙利亚",
+    "金牛：波斯、爱尔兰、塞浦路斯、小亚细亚",
+    "双子：亚美尼亚、下埃及、比利时、北美西北",
+    "巨蟹：北非、荷兰、苏格兰、东亚沿海",
+    "狮子：意大利、法国南部、罗马、阿尔卑斯",
+    "处女：希腊、两河、加勒比、瑞士",
+    "天秤：奥地利、上埃及、里海、中亚",
+    "天蝎：马格里布、挪威、巴伐利亚、摩洛哥",
+    "射手：西班牙、匈牙利、阿拉伯、澳洲",
+    "摩羯：印度、马其顿、墨西哥、阿富汗",
+    "水瓶：俄罗斯、瑞典、阿拉伯半岛、低地欧洲",
+    "双鱼：葡萄牙、埃及、诺曼底、地中海诸岛",
+]
+
+
+def _mundane_chart_digest(
+    chart_response: dict[str, Any], *, points: tuple[str, ...] = ("Sun", "Moon", "Asc", "MC")
+) -> list[str]:
+    """子盘四轴/日月摘要：不铺全盘，仅取关键结构点，避免子盘群把导出撑爆。"""
+    wrap = _top_level_chart_wrap(chart_response)
+    om = _get_objects_map(wrap)
+    lines: list[str] = []
+    for pid in points:
+        obj = om.get(pid)
+        if isinstance(obj, dict) and obj.get("sign") is not None and obj.get("signlon") is not None:
+            lines.append(
+                f"{_astro_msg(pid, short=True)}："
+                f"{_format_sign_degree(obj.get('sign'), obj.get('signlon'))}"
+                f"{_format_retrograde_text(obj)}"
+            )
+    return lines
+
+
+def _mundane_year_lord_lines(ingress_response: dict[str, Any]) -> list[str]:
+    """定局·年主/盘主：上升座主（命主星）落点 + 二分二至发光体宫位定当年基调。"""
+    wrap = _top_level_chart_wrap(ingress_response)
+    om = _get_objects_map(wrap)
+    asc = om.get("Asc")
+    asc_sign = _po_sign_key(asc.get("sign")) if isinstance(asc, dict) else None
+    if not asc_sign:
+        return ["本盘缺上升信息，无法定盘主。"]
+    modality = _PO_MODALITY_CN.get(_PO_SIGN_MODALITY.get(asc_sign, ""), "")
+    lines = [f"上升星座：{_astro_msg(asc.get('sign'))}{('（' + modality + '）') if modality else ''}"]
+    ruler_key = _PO_SIGN_DOMICILE.get(asc_sign)
+    ruler_id = _PO_KEY_TO_ID.get(ruler_key) if ruler_key else None
+    if ruler_id:
+        r = om.get(ruler_id)
+        if isinstance(r, dict) and r.get("sign") is not None:
+            house = _po_house_num(r.get("house"))
+            house_txt = f"，落第 {house} 宫" if house else ""
+            lines.append(
+                f"盘主（命主星／年主）：{_astro_msg(ruler_id, short=True)} —— "
+                f"{_format_sign_degree(r.get('sign'), r.get('signlon'))}{house_txt}"
+            )
+        else:
+            lines.append(f"盘主（命主星／年主）：{_astro_msg(ruler_id, short=True)}")
+    for lum in ("Sun", "Moon"):
+        obj = om.get(lum)
+        if isinstance(obj, dict) and obj.get("sign") is not None:
+            house = _po_house_num(obj.get("house"))
+            house_txt = f"（第 {house} 宫）" if house else ""
+            lines.append(
+                f"{_astro_msg(lum, short=True)}："
+                f"{_format_sign_degree(obj.get('sign'), obj.get('signlon'))}{house_txt}"
+            )
+    return lines
+
+
+def _mundane_skeleton_lines(ingress_response: dict[str, Any]) -> list[str]:
+    """入境骨架：四轴星座 + 临角行星（±3°），入宫盘的结构应力点。"""
+    wrap = _top_level_chart_wrap(ingress_response)
+    om = _get_objects_map(wrap)
+    lines: list[str] = []
+    angle_lons: dict[str, float] = {}
+    for pid in ("Asc", "MC", "Desc", "IC"):
+        obj = om.get(pid)
+        if isinstance(obj, dict) and obj.get("sign") is not None and obj.get("signlon") is not None:
+            lines.append(f"{_astro_msg(pid, short=True)}：{_format_sign_degree(obj.get('sign'), obj.get('signlon'))}")
+        if isinstance(obj, dict) and obj.get("lon") is not None:
+            angle_lons[pid] = _po_norm360(obj.get("lon"))
+    on_angle: list[str] = []
+    for pkey in _PO_TRAD_KEYS:
+        oid = _PO_KEY_TO_ID.get(pkey)
+        obj = om.get(oid) if oid else None
+        if not isinstance(obj, dict) or obj.get("lon") is None:
+            continue
+        plon = _po_norm360(obj.get("lon"))
+        for ang, alon in angle_lons.items():
+            diff = abs(plon - alon)
+            diff = min(diff, 360.0 - diff)
+            if diff <= 3.0:
+                on_angle.append(f"{_astro_msg(oid, short=True)} 合 {_astro_msg(ang, short=True)}（{diff:.1f}°）")
+                break
+    if on_angle:
+        lines.append("临角行星：" + "、".join(on_angle))
+    return lines
 
 
 def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
@@ -5456,8 +5582,7 @@ class HorosaSkillService:
         qimen_export = qimen_result.data.get("export_snapshot")
         taiyi_export = taiyi_result.data.get("export_snapshot")
         liureng_export = liureng_result.data.get("export_snapshot")
-        snapshot_text = _render_snapshot_text(
-            [
+        sections: list[tuple[str, str]] = [
                 ("起盘信息", _section_body(qimen_export, "起盘信息")),
                 (
                     "概览",
@@ -5490,8 +5615,40 @@ class HorosaSkillService:
                 ("六壬概览", _section_body(liureng_export, "概览")),
                 ("八宫详解", _section_body(qimen_export, "八宫详解")),
                 *_render_qimen_palace_sections(qimen_result.data.get("pan", {})),
-            ]
-        )
+        ]
+        # 三式合一对齐独立页：复用三个独立技法（奇门/太乙/六壬）builder 已产出的富化段，
+        # 按前缀规则拼入（太乙 pan.sections 加「太乙」前缀避叠词、六壬断卦层保留原名、奇门派生加「奇门」
+        # 前缀避与六壬「概览」等碰撞），单一真值源不重复实现；缺段优雅降级为简短占位，不臆造。
+        for _out, _src in (
+            ("太乙主客定算", "主客定算"),
+            ("太乙八门与宿曜", "八门与宿曜"),
+            ("太乙断法", "断法"),
+            ("太乙七大兵法", "七大兵法"),
+            ("太乙博弈", "博弈"),
+            ("太乙命法", "命法"),
+            ("太乙命宫行限", "命宫行限"),
+        ):
+            sections.append((_out, _section_body(taiyi_export, _src, f"（本盘未产出「{_src}」）")))
+        for _t in (
+            "十二盘式", "常用神煞", "年月神煞", "课体结构", "三传旺衰",
+            "空亡真假", "旬空落点", "陷空", "遁干特殊", "年命上神",
+            "毕法（已命中）", "占断向导",
+        ):
+            sections.append((_t, _section_body(liureng_export, _t, f"（本盘未产出「{_t}」）")))
+        for _out, _src in (
+            ("奇门九宫方盘", "九宫方盘"),
+            ("奇门旺相休囚死·月令能量", "旺相休囚死·月令能量"),
+            ("奇门六害总览", "六害总览"),
+            ("奇门化解方案", "化解方案"),
+            ("奇门八门化气大阵", "八门化气大阵"),
+            ("奇门用神分论", "用神分论"),
+            ("奇门财富七要", "财富七要"),
+            ("奇门事业七要", "事业七要"),
+            ("奇门恋爱姻缘", "恋爱姻缘"),
+            ("奇门孤辰寡宿", "孤辰寡宿"),
+        ):
+            sections.append((_out, _section_body(qimen_export, _src, f"（本盘未产出「{_src}」）")))
+        snapshot_text = _render_snapshot_text(sections)
         return {
             "qimen": qimen_result.data.get("pan", {}),
             "taiyi": taiyi_result.data.get("pan", {}),
@@ -5922,8 +6079,18 @@ class HorosaSkillService:
         chart_response = self._call_remote("/chart", chart_payload)
         chart_response = self._attach_natal_extras("mundane", chart_response)
         head = "\n".join(["[世俗入宫]", f"入宫节气：{term}", f"年份：{year or '-'}", f"入宫时刻：{ingress_time}"])
+        # 子盘群：新月/满月/日月食/地区盘/行星周期 + 世俗宫义/定局·年主·盘主/入境骨架/地理分野/地区盘推运。
+        subchart_sections = self._build_mundane_subchart_sections(
+            base_chart_payload=chart_payload,
+            seed_payload=seed_payload,
+            ingress_response=chart_response,
+            ingress_time=ingress_time,
+            year=year,
+            zone=zone,
+        )
+        subcharts_text = _render_snapshot_text(subchart_sections) if subchart_sections else ""
         body = _build_astro_snapshot_text(chart_payload, chart_response)
-        snapshot_text = f"{head}\n\n{body}".strip()
+        snapshot_text = "\n\n".join(part for part in (head, subcharts_text, body) if part).strip()
         result = {
             "ingressTerm": term,
             "ingressYear": year,
@@ -5934,6 +6101,177 @@ class HorosaSkillService:
         }
         result["export_snapshot"] = self._augment_export_payload(technique="mundane", snapshot_text=snapshot_text)
         return result
+
+    def _build_mundane_subchart_sections(
+        self,
+        *,
+        base_chart_payload: dict[str, Any],
+        seed_payload: dict[str, Any],
+        ingress_response: dict[str, Any],
+        ingress_time: str,
+        year: str,
+        zone: str,
+    ) -> list[tuple[str, str]]:
+        # 每个子盘独立 try/except：任一端点失败只降级该段为说明文本，绝不破坏世俗盘主流程。
+        ing_date = base_chart_payload.get("date")
+        ing_time = base_chart_payload.get("time")
+        lat = base_chart_payload.get("lat")
+        lon = base_chart_payload.get("lon")
+        try:
+            year_num = int(str(year).strip())
+        except (TypeError, ValueError):
+            year_num = 0
+        sections: list[tuple[str, str]] = []
+
+        # ── 新月图 / 满月图：自入宫时刻回溯最近朔望，再自该朔望回溯得另一相，一朔一望各起子盘 ──
+        syz_by_type: dict[str, dict[str, Any]] = {}
+        try:
+            s1 = self._call_remote(
+                "/astroextra/prenatal_syzygy",
+                {"date": ing_date, "time": ing_time, "zone": zone, "lat": lat, "lon": lon},
+            )
+            if isinstance(s1, dict) and s1.get("type"):
+                syz_by_type[s1["type"]] = s1
+                s2 = self._call_remote(
+                    "/astroextra/prenatal_syzygy",
+                    {"date": s1.get("date"), "time": s1.get("time"), "zone": zone, "lat": lat, "lon": lon},
+                )
+                if isinstance(s2, dict) and s2.get("type") and s2["type"] not in syz_by_type:
+                    syz_by_type[s2["type"]] = s2
+        except Exception as exc:  # noqa: BLE001 - degrade to a note, never break mundane
+            logger.warning("mundane prenatal_syzygy failed: %s", exc)
+        for title, syz_type, phase_cn in (("新月图", "new", "朔（新月·日月合）"), ("满月图", "full", "望（满月·日月冲）")):
+            syz = syz_by_type.get(syz_type)
+            if not isinstance(syz, dict):
+                sections.append((title, f"未能定位入宫前最近的{phase_cn}。"))
+                continue
+            moment = syz.get("datetime") or f"{syz.get('date', '')} {syz.get('time', '')}".strip()
+            lines = [
+                f"{phase_cn}时刻：{moment}",
+                f"日黄经 {syz.get('sunLon')}°，月黄经 {syz.get('moonLon')}°",
+            ]
+            try:
+                sub_chart = self._call_remote("/chart", {**base_chart_payload, "date": syz.get("date"), "time": syz.get("time")})
+                digest = _mundane_chart_digest(sub_chart)
+                if digest:
+                    lines.append("子盘四轴/日月：" + "；".join(digest))
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("mundane %s chart failed: %s", title, exc)
+            sections.append((title, "\n".join(lines)))
+
+        # ── 日食图 / 月食图：eclipsedetail 只回全球食时长（食时长定则的关键量），呈影响时长判词 ──
+        for title, kind, phase_cn, unit_default, rule in (
+            ("日食图", "solar", "日食", "年", "日食时长 N 小时 → 影响约 N 年"),
+            ("月食图", "lunar", "月食", "月", "月食时长 N 小时 → 影响约 N 月"),
+        ):
+            try:
+                ed = self._call_remote(
+                    "/astroextra/eclipsedetail",
+                    {"date": ing_date, "time": ing_time, "zone": zone, "eclipseKind": kind},
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("mundane eclipsedetail(%s) failed: %s", kind, exc)
+                ed = {}
+            if isinstance(ed, dict) and ed.get("durationHours"):
+                unit = ed.get("influenceUnit") or unit_default
+                sections.append((
+                    title,
+                    "\n".join([
+                        f"入宫时刻附近最近{phase_cn}：全球食持续约 {ed.get('durationHours')} 小时。",
+                        f"食时长定则（{rule}）→ 本次影响约 {ed.get('influence')} {unit}。",
+                        "（食盘极大时刻的整轮定盘属交互功能，此处给出无头可复算的影响时长判词。）",
+                    ]),
+                ))
+            else:
+                sections.append((title, f"入宫时刻附近未检索到{phase_cn}。"))
+
+        # ── 地区盘：以入宫（全球统一）时刻定盘于格林尼治（世界年图基准），与本地入宫盘对照 ──
+        try:
+            world_chart = self._call_remote(
+                "/chart",
+                {**base_chart_payload, "lat": "0n00", "lon": "0e00", "gpsLat": 0.0, "gpsLon": 0.0},
+            )
+            digest = _mundane_chart_digest(world_chart)
+            body = [f"以入宫时刻（{ingress_time}）定盘于格林尼治 0°（世界年图基准）："]
+            body.extend(digest or ["未取得地区盘轴点。"])
+            body.append("——同一天象、异地宫位；与上文本地入宫盘四轴对照可见地域落点差异。")
+            sections.append(("地区盘", "\n".join(body)))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("mundane world chart failed: %s", exc)
+            sections.append(("地区盘", "未能取得世界年图基准盘。"))
+
+        # ── 行星周期：木土大合相（前后 20 年最近三次）+ Barbault 行星聚散指数拐点 ──
+        cycle_lines: list[str] = []
+        if year_num:
+            try:
+                gc = self._call_remote("/astroextra/greatconj", {"startYear": year_num - 20, "endYear": year_num + 20})
+                conjs = gc.get("conjunctions") if isinstance(gc, dict) else None
+                if isinstance(conjs, list) and conjs:
+                    nearest = sorted(conjs, key=lambda c: abs(int(c.get("year", 0)) - year_num))[:3]
+                    cycle_lines.append("木土大合相（前后 20 年内最近三次）：")
+                    for c in sorted(nearest, key=lambda c: int(c.get("year", 0))):
+                        cycle_lines.append(f"  {c.get('year')}-{int(c.get('month', 0)):02d} 合于 {_lon_to_sign_degree(c.get('lon'))}")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("mundane greatconj failed: %s", exc)
+            try:
+                bb = self._call_remote(
+                    "/astroextra/barbault",
+                    {"startYear": year_num - 10, "endYear": year_num + 10, "stepMonths": 6},
+                )
+                extrema = bb.get("extrema") if isinstance(bb, dict) else None
+                if isinstance(extrema, list) and extrema:
+                    near = sorted(extrema, key=lambda e: abs(int(e.get("year", 0)) - year_num))[:2]
+                    planets = "、".join(str(p) for p in (bb.get("planets") or []))
+                    cycle_lines.append(f"Barbault 行星聚散指数（{planets}；满值 {bb.get('maxIndex')}）最近拐点：")
+                    for e in sorted(near, key=lambda e: int(e.get("year", 0))):
+                        kind_cn = "极小（聚集·危机/紧张）" if e.get("kind") == "min" else "极大（四散·扩张/繁荣）"
+                        cycle_lines.append(f"  {e.get('year')}-{int(e.get('month', 0)):02d} 指数 {e.get('index')} {kind_cn}")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("mundane barbault failed: %s", exc)
+        sections.append(("行星周期", "\n".join(cycle_lines) if cycle_lines else "未能取得慢星周期数据（需有效年份）。"))
+
+        # ── 世俗宫义（通行定则静态释义）──
+        sections.append(("世俗宫义", "\n".join(_MUNDANE_HOUSE_MEANINGS)))
+
+        # ── 定局·年主/盘主：上升座主落点 + 二分二至发光体宫位 ──
+        sections.append(("定局·年主/盘主", "\n".join(_mundane_year_lord_lines(ingress_response))))
+
+        # ── 入境骨架：四轴星座 + 临角行星 ──
+        skel = _mundane_skeleton_lines(ingress_response)
+        sections.append(("入境骨架", "\n".join(skel) if skel else "本盘缺四轴信息。"))
+
+        # ── 地理分野（托勒密星座—地域配当静态表）+ 上升所属 ──
+        alloc_lines = list(_MUNDANE_PTOLEMAIC_ALLOCATION)
+        asc_obj = _get_objects_map(_top_level_chart_wrap(ingress_response)).get("Asc")
+        if isinstance(asc_obj, dict) and asc_obj.get("sign") is not None:
+            alloc_lines.append(f"——本盘上升为 {_astro_msg(asc_obj.get('sign'))}，当年天象着重投射于其对应地域。")
+        sections.append(("地理分野", "\n".join(alloc_lines)))
+
+        # ── 地区盘推运：年度四季入宫时刻序列（地区盘随每季太阳入基本宫推移）──
+        prog_rows: list[str] = []
+        try:
+            sy = self._call_remote(
+                "/jieqi/year",
+                {**seed_payload, "jieqis": ["春分", "夏至", "秋分", "冬至"]},
+            )
+            j24 = sy.get("jieqi24") if isinstance(sy, dict) else None
+            if isinstance(j24, list):
+                want = ["春分", "夏至", "秋分", "冬至"]
+                by_term = {
+                    str(e.get("jieqi")).strip(): str(e.get("time")).strip()
+                    for e in j24
+                    if isinstance(e, dict) and str(e.get("jieqi")).strip() in want and e.get("time")
+                }
+                for t in want:
+                    if t in by_term:
+                        prog_rows.append(f"  {t}入宫：{by_term[t]}")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("mundane seasonal ingress failed: %s", exc)
+        prog_body = ["年度四季入宫定盘序列（地区盘随每季太阳入基本宫逐季推移）："]
+        prog_body.extend(prog_rows or ["未能取得四季入宫时刻。"])
+        sections.append(("地区盘推运", "\n".join(prog_body)))
+
+        return sections
 
     def _run_otherbu_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         remote_payload = {

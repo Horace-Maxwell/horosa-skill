@@ -273,7 +273,11 @@ def test_sanshiunited_combines_ken_qimen_taiyi(tmp_path) -> None:
     assert result.ok is True
     assert result.data["qimen"].get("juText")
     assert result.data["taiyi"].get("kook")
-    assert "[起盘信息]" in result.data["snapshot_text"]
+    snap = result.data["snapshot_text"]
+    assert "[起盘信息]" in snap
+    # 对齐独立页：复用三独立技法富化段——太乙 pan.sections（加「太乙」前缀）、六壬断卦层、奇门派生。
+    for header in ("[太乙断法]", "[太乙博弈]", "[十二盘式]", "[课体结构]", "[奇门九宫方盘]", "[奇门用神分论]"):
+        assert header in snap, header
     _assert_clean_export(result)
 
 
@@ -789,8 +793,21 @@ def test_mundane_ingress_chart(tmp_path) -> None:
     # The body reuses the astrochart snapshot with the v2.4.0 natal extras.
     assert "[起盘信息]" in snapshot
     assert "[寿命格局]" in snapshot
+    # 子盘群：新月/满月/日月食/地区盘/行星周期 + 世俗宫义/定局/入境骨架/地理分野/地区盘推运，
+    # 各由后端精算端点无头编排（朔望/食时长/慢星周期/四季入宫）。
+    for header in (
+        "[新月图]", "[满月图]", "[日食图]", "[月食图]", "[地区盘]", "[行星周期]",
+        "[世俗宫义]", "[定局·年主/盘主]", "[入境骨架]", "[地理分野]", "[地区盘推运]",
+    ):
+        assert header in snapshot, header
+    # 朔望时刻、木土大合相、四季入宫等确定性事实应现于对应子盘。
+    assert "朔（新月" in snapshot and "望（满月" in snapshot
+    assert "木土大合相" in snapshot
+    assert "夏至入宫：" in snapshot
     detected = (data.get("export_snapshot") or {}).get("section_titles_detected") or []
     assert "世俗入宫" in detected
+    # 世俗盘为非推运入宫盘，[可能性] 恒缺属预期（可选段）→ 导出仍应干净。
+    _assert_clean_export(result)
 
 
 @requires_chart
