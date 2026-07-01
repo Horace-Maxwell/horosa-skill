@@ -591,6 +591,9 @@ def test_liureng_bifa_and_zhanduan(tmp_path) -> None:
     assert result.ok is True, result.error
     snap = result.data["snapshot_text"]
     assert "[常用神煞]" in snap
+    # 断卦层（六壬全流派）：年月神煞/三传旺衰 对有效盘恒出（其余空亡/旬空/陷空/遁干/课体/年命 按盘面条件）。
+    assert "[年月神煞]" in snap
+    assert "[三传旺衰]" in snap
     assert "[毕法（已命中）]" in snap
     # 至少命中 1 条编号毕法（释/依据成对）
     import re as _re

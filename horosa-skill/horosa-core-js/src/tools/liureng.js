@@ -1,7 +1,11 @@
-import { computeFrontendShenSha } from '../vendor/liureng/LRShenShaDoc.js';
+import { computeFrontendShenSha, computeYearShenSha, computeMonthShenSha } from '../vendor/liureng/LRShenShaDoc.js';
 import { buildLiuRengReferenceContext } from '../vendor/liureng/liurengRefContext.js';
 import { matchBiFa } from '../vendor/liureng/LRBiFaDoc.js';
 import { ZHANDUAN_DOC } from '../vendor/liureng/LRZhanDuanDoc.js';
+import { detectJianChuan } from '../vendor/liureng/LRJianChuanDoc.js';
+import { analyzeKongLocations, analyzeDunGan, analyzeNianMing } from '../vendor/liureng/LRKongDunNianDoc.js';
+import { liurengWangXiang, judgeKongWang } from '../vendor/liureng/LRZhangSheng.js';
+import * as LRConst from '../vendor/liureng/LRConst.js';
 
 const ZI_LIST = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
 const GAN_LIST = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
@@ -814,6 +818,71 @@ function buildSnapshotText(payload, liureng, runyear, chartObj, data) {
 
   // 毕法100法：matchBiFa 机械命中之断诀（烈度须合时令旺衰、年命制化，非定数）。
   if (refCtx) {
+    // 断卦层（六壬全流派）：年月神煞/课体结构/三传旺衰/空亡真假/旬空落点/陷空/遁干特殊/年命上神。纯派生，缺数据则该段跳过。
+    const castOpts = payload?.castOverride || {};
+    const gzWx = (z) => LRConst.GanZiWuXing[`${z || ''}`.trim().substring(0, 1)] || '';
+    try {
+      const yearSS = computeYearShenSha(refCtx.yearBranch, castOpts.yearShenShaSort || 'sanyuan', refCtx.courseBranches) || [];
+      const monthSS = computeMonthShenSha(refCtx.monthBranch, refCtx.courseBranches) || [];
+      if (yearSS.length || monthSS.length) {
+        lines.push('');
+        lines.push('[年月神煞]');
+        lines.push(`（年神＝${castOpts.yearShenShaSort === 'suigui' ? '太岁排轮' : '四利三元序'}）`);
+        yearSS.concat(monthSS).forEach((s) => lines.push(`${s.name}：${s.branch}${s.inCourse ? '（入课传）' : ''}`));
+      }
+      const jcS = detectJianChuan(refCtx.sanChuanBranches);
+      if (jcS) {
+        lines.push('');
+        lines.push('[课体结构]');
+        lines.push(`${jcS.name}（${jcS.kind}${jcS.wuxing ? '·' + jcS.wuxing : ''}${jcS.dir ? '·' + jcS.dir + '间' : ''}）：${jcS.text}`);
+      }
+      const wsLines = (refCtx.sanChuanBranches || []).map((z, i) => {
+        const wxx = gzWx(z);
+        const w = liurengWangXiang(wxx, refCtx.monthBranch, castOpts.tuWangShuai);
+        return w ? `${['初', '中', '末'][i]}传${z}${wxx}${w}` : '';
+      }).filter(Boolean);
+      if (wsLines.length) {
+        lines.push('');
+        lines.push('[三传旺衰]');
+        lines.push(`${wsLines.join('、')}`);
+      }
+      const kwLines = (refCtx.xunKongBranches || []).map((z) => {
+        const wxx = gzWx(z);
+        const j = judgeKongWang(wxx, refCtx.monthBranch, castOpts.tuWangShuai);
+        return j ? `${z}${wxx}${j.kind}(${j.ws})` : '';
+      }).filter(Boolean);
+      if (kwLines.length) {
+        lines.push('');
+        lines.push('[空亡真假]');
+        lines.push(`${kwLines.join('、')}`);
+      }
+      const kloc = analyzeKongLocations(refCtx);
+      if (kloc && kloc.hits && kloc.hits.length) {
+        lines.push('');
+        lines.push('[旬空落点]');
+        lines.push(`${kloc.hits.map((h) => `${h.pos}${h.branch}空（${h.note}）`).join('；')}${kloc.allSanChuanKong ? '；三传全空，守干上旺禄勿动' : ''}`);
+      }
+      if (kloc && kloc.xianKong && kloc.xianKong.length) {
+        lines.push('');
+        lines.push('[陷空]');
+        lines.push(`${kloc.xianKong.map((x) => `${x.god}临地盘${x.seat}`).join('、')}（落于空地、虚而不实）`);
+      }
+      const dun = analyzeDunGan(refCtx) || [];
+      if (dun.length) {
+        lines.push('');
+        lines.push('[遁干特殊]');
+        lines.push(`${dun.map((d) => `${d.pos}${d.branch}${d.gan ? '遁' + d.gan : ''}${d.flags && d.flags.length ? '（' + d.flags.join('、') + '）' : ''}：${d.note}`).join('；')}`);
+      }
+      const nm = analyzeNianMing(refCtx) || [];
+      if (nm.length) {
+        lines.push('');
+        lines.push('[年命上神]');
+        lines.push(`${nm.map((n) => `${n.label}${n.branch}——${n.note}`).join('；')}`);
+      }
+    } catch (e) {
+      // 断卦层任一 helper 失败绝不连累既有段（毕法/占断向导），静默降级。
+    }
+
     let bifaHits = [];
     try { bifaHits = matchBiFa(refCtx) || []; } catch (e) { bifaHits = []; }
     lines.push('');

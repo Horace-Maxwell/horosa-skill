@@ -375,3 +375,39 @@ export const ZhangSheng = {
 
 
 }
+export const WANGXIANG_TABLE = {
+	'木': ['旺', '休', '囚', '死', '相'],
+	'火': ['相', '旺', '休', '囚', '死'],
+	'土': ['死', '相', '旺', '休', '囚'],
+	'金': ['囚', '死', '相', '旺', '休'],
+	'水': ['休', '囚', '死', '相', '旺'],
+};
+// 旺相休囚死(§20.1):当令旺/我生相/生我休/克我囚/我克死。season idx:春0 夏1 四季2 秋3 冬4。
+// tuMode:'siji'(四季月各18日土旺·默认)/'huotu'(火土同宫·土随火,辰戌丑未归邻季论)。
+export function liurengWangXiang(wuxing, monthBranch, tuMode){
+	const mz = `${monthBranch || ''}`.trim().substring(0, 1);
+	const mode = tuMode === 'huotu' ? 'huotu' : 'siji';
+	const SI = { '寅': 0, '卯': 0, '巳': 1, '午': 1, '申': 3, '酉': 3, '亥': 4, '子': 4 };
+	let idx;
+	if(SI[mz] !== undefined){ idx = SI[mz]; }
+	else if(['辰', '戌', '丑', '未'].indexOf(mz) >= 0){ idx = mode === 'siji' ? 2 : { '辰': 0, '未': 1, '戌': 3, '丑': 4 }[mz]; }
+	else { return ''; }
+	const tu = mode === 'siji' ? ['死', '相', '旺', '休', '囚'] : ['相', '旺', '休', '囚', '死'];
+	const tbl = { ...WANGXIANG_TABLE, '土': tu };
+	const row = tbl[`${wuxing || ''}`.trim()];
+	return row ? row[idx] : '';
+}
+
+// 空亡真假(§22.1):空神旺相=假空(旺空,空而不空,出空有用);休囚死=真空(衰空,无用)。化空三机制:出空/填实/冲空。
+export function judgeKongWang(wuxing, monthBranch, tuMode){
+	const ws = liurengWangXiang(wuxing, monthBranch, tuMode);
+	if(!ws){ return null; }
+	const real = ['休', '囚', '死'].indexOf(ws) >= 0;
+	return {
+		ws,
+		kind: real ? '真空' : '假空',
+		basis: real
+			? '衰空(休囚死居空)——多作无、不成、虚;待出空/填实/冲空之日方应'
+			: '旺空(旺相居空)——空而不空,出空(填实/冲空)后转强效',
+	};
+}
