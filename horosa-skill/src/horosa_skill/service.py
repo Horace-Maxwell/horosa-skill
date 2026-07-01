@@ -3922,6 +3922,18 @@ def _build_bazi_snapshot_text(payload: dict[str, Any], response: dict[str, Any])
         ("四柱与三元", _join_lines(four_lines)),
         ("神煞（四柱与三元）", _join_lines(god_lines)),
     ]
+    # 八字格局（五行力量/格局·用神/盲派结构/月令司令）：core-js baziGeju 引擎（_attach_bazi_geju 挂载）
+    # 从后端 fourColumns 派生，插于 神煞 与 大运 之间；无 node/引擎失败则 _baziGeju 缺 → 该批段不出。
+    geju_text = response.get("_baziGeju") if isinstance(response.get("_baziGeju"), str) else ""
+    for block in (geju_text or "").split("\n\n"):
+        block = block.strip()
+        if not block.startswith("["):
+            continue
+        blk_lines = block.splitlines()
+        geju_title = blk_lines[0].strip().lstrip("[").rstrip("]")
+        geju_body = "\n".join(blk_lines[1:]).strip()
+        if geju_title and geju_body:
+            sections.append((geju_title, geju_body))
     if dayun_lines:
         sections.append(("大运", _join_lines(dayun_lines)))
     sections.append(
@@ -4630,7 +4642,13 @@ def _build_generated_export_snapshot(
         if isinstance(section_data, dict) and ("__export_body__" in section_data or "__export_data__" in section_data):
             section_body_override = _stringify_export_body(section_data.get("__export_body__"))
             section_payload = section_data.get("__export_data__")
-        body = parsed_section.get("body") or section_body_override or _stringify_export_body(section_payload)
+        # 兜底 body：段未进快照(parsed body 空)且无 __export_body__ 时，退回 stringify(section_payload)。
+        # 但 _pick_section_data 对未识别段名兜底返回整份 response_data → stringify 会把整份响应 dump 进段正文，
+        # 导出文本暴涨百倍(条件 preset 段未产出时触发)。故超阈值即判定为原始 dump，改用简短「未产出」占位。
+        fallback_body = _stringify_export_body(section_payload)
+        if fallback_body and len(fallback_body.splitlines()) > 80:
+            fallback_body = _missing_detail_text(title)
+        body = parsed_section.get("body") or section_body_override or fallback_body
         content = parsed_section.get("content") or (f"[{title}]\n{body}".strip() if body else f"[{title}]")
         rendered_blocks.append(content)
         sections.append(
@@ -4976,6 +4994,28 @@ class HorosaSkillService:
                 return enriched
         except Exception as exc:
             logger.warning("classical /astroextra/analysis failed (tool=%s): %s", tool_name, exc)
+        return response_data
+
+    # 八字格局（v3.0.x 本地化）：五行力量/格局·用神/盲派结构 由 core-js baziGeju 引擎从后端 fourColumns 派生，
+    # 与 [四柱与三元] 同源。按需调用、优雅降级（无 node/引擎失败→不挂载→该批段不出，列 optional）。
+    _BAZI_GEJU_TOOLS = {"bazi_birth", "bazi_direct"}
+
+    def _attach_bazi_geju(self, tool_name: str, response_data: dict[str, Any]) -> dict[str, Any]:
+        if tool_name not in self._BAZI_GEJU_TOOLS or not isinstance(response_data, dict):
+            return response_data
+        bazi = response_data.get("bazi")
+        fc = bazi.get("fourColumns") if isinstance(bazi, dict) else None
+        if not isinstance(fc, dict):
+            return response_data
+        try:
+            geju = self.js_client.run("bazi_geju", {"fourColumns": fc})
+            text = geju.get("snapshot_text") if isinstance(geju, dict) else None
+            if isinstance(text, str) and text.strip():
+                enriched = dict(response_data)
+                enriched["_baziGeju"] = text
+                return enriched
+        except ToolTransportError as exc:
+            logger.warning("bazi geju engine failed (tool=%s): %s", tool_name, exc)
         return response_data
 
     def _require_ken_pan(self, ken_response: Any, *, engine: str, endpoint: str) -> None:
@@ -6073,6 +6113,7 @@ class HorosaSkillService:
                     response_data = self._attach_predictive_chart_context(tool_name, input_normalized, response_data)
                 response_data = self._attach_natal_extras(tool_name, response_data)
                 response_data = self._attach_classical_analysis(tool_name, input_normalized, response_data)
+                response_data = self._attach_bazi_geju(tool_name, response_data)
                 response_data = _attach_export_contract(tool_name, input_normalized, response_data)
                 summary = _generic_summary(tool_name, response_data)
                 warnings: list[str] = []

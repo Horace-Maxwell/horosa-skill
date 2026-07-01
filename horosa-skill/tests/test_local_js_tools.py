@@ -626,6 +626,27 @@ def test_sixyao_carries_liuyao_struct(tmp_path) -> None:
     _assert_clean_export(result)
 
 
+@requires_runtime
+def test_bazi_carries_geju_sections(tmp_path) -> None:
+    # 八字格局（core-js baziGeju 引擎，从后端 fourColumns 派生·与 [四柱与三元] 同源）：
+    # [五行力量]/[格局·用神]/[盲派结构]，插于 神煞 与 大运 之间。
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "bazi_birth",
+        {"date": "1990-07-15", "time": "14:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gender": 1},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    snap = result.data["snapshot_text"]
+    for header in ("[五行力量]", "[格局·用神]", "[盲派结构]"):
+        assert header in snap, header
+    assert "分布：" in snap and "宾主：" in snap
+    export = result.data.get("export_snapshot") or {}
+    assert export.get("unknown_detected_sections") == []
+    # 导出文本不因条件段回退而暴涨（_pick_section_data 兜底 dump 守卫）：合理上限
+    assert len((export.get("export_text") or "").splitlines()) < 200
+
+
 @requires_chart
 def test_chart_sidereal_ayanamsa_and_nakshatra(tmp_path) -> None:
     # 星阙 v2.6.4 恒星黄道 47 岁差 + 西洋月宿 nakshatra：sidereal 盘(zodiacal=1) 按 siderealAyanamsa
