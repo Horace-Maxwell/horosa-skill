@@ -40,7 +40,7 @@ Required and normalized fields:
   "version": "0.2.0",
   "platform": "darwin-arm64",
   "runtime_layout_version": 1,
-  "export_registry_version": 6,
+  "export_registry_version": 7,
   "services": {
     "backend_url": "http://127.0.0.1:9999",
     "chart_url": "http://127.0.0.1:8899",

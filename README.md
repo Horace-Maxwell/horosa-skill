@@ -71,7 +71,7 @@
 | --- | --- |
 | 可调用工具 | `74 / 74 ok=true` |
 | 工程测试 | `268 / 268 pass`（含 ken / 神数 后端实时集成测试 + 离线 golden 单测 + node JS golden） |
-| 未确认参数时强制追问 | `61` 个技法工具触发 `must_ask_user=true` |
+| 未确认参数时强制追问 | `67` 个技法工具触发 `must_ask_user=true` |
 | 安全豁免工具 | `7` 个 registry / knowledge / parser 类工具直接可读 |
 | 星阙式导出结构 | 每个业务技法均带 `export_snapshot` / `export_format`（已建模 `63` 个导出 technique） |
 | 本地 memory / report | `74 / 74` 写入 + `74 / 74` JSON artifact |
@@ -114,7 +114,7 @@
 | `decennials` ⓟ | 十年大运 / 十年星限 | decennials 时间分层（headless，与星阙金标对齐） |
 | `agepoint` ⓟ | 年龄推进点 / Huber | Koch 宫 6 年一宫的年龄点周期 |
 | `distributions` ⓟ | 界推运 / 分配法 | 上升点行经埃及界的分配主时间轴 |
-| `mundane` ⓟ | 世俗入宫盘 | 某年某节气精确入宫时刻的世俗盘 |
+| `mundane` ⓟ | 世俗盘 | 年度入宫盘 + 子盘群（新月/满月/日月食/地区盘/行星周期/定局/地理分野等） |
 | `jaynesprog` ⓟ | 赤纬推运 | Jayne 二次推运 + 赤纬平行 / 反平行 |
 | `vedicprog` ⓟ | 恒星推运 | 恒星黄道（sidereal）下的二次推运 |
 | `planetaryarc` ⓟ | 行星弧 | 整盘按 arcSource 二次弧方向 |
@@ -144,7 +144,7 @@
 | `qimen` ⓟ | 奇门遁甲 | 由 ken（`kinqimen`）起盘，宫位细节 + 演卦 |
 | `taiyi` ⓟ | 太乙神数 | 由 ken（`kintaiyi`）起盘，十六宫标记 |
 | `jinkou` ⓟ | 金口诀 | 由 ken（`kinjinkou`）起盘，速览结果 |
-| `sanshiunited` ⓟ | 三式合一 | 聚合 ken 的奇门 + 太乙与大六壬并统一导出 |
+| `sanshiunited` ⓟ | 三式合一 | 聚合 ken 的奇门 + 太乙与大六壬并统一导出（含三家富化段） |
 
 ### 本地术数 · 数算 · 占卜
 

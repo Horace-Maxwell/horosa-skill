@@ -278,6 +278,9 @@ def test_sanshiunited_combines_ken_qimen_taiyi(tmp_path) -> None:
     # 对齐独立页：复用三独立技法富化段——太乙 pan.sections（加「太乙」前缀）、六壬断卦层、奇门派生。
     for header in ("[太乙断法]", "[太乙博弈]", "[十二盘式]", "[课体结构]", "[奇门九宫方盘]", "[奇门用神分论]"):
         assert header in snap, header
+    # 三家恒产段必须是真实引擎输出而非占位（占位文案=「本盘未产出」）。
+    for always_on in ("主客定算", "十二盘式", "九宫方盘"):
+        assert f"（本盘未产出「{always_on}」）" not in snap, always_on
     _assert_clean_export(result)
 
 
@@ -800,10 +803,15 @@ def test_mundane_ingress_chart(tmp_path) -> None:
         "[世俗宫义]", "[定局·年主/盘主]", "[入境骨架]", "[地理分野]", "[地区盘推运]",
     ):
         assert header in snapshot, header
-    # 朔望时刻、木土大合相、四季入宫等确定性事实应现于对应子盘。
-    assert "朔（新月" in snapshot and "望（满月" in snapshot
+    # 朔望时刻、木土大合相、四季入宫等确定性事实应现于对应子盘。朔/望必须**成对真实产出**
+    # （回溯探针取首相前一日，杜绝首相时刻秒级舍入把同一相重捕、另一相丢失的抖动）。
+    assert "朔（新月·日月合）时刻：" in snapshot
+    assert "望（满月·日月冲）时刻：" in snapshot
     assert "木土大合相" in snapshot
     assert "夏至入宫：" in snapshot
+    # 地区盘按格林尼治（0°经线 51°29′N）定盘；定局段给出入宫图效力定则。
+    assert "格林尼治" in snapshot
+    assert "定局：" in snapshot
     detected = (data.get("export_snapshot") or {}).get("section_titles_detected") or []
     assert "世俗入宫" in detected
     # 世俗盘为非推运入宫盘，[可能性] 恒缺属预期（可选段）→ 导出仍应干净。

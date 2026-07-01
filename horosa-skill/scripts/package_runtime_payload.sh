@@ -248,7 +248,7 @@ manifest = {
     "platform": os.environ["PLATFORM_ENV"],
     "runtime_layout_version": 1,
     "runtime_payload_version": os.environ["VERSION_ENV"],
-    "export_registry_version": 6,
+    "export_registry_version": 7,
     "services": {
         "backend_url": "http://127.0.0.1:9999",
         "chart_url": "http://127.0.0.1:8899",

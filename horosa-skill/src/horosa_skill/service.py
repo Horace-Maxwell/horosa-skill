@@ -4,7 +4,7 @@ import copy
 import logging
 import re
 import time
-from datetime import timezone, datetime
+from datetime import timezone, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -152,13 +152,11 @@ _PYTHON_CHART_ENDPOINTS = {
     "/astroextra/progressions",
     "/astroextra/planetreturn",
     "/astroextra/analysis",
-    # 世俗盘子盘群（新月/满月/日月食/行星周期/地区盘）依赖的 astroextra 精算端点。
+    # 世俗盘子盘群（新月/满月图、日月食判词、木土大合相、行星聚散指数）依赖的 astroextra 精算端点。
     "/astroextra/prenatal_syzygy",
     "/astroextra/eclipsedetail",
     "/astroextra/greatconj",
-    "/astroextra/planetcycles",
     "/astroextra/barbault",
-    "/astroextra/relocation",
     "/geomancy/reading",
     "/predict/planetaryarc",
     "/jieqi/year",
@@ -2679,8 +2677,17 @@ def _mundane_year_lord_lines(ingress_response: dict[str, Any]) -> list[str]:
     asc_sign = _po_sign_key(asc.get("sign")) if isinstance(asc, dict) else None
     if not asc_sign:
         return ["本盘缺上升信息，无法定盘主。"]
-    modality = _PO_MODALITY_CN.get(_PO_SIGN_MODALITY.get(asc_sign, ""), "")
+    modality_key = _PO_SIGN_MODALITY.get(asc_sign, "")
+    modality = _PO_MODALITY_CN.get(modality_key, "")
     lines = [f"上升星座：{_astro_msg(asc.get('sign'))}{('（' + modality + '）') if modality else ''}"]
+    # 定局定则（入宫图效力时长随上升宫性而定）：定宫全年一图；二体宫半年、秋分补图；转宫一季、逐季另起。
+    validity = {
+        "fixed": "定局：上升落定宫（固定宫）→ 本图效力全年。",
+        "mutable": "定局：上升落二体宫（变动宫）→ 本图效力半年，需秋分补图。",
+        "cardinal": "定局：上升落转宫（基本宫）→ 本图效力一季，逐季另起入宫图（参见[地区盘推运]四季序列）。",
+    }.get(modality_key)
+    if validity:
+        lines.append(validity)
     ruler_key = _PO_SIGN_DOMICILE.get(asc_sign)
     ruler_id = _PO_KEY_TO_ID.get(ruler_key) if ruler_key else None
     if ruler_id:
@@ -6132,9 +6139,17 @@ class HorosaSkillService:
             )
             if isinstance(s1, dict) and s1.get("type"):
                 syz_by_type[s1["type"]] = s1
+                # 另一相恒在首相之前 ~14.77 天：探针取首相前一日再回溯。若直接从首相时刻起搜，
+                # 该时刻按秒舍入恰落在真朔/望点之后时，回溯会把同一相当场重捕，另一相就丢了。
+                probe_date, probe_time = s1.get("date"), s1.get("time")
+                try:
+                    probe_dt = datetime.strptime(f"{probe_date} {probe_time}", "%Y-%m-%d %H:%M:%S") - timedelta(days=1)
+                    probe_date, probe_time = probe_dt.strftime("%Y-%m-%d"), probe_dt.strftime("%H:%M:%S")
+                except (TypeError, ValueError):
+                    pass
                 s2 = self._call_remote(
                     "/astroextra/prenatal_syzygy",
-                    {"date": s1.get("date"), "time": s1.get("time"), "zone": zone, "lat": lat, "lon": lon},
+                    {"date": probe_date, "time": probe_time, "zone": zone, "lat": lat, "lon": lon},
                 )
                 if isinstance(s2, dict) and s2.get("type") and s2["type"] not in syz_by_type:
                     syz_by_type[s2["type"]] = s2
@@ -6177,22 +6192,22 @@ class HorosaSkillService:
                 sections.append((
                     title,
                     "\n".join([
-                        f"入宫时刻附近最近{phase_cn}：全球食持续约 {ed.get('durationHours')} 小时。",
+                        f"自入宫时刻顺推最近{phase_cn}：全球食持续约 {ed.get('durationHours')} 小时。",
                         f"食时长定则（{rule}）→ 本次影响约 {ed.get('influence')} {unit}。",
                         "（食盘极大时刻的整轮定盘属交互功能，此处给出无头可复算的影响时长判词。）",
                     ]),
                 ))
             else:
-                sections.append((title, f"入宫时刻附近未检索到{phase_cn}。"))
+                sections.append((title, f"自入宫时刻顺推未检索到{phase_cn}。"))
 
         # ── 地区盘：以入宫（全球统一）时刻定盘于格林尼治（世界年图基准），与本地入宫盘对照 ──
         try:
             world_chart = self._call_remote(
                 "/chart",
-                {**base_chart_payload, "lat": "0n00", "lon": "0e00", "gpsLat": 0.0, "gpsLon": 0.0},
+                {**base_chart_payload, "lat": "51n29", "lon": "0e00", "gpsLat": 51.48, "gpsLon": 0.0},
             )
             digest = _mundane_chart_digest(world_chart)
-            body = [f"以入宫时刻（{ingress_time}）定盘于格林尼治 0°（世界年图基准）："]
+            body = [f"以入宫时刻（{ingress_time}）定盘于格林尼治（0°经线 51°29′N，世界年图基准）："]
             body.extend(digest or ["未取得地区盘轴点。"])
             body.append("——同一天象、异地宫位；与上文本地入宫盘四轴对照可见地域落点差异。")
             sections.append(("地区盘", "\n".join(body)))
@@ -6208,7 +6223,7 @@ class HorosaSkillService:
                 conjs = gc.get("conjunctions") if isinstance(gc, dict) else None
                 if isinstance(conjs, list) and conjs:
                     nearest = sorted(conjs, key=lambda c: abs(int(c.get("year", 0)) - year_num))[:3]
-                    cycle_lines.append("木土大合相（前后 20 年内最近三次）：")
+                    cycle_lines.append("木土大合相（前后 20 年内，至多三次）：")
                     for c in sorted(nearest, key=lambda c: int(c.get("year", 0))):
                         cycle_lines.append(f"  {c.get('year')}-{int(c.get('month', 0)):02d} 合于 {_lon_to_sign_degree(c.get('lon'))}")
             except Exception as exc:  # noqa: BLE001
@@ -6216,7 +6231,7 @@ class HorosaSkillService:
             try:
                 bb = self._call_remote(
                     "/astroextra/barbault",
-                    {"startYear": year_num - 10, "endYear": year_num + 10, "stepMonths": 6},
+                    {"startYear": year_num - 10, "endYear": year_num + 10, "stepMonths": 1},
                 )
                 extrema = bb.get("extrema") if isinstance(bb, dict) else None
                 if isinstance(extrema, list) and extrema:

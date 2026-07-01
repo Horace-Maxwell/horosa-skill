@@ -71,7 +71,7 @@ Local end-to-end signals:
 | --- | --- |
 | Callable tools | `74 / 74 ok=true` |
 | Engineering tests | `268 / 268 pass` (ken / Shen Shu live integration + offline golden unit tests + node JS golden) |
-| Forced clarification when params unconfirmed | `61` technique tools trigger `must_ask_user=true` |
+| Forced clarification when params unconfirmed | `67` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `7` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`63` export techniques modeled) |
 | Local memory / report | `74 / 74` writes + `74 / 74` JSON artifacts |
@@ -114,7 +114,7 @@ Local end-to-end signals:
 | `decennials` ⓟ | Decennials | decennials timeline (headless, Xingque golden) |
 | `agepoint` ⓟ | Age Point / Huber | Koch-house age-point cycle (6 yrs/house) |
 | `distributions` ⓟ | Distributions | Asc through the Egyptian bounds |
-| `mundane` ⓟ | Mundane ingress | chart cast at a year's solar-term ingress moment |
+| `mundane` ⓟ | Mundane astrology | yearly ingress chart + sub-charts (lunations / eclipses / world chart / planetary cycles / chart validity / rulership geography) |
 | `jaynesprog` ⓟ | Jayne declination | secondary progression + declination parallels |
 | `vedicprog` ⓟ | Vedic sidereal progression | progressions under the sidereal zodiac |
 | `planetaryarc` ⓟ | Planetary Arc | whole chart directed by arcSource's secondary arc |
@@ -144,7 +144,7 @@ Local end-to-end signals:
 | `qimen` ⓟ | Qi Men Dun Jia | cast by ken (`kinqimen`), palace detail + gua |
 | `taiyi` ⓟ | Tai Yi Shen Shu | cast by ken (`kintaiyi`), 16-palace marks |
 | `jinkou` ⓟ | Jin Kou Jue | cast by ken (`kinjinkou`), quick reading |
-| `sanshiunited` ⓟ | Three Styles unified | aggregates ken Qi Men + Tai Yi with Da Liu Ren |
+| `sanshiunited` ⓟ | Three Styles unified | aggregates ken Qi Men + Tai Yi with Da Liu Ren (incl. all three engines' enriched sections) |
 
 ### Local metaphysics · numerology · divination
 
