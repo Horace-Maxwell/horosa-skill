@@ -13,6 +13,7 @@ have not diverged. Stdlib-only; exits non-zero with an explanation on any diverg
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -41,6 +42,11 @@ SHARED_STEPS = {
     "plotly": "strip plotly (~40 MB, streamlit-only)",
     "lunar-javascript": "bundle the lunar-javascript npm dep (canping/heluo)",
 }
+
+# Embedded-manifest integer constants that must be stamped identically by both builders. Substring
+# checks can't see numeric drift: at v0.16.1 the mac packager bumped export_registry_version 6→7 and
+# this lint stayed green while the Windows builder kept stamping the stale contract version.
+SHARED_MANIFEST_CONSTANTS = ("schema_version", "runtime_layout_version", "export_registry_version")
 
 # Entries that must be REQUIRED on BOTH platforms (legit per-platform path swaps like python3<->python.exe
 # and .sh<->.ps1 are intentionally not checked here — only the platform-agnostic payload contents).
@@ -79,6 +85,19 @@ def main() -> int:
         if token not in win:
             errors.append(f"Windows builder is missing step `{token}` ({label}) — would regress vs macOS")
 
+    for name in SHARED_MANIFEST_CONSTANTS:
+        mac_vals = sorted({int(v) for v in re.findall(rf'"{name}"\s*:\s*(\d+)', mac)})
+        win_vals = sorted({int(v) for v in re.findall(rf'"{name}"\s*:\s*(\d+)', win)})
+        if not mac_vals:
+            errors.append(f"macOS builder does not stamp `{name}` in its embedded manifest")
+        if not win_vals:
+            errors.append(f"Windows builder does not stamp `{name}` in its embedded manifest")
+        if mac_vals and win_vals and mac_vals != win_vals:
+            errors.append(
+                f"embedded-manifest constant `{name}` drifted: macOS stamps {mac_vals}, Windows stamps {win_vals} "
+                "— bump the lagging builder in the same change"
+            )
+
     required = _load_required_entries()
     for platform in ("darwin-arm64", "win32-x64"):
         joined = "\n".join(required.get(platform, []))
@@ -94,7 +113,8 @@ def main() -> int:
 
     print(
         f"builder-parity OK: both builders vendor all {len(ENGINES)} standalone engines + kinastro, "
-        "run shaozi-gen + plotly-strip + lunar-javascript, and REQUIRED_ENTRIES is symmetric across platforms."
+        "run shaozi-gen + plotly-strip + lunar-javascript, stamp identical manifest constants, "
+        "and REQUIRED_ENTRIES is symmetric across platforms."
     )
     return 0
 

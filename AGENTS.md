@@ -609,14 +609,27 @@ only difference is which engine dir is vendored:
   builder and the win32-x64 verifier list were left untouched. A Windows build would then have silently
   shipped placeholder 邵子 verses *and still passed verify*. Fixed by adding both steps to the Windows
   builder and the shaozi entry to the win32-x64 verifier list. **Rule: when you touch one builder or add a
-  required artifact, grep the other builder + both `REQUIRED_ENTRIES` lists in the same change.**
+  required artifact, grep the other builder + both `REQUIRED_ENTRIES` lists in the same change.** Numeric
+  constants drift too: v0.16.1 bumped the embedded manifest's `export_registry_version` 6→7 in the mac
+  packager only, and substring-level parity stayed green while the Windows builder kept stamping 6.
+  `verify_builder_parity.py` now cross-checks `schema_version`/`runtime_layout_version`/
+  `export_registry_version` between the two builders (validated on that live drift: FAIL before the
+  Windows-side bump, PASS after).
 - **A new release published as `latest` is repeatedly missing its Windows half — ALWAYS check the release
   manifest first. The CI guard now catches this automatically.** The mac side has shipped this incomplete on
   **every minor since v0.10.0**: v0.10.0 had **no** `runtime-manifest.json` at all (`releases/latest/download/runtime-manifest.json`
   404 → `install` broke on BOTH platforms); v0.11.0 through **v0.16.0** shipped a **darwin-only** manifest +
   no win32 zip (mac installs, **Windows** install finds no `win32-x64` entry / 404s the zip). **Auto-caught
   since v0.13.0**: `release-completeness.yml` fires on the release event and fails, exactly as designed —
-  so rely on that red check instead of noticing by hand (it flagged v0.14.0/v0.15.0/v0.16.0 too). The Windows runtime is
+  so rely on that red check instead of noticing by hand (it flagged v0.14.0/v0.15.0/v0.16.0 too).
+  **v0.16.1 (2026-07-01) broke the streak: the first mac-shipped COMPLETE dual-platform `latest`.** The mac
+  side repacked the Windows-built v0.16.0 zip with a corrected embedded manifest (version 0.16.1 +
+  `export_registry_version` 7 — confirmed by range-reading the published zip; sizes differed from the
+  v0.16.0 archives by only ~50 bytes) and the guard went green on the release event with zero Windows-side
+  action. A repack like this is only valid when the release diff has **no payload-affecting changes**
+  (horosa-core-js source, vendored engines, wheels, launchers — skill-layer Python/docs are fine); when a
+  suspiciously same-size win zip appears on a new release, verify the embedded manifest (version +
+  `export_registry_version`) and that diff condition before trusting it. The Windows runtime is
   built off-repo on a Windows box, so a mac-only release publish leaves it out. **First diagnostic when
   "check sync" / a new version appears:** `gh release view vX.Y.Z --json assets` (expect darwin tar.gz +
   win32 zip + runtime-manifest.json + SHA256SUMS.txt) and confirm
