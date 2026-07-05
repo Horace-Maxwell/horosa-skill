@@ -11,8 +11,34 @@ function lighter(a, b){ return speedIdx(a) < speedIdx(b); }   // a 比 b 轻/快
 function cn(k){ return (PLANETS[k] || {}).cn || k; }
 const EASY = [0, 60, 120];
 
+const PTOL = [0, 60, 90, 120, 180];
+
 function hasReception(facts, a, b){
 	return receives(facts, a, b) || receives(facts, b, a) || mutualReceptionBetween(facts, a, b);
+}
+
+// 阻碍 / 挫败识别（两征象星入相位成相前，光线被第三星截断或事项另有所属）。
+// 以「入相位所差度数」近似「谁先成相」（度数越小越先，忽略行速差——古典程序通行近似）。
+function detectInterference(facts, sigA, sigB, mover, target, dAB){
+	if(typeof dAB !== 'number') return null;
+	const cands = Object.keys(facts.planets).filter((k) => k !== sigA && k !== sigB);
+	// 阻碍 prohibition：第三星 T 抢先入相 target（比 mover 更快成相）→ 第三方/意外插入截断。
+	for(let i = 0; i < cands.length; i++){
+		const T = cands[i];
+		const app = applyingAspects(facts, T).find((x) => x.other === target && PTOL.indexOf(x.angle) >= 0);
+		if(app && typeof app.orb === 'number' && app.orb < dAB - 0.01){
+			return { kind: 'prohibition', planet: T, text: `阻碍（prohibition）：${cn(T)} 抢先与 ${cn(target)} 成相（还差 ${app.orb.toFixed(1)}°，早于两征象星的 ${dAB.toFixed(1)}°）→ 光线被第三方截断，事遭插入 / 阻挠。` };
+		}
+	}
+	// 挫败 frustration：target 先与另一（非 mover）星成相 → 事项另有所属，被抢先。
+	const targetApps = applyingAspects(facts, target)
+		.filter((x) => x.other !== mover && x.other !== target && PTOL.indexOf(x.angle) >= 0)
+		.sort((a, b) => a.orb - b.orb);
+	if(targetApps.length && typeof targetApps[0].orb === 'number' && targetApps[0].orb < dAB - 0.01){
+		const T = targetApps[0].other;
+		return { kind: 'frustration', planet: T, text: `挫败（frustration）：${cn(target)} 先与 ${cn(T)} 成相（还差 ${targetApps[0].orb.toFixed(1)}°，早于与 ${cn(mover)} 的 ${dAB.toFixed(1)}°）→ 事项另有所属，被抢先一步。` };
+	}
+	return null;
 }
 
 // 完成度三分（3 大征象：上升星/月亮/事件守护星，免受 凶/逆/燃/陷 的数量）
@@ -49,10 +75,21 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 	const pB = facts.planets[sigB];
 
 	// —— 完成法 ——
-	// 1) 入相位 Application
+	// 1) 入相位 Application（先查阻碍/挫败：光线在成相前被截 → 阻断完成）
 	const asp = aspectBetween(facts, sigA, sigB);
 	result.aspect = asp;
 	if(asp && asp.applying){
+		const mover = (asp.from === sigA) ? sigA : sigB;
+		const target = (asp.from === sigA) ? sigB : sigA;
+		// 现代心理档（lenient）淡化机械截断，仅取主完成法；其余档按古典识别阻碍/挫败。
+		const inter = (opts.perfectionStrict === 'lenient') ? null : detectInterference(facts, sigA, sigB, mover, target, asp.orb);
+		if(inter){
+			result.destroyed = true; result.destruction = inter.kind; result.interferer = inter.planet;
+			detail.push(inter.text);
+		}
+	}
+	if(asp && asp.applying && !result.destroyed){
+		const mover = (asp.from === sigA) ? sigA : sigB;
 		const rec = hasReception(facts, sigA, sigB);
 		if((asp.angle === 90 || asp.angle === 180) && !rec){
 			result.destroyed = true;
@@ -65,6 +102,8 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 			// 主动方（B.2）：谁入相谁
 			if(asp.from === sigA) { result.byWhom = 'querent_effort'; detail.push('问卜者入相位对方 → 靠问卜者努力促成。'); }
 			else { result.byWhom = 'other_initiates'; detail.push('对方入相位问卜者 → 由对方主动/自愿促成。'); }
+			// 折返 refranation：入相方逆行 → 临成又退，恐反复/告吹。
+			if(facts.planets[mover] && facts.planets[mover].retro){ result.refranationRisk = true; detail.push(`注意：入相方 ${cn(mover)} 逆行 → 恐折返（refranation），临成又退、事有反复。`); }
 		}
 	}
 

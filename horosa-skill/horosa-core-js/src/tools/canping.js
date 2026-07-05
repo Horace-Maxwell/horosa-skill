@@ -102,6 +102,7 @@ export function runCanping(payload) {
       fourPillars: { yearGz, monthBranch, dayBranch, hourBranch },
     },
     data: { ...result, series },
-    snapshot_text: buildSnapshotText(result),
+    // 全生涯流年表喂给快照（逐岁太岁/大运/顺逆数），[流年·歲運] 段随之产出。
+    snapshot_text: buildSnapshotText(result, { liunianRows: series && Array.isArray(series.rows) ? series.rows : null }),
   };
 }

@@ -28,6 +28,37 @@ export const TRIPLICITY = {
 	water: { day: 'venus', night: 'mars', participating: 'moon' },
 };
 
+// 界（托勒密界 / Ptolemaic terms / bounds）：每座 5 段 [planet, from, to]。
+// 与埃及界并列为古典两大界系；世运盘「托勒密古典」可选切换此表（默认仍埃及界，零回归）。
+export const PTOLEMAIC_TERMS = {
+	aries: [['jupiter', 0, 6], ['venus', 6, 14], ['mercury', 14, 21], ['mars', 21, 26], ['saturn', 26, 30]],
+	taurus: [['venus', 0, 8], ['mercury', 8, 15], ['jupiter', 15, 22], ['saturn', 22, 26], ['mars', 26, 30]],
+	gemini: [['mercury', 0, 7], ['jupiter', 7, 14], ['venus', 14, 21], ['saturn', 21, 25], ['mars', 25, 30]],
+	cancer: [['mars', 0, 6], ['jupiter', 6, 13], ['mercury', 13, 20], ['venus', 20, 27], ['saturn', 27, 30]],
+	leo: [['saturn', 0, 6], ['mercury', 6, 13], ['venus', 13, 19], ['jupiter', 19, 25], ['mars', 25, 30]],
+	virgo: [['mercury', 0, 7], ['venus', 7, 13], ['jupiter', 13, 18], ['saturn', 18, 24], ['mars', 24, 30]],
+	libra: [['saturn', 0, 6], ['venus', 6, 11], ['jupiter', 11, 19], ['mercury', 19, 24], ['mars', 24, 30]],
+	scorpio: [['mars', 0, 6], ['jupiter', 6, 14], ['venus', 14, 21], ['mercury', 21, 27], ['saturn', 27, 30]],
+	sagittarius: [['jupiter', 0, 8], ['venus', 8, 14], ['mercury', 14, 19], ['saturn', 19, 25], ['mars', 25, 30]],
+	capricorn: [['venus', 0, 6], ['mercury', 6, 12], ['jupiter', 12, 19], ['mars', 19, 25], ['saturn', 25, 30]],
+	aquarius: [['saturn', 0, 6], ['mercury', 6, 12], ['venus', 12, 20], ['jupiter', 20, 25], ['mars', 25, 30]],
+	pisces: [['venus', 0, 8], ['jupiter', 8, 14], ['mercury', 14, 20], ['mars', 20, 26], ['saturn', 26, 30]],
+};
+
+// 三分性（托勒密 / Ptolemaic）：托勒密水象昼夜均火星主、不另设共用主星（与多罗修斯有别）。
+// 世运盘可选切换此表（默认仍多罗修斯，零回归）。
+export const PTOLEMAIC_TRIPLICITY = {
+	fire: { day: 'sun', night: 'jupiter', participating: null },
+	earth: { day: 'venus', night: 'moon', participating: null },
+	air: { day: 'saturn', night: 'mercury', participating: null },
+	water: { day: 'mars', night: 'mars', participating: null },
+};
+
+// 界系表选择：variant='ptolemaic' → 托勒密界；其它/缺省 → 埃及界（默认，零回归）。
+function termsTableFor(variant){
+	return variant === 'ptolemaic' ? PTOLEMAIC_TERMS : EGYPTIAN_TERMS;
+}
+
 // 面（Chaldean decans）：每座 3 个面，按迦勒底序，自白羊 0° 起火星
 export const FACES = {
 	aries: ['mars', 'sun', 'venus'],
@@ -44,11 +75,11 @@ export const FACES = {
 	pisces: ['saturn', 'jupiter', 'mars'],
 };
 
-// 经度 → 界主星
-export function termRulerAt(lon){
+// 经度 → 界主星。variant 缺省='egyptian'(埃及界,默认零回归);='ptolemaic' 用托勒密界。
+export function termRulerAt(lon, variant){
 	const sign = signOfLon(lon);
 	const deg = ((lon % 360) + 360) % 360 % 30;
-	const terms = EGYPTIAN_TERMS[sign] || [];
+	const terms = termsTableFor(variant)[sign] || [];
 	for(let i = 0; i < terms.length; i++){
 		if(deg >= terms[i][1] && deg < terms[i][2]){
 			return terms[i][0];
@@ -65,9 +96,10 @@ export function faceAt(lon){
 	return { faceIndex: idx, ruler: (FACES[sign] || [])[idx] || null };
 }
 
-// 三分主星（按昼夜取主用/次用/共用）
-export function triplicityRulers(element){
-	return TRIPLICITY[element] || null;
+// 三分主星（按昼夜取主用/次用/共用）。variant 缺省='dorothean'(默认零回归);='ptolemaic' 用托勒密三分。
+export function triplicityRulers(element, variant){
+	const table = variant === 'ptolemaic' ? PTOLEMAIC_TRIPLICITY : TRIPLICITY;
+	return table[element] || null;
 }
 
 // 必备尊贵打分（庙+5/旺+4/三分+3/界+2/面+1/陷−5/落−4）。dignitiesAt 由 conditions.js 调用。

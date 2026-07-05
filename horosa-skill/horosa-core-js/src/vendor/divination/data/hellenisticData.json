@@ -1,0 +1,149 @@
+{
+  "_meta": {
+    "title": "Hellenistic Astrology reconstruction data tables",
+    "note": "Signs 0=Aries..11=Pisces. Degrees are within-sign (0-30) for bounds/faces. Planets: Sun Moon Mercury Venus Mars Jupiter Saturn NorthNode SouthNode.",
+    "verified": "Egyptian bounds per-planet checksum=360; all bound rows sum to 30; faces continuous Chaldean order.",
+    "version": "1.0"
+  },
+  "signs": ["Aries","Taurus","Gemini","Cancer","Leo","Virgo","Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"],
+  "signs_zh": ["白羊","金牛","双子","巨蟹","狮子","处女","天秤","天蝎","射手","摩羯","水瓶","双鱼"],
+  "signs_glyph": ["♈","♉","♊","♋","♌","♍","♎","♏","♐","♑","♒","♓"],
+  "elements": {"Fire":[0,4,8],"Earth":[1,5,9],"Air":[2,6,10],"Water":[3,7,11]},
+  "modalities": {"Cardinal":[0,3,6,9],"Fixed":[1,4,7,10],"Mutable":[2,5,8,11]},
+  "sign_gender": ["M","F","M","F","M","F","M","F","M","F","M","F"],
+  "sign_sect": ["nocturnal","nocturnal","diurnal","_lunar","_solar","nocturnal","diurnal","diurnal","diurnal","nocturnal","diurnal","nocturnal"],
+
+  "domicile": ["Mars","Venus","Mercury","Moon","Sun","Mercury","Venus","Mars","Jupiter","Saturn","Saturn","Jupiter"],
+
+  "exaltation": {
+    "Sun": {"sign":0,"deg":19}, "Moon": {"sign":1,"deg":3}, "Mercury": {"sign":5,"deg":15},
+    "Venus": {"sign":11,"deg":27}, "Mars": {"sign":9,"deg":28}, "Jupiter": {"sign":3,"deg":15},
+    "Saturn": {"sign":6,"deg":21}, "NorthNode": {"sign":2,"deg":3,"optional":true}
+  },
+  "no_exaltation_signs": [2,4,8,10],
+
+  "triplicity": {
+    "Dorothean": {
+      "Fire":  {"day":"Sun",   "night":"Jupiter","participating":"Saturn"},
+      "Earth": {"day":"Venus", "night":"Moon",   "participating":"Mars"},
+      "Air":   {"day":"Saturn","night":"Mercury","participating":"Jupiter"},
+      "Water": {"day":"Venus", "night":"Mars",   "participating":"Moon"}
+    },
+    "Ptolemaic": {
+      "Fire":  {"day":"Sun",   "night":"Jupiter"},
+      "Earth": {"day":"Venus", "night":"Moon"},
+      "Air":   {"day":"Saturn","night":"Mercury"},
+      "Water": {"day":"Mars",  "night":"Mars", "text_variant":{"day":["Mars","Venus"],"night":["Mars","Moon"]}}
+    }
+  },
+
+  "bounds_egyptian": {
+    "0":  [["Jupiter",0,6],["Venus",6,12],["Mercury",12,20],["Mars",20,25],["Saturn",25,30]],
+    "1":  [["Venus",0,8],["Mercury",8,14],["Jupiter",14,22],["Saturn",22,27],["Mars",27,30]],
+    "2":  [["Mercury",0,6],["Jupiter",6,12],["Venus",12,17],["Mars",17,24],["Saturn",24,30]],
+    "3":  [["Mars",0,7],["Venus",7,13],["Mercury",13,19],["Jupiter",19,26],["Saturn",26,30]],
+    "4":  [["Jupiter",0,6],["Venus",6,11],["Saturn",11,18],["Mercury",18,24],["Mars",24,30]],
+    "5":  [["Mercury",0,7],["Venus",7,17],["Jupiter",17,21],["Mars",21,28],["Saturn",28,30]],
+    "6":  [["Saturn",0,6],["Mercury",6,14],["Jupiter",14,21],["Venus",21,28],["Mars",28,30]],
+    "7":  [["Mars",0,7],["Venus",7,11],["Mercury",11,19],["Jupiter",19,24],["Saturn",24,30]],
+    "8":  [["Jupiter",0,12],["Venus",12,17],["Mercury",17,21],["Saturn",21,26],["Mars",26,30]],
+    "9":  [["Mercury",0,7],["Jupiter",7,14],["Venus",14,22],["Saturn",22,26],["Mars",26,30]],
+    "10": [["Mercury",0,7],["Venus",7,13],["Jupiter",13,20],["Mars",20,25],["Saturn",25,30]],
+    "11": [["Venus",0,12],["Jupiter",12,16],["Mercury",16,19],["Mars",19,28],["Saturn",28,30]]
+  },
+  "bounds_ptolemaic": {
+    "0":  [["Jupiter",0,6],["Venus",6,14],["Mercury",14,21],["Mars",21,26],["Saturn",26,30]],
+    "1":  [["Venus",0,8],["Mercury",8,15],["Jupiter",15,22],["Saturn",22,24],["Mars",24,30]],
+    "2":  [["Mercury",0,7],["Jupiter",7,13],["Venus",13,20],["Mars",20,26],["Saturn",26,30]],
+    "3":  [["Mars",0,6],["Jupiter",6,13],["Mercury",13,20],["Venus",20,27],["Saturn",27,30]],
+    "4":  [["Jupiter",0,6],["Mercury",6,13],["Saturn",13,19],["Venus",19,25],["Mars",25,30]],
+    "5":  [["Mercury",0,7],["Venus",7,13],["Jupiter",13,18],["Saturn",18,24],["Mars",24,30]],
+    "6":  [["Saturn",0,6],["Venus",6,11],["Mercury",11,16],["Jupiter",16,24],["Mars",24,30]],
+    "7":  [["Mars",0,6],["Venus",6,13],["Jupiter",13,21],["Mercury",21,27],["Saturn",27,30]],
+    "8":  [["Jupiter",0,8],["Venus",8,14],["Mercury",14,19],["Saturn",19,25],["Mars",25,30]],
+    "9":  [["Venus",0,6],["Mercury",6,12],["Jupiter",12,19],["Saturn",19,25],["Mars",25,30]],
+    "10": [["Saturn",0,6],["Mercury",6,12],["Venus",12,20],["Jupiter",20,25],["Mars",25,30]],
+    "11": [["Venus",0,8],["Jupiter",8,14],["Mercury",14,20],["Mars",20,25],["Saturn",25,30]]
+  },
+  "bounds_ptolemaic_leo_variant_saturn_first": [["Saturn",0,6],["Mercury",6,13],["Venus",13,19],["Mars",19,25],["Jupiter",25,30]],
+
+  "faces_chaldean": {
+    "0":["Mars","Sun","Venus"], "1":["Mercury","Moon","Saturn"], "2":["Jupiter","Mars","Sun"],
+    "3":["Venus","Mercury","Moon"], "4":["Saturn","Jupiter","Mars"], "5":["Sun","Venus","Mercury"],
+    "6":["Moon","Saturn","Jupiter"], "7":["Mars","Sun","Venus"], "8":["Mercury","Moon","Saturn"],
+    "9":["Jupiter","Mars","Sun"], "10":["Venus","Mercury","Moon"], "11":["Saturn","Jupiter","Mars"]
+  },
+
+  "joys": {"Mercury":1,"Moon":3,"Venus":5,"Mars":6,"Sun":9,"Jupiter":11,"Saturn":12},
+
+  "sect": {
+    "diurnal_planets":["Sun","Jupiter","Saturn"],
+    "nocturnal_planets":["Moon","Venus","Mars"],
+    "mercury":"variable (oriental=diurnal, occidental=nocturnal)",
+    "benefic_of_sect":{"day":"Jupiter","night":"Venus"},
+    "malefic_of_sect":{"day":"Saturn","night":"Mars"},
+    "malefic_contrary_to_sect":{"day":"Mars","night":"Saturn"}
+  },
+
+  "planetary_years": {
+    "Saturn": {"least":30,"mean":43.5,"greater":57,"greatest":465},
+    "Jupiter":{"least":12,"mean":45.5,"greater":79,"greatest":427},
+    "Mars":   {"least":15,"mean":40.5,"greater":66,"greatest":284},
+    "Sun":    {"least":19,"mean":39.5,"greater":120,"greatest":1461},
+    "Venus":  {"least":8, "mean":45,  "greater":82,"greatest":1151},
+    "Mercury":{"least":20,"mean":48,  "greater":76,"greatest":480},
+    "Moon":   {"least":25,"mean":39.5,"greater":108,"greatest":520}
+  },
+
+  "zr_periods_by_sign": {
+    "0":["Mars",15],"1":["Venus",8],"2":["Mercury",20],"3":["Moon",25],"4":["Sun",19],
+    "5":["Mercury",20],"6":["Venus",8],"7":["Mars",15],"8":["Jupiter",12],"9":["Saturn",27],
+    "10":["Saturn",30],"11":["Jupiter",12]},
+  "zr_total_check": 211,
+  "zr_notes": {"loosing_of_the_bond":"after sub-periods complete a full 12-sign circuit, jump to the OPPOSITE (7th) sign instead of repeating the start; only in signs with period>17.5y","peaks":{"major":[1,10],"moderate":[7],"minor":[4]},"unit":"1 period-year=360 days; L2=months, L3=~2.5 days, L4=~5 hours"},
+
+  "decennials": {"main_period_months":129,"derivation":"sum of seven lesser years (30+12+15+19+8+20+25=129)=10y9m","subperiod_months_by_planet":{"Saturn":30,"Jupiter":12,"Mars":15,"Sun":19,"Venus":8,"Mercury":20,"Moon":25}},
+
+  "firdaria": {
+    "day_order":  [["Sun",10],["Venus",8],["Mercury",13],["Moon",9],["Saturn",11],["Jupiter",12],["Mars",7],["NorthNode",3],["SouthNode",2]],
+    "night_order":[["Moon",9],["Saturn",11],["Jupiter",12],["Mars",7],["Sun",10],["Venus",8],["Mercury",13],["NorthNode",3],["SouthNode",2]],
+    "total_years":75,
+    "subperiod":"each planetary period splits into 7 equal sub-firdaria in Chaldean order starting from the main lord; nodes are not sub-rulers and (Abu Mashar/Dykes) do not subdivide"
+  },
+
+  "lots": {
+    "_method": "Day: Asc + (B - A) mod 360 ; Night: Asc + (A - B) mod 360. Compute Fortune & Spirit first.",
+    "Fortune":   {"A":"Sun","B":"Moon","reverse":true},
+    "Spirit":    {"A":"Moon","B":"Sun","reverse":true},
+    "Eros":      {"A":"Spirit","B":"Venus","reverse":true},
+    "Necessity": {"A":"Mercury","B":"Fortune","reverse":true},
+    "Courage":   {"A":"Mars","B":"Fortune","reverse":true},
+    "Victory":   {"A":"Spirit","B":"Jupiter","reverse":true},
+    "Nemesis":   {"A":"Saturn","B":"Fortune","reverse":true},
+    "Father":    {"A":"Sun","B":"Saturn","reverse":true},
+    "Mother":    {"A":"Venus","B":"Moon","reverse":true},
+    "Marriage_men":  {"A":"Saturn","B":"Venus","reverse":true},
+    "Marriage_women":{"A":"Venus","B":"Saturn","reverse":true},
+    "Children":  {"A":"Jupiter","B":"Saturn","reverse":false},
+    "Siblings":  {"A":"Saturn","B":"Jupiter","reverse":false},
+    "Basis":     {"special":"Asc + shorter arc between Fortune and Spirit"},
+    "Exaltation":{"special":"Day: Asc + (19Aries - Sun); Night: Asc + (3Taurus - Moon)"}
+  },
+
+  "places": [
+    {"n":1, "greek":"Horoskopos","en":"Ascendant/Helm","zh":"命宫/上升","angularity":"angular","quality":"good","sig":"身体、生命、灵魂、活力、自我"},
+    {"n":2, "greek":"(Anaphora) Gate of Hades","en":"Gate of Hades","zh":"财帛/冥府之门","angularity":"succedent","quality":"bad(aversion)","sig":"生计、财产、收入"},
+    {"n":3, "greek":"Thea","en":"Goddess","zh":"女神宫","angularity":"cadent","quality":"good","sig":"兄弟姐妹、近途、邻里、月亮事务、占卜","joy":"Moon"},
+    {"n":4, "greek":"Hypogeion","en":"Subterraneous/IC","zh":"田宅/地底","angularity":"angular","quality":"good","sig":"父母(尤父)、家宅、土地、根基、隐private、结局"},
+    {"n":5, "greek":"Agathe Tyche","en":"Good Fortune","zh":"子女/好运","angularity":"succedent","quality":"good","sig":"子女、欢愉、性、馈赠","joy":"Venus"},
+    {"n":6, "greek":"Kake Tyche","en":"Bad Fortune","zh":"奴役/恶运","angularity":"cadent","quality":"bad(aversion)","sig":"疾病、伤害、劳役、下属","joy":"Mars"},
+    {"n":7, "greek":"Dysis","en":"Descendant/Setting","zh":"夫妻/下降","angularity":"angular","quality":"good","sig":"婚姻、伴侣、他者、公开关系"},
+    {"n":8, "greek":"(Epikataphora) Idle place","en":"Death/Idle","zh":"死亡/闲置","angularity":"succedent","quality":"bad(aversion)","sig":"死亡、遗产、他人钱财"},
+    {"n":9, "greek":"Theos","en":"God","zh":"迁移/神宫","angularity":"cadent","quality":"good","sig":"远途、异乡、宗教、哲学、占星、梦","joy":"Sun"},
+    {"n":10,"greek":"Mesouranema","en":"Midheaven/Action","zh":"事业/中天","angularity":"angular","quality":"good","sig":"事业、行动、名望、地位、权威"},
+    {"n":11,"greek":"Agathos Daimon","en":"Good Spirit","zh":"福德/善灵","angularity":"succedent","quality":"good","sig":"朋友、盟友、恩主、希望、馈赠","joy":"Jupiter"},
+    {"n":12,"greek":"Kakos Daimon","en":"Bad Spirit","zh":"玄秘/恶灵","angularity":"cadent","quality":"bad(aversion)","sig":"敌人、损失、监禁、暗中之害、自我毁损","joy":"Saturn"}
+  ],
+  "aversion_places_from_asc": [2,6,8,12],
+  "aspects_by_sign": {"conjunction":0,"sextile":[2,10],"square":[3,9],"trine":[4,8],"opposition":6,"aversion":[1,5,7,11]}
+}

@@ -215,16 +215,12 @@ AI_EXPORT_PRESET_SECTIONS = {
     # 归成 起卦信息/牌阵直断(定局)/牌阵细论(逐位含牌义)/综合建议(综合)；牌义深解并入牌阵细论故不单列。
     "tarot": ["起卦信息", "牌阵直断", "牌阵细论", "综合建议"],
     "fengshui": ["起盘信息", "标记判定", "冲突清单", "建议汇总", "纳气建议"],
-    # 星阙 aiExport.js declares canping as ['起盘','本命','大运','流年'], but its module snapshot
-    # (CanPingMain.saveSnap → canpingLocal.buildSnapshotText with no liunianBranch) only ever emits
-    # 起盘/本命/大运·歲運 — 流年 is omitted (calculate()'s single-liunian path pairs the taisui with
-    # dayun[0], the inaccurate one). The accurate per-year 流年 lives in the `series` table, which the
-    # skill exposes under data.canping.series. So this preset reflects the sections the snapshot
-    # actually carries, keeping the export contract clean instead of永远-missing 流年.
-    "canping": ["起盘", "本命", "大运"],
-    # 河洛理数: matches 星阙 aiExport.js exactly. The snapshot emits 起命/先天·<卦>/后天·<卦>/命运篇/
-    # 大限·岁运; the dynamic 先天·…/后天·…/大限·岁运 labels legacy-map to 先天卦/后天卦/大限 below.
-    "heluo": ["起命", "先天卦", "后天卦", "命运篇", "大限"],
+    # 邵子参评数：起盘/本命/大运·歲運 + 全生涯流年表（liunianSeries 逐岁行喂入 buildSnapshotText
+    # 的 liunianRows → [流年·歲運]，即星阙 aiExport 宣称的完整四段；歲運后缀段名归一见下方映射）。
+    "canping": ["起盘", "本命", "大运", "流年"],
+    # 河洛理数：快照段 起命/先天卦·元堂爻辞/后天卦·元堂爻辞/命运篇/大限·岁运/流年·岁运/断验（十吉）。
+    # 元堂爻辞与岁运段名（含老版动态卦名段）legacy-map 到 先天卦/后天卦/大限/流年，见下方映射。
+    "heluo": ["起命", "先天卦", "后天卦", "命运篇", "大限", "流年", "断验"],
     "generic": ["起盘信息"],
 }
 
@@ -352,20 +348,24 @@ def map_legacy_section_title(key: str, title: str | None) -> str:
         if normalized == "卦辞":
             return "卦辞与断语"
     elif key == "canping":
-        # 星阙 canpingLocal.buildSnapshotText emits the 歲運-suffixed label [大运·歲運]. Map it back to
-        # the canonical 大运 section name so the snapshot (kept byte-identical to 星阙) parses cleanly.
+        # 星阙 canpingLocal.buildSnapshotText emits 歲運-suffixed labels [大运·歲運]/[流年·歲運]. Map them
+        # back to the canonical 大运/流年 section names so the snapshot (kept byte-identical) parses cleanly.
         if normalized == "大运·歲運":
             return "大运"
+        if normalized == "流年·歲運":
+            return "流年"
     elif key == "heluo":
-        # 星阙 heluoLocal.buildSnapshotText emits dynamic section labels carrying the gua name —
-        # [先天·<卦> 元堂爻辞] / [后天·<卦> 元堂爻辞] / [大限·岁运]. Map them onto the declared aiExport
-        # sections 先天卦/后天卦/大限 (same prefix-mapping pattern 星阙 uses for liureng's 三传(…)).
-        if normalized.startswith("先天·"):
+        # 星阙 heluoLocal.buildSnapshotText 段名两代兼容：老版动态卦名段 [先天·<卦> 元堂爻辞]/[后天·<卦> 元堂爻辞]，
+        # 新版静态段 [先天卦·元堂爻辞]/[后天卦·元堂爻辞]；另有 [大限·岁运]/[流年·岁运]。全部归一到
+        # canonical 先天卦/后天卦/大限/流年（same prefix-mapping pattern 星阙 uses for liureng's 三传(…)).
+        if normalized.startswith("先天·") or normalized == "先天卦·元堂爻辞":
             return "先天卦"
-        if normalized.startswith("后天·"):
+        if normalized.startswith("后天·") or normalized == "后天卦·元堂爻辞":
             return "后天卦"
         if normalized == "大限·岁运":
             return "大限"
+        if normalized == "流年·岁运":
+            return "流年"
     return normalized
 
 

@@ -163,7 +163,7 @@ export function liunianSeries({ yearGz, monthBranch, dayBranch, hourBranch, gend
 	return { element, partName: r.partName, dayun, rows, qiyunAge };
 }
 
-export function buildSnapshotText(result) {
+export function buildSnapshotText(result, opts = {}) {
 	if (!result) return '';
 	const lines = [];
 	const bm = result.benming || {};
@@ -181,7 +181,18 @@ export function buildSnapshotText(result) {
 		const dv = d.verses || {};
 		lines.push(`${d.ageStart}-${d.ageEnd}岁 ${d.branch}：顺${dv.numShun} ${dv.textShun} ／ 逆${dv.numNi} ${dv.textNi}`);
 	});
-	if (result.liunian) {
+	const ynRows = opts && Array.isArray(opts.liunianRows) ? opts.liunianRows : null;
+	if (ynRows && ynRows.length) {
+		// 全生涯流年表:此前 buildCanpingSnapshotForRecord 不传 liunianBranch → result.liunian 恒 null、流年段恒空,
+		// 挂载/导出都缺流年。改由调用方喂入 liunianSeries(...).rows,逐岁出 太岁/大运/顺逆数(紧凑,不含逐句判语避免过长)。
+		lines.push('');
+		lines.push('[流年·歲運]');
+		ynRows.forEach((row) => {
+			const rv = row.verses || {};
+			const yzz = row.year ? `${row.year}·${row.ganzhi}` : '';
+			lines.push(`${row.age}岁${yzz ? ` ${yzz}` : ''} 太岁${row.taisuiBranch || '-'}·大运${row.dayunBranch || '-'} 顺${rv.numShun}/逆${rv.numNi}`);
+		});
+	} else if (result.liunian) {
 		const lv = result.liunian.verses || {};
 		lines.push('');
 		lines.push('[流年·歲運]');

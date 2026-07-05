@@ -13,12 +13,20 @@ export function ascRulerKey(facts){
 	return s && SIGNS[s] ? SIGNS[s].domicile : null;
 }
 
-export function radicality(facts){
+// opts（卜卦流派可选；不传 = 择日/既有调用，行为字节不变）：
+//   ascEarlyDeg/ascLateDeg —— 命度过早/过晚阈值（默认 3/27）
+//   considerationsMode —— 'ignore' 略去「判断前考量」(命度早晚 + 月与七宫主刑冲)；'strict' 追加土星落七宫/七宫主受损
+//   category —— 供 strict 判断七宫是否为事项宫(婚姻/诉讼/盗窃)以免误套「七宫=占星师」考量
+export function radicality(facts, opts){
+	opts = opts || {};
 	const warnings = [];
 	const ok = [];
 	const meta = facts.meta;
 	const ascRuler = ascRulerKey(facts);
 	const lord1 = ascRuler;
+	const earlyDeg = (typeof opts.ascEarlyDeg === 'number') ? opts.ascEarlyDeg : 3;
+	const lateDeg = (typeof opts.ascLateDeg === 'number') ? opts.ascLateDeg : 27;
+	const ignoreConsider = opts.considerationsMode === 'ignore';
 
 	// 适合判断
 	if(meta.hourRuler && lord1){
@@ -30,17 +38,18 @@ export function radicality(facts){
 
 	// 警告（§2.6）
 	const ad = meta.ascDegree;
-	if(ad !== null && ad !== undefined){
-		if(ad < 3) warnings.push({ key: 'asc_early', text: `上升落星座极早（${ad.toFixed(1)}°<3°）：恐为时过早/无赖捏造，慎判。` });
-		else if(ad > 27) warnings.push({ key: 'asc_late', text: `上升落星座极晚（${ad.toFixed(1)}°>27°）：事已成定局/问者已知答案，慎判。` });
+	if(ad !== null && ad !== undefined && !ignoreConsider){
+		if(ad < earlyDeg) warnings.push({ key: 'asc_early', text: `上升落星座极早（${ad.toFixed(1)}°<${earlyDeg}°）：恐为时过早/无赖捏造，慎判。` });
+		else if(ad > lateDeg) warnings.push({ key: 'asc_late', text: `上升落星座极晚（${ad.toFixed(1)}°>${lateDeg}°）：事已成定局/问者已知答案，慎判。` });
 	}
 	const moon = facts.planets.moon;
+	const resolvedMoonVoc = (typeof opts.moonVoc === 'boolean') ? opts.moonVoc : (moon && moon.isVOC);
 	if(moon){
-		if(moon.isVOC) warnings.push({ key: 'moon_voc', text: '月亮空相：问题可能不真或无果。' });
+		if(resolvedMoonVoc) warnings.push({ key: 'moon_voc', text: '月亮空相：问题可能不真或无果。' });
 		if(moon.combustion === 'combust') warnings.push({ key: 'moon_combust', text: '月亮燃烧：受克严重，慎判。' });
 		// 月与七宫主刑冲
 		const l7 = facts.houses[7] && facts.houses[7].ruler;
-		if(l7){
+		if(l7 && !ignoreConsider){
 			const a = aspectBetween(facts, 'moon', l7);
 			if(a && (a.angle === 90 || a.angle === 180)) warnings.push({ key: 'moon_l7_hard', text: `月亮与七宫主（${cn(l7)}）${a.angle === 90 ? '四分' : '对分'}：传统视为不宜判断。` });
 		}
@@ -48,6 +57,18 @@ export function radicality(facts){
 	const sat = facts.planets.saturn;
 	if(sat && sat.house === 1 && (sat.retro || sat.combustion === 'combust' || sat.dignityScore <= -4)){
 		warnings.push({ key: 'saturn_asc', text: '土星落上升且受克：占星师/判断本身受阻。' });
+	}
+	// strict 口径：追加「判断前考量」——土星落七宫 / 七宫主受损（七宫为事项宫的类别不套用，避免与事项征象混淆）。
+	if(opts.considerationsMode === 'strict'){
+		const seventhIsQuesited = ['marriage', 'lawsuit', 'theft'].indexOf(opts.category) >= 0;
+		if(sat && sat.house === 7) warnings.push({ key: 'saturn_7th', text: '土星落七宫：传统视为占星师/判断本身受扰，宜格外慎断。' });
+		if(!seventhIsQuesited){
+			const l7k = facts.houses[7] && facts.houses[7].ruler;
+			const p7 = l7k && facts.planets[l7k];
+			if(p7 && (p7.retro || p7.combustion === 'combust' || p7.dignityScore <= -4)){
+				warnings.push({ key: 'l7_afflicted', text: `七宫主（${cn(l7k)}）逆行/燃烧/落陷：占星师征象星受损，慎断。` });
+			}
+		}
 	}
 	if(lord1 && facts.planets[lord1]){
 		const lp = facts.planets[lord1];

@@ -1,0 +1,72 @@
+{
+  "_meta": {"title": "Hellenistic reconstruction data - Volume II extension tables",
+            "note": "Companion to hellenistic_data.json. Signs 0=Aries..11=Pisces; degrees within-sign 0-30."},
+
+  "klimata": [
+    {"n":1,"city":"Meroe","lat":16.45,"longest_day_h":13.0},
+    {"n":2,"city":"Syene (Aswan)","lat":23.85,"longest_day_h":13.5},
+    {"n":3,"city":"Lower Egypt / Alexandria","lat":30.37,"longest_day_h":14.0},
+    {"n":4,"city":"Rhodes","lat":36.00,"longest_day_h":14.5},
+    {"n":5,"city":"Hellespont","lat":40.93,"longest_day_h":15.0},
+    {"n":6,"city":"Mid-Pontus / Borysthenes","lat":45.02,"longest_day_h":15.5},
+    {"n":7,"city":"Mouth of Borysthenes","lat":48.53,"longest_day_h":16.0}
+  ],
+
+  "dodecatemoria": {"formula":"dodec = (12*L - 11*S) mod 360, S=sign start",
+    "segment_width_deg":2.5, "babylonian_variant":"S + 13*p (different longitudes; not Hellenistic mainstream)"},
+
+  "monomoiria": {
+    "system1_chaldean":{"rule":"1st degree of sign = domicile lord; then descending Chaldean order Saturn,Jupiter,Mars,Sun,Venus,Mercury,Moon; resets each sign","sect_dependent":false},
+    "system2_triplicity":{"rule":"1st degree = first triplicity lord by sect; runs through triplicity lords; sect-dependent","sect_dependent":true}
+  },
+
+  "chaldean_bounds": {
+    "note":"Ptolemy gives construction rule only (no table); only Aries is source-attested; rest rule-derived; USE WITH CAUTION.",
+    "widths":[8,7,6,5,4],
+    "day_order_by_element":{"Fire":["Jupiter","Venus","Saturn","Mercury","Mars"],
+      "Earth":["Venus","Saturn","Mercury","Mars","Jupiter"],
+      "Air":["Saturn","Mercury","Mars","Jupiter","Venus"],
+      "Water":["Mercury","Venus","Saturn","Mars","Jupiter"]},
+    "night_rule":"swap Saturn and Mercury positions"
+  },
+
+  "melothesia_zodiac": {
+    "0":"head/face","1":"neck/throat","2":"shoulders/arms/hands/lungs","3":"chest/breasts/stomach",
+    "4":"heart/upper back/sides","5":"belly/intestines/digestion","6":"kidneys/lower back/buttocks",
+    "7":"genitals/bladder/excretory","8":"hips/thighs/sciatic","9":"knees/bones/joints/skin",
+    "10":"calves/ankles/circulation","11":"feet/toes/lymph"},
+  "melothesia_planet": {
+    "Saturn":"bones/teeth/skin/spleen/joints/knees/right ear; chronic cold-dry",
+    "Jupiter":"liver/arterial blood/thighs/growth/fat",
+    "Mars":"blood/bile/muscles/genitals/head/gallbladder; wounds/fevers/surgery",
+    "Sun":"heart/vital spirit/brain/arteries; right eye(men)/left eye(women)",
+    "Venus":"kidneys/internal genitals/throat/touch/smell/sexual fluids",
+    "Mercury":"nerves/brain/tongue/hands/lungs/breath/speech/hearing",
+    "Moon":"stomach/breasts/womb/body fluids/lymph/bladder; left eye(men)/right eye(women)"},
+
+  "ages_of_man_ptolemy": [
+    {"from":0,"to":4,"ruler":"Moon"},{"from":4,"to":14,"ruler":"Mercury"},
+    {"from":14,"to":22,"ruler":"Venus"},{"from":22,"to":41,"ruler":"Sun"},
+    {"from":41,"to":56,"ruler":"Mars"},{"from":56,"to":68,"ruler":"Jupiter"},
+    {"from":68,"to":120,"ruler":"Saturn"}],
+
+  "arcus_visionis_deg": {"Saturn":11,"Jupiter":10,"Mars":11.5,"Venus":5,"Mercury":10},
+
+  "lots_extended": {
+    "_method":"Day: Asc + (B - A) mod 360; night swap A,B unless reverse=false. *=formula varies by author (verify in primary text).",
+    "Marriage_dorothean":{"A":"Sun","B":"Venus","reverse":true},
+    "Sons":{"A":"Jupiter","B":"Mercury","reverse":true,"uncertain":true},
+    "Daughters":{"A":"Jupiter","B":"Venus","reverse":true,"uncertain":true},
+    "Praxis_action":{"A":"Mercury","B":"Mars","reverse":true,"uncertain":true},
+    "Friends":{"A":"Mercury","B":"Moon","reverse":true,"uncertain":true},
+    "Enemies":{"A":"Saturn","B":"Mars","reverse":true,"uncertain":true},
+    "Accusation":{"A":"Saturn","B":"Mars","reverse":true,"uncertain":true},
+    "Injury_illness":{"A":"Mars","B":"Saturn","reverse":true,"uncertain":true},
+    "Death":{"special":"varies; e.g. via 8th place + Saturn/Moon; HIGH disagreement - consult Valens","uncertain":true},
+    "Travel":{"special":"often via 9th place / its ruler; varies","uncertain":true}
+  },
+
+  "thema_mundi": {"ascendant":"15 Cancer",
+    "positions":{"Moon":"15 Cancer","Sun":"15 Leo","Mercury":"15 Virgo","Venus":"15 Libra",
+                 "Mars":"15 Scorpio","Jupiter":"15 Sagittarius","Saturn":"15 Capricorn"}}
+}

@@ -70,14 +70,17 @@ function buildCandidates(facts){
 }
 
 // ---- 某点（星座+度）的五尊贵主星 ----
-function dignityLordsAt(sign, lon, sect){
+// variants(可选) = {termsVariant, triplicityVariant}：缺省走默认表(埃及界+多罗修斯三分)，
+// 与寿命法/卜卦/择日同口径、零回归；世运盘按规则集传入 'ptolemaic' 切换界/三分主星换表。
+function dignityLordsAt(sign, lon, sect, variants){
 	const s = SIGNS[sign] || {};
-	const trip = s.element ? triplicityRulers(s.element) : null;
+	const v = variants || {};
+	const trip = s.element ? triplicityRulers(s.element, v.triplicityVariant) : null;
 	return {
 		domicile: s.domicile || null,
 		exaltation: s.exaltation ? s.exaltation.planet : null,
 		triplicity: trip ? (sect === 'day' ? trip.day : trip.night) : null,
-		term: termRulerAt(lon),
+		term: termRulerAt(lon, v.termsVariant),
 		face: faceAt(lon).ruler,
 	};
 }
@@ -198,7 +201,9 @@ function computeYears(facts, alc){
 const ALMUTEN_HYLEGIC = ['sun', 'moon', 'asc', 'fortune', 'syzygy'];
 const HOUSE_SCORES = { 1: 12, 2: 6, 3: 3, 4: 9, 5: 7, 6: 1, 7: 10, 8: 4, 9: 5, 10: 11, 11: 8, 12: 2 };
 const DIG_W = { domicile: 5, exaltation: 4, triplicity: 3, term: 2, face: 1 };
-function computeAlmuten(facts){
+// variants(可选) = {termsVariant, triplicityVariant}：缺省走默认尊贵表(零回归;寿命法/盘主用)。
+// 世运盘「年主/盘主」按其规则集传入 'ptolemaic' → 界主/三分主换表,胜者随之改变。
+function computeAlmuten(facts, variants){
 	const sect = facts.meta.sect;
 	const totals = {};
 	CLASSICAL_PLANETS.forEach((p) => { totals[p] = 0; });
@@ -207,7 +212,7 @@ function computeAlmuten(facts){
 		const pt = getPoint(facts, key);
 		if(!pt || pt.lon == null || !pt.sign) return;
 		const lon = pt.lon, sign = pt.sign;
-		const lords = dignityLordsAt(sign, lon, sect);
+		const lords = dignityLordsAt(sign, lon, sect, variants);
 		Object.keys(DIG_W).forEach((dig) => { const pl = lords[dig]; if(pl && totals[pl] != null) totals[pl] += DIG_W[dig]; });
 		points.push(key);
 	});
@@ -250,6 +255,50 @@ function planetStates(facts){
 		};
 	}).filter(Boolean);
 	return { rows, sect, hasSurround: !!surround };
+}
+
+// ---- 向运至杀星时间轴（primary direction of hyleg to anareta）----
+// 生命主受主行向运（黄道顺行）推进，遇杀星（土星/火星）本体或其凶光（四分/对分）即危险期。
+// 弧度→时间用简化普托度法 1°≈1 年（不取那波得/斜升时度，UI 注明为简化版）。
+// 仅本命事实派生，零后端：读 hyleg.lon 与 facts.planets[saturn/mars].lon。
+const ANARETA_KEYS = ['saturn', 'mars'];          // 杀星：土、火。
+const ANARETA_RAYS = [                              // 各杀星投向黄道的相位点（含本体合）。
+	{ offset: 0, aspect: 0, label: 'body' },         // 合（本体，最凶）
+	{ offset: 90, aspect: 90, label: 'dexter-square' },   // 右四分凶光
+	{ offset: 270, aspect: 90, label: 'sinister-square' },// 左四分凶光
+	{ offset: 180, aspect: 180, label: 'opposition' },    // 对分凶光
+];
+// 顺行向运弧：danger − hyleg ∈ [0,360)。
+function directionArc(hylegLon, dangerLon){
+	let d = (dangerLon - hylegLon) % 360;
+	if(d < 0) d += 360;
+	return d;
+}
+function lifespanTimeline(facts, hyleg){
+	if(!hyleg || hyleg.lon == null) return { rows: [], note: '未定生命主，无法推算向运时间轴。' };
+	const events = [];
+	ANARETA_KEYS.forEach((mk) => {
+		const p = facts.planets[mk];
+		if(!p || p.lon == null) return;
+		ANARETA_RAYS.forEach((ray) => {
+			const dangerLon = (p.lon + ray.offset) % 360;
+			const arc = directionArc(hyleg.lon, dangerLon);
+			events.push({
+				planet: mk,
+				aspect: ray.aspect,
+				aspectKind: ray.label,
+				dangerLon: round1(dangerLon),
+				dangerSign: signOfLon(dangerLon),
+				arc: round1(arc),
+				age: round1(arc),            // 1°≈1 年（简化普托度法）
+			});
+		});
+	});
+	events.sort((a, b) => a.arc - b.arc);
+	return {
+		rows: events,
+		note: '向运法：生命主以黄经顺行推进，遇杀星（土/火）本体或其四分/对分凶光即为危险窗口；弧度按 1°≈1 年折算（简化普托度法，未取斜升时度）。',
+	};
 }
 
 // ---- 医疗危机 v1（非宿命论；6宫+生命主受克+身体部位提示）----
@@ -321,6 +370,7 @@ export function runLifespan(facts, opts){
 	const rulers = rulersOfLife(facts, hy.hyleg, almuten.winner);
 	const states = planetStates(facts);
 	const medical = medicalCrisis(facts, hy.hyleg, alcBase);
+	const timeline = lifespanTimeline(facts, hy.hyleg);
 	const mp = facts.meta.moonPhase;
 	return {
 		method, sect, isDiurnal: facts.meta.isDiurnal,
@@ -333,8 +383,9 @@ export function runLifespan(facts, opts){
 		rulers,
 		states,
 		medical,
+		timeline,
 	};
 }
 
-export { selectHyleg, findAlcocoden, computeYears, computeAlmuten, rulersOfLife, planetStates, medicalCrisis };
+export { selectHyleg, findAlcocoden, computeYears, computeAlmuten, rulersOfLife, planetStates, medicalCrisis, lifespanTimeline };
 export default runLifespan;

@@ -50,7 +50,7 @@ export const TOPIC_MASTER = {
 	blessing: { topic_id: 'blessing', cn: '祈福', natural_significators: ['jupiter', 'neptune'], key_houses: [9, 11], preferred_asc_modality: [], moon_phase_pref: 'any', must_avoid: [], must_have: [], notes: '9宫(宗教)/11宫(愿望)+木星/海王；按所求加对应宫。' },
 	altar: { topic_id: 'altar', cn: '安香/安神位', natural_significators: ['jupiter'], key_houses: [9, 4, 8], preferred_asc_modality: [], moon_phase_pref: 'any', must_avoid: [], must_have: [], notes: '9/4/8 宫+木星。' },
 	ritual: { topic_id: 'ritual', cn: '法会/建醮', natural_significators: ['jupiter', 'neptune'], key_houses: [9, 11, 10, 4], preferred_asc_modality: [], moon_phase_pref: 'any', must_avoid: [], must_have: [], notes: '9(宗教)/11(团体)/10(地方形象)/4(区域)+木星/海王。' },
-	general_day: { topic_id: 'general_day', cn: '大众吉日(简)', natural_significators: [], key_houses: [], preferred_asc_modality: [], moon_phase_pref: 'any', must_avoid: [], must_have: [], notes: '小事，仅看月落星座（见 §6.17 月落十二座事务）。' },
+	general_day: { topic_id: 'general_day', cn: '大众吉日(简)', natural_significators: [], key_houses: [], preferred_asc_modality: [], moon_phase_pref: 'any', must_avoid: [], must_have: [], notes: '小事，仅看月落星座（月落十二座事务）。' },
 };
 
 export const TOPIC_LIST = Object.keys(TOPIC_MASTER);

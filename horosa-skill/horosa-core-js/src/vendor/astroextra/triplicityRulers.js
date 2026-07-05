@@ -1,6 +1,7 @@
 import moment from 'moment';
 import * as AstroConst from '../../constants/AstroConst.js';
 import * as AstroText from '../../constants/AstroText.js';
+import { TRIPLICITY } from '../divination/data/hellenisticData.js';
 
 // 三分主星推运（Triplicity-Ruler Periods）。纯前端：仅重新切分本命盘。
 //  ① 区间光体：昼生看太阳所在座、夜生看月亮所在座。
@@ -28,7 +29,61 @@ export const TRIPLICITY_DIVISIONS = {
 	halves: '两分（上半生 / 下半生 + 协作贯穿）',
 };
 
-export const TRIPLICITY_DEFAULT_OPTS = { division: 'thirds', lifespan: TRIPLICITY_LIFESPAN_DEFAULT };
+// 三分体系（同一元素三分主星的取法分歧；默认多罗特三主＝现状）。
+//  Dorothean  ：昼/夜/共同 三主（与本盘 SignsProp.Trip 一致）。
+//  Ptolemaic  ：昼/夜 两主（无共同主星）；水象座特别取两/三主变体。
+//  PtolemaicWaterVariant：托勒密两主，但水象座改用另一套水象三主。
+export const TRIPLICITY_SYSTEMS = {
+	Dorothean: '多罗特三主（昼/夜/共同）',
+	Ptolemaic: '托勒密二主（昼/夜）',
+	PtolemaicWaterVariant: '托勒密·水象变体',
+};
+
+export const TRIPLICITY_SYSTEM_DEFAULT = 'Dorothean';
+
+// 三分体系名 → 顶部说明。
+export const TRIPLICITY_SYSTEM_HINTS = {
+	Dorothean: '多罗特体系：每元素三颗三分主星（昼主／夜主／共同主），按昼夜换序分掌人生各阶段，共同主星贯穿。',
+	Ptolemaic: '托勒密体系：每元素仅昼、夜两颗主星，无共同主星，按昼夜分掌上下半生。',
+	PtolemaicWaterVariant: '托勒密体系（水象变体）：火/土/风三象同托勒密二主；唯水象座改取另一套水象主星（昼火金、夜火月）。',
+};
+
+export const TRIPLICITY_DEFAULT_OPTS = { division: 'thirds', lifespan: TRIPLICITY_LIFESPAN_DEFAULT, system: TRIPLICITY_SYSTEM_DEFAULT };
+
+// 星座英文名 → 元素键（Fire/Earth/Air/Water），用于在希腊化三分表中取对应元素行。
+const SIGN_ELEMENT = {
+	Aries: 'Fire', Leo: 'Fire', Sagittarius: 'Fire',
+	Taurus: 'Earth', Virgo: 'Earth', Capricorn: 'Earth',
+	Gemini: 'Air', Libra: 'Air', Aquarius: 'Air',
+	Cancer: 'Water', Scorpio: 'Water', Pisces: 'Water',
+};
+
+// 取某星座在指定体系下、依当前昼夜已排好序的三分主星列表 [主, 次?]。
+//  Dorothean   → 复用 SignsProp.Trip（[昼,夜,共同]），按昼夜换序为 [主,次,共同]（与现状一致）。
+//  Ptolemaic   → 元素行 {day, night} 视为 {昼主,夜主}，按昼夜取 [本派主, 另一]；水象退化为单主（火）。
+//  水象变体     → 火/土/风同托勒密；水象改取 text_variant[昼/夜] 已序列表（昼[火,金]/夜[火,月]）。
+// 返回的数组首元＝当前昼夜的「主」三分主星，次元（若有）＝「次」。下游不再换序。
+export function resolveTripletForSign(sign, system, isDiurnal){
+	const sp = sign ? AstroConst.SignsProp[sign] : null;
+	const trip = (sp && Array.isArray(sp.Trip)) ? sp.Trip : null;
+	const dorotheanOrdered = trip ? [isDiurnal ? trip[0] : trip[1], isDiurnal ? trip[1] : trip[0], trip[2]] : [];
+	if(system !== 'Ptolemaic' && system !== 'PtolemaicWaterVariant'){
+		return dorotheanOrdered; // 多罗特（默认）：三主，已按昼夜换序。
+	}
+	const elem = SIGN_ELEMENT[sign];
+	const tab = (TRIPLICITY && TRIPLICITY.Ptolemaic) ? TRIPLICITY.Ptolemaic[elem] : null;
+	if(!tab){ return dorotheanOrdered; }
+	if(elem === 'Water'){
+		const variant = tab.text_variant;
+		if(system === 'PtolemaicWaterVariant' && variant){
+			const seq = isDiurnal ? variant.day : variant.night; // 昼[火,金] / 夜[火,月]，已序。
+			if(Array.isArray(seq)){ return seq.slice(); }
+		}
+		return [tab.day].filter(Boolean); // 标准托勒密水象：昼夜同主（火），单主。
+	}
+	// 火/土/风：元素行 {昼主, 夜主}，按昼夜取 [本派主, 另一]。
+	return [isDiurnal ? tab.day : tab.night, isDiurnal ? tab.night : tab.day].filter(Boolean);
+}
 
 const SIGN_CN = {
 	Aries: '白羊', Taurus: '金牛', Gemini: '双子', Cancer: '巨蟹', Leo: '狮子', Virgo: '处女',
@@ -125,6 +180,7 @@ function planetTxt(id){
 function resolveOpts(opts){
 	const o = { ...TRIPLICITY_DEFAULT_OPTS, ...(opts || {}) };
 	if(!TRIPLICITY_DIVISIONS[o.division]){ o.division = 'thirds'; }
+	if(!TRIPLICITY_SYSTEMS[o.system]){ o.system = TRIPLICITY_SYSTEM_DEFAULT; }
 	o.lifespan = Number(o.lifespan) > 0 ? Number(o.lifespan) : TRIPLICITY_LIFESPAN_DEFAULT;
 	return o;
 }
@@ -138,28 +194,11 @@ export function buildTriplicityPeriods(chartObj, opts){
 	const sectLight = isDiurnal ? AstroConst.SUN : AstroConst.MOON;
 	const sign = natalSign(chartObj, sectLight);
 	const sp = sign ? AstroConst.SignsProp[sign] : null;
-	if(!sp || !Array.isArray(sp.Trip)){ return { isDiurnal, sectLight, sign, signCn: sign ? SIGN_CN[sign] : '', periods: [], lifespan: o.lifespan, division: o.division }; }
-	const trip = sp.Trip;
-	const r1 = isDiurnal ? trip[0] : trip[1];
-	const r2 = isDiurnal ? trip[1] : trip[0];
-	const r3 = trip[2];
+	if(!sp || !Array.isArray(sp.Trip)){ return { isDiurnal, sectLight, sign, signCn: sign ? SIGN_CN[sign] : '', periods: [], lifespan: o.lifespan, division: o.division, system: o.system }; }
 	const L = o.lifespan;
 	const birth = parseBirth(chartObj);
 	const dateAt = (age) => (birth ? moment(birth).add(Math.round(age * 365.2422), 'days').format('YYYY-MM-DD') : '');
-	let periods;
-	if(o.division === 'halves'){
-		periods = [
-			{ ruler: r1, role: '主三分主星（上半生）', fromAge: 0, toAge: L / 2 },
-			{ ruler: r2, role: '次三分主星（下半生）', fromAge: L / 2, toAge: L },
-			{ ruler: r3, role: '协作主星（贯穿）', fromAge: 0, toAge: L },
-		];
-	}else{
-		periods = [
-			{ ruler: r1, role: '主三分主星', fromAge: 0, toAge: L / 3 },
-			{ ruler: r2, role: '次三分主星', fromAge: L / 3, toAge: (2 * L) / 3 },
-			{ ruler: r3, role: '协作主星', fromAge: (2 * L) / 3, toAge: L },
-		];
-	}
+	const periods = buildRawPeriods(sign, isDiurnal, o.system, o.division, L);
 	periods.forEach((p) => {
 		p.fromDate = dateAt(p.fromAge);
 		p.toDate = dateAt(p.toAge);
@@ -167,7 +206,50 @@ export function buildTriplicityPeriods(chartObj, opts){
 		p.period = PLANETARY_PERIOD_YEARS[p.ruler];
 		p.rulerCn = planetTxt(p.ruler);
 	});
-	return { isDiurnal, sectLight, sectLightCn: planetTxt(sectLight), sign, signCn: sign ? SIGN_CN[sign] : '', periods, lifespan: L, division: o.division };
+	return { isDiurnal, sectLight, sectLightCn: planetTxt(sectLight), sign, signCn: sign ? SIGN_CN[sign] : '', periods, lifespan: L, division: o.division, system: o.system };
+}
+
+// 按体系与划分法生成原始阶段（仅 ruler/role/年龄段）。
+//  Dorothean（默认）严格保持现状逻辑：从 SignsProp.Trip 取 [昼,夜,共同]，三段。
+//  Ptolemaic/水象变体：二主 → 主/次两段；退化单主 → 仅一段（贯穿全程）。
+function buildRawPeriods(sign, isDiurnal, system, division, L){
+	const sp = AstroConst.SignsProp[sign];
+	if(system === 'Dorothean'){
+		const trip = sp.Trip;
+		const r1 = isDiurnal ? trip[0] : trip[1];
+		const r2 = isDiurnal ? trip[1] : trip[0];
+		const r3 = trip[2];
+		if(division === 'halves'){
+			return [
+				{ ruler: r1, role: '主三分主星（上半生）', fromAge: 0, toAge: L / 2 },
+				{ ruler: r2, role: '次三分主星（下半生）', fromAge: L / 2, toAge: L },
+				{ ruler: r3, role: '协作主星（贯穿）', fromAge: 0, toAge: L },
+			];
+		}
+		return [
+			{ ruler: r1, role: '主三分主星', fromAge: 0, toAge: L / 3 },
+			{ ruler: r2, role: '次三分主星', fromAge: L / 3, toAge: (2 * L) / 3 },
+			{ ruler: r3, role: '协作主星', fromAge: (2 * L) / 3, toAge: L },
+		];
+	}
+	// 托勒密体系（含水象变体）：resolveTripletForSign 已按昼夜排好序 [主, 次?]。
+	const seq = resolveTripletForSign(sign, system, isDiurnal);
+	const r1 = seq[0];
+	const r2 = seq.length > 1 ? seq[1] : seq[0];
+	if(seq.length <= 1 || r1 === r2){
+		// 单主（标准托勒密水象，昼夜同主）：全程一段。
+		return [{ ruler: r1, role: '三分主星（贯穿）', fromAge: 0, toAge: L }];
+	}
+	if(division === 'halves'){
+		return [
+			{ ruler: r1, role: '主三分主星（上半生）', fromAge: 0, toAge: L / 2 },
+			{ ruler: r2, role: '次三分主星（下半生）', fromAge: L / 2, toAge: L },
+		];
+	}
+	return [
+		{ ruler: r1, role: '主三分主星', fromAge: 0, toAge: L / 2 },
+		{ ruler: r2, role: '次三分主星', fromAge: L / 2, toAge: L },
+	];
 }
 
 // AI 快照。section 头 [三分主星推运] 与 aiExport preset 对齐。
@@ -176,7 +258,7 @@ export function buildTriplicityRulersSnapshotText(chartObj, opts){
 	const r = buildTriplicityPeriods(chartObj, opts);
 	if(!r || !r.periods || !r.periods.length){ return ''; }
 	const lines = ['[三分主星推运]'];
-	lines.push(`${r.isDiurnal ? '昼' : '夜'}生盘，区间光体=${r.sectLightCn}（${r.signCn}），三分主星依其落宫与状态主导人生各阶段（${TRIPLICITY_DIVISIONS[r.division]}）。`);
+	lines.push(`${r.isDiurnal ? '昼' : '夜'}生盘，区间光体=${r.sectLightCn}（${r.signCn}），三分体系＝${TRIPLICITY_SYSTEMS[r.system] || TRIPLICITY_SYSTEMS[TRIPLICITY_SYSTEM_DEFAULT]}，三分主星依其落宫与状态主导人生各阶段（${TRIPLICITY_DIVISIONS[r.division]}）。`);
 	lines.push('');
 	lines.push('| 阶段 | 主星 | 年龄段 | 日期段 | 落宫 | 状态 |');
 	lines.push('| --- | --- | --- | --- | --- | --- |');
@@ -191,4 +273,4 @@ export function buildTriplicityRulersSnapshotText(chartObj, opts){
 	return lines.join('\n');
 }
 
-export default { buildTriplicityPeriods, buildTriplicityRulersSnapshotText, TRIPLICITY_DIVISIONS, TRIPLICITY_HOUSE_SIGS, TRIPLICITY_DEFAULT_OPTS, PLANETARY_PERIOD_YEARS };
+export default { buildTriplicityPeriods, buildTriplicityRulersSnapshotText, resolveTripletForSign, TRIPLICITY_DIVISIONS, TRIPLICITY_SYSTEMS, TRIPLICITY_SYSTEM_HINTS, TRIPLICITY_SYSTEM_DEFAULT, TRIPLICITY_HOUSE_SIGS, TRIPLICITY_DEFAULT_OPTS, PLANETARY_PERIOD_YEARS };

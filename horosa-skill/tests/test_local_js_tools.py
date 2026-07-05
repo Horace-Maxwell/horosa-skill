@@ -383,13 +383,16 @@ def test_canping_local_tool_runs_headless_engine(tmp_path) -> None:
     assert data["benming"]["verses"]["numShun"] == 2152
     assert data["benming"]["verses"]["numNi"] == 3352
     assert len(data["dayun"]) == 9
-    # The accurate per-year 流年 table lives in series (1–120), not the snapshot.
+    # The accurate per-year 流年 table lives in series (1–120) AND now feeds the snapshot.
     assert len(data["series"]["rows"]) == 120
     snapshot = result.data["snapshot_text"]
     assert "[起盘]" in snapshot
     assert "[本命]" in snapshot
     assert "[大运·歲運]" in snapshot
-    # Export contract is clean: 大运·歲運 legacy-maps to 大运, matching the ['起盘','本命','大运'] preset.
+    # 全生涯流年表（liunianRows）喂入快照 → [流年·歲運] 段逐岁产出（120 行）。
+    assert "[流年·歲運]" in snapshot
+    assert "120岁" in snapshot
+    # Export contract is clean: 歲運 labels legacy-map to 大运/流年, matching the 4-section preset.
     _assert_clean_export(result)
 
 
@@ -424,11 +427,15 @@ def test_heluo_local_tool_runs_headless_engine(tmp_path) -> None:
     assert data["solarTerm"]["term"] == "立春"  # 命运篇 depends on this
     snapshot = result.data["snapshot_text"]
     assert "[起命]" in snapshot
-    assert "[先天·火風鼎 元堂爻辞]" in snapshot
-    assert "[后天·水火既濟 元堂爻辞]" in snapshot
+    # 段名静态化：先天/后天元堂爻辞不再带卦名（卦名在段内正文），另新增全生涯流年与断验（十吉）。
+    assert "[先天卦·元堂爻辞]" in snapshot
+    assert "火風鼎" in snapshot
+    assert "[后天卦·元堂爻辞]" in snapshot
     assert "[命运篇]" in snapshot
     assert "[大限·岁运]" in snapshot
-    # The dynamic 先天·…/后天·…/大限·岁运 labels legacy-map to 先天卦/后天卦/大限 ⇒ clean export.
+    assert "[流年·岁运]" in snapshot
+    assert "[断验]" in snapshot and "十吉" in snapshot
+    # 元堂爻辞/岁运段名 legacy-map 到 先天卦/后天卦/大限/流年 ⇒ clean export.
     _assert_clean_export(result)
 
 

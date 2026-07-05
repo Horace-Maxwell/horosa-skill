@@ -1,5 +1,3 @@
-// Generated from the phone app ShenShaUtil maps so Web BaZi uses the same local rules.
-// Source: /Users/xun/Documents/手机APP/星阙/前端/App/lib/constants/shen_sha.dart
 function dedupe(items){ return Array.from(new Set((items || []).filter(Boolean))); }
 export const BAZI_DAY_YEAR_STEMS = {
     "甲丑": ["天乙贵人"],
@@ -358,7 +356,42 @@ export const BAZI_MONTH_BRANCH = {
 
 function fromMap(map, key){ return map && map[key] ? map[key] : []; }
 
-export function calcPillarShenSha(base, target){
+// —— 补充神煞（全表见 八字大全 §5，仅收录原书给全对照表者，不臆造残表）——
+// 金舆（§5.1 禄前二位，按日干/年干 → 支）：丙戊同未、丁己同申
+const BAZI_JINYU = { 甲: '辰', 乙: '巳', 丙: '未', 戊: '未', 丁: '申', 己: '申', 庚: '戌', 辛: '亥', 壬: '丑', 癸: '寅' };
+// 灾煞（§5.2 年/日支三合局 → 胎/旺前位）：申子辰→午、寅午戌→子、巳酉丑→卯、亥卯未→酉
+const BAZI_ZAISHA = { 申: '午', 子: '午', 辰: '午', 寅: '子', 午: '子', 戌: '子', 巳: '卯', 酉: '卯', 丑: '卯', 亥: '酉', 卯: '酉', 未: '酉' };
+// 三奇贵人（§5.6，年月日 或 日月时 三天干成一组，集合判定）
+const BAZI_SANQI = [['甲', '戊', '庚'], ['乙', '丙', '丁'], ['壬', '癸', '辛']];
+// 阴差阳错日（§5.8，特定日柱）
+const BAZI_YINCHA = new Set(['丙子', '丁丑', '戊寅', '辛卯', '壬辰', '癸巳', '丙午', '丁未', '戊申', '辛酉', '壬戌', '癸亥']);
+// 十恶大败日（§5.9，禄入空亡，特定日柱）
+const BAZI_SHIE = new Set(['甲辰', '乙巳', '丙申', '丁亥', '戊戌', '己丑', '庚辰', '辛巳', '壬申', '癸亥']);
+// 天医（§5.3，月支退一位）：所在柱地支命中即取
+const BAZI_TIANYI_MED = { 寅: '丑', 卯: '寅', 辰: '卯', 巳: '辰', 午: '巳', 未: '午', 申: '未', 酉: '申', 戌: '酉', 亥: '戌', 子: '亥', 丑: '子' };
+// 月德合（§5.3 衍生，月支三合局 → 合月德之干）：寅午戌→辛、申子辰→丁、亥卯未→己、巳酉丑→乙
+const BAZI_YUEDEHE = { 寅: '辛', 午: '辛', 戌: '辛', 申: '丁', 子: '丁', 辰: '丁', 亥: '己', 卯: '己', 未: '己', 巳: '乙', 酉: '乙', 丑: '乙' };
+// 天德合（§5.3 衍生，合天德之干/支，按月支）
+const BAZI_TIANDEHE = { 寅: '壬', 卯: '巳', 辰: '丁', 巳: '丙', 午: '寅', 未: '己', 申: '戊', 酉: '亥', 戌: '辛', 亥: '庚', 子: '申', 丑: '乙' };
+// 八专日（§5.10，干支同气特定日柱）
+const BAZI_BAZHUAN = new Set(['甲寅', '乙卯', '己未', '丁未', '庚申', '辛酉', '戊戌', '癸丑']);
+// 九丑日（§5.10，特定日柱）
+const BAZI_JIUCHOU = new Set(['戊子', '戊午', '己卯', '己酉', '壬子', '壬午', '癸卯', '癸酉']);
+// 四废日（§5.10，按季节衰绝之干支日）：春庚申辛酉、夏壬子癸亥、秋甲寅乙卯、冬丙午丁巳
+const BAZI_SIFEI = { 春: new Set(['庚申', '辛酉']), 夏: new Set(['壬子', '癸亥']), 秋: new Set(['甲寅', '乙卯']), 冬: new Set(['丙午', '丁巳']) };
+const SEASON_OF_MONTH = { 寅: '春', 卯: '春', 辰: '春', 巳: '夏', 午: '夏', 未: '夏', 申: '秋', 酉: '秋', 戌: '秋', 亥: '冬', 子: '冬', 丑: '冬' };
+
+// 神煞主位（godKeyPos：'年' / '日' / '年日'）→ 允许的「主位基组」集合。
+// 对齐 Java GodsHelper.findGods(fourCols, zhu)：rule.keyZhu 非空者（月令系：天德/月德/月破/天医/天马/
+// 月厌/血支/地医 等）恒以月支为基、与主位无关恒查；rule.keyZhu 空者（主位系：天乙/桃花/华盖/驿马/红鸾…）
+// 才按主位用「年柱」或「日柱」当查神煞的基（'年日' = 年基∪日基）。月柱基组（月令系）任何档恒含。
+function allowedBases(godKeyPos){
+  if(godKeyPos === '日'){ return { Y: false, D: true }; }
+  if(godKeyPos === '年日'){ return { Y: true, D: true }; }
+  return { Y: true, D: false }; // 默认 '年'：年主位基组 + 月令（恒）；不含日主位基组。
+}
+
+export function calcPillarShenSha(base, target, godKeyPos){
   const yearGan = base && base.yearGan ? base.yearGan : '';
   const yearZhi = base && base.yearZhi ? base.yearZhi : '';
   const monthZhi = base && base.monthZhi ? base.monthZhi : '';
@@ -366,32 +399,157 @@ export function calcPillarShenSha(base, target){
   const dayZhi = base && base.dayZhi ? base.dayZhi : '';
   const gan = target && target.gan ? target.gan : '';
   const zhi = target && target.zhi ? target.zhi : '';
-  return dedupe([
+  const allow = allowedBases(godKeyPos);
+  // 年主位基组（以年柱干/支为基）
+  const yearBase = [
     ...fromMap(BAZI_DAY_YEAR_STEMS, yearGan + zhi),
-    ...fromMap(BAZI_DAY_YEAR_STEMS, dayGan + zhi),
-    ...fromMap(BAZI_DAY_STEMS, dayGan + zhi),
     ...fromMap(BAZI_YEAR_DAY_BRANCH, yearZhi + zhi),
     ...fromMap(BAZI_YEAR_BRANCH, yearZhi + zhi),
+    (zhi && BAZI_JINYU[yearGan] === zhi) ? '金舆' : null,
+    (zhi && BAZI_ZAISHA[yearZhi] === zhi) ? '灾煞' : null,
+  ];
+  // 日主位基组（以日柱干/支为基）
+  const dayBase = [
+    ...fromMap(BAZI_DAY_YEAR_STEMS, dayGan + zhi),
+    ...fromMap(BAZI_DAY_STEMS, dayGan + zhi),
     ...fromMap(BAZI_YEAR_DAY_BRANCH, dayZhi + zhi),
     ...fromMap(BAZI_DAY_BRANCH, dayZhi + zhi),
+    (zhi && BAZI_JINYU[dayGan] === zhi) ? '金舆' : null,
+    (zhi && BAZI_ZAISHA[dayZhi] === zhi) ? '灾煞' : null,
+  ];
+  // 月令基组（以月支为基，恒含）
+  const monthBase = [
     ...fromMap(BAZI_MONTH_BRANCH, monthZhi + zhi),
     ...fromMap(BAZI_MONTH_STEMS, monthZhi + gan),
+  ];
+  return dedupe([
+    ...(allow.Y ? yearBase : []),
+    ...(allow.D ? dayBase : []),
+    ...monthBase,
   ]);
 }
 
-export function calcFourPillarShenSha(four){
+export function calcFourPillarShenSha(four, godKeyPos){
   const getGan = (item)=>item && item.stem ? item.stem.cell || '' : '';
   const getZhi = (item)=>item && item.branch ? item.branch.cell || '' : '';
-  const base = {
-    yearGan: getGan(four && four.year),
-    yearZhi: getZhi(four && four.year),
-    monthZhi: getZhi(four && four.month),
-    dayGan: getGan(four && four.day),
-    dayZhi: getZhi(four && four.day),
+  const Yg = getGan(four && four.year), Yz = getZhi(four && four.year);
+  const Mg = getGan(four && four.month), Mz = getZhi(four && four.month);
+  const Dg = getGan(four && four.day), Dz = getZhi(four && four.day);
+  const Tg = getGan(four && four.time), Tz = getZhi(four && four.time);
+  const fm = fromMap;
+  const allow = allowedBases(godKeyPos);
+  // 主位敏感的补充神煞（金舆/灾煞）按基柱拆：年基只看 Yg/Yz、日基只看 Dg/Dz；
+  // 月令系补充神煞（天医/月德合/天德合，以月支 Mz 为基）恒含。
+  const augJinyuYear = (zhi)=>(zhi && BAZI_JINYU[Yg] === zhi) ? '金舆' : null;
+  const augZaishaYear = (zhi)=>(zhi && BAZI_ZAISHA[Yz] === zhi) ? '灾煞' : null;
+  const augJinyuDay = (zhi)=>(zhi && BAZI_JINYU[Dg] === zhi) ? '金舆' : null;
+  const augZaishaDay = (zhi)=>(zhi && BAZI_ZAISHA[Dz] === zhi) ? '灾煞' : null;
+  const augTianyi = (zhi)=>(zhi && BAZI_TIANYI_MED[Mz] === zhi) ? '天医' : null;
+  const augYuedehe = (gan)=>(gan && BAZI_YUEDEHE[Mz] === gan) ? '月德合' : null;
+  const augTiandehe = (gan, zhi)=>(BAZI_TIANDEHE[Mz] && (BAZI_TIANDEHE[Mz] === gan || BAZI_TIANDEHE[Mz] === zhi)) ? '天德合' : null;
+
+  // 逐柱查法（年/月/日/时 各自的干支组合，非统一查法）。
+  // 每个 token 形如 [base, ...values]，base∈{'Y'年主位 / 'D'日主位 / 'M'月令}。token 顺序严格保留旧版，
+  // 按 godKeyPos 过滤掉不允许的 base 后 flatten+dedupe：
+  //   · godKeyPos='年日' → Y/D/M 全保留 → 与旧版逐字一致（旧默认即恒并年+日，是本地 bug）。
+  //   · godKeyPos='年'（新默认）→ 仅 Y+M（剔除 D 段），与 Java GodsHelper(zhu='年') 一致。
+  //   · godKeyPos='日' → 仅 D+M。
+  // 旧版 aug(基,zhi) 整块（[金舆,灾煞,天医,月德合,天德合]）在每柱末尾，这里将其拆回各自 base 并保持「在该柱末」
+  // 的相对位置（金舆/灾煞按年/日基拆，天医/月德合/天德合归月令），故 '年日' 档 token 序与旧版完全一致。
+  const flat = (tokens)=>dedupe(tokens.filter((t)=>allow[t[0]] !== false).reduce((arr, t)=>arr.concat(t.slice(1)), []));
+  const acc = {
+    year: flat([
+      ['Y', ...fm(BAZI_DAY_YEAR_STEMS, Yg + Yz)],
+      ['D', ...fm(BAZI_DAY_STEMS, Dg + Yz)],
+      ['D', ...fm(BAZI_YEAR_DAY_BRANCH, Dz + Yz)],
+      ['D', ...fm(BAZI_DAY_BRANCH, Dz + Yg)],
+      ['M', ...fm(BAZI_MONTH_STEMS, Mz + Yg)],
+      ['M', ...fm(BAZI_MONTH_BRANCH, Mz + Yz)],
+      ['Y', augJinyuYear(Yz)], ['D', augJinyuDay(Yz)],
+      ['Y', augZaishaYear(Yz)], ['D', augZaishaDay(Yz)],
+      ['M', augTianyi(Yz)], ['M', augYuedehe(Yg)], ['M', augTiandehe(Yg, Yz)],
+    ]),
+    month: flat([
+      ['Y', ...fm(BAZI_DAY_YEAR_STEMS, Yg + Mz)],
+      ['D', ...fm(BAZI_DAY_YEAR_STEMS, Dg + Mz)], ['D', ...fm(BAZI_DAY_STEMS, Dg + Mz)],
+      ['Y', ...fm(BAZI_YEAR_DAY_BRANCH, Yz + Mz)], ['Y', ...fm(BAZI_YEAR_BRANCH, Yz + Mz)],
+      ['D', ...fm(BAZI_YEAR_DAY_BRANCH, Dz + Mz)], ['D', ...fm(BAZI_DAY_BRANCH, Dz + Mz)],
+      ['M', ...fm(BAZI_MONTH_STEMS, Mz + Mg)],
+      ['Y', augJinyuYear(Mz)], ['D', augJinyuDay(Mz)],
+      ['Y', augZaishaYear(Mz)], ['D', augZaishaDay(Mz)],
+      ['M', augTianyi(Mz)], ['M', augYuedehe(Mg)], ['M', augTiandehe(Mg, Mz)],
+    ]),
+    day: flat([
+      ['Y', ...fm(BAZI_DAY_YEAR_STEMS, Yg + Dz)], ['Y', ...fm(BAZI_YEAR_BRANCH, Yg + Dz)],
+      ['D', ...fm(BAZI_DAY_YEAR_STEMS, Dg + Dz)], ['D', ...fm(BAZI_DAY_STEMS, Dg + Dz)],
+      ['Y', ...fm(BAZI_YEAR_DAY_BRANCH, Yz + Dz)], ['Y', ...fm(BAZI_YEAR_BRANCH, Yz + Dz)],
+      ['M', ...fm(BAZI_MONTH_STEMS, Mz + Dg)], ['M', ...fm(BAZI_MONTH_BRANCH, Mz + Dz)],
+      ['Y', augJinyuYear(Dz)], ['D', augJinyuDay(Dz)],
+      ['Y', augZaishaYear(Dz)], ['D', augZaishaDay(Dz)],
+      ['M', augTianyi(Dz)], ['M', augYuedehe(Dg)], ['M', augTiandehe(Dg, Dz)],
+    ]),
+    time: flat([
+      ['Y', ...fm(BAZI_DAY_YEAR_STEMS, Yg + Tz)], ['D', ...fm(BAZI_DAY_YEAR_STEMS, Dg + Tz)],
+      ['D', ...fm(BAZI_DAY_BRANCH, Dz + Tz)],
+      ['Y', ...fm(BAZI_YEAR_DAY_BRANCH, Yz + Tz)], ['Y', ...fm(BAZI_YEAR_BRANCH, Yz + Tz)],
+      ['D', ...fm(BAZI_YEAR_DAY_BRANCH, Dz + Tz)], ['D', ...fm(BAZI_DAY_BRANCH, Dz + Tz)],
+      ['M', ...fm(BAZI_MONTH_BRANCH, Mz + Tz)], ['M', ...fm(BAZI_MONTH_STEMS, Mz + Tg)],
+      ['Y', augJinyuYear(Tz)], ['D', augJinyuDay(Tz)],
+      ['Y', augZaishaYear(Tz)], ['D', augZaishaDay(Tz)],
+      ['M', augTianyi(Tz)], ['M', augYuedehe(Tg)], ['M', augTiandehe(Tg, Tz)],
+    ]),
   };
-  return ['year','month','day','time'].reduce((acc, key)=>{
-    const item = four && four[key] ? four[key] : {};
-    acc[key] = calcPillarShenSha(base, { gan: getGan(item), zhi: getZhi(item) });
-    return acc;
-  }, {});
+
+  // —— 整盘级神煞（新增项，§5.6/§5.8/§5.9）——
+  const gm = Mg;
+  const gt = Tg;
+  const trios = [
+    [[Yg, gm, Dg], ['year','month','day']],
+    [[Dg, gm, gt], ['day','month','time']],
+  ];
+  trios.forEach(([stems, keys])=>{
+    const set = new Set(stems.filter(Boolean));
+    if(set.size === 3 && BAZI_SANQI.some((t)=>t.every((g)=>set.has(g)))){
+      keys.forEach((k)=>{ if(acc[k]){ acc[k] = dedupe([...acc[k], '三奇']); } });
+    }
+  });
+  // 日柱专断（§5.8 / §5.9 / §5.10）
+  const dayGz = (Dg || '') + (Dz || '');
+  if(BAZI_YINCHA.has(dayGz) && acc.day){ acc.day = dedupe([...acc.day, '阴差阳错']); }
+  if(BAZI_SHIE.has(dayGz) && acc.day){ acc.day = dedupe([...acc.day, '十恶大败']); }
+  if(BAZI_BAZHUAN.has(dayGz) && acc.day){ acc.day = dedupe([...acc.day, '八专']); }
+  if(BAZI_JIUCHOU.has(dayGz) && acc.day){ acc.day = dedupe([...acc.day, '九丑']); }
+  const season = SEASON_OF_MONTH[Mz];
+  if(season && BAZI_SIFEI[season] && BAZI_SIFEI[season].has(dayGz) && acc.day){ acc.day = dedupe([...acc.day, '四废']); }
+
+  return acc;
+}
+
+// 流运（大运/流年/流月/流日）某柱神煞：以本命年/月/日干支为基，查流运柱干支。
+export function calcFlowShenSha(four, gan, zhi){
+  if(!four || !zhi){ return []; }
+  const getGan = (item)=>item && item.stem ? item.stem.cell || '' : '';
+  const getZhi = (item)=>item && item.branch ? item.branch.cell || '' : '';
+  const Yg = getGan(four.year), Yz = getZhi(four.year);
+  const Mz = getZhi(four.month);
+  const Dg = getGan(four.day), Dz = getZhi(four.day);
+  const fm = fromMap;
+  const aug = [];
+  if(zhi && (BAZI_JINYU[Yg] === zhi || BAZI_JINYU[Dg] === zhi)){ aug.push('金舆'); }
+  if(zhi && (BAZI_ZAISHA[Yz] === zhi || BAZI_ZAISHA[Dz] === zhi)){ aug.push('灾煞'); }
+  if(zhi && BAZI_TIANYI_MED[Mz] === zhi){ aug.push('天医'); }
+  if(gan && BAZI_YUEDEHE[Mz] === gan){ aug.push('月德合'); }
+  if(BAZI_TIANDEHE[Mz] && (BAZI_TIANDEHE[Mz] === gan || BAZI_TIANDEHE[Mz] === zhi)){ aug.push('天德合'); }
+  return dedupe([
+    ...fm(BAZI_DAY_YEAR_STEMS, Yg + zhi),
+    ...fm(BAZI_DAY_YEAR_STEMS, Dg + zhi),
+    ...fm(BAZI_DAY_BRANCH, Dz + zhi),
+    ...fm(BAZI_YEAR_DAY_BRANCH, Yz + zhi),
+    ...fm(BAZI_YEAR_BRANCH, Yz + zhi),
+    ...fm(BAZI_YEAR_DAY_BRANCH, Dz + zhi),
+    ...fm(BAZI_DAY_BRANCH, Dz + zhi),
+    ...fm(BAZI_MONTH_BRANCH, Mz + zhi),
+    ...fm(BAZI_MONTH_STEMS, Mz + (gan || '')),
+    ...aug,
+  ]);
 }

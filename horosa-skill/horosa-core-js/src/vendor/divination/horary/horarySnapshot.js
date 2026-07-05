@@ -2,6 +2,7 @@
 // 把卜卦判断结果拼成 AI 快照文本（[小节标题] + markdown 列表），供 saveModuleAISnapshot('horary', ...)。
 import { PLANETS } from '../data/planets.js';
 import { CATEGORY_DEF } from './significators.js';
+import { schoolOf } from './horarySchools.js';
 
 function cn(k){ return (PLANETS[k] || {}).cn || k || '—'; }
 const ASPECT_CN = { 0: '合相', 60: '六合', 90: '四分(刑)', 120: '三合', 180: '对分(冲)' };
@@ -10,8 +11,10 @@ export function buildHorarySnapshot(j){
 	if(!j) return '';
 	const L = [];
 	const sig = j.significators;
+	const school = schoolOf(j.school);
 	L.push('[起卦信息]');
 	L.push(`问题类别：${(CATEGORY_DEF[j.category] && CATEGORY_DEF[j.category].quesitedLabel) || j.category}`);
+	L.push(`判读流派：${school.cn}（${school.desc}）`);
 	L.push(`时主星（活跃征象）：${cn(j.hourRuler)}`);
 	L.push('[根本性]');
 	L.push(j.radicality.suitable ? '适合判断。' : ('有警告（不阻断）：' + j.radicality.warnings.map((w) => w.text).join('；')));
@@ -39,6 +42,13 @@ export function buildHorarySnapshot(j){
 	L.push(`Query：①能否成事=${j.queries.canHappen.text} ②好坏=${j.queries.goodEvil.text} ③真假=${j.queries.reportTrue.text}`);
 	L.push('[应期方位]');
 	L.push((j.timing ? j.timing.text : '无准确相位，应期不定') + '；方位：' + (j.queries.where ? `${j.queries.where.dir}（${j.queries.where.terrain}），${j.queries.where.distance}` : '—'));
+	if(j.lots){
+		L.push(`阿拉伯点（${j.lots.convention}）：福点 ${j.lots.fortune.signCn}座 ${j.lots.fortune.signlon.toFixed(1)}°${j.lots.fortune.dispCn ? '·定位星' + j.lots.fortune.dispCn : ''}；精神点 ${j.lots.spirit.signCn}座 ${j.lots.spirit.signlon.toFixed(1)}°`);
+	}
+	if(j.topic){
+		L.push(`[专题深化·${j.topic.title}]`);
+		j.topic.lines.forEach((t) => L.push('- ' + t.text));
+	}
 	if(j.describe && j.describe.length){
 		L.push('[描述]');
 		j.describe.forEach((d) => L.push(`- ${d.role}：${d.title}${d.temper ? '（' + d.temper + '）' : ''} ${d.body}`));

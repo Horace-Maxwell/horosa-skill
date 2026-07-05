@@ -38,7 +38,14 @@ const AVOID_CHECK = {
 	malefic_in_1_3_9: (f) => ({ pass: !['mars', 'saturn'].some((k) => inHouse(f, k, [1, 3, 9])), label: '凶星不入 1/3/9 宫' }),
 	moon_mars_hard: (f) => ({ pass: [90, 180].indexOf(aspectAngle(f, 'moon', 'mars')) < 0, label: '月火无刑冲' }),
 	asc_mars_hard: (f) => ({ pass: true, label: '命度与火星无刑冲', skip: true }),
-	moon_in_surgery_part_sign: () => ({ pass: true, label: '月不落手术部位星座（依部位）', skip: true }),
+	moon_in_surgery_part_sign: (f, opts) => {
+		// WP-8:部位经 opts.surgeryPart(星座 id)指定后真判;未指定沿现状 skip(零回归)。
+		const part = opts && opts.surgeryPart;
+		if(!part || !SIGNS[part]) return { pass: true, label: '月不落手术部位星座（依部位）', skip: true };
+		const moon = f.planets.moon;
+		const parts = (SIGNS[part].body_parts || []).join('/');
+		return { pass: !(moon && moon.sign === part), label: `月不落手术部位星座（${SIGNS[part].cn}·${parts}）` };
+	},
 	neptune_afflicted: (f) => ({ pass: !['mars', 'saturn'].some((k) => [90, 180].indexOf(aspectAngle(f, 'neptune', k)) >= 0), label: '海王未受凶星刑冲' }),
 };
 
@@ -70,19 +77,20 @@ const HAVE_CHECK = {
 	moon_no_hard_aspect: (f) => ({ pass: !['mars', 'saturn'].some((k) => [90, 180].indexOf(aspectAngle(f, 'moon', k)) >= 0), label: '月无刑冲' }),
 };
 
-export function evaluateTopicPack(facts, topic){
+// opts:西方深化扩展(surgeryPart 等);检查函数第二参可选、不消费者行为不变。
+export function evaluateTopicPack(facts, topic, opts){
 	const items = [];
 	(topic.must_have || []).forEach((code) => {
 		const fn = HAVE_CHECK[code];
 		if(!fn) return;
-		const r = fn(facts);
+		const r = fn(facts, opts);
 		if(r.skip) return;
 		items.push({ kind: 'have', code, label: r.label, pass: r.pass });
 	});
 	(topic.must_avoid || []).forEach((code) => {
 		const fn = AVOID_CHECK[code];
 		if(!fn) return;
-		const r = fn(facts);
+		const r = fn(facts, opts);
 		if(r.skip) return;
 		items.push({ kind: 'avoid', code, label: r.label, pass: r.pass });
 	});

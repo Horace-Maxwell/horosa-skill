@@ -5,6 +5,8 @@ import { aspectsOf } from '../engine/aspectsEngine.js';
 import { isViaCombusta } from '../engine/moon.js';
 import { PLANETS } from '../data/planets.js';
 import { SIGNS } from '../data/signs.js';
+import { angularDist } from '../engine/utils.js';
+import { isEgyptianDay } from '../data/egyptianDays.js';
 
 function lord1Of(facts){
 	const s = facts.meta.ascSign;
@@ -13,11 +15,21 @@ function lord1Of(facts){
 
 function cn(k){ return (PLANETS[k] || {}).cn || k; }
 
-export function evalHardFlags(facts, topic){
+// school:西方子流派档(westernSchools.js;缺省=现状全权重)。
+// modernPlanets==='annotate' 档:三王星红线降为 info(不扣分、仅注记),消息附流派说明。
+export function evalHardFlags(facts, topic, school){
 	const flags = [];
 	const mustAvoid = (topic && topic.must_avoid) || [];
 	const inAvoid = (id) => mustAvoid.indexOf(id) >= 0;
-	const add = (id, severity, message, factor) => flags.push({ id, severity, message, factor });
+	const modernAnnotate = !!(school && school.modernPlanets === 'annotate');
+	const MODERN = ['uranus', 'neptune', 'pluto'];
+	const add = (id, severity, message, factor) => {
+		if(modernAnnotate && MODERN.indexOf(factor) >= 0){
+			flags.push({ id, severity: 'info', message: message + '（现代因素·本流派仅注记不扣分）', factor });
+			return;
+		}
+		flags.push({ id, severity, message, factor });
+	};
 
 	const moon = facts.planets.moon;
 	if(moon){
@@ -77,6 +89,30 @@ export function evalHardFlags(facts, topic){
 		const p = facts.planets[k];
 		if(p && p.peregrine) add('peregrine_significator', 'low', `用事星 ${cn(k)} 游走（无尊贵），缺乏力量`, k);
 	});
+
+	// 守留日：行星速度近 0（顺逆转向），力量停滞，重要用事宜避。
+	['mercury', 'venus', 'mars', 'jupiter', 'saturn'].forEach((k) => {
+		const p = facts.planets[k];
+		if(p && p.speed !== undefined && p.speed !== null && Math.abs(p.speed) < 0.05){
+			add('station_day', 'medium', `${cn(k)} 守留（速度近 0、顺逆转向）：停滞之象，重要用事宜避`, k);
+		}
+	});
+
+	// 火星合/刑命度：冲动、伤厄、争端，多数用事忌。
+	const mars = facts.planets.mars;
+	const ascLon = facts.meta.ascLon;
+	if(mars && mars.lon != null && ascLon != null){
+		const dConj = angularDist(mars.lon, ascLon);
+		const dSq = Math.min(angularDist(mars.lon, (ascLon + 90) % 360), angularDist(mars.lon, (ascLon + 270) % 360));
+		if(dConj <= 3) add('asc_mars_hard', 'high', '火星合命度：易冲动/伤厄，多数用事忌', 'mars');
+		else if(dSq <= 3) add('asc_mars_hard', 'medium', '火星刑命度：阻力/争端', 'mars');
+	}
+
+	// 埃及凶日(中世纪历书 24 日,低严重度提醒——历书禁忌不与盘面因素同权)
+	const dateStr = facts.result && facts.result.params && (facts.result.params.date || facts.result.params.birth);
+	if(dateStr && isEgyptianDay(dateStr)){
+		add('egyptian_day', 'low', '埃及凶日（中世纪历书 24 凶日之一）：传统历书忌开新事，仅作提醒', 'calendar');
+	}
 
 	return flags;
 }

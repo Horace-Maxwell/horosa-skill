@@ -73,6 +73,18 @@ export function buildFacts(result){
 			combustion: cid === 'Sun' ? null : combustionState(o.lon, sunLon),
 			orientality: cid === 'Sun' ? null : orientalityOf(o.lon, sunLon),
 			hayyiz: o.hayyiz,
+			outOfBounds: !!o.outOfBounds,
+			oobDelta: o.oobDelta != null ? o.oobDelta : null,
+			phase: o.phase || null,
+			phasisEvent: o.phasisEvent || null,
+			joy: !!o.joy,
+			ofSect: o.ofSect !== undefined ? !!o.ofSect : null,
+			mansion: o.mansion || null,
+			degreeGender: o.degreeGender || null,
+			feral: !!o.feral,
+			monomoiria: o.monomoiria || null,
+			ninthPart: o.ninthPart || null,
+			darijan: o.darijan || null,
 		};
 	});
 
@@ -81,9 +93,16 @@ export function buildFacts(result){
 	const desc = getObj(result, 'Desc');
 	const ic = getObj(result, 'IC');
 
-	// 宫位表（houseMap: 'House1'→{sign,lon,ruler,planets[]}）
+	// 宫位表（houseMap: 'House1'→{sign,lon,ruler,planets[]}）。
+	// ⚠️ result.houseMap 是盘面组件(AstroHelper)渲染时的懒建缓存,不是后端字段——
+	// 本命合参/AI 挂载再生等「裸 Result」路径没有它 → 缺失时按同法自 chart.houses 自建
+	// (本地对象,不回写 result),否则宫主类判断(小限年主/宫主受克等)会静默落空。
 	const houses = {};
-	const hmap = result.houseMap || {};
+	let hmap = result.houseMap;
+	if(!hmap || !Object.keys(hmap).length){
+		hmap = {};
+		((result.chart && result.chart.houses) || []).forEach((h) => { if(h && h.id){ hmap[h.id] = h; } });
+	}
 	for(let i = 1; i <= 12; i++){
 		const h = hmap['House' + i];
 		if(h){
