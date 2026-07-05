@@ -224,6 +224,21 @@ class FakeClient(HorosaApiClient):
                 },
                 "figures": [],
             }
+        if endpoint == "/location/acg":
+            # 占星地图：两星线表 + 一条偕升 + 一处交点，供 acg 契约 round-trip。
+            def _acg_planet(mc, ic, zlat, zlon):
+                return {
+                    "lines": {"mc": {"lon": mc}, "ic": {"lon": ic}, "asc": [], "desc": []},
+                    "zenith": {"lat": zlat, "lon": zlon},
+                    "oob": False,
+                }
+
+            return {
+                "meta": {"mode": "mundo", "lsMode": "great", "geodetic": "sepharial", "geodeticVar": "longitude"},
+                "planets": {"Sun": _acg_planet(120.5, -59.5, 11.2, 120.5), "Moon": _acg_planet(30.0, -150.0, -5.1, 30.0)},
+                "parans": [{"lat": 42.5, "a": "Sun", "aEvent": "mc", "b": "Moon", "bEvent": "rise", "type": "RSCA"}],
+                "crossings": [{"pa": "Sun", "av": "mc", "pb": "Moon", "bv": "asc", "lat": 42.5, "lon": 120.5}],
+            }
         if endpoint == "/predict/dice":
             return {
                 "planet": payload.get("planet", "Sun"),

@@ -289,6 +289,32 @@ class YizhangjingInput(FlexibleModel):
     shenshaLayer: bool | None = True
 
 
+class ACGInput(BirthInput):
+    # 占星地图（AstroCartoGraphy）：本命时刻的行星地理投影线（MC/IC 恒定经度、ASC/DESC 曲线、
+    # 天顶点、偕升纬度带、线交点）。口径开关：mode=mundo 真黄纬（Jim Lewis 原版，默认）/zodiac
+    # 黄道度；lsMode=great 大圆（默认）/rhumb 等角航线；geodetic 地理等价流派 sepharial（默认）
+    # /mcrae/johndro，变体 longitude（默认）/ra。地图渲染属 UI，无头输出为结构化线表。
+    mode: str | None = "mundo"
+    lsMode: str | None = "great"
+    geodetic: str | None = "sepharial"
+    geodeticVar: str | None = "longitude"
+
+
+class AstrodataInput(FlexibleModel):
+    # 名人星盘数据库（离线只读检索）：query 走 FTS 全文（姓名/条目/出生地/维基摘要），
+    # category 按分类过滤，rodden 按可信度评级过滤（AA/A/B/C/DD/X/XX，可传多个），
+    # personTitle 精确取单人详情（含可直接转排盘的出生数据）。纯查询不改结果 → 免确认门。
+    query: str | None = None
+    personTitle: str | None = None
+    category: str | None = None
+    rodden: str | list[str] | None = None
+    birthYearFrom: int | None = None
+    birthYearTo: int | None = None
+    hasTimeOnly: bool | None = False
+    limit: int | None = 20
+    offset: int | None = 0
+
+
 class SanShiUnitedInput(FlexibleModel):
     date: str
     time: str

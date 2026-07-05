@@ -118,6 +118,8 @@ def build_sample_payloads() -> dict[str, dict]:
             "gender": 1,
             "timeAlg": 1,
         },
+        "acg": {**chart_birth},
+        "astrodata": {**confirmed, "query": "Einstein", "limit": 5},
         "harmonic": {**chart_birth, "harmonic": 9, "orb": 2.0},
         "agepoint": {**chart_birth, "predictive": 1},
         "distributions": {**chart_birth, "predictive": 1},

@@ -22,7 +22,7 @@ GLOBAL_AGENT_RULES: list[str] = [
 COMMON_LOCATION_FIELDS = ["date", "time", "zone/timezone", "lat/lon or gpsLat/gpsLon/location"]
 COMMON_BIRTH_FIELDS = ["birth date", "birth time", "birth timezone", "birth place / longitude / latitude"]
 CONFIRMATION_FIELDS = ["agent_confirmed_settings", "defaults_accepted", "clarification_notes"]
-PREFLIGHT_EXEMPT_TOOLS = {"export_registry", "export_parse", "knowledge_registry", "knowledge_read", "ziwei_rules", "gua_desc", "gua_meiyi"}
+PREFLIGHT_EXEMPT_TOOLS = {"export_registry", "export_parse", "knowledge_registry", "knowledge_read", "ziwei_rules", "gua_desc", "gua_meiyi", "astrodata"}
 INPUT_CONTRACT_SCHEMA = "horosa.skill.input_contract.v1"
 
 
@@ -500,6 +500,28 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "shenshaLayer", "value": True, "meaning": "神煞合参层开（无头导出全量）"},
         ],
         do_not_assume=["gender"],
+    ),
+    "acg": _policy(
+        intent="占星地图（AstroCartoGraphy）：本命时刻行星地理投影线（MC/IC 经度、天顶点、偕升纬度带、线交点）。",
+        required_context=COMMON_BIRTH_FIELDS,
+        ask_if_missing=[
+            {"field": "date/time/place", "question": "请提供出生日期、时间、时区和出生地坐标。"},
+            {"field": "mode", "question": "投影口径沿用默认吗？", "options": ["默认（mundo 真黄纬 + 大圆 + Sepharial 地理等价）", "指定 mode/lsMode/geodetic"]},
+        ],
+        safe_defaults=[
+            {"field": "mode", "value": "mundo", "meaning": "真黄纬本体（Jim Lewis 原版口径）"},
+            {"field": "lsMode", "value": "great", "meaning": "本地空间线取大圆"},
+        ],
+    ),
+    "astrodata": _policy(
+        intent="名人星盘数据库（离线只读检索）：FTS 全文/分类/Rodden 评级过滤，单人详情含可直接排盘的出生数据。",
+        required_context=["query 或 personTitle"],
+        ask_if_missing=[
+            {"field": "query", "question": "要检索哪位名人或哪个关键词？（库内条目以英文为主）"},
+        ],
+        safe_defaults=[
+            {"field": "limit", "value": 20, "meaning": "默认返回前 20 条"},
+        ],
     ),
     "suzhan": _policy(
         intent="宿占/宿盘。",

@@ -10,6 +10,7 @@ engine and runs as a pure headless JS tool.
 from __future__ import annotations
 
 import os
+import pathlib
 import socket
 from urllib.parse import urlsplit
 
@@ -437,6 +438,57 @@ def test_heluo_local_tool_runs_headless_engine(tmp_path) -> None:
     assert "[断验]" in snapshot and "十吉" in snapshot
     # 元堂爻辞/岁运段名 legacy-map 到 先天卦/后天卦/大限/流年 ⇒ clean export.
     _assert_clean_export(result)
+
+
+@requires_chart
+def test_acg_lines_via_chart_service(tmp_path) -> None:
+    # 占星地图：/location/acg 精算行星地理投影线；MC/IC 恒定经度 + 天顶点 + 偕升/交点。
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "acg",
+        {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    acg = result.data["acg"]
+    planets = acg.get("planets") or {}
+    assert "Sun" in planets and "Moon" in planets
+    sun_lines = planets["Sun"].get("lines") or {}
+    assert isinstance((sun_lines.get("mc") or {}).get("lon"), (int, float))
+    snapshot = result.data["snapshot_text"]
+    assert "[起盘信息]" in snapshot
+    assert "[行星线经度]" in snapshot
+    assert "MC线经度" in snapshot
+    _assert_clean_export(result)
+
+
+ASTRODATA_DB_PRESENT = (
+    pathlib.Path(__file__).resolve().parents[2]
+    / "vendor" / "runtime-source" / "Horosa-Web" / "astrostudyui" / "dist-file" / "astrodata" / "astrodata-aa.sqlite.gz"
+).is_file()
+
+
+@pytest.mark.skipif(not ASTRODATA_DB_PRESENT, reason="astrodata sqlite not vendored in this checkout")
+def test_astrodata_search_and_person_detail(tmp_path) -> None:
+    # 名人星盘库：FTS 检索 → 单人详情（含可直接排盘的出生数据）。纯本地 sqlite，只读。
+    service = make_service(tmp_path)
+    hits = service.run_tool("astrodata", {"query": "Einstein", "limit": 5}, save_result=False)
+    assert hits.ok is True, hits.error
+    data = hits.data["astrodata"]
+    assert data["available"] is True and data["total"] >= 1
+    title = data["results"][0]["title"]
+    snapshot = hits.data["snapshot_text"]
+    assert "[检索条件]" in snapshot and "[命中列表]" in snapshot
+    _assert_clean_export(hits)
+
+    detail = service.run_tool("astrodata", {"personTitle": title}, save_result=False)
+    assert detail.ok is True, detail.error
+    person = detail.data["astrodata"]["person"]
+    assert person and person["birthDate"] and person["zone"]
+    dsnap = detail.data["snapshot_text"]
+    assert "[名人详情]" in dsnap and "排盘入参：" in dsnap
+    assert "[数据来源]" in dsnap and "Astro-Databank" in dsnap
+    _assert_clean_export(detail)
 
 
 def test_yizhangjing_local_tool_runs_headless_engine(tmp_path) -> None:

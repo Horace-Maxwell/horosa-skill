@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import copy
+import gzip
 import logging
+import os
 import re
+import sqlite3
 import time
 from datetime import timezone, datetime, timedelta
 from pathlib import Path
@@ -84,6 +87,8 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "canping": "canping",
     "heluo": "heluo",
     "yizhangjing": "yizhangjing",
+    "acg": "acg",
+    "astrodata": "astrodata",
     "sanshiunited": "sanshiunited",
     "germany": "germany",
     "agepoint": "agepoint",
@@ -159,6 +164,8 @@ _PYTHON_CHART_ENDPOINTS = {
     "/astroextra/greatconj",
     "/astroextra/barbault",
     "/geomancy/reading",
+    # 占星地图（AstroCartoGraphy）：行星地理投影线精算端点。
+    "/location/acg",
     "/predict/planetaryarc",
     "/jieqi/year",
     "/qimen/pan",
@@ -466,6 +473,24 @@ def _generic_summary(tool_name: str, data: dict[str, Any]) -> list[str]:
         pattern = model.get("pattern") if isinstance(model.get("pattern"), dict) else {}
         if pattern.get("mingGe"):
             summary.append(f"命格：{pattern['mingGe']}（九品估 {pattern.get('nineGrade', '—')}）。")
+        return summary
+    if tool_name == "acg":
+        model = data.get("acg", {})
+        summary = ["已生成占星地图行星线表（AstroCartoGraphy）。"]
+        planets = model.get("planets") if isinstance(model.get("planets"), dict) else {}
+        if planets:
+            summary.append(f"行星线：{len(planets)} 星（MC/IC 经度 + 天顶点）。")
+        parans = model.get("parans")
+        if isinstance(parans, list) and parans:
+            summary.append(f"偕升纬度带 {len(parans)} 条。")
+        return summary
+    if tool_name == "astrodata":
+        model = data.get("astrodata", {})
+        summary = ["已检索离线名人星盘数据库。"]
+        if isinstance(model.get("person"), dict):
+            summary.append(f"单人详情：{model['person'].get('name')}（评级 {model['person'].get('rodden', '—')}）。")
+        elif model.get("total") is not None:
+            summary.append(f"命中 {model['total']} 条。")
         return summary
     if tool_name == "harmonic":
         summary = [f"已生成调波盘（H{data.get('harmonic', '—')}）。"]
@@ -5570,6 +5595,295 @@ class HorosaSkillService:
             "export_snapshot": self._augment_export_payload(technique="heluo", snapshot_text=snapshot_text),
         }
 
+    def _run_acg_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 占星地图（AstroCartoGraphy）：行星地理投影线。地图渲染属 UI，无头输出为结构化线表 ——
+        # 每星 MC/IC 恒定经度、天顶点（星正当头顶的地表点）、超界标记，另附偕升纬度带与线交点摘要。
+        remote_payload = {
+            "date": payload["date"],
+            "time": payload["time"],
+            "zone": payload["zone"],
+            "lat": payload["lat"],
+            "lon": payload["lon"],
+            "ad": payload.get("ad", 1),
+            "mode": payload.get("mode", "mundo"),
+            "lsMode": payload.get("lsMode", "great"),
+            "geodetic": payload.get("geodetic", "sepharial"),
+            "geodeticVar": payload.get("geodeticVar", "longitude"),
+        }
+        response = self._call_remote("/location/acg", remote_payload)
+
+        def geo_lon(value: Any) -> str:
+            try:
+                lon = ((float(value) + 180.0) % 360.0) - 180.0
+            except (TypeError, ValueError):
+                return "—"
+            hemi = "E" if lon >= 0 else "W"
+            return f"{abs(lon):.2f}°{hemi}"
+
+        meta = response.get("meta") if isinstance(response.get("meta"), dict) else {}
+        planets = response.get("planets") if isinstance(response.get("planets"), dict) else {}
+        info_lines = [
+            f"出生：{payload.get('date')} {payload.get('time')}（{payload.get('zone')}）　经度 {payload.get('lon')} 纬度 {payload.get('lat')}",
+            f"口径：mode={meta.get('mode', remote_payload['mode'])}（mundo=真黄纬本体/zodiac=黄道度）　"
+            f"lsMode={meta.get('lsMode', remote_payload['lsMode'])}（great=大圆/rhumb=等角航线）　"
+            f"geodetic={meta.get('geodetic', remote_payload['geodetic'])}·{meta.get('geodeticVar', remote_payload['geodeticVar'])}",
+            "说明：MC/IC 线为恒定地理经度的南北直线；ASC/DESC 为曲线（此处给天顶点与直线经度，曲线逐点属地图渲染层）。",
+        ]
+        line_rows = ["| 星体 | MC线经度 | IC线经度 | 天顶点(纬,经) | 超界 |", "| --- | --- | --- | --- | --- |"]
+        for pid in ("Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto", "North Node", "Chiron"):
+            pd = planets.get(pid)
+            if not isinstance(pd, dict):
+                continue
+            lines = pd.get("lines") if isinstance(pd.get("lines"), dict) else {}
+            mc = lines.get("mc") if isinstance(lines.get("mc"), dict) else {}
+            ic = lines.get("ic") if isinstance(lines.get("ic"), dict) else {}
+            zen = pd.get("zenith") if isinstance(pd.get("zenith"), dict) else {}
+            zen_txt = "—"
+            if zen.get("lat") is not None and zen.get("lon") is not None:
+                try:
+                    zen_txt = f"{float(zen['lat']):.2f}°, {geo_lon(zen['lon'])}"
+                except (TypeError, ValueError):
+                    zen_txt = "—"
+            line_rows.append(
+                f"| {_astro_msg(pid, short=True)} | {geo_lon(mc.get('lon'))} | {geo_lon(ic.get('lon'))} | {zen_txt} | {'是' if pd.get('oob') else '—'} |"
+            )
+        sections: list[tuple[str, str]] = [
+            ("起盘信息", "\n".join(info_lines)),
+            ("行星线经度", "\n".join(line_rows) if len(line_rows) > 2 else "未取得行星线数据。"),
+        ]
+        parans = response.get("parans") if isinstance(response.get("parans"), list) else []
+        if parans:
+            rows = [f"偕升纬度带（同纬度两星同时临角，前 {min(len(parans), 40)}/{len(parans)} 条）："]
+            for item in parans[:40]:
+                if isinstance(item, dict):
+                    rows.append(
+                        f"纬 {item.get('lat')}°：{_astro_msg(item.get('a'), short=True)}·{item.get('aEvent')} × "
+                        f"{_astro_msg(item.get('b'), short=True)}·{item.get('bEvent')}（{item.get('type')}）"
+                    )
+            sections.append(("偕升纬度带", "\n".join(rows)))
+        crossings = response.get("crossings") if isinstance(response.get("crossings"), list) else []
+        if crossings:
+            rows = [f"线交点（一星临 MC/IC 直线 × 一星临 ASC/DESC 曲线，前 {min(len(crossings), 40)}/{len(crossings)} 处）："]
+            for item in crossings[:40]:
+                if isinstance(item, dict):
+                    a = _astro_msg(item.get("pa") or item.get("a"), short=True)
+                    b = _astro_msg(item.get("pb") or item.get("b"), short=True)
+                    lat_v, lon_v = item.get("lat"), item.get("lon")
+                    lat_txt = f"{float(lat_v):.2f}°" if isinstance(lat_v, (int, float)) else "—"
+                    rows.append(f"{a}·{item.get('av') or item.get('aEvent') or ''} × {b}·{item.get('bv') or item.get('bEvent') or ''}：纬 {lat_txt}，经 {geo_lon(lon_v)}")
+            sections.append(("线交点", "\n".join(rows)))
+        snapshot_text = _render_snapshot_text(sections)
+        return {
+            "acg": {
+                "meta": meta,
+                "planets": planets,
+                "parans": parans,
+                "crossings": crossings,
+            },
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="acg", snapshot_text=snapshot_text),
+        }
+
+    # ── 名人星盘数据库（离线只读检索）────────────────────────────────────────────
+    _ASTRODATA_RELATIVE = Path("Horosa-Web/astrostudyui/dist-file/astrodata/astrodata-aa.sqlite.gz")
+
+    def _astrodata_db_path(self) -> Path | None:
+        # 定位序列：显式 env → 已安装 runtime → 仓内 vendored 源快照（开发/live 测试）。
+        env_path = os.environ.get("HOROSA_ASTRODATA_DB")
+        candidates: list[Path] = []
+        if env_path:
+            candidates.append(Path(env_path).expanduser())
+        try:
+            candidates.append(Path(self.runtime_manager.current_dir) / self._ASTRODATA_RELATIVE)
+        except Exception:  # noqa: BLE001 - runtime manager optional in offline tests
+            pass
+        # src/horosa_skill/service.py → parents[3] = 仓根（vendor/runtime-source 所在）。
+        candidates.append(Path(__file__).resolve().parents[3] / "vendor" / "runtime-source" / self._ASTRODATA_RELATIVE)
+        for cand in candidates:
+            if cand.is_file():
+                return cand
+        return None
+
+    def _astrodata_connect(self) -> sqlite3.Connection | None:
+        source = self._astrodata_db_path()
+        if source is None:
+            return None
+        db_path = source
+        if source.suffix == ".gz":
+            cache_dir = Path(self.settings.runtime_root) / "cache"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            cached = cache_dir / "astrodata-aa.sqlite"
+            stamp = cache_dir / "astrodata-aa.sqlite.src"
+            src_sig = f"{source}|{source.stat().st_size}|{int(source.stat().st_mtime)}"
+            if not cached.is_file() or not stamp.is_file() or stamp.read_text(encoding="utf-8").strip() != src_sig:
+                with gzip.open(source, "rb") as fin:
+                    cached.write_bytes(fin.read())
+                stamp.write_text(src_sig, encoding="utf-8")
+            db_path = cached
+        con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        con.row_factory = sqlite3.Row
+        return con
+
+    @staticmethod
+    def _astrodata_person_brief(row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "title": row["title"],
+            "name": row["name"],
+            "born": row["born_display"],
+            "rodden": row["rodden"],
+            "sun": row["sun"],
+            "moon": row["moon"],
+            "asc": row["asc"],
+            "pos": row["pos"],
+            "hasTime": bool(row["has_time"]),
+        }
+
+    def _run_astrodata_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        con = self._astrodata_connect()
+        if con is None:
+            # 数据库缺席（如精简部署）：如实降级，不臆造。
+            snapshot_text = _render_snapshot_text([
+                ("检索条件", "名人星盘数据库文件不在本地部署中，本次无法检索；可安装完整离线 runtime 后重试。"),
+            ])
+            return {
+                "astrodata": {"available": False, "results": []},
+                "snapshot_text": snapshot_text,
+                "export_snapshot": self._augment_export_payload(technique="astrodata", snapshot_text=snapshot_text),
+                "_warnings": ["名人星盘数据库文件缺席，返回降级说明。"],
+            }
+        try:
+            person_title = f"{payload.get('personTitle') or ''}".strip()
+            if person_title:
+                row = con.execute("SELECT * FROM person WHERE title = ?", (person_title,)).fetchone()
+                if row is None:
+                    snapshot_text = _render_snapshot_text([
+                        ("检索条件", f"条目：{person_title}"),
+                        ("名人详情", "库内无此条目；请先用 query 检索取得精确 title。"),
+                    ])
+                    return {
+                        "astrodata": {"available": True, "person": None},
+                        "snapshot_text": snapshot_text,
+                        "export_snapshot": self._augment_export_payload(technique="astrodata", snapshot_text=snapshot_text),
+                    }
+                cats = [r["category"] for r in con.execute(
+                    "SELECT category FROM category WHERE person_title = ? LIMIT 30", (person_title,))]
+                birth_chart = f"{row['birth_chart'] or ''}".strip()
+                birth_date, _, birth_time = birth_chart.partition(" ")
+                person = {
+                    **self._astrodata_person_brief(row),
+                    "gender": row["gender"],
+                    "zone": row["zone"],
+                    "lat": row["lat"],
+                    "lon": row["lon"],
+                    "gpsLat": row["gpsLat"],
+                    "gpsLon": row["gpsLon"],
+                    "birthDate": birth_date or None,
+                    "birthTime": birth_time or None,
+                    "timeAccuracy": row["time_accuracy"],
+                    "adbUrl": row["adb_url"],
+                    "wikiUrl": row["wiki_url"],
+                    "categories": cats,
+                }
+                detail_lines = [
+                    f"{row['name']}（{row['title']}）",
+                    f"出生：{row['born_display']}　评级（Rodden）：{row['rodden']}　时刻精度：{row['time_accuracy'] or '—'}",
+                    f"地点：{row['pos'] or '—'}　坐标：{row['lat']} / {row['lon']}　时区：{row['zone']}",
+                    f"排盘入参：date={birth_date or '—'} time={birth_time or '—'} zone={row['zone']} lat={row['lat']} lon={row['lon']}",
+                    f"星盘三要：日 {row['sun'] or '—'} / 月 {row['moon'] or '—'} / 升 {row['asc'] or '—'}",
+                ]
+                if cats:
+                    detail_lines.append("分类：" + "；".join(cats[:12]) + ("…" if len(cats) > 12 else ""))
+                wiki = f"{row['wiki_summary'] or ''}".strip()
+                sections = [
+                    ("检索条件", f"条目：{person_title}"),
+                    ("名人详情", "\n".join(detail_lines)),
+                ]
+                if wiki:
+                    sections.append(("维基摘要", wiki[:1200] + ("…" if len(wiki) > 1200 else "")))
+                sections.append((
+                    "数据来源",
+                    "出生数据：Astro-Databank / Astrodienst AG（非商业研究用途，保留 Rodden 评级与来源链接）；"
+                    f"传记摘要：Wikipedia（CC BY-SA 4.0）。{row['adb_url'] or ''} {row['wiki_url'] or ''}".strip(),
+                ))
+                snapshot_text = _render_snapshot_text(sections)
+                return {
+                    "astrodata": {"available": True, "person": person},
+                    "snapshot_text": snapshot_text,
+                    "export_snapshot": self._augment_export_payload(technique="astrodata", snapshot_text=snapshot_text),
+                }
+
+            query = f"{payload.get('query') or ''}".strip()
+            category = f"{payload.get('category') or ''}".strip()
+            rodden_raw = payload.get("rodden")
+            rodden = [r for r in ([rodden_raw] if isinstance(rodden_raw, str) else (rodden_raw or [])) if f"{r}".strip()]
+            try:
+                limit = max(1, min(100, int(payload.get("limit") or 20)))
+            except (TypeError, ValueError):
+                limit = 20
+            try:
+                offset = max(0, int(payload.get("offset") or 0))
+            except (TypeError, ValueError):
+                offset = 0
+
+            where: list[str] = []
+            params: list[Any] = []
+            base = "FROM person p"
+            if query:
+                base = "FROM person_fts f JOIN person p ON p.id = f.rowid"
+                where.append("person_fts MATCH ?")
+                params.append(query)
+            if category:
+                where.append("p.title IN (SELECT person_title FROM category WHERE category LIKE ?)")
+                params.append(f"%{category}%")
+            if rodden:
+                where.append(f"p.rodden IN ({','.join('?' for _ in rodden)})")
+                params.extend(str(r).upper() for r in rodden)
+            if payload.get("birthYearFrom") is not None:
+                where.append("p.birth_year >= ?")
+                params.append(int(payload["birthYearFrom"]))
+            if payload.get("birthYearTo") is not None:
+                where.append("p.birth_year <= ?")
+                params.append(int(payload["birthYearTo"]))
+            if payload.get("hasTimeOnly"):
+                where.append("p.has_time = 1")
+            where_sql = (" WHERE " + " AND ".join(where)) if where else ""
+            order_sql = " ORDER BY rank" if query else " ORDER BY p.name"
+            total = con.execute(f"SELECT COUNT(*) {base}{where_sql}", params).fetchone()[0]
+            rows = con.execute(
+                f"SELECT p.* {base}{where_sql}{order_sql} LIMIT ? OFFSET ?", [*params, limit, offset]
+            ).fetchall()
+            results = [self._astrodata_person_brief(r) for r in rows]
+            cond_bits = [bit for bit in (
+                f"全文：{query}" if query else "",
+                f"分类：{category}" if category else "",
+                f"评级：{'/'.join(str(r).upper() for r in rodden)}" if rodden else "",
+                f"生年：{payload.get('birthYearFrom') or '…'}–{payload.get('birthYearTo') or '…'}" if (payload.get("birthYearFrom") is not None or payload.get("birthYearTo") is not None) else "",
+                "仅含出生时刻" if payload.get("hasTimeOnly") else "",
+            ) if bit]
+            head = [
+                "、".join(cond_bits) if cond_bits else "（无过滤条件）",
+                f"命中 {total} 条，返回第 {offset + 1}–{offset + len(results)} 条。",
+            ]
+            if results:
+                rows_txt = ["| 姓名 | 出生 | 评级 | 日/月/升 | 条目 |", "| --- | --- | --- | --- | --- |"]
+                for item in results:
+                    tri = f"{item['sun'] or '—'}/{item['moon'] or '—'}/{item['asc'] or '—'}"
+                    rows_txt.append(f"| {item['name']} | {item['born'] or '—'} | {item['rodden'] or '—'} | {tri} | {item['title']} |")
+                body = "\n".join(rows_txt) + "\n用 personTitle=<条目> 取单人详情（含可直接排盘的出生数据）。"
+            else:
+                body = "无命中；可放宽条件或改用英文姓名检索（库内条目以英文为主）。"
+            snapshot_text = _render_snapshot_text([
+                ("检索条件", "\n".join(head)),
+                ("命中列表", body),
+            ])
+            return {
+                "astrodata": {"available": True, "total": total, "results": results, "offset": offset, "limit": limit},
+                "snapshot_text": snapshot_text,
+                "export_snapshot": self._augment_export_payload(technique="astrodata", snapshot_text=snapshot_text),
+            }
+        finally:
+            con.close()
+
     def _run_yizhangjing_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 一掌经：原生·非 ken 工具，JS 进程内完成 农历解析→四柱四宫→命宫/人事十二宫→格局/重犯/
         # 大限/小限流年十二神（+可选神煞合参层），返回引擎自产快照（段头已转 [段名]）。
@@ -6545,6 +6859,10 @@ class HorosaSkillService:
             return self._run_heluo_tool(payload)
         if definition.name == "yizhangjing":
             return self._run_yizhangjing_tool(payload)
+        if definition.name == "acg":
+            return self._run_acg_tool(payload)
+        if definition.name == "astrodata":
+            return self._run_astrodata_tool(payload)
         if definition.name == "sanshiunited":
             return self._run_sanshiunited_tool(payload)
         if definition.name == "hellen_chart":
