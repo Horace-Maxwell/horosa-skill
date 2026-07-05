@@ -199,6 +199,10 @@ replacement = (
 if needle in text:
     p.write_text(text.replace(needle, replacement), encoding="utf-8")
     print("patched staged kentang mount to skip unavailable engines")
+elif "_LazyMountedService" in text:
+    # 新版 registry 自带惰性挂载：加载失败仅 HTTP 500 + 下个请求重试，启动不炸 —— patch 的
+    # 「缺引擎不崩启动」目的已被官方机制覆盖，无需再改写。
+    print("kentang registry ships lazy graceful mounts; no patch needed")
 else:
     print("WARNING: kentang mount signature not found; staged registry left unpatched", flush=True)
 PY
