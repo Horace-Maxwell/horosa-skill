@@ -41,6 +41,28 @@ def test_normalize_request_payload_pads_decimal_coordinate_birth_inputs() -> Non
     assert normalized["gpsLon"] == 121.4667
 
 
+def test_normalize_request_payload_coordinate_formats_full_compat() -> None:
+    # 坐标格式全兼容哨兵：十进制串（含带号/留白）、compact DMS、数值直通 —— 全部归一到
+    # compact + gps 十进制；科学计数暗雷（121e30 是东经 121°30′ 不是 1.21e+32）由 compact
+    # 分支先行匹配锁死。特殊带秒格式（12W30:00）不在归一集内 → 原样透传由后端解析。
+    n = normalize_request_payload({"lat": "-31.2", "lon": "+121.5"})
+    assert n["lat"] == "31s12" and n["lon"] == "121e30"
+    assert n["gpsLat"] == -31.2 and n["gpsLon"] == 121.5
+
+    n = normalize_request_payload({"lat": " 39.9 ", "lon": "116.4"})
+    assert n["lat"] == "39n54" and n["lon"] == "116e24"
+
+    n = normalize_request_payload({"lat": 26.07, "lon": 0})
+    assert n["lat"] == "26n04" and n["lon"] == "0e00"
+
+    n = normalize_request_payload({"lon": "121e30"})
+    assert n["lon"] == "121e30"
+    assert n["gpsLon"] == 121.5  # 绝不是 1.21e+32
+
+    n = normalize_request_payload({"lat": "12W30:00"})
+    assert n["lat"] == "12W30:00"  # 透传后端 toFloat
+
+
 def test_normalize_request_payload_converts_iana_timezones_from_event_datetime() -> None:
     normalized = normalize_request_payload(
         {
