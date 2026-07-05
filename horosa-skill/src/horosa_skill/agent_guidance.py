@@ -487,6 +487,20 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         do_not_assume=["gender"],
     ),
+    "yizhangjing": _policy(
+        intent="一掌经：农历生辰四宫十二星（六道），排命宫/人事十二宫/格局/重犯/大限/小限流年十二神，可叠神煞合参层。",
+        required_context=["birth date", "birth time", "gender"],
+        ask_if_missing=[
+            {"field": "date/time", "question": "请提供出生日期、时间和性别（一掌经按农历口径排盘）。"},
+            {"field": "dingYue", "question": "定月用农历月还是节气月？", "options": ["农历月（默认，闰月十五折半）", "节气月（按八字月支序）"]},
+        ],
+        safe_defaults=[
+            {"field": "dingYue", "value": "lunar", "meaning": "农历月，闰月十五折半归属"},
+            {"field": "dayunLength", "value": 7, "meaning": "大限一宫 7 年（通行口径）"},
+            {"field": "shenshaLayer", "value": True, "meaning": "神煞合参层开（无头导出全量）"},
+        ],
+        do_not_assume=["gender"],
+    ),
     "suzhan": _policy(
         intent="宿占/宿盘。",
         required_context=COMMON_BIRTH_FIELDS,

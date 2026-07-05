@@ -537,6 +537,32 @@ class FakeJsClient(HorosaJsEngineClient):
                     "[大限·岁运]\n1-9岁 火風鼎 九三（阳9）"
                 ),
             }
+        if tool_name == "yizhangjing":
+            return {
+                "data": {
+                    "input": {"yearBranch": "寅", "month": 1, "day": 24, "hourBranch": "戌", "gender": "男"},
+                    "mingGong": {"branch": "未", "star": "天驛"},
+                    "pattern": {"fourPalaceRank": "中中", "mingGe": "天驛命", "nineGrade": "中中", "gradeCount": {"up": 1, "mid": 2, "down": 1}},
+                    "renshi": [{"palace": "命", "branch": "未", "star": "天驛"}],
+                    "dayun": [{"from": 1, "to": 7, "branch": "卯", "star": "天破"}],
+                    "shenshaHits": [{"palace": "命", "branch": "未", "star": "天驛", "name": "华盖", "text": "主孤高"}],
+                    "shenshaLayer": True,
+                },
+                "input_normalized": {"date": "1998-02-20", "gender": 1},
+                "snapshot_text": (
+                    "[起盘信息]\n性别：男　生年支：寅(虎)　农历1月24日　生时支：戌（农历月）\n\n"
+                    "[四柱四宫断语]\n年宫 寅(虎)·天權·人道·上品：早年有权。\n\n"
+                    "[命宫与人事十二宫]\n命宫 未宫·天驛\n命=未天驛　财帛=午天文\n\n"
+                    "[格局判定]\n四宫等第：中中　命格：天驛命　九品估：中中\n\n"
+                    "[重犯]\n天貴×2：贵人重现。\n\n"
+                    "[交互格]\n日天文×时天驛：文驛交驰。\n\n"
+                    "[职业适性]\n（月柱天權）：宜公门。\n\n"
+                    "[大限]\n从月宫起·一宫7年·顺行\n1-7岁 卯·天破(地狱道·下品)：早limit。\n\n"
+                    "[小限与流年十二神]\n小限一宫一年·起日柱宫：1=太岁\n\n"
+                    "[流年总论]\n（主星天驛）：驿马奔波。\n\n"
+                    "[神煞合参]\n（通用命理合参层·非本术原生）\n命(未·天驛)：华盖—主孤高"
+                ),
+            }
         if tool_name == "progextra":
             # v2.5.0 推运 vendored builders (balbillus etc.) — return the single-section snapshot directly.
             technique = payload.get("technique")

@@ -439,6 +439,32 @@ def test_heluo_local_tool_runs_headless_engine(tmp_path) -> None:
     _assert_clean_export(result)
 
 
+def test_yizhangjing_local_tool_runs_headless_engine(tmp_path) -> None:
+    # 一掌经：原生·非 ken 工具，进程内纯函数排盘（农历/四柱来自 vendored bazi 链）。
+    # 岁首=正月初一（异八字）；此生日：生年支寅(虎)、农历1月24日、时支戌。
+    service = make_service(tmp_path)
+    payload = {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lon": "121e28", "gender": 1}
+    result = service.run_tool("yizhangjing", payload, save_result=False)
+    assert result.ok is True, result.error
+    data = result.data["yizhangjing"]
+    assert data["input"]["yearBranch"] == "寅"
+    assert data["input"]["month"] == 1 and data["input"]["day"] == 24
+    assert data["input"]["hourBranch"] == "戌"
+    assert data["mingGong"]["branch"] and data["mingGong"]["star"]
+    assert isinstance(data["dayun"], list) and data["dayun"]
+    snapshot = result.data["snapshot_text"]
+    for header in (
+        "[起盘信息]", "[四柱四宫断语]", "[命宫与人事十二宫]", "[格局判定]",
+        "[大限]", "[小限与流年十二神]", "[神煞合参]",
+    ):
+        assert header in snapshot, header
+    assert "生年支：寅(虎)" in snapshot
+    # 确定性：同输入同快照。
+    again = service.run_tool("yizhangjing", payload, save_result=False)
+    assert again.data["snapshot_text"] == snapshot
+    _assert_clean_export(result)
+
+
 @requires_chart
 def test_harmonic_runs_via_chart_service(tmp_path) -> None:
     # 调波盘 is a backend chart-extra on the Python chart service (/astroextra/harmonic). 星阙 has no

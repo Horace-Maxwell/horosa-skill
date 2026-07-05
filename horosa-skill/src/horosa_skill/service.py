@@ -83,6 +83,7 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "tongshefa": "tongshefa",
     "canping": "canping",
     "heluo": "heluo",
+    "yizhangjing": "yizhangjing",
     "sanshiunited": "sanshiunited",
     "germany": "germany",
     "agepoint": "agepoint",
@@ -455,6 +456,16 @@ def _generic_summary(tool_name: str, data: dict[str, Any]) -> list[str]:
             summary.append(f"先天卦 {xian['name']} → 后天卦 {hou['name']}。")
         if chart.get("tian") is not None and chart.get("di") is not None:
             summary.append(f"天数 {chart['tian']}（{chart.get('tianGua', '')}）／地数 {chart['di']}（{chart.get('diGua', '')}）。")
+        return summary
+    if tool_name == "yizhangjing":
+        model = data.get("yizhangjing", {})
+        summary = ["已运行本地一掌经算法。"]
+        ming = model.get("mingGong") if isinstance(model.get("mingGong"), dict) else {}
+        if ming.get("branch") and ming.get("star"):
+            summary.append(f"命宫 {ming['branch']}宫·{ming['star']}。")
+        pattern = model.get("pattern") if isinstance(model.get("pattern"), dict) else {}
+        if pattern.get("mingGe"):
+            summary.append(f"命格：{pattern['mingGe']}（九品估 {pattern.get('nineGrade', '—')}）。")
         return summary
     if tool_name == "harmonic":
         summary = [f"已生成调波盘（H{data.get('harmonic', '—')}）。"]
@@ -5553,6 +5564,18 @@ class HorosaSkillService:
             "export_snapshot": self._augment_export_payload(technique="heluo", snapshot_text=snapshot_text),
         }
 
+    def _run_yizhangjing_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 一掌经：原生·非 ken 工具，JS 进程内完成 农历解析→四柱四宫→命宫/人事十二宫→格局/重犯/
+        # 大限/小限流年十二神（+可选神煞合参层），返回引擎自产快照（段头已转 [段名]）。
+        js_result = self.js_client.run("yizhangjing", payload)
+        snapshot_text = js_result.get("snapshot_text")
+        return {
+            "yizhangjing": js_result.get("data", {}),
+            "input_normalized": js_result.get("input_normalized", {}),
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="yizhangjing", snapshot_text=snapshot_text),
+        }
+
     def _run_sanshiunited_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         shared = {
             "date": payload["date"],
@@ -6507,6 +6530,8 @@ class HorosaSkillService:
             return self._run_canping_tool(payload)
         if definition.name == "heluo":
             return self._run_heluo_tool(payload)
+        if definition.name == "yizhangjing":
+            return self._run_yizhangjing_tool(payload)
         if definition.name == "sanshiunited":
             return self._run_sanshiunited_tool(payload)
         if definition.name == "hellen_chart":

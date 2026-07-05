@@ -265,6 +265,30 @@ class HeLuoInput(FlexibleModel):
     timeAlg: int | None = 1
 
 
+class YizhangjingInput(FlexibleModel):
+    # 一掌经：进程内纯函数排盘（农历/四柱来自 bazi 链）。岁首＝正月初一（非立春），异于八字口径。
+    date: str
+    time: str
+    zone: str | None = None
+    lon: str | None = None
+    gender: str | int | None = None
+    timeAlg: int | None = 1
+    # 排盘选项（默认即通行口径）：定月法 lunar 农历月 / jieqi 节气月；顺逆 yangNanYinNv 阳男阴女顺 /
+    # menShunNvNi 男顺女逆；命宫 shiShang 时上起命 / shuZhiMao 数至卯；大限一宫 7 或 10 年；
+    # 大限起法 mi 月宫起 / age1 一岁起；小限起宫 ri 日柱宫 / yue 月柱宫；流年十二神组；早子时归前日；
+    # 重犯口诀组 alpha 常见 / beta 异传；神煞合参层（无头导出默认开，关则不出该段）。
+    dingYue: str | None = "lunar"
+    shunniRule: str | None = "yangNanYinNv"
+    mingGongMethod: str | None = "shiShang"
+    dayunLength: int | None = 7
+    dayunStartAge: str | None = "mi"
+    xiaoxianStart: str | None = "ri"
+    flowShenSet: str | None = "A"
+    zaoZiAdjust: bool | None = False
+    chongfanKou: str | None = "alpha"
+    shenshaLayer: bool | None = True
+
+
 class SanShiUnitedInput(FlexibleModel):
     date: str
     time: str
