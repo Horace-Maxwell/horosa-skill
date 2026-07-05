@@ -4,11 +4,16 @@ from copy import deepcopy
 from typing import Any
 
 AI_EXPORT_SETTINGS_KEY = "horosa.ai.export.settings.v1"
-# v7: sanshiunited 追加三独立技法富化段、mundane 追加子盘群段 → preset 内容变更须升版；
-# mundane 进迁移键（老选择集按 union 并入新段，不删用户项）。
-AI_EXPORT_SETTINGS_VERSION = 7
-AI_EXPORT_SECTION_MIGRATION_VERSION = 7
-AI_EXPORT_SECTION_MIGRATION_KEYS = ["liureng", "qimen", "sanshiunited", "mundane"]
+# v8: 新技法 yizhangjing/acg/astrodata 入册，heluo/canping 补全生涯流年与断验段，
+# fengshui 段表扩至十三派识别面 → preset 内容变更须升版；新技法与变更技法进迁移键
+# （老选择集按 union 并入新段，不删用户项）。
+# v7: sanshiunited 追加三独立技法富化段、mundane 追加子盘群段。
+AI_EXPORT_SETTINGS_VERSION = 8
+AI_EXPORT_SECTION_MIGRATION_VERSION = 8
+AI_EXPORT_SECTION_MIGRATION_KEYS = [
+    "liureng", "qimen", "sanshiunited", "mundane",
+    "yizhangjing", "acg", "astrodata", "heluo", "canping", "fengshui",
+]
 MODULE_SNAPSHOT_PREFIX = "horosa.ai.snapshot.module.v1."
 AI_EXPORT_PLANET_INFO_DEFAULT = {"showHouse": 1, "showRuler": 1}
 AI_EXPORT_ASTRO_MEANING_DEFAULT = {"enabled": 0}

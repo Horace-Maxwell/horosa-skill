@@ -148,7 +148,10 @@ mkdir -p "${DIST_ROOT}"
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/start_horosa_local.sh" "${STAGE_ROOT}/Horosa-Web/"
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/stop_horosa_local.sh" "${STAGE_ROOT}/Horosa-Web/"
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/scripts/repairEmbeddedPythonRuntime.py" "${STAGE_ROOT}/Horosa-Web/scripts/"
-rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/astropy/__init__.py" "${STAGE_ROOT}/Horosa-Web/astropy/"
+# astropy 包新形态为隐式命名空间包（无 __init__.py）；旧形态存在时才拷。
+if [ -f "${SOURCE_ROOT}/Horosa-Web/astropy/__init__.py" ]; then
+  rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/astropy/__init__.py" "${STAGE_ROOT}/Horosa-Web/astropy/"
+fi
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/astropy/astrostudy" "${STAGE_ROOT}/Horosa-Web/astropy/"
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/astropy/websrv" "${STAGE_ROOT}/Horosa-Web/astropy/"
 # ken engines for the chart-service qimen/taiyi/jinkou mounts + the 5 standalone 神数 engines
@@ -252,7 +255,7 @@ manifest = {
     "platform": os.environ["PLATFORM_ENV"],
     "runtime_layout_version": 1,
     "runtime_payload_version": os.environ["VERSION_ENV"],
-    "export_registry_version": 7,
+    "export_registry_version": 8,
     "services": {
         "backend_url": "http://127.0.0.1:9999",
         "chart_url": "http://127.0.0.1:8899",
