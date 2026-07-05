@@ -11,7 +11,7 @@
     <img src="https://img.shields.io/github/stars/Horace-Maxwell/horosa-skill?style=flat-square" alt="GitHub stars" />
     <img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square" alt="Release" />
     <img src="https://img.shields.io/badge/tools-74-1d4ed8?style=flat-square" alt="74 tools" />
-    <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-0f766e?style=flat-square" alt="Platforms" />
+    <img src="https://img.shields.io/badge/platform-macOS%20(arm64)%20%7C%20Windows%20(x64)-0f766e?style=flat-square" alt="Platforms" />
     <img src="https://img.shields.io/badge/runtime-offline%20first-111827?style=flat-square" alt="Offline runtime" />
     <img src="https://img.shields.io/badge/MCP-ready-111827?style=flat-square" alt="MCP ready" />
     <img src="https://img.shields.io/badge/storage-SQLite%20%2B%20JSON-111827?style=flat-square" alt="SQLite and JSON" />
@@ -78,7 +78,7 @@ Local end-to-end signals:
 | Qi Men / Tai Yi / Jin Kou / Three Styles | unified on `ken`, same as the desktop app |
 | Tong She Fa / Decennials | headless, value-for-value with Xingque (`decennials.test.js` golden) |
 | GitHub CI | Linux/macOS unit tests + horosa-core-js JS golden self-check + Windows OpenClaw smoke |
-| Release runtime | macOS / Windows `v0.16.1` assets (ken + 14 Shen Shu engines bundled) packaged and verified |
+| Release runtime | macOS (arm64) / Windows (x64) `v0.16.1` assets (ken + 14 Shen Shu engines bundled) packaged and verified; other platforms/arches fail install with an explicit unsupported error |
 
 > About `solarreturn` / `lunarreturn` / `solararc` / `givenyear` / `profection` / `pd` / `pdchart` / `zr`: these predictive tools are verified working in this version and should not be flagged by an agent as "Java `/predict/*` unavailable". If a client still says so, check whether it is on an old runtime, bypassing MCP to hand-compute, or hasn't run `doctor` / `openclaw-check --full`.
 

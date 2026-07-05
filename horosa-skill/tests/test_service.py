@@ -2160,6 +2160,11 @@ def test_all_callable_techniques_do_not_emit_bare_empty_or_dependency_hallucinat
         export_snapshot = result.data["export_snapshot"]
         export_text = export_snapshot["export_text"]
         assert not any(term in export_text for term in forbidden_claim_terms), tool_name
+        # 段名一致性闸：任何工具 emit 的段名必须能被契约认领（preset/可选段/legacy 映射之一），
+        # unknown 非空 = builder 段名与 registry 拼写漂移，立即红。
+        assert export_snapshot.get("unknown_detected_sections") == [], (
+            f"{tool_name}: unknown sections {export_snapshot.get('unknown_detected_sections')}"
+        )
         for section in export_snapshot["sections"]:
             body = section.get("body", "").strip()
             assert body and body != "无", f"{tool_name}:{section.get('title')}"

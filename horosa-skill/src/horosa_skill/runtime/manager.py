@@ -28,20 +28,31 @@ from horosa_skill.tracing import TraceRecorder
 
 
 def _platform_key() -> str:
+    # 架构精确匹配：只有确知的 64 位架构映射到发布键；其余（i386/i686/armv7l 等）保留原始
+    # machine 名 —— 让 install 的 `runtime.install_missing_platform` 错误如实报出真实架构，
+    # 而不是把 32 位机器误标成 x64 后下载一个跑不起来的运行时。
     machine = platform.machine().lower()
+    arm64 = {"arm64", "aarch64", "armv8l"}
+    x64 = {"x86_64", "amd64"}
     if sys_platform := platform.system().lower():
         if sys_platform == "darwin":
-            if "arm" in machine:
+            if machine in arm64:
                 return "darwin-arm64"
-            return "darwin-x64"
+            if machine in x64:
+                return "darwin-x64"
+            return f"darwin-{machine}"
         if sys_platform == "windows":
-            if "arm" in machine:
+            if machine in arm64:
                 return "win32-arm64"
-            return "win32-x64"
+            if machine in x64:
+                return "win32-x64"
+            return f"win32-{machine}"
         if sys_platform == "linux":
-            if "arm" in machine:
+            if machine in arm64:
                 return "linux-arm64"
-            return "linux-x64"
+            if machine in x64:
+                return "linux-x64"
+            return f"linux-{machine}"
     return f"{sys_platform}-{machine}"
 
 
@@ -372,6 +383,20 @@ class HorosaRuntimeManager:
                         code="runtime.install_sha256_mismatch",
                         details={"archive": str(archive_path), "expected_sha256": expected_sha256},
                     )
+                # manifest 声明的归档类型必须与资产扩展名一致（防声明 zip 实传 tar.gz 之类的静默错配）。
+                declared_type = str((asset_meta or {}).get("archive_type") or "").strip().lower()
+                if declared_type:
+                    lower_name = archive_path.name.lower()
+                    type_ok = (
+                        (declared_type in {"tar.gz", "tgz"} and (lower_name.endswith(".tar.gz") or lower_name.endswith(".tgz")))
+                        or (declared_type == "zip" and lower_name.endswith(".zip"))
+                    )
+                    if not type_ok:
+                        raise RuntimeValidationError(
+                            "Runtime archive type mismatch between manifest and asset.",
+                            code="runtime.install_archive_type_mismatch",
+                            details={"archive": str(archive_path), "declared_archive_type": declared_type},
+                        )
 
                 extract_dir = temp_dir / "extract"
                 extract_dir.mkdir(parents=True, exist_ok=True)

@@ -11,7 +11,7 @@
     <img src="https://img.shields.io/github/stars/Horace-Maxwell/horosa-skill?style=flat-square" alt="GitHub stars" />
     <img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square" alt="Release" />
     <img src="https://img.shields.io/badge/tools-74-1d4ed8?style=flat-square" alt="74 tools" />
-    <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-0f766e?style=flat-square" alt="Platforms" />
+    <img src="https://img.shields.io/badge/platform-macOS%20(arm64)%20%7C%20Windows%20(x64)-0f766e?style=flat-square" alt="Platforms" />
     <img src="https://img.shields.io/badge/runtime-offline%20first-111827?style=flat-square" alt="Offline runtime" />
     <img src="https://img.shields.io/badge/MCP-ready-111827?style=flat-square" alt="MCP ready" />
     <img src="https://img.shields.io/badge/storage-SQLite%20%2B%20JSON-111827?style=flat-square" alt="SQLite and JSON" />
@@ -78,7 +78,7 @@
 | 奇门 / 太乙 / 金口 / 三式 | 统一走 `ken`，与星阙桌面端同源 |
 | 统摄法 / 十年大运 | headless 实现与星阙逐值对齐（京房八宫五行；对照星阙 `decennials.test.js` 金标） |
 | GitHub CI | Linux/macOS 单测 + horosa-core-js JS golden 自检 + Windows OpenClaw smoke 通过 |
-| Release runtime | macOS / Windows `v0.16.1` assets（含 ken + 14 神数引擎）已打包并校验 |
+| Release runtime | macOS (arm64) / Windows (x64) `v0.16.1` assets（含 ken + 14 神数引擎）已打包并校验；其余平台/架构安装时会明确报不支持 |
 
 > 关于 `solarreturn` / `lunarreturn` / `solararc` / `givenyear` / `profection` / `pd` / `pdchart` / `zr` 这批推运工具：当前版本已复核可用，不应再被 agent 标记为「Java `/predict/*` 不可用」。若某客户端仍这样回答，优先检查它是否在用旧 runtime、是否绕过 MCP 手算、是否没跑 `doctor` / `openclaw-check --full`。
 

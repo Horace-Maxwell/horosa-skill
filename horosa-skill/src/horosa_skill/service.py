@@ -5258,6 +5258,12 @@ class HorosaSkillService:
                 return enriched
         except ToolTransportError as exc:
             logger.warning("bazi geju engine failed (tool=%s): %s", tool_name, exc)
+            # 不静默：把降级说明抛到 envelope.warnings（结果仍可用，但格局段缺席要让调用方知道）。
+            degraded = dict(response_data)
+            degraded.setdefault("_warnings", []).append(
+                "八字格局引擎（五行力量/格局·用神/盲派结构）本次不可用，已降级为基础四柱输出。"
+            )
+            return degraded
         return response_data
 
     def _require_ken_pan(self, ken_response: Any, *, engine: str, endpoint: str) -> None:
@@ -5609,6 +5615,12 @@ class HorosaSkillService:
             save_result=False,
         )
 
+        # 子技法失败不崩整盘（对应段落为占位），但必须在 envelope.warnings 里点名，不得静默。
+        sub_warnings: list[str] = []
+        for _label, _res in (("奇门", qimen_result), ("太乙", taiyi_result), ("大六壬", liureng_result)):
+            if not _res.ok:
+                _err = (_res.error or {}).get("message") if isinstance(_res.error, dict) else _res.error
+                sub_warnings.append(f"三式合一子技法「{_label}」计算失败，相关段落以占位输出：{_err or '未知错误'}")
         qimen_export = qimen_result.data.get("export_snapshot")
         taiyi_export = taiyi_result.data.get("export_snapshot")
         liureng_export = liureng_result.data.get("export_snapshot")
@@ -5690,6 +5702,7 @@ class HorosaSkillService:
             },
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="sanshiunited", snapshot_text=snapshot_text),
+            **({"_warnings": sub_warnings} if sub_warnings else {}),
         }
 
     def _run_hellen_chart_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -6646,7 +6659,13 @@ class HorosaSkillService:
                 response_data = self._attach_bazi_geju(tool_name, response_data)
                 response_data = _attach_export_contract(tool_name, input_normalized, response_data)
                 summary = _generic_summary(tool_name, response_data)
+                # 工具内部经 `_warnings` 上抛的降级说明（如子引擎不可用）落入 envelope.warnings，
+                # 不静默：调用方能看到「结果不完整」而 ok 仍为 True（优雅降级 ≠ 无声降级）。
                 warnings: list[str] = []
+                if isinstance(response_data, dict):
+                    raised = response_data.pop("_warnings", None)
+                    if isinstance(raised, list):
+                        warnings.extend(str(item) for item in raised if f"{item}".strip())
                 envelope = ToolEnvelope(
                     ok=True,
                     tool=tool_name,
