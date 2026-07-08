@@ -374,7 +374,9 @@ class HorosaRuntimeManager:
                     )
 
             self.runtime_root.mkdir(parents=True, exist_ok=True)
-            with tempfile.TemporaryDirectory(prefix="horosa-runtime-install-") as temp_dir_raw:
+            # 临时目录置于 runtime_root 同卷（非系统 /tmp）：最终 shutil.move(payload_root→current)
+            # 落到同一文件系统即为原子 rename，避免跨卷退化成「复制+删除」（慢，且中途失败留半装）。
+            with tempfile.TemporaryDirectory(prefix=".horosa-install-", dir=self.runtime_root) as temp_dir_raw:
                 temp_dir = Path(temp_dir_raw)
                 archive_path = self._materialize_archive(source, temp_dir)
                 if expected_sha256 and _sha256_file(archive_path).lower() != expected_sha256.lower():
@@ -436,8 +438,18 @@ class HorosaRuntimeManager:
 
                 target_parent = self.current_dir.parent
                 target_parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(payload_root), str(self.current_dir))
-                self._apply_runtime_overrides(manifest)
+                # 原子换入 + 失败回滚：move/overrides 任一失败即把旧运行时从 previous 还原回 current，
+                # 绝不留下缺失/半装的 current（否则下次 install 会先 rmtree previous 毁掉唯一好副本）。
+                try:
+                    shutil.move(str(payload_root), str(self.current_dir))
+                    self._apply_runtime_overrides(manifest)
+                except Exception:
+                    if not self.current_dir.exists() and previous_dir.exists():
+                        try:
+                            previous_dir.replace(self.current_dir)
+                        except Exception:  # noqa: BLE001 - best-effort restore; surface original error
+                            logger.exception("runtime install rollback failed")
+                    raise
                 if previous_dir.exists():
                     shutil.rmtree(previous_dir)
 
@@ -758,16 +770,36 @@ class HorosaRuntimeManager:
                 return self._file_url_to_path(source)
             filename = Path(parsed.path).name or "runtime-archive"
             target = temp_dir / filename
-            with httpx.Client(timeout=120.0, follow_redirects=True) as client:
-                response = client.get(source)
-                response.raise_for_status()
-                target.write_bytes(response.content)
+            # 流式下载：700MB+ 归档分块写盘，不 response.content 整体进内存（低内存/CI 机 OOM 风险）。
+            try:
+                with httpx.Client(timeout=httpx.Timeout(60.0, read=120.0), follow_redirects=True) as client:
+                    with client.stream("GET", source) as response:
+                        response.raise_for_status()
+                        with open(target, "wb") as handle:
+                            for chunk in response.iter_bytes(chunk_size=1024 * 1024):
+                                handle.write(chunk)
+            except httpx.HTTPError as exc:
+                raise RuntimeInstallError(
+                    f"Failed to download runtime archive: {exc}",
+                    code="runtime.install_download_failed",
+                    details={"source": source},
+                ) from exc
+            except OSError as exc:
+                raise RuntimeInstallError(
+                    f"Failed to write runtime archive to disk: {exc}",
+                    code="runtime.install_write_failed",
+                    details={"target": str(target)},
+                ) from exc
             return target
         local_path = Path(source).expanduser().resolve()
         if not local_path.is_file():
-            # Surface a clean RuntimeError (which `install` handles) instead of letting a
-            # raw tarfile/shutil error escape later from _extract_archive.
-            raise RuntimeError(f"Runtime archive not found: {local_path}")
+            # 结构化错误（CLI 的 except RuntimeInstallError/RuntimeValidationError 能干净接住并出
+            # {ok:false,code,...}），而非内置 RuntimeError 冒泡成 traceback。
+            raise RuntimeInstallError(
+                f"Runtime archive not found: {local_path}",
+                code="runtime.install_archive_missing",
+                details={"archive": str(local_path)},
+            )
         return local_path
 
     def _read_json_location(self, location: str) -> dict[str, Any]:
@@ -797,13 +829,35 @@ class HorosaRuntimeManager:
         name = archive_path.name.lower()
         if name.endswith(".tar.gz") or name.endswith(".tgz"):
             with tarfile.open(archive_path, "r:gz") as archive:
+                # filter="data" 拒绝绝对路径 / .. 穿越 / 设备/symlink 逃逸（与下方 zip 纵深断言对称）。
                 archive.extractall(extract_dir, filter="data")
+            self._assert_extracted_within(extract_dir)
             return
         if name.endswith(".zip"):
+            # CPython zipfile 已消毒 ../ 与盘符前缀，但显式纵深断言：与 tar 分支对称、且对未来
+            # 换用会保留 symlink 的库（zip-slip 复发）多一道防线。
             with zipfile.ZipFile(archive_path) as archive:
                 archive.extractall(extract_dir)
+            self._assert_extracted_within(extract_dir)
             return
         shutil.unpack_archive(str(archive_path), str(extract_dir))
+        self._assert_extracted_within(extract_dir)
+
+    @staticmethod
+    def _assert_extracted_within(extract_dir: Path) -> None:
+        # 纵深防护：解压后每个真实路径（解引用 symlink）必须仍在 extract_dir 内，杜绝穿越逃逸。
+        root = extract_dir.resolve()
+        for path in extract_dir.rglob("*"):
+            try:
+                resolved = path.resolve()
+            except OSError:
+                resolved = path
+            if not (resolved == root or root in resolved.parents):
+                raise RuntimeValidationError(
+                    "Runtime archive contains a path that escapes the extraction directory.",
+                    code="runtime.install_path_traversal",
+                    details={"offending_path": str(path)},
+                )
 
     def _locate_payload_root(self, extract_dir: Path) -> Path:
         candidates = [

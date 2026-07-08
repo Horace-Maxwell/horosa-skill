@@ -11,7 +11,7 @@ from types import MethodType
 import pytest
 
 from horosa_skill.config import Settings
-from horosa_skill.errors import RuntimeValidationError
+from horosa_skill.errors import RuntimeInstallError, RuntimeValidationError
 from horosa_skill.runtime import HorosaRuntimeManager
 
 
@@ -138,6 +138,37 @@ def test_install_runtime_from_local_archive(tmp_path: Path) -> None:
         manager._platform_path("Horosa-Web/start_horosa_local.sh", "Horosa-Web/start_horosa_local.ps1")
     )
     assert (settings.runtime_current_dir / "runtime-manifest.json").is_file()
+
+
+def test_install_missing_local_archive_raises_structured_error(tmp_path: Path) -> None:
+    # 归档不存在 → 结构化 RuntimeInstallError（带 code，CLI 能干净接住出 {ok:false}），
+    # 而非内置 RuntimeError 冒泡成 traceback。
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    manager = HorosaRuntimeManager(settings)
+    with pytest.raises(RuntimeInstallError) as excinfo:
+        manager.install(archive=str(tmp_path / "does-not-exist.tar.gz"))
+    assert excinfo.value.code == "runtime.install_archive_missing"
+
+
+def test_install_temp_dir_is_under_runtime_root(tmp_path: Path) -> None:
+    # 提取临时目录须落在 runtime_root 同卷（最终 move 为原子 rename）。以真实安装验证：
+    # 安装成功且 current 落位，runtime_root 下不残留 .horosa-install-* 临时目录。
+    archive = create_runtime_archive(tmp_path)
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    manager = HorosaRuntimeManager(settings)
+    result = manager.install(archive=str(archive))
+    assert result["ok"] is True
+    assert settings.runtime_current_dir.is_dir()
+    leftovers = list((tmp_path / "runtime-root").glob(".horosa-install-*"))
+    assert leftovers == []
 
 
 def test_install_runtime_binds_service_urls_to_current_settings(tmp_path: Path) -> None:

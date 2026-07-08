@@ -769,6 +769,10 @@ def install(
     except RuntimeError as exc:
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
+    except OSError as exc:
+        # 磁盘满 / 权限不足 / 跨卷等 IO 失败：结构化输出而非裸 traceback。
+        typer.echo(json.dumps({"ok": False, "code": "runtime.install_io_error", "message": str(exc), "details": {}}, ensure_ascii=False, indent=2), err=True)
+        raise typer.Exit(code=2)
     _print_json(result)
 
 
