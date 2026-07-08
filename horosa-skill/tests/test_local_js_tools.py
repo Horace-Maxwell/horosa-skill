@@ -176,6 +176,9 @@ def test_qimen_runs_via_ken_backend(tmp_path) -> None:
     assert isinstance(pan.get("cells"), list) and pan["cells"]
     assert "[起盘信息]" in result.data["snapshot_text"]
     assert "[九宫方盘]" in result.data["snapshot_text"]
+    # 全局速览：九遁/三奇得使/吉凶格/六害分布/值符值使落宫一览（v3.3.1）。
+    assert "[全局速览]" in result.data["snapshot_text"]
+    assert "值符落宫：" in result.data["snapshot_text"]
     # 旺相休囚死·月令能量：以月令五行定各宫 星/门/宫 的旺相休囚死（当令者旺…）。
     assert "[旺相休囚死·月令能量]" in result.data["snapshot_text"]
     assert "月令：" in result.data["snapshot_text"]
@@ -437,6 +440,21 @@ def test_heluo_local_tool_runs_headless_engine(tmp_path) -> None:
     assert "[流年·岁运]" in snapshot
     assert "[断验]" in snapshot and "十吉" in snapshot
     # 元堂爻辞/岁运段名 legacy-map 到 先天卦/后天卦/大限/流年 ⇒ clean export.
+    _assert_clean_export(result)
+
+
+@requires_chart
+def test_relative_score_sections_via_chart_service(tmp_path) -> None:
+    # 合盘关系量化（v3.3.1）：/modern/relative 比较盘 + /astroextra/relative 打分 → [关系量化]/
+    # [顺畅连接]/[张力连接]。契合分数 0–100，highlights/challenges 逐条相位。
+    service = make_service(tmp_path)
+    inner = {"date": "1990-05-15", "time": "08:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"}
+    outer = {"date": "1988-11-20", "time": "14:00:00", "zone": "+08:00", "lat": "39n54", "lon": "116e23"}
+    result = service.run_tool("relative", {"inner": inner, "outer": outer, "hsys": 0, "zodiacal": 0}, save_result=False)
+    assert result.ok is True, result.error
+    snap = result.data["snapshot_text"]
+    assert "[关系起盘信息]" in snap  # 既有比较盘段
+    assert "[关系量化]" in snap and "契合分数：" in snap
     _assert_clean_export(result)
 
 

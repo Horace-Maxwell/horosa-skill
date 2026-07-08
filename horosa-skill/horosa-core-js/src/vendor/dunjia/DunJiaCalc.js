@@ -1,5 +1,7 @@
 import * as LRConst from '../liureng/LRConst.js';
-import { buildQimenBaGongSnapshotLines, buildQimenFuShiYiGua } from './DunJiaBaGongRules.js';
+import { buildQimenBaGongSnapshotLines, buildQimenFuShiYiGua, buildQimenOverviewSummary } from './DunJiaBaGongRules.js';
+
+const OVERVIEW_LUOSHU_NUM = { 坎: 1, 坤: 2, 震: 3, 巽: 4, 中: 5, 乾: 6, 兑: 7, 艮: 8, 离: 9 };
 import { buildFaQimenAnalysis } from './DunJiaFaCalc.js';
 
 export const SEX_OPTIONS = [
@@ -1893,6 +1895,25 @@ export function buildDunJiaSnapshotText(pan){
 	lines.push(`值符：${pan.zhiFu}`);
 	lines.push(`值使：${pan.zhiShi}`);
 	lines.push('');
+
+	// [全局速览]：九遁/三奇得使/吉凶格品级 + 六害分布 + 值符值使落宫，一眼看全局格局。
+	const overview = buildQimenOverviewSummary(pan);
+	if (overview) {
+		const catText = pan.options && pan.options.chartCategory === 'ming' ? '命局（日干＝内心 / 时干＝外在）' : '事局（日干＝实质 / 时干＝表象）';
+		const posShort = (it) => (it && it.palace ? `${it.palaceName}${OVERVIEW_LUOSHU_NUM[it.palaceName] || it.palace}宫·${it.dir}` : '未现');
+		const patShort = (arr) => (arr && arr.length ? arr.slice(0, 3).map((x) => `${x.name}(${x.palaceName}${x.palace})`).join('、') + (arr.length > 3 ? ` 等${arr.length}例` : '') : '无');
+		lines.push('[全局速览]');
+		lines.push(`盘类：${catText}`);
+		lines.push(`九遁：${overview.dun.length ? overview.dun.map((d) => `${d.name}(${d.palaceName}${d.palace})`).join('、') : '无'}`);
+		lines.push(`三奇得使：${overview.sanQiDeshi ? posShort(overview.sanQiDeshi) : '无'}`);
+		lines.push(`吉格 ${overview.ji.length} 例：${patShort(overview.ji)}`);
+		lines.push(`凶格 ${overview.xiong.length} 例：${patShort(overview.xiong)}`);
+		const harm = overview.sixHarm;
+		const harmCount = harm.jiXing.length + harm.ruMu.length + harm.menPo.length + harm.kongWang.length + harm.gengHu.length;
+		lines.push(`六害分布：${harmCount ? `击刑${harm.jiXing.length}·入墓${harm.ruMu.length}·门迫${harm.menPo.length}·空亡${harm.kongWang.length}·庚虎${harm.gengHu.length}` : '本局未现'}`);
+		lines.push(`值符落宫：${posShort(overview.zhiFu)}（${overview.zhiFu.star || '—'}）　值使落宫：${posShort(overview.zhiShi)}（${overview.zhiShi.door || '—'}）`);
+		lines.push('');
+	}
 
 	lines.push('[盘面要素]');
 	lines.push(`符头：${pan.fuTou}`);

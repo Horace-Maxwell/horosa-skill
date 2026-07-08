@@ -150,6 +150,8 @@ _PYTHON_CHART_ENDPOINTS = {
     "/predict/zr",
     "/predict/dice",
     "/modern/relative",
+    # 合盘关系量化打分（契合分数 + 顺畅/张力连接），与 /modern/relative 比较盘互补。
+    "/astroextra/relative",
     "/india/chart",
     "/germany/midpoint",
     "/astroextra/harmonic",
@@ -4095,6 +4097,31 @@ def _build_relative_snapshot_text(payload: dict[str, Any], response: dict[str, A
             else _missing_detail_text("影响图盘-星盘B"),
         )
     )
+    # 关系量化（v3.3.1）：契合分数 + 顺畅/张力连接，源 AstroRelative.js Score 页三段。
+    score = response.get("_relativeScore") if isinstance(response.get("_relativeScore"), dict) else None
+    if score and score.get("score") is not None:
+        rendered.append((
+            "关系量化",
+            f"契合分数：{score.get('score')}（0–100，50 为中性；越高越顺畅，越低张力越大）",
+        ))
+
+        def _score_asp_lines(items: Any) -> str:
+            rows: list[str] = []
+            for it in (items or [])[:12]:
+                if not isinstance(it, dict):
+                    continue
+                rows.append(
+                    f"{_astro_msg(it.get('a'), short=True)} 与 {_astro_msg(it.get('b'), short=True)} 成 "
+                    f"{_aspect_label(it.get('aspect'))} 相位（权重{_round3(it.get('impact'))}，误差{_round3(it.get('orb'))}）"
+                )
+            return "\n".join(rows)
+
+        highlights = _score_asp_lines(score.get("highlights"))
+        if highlights:
+            rendered.append(("顺畅连接", highlights))
+        challenges = _score_asp_lines(score.get("challenges"))
+        if challenges:
+            rendered.append(("张力连接", challenges))
     return _render_snapshot_text(rendered)
 
 
@@ -5267,6 +5294,37 @@ class HorosaSkillService:
     # 八字格局（v3.0.x 本地化）：五行力量/格局·用神/盲派结构 由 core-js baziGeju 引擎从后端 fourColumns 派生，
     # 与 [四柱与三元] 同源。按需调用、优雅降级（无 node/引擎失败→不挂载→该批段不出，列 optional）。
     _BAZI_GEJU_TOOLS = {"bazi_birth", "bazi_direct"}
+
+    def _attach_relative_score(
+        self, tool_name: str, input_normalized: dict[str, Any], response_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        # 合盘关系量化：/modern/relative 出比较盘后，另调 /astroextra/relative 取契合分数 +
+        # 顺畅/张力连接（同 inner/outer），挂到 _relativeScore 供 [关系量化]/[顺畅连接]/[张力连接] 段。
+        # 打分失败不阻塞既有比较盘段（优雅降级）。
+        if tool_name != "relative" or not isinstance(response_data, dict):
+            return response_data
+        inner = input_normalized.get("inner")
+        outer = input_normalized.get("outer")
+        if not isinstance(inner, dict) or not isinstance(outer, dict):
+            return response_data
+        try:
+            score = self._call_remote(
+                "/astroextra/relative",
+                {
+                    "inner": inner,
+                    "outer": outer,
+                    "hsys": input_normalized.get("hsys", 0),
+                    "zodiacal": input_normalized.get("zodiacal", 0),
+                },
+            )
+        except Exception as exc:  # noqa: BLE001 - degrade to no-score, keep comparison chart
+            logger.warning("relative score failed: %s", exc)
+            return response_data
+        if isinstance(score, dict) and score.get("score") is not None:
+            enriched = dict(response_data)
+            enriched["_relativeScore"] = score
+            return enriched
+        return response_data
 
     def _attach_bazi_geju(self, tool_name: str, response_data: dict[str, Any]) -> dict[str, Any]:
         if tool_name not in self._BAZI_GEJU_TOOLS or not isinstance(response_data, dict):
@@ -7020,6 +7078,7 @@ class HorosaSkillService:
                 response_data = self._attach_natal_extras(tool_name, response_data)
                 response_data = self._attach_classical_analysis(tool_name, input_normalized, response_data)
                 response_data = self._attach_bazi_geju(tool_name, response_data)
+                response_data = self._attach_relative_score(tool_name, input_normalized, response_data)
                 response_data = _attach_export_contract(tool_name, input_normalized, response_data)
                 summary = _generic_summary(tool_name, response_data)
                 # 工具内部经 `_warnings` 上抛的降级说明（如子引擎不可用）落入 envelope.warnings，

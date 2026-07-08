@@ -49,15 +49,17 @@ const BASE_PALACE_BY_DOOR = Object.keys(BASE_DOOR_BY_PALACE).reduce((acc, key)=>
 	return acc;
 }, {});
 
+// 对宫（后天八卦方位 180° 对冲；opp = 10 − 宫号）：巽1↔乾9·离2↔坎8·坤3↔艮7·震4↔兑6。
+// 🔴 旧值 {1:6,3:9,4:7,9:3} 按方位错(巽东南 应对乾西北=9,非兑=6);影响对宫门/星。
 const OPPOSITE_PALACE = {
-	1: 6,
+	1: 9,
 	2: 8,
-	3: 9,
-	4: 7,
-	6: 1,
-	7: 4,
+	3: 7,
+	4: 6,
+	6: 4,
+	7: 3,
 	8: 2,
-	9: 3,
+	9: 1,
 };
 
 const PALACE_WUXING = {
@@ -186,7 +188,7 @@ const YUNU_SHOUMEN_BY_TIME_GAN = {
 	癸: '壬',
 };
 const YUNU_EXTRA_TIME_GANZHI = new Set(['乙卯', '乙未', '丙午', '丁酉', '庚午', '庚子', '己卯', '戊子']);
-const XUN_SHOU_TO_LIUYI = {
+export const XUN_SHOU_TO_LIUYI = {
 	甲子: '戊',
 	甲戌: '己',
 	甲申: '庚',
@@ -994,6 +996,56 @@ export function buildQimenBaGongPanelData(pan, palaceNum){
 		godDoorText,
 		menFangYiGua: menFangYiGuaData.displayName,
 		menFangYiGuaText: menFangYiGuaData.text,
+	};
+}
+
+// 全局格局速览（概览用）：扫全外八宫，聚合 九遁/三奇得使/吉格/凶格 + 六害分布 + 值符值使落宫，
+// 一眼看出全局品级与吉凶源头。复用逐宫 calcJi/XiongPatterns（与八宫 tab 同源，零口径分叉）。
+const OVERVIEW_POS_DIR = { 1: '东南', 2: '正南', 3: '西南', 4: '正东', 5: '中', 6: '正西', 7: '东北', 8: '正北', 9: '西北' };
+const NINE_DUN_SET = new Set(['天遁', '地遁', '人遁', '神遁', '鬼遁', '风遁', '云遁', '龙遁', '虎遁']);
+export function buildQimenOverviewSummary(pan){
+	if(!pan || !Array.isArray(pan.cells)){ return null; }
+	const info = (p)=>({ palace: p, palaceName: BAGONG_PALACE_NAME[p] || `${p}`, dir: OVERVIEW_POS_DIR[p] || '' });
+	const dun = [];
+	const ji = [];
+	const xiong = [];
+	let sanQiDeshi = null;
+	BAGONG_PALACE_ORDER.forEach((p)=>{
+		const cell = findCell(pan, p);
+		if(!cell){ return; }
+		(calcJiPatterns(pan, p, cell) || []).forEach((name)=>{
+			if(NINE_DUN_SET.has(name)){ dun.push({ name, ...info(p) }); }
+			else if(name === '三奇得使'){ sanQiDeshi = { ...info(p) }; }
+			else { ji.push({ name, ...info(p) }); }
+		});
+		(calcXiongPatterns(pan, p, cell) || []).forEach((name)=>{ xiong.push({ name, ...info(p) }); });
+	});
+	// 六害分布：庚/白虎扫 cells；其余读 pan 既有字段（与概览逐项显示同源）。
+	const gengHu = [];
+	pan.cells.forEach((cell)=>{
+		if(!cell || cell.palaceNum === 5){ return; }
+		const isGeng = cell.tianGan === '庚';
+		const isHu = getGodFull(cell.god) === '白虎';
+		if(isGeng || isHu){ gengHu.push({ ...info(cell.palaceNum), label: `${isGeng ? '庚' : ''}${isHu ? '虎' : ''}` }); }
+	});
+	// 值符/值使落宫（cells 单一真值，与用神/盘面同口径）。
+	const zhiFuCell = pan.cells.find((c)=>c && getGodFull(c.god) === '值符');
+	const zhiShiDoorChar = getDoorChar(pan.zhiShi);
+	const zhiShiCell = zhiShiDoorChar ? pan.cells.find((c)=>c && getDoorChar(c.door) === zhiShiDoorChar) : null;
+	return {
+		dun,
+		sanQiDeshi,
+		ji,
+		xiong,
+		sixHarm: {
+			jiXing: (pan.liuYiJiXing || []).slice(),
+			ruMu: (pan.qiYiRuMu || []).slice(),
+			menPo: ((pan.menPo && pan.menPo.list) || []).slice(),
+			kongWang: (pan.kongWangDesc || []).slice(),
+			gengHu,
+		},
+		zhiFu: zhiFuCell ? { star: pan.zhiFu || '', ...info(zhiFuCell.palaceNum) } : { star: pan.zhiFu || '', palace: 0, palaceName: '', dir: '' },
+		zhiShi: zhiShiCell ? { door: pan.zhiShi || '', ...info(zhiShiCell.palaceNum) } : { door: pan.zhiShi || '', palace: 0, palaceName: '', dir: '' },
 	};
 }
 
