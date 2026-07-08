@@ -629,8 +629,23 @@ only difference is which engine dir is vendored:
   action. A repack like this is only valid when the release diff has **no payload-affecting changes**
   (horosa-core-js source, vendored engines, wheels, launchers — skill-layer Python/docs are fine); when a
   suspiciously same-size win zip appears on a new release, verify the embedded manifest (version +
-  `export_registry_version`) and that diff condition before trusting it. The Windows runtime is
-  built off-repo on a Windows box, so a mac-only release publish leaves it out. **First diagnostic when
+  `export_registry_version`) and that diff condition before trusting it.
+  **v0.17.0 / v0.18.0 introduced a THIRD, stealthier mode — "pin-forward":** the new release's manifest
+  lists `win32-x64` but points it at the *previous* version's win zip (v0.17.0/v0.18.0 both pinned
+  `.../download/v0.16.1/horosa-runtime-win32-x64-v0.16.1.zip`). **The guard stays GREEN and `install` does
+  NOT break** — both platforms are present, the URL resolves 200, and the sha matches — but Windows users
+  silently get a runtime **N versions stale** (missing every feature since the pinned version). The guard
+  can't catch this (it only checks presence + resolvability, not version match). **`sync_windows_release.py
+  --check` IS the reliable detector**: it looks for the version-specific `horosa-runtime-win32-x64-vX.Y.Z.zip`
+  asset, which is absent under pin-forward, so it reports `[GAP]` even while the guard is green. Treat a
+  `--check` GAP as authoritative regardless of guard colour; the remediation (build + upload the real win
+  zip, re-pointing the manifest) is identical. **Freshness caveat for these jumps:** v0.17.0 was an "引擎全面
+  升级" that added real chart-service endpoints (`/location/acg` 占星地图, `/astroextra/relative`) and new
+  bundled data (`astrostudyui/dist-file/astrodata/astrodata-aa.sqlite.gz` for 名人库, ~50 MB) — a pin-forward
+  jump can span such changes, so re-populate `vendor/runtime-source` from the **current** Windows workspace
+  (check astropy / dist-file mtimes are newer than the target release) and native-verify the new endpoints
+  return real data before shipping. The Windows runtime is built off-repo on a Windows box, so a mac-only
+  release publish leaves it out. **First diagnostic when
   "check sync" / a new version appears:** `gh release view vX.Y.Z --json assets` (expect darwin tar.gz +
   win32 zip + runtime-manifest.json + SHA256SUMS.txt) and confirm
   `releases/latest/download/runtime-manifest.json` has **both** `darwin-arm64` and `win32-x64` platforms.
