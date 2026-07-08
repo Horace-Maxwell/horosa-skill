@@ -19,7 +19,10 @@ export function buildReadingText(reading, question){
 	const deck = getDeck(reading.deckId);
 	const eff = reading.settings || {};
 	const q = question !== undefined && question !== null ? question : reading.question;
+	// 段头独占一行([段]),供 AI 导出/挂载「纳入内容」按段裁剪(与 aiExport tarot preset 逐一对齐);
+	// 各段为条件产出(无内容即不出该段头,⊆ 语义天然豁免)。段头仅进 AI 快照文本,不影响右栏牌面渲染。
 	const lines = [];
+	lines.push('[牌阵综览]');
 	lines.push(`【${reading.deckTitle || (deck && deck.title) || '塔罗'}】${reading.spreadTitle || ''}(种子:${reading.seed})`);
 	const meta = [eff.reversals ? '逆位 ON' : '逆位 OFF'];
 	if(eff.dignities){ meta.push('元素尊位 ON'); }
@@ -29,7 +32,7 @@ export function buildReadingText(reading, question){
 	if(reading.significator && reading.significator.card){
 		lines.push(`指示牌:${displayName(reading.significator.card, deck)}`);
 	}
-	lines.push('—');
+	lines.push('[逐牌详解]');
 	reading.draws.forEach((d) => {
 		const card = d.card;
 		if(!card){ return; }
@@ -39,14 +42,14 @@ export function buildReadingText(reading, question){
 		lines.push(`  含义:${meaningOf(card, d.isReversed)}`);
 		if(d.dignity){ lines.push(`  尊位:${d.dignity.strength}(${d.dignity.notes})`); }
 	});
-	lines.push('—');
-	if(reading.summary){ lines.push(`综合:${synthesizeText(reading.summary)}`); }
+	if(reading.summary){ lines.push('[综合断语]'); lines.push(synthesizeText(reading.summary)); }
 	// 定局摘要(Yes/No + 精华牌)
 	try{
 		const cards = getDeckCards(reading.deckId);
 		const v = yesNo(reading.draws, eff.verdictMode || 'majority');
 		const quint = quintessence(reading.draws, cards);
-		lines.push(`定局:Yes/No=${v.verdict}(${eff.verdictMode || 'majority'},score ${v.score})${quint ? ` · 精华牌 ${displayName(quint, deck)}` : ''}`);
+		lines.push('[定局]');
+		lines.push(`Yes/No=${v.verdict}(${eff.verdictMode || 'majority'},score ${v.score})${quint ? ` · 精华牌 ${displayName(quint, deck)}` : ''}`);
 	}catch(e){ /* 定局可选,失败不阻断 */ }
 	// 生命牌(若给生日)
 	if(eff.birth && eff.birth.year && eff.birth.month && eff.birth.day){
@@ -55,7 +58,8 @@ export function buildReadingText(reading, question){
 			const bc = birthCards(Number(eff.birth.year), Number(eff.birth.month), Number(eff.birth.day));
 			const pc = majorByNumber(cards, bc.personality <= 21 ? bc.personality : 0);
 			const sc = majorByNumber(cards, bc.soul);
-			lines.push(`生命牌:人格 ${pc ? displayName(pc, deck) : bc.personality} · 灵魂 ${sc ? displayName(sc, deck) : bc.soul}`);
+			lines.push('[生命牌]');
+			lines.push(`人格 ${pc ? displayName(pc, deck) : bc.personality} · 灵魂 ${sc ? displayName(sc, deck) : bc.soul}`);
 			if(eff.birth.refYear){
 				const yn = yearCard(Number(eff.birth.month), Number(eff.birth.day), Number(eff.birth.refYear));
 				const yc = majorByNumber(cards, yn <= 21 ? yn : 0);

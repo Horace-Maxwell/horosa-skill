@@ -1,4 +1,4 @@
-// 定局法引擎(手册第6部分):Yes/No(5法) · 精华牌 Quintessence · 计数链 · 生命/灵魂/流年牌 · 综合合读。
+// 定局法引擎(古籍第6部分):Yes/No(5法) · 精华牌 Quintessence · 计数链 · 生命/灵魂/流年牌 · 综合合读。
 // 极性/计数值已随卡片携带(core78 polarity/countingValue);本模块只做派生计算,纯函数、确定性。
 import { SUITS, SUIT_ELEMENT, ELEMENT_CN } from '../decks/correspondences.js';
 import { cardElement } from './cardSchema.js';

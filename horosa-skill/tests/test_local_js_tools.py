@@ -459,6 +459,11 @@ def test_acg_lines_via_chart_service(tmp_path) -> None:
     assert "[起盘信息]" in snapshot
     assert "[行星线经度]" in snapshot
     assert "MC线经度" in snapshot
+    # 线交点若产出，角色标签必须落地（源返回键 aAngle/bAngle；曾误读 av/aEvent 致标签恒空）。
+    crossings = acg.get("crossings") or []
+    if crossings and "[线交点]" in snapshot:
+        assert ("·mc" in snapshot or "·ic" in snapshot)
+        assert ("·asc" in snapshot or "·desc" in snapshot)
     _assert_clean_export(result)
 
 
@@ -489,6 +494,12 @@ def test_astrodata_search_and_person_detail(tmp_path) -> None:
     assert "[名人详情]" in dsnap and "排盘入参：" in dsnap
     assert "[数据来源]" in dsnap and "Astro-Databank" in dsnap
     _assert_clean_export(detail)
+
+    # FTS5 语法字符不再使工具整体失败（曾裸 MATCH 用户串 → OperationalError → ok=False）。
+    for bad in ('6"', "*", "NEAR", "(rock", 'a OR b', "-x"):
+        r = service.run_tool("astrodata", {"query": bad, "limit": 3}, save_result=False)
+        assert r.ok is True, f"query {bad!r} -> {r.error}"
+        assert r.data["astrodata"].get("available") is True
 
 
 def test_yizhangjing_local_tool_runs_headless_engine(tmp_path) -> None:
@@ -760,7 +771,8 @@ def test_geomancy_deterministic_cast_and_sections(tmp_path) -> None:
 
 @requires_runtime
 def test_tarot_deterministic_draw_and_sections(tmp_path) -> None:
-    # 塔罗（core-js tarot 引擎，SHA-256种子洗牌确定性抽牌）：[起卦信息]/[牌阵直断]/[牌阵细论]/[综合建议]。
+    # 塔罗（core-js tarot 引擎，SHA-256种子洗牌确定性抽牌）：引擎直接产出独占段头
+    # [牌阵综览]/[逐牌详解]/[综合断语]/[定局]/([生命牌] 仅传 birth 时)。
     service = make_service(tmp_path)
     base = {"date": "2026-06-30", "time": "14:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "question": "事业能否升迁", "spread": "three"}
     r1 = service.run_tool("tarot", base, save_result=False)
@@ -769,13 +781,22 @@ def test_tarot_deterministic_draw_and_sections(tmp_path) -> None:
     # 以时抽牌确定性：同刻同牌
     assert r1.data["snapshot_text"] == r2.data["snapshot_text"]
     snap = r1.data["snapshot_text"]
-    for header in ("[起卦信息]", "[牌阵直断]", "[牌阵细论]", "[综合建议]"):
+    for header in ("[牌阵综览]", "[逐牌详解]", "[综合断语]", "[定局]"):
         assert header in snap, header
-    # 逐位含牌 + 定局
-    assert "位置1" in snap and "定局:" in snap
+    # 逐位含牌 + Yes/No 定局
+    assert "位置" in snap and "Yes/No=" in snap
+    # 无 birth → 不出生命牌段（条件段，非误缺）
+    assert "[生命牌]" not in snap
     export = r1.data.get("export_snapshot") or {}
     assert export.get("unknown_detected_sections") == []
     assert len((export.get("export_text") or "").splitlines()) < 200
+
+    # 传 birth → 产出[生命牌]段（人格·灵魂）。
+    born = service.run_tool("tarot", {**base, "birth": {"year": 1990, "month": 5, "day": 15}}, save_result=False)
+    assert born.ok is True, born.error
+    bsnap = born.data["snapshot_text"]
+    assert "[生命牌]" in bsnap and "人格" in bsnap
+    assert (born.data.get("export_snapshot") or {}).get("unknown_detected_sections") == []
 
 
 @requires_chart

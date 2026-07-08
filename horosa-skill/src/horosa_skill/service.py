@@ -5,6 +5,7 @@ import gzip
 import logging
 import os
 import re
+import shutil
 import sqlite3
 import time
 from datetime import timezone, datetime, timedelta
@@ -5457,7 +5458,11 @@ class HorosaSkillService:
                 },
             )
         options = payload.get("options") or {}
-        sex = options.get("sex") or payload.get("gender") or "男"
+        # taiyi ken 期望 sex 为 '男'/'女' 字符串；gender 经 input_normalization 已归一为 0(女)/1(男)，
+        # 故此处显式映射（不能靠 `or gender` —— int 0 为 falsy 会误落默认「男」）。
+        _g = payload.get("gender")
+        _sex_from_gender = "女" if _g in (0, "0", False, "女", "female", "f") else "男"
+        sex = options.get("sex") or _sex_from_gender
         ken_response = self._call_remote(
             "/taiyi/pan",
             {
@@ -5630,8 +5635,9 @@ class HorosaSkillService:
             "说明：MC/IC 线为恒定地理经度的南北直线；ASC/DESC 为曲线（此处给天顶点与直线经度，曲线逐点属地图渲染层）。",
         ]
         line_rows = ["| 星体 | MC线经度 | IC线经度 | 天顶点(纬,经) | 超界 |", "| --- | --- | --- | --- | --- |"]
-        for pid in ("Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto", "North Node", "Chiron"):
-            pd = planets.get(pid)
+        # 直接遍历后端返回的行星（保序=源 objlists：七政+外三+北南交+凯龙+暗月+紫炁，共 15），
+        # 不硬编码列表 → 自动含全部天体且随后端增减免漂移。
+        for pid, pd in planets.items():
             if not isinstance(pd, dict):
                 continue
             lines = pd.get("lines") if isinstance(pd.get("lines"), dict) else {}
@@ -5666,11 +5672,14 @@ class HorosaSkillService:
             rows = [f"线交点（一星临 MC/IC 直线 × 一星临 ASC/DESC 曲线，前 {min(len(crossings), 40)}/{len(crossings)} 处）："]
             for item in crossings[:40]:
                 if isinstance(item, dict):
-                    a = _astro_msg(item.get("pa") or item.get("a"), short=True)
-                    b = _astro_msg(item.get("pb") or item.get("b"), short=True)
+                    a = _astro_msg(item.get("a"), short=True)
+                    b = _astro_msg(item.get("b"), short=True)
+                    # 源 _crossings 返回键：a/aAngle(mc|ic) × b/bAngle(asc|desc)。角色标签取 aAngle/bAngle。
+                    a_ang = item.get("aAngle") or ""
+                    b_ang = item.get("bAngle") or ""
                     lat_v, lon_v = item.get("lat"), item.get("lon")
                     lat_txt = f"{float(lat_v):.2f}°" if isinstance(lat_v, (int, float)) else "—"
-                    rows.append(f"{a}·{item.get('av') or item.get('aEvent') or ''} × {b}·{item.get('bv') or item.get('bEvent') or ''}：纬 {lat_txt}，经 {geo_lon(lon_v)}")
+                    rows.append(f"{a}·{a_ang} × {b}·{b_ang}：纬 {lat_txt}，经 {geo_lon(lon_v)}")
             sections.append(("线交点", "\n".join(rows)))
         snapshot_text = _render_snapshot_text(sections)
         return {
@@ -5715,12 +5724,23 @@ class HorosaSkillService:
             cached = cache_dir / "astrodata-aa.sqlite"
             stamp = cache_dir / "astrodata-aa.sqlite.src"
             src_sig = f"{source}|{source.stat().st_size}|{int(source.stat().st_mtime)}"
-            if not cached.is_file() or not stamp.is_file() or stamp.read_text(encoding="utf-8").strip() != src_sig:
-                with gzip.open(source, "rb") as fin:
-                    cached.write_bytes(fin.read())
-                stamp.write_text(src_sig, encoding="utf-8")
+            stamp_ok = stamp.is_file() and stamp.read_text(encoding="utf-8").strip() == src_sig
+            if not cached.is_file() or not stamp_ok:
+                # 原子 + 流式解压：写唯一临时文件（进程/线程隔离，避免并发交错写撕裂 122MB 库），
+                # copyfileobj 分块拷贝（不 fin.read() 整库进内存），成功后 os.replace 原子落位，
+                # 最后才写 stamp —— 中断/并发都不会留下被当成有效的截断库。
+                tmp = cache_dir / f".astrodata-aa.sqlite.{os.getpid()}.tmp"
+                try:
+                    with gzip.open(source, "rb") as fin, open(tmp, "wb") as fout:
+                        shutil.copyfileobj(fin, fout, length=1024 * 1024)
+                    os.replace(tmp, cached)
+                    stamp.write_text(src_sig, encoding="utf-8")
+                finally:
+                    if tmp.exists():
+                        tmp.unlink(missing_ok=True)
             db_path = cached
-        con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        # as_uri() 正确百分号编码路径（含空格/%/#/Windows 反斜杠+盘符），勿裸 f-string 拼接。
+        con = sqlite3.connect(f"{db_path.as_uri()}?mode=ro", uri=True)
         con.row_factory = sqlite3.Row
         return con
 
@@ -5831,10 +5851,14 @@ class HorosaSkillService:
             if query:
                 base = "FROM person_fts f JOIN person p ON p.id = f.rowid"
                 where.append("person_fts MATCH ?")
-                params.append(query)
+                # 整串当短语并转义双引号 → 用户键入 `6"` / `*` / `NEAR` / `(rock` 等 FTS5 语法字符
+                # 不再抛 OperationalError 使工具整体失败；末尾加 * 做前缀匹配（"Einstein" 亦命中 Einsteinium）。
+                params.append('"' + query.replace('"', '""') + '"*')
             if category:
-                where.append("p.title IN (SELECT person_title FROM category WHERE category LIKE ?)")
-                params.append(f"%{category}%")
+                where.append("p.title IN (SELECT person_title FROM category WHERE category LIKE ? ESCAPE '\\')")
+                # 转义 LIKE 通配 %/_，避免用户输入被当通配过度匹配。
+                safe_cat = category.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                params.append(f"%{safe_cat}%")
             if rodden:
                 where.append(f"p.rodden IN ({','.join('?' for _ in rodden)})")
                 params.extend(str(r).upper() for r in rodden)
@@ -5880,6 +5904,18 @@ class HorosaSkillService:
                 "astrodata": {"available": True, "total": total, "results": results, "offset": offset, "limit": limit},
                 "snapshot_text": snapshot_text,
                 "export_snapshot": self._augment_export_payload(technique="astrodata", snapshot_text=snapshot_text),
+            }
+        except sqlite3.Error as exc:
+            # 老版本库缺 person_fts / birth_year·has_time 列，或检索式仍非法 → 优雅降级，不让整工具 ok=False。
+            logger.warning("astrodata query failed: %s", exc)
+            snapshot_text = _render_snapshot_text([
+                ("检索条件", "名人库检索未能完成（数据库版本过旧或检索式无效）；请改用英文姓名关键词，或更新离线 runtime。"),
+            ])
+            return {
+                "astrodata": {"available": True, "results": [], "error": "query_failed"},
+                "snapshot_text": snapshot_text,
+                "export_snapshot": self._augment_export_payload(technique="astrodata", snapshot_text=snapshot_text),
+                "_warnings": [f"名人库检索降级：{exc}"],
             }
         finally:
             con.close()
@@ -6722,6 +6758,15 @@ class HorosaSkillService:
         }
         if payload.get("usesReversals") is False:
             js_payload["usesReversals"] = False
+        # 透传 v3.3.1 塔罗设置：尊位/变体/定局法/生命牌生日 —— [综合断语]/[定局]/[生命牌] 段依赖之。
+        if payload.get("dignities") is not None:
+            js_payload["dignities"] = bool(payload.get("dignities"))
+        if payload.get("variant"):
+            js_payload["variant"] = payload.get("variant")
+        if payload.get("verdictMode"):
+            js_payload["verdictMode"] = payload.get("verdictMode")
+        if isinstance(payload.get("birth"), dict):
+            js_payload["birth"] = payload.get("birth")
         try:
             result = self.js_client.run("tarot", js_payload)
         except ToolTransportError:

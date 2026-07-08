@@ -63,6 +63,23 @@ def test_normalize_request_payload_coordinate_formats_full_compat() -> None:
     assert n["lat"] == "12W30:00"  # 透传后端 toFloat
 
 
+def test_normalize_request_payload_gender_labels_to_int() -> None:
+    # 性别标签归一为 0(女)/1(男)：字符串标签统一，int/None/未识别值不动。八字链下游按 0/1
+    # 判大运顺逆；若 '女' 原样进 JS 会 Number()→NaN→恒判男 → 女命方向反转，故必须先归一。
+    assert normalize_request_payload({"gender": "女"})["gender"] == 0
+    assert normalize_request_payload({"gender": "Female"})["gender"] == 0
+    assert normalize_request_payload({"gender": "F"})["gender"] == 0
+    assert normalize_request_payload({"gender": "坤"})["gender"] == 0
+    assert normalize_request_payload({"gender": "男"})["gender"] == 1
+    assert normalize_request_payload({"gender": "male"})["gender"] == 1
+    assert normalize_request_payload({"gender": "乾"})["gender"] == 1
+    # int / None / 未识别串 原样保留（零回归）。
+    assert normalize_request_payload({"gender": 0})["gender"] == 0
+    assert normalize_request_payload({"gender": 1})["gender"] == 1
+    assert normalize_request_payload({"gender": None})["gender"] is None
+    assert normalize_request_payload({"gender": "其他"})["gender"] == "其他"
+
+
 def test_normalize_request_payload_converts_iana_timezones_from_event_datetime() -> None:
     normalized = normalize_request_payload(
         {

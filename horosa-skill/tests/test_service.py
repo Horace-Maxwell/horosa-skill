@@ -456,15 +456,15 @@ class FakeJsClient(HorosaJsEngineClient):
                 ),
             }
         if tool_name == "tarot":
-            # 塔罗：离线替身给结构化 [起卦信息]/[牌阵直断]/[牌阵细论]/[综合建议]，供 tarot 契约 round-trip。
+            # 塔罗：离线替身给引擎直出的 [牌阵综览]/[逐牌详解]/[综合断语]/[定局]，供 tarot 契约 round-trip。
             return {
                 "deck": "rws",
                 "spread": payload.get("spread") or "three",
                 "snapshot_text": (
-                    "[起卦信息]\n【Rider–Waite–Smith (RWS)】三张(过去·现在·未来)(种子:test)\n所问:事业能否升迁\n\n"
-                    "[牌阵直断]\n定局:Yes/No=NO 否 · 精华牌 17 The Star 星星\n\n"
-                    "[牌阵细论]\n位置1(过去)：6 The Lovers 恋人（逆位）\n  含义:失败、愚妄之谋\n\n"
-                    "[综合建议]\n综合:主导元素:火(行动/意志)；大牌占比:67%"
+                    "[牌阵综览]\n【Rider–Waite–Smith (RWS)】三张(过去·现在·未来)(种子:test)\n所问:事业能否升迁\n\n"
+                    "[逐牌详解]\n位置1(过去)：6 The Lovers 恋人（逆位）\n  含义:失败、愚妄之谋\n\n"
+                    "[综合断语]\n主导元素:火(行动/意志)；大牌占比:67%\n\n"
+                    "[定局]\nYes/No=NO(majority,score -1) · 精华牌 17 The Star 星星"
                 ),
             }
         if tool_name == "bazi_geju":

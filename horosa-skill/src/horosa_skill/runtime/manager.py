@@ -387,11 +387,16 @@ class HorosaRuntimeManager:
                 declared_type = str((asset_meta or {}).get("archive_type") or "").strip().lower()
                 if declared_type:
                     lower_name = archive_path.name.lower()
-                    type_ok = (
-                        (declared_type in {"tar.gz", "tgz"} and (lower_name.endswith(".tar.gz") or lower_name.endswith(".tgz")))
-                        or (declared_type == "zip" and lower_name.endswith(".zip"))
+                    is_tar = lower_name.endswith(".tar.gz") or lower_name.endswith(".tgz")
+                    is_zip = lower_name.endswith(".zip")
+                    # 仅当文件名带可识别扩展名却与声明相矛盾时才拒装（真错配）；无扩展名的
+                    # 下载 URL（预签名/?asset= 式）无从判断 → 放行，交由后续解压按魔数处理，
+                    # 避免把合法资产误判为类型不符。
+                    contradicts = (
+                        (declared_type in {"tar.gz", "tgz"} and is_zip)
+                        or (declared_type == "zip" and is_tar)
                     )
-                    if not type_ok:
+                    if contradicts:
                         raise RuntimeValidationError(
                             "Runtime archive type mismatch between manifest and asset.",
                             code="runtime.install_archive_type_mismatch",

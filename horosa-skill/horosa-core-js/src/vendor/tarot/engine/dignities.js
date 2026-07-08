@@ -1,6 +1,6 @@
 // 元素尊位(Elemental Dignities)——金色黎明/托特核心,逆位的替代法。
 // 基础:中心牌看左右两邻元素(同元素+2 强化 / 友+1 / 敌-1 / 中立 0);两邻相争→本牌主导。
-// 进阶 dignify3(手册§6.7):三张式主从——同元素全增、主元素决定基调。
+// 进阶 dignify3(古籍§6.7):三张式主从——同元素全增、主元素决定基调。
 import { ELEMENT_CN, isFriend, isEnemy } from '../decks/correspondences.js';
 
 // 基础尊位:center/left/right 为元素('fire'/'water'/'air'/'earth'/null)。返回 { strength, score, notes }

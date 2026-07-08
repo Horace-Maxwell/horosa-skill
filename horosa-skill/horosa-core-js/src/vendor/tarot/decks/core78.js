@@ -22,7 +22,7 @@ const RANK_EN = { 1: 'Ace', 2: 'Two', 3: 'Three', 4: 'Four', 5: 'Five', 6: 'Six'
 const SUIT_EN = { wands: 'Wands', cups: 'Cups', swords: 'Swords', pentacles: 'Pentacles' };
 const COURT_BY_RANK = { 11: 'page', 12: 'knight', 13: 'queen', 14: 'king' };
 
-// --- Yes/No 极性(手册§6.1 一种通行约定) ---
+// --- Yes/No 极性(古籍§6.1 一种通行约定) ---
 const MAJ_YES = new Set(['the_fool', 'the_magician', 'the_empress', 'the_emperor', 'the_hierophant', 'the_lovers', 'the_chariot', 'strength', 'wheel_of_fortune', 'temperance', 'the_star', 'the_sun', 'the_world', 'judgement']);
 const MAJ_NO = new Set(['death', 'the_devil', 'the_tower', 'the_moon']);
 const PIP_YESNO = {
@@ -33,7 +33,7 @@ const PIP_YESNO = {
 };
 const COURT_YESNO = { king: 1, queen: 1, knight: 1, page: 0 };
 
-// --- 开钥计数值(手册§6.2 通行版本) ---
+// --- 开钥计数值(古籍§6.2 通行版本) ---
 const PLANETARY_TRUMPS = new Set(['the_magician', 'high_priestess', 'the_empress', 'wheel_of_fortune', 'the_tower', 'the_sun', 'the_world']);
 const MOTHER_TRUMPS = new Set(['the_fool', 'hanged_man', 'judgement']); // Aleph/Mem/Shin
 

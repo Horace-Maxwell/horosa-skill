@@ -454,6 +454,13 @@ class TarotInput(BirthInput):
     deck: str | None = "rws"
     seed: str | None = None
     usesReversals: bool | None = True
+    # dignities 元素尊位强弱、variant 占象变体（A/B），影响逐牌详解与综合断语。
+    dignities: bool | None = None
+    variant: str | None = None
+    # 定局法：majority(多数) / orientation(正逆) / single(单张) / numeric(数字) / polarity(极性)。
+    verdictMode: str | None = "majority"
+    # 生命牌：给出生年月日（+可选 refYear 流年）才产出[生命牌]段；不传则该段自然不出。
+    birth: dict[str, Any] | None = None
 
 
 class ShenShuInput(FlexibleModel):

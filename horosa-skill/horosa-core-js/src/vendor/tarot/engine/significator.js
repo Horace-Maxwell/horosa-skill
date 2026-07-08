@@ -1,4 +1,4 @@
-// 指示牌(Significator)——代表问卜者的牌,抽牌前从牌池剔除(手册§3.4)。
+// 指示牌(Significator)——代表问卜者的牌,抽牌前从牌池剔除(古籍§3.4)。
 // 自动:性别·年龄·星座元素 → 宫廷牌(火→权杖…;<18 侍从/女→王后/≥35 国王/否则骑士)。
 // 手动:直接给 16 宫廷之一的 sid。Etteilla 用双指示牌(男 Card1 / 女 Card8),见 etteilla deck。
 import { SIGN_ELEMENT, ELEMENT_SUIT } from '../decks/correspondences.js';

@@ -1,5 +1,5 @@
 // 统一 Card 字段 schema + 显示工具(各派牌名/8-11 换号/占星对应行)。纯函数(卡片是 plain object,便于快照序列化)。
-// 字段(手册附录 A.1):id(0..n 数字,facade 兼容) · sid(字符串 id the_fool/wands_05) · arcana · suit · number(rank)
+// 字段(古籍附录 A.1):id(0..n 数字,facade 兼容) · sid(字符串 id the_fool/wands_05) · arcana · suit · number(rank)
 //   · court · name_cn/name_en(默认 rws 显示,facade 兼容) · names{rws,thoth,tdm,golden_dawn} · element · symbol
 //   · hebrew · astro · path · decanTitle/decanPlanet/decanSign · courtEie/courtSpan · polarity · countingValue
 //   · keywords_upright/keywords_reversed(facade 兼容) · meanings{up,rev}(同源)

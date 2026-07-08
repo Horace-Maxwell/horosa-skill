@@ -20,6 +20,7 @@ SERVICE_PATH = pathlib.Path(__file__).resolve().parents[1] / "src" / "horosa_ski
 CHART_ONLY_PREFIXES = (
     "/astroextra/",
     "/geomancy/",
+    "/location/",
     "/jieqi/",
     "/predict/",
     "/modern/",

@@ -25,7 +25,26 @@ def normalize_request_payload(payload: Any) -> Any:
     _normalize_date_like_fields(normalized)
     _normalize_zone_fields(normalized)
     _normalize_coordinate_fields(normalized)
+    _normalize_gender_field(normalized)
     return normalized
+
+
+# 性别标签 → 0(女)/1(男)。八字链（bazi/canping/heluo/yizhangjing）下游按 0/1 判大运/大限顺逆；
+# 若字符串标签（'女'/'Female'/'F'…）原样进 JS，Number(...) 得 NaN → 恒判男 → 女命方向反转。
+# 只归一「可识别的字符串标签」，int/None/未识别值一律不动（零回归：既有 0/1 调用不受影响）。
+_GENDER_MALE_LABELS = {"男", "male", "m", "boy", "man", "nan", "男性", "乾", "1"}
+_GENDER_FEMALE_LABELS = {"女", "female", "f", "girl", "woman", "nv", "女性", "坤", "0"}
+
+
+def _normalize_gender_field(payload: dict[str, Any]) -> None:
+    value = payload.get("gender")
+    if not isinstance(value, str):
+        return
+    key = value.strip().lower()
+    if key in _GENDER_MALE_LABELS:
+        payload["gender"] = 1
+    elif key in _GENDER_FEMALE_LABELS:
+        payload["gender"] = 0
 
 
 def _normalize_date_like_fields(payload: dict[str, Any]) -> None:
