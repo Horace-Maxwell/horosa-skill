@@ -630,9 +630,11 @@ only difference is which engine dir is vendored:
   (horosa-core-js source, vendored engines, wheels, launchers — skill-layer Python/docs are fine); when a
   suspiciously same-size win zip appears on a new release, verify the embedded manifest (version +
   `export_registry_version`) and that diff condition before trusting it.
-  **v0.17.0 / v0.18.0 introduced a THIRD, stealthier mode — "pin-forward":** the new release's manifest
-  lists `win32-x64` but points it at the *previous* version's win zip (v0.17.0/v0.18.0 both pinned
-  `.../download/v0.16.1/horosa-runtime-win32-x64-v0.16.1.zip`). **The guard stays GREEN and `install` does
+  **v0.17.0 / v0.18.0 / v0.19.0 introduced a THIRD, stealthier mode — "pin-forward":** the new release's
+  manifest lists `win32-x64` but points it at a *stale* win zip frozen at the mac side's last local build,
+  **v0.16.1** (`.../download/v0.16.1/horosa-runtime-win32-x64-v0.16.1.zip`) — the pin does NOT advance as you
+  ship real per-release win zips (v0.17/v0.18/v0.19 all re-pinned to v0.16.1 even after v0.18.0 shipped its
+  real half), so **expect this on every new release until the mac side refreshes its baseline**. **The guard stays GREEN and `install` does
   NOT break** — both platforms are present, the URL resolves 200, and the sha matches — but Windows users
   silently get a runtime **N versions stale** (missing every feature since the pinned version). The guard
   can't catch this (it only checks presence + resolvability, not version match). **`sync_windows_release.py
