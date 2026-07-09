@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import logging
 import os
 import platform
 import re
@@ -25,6 +26,8 @@ from horosa_skill.config import Settings
 from horosa_skill.engine.client import HorosaApiClient
 from horosa_skill.errors import RuntimeInstallError, RuntimeValidationError
 from horosa_skill.tracing import TraceRecorder
+
+logger = logging.getLogger(__name__)
 
 
 def _platform_key() -> str:
@@ -440,12 +443,16 @@ class HorosaRuntimeManager:
                 target_parent.mkdir(parents=True, exist_ok=True)
                 # 原子换入 + 失败回滚：move/overrides 任一失败即把旧运行时从 previous 还原回 current，
                 # 绝不留下缺失/半装的 current（否则下次 install 会先 rmtree previous 毁掉唯一好副本）。
+                # 注意 overrides 失败时 move 已成功 → current 存在但半装，必须先清掉再从 previous 还原
+                # （不能只在 current 缺失时才回滚）。
                 try:
                     shutil.move(str(payload_root), str(self.current_dir))
                     self._apply_runtime_overrides(manifest)
                 except Exception:
-                    if not self.current_dir.exists() and previous_dir.exists():
+                    if previous_dir.exists():
                         try:
+                            if self.current_dir.exists():
+                                shutil.rmtree(self.current_dir, ignore_errors=True)
                             previous_dir.replace(self.current_dir)
                         except Exception:  # noqa: BLE001 - best-effort restore; surface original error
                             logger.exception("runtime install rollback failed")
@@ -829,9 +836,9 @@ class HorosaRuntimeManager:
         name = archive_path.name.lower()
         if name.endswith(".tar.gz") or name.endswith(".tgz"):
             with tarfile.open(archive_path, "r:gz") as archive:
-                # filter="data" 拒绝绝对路径 / .. 穿越 / 设备/symlink 逃逸（与下方 zip 纵深断言对称）。
+                # filter="data" 已拒绝绝对路径 / .. 穿越 / 设备/symlink 逃逸 → 无需再对整棵 2GB 树逐文件
+                # resolve 断言（冗余且慢）；纵深断言只留给下方无 filter 保护的 zip/unpack 分支。
                 archive.extractall(extract_dir, filter="data")
-            self._assert_extracted_within(extract_dir)
             return
         if name.endswith(".zip"):
             # CPython zipfile 已消毒 ../ 与盘符前缀，但显式纵深断言：与 tar 分支对称、且对未来

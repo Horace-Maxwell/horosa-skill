@@ -23,7 +23,9 @@ export function runTarot(payload) {
     if (p.usesReversals !== undefined) { settings.reversals = !!p.usesReversals; }
     if (p.dignities !== undefined) { settings.dignities = !!p.dignities; }
     if (p.variant) { settings.variant = p.variant; }
-    if (p.verdictMode) { settings.verdictMode = p.verdictMode; }
+    // verdictMode 归一到已知集合（非法值回退 majority），避免 [定局] 段打印原始非法串。
+    const VERDICT_MODES = ['majority', 'orientation', 'single', 'numeric', 'polarity'];
+    if (p.verdictMode) { settings.verdictMode = VERDICT_MODES.includes(p.verdictMode) ? p.verdictMode : 'majority'; }
     // 生命牌：仅在给定出生年月日时产出该段（TarotInput.birth = {year,month,day,refYear?}）。
     if (p.birth && p.birth.year && p.birth.month && p.birth.day) {
       settings.birth = {

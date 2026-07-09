@@ -8,6 +8,7 @@ import re
 import shutil
 import sqlite3
 import time
+import uuid
 from datetime import timezone, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -5227,7 +5228,11 @@ class HorosaSkillService:
             natal_payload.pop("dirZone", None)
             natal_payload.pop("dirLat", None)
             natal_payload.pop("dirLon", None)
-            enriched["natalChart"] = self._call_remote("/chart", natal_payload)
+            # 辅助本命盘 fetch 失败不得清空已算好的推运结果 → 与其余 _attach_* 一致的优雅降级。
+            try:
+                enriched["natalChart"] = self._call_remote("/chart", natal_payload)
+            except HorosaSkillError as exc:
+                logger.warning("predictive natal chart fetch failed (tool=%s): %s", tool_name, exc)
         return enriched
 
     def _attach_natal_extras(self, tool_name: str, response_data: dict[str, Any]) -> dict[str, Any]:
@@ -5322,7 +5327,12 @@ class HorosaSkillService:
             return response_data
         if isinstance(score, dict) and score.get("score") is not None:
             enriched = dict(response_data)
-            enriched["_relativeScore"] = score
+            # 只留渲染三段所需字段，剥离 raw（整份 ChartComp）避免臃肿 envelope.data。
+            enriched["_relativeScore"] = {
+                "score": score.get("score"),
+                "highlights": score.get("highlights"),
+                "challenges": score.get("challenges"),
+            }
             return enriched
         return response_data
 
@@ -5787,7 +5797,7 @@ class HorosaSkillService:
                 # 原子 + 流式解压：写唯一临时文件（进程/线程隔离，避免并发交错写撕裂 122MB 库），
                 # copyfileobj 分块拷贝（不 fin.read() 整库进内存），成功后 os.replace 原子落位，
                 # 最后才写 stamp —— 中断/并发都不会留下被当成有效的截断库。
-                tmp = cache_dir / f".astrodata-aa.sqlite.{os.getpid()}.tmp"
+                tmp = cache_dir / f".astrodata-aa.sqlite.{os.getpid()}.{uuid.uuid4().hex}.tmp"
                 try:
                     with gzip.open(source, "rb") as fin, open(tmp, "wb") as fout:
                         shutil.copyfileobj(fin, fout, length=1024 * 1024)
@@ -5803,18 +5813,42 @@ class HorosaSkillService:
         return con
 
     @staticmethod
-    def _astrodata_person_brief(row: sqlite3.Row) -> dict[str, Any]:
+    def _astrodata_row_get(row: sqlite3.Row, key: str, default: Any = None) -> Any:
+        # sqlite3.Row 无 .get；对缺列（老库 schema）安全取值，避免裸 row[key] 抛 IndexError。
+        try:
+            return row[key]
+        except (IndexError, KeyError):
+            return default
+
+    @classmethod
+    def _astrodata_person_brief(cls, row: sqlite3.Row) -> dict[str, Any]:
+        # v3.3.2 中文化：优先中文列（name_zh/pos_zh/born_zh），缺则回退英文，与上游前端 nm/ps 同口径。
+        g = cls._astrodata_row_get
+        name_zh = g(row, "name_zh")
+        pos_zh = g(row, "pos_zh")
+        born_zh = g(row, "born_zh")
         return {
             "title": row["title"],
-            "name": row["name"],
-            "born": row["born_display"],
-            "rodden": row["rodden"],
-            "sun": row["sun"],
-            "moon": row["moon"],
-            "asc": row["asc"],
-            "pos": row["pos"],
-            "hasTime": bool(row["has_time"]),
+            "name": g(row, "name"),
+            "nameZh": name_zh or None,
+            "nameDisplay": name_zh or g(row, "name"),
+            "born": g(row, "born_display"),
+            "bornDisplay": born_zh or g(row, "born_display"),
+            "rodden": g(row, "rodden"),
+            "sun": g(row, "sun"),
+            "moon": g(row, "moon"),
+            "asc": g(row, "asc"),
+            "pos": g(row, "pos"),
+            "posDisplay": pos_zh or g(row, "pos"),
+            "hasTime": bool(g(row, "has_time", 0)),
         }
+
+    @classmethod
+    def _astrodata_has_column(cls, con: sqlite3.Connection, table: str, column: str) -> bool:
+        try:
+            return any(r[1] == column for r in con.execute(f"PRAGMA table_info({table})"))
+        except sqlite3.Error:
+            return False
 
     def _run_astrodata_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         con = self._astrodata_connect()
@@ -5845,33 +5879,40 @@ class HorosaSkillService:
                     }
                 cats = [r["category"] for r in con.execute(
                     "SELECT category FROM category WHERE person_title = ? LIMIT 30", (person_title,))]
+                g = self._astrodata_row_get
                 birth_chart = f"{row['birth_chart'] or ''}".strip()
                 birth_date, _, birth_time = birth_chart.partition(" ")
+                # v3.3.2 中文化：详情优先中文列，缺则回退英文。
+                name_disp = g(row, "name_zh") or g(row, "name")
+                born_disp = g(row, "born_zh") or g(row, "born_display")
+                pos_disp = g(row, "pos_zh") or g(row, "pos")
+                summary_disp = g(row, "summary_zh") or g(row, "wiki_summary")
                 person = {
                     **self._astrodata_person_brief(row),
-                    "gender": row["gender"],
-                    "zone": row["zone"],
-                    "lat": row["lat"],
-                    "lon": row["lon"],
-                    "gpsLat": row["gpsLat"],
-                    "gpsLon": row["gpsLon"],
+                    "gender": g(row, "gender"),
+                    "zone": g(row, "zone"),
+                    "lat": g(row, "lat"),
+                    "lon": g(row, "lon"),
+                    "gpsLat": g(row, "gpsLat"),
+                    "gpsLon": g(row, "gpsLon"),
                     "birthDate": birth_date or None,
                     "birthTime": birth_time or None,
-                    "timeAccuracy": row["time_accuracy"],
-                    "adbUrl": row["adb_url"],
-                    "wikiUrl": row["wiki_url"],
+                    "timeAccuracy": g(row, "time_accuracy"),
+                    "adbUrl": g(row, "adb_url"),
+                    "wikiUrl": g(row, "wiki_url"),
+                    "summaryZh": g(row, "summary_zh") or None,
                     "categories": cats,
                 }
                 detail_lines = [
-                    f"{row['name']}（{row['title']}）",
-                    f"出生：{row['born_display']}　评级（Rodden）：{row['rodden']}　时刻精度：{row['time_accuracy'] or '—'}",
-                    f"地点：{row['pos'] or '—'}　坐标：{row['lat']} / {row['lon']}　时区：{row['zone']}",
-                    f"排盘入参：date={birth_date or '—'} time={birth_time or '—'} zone={row['zone']} lat={row['lat']} lon={row['lon']}",
-                    f"星盘三要：日 {row['sun'] or '—'} / 月 {row['moon'] or '—'} / 升 {row['asc'] or '—'}",
+                    f"{name_disp}（{row['title']}）",
+                    f"出生：{born_disp or '—'}　评级（Rodden）：{g(row, 'rodden') or '—'}　时刻精度：{g(row, 'time_accuracy') or '—'}",
+                    f"地点：{pos_disp or '—'}　坐标：{g(row, 'lat')} / {g(row, 'lon')}　时区：{g(row, 'zone')}",
+                    f"排盘入参：date={birth_date or '—'} time={birth_time or '—'} zone={g(row, 'zone')} lat={g(row, 'lat')} lon={g(row, 'lon')}",
+                    f"星盘三要：日 {g(row, 'sun') or '—'} / 月 {g(row, 'moon') or '—'} / 升 {g(row, 'asc') or '—'}",
                 ]
                 if cats:
                     detail_lines.append("分类：" + "；".join(cats[:12]) + ("…" if len(cats) > 12 else ""))
-                wiki = f"{row['wiki_summary'] or ''}".strip()
+                wiki = f"{summary_disp or ''}".strip()
                 sections = [
                     ("检索条件", f"条目：{person_title}"),
                     ("名人详情", "\n".join(detail_lines)),
@@ -5903,20 +5944,36 @@ class HorosaSkillService:
             except (TypeError, ValueError):
                 offset = 0
 
+            def _like_escape(text: str) -> str:
+                return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
             where: list[str] = []
             params: list[Any] = []
             base = "FROM person p"
+            has_zh = self._astrodata_has_column(con, "person", "name_zh")
+            has_catzh = self._astrodata_has_column(con, "category_zh", "en")
             if query:
-                base = "FROM person_fts f JOIN person p ON p.id = f.rowid"
-                where.append("person_fts MATCH ?")
-                # 整串当短语并转义双引号 → 用户键入 `6"` / `*` / `NEAR` / `(rock` 等 FTS5 语法字符
-                # 不再抛 OperationalError 使工具整体失败；末尾加 * 做前缀匹配（"Einstein" 亦命中 Einsteinium）。
-                params.append('"' + query.replace('"', '""') + '"*')
+                # 多列 LIKE 检索（对齐 v3.3.2 前端：name_zh/name/title/pos_zh/summary_zh），支持中文名/
+                # 中文地点；FTS 只索引英文列，中文查询会静默返回空，故不用 FTS 走 LIKE（离线库规模可承受）。
+                cols = ["p.name", "p.title", "p.pos"]
+                if has_zh:
+                    cols = ["p.name_zh", "p.name", "p.title", "p.pos_zh", "p.summary_zh"]
+                pat = f"%{_like_escape(query)}%"
+                where.append("(" + " OR ".join(f"{c} LIKE ? ESCAPE '\\' COLLATE NOCASE" for c in cols) + ")")
+                params.extend(pat for _ in cols)
             if category:
-                where.append("p.title IN (SELECT person_title FROM category WHERE category LIKE ? ESCAPE '\\')")
-                # 转义 LIKE 通配 %/_，避免用户输入被当通配过度匹配。
-                safe_cat = category.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-                params.append(f"%{safe_cat}%")
+                safe_cat = _like_escape(category)
+                if has_catzh:
+                    # 中文分类：category_zh(en→zh) 映射，匹配 zh 或英文原名（对齐前端 LEFT JOIN category_zh）。
+                    where.append(
+                        "p.title IN (SELECT c.person_title FROM category c "
+                        "LEFT JOIN category_zh z ON z.en = c.category "
+                        "WHERE z.zh LIKE ? ESCAPE '\\' COLLATE NOCASE OR c.category LIKE ? ESCAPE '\\' COLLATE NOCASE)"
+                    )
+                    params.extend([f"%{safe_cat}%", f"%{safe_cat}%"])
+                else:
+                    where.append("p.title IN (SELECT person_title FROM category WHERE category LIKE ? ESCAPE '\\')")
+                    params.append(f"%{safe_cat}%")
             if rodden:
                 where.append(f"p.rodden IN ({','.join('?' for _ in rodden)})")
                 params.extend(str(r).upper() for r in rodden)
@@ -5929,7 +5986,7 @@ class HorosaSkillService:
             if payload.get("hasTimeOnly"):
                 where.append("p.has_time = 1")
             where_sql = (" WHERE " + " AND ".join(where)) if where else ""
-            order_sql = " ORDER BY rank" if query else " ORDER BY p.name"
+            order_sql = " ORDER BY p.name_zh, p.name" if has_zh else " ORDER BY p.name"
             total = con.execute(f"SELECT COUNT(*) {base}{where_sql}", params).fetchone()[0]
             rows = con.execute(
                 f"SELECT p.* {base}{where_sql}{order_sql} LIMIT ? OFFSET ?", [*params, limit, offset]
@@ -5950,10 +6007,12 @@ class HorosaSkillService:
                 rows_txt = ["| 姓名 | 出生 | 评级 | 日/月/升 | 条目 |", "| --- | --- | --- | --- | --- |"]
                 for item in results:
                     tri = f"{item['sun'] or '—'}/{item['moon'] or '—'}/{item['asc'] or '—'}"
-                    rows_txt.append(f"| {item['name']} | {item['born'] or '—'} | {item['rodden'] or '—'} | {tri} | {item['title']} |")
+                    name_disp = item.get("nameDisplay") or item.get("name")
+                    born_disp = item.get("bornDisplay") or item.get("born")
+                    rows_txt.append(f"| {name_disp} | {born_disp or '—'} | {item['rodden'] or '—'} | {tri} | {item['title']} |")
                 body = "\n".join(rows_txt) + "\n用 personTitle=<条目> 取单人详情（含可直接排盘的出生数据）。"
             else:
-                body = "无命中；可放宽条件或改用英文姓名检索（库内条目以英文为主）。"
+                body = "无命中；可放宽检索词或分类（支持中文与英文原名）。"
             snapshot_text = _render_snapshot_text([
                 ("检索条件", "\n".join(head)),
                 ("命中列表", body),

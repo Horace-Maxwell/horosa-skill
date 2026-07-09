@@ -513,11 +513,20 @@ def test_astrodata_search_and_person_detail(tmp_path) -> None:
     assert "[数据来源]" in dsnap and "Astro-Databank" in dsnap
     _assert_clean_export(detail)
 
-    # FTS5 语法字符不再使工具整体失败（曾裸 MATCH 用户串 → OperationalError → ok=False）。
-    for bad in ('6"', "*", "NEAR", "(rock", 'a OR b', "-x"):
+    # 检索式特殊字符不再使工具整体失败（多列 LIKE，转义 %/_；曾裸 FTS MATCH → OperationalError → ok=False）。
+    for bad in ('6"', "*", "NEAR", "(rock", 'a OR b', "-x", "100%"):
         r = service.run_tool("astrodata", {"query": bad, "limit": 3}, save_result=False)
         assert r.ok is True, f"query {bad!r} -> {r.error}"
         assert r.data["astrodata"].get("available") is True
+
+    # v3.3.2 中文化：中文名/中文地点/中文分类均可检索（多列 LIKE name_zh/pos_zh + category_zh JOIN），
+    # 英文名仍可（曾走英文-only FTS → 中文查询静默返回空）。
+    zh_name = service.run_tool("astrodata", {"query": "爱因斯坦", "limit": 3}, save_result=False)
+    assert zh_name.ok is True and zh_name.data["astrodata"]["total"] >= 1
+    en_name = service.run_tool("astrodata", {"query": "Einstein", "limit": 3}, save_result=False)
+    assert en_name.ok is True and en_name.data["astrodata"]["total"] >= 1
+    zh_cat = service.run_tool("astrodata", {"category": "水瓶座", "limit": 3}, save_result=False)
+    assert zh_cat.ok is True and zh_cat.data["astrodata"]["total"] >= 1
 
 
 def test_yizhangjing_local_tool_runs_headless_engine(tmp_path) -> None:
