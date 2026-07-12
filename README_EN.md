@@ -3,14 +3,14 @@
 <div align="center">
   <h1>Horosa Skill</h1>
   <p><strong>Turn Xingque / Horosa into an offline metaphysics capability layer any AI can call locally.</strong></p>
-  <p>Clone the repo, install the offline runtime once, and let Claude, Codex, Open WebUI, OpenClaw, etc. call <strong>77</strong> real techniques on your own machine — Western natal / predictive / horary / electional, BaZi / Zi Wei / Da Liu Ren / the Three Styles, and all <strong>14 Shen Shu</strong> systems — read the full Xingque AI-export protocol, return stable structured output, and persist every analysis as a retrievable local record. Works offline, value-for-value identical to the Xingque desktop app.</p>
+  <p>Clone the repo, install the offline runtime once, and let Claude, Codex, Open WebUI, OpenClaw, etc. call <strong>78</strong> real techniques on your own machine — Western natal / predictive / horary / electional, BaZi / Zi Wei / Da Liu Ren / the Three Styles, and all <strong>14 Shen Shu</strong> systems — read the full Xingque AI-export protocol, return stable structured output, and persist every analysis as a retrievable local record. Works offline, value-for-value identical to the Xingque desktop app.</p>
 
   <p><a href="https://github.com/Horace-Maxwell/horosa-skill"><img src="https://img.shields.io/badge/GitHub-Repository-111827?style=for-the-badge&logo=github" alt="Repository" /></a>&nbsp;<a href="https://github.com/Horace-Maxwell/horosa-skill/releases"><img src="https://img.shields.io/badge/GitHub-Releases-1d4ed8?style=for-the-badge&logo=github" alt="Releases" /></a>&nbsp;<a href="./README.md"><img src="https://img.shields.io/badge/阅读-简体中文-0f766e?style=for-the-badge" alt="Read in Chinese" /></a></p>
 
   <p>
     <img src="https://img.shields.io/github/stars/Horace-Maxwell/horosa-skill?style=flat-square" alt="GitHub stars" />
     <img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square" alt="Release" />
-    <img src="https://img.shields.io/badge/tools-77-1d4ed8?style=flat-square" alt="77 tools" />
+    <img src="https://img.shields.io/badge/tools-78-1d4ed8?style=flat-square" alt="78 tools" />
     <img src="https://img.shields.io/badge/platform-macOS%20(arm64)%20%7C%20Windows%20(x64)-0f766e?style=flat-square" alt="Platforms" />
     <img src="https://img.shields.io/badge/runtime-offline%20first-111827?style=flat-square" alt="Offline runtime" />
     <img src="https://img.shields.io/badge/MCP-ready-111827?style=flat-square" alt="MCP ready" />
@@ -50,7 +50,7 @@ License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICEN
 
 ## Current stable baseline
 
-**Current public version: `Horosa Skill 0.19.0` (77 callable tools).**
+**Current public version: `Horosa Skill 0.20.0` (78 callable tools).**
 
 This release line brings the capability surface roughly to parity with the desktop app:
 
@@ -69,20 +69,20 @@ Local end-to-end signals:
 
 | Check | Result |
 | --- | --- |
-| Callable tools | `77 / 77 ok=true` |
-| Engineering tests | `278 / 278 pass` (ken / Shen Shu live integration + offline golden unit tests + node JS golden) |
+| Callable tools | `78 / 78 ok=true` |
+| Engineering tests | `284 / 284 pass` (ken / Shen Shu live integration + offline golden unit tests + node JS golden) |
 | Forced clarification when params unconfirmed | `67` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `7` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`63` export techniques modeled) |
-| Local memory / report | `77 / 77` writes + `77 / 77` JSON artifacts |
+| Local memory / report | `78 / 78` writes + `78 / 78` JSON artifacts |
 | Qi Men / Tai Yi / Jin Kou / Three Styles | unified on `ken`, same as the desktop app |
 | Tong She Fa / Decennials | headless, value-for-value with Xingque (`decennials.test.js` golden) |
 | GitHub CI | Linux/macOS unit tests + horosa-core-js JS golden self-check + Windows OpenClaw smoke |
-| Release runtime | macOS (arm64) / Windows (x64) `v0.19.0` assets (ken + 14 Shen Shu engines bundled) packaged and verified; other platforms/arches fail install with an explicit unsupported error |
+| Release runtime | macOS (arm64) / Windows (x64) `v0.20.0` assets (ken + 14 Shen Shu engines bundled) packaged and verified; other platforms/arches fail install with an explicit unsupported error |
 
 > About `solarreturn` / `lunarreturn` / `solararc` / `givenyear` / `profection` / `pd` / `pdchart` / `zr`: these predictive tools are verified working in this version and should not be flagged by an agent as "Java `/predict/*` unavailable". If a client still says so, check whether it is on an old runtime, bypassing MCP to hand-compute, or hasn't run `doctor` / `openclaw-check --full`.
 
-## Capability map (68 tools)
+## Capability map (78 tools)
 
 > Every business technique returns a uniform envelope plus a Xingque-style `export_snapshot` / `export_format`. Tools marked ⓟ are setting-sensitive and require parameter confirmation before calling.
 
@@ -232,7 +232,7 @@ Every tool call returns a uniform envelope:
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.19.0",
+  "ok": true, "tool": "qimen", "version": "0.20.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -347,7 +347,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 278 passed with local backends up; live integration tests auto-skip offline
+uv run pytest -q                                        # 284 passed with local backends up; live integration tests auto-skip offline
 uv run python scripts/run_benchmark.py                  # HorosaBench: dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

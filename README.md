@@ -3,14 +3,14 @@
 <div align="center">
   <h1>Horosa Skill</h1>
   <p><strong>把星阙 / Horosa 变成任何 AI 都能本地调用的离线玄学能力层。</strong></p>
-  <p>克隆仓库、安装一次离线 runtime，就能让 Claude、Codex、Open WebUI、OpenClaw 等 AI 在你自己的机器上直接调用 <strong>77 个</strong>真实技法——西洋本命 / 推运 / 卜卦 / 择日、八字 / 紫微 / 大六壬 / 三式合一、以及 <strong>全 14 路神数</strong>——读取完整的星阙式 AI 导出协议，输出稳定结构化结果，并把每次分析沉淀为可检索的本地记录。断网可用，与星阙桌面端逐值同源。</p>
+  <p>克隆仓库、安装一次离线 runtime，就能让 Claude、Codex、Open WebUI、OpenClaw 等 AI 在你自己的机器上直接调用 <strong>78 个</strong>真实技法——西洋本命 / 推运 / 卜卦 / 择日、八字 / 紫微 / 大六壬 / 三式合一、以及 <strong>全 14 路神数</strong>——读取完整的星阙式 AI 导出协议，输出稳定结构化结果，并把每次分析沉淀为可检索的本地记录。断网可用，与星阙桌面端逐值同源。</p>
 
   <p><a href="https://github.com/Horace-Maxwell/horosa-skill"><img src="https://img.shields.io/badge/GitHub-Repository-111827?style=for-the-badge&logo=github" alt="Repository" /></a>&nbsp;<a href="https://github.com/Horace-Maxwell/horosa-skill/releases"><img src="https://img.shields.io/badge/GitHub-Releases-1d4ed8?style=for-the-badge&logo=github" alt="Releases" /></a>&nbsp;<a href="./README_EN.md"><img src="https://img.shields.io/badge/Read%20in-English-0f766e?style=for-the-badge" alt="Read in English" /></a></p>
 
   <p>
     <img src="https://img.shields.io/github/stars/Horace-Maxwell/horosa-skill?style=flat-square" alt="GitHub stars" />
     <img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square" alt="Release" />
-    <img src="https://img.shields.io/badge/tools-77-1d4ed8?style=flat-square" alt="77 tools" />
+    <img src="https://img.shields.io/badge/tools-78-1d4ed8?style=flat-square" alt="78 tools" />
     <img src="https://img.shields.io/badge/platform-macOS%20(arm64)%20%7C%20Windows%20(x64)-0f766e?style=flat-square" alt="Platforms" />
     <img src="https://img.shields.io/badge/runtime-offline%20first-111827?style=flat-square" alt="Offline runtime" />
     <img src="https://img.shields.io/badge/MCP-ready-111827?style=flat-square" alt="MCP ready" />
@@ -50,7 +50,7 @@
 
 ## 最新稳定基线
 
-**当前公开版本：`Horosa Skill 0.19.0`（77 个可调用工具）。**
+**当前公开版本：`Horosa Skill 0.20.0`（78 个可调用工具）。**
 
 这一条发布线把星阙的能力面补到了与桌面端基本对齐：
 
@@ -69,20 +69,20 @@
 
 | 检查项 | 结果 |
 | --- | --- |
-| 可调用工具 | `77 / 77 ok=true` |
-| 工程测试 | `278 / 278 pass`（含 ken / 神数 后端实时集成测试 + 离线 golden 单测 + node JS golden） |
+| 可调用工具 | `78 / 78 ok=true` |
+| 工程测试 | `284 / 284 pass`（含 ken / 神数 后端实时集成测试 + 离线 golden 单测 + node JS golden） |
 | 未确认参数时强制追问 | `67` 个技法工具触发 `must_ask_user=true` |
 | 安全豁免工具 | `7` 个 registry / knowledge / parser 类工具直接可读 |
 | 星阙式导出结构 | 每个业务技法均带 `export_snapshot` / `export_format`（已建模 `63` 个导出 technique） |
-| 本地 memory / report | `77 / 77` 写入 + `77 / 77` JSON artifact |
+| 本地 memory / report | `78 / 78` 写入 + `78 / 78` JSON artifact |
 | 奇门 / 太乙 / 金口 / 三式 | 统一走 `ken`，与星阙桌面端同源 |
 | 统摄法 / 十年大运 | headless 实现与星阙逐值对齐（京房八宫五行；对照星阙 `decennials.test.js` 金标） |
 | GitHub CI | Linux/macOS 单测 + horosa-core-js JS golden 自检 + Windows OpenClaw smoke 通过 |
-| Release runtime | macOS (arm64) / Windows (x64) `v0.19.0` assets（含 ken + 14 神数引擎）已打包并校验；其余平台/架构安装时会明确报不支持 |
+| Release runtime | macOS (arm64) / Windows (x64) `v0.20.0` assets（含 ken + 14 神数引擎）已打包并校验；其余平台/架构安装时会明确报不支持 |
 
 > 关于 `solarreturn` / `lunarreturn` / `solararc` / `givenyear` / `profection` / `pd` / `pdchart` / `zr` 这批推运工具：当前版本已复核可用，不应再被 agent 标记为「Java `/predict/*` 不可用」。若某客户端仍这样回答，优先检查它是否在用旧 runtime、是否绕过 MCP 手算、是否没跑 `doctor` / `openclaw-check --full`。
 
-## 技法全景（77 个工具）
+## 技法全景（78 个工具）
 
 > 所有业务技法都返回统一 envelope，并附带星阙式 `export_snapshot` / `export_format`。带 ⓟ 的工具是会受设置影响、调用前必须先确认参数的技法。
 
@@ -232,7 +232,7 @@ Agent 在调用技法前如果不确定用户设置，应先查 `horosa_agent_gu
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.19.0",
+  "ok": true, "tool": "qimen", "version": "0.20.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -364,7 +364,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 278 passed（本机后端全起；纯离线时 live 集成测试自动 skip）
+uv run pytest -q                                        # 284 passed（本机后端全起；纯离线时 live 集成测试自动 skip）
 uv run python scripts/run_benchmark.py                  # HorosaBench：调度 / 导出 parity / 知识读取
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
