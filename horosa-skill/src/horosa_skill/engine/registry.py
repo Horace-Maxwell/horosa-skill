@@ -39,6 +39,7 @@ from horosa_skill.schemas.tools import (
     ACGInput,
     AstrodataInput,
     NongliTimeInput,
+    CalendarMonthInput,
     OtherBuInput,
     PersianDirectedInput,
     PlanetaryAgesInput,
@@ -167,6 +168,7 @@ TOOL_DEFINITIONS: dict[str, ToolDefinition] = {
     ),
     "jieqi_year": ToolDefinition("jieqi_year", "cn", "jieqi_year", "/jieqi/year", JieQiYearInput, "Generate JieQi year output."),
     "nongli_time": ToolDefinition("nongli_time", "cn", "nongli_time", "/nongli/time", NongliTimeInput, "Generate NongLi time output."),
+    "calendar_month": ToolDefinition("calendar_month", "cn", "calendar_month", "/calendar/month", CalendarMonthInput, "Generate 黄历/万年历 month calendar (农历/干支/节气/朔望, with optional selected-day detail)."),
     "gua_desc": ToolDefinition("gua_desc", "cn", "gua_desc", "/gua/desc", GuaNamesInput, "Fetch Gua descriptions."),
     "gua_meiyi": ToolDefinition("gua_meiyi", "cn", "gua_meiyi", "/gua/meiyi", GuaNamesInput, "Fetch MeiYi Gua descriptions."),
 }

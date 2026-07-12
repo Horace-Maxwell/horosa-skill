@@ -197,6 +197,16 @@ class NongliTimeInput(FlexibleModel):
     ad: int | None = 1
 
 
+class CalendarMonthInput(FlexibleModel):
+    # 黄历/万年历：date 所在公历月的整月月历（农历/干支/节气/朔望）。
+    date: str
+    zone: str
+    lon: str = "120e00"  # 历算经度（节气/朔望真时刻按此），默认东经 120 度标准历算经度
+    lat: str | None = None
+    ad: int | None = 1
+    day: str | None = None  # 选中日（YYYY-MM-DD）：给出则产 [选中日详情] 段
+
+
 class GuaNamesInput(FlexibleModel):
     name: list[str]
 

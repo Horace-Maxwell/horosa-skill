@@ -168,6 +168,36 @@ class FakeClient(HorosaApiClient):
             return {"source": "kinjinkou", "rows": [{"name": "贵神"}], "raw": {}}
         if endpoint == "/nongli/time":
             return {"birth": f"{payload['date']} {payload['time']}", "nongli": "丙午年二月十七"}
+        if endpoint == "/calendar/month":
+            # 黄历月历桩：两天当月项 + 一天补位（跨月过滤锚），字段形态与后端真值同构。
+            month = str(payload.get("date") or "2028-04-06")[:7]
+            return {
+                "prevDays": [],
+                "days": [
+                    {
+                        "birth": f"{month}-01 12:00:00", "year": "戊申", "yearJieqi": "戊申",
+                        "month": "三月", "day": "初一", "dayInt": 1, "leap": False,
+                        "monthGanZi": "丙辰", "dayGanZi": "甲子", "yearNaying": "大驿土",
+                        "dayOfWeek": 6, "jieqi": None, "jieqiTime": None,
+                        "moonTime": "12:20:33", "date": f"{month}-01", "time": "庚午",
+                        "chef": "乙木用事", "jiedelta": "清明后第2天", "qimengYearGua": None,
+                    },
+                    {
+                        "birth": f"{month}-06 12:00:00", "year": "戊申", "yearJieqi": "戊申",
+                        "month": "三月", "day": "初六", "dayInt": 6, "leap": False,
+                        "monthGanZi": "丙辰", "dayGanZi": "己巳", "yearNaying": "大驿土",
+                        "dayOfWeek": 4, "jieqi": "清明", "jieqiTime": "2028-04-04 16:02:11",
+                        "moonTime": None, "date": f"{month}-06", "time": "庚午",
+                        "chef": "乙木用事", "jiedelta": "清明后第2天", "qimengYearGua": None,
+                    },
+                    {
+                        "birth": "2028-05-01 12:00:00", "year": "戊申", "yearJieqi": "戊申",
+                        "month": "四月", "day": "初八", "dayInt": 8, "leap": False,
+                        "monthGanZi": "丁巳", "dayGanZi": "甲午", "dayOfWeek": 1,
+                        "jieqi": None, "moonTime": None, "date": "2028-05-01",
+                    },
+                ],
+            }
         if endpoint == "/jieqi/year":
             # entries carry both `name` (jieqi_year tool) and `jieqi`+`time` (mundane ingress lookup).
             term = (payload.get("jieqis") or [None])[0]
@@ -1370,6 +1400,77 @@ def test_java_chart_payload_candidates_cover_windows_runtime_variants() -> None:
         "gpsLat": -41.433333,
         "gpsLon": 174.5,
     } in candidates
+
+
+def test_calendar_month_snapshot_sections_and_cross_month_filter(tmp_path) -> None:
+    # 黄历/万年历：起盘信息+当月月历(GFM 表)+选中日详情+方法说明；跨月补位项不入当月表。
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+
+    result = service.run_tool(
+        "calendar_month",
+        {"date": "2028-04-06", "zone": "+08:00", "lon": "120e00", "day": "2028-04-06", "agent_confirmed_settings": True},
+        save_result=False,
+    )
+
+    assert result.ok is True
+    snapshot = result.data["snapshot_text"]
+    for head in ("[起盘信息]", "[当月月历]", "[选中日详情]", "[方法说明]"):
+        assert head in snapshot
+    assert "| 公历 | 星期 | 农历 | 日干支 | 节气/朔望 |" in snapshot
+    assert "清明 2028-04-04 16:02:11" in snapshot
+    assert "朔 12:20:33" in snapshot
+    # 跨月补位（2028-05-01）不得混入当月月历表。
+    assert "05-01" not in snapshot
+    # 选中日详情字段落位。
+    assert "农历：戊申年三月初六" in snapshot
+    assert "年柱口径" in snapshot
+    export_format = result.data.get("export_format") or {}
+    assert export_format.get("technique", {}).get("key") == "calendar"
+    assert export_format.get("missing_selected_sections") in (None, [])
+    assert export_format.get("unknown_sections") in (None, [])
+
+
+def test_predictive_common_sections_appended_for_predictive_family(tmp_path) -> None:
+    # 星运族公共段：当前时点(导出时刻+盘主年龄) + 方法说明(机理与读法) 在统一出口追加。
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+
+    result = service.run_tool(
+        "profection",
+        {
+            "date": "1995-06-03",
+            "time": "05:30:00",
+            "zone": "+08:00",
+            "lat": "31n13",
+            "lon": "121e28",
+            "datetime": "2026-07-12 12:00:00",
+            "agent_confirmed_settings": True,
+        },
+        save_result=False,
+    )
+
+    assert result.ok is True
+    snapshot = result.data["snapshot_text"]
+    assert "[当前时点]" in snapshot and "[方法说明]" in snapshot
+    assert "导出时刻：" in snapshot
+    assert "盘主当前年龄：" in snapshot
+    assert "小限(年限)" in snapshot
+    # 非星运技法不受影响（零变化）。
+    nongli = service.run_tool(
+        "nongli_time",
+        {"date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "lon": "121e28", "agent_confirmed_settings": True},
+        save_result=False,
+    )
+    assert "[方法说明]" not in (nongli.data.get("snapshot_text") or "")
 
 
 def test_nongli_payload_candidates_keep_validated_payload_first_then_legacy_slash_fallback() -> None:

@@ -775,6 +775,17 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         do_not_assume=["timezone", "longitude"],
     ),
+    "calendar_month": _policy(
+        intent="黄历/万年历：整月农历/干支/节气/朔望月历，可选选中日详情。",
+        required_context=["date (月份内任一天)", "zone"],
+        ask_if_missing=[
+            {"field": "date", "question": "要查询哪个月份的黄历？请给出该月内任一公历日期。"},
+            {"field": "zone", "question": "用哪个时区？"},
+            {"field": "lon", "question": "历算经度沿用东经120度标准，还是指定当地经度？", "options": ["沿用默认 120e00", "指定经度"]},
+        ],
+        safe_defaults=[{"field": "lon", "value": "120e00", "meaning": "东经 120 度标准历算经度（节气/朔望真时刻按此）"}],
+        do_not_assume=["timezone"],
+    ),
     "gua_desc": _policy(
         intent="卦辞/卦义查询。",
         required_context=["name list"],

@@ -239,6 +239,14 @@ def build_sample_payloads() -> dict[str, dict]:
             "timeAlg": 0,
             "ad": 1,
         },
+        "calendar_month": {
+            **confirmed,
+            "date": "2028-04-06",
+            "zone": "+08:00",
+            "lon": "120e00",
+            "day": "2028-04-06",
+            "ad": 1,
+        },
         "gua_desc": {"name": ["111111", "000000", "101010"]},
         "gua_meiyi": {"name": ["111", "000"]},
     }

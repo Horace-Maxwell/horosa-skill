@@ -920,7 +920,76 @@ function buildSnapshotText(payload, liureng, runyear, chartObj, data) {
       if (zd.sanChuanTip) lines.push(`三传提示：${zd.sanChuanTip}`);
     }
   }
+
+  // [七政] 段：日月五星临支/五行/度/逆行/月将，是大六壬七政四余合参的独立断法层。
+  // 值取自随盘星历对象；无星历数据不产段（零字节变化）。
+  const qizhengItems = buildQiZhengItems(chartObj);
+  if (qizhengItems.length) {
+    lines.push('');
+    lines.push('[七政]');
+    lines.push('| 七政 | 临支 | 五行 | 度数 | 逆行 | 备注 |');
+    lines.push('| --- | --- | --- | --- | --- | --- |');
+    qizhengItems.forEach((item) => {
+      const deg = item.deg != null ? `${item.deg.toFixed(0)}°` : '—';
+      lines.push(`| ${item.name} | ${item.branch || '—'} | ${item.wx || '—'} | ${deg} | ${item.retro ? '逆' : '—'} | ${item.isYue ? '月将(太阳过宫)' : '—'} |`);
+    });
+  }
   return lines.join('\n').trim();
+}
+
+const QIZHENG_DEFS = [
+  { id: 'Sun', name: '日' },
+  { id: 'Moon', name: '月' },
+  { id: 'Mercury', name: '水' },
+  { id: 'Venus', name: '金' },
+  { id: 'Mars', name: '火' },
+  { id: 'Jupiter', name: '木' },
+  { id: 'Saturn', name: '土' },
+];
+
+function getQiZhengPlanetObject(chartObj, planetId) {
+  if (!chartObj || !Array.isArray(chartObj.objects) || !planetId) {
+    return null;
+  }
+  for (let i = 0; i < chartObj.objects.length; i++) {
+    const obj = chartObj.objects[i];
+    if (obj && obj.id === planetId) {
+      return obj;
+    }
+  }
+  return null;
+}
+
+// 七政：临支按星座换地支；顺逆按 lonspeed<0；月将=与太阳同支（太阳过宫）。
+function buildQiZhengItems(chartObj) {
+  if (!chartObj || !chartObj.objects) {
+    return [];
+  }
+  const sunObj = getQiZhengPlanetObject(chartObj, 'Sun');
+  const sunBranch = sunObj ? (LRConst.getSignZi(sunObj.sign) || '') : '';
+  const items = [];
+  for (let i = 0; i < QIZHENG_DEFS.length; i++) {
+    const def = QIZHENG_DEFS[i];
+    const obj = getQiZhengPlanetObject(chartObj, def.id);
+    if (!obj) {
+      continue;
+    }
+    const branch = LRConst.getSignZi(obj.sign) || '';
+    let deg = null;
+    if (typeof obj.lon === 'number' && isFinite(obj.lon)) {
+      deg = ((obj.lon % 30) + 30) % 30;
+    }
+    items.push({
+      key: def.id,
+      name: def.name,
+      branch,
+      wx: branch ? (LRConst.GanZiWuXing[branch] || '') : '',
+      deg,
+      retro: typeof obj.lonspeed === 'number' && obj.lonspeed < 0,
+      isYue: !!branch && branch === sunBranch,
+    });
+  }
+  return items;
 }
 
 export function runLiureng(payload) {

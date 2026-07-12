@@ -78,6 +78,7 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "liureng_runyear": "liureng",
     "jieqi_year": "jieqi",
     "nongli_time": "generic",
+    "calendar_month": "calendar",
     "gua_desc": "sixyao",
     "gua_meiyi": "sixyao",
     "qimen": "qimen",
@@ -703,6 +704,125 @@ def _render_snapshot_text(sections: list[tuple[str, str]]) -> str:
         clean_body = (body or "").strip() or _missing_detail_text(title)
         blocks.append(f"[{title}]\n{clean_body}".strip())
     return "\n\n".join(blocks).strip()
+
+
+# 星运族 [方法说明]：每键 2-4 行公开通行机理与读法（零书名零章节）。键=导出 technique 名。
+_PREDICTIVE_METHOD_NOTES: dict[str, list[str]] = {
+    "primarydirect": [
+        "主限法：天体按周日运动(赤经/方位弧)推进,约 1 度合 1 年;迫星抵达应星的弧量换算年龄,用于判大事应期。",
+        "读法：表中每行=一次抵达事件;以应星宫职与迫星性质合断吉凶主题。",
+    ],
+    "zodialrelease": [
+        "黄道释放：自精神点(或幸运点)起,按行星大年逐层释放,划分人生篇章(一级期)与子期(二级期)。",
+        "读法：期主星及其本命状态定该段主题;跳宫(LB)为重大转折;与幸运点十度关系看顺逆。",
+    ],
+    "firdaria": [
+        "法达大限：波斯行星期法,日生盘自太阳、夜生盘自月亮起,诸星依序各主政若干年,内再均分子期。",
+        "读法：主期星定大主题、子期星定阶段事项,两星本命状态与彼此关系定吉凶成色。",
+    ],
+    "distributions": [
+        "界推运(分配法)：上升(或选定释放点)按主限速率行经黄道各界,界主星即该段\"分配星\"。",
+        "读法：分配星与其间同行的本命星(参与星)共同定该段境遇;换界即换阶段。",
+    ],
+    "agepoint": [
+        "年龄推进点：心理占星年龄点每宫约 6 年匀速推进,逐宫走完十二宫。",
+        "读法：落宫定人生课题场域,与本命星的合相/相位标记该年龄的关键事件与心理主题。",
+    ],
+    "profection": [
+        "小限(年限)：每满一岁命宫顺推一宫,该宫为当年小限宫,其宫主星为年主星。",
+        "读法：年主星本命状态与流年动态定当年吉凶;小限宫宫职指示当年主战场。",
+    ],
+    "solararc": [
+        "太阳弧向运：全盘诸点按太阳年均约 1 度的弧量整体推进。",
+        "读法：推进点与本命点形成的入相位(容许度约 1 度)标记事件年份;点性组合定事件性质。",
+    ],
+    "solarreturn": [
+        "太阳返照(日返)：太阳每年回归本命黄经时刻起盘,该盘统领此后一个太阳年。",
+        "读法：返照盘上升与其主星定年度基调;返照盘行星落本命宫位看事项落点。",
+    ],
+    "lunarreturn": [
+        "太阴返照(月返)：月亮每月回归本命黄经时刻起盘,统领此后一个太阴月。",
+        "读法：与日返同理,颗粒度为月;月亮状态与四轴最要紧。",
+    ],
+    "givenyear": [
+        "指定年推运盘：按指定年份取推运时刻起盘,与本命对照。",
+        "读法：推运盘行星落本命宫位与两盘相位定该年主题。",
+    ],
+    "decennials": [
+        "十年大运(Decennials)：希腊期法,诸星依序轮值主政各 129 个月(约 10.75 年),内按行星小年分子期。",
+        "读法：主政星+子期星组合定阶段主题;换主政为人生大节点。",
+    ],
+    "planetaryages": [
+        "行星年龄段：人生依序由月亮/水星/金星/太阳/火星/木星/土星主政固定年岁段(4/10/8/19/15/12/30 年制式)。",
+        "读法：当前年龄所处主政星定人生阶段基调;主政星本命状态定该阶段顺逆。",
+    ],
+    "vedicprog": [
+        "恒星推运：以恒星黄道计的推运(含二次推运一日抵一年),叠加本命对照。",
+        "读法：推运位与本命位的星座宫位迁移及相位,按恒星制口径判断。",
+    ],
+    "jaynesprog": [
+        "赤纬推运：只看推运星与本命星的赤纬平行(同纬同侧)与反平行(同纬异侧)。",
+        "读法：平行视作强合相、反平行视作强对冲;成对年份即应期。",
+    ],
+    "planetaryarc": [
+        "行星弧向运：同太阳弧原理,但以选定行星的推进速率作弧量整体前移。",
+        "读法：弧主星的性质给全部触发事件染色;入相位年份为应期。",
+    ],
+    "persiandirected": [
+        "波斯向运：中世纪波斯法,诸点按约 1 度/年向前推进与本命点会照。",
+        "读法：向运点与本命点的相位事件按年龄排布;近期命中(距今最近)优先解读。",
+    ],
+    "yearsystem129": [
+        "129 年系统：以行星大年合计 129 年为总周期,先按大年切主限,再按比例切子限。",
+        "读法：主限星定大阶段,子限星定小阶段,起讫日期定应期窗口。",
+    ],
+    "balbillus": [
+        "主/子限期法(Balbillus)：罗马期法,行星大年定主限时长,主限内按诸星小年比例切子限。",
+        "读法：主限星与子限星组合断该段主题;换限日期为节点。",
+    ],
+    "triplicityrulers": [
+        "三分主星推运：命度三分性的三位主星(日/夜/伴)依序主管人生前/中/后三段。",
+        "读法：各段主星的本命状态(庙旺陷落/宫位/受克)直接定该人生阶段的整体成色。",
+    ],
+    "keypoints": [
+        "数字相位推运(120 关键点)：以 120 的调和因数(2/3/4/5/6/8/10/12…)生成关键年龄激活序列。",
+        "读法：命中因数年龄=激活年;因数越小事件越重;结合被激活点的本命性质定主题。",
+    ],
+    "lunationphase": [
+        "月相推运：二次推运的日月相位约 30 年走完一轮朔望循环,分八相。",
+        "读法：新月=起始、上弦=建设、满月=显化、下弦=释放;当前相定人生大节奏。",
+    ],
+    "extrareturns": [
+        "多重回归：木星/土星等回归本命位置的时刻表(含 1/4、1/2 周期)。",
+        "读法：整回归=大周期重启(如土星回归约 29.5 岁);半/四分之一回归为阶段检查点。",
+    ],
+}
+
+
+def _predictive_common_sections_text(technique: str | None, payload: dict[str, Any]) -> str:
+    """星运族公共两段：[当前时点](导出时刻+盘主年龄) + [方法说明](机理与读法)。
+
+    [起盘信息]等价段各技法快照已有,不重复。非星运键返回空串(零变化)。
+    """
+    notes = _PREDICTIVE_METHOD_NOTES.get(technique or "")
+    if not notes:
+        return ""
+    now = datetime.now()
+    moment_lines = [f"导出时刻：{now.strftime('%Y-%m-%d %H:%M')}"]
+    birth_text = f"{payload.get('date') or ''} {payload.get('time') or ''}".strip()
+    if birth_text:
+        try:
+            birth_dt = datetime.strptime(birth_text[:16].replace("/", "-"), "%Y-%m-%d %H:%M")
+        except ValueError:
+            try:
+                birth_dt = datetime.strptime(birth_text[:10].replace("/", "-"), "%Y-%m-%d")
+            except ValueError:
+                birth_dt = None
+        if birth_dt is not None:
+            age = (now - birth_dt).total_seconds() / (365.2425 * 24 * 3600)
+            if -1 < age < 200:
+                moment_lines.append(f"盘主当前年龄：{round(age * 100) / 100} 岁")
+    return _render_snapshot_text([("当前时点", "\n".join(moment_lines)), ("方法说明", "\n".join(notes))])
 
 
 def _ken_datetime_parts(payload: dict[str, Any]) -> dict[str, int]:
@@ -4500,6 +4620,102 @@ def _build_nongli_snapshot_text(payload: dict[str, Any], response: dict[str, Any
     return _render_snapshot_text([("起盘信息", _join_lines(lines))])
 
 
+_CALENDAR_WEEK_CN = {0: "星期日", 1: "星期一", 2: "星期二", 3: "星期三", 4: "星期四", 5: "星期五", 6: "星期六"}
+
+
+def _build_calendar_month_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
+    """黄历/万年历快照：起盘信息 / 当月月历(GFM 表) / 选中日详情(可选) / 方法说明。
+
+    月历行只收与 days[0] 同月的项（days 可能带下月补位）；字段均后端真值直引，不重算。
+    """
+    days = response.get("days") if isinstance(response.get("days"), list) else []
+    prev_days = response.get("prevDays") if isinstance(response.get("prevDays"), list) else []
+
+    def month_of(d: dict[str, Any]) -> str:
+        return str(d.get("birth") or "")[:7]
+
+    def day_of(d: dict[str, Any]) -> str:
+        return str(d.get("birth") or "")[5:10]
+
+    query_month = str(payload.get("date") or "")[:7] or (month_of(days[0]) if days else "")
+    info_lines: list[str] = []
+    if query_month:
+        info_lines.append(f"查询月份：{query_month}")
+    if payload.get("zone"):
+        info_lines.append(f"时区：{payload.get('zone')}")
+    if payload.get("lon"):
+        info_lines.append(f"历算经度：{payload.get('lon')}")
+
+    sections: list[tuple[str, str]] = [("起盘信息", _join_lines(info_lines))]
+
+    table_lines: list[str] = []
+    if days:
+        cur_month = month_of(days[0])
+        rows = [d for d in days if isinstance(d, dict) and month_of(d) == cur_month]
+        if rows:
+            table_lines.append("| 公历 | 星期 | 农历 | 日干支 | 节气/朔望 |")
+            table_lines.append("| --- | --- | --- | --- | --- |")
+            for d in rows:
+                nl = str(d.get("day") or "")
+                if d.get("dayInt") == 1:
+                    nl = f"{'闰' if d.get('leap') else ''}{d.get('month') or ''}{d.get('day') or ''}"
+                notes: list[str] = []
+                if d.get("jieqi"):
+                    notes.append(f"{d.get('jieqi')} {d.get('jieqiTime') or ''}".strip())
+                if d.get("moonTime"):
+                    mt = "朔" if d.get("dayInt") == 1 else ("望" if d.get("dayInt") == 15 else "月相")
+                    notes.append(f"{mt} {d.get('moonTime')}".strip())
+                week = _CALENDAR_WEEK_CN.get(d.get("dayOfWeek"), "")
+                table_lines.append(f"| {day_of(d)} | {week} | {nl} | {d.get('dayGanZi') or ''} | {'；'.join(notes)} |")
+    sections.append(("当月月历", _join_lines(table_lines) or "无"))
+
+    # 选中日详情：payload.day 指定公历日，从当月/补位项中按 birth 前缀匹配。
+    selected_day = str(payload.get("day") or "").strip()
+    if selected_day:
+        sel = next(
+            (d for d in [*days, *prev_days] if isinstance(d, dict) and str(d.get("birth") or "").startswith(selected_day)),
+            None,
+        )
+        detail_lines: list[str] = []
+        if sel:
+            week = _CALENDAR_WEEK_CN.get(sel.get("dayOfWeek"), "")
+            detail_lines.append(f"公历：{str(sel.get('birth') or '').split(' ')[0]} {week}".strip())
+            sel_month = f"{'闰' if sel.get('leap') else ''}{sel.get('month') or ''}"
+            detail_lines.append(f"农历：{sel.get('year') or ''}年{sel_month}{sel.get('day') or ''}")
+            if sel.get("yearNaying"):
+                detail_lines.append(f"年纳音：{sel.get('yearNaying')}")
+            detail_lines.append(
+                f"干支：{sel.get('yearJieqi') or ''}年 {sel.get('monthGanZi') or ''}月 {sel.get('dayGanZi') or ''}日 {sel.get('time') or ''}时"
+            )
+            jiehou = [v for v in (sel.get("jiedelta"), sel.get("chef")) if v]
+            if jiehou:
+                detail_lines.append(f"节候：{'，'.join(jiehou)}")
+            if sel.get("jieqi"):
+                jdn_note = f"（jdn {sel.get('jieqiJdn')}）" if sel.get("jieqiJdn") else ""
+                detail_lines.append(f"节气：{sel.get('jieqi')} {sel.get('jieqiTime') or ''}{jdn_note}")
+            if sel.get("moonTime"):
+                mt = "朔月" if sel.get("dayInt") == 1 else ("望月" if sel.get("dayInt") == 15 else "月相")
+                jdn_note = f"（jdn {sel.get('moonJdn')}）" if sel.get("moonJdn") else ""
+                detail_lines.append(f"{mt}：{sel.get('date') or ''} {sel.get('moonTime') or ''}{jdn_note}")
+            if sel.get("qimengYearGua"):
+                detail_lines.append(f"奇门年卦：{sel.get('qimengYearGua')}")
+        sections.append(("选中日详情", _join_lines(detail_lines) or f"未在返回月历中找到 {selected_day}"))
+
+    sections.append(
+        (
+            "方法说明",
+            _join_lines(
+                [
+                    "月干支：以当天正午12点是否已跨节气决定归属月。",
+                    "年柱口径：干支年以节气（立春）为界；农历年月日以朔望月与置闰为准，两者并列显示。",
+                    "节气/朔望时刻为该历算经度下的真时刻；jdn 为对应儒略日数。",
+                ]
+            ),
+        )
+    )
+    return _render_snapshot_text(sections)
+
+
 def _build_gua_lookup_snapshot_text(tool_name: str, payload: dict[str, Any], response: dict[str, Any]) -> str:
     queried = payload.get("name") or []
     gua_lines: list[str] = []
@@ -4808,6 +5024,8 @@ def _auto_snapshot_text_for_tool(tool_name: str, input_normalized: dict[str, Any
         return _build_jieqi_snapshot_text(input_normalized, response_data)
     if tool_name == "nongli_time":
         return _build_nongli_snapshot_text(input_normalized, response_data)
+    if tool_name == "calendar_month":
+        return _build_calendar_month_snapshot_text(input_normalized, response_data)
     if tool_name in {"gua_desc", "gua_meiyi"}:
         return _build_gua_lookup_snapshot_text(tool_name, input_normalized, response_data)
     return None
@@ -5010,6 +5228,12 @@ def _attach_export_contract(tool_name: str, input_normalized: dict[str, Any], re
     if not snapshot_text:
         snapshot_text = _auto_snapshot_text_for_tool(tool_name, input_normalized, response_data)
         augmented["snapshot_text"] = snapshot_text
+    # 星运族公共段（当前时点/方法说明）在统一出口追加一次,22 键全覆盖;追加后强制重解析。
+    predictive_common = _predictive_common_sections_text(technique, input_normalized)
+    if snapshot_text and predictive_common and "[方法说明]" not in snapshot_text:
+        snapshot_text = f"{snapshot_text}\n\n{predictive_common}"
+        augmented["snapshot_text"] = snapshot_text
+        parsed_snapshot = None
     if snapshot_text and not parsed_snapshot:
         try:
             parsed_snapshot = parse_export_content(technique=technique, content=snapshot_text)

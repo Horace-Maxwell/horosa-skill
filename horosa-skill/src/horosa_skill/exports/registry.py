@@ -4,16 +4,22 @@ from copy import deepcopy
 from typing import Any
 
 AI_EXPORT_SETTINGS_KEY = "horosa.ai.export.settings.v1"
+# v10: 星运族 22 键补 当前时点/方法说明 公共段；六壬补 七政（日月五星临支合参）段。
 # v9: tarot 段结构对齐引擎直出（牌阵综览/逐牌详解/综合断语/定局/生命牌），relative 补关系量化
 # 三段，qimen 补全局速览，horary 补专题深化·X，cetian 补今制 4 宫识别 → preset 内容变更须升版。
 # v8: 新技法 yizhangjing/acg/astrodata 入册，heluo/canping 补全生涯流年与断验段，fengshui 扩十三派。
 # v7: sanshiunited 追加三独立技法富化段、mundane 追加子盘群段。
-AI_EXPORT_SETTINGS_VERSION = 9
-AI_EXPORT_SECTION_MIGRATION_VERSION = 9
+AI_EXPORT_SETTINGS_VERSION = 10
+AI_EXPORT_SECTION_MIGRATION_VERSION = 10
 AI_EXPORT_SECTION_MIGRATION_KEYS = [
     "liureng", "qimen", "sanshiunited", "mundane",
     "yizhangjing", "acg", "astrodata", "heluo", "canping", "fengshui",
     "tarot", "relative", "horary", "cetian",
+    # v10 星运族公共段升版键
+    "primarydirect", "zodialrelease", "firdaria", "profection", "solararc", "solarreturn",
+    "lunarreturn", "givenyear", "decennials", "agepoint", "distributions", "jaynesprog",
+    "vedicprog", "planetaryarc", "planetaryages", "balbillus", "yearsystem129", "persiandirected",
+    "triplicityrulers", "keypoints", "lunationphase", "extrareturns",
 ]
 MODULE_SNAPSHOT_PREFIX = "horosa.ai.snapshot.module.v1."
 AI_EXPORT_PLANET_INFO_DEFAULT = {"showHouse": 1, "showRuler": 1}
@@ -120,6 +126,7 @@ AI_EXPORT_TECHNIQUES = [
     {"key": "qizhengkin", "label": "七政四余·张果"},
     {"key": "mundane", "label": "世俗盘"},
     {"key": "jieqi", "label": "节气盘"},
+    {"key": "calendar", "label": "黄历"},
     {"key": "jieqi_meta", "label": "节气盘-通用参数"},
     {"key": "jieqi_chunfen", "label": "节气盘-春分"},
     {"key": "jieqi_xiazhi", "label": "节气盘-夏至"},
@@ -142,22 +149,22 @@ AI_EXPORT_PRESET_SECTIONS = {
     "indiachart": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "古典", "可能性", "大运Dasha"],
     "astrochart_like": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "古典", "古典格局", "可能性"],
     "relative": ["关系起盘信息", "A对B相位", "B对A相位", "A对B中点相位", "B对A中点相位", "A对B映点", "A对B反映点", "B对A映点", "B对A反映点", "合成图盘", "影响图盘-星盘A", "影响图盘-星盘B", "关系量化", "顺畅连接", "张力连接"],
-    "primarydirect": ["出生时间", "本命盘星与虚点", "主/界限法设置", "主/界限法表格"],
+    "primarydirect": ["出生时间", "本命盘星与虚点", "主/界限法设置", "主/界限法表格", "当前时点", "方法说明"],
     "primarydirchart": ["出生时间", "本命盘星与虚点", "主限法盘设置", "主限法盘星体表格", "主限法盘相位", "主限法盘说明"],
-    "zodialrelease": ["起盘信息", "本命盘星与虚点", "基于X点推运"],
-    "firdaria": ["出生时间", "星盘信息", "法达星限表格"],
-    "profection": ["本命盘起盘信息", "本命盘星与虚点", "推运盘起盘信息", "推运盘星与虚点", "推运盘相位"],
-    "solararc": ["本命盘起盘信息", "本命盘星与虚点", "推运盘起盘信息", "推运盘星与虚点", "推运盘相位"],
-    "solarreturn": ["本命盘起盘信息", "本命盘星与虚点", "返照盘起盘信息", "返照盘星与虚点", "返照盘相位"],
-    "lunarreturn": ["本命盘起盘信息", "本命盘星与虚点", "返照盘起盘信息", "返照盘星与虚点", "返照盘相位"],
-    "givenyear": ["本命盘起盘信息", "本命盘星与虚点", "流年盘起盘信息", "流年盘星与虚点", "流年盘相位"],
-    "decennials": ["起盘信息", "星盘信息", "十年大运设置", "基于X起运"],
+    "zodialrelease": ["起盘信息", "本命盘星与虚点", "基于X点推运", "当前时点", "方法说明"],
+    "firdaria": ["出生时间", "星盘信息", "法达星限表格", "当前时点", "方法说明"],
+    "profection": ["本命盘起盘信息", "本命盘星与虚点", "推运盘起盘信息", "推运盘星与虚点", "推运盘相位", "当前时点", "方法说明"],
+    "solararc": ["本命盘起盘信息", "本命盘星与虚点", "推运盘起盘信息", "推运盘星与虚点", "推运盘相位", "当前时点", "方法说明"],
+    "solarreturn": ["本命盘起盘信息", "本命盘星与虚点", "返照盘起盘信息", "返照盘星与虚点", "返照盘相位", "当前时点", "方法说明"],
+    "lunarreturn": ["本命盘起盘信息", "本命盘星与虚点", "返照盘起盘信息", "返照盘星与虚点", "返照盘相位", "当前时点", "方法说明"],
+    "givenyear": ["本命盘起盘信息", "本命盘星与虚点", "流年盘起盘信息", "流年盘星与虚点", "流年盘相位", "当前时点", "方法说明"],
+    "decennials": ["起盘信息", "星盘信息", "十年大运设置", "基于X起运", "当前时点", "方法说明"],
     "bazi": ["起盘信息", "四柱与三元", "神煞（四柱与三元）", "五行力量", "格局·用神", "盲派结构", "大运", "流年行运概略"],
     "ziwei": ["起盘信息", "宫位总览", "命中格局"],
     "suzhan": ["起盘信息", "宿盘宫位与二十八宿星曜"],
     "sixyao": ["起盘信息", "卦象", "六爻与动爻", "断卦结构", "卦辞与断语"],
     "tongshefa": ["本卦", "六爻", "潜藏", "亲和"],
-    "liureng": ["起盘信息", "十二盘式", "十二地盘/十二天盘/十二贵神对应", "四课", "三传", "行年", "旬日", "旺衰", "基础神煞", "干煞", "月煞", "支煞", "岁煞", "十二长生", "大格", "小局", "参考", "概览", "常用神煞", "年月神煞", "课体结构", "三传旺衰", "空亡真假", "旬空落点", "陷空", "遁干特殊", "年命上神", "毕法（已命中）", "占断向导"],
+    "liureng": ["起盘信息", "十二盘式", "十二地盘/十二天盘/十二贵神对应", "四课", "三传", "行年", "旬日", "旺衰", "基础神煞", "干煞", "月煞", "支煞", "岁煞", "十二长生", "大格", "小局", "参考", "概览", "常用神煞", "年月神煞", "课体结构", "三传旺衰", "空亡真假", "旬空落点", "陷空", "遁干特殊", "年命上神", "毕法（已命中）", "占断向导", "七政"],
     "jinkou": ["起盘信息", "金口诀速览", "金口诀四位", "金口诀三盘", "四位神煞", "用神强弱", "四位生克", "应期", "地支关系", "相关神煞", "分类用神·求财", "行年", "旬日", "旺衰", "基础神煞", "干煞", "月煞", "支煞", "岁煞", "十二长生"],
     "taiyi": ["起盘信息", "太乙盘", "太乙诸神", "风游", "主客定算", "十二神", "八门与宿曜", "断法", "七大兵法", "博弈", "命法", "命宫行限", "十六宫标记"],
     "qimen": ["起盘信息", "盘型", "全局速览", "盘面要素", "奇门演卦", "八宫详解", "九宫方盘", "旺相休囚死·月令能量", "六害总览", "化解方案", "八门化气大阵", "用神分论", "财富七要", "事业七要", "恋爱姻缘", "孤辰寡宿"],
@@ -175,19 +182,19 @@ AI_EXPORT_PRESET_SECTIONS = {
     ],
     "guolao": ["起盘信息", "七政四余宫位与二十八宿星曜", "神煞", "大限", "政余格局", "相位"],
     "germany": ["起盘信息", "宫位宫头", "行星", "中点", "TNP星体", "中点相位", "90°中点盘", "行星图", "映点", "中点列表", "汉堡学派要素"],
-    "agepoint": ["年龄推进点（Age Point / Huber）"],
-    "distributions": ["界推运（分配法 / Distributions）"],
-    "jaynesprog": ["赤纬推运（Declination）", "本命盘配置", "时段盘 赤纬平行/反平行"],
-    "vedicprog": ["恒星推运（Vedic Sidereal）"],
-    "planetaryarc": ["行星弧（Planetary Arc）"],
-    "planetaryages": ["行星年龄（Ages of Man）"],
-    "balbillus": ["Balbillus"],
-    "yearsystem129": ["129年系统表格"],
-    "persiandirected": ["波斯向运（Persian Directed）"],
-    "triplicityrulers": ["三分主星推运"],
-    "keypoints": ["数字相位推运"],
-    "lunationphase": ["月相推运"],
-    "extrareturns": ["多重回归"],
+    "agepoint": ["年龄推进点（Age Point / Huber）", "当前时点", "方法说明"],
+    "distributions": ["界推运（分配法 / Distributions）", "当前时点", "方法说明"],
+    "jaynesprog": ["赤纬推运（Declination）", "本命盘配置", "时段盘 赤纬平行/反平行", "当前时点", "方法说明"],
+    "vedicprog": ["恒星推运（Vedic Sidereal）", "当前时点", "方法说明"],
+    "planetaryarc": ["行星弧（Planetary Arc）", "当前时点", "方法说明"],
+    "planetaryages": ["行星年龄（Ages of Man）", "当前时点", "方法说明"],
+    "balbillus": ["Balbillus", "当前时点", "方法说明"],
+    "yearsystem129": ["129年系统表格", "当前时点", "方法说明"],
+    "persiandirected": ["波斯向运（Persian Directed）", "当前时点", "方法说明"],
+    "triplicityrulers": ["三分主星推运", "当前时点", "方法说明"],
+    "keypoints": ["数字相位推运", "当前时点", "方法说明"],
+    "lunationphase": ["月相推运", "当前时点", "方法说明"],
+    "extrareturns": ["多重回归", "当前时点", "方法说明"],
     "horary": ["起卦信息", "根本性", "征象星指派", "完成分析", "月亮的故事", "相位全览", "裁决", "应期方位", "描述", "专题深化·X"],
     "election": ["起盘信息", "总评", "红线", "分项", "用事专属", "应期", "建议"],
     "wangji": ["起盘", "元会运世", "天道卦", "人事卦", "历史年表", "心易发微"],
@@ -217,6 +224,7 @@ AI_EXPORT_PRESET_SECTIONS = {
         "12分度", "主宰星链", "古典", "寿命格局", "可能性",
     ],
     "jieqi": ["节气盘参数", "春分星盘", "春分宿盘", "夏至星盘", "夏至宿盘", "秋分星盘", "秋分宿盘", "冬至星盘", "冬至宿盘"],
+    "calendar": ["起盘信息", "当月月历", "选中日详情", "方法说明"],
     **JIEQI_SETTING_PRESETS,
     "otherbu": ["起盘信息", "骰子结果", "骰子盘宫位与星体", "天象盘宫位与星体"],
     # 天文地占（源 preset ['判定','解读技法','十二宫·图形入宫','十六图形']）+ 起卦信息(问题/问类/上升图形)，
@@ -276,7 +284,8 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     # 六壬 Phase4 (星阙 v2.5.x)：毕法（已命中）只在 refContext 成功且有命中时出；占断向导只在指定占类
     # (zhanCategory ≠ general) 时出。断卦层（年月神煞/课体结构/三传旺衰/空亡真假/旬空落点/陷空/遁干特殊/年命上神）
     # 各段按盘面数据条件产出（每盘几乎必出但非保证；如三传不空则无空亡段）→ 全列可选段，避免误报 missing。
-    "liureng": ["毕法（已命中）", "占断向导", "年月神煞", "课体结构", "三传旺衰", "空亡真假", "旬空落点", "陷空", "遁干特殊", "年命上神"],
+    # 七政（日月五星临支合参）依赖随盘星历对象；chart 上下文获取失败时优雅缺段 → 可选。
+    "liureng": ["毕法（已命中）", "占断向导", "年月神煞", "课体结构", "三传旺衰", "空亡真假", "旬空落点", "陷空", "遁干特殊", "年命上神", "七政"],
     # 紫微 P2 (星阙 v2.6.x)：命中格局随 jar 返回的 patterns；本盘未命中所收录格局时为空 → 可选段。
     "ziwei": ["命中格局"],
     # 六爻 [断卦结构]（纳甲/世应/用神/旺衰/飞伏/六神/动变）由 core-js analyzeLiuyao 引擎派生，
@@ -295,6 +304,8 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     "astrodata": ["命中列表", "名人详情", "维基摘要", "数据来源"],
     # 卜卦专题深化（诉讼/买房/怀孕）：仅在起卦命中 3 类专题之一时产出 [专题深化·<title>]（归一为专题深化·X）。
     "horary": ["专题深化·X"],
+    # 黄历: 选中日详情仅在请求指定 day（选中某日）时产出 → 可选段。
+    "calendar": ["选中日详情"],
     # 择日: 用事专属 only when the topic rule-pack produced items; 应期 is never emitted by 星阙's builder.
     "election": ["用事专属", "应期"],
     # 七政四余: 政余格局 = Moira 格局 DSL（~280 行子系统），headless 版未移植 → 可选段（如实标出）。
