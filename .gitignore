@@ -23,6 +23,8 @@ horosa-skill/build/
 horosa-skill/horosa-core-js/node_modules/
 
 vendor/runtime-source/
+# Offline-packaging node cache consumed by package_runtime_payload.sh (first-priority source).
+horosa-skill/vendor/
 
 # Local report QA artifacts generated during manual audits.
 HOROSA_IO_AUDIT_*/
