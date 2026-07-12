@@ -596,32 +596,47 @@ def _generic_summary(tool_name: str, data: dict[str, Any]) -> list[str]:
 def _extract_entities(input_normalized: dict[str, Any], query_text: str | None = None) -> list[dict[str, Any]]:
     entities: list[dict[str, Any]] = []
 
-    def add(display_name: str, *, entity_type: str = "subject") -> None:
+    def add(display_name: str, *, entity_type: str = "subject", key: str | None = None, metadata: dict[str, Any] | None = None) -> None:
         value = (display_name or "").strip()
         if not value:
             return
         entities.append(
             {
                 "entity_type": entity_type,
-                "entity_key": value.lower(),
+                "entity_key": (key or value).lower(),
                 "display_name": value,
-                "metadata": {},
+                "metadata": metadata or {},
             }
         )
+
+    def birth_meta(source: dict[str, Any]) -> dict[str, Any]:
+        return {
+            k: source.get(src_key)
+            for k, src_key in (("date", "date"), ("time", "time"), ("zone", "zone"), ("lat", "lat"), ("lon", "lon"))
+            if source.get(src_key) is not None
+        }
 
     if query_text:
         add(query_text[:80], entity_type="query")
 
-    name = input_normalized.get("name")
-    if isinstance(name, str):
-        add(name)
+    def add_person(source: dict[str, Any]) -> None:
+        # 按人聚合的索引基础：姓名实体带出生元数据；有 name+date 时另建 `name|date` 复合键实体
+        # （精确定位同名同生辰之人），有 date 时建 birthdate 实体（按生日横向聚合历史盘）。
+        p_name = source.get("name")
+        p_date = source.get("date")
+        meta = birth_meta(source)
+        if isinstance(p_name, str) and p_name.strip():
+            add(p_name, metadata=meta)
+            if isinstance(p_date, str) and p_date.strip():
+                add(p_name, entity_type="person", key=f"{p_name.strip()}|{p_date.strip()}", metadata=meta)
+        if isinstance(p_date, str) and p_date.strip():
+            add(p_date.strip(), entity_type="birthdate", metadata=meta)
 
-    for key in ("inner", "outer", "subject"):
+    add_person(input_normalized)
+    for key in ("inner", "outer", "subject", "birth"):
         nested = input_normalized.get(key)
         if isinstance(nested, dict):
-            nested_name = nested.get("name")
-            if isinstance(nested_name, str):
-                add(nested_name)
+            add_person(nested)
 
     return entities
 
@@ -7291,6 +7306,7 @@ class HorosaSkillService:
                 after=request.after,
                 before=request.before,
                 limit=max(1, request.limit),
+                offset=max(0, getattr(request, "offset", 0) or 0),
                 include_payload=request.include_payload,
             )
             trace["result_count"] = len(results)

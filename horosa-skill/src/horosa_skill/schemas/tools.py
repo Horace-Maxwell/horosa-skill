@@ -614,6 +614,8 @@ class MemoryQueryInput(FlexibleModel):
     after: str | None = None
     before: str | None = None
     limit: int = 20
+    # 分页偏移：跳过前 N 条命中（与 limit 搭配翻页）。
+    offset: int = 0
     include_payload: bool = True
 
 

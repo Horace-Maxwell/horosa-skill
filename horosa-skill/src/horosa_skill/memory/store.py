@@ -17,6 +17,20 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+def _file_hash_info(path: Path) -> tuple[int, str | None]:
+    # 一次读盘同时得 size+sha256；文件缺席/不可读回 (0, None)。
+    try:
+        data = path.read_bytes()
+        return len(data), hashlib.sha256(data).hexdigest()
+    except OSError:
+        return 0, None
+
+
+def _safe_file_component(name: str) -> str:
+    # 文件名组件白名单（防 tool_name 含路径分隔等异常字符穿到磁盘路径）。
+    return "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in str(name or "")) or "_"
+
+
 class MemoryStore:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -29,8 +43,17 @@ class MemoryStore:
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
-        connection = sqlite3.connect(self.db_path)
+        # WAL + busy_timeout：多进程（MCP server / CLI / dispatch 并发）读写不再 `database is locked`；
+        # WAL 允许读写并行，NORMAL 同步在 WAL 下掉电最多丢最近事务、不损坏库。
+        connection = sqlite3.connect(self.db_path, timeout=30.0)
         connection.row_factory = sqlite3.Row
+        try:
+            connection.execute("PRAGMA journal_mode=WAL")
+            connection.execute("PRAGMA synchronous=NORMAL")
+            connection.execute("PRAGMA busy_timeout=30000")
+            connection.execute("PRAGMA foreign_keys=ON")
+        except sqlite3.Error:
+            pass  # 只读介质等极端环境下 PRAGMA 失败不阻塞使用
         try:
             yield connection
         finally:
@@ -98,7 +121,78 @@ class MemoryStore:
             self._ensure_column(conn, "tool_calls", "trace_id", "TEXT")
             self._ensure_column(conn, "tool_calls", "group_id", "TEXT")
             self._ensure_column(conn, "tool_calls", "evaluation_case_id", "TEXT")
+            # 写时落列（消 O(n²)）：sha256/file_size 在写入 artifact 时算一次入库，manifest 刷新与
+            # 检索读取不再对每个文件全量 read_bytes 重算（老行列为 NULL → 读取端回退现算）。
+            self._ensure_column(conn, "artifacts", "file_size", "INTEGER")
+            self._ensure_column(conn, "artifacts", "sha256", "TEXT")
+            # 二级索引：按技法/时间/实体/产物类型的组合过滤从全表扫变索引查（IF NOT EXISTS 幂等，老库自动补建）。
+            conn.executescript(
+                """
+                CREATE INDEX IF NOT EXISTS idx_runs_created ON runs(created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_runs_group ON runs(group_id);
+                CREATE INDEX IF NOT EXISTS idx_tool_calls_run ON tool_calls(run_id);
+                CREATE INDEX IF NOT EXISTS idx_tool_calls_tool ON tool_calls(tool_name, created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_artifacts_run ON artifacts(run_id);
+                CREATE INDEX IF NOT EXISTS idx_artifacts_kind ON artifacts(kind);
+                CREATE INDEX IF NOT EXISTS idx_entities_run ON entities(run_id);
+                CREATE INDEX IF NOT EXISTS idx_entities_key ON entities(entity_key);
+                """
+            )
+            self._ensure_fts(conn)
             conn.commit()
+
+    def _ensure_fts(self, conn: sqlite3.Connection) -> None:
+        # 全文检索（FTS5 external-content on runs）：query/user_question/ai_answer 三字段入索引，
+        # 触发器随写同步；老库首建后做一次 rebuild 回填历史数据。FTS 在 query_runs 里作为加速预筛
+        # （命中直接通过；未命中仍走既有 Python 深扫，因文本可能在 tool_calls/artifact 文件里）——
+        # 语义只增不减。环境缺 FTS5 编译时静默跳过，检索回退旧路径。
+        try:
+            existed = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='runs_fts'"
+            ).fetchone()
+            conn.executescript(
+                """
+                CREATE VIRTUAL TABLE IF NOT EXISTS runs_fts USING fts5(
+                    query_text, user_question_text, ai_answer_text,
+                    content='runs', content_rowid='rowid',
+                    tokenize='trigram'
+                );
+                CREATE TRIGGER IF NOT EXISTS runs_fts_ai AFTER INSERT ON runs BEGIN
+                    INSERT INTO runs_fts(rowid, query_text, user_question_text, ai_answer_text)
+                    VALUES (new.rowid, new.query_text, new.user_question_text, new.ai_answer_text);
+                END;
+                CREATE TRIGGER IF NOT EXISTS runs_fts_ad AFTER DELETE ON runs BEGIN
+                    INSERT INTO runs_fts(runs_fts, rowid, query_text, user_question_text, ai_answer_text)
+                    VALUES ('delete', old.rowid, old.query_text, old.user_question_text, old.ai_answer_text);
+                END;
+                CREATE TRIGGER IF NOT EXISTS runs_fts_au AFTER UPDATE ON runs BEGIN
+                    INSERT INTO runs_fts(runs_fts, rowid, query_text, user_question_text, ai_answer_text)
+                    VALUES ('delete', old.rowid, old.query_text, old.user_question_text, old.ai_answer_text);
+                    INSERT INTO runs_fts(rowid, query_text, user_question_text, ai_answer_text)
+                    VALUES (new.rowid, new.query_text, new.user_question_text, new.ai_answer_text);
+                END;
+                """
+            )
+            if not existed:
+                conn.execute("INSERT INTO runs_fts(runs_fts) VALUES('rebuild')")
+        except sqlite3.Error:
+            pass
+
+    def _fts_run_ids(self, conn: sqlite3.Connection, text: str) -> set[str]:
+        # 文本转 FTS 短语（转义引号），返回命中 run id 集；FTS 缺失/查询异常回空集（走深扫）。
+        # trigram 分词要求查询 ≥3 码点（中文两字词等短查询直接回落深扫，不发无效查询）。
+        needle = (text or "").strip()
+        if len(needle) < 3:
+            return set()
+        try:
+            phrase = '"' + needle.replace('"', '""') + '"'
+            rows = conn.execute(
+                "SELECT runs.id FROM runs_fts JOIN runs ON runs.rowid = runs_fts.rowid WHERE runs_fts MATCH ?",
+                (phrase,),
+            ).fetchall()
+            return {row["id"] for row in rows}
+        except sqlite3.Error:
+            return set()
 
     def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
         columns = {
@@ -215,12 +309,13 @@ class MemoryStore:
                 group_id=group_id,
                 evaluation_case_id=evaluation_case_id,
             )
+            artifact_size, artifact_sha = _file_hash_info(artifact_path)
             artifact_cursor = conn.execute(
                 """
-                INSERT INTO artifacts (run_id, tool_call_id, tool_name, kind, path, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO artifacts (run_id, tool_call_id, tool_name, kind, path, created_at, file_size, sha256)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (run_id, tool_call_id, tool_name, "tool_result", str(artifact_path), now),
+                (run_id, tool_call_id, tool_name, "tool_result", str(artifact_path), now, artifact_size, artifact_sha),
             )
             conn.execute("UPDATE runs SET updated_at = ?, group_id = COALESCE(group_id, ?) WHERE id = ?", (now, group_id, run_id))
             conn.commit()
@@ -257,10 +352,10 @@ class MemoryStore:
         with self.connect() as conn:
             cursor = conn.execute(
                 """
-                INSERT INTO artifacts (run_id, tool_call_id, tool_name, kind, path, created_at)
-                VALUES (?, NULL, ?, ?, ?, ?)
+                INSERT INTO artifacts (run_id, tool_call_id, tool_name, kind, path, created_at, file_size, sha256)
+                VALUES (?, NULL, ?, ?, ?, ?, ?, ?)
                 """,
-                (run_id, "horosa_dispatch", "dispatch_result", str(artifact_path), now),
+                (run_id, "horosa_dispatch", "dispatch_result", str(artifact_path), now, *_file_hash_info(artifact_path)),
             )
             conn.execute("UPDATE runs SET updated_at = ?, group_id = COALESCE(group_id, ?) WHERE id = ?", (now, group_id, run_id))
             conn.commit()
@@ -302,10 +397,10 @@ class MemoryStore:
         with self.connect() as conn:
             cursor = conn.execute(
                 """
-                INSERT INTO artifacts (run_id, tool_call_id, tool_name, kind, path, created_at)
-                VALUES (?, NULL, ?, ?, ?, ?)
+                INSERT INTO artifacts (run_id, tool_call_id, tool_name, kind, path, created_at, file_size, sha256)
+                VALUES (?, NULL, ?, ?, ?, ?, ?, ?)
                 """,
-                (run_id, tool_name, kind, str(path), now),
+                (run_id, tool_name, kind, str(path), now, *_file_hash_info(path)),
             )
             conn.execute("UPDATE runs SET updated_at = ?, group_id = COALESCE(group_id, ?) WHERE id = ?", (now, group_id, run_id))
             conn.commit()
@@ -380,6 +475,7 @@ class MemoryStore:
         after: str | None = None,
         before: str | None = None,
         limit: int = 20,
+        offset: int = 0,
         include_payload: bool = True,
     ) -> list[dict[str, Any]]:
         sql = [
@@ -412,20 +508,24 @@ class MemoryStore:
         if before:
             sql.append("AND runs.created_at <= ?")
             params.append(before)
-        candidate_limit = max(1, limit)
+        offset = max(0, offset)
+        target_count = max(1, limit) + offset
+        candidate_limit = target_count
         if text:
             # Text search also scans artifact file contents, so fetch a wider local candidate window
             # before applying the final in-process filter.
             candidate_limit = max(candidate_limit * 20, 200)
-        sql.append("ORDER BY runs.created_at DESC LIMIT ?")
+        # rowid 次键：同秒创建的多个 run 顺序确定（分页/翻页稳定）。
+        sql.append("ORDER BY runs.created_at DESC, runs.rowid DESC LIMIT ?")
         params.append(candidate_limit)
 
         with self.connect() as conn:
             rows = conn.execute("\n".join(sql), params).fetchall()
+            fts_hits: set[str] = self._fts_run_ids(conn, text) if text else set()
             results = []
             for row in rows:
                 artifact_sql = """
-                    SELECT tool_name, kind, path, created_at
+                    SELECT tool_name, kind, path, created_at, file_size, sha256
                     FROM artifacts
                     WHERE run_id = ?
                 """
@@ -451,7 +551,7 @@ class MemoryStore:
                     """,
                     (row["id"], tool or ""),
                 ).fetchall()
-                if text and not self._run_matches_text(row=row, tool_calls=tool_calls, artifacts=artifact_records, text=text):
+                if text and row["id"] not in fts_hits and not self._run_matches_text(row=row, tool_calls=tool_calls, artifacts=artifact_records, text=text):
                     continue
                 results.append(
                     {
@@ -471,9 +571,10 @@ class MemoryStore:
                         "artifact_summary": self._artifact_summary(artifact_records),
                     }
                 )
-                if len(results) >= limit:
+                if len(results) >= target_count:
                     break
-        return results
+        # offset 分页：收集满 offset+limit 后切片（text 深扫语义下 SQL OFFSET 不可用，此处统一处理）。
+        return results[offset:]
 
     def _write_artifact(
         self,
@@ -491,7 +592,7 @@ class MemoryStore:
         target_dir = self.output_dir / now.strftime("%Y") / now.strftime("%m") / now.strftime("%d")
         target_dir.mkdir(parents=True, exist_ok=True)
         suffix = f"{tool_call_id}" if tool_call_id is not None else "dispatch"
-        target_path = target_dir / f"{run_id}_{tool_name}_{suffix}.json"
+        target_path = target_dir / f"{run_id}_{_safe_file_component(tool_name)}_{suffix}.json"
         artifact_payload = self._build_record_payload(
             run_id=run_id,
             tool_name=tool_name,
@@ -602,7 +703,7 @@ class MemoryStore:
                 (run_id,),
             ).fetchall()
             artifacts = conn.execute(
-                "SELECT tool_name, kind, path, created_at FROM artifacts WHERE run_id = ? ORDER BY id ASC",
+                "SELECT tool_name, kind, path, created_at, file_size, sha256 FROM artifacts WHERE run_id = ? ORDER BY id ASC",
                 (run_id,),
             ).fetchall()
             entities = conn.execute(
@@ -650,8 +751,13 @@ class MemoryStore:
         path = Path(str(record.get("path") or ""))
         exists = path.is_file()
         record["exists"] = exists
-        record["file_size"] = path.stat().st_size if exists else 0
-        record["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest() if exists else None
+        # 优先取写入时落库的 size/sha（消每次 manifest 刷新对全部文件的 O(n²) 重读重算）；
+        # 老行列为 NULL 时回退现算一次。
+        if not exists:
+            record["file_size"] = 0
+            record["sha256"] = None
+        elif not record.get("sha256"):
+            record["file_size"], record["sha256"] = _file_hash_info(path)
         return record
 
     def _refresh_run_manifest(self, run_id: str) -> dict[str, Any]:
@@ -690,8 +796,12 @@ class MemoryStore:
         record = dict(artifact)
         path = Path(record["path"])
         record["exists"] = path.is_file()
-        record["file_size"] = path.stat().st_size if record["exists"] else 0
-        record["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest() if record["exists"] else None
+        # 优先取落库 size/sha；老行（NULL）回退现算。
+        if not record["exists"]:
+            record["file_size"] = 0
+            record["sha256"] = None
+        elif not record.get("sha256"):
+            record["file_size"], record["sha256"] = _file_hash_info(path)
         if include_payload:
             if record["exists"]:
                 try:

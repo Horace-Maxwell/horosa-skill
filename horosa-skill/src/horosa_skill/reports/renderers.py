@@ -49,8 +49,15 @@ def render_report(document: dict[str, Any], *, output_path: Path, format_name: s
             _render_pdf(document, tmp_path)
         payload = tmp_path.read_bytes()
         os.replace(str(tmp_path), str(output_path))
-    except BaseException:
+    except BaseException as exc:
         tmp_path.unlink(missing_ok=True)
+        if normalized in {"docx", "pdf"}:
+            # 渲染失败降级：自动改存 TXT（纯文本全文），绝不静默丢内容——结果里如实标注降级。
+            degraded = _render_txt_degraded(document, output_path)
+            if degraded is not None:
+                degraded["degraded_from"] = normalized
+                degraded["degrade_reason"] = f"{type(exc).__name__}: {exc}"
+                return degraded
         raise
     return {
         "path": str(output_path),
@@ -58,6 +65,76 @@ def render_report(document: dict[str, Any], *, output_path: Path, format_name: s
         "file_size": len(payload),
         "sha256": hashlib.sha256(payload).hexdigest(),
     }
+
+
+def _render_txt_degraded(document: dict[str, Any], intended_path: Path) -> dict[str, Any] | None:
+    # DOCX/PDF 渲染异常时的兜底：把报告全文（plain_text 或 JSON）写成 UTF-8 TXT 落在同名 .txt。
+    try:
+        txt_path = intended_path.with_suffix(".txt")
+        text = document.get("plain_text")
+        if not isinstance(text, str) or not text.strip():
+            text = json.dumps(document, ensure_ascii=False, indent=2)
+        txt_path.write_text(text, encoding="utf-8")
+        payload = txt_path.read_bytes()
+        return {
+            "path": str(txt_path),
+            "format": "txt",
+            "file_size": len(payload),
+            "sha256": hashlib.sha256(payload).hexdigest(),
+        }
+    except OSError:
+        return None
+
+
+_MD_TABLE_SEP_RE = re.compile(r"^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$")
+
+
+def _split_markdown_blocks(text: str) -> list[tuple[str, Any]]:
+    """把正文拆成 ('text', str) 与 ('table', {'header': [...], 'rows': [[...]]}) 块序列。
+
+    识别标准 Markdown 管道表：表头行 `| a | b |` + 分隔行 `|---|---|` + 数据行。
+    非表格内容原样归入 text 块（含空行分段语义交由调用方 _paragraphs 处理）。
+    """
+    lines = (text or "").splitlines()
+    blocks: list[tuple[str, Any]] = []
+    buffer: list[str] = []
+
+    def flush_text() -> None:
+        if buffer:
+            blocks.append(("text", "\n".join(buffer)))
+            buffer.clear()
+
+    def parse_row(line: str) -> list[str]:
+        row = line.strip()
+        if row.startswith("|"):
+            row = row[1:]
+        if row.endswith("|"):
+            row = row[:-1]
+        return [cell.strip() for cell in row.split("|")]
+
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        is_pipe_row = "|" in line and line.strip().startswith("|")
+        if is_pipe_row and i + 1 < len(lines) and _MD_TABLE_SEP_RE.match(lines[i + 1] or ""):
+            header = parse_row(line)
+            rows: list[list[str]] = []
+            j = i + 2
+            while j < len(lines) and "|" in lines[j] and lines[j].strip().startswith("|"):
+                cells = parse_row(lines[j])
+                # 列数对齐表头（缺补空、多截断），保证表格矩形。
+                if len(cells) < len(header):
+                    cells = cells + [""] * (len(header) - len(cells))
+                rows.append(cells[: len(header)])
+                j += 1
+            flush_text()
+            blocks.append(("table", {"header": header, "rows": rows}))
+            i = j
+            continue
+        buffer.append(line)
+        i += 1
+    flush_text()
+    return blocks
 
 
 def _render_docx(document: dict[str, Any], output_path: Path) -> None:
@@ -141,11 +218,56 @@ def _render_docx(document: dict[str, Any], output_path: Path) -> None:
         if color:
             run.font.color.rgb = RGBColor.from_string(color)
 
+    def add_data_table(header: list[str], rows: list[list[str]]) -> None:
+        # Markdown 管道表 → Word 真表格：表头底纹加粗 + 跨页重复（w:tblHeader）+ 全宽 + 细边框。
+        cols = max(1, len(header))
+        table = doc.add_table(rows=1, cols=cols)
+        table.autofit = False
+        set_table_full_width(table)
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER
+        col_width = Inches(6.25 / cols)
+        for column in table.columns:
+            column.width = col_width
+        header_row = table.rows[0]
+        # 跨页重复表头
+        tr_pr = header_row._tr.get_or_add_trPr()
+        tbl_header = OxmlElement("w:tblHeader")
+        tbl_header.set(qn("w:val"), "true")
+        tr_pr.append(tbl_header)
+        for idx, cell in enumerate(header_row.cells):
+            cell.width = col_width
+            set_cell_shading(cell, "EEF6F2")
+            set_cell_border(cell)
+            p = cell.paragraphs[0]
+            run = p.add_run(header[idx] if idx < len(header) else "")
+            style_run(run, size=9.6, bold=True, color="0F766E")
+        for data_row in rows:
+            row = table.add_row()
+            for idx, cell in enumerate(row.cells):
+                cell.width = col_width
+                set_cell_border(cell)
+                p = cell.paragraphs[0]
+                run = p.add_run(data_row[idx] if idx < len(data_row) else "")
+                style_run(run, size=9.6, color="14211F")
+        doc.add_paragraph()
+
     def add_text(text: str, *, style: str = "Normal") -> None:
-        for paragraph in _paragraphs(text):
-            p = doc.add_paragraph(style=style)
-            run = p.add_run(paragraph)
-            style_run(run, size=10.2, color="14211F")
+        # 正文按块渲染：Markdown 管道表成真表格，其余成段落。
+        for kind, payload in _split_markdown_blocks(text):
+            if kind == "table":
+                add_data_table(payload["header"], payload["rows"])
+                continue
+            for paragraph in _paragraphs(payload):
+                p = doc.add_paragraph(style=style)
+                run = p.add_run(paragraph)
+                style_run(run, size=10.2, color="14211F")
+
+    def set_outline_level(paragraph: Any, level: int) -> None:
+        # 给段落挂大纲级别（0=一级）：Word 导航窗格/自动目录识别 outlineLvl，无需换 Heading 视觉样式。
+        p_pr = paragraph._p.get_or_add_pPr()
+        outline = OxmlElement("w:outlineLvl")
+        outline.set(qn("w:val"), str(level))
+        p_pr.append(outline)
 
     def add_heading_block(text: str, *, level: int = 1) -> None:
         table = doc.add_table(rows=1, cols=1)
@@ -161,6 +283,7 @@ def _render_docx(document: dict[str, Any], output_path: Path) -> None:
         p = cell.paragraphs[0]
         p.paragraph_format.space_before = Pt(3)
         p.paragraph_format.space_after = Pt(3)
+        set_outline_level(p, 0 if level == 1 else 1)
         run = p.add_run(text)
         style_run(run, size=16 if level == 1 else 12.5, bold=True, color="14211F" if level == 1 else "0F766E")
         doc.add_paragraph()
@@ -179,11 +302,21 @@ def _render_docx(document: dict[str, Any], output_path: Path) -> None:
         p = cell.paragraphs[0]
         title_run = p.add_run(title_text)
         style_run(title_run, size=12.5, bold=True, color=accent)
-        for paragraph in _paragraphs(body_text):
-            p = cell.add_paragraph()
-            run = p.add_run(paragraph)
-            style_run(run, size=10.2, color="14211F")
+        for kind, payload in _split_markdown_blocks(body_text):
+            if kind == "table":
+                # 卡片内表格：渲染在卡片下方为独立真表格（表格嵌单元格在窄卡内可读性差）。
+                pass_through_tables.append(payload)
+                continue
+            for paragraph in _paragraphs(payload):
+                p = cell.add_paragraph()
+                run = p.add_run(paragraph)
+                style_run(run, size=10.2, color="14211F")
         doc.add_paragraph()
+        while pass_through_tables:
+            payload = pass_through_tables.pop(0)
+            add_data_table(payload["header"], payload["rows"])
+
+    pass_through_tables: list[dict[str, Any]] = []
 
     ai_report = document.get("ai_report") if isinstance(document.get("ai_report"), dict) else {}
     display_question = _display_question(document, ai_report)
@@ -217,6 +350,27 @@ def _render_docx(document: dict[str, Any], output_path: Path) -> None:
     meta = "结构化解读 · 行动建议 · 风险提示"
     run = p.add_run(meta)
     style_run(run, size=9.5, color="DBE8E3")
+    doc.add_paragraph()
+
+    # 目录：TOC 域（取大纲级别 1-2），Word 打开时经 updateFields 自动生成、可点击跳转。
+    toc_head = doc.add_paragraph()
+    toc_run = toc_head.add_run("目录")
+    style_run(toc_run, size=13, bold=True, color="0F766E")
+    toc_paragraph = doc.add_paragraph()
+    fld = OxmlElement("w:fldSimple")
+    fld.set(qn("w:instr"), 'TOC \\o "1-2" \\h \\z \\u')
+    placeholder = OxmlElement("w:r")
+    placeholder_text = OxmlElement("w:t")
+    placeholder_text.text = "（打开文档后目录将自动更新）"
+    placeholder.append(placeholder_text)
+    fld.append(placeholder)
+    toc_paragraph._p.append(fld)
+    settings_element = doc.settings.element
+    update_fields = settings_element.find(qn("w:updateFields"))
+    if update_fields is None:
+        update_fields = OxmlElement("w:updateFields")
+        settings_element.append(update_fields)
+    update_fields.set(qn("w:val"), "true")
     doc.add_paragraph()
 
     add_heading_block("解读目标")
@@ -256,6 +410,40 @@ def _render_docx(document: dict[str, Any], output_path: Path) -> None:
             continue
         add_heading_block(str(section.get("title") or "章节"))
         add_text(str(section.get("body") or ""))
+
+    # 文档元数据：文件属性可检索/归档（标题/作者/主题/关键词/创建时间）。
+    # OOXML core property 单项硬限 255 字符；search_index 里可能混入整段长文本，先滤短词再截断。
+    source_meta = document.get("source") if isinstance(document.get("source"), dict) else {}
+    props = doc.core_properties
+    props.title = _core_prop_text(document.get("title") or "结构化咨询报告")
+    props.author = "Horosa Skill"
+    props.subject = _core_prop_text(source_meta.get("technique_label") or source_meta.get("tool_name") or "")
+    keywords = document.get("search_index") if isinstance(document.get("search_index"), dict) else {}
+    keyword_list = keywords.get("keywords") if isinstance(keywords.get("keywords"), list) else []
+    short_keywords = [str(k).strip() for k in keyword_list if str(k).strip() and len(str(k).strip()) <= 24]
+    props.keywords = _core_prop_text(", ".join(short_keywords[:12]))
+    props.comments = "Generated by Horosa Skill report renderer"
+
+    # 页脚：报告标题 + 「第 X 页 / 共 Y 页」域（与 PDF 页脚对齐）。
+    footer = doc.sections[0].footer
+    footer_p = footer.paragraphs[0]
+    footer_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title_run = footer_p.add_run(f"{props.title}　·　第 ")
+    style_run(title_run, size=8, color="66706D")
+    for instr in ("PAGE", "NUMPAGES"):
+        fld_page = OxmlElement("w:fldSimple")
+        fld_page.set(qn("w:instr"), instr)
+        run_el = OxmlElement("w:r")
+        text_el = OxmlElement("w:t")
+        text_el.text = "1"
+        run_el.append(text_el)
+        fld_page.append(run_el)
+        footer_p._p.append(fld_page)
+        if instr == "PAGE":
+            mid_run = footer_p.add_run(" 页 / 共 ")
+            style_run(mid_run, size=8, color="66706D")
+    tail_run = footer_p.add_run(" 页")
+    style_run(tail_run, size=8, color="66706D")
 
     doc.save(str(output_path))
 
@@ -359,10 +547,43 @@ def _render_pdf(document: dict[str, Any], output_path: Path) -> None:
         story.append(block)
         story.append(Spacer(1, 5))
 
+    table_cell = ParagraphStyle("HorosaTableCell", parent=base, fontSize=8.6, leading=12, spaceAfter=0)
+    table_head = ParagraphStyle("HorosaTableHead", parent=table_cell, fontName=bold_font_name, textColor=green)
+
+    def add_data_table(header: list[str], rows: list[list[str]]) -> None:
+        # Markdown 管道表 → PDF 真表格：表头底纹 + repeatRows 跨页重复表头 + 细网格。
+        cols = max(1, len(header))
+        data = [[Paragraph(_esc(h), table_head) for h in header]]
+        for row in rows:
+            data.append([Paragraph(_esc(row[idx] if idx < len(row) else ""), table_cell) for idx in range(cols)])
+        story.append(
+            Table(
+                data,
+                colWidths=[content_width / cols] * cols,
+                repeatRows=1,
+                style=TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, 0), pale),
+                        ("GRID", (0, 0), (-1, -1), 0.4, line),
+                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                        ("TOPPADDING", (0, 0), (-1, -1), 3),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                    ]
+                ),
+            )
+        )
+        story.append(Spacer(1, 6))
+
     def add_body(text: str) -> None:
-        for paragraph in _paragraphs(text):
-            story.append(Paragraph(_esc(paragraph), base))
-            story.append(Spacer(1, 4))
+        for kind, payload in _split_markdown_blocks(text):
+            if kind == "table":
+                add_data_table(payload["header"], payload["rows"])
+                continue
+            for paragraph in _paragraphs(payload):
+                story.append(Paragraph(_esc(paragraph), base))
+                story.append(Spacer(1, 4))
 
     def add_note_card(title_text: str, body_text: str, *, accent: Any = green) -> None:
         rows = [
@@ -485,10 +706,19 @@ def _render_pdf(document: dict[str, Any], output_path: Path) -> None:
 
 
 def _docx_font_name() -> str:
+    # 中文字体候选（按平台常见优先级）：Win 微软雅黑 → Mac 苹方/宋体 → Arial Unicode → Noto CJK。
+    # 返回的字体名同时用于 w:eastAsia，确保 CJK 字形真实存在，异机打开不豆腐。
     if Path("C:/Windows/Fonts/msyh.ttc").exists() or Path("C:/Windows/Fonts/msyh.ttf").exists():
         return "Microsoft YaHei"
+    if Path("/System/Library/Fonts/PingFang.ttc").exists():
+        return "PingFang SC"
+    if Path("/System/Library/Fonts/Supplemental/Songti.ttc").exists():
+        return "Songti SC"
     if Path("/System/Library/Fonts/Supplemental/Arial Unicode.ttf").exists():
         return "Arial Unicode MS"
+    for noto in ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"):
+        if Path(noto).exists():
+            return "Noto Sans CJK SC"
     return "Arial"
 
 
@@ -536,9 +766,16 @@ def _register_pdf_fonts(pdfmetrics: Any, UnicodeCIDFont: Any, TTFont: Any) -> tu
         "C:/Windows/Fonts/simhei.ttf",
         "C:/Windows/Fonts/simsun.ttc",
         "C:/Windows/Fonts/simsun.ttf",
+        # macOS 中文正体候选（苹方/宋体优先于 Arial Unicode）
+        "/System/Library/Fonts/PingFang.ttc",
+        "/System/Library/Fonts/Supplemental/Songti.ttc",
+        "/System/Library/Fonts/STHeiti Light.ttc",
         "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
         "/System/Library/Fonts/Supplemental/AppleGothic.ttf",
         "/System/Library/Fonts/SFNS.ttf",
+        # Linux Noto CJK
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
     ]
     for index, candidate in enumerate(candidates):
         path = Path(candidate)
@@ -546,7 +783,11 @@ def _register_pdf_fonts(pdfmetrics: Any, UnicodeCIDFont: Any, TTFont: Any) -> tu
             continue
         font_name = f"HorosaSans{index}"
         try:
-            pdfmetrics.registerFont(TTFont(font_name, str(path)))
+            if path.suffix.lower() == ".ttc":
+                # TTC 集合字体需指定子字体索引（0=常规），否则 reportlab 拒载。
+                pdfmetrics.registerFont(TTFont(font_name, str(path), subfontIndex=0))
+            else:
+                pdfmetrics.registerFont(TTFont(font_name, str(path)))
             return font_name, font_name
         except Exception:
             continue
@@ -556,6 +797,12 @@ def _register_pdf_fonts(pdfmetrics: Any, UnicodeCIDFont: Any, TTFont: Any) -> tu
         return fallback, fallback
     except Exception:
         return "Helvetica", "Helvetica"
+
+
+def _core_prop_text(value: Any, limit: int = 255) -> str:
+    """OOXML core property 文本硬限 255 字符，超限写入会直接抛错，统一在此截断。"""
+    text = str(value or "").strip()
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 def _human_sections(document: dict[str, Any]) -> list[dict[str, Any]]:
