@@ -92,7 +92,8 @@ def test_predictive_input_contracts_are_explicit_for_agents() -> None:
 
     assert {"pdtype", "pdMethod", "pdTimeKey", "pdaspects"} <= set(pd["required_for_real_call"])
     assert "主限表格" in pd["output_contract"]
-    assert "Required input for a real call" in pdchart_doc
+    # docstring 双语化：必填清单标记为「真实调用必填 / Required input」。
+    assert "真实调用必填" in pdchart_doc and "Required input" in pdchart_doc
     assert "主限法盘星体表格" in pdchart_doc
 
 

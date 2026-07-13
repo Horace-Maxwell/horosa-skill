@@ -916,19 +916,21 @@ def build_tool_docstring(tool_name: str) -> str:
     lines = [definition.description]
     if contract.get("confirmation_required"):
         lines.append(
-            "Agent gate: ask the user for result-changing settings first, then pass "
-            "`agent_confirmed_settings=true` or `defaults_accepted=true` with `clarification_notes`."
+            "澄清闸：先向用户确认会改变结果的设置，再传 `agent_confirmed_settings=true` 或 "
+            "`defaults_accepted=true` 并附 `clarification_notes`。 / Agent gate: confirm result-changing "
+            "settings with the user first, then pass `agent_confirmed_settings=true` or "
+            "`defaults_accepted=true` with `clarification_notes`."
         )
     required = contract.get("required_for_real_call") or contract.get("technical", {}).get("technical_required_fields", [])
     if required:
-        lines.append("Required input for a real call: " + ", ".join(str(item) for item in required) + ".")
+        lines.append("真实调用必填 / Required input: " + ", ".join(str(item) for item in required) + ".")
     target_fields = contract.get("target_fields")
     if isinstance(target_fields, dict) and target_fields:
         field_notes = "; ".join(f"{key}: {value}" for key, value in list(target_fields.items())[:5])
-        lines.append("Timing/target fields: " + field_notes)
+        lines.append("时点 / 目标字段 · Timing/target fields: " + field_notes)
     output_contract = contract.get("output_contract") or []
     if output_contract:
-        lines.append("Expected output sections: " + ", ".join(str(item) for item in output_contract) + ".")
+        lines.append("预期输出段 / Expected output sections: " + ", ".join(str(item) for item in output_contract) + ".")
     return "\n".join(lines)
 
 
