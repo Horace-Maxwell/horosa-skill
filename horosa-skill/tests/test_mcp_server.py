@@ -146,8 +146,9 @@ def test_mcp_full_mode_exposes_all_technique_tools(tmp_path) -> None:
     settings, service = _make_service(tmp_path)
     tools = asyncio.run(create_mcp_server(service, settings).list_tools())
     names = {tool.name for tool in tools}
-    # 9 个门面 + 全部技法平铺。
-    assert len(names) == 9 + len(TOOL_DEFINITIONS)
+    # 8 个门面 + 全部技法平铺（report_from_run 已下线并入 report_render）。
+    assert len(names) == 8 + len(TOOL_DEFINITIONS)
+    assert "horosa_report_from_run" not in names
     assert "horosa_cn_qimen" in names
     assert "horosa_tool_run" not in names
 
@@ -161,7 +162,7 @@ def test_mcp_compact_mode_exposes_facade_plus_tool_run(tmp_path) -> None:
     settings.mcp_compact = True
     tools = asyncio.run(create_mcp_server(service, settings).list_tools())
     names = {tool.name for tool in tools}
-    assert len(names) == 10
+    assert len(names) == 9
     assert "horosa_tool_run" in names and "horosa_cn_qimen" not in names
     # 技法目录随 docstring 在场（dispatch 与 tool_run 均可发现全部技法）。
     by_name = {tool.name: tool for tool in tools}

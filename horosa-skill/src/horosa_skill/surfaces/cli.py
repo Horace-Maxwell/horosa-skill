@@ -33,9 +33,12 @@ from horosa_skill.tracing import TraceRecorder
 
 app = typer.Typer(
     help=(
-        "Horosa Skill CLI. Recommended OpenClaw path: `client openclaw-setup`. "
+        "Horosa Skill CLI — 本地术数/占星技法工具箱。\n"
+        "上手三步：`install`（装离线 runtime）→ `selfcheck`（活体验证）→ `serve`（起 MCP 接 AI 客户端）。\n"
+        "客户端注册：`client config --format claude-code|claude-desktop|codex`。\n"
         "Use `ask` / `dispatch` for natural-language orchestration, `tool run` for direct method calls, "
-        "and `memory show/query/answer` for local record management."
+        "and `memory show/query/answer` for local record management. "
+        "OpenClaw path: `client openclaw-setup`."
     )
 )
 tool_app = typer.Typer(help="Direct atomic method calls such as chart, qimen, liureng, and bazi.")
@@ -1119,6 +1122,77 @@ def trace_latest(
             "events": tracer.read_latest(limit=max(1, limit)),
         }
     )
+
+
+@client_app.command("config")
+def client_config(
+    format_name: str = typer.Option(
+        "claude-code",
+        "--format",
+        help="Target client: claude-code / claude-desktop / codex / mcporter / openclaw.",
+    ),
+    skill_root: Path = typer.Option(
+        _package_root(),
+        help="Path to the horosa-skill package directory, or the repo root that contains it.",
+    ),
+    server_name: str = typer.Option("horosa", help="Server name key written into the MCP config."),
+    write: Path | None = typer.Option(None, help="Optional output file path (also printed to stdout)."),
+) -> None:
+    """按客户端生成即用 MCP 配置（自动注入真实绝对路径，无手填占位符）。"""
+    resolved_skill_root = _resolve_skill_root(skill_root)
+    uv_command = resolve_uv_command()
+    stdio_command = [
+        *uv_command,
+        "run",
+        "--directory",
+        str(resolved_skill_root),
+        "horosa-skill",
+        "serve",
+        "--transport",
+        "stdio",
+    ]
+    key = format_name.strip().lower()
+    if key in {"mcporter", "openclaw"}:
+        payload: dict[str, Any] = _build_openclaw_config(
+            skill_root=resolved_skill_root,
+            server_name=server_name,
+            format_name=key,
+            isolate_home=None,
+        )
+    elif key == "claude-code":
+        payload = {
+            "note": "运行下面这一条命令即可把 Horosa 注册进 Claude Code（stdio 直连，无需常驻 serve）。",
+            "command": "claude mcp add " + server_name + " -- " + " ".join(stdio_command),
+            "alternative_http": {
+                "note": "或先 `uv run horosa-skill serve` 再注册 HTTP 端点：",
+                "command": f"claude mcp add {server_name} --transport http http://127.0.0.1:8765/mcp",
+            },
+        }
+    elif key == "claude-desktop":
+        payload = {
+            "note": "合并进 Claude Desktop 的 claude_desktop_config.json（mcpServers 键下）。",
+            "mcpServers": {
+                server_name: {
+                    "command": stdio_command[0],
+                    "args": stdio_command[1:],
+                }
+            },
+        }
+    elif key == "codex":
+        payload = {
+            "note": "追加到 Codex 的 config.toml；HTTP 变体需先 `uv run horosa-skill serve`。",
+            "toml_stdio": (
+                f"[mcp_servers.{server_name}]\n"
+                f"command = \"{stdio_command[0]}\"\n"
+                f"args = {json.dumps(stdio_command[1:])}\n"
+            ),
+            "toml_http": f"[mcp_servers.{server_name}]\nurl = \"http://127.0.0.1:8765/mcp\"\n",
+        }
+    else:
+        raise typer.BadParameter("format must be one of: claude-code / claude-desktop / codex / mcporter / openclaw")
+    if write is not None:
+        _write_json_file(write, payload)
+    _print_json(payload)
 
 
 @client_app.command("openclaw-config")

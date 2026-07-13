@@ -259,13 +259,19 @@ echo '{"run_id":"<run_id>","user_question":"...","ai_answer":"...","ai_answer_st
 
 ## 快速开始
 
+前置：[uv](https://docs.astral.sh/uv/)（一行安装：`curl -LsSf https://astral.sh/uv/install.sh | sh`）；Python ≥3.12 由 uv 自动准备；磁盘留足 ~5GB（runtime 下载 ~730MB、解压后 ~2GB）。
+
 ```bash
-cd horosa-skill
+git clone https://github.com/Horace-Maxwell/horosa-skill.git
+cd horosa-skill/horosa-skill
 uv sync
-uv run horosa-skill install      # 从 GitHub Release 安装离线 runtime
-uv run horosa-skill doctor       # 确认 runtime 就绪（期望 issues: []）
+uv run horosa-skill install      # 安装离线 runtime（~730MB，带进度/断点续传；已最新则秒退）
+uv run horosa-skill doctor       # 环境体检（磁盘/端口/node 实跑探针，期望 issues: []）
+uv run horosa-skill selfcheck    # 活体验证：起一张盘 → 存 → 读回
 uv run horosa-skill serve        # 启动本地 MCP（默认 http://127.0.0.1:8765/mcp）
 ```
+
+装不上怎么办：`uv: command not found` → 先装 uv（上面一行）；下载慢/断网 → 重跑 `install` 会断点续传，或设 `HOROSA_RUNTIME_MIRROR=<镜像前缀>`；磁盘不足/端口被占 → `doctor` 会给出体检项与 next_action；升级 → `uv run horosa-skill upgrade`（同版本不重下）；卸载 → `uv run horosa-skill uninstall`（默认只打印将删清单）。
 
 给 Claude Desktop 这类 stdio 客户端：
 
@@ -306,10 +312,13 @@ uv run horosa-skill export registry
 
 ## 当前支持的 AI 客户端
 
-- [Claude Desktop 配置示例](./horosa-skill/examples/clients/claude_desktop_config.json)
-- [Codex 配置示例](./horosa-skill/examples/clients/codex-config.toml)
+- **Claude Code**（一条命令注册）：`uv run horosa-skill client config --format claude-code` 会生成带真实绝对路径的 `claude mcp add …` 命令，复制执行即可；详见 [接入说明](./horosa-skill/examples/clients/claude-code.md)
+- [Claude Desktop 配置示例](./horosa-skill/examples/clients/claude_desktop_config.json)（或 `client config --format claude-desktop` 自动生成，免手填路径）
+- [Codex 配置示例](./horosa-skill/examples/clients/codex-config.toml)（或 `client config --format codex`）
 - [Open WebUI 接入说明](./horosa-skill/examples/clients/openwebui-streamable-http.md)
 - [OpenClaw 接入说明](./horosa-skill/examples/clients/openclaw-mcp.md)
+
+> 根目录的 `server.json` 是 MCP Registry 收录元数据，普通用户无需手改；本地接入请用上面的生成器或示例。
 
 接 OpenClaw / mcporter 时，推荐用生成器命令减少手改 JSON 和路径出错：
 

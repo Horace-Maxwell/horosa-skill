@@ -2,6 +2,19 @@
 
 Horosa Skill has a few different support paths depending on what you need.
 
+## Self-Service First / 先自助排查
+
+Before opening an issue, run these locally — they resolve most problems:
+
+```bash
+uv run horosa-skill doctor      # 环境体检：runtime/磁盘/端口/node 实跑探针 + next_action
+uv run horosa-skill selfcheck   # 活体验证：起一张盘 → 存 → 读回（失败带修复指引）
+```
+
+- Runtime not installed → `uv run horosa-skill install` (≈730MB download, resumable).
+- Backend cold start can take up to ~45s on the first call — retry once before reporting.
+- Behind a slow network? Set `HOROSA_RUNTIME_MIRROR=<mirror-prefix>` and re-run install.
+
 ## Usage Questions
 
 Use GitHub Discussions if they become available for the repository. Until then,
@@ -10,12 +23,13 @@ problem in this repository.
 
 ## Bug Reports
 
-Open a GitHub issue and include:
+Open a GitHub issue and include / 请求应带信息:
 
-- what you tried to do
-- which command, tool, or client you used
-- platform and runtime version
-- relevant logs or screenshots
+- what you tried to do（想做什么）
+- which command, tool, or client you used（哪条命令 / 哪个工具 / 哪个 AI 客户端）
+- platform and runtime version（`uv run horosa-skill --version` + OS）
+- the full JSON output of `uv run horosa-skill doctor`（脱敏后）
+- relevant logs or screenshots（相关日志，注意脱敏个人生辰）
 - whether the problem is reproducible on a fresh clone or fresh runtime install
 
 ## Feature Requests

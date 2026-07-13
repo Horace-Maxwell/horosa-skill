@@ -224,22 +224,17 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
             return _mcp_error_payload(exc)
         except Exception as exc:  # noqa: BLE001 - never break the MCP session on a report/IO error
             return _mcp_internal_error_payload(exc)
+    horosa_report_render.__doc__ = (
+        "Render a stored run into a DOCX/PDF/JSON report. Preferred when you already have a run_id "
+        "(from a prior tool call): pass run_id + format + your ai_report; the ai_report is auto "
+        "written back to memory (no separate memory_record_answer call needed)."
+    )
     horosa_report_render.__signature__ = _signature_for_input_model(ReportRenderInput)
     horosa_report_render.__annotations__ = {"return": dict[str, Any]}
     mcp.tool(name="horosa_report_render")(horosa_report_render)
 
-    def horosa_report_from_run(**kwargs: Any) -> dict[str, Any]:
-        try:
-            return service.report_render(
-                _normalize_mcp_request(_merge_mcp_arguments(kwargs), ReportRenderInput)
-            )
-        except ToolValidationError as exc:
-            return _mcp_error_payload(exc)
-        except Exception as exc:  # noqa: BLE001 - never break the MCP session on a report/IO error
-            return _mcp_internal_error_payload(exc)
-    horosa_report_from_run.__signature__ = _signature_for_input_model(ReportRenderInput)
-    horosa_report_from_run.__annotations__ = {"return": dict[str, Any]}
-    mcp.tool(name="horosa_report_from_run")(horosa_report_from_run)
+    # horosa_report_from_run 已下线：与 horosa_report_render 逐行同义（同一 ReportRenderInput
+    # → service.report_render），两个同义工具挤占 tools/list 并造成「该用哪个」歧义。
 
     def horosa_report_from_tool(**kwargs: Any) -> dict[str, Any]:
         raw_payload = _merge_mcp_arguments(kwargs)
@@ -258,12 +253,17 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
             return _mcp_error_payload(exc)
         except Exception as exc:  # noqa: BLE001 - never break the MCP session on a report/IO error
             return _mcp_internal_error_payload(exc)
+    horosa_report_from_tool.__doc__ = (
+        "One-shot: run a technique tool AND prepare its report. NOTE this re-casts the chart — if you "
+        "already called the tool and hold a run_id, use horosa_report_render instead (avoids a duplicate "
+        "backend call and a duplicate stored run)."
+    )
     horosa_report_from_tool.__signature__ = _signature_for_input_model(ReportFromToolInput)
     horosa_report_from_tool.__annotations__ = {"return": dict[str, Any]}
     mcp.tool(name="horosa_report_from_tool")(horosa_report_from_tool)
 
     if settings.mcp_compact:
-        # 精简模式：技法工具不平铺，注册一个按名直呼的通用工具（dispatch 关键词路由只覆盖部分技法，
+        # 精简模式（8 门面 + tool_run = 9 工具）：技法工具不平铺，注册一个按名直呼的通用工具（dispatch 关键词路由只覆盖部分技法，
         # 直呼通道保证 78 技法全部可达）；澄清闸照常生效。
         def horosa_tool_run(**kwargs: Any) -> ToolEnvelope:
             raw_payload = _merge_mcp_arguments(kwargs)

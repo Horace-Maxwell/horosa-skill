@@ -932,6 +932,26 @@ def build_tool_docstring(tool_name: str) -> str:
     return "\n".join(lines)
 
 
+# 软件用法帮助语料：随 guidance 返回，供 agent 据实回答「怎么装/怎么用/怎么出报告」类问题。
+SOFTWARE_USAGE_HELP: dict[str, list[str]] = {
+    "install": [
+        "安装：仓库目录执行 `uv run horosa-skill install`（约 730MB 下载，支持断点续传与 HOROSA_RUNTIME_MIRROR 镜像）。",
+        "升级：`uv run horosa-skill upgrade`（已最新则秒退不重下）；卸载：`uv run horosa-skill uninstall`（默认只打印将删清单）。",
+        "体检：`uv run horosa-skill doctor`（环境/磁盘/端口/文件）；活体验证：`uv run horosa-skill selfcheck`（起盘→存→读回）。",
+    ],
+    "workflow": [
+        "起盘：直接调技法工具（如 horosa_cn_qimen），结果读 data.export_snapshot.export_text 与 sections。",
+        "出报告：已有 run_id 时用 horosa_report_render(run_id, format, ai_report)——ai_report 会自动写回记忆；一步到位用 horosa_report_from_tool（注意会重新起盘）。",
+        "找历史：horosa_memory_query 按人名/技法/日期/全文组合检索（limit/offset 分页），horosa_memory_show(run_id) 取完整记录。",
+        "省 token：技法工具可传 response_view='titles'（只回段标题）或 'sections'（段标题+正文），完整结果始终已存档。",
+    ],
+    "boundaries": [
+        "本产品 local-first：结果全部来自本机运行时，不依赖远程数据库或外部服务；缺字段先怀疑本地输入/运行时而非网络服务。",
+        "禁止手算这些技法（shell/Python/记忆公式都不行）——只以工具返回的 export_snapshot 为准。",
+    ],
+}
+
+
 def build_technique_catalog() -> str:
     """78 技法一行索引（按 domain 分组）——精简 MCP 模式下拼进 dispatch/tool_run 的 docstring。
 
@@ -1123,6 +1143,9 @@ def build_agent_guidance(
         ],
         "tools": tools,
         "report_and_memory": deepcopy(REPORT_AND_MEMORY_GUIDANCE) if include_all else {},
+        # 软件用法帮助（防编造语料）：agent 回答「这套工具怎么用/怎么装/怎么出报告」时据此作答，
+        # 不要凭通用知识虚构不存在的命令或功能。
+        "usage_help": SOFTWARE_USAGE_HELP,
     }
 
 

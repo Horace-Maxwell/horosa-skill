@@ -25,7 +25,7 @@ Do not hand-calculate Horosa techniques with `Exec`, shell, Python, JavaScript s
 4. Ask the user one concise clarification question with concrete options when settings are unclear.
 5. Normalize time, place, timezone, and question text.
 6. Call the tool.
-7. Read `export_snapshot.export_text`, `export_format.sections`, and `summary`.
+7. Read `export_snapshot.export_text`, `export_snapshot.sections`, and `summary`.
 8. If the user wants a human-readable answer, explain the calculated chart/pan directly in the chat.
 9. If the user wants a file, call the report tools and save JSON/DOCX/PDF artifacts.
 10. If the user asks follow-up questions, use memory tools to retrieve prior runs and AI answers.

@@ -255,13 +255,19 @@ This makes it not just a "tool layer" but a "tool layer + traceable knowledge ba
 
 ## Quick start
 
+Prerequisites: [uv](https://docs.astral.sh/uv/) (one-liner: `curl -LsSf https://astral.sh/uv/install.sh | sh`); Python ≥3.12 is provisioned by uv; keep ~5GB disk free (runtime download ~730MB, ~2GB unpacked).
+
 ```bash
-cd horosa-skill
+git clone https://github.com/Horace-Maxwell/horosa-skill.git
+cd horosa-skill/horosa-skill
 uv sync
-uv run horosa-skill install      # install the offline runtime from a GitHub Release
-uv run horosa-skill doctor       # confirm runtime is ready (expect issues: [])
+uv run horosa-skill install      # install the offline runtime (~730MB, progress + resumable; no-op when up to date)
+uv run horosa-skill doctor       # environment checkup (disk / ports / node probe; expect issues: [])
+uv run horosa-skill selfcheck    # live check: cast one chart -> store -> read back
 uv run horosa-skill serve        # start local MCP (default http://127.0.0.1:8765/mcp)
 ```
+
+Troubleshooting install: `uv: command not found` -> install uv first (one-liner above); slow/broken network -> re-run `install` (resumes from the partial download) or set `HOROSA_RUNTIME_MIRROR=<mirror-prefix>`; low disk / busy ports -> `doctor` reports each check with a next_action; upgrade -> `uv run horosa-skill upgrade` (skips the download when already current); uninstall -> `uv run horosa-skill uninstall` (dry-run by default).
 
 For stdio clients like Claude Desktop: `uv run horosa-skill serve --transport stdio`.
 
@@ -291,10 +297,13 @@ uv run horosa-skill export registry
 
 ## Supported AI clients
 
-- [Claude Desktop config example](./horosa-skill/examples/clients/claude_desktop_config.json)
-- [Codex config example](./horosa-skill/examples/clients/codex-config.toml)
-- [Open WebUI integration](./horosa-skill/examples/clients/openwebui-streamable-http.md)
-- [OpenClaw integration](./horosa-skill/examples/clients/openclaw-mcp.md)
+- **Claude Code** (one-command registration): `uv run horosa-skill client config --format claude-code` prints a ready-to-run `claude mcp add ...` with real absolute paths; see the [guide](./horosa-skill/examples/clients/claude-code.md)
+- [Claude Desktop config example](./horosa-skill/examples/clients/claude_desktop_config.json) (or `client config --format claude-desktop` to generate one, no placeholder editing)
+- [Codex config example](./horosa-skill/examples/clients/codex-config.toml) (or `client config --format codex`)
+- [Open WebUI guide](./horosa-skill/examples/clients/openwebui-streamable-http.md)
+- [OpenClaw guide](./horosa-skill/examples/clients/openclaw-mcp.md)
+
+> `server.json` at the repo root is MCP Registry metadata — regular users never edit it; use the generator or the examples above.
 
 For OpenClaw / mcporter, prefer the generator to avoid hand-editing JSON and paths:
 
