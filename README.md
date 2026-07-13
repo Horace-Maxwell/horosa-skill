@@ -1,234 +1,286 @@
-**简体中文** | [English](./README_EN.md)
-
 <div align="center">
-  <h1>Horosa Skill</h1>
-  <p><strong>把星阙 / Horosa 变成任何 AI 都能本地调用的离线玄学能力层。</strong></p>
-  <p>克隆仓库、安装一次离线 runtime，就能让 Claude、Codex、Open WebUI、OpenClaw 等 AI 在你自己的机器上直接调用 <strong>78 个</strong>真实技法——西洋本命 / 推运 / 卜卦 / 择日、八字 / 紫微 / 大六壬 / 三式合一、以及 <strong>全 14 路神数</strong>——读取完整的星阙式 AI 导出协议，输出稳定结构化结果，并把每次分析沉淀为可检索的本地记录。断网可用，与星阙桌面端逐值同源。</p>
 
-  <p><a href="https://github.com/Horace-Maxwell/horosa-skill"><img src="https://img.shields.io/badge/GitHub-Repository-111827?style=for-the-badge&logo=github" alt="Repository" /></a>&nbsp;<a href="https://github.com/Horace-Maxwell/horosa-skill/releases"><img src="https://img.shields.io/badge/GitHub-Releases-1d4ed8?style=for-the-badge&logo=github" alt="Releases" /></a>&nbsp;<a href="./README_EN.md"><img src="https://img.shields.io/badge/Read%20in-English-0f766e?style=for-the-badge" alt="Read in English" /></a></p>
+<img src="./docs/assets/banner.svg" alt="Horosa Skill — 把星阙 78 个术数 / 占星技法做成任何 AI 都能本地调用的 MCP server 与 CLI" width="880" />
 
-  <p>
-    <img src="https://img.shields.io/github/stars/Horace-Maxwell/horosa-skill?style=flat-square" alt="GitHub stars" />
-    <img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square" alt="Release" />
-    <img src="https://img.shields.io/badge/tools-78-1d4ed8?style=flat-square" alt="78 tools" />
-    <img src="https://img.shields.io/badge/platform-macOS%20(arm64)%20%7C%20Windows%20(x64)-0f766e?style=flat-square" alt="Platforms" />
-    <img src="https://img.shields.io/badge/runtime-offline%20first-111827?style=flat-square" alt="Offline runtime" />
-    <img src="https://img.shields.io/badge/MCP-ready-111827?style=flat-square" alt="MCP ready" />
-    <img src="https://img.shields.io/badge/storage-SQLite%20%2B%20JSON-111827?style=flat-square" alt="SQLite and JSON" />
-  </p>
+# 🔮 Horosa Skill
 
-  <p><a href="./LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-374151?style=flat-square" alt="License" /></a>&nbsp;<a href="./CONTRIBUTING.md"><img src="https://img.shields.io/badge/Contributing-Guide-0f766e?style=flat-square" alt="Contributing" /></a>&nbsp;<a href="./SECURITY.md"><img src="https://img.shields.io/badge/Security-Policy-991b1b?style=flat-square" alt="Security" /></a>&nbsp;<a href="./SUPPORT.md"><img src="https://img.shields.io/badge/Support-Paths-1d4ed8?style=flat-square" alt="Support" /></a>&nbsp;<a href="./CITATION.cff"><img src="https://img.shields.io/badge/Citation-CFF-7c3aed?style=flat-square" alt="Citation" /></a>&nbsp;<a href="./CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-Updates-f59e0b?style=flat-square" alt="Changelog" /></a></p>
+**把星阙（Horosa）的 78 个真实术数 / 占星技法，做成任何 AI 都能本地调用的 MCP server 与 CLI。**<br/>
+**A local-first MCP server & CLI that exposes 78 real astrology / metaphysics techniques from Horosa (星阙) to any AI client.**
+
+简体中文 · [English](./README_EN.md)
+
+<p>
+  <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
+  <img src="https://img.shields.io/badge/技法-78-1d4ed8?style=for-the-badge" alt="78 tools" />
+  <img src="https://img.shields.io/badge/测试-299_passed-16a34a?style=for-the-badge" alt="299 passed" />
+  <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
+</p>
+
+<p>
+  <img src="https://img.shields.io/badge/MCP-ready-111827?style=flat-square" />
+  <img src="https://img.shields.io/badge/CLI-JSON_first-111827?style=flat-square" />
+  <img src="https://img.shields.io/badge/macOS_(arm64)_|_Windows_(x64)-111827?style=flat-square" />
+  <img src="https://img.shields.io/badge/storage-SQLite_+_JSON-111827?style=flat-square" />
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-374151?style=flat-square" /></a>
+</p>
+
 </div>
 
 ---
 
-## 一句话
+| ✨ | ✨ | ✨ |
+|:--|:--|:--|
+| 🌌 **78 技法一次装齐** | ⚡ **算法本机跑 · 断网可用** | 🧠 **为 AI 稳定消费而设计** |
+| 🛡️ **AI 不许乱补参数** | 🗄️ **每次调用自动落成知识库** | 📄 **一键出 Word / PDF 报告** |
+| 🔁 **断点续传 · 版本短路装** | 🀄 **中西术数 + 全 14 路神数** | 🔓 **免费 · 开源 · AGPL** |
 
-星阙本身已经有完整的本地算法、星历、导出设置和多技法体系。**Horosa Skill 不是再造一个简化占算器**，而是把这些能力整理成一个适合 GitHub 分发、适合 AI 调用、适合长期本地管理的产品化接口层：算法在本机跑、输出是稳定 JSON + 星阙式导出快照、每次调用都自动写成可检索的本地知识记录。
+克隆仓库、安装一次离线 runtime，Claude Code / Claude Desktop / Codex / Open WebUI / OpenClaw 等客户端即可通过 **MCP** 或 **JSON-first CLI** 直接调用真实的星阙方法：西洋本命 / 推运 / 卜卦 / 择日，八字 / 紫微 / 大六壬 / 奇门 / 太乙 / 金口诀 / 三式合一，六爻 / 塔罗 / 天文地占，以及全 14 路神数。
 
-它解决五件事：
+算法在本机运行，断网可用；每个技法返回统一 envelope 与星阙式导出结构；每次调用自动落成可检索的本地记录。**与星阙桌面端共用同一套后端、逐值同源。**
 
-- **取得即用** — 从 GitHub clone，再从 GitHub Releases 安装完整离线 runtime，安装后断网运行。
-- **真 AI 接口** — 通过 `MCP` 或 `JSON-first CLI` 调用真正的星阙方法，而不是一层松散 prompt。
-- **稳定可消费** — 每个技法都输出统一 envelope + 星阙式 `export_snapshot` / `export_format`，机器和人都不用猜字段。
-- **长期可管** — 一次调用 = 一条可追溯记录（run / artifact / manifest / AI 最终回答）。
-- **轻仓库** — 代码、文档、CLI、MCP、测试进 Git；大体积 runtime 进 Releases。
+```
+   🖥️  AI 客户端   Claude Code · Claude Desktop · Codex · Open WebUI · OpenClaw
+        │
+        │  MCP  /  JSON-first CLI
+        ▼
+   ┌──────────────────────────────────────────────────────────────┐
+   │  🔮 Horosa Skill   本地进程 · 78 工具 · 澄清闸 · 统一 envelope │
+   │  自然语言调度 · 逐技法直调 · 报告渲染 · 本地记忆检索           │
+   └──────────────────────────────────────────────────────────────┘
+        │  全部在本机 · 断网可用
+        ▼
+   ⚙️ 离线 runtime         🧩 headless JS 引擎     💾 本地存储
+   Java+Python 星历        horosa-core-js          SQLite 全文索引
+   ken / kentang 引擎      aiExport 结构化          + JSON artifact 归档
+```
 
-许可证：仓库以 `GNU AGPL-3.0-only` 公开（根目录 [LICENSE](./LICENSE)）。内置的三个第三方 `ken` 引擎按其各自的 MIT 许可证使用（见[致谢](#致谢内置的开源术数引擎-ken)）。
+> [!NOTE]
+> 它不是又造一个简化占算器，而是把星阙已有的本地算法、星历与导出协议，整理成一层**适合 GitHub 分发、适合 AI 调用、适合长期本地管理**的接口。桌面端算出来是什么，这里就是什么。
 
-## 文档入口
+## 📑 目录
 
-| 文档 | 内容 |
+- [✨ 核心特性](#-核心特性)
+- [🚀 快速开始](#-快速开始)
+- [🔌 接入 AI 客户端](#-接入-ai-客户端)
+- [🎯 一次调用的完整流程](#-一次调用的完整流程)
+- [🧭 技法总览](#-技法总览)
+- [📐 输出契约](#-输出契约)
+- [🚦 调用前的澄清闸](#-调用前的澄清闸)
+- [📂 本地记忆与报告](#-本地记忆与报告)
+- [📦 安装与 runtime 策略](#-安装与-runtime-策略)
+- [✅ 质量与验证](#-质量与验证)
+- [📚 文档](#-文档)
+- [🙏 致谢与许可证](#-致谢与许可证)
+
+## ✨ 核心特性
+
+- 🌌 **78 个真实技法，一次安装，全程离线。** 覆盖西洋占星全链路、中文术数主干、数算与卜法、全 14 路神数；算法在本机运行，不联网、不上传。
+- 🧠 **为 AI 消费而设计的稳定契约。** 每次调用返回统一 envelope，接入导出协议的技法附带 `export_snapshot`（段结构化正文）。同一技法连续调用得到同一套字段，落库后结构不丢。
+- 🛡️ **调用前的硬性澄清闸。** 只要技法受时间 / 地点 / 时区 / 性别 / 事项 / 宫制 / 历法 / 起局方式影响，agent 在用户确认前会被结构化拦截，并收到可直接转发给用户的追问文本。
+- 🪙 **精简的响应体量。** 导出契约单份化，同一份快照不再重复；大盘单次响应体量较早期显著下降。可用 `response_view=titles|sections` 仅取段标题或指定段，完整快照始终已归档。
+- ⏳ **主限法可推至 3000 年。** 逐位核验的核5方位法 + 22 项时间钥匙 + In Zodiaco / In Mundo + 宿命点(Vertex)应星 + 映点 / 界作迫星，多圈复发行。
+- 🗄️ **完整的本地记录系统。** SQLite 全文检索（trigram，中文子串可命中）+ JSON artifact 归档；按人名 / 技法 / 日期区间 / 全文组合检索，跨会话找回历史。
+- 📄 **结构化报告导出。** 一条命令生成 DOCX / PDF / JSON；Markdown 表格渲染为真 Word 表格，含导航大纲、目录、页码与中文字体。
+- 🔁 **成熟的安装与升级链。** 断点续传、多镜像回退、实时进度；版本短路（已最新则跳过下载）；`upgrade` / `uninstall` / `selfcheck` / `doctor` 环境体检齐备。
+- 🔗 **同源后端。** 奇门 / 太乙 / 金口诀走星阙 `ken` 后端；14 路神数走 chart 服务上挂载的 kentang 引擎；结果由 headless JS 层重排为 `aiExport.js` 段结构。
+
+## 🚀 快速开始
+
+> [!TIP]
+> 前置只需 [uv](https://docs.astral.sh/uv/)（`curl -LsSf https://astral.sh/uv/install.sh | sh`）；Python ≥ 3.12 由 uv 自动准备；磁盘预留约 5 GB（runtime 下载约 730 MB、解压后约 2 GB）。
+
+```bash
+git clone https://github.com/Horace-Maxwell/horosa-skill.git
+cd horosa-skill/horosa-skill
+uv sync
+uv run horosa-skill install      # 📦 安装离线 runtime（带进度 / 断点续传；已最新则跳过下载）
+uv run horosa-skill doctor       # 🩺 环境体检（磁盘 / 端口 / node 实跑探针，期望 issues: []）
+uv run horosa-skill selfcheck    # ✅ 活体验证：起一张盘 → 存 → 读回
+uv run horosa-skill serve        # 🚀 启动本地 MCP（默认 http://127.0.0.1:8765/mcp）
+```
+
+<details>
+<summary>🔧 <b>安装排障与升级 / 卸载</b></summary>
+
+| 症状 | 处理 |
 | --- | --- |
-| [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | 架构设计 |
-| [`docs/INPUT_CONTRACTS.md`](./docs/INPUT_CONTRACTS.md) | 每个工具的输入契约（必填字段） |
-| [`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md) | 输出 / envelope / export 数据契约 |
-| [`docs/EXPORT_AUDIT_GUIDE.md`](./docs/EXPORT_AUDIT_GUIDE.md) | 推运类导出的逐 section 审计方法 |
-| [`docs/OPERATIONS.md`](./docs/OPERATIONS.md) · [`docs/EVALUATION.md`](./docs/EVALUATION.md) | 运维 · 评测体系 |
-| [`docs/OFFLINE_RUNTIME_RELEASES.md`](./docs/OFFLINE_RUNTIME_RELEASES.md) | 离线 runtime 打包与发布 |
-| [`server.json`](./server.json) · [`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md) · [`AGENTS.md`](./AGENTS.md) | MCP 元数据 · Agent 使用 Skill · Agent 仓库规则 |
+| `uv: command not found` | 先安装 uv：`curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+| 下载缓慢或中断 | 重跑 `install` 会断点续传；或设 `HOROSA_RUNTIME_MIRROR=<镜像前缀>` 走镜像 |
+| 磁盘不足 / 端口被占 | `uv run horosa-skill doctor` 逐项体检并给出 `next_action` |
+| 升级 | `uv run horosa-skill upgrade`（同版本不重复下载） |
+| 卸载 | `uv run horosa-skill uninstall`（默认仅打印将删清单，`--yes` 执行，`--purge-data` 才动用户数据） |
 
-## 最新稳定基线
+</details>
 
-**当前公开版本：`Horosa Skill 0.21.0`（78 个可调用工具）。**
+## 🔌 接入 AI 客户端
 
-这一条发布线把星阙的能力面补到了与桌面端基本对齐：
+一条命令生成**带真实绝对路径**的即用配置，无需手填占位符：
 
-- **西洋占星全链路** — 本命与派生盘、10 个经典推运/返照/时运、3 个 v2.4.0 西占（年龄推进点 / 界推运 / 世俗入宫盘）、7 个 v2.5.0 推运（赤纬 / 恒星 / 行星弧 / 行星年龄 / Balbillus / 129年系统 / 波斯向运），外加**卜卦（horary）与择日（election）**两套完整判断引擎。
-- **主限法 v12 核验方位法（v2.6.6）** — 主限表收敛为**逐位核验的核5方位法**（Alcabitius / Meridian / Porphyry / Equal·黄道 / Equal·时圈；未核验值引擎内回退 Alcabitius）+ In Zodiaco/In Mundo 坐标系 + 顺逆向 + **22 项时间钥匙**（含每盘真算 Simmonite/Kepler/Brahe 与真太阳弧/太阳弧动态键）+ 映点/界作迫星 + **宿命点(Vertex)应星**行 + **pdYears 上限 3000**（多圈复发行）；**中点盘**为汉堡学派量化盘（90° 盘 + 8 颗 TNP + 行星图/映点/中点列表）。
-- **恒星黄道与印占全补（v2.6.4）** — 全西洋技法盘支持 **47 套岁差(ayanāṃśa)** 恒星黄道（缺省 Lahiri，向后兼容回归盘）+ **西洋月宿(nakshatra)** 行；印度占星分宫制 **4→24 制**、黄道岁差 **6→47 制**。
-- **古典占星补全（v2.6.7）** — chart 家族（本命 / 13 宫 / 希腊化 / 印度 / 世俗入宫）导出新增 **[古典]**（逐曜古典状态：出界 / 相位显隐 / 喜乐 / 同异宗 / 度数性质 / 月站 / 远近地点 / 单度主星·九分·面主·Darijan；上升宿；**围攻详断**与**围绕**；Melothesia 身体部位）与 **[古典格局]**（护卫 / 优势相位 / 度数围攻 / 传光聚光 / 不合意 / 交点弯曲 / 逐题主星 / **偶然尊贵** / 恒星触发 / 行星时 / 埃及历 / 巴比伦参照星 / 相位格局 / 分布权重 / 气质评估 / **Almuten 总主** / 吉化凶化 / 阿拉伯点扩展）；两段由 vendored 公式从 `/chart`（含 `surround.besiegement`）与 `analyze_chart` 后端逐值派生（本命三盘带两段，印度 / 世俗仅带 [古典]）。
-- **中文术数主干** — 八字、紫微、大六壬、奇门、太乙、金口诀、三式合一、统摄法、河洛理数、邵子参评数、调波盘、宿占、六爻。
-- **解读层同步（v0.10.0 / v0.11.0）** — 七政四余补**大限/相位/政余格局**（Moira DSL）、金口诀补 **20 段解读层**、大六壬补**常用神煞 + 毕法100法 + 占断向导**、奇门补**法奇门叠加层**（六害 / 化解 / 八门化气大阵 / 用神分论 / 七要 / 孤辰寡宿）、紫微补**命中格局/杂曜/流派四化**（含天伤天使安星）。
-- **全 14 路神数** — 5 路标准（皇极经世 / 五兆 / 太玄 / 京氏易 / 神乙数）+ 9 路（邵子 / 铁板 / 分经 / 北极 / 南极 / 淳子 / 演禽 / 策天飞星 / 七政四余·张果）。
-- **同源后端** — 奇门 / 太乙 / 金口诀（及三式合一里的奇门 + 太乙）走星阙 `ken` 后端（`kinqimen` / `kintaiyi` / `kinjinkou`）独占计算；14 路神数走星阙 chart 服务上挂载的 kentang 引擎；返回结果由 headless JS 层重排成 `aiExport.js` 的 section 结构。**Skill 与星阙桌面端走同一套后端、逐值同源。**
+```bash
+uv run horosa-skill client config --format claude-code      # 输出 claude mcp add … 命令
+uv run horosa-skill client config --format claude-desktop   # Claude Desktop mcpServers 片段
+uv run horosa-skill client config --format codex            # Codex config.toml 片段
+```
 
-贯穿始终的硬性协议是「**AI 不能乱补参数**」：只要技法会受时间、地点、时区、性别、事项、宫制、历法、起局方式等设置影响，agent 在用户确认前就不能继续调用——工具会返回结构化阻断结果，并给出可直接转发给用户的追问文本。
+| 客户端 | 接入方式 |
+| :-- | :-- |
+| 🟣 **Claude Code** | `claude mcp add horosa -- uv run --directory <abs> horosa-skill serve --transport stdio`；见 [接入说明](./horosa-skill/examples/clients/claude-code.md) |
+| 🟠 **Claude Desktop** | [配置示例](./horosa-skill/examples/clients/claude_desktop_config.json) 或 `client config --format claude-desktop` |
+| 🔵 **Codex** | [配置示例](./horosa-skill/examples/clients/codex-config.toml) 或 `client config --format codex` |
+| 🟢 **Open WebUI** | [接入说明](./horosa-skill/examples/clients/openwebui-streamable-http.md) |
+| ⚪ **OpenClaw / mcporter** | `uv run horosa-skill client openclaw-setup --workspace ~/.openclaw/workspace` |
 
-本机完整实测信号：
+> [!TIP]
+> 上下文预算受限的客户端可设 `HOROSA_MCP_COMPACT=1`，只暴露约 9 个门面工具（含按名直调的 `horosa_tool_run` 与 78 技法目录索引），澄清闸照常生效。根目录 `server.json` 为 MCP Registry 元数据，普通用户无需手改。
 
-| 检查项 | 结果 |
-| --- | --- |
-| 可调用工具 | `78 / 78 ok=true` |
-| 工程测试 | `299 / 299 pass`（含 ken / 神数 后端实时集成测试 + 离线 golden 单测 + node JS golden） |
-| 未确认参数时强制追问 | `67` 个技法工具触发 `must_ask_user=true` |
-| 安全豁免工具 | `7` 个 registry / knowledge / parser 类工具直接可读 |
-| 星阙式导出结构 | 每个业务技法均带 `export_snapshot` / `export_format`（已建模 `63` 个导出 technique） |
-| 本地 memory / report | `78 / 78` 写入 + `78 / 78` JSON artifact |
-| 奇门 / 太乙 / 金口 / 三式 | 统一走 `ken`，与星阙桌面端同源 |
-| 统摄法 / 十年大运 | headless 实现与星阙逐值对齐（京房八宫五行；对照星阙 `decennials.test.js` 金标） |
-| GitHub CI | Linux/macOS 单测 + horosa-core-js JS golden 自检 + Windows OpenClaw smoke 通过 |
-| Release runtime | macOS (arm64) / Windows (x64) `v0.21.0` assets（含 ken + 14 神数引擎）已打包并校验；其余平台/架构安装时会明确报不支持 |
+## 🎯 一次调用的完整流程
 
-> 关于 `solarreturn` / `lunarreturn` / `solararc` / `givenyear` / `profection` / `pd` / `pdchart` / `zr` 这批推运工具：当前版本已复核可用，不应再被 agent 标记为「Java `/predict/*` 不可用」。若某客户端仍这样回答，优先检查它是否在用旧 runtime、是否绕过 MCP 手算、是否没跑 `doctor` / `openclaw-check --full`。
+以「查今年事业，1995-06-03 05:30 上海出生」为例，agent 端的实际序列：
 
-## 技法全景（78 个工具）
+```
+1️⃣  澄清闸兜底 —— 缺时区 / 宫制等结果敏感设置时，工具返回追问文本，
+    agent 先向用户确认，而非自行补参
+2️⃣  起盘       —— 确认后传 agent_confirmed_settings: true 调用技法工具，
+    返回统一 envelope，含 memory_ref.run_id 与 data.export_snapshot
+3️⃣  读盘       —— 读 export_snapshot.export_text / sections 撰写解读
+    （想省 token 可传 response_view: "titles" 只取段标题，完整快照已归档）
+4️⃣  出报告     —— report_render 生成 DOCX，传入的 ai_report 自动写回记忆
+5️⃣  跨会话找回 —— memory_query 按人名 / 技法 / 日期检索，memory_show 取完整记录
+```
 
-> 所有业务技法都返回统一 envelope，并附带星阙式 `export_snapshot` / `export_format`。带 ⓟ 的工具是会受设置影响、调用前必须先确认参数的技法。
+> [!NOTE]
+> 最短路径为 **2 次工具调用 + 1 次本地分析**：起盘拿到 `run_id`，本地撰写 `ai_report`，再 `report_render` 出 Word 并自动归档。全程算法在本机、AI 只负责解读、结构永不丢。
 
-### 西洋占星 · 本命与派生盘
+## 🧭 技法总览
+
+所有业务技法都返回统一 envelope 并附星阙式 `export_snapshot`。带 ⓟ 的工具受设置影响，调用前必须先确认参数。
+
+<details open>
+<summary>🌟 <b>西洋占星 · 本命与派生盘（7）</b></summary>
 
 | 工具 ID | 名称 | 说明 |
 | --- | --- | --- |
-| `chart` ⓟ | 标准星盘 | 基础西洋星盘 + 完整 AI 导出正文（含 12 分度 / 主宰星链 / 寿命格局） |
+| `chart` ⓟ | 标准星盘 | 基础西洋星盘 + 完整导出正文（12 分度 / 主宰星链 / 寿命格局 / 古典 / 古典格局） |
 | `chart13` ⓟ | 13 宫扩展盘 | `chart13` 形态输出 |
 | `hellen_chart` ⓟ | 希腊星盘 | 希腊占星取向盘面 |
-| `india_chart` ⓟ | 印度盘 | 印度占星盘面 |
+| `india_chart` ⓟ | 印度盘 | 分宫 4→24 制、岁差 6→47 制 |
 | `guolao_chart` ⓟ | 七政四余盘 | 七政四余 / 果老法盘面 |
-| `relative` ⓟ | 合盘 / 关系盘 | 双人关系、合盘、relative 输出 |
-| `germany` ⓟ | 量化盘 / 中点盘 | 中点结构与量化分析 |
+| `relative` ⓟ | 合盘 / 关系盘 | 双人关系、合盘、关系量化评分 |
+| `germany` ⓟ | 量化盘 / 汉堡学派 | 90° 拨盘 + 8 颗 TNP + 中点树 / 相位 / 列表 |
 
-### 西洋占星 · 推运 / 返照 / 时运（24）
+</details>
+
+<details>
+<summary>⏳ <b>西洋占星 · 推运 / 返照 / 时运 · 占星地图 / 名人库（24）</b></summary>
 
 | 工具 ID | 名称 | 说明 |
 | --- | --- | --- |
-| `solarreturn` ⓟ | 太阳返照 | 本命 + 返照盘 + 相位 |
-| `lunarreturn` ⓟ | 月亮返照 | 本命 + 月返盘 + 相位 |
+| `solarreturn` ⓟ / `lunarreturn` ⓟ | 太阳 / 太阴返照 | 本命 + 返照盘 + 相位 |
 | `solararc` ⓟ | 太阳弧推运 | 本命 + 推运盘 + 相位 |
 | `givenyear` ⓟ | 指定年推运 | 本命 + 流年盘 + 相位 |
 | `profection` ⓟ | 小限 / 年运推限 | profection 时间层 |
-| `pd` ⓟ | 本初方向 / 主限 | primary directions 真实表格 |
+| `pd` ⓟ | 本初方向 / 主限 | 逐位核验核5方位法 + 22 项时间钥匙，可推运至 3000 年 |
 | `pdchart` ⓟ | 主限盘 | 可读主限盘面 + 相位 |
 | `zr` ⓟ | 黄道释放 | zodiacal release 时间轴 |
 | `firdaria` ⓟ | 法达星限 | 法达星限结构与时间轴 |
-| `decennials` ⓟ | 十年大运 / 十年星限 | decennials 时间分层（headless，与星阙金标对齐） |
-| `agepoint` ⓟ | 年龄推进点 / Huber | Koch 宫 6 年一宫的年龄点周期 |
+| `decennials` ⓟ | 十年大运 | 与星阙 `decennials.test.js` 金标对齐 |
+| `agepoint` ⓟ | 年龄推进点 / Huber | Koch 宫 6 年一宫周期 |
 | `distributions` ⓟ | 界推运 / 分配法 | 上升点行经埃及界的分配主时间轴 |
-| `mundane` ⓟ | 世俗盘 | 年度入宫盘 + 子盘群（新月/满月/日月食/地区盘/行星周期/定局/地理分野等） |
-| `jaynesprog` ⓟ | 赤纬推运 | Jayne 二次推运 + 赤纬平行 / 反平行 |
-| `vedicprog` ⓟ | 恒星推运 | 恒星黄道（sidereal）下的二次推运 |
+| `mundane` ⓟ | 世俗盘 | 年度入宫盘 + 子盘群（新月 / 满月 / 日月食 / 地区盘 / 行星周期 / 定局 / 分野） |
+| `jaynesprog` ⓟ | 赤纬推运 | 二次推运 + 赤纬平行 / 反平行 |
+| `vedicprog` ⓟ | 恒星推运 | sidereal 下的二次推运 |
 | `planetaryarc` ⓟ | 行星弧 | 整盘按 arcSource 二次弧方向 |
 | `planetaryages` ⓟ | 行星年龄 | 托勒密人生七阶 + 当前主运 |
-| `yearsystem129` ⓟ | 129年系统 | 七政各管小年的 129 年一轮 |
+| `yearsystem129` ⓟ | 129 年系统 | 七政各管小年的 129 年一轮 |
 | `persiandirected` ⓟ | 波斯向运 | 黄经象征向运（1°/年）应期表 |
-| `balbillus` ⓟ | Balbillus 129年 | 旺距削减主限 + 递归子限（JS 逐字 vendor，与星阙一致） |
-| `triplicityrulers` ⓟ | 三分主星推运 | 区间光体三分主星按昼夜换序划分人生各阶段 |
-| `keypoints` ⓟ | 数字相位推运 | 七星小年数 + 自释放点起座距，按年龄因数激活 |
-| `lunationphase` ⓟ | 月相推运 | 本命日月黄经差次限推进的八相时间轴 |
-| `extrareturns` ⓟ | 多重回归 | 土星 / 木星 / 月交三体返照应期 |
-| `acg` ⓟ | 占星地图 | 行星地理投影线（MC/IC 经度、天顶点、偕升纬度带、线交点） |
-| `astrodata` ⓟ | 名人星盘库 | 离线名人出生数据检索（FTS/分类/Rodden 评级，单人详情可直接排盘） |
+| `balbillus` ⓟ | Balbillus 129 年 | 旺距削减主限 + 递归子限 |
+| `triplicityrulers` ⓟ | 三分主星推运 | 昼夜换序划分人生阶段 |
+| `keypoints` ⓟ | 数字相位推运 | 七星小年数 + 座距按年龄因数激活 |
+| `lunationphase` ⓟ | 月相推运 | 次限日月黄经差八相时间轴 |
+| `extrareturns` ⓟ | 多重回归 | 土 / 木 / 月交三体返照应期 |
+| `acg` ⓟ | 占星地图 | 行星地理投影线（MC/IC / 天顶点 / 偕升带 / 线交点） |
+| `astrodata` ⓟ | 名人星盘库 | 数万条 A/AA 级出生数据离线检索（FTS / 分类 / Rodden 评级） |
 
-### 西洋占卜 · 卜卦 / 择日
+</details>
+
+<details>
+<summary>🔯 <b>西洋占卜 · 卜卦 / 择日（2）</b></summary>
 
 | 工具 ID | 名称 | 说明 |
 | --- | --- | --- |
-| `horary` ⓟ | 卜卦（horary） | 根本性 / 征象星（14 类问题）/ 完成分析 / 月亮的故事 / 裁决 / 应期方位 / 描述 |
+| `horary` ⓟ | 卜卦（horary） | 根本性 / 14 类征象星 / 完成分析 / 月亮的故事 / 裁决 / 应期方位 |
 | `election` ⓟ | 择日（electional） | 红线 / 28 类用事规则包 / 评分定级 / 起盘时刻 / 建议 |
 
-### 中文术数主干
+</details>
+
+<details>
+<summary>☯️ <b>中文术数主干 · 三式合一（9）</b></summary>
 
 | 工具 ID | 名称 | 说明 |
 | --- | --- | --- |
-| `bazi_birth` ⓟ / `bazi_direct` ⓟ | 八字命盘 / 八字直断 | 四柱命盘 / 直断输出 |
-| `ziwei_birth` ⓟ | 紫微斗数命盘 | 紫微命盘（`ziwei_rules` 返回规则库） |
-| `liureng_gods` ⓟ / `liureng_runyear` ⓟ | 大六壬起课 / 行年 | 四课三传神煞 / 行年年运 |
-| `qimen` ⓟ | 奇门遁甲 | 由 ken（`kinqimen`）起盘，宫位细节 + 演卦 |
-| `taiyi` ⓟ | 太乙神数 | 由 ken（`kintaiyi`）起盘，十六宫标记 |
-| `jinkou` ⓟ | 金口诀 | 由 ken（`kinjinkou`）起盘，速览结果 |
-| `sanshiunited` ⓟ | 三式合一 | 聚合 ken 的奇门 + 太乙与大六壬并统一导出（含三家富化段） |
+| `bazi_birth` ⓟ / `bazi_direct` ⓟ | 八字命盘 / 直断 | 四柱 + 大运 + 神煞 + 五行力量 / 格局 / 盲派结构 |
+| `ziwei_birth` ⓟ | 紫微斗数 | 自定义四化 / 流派 / 命中格局（`ziwei_rules` 返回规则库） |
+| `liureng_gods` ⓟ / `liureng_runyear` ⓟ | 大六壬起课 / 行年 | 四课三传神煞 / 毕法 100 法 / 占断向导 / 七政 |
+| `qimen` ⓟ | 奇门遁甲 | ken（`kinqimen`）起盘 + 法奇门叠加层 + 演卦 |
+| `taiyi` ⓟ | 太乙神数 | ken（`kintaiyi`）起盘，十六宫标记 |
+| `jinkou` ⓟ | 金口诀 | ken（`kinjinkou`）起盘，20 段解读层 |
+| `sanshiunited` ⓟ | 三式合一 | 一页聚合奇门 + 太乙 + 大六壬，统一导出 |
 
-### 本地术数 · 数算 · 占卜
+</details>
+
+<details>
+<summary>🀄 <b>本地术数 · 数算 · 占卜（10）</b></summary>
 
 | 工具 ID | 名称 | 说明 |
 | --- | --- | --- |
-| `tongshefa` ⓟ | 统摄法 | 卦象、六爻、潜藏、亲和（headless，与星阙逐值对齐） |
-| `canping` ⓟ | 邵子参评数 / 金锁银匙 | 四柱起数、年纳音定部、本命 / 大运歲運条文（本地 in-process，依赖打包的 `lunar-javascript`） |
-| `heluo` ⓟ | 河洛理数 | 先天 / 后天卦与元堂、命运篇、大限·岁运 / 流年·岁运与断验（含元堂爻辞，本地 in-process） |
-| `yizhangjing` ⓟ | 一掌经 | 十二支六道四柱四宫、命宫 / 人事十二宫、大限 / 小限流年十二神、神煞合参（本地 in-process） |
-| `harmonic` ⓟ | 调波盘 | 本命黄经×调波数取调波位置、同频合相 |
+| `tongshefa` ⓟ | 统摄法 | 卦象 / 六爻 / 潜藏 / 亲和 |
+| `canping` ⓟ | 邵子参评数 / 金锁银匙 | 四柱起数 + 本命 / 大运歲運条文 |
+| `heluo` ⓟ | 河洛理数 | 先后天卦 + 元堂爻辞 + 大限岁运断验 |
+| `yizhangjing` ⓟ | 一掌经 | 十二支六道 + 十二宫 + 大限流年十二神 + 神煞合参 |
+| `harmonic` ⓟ | 调波盘 | 黄经 × 调波数取位、同频合相 |
 | `suzhan` ⓟ | 宿占 / 宿盘 | 宿占结构与宿曜信息 |
-| `sixyao` ⓟ | 六爻 / 易卦 | 本卦、之卦、爻变、问题导向输出 |
-| `otherbu` ⓟ | 西洋游戏 / 占星骰子 | 星骰与对应解读结构 |
+| `sixyao` ⓟ | 六爻 / 易卦 | 本 / 互 / 之 / 错 / 综卦 + 断卦结构 |
+| `geomancy` ⓟ | 天文地占 | 4 母卦 → 16 图形 + 十二宫入宫 + 判官 / 见证 |
+| `tarot` ⓟ | 塔罗 | 78 牌确定性洗牌 + 牌阵直断 / 细论 / 综合建议 |
+| `otherbu` ⓟ | 占星骰子 | 星骰与对应解读结构 |
 
-### 神数（全 14 路）
+</details>
 
-> kentang 引擎挂在星阙 chart 服务上，后端直出 `snapshot`，段头对齐 aiExport preset。`shaozi` / `tieban` / `cetian` / `qizhengkin` / `xianqin` 另带性别（+地点）。
+<details>
+<summary>🔢 <b>神数（全 14 路）</b></summary>
 
-| 工具 ID | 名称 | 引擎 |
-| --- | --- | --- |
-| `wangji` ⓟ | 皇极经世·心易发微 | 标准 |
-| `wuzhao` ⓟ | 五兆 | 标准 |
-| `taixuan` ⓟ | 太玄·揲蓍 | 标准 |
-| `jingjue` ⓟ | 京氏易·靖瞶 | 标准 |
-| `shenyishu` ⓟ | 神乙数 | 标准 |
-| `shaozi` ⓟ | 邵子神数 | kinastro |
-| `tieban` ⓟ | 铁板神数 | kinastro |
-| `fendjing` ⓟ | 分经神数·两头钳 | kinastro |
-| `beiji` ⓟ | 北极神数 | kinastro |
-| `nanji` ⓟ | 南极神数 | kinastro |
-| `chunzi` ⓟ | 淳子神数 | kinastro |
-| `xianqin` ⓟ | 演禽 | kinastro |
-| `cetian` ⓟ | 策天飞星·紫微 | kinastro |
-| `qizhengkin` ⓟ | 七政四余·张果星宗 | kinastro |
+| 工具 ID | 名称 | 引擎 | 工具 ID | 名称 | 引擎 |
+| --- | --- | --- | --- | --- | --- |
+| `wangji` ⓟ | 皇极经世 | 标准 | `tieban` ⓟ | 铁板神数 | kinastro |
+| `wuzhao` ⓟ | 五兆 | 标准 | `fendjing` ⓟ | 分经神数 | kinastro |
+| `taixuan` ⓟ | 太玄 | 标准 | `beiji` ⓟ | 北极神数 | kinastro |
+| `jingjue` ⓟ | 京氏易 | 标准 | `nanji` ⓟ | 南极神数 | kinastro |
+| `shenyishu` ⓟ | 神乙数 | 标准 | `chunzi` ⓟ | 淳子神数 | kinastro |
+| `shaozi` ⓟ | 邵子神数 | kinastro | `xianqin` ⓟ | 演禽 | kinastro |
+| `cetian` ⓟ | 策天飞星 | kinastro | `qizhengkin` ⓟ | 七政四余·张果 | kinastro |
 
-### 节气 / 农历 / 卦义 · 协议 / 调度 / 知识
+</details>
+
+<details>
+<summary>📅 <b>节气 / 农历 / 黄历 · 协议 / 调度 / 知识</b></summary>
 
 | 工具 ID | 名称 | 说明 |
 | --- | --- | --- |
 | `jieqi_year` ⓟ / `nongli_time` ⓟ | 全年节气盘 / 农历换算 | 节气节点 / 农历干支 |
-| `gua_desc` / `gua_meiyi` | 卦义说明 / 梅易卦义 | 卦名卦辞 / 梅花易数卦义 |
-| `export_registry` / `export_parse` | 导出协议注册表 / 正文解析器 | 机器可读导出总表 / 把星阙式导出文本解析回稳定 JSON |
-| `horosa_dispatch` | 总调度器 | 接收自然语言意图并自动分派到对应技法 |
-| `knowledge_registry` / `knowledge_read` | 悬浮知识目录 / 读取器 | 列出 / 读取星阙 app 内的 hover 知识并落库 |
+| `calendar_month` ⓟ | 黄历 / 万年历 | 整月农历 / 干支 / 节气 / 朔望 + 选中日详情 |
+| `gua_desc` / `gua_meiyi` | 卦义 / 梅易卦义 | 卦名卦辞 / 梅花易数卦义 |
+| `export_registry` / `export_parse` | 导出协议注册表 / 正文解析器 | 机器可读导出总表 / 把导出文本解析回 JSON |
+| `horosa_dispatch` | 总调度器 | 自然语言意图自动分派到对应技法 |
+| `knowledge_registry` / `knowledge_read` | 悬浮知识目录 / 读取器 | 列出 / 读取星阙 app 内 hover 知识并落库 |
 
-> **明确排除项**：`fengshui`（风水尚未完成 headless 化，不把未完成能力伪装成可发布功能）。v0.9.0 曾暂缓的 9 路 kinastro-* 神数已在 v0.9.1 全部补齐。
+</details>
 
-## Agent 硬性调用规则
+> [!NOTE]
+> 明确排除项：`fengshui`（风水尚未完成 headless 化，不作为可发布能力）。
 
-这是接入 Cursor、OpenClaw、Claude、Codex、Open WebUI 时**最重要**的规则。
+## 📐 输出契约
 
-Agent 在调用技法前如果不确定用户设置，应先查 `horosa_agent_guidance`（CLI：`uv run horosa-skill agent guidance --tool <tool> --intent "..."`）——它告诉 AI 哪些字段必须先问用户、哪些星阙默认值可以在用户接受后使用。
-
-计算工具与 `horosa_dispatch` 有硬性门禁：Agent 没先确认设置时会收到 `agent_guidance.required`，需在用户确认后传 `agent_confirmed_settings: true`，或在用户明确接受默认值后传 `defaults_accepted: true`。返回里若有 `details.agent_recovery.prompt_to_user`，AI 客户端必须停止调用并把这段问题发给用户确认，不能绕过或自行补参。
-
-标准流程：①用户说出需求 → ②Agent 判断参数是否足够，不够就调 `horosa_agent_guidance` 或直接询问 → ③用户明确回答时间/地点/事项/是否接受默认 → ④Agent 调真实工具并传 `agent_confirmed_settings: true` + `clarification_notes` → ⑤用 `export_snapshot` / `export_format` 解释，而不是自己手算。
-
-❌ 会被拦截（缺确认、地点、时区、事项）：
-
-```json
-{ "date": "2026-05-18", "time": "13:14:00" }
-```
-
-✅ 正确（含用户确认 + 完整上下文）：
-
-```json
-{
-  "agent_confirmed_settings": true,
-  "clarification_notes": "用户确认：用 2026-05-18 13:14:00，America/Los_Angeles，旧金山，事项为当前工作决策。",
-  "date": "2026-05-18", "time": "13:14:00", "zone": "-07:00",
-  "lat": "37n46", "lon": "122w25", "gpsLat": 37.7667, "gpsLon": -122.4167,
-  "after23NewDay": false
-}
-```
-
-用户说「按星阙默认继续」时，可改用 `{ "defaults_accepted": true, "clarification_notes": "用户明确接受星阙默认设置。" }`——但 agent **不能替用户擅自**写 `defaults_accepted: true`。
-
-> 时区既可传 `+08:00` / `-07:00` 这样的固定 offset，也可传 `America/Los_Angeles` / `Asia/Shanghai` 这样的 IANA 名称——Horosa Skill 会按起盘日期时间归一化为后端稳定接受的 offset。
-
-## 输出协议：对 AI 来说，重点不是「算」而是「稳定可消费」
-
-每个工具调用都返回统一 envelope：
+每个工具调用返回统一 envelope：
 
 ```json
 {
@@ -238,167 +290,111 @@ Agent 在调用技法前如果不确定用户设置，应先查 `horosa_agent_gu
 }
 ```
 
-接入星阙导出协议的技法还会额外带 `data.export_snapshot`（含 `.snapshot_text` / `.sections` / `.selected_sections`）与 `data.export_format`。这意味着：AI 不用从自由文本里猜结构；同一技法连续调用得到同一套 contract；`horosa_dispatch` 的汇总层也显式带每个子结果的 export contract；落库到 JSON artifact 后结构不丢。
+接入导出协议的技法额外带 `data.export_snapshot`，含 `export_text`（段结构化正文）、`sections`（逐段标题 + 正文 + 结构化数据）、`selected_sections`、`provenance` 等。因此 ——
 
-完整字段表见 [`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md) 与 [`docs/INPUT_CONTRACTS.md`](./docs/INPUT_CONTRACTS.md)；CLI 与 MCP 也通过 `tool list`、`horosa_agent_guidance`、tool docstring 暴露同一份契约。
+- 🧷 AI 无需从自由文本猜结构；
+- 🔁 同一技法连续调用得到同一套契约；
+- 🧮 `horosa_dispatch` 汇总层显式带每个子结果的导出契约；
+- 💾 落库到 JSON artifact 后结构不丢。
 
-## 数据管理：完整本地记录系统
+> [!NOTE]
+> 自 v0.21.0 起契约单份化，同一份快照不再重复存放；可传 `response_view=titles|sections` 仅返回段标题或段标题 + 正文，完整快照始终已归档，可用 `memory_show(run_id)` 取回。字段全表见 [`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md) 与 [`docs/INPUT_CONTRACTS.md`](./docs/INPUT_CONTRACTS.md)。
 
-本地数据默认写到 macOS / Linux 的 `~/.horosa-skill/`（Windows：`%APPDATA%/HorosaSkill/`）。每次 run 会沉淀：run 元信息、tool call 记录、entity 索引、JSON artifact、`run manifest`、原始 `query_text`、用户问题 `user_question`、AI 最终回答 `ai_answer_text`、可选结构化回答 `ai_answer_structured`。
+## 🚦 调用前的澄清闸
 
-典型管理动作：
+> [!IMPORTANT]
+> 只要技法受时间 / 地点 / 时区 / 性别 / 事项 / 宫制 / 历法 / 起局方式影响，agent 在用户确认前会被拦截，返回 `agent_guidance.required` 与可直接转发给用户的追问文本。**杜绝「AI 自己脑补一个生辰就开算」。**
 
-```bash
-uv run horosa-skill memory query                 # 按 tool / entity / run_id 查历史
-uv run horosa-skill memory show <run_id>         # 精确回看某次完整调用
-echo '{"run_id":"<run_id>","user_question":"...","ai_answer":"...","ai_answer_structured":{}}' \
-  | uv run horosa-skill memory answer --stdin    # 把 AI 最终回答回写到记录
-```
+```jsonc
+// ❌ 被拦截：缺确认、地点、时区、事项
+{ "date": "2026-05-18", "time": "13:14:00" }
 
-这让它不只是「工具层」，而是「工具层 + 可追溯知识库」。
-
-## 快速开始
-
-前置：[uv](https://docs.astral.sh/uv/)（一行安装：`curl -LsSf https://astral.sh/uv/install.sh | sh`）；Python ≥3.12 由 uv 自动准备；磁盘留足 ~5GB（runtime 下载 ~730MB、解压后 ~2GB）。
-
-```bash
-git clone https://github.com/Horace-Maxwell/horosa-skill.git
-cd horosa-skill/horosa-skill
-uv sync
-uv run horosa-skill install      # 安装离线 runtime（~730MB，带进度/断点续传；已最新则秒退）
-uv run horosa-skill doctor       # 环境体检（磁盘/端口/node 实跑探针，期望 issues: []）
-uv run horosa-skill selfcheck    # 活体验证：起一张盘 → 存 → 读回
-uv run horosa-skill serve        # 启动本地 MCP（默认 http://127.0.0.1:8765/mcp）
-```
-
-装不上怎么办：`uv: command not found` → 先装 uv（上面一行）；下载慢/断网 → 重跑 `install` 会断点续传，或设 `HOROSA_RUNTIME_MIRROR=<镜像前缀>`；磁盘不足/端口被占 → `doctor` 会给出体检项与 next_action；升级 → `uv run horosa-skill upgrade`（同版本不重下）；卸载 → `uv run horosa-skill uninstall`（默认只打印将删清单）。
-
-给 Claude Desktop 这类 stdio 客户端：
-
-```bash
-uv run horosa-skill serve --transport stdio
-```
-
-### 让调度器自动选技法
-
-```bash
-echo '{
+// ✅ 通过：含用户确认 + 完整上下文
+{
   "agent_confirmed_settings": true,
-  "clarification_notes": "用户确认：示例出生资料，上海，+08:00，按星阙默认技法参数。",
-  "query":"请综合奇门、六壬和星盘分析当前状态",
-  "birth":{"date":"1990-01-01","time":"12:00","zone":"+08:00","lat":"31n14","lon":"121e28"},
-  "save_result": true
-}' | uv run horosa-skill ask --stdin
+  "clarification_notes": "用户确认：2026-05-18 13:14:00，America/Los_Angeles，旧金山，事项为工作决策。",
+  "date": "2026-05-18", "time": "13:14:00", "zone": "-07:00",
+  "lat": "37n46", "lon": "122w25"
+}
 ```
 
-### 直接调用某个工具 / 读取悬浮知识 / 解析导出正文
+标准流程：用户说出需求 → 参数不足则查 `horosa_agent_guidance` 或直接询问 → 用户明确回答 → agent 传 `agent_confirmed_settings: true` + `clarification_notes` 调真实工具 → 用 `export_snapshot` 解释，不自行手算。时区可用 `+08:00` 固定偏移，也可用 `Asia/Shanghai` IANA 名（按起盘日期归一化）。
+
+## 📂 本地记忆与报告
+
+本地数据默认写入 `~/.horosa-skill/`（Windows：`%APPDATA%/HorosaSkill/`）。每次 run 沉淀：run 元信息、tool call 记录、entity 索引、JSON artifact、run manifest、原始 `query_text`、用户问题、AI 最终回答与可选结构化回答。
+
+- 🔎 SQLite 全文检索（trigram，中文子串可命中）+ 热路径索引 + WAL 并发；按人名 / 技法 / 日期区间 / 全文组合检索，支持分页。
+- 📄 `report_render` 生成 DOCX / PDF / JSON：Markdown 表格渲染为真 Word 表格（跨页重复表头）、导航大纲、目录、页码、中文字体，异常自动降级保全文。
 
 ```bash
-# 调用工具
-echo '{"agent_confirmed_settings":true,"clarification_notes":"示例盘，上海默认设置","date":"1990-01-01","time":"12:00","zone":"+08:00","lat":"31n14","lon":"121e28","gpsLat":31.2333,"gpsLon":121.4667}' \
-  | uv run horosa-skill tool run chart --stdin
-
-# 读取星阙悬浮知识（星盘 / 六壬 / 奇门）
-echo '{"domain":"qimen","category":"door","key":"休门"}' | uv run horosa-skill knowledge read --stdin
-
-# 把星阙导出正文解析成结构化 JSON
-echo '{"technique":"qimen","content":"[起盘信息]\n参数\n\n[八宫]\n八宫内容"}' | uv run horosa-skill export parse --stdin
-
-# 查看完整导出 registry
-uv run horosa-skill export registry
+uv run horosa-skill memory query                 # 按 tool / entity / run_id / 全文 检索
+uv run horosa-skill memory show <run_id>         # 精确回看某次完整调用
 ```
 
-> Agent 用过少参数直接试跑奇门 / 太乙 / 六爻、导致 `/nongli/time` 返回 `200001 param error` 时，先让 agent 通过 `horosa_agent_guidance` 补问日期 / 时间 / 时区 / 经纬度与默认设置；Horosa Skill 也会自动对 Java 日期接口重试星阙兼容格式，避免把后端格式错误误判为算法不可用。
+## 📦 安装与 runtime 策略
 
-## 当前支持的 AI 客户端
+仓库分为三层，兼顾「代码仓库轻量、Release 资产完整、本地运行离线」：
 
-- **Claude Code**（一条命令注册）：`uv run horosa-skill client config --format claude-code` 会生成带真实绝对路径的 `claude mcp add …` 命令，复制执行即可；详见 [接入说明](./horosa-skill/examples/clients/claude-code.md)
-- [Claude Desktop 配置示例](./horosa-skill/examples/clients/claude_desktop_config.json)（或 `client config --format claude-desktop` 自动生成，免手填路径）
-- [Codex 配置示例](./horosa-skill/examples/clients/codex-config.toml)（或 `client config --format codex`）
-- [Open WebUI 接入说明](./horosa-skill/examples/clients/openwebui-streamable-http.md)
-- [OpenClaw 接入说明](./horosa-skill/examples/clients/openclaw-mcp.md)
-
-> 根目录的 `server.json` 是 MCP Registry 收录元数据，普通用户无需手改；本地接入请用上面的生成器或示例。
-
-接 OpenClaw / mcporter 时，推荐用生成器命令减少手改 JSON 和路径出错：
-
-```bash
-cd horosa-skill
-uv run horosa-skill client openclaw-setup --workspace ~/.openclaw/workspace
-uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace
-```
-
-`openclaw-setup` 会同时写 `~/.openclaw/workspace/config/mcporter.json`（供 `openclaw-check` / mcporter smoke）与 `~/.openclaw/openclaw.json` 的 `mcp.servers.horosa`（供 OpenClaw 原生挂载 `horosa_*` 工具）。
-
-> 若 `openclaw-check` 通过、`openclaw mcp list` 能看到 `horosa`、真实会话里已出现 `horosa__...` 工具，但 agent trace 里仍是 `clientToolCount: 0`，这只是旧 trajectory 统计噪音，不能当成「未挂载」；重启 OpenClaw 或开新 session，不要让 agent 退回 Shell / Python 手算。
-
-## 致谢：内置的开源术数引擎（ken）
-
-奇门遁甲 / 太乙神数 / 金口诀（以及三式合一中的奇门 + 太乙）的盘面，由 **[kentang2017](https://github.com/kentang2017)** 开源的三个 Python 引擎计算。星阙在后端接入了这套引擎，Horosa Skill 复用同一计算路径并随离线 runtime 一起分发：
-
-- **kinqimen**（奇门遁甲）— MIT — <https://github.com/kentang2017/kinqimen>
-- **kintaiyi**（太乙神数）— MIT — <https://github.com/kentang2017/kintaiyi>
-- **kinjinkou**（金口诀）— MIT — <https://github.com/kentang2017/kinjinkou>
-
-完整版权与许可证文本随离线 runtime 打包在 `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}/LICENSE`，分发时一并保留。
-
-**许可证归属**：上述三个 `ken` 引擎是第三方 MIT 组件（作者 kentang2017）。本仓库其余术数实现——统摄法、十年大运、以及奇门 / 太乙 / 金口 / 大六壬 / 星盘 / 推运 / 卜卦 / 择日 / 神数等的 `aiExport.js` 格式化与 headless 适配——均为**星阙自有算法**，按根目录 `GNU AGPL-3.0-only` 授权。传统术数体系本身（京房八宫、希腊十年星限等）属公共知识，不构成第三方版权。
-
-## Release 与 runtime 策略
-
-仓库故意拆成三层：
-
-| 层 | 放在哪里 | 作用 |
+| 层 | 位置 | 作用 |
 | --- | --- | --- |
-| 公开仓库层 | GitHub repo | 代码、文档、CLI、MCP、测试、示例、打包脚本 |
-| 维护者本地打包输入层 | `vendor/runtime-source/` | 构建离线 runtime 所需的大体积输入（不进 Git 历史） |
-| 最终用户运行层 | `~/.horosa/runtime/current` / `%LOCALAPPDATA%/Horosa/runtime/current` | 用户安装后真实执行算法的本地 runtime |
+| 📂 公开仓库层 | GitHub repo | 代码、文档、CLI、MCP、测试、示例、打包脚本 |
+| 📦 打包输入层 | `vendor/runtime-source/` | 构建离线 runtime 的大体积输入（不进 Git 历史） |
+| 💻 用户运行层 | `~/.horosa/runtime/current` | 用户安装后本地执行算法的 runtime |
 
-这样能同时满足：GitHub 页面干净、Release 资产完整、本地运行离线、维护者打包不依赖外部兄弟目录。配套阅读：[Offline Runtime Releases](./docs/OFFLINE_RUNTIME_RELEASES.md) · [Runtime Manifest Spec](./docs/RUNTIME_MANIFEST_SPEC.md) · [Repo Layout](./docs/REPO_LAYOUT.md)。
+奇门 / 太乙 / 金口诀（及三式合一中的奇门 + 太乙）走星阙 `ken` 后端；14 路神数走 chart 服务上挂载的 kentang 引擎；结果由 headless JS 层重排为 `aiExport.js` 段结构，与星阙桌面端逐值同源。配套阅读：[Offline Runtime Releases](./docs/OFFLINE_RUNTIME_RELEASES.md) · [Runtime Manifest Spec](./docs/RUNTIME_MANIFEST_SPEC.md) · [Repo Layout](./docs/REPO_LAYOUT.md)。
 
-## 仓库结构
+## ✅ 质量与验证
 
-| 路径 | 说明 |
+| 检查项 | 结果 |
 | --- | --- |
-| [`horosa-skill/`](./horosa-skill) | 核心 Python 包、CLI、MCP server、`horosa-core-js`（headless JS 引擎）、tests、examples、release scripts |
-| [`docs/`](./docs) | runtime 规范、算法覆盖矩阵、Release 文档、维护文档 |
-| [`vendor/`](./vendor) | 本地 runtime 打包输入区 |
+| 🧰 可调用工具 | 78 / 78 `ok=true` |
+| 🧪 工程测试 | **299 / 299 pass**（ken / 神数后端实时集成 + 离线 golden 单测 + node JS golden） |
+| 🛡️ 未确认参数时强制追问 | 67 个技法工具触发 `must_ask_user=true` |
+| 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 63 个导出 technique） |
+| 🗄️ 本地 memory / report | 78 / 78 写入 + 78 / 78 JSON artifact |
+| 🔄 GitHub CI | Linux / macOS 单测 + JS golden 自检 + Windows OpenClaw smoke |
+| 📦 Release runtime | macOS (arm64) / Windows (x64) `v0.21.0` 已打包并校验；其余平台安装时明确报不支持 |
 
-## 验真清单
-
-第一次 clone 后，想快速确认「这不是空壳仓库」，按这组最小检查走：
+第一次 clone 后确认非空壳的最小验证：
 
 ```bash
-cd horosa-skill
-uv sync
-uv run horosa-skill install
+cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 299 passed（本机后端全起；纯离线时 live 集成测试自动 skip）
-uv run python scripts/run_benchmark.py                  # HorosaBench：调度 / 导出 parity / 知识读取
+uv run pytest -q                                        # 299 passed
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 
-完整自检覆盖：每个工具能否调用 → 是否输出统一 envelope → 业务技法是否带 `export_snapshot` / `export_format` → 导出正文能否重新解析 → run 是否写入 memory → `memory show/query` 能否找回 → report JSON/DOCX/PDF 能否生成并登记 artifact → `horosa_dispatch` 汇总层是否保留子工具 export contract → OpenClaw / mcporter 能否看到 MCP 工具并完成 smoke/full check。
+> [!WARNING]
+> 审计推运 / 神数类工具时不要只看短预览——其正文通常先写本命盘再写返照 / 推运 / 流年 / 主限表格，只截前若干字符可能只看到本命盘。应打开完整 artifact，按 `export_snapshot.sections` 逐段检查。详见 [`docs/EXPORT_AUDIT_GUIDE.md`](./docs/EXPORT_AUDIT_GUIDE.md)。
 
-> **审计推运 / 神数类工具时不要只看短预览。** 这些工具的星阙式正文通常先写本命盘，再写返照 / 推运 / 流年 / 主限 / 神数表格；只截前 1200 字可能只看到本命盘。正确做法是打开完整 artifact，按 `export_format.sections` 逐 section 检查。详见 [`docs/EXPORT_AUDIT_GUIDE.md`](./docs/EXPORT_AUDIT_GUIDE.md)。
+## 📚 文档
 
-## 输出是否和星阙一致
+| 文档 | 内容 |
+| --- | --- |
+| [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | 架构设计 |
+| [`docs/INPUT_CONTRACTS.md`](./docs/INPUT_CONTRACTS.md) | 每个工具的输入契约（必填字段） |
+| [`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md) | 输出 / envelope / export 数据契约 |
+| [`docs/EXPORT_AUDIT_GUIDE.md`](./docs/EXPORT_AUDIT_GUIDE.md) | 推运类导出的逐段审计方法 |
+| [`docs/OPERATIONS.md`](./docs/OPERATIONS.md) · [`docs/EVALUATION.md`](./docs/EVALUATION.md) | 运维 · 评测体系 |
+| [`docs/OFFLINE_RUNTIME_RELEASES.md`](./docs/OFFLINE_RUNTIME_RELEASES.md) | 离线 runtime 打包与发布 |
+| [`docs/LESSONS.md`](./docs/LESSONS.md) · [`docs/GLOSSARY.md`](./docs/GLOSSARY.md) | 逐版本经验台账 · 领域名词表 |
+| [`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md) · [`AGENTS.md`](./AGENTS.md) | AI 客户端行为策略源 · Agent 总规则与路由 |
 
-「星阙一致」指两层：
+## 🙏 致谢与许可证
 
-1. **导出结构一致** — 业务技法输出生成星阙式 `export_snapshot.export_text`，再由 `snapshot_parser` 解析成 `export_format`；完整自检会逐项确认 selected sections 无缺失、无未知 section。
-2. **算法路径一致** — Skill 不允许 agent 用 shell / Python 小脚本 / 联网搜索手算玄学盘。奇门 / 太乙 / 金口 / 三式合一里的奇门+太乙由 ken 后端独占计算；14 路神数由 chart 服务上挂载的 kentang 引擎计算；卜卦 / 择日 / Balbillus 由逐字 vendor 的星阙前端引擎计算——全部与星阙同源。
+奇门遁甲 / 太乙神数 / 金口诀（及三式合一中的奇门 + 太乙）的盘面，由 [kentang2017](https://github.com/kentang2017) 开源的三个 Python 引擎计算，随离线 runtime 一起分发：
 
-> 内容保真已做过逐字节抽检：抽星阙真实前端 builder 对同一盘比对，年龄 / 相位 / 向运星 / 本命对象完全一致；仅波斯向运的「应期日期」因 moment 截断小数日 + JS↔Python 浮点有 ≤1 天偏差，占断上无意义并已记档（见 [`horosa-skill/docs/v091-fidelity-spotcheck.md`](./horosa-skill/docs/v091-fidelity-spotcheck.md)）。若要证明某具体输入与星阙桌面 UI 逐字段一致，应把星阙对同一输入的 golden snapshot 放进 fixtures 做逐字段 diff。
+- ✳️ **kinqimen**（奇门遁甲）— MIT — <https://github.com/kentang2017/kinqimen>
+- ✳️ **kintaiyi**（太乙神数）— MIT — <https://github.com/kentang2017/kintaiyi>
+- ✳️ **kinjinkou**（金口诀）— MIT — <https://github.com/kentang2017/kinjinkou>
 
-## FAQ / 边界
+上述三个 `ken` 引擎为第三方 MIT 组件。本仓库其余术数实现——统摄法、十年大运，以及奇门 / 太乙 / 金口 / 大六壬 / 星盘 / 推运 / 卜卦 / 择日 / 神数等的 `aiExport.js` 格式化与 headless 适配——均为星阙自有算法，按根目录 `GNU AGPL-3.0-only` 授权。传统术数体系本身（京房八宫、希腊十年星限等）属公共知识，不构成第三方版权。
 
-**为什么 release 不是纯云构建？** 因为完整 runtime 依赖本地维护的 runtime source 与平台运行时。仓库保持轻量是目标，但完整 runtime 仍需可靠的本地打包输入，故采用「轻仓库 + 重 release + 明确校验」策略。
+<div align="center">
 
-**为什么一直强调 `export_snapshot` / `export_format`？** 因为本项目最核心的价值之一就是「让 AI 稳定消费星阙输出」。没有这层 contract，AI 只能读松散文本，后续检索、比对、回写、研究评测都会变脆。
+**🔮 玄学工具，本地优先，掌握在你自己手里。**
 
-**为什么同时保留 SQLite 和 JSON？** SQLite 负责结构化索引与查询，JSON artifact 负责长期归档、可携带、可 diff、可审阅。
+[![License](https://img.shields.io/badge/License-AGPL--3.0-374151?style=flat-square)](./LICENSE) [![Security](https://img.shields.io/badge/Security-Policy-991b1b?style=flat-square)](./SECURITY.md) [![Support](https://img.shields.io/badge/Support-Paths-1d4ed8?style=flat-square)](./SUPPORT.md) [![Contributing](https://img.shields.io/badge/Contributing-Guide-0f766e?style=flat-square)](./CONTRIBUTING.md) [![Citation](https://img.shields.io/badge/Citation-CFF-7c3aed?style=flat-square)](./CITATION.cff)
 
-**`fengshui` 为什么还没进发布面？** 当前目标是「已完整、已 headless、已可离线验证」的能力面。`fengshui` 仍明确排除，不把未完成 headless 化的能力伪装成可发布功能。
-
-**这个仓库最重要的质量信号是什么？** 不是 badge，也不是截图，而是这四件事能否同时成立：tool 真能调用 · 导出真是稳定结构化 · 结果真会落库和回写 · benchmark / self-check 真能持续跑通。
+</div>
