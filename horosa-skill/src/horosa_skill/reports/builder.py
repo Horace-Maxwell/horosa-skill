@@ -35,7 +35,7 @@ class ReportBuilder:
         export_sections = self._source_export_sections(export_format, include_body=True)
         coverage_contract = self._coverage_contract(
             export_sections=export_sections,
-            export_text=self._export_text(export_snapshot=export_snapshot, export_format=export_format),
+            export_text=self._export_text(export_snapshot=export_snapshot, export_format=export_format, payload=payload),
             source=source,
         )
         user_question = self._user_question(run)
@@ -74,7 +74,7 @@ class ReportBuilder:
             "source_context": {
                 "input_normalized": payload.get("input_normalized") if isinstance(payload.get("input_normalized"), dict) else {},
                 "summary": payload.get("summary") if isinstance(payload.get("summary"), list) else [],
-                "export_text": self._export_text(export_snapshot=export_snapshot, export_format=export_format),
+                "export_text": self._export_text(export_snapshot=export_snapshot, export_format=export_format, payload=payload),
                 "export_sections": export_sections,
                 "provenance": self._provenance(export_snapshot=export_snapshot, export_format=export_format, source=source),
             },
@@ -186,7 +186,7 @@ class ReportBuilder:
         export_format = self._export_format(payload)
         input_normalized = payload.get("input_normalized") if isinstance(payload, dict) else {}
         summary = payload.get("summary") if isinstance(payload, dict) else []
-        export_text = self._export_text(export_snapshot=export_snapshot, export_format=export_format)
+        export_text = self._export_text(export_snapshot=export_snapshot, export_format=export_format, payload=payload)
         export_sections = self._source_export_sections(export_format, include_body=True)
         merged_ai_report = self._merge_ai_report(
             run=run,
@@ -428,9 +428,15 @@ class ReportBuilder:
         return payload if isinstance(payload, dict) else {}
 
     def _export_format(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 唯一导出契约 = data.export_snapshot；旧归档（曾带 export_format 副本）回退读取保持可回放。
         data = payload.get("data") if isinstance(payload, dict) else {}
-        export_format = data.get("export_format") if isinstance(data, dict) else {}
-        return export_format if isinstance(export_format, dict) else {}
+        if not isinstance(data, dict):
+            return {}
+        contract = data.get("export_snapshot")
+        if isinstance(contract, dict):
+            return contract
+        legacy = data.get("export_format")
+        return legacy if isinstance(legacy, dict) else {}
 
     def _source_meta(
         self,
@@ -1528,8 +1534,11 @@ class ReportBuilder:
             "group_id": source.get("group_id"),
         }
 
-    def _export_text(self, *, export_snapshot: dict[str, Any], export_format: dict[str, Any]) -> str:
-        return str(export_snapshot.get("export_text") or export_format.get("snapshot_text") or "")
+    def _export_text(self, *, export_snapshot: dict[str, Any], export_format: dict[str, Any], payload: dict[str, Any] | None = None) -> str:
+        # 新契约取 export_text；旧归档回退 export_format.snapshot_text；末级回退顶层 data.snapshot_text。
+        data = payload.get("data") if isinstance(payload, dict) else {}
+        top_snapshot = data.get("snapshot_text") if isinstance(data, dict) else ""
+        return str(export_snapshot.get("export_text") or export_format.get("snapshot_text") or top_snapshot or "")
 
     def _coverage_contract(self, *, export_sections: list[dict[str, Any]], export_text: str, source: dict[str, Any]) -> dict[str, Any]:
         must_explain_sections = [str(section.get("title")) for section in export_sections if section.get("title")]

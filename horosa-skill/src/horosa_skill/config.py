@@ -91,7 +91,11 @@ class Settings(BaseModel):
     runtime_release_repo: str = DEFAULT_RELEASE_REPO
     local_backend_port: int = 9999
     local_chart_port: int = 8899
-    runtime_start_timeout_seconds: float = 15.0
+    # 冷启动等待：Java(Spring Boot fat jar)+Python(星历重导入) 后端首启常超 15s，45s 覆盖常见机器。
+    runtime_start_timeout_seconds: float = 45.0
+    # MCP 精简工具面：True 时只暴露 dispatch/guidance/memory/report 门面 + 通用直呼 horosa_tool_run，
+    # 技法工具不平铺（省 tools/list 上下文预算）；默认 False 保持 87 工具全量平铺。
+    mcp_compact: bool = False
     js_engine_timeout_seconds: float = 60.0
     host: str = "127.0.0.1"
     port: int = 8765
@@ -120,7 +124,8 @@ class Settings(BaseModel):
             runtime_release_repo=_env_text("HOROSA_RUNTIME_RELEASE_REPO", DEFAULT_RELEASE_REPO) or DEFAULT_RELEASE_REPO,
             local_backend_port=_env_int("HOROSA_LOCAL_BACKEND_PORT", 9999, minimum=1, maximum=65535),
             local_chart_port=_env_int("HOROSA_LOCAL_CHART_PORT", 8899, minimum=1, maximum=65535),
-            runtime_start_timeout_seconds=_env_float("HOROSA_RUNTIME_START_TIMEOUT_SECONDS", 15.0, minimum=0.1),
+            runtime_start_timeout_seconds=_env_float("HOROSA_RUNTIME_START_TIMEOUT_SECONDS", 45.0, minimum=0.1),
+            mcp_compact=_env_bool("HOROSA_MCP_COMPACT", False),
             js_engine_timeout_seconds=_env_float("HOROSA_JS_ENGINE_TIMEOUT_SECONDS", 60.0, minimum=0.1),
             host=_env_text("HOROSA_SKILL_HOST", "127.0.0.1") or "127.0.0.1",
             port=_env_int("HOROSA_SKILL_PORT", 8765, minimum=1, maximum=65535),

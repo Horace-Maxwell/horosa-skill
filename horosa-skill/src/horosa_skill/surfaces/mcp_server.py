@@ -7,7 +7,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
 
-from horosa_skill.agent_guidance import build_agent_guidance, build_tool_docstring, validate_agent_preflight
+from horosa_skill.agent_guidance import build_agent_guidance, build_technique_catalog, build_tool_docstring, validate_agent_preflight
 from horosa_skill.config import Settings
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.errors import ToolValidationError
@@ -143,6 +143,13 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
             return service.dispatch(_normalize_mcp_request(raw_payload, DispatchInput))
         except ToolValidationError as exc:
             return _mcp_error_payload(exc)
+    dispatch_doc = (
+        "Route a natural-language 术数/占星 request to the right Horosa technique tools and run them. "
+        "Results are saved to local memory by default (save_result=false to disable)."
+    )
+    if settings.mcp_compact:
+        dispatch_doc += "\n\n" + build_technique_catalog()
+    horosa_dispatch.__doc__ = dispatch_doc
     horosa_dispatch.__signature__ = _signature_for_input_model(DispatchInput)
     horosa_dispatch.__annotations__ = {"return": DispatchEnvelope}
     mcp.tool(name="horosa_dispatch")(horosa_dispatch)
@@ -254,6 +261,44 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
     horosa_report_from_tool.__signature__ = _signature_for_input_model(ReportFromToolInput)
     horosa_report_from_tool.__annotations__ = {"return": dict[str, Any]}
     mcp.tool(name="horosa_report_from_tool")(horosa_report_from_tool)
+
+    if settings.mcp_compact:
+        # 精简模式：技法工具不平铺，注册一个按名直呼的通用工具（dispatch 关键词路由只覆盖部分技法，
+        # 直呼通道保证 78 技法全部可达）；澄清闸照常生效。
+        def horosa_tool_run(**kwargs: Any) -> ToolEnvelope:
+            raw_payload = _merge_mcp_arguments(kwargs)
+            if not isinstance(raw_payload, dict):
+                raw_payload = {}
+            tool_name = str(raw_payload.pop("tool_name", "") or "")
+            request = raw_payload.pop("request", None)
+            payload = request if isinstance(request, dict) else raw_payload
+            if tool_name not in TOOL_DEFINITIONS:
+                return _mcp_error_payload(
+                    ToolValidationError(
+                        f"Unknown tool: {tool_name or '(missing tool_name)'}",
+                        code="tool.unknown",
+                        details={"tool_name": tool_name, "hint": "See the technique catalog in this tool's description."},
+                    )
+                )
+            error = _agent_preflight_error(tool_name, payload)
+            if error is not None:
+                return error
+            try:
+                return service.run_tool(
+                    tool_name,
+                    _normalize_mcp_request(payload, TOOL_DEFINITIONS[tool_name].input_model),
+                )
+            except ToolValidationError as exc:
+                return _mcp_error_payload(exc)
+
+        horosa_tool_run.__doc__ = (
+            "Run any Horosa technique tool by name: pass tool_name plus the tool's input fields "
+            "(flat or under `request`). Same clarification gate and envelope as the dedicated tools.\n\n"
+            + build_technique_catalog()
+        )
+        horosa_tool_run.__annotations__ = {"return": ToolEnvelope}
+        mcp.tool(name="horosa_tool_run")(horosa_tool_run)
+        return mcp
 
     for definition in TOOL_DEFINITIONS.values():
         input_model = definition.input_model

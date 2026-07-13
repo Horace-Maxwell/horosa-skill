@@ -315,6 +315,19 @@ def _only_payload_keys(payload: dict[str, Any], keys: tuple[str, ...]) -> dict[s
     return {key: payload[key] for key in keys if key in payload and payload[key] is not None}
 
 
+def _day_boundary_switches(payload: dict[str, Any], keys: tuple[str, ...] = ("after23NewDay", "lateZiHourUseNextDay")) -> dict[str, int]:
+    """日界(after23NewDay)/晚子时时柱(lateZiHourUseNextDay)开关：仅显式给定时发送。
+
+    None 不发送 → 后端按其默认(1/1)起算，与未传时字节级等价（零默认漂移）。
+    """
+    switches: dict[str, int] = {}
+    for key in keys:
+        value = payload.get(key)
+        if value is not None:
+            switches[key] = 1 if value in (1, True, "1", "true", "True") else 0
+    return switches
+
+
 def _liureng_remote_payload(tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
     if tool_name == "liureng_runyear":
         return _only_payload_keys(
@@ -326,6 +339,7 @@ def _liureng_remote_payload(tool_name: str, payload: dict[str, Any]) -> dict[str
                 "lat",
                 "lon",
                 "after23NewDay",
+                "lateZiHourUseNextDay",
                 "ad",
                 "gender",
                 "guaYearGanZi",
@@ -340,7 +354,7 @@ def _liureng_remote_payload(tool_name: str, payload: dict[str, Any]) -> dict[str
         )
     return _only_payload_keys(
         payload,
-        ("date", "time", "zone", "lat", "lon", "after23NewDay", "ad", "yue", "isDiurnal"),
+        ("date", "time", "zone", "lat", "lon", "after23NewDay", "lateZiHourUseNextDay", "ad", "yue", "isDiurnal"),
     )
 
 
@@ -5180,6 +5194,8 @@ def _build_generated_export_snapshot(
         body = parsed_section.get("body") or section_body_override or fallback_body
         content = parsed_section.get("content") or (f"[{title}]\n{body}".strip() if body else f"[{title}]")
         rendered_blocks.append(content)
+        # 段仅存 body（content = "[title]\nbody" 可推导，不重复存），全文仅存 export_text 一份；
+        # 原始全段快照以顶层 data.snapshot_text 为唯一权威，此处不再内嵌复制。
         sections.append(
             {
                 "index": index,
@@ -5187,7 +5203,6 @@ def _build_generated_export_snapshot(
                 "title": title,
                 "included": True,
                 "body": body,
-                "content": content,
                 "data": _sanitize_section_data(section_payload),
             }
         )
@@ -5206,11 +5221,8 @@ def _build_generated_export_snapshot(
         "unknown_detected_sections": unknown_detected_sections,
         "missing_selected_sections": missing_selected_sections,
         "sections": sections,
-        "raw_text": snapshot_text or (parsed_snapshot.get("raw_text", "") if isinstance(parsed_snapshot, dict) else ""),
-        "filtered_text": export_text,
         "export_text": export_text,
         "format_source": "snapshot_parser" if parsed_snapshot else "generated_template",
-        "snapshot_text": snapshot_text,
         "bundle_version": provenance.get("bundle_version"),
         "provenance": provenance,
         "citation": citation,
@@ -5240,43 +5252,78 @@ def _attach_export_contract(tool_name: str, input_normalized: dict[str, Any], re
             augmented["export_snapshot"] = parsed_snapshot
         except ValueError:
             parsed_snapshot = None
-    export_format = _build_generated_export_snapshot(
+    export_contract = _build_generated_export_snapshot(
         technique=technique,
         input_normalized=input_normalized,
         response_data=augmented,
         snapshot_text=snapshot_text,
         parsed_snapshot=parsed_snapshot,
     )
-    if export_format is None:
+    if export_contract is None:
+        # 兜底剥离：_run_* 自写 parser 形状 export_snapshot 而模板生成失败时，冗余全文键不外泄。
+        if isinstance(augmented.get("export_snapshot"), dict):
+            augmented["export_snapshot"] = _slim_export_snapshot(augmented["export_snapshot"])
         return augmented
 
-    augmented["export_snapshot"] = export_format
-    augmented["export_format"] = {
-        "technique": export_format["technique"],
-        "selected_sections": export_format["selected_sections"],
-        "format_source": export_format["format_source"],
-        "snapshot_text": export_format["snapshot_text"],
-        "bundle_version": export_format.get("bundle_version"),
-        "provenance": export_format.get("provenance"),
-        "citation": export_format.get("citation"),
-        "sections": [
-            {
-                "index": section["index"],
-                "title": section["title"],
-                "included": section["included"],
-                "body": section["body"],
-                "data": section["data"],
-            }
-            for section in export_format["sections"]
-        ],
-    }
+    # data.export_snapshot 是唯一导出契约（原 export_format 为其真子集，已并入不再单独产出）；
+    # 原始全段快照的唯一权威是顶层 data.snapshot_text。
+    augmented["export_snapshot"] = export_contract
     return augmented
 
 
+def _slim_export_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """剥离 parser 中间态里的冗余全文键（与顶层 snapshot_text / export_text 重复）。"""
+    slim = {key: value for key, value in snapshot.items() if key not in {"raw_text", "filtered_text", "snapshot_text"}}
+    sections = slim.get("sections")
+    if isinstance(sections, list):
+        slim["sections"] = [
+            {key: value for key, value in section.items() if key != "content"} if isinstance(section, dict) else section
+            for section in sections
+        ]
+    return slim
+
+
+def _apply_response_view(envelope: ToolEnvelope, input_normalized: dict[str, Any]) -> ToolEnvelope:
+    """response_view 响应视图：titles=只留段标题索引；sections=段标题+正文。
+
+    只精简返回体（存档已保全量，完整结果可经 memory_show(run_id) 取回）；未知/缺省值原样返回。
+    """
+    view = str(input_normalized.get("response_view") or "").strip().lower()
+    if view not in {"titles", "sections"} or not isinstance(envelope.data, dict):
+        return envelope
+    data = dict(envelope.data)
+    contract = data.get("export_snapshot")
+    if isinstance(contract, dict):
+        slim = dict(contract)
+        sections = [section for section in contract.get("sections", []) if isinstance(section, dict)]
+        if view == "titles":
+            slim["sections"] = [{"index": section.get("index"), "title": section.get("title")} for section in sections]
+        else:
+            slim["sections"] = [
+                {"index": section.get("index"), "title": section.get("title"), "body": section.get("body")}
+                for section in sections
+            ]
+        slim.pop("export_text", None)
+        data["export_snapshot"] = slim
+    if isinstance(data.get("snapshot_text"), str):
+        data["snapshot_text"] = ""
+    envelope.data = data
+    envelope.warnings = [
+        *envelope.warnings,
+        f"response_view={view}：返回体已按需精简；完整快照已存档，可用 memory_show(run_id) 取回。",
+    ]
+    return envelope
+
+
 def _build_dispatch_export_contract(result: ToolEnvelope) -> dict[str, Any]:
+    # dispatch 轻契约：只带元信息与段标题索引；快照本体在 results[tool].data 已有一份，不再内嵌复制。
     export_snapshot = result.data.get("export_snapshot") if isinstance(result.data, dict) else None
-    export_format = result.data.get("export_format") if isinstance(result.data, dict) else None
     technique = export_snapshot.get("technique") if isinstance(export_snapshot, dict) else None
+    section_titles: list[str] = []
+    if isinstance(export_snapshot, dict):
+        for section in export_snapshot.get("sections", []):
+            if isinstance(section, dict) and section.get("title"):
+                section_titles.append(section["title"])
     return {
         "ok": result.ok,
         "tool": result.tool,
@@ -5284,16 +5331,14 @@ def _build_dispatch_export_contract(result: ToolEnvelope) -> dict[str, Any]:
         "warnings": list(result.warnings),
         "memory_ref": result.memory_ref.model_dump(mode="json") if result.memory_ref else None,
         "has_export_snapshot": isinstance(export_snapshot, dict),
-        "has_export_format": isinstance(export_format, dict),
         "technique": technique,
-        "selected_sections": list(export_format.get("selected_sections", [])) if isinstance(export_format, dict) else [],
-        "format_source": export_format.get("format_source") if isinstance(export_format, dict) else None,
-        "snapshot_text": export_format.get("snapshot_text") if isinstance(export_format, dict) else None,
-        "bundle_version": export_format.get("bundle_version") if isinstance(export_format, dict) else None,
-        "provenance": export_format.get("provenance") if isinstance(export_format, dict) else None,
-        "citation": export_format.get("citation") if isinstance(export_format, dict) else None,
-        "export_snapshot": export_snapshot if isinstance(export_snapshot, dict) else None,
-        "export_format": export_format if isinstance(export_format, dict) else None,
+        "selected_sections": list(export_snapshot.get("selected_sections", [])) if isinstance(export_snapshot, dict) else [],
+        "format_source": export_snapshot.get("format_source") if isinstance(export_snapshot, dict) else None,
+        "section_count": len(section_titles),
+        "section_titles": section_titles,
+        "bundle_version": export_snapshot.get("bundle_version") if isinstance(export_snapshot, dict) else None,
+        "provenance": export_snapshot.get("provenance") if isinstance(export_snapshot, dict) else None,
+        "citation": export_snapshot.get("citation") if isinstance(export_snapshot, dict) else None,
         "error": result.error.model_dump(mode="json") if result.error else None,
     }
 
@@ -5301,10 +5346,9 @@ def _build_dispatch_export_contract(result: ToolEnvelope) -> dict[str, Any]:
 def _build_compact_subresult_contract(result: ToolEnvelope) -> dict[str, Any]:
     data = result.data if isinstance(result.data, dict) else {}
     export_snapshot = data.get("export_snapshot") if isinstance(data.get("export_snapshot"), dict) else None
-    export_format = data.get("export_format") if isinstance(data.get("export_format"), dict) else None
     section_titles = []
-    if isinstance(export_format, dict):
-        for section in export_format.get("sections", []):
+    if isinstance(export_snapshot, dict):
+        for section in export_snapshot.get("sections", []):
             if isinstance(section, dict) and section.get("title"):
                 section_titles.append(section["title"])
     return {
@@ -5319,15 +5363,14 @@ def _build_compact_subresult_contract(result: ToolEnvelope) -> dict[str, Any]:
         "group_id": result.group_id,
         "export_contract": {
             "has_export_snapshot": isinstance(export_snapshot, dict),
-            "has_export_format": isinstance(export_format, dict),
             "technique": export_snapshot.get("technique") if isinstance(export_snapshot, dict) else None,
-            "selected_sections": list(export_format.get("selected_sections", [])) if isinstance(export_format, dict) else [],
-            "format_source": export_format.get("format_source") if isinstance(export_format, dict) else None,
+            "selected_sections": list(export_snapshot.get("selected_sections", [])) if isinstance(export_snapshot, dict) else [],
+            "format_source": export_snapshot.get("format_source") if isinstance(export_snapshot, dict) else None,
             "section_count": len(section_titles),
             "section_titles": section_titles,
-            "bundle_version": export_format.get("bundle_version") if isinstance(export_format, dict) else None,
-            "provenance": export_format.get("provenance") if isinstance(export_format, dict) else None,
-            "citation": export_format.get("citation") if isinstance(export_format, dict) else None,
+            "bundle_version": export_snapshot.get("bundle_version") if isinstance(export_snapshot, dict) else None,
+            "provenance": export_snapshot.get("provenance") if isinstance(export_snapshot, dict) else None,
+            "citation": export_snapshot.get("citation") if isinstance(export_snapshot, dict) else None,
         },
         "error": result.error.model_dump(mode="json") if result.error else None,
     }
@@ -5692,7 +5735,8 @@ class HorosaSkillService:
                     "lat": payload["lat"],
                     "gpsLat": payload.get("gpsLat"),
                     "gpsLon": payload.get("gpsLon"),
-                    "after23NewDay": payload.get("after23NewDay", False),
+                    # 日界/晚子时开关与 ken 权威引擎同口径：仅显式给定时发送，缺省沿用后端默认(1/1)。
+                    **_day_boundary_switches(payload),
                     "timeAlg": payload.get("timeAlg", 0),
                     "ad": payload.get("ad", 1),
                 },
@@ -5724,6 +5768,8 @@ class HorosaSkillService:
                 "time": payload.get("time"),
                 "realSunTime": (nongli or {}).get("birth", ""),
                 "jiedelta": (nongli or {}).get("jiedelta", ""),
+                # 显式日界/晚子时开关直达权威引擎（缺省不发→引擎默认 1/1）。
+                **_day_boundary_switches(payload),
             },
         )
         self._require_ken_pan(ken_response, engine="kinqimen", endpoint="/qimen/pan")
@@ -5759,7 +5805,8 @@ class HorosaSkillService:
                     "lat": payload["lat"],
                     "gpsLat": payload.get("gpsLat"),
                     "gpsLon": payload.get("gpsLon"),
-                    "after23NewDay": payload.get("after23NewDay", False),
+                    # 日界/晚子时开关与 ken 权威引擎同口径：仅显式给定时发送，缺省沿用后端默认(1/1)。
+                    **_day_boundary_switches(payload),
                     "timeAlg": payload.get("timeAlg", 0),
                     "ad": payload.get("ad", 1),
                 },
@@ -5783,6 +5830,8 @@ class HorosaSkillService:
                 "time": payload.get("time"),
                 "realSunTime": (nongli or {}).get("birth", ""),
                 "jiedelta": (nongli or {}).get("jiedelta", ""),
+                # 显式日界/晚子时开关直达权威引擎（缺省不发→引擎默认 1/1）。
+                **_day_boundary_switches(payload),
             },
         )
         self._require_ken_pan(ken_response, engine="kintaiyi", endpoint="/taiyi/pan")
@@ -5815,6 +5864,8 @@ class HorosaSkillService:
                 "zhanshi": options.get("zhanShi") or options.get("zhanshi") or "",
                 "date": payload.get("date"),
                 "time": payload.get("time"),
+                # 仅晚子时开关（after23 继承自六壬默认 False，为零漂移不向 ken 新发送——既有边界）。
+                **_day_boundary_switches(payload, keys=("lateZiHourUseNextDay",)),
             },
         )
         self._require_ken_pan(ken_response, engine="kinjinkou", endpoint="/jinkou/pan")
@@ -6298,7 +6349,8 @@ class HorosaSkillService:
             "gpsLat": payload.get("gpsLat"),
             "gpsLon": payload.get("gpsLon"),
             "ad": payload.get("ad", 1),
-            "after23NewDay": payload.get("after23NewDay", False),
+            # 日界/晚子时开关仅显式给定时透传三式子工具（缺省沿用各子工具/引擎默认）。
+            **_day_boundary_switches(payload),
             "timeAlg": payload.get("timeAlg", 0),
         }
         qimen_result = self.run_tool(
@@ -7464,6 +7516,8 @@ class HorosaSkillService:
                 trace["run_id"] = effective_run_id
                 trace["artifact_path"] = memory_ref.artifact_path
 
+            # response_view 视图裁剪在存档之后：memory 保全量，返回体按需精简。
+            envelope = _apply_response_view(envelope, input_normalized)
             trace["success"] = envelope.ok
             trace["input_normalized"] = input_normalized
             trace["summary"] = envelope.summary
@@ -7998,11 +8052,8 @@ class HorosaSkillService:
             source_tool = str(artifact.get("tool_name") or "")
             if artifact.get("kind") != "tool_result" or source_tool not in TOOL_EXPORT_TECHNIQUE_MAP:
                 return True
-            return (
-                isinstance(data, dict)
-                and isinstance(data.get("export_snapshot"), dict)
-                and isinstance(data.get("export_format"), dict)
-            )
+            # 只要求 export_snapshot（唯一导出契约）；旧归档带 export_format 双字段的天然满足 → 向后兼容。
+            return isinstance(data, dict) and isinstance(data.get("export_snapshot"), dict)
 
         source = next((artifact for artifact in candidates if has_complete_export_contract(artifact)), candidates[0])
         payload = source.get("payload")
@@ -8011,7 +8062,6 @@ class HorosaSkillService:
         if source.get("kind") == "tool_result" and source_tool in TOOL_EXPORT_TECHNIQUE_MAP and not (
             isinstance(data, dict)
             and isinstance(data.get("export_snapshot"), dict)
-            and isinstance(data.get("export_format"), dict)
         ):
             raise ToolValidationError(
                 "Selected artifact does not contain a complete export contract.",

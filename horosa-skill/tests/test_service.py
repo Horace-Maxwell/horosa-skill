@@ -810,7 +810,7 @@ def test_service_tool_call_persists_memory(tmp_path) -> None:
     assert result.ok is True
     assert result.memory_ref is not None
     assert result.data["export_snapshot"]["technique"]["key"] == "astrochart"
-    assert result.data["export_format"]["sections"][0]["title"] == "起盘信息"
+    assert result.data["export_snapshot"]["sections"][0]["title"] == "起盘信息"
     assert "宫位宫头" in result.data["export_snapshot"]["selected_sections"]
     assert "星与虚点" in result.data["export_snapshot"]["selected_sections"]
     assert "第八宫 宫头" in result.data["export_snapshot"]["export_text"]
@@ -1034,13 +1034,13 @@ def test_local_tool_call_always_attaches_complete_export_contract(tmp_path) -> N
 
     assert result.ok is True
     assert result.data["export_snapshot"]["technique"]["key"] == "qimen"
-    assert result.data["export_format"]["format_source"] == "snapshot_parser"
-    assert result.data["export_format"]["selected_sections"] == [
+    assert result.data["export_snapshot"]["format_source"] == "snapshot_parser"
+    assert result.data["export_snapshot"]["selected_sections"] == [
         "起盘信息", "盘型", "全局速览", "盘面要素", "奇门演卦", "八宫详解", "九宫方盘", "旺相休囚死·月令能量",
         "六害总览", "化解方案", "八门化气大阵", "用神分论", "财富七要", "事业七要", "恋爱姻缘", "孤辰寡宿",
     ]
-    assert any(section["title"] == "奇门演卦" for section in result.data["export_format"]["sections"])
-    assert any(section["title"] == "化解方案" for section in result.data["export_format"]["sections"])
+    assert any(section["title"] == "奇门演卦" for section in result.data["export_snapshot"]["sections"])
+    assert any(section["title"] == "化解方案" for section in result.data["export_snapshot"]["sections"])
 
 
 def test_qimen_fails_loudly_when_ken_returns_failure_envelope(tmp_path) -> None:
@@ -1429,7 +1429,7 @@ def test_calendar_month_snapshot_sections_and_cross_month_filter(tmp_path) -> No
     # 选中日详情字段落位。
     assert "农历：戊申年三月初六" in snapshot
     assert "年柱口径" in snapshot
-    export_format = result.data.get("export_format") or {}
+    export_format = result.data.get("export_snapshot") or {}
     assert export_format.get("technique", {}).get("key") == "calendar"
     assert export_format.get("missing_selected_sections") in (None, [])
     assert export_format.get("unknown_sections") in (None, [])
@@ -1623,7 +1623,7 @@ def test_sanshiunited_subresults_use_compact_export_contracts(tmp_path) -> None:
         assert "export_snapshot" not in subresult
         assert "export_format" not in subresult
         assert subresult["export_contract"]["has_export_snapshot"] is True
-        assert subresult["export_contract"]["has_export_format"] is True
+        assert subresult["export_contract"]["has_export_snapshot"] is True
         assert subresult["export_contract"]["section_titles"]
 
 
@@ -1711,9 +1711,9 @@ def test_all_callable_techniques_keep_non_empty_structured_export_contracts(tmp_
         assert result.ok is True, tool_name
         assert result.data["export_snapshot"]["technique"]["key"] == technique_key, tool_name
         assert result.data["export_snapshot"]["format_source"] == "snapshot_parser", tool_name
-        assert result.data["export_format"]["selected_sections"], tool_name
-        assert result.data["export_format"]["sections"], tool_name
-        assert all(section["title"] for section in result.data["export_format"]["sections"]), tool_name
+        assert result.data["export_snapshot"]["selected_sections"], tool_name
+        assert result.data["export_snapshot"]["sections"], tool_name
+        assert all(section["title"] for section in result.data["export_snapshot"]["sections"]), tool_name
 
 
 def test_predictive_tools_export_real_natal_and_timed_chart_content(tmp_path) -> None:
@@ -1734,8 +1734,8 @@ def test_predictive_tools_export_real_natal_and_timed_chart_content(tmp_path) ->
     }
     for tool_name, sections in expected_sections.items():
         result = service.run_tool(tool_name, payloads[tool_name], save_result=False)
-        export_format = result.data["export_format"]
-        text = export_format["snapshot_text"]
+        export_format = result.data["export_snapshot"]
+        text = result.data["snapshot_text"]
         assert all(section in export_format["selected_sections"] for section in sections), tool_name
         assert "本命盘" in text, tool_name
         assert any(label in text for label in ("返照盘", "推运盘", "流年盘")), tool_name
@@ -1753,7 +1753,7 @@ def test_primary_direction_exports_tables_and_pdchart_positions(tmp_path) -> Non
     payloads = build_sample_payloads()
 
     pd_result = service.run_tool("pd", payloads["pd"], save_result=False)
-    pd_text = pd_result.data["export_format"]["snapshot_text"]
+    pd_text = pd_result.data["snapshot_text"]
     assert "主/界限法表格" in pd_text
     assert "| Arc | 迫星 | 应星 | 类型 | 日期 |" in pd_text
     assert "推运月" in pd_text
@@ -1761,7 +1761,7 @@ def test_primary_direction_exports_tables_and_pdchart_positions(tmp_path) -> Non
     assert "2031-04-06" in pd_text
 
     pdchart_result = service.run_tool("pdchart", payloads["pdchart"], save_result=False)
-    pdchart_text = pdchart_result.data["export_format"]["snapshot_text"]
+    pdchart_text = pdchart_result.data["snapshot_text"]
     assert "本命盘星与虚点" in pdchart_text
     assert "主限法盘星体表格" in pdchart_text
     assert "| 星体/虚点 | 位置 | 宫位 | 速度 |" in pdchart_text
@@ -1787,7 +1787,7 @@ def test_primary_direction_full_house_settings_surface(tmp_path) -> None:
         "pdTerms": 1,
         "pdTimeKey": "Kundig",
     }
-    text = service.run_tool("pd", payload, save_result=False).data["export_format"]["snapshot_text"]
+    text = service.run_tool("pd", payload, save_result=False).data["snapshot_text"]
     assert "Meridian" in text
     assert "In Mundo（世俗）" in text
     assert "仅逆向 (converse)" in text
@@ -1832,7 +1832,7 @@ def test_germany_uranian_snapshot_has_full_sections(tmp_path) -> None:
         {"date": "2028/04/06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
         save_result=False,
     )
-    text = result.data["export_format"]["snapshot_text"]
+    text = result.data["snapshot_text"]
     for header in ("行星", "TNP星体", "90°中点盘", "行星图", "映点", "中点列表"):
         assert header in text, header
     assert "Cupido" in text or "Hades" in text  # TNP 渲染
@@ -1881,7 +1881,7 @@ def test_guolao_snapshot_has_limit_and_aspect_sections(tmp_path) -> None:
         {"date": "1998/03/02", "time": "08:18:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
         save_result=False,
     )
-    text = result.data["export_format"]["snapshot_text"]
+    text = result.data["snapshot_text"]
     assert "大限" in text
     assert "第1限 命宫" in text
     assert "相位" in text
@@ -1897,7 +1897,7 @@ def test_zodiacal_release_exports_timeline_rows(tmp_path) -> None:
     payloads = build_sample_payloads()
 
     result = service.run_tool("zr", payloads["zr"], save_result=False)
-    text = result.data["export_format"]["snapshot_text"]
+    text = result.data["snapshot_text"]
     assert "本命盘星与虚点" in text
     assert "基于X点推运" in text
     assert "L1：牡羊" in text
@@ -1924,7 +1924,7 @@ def test_all_callable_techniques_keep_clean_contracts_across_repeated_saved_runs
         for run in queried[:2]:
             artifact_payload = run["artifacts"][0]["payload"]
             export_snapshot = artifact_payload["data"]["export_snapshot"]
-            export_format = artifact_payload["data"]["export_format"]
+            export_format = artifact_payload["data"]["export_snapshot"]
             assert artifact_payload["ok"] is True, tool_name
             assert export_snapshot["technique"]["key"] == technique_key, tool_name
             assert export_snapshot["format_source"] == "snapshot_parser", tool_name
@@ -2311,11 +2311,11 @@ def test_dispatch_exposes_child_export_contracts_explicitly(tmp_path) -> None:
     qimen_contract = result.result_export_contracts["qimen"]
     liureng_contract = result.result_export_contracts["liureng_gods"]
     assert qimen_contract["has_export_snapshot"] is True
-    assert qimen_contract["has_export_format"] is True
+    assert qimen_contract["has_export_snapshot"] is True
     assert qimen_contract["technique"]["key"] == "qimen"
     assert "奇门演卦" in qimen_contract["selected_sections"]
     assert liureng_contract["has_export_snapshot"] is True
-    assert liureng_contract["has_export_format"] is True
+    assert liureng_contract["has_export_snapshot"] is True
     assert liureng_contract["technique"]["key"] == "liureng"
     queried = store.query_runs(tool="liureng_gods", include_payload=True)
     assert queried
@@ -2323,8 +2323,10 @@ def test_dispatch_exposes_child_export_contracts_explicitly(tmp_path) -> None:
     for tool_name, contract in result.result_export_contracts.items():
         assert contract["tool"] == tool_name
         assert contract["selected_sections"]
-        assert contract["export_snapshot"]["technique"]["key"] == TOOL_EXPORT_TECHNIQUE_MAP[tool_name]
-        assert contract["export_format"]["sections"]
+        # dispatch 轻契约：快照本体在 results[tool].data，contract 只带元信息。
+        assert contract["technique"]["key"] == TOOL_EXPORT_TECHNIQUE_MAP[tool_name]
+        assert "export_snapshot" not in contract and "snapshot_text" not in contract
+        assert contract["section_titles"]
 
 
 def test_service_can_attach_ai_answer_to_existing_run(tmp_path) -> None:
@@ -2968,6 +2970,173 @@ def test_report_question_analysis_understands_natural_timing_and_decision_words(
     assert {"focus_career", "timing_window", "decision_support"}.issubset(requirement_ids)
 
 
+def test_late_zi_switch_threads_through_all_chart_flows(tmp_path) -> None:
+    # 晚子时开关全链穿透：显式 0 抵达各端点；不传时键缺席（零默认漂移，后端按默认 1 起算）。
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    client = CaptureClient()
+    service = HorosaSkillService(settings, client=client, store=MemoryStore(settings), js_client=FakeJsClient())
+    base = {"date": "2026-05-27", "time": "23:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "agent_confirmed_settings": True}
+
+    cases = [
+        ("bazi_birth", "/bazi/birth"),
+        ("ziwei_birth", "/ziwei/birth"),
+        ("liureng_gods", "/liureng/gods"),
+        ("nongli_time", "/nongli/time"),
+        ("qimen", "/qimen/pan"),
+        ("taiyi", "/taiyi/pan"),
+        ("jinkou", "/jinkou/pan"),
+    ]
+    for tool_name, endpoint in cases:
+        client.calls.clear()
+        service.run_tool(tool_name, {**base, "lateZiHourUseNextDay": 0}, save_result=False)
+        captured = [payload for ep, payload in client.calls if ep == endpoint]
+        assert captured, f"{tool_name} 未调用 {endpoint}"
+        assert captured[0].get("lateZiHourUseNextDay") == 0, f"{tool_name} 未穿透 lateZi 到 {endpoint}"
+
+        client.calls.clear()
+        service.run_tool(tool_name, dict(base), save_result=False)
+        captured = [payload for ep, payload in client.calls if ep == endpoint]
+        assert captured and "lateZiHourUseNextDay" not in captured[0], f"{tool_name} 缺省时不得发送 lateZi（零漂移）"
+
+    # qimen 显式 after23NewDay=0 抵达权威引擎（此前 ken 调用收不到该开关）。
+    client.calls.clear()
+    service.run_tool("qimen", {**base, "after23NewDay": 0}, save_result=False)
+    ken = [payload for ep, payload in client.calls if ep == "/qimen/pan"]
+    assert ken and ken[0].get("after23NewDay") == 0
+
+    # sanshiunited 显式开关透传三式子工具。
+    client.calls.clear()
+    service.run_tool("sanshiunited", {**base, "lateZiHourUseNextDay": 0}, save_result=False)
+    for endpoint in ("/qimen/pan", "/taiyi/pan", "/liureng/gods"):
+        captured = [payload for ep, payload in client.calls if ep == endpoint]
+        assert captured and captured[0].get("lateZiHourUseNextDay") == 0, f"sanshiunited 未透传到 {endpoint}"
+
+
+def test_response_view_trims_payload_but_archives_full(tmp_path) -> None:
+    # response_view=titles：返回体只留段标题索引；memory 存档仍是全量（可取回）。
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    base = {"date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "agent_confirmed_settings": True}
+
+    result = service.run_tool("qimen", {**base, "response_view": "titles"})
+    assert result.ok is True
+    contract = result.data["export_snapshot"]
+    assert contract["sections"] and all(set(section) == {"index", "title"} for section in contract["sections"])
+    assert "export_text" not in contract
+    assert result.data["snapshot_text"] == ""
+    assert any("response_view" in warning for warning in result.warnings)
+    # 存档保全量。
+    shown = service.show_memory({"run_id": result.memory_ref.run_id, "include_payload": True})
+    archived = None
+    for artifact in shown["result"].get("artifacts", []):
+        if artifact.get("kind") == "tool_result":
+            archived = json.loads(Path(artifact["path"]).read_text(encoding="utf-8"))
+            break
+    assert archived and archived["data"]["snapshot_text"]
+    assert archived["data"]["export_snapshot"]["export_text"]
+
+    # sections 视图：标题+正文，剥结构化 data。
+    result2 = service.run_tool("qimen", {**base, "response_view": "sections"}, save_result=False)
+    sections2 = result2.data["export_snapshot"]["sections"]
+    assert sections2 and all(set(section) == {"index", "title", "body"} for section in sections2)
+
+
+def test_export_contract_is_deduplicated_single_copy(tmp_path) -> None:
+    # 响应体去重锚：同一份快照只存 顶层 snapshot_text + export_snapshot.export_text 两份，
+    # 冗余副本（export_format / raw_text / filtered_text / 内嵌 snapshot_text / sections.content）不复现。
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    result = service.run_tool(
+        "qimen",
+        {"date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "agent_confirmed_settings": True},
+        save_result=False,
+    )
+    assert result.ok is True
+    data = result.data
+    assert isinstance(data["snapshot_text"], str) and data["snapshot_text"]
+    assert "export_format" not in data
+    contract = data["export_snapshot"]
+    for redundant in ("raw_text", "filtered_text", "snapshot_text"):
+        assert redundant not in contract, redundant
+    assert contract["export_text"]
+    assert contract["sections"]
+    for section in contract["sections"]:
+        assert "content" not in section
+        assert section["title"]
+    # 全文最多出现 2 份：顶层 snapshot_text + export_snapshot.export_text。
+    serialized = json.dumps(data, ensure_ascii=False)
+    probe = data["snapshot_text"][:24]
+    assert probe and serialized.count(probe) <= 2
+
+
+def test_report_render_replays_legacy_archive_shape(tmp_path) -> None:
+    # 向后兼容锚：旧归档（data.export_format 副本、无新形状 export_snapshot）仍可出报告。
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    result = service.run_tool(
+        "qimen",
+        {"date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "agent_confirmed_settings": True},
+        query_text="旧归档回放",
+    )
+    run_id = result.memory_ref.run_id
+    # 把归档改写成旧形状：export_snapshot → export_format（含彼时的 snapshot_text 内嵌份）。
+    shown = service.show_memory({"run_id": run_id, "include_payload": True})
+    artifact_path = None
+    for artifact in shown["result"].get("artifacts", []):
+        if artifact.get("kind") == "tool_result":
+            artifact_path = artifact.get("path")
+            break
+    assert artifact_path
+    archive = json.loads(Path(artifact_path).read_text(encoding="utf-8"))
+    data = archive["data"]
+    # 还原旧归档形状：export_snapshot 带冗余全文键 + export_format 完整副本并存。
+    legacy_snapshot = dict(data["export_snapshot"])
+    legacy_snapshot["raw_text"] = data.get("snapshot_text")
+    legacy_snapshot["filtered_text"] = legacy_snapshot.get("export_text")
+    legacy_snapshot["snapshot_text"] = data.get("snapshot_text")
+    data["export_snapshot"] = legacy_snapshot
+    data["export_format"] = {
+        "technique": legacy_snapshot["technique"],
+        "selected_sections": legacy_snapshot["selected_sections"],
+        "format_source": legacy_snapshot["format_source"],
+        "snapshot_text": data.get("snapshot_text"),
+        "bundle_version": legacy_snapshot.get("bundle_version"),
+        "provenance": legacy_snapshot.get("provenance"),
+        "citation": legacy_snapshot.get("citation"),
+        "sections": [
+            {**{k: v for k, v in section.items() if k != "raw_title"}, "content": f"[{section['title']}]"}
+            for section in legacy_snapshot["sections"]
+        ],
+    }
+    Path(artifact_path).write_text(json.dumps(archive, ensure_ascii=False), encoding="utf-8")
+
+    rendered = service.report_render(
+        {
+            "run_id": run_id,
+            "tool_name": "qimen",
+            "format": "json",
+            "ai_report": {"executive_summary": "旧归档也能出报告。", "answer_text": "结论：可以推进。"},
+        }
+    )
+    assert rendered["ok"] is True
+
+
 def test_service_emits_trace_and_provenance_for_tool_results(tmp_path) -> None:
     settings = Settings(
         server_root="http://127.0.0.1:9999",
@@ -2990,7 +3159,9 @@ def test_service_emits_trace_and_provenance_for_tool_results(tmp_path) -> None:
     assert result.memory_ref.trace_id == result.trace_id
     assert result.memory_ref.group_id == result.group_id
     assert result.data["export_snapshot"]["provenance"]["source_domain"] == "xingque_ai_export"
-    assert result.data["export_format"]["provenance"]["bundle_version"] == result.data["export_snapshot"]["bundle_version"]
+    assert result.data["export_snapshot"]["provenance"]["bundle_version"] == result.data["export_snapshot"]["bundle_version"]
+    # 唯一导出契约：export_format 副本不再产出。
+    assert "export_format" not in result.data
     assert settings.trace_dir.exists()
     trace_files = sorted(settings.trace_dir.glob("*.jsonl"))
     assert trace_files

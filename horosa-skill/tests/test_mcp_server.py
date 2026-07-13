@@ -122,3 +122,60 @@ def test_mcp_agent_preflight_blocks_unconfirmed_dispatch() -> None:
     assert error is not None
     assert error["code"] == "agent_guidance.required"
     assert error["details"]["agent_recovery"]["must_ask_user"] is True
+
+
+def _make_service(tmp_path):
+    from horosa_skill.config import Settings
+    from horosa_skill.memory.store import MemoryStore
+    from horosa_skill.service import HorosaSkillService
+
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    return settings, HorosaSkillService(settings, store=MemoryStore(settings))
+
+
+def test_mcp_full_mode_exposes_all_technique_tools(tmp_path) -> None:
+    import asyncio
+
+    from horosa_skill.engine.registry import TOOL_DEFINITIONS
+    from horosa_skill.surfaces.mcp_server import create_mcp_server
+
+    settings, service = _make_service(tmp_path)
+    tools = asyncio.run(create_mcp_server(service, settings).list_tools())
+    names = {tool.name for tool in tools}
+    # 9 个门面 + 全部技法平铺。
+    assert len(names) == 9 + len(TOOL_DEFINITIONS)
+    assert "horosa_cn_qimen" in names
+    assert "horosa_tool_run" not in names
+
+
+def test_mcp_compact_mode_exposes_facade_plus_tool_run(tmp_path) -> None:
+    import asyncio
+
+    from horosa_skill.surfaces.mcp_server import create_mcp_server
+
+    settings, service = _make_service(tmp_path)
+    settings.mcp_compact = True
+    tools = asyncio.run(create_mcp_server(service, settings).list_tools())
+    names = {tool.name for tool in tools}
+    assert len(names) == 10
+    assert "horosa_tool_run" in names and "horosa_cn_qimen" not in names
+    # 技法目录随 docstring 在场（dispatch 与 tool_run 均可发现全部技法）。
+    by_name = {tool.name: tool for tool in tools}
+    assert "yizhangjing" in (by_name["horosa_tool_run"].description or "")
+    assert "yizhangjing" in (by_name["horosa_dispatch"].description or "")
+
+
+def test_mcp_compact_tool_run_executes_and_keeps_gate(tmp_path) -> None:
+    from horosa_skill.surfaces.mcp_server import _agent_preflight_error
+
+    settings, service = _make_service(tmp_path)
+    # 直呼本地无网工具：export_registry。
+    result = service.run_tool("export_registry", {"technique": "qimen"}, save_result=False)
+    assert result.ok is True
+    # 澄清闸在直呼通道不失守：未确认设置的 qimen 仍被拦。
+    gate = _agent_preflight_error("qimen", {"date": "2028-04-06"})
+    assert gate is not None and gate["code"] == "agent_guidance.required"

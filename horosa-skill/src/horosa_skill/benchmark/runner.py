@@ -65,7 +65,7 @@ def _evaluate_dispatch_case(case: dict[str, Any], result: Any) -> dict[str, Any]
         "selected_tools": selected,
         "expected_selected_tools": expected,
         "selection_ok": selected == expected,
-        "contracts_ok": all(contract.get("has_export_snapshot") and contract.get("has_export_format") for contract in result.result_export_contracts.values()),
+        "contracts_ok": all(contract.get("has_export_snapshot") for contract in result.result_export_contracts.values()),
     }
 
 

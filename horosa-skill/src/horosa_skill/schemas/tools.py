@@ -28,6 +28,9 @@ class BirthInput(FlexibleModel):
     lat: str
     lon: str
     ad: int | None = 1
+    # 响应视图（所有技法工具通用，FlexibleModel 均接受）：None=完整；"sections"=段标题+正文；
+    # "titles"=只留段标题索引。仅精简返回体，完整快照照常存档（memory_show 可取回）。
+    response_view: str | None = None
     hsys: int | None = 0
     tradition: bool | None = False
     predictive: bool | None = True
@@ -107,6 +110,8 @@ class ZiWeiBirthInput(FlexibleModel):
     lon: str
     gender: bool | None = True
     after23NewDay: bool | None = False
+    # 晚子时时柱开关：None=不发送（沿用后端默认 1=时干按次日日干起子时）；显式 0/1 全链穿透。
+    lateZiHourUseNextDay: int | bool | None = None
     timeAlg: int | None = 0
     sihua: dict[str, list[str]] | None = None
     ad: int | None = 1
@@ -126,6 +131,8 @@ class BaZiBirthInput(FlexibleModel):
     timeAlg: int | None = 0
     byLon: bool | None = False
     after23NewDay: bool | None = False
+    # 晚子时时柱开关：None=不发送（沿用后端默认 1=时干按次日日干起子时）；显式 0/1 全链穿透。
+    lateZiHourUseNextDay: int | bool | None = None
     phaseType: int | None = 0
     ad: int | None = 1
 
@@ -144,6 +151,8 @@ class LiuRengGodsInput(FlexibleModel):
     gpsLat: float | None = None
     gpsLon: float | None = None
     after23NewDay: bool | None = False
+    # 晚子时时柱开关：None=不发送（沿用后端默认 1=时干按次日日干起子时）；显式 0/1 全链穿透。
+    lateZiHourUseNextDay: int | bool | None = None
     yue: str | None = None
     isDiurnal: bool | None = None
     guirengType: int | None = 2
@@ -180,6 +189,8 @@ class JieQiYearInput(FlexibleModel):
     byLon: bool | None = False
     godKeyPos: str | None = None
     phaseType: int | None = 0
+    # 晚子时时柱开关：None=不发送（沿用后端默认 1=时干按次日日干起子时）；显式 0/1 全链穿透。
+    lateZiHourUseNextDay: int | bool | None = None
     ad: int | None = 1
 
 
@@ -193,6 +204,8 @@ class NongliTimeInput(FlexibleModel):
     gpsLon: float | None = None
     gender: bool | None = None
     after23NewDay: bool | None = False
+    # 晚子时时柱开关：None=不发送（沿用后端默认 1=时干按次日日干起子时）；显式 0/1 全链穿透。
+    lateZiHourUseNextDay: int | bool | None = None
     timeAlg: int | None = 0
     ad: int | None = 1
 
@@ -212,7 +225,10 @@ class GuaNamesInput(FlexibleModel):
 
 
 class QimenInput(BirthInput):
-    after23NewDay: bool | None = False
+    # after23NewDay None=不发送（ken 权威引擎默认 1=23点起算次日日柱）；显式 0/1 直达 /qimen/pan 与 nongli 前置。
+    after23NewDay: bool | None = None
+    # 晚子时时柱开关：None=不发送（沿用后端默认 1=时干按次日日干起子时）；显式 0/1 全链穿透。
+    lateZiHourUseNextDay: int | bool | None = None
     timeAlg: int | None = 0
     options: dict[str, Any] = Field(default_factory=dict)
     context: dict[str, Any] = Field(default_factory=dict)
@@ -226,7 +242,10 @@ class QimenInput(BirthInput):
 
 
 class TaiyiInput(BirthInput):
-    after23NewDay: bool | None = False
+    # after23NewDay None=不发送（ken 权威引擎默认 1）；显式 0/1 直达 /taiyi/pan 与 nongli 前置。
+    after23NewDay: bool | None = None
+    # 晚子时时柱开关：None=不发送（沿用后端默认 1=时干按次日日干起子时）；显式 0/1 全链穿透。
+    lateZiHourUseNextDay: int | bool | None = None
     timeAlg: int | None = 0
     gender: str | int | None = None
     options: dict[str, Any] = Field(default_factory=dict)
@@ -334,7 +353,10 @@ class SanShiUnitedInput(FlexibleModel):
     gpsLat: float | None = None
     gpsLon: float | None = None
     ad: int | None = 1
-    after23NewDay: bool | None = False
+    # after23NewDay None=不发送（三式权威引擎默认 1）；显式 0/1 透传三式子工具。
+    after23NewDay: bool | None = None
+    # 晚子时时柱开关：None=不发送（沿用后端默认 1）；显式 0/1 透传到三式子工具。
+    lateZiHourUseNextDay: int | bool | None = None
     timeAlg: int | None = 0
     qimen_options: dict[str, Any] = Field(default_factory=dict)
     taiyi_options: dict[str, Any] = Field(default_factory=dict)

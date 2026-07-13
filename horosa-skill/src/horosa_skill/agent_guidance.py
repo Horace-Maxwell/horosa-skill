@@ -16,7 +16,7 @@ GLOBAL_AGENT_RULES: list[str] = [
     "Use Horosa/Xingque defaults only when the user accepts defaults, asks for a quick/default reading, or the setting is explicitly documented as safe to default.",
     "For current-time questions, using the current local date/time/timezone is allowed, but location and technique-specific settings still need clarification when they matter.",
     "Timezone may be a fixed offset like +08:00 or an IANA name like America/Los_Angeles; Horosa normalizes IANA names by the chart date/time before calling the runtime.",
-    "After a tool call, treat export_snapshot.export_text, export_format.sections, and summary as the source of truth.",
+    "After a tool call, treat export_snapshot.export_text, export_snapshot.sections, and summary as the source of truth.",
 ]
 
 COMMON_LOCATION_FIELDS = ["date", "time", "zone/timezone", "lat/lon or gpsLat/gpsLon/location"]
@@ -250,7 +250,7 @@ def _policy(
         "output_contract": output_contract
         or [
             "Use ok=true result only.",
-            "Read export_snapshot.export_text and export_format.sections before explaining.",
+            "Read export_snapshot.export_text and export_snapshot.sections before explaining.",
             "Persist or report only through Horosa memory/report tools when requested.",
         ],
     }
@@ -266,6 +266,7 @@ SHENSHU_POLICY = _policy(
     safe_defaults=[
         {"field": "time", "value": "00:00:00", "meaning": "未给时间时按子初起时柱"},
         {"field": "after23NewDay", "value": 1, "meaning": "23 点后归次日（星阙默认）"},
+        {"field": "lateZiHourUseNextDay", "value": 1, "meaning": "晚子时时干按次日日干起（星阙默认）"},
     ],
     do_not_assume=["date"],
 )
@@ -323,6 +324,7 @@ EVENT_METHOD_POLICY = _policy(
         {"field": "location", "question": "起盘地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
         {"field": "question", "question": "这次主要问什么事？", "options": ["事业/财务", "感情/关系", "健康", "出行/失物/选择", "整体局势"]},
         {"field": "after23NewDay", "question": "23 点后是否按次日换日？", "options": ["按星阙默认", "23 点后换日", "23 点后不换日"]},
+        {"field": "lateZiHourUseNextDay", "question": "晚子时（23-24点）时柱是否按次日日干起子时？", "options": ["按星阙默认（次日）", "按当日"]},
     ],
     safe_defaults=[
         {"field": "ad", "value": 1, "meaning": "公历"},
@@ -719,7 +721,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ask_if_missing=[
             {"field": "birth data", "question": "请提供出生日期、时间、时区和地点。"},
             {"field": "gender", "question": "紫微需要性别，请选择。", "options": ["男", "女"]},
-            {"field": "after23NewDay/timeAlg", "question": "子时换日和时间算法是否沿用星阙默认？", "options": ["沿用默认", "指定"]},
+            {"field": "after23NewDay/lateZiHourUseNextDay/timeAlg", "question": "子时换日、晚子时时柱和时间算法是否沿用星阙默认？", "options": ["沿用默认", "指定"]},
         ],
         safe_defaults=[{"field": "after23NewDay", "value": False, "meaning": "星阙默认"}],
         do_not_assume=["gender", "birth time"],
@@ -735,7 +737,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         required_context=COMMON_BIRTH_FIELDS,
         ask_if_missing=[
             {"field": "birth data", "question": "请提供出生日期、时间、时区和地点。"},
-            {"field": "timeAlg/byLon/after23NewDay", "question": "真太阳时、经度校正、子时换日是否沿用星阙默认？", "options": ["沿用默认", "指定设置"]},
+            {"field": "timeAlg/byLon/after23NewDay/lateZiHourUseNextDay", "question": "真太阳时、经度校正、子时换日、晚子时时柱是否沿用星阙默认？", "options": ["沿用默认", "指定设置"]},
         ],
         safe_defaults=[
             {"field": "timeAlg", "value": 0, "meaning": "星阙默认"},
@@ -771,7 +773,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ask_if_missing=[
             {"field": "date/time", "question": "请提供要换算的日期、时间和时区。"},
             {"field": "location", "question": "请提供经度；如需真太阳时也请提供纬度。"},
-            {"field": "after23NewDay/timeAlg", "question": "子时换日和时间算法是否沿用默认？", "options": ["沿用默认", "指定"]},
+            {"field": "after23NewDay/lateZiHourUseNextDay/timeAlg", "question": "子时换日、晚子时时柱和时间算法是否沿用默认？", "options": ["沿用默认", "指定"]},
         ],
         do_not_assume=["timezone", "longitude"],
     ),
@@ -927,6 +929,24 @@ def build_tool_docstring(tool_name: str) -> str:
     output_contract = contract.get("output_contract") or []
     if output_contract:
         lines.append("Expected output sections: " + ", ".join(str(item) for item in output_contract) + ".")
+    return "\n".join(lines)
+
+
+def build_technique_catalog() -> str:
+    """78 技法一行索引（按 domain 分组）——精简 MCP 模式下拼进 dispatch/tool_run 的 docstring。
+
+    每行 `name — 描述首句`，全目录约 1-1.5K token；完整输入契约经 horosa_agent_guidance 获取。
+    """
+    groups: dict[str, list[str]] = {}
+    for definition in TOOL_DEFINITIONS.values():
+        first_sentence = str(definition.description or "").split(". ")[0].split("。")[0].strip()
+        if len(first_sentence) > 72:
+            first_sentence = first_sentence[:71] + "…"
+        groups.setdefault(definition.domain, []).append(f"  {definition.name} — {first_sentence}")
+    lines = ["Available techniques (call by tool_name; full input contract via horosa_agent_guidance):"]
+    for domain in sorted(groups):
+        lines.append(f"[{domain}]")
+        lines.extend(sorted(groups[domain]))
     return "\n".join(lines)
 
 

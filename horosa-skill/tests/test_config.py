@@ -29,7 +29,9 @@ def test_settings_from_env_uses_safe_fallbacks(monkeypatch, tmp_path: Path) -> N
     assert settings.runtime_release_repo == "Horace-Maxwell/horosa-skill"
     assert settings.local_backend_port == 9999
     assert settings.local_chart_port == 8899
-    assert settings.runtime_start_timeout_seconds == 15.0
+    # 冷启动默认 45s：Java+Python 后端首启常超 15s。
+    assert settings.runtime_start_timeout_seconds == 45.0
+    assert settings.mcp_compact is False
     assert settings.js_engine_timeout_seconds == 60.0
     assert settings.port == 8765
     assert settings.log_level == "DEBUG"

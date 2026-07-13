@@ -154,8 +154,8 @@ def parse_export_content(
         "selected_sections": selected_normalized,
         "unknown_detected_sections": unknown_detected,
         "missing_selected_sections": missing_selected,
+        # 全文仅存 export_text 一份；原始输入回显（raw_text）与严格过滤中间态（filtered_text）
+        # 与调用方已持有的内容重复，不再返回。
         "sections": filtered_sections,
-        "raw_text": raw_text,
-        "filtered_text": strict_filtered,
         "export_text": safe_export_text,
     }

@@ -1276,7 +1276,7 @@ def test_india_chart_builds_clean_export_despite_empty_western_aspects(tmp_path)
     )
     assert result.ok is True, result.error
     assert isinstance(result.data.get("export_snapshot"), dict)
-    assert isinstance(result.data.get("export_format"), dict)
+    assert isinstance(result.data.get("export_snapshot"), dict)
 
 
 def _pd_live_payload(**overrides):
@@ -1360,4 +1360,24 @@ def test_pd_v12_vertex_significator_rows_in_zodiaco(tmp_path) -> None:
     assert result.ok is True, result.error
     rows = result.data.get("pd") or []
     assert any("Vertex" in str(row[2]) for row in rows)
-    assert "宿命点" in result.data["export_format"]["snapshot_text"]
+    assert "宿命点" in result.data["snapshot_text"]
+
+
+@requires_runtime
+def test_late_zi_switch_matrix_changes_bazi_pillars(tmp_path) -> None:
+    # 晚子时/日界开关 live 矩阵（23:30 用例）：三象限日柱/时柱逐字断言，证明开关真实抵达引擎。
+    # (after23, lateZi)=(1,1)→壬寅日庚子时；(0,1)→辛丑日庚子时；(0,0)→辛丑日戊子时。
+    service = make_service(tmp_path)
+    base = {"date": "2026-05-27", "time": "23:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gender": True}
+
+    def pillars(payload):
+        result = service.run_tool("bazi_direct", payload, save_result=False)
+        assert result.ok is True, result.error
+        columns = result.data["bazi"]["fourColumns"]
+        day = columns["day"]["ganzi"] if isinstance(columns["day"], dict) else columns["day"]
+        hour = columns["time"]["ganzi"] if isinstance(columns["time"], dict) else columns["time"]
+        return str(day), str(hour)
+
+    assert pillars({**base, "after23NewDay": 1, "lateZiHourUseNextDay": 1}) == ("壬寅", "庚子")
+    assert pillars({**base, "after23NewDay": 0, "lateZiHourUseNextDay": 1}) == ("辛丑", "庚子")
+    assert pillars({**base, "after23NewDay": 0, "lateZiHourUseNextDay": 0}) == ("辛丑", "戊子")
