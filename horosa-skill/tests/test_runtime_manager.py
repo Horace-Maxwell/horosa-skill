@@ -1131,3 +1131,145 @@ def test_repo_windows_runtime_java_template_exists() -> None:
 
     assert "class LocalCacheFactory" in content
     assert "needMemCache" in content
+
+
+def _manifest_file(tmp_path: Path, archive: Path, version: str = "1.2.3") -> Path:
+    manifest = tmp_path / f"runtime-manifest-{version}.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "version": version,
+                "platforms": {
+                    "darwin-arm64": {"url": archive.resolve().as_uri(), "sha256": "", "archive_type": "tar.gz"}
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def test_install_skips_download_when_version_matches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # 版本短路：同版本非 --force 时下载前直接返回 skipped_download，不再取大包。
+    archive = create_runtime_archive(tmp_path)
+    manifest = _manifest_file(tmp_path, archive)
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+        runtime_platform="darwin-arm64",
+    )
+    manager = HorosaRuntimeManager(settings)
+    first = manager.install(manifest_url=manifest.resolve().as_uri())
+    assert first["changed"] is True
+
+    def _boom(*args, **kwargs):  # noqa: ANN002, ANN003
+        raise AssertionError("同版本不应触发归档下载")
+
+    monkeypatch.setattr(manager, "_materialize_archive", _boom)
+    second = manager.install(manifest_url=manifest.resolve().as_uri())
+    assert second["changed"] is False and second["skipped_download"] is True
+
+    # --force 恢复真实安装路径（会再次走 materialize）。
+    monkeypatch.undo()
+    forced = manager.install(manifest_url=manifest.resolve().as_uri(), force=True)
+    assert forced["ok"] is True and forced["changed"] is True
+
+
+def test_uninstall_dry_run_then_execute(tmp_path: Path) -> None:
+    archive = create_runtime_archive(tmp_path)
+    manifest = _manifest_file(tmp_path, archive)
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        data_dir=tmp_path / "data",
+        db_path=tmp_path / "data" / "memory.db",
+        output_dir=tmp_path / "data" / "runs",
+        runtime_platform="darwin-arm64",
+    )
+    manager = HorosaRuntimeManager(settings)
+    manager.install(manifest_url=manifest.resolve().as_uri())
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
+
+    dry = manager.uninstall()
+    assert dry["dry_run"] is True
+    assert any("current" in item for item in dry["would_remove"])
+    assert settings.runtime_current_dir.exists()  # dry-run 不删
+
+    done = manager.uninstall(yes=True)
+    assert done["dry_run"] is False
+    assert not settings.runtime_current_dir.exists()
+    assert settings.data_dir.exists()  # 用户数据默认保留
+
+    manager.install(manifest_url=manifest.resolve().as_uri())
+    purge = manager.uninstall(yes=True, purge_data=True)
+    assert purge["ok"] is True
+    assert not settings.data_dir.exists()
+
+
+def test_mirror_candidates_rewrite_github_urls(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    manager = HorosaRuntimeManager(settings)
+    url = "https://github.com/o/r/releases/download/v1/x.tar.gz"
+    assert manager._mirror_candidates(url) == [url]  # 无镜像=原样
+    monkeypatch.setenv("HOROSA_RUNTIME_MIRROR", "https://mirror.example.com/github,https://m2.example.org")
+    candidates = manager._mirror_candidates(url)
+    assert candidates == [
+        "https://mirror.example.com/github/o/r/releases/download/v1/x.tar.gz",
+        "https://m2.example.org/o/r/releases/download/v1/x.tar.gz",
+        url,
+    ]
+    # 非 github URL 不改写。
+    other = "https://example.com/a.tar.gz"
+    assert manager._mirror_candidates(other) == [other]
+
+
+def test_download_with_resume_sends_range_and_appends(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # 断点续传：.part 存在时请求带 Range；206 响应续写完成整文件。
+    import httpx
+
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    settings.runtime_root.mkdir(parents=True, exist_ok=True)
+    manager = HorosaRuntimeManager(settings)
+    payload = b"0123456789" * 100
+    half = len(payload) // 2
+    downloads = settings.runtime_root / "downloads"
+    downloads.mkdir(parents=True, exist_ok=True)
+    (downloads / "blob.bin.part").write_bytes(payload[:half])
+
+    captured_headers: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_headers.update(dict(request.headers))
+        range_header = request.headers.get("range")
+        if range_header:
+            offset = int(range_header.split("=")[1].rstrip("-"))
+            return httpx.Response(
+                206,
+                content=payload[offset:],
+                headers={"Content-Length": str(len(payload) - offset)},
+            )
+        return httpx.Response(200, content=payload, headers={"Content-Length": str(len(payload))})
+
+    transport = httpx.MockTransport(handler)
+    real_client = httpx.Client
+
+    def _patched_client(*args, **kwargs):  # noqa: ANN002, ANN003
+        kwargs["transport"] = transport
+        return real_client(*args, **kwargs)
+
+    monkeypatch.setattr(httpx, "Client", _patched_client)
+    progress_points: list[tuple[int, int | None]] = []
+    target = manager._download_with_resume(
+        "https://example.com/blob.bin", tmp_path, progress=lambda done, total: progress_points.append((done, total))
+    )
+    assert target.read_bytes() == payload
+    assert captured_headers.get("range") == f"bytes={half}-"
+    assert progress_points and progress_points[-1][0] == len(payload)

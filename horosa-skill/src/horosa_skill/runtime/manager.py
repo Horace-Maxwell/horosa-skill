@@ -343,6 +343,7 @@ class HorosaRuntimeManager:
         manifest_url: str | None = None,
         platform_key: str | None = None,
         force: bool = False,
+        progress: Any | None = None,
     ) -> dict[str, Any]:
         with self.tracer.span(
             workflow_name="runtime.install",
@@ -375,13 +376,34 @@ class HorosaRuntimeManager:
                         code="runtime.install_missing_url",
                         details={"platform": platform_name, "manifest_url": manifest_location},
                     )
+                # 版本短路：manifest 版本与已装 current 版本一致且非 --force → 直接跳过大包下载。
+                # （损坏 manifest 读为 None 不短路 → 自然走重装；--archive 路径仍由解包后深比较兜底。）
+                if not force and self.current_dir.exists():
+                    installed_manifest = self.load_installed_manifest()
+                    installed_version = str((installed_manifest or {}).get("version") or "").strip()
+                    target_version = str(manifest_data.get("version") or "").strip()
+                    if installed_version and target_version and installed_version == target_version:
+                        return {
+                            "ok": True,
+                            "installed": True,
+                            "changed": False,
+                            "skipped_download": True,
+                            "version": installed_version,
+                            "platform": platform_name,
+                            "runtime_root": str(self.runtime_root),
+                            "current_dir": str(self.current_dir),
+                            "manifest": installed_manifest,
+                            "next_action": "已是最新版本，无需重新下载；如需强制重装请加 --force。",
+                            "trace_id": trace["trace_id"],
+                            "group_id": trace["group_id"],
+                        }
 
             self.runtime_root.mkdir(parents=True, exist_ok=True)
             # 临时目录置于 runtime_root 同卷（非系统 /tmp）：最终 shutil.move(payload_root→current)
             # 落到同一文件系统即为原子 rename，避免跨卷退化成「复制+删除」（慢，且中途失败留半装）。
             with tempfile.TemporaryDirectory(prefix=".horosa-install-", dir=self.runtime_root) as temp_dir_raw:
                 temp_dir = Path(temp_dir_raw)
-                archive_path = self._materialize_archive(source, temp_dir)
+                archive_path = self._materialize_archive(source, temp_dir, progress=progress)
                 if expected_sha256 and _sha256_file(archive_path).lower() != expected_sha256.lower():
                     raise RuntimeValidationError(
                         "Runtime archive checksum mismatch.",
@@ -460,6 +482,11 @@ class HorosaRuntimeManager:
                 if previous_dir.exists():
                     shutil.rmtree(previous_dir)
 
+            # 安装成功后清理断点续传缓存（失败路径保留 .part 供下次续传）。
+            downloads_dir = self.runtime_root / "downloads"
+            if downloads_dir.exists():
+                shutil.rmtree(downloads_dir, ignore_errors=True)
+
             trace["platform"] = platform_name
             trace["manifest_version"] = manifest.get("version")
             return {
@@ -472,9 +499,55 @@ class HorosaRuntimeManager:
                 "manifest": manifest,
                 "asset": asset_meta or {},
                 "release_manifest": manifest_data or {},
+                "next_action": "接下来：`uv run horosa-skill doctor` 确认体检，`uv run horosa-skill serve` 启动 MCP，或把本服务注册到你的 AI 客户端（见 README「接入 AI 客户端」）。",
                 "trace_id": trace["trace_id"],
                 "group_id": trace["group_id"],
             }
+
+    def uninstall(self, *, purge_data: bool = False, yes: bool = False) -> dict[str, Any]:
+        """卸载离线 runtime：默认 dry-run 返回将删清单；yes=True 才执行（先停服务再删）。
+
+        purge_data=True 时额外删除用户数据目录（memory.db/runs/traces）——不可恢复，需显式选择。
+        """
+        removal_plan: list[str] = []
+        for path in (self.current_dir, self.runtime_root / "previous", self.runtime_root / "downloads"):
+            if path.exists():
+                removal_plan.append(str(path))
+        state_path = self.settings.runtime_state_path
+        if state_path.exists():
+            removal_plan.append(str(state_path))
+        if purge_data and self.settings.data_dir.exists():
+            removal_plan.append(str(self.settings.data_dir))
+
+        if not yes:
+            return {
+                "ok": True,
+                "dry_run": True,
+                "would_remove": removal_plan,
+                "purge_data": purge_data,
+                "next_action": "确认无误后追加 --yes 执行删除；用户数据默认保留（--purge-data 才删 memory/runs/traces）。",
+            }
+
+        try:
+            self.stop_local_services()
+        except Exception:  # noqa: BLE001 - 卸载前停服务尽力而为，失败不阻断删除
+            pass
+        removed: list[str] = []
+        for text in removal_plan:
+            path = Path(text)
+            try:
+                if path.is_dir():
+                    shutil.rmtree(path)
+                elif path.exists():
+                    path.unlink()
+                removed.append(text)
+            except OSError as exc:
+                raise RuntimeInstallError(
+                    f"Failed to remove {path}: {exc}",
+                    code="runtime.uninstall_failed",
+                    details={"path": text, "removed_so_far": removed},
+                ) from exc
+        return {"ok": True, "dry_run": False, "removed": removed, "purge_data": purge_data}
 
     def doctor(self) -> dict[str, Any]:
         with self.tracer.span(workflow_name="runtime.doctor", metadata={"entrypoint": "runtime.doctor"}) as trace:
@@ -778,34 +851,12 @@ class HorosaRuntimeManager:
                 },
             )
 
-    def _materialize_archive(self, source: str, temp_dir: Path) -> Path:
+    def _materialize_archive(self, source: str, temp_dir: Path, *, progress: Any | None = None) -> Path:
         if _is_url(source):
             parsed = urlparse(source)
             if parsed.scheme == "file":
                 return self._file_url_to_path(source)
-            filename = Path(parsed.path).name or "runtime-archive"
-            target = temp_dir / filename
-            # 流式下载：700MB+ 归档分块写盘，不 response.content 整体进内存（低内存/CI 机 OOM 风险）。
-            try:
-                with httpx.Client(timeout=httpx.Timeout(60.0, read=120.0), follow_redirects=True) as client:
-                    with client.stream("GET", source) as response:
-                        response.raise_for_status()
-                        with open(target, "wb") as handle:
-                            for chunk in response.iter_bytes(chunk_size=1024 * 1024):
-                                handle.write(chunk)
-            except httpx.HTTPError as exc:
-                raise RuntimeInstallError(
-                    f"Failed to download runtime archive: {exc}",
-                    code="runtime.install_download_failed",
-                    details={"source": source},
-                ) from exc
-            except OSError as exc:
-                raise RuntimeInstallError(
-                    f"Failed to write runtime archive to disk: {exc}",
-                    code="runtime.install_write_failed",
-                    details={"target": str(target)},
-                ) from exc
-            return target
+            return self._download_with_resume(source, temp_dir, progress=progress)
         local_path = Path(source).expanduser().resolve()
         if not local_path.is_file():
             # 结构化错误（CLI 的 except RuntimeInstallError/RuntimeValidationError 能干净接住并出
@@ -817,15 +868,103 @@ class HorosaRuntimeManager:
             )
         return local_path
 
+    def _mirror_candidates(self, url: str) -> list[str]:
+        """HOROSA_RUNTIME_MIRROR（逗号分隔前缀）对 github.com URL 做前缀替换：镜像在前、原始 URL 兜底。"""
+        mirrors = [m.strip().rstrip("/") for m in (os.environ.get("HOROSA_RUNTIME_MIRROR") or "").split(",") if m.strip()]
+        if not mirrors or not url.startswith("https://github.com/"):
+            return [url]
+        suffix = url[len("https://github.com"):]
+        return [f"{mirror}{suffix}" for mirror in mirrors] + [url]
+
+    def _download_with_resume(
+        self,
+        source: str,
+        temp_dir: Path,
+        *,
+        attempts: int = 3,
+        progress: Any | None = None,
+    ) -> Path:
+        """流式下载 + HTTP Range 断点续传 + 有限退避重试 + 多镜像回退。
+
+        .part 分块存 runtime_root/downloads（跨 install 调用可续传）；206 续写、200 重下兜底；
+        最终 sha256 校验（install 主流程）兜住续传坏块。progress(done, total|None) 供 CLI 回调。
+        """
+        filename = Path(urlparse(source).path).name or "runtime-archive"
+        downloads_dir = self.runtime_root / "downloads"
+        downloads_dir.mkdir(parents=True, exist_ok=True)
+        part_path = downloads_dir / f"{filename}.part"
+        candidates = self._mirror_candidates(source)
+        failures: list[str] = []
+        for candidate in candidates:
+            for attempt in range(attempts):
+                try:
+                    offset = part_path.stat().st_size if part_path.exists() else 0
+                    headers = {"Range": f"bytes={offset}-"} if offset else {}
+                    with httpx.Client(timeout=httpx.Timeout(60.0, read=120.0), follow_redirects=True) as client:
+                        with client.stream("GET", candidate, headers=headers) as response:
+                            response.raise_for_status()
+                            if response.status_code == 206:
+                                mode = "ab"
+                                total = offset + int(response.headers.get("Content-Length") or 0) or None
+                                done = offset
+                            else:
+                                # 服务器不支持 Range（或无 .part）→ 从头重下。
+                                mode = "wb"
+                                total = int(response.headers.get("Content-Length") or 0) or None
+                                done = 0
+                            with open(part_path, mode) as handle:
+                                for chunk in response.iter_bytes(chunk_size=1024 * 1024):
+                                    handle.write(chunk)
+                                    done += len(chunk)
+                                    if progress is not None:
+                                        progress(done, total)
+                    target = temp_dir / filename
+                    shutil.move(str(part_path), str(target))
+                    return target
+                except httpx.HTTPStatusError as exc:
+                    failures.append(f"{candidate}: HTTP {exc.response.status_code}")
+                    if exc.response.status_code < 500:
+                        break  # 4xx 换 URL 无益重试同 URL
+                except httpx.HTTPError as exc:
+                    failures.append(f"{candidate}: {exc}")
+                except OSError as exc:
+                    raise RuntimeInstallError(
+                        f"Failed to write runtime archive to disk: {exc}",
+                        code="runtime.install_write_failed",
+                        details={"target": str(part_path)},
+                    ) from exc
+                if attempt < attempts - 1:
+                    time.sleep((3 ** attempt))  # 1s/3s 退避（最后一次不等）
+        raise RuntimeInstallError(
+            "Failed to download runtime archive from all sources.",
+            code="runtime.install_download_failed",
+            details={
+                "source": source,
+                "attempts_per_source": attempts,
+                "failures": failures[-6:],
+                "resume_note": f"已下载分块保留在 {part_path}（若存在），重试 install 会从断点续传。",
+            },
+        )
+
     def _read_json_location(self, location: str) -> dict[str, Any]:
         if _is_url(location):
             parsed = urlparse(location)
             if parsed.scheme == "file":
                 return json.loads(self._file_url_to_path(location).read_text(encoding="utf-8"))
-            with httpx.Client(timeout=60.0, follow_redirects=True) as client:
-                response = client.get(location)
-                response.raise_for_status()
-                return response.json()
+            last_error: Exception | None = None
+            for candidate in self._mirror_candidates(location):
+                try:
+                    with httpx.Client(timeout=60.0, follow_redirects=True) as client:
+                        response = client.get(candidate)
+                        response.raise_for_status()
+                        return response.json()
+                except httpx.HTTPError as exc:
+                    last_error = exc
+            raise RuntimeInstallError(
+                f"Failed to fetch runtime manifest: {last_error}",
+                code="runtime.install_manifest_fetch_failed",
+                details={"location": location},
+            ) from last_error
         return json.loads(Path(location).expanduser().read_text(encoding="utf-8"))
 
     def _file_url_to_path(self, location: str) -> Path:

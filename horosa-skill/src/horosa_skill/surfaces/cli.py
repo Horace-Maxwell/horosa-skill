@@ -24,6 +24,7 @@ from horosa_skill.client_tools import (
     resolve_mcporter_command,
     resolve_uv_command,
 )
+from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.errors import RuntimeError, ToolValidationError
 from horosa_skill.runtime import HorosaRuntimeManager
 from horosa_skill.service import HorosaSkillService
@@ -93,8 +94,10 @@ def _start_stdio_runtime_warmup(manager: HorosaRuntimeManager) -> None:
     def _warmup() -> None:
         try:
             manager.start_local_services()
-        except RuntimeError:
-            pass
+        except RuntimeError as exc:
+            # 预热失败推迟不了问题只会掩盖它：stderr 一行警告（stdio 协议流在 stdout，不受影响）。
+            sys.stderr.write(f"[horosa] runtime 预热失败（首次调用时会重试）：{exc.code} {exc}\n")
+            sys.stderr.flush()
 
     threading.Thread(target=_warmup, name="horosa-stdio-runtime-warmup", daemon=True).start()
 
@@ -368,16 +371,64 @@ def _doctor_summary(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _probe_executable(path: Path, args: list[str]) -> dict[str, Any]:
+    """实跑探针：不止「文件存在」，还验证真的能执行并回读版本串。"""
+    if not path.is_file():
+        return {"path": str(path), "exists": False, "runnable": False}
+    try:
+        completed = subprocess.run([str(path), *args], capture_output=True, text=True, timeout=15)
+        output = (completed.stdout or completed.stderr or "").strip().splitlines()
+        return {
+            "path": str(path),
+            "exists": True,
+            "runnable": completed.returncode == 0,
+            "version": output[0][:80] if output else "",
+        }
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"path": str(path), "exists": True, "runnable": False, "error": str(exc)[:200]}
+
+
+def _probe_port(port: int) -> dict[str, Any]:
+    """端口占用探测：区分空闲 / 被占（被占时是否是本产品由 doctor 的可达性检查判断）。"""
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.5)
+        occupied = sock.connect_ex(("127.0.0.1", port)) == 0
+    return {"port": port, "occupied": occupied}
+
+
 def _doctor_environment_context(settings: Settings) -> dict[str, Any]:
     explicit_runtime_root = "HOROSA_RUNTIME_ROOT" in os.environ
     explicit_data_dir = "HOROSA_SKILL_DATA_DIR" in os.environ
     explicit_home = "HOME" in os.environ or (os.name == "nt" and "USERPROFILE" in os.environ)
     workspace_hint = os.environ.get("OPENCLAW_WORKSPACE")
     default_openclaw_workspace = Path.home() / ".openclaw" / "workspace"
+    # 磁盘体检：runtime 全量约 2GB，升级/重装峰值需要双份空间。
+    import shutil as _shutil
+
+    try:
+        usage = _shutil.disk_usage(settings.runtime_root if settings.runtime_root.exists() else Path.home())
+        disk = {
+            "free_gb": round(usage.free / (1024**3), 1),
+            "total_gb": round(usage.total / (1024**3), 1),
+            "sufficient_for_install": usage.free > 5 * (1024**3),
+        }
+    except OSError:
+        disk = {"free_gb": None, "total_gb": None, "sufficient_for_install": None}
+    current = settings.runtime_root / "current"
+    node_bin = current / "runtime" / ("win" if os.name == "nt" else "mac") / "node" / ("node.exe" if os.name == "nt" else "bin/node")
+    probes = {
+        "node": _probe_executable(node_bin, ["--version"]),
+        "backend_port": _probe_port(settings.local_backend_port),
+        "chart_port": _probe_port(settings.local_chart_port),
+    }
     return {
         "runtime_root": str(settings.runtime_root),
         "data_dir": str(settings.data_dir),
         "home": str(Path.home()),
+        "disk": disk,
+        "probes": probes,
         "uses_explicit_runtime_root": explicit_runtime_root,
         "uses_explicit_data_dir": explicit_data_dir,
         "uses_explicit_home": explicit_home,
@@ -756,22 +807,77 @@ def _run_openclaw_smoke_check(
     return report
 
 
-@app.command()
-def install(
-    archive: str | None = typer.Option(None, help="Local archive path or URL to a runtime asset."),
-    manifest_url: str | None = typer.Option(None, help="Release manifest URL that maps platforms to runtime archives."),
-    force: bool = typer.Option(False, help="Reinstall even if the same runtime version is already present."),
-) -> None:
+def _install_progress_printer():
+    """stderr 下载进度（stdout 保持纯 JSON 契约）：TTY 用行内百分比，非 TTY 每 ~50MB 一行。"""
+    state = {"last": 0}
+    is_tty = sys.stderr.isatty()
+
+    def _progress(done: int, total: int | None) -> None:
+        if is_tty:
+            if total:
+                pct = done * 100 // total
+                sys.stderr.write(f"\r下载 runtime：{done // (1024*1024)}MB / {total // (1024*1024)}MB（{pct}%）")
+            else:
+                sys.stderr.write(f"\r下载 runtime：{done // (1024*1024)}MB")
+            sys.stderr.flush()
+            if total and done >= total:
+                sys.stderr.write("\n")
+        else:
+            if done - state["last"] >= 50 * 1024 * 1024:
+                state["last"] = done
+                suffix = f" / {total // (1024*1024)}MB" if total else ""
+                sys.stderr.write(f"下载 runtime：{done // (1024*1024)}MB{suffix}\n")
+                sys.stderr.flush()
+
+    return _progress
+
+
+def _run_install(archive: str | None, manifest_url: str | None, force: bool, *, mode: str) -> None:
     settings = Settings.from_env()
     manager = _runtime_manager(settings)
+    typer.echo("正在解析 runtime 版本与资产…（约 730MB 下载、解压后约 2GB，请留足磁盘）", err=True)
     try:
-        result = manager.install(archive=archive, manifest_url=manifest_url, force=force)
+        result = manager.install(archive=archive, manifest_url=manifest_url, force=force, progress=_install_progress_printer())
     except RuntimeError as exc:
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
     except OSError as exc:
         # 磁盘满 / 权限不足 / 跨卷等 IO 失败：结构化输出而非裸 traceback。
         typer.echo(json.dumps({"ok": False, "code": "runtime.install_io_error", "message": str(exc), "details": {}}, ensure_ascii=False, indent=2), err=True)
+        raise typer.Exit(code=2)
+    if mode == "upgrade":
+        result["mode"] = "upgrade"
+    _print_json(result)
+
+
+@app.command(help="Install the offline runtime (~730MB download; resumable, mirror-aware). 安装离线 runtime（断点续传/多镜像）。")
+def install(
+    archive: str | None = typer.Option(None, help="Local archive path or URL to a runtime asset."),
+    manifest_url: str | None = typer.Option(None, help="Release manifest URL that maps platforms to runtime archives."),
+    force: bool = typer.Option(False, help="Reinstall even if the same runtime version is already present."),
+) -> None:
+    _run_install(archive, manifest_url, force, mode="install")
+
+
+@app.command(help="Version-aware install alias: skips the 730MB download when already up to date. 升级（已最新则秒退）。")
+def upgrade(
+    manifest_url: str | None = typer.Option(None, help="Release manifest URL that maps platforms to runtime archives."),
+    force: bool = typer.Option(False, help="Reinstall even if the same runtime version is already present."),
+) -> None:
+    _run_install(None, manifest_url, force, mode="upgrade")
+
+
+@app.command(help="Uninstall the offline runtime (dry-run by default; --yes to execute). 卸载 runtime（默认只打印将删清单）。")
+def uninstall(
+    purge_data: bool = typer.Option(False, "--purge-data", help="Also delete user data (memory.db / runs / traces). 同时删除用户数据（不可恢复）。"),
+    yes: bool = typer.Option(False, "--yes", help="Actually delete. Without this flag only the removal plan is printed."),
+) -> None:
+    settings = Settings.from_env()
+    manager = _runtime_manager(settings)
+    try:
+        result = manager.uninstall(purge_data=purge_data, yes=yes)
+    except RuntimeError as exc:
+        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
     _print_json(result)
 
@@ -784,6 +890,44 @@ def doctor() -> None:
     report["environment"] = _doctor_environment_context(settings)
     report.update(_doctor_summary(report))
     _print_json(report)
+
+
+@app.command(help="Client-agnostic live check: cast one chart, store it, read it back. 活体体检（起一张盘→存→读回）。")
+def selfcheck() -> None:
+    settings = Settings.from_env()
+    manager = _runtime_manager(settings)
+    report: dict[str, Any] = {"ok": False, "steps": {}}
+    try:
+        doctor_report = manager.doctor()
+        report["steps"]["doctor"] = {"ok": not doctor_report.get("issues"), "issues": doctor_report.get("issues", [])}
+        service = HorosaSkillService(settings, runtime_manager=manager)
+        result = service.run_tool(
+            "nongli_time",
+            {
+                "date": "2028-04-06",
+                "time": "09:33:00",
+                "zone": "+08:00",
+                "lon": "121e28",
+                "lat": "31n13",
+                "agent_confirmed_settings": True,
+            },
+            query_text="selfcheck 活体体检",
+        )
+        report["steps"]["compute"] = {"ok": result.ok, "tool": "nongli_time", "error": result.error.model_dump(mode="json") if result.error else None}
+        run_id = result.memory_ref.run_id if result.memory_ref else None
+        shown = service.show_memory({"run_id": run_id}) if run_id else {"ok": False}
+        report["steps"]["memory_roundtrip"] = {"ok": bool(shown.get("ok")), "run_id": run_id}
+        report["ok"] = bool(result.ok and shown.get("ok"))
+        report["next_action"] = (
+            "全部通过：可以 `serve` 并接入 AI 客户端。" if report["ok"]
+            else "有步骤失败：按 steps 中的 error/issues 排查，或运行 `uv run horosa-skill doctor` 看完整体检。"
+        )
+    except RuntimeError as exc:
+        report["steps"]["error"] = {"code": exc.code, "message": str(exc), "details": exc.details}
+        report["next_action"] = "运行 `uv run horosa-skill install` 安装离线 runtime 后重试。" if exc.code == "runtime.not_installed" else "运行 `uv run horosa-skill doctor` 定位。"
+    _print_json(report)
+    if not report["ok"]:
+        raise typer.Exit(code=1)
 
 
 @app.command()
@@ -821,6 +965,14 @@ def serve(
             except RuntimeError as exc:
                 typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
                 raise typer.Exit(code=2)
+    # 启动横幅（stderr）：监听地址 + 客户端注册一行指引；stdio 模式不打印（协议流走 stdout/stdin）。
+    if transport != "stdio":
+        typer.echo(
+            f"Horosa Skill MCP 正在 http://{host}:{port}/mcp 监听（streamable-http，{len(TOOL_DEFINITIONS)} 个技法工具）。\n"
+            f"接入 Claude Code：claude mcp add horosa --transport http http://{host}:{port}/mcp\n"
+            f"其他客户端配置见 examples/clients/ 或 README「接入 AI 客户端」。",
+            err=True,
+        )
     try:
         run_mcp_server(settings, transport=transport, service=service)
     finally:
