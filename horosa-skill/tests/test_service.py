@@ -3016,6 +3016,58 @@ def test_late_zi_switch_threads_through_all_chart_flows(tmp_path) -> None:
         assert captured and captured[0].get("lateZiHourUseNextDay") == 0, f"sanshiunited 未透传到 {endpoint}"
 
 
+def test_operational_errors_carry_agent_recovery(tmp_path) -> None:
+    # 运行时/传输类错误统一带 agent_recovery（可执行的修复指引），不再只丢技术字段。
+    settings = Settings(
+        server_root="http://127.0.0.1:1",  # 无监听端口 → transport.connection_error
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, store=MemoryStore(settings), js_client=FakeJsClient())
+    result = service.run_tool(
+        "nongli_time",
+        {"date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "lon": "121e28", "agent_confirmed_settings": True},
+        save_result=False,
+    )
+    assert result.ok is False
+    assert result.error is not None
+    recovery = (result.error.details or {}).get("agent_recovery")
+    assert isinstance(recovery, dict) and recovery.get("prompt_to_user")
+    assert "doctor" in json.dumps(recovery)
+
+
+def test_preflight_skips_questions_for_provided_fields(tmp_path) -> None:
+    # 闸按已提供字段过滤：用户已给出生数据时不再重复追问 date/time/location。
+    from horosa_skill.agent_guidance import validate_agent_preflight
+
+    gate_empty = validate_agent_preflight("chart", {})
+    fields_when_empty = {str(item.get("field")) for item in gate_empty["ask_if_missing"]}
+
+    gate_full = validate_agent_preflight(
+        "chart",
+        {"date": "1995-06-03", "time": "05:30", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
+    )
+    fields_when_full = {str(item.get("field")) for item in gate_full["ask_if_missing"]}
+    assert gate_full["ok"] is False  # 仍需确认结果敏感设置（hsys/zodiacal 等仍在问）
+    # 已提供的出生信息组不再出现在追问里；空 payload 时仍会问。
+    assert "date/time/place" in fields_when_empty
+    assert "date/time/place" not in fields_when_full
+    assert "hsys" in fields_when_full
+
+
+def test_dispatch_no_match_returns_candidates(tmp_path) -> None:
+    settings = Settings(
+        server_root="http://127.0.0.1:9999",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    result = service.dispatch({"query": "看看老黄历宜忌", "agent_confirmed_settings": True, "save_result": False})
+    assert result.ok is False
+    details = result.error.details or {}
+    assert details.get("candidates") and "calendar_month" in details["candidates"]
+
+
 def test_response_view_trims_payload_but_archives_full(tmp_path) -> None:
     # response_view=titles：返回体只留段标题索引；memory 存档仍是全量（可取回）。
     settings = Settings(

@@ -63,7 +63,7 @@ class HorosaJsEngineClient:
             )
         except subprocess.TimeoutExpired as exc:
             raise ToolTransportError(
-                "horosa-core-js timed out.",
+                "本地 JS 引擎执行超时（horosa-core-js timed out）。",
                 code="js_engine.timeout",
                 details={
                     "tool": tool_name,
@@ -75,7 +75,7 @@ class HorosaJsEngineClient:
             # FileNotFoundError (Node not installed / unresolved), PermissionError, etc. — keep the
             # "every failure is a ToolTransportError" contract so the surface returns a clean error.
             raise ToolTransportError(
-                "horosa-core-js could not be launched (Node runtime not found or not executable).",
+                "本地 JS 引擎无法启动：未找到可执行的 Node（可装离线 runtime 自带 node，或设 HOROSA_NODE_BIN）。",
                 code="js_engine.node_unavailable",
                 details={"tool": tool_name, "node_bin": str(node_bin), "error": str(exc)},
             ) from exc
@@ -83,26 +83,32 @@ class HorosaJsEngineClient:
             parsed = json.loads(completed.stdout or "{}")
         except ValueError as exc:
             raise ToolTransportError(
-                "horosa-core-js returned invalid JSON.",
+                "本地 JS 引擎返回了无效 JSON。",
                 code="js_engine.invalid_json",
                 details={
                     "tool": tool_name,
-                    "stdout": (completed.stdout or "")[-2000:],
-                    "stderr": (completed.stderr or "")[-2000:],
+                    # 原始输出属调试信息：降级进 debug 并短截断，避免大段堆栈直冲 agent 上下文。
+                    "debug": {
+                        "stdout": (completed.stdout or "")[-500:],
+                        "stderr": (completed.stderr or "")[-500:],
+                    },
                 },
             ) from exc
 
         if completed.returncode != 0 or parsed.get("ok") is not True:
             error_obj = parsed.get("error") if isinstance(parsed, dict) else None
             raise ToolTransportError(
-                "horosa-core-js execution failed.",
+                "本地 JS 引擎执行失败。",
                 code="js_engine.execution_failed",
                 details={
                     "tool": tool_name,
                     "returncode": completed.returncode,
-                    "stdout": (completed.stdout or "")[-2000:],
-                    "stderr": (completed.stderr or "")[-2000:],
                     "error": error_obj or {},
+                    # 原始输出属调试信息：降级进 debug 并短截断。
+                    "debug": {
+                        "stdout": (completed.stdout or "")[-500:],
+                        "stderr": (completed.stderr or "")[-500:],
+                    },
                 },
             )
 

@@ -950,6 +950,38 @@ def build_technique_catalog() -> str:
     return "\n".join(lines)
 
 
+def _filter_provided_questions(ask_if_missing: list[dict[str, Any]], payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """闸问题按 payload 已提供字段过滤：用户已给的信息不再重复追问。
+
+    条目 field 形如 "date/time" 或 "after23NewDay/timeAlg"（斜杠=同组多字段）；组内字段全部
+    已显式提供（非 None）才略过该问。别名 location≈lat/lon，birth/date≈date。
+    """
+    provided = {key for key, value in payload.items() if value is not None}
+    alias_groups = {
+        "location": {"lat", "lon", "gpsLat", "gpsLon", "location"},
+        "place": {"lat", "lon", "gpsLat", "gpsLon", "location"},
+        "birth": {"date"},
+    }
+    filtered: list[dict[str, Any]] = []
+    for item in ask_if_missing:
+        if not isinstance(item, dict):
+            filtered.append(item)
+            continue
+        fields = [part.strip() for part in str(item.get("field") or "").split("/") if part.strip()]
+        if not fields:
+            filtered.append(item)
+            continue
+        def _has(field: str) -> bool:
+            if field in provided:
+                return True
+            aliases = alias_groups.get(field)
+            return bool(aliases and aliases & provided)
+        if all(_has(field) for field in fields):
+            continue
+        filtered.append(item)
+    return filtered
+
+
 def validate_agent_preflight(tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Return a structured gate result before a calculation tool is allowed to run."""
 
@@ -981,7 +1013,7 @@ def validate_agent_preflight(tool_name: str, payload: dict[str, Any]) -> dict[st
     else:
         guidance = build_agent_guidance(tool_name=tool_name)
         policy = guidance["tools"][tool_name]
-        ask_if_missing = policy.get("ask_if_missing", [])
+        ask_if_missing = _filter_provided_questions(policy.get("ask_if_missing", []), payload)
         safe_defaults = policy.get("safe_defaults", [])
         do_not_assume = policy.get("do_not_assume", [])
     return {

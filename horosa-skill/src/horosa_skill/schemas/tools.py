@@ -22,20 +22,23 @@ class AstroMeaningSettingInput(FlexibleModel):
 
 
 class BirthInput(FlexibleModel):
-    date: str
-    time: str
-    zone: str
-    lat: str
-    lon: str
-    ad: int | None = 1
+    date: str = Field(description="公历日期 YYYY-MM-DD（如 1995-06-03）；公元前配 ad=-1。")
+    time: str = Field(description="时间 HH:mm 或 HH:mm:ss（24 小时制，如 05:30）。")
+    zone: str = Field(description="时区：+08:00 这类固定偏移，或 IANA 名（如 Asia/Shanghai，按盘面日期自动折算）。")
+    lat: str = Field(description="纬度：31n13（31°13'N）或十进制 31.2167（会自动归一）；南纬用 s。")
+    lon: str = Field(description="经度：121e28（121°28'E）或十进制 121.4667（会自动归一）；西经用 w。")
+    ad: int | None = Field(default=1, description="纪元：1=公元后（默认），-1=公元前。")
     # 响应视图（所有技法工具通用，FlexibleModel 均接受）：None=完整；"sections"=段标题+正文；
     # "titles"=只留段标题索引。仅精简返回体，完整快照照常存档（memory_show 可取回）。
-    response_view: str | None = None
-    hsys: int | None = 0
+    response_view: str | None = Field(
+        default=None,
+        description="响应精简视图：缺省=完整；'sections'=段标题+正文；'titles'=只留段标题索引（完整结果已存档，memory_show 可取回）。",
+    )
+    hsys: int | None = Field(default=0, description="宫制：0=整宫 Whole Sign（默认）、1=Placidus 等（详见 agent_guidance）。")
     tradition: bool | None = False
     predictive: bool | None = True
     southchart: bool | None = False
-    zodiacal: int | bool | None = 0
+    zodiacal: int | bool | None = Field(default=0, description="黄道：0=回归 tropical（默认），1=恒星 sidereal（配 siderealAyanamsa）。")
     # 恒星黄道 ayanāṃśa (星阙 v2.6.4)：仅在 zodiacal=1(恒星) 时生效，选 47 个岁差模式之一
     # (lahiri/raman/krishnamurti/fagan_bradley/…，见 astro_sidereal.SIDEREAL_AYANAMSA_LABELS)。
     # 缺省(不传) == Lahiri，向后兼容回归黄道盘不受影响。贯穿全西洋技法盘(命占/合盘/中点/卜卦/三式/节气)。
@@ -108,11 +111,11 @@ class ZiWeiBirthInput(FlexibleModel):
     zone: str
     lat: str
     lon: str
-    gender: bool | None = True
-    after23NewDay: bool | None = False
+    gender: bool | None = Field(default=True, description="性别：true/1=男（默认），false/0=女；'男'/'女'/'M'/'F' 会自动归一。")
+    after23NewDay: bool | None = Field(default=False, description="日界开关：23 点后是否按次日日柱（星阙默认按当日=false；后端神数/三式默认为 1）。")
     # 晚子时时柱开关：None=不发送（沿用后端默认 1=时干按次日日干起子时）；显式 0/1 全链穿透。
     lateZiHourUseNextDay: int | bool | None = None
-    timeAlg: int | None = 0
+    timeAlg: int | None = Field(default=0, description="时间算法：0=平太阳时（默认），1=真太阳时。")
     sihua: dict[str, list[str]] | None = None
     ad: int | None = 1
 

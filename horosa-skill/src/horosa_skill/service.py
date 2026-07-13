@@ -5283,6 +5283,39 @@ def _slim_export_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     return slim
 
 
+def _with_operational_recovery(code: str, details: dict[str, Any] | None) -> dict[str, Any]:
+    """给运行时/传输/引擎类错误统一补 agent_recovery（安装/体检/重试语义），已带者不覆盖。"""
+    result = dict(details) if isinstance(details, dict) else {}
+    if "agent_recovery" in result:
+        return result
+    code_text = str(code or "")
+    if code_text.startswith("runtime."):
+        result["agent_recovery"] = {
+            "kind": "runtime",
+            "prompt_to_user": "本地 Horosa 运行时不可用。请执行 `uv run horosa-skill doctor` 查看体检结果；未安装则先 `uv run horosa-skill install`。",
+            "commands": ["uv run horosa-skill doctor", "uv run horosa-skill install"],
+        }
+    elif code_text.startswith("transport."):
+        result["agent_recovery"] = {
+            "kind": "transport",
+            "prompt_to_user": "本地后端暂时不可达（可能正在冷启动或已停止）。可稍候数秒重试一次；仍失败请执行 `uv run horosa-skill doctor` 检查服务状态。",
+            "retry": "backend cold start can take up to ~45s on first call; one retry is usually enough",
+            "commands": ["uv run horosa-skill doctor"],
+        }
+    elif code_text.startswith("js_engine."):
+        result["agent_recovery"] = {
+            "kind": "js_engine",
+            "prompt_to_user": "本地 JS 引擎不可用或执行失败。请确认已安装离线 runtime（自带 node），或设 HOROSA_NODE_BIN 指向 node 后重试；`uv run horosa-skill doctor` 可定位。",
+            "commands": ["uv run horosa-skill doctor"],
+        }
+    elif code_text == "tool.backend_param_error":
+        result["agent_recovery"] = {
+            "kind": "input",
+            "prompt_to_user": "后端拒绝了本次参数。请核对 date=YYYY-MM-DD、time=HH:mm:ss、zone=+08:00、lat=31n13、lon=121e28 这类格式后重试；details.hint 里有具体建议。",
+        }
+    return result
+
+
 def _apply_response_view(envelope: ToolEnvelope, input_normalized: dict[str, Any]) -> ToolEnvelope:
     """response_view 响应视图：titles=只留段标题索引；sections=段标题+正文。
 
@@ -7453,16 +7486,17 @@ class HorosaSkillService:
                 )
             except HorosaSkillError as exc:
                 trace["error_code"] = exc.code
+                error_details = _with_operational_recovery(exc.code, exc.details)
                 envelope = ToolEnvelope(
                     ok=False,
                     tool=tool_name,
                     version=__version__,
                     input_normalized=input_normalized,
                     data={},
-                    summary=[f"工具 `{tool_name}` 调用失败。"],
+                    summary=[f"工具 `{tool_name}` 调用失败（{exc.code}）。"],
                     warnings=[],
                     memory_ref=None,
-                    error=ErrorInfo(code=exc.code, message=str(exc), details=exc.details),
+                    error=ErrorInfo(code=exc.code, message=str(exc), details=error_details),
                     trace_id=trace["trace_id"],
                     group_id=trace["group_id"],
                 )
@@ -8112,6 +8146,7 @@ class HorosaSkillService:
         normalized_inputs: dict[str, dict[str, Any]] = {}
         results: dict[str, ToolEnvelope] = {}
         result_export_contracts: dict[str, dict[str, Any]] = {}
+        dispatch_warnings: list[str] = []
 
         workflow_group_id = self.tracer.new_group_id()
         with self.tracer.span(
@@ -8169,11 +8204,18 @@ class HorosaSkillService:
                     year = request.subject.year if request.subject and request.subject.year is not None else None
                     if year is None and base_birth.get("date"):
                         year = str(base_birth["date"])[:4]
+                    jieqi_lat = base_birth.get("lat", request.context.get("lat"))
+                    jieqi_lon = base_birth.get("lon", request.context.get("lon"))
+                    if not jieqi_lat or not jieqi_lon:
+                        # 兜底赤道/本初子午线坐标会改变节气盘宫位——显式告知而非静默。
+                        dispatch_warnings.append(
+                            "jieqi_year 未提供经纬度，已按 0n00/0e00 兜底起盘；宫位随地点变化，建议补充坐标后重算。"
+                        )
                     payload_for_tool = {
                         "year": year,
                         "zone": base_birth.get("zone", request.context.get("zone", "8")),
-                        "lat": base_birth.get("lat", request.context.get("lat", "0n00")),
-                        "lon": base_birth.get("lon", request.context.get("lon", "0e00")),
+                        "lat": jieqi_lat or "0n00",
+                        "lon": jieqi_lon or "0e00",
                         "time": request.context.get("time"),
                     }
                 else:
@@ -8203,7 +8245,7 @@ class HorosaSkillService:
                 results=results,
                 result_export_contracts=result_export_contracts,
                 summary=summary[:6],
-                warnings=[],
+                warnings=dispatch_warnings,
                 memory_ref=None,
                 error=None,
                 trace_id=trace["trace_id"],

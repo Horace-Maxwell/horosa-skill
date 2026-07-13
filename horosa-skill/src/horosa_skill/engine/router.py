@@ -156,8 +156,42 @@ def select_tools(request: DispatchInput) -> list[str]:
 
     if not selected:
         raise DispatchResolutionError(
-            "Unable to resolve a Horosa tool from the dispatch input.",
+            "未能从请求文本中解析出匹配的技法（no matching tool）。",
             code="dispatch.no_matching_tool",
+            details={
+                "candidates": _suggest_candidates(text),
+                "hint": "可从 candidates 里选技法名直调对应工具，完整技法目录见 horosa_agent_guidance(include_all=true)。",
+            },
         )
 
     return selected
+
+
+# 关键词路由未命中时的候选建议：常用技法池按名称/关键词与查询的重合度粗排 top-N。
+_CANDIDATE_POOL: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("chart", ("星盘", "本命", "natal", "chart", "占星")),
+    ("qimen", ("奇门", "遁甲", "qimen")),
+    ("liureng_gods", ("六壬", "壬课", "liureng")),
+    ("bazi_birth", ("八字", "四柱", "bazi")),
+    ("ziwei_birth", ("紫微", "斗数", "ziwei")),
+    ("sixyao", ("六爻", "卦", "起卦", "周易")),
+    ("tarot", ("塔罗", "tarot", "牌")),
+    ("horary", ("卜卦占星", "horary", "问事")),
+    ("election", ("择日", "择吉", "election")),
+    ("calendar_month", ("黄历", "万年历", "农历", "老黄历")),
+    ("astrodata", ("名人", "celebrity", "明星")),
+    ("acg", ("地图", "acg", "迁移", "行星线")),
+    ("relative", ("合盘", "关系", "synastry", "配对")),
+    ("yizhangjing", ("一掌经", "掌经")),
+    ("taiyi", ("太乙", "taiyi")),
+)
+
+
+def _suggest_candidates(text: str, limit: int = 5) -> list[str]:
+    lowered = text.lower()
+    scored: list[tuple[int, int, str]] = []
+    for order, (name, keywords) in enumerate(_CANDIDATE_POOL):
+        score = sum(1 for keyword in keywords if keyword.lower() in lowered)
+        scored.append((-score, order, name))
+    scored.sort()
+    return [name for _, _, name in scored[:limit]]

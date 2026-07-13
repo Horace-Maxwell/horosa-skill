@@ -183,7 +183,7 @@ class HorosaApiClient:
                 return data
         except httpx.HTTPStatusError as exc:
             raise ToolTransportError(
-                f"Horosa server returned HTTP {exc.response.status_code}.",
+                f"本地 Horosa 后端返回 HTTP {exc.response.status_code}。",
                 code="transport.http_error",
                 details={
                     "endpoint": endpoint,
@@ -193,13 +193,13 @@ class HorosaApiClient:
             ) from exc
         except httpx.HTTPError as exc:
             raise ToolTransportError(
-                "Could not reach the Horosa server.",
+                "无法连接本地 Horosa 后端（可能未启动或正在冷启动）。",
                 code="transport.connection_error",
                 details={"endpoint": endpoint, "message": str(exc)},
             ) from exc
         except ValueError as exc:
             raise ToolTransportError(
-                "Horosa server returned invalid JSON.",
+                "本地 Horosa 后端返回了无效 JSON。",
                 code="transport.invalid_json",
                 details={"endpoint": endpoint, "message": str(exc)},
             ) from exc
@@ -238,7 +238,7 @@ class HorosaPlainJsonClient:
                 data = response.json()
                 if isinstance(data, dict) and data.get("err"):
                     raise ToolTransportError(
-                        "Horosa chart server rejected the request payload.",
+                        "后端拒绝了本次请求参数（backend_param_error）。",
                         code="tool.backend_param_error",
                         details={"endpoint": endpoint, "status_code": response.status_code, "body": response.text[:1000]},
                     )
@@ -247,19 +247,19 @@ class HorosaPlainJsonClient:
             raise
         except httpx.HTTPStatusError as exc:
             raise ToolTransportError(
-                f"Horosa chart server returned HTTP {exc.response.status_code}.",
+                f"本地星盘计算服务返回 HTTP {exc.response.status_code}。",
                 code="transport.http_error",
                 details={"endpoint": endpoint, "status_code": exc.response.status_code, "body": exc.response.text[:1000]},
             ) from exc
         except httpx.HTTPError as exc:
             raise ToolTransportError(
-                "Could not reach the Horosa chart server.",
+                "无法连接本地星盘计算服务（可能未启动或正在冷启动）。",
                 code="transport.connection_error",
                 details={"endpoint": endpoint, "message": str(exc)},
             ) from exc
         except ValueError as exc:
             raise ToolTransportError(
-                "Horosa chart server returned invalid JSON.",
+                "本地星盘计算服务返回了无效 JSON。",
                 code="transport.invalid_json",
                 details={"endpoint": endpoint, "message": str(exc)},
             ) from exc

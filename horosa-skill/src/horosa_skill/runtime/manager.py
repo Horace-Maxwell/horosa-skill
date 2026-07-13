@@ -765,9 +765,17 @@ class HorosaRuntimeManager:
     def _require_runtime(self) -> None:
         if not self.current_dir.exists():
             raise RuntimeValidationError(
-                "Horosa runtime is not installed.",
+                "Horosa 离线 runtime 尚未安装（runtime is not installed）。",
                 code="runtime.not_installed",
-                details={"current_dir": str(self.current_dir)},
+                details={
+                    "current_dir": str(self.current_dir),
+                    "next_action": "运行 `uv run horosa-skill install` 安装离线 runtime（约 730MB 下载），随后 `uv run horosa-skill doctor` 确认。",
+                    "agent_recovery": {
+                        "kind": "install_required",
+                        "prompt_to_user": "本地 Horosa 运行时还没安装。请在仓库目录执行：uv run horosa-skill install（首次约需数分钟下载 730MB），装好后重试本次请求。",
+                        "commands": ["uv run horosa-skill install", "uv run horosa-skill doctor"],
+                    },
+                },
             )
 
     def _materialize_archive(self, source: str, temp_dir: Path) -> Path:
