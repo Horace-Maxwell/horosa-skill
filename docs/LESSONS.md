@@ -92,6 +92,19 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.22.0 / 2026-07-16 — parity lint 常量交叉扩到全部 manifest-stamping 脚本（Windows 侧）
+
+- **症状**：`export_registry_version` 在 linux builder + 两个 scaffold 曾滞留 6 而 mac/win 已到 10
+  （上一条台账已记），CI 全绿放行。**根因**：`verify_builder_parity.py` 的
+  `SHARED_MANIFEST_CONSTANTS` 交叉只读 mac/win 两个文件——第三平台 builder 与 scaffold 不在射程。
+- **守卫（本条完成上条教训的机器守卫件）**：lint 新增 `CONSTANT_STAMPERS` 清单
+  （mac/win/linux 三 builder + windows/linux 两 scaffold），三常量
+  （`schema_version`/`runtime_layout_version`/`export_registry_version`）N 路交叉断言；
+  清单中不存在的文件跳过（容忍 repo 演进），存在但缺常量 = 错。已 mutation 验证：
+  临时把 `scaffold_windows_runtime.py` 改 6 → FAIL 并点名 `Windows scaffold=[6]`，还原 → PASS。
+- 注：协议第 3 件（CHANGELOG）不可执行——本仓当前不存在 `CHANGELOG.md`（文档重构后未保留），
+  §2 协议文本与树的这一处不一致留待 mac 侧裁定。
+
 ### v0.21.0+ / 2026-07-16 — MCP 面顶级化 + 三方审计（上游基线/用户路径/前沿调研）
 
 - **上游同步基线纠偏**：上游 Horosa-Public 实际已到 **v3.4.0 / aiExport v48**（UPGRADE_LOG 最新条目在文件**顶部**，

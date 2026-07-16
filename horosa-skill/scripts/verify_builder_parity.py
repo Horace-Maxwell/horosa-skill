@@ -43,10 +43,22 @@ SHARED_STEPS = {
     "lunar-javascript": "bundle the lunar-javascript npm dep (canping/heluo)",
 }
 
-# Embedded-manifest integer constants that must be stamped identically by both builders. Substring
-# checks can't see numeric drift: at v0.16.1 the mac packager bumped export_registry_version 6→7 and
-# this lint stayed green while the Windows builder kept stamping the stale contract version.
+# Embedded-manifest integer constants that must be stamped identically by every script that writes
+# a runtime manifest. Substring checks can't see numeric drift: at v0.16.1 the mac packager bumped
+# export_registry_version 6→7 while the Windows builder kept stamping 6 and this lint stayed green.
 SHARED_MANIFEST_CONSTANTS = ("schema_version", "runtime_layout_version", "export_registry_version")
+
+# Every manifest-stamping script, not just the mac/win release pair: around v0.22.0 the linux builder
+# and both dev scaffolds still stamped export_registry_version 6 while mac/win were at 10 — the
+# constants cross-check only read mac/win, so CI stayed green through that drift. Scripts listed here
+# that don't exist are skipped (repo layout may evolve); an existing script missing a constant errors.
+CONSTANT_STAMPERS = {
+    "macOS builder": MAC_BUILDER,
+    "Windows builder": WIN_BUILDER,
+    "Linux builder": SCRIPTS / "build_runtime_release_linux.py",
+    "Windows scaffold": SCRIPTS / "scaffold_windows_runtime.py",
+    "Linux scaffold": SCRIPTS / "scaffold_linux_runtime.py",
+}
 
 # Entries that must be REQUIRED on BOTH platforms (legit per-platform path swaps like python3<->python.exe
 # and .sh<->.ps1 are intentionally not checked here — only the platform-agnostic payload contents).
@@ -86,16 +98,21 @@ def main() -> int:
             errors.append(f"Windows builder is missing step `{token}` ({label}) — would regress vs macOS")
 
     for name in SHARED_MANIFEST_CONSTANTS:
-        mac_vals = sorted({int(v) for v in re.findall(rf'"{name}"\s*:\s*(\d+)', mac)})
-        win_vals = sorted({int(v) for v in re.findall(rf'"{name}"\s*:\s*(\d+)', win)})
-        if not mac_vals:
-            errors.append(f"macOS builder does not stamp `{name}` in its embedded manifest")
-        if not win_vals:
-            errors.append(f"Windows builder does not stamp `{name}` in its embedded manifest")
-        if mac_vals and win_vals and mac_vals != win_vals:
+        stamped: dict[str, list[int]] = {}
+        for label, path in CONSTANT_STAMPERS.items():
+            if not path.exists():
+                continue
+            text = path.read_text(encoding="utf-8")
+            vals = sorted({int(v) for v in re.findall(rf'"{name}"\s*:\s*(\d+)', text)})
+            if not vals:
+                errors.append(f"{label} ({path.name}) does not stamp `{name}` in its embedded manifest")
+                continue
+            stamped[label] = vals
+        if len({tuple(v) for v in stamped.values()}) > 1:
+            detail = ", ".join(f"{label}={vals}" for label, vals in sorted(stamped.items()))
             errors.append(
-                f"embedded-manifest constant `{name}` drifted: macOS stamps {mac_vals}, Windows stamps {win_vals} "
-                "— bump the lagging builder in the same change"
+                f"embedded-manifest constant `{name}` drifted across manifest-stamping scripts: {detail} "
+                "— bump the lagging script(s) in the same change"
             )
 
     required = _load_required_entries()

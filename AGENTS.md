@@ -279,8 +279,11 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   `build_runtime_release_windows.py` 对应步；`verify_runtime_release.py` 的 REQUIRED_ENTRIES 两平台对称
   （v0.10.0 曾 mac 侧加 shaozi 条文生成 + 验证项而 Windows 侧漏，win 构建会静默出占位条文还照样过验）。
   数字常量（`schema_version` / `runtime_layout_version` / `export_registry_version`）由
-  `verify_builder_parity.py` 交叉断言（CI 常跑；v0.16.1 曾 mac 单边 bump 6→7 而字符串级 parity 仍绿）。
-  改一个 builder / 加一个必需 artifact = 同一 change 里 grep 另一个 builder + 两份 REQUIRED_ENTRIES。
+  `verify_builder_parity.py` 对**全部 manifest-stamping 脚本**（mac/win/linux 三 builder +
+  windows/linux 两 scaffold，`CONSTANT_STAMPERS` 清单）N 路交叉断言（CI 常跑；v0.16.1 曾 mac 单边
+  bump 6→7、v0.22.0 前 linux+scaffold 曾滞留 6，均为该检查射程外时的漏网）。
+  改一个 builder / 加一个必需 artifact = 同一 change 里 grep 另一个 builder + 两份 REQUIRED_ENTRIES；
+  **新增 manifest-stamping 脚本 = 同一 change 里进 `CONSTANT_STAMPERS`**。
 - **发布完整性三失效模式**（完整案例史：[`docs/LESSONS.md`](./docs/LESSONS.md)「发布完整性编年」）：
   1. **缺半**：`latest` 只有 darwin 半（v0.10.0–v0.16.0 每个 minor 都犯过；v0.10.0 连 manifest 都没有，
      双平台 install 全断）→ `release-completeness.yml`（release/schedule/dispatch 事件）会红，信它。
