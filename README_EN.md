@@ -17,7 +17,7 @@
     <img src="https://img.shields.io/badge/storage-SQLite%20%2B%20JSON-111827?style=flat-square" alt="SQLite and JSON" />
   </p>
 
-  <p><a href="./LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-374151?style=flat-square" alt="License" /></a>&nbsp;<a href="./CONTRIBUTING.md"><img src="https://img.shields.io/badge/Contributing-Guide-0f766e?style=flat-square" alt="Contributing" /></a>&nbsp;<a href="./SECURITY.md"><img src="https://img.shields.io/badge/Security-Policy-991b1b?style=flat-square" alt="Security" /></a>&nbsp;<a href="./SUPPORT.md"><img src="https://img.shields.io/badge/Support-Paths-1d4ed8?style=flat-square" alt="Support" /></a>&nbsp;<a href="./CITATION.cff"><img src="https://img.shields.io/badge/Citation-CFF-7c3aed?style=flat-square" alt="Citation" /></a>&nbsp;<a href="./CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-Updates-f59e0b?style=flat-square" alt="Changelog" /></a></p>
+  <p><a href="./LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-374151?style=flat-square" alt="License" /></a>&nbsp;<a href="./CONTRIBUTING.md"><img src="https://img.shields.io/badge/Contributing-Guide-0f766e?style=flat-square" alt="Contributing" /></a>&nbsp;<a href="./SECURITY.md"><img src="https://img.shields.io/badge/Security-Policy-991b1b?style=flat-square" alt="Security" /></a>&nbsp;<a href="./SUPPORT.md"><img src="https://img.shields.io/badge/Support-Paths-1d4ed8?style=flat-square" alt="Support" /></a>&nbsp;<a href="./CITATION.cff"><img src="https://img.shields.io/badge/Citation-CFF-7c3aed?style=flat-square" alt="Citation" /></a></p>
 </div>
 
 ---
@@ -46,11 +46,12 @@ License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICEN
 | [`docs/EXPORT_AUDIT_GUIDE.md`](./docs/EXPORT_AUDIT_GUIDE.md) | Section-by-section audit method for predictive exports |
 | [`docs/OPERATIONS.md`](./docs/OPERATIONS.md) · [`docs/EVALUATION.md`](./docs/EVALUATION.md) | Operations · evaluation |
 | [`docs/OFFLINE_RUNTIME_RELEASES.md`](./docs/OFFLINE_RUNTIME_RELEASES.md) | Offline runtime packaging & release |
-| [`server.json`](./server.json) · [`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md) · [`AGENTS.md`](./AGENTS.md) | MCP metadata · agent skill · repo rules |
+| [`docs/LESSONS.md`](./docs/LESSONS.md) · [`docs/GLOSSARY.md`](./docs/GLOSSARY.md) | Append-only lessons ledger · domain glossary |
+| [`server.json`](./server.json) · [`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md) · [`AGENTS.md`](./AGENTS.md) | MCP metadata · the single policy source for AI clients (with references/ sheets) · agent rules-of-record (iron laws / compute model / packaging & release law / symptom table) |
 
 ## Current stable baseline
 
-**Current public version: `Horosa Skill 0.21.0` (78 callable tools).**
+**Current public version: `Horosa Skill 0.22.0` (78 callable tools).**
 
 This release line brings the capability surface roughly to parity with the desktop app:
 
@@ -78,7 +79,7 @@ Local end-to-end signals:
 | Qi Men / Tai Yi / Jin Kou / Three Styles | unified on `ken`, same as the desktop app |
 | Tong She Fa / Decennials | headless, value-for-value with Xingque (`decennials.test.js` golden) |
 | GitHub CI | Linux/macOS unit tests + horosa-core-js JS golden self-check + Windows OpenClaw smoke |
-| Release runtime | macOS (arm64) / Windows (x64) `v0.21.0` assets (ken + 14 Shen Shu engines bundled) packaged and verified; other platforms/arches fail install with an explicit unsupported error |
+| Release runtime | macOS (arm64) / Windows (x64) `v0.22.0` assets (ken + 14 Shen Shu engines bundled) packaged and verified; other platforms/arches fail install with an explicit unsupported error |
 
 > About `solarreturn` / `lunarreturn` / `solararc` / `givenyear` / `profection` / `pd` / `pdchart` / `zr`: these predictive tools are verified working in this version and should not be flagged by an agent as "Java `/predict/*` unavailable". If a client still says so, check whether it is on an old runtime, bypassing MCP to hand-compute, or hasn't run `doctor` / `openclaw-check --full`.
 
@@ -159,6 +160,8 @@ Local end-to-end signals:
 | `harmonic` ⓟ | Harmonic chart | natal longitude × harmonic number, same-frequency conjunctions |
 | `suzhan` ⓟ | Su Zhan | mansion-divination structure |
 | `sixyao` ⓟ | Liu Yao / I Ching | hexagram, changing lines, question-oriented output |
+| `geomancy` ⓟ | Astronomical geomancy | 4 mothers → 16 figures, figures into 12 houses + judge/witnesses, deterministic cast from the query moment |
+| `tarot` ⓟ | Tarot | Waite 78-card deck, deterministic seeded shuffle from the query moment + spread verdict / detail / synthesis |
 | `otherbu` ⓟ | Astro dice | astrological dice + reading |
 
 ### Shen Shu (all 14)
@@ -187,6 +190,7 @@ Local end-to-end signals:
 | Tool ID | Name | Notes |
 | --- | --- | --- |
 | `jieqi_year` ⓟ / `nongli_time` ⓟ | Year solar terms / lunar time | solar-term nodes / lunar ganzhi |
+| `calendar_month` ⓟ | Chinese almanac / month calendar | whole-month lunar / ganzhi / solar terms / lunations + selected-day detail |
 | `gua_desc` / `gua_meiyi` | Gua meaning / Mei Yi gua | hexagram names & texts / Plum-Blossom gua |
 | `export_registry` / `export_parse` | Export registry / parser | machine-readable export table / parse Xingque export text back to JSON |
 | `horosa_dispatch` | Dispatcher | takes natural-language intent and routes to the right technique |
@@ -232,7 +236,7 @@ Every tool call returns a uniform envelope:
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.21.0",
+  "ok": true, "tool": "qimen", "version": "0.22.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -299,6 +303,9 @@ uv run horosa-skill export registry
 
 - **Claude Code** (one-command registration): `uv run horosa-skill client config --format claude-code` prints a ready-to-run `claude mcp add ...` with real absolute paths; see the [guide](./horosa-skill/examples/clients/claude-code.md)
 - [Claude Desktop config example](./horosa-skill/examples/clients/claude_desktop_config.json) (or `client config --format claude-desktop` to generate one, no placeholder editing)
+- **Cursor** (one-click): `uv run horosa-skill client config --format cursor` prints the official install deep link + an `mcpServers` snippet
+- **VS Code** (one-click): `uv run horosa-skill client config --format vscode` prints a `vscode:mcp/install` link + the `code --add-mcp` command
+- **Claude Code Plugin**: `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` (skill + MCP in one step; the offline runtime still needs a one-time `install` inside the plugin's `horosa-skill/` directory)
 - [Codex config example](./horosa-skill/examples/clients/codex-config.toml) (or `client config --format codex`)
 - [Open WebUI guide](./horosa-skill/examples/clients/openwebui-streamable-http.md)
 - [OpenClaw guide](./horosa-skill/examples/clients/openclaw-mcp.md)

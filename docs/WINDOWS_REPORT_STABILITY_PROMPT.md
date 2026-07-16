@@ -1,5 +1,7 @@
 # Windows Codex 跨平台稳定性复核 Prompt
 
+> 读者：Windows 侧维护者/agent。何时读：跨平台报告与 OpenClaw 链路验证时。
+
 请在 Windows 机器上作为 Codex 执行这份复核。目标不是继续做激进优化，而是确认 Horosa Skill 的最新报告层在 Windows 上稳定可用，同时不能破坏 macOS / POSIX 路径。
 
 ## 背景

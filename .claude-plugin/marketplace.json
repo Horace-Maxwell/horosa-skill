@@ -1,0 +1,14 @@
+{
+  "name": "horosa-skill",
+  "owner": {
+    "name": "Horace Maxwell",
+    "url": "https://github.com/Horace-Maxwell"
+  },
+  "plugins": [
+    {
+      "name": "horosa",
+      "source": "./",
+      "description": "78 local Horosa (星阙) technique tools over MCP + the horosa-agent skill (clarify-before-call gate, export-snapshot reading). Requires the offline runtime: run `uv run horosa-skill install` inside the plugin's horosa-skill/ directory once."
+    }
+  ]
+}

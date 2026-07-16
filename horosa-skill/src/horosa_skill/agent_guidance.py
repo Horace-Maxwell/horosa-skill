@@ -206,6 +206,7 @@ def _prompt_from_guidance(tool_name: str, ask_if_missing: list[dict[str, Any]], 
     if safe_defaults:
         defaults = "; ".join(f"{item.get('field')}={item.get('value')}" for item in safe_defaults[:5])
         lines.append(f"如果你想快速继续，也可以明确说“按星阙默认”，我会使用：{defaults}。")
+    lines.append("(Reply with your choices, or say “按星阙默认 / use defaults” to continue with Xingque defaults.)")
     return "\n".join(lines)
 
 

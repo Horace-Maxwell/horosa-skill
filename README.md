@@ -126,6 +126,9 @@ uv run horosa-skill client config --format codex            # Codex config.toml 
 | :-- | :-- |
 | 🟣 **Claude Code** | `claude mcp add horosa -- uv run --directory <abs> horosa-skill serve --transport stdio`；见 [接入说明](./horosa-skill/examples/clients/claude-code.md) |
 | 🟠 **Claude Desktop** | [配置示例](./horosa-skill/examples/clients/claude_desktop_config.json) 或 `client config --format claude-desktop` |
+| 🟡 **Cursor** | 一键安装：`uv run horosa-skill client config --format cursor` 输出官方 deep link（点击即装）与 mcpServers 片段 |
+| 🔷 **VS Code** | 一键安装：`uv run horosa-skill client config --format vscode` 输出 `vscode:mcp/install` 链接与 `code --add-mcp` 命令 |
+| 🧩 **Claude Code Plugin** | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill`（skill + MCP 一步到位；首次仍需在插件目录跑 `install` 装离线 runtime） |
 | 🔵 **Codex** | [配置示例](./horosa-skill/examples/clients/codex-config.toml) 或 `client config --format codex` |
 | 🟢 **Open WebUI** | [接入说明](./horosa-skill/examples/clients/openwebui-streamable-http.md) |
 | ⚪ **OpenClaw / mcporter** | `uv run horosa-skill client openclaw-setup --workspace ~/.openclaw/workspace` |
@@ -284,7 +287,7 @@ uv run horosa-skill client config --format codex            # Codex config.toml 
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.21.0",
+  "ok": true, "tool": "qimen", "version": "0.22.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -354,7 +357,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 63 个导出 technique） |
 | 🗄️ 本地 memory / report | 78 / 78 写入 + 78 / 78 JSON artifact |
 | 🔄 GitHub CI | Linux / macOS 单测 + JS golden 自检 + Windows OpenClaw smoke |
-| 📦 Release runtime | macOS (arm64) / Windows (x64) `v0.21.0` 已打包并校验；其余平台安装时明确报不支持 |
+| 📦 Release runtime | macOS (arm64) / Windows (x64) `v0.22.0` 已打包并校验；其余平台安装时明确报不支持 |
 
 第一次 clone 后确认非空壳的最小验证：
 

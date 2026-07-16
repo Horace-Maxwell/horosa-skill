@@ -1,56 +1,34 @@
 {
-  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/registry/main/schema/server.schema.json",
-  "name": "horosa-skill",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.horace-maxwell/horosa-skill",
   "title": "Horosa Skill",
   "description": "Local-first offline Horosa / Xingque MCP server with structured export contracts, bundled hover knowledge, local memory, and release-managed runtime payloads.",
-  "version": "0.21.0",
-  "homepage": "https://github.com/Horace-Maxwell/horosa-skill",
-  "repository": "https://github.com/Horace-Maxwell/horosa-skill",
-  "license": "AGPL-3.0-only",
-  "category": "knowledge-and-reasoning",
-  "tags": [
-    "mcp",
-    "horosa",
-    "xingque",
-    "astrology",
-    "metaphysics",
-    "offline-first",
-    "local-memory"
-  ],
-  "transports": [
-    "stdio",
-    "streamable-http"
-  ],
-  "platforms": [
-    "macOS",
-    "Windows"
-  ],
+  "version": "0.22.0",
+  "websiteUrl": "https://github.com/Horace-Maxwell/horosa-skill",
+  "repository": {
+    "url": "https://github.com/Horace-Maxwell/horosa-skill",
+    "source": "github"
+  },
   "packages": [
     {
       "registryType": "github",
       "identifier": "Horace-Maxwell/horosa-skill",
-      "version": "0.21.0",
-      "transport": "stdio",
-      "runtime": {
-        "command": "uv",
-        "args": [
-          "run",
-          "horosa-skill",
-          "serve",
-          "--transport",
-          "stdio"
-        ]
-      },
-      "local": {
-        "install": [
-          "uv sync --dev",
-          "uv run horosa-skill install"
-        ],
-        "start": [
-          "uv run horosa-skill serve --transport stdio"
-        ]
-      },
+      "version": "0.22.0",
+      "runtimeHint": "uv",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ],
+  "_meta": {
+    "io.github.horace-maxwell/horosa-skill": {
+      "category": "knowledge-and-reasoning",
+      "tags": ["mcp", "horosa", "xingque", "astrology", "metaphysics", "offline-first", "local-memory"],
+      "platforms": ["macOS", "Windows"],
+      "transports": ["stdio", "streamable-http"],
+      "install": ["uv sync --dev", "uv run horosa-skill install"],
+      "start": ["uv run horosa-skill serve --transport stdio"],
       "releaseManifest": "https://github.com/Horace-Maxwell/horosa-skill/releases/latest/download/runtime-manifest.json"
     }
-  ]
+  }
 }

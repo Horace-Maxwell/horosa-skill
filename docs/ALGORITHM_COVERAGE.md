@@ -1,5 +1,7 @@
 # Algorithm Coverage
 
+> 读者：维护者。何时读：查某技法由哪层 runtime 支撑、覆盖矩阵与差距时。
+
 This document is the shipping coverage matrix for the offline GitHub distribution.
 
 It answers one question only:

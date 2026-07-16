@@ -1,5 +1,7 @@
 # Runtime Manifest Spec
 
+> 读者：维护者。何时读：读写 runtime-manifest / payload-manifest 格式时。
+
 Two manifest files are involved in offline distribution.
 
 ## Release Manifest

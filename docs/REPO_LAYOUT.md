@@ -1,5 +1,7 @@
 # Repo Layout
 
+> 读者：所有 agent（新 agent 首读之一）。何时读：定位代码、理解一次调用的层间流转时。路由：[`AGENTS.md`](../AGENTS.md) §0。
+
 Horosa Skill is a local-first, offline MCP server + CLI that exposes Horosa (星阙) divination
 techniques to AI agents. The Git repository stays lightweight; the heavy runtime is published as
 GitHub Release assets and assembled locally from `vendor/runtime-source/`.
@@ -30,27 +32,37 @@ no ken engine and stays a pure headless JS calculation.
 ## Public repository surface (top level)
 
 - `README.md` / `README_EN.md` / `README.zh-CN.md` — Chinese / English landing pages (zh-CN forwards).
-- `CHANGELOG.md` — release-oriented change log (current: `0.6.1`).
+- `CLAUDE.md` / `AGENTS.md` — agent entry points: thin Claude Code router / the full rules-of-record
+  (routing, iron laws, problem-logging protocol, compute/packaging/release law).
+- `CHANGELOG.md` — release-oriented change log (version lockstep enforced by
+  `scripts/verify_docs_sync.py`).
 - `server.json` — Model Context Protocol registry metadata (name, version, packages, transports).
 - `CITATION.cff` — citation metadata; version kept in lockstep with the package.
 - `LICENSE` — GNU AGPL-3.0-only.
 - `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `SECURITY.md`, `SUPPORT.md`, `.github/` — community + CI surface.
 - `docs/` — maintainer-facing docs (see below).
+- `skills/horosa-agent/` — the published agent skill (SKILL.md + references/) — the single policy
+  source for AI-client behaviour.
 - `vendor/` — local-only runtime packaging inputs (see below).
 - `horosa-skill/` — the actual Python package + bundled JS engine + scripts + tests.
 
 ## docs/
 
 - `REPO_LAYOUT.md` — this file.
+- `LESSONS.md` — append-only ledger of per-version lessons (原文); current-truth rules live in `AGENTS.md`.
+- `GLOSSARY.md` — domain/name glossary (ken, kentang, 命盘/事盘, pin-forward, …).
 - `ARCHITECTURE.md` — layer diagram and module roles.
 - `ALGORITHM_COVERAGE.md` — per-technique coverage matrix and the runtime layer that backs each.
+- `INPUT_CONTRACTS.md` — per-tool input contracts (required fields).
 - `DATA_CONTRACTS.md` — tool-envelope version, export-contract / record / manifest schema identifiers.
+- `EXPORT_AUDIT_GUIDE.md` — section-by-section audit method for predictive exports.
 - `OPERATIONS.md` — install / doctor / serve / run operational guide.
 - `OFFLINE_RUNTIME_RELEASES.md` — what a runtime release must contain (incl. the ken engines + their
   Python deps) and the maintainer build/publish workflow.
 - `RUNTIME_MANIFEST_SPEC.md` + `runtime-manifest.example.json` + `runtime-payload-manifest.example.json` —
   the manifest formats for installed runtimes and payloads.
 - `EVALUATION.md` — benchmark / self-check methodology.
+- `WINDOWS_RELEASE_BUILD_PROMPT.md` — Windows build-box runbook (release half / sync incidents).
 - `WINDOWS_REPORT_STABILITY_PROMPT.md` — cross-platform report/OpenClaw verification prompt.
 
 ## horosa-skill/ — the package
@@ -110,7 +122,11 @@ no ken engine and stays a pure headless JS calculation.
   `build_hover_knowledge_bundle.mjs` — manifest, SBOM, and knowledge-bundle generation.
 - `run_full_self_check.py`, `run_openclaw_full_self_check.py`, `run_benchmark.py` — end-to-end self-checks.
 - `verify_runtime_release.py`, `verify_vendor_runtime_sources.py`, `verify_server_json.py`,
-  `verify_readme_links.py` — release / source / metadata / docs verifiers.
+  `verify_readme_links.py`, `verify_docs_sync.py`, `verify_builder_parity.py` — release / source /
+  metadata / docs-drift / builder-parity verifiers.
+- `sync_windows_release.py` — detect + remediate a `latest` release missing its Windows half
+  (`--check` is the authoritative pin-forward detector; `--upload` runs the full build→verify→upload
+  pipeline on the Windows box).
 
 ### tests/ and examples/
 

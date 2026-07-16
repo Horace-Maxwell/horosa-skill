@@ -1,5 +1,7 @@
 # Export Audit Guide
 
+> 读者：维护者。何时读：逐 section 审计推运类导出、排查 missing/unknown 段时。
+
 Horosa Skill writes Xingque-style output in two layers:
 
 - `export_snapshot.export_text`: the human-readable Xingque export body.

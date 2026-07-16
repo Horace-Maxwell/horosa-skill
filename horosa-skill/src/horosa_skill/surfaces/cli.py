@@ -238,6 +238,25 @@ def _write_json_file(path: Path, payload: object) -> Path:
     return output_path
 
 
+def _client_config_write(path: Path, payload: object) -> Path:
+    """`client config --write` 落盘：目标文件已是 JSON 对象且本次产物含 `mcpServers` 时，
+    按 server 键合并（保留用户已有的其他 MCP server），其余情况整文件写入。
+    防止把用户真实的 claude_desktop_config.json / mcp.json 清空成只剩 horosa。"""
+    target = path.expanduser().resolve()
+    if isinstance(payload, dict) and isinstance(payload.get("mcpServers"), dict) and target.exists():
+        try:
+            existing = json.loads(target.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            existing = None
+        if isinstance(existing, dict):
+            merged = dict(existing)
+            servers = dict(merged.get("mcpServers") or {})
+            servers.update(payload["mcpServers"])
+            merged["mcpServers"] = servers
+            return _write_json_file(target, merged)
+    return _write_json_file(target, payload)
+
+
 def _default_openclaw_native_config_path() -> Path:
     return Path.home() / ".openclaw" / "openclaw.json"
 
@@ -1129,7 +1148,7 @@ def client_config(
     format_name: str = typer.Option(
         "claude-code",
         "--format",
-        help="Target client: claude-code / claude-desktop / codex / mcporter / openclaw.",
+        help="Target client: claude-code / claude-desktop / cursor / vscode / codex / mcporter / openclaw.",
     ),
     skill_root: Path = typer.Option(
         _package_root(),
@@ -1188,10 +1207,35 @@ def client_config(
             ),
             "toml_http": f"[mcp_servers.{server_name}]\nurl = \"http://127.0.0.1:8765/mcp\"\n",
         }
+    elif key == "cursor":
+        # Cursor 官方 install deep link：config = base64({"command","args"})，点击即装。
+        import base64
+
+        cursor_config = json.dumps({"command": stdio_command[0], "args": stdio_command[1:]}, ensure_ascii=False)
+        encoded = base64.b64encode(cursor_config.encode("utf-8")).decode("ascii")
+        payload = {
+            "note": "点击 deep_link 一键安装进 Cursor；或把 mcpServers 合并进 ~/.cursor/mcp.json。",
+            "deep_link": f"cursor://anysphere.cursor-deeplink/mcp/install?name={server_name}&config={encoded}",
+            "mcpServers": {server_name: {"command": stdio_command[0], "args": stdio_command[1:]}},
+        }
+    elif key == "vscode":
+        # VS Code 官方安装链接（vscode:mcp/install?<url-encoded JSON>）+ CLI 等价命令。
+        from urllib.parse import quote
+
+        vscode_config = json.dumps(
+            {"name": server_name, "command": stdio_command[0], "args": stdio_command[1:]}, ensure_ascii=False
+        )
+        payload = {
+            "note": "点击 install_link 一键安装进 VS Code；或运行 cli_command。",
+            "install_link": f"vscode:mcp/install?{quote(vscode_config, safe='')}",
+            "cli_command": f"code --add-mcp '{vscode_config}'",
+        }
     else:
-        raise typer.BadParameter("format must be one of: claude-code / claude-desktop / codex / mcporter / openclaw")
+        raise typer.BadParameter(
+            "format must be one of: claude-code / claude-desktop / cursor / vscode / codex / mcporter / openclaw"
+        )
     if write is not None:
-        _write_json_file(write, payload)
+        _client_config_write(write, payload)
     _print_json(payload)
 
 

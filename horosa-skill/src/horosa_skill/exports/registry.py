@@ -11,6 +11,11 @@ AI_EXPORT_SETTINGS_KEY = "horosa.ai.export.settings.v1"
 # v7: sanshiunited 追加三独立技法富化段、mundane 追加子盘群段。
 AI_EXPORT_SETTINGS_VERSION = 10
 AI_EXPORT_SECTION_MIGRATION_VERSION = 10
+# 镜像基线（机读）：本注册表整版对齐到上游 aiExport.js 的哪个 AI_EXPORT_SETTINGS_VERSION。
+# v0.19–0.21 期间零散摘取过 v44 的个别段（六壬「七政」、八字大运拆段），但整版仍是 v40；
+# 2026-07 审计：上游已到 v48（≈应用 v3.4.0），缺口清单见 docs/LESSONS.md「上游同步缺口审计」。
+# 每次整批同步后必须更新此常量——它把「同步到哪」从散文提升为可断言事实。
+MIRRORED_UPSTREAM_AIEXPORT_VERSION = 40
 AI_EXPORT_SECTION_MIGRATION_KEYS = [
     "liureng", "qimen", "sanshiunited", "mundane",
     "yizhangjing", "acg", "astrodata", "heluo", "canping", "fengshui",

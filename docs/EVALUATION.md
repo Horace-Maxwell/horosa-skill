@@ -1,5 +1,7 @@
 # Evaluation
 
+> 读者：维护者。何时读：跑/改 HorosaBench 评测与自检方法时。
+
 ## 评测体系
 
 Horosa Skill 现在有两层评测：

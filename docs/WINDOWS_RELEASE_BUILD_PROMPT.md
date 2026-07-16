@@ -1,5 +1,7 @@
 # Windows runtime build & release — Claude Code handoff prompt
 
+> 读者：Windows 构建机上的维护者/agent。何时读：补建发布的 Windows 半、处理 release-completeness / pin-forward 事故时。
+
 > **Read this whole file, then do the work.** You are a Claude Code agent running on a **Windows**
 > machine. A teammate (Claude Code on macOS) finished all the code/test/doc/release work for **Horosa
 > Skill v0.12.0** but cannot build or natively verify the **Windows** offline runtime — that requires
@@ -42,10 +44,11 @@ agents. Repo: `https://github.com/Horace-Maxwell/horosa-skill` (AGPL-3.0). The P
   `gh release view vX.Y.Z --json assets` (want darwin tar.gz + win32 zip + manifest + SHA256SUMS) and that
   the manifest JSON lists **both** `darwin-arm64` and `win32-x64`. The fix is to build the win half +
   regenerate the **dual-platform** manifest/checksums + upload (no flip needed — it's already latest).
-- **Read `AGENTS.md` first** (repo root) — its "Maintainer & Build Notes" + "Stability invariants"
-  sections are authoritative. **Standing rule:** if you hit any problem/gotcha/fix, update **both**
-  `AGENTS.md` and `skills/horosa-agent/SKILL.md` in the same change (keep them in sync), and log it in
-  `CHANGELOG.md` under `[Unreleased]`.
+- **Read `AGENTS.md` first** (repo root) — §6 打包不变量, §7 发布协议, and §9 Stability invariants
+  are authoritative. **Standing rule (protocol v2, AGENTS.md §2):** any problem/gotcha/fix you hit
+  lands in the same change as: a `docs/LESSONS.md` ledger entry + the distilled rule in the right
+  `AGENTS.md` section (+ `skills/horosa-agent/SKILL.md` when client-facing) + a `CHANGELOG.md`
+  `[Unreleased]` entry + a machine guard when assertable.
 
 ## 1. Goal (acceptance criteria)
 

@@ -1,5 +1,7 @@
 # Offline Runtime Releases
 
+> 读者：维护者。何时读：打包/发布离线 runtime、核对 payload 必含物时。发布法则：[`AGENTS.md`](../AGENTS.md) §6–§7。
+
 This repository is meant to stay lightweight in Git history while still supporting fully local runtime packaging.
 
 Complete offline runtime payloads are published as GitHub Release assets, but the source inputs needed to build those payloads should live locally inside [`../vendor/runtime-source`](../vendor).

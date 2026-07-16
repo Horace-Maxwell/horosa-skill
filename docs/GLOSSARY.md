@@ -67,3 +67,20 @@
 | release-completeness 守卫 | CI：发布后查 `latest` 是否双平台 / 归档是否 404。 |
 | builder-parity lint | CI：查 mac 与 Windows 两个 builder + 验证器契约是否漂移。 |
 | `sync_windows_release.py` | Windows 侧一条命令补齐：检测缺半边 → 构建 → 下载 darwin → 双 manifest + 校验和 → 验证 → 上传。 |
+
+## 导出契约与闸门（工程补充）
+
+| 术语 | 含义 |
+| --- | --- |
+| envelope / ToolEnvelope | 每个工具统一返回信封 `{ok, tool, version, data, error, …}`；失败 `ok=False` + `error.code`，永不抛裸异常。 |
+| export_snapshot / export_text | 星阙式 AI 导出正文（`[小节]` 结构纯文本）——解释结果的唯一事实来源。 |
+| preset / `AI_EXPORT_PRESET_SECTIONS` | 每技法「应出哪些段」的契约表（镜像上游 aiExport.js），在 `exports/registry.py`。 |
+| `AI_EXPORT_OPTIONAL_SECTIONS` | 条件段白名单：段可能不出现时登记于此；条件段必须 preset+optional 双登记。 |
+| missing / unknown_detected_sections | 契约核对两类偏差：预期未出现 / 出现但不在 preset；干净导出 = 两者皆空。 |
+| `MIRRORED_UPSTREAM_AIEXPORT_VERSION` | 机读镜像基线：导出契约整版对齐到上游 aiExport 第几版（现 40，上游 48）。 |
+| agent_guidance 闸门 / `agent_recovery` | 运行时澄清闸：设置未确认返回 `agent_guidance.required`；`details.agent_recovery.prompt_to_user` 可直接转发追问；确认后带 `agent_confirmed_settings`/`defaults_accepted`。 |
+| elicitation 双轨 | 客户端声明 MCP elicitation 能力时闸门弹原生表单（按默认一跳闭环），否则回落错误往返；`HOROSA_MCP_ELICIT=0` 关闭。 |
+| 命盘 / 事盘 | 上游概念：命盘=出生数据可重算；事盘=一次性占例（六爻/卜卦），永不按时间重算。 |
+| FakeClient / FakeJsClient | 离线测试桩（HTTP/JS 层），必须返回真内容（禁裸「无」、禁 generated_template 回退）。 |
+| pdSyncRev | chart 服务心跳回显的主限引擎同步版本号（防陈旧实例静默吞新钥匙）。 |
+| run / artifact / memory | 每次调用落一条可检索记录（SQLite FTS + JSON artifact + AI 回答写回）。 |

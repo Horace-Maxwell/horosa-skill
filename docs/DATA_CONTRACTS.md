@@ -1,5 +1,7 @@
 # Data Contracts
 
+> 读者：维护者 + 客户端开发。何时读：查 envelope / export / record / manifest 的 schema 版本与形状时（`tool envelope` 版本独立于包版本）。
+
 ## 版本面
 
 - tool envelope：`0.6.3`

@@ -16,7 +16,7 @@ def build_manifest(version: str) -> dict[str, object]:
         "version": version,
         "platform": "win32-x64",
         "runtime_layout_version": 1,
-        "export_registry_version": 6,
+        "export_registry_version": 10,
         "services": {
             "backend_url": "http://127.0.0.1:9999",
             "chart_url": "http://127.0.0.1:8899",

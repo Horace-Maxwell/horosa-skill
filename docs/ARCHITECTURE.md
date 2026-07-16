@@ -1,5 +1,7 @@
 # Architecture
 
+> 读者：维护者 / 新 agent。何时读：想看分层图与各模块职责时。路由：[`AGENTS.md`](../AGENTS.md) §0。
+
 ## 总览
 
 Horosa Skill 由五层组成：

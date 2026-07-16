@@ -1,5 +1,7 @@
 # Operations
 
+> 读者：运维 / 用户支持。何时读：install / doctor / serve / run 运维操作时。
+
 ## 目标
 
 这份文档面向维护者，描述 Horosa Skill 的安装、运行、发布、校验和排障路径。

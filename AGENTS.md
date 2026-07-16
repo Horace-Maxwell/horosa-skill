@@ -1,908 +1,455 @@
-# Horosa Skill Agent Rules
+# Horosa Skill — Agent Rules
 
-These rules are for Codex, Cursor, Claude, OpenClaw, Open WebUI, and any agent connected to this repository or its MCP server.
+These rules are for Codex, Cursor, Claude (incl. Claude Code), OpenClaw, Open WebUI, and any agent
+connected to this repository or its MCP server.
 
----
+**本文件只记「现行真相」（current truth），按主题组织。** 逐版本教训原文在
+[`docs/LESSONS.md`](./docs/LESSONS.md)（只增台账）；领域名词在 [`docs/GLOSSARY.md`](./docs/GLOSSARY.md)；
+Claude Code 的薄入口是根 [`CLAUDE.md`](./CLAUDE.md)（与本文 §0 路由一致）。
 
-## 🔴 MANDATORY: Problem-Logging Protocol (read this first, every session)
-
-**This is an enforced rule, not advice. Any agent or maintainer who hits a problem, gotcha, surprising
-behavior, wrong assumption, or ships a fix while working in this repo MUST record it in THIS file
-(`AGENTS.md`) before the work is considered done.** No exception is too small — if it bit you, it will
-bite the next agent. The whole point of this repo's harness doc is to be the single, permanent sink for
-every lesson learned.
-
-**What "record it" means — do ALL of these in the same change that fixes/discovers the problem:**
-
-1. **Append a gotcha bullet to the most relevant `## … gotchas` / invariants section of this file**
-   (e.g. *Offline runtime packaging gotchas*, *Stability invariants*, the ken/JS-engine sections). State
-   the **symptom**, the **root cause**, and the **fix / guard** so the next agent recognizes it fast.
-2. **Sync `skills/horosa-agent/SKILL.md`** if the lesson affects how an AI *client* calls the tools
-   (payload fields, gating, section contracts). Maintainer/build-only lessons stay in `AGENTS.md` only,
-   but never leave the two docs contradicting each other.
-3. **Add a `CHANGELOG.md` `[Unreleased]` entry** for any code/behavior/build/CI change.
-4. **If it's a release/build/CI gap, add a code-level guard** (a `verify_*` check, a CI step, a schema
-   constraint, a `require_path`) so the gotcha can't silently recur — a doc note alone is not enough for
-   anything that a script or CI can assert.
-
-**Self-audit gate (every release + every "check for bugs" pass):** re-read the gotcha sections, confirm
-each still holds, and confirm anything you just learned has been written down here. Treat an undocumented
-recurring problem as a regression.
-
-**Scope rule:** keep every lesson in *this* repo (`AGENTS.md` + `SKILL.md`). **Never** write skill-repo
-lessons into the upstream 星阙 (`Horosa-Primary Direction Trial`) working tree — the skill repo is
-self-contained and ships its own agent guidance.
+目录：§0 定向路由 · §1 铁律 · §2 🔴问题记录协议 v2 · §3 AI 客户端行为（指针） · §4 计算模型 ·
+§5 新增技法/re-vendor · §6 打包不变量 · §7 发布协议 · §8 本地验证与症状速查 · §9 Stability invariants ·
+§10 上游镜像注记 · §11 MIT 义务 · §12 经验台账
 
 ---
 
-## Do Not Hand-Calculate Horosa Methods
-
-When the user asks for a Horosa technique result, call the Horosa MCP/CLI tool. Do not write ad-hoc Python, JavaScript, shell scripts, web-search snippets, or calendar formulas to recreate the method.
-
-## Clarify Settings Before Calling
-
-Do not silently call a technique with guessed settings when those settings change the result. If the user did not provide enough context, ask a concise question with concrete options first.
-
-Use `horosa_agent_guidance` before direct tool calls when settings are unclear:
-
-```json
-{"tool_name":"liureng_gods","intent":"当前时间起大六壬"}
-```
-
-Equivalent CLI:
-
-```bash
-uv run horosa-skill agent guidance --tool liureng_gods --intent "当前时间起大六壬"
-```
-
-Hard rule:
-
-- If the user says “当前时间”, you may use current local date/time/timezone.
-- If location matters and no location is provided, ask whether to use client/current location or a specified city/longitude/latitude.
-- If a method has multiple result-changing systems, ask the user to choose or explicitly accept Xingque defaults.
-- If gender, house system, zodiacal system, 起局方式, 贵人体系, 六爻 lines, 地分, target year, or report format matters and is missing, ask before calling.
-- For predictive astrology, natal data is not enough. Ask for target `datetime`, target location/timezone `dirLat` / `dirLon` / `dirZone`, or primary-direction settings when the selected tool needs them.
-- Only use defaults without asking when the user says “默认 / 按星阙 / 快速起盘 / 你来决定”.
-
-Runtime gate:
-
-- Calculation tools and `horosa_dispatch` will reject unconfirmed calls with `agent_guidance.required`.
-- After asking the user, pass `agent_confirmed_settings: true`.
-- If the user explicitly accepts defaults, pass `defaults_accepted: true`.
-- Add `clarification_notes` summarizing what was confirmed.
-- If any tool returns `agent_guidance.required` or an `*.invalid_payload` error with `details.agent_recovery`, stop immediately and ask the user using `details.agent_recovery.prompt_to_user`.
-- Do not retry the same tool until the user answered the missing settings or explicitly accepted defaults.
-- Never satisfy the gate by setting `agent_confirmed_settings: true` yourself without a user answer.
-
-This is especially important for:
-
-- 大六壬: use `horosa_cn_liureng_gods` / `liureng_gods`.
-- 大六壬行年: use `horosa_cn_liureng_runyear` / `liureng_runyear`.
-- 奇门遁甲: use `horosa_cn_qimen` / `qimen`.
-- 三式合一: use `horosa_cn_sanshiunited` / `sanshiunited`.
-- 太乙、金口诀、八字、紫微、星盘、推运 and all other registered Horosa tools.
-
-Predictive tool contracts:
-
-- `solarreturn` / `lunarreturn`: birth data + `datetime` + `dirZone` + `dirLat` + `dirLon`; output must include natal chart, return chart, and return aspects.
-- `givenyear`: birth data + `datetime` + `dirZone` + `dirLat` + `dirLon`; output must include natal chart, given-year chart, and aspects.
-- `solararc` / `profection`: birth data + `datetime` + `dirZone`; output must include natal chart, progressed/profection chart, and aspects.
-- `pd`: birth data + `pdtype` + `pdMethod` + `pdTimeKey` + `pdaspects`; output must include real primary-direction table rows.
-- `pdchart`: birth data + `datetime` + `dirZone` + primary-direction method settings; output must include primary-direction chart table and aspects.
-- `zr` / `firdaria` / `decennials`: birth data plus confirmed/default timeline settings; output must include timeline rows.
-
-The same contracts are exposed through `uv run horosa-skill tool list`, `uv run horosa-skill agent guidance --tool <tool>`, MCP `horosa_agent_guidance`, and MCP tool docstrings.
-
-Manual calculations can easily disagree with Xingque/Horosa because they bypass:
-
-- Horosa input normalization.
-- true solar time and timezone handling.
-- Xingque-compatible defaults.
-- local Java/Python/JS runtime layers.
-- export snapshots and fixed report contracts.
-- memory storage and retrieval.
-
-## Current-Time Requests
-
-For requests like “用当前时间起一个大六壬盘”:
-
-1. Get the current local date/time/timezone.
-2. Build a normal Horosa payload with `date`, `time`, `timezone` or `zone`, location/longitude/latitude when available, and the user question.
-3. Call `horosa_cn_liureng_gods`.
-4. Read `export_snapshot.export_text`, `export_format.sections`, and `summary`.
-5. Explain from those returned sections only.
-6. If the user wants persistence or a document, use memory/report tools.
-
-Never replace step 3 with `Exec`, `python3`, a web search, or handwritten 六壬 formulas.
-
-## Daliuren Defaults
-
-Horosa Skill follows Xingque-compatible defaults:
-
-- Default `guirengType` is `2` / `星占法贵人`.
-- Only use `guirengType=0` (`六壬法贵人`) or `guirengType=1` (`遁甲法贵人`) when the user explicitly requests that system or an existing saved case already specifies it.
-
-## Safe Explanation
-
-Never tell users that 大六壬 requires MongoDB, port `7897`, Xingque Desktop, a remote database, or an external service unless a current Horosa `doctor` or `openclaw-check` result explicitly says so.
-
-If a section is missing, say that the local tool did not return that section and rerun `doctor` / `openclaw-check`; do not invent a dependency.
-
----
-
-# Maintainer & Build Notes (ken backend, offline runtime)
-
-The section above is for AI **clients consuming** Horosa Skill. This section is for any agent or
-maintainer **modifying / building / releasing** this repository.
-
-**Standing rule (force-sync on every issue):** this is the same enforced protocol stated at the top of
-this file under **🔴 MANDATORY: Problem-Logging Protocol** — every problem/gotcha/fix gets written into
-`AGENTS.md` (+ `SKILL.md` when client-facing, + `CHANGELOG.md`, + a code guard when assertable), in the
-same change, kept in sync, and never written into the upstream 星阙 tree. If you are reading this section
-first, scroll up and read that protocol now; it governs everything below.
-
-## Third-party engine provenance & MIT obligation (ken)
-
-The ken engines are open-source, **MIT-licensed**, by **kentang2017**: `kinqimen`
-(<https://github.com/kentang2017/kinqimen>), `kintaiyi` (<https://github.com/kentang2017/kintaiyi>),
-`kinjinkou` (<https://github.com/kentang2017/kinjinkou>). MIT requires the copyright + license text to
-travel with every distribution, so:
-
-- **Never strip `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}/LICENSE`** from the runtime payload.
-  The packaging strip must leave these `LICENSE` files intact; `verify_runtime_release.py` requires the
-  engine dirs, and the LICENSE files ship inside them.
-- The acknowledgement lives in `README.md` / `README_EN.md` ("致谢 / Acknowledgements") and in the
-  GitHub release notes. If you bump or re-vendor an engine, keep that credit accurate.
-
-## Compute model: ken is authoritative, JS only formats
-
-`qimen` / `taiyi` / `jinkou`, and the 奇门 + 太乙 legs of `sanshiunited`, are computed by 星阙's **ken
-backend** — the `kinqimen` / `kintaiyi` / `kinjinkou` Python engines mounted on the chart service
-(`:8899`) at `/qimen/pan` · `/taiyi/pan` · `/jinkou/pan`. The skill's charts therefore match the 星阙
-desktop app value-for-value.
-
-- `service.py`: `_run_{qimen,taiyi,jinkou}_tool` fetch the JS-scaffold prerequisites (nongli + jieqi for
-  qimen, liureng for jinkou), call the ken endpoint via `_call_remote`, then pass `ken_response` into
-  `js_client.run(...)`. The three ken endpoints are listed in `_PYTHON_CHART_ENDPOINTS` so they route to
-  the chart server (`:8899`), not Java (`:9999`).
-- `horosa-core-js` does **not** compute these — it is a **ken-response → aiExport.js formatter**.
-  `tools/{qimen,taiyi,jinkou}.js` overlay the ken response onto a local scaffold via 星阙's
-  `normalizeKinqimenData` / `normalizeBackendPan` / `normalizeKinjinkouData`, then `build*SnapshotText`
-  emits the `export_snapshot` sections. ken stays the sole compute authority; the JS falls back to the
-  local scaffold only when `ken_response` is missing/malformed (graceful, but not the normal path).
-
-## ⚠️ ken endpoints fail with HTTP 200 — guard on `source`, never trust the status code
-
-The chart-service ken handlers (`web{qimen,taiyi,jinkou}srv.py`) wrap everything in
-`try/except` and on **any** exception return **HTTP 200** with `{"ResultCode": -1/1, "Result":
-"<engine> ... failed"}` (a string `Result`). Pitfalls this creates:
-
-- `_call_remote` only raises on transport/param errors, and `_unwrap_result` returns that failure
-  envelope unchanged (it's still a dict). So a ken failure looks like a successful call.
-- If you forward it to the JS formatter, the JS guard (`ken.selected || ken.raw` etc.) is falsy and
-  the formatter **silently falls back to the old local-engine chart** — a wrong result with no error.
-
-The fix already in place: `service.py::_require_ken_pan` checks `ken_response.get("source") == engine`
-right after each `_call_remote("/…/pan", …)` and raises `tool.ken_compute_failed` otherwise. **Keep this
-guard.** If you add another ken-backed technique, call `_require_ken_pan` on its response too, and never
-rely on HTTP status alone to decide whether ken succeeded. Regression test:
-`tests/test_service.py::test_qimen_fails_loudly_when_ken_returns_failure_envelope`. Note this means test
-fakes for ken endpoints must return a body with the right `source` (see `FakeClient` in `test_service.py`).
-- `tongshefa` is pure headless JS (no ken engine). `sanshiunited` composes ken 奇门+太乙 with the 大六壬 leg.
-- `canping` (邵子参评数) and `heluo` (河洛理数) are **原生·非 ken** tools: they compute their four pillars
-  **in-process** via the vendored bazi chain (`horosa-core-js/src/vendor/bazi/` → the `lunar-javascript`
-  npm package), then do their own 起数/起卦 + 条文 lookup. No chart-service round-trip. `harmonic` (调波盘)
-  is the opposite — a backend chart-extra (`/astroextra/harmonic`) with no aiExport contract (UI/lab-only
-  in 星阙), so the skill returns structured `positions`/`conjunctions`/`chart` + a readable snapshot only.
-
-## Re-vendoring the JS engines from 星阙
-
-When refreshing `horosa-core-js/src/vendor/{dunjia,taiyi,jinkou}` from 星阙's frontend engines, copy the
-**full** 星阙 files and apply exactly this headless transform:
-
-- add `.js` to sibling imports;
-- drop the 3 backend imports (`request` / `{ServerRoot,ResultKey}` / `{buildKentangEndpoint}`);
-- drop **only** the `fetch*Pan` network helpers;
-- **keep** the `normalize*` overlay functions (`normalizeKinqimenData`, `normalizeBackendPan`,
-  `normalizeKinjinkouData`) — these are what turn a ken response into a 星阙 pan object.
-
-For taiyi, build the snapshot from `{ ...pan, sections: undefined }` — ken's in-app detail `sections`
-are not part of the aiExport contract and will otherwise show up as unknown sections.
-
-### Re-vendoring the 数算 engines (canping / heluo) — different from the ken formatters
-
-`canping`/`heluo` are NOT ken-fed; they are vendored **whole** from 星阙 with almost no transform:
-
-- vendor `src/vendor/bazi/{ZWConst.js,baziShenShaLocal.js,baziLunarLocal.js}` (the bazi chain),
-  `src/vendor/canping/{canpingLocal.js,data/canpingTiaowen.json}`, and
-  `src/vendor/heluo/{heluoLocal.js,data/heluoTiaowen.json}`;
-- the **only** edits are (1) point sibling imports at the vendored copies and (2) add the JSON import
-  attribute: `import X from './data/*.json' with { type: 'json' };` — **without it raw Node throws
-  "needs an import attribute of type: json"** (this bit us). `heluoLocal.js` deliberately imports only
-  `heluoTiaowen.json` (NOT `heluoNihaixiaRaw.json` — the 倪海厦 data is already compiled into the tiaowen).
-- 星阙 has a real **section-name mismatch**: `canpingLocal.buildSnapshotText` emits `[大运·歲運]` and
-  `heluoLocal` emits `[先天·<卦>…]/[后天·<卦>…]/[大限·岁运]`, but `aiExport.js` declares `大运`/`先天卦`/
-  `后天卦`/`大限`. The skill keeps the snapshot **byte-identical** and reconciles via
-  `map_legacy_section_title` in `exports/registry.py` (same mechanism as `三传(…)→三传`). canping's `流年`
-  is intentionally NOT in the contract — 星阙's snapshot omits it (the accurate 流年 table is in
-  `data.canping.series`).
-- the formatter (`src/tools/{canping,heluo}.js`) mirrors `CanPingMain.js`/`HeLuoMain.js`'s `getModel`:
-  `buildLocalBaziResult(params).bazi` → pillars → `calculate`/`judge`/`daYun` → `buildSnapshotText`.
-  heluo additionally ports `HeLuoMain.solarTerm` (the 命运篇 needs the real 节气 from `lunar-javascript`).
-  `timeAlg` default is **1** (clock time) to match 星阙's `fieldVal(f,'timeAlg',1)` — note `timeAlg===0`
-  means 真太阳时 (the only value that triggers the longitude+EoT correction).
-
-### v2.4.0 西占 (Western) techniques — agepoint / distributions / mundane / natal extras
-
-These are 星阙 v2.4.0 additions; integrating them required **re-vendoring `vendor/runtime-source` from
-星阙 v2.4.0** (the bundled chart service then carries `/predict/agepoint`, `/predict/dist`,
-`/astroextra/greatconj`, and the enriched `/chart`). Patterns:
-
-- **`agepoint` / `distributions` are simple backend predict tools** (like harmonic): `_call_remote`
-  (`/predict/agepoint` → `{agepoint:{points:[…]}}`; `/predict/dist` → `{dist:[…]}`) + a Python snapshot
-  builder (`_build_agepoint_snapshot_text` / `_build_distributions_snapshot_text`, ports of 星阙's frontend
-  builders). Both endpoints are in `_PYTHON_CHART_ENDPOINTS`. Each has a single-section export contract.
-- **本命增补 (12分度 / 主宰星链 / 寿命格局) is JS-computed, Python-formatted.** 星阙 computes these in the
-  frontend (`astroAiSnapshot.js`), reading the chart object. The skill vendored the needed 星阙
-  `divination/` engine subtree into `horosa-core-js/src/vendor/divination/` (chartFacts + the Ptolemy
-  **lifespan** engine + `data/{signs,dignities,planets,houseMeanings}` + `engine/utils` — a clean 8-file
-  closure, no npm deps) and wrote `src/vendor/astroextra/natalExtras.js` + the `astroextra` JS tool that
-  return **structured** data (dodeca pairs / dispositor chains / the runLifespan res). `service.py`'s
-  `_attach_natal_extras` (only for `chart` + `mundane`) calls it via `js_client`, and
-  `_build_natal_extra_sections` formats the 3 sections with `_astro_msg` — so the JS does compute, Python
-  does the Chinese formatting (no `AstroText`/`whichTerm` vendored). They are inserted into the astrochart
-  snapshot before `可能性`; the `astrochart` preset gained the 3 sections.
-- **`mundane` (世俗入宫盘) is a composite** local tool: `/jieqi/year` (seedOnly, `jieqis:[term]`) → find
-  the `jieqi24` entry whose `jieqi==term` → its `time` is the precise ingress moment → `/chart` at that
-  instant → `_attach_natal_extras('mundane', …)` → prepend a `[世俗入宫]` head to the astrochart snapshot.
-  Input is **year + 入宫节气 + place** (date/time are derived, not user input).
-- **Re-vendoring `vendor/runtime-source` (the skill's copy) is allowed and READ-ONLY on 星阙.**
-  `sync_vendored_runtime_sources.sh` with `HOROSA_SOURCE_ROOT=<星阙 tree>` does it. After it, re-apply the
-  graceful-kentang-mount patch to the vendor's `astropy/websrv/kentang/registry.py` if you run the chart
-  service directly from `vendor/` (the **build** scripts patch the staged copy automatically; the raw
-  vendor hard-fails on `mount_kentang_services` because the kentang registry lists engines like `kinwangji`
-  that the skill doesn't vendor).
-
-### v2.5.0 推运 (7) + 卜卦/择日 — JS-vendor vs Python-port decision tree
-
-星阙 v2.5.0 added 7 推运 (jaynesprog / vedicprog / planetaryarc / planetaryages / balbillus /
-yearsystem129 / persiandirected) plus the **horary (卜卦)** and **election (择日)** divination engines.
-The integration rule that emerged:
-
-- **Backend-computed (has a `/predict/*` or `/astroextra/*` endpoint) → Python.** jaynesprog
-  (`/astroextra/jaynesprog`), vedicprog (`/astroextra/progressions` zodiacal=1), planetaryarc
-  (`/predict/planetaryarc`) — `_call_remote` + a Python snapshot builder. Add the endpoint to
-  `_PYTHON_CHART_ENDPOINTS`. **These 3 endpoints did NOT exist in the v2.4.0 `vendor/runtime-source`** —
-  they need the v2.5.0 re-sync (`sync_vendored_runtime_sources.sh`) before the bundled runtime can serve
-  them; the LIVE 星阙 app (:8899) already has them, which is why the live `@requires_chart` tests pass
-  pre-rebuild.
-- **Frontend, reads pre-computed chart data → Python.** planetaryages (reads `chart.objects` +
-  `params.birth`), yearsystem129 (reads `predictives.yearsystem129`, which `/chart` only emits when cast
-  with `predictive` truthy — `getPredictivesObj`), persiandirected (pure 1°/年 arithmetic off
-  `chart.objects`/`houses`/`birth`). Ported to Python reusing `_astro_msg` / `_aspect_label` /
-  `_split_degree`.
-- **Frontend, algorithm-heavy / risky to re-derive → vendor the JS verbatim.** balbillus (247-line
-  129年旺距削减 with recursive sub-periods). Vendored `astrostudyui/src/utils/balbillus.js` →
-  `horosa-core-js/src/vendor/astroextra/balbillus.js`, redirecting its `AstroConst`/`AstroText` imports to
-  a tiny **`progConst.js` stub** (7 classical planet ids + `LIST_SIGNS` + `AstroTxtMsg` — avoids vendoring
-  the 1128-line AstroConst). Needs `moment` (added to `horosa-core-js/package.json`). Dispatched through a
-  new **`progextra` JS tool** (`technique` → builder map) called from `_run_progextra_js_tool`.
-- **卜卦/择日 = vendor the whole `divination/` tree.** It's ~3200 lines of **pure logic with only relative
-  imports** (no React/antd). Copy the entire `astrostudyui/src/divination/` into
-  `horosa-core-js/src/vendor/divination/` (this also re-syncs the v0.8.0 lifespan subset to upstream), then
-  **add `.js` to every relative import** (Node ESM needs explicit extensions; a one-shot regex over
-  `from '…'` does it — 22 files). Two thin JS tools `horary.js` / `election.js` call
-  `runHorary(chartResp, category)`+`buildHorarySnapshot` / `runElection(chartResp, topicId)`+
-  `buildElectionSnapshot`. Python `_run_horary_tool` / `_run_election_tool` cast a **traditional**
-  (`tradition:1`, `predictive:0`) chart at the question/candidate moment, pass the `/chart` response as
-  `payload.chart`, and read back the JS-resolved `category`/`topicId` (the engine falls back unknown →
-  `general`/`marriage`).
-
-Gotchas that bit us here:
-- **`buildFacts(result)` wants the full `/chart` response** (it reads `result.chart.objects`, `result.objectMap`,
-  `result.aspects`, …), so pass the whole response object as `chart`, not just `chart.objects`.
-- **election preset has dead/conditional sections.** 星阙's `aiExport.js` election preset lists `应期`
-  (its builder **never** emits it) and `用事专属` (only when the topic rule-pack produced items). We mirror the
-  preset for fidelity, but `_assert_clean_export` (which requires `missing_selected_sections == []`) is too
-  strict for election — assert `missing ⊆ {用事专属, 应期}` instead. horary's 9 sections are all reliably
-  emitted (描述 is technically conditional but present for normal charts), so horary keeps strict clean-export.
-- **Router: 卜卦 also contains the generic 卦.** The 梅花易数/卦 branch (`["梅易","卦","gua"]`) must exclude
-  horary phrasing (`卜卦/horary/起卦/占问`) or `卜卦问婚姻` mis-routes to `gua_desc`.
-- **Offline test fakes must cover the new JS tools.** `FakeJsClient.run` needs `progextra` (balbillus snapshot),
-  `horary`, `election` handlers, and `FakeClient` `/chart` needs `predictives.yearsystem129`, or the offline
-  export-contract suite falls back to `generated_template` and fails.
-
-### 神数 family (14) — ALL SHIPPED (v0.9.1)
-
-The kentang registry (`astropy/websrv/kentang/registry.py`) mounts **14 神数 engines on the chart
-service (:8899)**: wangji / wuzhao / taixuan / jingjue / shenyishu (5 standalone engines) + shaozi /
-tieban / fendjing / beiji / nanji / chunzi / xianqin / cetian / qizhengkin (9 sharing the **`kinastro`**
-engine). Both groups are now integrated — the wiring is identical (backend `snapshot` → export), the
-only difference is which engine dir is vendored:
-
-- **Tier 1 — 5 standalone engines: SHIPPED.** `vendor/{kinwangji,kinwuzhao,taixuanshifa,jingjue,shenyishu}`
-  (~5.2 MB total). Each `web{key}srv.py` builds a `response["snapshot"]` whose `[小节]` headers already
-  match 星阙's `aiExport.js` preset, so the skill needs **no snapshot builder** — just POST `/{key}/pan`
-  and export `response.snapshot`. Wiring: one shared `_run_shenshu_tool(payload, key)` + `_split_birth_ymdhm`
-  (神数 take split year/month/day/hour/minute, not date/time strings) + a `ShenShuInput` (FlexibleModel:
-  date + optional time + 晚子时 switches + an `options` passthrough for engine-specific overrides like
-  wuzhao mode/number). **CRITICAL routing gotcha:** kentang mounts only reach :8899 if the endpoint is in
-  `_PYTHON_CHART_ENDPOINTS` — otherwise `_call_remote` sends them to the Java :9999 server and they 500.
-  Add `/wangji/pan` … `/shenyishu/pan` there (alongside `/qimen/pan`).
-- **Tier 2 — 9 kinastro-* engines: SHIPPED (v0.9.1).** All 9 share the `kinastro` engine
-  (`from astro.{shaozi,fendjing,chunzi,cetian_ziwei,…} import …`). Same shared `_run_shenshu_tool`;
-  cetian/qizhengkin/xianqin also forward `gender` + place. **The v0.9.0 "deferred" call was WRONG:** the
-  live :8899 returned `basic`-only data only because the user's *running* app was an older build — the
-  current source's `web{key}srv.py` all set `pan["snapshot"] = build_snapshot(pan)`, and the engine
-  imports + computes cleanly under the bundled Python. Vendor the **engine only**: `vendor/kinastro`
-  with `--exclude=tools` (the 26 MB `tools/cities` geocoding DB is not needed for ganzhi 神数) +
-  `--exclude={ui,frontend,docs,wiki,examples,tests,styles,scripts,.streamlit,…}` → ~31 MB (`astro/` is
-  32 MB raw). `ensure_kinastro_path()` puts `vendor/kinastro` on `sys.path` so `import astro.shaozi`
-  resolves; `streamlit` is a kinastro import but it's already in the bundled site-packages (the
-  `@cache_data`-without-runtime warning is harmless). **Validate offline by invoking each
-  `web{key}srv` class's `pan()` with a mocked `cherrypy.request` from a NEUTRAL CWD** (NOT `cd $HW`, or
-  the local `Horosa-Web/astropy/__init__.py` shadows PyPI astropy → `No module named astropy.units`).
-- **The 9 kinastro-* have NO live `@requires_chart` test** — the user's running app is an older build
-  without their snapshots, so a live test would red. They're covered by the offline FakeClient contract
-  suite (the fake synthesizes a preset-covering snapshot) + the in-process srv validation.
-- **Some kinastro presets have conditional sections** (tieban/chunzi/cetian emit fewer than the full
-  `aiExport.js` preset for a given input). The FakeClient emits the FULL preset so the offline contract
-  is clean; real exports may show a few `missing_selected_sections` — that's expected (like election).
-- **NATIVELY CONFIRMED on Windows (v0.9.1 release build).** Booting the bundled `win32-x64` chart service
-  and POSTing to each `/{key}/pan`, **all 14 神数 returned `ResultCode 0` with a real `Result.snapshot`** —
-  the 5 standalone (`source` `kinwangji`/`kinwuzhao`/`taixuanshifa`/`jingjue`/`shenyishu`) and all 9
-  kinastro-* (`source: kinastro`, snapshots 540–6000 chars). So the engine-only kinastro trim (above)
-  is sufficient and the "deferred" worry is fully retired on Windows too — not just structurally.
-- **Native-probe gotcha: the snapshot is nested at `Result.snapshot`, not top-level.** The raw chart-service
-  response is `{ResultCode, Result:{source, engine, snapshot, raw, …}}` (the skill's `_call_remote` unwraps
-  `Result` for `_run_shenshu_tool`, which then reads `response["snapshot"]`). If you probe `/{key}/pan` with
-  raw HTTP and read a top-level `snapshot`/`engine`, you'll wrongly see "empty" and think the engine failed.
-  Read `Result.snapshot` / `Result.source`.
-
-### v0.9.2 hardening lessons (audit pass — tests/robustness/fidelity/runtime)
-
-- **`f"{response.get('snapshot')}"` produces the literal string `"None"` when the key is absent** (a truthy
-  6-char string → a garbage "None" export that silently passed). Always guard `raw = response.get("snapshot")`
-  then `f"{raw}".strip() if raw else ""`. This bit `_run_shenshu_tool`; the same `f"{...or ''}"` idiom is safe
-  only because of the explicit `or ''`.
-- **Don't silently fall back in compute runners.** `_split_birth_ymdhm` used to substitute `2025-01-01` on an
-  unparseable date (wrong-moment chart, no error). Now it raises `tool.shenshu_bad_date`; `_run_shenshu_tool`
-  raises `transport.shenshu_snapshot_unavailable` on a no-snapshot (old-backend) response; horary/election/
-  progextra log + attach `snapshot_error` instead of a bare `except: pass`.
-- **persiandirected dates differ from 星阙 by ≤1 day** (~40% of rows). Root cause: 星阙's moment
-  `add(N,'days')` TRUNCATES the fractional day (JS `Date.setDate` floors), AND `arc % 360` has JS↔Python
-  float noise that rounds to the same 2-dp age but flips a day at the integer boundary. Matching the truncation
-  made it worse (float noise dominates). The ages/aspects/targets are byte-identical; the ≤1-day 应期 date is
-  astrologically negligible and documented (`docs/v091-fidelity-spotcheck.md`). To verify a hand-port's
-  fidelity, extract the 星阙 builder's pure functions + run them on the same fixture and diff — but mind
-  `moment` (CJS, `createRequire`) and the React-class lines.
-- **Runtime-slim reality: `pyarrow`(119M)/`pandas`(40M) are astropy deps, NOT streamlit-only.** kintaiyi needs
-  `import astropy.units` → astropy needs pyarrow+pandas. Stripping them breaks taiyi. streamlit is imported
-  pervasively across `kinastro/astro/*` (st.markdown ×1817 …) so it can't be stripped without a fragile stub.
-  **Only `plotly`(40M) is safely strippable** (streamlit-only + lazily imported for `st.plotly_chart`, never hit
-  headless). Verified `import streamlit` + cetian snapshot + `astropy.units` all OK without it.
-- **Export presets are a SUPERSET; some sections are 星阙-UI-only or conditional.** `AI_EXPORT_OPTIONAL_SECTIONS`
-  (registry) lists sections a preset names but the headless snapshot may not emit (检索/查询 panels, mode/topic
-  conditional). The parser excludes them from `missing_selected_sections` so real exports read clean; strict
-  techniques keep an empty optional set. Also: a preset copied from `aiExport.js` can MISS sections the backend
-  actually emits (qizhengkin 今制宿度/古制宿度) → they surface as `unknown_detected_sections`; add them to the preset.
-
-### v0.13.0 sync lessons (4 未同步 AI 技法 + 太乙/八字 段口径 — vendor 源 = Horosa-Public, 68→72)
-
-- **审计前先查自家「明确排除项」+ 过 headless-readiness 闸。** 第三轮把 `fengshui` 误当可补缺口——它是 canvas +
-  户型图上传 + 交互点位驱动（`new FengShuiEngine(canvas,…)`，无 birth/time 输入），无法 headless；仓内 SKILL.md/README×2
-  早有「明确排除·风水未完成 headless 化」政策。教训：上游有 engine 文件 ≠ 可进公开 skill；每个候选先 grep 排除政策，
-  再确认其 `buildXxxSnapshotText` 是纯 `chart/data→text`（无 canvas/DOM/上传/点击依赖）。
-- **AI-export 技法的权威清单 = `aiExport.js` 的 `EXPORT_TECHNIQUES` + `EXPORT_PRESET_SECTIONS`**（不是组件目录）。本轮
-  4 个缺口（triplicityrulers/keypoints/lunationphase/extrareturns）都在该表里却无 skill 工具。`utils/triplicityRulers.js`
-  用 `AstroConst.SignsProp` → shim 必须补该表（v0.11 闭合教训复发点：load 过、真盘崩）。
-- **请求型 builder（如 extrareturns 逐体拉 `/astroextra/planetreturn`）不能塞进 headless JS**（JS 层不发 HTTP）——
-  后端调用放 Python（`_run_*_tool` 循环 `_call_remote`），JS 只做纯格式化；或直接 Python 拼段（extrareturns 即此）。
-- **后端「整段 sections」可能被旧 vendor 层 strip 掉**：太乙的 13 段解读 kintaiyi 后端本就返回（top-level `sections`），
-  但 `tools/taiyi.js` 历史上 `sections: undefined` 整体丢弃。排查法：抓 `js_client.run` 实际收到的 `ken_response`，
-  grep `sections`/段名，再决定是「透传」还是「重 vendor builder」。条件出现的段：**同时进 preset（present 不 unknown）
-  + optional（absent 不 missing）**——单进 optional 不够（parser 的 unknown 只减 preset，见 `exports/parser.py:130`）。
-- **CI 起不了后端**：GitHub Linux runner 无 Linux 运行时（Linux PR 已拒；运行时 macOS/Windows-only + gitignore）。
-  别造「boot runtime」假 job；CI 网 = offline FakeClient 契约 + export-fixture 契约，全套 live 在本机 vendored 实例发布前跑。
-- **`04caa37`（Windows v0.12.0）带来的两道闸**：`release-completeness.yml`（发布后查 latest 是否双平台——darwin-only latest
-  过渡期必红=预期信号）+ `verify_builder_parity.py`（mac/win builder 锁步 + REQUIRED_ENTRIES 对称）。新技法是 horosa-core-js
-  内的 JS+Python（随包带入，不改 payload/REQUIRED_ENTRIES），故 parity 不受影响——但发布前要跑 `verify_builder_parity.py`。
-
-### v0.14.0 sync lessons (古典占星 [古典] + [古典格局] 补到 chart 家族 — vendor 源 = Horosa-Public, 72 工具不变)
-
-- **新增任何到 chart 服务的 `_call_remote(endpoint)` 必须把 endpoint 加进 `_PYTHON_CHART_ENDPOINTS`。** `[古典格局]` 经
-  `_attach_classical_analysis` 调 `/astroextra/analysis`；最初漏登记该 endpoint → `use_chart_server=False` 落到 **Java** 通路，
-  读 `_java_runtime_ready`（仍 False）→ 二次探针 + 二次 `start_local_services`，直接打挂 `test_service_*runtime*`（`started==1`/`probe_calls==1`）。
-  判据：chart 服务族（`/chart`·`/predict/*`·`/astroextra/*`·`/*/pan`…）一律进该 set，才会复用 `_chart_runtime_ready` 缓存、首调后不再探针。
-- **段补到「既有工具」≠ 新工具**：古典两段挂在 chart 家族导出上，工具数仍 72。版本仍要全量 bump（pyproject/uv.lock/__init__/
-  package.json+lock/server.json/README×2/JSON 例），但 badge/句子/全景标题的 **72 不动**；测试数 260→263 要同步。
-- **`_attach_*` 增补走「gated + try/except graceful + 顶层 stash」**：`_CLASSICAL_ANALYSIS_TOOLS={chart,chart13,hellen_chart}`
-  控制 `[古典格局]` 只挂本命三盘；india/mundane 走 `_build_astro_snapshot_text` 自带 `[古典]`（来自 `/chart` objects），但不挂
-  `[古典格局]`——preset 必须**逐工具对齐**（astrochart/astrochart_like 双段；indiachart/mundane 仅 `[古典]`），否则挂不上的段进 preset 会成「死条目」。
-- **离线 vs live 覆盖分层**：`[古典]` 的 Melothesia 段离线即出（FakeClient objects 带 `sign`），但**逐曜古典状态/围攻/围绕**需富集
-  per-object 字段（outOfBounds/phase/joy/mansion…），仅 live 出；故离线测试断言 stub 驱动的 `[古典格局]` + Melothesia，富集 `[古典]`
-  交 live 测试 + export-fixture（用真 live 快照 `astrochart_classical_live_snapshot.txt` 锁解析契约）。FakeClient 要加 `/astroextra/analysis` 桩。
-
-### v0.12.0 sync lessons (主限法 v12 核5收敛 + 排盘修正批 + faRelatedPeople — vendor 源 = Horosa-Public)
-
-- **vendor 源 = 开源仓 Horosa-Public**（`HOROSA_SOURCE_ROOT=/Users/horacedong/Desktop/Horosa-Public`；
-  sync 脚本默认根是 Desktop、其下无 Horosa-Web，必须显式传）。Public 的 PD 引擎天然就是核5+legacy 白名单
-  （perchart 白名单 ↔ `_PD_METHOD_REGISTRY` 6 键锁步），v12 核 kernel 完整（Vertex/多圈/每盘钥匙/显示窗）。
-  同步后核法：vendored astropy 与 Horosa-Public 逐文件 `diff -q` 全同 + `PD_SYNC_REV==pd_method_sync_v12`
-  + golden v266 在位。**同步与核对一律以 Horosa-Public 为唯一来源。**
-- **`/predict/pd` 的 params 回显是原样输入，不是引擎解析值**：送 `placidus` 回显仍 `placidus`，但引擎内已
-  回退 core_alchabitius（行集与显式 core 逐位一致，live 测试钉死）。skill 快照对白名单外键如实标注
-  「未核验，引擎回退 Alcabitius 半弧法」，不静默换标签。
-- **live 验证必须打 skill 自己 vendored 的引擎实例，不是 :8899/:9999 上恰好在跑的东西**——默认端口上
-  常驻的服务不保证与 vendored 引擎同版本（陈旧实例会掩盖白名单/钥匙问题）。本轮把 tests 的
-  gate+`make_service` 从写死 `:8899/:9999` 改为尊重 `HOROSA_CHART_SERVER_ROOT`/`HOROSA_SERVER_ROOT`
-  （此前 env 覆盖静默无效，一次「带覆盖的全绿」实际测的是默认端口上的旧实例）。
-  起 vendored 实例：chart 要 `PYTHONPATH=<vendor>/Horosa-Web/astropy`
-  + `HOROSA_CHART_PORT`（脚本只自动解析 flatlib，不解析自身包根）；java 用 vendored
-  `runtime/mac/java/bin/java -jar runtime/mac/bundle/astrostudyboot.jar --server.port=… --astrosrv=…`
-  （root 500 = 正常无路由）。
-- **防陈旧进程门已制度化为 live 测试**：chart 心跳 `GET /` 回显 `pdSyncRev`，断言 ==`pd_method_sync_v12`
-  再信任结果（v12 注记坑#6：陈旧引擎把未知时间钥匙静默按 Ptolemy 算）。**钥匙分叉探针别用 Kündig**（静态
-  标度 1.0 与 Ptolemy 同日期）——用每盘真算的 Kepler（live：321/321 行日期分叉）。
-- **pd 表行是列表不是字典**：`[arc, prom, sig, type, date]`；3000 年多圈 = 同 (prom,sig) 弧 +360°×n
-  （live 实测 168 组复发对，max arc 2995.5°）。宿命点行 id `N_Vertex_0` 仅 In-Zodiaco；skill 侧
-  `ASTRO_TEXT_MAP["Vertex"]="宿命点"`（主短两表都要）。
-- **faRelatedPeople 透传**：vendored `computeProtect` 吃 `pan.faRelatedPeople=[{name, yearGan}]`（显式数组
-  为准，缺省不出行）。skill 在 Python 侧把 `{name, birth}` 经 `/nongli/time` 的 `yearJieqi`（立春界）归一化
-  为年干（1991-02-03 → 庚，立春前归前一年，live 钉死），JS 保持上游 verbatim 只 stamp。上游的
-  `birthToYearGan` 依赖 lunar-javascript，skill 不引这个依赖——走自家 nongli 后端同口径。
-- **排盘修正批随重同步自动带入**（日返/月返种子、合盘/组合盘归一化、恒星跨0°、围攻 orb、均时差等，上游
-  pytest 60 + golden byte-perfect 已验）；skill 结构断言型测试全绿，无需改动。
-- 界 (term) promissor row id = `T_<ruler>_<sign-name>`（非经度）；上游 dial 的 `_PD_CHART_METHOD_HSYS`
-  只在 skill 暴露 dial 时才相关（目前只暴露 PD 表）。
-
-### v0.11.0 sync lessons (Xingque v2.6.3→v2.6.5 parity + 2 v0.10.0 deferrals — no new tools, still 68)
-
-- **Sidereal ayanāṃśa is pure Python passthrough.** `perchart.py` reads `data.get('siderealAyanamsa')` and emits
-  `chart.siderealAyanamsa` + `chart.nakshatras` (sidereal only). `BirthInput` has `extra="allow"` so the param already
-  flows via `model_dump(exclude_none=True)`; declaring it is for discoverability + guidance only. **Real bug fixed:** the
-  skill's `ASTRO_MSG["Sidereal"]` was hardcoded `恒星黄道，岁差:Lahiri` → mislabelled Raman/Fagan charts; de-hardcode it,
-  read the ayanāṃśa from `chart.siderealAyanamsa` (西占) / `chart.siderealModeKey`+`ayanamsaValue` (印占, **different field
-  names**), and put the real name on its own line. `chart.zodiacal` is a *localized string* ("恒星黄道"), not an int — don't
-  gate on `== 1`. Nakshatras read from `response.chart.nakshatras`, NOT top-level.
-- **India is Python (`/india/chart` in `_PYTHON_CHART_ENDPOINTS`), reads `indiaHsys`/`indiaAyanamsa`** (aliases hsys/ayanamsa/
-  siderealMode). Golden = ayanāṃśa *differences* are stable astronomical constants (Raman−Lahiri Sun lon = +1.446°,
-  Lahiri−Fagan = +0.88°) — robust without pinning fragile absolute lon.
-- **JS vendor dependency-closure is the whole game (六壬毕法 D + 政余格局 E).** Both are pure module-level closures
-  (zero `this.`/React) — extract by transitive-call analysis, but **CONST refs are caught separately from function refs**
-  (missing `JiaZiList`/`ERFAN_SU_TO_BRANCH` → silent `ReferenceError` swallowed by try/catch → null result). The 六壬 三传
-  engine is a plain `ChuangChart` class — vendor it with draw-only imports (GraphHelper/helper/LRShenJiangDoc) replaced by
-  no-op stubs (only `genCuangs` runs). `SZConst.js` reads `localStorage` at *module load* → **hardcode a no-op shim** (node
-  25's experimental global `localStorage` throws without `--localstorage-file`; don't probe `globalThis.localStorage`).
-  `AstroText.js` keys its maps on `AstroConst.*` constants → extend the `constants/AstroConst.js` shim with every planet/
-  node/point the closure looks up, or the lookups return `undefined`-keyed.
-- **政余格局 honest limitation:** 七政神煞 (官/福/疾/天贵/玉贵/岁驾) come from a *separate* kinastro qizheng engine
-  (`fetchKinastroQizheng`) the western-`/chart` guolao path never calls → `guolaoGods` absent → god-dependent patterns
-  can't fire (chart-object ones do). The 神煞 section was already empty for the same reason. `能接多少接多少、跑不通如实标出`.
-- **紫微 P0–P2 data is all in the jar response** (re-synced): top-level `patterns` (命中格局: name/category/duanyi/broken),
-  `houses[].starsOthersGood/Bad/Small` (杂曜), `direction`/`smallDirection` (大限/小限). Just surface it in
-  `_build_ziwei_snapshot_text`. 来因宫 + rich 流曜运限 are frontend-only (ZiWeiHelper) → not in the response, honestly skipped.
-- **Offline contract (`test_all_callable_techniques...`) forbids bare `无` sections.** Any new JS-fed or jar-fed section
-  needs a `FakeJsClient`/`FakeClient` handler returning real content (guolao_moira; `/ziwei/{birth,rules}` patterns), AND
-  the section in both preset + `AI_EXPORT_OPTIONAL_SECTIONS` (conditional → no false `missing`).
-
-### v0.10.0 sync lessons (Xingque v2.5.4/v2.6.x parity — no new tools, still 68)
-
-- **PD full-house params flow through `PerChart`, not the web layer.** `webpredictsrv.py:pd()` is just
-  `PerChart(data) → getPredict() → getPrimaryDirection()`; `perchart.py` reads `pdMethod/pdDirect/pdAntiscia/...`
-  from the request, `perpredict.py` reads them via `getattr(self.perchart, ...)`. So A only needed schema fields
-  + a vendor re-sync (`input_normalized` is `model_dump(exclude_none=True)` → unset params fall back to the
-  upstream defaults: direct/converse on, antiscia/terms off). Don't grep the web srv for the param — grep `perchart.py`.
-- **JS re-vendor dependency closure is the #1 trap.** The jinkou 解读层 crashed on `LRConst.TaiXuanNum` undefined —
-  the curated `vendor/liureng/LRConst.js` (131-line, AstroConst-free) was missing 6 new constants
-  (`TaiXuanNum/ZiCong/ZiHai/ZiPo/ZiSangHe/ZiXing`). Do NOT re-vendor the full upstream `LRConst.js` (it `import`s
-  `AstroConst` from a path that doesn't exist headless); append only the new pure constants. Always do a
-  `node -e "import('...')"` load-check AND a real-data run after vendoring, not just a load-check.
-- **qimen 法奇门 = surgical add, not a 2086-line re-vendor.** `DunJiaFaDoc.js` is pure; `DunJiaFaCalc.js` imports
-  only `DunJiaFaDoc`. The existing `DunJiaCalc.js` works, so just add `import { buildFaQimenAnalysis }` + the +8-section
-  block before its `return`. `buildFaQimenAnalysis(pan)` is compatible with the skill's kinqimen pan (live-verified);
-  all 8 法 headers emit when `fa` is truthy. Preset = the builder's actual sections (14: skill has no `九宫与宫内星体`).
-- **liureng `毕法/占断向导` — DONE in v0.11.0** (was deferred in v0.10.0): the ~40-field layout context IS assemblable
-  headless. `buildLiuRengReferenceContext` + `buildLiuRengLayout`/`buildKeData`/`buildSanChuanData` are pure
-  module-level functions (20-fn / ~570-LOC closure, zero `this.`/React) — extracted verbatim into
-  `vendor/liureng/liurengRefContext.js`. The 三传 engine is `ChuangChart.genCuangs()` (plain class; vendored with
-  the 3 draw-only imports — GraphHelper/helper/LRShenJiangDoc — replaced by no-op stubs since only genCuangs runs).
-  Deps: full `LRConst.js` (re-vendored 21→52 exports superset; has GanJiZi/GuiRengs/GanZiWuXing/getGuiZi), `LRPanStyle.js`,
-  a 12-LOC `constants/AstroConst.js` shim (LIST_SIGNS + Sun/Moon). Wired in `tools/liureng.js`: `[毕法（已命中）]` always
-  (refCtx success), `[占断向导]` only when `payload.zhanCategory` ∈ {hunyin/taichan/jibing/caiyun/…}. Both in the liureng
-  preset + `AI_EXPORT_OPTIONAL_SECTIONS["liureng"]` (conditional → no false missing). **坑**: missing a module-level const
-  in the closure (JiaZiList/ERFAN_SU_TO_BRANCH) → silent `ReferenceError` caught by try/catch → refCtx null → 毕法 absent;
-  and a missing `ChuangChart` import → 三传 null → only non-三传 毕法 fire. Always trace refCtx + sanChuan on a real 盘.
-- **guolao `政余格局` — DONE in v0.11.0** (was deferred): `buildLocalMoiraPatterns` (Moira DSL) + its 34-fn/~600-LOC
-  pure closure (zero `this.`) extracted verbatim into `vendor/guolao/guolaoMoira.js`; runs via `js_client.run("guolao_moira")`
-  in `_run_guolao_chart_tool`, appended as the `[政余格局]` section. Deps chained out: `vendor/suzhan/SZConst.js` (with a
-  hardcoded `localStorage` no-op shim — node 25's experimental global localStorage throws without a flag), the real
-  `constants/AstroText.js` (name maps) + an extended `constants/AstroConst.js` shim (planets/nodes/points the maps key on),
-  and inline `GUOLAO_LIFE_MODE_*` + `getStored*` default stubs (headless has no UI prefs → ASC 命度 / su28=2).
-  **Honest limitation** (`能接多少接多少、跑不通如实标出`): the 七政神煞 (官/福/疾/天贵/玉贵/岁驾) come from a *separate*
-  kinastro qizheng engine (`fetchKinastroQizheng`), which the skill's western-`/chart`-only guolao path never fetches — so
-  `guolaoGods` is absent and the **god-dependent patterns** (八杀朝天/日月拱官/官福失垣/…) can't fire. The **chart-object
-  patterns** (孛犯太阳/罗犯太阳/金水相涵/日月失所/命坐两歧/孤月独明) DO fire (golden: 1985-03-21 → 金水相涵 + 孛犯太阳).
-  The 神煞 section was already empty for the same reason (pre-existing). Closing it = wiring the qizhengkin gods in (future).
-- **Live services make the @requires_* tests run.** When `:8899` (chart/ken) and `:9999` (Java) are up, pytest runs
-  the integration tests for real (233 passed, 0 skipped). That validated B/C/A against real Python compute and the
-  qimen/jinkou 解读层 against the real ken backend — the best signal available. CI (services down) skips them.
-
-## Offline runtime packaging gotchas (these have bitten us)
-
-- **flatlib must survive the strip.** `scripts/package_runtime_payload.sh` must keep its
-  `flatlib-ctrad2/flatlib` rsync line. Dropping it makes the bundled chart service fail with
-  `ModuleNotFoundError: No module named 'flatlib'`.
-- **`site-packages` tests must survive the strip.** The python-strip removes `test`/`tests` dirs, but it
-  must `-prune` `site-packages` first. If `site-packages/astropy/tests` gets removed, `kintaiyi`'s
-  `import astropy` fails and the `/taiyi/pan` mount is silently skipped.
-- **ken deps must be bundled.** The chart service needs `bidict` (kinqimen), `numpy` · `kerykeion` ·
-  `ephem` (kintaiyi), `pendulum` (kinjinkou) **on top of** the base chart deps. macOS's embedded Python
-  already has them; the Windows `runtime/windows/bundle/wheels` set MUST include them too.
-- **`lunar-javascript` must be bundled for 数算.** `canping`/`heluo` compute pillars in-process via
-  `horosa-core-js/src/vendor/bazi/` → the `lunar-javascript` npm package. Both builders
-  (`package_runtime_payload.sh` + `build_runtime_release_windows.py`) now run `npm install --omit=dev`
-  in `horosa-core-js` before copying it (the core-js copy has **no** `node_modules` rsync/ignore
-  exclusion, so `node_modules/lunar-javascript` rides along). `verify_runtime_release.py` requires
-  `horosa-core-js/node_modules/lunar-javascript/package.json` in both archives. Without it, canping/heluo
-  throw `Cannot find package 'lunar-javascript'` at runtime — the rest of the runtime still boots, so this
-  fails silently unless the verifier catches it.
-- **CI/test must `npm install` `lunar-javascript` before `pytest` (it does now).** `node_modules` is
-  gitignored, and the `canping`/`heluo` tests in `tests/test_local_js_tools.py` are **not**
-  `@requires_runtime`-gated, so they run in CI and shell out to bundled Node → the vendored bazi chain →
-  `import 'lunar-javascript'`. Before v0.7.0, `horosa-core-js` had **zero** npm deps so CI never needed
-  `npm install`; v0.7.0 added the first one and turned CI red (3 `ERR_MODULE_NOT_FOUND` failures) while
-  the local `186 green` hid it (dev tree already had `node_modules`). Both `ci.yml` jobs and `release.yml`
-  now run `actions/setup-node@v4` + `npm ci --omit=dev` in `horosa-core-js`. **Lesson:** whenever you add
-  a JS test that isn't `@requires_runtime`, confirm CI installs whatever that test's `node` needs.
-- **`with { type: 'json' }` raises the Node floor for ALL JS tools.** The vendored 数算 JSON
-  (`canpingTiaowen.json` / `heluoTiaowen.json`) is imported with the import-attribute syntax
-  (`import X from './x.json' with { type: 'json' }`), which requires **Node ≥ 20.10**. Because
-  `src/tools/index.js` imports `canping.js`/`heluo.js` at the top, an older Node fails to load the whole
-  module graph with a *syntax* error — i.e. qimen/taiyi/jinkou/tongshefa break too, not just 数算. The
-  bundled runtime ships Node 22 (safe) and `package.json` declares `engines.node >=20.10.0`; the risk is
-  only a dev/PATH `node` that's too old. Don't downgrade the bundled Node below 20.10, and if you add
-  another raw-`node` JSON import keep using the `with { type: 'json' }` attribute (not the deprecated
-  `assert { type: 'json' }`).
-- **Windows `PYTHONPATH` must include `Horosa-Web/vendor`.** `start_horosa_local.ps1` puts the vendor
-  root on `PYTHONPATH` so `import kinqimen/kintaiyi/kinjinkou` resolve. `package_runtime_payload.sh` and
-  `build_runtime_release_windows.py` both bundle `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}`.
-- **Graceful kentang mount.** The packaging scripts patch the *staged* `kentang/registry.py` mount to
-  skip engines that aren't bundled, so the chart service still boots offline (`_load_service` does a bare
-  `__import__` and would otherwise hard-fail on a missing engine).
-- **`verify_runtime_release.py` checks real files inside required dirs.** A directory requirement
-  (`swefiles/`, `astropy/`, `vendor/kin*/`) passes only if the archive holds a real file strictly
-  inside it — an empty dir-marker entry fails (a bare `…/swefiles/` in a hand-built zip used to pass).
-  When hand-zipping the Windows payload, make sure those dirs are actually populated, not just present.
-- **The Windows builder must not shell out to `rsync`.** `build_runtime_release_windows.py`'s
-  `rsync_copy()` used to invoke the `rsync` binary for its in-payload copies — which does not exist on
-  Windows, so the *Windows* builder died on its very first copy (`FileNotFoundError: [WinError 2]`) and
-  could only ever run on a machine that happened to have rsync. It now uses a portable
-  `shutil.copytree(src, dst/src.name, ignore=ignore_patterns(*excludes), dirs_exist_ok=True)` — same
-  "copy SRC into DST" semantics, same exclude set, merging into existing trees — so the single builder
-  runs natively on Windows as well as macOS/Linux. Keep runtime-build copies dependency-free this way;
-  do not reintroduce a POSIX-only binary (`rsync`, `cp`, `tar`…) into a path that must also run on
-  Windows. (`download()` already uses `curl`, which Windows 10/11 ship natively.)
-- **Release version bumps must cover *every* release-version-bearing file.** A pyproject-only bump leaves
-  `src/horosa_skill/__init__.py.__version__` (CLI `--version`), `server.json` (the MCP-registry-declared
-  version, ×2), `CITATION.cff`, and the "current version" references in `README.md` / `README_EN.md` stale.
-  When releasing vX.Y.Z bump **all five** in the same commit; `git grep -n "<OLD>"` after the bump should
-  show only legitimate historical references (CHANGELOG history, this gotcha line, the Windows-release
-  handoff doc). `docs/DATA_CONTRACTS.md`'s `tool envelope: <ver>` tracks an independent envelope-schema
-  version — do **not** bump it just because it shares a number with the package. (v0.9.1 note: the mac
-  side bumped all five correctly this round — `__version__` read `0.9.1` straight away.)
-- **`start_horosa_local.ps1`'s 180s readiness gate is too short on a box without Mongo/Redis, but the
-  services still come up.** On a clean machine the Java backend retries Mongo/Redis connects on boot and
-  takes >180s to answer `/common/time`, so the launcher hits its deadline and `throw`s "Windows Horosa
-  runtime did not become ready in time." This is a FALSE failure: `Start-Process` already detached both
-  the chart (`:8899`) and Java (`:9999`) processes, they keep coming up, and `horosa-skill doctor` goes
-  green (`issues: []`) ~30–60s later. When self-checking after `install`: start the stack, ignore the
-  launcher throw, then poll `doctor` (or the two endpoints) for a few minutes rather than trusting the
-  launcher's exit code. (Candidate fix: raise the deadline to ~300s, or gate "ready" on the chart service
-  alone since that is what the ken/神数 endpoints need.) Verified harmless across the v0.7.0 and v0.9.1
-  Windows release builds.
-- **The two runtime builders MUST stay in lockstep — every `package_runtime_payload.sh` (mac) step needs
-  a parallel `build_runtime_release_windows.py` (Windows) step, and `verify_runtime_release.py` must list
-  new required entries for BOTH platforms.** v0.10.0 broke this: the mac packager gained (1) a
-  `gen_shaozi_tiaowen.py` call (so 邵子神数 emits real verses) and (2) a plotly strip, and the verifier
-  added `…/shaozi/data/shaozi_tiaowen_6144.json` to the **darwin-arm64** list only — but the Windows
-  builder and the win32-x64 verifier list were left untouched. A Windows build would then have silently
-  shipped placeholder 邵子 verses *and still passed verify*. Fixed by adding both steps to the Windows
-  builder and the shaozi entry to the win32-x64 verifier list. **Rule: when you touch one builder or add a
-  required artifact, grep the other builder + both `REQUIRED_ENTRIES` lists in the same change.** Numeric
-  constants drift too: v0.16.1 bumped the embedded manifest's `export_registry_version` 6→7 in the mac
-  packager only, and substring-level parity stayed green while the Windows builder kept stamping 6.
-  `verify_builder_parity.py` now cross-checks `schema_version`/`runtime_layout_version`/
-  `export_registry_version` between the two builders (validated on that live drift: FAIL before the
-  Windows-side bump, PASS after).
-- **A new release published as `latest` is repeatedly missing its Windows half — ALWAYS check the release
-  manifest first. The CI guard now catches this automatically.** The mac side has shipped this incomplete on
-  **every minor since v0.10.0**: v0.10.0 had **no** `runtime-manifest.json` at all (`releases/latest/download/runtime-manifest.json`
-  404 → `install` broke on BOTH platforms); v0.11.0 through **v0.16.0** shipped a **darwin-only** manifest +
-  no win32 zip (mac installs, **Windows** install finds no `win32-x64` entry / 404s the zip). **Auto-caught
-  since v0.13.0**: `release-completeness.yml` fires on the release event and fails, exactly as designed —
-  so rely on that red check instead of noticing by hand (it flagged v0.14.0/v0.15.0/v0.16.0 too).
-  **v0.16.1 (2026-07-01) broke the streak: the first mac-shipped COMPLETE dual-platform `latest`.** The mac
-  side repacked the Windows-built v0.16.0 zip with a corrected embedded manifest (version 0.16.1 +
-  `export_registry_version` 7 — confirmed by range-reading the published zip; sizes differed from the
-  v0.16.0 archives by only ~50 bytes) and the guard went green on the release event with zero Windows-side
-  action. A repack like this is only valid when the release diff has **no payload-affecting changes**
-  (horosa-core-js source, vendored engines, wheels, launchers — skill-layer Python/docs are fine); when a
-  suspiciously same-size win zip appears on a new release, verify the embedded manifest (version +
-  `export_registry_version`) and that diff condition before trusting it.
-  **v0.17.0+ established a THIRD, stealthier mode — "pin-forward" (every release since):** the new release's
-  manifest lists `win32-x64` but points it at a *previous* version's win zip. v0.17/v0.18/v0.19 pinned a
-  baseline frozen at **v0.16.1**; from v0.20.0 the pin *advances* to the most recent real win zip you shipped
-  (v0.20.0 pinned v0.19.0's zip), so staleness is now one-ish release rather than many — but it is still a
-  pin, so **expect a `--check` GAP on every new release** and ship the real per-version half each time. **The guard stays GREEN and `install` does
-  NOT break** — both platforms are present, the URL resolves 200, and the sha matches — but Windows users
-  silently get a runtime **N versions stale** (missing every feature since the pinned version). The guard
-  can't catch this (it only checks presence + resolvability, not version match). **`sync_windows_release.py
-  --check` IS the reliable detector**: it looks for the version-specific `horosa-runtime-win32-x64-vX.Y.Z.zip`
-  asset, which is absent under pin-forward, so it reports `[GAP]` even while the guard is green. Treat a
-  `--check` GAP as authoritative regardless of guard colour; the remediation (build + upload the real win
-  zip, re-pointing the manifest) is identical. **Freshness caveat for these jumps:** v0.17.0 was an "引擎全面
-  升级" that added real chart-service endpoints (`/location/acg` 占星地图, `/astroextra/relative`) and new
-  bundled data (`astrostudyui/dist-file/astrodata/astrodata-aa.sqlite.gz` for 名人库, ~50 MB) — a pin-forward
-  jump can span such changes, so re-populate `vendor/runtime-source` from the **current** Windows workspace
-  (check astropy / dist-file mtimes are newer than the target release) and native-verify the new endpoints
-  return real data before shipping. The Windows runtime is built off-repo on a Windows box, so a mac-only
-  release publish leaves it out. **First diagnostic when
-  "check sync" / a new version appears:** `gh release view vX.Y.Z --json assets` (expect darwin tar.gz +
-  win32 zip + runtime-manifest.json + SHA256SUMS.txt) and confirm
-  `releases/latest/download/runtime-manifest.json` has **both** `darwin-arm64` and `win32-x64` platforms.
-  If the win half is missing: build it, regenerate the **dual-platform** manifest + SHA256SUMS, and upload —
-  the release is usually already `latest`, so the upload alone (no flip) restores Windows `install`.
-  **Automated since v0.12.0:** `.github/workflows/release-completeness.yml` (schedule + dispatch + release
-  events) fails if the published `latest` lacks either platform / an archive 404s, and
-  `scripts/verify_builder_parity.py` (CI `test` job) fails if the two builders or the verifier contract
-  drift. If either alarms, the fix is this same build-the-Windows-half flow.
-  **One-command remediation (v0.14.0):** on the Windows build box, `python scripts/sync_windows_release.py`
-  detects whether the current `latest` is missing its Windows half and (when run with `--upload`) runs the
-  whole build → download-darwin → dual-platform manifest + SHA256SUMS → `verify_runtime_release.py` →
-  upload pipeline. Safe by default (no `--upload` = build + verify only, no irreversible action), idempotent
-  (no-op + exit 0 when already in sync), and it gates the upload behind `verify_runtime_release.py`. It
-  reads the version from `pyproject.toml`, so `git pull` to the release commit first. This is the canonical
-  way to clear a `release-completeness` red — prefer it over doing the steps by hand. **Battle-tested
-  end-to-end on v0.16.0 (2026-07-01):** re-populate `vendor/runtime-source` from the Windows workspace,
-  build, native-verify (chart `:8899` compute — the new `/geomancy/reading` + `/astroextra/*` mundane
-  endpoints returned real data, confirming the source tree was fresh), then the sync tool packaged +
-  uploaded and the guard went green + a public `install --force` matched the sha.
-- **Windows launcher hardening (v0.12.0) — keep these when re-vendoring the templates.** The
-  `scripts/runtime_templates/windows/{start,stop}_horosa_local.ps1` templates carry: PID-ownership checks
-  (only kill a PID still mapping to our own python.exe/java.exe image — never a recycled/foreign PID),
-  a port-collision fast-fail (clear error in ~2s instead of a 300s hang), a stale/already-running guard
-  that emits the `pid files already exist` marker the manager keys on, a 300s readiness window, and
-  `-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8` on the Java launch (bundled Temurin 17 is pre-JEP-400 →
-  OS-codepage default mojibakes CJK jar tables). The readiness gate intentionally still requires BOTH
-  chart + Java (a chart-only gate would need a matching change to `manager._wait_for_service_state`, which
-  requires ALL endpoints — left as a future option, noted in the start script). **CRITICAL gotcha in the
-  PID-ownership check (bit the first v0.12.0 build):** the expected image path is built with
-  `Join-Path $RuntimeRoot ...` where `$RuntimeRoot = "$Root\..\runtime\windows"`, so it contains a literal
-  `..`; `Get-Process .Path` is OS-normalized (no `..`), so a raw `$proc.Path -ieq $expectedExe` **never
-  matches** and the ownership check silently skips the kill (stop becomes a no-op that still deletes the
-  pid file → processes leak). Both templates wrap the exe paths in `[System.IO.Path]::GetFullPath(...)`
-  to normalize before comparing — keep that when editing. Verified: with the fix, stop actually kills both
-  PIDs; without it, both survive. Test stop-actually-kills after any change to these scripts.
-- **Watch for committed git conflict markers after a mac-side merge.** v0.11.0's release-prep left a stray
-  `>>>>>>> <sha>` line in `CHANGELOG.md` on `main`. `git grep -nE '^(<<<<<<<|=======|>>>>>>>)'` after every
-  fetch/ff; delete any stray marker (the surrounding content is usually already resolved).
-- **邵子神数 `完整条文` placeholder is upstream-faithful, not a bug.** The shaozi engine looks up two verse
-  ids; `基础条文` uses an id that IS in the upstream CSV (real verse after generation), but `完整条文` uses
-  an id scheme not covered by the 6144-verse CSV, so it falls back to the engine's `【条文待補充】`. macOS
-  behaves identically (same CSV → same generated JSON → same missing id). Don't "fix" it by faking verses.
-  A coarse `grep 條文待補充` over the snapshot will false-positive on this expected fallback — check that
-  `基础条文` is a real verse instead.
-- **`gen_shaozi_tiaowen.py` must write LF (`newline="\n"`).** Without it, `Path.write_text` emits CRLF on
-  Windows, so the Windows-built `shaozi_tiaowen_6144.json` differs from the macOS-built one purely by line
-  endings (same content, +1 byte/line). Inert functionally; the explicit LF keeps the two platform builds
-  byte-reproducible. (The shipped v0.10.0 win zip predates this fix and carries CRLF — verified
-  content-identical to mac's LF copy, so it is fine; future builds are byte-clean.)
-
-## `pkill` will take down the live 星阙 stack
-
-Both the bundled offline chart service and the live 星阙 dev chart service run `webchartsrv.py`. Running
-`pkill -f webchartsrv.py` to stop a test service (e.g. on `:8896`) **also kills the live 星阙 `:8899`**.
-Stop services by port/PID, not by process-name match.
-
-## Verifying skill changes locally
-
-1. Fix the venv if it's broken: the skill `.venv` symlinking miniconda trips macOS library-validation on
-   `pydantic_core`. Rebuild with `uv venv --clear --python-preference only-managed --python 3.12 && uv sync`
-   (uv-managed CPython has no library-validation).
-2. Bring up the 星阙 stack: `cd Horosa-Web && HOROSA_SKIP_UI_BUILD=1 ./start_horosa_local.sh` → Java `:9999`
-   + chart `:8899`.
-3. Run `uv run pytest`. The qimen/taiyi/jinkou/sanshi cases in `tests/test_local_js_tools.py` are
-   `@requires_runtime` integration tests that **skip** when `:8899`/`:9999` are down — a green run with
-   them skipped is not a full verification. Acceptance: each emits its aiExport sections with a clean
-   export contract (`missing_selected_sections == []` and `unknown_detected_sections == []`).
-
-## The installed runtime can be stale (CLI/MCP fall back to local compute)
-
-`js_client` resolves the JS engine via `HOROSA_CORE_JS_ROOT` → installed-manifest
-`horosa_core_js_root` (`~/.horosa/runtime/current/horosa-core-js`) → the package's bundled
-`horosa-core-js`. If the **installed** runtime predates the ken migration, it lacks
-`normalizeKinqimenData`, so a real CLI/MCP call returns the local scaffold (`source: null`) instead of
-ken (`source: kinqimen`). Two fixes:
-
-- For development, point at the repo's engine: `HOROSA_CORE_JS_ROOT="$PWD/horosa-core-js"`.
-- For users, **re-install the matching runtime release** — both runtime builders copy the repo's
-  (ken-fed) `horosa-core-js` into the payload, so a fresh install carries the formatter.
-
-## Headless engine alignment (tongshefa / decennials)
-
-These two techniques are the skill's own headless reimplementations (no ken backend). Keep them
-value-identical to 星阙:
-
-- **`tongshefa.js`**: a hexagram's element comes from its **京房本宫 palace** (`HEXAGRAM_PALACE_ELEM`,
-  mirrored from 星阙 `GuaConst.js Gua64[i].house.elem`), NOT the upper trigram — they differ for 32/64
-  hexagrams. Use `hexElem(hex)` for `left_elem`/`right_elem`/`main_relation`. The aiExport contract is
-  **本卦/六爻/潜藏/亲和 only** (matches 星阙 `aiExport.js`); 星阙's najia/六合/升降 UI detail is deliberately
-  out of scope — do not add it to the export.
-- **`engine/decennials.py`** is a port of 星阙 `utils/decennials.js`. JS uses `Math.round` (half-up) and
-  `Math.ceil`; Python's `round` is banker's rounding. Use `_js_round` (= `floor(x+0.5)`) for every JS
-  `Math.round`, and `math.ceil` for the L1 count. Cross-check against 星阙's `decennials.test.js` golden
-  vectors (`tests/test_decennials.py`) whenever you touch the period math.
-
-## Day boundary + late-zi-hour — two independent global switches (upstream v2.2.1+)
-
-> **⏳ STATUS as of v0.12.0: PARTIALLY landed — runtime YES, skill-side wiring PARTIAL.** The bundled ken
-> engine carries the v2.2.1 lateZi code (`vendor/runtime-source` kintaiyi has the `_get_after23`/
-> `_get_hour_gan_next` markers). The skill **now forwards `lateZiHourUseNextDay` in the 神数 path** — it is a
-> `ShenShuInput` schema field (`tools.py`) and `_run_shenshu_tool` passes it through (`service.py`), so the
-> earlier "0 occurrences in `src/`" note is **stale/false**. But it is **still NOT threaded through the
-> bazi / ziwei / liureng / qimen chart-flow payloads** (those forward only `after23NewDay`), so for those
-> techniques a non-default `hour==23` request is still accepted-but-ignored. **Remaining v2.2.1 round:**
-> thread `lateZiHourUseNextDay` through the remaining chart-flow payloads + schema (runtime already supports
-> it) — no re-sync needed. Treat the non-default rows of the matrix below as the target spec for those
-> techniques, not live behavior.
-
-This is **upstream 星阙 context** that the skill must mirror, not skill-local invariants. Stick to the
-self-check fixture below in tests/fakes; if a real backend call returns four pillars that disagree, the
-runtime is pre-v2.2.1 (re-install) — do **not** patch the skill to mask the discrepancy.
-
-Two independent flags control `hour ∈ [23:00, 24:00)`:
-
-| Field | Default | Effect |
-|---|---|---|
-| `after23NewDay` (`1`/`0`) | `1` | `1` advances day pillar at 23:00; `0` keeps day pillar until 24:00. |
-| `lateZiHourUseNextDay` (`1`/`0`) | `1` | `1` starts hour stem from next-day day stem; `0` starts from today's day stem. |
-
-Outside `hour == 23` both flags are no-ops.
-
-**Self-check matrix — `2026-05-27 23:30:00`, direct-time mode:**
-
-```
-┌────────────────┬──────────────┬──────────────────────┐
-│                │ lateZi = 1   │ lateZi = 0           │
-├────────────────┼──────────────┼──────────────────────┤
-│ after23 = 1    │ 壬寅 庚子    │ 壬寅 庚子 (equiv.)   │
-│ after23 = 0    │ 辛丑 庚子    │ 辛丑 戊子 ← only 新  │
-└────────────────┴──────────────┴──────────────────────┘
-```
-
-**Skill payloads must forward both flags verbatim.** Any chart-flow tool that builds Chinese pillars
-(`bazi_*`, `ziwei_*`, `liureng_*`, `qimen`, `taiyi`, `jinkou`, `sanshiunited`, `canping`, `heluo`,
-`nongli_time`, `jieqi_year`, `chart` for Bazi-aware paths) must thread both `after23NewDay` and
-`lateZiHourUseNextDay` from the user payload down to the engine call. Java `:9999` reads them through
-`ChartController.getParams()`'s **whitelist** — silent dropping there was the v2.2.1 root-cause bug
-upstream; if you ever add a new chart-flow payload field, audit every `getParams()`-style controller
-the same way. The Python chart service (`:8899`) reads them on every chart-creating endpoint.
-
-**The export snapshot carries the active rule.** `aiExport.js` injects a leading
-`排盘规则: 日柱开关【…】+ 时柱开关【…】。本盘四柱按此规则计算。` line. Tool formatters MUST preserve this
-line; reports and AI answers MUST quote it back so the consultant can verify which convention the chart
-was built under. Stripping it produces silently-wrong analyses when the user has flipped either switch.
-
-**Upstream root-cause references** (for maintainers debugging a value mismatch — the skill itself
-shouldn't replicate these fixes, but knowing they exist saves hours):
-
-1. **`ChartController.getParams()` is a whitelist** — fields not explicitly `params.put(...)` are dropped
-   silently, defaults take over. Audit ALL `getParams()`-style controllers when adding a chart-flow
-   field upstream.
-2. **`mvn package` ≠ live process update** — replacing `runtime/mac/bundle/astrostudyboot.jar` doesn't
-   reload the JVM; `lsof -ti :9999` + `ps -p <PID> -o lstart=` to confirm the process started AFTER the
-   jar mtime, or kill + `start_horosa_local.sh` cycle.
-3. **`lunar-javascript` hardcodes `timeGanIndex = (dayGanIndexExact … )`** — `setSect()` shifts only the
-   day pillar, never the hour pillar. To honor `lateZiHourUseNextDay = 0`, the frontend must compute the
-   hour stem itself using `getDayGanIndexExact2()` (today, no shift).
-4. **Triple cache (JVM mem + Redis + `.horosa-cache/paramhash/`)** — new key fields auto-miss, but type
-   changes can hit stale entries; clear `redis-cli KEYS "*chart*"` + `.horosa-cache/` when debugging.
-5. **Client-side `chartMem` cache (`services/astro.js`)** keys by `JSON.stringify(values)`; new fields
-   auto-miss, but `requestOptions.cache = false` forces refresh.
-6. **AI snapshots must carry the rule line** — see above; otherwise downstream models default-assume
-   `1/1` and explain pillars that don't match the chart.
-
-Authoritative upstream doc: `Horosa-Web/docs/global-day-boundary-v2.2.1.md` (in the 星阙 working tree,
-not this repo). When this section drifts from upstream, treat upstream as truth and sync — do not edit
-upstream from inside the skill repo.
-
-### Bonus upstream trap (v2.2.1) — AI-analysis SSE Issue #8
-
-The skill talks to its own ken backend, not 星阙's `chat/stream` SSE proxy, so this does NOT affect
-skill compute paths. It's documented here because if a user ever debugs 星阙 desktop and asks "why did
-my Ollama chat just go silent and then die", the answer is upstream:
-
-- **Catch block in `AIAnalysisProxyService.chatStream` used to swallow the first-cause exception**:
-  `sendEvent` inside catch rethrew `ClientAbortException` as `RuntimeException`, killing the
-  `ai-analysis-chat-stream` thread, and the original Ollama error went only into a
-  `safeErrorMessage(...)` SSE frame that never reached the client. Upstream fix: `QueueLog.error(...)`
-  first, then nested try around `sendEvent` + `completeWithError`.
-- **The three `stream***` methods used to send zero bytes until the first delta**: with a local Ollama
-  TTFT of 10–60 s, browsers/Chromium/middleware time the SSE socket out as idle. Upstream fix: each
-  stream method is now wrapped in `withHeartbeat`, which emits `: keep-alive` every 15 s.
-
-If a skill user reports flaky 星阙 AI streaming, point them at upstream v2.2.1 and the
-`release_preflight.sh` sentinel `[7]` that gates both lines (`QueueLog.error(AppLoggers.ErrorLogger` and
-`keep-alive`) in `AIAnalysisProxyService.java`.
-
-## Stability invariants (don't regress these)
+## 0. 30 秒定向与路由
+
+Horosa Skill 把星阙（Horosa）的 **77 个**术数/占星技法打包成 local-first 的 **MCP server + CLI**：
+算法跑在本机离线 runtime（Java 聚合层 `:9999` + Python chart 服务 `:8899`（含 ken/kentang 引擎）+
+bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 envelope + 星阙式
+`export_snapshot`/`export_format`；仓库保持轻量，重 runtime 走 GitHub Releases 分发。
+本仓是星阙的**下游**（sync 方向：星阙 → skill，永不反向）。
+
+| 你要做什么 | 去哪里 |
+| --- | --- |
+| 作为 AI 客户端调用技法 / 出报告 / 解释结果 | [`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md)（客户端行为唯一策略源）+ 其 `references/` |
+| 理解仓库结构与一次调用的完整链路 | [`docs/REPO_LAYOUT.md`](./docs/REPO_LAYOUT.md) · [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) |
+| 改代码 / 新增技法 / re-vendor 引擎 | 本文 §4–§5 + [`docs/EXPORT_AUDIT_GUIDE.md`](./docs/EXPORT_AUDIT_GUIDE.md) |
+| 打包 runtime / 发版 / 修发布事故 | 本文 §6–§7 + [`docs/OFFLINE_RUNTIME_RELEASES.md`](./docs/OFFLINE_RUNTIME_RELEASES.md) + [`docs/WINDOWS_RELEASE_BUILD_PROMPT.md`](./docs/WINDOWS_RELEASE_BUILD_PROMPT.md) |
+| 本地验证 / 按症状排障 | 本文 §8（含症状速查表） |
+| 查某条规则的历史来龙去脉 | [`docs/LESSONS.md`](./docs/LESSONS.md) |
+| 查名词（ken/kentang/命盘·事盘/pin-forward…） | [`docs/GLOSSARY.md`](./docs/GLOSSARY.md) |
+
+## 1. 铁律（六条，违者必出事故）
+
+1. **禁手算**：任何星阙技法结果一律走 Horosa MCP/CLI 工具，禁止用 Python/JS/shell/网搜公式重造
+   （手算会绕过输入归一化、真太阳时、星阙默认值、runtime 各层、导出契约与 memory——细则见 SKILL.md）。
+2. **先问后调**：会改变结果的设置缺失时先问用户；运行时闸门 `agent_guidance.required` 会强制拦截（细则见 SKILL.md）。
+3. **vendor/参照唯一来源 = 开源仓 Horosa-Public**（`HOROSA_SOURCE_ROOT=/Users/horacedong/Desktop/Horosa-Public`，
+   sync 脚本默认根不对，必须显式传）。上游星阙工作树**只读**；skill 仓的教训**永不**写进上游树。
+4. **🔴 问题记录协议 v2**（§2）：踩坑必记——台账原文 + 蒸馏规则 + CHANGELOG + 机器守卫，四件套同一 change 完成。
+5. **发布不信绿灯**：release-completeness guard 绿 ≠ 完整（pin-forward 模式下它必绿）；
+   `sync_windows_release.py --check` 的 `[GAP]` 才是权威（§7）。
+6. **文档同步交给 CI**：`scripts/verify_docs_sync.py` 强制版本号锁步 × 工具全覆盖 × 链接有效 ×
+   SKILL frontmatter × 无冲突标记。改文档/发版时跑它，别靠肉眼。
+
+## 2. 🔴 MANDATORY：问题记录协议 v2（every session, read this）
+
+**This is an enforced rule, not advice.** 任何 agent/维护者在本仓踩到问题、gotcha、意外行为、错误假设，
+或修掉一个 bug，必须在**同一个 change** 里完成四件事，工作才算完成——no exception is too small; if it bit
+you, it will bite the next agent：
+
+1. **台账落原文**：在 [`docs/LESSONS.md`](./docs/LESSONS.md)「台账正文」最上方加一条
+   （`### vX.Y.Z / YYYY-MM — 主题`），写清 **symptom → root cause → fix/guard**，让下一个 agent 秒认。
+2. **蒸馏进现行规则**：把「今后应该怎么做」写进本文对应主题章节（§4–§10），**替换**被取代的旧文本——
+   本文不做叠层叙事（不留「以前 X 现在改成 Y」），历史归台账。教训影响 AI **客户端**调用方式
+   （payload 字段 / 闸门 / section 契约）时，同步 [`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md)
+   及其 `references/`。两文档永不互相矛盾。
+3. **CHANGELOG**：任何代码/行为/构建/CI 变化在 `CHANGELOG.md` `[Unreleased]` 加条目。
+4. **机器守卫**：凡脚本或 CI 能断言的，加代码级 guard（`verify_*` 检查 / CI step / schema 约束 /
+   `require_path`）——对可断言的问题，只写文档**不算完成**。
+
+**Self-audit gate（每次发布 + 每次 "check for bugs"）**：重读本文各主题章节，确认每条仍成立、本轮所学已按
+四件套落盘。未记录的复发问题按回归对待。
+**Compaction gate（每次发布）**：本文任何章节若出现矛盾、被取代文本或明显超长（>~80 行），当场归并——
+叙事移去台账，留下规则。（v1 协议只增不减，曾把本文喂到 900+ 行；v2 用这道门保持可读。）
+**Scope rule**：所有教训只进本仓（`AGENTS.md` / `docs/LESSONS.md` / `SKILL.md`）；**never** 写进上游星阙树。
+
+## 3. AI 客户端行为（属主 = SKILL.md，本节只留一行版）
+
+客户端行为规则的**唯一策略源**是 [`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md)
+（分册：`references/{payloads,late-zi,predictive,chinese-methods,reports,troubleshooting}.md`）。速查：
+
+- 禁手算 / 禁 `Exec` / 禁网搜公式；只从返回的 `export_snapshot.export_text` + `export_format.sections` +
+  `summary` 解释，缺什么就说本地未返回该段，不发明依赖。
+- 结果敏感设置缺失 → 先问（给具体选项）；用户说「当前时间」可直接取本地时间；只有用户明说
+  「默认 / 按星阙 / 快速起盘 / 你来决定」才可用默认并声明用了默认。
+- 闸门协议：被 `agent_guidance.required` 或 `*.invalid_payload` + `details.agent_recovery` 拦下 → 用
+  `agent_recovery.prompt_to_user` 问用户；答后带 `agent_confirmed_settings: true`（接受默认则
+  `defaults_accepted: true`）+ `clarification_notes`；**绝不自己置 true 蒙混**，不换工具绕行。
+- 大六壬默认 `guirengType: 2`（星占法贵人）；0/1 需用户明说或既有案例指定。
+- 预测类光有本命数据不够：必须有目标 `datetime` / `dirZone` / `dirLat` / `dirLon` / PD 方法设置
+  （逐工具契约表：`references/predictive.md`）。
+- 禁幻觉依赖：没有当前 `doctor` / `openclaw-check` 证据，永不说「需要 MongoDB / 7897 / 星阙桌面端 / 远程库」。
+
+## 4. 计算模型铁律（compute model）
+
+**ken 是唯一算权，JS 只格式化。** `qimen` / `taiyi` / `jinkou`（及 `sanshiunited` 的奇门+太乙腿）由星阙
+**ken 后端**（`kinqimen` / `kintaiyi` / `kinjinkou`，挂在 chart 服务 `:8899` 的 `/qimen/pan` ·
+`/taiyi/pan` · `/jinkou/pan`）计算，与星阙桌面端逐值同源。`service.py::_run_{qimen,taiyi,jinkou}_tool`
+先取 JS 脚手架前置（qimen 要 nongli+jieqi，jinkou 要 liureng），`_call_remote` 打 ken 端点，再把
+`ken_response` 交给 `js_client.run(...)`；`horosa-core-js` 的 `tools/{qimen,taiyi,jinkou}.js` 用星阙的
+`normalizeKinqimenData` / `normalizeBackendPan` / `normalizeKinjinkouData` 把 ken 响应叠到本地脚手架，
+`build*SnapshotText` 产出 `export_snapshot` 段。JS 本地脚手架只在 `ken_response` 缺失/畸形时兜底
+（graceful，非正常路径）。健康结果带 `pan.source == "kinqimen"/"kintaiyi"`、`jinkou.source == "kinjinkou"`。
+
+**⚠️ ken 端点失败也回 HTTP 200 — 只认 `source`，永不信状态码。** chart 服务的 `web{qimen,taiyi,jinkou}srv.py`
+把一切异常包成 `{"ResultCode": -1/1, "Result": "<engine> ... failed"}`（字符串 `Result`）照样 200 返回；
+`_call_remote` 不 raise、`_unwrap_result` 原样放行，转给 JS 后 formatter guard（`ken.selected || ken.raw`）
+为假 → **静默回退本地旧引擎 = 错结果无报错**。守卫：`service.py::_require_ken_pan` 在每次 ken
+`_call_remote` 后断言 `ken_response.get("source") == engine`，否则 raise `tool.ken_compute_failed`。
+**新增 ken-backed 技法必须同样调 `_require_ken_pan`。** 回归测试：
+`tests/test_service.py::test_qimen_fails_loudly_when_ken_returns_failure_envelope`（连带要求 ken 端点的
+测试 fake 返回带正确 `source` 的 body，见 `FakeClient`）。
+
+**端点注册法则：任何打 chart 服务的 `_call_remote(endpoint)` 必须把 endpoint 加进
+`service.py::_PYTHON_CHART_ENDPOINTS`。** chart 服务族 = `/chart` · `/predict/*` · `/astroextra/*` ·
+`/india/*` · `/germany/*` · `/jieqi/*` · `/*/pan`（ken + 14 神数）等。漏登记 → 请求落到 Java `:9999`
+通路（500，或读 `_java_runtime_ready` 触发二次探针，直接打挂 `test_service_*runtime*`）。判据：进了该 set
+才复用 `_chart_runtime_ready` 缓存、首调后不再探针。
+
+**工具算源普查**（决定改哪一层）：
+
+- **ken-fed**：qimen / taiyi / jinkou（+ sanshiunited 两腿）——ken 算，JS 排版。
+- **原生·非 ken 数算**：canping（邵子参评数）/ heluo（河洛理数）——在 `horosa-core-js` 进程内经 vendored
+  bazi 链（`src/vendor/bazi/` → npm `lunar-javascript`）起四柱，再自行起数/起卦 + 条文查表；不打 chart 服务。
+  heluo 的 `timeAlg` 默认 **1**（钟表时，匹配星阙 `fieldVal(f,'timeAlg',1)`）；`timeAlg===0` 才是真太阳时
+  （唯一触发经度+均时差修正的值）。
+- **backend predict/astroextra 型**：harmonic / agepoint / distributions / jaynesprog / vedicprog /
+  planetaryarc 等——Python `_call_remote` + Python snapshot builder。
+- **复合型**：mundane（`/jieqi/year` seedOnly 求入宫时刻 → 该时刻 `/chart`，输入是 年+入宫节气+地点）、
+  sanshiunited、extrareturns（Python 循环逐体拉 `/astroextra/planetreturn` 拼段）。**请求型 builder 一律归
+  Python——JS 层不发 HTTP。**
+- **纯 headless JS**：tongshefa（无 ken 引擎）。headless 对齐：卦的五行取**京房本宫**
+  （`HEXAGRAM_PALACE_ELEM` 镜像星阙 `GuaConst.js Gua64[i].house.elem`），非上卦——32/64 卦两者不同；
+  `hexElem(hex)` 用于 `left_elem`/`right_elem`/`main_relation`；aiExport 契约只有 本卦/六爻/潜藏/亲和 四段，
+  星阙的 najia/六合/升降 UI 细节**故意**不进导出。
+- **Python port**：`engine/decennials.py`（十年大运，星阙 `utils/decennials.js` 的移植）——JS `Math.round`
+  是 half-up，Python `round` 是银行家舍入；每个 JS `Math.round` 用 `_js_round`（=`floor(x+0.5)`），L1 计数用
+  `math.ceil`；动周期数学必对星阙 `decennials.test.js` 金标（`tests/test_decennials.py`）。
+- **frontend-读数型 Python 移植**：planetaryages（读 `chart.objects`+`params.birth`）/ yearsystem129
+  （`/chart` 需 `predictive` 真值才出 `predictives.yearsystem129`）/ persiandirected 等——读已算好的 chart
+  对象，Python 复用 `_astro_msg` / `_aspect_label` / `_split_degree`。已知可接受偏差：persiandirected 应期
+  日期与星阙 ≤1 天（JS 截断+浮点噪声，度数/相位逐位一致，见 `docs/v091-fidelity-spotcheck.md`）。
+
+**恒星黄道/岁差标注**：`ASTRO_MSG` 不许硬编码岁差名——西占读 `chart.siderealAyanamsa`、印占读
+`chart.siderealModeKey`+`ayanamsaValue`（**字段名不同**）；`chart.zodiacal` 是本地化字符串（"恒星黄道"），
+不许 `== 1` 判断；nakshatras 在 `response.chart.nakshatras`，非顶层。
+
+**MCP 服务器面法则**（`surfaces/mcp_server.py`）：全部工具带 **tool annotations**（口径：openWorldHint
+一律 False（local-first）；查询类 readOnly+idempotent=True；技法计算类 readOnly=False、destructive=False、
+idempotent=False——默认写一条本地 run 记录，必须如实标注，目录审核会核）；澄清闸走 **elicitation 双轨**
+（客户端声明能力→原生表单，「按星阙默认」一跳闭环、「补充设置」只回带备注**绝不代答术数参数**；
+无能力/任何异常→逐字节回落 `agent_guidance.required` 错误往返；`HOROSA_MCP_ELICIT=0` 关闭）；
+structured output 目前**未激活**（动态 `__annotations__` 不触发 FastMCP 推断，`outputSchema` 缺席是
+现状而非缺陷）——开启前必须在真实 Claude Code/Cursor 实测 `tools/list` 不掉工具（上游曾有掉工具事故）。
+依赖钉 `mcp[cli]>=1.27,<2`；不新增依赖 sampling/roots/logging（2026-07-28 规范起废弃）。
+
+**Node 地板 ≥ 20.10**：数算 JSON 走 `import X from './x.json' with { type: 'json' }`；`src/tools/index.js`
+顶层 import 使旧 Node **语法级**炸掉整个模块图（qimen/taiyi/jinkou/tongshefa 全挂，不只数算）。bundled
+runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 raw-node JSON import 继续用
+`with`（不用废弃的 `assert`）。
+
+## 5. 新增技法 / re-vendor（集成决策树 + 布线清单）
+
+**四分决策树**（新技法先归类，再动手）：
+
+1. **后端已有 `/predict/*` · `/astroextra/*` 端点** → Python：`_call_remote` + Python snapshot builder；
+   端点进 `_PYTHON_CHART_ENDPOINTS`。（端点是新版 runtime 才有 → 先 `sync_vendored_runtime_sources.sh`
+   重同步 `vendor/runtime-source`；live 星阙实例先于 bundled runtime 可用是正常现象。）
+2. **前端逻辑但只读已算好的 chart 数据** → Python 移植（复用 `_astro_msg` 等）。
+3. **前端算法重 / 重推导风险高**（如 balbillus 247 行递归削减）→ **verbatim vendor JS**，import 指向
+   shim/stub（如 `progConst.js` 仅 7 经典行星 + `LIST_SIGNS` + `AstroTxtMsg`，避免 vendor 1128 行
+   AstroConst）；经 JS tool 按 `technique` → builder map 分发（`progextra` 模式）。
+4. **整棵纯逻辑子树**（卜卦/择日 divination ~3200 行，无 React/antd、只有相对 import）→ 整树 vendor +
+   一把正则给所有相对 import 补 `.js`（Node ESM 要显式扩展名）；薄 JS tool 调 `runHorary`/`runElection`；
+   Python 铸 **traditional** chart（`tradition:1, predictive:0`）并把**整个** `/chart` 响应作为
+   `payload.chart` 传入——`buildFacts(result)` 读 `result.chart.objects`/`result.objectMap`/`result.aspects`，
+   只传 `chart.objects` 会崩。
+
+**vendoring 变换规则**：
+
+- **ken formatter 再同步**（dunjia/taiyi/jinkou）：拷星阙**全文件**，只做 headless 变换 = 兄弟 import 补
+  `.js`；删 3 个后端 import（`request` / `{ServerRoot,ResultKey}` / `{buildKentangEndpoint}`）；**只**删
+  `fetch*Pan` 网络 helper；**保留** `normalize*` 叠加函数。后端返回的「整段 sections」不许旧习惯性丢弃
+  （taiyi 13 段解读曾被 `sections: undefined` 整体丢掉）——排查法：抓 `js_client.run` 实收的
+  `ken_response` grep 段名，再决定透传还是重 vendor builder；透传段按「条件段双登记」处理。
+- **数算 verbatim vendor**（canping/heluo）：整体照搬，仅两处改动 = 兄弟 import 指向 vendored 拷贝 +
+  JSON import attribute（漏了 raw Node 报 `needs an import attribute of type: json`）。
+- **闭包提取三陷阱**（六壬毕法/占断向导、政余格局这类纯模块级闭包，零 `this.`/React）：
+  ① **常量引用与函数引用分开清点**——漏 `JiaZiList` / `ERFAN_SU_TO_BRANCH` 这类 module-level const →
+  静默 `ReferenceError` 被 try/catch 吞掉 → 结果 null 无报错；② `SZConst.js` 在模块加载期读
+  `localStorage` → **硬编码 no-op shim**（Node 25 实验性全局 localStorage 无 flag 会 throw，别探测
+  `globalThis.localStorage`）；③ `AstroText.js` 的名称表用 `AstroConst.*` 常量做键 → shim 必须补齐闭包
+  查到的每个 planet/node/point（含 `SignsProp` 这类表——v0.11/v0.13 两轮都栽在这）。draw-only import
+  （GraphHelper/helper/LRShenJiangDoc）用 no-op stub 替换。vendor 后必须 `node -e "import('...')"`
+  load-check **加**真数据整链跑（load 过 ≠ 真盘不崩；追 refCtx/三传是否真的非 null）。
+- **curated 常量文件**（如 `vendor/liureng/LRConst.js`）：上游全文件 import 了 headless 不存在的路径时，
+  **只追加新增的纯常量**，不整文件重 vendor。
+- **重同步 `vendor/runtime-source`**：`sync_vendored_runtime_sources.sh` + 显式 `HOROSA_SOURCE_ROOT`
+  （对上游 READ-ONLY）。若直接从 `vendor/` 起 chart 服务，重打 graceful-kentang-mount 补丁（build 脚本
+  会自动 patch **staged** 拷贝；raw vendor 因 registry 列了未 vendor 的引擎会 hard-fail）。
+
+**布线清单**（每个新技法照单走完）：
+
+1. `schemas/tools.py` 输入模型（神数用 split 年月日时分 + `options` passthrough 的 `ShenShuInput` 模式；
+   `BirthInput` `extra="allow"`，声明字段主要为 discoverability + guidance）。
+2. `service.py` `_run_*_tool` runner；远端端点进 `_PYTHON_CHART_ENDPOINTS`；ken-backed 加 `_require_ken_pan`。
+3. `engine/registry.py` TOOL_DEFINITIONS 注册；`router.py` 分派词做互斥检查（**卜卦含「卦」字**：梅易/卦
+   分支必须排除 卜卦/horary/起卦/占问 短语，否则「卜卦问婚姻」误路由 `gua_desc`——同类新词照此办理）。
+4. 导出契约：`exports/registry.py` preset **逐工具**对齐 builder 实际产段。照抄 `aiExport.js` 可能多列
+   星阙-UI-only 段（死条目）、也可能漏列后端真产段（→ `unknown_detected_sections`，补进 preset）。
+   **权威清单 = `aiExport.js` 的 `EXPORT_TECHNIQUES` + `EXPORT_PRESET_SECTIONS`**（不是组件目录）。
+5. **条件段双登记**：可能不出现的段要**同时**进 preset（出现时不算 unknown）**和**
+   `AI_EXPORT_OPTIONAL_SECTIONS`（缺席时不算 missing）——单进 optional 不够（parser 的 unknown 只对照
+   preset，见 `exports/parser.py:130`）。election 的 `用事专属`/`应期`、liureng 的 `占断向导` 都是此类；
+   严格技法保持空 optional 集。星阙自带段名不一致走 `map_legacy_section_title`（`三传(…)→三传`、canping
+   `[大运·歲運]`、heluo `[大限·岁运]`），快照 byte-identical，不改 vendored builder。
+6. 离线 fakes：`FakeClient`（HTTP 桩，覆盖新端点，含 `/chart` 的 `predictives.*` 等衍生键）+
+   `FakeJsClient`（新 JS tool handler）返回**真内容**——离线契约测试禁裸 `无` 段、禁 `generated_template`
+   回退；条件段 FakeClient 发全集（真实导出少几段是预期，如 election / 部分 kinastro preset）。
+7. 测试三层：离线契约（全技法可调、export clean）+ live `@requires_chart`/`@requires_runtime`（服务在才跑）
+   + golden/export-fixture（真 live 快照锁解析契约）。kinastro-9 无 live 测试（用户 runtime 旧）→ 离线 +
+   in-process srv 验证（**中立 CWD** 跑，别 `cd $HW`——本地 `astropy/__init__.py` 会 shadow PyPI astropy）。
+8. 版本与文档：§7 版本 bump 全覆盖；README×2 全景表加行 + SKILL.md 工具路由加意图行
+   （CI `verify_docs_sync.py` 因缺行而红）；「段补到既有工具 ≠ 新工具」——工具数徽章不动，测试数照更。
+9. **勿静默回退**：compute runner 解析失败一律 raise 结构化错误（`tool.shenshu_bad_date` /
+   `transport.shenshu_snapshot_unavailable`），不许换默认值蒙混；快照失败 log + `snapshot_error`，
+   不许裸 `except: pass`。
+10. **f-string None 陷阱**：`f"{response.get('snapshot')}"` 在键缺失时产出字面 `"None"`（6 字符真值串）——
+    先 `raw = response.get(...)` 判空再格式化；`f"{... or ''}"` 只有显式 `or ''` 才安全。
+
+**审计前置**（补「未同步技法」缺口前）：先 grep 仓内**明确排除项**（`fengshui`：canvas + 户型图上传 +
+交互点位驱动，无 birth/time 输入，无法 headless——是政策性排除不是缺口），再确认候选的
+`buildXxxSnapshotText` 是纯 `chart/data→text`（无 canvas/DOM/上传/点击依赖），过了 headless-readiness
+闸再动手。上游有 engine 文件 ≠ 可进公开 skill。
+
+## 6. 打包不变量（offline runtime packaging — 每条都咬过人）
+
+- **flatlib 必须活过 strip**：`package_runtime_payload.sh` 保留 `flatlib-ctrad2/flatlib` 拷贝行，
+  否则 bundled chart 服务 `ModuleNotFoundError: No module named 'flatlib'`。
+- **python-strip 先 `-prune` `site-packages`** 再删 `test`/`tests` 目录：删了 `site-packages/astropy/tests`
+  → kintaiyi `import astropy` 失败 → `/taiyi/pan` 挂载被**静默**跳过。
+- **ken 依赖随包**：chart 服务在基础依赖外要 `bidict`(kinqimen)、`numpy`/`kerykeion`/`ephem`(kintaiyi)、
+  `pendulum`(kinjinkou)；mac 内嵌 Python 已带，Windows `runtime/windows/bundle/wheels` 必须含。
+- **`lunar-javascript` 随包**：两个 builder 都先在 `horosa-core-js` 跑 `npm install --omit=dev` 再拷贝
+  （core-js 拷贝不排除 node_modules）；`verify_runtime_release.py` 两平台都必查
+  `horosa-core-js/node_modules/lunar-javascript/package.json`。缺了 → canping/heluo 运行时才炸、其余照常
+  启动（静默失败，只有 verifier 拦得住）。CI 同理：非 `@requires_runtime` 的 JS 测试要求 CI 先
+  `npm ci --omit=dev`——新增此类测试时确认 CI 装齐了它的 node 依赖。
+- **Windows `PYTHONPATH` 必含 `Horosa-Web/vendor`**（`start_horosa_local.ps1`）让 `import kinqimen/…`
+  解析；两个 builder 都 bundle `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}`。
+- **graceful kentang mount**：打包脚本 patch **staged** `kentang/registry.py`，跳过未 bundle 的引擎
+  （`_load_service` 裸 `__import__`，缺引擎会 hard-fail 整个 chart 服务）。
+- **verifier 查真文件**：`verify_runtime_release.py` 的目录性要求（`swefiles/`、`astropy/`、`vendor/kin*/`）
+  必须有严格位于其内的真实文件才 pass——空目录条目不算（手工 zip 曾以空 `swefiles/` 蒙混过关）。
+- **Windows builder 禁 POSIX-only 二进制**：in-payload 拷贝用
+  `shutil.copytree(src, dst/src.name, ignore=ignore_patterns(*excludes), dirs_exist_ok=True)`；
+  不许 `rsync`/`cp`/`tar` 回潮（`rsync_copy()` 曾让 Windows builder 第一步 `FileNotFoundError` 死掉）；
+  `download()` 用 `curl`（Win10/11 自带）。
+- **kinastro 只 vendor 引擎**：`vendor/kinastro` 带 `--exclude=tools`（26MB cities 地理库对干支神数无用）
+  + `--exclude={ui,frontend,docs,wiki,examples,tests,…}` → ~31MB；`ensure_kinastro_path()` 上 `sys.path`
+  使 `import astro.shaozi` 解析（streamlit 已在 bundled site-packages，`@cache_data` 无 runtime 警告无害）。
+- **runtime 瘦身红线**：`pyarrow`(119M)/`pandas`(40M) 是 astropy 依赖（kintaiyi 要 `astropy.units`）
+  **不可删**；streamlit 被 `kinastro/astro/*` 全线 import 不可删；**只有 `plotly`(40M) 可安全 strip**
+  （streamlit-only + 懒加载，headless 不触发；已验 streamlit import + cetian 快照 + astropy.units 全 OK）。
+- **Windows 启动器（`runtime_templates/windows/{start,stop}_horosa_local.ps1`）保住这些加固**：
+  PID-ownership 检查（期望 exe 路径必须 `[System.IO.Path]::GetFullPath(...)` 归一再比——`$RuntimeRoot`
+  含字面 `..` 而 `Get-Process .Path` 是 OS 归一化的，raw `-ieq` **永不相等** → stop 变 no-op 还删 pid 文件
+  → 进程泄漏；改这俩脚本后必测 stop 真杀掉双进程）、端口冲突 ~2s 快败、stale/already-running 标记
+  （manager 键控的 `pid files already exist`）、300s readiness 窗（readiness 门刻意要求 chart+Java 双活；
+  改成 chart-only 需连动 `manager._wait_for_service_state`）、Java 带
+  `-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8`（Temurin 17 pre-JEP-400，OS 代码页会 mojibake CJK jar 表）。
+- **launcher 假失败**（无 Mongo/Redis 的干净机器）：Java 重试连库使 `/common/time` >180s 才应答，旧 180s 窗
+  会 throw「did not become ready」，但双进程已 `Start-Process` detach 照常起来，`doctor` 约 30–60s 后转绿。
+  install 后自检：忽略 launcher throw，改 poll `doctor`/双端点几分钟，别信退出码。
+- **邵子 `完整条文`「條文待補充」是上游忠实回退**（该 id 方案不在 6144 条 CSV 覆盖内），mac/win 一致；
+  别造假条文；粗 grep `條文待補充` 会假阳——验 `基础条文` 是真条文即可。`gen_shaozi_tiaowen.py` 必须
+  `newline="\n"` 写 LF（保两平台构建字节可复现）。
+
+## 7. 发布协议（release law）
+
+- **版本 bump 全覆盖**：发 vX.Y.Z 同一 commit bump 全部——`pyproject.toml`、
+  `src/horosa_skill/__init__.py.__version__`（CLI `--version`）、`server.json`（×2）、`CITATION.cff`、
+  `README.md`/`README_EN.md` 的「当前公开版本」行（工具数/测试数一并更新）。bump 后 `git grep -n "<OLD>"`
+  只应剩合法历史引用（CHANGELOG、台账、Windows 交接文档）。`docs/DATA_CONTRACTS.md` 的
+  `tool envelope: <ver>` 是**独立** schema 版本，不跟包版本连动。CI 守卫：`verify_docs_sync.py`。
+- **两个 runtime builder 永远锁步**：mac `package_runtime_payload.sh` 每一步都要有
+  `build_runtime_release_windows.py` 对应步；`verify_runtime_release.py` 的 REQUIRED_ENTRIES 两平台对称
+  （v0.10.0 曾 mac 侧加 shaozi 条文生成 + 验证项而 Windows 侧漏，win 构建会静默出占位条文还照样过验）。
+  数字常量（`schema_version` / `runtime_layout_version` / `export_registry_version`）由
+  `verify_builder_parity.py` 交叉断言（CI 常跑；v0.16.1 曾 mac 单边 bump 6→7 而字符串级 parity 仍绿）。
+  改一个 builder / 加一个必需 artifact = 同一 change 里 grep 另一个 builder + 两份 REQUIRED_ENTRIES。
+- **发布完整性三失效模式**（完整案例史：[`docs/LESSONS.md`](./docs/LESSONS.md)「发布完整性编年」）：
+  1. **缺半**：`latest` 只有 darwin 半（v0.10.0–v0.16.0 每个 minor 都犯过；v0.10.0 连 manifest 都没有，
+     双平台 install 全断）→ `release-completeness.yml`（release/schedule/dispatch 事件）会红，信它。
+  2. **repack**：mac 侧重打 win zip 只换 embedded manifest（v0.16.1 首次双平台完整 latest 即此法）——
+     仅当 release diff **无 payload-affecting 变化**（horosa-core-js / vendored 引擎 / wheels / launchers；
+     skill 层 Python/docs 无妨）才合法；新版本出现可疑同尺寸 win zip 时，range-read 校 embedded manifest
+     的 version + `export_registry_version` + 该 diff 条件后再信。
+  3. **pin-forward（最隐蔽）**：新版 manifest 列了 `win32-x64` 但指向**上一版** zip（v0.17.0/v0.18.0 均
+     钉回 v0.16.1）——guard 绿、install 不炸、sha 也对，Windows 用户静默拿到落后 N 版的 runtime。
+     **检测**：`sync_windows_release.py --check` 找版本专属 `horosa-runtime-win32-x64-vX.Y.Z.zip`，
+     缺 → `[GAP]`（**权威，无视 guard 颜色**）。
+- **修复一律**：Windows 构建机 `git pull` 到发布 commit → `python scripts/sync_windows_release.py`
+  （默认 build+verify 无副作用；`--upload` 才执行 构建→拉 darwin→双平台 manifest+SHA256SUMS→
+  `verify_runtime_release.py`→上传 全链；幂等，已同步则 no-op exit 0）。发布通常已是 `latest`，补传即恢复
+  Windows install（无需 flip）。pin-forward 跨「引擎升级」版（如 v0.17 新增 `/location/acg` 占星地图、
+  `/astroextra/relative`、名人库 `astrodata-aa.sqlite.gz` ~50MB）时：先从**当前** Windows workspace 重灌
+  `vendor/runtime-source`（核 astropy / dist-file mtime 新于目标版）+ native-verify 新端点回真数据再打包。
+- **首诊命令**：`gh release view vX.Y.Z --json assets`（应见 darwin tar.gz + win32 zip +
+  runtime-manifest.json + SHA256SUMS.txt）+ 确认 `releases/latest/download/runtime-manifest.json` 同时含
+  `darwin-arm64` 与 `win32-x64`。
+- **CI 起不了 runtime**（GitHub Linux runner 无 Linux 运行时；Linux PR 已拒；runtime macOS/Windows-only
+  且 gitignore）：别造「boot runtime」假 job。CI 网 = 离线 FakeClient 契约 + export-fixture 契约 +
+  horosa-core-js JS golden；**全套 live 在本机 vendored 实例发布前跑**（§8）。
+- **合并后查冲突标记**：每次 fetch/ff 后 `git grep -nE '^(<<<<<<<|=======|>>>>>>>)'`（v0.11.0 曾把
+  `>>>>>>> <sha>` 留上 main）；`verify_docs_sync.py` 在 CI 里也查。
+
+## 8. 本地验证与排障
+
+**验证流程**：
+
+1. venv 坏了先修（miniconda symlink 触 macOS library-validation on `pydantic_core`）：
+   `uv venv --clear --python-preference only-managed --python 3.12 && uv sync`（uv-managed CPython 无
+   library-validation）。
+2. **live 验证必须打本仓 vendored 引擎实例，不是默认端口上恰好在跑的东西**（默认 `:8899`/`:9999` 上的常驻
+   服务不保证与 vendored 引擎同版本，陈旧实例会掩盖白名单/钥匙/段位问题）。起法：chart =
+   `PYTHONPATH=<vendor>/Horosa-Web/astropy` + `HOROSA_CHART_PORT=<port>` 起 `webchartsrv.py`（脚本只自动
+   解析 flatlib，不解析自身包根）；java = vendored `runtime/mac/java/bin/java -jar
+   runtime/mac/bundle/astrostudyboot.jar --server.port=… --astrosrv=…`（root 500 = 正常无路由）。测试经
+   `HOROSA_CHART_SERVER_ROOT` / `HOROSA_SERVER_ROOT` 指过去（tests 的 gate + `make_service` 尊重这两个
+   env——曾经写死默认端口导致「带覆盖的全绿」实测的是旧实例）。
+3. **防陈旧闸**：chart 心跳 `GET /` 回显 `pdSyncRev`，断言 == 当前 rev（当前 `pd_method_sync_v12`）再信
+   结果——陈旧引擎会把未知时间钥匙**静默按 Ptolemy 算**。钥匙分叉探针用每盘真算的 Kepler，别用 Kündig
+   （静态标度 1.0 与 Ptolemy 同日期，探不出分叉）。
+4. `uv run pytest`：`@requires_runtime` / `@requires_chart` 集成测试在服务 down 时 **skip**——带 skip 的
+   全绿**不是完整验证**；服务全起时 0 skipped 才是最强信号。验收 = 各技法产出 aiExport 段 + 干净导出契约
+   （`missing_selected_sections == []` 且 `unknown_detected_sections == []`；election 等条件段技法按
+   optional 白名单放宽）。
+5. **`pkill` 法则**：bundled 与 live 星阙都跑 `webchartsrv.py`——`pkill -f webchartsrv.py` 会连星阙
+   `:8899` 一起杀。按端口/PID 停；stop 脚本已按 runtime root 限定 kill 范围，保持住。
+
+**症状速查表**：
+
+| 症状 | 根因 | 处置 |
+| --- | --- | --- |
+| qimen/taiyi/jinkou `source: null` 或结果与星阙不一致 | 安装的 runtime pre-ken，`js_client` 落到本地脚手架 | 重装匹配 runtime；开发用 `HOROSA_CORE_JS_ROOT="$PWD/horosa-core-js"`（解析顺序：env → installed manifest → 包内 bundled） |
+| HTTP 200 但 `ResultCode -1/1`、`Result` 是字符串 | ken 引擎异常被包成 200 信封 | `_require_ken_pan` 会拦 → `tool.ken_compute_failed`；查 `:8899` 日志 |
+| `agent_guidance.required` / `details.agent_recovery` | 澄清闸生效（设计行为） | 按 SKILL.md：用 `prompt_to_user` 问用户，答后 `agent_confirmed_settings: true` |
+| 神数探针看似空 snapshot | 读了顶层键，真身嵌在 `Result.snapshot` | 读 `Result.snapshot` / `Result.source`（skill 的 `_call_remote` 会解包 `Result`） |
+| `Cannot find package 'lunar-javascript'` | `horosa-core-js` 未装 npm 依赖 | `npm ci --omit=dev`；打包/CI 已内置该步 |
+| `needs an import attribute of type: json` / 全 JS 工具集体语法炸 | PATH 上 Node < 20.10 | 用 bundled Node 22（`engines` 已声明地板） |
+| pytest 全绿但 `requires_*` 全 skip | 本地服务没起 | 起 vendored 实例（上面第 2 步）再跑 |
+| `pydantic_core` dylib/签名报错 | miniconda symlink venv 触 library-validation | `uv venv --clear --python-preference only-managed --python 3.12 && uv sync` |
+| `uv run pytest` 报缺新 API（如 `mcp.types` 无 `Icon`）而 `python -m pytest` 正常 | 仓库搬家后 `.venv/bin/*` shebang 仍指旧路径 → 静默回退全局 pytest（旧依赖环境） | 同上重建 venv；判据 = 直接跑 `.venv/bin/pytest` 报 `bad interpreter` |
+| 新时间钥匙/新参数结果与 Ptolemy/默认完全一致 | 长驻旧 chart 进程静默吞新键 | 心跳核 `pdSyncRev`；重启 vendored 实例 |
+| `/predict/pd` params 回显 = 你送的白名单外值 | 回显是原样输入，引擎内已回退 core_alchabitius | 快照如实标注「未核验，引擎回退 Alcabitius 半弧法」，不静默换标签 |
+| Windows 启动器超时 throw 但服务随后可用 | Java 连 Mongo/Redis 重试超 readiness 窗 | 忽略 throw，poll `doctor` / 双端点几分钟 |
+| release guard 绿但 Windows 用户拿到旧功能 | pin-forward（manifest 指旧 zip） | `sync_windows_release.py --check` 定案 → §7 修复流 |
+| 结果段缺失，客户端想报「缺依赖」 | 幻觉依赖风险 | 按 SKILL.md：说本地未返回该段，跑 `doctor` / `openclaw-check`，不发明 MongoDB/7897 |
+
+## 9. Stability invariants（稳定性不变量 — don't regress these）
 
 A global stability pass hardened these; keep them true when you touch the relevant code:
 
 - **`run_tool` always returns a `ToolEnvelope`, never lets an unexpected exception escape.** Tool
-  execution + the snapshot/summary/export post-processing run inside a try that catches
-  `HorosaSkillError` **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`.
-  Only invalid-payload `ValidationError` (raised *before* that try) intentionally surfaces as
-  `tool.invalid_payload`. Do not add a tool/post-processing path that can raise out of `run_tool` —
-  it would crash the CLI, break the MCP session, or abort a whole `dispatch`.
-- **Surfaces never dump a traceback.** CLI file reads (`--ai-report-file` / `--ai-answer-file`) raise
+  execution + snapshot/summary/export post-processing run inside a try that catches `HorosaSkillError`
+  **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`. Only invalid-payload
+  `ValidationError`（raised *before* that try）intentionally surfaces as `tool.invalid_payload`. Do not
+  add a tool/post-processing path that can raise out of `run_tool` — it would crash the CLI, break the
+  MCP session, or abort a whole `dispatch`.
+- **Surfaces never dump a traceback.** CLI file reads（`--ai-report-file` / `--ai-answer-file`）raise
   clean `typer.BadParameter`; the MCP `horosa_report_*` handlers wrap unexpected renderer/IO errors via
-  `_mcp_internal_error_payload`; subprocess calls carry timeouts (incl. `openclaw-check --full`, 900s).
-- **`input_normalization` degrades, never crashes.** The date/time regexes are shape-only (they accept
-  month `13`, day `45`), so anything that builds a `datetime` from them must tolerate `ValueError`
-  (see `_combine_date_time`). IANA-zone→offset conversion uses the *chart date*, not `now()`. `Z`/`UTC`/
-  `GMT` → `+00:00`. Compact coords like `121e28` are parsed as 121°28′ (NOT float scientific notation).
+  `_mcp_internal_error_payload`; subprocess calls carry timeouts（incl. `openclaw-check --full`, 900s）.
+- **`input_normalization` degrades, never crashes.** The date/time regexes are shape-only（they accept
+  month `13`, day `45`）, so anything building a `datetime` from them must tolerate `ValueError`（see
+  `_combine_date_time`）. IANA-zone→offset conversion uses the *chart date*, not `now()`. `Z`/`UTC`/
+  `GMT` → `+00:00`. Compact coords like `121e28` parse as 121°28′（NOT float scientific notation）.
 - **Runtime manager:** close file handles before `shutil.rmtree` on the Windows start path; a missing
-  local `--archive` raises `RuntimeError` (which `install` catches), not a raw tarfile error. Never kill
-  chart services by process-name (`pkill -f webchartsrv.py` would also kill a live :8899) — the stop
-  script already scopes kills by the runtime root path; keep it that way.
+  local `--archive` raises `RuntimeError`（which `install` catches）, not a raw tarfile error. Never
+  kill chart services by process-name — the stop script scopes kills by runtime root path; keep it.
 - **`js_client` keeps the transport contract.** Every Node failure becomes a `ToolTransportError`:
-  a missing/unstartable Node → `js_engine.node_unavailable`, a timeout → `js_engine.timeout`. The
+  missing/unstartable Node → `js_engine.node_unavailable`, timeout → `js_engine.timeout`. The
   `subprocess.run` call is wrapped — don't let a raw `OSError`/`TimeoutExpired` escape. On the JS side,
-  `bin/cli.mjs` always prints a JSON `{ok:...}` envelope to stdout (never a bare stack trace) and
+  `bin/cli.mjs` always prints a JSON `{ok:...}` envelope to stdout（never a bare stack trace）and
   coerces a `null`/scalar parsed payload to `{}` so tools don't null-deref on `payload.field`.
-- **Tracing is best-effort.** `TraceRecorder._write_event` swallows local-write failures (like
-  `_emit_otlp`); a trace write must never crash or mask the traced operation.
-- **`evaluation_lock` self-heals.** `acquire_evaluation_lock` reclaims a stale lock (dead PID on POSIX,
-  or age threshold when liveness is unknown) but never reclaims a *live* owner. A crashed run must not
-  deadlock future evaluations; a long live run must not be stolen from. **Never call `os.kill(pid, 0)`
-  on Windows** to probe liveness — on Windows `os.kill` maps to `TerminateProcess`, so it would *kill*
-  the lock owner. `_pid_liveness` returns `unknown` on Windows (→ age-based reclaim); keep it that way.
-- **Report rendering is atomic.** `render_report` renders to a temp sibling then `os.replace()`s — never
-  write a report format directly to its final `output_path` (a mid-render failure would corrupt it).
+- **Tracing is best-effort.** `TraceRecorder._write_event` swallows local-write failures（like
+  `_emit_otlp`）; a trace write must never crash or mask the traced operation.
+- **`evaluation_lock` self-heals.** `acquire_evaluation_lock` reclaims a stale lock（dead PID on POSIX,
+  or age threshold when liveness is unknown）but never reclaims a *live* owner. **Never call
+  `os.kill(pid, 0)` on Windows** to probe liveness — on Windows `os.kill` maps to `TerminateProcess`,
+  it would *kill* the lock owner. `_pid_liveness` returns `unknown` on Windows（→ age-based reclaim）;
+  keep it that way.
+- **Report rendering is atomic.** `render_report` renders to a temp sibling then `os.replace()`s —
+  never write a report format directly to its final `output_path`（a mid-render failure would corrupt it）.
 
-## 西占(占星)新功能 — AI导出 / AI分析 / 命盘事盘储存 必查 (upstream 星阙)
+## 10. 上游镜像注记（upstream 星阙 — skill 必须镜像的行为）
 
-新增占星功能（判读/预测/辅盘盘）默认只渲染成 tab，**不会**自动接入 AI导出 / AI分析 / 命盘事盘储存——漏接 = 用户眼里「不全面/不稳定」。全链路接入点 + 缺口 + 已修/待修详见 `Horosa-Web/docs/西占新功能-AI导出与储存接入清单.md`。要点：
+**晚子时双开关（upstream v2.2.1+）**：`after23NewDay` 与 `lateZiHourUseNextDay` 两个**独立** flag 只在
+`hour == 23` 生效；完整规格、自检矩阵（`2026-05-27 23:30:00` 四象限）与向用户问法的**属主 =
+[`skills/horosa-agent/references/late-zi.md`](./skills/horosa-agent/references/late-zi.md)**。维护者要点：
 
-- **判读类**(寿命/12分度/主宰链…) → 写 `utils/astroAiSnapshot.js` 的 section builder + `utils/aiExport.js` 段名并升 `AI_EXPORT_SETTINGS_VERSION`，才进 AI导出。
-- **预测类**(界推运/Huber…) → 仿 `AstroDirectMain.buildPrimaryDirectSnapshotText` 写 `buildXxxSnapshotText` + 在 `utils/aiAnalysisContext.regenerateChartTechniqueSnapshot` switch 加 case。
-- **希腊点/阿拉伯点** → 只要进 `AstroConst.LOTS` 就**自动**进 AI导出「希腊点」段(`buildLotsSection`)。
-- **新 chart-calc 参数(如 orbs/容许度)** → 四点存/取，否则**存盘后丢**：`models/user.js` 命盘 fields 定义 + 存档复制(~498，镜像 after23NewDay)、`utils/localcharts.js buildLocalChartRecord`、`models/astro.js` 重建 fields(~566)。**铁律：勿连带改坏 pdMethod/主限法。**
-- **DivinationChartShell 事盘** → `utils/localcases.js CASE_TYPE_OPTIONS` 注册 module；技法 `state.extra` 现已**通用存取**(`divinationCaseSave` 写 `payload.extra` + `applyRestoreIfAny` 读 `c.payload.extra`)，新 module 不必再逐个改 extra 逻辑。
-- **陷阱**：predictHook 的 hook prop 只管 UI 实时刷新；**AI 分析不遍历 hook、走专用 builder**——别以为传了 hook prop 就接入了 AI。
-- 本轮已修：世俗盘(mundane) 事盘注册 + 通用 extra 存取。待修(已在清单文档逐点写明，加性低回归、单独谨慎做)：orbs 随命盘存档、各新分析的 AI导出 builder。
+- **状态（as of v0.12.0）**：bundled runtime 已带 v2.2.1 代码（kintaiyi 有 `_get_after23` /
+  `_get_hour_gan_next` 标记）；skill 侧**神数路径已透传** `lateZiHourUseNextDay`（`ShenShuInput` schema
+  字段 + `_run_shenshu_tool` passthrough）；**bazi / ziwei / liureng / qimen 等 chart-flow payload 尚未
+  线穿**（只转发 `after23NewDay`）——非默认 `hour==23` 请求对这些技法 accepted-but-ignored。
+  **遗留 to-do**：把 `lateZiHourUseNextDay` 线穿剩余 chart-flow payload + schema（runtime 已支持，
+  无需重同步）。
+- **法则**：所有起中式四柱的 chart-flow payload（`bazi_*`、`ziwei_*`、`liureng_*`、`qimen`、`taiyi`、
+  `jinkou`、`sanshiunited`、`canping`、`heluo`、`nongli_time`、`jieqi_year`、Bazi-aware `chart`）两 flag
+  一律 **verbatim 转发**到引擎；导出快照带 `排盘规则: 日柱开关【…】+ 时柱开关【…】` 行，tool formatter
+  必须保留、报告/AI 解读必须引用回去（strip 掉 = 用户换过开关时静默错解）。
+- 真后端返回的四柱与矩阵不符 = runtime pre-v2.2.1（让用户重装 runtime），**不许**在 skill 侧打补丁掩盖。
+- 上游根因参考（替用户排障星阙侧数值时省几小时）：① Java `ChartController.getParams()` 是**白名单**，
+  没 `params.put(...)` 的字段静默丢、默认接管——上游加 chart-flow 字段要审计所有 `getParams()` 型
+  controller；② `mvn package` ≠ 活进程更新（`lsof -ti :9999` + `ps -p <PID> -o lstart=` 核进程启动时间
+  晚于 jar mtime）；③ `lunar-javascript` 硬编码 `timeGanIndex`，`setSect()` 只移日柱不移时柱——
+  `lateZiHourUseNextDay=0` 要前端用 `getDayGanIndexExact2()` 自算时干；④ 三重缓存
+  （JVM 内存 + Redis + `.horosa-cache/paramhash/`）——新键自动 miss 但类型变更可能命中旧条目，排障时清
+  `redis-cli KEYS "*chart*"` + `.horosa-cache/`；⑤ 前端 `chartMem`（`services/astro.js`）按
+  `JSON.stringify(values)` 键控，`requestOptions.cache = false` 强刷；⑥ AI 快照必须带规则行（见上）。
+  权威上游文档：`Horosa-Web/docs/global-day-boundary-v2.2.1.md`（在星阙树，非本仓；本节漂移时以上游为准
+  同步过来，不从本仓改上游）。
 
-## 奇门遁甲 法奇门叠加层 (upstream 星阙；AI导出/导出设置/挂载/命盘事盘储存 四同步已含)
+**西占新功能四同步**（上游加占星功能时必查）：新增占星功能默认只渲染成 tab，**不会**自动接入
+AI导出 / AI分析 / 命盘事盘储存——漏接 = 用户眼里「不全面/不稳定」。判读类 → 写 `astroAiSnapshot.js`
+section builder + `aiExport.js` 段名 + 升 `AI_EXPORT_SETTINGS_VERSION`；预测类 → 写
+`buildXxxSnapshotText` + 在 `aiAnalysisContext.regenerateChartTechniqueSnapshot` 加 case；希腊点/阿拉伯点
+只要进 `AstroConst.LOTS` 即自动进导出（`buildLotsSection`）；新 chart-calc 参数四点存/取
+（`models/user.js` fields + 存档复制、`utils/localcharts.js buildLocalChartRecord`、`models/astro.js`
+重建 fields），**铁律：勿连带改坏 pdMethod/主限法**；事盘 module 注册 `utils/localcases.js
+CASE_TYPE_OPTIONS`（`state.extra` 已通用存取）；**陷阱：predictHook 只管 UI 实时刷新，AI 分析不遍历
+hook、走专用 builder**。全链路清单：`Horosa-Web/docs/西占新功能-AI导出与储存接入清单.md`（星阙树）。
 
-星阙 v-next 给奇门加了荀爽法奇门「断 + 解」层（纯前端 JS，consume kinqimen 的 `pan`，不改 ken 引擎/不重编 jar）：六害完整（补 **庚/白虎** + 危害排序 击刑>入墓>庚>白虎>门迫>空亡）、**逐宫合并化解**（灭象/布阵/解刑墓庚虎迫空；庚击刑→乙巳、庚单独→只乙、庚入墓→冲，本宫优先；卡片只写「怎么做」+ 物象例 + 龙/蛇/虎脚注替代）、用神分论（识破人心/财富七要/事业七要/恋爱姻缘/解孤辰寡宿）、取象/神煞 hover。
+**法奇门叠加层**（qimen 快照 +8 段）：纯前端 JS（`DunJiaFaCalc` / `DunJiaFaDoc`）consume kinqimen 的
+`pan` 叠加 `[六害总览][化解方案][八门化气大阵][用神分论][财富七要][事业七要][恋爱姻缘][孤辰寡宿]`——
+这是 JS 格式化层、非后端缺失；`pan.source == "kinqimen"` 守恒不变。上游「AI导出 / 导出设置段表 /
+AI分析挂载 / 命盘事盘储存」四处走同一 builder + 同一段表——**新增段必同步 builder + 段表两处**。
+八神显示已归一 `勾→虎 / 雀→玄`（`DunJiaCalc.buildCells`，盘面/hover/八宫/化解/快照一致）；六害化解口径
+以荀爽视频 docx 为准。`[八门化气大阵]` 可含 `faRelatedPeople` 逐人「生年干·姓名」行（**折叠进现有段，
+段表不动**）：skill 侧 Python 把 `{name, birth}` 经 `/nongli/time` 的 `yearJieqi`（立春界，1991-02-03 →
+庚）归一为年干，JS 保持上游 verbatim 只 stamp `pan.faRelatedPeople`（显式数组为准，缺省不出行；不引
+`lunar-javascript` 的 `birthToYearGan`，走自家 nongli 后端同口径）。re-vendor 星阙 JS 时会带入
+`DunJiaFaCalc.js` + `DunJiaFaDoc.js` 并改 `DunJiaCalc.js` / `QimenXiangDoc.js` / `aiExport.js` 等
+（guarded 增量，占星零回归）。
 
-- **对 AI 客户端的影响（必知）**：qimen 的 AI 快照（`components/dunjia/DunJiaCalc.js:buildDunJiaSnapshotText`）末尾新增 8 段 `[六害总览][化解方案][八门化气大阵][用神分论][财富七要][事业七要][恋爱姻缘][孤辰寡宿]`。**AI导出 / 导出设置段表（`utils/aiExport.js` `AI_EXPORT_PRESET_SECTIONS.qimen` 同步 +8）/ AI分析挂载（`aiAnalysisContext` 复用同 builder）/ 命盘·事盘储存（快照随 pan 重生成）四处全同步**——都走同一个 builder + 同一段表，新增段必同步「builder + 段表」两处。求测事项（识破人心/财富/事业/婚恋）是 localStorage 偏好、不进 fields，**无网测**（仅荀爽）。
-- **口径**：六害化解以荀爽视频 docx 为准（用户给的 md 掺了个人补充，已回退）；**八神显示已归一 `勾→虎 / 雀→玄`（白虎玄武）于 `DunJiaCalc.buildCells`**——盘面/hover/八宫/化解/快照一致。qimen 仍由 ken（`kinqimen`,:8899）算 pan，化解/用神/六害是 **JS 层格式化**，`pan.source=="kinqimen"` 守恒不变。
-- **后续批：相关人员(生年干) + 命盘/事盘（纯前端，不影响 ken 引擎/快照段数）**：星阙左栏加「相关人员」多选（从命盘库选人，各人**生年干**＝`birthToYearGan` 按立春算）喂 **八门化气大阵**保护清单——`computeProtect` 删占位「示本盘年干」、改读 `pan.faRelatedPeople`，**未选则不出生年干行**。对 AI 客户端：**快照仍是同 8 段，无新顶层段**；只是 `[八门化气大阵]` 段内容可多出「生年干·姓名」逐人行（折叠进现有段，段表不动）。另加左栏「盘类」选择器：命盘→复用命盘库 `localCharts`（一等人命盘、跨技法可用，**保存恒弹新增星盘抽屉**、信息预填完整、奇门设置存 `payload.qimen`）；事盘→`localCases`（现状）。**四同步挂载加固**：`aiAnalysisContext.js` 的重算路径（`regenerateQimenSnapshot`、亦被三式合一调用）已补 stamp `faRelatedPeople`（兼容事盘 `payload.faRelatedPeople`/命盘 `payload.qimen.faRelatedPeople`）+ `computeProtect` 全局兜底 `window.__horosa_qimen_related_people`，确保 AI 挂载不漏相关人员。
-- **再 vendor 星阙 JS 时**（见 §Re-vendoring the JS engines from 星阙）会带入新文件 `components/dunjia/DunJiaFaCalc.js` + `DunJiaFaDoc.js`，并改 `DunJiaMain.js` / `DunJiaCalc.js` / `QimenXiangDoc.js` / `utils/aiExport.js`（及命盘往返的 `models/astro.js` / `models/user.js` / `components/user/ChartAddFormComp.js`，均 guarded 增量、占星零回归）。星阙侧自检：jest `dunjia/__tests__/DunJiaFaCalc.test.js`+`DunJiaCalc.test.js`+`DunJiaFaDoc.test.js`、preflight `[26]`。
+（上游 AI-analysis **SSE Issue #8** 只影响星阙桌面端 chat 流、不影响 skill 计算路径——原文与处置见
+[`docs/LESSONS.md`](./docs/LESSONS.md)。）
 
+## 11. 第三方引擎与 MIT 义务（ken）
 
-## 主限法 v12 批(upstream 星阙 v2.6.6 — ✅ 已于 v0.12.0 同步完成,vendor 源=Horosa-Public)
+ken 引擎开源、**MIT-licensed**，作者 **kentang2017**：
+[`kinqimen`](https://github.com/kentang2017/kinqimen) · [`kintaiyi`](https://github.com/kentang2017/kintaiyi)
+· [`kinjinkou`](https://github.com/kentang2017/kinjinkou)。MIT 要求版权+许可文本随每次分发：
 
-> 下面 7 条是当时的同步清单,留作历史核对参照;实际执行结论与坑见上方「v0.12.0 sync lessons」节
-> (全部逐条核到:核5白名单/22钥匙/Vertex/3000多圈/golden v266/pdSyncRev 心跳门/钥匙分叉 live 测试)。
+- **永不 strip** runtime payload 里的 `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}/LICENSE`
+  （`verify_runtime_release.py` 要求引擎目录在位，LICENSE 随目录走）。
+- 致谢在 `README.md` / `README_EN.md`「致谢 / Acknowledgements」+ GitHub release notes；bump / 重 vendor
+  引擎时保持 credit 准确。
 
-1. **显示窗口径换了**:行星对显示窗 = 「弧 pre-norm 原值 |Δ| < 107.5」单参数判据(`_passesCoreDisplayWindow`),旧三分支 λ 窗 + EPS 已删。世俗(In-Mundo)核旧窗符号错配修复 → **In-Mundo 行星对行显著增多是修复非回归**,skill 的 golden/selfcheck 若按旧行数断言会假红。
-2. **宿命点(Vertex)应星新增**(仅黄道向运;世俗核不出):行 id `N_Vertex_0`,闭式直算。snapshot/导出段如列方向行,新应星会出现。
-3. **时间钥匙修真**:Simmonite/Kepler/Brahe 由常数改**每盘真算**(本命太阳日速);新增 `Kündig`(静态 1.0)与 `SymbolicSolarArc`(动态,逐弧查星历)。同步时 `STATIC_TIME_KEY_SCALES` 集合与 `PER_CHART_TIME_KEY_FALLBACK` 一起带。
-4. **pdYears 上限 360→3000**:`perchart.py` 夹断 3000;`perpredict._extendCorePdRecurrences` 统一旧「180+ 互补行」与多圈复发(基弧+360m)。≤360 逐位等价旧式;skill 侧若有 pdYears 校验/文档要同步上限。
-5. **golden 改名** `golden_alcabitius_ptolemy_v266.ndjson.gz`(v253 删),manifest 同步;`PD_SYNC_REV = pd_method_sync_v12`(helper.py/webchartsrv.py + 前端 + Java 4 控制器——skill 只 vendor Python 也要带 rev,响应 params.pdSyncRev 会回显)。
-6. **坑·陈旧 Python 进程静默吞新钥匙**:长驻 webchartsrv 不重启时,新动态钥匙会**静默按 Ptolemy 算日期**(未知 key 不报错走默认 scale)。skill 打包运行时若复用旧进程同坑;验证法 = 直接 POST 对比 Ptolemy vs 新键日期是否分叉。
-7. 同步自检建议:vendored 引擎跑 `pdYears=3000` 应出多圈行(同 (prom,sig) 链上 arc+360k、日期逐圈递增);`pdYears=100` 行集与 v2.6.5 vendor 比对 — 仅显示窗/宿命点差异属预期。
+## 12. 经验台账
+
+逐版本教训**原文**（v2.4.0 批 → v0.14.0 批、发布完整性编年、上游 SSE 陷阱）：
+[`docs/LESSONS.md`](./docs/LESSONS.md)。新教训按 §2 协议：台账落原文 + 蒸馏进本文对应章节。
