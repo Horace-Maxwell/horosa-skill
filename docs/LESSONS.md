@@ -135,6 +135,13 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 - **primarydirect 段名对齐**：上游 v48 判 `主/界限法设置|表格` 为死名、真名 `主限法设置|表格`；skill builder/
   preset/report-payload-map 同步改真名，旧名走 `map_legacy_section_title`。UI-only 新段
   `主限天球·当前动画所指`（3D 动画所指）headless 不产，**故意不进 preset**（§5 UI-only 段过滤）。
+- **live 0-skip 需 Mongo：干净机器只能验 chart 半边**：vendored chart 服务（`:8896`）**完全独立**，
+  geomancy/predict/astroextra/ken-formatter 全可验；但 Java 聚合层（`:9996`）的 app 注册在 Mongo 里，
+  无 Mongo 时 `/nongli/time`·`/bazi/birth`·`/ziwei/birth`·`/liureng/*` 一律返 `ResultCode 9999
+  "no.register.app.in.sys"`（不是启动慢、是缺注册）。连带 qimen/taiyi/jinkou（需 `/nongli/time` 脚手架）
+  与 5 新技法的**占时**路径在无 Mongo 机器上跑不了 live。判据 = 这类 500/9999 全落在 java 端点、chart 端点
+  全绿 → 环境限制而非代码问题；这些路径的离线覆盖 = FakeClient 全形状 `/nongli/time` 桩 + FakeJsClient +
+  node golden，占时派生纯 Python 亦离线可测。完整 0-skip 留给带 Mongo/Redis 的发布机。
 - **core-js 重 vendor（baziLunarLocal 全年份域守卫 + gua 六爻大扩充）**：
   ① `baziLunarLocal.js` 重拷带入 v3.5.0 **全年份域守卫**——`lunarDomainGuard.isLunarJsYearReliable`（AD1~9999
   外 lunar-js 节气静默错位 → 月柱错，比崩溃更危险，故域外 throw 让上层走后端星历）+ `dateStrSafe.parseDateParts`
