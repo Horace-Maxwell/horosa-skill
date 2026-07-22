@@ -141,6 +141,7 @@ def build_sample_payloads() -> dict[str, dict]:
         "xiaoliuren": {**confirmed, "nums": [5, 20, 7], "school": "dao", "askEvent": "求财"},
         "feigong": {**confirmed, "qiMode": "manualZhi", "zhi": "午", "dayGan": "甲", "dayZhi": "子", "mingAge": 35, "mingGender": "male", "liuYueMonth": 1, "askEvent": "求财"},
         "xiaochengtu": {**confirmed, "qiguaFa": "stock", "open": "1563.60", "close": "1571.10", "yongGong": 1, "askEvent": "问股"},
+        "guice": {**confirmed, "qiguaFa": "baoshu", "nums": [7, 9], "hourZhi": "午", "yearZhi": "午", "monthZhi": "巳", "lunarMonth": 4, "lunarDay": 5, "year": 2026, "dayGan": "甲", "pillars": ["丙午", "癸巳", "甲子", "庚午"], "askEvent": "问事业"},
         "wangji": {**confirmed, "date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1},
         "wuzhao": {**confirmed, "date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1, "options": {"mode": "ganzhi", "number": 0}},
         "taixuan": {**confirmed, "date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1},

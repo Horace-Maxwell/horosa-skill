@@ -58,3 +58,11 @@ def test_router_xiaochengtu_excludes_horary() -> None:
     assert "xiaochengtu" in got and "horary" not in got
     # 卜卦回归：无小成图字样时「卜卦」仍走 horary。
     assert "horary" in select_tools(DispatchInput.model_validate({"query": "卜卦问婚姻"}))
+
+
+def test_router_guice_excludes_wangji_and_horary() -> None:
+    # 皇极轨策 用「轨策」全词，禁裸「皇极」（皇极经世=wangji）；「起卦」不误触 horary。
+    got = select_tools(DispatchInput.model_validate({"query": "皇极轨策报数起卦"}))
+    assert "guice" in got and "wangji" not in got and "horary" not in got
+    got2 = select_tools(DispatchInput.model_validate({"query": "皇极经世值年卦"}))
+    assert "wangji" in got2 and "guice" not in got2

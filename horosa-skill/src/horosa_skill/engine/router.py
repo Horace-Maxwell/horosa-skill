@@ -35,6 +35,9 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("feigong")
     if _contains_any(text, ["小成图", "xiaochengtu"]):
         add("xiaochengtu")
+    # 皇极轨策：用「轨策」全词，禁裸「皇极」（皇极经世=wangji 神数，键名分叉不可混）。
+    if _contains_any(text, ["皇极轨策", "轨策", "guice"]):
+        add("guice")
     # 飞宫小奇门 含「奇门」二字 → 奇门遁甲分支须排除，否则「飞宫小奇门问出行」误路由 qimen。
     if _contains_any(text, ["奇门", "qimen"]) and not _contains_any(text, ["飞宫", "小奇门", "feigong"]):
         add("qimen")

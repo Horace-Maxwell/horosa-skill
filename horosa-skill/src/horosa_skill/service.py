@@ -93,6 +93,7 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "xiaoliuren": "xiaoliuren",
     "feigong": "feigong",
     "xiaochengtu": "xiaochengtu",
+    "guice": "guice",
     "acg": "acg",
     "astrodata": "astrodata",
     "sanshiunited": "sanshiunited",
@@ -6711,6 +6712,76 @@ class HorosaSkillService:
             "export_snapshot": self._augment_export_payload(technique="xiaochengtu", snapshot_text=snapshot_text),
         }
 
+    def _run_guice_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 皇极轨策：十二法起卦 + 演数四位 + 卦变断法 + 元会运世 + 大定。卦为冻结值。占时四柱（立春界年柱 +
+        # 农历月日 + 时支）由前置 /nongli/time 拼 ctx 后传入，JS 层不发 HTTP（AGENTS §4）。
+        # settings 十开关 + 各法专属起卦字段（nums/wuShu/… + shu2/tones/zhang/chi/cun/qu/wuGuaNum/fangGuaNum/kind）
+        # 经 FlexibleModel extra 透传，此处整体转发（qiGua/normalizeGuiceSettings 忽略多余键）。
+        passthrough_keys = (
+            "qiguaFa", "school", "yanshuFa", "jiGongMode", "qiguaShu", "shenSha", "shiFang", "shuXi",
+            "dadingTable", "shiyingSet", "nums", "wuShu", "shengShu", "text", "shu", "shu2", "tones",
+            "zhang", "chi", "cun", "qu", "wuGuaNum", "fangGuaNum", "kind", "hourZhi", "shiyingInputs", "fangKey",
+        )
+        request: dict[str, Any] = {k: payload.get(k) for k in passthrough_keys if payload.get(k) is not None}
+        request["askEvent"] = payload.get("askEvent") or payload.get("question") or ""
+        time_lines: list[str] = []
+        if payload.get("date"):
+            nongli = self._call_remote(
+                "/nongli/time",
+                {
+                    "date": payload["date"],
+                    "time": payload.get("time"),
+                    "zone": payload.get("zone"),
+                    "lon": payload.get("lon"),
+                    "lat": payload.get("lat"),
+                    **_day_boundary_switches(payload),
+                },
+            )
+            if isinstance(nongli, dict):
+                year_jieqi = str(nongli.get("yearJieqi") or nongli.get("year") or "")
+                month_gz = str(nongli.get("monthGanZi") or "")
+                day_gz = str(nongli.get("dayGanZi") or "")
+                hour_gz = str(nongli.get("time") or "")
+                if len(year_jieqi) >= 2:
+                    request["yearZhi"] = year_jieqi[1]
+                if len(month_gz) >= 2:
+                    request["monthZhi"] = month_gz[1]
+                request["lunarMonth"] = nongli.get("monthInt")
+                request["lunarDay"] = nongli.get("dayInt")
+                if len(hour_gz) >= 2 and not request.get("hourZhi"):
+                    request["hourZhi"] = hour_gz[1]
+                if len(day_gz) >= 2:
+                    request["dayGan"] = day_gz[0]
+                request["pillars"] = [p for p in (year_jieqi, month_gz, day_gz, hour_gz) if len(p) >= 2]
+                try:
+                    request["year"] = int(str(payload["date"]).lstrip("-").split("-")[0]) * (payload.get("ad", 1) or 1)
+                except (ValueError, IndexError):
+                    request["year"] = None
+                time_lines = [
+                    f"起卦时间:{payload.get('date')} {payload.get('time') or ''}".strip(),
+                    f"农历:{nongli.get('monthInt')}月{nongli.get('dayInt')}日 四柱[{'·'.join(request.get('pillars') or [])}]",
+                ]
+        # 显式 ctx 覆盖（无 date 时可直接给年支/月支/农历月日/时支等）。
+        for k in ("yearZhi", "monthZhi", "lunarMonth", "lunarDay", "year", "dayGan", "pillars"):
+            if payload.get(k) is not None:
+                request[k] = payload[k]
+        request["timeLines"] = time_lines
+        js_result = self.js_client.run("guice", request)
+        data = js_result.get("data", {})
+        if isinstance(data, dict) and data.get("ok") is False:
+            raise ToolValidationError(
+                data.get("message") or "皇极轨策起卦失败：所需之输入未足。",
+                code="tool.guice_insufficient_cast_input",
+                details={"reason": data.get("reason"), "qiguaFa": payload.get("qiguaFa")},
+            )
+        snapshot_text = js_result.get("snapshot_text")
+        return {
+            "guice": data,
+            "input_normalized": js_result.get("input_normalized", {}),
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="guice", snapshot_text=snapshot_text),
+        }
+
     def _run_sanshiunited_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         shared = {
             "date": payload["date"],
@@ -7711,6 +7782,8 @@ class HorosaSkillService:
             return self._run_feigong_tool(payload)
         if definition.name == "xiaochengtu":
             return self._run_xiaochengtu_tool(payload)
+        if definition.name == "guice":
+            return self._run_guice_tool(payload)
         if definition.name == "acg":
             return self._run_acg_tool(payload)
         if definition.name == "astrodata":

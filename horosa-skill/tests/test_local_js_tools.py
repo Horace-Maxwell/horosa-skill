@@ -668,6 +668,34 @@ def test_xiaochengtu_local_tool_runs_headless_engine(tmp_path) -> None:
     assert a.data["snapshot_text"] == b.data["snapshot_text"]
 
 
+def test_guice_local_tool_runs_headless_engine(tmp_path) -> None:
+    # 皇极轨策（上游 v3.5.0）：十二法起卦·演数四位·卦变断法，纯函数进程内计算、零后端。
+    # 报数法 baoshu 显式 nums + 显式 ctx（免占时后端）冻结起卦。
+    service = make_service(tmp_path)
+    r = service.run_tool(
+        "guice",
+        {"qiguaFa": "baoshu", "nums": [7, 9], "hourZhi": "午", "yearZhi": "午", "monthZhi": "巳",
+         "lunarMonth": 4, "lunarDay": 5, "year": 2026, "dayGan": "甲",
+         "pillars": ["丙午", "癸巳", "甲子", "庚午"], "askEvent": "问事业"},
+        save_result=False,
+    )
+    assert r.ok is True, r.error
+    snap = r.data["snapshot_text"]
+    for header in ("[占事直断]", "[起卦]", "[演数]", "[四位]", "[卦变]", "[断法]"):
+        assert header in snap, header
+    assert r.data["guice"]["gua"]["ben"] == "山天大畜"
+    assert "策数" in snap
+    export = r.data.get("export_snapshot") or {}
+    assert export.get("missing_selected_sections") == [] and export.get("unknown_detected_sections") == []
+    # 卦冻结：同起卦输入同盘。
+    again = service.run_tool("guice", {"qiguaFa": "baoshu", "nums": [7, 9], "hourZhi": "午", "yearZhi": "午", "monthZhi": "巳", "lunarMonth": 4, "lunarDay": 5, "year": 2026, "dayGan": "甲", "pillars": ["丙午", "癸巳", "甲子", "庚午"], "askEvent": "问事业"}, save_result=False)
+    assert again.data["snapshot_text"] == snap
+    # 缺 ctx.year → [元会运世] 优雅缺席（不误报 missing）。
+    no_year = service.run_tool("guice", {"qiguaFa": "baoshu", "nums": [7, 9], "hourZhi": "午"}, save_result=False)
+    assert no_year.ok is True, no_year.error
+    assert (no_year.data.get("export_snapshot") or {}).get("unknown_detected_sections") == []
+
+
 @requires_chart
 def test_harmonic_runs_via_chart_service(tmp_path) -> None:
     # 调波盘 is a backend chart-extra on the Python chart service (/astroextra/harmonic). 星阙 has no

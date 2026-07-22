@@ -16,6 +16,7 @@ import { runGuolaoMoira } from '../src/tools/guolaoMoira.js';
 import { runXiaoLiuRen } from '../src/tools/xiaoliuren.js';
 import { runFeiGong } from '../src/tools/feigong.js';
 import { runXiaoChengTu } from '../src/tools/xiaochengtu.js';
+import { runGuice } from '../src/tools/guice.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const chart = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_traditional.json'), 'utf8'));
@@ -153,6 +154,17 @@ check('xiaochengtu 洛书九宫 + 股市段条件 + 大衍 seed 确定性', () =
   const a = runXiaoChengTu({ qiguaFa: 'dayan', seed: 12345 });
   const b = runXiaoChengTu({ qiguaFa: 'dayan', seed: 12345 });
   assert(a.snapshot_text === b.snapshot_text, '大衍同 seed 须同盘');
+});
+
+check('guice 报数起卦 + 演数四位 + 卦变断法 + determinism', () => {
+  const p = { qiguaFa: 'baoshu', nums: [7, 9], hourZhi: '午', yearZhi: '午', monthZhi: '巳', lunarMonth: 4, lunarDay: 5, year: 2026, dayGan: '甲', pillars: ['丙午', '癸巳', '甲子', '庚午'], askEvent: '问事业' };
+  const r = runGuice(p);
+  assert(r.snapshot_text, 'should emit a snapshot');
+  ['[占事直断]', '[起卦]', '[演数]', '[四位]', '[卦变]', '[断法]'].forEach((h) => assert(r.snapshot_text.includes(h), `missing ${h}`));
+  assert(r.data.gua.ben === '山天大畜', `unexpected 本卦: ${r.data.gua.ben}`);
+  assert(r.snapshot_text.includes('策数'), 'missing 策数');
+  const again = runGuice(p);
+  assert(again.snapshot_text === r.snapshot_text, '同起卦输入须同盘（冻结卦）');
 });
 
 if (failures > 0) {

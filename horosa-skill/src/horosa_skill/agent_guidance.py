@@ -636,6 +636,21 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         do_not_assume=["起卦法与起卦输入（决定卦，须真实；大衍禁静默随机）", "所问内容"],
     ),
+    "guice": _policy(
+        intent="皇极轨策 / guice：十二法之一起一卦，演策数（或轨数）成四位卦，取体用生克断吉凶，兼三要十应、元会运世、大定起数。卦为冻结值——起卦一经起出即不重起，改流派/十开关只重排断法。",
+        required_context=["起卦法 qiguaFa + 该法之输入", "起卦时刻 date/time（元会运世/时方所需四柱）", "流派/十开关（可选）", "所问 askEvent"],
+        ask_if_missing=[
+            {"field": "qiguaFa", "question": "用哪种起卦法？", "options": ["年月日时 time", "报数 baoshu(nums)", "物数 wushu(wuShu)", "声音 shengyin(shengShu)", "字占 zizhan(text+shu+tones)", "丈尺 zhangchi / 尺寸 chicun", "为人 weiren / 自己 ziji(qu+shu)", "动物·五方 dongwu / 端法 duanfa(wuGuaNum+fangGuaNum)", "惊悟 jingwu(kind)"]},
+            {"field": "cast-input + date/time", "question": "请给该起卦法所需的输入，并给起卦的日期/时间（元会运世、时方需四柱）。"},
+            {"field": "school", "question": "用哪一流派预设？", "options": ["默认·心易发微 default", "梅花 meihua", "周易数 zhouyishu", "大定 dading", "自定 custom"]},
+            {"field": "askEvent", "question": "所问何事？"},
+        ],
+        safe_defaults=[
+            {"field": "qiguaFa", "value": "time", "meaning": "默认年月日时起例"},
+            {"field": "school", "value": "default", "meaning": "默认心易发微本"},
+        ],
+        do_not_assume=["起卦法与起卦输入（决定卦，须真实）", "起卦时刻", "所问内容"],
+    ),
     "wangji": SHENSHU_POLICY,
     "wuzhao": SHENSHU_POLICY,
     "taixuan": SHENSHU_POLICY,

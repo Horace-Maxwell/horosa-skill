@@ -412,6 +412,47 @@ class XiaoChengTuInput(FlexibleModel):
     lateZiHourUseNextDay: int | None = None
 
 
+class GuiceInput(FlexibleModel):
+    # 皇极轨策：十二法起卦 + 演数四位 + 卦变断法 + 三要十应 + 元会运世 + 大定起数。卦为【冻结值】。
+    # 起卦法 qiguaFa：time 年月日时 / baoshu 报数 / wushu 物数 / shengyin 声音 / zizhan 字占 /
+    # zhangchi 丈尺 / chicun 尺寸 / weiren 为人 / ziji 自己 / dongwu 动物·五方 / jingwu 惊悟 / duanfa 端法。
+    # 十开关流派（默认心易发微本）：school/yanshuFa(策 ce/轨 gui)/jiGongMode/qiguaShu/shenSha/shiFang/
+    # shuXi(周易 zhouyi/梅花 meihua)/dadingTable/shiyingSet。FlexibleModel 额外接受各法专属起卦字段。
+    qiguaFa: str | None = "time"
+    school: str | None = None
+    yanshuFa: str | None = None
+    jiGongMode: str | None = None
+    qiguaShu: str | None = None
+    shenSha: bool | None = None
+    shiFang: bool | None = None
+    shuXi: str | None = None
+    dadingTable: str | None = None
+    shiyingSet: str | None = None
+    # 法专属起卦输入（按 qiguaFa 取用；FlexibleModel 亦接受未列字段）：
+    nums: list[int] | None = None
+    wuShu: int | None = None
+    shengShu: int | None = None
+    text: str | None = None
+    shu: int | None = None
+    shu2: int | None = None
+    hourZhi: str | None = None
+    # 十应之录（占时耳目所及，机不能代）+ 方位 + 所问：
+    shiyingInputs: dict[str, Any] | None = None
+    fangKey: str | None = None
+    askEvent: str | None = None
+    question: str | None = None
+    # 占时四柱（缺显式 ctx 时由 date/time 起；ctx 立春界年柱 + 农历月日 + 时支）：
+    date: str | None = None
+    time: str | None = None
+    zone: str | None = None
+    lon: str | None = None
+    lat: str | None = None
+    ad: int | None = 1
+    timeAlg: int | None = None
+    after23NewDay: int | None = None
+    lateZiHourUseNextDay: int | None = None
+
+
 class ACGInput(BirthInput):
     # 占星地图（AstroCartoGraphy）：本命时刻的行星地理投影线（MC/IC 恒定经度、ASC/DESC 曲线、
     # 天顶点、偕升纬度带、线交点）。口径开关：mode=mundo 真黄纬（Jim Lewis 原版，默认）/zodiac

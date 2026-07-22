@@ -167,7 +167,13 @@ class FakeClient(HorosaApiClient):
         if endpoint == "/jinkou/pan":
             return {"source": "kinjinkou", "rows": [{"name": "贵神"}], "raw": {}}
         if endpoint == "/nongli/time":
-            return {"birth": f"{payload['date']} {payload['time']}", "nongli": "丙午年二月十七"}
+            # 全形状桩（供小六壬/飞宫/小成图/皇极轨策 占时起卦派生用；对既有 qimen/taiyi 流是纯增键）：
+            # yearJieqi=立春界年柱、monthGanZi、dayGanZi、time=时柱干支、monthInt/dayInt=农历月日。
+            return {
+                "birth": f"{payload['date']} {payload['time']}", "nongli": "丙午年二月十七",
+                "year": "丙午", "yearJieqi": "丙午", "monthGanZi": "辛卯", "dayGanZi": "戊辰",
+                "time": "庚午", "monthInt": 2, "dayInt": 17, "leap": False,
+            }
         if endpoint == "/calendar/month":
             # 黄历月历桩：两天当月项 + 一天补位（跨月过滤锚），字段形态与后端真值同构。
             month = str(payload.get("date") or "2028-04-06")[:7]
@@ -655,6 +661,20 @@ class FakeJsClient(HorosaJsEngineClient):
                     "[四象]\n本卦天泽履:老阳\n\n"
                     "[应期]\n数占:正推链宫数相加 = 30(问数以数应)\n\n"
                     "[股市]\n研判·开盘:用宫天盘乾 → 涨(幅度大)\n研判·收盘:正推末卦乾 → 涨(幅度大)"
+                ),
+            }
+        if tool_name == "guice":
+            # 皇极轨策：占事直断/演数/四位 恒出 + 起卦/卦变/断法 条件段。真内容样例，供离线契约 round-trip。
+            return {
+                "data": {"qiguaFa": "baoshu", "gua": {"ben": "山天大畜", "bian": "风天小畜", "dongYao": 5}, "settings": {"school": "default", "qiguaFa": "baoshu"}},
+                "input_normalized": {"qiguaFa": "baoshu", "settings": {"school": "default"}},
+                "snapshot_text": (
+                    "[占事直断]\n| 项 | 值 |\n| --- | --- |\n| 占事 | 问事业 |\n| 本卦 | 山天大畜　5 爻动 |\n| 变卦 | 风天小畜 |\n| 演数 | 策数 11149 |\n\n"
+                    "[起卦]\n| 步骤 | 依据 | 所得 |\n| --- | --- | --- |\n| 上卦 | 先数 7 ÷8 余 | 艮 |\n| 下卦 | 后数 9 ÷8 余 | 乾 |\n\n"
+                    "[演数]\n| 项 | 值 |\n| --- | --- |\n| 身数 | 192 |\n| 所得 | 11149 |\n\n"
+                    "[四位]\n| 位 | 数 | 卦 | 取象 |\n| --- | --- | --- | --- |\n| 千 | 1 | 坎 | 水 |\n\n"
+                    "[卦变]\n| 项 | 卦 |\n| --- | --- |\n| 本卦 | 山天大畜 |\n| 变卦 | 风天小畜 |\n\n"
+                    "[断法]\n| 项 | 判 |\n| --- | --- |\n| 用生体 | 助力 |"
                 ),
             }
         if tool_name == "progextra":
