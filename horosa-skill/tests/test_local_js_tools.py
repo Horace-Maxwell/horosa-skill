@@ -780,6 +780,7 @@ def test_bazi_carries_geju_sections(tmp_path) -> None:
 @requires_chart
 def test_geomancy_deterministic_cast_and_sections(tmp_path) -> None:
     # 天文地占（后端 /geomancy/reading，以起卦时刻确定性起卦）：[起卦信息]/[判定]/[十二宫·图形入宫]/[十六图形]。
+    # v3.5.1 地占大改版：十二宫/十六图形改 markdown 表；解读技法/转宫派生/定局落星 随条件出。
     service = make_service(tmp_path)
     base = {"date": "2026-06-30", "time": "14:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "question": "事业能否升迁", "questionType": "career"}
     r1 = service.run_tool("geomancy", base, save_result=False)
@@ -790,10 +791,21 @@ def test_geomancy_deterministic_cast_and_sections(tmp_path) -> None:
     snap = r1.data["snapshot_text"]
     for header in ("[起卦信息]", "[判定]", "[十二宫·图形入宫]", "[十六图形]"):
         assert header in snap, header
-    assert "判官：" in snap and "母一：" in snap
+    assert "判官：" in snap and "| 母一 |" in snap  # 十六图形现为 markdown 表
     export = r1.data.get("export_snapshot") or {}
     assert export.get("unknown_detected_sections") == []
     assert len((export.get("export_text") or "").splitlines()) < 200
+
+
+def test_geomancy_rejects_ifa_structural_only(tmp_path) -> None:
+    # ifa（西非同族）为结构对照模式、不产占断：skill 明确拒绝，给结构化错误 + 文化声明，绝不静默出空盘。
+    # 拒绝发生在 runner 首行、调后端前 → 无需 live，离线可跑。
+    service = make_service(tmp_path)
+    base = {"date": "2026-06-30", "time": "14:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "question": "x", "profile": "ifa"}
+    r = service.run_tool("geomancy", base, save_result=False)
+    assert r.ok is False
+    assert r.error and r.error.code == "tool.geomancy_structural_only_unsupported"
+    assert "cultural_notice" in (r.error.details or {})
 
 
 @requires_runtime

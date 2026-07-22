@@ -241,6 +241,7 @@ class FakeClient(HorosaApiClient):
                     "question": payload.get("question") or "",
                     "questionType": payload.get("questionType") or "custom",
                     "questionTypeZh": "事业",
+                    "profileId": payload.get("profile") or "european_classical",
                     "ascendantFigure": _gfig("获得", "太阳", "火"),
                     "ascendantSignZh": "白羊",
                     "judge": _gfig("道路", "太阴", "水"),
@@ -248,7 +249,11 @@ class FakeClient(HorosaApiClient):
                     "rightWitness": _gfig("牢狱", "土星", "地"),
                     "leftWitness": _gfig("获得", "太阳", "火"),
                     "primaryHouse": 10,
-                    "technique": {"perfection": "occupation", "aspect": "trine", "points_parity": {"total": 68, "parity": "even"}, "timing": {"speed": "slow", "unit": "月"}},
+                    # v3.5.1：解读技法补三方/数量；转宫派生 + 定局落星·甲乙 全集段供契约覆盖。
+                    "technique": {"perfection": "occupation", "aspect": "trine", "points_parity": {"total": 68, "parity": "even", "scope": "shield16"}, "timing": {"speed": "slow", "unit": "月", "quantity": {"label": "少", "total": 68, "min": 60, "max": 76}}, "triplicities": [1, 5]},
+                    "derived": {"turn_to": 7, "derived_querent_house": 7, "derived_quesited_house": 4, "perfection": "conjunction", "figure": _gfig("会合", "水星", "风")},
+                    "planetPlacement": {"Sun": [1, 10], "Moon": [], "Mars": [5]},
+                    "planetPlacementByTwelves": {"Sun": 1, "Moon": 2, "Mars": 5},
                     "houses": [{"house": 1, "nameZh": "命宫", "roles": ["querent"], "figure": _gfig("获得", "太阳", "火"), "reading": "问者得力"}],
                     "figures16": [_gfig("获得", "太阳", "火") for _ in range(16)],
                 },
@@ -1754,7 +1759,7 @@ def test_primary_direction_exports_tables_and_pdchart_positions(tmp_path) -> Non
 
     pd_result = service.run_tool("pd", payloads["pd"], save_result=False)
     pd_text = pd_result.data["snapshot_text"]
-    assert "主/界限法表格" in pd_text
+    assert "主限法表格" in pd_text  # 上游 v48 段名对齐（旧名 主/界限法表格 → 主限法表格）
     assert "| Arc | 迫星 | 应星 | 类型 | 日期 |" in pd_text
     assert "推运月" in pd_text
     assert "本命土" in pd_text

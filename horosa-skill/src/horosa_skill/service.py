@@ -1631,6 +1631,15 @@ def _keep_reception_line(item: dict[str, Any] | None, *, abnormal: bool = False)
     return True if not supplier and not beneficiary else supplier_ok or beneficiary_ok or True
 
 
+def _reception_reject_mark(item: dict[str, Any] | None) -> str:
+    # FIX-15（镜像 astroAiSnapshot.isReject）：supplier 在 beneficiary 所在座为 exile/fall = 凶接纳=拒绝。
+    dig = item.get("supplierRulerShip") if isinstance(item, dict) else None
+    if not dig:
+        return ""
+    arr = dig if isinstance(dig, list) else [dig]
+    return "（拒绝）" if any(d in ("exile", "fall") for d in arr) else ""
+
+
 def _build_info_section(chart_wrap: dict[str, Any], fields: dict[str, Any]) -> list[str]:
     chart = chart_wrap.get("chart", {}) if isinstance(chart_wrap, dict) else {}
     chart_data = chart_wrap if isinstance(chart_wrap, dict) else {}
@@ -1658,7 +1667,7 @@ def _build_info_section(chart_wrap: dict[str, Any], fields: dict[str, Any]) -> l
             lines.append(
                 f"{_astro_msg_with_house(item.get('beneficiary'), chart_wrap, short=True)} 被 "
                 f"{_astro_msg_with_house(item.get('supplier'), chart_wrap, short=True)} 接纳 "
-                f"({_ruleship_text(item.get('supplierRulerShip'))})"
+                f"({_ruleship_text(item.get('supplierRulerShip'))}){_reception_reject_mark(item)}"
             )
         lines.append("邪接纳：")
         for item in abnormal_receptions:
@@ -1666,7 +1675,7 @@ def _build_info_section(chart_wrap: dict[str, Any], fields: dict[str, Any]) -> l
                 f"{_astro_msg_with_house(item.get('beneficiary'), chart_wrap, short=True)} "
                 f"({_ruleship_text(item.get('beneficiaryDignity'))}) 被 "
                 f"{_astro_msg_with_house(item.get('supplier'), chart_wrap, short=True)} 接纳 "
-                f"({_ruleship_text(item.get('supplierRulerShip'))})"
+                f"({_ruleship_text(item.get('supplierRulerShip'))}){_reception_reject_mark(item)}"
             )
 
     mutuals = chart_data.get("mutuals", {}) if isinstance(chart_data, dict) else {}
@@ -3941,10 +3950,26 @@ def _build_decennials_snapshot_text(response: dict[str, Any], settings: dict[str
 
 
 # ── 天文地占 (astronomical geomancy)：4 母卦→16 图形 + 十二宫图形入宫 + 判官/见证/解读技法。port GeomancyMain.buildGeomancySnapshotText ──
-_GEO_TRAD = {"european_classical": "古典定局派", "european_planetary": "行星共鸣派", "european_modern": "现代综合派", "arabic_raml": "阿拉伯沙占派", "india_ramal": "印度骰占派", "sikidy": "异或表盘", "hakata": "四片盘"}
+_GEO_TRAD = {"european_classical": "古典定局派", "european_planetary": "行星共鸣派", "european_modern": "现代综合派(同古典口径)", "arabic_raml": "阿拉伯沙占派", "india_ramal": "印度骰占派", "sikidy": "异或表盘", "hakata": "四片盘", "greek": "希腊传本", "ifa": "西非同族结构对照"}
 _GEO_PERF = {"occupation": "入主成局", "conjunction": "会合成局", "mutation": "互变成局", "translation": "传递成局", "none": "未成局"}
 _GEO_ASP = {"conjunction": "合", "sextile": "六分(吉)", "square": "刑(凶)", "trine": "拱(吉)", "opposition": "冲", "none": "无相位"}
 _GEO_SLOT = ["母一", "母二", "母三", "母四", "女一", "女二", "女三", "女四", "甥一", "甥二", "甥三", "甥四", "右证", "左证", "判官", "调和"]
+# 传本粒度设置注记（仅注记与主流缺省不同者）；镜像 GeomancyMain GNAME。
+_GEO_GNAME = {
+    "house_projection": {"sequential": "落星=不落(仅图形入宫)", "astro_from_chart": "落星=占星甲(星落所主图之宫)", "astro_bytwelves": "落星=占星乙(另起点数定宫)"},
+    "compound_mode": {"reverse": "合成同伴=逆转法"},
+    "number_system": {"planetary": "图数=行星序", "abjad": "图数=字母值"},
+    "reconciler_mode": {"judge_querent_significator": "调和者=判官⊕问者指示星"},
+    "mark_style": {"lines": "记号=线形", "bindu": "记号=点线", "tablets": "记号=开合片"},
+    "direction": {"RTL": "书写=自右向左"},
+}
+_GEO_PARITY_SCOPE = {"shield16": "全盘十六图", "mothers": "四母", "houses12": "十二宫"}
+_GEO_PZH = {"Sun": "日", "Moon": "月", "Mercury": "水", "Venus": "金", "Mars": "火", "Jupiter": "木", "Saturn": "土", "NorthNode": "龙头", "SouthNode": "龙尾"}
+_GEO_TRI = {1: "火", 5: "火", 9: "火", 2: "地", 6: "地", 10: "地", 3: "风", 7: "风", 11: "风", 4: "水", 8: "水", 12: "水"}
+# ifa（西非同族）为结构对照模式：不产地占判读。skill 暴露的 8 家占断传本白名单（明确排除 ifa）。
+_GEOMANCY_PROFILES = ("european_classical", "european_planetary", "european_modern", "arabic_raml", "india_ramal", "sikidy", "hakata", "greek")
+# 传本粒度覆盖 passthrough 白名单（未传即不发 → 内核回落 profile 默认，旧盘字节零变）。
+_GEOMANCY_OPTION_KEYS = ("markStyle", "direction", "houseProjection", "wrapHouses", "reconciler", "reconcilerMode", "haltEnabled", "compoundMode", "numberSystem", "chartMode", "houseSystem", "ascSource", "namesSystem", "parityScope")
 
 
 def _geo_figure_line(fig: Any, role: str) -> str:
@@ -3962,6 +3987,23 @@ def _geo_figure_line(fig: Any, role: str) -> str:
 
 def _build_geomancy_snapshot_text(response: dict[str, Any]) -> str:
     reading = response.get("reading") if isinstance(response.get("reading"), dict) else {}
+    # 结构对照模式（ifa）防御性早退：skill schema 已挡 ifa，此分支仅为稳健 + 供 export_parse 识别面。
+    if reading.get("structuralOnly") or reading.get("structural_only"):
+        notice = reading.get("culturalNotice") or reading.get("note") or "独立圣传体系，仅结构同构对照，不套地占含义、不构成占断。"
+        body = [notice]
+        ifa = reading.get("ifa") if isinstance(reading.get("ifa"), dict) else {}
+        if ifa.get("label"):
+            right = ifa.get("right") or {}
+            left = ifa.get("left") or {}
+            body.append(
+                f"结构对照：{ifa['label']}{'(主形)' if ifa.get('is_meji') else ''}；"
+                f"右列 {right.get('odu_name') or '—'}→{right.get('figure') or '—'}、"
+                f"左列 {left.get('odu_name') or '—'}→{left.get('figure') or '—'}（自右向左读）"
+            )
+        body.append("※ 本模式只作形的识别与比特对照，不产出该体系之占断，亦不套用地占含义。")
+        return _render_snapshot_text([("边界声明", "\n".join(body).strip())])
+
+    # [起卦信息]：问题/问类/上升 + 传本设置（仅注记非默认口径）。
     info = [
         f"问题：{reading.get('question') or '—'}",
         f"问类：{reading.get('questionTypeZh') or reading.get('questionType') or '—'}",
@@ -3974,15 +4016,55 @@ def _build_geomancy_snapshot_text(response: dict[str, Any]) -> str:
         tb.append("黄道=行星归属体系")
     if reading.get("readingScope") and reading.get("readingScope") != "L3":
         tb.append(f"范围={reading['readingScope']}")
+    gs = reading.get("settings") if isinstance(reading.get("settings"), dict) else {}
+    for gkey, gtable in _GEO_GNAME.items():
+        hit = gtable.get(gs.get(gkey))
+        if hit:
+            tb.append(hit)
+    if gs.get("wrap_houses") is True:
+        tb.append("宫位成环")
+    if gs.get("reconciler") is False:
+        tb.append("不取调和者")
+    if gs.get("halt_enabled") is False:
+        tb.append("不启用首母中止")
     if tb:
         info.append(f"传本设置：{'、'.join(tb)}")
+
+    # [判定]：首母中止 + 判官/调和者/证 + 主宫 + sikidy/hakata 中栏结论。
     judge: list[str] = []
+    if reading.get("haltedOnFirstMother"):
+        judge.append("⚠ 首母中止：首母落 Rubeus/Cauda 之属，依所选传本传统应中止本占、另择时再占（以下判读仅作参考）。")
     for fig, role in ((reading.get("judge"), "判官"), (reading.get("reconciler"), "调和者"), (reading.get("rightWitness"), "右证(过去/问者)"), (reading.get("leftWitness"), "左证(现在/所问)")):
         ln = _geo_figure_line(fig, role)
         if ln:
             judge.append(ln)
     if reading.get("primaryHouse"):
         judge.append(f"主宫：第 {reading['primaryHouse']} 宫")
+    sk = reading.get("sikidy")
+    if isinstance(sk, dict):
+        princes = sk.get("princes") if isinstance(sk.get("princes"), list) else []
+        judge.append(
+            f"异或表盘：三道校验{'通过' if sk.get('valid') else '未过'}"
+            f"{'；红 Sikidy(大凶)' if sk.get('red_sikidy') else ''}"
+            f"{('；诸侯列:' + '、'.join(str(p) for p in princes)) if princes else ''}"
+        )
+        compare = sk.get("compare") if isinstance(sk.get("compare"), dict) else None
+        columns = sk.get("columns") if isinstance(sk.get("columns"), dict) else None
+        if compare and columns:
+            hits = [f"第{k}列 {(columns.get(k) or {}).get('name') or ''}（{(columns.get(k) or {}).get('meaning') or ''}）"
+                    for k in compare if compare.get(k) and compare[k].get("equal")]
+            judge.append(f"列比对：问者列与{('、'.join(hits) + ' 同形 —— 事之所系在此') if hits else '各主题列皆不同形，无直指之应'}")
+    hk = reading.get("hakata")
+    if isinstance(hk, dict):
+        tablets = hk.get("tablets") if isinstance(hk.get("tablets"), list) else []
+        tb_str = " ".join(f"{t.get('name') or ''}{'开' if t.get('open') else '合'}" for t in tablets if isinstance(t, dict))
+        judge.append(
+            f"四片盘：{tb_str or '—'} → {hk.get('figure_zh') or hk.get('figure') or '—'}"
+            f"{('；' + hk['reading']) if hk.get('reading') else ''}"
+            f"{('；' + hk['orientation']) if hk.get('orientation') else ''}"
+        )
+
+    # [解读技法]（条件）+ 判官之数折入。
     tech: list[str] = []
     t = reading.get("technique")
     if isinstance(t, dict):
@@ -3998,7 +4080,9 @@ def _build_geomancy_snapshot_text(response: dict[str, Any]) -> str:
             tech.append(f"阻碍：第 {t['prohibition']} 宫强凶图阻断")
         pp = t.get("points_parity")
         if isinstance(pp, dict):
-            tech.append(f"点数是否：总 {pp.get('total')} 点·{'偶→是/稳' if pp.get('parity') == 'even' else '奇→否/动'}")
+            scope = _GEO_PARITY_SCOPE.get(pp.get("scope"), "全盘十六图")
+            degen = "，该取样结构恒偶、不具判别力" if pp.get("degenerate") else ""
+            tech.append(f"点数是否：总 {pp.get('total')} 点·{'偶→是/稳' if pp.get('parity') == 'even' else '奇→否/动'}（取样 {scope}{degen}）")
         tm = t.get("timing")
         if isinstance(tm, dict):
             tech.append(f"应期：{'速' if tm.get('speed') == 'fast' else '迟'}·以「{tm.get('unit')}」计")
@@ -4007,31 +4091,89 @@ def _build_geomancy_snapshot_text(response: dict[str, Any]) -> str:
             tech.append(f"点之路：{'贯通' if vp.get('through') else '断于' + str(vp.get('broken_at'))}")
         if t.get("natural_cosignificator"):
             tech.append("自然共主：月亮")
-    house_lines: list[str] = []
-    for h in (reading.get("houses") or []):
-        if not isinstance(h, dict):
-            continue
-        fig = h.get("figure") or {}
-        roles = h.get("roles") or []
-        role = "【所问】" if "quesited" in roles else ("【问者】" if "querent" in roles else "")
-        reading_note = f" — {h['reading']}" if h.get("reading") else ""
-        house_lines.append(f"第{h.get('house')}宫({h.get('nameZh') or ''}){role}：{fig.get('nameZh') or fig.get('nameEn') or ''}{reading_note}")
-    fig_lines: list[str] = []
-    for i, f in enumerate(reading.get("figures16") or []):
-        if not isinstance(f, dict):
-            continue
-        slot = _GEO_SLOT[i] if i < len(_GEO_SLOT) else f"图{i + 1}"
-        elem = f"·{f['elementZh']}" if f.get("elementZh") else ""
-        fig_lines.append(f"{slot}：{f.get('nameZh') or f.get('nameEn')}（{f.get('planetZh') or ''}{elem}）")
+        tri = t.get("triplicities") if isinstance(t.get("triplicities"), list) else []
+        if len(tri) > 1:
+            tech.append(f"黄道宫三方：宫 {'/'.join(str(x) for x in tri)}（{_GEO_TRI.get(tri[0], '')}三方）")
+        if isinstance(tm, dict) and isinstance(tm.get("quantity"), dict):
+            q = tm["quantity"]
+            tech.append(f"数量：{q.get('label')}(总 {q.get('total')} 点·域 {q.get('min')}–{q.get('max')})")
+    jn = (reading.get("judge") or {}).get("number") if isinstance(reading.get("judge"), dict) else None
+    if isinstance(jn, dict) and jn.get("system") != "points":
+        tech.append(f"判官之数：{jn.get('value')}（{jn.get('basis') or jn.get('system')}）")
+
+    # [转宫派生]（条件）
+    derived_lines: list[str] = []
+    d = reading.get("derived")
+    if isinstance(d, dict):
+        derived_lines.append(f"以第 {d.get('turn_to')} 宫为新命宫：新命宫 {d.get('derived_querent_house')} → 所问宫 {d.get('derived_quesited_house')}")
+        derived_lines.append(f"派生完美：{_GEO_PERF.get(d.get('perfection'), d.get('perfection'))}{('；派生阻碍在第 ' + str(d['prohibition']) + ' 宫') if d.get('prohibition') else ''}")
+        df = d.get("figure")
+        if isinstance(df, dict):
+            derived_lines.append(f"派生宫图：{df.get('nameZh') or df.get('nameEn') or '—'}")
+
+    # [定局落星·甲/乙]（条件）
+    placement_a: list[str] = []
+    ppA = reading.get("planetPlacement") if isinstance(reading.get("planetPlacement"), dict) else {}
+    ppA_keys = [k for k in ppA if (ppA.get(k) or [])]
+    if ppA_keys:
+        placement_a.append("；".join(f"{_GEO_PZH.get(k, k)}→{'/'.join(f'{h}宫' for h in ppA[k])}" for k in ppA_keys))
+        absent = [_GEO_PZH.get(k, k) for k in ppA if not (ppA.get(k) or [])]
+        if absent:
+            placement_a.append(f"（缺席：{'、'.join(absent)} —— 星所主之图未入盘，乃本法固有，非算漏）")
+    placement_b: list[str] = []
+    ppB = reading.get("planetPlacementByTwelves")
+    if isinstance(ppB, dict) and ppB:
+        placement_b.append("；".join(f"{_GEO_PZH.get(k, k)}→{ppB[k]}宫" for k in ppB))
+
+    # [十二宫·图形入宫] markdown 表（印度派多支名/曜两列）
+    houses = reading.get("houses") if isinstance(reading.get("houses"), list) else []
+    house_body = ""
+    if houses:
+        is_india = reading.get("profileId") == "india_ramal"
+        rows = (["| 宫 | 宫名 | 支名 | 角色 | 图形 | 曜 | 断语 |", "| --- | --- | --- | --- | --- | --- | --- |"]
+                if is_india else ["| 宫 | 宫名 | 角色 | 图形 | 断语 |", "| --- | --- | --- | --- | --- |"])
+        for h in houses:
+            if not isinstance(h, dict):
+                continue
+            fig = h.get("figure") or {}
+            roles = h.get("roles") or []
+            role = "【所问】" if "quesited" in roles else ("【问者】" if "querent" in roles else "—")
+            if is_india:
+                bh = f"{h['bhava']}（{h.get('bhavaZh') or ''}）" if h.get("bhava") else "—"
+                gr = ((fig.get("vedic") or {}).get("graha_zh")) or "—"
+                rows.append(f"| 第{h.get('house')}宫 | {h.get('nameZh') or '—'} | {bh} | {role} | {fig.get('nameZh') or fig.get('nameEn') or '—'} | {gr} | {h.get('reading') or '—'} |")
+            else:
+                rows.append(f"| 第{h.get('house')}宫 | {h.get('nameZh') or '—'} | {role} | {fig.get('nameZh') or fig.get('nameEn') or '—'} | {h.get('reading') or '—'} |")
+        house_body = "\n".join(rows)
+
+    # [十六图形] markdown 表
+    figs = reading.get("figures16") if isinstance(reading.get("figures16"), list) else []
+    fig_body = ""
+    if figs:
+        rows = ["| 位 | 图形 | 行星 | 元素 |", "| --- | --- | --- | --- |"]
+        for i, f in enumerate(figs):
+            if not isinstance(f, dict):
+                continue
+            slot = _GEO_SLOT[i] if i < len(_GEO_SLOT) else f"图{i + 1}"
+            rows.append(f"| {slot} | {f.get('nameZh') or f.get('nameEn')} | {f.get('planetZh') or '—'} | {f.get('elementZh') or '—'} |")
+        fig_body = "\n".join(rows)
+
+    # [图形释义] doctrine 段：上游默认关段，skill 不产出（仅在 preset 保留作 export_parse 识别面）。
     sections: list[tuple[str, str]] = [("起卦信息", "\n".join(info).strip())]
     if judge:
         sections.append(("判定", "\n".join(judge).strip()))
     if tech:
         sections.append(("解读技法", "\n".join(tech).strip()))
-    if house_lines:
-        sections.append(("十二宫·图形入宫", "\n".join(house_lines).strip()))
-    if fig_lines:
-        sections.append(("十六图形", "\n".join(fig_lines).strip()))
+    if derived_lines:
+        sections.append(("转宫派生", "\n".join(derived_lines).strip()))
+    if placement_a:
+        sections.append(("定局落星·甲", "\n".join(placement_a).strip()))
+    if placement_b:
+        sections.append(("定局落星·乙", "\n".join(placement_b).strip()))
+    if house_body:
+        sections.append(("十二宫·图形入宫", house_body))
+    if fig_body:
+        sections.append(("十六图形", fig_body))
     return _render_snapshot_text(sections)
 
 
@@ -4921,7 +5063,8 @@ def _build_primarydirect_snapshot_text(payload: dict[str, Any], response: dict[s
             ("出生时间", f"出生时间：{params.get('birth', '无')}"),
             ("本命盘星与虚点", _join_lines(_build_star_and_lot_position_lines(natal_wrap)) or "无"),
             (
-                "主/界限法设置",
+                # 上游 v48 段名对齐：主/界限法设置 → 主限法设置（旧名走 map_legacy_section_title）。
+                "主限法设置",
                 _join_lines(
                     [
                         f"推运方法：{_primary_direction_method_text(params.get('pdMethod'))}",
@@ -4934,7 +5077,7 @@ def _build_primarydirect_snapshot_text(payload: dict[str, Any], response: dict[s
                     ]
                 ),
             ),
-            ("主/界限法表格", _join_lines(rows)),
+            ("主限法表格", _join_lines(rows)),
         ]
     )
 
@@ -5103,9 +5246,9 @@ def _pick_section_data(title: str, *, input_normalized: dict[str, Any], response
         if isinstance(chart, dict):
             return chart.get("possibility") or chart.get("possibilities") or {}
         return response_data.get("possibility") or response_data.get("possibilities") or {}
-    if normalized_title in {"主/界限法设置", "主限法盘设置", "十年大运设置"}:
+    if normalized_title in {"主限法设置", "主/界限法设置", "主限法盘设置", "十年大运设置"}:
         return {"input": input_normalized, "predictives": predictives or response_data}
-    if normalized_title in {"主/界限法表格", "主限法盘说明", "法达星限表格", "基于X点推运", "基于X起运"}:
+    if normalized_title in {"主限法表格", "主/界限法表格", "主限法盘说明", "法达星限表格", "基于X点推运", "基于X起运"}:
         return predictives or response_data
     if normalized_title in {"中点", "中点相位"}:
         return response_data
@@ -7223,19 +7366,40 @@ class HorosaSkillService:
 
     def _run_geomancy_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 天文地占：以起卦时刻确定性起卦（castMethod='time' + timeSeed 由 年月日时分 派生，同盘可复现），
-        # 后端 /geomancy/reading 由 4 母卦推 16 图形 + 十二宫图形入宫 + 判官/见证/解读技法。
+        # 后端 /geomancy/reading 由 4 母卦推 16 图形 + 十二宫图形入宫 + 判官/见证/解读技法 + 转宫派生 + 定局落星。
+        options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+        profile = payload.get("profile") or "european_classical"
+        chart_mode = options.get("chartMode")
+        # ifa（西非同族）是结构对照模式：不产地占判读、须随附文化声明。skill 只暴露 8 家占断传本，明确拒绝
+        # ifa（含经 options.chartMode 触发），给结构化错误 + 声明，绝不静默降级出空盘。
+        if profile == "ifa" or chart_mode == "ifa":
+            raise ToolValidationError(
+                "天文地占的 ifa（西非同族）为结构对照模式，只作图形/比特同构对照、不产出该体系之占断，"
+                "故本 skill 不作为可调用能力暴露。请改用 "
+                + "/".join(_GEOMANCY_PROFILES) + " 之一。",
+                code="tool.geomancy_structural_only_unsupported",
+                details={"profile": profile, "chartMode": chart_mode,
+                         "cultural_notice": "Ifá 为独立圣传体系，仅结构同构对照，不套地占含义、不构成占断。"},
+            )
+        if profile not in _GEOMANCY_PROFILES:
+            profile = "european_classical"
         parts = _ken_datetime_parts(payload)
         time_seed = int(f"{parts['year']:04d}{parts['month']:02d}{parts['day']:02d}{parts['hour']:02d}{parts['minute']:02d}")
-        response = self._call_remote(
-            "/geomancy/reading",
-            {
-                "question": payload.get("question") or "",
-                "questionType": payload.get("questionType") or "custom",
-                "castMethod": "time",
-                "timeSeed": time_seed,
-                "profile": payload.get("profile") or "european_classical",
-            },
-        )
+        request: dict[str, Any] = {
+            "question": payload.get("question") or "",
+            "questionType": payload.get("questionType") or "custom",
+            "castMethod": "time",
+            "timeSeed": time_seed,
+            "profile": profile,
+        }
+        for key in ("zodiacSystem", "readingScope", "quesitedHouse", "turnTo"):
+            if payload.get(key) is not None:
+                request[key] = payload[key]
+        # 传本粒度覆盖 passthrough（白名单；chartMode='ifa' 已在上方拦下，此处不会透传）。
+        for key in _GEOMANCY_OPTION_KEYS:
+            if options.get(key) is not None:
+                request[key] = options[key]
+        response = self._call_remote("/geomancy/reading", request)
         snapshot_text = _build_geomancy_snapshot_text(response if isinstance(response, dict) else {})
         return {
             "reading": response.get("reading") if isinstance(response, dict) else None,

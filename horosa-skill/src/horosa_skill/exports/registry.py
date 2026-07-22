@@ -154,7 +154,9 @@ AI_EXPORT_PRESET_SECTIONS = {
     "indiachart": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "古典", "可能性", "大运Dasha"],
     "astrochart_like": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "古典", "古典格局", "可能性"],
     "relative": ["关系起盘信息", "A对B相位", "B对A相位", "A对B中点相位", "B对A中点相位", "A对B映点", "A对B反映点", "B对A映点", "B对A反映点", "合成图盘", "影响图盘-星盘A", "影响图盘-星盘B", "关系量化", "顺畅连接", "张力连接"],
-    "primarydirect": ["出生时间", "本命盘星与虚点", "主/界限法设置", "主/界限法表格", "当前时点", "方法说明"],
+    # 上游 v48 段名对齐：主/界限法设置|表格 → 主限法设置|表格（旧名走 map_legacy_section_title）。UI-only
+    # 新段「主限天球·当前动画所指」(3D 动画所指)headless 不产，故意不进 preset。
+    "primarydirect": ["出生时间", "本命盘星与虚点", "主限法设置", "主限法表格", "当前时点", "方法说明"],
     "primarydirchart": ["出生时间", "本命盘星与虚点", "主限法盘设置", "主限法盘星体表格", "主限法盘相位", "主限法盘说明"],
     "zodialrelease": ["起盘信息", "本命盘星与虚点", "基于X点推运", "当前时点", "方法说明"],
     "firdaria": ["出生时间", "星盘信息", "法达星限表格", "当前时点", "方法说明"],
@@ -232,9 +234,11 @@ AI_EXPORT_PRESET_SECTIONS = {
     "calendar": ["起盘信息", "当月月历", "选中日详情", "方法说明"],
     **JIEQI_SETTING_PRESETS,
     "otherbu": ["起盘信息", "骰子结果", "骰子盘宫位与星体", "天象盘宫位与星体"],
-    # 天文地占（源 preset ['判定','解读技法','十二宫·图形入宫','十六图形']）+ 起卦信息(问题/问类/上升图形)，
-    # 与 skill 惯例一致。解读技法随后端 technique 出、判定/入宫/十六图形每盘必出。
-    "geomancy": ["起卦信息", "判定", "解读技法", "十二宫·图形入宫", "十六图形"],
+    # 天文地占（上游 v3.5.1 地占大改版；builder 段序照 GeomancyMain.buildGeomancySnapshotText）+ 起卦信息
+    # (问题/问类/上升图形)，与 skill 惯例一致。判定/入宫/十六图形每盘必出；解读技法随 technique、转宫派生随
+    # turnTo、定局落星随 house_projection、边界声明随 structuralOnly 条件出 → 见 optional。图形释义为上游默认关
+    # doctrine 段，skill 不产出，仅在 preset 保留作 export_parse 识别面（同 fengshui 策略）。
+    "geomancy": ["起卦信息", "判定", "解读技法", "转宫派生", "定局落星·甲", "定局落星·乙", "十二宫·图形入宫", "十六图形", "图形释义", "边界声明"],
     # 塔罗：reportText 直接产出独占段头 —— 牌阵综览(牌组/牌阵/种子/设置/所问/指示牌) / 逐牌详解(逐位
     # 占象·含义·尊位) / 综合断语(花色元素合读) / 定局(Yes-No+精华牌) / 生命牌(人格·灵魂·流年，需生日)。
     # 综合断语随 summary、生命牌随 birth 条件产出 → 见 optional。
@@ -300,6 +304,10 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     "relative": ["关系量化", "顺畅连接", "张力连接"],
     # 塔罗条件段：综合断语（有 summary 才出）/定局（try 内，罕见异常才缺）/生命牌（仅传 birth 时出）。
     "tarot": ["综合断语", "定局", "生命牌"],
+    # 天文地占条件段：解读技法（随后端 technique）/转宫派生（turnTo）/定局落星·甲乙（house_projection=占星法）/
+    # 图形释义（上游默认关 doctrine 段，skill 不产，仅识别面）/边界声明（结构对照模式，skill 挡 ifa 故不产）。
+    # 判定/十二宫·图形入宫/十六图形每盘必出、起卦信息恒出，保持严格。
+    "geomancy": ["解读技法", "转宫派生", "定局落星·甲", "定局落星·乙", "图形释义", "边界声明"],
     # 一掌经条件段：重犯（有星重现才出）/交互格（日×时有断语才出）/职业适性（月柱星有断语才出）/
     # 流年总论（主星有断语才出）/神煞合参（开关开且有落宫才出）→ 缺失不误报 missing。
     "yizhangjing": ["重犯", "交互格", "职业适性", "流年总论", "神煞合参"],
@@ -373,6 +381,12 @@ def map_legacy_section_title(key: str, title: str | None) -> str:
         # （与 preset 两侧归一，一个纳入开关控 3 类专题）。
         if normalized.startswith("专题深化·"):
             return "专题深化·X"
+    if key == "primarydirect":
+        # 上游 v48 段名对齐：旧名 主/界限法设置|表格 → 新 canonical 主限法设置|表格（外部旧导出/旧 skill 输出兼容）。
+        if normalized == "主/界限法设置":
+            return "主限法设置"
+        if normalized == "主/界限法表格":
+            return "主限法表格"
     if key == "tongshefa":
         if normalized == "互潜":
             return "潜藏"

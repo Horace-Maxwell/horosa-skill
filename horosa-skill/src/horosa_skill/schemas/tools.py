@@ -473,12 +473,25 @@ class ElectionInput(BirthInput):
 
 class GeomancyInput(BirthInput):
     # 天文地占 (astronomical geomancy): 以起卦时刻(date/time/place)确定性起卦(castMethod='time' + timeSeed 由时刻派生)。
-    # 后端由 4 母卦推 16 图形 + 十二宫图形入宫 + 判官/见证/解读技法。question 为所问，questionType 择 11 类问类。
-    # profile = 地占传本流派（european_classical/planetary/modern/arabic_raml/india_ramal/sikidy/hakata）。
+    # 后端由 4 母卦推 16 图形 + 十二宫图形入宫 + 判官/见证/解读技法 + 转宫派生 + 定局落星。question 为所问，
+    # questionType 择 11 类问类。
     question: str | None = None
     questionType: str | None = "custom"
+    # 传本流派：european_classical/european_planetary/european_modern/arabic_raml/india_ramal/sikidy/
+    # hakata/greek（8 家占断传本）。ifa（西非同族结构对照）为结构对照模式、不产占断，本 skill 不暴露 ——
+    # 传 ifa 会以 tool.geomancy_structural_only_unsupported 明确拒绝并说明。
     profile: str | None = "european_classical"
-    tradition: bool | None = None
+    tradition: bool | None = None  # 通用古典盘开关（chart 族共享，geomancy 不使用；保留以兼容 chart_birth 透传）
+    # 黄道体系(classical/planetary)、判读深度(L1/L2/L3)、所问宫(1-12，显式优先于问类查表)、
+    # 转宫(turnTo：以某宫为新命宫重算，问他人/事中之事时用)。
+    zodiacSystem: str | None = None
+    readingScope: str | None = None
+    quesitedHouse: int | None = None
+    turnTo: int | None = None
+    # 传本粒度覆盖 passthrough（markStyle/direction/houseProjection/wrapHouses/reconciler/reconcilerMode/
+    # haltEnabled/compoundMode/numberSystem/chartMode/houseSystem/ascSource/namesSystem/parityScope）；
+    # 未传=None → 内核回落 profile 默认，旧盘字节零变。
+    options: dict[str, Any] | None = None
 
 
 class TarotInput(BirthInput):

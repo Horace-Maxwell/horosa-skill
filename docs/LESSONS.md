@@ -111,6 +111,20 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   （默认 `HOROSA_KENTANG_LAZY=1`）：缺引擎只在**首请求**时响亮 500 + 下次重试，启动不炸。18 个 mount 的
   引擎全在 vendored 集合内。影响 live 验证法：不能再靠「启动即知」，改为**启动后逐 mount 打真请求**强制加载。
   （按 §2 compaction 蒸馏进 AGENTS §5/§8。）
+- **v3.3.6「有情/无情」purity 是 UI-only，不进 AI 导出链（防后人重查）**：上游 astroPatternOverview.js 的
+  purity 只被 `AstroInfo.js` 消费；`astroAiSnapshot.js::buildPatternOverviewLines` 与 [古典] 接纳/互容行
+  **都不渲染 purity**。故 skill 镜像导出契约**无需移植 purity**。真正落后的是 pre-v44 的一处快照可见细节：
+  [古典] 正/邪接纳行缺 FIX-15 `（拒绝）` 标（supplier 在 beneficiary 座为 exile/fall = 凶接纳）——已补
+  `_reception_reject_mark`（镜像 astroAiSnapshot.isReject）。
+- **geomancy v3.5.1 地占大改版接入**：`_build_geomancy_snapshot_text` 对齐上游 v48 builder —— [判定] 补
+  首母中止/sikidy 三道校验+列比对/hakata 四片盘；[解读技法] 补 points_parity 取样域/黄道宫三方/数量+判官之数；
+  新增 [转宫派生]/[定局落星·甲乙]；十二宫·图形入宫 与 十六图形 改 **markdown 表**（印度派多支名/曜两列）。
+  ifa（西非同族）为**结构对照模式、不产占断**：schema 白名单 8 家占断传本、明确拒绝 ifa
+  （`tool.geomancy_structural_only_unsupported` + 文化声明），换来 判定/十二宫/十六图形 可作**必出段**的强契约；
+  [图形释义]（doctrine 默认关）与 [边界声明]（ifa）skill 不产，仅进 preset 作 export_parse 识别面（同 fengshui）。
+- **primarydirect 段名对齐**：上游 v48 判 `主/界限法设置|表格` 为死名、真名 `主限法设置|表格`；skill builder/
+  preset/report-payload-map 同步改真名，旧名走 `map_legacy_section_title`。UI-only 新段
+  `主限天球·当前动画所指`（3D 动画所指）headless 不产，**故意不进 preset**（§5 UI-only 段过滤）。
 
 ### v0.22.0 / 2026-07-16 — parity lint 常量交叉扩到全部 manifest-stamping 脚本（Windows 侧）
 
