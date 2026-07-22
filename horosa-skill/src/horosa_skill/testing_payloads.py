@@ -139,6 +139,7 @@ def build_sample_payloads() -> dict[str, dict]:
         "geomancy": {**chart_birth, "question": "事业能否升迁", "questionType": "career"},
         "tarot": {**chart_birth, "question": "事业能否升迁", "spread": "three"},
         "xiaoliuren": {**confirmed, "nums": [5, 20, 7], "school": "dao", "askEvent": "求财"},
+        "feigong": {**confirmed, "qiMode": "manualZhi", "zhi": "午", "dayGan": "甲", "dayZhi": "子", "mingAge": 35, "mingGender": "male", "liuYueMonth": 1, "askEvent": "求财"},
         "wangji": {**confirmed, "date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1},
         "wuzhao": {**confirmed, "date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1, "options": {"mode": "ganzhi", "number": 0}},
         "taixuan": {**confirmed, "date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1},

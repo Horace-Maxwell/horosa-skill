@@ -610,6 +610,38 @@ def test_xiaoliuren_time_cast_derives_nums_from_nongli(tmp_path) -> None:
     assert r.ok is True, r.error
     assert len(r.data["xiaoliuren"]["nums"]) == 3
     assert "起卦时间:2026-05-20" in r.data["snapshot_text"]
+
+
+def test_feigong_local_tool_runs_headless_engine(tmp_path) -> None:
+    # 飞宫小奇门（上游 v3.5.0）：时上起青龙飞九宫，纯函数进程内计算，零后端。手工起支+日干支冻结定局。
+    service = make_service(tmp_path)
+    r = service.run_tool(
+        "feigong",
+        {"qiMode": "manualZhi", "zhi": "午", "dayGan": "甲", "dayZhi": "子", "mingAge": 35, "mingGender": "male", "liuYueMonth": 1, "askEvent": "求财"},
+        save_result=False,
+    )
+    assert r.ok is True, r.error
+    snap = r.data["snapshot_text"]
+    for header in ("[问事]", "[起局]", "[干支]", "[命宫]", "[宫位]", "[运气]", "[应期]"):
+        assert header in snap, header
+    assert r.data["feigong"]["qiZhi"] == "午"
+    assert "甲乘龙飞九宫" in snap and "青龙(甲)落 9 宫" in snap
+    export = r.data.get("export_snapshot") or {}
+    assert export.get("missing_selected_sections") == []
+    assert export.get("unknown_detected_sections") == []
+    # 局冻结：同起支同盘。
+    again = service.run_tool("feigong", {"qiMode": "manualZhi", "zhi": "午", "dayGan": "甲", "dayZhi": "子", "mingAge": 35, "mingGender": "male", "liuYueMonth": 1, "askEvent": "求财"}, save_result=False)
+    assert again.data["snapshot_text"] == snap
+
+
+@requires_chart
+def test_feigong_time_cast_derives_ganzhi_from_nongli(tmp_path) -> None:
+    # 占时起局：缺 dayGan/dayZhi → 前置 /nongli/time 派生 时支（起支）+ 日干支（JS 不发 HTTP）。
+    service = make_service(tmp_path)
+    r = service.run_tool("feigong", {"date": "2026-05-20", "time": "12:30:00", "zone": "+08:00", "lon": "121e28", "mingAge": 35, "askEvent": "问出行"}, save_result=False)
+    assert r.ok is True, r.error
+    assert r.data["feigong"]["qiZhi"]
+    assert "起卦时间:2026-05-20" in r.data["snapshot_text"]
     _assert_clean_export(result)
 
 

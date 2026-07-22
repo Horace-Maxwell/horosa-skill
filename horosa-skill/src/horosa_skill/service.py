@@ -91,6 +91,7 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "heluo": "heluo",
     "yizhangjing": "yizhangjing",
     "xiaoliuren": "xiaoliuren",
+    "feigong": "feigong",
     "acg": "acg",
     "astrodata": "astrodata",
     "sanshiunited": "sanshiunited",
@@ -6567,6 +6568,73 @@ class HorosaSkillService:
             "export_snapshot": self._augment_export_payload(technique="xiaoliuren", snapshot_text=snapshot_text),
         }
 
+    def _run_feigong_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 飞宫小奇门：起支 + 日干支定局（冻结）。显式 qiZhi/dayGan/dayZhi 优先；缺则占时起
+        # （/nongli/time → 时支作起支 + 日干支），JS 层不发 HTTP（AGENTS §4）。
+        qi_mode = payload.get("qiMode", "hour")
+        day_gan = payload.get("dayGan")
+        day_zhi = payload.get("dayZhi")
+        hour_zhi = payload.get("hourZhi")
+        time_lines: list[str] = []
+        need_hour = qi_mode == "hour" and not payload.get("qiZhi") and not hour_zhi
+        if (not day_gan or not day_zhi or need_hour) and payload.get("date"):
+            nongli = self._call_remote(
+                "/nongli/time",
+                {
+                    "date": payload["date"],
+                    "time": payload.get("time"),
+                    "zone": payload.get("zone"),
+                    "lon": payload.get("lon"),
+                    "lat": payload.get("lat"),
+                    **_day_boundary_switches(payload),
+                },
+            )
+            if isinstance(nongli, dict):
+                day_gz = str(nongli.get("dayGanZi") or "")
+                if len(day_gz) >= 2:
+                    day_gan = day_gan or day_gz[0]
+                    day_zhi = day_zhi or day_gz[1]
+                hour_gz = str(nongli.get("time") or "")
+                if len(hour_gz) >= 2 and not hour_zhi:
+                    hour_zhi = hour_gz[1]
+                time_lines = [
+                    f"起卦时间:{payload.get('date')} {payload.get('time') or ''}".strip(),
+                    f"农历:{nongli.get('monthInt')}月{nongli.get('dayInt')}日 {hour_zhi}时",
+                ]
+        js_result = self.js_client.run(
+            "feigong",
+            {
+                "qiMode": qi_mode,
+                "qiZhi": payload.get("qiZhi"),
+                "hourZhi": hour_zhi,
+                "zhi": payload.get("zhi"),
+                "num": payload.get("num"),
+                "yearZhi": payload.get("yearZhi"),
+                "dayGan": day_gan,
+                "dayZhi": day_zhi,
+                "mingAge": payload.get("mingAge"),
+                "mingGender": payload.get("mingGender", "male"),
+                "liuYueMonth": payload.get("liuYueMonth"),
+                "koujing": payload.get("koujing", "zheng"),
+                "askEvent": payload.get("askEvent") or payload.get("question") or "",
+                "timeLines": time_lines,
+            },
+        )
+        data = js_result.get("data", {})
+        if isinstance(data, dict) and data.get("ok") is False:
+            raise ToolValidationError(
+                "飞宫小奇门起局失败：无法定起支/日干支。请显式给 qiZhi + dayGan + dayZhi，或提供完整 date/time 按占时起局。",
+                code="tool.feigong_cast_unavailable",
+                details={"reason": data.get("reason"), "qiMode": qi_mode},
+            )
+        snapshot_text = js_result.get("snapshot_text")
+        return {
+            "feigong": data,
+            "input_normalized": js_result.get("input_normalized", {}),
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="feigong", snapshot_text=snapshot_text),
+        }
+
     def _run_sanshiunited_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         shared = {
             "date": payload["date"],
@@ -7563,6 +7631,8 @@ class HorosaSkillService:
             return self._run_yizhangjing_tool(payload)
         if definition.name == "xiaoliuren":
             return self._run_xiaoliuren_tool(payload)
+        if definition.name == "feigong":
+            return self._run_feigong_tool(payload)
         if definition.name == "acg":
             return self._run_acg_tool(payload)
         if definition.name == "astrodata":

@@ -627,6 +627,21 @@ class FakeJsClient(HorosaJsEngineClient):
                     "[化解]\n小吉被空亡克 → 拜玉皇化解"
                 ),
             }
+        if tool_name == "feigong":
+            # 飞宫小奇门：7 段无条件恒出。真内容样例，供离线契约 round-trip。
+            return {
+                "data": {"qiZhi": "午", "jianZhi": "申", "longGong": 9, "dayGan": "甲", "dayZhi": "子", "zhongGong": ["乙", "庚"]},
+                "input_normalized": {"qiMode": "manualZhi", "qiZhi": "午", "dayGan": "甲", "dayZhi": "子", "askEvent": "求财"},
+                "snapshot_text": (
+                    "[问事]\n所问:求财\n\n"
+                    "[起局]\n起支:午;建星起于申;青龙(甲)落 9 宫\n\n"
+                    "[干支]\n甲乘龙飞九宫:甲9 乙中 丙1 丁2 戊3 己4 庚中 辛6 壬7 癸8\n中宫双干:乙庚(五十居中)\n八门:休门起 1 宫\n\n"
+                    "[命宫]\n年龄 35(男):调整数 35,命宫 3(震)\n\n"
+                    "[宫位]\n主(日干甲)落 9 宫;客(日支子)落 1 宫\n\n"
+                    "[运气]\n主宫9 得景门(平):远行有阻,音信利。\n\n"
+                    "[应期]\n建星:申 起建,建除十二神随支顺布(以天星所临断应期缓急)。"
+                ),
+            }
         if tool_name == "progextra":
             # v2.5.0 推运 vendored builders (balbillus etc.) — return the single-section snapshot directly.
             technique = payload.get("technique")

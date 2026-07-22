@@ -607,6 +607,21 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         safe_defaults=[{"field": "school", "value": "main", "meaning": "默认主流六宫（六宫直断，无五行生克）"}],
         do_not_assume=["起课三数/起课时刻（决定三传，须真实）", "所问内容"],
     ),
+    "feigong": _policy(
+        intent="飞宫小奇门 / feigong：时上起青龙，甲乘龙飞九宫，布八门九星，看主（日干）客（日支）宫。局为冻结值——起支一经定局即不重起。占时可起（时支作起支 + 日干支）。",
+        required_context=["起支 qiMode/qiZhi 或 起局时刻 date/time", "日干支 dayGan/dayZhi", "所问 askEvent", "命宫 mingAge/mingGender（可选）"],
+        ask_if_missing=[
+            {"field": "qiZhi / date-time", "question": "如何起局？给起支（时支/选支/数取/年支），或提供起局的日期/时间（按占时以时支起局）。"},
+            {"field": "dayGan/dayZhi", "question": "日干支是什么？（主=日干、客=日支落宫）。占时可由起局时刻自动取。"},
+            {"field": "askEvent", "question": "所问何事？"},
+            {"field": "koujing", "question": "河魁口径用哪说？", "options": ["正说 zheng", "异说 yi"]},
+        ],
+        safe_defaults=[
+            {"field": "qiMode", "value": "hour", "meaning": "默认按占时（时支）起局"},
+            {"field": "koujing", "value": "zheng", "meaning": "默认河魁正说"},
+        ],
+        do_not_assume=["起支/起局时刻（决定全局，须真实）", "日干支", "所问内容"],
+    ),
     "wangji": SHENSHU_POLICY,
     "wuzhao": SHENSHU_POLICY,
     "taixuan": SHENSHU_POLICY,

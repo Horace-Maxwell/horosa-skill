@@ -14,6 +14,7 @@ import { buildLiuRengReferenceContext } from '../src/vendor/liureng/liurengRefCo
 import { matchBiFa } from '../src/vendor/liureng/LRBiFaDoc.js';
 import { runGuolaoMoira } from '../src/tools/guolaoMoira.js';
 import { runXiaoLiuRen } from '../src/tools/xiaoliuren.js';
+import { runFeiGong } from '../src/tools/feigong.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const chart = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_traditional.json'), 'utf8'));
@@ -127,6 +128,17 @@ check('xiaoliuren(dao) 三数起三传 + 生克/化解，determinism', () => {
   // 主流六宫无五行生克，段如实标注。
   const main = runXiaoLiuRen({ nums: [5, 20, 7], school: 'main', askEvent: '求财' });
   assert(main.snapshot_text.includes('主流六宫不调取五行生克'), 'main school should note no 生克');
+});
+
+check('feigong 时上起青龙飞九宫，7 段 + determinism', () => {
+  const p = { qiMode: 'manualZhi', zhi: '午', dayGan: '甲', dayZhi: '子', mingAge: 35, mingGender: 'male', liuYueMonth: 1, askEvent: '求财' };
+  const r = runFeiGong(p);
+  assert(r.snapshot_text, 'should emit a snapshot');
+  ['[问事]', '[起局]', '[干支]', '[命宫]', '[宫位]', '[运气]', '[应期]'].forEach((h) => assert(r.snapshot_text.includes(h), `missing ${h}`));
+  assert(r.data.qiZhi === '午', `unexpected 起支: ${r.data.qiZhi}`);
+  assert(r.snapshot_text.includes('甲乘龙飞九宫'), 'missing 甲乘龙飞九宫');
+  const again = runFeiGong(p);
+  assert(again.snapshot_text === r.snapshot_text, '同起支须同盘（冻结局）');
 });
 
 if (failures > 0) {

@@ -350,6 +350,36 @@ class XiaoLiuRenInput(FlexibleModel):
     lateZiHourUseNextDay: int | None = None
 
 
+class FeiGongInput(FlexibleModel):
+    # 飞宫小奇门：时上起青龙·甲乘龙飞九宫。局为【冻结值】——起支 + 日干支一经定局即不重起。
+    # 起支来源 qiMode：hour 时支（默认，占时）/ manualZhi 选支 / manualNum 数取 / yearZhi 年支；
+    # 也可直接给已定 qiZhi。命宫随 mingAge/mingGender 重排；koujing=河魁口径（zheng 正 / yi 异两说）。
+    qiMode: str | None = "hour"
+    qiZhi: str | None = None
+    zhi: str | None = None
+    num: int | None = None
+    yearZhi: str | None = None
+    hourZhi: str | None = None
+    dayGan: str | None = None
+    dayZhi: str | None = None
+    mingAge: int | None = None
+    mingGender: str | None = "male"
+    liuYueMonth: int | None = None
+    koujing: str | None = "zheng"
+    askEvent: str | None = None
+    question: str | None = None
+    # 占时起局所需（缺 dayGan/dayZhi 或 hour 模式缺 hourZhi 时）：
+    date: str | None = None
+    time: str | None = None
+    zone: str | None = None
+    lon: str | None = None
+    lat: str | None = None
+    ad: int | None = 1
+    timeAlg: int | None = None
+    after23NewDay: int | None = None
+    lateZiHourUseNextDay: int | None = None
+
+
 class ACGInput(BirthInput):
     # 占星地图（AstroCartoGraphy）：本命时刻的行星地理投影线（MC/IC 恒定经度、ASC/DESC 曲线、
     # 天顶点、偕升纬度带、线交点）。口径开关：mode=mundo 真黄纬（Jim Lewis 原版，默认）/zodiac
