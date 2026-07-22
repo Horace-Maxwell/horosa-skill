@@ -16,6 +16,7 @@ import { runTongSheFa } from './tongshefa.js';
 import { runYizhangjing } from './yizhangjing.js';
 import { runXiaoLiuRen } from './xiaoliuren.js';
 import { runFeiGong } from './feigong.js';
+import { runXiaoChengTu } from './xiaochengtu.js';
 
 const TOOL_RUNNERS = {
   qimen: runQimen,
@@ -31,6 +32,7 @@ const TOOL_RUNNERS = {
   yizhangjing: runYizhangjing,
   xiaoliuren: runXiaoLiuRen,
   feigong: runFeiGong,
+  xiaochengtu: runXiaoChengTu,
   astroextra: runAstroExtra,
   progextra: runProgExtra,
   horary: runHoraryTool,

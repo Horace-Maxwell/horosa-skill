@@ -622,6 +622,20 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         do_not_assume=["起支/起局时刻（决定全局，须真实）", "日干支", "所问内容"],
     ),
+    "xiaochengtu": _policy(
+        intent="小成图 / xiaochengtu：得一卦排入洛书九宫，正推旁推演事，四象定性、数占/三分两分定应期，股市模式研判开收盘。卦为冻结值——起卦一经起出即不重起，改用宫只重排推演。",
+        required_context=["起卦法 qiguaFa + 该法之输入", "用宫 yongGong", "所问 askEvent"],
+        ask_if_missing=[
+            {"field": "qiguaFa", "question": "用哪种起卦法？", "options": ["手动上下卦 manual（up/lo + 动爻）", "两数 number（upNum/loNum + 天地数/先天数）", "股价 stock（open/close，字符串保末尾0）", "大衍蓍草 dayan（须给 seed 或 6 个 counts）", "占时梅花卦 time（date/time 起）"]},
+            {"field": "cast-input", "question": "请给该起卦法所需的输入（手动=上下卦、两数=两数、股价=开收价、大衍=种子/蓍草数、占时=日期时间）。"},
+            {"field": "askEvent", "question": "所问何事？"},
+        ],
+        safe_defaults=[
+            {"field": "yongGong", "value": 1, "meaning": "默认用宫 1（坎宫）"},
+            {"field": "qiguaShu", "value": "tiandi", "meaning": "两数模式默认天地数"},
+        ],
+        do_not_assume=["起卦法与起卦输入（决定卦，须真实；大衍禁静默随机）", "所问内容"],
+    ),
     "wangji": SHENSHU_POLICY,
     "wuzhao": SHENSHU_POLICY,
     "taixuan": SHENSHU_POLICY,

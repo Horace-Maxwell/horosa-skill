@@ -15,6 +15,7 @@ import { matchBiFa } from '../src/vendor/liureng/LRBiFaDoc.js';
 import { runGuolaoMoira } from '../src/tools/guolaoMoira.js';
 import { runXiaoLiuRen } from '../src/tools/xiaoliuren.js';
 import { runFeiGong } from '../src/tools/feigong.js';
+import { runXiaoChengTu } from '../src/tools/xiaochengtu.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const chart = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_traditional.json'), 'utf8'));
@@ -139,6 +140,19 @@ check('feigong 时上起青龙飞九宫，7 段 + determinism', () => {
   assert(r.snapshot_text.includes('甲乘龙飞九宫'), 'missing 甲乘龙飞九宫');
   const again = runFeiGong(p);
   assert(again.snapshot_text === r.snapshot_text, '同起支须同盘（冻结局）');
+});
+
+check('xiaochengtu 洛书九宫 + 股市段条件 + 大衍 seed 确定性', () => {
+  const manual = runXiaoChengTu({ qiguaFa: 'manual', up: '乾', lo: '兑', dongYaos: [3], yongGong: 1, askEvent: '求财' });
+  ['[问事]', '[起卦]', '[佈局]', '[推导]', '[四象]', '[应期]'].forEach((h) => assert(manual.snapshot_text.includes(h), `missing ${h}`));
+  assert(!manual.snapshot_text.includes('[股市]'), 'non-stock must not emit [股市]');
+  const stock = runXiaoChengTu({ qiguaFa: 'stock', open: '1563.60', close: '1571.10', yongGong: 1 });
+  assert(stock.snapshot_text.includes('[股市]'), 'stock mode must emit [股市]');
+  const noSeed = runXiaoChengTu({ qiguaFa: 'dayan' });
+  assert(noSeed.data.reason === 'dayan_seed_required', 'dayan without seed must refuse');
+  const a = runXiaoChengTu({ qiguaFa: 'dayan', seed: 12345 });
+  const b = runXiaoChengTu({ qiguaFa: 'dayan', seed: 12345 });
+  assert(a.snapshot_text === b.snapshot_text, '大衍同 seed 须同盘');
 });
 
 if (failures > 0) {

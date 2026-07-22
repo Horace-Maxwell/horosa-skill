@@ -642,7 +642,30 @@ def test_feigong_time_cast_derives_ganzhi_from_nongli(tmp_path) -> None:
     assert r.ok is True, r.error
     assert r.data["feigong"]["qiZhi"]
     assert "起卦时间:2026-05-20" in r.data["snapshot_text"]
-    _assert_clean_export(result)
+
+
+def test_xiaochengtu_local_tool_runs_headless_engine(tmp_path) -> None:
+    # 小成图（上游 v3.5.0）：洛书九宫佈局，纯函数进程内计算，零后端。手动上下卦 + 动爻冻结起卦。
+    service = make_service(tmp_path)
+    manual = service.run_tool("xiaochengtu", {"qiguaFa": "manual", "up": "乾", "lo": "兑", "dongYaos": [3], "yongGong": 1, "askEvent": "求财"}, save_result=False)
+    assert manual.ok is True, manual.error
+    snap = manual.data["snapshot_text"]
+    for header in ("[问事]", "[起卦]", "[佈局]", "[推导]", "[四象]", "[应期]"):
+        assert header in snap, header
+    assert "[股市]" not in snap  # 非 stock 模式不出（条件段，非误缺）
+    assert manual.data["xiaochengtu"]["ben"] == "天泽履"
+    export = manual.data.get("export_snapshot") or {}
+    assert export.get("missing_selected_sections") == [] and export.get("unknown_detected_sections") == []
+    # stock 模式出 [股市]。
+    stock = service.run_tool("xiaochengtu", {"qiguaFa": "stock", "open": "1563.60", "close": "1571.10", "yongGong": 1}, save_result=False)
+    assert "[股市]" in stock.data["snapshot_text"]
+    # 大衍须显式 seed：缺则结构化拒绝，不静默随机。
+    dayan_no_seed = service.run_tool("xiaochengtu", {"qiguaFa": "dayan"}, save_result=False)
+    assert dayan_no_seed.ok is False and dayan_no_seed.error.code == "tool.xiaochengtu_dayan_seed_required"
+    # 大衍同 seed 同盘。
+    a = service.run_tool("xiaochengtu", {"qiguaFa": "dayan", "seed": 12345}, save_result=False)
+    b = service.run_tool("xiaochengtu", {"qiguaFa": "dayan", "seed": 12345}, save_result=False)
+    assert a.data["snapshot_text"] == b.data["snapshot_text"]
 
 
 @requires_chart

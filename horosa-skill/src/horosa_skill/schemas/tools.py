@@ -380,6 +380,38 @@ class FeiGongInput(FlexibleModel):
     lateZiHourUseNextDay: int | None = None
 
 
+class XiaoChengTuInput(FlexibleModel):
+    # 小成图：洛书九宫佈局·正旁推·四象·应期·股市研判。卦为【冻结值】——起卦一经起出即不重起。
+    # qiguaFa：manual 手动(上/下卦 up/lo + 动爻 dongYaos) / number 两数(upNum/loNum + qiguaShu 天地数
+    # tiandi/先天 xiantian) / stock 股价(open/close 字符串保末尾 0) / dayan 大衍(seed 或 manualCounts，
+    # 须显式，禁静默随机) / time 占时梅花卦(date/time → 年支序+月+日=上数、+时支序=下数)。yongGong 用宫(1-9 非5)。
+    qiguaFa: str | None = "manual"
+    up: str | None = None
+    lo: str | None = None
+    dongYaos: list[int] | None = None
+    upNum: int | None = None
+    loNum: int | None = None
+    qiguaShu: str | None = "tiandi"
+    open: str | None = None
+    close: str | None = None
+    seed: int | None = None
+    manualCounts: list[int] | None = None
+    yongGong: int | None = 1
+    kline: dict[str, Any] | None = None
+    askEvent: str | None = None
+    question: str | None = None
+    # 占时(qiguaFa='time')所需：
+    date: str | None = None
+    time: str | None = None
+    zone: str | None = None
+    lon: str | None = None
+    lat: str | None = None
+    ad: int | None = 1
+    timeAlg: int | None = None
+    after23NewDay: int | None = None
+    lateZiHourUseNextDay: int | None = None
+
+
 class ACGInput(BirthInput):
     # 占星地图（AstroCartoGraphy）：本命时刻的行星地理投影线（MC/IC 恒定经度、ASC/DESC 曲线、
     # 天顶点、偕升纬度带、线交点）。口径开关：mode=mundo 真黄纬（Jim Lewis 原版，默认）/zodiac

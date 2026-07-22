@@ -33,6 +33,8 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("xiaoliuren")
     if _contains_any(text, ["飞宫", "小奇门", "feigong"]):
         add("feigong")
+    if _contains_any(text, ["小成图", "xiaochengtu"]):
+        add("xiaochengtu")
     # 飞宫小奇门 含「奇门」二字 → 奇门遁甲分支须排除，否则「飞宫小奇门问出行」误路由 qimen。
     if _contains_any(text, ["奇门", "qimen"]) and not _contains_any(text, ["飞宫", "小奇门", "feigong"]):
         add("qimen")
@@ -115,7 +117,10 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("yearsystem129")
     if _contains_any(text, ["波斯向运", "persian directed", "persiandirected", "象征向运"]):
         add("persiandirected")
-    if _contains_any(text, ["卜卦", "horary", "占问", "起卦"]):
+    # 卜卦盘 的「起卦」通用词会被小成图/小六壬/飞宫/皇极轨策的「…起卦」误触 → 显式排除新式起卦技法。
+    if _contains_any(text, ["卜卦", "horary", "占问", "起卦"]) and not _contains_any(
+        text, ["小成图", "小六壬", "飞宫", "轨策", "皇极轨策", "xiaochengtu", "xiaoliuren", "feigong", "guice"]
+    ):
         add("horary")
     if _contains_any(text, ["择日", "择吉", "election", "electional", "选时", "用事时刻"]):
         add("election")

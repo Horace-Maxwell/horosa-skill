@@ -92,6 +92,7 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "yizhangjing": "yizhangjing",
     "xiaoliuren": "xiaoliuren",
     "feigong": "feigong",
+    "xiaochengtu": "xiaochengtu",
     "acg": "acg",
     "astrodata": "astrodata",
     "sanshiunited": "sanshiunited",
@@ -6635,6 +6636,81 @@ class HorosaSkillService:
             "export_snapshot": self._augment_export_payload(technique="feigong", snapshot_text=snapshot_text),
         }
 
+    def _run_xiaochengtu_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 小成图：五式起卦（manual/number/stock/dayan/time）。卦为冻结值。占时=梅花时间卦：Python 前置
+        # /nongli/time 算 upNum=年支序+农历月+日、loNum=upNum+时支序（镜像上游·之卦=本卦不加动爻），
+        # 以 number 模式喂 JS（JS 不发 HTTP，AGENTS §4）。
+        fa = payload.get("qiguaFa", "manual")
+        request: dict[str, Any] = {
+            "qiguaFa": fa,
+            "up": payload.get("up"),
+            "lo": payload.get("lo"),
+            "dongYaos": payload.get("dongYaos"),
+            "upNum": payload.get("upNum"),
+            "loNum": payload.get("loNum"),
+            "qiguaShu": payload.get("qiguaShu", "tiandi"),
+            "open": payload.get("open"),
+            "close": payload.get("close"),
+            "seed": payload.get("seed"),
+            "manualCounts": payload.get("manualCounts"),
+            "yongGong": payload.get("yongGong", 1),
+            "kline": payload.get("kline"),
+            "askEvent": payload.get("askEvent") or payload.get("question") or "",
+            "timeLines": [],
+        }
+        if fa == "time":
+            nongli = self._call_remote(
+                "/nongli/time",
+                {
+                    "date": payload["date"],
+                    "time": payload.get("time"),
+                    "zone": payload.get("zone"),
+                    "lon": payload.get("lon"),
+                    "lat": payload.get("lat"),
+                    **_day_boundary_switches(payload),
+                },
+            )
+            year_gz = str(nongli.get("year") or "") if isinstance(nongli, dict) else ""
+            year_zhi = year_gz[1] if len(year_gz) >= 2 else ""
+            month_int = nongli.get("monthInt") if isinstance(nongli, dict) else None
+            day_int = nongli.get("dayInt") if isinstance(nongli, dict) else None
+            hour_gz = str(nongli.get("time") or "") if isinstance(nongli, dict) else ""
+            hour_zhi = hour_gz[1] if len(hour_gz) >= 2 else ""
+            year_idx = (_SIXYAO_DIZHI.index(year_zhi) + 1) if year_zhi in _SIXYAO_DIZHI else None
+            hour_idx = (_SIXYAO_DIZHI.index(hour_zhi) + 1) if hour_zhi in _SIXYAO_DIZHI else None
+            if not (year_idx and month_int and day_int and hour_idx):
+                raise ToolValidationError(
+                    "小成图占时起卦失败：无法从 /nongli/time 取得 年支/农历月日/时支。请改用 manual/number/stock/dayan 显式起卦。",
+                    code="tool.xiaochengtu_cast_unavailable",
+                    details={"yearZhi": year_zhi, "monthInt": month_int, "dayInt": day_int, "hourZhi": hour_zhi},
+                )
+            up_num = year_idx + month_int + day_int
+            lo_num = up_num + hour_idx
+            request["qiguaFa"] = "number"
+            request["upNum"] = up_num
+            request["loNum"] = lo_num
+            request["timeLines"] = [
+                f"起卦时间:{payload.get('date')} {payload.get('time') or ''}".strip(),
+                f"梅花时间卦:上数{up_num}(年支序{year_idx}+农历{month_int}月+{day_int}日) 下数{lo_num}(+时支序{hour_idx})",
+            ]
+        js_result = self.js_client.run("xiaochengtu", request)
+        data = js_result.get("data", {})
+        if isinstance(data, dict) and data.get("ok") is False:
+            reason = data.get("reason")
+            code = "tool.xiaochengtu_dayan_seed_required" if reason == "dayan_seed_required" else "tool.xiaochengtu_bad_cast"
+            raise ToolValidationError(
+                data.get("message") or "小成图起卦失败。",
+                code=code,
+                details={"reason": reason, "qiguaFa": fa},
+            )
+        snapshot_text = js_result.get("snapshot_text")
+        return {
+            "xiaochengtu": data,
+            "input_normalized": js_result.get("input_normalized", {}),
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="xiaochengtu", snapshot_text=snapshot_text),
+        }
+
     def _run_sanshiunited_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         shared = {
             "date": payload["date"],
@@ -7633,6 +7709,8 @@ class HorosaSkillService:
             return self._run_xiaoliuren_tool(payload)
         if definition.name == "feigong":
             return self._run_feigong_tool(payload)
+        if definition.name == "xiaochengtu":
+            return self._run_xiaochengtu_tool(payload)
         if definition.name == "acg":
             return self._run_acg_tool(payload)
         if definition.name == "astrodata":

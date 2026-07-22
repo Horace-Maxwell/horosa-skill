@@ -642,6 +642,21 @@ class FakeJsClient(HorosaJsEngineClient):
                     "[应期]\n建星:申 起建,建除十二神随支顺布(以天星所临断应期缓急)。"
                 ),
             }
+        if tool_name == "xiaochengtu":
+            # 小成图：6 段恒出 + [股市]（stock 模式）。真内容样例，供离线契约 round-trip。
+            return {
+                "data": {"mode": "stock", "ben": "天泽履", "zhi": "乾为天", "dongYaos": [], "yongGong": 1},
+                "input_normalized": {"qiguaFa": "stock", "yongGong": 1, "askEvent": "问股"},
+                "snapshot_text": (
+                    "[问事]\n所问:问股\n\n"
+                    "[起卦]\n本卦:天泽履;之卦:乾为天;动爻:无\n\n"
+                    "[佈局]\n4巽 | 9乾 | 2离\n3乾 | 五(中) | 7乾\n8乾 | 1兑 | 6乾\n中宫五、十居中,无卦。\n\n"
+                    "[推导]\n用宫所主:1宫坎(北·十一月),宫主命病盗\n\n"
+                    "[四象]\n本卦天泽履:老阳\n\n"
+                    "[应期]\n数占:正推链宫数相加 = 30(问数以数应)\n\n"
+                    "[股市]\n研判·开盘:用宫天盘乾 → 涨(幅度大)\n研判·收盘:正推末卦乾 → 涨(幅度大)"
+                ),
+            }
         if tool_name == "progextra":
             # v2.5.0 推运 vendored builders (balbillus etc.) — return the single-section snapshot directly.
             technique = payload.get("technique")

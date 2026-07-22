@@ -146,6 +146,7 @@ AI_EXPORT_TECHNIQUES = [
     {"key": "yizhangjing", "label": "一掌经"},
     {"key": "xiaoliuren", "label": "小六壬"},
     {"key": "feigong", "label": "飞宫小奇门"},
+    {"key": "xiaochengtu", "label": "小成图"},
     {"key": "acg", "label": "占星地图"},
     {"key": "astrodata", "label": "名人星盘库"},
     {"key": "generic", "label": "其他页面"},
@@ -268,6 +269,8 @@ AI_EXPORT_PRESET_SECTIONS = {
     "xiaoliuren": ["问事", "起课", "三传", "生克", "九神", "化解"],
     # 飞宫小奇门（上游 v3.5.0）：时上起青龙飞九宫，7 段无条件恒出（缺项段内如实标注）→ 严格技法，空 optional。
     "feigong": ["问事", "起局", "干支", "命宫", "宫位", "运气", "应期"],
+    # 小成图（上游 v3.5.0）：洛书九宫佈局，6 段恒出 + [股市] 仅 stock 模式出（条件段，见 optional）。
+    "xiaochengtu": ["问事", "起卦", "佈局", "推导", "四象", "应期", "股市"],
     # 占星地图（AstroCartoGraphy）：行星地理投影线表；偕升/交点随数据条件产出 → optional。
     "acg": ["起盘信息", "行星线经度", "偕升纬度带", "线交点"],
     # 名人星盘库（离线只读检索）：列表态出 检索条件/命中列表；单人态出 检索条件/名人详情/
@@ -310,6 +313,8 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     "relative": ["关系量化", "顺畅连接", "张力连接"],
     # 塔罗条件段：综合断语（有 summary 才出）/定局（try 内，罕见异常才缺）/生命牌（仅传 birth 时出）。
     "tarot": ["综合断语", "定局", "生命牌"],
+    # 小成图条件段：[股市] 仅 qiguaFa='stock' 起卦时出（研判开收盘涨跌/幅度/K线），其余模式不出 → 缺失不误报。
+    "xiaochengtu": ["股市"],
     # 天文地占条件段：解读技法（随后端 technique）/转宫派生（turnTo）/定局落星·甲乙（house_projection=占星法）/
     # 图形释义（上游默认关 doctrine 段，skill 不产，仅识别面）/边界声明（结构对照模式，skill 挡 ifa 故不产）。
     # 判定/十二宫·图形入宫/十六图形每盘必出、起卦信息恒出，保持严格。

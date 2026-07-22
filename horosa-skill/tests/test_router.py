@@ -50,3 +50,11 @@ def test_router_feigong_excludes_qimen_both_ways() -> None:
     assert "feigong" in got and "qimen" not in got
     got2 = select_tools(DispatchInput.model_validate({"query": "奇门遁甲排盘看事业"}))
     assert "qimen" in got2 and "feigong" not in got2
+
+
+def test_router_xiaochengtu_excludes_horary() -> None:
+    # 小成图起卦：通用词「起卦」不得误路由 horary。
+    got = select_tools(DispatchInput.model_validate({"query": "小成图起卦看股市"}))
+    assert "xiaochengtu" in got and "horary" not in got
+    # 卜卦回归：无小成图字样时「卜卦」仍走 horary。
+    assert "horary" in select_tools(DispatchInput.model_validate({"query": "卜卦问婚姻"}))
