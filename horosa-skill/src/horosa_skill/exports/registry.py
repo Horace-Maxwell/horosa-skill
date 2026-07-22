@@ -7,18 +7,21 @@ AI_EXPORT_SETTINGS_KEY = "horosa.ai.export.settings.v1"
 # v10: 星运族 22 键补 当前时点/方法说明 公共段；六壬补 七政（日月五星临支合参）段。
 # v9: tarot 段结构对齐引擎直出（牌阵综览/逐牌详解/综合断语/定局/生命牌），relative 补关系量化
 # 三段，qimen 补全局速览，horary 补专题深化·X，cetian 补今制 4 宫识别 → preset 内容变更须升版。
+# v11 (v0.23.0): 5 个上游 v3.5.0 新技法入册（xiaoliuren/feigong/xiaochengtu/guice/zhengchuan）；
+#   geomancy 升 v3.5.1 地占大改版段表、primarydirect 段名对齐 v48、sixyao [断卦结构] 富化。
 # v8: 新技法 yizhangjing/acg/astrodata 入册，heluo/canping 补全生涯流年与断验段，fengshui 扩十三派。
 # v7: sanshiunited 追加三独立技法富化段、mundane 追加子盘群段。
-AI_EXPORT_SETTINGS_VERSION = 10
-AI_EXPORT_SECTION_MIGRATION_VERSION = 10
+AI_EXPORT_SETTINGS_VERSION = 11
+AI_EXPORT_SECTION_MIGRATION_VERSION = 11
 # 镜像基线（机读）：本注册表整版对齐到上游 aiExport.js 的哪个 AI_EXPORT_SETTINGS_VERSION。
-# v0.19–0.21 期间零散摘取过 v44 的个别段（六壬「七政」、八字大运拆段），但整版仍是 v40；
-# 2026-07 审计：上游已到 v48（≈应用 v3.4.0），缺口清单见 docs/LESSONS.md「上游同步缺口审计」。
-# 每次整批同步后必须更新此常量——它把「同步到哪」从散文提升为可断言事实。
-MIRRORED_UPSTREAM_AIEXPORT_VERSION = 40
+# v0.23.0（2026-07）：全面重同步至上游 v3.5.1（aiExport v48），逐技法对齐（geomancy/primarydirect/
+# 5 新技法段表逐字镜像；skill-extra 段如 起卦信息、UI-only 死段、收缩契约走 verify_export_contract_mirror.py
+# 的 DIVERGENCE 白名单）。守卫：vendored aiExport 的 AI_EXPORT_SETTINGS_VERSION 必须 == 本常量（版本锁步）。
+MIRRORED_UPSTREAM_AIEXPORT_VERSION = 48
 AI_EXPORT_SECTION_MIGRATION_KEYS = [
     "liureng", "qimen", "sanshiunited", "mundane",
     "yizhangjing", "acg", "astrodata", "heluo", "canping", "fengshui",
+    "geomancy", "xiaoliuren", "feigong", "xiaochengtu", "guice", "zhengchuan",
     "tarot", "relative", "horary", "cetian",
     # v10 星运族公共段升版键
     "primarydirect", "zodialrelease", "firdaria", "profection", "solararc", "solarreturn",

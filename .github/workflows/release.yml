@@ -36,6 +36,9 @@ jobs:
       - name: Verify vendored runtime inputs
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_vendor_runtime_sources.py
+      - name: Verify export-contract mirror (skill registry ↔ vendored aiExport version + keys)
+        working-directory: ./horosa-skill
+        run: uv run python scripts/verify_export_contract_mirror.py
       - name: Verify bundled knowledge index
         working-directory: ./horosa-skill
         run: uv run python scripts/build_knowledge_index.py --check

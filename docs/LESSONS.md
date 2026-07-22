@@ -94,6 +94,16 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ### v0.23.0 / 2026-07 — 全面重同步至上游 v3.5.1（全年份域 + 地占大改 + 六爻扩充 + 5 新技法）
 
+- **导出契约三层脱节收口（40<44<48 → 48）+ mirror 守卫**：`MIRRORED_UPSTREAM_AIEXPORT_VERSION` 40→48、
+  `AI_EXPORT_SETTINGS_VERSION` 10→11（5 新技法 + geomancy/primarydirect 对齐）。新守卫
+  `verify_export_contract_mirror.py`：①版本锁步——vendored aiExport 的 `AI_EXPORT_SETTINGS_VERSION` 必须
+  == skill `MIRRORED_UPSTREAM_AIEXPORT_VERSION`（堵「同步旧树」与「改一个忘改另一个」）；②技法键覆盖——
+  每个 skill 导出键须在 vendored 上游 `AI_EXPORT_TECHNIQUES` 内，或走 `KEY_ALIAS`（wangji↔huangji、
+  acg↔locastro 键名分叉）/`DIVERGENCE_WHITELIST`（astrodata skill-only、generic、astrochart_like）。
+  jieqi 分点子键经 JIEQI_SPLIT_TECHNIQUES spread 入上游，按字符串字面识别。守卫需 vendored 树 → 跑在
+  self-hosted release runner（release.yml），非 GitHub CI（后者无 vendored 树）。**逐技法对齐、非整版盲抄**：
+  skill-extra 段（起卦信息）、UI-only 死段（主限天球）、收缩契约由白名单显式豁免。
+
 - **`kin_year_domain.py` 同步漏拷（sync 脚本枚举陷阱）**：symptom = 从上游 v3.5.0+ 重同步
   `vendor/runtime-source` 后，每个 ken/神数 引擎在**首个域外（BC/远期）请求**上 500。root cause =
   上游 v3.5.0「全年份域」把域外四柱回退逻辑抽成**顶层共享模块**
