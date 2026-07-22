@@ -20,8 +20,8 @@ RSYNC_FILTERS=(
   "--exclude=*.pid"
   "--exclude=_CodeSignature"
   "--exclude=*/_CodeSignature"
-  '--exclude=${env:HOME}'
-  '--exclude=*/${env:HOME}'
+  '--exclude=${env:*'
+  '--exclude=*/${env:*'
   "--exclude=.horosa-logs"
   "--exclude=*/.horosa-logs"
 )
@@ -39,8 +39,10 @@ require_path "${SOURCE_ROOT}/Horosa-Web/stop_horosa_local.sh"
 require_path "${SOURCE_ROOT}/Horosa-Web/astropy"
 require_path "${SOURCE_ROOT}/Horosa-Web/flatlib-ctrad2"
 # ken engines backing the chart-service qimen/taiyi/jinkou endpoints + the 5 standalone 神数 engines
-# (wangji/wuzhao/taixuan/jingjue/shenyishu). The 9 kinastro-* 神数 share the ~61 MB kinastro engine and
-# are intentionally NOT vendored (out of skill scope — see AGENTS.md 神数 tier table).
+# (wangji/wuzhao/taixuan/jingjue/shenyishu). The 9 kinastro-* 神数 share the kinastro engine, which IS
+# vendored below (engine-only: `astro/` + root .py + interpretations + LICENSE; the ~26 MB tools/cities
+# geocoding DB + streamlit ui/frontend/docs are excluded — see AGENTS.md 神数 tier table).
+require_path "${SOURCE_ROOT}/Horosa-Web/vendor/kin_year_domain.py"
 require_path "${SOURCE_ROOT}/Horosa-Web/vendor/kinqimen"
 require_path "${SOURCE_ROOT}/Horosa-Web/vendor/kintaiyi"
 require_path "${SOURCE_ROOT}/Horosa-Web/vendor/kinjinkou"
@@ -72,6 +74,14 @@ mkdir -p "${VENDOR_ROOT}/Horosa-Web/vendor"
 for ken_engine in kinqimen kintaiyi kinjinkou kinwangji kinwuzhao taixuanshifa jingjue shenyishu; do
   rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/vendor/${ken_engine}" "${VENDOR_ROOT}/Horosa-Web/vendor/"
 done
+# Shared top-level module (upstream v3.5.0 全年份域): 16 engine files lazily `from kin_year_domain import
+# solar_term_name/extreme_pillars`. Missing it → every ken/神数 engine 500s on first request (BC/远期
+# year fallback path). Its sibling月柱边界回归测试随行(小体积,自检有用). Both live at vendor root, not
+# inside an engine dir, so they are copied explicitly here rather than by the loop above.
+rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/vendor/kin_year_domain.py" "${VENDOR_ROOT}/Horosa-Web/vendor/"
+if [ -f "${SOURCE_ROOT}/Horosa-Web/vendor/test_month_pillar_boundary.py" ]; then
+  rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/vendor/test_month_pillar_boundary.py" "${VENDOR_ROOT}/Horosa-Web/vendor/"
+fi
 # kinastro engine backs the 9 kinastro-* 神数 (shaozi/tieban/fendjing/beiji/nanji/chunzi/xianqin/
 # cetian/qizhengkin). Vendor only the engine (`astro/` + root .py + interpretations + LICENSE); the
 # ~26 MB tools/cities geocoding DB + the streamlit ui/frontend/docs are not needed for ganzhi 神数.

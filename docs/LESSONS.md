@@ -92,6 +92,26 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.23.0 / 2026-07 — 全面重同步至上游 v3.5.1（全年份域 + 地占大改 + 六爻扩充 + 5 新技法）
+
+- **`kin_year_domain.py` 同步漏拷（sync 脚本枚举陷阱）**：symptom = 从上游 v3.5.0+ 重同步
+  `vendor/runtime-source` 后，每个 ken/神数 引擎在**首个域外（BC/远期）请求**上 500。root cause =
+  上游 v3.5.0「全年份域」把域外四柱回退逻辑抽成**顶层共享模块**
+  `Horosa-Web/vendor/kin_year_domain.py`，被 16 个引擎 `config.py`/`jieqi.py`/`shenyishu.py` 懒
+  `from kin_year_domain import solar_term_name/extreme_pillars`。`sync_vendored_runtime_sources.sh`
+  的 require+rsync 清单**逐引擎目录枚举**，漏了这个**平级的顶层单文件** → 重同步静默丢弃它，域内请求
+  照常、域外静默炸。guard = sync 脚本显式拷 `kin_year_domain.py`（+ 其兄弟 `test_month_pillar_boundary.py`）；
+  `verify_vendor_runtime_sources.py` REQUIRED_PATHS 断言该文件 + geomancy `data/ifa_odu.json` + xuanshi
+  `public_data.sqlite` 真文件，并加**内容断言 vendored aiExport `AI_EXPORT_SETTINGS_VERSION >= 48`**
+  （通用拦「同步了旧树」，堵住三层版本脱节 skill<vendored<上游 的静默复发）。教训 = 上游把子逻辑上提为
+  vendor 根级共享件时，逐目录枚举的 sync 清单必须同步补顶层单文件。
+- **kentang registry 已懒挂载 → raw-vendor hard-fail 警告过时**：AGENTS §5/§8 旧警告「raw vendor 直接起
+  chart 服务时 registry 列了未 vendor 引擎会 hard-fail（graceful patch 只在打包 staged 拷贝）」在
+  vendored v44 与上游 v48 都已不成立——`astropy/websrv/kentang/registry.py` 现用 `_LazyMountedService`
+  （默认 `HOROSA_KENTANG_LAZY=1`）：缺引擎只在**首请求**时响亮 500 + 下次重试，启动不炸。18 个 mount 的
+  引擎全在 vendored 集合内。影响 live 验证法：不能再靠「启动即知」，改为**启动后逐 mount 打真请求**强制加载。
+  （按 §2 compaction 蒸馏进 AGENTS §5/§8。）
+
 ### v0.22.0 / 2026-07-16 — parity lint 常量交叉扩到全部 manifest-stamping 脚本（Windows 侧）
 
 - **症状**：`export_registry_version` 在 linux builder + 两个 scaffold 曾滞留 6 而 mac/win 已到 10

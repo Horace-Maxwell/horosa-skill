@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 
@@ -10,7 +11,43 @@ REQUIRED_PATHS = [
     "vendor/runtime-source/runtime/windows",
     "vendor/runtime-source/prepareruntime",
     "horosa-skill/scripts/build_runtime_release.sh",
+    # v3.5.0 全年份域 shared module — 16 ken/神数 engine files lazily `from kin_year_domain import ...`
+    # for the BC/远期 year fallback path. If the sync dropped it, every ken/神数 engine 500s on its
+    # first out-of-domain request. This is the machine guard for the kin_year_domain sync-drop lesson.
+    "vendor/runtime-source/Horosa-Web/vendor/kin_year_domain.py",
+    # v3.5.1 地占大改版 data — the new ifa/numbers/vedic engines read these; a real file here proves
+    # the geomancy subtree is the current one (not a pre-v3.5.1 stale copy).
+    "vendor/runtime-source/Horosa-Web/astropy/astrostudy/geomancy/data/ifa_odu.json",
+    # 政余/xuanshi 神数 backing SQLite (kentang /xuanshi mount) — a real file inside, never an empty dir.
+    "vendor/runtime-source/Horosa-Web/astropy/astrostudy/xuanshi/data/public_data.sqlite",
+    # export-contract source of truth; also content-checked for version currency (see below).
+    "vendor/runtime-source/Horosa-Web/astrostudyui/src/utils/aiExport.js",
 ]
+
+# The vendored aiExport.js must be at least this recent. Catches the "synced a stale upstream tree"
+# failure that lets the three-layer version skew (skill mirror < vendored runtime < upstream HEAD)
+# creep back in silently. Bump in lockstep with MIRRORED_UPSTREAM_AIEXPORT_VERSION in
+# horosa_skill/exports/registry.py whenever a full re-sync advances the mirror.
+MIN_AIEXPORT_SETTINGS_VERSION = 48
+_AIEXPORT_REL = "vendor/runtime-source/Horosa-Web/astrostudyui/src/utils/aiExport.js"
+_AIEXPORT_VERSION_RE = re.compile(r"AI_EXPORT_SETTINGS_VERSION\s*=\s*(\d+)")
+
+
+def _check_aiexport_version(root: Path) -> dict:
+    """Assert the vendored aiExport.js is >= MIN_AIEXPORT_SETTINGS_VERSION (freshness guard)."""
+    target = root / _AIEXPORT_REL
+    text = target.read_text(encoding="utf-8", errors="replace")
+    match = _AIEXPORT_VERSION_RE.search(text)
+    if not match:
+        raise SystemExit(f"Could not read AI_EXPORT_SETTINGS_VERSION from {target}")
+    version = int(match.group(1))
+    if version < MIN_AIEXPORT_SETTINGS_VERSION:
+        raise SystemExit(
+            f"Vendored aiExport.js is stale: AI_EXPORT_SETTINGS_VERSION={version} < "
+            f"required {MIN_AIEXPORT_SETTINGS_VERSION}. Re-run sync_vendored_runtime_sources.py "
+            f"against a current Horosa-Public checkout."
+        )
+    return {"aiexport_settings_version": version, "min_required": MIN_AIEXPORT_SETTINGS_VERSION}
 
 
 def main() -> None:
@@ -28,7 +65,8 @@ def main() -> None:
             missing.append(str(target))
     if missing:
         raise SystemExit("Missing vendored runtime sources:\n" + "\n".join(missing))
-    print(json.dumps({"ok": True, "checked": results}, ensure_ascii=False, indent=2))
+    version_info = _check_aiexport_version(root)
+    print(json.dumps({"ok": True, "checked": results, "aiexport": version_info}, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

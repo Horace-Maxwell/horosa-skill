@@ -188,8 +188,13 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 - **curated 常量文件**（如 `vendor/liureng/LRConst.js`）：上游全文件 import 了 headless 不存在的路径时，
   **只追加新增的纯常量**，不整文件重 vendor。
 - **重同步 `vendor/runtime-source`**：`sync_vendored_runtime_sources.sh` + 显式 `HOROSA_SOURCE_ROOT`
-  （对上游 READ-ONLY）。若直接从 `vendor/` 起 chart 服务，重打 graceful-kentang-mount 补丁（build 脚本
-  会自动 patch **staged** 拷贝；raw vendor 因 registry 列了未 vendor 的引擎会 hard-fail）。
+  （对上游 READ-ONLY）。**顶层共享件必须显式补**：上游把子逻辑上提为 vendor 根级单文件时（如
+  v3.5.0 全年份域的 `Horosa-Web/vendor/kin_year_domain.py`，被 16 个 ken/神数 引擎懒 import），逐引擎
+  目录枚举的 sync 清单会漏它 → 重同步后**域外（BC/远期）请求静默 500**。守卫 =
+  `verify_vendor_runtime_sources.py` 断言该文件 + vendored aiExport `AI_EXPORT_SETTINGS_VERSION >= 48`。
+  raw vendor 起 chart 服务**不再 hard-fail**：`kentang/registry.py` 现用 `_LazyMountedService`
+  （默认 `HOROSA_KENTANG_LAZY=1`），缺引擎只在首请求时响亮 500 + 下次重试；18 个 mount 引擎均在
+  vendored 集内，无需再手打 graceful-kentang-mount 补丁（打包脚本仍对 staged 拷贝保留该分支以防旧树）。
 
 **布线清单**（每个新技法照单走完）：
 
@@ -326,7 +331,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
    env——曾经写死默认端口导致「带覆盖的全绿」实测的是旧实例）。
 3. **防陈旧闸**：chart 心跳 `GET /` 回显 `pdSyncRev`，断言 == 当前 rev（当前 `pd_method_sync_v12`）再信
    结果——陈旧引擎会把未知时间钥匙**静默按 Ptolemy 算**。钥匙分叉探针用每盘真算的 Kepler，别用 Kündig
-   （静态标度 1.0 与 Ptolemy 同日期，探不出分叉）。
+   （静态标度 1.0 与 Ptolemy 同日期，探不出分叉）。**kentang 懒挂载**：`registry.py` 用
+   `_LazyMountedService`（`HOROSA_KENTANG_LAZY=1`），缺引擎/坏引擎不再启动即炸，改为**首请求**才 500 —
+   所以启动后必须**逐 mount 打一次真请求**（至少 `/geomancy/reading` `/taiyi/pan` `/shaozi/pan` +
+   任一新端点）强制加载，确认无 `KentangServiceLoadError`，替代旧「启动即知」信号。
 4. `uv run pytest`：`@requires_runtime` / `@requires_chart` 集成测试在服务 down 时 **skip**——带 skip 的
    全绿**不是完整验证**；服务全起时 0 skipped 才是最强信号。验收 = 各技法产出 aiExport 段 + 干净导出契约
    （`missing_selected_sections == []` 且 `unknown_detected_sections == []`；election 等条件段技法按
