@@ -696,6 +696,40 @@ def test_guice_local_tool_runs_headless_engine(tmp_path) -> None:
     assert (no_year.data.get("export_snapshot") or {}).get("unknown_detected_sections") == []
 
 
+def test_zhengchuan_xinyi_query_layer_needs_no_birth(tmp_path) -> None:
+    # 神数正传·铁算心易（查询层）：不需生辰四柱、不打 /nongli/time，纯 node 离线可跑。
+    service = make_service(tmp_path)
+    r = service.run_tool("zhengchuan", {"school": "xinyi", "item": "财", "gong": "乾"}, save_result=False)
+    assert r.ok is True, r.error
+    assert "[起盘信息]" in r.data["snapshot_text"]
+    assert r.data["zhengchuan"]["school"] == "xinyi"
+    export = r.data.get("export_snapshot") or {}
+    assert export.get("unknown_detected_sections") == []
+
+
+@requires_chart
+def test_zhengchuan_tieban_derives_pillars_and_links_verses(tmp_path) -> None:
+    # 神数正传·铁板：四柱走 /nongli/time 权威口径；条文正文库异步载入（本命条文段带真条文）。
+    service = make_service(tmp_path)
+    r = service.run_tool("zhengchuan", {"school": "tieban", "date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lon": "121e28", "gender": 1}, save_result=False)
+    assert r.ok is True, r.error
+    snap = r.data["snapshot_text"]
+    assert "[起盘信息]" in snap and "[本命条文]" in snap
+    assert len(r.data["zhengchuan"]["pillars"]) == 4
+    export = r.data.get("export_snapshot") or {}
+    assert export.get("missing_selected_sections") == [] and export.get("unknown_detected_sections") == []
+
+
+@requires_chart
+def test_zhengchuan_dading_uses_bazi_direction_table(tmp_path) -> None:
+    # 大定流派：四柱=权威柱；小运/大运/岁君取自 vendored bazi 推运表（pillar_source_note 标注双源）。
+    service = make_service(tmp_path)
+    r = service.run_tool("zhengchuan", {"school": "dading", "date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lon": "121e28", "gender": 1, "dadingYear": 2026}, save_result=False)
+    assert r.ok is True, r.error
+    assert "[起盘信息]" in r.data["snapshot_text"]
+    assert r.data["zhengchuan"].get("pillar_source_note")
+
+
 @requires_chart
 def test_harmonic_runs_via_chart_service(tmp_path) -> None:
     # 调波盘 is a backend chart-extra on the Python chart service (/astroextra/harmonic). 星阙 has no

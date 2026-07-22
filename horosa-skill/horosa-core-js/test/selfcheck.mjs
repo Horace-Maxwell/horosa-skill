@@ -17,6 +17,7 @@ import { runXiaoLiuRen } from '../src/tools/xiaoliuren.js';
 import { runFeiGong } from '../src/tools/feigong.js';
 import { runXiaoChengTu } from '../src/tools/xiaochengtu.js';
 import { runGuice } from '../src/tools/guice.js';
+import { runZhengChuan } from '../src/tools/zhengchuan.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const chart = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_traditional.json'), 'utf8'));
@@ -166,6 +167,21 @@ check('guice 报数起卦 + 演数四位 + 卦变断法 + determinism', () => {
   const again = runGuice(p);
   assert(again.snapshot_text === r.snapshot_text, '同起卦输入须同盘（冻结卦）');
 });
+
+// zhengchuan 铁板异步载条文正文库 → 用异步块（.mjs 顶层 await 可用）。
+try {
+  const tb = await runZhengChuan({ school: 'tieban', pillars: ['戊寅', '甲寅', '壬戌', '庚戌'], gender: 1, lunarMonth: 1, lunarDay: 24 });
+  ['[起盘信息]', '[起数]', '[本命条文]', '[流年条文]'].forEach((h) => assert(tb.snapshot_text.includes(h), `tieban missing ${h}`));
+  assert(tb.snapshot_text.length > 2000, 'tieban 本命条文正文应非空（verses 已链）');
+  const xy = await runZhengChuan({ school: 'xinyi', item: '财', gong: '乾' });
+  assert(xy.snapshot_text.includes('[起盘信息]'), 'xinyi 起盘信息 missing');
+  const lq = await runZhengChuan({ school: 'liuqin', pillars: ['戊寅', '甲寅', '壬戌', '庚戌'], gender: 1, lunarMonth: 1, lunarDay: 24 });
+  assert(lq.snapshot_text.includes('[十二宫与六亲宫]'), 'liuqin 十二宫与六亲宫 missing');
+  console.log('  ok   zhengchuan tieban(条文)/xinyi(查询)/liuqin(六亲) 三流派');
+} catch (err) {
+  failures += 1;
+  console.error(`  FAIL zhengchuan: ${err.message}`);
+}
 
 if (failures > 0) {
   console.error(`\nselfcheck: ${failures} failure(s)`);

@@ -66,3 +66,11 @@ def test_router_guice_excludes_wangji_and_horary() -> None:
     assert "guice" in got and "wangji" not in got and "horary" not in got
     got2 = select_tools(DispatchInput.model_validate({"query": "皇极经世值年卦"}))
     assert "wangji" in got2 and "guice" not in got2
+
+
+def test_router_zhengchuan_excludes_component_shensu_and_canping() -> None:
+    # 神数正传 含「铁板/邵子」流派名 → 须与独立 tieban/shaozi/canping 神数互斥（双向）。
+    got = select_tools(DispatchInput.model_validate({"query": "神数正传铁板流派"}))
+    assert "zhengchuan" in got and "tieban" not in got and "canping" not in got
+    got2 = select_tools(DispatchInput.model_validate({"query": "铁板神数条文"}))
+    assert "tieban" in got2 and "zhengchuan" not in got2

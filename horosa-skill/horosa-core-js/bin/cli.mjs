@@ -40,7 +40,8 @@ async function main() {
     // so tools degrade to a structured "insufficient input" result instead of throwing on
     // `payload.field`. Objects and arrays pass through unchanged (they already degrade gracefully).
     const payload = parsed && typeof parsed === 'object' ? parsed : {};
-    const result = runTool(arg, payload);
+    // await：多数 runner 同步（await 对其为 no-op），zhengchuan 因异步载条文正文库返 Promise。
+    const result = await runTool(arg, payload);
     printJson({ ok: true, ...result });
   } catch (error) {
     printJson({

@@ -677,6 +677,18 @@ class FakeJsClient(HorosaJsEngineClient):
                     "[断法]\n| 项 | 判 |\n| --- | --- |\n| 用生体 | 助力 |"
                 ),
             }
+        if tool_name == "zhengchuan":
+            # 神数正传：五流派各产 17 段之子集，唯一恒出段=起盘信息。此桩为 tieban 子集，供离线契约 round-trip。
+            return {
+                "data": {"school": "tieban", "pillars": ["戊寅", "辛卯", "戊辰", "庚午"], "pillar_source_note": None},
+                "input_normalized": {"school": "tieban"},
+                "snapshot_text": (
+                    "[起盘信息]\n流派:铁板神数　四柱:戊寅 辛卯 戊辰 庚午　性别:男\n\n"
+                    "[起数]\n年上起数 戊寅→…　装成先天卦\n\n"
+                    "[本命条文]\n一二三：命主聪明，早年多波折。\n\n"
+                    "[流年条文]\n三十六岁：运转东南，渐入佳境。"
+                ),
+            }
         if tool_name == "progextra":
             # v2.5.0 推运 vendored builders (balbillus etc.) — return the single-section snapshot directly.
             technique = payload.get("technique")

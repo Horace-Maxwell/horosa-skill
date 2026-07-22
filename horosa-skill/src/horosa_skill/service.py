@@ -94,6 +94,7 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "feigong": "feigong",
     "xiaochengtu": "xiaochengtu",
     "guice": "guice",
+    "zhengchuan": "zhengchuan",
     "acg": "acg",
     "astrodata": "astrodata",
     "sanshiunited": "sanshiunited",
@@ -6782,6 +6783,75 @@ class HorosaSkillService:
             "export_snapshot": self._augment_export_payload(technique="guice", snapshot_text=snapshot_text),
         }
 
+    def _run_zhengchuan_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 神数正传（五流派）：除 xinyi 查询层外，四柱走 /nongli/time 权威口径（立春界年柱 + 农历月日 + 时柱），
+        # JS 层不发 HTTP（AGENTS §4）；条文正文库由 JS 异步载入。dading 另需 birth params 建 bazi 推运表。
+        school = payload.get("school", "tieban")
+        request: dict[str, Any] = {"school": school}
+        if school == "xinyi":
+            for key in ("item", "sound", "ke", "gong", "xqZhi", "xqYushu", "gender"):
+                if payload.get(key) is not None:
+                    request[key] = payload[key]
+        else:
+            nongli = self._call_remote(
+                "/nongli/time",
+                {
+                    "date": payload["date"],
+                    "time": payload.get("time"),
+                    "zone": payload.get("zone"),
+                    "lon": payload.get("lon"),
+                    "lat": payload.get("lat"),
+                    "timeAlg": payload.get("timeAlg"),
+                    **_day_boundary_switches(payload),
+                },
+            )
+            if not isinstance(nongli, dict):
+                raise ToolValidationError(
+                    "神数正传起盘失败：/nongli/time 未返回农历数据。",
+                    code="tool.zhengchuan_pillars_unavailable",
+                    details={"school": school},
+                )
+            pillars = [
+                str(nongli.get("yearJieqi") or nongli.get("year") or ""),
+                str(nongli.get("monthGanZi") or ""),
+                str(nongli.get("dayGanZi") or ""),
+                str(nongli.get("time") or ""),
+            ]
+            if any(len(p) < 2 for p in pillars):
+                raise ToolValidationError(
+                    "神数正传起盘失败：/nongli/time 未返回完整四柱（年/月/日/时）。请提供完整 date/time。",
+                    code="tool.zhengchuan_pillars_unavailable",
+                    details={"pillars": pillars},
+                )
+            request["pillars"] = pillars
+            request["lunarMonth"] = nongli.get("monthInt")
+            request["lunarDay"] = nongli.get("dayInt")
+            request["isLeapMonth"] = bool(nongli.get("leap"))
+            request["gender"] = payload.get("gender")
+            for key in ("askGz", "fatherAge", "motherAge", "yuan", "askHourZhi", "env", "dadingYear", "dayun", "xiaoyun", "suijun", "age"):
+                if payload.get(key) is not None:
+                    request[key] = payload[key]
+            if school == "dading":
+                # dading 的 JS 端需 birth params 建 bazi 推运表（小运/大运/岁君·年粒度）。
+                for key in ("date", "time", "zone", "lon", "timeAlg", "after23NewDay", "lateZiHourUseNextDay"):
+                    if payload.get(key) is not None:
+                        request[key] = payload[key]
+        js_result = self.js_client.run("zhengchuan", request)
+        data = js_result.get("data", {})
+        if isinstance(data, dict) and data.get("ok") is False:
+            raise ToolValidationError(
+                data.get("message") or "神数正传排盘失败。",
+                code="tool.zhengchuan_calc_failed",
+                details={"reason": data.get("reason"), "school": school},
+            )
+        snapshot_text = js_result.get("snapshot_text")
+        return {
+            "zhengchuan": data,
+            "input_normalized": js_result.get("input_normalized", {}),
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="zhengchuan", snapshot_text=snapshot_text),
+        }
+
     def _run_sanshiunited_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         shared = {
             "date": payload["date"],
@@ -7784,6 +7854,8 @@ class HorosaSkillService:
             return self._run_xiaochengtu_tool(payload)
         if definition.name == "guice":
             return self._run_guice_tool(payload)
+        if definition.name == "zhengchuan":
+            return self._run_zhengchuan_tool(payload)
         if definition.name == "acg":
             return self._run_acg_tool(payload)
         if definition.name == "astrodata":

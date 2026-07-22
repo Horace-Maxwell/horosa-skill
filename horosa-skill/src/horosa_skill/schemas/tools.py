@@ -453,6 +453,43 @@ class GuiceInput(FlexibleModel):
     lateZiHourUseNextDay: int | None = None
 
 
+class ZhengChuanInput(FlexibleModel):
+    # 神数正传：五流派——tieban 铁板神数 / shaozi 邵子神数 / dading 大定数 / liuqin 六亲数 / xinyi 铁算心易。
+    # 除 xinyi（查询层，不需生辰）外，四柱走 /nongli/time 权威口径（立春界年柱 + 农历月日）。gender 男/女 或 1/0。
+    school: str | None = "tieban"
+    gender: str | int | None = None
+    # 生辰（tieban/shaozi/dading/liuqin 起四柱所需；dading 另需 date/time 建 bazi 推运表）：
+    date: str | None = None
+    time: str | None = None
+    zone: str | None = None
+    lon: str | None = None
+    lat: str | None = None
+    ad: int | None = 1
+    timeAlg: int | None = None
+    after23NewDay: int | None = None
+    lateZiHourUseNextDay: int | None = None
+    # 流派专属：tieban askGz（占问干支）；shaozi fatherAge/motherAge/yuan（上/中/下元）；
+    # liuqin askHourZhi/env（晴阴雨雪/明晦）；dading dadingYear（所推流年）+ 可手填 dayun/xiaoyun/suijun/age。
+    askGz: str | None = None
+    fatherAge: int | None = None
+    motherAge: int | None = None
+    yuan: str | None = None
+    askHourZhi: str | None = None
+    env: str | None = None
+    dadingYear: int | None = None
+    dayun: str | None = None
+    xiaoyun: str | None = None
+    suijun: str | None = None
+    age: int | None = None
+    # xinyi 查询层（铁算心易·条文秘数/性情项查询，任一即可）：
+    item: str | None = None
+    sound: str | None = None
+    ke: int | None = None
+    gong: str | None = None
+    xqZhi: str | None = None
+    xqYushu: int | None = None
+
+
 class ACGInput(BirthInput):
     # 占星地图（AstroCartoGraphy）：本命时刻的行星地理投影线（MC/IC 恒定经度、ASC/DESC 曲线、
     # 天顶点、偕升纬度带、线交点）。口径开关：mode=mundo 真黄纬（Jim Lewis 原版，默认）/zodiac

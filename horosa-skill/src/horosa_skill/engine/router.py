@@ -51,7 +51,7 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("sixyao")
     if _contains_any(text, ["统摄法", "tongshefa"]):
         add("tongshefa")
-    if _contains_any(text, ["参评数", "邵子", "金锁银匙", "canping"]):
+    if _contains_any(text, ["参评数", "邵子", "金锁银匙", "canping"]) and not _contains_any(text, ["正传", "zhengchuan"]):
         add("canping")
     if _contains_any(text, ["河洛理数", "河洛", "heluo"]):
         add("heluo")
@@ -137,9 +137,12 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("jingjue")
     if _contains_any(text, ["神乙数", "神乙", "shenyishu"]):
         add("shenyishu")
-    if _contains_any(text, ["邵子神数", "邵子数", "shaozi"]):
+    # 神数正传（五流派合一）：含「铁板/邵子」流派名 → 需与独立 tieban/shaozi/canping 神数互斥（键名分叉）。
+    if _contains_any(text, ["神数正传", "正传", "zhengchuan"]):
+        add("zhengchuan")
+    if _contains_any(text, ["邵子神数", "邵子数", "shaozi"]) and not _contains_any(text, ["正传", "zhengchuan"]):
         add("shaozi")
-    if _contains_any(text, ["铁板神数", "铁板", "tieban"]):
+    if _contains_any(text, ["铁板神数", "铁板", "tieban"]) and not _contains_any(text, ["正传", "zhengchuan"]):
         add("tieban")
     if _contains_any(text, ["分经神数", "两头钳", "fendjing", "fenjing"]):
         add("fendjing")
