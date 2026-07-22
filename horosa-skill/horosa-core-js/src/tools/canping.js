@@ -42,6 +42,8 @@ export function runCanping(payload) {
   // timeAlg: 0 → 真太阳时 (longitude + equation-of-time correction); any other value → clock time.
   // Default 1 (clock time) mirrors 星阙 CanPingMain.js's `fieldVal(f, 'timeAlg', 1)`.
   const timeAlg = input.timeAlg === undefined || input.timeAlg === null ? 1 : input.timeAlg;
+  // 晚子时双开关（after23NewDay 日柱 / lateZiHourUseNextDay 时干）verbatim 透传给 buildLocalBaziResult；
+  // 缺省不传 → 上游默认（after23NewDay 缺省、lateZiHourUseNextDay=1），与 CanPingMain 同口径。
   const baziParams = {
     date,
     time,
@@ -49,6 +51,8 @@ export function runCanping(payload) {
     lon: input.lon,
     gender: input.gender,
     timeAlg,
+    after23NewDay: input.after23NewDay,
+    lateZiHourUseNextDay: input.lateZiHourUseNextDay,
   };
   const normalized = {
     date,
@@ -57,6 +61,8 @@ export function runCanping(payload) {
     lon: input.lon ?? null,
     gender: input.gender ?? null,
     timeAlg,
+    after23NewDay: input.after23NewDay ?? null,
+    lateZiHourUseNextDay: input.lateZiHourUseNextDay ?? null,
     method,
   };
 

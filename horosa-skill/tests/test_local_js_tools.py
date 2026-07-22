@@ -411,6 +411,32 @@ def test_canping_method_gu_changes_day_palace(tmp_path) -> None:
     assert gu.data["canping"]["dayPalaceBranch"] == "戌"
 
 
+def test_canping_heluo_late_zi_switches_thread(tmp_path) -> None:
+    # 晚子时双开关（after23NewDay 日柱 / lateZiHourUseNextDay 时干）全链穿透 canping/heluo（AGENTS §10 残余缺口）。
+    # 2026-05-27 23:30 子时段：after23=1 日柱进次日；lateZi 移时干。heluo 用全干支起卦故两开关皆可见；
+    # canping 只用时支（子恒定），故 after23 移日支、lateZi 对其为 no-op —— 但两开关均已 verbatim 透传。
+    service = make_service(tmp_path)
+    base = {"date": "2026-05-27", "time": "23:30:00", "zone": "+08:00", "lon": "121e28", "gender": 1, "timeAlg": 1}
+
+    def heluo_pillars(a23, lz):
+        r = service.run_tool("heluo", {**base, "after23NewDay": a23, "lateZiHourUseNextDay": lz}, save_result=False)
+        assert r.ok is True, r.error
+        return r.data["heluo"]["fourPillars"]
+
+    # after23NewDay 移日柱（辛丑 → 壬寅）；lateZiHourUseNextDay 移时干（戊子 → 庚子，时支恒子）。
+    assert heluo_pillars(0, 1)["day"] != heluo_pillars(1, 1)["day"]
+    assert heluo_pillars(1, 0)["hour"] != heluo_pillars(1, 1)["hour"]
+    assert heluo_pillars(1, 0)["hour"].endswith("子") and heluo_pillars(1, 1)["hour"].endswith("子")
+
+    # canping：after23 移日支（丑→寅）。
+    def canping_day(a23):
+        r = service.run_tool("canping", {**base, "after23NewDay": a23}, save_result=False)
+        assert r.ok is True, r.error
+        return r.data["canping"]["fourPillars"]["dayBranch"]
+
+    assert canping_day(0) != canping_day(1)
+
+
 def test_heluo_local_tool_runs_headless_engine(tmp_path) -> None:
     # heluo (河洛理数) is a 原生·非 ken tool: pillars come from the vendored bazi chain, then heluoLocal
     # does 起命/先天/后天/命运篇/大限. The 命运篇 needs the real 节气 (lunar-javascript JieQi table), so

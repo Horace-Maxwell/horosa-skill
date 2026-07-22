@@ -54,3 +54,6 @@ technique, and do not patch around it.
 - **Always quote the active rule back.** The export snapshot carries a leading
   `排盘规则: 日柱开关【…】+ 时柱开关【…】。本盘四柱按此规则计算。` line — mirror it in your
   interpretation/report so the user can verify the convention. Never strip it.
+- **`canping` / `heluo` exception**: their upstream `buildSnapshotText` does not emit the 排盘规则 line
+  (the skill keeps the snapshot byte-identical to 星阙), so the active flags are echoed in the
+  tool's `input_normalized` (`after23NewDay` / `lateZiHourUseNextDay`) instead — read them from there.

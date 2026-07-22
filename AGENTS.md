@@ -402,12 +402,13 @@ A global stability pass hardened these; keep them true when you touch the releva
 `hour == 23` 生效；完整规格、自检矩阵（`2026-05-27 23:30:00` 四象限）与向用户问法的**属主 =
 [`skills/horosa-agent/references/late-zi.md`](./skills/horosa-agent/references/late-zi.md)**。维护者要点：
 
-- **状态（as of v0.12.0）**：bundled runtime 已带 v2.2.1 代码（kintaiyi 有 `_get_after23` /
-  `_get_hour_gan_next` 标记）；skill 侧**神数路径已透传** `lateZiHourUseNextDay`（`ShenShuInput` schema
-  字段 + `_run_shenshu_tool` passthrough）；**bazi / ziwei / liureng / qimen 等 chart-flow payload 尚未
-  线穿**（只转发 `after23NewDay`）——非默认 `hour==23` 请求对这些技法 accepted-but-ignored。
-  **遗留 to-do**：把 `lateZiHourUseNextDay` 线穿剩余 chart-flow payload + schema（runtime 已支持，
-  无需重同步）。
+- **状态（as of v0.23.0）**：晚子时双开关（`after23NewDay` 日柱 / `lateZiHourUseNextDay` 时干）**已全链
+  穿透**——神数 14 路（`ShenShuInput`）、`bazi_*` / `ziwei_birth` / `liureng_*` / `jinkou` / `qimen` /
+  `taiyi` / `sanshiunited` / `jieqi_year` / `nongli_time`（schema 字段 + `service.py` 白名单转发），以及
+  v0.23.0 补线的 **`canping` / `heluo`**（`CanPingInput`/`HeLuoInput` schema + `tools/{canping,heluo}.js`
+  的 `baziParams` 透传给 `buildLocalBaziResult`）。验证：`references/late-zi.md` 四象限矩阵
+  （`2026-05-27 23:30:00` × 两开关），heluo 两开关皆可见（日 辛丑↔壬寅、时干 戊子↔庚子）、canping 只用
+  时支故 `lateZiHourUseNextDay` 对其为 no-op（仍 verbatim 转发）；回归 `test_canping_heluo_late_zi_switches_thread`。
 - **法则**：所有起中式四柱的 chart-flow payload（`bazi_*`、`ziwei_*`、`liureng_*`、`qimen`、`taiyi`、
   `jinkou`、`sanshiunited`、`canping`、`heluo`、`nongli_time`、`jieqi_year`、Bazi-aware `chart`）两 flag
   一律 **verbatim 转发**到引擎；导出快照带 `排盘规则: 日柱开关【…】+ 时柱开关【…】` 行，tool formatter

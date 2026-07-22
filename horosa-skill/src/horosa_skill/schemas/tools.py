@@ -281,6 +281,10 @@ class CanPingInput(FlexibleModel):
     # timeAlg=0 → 真太阳时 (longitude + equation-of-time); any other value → clock time. Default 1
     # (clock time) mirrors 星阙 CanPingMain.js's `fieldVal(f, 'timeAlg', 1)`.
     timeAlg: int | None = 1
+    # 晚子时双开关（仅 hour==23 生效，见 references/late-zi.md）：after23NewDay=1 日柱进次日；
+    # lateZiHourUseNextDay=1(默认) 时干用次日日干起子时、=0 用今日。缺省不传 → 上游默认口径。
+    after23NewDay: int | None = None
+    lateZiHourUseNextDay: int | None = None
     # method: 'ming' (明法·月支反向取日宫) or 'gu' (古法·八字日支为日宫).
     method: str | None = "ming"
 
@@ -295,6 +299,9 @@ class HeLuoInput(FlexibleModel):
     gender: str | int | None = None
     # timeAlg=0 → 真太阳时; any other value → clock time. Default 1 mirrors 星阙 HeLuoMain.js.
     timeAlg: int | None = 1
+    # 晚子时双开关（仅 hour==23 生效，见 references/late-zi.md）：缺省不传 → 上游默认口径。
+    after23NewDay: int | None = None
+    lateZiHourUseNextDay: int | None = None
 
 
 class YizhangjingInput(FlexibleModel):
