@@ -1,5 +1,5 @@
 // 六爻用神体系(WP-E):占测事项→用神六亲/世/应 取用表 + 原神/忌神/仇神 推导 + 用神爻定位(多现取舍)。
-// 取用表忠于古典通用口径(§5.1);原忌仇按生克链(§5.2)。断结构真值,吉凶交 AI。
+// 取用表忠于古典通用口径(古籍通例);原忌仇按生克链(古籍通例)。断结构真值,吉凶交 AI。
 
 // 六亲相生链(X 生 next):父母→兄弟→子孙→妻财→官鬼→父母
 const SHENG_NEXT = { 父母: '兄弟', 兄弟: '子孙', 子孙: '妻财', 妻财: '官鬼', 官鬼: '父母' };
@@ -20,7 +20,7 @@ export function relativeRoles(yong){
 	return { yuan, ji, chou };
 }
 
-// ── §5.1 通用取用表:occasion → 用神(六亲或「世」「应」)+ 可选次用神 + 说明 ──
+// ── 通用取用表:occasion → 用神(六亲或「世」「应」)+ 可选次用神 + 说明 ──
 export const YONGSHEN_CATEGORIES = [
 	{ key: 'self', label: '自身/综合运势', yong: '世', note: '凡测己身、综合运势以世为用' },
 	{ key: 'opponent', label: '对方/敌方/合作方/所往之地', yong: '应', note: '与世相对' },
@@ -36,6 +36,13 @@ export const YONGSHEN_CATEGORIES = [
 	{ key: 'thief', label: '盗贼/鬼祟/官非', yong: '官鬼', note: '官鬼亦主盗贼鬼祟' },
 	{ key: 'weather_rain', label: '天气·雨/消息', yong: '父母', note: '雨、消息属父母' },
 	{ key: 'weather_sun', label: '天气·晴', yong: '子孙', note: '晴天属子孙' },
+	{ key: 'lost', label: '失物/寻物', yong: '妻财', note: '财为物;鬼为贼;玄武临主盗失' },
+	{ key: 'travel', label: '出行/行人', yong: '世', secondary: '父母', note: '出行以世为己;行人取对应六亲,父母为音信行李' },
+	{ key: 'lawsuit', label: '官司/词讼', yong: '官鬼', secondary: '父母', note: '世为己应为对方;官鬼为官府、父母为状文' },
+	{ key: 'home', label: '家宅/田土', yong: '父母', secondary: '官鬼', note: '父母为宅,兼看二爻宅位与官鬼动静' },
+	{ key: 'guishen', label: '鬼神/怪异/梦寐', yong: '官鬼', note: '官鬼为祟;配六神五行八卦定祟类' },
+	{ key: 'study', label: '学问/求师', yong: '父母', note: '父母为师为文;朱雀为文章' },
+	{ key: 'guochao', label: '国朝/时局', yong: '世', secondary: '官鬼', note: '五爻为尊位;财福文书各安其位' },
 ];
 
 export function getYongShenCategory(key){
@@ -59,7 +66,7 @@ export function locateYaos(yaos, target){
 	return yaos.filter((y) => y.liuqin === target).map((y) => y.pos);
 }
 
-// ── 用神多现取舍(§5.1 注):临日月者、动者、临世应者、独发者优先。返回 {candidates, primary} ──
+// ── 用神多现取舍(注):临日月者、动者、临世应者、独发者优先。返回 {candidates, primary} ──
 // ctx:{ dayZhi, monthZhi, movingPositions:[..] }(movingPositions 为动爻位集,可选)
 export function pickYongShenYao(yaos, target, ctx){
 	const c = ctx || {};
@@ -83,10 +90,17 @@ export function pickYongShenYao(yaos, target, ctx){
 }
 
 // ── 汇总:对一卦给出用神/原忌仇 的定位 + 旺衰摘要(供右栏 + AI 快照) ──
-export function analyzeYongShen(yaos, key, ctx){
-	const r = resolveYongShen(key);
+// 手动可选用神(六亲 + 世/应);override 命中即覆盖占测事项自动取用,并按该六亲重派原/忌/仇。
+export const YONG_MANUAL_OPTIONS = ['父母', '兄弟', '子孙', '妻财', '官鬼', '世', '应'];
+export function analyzeYongShen(yaos, key, ctx, override){
+	const base = resolveYongShen(key);
+	const manual = !!(override && YONG_MANUAL_OPTIONS.indexOf(override) >= 0);
+	const r = manual
+		? { key: base.key, label: `${base.label}·手选`, yong: override, secondary: null,
+			note: `手动指定用神为「${override}」(覆盖占测事项自动取用)`, roles: relativeRoles(override) }
+		: base;
 	const c = ctx || {};
-	const out = { key: r.key, label: r.label, note: r.note, yong: r.yong, secondary: r.secondary, roles: r.roles, located: {} };
+	const out = { key: r.key, label: r.label, note: r.note, yong: r.yong, secondary: r.secondary, roles: r.roles, located: {}, manual };
 	const pickOne = (target) => {
 		if(!target){ return null; }
 		const p = pickYongShenYao(yaos, target, c);

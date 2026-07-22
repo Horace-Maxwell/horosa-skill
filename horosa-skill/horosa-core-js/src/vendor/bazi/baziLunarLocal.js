@@ -1,10 +1,12 @@
 import { Solar, LunarUtil } from 'lunar-javascript';
+import { isLunarJsYearReliable, lunarDomainNotice } from './lunarDomainGuard.js';
 import { NaYin, SixtyJiaZi } from './ZWConst.js';
 import { calcFourPillarShenSha } from './baziShenShaLocal.js';
 import { computeWuxingStrength } from './baziWuxing.js';
 import { computeFenYe } from './baziFenYe.js';
 import { computeGejuYongShen } from './baziGejuYongShen.js';
 import { computeMangPai } from './baziMangPai.js';
+import { parseDateParts } from './dateStrSafe.js';
 
 const GANS = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
 const ZHIS = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
@@ -247,7 +249,8 @@ function parseGeoDegrees(value, limit){
 }
 
 function parseDateTime(params){
-	const [year, month, day] = `${params.date || ''}`.split('-').map((item)=>Number(item));
+	const _dp = parseDateParts(`${params.date || ''}`) || {};
+	const year = _dp.year, month = _dp.month, day = _dp.day;
 	const [hour, minute, second] = `${params.time || '00:00:00'}`.split(':').map((item)=>Number(item));
 	return {
 		year,
@@ -951,10 +954,30 @@ function buildNongli(lunar, solar, apparentSolar, ziweiLunar){
 	};
 }
 
-export function buildLocalBaziResult(params){
+// [A3·核心层 memo] 时空核心(solar/lunar/eightChar/yun/大运/紫微农历)只依赖下列键;
+// 五个派生开关(minggongMethod/phaseType/godKeyPos/fenyeVersion/cangVersion)与 lateZiHourUseNextDay/
+// dayunPrecision 均在核心之外 —— 用户在选项轴来回拨时核心层零重算(实测核心占大头)。
+// 状态安全:唯一 setter eightChar.setSect 由 after23NewDay 驱动且 after23 在核心键内 → 每个缓存桶
+// 构造时定终身,复用零漂移;daYunList 消费者全只读(map/slice/flatMap)。开关 horosa.perf.baziCoreMemo
+// (localStorage 置 '0' 关=旧行为逐次全算);字节等价由全部八字 golden/压测(同日期×选项笛卡尔)裁决。
+const BAZI_CORE_KEYS = ['date', 'time', 'zone', 'ad', 'lon', 'lat', 'gpsLon', 'gpsLat', 'timeAlg', 'after23NewDay', 'gender'];
+const baziCoreMemo = new Map();   // key -> bundle(插入序 LRU,8 桶)
+const BAZI_CORE_MEMO_MAX = 8;
+function baziCoreMemoEnabled(){
+	try{
+		if(typeof localStorage === 'undefined'){ return true; }
+		return localStorage.getItem('horosa.perf.baziCoreMemo') !== '0';
+	}catch(e){ return true; }
+}
+function buildBaziCore(params){
 	const rawParts = parseDateTime(params);
 	if(!Number.isFinite(rawParts.year) || !Number.isFinite(rawParts.month) || !Number.isFinite(rawParts.day)){
 		throw new Error('invalid bazi date');
+	}
+	// lunar-javascript 可靠域 AD1~9999:域外(公元前/万年后)其节气静默错位 → 月柱错干支,
+	// 比报错更危险。此处硬挡,域外历法走后端星历实算路径(错误信息供上层提示)。
+	if(!isLunarJsYearReliable(rawParts.year)){
+		throw new Error(lunarDomainNotice(rawParts.year));
 	}
 	const apparentParts = applyApparentSolarTime(rawParts, params || {});
 	const solar = solarFromParts(apparentParts);
@@ -968,6 +991,42 @@ export function buildLocalBaziResult(params){
 	eightChar.setSect(dayPillarShift ? 1 : 2);
 	const gender = Number(params.gender) === 0 ? 0 : 1;
 	const yun = eightChar.getYun(gender);
+	// perf · A1：大运表算一次，喂给三个推运 builder（旧版三 builder 各自调 yun.getDaYun(10)，3 次重活）。
+	const daYunList = yun.getDaYun(10);
+	// 晚子时·紫微所用农历:after23NewDay=1 且本命落 23 点子时段 → 日柱已进位次日,紫微随之取次日历日。
+	const ziweiLunar = ziweiLunarFor(lunar, solar, dayPillarShift, apparentParts.hour);
+	// [A3·profile 定谳] 三推运 builder(流年/主运/小运,lunar.js 逐年重演)≈ 全函数 97% 耗时,
+	// 且只依赖核心键参数 → 随核心一并缓存;消费侧以 slice() 发新数组防外部 push/splice 互染。
+	const dayGan = eightChar.getDayGan();
+	const direction = buildDirection(daYunList, dayGan, solar);
+	const mainDirection = buildMainDirection(daYunList, dayGan);
+	const smallDirection = buildSmallDirection(daYunList, dayGan, solar);
+	return { rawParts, apparentParts, solar, lunar, eightChar, dayPillarShift, gender, yun, daYunList, ziweiLunar, direction, mainDirection, smallDirection };
+}
+function getBaziCore(params){
+	if(!baziCoreMemoEnabled()){
+		return buildBaziCore(params);
+	}
+	const key = BAZI_CORE_KEYS.map((k)=>`${params && params[k] !== undefined && params[k] !== null ? params[k] : ''}`).join('|');
+	const hit = baziCoreMemo.get(key);
+	if(hit){
+		// 访问提升(Map 重插=LRU 触底保护)
+		baziCoreMemo.delete(key);
+		baziCoreMemo.set(key, hit);
+		return hit;
+	}
+	const bundle = buildBaziCore(params);
+	baziCoreMemo.set(key, bundle);
+	while(baziCoreMemo.size > BAZI_CORE_MEMO_MAX){
+		const first = baziCoreMemo.keys().next().value;
+		baziCoreMemo.delete(first);
+	}
+	return bundle;
+}
+
+export function buildLocalBaziResult(params){
+	const core = getBaziCore(params);
+	const { rawParts, apparentParts, solar, lunar, eightChar, dayPillarShift, gender, yun, daYunList, ziweiLunar } = core;
 	const dayGan = eightChar.getDayGan();
 	// v3 第二开关 lateZiHourUseNextDay: 默认 1 (跟现有 lunar.js Exact 行为一致, 时干用次日干起子时)。
 	const lateZiHourUseNextDay = (params && (params.lateZiHourUseNextDay === 0 || params.lateZiHourUseNextDay === '0' || params.lateZiHourUseNextDay === false)) ? 0 : 1;
@@ -997,10 +1056,7 @@ export function buildLocalBaziResult(params){
 	});
 	const gejuYongShen = computeGejuYongShen(fourColumns, wuxingStat);
 	const mangpai = computeMangPai(fourColumns);
-	// perf · A1：大运表算一次，喂给三个推运 builder（旧版三 builder 各自调 yun.getDaYun(10)，3 次重活）。
-	const daYunList = yun.getDaYun(10);
-	// 晚子时·紫微所用农历:after23NewDay=1 且本命落 23 点子时段 → 日柱已进位次日,紫微随之取次日历日。
-	const ziweiLunar = ziweiLunarFor(lunar, solar, dayPillarShift, apparentParts.hour);
+	// (daYunList/ziweiLunar 已随核心层缓存,见 buildBaziCore)
 	const bazi = {
 		gender: gender === 1 ? 'Male' : 'Female',
 		nongli: buildNongli(lunar, solar, solar, ziweiLunar),
@@ -1010,9 +1066,9 @@ export function buildLocalBaziResult(params){
 			mangpai,
 			fenYe,
 			gong12God: {},
-			direction: buildDirection(daYunList, dayGan, solar),
-			mainDirection: buildMainDirection(daYunList, dayGan),
-			smallDirection: buildSmallDirection(daYunList, dayGan, solar),
+			direction: core.direction.slice(),
+			mainDirection: core.mainDirection.slice(),
+			smallDirection: core.smallDirection.slice(),
 		directTime: yun.getStartSolar().toYmdHms(),
 		directInfo: formatStartLuck(yun, params && params.dayunPrecision),
 		tiaohou: [],

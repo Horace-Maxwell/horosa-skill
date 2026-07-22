@@ -75,6 +75,35 @@ export function runLiuyao(payload) {
         out.push(`第${m.pos}爻动：${m.ben.liuqin}${m.ben.zhi}${m.ben.wuxing} → ${m.bian.liuqin}${m.bian.zhi}${m.bian.wuxing}${tags ? ' ' + tags : ''}`);
       });
     }
+    // 断诀命中（v3.5.1 六爻扩充 liuyaoDuanJue）：本盘命中的经典口诀（暗动/随官入墓/金锁玉关十例…）。
+    const dj = a.duanJue;
+    if (dj) {
+      const hits = [];
+      const arrNamed = { anDong: '暗动', chongSan: '冲散', jueSheng: '绝处逢生', heChong: '合处逢冲', chengGang: '乘刚', feiFu: '飞伏', xieQi: '泄气', suiJinFu: '随金伏' };
+      Object.keys(arrNamed).forEach((k) => {
+        const arr = dj[k];
+        if (Array.isArray(arr) && arr.length) {
+          const parts = arr
+            .map((x) => `${x.liuqin || ''}${x.zhi || ''}${x.kind ? '·' + x.kind : ''}${typeof x.from === 'number' ? '(第' + x.from + '爻)' : ''}`.trim())
+            .filter(Boolean);
+          if (parts.length) { hits.push(`${arrNamed[k]}：${parts.join('、')}`); }
+        }
+      });
+      const objNamed = { suiGuan: '随官入墓', zhuGui: '助鬼伤身', wuGui: '五鬼', mieMo: '灭没' };
+      Object.keys(objNamed).forEach((k) => { if (dj[k]) { hits.push(`${objNamed[k]}：命中`); } });
+      if (Array.isArray(dj.jinSuoShi)) {
+        const on = dj.jinSuoShi.filter((x) => x && x.on).map((x) => `${x.k}(${x.note})`);
+        if (on.length) { hits.push(`金锁玉关：${on.join('；')}`); }
+      }
+      if (hits.length) { out.push('断诀命中：'); hits.forEach((h) => out.push('  ' + h)); }
+    }
+    // 应期（v3.5.1 六爻扩充 liuyaoYingQi）：以用神旺衰/生克逢值定何时应事。
+    if (a.yingqi && Array.isArray(a.yingqi.rules) && a.yingqi.rules.length) {
+      out.push('应期：');
+      a.yingqi.rules.forEach((r) => {
+        out.push(`  ${r.rule}${r.targets && r.targets.length ? '→' + r.targets.join('/') : ''}${r.scope ? '(' + r.scope + ')' : ''}`);
+      });
+    }
     return { snapshot_text: out.join('\n') };
   } catch (e) {
     return { snapshot_text: '' };

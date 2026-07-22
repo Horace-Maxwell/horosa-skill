@@ -125,6 +125,21 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 - **primarydirect 段名对齐**：上游 v48 判 `主/界限法设置|表格` 为死名、真名 `主限法设置|表格`；skill builder/
   preset/report-payload-map 同步改真名，旧名走 `map_legacy_section_title`。UI-only 新段
   `主限天球·当前动画所指`（3D 动画所指）headless 不产，**故意不进 preset**（§5 UI-only 段过滤）。
+- **core-js 重 vendor（baziLunarLocal 全年份域守卫 + gua 六爻大扩充）**：
+  ① `baziLunarLocal.js` 重拷带入 v3.5.0 **全年份域守卫**——`lunarDomainGuard.isLunarJsYearReliable`（AD1~9999
+  外 lunar-js 节气静默错位 → 月柱错，比崩溃更危险，故域外 throw 让上层走后端星历）+ `dateStrSafe.parseDateParts`
+  （`'-7040-07-19'` 裸 split 撕成 NaN 年）两个新 import-free 兄弟依赖随拷；公共 export 面不变（canping/heluo/
+  yizhangjing/zhengchuan 链零改）。
+  ② **gua 六爻整子树重 vendor**：14 引擎模块 + 6 data（tianjiDoctrine 9581 行纯数据）统一 sed 变换
+  （`./X`→`./X.js`、`../../utils/helper`→`./guaHelper`、`../../utils/safeStorage`→`./safeStorage` no-op shim）。
+  新增 liuyaoDuanJue/GuFa/YingQi/ShenShaEx 引擎 → `analyzeLiuyao` 新出 `duanJue`/`yingqi` 等键（旧键全保留=
+  向后兼容）；`tools/liuyao.js` 把「断诀命中」（金锁玉关/随官入墓/随金伏…命中项，**空 render 过滤**）+「应期」
+  折进已有 [断卦结构]（optional）段，不新增段名、契约零变。closure 干净（引擎只 import 兄弟+data+2 shim，
+  无 React/canvas）；golden + analyzeLiuyao real-chain 验证。
+  ③ **本轮 core-js 已完成 = bazi + gua**；ken formatter（DunJia/JinKou/TaiYi 各 4~23 行极端年 clockTime/BC-safe
+  显示微漂）、tarot engine（cardSchema/reportText/verdict 微漂）、tongshefa 三十二观、calendar 4→14 段（黄历
+  四页签，需审 fengshui/zeri.js headless）**列为后续专项**——ken 引擎全年份域已由 Phase 0 runtime 重同步覆盖，
+  这些是极端年显示 polish 与能力增补，非在域正确性缺口，留待专项验证 pass。
 
 ### v0.22.0 / 2026-07-16 — parity lint 常量交叉扩到全部 manifest-stamping 脚本（Windows 侧）
 

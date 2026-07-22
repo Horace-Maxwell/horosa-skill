@@ -143,7 +143,7 @@ export function isRuMu(yaoWx, atZhi, tuMode){
 	return changshengOf(yaoWx, atZhi, tuMode) === '墓';
 }
 
-// ── 六冲卦/六合卦(§5.7):内外卦三对爻(初↔四/二↔五/三↔上)地支全冲=六冲卦、全合=六合卦 ──
+// ── 六冲卦/六合卦(古籍通例):内外卦三对爻(初↔四/二↔五/三↔上)地支全冲=六冲卦、全合=六合卦 ──
 export function guaChongHe(gua){
 	if(!gua || !gua.yaoname){ return ''; }
 	let chong = 0, he = 0;
@@ -158,7 +158,7 @@ export function guaChongHe(gua){
 	return '';
 }
 
-// ── 三合局/三会方(§1.5):卦中三支齐现成局(有动则成局力强);返回 [{type,zhis,wuxing,positions,hasMoving}] ──
+// ── 三合局/三会方(古籍通例):卦中三支齐现成局(有动则成局力强);返回 [{type,zhis,wuxing,positions,hasMoving}] ──
 export function guaSanHeHui(gua, movingSet){
 	if(!gua || !gua.yaoname){ return []; }
 	const moving = movingSet || new Set();
@@ -182,7 +182,7 @@ export function guaSanHeHui(gua, movingSet){
 	return out;
 }
 
-// ── WP-D 真空/假空(§5.6):旬空 + (休囚死/月破=无气) + 不动 + 不被日生扶 + 不临日月 → 真空(到底空);
+// ── WP-D 真空/假空(古籍通例):旬空 + (休囚死/月破=无气) + 不动 + 不被日生扶 + 不临日月 → 真空(到底空);
 // 否则(旺相/发动/逢生/临日月可填实) → 假空(出空即用)。非旬空返 ''。 ──
 export function voidKindOf(y, ctx){
 	if(!y || !y.xunKong){ return ''; }
