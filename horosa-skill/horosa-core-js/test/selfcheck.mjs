@@ -13,6 +13,7 @@ import { runLiureng, normalizeChart } from '../src/tools/liureng.js';
 import { buildLiuRengReferenceContext } from '../src/vendor/liureng/liurengRefContext.js';
 import { matchBiFa } from '../src/vendor/liureng/LRBiFaDoc.js';
 import { runGuolaoMoira } from '../src/tools/guolaoMoira.js';
+import { runXiaoLiuRen } from '../src/tools/xiaoliuren.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const chart = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_traditional.json'), 'utf8'));
@@ -112,6 +113,20 @@ check('guolaoMoira evaluates 政余格局 patterns', () => {
   assert(names.includes('孛犯太阳'), `expected 孛犯太阳, got ${names.join(',')}`);
   const s = r.snapshot_text || '';
   assert(s.includes('喜格：') && s.includes('忌格：'), 'snapshot missing 喜格/忌格 lines');
+});
+
+check('xiaoliuren(dao) 三数起三传 + 生克/化解，determinism', () => {
+  const p = { nums: [5, 20, 7], school: 'dao', askEvent: '求财' };
+  const r = runXiaoLiuRen(p);
+  assert(r.snapshot_text, 'should emit a snapshot');
+  ['[问事]', '[起课]', '[三传]', '[生克]', '[九神]', '[化解]'].forEach((h) => assert(r.snapshot_text.includes(h), `missing ${h}`));
+  assert(JSON.stringify(r.data.chuan) === JSON.stringify(['小吉', '空亡', '速喜']), `unexpected 三传: ${r.data.chuan}`);
+  assert(r.snapshot_text.includes('拜'), 'dao school should carry 拜解');
+  const again = runXiaoLiuRen(p);
+  assert(again.snapshot_text === r.snapshot_text, '同三数须同盘（冻结起课）');
+  // 主流六宫无五行生克，段如实标注。
+  const main = runXiaoLiuRen({ nums: [5, 20, 7], school: 'main', askEvent: '求财' });
+  assert(main.snapshot_text.includes('主流六宫不调取五行生克'), 'main school should note no 生克');
 });
 
 if (failures > 0) {

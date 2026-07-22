@@ -90,6 +90,7 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "canping": "canping",
     "heluo": "heluo",
     "yizhangjing": "yizhangjing",
+    "xiaoliuren": "xiaoliuren",
     "acg": "acg",
     "astrodata": "astrodata",
     "sanshiunited": "sanshiunited",
@@ -6515,6 +6516,57 @@ class HorosaSkillService:
             "export_snapshot": self._augment_export_payload(technique="yizhangjing", snapshot_text=snapshot_text),
         }
 
+    def _run_xiaoliuren_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 小六壬：三数起三传（主流六宫/道门九宫）。起课为冻结值——显式 nums 优先；缺 nums 则按占时正统起
+        # （农历月 monthInt / 农历日 dayInt / 时支序 三数，前置 /nongli/time 派生，JS 层不发 HTTP，AGENTS §4）。
+        nums = payload.get("nums")
+        time_lines: list[str] = []
+        if not (isinstance(nums, list) and len(nums) == 3):
+            nongli = self._call_remote(
+                "/nongli/time",
+                {
+                    "date": payload["date"],
+                    "time": payload["time"],
+                    "zone": payload["zone"],
+                    "lon": payload.get("lon"),
+                    "lat": payload.get("lat"),
+                    **_day_boundary_switches(payload),
+                },
+            )
+            month_int = nongli.get("monthInt") if isinstance(nongli, dict) else None
+            day_int = nongli.get("dayInt") if isinstance(nongli, dict) else None
+            hour_gz = str(nongli.get("time") or "") if isinstance(nongli, dict) else ""
+            hour_zhi = hour_gz[1] if len(hour_gz) >= 2 else ""
+            hour_idx = (_SIXYAO_DIZHI.index(hour_zhi) + 1) if hour_zhi in _SIXYAO_DIZHI else None
+            if not (month_int and day_int and hour_idx):
+                raise ToolValidationError(
+                    "小六壬占时起数失败：无法从 /nongli/time 取得 农历月/日/时支。请显式给 nums=[月,日,时] 或提供完整 date/time。",
+                    code="tool.xiaoliuren_cast_unavailable",
+                    details={"monthInt": month_int, "dayInt": day_int, "hourZhi": hour_zhi},
+                )
+            nums = [month_int, day_int, hour_idx]
+            time_lines = [
+                f"起卦时间:{payload.get('date')} {payload.get('time')}",
+                f"农历:{month_int}月{day_int}日 {hour_zhi}时（时支序{hour_idx}）",
+            ]
+        js_result = self.js_client.run(
+            "xiaoliuren",
+            {
+                "nums": nums,
+                "school": payload.get("school", "main"),
+                "showOneThree": payload.get("showOneThree", True),
+                "askEvent": payload.get("askEvent") or payload.get("question") or "",
+                "timeLines": time_lines,
+            },
+        )
+        snapshot_text = js_result.get("snapshot_text")
+        return {
+            "xiaoliuren": js_result.get("data", {}),
+            "input_normalized": js_result.get("input_normalized", {}),
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="xiaoliuren", snapshot_text=snapshot_text),
+        }
+
     def _run_sanshiunited_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         shared = {
             "date": payload["date"],
@@ -7509,6 +7561,8 @@ class HorosaSkillService:
             return self._run_heluo_tool(payload)
         if definition.name == "yizhangjing":
             return self._run_yizhangjing_tool(payload)
+        if definition.name == "xiaoliuren":
+            return self._run_xiaoliuren_tool(payload)
         if definition.name == "acg":
             return self._run_acg_tool(payload)
         if definition.name == "astrodata":

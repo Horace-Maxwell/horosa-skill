@@ -613,6 +613,20 @@ class FakeJsClient(HorosaJsEngineClient):
                     "[神煞合参]\n（通用命理合参层·非本术原生）\n命(未·天驛)：华盖—主孤高"
                 ),
             }
+        if tool_name == "xiaoliuren":
+            # 小六壬：6 段无条件恒出（道门九宫含五行生克/拜解）。真内容样例，供离线契约 round-trip。
+            return {
+                "data": {"school": "dao", "nums": [5, 20, 7], "chuan": ["小吉", "空亡", "速喜"], "analysis": {}},
+                "input_normalized": {"nums": [5, 20, 7], "school": "dao", "showOneThree": True, "askEvent": "求财"},
+                "snapshot_text": (
+                    "[问事]\n所问:求财\n\n"
+                    "[起课]\n流派:道门九宫;三数:5、20、7(月/日/时,作一顺数自大安起)\n\n"
+                    "[三传]\n第一传 小吉(坎水) —— 我/事件主体\n第二传 空亡(中土) —— 他人与外界因素\n第三传 速喜(离火) —— 事情的结果\n\n"
+                    "[生克]\n空亡土克小吉水(2克1) → 被克\n速喜火生空亡土(3生2) → 有贵人相助,生我,爱我,保护我\n\n"
+                    "[九神]\n大安(震木):木·正东\n速喜(离火):火·正南\n空亡(中土):失去、虚伪、空想\n\n"
+                    "[化解]\n小吉被空亡克 → 拜玉皇化解"
+                ),
+            }
         if tool_name == "progextra":
             # v2.5.0 推运 vendored builders (balbillus etc.) — return the single-section snapshot directly.
             technique = payload.get("technique")

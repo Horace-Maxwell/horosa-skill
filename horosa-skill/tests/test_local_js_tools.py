@@ -578,6 +578,38 @@ def test_yizhangjing_local_tool_runs_headless_engine(tmp_path) -> None:
     # 确定性：同输入同快照。
     again = service.run_tool("yizhangjing", payload, save_result=False)
     assert again.data["snapshot_text"] == snapshot
+
+
+def test_xiaoliuren_local_tool_runs_headless_engine(tmp_path) -> None:
+    # 小六壬（上游 v3.5.0）：三数起三传，纯函数进程内计算，零后端。显式 nums=[月,日,时] 冻结起课。
+    # 道门九宫含五行生克 + 拜解；主流六宫无生克（段如实标注）。
+    service = make_service(tmp_path)
+    dao = service.run_tool("xiaoliuren", {"nums": [5, 20, 7], "school": "dao", "askEvent": "求财"}, save_result=False)
+    assert dao.ok is True, dao.error
+    snap = dao.data["snapshot_text"]
+    for header in ("[问事]", "[起课]", "[三传]", "[生克]", "[九神]", "[化解]"):
+        assert header in snap, header
+    assert dao.data["xiaoliuren"]["chuan"] == ["小吉", "空亡", "速喜"]
+    assert "道门九宫" in snap and "拜" in snap  # 拜解化解
+    export = dao.data.get("export_snapshot") or {}
+    assert export.get("missing_selected_sections") == []
+    assert export.get("unknown_detected_sections") == []
+    # 主流六宫：无五行生克，如实标注。
+    main = service.run_tool("xiaoliuren", {"nums": [5, 20, 7], "school": "main", "askEvent": "求财"}, save_result=False)
+    assert "主流六宫不调取五行生克" in main.data["snapshot_text"]
+    # 起课冻结：同三数同盘。
+    again = service.run_tool("xiaoliuren", {"nums": [5, 20, 7], "school": "dao", "askEvent": "求财"}, save_result=False)
+    assert again.data["snapshot_text"] == snap
+
+
+@requires_chart
+def test_xiaoliuren_time_cast_derives_nums_from_nongli(tmp_path) -> None:
+    # 占时起课：缺 nums → 前置 /nongli/time 派生 农历月/日/时支序三数（JS 不发 HTTP）。
+    service = make_service(tmp_path)
+    r = service.run_tool("xiaoliuren", {"date": "2026-05-20", "time": "12:30:00", "zone": "+08:00", "lon": "121e28", "school": "dao", "askEvent": "问事"}, save_result=False)
+    assert r.ok is True, r.error
+    assert len(r.data["xiaoliuren"]["nums"]) == 3
+    assert "起卦时间:2026-05-20" in r.data["snapshot_text"]
     _assert_clean_export(result)
 
 

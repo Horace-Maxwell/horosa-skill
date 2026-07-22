@@ -23,11 +23,14 @@ def select_tools(request: DispatchInput) -> list[str]:
             add("bazi_direct")
         else:
             add("bazi_birth")
-    if _contains_any(text, ["六壬", "liureng"]):
+    # 小六壬 含「六壬」二字 → 大六壬分支须排除，否则「小六壬测走失」误路由 liureng（同「卜卦含卦字」先例）。
+    if _contains_any(text, ["六壬", "liureng"]) and not _contains_any(text, ["小六壬", "xiaoliuren"]):
         if _contains_any(text, ["年运", "runyear", "行年"]):
             add("liureng_runyear")
         else:
             add("liureng_gods")
+    if _contains_any(text, ["小六壬", "xiaoliuren"]):
+        add("xiaoliuren")
     if _contains_any(text, ["奇门", "qimen"]):
         add("qimen")
     if _contains_any(text, ["太乙", "taiyi", "太一"]):

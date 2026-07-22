@@ -34,3 +34,11 @@ def test_router_handles_relative_keywords() -> None:
     )
     assert select_tools(request) == ["relative"]
 
+
+
+def test_router_xiaoliuren_excludes_liureng_both_ways() -> None:
+    # 小六壬 含「六壬」二字，须与大六壬互斥（双向）。
+    assert select_tools(DispatchInput.model_validate({"query": "小六壬测走失"})) == ["xiaoliuren"]
+    assert select_tools(DispatchInput.model_validate({"query": "起小六壬看财"})) == ["xiaoliuren"]
+    got = select_tools(DispatchInput.model_validate({"query": "大六壬起课问婚姻"}))
+    assert "liureng_gods" in got and "xiaoliuren" not in got

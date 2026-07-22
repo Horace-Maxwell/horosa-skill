@@ -328,6 +328,28 @@ class YizhangjingInput(FlexibleModel):
     shenshaLayer: bool | None = True
 
 
+class XiaoLiuRenInput(FlexibleModel):
+    # 小六壬：三数起三传（主流六宫 main / 道门九宫 dao，dao 才有五行生克与拜解）。起课为【冻结值】——
+    # nums=[月,日,时] 三正整数显式优先；缺 nums 则按占时正统起（date/time/zone[+lon] → 农历月/日/时支序，
+    # 前置 /nongli/time 派生）。askEvent=所问；showOneThree=道门是否列一↔三关系（默认列）。
+    nums: list[int] | None = None
+    school: str | None = "main"
+    showOneThree: bool | None = True
+    askEvent: str | None = None
+    question: str | None = None
+    # 占时起数所需（缺 nums 时必填）：
+    date: str | None = None
+    time: str | None = None
+    zone: str | None = None
+    lon: str | None = None
+    lat: str | None = None
+    ad: int | None = 1
+    timeAlg: int | None = None
+    # 晚子时双开关（占时影响时支序，见 references/late-zi.md）。
+    after23NewDay: int | None = None
+    lateZiHourUseNextDay: int | None = None
+
+
 class ACGInput(BirthInput):
     # 占星地图（AstroCartoGraphy）：本命时刻的行星地理投影线（MC/IC 恒定经度、ASC/DESC 曲线、
     # 天顶点、偕升纬度带、线交点）。口径开关：mode=mundo 真黄纬（Jim Lewis 原版，默认）/zodiac

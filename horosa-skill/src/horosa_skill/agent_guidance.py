@@ -596,6 +596,17 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         do_not_assume=["起卦时刻/种子（决定抽到的牌，须真实）", "所问内容"],
     ),
+    "xiaoliuren": _policy(
+        intent="小六壬 / xiaoliuren：任取三数（月/日/时）作一顺数自大安起，推三传（主流六宫 / 道门九宫）。起课为冻结值——三数一经起出即不重起，改流派只重排判读。占时可起（农历月/日/时支序三数）。",
+        required_context=["起课三数 nums 或 起课时刻 date/time", "所问 askEvent", "流派 school"],
+        ask_if_missing=[
+            {"field": "nums / date-time", "question": "如何起课？给三个数 nums=[月,日,时]，或提供起课的日期/时间（按占时以农历月/日/时支序起）。"},
+            {"field": "askEvent", "question": "所问何事？请给出具体问题。"},
+            {"field": "school", "question": "用哪一派？", "options": ["主流六宫 main（大安/留连/速喜/赤口/小吉/空亡，各宫吉凶直断）", "道门九宫 dao（+病符/桃花/天德，含五行生克与拜解）"]},
+        ],
+        safe_defaults=[{"field": "school", "value": "main", "meaning": "默认主流六宫（六宫直断，无五行生克）"}],
+        do_not_assume=["起课三数/起课时刻（决定三传，须真实）", "所问内容"],
+    ),
     "wangji": SHENSHU_POLICY,
     "wuzhao": SHENSHU_POLICY,
     "taixuan": SHENSHU_POLICY,
