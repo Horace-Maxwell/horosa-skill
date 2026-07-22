@@ -170,7 +170,7 @@ def write_manifest(version: str) -> None:
         "platform": "win32-x64",
         "runtime_layout_version": 1,
         "runtime_payload_version": version,
-        "export_registry_version": 10,
+        "export_registry_version": 11,
         "services": {
             "backend_url": "http://127.0.0.1:9999",
             "chart_url": "http://127.0.0.1:8899",
@@ -212,6 +212,7 @@ def build() -> Path:
     require_path(SOURCE_ROOT / "Horosa-Web" / "vendor" / "taixuanshifa")
     require_path(SOURCE_ROOT / "Horosa-Web" / "vendor" / "jingjue")
     require_path(SOURCE_ROOT / "Horosa-Web" / "vendor" / "shenyishu")
+    require_path(SOURCE_ROOT / "Horosa-Web" / "vendor" / "kin_year_domain.py")
     require_path(SOURCE_ROOT / "Horosa-Web" / "astrostudyui" / "dist-file")
     require_path(SOURCE_ROOT / "Horosa-Web" / "astrostudyui" / "scripts" / "warmHorosaRuntime.js")
     require_path(SOURCE_ROOT / "Horosa-Web" / "scripts" / "repairEmbeddedPythonRuntime.py")
@@ -233,6 +234,9 @@ def build() -> Path:
     (horosa_web_root / "vendor").mkdir(parents=True, exist_ok=True)
     for ken_engine in ("kinqimen", "kintaiyi", "kinjinkou", "kinwangji", "kinwuzhao", "taixuanshifa", "jingjue", "shenyishu"):
         rsync_copy(SOURCE_ROOT / "Horosa-Web" / "vendor" / ken_engine, horosa_web_root / "vendor" / "")
+    # v3.5.0 全年份域 shared module (sibling of the engine dirs, missed by the loop) — copy explicitly.
+    # shutil.copy2 (no POSIX rsync/cp/tar per §6). Missing it → ken/神数 engines 500 on first BC/远期 request.
+    shutil.copy2(SOURCE_ROOT / "Horosa-Web" / "vendor" / "kin_year_domain.py", horosa_web_root / "vendor" / "kin_year_domain.py")
     # kinastro engine for the 9 kinastro-* 神数 (engine only; drop tools/cities + streamlit ui/docs).
     if (SOURCE_ROOT / "Horosa-Web" / "vendor" / "kinastro").is_dir():
         rsync_copy(

@@ -161,6 +161,11 @@ mkdir -p "${STAGE_ROOT}/Horosa-Web/vendor"
 for ken_engine in kinqimen kintaiyi kinjinkou kinwangji kinwuzhao taixuanshifa jingjue shenyishu; do
   rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/vendor/${ken_engine}" "${STAGE_ROOT}/Horosa-Web/vendor/"
 done
+# v3.5.0 全年份域 shared module: 16 ken/神数 engine files lazily `from kin_year_domain import ...`.
+# It lives at the vendor root (sibling of the engine dirs), so the loop above misses it — copy explicitly.
+# Missing it → every ken/神数 engine 500s on its first BC/远期 request in the bundled runtime.
+require_path "${SOURCE_ROOT}/Horosa-Web/vendor/kin_year_domain.py"
+rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/vendor/kin_year_domain.py" "${STAGE_ROOT}/Horosa-Web/vendor/"
 # kinastro engine for the 9 kinastro-* 神数 (engine only; exclude tools/cities + streamlit ui/docs).
 if [ -d "${SOURCE_ROOT}/Horosa-Web/vendor/kinastro" ]; then
   rsync -a "${RSYNC_FILTERS[@]}" \
@@ -255,7 +260,7 @@ manifest = {
     "platform": os.environ["PLATFORM_ENV"],
     "runtime_layout_version": 1,
     "runtime_payload_version": os.environ["VERSION_ENV"],
-    "export_registry_version": 10,
+    "export_registry_version": 11,
     "services": {
         "backend_url": "http://127.0.0.1:9999",
         "chart_url": "http://127.0.0.1:8899",

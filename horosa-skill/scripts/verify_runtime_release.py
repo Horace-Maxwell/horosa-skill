@@ -19,6 +19,10 @@ REQUIRED_ENTRIES = {
         "runtime-payload/Horosa-Web/vendor/kinqimen/",
         "runtime-payload/Horosa-Web/vendor/kintaiyi/",
         "runtime-payload/Horosa-Web/vendor/kinjinkou/",
+        # v3.5.0 全年份域 shared module — 16 ken/神数 engines lazily import it; missing → BC/远期 500s.
+        "runtime-payload/Horosa-Web/vendor/kin_year_domain.py",
+        # v3.5.1 地占大改版 data — the ifa/numbers/vedic geomancy engines read these; real file, not empty dir.
+        "runtime-payload/Horosa-Web/astropy/astrostudy/geomancy/data/ifa_odu.json",
         # 5 standalone 神数 engines back /wangji/pan · /wuzhao/pan · /taixuan/pan · /jingjue/pan ·
         # /shenyishu/pan — without these the kentang mount skips them and the 神数 tools fail offline.
         "runtime-payload/Horosa-Web/vendor/kinwangji/",
@@ -49,6 +53,10 @@ REQUIRED_ENTRIES = {
         "runtime-payload/Horosa-Web/vendor/kinqimen/",
         "runtime-payload/Horosa-Web/vendor/kintaiyi/",
         "runtime-payload/Horosa-Web/vendor/kinjinkou/",
+        # v3.5.0 全年份域 shared module — 16 ken/神数 engines lazily import it; missing → BC/远期 500s.
+        "runtime-payload/Horosa-Web/vendor/kin_year_domain.py",
+        # v3.5.1 地占大改版 data — the ifa/numbers/vedic geomancy engines read these; real file, not empty dir.
+        "runtime-payload/Horosa-Web/astropy/astrostudy/geomancy/data/ifa_odu.json",
         # 5 standalone 神数 engines (see darwin note).
         "runtime-payload/Horosa-Web/vendor/kinwangji/",
         "runtime-payload/Horosa-Web/vendor/kinwuzhao/",
@@ -77,6 +85,10 @@ REQUIRED_ENTRIES = {
         "runtime-payload/Horosa-Web/vendor/kinqimen/",
         "runtime-payload/Horosa-Web/vendor/kintaiyi/",
         "runtime-payload/Horosa-Web/vendor/kinjinkou/",
+        # v3.5.0 全年份域 shared module — 16 ken/神数 engines lazily import it; missing → BC/远期 500s.
+        "runtime-payload/Horosa-Web/vendor/kin_year_domain.py",
+        # v3.5.1 地占大改版 data — the ifa/numbers/vedic geomancy engines read these; real file, not empty dir.
+        "runtime-payload/Horosa-Web/astropy/astrostudy/geomancy/data/ifa_odu.json",
         # 5 standalone 神数 engines (see darwin note).
         "runtime-payload/Horosa-Web/vendor/kinwangji/",
         "runtime-payload/Horosa-Web/vendor/kinwuzhao/",

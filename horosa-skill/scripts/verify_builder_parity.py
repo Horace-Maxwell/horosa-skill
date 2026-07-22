@@ -41,6 +41,7 @@ SHARED_STEPS = {
     "gen_shaozi_tiaowen": "generate shaozi_tiaowen_6144.json (邵子 real verses)",
     "plotly": "strip plotly (~40 MB, streamlit-only)",
     "lunar-javascript": "bundle the lunar-javascript npm dep (canping/heluo)",
+    "kin_year_domain": "copy the 全年份域 shared module kin_year_domain.py (16 engines lazily import it)",
 }
 
 # Embedded-manifest integer constants that must be stamped identically by every script that writes
@@ -68,6 +69,8 @@ REQUIRED_ON_BOTH = (
         "vendor/kinastro/astro/",
         "shaozi/data/shaozi_tiaowen_6144.json",
         "node_modules/lunar-javascript/package.json",
+        "vendor/kin_year_domain.py",
+        "geomancy/data/ifa_odu.json",
     ]
 )
 
