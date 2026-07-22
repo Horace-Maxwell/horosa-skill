@@ -74,6 +74,7 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 | v0.19.0 | 名人库中文化 + 法奇门对宫订正 | 名人库靠 astrodata sqlite 的 `name_zh` 列（07-07 源树已含 5.9 万行）；对宫订正在 `DunJiaFaCalc.js`（JS，随 repo）——原生验证可用 sha 对齐“bundle 里的 JS == repo 的 JS”。 |
 | v0.20.0 | pin-forward **基线前移**（钉到上一个真 zip 而非冻结 v0.16.1）；黄历/六壬七政 | 滞后从多版降到约一版；黄历依赖 java 端 `/nongli/time` + `/jieqi/year`，直接裸 POST 会因 payload 归一化差异 500，须走 skill 自己的 `_call_remote` 归一化路径验证。 |
 | v0.21.0 | 安装链增强（断点续传/多镜像/进度/uninstall/upgrade/selfcheck） | 新 install UX 往 stdout 打**进度/引导文案，不再是纯 JSON**——脚本化判定改用 `doctor`（仍是干净 JSON）或从混合输出提取末尾 JSON 块的 `asset.sha256`。“版本短路”被 `--force` 绕过，`install --archive --force` 仍做真安装。 |
+| v0.23.0 | darwin-only 复发；vendor 缺 v3.5.x 新顶层件（kin_year_domain/ifa_odu/prepareruntime）+ jar 落后须从当前 Windows workspace 重灌；首建死于 Temurin `releases/latest` 半发布窗口（jdk-17.0.20-ga 无 win 二进制）→ JDK 改走 Adoptium API；kintaiyi game_theory/scipy 吓人 traceback 定性为两平台一致良性噪音 | JDK 解析必须 asset-existence-aware；重灌后必跑 `verify_vendor_runtime_sources.py` + `verify_export_contract_mirror.py`；吓人 traceback 先对照 mac 半边定性再动手；无 Mongo 机器 live 验证按「chart 半边绿 + 占时路径 java 500 属预期」判读。 |
 
 ## 横切教训
 
@@ -106,6 +107,16 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   17.0.20）；`verify_builder_parity.py` 新增断言：JDK-downloading builders（win/linux）必含 Adoptium
   API URL、禁再引用 `temurin17-binaries/releases/latest`；mac builder 不下载 JDK（vendored
   runtime/mac/java）豁免。
+- **kintaiyi `game_theory` 的 scipy 缺失是两平台一致的良性 prewarm 噪音**：symptom = bundled chart 服务
+  启动日志出现 `prewarm_kentang_modules → kintaiyi/game_theory.py → ModuleNotFoundError: No module named
+  'scipy'` 整段 traceback，看似 taiyi 引擎坏了。root cause = 上游 kintaiyi 新增 **opt-in** 博弈论模块
+  （`pan(..., enable_game_theory=False)` 默认关、`if enable_game_theory` 内懒 import），scipy 既不在 ken
+  依赖集（§6 只有 bidict/numpy/kerykeion/ephem/pendulum）也不在**任何**平台 bundle 内——实测 v0.23.0
+  darwin tar 同样含 `game_theory.py` 且无 scipy，两平台行为一致；skill 调用面永不置 True。判据 =
+  `/taiyi/pan` 返 `ResultCode 0 + source kintaiyi` 即健康，该 traceback 无需处置；**勿为它加 scipy**
+  （~40MB，瘦身红线，服务于永不触发的功能）。守卫：CI 起不了 runtime（§7），无廉价断言点，按 §8 症状表
+  + 本条documentation 处置。顺带观察：darwin tar 混入 `._game_theory.py`（AppleDouble，inert，
+  mac 侧滤网漏网，无碍）。
 
 ### v0.23.0 / 2026-07 — 全面重同步至上游 v3.5.1（全年份域 + 地占大改 + 六爻扩充 + 5 新技法）
 
