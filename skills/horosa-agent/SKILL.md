@@ -11,7 +11,7 @@ description: >-
 license: AGPL-3.0-only
 compatibility: Requires the local Horosa Skill MCP server/CLI (Python 3.12 + uv + installed offline runtime)
 metadata:
-  version: "0.22.0"
+  version: "0.23.0"
 ---
 
 # Horosa Skill Agent Guide
@@ -153,6 +153,11 @@ question context.”
 | 卦义 | `gua_desc`, `gua_meiyi` |
 | 宿占 | `suzhan` |
 | 一掌经 | `yizhangjing` |
+| 神数正传（铁板 / 邵子 / 大定 / 六亲 / 铁算心易） | `zhengchuan`（school 选流派；除铁算心易外需生辰） |
+| 小六壬 | `xiaoliuren`（三数或占时起课，冻结值；改流派只重排） |
+| 飞宫小奇门 | `feigong`（起支+日干支定局，冻结值；占时可起） |
+| 小成图 | `xiaochengtu`（手动/两数/股价/大衍/占时，大衍须显式 seed，卦为冻结值） |
+| 皇极轨策 | `guice`（十二法起卦，冻结值；十开关流派只重排断法） |
 | 天文地占 geomancy | `geomancy` |
 | 塔罗 tarot | `tarot` |
 | 占星地图 ACG | `acg` |

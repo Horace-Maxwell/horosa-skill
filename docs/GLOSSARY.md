@@ -77,7 +77,9 @@
 | preset / `AI_EXPORT_PRESET_SECTIONS` | 每技法「应出哪些段」的契约表（镜像上游 aiExport.js），在 `exports/registry.py`。 |
 | `AI_EXPORT_OPTIONAL_SECTIONS` | 条件段白名单：段可能不出现时登记于此；条件段必须 preset+optional 双登记。 |
 | missing / unknown_detected_sections | 契约核对两类偏差：预期未出现 / 出现但不在 preset；干净导出 = 两者皆空。 |
-| `MIRRORED_UPSTREAM_AIEXPORT_VERSION` | 机读镜像基线：导出契约整版对齐到上游 aiExport 第几版（现 40，上游 48）。 |
+| `MIRRORED_UPSTREAM_AIEXPORT_VERSION` | 机读镜像基线：导出契约对齐到上游 aiExport 第几版（现 48，逐技法对齐；`verify_export_contract_mirror.py` 断言 vendored aiExport 版本 == 本常量）。 |
+| 冻结值（课/局/卦） | 占卦型技法（小六壬/飞宫/小成图/皇极轨策/卜卦）的起卦结果一经起出即冻结——改流派/设置只重排判读，绝不按时重起（重起=伪造用户没见过的盘）。 |
+| 神数正传五流派 | `zhengchuan` 一入口含 铁板/邵子/大定/六亲/铁算心易；`school` 选定；除铁算心易（查询层）外皆需生辰四柱（走 `/nongli/time` 权威柱）。 |
 | agent_guidance 闸门 / `agent_recovery` | 运行时澄清闸：设置未确认返回 `agent_guidance.required`；`details.agent_recovery.prompt_to_user` 可直接转发追问；确认后带 `agent_confirmed_settings`/`defaults_accepted`。 |
 | elicitation 双轨 | 客户端声明 MCP elicitation 能力时闸门弹原生表单（按默认一跳闭环），否则回落错误往返；`HOROSA_MCP_ELICIT=0` 关闭。 |
 | 命盘 / 事盘 | 上游概念：命盘=出生数据可重算；事盘=一次性占例（六爻/卜卦），永不按时间重算。 |

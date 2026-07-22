@@ -59,3 +59,24 @@ normalized `勾→虎 / 雀→玄`.
 - Some presets have conditional sections (tieban/chunzi/cetian may emit fewer than the full preset
   for a given input) — a few `missing_selected_sections` on real exports is expected there, like
   election.
+
+## 神数正传 + 4 新占卦技法（上游 v3.5.0）
+
+**共通铁律 · 冻结值**：这些技法的「课/局/卦/四柱」一经起出即为**冻结值**——改流派、改用宫、改十开关
+只**重排判读**，绝不重起课/局/卦（重起 = 伪造一个用户没见过的盘）。改了起卦输入 = 另占新盘。
+
+- **`zhengchuan` 神数正传**：`school` 五选一——`tieban` 铁板 / `shaozi` 邵子 / `dading` 大定 / `liuqin`
+  六亲 / `xinyi` 铁算心易。除 `xinyi`（查询层，只需 item/sound/ke/gong/xqZhi/xqYushu）外，都需生辰
+  （date/time/zone[+lon] + gender），四柱走 `/nongli/time` 权威口径（立春界年柱）；铁板/邵子异步载条文
+  正文库。流派专属：shaozi `fatherAge`/`motherAge`/`yuan`；liuqin `askHourZhi`/`env`；dading `dadingYear`
+  （所推流年，小运/大运/岁君自八字推运表派生，四柱仍以权威柱为准）。段随流派子集出、唯一恒出=起盘信息。
+- **`xiaoliuren` 小六壬**：`nums=[月,日,时]` 三正整数显式起课，或按占时（date/time → 农历月/日/时支序）。
+  `school` main 主流六宫（无五行生克，[生克]段如实标注）/ dao 道门九宫（含生克与拜解）。6 段严格。
+- **`feigong` 飞宫小奇门**：`qiMode` hour 时支（默认，占时）/ manualZhi 选支 / manualNum 数取 / yearZhi 年支，
+  + 日干支（占时自 `/nongli/time` 取）。命宫随 `mingAge`/`mingGender`；`koujing` 河魁口径 zheng/yi 两说。7 段严格。
+- **`xiaochengtu` 小成图**：`qiguaFa` manual（上/下卦 up/lo + dongYaos）/ number（upNum/loNum + qiguaShu）/
+  stock（open/close **字符串保末尾 0**）/ dayan（**须显式 seed 或 counts，禁静默随机**）/ time（占时梅花卦）。
+  `yongGong` 用宫 1-9 非5。[股市]段仅 stock 模式出。
+- **`guice` 皇极轨策**：`qiguaFa` 十二法（time/baoshu/wushu/shengyin/zizhan/zhangchi/chicun/weiren/ziji/
+  dongwu/jingwu/duanfa）+ 各法专属输入；十开关流派（school/yanshuFa/qiguaShu/shuXi/shiFang…）。起卦时刻
+  （date/time）供元会运世/时方所需四柱。占事直断/演数/四位 恒出，余段随盘面/开关条件出。

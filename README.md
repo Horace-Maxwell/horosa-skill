@@ -11,8 +11,8 @@
 
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
-  <img src="https://img.shields.io/badge/技法-78-1d4ed8?style=for-the-badge" alt="78 tools" />
-  <img src="https://img.shields.io/badge/测试-299_passed-16a34a?style=for-the-badge" alt="299 passed" />
+  <img src="https://img.shields.io/badge/技法-83-1d4ed8?style=for-the-badge" alt="78 tools" />
+  <img src="https://img.shields.io/badge/测试-315_passed-16a34a?style=for-the-badge" alt="315 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
 
@@ -44,7 +44,7 @@
         │  MCP  /  JSON-first CLI
         ▼
    ┌──────────────────────────────────────────────────────────────┐
-   │  🔮 Horosa Skill   本地进程 · 78 工具 · 澄清闸 · 统一 envelope │
+   │  🔮 Horosa Skill   本地进程 · 83 工具 · 澄清闸 · 统一 envelope │
    │  自然语言调度 · 逐技法直调 · 报告渲染 · 本地记忆检索           │
    └──────────────────────────────────────────────────────────────┘
         │  全部在本机 · 断网可用
@@ -134,7 +134,7 @@ uv run horosa-skill client config --format codex            # Codex config.toml 
 | ⚪ **OpenClaw / mcporter** | `uv run horosa-skill client openclaw-setup --workspace ~/.openclaw/workspace` |
 
 > [!TIP]
-> 上下文预算受限的客户端可设 `HOROSA_MCP_COMPACT=1`，只暴露约 9 个门面工具（含按名直调的 `horosa_tool_run` 与 78 技法目录索引），澄清闸照常生效。根目录 `server.json` 为 MCP Registry 元数据，普通用户无需手改。
+> 上下文预算受限的客户端可设 `HOROSA_MCP_COMPACT=1`，只暴露约 9 个门面工具（含按名直调的 `horosa_tool_run` 与 83 技法目录索引），澄清闸照常生效。根目录 `server.json` 为 MCP Registry 元数据，普通用户无需手改。
 
 ## 🎯 一次调用的完整流程
 
@@ -240,6 +240,11 @@ uv run horosa-skill client config --format codex            # Codex config.toml 
 | `canping` ⓟ | 邵子参评数 / 金锁银匙 | 四柱起数 + 本命 / 大运歲運条文 |
 | `heluo` ⓟ | 河洛理数 | 先后天卦 + 元堂爻辞 + 大限岁运断验 |
 | `yizhangjing` ⓟ | 一掌经 | 十二支六道 + 十二宫 + 大限流年十二神 + 神煞合参 |
+| `zhengchuan` ⓟ | 神数正传 | 铁板 / 邵子 / 大定 / 六亲 / 铁算心易 五流派·四柱起数 + 条文 + 大运死月 |
+| `xiaoliuren` ⓟ | 小六壬 | 三数起三传·主流六宫 / 道门九宫 + 生克 + 九神 + 拜解 |
+| `feigong` ⓟ | 飞宫小奇门 | 时上起青龙飞九宫 + 主客命宫 + 八门九星 + 流年流月 + 应期 |
+| `xiaochengtu` ⓟ | 小成图 | 洛书九宫佈局 + 正旁推 + 四象 + 应期 + 股市研判（五式起卦） |
+| `guice` ⓟ | 皇极轨策 | 十二法起卦 + 演数四位 + 卦变断法 + 三要十应 + 元会运世 + 大定 |
 | `harmonic` ⓟ | 调波盘 | 黄经 × 调波数取位、同频合相 |
 | `suzhan` ⓟ | 宿占 / 宿盘 | 宿占结构与宿曜信息 |
 | `sixyao` ⓟ | 六爻 / 易卦 | 本 / 互 / 之 / 错 / 综卦 + 断卦结构 |
@@ -287,7 +292,7 @@ uv run horosa-skill client config --format codex            # Codex config.toml 
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.22.0",
+  "ok": true, "tool": "qimen", "version": "0.23.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -351,20 +356,20 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 
 | 检查项 | 结果 |
 | --- | --- |
-| 🧰 可调用工具 | 78 / 78 `ok=true` |
-| 🧪 工程测试 | **299 / 299 pass**（ken / 神数后端实时集成 + 离线 golden 单测 + node JS golden） |
+| 🧰 可调用工具 | 83 / 83 `ok=true` |
+| 🧪 工程测试 | **315 / 315 pass**（ken / 神数后端实时集成 + 离线 golden 单测 + node JS golden） |
 | 🛡️ 未确认参数时强制追问 | 67 个技法工具触发 `must_ask_user=true` |
 | 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 63 个导出 technique） |
-| 🗄️ 本地 memory / report | 78 / 78 写入 + 78 / 78 JSON artifact |
+| 🗄️ 本地 memory / report | 83 / 83 写入 + 83 / 83 JSON artifact |
 | 🔄 GitHub CI | Linux / macOS 单测 + JS golden 自检 + Windows OpenClaw smoke |
-| 📦 Release runtime | macOS (arm64) / Windows (x64) `v0.22.0` 已打包并校验；其余平台安装时明确报不支持 |
+| 📦 Release runtime | macOS (arm64) / Windows (x64) `v0.23.0` 已打包并校验；其余平台安装时明确报不支持 |
 
 第一次 clone 后确认非空壳的最小验证：
 
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 299 passed
+uv run pytest -q                                        # 315 passed
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

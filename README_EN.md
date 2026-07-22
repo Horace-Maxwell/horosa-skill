@@ -10,7 +10,7 @@
   <p>
     <img src="https://img.shields.io/github/stars/Horace-Maxwell/horosa-skill?style=flat-square" alt="GitHub stars" />
     <img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square" alt="Release" />
-    <img src="https://img.shields.io/badge/tools-78-1d4ed8?style=flat-square" alt="78 tools" />
+    <img src="https://img.shields.io/badge/tools-83-1d4ed8?style=flat-square" alt="78 tools" />
     <img src="https://img.shields.io/badge/platform-macOS%20(arm64)%20%7C%20Windows%20(x64)-0f766e?style=flat-square" alt="Platforms" />
     <img src="https://img.shields.io/badge/runtime-offline%20first-111827?style=flat-square" alt="Offline runtime" />
     <img src="https://img.shields.io/badge/MCP-ready-111827?style=flat-square" alt="MCP ready" />
@@ -51,7 +51,7 @@ License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICEN
 
 ## Current stable baseline
 
-**Current public version: `Horosa Skill 0.22.0` (78 callable tools).**
+**Current public version: `Horosa Skill 0.23.0` (83 callable tools).**
 
 This release line brings the capability surface roughly to parity with the desktop app:
 
@@ -70,20 +70,20 @@ Local end-to-end signals:
 
 | Check | Result |
 | --- | --- |
-| Callable tools | `78 / 78 ok=true` |
-| Engineering tests | `299 / 299 pass` (ken / Shen Shu live integration + offline golden unit tests + node JS golden) |
+| Callable tools | `83 / 83 ok=true` |
+| Engineering tests | `315 / 315 pass` (ken / Shen Shu live integration + offline golden unit tests + node JS golden) |
 | Forced clarification when params unconfirmed | `67` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `7` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`63` export techniques modeled) |
-| Local memory / report | `78 / 78` writes + `78 / 78` JSON artifacts |
+| Local memory / report | `83 / 83` writes + `83 / 83` JSON artifacts |
 | Qi Men / Tai Yi / Jin Kou / Three Styles | unified on `ken`, same as the desktop app |
 | Tong She Fa / Decennials | headless, value-for-value with Xingque (`decennials.test.js` golden) |
 | GitHub CI | Linux/macOS unit tests + horosa-core-js JS golden self-check + Windows OpenClaw smoke |
-| Release runtime | macOS (arm64) / Windows (x64) `v0.22.0` assets (ken + 14 Shen Shu engines bundled) packaged and verified; other platforms/arches fail install with an explicit unsupported error |
+| Release runtime | macOS (arm64) / Windows (x64) `v0.23.0` assets (ken + 14 Shen Shu engines bundled) packaged and verified; other platforms/arches fail install with an explicit unsupported error |
 
 > About `solarreturn` / `lunarreturn` / `solararc` / `givenyear` / `profection` / `pd` / `pdchart` / `zr`: these predictive tools are verified working in this version and should not be flagged by an agent as "Java `/predict/*` unavailable". If a client still says so, check whether it is on an old runtime, bypassing MCP to hand-compute, or hasn't run `doctor` / `openclaw-check --full`.
 
-## Capability map (78 tools)
+## Capability map (83 tools)
 
 > Every business technique returns a uniform envelope plus a Xingque-style `export_snapshot` / `export_format`. Tools marked ⓟ are setting-sensitive and require parameter confirmation before calling.
 
@@ -157,6 +157,11 @@ Local end-to-end signals:
 | `canping` ⓟ | Shao Zi Can Ping Shu | four-pillar numbers, verses (in-process, bundled `lunar-javascript`) |
 | `heluo` ⓟ | He Luo Li Shu | pre/post-heaven gua, fate chapter, decade + yearly fortunes with verdict (in-process) |
 | `yizhangjing` ⓟ | Yi Zhang Jing | palm-chart four palaces, life palace / twelve mansions, decade + annual cycles, shensha overlay (in-process) |
+| `zhengchuan` ⓟ | Shen Shu Zheng Chuan | five schools (铁板/邵子/大定/六亲/铁算心易): four-pillar casting, verse lookup, decade + death-month (in-process) |
+| `xiaoliuren` ⓟ | Xiao Liu Ren | three-number 三传 · mainstream six-palace / Daoist nine-palace + 生克 + nine spirits + remedies |
+| `feigong` ⓟ | Fei Gong Xiao Qi Men | 青龙 flies the nine palaces + host/guest & life palace + eight gates/nine stars + annual/monthly + timing |
+| `xiaochengtu` ⓟ | Xiao Cheng Tu | Luoshu nine-palace layout + forward/side derivation + four images + timing + stock (five casting methods) |
+| `guice` ⓟ | Huang Ji Gui Ce | 12 casting methods + 演数四位 + gua-change judgment + 三要十应 + 元会运世 + 大定 |
 | `harmonic` ⓟ | Harmonic chart | natal longitude × harmonic number, same-frequency conjunctions |
 | `suzhan` ⓟ | Su Zhan | mansion-divination structure |
 | `sixyao` ⓟ | Liu Yao / I Ching | hexagram, changing lines, question-oriented output |
@@ -236,7 +241,7 @@ Every tool call returns a uniform envelope:
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.22.0",
+  "ok": true, "tool": "qimen", "version": "0.23.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -363,7 +368,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 299 passed with local backends up; live integration tests auto-skip offline
+uv run pytest -q                                        # 315 passed with local backends up; live integration tests auto-skip offline
 uv run python scripts/run_benchmark.py                  # HorosaBench: dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```
