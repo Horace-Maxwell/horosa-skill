@@ -92,6 +92,21 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.23.0+ / 2026-07-22 — Temurin「releases/latest」半发布窗口打空 JDK 下载（Windows 补建时踩中）
+
+- **症状**：v0.23.0 Windows 半边补建时 `build_runtime_release_windows.py` 第一步即死：
+  `could not resolve Temurin asset for OpenJDK17U-jdk_x64_windows_hotspot_.zip`。**根因**：builder 从
+  GitHub `temurin17-binaries/releases/latest` 按资产名匹配下载 JDK；GitHub 的 `releases/latest` 按
+  **tag 提交日期**取，Adoptium 刚打 GA tag（jdk-17.0.20-ga）而平台二进制尚未传完的窗口内，该 release
+  资产为空/不全 → 匹配空手。且其 `/releases` 列表顺序按 release 对象创建时间（老版本重发会插队到最前，
+  实测 2023 年的 17.0.9+9.1 排第一），「遍历列表取第一个含资产的」同样不可靠。linux builder 同模式同病。
+  **fix/guard**：两个下载 JDK 的 builder（win/linux）改走 Adoptium 官方分发 API
+  `api.adoptium.net/v3/binary/latest/17/ga/<os>/x64/jdk/hotspot/normal/eclipse`（307 只指向**已存在**的
+  最新 GA 二进制，`download()` 的 `curl -fL` 跟随重定向；实测解析到 17.0.19+10、正确跳过无资产的
+  17.0.20）；`verify_builder_parity.py` 新增断言：JDK-downloading builders（win/linux）必含 Adoptium
+  API URL、禁再引用 `temurin17-binaries/releases/latest`；mac builder 不下载 JDK（vendored
+  runtime/mac/java）豁免。
+
 ### v0.23.0 / 2026-07 — 全面重同步至上游 v3.5.1（全年份域 + 地占大改 + 六爻扩充 + 5 新技法）
 
 - **导出契约三层脱节收口（40<44<48 → 48）+ mirror 守卫**：`MIRRORED_UPSTREAM_AIEXPORT_VERSION` 40→48、

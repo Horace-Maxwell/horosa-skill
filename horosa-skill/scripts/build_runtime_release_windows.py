@@ -54,19 +54,11 @@ def latest_node_win_url() -> str:
     raise SystemExit("could not resolve latest Node.js win-x64 zip")
 
 
-def latest_temurin_asset_url(needle: str, suffix: str) -> str:
-    completed = subprocess.run(
-        ["curl", "-fsSL", "https://api.github.com/repos/adoptium/temurin17-binaries/releases/latest"],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    payload = json.loads(completed.stdout)
-    for asset in payload.get("assets", []):
-        name = asset.get("name", "")
-        if needle in name and name.endswith(suffix):
-            return asset["browser_download_url"]
-    raise SystemExit(f"could not resolve Temurin asset for {needle}{suffix}")
+def latest_temurin_jdk_url() -> str:
+    # Adoptium's own API redirects to the newest GA JDK whose windows/x64 binary actually exists.
+    # GitHub `releases/latest` on temurin17-binaries picks by tag commit date, so during the hours
+    # after a GA tag lands it can point at a release with zero platform assets (jdk-17.0.20-ga did).
+    return "https://api.adoptium.net/v3/binary/latest/17/ga/windows/x64/jdk/hotspot/normal/eclipse"
 
 
 def extract_zip_strip_first(archive: Path, target: Path) -> None:
@@ -273,7 +265,7 @@ def build() -> Path:
     (runtime_windows_root / "bundle").mkdir(parents=True, exist_ok=True)
 
     java_archive = download(
-        latest_temurin_asset_url("OpenJDK17U-jdk_x64_windows_hotspot_", ".zip"),
+        latest_temurin_jdk_url(),
         DOWNLOAD_ROOT / "OpenJDK17U-jdk_x64_windows_hotspot.zip",
     )
     python_archive = download(

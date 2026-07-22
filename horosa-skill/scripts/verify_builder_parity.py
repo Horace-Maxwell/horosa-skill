@@ -61,6 +61,17 @@ CONSTANT_STAMPERS = {
     "Linux scaffold": SCRIPTS / "scaffold_linux_runtime.py",
 }
 
+# Builders that download a Temurin JDK must resolve it via the Adoptium API redirect, which only
+# points at binaries that exist. GitHub `releases/latest` on temurin17-binaries picks by tag commit
+# date, so a freshly-tagged GA can have zero platform assets for hours (jdk-17.0.20-ga stranded both
+# JDK-downloading builders). The mac builder vendors runtime/mac/java and is exempt.
+JDK_DOWNLOADING_BUILDERS = {
+    "Windows builder": WIN_BUILDER,
+    "Linux builder": SCRIPTS / "build_runtime_release_linux.py",
+}
+ADOPTIUM_API_NEEDLE = "api.adoptium.net/v3/binary/latest/17/ga/"
+GITHUB_TEMURIN_LATEST_NEEDLE = "temurin17-binaries/releases/latest"
+
 # Entries that must be REQUIRED on BOTH platforms (legit per-platform path swaps like python3<->python.exe
 # and .sh<->.ps1 are intentionally not checked here — only the platform-agnostic payload contents).
 REQUIRED_ON_BOTH = (
@@ -116,6 +127,21 @@ def main() -> int:
             errors.append(
                 f"embedded-manifest constant `{name}` drifted across manifest-stamping scripts: {detail} "
                 "— bump the lagging script(s) in the same change"
+            )
+
+    for label, path in JDK_DOWNLOADING_BUILDERS.items():
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        if ADOPTIUM_API_NEEDLE not in text:
+            errors.append(
+                f"{label} ({path.name}) does not resolve the JDK via the Adoptium API "
+                f"(`{ADOPTIUM_API_NEEDLE}`)"
+            )
+        if GITHUB_TEMURIN_LATEST_NEEDLE in text:
+            errors.append(
+                f"{label} ({path.name}) still queries GitHub `{GITHUB_TEMURIN_LATEST_NEEDLE}` — "
+                "a freshly-tagged GA can have zero platform assets; use the Adoptium API redirect"
             )
 
     required = _load_required_entries()

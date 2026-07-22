@@ -253,6 +253,12 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   `shutil.copytree(src, dst/src.name, ignore=ignore_patterns(*excludes), dirs_exist_ok=True)`；
   不许 `rsync`/`cp`/`tar` 回潮（`rsync_copy()` 曾让 Windows builder 第一步 `FileNotFoundError` 死掉）；
   `download()` 用 `curl`（Win10/11 自带）。
+- **JDK 下载走 Adoptium API，禁 GitHub `releases/latest`**：temurin17-binaries 的 `releases/latest` 按
+  tag 提交日期取，GA 刚打 tag 的窗口内平台二进制可能还没传完（jdk-17.0.20-ga 曾使 win/linux builder
+  空手），`/releases` 列表顺序亦不可靠（老版本重发插队到最前）。下载 JDK 的 builder 一律用
+  `api.adoptium.net/v3/binary/latest/17/ga/<os>/x64/jdk/hotspot/normal/eclipse`（只指向已存在的最新 GA
+  二进制，`curl -fL` 跟随 307）；guard = `verify_builder_parity.py` 断言 win/linux builder 含该 URL 且
+  不再引用 `temurin17-binaries/releases/latest`。
 - **kinastro 只 vendor 引擎**：`vendor/kinastro` 带 `--exclude=tools`（26MB cities 地理库对干支神数无用）
   + `--exclude={ui,frontend,docs,wiki,examples,tests,…}` → ~31MB；`ensure_kinastro_path()` 上 `sys.path`
   使 `import astro.shaozi` 解析（streamlit 已在 bundled site-packages，`@cache_data` 无 runtime 警告无害）。

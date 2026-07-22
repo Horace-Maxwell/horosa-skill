@@ -94,19 +94,13 @@ def latest_node_linux_url() -> str:
 
 
 def latest_temurin_jdk_url() -> str:
-    """Resolve the latest Adoptium Temurin 17 JDK linux-x64 tar.gz URL."""
-    completed = subprocess.run(
-        ["curl", "-fsSL", "https://api.github.com/repos/adoptium/temurin17-binaries/releases/latest"],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    payload = json.loads(completed.stdout)
-    for asset in payload.get("assets", []):
-        name = asset.get("name", "")
-        if "OpenJDK17U-jdk_x64_linux_hotspot_" in name and name.endswith(".tar.gz"):
-            return asset["browser_download_url"]
-    raise SystemExit("could not resolve Temurin 17 JDK linux-x64 asset")
+    """Latest GA Temurin 17 JDK linux-x64 via the Adoptium API redirect.
+
+    Adoptium's own API only redirects to a binary that actually exists. GitHub `releases/latest`
+    on temurin17-binaries picks by tag commit date, so during the hours after a GA tag lands it
+    can point at a release with zero platform assets (jdk-17.0.20-ga did).
+    """
+    return "https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse"
 
 
 def extract_tar_strip_first(archive: Path, target: Path) -> None:
