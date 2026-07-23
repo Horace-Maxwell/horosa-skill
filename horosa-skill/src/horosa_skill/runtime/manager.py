@@ -593,8 +593,19 @@ class HorosaRuntimeManager:
             for entry in files:
                 if not entry["exists"]:
                     issues.append(f"missing:{entry['label']}")
+            degraded: str | None = None
+            java_diagnostics: dict[str, Any] | None = None
             if installed and not self._all_services_reachable(endpoints):
-                issues.append("services:not_running")
+                if self._chart_only_degraded(endpoints):
+                    # Issue #14: name the half that is down and surface WHY — a silently dead
+                    # Java backend was previously indistinguishable from "nothing running".
+                    issues.append("services:java_backend_not_running")
+                    degraded = "chart_only"
+                    java_diagnostics = self._java_boot_diagnostics(manifest)
+                elif self._any_services_reachable(endpoints):
+                    issues.append("services:chart_not_running")
+                else:
+                    issues.append("services:not_running")
 
             trace["issues"] = issues
             manifest_version = manifest.get("version") if manifest else None
@@ -621,6 +632,8 @@ class HorosaRuntimeManager:
                 "files": files,
                 "endpoints": endpoints,
                 "issues": issues,
+                "degraded": degraded,
+                "java_diagnostics": java_diagnostics,
                 "trace_id": trace["trace_id"],
                 "group_id": trace["group_id"],
             }
@@ -707,8 +720,27 @@ class HorosaRuntimeManager:
                         env=env,
                         manifest=manifest,
                     )
+                degraded = bool(readiness.get("degraded"))
                 startup_warning: dict[str, Any] | None = None
-                if completed.returncode != 0 and readiness["ready"]:
+                if degraded:
+                    startup_warning = {
+                        "code": "runtime.start_degraded_chart_only",
+                        "message": (
+                            "Java backend (:9999) did not become ready; running degraded on the chart service only. "
+                            "Chart-side techniques (三式 ken/神数/地占/塔罗/西占 chart 族) stay available; "
+                            "Java-side ones (nongli/bazi/ziwei/liureng and 占时 casts) will error until it recovers. "
+                            "Run `uv run horosa-skill doctor` for the captured Java boot error."
+                        ),
+                        "details": {
+                            "command": command,
+                            "returncode": completed.returncode,
+                            "stdout": completed.stdout[-4000:],
+                            "stderr": completed.stderr[-4000:],
+                            "retried_after_cleanup": retried_after_cleanup,
+                            "java_diagnostics": self._java_boot_diagnostics(manifest),
+                        },
+                    }
+                elif completed.returncode != 0 and readiness["ready"]:
                     startup_warning = {
                         "code": "runtime.start_nonzero_but_ready",
                         "message": "Runtime start script exited non-zero, but all required services became reachable.",
@@ -741,10 +773,16 @@ class HorosaRuntimeManager:
                             "endpoints": readiness["endpoints"],
                         },
                     )
+                if degraded:
+                    runtime_status = "degraded_chart_only"
+                elif startup_warning:
+                    runtime_status = "running_with_warnings"
+                else:
+                    runtime_status = "running"
                 self._write_runtime_state(
                     {
                         "managed": True,
-                        "status": "running_with_warnings" if startup_warning else "running",
+                        "status": runtime_status,
                         "updated_at": self._utc_now(),
                         "manifest_version": manifest.get("version") if manifest else None,
                         "platform": manifest.get("platform") if manifest else (self.settings.runtime_platform or _platform_key()),
@@ -758,6 +796,7 @@ class HorosaRuntimeManager:
                 return {
                     "ok": True,
                     "already_running": False,
+                    "degraded": degraded,
                     "command": command,
                     "stdout": completed.stdout[-4000:],
                     "stderr": completed.stderr[-4000:],
@@ -1386,6 +1425,50 @@ class HorosaRuntimeManager:
     def _any_services_reachable(self, endpoints: list[dict[str, Any]]) -> bool:
         return any(bool(item.get("reachable")) for item in endpoints)
 
+    def _chart_only_degraded(self, endpoints: list[dict[str, Any]]) -> bool:
+        chart = next((item for item in endpoints if item.get("label") == "python_chart"), None)
+        java = next((item for item in endpoints if item.get("label") == "java_backend"), None)
+        return bool(chart and chart.get("reachable")) and bool(java and not java.get("reachable"))
+
+    def _java_boot_diagnostics(self, manifest: dict[str, Any] | None) -> dict[str, Any] | None:
+        """Best-effort excerpt of the Java backend's boot failure; never raises.
+
+        The launcher redirects the jar's stdout/stderr under <Horosa-Web>/.horosa-local-logs/<run>/.
+        A backend that dies during Spring bean construction takes its log4j file appenders with it,
+        so without this excerpt doctor can only say "not running" (issue #14).
+        """
+        try:
+            script = self._relative_manifest_path(manifest, "services", "start_script")
+            log_root = self.current_dir / script.parent / ".horosa-local-logs"
+            if not log_root.is_dir():
+                return None
+            run_dirs = sorted((path for path in log_root.iterdir() if path.is_dir()), key=lambda path: path.name)
+            if not run_dirs:
+                return None
+            latest = run_dirs[-1]
+            markers = (
+                "Application run failed",
+                "APPLICATION FAILED TO START",
+                "BeanInstantiationException",
+                "Caused by:",
+            )
+            excerpt: list[str] = []
+            for name in ("astrostudyboot.stderr.log", "astrostudyboot.stdout.log"):
+                log_path = latest / name
+                if not log_path.is_file():
+                    continue
+                lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+                marked = [line.strip() for line in lines if any(marker in line for marker in markers)]
+                if marked:
+                    excerpt.extend(marked[:8])
+                else:
+                    excerpt.extend(line.strip() for line in lines[-5:] if line.strip())
+            if not excerpt:
+                return None
+            return {"log_dir": str(latest), "excerpt": excerpt[:12]}
+        except Exception:
+            return None
+
     def _run_start_command(
         self,
         *,
@@ -1435,11 +1518,25 @@ class HorosaRuntimeManager:
                 errors="replace",
                 check=False,
             )
+        # Issue #14: when the launcher already reports the java process dead (its marker line),
+        # don't burn the full readiness window waiting for an endpoint that can never come up.
+        java_dead_marker = "java backend process exited" in f"{completed.stdout}\n{completed.stderr}"
+        wait_timeout = (
+            min(self.settings.runtime_start_timeout_seconds, 20.0)
+            if java_dead_marker
+            else self.settings.runtime_start_timeout_seconds
+        )
         readiness = self._wait_for_service_state(
             expected_reachable=True,
-            timeout_seconds=self.settings.runtime_start_timeout_seconds,
+            timeout_seconds=wait_timeout,
             manifest=manifest,
         )
+        readiness.setdefault("degraded", False)
+        if not readiness["ready"] and self._chart_only_degraded(readiness["endpoints"]):
+            # A dead/blocked Java backend (e.g. WFP/proxy software vetoing JDK-17 AF_UNIX
+            # loopback pipes) must not lock out chart-only techniques: accept chart-up/java-down
+            # as a degraded start instead of failing the whole runtime.
+            readiness = {"ready": True, "degraded": True, "endpoints": readiness["endpoints"]}
         return completed, readiness
 
     def _wait_for_service_state(

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import sys
 import tarfile
 import threading
 import zipfile
@@ -543,7 +545,9 @@ def test_doctor_marks_partial_service_state_as_not_running(tmp_path: Path) -> No
     report = manager.doctor()
 
     assert report["ok"] is False
-    assert "services:not_running" in report["issues"]
+    # Partial state is still an issue — but named per-half now (issue #14): java up + chart down.
+    assert "services:chart_not_running" in report["issues"]
+    assert report["degraded"] is None
 
 
 def test_start_runtime_succeeds_when_script_returns_nonzero_but_services_become_ready(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1273,3 +1277,129 @@ def test_download_with_resume_sends_range_and_appends(tmp_path: Path, monkeypatc
     assert target.read_bytes() == payload
     assert captured_headers.get("range") == f"bytes={half}-"
     assert progress_points and progress_points[-1][0] == len(payload)
+
+
+def _chart_only_endpoints() -> list[dict[str, object]]:
+    return [
+        {"label": "java_backend", "url": "http://127.0.0.1:9999/common/time", "reachable": False},
+        {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": True},
+    ]
+
+
+def test_run_start_command_accepts_chart_only_as_degraded(tmp_path: Path) -> None:
+    # Issue #14: java 死 (WFP 拦 JDK-17 loopback) 时 chart-only 必须算降级成功，不再判整体失败。
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+        runtime_start_timeout_seconds=0.3,
+    )
+    manager = HorosaRuntimeManager(settings)
+
+    def fake_wait(self: HorosaRuntimeManager, *, expected_reachable: bool, timeout_seconds: float, manifest: dict | None) -> dict[str, object]:
+        return {"ready": False, "endpoints": _chart_only_endpoints()}
+
+    manager._wait_for_service_state = MethodType(fake_wait, manager)
+    script = tmp_path / "start.fake"
+    script.write_text("", encoding="utf-8")
+
+    completed, readiness = manager._run_start_command(
+        command=[sys.executable, "-c", "print('java backend process exited (exit code 1)')"],
+        script=script,
+        env=os.environ.copy(),
+        manifest=None,
+    )
+    assert completed.returncode == 0
+    assert readiness["ready"] is True
+    assert readiness["degraded"] is True
+
+
+def test_start_local_services_reports_degraded_chart_only(tmp_path: Path) -> None:
+    # 降级启动：ok=True + warning=runtime.start_degraded_chart_only + 状态文件 degraded_chart_only；
+    # 不触发破坏性 stop+重试（readiness.ready=True 使旧的 partial-state 分支不进入）。
+    archive = create_runtime_archive(tmp_path)
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+        runtime_start_timeout_seconds=0.3,
+    )
+    manager = HorosaRuntimeManager(settings)
+    manager.install(archive=str(archive))
+
+    stop_calls: list[bool] = []
+    real_stop = manager.stop_local_services
+
+    def spy_stop(self: HorosaRuntimeManager) -> dict[str, object]:
+        stop_calls.append(True)
+        return real_stop()
+
+    def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+        return [
+            {"label": "java_backend", "url": "http://127.0.0.1:9999/common/time", "reachable": False},
+            {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": False},
+        ]
+
+    def fake_run_start(
+        self: HorosaRuntimeManager,
+        *,
+        command: list[str],
+        script: Path,
+        env: dict[str, str],
+        manifest: dict | None,
+    ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
+        completed = subprocess.CompletedProcess(args=command, returncode=1, stdout="java backend process exited (exit code 1)", stderr="")
+        return completed, {"ready": True, "degraded": True, "endpoints": _chart_only_endpoints()}
+
+    manager._service_status = MethodType(fake_service_status, manager)
+    manager._run_start_command = MethodType(fake_run_start, manager)
+    manager.stop_local_services = MethodType(spy_stop, manager)
+
+    started = manager.start_local_services()
+
+    assert started["ok"] is True
+    assert started["degraded"] is True
+    assert started["warning"]["code"] == "runtime.start_degraded_chart_only"
+    assert not stop_calls, "degraded start must not trigger the destructive stop+retry path"
+    state = json.loads(settings.runtime_state_path.read_text(encoding="utf-8"))
+    assert state["status"] == "degraded_chart_only"
+
+
+def test_doctor_names_dead_java_and_surfaces_boot_excerpt(tmp_path: Path) -> None:
+    # doctor 在 chart 活/java 死时给专属 issue + degraded 标记 + 从启动器日志提取的 Java 崩溃摘录。
+    archive = create_runtime_archive(tmp_path)
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    manager = HorosaRuntimeManager(settings)
+    manager.install(archive=str(archive))
+
+    log_dir = settings.runtime_current_dir / "Horosa-Web" / ".horosa-local-logs" / "20260722_000000"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    (log_dir / "astrostudyboot.stderr.log").write_text(
+        "\n".join(
+            [
+                "2026-07-20 10:00:00 ERROR o.s.boot.SpringApplication - Application run failed",
+                "org.springframework.beans.BeanInstantiationException: Failed to instantiate AIAnalysisProxyService",
+                "Caused by: java.io.IOException: Unable to establish loopback connection",
+                "Caused by: java.net.SocketException: Invalid argument: connect",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+        return _chart_only_endpoints()
+
+    manager._service_status = MethodType(fake_service_status, manager)
+    report = manager.doctor()
+
+    assert "services:java_backend_not_running" in report["issues"]
+    assert "services:not_running" not in report["issues"]
+    assert report["degraded"] == "chart_only"
+    diagnostics = report["java_diagnostics"]
+    assert diagnostics is not None
+    assert any("SocketException" in line for line in diagnostics["excerpt"])
+    assert any("Application run failed" in line for line in diagnostics["excerpt"])

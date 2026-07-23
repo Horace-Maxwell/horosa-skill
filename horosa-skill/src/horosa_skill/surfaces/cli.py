@@ -381,6 +381,18 @@ def _doctor_summary(report: dict[str, Any]) -> dict[str, Any]:
     elif issues == ["services:not_running"]:
         user_summary = "The runtime files are installed, but the local Horosa services are not running yet."
         next_action = f"Run `{_openclaw_setup_command()}` to start the runtime and verify the OpenClaw path."
+    elif issues == ["services:java_backend_not_running"]:
+        user_summary = (
+            "Degraded (chart-only): the Python chart service is up, but the Java backend (:9999) is not. "
+            "Chart-side techniques (三式 ken/神数/地占/塔罗/西占 chart 族) still work; Java-side ones "
+            "(nongli/bazi/ziwei/liureng and 占时 casts) will error until it recovers."
+        )
+        next_action = (
+            "See `java_diagnostics` below for the captured Java boot error. Known cause on Windows: "
+            "proxy/VPN or security software (WFP filters) blocking JDK-17 AF_UNIX/TCP loopback — "
+            "issue #14. Retry after disabling the interfering software and rebooting, or keep using "
+            "chart-only techniques."
+        )
     else:
         user_summary = "Horosa still has runtime issues that need attention before OpenClaw will be fully ready."
         next_action = "Review the `issues` list below, fix the blocking item, then rerun `uv run horosa-skill doctor`."
@@ -936,14 +948,45 @@ def selfcheck() -> None:
             query_text="selfcheck 活体体检",
         )
         report["steps"]["compute"] = {"ok": result.ok, "tool": "nongli_time", "error": result.error.model_dump(mode="json") if result.error else None}
-        run_id = result.memory_ref.run_id if result.memory_ref else None
+        probe_result = result
+        if not result.ok:
+            # Issue #14: nongli_time 走 Java 后端(:9999)；Java 被环境杀死（如 WFP 拦 JDK-17 loopback）时
+            # 不能让整个 selfcheck 挂死 —— 改用 chart 侧 kentang 的 wangji 证明 chart 半边活着（降级可用）。
+            fallback = service.run_tool(
+                "wangji",
+                {
+                    "date": "1998-02-20",
+                    "time": "20:48:00",
+                    "after23NewDay": 1,
+                    "agent_confirmed_settings": True,
+                    "clarification_notes": "selfcheck degraded chart-only probe",
+                },
+                query_text="selfcheck 降级 chart-only 活体体检",
+            )
+            report["steps"]["compute_chart_only_fallback"] = {
+                "ok": fallback.ok,
+                "tool": "wangji",
+                "error": fallback.error.model_dump(mode="json") if fallback.error else None,
+            }
+            if fallback.ok:
+                report["degraded"] = "chart_only"
+                probe_result = fallback
+        run_id = probe_result.memory_ref.run_id if probe_result.memory_ref else None
         shown = service.show_memory({"run_id": run_id}) if run_id else {"ok": False}
         report["steps"]["memory_roundtrip"] = {"ok": bool(shown.get("ok")), "run_id": run_id}
-        report["ok"] = bool(result.ok and shown.get("ok"))
-        report["next_action"] = (
-            "全部通过：可以 `serve` 并接入 AI 客户端。" if report["ok"]
-            else "有步骤失败：按 steps 中的 error/issues 排查，或运行 `uv run horosa-skill doctor` 看完整体检。"
-        )
+        report["ok"] = bool(probe_result.ok and shown.get("ok"))
+        if report.get("degraded") == "chart_only":
+            report["next_action"] = (
+                "降级可用（chart-only）：Java 后端(:9999)未就绪，nongli/bazi/ziwei/liureng 与占时起课暂不可用；"
+                "chart 侧技法（三式 ken/神数/地占/塔罗/西占 chart 族）可正常 `serve` 使用。"
+                "跑 `uv run horosa-skill doctor` 看 java_diagnostics 里捕获的 Java 启动错误；"
+                "Windows 已知诱因 = 代理/VPN/安全软件的 WFP 过滤拦截 JDK-17 loopback（issue #14）。"
+            )
+        else:
+            report["next_action"] = (
+                "全部通过：可以 `serve` 并接入 AI 客户端。" if report["ok"]
+                else "有步骤失败：按 steps 中的 error/issues 排查，或运行 `uv run horosa-skill doctor` 看完整体检。"
+            )
     except RuntimeError as exc:
         report["steps"]["error"] = {"code": exc.code, "message": str(exc), "details": exc.details}
         report["next_action"] = "运行 `uv run horosa-skill install` 安装离线 runtime 后重试。" if exc.code == "runtime.not_installed" else "运行 `uv run horosa-skill doctor` 定位。"

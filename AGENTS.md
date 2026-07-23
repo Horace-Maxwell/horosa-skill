@@ -269,12 +269,15 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   PID-ownership 检查（期望 exe 路径必须 `[System.IO.Path]::GetFullPath(...)` 归一再比——`$RuntimeRoot`
   含字面 `..` 而 `Get-Process .Path` 是 OS 归一化的，raw `-ieq` **永不相等** → stop 变 no-op 还删 pid 文件
   → 进程泄漏；改这俩脚本后必测 stop 真杀掉双进程）、端口冲突 ~2s 快败、stale/already-running 标记
-  （manager 键控的 `pid files already exist`）、300s readiness 窗（readiness 门刻意要求 chart+Java 双活；
-  改成 chart-only 需连动 `manager._wait_for_service_state`）、Java 带
+  （manager 键控的 `pid files already exist`）、**降级就绪门（issue #14）**：双活 → exit 0；chart 活 +
+  java **进程已死** → 秒级 exit 0 降级并打 marker `java backend process exited` + java 日志尾（manager 靠
+  该 marker 把等待截短到 ≤20s）；chart 活 + java 慢 → 300s 窗尽头 exit 0 降级（java 之后可能自愈，doctor
+  会转绿）；chart 不活 → throw（真失败）。该契约与 `manager._run_start_command` 的 chart-only 降级判定
+  **锁步——改一边必改另一边**。Java 带
   `-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8`（Temurin 17 pre-JEP-400，OS 代码页会 mojibake CJK jar 表）。
-- **launcher 假失败**（无 Mongo/Redis 的干净机器）：Java 重试连库使 `/common/time` >180s 才应答，旧 180s 窗
-  会 throw「did not become ready」，但双进程已 `Start-Process` detach 照常起来，`doctor` 约 30–60s 后转绿。
-  install 后自检：忽略 launcher throw，改 poll `doctor`/双端点几分钟，别信退出码。
+- **launcher「假失败」已收敛（issue #14 降级门之后）**：无 Mongo/Redis 机器上 Java 连库重试可超就绪窗——
+  现在 chart 就绪即 exit 0（java 慢 = 降级 marker，之后自愈则 `doctor` 转绿）。launcher 仍 throw = chart
+  半边真没起来，按真失败排查（看 astropy.stderr 日志），不再有「throw 但其实都起来了」的假阳。
 - **邵子 `完整条文`「條文待補充」是上游忠实回退**（该 id 方案不在 6144 条 CSV 覆盖内），mac/win 一致；
   别造假条文；粗 grep `條文待補充` 会假阳——验 `基础条文` 是真条文即可。`gen_shaozi_tiaowen.py` 必须
   `newline="\n"` 写 LF（保两平台构建字节可复现）。
@@ -367,6 +370,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | release guard 绿但 Windows 用户拿到旧功能 | pin-forward（manifest 指旧 zip） | `sync_windows_release.py --check` 定案 → §7 修复流 |
 | 结果段缺失，客户端想报「缺依赖」 | 幻觉依赖风险 | 按 SKILL.md：说本地未返回该段，跑 `doctor` / `openclaw-check`，不发明 MongoDB/7897 |
 | chart 启动日志整段 traceback：`kintaiyi/game_theory.py … No module named 'scipy'` | prewarm 碰到 opt-in 博弈论子模块（默认关、懒 import）；scipy 两平台 bundle 均无（mac 同样） | 良性，无需处置；判据 = `/taiyi/pan` 回 `ResultCode 0 + source kintaiyi`；勿为此加 scipy（瘦身红线） |
+| `doctor` 报 `services:java_backend_not_running` / runtime_state `degraded_chart_only` | Java 后端死或被拦（Windows 常见 = 代理/VPN/安全软件 WFP 拦 JDK-17 AF_UNIX loopback，jar 在 Spring bean 构造期秒退且自身日志为空） | 降级模式设计行为：chart 侧技法照常可用；`doctor.java_diagnostics` 有启动器捕获的崩溃摘录；用户侧处置 = 禁用干扰软件并重启（issue #14） |
 
 ## 9. Stability invariants（稳定性不变量 — don't regress these）
 

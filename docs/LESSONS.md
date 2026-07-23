@@ -93,6 +93,30 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.23.0+ / 2026-07-22 — issue #14：Java 后端被环境杀死时全盘卡死 → chart-only 降级 + 诊断透传
+
+- **症状**（用户报告，Windows 11 + Clash Verge/安全软件）：`selfcheck` 挂死、`doctor` 只报
+  `services:not_running` 不说原因；Java(:9999) 启动即静默退出、无自身日志。**根因（环境层）**：jar 的
+  `AIAnalysisProxyService` bean 构造期 `new HttpClient()` → `Selector.open()` → JDK-17 `PipeImpl`
+  在 Windows 上**硬编码优先 AF_UNIX** 做内部 loopback（`PipeImpl(sp)` 写死 `this(sp,true,false)`），
+  且 **connect 失败无 TCP 回退**（只有 bind 失败才回退）——代理/VPN/安全软件的 WFP 过滤拦
+  `UnixDomainSockets.connect0` 即整跳崩；报告者机器连 java.exe 的 TCP loopback 也被拦（WFP 驻留内核，
+  停服务不够、需禁用+重启），Java 侧无解。**根因（我们的放大器）**：manager 就绪门要求 8899+9999 双活；
+  chart-up/java-down 触发 partial-recovery 把**健康的 chart 也停掉**重试，二次同败后 raise——只需 :8899
+  的三式/神数/地占等全被连坐；Java 崩溃栈无处可看（log4j appender 随进程死，doctor 不读启动器捕获的 std 流）。
+- **fix/guard（同一 change 全落）**：① 启动器降级门（Windows 模板 + `manager._run_start_command`
+  **锁步**）：java 进程死 → 秒级 exit 0 降级 + marker `java backend process exited` + java 日志尾进
+  stdout；java 慢 → 窗尽头 exit 0 降级；chart 死 → 照旧 throw。实测损坏 jar 场景 **5s** 降级退出
+  （旧行为 300s throw + 全锁）。② manager 接受 chart-only 为降级成功：`runtime.start_degraded_chart_only`
+  warning + runtime_state `degraded_chart_only`；见 marker 时等待截短 ≤20s；degraded ready **不再**触发
+  破坏性 stop+retry。③ doctor 分半报 `services:{java_backend,chart}_not_running`，java 死时附
+  `java_diagnostics`（读最新 `.horosa-local-logs/*/astrostudyboot.std{err,out}.log` 提取
+  `Application run failed`/`Caused by:` 链，best-effort 永不 crash doctor）。④ selfcheck：`nongli_time`
+  （java 面）失败自动回退 chart 侧 `wangji` 探针——降级机器上 ok=true + `degraded: chart_only` +
+  定向 next_action，不再挂死。⑤ README×2 排障：受限网络 assets-API 安装法（github.com:443 不通时）+
+  WFP 干扰判据。回归测试：`test_runtime_manager.py` 降级三测（`_run_start_command` 降级判定 /
+  start 不破坏性重试 / doctor 摘录）+ 分半 issue 命名测。
+
 ### v0.23.0+ / 2026-07-22 — Temurin「releases/latest」半发布窗口打空 JDK 下载（Windows 补建时踩中）
 
 - **症状**：v0.23.0 Windows 半边补建时 `build_runtime_release_windows.py` 第一步即死：

@@ -122,13 +122,19 @@ $JavaProc = Start-Process -FilePath $JavaBin -ArgumentList "-Dfile.encoding=UTF-
 $PyProc.Id | Set-Content -Encoding utf8 $PyPidPath
 $JavaProc.Id | Set-Content -Encoding utf8 $JavaPidPath
 
-# Readiness: require BOTH the Python chart service (:8899) and the Java backend (:9999) — same contract
-# the runtime manager enforces. The Java backend (Spring Boot) retries Mongo/Redis on boot and can be
-# slow on a bare box, so the window is 300s (was 180s) to avoid the historical false-failure where the
-# script threw while the backend was still a few seconds from ready. (A future option is to gate exit-0
-# on the chart service alone — ken/神数 only need :8899 — but that requires a matching change to the
-# manager's all-endpoints readiness check, so it is intentionally left as a both-required gate here.)
+# Readiness: full success needs BOTH the Python chart service (:8899) and the Java backend (:9999),
+# but a dead/blocked Java backend must not lock out the chart-only techniques (issue #14: WFP filters
+# from proxy/VPN/security software can veto JDK-17's AF_UNIX loopback pipes, killing the jar during
+# Spring bean construction with no console output). Contract, kept in lockstep with the runtime
+# manager's readiness handling (`manager._run_start_command` accepts chart-up/java-down as degraded):
+#   - both ready              -> exit 0 ("services are ready.")
+#   - chart ready, java DEAD  -> exit 0 degraded immediately (marker line + java log tails below)
+#   - chart ready, java slow  -> exit 0 degraded at deadline (Mongo/Redis boot retries can exceed the
+#                                window on a bare box; java may still become ready afterwards)
+#   - chart not ready         -> throw (real failure)
 $Deadline = (Get-Date).AddSeconds(300)
+$ChartReady = $false
+$JavaGaveUp = $false
 while ((Get-Date) -lt $Deadline) {
   $ChartReady = $false
   $BackendReady = $false
@@ -136,17 +142,42 @@ while ((Get-Date) -lt $Deadline) {
     $chartRsp = Invoke-WebRequest -Uri "http://127.0.0.1:$ChartPort/" -UseBasicParsing -TimeoutSec 2
     $ChartReady = $chartRsp.StatusCode -lt 500
   } catch {}
-  try {
-    $backendRsp = Invoke-WebRequest -Uri "http://127.0.0.1:$BackendPort/common/time" -UseBasicParsing -TimeoutSec 2
-    $BackendReady = $backendRsp.StatusCode -lt 500
-  } catch {}
+  if (-not $JavaGaveUp) {
+    try {
+      $backendRsp = Invoke-WebRequest -Uri "http://127.0.0.1:$BackendPort/common/time" -UseBasicParsing -TimeoutSec 2
+      $BackendReady = $backendRsp.StatusCode -lt 500
+    } catch {}
+    if (-not $BackendReady -and $JavaProc.HasExited) {
+      # The jar died before ever becoming ready. Its log4j appenders die with it, so tail the
+      # captured std streams here — the runtime manager stores this output for doctor/diagnosis.
+      $JavaGaveUp = $true
+      Write-Host "java backend process exited before becoming ready (exit code $($JavaProc.ExitCode))"
+      foreach ($lg in @($JavaErrLog, $JavaOutLog)) {
+        if (Test-Path $lg) {
+          Write-Host "---- tail: $lg ----"
+          Get-Content $lg -Tail 40 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+        }
+      }
+    }
+  }
   if ($ChartReady -and $BackendReady) {
     Write-Host "services are ready."
     Write-Host "backend:  http://127.0.0.1:$BackendPort"
     Write-Host "chartpy:  http://127.0.0.1:$ChartPort"
     exit 0
   }
+  if ($ChartReady -and $JavaGaveUp) {
+    Write-Host "degraded: chart-only (java backend exited; chart-side techniques remain available)"
+    Write-Host "chartpy:  http://127.0.0.1:$ChartPort"
+    exit 0
+  }
   Start-Sleep -Seconds 1
+}
+
+if ($ChartReady) {
+  Write-Host "degraded: chart-only (java backend not ready within the window; Mongo/Redis boot retries are slow on machines without them — it may still become ready)"
+  Write-Host "chartpy:  http://127.0.0.1:$ChartPort"
+  exit 0
 }
 
 throw "Windows Horosa runtime did not become ready in time."
