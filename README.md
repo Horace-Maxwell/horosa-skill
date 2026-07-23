@@ -1,17 +1,17 @@
 <div align="center">
 
-<img src="./docs/assets/banner.svg" alt="Horosa Skill — 把星阙 78 个术数 / 占星技法做成任何 AI 都能本地调用的 MCP server 与 CLI" width="880" />
+<img src="./docs/assets/banner.svg" alt="Horosa Skill — 把星阙 83 个术数 / 占星技法做成任何 AI 都能本地调用的 MCP server 与 CLI" width="880" />
 
 # 🔮 Horosa Skill
 
-**把星阙（Horosa）的 78 个真实术数 / 占星技法，做成任何 AI 都能本地调用的 MCP server 与 CLI。**<br/>
-**A local-first MCP server & CLI that exposes 78 real astrology / metaphysics techniques from Horosa (星阙) to any AI client.**
+**把星阙（Horosa）的 83 个真实术数 / 占星技法，做成任何 AI 都能本地调用的 MCP server 与 CLI。**<br/>
+**A local-first MCP server & CLI that exposes 83 real astrology / metaphysics techniques from Horosa (星阙) to any AI client.**
 
 简体中文 · [English](./README_EN.md)
 
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
-  <img src="https://img.shields.io/badge/技法-83-1d4ed8?style=for-the-badge" alt="78 tools" />
+  <img src="https://img.shields.io/badge/技法-83-1d4ed8?style=for-the-badge" alt="83 tools" />
   <img src="https://img.shields.io/badge/测试-315_passed-16a34a?style=for-the-badge" alt="315 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
@@ -30,11 +30,11 @@
 
 | ✨ | ✨ | ✨ |
 |:--|:--|:--|
-| 🌌 **78 技法一次装齐** | ⚡ **算法本机跑 · 断网可用** | 🧠 **为 AI 稳定消费而设计** |
+| 🌌 **83 技法一次装齐** | ⚡ **算法本机跑 · 断网可用** | 🧠 **为 AI 稳定消费而设计** |
 | 🛡️ **AI 不许乱补参数** | 🗄️ **每次调用自动落成知识库** | 📄 **一键出 Word / PDF 报告** |
 | 🔁 **断点续传 · 版本短路装** | 🀄 **中西术数 + 全 14 路神数** | 🔓 **免费 · 开源 · AGPL** |
 
-克隆仓库、安装一次离线 runtime，Claude Code / Claude Desktop / Codex / Open WebUI / OpenClaw 等客户端即可通过 **MCP** 或 **JSON-first CLI** 直接调用真实的星阙方法：西洋本命 / 推运 / 卜卦 / 择日，八字 / 紫微 / 大六壬 / 奇门 / 太乙 / 金口诀 / 三式合一，六爻 / 塔罗 / 天文地占，以及全 14 路神数。
+克隆仓库、安装一次离线 runtime，Claude Code / Claude Desktop / Codex / Open WebUI / OpenClaw 等客户端即可通过 **MCP** 或 **JSON-first CLI** 直接调用真实的星阙方法：西洋本命 / 推运 / 卜卦 / 择日，八字 / 紫微 / 大六壬 / 奇门 / 太乙 / 金口诀 / 三式合一，六爻 / 塔罗 / 天文地占 / 小六壬 / 飞宫小奇门 / 小成图 / 皇极轨策 / 神数正传，以及全 14 路神数。
 
 算法在本机运行，断网可用；每个技法返回统一 envelope 与星阙式导出结构；每次调用自动落成可检索的本地记录。**与星阙桌面端共用同一套后端、逐值同源。**
 
@@ -74,7 +74,7 @@
 
 ## ✨ 核心特性
 
-- 🌌 **78 个真实技法，一次安装，全程离线。** 覆盖西洋占星全链路、中文术数主干、数算与卜法、全 14 路神数；算法在本机运行，不联网、不上传。
+- 🌌 **83 个真实技法，一次安装，全程离线。** 覆盖西洋占星全链路、中文术数主干、数算与卜法、全 14 路神数；算法在本机运行，不联网、不上传。
 - 🧠 **为 AI 消费而设计的稳定契约。** 每次调用返回统一 envelope，接入导出协议的技法附带 `export_snapshot`（段结构化正文）。同一技法连续调用得到同一套字段，落库后结构不丢。
 - 🛡️ **调用前的硬性澄清闸。** 只要技法受时间 / 地点 / 时区 / 性别 / 事项 / 宫制 / 历法 / 起局方式影响，agent 在用户确认前会被结构化拦截，并收到可直接转发给用户的追问文本。
 - 🪙 **精简的响应体量。** 导出契约单份化，同一份快照不再重复；大盘单次响应体量较早期显著下降。可用 `response_view=titles|sections` 仅取段标题或指定段，完整快照始终已归档。
@@ -365,7 +365,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 63 个导出 technique） |
 | 🗄️ 本地 memory / report | 83 / 83 写入 + 83 / 83 JSON artifact |
 | 🔄 GitHub CI | Linux / macOS 单测 + JS golden 自检 + Windows OpenClaw smoke |
-| 📦 Release runtime | macOS (arm64) / Windows (x64) `v0.23.0` 已打包并校验；其余平台安装时明确报不支持 |
+| 📦 Release runtime | macOS (arm64) `v0.23.0` 已打包并校验；Windows (x64) 由构建机补传（补传前 win 用户拿到上一版 runtime）；其余平台安装时明确报不支持 |
 
 第一次 clone 后确认非空壳的最小验证：
 
