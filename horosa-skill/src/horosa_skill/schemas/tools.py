@@ -47,16 +47,46 @@ class BirthInput(FlexibleModel):
     pdMethod: Any | None = None
     pdTimeKey: Any | None = None
     pdaspects: list[int | str] | None = None
-    # 主限法 v12 (星阙 v2.6.6)：顺/逆向、映点(antiscia)、界(terms) promissor 开关 + 年限上限。
-    # pdMethod 取核5（core_alchabitius/meridian/porphyry/equal_ecliptic/equal_hour_circle，另 horosa_legacy）；
-    # pdTimeKey 22 项（含每盘真算 Simmonite/Kepler/Brahe + 动态 TrueSolarArc/SymbolicSolarArc）；
+    # 主限法（星阙 v3.6.0 大改版）：顺/逆向、映点(antiscia)、界(terms) promissor 开关 + 年限上限。
+    # pdMethod 现为**方位法全谱 13 法**（旧「核5」注记已过期两代）；pdTimeKey 含每盘真算
+    # Simmonite/Kepler/Brahe/VanDam + 动态 TrueSolarArc/SymbolicSolarArc + 自定义率；
     # pdYears 上限 3000（>360 出多圈复发行）。仅在显式设置时透传（model_dump(exclude_none=True)），
-    # 缺省走后端默认（顺逆都开/映点界关/100 年）。
+    # 缺省走后端默认（顺逆都开/映点界关/100 年）。白名单在上游 astropy/astrostudy/perchart.py。
     pdDirect: Any | None = None
     pdConverse: Any | None = None
     pdAntiscia: Any | None = None
     pdTerms: Any | None = None
     pdYears: Any | None = None
+    # v3.6.0 正交解耦：弧算法(投影) × 盘面宫制(分宫) 拆成两个独立轴，不再由 pdMethod 一个键决定。
+    # 这些字段此前已能经 FlexibleModel extra 透传到后端并真实生效，但没有 schema 描述 = agent 发现不了，
+    # 等于事实上不可用。声明出来即解锁（零 service 改动）。
+    pdProjection: Any | None = Field(default=None, description="弧算法/投影（11 种）：与 pdFrame 正交，决定弧如何投影。")
+    pdFrame: Any | None = Field(default=None, description="盘面宫制/分宫 frame（12 种，含 koch）：与 pdProjection 正交。")
+    pdFramework: Any | None = Field(default=None, description="界行框架：aspect | bounds | release（hyleg/anareta 判读层）。")
+    pdSignificators: Any | None = Field(default=None, description="应星扩展：Desc/IC/Syzygy/Spirit/Cusps/Stars/Lots 等。")
+    pdPromissorTypes: Any | None = Field(default=None, description="迫星类型扩展：cusps / stars / lots。")
+    pdTimeKeyCustom: Any | None = Field(default=None, description="自定义时间钥匙速率（0.001–30 度/年）。")
+    pdParallel: Any | None = Field(default=None, description="赤纬平行是否计入（三类被限星之一）。")
+    pdRaptParallel: Any | None = Field(default=None, description="周日运动平行（rapt parallel）是否计入。")
+    # 古典参数全局化（星阙 v3.6.0）：以下 16 键由后端 webmodernsrv 统一透传给古典判读层，
+    # 影响 [古典] / [古典格局] 段的逐值结果（容许度、空亡口径、界表流派、交点性质…）。
+    # 与主限法同理：本仓早已能经 extra 透传，声明只为可发现性。
+    westNodeType: Any | None = Field(default=None, description="交点取法：真交点 / 平交点。")
+    sectBuffer: Any | None = Field(default=None, description="同异宗(sect)判定的地平缓冲角。")
+    cazimiOrb: Any | None = Field(default=None, description="核心内(cazimi)容许度。")
+    combustOrb: Any | None = Field(default=None, description="燃烧(combust)容许度。")
+    underBeamsOrb: Any | None = Field(default=None, description="日光下(under the beams)容许度。")
+    vocMode: Any | None = Field(default=None, description="月空(void of course)判定口径（六种之一）。")
+    vocIncludeOuter: Any | None = Field(default=None, description="月空判定是否计入外行星。")
+    starOrb: Any | None = Field(default=None, description="恒星触发容许度。")
+    antisciaOrb: Any | None = Field(default=None, description="映点(antiscia)容许度。")
+    viaCombustaVariant: Any | None = Field(default=None, description="燃烧之路(via combusta)区间口径。")
+    termsVariant: Any | None = Field(default=None, description="界(terms)表流派：埃及 / 托勒密 等。")
+    leoBoundFirst: Any | None = Field(default=None, description="狮子座界首主星口径。")
+    geminiBoundEmended: Any | None = Field(default=None, description="双子界表勘误（v3.6.0 修订）。")
+    triplicity: Any | None = Field(default=None, description="三分主星体系（Dorotheus / Ptolemy 等）。")
+    nodeExaltation: Any | None = Field(default=None, description="交点是否参与旺弱(exaltation)判定。")
+    saturnExalt20: Any | None = Field(default=None, description="土星旺度取 20° 还是 21°。")
     gpsLat: float | None = None
     gpsLon: float | None = None
     includePrimaryDirection: bool | None = None
@@ -80,6 +110,24 @@ class IndiaChartInput(BirthInput):
     # 后端 webindiasrv 读 indiaHsys/indiaAyanamsa（亦兼容 hsys/ayanamsa/siderealMode）。
     indiaHsys: Any | None = None
     indiaAyanamsa: Any | None = None
+    # 印占大扩容（星阙 v3.6.0）：KP 完整化 / SBC / 七新大运体系 / Ayurdaya / 纳迪 / Tajika / Prashna。
+    # 后端 webindiasrv 已读这些键（本仓经 FlexibleModel extra 早已能透传），此处声明只为让 agent 看得见。
+    dashaVariants: Any | None = Field(default=None, description="大运流派 21 开关（Vimśottarī/Kālachakra/Yogini… 的分派选项）。")
+    dashaYearLength: Any | None = Field(default=None, description="大运年长档：五档（360日/365.25日/恒星年…）。")
+    vargaVariant: Any | None = Field(default=None, description="分割盘(varga)流派：Parāśara / Jaimini 等口径。")
+    karakaScheme: Any | None = Field(default=None, description="Chara Kāraka 取法（7/8 星制）。")
+    yuddhaCriterion: Any | None = Field(default=None, description="行星战(graha yuddha)胜负判据。")
+    tripataki: Any | None = Field(default=None, description="Tripatāki 三旗盘（opt-in，宿距三旗）。")
+    prashnaTime: Any | None = Field(default=None, description="问事(Praśna)盘时刻；不传则用主盘时刻。")
+    prashnaSchools: Any | None = Field(default=None, description="问事三派选择。")
+    prashnaMatter: Any | None = Field(default=None, description="问事事项/所问之题。")
+    prashnaNumber: Any | None = Field(default=None, description="问事数（ārūḍha 起数法用）。")
+    prashnaCuspMode: Any | None = Field(default=None, description="问事盘宫头取法。")
+    prashnaPrimaryHouse: Any | None = Field(default=None, description="问事主事宫指定。")
+    tajakaYear: Any | None = Field(default=None, description="Tājika 年盘的目标年份。")
+    annualChartType: Any | None = Field(default=None, description="年盘类型（阴历年盘 / 太阳返照年盘等）。")
+    varshaLat: Any | None = Field(default=None, description="年盘地点纬度（不传沿用本命地）。")
+    varshaLon: Any | None = Field(default=None, description="年盘地点经度（不传沿用本命地）。")
 
 
 class PredictiveInput(BirthInput):
@@ -118,6 +166,16 @@ class ZiWeiBirthInput(FlexibleModel):
     timeAlg: int | None = Field(default=0, description="时间算法：0=平太阳时（默认），1=真太阳时。")
     sihua: dict[str, list[str]] | None = None
     ad: int | None = 1
+    # 紫微流派叠层（星阙 v3.6.0「死开关接活」批）：这些开关在上游驱动 [流派叠层] / [运限] 段。
+    # 声明出来即可显式透传；本仓对应导出段的接入见 exports/registry.py（回填批 4-3）。
+    sihuaSchool: Any | None = Field(default=None, description="四化流派（中州 / 飞星 / 钦天 等）。")
+    childLimit: Any | None = Field(default=None, description="童限取法。")
+    zhongxian: Any | None = Field(default=None, description="中限（三限之一）取法。")
+    huoPan: Any | None = Field(default=None, description="活盘（三限活盘）开关。")
+    qishuWei: Any | None = Field(default=None, description="起数位（安星起点流派）。")
+    borrowPalace: Any | None = Field(default=None, description="借宫（空宫借对宫）规则。")
+    taiSuiRuGua: Any | None = Field(default=None, description="太岁入卦法开关。")
+    taiSuiRelatives: Any | None = Field(default=None, description="太岁六亲取法。")
 
 
 class ZiWeiRulesInput(FlexibleModel):
@@ -160,6 +218,12 @@ class LiuRengGodsInput(FlexibleModel):
     isDiurnal: bool | None = None
     guirengType: int | None = 2
     ad: int | None = 1
+    # 占断向导：上游据 zhanCategory 产出整个 [占断向导] 段（hunyin/taichan/jibing/caiyun/…）。
+    # 此前 skill 没有这个入口，等于该段永远不出——补上即解锁。
+    zhanCategory: str | None = Field(
+        default=None,
+        description="占断门类（hunyin 婚姻 / taichan 胎产 / jibing 疾病 / caiyun 财运 …）：驱动 [占断向导] 段。",
+    )
 
 
 class LiuRengRunYearInput(LiuRengGodsInput):
@@ -251,7 +315,13 @@ class TaiyiInput(BirthInput):
     lateZiHourUseNextDay: int | bool | None = None
     timeAlg: int | None = 0
     gender: str | int | None = None
-    options: dict[str, Any] = Field(default_factory=dict)
+    options: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "引擎参数直通（style/tn/局式…）。太乙流派六轴（jishen/wenchang/keJianChen/sanji/youshen/"
+            "shijiCoord）也放这里——上游 v3.6.0 已把它们接活为真产段的开关。"
+        ),
+    )
     nongli: dict[str, Any] | None = None
 
 
@@ -629,6 +699,15 @@ class HoraryInput(BirthInput):
     category: str | None = "general"
     tradition: bool | None = True
     predictive: bool | None = False
+    # 卜卦七档参数谱（星阙 v3.6.0，界表勘误 + 判读叠层二期）。上游 horarySchools.js 的 HORARY_PARAM_SPEC
+    # 中 hsys/termsVariant/geminiBoundEmended/tradition 标 sendToBackend，其余在判读层生效。
+    hsys: Any | None = Field(default=None, description="卜卦盘分宫制（Regiomontanus 等，随流派档）。")
+    termsVariant: Any | None = Field(default=None, description="界(terms)表流派：埃及 / 托勒密。")
+    geminiBoundEmended: Any | None = Field(default=None, description="双子界表勘误开关（v3.6.0 修订）。")
+    considerationsMode: Any | None = Field(default=None, description="定盘考量(considerations before judgment)口径。")
+    receptionMode: Any | None = Field(default=None, description="接纳(reception)判定口径。")
+    almutenScheme: Any | None = Field(default=None, description="Almuten 取法（Ibn Ezra / Lilly 等）。")
+    lotsSet: Any | None = Field(default=None, description="阿拉伯点集合范围（全集 / 常用）。")
 
 
 class ElectionInput(BirthInput):
@@ -638,6 +717,19 @@ class ElectionInput(BirthInput):
     topicId: str | None = "marriage"
     tradition: bool | None = True
     predictive: bool | None = False
+    # 择日五档真差异化（星阙 v3.6.0）：流派轴 + 八大分析模块 + 医疗择日危象参照。
+    # 上游 electionParams.js 的 13 键；未声明前 agent 无从得知这些档位存在。
+    school: Any | None = Field(default=None, description="择日流派档（五档：古典 / 现代 / 中西合参 等）。")
+    dignityScheme: Any | None = Field(default=None, description="尊贵五重矩阵取法。")
+    lotsSet: Any | None = Field(default=None, description="阿拉伯点全谱 / 常用集。")
+    starSet: Any | None = Field(default=None, description="恒星集（41 恒星）参与与否。")
+    considerationsMode: Any | None = Field(default=None, description="择前三清单(considerations)口径。")
+    medicalCritical: Any | None = Field(default=None, description="医疗择日危象日参照开关。")
+    hourRuler: Any | None = Field(default=None, description="时主(planetary hour)合参。")
+    returnCharts: Any | None = Field(default=None, description="回归盘合参（太阳/月亮返照）。")
+    primaryDirections: Any | None = Field(default=None, description="主限合参。")
+    natalCompare: Any | None = Field(default=None, description="本命合参（与当事人本命盘比对）。")
+    mundaneCompare: Any | None = Field(default=None, description="时势合参（世运盘比对）。")
 
 
 class GeomancyInput(BirthInput):

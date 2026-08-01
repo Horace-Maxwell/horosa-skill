@@ -24,30 +24,39 @@ REQUIRED_PATHS = [
     "vendor/runtime-source/Horosa-Web/astrostudyui/src/utils/aiExport.js",
 ]
 
-# The vendored aiExport.js must be at least this recent. Catches the "synced a stale upstream tree"
-# failure that lets the three-layer version skew (skill mirror < vendored runtime < upstream HEAD)
-# creep back in silently. Bump in lockstep with MIRRORED_UPSTREAM_AIEXPORT_VERSION in
-# horosa_skill/exports/registry.py whenever a full re-sync advances the mirror.
-MIN_AIEXPORT_SETTINGS_VERSION = 48
+# The vendored aiExport.js version must EQUAL the skill's mirror constant. It used to be a `>=` lower
+# bound, which passed for any newer tree too — so a vendored tree that had moved ahead (or a mirror
+# constant left behind) produced no signal at all. Equality makes both directions of skew red, and the
+# constant now lives in one place (exports/registry.py) instead of being duplicated here.
 _AIEXPORT_REL = "vendor/runtime-source/Horosa-Web/astrostudyui/src/utils/aiExport.js"
 _AIEXPORT_VERSION_RE = re.compile(r"AI_EXPORT_SETTINGS_VERSION\s*=\s*(\d+)")
 
 
+def _expected_aiexport_version(root: Path) -> int:
+    import sys
+
+    sys.path.insert(0, str(root / "horosa-skill" / "src"))
+    from horosa_skill.exports.registry import MIRRORED_UPSTREAM_AIEXPORT_VERSION
+
+    return int(MIRRORED_UPSTREAM_AIEXPORT_VERSION)
+
+
 def _check_aiexport_version(root: Path) -> dict:
-    """Assert the vendored aiExport.js is >= MIN_AIEXPORT_SETTINGS_VERSION (freshness guard)."""
+    """Assert the vendored aiExport.js version == the skill's MIRRORED_UPSTREAM_AIEXPORT_VERSION."""
     target = root / _AIEXPORT_REL
     text = target.read_text(encoding="utf-8", errors="replace")
     match = _AIEXPORT_VERSION_RE.search(text)
     if not match:
         raise SystemExit(f"Could not read AI_EXPORT_SETTINGS_VERSION from {target}")
     version = int(match.group(1))
-    if version < MIN_AIEXPORT_SETTINGS_VERSION:
+    expected = _expected_aiexport_version(root)
+    if version != expected:
         raise SystemExit(
-            f"Vendored aiExport.js is stale: AI_EXPORT_SETTINGS_VERSION={version} < "
-            f"required {MIN_AIEXPORT_SETTINGS_VERSION}. Re-run sync_vendored_runtime_sources.py "
-            f"against a current Horosa-Public checkout."
+            f"Vendored aiExport.js version skew: AI_EXPORT_SETTINGS_VERSION={version} != skill "
+            f"MIRRORED_UPSTREAM_AIEXPORT_VERSION={expected}. Re-sync against the matching Horosa-Public "
+            f"checkout, or advance the mirror constant together with the backfilled sections."
         )
-    return {"aiexport_settings_version": version, "min_required": MIN_AIEXPORT_SETTINGS_VERSION}
+    return {"aiexport_settings_version": version, "expected": expected}
 
 
 def main() -> None:

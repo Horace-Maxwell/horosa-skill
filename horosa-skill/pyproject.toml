@@ -1,6 +1,6 @@
 [project]
 name = "horosa-skill"
-version = "0.23.0"
+version = "0.24.0"
 description = "GitHub-first Horosa AI skill distribution with CLI, MCP, and local structured memory."
 readme = "README.md"
 license = "AGPL-3.0-only"
@@ -8,7 +8,10 @@ requires-python = ">=3.12"
 dependencies = [
   "cryptography>=45.0.0",
   "httpx>=0.28.0",
-  "mcp[cli]>=1.27.0,<2",
+  # 钉在 1.x：SDK v2.0.0（2026-07-28）是破坏性重写（FastMCP→MCPServer、装饰器→构造器、
+  # camelCase→snake_case、httpx2、强制 opentelemetry）。v2 同时支持 2026-07-28 与更早修订，
+  # 故晚迁不掉队；迁移单独跟踪，不随本版本走。
+  "mcp[cli]>=1.28.1,<2",
   "pydantic>=2.8.0",
   "python-docx>=1.1.2",
   "reportlab>=4.2.0",

@@ -1,0 +1,57 @@
+{
+  "manifest_version": "0.4",
+  "name": "horosa-skill",
+  "display_name": "Horosa 星阙 — 术数 / 占星",
+  "version": "0.24.0",
+  "description": "Local-first Horosa (星阙) metaphysics: 83 real technique tools over MCP, fully offline.",
+  "long_description": "Horosa Skill exposes 83 real 术数/占星 techniques — Western natal & predictive astrology (returns, progressions, 13-method primary directions, horary 卜卦, election 择日, astrocartography), 八字 / 紫微斗数 / 大六壬 / 奇门遁甲 / 太乙 / 金口诀 / 三式合一 / 六爻 / 河洛理数 / 一掌经, the full 14 神数 family, tarot and 天文地占 — as MCP tools that run entirely on your machine. Every result carries a Xingque-compatible export snapshot, every call is stored in a local searchable archive, and a runtime gate forces the assistant to confirm result-changing settings with you instead of inventing them.",
+  "author": {
+    "name": "Horace Maxwell",
+    "url": "https://github.com/Horace-Maxwell"
+  },
+  "homepage": "https://github.com/Horace-Maxwell/horosa-skill",
+  "documentation": "https://github.com/Horace-Maxwell/horosa-skill#readme",
+  "support": "https://github.com/Horace-Maxwell/horosa-skill/issues",
+  "license": "AGPL-3.0-only",
+  "keywords": ["astrology", "metaphysics", "horosa", "xingque", "offline", "local-first"],
+  "server": {
+    "type": "uv",
+    "entry_point": "horosa-skill/src/horosa_skill/surfaces/mcp_server.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${__dirname}/horosa-skill",
+        "horosa-skill",
+        "serve",
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "HOROSA_RUNTIME_ROOT": "${user_config.runtime_root}",
+        "HOROSA_SKILL_DATA_DIR": "${user_config.data_dir}"
+      }
+    }
+  },
+  "user_config": {
+    "runtime_root": {
+      "type": "directory",
+      "title": "Offline runtime directory",
+      "description": "Where the ~2 GB Horosa offline runtime lives. Leave empty for the default (~/.horosa/runtime, or %LOCALAPPDATA%\\Horosa\\runtime on Windows).",
+      "required": false
+    },
+    "data_dir": {
+      "type": "directory",
+      "title": "Local runs & reports directory",
+      "description": "Where run records, report artifacts and the SQLite index are stored. Leave empty for ~/.horosa-skill.",
+      "required": false
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32"],
+    "runtimes": {
+      "python": ">=3.12"
+    }
+  }
+}

@@ -12,7 +12,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-83-1d4ed8?style=for-the-badge" alt="83 tools" />
-  <img src="https://img.shields.io/badge/测试-315_passed-16a34a?style=for-the-badge" alt="315 passed" />
+  <img src="https://img.shields.io/badge/测试-326_passed-16a34a?style=for-the-badge" alt="326 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
 
@@ -295,7 +295,7 @@ uv run horosa-skill client config --format codex            # Codex config.toml 
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.23.0",
+  "ok": true, "tool": "qimen", "version": "0.24.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -360,19 +360,19 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 🧰 可调用工具 | 83 / 83 `ok=true` |
-| 🧪 工程测试 | **315 / 315 pass**（ken / 神数后端实时集成 + 离线 golden 单测 + node JS golden） |
+| 🧪 工程测试 | **326 / 326 pass**（ken / 神数后端实时集成 + 离线 golden 单测 + node JS golden） |
 | 🛡️ 未确认参数时强制追问 | 67 个技法工具触发 `must_ask_user=true` |
 | 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 63 个导出 technique） |
 | 🗄️ 本地 memory / report | 83 / 83 写入 + 83 / 83 JSON artifact |
 | 🔄 GitHub CI | Linux / macOS 单测 + JS golden 自检 + Windows OpenClaw smoke |
-| 📦 Release runtime | macOS (arm64) `v0.23.0` 已打包并校验；Windows (x64) 由构建机补传（补传前 win 用户拿到上一版 runtime）；其余平台安装时明确报不支持 |
+| 📦 Release runtime | macOS (arm64) `v0.24.0` 已打包并校验；Windows (x64) 由构建机补传（补传前 win 用户拿到上一版 runtime）；其余平台安装时明确报不支持 |
 
 第一次 clone 后确认非空壳的最小验证：
 
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 315 passed
+uv run pytest -q                                        # 326 passed
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

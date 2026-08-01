@@ -51,7 +51,7 @@ License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICEN
 
 ## Current stable baseline
 
-**Current public version: `Horosa Skill 0.23.0` (83 callable tools).**
+**Current public version: `Horosa Skill 0.24.0` (83 callable tools).**
 
 This release line brings the capability surface roughly to parity with the desktop app:
 
@@ -71,7 +71,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `83 / 83 ok=true` |
-| Engineering tests | `315 / 315 pass` (ken / Shen Shu live integration + offline golden unit tests + node JS golden) |
+| Engineering tests | `326 / 326 pass` (ken / Shen Shu live integration + offline golden unit tests + node JS golden) |
 | Forced clarification when params unconfirmed | `67` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `7` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`63` export techniques modeled) |
@@ -79,7 +79,7 @@ Local end-to-end signals:
 | Qi Men / Tai Yi / Jin Kou / Three Styles | unified on `ken`, same as the desktop app |
 | Tong She Fa / Decennials | headless, value-for-value with Xingque (`decennials.test.js` golden) |
 | GitHub CI | Linux/macOS unit tests + horosa-core-js JS golden self-check + Windows OpenClaw smoke |
-| Release runtime | macOS (arm64) `v0.23.0` assets (ken + 14 Shen Shu engines bundled) packaged and verified; Windows (x64) uploaded separately from the build box (Windows users keep the prior runtime until then); other platforms/arches fail install with an explicit unsupported error |
+| Release runtime | macOS (arm64) + Windows (x64) assets (ken + 14 Shen Shu engines bundled) packaged and verified on every release; other platforms/arches fail install with an explicit unsupported error |
 
 > About `solarreturn` / `lunarreturn` / `solararc` / `givenyear` / `profection` / `pd` / `pdchart` / `zr`: these predictive tools are verified working in this version and should not be flagged by an agent as "Java `/predict/*` unavailable". If a client still says so, check whether it is on an old runtime, bypassing MCP to hand-compute, or hasn't run `doctor` / `openclaw-check --full`.
 
@@ -241,7 +241,7 @@ Every tool call returns a uniform envelope:
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.23.0",
+  "ok": true, "tool": "qimen", "version": "0.24.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }

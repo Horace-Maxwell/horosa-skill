@@ -13,11 +13,16 @@ AI_EXPORT_SETTINGS_KEY = "horosa.ai.export.settings.v1"
 # v7: sanshiunited 追加三独立技法富化段、mundane 追加子盘群段。
 AI_EXPORT_SETTINGS_VERSION = 11
 AI_EXPORT_SECTION_MIGRATION_VERSION = 11
-# 镜像基线（机读）：本注册表整版对齐到上游 aiExport.js 的哪个 AI_EXPORT_SETTINGS_VERSION。
+# 镜像基线（机读）：vendored aiExport.js 的版本，也就是本注册表**对账所依据**的上游版本。
+#
+# ⚠️ 语义澄清（v0.23.0 的教训）：这个数字表示「对到了哪一版」，**不**表示「该版的段全都有了」。
+# 段级欠账由 contracts/export_section_debt.json 逐键量化并棘轮化（只减不增），由
+# scripts/verify_export_section_baseline.py 强制。v0.23.0 曾以键级对齐宣称「整版对齐 v48」，
+# 实际欠 180 段——两个数字必须一起读：版本号说对账基准，欠账文件说还差多少。
 # v0.23.0（2026-07）：全面重同步至上游 v3.5.1（aiExport v48），逐技法对齐（geomancy/primarydirect/
 # 5 新技法段表逐字镜像；skill-extra 段如 起卦信息、UI-only 死段、收缩契约走 verify_export_contract_mirror.py
 # 的 DIVERGENCE 白名单）。守卫：vendored aiExport 的 AI_EXPORT_SETTINGS_VERSION 必须 == 本常量（版本锁步）。
-MIRRORED_UPSTREAM_AIEXPORT_VERSION = 48
+MIRRORED_UPSTREAM_AIEXPORT_VERSION = 50
 AI_EXPORT_SECTION_MIGRATION_KEYS = [
     "liureng", "qimen", "sanshiunited", "mundane",
     "yizhangjing", "acg", "astrodata", "heluo", "canping", "fengshui",

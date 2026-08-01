@@ -35,6 +35,12 @@ class ToolEnvelope(BaseModel):
     trace_id: str | None = None
     group_id: str | None = None
     error: ErrorInfo | None = None
+    # 顶层错误镜像（可选，仅错误时出现）：MCP 侧的失败载荷历史上是一个 5 键裸 dict，与本信封不同形，
+    # 客户端要按两种形状分别解析，也让 outputSchema 无法启用。现在错误也返回本信封，同时保留这三个
+    # 顶层键，使既有按 `code`/`message`/`details` 读的调用方（CLI、旧 agent 提示词）零改动。
+    code: str | None = None
+    message: str | None = None
+    details: dict[str, Any] | None = None
 
 
 class DispatchEnvelope(BaseModel):
@@ -51,3 +57,7 @@ class DispatchEnvelope(BaseModel):
     trace_id: str | None = None
     group_id: str | None = None
     error: ErrorInfo | None = None
+    # 顶层错误镜像，与 ToolEnvelope 同义（见那里的说明）。
+    code: str | None = None
+    message: str | None = None
+    details: dict[str, Any] | None = None

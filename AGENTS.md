@@ -137,14 +137,35 @@ you, it will bite the next agent：
 `chart.siderealModeKey`+`ayanamsaValue`（**字段名不同**）；`chart.zodiacal` 是本地化字符串（"恒星黄道"），
 不许 `== 1` 判断；nakshatras 在 `response.chart.nakshatras`，非顶层。
 
+**同步守卫三层（缺一层就会静默漂）**：① `verify_upstream_sync.py` = vendored ↔ **上游 HEAD**
+（版本恒等 + 哨兵 sha256 + core-js 逐文件；无上游树时 skipped 而非绿，release 链用 `--require-upstream`）；
+② `verify_export_contract_mirror.py` = skill 常量 ↔ vendored（版本 + 技法键）；
+③ `verify_export_section_baseline.py` = **段级欠账棘轮**，基线在 `contracts/export_section_debt.json`
+（受 git 跟踪，新增欠账 fail、还清也 fail 提示 `--update-baseline`）。
+**`MIRRORED_UPSTREAM_AIEXPORT_VERSION` 只表示「对账基准版本」，不表示「该版段全有了」**——键级对齐
+不等于段级对齐（v0.23.0 曾据此宣称整版对齐而实欠 180 段）。两个数字必须一起读。
+
 **MCP 服务器面法则**（`surfaces/mcp_server.py`）：全部工具带 **tool annotations**（口径：openWorldHint
 一律 False（local-first）；查询类 readOnly+idempotent=True；技法计算类 readOnly=False、destructive=False、
 idempotent=False——默认写一条本地 run 记录，必须如实标注，目录审核会核）；澄清闸走 **elicitation 双轨**
 （客户端声明能力→原生表单，「按星阙默认」一跳闭环、「补充设置」只回带备注**绝不代答术数参数**；
 无能力/任何异常→逐字节回落 `agent_guidance.required` 错误往返；`HOROSA_MCP_ELICIT=0` 关闭）；
-structured output 目前**未激活**（动态 `__annotations__` 不触发 FastMCP 推断，`outputSchema` 缺席是
-现状而非缺陷）——开启前必须在真实 Claude Code/Cursor 实测 `tools/list` 不掉工具（上游曾有掉工具事故）。
-依赖钉 `mcp[cli]>=1.27,<2`；不新增依赖 sampling/roots/logging（2026-07-28 规范起废弃）。
+**签名即契约**：每个 MCP 工具**必须**显式设 `__signature__`——漏设会让 FastMCP 内省 `**kwargs` 造出一个
+名叫 `kwargs` 的必填 string 参数，工具静默不可调用（`horosa_tool_run` 栽过，且它是 compact 模式的唯一
+通道）。`__signature__` 优先级**高于** `__annotations__`：返回类型只能写在签名的 `return_annotation` 里，
+写 `__annotations__` 是死代码。签名口径是「**广告保真、校验放松**」（FastMCP 注册时
+`validate_input=False`，广告与校验解耦）：字段描述/枚举/`[required]` 标记照登，但一律 `default=None` +
+`Annotated[Any, WithJsonSchema(...)]`，MCP 层零必填——否则 `request={…}` 逃生通道走不到、数字经纬度在
+归一化前被拒、且都绕过 `agent_recovery`。内联 `$defs` 时**绝不能残留 `$ref`**（模型自引用会让 pydantic
+构不出 arg model，服务器起不来）。
+
+**错误也必须是信封**：技法/dispatch/tool_run 的错误路径返回 `ToolEnvelope`（含顶层 `code/message/details`
+镜像），不是裸 dict——出参被 server+client 两侧校验，一旦声明 outputSchema，裸 dict 会被打成协议级
+ToolError，**澄清闸当场报废**。structured output 由 `HOROSA_OUTPUT_SCHEMA=1` **显式开启，默认关**
+（claude-code#25081：带 outputSchema 时工具列表静默消失，至今 stale-closed 未确认修复）；开启前须在真实
+客户端 `/mcp` 确认工具计数不掉。依赖钉 `mcp[cli]>=1.28.1,<2`（SDK v2 是破坏性重写，单独跟踪）；
+不新增依赖 sampling/roots/logging（2026-07-28 规范起废弃，本仓未使用）。elicit 必须在任何副作用之前
+（v2 会重放整个工具函数）。
 
 **Node 地板 ≥ 20.10**：数算 JSON 走 `import X from './x.json' with { type: 'json' }`；`src/tools/index.js`
 顶层 import 使旧 Node **语法级**炸掉整个模块图（qimen/taiyi/jinkou/tongshefa 全挂，不只数算）。bundled

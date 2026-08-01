@@ -123,3 +123,12 @@ if [ -n "${WINDOWS_SOURCE_ROOT}" ]; then
 fi
 
 echo "vendored runtime sources ready at ${VENDOR_ROOT}"
+
+# core-js 的 vendored JS 树受 git 跟踪、却**不**由本脚本拷贝（逐文件按需移植 + 少量 shim）。
+# 它长期零守卫：上游改了 JS，这里毫无信号。同步完顺手核一遍同源性并把上游状态写进 contracts/，
+# 让每次同步在 git 里留痕（漂移则报告，不阻断——bespoke shim 本就允许存在）。
+echo "checking core-js vendored tree + upstream contract currency ..."
+HOROSA_SOURCE_ROOT="${SOURCE_ROOT}" python3 "${ROOT}/horosa-skill/scripts/verify_upstream_sync.py" --write-state || {
+  echo "  ^ 上游同源检查未通过：若刚重同步到新版上游，这是预期的红——去回填新增段并推进"
+  echo "    MIRRORED_UPSTREAM_AIEXPORT_VERSION，再跑 verify_export_section_baseline.py --update-baseline。"
+}

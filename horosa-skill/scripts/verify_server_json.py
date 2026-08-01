@@ -54,6 +54,20 @@ def main() -> None:
         transport = package.get("transport")
         if not isinstance(transport, dict) or "type" not in transport:
             errors.append("first package transport must be an object with a 'type' (schema 2025-12-11 shape)")
+        # Registry 认可的分发通道；`github` 不是其中之一（repository.source 只是元数据，不是通道）。
+        # 我们走 `mcpb`：GitHub Release 上的 .mcpb + fileSha256，客户端安装前自校验 —— 这条路不需要
+        # 发 PyPI，正好绕开 horosa-core-js 在 wheel 之外的分发归属问题。
+        registry_type = package.get("registryType")
+        if registry_type not in {"npm", "pypi", "nuget", "cargo", "oci", "mcpb"}:
+            errors.append(f"registryType must be a real distribution channel, got {registry_type!r}")
+        if registry_type == "mcpb":
+            digest = str(package.get("fileSha256") or "")
+            if not digest:
+                errors.append("mcpb packages must carry fileSha256 (clients verify it before install)")
+            elif digest != "TBD-set-by-release-pipeline" and len(digest) != 64:
+                errors.append(f"fileSha256 must be a 64-char sha256 digest, got {len(digest)} chars")
+            if "mcp" not in str(package.get("identifier") or "").lower():
+                errors.append("mcpb identifier URL must contain 'mcp' (registry ownership rule)")
 
     if errors:
         raise SystemExit("server.json: FAIL\n- " + "\n- ".join(errors))

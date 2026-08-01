@@ -33,6 +33,14 @@ jobs:
       - name: Install dependencies
         working-directory: ./horosa-skill
         run: uv sync --dev
+      # 发布链是唯一同时持有上游 checkout 与 vendored 树的地方——跨树校验只能在这里做真。
+      # 没有这两闸，vendored 树落后于上游时全流水线依旧全绿（v48 vs v50 就是这么漏过去的）。
+      - name: Verify vendored trees match upstream HEAD (contract version + sentinels + core-js)
+        working-directory: ./horosa-skill
+        run: uv run python scripts/verify_upstream_sync.py --require-upstream --write-state
+      - name: Verify export-section debt against upstream (ratchet)
+        working-directory: ./horosa-skill
+        run: uv run python scripts/verify_export_section_baseline.py --source upstream --require-upstream
       - name: Verify vendored runtime inputs
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_vendor_runtime_sources.py

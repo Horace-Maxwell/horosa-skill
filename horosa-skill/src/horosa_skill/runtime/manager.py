@@ -398,6 +398,7 @@ class HorosaRuntimeManager:
                             "group_id": trace["group_id"],
                         }
 
+            self._require_install_disk_space(asset_meta)
             self.runtime_root.mkdir(parents=True, exist_ok=True)
             # 临时目录置于 runtime_root 同卷（非系统 /tmp）：最终 shutil.move(payload_root→current)
             # 落到同一文件系统即为原子 rename，避免跨卷退化成「复制+删除」（慢，且中途失败留半装）。
@@ -1258,6 +1259,40 @@ class HorosaRuntimeManager:
             updated += "\n"
         return updated
 
+    def _require_install_disk_space(self, asset_meta: dict[str, Any] | None) -> None:
+        """下载前先看磁盘够不够——不够就当场说清还差多少，而不是下完 700MB 再在解压时炸。
+
+        峰值占用 ≈ 归档 + 解压后的树 + 保留的 previous，故按归档大小的 4 倍估（未知大小按 700MB 估）。
+        失败只在「确知不足」时抛；取不到用量（异常文件系统）一律放行，不因体检本身挡住安装。
+        """
+        try:
+            probe = self.runtime_root if self.runtime_root.exists() else self.runtime_root.parent
+            while not probe.exists() and probe != probe.parent:
+                probe = probe.parent
+            free_bytes = shutil.disk_usage(probe).free
+        except OSError:
+            return
+        archive_bytes = 0
+        try:
+            archive_bytes = int((asset_meta or {}).get("size") or 0)
+        except (TypeError, ValueError):
+            archive_bytes = 0
+        needed = (archive_bytes * 4) if archive_bytes else 3_000_000_000
+        if free_bytes >= needed:
+            return
+        gib = 1024 ** 3
+        raise RuntimeInstallError(
+            f"磁盘空间不足：安装离线 runtime 约需 {needed / gib:.1f} GiB（下载 + 解压 + 保留上一版），"
+            f"当前可用 {free_bytes / gib:.1f} GiB。请清理后重试，或用 HOROSA_RUNTIME_ROOT 指向空间更充裕的卷。",
+            code="runtime.install_insufficient_disk",
+            details={
+                "required_bytes": needed,
+                "free_bytes": free_bytes,
+                "runtime_root": str(self.runtime_root),
+                "next_action": "腾出空间后重跑 install（已下载的分片会断点续传）。",
+            },
+        )
+
     def _rewrite_runtime_log4j(self, content: str) -> str:
         log_root = self._runtime_log_root()
         replaced = False
@@ -1277,7 +1312,15 @@ class HorosaRuntimeManager:
         if replaced:
             return updated
         if updated == content:
-            updated = updated.replace("${env:HOME}/.horosa-logs/astrostudyboot", log_root)
+            # log4j 的 `${env:HOME}` 有两种写法，第二种带默认值：`${env:HOME:-${sys:user.home}}`。
+            # 只替换第一种时，第二种会被 log4j 当作**字面量目录名**，于是日志落进
+            # `./${env:HOME:-${sys:user.home}}/.horosa-logs/…`——落在启动时的 CWD，在用户的仓库/工作目录
+            # 里留下一个名字诡异的目录，而且谁也不知道日志去哪了。两种形态都要归位。
+            for placeholder in (
+                "${env:HOME:-${sys:user.home}}/.horosa-logs/astrostudyboot",
+                "${env:HOME}/.horosa-logs/astrostudyboot",
+            ):
+                updated = updated.replace(placeholder, log_root)
             if updated != content:
                 return updated
         raise RuntimeValidationError(

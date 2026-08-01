@@ -43,6 +43,14 @@ jobs:
       - name: Verify docs sync (version lockstep / tool coverage / links / frontmatter)
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_docs_sync.py
+      # 段级欠账棘轮：只减不增。GitHub runner 无 vendored/上游树时脚本自报 skipped（不装绿），
+      # 但基线本身的自洽（registry 改了段表却没更基线）在这里就能红。
+      - name: Verify export-section debt ratchet
+        working-directory: ./horosa-skill
+        run: uv run python scripts/verify_export_section_baseline.py
+      - name: Verify upstream sync (skipped without an upstream checkout)
+        working-directory: ./horosa-skill
+        run: uv run python scripts/verify_upstream_sync.py
       - name: Verify macOS/Windows runtime-builder parity
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_builder_parity.py

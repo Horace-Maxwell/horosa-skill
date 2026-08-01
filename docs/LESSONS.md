@@ -93,6 +93,61 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.24.0 / 2026-07-31 — 守卫「结构性失明」+ MCP 面三处静默破损
+
+- **守卫全绿却漏掉 8 个上游版本：同源校验必须比对上游 HEAD，不能比对自己的 vendored 拷贝。**
+  症状：`verify_export_contract_mirror.py` 与 `verify_vendor_runtime_sources.py` 全绿，而上游已 v50、
+  skill 镜像仍 48。根因：前者读 `vendor/runtime-source/...aiExport.js`（本地 vendored），后者用
+  `MIN_AIEXPORT_SETTINGS_VERSION = 48` 的**下界**断言 —— 两棵 vendor 树都 gitignore，没人 re-sync
+  就永远自洽；`horosa-core-js/src/vendor`（受 git 跟踪）更是**零守卫**。守卫：新增
+  `scripts/verify_upstream_sync.py`（`HOROSA_SOURCE_ROOT` 定位上游 → aiExport 版本恒等 + 哨兵文件
+  sha256 + core-js 按 basename 逐文件比对；无上游树时输出 `{"skipped":true}` + `::notice` 而**不装绿**，
+  `--require-upstream` 在 release 链硬失败）；下界断言改为与 registry 常量**恒等**。首跑即抓出
+  112 个 core-js 文件漂移 + 4 个哨兵漂移（含 `perpredict.py`/`perchart.py` —— 正是主限法 13 法白名单所在）。
+- **键级对齐 ≠ 段级对齐：v0.23.0 的「整版对齐 v48」是虚账。** 实测 skill 653 段 vs 上游 v48 的 843 段。
+  原 mirror 守卫自述 "Deliberately NOT a per-section diff"，于是 180 段欠账藏在全绿背后。守卫：新增
+  `scripts/verify_export_section_baseline.py` + 受 git 跟踪的 `contracts/export_section_debt.json`
+  **棘轮**（新增欠账 fail；还清了也 fail 并提示 `--update-baseline` 收紧，使欠账只减不增、每次回填在
+  git 里可见）。重同步到 v50 后真实欠账 = **314 段 / 51 多余 / 8 缺键，跨 62 技法**（印占 53 段最大）。
+  同时把 `MIRRORED_UPSTREAM_AIEXPORT_VERSION` 的语义写死在注释里：**它表示「对账基准版本」，不表示
+  「该版段全有了」**——两个数字必须一起读。
+- **`__signature__` 漏设 = 工具静默不可调用（P0）。** `horosa_tool_run` 只设了 `__doc__`/`__annotations__`
+  没设 `__signature__` → FastMCP 内省 `**kwargs` 生成 `{"kwargs":{"type":"string"},"required":["kwargs"]}`，
+  而它是 `HOROSA_MCP_COMPACT=1` 下抵达全部技法的**唯一**通道。连带 bug：`request` 存在时
+  `_merge_mcp_arguments` 整体改用 request 作载荷，把兄弟参数 `tool_name` 丢了。测试之所以没抓到，是因为
+  `test_mcp_server.py` **从不走 `srv.call_tool`**（直接调 service 层）——守卫：新增 `tests/test_mcp_contract.py`
+  按「客户端真正看到什么」断言（list_tools 每个工具有描述/title/无 `kwargs` 参数/无残留 `$ref`；
+  call_tool 跑通闸门/成功/畸形/request 通道/数字经纬度五路）。
+- **`__signature__` 优先级高于 `__annotations__` → structured output 全线失效。** 9 处
+  `__annotations__ = {"return": ToolEnvelope}` 是死代码，91 个工具 `outputSchema` 全 None；讽刺的是唯一
+  拿到 outputSchema 的恰是那个坏掉的 `horosa_tool_run`（因为它没有 `__signature__`）。修法：签名带
+  `return_annotation`。**但开启前必须先统一错误载荷**——出参被 server+client 两侧校验，而闸门返回的是
+  5 键裸 dict，声明 outputSchema 后会被打成协议级 ToolError，**整个澄清闸当场报废**（实测复现）。
+  故先给 `ToolEnvelope`/`DispatchEnvelope` 加可选顶层镜像 `code/message/details`、把闸门/elicit/校验
+  三条错误路径全部转成合规信封，再接 `return_annotation`；且因 claude-code#25081（带 outputSchema 时
+  工具列表静默消失，stale-closed 未确认修复）**默认关闭**，`HOROSA_OUTPUT_SCHEMA=1` 显式开启。
+- **FastMCP 注册时 `validate_input=False`——广告 schema 与实际校验解耦，这是解开死结的钥匙。**
+  据此把签名改成「广告保真、校验放松」：字段描述/枚举/`[required]` 标记照登，但全部 `default=None` +
+  `Annotated[Any, WithJsonSchema(...)]` → MCP 层零必填。一次修好三处：文档承诺的 `request={…}` 逃生通道
+  此前**永远走不到**（必填字段先被 arg model 拒）、`{"lat": 39.9}`（模型极高频）在归一化之前就被拒、
+  以及两者都绕过 `agent_recovery` 回裸 pydantic 错误。**坑**：把 property 摘出来单独广告时 `#/$defs/…`
+  解析不到根，且模型间存在自引用（嵌套 BirthInput）——`WithJsonSchema` 里残留 `$ref` 会让 pydantic
+  `KeyError` 到整个服务器起不来。内联必须「遇环/超深/缺失一律降级为无约束对象，绝不留下 `$ref`」。
+- **仓库搬家后 `.venv/bin/*` 的 shebang 仍指旧路径** → `uv run pytest` 静默回退到全局 pytest（旧依赖，
+  报 `mcp.types 无 Icon`），而 `uv run python -m pytest` 正常。判据：直接跑 `.venv/bin/pytest` 报
+  `bad interpreter`。修法 = §8 标准 venv 重建。
+- **log4j 的 `${env:HOME:-${sys:user.home}}` 带默认值形态未被替换** → 日志按**字面量目录名**落在启动
+  CWD，在用户工作目录里留下一个名字诡异的目录，且没人知道日志在哪。`_rewrite_runtime_log4j` 原来只处理
+  `${env:HOME}` 一种写法，现两种都归位。
+- **生态基准变了（2026-07-31 核实）**：MCP **2026-07-28 规范已发布**、python-sdk **v2.0.0 已上 PyPI**
+  （v2 是破坏性重写，钉 `mcp[cli]>=1.28.1,<2` 不迁）；本仓**未使用** logging/roots/sampling 三项废弃 API，
+  且 `_maybe_elicit_gate` 本就在 `service.run_tool` 之前 → 天然满足 v2 的「工具函数会被整体重放」要求。
+  **Claude Code 的工具搜索已默认开启**，83 工具的上下文膨胀在该客户端已由平台解决，ROI 重心移到
+  server `instructions`（此前只用了 164/2048 字节）与 `_meta["anthropic/alwaysLoad"]` 入口标记；
+  Cursor 仍有较紧工具数上限 → 新增 `HOROSA_TOOLSETS` 分组白名单（registry 的 domain 天然可用）。
+  **官方 Registry 可不发 PyPI 上架**：`registryType: "mcpb"` + GitHub Release 的 .mcpb + `fileSha256`，
+  正好绕开 horosa-core-js 在 wheel 之外的分发归属难题（`registryType: "github"` **不是**合法通道）。
+
 ### v0.23.0+ / 2026-07-22 — issue #14：Java 后端被环境杀死时全盘卡死 → chart-only 降级 + 诊断透传
 
 - **症状**（用户报告，Windows 11 + Clash Verge/安全软件）：`selfcheck` 挂死、`doctor` 只报

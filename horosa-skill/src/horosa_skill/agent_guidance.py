@@ -192,21 +192,32 @@ PREDICTIVE_INPUT_CONTRACTS: dict[str, dict[str, Any]] = {
 
 
 def _prompt_from_guidance(tool_name: str, ask_if_missing: list[dict[str, Any]], safe_defaults: list[dict[str, Any]]) -> str:
+    """闸门追问文案（**双语**）。
+
+    这段文本会被 agent 原样转给用户，在支持 elicitation 的客户端还会直接变成原生表单的标题——
+    单中文会让非中文用户面对一整块看不懂的表单。技法名词保持中文（它们本就是专名），但每条指引
+    都配英文，使任何语言的用户都知道「要我确认什么、怎么快速继续」。
+    """
     if not ask_if_missing:
         return (
-            "我还缺少这次调用所需的关键参数。请补充必要输入，或明确说明是否按星阙默认设置继续。"
+            "我还缺少这次调用所需的关键参数。请补充必要输入，或明确说明是否按星阙默认设置继续。\n"
+            "I still need the key inputs for this call — please provide them, or say to continue with "
+            "Xingque defaults."
         )
-    lines = [f"调用 `{tool_name}` 前需要先确认这些会影响结果的设置："]
+    lines = [
+        f"调用 `{tool_name}` 前需要先确认这些会影响结果的设置：",
+        f"Before running `{tool_name}`, please confirm these result-changing settings:",
+    ]
     for index, item in enumerate(ask_if_missing[:6], start=1):
         question = str(item.get("question") or item.get("field") or "请补充这个参数。")
         options = item.get("options")
         if isinstance(options, list) and options:
-            question = f"{question} 可选：{' / '.join(str(option) for option in options)}"
+            question = f"{question} 可选 / options：{' / '.join(str(option) for option in options)}"
         lines.append(f"{index}. {question}")
     if safe_defaults:
         defaults = "; ".join(f"{item.get('field')}={item.get('value')}" for item in safe_defaults[:5])
         lines.append(f"如果你想快速继续，也可以明确说“按星阙默认”，我会使用：{defaults}。")
-    lines.append("(Reply with your choices, or say “按星阙默认 / use defaults” to continue with Xingque defaults.)")
+        lines.append(f"To continue immediately, say “use Xingque defaults” and I will use: {defaults}.")
     return "\n".join(lines)
 
 
