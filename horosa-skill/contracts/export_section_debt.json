@@ -5,7 +5,7 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 16,
+    "missing_sections": 13,
     "extra_sections": 30,
     "absent_keys": 0,
     "keys_with_debt": 24
@@ -105,9 +105,6 @@
     },
     "mundane": {
       "missing": [
-        "恒星派入境",
-        "吠陀世运",
-        "角化",
         "年之九主"
       ],
       "extra": []

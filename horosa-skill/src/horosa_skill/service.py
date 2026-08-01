@@ -4411,6 +4411,25 @@ def _relative_antiscia_lines(items: Any, type_label: str) -> list[str]:
     return lines
 
 
+def _solunar_body_lon(chart_response: dict[str, Any], body: str) -> float | None:
+    """从 /chart 响应取日/月黄经（同上游 lonOf）。"""
+    chart = chart_response.get("chart") if isinstance(chart_response.get("chart"), dict) else {}
+    wanted = "Sun" if body == "sun" else "Moon"
+    for obj in chart.get("objects") or []:
+        if isinstance(obj, dict) and obj.get("id") == wanted:
+            try:
+                return float(obj.get("lon"))
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
+def _shift_moment(moment: str, days: float) -> str:
+    """把 'YYYY-MM-DD HH:MM:SS' 平移若干天（可为负），同上游 shiftMoment。"""
+    base = datetime.strptime(moment, "%Y-%m-%d %H:%M:%S")
+    return (base + timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+
+
 def _build_relative_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
     def embedded_chart_text(chart_payload: Any) -> str:
         if not isinstance(chart_payload, dict):
@@ -7940,6 +7959,70 @@ class HorosaSkillService:
             "export_snapshot": self._augment_export_payload(technique="persiandirected", snapshot_text=snapshot_text),
         }
 
+    # 恒星派入境（solunar）盘型表：逐字取自上游 divination/mundane/solunar.js 的 SOLUNAR_TYPES。
+    _SOLUNAR_TYPES = {
+        "capsolar": {"body": "sun", "target": 270.0, "approx": "01-14"},
+        "arisolar": {"body": "sun", "target": 0.0, "approx": "04-14"},
+        "cansolar": {"body": "sun", "target": 90.0, "approx": "07-16"},
+        "libsolar": {"body": "sun", "target": 180.0, "approx": "10-17"},
+        "caplunar": {"body": "moon", "target": 270.0, "approx": None},
+        "arilunar": {"body": "moon", "target": 0.0, "approx": None},
+        "canlunar": {"body": "moon", "target": 90.0, "approx": None},
+        "liblunar": {"body": "moon", "target": 180.0, "approx": None},
+    }
+    _SOLUNAR_MEAN_SPEED = {"sun": 0.9856, "moon": 13.1764}  # °/日，同上游 MEAN_SPEED
+
+    def _solve_sidereal_ingress(
+        self, type_key: str, year: str, payload: dict[str, Any], *, ayanamsa: str = "fagan_bradley"
+    ) -> tuple[str, dict[str, Any]] | None:
+        """迭代 /chart 求某体入某恒星黄道度的时刻（上游 solveSiderealIngress 的 Python 端口）。
+
+        🔴 上游 solunar.js:150-157 明确警告的陷阱，这里逐条照搬：
+        - **首步的带符号最短弧**只在「近种子」时才允许取负。太阳有 approx（±2 日内）算近种子；
+          月盘无 approx、种子固定 1/1 属**远种子**，月速 13°/日、距目标常 >180°，首步若允许取负
+          会有约半数年份收敛到上一年 12 月的回归。故远种子首步只许向前，其后各步已贴近真根，
+          恢复双向微调。
+        - 收敛判据 |diff| < 0.002°（约 7″；太阳约 3 分钟）。
+        - 迭代上限：太阳 4 次、月 6 次。
+        """
+        spec = self._SOLUNAR_TYPES.get(type_key)
+        if not spec:
+            return None
+        body = spec["body"]
+        speed = self._SOLUNAR_MEAN_SPEED[body]
+        moment = f"{year}-{spec['approx']} 12:00:00" if spec["approx"] else f"{year}-01-01 12:00:00"
+        near_seed = spec["approx"] is not None
+        chart: dict[str, Any] = {}
+        for step in range(4 if body == "sun" else 6):
+            chart = self._call_remote(
+                "/chart",
+                {
+                    "date": moment.split(" ")[0].replace("-", "/"),
+                    "time": moment.split(" ")[1],
+                    "zone": payload.get("zone") or "+08:00",
+                    "lat": payload.get("lat") or "31n13",
+                    "lon": payload.get("lon") or "121e28",
+                    "gpsLat": payload.get("gpsLat"),
+                    "gpsLon": payload.get("gpsLon"),
+                    "ad": payload.get("ad", 1),
+                    "zodiacal": 1,
+                    "siderealAyanamsa": ayanamsa,
+                    "hsys": 10,
+                    "tradition": 0,
+                    "predictive": 0,
+                },
+            )
+            lon = _solunar_body_lon(chart, body)
+            if lon is None:
+                return None
+            diff = (spec["target"] - lon) % 360.0  # 前向弧（入境=向前到达目标）
+            if diff > 180.0 and (near_seed or step > 0):
+                diff -= 360.0
+            if abs(diff) < 0.002:
+                break
+            moment = _shift_moment(moment, diff / speed)
+        return moment, chart
+
     def _run_mundane_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 世俗入宫盘 (mundane ingress): (1) get the precise solar-term ingress moment for the year via
         # /jieqi/year, (2) cast a /chart at that moment, (3) enrich with the v2.4.0 natal extras, then
@@ -7996,6 +8079,50 @@ class HorosaSkillService:
         # buildFacts → describeXQuestion」，机制同卜卦、问主=公众/国家、宫义按世运读。这里复用
         # 已经算好的入宫盘作为问事盘面（headless 无「问事时刻」这个交互输入，故以本盘为准），
         # 由 vendored 的三个纯函数出 [世运卜卦]/[世运问判] 两段。失败只是这两段不出。
+        # 恒星派入境（solunar）：入境时刻由 Python 迭代 /chart 求根（上游那支走 HTTP，按 §5 归 Python），
+        # 段文本由 vendored 的 describeSolunar / computeAngularity / rulerDeathSignature 纯函数出。
+        solunar_text = ""
+        if f"{payload.get('mundaneType') or ''}" == "solunar":
+            try:
+                solved = self._solve_sidereal_ingress(
+                    f"{payload.get('solunarType') or 'capsolar'}", year, payload
+                )
+                if solved:
+                    moment, solunar_chart = solved
+                    js_s = self.js_client.run(
+                        "mundane_solunar",
+                        {
+                            "chart": solunar_chart,
+                            "solunarType": payload.get("solunarType") or "capsolar",
+                            "solunarWeights": payload.get("solunarWeights") or "scheme_a",
+                            "solunarOrb": payload.get("solunarOrb") or 3,
+                            "moment": moment,
+                        },
+                    )
+                    solunar_text = f"{(js_s or {}).get('text') or ''}".strip()
+            except Exception as exc:  # noqa: BLE001 — 求根/富化失败不许带崩入宫盘
+                logger.warning("mundane solunar build failed: %s", exc)
+        # 吠陀世运（vedicmundane）：恒星黄道 Lahiri 的梅沙（白羊）入境盘 —— 同一个求根器，只换
+        # ayanamsa 与目标度。盘型头之外的判读段（[年之九主]）另需九职求根 + 王职的月相搜索，未做。
+        vedic_text = ""
+        if f"{payload.get('mundaneType') or ''}" == "vedicmundane":
+            try:
+                vedic_year = f"{payload.get('vedicYear') or year}".strip()
+                solved_v = self._solve_sidereal_ingress(
+                    "arisolar", vedic_year, payload, ayanamsa="lahiri"
+                )
+                if solved_v:
+                    v_moment, _v_chart = solved_v
+                    vedic_text = "\n".join(
+                        [
+                            "[吠陀世运]",
+                            f"年份：{vedic_year}",
+                            "体系：恒星黄道 Lahiri · 梅沙入境为年度主盘",
+                            f"梅沙入境时刻：{v_moment}",
+                        ]
+                    )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("mundane vedic ingress failed: %s", exc)
         horary_text = ""
         if f"{payload.get('mundaneType') or ''}" == "mundanehorary":
             try:
@@ -8017,7 +8144,7 @@ class HorosaSkillService:
         )
         subcharts_text = _render_snapshot_text(subchart_sections) if subchart_sections else ""
         body = _build_astro_snapshot_text(chart_payload, chart_response)
-        snapshot_text = "\n\n".join(part for part in (head, horary_text, subcharts_text, body) if part).strip()
+        snapshot_text = "\n\n".join(part for part in (head, solunar_text, vedic_text, horary_text, subcharts_text, body) if part).strip()
         result = {
             "ingressTerm": term,
             "ingressYear": year,

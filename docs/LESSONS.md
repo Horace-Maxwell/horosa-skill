@@ -404,6 +404,11 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   快照不产 [紫微四化] 段」。headless 没有页签、选中态也是用户选择 —— 与 `bazi` 的
   `[多运限·指定时段]` 同类：**需新增一组显式入参的功能缺口**，不是段名/取数问题。
 
+- **`mundane` 的 `[年之九主]`** —— 九职里 8 职可由入境求根器解出，但「**王**」职要做月相搜索
+  （上游走 `momentPipeline.fetchMundaneEvents({kinds:['lunations']})`）。这一项**可做但未做**：
+  可改用已放行的 `/astroextra/prenatal_syzygy` 求「梅沙入境前最近一次朔」绕开新端点。
+  记在这里是为了区分「不可得」与「可得但排期未到」—— 它属后者。
+
 - 对比一条**看起来像**排除项、实际不是的：`jieqi` 的 `[X3D盘]` 曾被我判为 3D 渲染而搁置，
   读码后发现上游 astro3d 页签走的是 `buildAstroSnapshotContent(one, flds, {headerless:true})`
   —— 与 `[X星盘]` 逐字同一份文本。**「名字里有 3D」不等于不可 headless**，一律以 builder 实际取数为准。

@@ -35,6 +35,9 @@ _DROP_IMPORT_PATTERNS = (
     re.compile(r"^import\s+\*\s+as\s+Constants\s+from\s+['\"][^'\"]*constants['\"];?\s*$", re.M),
     re.compile(r"^import\s+\w+\s+from\s+['\"][^'\"]*utils/request['\"];?\s*$", re.M),
     re.compile(r"^import\s+\w+\s+from\s+['\"]\./request['\"];?\s*$", re.M),
+    # `momentPipeline` 是纯网络编排模块（import request + services/astro + DateTime 组件），
+    # 按 §5 归 Python；引用它的求根循环由 _strip_network_orchestrators 连带剥掉。
+    re.compile(r"^import\s+\{[^}]*\}\s+from\s+['\"][^'\"]*momentPipeline['\"];?\s*$", re.M),
 )
 _RELATIVE_IMPORT = re.compile(r"(from\s+['\"])(\.[^'\"]*?)(['\"])")
 
@@ -156,19 +159,51 @@ def _rewrite_inline_requires(text: str) -> tuple[str, list[str]]:
     return text, notes
 
 
+def _prune_default_export(text: str, removed: list[str]) -> tuple[str, list[str]]:
+    """把已剥掉的符号从末尾的 `export default { … }` 聚合对象里摘掉。
+
+    只删函数体不够：上游多数模块末尾有一行 `export default { A, B, C }` 汇总导出，其中若仍列着
+    被剥掉的网络函数，模块**加载期**就 `ReferenceError`（本轮 solunar.js 踩到）——比留个坏 import
+    更早炸，且报错信息只说「X is not defined」，不指向 vendor 流程。
+    """
+    notes: list[str] = []
+    if not removed:
+        return text, notes
+    match = re.search(r"^export default \{([^}]*)\};?\s*$", text, re.M)
+    if not match:
+        return text, notes
+    names = [s.strip() for s in match.group(1).split(",") if s.strip()]
+    kept = [n for n in names if n.split(":")[0].strip() not in set(removed)]
+    if len(kept) == len(names):
+        return text, notes
+    notes.append(f"pruned default export ×{len(names) - len(kept)}")
+    replacement = "export default { " + ", ".join(kept) + " };"
+    return text[: match.start()] + replacement + text[match.end():], notes
+
+
 def transform(text: str) -> tuple[str, list[str]]:
     notes: list[str] = []
     text, require_notes = _rewrite_inline_requires(text)
     notes.extend(require_notes)
+    dropped_symbols: list[str] = []
     for pattern in _DROP_IMPORT_PATTERNS:
+        # 先收走该 import 带进来的具名符号：它们是后端层的东西，任何仍在引用它们的导出 async
+        # 编排函数（求根循环一类）也该一并剥掉，否则留下的入口在 headless 下一调用就 ReferenceError。
+        for match in pattern.finditer(text):
+            inner = re.search(r"\{([^}]*)\}", match.group(0))
+            if inner:
+                dropped_symbols += [s.strip().split(" as ")[-1].strip() for s in inner.group(1).split(",") if s.strip()]
         text, count = pattern.subn("", text)
         if count:
             notes.append(f"dropped {count} backend import(s)")
     text, removed = _strip_fetch_helpers(text)
+    removed = removed + dropped_symbols
     if removed:
         notes.append("stripped " + ", ".join(removed))
     text, orch_notes = _strip_network_orchestrators(text, removed)
     notes.extend(orch_notes)
+    text, prune_notes = _prune_default_export(text, removed)
+    notes.extend(prune_notes)
     text, orphan_notes = _drop_orphaned_imports(text)
     notes.extend(orphan_notes)
 

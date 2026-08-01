@@ -30,6 +30,7 @@ import { runTongshu } from './tongshu.js';
 import { runCalendarExtras } from './calendarExtras.js';
 import { runGuolaoStarDignity } from './guolaoStarDignity.js';
 import { runMundaneHorary } from './mundaneHorary.js';
+import { runMundaneSolunar } from './mundaneSolunar.js';
 
 const TOOL_RUNNERS = {
   uranian_extra: runUranianExtra,
@@ -42,6 +43,7 @@ const TOOL_RUNNERS = {
   calendar_extras: runCalendarExtras,
   guolao_star_dignity: runGuolaoStarDignity,
   mundane_horary: runMundaneHorary,
+  mundane_solunar: runMundaneSolunar,
   india_jyotish: runIndiaJyotish,
   qimen: runQimen,
   taiyi: runTaiyi,

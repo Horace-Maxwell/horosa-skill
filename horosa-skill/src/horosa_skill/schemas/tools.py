@@ -860,6 +860,10 @@ class MundaneInput(FlexibleModel):
     # mundanehorary；后者按 mhKind 出 [世运卜卦]/[世运问判] 两段。
     mundaneType: str | None = Field(default=None, description="盘型：ingress（默认）/ mundanehorary。")
     mhKind: str | None = Field(default=None, description="世运卜卦问类：war 战争（默认）/ weather 天候 / price 物价。")
+    solunarType: str | None = Field(default=None, description="恒星派入境盘型：capsolar（默认）/arisolar/cansolar/libsolar/caplunar/arilunar/canlunar/liblunar。")
+    solunarWeights: str | None = Field(default=None, description="恒星派权重方案（scheme_a 默认）。")
+    solunarOrb: float | None = Field(default=None, description="角化容许度（默认 3°）。")
+    vedicYear: int | None = Field(default=None, description="吠陀世运年份（缺省取 year）。")
 
 
 class OtherBuInput(BirthInput):
