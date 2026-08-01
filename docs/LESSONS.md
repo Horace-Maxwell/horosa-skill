@@ -399,6 +399,11 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   而非段名/取数问题。同批的 `[月令司令（分野）]` 则**可得**（vendored `computeFenYe` 本地算，只需出生
   日期换节后日数），已于 v0.25 补上 —— 又一次「同一键的欠账不同因」。
 
+- **`sanshiunited` 的 `[紫微四化]`** —— 上游由紫微子页签**上报的 UI 状态**驱动（盘 + 用户选中的
+  大运/流年），`SanShiUnitedMain.js:1978` 的注释明写「tab 未打开过(antd 懒渲染)保持 null →
+  快照不产 [紫微四化] 段」。headless 没有页签、选中态也是用户选择 —— 与 `bazi` 的
+  `[多运限·指定时段]` 同类：**需新增一组显式入参的功能缺口**，不是段名/取数问题。
+
 - 对比一条**看起来像**排除项、实际不是的：`jieqi` 的 `[X3D盘]` 曾被我判为 3D 渲染而搁置，
   读码后发现上游 astro3d 页签走的是 `buildAstroSnapshotContent(one, flds, {headerless:true})`
   —— 与 `[X星盘]` 逐字同一份文本。**「名字里有 3D」不等于不可 headless**，一律以 builder 实际取数为准。
