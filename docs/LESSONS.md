@@ -93,6 +93,27 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.25.0-dev / 2026-08 — 段级欠账回填（批 1 起）
+
+- **印占 53 段：verbatim vendor 胜过 Python 移植。** 上游 `buildJyotishSnapshotLines`（IndiaChart.js:479，
+  578 行）是**纯格式化**函数——读后端已算好的 `chartObj.jyotish`（30 个子树）产 51 个具名段。闭包极小
+  （只依赖 7 行 `gfmTable`，`PCN` 是块内局部量，零 AstroConst 依赖），逐字 vendor 后真盘一次跑通 57 段。
+  若手抄成 Python 是 600 行抄写面，任一措辞漂移都会与桌面端不一致。**判据**：纯格式化 + 小闭包 = vendor；
+  只有需要发 HTTP 或依赖 Python 侧数据时才移植。
+- **`js_client.run()` 已解包 envelope 的 `data`**，返回的就是 runner 结果对象。照 `_attach_natal_extras`
+  的样子写成 `js.get("data")` 会恒为 None → 段静默不出（本轮踩了一次，表现为「挂载了但段数没变」）。
+- **上游用占位段名登记动态段族**：印占 11 个 `座运·<变体>` 在 preset 里是单个 `座运·X`（同 horary 的
+  `专题深化·X`）。折叠规则加进 `map_legacy_section_title`，否则实产段全成 unknown。
+- **段名折叠方向要跟上游走**：canping/heluo 早期把上游长名（`大运·歲運`/`先天卦·元堂爻辞`）折叠成短名，
+  而上游 preset 现已正式声明长名 → 反转映射（canonical=长名，短名留作向后兼容）。
+- **主限法语义变更（v3.6.0）**：`pdSyncRev` v12→**v15**，方位法从「核 5 + legacy」开放到全谱 13 法，
+  **placidus 已是真方位法、不再回退 core_alchabitius**（实测 114 行 vs 64 行）。原测试断言「两法逐位
+  一致」在新引擎下必红，而且方向危险——引擎真回退时它反而会绿。已改为「都产真行集且彼此不同」。
+- **回填铁律的实操顺序**：先 live 跑出**实产段名**，再拿它与上游 preset 做三向差（都有 → 进 preset；
+  上游有实产无 → preset+optional 双登记；实产有上游无 → 查是 skill 自有基础段还是占位名族）。
+  绝不能照抄上游 preset 了事——那会造出死条目，让每次真实导出都报 missing。
+
+
 ### v0.24.0 / 2026-07-31 — 守卫「结构性失明」+ MCP 面三处静默破损
 
 - **守卫全绿却漏掉 8 个上游版本：同源校验必须比对上游 HEAD，不能比对自己的 vendored 拷贝。**

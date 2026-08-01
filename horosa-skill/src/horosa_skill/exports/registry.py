@@ -268,10 +268,10 @@ AI_EXPORT_PRESET_SECTIONS = {
     ],
     # 邵子参评数：起盘/本命/大运·歲運 + 全生涯流年表（liunianSeries 逐岁行喂入 buildSnapshotText
     # 的 liunianRows → [流年·歲運]，即星阙 aiExport 宣称的完整四段；歲運后缀段名归一见下方映射）。
-    "canping": ["起盘", "本命", "大运", "流年"],
+    "canping": ["起盘", "本命", "大运·歲運", "流年·歲運"],
     # 河洛理数：快照段 起命/先天卦·元堂爻辞/后天卦·元堂爻辞/命运篇/大限·岁运/流年·岁运/断验（十吉）。
     # 元堂爻辞与岁运段名（含老版动态卦名段）legacy-map 到 先天卦/后天卦/大限/流年，见下方映射。
-    "heluo": ["起命", "先天卦", "后天卦", "命运篇", "大限", "流年", "断验"],
+    "heluo": ["起命", "先天卦·元堂爻辞", "后天卦·元堂爻辞", "命运篇", "大限·岁运", "流年·岁运", "断验"],
     # 一掌经：十二支十二星（六道四柱四宫）+ 命宫/人事十二宫 + 格局 + 大限/小限流年十二神；
     # 重犯/交互格/职业适性/流年总论随盘面条件产出、神煞合参随开关（默认开）产出 → 见 optional。
     "yizhangjing": ["起盘信息", "四柱四宫断语", "命宫与人事十二宫", "格局判定", "重犯", "交互格", "职业适性", "大限", "小限与流年十二神", "流年总论", "神煞合参"],
@@ -463,24 +463,23 @@ def map_legacy_section_title(key: str, title: str | None) -> str:
         if normalized == "卦辞":
             return "卦辞与断语"
     elif key == "canping":
-        # 星阙 canpingLocal.buildSnapshotText emits 歲運-suffixed labels [大运·歲運]/[流年·歲運]. Map them
-        # back to the canonical 大运/流年 section names so the snapshot (kept byte-identical) parses cleanly.
-        if normalized == "大运·歲運":
-            return "大运"
-        if normalized == "流年·歲運":
-            return "流年"
+        # canonical 名 = 上游 aiExport 现在声明的、也是 canpingLocal.buildSnapshotText 实际吐出的
+        # 歲運 后缀名。skill 早期把它们折叠成短名 大运/流年，方向反了——现在以上游为准，短名保留
+        # 为向后兼容（旧 skill 版本导出的文本仍能解析）。
+        if normalized == "大运":
+            return "大运·歲運"
+        if normalized == "流年":
+            return "流年·歲運"
     elif key == "heluo":
-        # 星阙 heluoLocal.buildSnapshotText 段名两代兼容：老版动态卦名段 [先天·<卦> 元堂爻辞]/[后天·<卦> 元堂爻辞]，
-        # 新版静态段 [先天卦·元堂爻辞]/[后天卦·元堂爻辞]；另有 [大限·岁运]/[流年·岁运]。全部归一到
-        # canonical 先天卦/后天卦/大限/流年（same prefix-mapping pattern 星阙 uses for liureng's 三传(…)).
-        if normalized.startswith("先天·") or normalized == "先天卦·元堂爻辞":
-            return "先天卦"
-        if normalized.startswith("后天·") or normalized == "后天卦·元堂爻辞":
-            return "后天卦"
-        if normalized == "大限·岁运":
-            return "大限"
-        if normalized == "流年·岁运":
-            return "流年"
+        # 同上：canonical = 上游长名。老版动态卦名段 [先天·<卦> 元堂爻辞] 与 skill 早期短名一并归一。
+        if normalized.startswith("先天·") or normalized == "先天卦":
+            return "先天卦·元堂爻辞"
+        if normalized.startswith("后天·") or normalized == "后天卦":
+            return "后天卦·元堂爻辞"
+        if normalized == "大限":
+            return "大限·岁运"
+        if normalized == "流年":
+            return "流年·岁运"
     return normalized
 
 

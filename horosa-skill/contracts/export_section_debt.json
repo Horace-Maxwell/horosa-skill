@@ -5,10 +5,10 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 261,
-    "extra_sections": 51,
+    "missing_sections": 255,
+    "extra_sections": 45,
     "absent_keys": 8,
-    "keys_with_debt": 62
+    "keys_with_debt": 60
   },
   "keys": {
     "acg": {
@@ -88,16 +88,6 @@
         "当事人八字"
       ],
       "extra": []
-    },
-    "canping": {
-      "missing": [
-        "大运·歲運",
-        "流年·歲運"
-      ],
-      "extra": [
-        "大运",
-        "流年"
-      ]
     },
     "distributions": {
       "missing": [
@@ -245,20 +235,6 @@
       ],
       "extra": [],
       "absent_key": true
-    },
-    "heluo": {
-      "missing": [
-        "先天卦·元堂爻辞",
-        "后天卦·元堂爻辞",
-        "大限·岁运",
-        "流年·岁运"
-      ],
-      "extra": [
-        "先天卦",
-        "后天卦",
-        "大限",
-        "流年"
-      ]
     },
     "horary": {
       "missing": [
