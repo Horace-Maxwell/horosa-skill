@@ -7062,6 +7062,23 @@ class HorosaSkillService:
         chart_response = self._call_remote("/chart", chart_payload)
         germany_result = self._call_remote("/germany/midpoint", chart_payload)
         snapshot_text = _build_germany_snapshot_text(chart_payload, chart_response, germany_result)
+        # [戴维森盘]（后端 davison 字段，仅在请求带 davison 第二人时返回）+ [虚星参考]（静态口径表）。
+        # 两段由 vendored 上游排版逐字产出；失败只是这两段不出，不影响主盘。
+        try:
+            extra = self.js_client.run(
+                "uranian_extra",
+                {
+                    "davison": germany_result.get("davison") if isinstance(germany_result, dict) else None,
+                    "school": payload.get("school"),
+                    "showTnp": payload.get("showTnp", True),
+                    "labels": ASTRO_TEXT_MAP,
+                },
+            )
+            extra_text = f"{(extra or {}).get('text') or ''}".strip()
+            if extra_text:
+                snapshot_text = f"{snapshot_text}\n{extra_text}".strip()
+        except Exception as exc:  # noqa: BLE001 — 附注段失败不影响量化盘
+            logger.warning("uranian extra sections failed: %s", exc)
         result = {
             "chart": chart_response.get("chart"),
             "midpoints": germany_result.get("midpoints", germany_result if isinstance(germany_result, list) else []),

@@ -22,8 +22,10 @@ import { runZhengChuan } from './zhengchuan.js';
 import { runIndiaJyotish } from './indiaJyotish.js';
 import { runYanqinYanfa } from './yanqinYanfa.js';
 import { runTiebanFramework } from './tiebanFramework.js';
+import { runUranianExtra } from './uranianExtra.js';
 
 const TOOL_RUNNERS = {
+  uranian_extra: runUranianExtra,
   tieban_framework: runTiebanFramework,
   yanqin_yanfa: runYanqinYanfa,
   india_jyotish: runIndiaJyotish,

@@ -129,6 +129,10 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   preset（可勾、勾了永久尊重），但用户未自定义时默认不导出」——doctrine 型大段（判语库/古籍全文）
   专用。skill 侧并入 optional（对解析器同义：缺席不算漏）并在契约里单列 `default_off_sections`。
   **注意上游的 migration union 也排除这些段**，否则升级会把它们硬并进已自定义用户的选择 = 变相默认开。
+- **抽 AstroConst 子集做 shim 有两条边界规则**（都踩过）：① 块的终点是「下一个顶层 `export const`」
+  而非分号——上游多数常量**不带结尾分号**，按分号切会把后续所有声明卷进来（`Identifier already
+  declared`）；② 必须保持**上游原序**，`LIST_URANIAN` 这类聚合常量引用了排在其后的符号，重排即
+  `ReferenceError: before initialization`。宁可逐值抽取也不手写猜值——这类表以 AstroConst.* 为键。
 - **回填铁律的实操顺序**：先 live 跑出**实产段名**，再拿它与上游 preset 做三向差（都有 → 进 preset；
   上游有实产无 → preset+optional 双登记；实产有上游无 → 查是 skill 自有基础段还是占位名族）。
   绝不能照抄上游 preset 了事——那会造出死条目，让每次真实导出都报 missing。

@@ -5,10 +5,10 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 221,
+    "missing_sections": 218,
     "extra_sections": 44,
     "absent_keys": 8,
-    "keys_with_debt": 51
+    "keys_with_debt": 50
   },
   "keys": {
     "acg": {
@@ -164,14 +164,6 @@
       "extra": [
         "起卦信息"
       ]
-    },
-    "germany": {
-      "missing": [
-        "组合盘",
-        "戴维森盘",
-        "虚星参考"
-      ],
-      "extra": []
     },
     "givenyear": {
       "missing": [
