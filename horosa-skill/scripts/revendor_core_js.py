@@ -76,8 +76,48 @@ def _drop_orphaned_imports(text: str) -> tuple[str, list[str]]:
     return text, notes
 
 
+_INLINE_REQUIRE = re.compile(
+    r"^([ \t]*)const\s*\{\s*([^}]+?)\s*\}\s*=\s*require\(\s*['\"]([^'\"]+)['\"]\s*\);?[ \t]*\n",
+    re.M,
+)
+
+
+def _rewrite_inline_requires(text: str) -> tuple[str, list[str]]:
+    """把函数体内的惰性 `const {X} = require('…')` 改写成顶层静态 import。
+
+    `horosa-core-js` 是 `"type": "module"`，ESM 下 `require` 根本没有定义 → 运行到那一行就
+    `ReferenceError`。上游用惰性 require 是为了断模块环（如 `data/accidentalDignity` ↔
+    `engine/conditions` 互引），但两处都只在**函数体内**调用符号，而 ESM 的 live binding 对
+    这种「求值期不用、调用期才用」的循环本来就安全 —— 静态 import 是等价且可加载的。
+
+    不处理这条的后果不是「少一段」，而是净回归：`horary/timing.js` 的 require 落在 `[应期方位]`
+    —— 一个当前已经能用的段，重 vendor 会把它炸掉。
+    """
+    notes: list[str] = []
+    imports: list[str] = []
+    for match in list(_INLINE_REQUIRE.finditer(text)):
+        symbols = match.group(2).strip()
+        target = match.group(3)
+        if not target.startswith("."):
+            continue  # 第三方包（moment 之类）不在 vendor 闭包里，留给人工判断
+        suffixed = target if target.endswith((".js", ".json", ".mjs")) else f"{target}.js"
+        imports.append(f"import {{ {symbols} }} from '{suffixed}';")
+        text = text.replace(match.group(0), "", 1)
+        notes.append(f"require→import {{{symbols}}} from {target}")
+    if imports:
+        # 插在最后一条既有 import 之后；文件若无 import 则置顶。
+        last = None
+        for m in re.finditer(r"^import\s[^\n]*\n", text, re.M):
+            last = m
+        block = "\n".join(imports) + "\n"
+        text = (text[: last.end()] + block + text[last.end() :]) if last else block + text
+    return text, notes
+
+
 def transform(text: str) -> tuple[str, list[str]]:
     notes: list[str] = []
+    text, require_notes = _rewrite_inline_requires(text)
+    notes.extend(require_notes)
     for pattern in _DROP_IMPORT_PATTERNS:
         text, count = pattern.subn("", text)
         if count:
@@ -148,6 +188,14 @@ def _relocate_imports(text: str, target: Path) -> tuple[str, list[str]]:
     index: dict[str, list[Path]] = {}
     for path in VENDOR_ROOT.rglob("*.js"):
         index.setdefault(path.name, []).append(path)
+    # 少数上游模块在本仓不落 vendor 树，而是长在 core-js 自己的 `src/constants`、`src/shared` 下
+    # （如 AstroText.js / AstroConst.js —— 它们是 skill 自己也要用的共享常量）。搜索范围要含这两处，
+    # 否则 `../../constants/AstroText` 永远 UNRESOLVED，人只能一次次手工改路径。
+    for sibling in ("constants", "shared"):
+        sibling_dir = VENDOR_ROOT.parent / sibling
+        if sibling_dir.is_dir():
+            for path in sibling_dir.rglob("*.js"):
+                index.setdefault(path.name, []).append(path)
 
     def fix(match: re.Match[str]) -> str:
         rel = match.group(2)

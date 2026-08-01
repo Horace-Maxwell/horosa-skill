@@ -80,11 +80,35 @@ function buildChaldeanTerms(night){
 export const CHALDEAN_TERMS_DAY = buildChaldeanTerms(false);
 export const CHALDEAN_TERMS_NIGHT = buildChaldeanTerms(true);
 
+// 界内变体两张(与后端 perchart _TETRABIBLOS_LEO_SATURN_FIRST / _LILLY_GEMINI_EMENDED 逐字节同构;
+// 双实现漂移曾致「设置开了狮子土星优先/双子校勘,后端尊贵按变体算、行星 tab『位于 X 界』仍按基表显示」):
+// 惰性浅拷贝基表+覆写单座,以 baseTables 引用为 memo 键(AstroConst 表模块级恒定,实际只建一次)。
+const _LEO_SATURN_FIRST_ROW = [['Saturn', 0, 6], ['Mercury', 6, 13], ['Jupiter', 13, 19], ['Venus', 19, 25], ['Mars', 25, 30]];
+const _GEMINI_EMENDED_ROW = [['Mercury', 0, 7], ['Jupiter', 7, 14], ['Venus', 14, 21], ['Mars', 21, 25], ['Saturn', 25, 30]];
+let _leoVariantCache = null;   // { base, table }
+let _geminiVariantCache = null;
+
 // 界系变体 → 界主表:0 埃及 / 1 托勒密 / 2 莉莉(三套由 AstroConst 传入)/ 3 迦勒底(本模块昼夜表,按 isDiurnal)。
-export function termsTableForVariant(variant, isDiurnal, baseTables, egyptianFallback){
+// opts(可选):{ leoBoundFirst, geminiBoundEmended } —— 与后端 push_request_terms 同语义:
+// 仅 v==1 且 leoBoundFirst 时换狮子土星优先变体、v==2 且 geminiBoundEmended 时换双子校勘变体;
+// 不传/默认恒基表(零回归)。truthy 判定与请求键形态(1/'1'/true)兼容。
+export function termsTableForVariant(variant, isDiurnal, baseTables, egyptianFallback, opts){
 	const v = Number(variant) || 0;
 	if(v === 3){ return isDiurnal ? CHALDEAN_TERMS_DAY : CHALDEAN_TERMS_NIGHT; }
-	return (baseTables && baseTables[v]) || egyptianFallback;
+	const base = (baseTables && baseTables[v]) || egyptianFallback;
+	if(v === 1 && opts && opts.leoBoundFirst && base){
+		if(!_leoVariantCache || _leoVariantCache.base !== base){
+			_leoVariantCache = { base, table: { ...base, Leo: _LEO_SATURN_FIRST_ROW } };
+		}
+		return _leoVariantCache.table;
+	}
+	if(v === 2 && opts && opts.geminiBoundEmended && base){
+		if(!_geminiVariantCache || _geminiVariantCache.base !== base){
+			_geminiVariantCache = { base, table: { ...base, Gemini: _GEMINI_EMENDED_ROW } };
+		}
+		return _geminiVariantCache.table;
+	}
+	return base;
 }
 
 // "15 Cancer" → { signIndex, deg, lon }(thema_mundi 等英文度位解析)。

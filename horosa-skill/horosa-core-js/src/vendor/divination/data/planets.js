@@ -151,6 +151,30 @@ export const RETROGRADE_NOTES = {
 	rule: '主管命宫/用事宫的内行星逆行始终标红。',
 };
 
+// 七行星平均日行度（卜卦口径 04§6.1，单位 °/日）：swift/slow 判定与应期快慢修正的单一阈值源。
+// 日/水/金三者同值（地心视角三者年绕一周）;地心争议档允许 opts.meanTable 覆盖（默认零回归）。
+export const MEAN_DAILY_MOTION = {
+	moon: 13.1767,      // 13°10′36″
+	mercury: 0.98556,   // 0°59′08″
+	venus: 0.98556,
+	sun: 0.98556,
+	mars: 0.52417,      // 0°31′27″
+	jupiter: 0.08306,   // 0°04′59″
+	saturn: 0.03361,    // 0°02′01″
+};
+
+// 行度迅疾/迟缓判定：|实际日速| 对比自身平均日行度；逆行不在此判（另列 −5 无力项）。
+// 返回 'swift' | 'slow' | null（无速度数据/无均值表项/恰等）。
+export function motionRateOf(key, speed, opts){
+	const mean = (opts && opts.meanTable && opts.meanTable[key] !== undefined)
+		? opts.meanTable[key] : MEAN_DAILY_MOTION[key];
+	if(mean === undefined || speed === undefined || speed === null) return null;
+	const v = Math.abs(speed);
+	if(v > mean) return 'swift';
+	if(v < mean) return 'slow';
+	return null;
+}
+
 export const CLASSICAL_PLANETS = ['saturn', 'jupiter', 'mars', 'sun', 'venus', 'mercury', 'moon'];
 export const DIURNAL_SECT = ['sun', 'jupiter', 'saturn'];
 export const NOCTURNAL_SECT = ['moon', 'venus', 'mars'];

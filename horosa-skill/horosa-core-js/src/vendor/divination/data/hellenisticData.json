@@ -108,7 +108,7 @@
     "day_order":  [["Sun",10],["Venus",8],["Mercury",13],["Moon",9],["Saturn",11],["Jupiter",12],["Mars",7],["NorthNode",3],["SouthNode",2]],
     "night_order":[["Moon",9],["Saturn",11],["Jupiter",12],["Mars",7],["Sun",10],["Venus",8],["Mercury",13],["NorthNode",3],["SouthNode",2]],
     "total_years":75,
-    "subperiod":"each planetary period splits into 7 equal sub-firdaria in Chaldean order starting from the main lord; nodes are not sub-rulers and (Abu Mashar/Dykes) do not subdivide"
+    "subperiod":"each planetary period splits into 7 equal sub-firdaria in Chaldean order starting from the main lord; nodes are not sub-rulers and (Abu Ma'shar tradition) do not subdivide"
   },
 
   "lots": {

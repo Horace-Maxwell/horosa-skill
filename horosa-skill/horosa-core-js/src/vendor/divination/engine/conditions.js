@@ -1,7 +1,8 @@
 // divination/engine/conditions.js
 // 单星状态 → 统一结构 {key,value,polarity,weight,text_zh}（构建清单 §2.1）。
 import { PLANETS } from '../data/planets.js';
-import { angularDist } from './utils.js';
+
+import { scoreAccidental } from '../data/accidentalDignity.js';
 
 function cn(key){ return (PLANETS[key] || {}).cn || key; }
 
@@ -26,7 +27,10 @@ export function isBesieged(key, facts){
 	return false;
 }
 
-export function planetCondition(key, facts){
+// opts（可选;不传=既有行为字节不变）:
+//   accidentalMode='lilly' → 附带偶然尊贵满分表明细(accidental 字段,±38 域)供古典 Tab/AI 快照,
+//   并把「合计分」聚合为一条 finding 入裁决(极性=合计符号,权重 2);默认 'heuristic' 不触发。
+export function planetCondition(key, facts, opts){
 	const p = facts.planets[key];
 	if(!p) return { key, findings: [], score: 0 };
 	const f = [];
@@ -70,8 +74,23 @@ export function planetCondition(key, facts){
 	const sp = speedNote(p);
 	if(sp) f.push(sp);
 
+	let accidental = null;
+	if(opts && opts.accidentalMode === 'lilly'){
+		// 惰性 require 防模块环（data/accidentalDignity ← engine/conditions 互引仅函数级）。
+		accidental = scoreAccidental(key, facts, opts);
+		if(accidental && accidental.total !== 0){
+			f.push({
+				key: 'accidental_lilly', value: accidental.total,
+				polarity: accidental.total > 0 ? 'positive' : 'negative', weight: 2,
+				text_zh: `${name} 偶然尊贵满分表合计 ${accidental.total > 0 ? '+' : ''}${accidental.total}（±38 域）`,
+			});
+		}
+	}
+
 	const score = f.reduce((s, x) => s + (x.polarity === 'positive' ? x.weight : (x.polarity === 'negative' ? -x.weight : 0)), 0);
-	return { key, name, findings: f, score };
+	const out = { key, name, findings: f, score };
+	if(accidental) out.accidental = accidental;
+	return out;
 }
 
 export default planetCondition;

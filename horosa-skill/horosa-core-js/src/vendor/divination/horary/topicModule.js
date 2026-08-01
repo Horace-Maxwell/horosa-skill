@@ -68,7 +68,130 @@ export function buildTopicDeepening(facts, category){
 		if(ascGender) lines.push({ polarity: 'neutral', text: `性别参考（仅一征象，勿单凭）：上升座属${ascGender === 'masculine' ? '阳（偏男）' : '阴（偏女）'}，须合5宫主/月亮阴阳同断。` });
 		return { title: '怀孕（5宫子嗣 + 月木金自然征象）', lines };
 	}
+	// ── B1–B12 专题扩充（2026-07 批2;既有三题在上方保持字节不变）──
+	if(category === 'health'){
+		return buildDecumbiture(facts);
+	}
+	if(category === 'wealth'){
+		const l1 = lordOf(facts, 1); const l2 = lordOf(facts, 2);
+		const lines = [
+			{ polarity: (strengthOf(facts, l2) >= 0 ? 'positive' : 'negative'), text: `财帛＝2宫主 ${cn(l2)}（${stateWord(facts, l2)}）;福点亦作财之征。` },
+			{ polarity: 'neutral', text: '取效方向：2宫主入相位1宫主 → 钱主动来;1宫主入相位2宫主 → 须主动求取。' },
+			{ polarity: 'neutral', text: `讨债/借贷：债务人＝7宫主 ${cn(lordOf(facts, 7))}，其钱＝7之2＝本盘8宫主 ${cn(lordOf(facts, 8))}（转宫口径）。` },
+		];
+		return { title: '钱财能否得（2宫财帛·B2）', lines };
+	}
+	if(category === 'message'){
+		const l3 = lordOf(facts, 3);
+		const merc = facts.planets.mercury;
+		const mercBad = merc && (merc.retro || merc.combustion === 'combust' || merc.dignityScore <= -4);
+		const moonVoc = facts.planets.moon && facts.planets.moon.isVOC;
+		const lines = [
+			{ polarity: (strengthOf(facts, l3) >= 0 ? 'positive' : 'negative'), text: `消息＝3宫主 ${cn(l3)}（${stateWord(facts, l3)}）＋水星（信息自然象征）。` },
+			{ polarity: mercBad ? 'negative' : 'positive', text: mercBad ? `水星受损（${stateWord(facts, 'mercury')}）→ 消息恐假/坏/迟。` : '水星状态尚可 → 消息偏真/可达。' },
+		];
+		if(moonVoc) lines.push({ polarity: 'negative', text: '月亮空亡 → 多主「无下文」。' });
+		return { title: '消息真假·书信能否达（3宫·B3）', lines };
+	}
+	if(category === 'death'){
+		const l8 = lordOf(facts, 8); const l1 = lordOf(facts, 1); const l2 = lordOf(facts, 2);
+		const lines = [
+			{ polarity: 'neutral', text: `遗产＝8宫主 ${cn(l8)}（${stateWord(facts, l8)}）;能否得看其与 1/2 宫主（${cn(l1)}/${cn(l2)}）的入相位与容纳。` },
+			{ polarity: (strengthOf(facts, l8) >= 0 ? 'positive' : 'negative'), text: strengthOf(facts, l8) >= 0 ? '8宫主未受重克 → 承得之象偏顺。' : '8宫主受克/被阻 → 不得或缩水。' },
+		];
+		return { title: '遗产能否得（8宫·B8）', lines };
+	}
+	if(category === 'travel'){
+		const l9 = lordOf(facts, 9); const l1 = lordOf(facts, 1);
+		const moonOk = facts.planets.moon && facts.planets.moon.dignityScore > -4 && facts.planets.moon.combustion !== 'combust';
+		const lines = [
+			cmpLine(facts, l1, '行人（1宫）', l9, '旅程（9宫）'),
+			{ polarity: moonOk ? 'positive' : 'negative', text: moonOk ? '月亮未受重克 → 途中偏顺。' : '月亮受克 → 途中多阻/险。' },
+			{ polarity: 'neutral', text: '出国移居：1宫主与9宫主入相位、9宫主得位 → 可成且佳。' },
+		];
+		return { title: '旅行/出国顺否（9宫·B9）', lines };
+	}
+	if(category === 'career'){
+		const l1 = lordOf(facts, 1); const l10 = lordOf(facts, 10);
+		const lines = [
+			cmpLine(facts, l1, '求职者（1宫）', l10, '职位/上司（10宫）'),
+			{ polarity: 'neutral', text: '取效方向：10宫主入相位1宫主 → 职位主动来;1宫主入相位10宫主 → 须争取。受阻/撤回 → 落空。' },
+			{ polarity: 'neutral', text: '选举/竞争：对手＝7宫主，比较双方尊贵，再看 10宫（权威/选民）容纳谁。' },
+		];
+		return { title: '求职升迁·选举竞争（10宫·B10）', lines };
+	}
+	if(category === 'hope'){
+		const l1 = lordOf(facts, 1); const l11 = lordOf(facts, 11);
+		return {
+			title: '愿望能否实现（11宫·B11）',
+			lines: [
+				cmpLine(facts, l1, '问者（1宫）', l11, '所愿（11宫）'),
+				{ polarity: 'neutral', text: '1宫主与11宫主（或所愿之事本宫主）入相位 → 如愿;月亮吉相有助。' },
+			],
+		};
+	}
+	if(category === 'enemy'){
+		const l1 = lordOf(facts, 1); const l12 = lordOf(facts, 12);
+		const l1p = facts.planets[l1];
+		const trapped = l1p && l1p.house === 12;
+		return {
+			title: '暗敌·囚禁能否脱（12宫·B12）',
+			lines: [
+				cmpLine(facts, l1, '本人（1宫）', l12, '暗敌/禁锢（12宫）'),
+				{ polarity: trapped ? 'negative' : 'neutral', text: trapped ? '1宫主落12宫 → 受困之象。' : '1宫主不居12宫 → 未成困局。' },
+				{ polarity: 'neutral', text: '脱困之征：1宫主离开凶相、与吉星入相位、得位。' },
+			],
+		};
+	}
+	if(category === 'lost'){
+		return buildLostObject(facts);
+	}
 	return null;
+}
+
+// ── B6 疾病 decumbiture + 危象日（月亮自本位每 45° 一站;90°/180° 为最凶险节点）。
+// 天数按本盘月亮真实日速折算（≈45°/13.2°日≈3.4天;90° 危象≈6.8–7 天与古法「约七日一危」相合）。──
+function buildDecumbiture(facts){
+	const l1 = lordOf(facts, 1); const l6 = lordOf(facts, 6);
+	const moon = facts.planets.moon;
+	const lines = [
+		{ polarity: (strengthOf(facts, l1) >= 0 ? 'positive' : 'negative'), text: `患者＝1宫主 ${cn(l1)}（${stateWord(facts, l1)}）＋月亮;疾病＝6宫主 ${cn(l6)}（${stateWord(facts, l6)}）。` },
+		{ polarity: 'neutral', text: `医者＝7宫主 ${cn(lordOf(facts, 7))};疗法＝10宫主 ${cn(lordOf(facts, 10))};结局看 4宫与月亮末相位;凶征＝入相位 6/8 宫主或凶星。` },
+	];
+	let criticalDays = null;
+	if(moon && moon.speed){
+		const v = Math.abs(moon.speed) || 13.1767;
+		const stations = [
+			{ arc: 45, kind: '判断日' }, { arc: 90, kind: '危象日(刑·最凶险)' }, { arc: 120, kind: '判断日(拱)' },
+			{ arc: 135, kind: '判断日' }, { arc: 180, kind: '危象日(冲·最凶险)' }, { arc: 225, kind: '判断日' },
+			{ arc: 270, kind: '危象日(刑·再临)' }, { arc: 315, kind: '判断日' },
+		];
+		criticalDays = stations.map((st) => ({ ...st, days: Math.round((st.arc / v) * 10) / 10 }));
+		lines.push({ polarity: 'neutral', text: `危象日程（自起病盘月亮本位起算）：${criticalDays.map((c) => `${c.arc}°≈第${c.days}天(${c.kind})`).join('；')}。危象日月亮所遇吉/凶相预示该日转折。` });
+	}
+	return { title: '疾病 decumbiture + 危象日（6宫·B6）', lines, criticalDays };
+}
+
+// ── 失物（非盗窃）专题：象征星元素 → 场所类型;宫位 → 方位/家中;月亮指线索。──
+const LOST_PLACE_BY_ELEMENT = {
+	fire: '近火/炉灶/高处/南向之所',
+	earth: '地面/田野/地板下/泥土附近',
+	air: '高处/空中/墙上/窗架通风处',
+	water: '近水/低湿处/水管盥洗/北向之所',
+};
+function buildLostObject(facts){
+	const l2 = lordOf(facts, 2);
+	const p2 = l2 && facts.planets[l2];
+	const el = p2 && SIGNS[p2.sign] ? SIGNS[p2.sign].element : null;
+	const near = p2 && p2.angularity === 'angular';
+	const lines = [
+		{ polarity: 'neutral', text: `失物＝2宫主 ${cn(l2)}（${stateWord(facts, l2)}）;以最能描述该物之星为准（活物另按 6/12 宫）。` },
+		{ polarity: near ? 'positive' : 'neutral', text: near ? '失物象征星落角宫 → 在近处/易得。' : (p2 && p2.angularity === 'cadent' ? '失物象征星落果宫 → 远/难寻或被移动。' : '失物象征星落续宫 → 不远不近。') },
+	];
+	if(el) lines.push({ polarity: 'neutral', text: `场所类型（象征星元素=${el}）：${LOST_PLACE_BY_ELEMENT[el]}。` });
+	if(p2 && (p2.house === 8 || p2.house === 12)) lines.push({ polarity: 'negative', text: '象征星落 8/12 宫 → 难寻或被藏匿。' });
+	lines.push({ polarity: 'neutral', text: '寻回之征：失物象征星与 1宫主/月亮入相位（尤有容纳）;月亮入相位失物星 → 有线索。' });
+	return { title: '失物寻回（非盗窃·2宫动产）', lines };
 }
 
 export default buildTopicDeepening;

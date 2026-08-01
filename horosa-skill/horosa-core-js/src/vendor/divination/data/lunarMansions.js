@@ -1,8 +1,12 @@
 // 西方28宿(Lunar Mansions)。源:Agrippa《Three Books of Occult Philosophy》II.33 / Picatrix / al-Biruni(公开古籍)。
 // 每宿 12°51′25.7″(=360/28),自白羊 0° 连续均分(Agrippa 锚,本仓默认)。
-// 变体注:部分 Picatrix 抄本与现代作者将第 1 宿锚定实星 Sheratan 使边界整体偏移数度——
-// 原典诸本无统一精确偏移方案,按反臆造纪律不做该选项;如需扩展须先补权威源值。
+// 变体(anchor='sheratan'):部分 Picatrix 抄本与现代作者将第 1 宿锚定实星 Sheratan——
+// 原典无固定偏移数值,故按其字面操作规则实现:宿 1 起点 = Sheratan 当年岁差实位
+// (偏移量随岁差内生,不写死任何常数;默认仍 Agrippa 均分,零回归)。
 export const MANSION_SPAN = 360 / 28; // 12.857142…
+
+// Sheratan(β Arietis)1995 回归黄经(J2000 金牛3°58′ 回推 5 年岁差),供实星锚变体取当年实位。
+export const SHERATAN_LON_1995 = 33.90;
 
 // name:Agrippa 名(变体名并注);nature:性质;use:护符/择日用途摘要;good:吉性(true 吉/false 凶/null 中)
 export const LUNAR_MANSIONS = [
@@ -67,10 +71,24 @@ export const TOPIC_MANSION_MAP = {
 	organization: { good: 'gain', bad: 'destructive' },
 	blessing: { good: 'love', bad: 'destructive' },
 	general_day: { good: null, bad: 'destructive' },
+	// R2 六新分科
+	planting: { good: 'gain', bad: 'destructive' },
+	sailing: { good: 'travel_good', bad: 'travel_bad' },
+	litigation: { good: null, bad: 'destructive' },
+	release: { good: 'heal', bad: 'destructive' },
+	haircut: { good: 'love', bad: 'destructive' },
+	talisman: { good: null, bad: 'destructive' },
 };
 
-export function mansionOf(lon){
-	const L = ((Number(lon) % 360) + 360) % 360;
+// anchor: 'equal_aries0'(默认,Agrippa 白羊0°均分) | 'sheratan'(实星锚:宿1起点=Sheratan 当年实位)。
+// year 仅实星锚需要(岁差 50.27″/年,与 fixedStars.starLonAt 同率)。
+export function mansionOf(lon, anchor, year){
+	let L = ((Number(lon) % 360) + 360) % 360;
+	if(anchor === 'sheratan'){
+		const y = Number(year) || 2000;
+		const offset = ((SHERATAN_LON_1995 + (y - 1995) * 50.27 / 3600) % 360 + 360) % 360;
+		L = ((L - offset) % 360 + 360) % 360;
+	}
 	const idx = Math.min(27, Math.floor(L / MANSION_SPAN));
 	return LUNAR_MANSIONS[idx];
 }

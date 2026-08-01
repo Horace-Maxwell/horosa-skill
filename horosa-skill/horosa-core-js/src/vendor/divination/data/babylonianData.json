@@ -1,0 +1,364 @@
+{
+  "signs": [
+    { "n": 1, "cune": "LÚ.ḪUN.GÁ", "akk": "agru", "lit": "雇工", "cn": "白羊", "body": "头", "bodyAkk": "SAG.DU (qaqqadu)", "ingredient": "羊(血/脂/毛)", "magic": "「召女来」(爱/性能力);治瘫/直肠病/肾石/热", "exaltOf": "sun" },
+    { "n": 2, "cune": "MUL.MUL / GU₄.AN.NA", "akk": "zappu / alû", "lit": "星团/天牛", "cn": "金牛", "body": "咽喉与颈", "bodyAkk": "ZI (napištu), GÚ (kišādu)", "ingredient": "牛", "magic": null, "exaltOf": "moon" },
+    { "n": 3, "cune": "MAŠ.MAŠ", "akk": "tūʾamū", "lit": "双子", "cn": "双子", "body": "臂与肩", "bodyAkk": "Á (aḫu), MAŠ.SÌL (naglabu)", "ingredient": "公鸡", "magic": null, "exaltOf": null },
+    { "n": 4, "cune": "ALLA (AL.LUL)", "akk": "alluttu", "lit": "蟹", "cn": "巨蟹", "body": "胸/肋(残)", "bodyAkk": "GABA / TI.MEŠ (?)", "ingredient": "蟹", "magic": null, "exaltOf": "jupiter" },
+    { "n": 5, "cune": "UR.A (UR.GU.LA)", "akk": "urgulû / nēšu", "lit": "狮", "cn": "狮子", "body": "腹", "bodyAkk": "ŠÀ (libbu)", "ingredient": "狮", "magic": "「改变某人心意」;治痫", "exaltOf": null },
+    { "n": 6, "cune": "AB.SÍN", "akk": "šerʾu / absinnu", "lit": "犁沟(谷穗女神)", "cn": "处女", "body": "脊与腰", "bodyAkk": "GÚ.MURUB₄", "ingredient": "大麦粉、乌鸦", "magic": null, "exaltOf": "mercury" },
+    { "n": 7, "cune": "RÍN (ZIB.BA)", "akk": "zibānītu", "lit": "天秤", "cn": "天秤", "body": "臀", "bodyAkk": "GU.DU (qinnatu)", "ingredient": "「空位」", "magic": "「男爱女」", "exaltOf": "saturn" },
+    { "n": 8, "cune": "GÍR.TAB", "akk": "zuqaqīpu", "lit": "蝎", "cn": "天蝎", "body": "女阴", "bodyAkk": "PEŠ₄ (biṣṣūru)", "ingredient": "「空位」", "magic": "「男爱男」", "exaltOf": null },
+    { "n": 9, "cune": "PA (Pabilsag)", "akk": "Pabilsag", "lit": "神射手", "cn": "射手", "body": "上股", "bodyAkk": "TUGUL (gilšu)", "ingredient": "Anzu 鸟", "magic": null, "exaltOf": null },
+    { "n": 10, "cune": "MÁŠ / SUḪUR.MÁŠ", "akk": "suḫurmāšu", "lit": "山羊鱼", "cn": "摩羯", "body": "膝/胫", "bodyAkk": "kimṣu", "ingredient": "山羊", "magic": "治头;躁狂、伤、经血", "exaltOf": "mars" },
+    { "n": 11, "cune": "GU / GU.LA", "akk": "gula", "lit": "大者(Ea)", "cn": "水瓶", "body": "腿", "bodyAkk": "ÚR (pēnū)", "ingredient": "鹰", "magic": "「翻案」;「解巫术」;立誓", "exaltOf": null },
+    { "n": 12, "cune": "zibbātu / KUN", "akk": "zibbātu", "lit": "鱼尾", "cn": "双鱼", "body": "足", "bodyAkk": "GÌR.II (šēpā)", "ingredient": "鸽、燕", "magic": "「女爱男」", "exaltOf": "venus" }
+  ],
+  "melothesiaCaveat": "机制(微黄道)与月历式身体方案确为巴比伦;黄道式「白羊=头…双鱼=足」仅确证于希腊化期文本,其独立于希腊之证据不充分(学界未决)。巴表与希腊表近而不同(巴:天秤=臀、天蝎=女阴)。",
+  "normalStars": [
+    { "i": 1, "cn": "雇工头之前星", "star": "β Ari (Sheratan)", "manual": "白羊 17", "manualLon": 17, "compLon": 9.21, "compLat": 8.41, "div": true },
+    { "i": 2, "cn": "雇工头之后星", "star": "α Ari (Hamal)", "manual": "白羊 20", "manualLon": 20, "compLon": 12.87, "compLat": 9.91, "div": true },
+    { "i": 3, "cn": "星团 MÚL.MÚL", "star": "η Tau (Pleiades)", "manual": "金牛 4", "manualLon": 34, "compLon": 35.24, "compLat": 3.83 },
+    { "i": 4, "cn": "牛颚(Hyades)", "star": "α Tau (Aldebaran)", "manual": "金牛 15", "manualLon": 45, "compLon": 45.0, "compLat": -5.62, "anchor": true },
+    { "i": 5, "cn": "战车北星", "star": "β Tau (Elnath)", "manual": "金牛 25", "manualLon": 55, "compLon": 57.82, "compLat": 5.2, "div": true },
+    { "i": 6, "cn": "战车南星", "star": "ζ Tau", "manual": "双子 0", "manualLon": 60, "compLon": 60.03, "compLat": -2.47 },
+    { "i": 7, "cn": "前双子(头)", "star": "η Gem (Propus)", "manual": "双子 8–10", "manualLon": 69, "compLon": 68.72, "compLat": -1.17 },
+    { "i": 8, "cn": "后双子", "star": "γ Gem (Alhena)", "manual": "双子 14", "manualLon": 74, "compLon": 74.35, "compLat": -7.0 },
+    { "i": 9, "cn": "中双子", "star": "α Gem (Castor)", "manual": "双子 23", "manualLon": 83, "compLon": 85.57, "compLat": 9.93, "div": true },
+    { "i": 10, "cn": "后双子星", "star": "β Gem (Pollux)", "manual": "双子 29", "manualLon": 89, "compLon": 88.82, "compLat": 6.51, "anchor": true },
+    { "i": 11, "cn": "蟹前北星", "star": "γ Cnc (Asellus Bor.)", "manual": "巨蟹 7", "manualLon": 97, "compLon": 102.83, "compLat": 3.0, "div": true },
+    { "i": 12, "cn": "蟹前南星", "star": "δ Cnc (Asellus Aus.)", "manual": "巨蟹 10", "manualLon": 100, "compLon": 103.94, "compLat": -0.01, "div": true },
+    { "i": 13, "cn": "蟹后南星", "star": "δ Cnc(手册同标)", "manual": "巨蟹 11", "manualLon": 101, "compLon": 103.94, "compLat": -0.01, "div": true, "caveat": "第 12/13 行同标 δ Cnc(文献表原样)" },
+    { "i": 14, "cn": "狮头", "star": "κ/λ Leo", "manual": "狮 0–2", "manualLon": 121, "compLon": 110.52, "compLat": 10.25, "div": true, "caveat": "星名认证与黄经档不自洽(文献表原样)" },
+    { "i": 15, "cn": "王 LUGAL", "star": "α Leo (Regulus)", "manual": "狮 5", "manualLon": 125, "compLon": 125.22, "compLat": 0.37, "anchor": true },
+    { "i": 16, "cn": "王后 4 cubit 之小星", "star": "ρ Leo", "manual": "狮 13", "manualLon": 133, "compLon": 131.64, "compLat": 0.04 },
+    { "i": 17, "cn": "狮心", "star": "θ Leo", "manual": "狮 20", "manualLon": 140, "compLon": 138.64, "compLat": 9.65 },
+    { "i": 18, "cn": "狮尾", "star": "β Leo (Denebola)", "manual": "狮 24", "manualLon": 144, "compLon": 147.06, "compLat": 12.41, "div": true },
+    { "i": 19, "cn": "犁沟前星", "star": "β Vir (Zavijava)", "manual": "处女 4", "manualLon": 154, "compLon": 151.93, "compLat": 0.65, "div": true },
+    { "i": 20, "cn": "犁沟前亮星", "star": "γ Vir (Porrima)", "manual": "处女 13", "manualLon": 163, "compLon": 165.73, "compLat": 2.95, "div": true },
+    { "i": 21, "cn": "犁沟 ABSIN(谷穗)", "star": "α Vir (Spica)", "manual": "处女 29", "manualLon": 179, "compLon": 179.11, "compLat": -1.91, "anchor": true },
+    { "i": 22, "cn": "南秤", "star": "α Lib (Zubenelgenubi)", "manual": "天秤 20", "manualLon": 200, "compLon": 200.37, "compLat": 0.6, "anchor": true },
+    { "i": 23, "cn": "北秤", "star": "β Lib", "manual": "天秤 24", "manualLon": 204, "compLon": 204.64, "compLat": 8.74 },
+    { "i": 24, "cn": "蝎头上星", "star": "δ Sco (Dschubba)", "manual": "天蝎 9", "manualLon": 219, "compLon": 217.82, "compLat": -1.71 },
+    { "i": 25, "cn": "蝎头中星", "star": "β Sco (Acrab)", "manual": "天蝎 9", "manualLon": 219, "compLon": 218.43, "compLat": 1.28 },
+    { "i": 26, "cn": "蝎胸亮星", "star": "α Sco (Antares)", "manual": "天蝎 15", "manualLon": 225, "compLon": 225.01, "compLat": -4.28, "anchor": true },
+    { "i": 27, "cn": "山羊鱼角", "star": "θ Oph", "manual": "射手 15", "manualLon": 255, "compLon": 236.64, "compLat": -1.54, "div": true, "caveat": "星名认证与黄经档不自洽(文献表原样)" },
+    { "i": 28, "cn": "山羊鱼前星", "star": "β Cap (Dabih)", "manual": "摩羯 0", "manualLon": 270, "compLon": 279.27, "compLat": 4.83, "div": true },
+    { "i": 29, "cn": "山羊鱼后星", "star": "γ Cap (Nashira)", "manual": "摩羯 18", "manualLon": 288, "compLon": 296.91, "compLat": -2.33, "div": true },
+    { "i": 30, "cn": "山羊鱼尾(定水瓶0°)", "star": "δ Cap (Deneb Algedi)", "manual": "水瓶 0", "manualLon": 300, "compLon": 298.68, "compLat": -2.2, "anchor": true },
+    { "i": 31, "cn": "鱼带亮星", "star": "η Psc (Kullat Nūnu)", "manual": "双鱼 24–25", "manualLon": 354.87, "compLon": 2.07, "compLat": 5.26, "anchor": true, "div": true }
+  ],
+  "normalStarsNote": "manualLon=楔文记录档(显示主值);compLon/Lat=现代恒星在 Aldebaran=金牛15° 恒星黄道框架、塞琉古中期历元的实算对照。二者在白羊/摩羯段有已知系统差(学界已知,楔文记录自身口径)。距离单位 cubit≈2°–2.5°(统计最佳≈2.2,可配),1 cubit=24 finger。",
+  "ziqpu": [
+    { "r": "I", "us": 8, "en": "Yoke = ŠU.PA", "cune": "ŠUDUN, ŠU.PA", "modern": "α Boötis", "cn": "轭/ŠU.PA" },
+    { "r": "II", "us": 9, "en": "Rear Harness", "cune": "ŠUDUN.ANŠE EGIR-ti", "modern": "ε Boötis", "cn": "后驾" },
+    { "r": "III", "us": 12, "en": "Circlet / Star of Dignity", "cune": "GAM-ti, kip-pat, MUL BAL.TEŠ₂.A", "modern": "Corona Borealis", "cn": "环冠/尊严之星" },
+    { "r": "IV", "us": 15, "en": "Star from the Doublets", "cune": "MUL šá maš-a-ti", "modern": "β, γ Herculis", "cn": "对星" },
+    { "r": "V", "us": 5, "en": "Star from the Triplets", "cune": "MUL šá taš-ka-a-ti", "modern": "α, δ Herculis", "cn": "三联星" },
+    { "r": "VI", "us": 10, "en": "Single Star", "cune": "MUL DELE, MUL e-du", "modern": "μ / ρ Herculis", "cn": "独星" },
+    { "r": "VII", "us": 10, "en": "Lady of Life = She-Goat", "cune": "GAŠAN TIN, UZ₃", "modern": "α Lyrae", "cn": "生命之后/母山羊" },
+    { "r": "VIII", "us": 20, "en": "Shoulder of the Panther", "cune": "qu₂-ma-ri šá UD.KA.DUH.A", "modern": "β / γ Cygni", "cn": "豹肩" },
+    { "r": "IX", "us": 10, "en": "Bright Star of Its Chest", "cune": "MUL ni-bi-i šá GABA-šu₂", "modern": "α Cygni", "cn": "豹胸亮星" },
+    { "r": "X", "us": 20, "en": "Knee", "cune": "kin-si", "modern": "α/β Lacertae", "cn": "膝" },
+    { "r": "XI", "us": 20, "en": "Heel", "cune": "a-si-di", "modern": "λ Andromedae", "cn": "踵" },
+    { "r": "XII", "us": 10, "en": "4 Stars of the Stag", "cune": "4 šá LU.LIM", "modern": "α Cassiopeiae", "cn": "鹿之四星" },
+    { "r": "XIII", "us": 15, "en": "Dusky Stars", "cune": "um-mu-lu-ti", "modern": "h, χ Persei", "cn": "昏暗之星" },
+    { "r": "XIV", "us": 15, "en": "Bright Star of the Old Man", "cune": "ni-bi-i šá ŠU.GI", "modern": "α/η Persei", "cn": "老人亮星" },
+    { "r": "XV", "us": 10, "en": "Naṣrapu", "cune": "na-aṣ-ra-pi", "modern": "b, c Persei", "cn": "坩埚" },
+    { "r": "XVI", "us": 15, "en": "Crook", "cune": "GAM₃, gam-lu", "modern": "Aurigae", "cn": "弯钩" },
+    { "r": "XVII", "us": 10, "en": "Hand of the Crook", "cune": "KIŠIB GAM₃", "modern": "ρ, υ Aurigae", "cn": "钩之手" },
+    { "r": "XVIII", "us": 30, "en": "Twins", "cune": "MAŠ.TAB.BA, MAŠ.MAŠ", "modern": "α Geminorum", "cn": "双子" },
+    { "r": "XIX", "us": 5, "en": "The Rear Twin", "cune": "MAŠ.TAB.BA EGIR-i", "modern": "β Geminorum", "cn": "后双子", "caveat": "或非独立 ziqpu(双子之成员)" },
+    { "r": "XX", "us": 20, "en": "Crab", "cune": "AL.LUL, ALLA", "modern": "ε Cancri", "cn": "蟹" },
+    { "r": "XXI", "us": 20, "en": "2 Stars of the Head of the Lion", "cune": "2 MULmeš šá SAG.DU UR.GU.LA", "modern": "ε, μ Leonis", "cn": "狮头二星" },
+    { "r": "XXII", "us": 10, "en": "4 Stars of Its Chest", "cune": "4 šá GABA-šu₂", "modern": "α, γ, ζ, η Leonis", "cn": "狮胸四星" },
+    { "r": "XXIII", "us": 20, "en": "2 Stars of Its Thigh", "cune": "2 šá GIŠ.KUN-šu₂", "modern": "δ, ρ Leonis", "cn": "狮股二星" },
+    { "r": "XXIV", "us": 10, "en": "Single Star of Its Tail", "cune": "DELE šá KUN-šu₂", "modern": "β Leonis", "cn": "狮尾独星" },
+    { "r": "XXV", "us": 10, "en": "Frond, Eru", "cune": "e₄-ru₆", "modern": "γ Comae Berenices", "cn": "叶/Eru" },
+    { "r": "XXVI", "us": 25, "en": "Harness", "cune": "ŠUDUN.ANŠE, na-dul-lum", "modern": "η, υ Boötis", "cn": "驾" }
+  ],
+  "ziqpuNote": "每行 us=自前一星至该星的间距(UŠ,1 UŠ=1°=4 分钟);ziqpu 圆=12 bēru=360°。序与距取最完整距表(开放校勘核得);四段锚(Eru→Harness 25/Harness→Yoke 8/Yoke→Rear Harness 9/Rear Harness→Circlet 12)吻合。",
+  "ziqpuMulapin": ["ŠU.PA", "尊严之星", "立神", "犬", "母山羊", "豹", "鹿", "老人", "弯钩", "大双子", "蟹", "狮", "叶(Frond)", "丰饶之星"],
+  "planets": [
+    { "key": "moon", "cn": "月", "akk": "Sîn", "starNames": "d30, dEN.ZU, dNANNA", "god": "Nanna/Sîn", "number": 30, "nature": "可变", "note": "最长老行星神;智慧、丰饶;日神之父" },
+    { "key": "sun", "cn": "日", "akk": "Šamaš", "starNames": "d20, dUTU", "god": "Utu/Šamaš", "number": 20, "nature": "可变", "note": "公义/律法之神;月神长子" },
+    { "key": "jupiter", "cn": "木星", "akk": "(SAG.ME.GAR 读法未定)", "starNames": "MUL.BABBAR, SAG.ME.GAR, Nēberu, LUGAL", "god": "Marduk (Bēl)", "number": null, "nature": "大吉", "note": "主神之星;王权、国家、福祉" },
+    { "key": "venus", "cn": "金星", "akk": "Dilbat", "starNames": "d15, dIštar, Ninsianna", "god": "Inanna/Ištar", "number": 15, "nature": "小吉", "note": "唯一阴性行星;爱与战;晨=男、昏=女" },
+    { "key": "mercury", "cn": "水星", "akk": "Šiḫṭu(跳)", "starNames": "GU₄.UD, MUL Nabû, DUMU.LUGAL(储君)", "god": "Nabû (↔Ninurta)", "number": null, "nature": "可变/中性", "note": "书写、智慧、命运之神;暗而快" },
+    { "key": "saturn", "cn": "土星", "akk": "Kayyamānu(稳者)", "starNames": "UDU.IDIM.SAG.UŠ(太阳之星), GENNA", "god": "Ninurta (↔Šamaš)", "number": null, "nature": "大凶", "note": "「夜之太阳」;慢稳;「律法与公义之星」" },
+    { "key": "mars", "cn": "火星", "akk": "Ṣalbatānu(义不明)", "starNames": "dNergal, MUL GIG(黑星), MUL Limnu(恶星)", "god": "Nergal", "number": null, "nature": "小凶", "note": "瘟疫、战争、死亡、冥界之神;「恒为诸行星之末」" }
+  ],
+  "godNumbers": { "Anu": 60, "Enlil": 50, "Ea": 40, "Sîn": 30, "Šamaš": 20, "Ištar": 15, "Adad": 6 },
+  "exaltations": [
+    { "planet": "sun", "sign": 1, "house": "雇工(LÚ.ḪUN.GÁ)", "greekDeg": 19, "variants": [10, 29], "normalStar": null, "nsLon": null },
+    { "planet": "moon", "sign": 2, "house": "星团(Pleiades)+老人;「天牛」", "greekDeg": 3, "variants": [4], "normalStar": "星团/η Tau", "nsLon": "金牛 3" },
+    { "planet": "jupiter", "sign": 4, "house": "蟹—「狮与蟹之间」", "greekDeg": 15, "variants": [5, 16, 21], "normalStar": "蟹后/δ Cnc", "nsLon": "巨蟹 13–15" },
+    { "planet": "mercury", "sign": 6, "house": "犁沟(ABSIN)", "greekDeg": 15, "variants": [], "normalStar": "犁沟前/γ Vir", "nsLon": "处女 15" },
+    { "planet": "saturn", "sign": 7, "house": "秤", "greekDeg": 20, "variants": [19, 21], "normalStar": "南秤/α Lib", "nsLon": "天秤 20" },
+    { "planet": "mars", "sign": 10, "house": "山羊鱼", "greekDeg": 28, "variants": [29], "normalStar": "山羊鱼前/γ Cap", "nsLon": "摩羯 28;30" },
+    { "planet": "venus", "sign": 12, "house": "燕+Anunītu 颈;「鱼尾」", "greekDeg": 27, "variants": [16, 17, 26], "normalStar": "燕带/ζ Psc", "nsLon": "双鱼 26;15" }
+  ],
+  "exaltationCaveat": "楔文旺位(bīt niṣirti「秘密之屋」)只给宫/星座;度数属希腊/晚古——但数值上由巴比伦距星黄经导出(7 中有 6 恰合该宫一颗距星,差 ~1°)。任何楔文均未把度数记作旺度。",
+  "triplicities": [
+    { "group": "I–V–IX", "signs": [1, 5, 9], "cn": "白羊–狮–射手", "lord": "jupiter", "lordCn": "木星" },
+    { "group": "II–VI–X", "signs": [2, 6, 10], "cn": "金牛–处女–摩羯", "lord": "venus", "lordCn": "金星" },
+    { "group": "III–VII–XI", "signs": [3, 7, 11], "cn": "双子–天秤–水瓶", "lord": "mercury+saturn", "lordCn": "水星+土星" },
+    { "group": "IV–VIII–XII", "signs": [4, 8, 12], "cn": "巨蟹–天蝎–双鱼", "lord": "mars", "lordCn": "火星" }
+  ],
+  "triplicityCaveat": "三分组成员集合为巴比伦;四元素标签(火土风水)、「triplicity」一词与几何三分相读法皆希腊叠加。行星主管的「月-三分」确为巴比伦(诞生预兆用),但异于希腊昼/夜主管。",
+  "termsAries": [
+    { "from": 1, "to": 5, "planet": "jupiter", "cn": "木" },
+    { "from": 6, "to": 12, "planet": "venus", "cn": "金" },
+    { "from": 13, "to": 20, "planet": "mercury", "cn": "水" },
+    { "from": 21, "to": 25, "planet": "saturn", "cn": "土" },
+    { "from": 26, "to": 30, "planet": "mars", "cn": "火" }
+  ],
+  "termsNote": "楔文 terms(界)系统合后世所谓「埃及」界;每宫首段=该宫三分主(白羊首段=木)。全黄道行星总度:土 57/木 79/火 66/金 82/水 76(和 360)。星盘「日段方案」与此同构:出生月分 5 个行星日段,生日落段定其主。",
+  "fourLands": [
+    { "dir": "南", "wind": "南风", "land": "Akkad(巴比伦尼亚)", "months": [1, 5, 9] },
+    { "dir": "北", "wind": "北风", "land": "Subartu(亚述/北方)", "months": [4, 8, 12] },
+    { "dir": "东", "wind": "东风", "land": "Elam", "months": [2, 6, 10] },
+    { "dir": "西", "wind": "西风", "land": "Amurru(西方)", "months": [3, 7, 11] }
+  ],
+  "fourLandsRule": "月食时变暗的象限指向相应国之灾;全食为普世之灾。食之月份、夜更、日期叠加给出受灾之国与时机;配合右=吉/左=凶、明=吉/暗=凶二元律。个别抄本对应有出入。",
+  "colors": [
+    { "color": "红 (sāmu)", "planet": "火星/Nergal", "meaning": "血与火→战争、凶(最稳固)" },
+    { "color": "白 (peṣû)", "planet": "木星/水星", "meaning": "多吉", "caveat": true },
+    { "color": "黑/暗 (ṣalmu)", "planet": "土星;冥界", "meaning": "凶、隐", "caveat": true },
+    { "color": "黄绿 (arqu)", "planet": "—", "meaning": "疫病/收成相关", "caveat": true }
+  ],
+  "goalYear": [
+    { "planet": "jupiter", "cn": "木星", "periods": [71, 83], "note": "两周期(会合/恒星);71 年需约 −6° 黄经修正", "accuracy": "55%" },
+    { "planet": "venus", "cn": "金星", "periods": [8], "note": "精 8 年 − 4 日 = 5 会合 ≈ 99 朔望月", "accuracy": "91%" },
+    { "planet": "mercury", "cn": "水星", "periods": [46], "note": "= 145 会合;精度最高", "accuracy": "97%" },
+    { "planet": "saturn", "cn": "土星", "periods": [59], "note": "≈57 会合 + 2 恒星回;日修正约 −17/+28 日", "accuracy": "80%" },
+    { "planet": "mars", "cn": "火星", "periods": [47, 79], "note": "两周期;最难", "accuracy": "68%" },
+    { "planet": "moon", "cn": "月", "periods": [18], "note": "= Saros = 223 朔望月(Lunar Six 与月食)", "accuracy": null }
+  ],
+  "mulapin": {
+    "paths": {
+      "enlil": { "cn": "Enlil 道(北)", "count": 33, "decl": ">+17°", "stars": ["犁 APIN(Triangulum+γAnd)", "狼 UR.BAR.RA(αTri)", "老人 ŠU.GI(Perseus)", "弯钩 GAM(Auriga)", "大双子 MAŠ.TAB.BA.GAL.GAL", "小双子 MAŠ.TAB.BA.TUR.TUR(δ,λGem)", "蟹 AL.LUL(Cancer)", "狮 UR.GU.LA(Leo)", "王 LUGAL(Regulus)", "Erua 之叶(Coma)", "ŠU.PA(Arcturus/Boötes)", "丰饶之星(Ninlil 使者)", "尊严之星(Tišpak 使者)", "大车 MAR.GÍD.DA(UMa)", "狐 KA₅.A(Alcor)", "母羊 U₈(Aya)", "轭/绳之星(Anu 长子)", "天车 MAR.GÍD.DA.AN.NA(UMi)", "母山羊 ÙZ(Vega/Lyra)", "豹 UD.KA.DUḪ.A(Cygnus+Cepheus)", "鹿 LU.LIM(And/Cas)", "彩虹 Harriru", "田 AŠ.IKU(Pegasus 大方)", "猪 ŠAḪ/Damu", "马 ANŠE.KUR.RA", "鹿之使者群", "Eridu NUN.KI", "Numušda(Adad)", "Ḫabaṣirānu(鼠/鼩)", "Anunitu", "(收尾三项含雇工之过渡)"], "caveat": "第 23–33 项确切名目与顺序以校勘本为准(在线不可得)" },
+      "anu": { "cn": "Anu 道(中/赤道)", "count": 23, "decl": "±17°", "stars": ["田/大方(Pegasus)", "雇工 LU.ḪUN.GA(→Aries)", "星团 MUL.MUL(Pleiades)", "天牛 GU₄.AN.NA(Taurus)", "真牧人 SIPA.ZI.AN.NA(Orion)", "小双子", "箭 KAK.SI.SÁ(Sirius)", "弓 BAN", "蛇 MUŠ", "乌鸦 UGA", "犁沟 AB.SIN(Spica/Virgo)", "天秤 ZI.BA.AN.NA(Libra)", "鹰 TI₈", "尸 AD₆", "(+金火土水四行星亦列于此道)"], "caveat": "完整 23 星逐项以校勘本为准(在线不可得);概览列出" },
+      "ea": { "cn": "Ea 道(南)", "count": 15, "decl": "<−17°", "stars": ["鱼 KU₆(Ea)", "大者 GU.LA(Aquarius/Eridu)", "野猪(Centaurus)", "犁耙", "Šullat-Ḫaniš", "Numušda", "疯狗/狼(Lupus)", "蝎 GÍR.TAB(Scorpius)", "蝎胸", "Šarur-Šargaz", "Pabilsag(Sagittarius)", "船 MÁ.GUR₈", "山羊鱼 SUḪUR.MAŠ(Capricornus)"], "caveat": "完整 15 星逐项以校勘本为准(在线不可得);概览列出" }
+    },
+    "pathCountCaveat": "星表总数 33+23+15=71;另有 66 星一说(去重/不计行星)。三道分数 33/23/15 本身稳固。",
+    "moonPath": ["星团 Pleiades", "天牛 Taurus", "真牧人 Orion", "老人 Perseus", "弯钩 Auriga", "大双子 Gemini", "蟹 Cancer", "狮 Leo", "犁沟 Virgo", "天秤 Libra", "蝎 Scorpius", "Pabilsag Sagittarius", "山羊鱼 Capricornus", "大者 Aquarius", "燕尾 SW-Pisces", "Anunitu E-Pisces", "雇工 Aries"],
+    "moonPathCaveat": "月路星数 17(原文/主流)vs 18(部分二手多算 Anunitu)。",
+    "heliacal": [
+      { "month": 1, "day": 1, "stars": "雇工(Hired Man)" },
+      { "month": 2, "day": 1, "stars": "星团 Pleiades" },
+      { "month": 3, "day": 10, "stars": "真牧人 + 大双子" },
+      { "month": 4, "day": 15, "stars": "箭(Sirius)、蛇、狮", "water": "昼 4 mina / 夜 2 mina" },
+      { "month": 5, "day": 5, "stars": "弓 + 王星" },
+      { "month": 6, "day": 15, "stars": "ŠU.PA(Enlil)" },
+      { "month": 7, "day": 15, "stars": "天秤、野犬、鼠、犬", "water": "昼 3 / 夜 3 mina" },
+      { "month": 9, "day": 15, "stars": "豹、鹰、Pabilsag" },
+      { "month": 10, "day": 15, "stars": "燕(晨)+ 箭(昏)", "water": "昼 2 / 夜 4 mina" },
+      { "month": 12, "day": 15, "stars": "鱼 + 老人" }
+    ],
+    "intervals": ["从箭升到 Eridu 升为 55 日", "从 ŠU.PA 升到犁沟升为 10 日", "星每日升/没推进 1 UŠ(恒星日每日提前约 4 分)"],
+    "visibility": [
+      { "planet": "jupiter", "cn": "木星", "visible": "1 年", "invisible": "20 日 / 1 月" },
+      { "planet": "venus", "cn": "金星", "visible": "9 月", "invisible": "晨没 1 月 / 1 月 15 日 / 2 月;昏没 3/7/14 日" },
+      { "planet": "mars", "cn": "火星", "visible": "1 年 6 月 / 1 年 10 月 / 2 年", "invisible": "2 月 / 3 月 10 日 / 6 月 20 日" },
+      { "planet": "saturn", "cn": "土星", "visible": "1 年", "invisible": "20 日" },
+      { "planet": "mercury", "cn": "水星", "visible": "7/14/21 日、1 月、1 月 15 日", "invisible": "与可见同长" }
+    ],
+    "visibilityNote": "图式近似,非晚期数理系统的精确会合弧。",
+    "intercalation": {
+      "rules": ["若一月 1 日星团与月合 → 年「正」;延至 3 日 → 年「闰」", "五月 15 日箭星现 → 闰", "八月/九月 15 日星团-月合 → 正/闰", "十月 15 日箭星昏现东方、日由南转北 → 正"],
+      "arithmetic": "「12 月中 10 闰日为一年之数」(阴历年短约 10–11 日);至第三年谓该年为闰。此汇编无 19 年周期(后世发展)。",
+      "dayNight": "图式昼夜比 2:1(最长昼 4 mina/最短 2 mina;240/120 UŠ);约前 700 年后为更精确的 3:2 取代。分至固定于 I/IV/VII/X 月 15 日。"
+    }
+  },
+  "eae": {
+    "segments": [
+      { "god": "Sîn(月)", "tablets": "1–22", "content": "1–13 新月初见/末见、月晕、月冠、颜色;14 月可见性数学方案;15–22 月食" },
+      { "god": "Šamaš(日)", "tablets": "23–29(/36)", "content": "日之显现、颜色、标记、云带;其后接日食", "caveat": "太阳段边界 36/37 抑或 39,有分歧" },
+      { "god": "Adad(天气)", "tablets": "~37–49(/50)", "content": "天气与地震,尤重雷;44–46 雷、47 电、48 雨、49 风" },
+      { "god": "Ištar(星与行星)", "tablets": "~50–70", "content": "末约 20 块;用恒星名加密行星名;金星 = 63(偕日升没预兆)" }
+    ],
+    "scale": "68 或 70 块泥板(依抄本),约 6500–7000 条预兆;已刊布英译不足一半;或曾有多达 5 种抄本系统。",
+    "binaryRules": ["右 = 吉,左 = 凶", "明(亮)= 吉,暗 = 凶", "落实:月之右角/左角、月日颜色(红、暗)、亮度、晕从哪侧开口、行星立于哪侧"],
+    "examples": [
+      { "type": "月食(早期汇编)", "text": "当月全部滑入大地的阴影:一位王将死。" },
+      { "type": "月食(早期汇编)", "text": "若食从中心一次性变暗、又一次性转清:王将死,Elam 覆灭。" },
+      { "type": "月食(夜更)", "text": "食发生于昏更 → 瘟疫;发生于晨更 → 王朝终结。" },
+      { "type": "金星(偕日升没)", "text": "若五月 21 日金星在东方隐没,缺席天空 2 月 11 日,于八月 2 日在西方再现:地将有雨;将有荒废。" },
+      { "type": "学者奏报(逐字)", "text": "若月在初一可见:言语可信,国将欢喜。/ 若白昼达其正常长度:长治久安。/ 若月出现时戴冠:王将登至高位。" },
+      { "type": "满月理想日", "text": "满月恰落在 14 日为「正/理想」(则新月在 30 日,万象和谐);落在 13/15/16 日皆凶。" }
+    ],
+    "exampleCaveat": "早期汇编与金星条精确措辞按权威二手报道转写。",
+    "mechanism": "protasis(若/šumma 天象)→ apodosis(对王/国预言);相关性逻辑而非因果,含为体系完整而机械生成的不可能预兆(如为每月 14/15/16/20/21 日皆列食条)。commentary 两型:mukallimtu(释义型)/ṣâtu(表列摘录型),常以「替换前件」使一次观测匹配多条。天空是泥板,星象是 šiṭir šamê「天书」。",
+    "ritual": "预兆指向王身之死时行替身王仪式(šar pūḫi):以替身代王承灾,期满处死替身。",
+    "planetOmens": [
+      { "planet": "venus", "cn": "金星", "theme": "偕日升/没之月份与位置 → 雨、收成、战和" },
+      { "planet": "jupiter", "cn": "木星", "theme": "吉;显现利王与国之福祉、王寿;立于某宫/近某星主王运" },
+      { "planet": "mars", "cn": "火星", "theme": "凶;主战、疫、死;红而亮尤凶;「恒为诸行星之末」" },
+      { "planet": "saturn", "cn": "土星", "theme": "凶;主律法/王/老;近王星(Regulus)之合常关王身" },
+      { "planet": "mercury", "cn": "水星", "theme": "可变;与书写、信息、命运相关;快、暗" }
+    ],
+    "verbs": "「接近/到达/站立/进入」(ṭeḫû/kašādu/izuzzu/erēbu)另一星或星座 → 合相之吉凶。"
+  },
+  "systemA": {
+    "jupiter": { "cn": "木星", "zones": [ { "from": 85, "to": 240, "w": "30;0", "label": "慢带 双子25°→射手0°" }, { "from": 240, "to": 85, "w": "36;0", "label": "快带 射手0°→双子25°" } ] },
+    "jupiterA1": { "cn": "木星 A′(三带)", "caveat": "边界度需核原校;另有四带 A′ 记载,变体归属存分歧", "zones": [ { "from": 99, "to": 219, "w": "30;0", "label": "巨蟹9°→天蝎9°" }, { "from": 219, "to": 272, "w": "33;45", "label": "天蝎9°→摩羯2°" }, { "from": 272, "to": 99, "w": "36;0", "label": "摩羯2°→巨蟹9°" } ] },
+    "mars": { "cn": "火星(六带,各 60°)", "caveat": "边界由「中心±30°」导出,需核原校;此函数仅管 Γ/Φ/Ω,第二留另用辅助方案", "zones": [ { "from": 60, "to": 120, "w": "45;0", "label": "双子0°→狮0°" }, { "from": 120, "to": 180, "w": "30;0", "label": "狮0°→天秤0°" }, { "from": 180, "to": 240, "w": "40;0", "label": "天秤0°→射手0°" }, { "from": 240, "to": 300, "w": "60;0", "label": "射手0°→水瓶0°" }, { "from": 300, "to": 0, "w": "90;0", "label": "水瓶0°→白羊0°" }, { "from": 0, "to": 60, "w": "67;30", "label": "白羊0°→双子0°" } ] },
+    "saturn": { "cn": "土星", "zones": [ { "from": 130, "to": 330, "w": "11;43,7,30", "label": "慢带 狮10°→双鱼0°" }, { "from": 330, "to": 130, "w": "14;3,45", "label": "快带 双鱼0°→狮10°" } ], "note": "A′ 同两弧、界移至狮20°/水瓶10°(无土星星历存世,仅 procedure)" },
+    "venus": { "cn": "金星 A3(各现象;值为超出 360° 部分)", "el": { "const": "215;30" }, "mf": [ { "from": 18, "to": 102, "w": "210;8" }, { "from": 102, "to": 186, "w": "215;30" }, { "from": 186, "to": 282, "w": "229;52" }, { "from": 282, "to": 18, "w": "215;30" } ], "ml": [ { "from": 102, "to": 276, "w": "215;30" }, { "from": 276, "to": 358.667, "w": "191;33,20" }, { "from": 358.667, "to": 102, "w": "239;26,40" } ], "ef": [ { "from": 102, "to": 205.333, "w": "239;26,40" }, { "from": 205.333, "to": 288, "w": "191;33,20" }, { "from": 288, "to": 102, "w": "215;30" } ] },
+    "mercury": {
+      "cn": "水星(全为 System A;A1=初见、A2=末见、A3=昏末见最早系统)",
+      "mf": { "system": "A1", "zones": [ { "from": 60, "to": 121, "w": "94;13,20", "ratio": "9/8" }, { "from": 121, "to": 286, "w": "106;0", "ratio": "4/3" }, { "from": 286, "to": 60, "w": "141;20", "ratio": "2/3" } ], "period": "848 年 = 2673 会合", "dLam": "114;12,32", "c": "3;30,39" },
+      "ef": { "system": "A1", "zones": [ { "from": 96, "to": 206, "w": "160;0", "ratio": "2/3" }, { "from": 206, "to": 340, "w": "106;40", "ratio": "9/10" }, { "from": 340, "to": 96, "w": "96;0", "ratio": "5/3" } ], "period": "480 年 = 1513 会合", "dLam": "114;12,37", "c": "3;30,39" },
+      "ml": { "system": "A2", "zones": [ { "from": 5, "to": 90, "w": "129;20", "ratio": "4/5" }, { "from": 90, "to": 180, "w": "107;46,40", "ratio": "5/4" }, { "from": 180, "to": 276, "w": "129;20", "ratio": "3/4" }, { "from": 276, "to": 5, "w": "97;0", "ratio": "4/3" } ], "period": "388 年 = 1223 会合", "dLam": "114;12,39", "c": "3;30,40" },
+      "el": { "system": "A2", "zones": [ { "from": 30, "to": 90, "w": "135;37,30", "ratio": "4/5" }, { "from": 90, "to": 270, "w": "108;30", "ratio": "10/9" }, { "from": 270, "to": 330, "w": "120;33,20", "ratio": "9/10" }, { "from": 330, "to": 30, "w": "108;30", "ratio": "5/4" } ], "period": "217 年 = 684 会合", "dLam": "114;12,38", "c": "3;30,39" },
+      "threeSynarc": {
+        "note": "3-synarc(每三会合一步)缩减振幅,同带界;缩减系数 = (3Δλ−360°)/Δλ",
+        "el": [ { "from": 30, "w": "−20;37,30" }, { "from": 90, "w": "−16;30" }, { "from": 270, "w": "−18;20" }, { "from": 330, "w": "−16;30" } ],
+        "mf": [ { "from": 60, "w": "−14;20" }, { "from": 121, "w": "−16;7,30" }, { "from": 286, "w": "−21;30" } ],
+        "ml": [ { "from": 5, "w": "−19;40" }, { "from": 90, "w": "−16;23,20" }, { "from": 180, "w": "−19;40" }, { "from": 276, "w": "−14;45" } ],
+        "ef": [ { "from": 96, "w": "−24;20" }, { "from": 206, "w": "−16;13,20" }, { "from": 340, "w": "−14;36" } ]
+      },
+      "a3": { "cn": "A3「三列星历」(最早行星系统,昏末见)", "zones": [ { "from": 110, "to": 290, "w": "−20;0", "label": "巨蟹20°起(原件 20;37,30,疑书吏保密微移)" }, { "from": 290, "to": 110, "w": "−16;0" } ], "anchor": "起算锚 狮 3;30°(据前 403 年一次昏末见观测:在王星下 1½ cubit)", "note": "每步=3 会合;三列各差约 115°" },
+      "observedPeriods": "13 年=41 会合;46 年=145;125 年=394(「13 年缺 3 日;46 年缺 1 日;125 年日日相符」)"
+    },
+    "crossingRule": "越界规则:一步 Δλ 跨带界时,越界部分按两带弧值之比缩放(s′ = s × w次带/w本带);水星常一步连跨两界。"
+  },
+  "systemB": {
+    "jupiter": { "cn": "木星", "m": "28;15,30", "M": "38;2", "d": "1;48", "mu": "33;8,45", "P": "≈10.86 步" },
+    "mars": { "cn": "火星", "m": null, "M": null, "d": null, "mu": "48;43,18,30", "caveat": "极值未公开复得(仅均值)" },
+    "saturn": { "cn": "土星", "m": null, "M": null, "d": "0;12", "mu": "≈12;39,22,30", "caveat": "极值未公开复得(仅 d;B/B′/B″ 三变体同 d)" },
+    "note": "水星、金星无(真正)System B。时间锯齿 = 弧锯齿整体上移 c(同 d、同振幅、同周期)。"
+  },
+  "dateConstants": [
+    { "planet": "jupiter", "cn": "木星", "c": "12;5,8", "variants": "12;5,10 / 12;5,15", "baseMonths": 12 },
+    { "planet": "saturn", "cn": "土星", "c": "11;27,20", "baseMonths": 12 },
+    { "planet": "mars", "cn": "火星", "c": "23;37,52", "baseMonths": 24 },
+    { "planet": "venus", "cn": "金星", "c": "17;40", "variants": "精 17;41,29", "baseMonths": 12 },
+    { "planet": "mercury", "cn": "水星", "c": "3;30,39", "variants": "异文 3;39,40;每 3 会合黄经亏空 ≈17;24°", "baseMonths": 0 }
+  ],
+  "periods": [
+    { "planet": "jupiter", "cn": "木星", "Pi": 391, "Z": 36, "Y": 427, "arc": "33;8,45", "arcDec": 33.1586 },
+    { "planet": "saturn", "cn": "土星", "Pi": 256, "Z": 9, "Y": 265, "arc": "12;39,22,30", "arcDec": 12.6563 },
+    { "planet": "mars", "cn": "火星", "Pi": 133, "Z": 18, "Y": 284, "arc": "48;43,18", "arcDec": 48.722, "note": "Z=18 为现象黄经回数;151 为恒星公转数(另一量),勿用于反推会合弧" },
+    { "planet": "venus", "cn": "金星", "Pi": 720, "Z": 1151, "Y": 1151, "arc": "360°+215;30", "arcDec": 575.5 },
+    { "planet": "mercury", "cn": "水星", "Pi": 145, "Z": 46, "Y": 46, "arc": "1,54;12,25", "arcDec": 114.207 }
+  ],
+  "subdivision": {
+    "pushes": [
+      { "seg": "Ω→Φ(LA→S1)", "arc": "+22;15°", "time": "2,30 tithi" },
+      { "seg": "Φ→Θ(S1→AR)", "arc": "−4;25°" },
+      { "seg": "Θ→Ψ(AR→S2)", "arc": "−5;35°" },
+      { "seg": "Φ→Ψ(S1→S2 全逆行)", "arc": "−10;0°" }
+    ],
+    "act817": "可见期 1/3 处第一留、1/2 处冲、2/3 处第二留。",
+    "trapezoid": { "first60": "10;45", "next60": "5;30", "note": "木星速度随时间线性递减;行程 = 速度-时间图下梯形面积;首 60 日 10;45°、日 60–120(至第一留)5;30°;等面积二分求半程时刻(不在时间中点);速度线性 → 位置随时间二次。" }
+  },
+  "lunar": {
+    "columns": [
+      { "col": "T", "content": "日期(S.E.年+月),1 行/月", "system": "A&B", "fn": "索引", "params": "19 年置闰(3,6,8,11,14,17,19)" },
+      { "col": "Φ", "content": "Saros(223月)超 6585 整日之变余(月行差载体;A 之生成列)", "system": "仅 A", "fn": "锯齿", "params": "M=2,17;4,48,53,20 UŠ / m=1,57;47,57,46,40 / μ=2,7;26,26,40 / d=2;45,55,33,20;周期 6247 月(Z=448)≈505 年" },
+      { "col": "A", "content": "太阳每朔望月速度", "system": "仅 B", "fn": "锯齿", "params": "M=30;1,59,20 / m=28;10,39,40 / μ=29;6,19,20;Π=10019 月" },
+      { "col": "B", "content": "朔望时月(=合时日)之黄经", "system": "A&B", "fn": "阶梯(A)/累积锯齿(B)", "params": "A 两带:快 30;0°/月(处女13°→双鱼27°)、慢 28;7,30°/月;Π=2783 月=225 年" },
+      { "col": "C", "content": "昼长(换日落↔日出纪元)", "system": "A&B", "fn": "由 B 导出", "params": "3:2 比;夏至 3,36 UŠ(216)/冬至 2,24(144)/分 3,0(180)" },
+      { "col": "C′", "content": "半昼变化修正", "system": "A 特有", "fn": "由 C 导出", "params": "C′(n)=½(C(n−1)−C(n))" },
+      { "col": "E", "content": "朔望时月黄纬(→食)", "system": "A&B", "fn": "插值(A)/锯齿(B)", "params": "单位 še(1 še=0;0,50°);交点周期 5458 朔望=5923 交点月", "caveat": "精确锯齿参数未公开原校" },
+      { "col": "Ψ", "content": "食分", "system": "A:Ψ / B:Ψ′,Ψ″", "fn": "由 E 导出(A)/锯齿(B)", "params": "finger(=月径1/12=6 še);节点偏移 ±6 finger(升+6/降−6);Ψ′ 极值 ±120 finger、差依黄经", "caveat": "Ψ←E 斜率未公开原校" },
+      { "col": "F", "content": "月日速(°/日)", "system": "A&B", "fn": "锯齿(A 由 Φ 出)", "params": "A:μ=13;30,30、d=0;42、周期 6247/Z=448;B:μ=13;10,35、周期 251 月/Z=18", "caveat": "两系统极值未公开确证;A 极值可由 μ/d/P 派生(约 11;5–15;56,非原校)" },
+      { "col": "G", "content": "月长之月行差贡献", "system": "A&B", "fn": "由 Φ 导出(A)/锯齿(B)", "params": "G_min(A)=2;40,13 大时;μ(B)=3,11;0,50 UŠ", "caveat": "A 之 Φ→G 完整插值表未公开原校" },
+      { "col": "(H)", "content": "月长块内辅助列", "system": "主要 B", "fn": "辅助", "params": null, "caveat": "角色仅见纸本" },
+      { "col": "J", "content": "月长之太阳修正", "system": "A&B", "fn": "依太阳黄经", "params": "A:快弧 J≈0、慢弧 J=0;57,3,45 UŠ;周期=年(12;22,8 月)" },
+      { "col": "K", "content": "=G+J,月超 29 日净时长", "system": "A&B", "fn": "求和", "params": "均=0;31,50,8,20 日" },
+      { "col": "M", "content": "朔望时刻", "system": "A&B", "fn": "累积", "params": "M(n)=M(n−1)+29ᵈ+K(n)" },
+      { "col": "P", "content": "可见性(Lunar Six)", "system": "A&B", "fn": "Lunar Six 模块", "params": "施昼长 C + 黄道斜升;P₁ 定月长 29/30" }
+    ],
+    "columnsNote": "标准月亮星历无 Q/R/D/L/N/O/W 列;不存在「月亮 A2」;Ψ 由 E 导出(Φ→E→Ψ)。新月型/满月型两种星历字母相同。",
+    "phiTruncated": { "upper": "2,13;20 UŠ(=133;20)", "lower": "1;58,31,6,40 大时(=118;31 UŠ)", "note": "「截断 Φ」用于由 Φ 求 G/Λ,与制表锯齿是两组不同的真实数值,勿混。2,13;20 似为对 Φ 列的称名。" },
+    "meanSynodicMonth": "29;31,50,8,20 日(= 29.5305941;超 29 日部分 = 3,11;0,50 UŠ = 191.014 UŠ)"
+  },
+  "lunarSix": [
+    { "key": "NA1", "cune": "NA₁", "def": "日落 → 月落(新月牙之夜;标月始)", "phase": "新月" },
+    { "key": "KUR", "cune": "KUR", "def": "月出 → 日出(残月末见之晨)", "phase": "新月" },
+    { "key": "SHU2", "cune": "ŠÚ", "def": "月落 → 日出(日出前最后一次月落)", "phase": "满月" },
+    { "key": "NA", "cune": "NA", "def": "日出 → 月落(日出后第一次月落)", "phase": "满月" },
+    { "key": "ME", "cune": "ME", "def": "月出 → 日落(日落前最后一次月出)", "phase": "满月" },
+    { "key": "GE6", "cune": "GE₆", "def": "日落 → 月出(日落后第一次月出)", "phase": "满月" }
+  ],
+  "lunarSixNote": "单位 UŠ。ŠÚ+NA=满月落之日退;ME+GE₆=满月升之日退;Σ四项≈2×满月日速。目标年法:取 Y−18(=223 月)之值加 1/3 修正,如 ŠÚᵢ=ŠÚᵢ₋₂₂₃+⅓(ŠÚ+NA)ᵢ₋₂₂₃。「Lunar Three」=月满/缺(30/29)、满月附近 NA、残月 KUR。",
+  "saros": {
+    "months": { "synodic": 223, "draconic": 242, "anomalistic": 239 },
+    "days": "≈6585.32 日 ≈ 18 年 11 日 8 时",
+    "exeligmos": "3 Saros = 669 朔望月 ≈ 54 年 33 日(单 Saros 使食西移约 120°、迟约 8 时)",
+    "pattern": "一 Saros 内 38 次食可能 = 33 次(间隔 6 月)+ 5 次(间隔 5 月),分 5 组 8,7,8,7,8;33×6+5×5=223 ✓",
+    "selection": "选食:E 规则(黄纬变号附近 |E| 最小之朔望)或 Ψ′ 规则(Ψ′ 刚转正之朔望);两者常合、偶异(日食表用 Ψ′,较 E 偏 1 月)。",
+    "canon": "食表按 38 行/列排(38 行=1 Saros,次列=次 Saros)。"
+  },
+  "risingTimes": {
+    "systemA": [ { "sign": 1, "us": 20 }, { "sign": 2, "us": 24 }, { "sign": 3, "us": 28 }, { "sign": 4, "us": 32 }, { "sign": 5, "us": 36 }, { "sign": 6, "us": 40 }, { "sign": 7, "us": 40 }, { "sign": 8, "us": 36 }, { "sign": 9, "us": 32 }, { "sign": 10, "us": 28 }, { "sign": 11, "us": 24 }, { "sign": 12, "us": 20 } ],
+    "note": "等差自白羊 20 UŠ 至处女/天秤 40 UŠ 再对称递减;总和 360 UŠ ✓;与 3:2 昼夜比一致(处女升时=2×双鱼)。System B 用更平滑级数(逐宫值仅纸本)。另有微黄道粗方案:六宫各 20、六宫各 40(二值化,具体分派存文本群)。",
+    "usage": "已知某时刻自某黄道点起算的累积升时,可定此刻地平上升之黄道度;可近似「出生时上升之宫」——但楔文星盘并不设上升。"
+  },
+  "horoscope": {
+    "corpus": "已校语料 28 块(部分一板两盘),含新见约 32;年代前 410–前 69;出 Babylon 与 Uruk(以神祇祈请语判)。",
+    "template": [
+      "(a) 出生日期+前月长+时辰:「MN 月,(前月)满 30/缺 29,第 n 夜,孩子出生」;时辰常省(仅月位受时辰显著影响)",
+      "(b) 七曜按宫(或度),固定序:月、日、木、金、水、土、火(吉→中→凶的占星性排序);与日合而不可见者记「已没 ŠÚ」/「与日同」",
+      "(c) Lunar Three:前月满/缺、满月附近 NA、残月 KUR",
+      "(d) 该年分至与天狼星日期(19 年图式方案推得,非实测)",
+      "(e) 出生邻近的月食/日食(含本地不可见者)",
+      "(f) (较罕)月相对距星:「月在距星 Y 上/下 X cubit」",
+      "(g) (罕,Uruk)月黄纬",
+      "(h) (部分)神祇祈请"
+    ],
+    "noHouses": "无十二宫位、无相位、无(希腊式)上升点——巴比伦星盘是数据清单而非空间盘;太阳星座亦无关紧要。个别学者主张的「上升」读法多数学者否定。",
+    "positionsAreComputed": "位置非出生实测,而是从上游档案(逐夜观测记录/目标年文本/年历/星历表)摘录或推算;宫位本身即预测量。",
+    "prayers": [ { "city": "Babylon", "text": "ina amat Bēl u Bēltīja lišlim(愿凭 Bēl 与 Bēltīja 之命而安)" }, { "city": "Uruk", "text": "ina amat Anu u Antum … lišlim(愿凭 Anu 与 Antu 之命而安)" } ],
+    "apodoses": [ "ūmēšu arkū——其寿将长", "mārū iraššî——他将有子嗣", "nēmela immar——他将见获利" ],
+    "birthOmens": [
+      { "type": "占星型(按出生宫)", "text": "(若)孩子生于金牛——天牛即天之大 Anu:该人将显赫,子女归来,他见获利。" },
+      { "type": "拟占星型(按生日事件)", "text": "(若)孩子生、其婴期遇日食:他将客死他乡……父家离散。" }
+    ],
+    "examples": [
+      { "title": "最早星盘(前 410,过渡型)", "text": "「十月,24 日,向 25 日清晨,孩子出生。」不用黄道宫,围绕出生前后行星会合现象构建,并记历法/气象。" },
+      { "title": "前 410(按宫件)", "text": "「那时月在蝎角之下,木星在双鱼,金星在金牛,土星在巨蟹,火星在双子。水星(末次)已没,仍不可见。」" },
+      { "title": "带预言的 Uruk 盘(前 235)", "text": "「S.E.77 年,三月 4 日,5 日晨(?),命主出生。那日,月在狮,日在双子 12;30°……木星在射手 18°。木星之『位』:兴旺、平安;其财将长久,长寿……金星之『位』:所往得宠;将有子女。」(「位」为三分预言:木星主白羊-狮-射手,故木星在射手吉。)" },
+      { "title": "位置串模板", "text": "「第 24 夜、夜末,孩子出生。那时月在双子,日在狮,木星与土星在双鱼,金星在狮,水星与火星已没、不可见。」" }
+    ],
+    "bitNisirti": {
+      "note": "bīt niṣirti「秘密之屋」/KI「位」双义:预兆文本中=行星吉兆位(按星座);星盘中=三分+日段方案(非希腊宫位、非旺)。",
+      "methods": [
+        "① 经近出生之分至月定:该月所属三分组之主(如冬至在十月→金星组 II-VI-X)",
+        "② 经行星实际所在宫定:行星落宫之三分主(木星在射手、其本三分 → 「兴旺」)",
+        "③ 日段方案:出生月分 5 个行星日段(同界结构:1–5 木/6–12 金/13–20 水/21–25 土/26–30 火),生日落段定其主"
+      ]
+    }
+  },
+  "hemerology": {
+    "iqqurIpus": "月之宜忌汇编(105 节、数百条,与历法绑定):各类活动(建造、拆屋、仪式、婚、行、医、农…)在某月宜/不宜;两种排列(按活动/按月)便于双向查检。",
+    "babylonianAlmanac": "逐日吉凶历:给一年每一日的简略宜忌处方(吉日与凶日皆列),面向专家的占卜日历;与月宜忌互补。",
+    "links": "「生于某月」之吉凶底料接诞生预兆;微黄道医疗之「于吉日施药/护符」即调用吉日历选日。",
+    "caveat": "逐日全年表未在公开校勘逐条刊布——此处呈现体系结构与代表逻辑,不虚构逐日条目。"
+  },
+  "kalendertextGolden": [
+    { "in": [1, 1], "lmoon": 1, "out277": 277, "outDate": [10, 7] },
+    { "in": [1, 2], "lmoon": 2, "out277": 194, "outDate": [7, 14] },
+    { "in": [1, 3], "lmoon": 3, "out277": 111, "outDate": [4, 21] },
+    { "in": [1, 4], "lmoon": 4, "out277": 28, "outDate": [1, 28] },
+    { "in": [1, 5], "lmoon": 5, "out277": 305, "outDate": [11, 5] }
+  ],
+  "microzodiacExtra": {
+    "conception": "受孕儿童预兆圆图:月食时各宫下受孕之子的命运(对胎儿的恶魔侵袭之兆),段号自天秤=1 起(第二岁首在七月之制)。",
+    "stones": { "caveat": "逐宫「石–草–木」(abnu/šammu/iṣṣu)三联确为一类,具体逐宫名未公开原校——待补,不虚构。" },
+    "temples": { "caveat": "逐宫城市/神庙对应确为一类,具体逐宫名未公开原校——待补,不虚构。" },
+    "microzodiac13": "另有「13 微段」较古方案(第 1 与第 13 段同,13°/日),与图绘的 12 微段相关而不同。"
+  },
+  "constants": [
+    { "k": "平均朔望月", "v": "29;31,50,8,20 日 = 29.530594 日" },
+    { "k": "1 年", "v": "12;22,8(A)/ 12;22,8,53,20(B)朔望月" },
+    { "k": "岁余 epact", "v": "11;4 tithi" },
+    { "k": "太阳速率", "v": "1;1,50,40 tithi/度(≈1°/tithi)" },
+    { "k": "Saros", "v": "223 朔望 = 242 交点 = 239 近点月 ≈ 6585.32 日" },
+    { "k": "1 UŠ", "v": "1° = 4 分钟;1 bēru = 30 UŠ = 2h;1 日 = 360 UŠ = 12 bēru = 6 大时" },
+    { "k": "cubit / finger(观测)", "v": "1 cubit = 24 finger ≈ 2°–2.5°(统计 ≈2.2)" },
+    { "k": "cubit(图式)/ še", "v": "图式 cubit = 2;30° = 180 še;1 še = 0;0,50°;食分 1 finger = 月径1/12 = 6 še" }
+  ]
+}

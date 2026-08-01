@@ -12,36 +12,50 @@ import { PLANETS } from '../data/planets.js';
 import { natalIntegration } from './natalIntegration.js';
 import { mundaneIntegration } from './mundaneIntegration.js';
 import { schoolOf } from './westernSchools.js';
+import { resolveElectionParams, calibreSummary } from './electionParams.js';
+import { filterAspects } from './orbPolicy.js';
+import { computeElectionLots, resolveTopicLots } from './lotsEngine.js';
+import { buildConsiderations } from './considerations.js';
 import { norm360 } from '../engine/utils.js';
 
-// WP-8 危象日(crisis days):自病始时刻月位行进 45°/90°/180°/270° 前后为危象期(~7 日律)。
+// 危象日(crisis days):自病始时刻月位行进,八点全谱——
+// 大危象 90/180/270/360°(~7 日律:上弦/满/下弦/月归本位),小危象 45/135/225/315°(半刑系,~3.5 日律)。
 // 传统文献未给统一判定容许度 → 纯陈述不设 orb 不扣分:报已行度数与最近危象点距离,由用户裁量。
-// 仅手术/用药用事产出(危象=病程七日律,他事无义);切走用事后 extra 里的病始输入保留、此处门控不显示。
+// R2:自手术放开至用药(卧病盘危象本为医事通则);切走用事后 extra 里的病始输入保留、此处门控不显示。
+const CRISIS_MARKS = [
+	{ deg: 45, grade: '小', label: '半刑' }, { deg: 90, grade: '大', label: '上弦刑·第1大危象(~7日)' },
+	{ deg: 135, grade: '小', label: '补八分' }, { deg: 180, grade: '大', label: '冲·第2大危象(~14日高潮)' },
+	{ deg: 225, grade: '小', label: '补八分' }, { deg: 270, grade: '大', label: '下弦刑·第3大危象(~21日)' },
+	{ deg: 315, grade: '小', label: '半刑' }, { deg: 360, grade: '大', label: '月归本位·第4大危象(~28日)' },
+];
 function buildCrisis(facts, opts, topic){
-	if(!topic || topic.topic_id !== 'surgery') return null;
+	if(!topic || (topic.topic_id !== 'surgery' && topic.topic_id !== 'medication')) return null;
 	const base = opts && opts.crisisBase;
 	if(!base || base.moonLon == null || !Number.isFinite(Number(base.moonLon))) return null;
 	const moon = facts.planets.moon;
 	if(!moon || moon.lon == null) return null;
 	const elapsed = norm360(moon.lon - Number(base.moonLon));
-	const marks = [45, 90, 180, 270];
 	let nearest = null;
-	marks.forEach((m) => {
-		const d = Math.abs(elapsed - m);
-		if(nearest === null || d < nearest.dist) nearest = { mark: m, dist: d };
+	CRISIS_MARKS.forEach((m) => {
+		// 360°(月归本位)与 0° 同点:取环向距离,否则刚过本位(如 2°)会被误算成距 358°。
+		const d = m.deg === 360 ? Math.min(Math.abs(elapsed - 360), elapsed) : Math.abs(elapsed - m.deg);
+		if(nearest === null || d < nearest.dist) nearest = { mark: m.deg, grade: m.grade, label: m.label, dist: d };
 	});
 	return {
 		baseDate: base.date || '',
 		elapsedDeg: Math.round(elapsed * 10) / 10,
 		nearestMark: nearest.mark,
+		nearestGrade: nearest.grade,
+		nearestLabel: nearest.label,
 		distToMark: Math.round(nearest.dist * 10) / 10,
-		text: `自病始（${base.date || '—'}）月已行 ${Math.round(elapsed * 10) / 10}°；最近危象点 ${nearest.mark}°（45/90/180/270° 为危象期，~7 日律），相距 ${Math.round(nearest.dist * 10) / 10}°。`,
+		text: `自病始（${base.date || '—'}）月已行 ${Math.round(elapsed * 10) / 10}°；最近危象点 ${nearest.mark}°（${nearest.grade}危象·${nearest.label}），相距 ${Math.round(nearest.dist * 10) / 10}°。八点全谱：大危象 90/180/270/360°，小危象 45/135/225/315°。`,
 	};
 }
 
-// 应期参考：月亮临近相位（按误差升序，越紧越近发动）。
+// 应期参考：月亮临近相位（按误差升序，越紧越近发动;随流派容许度档收紧）。
 function buildTiming(facts){
-	const ma = aspectsOf(facts, 'moon') || [];
+	const eff = facts.eff || null;
+	const ma = filterAspects(aspectsOf(facts, 'moon') || [], 'moon', facts, eff && eff.orbProfile);
 	return ma.slice().sort((a, b) => (a.orb == null ? 99 : a.orb) - (b.orb == null ? 99 : b.orb)).slice(0, 3)
 		.map((a) => ({ otherCn: (PLANETS[a.other] || {}).cn || a.other, angle: a.angle, orb: a.orb }));
 }
@@ -69,20 +83,29 @@ function buildRecommendations(facts, topic, sections, flags, scored){
 }
 
 // opts.westSchool:西方子流派档(westernSchools.js 五档;缺省 modern_main=现状行为)。
+// opts.electionParams:左栏「流派口径」逐项覆盖(''=随流派);
+// opts 里可携全局判读键(judgeLayerOverrides 展开;只含用户改过的键)。
 export function runElection(result, topicId, natalFacts, mundaneSet, opts){
-	const facts = buildFacts(result);
+	// 四层口径解析:内建默认 < 全局仓 < 流派差异集 < 页面覆盖(electionParams.resolveElectionParams)。
+	// 全默认时 eff 各键=引擎旧硬编码值 → buildFacts/模块行为字节不变。
+	const eff = resolveElectionParams(opts && opts.westSchool, opts, opts && opts.electionParams);
+	const facts = buildFacts(result, eff);
 	if(!facts) return null;
+	facts.eff = eff;   // 口径单点注入:modules/hardFlags/rulePacks 经 facts.eff 读取
 	const school = schoolOf(opts && opts.westSchool);
 	const topic = TOPIC_MASTER[topicId] || TOPIC_MASTER.marriage;
+	facts.lots = computeElectionLots(facts, eff);            // 阿拉伯点全谱(右栏页+模块共用)
+	facts.topicLotIds = resolveTopicLots(topic, eff);        // 用事关联点(auto 已按口径落点)
 	const sections = runModules(facts, topic, school);
 	const flags = evalHardFlags(facts, topic, school);
 	const topicPack = evaluateTopicPack(facts, topic, opts);
 	const scored = scoreReport(sections, flags, school);
-	const natal = natalFacts ? natalIntegration(natalFacts, facts) : null;
+	const natal = natalFacts ? natalIntegration(natalFacts, facts, eff) : null;
 	const mundane = mundaneSet ? mundaneIntegration(facts, mundaneSet) : null;
 	return {
 		facts, topic,
 		westSchool: { id: school.id, cn: school.cn },
+		calibre: { eff, summary: calibreSummary(eff) },
 		overall: {
 			score: scored.score, grade: scored.grade, gradeCn: GRADE_CN[scored.grade],
 			headline: buildHeadline(topic, scored, flags),
@@ -91,6 +114,8 @@ export function runElection(result, topicId, natalFacts, mundaneSet, opts){
 		hard_flags: flags,
 		sections,
 		topicPack,
+		// 择前考量三清单(纯提示,默认不计分——保总分构成零回归)
+		considerations: buildConsiderations(facts, eff),
 		natal,
 		mundane,
 		crisis: buildCrisis(facts, opts, topic),

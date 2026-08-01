@@ -8,14 +8,19 @@ export const WEIGHTS = {
 
 const PENALTY = { critical: 40, high: 15, medium: 8, low: 3 };
 
-// school:西方子流派档(可缺省)。其 extraWeights 为「新增分析模块→权重」表:
-// 默认现代主流 extraWeights={} → 新模块仅展示不进总分(总分构成与既往字节不变);
-// 宗派强调档给 sect/moon_mechanics 真实权重,wsum 归一自动摊薄、旧模块相对权重不变。
+// school:西方子流派档(可缺省)。三个真消费面:
+//   extraWeights —— 「新增分析模块→权重」表(默认现代主流 extraWeights={} → 新模块仅展示不进总分,
+//                   总分构成与既往字节不变;宗派强调档给真实权重,wsum 归一自动摊薄);
+//   sectWeight  —— 宗派模块权重的权威字段(定义时压过 extraWeights.sect,两处同值=行为不变);
+//   moduleSet   —— 核心模块评分白名单(缺省=全部核心;白名单外的核心模块仅展示不进总分)。
 export function scoreReport(sections, flags, school){
 	const extraW = (school && school.extraWeights) || {};
+	const coreAllowed = (school && Array.isArray(school.moduleSet)) ? school.moduleSet : null;
 	let base = 0; let wsum = 0;
 	sections.forEach((s) => {
-		const w = WEIGHTS[s.key] !== undefined ? WEIGHTS[s.key] : extraW[s.key];
+		if(coreAllowed && WEIGHTS[s.key] !== undefined && coreAllowed.indexOf(s.key) < 0){ return; }
+		let w = WEIGHTS[s.key] !== undefined ? WEIGHTS[s.key] : extraW[s.key];
+		if(s.key === 'sect' && school && typeof school.sectWeight === 'number'){ w = school.sectWeight; }
 		if(w !== undefined && s.score !== undefined && s.score !== null){ base += s.score * w; wsum += w; }
 	});
 	base = wsum > 0 ? base / wsum : 50;

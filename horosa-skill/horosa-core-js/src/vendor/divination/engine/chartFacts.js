@@ -7,16 +7,19 @@ import { angularityOf } from '../data/houseMeanings.js';
 import { signOfLon } from '../data/signs.js';
 import { norm360, angularDist, signedDelta, houseNumFromId, keyOfChartId, scoreSelfDignity } from './utils.js';
 
-const COMBUST_CAZIMI = 17 / 60;   // 17′
-const COMBUST_LIMIT = 8.5;        // 燃烧
-const UNDER_BEAMS_LIMIT = 17;     // 日光束下
+const COMBUST_CAZIMI = 17 / 60;   // 17′（1647 口径;16′含黄纬为中世纪档,1°为早期档——经 opts 可配）
+const COMBUST_LIMIT = 8.5;        // 燃烧 8°30′（~8° 为中世纪档）
+const UNDER_BEAMS_LIMIT = 17;     // 日光束下 17°（15° 为较古档）
 
-function combustionState(planetLon, sunLon){
+function combustionState(planetLon, sunLon, orbs){
 	if(sunLon === null || sunLon === undefined || planetLon === null || planetLon === undefined) return null;
+	const cz = (orbs && orbs.cazimiOrb > 0) ? orbs.cazimiOrb : COMBUST_CAZIMI;
+	const cb = (orbs && orbs.combustOrb > 0) ? orbs.combustOrb : COMBUST_LIMIT;
+	const ub = (orbs && orbs.underBeamsOrb > 0) ? orbs.underBeamsOrb : UNDER_BEAMS_LIMIT;
 	const d = angularDist(planetLon, sunLon);
-	if(d <= COMBUST_CAZIMI) return 'cazimi';
-	if(d < COMBUST_LIMIT) return 'combust';
-	if(d < UNDER_BEAMS_LIMIT) return 'under_beams';
+	if(d <= cz) return 'cazimi';
+	if(d < cb) return 'combust';
+	if(d < ub) return 'under_beams';
 	return null;
 }
 
@@ -45,8 +48,11 @@ function getObj(result, chartId){
 
 const PLANET_CHART_IDS = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto', 'North Node', 'South Node', 'Pars Fortuna'];
 
-export function buildFacts(result){
+// opts（可选;不传=既有行为字节不变）：cazimiOrb/combustOrb/underBeamsOrb —— 太阳三态阈值（度）。
+export function buildFacts(result, opts){
 	if(!result || !result.chart) return null;
+	const solarOrbs = opts && (opts.cazimiOrb || opts.combustOrb || opts.underBeamsOrb)
+		? { cazimiOrb: opts.cazimiOrb, combustOrb: opts.combustOrb, underBeamsOrb: opts.underBeamsOrb } : null;
 	const chart = result.chart;
 	const sun = getObj(result, 'Sun');
 	const moon = getObj(result, 'Moon');
@@ -70,7 +76,7 @@ export function buildFacts(result){
 			dignities: o.dignities || {},
 			dignityScore: scoreSelfDignity(o.selfDignity),
 			antiscion: o.antisciaPoint || null,
-			combustion: cid === 'Sun' ? null : combustionState(o.lon, sunLon),
+			combustion: cid === 'Sun' ? null : combustionState(o.lon, sunLon, solarOrbs),
 			orientality: cid === 'Sun' ? null : orientalityOf(o.lon, sunLon),
 			hayyiz: o.hayyiz,
 			outOfBounds: !!o.outOfBounds,

@@ -2,11 +2,13 @@
 // 红线/警告系统（择日清单 §4）。布尔检查，命中进 hard_flags[]，按 severity 影响评分/分级。
 // 带 * 的规则参照当前 topic.must_avoid 决定触发/升降级。
 import { aspectsOf } from '../engine/aspectsEngine.js';
-import { isViaCombusta } from '../engine/moon.js';
+import { moonReport } from '../engine/moon.js';
+import { viaCombustaRange } from '../engine/radicality.js';
 import { PLANETS } from '../data/planets.js';
 import { SIGNS } from '../data/signs.js';
-import { angularDist } from '../engine/utils.js';
+import { angularDist, norm360 } from '../engine/utils.js';
 import { isEgyptianDay } from '../data/egyptianDays.js';
+import { filterAspects } from './orbPolicy.js';
 
 function lord1Of(facts){
 	const s = facts.meta.ascSign;
@@ -31,14 +33,26 @@ export function evalHardFlags(facts, topic, school){
 		flags.push({ id, severity, message, factor });
 	};
 
+	// 流派口径(facts.eff,electionEngine 注入;缺省=内建默认零回归):
+	// 空亡随 vocMode 解算、火道随 viaCombustaVariant、月相位随 orbProfile 收紧。
+	const eff = facts.eff || null;
 	const moon = facts.planets.moon;
 	if(moon){
-		if(moon.isVOC) add('moon_void_of_course', 'critical', '月亮空亡：此刻起的行动通常无效应', 'moon');
-		const ma = aspectsOf(facts, 'moon');
+		const vocResolved = eff
+			? moonReport(facts, { vocMode: eff.vocMode, vocIncludeOuter: !!eff.vocIncludeOuter }).voc
+			: !!moon.isVOC;
+		if(vocResolved) add('moon_void_of_course', 'critical', '月亮空亡：此刻起的行动通常无效应', 'moon');
+		const ma = filterAspects(aspectsOf(facts, 'moon'), 'moon', facts, eff && eff.orbProfile);
 		if(ma.some((a) => a.angle === 90)) add('moon_square', 'high', '月亮逢刑（90°）：不安定、缺生产力 → 应避', 'moon');
 		if(ma.some((a) => a.angle === 180)) add('moon_opposition', 'medium', '月亮逢冲（180°）：尤不利合作', 'moon');
 		if(moon.combustion) add('moon_combust', 'medium', '月亮在日光束下，力量受限', 'moon');
-		if(isViaCombusta(moon.lon)) add('moon_via_combusta', 'high', '月在燃烧之路（天秤15°–天蝎15°）：最糟阻碍之一', 'moon');
+		const vcr = viaCombustaRange(eff && eff.viaCombustaVariant);
+		if(norm360(moon.lon) >= vcr[0] && norm360(moon.lon) <= vcr[1]){
+			const vcTxt = (!eff || eff.viaCombustaVariant === 'standard' || !eff.viaCombustaVariant)
+				? '月在燃烧之路（天秤15°–天蝎15°）：最糟阻碍之一'
+				: `月在燃烧之路（本档界 ${vcr[0]}°–${vcr[1]}°）：最糟阻碍之一`;
+			add('moon_via_combusta', 'high', vcTxt, 'moon');
+		}
 		const mp = facts.meta.moonPhase;
 		if(mp && (mp.nearNew || mp.nearFull)) add('near_new_or_full_moon', 'medium', '临近新/满月：手术/重要用事宜避前后数日', 'moon');
 		if(moon.sign === 'scorpio') add('moon_in_fall', 'medium', '月落陷天蝎，带秘密/占有（婚姻盘尤忌）', 'moon');

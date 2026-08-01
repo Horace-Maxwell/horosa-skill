@@ -7496,12 +7496,15 @@ class HorosaSkillService:
         # horary engine (runHorary + buildHorarySnapshot) over it. category drives the quesited house.
         category = f"{payload.get('category') or 'general'}".strip() or "general"
         chart_payload = {**payload, "predictive": 0, "tradition": payload.get("tradition", 1)}
-        for stale in ("datetime", "dirZone", "dirLat", "dirLon", "category"):
+        for stale in ("datetime", "dirZone", "dirLat", "dirLon", "category", "school"):
             chart_payload.pop(stale, None)
         response = self._call_remote("/chart", chart_payload)
         snapshot_text, data, snapshot_error = "", {}, None
         try:
-            js = self.js_client.run("horary", {"chart": response, "category": category})
+            js = self.js_client.run(
+                "horary",
+                {"chart": response, "category": category, "school": payload.get("school") or "classical"},
+            )
             if isinstance(js, dict):
                 snapshot_text = f"{js.get('snapshot_text') or ''}".strip()
                 data = js.get("data") if isinstance(js.get("data"), dict) else {}

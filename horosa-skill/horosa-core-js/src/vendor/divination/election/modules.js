@@ -1,20 +1,48 @@
 // divination/election/modules.js
-// 13 个分析模块（择日清单 §3），按优先级=UI 顺序。每模块产 section{key,title,verdict,score,findings,detail}。
+// 21 个分析模块（择日清单 §3 + 西方深化 WP + R2 流派口径/阿拉伯点/吉化凶化），按优先级=UI 顺序。
+// 每模块产 section{key,title,verdict,score,findings,detail}。
+// 流派口径 eff 经 electionEngine 挂到 facts.eff 单点注入（缺省 null = 内建默认,行为字节不变）。
 import { planetCondition } from '../engine/conditions.js';
 import { moonReport } from '../engine/moon.js';
 import { aspectsOf } from '../engine/aspectsEngine.js';
 import { receptionsOf } from '../engine/reception.js';
 import { SIGNS } from '../data/signs.js';
 import { PLANETS } from '../data/planets.js';
-import { FIXED_STARS, starLonAt } from '../data/fixedStars.js';
+import { FIXED_STARS, starLonAt, starOrbFor } from '../data/fixedStars.js';
 import { angularDist, norm360 } from '../engine/utils.js';
 import { PLANETARY_HOURS, DAY_RULERS } from '../data/planetaryHours.js';
 import { mansionOf, MANSION_ELECTION_SETS, TOPIC_MANSION_MAP } from '../data/lunarMansions.js';
 import { paransAt } from '../engine/paransLocal.js';
-import { radicality } from '../engine/radicality.js';
+import { radicality, viaCombustaRange } from '../engine/radicality.js';
 import { termRulerAt, faceAt, triplicityRulers } from '../data/dignities.js';
+import { termRulerForVariant, almutenFiguris } from '../engine/almuten.js';
+import { filterAspects } from './orbPolicy.js';
+import { bonificationReport } from './dignityReport.js';
 
 function cn(k){ return (PLANETS[k] || {}).cn || k; }
+// 流派口径读取（facts.eff 由 electionEngine 注入;直接调 runModules 的旧路径无此键 → 全默认）。
+function effOf(facts){ return (facts && facts.eff) || null; }
+// 按口径过滤后的相位组（'modern'/缺省 = 后端表原样,零回归）。
+function aspOf(facts, key){
+	const eff = effOf(facts);
+	return filterAspects(aspectsOf(facts, key), key, facts, eff && eff.orbProfile);
+}
+// 空亡/月亮类口径 opts（全默认时与不传 opts 字节等价）。
+function vocOptsOf(facts){
+	const eff = effOf(facts);
+	if(!eff) return undefined;
+	return {
+		vocMode: eff.vocMode, vocIncludeOuter: !!eff.vocIncludeOuter,
+		vocMitigateSigns: !!eff.vocMitigateSigns, viaCombustaVariant: eff.viaCombustaVariant,
+	};
+}
+// 判读层界主（随 eff.termsVariant;0=埃及=既有默认）。
+function termRulerEff(facts, lon){
+	const eff = effOf(facts);
+	const v = eff ? eff.termsVariant : 0;
+	if(!v) return termRulerAt(lon);
+	return termRulerForVariant(lon, { termsVariant: v, isDiurnal: !!(facts.meta && facts.meta.isDiurnal) });
+}
 function clamp(x){ return Math.max(0, Math.min(100, Math.round(x))); }
 function verdictOf(s){ return s >= 70 ? 'good' : (s >= 52 ? 'neutral' : (s >= 38 ? 'caution' : 'bad')); }
 function scoreFromFindings(findings, baseSeed){
@@ -46,10 +74,17 @@ function shortMidpoint(a, b){
 }
 
 function moonModule(facts){
-	const r = moonReport(facts);
+	const r = moonReport(facts, vocOptsOf(facts));
 	const findings = r.findings.map((f) => ({ ...f, message: f.text_zh }));
 	const score = scoreFromFindings(findings, 64);
-	return { key: 'moon', title: '月亮（第一考量）', verdict: verdictOf(score), score, findings, detail_md: `月落 ${SIGNS[facts.planets.moon.sign] ? SIGNS[facts.planets.moon.sign].cn : ''}，${r.phase === 'waxing' ? '盈' : '亏'}。` };
+	// 口径注记:仅当空亡/火道口径偏离内建默认时追加(默认档 detail 与既往逐字一致)。
+	const eff = effOf(facts);
+	let calibreNote = '';
+	if(eff && (eff.vocMode !== 'classic' || eff.viaCombustaVariant !== 'standard')){
+		const vc = viaCombustaRange(eff.viaCombustaVariant);
+		calibreNote = `（本档口径:空亡=${eff.vocMode}·火道 ${vc[0]}°–${vc[1]}°）`;
+	}
+	return { key: 'moon', title: '月亮（第一考量）', verdict: verdictOf(score), score, findings, detail_md: `月落 ${SIGNS[facts.planets.moon.sign] ? SIGNS[facts.planets.moon.sign].cn : ''}，${r.phase === 'waxing' ? '盈' : '亏'}。${calibreNote}` };
 }
 
 function ascRulerModule(facts){
@@ -90,7 +125,7 @@ function sunModule(facts){
 	const s = facts.planets.sun;
 	if(s){
 		if([12].indexOf(s.house) >= 0) findings.push(mkFinding('negative', '太阳落 12 宫（出版/魅力类用事尤忌）', 1));
-		const asp = aspectsOf(facts, 'sun').filter((a) => [60, 120].indexOf(a.angle) >= 0 && BENEFICS.indexOf(a.other) >= 0);
+		const asp = aspOf(facts, 'sun').filter((a) => [60, 120].indexOf(a.angle) >= 0 && BENEFICS.indexOf(a.other) >= 0);
 		if(asp.length) findings.push(mkFinding('positive', `太阳与吉星${asp[0].angle}°`, 1));
 	}
 	const score = scoreFromFindings(findings, 60);
@@ -100,12 +135,15 @@ function sunModule(facts){
 function anglesModule(facts){
 	const findings = [];
 	[1, 4, 7, 10].forEach(() => {});
+	const eff = effOf(facts);
+	const sevenOnly = !!(eff && eff.bodySet === 'classical7');
 	Object.keys(facts.planets).forEach((k) => {
 		const p = facts.planets[k];
 		if(p.angularity !== 'angular') return;
 		if(BENEFICS.indexOf(k) >= 0 && p.dignityScore >= 0) findings.push(mkFinding('positive', `吉星 ${cn(k)} 入角宫`, 2));
 		if(MALEFICS.indexOf(k) >= 0 && (p.dignityScore <= 0 || p.retro)) findings.push(mkFinding('negative', `凶星 ${cn(k)} 受剋入角宫`, 2));
-		if(k === 'uranus' && (p.house === 1 || p.house === 7)) findings.push(mkFinding('negative', '天王星在 1/7 宫（变动/分离）', 2));
+		// 七曜档(classical7)不出三王星条目(红线层仍按流派 annotate 降级另行注记)。
+		if(!sevenOnly && k === 'uranus' && (p.house === 1 || p.house === 7)) findings.push(mkFinding('negative', '天王星在 1/7 宫（变动/分离）', 2));
 	});
 	const score = scoreFromFindings(findings, 60);
 	return { key: 'angles', title: '角宫吉凶分布（纳吉排凶）', verdict: verdictOf(score), score, findings, detail_md: '' };
@@ -115,8 +153,8 @@ function maleficHandlingModule(facts){
 	const findings = [];
 	MALEFICS.forEach((k) => {
 		const p = facts.planets[k]; if(!p) return;
-		const hardNoHelp = aspectsOf(facts, k).filter((a) => [90, 180].indexOf(a.angle) >= 0);
-		const benefHelp = aspectsOf(facts, k).filter((a) => [60, 120].indexOf(a.angle) >= 0 && BENEFICS.indexOf(a.other) >= 0);
+		const hardNoHelp = aspOf(facts, k).filter((a) => [90, 180].indexOf(a.angle) >= 0);
+		const benefHelp = aspOf(facts, k).filter((a) => [60, 120].indexOf(a.angle) >= 0 && BENEFICS.indexOf(a.other) >= 0);
 		if(hardNoHelp.length && !benefHelp.length) findings.push(mkFinding('negative', `${cn(k)} 凶相无吉相援助`, 2));
 		else if(benefHelp.length) findings.push(mkFinding('positive', `${cn(k)} 有吉相援助（化解）`, 1));
 	});
@@ -162,7 +200,7 @@ function aspectPatternsModule(facts){
 	// 检测：大三角 / 风筝 / 三刑会沖(T) / 大十字 / 星聚。择日喜大三角·风筝·小三角·矩形，忌 T·大十字。
 	const findings = [];
 	const ps = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn'].filter((k) => facts.planets[k]);
-	const has = (a, b, ang) => aspectsOf(facts, a).some((x) => x.other === b && x.angle === ang);
+	const has = (a, b, ang) => aspOf(facts, a).some((x) => x.other === b && x.angle === ang);
 	// 大三角：三星两两 120°
 	let grandTrine = null;
 	for(let i = 0; i < ps.length && !grandTrine; i++){
@@ -231,17 +269,24 @@ function fixedStarsModule(facts, topic){
 	if(l1 && facts.planets[l1]){ points[`命主星(${cn(l1)})`] = facts.planets[l1].lon; }
 	// 用事自然徵象星
 	(topic && topic.natural_significators || []).forEach((k) => { const p = facts.planets[k]; if(p && p.lon != null){ points[`用事星(${cn(k)})`] = p.lon; } });
+	// 容许度:默认平轨 1°(零回归);全局仓改「恒星容许度/按星等」后随动(starOrbFor 单一真值)。
+	const eff = effOf(facts);
+	const starOpts = eff ? { fixedStarOrb: eff.fixedStarOrb, fixedStarOrbMode: eff.fixedStarOrbMode } : {};
 	Object.keys(points).forEach((label) => {
 		const lon = points[label]; if(lon === null || lon === undefined) return;
 		FIXED_STARS.forEach((st) => {
-			if(angularDist(lon, starLonAt(st.lon_1995, year)) <= 1){
-				if(st.election && st.election.avoid) findings.push(mkFinding('negative', `${label} 会合凶恒星 ${st.name_cn}（${st.meaning}）`, 2));
-				else findings.push(mkFinding('positive', `${label} 会合吉恒星 ${st.name_cn}（${st.meaning}）`, 2));
+			if(angularDist(lon, starLonAt(st.lon_1995, year)) <= starOrbFor(st, starOpts)){
+				// 四王者星命中额外注守望方位(仅王者命中时追加,不动既有文案)。
+				const royalNote = st.royal ? `（四王者·${st.royal.watcher}方守望）` : '';
+				if(st.election && st.election.avoid) findings.push(mkFinding('negative', `${label} 会合凶恒星 ${st.name_cn}（${st.meaning}）${royalNote}`, 2));
+				else findings.push(mkFinding('positive', `${label} 会合吉恒星 ${st.name_cn}（${st.meaning}）${royalNote}`, 2));
 			}
 		});
 	});
 	const score = scoreFromFindings(findings, 60);
-	return { key: 'fixed_stars', title: '恒星会合', verdict: verdictOf(score), score, findings, detail_md: `≤1° 会合关键点才计（岁差修正至 ${year} 年）` };
+	const orbNote = (!eff || (eff.fixedStarOrbMode !== 'byMagnitude' && (eff.fixedStarOrb === undefined || eff.fixedStarOrb === 1)))
+		? '≤1° 会合关键点才计' : (eff.fixedStarOrbMode === 'byMagnitude' ? '按星等取轨（1等7°30′…王者≤5°）' : `≤${eff.fixedStarOrb}° 会合关键点才计`);
+	return { key: 'fixed_stars', title: '恒星会合', verdict: verdictOf(score), score, findings, detail_md: `${orbNote}（岁差修正至 ${year} 年）` };
 }
 
 // ===== WP-1 宗派(sect)深化:昼夜派/得派吉凶星/hayz·halb/喜乐宫 =====
@@ -295,7 +340,7 @@ function moonMechanicsModule(facts){
 	if(!moon) return { key: 'moon_mechanics', title: '月相机制', verdict: 'neutral', score: 60, findings, detail_md: '' };
 	// 全模块仅论七曜:传光/收光/阻碍/挫败为古典机制,不涉三王星;
 	// 且三王星常年近守留速度,纳入会量产伪「挫败/回避」噪音。
-	const ma = aspectsOf(facts, 'moon').filter((a) => SECT_SEVEN.indexOf(a.other) >= 0);
+	const ma = aspOf(facts, 'moon').filter((a) => SECT_SEVEN.indexOf(a.other) >= 0);
 	const app = ma.filter((a) => a.applying);
 	const sep = ma.filter((a) => a.separating);
 
@@ -314,7 +359,7 @@ function moonMechanicsModule(facts){
 		const collectors = [];
 		SECT_SEVEN.forEach((k) => {
 			if(k === x) return;
-			const ka = aspectsOf(facts, k).filter((a) => a.applying && a.other === x);
+			const ka = aspOf(facts, k).filter((a) => a.applying && a.other === x);
 			if(ka.length) collectors.push(k);
 		});
 		const px = facts.planets[x];
@@ -334,7 +379,7 @@ function moonMechanicsModule(facts){
 		let best = null;
 		SECT_SEVEN.forEach((c) => {
 			if(c === 'moon' || c === a.other) return;
-			aspectsOf(facts, c).forEach((x) => {
+			aspOf(facts, c).forEach((x) => {
 				if(x.applying && x.other === a.other && x.orb != null && a.orb != null && x.orb < a.orb){
 					if(!best || x.orb < best.orb) best = { c, orb: x.orb };
 				}
@@ -349,7 +394,7 @@ function moonMechanicsModule(facts){
 	// B 只会「先赴最紧一约」,故仅报其中差最小者。
 	app.forEach((a) => {
 		let best = null;
-		aspectsOf(facts, a.other).forEach((x) => {
+		aspOf(facts, a.other).forEach((x) => {
 			if(x.applying && x.other !== 'moon' && SECT_SEVEN.indexOf(x.other) >= 0
 				&& x.orb != null && a.orb != null && x.orb < a.orb){
 				if(!best || x.orb < best.orb) best = x;
@@ -372,7 +417,7 @@ function moonMechanicsModule(facts){
 	['moon', 'venus', 'jupiter', 'sun', 'mercury'].forEach((k) => {
 		const p = facts.planets[k];
 		if(!p) return;
-		const ka = aspectsOf(facts, k);
+		const ka = aspOf(facts, k);
 		const sepMal = ka.some((a) => a.separating && isMal(a.other));
 		const appMal = ka.some((a) => a.applying && isMal(a.other));
 		if(sepMal && appMal){
@@ -433,7 +478,9 @@ function mansionModule(facts, topic){
 	if(!moon || moon.lon == null){
 		return { key: 'mansions', title: '月宿（西方28宿）', verdict: 'neutral', score: 60, findings, detail_md: '' };
 	}
-	const m = mansionOf(moon.lon);
+	const eff = effOf(facts);
+	const anchor = (eff && eff.mansionAnchor) || 'equal_aries0';
+	const m = mansionOf(moon.lon, anchor, getChartYear(facts));
 	findings.push(mkFinding('neutral', `月在第 ${m.n} 宿 ${m.name}（${m.alt}）：${m.nature}。用途：${m.use}`, 1));
 	const map = TOPIC_MANSION_MAP[topic && topic.topic_id];
 	if(map){
@@ -449,7 +496,10 @@ function mansionModule(facts, topic){
 	if(m.good === true && mp && mp.phase === 'waxing' && !moon.combustion) findings.push(mkFinding('positive', '月增光、免燃烧而入吉宿：可乘其力', 1));
 	if(moon.combustion === 'combust') findings.push(mkFinding('negative', '月燃烧：宿力难用（通则尤忌）', 1));
 	const score = scoreFromFindings(findings, 60);
-	return { key: 'mansions', title: '月宿（西方28宿）', verdict: verdictOf(score), score, findings, detail_md: `Agrippa 白羊0°均分 12°51′26″/宿；通则:择月入所选宿、增光不受克、不空亡。` };
+	const anchorNote = anchor === 'sheratan'
+		? '实星锚（宿1起于 Sheratan 当年岁差实位）12°51′26″/宿'
+		: 'Agrippa 白羊0°均分 12°51′26″/宿';
+	return { key: 'mansions', title: '月宿（西方28宿）', verdict: verdictOf(score), score, findings, detail_md: `${anchorNote}；通则:择月入所选宿、增光不受克、不空亡。` };
 }
 
 // ===== WP-5 映点隐合/隐冲(≤1°):映点=关于巨蟹0°轴对称(180−λ);反映点=关于白羊0°轴(360−λ) =====
@@ -460,6 +510,9 @@ function antisciaModule(facts){
 	ANTISCIA_KEYS.forEach((k) => { const p = facts.planets[k]; if(p && p.lon != null) pts.push({ k, lon: p.lon }); });
 	if(facts.meta.ascLon != null) pts.push({ k: 'asc', lon: facts.meta.ascLon, isPoint: true });
 	const nameOf = (o) => (o.k === 'asc' ? '命度' : cn(o.k));
+	// 接触容许度:默认 1°(零回归);全局「映点接触容许度」改后随动。
+	const effA = effOf(facts);
+	const antiOrb = (effA && typeof effA.antisciaOrb === 'number' && effA.antisciaOrb > 0) ? effA.antisciaOrb : 1;
 	for(let i = 0; i < pts.length; i++){
 		for(let j = 0; j < pts.length; j++){
 			if(i === j) continue;
@@ -470,19 +523,20 @@ function antisciaModule(facts){
 			const dA = angularDist(anti, b.lon);
 			const dC = angularDist(contra, b.lon);
 			if(i < j || b.isPoint){ // 行星对去重(i<j);受点=命度恒报
-				if(dA <= 1){
+				if(dA <= antiOrb){
 					const mal = isMal(a.k) || isMal(b.k);
 					findings.push(mkFinding(mal ? 'negative' : (isBen(a.k) || isBen(b.k) ? 'positive' : 'neutral'), `映点隐合：${nameOf(a)} 映点（${anti.toFixed(1)}°）合 ${nameOf(b)}（差 ${dA.toFixed(1)}°）——如暗中合相${mal ? '，凶星者尤须防暗损' : ''}`, 2));
 				}
-				if(dC <= 1){
+				if(dC <= antiOrb){
 					findings.push(mkFinding('negative', `反映点隐冲：${nameOf(a)} 反映点（${contra.toFixed(1)}°）冲 ${nameOf(b)}（差 ${dC.toFixed(1)}°）——如暗中对分`, 1));
 				}
 			}
 		}
 	}
-	if(!findings.length) findings.push(mkFinding('neutral', '无 ≤1° 映点隐合/隐冲', 1));
+	const orbTxt = antiOrb === 1 ? '≤1°' : `≤${antiOrb}°`;
+	if(!findings.length) findings.push(mkFinding('neutral', `无 ${orbTxt} 映点隐合/隐冲`, 1));
 	const score = scoreFromFindings(findings, 60);
-	return { key: 'antiscia', title: '映点（隐合/隐冲）', verdict: verdictOf(score), score, findings, detail_md: '映点=关于巨蟹0°—摩羯0°轴对称;反映点=关于白羊0°—天秤0°轴。仅 ≤1° 计。' };
+	return { key: 'antiscia', title: '映点（隐合/隐冲）', verdict: verdictOf(score), score, findings, detail_md: `映点=关于巨蟹0°—摩羯0°轴对称;反映点=关于白羊0°—天秤0°轴。仅 ${orbTxt} 计。` };
 }
 
 // ===== WP-6 恒星交映(parans·Brady 口径·固定地点) =====
@@ -526,7 +580,8 @@ function paransModule(facts, topic){
 function radicalityModule(facts){
 	const findings = [];
 	let r = null;
-	try{ r = radicality(facts); }catch(e){ r = null; }
+	const eff = effOf(facts);
+	try{ r = radicality(facts, eff ? { viaCombustaVariant: eff.viaCombustaVariant } : undefined); }catch(e){ r = null; }
 	if(r){
 		(r.ok || []).forEach((t) => findings.push(mkFinding('positive', t, 1)));
 		(r.warnings || []).forEach((w) => findings.push(mkFinding('negative', w.text, 1)));
@@ -536,51 +591,56 @@ function radicalityModule(facts){
 	return { key: 'radicality', title: '可判性（盘之可靠）', verdict: verdictOf(score), score, findings, detail_md: '命度过早/过晚、月空/月燃、土星落一宫等——提示这一时刻的盘是否「可托付判断」,警告不阻断。' };
 }
 
-// ===== WP-10b 胜利星(Almuten Figuris·Ibn Ezra 法):命点五尊贵计分之总胜者 =====
-// 五命点=日/月/命度/幸运点/产前朔望;事盘无产前朔望 → 按四命点计并注明。
-// 计分:庙5 旺4 三分3(昼/夜/共各得3) 界2 面1。
-const ALMUTEN_SCORE = { domicile: 5, exalt: 4, trip: 3, term: 2, face: 1 };
+// ===== WP-10b→R2 胜利星(Almuten Figuris·五命点权威实现,与寿命/卜卦共用 engine/almuten) =====
+// 五命点=日/月/上升/福点/产前朔望(后端 Syzygy 对象;缺则按四点计并注明,不臆造)。
+// 计分:庙5 旺4 三分3(按昼夜取主,Dorothean 另计共主) 界2 面1——界/三分随流派口径。
+function syzygyLonOf(facts){
+	const r = facts.result || {};
+	let o = (r.objectMap && r.objectMap.Syzygy) || null;
+	if(!o){
+		const objs = (r.chart && r.chart.objects) || [];
+		for(let i = 0; i < objs.length; i++){ if(objs[i].id === 'Syzygy'){ o = objs[i]; break; } }
+	}
+	return o && o.lon !== undefined && o.lon !== null ? o.lon : null;
+}
 function almutenModule(facts){
 	const findings = [];
-	const pts = [];
-	const sun = facts.planets.sun; const moon = facts.planets.moon; const fortune = facts.planets.fortune;
-	if(sun && sun.lon != null) pts.push({ label: '太阳', lon: sun.lon });
-	if(moon && moon.lon != null) pts.push({ label: '月亮', lon: moon.lon });
-	if(facts.meta.ascLon != null) pts.push({ label: '命度', lon: facts.meta.ascLon });
-	if(fortune && fortune.lon != null) pts.push({ label: '幸运点', lon: fortune.lon });
-	const tally = {};
-	const addScore = (k, v) => { if(k){ tally[k] = (tally[k] || 0) + v; } };
-	pts.forEach((pt) => {
-		const sg = SIGNS[signKeyOfLon(pt.lon)];
-		if(!sg) return;
-		addScore(sg.domicile, ALMUTEN_SCORE.domicile);
-		if(sg.exaltation && sg.exaltation.planet && sg.exaltation.planet !== 'north_node' && sg.exaltation.planet !== 'south_node'){
-			addScore(sg.exaltation.planet, ALMUTEN_SCORE.exalt);
-		}
-		const trips = triplicityRulers(sg.element);
-		if(trips){ ['day', 'night', 'participating'].forEach((b) => addScore(trips[b], ALMUTEN_SCORE.trip)); }
-		addScore(termRulerAt(pt.lon), ALMUTEN_SCORE.term);
-		const fc = faceAt(pt.lon);
-		addScore(fc && fc.ruler, ALMUTEN_SCORE.face);
+	const eff = effOf(facts);
+	const fortune = facts.planets.fortune;
+	const af = almutenFiguris(facts, { fortune: fortune && fortune.lon != null ? { lon: fortune.lon } : null }, {
+		termsVariant: eff ? eff.termsVariant : 0,
+		tripSystem: (eff && eff.tripSystem === 'ptolemaic') ? 'ptolemaic' : 'dorothean',
+		tripIncludeParticipating: !(eff && eff.tripSystem === 'ptolemaic'),
+		syzygyLon: syzygyLonOf(facts),
 	});
-	const ranked = Object.keys(tally).sort((a, b) => tally[b] - tally[a]);
-	if(!ranked.length){
+	facts.almuten = af;   // 供「尊贵强弱」页矩阵展示(五点逐点计分)
+	if(!af.winners.length){
 		findings.push(mkFinding('neutral', '命点不足，无法计算胜利星', 1));
 	}else{
-		const top = ranked[0];
-		const ties = ranked.filter((k) => tally[k] === tally[top]);
-		findings.push(mkFinding('neutral', `胜利星（Almuten Figuris）：${ties.map(cn).join('、')}（${tally[top]} 分；按四命点计，事盘无产前朔望）`, 1));
+		const nPts = af.points.length;
+		findings.push(mkFinding('neutral', `胜利星（Almuten Figuris）：${af.winners.map(cn).join('、')}（${af.best} 分；按${nPts === 5 ? '五' : '四'}命点计${nPts < 5 ? '，事盘无产前朔望' : '，含产前朔望'}）`, 1));
+		const top = af.winners[0];
 		const p = facts.planets[top];
 		if(p){
 			if(p.dignityScore >= 2 && !p.retro) findings.push(mkFinding('positive', `胜利星 ${cn(top)} 在盘中有力顺行——全盘有主心骨`, 2));
 			else if(p.retro || p.combustion === 'combust' || p.dignityScore <= -4) findings.push(mkFinding('negative', `胜利星 ${cn(top)} 受克（逆行/燃烧/落陷）——全盘乏主`, 2));
 			if(p.angularity === 'angular') findings.push(mkFinding('positive', `胜利星 ${cn(top)} 临角宫`, 1));
 		}
-		const runner = ranked.slice(ties.length, ties.length + 2);
-		if(runner.length) findings.push(mkFinding('neutral', `次位：${runner.map((k) => `${cn(k)}(${tally[k]})`).join('、')}`, 1));
+		const ranked = Object.keys(af.totals).sort((a, b) => af.totals[b] - af.totals[a]);
+		const runner = ranked.filter((k) => af.winners.indexOf(k) < 0).slice(0, 2);
+		if(runner.length) findings.push(mkFinding('neutral', `次位：${runner.map((k) => `${cn(k)}(${af.totals[k]})`).join('、')}`, 1));
 	}
 	const score = scoreFromFindings(findings, 60);
-	return { key: 'almuten', title: '胜利星（Almuten Figuris）', verdict: verdictOf(score), score, findings, detail_md: '命点(日/月/命度/幸运点)所在处五尊贵主星计分:庙5旺4三分3界2面1,总分最高者为全盘胜利星。' };
+	return { key: 'almuten', title: '胜利星（Almuten Figuris）', verdict: verdictOf(score), score, findings, detail_md: '五命点(日/月/上升/福点/产前朔望)逐点五尊贵计分:庙5旺4三分3界2面1,跨点累计最高者为全盘胜利星;界/三分随流派口径。' };
+}
+
+// ===== R2 吉化/凶化模块(engine 与「尊贵强弱」页共用 dignityReport.bonificationReport) =====
+function bonificationModule(facts){
+	const items = bonificationReport(facts);
+	const findings = items.map((it) => mkFinding(it.polarity, it.text, it.kind === 'maltreat' ? 2 : 1));
+	if(!findings.length) findings.push(mkFinding('neutral', '无吉化/凶化条件命中（凌制/围合/背离/执矛/日心均未见）', 1));
+	const score = scoreFromFindings(findings, 60);
+	return { key: 'bonification', title: '吉化 / 凶化（凌制·围合·背离）', verdict: verdictOf(score), score, findings, detail_md: '吉化=3°内入相合吉星/优位四分三分凌制/吉围合/执矛/日心;凶化=凶星同度/优位凌制/围攻/背离其定位星。凌制取整宫口径,黄道在先者为主。' };
 }
 
 // 黄经 → 星座 key(供 almuten 用)
@@ -589,7 +649,55 @@ function signKeyOfLon(lon){
 	return ['aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo', 'libra', 'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces'][idx];
 }
 
-export function runModules(facts, topic){
+// ===== R2 阿拉伯点模块:福/精神状态 + 用事关联分科点(facts.lots 由 electionEngine 组装) =====
+const LOT_CONTACT_ORB = 3;   // 点为虚点,取紧合/冲/刑接触判受照(±3°)
+function lotContacts(facts, lon){
+	const hits = [];
+	['jupiter', 'venus', 'mars', 'saturn'].forEach((k) => {
+		const p = facts.planets[k];
+		if(!p || p.lon === null || p.lon === undefined) return;
+		[[0, '合'], [90, '刑'], [180, '冲'], [120, '拱'], [60, '六合']].forEach(([ang, label]) => {
+			const target = normLon(lon + ang);
+			const target2 = normLon(lon - ang);
+			if(angularDist(p.lon, target) <= LOT_CONTACT_ORB || (ang !== 0 && ang !== 180 && angularDist(p.lon, target2) <= LOT_CONTACT_ORB)){
+				hits.push({ planet: k, angle: ang, label, benefic: BENEFICS.indexOf(k) >= 0 });
+			}
+		});
+	});
+	return hits;
+}
+function lotsModule(facts, topic){
+	const findings = [];
+	const lots = facts.lots;
+	if(!lots || (!lots.hermetic.length && !lots.topical.length)){
+		return { key: 'lots', title: '阿拉伯点', verdict: 'neutral', score: 60, findings: [mkFinding('neutral', '缺上升/福点数据，无法组装阿拉伯点', 1)], detail_md: '' };
+	}
+	const judge = (row, weightBase) => {
+		if(!row) return;
+		const contacts = lotContacts(facts, row.lon);
+		const good = contacts.filter((c) => c.benefic && (c.angle === 0 || c.angle === 120 || c.angle === 60));
+		const bad = contacts.filter((c) => !c.benefic && (c.angle === 0 || c.angle === 90 || c.angle === 180));
+		let text = `${row.cn} 落 ${row.signCn} ${row.signlon}°${row.house ? `·第 ${row.house} 宫` : ''}（定位星 ${row.dispositorCn}）`;
+		if(good.length) text += `；受吉星${good.map((c) => `${cn(c.planet)}${c.label}`).join('、')}`;
+		if(bad.length) text += `；受凶星${bad.map((c) => `${cn(c.planet)}${c.label}`).join('、')}`;
+		const pol = bad.length && !good.length ? 'negative' : (good.length && !bad.length ? 'positive' : 'neutral');
+		findings.push(mkFinding(pol, text, (good.length || bad.length) ? weightBase : 1));
+	};
+	judge(lots.byId.fortune, 2);
+	judge(lots.byId.spirit, 2);
+	// 用事关联分科点(topicMaster.topic_lots;marriageAuto/erosAuto 已由引擎按口径落点)
+	(facts.topicLotIds || []).forEach((id) => {
+		if(id === 'fortune' || id === 'spirit') return;
+		judge(lots.byId[id], 2);
+	});
+	if(!findings.length) findings.push(mkFinding('neutral', '福/精神点无紧密受照，状态平平', 1));
+	const score = scoreFromFindings(findings, 60);
+	return { key: 'lots', title: '阿拉伯点（福·精神·分科）', verdict: verdictOf(score), score, findings, detail_md: '福点=后端盘面同源;精神点=福点关于上升之镜像;受照按 ±3° 紧接触计。全谱见右栏「阿拉伯点」页。' };
+}
+
+// school:westernSchools 五档之一(红线/权重/口径的流派载体;缺省=modern_main 行为)。
+// 口径细化值经 facts.eff(electionEngine 注入)读取——本签名保住「runModules 必须接 school」的护栏语义。
+export function runModules(facts, topic, school){
 	return [
 		moonModule(facts),
 		ascRulerModule(facts),
@@ -610,6 +718,8 @@ export function runModules(facts, topic){
 		paransModule(facts, topic),
 		radicalityModule(facts),
 		almutenModule(facts),
+		lotsModule(facts, topic),
+		bonificationModule(facts),
 	];
 }
 

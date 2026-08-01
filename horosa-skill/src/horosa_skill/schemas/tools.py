@@ -697,6 +697,10 @@ class HoraryInput(BirthInput):
     # category picks the quesited house: general/wealth/family/property/pregnancy/health/marriage/lawsuit/
     # theft/death/travel/career/hope/enemy (unknown → general).
     category: str | None = "general"
+    # 流派档（horarySchools.js 的 HORARY_SCHOOLS）：classical(默认) / renaissance / medieval …
+    # 它决定两段的有无——[偶然尊贵满分表] 只在 accidentalMode=='lilly' 出、[阿拉伯点全集] 只在
+    # lotsSet=='core15' 出，二者都是 renaissance/medieval 档的口径。结果敏感 → 缺省不静默切换。
+    school: str | None = Field(default=None, description="卜卦流派档：classical / renaissance / medieval（默认 classical）。")
     tradition: bool | None = True
     predictive: bool | None = False
     # 卜卦七档参数谱（星阙 v3.6.0，界表勘误 + 判读叠层二期）。上游 horarySchools.js 的 HORARY_PARAM_SPEC

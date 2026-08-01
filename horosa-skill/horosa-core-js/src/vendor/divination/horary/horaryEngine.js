@@ -6,16 +6,17 @@ import { radicality } from '../engine/radicality.js';
 import { analyzePerfection, completionThirds } from '../engine/perfection.js';
 import { moonReport } from '../engine/moon.js';
 import { planetCondition } from '../engine/conditions.js';
-import { applyingAspects, separatingAspects, aspectsOf } from '../engine/aspectsEngine.js';
-import { assignSignificators } from './significators.js';
+import { applyingAspects, separatingAspects, aspectsOf, aspectBetween } from '../engine/aspectsEngine.js';
+import { almutenAt } from '../engine/almuten.js';
+import { assignSignificators, moonPromotionCheck } from './significators.js';
 import { timingFrom, directionFrom } from './timing.js';
 import { describePerson, THIEF_BY_PLANET, DISEASE_BY_ELEMENT, DEATH_MODE } from './describe.js';
 import { runTheft } from './theftModule.js';
 import { buildTopicDeepening } from './topicModule.js';
 import { PLANETS } from '../data/planets.js';
 import { SIGNS, signOfLon } from '../data/signs.js';
-import { FIXED_STARS, starLonAt } from '../data/fixedStars.js';
-import { lotDispositor } from '../data/lots.js';
+import { FIXED_STARS, starLonAt, starOrbFor } from '../data/fixedStars.js';
+import { lotDispositor, LOTS_SETS, computeLotsSet } from '../data/lots.js';
 import { angularDist, norm360 } from '../engine/utils.js';
 
 function cn(k){ return (PLANETS[k] || {}).cn || k; }
@@ -39,12 +40,20 @@ function buildLots(facts, opts){
 		const disp = lotDispositor(lon);
 		return { lon, sign, signCn: signCn(sign), signlon: ((lon % 30) + 30) % 30, disp, dispCn: disp ? cn(disp) : null };
 	};
-	return {
+	const out = {
 		reversalApplied: useNight,
 		convention: reverse ? (isDay ? '反转档·日盘（同日式）' : '反转档·夜盘（翻公式）') : '不反转档（恒日式）',
 		fortune: pack(fortune),
 		spirit: pack(spirit),
 	};
+	// lots_set='core15'：高可靠核心集全量（福/精神按上方口径先算好注入,其余按各点 reverseBySect）。
+	// 默认 'minimal' 不扩（零回归）。
+	if(opts.lotsSet && opts.lotsSet !== 'minimal' && LOTS_SETS[opts.lotsSet]){
+		const workLons = { ...facts.lons, fortune, spirit };
+		out.extended = computeLotsSet(workLons, isDay, LOTS_SETS[opts.lotsSet])
+			.map((it) => ({ ...it, ...pack(it.lon), id: it.id, cn: it.cn, use: it.use, house: it.house }));
+	}
+	return out;
 }
 
 // 取本盘公历年（恒星岁差修正）：读 /chart 回传 params.birth/date；缺则用中性年。
@@ -59,7 +68,7 @@ function chartYear(facts){
 
 // D2 恒星会合：征象星/命度/天顶 会合精选恒星（容许度按流派取，默认 1°）。
 function buildFixedStars(facts, sigs, opts){
-	const orb = (opts && typeof opts.fixedStarOrb === 'number' && opts.fixedStarOrb > 0) ? opts.fixedStarOrb : 1;
+	// 轨档：'school'(默认,平轨=既有行为字节不变) / 'byMagnitude'(Robson 按星等;王者封顶 5°)。
 	const year = chartYear(facts);
 	const out = [];
 	const points = {};
@@ -72,8 +81,10 @@ function buildFixedStars(facts, sigs, opts){
 	Object.keys(points).forEach((label) => {
 		const lon = points[label];
 		FIXED_STARS.forEach((st) => {
-			if(angularDist(lon, starLonAt(st.lon_1995, year)) <= orb){
-				out.push({ point: label, star: st.name_cn, meaning: st.meaning, nature: (st.election && st.election.avoid) ? 'caution' : 'boost' });
+			const stLon = starLonAt(st.lon_1995, year);
+			if(angularDist(lon, stLon) <= starOrbFor(st, opts)){
+				// starLon/pointLon 为纯增字段(中栏叠层轮缘定位用);快照/右栏按显式字段格式化,零影响。
+				out.push({ point: label, star: st.name_cn, meaning: st.meaning, nature: (st.election && st.election.avoid) ? 'caution' : 'boost', royal: !!st.isRoyal, starLon: stLon, pointLon: lon });
 			}
 		});
 	});
@@ -81,28 +92,48 @@ function buildFixedStars(facts, sigs, opts){
 }
 
 // D5 行星时佐证：时主星与命主/事项星一致 → 时辰与盘相合（根本性佐证）。
-function buildHourAgreement(facts, sigs){
+// opts.hourAgreementVariant:'either'(两口径任一,缺省)|'lilly'(行星统辖版:只认时主=命主星)|
+// 'bonatti'(落座元素版:时主与上升座同元素也算合)。不传=既有行为字节不变。
+function buildHourAgreement(facts, sigs, opts){
+	opts = opts || {};
+	const v = opts.hourAgreementVariant || 'either';
 	const hr = facts.meta.hourRuler;
 	if(!hr){ return null; }
 	if(hr === sigs.querentKey){ return { agree: true, text: `时主星 ${cn(hr)} ＝ 命主：时辰与盘相合（根本性佐证）。` }; }
-	if(hr === sigs.quesitedKey){ return { agree: true, text: `时主星 ${cn(hr)} ＝ 事项守护星：时辰与所问相合（佐证）。` }; }
+	if(v !== 'lilly' && hr === sigs.quesitedKey){ return { agree: true, text: `时主星 ${cn(hr)} ＝ 事项守护星：时辰与所问相合（佐证）。` }; }
+	if(v === 'bonatti'){
+		const ELEM = { aries: 'fire', leo: 'fire', sagittarius: 'fire', taurus: 'earth', virgo: 'earth', capricorn: 'earth', gemini: 'air', libra: 'air', aquarius: 'air', cancer: 'water', scorpio: 'water', pisces: 'water' };
+		const ascSign = facts.houses && facts.houses[1] ? facts.houses[1].sign : null;
+		const hrSign = facts.planets[hr] ? facts.planets[hr].sign : null;
+		if(ascSign && hrSign && ELEM[ascSign] && ELEM[ascSign] === ELEM[hrSign]){
+			return { agree: true, text: `时主星 ${cn(hr)} 落座与上升座同元素（落座元素版口径）：时辰与盘相合。` };
+		}
+	}
+	if(v === 'lilly' && hr === sigs.quesitedKey){ return { agree: false, text: `时主星 ${cn(hr)} ＝ 事项守护星——行星统辖版口径只认命主一致，作一般参考。` }; }
 	return { agree: false, text: `时主星 ${cn(hr)} 与命主/事项星不一致，作一般参考。` };
 }
 
 export const ASPECT_CN = { 0: '合相', 60: '六合', 90: '四分(刑)', 120: '三合', 180: '对分(冲)' };
 const ASPECT_NATURE = { 0: 'neutral', 60: 'positive', 120: 'positive', 90: 'negative', 180: 'negative' };
 const ALL_KEYS = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn'];
+const OUTER_KEYS = ['uranus', 'neptune', 'pluto'];
+// [WP-F] includeOuter 真接线:全相位表/月亮叙事的星集门(默认 false=七政,现状零回归;
+// 现代档 includeOuter:true → 三王星入表)。注:perfection 的干扰/传递/汇集候选历史即全星集,不动。
+function judgeKeysFor(includeOuter){
+	return includeOuter ? ALL_KEYS.concat(OUTER_KEYS) : ALL_KEYS;
+}
 // 古典卜卦只取托勒密五相位（合/六合/四分/三合/对分），不取 45°/30° 等次相位。
 const PTOLEMAIC = [0, 60, 90, 120, 180];
 
-// 全盘相位一览（古典七政两两，去重）——把所有可能用到的征象摆给用户自行判断
-function buildAllAspects(facts){
+// 全盘相位一览（判读星集两两，去重）——把所有可能用到的征象摆给用户自行判断
+function buildAllAspects(facts, includeOuter){
+	const KS = judgeKeysFor(includeOuter);
 	const seen = {}; const out = [];
-	ALL_KEYS.forEach((a) => {
+	KS.forEach((a) => {
 		if(!facts.planets[a]) return;
 		aspectsOf(facts, a).forEach((x) => {
 			const b = x.other;
-			if(ALL_KEYS.indexOf(b) < 0) return;
+			if(KS.indexOf(b) < 0) return;
 			if(PTOLEMAIC.indexOf(x.angle) < 0) return;
 			const k = [a, b].sort().join('-') + ':' + x.angle;
 			if(seen[k]) return; seen[k] = 1;
@@ -114,8 +145,9 @@ function buildAllAspects(facts){
 }
 
 // 月亮的故事：刚离开（过去）→ 接下来要会（未来），卜卦核心线索
-function buildMoonStory(facts){
-	const inSet = (x) => ALL_KEYS.indexOf(x.other) >= 0 && PTOLEMAIC.indexOf(x.angle) >= 0;
+function buildMoonStory(facts, includeOuter){
+	const KS = judgeKeysFor(includeOuter);
+	const inSet = (x) => KS.indexOf(x.other) >= 0 && PTOLEMAIC.indexOf(x.angle) >= 0;
 	return {
 		separating: separatingAspects(facts, 'moon').filter(inSet).sort((a, b) => a.orb - b.orb),
 		applying: applyingAspects(facts, 'moon').filter(inSet).sort((a, b) => a.orb - b.orb),
@@ -160,11 +192,20 @@ function buildQueries(facts, ctx){
 	q.reportTrue = { verdict: (moonAngular && !rVoc) ? 'true' : (m && (rVoc || m.combustion === 'combust') ? 'false' : 'uncertain'), text: m ? (rVoc ? '月空相 → 消息恐假/为时过早。' : (moonAngular ? '月在角宫且非空相 → 偏真。' : '月非角宫，参考其他。')) : '' };
 	// Query IV 何处/方向
 	q.where = quesitedKey ? directionFrom(facts, quesitedKey) : null;
+	// Query V 何时（应期指针;与「时空」Tab 同源）
+	q.when = ctx.timing ? { verdict: 'info', text: ctx.timing.text } : { verdict: 'uncertain', text: '无准确入相位可折算应期。' };
+	// Query VI 结局如何（事情之终局:4宫主状态 + 月亮末相位口径）
+	const l4 = facts.houses[4] && facts.houses[4].ruler;
+	const c4 = l4 && conds && conds[l4] ? conds[l4] : null;
+	q.outcome = {
+		verdict: c4 ? (c4.score > 0 ? 'good' : (c4.score < 0 ? 'bad' : 'neutral')) : 'uncertain',
+		text: l4 ? `事之结局看 4宫主 ${cn(l4)}${c4 ? `（状态分 ${c4.score}）` : ''}；月亮末次相位并参。` : '4宫主未定，结局待参月亮末相位。',
+	};
 	return q;
 }
 
 function methodCn(m){ return ({ application: '入相位', translation: '光线传递', collection: '光线汇集', position: '落位', antiscion: '映点' })[m] || m || ''; }
-function destrCn(d){ return ({ no_reception_hard: '无接纳的刑/冲', combustion: '燃烧', separation: '出相位(事已过)', prohibition: '阻碍', frustration: '挫败', refranation: '折返' })[d] || d || '受阻'; }
+function destrCn(d){ return ({ no_reception_hard: '无接纳的刑/冲', combustion: '燃烧', separation: '出相位(事已过)', prohibition: '阻碍', frustration: '挫败', refranation: '撤回(临成自退)', abscission: '光线切断' })[d] || d || '受阻'; }
 
 function buildVerdict(ctx){
 	const { perf, moon, conds, thirds, querentKey, quesitedKey } = ctx;
@@ -212,9 +253,9 @@ function buildVerdict(ctx){
 
 export function runHorary(result, category, opts){
 	opts = opts || {};
-	const facts = buildFacts(result);
+	const facts = buildFacts(result, opts);
 	if(!facts) return null;
-	const sigs = assignSignificators(facts, category || 'general');
+	const sigs = assignSignificators(facts, category || 'general', opts);
 	const querentKey = sigs.querentKey;
 	let quesitedKey = sigs.quesitedKey;
 	if(!quesitedKey){
@@ -222,24 +263,52 @@ export function runHorary(result, category, opts){
 		quesitedKey = app.length ? app[0].other : null;
 	}
 	const moon = moonReport(facts, opts);
-	const rad = radicality(facts, { ...opts, category: category || 'general', moonVoc: moon.voc });
+	const rad = radicality(facts, { ...opts, category: category || 'general', moonVoc: moon.voc, sigs: { querentKey, quesitedKey } });
 	const perf = (querentKey && quesitedKey) ? analyzePerfection(facts, querentKey, quesitedKey, { quesitedHouse: sigs.quesitedHouse, ...opts }) : null;
 	const thirds = completionThirds(facts, [querentKey, 'moon', quesitedKey]);
 	const conds = {};
-	[querentKey, quesitedKey, sigs.natural, 'moon'].filter(Boolean).forEach((k) => { if(!conds[k]) conds[k] = planetCondition(k, facts); });
-	const queries = buildQueries(facts, { quesitedKey, perf, moon, conds });
-	const timing = (perf && perf.aspect && perf.perfects) ? timingFrom(facts, perf.aspect.from || querentKey, perf.aspect.orb) : null;
+	[querentKey, quesitedKey, sigs.natural, 'moon'].filter(Boolean).forEach((k) => { if(!conds[k]) conds[k] = planetCondition(k, facts, opts); });
+	const timing = (perf && perf.aspect && perf.perfects)
+		? timingFrom(facts, perf.aspect.from || querentKey, perf.aspect.orb, {
+			...opts,
+			appliedKey: perf.aspect.to || quesitedKey,
+			otherKey: (perf.aspect.from === querentKey ? quesitedKey : querentKey),
+		})
+		: null;
+	const queries = buildQueries(facts, { quesitedKey, perf, moon, conds, timing });
 	const verdict = buildVerdict({ perf, moon, conds, thirds, querentKey, quesitedKey });
+	// 考量14「吉凶势均力敌」：裁决后回填（|pos−neg|<2 且未有明确完成/破坏 → 命中）。
+	if(rad && rad.considerations && rad.considerations.items){
+		const even = rad.considerations.items.find((it) => it.key === 'balance_even');
+		if(even){
+			even.hit = Math.abs(verdict.posScore - verdict.negScore) < 2 && !(perf && (perf.perfects || perf.destroyed));
+		}
+	}
+	// 月亮升格检查（05§4.1 四条件;注记性,不改变默认象征星指派）。
+	const l1qAspect = (querentKey && quesitedKey) ? aspectBetween(facts, querentKey, quesitedKey) : null;
+	const moonPromotion = moonPromotionCheck(facts, querentKey, quesitedKey, l1qAspect !== null);
+	// 逐度 almuten（上升/事项宫头/日月福点由 UI 按需展开;此处给上升与事项宫头两处）。
+	const almutenOpts = {
+		isDiurnal: facts.meta.isDiurnal,
+		termsVariant: opts.termsVariant !== undefined ? opts.termsVariant : 'ptolemaic',
+		tripSystem: opts.tripSystem, geminiEmended: !!opts.geminiEmended, weights: opts.almutenWeights,
+	};
+	const almuten = {
+		asc: facts.meta.ascLon != null ? almutenAt(facts.meta.ascLon, almutenOpts) : null,
+		quesitedCusp: (sigs.quesitedHouse && facts.houses[sigs.quesitedHouse] && facts.houses[sigs.quesitedHouse].lon != null)
+			? almutenAt(facts.houses[sigs.quesitedHouse].lon, almutenOpts) : null,
+	};
 	const describe = buildDescribe(facts, querentKey, quesitedKey, category || 'general', sigs);
 	const theft = (category === 'theft') ? runTheft(facts) : null;
 	return {
 		facts, category: category || 'general', school: opts.school || 'classical',
 		significators: { querentKey, quesitedKey, natural: sigs.natural, moon: 'moon', quesitedHouse: sigs.quesitedHouse, quesitedLabel: sigs.quesitedLabel },
 		radicality: rad, moon, perfection: perf, thirds, conditions: conds, queries, timing, verdict, describe, theft,
-		allAspects: buildAllAspects(facts), moonStory: buildMoonStory(facts),
+		almuten, moonPromotion,
+		allAspects: buildAllAspects(facts, !!opts.includeOuter), moonStory: buildMoonStory(facts, !!opts.includeOuter),
 		hourRuler: facts.meta.hourRuler,
 		fixedStars: buildFixedStars(facts, { querentKey, quesitedKey }, opts),
-		hourAgreement: buildHourAgreement(facts, { querentKey, quesitedKey }),
+		hourAgreement: buildHourAgreement(facts, { querentKey, quesitedKey }, opts),
 		lots: buildLots(facts, opts),
 		tripSystem: opts.tripSystem || 'ptolemaic',
 		topic: buildTopicDeepening(facts, category || 'general'),

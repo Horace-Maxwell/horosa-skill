@@ -1,3 +1,4 @@
+import { safeLocalStorageSet } from '../../gua/safeStorage.js';
 // divination/data/regionCharts.js
 // 「地区盘」预置数据 + 用户自定义存取。只放中性历史建置时刻作示例；以用户自定义为主。
 // 不预置任何政治敏感现代实体；坐标用 App 既有「度分」串式（如 '0w07' / '51n30'）+ 数值 gps。
@@ -81,7 +82,7 @@ export function saveUserRegion(key, rec){
 		if(typeof localStorage === 'undefined' || !key || !rec){ return loadUserRegions(); }
 		const cur = loadUserRegions();
 		cur[key] = rec;
-		localStorage.setItem(USER_KEY, JSON.stringify(cur));
+		safeLocalStorageSet(USER_KEY, JSON.stringify(cur));
 		return cur;
 	}catch(e){ return loadUserRegions(); }
 }
@@ -91,7 +92,7 @@ export function removeUserRegion(key){
 		if(typeof localStorage === 'undefined' || !key){ return loadUserRegions(); }
 		const cur = loadUserRegions();
 		delete cur[key];
-		localStorage.setItem(USER_KEY, JSON.stringify(cur));
+		safeLocalStorageSet(USER_KEY, JSON.stringify(cur));
 		return cur;
 	}catch(e){ return loadUserRegions(); }
 }
