@@ -24,12 +24,14 @@ import { runYanqinYanfa } from './yanqinYanfa.js';
 import { runTiebanFramework } from './tiebanFramework.js';
 import { runUranianExtra } from './uranianExtra.js';
 import { runEgyptSection } from './egyptSection.js';
+import { runBabylon } from './babylon.js';
 
 const TOOL_RUNNERS = {
   uranian_extra: runUranianExtra,
   tieban_framework: runTiebanFramework,
   yanqin_yanfa: runYanqinYanfa,
   egypt_section: runEgyptSection,
+  babylon: runBabylon,
   india_jyotish: runIndiaJyotish,
   qimen: runQimen,
   taiyi: runTaiyi,

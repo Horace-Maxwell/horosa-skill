@@ -161,6 +161,7 @@ def build_sample_payloads() -> dict[str, dict]:
         "sanshiunited": dict(east_birth),
         "chart": dict(chart_birth),
         "chart13": {**chart_birth, "predictive": 0},
+        "babylon": {**chart_birth, "predictive": 0},
         "chart12": {**chart_birth, "predictive": 0},
         "draconic": {**chart_birth, "predictive": 0, "orb": 2.0},
         # 重置盘必须给新地点，否则退化成本命盘（relocLat/relocLon 缺省回退出生地）。

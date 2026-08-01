@@ -30,6 +30,11 @@ _DROP_IMPORT_PATTERNS = (
     re.compile(r"^import\s+request\s+from\s+['\"][^'\"]*utils/request['\"];?\s*$", re.M),
     re.compile(r"^import\s+\{[^}]*\b(?:ServerRoot|ResultKey)\b[^}]*\}\s+from\s+['\"][^'\"]+['\"];?\s*$", re.M),
     re.compile(r"^import\s+\{[^}]*buildKentangEndpoint[^}]*\}\s+from\s+['\"][^'\"]+['\"];?\s*$", re.M),
+    # namespace 形式：`import * as Constants from './constants'`（其 ServerRoot 是后端地址）。
+    # 具名形式已在上面覆盖，但上游 utils/*AiSnapshot.js 这一支用的是 namespace 写法。
+    re.compile(r"^import\s+\*\s+as\s+Constants\s+from\s+['\"][^'\"]*constants['\"];?\s*$", re.M),
+    re.compile(r"^import\s+\w+\s+from\s+['\"][^'\"]*utils/request['\"];?\s*$", re.M),
+    re.compile(r"^import\s+\w+\s+from\s+['\"]\./request['\"];?\s*$", re.M),
 )
 _RELATIVE_IMPORT = re.compile(r"(from\s+['\"])(\.[^'\"]*?)(['\"])")
 
@@ -37,7 +42,10 @@ _RELATIVE_IMPORT = re.compile(r"(from\s+['\"])(\.[^'\"]*?)(['\"])")
 def _strip_fetch_helpers(text: str) -> tuple[str, list[str]]:
     """Remove `export async function fetch*Pan(...) { … }` blocks by brace matching."""
     removed: list[str] = []
-    pattern = re.compile(r"^export\s+(?:async\s+)?function\s+(fetch\w*Pan)\s*\(", re.M)
+    # 命名放宽到任意导出的 `fetch*`：AGENTS §5 的契约是「Python 发请求，JS 层不说 HTTP」，
+    # 按 `fetch` 前缀识别比维护一张函数名清单稳。此前只认 `fetch*Pan`，于是
+    # `fetchBabylonEphemeris` / `fetchRiseSetAt` 漏网，vendored 模块带着 ServerRoot 引用不可加载。
+    pattern = re.compile(r"^export\s+(?:async\s+)?function\s+(fetch\w+)\s*\(", re.M)
     while True:
         match = pattern.search(text)
         if not match:
@@ -53,6 +61,40 @@ def _strip_fetch_helpers(text: str) -> tuple[str, list[str]]:
             index += 1
         removed.append(match.group(1))
         text = text[:start] + text[index:].lstrip("\n")
+
+
+def _strip_network_orchestrators(text: str, removed: list[str]) -> tuple[str, list[str]]:
+    """剥掉引用了已删 `fetch*` 的导出 async 编排函数（`buildXForFields` 一类）。
+
+    这些函数的职责就是「发几个请求再拼数据」，headless 侧由 Python 承担。留着它们不会在加载期报错
+    （自由变量到调用期才解析），但会让 vendored 模块看起来还提供一个根本不能用的入口——比留个坏
+    import 更隐蔽。按「引用了被删符号」判定，不写死函数名。
+    """
+    notes: list[str] = []
+    if not removed:
+        return text, notes
+    while True:
+        hit = None
+        for match in re.finditer(r"^export\s+async\s+function\s+(\w+)\s*\(", text, re.M):
+            start = match.start()
+            brace = text.index("{", match.end() - 1)
+            depth, index = 1, brace + 1
+            while depth and index < len(text):
+                if text[index] == "{":
+                    depth += 1
+                elif text[index] == "}":
+                    depth -= 1
+                index += 1
+            body = text[brace:index]
+            if any(re.search(rf"\b{re.escape(name)}\b", body) for name in removed):
+                hit = (match.group(1), start, index)
+                break
+        if not hit:
+            return text, notes
+        name, start, end = hit
+        removed.append(name)
+        notes.append(f"stripped network orchestrator {name}")
+        text = text[:start] + text[end:].lstrip("\n")
 
 
 _NAMED_IMPORT = re.compile(r"^import\s+\{\s*([^}]+?)\s*\}\s+from\s+['\"]([^'\"]+)['\"];?\s*$", re.M)
@@ -125,6 +167,8 @@ def transform(text: str) -> tuple[str, list[str]]:
     text, removed = _strip_fetch_helpers(text)
     if removed:
         notes.append("stripped " + ", ".join(removed))
+    text, orch_notes = _strip_network_orchestrators(text, removed)
+    notes.extend(orch_notes)
     text, orphan_notes = _drop_orphaned_imports(text)
     notes.extend(orphan_notes)
 

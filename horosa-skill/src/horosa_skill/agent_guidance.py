@@ -713,6 +713,19 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     ),
     "chart": ASTRO_BIRTH_POLICY,
     "chart13": ASTRO_BIRTH_POLICY,
+    "babylon": _policy(
+        intent="巴比伦占星：恒星黄道·毕宿锚盘（无宫位/无相位/无上升），解读装置是「位」三法与行星神性。",
+        required_context=COMMON_BIRTH_FIELDS,
+        ask_if_missing=[
+            {"field": "date/time/place", "question": "请提供出生日期、时间、时区和地点。"},
+            {
+                "field": "scheme/solstice",
+                "question": "实位派系与分至规范取哪一套？（派系改「位」的落点、分至规范改春分度数）",
+                "options": ["swissA10 + A10（春分白羊 10°，默认）", "systemA", "systemB", "B8（春分白羊 8°）"],
+            },
+        ],
+        output_contract=["起盘信息", "七曜按宫", "分至天狼星", "位三法", "行星神性", "微黄道"],
+    ),
     # 十二分盘/龙盘：与本命盘同一套出生资料，无额外结果敏感设置 → 沿用同一策略。
     "chart12": ASTRO_BIRTH_POLICY,
     "draconic": ASTRO_BIRTH_POLICY,

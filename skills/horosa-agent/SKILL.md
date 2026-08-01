@@ -1,7 +1,7 @@
 ---
 name: horosa-agent
 description: >-
-  Call Horosa (星阙) local metaphysics tools correctly over MCP or CLI — 86 real techniques: Western
+  Call Horosa (星阙) local metaphysics tools correctly over MCP or CLI — 87 real techniques: Western
   natal/predictive astrology (returns, progressions, primary directions, horary 卜卦, election 择日),
   八字, 紫微, 大六壬, 奇门遁甲, 太乙, 金口诀, 三式合一, 河洛理数, 邵子参评数, 六爻, 天文地占, 塔罗, and
   the full 14 神数. Use whenever a user asks to 起盘 / 排盘 / 起课 / 起卦 / 算命 / 推运 / 看盘 / 合盘 /
@@ -129,6 +129,7 @@ question context.”
 | User intent | Tool |
 | --- | --- |
 | Natal chart 标准星盘 | `chart` (13-house: `chart13`; 12th-harmonic/Dwadasamsa: `chart12`; Hellenistic: `hellen_chart`) |
+| 巴比伦占星 Babylonian | `babylon` (no houses/aspects/Asc by design — the reading device is the bīt niṣirti triplicity + planetary numina) |
 | Draconic / Relocation 衍生盘 | `draconic` (node-zeroed) · `relocation` (needs `relocLat`/`relocLon` — without them it degenerates to the natal chart) |
 | 古典占星 dignities reading (v2.6.7) | no separate tool — `chart`/`chart13`/`hellen_chart` exports carry `[古典]` + `[古典格局]` automatically; `india_chart`/`mundane` carry `[古典]` only |
 | Qizheng Siyi / 七政四余 | `guolao_chart` |

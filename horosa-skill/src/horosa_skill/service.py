@@ -61,6 +61,7 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "chart13": "astrochart_like",
     "chart12": "dwadasamsa",
     "draconic": "draconic",
+    "babylon": "babylon",
     "relocation": "relocation",
     # 上游把这一族按出盘页面拆键（aiExport.js 的 ASTRO_LIKE_EXPORT_KEYS）；希腊盘与调波盘各有自己的
     # 导出键，不再共用 astrochart_like，否则两者的导出勾选会互相串。
@@ -170,6 +171,7 @@ _PYTHON_CHART_ENDPOINTS = {
     "/india/chart",
     "/germany/midpoint",
     "/astroextra/harmonic",
+    "/astroextra/ephemeris",
     "/astroextra/draconic",
     "/astroextra/relocation",
     "/predict/agepoint",
@@ -7329,6 +7331,58 @@ class HorosaSkillService:
             "raw": response,
         }
 
+    def _run_babylon_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """巴比伦占星：恒星黄道 · 毕宿锚盘 → vendored 纯函数链铺六段。
+
+        上游的编排函数自己发两个请求，headless 侧按 §5 由 Python 发、JS 只算与排版。
+        `/astroextra/ephemeris`（朔望/邻近食）取不到时，[分至天狼星] 段内两行实算自动省略、
+        图式行照常 —— 与上游同一条降级口径，故不视为失败。
+        """
+        chart_payload = {
+            **payload,
+            "predictive": 0,
+            "tradition": 1,
+            # 口径由体系决定，不是用户可选项：巴比伦盘恒为恒星黄道 + 毕宿锚（金牛 15°）。
+            "zodiacal": 1,
+            "siderealAyanamsa": "aldebaran_15tau",
+        }
+        for stale in ("scheme", "solstice", "era", "datetime", "dirZone", "dirLat", "dirLon"):
+            chart_payload.pop(stale, None)
+        chart = self._call_remote("/chart", chart_payload)
+        date_text = f"{payload.get('date') or ''}".replace("/", "-")
+        parts = date_text.split("-")
+        try:
+            year, month, day = int(parts[0]), int(parts[1]), int(parts[2][:2])
+        except (IndexError, ValueError):
+            raise ToolValidationError(f"Invalid date for tool `babylon`: {payload.get('date')!r}") from None
+        if f"{payload.get('ad', 1)}" in {"-1", "0"}:
+            year = -abs(year)  # 公元前：同上游 babylonBirthJdn 的 signedYear 分支
+        ephemeris = None
+        try:
+            ephemeris = self._call_remote("/astroextra/ephemeris", {**chart_payload, "kinds": "lunations"})
+        except Exception as exc:  # noqa: BLE001 — 实算历象缺失只丢两行，不影响成段
+            logger.warning("babylon ephemeris fetch failed: %s", exc)
+        js = self.js_client.run(
+            "babylon",
+            {
+                "chart": chart,
+                "year": year,
+                "month": month,
+                "day": day,
+                "ephemeris": ephemeris,
+                "scheme": payload.get("scheme"),
+                "solstice": payload.get("solstice"),
+                "era": payload.get("era"),
+            },
+        )
+        snapshot_text = f"{(js or {}).get('text') or ''}".strip()
+        return {
+            "chart": chart.get("chart"),
+            "raw": chart,
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="babylon", snapshot_text=snapshot_text),
+        }
+
     def _run_draconic_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 龙盘：各点黄经减北交点（交点归零）。后端把标准 chart-wrap 放在响应的 `chart` 键下——
         # 与 /astroextra/harmonic 同一形状，比导出层通用段构建器预期深一层，故同样摊平到顶层。
@@ -8205,6 +8259,8 @@ class HorosaSkillService:
             return self._run_astrodata_tool(payload)
         if definition.name == "sanshiunited":
             return self._run_sanshiunited_tool(payload)
+        if definition.name == "babylon":
+            return self._run_babylon_tool(payload)
         if definition.name == "draconic":
             return self._run_draconic_tool(payload)
         if definition.name == "relocation":

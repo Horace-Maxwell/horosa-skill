@@ -625,6 +625,16 @@ class HarmonicInput(BirthInput):
     orb: float | None = 2.0
 
 
+class BabylonInput(BirthInput):
+    # 巴比伦占星（美索不达米亚天象体系）：恒星黄道 · 毕宿锚（Aldebaran = 金牛 15°）。
+    # 本体系无十二宫位、无相位、无上升点——盘面是数据清单，解读装置是「位」(三分+日段) 与行星神性。
+    # 派系口径直接改分至规范与「位」的落点 → 结果敏感，缺省不静默切换。
+    predictive: bool | None = False
+    scheme: str | None = Field(default=None, description="实位派系：swissA10（默认）/ systemA / systemB。")
+    solstice: str | None = Field(default=None, description="分至规范：A10（春分白羊 10°，默认）/ B8（春分白羊 8°）。")
+    era: str | None = Field(default=None, description="纪元口径（塞琉古纪年等）。")
+
+
 class DraconicInput(BirthInput):
     # 龙盘 (draconic chart)：把命盘各点黄经减去北交点黄经（POST /astroextra/draconic）。
     # 后端返回 {nodeLon, positions, conjunctions, chart}，chart 与 /chart 同形。

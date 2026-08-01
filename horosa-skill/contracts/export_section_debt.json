@@ -5,10 +5,10 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 72,
+    "missing_sections": 66,
     "extra_sections": 29,
-    "absent_keys": 3,
-    "keys_with_debt": 35
+    "absent_keys": 2,
+    "keys_with_debt": 34
   },
   "keys": {
     "acg": {
@@ -24,18 +24,6 @@
       "extra": [
         "月宿"
       ]
-    },
-    "babylon": {
-      "missing": [
-        "起盘信息",
-        "七曜按宫",
-        "分至天狼星",
-        "位三法",
-        "行星神性",
-        "微黄道"
-      ],
-      "extra": [],
-      "absent_key": true
     },
     "bazi": {
       "missing": [
