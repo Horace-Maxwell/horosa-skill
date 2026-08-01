@@ -4948,6 +4948,42 @@ def _natal_chart_wrap(response: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _build_predictive_cross_aspect_lines(
+    response: dict[str, Any],
+    predictive_wrap: dict[str, Any] | None = None,
+    natal_wrap: dict[str, Any] | None = None,
+) -> list[str]:
+    """推运盘 ↔ 本命盘的交叉相位（上游 predictiveAiSnapshot.js::buildAspectLines 同款）。
+
+    这**不是**本命盘那种 {normalAsp, immediateAsp, signAsp} 结构：`/predict/*` 把交叉相位放在
+    `response["chart"]["aspects"]` 的**数组**里，每项形如
+    `{directId, objects:[{natalId, aspect, delta}]}`（后端 perpredict.getAspects 产出）。
+    此前这段错走 `_build_aspect_section`（读本命盘形状、且只认顶层 aspects）→ 真机上整段只输出
+    「标准相位/立即相位/星座相位」三个空子标题、一条相位都没有。离线测试没抓到，是因为
+    FakeClient 在顶层塞了本命形状的 aspects——桩与真实响应形状不一致，把 bug 盖住了。
+    """
+    chart = response.get("chart") if isinstance(response.get("chart"), dict) else {}
+    aspects = chart.get("aspects")
+    if not isinstance(aspects, list):
+        return []
+    lines: list[str] = []
+    for item in aspects:
+        if not isinstance(item, dict):
+            continue
+        direct_id = item.get("directId") or item.get("id")
+        # 上游 appendPlanetHouseInfoById：推运星的宫位取推运盘、本命星的宫位取本命盘（两张盘各查各的）。
+        direct_label = _astro_msg_with_house(direct_id, predictive_wrap or {}, short=True)
+        for target in item.get("objects") or []:
+            if not isinstance(target, dict):
+                continue
+            natal_label = _astro_msg_with_house(target.get("natalId") or target.get("id"), natal_wrap or {}, short=True)
+            lines.append(
+                f"行运{direct_label} 与 本命{natal_label}"
+                f" 成 {_aspect_text(target.get('aspect'))} 相位，误差{_round3(target.get('delta'))}"
+            )
+    return lines
+
+
 def _build_predictive_snapshot_text(tool_name: str, payload: dict[str, Any], response: dict[str, Any]) -> str:
     natal_wrap = _natal_chart_wrap(response)
     predictive_wrap = _predictive_chart_wrap(response)
@@ -4971,7 +5007,13 @@ def _build_predictive_snapshot_text(tool_name: str, payload: dict[str, Any], res
         ("本命盘星与虚点", _join_lines(_build_star_and_lot_position_lines(natal_wrap)) if natal_wrap else "无"),
         (f"{chart_label}起盘信息", _join_lines(predictive_setup_lines)),
         (f"{chart_label}星与虚点", _join_lines(_build_star_and_lot_position_lines(predictive_wrap)) or "无"),
-        (f"{chart_label}相位", _join_lines(_build_aspect_section(predictive_wrap)) or "无"),
+        # 交叉相位优先；后端未回数组形状时才退回本命盘形状的相位构建器（老响应 / 降级）。
+        (
+            f"{chart_label}相位",
+            _join_lines(_build_predictive_cross_aspect_lines(response, predictive_wrap, natal_wrap))
+            or _join_lines(_build_aspect_section(predictive_wrap))
+            or "无",
+        ),
     ]
     return _render_snapshot_text(sections)
 

@@ -288,10 +288,17 @@ class FakeClient(HorosaApiClient):
                 "diceChart": chart_payload,
                 "chart": chart_payload,
             }
+        # `/predict/*` 的交叉相位是**数组**形状（后端 perpredict.getAspects），且挂在 `chart` 里，
+        # 与本命盘的 {normalAsp, immediateAsp, signAsp} 完全不同。桩早先在**顶层**塞本命形状的
+        # aspects，于是「推运相位段在真机上是空的」这个 bug 在离线测试里恒绿。桩必须同形。
+        predictive_cross_aspects = [
+            {"directId": "Sun", "objects": [{"natalId": "Sun", "aspect": 0, "delta": 0.0}, {"natalId": "Mars", "aspect": 90, "delta": 0.929}]},
+            {"directId": "Moon", "objects": [{"natalId": "Venus", "aspect": 120, "delta": 0.262}]},
+        ]
         if endpoint in {"/predict/solarreturn", "/predict/lunarreturn", "/predict/givenyear"}:
             return {
                 "date": payload.get("datetime", "2031-04-06 09:33:00"),
-                "chart": chart_payload["chart"],
+                "chart": {**chart_payload["chart"], "aspects": predictive_cross_aspects},
                 "lots": chart_payload["lots"],
                 "dirParams": {
                     "date": "2031-04-06",
@@ -303,11 +310,11 @@ class FakeClient(HorosaApiClient):
                 "dirChart": chart_payload,
             }
         if endpoint in {"/predict/solararc", "/predict/profection"}:
+            # 真实响应只有 {chart:{objects, aspects}}，顶层**没有** aspects——桩不许比真实响应更宽松。
             return {
                 "date": payload.get("datetime", "2031-04-06 09:33:00"),
-                "chart": chart_payload["chart"],
+                "chart": {**chart_payload["chart"], "aspects": predictive_cross_aspects},
                 "lots": chart_payload["lots"],
-                "aspects": chart_payload["aspects"],
             }
         if endpoint == "/predict/pd":
             return {
@@ -1840,7 +1847,11 @@ def test_predictive_tools_export_real_natal_and_timed_chart_content(tmp_path) ->
         assert "本命盘" in text, tool_name
         assert any(label in text for label in ("返照盘", "推运盘", "流年盘")), tool_name
         assert "日 (" in text and "月 (" in text, tool_name
-        assert "标准相位" in text, tool_name
+        # 推运族的 [X盘相位] 是**交叉相位**（行运星 ↔ 本命星），不是本命盘那三个子标题。
+        # 旧断言查 "标准相位" 恰恰是在断言那个 bug 的产物：真机上该段只有三个空子标题、
+        # 零条相位，而桩在顶层塞了本命形状的 aspects 才让它显得成立。
+        assert "行运" in text and "与 本命" in text, tool_name
+        assert "标准相位" not in text, tool_name
 
 
 def test_primary_direction_exports_tables_and_pdchart_positions(tmp_path) -> None:
