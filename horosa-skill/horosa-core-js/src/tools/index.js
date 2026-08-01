@@ -32,6 +32,9 @@ import { runGuolaoStarDignity } from './guolaoStarDignity.js';
 import { runMundaneHorary } from './mundaneHorary.js';
 import { runMundaneSolunar } from './mundaneSolunar.js';
 import { runMundaneNavanayaka } from './mundaneNavanayaka.js';
+import { runBaziPeriod } from './baziPeriod.js';
+import { runZiweiExtras } from './ziweiExtras.js';
+import { runSanshiZiweiSihua } from './sanshiZiweiSihua.js';
 
 const TOOL_RUNNERS = {
   uranian_extra: runUranianExtra,
@@ -46,6 +49,9 @@ const TOOL_RUNNERS = {
   mundane_horary: runMundaneHorary,
   mundane_solunar: runMundaneSolunar,
   mundane_navanayaka: runMundaneNavanayaka,
+  bazi_period: runBaziPeriod,
+  ziwei_extras: runZiweiExtras,
+  sanshi_ziwei_sihua: runSanshiZiweiSihua,
   india_jyotish: runIndiaJyotish,
   qimen: runQimen,
   taiyi: runTaiyi,

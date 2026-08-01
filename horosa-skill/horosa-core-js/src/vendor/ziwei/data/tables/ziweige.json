@@ -1,0 +1,510 @@
+{
+	"紫府同宫": {
+		"category": "富贵", "source_ref": "紫微斗数全书",
+		"duanyi": "紫微天府同临命垣，帝座得库，主一生富贵双全、福禄绵长。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "same", "stars": ["紫微", "天府"]},
+			{"op": "inMing", "star": "紫微"},
+			{"op": "mingZhi", "branches": ["寅", "申"]}
+		],
+		"breakers": [{"op": "breakBy", "stars": ["擎羊", "陀罗", "火星", "铃星", "地空", "地劫"]}]
+	},
+	"府相朝垣": {
+		"category": "富贵", "source_ref": "紫微斗数全书·骨髓赋",
+		"duanyi": "天府天相于三方来朝命垣，仓廪充盈，衣食丰足，一生平稳得贵。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inTrine", "star": "天府"},
+			{"op": "inTrine", "star": "天相"}
+		],
+		"breakers": [{"op": "breakBy", "stars": ["擎羊", "陀罗", "火星", "铃星", "地空", "地劫"]}]
+	},
+	"君臣庆会": {
+		"category": "富贵", "source_ref": "紫微斗数全书·骨髓赋",
+		"duanyi": "紫微守命而得左右昌曲魁钺来朝，君臣庆会，主贵显赫，位列朝堂。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inMing", "star": "紫微"},
+			{"op": "inTrineAny", "stars": ["左辅", "右弼"], "atLeast": 1},
+			{"op": "inTrineAny", "stars": ["文昌", "文曲", "天魁", "天钺"], "atLeast": 1}
+		],
+		"breakers": [{"op": "breakBy", "stars": ["地空", "地劫"]}]
+	},
+	"机月同梁": {
+		"category": "富贵", "source_ref": "紫微斗数全书",
+		"duanyi": "天机太阴天同天梁会聚命垣三方，宜公门文教、计谋策划，安稳致贵。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inTrine", "star": "天机"},
+			{"op": "inTrine", "star": "太阴"},
+			{"op": "inTrine", "star": "天同"},
+			{"op": "inTrine", "star": "天梁"}
+		]
+	},
+	"日月并明": {
+		"category": "富贵", "source_ref": "紫微斗数全书·骨髓赋",
+		"duanyi": "太阴太阳俱居庙旺而拱照命垣，日月并明，佐九重于尧殿，贵不可言。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "bright", "star": "太阳", "levels": ["庙", "旺"]},
+			{"op": "bright", "star": "太阴", "levels": ["庙", "旺"]},
+			{"op": "or", "conditions": [
+				{"op": "inTrine", "star": "太阳"},
+				{"op": "inTrine", "star": "太阴"}
+			]}
+		]
+	},
+	"日照雷门": {
+		"category": "富贵", "source_ref": "紫微斗数全书",
+		"duanyi": "太阳居卯守命，旭日东升，光辉万丈，主富贵荣华、声名远播。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inMing", "star": "太阳"},
+			{"op": "mingZhi", "branches": ["卯"]}
+		]
+	},
+	"月朗天门": {
+		"category": "富贵", "source_ref": "紫微斗数全书",
+		"duanyi": "太阴居亥守命，月朗天门，清辉皎洁，主登科及第、文章显达。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inMing", "star": "太阴"},
+			{"op": "mingZhi", "branches": ["亥"]}
+		]
+	},
+	"明珠出海": {
+		"category": "富贵", "source_ref": "紫微斗数全书",
+		"duanyi": "命无正曜居未，太阳在卯、太阴在亥来会，明珠出海，文章盖世、晚景荣昌。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "mingZhi", "branches": ["未"]},
+			{"op": "mingNoMainStar"},
+			{"op": "inZhi", "star": "太阳", "branches": ["卯"]},
+			{"op": "inZhi", "star": "太阴", "branches": ["亥"]}
+		]
+	},
+	"巨日同宫": {
+		"category": "富贵", "source_ref": "紫微斗数全书",
+		"duanyi": "巨门太阳同守命垣，光明磊落，言出有信，主官封三代、食禄千锺。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "same", "stars": ["巨门", "太阳"]},
+			{"op": "inMing", "star": "巨门"},
+			{"op": "mingZhi", "branches": ["寅", "申"]}
+		],
+		"breakers": [{"op": "breakBy", "stars": ["擎羊", "陀罗", "火星", "铃星"]}]
+	},
+	"阳梁昌禄": {
+		"category": "富贵", "source_ref": "紫微斗数全书",
+		"duanyi": "太阳天梁文昌禄存会于命垣，阳梁昌禄，传胪第一，最利科甲功名。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inTrine", "star": "太阳"},
+			{"op": "inTrine", "star": "天梁"},
+			{"op": "inTrine", "star": "文昌"},
+			{"op": "inTrine", "star": "禄存"}
+		]
+	},
+	"文星拱命": {
+		"category": "文贵", "source_ref": "紫微斗数全书·骨髓赋",
+		"duanyi": "文昌文曲夹命或拱照，文星拱命，才华横溢，文章华国、声名籍甚。",
+		"logic": "OR",
+		"conditions": [
+			{"op": "sandwichMing", "stars": ["文昌", "文曲"]},
+			{"op": "and", "conditions": [
+				{"op": "inTrine", "star": "文昌"},
+				{"op": "inTrine", "star": "文曲"}
+			]}
+		],
+		"breakers": [{"op": "breakBy", "stars": ["地空", "地劫"]}]
+	},
+	"坐贵向贵": {
+		"category": "文贵", "source_ref": "紫微斗数全书",
+		"duanyi": "天魁天钺夹命或拱照，坐贵向贵，逢凶化吉，一生多得贵人提携。",
+		"logic": "OR",
+		"conditions": [
+			{"op": "sandwichMing", "stars": ["天魁", "天钺"]},
+			{"op": "and", "conditions": [
+				{"op": "inTrine", "star": "天魁"},
+				{"op": "inTrine", "star": "天钺"}
+			]}
+		]
+	},
+	"辅弼夹命": {
+		"category": "富贵", "source_ref": "紫微斗数全书·骨髓赋",
+		"duanyi": "左辅右弼夹命或同守，辅弼夹命，终身福厚，得力助、近贵人。",
+		"logic": "OR",
+		"conditions": [
+			{"op": "sandwichMing", "stars": ["左辅", "右弼"]},
+			{"op": "and", "conditions": [
+				{"op": "same", "stars": ["左辅", "右弼"]},
+				{"op": "inMing", "star": "左辅"}
+			]}
+		]
+	},
+	"三奇加会": {
+		"category": "富贵", "source_ref": "紫微斗数全书",
+		"duanyi": "化禄化权化科三吉化会于命垣三方，三奇加会，位至公卿、福禄崇隆。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "huaTrineAll", "huas": ["禄", "权", "科"]}
+		]
+	},
+	"禄马交驰": {
+		"category": "富贵", "source_ref": "紫微斗数全书",
+		"duanyi": "天马与禄存或化禄同宫会照，禄马交驰，财源广进，宜动中求财、发于远方。",
+		"logic": "OR",
+		"conditions": [
+			{"op": "same", "stars": ["天马", "禄存"]},
+			{"op": "huaWithStar", "star": "天马", "hua": "禄"}
+		]
+	},
+	"双禄朝垣": {
+		"category": "富贵", "source_ref": "紫微斗数全书",
+		"duanyi": "禄存与化禄并会命垣，双禄朝垣，富奢敌国、衣紫腰金。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inTrine", "star": "禄存"},
+			{"op": "huaTrineAll", "huas": ["禄"]}
+		],
+		"breakers": [{"op": "breakBy", "stars": ["地空", "地劫"]}]
+	},
+	"财荫夹印": {
+		"category": "富贵", "source_ref": "紫微斗数全书",
+		"duanyi": "天相居命，化禄与天梁分夹左右，财荫夹印，位尊财丰、得贵庇荫。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inMing", "star": "天相"},
+			{"op": "sandwichStarMix", "target": "天相", "star": "天梁", "hua": "禄"}
+		]
+	},
+	"杀破狼": {
+		"category": "武贵", "source_ref": "紫微斗数全书",
+		"duanyi": "七杀破军贪狼会于命身三方，杀破狼局，人生起伏跌宕，宜变动开创、动中求胜。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inTrine", "star": "七杀"},
+			{"op": "inTrine", "star": "破军"},
+			{"op": "inTrine", "star": "贪狼"}
+		]
+	},
+	"七杀朝斗": {
+		"category": "武贵", "source_ref": "紫微斗数全书·骨髓赋",
+		"duanyi": "七杀守命于寅申子午，七杀朝斗仰斗，威权出众、爵禄荣昌。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inMing", "star": "七杀"},
+			{"op": "mingZhi", "branches": ["寅", "申", "子", "午"]}
+		]
+	},
+	"火贪格": {
+		"category": "武贵", "source_ref": "紫微斗数全书",
+		"duanyi": "火星贪狼同宫，火贪相逢，主横发资财、骤然显达。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "same", "stars": ["火星", "贪狼"]}
+		]
+	},
+	"铃贪格": {
+		"category": "武贵", "source_ref": "紫微斗数全书",
+		"duanyi": "铃星贪狼同宫，铃贪并守，主武职峥嵘、意外得财。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "same", "stars": ["铃星", "贪狼"]}
+		]
+	},
+	"马头带箭": {
+		"category": "武贵", "source_ref": "紫微斗数全书",
+		"duanyi": "命居午宫，擎羊或火星与天马同守，马头带箭，威镇边疆、宜武职军警。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "mingZhi", "branches": ["午"]},
+			{"op": "or", "conditions": [
+				{"op": "inMing", "star": "擎羊"},
+				{"op": "same", "stars": ["天马", "火星"]}
+			]}
+		]
+	},
+	"石中隐玉": {
+		"category": "富贵", "source_ref": "紫微斗数全书",
+		"duanyi": "巨门守命于子午，石中隐玉，先难后获、大器晚成、终身富贵。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inMing", "star": "巨门"},
+			{"op": "mingZhi", "branches": ["子", "午"]}
+		]
+	},
+	"英星入庙": {
+		"category": "武贵", "source_ref": "紫微斗数全书",
+		"duanyi": "破军庙旺守命于子午，英星入庙，威权出众、开创有成。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inMing", "star": "破军"},
+			{"op": "mingZhi", "branches": ["子", "午"]},
+			{"op": "bright", "star": "破军", "levels": ["庙", "旺"]}
+		]
+	},
+	"雄宿朝元": {
+		"category": "富贵", "source_ref": "紫微斗数全书",
+		"duanyi": "廉贞守命于寅申，雄宿朝元，富贵声扬、宜公职掌权。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inMing", "star": "廉贞"},
+			{"op": "mingZhi", "branches": ["寅", "申"]}
+		],
+		"breakers": [{"op": "breakBy", "stars": ["擎羊", "陀罗", "火星", "铃星"]}]
+	},
+	"命无正曜": {
+		"category": "破格", "source_ref": "紫微斗数全书",
+		"duanyi": "命宫无十四正曜，须借对宫安星论断，根基较薄、行运起伏宜审。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "mingNoMainStar"}
+		]
+	},
+	"羊陀夹命": {
+		"category": "破格", "source_ref": "紫微斗数全书·骨髓赋",
+		"duanyi": "擎羊陀罗夹命，进退两难、劳碌带伤，宜修身忍让以化之。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "sandwichMing", "stars": ["擎羊", "陀罗"]}
+		]
+	},
+	"火铃夹命": {
+		"category": "破格", "source_ref": "紫微斗数全书",
+		"duanyi": "火星铃星夹命，性急多变、易招是非，宜静制动、缓图为吉。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "sandwichMing", "stars": ["火星", "铃星"]}
+		]
+	},
+	"空劫夹命": {
+		"category": "破格", "source_ref": "紫微斗数全书",
+		"duanyi": "地空地劫夹命，成败多端、财来财去，宜务实守成、忌投机。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "sandwichMing", "stars": ["地空", "地劫"]}
+		]
+	},
+	"刑囚夹印": {
+		"category": "破格", "source_ref": "紫微斗数全书",
+		"duanyi": "天相同宫见廉贞擎羊，刑囚夹印，易涉官非刑伤，宜守正避讼。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "same", "stars": ["天相", "廉贞", "擎羊"]}
+		]
+	},
+	"巨机卯酉": {
+		"category": "破格", "source_ref": "紫微斗数全书",
+		"duanyi": "天机巨门同守卯酉，巨机酉宫，纵有财官亦多破荡，宜防口舌迁变。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "same", "stars": ["天机", "巨门"]},
+			{"op": "inMing", "star": "天机"},
+			{"op": "mingZhi", "branches": ["卯", "酉"]}
+		]
+	},
+	"日月反背": {
+		"category": "破格", "source_ref": "紫微斗数全书",
+		"duanyi": "太阳落戌子、太阴落辰午而守命，日月失辉，劳而少成，宜勤补拙、晚发为宜。",
+		"logic": "OR",
+		"conditions": [
+			{"op": "and", "conditions": [
+				{"op": "inMing", "star": "太阳"},
+				{"op": "inZhi", "star": "太阳", "branches": ["戌", "子"]}
+			]},
+			{"op": "and", "conditions": [
+				{"op": "inMing", "star": "太阴"},
+				{"op": "inZhi", "star": "太阴", "branches": ["辰", "午"]}
+			]}
+		]
+	},
+	"马落空亡": {
+		"category": "破格", "source_ref": "紫微斗数全书",
+		"duanyi": "天马逢旬空截空，马落空亡，徒劳奔波、动而无功，宜守静待时。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "sameAnyOf", "star": "天马", "others": ["旬空", "截空"]}
+		]
+	},
+	"禄逢冲破": {
+		"category": "破格", "source_ref": "紫微斗数全书·骨髓赋",
+		"duanyi": "禄存或化禄逢羊陀火铃空劫冲破，吉处藏凶、得而复失，宜守财防耗。",
+		"logic": "OR",
+		"conditions": [
+			{"op": "sameAnyOf", "star": "禄存", "others": ["擎羊", "陀罗", "火星", "铃星", "地空", "地劫"]},
+			{"op": "and", "conditions": [
+				{"op": "huaMing", "hua": "忌"},
+				{"op": "huaTrineAll", "huas": ["禄"]}
+			]}
+		]
+	},
+	"清白格": {
+		"category": "文贵", "source_ref": "紫微斗数全书·诸星问答",
+		"duanyi": "廉贞守命入庙旺、三方不逢羊陀火铃，清白能守、名节昭彰，宜法政清要之职。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inMing", "star": "廉贞"},
+			{"op": "bright", "star": "廉贞", "levels": ["庙", "旺"]}
+		],
+		"breakers": [{"op": "breakBy", "stars": ["擎羊", "陀罗", "火星", "铃星"]}]
+	},
+	"泛水桃花": {
+		"category": "破格", "source_ref": "紫微斗数全书",
+		"duanyi": "贪狼居子或亥守命，更逢咸池天姚来会，泛水桃花，多情敏感、易因色生波。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inMing", "star": "贪狼"},
+			{"op": "mingZhi", "branches": ["子", "亥"]},
+			{"op": "inTrineAny", "stars": ["咸池", "天姚"], "atLeast": 1}
+		]
+	},
+	"风流彩杖": {
+		"category": "破格", "source_ref": "紫微斗数全书",
+		"duanyi": "贪狼守命于寅而与陀罗同度，风流彩杖，沉迷酒色、影响进取，宜节制自持。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inMing", "star": "贪狼"},
+			{"op": "mingZhi", "branches": ["寅"]},
+			{"op": "same", "stars": ["贪狼", "陀罗"]}
+		]
+	},
+	"羊陀夹忌": {
+		"category": "破格", "source_ref": "紫微斗数全书·骨髓赋",
+		"duanyi": "生年化忌坐命而擎羊陀罗左右来夹，进退维谷、内外交逼，宜忍让修德以解之。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "huaMing", "hua": "忌"},
+			{"op": "sandwichMing", "stars": ["擎羊", "陀罗"]}
+		]
+	},
+	"火铃照命": {
+		"category": "破格", "source_ref": "紫微斗数全书",
+		"duanyi": "火星或铃星于迁移宫冲照命垣，性烈多变、外出招扰，宜静以制动、慎防意外。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inOpp", "stars": ["火星", "铃星"]}
+		]
+	},
+	"巨火擎羊": {
+		"category": "破格", "source_ref": "紫微斗数全书·骨髓赋",
+		"duanyi": "巨门、火星、擎羊三方会照命垣，是非凶险、防意外横逆，古云防终身之厄。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inTrine", "star": "巨门"},
+			{"op": "inTrine", "star": "火星"},
+			{"op": "inTrine", "star": "擎羊"}
+		]
+	},
+	"武贪同行": {
+		"category": "富贵", "source_ref": "紫微斗数全书",
+		"duanyi": "武曲贪狼同临丑未命垣，先贫后富，中晚年方发，主横发资财、事业渐隆。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "same", "stars": ["武曲", "贪狼"]},
+			{"op": "mingZhi", "branches": ["丑", "未"]}
+		],
+		"breakers": [{"op": "breakBy", "stars": ["地空", "地劫"]}]
+	},
+	"紫府朝垣": {
+		"category": "富贵", "source_ref": "紫微斗数全书·骨髓赋",
+		"duanyi": "紫微天府于三方来朝命垣，帝库同拱，主一生近贵、福禄绵长、位列公卿。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inTrineAny", "stars": ["紫微", "天府"], "atLeast": 2}
+		],
+		"breakers": [{"op": "breakBy", "stars": ["擎羊", "陀罗", "火星", "铃星", "地空", "地劫"]}]
+	},
+	"日月夹命": {
+		"category": "富贵", "source_ref": "紫微斗数全书·太微赋",
+		"duanyi": "命垣为太阳太阴双曜所夹，日月拱护，主得尊长扶持、富贵可期。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "sandwichMing", "stars": ["太阳", "太阴"]}
+		]
+	},
+	"紫府夹命": {
+		"category": "富贵", "source_ref": "紫微斗数全书",
+		"duanyi": "命垣为紫微天府所夹，帝库护持，主尊贵有靠、根基稳厚。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "sandwichMing", "stars": ["紫微", "天府"]}
+		]
+	},
+	"禄合鸳鸯": {
+		"category": "富贵", "source_ref": "紫微斗数全书",
+		"duanyi": "禄存与生年化禄同临一宫，双禄交流，主财禄丰厚、富足安泰。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "huaWithStar", "hua": "禄", "star": "禄存"}
+		],
+		"breakers": [{"op": "breakBy", "stars": ["地空", "地劫"]}]
+	},
+	"君子在野": {
+		"category": "破格", "source_ref": "紫微斗数全书·骨髓赋",
+		"duanyi": "紫微独守命垣而左右昌曲魁钺俱不来朝，君臣失会，主有位无权、孤立少助。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inMing", "star": "紫微"},
+			{"op": "notInMing", "star": "天府"},
+			{"op": "noneInTrine", "stars": ["左辅", "右弼", "文昌", "文曲", "天魁", "天钺"]}
+		]
+	},
+	"两重华盖": {
+		"category": "破格", "source_ref": "紫微斗数全书",
+		"duanyi": "禄存化禄同宫却逢空劫来会，双禄为华盖所掩，主福禄落空、华而不实。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "huaWithStar", "hua": "禄", "star": "禄存"},
+			{"op": "inTrineAny", "stars": ["地空", "地劫"], "atLeast": 1}
+		]
+	},
+	"铃昌陀武": {
+		"category": "破格", "source_ref": "紫微斗数全书",
+		"duanyi": "铃星文昌陀罗武曲四曜会聚辰戌命垣，星曜交战，主限运不利、宜防灾厄伤病。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inTrineAny", "stars": ["铃星", "文昌", "陀罗", "武曲"], "atLeast": 4},
+			{"op": "mingZhi", "branches": ["辰", "戌"]}
+		]
+	},
+	"杀拱廉贞": {
+		"category": "破格", "source_ref": "紫微斗数全书",
+		"duanyi": "七杀拱照而廉贞化忌又逢煞曜交会，古称路上埋尸，主凶险灾厄，宜慎防（古说，仅备参考）。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "inTrineAny", "stars": ["七杀"], "atLeast": 1},
+			{"op": "huaWithStar", "hua": "忌", "star": "廉贞"},
+			{"op": "inTrineAny", "stars": ["擎羊", "陀罗", "火星", "铃星"], "atLeast": 1}
+		]
+	},
+	"日月藏辉": {
+		"category": "破格", "source_ref": "紫微斗数全书",
+		"duanyi": "太阳太阴俱落陷而临照命垣，日月藏辉、光明晦暗，主劳碌不显、六亲缘薄。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "bright", "star": "太阳", "levels": ["陷"]},
+			{"op": "bright", "star": "太阴", "levels": ["陷"]},
+			{"op": "or", "conditions": [
+				{"op": "inTrine", "star": "太阳"},
+				{"op": "inTrine", "star": "太阴"}
+			]}
+		]
+	},
+	"文星失位": {
+		"category": "破格", "source_ref": "紫微斗数全书",
+		"duanyi": "文昌或文曲落陷而临照命垣，文星失位，主功名蹭蹬、才不见用、虚有其名。",
+		"logic": "OR",
+		"conditions": [
+			{"op": "and", "conditions": [
+				{"op": "inTrine", "star": "文昌"},
+				{"op": "bright", "star": "文昌", "levels": ["陷"]}
+			]},
+			{"op": "and", "conditions": [
+				{"op": "inTrine", "star": "文曲"},
+				{"op": "bright", "star": "文曲", "levels": ["陷"]}
+			]}
+		]
+	}
+}

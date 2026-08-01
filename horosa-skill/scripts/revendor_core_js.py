@@ -121,6 +121,15 @@ def _drop_orphaned_imports(text: str) -> tuple[str, list[str]]:
         if symbols and not any(re.search(rf"\b{re.escape(sym)}\b", body) for sym in symbols):
             text = body
             notes.append(f"dropped orphaned import {{{', '.join(symbols)}}}")
+    # namespace 形式 `import * as X from '…'` 同理。上游偶有**死 import**（ZiWeiHelper.js 引了 d3
+    # 却一次没用），headless 侧 d3 不在依赖里 → 模块直接加载失败。按「实际是否被引用」判定，
+    # 不写死包名黑名单。
+    for match in list(re.finditer(r"^import\s+\*\s+as\s+(\w+)\s+from\s+['\"][^'\"]+['\"];?\s*$", text, re.M)):
+        alias = match.group(1)
+        body = text[: match.start()] + text[match.end() :]
+        if not re.search(rf"\b{re.escape(alias)}\s*\.", body):
+            text = body
+            notes.append(f"dropped orphaned namespace import {alias}")
     return text, notes
 
 

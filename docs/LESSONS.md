@@ -394,20 +394,14 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   无 birth/time 输入；SKILL.md 与 README×2 都写了「明确排除·风水未完成 headless 化」）。这三段只是该
   排除面下新增的页签，不改变结论。**别因为「上游 preset 里有」就重新当缺口查一遍**——这已是第四轮踩它。
 
-- **`bazi` 的 `[多运限·指定时段]`** —— 上游该段由用户在界面**勾选**具体的流年/流月/流日/流时组合驱动
-  （`body.length === 0` 就整段不产）。headless 侧要驱动它得新增一组显式的时段选择入参，属**功能缺口**
-  而非段名/取数问题。同批的 `[月令司令（分野）]` 则**可得**（vendored `computeFenYe` 本地算，只需出生
-  日期换节后日数），已于 v0.25 补上 —— 又一次「同一键的欠账不同因」。
-
-- **`sanshiunited` 的 `[紫微四化]`** —— 上游由紫微子页签**上报的 UI 状态**驱动（盘 + 用户选中的
-  大运/流年），`SanShiUnitedMain.js:1978` 的注释明写「tab 未打开过(antd 懒渲染)保持 null →
-  快照不产 [紫微四化] 段」。headless 没有页签、选中态也是用户选择 —— 与 `bazi` 的
-  `[多运限·指定时段]` 同类：**需新增一组显式入参的功能缺口**，不是段名/取数问题。
-
-- **`ziwei` 的 `[运限]` 与 `[流派叠层]`** —— 前者由用户勾选的大运/流年/流月组合驱动（`body.length === 0`
-  就整段不产，同 `bazi` 多运限）；后者由紫微流派开关驱动（`ZWEngineOptions.taiSuiRuGua` 等），本仓
-  尚未开放这组开关。两者都属**需新增显式入参的功能缺口**。同批的 `[来因宫]` 则**可得**（纯查表：
-  按生年天干筛同干宫，`chart.yearGan` 与 `houses[].ganzi` 响应里都现成），已于 v0.25 补上。
+- **从上游 React 文件抽纯函数：闭包必须连 `const` 箭头助手一起走，且别整份 vendor。** 本轮四个
+  「功能缺口」段全部落地，路上踩了三次同一形态的坑：
+  1. 只按 `function` 声明做传递闭包 → 漏掉 `const luckHouseName = …` 这类箭头助手，症状是段**恒空**
+     而不报错（我的 wrapper 有静默 catch）；
+  2. 漏掉跨文件的**别名导入**（`houseName as luckHouseName`），同样恒空；
+  3. 图省事整份 vendor `ZWLuckPanel.js` → 把 JSX 带进来，Node 直接 `Unexpected token '<'`。
+  做法：闭包同时扫 `function` 与 `const … =>`，从**目标函数**反向传递求闭包，只搬闭包内的东西；
+  调试期先把静默 catch 换成打印，否则「段恒空」这个症状指向不了任何具体原因。
 
 - 对比一条**看起来像**排除项、实际不是的：`jieqi` 的 `[X3D盘]` 曾被我判为 3D 渲染而搁置，
   读码后发现上游 astro3d 页签走的是 `buildAstroSnapshotContent(one, flds, {headerless:true})`

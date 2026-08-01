@@ -5,10 +5,10 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 11,
+    "missing_sections": 7,
     "extra_sections": 30,
     "absent_keys": 0,
-    "keys_with_debt": 23
+    "keys_with_debt": 20
   },
   "keys": {
     "acg": {
@@ -24,12 +24,6 @@
       "extra": [
         "月宿"
       ]
-    },
-    "bazi": {
-      "missing": [
-        "多运限·指定时段"
-      ],
-      "extra": []
     },
     "draconic": {
       "missing": [],
@@ -131,12 +125,6 @@
         "月宿"
       ]
     },
-    "sanshiunited": {
-      "missing": [
-        "紫微四化"
-      ],
-      "extra": []
-    },
     "solararc": {
       "missing": [],
       "extra": [
@@ -154,13 +142,6 @@
       "extra": [
         "起盘信息"
       ]
-    },
-    "ziwei": {
-      "missing": [
-        "运限",
-        "流派叠层"
-      ],
-      "extra": []
     },
     "zodialrelease": {
       "missing": [],

@@ -176,6 +176,9 @@ class ZiWeiBirthInput(FlexibleModel):
     borrowPalace: Any | None = Field(default=None, description="借宫（空宫借对宫）规则。")
     taiSuiRuGua: Any | None = Field(default=None, description="太岁入卦法开关。")
     taiSuiRelatives: Any | None = Field(default=None, description="太岁六亲取法。")
+    # [运限] / [流派叠层]：上游由界面勾选与流派开关驱动，headless 开成显式入参。
+    period: dict[str, Any] | None = Field(default=None, description="运限时段选择 {daxian:[], liunian:[], liuyue:[], liuri:[], liushi:[]}。")
+    schools: dict[str, Any] | None = Field(default=None, description="流派叠层开关 {childLimit, zhongxian, huoPan, qishuWei, borrowPalace, taiSuiRuGua, taiSuiRelatives:[{branch,role,sex}]}；结果敏感。")
 
 
 class ZiWeiRulesInput(FlexibleModel):
@@ -196,11 +199,17 @@ class BaZiBirthInput(FlexibleModel):
     lateZiHourUseNextDay: int | bool | None = None
     phaseType: int | None = 0
     ad: int | None = 1
+    # [多运限·指定时段]：上游由界面勾选驱动，headless 开成显式入参。语义同上游 ——
+    # 流年 × 流月笛卡尔各一段；流日/流时锚定到所选的第一个上层；总段数封顶 50。
+    period: dict[str, Any] | None = Field(default=None, description="多运限时段选择 {liunian:[公历年], liuyue:[月序1-12], liuri:[公历日], liushi:[时辰序0-11]}。")
 
 
 class BaZiDirectInput(BaZiBirthInput):
     gender: bool | None = True
     adjustJieqi: bool | None = False
+    # [多运限·指定时段]：上游由界面勾选驱动，headless 开成显式入参。语义同上游 ——
+    # 流年 × 流月笛卡尔各一段；流日/流时锚定到所选的第一个上层；总段数封顶 50。
+    period: dict[str, Any] | None = Field(default=None, description="多运限时段选择 {liunian:[公历年], liuyue:[月序1-12], liuri:[公历日], liushi:[时辰序0-11]}。")
 
 
 class LiuRengGodsInput(FlexibleModel):
@@ -624,6 +633,8 @@ class SanShiUnitedInput(FlexibleModel):
     taiyi_options: dict[str, Any] = Field(default_factory=dict)
     liureng_yue: str | None = None
     liureng_isDiurnal: bool | None = None
+    # [紫微四化]：上游由紫微子页签的 UI 状态驱动，headless 开成显式入参（下标越界回退末项，同上游钳制）。
+    ziweiSihua: dict[str, Any] | None = Field(default=None, description="紫微四化层选择 {daxianIdx, liunianIdx}；给了才产 [紫微四化] 段。")
 
 
 class SuZhanInput(BirthInput):

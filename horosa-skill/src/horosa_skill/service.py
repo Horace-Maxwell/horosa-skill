@@ -4776,7 +4776,12 @@ def _build_ziwei_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
     ]
     if laiyin_lines:
         blocks.append(("来因宫", _join_lines(laiyin_lines)))
-    return _render_snapshot_text(blocks)
+    text = _render_snapshot_text(blocks)
+    # [运限] / [流派叠层]：由 vendored builder 出（自带段头），仅在调用方给了 period / schools 时产。
+    extras = response.get("_ziweiExtras")
+    if isinstance(extras, str) and extras.strip():
+        text = f"{text}\n\n{extras.strip()}"
+    return text
 
 
 def _append_map_section_snapshot(blocks: list[tuple[str, str]], title: str, data: Any) -> None:
@@ -6149,6 +6154,32 @@ class HorosaSkillService:
             return enriched
         return response_data
 
+    def _attach_ziwei_extras(self, tool_name: str, payload: dict[str, Any], response_data: dict[str, Any]) -> dict[str, Any]:
+        """紫微 [运限] / [流派叠层]：仅在调用方显式给了 period / schools 时产出。
+
+        上游这两段由界面勾选与流派开关驱动（无勾选整段不产）；headless 把同一份选择开成入参，
+        语义一致 —— 不给就不产，故两段列 optional。
+        """
+        if tool_name not in {"ziwei_birth", "ziwei_rules"} or not isinstance(response_data, dict):
+            return response_data
+        period = payload.get("period") if isinstance(payload.get("period"), dict) else None
+        schools = payload.get("schools") if isinstance(payload.get("schools"), dict) else None
+        if not period and not schools:
+            return response_data
+        chart = response_data.get("chart")
+        if not isinstance(chart, dict):
+            return response_data
+        try:
+            js = self.js_client.run("ziwei_extras", {"chart": chart, "period": period, "schools": schools})
+            text = f"{(js or {}).get('text') or ''}".strip()
+            if text:
+                enriched = dict(response_data)
+                enriched["_ziweiExtras"] = text
+                return enriched
+        except Exception as exc:  # noqa: BLE001 — 富化失败不许影响命盘
+            logger.warning("ziwei extras build failed: %s", exc)
+        return response_data
+
     def _attach_bazi_geju(self, tool_name: str, response_data: dict[str, Any], payload: dict[str, Any] | None = None) -> dict[str, Any]:
         if tool_name not in self._BAZI_GEJU_TOOLS or not isinstance(response_data, dict):
             return response_data
@@ -6170,7 +6201,19 @@ class HorosaSkillService:
                     "lateZiHourUseNextDay": fields.get("lateZiHourUseNextDay"),
                 }
             geju = self.js_client.run("bazi_geju", {"fourColumns": fc, "birth": birth})
+            # [多运限·指定时段]：仅在调用方显式给了 period 选择时产出（上游由界面勾选驱动，
+            # 无勾选整段不产 —— headless 把同一份选择开成入参，语义一致）。
+            period = fields.get("period") if isinstance(fields.get("period"), dict) else None
+            period_text = ""
+            if period and birth:
+                try:
+                    js_p = self.js_client.run("bazi_period", {"birth": birth, "period": period})
+                    period_text = f"{(js_p or {}).get('text') or ''}".strip()
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("bazi period build failed: %s", exc)
             text = geju.get("snapshot_text") if isinstance(geju, dict) else None
+            if period_text:
+                text = f"{text}\n\n{period_text}" if isinstance(text, str) and text.strip() else period_text
             if isinstance(text, str) and text.strip():
                 enriched = dict(response_data)
                 enriched["_baziGeju"] = text
@@ -7351,6 +7394,31 @@ class HorosaSkillService:
         ):
             sections.append((_out, _section_body(qimen_export, _src, f"（本盘未产出「{_src}」）")))
         snapshot_text = _render_snapshot_text(sections)
+        # [紫微四化]：上游由紫微子页签上报的 UI 状态驱动（盘 + 选中的大运/流年下标），tab 未打开过
+        # 就整段不产。headless 把同一份选择开成 ziweiSihua 入参；紫微盘按**起课时间**另取一张
+        # （同上游「为三式起课时间取一张紫微盘」）。不给该入参就不产该段。
+        sihua_opts = payload.get("ziweiSihua") if isinstance(payload.get("ziweiSihua"), dict) else None
+        if sihua_opts is not None:
+            try:
+                zw = self._call_remote(
+                    "/ziwei/birth",
+                    {**{k: v for k, v in shared.items() if v is not None}, "gender": payload.get("gender", 1)},
+                )
+                zw_chart = zw.get("chart") if isinstance(zw, dict) else None
+                if isinstance(zw_chart, dict):
+                    js_s = self.js_client.run(
+                        "sanshi_ziwei_sihua",
+                        {
+                            "chart": zw_chart,
+                            "daxianIdx": sihua_opts.get("daxianIdx") or 0,
+                            "liunianIdx": sihua_opts.get("liunianIdx") or 0,
+                        },
+                    )
+                    sihua_text = f"{(js_s or {}).get('text') or ''}".strip()
+                    if sihua_text:
+                        snapshot_text = f"{snapshot_text}\n\n{sihua_text}"
+            except Exception as exc:  # noqa: BLE001 — 富化失败不许带崩三式主盘
+                logger.warning("sanshi ziwei sihua build failed: %s", exc)
         return {
             "qimen": qimen_result.data.get("pan", {}),
             "taiyi": taiyi_result.data.get("pan", {}),
@@ -8865,6 +8933,7 @@ class HorosaSkillService:
                 response_data = self._attach_jyotish_sections(tool_name, response_data)
                 response_data = self._attach_calendar_extras(tool_name, input_normalized, response_data)
                 response_data = self._attach_bazi_geju(tool_name, response_data, input_normalized)
+                response_data = self._attach_ziwei_extras(tool_name, input_normalized, response_data)
                 response_data = self._attach_relative_score(tool_name, input_normalized, response_data)
                 response_data = _attach_export_contract(tool_name, input_normalized, response_data)
                 summary = _generic_summary(tool_name, response_data)
