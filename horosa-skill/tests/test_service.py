@@ -343,6 +343,19 @@ class FakeClient(HorosaApiClient):
             }
         if endpoint == "/chart13":
             return chart_payload
+        if endpoint == "/astroextra/harmonic":
+            # 真实后端把**整个标准 chart-wrap** 放在 `chart` 键下（比通用段构建器预期深一层），
+            # 调波专属数据与之并列。桩必须同形——早先的桩没有 chart，于是 skill 侧
+            # 「盘面段全是占位存根」这个 bug 在离线测试里完全看不见。
+            return {
+                "harmonic": payload.get("harmonic", 9),
+                "positions": [
+                    {"id": "Sun", "sign": "Capricorn", "signlon": 16.9, "lon": 286.9, "natalLon": 11.87},
+                    {"id": "Moon", "sign": "Aries", "signlon": 10.05, "lon": 10.05, "natalLon": 1.12},
+                ],
+                "conjunctions": [{"a": "Mars", "b": "Saturn", "orb": 0.05}],
+                "chart": chart_payload,
+            }
         if endpoint == "/astroextra/planetreturn":
             # 多重回归: per-body return dates. Synthesize a couple so [多重回归] emits + export stays clean.
             return {"returns": [{"which": 1, "date": "2019-05-10"}, {"which": 2, "date": "2048-11-02"}]}
@@ -783,6 +796,10 @@ class FakeJsClient(HorosaJsEngineClient):
                     {"name": "孛犯太阳", "level": "bad", "detail": "政余忌格：孛与太阳同宫。"},
                 ]},
             }
+        if tool_name == "egypt_section":
+            # 假盘面不带真实黄经，vendored builder 会算出无意义结果 → 返回空文本，
+            # 走与「/astroextra/analysis 失败」同一条优雅降级路径（该段不出）。
+            return {"text": ""}
         raise AssertionError(f"Unexpected local tool: {tool_name}")
 
 
@@ -1262,7 +1279,8 @@ def test_phase2_tools_attach_export_contracts(tmp_path) -> None:
     assert guolao.ok is True
     assert guolao.data["export_snapshot"]["technique"]["key"] == "guolao"
     assert hellen.ok is True
-    assert hellen.data["export_snapshot"]["technique"]["key"] == "astrochart_like"
+    # 上游 v50 把这一族按出盘页面拆键（ASTRO_LIKE_EXPORT_KEYS）：希腊盘有自己的 `hellenastro`。
+    assert hellen.data["export_snapshot"]["technique"]["key"] == "hellenastro"
     assert tongshe.ok is True
     assert tongshe.data["export_snapshot"]["technique"]["key"] == "tongshefa"
     assert sanshi.ok is True

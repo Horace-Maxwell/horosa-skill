@@ -85,6 +85,8 @@ AI_EXPORT_TECHNIQUES = [
     {"key": "astrochart", "label": "星盘"},
     {"key": "indiachart", "label": "印度律盘"},
     {"key": "astrochart_like", "label": "希腊/星体地图"},
+    {"key": "hellenastro", "label": "希腊占星盘"},
+    {"key": "harmonic", "label": "调波盘"},
     {"key": "relative", "label": "关系盘"},
     {"key": "primarydirect", "label": "推运盘-主/界限法"},
     {"key": "primarydirchart", "label": "推运盘-主限法盘"},
@@ -163,9 +165,16 @@ AI_EXPORT_TECHNIQUES = [
 ]
 
 AI_EXPORT_PRESET_SECTIONS = {
-    "astrochart": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "12分度", "主宰星链", "古典", "古典格局", "寿命格局", "可能性"],
+    "astrochart": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "12分度", "主宰星链", "古典", "古典格局", "埃及历", "寿命格局", "可能性"],
     "indiachart": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "古典", "可能性", "大运Dasha", "星盘信息", "Panchanga 五要素", "卡拉卡（8 Chara Karakas）", "节点主照（Rasi Drishti）", "星曜状态", "分盘吉位 Vimśopaka", "八分点 SAV", "Sodhya Pinda 凝量", "Shadbala 六力", "Ishta/Kashta 吉凶果", "Vimśopaka 分盘 20 分力", "Hora 行星时", "Choghadia 民用择时", "择时 Panchaka/Abhijit", "Mūla 大运", "Sudarśana Chakra 大运", "Naisargika 自然大运", "补充上升（Supplementary Lagnas）", "Nāḍī · Bhrigu Bindu 福点", "Nāḍī · D150 纳地盘", "Āyurdāya 寿命基础", "特殊上升 Special Lagnas", "D60 六十分盘吉凶", "分盘变体对照", "功能吉凶（Functional Nature）", "宫位力（Bhava Bala）", "星曜战（Graha Yuddha）", "扩展大运（Conditional / Chara）", "Kartari 夹击格局", "Sudarshana 三盘（命/日/月起）", "KP 宫头次主星 CSL", "KP 意义者 Significators", "KP 六级细分 / 当令星", "敌友（复合五分）", "行运 Gochara（从月·八分点）", "化解（信息·非处方）", "Jaimini Argala 干涉", "Tajika Harsha Bala", "Tajika Pancha-Vargeeya", "Tajika Mudda 年运", "行运 Gochara（从命）", "座运·X", "瑜伽格局 Yogas", "副星 Upagraha", "敏感点 Sphuta", "全吉盘 SBC", "问事 Praśna", "Nāḍī · 行星组合(同座合)", "Nāḍī · 星座交换", "Nāḍī · 木星推进时间轴", "Jaimini 三对法寿命", "Tripataki 宿距三旗", "寿命判读"],
-    "astrochart_like": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "古典", "古典格局", "可能性", "12分度", "主宰星链", "寿命格局"],
+    "astrochart_like": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "古典", "古典格局", "埃及历", "可能性", "12分度", "主宰星链", "寿命格局"],
+    # 上游把 astrochart_like 这一族按「哪个页面出的盘」再拆成独立导出键（aiExport.js 的
+    # ASTRO_LIKE_EXPORT_KEYS）。段单与 astrochart_like 同构，差别只在 hellenastro 无 [古典格局]
+    # ——但 skill 的希腊盘走 _CLASSICAL_ANALYSIS_TOOLS，确实产得出，故按实产登记并列为可选段。
+    # 「月宿」是 skill 相对上游的既有 extra（恒星黄道盘才有），不因拆键而消失。
+    "hellenastro": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "12分度", "主宰星链", "古典", "古典格局", "埃及历", "寿命格局", "可能性"],
+    # 调波盘另出两段本技法专属内容（上游该键无——上游是整页导出，调波表在页面别处），按实产登记。
+    "harmonic": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "12分度", "主宰星链", "古典", "古典格局", "埃及历", "寿命格局", "可能性", "调波位置", "同频合相"],
     "relative": ["关系起盘信息", "A对B相位", "B对A相位", "A对B中点相位", "B对A中点相位", "A对B映点", "A对B反映点", "B对A映点", "B对A反映点", "合成图盘", "影响图盘-星盘A", "影响图盘-星盘B", "关系量化", "顺畅连接", "张力连接"],
     # 上游 v48 段名对齐：主/界限法设置|表格 → 主限法设置|表格（旧名走 map_legacy_section_title）。UI-only
     # 新段「主限天球·当前动画所指」(3D 动画所指)headless 不产，故意不进 preset。
@@ -241,7 +250,7 @@ AI_EXPORT_PRESET_SECTIONS = {
         "世俗入宫", "新月图", "满月图", "日食图", "月食图", "地区盘", "行星周期",
         "世俗宫义", "定局·年主/盘主", "入境骨架", "地理分野", "地区盘推运",
         "起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "希腊点",
-        "12分度", "主宰星链", "古典", "寿命格局", "可能性",
+        "12分度", "主宰星链", "古典", "埃及历", "寿命格局", "可能性",
     ],
     "jieqi": ["节气盘参数", "春分星盘", "春分宿盘", "夏至星盘", "夏至宿盘", "秋分星盘", "秋分宿盘", "冬至星盘", "冬至宿盘"],
     "calendar": ["起盘信息", "当月月历", "选中日详情", "方法说明"],
@@ -328,11 +337,15 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     # 回归黄道盘不产出 → 列为可选段，避免 tropical 盘误报 missing。
     # 古典占星 (星阙 v2.6.7): [古典](逐曜状态/围攻/围绕) 仅本盘有 besiegement/古典字段时出;
     # [古典格局] 仅 /astroextra/analysis 成功(astrochart/astrochart_like)时出 → 列可选段, 优雅降级不误报 missing。
-    "astrochart": ["月宿", "古典", "古典格局", "可能性"],
-    "astrochart_like": ["月宿", "古典", "古典格局", "可能性"],
+    # [埃及历] 与 [古典格局] 同源同命：都挂在 /astroextra/analysis 成功之后（天狼偕日升由后端算），
+    # 该 fetch 失败即整段不出 → 同列可选段。
+    "astrochart": ["月宿", "古典", "古典格局", "埃及历", "可能性"],
+    "astrochart_like": ["月宿", "古典", "古典格局", "埃及历", "可能性"],
+    "hellenastro": ["月宿", "古典", "古典格局", "埃及历", "可能性"],
+    "harmonic": ["月宿", "古典", "古典格局", "埃及历", "可能性"],
     "indiachart": ["月宿", "古典", "大运Dasha", "可能性", "星盘信息", "星曜战（Graha Yuddha）", "Kartari 夹击格局", "Tajika Mudda 年运", "问事 Praśna", "Nāḍī · 星座交换"],
     # 世俗盘为非推运入宫盘（predictive=0），[可能性] 依赖 predict.PlanetSign 故恒不产出 → 可选段。
-    "mundane": ["古典", "可能性"],
+    "mundane": ["古典", "埃及历", "可能性"],
     # 六壬 Phase4 (星阙 v2.5.x)：毕法（已命中）只在 refContext 成功且有命中时出；占断向导只在指定占类
     # (zhanCategory ≠ general) 时出。断卦层（年月神煞/课体结构/三传旺衰/空亡真假/旬空落点/陷空/遁干特殊/年命上神）
     # 各段按盘面数据条件产出（每盘几乎必出但非保证；如三传不空则无空亡段）→ 全列可选段，避免误报 missing。

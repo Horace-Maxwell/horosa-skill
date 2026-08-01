@@ -84,6 +84,108 @@ export function decanByLon(lon){
 }
 
 /* ============================================================
+ * W1:旬主星制(两派) + 旬序锚定(两式)
+ * ------------------------------------------------------------
+ * 传世有两套「每旬叠加一颗行星」的分配法,复原时须选定其一:
+ *   ① 迦勒底外貌 faces —— 自白羊 I=♂ 起,沿迦勒底序(慢→快)逐旬循环。
+ *      因 36 不是 7 的倍数(36=7×5+1),绕完一圈后双鱼III与白羊I 同为♂ 相邻重复,
+ *      这是该体系的固有特征而非错误。
+ *   ② 三分性旬星 —— 每宫三旬的主星 = 同三分性三座的庙主,自本宫起依序
+ *      (本宫→第5座→第9座)。印度称 drekkāṇa,经《臾那本集》自希腊-埃及传入。
+ * 两者与「旬序锚定」正交:锚定只改编号(希腊化回归自白羊起 / 古代恒星自天狼起),
+ * 不改主星分配。
+ * ============================================================ */
+
+// 迦勒底序自♂重排(= 迦勒底序 ♄♃♂☉♀☿☽ 从♂ 切起)
+export const FACE_SEQ = ['Mars', 'Sun', 'Venus', 'Mercury', 'Moon', 'Saturn', 'Jupiter'];
+
+// 十二宫庙主(白羊→双鱼)
+export const SIGN_DOMICILE_RULERS = [
+	'Mars', 'Venus', 'Mercury', 'Moon', 'Sun', 'Mercury',
+	'Venus', 'Mars', 'Jupiter', 'Saturn', 'Saturn', 'Jupiter',
+];
+
+export const SIGN_ORDER = [
+	'aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo',
+	'libra', 'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces',
+];
+
+// 迦勒底外貌主星:由黄经直取
+export function faceRulerAt(lon){
+	return FACE_SEQ[Math.floor(norm360(lon) / 10) % 7];
+}
+
+// 三分性旬星主星:signIdx 0..11、decanInSign 1..3
+export function triplicityDecanRuler(signIdx, decanInSign){
+	const si = Number(signIdx);
+	const di = Number(decanInSign);
+	if(!Number.isFinite(si) || !Number.isFinite(di)){ return ''; }
+	if(si < 0 || si > 11 || di < 1 || di > 3){ return ''; }
+	// 本宫 → 第5座 → 第9座(即每次 +4 宫,恰为同三分性三座)
+	return SIGN_DOMICILE_RULERS[(si + (di - 1) * 4) % 12];
+}
+
+// 旬主星制注册表(单一真值源;UI 的档位、列标题、说明全取自此)
+export const EGYPT_DECAN_RULER_SYSTEMS = {
+	chaldean: {
+		key: 'chaldean',
+		label: '迦勒底外貌',
+		column: '面主',
+		note: '自白羊 I 起以♂为首、沿迦勒底序逐旬循环;西方传统主流。双鱼III 与白羊I 同为♂ 属固有特征。',
+	},
+	triplicity: {
+		key: 'triplicity',
+		label: '三分性旬星',
+		column: '旬主',
+		note: '每宫三旬主星取同三分性三座之庙主,自本宫起依序;印度 drekkāṇa 同源。',
+	},
+};
+export const EGYPT_DECAN_RULER_DEFAULT = 'chaldean';
+
+// 取某旬在指定主星制下的主星。decan 为 EGYPT_DECANS 的一行。
+export function decanRulerAt(decan, system){
+	if(!decan){ return ''; }
+	if(system === 'triplicity'){
+		const si = SIGN_ORDER.indexOf(decan.signId);
+		const r = triplicityDecanRuler(si, decan.decanInSign);
+		return r || decan.face;
+	}
+	// 默认迦勒底:直接用已逐项核验过的 face 字段(与 faceRulerAt 恒等)
+	return decan.face;
+}
+
+/* ---- 旬序锚定(两式;只改编号,不改主星) ---- */
+
+export const EGYPT_DECAN_ANCHORS = {
+	greek: {
+		key: 'greek',
+		label: '希腊化回归',
+		column: '旬序',
+		note: '第 1 旬对齐白羊 0°–10°,自此每 10° 一旬顺数至双鱼;后世一切旬/外貌占星的基准。',
+	},
+	ancient: {
+		key: 'ancient',
+		label: '古代恒星',
+		column: '原位',
+		note: '序列以天狼(Sothis)为原位第 1,按岁差回推约当 0°巨蟹;此为埃及本土授时序,与回归锚定并存。',
+	},
+};
+export const EGYPT_DECAN_ANCHOR_DEFAULT = 'greek';
+
+// 取某旬在指定锚定下的编号
+export function decanNumberAt(decan, anchor){
+	if(!decan){ return null; }
+	return anchor === 'ancient' ? decan.ancient : decan.greek;
+}
+
+// 按锚定给出「主编号 → 旬记录」的有序列表(古代锚定下按原位号重排)
+export function decansOrderedBy(anchor){
+	const list = EGYPT_DECANS.slice();
+	if(anchor !== 'ancient'){ return list; }
+	return list.slice().sort((a, b)=>a.ancient - b.ancient);
+}
+
+/* ============================================================
  * E9:五星 + 关键恒星的埃及名
  * ------------------------------------------------------------
  * 命名存在异写与学派分歧(火/木/土均以「荷鲁斯+修饰」命名是显著特征)。
@@ -142,6 +244,153 @@ export function egyptCivilMonths(){
 export function civilDayOfYear(season, month, day){ return season * 120 + month * 30 + day; }
 export function civilEpagomenalDayOfYear(e){ return 360 + e; }
 
+/* ------------------------------------------------------------
+ * 民用历换算器(游移年 ↔ 儒略日)
+ * ------------------------------------------------------------
+ * 游移年恒 365 日、无闰日 → 相对儒略年(365.25 日)每 4 年退 1 日,
+ * 1460 儒略年 ≈ 1461 民用年后回归原位(Sothic 周期)。
+ *
+ * ⚠️ 埃及民用日的**绝对**公历对应完全取决于所选纪元锚点;换锚点则同一儒略日
+ * 得到不同的年/月/日。故显示层必须标注所用锚点(见 EGYPT_CALENDAR_ANCHORS)。
+ * ------------------------------------------------------------ */
+
+// 儒略历(proleptic Julian)年月日 → 儒略日数(当日正午)。年用天文纪年(前 1 年 = 0)。
+// 自校验:JD 0 = 前 4713 年 1 月 1 日儒略历正午 → julianCalendarJDN(-4712,1,1) === 0。
+export function julianCalendarJDN(year, month, day){
+	const a = Math.floor((14 - month) / 12);
+	const y = year + 4800 - a;
+	const m = month + 12 * a - 3;
+	return day + Math.floor((153 * m + 2) / 5) + 365 * y + Math.floor(y / 4) - 32083;
+}
+
+// 纪元锚点:各以「该纪元元年 1 Thoth 当日」为 JD 原点(取当日 0h,即 JDN − 0.5)。
+export const EGYPT_CALENDAR_ANCHORS = {
+	ce139: {
+		key: 'ce139',
+		label: '公元 139 年重合点',
+		jd: julianCalendarJDN(139, 7, 20) - 0.5,
+		civilYearLabel: '重合纪年',
+		note: '古代记述所载的 Sothic 重合:该年 1 Thoth 与天狼偕日升同日(儒略历 7 月 20 日)。旬星—民用历对照最常以此为准。',
+	},
+	nabonassar: {
+		key: 'nabonassar',
+		label: '那波那萨尔纪元',
+		jd: julianCalendarJDN(-746, 2, 26) - 0.5,
+		civilYearLabel: '那波那萨尔年',
+		note: '希腊化天文历表通用起点(儒略历前 747 年 2 月 26 日);古代星历表与占星文献的年数多以此计。',
+	},
+	philip: {
+		key: 'philip',
+		label: '腓力纪元',
+		jd: julianCalendarJDN(-323, 11, 12) - 0.5,
+		civilYearLabel: '腓力年',
+		note: '亚历山大身后的历表纪元(儒略历前 324 年 11 月 12 日);部分希腊化星表以此为起算。',
+	},
+};
+export const EGYPT_CALENDAR_ANCHOR_DEFAULT = 'ce139';
+
+export function egyptAnchor(key){
+	return EGYPT_CALENDAR_ANCHORS[key] || EGYPT_CALENDAR_ANCHORS[EGYPT_CALENDAR_ANCHOR_DEFAULT];
+}
+
+/**
+ * 儒略日 → 埃及民用历。
+ * @returns {{year,dayOfYear,isEpagomenal,epagomenal,season,seasonIndex,month,monthIndex,monthName,day,decade,text}}
+ *   year        纪元年序(锚点当年 = 1;锚点之前为 0、−1 …)
+ *   dayOfYear   1..365
+ *   decade      旬列序 0..35(闰余日 = null,不属任何旬)
+ */
+export function egyptCivilFromJD(jd, anchorJD){
+	const anchor = anchorJD == null ? egyptAnchor(EGYPT_CALENDAR_ANCHOR_DEFAULT).jd : Number(anchorJD);
+	if(!Number.isFinite(jd) || !Number.isFinite(anchor)){ return null; }
+	// 整日差:两端同取「当日 0h 起」,避免小数时刻把日界推错一天
+	const days = Math.floor(jd - anchor);
+	const n = Math.floor(days / 365);            // 已满的整民用年数(可负)
+	const dayOfYear = days - n * 365 + 1;        // 1..365(负 days 也成立:floor 除法)
+	const year = n + 1;
+	if(dayOfYear > 360){
+		const e = dayOfYear - 360;
+		const deity = (EGYPT_EPAGOMENAL.find((x) => x.day === e) || {}).deity || '';
+		return {
+			year, dayOfYear, isEpagomenal: true, epagomenal: e,
+			season: '', seasonIndex: -1, month: '', monthIndex: -1, monthName: '', day: e,
+			decade: null, deity,
+			text: `${year} 年 闰余第 ${e} 日${deity ? `(${deity} 诞)` : ''}`,
+		};
+	}
+	const zero = dayOfYear - 1;                  // 0..359
+	const seasonIndex = Math.floor(zero / 120);  // 0..2
+	const monthInSeason = Math.floor((zero % 120) / 30); // 0..3
+	const day = (zero % 30) + 1;                 // 1..30
+	const s = EGYPT_CIVIL_SEASONS[seasonIndex];
+	const monthName = s ? s.months[monthInSeason] : '';
+	return {
+		year, dayOfYear, isEpagomenal: false, epagomenal: 0,
+		season: s ? s.cn : '', seasonIndex,
+		month: monthInSeason + 1, monthIndex: seasonIndex * 4 + monthInSeason + 1, monthName,
+		day, decade: Math.floor(zero / 10), deity: '',
+		text: `${year} 年 ${s ? s.cn : ''}第 ${monthInSeason + 1} 月(${monthName}) ${day} 日`,
+	};
+}
+
+/** 埃及民用历 → 儒略日(当日 0h)。传 epagomenal(1..5) 则忽略 season/month/day。 */
+export function jdFromEgyptCivil({ year, season = 0, month = 1, day = 1, epagomenal = 0 }, anchorJD){
+	const anchor = anchorJD == null ? egyptAnchor(EGYPT_CALENDAR_ANCHOR_DEFAULT).jd : Number(anchorJD);
+	const y = Number(year);
+	if(!Number.isFinite(y) || !Number.isFinite(anchor)){ return null; }
+	const e = Number(epagomenal) || 0;
+	const doy = e >= 1 && e <= 5
+		? civilEpagomenalDayOfYear(e)
+		: civilDayOfYear(Number(season) || 0, (Number(month) || 1) - 1, Number(day) || 1);
+	if(doy < 1 || doy > 365){ return null; }
+	return anchor + (y - 1) * 365 + (doy - 1);
+}
+
+/**
+ * Sothic 周期内定位。position = 自锚点起经过的儒略年数对 1460 取模。
+ * drift = 民用历相对季节已漂移的天数 = 经过儒略年数 / 4(锚点处为 0,每 4 年退 1 日)。
+ */
+export function sothicPosition(jd, anchorJD){
+	const anchor = anchorJD == null ? egyptAnchor(EGYPT_CALENDAR_ANCHOR_DEFAULT).jd : Number(anchorJD);
+	if(!Number.isFinite(jd) || !Number.isFinite(anchor)){ return null; }
+	const julianYears = (jd - anchor) / 365.25;
+	const pos = ((julianYears % SOTHIC_CYCLE_YEARS) + SOTHIC_CYCLE_YEARS) % SOTHIC_CYCLE_YEARS;
+	return {
+		julianYears,
+		position: pos,                                   // 0..1459.99(周期内位置,儒略年)
+		percent: (pos / SOTHIC_CYCLE_YEARS) * 100,
+		driftDays: julianYears / 4,                      // 正 = 民用日已比锚点提早落在更早的季节点
+		cycleIndex: Math.floor(julianYears / SOTHIC_CYCLE_YEARS), // 0 = 锚点所在周期
+	};
+}
+
+// 公历(格里/儒略由调用方决定)Date → JD(0h)。仅取年月日,按格里历换算(近现代盘用)。
+export function jdFromGregorianYMD(year, month, day){
+	const a = Math.floor((14 - month) / 12);
+	const y = year + 4800 - a;
+	const m = month + 12 * a - 3;
+	const jdn = day + Math.floor((153 * m + 2) / 5) + 365 * y + Math.floor(y / 4)
+		- Math.floor(y / 100) + Math.floor(y / 400) - 32045;
+	return jdn - 0.5;
+}
+
+// JD(0h 或任意时刻)→ 格里历年月日。与 jdFromGregorianYMD 互逆(整日面)。
+export function gregorianFromJD(jd){
+	if(!Number.isFinite(jd)){ return null; }
+	const jdn = Math.floor(jd + 0.5);
+	const a = jdn + 32044;
+	const b = Math.floor((4 * a + 3) / 146097);
+	const c = a - Math.floor((146097 * b) / 4);
+	const d = Math.floor((4 * c + 3) / 1461);
+	const e = c - Math.floor((1461 * d) / 4);
+	const m = Math.floor((5 * e + 2) / 153);
+	return {
+		year: 100 * b + d - 4800 + Math.floor(m / 10),
+		month: m + 3 - 12 * Math.floor(m / 10),
+		day: e - Math.floor((153 * m + 2) / 5) + 1,
+	};
+}
+
 /* ============================================================
  * E4:对角星钟(夜时授时表)
  * ------------------------------------------------------------
@@ -162,6 +411,25 @@ export function diagonalStar(decadeCol /*1..36*/, nightHour /*1..12*/){
 }
 
 export const DIAGONAL_NOTE = '对角星钟:夜里依次升起 12 颗旬星标记夜 12 时;每过 10 天进下一列,同一旬星沿对角线移动(故名)。各墓本网格数值互异,此处按理想对角推移派生展示规律(具体墓本三元组待核)。';
+
+// 过中天法(晚期星钟):记的不是「升起」而是「上中天」的星。
+// 同一颗星自升起到上中天约隔 6 个夜时 → 理想化即在升起序上整体位移 6 位。
+// 同样只示推移规律;具体墓本的「星—网格—夜时」三元组待核。
+export const STAR_CLOCK_TRANSIT_OFFSET = 6;
+export function transitStar(decadeCol /*1..36*/, nightHour /*1..12*/){
+	return diagonalStar(decadeCol, nightHour - STAR_CLOCK_TRANSIT_OFFSET);
+}
+export const TRANSIT_NOTE = '过中天星钟:晚期星表改记每夜时「上中天」之星(而非升起之星),观测以坐姿人形为基准分位。较升起法整体后移约 6 时位,故同一网格所标星号与对角(升起)表不同。具体墓本数值待核,此处仅按理想位移示其与升起表的定量关系。';
+
+export const EGYPT_STAR_CLOCKS = {
+	diagonal: { key: 'diagonal', label: '对角星钟(升起法)', fn: diagonalStar, note: DIAGONAL_NOTE, column: '升起之星' },
+	transit: { key: 'transit', label: '过中天星钟', fn: transitStar, note: TRANSIT_NOTE, column: '上中天之星' },
+};
+export const EGYPT_STAR_CLOCK_DEFAULT = 'diagonal';
+export function starClockStar(clock, decadeCol, nightHour){
+	const c = EGYPT_STAR_CLOCKS[clock] || EGYPT_STAR_CLOCKS[EGYPT_STAR_CLOCK_DEFAULT];
+	return c.fn(decadeCol, nightHour);
+}
 
 /* ============================================================
  * E6:赫尔墨斯护符 melothesia(逐旬 秘名/宝石/身体部位/疾病)

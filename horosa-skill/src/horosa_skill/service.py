@@ -58,7 +58,10 @@ logger = logging.getLogger(__name__)
 TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "chart": "astrochart",
     "chart13": "astrochart_like",
-    "hellen_chart": "astrochart_like",
+    # 上游把这一族按出盘页面拆键（aiExport.js 的 ASTRO_LIKE_EXPORT_KEYS）；希腊盘与调波盘各有自己的
+    # 导出键，不再共用 astrochart_like，否则两者的导出勾选会互相串。
+    "hellen_chart": "hellenastro",
+    "harmonic": "harmonic",
     "guolao_chart": "guolao",
     "solarreturn": "solarreturn",
     "lunarreturn": "lunarreturn",
@@ -2978,6 +2981,12 @@ def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
             classical_analysis = (classical_analysis or []) + ["格局速览"] + pov
     if classical_analysis:
         rendered.append(("古典格局", "\n".join(classical_analysis).strip()))
+    # [埃及历]：vendored builder 已带 `[埃及历]` 段头，这里只取正文（段头由导出层统一加）。
+    egypt = response.get("_egyptSection")
+    if isinstance(egypt, str) and egypt.strip():
+        body = egypt.split("\n", 1)[1] if egypt.startswith("[埃及历]\n") else egypt
+        if body.strip():
+            rendered.append(("埃及历", body.strip()))
     if extras:
         body = extras.get("寿命格局")
         if body and f"{body}".strip():
@@ -5177,6 +5186,18 @@ def _build_zr_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -
 def _auto_snapshot_text_for_tool(tool_name: str, input_normalized: dict[str, Any], response_data: dict[str, Any]) -> str | None:
     if tool_name in {"chart", "chart13", "hellen_chart", "india_chart"} and _is_astro_chart_payload(response_data):
         return _build_astro_snapshot_text(input_normalized, response_data)
+    # 调波盘：上游 v50 的 `harmonic` 键要求整套本命盘段 + 调波专属段。盘面本就在响应里（已在
+    # `_run_harmonic_tool` 摊平到顶层），所以走通用盘面渲染器，再把 [调波位置]/[同频合相] 接在后面。
+    # 这两段由 `_build_harmonic_snapshot_text` 出，它自带的 [起盘信息] 与通用器重复，故只取尾两段。
+    if tool_name == "harmonic":
+        extra = _build_harmonic_snapshot_text(input_normalized, response_data)
+        # 后端只回了调波数据、没回盘面时（老响应形状 / 降级），退回「起盘信息 + 调波两段」的旧行为，
+        # 而不是整个不出快照。
+        if not _is_astro_chart_payload(response_data):
+            return extra
+        base = _build_astro_snapshot_text(input_normalized, response_data)
+        tail = [block for block in extra.split("\n[") if block.startswith(("调波位置]", "同频合相]"))]
+        return "\n".join([base] + [f"[{block.rstrip()}" for block in tail]) if tail else base
     if tool_name in {"solarreturn", "lunarreturn", "solararc", "givenyear", "profection"}:
         return _build_predictive_snapshot_text(tool_name, input_normalized, response_data)
     if tool_name == "pd":
@@ -5716,7 +5737,7 @@ class HorosaSkillService:
         # chart if the enrichment errors.
         # 上游 v50 给整个 chart 家族（含 13 宫/希腊化/衍生盘）都出 12分度/主宰星链/寿命格局，
         # 不只本命与世俗盘——门控放开到 astrochart_like 家族，段随之进导出。
-        if tool_name not in {"chart", "mundane", "chart13", "hellen_chart"}:
+        if tool_name not in {"chart", "mundane", "chart13", "hellen_chart", "harmonic"}:
             return response_data
         if not isinstance(response_data, dict) or not _is_astro_chart_payload(response_data):
             return response_data
@@ -5761,7 +5782,12 @@ class HorosaSkillService:
     # 古典格局派生分析 (星阙 v2.6.7): astrochart/astrochart_like 的 [古典格局] 段来自 /astroextra/analysis
     # (护卫/优势相位/相位动态/逐题主星/偶然尊贵/恒星/行星时/埃及历/巴比伦/格局/分布/气质/almutem/吉化-extraLots)。
     # 与前端同源:按需 fetch、优雅降级(失败→不挂载→该段不出)。[古典](逐曜状态/围攻/围绕)直接读 /chart 响应,无需此 fetch。
-    _CLASSICAL_ANALYSIS_TOOLS = {"chart", "chart13", "hellen_chart"}
+    # 调波盘同属上游 ASTRO_LIKE_EXPORT_KEYS 族，盘面形状与本命盘一致 → 同样吃得下派生分析。
+    # （上游把 harmonic 放在 skipClassical 名单里是 UI 侧的性能取舍，headless 无此顾虑，多出的
+    # [古典格局] 是 skill 相对上游的 extra，不是漂移。）
+    # mundane 也纳入：它已走 `_build_astro_snapshot_text`，开门控即得 [埃及历]。但**不要**因此
+    # 给 mundane 登记 [古典格局]——世俗盘无该段是既定结论（docs/LESSONS.md）。
+    _CLASSICAL_ANALYSIS_TOOLS = {"chart", "chart13", "hellen_chart", "harmonic", "mundane"}
 
     def _attach_classical_analysis(self, tool_name: str, payload: dict[str, Any], response_data: dict[str, Any]) -> dict[str, Any]:
         if tool_name not in self._CLASSICAL_ANALYSIS_TOOLS:
@@ -5792,10 +5818,31 @@ class HorosaSkillService:
             if isinstance(analysis, dict) and analysis:
                 enriched = dict(response_data)
                 enriched["_classicalAnalysis"] = analysis
+                enriched["_egyptSection"] = self._build_egypt_section(enriched, analysis)
                 return enriched
         except Exception as exc:
             logger.warning("classical /astroextra/analysis failed (tool=%s): %s", tool_name, exc)
         return response_data
+
+    def _build_egypt_section(self, chart: dict[str, Any], analysis: dict[str, Any]) -> str:
+        """[埃及历] 独立段：各点落旬 / 上升旬详情 / 埃及民用历 + Sothic。
+
+        上游把埃及历**同时**写在两处：`古典格局` 段里一行摘要（天狼偕日升/岁年/上升旬），以及这个
+        逐点铺开的独立段（`aiExport.js` 的 preset 里 astrochart 与 5 个衍生盘键都列了它）。两处并存
+        是上游原样，不是重复——摘要给概览、独立段给逐点明细，故这里也保持双份。
+
+        天狼偕日升由后端算（`astroextra.compute_egyptian_calendar`），JS 只回显与对差，所以要把
+        analysis 的 `egyptianCalendar` 并进盘对象再交给 vendored builder。失败只是本段不出。
+        """
+        try:
+            chart_obj = dict(chart)
+            chart_obj["egyptianCalendar"] = analysis.get("egyptianCalendar")
+            js = self.js_client.run("egypt_section", {"chart": chart_obj})
+            text = js.get("text") if isinstance(js, dict) else None
+            return f"{text}".strip() if text else ""
+        except Exception as exc:  # noqa: BLE001 — 富化失败不许影响主盘
+            logger.warning("egypt section build failed: %s", exc)
+            return ""
 
     # 八字格局（v3.0.x 本地化）：五行力量/格局·用神/盲派结构 由 core-js baziGeju 引擎从后端 fourColumns 派生，
     # 与 [四柱与三元] 同源。按需调用、优雅降级（无 node/引擎失败→不挂载→该批段不出，列 optional）。
@@ -7091,9 +7138,8 @@ class HorosaSkillService:
 
     def _run_harmonic_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 调波盘: a backend chart-extra computation on the Python chart service (/astroextra/harmonic).
-        # 星阙 has no aiExport contract for 调波盘 (it is a UI/lab-only auxiliary chart), so this returns
-        # the structured data (positions/conjunctions/chart) plus a readable snapshot_text for the AI,
-        # but no formal export technique (harmonic is intentionally absent from TOOL_EXPORT_TECHNIQUE_MAP).
+        # 上游 v50 已给调波盘正式导出键（aiExport.js 的 `harmonic`，属 ASTRO_LIKE_EXPORT_KEYS 族），
+        # 故此处不再是「无契约的实验面」——见 TOOL_EXPORT_TECHNIQUE_MAP。
         try:
             harmonic_num = max(1, min(int(payload.get("harmonic", 9)), 360))
         except (TypeError, ValueError):
@@ -7101,14 +7147,20 @@ class HorosaSkillService:
         orb = payload.get("orb", 2.0)
         remote_payload = {**payload, "predictive": 0, "harmonic": harmonic_num, "orb": orb}
         response = self._call_remote("/astroextra/harmonic", remote_payload)
-        snapshot_text = _build_harmonic_snapshot_text(remote_payload, response)
+        # 注意：这里**不要**回填 `snapshot_text`——统一出口是「工具自带 snapshot_text 就短路自动渲染器」
+        # （见 `_flush_export_snapshot` 的 `if not snapshot_text:`）。调波盘要的是通用盘面段 + 调波两段的
+        # 合并文本，由 `_auto_snapshot_text_for_tool` 负责；自带一份只含 3 段的文本会把整套盘面段挡掉。
+        # `/astroextra/harmonic` 把整个标准 chart-wrap（{chart, aspects, lots, receptions, mutuals,
+        # declParallel, params}）放在响应的 `chart` 键下——比导出层通用段构建器预期的深一层。此前原样
+        # 转发，导致 [宫位宫头]/[星与虚点]/[相位]/[行星]/[希腊点]/[12分度]/[主宰星链]/[寿命格局] 等
+        # 一整批段只出「本次本地计算结果未返回…」占位存根。摊平到顶层，通用构建器才认得。
+        chart_wrap = response.get("chart") if isinstance(response.get("chart"), dict) else {}
         return {
+            **chart_wrap,
             "harmonic": response.get("harmonic", harmonic_num),
             "positions": response.get("positions", []),
             "conjunctions": response.get("conjunctions", []),
-            "chart": response.get("chart"),
             "raw": response,
-            "snapshot_text": snapshot_text,
         }
 
     def _run_agepoint_tool(self, payload: dict[str, Any]) -> dict[str, Any]:

@@ -179,7 +179,16 @@ def main() -> None:
         source = args.upstream_src / rel
         if not source.is_file():
             raise SystemExit(f"upstream file not found: {source}")
-        subdir = args.vendor_subdir or Path(rel).parent.name
+        # 落点默认取上游父目录的**末段**(vendor 树是扁平化的),但当完整相对父路径在 vendor 里已存在时
+        # 必须用它——否则 `divination/data/x.js` 会新建一棵 `vendor/data/`,与既有 `vendor/divination/data/`
+        # 形成同名重复树,后续 relocate 还会把 import 指回旧树,同一模块两份、改一份不生效。
+        nested = Path(rel).parent
+        if args.vendor_subdir:
+            subdir = Path(args.vendor_subdir)
+        elif (VENDOR_ROOT / nested).is_dir():
+            subdir = nested
+        else:
+            subdir = Path(nested.name)
         target = VENDOR_ROOT / subdir / Path(rel).name
         new_text, notes = transform(source.read_text(encoding="utf-8"))
         new_text, export_notes = _reexport_required(new_text, target)
