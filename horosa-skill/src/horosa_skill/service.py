@@ -5028,6 +5028,32 @@ def _natal_chart_wrap(response: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _build_chart_info_lines(chart_wrap: dict[str, Any], payload: dict[str, Any]) -> list[str]:
+    """[星盘信息] 段：盘面口径（经纬度 / 时区 / 黄道 / 宫制 / 盘型）。
+
+    上游主限法族与法达族都把这段叫 `星盘信息`（`AstroPrimaryDirectionChart.js` 的
+    `lines.push('[星盘信息]')`），内容是**盘面元信息**，与本仓 `本命盘星与虚点`（星位表）
+    不是一回事 —— 所以这是补段，不是改名，两段并存。
+    """
+    params = chart_wrap.get("params") if isinstance(chart_wrap.get("params"), dict) else {}
+    chart = chart_wrap.get("chart") if isinstance(chart_wrap.get("chart"), dict) else {}
+    lon = params.get("lon") or payload.get("lon") or ""
+    lat = params.get("lat") or payload.get("lat") or ""
+    lines = [f"经纬度：{lon} {lat}".strip() or "经纬度：无", f"时区：{params.get('zone') or payload.get('zone') or '无'}"]
+    # 黄道/宫制的取值与显示与 _build_base_info_lines 同一条路径（数字 code → 文案）。
+    zodiacal = chart.get("zodiacal") or ASTRO_HOUSE_SYSTEM_TEXT.get(str(params.get("zodiacal")), params.get("zodiacal"))
+    zodiacal_text = _astro_msg(zodiacal)
+    if zodiacal_text:
+        lines.append(f"黄道：{zodiacal_text}")
+    hsys = chart.get("hsys") or ASTRO_HOUSE_SYSTEM_TEXT.get(str(params.get("hsys")), params.get("hsys"))
+    hsys_text = _astro_msg(hsys)
+    if hsys_text:
+        lines.append(f"宫制：{hsys_text}")
+    if chart.get("isDiurnal") is not None:
+        lines.append(f"盘型：{'日生盘' if chart.get('isDiurnal') else '夜生盘'}")
+    return lines
+
+
 def _build_predictive_cross_aspect_lines(
     response: dict[str, Any],
     predictive_wrap: dict[str, Any] | None = None,
@@ -5233,6 +5259,7 @@ def _build_primarydirect_snapshot_text(payload: dict[str, Any], response: dict[s
     return _render_snapshot_text(
         [
             ("出生时间", f"出生时间：{params.get('birth', '无')}"),
+            ("星盘信息", _join_lines(_build_chart_info_lines(natal_wrap, payload)) or "无"),
             ("本命盘星与虚点", _join_lines(_build_star_and_lot_position_lines(natal_wrap)) or "无"),
             (
                 # 上游 v48 段名对齐：主/界限法设置 → 主限法设置（旧名走 map_legacy_section_title）。
@@ -5262,6 +5289,7 @@ def _build_pdchart_snapshot_text(payload: dict[str, Any], response: dict[str, An
     return _render_snapshot_text(
         [
             ("出生时间", f"出生时间：{params.get('birth', '无')}"),
+            ("星盘信息", _join_lines(_build_chart_info_lines(natal_wrap, payload)) or "无"),
             ("本命盘星与虚点", _join_lines(_build_star_and_lot_position_lines(natal_wrap)) or "无"),
             (
                 "主限法盘设置",
@@ -5327,7 +5355,7 @@ def _build_zr_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -
         push_zr(zr_data)
     elif isinstance(zr_data, dict):
         zr_lines.append(_stringify_export_body(zr_data))
-    return _render_snapshot_text([("起盘信息", _join_lines(lines)), ("本命盘星与虚点", _join_lines(_build_star_and_lot_position_lines(natal_wrap)) or "无"), (f"基于{base_point}推运", _join_lines(zr_lines) or "无推运数据")])
+    return _render_snapshot_text([("起盘信息", _join_lines(lines)), ("星盘信息", _join_lines(_build_chart_info_lines(natal_wrap, payload)) or "无"), ("本命盘星与虚点", _join_lines(_build_star_and_lot_position_lines(natal_wrap)) or "无"), (f"基于{base_point}推运", _join_lines(zr_lines) or "无推运数据")])
 
 
 def _auto_snapshot_text_for_tool(tool_name: str, input_normalized: dict[str, Any], response_data: dict[str, Any]) -> str | None:

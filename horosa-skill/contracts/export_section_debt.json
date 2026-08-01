@@ -5,7 +5,7 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 38,
+    "missing_sections": 35,
     "extra_sections": 29,
     "absent_keys": 0,
     "keys_with_debt": 30
@@ -151,7 +151,6 @@
     },
     "primarydirchart": {
       "missing": [
-        "星盘信息",
         "本命盘配置",
         "主限法盘配置"
       ],
@@ -163,7 +162,6 @@
     },
     "primarydirect": {
       "missing": [
-        "星盘信息",
         "主限天球·当前动画所指"
       ],
       "extra": [
@@ -224,9 +222,7 @@
       "extra": []
     },
     "zodialrelease": {
-      "missing": [
-        "星盘信息"
-      ],
+      "missing": [],
       "extra": [
         "本命盘星与虚点"
       ]
