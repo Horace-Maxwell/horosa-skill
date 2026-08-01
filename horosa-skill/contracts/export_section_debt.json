@@ -5,10 +5,10 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 43,
+    "missing_sections": 38,
     "extra_sections": 29,
     "absent_keys": 0,
-    "keys_with_debt": 31
+    "keys_with_debt": 30
   },
   "keys": {
     "acg": {
@@ -207,16 +207,6 @@
       "extra": [
         "当前时点"
       ]
-    },
-    "tongshefa": {
-      "missing": [
-        "三十二观",
-        "世应",
-        "五行关系",
-        "五友",
-        "大局与动变"
-      ],
-      "extra": []
     },
     "vedicprog": {
       "missing": [
