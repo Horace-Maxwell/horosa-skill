@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "horosa",
   "displayName": "Horosa 星阙 — 术数 / 占星",
-  "description": "Horosa (星阙) local-first metaphysics for Claude Code: 83 real technique tools over MCP (Western astrology, 八字/紫微/大六壬/奇门/太乙/金口诀/三式合一, 14 神数, 卜卦/择日, tarot, geomancy) plus the horosa-agent skill that teaches the clarify-before-call gate and export-snapshot reading contract.",
+  "description": "Horosa (星阙) local-first metaphysics for Claude Code: 86 real technique tools over MCP (Western astrology, 八字/紫微/大六壬/奇门/太乙/金口诀/三式合一, 14 神数, 卜卦/择日, tarot, geomancy) plus the horosa-agent skill that teaches the clarify-before-call gate and export-snapshot reading contract.",
   "version": "0.24.0",
   "author": {
     "name": "Horace Maxwell",

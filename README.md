@@ -1,17 +1,17 @@
 <div align="center">
 
-<img src="./docs/assets/banner.svg" alt="Horosa Skill — 把星阙 83 个术数 / 占星技法做成任何 AI 都能本地调用的 MCP server 与 CLI" width="880" />
+<img src="./docs/assets/banner.svg" alt="Horosa Skill — 把星阙 86 个术数 / 占星技法做成任何 AI 都能本地调用的 MCP server 与 CLI" width="880" />
 
 # 🔮 Horosa Skill
 
-**把星阙（Horosa）的 83 个真实术数 / 占星技法，做成任何 AI 都能本地调用的 MCP server 与 CLI。**<br/>
-**A local-first MCP server & CLI that exposes 83 real astrology / metaphysics techniques from Horosa (星阙) to any AI client.**
+**把星阙（Horosa）的 86 个真实术数 / 占星技法，做成任何 AI 都能本地调用的 MCP server 与 CLI。**<br/>
+**A local-first MCP server & CLI that exposes 86 real astrology / metaphysics techniques from Horosa (星阙) to any AI client.**
 
 简体中文 · [English](./README_EN.md)
 
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
-  <img src="https://img.shields.io/badge/技法-83-1d4ed8?style=for-the-badge" alt="83 tools" />
+  <img src="https://img.shields.io/badge/技法-83-1d4ed8?style=for-the-badge" alt="86 tools" />
   <img src="https://img.shields.io/badge/测试-326_passed-16a34a?style=for-the-badge" alt="326 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
@@ -74,7 +74,7 @@
 
 ## ✨ 核心特性
 
-- 🌌 **83 个真实技法，一次安装，全程离线。** 覆盖西洋占星全链路、中文术数主干、数算与卜法、全 14 路神数；算法在本机运行，不联网、不上传。
+- 🌌 **86 个真实技法，一次安装，全程离线。** 覆盖西洋占星全链路、中文术数主干、数算与卜法、全 14 路神数；算法在本机运行，不联网、不上传。
 - 🧠 **为 AI 消费而设计的稳定契约。** 每次调用返回统一 envelope，接入导出协议的技法附带 `export_snapshot`（段结构化正文）。同一技法连续调用得到同一套字段，落库后结构不丢。
 - 🛡️ **调用前的硬性澄清闸。** 只要技法受时间 / 地点 / 时区 / 性别 / 事项 / 宫制 / 历法 / 起局方式影响，agent 在用户确认前会被结构化拦截，并收到可直接转发给用户的追问文本。
 - 🪙 **精简的响应体量。** 导出契约单份化，同一份快照不再重复；大盘单次响应体量较早期显著下降。可用 `response_view=titles|sections` 仅取段标题或指定段，完整快照始终已归档。
@@ -168,6 +168,9 @@ uv run horosa-skill client config --format codex            # Codex config.toml 
 | --- | --- | --- |
 | `chart` ⓟ | 标准星盘 | 基础西洋星盘 + 完整导出正文（12 分度 / 主宰星链 / 寿命格局 / 古典 / 古典格局） |
 | `chart13` ⓟ | 13 宫扩展盘 | `chart13` 形态输出 |
+| `chart12` ⓟ | 十二分盘 / Dwadasamsa | 黄经×12 mod 360，与十三分盘同结构 |
+| `draconic` | 龙盘 / Draconic | 各点黄经减北交点（交点归零的盘） |
+| `relocation` | 重置盘 / Relocation | 出生时刻不变，按新居住地重算宫位与角点 |
 | `hellen_chart` ⓟ | 希腊星盘 | 希腊占星取向盘面 |
 | `india_chart` ⓟ | 印度盘 | 分宫 4→24 制、岁差 6→47 制 |
 | `guolao_chart` ⓟ | 七政四余盘 | 七政四余 / 果老法盘面 |

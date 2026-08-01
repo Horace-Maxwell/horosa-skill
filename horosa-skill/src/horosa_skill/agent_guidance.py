@@ -713,6 +713,21 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     ),
     "chart": ASTRO_BIRTH_POLICY,
     "chart13": ASTRO_BIRTH_POLICY,
+    # 十二分盘/龙盘：与本命盘同一套出生资料，无额外结果敏感设置 → 沿用同一策略。
+    "chart12": ASTRO_BIRTH_POLICY,
+    "draconic": ASTRO_BIRTH_POLICY,
+    "relocation": _policy(
+        intent="重置盘(relocation)：保留出生时刻，按新居住地重算十二宫与上升/中天（行星黄经不变）。",
+        required_context=COMMON_BIRTH_FIELDS + ["relocLat", "relocLon"],
+        ask_if_missing=[
+            {"field": "date/time/place", "question": "请提供出生日期、时间、时区和出生地点。"},
+            {
+                "field": "relocLat/relocLon",
+                "question": "重置到哪个地点？（迁居/旅居地的经纬度，如伦敦 51n30 / 0w07）",
+            },
+        ],
+        output_contract=["起盘信息", "宫位宫头", "星与虚点", "相位"],
+    ),
     "india_chart": _policy(
         intent="印度占星(Vedic)恒星黄道盘：分宫制全 24 制(indiaHsys 0–24) + 黄道岁差全 47(indiaAyanamsa)。",
         required_context=COMMON_BIRTH_FIELDS,

@@ -625,6 +625,22 @@ class HarmonicInput(BirthInput):
     orb: float | None = 2.0
 
 
+class DraconicInput(BirthInput):
+    # 龙盘 (draconic chart)：把命盘各点黄经减去北交点黄经（POST /astroextra/draconic）。
+    # 后端返回 {nodeLon, positions, conjunctions, chart}，chart 与 /chart 同形。
+    predictive: bool | None = False
+    orb: float | None = 2.0
+
+
+class RelocationInput(BirthInput):
+    # 重置盘 (relocation)：保留出生 UT，仅用新经纬重算十二宫与上升/中天（POST /astroextra/relocation）。
+    # 行星黄经由 UT 决定故不变，宫位/角点随地点变 —— 迁居占星的标准做法。
+    # relocLat/relocLon 缺省回退到出生地，等于本命盘（结果敏感：不给新地点就不是「重置」）。
+    predictive: bool | None = False
+    relocLat: Any | None = Field(default=None, description="重置地纬度（如 51n30）；缺省回退出生地。")
+    relocLon: Any | None = Field(default=None, description="重置地经度（如 0w07）；缺省回退出生地。")
+
+
 class AgePointInput(BirthInput):
     # 年龄推进点 (Age Point / Huber): backend /predict/agepoint computes the whole Koch-house age-point
     # cycle from the natal chart (no separate target time). Needs predictive on so the predict engine runs.

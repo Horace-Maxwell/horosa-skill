@@ -59,6 +59,9 @@ logger = logging.getLogger(__name__)
 TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "chart": "astrochart",
     "chart13": "astrochart_like",
+    "chart12": "dwadasamsa",
+    "draconic": "draconic",
+    "relocation": "relocation",
     # 上游把这一族按出盘页面拆键（aiExport.js 的 ASTRO_LIKE_EXPORT_KEYS）；希腊盘与调波盘各有自己的
     # 导出键，不再共用 astrochart_like，否则两者的导出勾选会互相串。
     "hellen_chart": "hellenastro",
@@ -141,7 +144,7 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
 }
 
 
-_JAVA_CHART_DATE_ENDPOINTS = {"/chart", "/chart13", "/india/chart"}
+_JAVA_CHART_DATE_ENDPOINTS = {"/chart", "/chart12", "/chart13", "/india/chart"}
 _JAVA_DATE_FALLBACK_ENDPOINTS = {
     "/nongli/time",
     "/jieqi/year",
@@ -150,6 +153,7 @@ _JAVA_DATE_FALLBACK_ENDPOINTS = {
 }
 _PYTHON_CHART_ENDPOINTS = {
     "/chart",
+    "/chart12",
     "/chart13",
     "/predict/solarreturn",
     "/predict/lunarreturn",
@@ -166,6 +170,8 @@ _PYTHON_CHART_ENDPOINTS = {
     "/india/chart",
     "/germany/midpoint",
     "/astroextra/harmonic",
+    "/astroextra/draconic",
+    "/astroextra/relocation",
     "/predict/agepoint",
     "/predict/dist",
     "/astroextra/jaynesprog",
@@ -5309,7 +5315,7 @@ def _build_zr_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -
 
 
 def _auto_snapshot_text_for_tool(tool_name: str, input_normalized: dict[str, Any], response_data: dict[str, Any]) -> str | None:
-    if tool_name in {"chart", "chart13", "hellen_chart", "india_chart"} and _is_astro_chart_payload(response_data):
+    if tool_name in {"chart", "chart13", "chart12", "hellen_chart", "india_chart", "draconic", "relocation"} and _is_astro_chart_payload(response_data):
         return _build_astro_snapshot_text(input_normalized, response_data)
     # 调波盘：上游 v50 的 `harmonic` 键要求整套本命盘段 + 调波专属段。盘面本就在响应里（已在
     # `_run_harmonic_tool` 摊平到顶层），所以走通用盘面渲染器，再把 [调波位置]/[同频合相] 接在后面。
@@ -5870,7 +5876,7 @@ class HorosaSkillService:
         # chart if the enrichment errors.
         # 上游 v50 给整个 chart 家族（含 13 宫/希腊化/衍生盘）都出 12分度/主宰星链/寿命格局，
         # 不只本命与世俗盘——门控放开到 astrochart_like 家族，段随之进导出。
-        if tool_name not in {"chart", "mundane", "chart13", "hellen_chart", "harmonic"}:
+        if tool_name not in {"chart", "mundane", "chart13", "chart12", "hellen_chart", "harmonic", "draconic", "relocation"}:
             return response_data
         if not isinstance(response_data, dict) or not _is_astro_chart_payload(response_data):
             return response_data
@@ -5920,7 +5926,7 @@ class HorosaSkillService:
     # [古典格局] 是 skill 相对上游的 extra，不是漂移。）
     # mundane 也纳入：它已走 `_build_astro_snapshot_text`，开门控即得 [埃及历]。但**不要**因此
     # 给 mundane 登记 [古典格局]——世俗盘无该段是既定结论（docs/LESSONS.md）。
-    _CLASSICAL_ANALYSIS_TOOLS = {"chart", "chart13", "hellen_chart", "harmonic", "mundane"}
+    _CLASSICAL_ANALYSIS_TOOLS = {"chart", "chart13", "chart12", "hellen_chart", "harmonic", "mundane", "draconic", "relocation"}
 
     def _attach_classical_analysis(self, tool_name: str, payload: dict[str, Any], response_data: dict[str, Any]) -> dict[str, Any]:
         if tool_name not in self._CLASSICAL_ANALYSIS_TOOLS:
@@ -7323,6 +7329,33 @@ class HorosaSkillService:
             "raw": response,
         }
 
+    def _run_draconic_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 龙盘：各点黄经减北交点（交点归零）。后端把标准 chart-wrap 放在响应的 `chart` 键下——
+        # 与 /astroextra/harmonic 同一形状，比导出层通用段构建器预期深一层，故同样摊平到顶层。
+        response = self._call_remote("/astroextra/draconic", {**payload, "predictive": 0})
+        chart_wrap = response.get("chart") if isinstance(response.get("chart"), dict) else {}
+        return {
+            **chart_wrap,
+            "nodeLon": response.get("nodeLon"),
+            "positions": response.get("positions", []),
+            "conjunctions": response.get("conjunctions", []),
+            "raw": response,
+        }
+
+    def _run_relocation_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 重置盘：出生 UT 不变，只按新经纬重算宫位与角点（行星黄经由 UT 决定故不变）。
+        # 响应同 harmonic/draconic 的嵌套形状 → 同样摊平。relocLat/relocLon 缺省回退出生地。
+        response = self._call_remote("/astroextra/relocation", {**payload, "predictive": 0})
+        chart_wrap = response.get("chart") if isinstance(response.get("chart"), dict) else {}
+        return {
+            **chart_wrap,
+            "relocLat": response.get("relocLat"),
+            "relocLon": response.get("relocLon"),
+            "natalLat": response.get("natalLat"),
+            "natalLon": response.get("natalLon"),
+            "raw": response,
+        }
+
     def _run_agepoint_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 年龄推进点 (Age Point / Huber): backend /predict/agepoint computes the whole Koch-house cycle.
         remote_payload = {**payload, "predictive": payload.get("predictive", 1)}
@@ -8172,6 +8205,10 @@ class HorosaSkillService:
             return self._run_astrodata_tool(payload)
         if definition.name == "sanshiunited":
             return self._run_sanshiunited_tool(payload)
+        if definition.name == "draconic":
+            return self._run_draconic_tool(payload)
+        if definition.name == "relocation":
+            return self._run_relocation_tool(payload)
         if definition.name == "hellen_chart":
             return self._run_hellen_chart_tool(payload)
         if definition.name == "guolao_chart":

@@ -363,6 +363,23 @@ class FakeClient(HorosaApiClient):
                 "conjunctions": [{"a": "Mars", "b": "Saturn", "orb": 0.05}],
                 "chart": chart_payload,
             }
+        if endpoint in {"/astroextra/draconic", "/astroextra/relocation"}:
+            # 与 /astroextra/harmonic 同一嵌套形状：标准 chart-wrap 挂在 `chart` 键下，技法专属字段并列。
+            # 桩必须同形——否则 skill 侧「盘面段全是占位存根」这类 off-by-one-level 缺陷离线看不见。
+            if endpoint.endswith("draconic"):
+                return {
+                    "nodeLon": 123.45,
+                    "positions": [{"id": "Sun", "natalLon": 11.87, "lon": 248.42, "sign": "Sagittarius", "signlon": 8.42}],
+                    "conjunctions": [{"a": "Sun", "b": "Mars", "orb": 1.2}],
+                    "chart": chart_payload,
+                }
+            return {
+                "chart": chart_payload,
+                "natalLat": payload.get("lat", "31n14"),
+                "natalLon": payload.get("lon", "121e28"),
+                "relocLat": payload.get("relocLat", "51n30"),
+                "relocLon": payload.get("relocLon", "0w07"),
+            }
         if endpoint == "/astroextra/planetreturn":
             # 多重回归: per-body return dates. Synthesize a couple so [多重回归] emits + export stays clean.
             return {"returns": [{"which": 1, "date": "2019-05-10"}, {"which": 2, "date": "2048-11-02"}]}

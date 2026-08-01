@@ -5,9 +5,9 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 112,
-    "extra_sections": 24,
-    "absent_keys": 6,
+    "missing_sections": 72,
+    "extra_sections": 29,
+    "absent_keys": 3,
     "keys_with_debt": 35
   },
   "keys": {
@@ -61,42 +61,18 @@
       "extra": []
     },
     "draconic": {
-      "missing": [
-        "起盘信息",
-        "宫位宫头",
-        "星与虚点",
-        "信息",
-        "相位",
-        "行星",
-        "希腊点",
-        "12分度",
-        "主宰星链",
-        "古典",
-        "埃及历",
-        "寿命格局",
-        "可能性"
-      ],
-      "extra": [],
-      "absent_key": true
+      "missing": [],
+      "extra": [
+        "月宿",
+        "古典格局"
+      ]
     },
     "dwadasamsa": {
-      "missing": [
-        "起盘信息",
-        "宫位宫头",
-        "星与虚点",
-        "信息",
-        "相位",
-        "行星",
-        "希腊点",
-        "12分度",
-        "主宰星链",
-        "古典",
-        "埃及历",
-        "寿命格局",
-        "可能性"
-      ],
-      "extra": [],
-      "absent_key": true
+      "missing": [],
+      "extra": [
+        "月宿",
+        "古典格局"
+      ]
     },
     "fengshui": {
       "missing": [
@@ -253,24 +229,10 @@
       "extra": []
     },
     "relocation": {
-      "missing": [
-        "起盘信息",
-        "宫位宫头",
-        "星与虚点",
-        "信息",
-        "相位",
-        "行星",
-        "希腊点",
-        "12分度",
-        "主宰星链",
-        "古典",
-        "古典格局",
-        "埃及历",
-        "寿命格局",
-        "可能性"
-      ],
-      "extra": [],
-      "absent_key": true
+      "missing": [],
+      "extra": [
+        "月宿"
+      ]
     },
     "sanshiunited": {
       "missing": [
