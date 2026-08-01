@@ -820,6 +820,15 @@ class FakeJsClient(HorosaJsEngineClient):
                     {"name": "孛犯太阳", "level": "bad", "detail": "政余忌格：孛与太阳同宫。"},
                 ]},
             }
+        if tool_name in {"huangli", "tongshu"}:
+            # 纯本地技法的离线替身：段头与顺序取自上游 preset（真实 builder 零后端往返，
+            # 这里只是让契约测试有稳定输入）。
+            from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS as _P
+
+            blocks = []
+            for title in _P[tool_name]:
+                blocks.append(f"[{title}]\n{title}：离线替身内容。")
+            return {"text": "\n\n".join(blocks)}
         if tool_name == "babylon":
             # 六段的离线替身：段头与顺序须与上游一致（微黄道居末，上游测试断言了这一点）。
             return {

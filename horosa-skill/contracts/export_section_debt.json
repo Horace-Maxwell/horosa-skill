@@ -5,10 +5,10 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 66,
+    "missing_sections": 54,
     "extra_sections": 29,
-    "absent_keys": 2,
-    "keys_with_debt": 34
+    "absent_keys": 0,
+    "keys_with_debt": 32
   },
   "keys": {
     "acg": {
@@ -106,22 +106,6 @@
         "月宿",
         "古典格局"
       ]
-    },
-    "huangli": {
-      "missing": [
-        "起盘信息",
-        "今日宜忌",
-        "值神值宿",
-        "彭祖百忌",
-        "吉神凶煞",
-        "冲煞·胎神·方位",
-        "时辰吉凶",
-        "物候·六曜·数九三伏",
-        "流年年神方位",
-        "方法说明"
-      ],
-      "extra": [],
-      "absent_key": true
     },
     "indiachart": {
       "missing": [],
@@ -249,14 +233,6 @@
         "大局与动变"
       ],
       "extra": []
-    },
-    "tongshu": {
-      "missing": [
-        "通书择日",
-        "方法说明"
-      ],
-      "extra": [],
-      "absent_key": true
     },
     "vedicprog": {
       "missing": [

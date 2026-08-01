@@ -713,6 +713,34 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     ),
     "chart": ASTRO_BIRTH_POLICY,
     "chart13": ASTRO_BIRTH_POLICY,
+    "huangli": _policy(
+        intent="老黄历日课：某一天的宜忌 / 值神值宿 / 彭祖百忌 / 吉神凶煞 / 冲煞胎神方位 / 时辰吉凶 / 物候 / 流年年神方位。",
+        required_context=["date"],
+        ask_if_missing=[
+            {"field": "date", "question": "要看哪一天的黄历？（公历 YYYY-MM-DD）"},
+        ],
+        output_contract=["今日宜忌", "值神值宿", "冲煞·胎神·方位", "时辰吉凶"],
+    ),
+    "tongshu": _policy(
+        intent="通书择日：按五流派各自的断语表判某日某用事的吉凶。",
+        required_context=["date", "school", "event"],
+        ask_if_missing=[
+            {"field": "date", "question": "要择的是哪一天？（公历 YYYY-MM-DD）"},
+            {
+                "field": "school",
+                "question": "用哪一派通书？（同一天在不同流派下结论可以完全相反，必须指定）",
+                "options": [
+                    "donggong 董公择日",
+                    "qimen 奇门叠数",
+                    "sanyuan 三垣列宿",
+                    "wutu 天元乌兔",
+                    "xuankong 三元玄空大卦",
+                ],
+            },
+            {"field": "event", "question": "要择的用事是什么？（嫁娶 / 开市 / 安葬 / 动土 …）"},
+        ],
+        output_contract=["通书择日", "方法说明"],
+    ),
     "babylon": _policy(
         intent="巴比伦占星：恒星黄道·毕宿锚盘（无宫位/无相位/无上升），解读装置是「位」三法与行星神性。",
         required_context=COMMON_BIRTH_FIELDS,

@@ -25,6 +25,8 @@ import { runTiebanFramework } from './tiebanFramework.js';
 import { runUranianExtra } from './uranianExtra.js';
 import { runEgyptSection } from './egyptSection.js';
 import { runBabylon } from './babylon.js';
+import { runHuangli } from './huangli.js';
+import { runTongshu } from './tongshu.js';
 
 const TOOL_RUNNERS = {
   uranian_extra: runUranianExtra,
@@ -32,6 +34,8 @@ const TOOL_RUNNERS = {
   yanqin_yanfa: runYanqinYanfa,
   egypt_section: runEgyptSection,
   babylon: runBabylon,
+  huangli: runHuangli,
+  tongshu: runTongshu,
   india_jyotish: runIndiaJyotish,
   qimen: runQimen,
   taiyi: runTaiyi,

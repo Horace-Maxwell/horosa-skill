@@ -287,6 +287,22 @@ class CalendarMonthInput(FlexibleModel):
     day: str | None = None  # 选中日（YYYY-MM-DD）：给出则产 [选中日详情] 段
 
 
+class HuangliInput(FlexibleModel):
+    # 老黄历日课：纯前端本地推演（lunar-javascript + 择日表），零后端往返，故无需 zone/经纬。
+    date: str
+    hour: int | None = Field(default=None, description="0–23 整点小时；影响 [时辰吉凶] 的当前时标记，缺省 12。")
+
+
+class TongshuInput(FlexibleModel):
+    # 通书择日：五流派各自独立的断语表，同一天在不同流派下结论可以完全相反 → school 结果敏感。
+    date: str
+    school: str | None = Field(default=None, description="流派：donggong 董公 / qimen 奇门叠数 / sanyuan 三垣列宿 / wutu 天元乌兔 / xuankong 三元玄空大卦。")
+    event: str | None = Field(default=None, description="用事（嫁娶 / 开市 / 安葬 …），缺省「嫁娶」。")
+    liexiuUse: str | None = Field(default=None, description="三垣列宿用事类（断语高亮），缺省「建宅」。")
+    zuoShan: str | None = Field(default=None, description="坐山（玄空大卦用），缺省「子」。")
+    mingYear: str | None = Field(default=None, description="命年干支（乌兔/玄空用），缺省「甲子」。")
+
+
 class GuaNamesInput(FlexibleModel):
     name: list[str]
 

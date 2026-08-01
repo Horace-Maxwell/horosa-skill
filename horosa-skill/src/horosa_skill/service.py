@@ -62,6 +62,8 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "chart12": "dwadasamsa",
     "draconic": "draconic",
     "babylon": "babylon",
+    "huangli": "huangli",
+    "tongshu": "tongshu",
     "relocation": "relocation",
     # 上游把这一族按出盘页面拆键（aiExport.js 的 ASTRO_LIKE_EXPORT_KEYS）；希腊盘与调波盘各有自己的
     # 导出键，不再共用 astrochart_like，否则两者的导出勾选会互相串。
@@ -7331,6 +7333,49 @@ class HorosaSkillService:
             "raw": response,
         }
 
+    @staticmethod
+    def _split_ymd(value: Any, *, tool: str) -> tuple[int, int, int]:
+        parts = f"{value or ''}".replace("/", "-").split("-")
+        try:
+            return int(parts[0]), int(parts[1]), int(parts[2][:2])
+        except (IndexError, ValueError):
+            raise ToolValidationError(f"Invalid date for tool `{tool}`: {value!r}") from None
+
+    def _run_huangli_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 老黄历日课：上游这支是纯前端本地推演（lunar-javascript + 择日表），**零后端往返**，
+        # 所以这里没有任何 _call_remote —— 与 canping/heluo 一类的 execution="local" 同款。
+        year, month, day = self._split_ymd(payload.get("date"), tool="huangli")
+        hour = payload.get("hour")
+        js = self.js_client.run(
+            "huangli",
+            {"year": year, "month": month, "day": day, "hour": hour if hour is not None else 12},
+        )
+        snapshot_text = f"{(js or {}).get('text') or ''}".strip()
+        return {
+            "date": payload.get("date"),
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="huangli", snapshot_text=snapshot_text),
+        }
+
+    def _run_tongshu_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 通书择日：同样纯本地。school 是结果敏感项（五流派断语可以完全相反），由闸门在调用前问清；
+        # 这里只做透传，不替用户挑。
+        self._split_ymd(payload.get("date"), tool="tongshu")  # 仅校验格式，JS 侧吃 'YYYY-MM-DD' 原串
+        js = self.js_client.run(
+            "tongshu",
+            {
+                "date": f"{payload.get('date') or ''}".replace("/", "-"),
+                **{k: payload.get(k) for k in ("school", "event", "liexiuUse", "zuoShan", "mingYear") if payload.get(k)},
+            },
+        )
+        snapshot_text = f"{(js or {}).get('text') or ''}".strip()
+        return {
+            "date": payload.get("date"),
+            "school": payload.get("school"),
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="tongshu", snapshot_text=snapshot_text),
+        }
+
     def _run_babylon_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         """巴比伦占星：恒星黄道 · 毕宿锚盘 → vendored 纯函数链铺六段。
 
@@ -8259,6 +8304,10 @@ class HorosaSkillService:
             return self._run_astrodata_tool(payload)
         if definition.name == "sanshiunited":
             return self._run_sanshiunited_tool(payload)
+        if definition.name == "huangli":
+            return self._run_huangli_tool(payload)
+        if definition.name == "tongshu":
+            return self._run_tongshu_tool(payload)
         if definition.name == "babylon":
             return self._run_babylon_tool(payload)
         if definition.name == "draconic":

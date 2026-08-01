@@ -10,7 +10,7 @@
   <p>
     <img src="https://img.shields.io/github/stars/Horace-Maxwell/horosa-skill?style=flat-square" alt="GitHub stars" />
     <img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square" alt="Release" />
-    <img src="https://img.shields.io/badge/tools-87-1d4ed8?style=flat-square" alt="87 tools" />
+    <img src="https://img.shields.io/badge/tools-89-1d4ed8?style=flat-square" alt="89 tools" />
     <img src="https://img.shields.io/badge/platform-macOS%20(arm64)%20%7C%20Windows%20(x64)-0f766e?style=flat-square" alt="Platforms" />
     <img src="https://img.shields.io/badge/runtime-offline%20first-111827?style=flat-square" alt="Offline runtime" />
     <img src="https://img.shields.io/badge/MCP-ready-111827?style=flat-square" alt="MCP ready" />
@@ -51,7 +51,7 @@ License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICEN
 
 ## Current stable baseline
 
-**Current public version: `Horosa Skill 0.24.0` (87 callable tools).**
+**Current public version: `Horosa Skill 0.24.0` (89 callable tools).**
 
 This release line brings the capability surface roughly to parity with the desktop app:
 
@@ -70,7 +70,7 @@ Local end-to-end signals:
 
 | Check | Result |
 | --- | --- |
-| Callable tools | `87 / 87 ok=true` |
+| Callable tools | `89 / 89 ok=true` |
 | Engineering tests | `326 / 326 pass` (ken / Shen Shu live integration + offline golden unit tests + node JS golden) |
 | Forced clarification when params unconfirmed | `67` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `7` registry / knowledge / parser tools are directly readable |
@@ -83,7 +83,7 @@ Local end-to-end signals:
 
 > About `solarreturn` / `lunarreturn` / `solararc` / `givenyear` / `profection` / `pd` / `pdchart` / `zr`: these predictive tools are verified working in this version and should not be flagged by an agent as "Java `/predict/*` unavailable". If a client still says so, check whether it is on an old runtime, bypassing MCP to hand-compute, or hasn't run `doctor` / `openclaw-check --full`.
 
-## Capability map (87 tools)
+## Capability map (89 tools)
 
 > Every business technique returns a uniform envelope plus a Xingque-style `export_snapshot` / `export_format`. Tools marked ⓟ are setting-sensitive and require parameter confirmation before calling.
 
@@ -93,6 +93,8 @@ Local end-to-end signals:
 | --- | --- | --- |
 | `chart` ⓟ | Standard chart | Western natal chart + full AI export (Dodekatemoria / dispositor chain / hyleg lifespan) |
 | `chart13` ⓟ | 13-house variant | `chart13` form |
+| `huangli` | Chinese day almanac | daily do/avoid, duty spirits, Peng Zu taboos, clash-sha & fetal-god directions, hourly luck |
+| `tongshu` | Tongshu date selection | verdict across the five classical schools |
 | `babylon` | Babylonian astrology | Aldebaran-anchored sidereal list, arithmetic calendar, bīt niṣirti, numina, microzodiac |
 | `chart12` ⓟ | Dwadasamsa (12th-harmonic) | lon×12 mod 360, same shape as chart13 |
 | `draconic` | Draconic chart | all longitudes measured from the North Node |

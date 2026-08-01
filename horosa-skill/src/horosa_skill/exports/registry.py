@@ -88,6 +88,8 @@ AI_EXPORT_TECHNIQUES = [
     {"key": "hellenastro", "label": "希腊占星盘"},
     {"key": "harmonic", "label": "调波盘"},
     {"key": "babylon", "label": "巴比伦占星"},
+    {"key": "huangli", "label": "老黄历日课"},
+    {"key": "tongshu", "label": "通书择日"},
     {"key": "dwadasamsa", "label": "十二分盘"},
     {"key": "draconic", "label": "龙盘"},
     {"key": "relocation", "label": "重置盘"},
@@ -181,6 +183,9 @@ AI_EXPORT_PRESET_SECTIONS = {
     # 同族的另外三个键（上游 ASTRO_LIKE_EXPORT_KEYS）：十二分盘 /chart12、龙盘 /astroextra/draconic、
     # 重置盘 /astroextra/relocation。段单与 astrochart_like 同构（月宿是 skill 相对上游的既有 extra）。
     # 上游 v50 全新键。微黄道**必须居末**（上游 aiExportSectionSemantics 测试断言了段序）。
+    # 上游把黄历页拆成三键：calendar（页面聚合四子并出）/ huangli（老黄历日课）/ tongshu（通书择日）。
+    "huangli": ["起盘信息", "今日宜忌", "值神值宿", "彭祖百忌", "吉神凶煞", "冲煞·胎神·方位", "时辰吉凶", "物候·六曜·数九三伏", "流年年神方位", "方法说明"],
+    "tongshu": ["通书择日", "方法说明"],
     "babylon": ["起盘信息", "七曜按宫", "分至天狼星", "位三法", "行星神性", "微黄道"],
     "dwadasamsa": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "12分度", "主宰星链", "古典", "古典格局", "埃及历", "寿命格局", "可能性"],
     "draconic": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "12分度", "主宰星链", "古典", "古典格局", "埃及历", "寿命格局", "可能性"],
@@ -362,6 +367,8 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     "astrochart_like": ["月宿", "古典", "古典格局", "埃及历", "可能性"],
     "hellenastro": ["月宿", "古典", "古典格局", "埃及历", "可能性"],
     # 微黄道缺月/日点位时整段不产（上游同）。
+    # 这三段在 builder 里条件产出（无时辰/无物候数据/无年神表时不出）。
+    "huangli": ["时辰吉凶", "物候·六曜·数九三伏", "流年年神方位"],
     "babylon": ["微黄道"],
     "dwadasamsa": ["月宿", "古典", "古典格局", "埃及历", "可能性"],
     "draconic": ["月宿", "古典", "古典格局", "埃及历", "可能性"],
