@@ -182,9 +182,9 @@ AI_EXPORT_PRESET_SECTIONS = {
     "bazi": ["起盘信息", "四柱与三元", "神煞（四柱与三元）", "五行力量", "格局·用神", "盲派结构", "大运", "流年行运概略"],
     "ziwei": ["起盘信息", "宫位总览", "命中格局"],
     "suzhan": ["起盘信息", "宿盘宫位与二十八宿星曜"],
-    "sixyao": ["起盘信息", "卦象", "六爻与动爻", "断卦结构", "卦辞与断语"],
+    "sixyao": ["起盘信息", "卦象", "六爻与动爻", "断卦结构", "卦辞与断语", "断诀命中", "占类断语", "判语库·参考诀表"],
     "tongshefa": ["本卦", "六爻", "潜藏", "亲和"],
-    "liureng": ["起盘信息", "十二盘式", "十二地盘/十二天盘/十二贵神对应", "四课", "三传", "行年", "旬日", "旺衰", "基础神煞", "干煞", "月煞", "支煞", "岁煞", "十二长生", "大格", "小局", "参考", "概览", "常用神煞", "年月神煞", "课体结构", "三传旺衰", "空亡真假", "旬空落点", "陷空", "遁干特殊", "年命上神", "毕法（已命中）", "占断向导", "七政"],
+    "liureng": ["起盘信息", "十二盘式", "十二地盘/十二天盘/十二贵神对应", "四课", "三传", "行年", "旬日", "旺衰", "基础神煞", "干煞", "月煞", "支煞", "岁煞", "十二长生", "大格", "小局", "参考", "概览", "常用神煞", "年月神煞", "课体结构", "三传旺衰", "空亡真假", "旬空落点", "陷空", "遁干特殊", "年命上神", "毕法（已命中）", "占断向导", "七政", "取象"],
     "jinkou": ["起盘信息", "金口诀速览", "金口诀四位", "金口诀三盘", "四位神煞", "用神强弱", "四位生克", "应期", "地支关系", "相关神煞", "分类用神·求财", "行年", "旬日", "旺衰", "基础神煞", "干煞", "月煞", "支煞", "岁煞", "十二长生"],
     "taiyi": ["起盘信息", "太乙盘", "太乙诸神", "风游", "主客定算", "十二神", "八门与宿曜", "断法", "七大兵法", "博弈", "命法", "命宫行限", "十六宫标记", "起盘"],
     "qimen": ["起盘信息", "盘型", "全局速览", "盘面要素", "奇门演卦", "八宫详解", "九宫方盘", "旺相休囚死·月令能量", "六害总览", "化解方案", "八门化气大阵", "用神分论", "财富七要", "事业七要", "恋爱姻缘", "孤辰寡宿", "八宫克应"],
@@ -217,9 +217,9 @@ AI_EXPORT_PRESET_SECTIONS = {
     "extrareturns": ["多重回归", "当前时点", "方法说明"],
     "horary": ["起卦信息", "根本性", "征象星指派", "完成分析", "月亮的故事", "相位全览", "裁决", "应期方位", "描述", "专题深化·X"],
     "election": ["起盘信息", "总评", "红线", "分项", "用事专属", "应期", "建议"],
-    "wangji": ["起盘", "元会运世", "天道卦", "人事卦", "历史年表", "心易发微"],
+    "wangji": ["起盘", "元会运世", "天道卦", "人事卦", "历史年表", "心易发微", "经典原文"],
     "wuzhao": ["起盘", "揲筮", "兆", "木乡", "火乡", "土乡", "金乡", "水乡", "特殊标记"],
-    "taixuan": ["起盘", "玄首", "方州部家", "表"],
+    "taixuan": ["起盘", "玄首", "方州部家", "表", "太玄经全文"],
     "jingjue": ["起课", "卦辞", "三分", "十六卦"],
     "shenyishu": ["起盘", "干支与五行", "神卦", "五行法则", "兵占", "主客判断", "神煞", "长生", "吉凶"],
     "shaozi": ["起盘", "四柱", "四位起数", "河洛纳音", "完整结构", "64钥匙", "元会运世", "条文"],
@@ -306,6 +306,23 @@ AI_EXPORT_FORBIDDEN_SECTIONS = {
 # does not reliably emit — either 星阙-UI-only interactive panels (检索/查询 search boxes) or mode/data-
 # conditional sections. They are still valid export targets when present, but their ABSENCE must not mark
 # the export "dirty" (i.e. they are excluded from `missing_selected_sections`).
+# 默认关段（上游 AI_EXPORT_DEFAULT_OFF_SECTIONS，v50）：判语库 / 象意 / 古籍全文这类 **doctrine 型**
+# 段——体量大、且不是逐盘事实。上游的语义是「登记进 preset（设置面可勾、勾了就永久尊重），但用户
+# 未自定义时默认不纳入导出」。
+#
+# 这是 preset / optional 之外的**第三态**：preset 说「这个技法有这个段」，optional 说「缺席不算漏」，
+# 默认关说「除非明确要，否则不默认给」。skill 侧把它当作 optional 的超集使用——段照常登记、缺席不
+# 报 missing，同时在导出契约里如实标注 default_off，供调用方决定是否请求。
+AI_EXPORT_DEFAULT_OFF_SECTIONS = {
+    "sixyao": ["判语库·参考诀表"],
+    "taixuan": ["太玄经全文"],
+    "wangji": ["经典原文", "历史年表"],   # skill 键 wangji ↔ 上游键 huangji
+    "geomancy": ["图形释义"],
+    "yizhangjing": ["诗文", "四柱文献", "逐日值星", "时辰细断", "叠断"],
+    "qimen": ["八宫克应"],
+    "liureng": ["取象"],
+}
+
 AI_EXPORT_OPTIONAL_SECTIONS = {
     # 月宿 (星阙 v2.6.4 西洋月宿)：仅恒星黄道(zodiacal=1)盘的 perchart 响应带 nakshatras，
     # 回归黄道盘不产出 → 列为可选段，避免 tropical 盘误报 missing。
@@ -325,7 +342,7 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     "ziwei": ["命中格局"],
     # 六爻 [断卦结构]（纳甲/世应/用神/旺衰/飞伏/六神/动变）由 core-js analyzeLiuyao 引擎派生，
     # 需 node 运行时；无 node/引擎失败则优雅降级不出该段 → 列可选段，缺失不误报。
-    "sixyao": ["断卦结构"],
+    "sixyao": ["断卦结构", "断诀命中", "占类断语"],
     # 合盘关系量化（v3.3.1）：/astroextra/relative 打分成功才出；顺畅/张力连接随命中相位条件产出。
     "relative": ["关系量化", "顺畅连接", "张力连接"],
     # 塔罗条件段：综合断语（有 summary 才出）/定局（try 内，罕见异常才缺）/生命牌（仅传 birth 时出）。
@@ -525,7 +542,15 @@ def get_technique_info(key: str) -> dict[str, Any] | None:
         "label": base["label"],
         "preset_sections": deepcopy(AI_EXPORT_PRESET_SECTIONS.get(key, [])),
         "forbidden_sections": deepcopy(AI_EXPORT_FORBIDDEN_SECTIONS.get(key, [])),
-        "optional_sections": deepcopy(AI_EXPORT_OPTIONAL_SECTIONS.get(key, [])),
+        # 默认关段并入 optional：二者对解析器的意思相同（缺席不算漏）；default_off_sections 单列，
+        # 让调用方能区分「本盘没这段」与「这段体量大、默认不给，要就明说」。
+        "optional_sections": deepcopy(
+            unique_list(
+                list(AI_EXPORT_OPTIONAL_SECTIONS.get(key, []))
+                + list(AI_EXPORT_DEFAULT_OFF_SECTIONS.get(key, []))
+            )
+        ),
+        "default_off_sections": deepcopy(AI_EXPORT_DEFAULT_OFF_SECTIONS.get(key, [])),
         "supports_planet_info": supports_planet_info,
         "planet_info_default": deepcopy(AI_EXPORT_PLANET_INFO_DEFAULT) if supports_planet_info else None,
         "supports_astro_meaning": supports_astro_meaning,

@@ -125,6 +125,10 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   missing」。修法是在 JS 侧只在段头后断行（`/^(\[[^\]]+\])[ \t]+/gm` → `$1\n`），正文逐字不动，
   快照仍与上游同源。**排查判据**：段出现在 `sections` 里但同时出现在 `missing` 里 = 解析形态问题，
   不是缺 builder。
+- **preset / optional 之外还有第三态**：上游 `AI_EXPORT_DEFAULT_OFF_SECTIONS` 的语义是「登记进
+  preset（可勾、勾了永久尊重），但用户未自定义时默认不导出」——doctrine 型大段（判语库/古籍全文）
+  专用。skill 侧并入 optional（对解析器同义：缺席不算漏）并在契约里单列 `default_off_sections`。
+  **注意上游的 migration union 也排除这些段**，否则升级会把它们硬并进已自定义用户的选择 = 变相默认开。
 - **回填铁律的实操顺序**：先 live 跑出**实产段名**，再拿它与上游 preset 做三向差（都有 → 进 preset；
   上游有实产无 → preset+optional 双登记；实产有上游无 → 查是 skill 自有基础段还是占位名族）。
   绝不能照抄上游 preset 了事——那会造出死条目，让每次真实导出都报 missing。
