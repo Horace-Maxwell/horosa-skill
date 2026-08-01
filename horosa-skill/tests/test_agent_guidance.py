@@ -87,7 +87,8 @@ def test_predictive_input_contracts_are_explicit_for_agents() -> None:
     assert solarreturn["schema"] == "horosa.skill.input_contract.v1"
     assert solarreturn["confirmation_required"] is True
     assert {"datetime", "dirZone", "dirLat", "dirLon"} <= set(solarreturn["required_for_real_call"])
-    assert "返照盘星与虚点" in solarreturn["output_contract"]
+    # 上游 v50 段结构：本命盘配置 / 起盘信息 / 时段盘配置 / 相位（旧的「返照盘X」前缀名走 legacy 迁移）。
+    assert "时段盘配置" in solarreturn["output_contract"]
     assert solarreturn["example_payload"]["agent_confirmed_settings"] is True
 
     assert {"pdtype", "pdMethod", "pdTimeKey", "pdaspects"} <= set(pd["required_for_real_call"])

@@ -5002,14 +5002,39 @@ def _build_predictive_snapshot_text(tool_name: str, payload: dict[str, Any], res
         f"推运时区：{predictive_params.get('zone') or payload.get('dirZone') or payload.get('zone', '无')}",
         f"推运地点：{predictive_params.get('lon') or payload.get('dirLon') or payload.get('lon', '—')} {predictive_params.get('lat') or payload.get('dirLat') or payload.get('lat', '—')}",
     ]
+    # 段结构逐字对齐上游 predictiveAiSnapshot.js::buildPredictiveSnapshotText —— 四段：
+    # [本命盘配置]（生辰 + 口径 + 宫位宫头/星与虚点/信息 三个子块）/ [起盘信息]（推运时点口径）/
+    # [时段盘配置]（时段盘 星与虚点 + 时段盘 宫位宫头）/ [相位]（交叉相位）。
+    # 本仓旧段名（本命盘起盘信息 / 本命盘星与虚点 / X盘起盘信息 / X盘星与虚点 / X盘相位）走
+    # map_legacy_section_title 迁移，老用户自定义勾选不被静默丢弃。
+    natal_config_lines = list(birth_lines)
+    if natal_wrap:
+        cusp_lines = _build_house_cusp_lines(natal_wrap)
+        if cusp_lines:
+            natal_config_lines.extend(["宫位宫头", *cusp_lines])
+        star_lines = _build_star_and_lot_position_lines(natal_wrap)
+        if star_lines:
+            natal_config_lines.extend(["星与虚点", *star_lines])
+        # _build_info_section 的开头会重出一遍 base info（与 birth_lines 重复）→ 只取其后的子块。
+        info_lines = _build_info_section(natal_wrap, payload)
+        base_len = len(_build_base_info_lines(natal_wrap, payload))
+        info_only = info_lines[base_len:]
+        if info_only:
+            natal_config_lines.extend(["信息", *info_only])
+    directed_lines: list[str] = []
+    directed_stars = _build_star_and_lot_position_lines(predictive_wrap)
+    if directed_stars:
+        directed_lines.extend(["时段盘 星与虚点", *directed_stars])
+    directed_cusps = _build_house_cusp_lines(predictive_wrap)
+    if directed_cusps:
+        directed_lines.extend(["时段盘 宫位宫头", *directed_cusps])
     sections = [
-        ("本命盘起盘信息", _join_lines(birth_lines) or "无"),
-        ("本命盘星与虚点", _join_lines(_build_star_and_lot_position_lines(natal_wrap)) if natal_wrap else "无"),
-        (f"{chart_label}起盘信息", _join_lines(predictive_setup_lines)),
-        (f"{chart_label}星与虚点", _join_lines(_build_star_and_lot_position_lines(predictive_wrap)) or "无"),
+        ("本命盘配置", _join_lines(natal_config_lines) or "无"),
+        ("起盘信息", _join_lines(predictive_setup_lines)),
+        ("时段盘配置", _join_lines(directed_lines) or "无"),
         # 交叉相位优先；后端未回数组形状时才退回本命盘形状的相位构建器（老响应 / 降级）。
         (
-            f"{chart_label}相位",
+            "相位",
             _join_lines(_build_predictive_cross_aspect_lines(response, predictive_wrap, natal_wrap))
             or _join_lines(_build_aspect_section(predictive_wrap))
             or "无",

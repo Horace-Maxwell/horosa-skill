@@ -1832,20 +1832,23 @@ def test_predictive_tools_export_real_natal_and_timed_chart_content(tmp_path) ->
     service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
     payloads = build_sample_payloads()
 
+    # 上游 v50 的推运族段结构：[本命盘配置]/[起盘信息]/[时段盘配置]/[相位]（不再带
+    # 本命盘/返照盘/推运盘/流年盘 前缀；旧名走 map_legacy_section_title 迁移）。
     expected_sections = {
-        "solarreturn": ["本命盘星与虚点", "返照盘星与虚点", "返照盘相位"],
-        "lunarreturn": ["本命盘星与虚点", "返照盘星与虚点", "返照盘相位"],
-        "givenyear": ["本命盘星与虚点", "流年盘星与虚点", "流年盘相位"],
-        "solararc": ["本命盘星与虚点", "推运盘星与虚点", "推运盘相位"],
-        "profection": ["本命盘星与虚点", "推运盘星与虚点", "推运盘相位"],
+        "solarreturn": ["本命盘配置", "时段盘配置", "相位"],
+        "lunarreturn": ["本命盘配置", "时段盘配置", "相位"],
+        "givenyear": ["本命盘配置", "时段盘配置", "相位"],
+        "solararc": ["本命盘配置", "时段盘配置", "相位"],
+        "profection": ["本命盘配置", "时段盘配置", "相位"],
     }
     for tool_name, sections in expected_sections.items():
         result = service.run_tool(tool_name, payloads[tool_name], save_result=False)
         export_format = result.data["export_snapshot"]
         text = result.data["snapshot_text"]
         assert all(section in export_format["selected_sections"] for section in sections), tool_name
-        assert "本命盘" in text, tool_name
-        assert any(label in text for label in ("返照盘", "推运盘", "流年盘")), tool_name
+        assert "本命盘配置" in text, tool_name
+        # 时段盘的两个子块标题（上游 buildDirectedChartLines 的排版）。
+        assert "时段盘 星与虚点" in text, tool_name
         assert "日 (" in text and "月 (" in text, tool_name
         # 推运族的 [X盘相位] 是**交叉相位**（行运星 ↔ 本命星），不是本命盘那三个子标题。
         # 旧断言查 "标准相位" 恰恰是在断言那个 bug 的产物：真机上该段只有三个空子标题、

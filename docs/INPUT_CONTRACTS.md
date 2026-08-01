@@ -49,11 +49,11 @@ IANA 时区会在进入 runtime 前转换为后端稳定接受的固定 offset�
 
 | 工具 | 中文 | 必填输入 | 目标时间/地点字段 | 正确输出必须包含 |
 | --- | --- | --- | --- | --- |
-| `solarreturn` | 太阳返照 | `date`、`time`、`zone`、`lat`、`lon`、`datetime`、`dirZone`、`dirLat`、`dirLon` | `datetime` 为返照目标时间；`dir*` 为返照地点 | 本命盘起盘信息、本命盘星与虚点、返照盘起盘信息、返照盘星与虚点、返照盘相位 |
-| `lunarreturn` | 月亮返照 | `date`、`time`、`zone`、`lat`、`lon`、`datetime`、`dirZone`、`dirLat`、`dirLon` | `datetime` 为月返目标时间；`dir*` 为月返地点 | 本命盘起盘信息、本命盘星与虚点、返照盘起盘信息、返照盘星与虚点、返照盘相位 |
-| `givenyear` | 指定年推运 / 流年 | `date`、`time`、`zone`、`lat`、`lon`、`datetime`、`dirZone`、`dirLat`、`dirLon` | `datetime` 为指定年中的目标时间；`dir*` 为流年盘地点 | 本命盘起盘信息、本命盘星与虚点、流年盘起盘信息、流年盘星与虚点、流年盘相位 |
-| `solararc` | 太阳弧推运 | `date`、`time`、`zone`、`lat`、`lon`、`datetime`、`dirZone` | `datetime` 为推运目标时间 | 本命盘起盘信息、本命盘星与虚点、推运盘起盘信息、推运盘星与虚点、推运盘相位 |
-| `profection` | 小限 / 年运推限 | `date`、`time`、`zone`、`lat`、`lon`、`datetime`、`dirZone` | `datetime` 为目标年份/时间 | 本命盘起盘信息、本命盘星与虚点、推运盘起盘信息、推运盘星与虚点、推运盘相位 |
+| `solarreturn` | 太阳返照 | `date`、`time`、`zone`、`lat`、`lon`、`datetime`、`dirZone`、`dirLat`、`dirLon` | `datetime` 为返照目标时间；`dir*` 为返照地点 | 本命盘配置、起盘信息、时段盘配置、相位 |
+| `lunarreturn` | 月亮返照 | `date`、`time`、`zone`、`lat`、`lon`、`datetime`、`dirZone`、`dirLat`、`dirLon` | `datetime` 为月返目标时间；`dir*` 为月返地点 | 本命盘配置、起盘信息、时段盘配置、相位 |
+| `givenyear` | 指定年推运 / 流年 | `date`、`time`、`zone`、`lat`、`lon`、`datetime`、`dirZone`、`dirLat`、`dirLon` | `datetime` 为指定年中的目标时间；`dir*` 为流年盘地点 | 本命盘配置、起盘信息、时段盘配置、相位 |
+| `solararc` | 太阳弧推运 | `date`、`time`、`zone`、`lat`、`lon`、`datetime`、`dirZone` | `datetime` 为推运目标时间 | 本命盘配置、起盘信息、时段盘配置、相位 |
+| `profection` | 小限 / 年运推限 | `date`、`time`、`zone`、`lat`、`lon`、`datetime`、`dirZone` | `datetime` 为目标年份/时间 | 本命盘配置、起盘信息、时段盘配置、相位 |
 | `pd` | 本初方向 / 主限表 | `date`、`time`、`zone`、`lat`、`lon`、`pdtype`、`pdMethod`、`pdTimeKey`、`pdaspects` | `pdMethod` 和 `pdTimeKey` 决定表格算法 | 主限设置、真实主限表格 |
 | `pdchart` | 主限法盘 | `date`、`time`、`zone`、`lat`、`lon`、`datetime`、`dirZone`、`pdtype`、`pdMethod`、`pdTimeKey` | `datetime` 为主限盘目标时间 | 本命盘星与虚点、主限法盘星体表格、主限法盘相位 |
 | `zr` | 黄道释放 | `date`、`time`、`zone`、`lat`、`lon` | 可选 `startSign`、`stopLevelIdx` | 黄道释放设置、黄道释放时间轴 |

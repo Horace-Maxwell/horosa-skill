@@ -332,7 +332,14 @@ def test_jinkou_local_emits_interpretation_layer(tmp_path) -> None:
     )
     assert result.ok is True, result.error
     text = result.data["snapshot_text"]
-    for header in ("[金口诀三盘]", "[用神强弱]", "[四位生克]", "[应期]", "[地支关系]", "[相关神煞]", "[分类用神·求财]", "[十二长生]"):
+    # 段名 分类用神·求财 → 分类用神：旧 vendored JinKouDoc 的 JINKOU_CATEGORY_RULES 只有「求财」
+    # 一条，段头被写死；重 vendor 到上游 13 类后回归上游段名。新增段一并断言，防解读层再被截断。
+    for header in (
+        "[金口诀三盘]", "[用神强弱]", "[四位生克]", "[应期]", "[地支关系]", "[相关神煞]",
+        "[分类用神]", "[十二长生]",
+        "[发用·五动三动]", "[格局]", "[太岁月建]", "[四象所属]", "[四象五行]",
+        "[方位神煞]", "[合占扣题与内外]", "[二遁与次客]", "[贵神月将象意]", "[数理]",
+    ):
         assert header in text, header
     _assert_clean_export(result)
 

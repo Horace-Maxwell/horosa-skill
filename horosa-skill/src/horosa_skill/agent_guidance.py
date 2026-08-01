@@ -48,7 +48,7 @@ PREDICTIVE_INPUT_CONTRACTS: dict[str, dict[str, Any]] = {
             "dirZone": "返照盘地点时区；如 +08:00。",
             "dirLat/dirLon": "返照盘地点经纬度；若用户没有指定返照地点，必须先询问是否用出生地/现居地。",
         },
-        "output_contract": ["本命盘起盘信息", "本命盘星与虚点", "返照盘起盘信息", "返照盘星与虚点", "返照盘相位"],
+        "output_contract": ["本命盘配置", "起盘信息", "时段盘配置", "相位"],
         "example_payload": {
             **COMMON_ASTRO_PAYLOAD_EXAMPLE,
             "datetime": "2031-04-06 09:33:00",
@@ -66,7 +66,7 @@ PREDICTIVE_INPUT_CONTRACTS: dict[str, dict[str, Any]] = {
             "dirZone": "月返盘地点时区。",
             "dirLat/dirLon": "月返盘地点经纬度；不要静默假定等于出生地。",
         },
-        "output_contract": ["本命盘起盘信息", "本命盘星与虚点", "返照盘起盘信息", "返照盘星与虚点", "返照盘相位"],
+        "output_contract": ["本命盘配置", "起盘信息", "时段盘配置", "相位"],
         "example_payload": {
             **COMMON_ASTRO_PAYLOAD_EXAMPLE,
             "datetime": "2031-04-06 09:33:00",
@@ -84,7 +84,7 @@ PREDICTIVE_INPUT_CONTRACTS: dict[str, dict[str, Any]] = {
             "dirZone": "流年盘地点时区。",
             "dirLat/dirLon": "流年盘地点经纬度。",
         },
-        "output_contract": ["本命盘起盘信息", "本命盘星与虚点", "流年盘起盘信息", "流年盘星与虚点", "流年盘相位"],
+        "output_contract": ["本命盘配置", "起盘信息", "时段盘配置", "相位"],
         "example_payload": {
             **COMMON_ASTRO_PAYLOAD_EXAMPLE,
             "datetime": "2031-04-06 09:33:00",
@@ -101,7 +101,7 @@ PREDICTIVE_INPUT_CONTRACTS: dict[str, dict[str, Any]] = {
             "datetime": "太阳弧推运目标时间，格式建议 YYYY-MM-DD HH:mm:ss。",
             "dirZone": "推运盘目标时区。",
         },
-        "output_contract": ["本命盘起盘信息", "本命盘星与虚点", "推运盘起盘信息", "推运盘星与虚点", "推运盘相位"],
+        "output_contract": ["本命盘配置", "起盘信息", "时段盘配置", "相位"],
         "example_payload": {
             **COMMON_ASTRO_PAYLOAD_EXAMPLE,
             "datetime": "2031-04-06 09:33:00",
@@ -116,7 +116,7 @@ PREDICTIVE_INPUT_CONTRACTS: dict[str, dict[str, Any]] = {
             "datetime": "小限目标时间，格式建议 YYYY-MM-DD HH:mm:ss。",
             "dirZone": "目标时区。",
         },
-        "output_contract": ["本命盘起盘信息", "本命盘星与虚点", "推运盘起盘信息", "推运盘星与虚点", "推运盘相位"],
+        "output_contract": ["本命盘配置", "起盘信息", "时段盘配置", "相位"],
         "example_payload": {
             **COMMON_ASTRO_PAYLOAD_EXAMPLE,
             "datetime": "2031-04-06 09:33:00",
