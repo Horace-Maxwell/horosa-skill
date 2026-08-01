@@ -5,7 +5,7 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 27,
+    "missing_sections": 26,
     "extra_sections": 29,
     "absent_keys": 0,
     "keys_with_debt": 25
@@ -68,7 +68,6 @@
     },
     "guolao": {
       "missing": [
-        "星曜庙旺与星点动态（殿垣庙旺乐喜怒 · 顺逆留伏迟速）",
         "虚实",
         "本命化曜",
         "流年流曜"

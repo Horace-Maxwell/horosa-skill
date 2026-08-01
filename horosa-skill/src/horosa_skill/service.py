@@ -7302,7 +7302,25 @@ class HorosaSkillService:
                 patterns = js.get("data", {}).get("patterns") if isinstance(js.get("data"), dict) else None
         except Exception as exc:  # noqa: BLE001 - degrade to '无', never break the guolao chart
             logger.warning("guolao_moira pattern eval failed: %s", exc)
+        # [星曜庙旺与星点动态]：上游导出的纯函数，只吃 /chart 响应（不需要 Moira 规则服务）。
+        # 同批的 [虚实]/[本命化曜]/[流年流曜] 读 moiraRules.weakSolid / .yearStars，只来自后端
+        # /qizheng/moira —— 开源 astropy 无该路由，本地回退也不产这两个字段，故那三段不可得。
+        dignity_text: str | None = None
+        try:
+            js2 = self.js_client.run("guolao_star_dignity", {"chart": response, "fields": {}})
+            if isinstance(js2, dict):
+                dignity_text = f"{js2.get('text') or ''}".strip() or None
+        except Exception as exc:  # noqa: BLE001 - 富化失败只是该段不出
+            logger.warning("guolao star dignity build failed: %s", exc)
         snapshot_text = _build_guolao_snapshot_text(remote_payload, response, pattern_text=pattern_text)
+        if dignity_text:
+            # 段序对齐上游：紧跟 [七政四余宫位与二十八宿星曜]、在 [神煞] 之前。
+            marker = "[神煞]"
+            at = snapshot_text.find(marker)
+            snapshot_text = (
+                f"{snapshot_text[:at]}{dignity_text}\n\n{snapshot_text[at:]}" if at >= 0
+                else f"{snapshot_text}\n\n{dignity_text}"
+            )
         response = dict(response)
         response["snapshot_text"] = snapshot_text
         response["guolaoPatterns"] = patterns

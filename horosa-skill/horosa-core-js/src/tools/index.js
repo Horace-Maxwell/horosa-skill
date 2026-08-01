@@ -28,6 +28,7 @@ import { runBabylon } from './babylon.js';
 import { runHuangli } from './huangli.js';
 import { runTongshu } from './tongshu.js';
 import { runCalendarExtras } from './calendarExtras.js';
+import { runGuolaoStarDignity } from './guolaoStarDignity.js';
 
 const TOOL_RUNNERS = {
   uranian_extra: runUranianExtra,
@@ -38,6 +39,7 @@ const TOOL_RUNNERS = {
   huangli: runHuangli,
   tongshu: runTongshu,
   calendar_extras: runCalendarExtras,
+  guolao_star_dignity: runGuolaoStarDignity,
   india_jyotish: runIndiaJyotish,
   qimen: runQimen,
   taiyi: runTaiyi,

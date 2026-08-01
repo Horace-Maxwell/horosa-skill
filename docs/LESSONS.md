@@ -371,6 +371,28 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   `mcp-publisher login github`（PyPI README 放 `mcp-name:` 行验证）；MCP Apps 扩展值得盯（Claude Code 尚未支持，
   支持后可做盘面可视化）。
 
+### 开源栈上不可得的段 —— 明确排除项台账（回填时先查这里，别当缺口重查一遍）
+
+判据统一是：**上游 builder 依赖的数据在开源 Horosa-Public 栈上取不到**（后端无该路由 / 依赖 canvas
+渲染 / 依赖交互点位），而不是「本仓还没写」。每条都附可复核的证据，下次审计直接引用。
+
+- **`guolao` 的 `[虚实]` / `[本命化曜]` / `[流年流曜]`（3 段）** —— 三者读 `moiraRules.weakSolid`
+  与 `moiraRules.yearStars`，该对象来自后端 **`/qizheng/moira`**（上游 `services/qizheng.js:10`
+  `fetchMoiraQizhengRules`）。开源 astropy 的 `websrv/` 只挂了 `webqizhengelectionsrv` 与
+  `webqizhengkinsrv`，**没有这条路由**（仓内 vendored 实例实测 POST `/qizheng/moira` → 500）；
+  上游的本地回退 `buildLocalMoiraRules` 只产 `houses/patterns/godHits`，不产这两个字段。
+  → 同批的 `[星曜庙旺与星点动态]` **可得**（纯表查询、只吃 `/chart` 响应），已于 v0.25 补上；
+  别因为「guolao 还欠 4 段」就以为整批同因。
+  这也顺带裁掉了历史矛盾：registry 里「headless 未移植」的旧注释与 LESSONS 早期「已 DONE」的
+  记录互斥 —— 实际是 `政余格局` 早已 DONE（走 vendored Moira DSL），欠的是另外三段且不可得。
+
+- **`primarydirect` 的 `[主限天球·当前动画所指]`** —— 段名即语义：它指的是 3D 天球**动画当前所指**，
+  没有动画就没有「所指」。UI-only，不进 preset。
+
+- 对比一条**看起来像**排除项、实际不是的：`jieqi` 的 `[X3D盘]` 曾被我判为 3D 渲染而搁置，
+  读码后发现上游 astro3d 页签走的是 `buildAstroSnapshotContent(one, flds, {headerless:true})`
+  —— 与 `[X星盘]` 逐字同一份文本。**「名字里有 3D」不等于不可 headless**，一律以 builder 实际取数为准。
+
 ### v0.25.0 段级回填（上游 v50，216 → 141 段）— 四条会反复咬人的坑
 
 - **🔴 上游前端源不在 `vendor/runtime-source`。** 该树的 `astrostudyui/src/` 只镜像了 `utils/`（供 aiExport
