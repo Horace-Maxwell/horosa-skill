@@ -3,6 +3,9 @@
 // 人事十二宫，叠大限/小限/流年十二神与格局判识。全部为分支算术，可复现、可golden。
 // 说明：星名用繁体（与断语数据键一致）；月/闰月/节气月归属在调用方解析后以整数 month 传入，
 // 本引擎保持纯函数便于逐例核验。
+// 断语表（九品/互见/刑害等表驱动判识）从数据层读取，盘算主流程（calcYizhangjing）不依赖，
+// 故 golden 四例字节不变；新增判识函数为独立导出，供装配层可选消费。
+import DATA from './data/yizhangjingData.json' with { type: 'json' };
 
 export const BRANCHES = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
 export const ZODIAC = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪'];
@@ -54,7 +57,10 @@ export function daoOf(idx) {
 	return DAO[BRANCHES[mod12(idx)]];
 }
 
-export function gradeOf(star) {
+export function gradeOf(star, gradeSet) {
+	// gradeSet='variant'（品级分类变体）：天驛（天驿）由中品改归下品（最凶）。
+	// 默认（无 gradeSet）字节不变，golden 与既有调用不受影响。
+	if (gradeSet === 'variant' && star === '天驛') return '下品';
 	if (GRADE_UP.indexOf(star) >= 0) return '上品';
 	if (GRADE_DOWN.indexOf(star) >= 0) return '下品';
 	return '中品';
@@ -151,14 +157,16 @@ export function chongfanStat(fourStars) {
 	return Object.keys(cnt).filter((s) => cnt[s] >= 2).map((s) => ({ star: s, count: cnt[s] }));
 }
 
-// 四宫等第（以时宫为主）
-export function fourPalaceRank(stars, timeStar, dayStar) {
-	const up = stars.filter((s) => GRADE_UP.indexOf(s) >= 0).length;
-	const down = stars.filter((s) => GRADE_DOWN.indexOf(s) >= 0).length;
-	const timeUp = GRADE_UP.indexOf(timeStar) >= 0;
-	const timeDown = GRADE_DOWN.indexOf(timeStar) >= 0;
-	const dayUp = GRADE_UP.indexOf(dayStar) >= 0;
-	const dayDown = GRADE_DOWN.indexOf(dayStar) >= 0;
+// 四宫等第（以时宫为主）。gradeSet 可选：'variant' 时天驛归下品；默认字节不变。
+export function fourPalaceRank(stars, timeStar, dayStar, gradeSet) {
+	const isUp = (s) => gradeOf(s, gradeSet) === '上品';
+	const isDown = (s) => gradeOf(s, gradeSet) === '下品';
+	const up = stars.filter(isUp).length;
+	const down = stars.filter(isDown).length;
+	const timeUp = isUp(timeStar);
+	const timeDown = isDown(timeStar);
+	const dayUp = isUp(dayStar);
+	const dayDown = isDown(dayStar);
 	if (up === 4) return '最上等命（四宫全吉）';
 	if (down === 4) return '下等命（四宫全凶）';
 	if (timeUp && dayUp) return '上等命（时吉日吉·年月不足）';
@@ -166,17 +174,19 @@ export function fourPalaceRank(stars, timeStar, dayStar) {
 	return '中平之命（吉凶混见·以时宫为主）';
 }
 
-// 命格（定义化，最易上手）
-export function mingGe(stars, timeStar, dayStar, yearStar, monthStar, repeats) {
-	const up = stars.filter((s) => GRADE_UP.indexOf(s) >= 0).length;
-	const down = stars.filter((s) => GRADE_DOWN.indexOf(s) >= 0).length;
-	const timeUp = GRADE_UP.indexOf(timeStar) >= 0;
-	const timeDown = GRADE_DOWN.indexOf(timeStar) >= 0;
-	const ymUp = GRADE_UP.indexOf(yearStar) >= 0 && GRADE_UP.indexOf(monthStar) >= 0;
-	const ymDown = GRADE_DOWN.indexOf(yearStar) >= 0 && GRADE_DOWN.indexOf(monthStar) >= 0;
-	const dtUp = GRADE_UP.indexOf(dayStar) >= 0 && timeUp;
-	const dtDown = GRADE_DOWN.indexOf(dayStar) >= 0 && timeDown;
-	const hasUpRepeat = repeats.some((r) => GRADE_UP.indexOf(r.star) >= 0);
+// 命格（定义化，最易上手）。gradeSet 可选，默认字节不变。
+export function mingGe(stars, timeStar, dayStar, yearStar, monthStar, repeats, gradeSet) {
+	const isUp = (s) => gradeOf(s, gradeSet) === '上品';
+	const isDown = (s) => gradeOf(s, gradeSet) === '下品';
+	const up = stars.filter(isUp).length;
+	const down = stars.filter(isDown).length;
+	const timeUp = isUp(timeStar);
+	const timeDown = isDown(timeStar);
+	const ymUp = isUp(yearStar) && isUp(monthStar);
+	const ymDown = isDown(yearStar) && isDown(monthStar);
+	const dtUp = isUp(dayStar) && timeUp;
+	const dtDown = isDown(dayStar) && timeDown;
+	const hasUpRepeat = repeats.some((r) => isUp(r.star));
 	if (up === 4 && timeUp && repeats.length === 0) return '富贵之命（四吉·吉星居时·不重犯）';
 	if (down === 4) return '贫贱之命（四柱全凶）';
 	if (ymDown && dtUp) return '先贫后富（年月凶·日时吉）';
@@ -230,6 +240,8 @@ export function calcYizhangjing(input) {
 	const xiaoStart = opts.xiaoxianStart === 'yue' ? 'yue' : 'ri';
 	const flowSet = FLOW_SETS[opts.flowShenSet] ? opts.flowShenSet : 'A';
 	const earlyZi = !!opts.zaoZiAdjust;
+	// 品级分类变体（默认 undefined → gradeOf 字节不变，golden 与既有快照保持）
+	const gradeSet = opts.gradeSet === 'variant' ? 'variant' : undefined;
 
 	const c = fourPalaces(yearIdx, month, day, hourIdx, gender, rule, earlyZi);
 	const mg = mingGong(c.ti, hourIdx, c.d, mgMethod);
@@ -240,13 +252,13 @@ export function calcYizhangjing(input) {
 		const idx = [c.yi, c.mi, c.di, c.ti][i];
 		return {
 			label, idx, branch: BRANCHES[idx], zodiac: ZODIAC[idx], star: starOf(idx),
-			dao: daoOf(idx), grade: gradeOf(starOf(idx)), hand: HAND_POS[idx],
+			dao: daoOf(idx), grade: gradeOf(starOf(idx), gradeSet), hand: HAND_POS[idx],
 		};
 	});
 
 	const repeats = chongfanStat(fourStars);
-	const up = fourStars.filter((s) => GRADE_UP.indexOf(s) >= 0).length;
-	const down = fourStars.filter((s) => GRADE_DOWN.indexOf(s) >= 0).length;
+	const up = fourStars.filter((s) => gradeOf(s, gradeSet) === '上品').length;
+	const down = fourStars.filter((s) => gradeOf(s, gradeSet) === '下品').length;
 	const mid = 4 - up - down;
 
 	const startAge = dayunStartAge(starOf(mg), gender, startMode);
@@ -255,27 +267,279 @@ export function calcYizhangjing(input) {
 
 	return {
 		input: { yearBranch: BRANCHES[yearIdx], month, day, hourBranch: BRANCHES[hourIdx], gender: (gender === '男' || gender === 1 || gender === 'Male') ? '男' : '女' },
-		opts: { rule, mgMethod, N, startMode, xiaoStart, flowSet, earlyZi },
+		opts: { rule, mgMethod, N, startMode, xiaoStart, flowSet, earlyZi, gradeSet: gradeSet || 'standard' },
 		dir: c.d,
 		dirText: c.d === 1 ? '顺行' : '逆行',
 		yinyang: yinyang(yearIdx),
 		fourIdx,
 		pillars,
 		timeStar: starOf(c.ti),
+		startAge,
 		mingIdx: mg,
 		mingBranch: BRANCHES[mg],
 		mingStar: starOf(mg),
 		renshi: renshiPalaces(mg),
 		repeats,
 		gradeCount: { up, mid, down },
-		fourPalaceRank: fourPalaceRank(fourStars, starOf(c.ti), starOf(c.di)),
-		mingGe: mingGe(fourStars, starOf(c.ti), starOf(c.di), starOf(c.yi), starOf(c.mi), repeats),
+		fourPalaceRank: fourPalaceRank(fourStars, starOf(c.ti), starOf(c.di), gradeSet),
+		mingGe: mingGe(fourStars, starOf(c.ti), starOf(c.di), starOf(c.yi), starOf(c.mi), repeats, gradeSet),
 		nineGrade: nineGradeEstimate(up, mid, down),
 		dayun,
 		xiaoStartIdx,
 		xiaoStartLabel: xiaoStart === 'yue' ? '月柱宫' : '日柱宫',
 		monthBranch: BRANCHES[c.mi],
 	};
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// WP-B 判识扩展（表驱动/派生层）——均为独立导出，不改 calcYizhangjing 主流程。
+// ══════════════════════════════════════════════════════════════════════════
+
+const PILLAR_LABEL = ['年', '月', '日', '时'];
+
+// ── B22 四世权重（根苗花果·年10/月15/日25/时50）──
+export const SHISHI_WEIGHTS = [10, 15, 25, 50];
+export const SHISHI_LABELS = ['根·前第三世', '苗·前第二世', '花·今世本身', '果·来世子孙'];
+export const SHISHI_AGE = ['少年（祖上根基）', '青年（父母庇荫）', '中年（自身作为）', '晚年（子孙福泽）'];
+
+function gradeScore(star, gradeSet) {
+	const g = gradeOf(star, gradeSet);
+	return g === '上品' ? 1 : (g === '下品' ? -1 : 0);
+}
+
+// 加权分＝Σ(权重×品级分{上+1/中0/下−1})；逐柱输出世/年龄段/权重/品级。
+export function pillarWeights(fourStars, gradeSet) {
+	const rows = PILLAR_LABEL.map((label, i) => ({
+		pillar: label,
+		shi: SHISHI_LABELS[i],
+		age: SHISHI_AGE[i],
+		weight: SHISHI_WEIGHTS[i],
+		star: fourStars[i],
+		grade: gradeOf(fourStars[i], gradeSet),
+	}));
+	const score = rows.reduce((s, r, i) => s + SHISHI_WEIGHTS[i] * gradeScore(fourStars[i], gradeSet), 0);
+	return { rows, score };
+}
+
+// ── B19/20/21 九品精确定格 ──
+// 星多重集签名（排列无关）：排序后 join。
+function multisetKey(stars) {
+	return [...stars].sort().join('|');
+}
+// ①四星多重集匹配 combo（含「三X一Y」具体格已在表中）②孤星≥2 优先走孤克格
+// ③全不中→回落启发式并标 matched:false。保留 nineGradeEstimate 供旧测试。
+export function nineGradeExact(fourStars, gradeSet) {
+	const key = multisetKey(fourStars);
+	const guCount = fourStars.filter((s) => s === '天孤').length;
+	if (guCount >= 2 && DATA.ninePin && Array.isArray(DATA.ninePin.guke)) {
+		for (let i = 0; i < DATA.ninePin.guke.length; i++) {
+			const g = DATA.ninePin.guke[i];
+			if ((g.patterns || []).some((p) => multisetKey(p) === key)) {
+				return { grade: g.grade, level: g.grade, text: g.text || '', matched: true, kind: 'guke' };
+			}
+		}
+	}
+	if (DATA.ninePin && Array.isArray(DATA.ninePin.combo)) {
+		for (let i = 0; i < DATA.ninePin.combo.length; i++) {
+			const g = DATA.ninePin.combo[i];
+			if ((g.patterns || []).some((p) => multisetKey(p) === key)) {
+				return { grade: g.grade, level: g.level || '', matched: true, kind: 'combo' };
+			}
+		}
+	}
+	const up = fourStars.filter((s) => gradeOf(s, gradeSet) === '上品').length;
+	const down = fourStars.filter((s) => gradeOf(s, gradeSet) === '下品').length;
+	const mid = 4 - up - down;
+	return { grade: nineGradeEstimate(up, mid, down), level: '', matched: false, kind: 'estimate' };
+}
+
+// ── B6 童限：未交大运前，无论男女一律逆行，命宫1岁→相貌2岁→福德3岁…共 startAge−1 年 ──
+export function tongxianList(mingIdx, startAge) {
+	const n = (parseInt(startAge, 10) || 1) - 1;
+	if (n <= 0) return [];
+	const out = [];
+	for (let k = 0; k < n; k++) {
+		const idx = mod12(mingIdx - k);          // 逆行数支：命→相貌→福德…（人事宫顺布，逆数即 −k）
+		const palaceOrder = mod12(-k);           // 宫序 0,11,10,…（命→相貌→福德）
+		out.push({ age: k + 1, idx, branch: BRANCHES[idx], star: starOf(idx), palace: PALACES[palaceOrder], dao: daoOf(idx), grade: gradeOf(starOf(idx)) });
+	}
+	return out;
+}
+
+// ── B8 小限顺逆：dirMode 'chart'(随盘向,现状) / 'always'(一律顺行) ──
+export function xiaoxianStarAtDir(startPalaceIdx, d, age, dirMode) {
+	const dir = dirMode === 'always' ? 1 : d;
+	return starOf(startPalaceIdx + dir * (age - 1));
+}
+
+// ── B9 小限速算式：(命宫序＋生年序)−流年序，不足＋12、有余−12，规整 1–12 ──
+export function xiaoxianQuick(mingIdx, yearIdx, flowIdx) {
+	const m = mod12(mingIdx) + 1;   // 序：子=1…亥=12
+	const y = mod12(yearIdx) + 1;
+	const f = mod12(flowIdx) + 1;
+	let v = m + y - f;
+	while (v < 1) v += 12;
+	while (v > 12) v -= 12;
+	return { num: v, branch: BRANCHES[v - 1], star: STARS[v - 1] };
+}
+
+// ── B12 巡宫四位：流年在四柱各司其职（年押运/月串宫/日守户/时巡门），取该柱当值神 ──
+export const XUN_ROLES = ['押运', '串宫', '守户', '巡门'];
+export function xunShenRoles(fourIdx, flowIdx, setKey) {
+	const order = ['year', 'month', 'day', 'time'];
+	return order.map((k, i) => ({
+		role: XUN_ROLES[i],
+		pillar: PILLAR_LABEL[i],
+		branch: BRANCHES[mod12(fourIdx[k])],
+		star: starOf(fourIdx[k]),
+		shen: xunShenAt(flowIdx, fourIdx[k], setKey),
+	}));
+}
+
+// ── B13 流月/流日/流时：流年宫起正月→初一→子时，一律顺行 ──
+export function flowSub(flowYearPalaceIdx, month, day, hourIdx) {
+	const m = parseInt(month, 10) || 1;
+	const dd = parseInt(day, 10) || 1;
+	const my = mod12(flowYearPalaceIdx + (m - 1));
+	const dy = mod12(my + (dd - 1));
+	const hourOrder = mod12(hourIdx) + 1;         // 子=1…亥=12
+	const ty = mod12(dy + (hourOrder - 1));
+	return {
+		month: { idx: my, branch: BRANCHES[my], star: starOf(my) },
+		day: { idx: dy, branch: BRANCHES[dy], star: starOf(dy) },
+		time: { idx: ty, branch: BRANCHES[ty], star: starOf(ty) },
+	};
+}
+
+// ── B24 兄弟数（术数取象，非人口统计）：月支五行取数理，出区间 ──
+const WUXING_NUM = { 水: [1, 5, 7], 土: [1, 5, 7], 火: [2, 4, 8], 金: [3, 6, 9], 木: [3, 6, 9] };
+export function brotherCount(monthBranch) {
+	const wx = BRANCH_WUXING[monthBranch];
+	if (!wx) return null;
+	const nums = WUXING_NUM[wx];
+	return {
+		wuxing: wx, nums, low: nums[0], high: nums[nums.length - 1],
+		text: `${nums[0]}–${nums[nums.length - 1]} 人`, note: '术数取象，非人口统计',
+	};
+}
+
+// ── B25/B26 星曜阴阳分（⚠ 与判顺逆用的「年支阴阳」是两回事：此处按星曜本身归六阳六阴）──
+export const STAR_YANG = ['天貴', '天權', '天奸', '天福', '天孤', '天藝'];
+export const STAR_YIN = ['天厄', '天壽', '天刃', '天驛', '天文', '天破'];
+export function starPolarity(fourStars) {
+	const yang = fourStars.filter((s) => STAR_YANG.indexOf(s) >= 0).length;
+	const yin = fourStars.filter((s) => STAR_YIN.indexOf(s) >= 0).length;
+	let judge = '';
+	if (yang === 4) judge = '四柱纯阳（孤阳不长）：父母必有刑伤。';
+	else if (yin === 4) judge = '四柱纯阴（孤阴不生）：父母必有刑伤。';
+	else if (yang > yin) judge = '阳星多：先克父。';
+	else if (yin > yang) judge = '阴星多：先克母。';
+	else judge = '阴阳均停：父母俱全，刑克较轻。';
+	return { yang, yin, judge };
+}
+
+// ── B27 地支刑冲害叠断（命中挂刑害歌断语）──
+const HAI_PAIRS = [['子', '未'], ['丑', '午'], ['寅', '巳'], ['卯', '辰'], ['申', '亥'], ['酉', '戌']];
+const XING_GROUPS = [['子', '卯'], ['寅', '巳', '申'], ['丑', '戌', '未'], ['辰'], ['午'], ['酉'], ['亥']]; // 单元素=自刑
+export function branchClash(fourIdx, mingIdx) {
+	const idxs = [fourIdx.year, fourIdx.month, fourIdx.day, fourIdx.time];
+	const set = idxs.map((i) => BRANCHES[mod12(i)]);
+	const hits = [];
+	for (let i = 0; i < idxs.length; i++) {
+		for (let j = i + 1; j < idxs.length; j++) {
+			if (mod12(idxs[i] - idxs[j]) === 6) {
+				hits.push({ type: '冲', a: BRANCHES[mod12(idxs[i])], b: BRANCHES[mod12(idxs[j])], pillars: [PILLAR_LABEL[i], PILLAR_LABEL[j]] });
+			}
+		}
+	}
+	HAI_PAIRS.forEach(([x, y]) => {
+		if (set.indexOf(x) >= 0 && set.indexOf(y) >= 0) hits.push({ type: '害', a: x, b: y });
+	});
+	XING_GROUPS.forEach((grp) => {
+		if (grp.length === 1) {
+			if (set.filter((s) => s === grp[0]).length >= 2) hits.push({ type: '自刑', a: grp[0], b: grp[0] });
+		} else {
+			const present = grp.filter((s) => set.indexOf(s) >= 0);
+			if (present.length >= 2) hits.push({ type: '刑', group: grp.join(''), present });
+		}
+	});
+	const branchHarm = DATA.branchHarm || {};
+	const uniq = [];
+	set.forEach((b) => { if (uniq.indexOf(b) < 0) uniq.push(b); });
+	const harmTexts = uniq.filter((b) => branchHarm[b]).map((b) => ({ branch: b, text: branchHarm[b] }));
+	return { hits, harmTexts };
+}
+
+// ── B28 星组合互见（四星两两无序查 pairRule，去重）──
+export function pairHits(fourStars) {
+	const uniq = [];
+	fourStars.forEach((s) => { if (uniq.indexOf(s) < 0) uniq.push(s); });
+	const rules = DATA.pairRule || [];
+	const seen = {};
+	const out = [];
+	for (let i = 0; i < uniq.length; i++) {
+		for (let j = i + 1; j < uniq.length; j++) {
+			const x = uniq[i]; const y = uniq[j];
+			rules.forEach((r) => {
+				if ((r.a === x && r.b === y) || (r.a === y && r.b === x)) {
+					if (!seen[r.text]) { seen[r.text] = 1; out.push(r); }
+				}
+			});
+		}
+	}
+	return out;
+}
+
+// ── B23 四柱旺衰（各支对月令取旺相休囚死 + 用法断语）──
+const STATE_TEXT = { 旺: '当令得时', 相: '得生有气', 休: '退气无力', 囚: '受制困顿', 死: '全然无气' };
+export function pillarWuxing(fourIdx, monthBranchIdx, gradeSet) {
+	const monthBranch = BRANCHES[mod12(monthBranchIdx)];
+	return ['year', 'month', 'day', 'time'].map((k, i) => {
+		const b = BRANCHES[mod12(fourIdx[k])];
+		const state = wuxingState(monthBranch, b);
+		const star = starOf(fourIdx[k]);
+		const g = gradeOf(star, gradeSet);
+		const strong = state === '旺' || state === '相';
+		const omen = strong
+			? (g === '上品' ? '吉星旺相，福力大兴。' : g === '下品' ? '凶星旺相，为祸尤烈。' : '中星旺相，平中见起。')
+			: (g === '上品' ? '吉星失气，福力打折。' : g === '下品' ? '凶星失气，为害稍轻。' : '中星失气，平淡守常。');
+		return { pillar: PILLAR_LABEL[i], branch: b, star, wuxing: BRANCH_WUXING[b], state, stateText: STATE_TEXT[state] || '', omen };
+	});
+}
+
+// ── B31 子时细分：子初23:00–23:40 / 子中23:40–00:20 / 子末00:20–01:00 ──
+export function ziSubPeriod(hh, mm) {
+	const h = parseInt(hh, 10);
+	if (isNaN(h)) return null;
+	const m = parseInt(mm, 10) || 0;
+	const isZi = h === 23 || h === 0;
+	if (!isZi) return null;
+	const t = (h === 23 ? 0 : 60) + m; // 自 23:00 起的分钟数
+	if (t < 40) return { key: 'chu', label: '子初', range: '23:00–23:40' };
+	if (t < 80) return { key: 'zhong', label: '子中', range: '23:40–00:20' };
+	return { key: 'mo', label: '子末', range: '00:20–01:00' };
+}
+
+// ── A2/A7/A8 显示层映射（盘算一律用 A 系内部键，仅换显示名 → 零算法回归）──
+// 星名系统：'A'(主流,默认) / 'B'(异名·断语互通) / 'C'(仅异名显示)。
+export function starLabel(star, naming) {
+	if ((naming === 'B' || naming === 'C')) {
+		const idx = STARS.indexOf(star);
+		if (idx >= 0) {
+			const zhi = BRANCHES[idx];
+			const alias = (DATA.starAlias || {})[zhi];
+			if (alias && alias[naming] && alias[naming] !== '—' && alias[naming] !== star) return alias[naming];
+		}
+	}
+	return star;
+}
+// 六道术语：'gui'(鬼道/修羅道,默认) / 'edao'(饿鬼道/阿修羅道)。
+export function daoLabel(dao, term) {
+	if (term === 'edao') {
+		if (dao === '鬼道') return '饿鬼道';
+		if (dao === '修羅道') return '阿修羅道';
+	}
+	return dao;
 }
 
 export default { calcYizhangjing };

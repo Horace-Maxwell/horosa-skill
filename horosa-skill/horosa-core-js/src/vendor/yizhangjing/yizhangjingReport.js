@@ -1,8 +1,16 @@
 // 一掌经 · 模型装配 + AI 快照文本（引擎 + 断语数据 → 展示模型 / 快照串）。
 // UI 与 AI 挂载共用本模块；引擎(yizhangjingLocal)保持纯函数，本模块负责农历解析与断语拼接。
-import { calcYizhangjing, BRANCHES, ZODIAC, gradeOf, wuxingState, xiaoxianStarAt, xunShenAt } from './yizhangjingLocal.js';
+import {
+	calcYizhangjing, BRANCHES, ZODIAC, STARS, gradeOf, wuxingState, xiaoxianStarAt, xunShenAt,
+	pillarWeights, nineGradeExact, tongxianList, xiaoxianStarAtDir, xiaoxianQuick, xunShenRoles,
+	flowSub, brotherCount, starPolarity, branchClash, pairHits, pillarWuxing, ziSubPeriod, starLabel, daoLabel,
+} from './yizhangjingLocal.js';
 import DATA from './data/yizhangjingData.json' with { type: 'json' };
 import SHENSHA from './data/yizhangjingShensha.json' with { type: 'json' };
+import LORE from './data/yizhangjingLore.json' with { type: 'json' };
+
+// 农历月序 → 文献层月诗键（与 YiZhangJingMain 的 MONTH_LABELS 同表；1 起）。
+const LORE_MONTH_LABELS = ['', '正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
 
 const ZODIAC_TO_BRANCH = {};
 ZODIAC.forEach((z, i) => { ZODIAC_TO_BRANCH[z] = BRANCHES[i]; });
@@ -33,15 +41,20 @@ export function resolveLunarInput(bazi, opts) {
 			monthNote = '节气月';
 		}
 	} else if (nl.leap) {
-		// 闰月归属：默认十五折半（十五含前作本月、后作下月）
+		// 闰月归属：默认十五折半（十五含前作本月、后作下月）；
+		// 夜半折半（leapRule='midnight'）：十五当日且生时=子且属晚子(00:xx)→作下月，余同十五折半。
 		const day = parseInt(nl.dayNum, 10) || 0;
-		if (day > 15) {
-			month = month + 1;
-			if (month > 12) month -= 12;
-			monthNote = '闰月·十五后作下月';
-		} else {
-			monthNote = '闰月·十五前作本月';
+		const leapRule = opts && opts.leapRule === 'midnight' ? 'midnight' : 'half';
+		let toNext = day > 15;
+		let note = day > 15 ? '闰月·十五后作下月' : '闰月·十五前作本月';
+		if (leapRule === 'midnight' && day === 15) {
+			const hb15 = gz(fc.time).charAt(1);
+			const hm = /(\d{1,2}):/.exec(`${nl.clockTime || ''}`);
+			const lateZi = hb15 === '子' && hm && parseInt(hm[1], 10) === 0; // 晚子=00:xx
+			if (lateZi) { toNext = true; note = '闰月·十五夜半(晚子)作下月'; }
 		}
+		if (toNext) { month = month + 1; if (month > 12) month -= 12; }
+		monthNote = note;
 	}
 	const day = parseInt(nl.dayNum, 10) || 0;
 	if (!yearBranch || !hourBranch || !month || !day) return null;
@@ -152,6 +165,39 @@ export function computeShenshaHits(input, bazi, renshi) {
 	return hits;
 }
 
+// 人事十二宫（命起顺布）→ 十二宫寓意表键（传统宫名；按位序对应，字虽异位同）。
+const PALACE_MEANING_KEYS = ['命宫', '财帛', '兄弟', '田宅', '男女', '奴仆', '夫妻', '疾厄', '迁移', '官禄', '福德', '相貌'];
+
+// 逐日值星：农历日(1-30) → 6 轮值星之一（初一/初七/十三…同轮）。
+function dayStarRound(dayNum) {
+	const d = parseInt(dayNum, 10);
+	if (!d || d < 1) return null;
+	const arr = (LORE.poems && LORE.poems.dayStar) || [];
+	return arr[(d - 1) % 6] || null;
+}
+
+// 时辰细分 初/中/末：由钟表时分定位在本时辰(2h)内的三分段（0-40/40-80/80-120 分）。
+function hourSubKey(clockTime, hourBranch) {
+	const zi = BRANCHES.indexOf(`${hourBranch || ''}`);
+	const m = /(\d{1,2}):(\d{2})/.exec(`${clockTime || ''}`);
+	if (zi < 0 || !m) return '初';
+	const hh = parseInt(m[1], 10); const mm = parseInt(m[2], 10);
+	const startHour = (23 + 2 * zi) % 24;            // 子=23,丑=1,寅=3…亥=21
+	const mins = (((hh - startHour + 24) % 24) * 60 + mm);
+	return mins < 40 ? '初' : (mins < 80 ? '中' : '末');
+}
+
+// 时组诗：生时支属哪一组（子午卯酉／辰戌丑未／寅申巳亥）。
+function hourGroupOf(hourBranch) {
+	const groups = (LORE.poems && LORE.poems.hourGroup) || {};
+	const keys = Object.keys(groups);
+	for (let i = 0; i < keys.length; i++) {
+		const g = groups[keys[i]];
+		if (g && Array.isArray(g.branches) && g.branches.indexOf(hourBranch) >= 0) return { key: keys[i], ...g };
+	}
+	return null;
+}
+
 // 组装完整展示模型：引擎盘 + 逐柱断语 + 象义/星性/职业/流年总论 + 交互格 + 重犯 + 神煞
 export function buildYizhangjingModel(bazi, opts) {
 	const input = resolveLunarInput(bazi, opts);
@@ -191,22 +237,97 @@ export function buildYizhangjingModel(bazi, opts) {
 	const zhiye = starData(monthStar).zhiye || '';
 	const liunianZong = starData(timeStar).liunian || '';
 
-	// 大限：运×时断语（运星 × 时柱星）
+	// 显示层选项（映射层：盘算用 A 系内部键，仅显示换名）
+	const o = opts || {};
+	const gradeSet = o.gradeSet === 'variant' ? 'variant' : undefined;
+	const naming = (o.starNaming === 'B' || o.starNaming === 'C') ? o.starNaming : 'A';
+	const daoTerm = o.daoTerm === 'edao' ? 'edao' : 'gui';
+	const annualMethod = (o.annualMethod === 'liunian' || o.annualMethod === 'xiaoxian') ? o.annualMethod : '';
+	const xiaoDir = o.xiaoxianDir === 'always' ? 'always' : 'chart';
+
+	const fourStars = chart.pillars.map((p) => p.star);
+	const fourIdx = chart.fourIdx;
+	const yearIdxNum = BRANCHES.indexOf(input.yearBranch);
+	const hourIdxNum = BRANCHES.indexOf(input.hourBranch);
+
+	// 大限：运×时断语（运星 × 时柱星，B14 正确口径）；grade 随品级分类
 	const dayun = chart.dayun.map((d) => ({
 		...d,
+		grade: gradeOf(d.star, gradeSet),
 		yunshi: (DATA.grid_yunshi && DATA.grid_yunshi.rows[timeStar] && DATA.grid_yunshi.rows[timeStar][d.star]) || '',
 		wuxing: wuxingState(chart.monthBranch, d.branch),
 	}));
 
-	// 人事十二宫 + 神煞叠加（合参层，opts.shenshaLayer 开时才带，但模型恒备数据供 UI 切换）
-	const renshi = chart.renshi.map((g) => ({ ...g, grade: gradeOf(g.star) }));
-	// 神煞合参层：由生年支／日干／月支／日柱旬定位各神煞落地支 → 坐该支之人事宫（仅列本盘落宫）
+	// B15 流年运×时改用「月柱星」口径（大限用时柱星、流年用月柱星）：按 12 流年支预表
+	const liunianYunshi = {};
+	BRANCHES.forEach((b) => {
+		const flowStar = STARS[BRANCHES.indexOf(b)];
+		liunianYunshi[b] = (DATA.grid_yunshi && DATA.grid_yunshi.rows[monthStar] && DATA.grid_yunshi.rows[monthStar][flowStar]) || '';
+	});
+
+	// 人事十二宫 + 十二宫寓意 + 神煞叠加（合参层，模型恒备数据供 UI 切换）
+	const renshi = chart.renshi.map((g, k) => ({
+		...g, grade: gradeOf(g.star, gradeSet),
+		meaning: (DATA.palaceMeaning && DATA.palaceMeaning[PALACE_MEANING_KEYS[k]]) || '',
+		label: starLabel(g.star, naming),
+	}));
 	const shenshaHits = computeShenshaHits(input, bazi, renshi);
+
+	// ── WP-C 新增派生字段（全部可选消费，老 UI 不读不炸）──
+	const sishi = pillarWeights(fourStars, gradeSet);
+	const ninePinExact = nineGradeExact(fourStars, gradeSet);
+	// 童限开关（tongxianShow，默认开）：关时不出童限（某些流派不用童限）——门控在此，UI/快照按 tongxian.length 显现。
+	const tongxian = (o.tongxianShow === false) ? [] : tongxianList(chart.mingIdx, chart.startAge);
+	const xunRoles = xunShenRoles(fourIdx, yearIdxNum, chart.opts.flowSet);
+	const flowSubRep = flowSub(yearIdxNum, input.month, input.day, hourIdxNum);
+	const pillarWx = pillarWuxing(fourIdx, fourIdx.month, gradeSet);
+	const brothers = brotherCount(chart.monthBranch);
+	const polarity = starPolarity(fourStars);
+	const clashes = branchClash(fourIdx, chart.mingIdx);
+	const pairHitList = pairHits(fourStars);
+	const nianyun = starData(chart.pillars[0].star).nianyun || '';
+	// 位置速断：逐柱按柱位取该柱主星的年/月/日/时速断
+	const posKeys = ['nian', 'yue', 'ri', 'shi'];
+	const posQuick = chart.pillars.map((p, i) => ({
+		label: p.label, star: p.star,
+		text: ((DATA.posQuick && DATA.posQuick[p.star]) || {})[posKeys[i]] || '',
+	}));
+	// 各柱逢星速断：命中该柱主星在表中的行
+	const pillarLabels = ['年', '月', '日', '时'];
+	const pillarQuickHits = (DATA.pillarQuick || []).filter((row) => {
+		const pi = pillarLabels.indexOf(row.pillar);
+		return pi >= 0 && Array.isArray(row.stars) && row.stars.indexOf(fourStars[pi]) >= 0;
+	});
+	// 六道分布：四柱各道计数 + 共通特质/前世身份
+	const daoDist = {};
+	chart.pillars.forEach((p) => { daoDist[p.dao] = (daoDist[p.dao] || 0) + 1; });
+	const daoRows = Object.keys(daoDist).map((dao) => ({
+		dao, term: daoLabel(dao, daoTerm), count: daoDist[dao],
+		traits: ((DATA.daoTraits && DATA.daoTraits[dao]) || {}).traits || '',
+		prevLife: ((DATA.daoTraits && DATA.daoTraits[dao]) || {}).prevLife || [],
+	}));
+	// 逐日值星 / 时辰细断 / 时组诗 / 星名映射
+	const clockTime = (bazi && bazi.nongli && bazi.nongli.clockTime) || '';
+	const cm = /(\d{1,2}):(\d{2})/.exec(clockTime);
+	const ziSub = cm ? ziSubPeriod(parseInt(cm[1], 10), parseInt(cm[2], 10)) : null;
+	const hourSub = hourSubKey(clockTime, input.hourBranch);
+	const hourDetailNode = ((LORE.poems && LORE.poems.hourDetail && LORE.poems.hourDetail[input.hourBranch]) || {})[hourSub] || null;
+	const dayStarPick = dayStarRound(input.day);
+	const hourGroupPick = hourGroupOf(input.hourBranch);
+	const aliasMap = {};
+	STARS.forEach((s) => { aliasMap[s] = starLabel(s, naming); });
 
 	return {
 		input, chart, pillars, repeats, rishi, zhiye, liunianZong, dayun, renshi, shenshaHits,
 		timeStar, dayStar, monthStar,
 		shenshaLayer: !!(opts && opts.shenshaLayer),
+		// 显示层选项回显
+		naming, daoTerm, gradeSet: gradeSet || 'standard', annualMethod, xiaoDir, chongfanKou: kouKey,
+		// 新派生
+		sishi, ninePinExact, tongxian, xunRoles, flowSub: flowSubRep, pillarWuxing: pillarWx,
+		brothers, polarity, clashes, pairHits: pairHitList, nianyun, posQuick, pillarQuickHits,
+		daoRows, liunianYunshi, aliasMap,
+		ziSub, hourSub, hourDetail: hourDetailNode, dayStarPick, hourGroupPick,
 	};
 }
 
@@ -220,7 +341,7 @@ export function listShensha() {
 	return Object.keys((SHENSHA && SHENSHA.rows) || {});
 }
 
-// AI 快照文本：计算盘 + 核心断语（文献层古本诗/逐星全文属显示层，不入快照）
+// AI 快照文本：计算盘 + 核心断语 + 文献层【诗文】【四柱文献】（后两段登记为默认关段：builder 恒产，导出层按设置控）
 export function buildYizhangjingSnapshotText(model) {
 	if (!model) return '';
 	const c = model.chart;
@@ -231,7 +352,16 @@ export function buildYizhangjingSnapshotText(model) {
 	const paiNote = c.input.month !== rawMonth ? `·排作${c.input.month}月` : '';
 	L.push('【起盘信息】');
 	L.push(`性别：${c.input.gender}　生年支：${c.input.yearBranch}(${ZODIAC[BRANCHES.indexOf(c.input.yearBranch)]})　农历${model.input.leap ? '闰' : ''}${rawMonth}月${c.input.day}日　生时支：${c.input.hourBranch}（${model.input.monthNote}${paiNote}）`);
-	L.push(`本命阴阳：${c.yinyang}年 → ${c.dirText}　命宫定法：${c.opts.mgMethod === 'shuZhiMao' ? '数至卯' : '时上起命'}　大限一宫${c.opts.N}年　流年十二神：${c.opts.flowSet}组`);
+	L.push(`本命阴阳：${c.yinyang}年 → ${c.dirText}　命宫定法：${c.opts.mgMethod === 'shuZhiMao' ? '数至卯' : '时上起命'}　大限一宫${c.opts.N}年　大限起运：${c.opts.startMode === 'age1' ? '1岁连续' : '秘传起运'}`);
+	// 流派配置行：让 AI 快照反映用户全部所选（逐年法/显示层/断语组），非默认项显式标出。
+	const cfg = [];
+	cfg.push(`逐年法：${model.annualMethod === 'liunian' ? `流年十二神(${c.opts.flowSet}组)` : `小限·起${c.xiaoStartLabel || '日柱宫'}·${model.xiaoDir === 'always' ? '一律顺行' : '随盘向'}`}`);
+	cfg.push(`重犯口诀：${model.chongfanKou === 'beta' ? '异传组' : '常见组'}`);
+	if (model.gradeSet === 'variant') cfg.push('品级分类：变体(天驿归凶)');
+	if (model.naming && model.naming !== 'A') cfg.push(`星名系统：${model.naming}系(显示层)`);
+	if (model.daoTerm === 'edao') cfg.push('六道术语：饿鬼道系(显示层)');
+	if (c.opts.earlyZi) cfg.push('早子调宫：开');
+	L.push(cfg.join('　'));
 	L.push('');
 	L.push('【四柱四宫断语】');
 	L.push('（年=祖上／月=父母事业／日=夫妻／时=子女自身·主星）');
@@ -241,16 +371,56 @@ export function buildYizhangjingSnapshotText(model) {
 	L.push('');
 	L.push('【命宫与人事十二宫】');
 	L.push(`命宫 ${c.mingBranch}宫·${c.mingStar}`);
-	L.push(model.renshi.map((g) => `${g.palace}=${g.branch}${g.star}`).join('　'));
+	L.push('| 宫位 | 星曜 |');
+	L.push('| --- | --- |');
+	model.renshi.forEach((g) => { L.push(`| ${g.palace} | ${g.branch}${g.star} |`); });
+	if (model.sishi && model.sishi.rows) {
+		L.push('');
+		L.push('【四世与权重】');
+		L.push('（四柱＝四世：根苗花果，加权分＝Σ权重×品级分[上+1/中0/下−1]）');
+		L.push(`加权总分：${model.sishi.score}`);
+		L.push('| 柱 | 世 | 年龄段 | 权重 | 星 | 品级 |');
+		L.push('| --- | --- | --- | --- | --- | --- |');
+		model.sishi.rows.forEach((r) => { L.push(`| ${r.pillar} | ${r.shi} | ${r.age} | ${r.weight}% | ${r.star} | ${r.grade} |`); });
+	}
+	if (model.renshi && model.renshi.some((g) => g.meaning)) {
+		L.push('');
+		L.push('【人事十二宫寓意】');
+		model.renshi.forEach((g) => { if (g.meaning) L.push(`${g.palace}（${g.branch}${g.star}）：${g.meaning}`); });
+	}
 	L.push('');
 	L.push('【格局判定】');
 	L.push(`四宫等第：${c.fourPalaceRank}　命格：${c.mingGe}　九品估：${c.nineGrade}　（上品×${c.gradeCount.up} 中品×${c.gradeCount.mid} 下品×${c.gradeCount.down}）`);
+	if (model.ninePinExact) {
+		L.push('');
+		L.push('【九品定格】');
+		if (model.ninePinExact.matched) {
+			L.push(`星组合精确命中：${model.ninePinExact.grade}${model.ninePinExact.level ? '·' + model.ninePinExact.level : ''}`);
+			if (model.ninePinExact.text) L.push(model.ninePinExact.text);
+		} else {
+			L.push(`（按品级数估）${model.ninePinExact.grade}`);
+		}
+	}
+	if (model.nianyun) {
+		L.push('');
+		L.push('【年上运程】');
+		L.push(`（以生年星${model.chart.pillars[0].star}为纲）`);
+		L.push(model.nianyun);
+	}
+	if (model.posQuick && model.posQuick.some((p) => p.text)) {
+		L.push('');
+		L.push('【位置速断】');
+		model.posQuick.forEach((p) => { if (p.text) L.push(`${p.label}柱${p.star}：${p.text}`); });
+	}
 	if (model.repeats.length) {
 		L.push('');
 		L.push('【重犯】');
+		// 「重犯口诀」所选组以 ★当前 标出（否则快照两组恒列、AI 读不到用户所宗）。
 		model.repeats.forEach((r) => {
+			const aMark = r.chosen !== 'beta' ? '★当前' : '';
+			const bMark = r.chosen === 'beta' ? '★当前' : '';
 			L.push(`${r.star}×${r.count}：${r.detail}`);
-			L.push(`　速断(常见)：${r.alpha}　速断(异传)：${r.beta}`);
+			L.push(`　速断(常见组${aMark})：${r.alpha}　速断(异传组${bMark})：${r.beta}`);
 		});
 	}
 	if (model.rishi) {
@@ -266,22 +436,68 @@ export function buildYizhangjingSnapshotText(model) {
 	L.push('');
 	L.push('【大限】');
 	L.push(`从月宫起·一宫${c.opts.N}年·${c.dirText}`);
+	L.push('| 年龄 | 地支 | 星 | 道 | 品级 | 五行 | 运势 |');
+	L.push('| --- | --- | --- | --- | --- | --- | --- |');
 	model.dayun.forEach((d) => {
-		L.push(`${d.from}-${d.to}岁 ${d.branch}·${d.star}(${d.dao}·${d.grade}${d.wuxing ? '·' + d.wuxing : ''})：${d.yunshi}`);
+		L.push(`| ${d.from}-${d.to}岁 | ${d.branch} | ${d.star} | ${d.dao} | ${d.grade} | ${d.wuxing || '—'} | ${d.yunshi || '—'} |`);
 	});
+	if (model.tongxian && model.tongxian.length) {
+		L.push('');
+		L.push('【童限】');
+		L.push('（未交大运前·一律逆行·一宫一年）');
+		L.push(model.tongxian.map((t) => `${t.age}岁=${t.palace}(${t.branch}${t.star})`).join('　'));
+	}
 	L.push('');
+	// 逐年法互斥（B10 明训：小限/流年只用一套）：annualMethod 未设时二者并列（零回归）
+	const showXiao = model.annualMethod !== 'liunian';
+	const showLiunian = model.annualMethod !== 'xiaoxian';
 	const xiaoLabel = c.xiaoStartLabel || '日柱宫';
 	const xiaoStars = [];
-	for (let a = 1; a <= 12; a++) { xiaoStars.push(`${a}=${xiaoxianStarAt(c.xiaoStartIdx, c.dir, a)}`); }
+	for (let a = 1; a <= 12; a++) { xiaoStars.push(`${a}=${xiaoxianStarAtDir(c.xiaoStartIdx, c.dir, a, model.xiaoDir)}`); }
 	L.push('【小限与流年十二神】');
-	L.push(`小限一宫一年·起${xiaoLabel}：${xiaoStars.join(' ')}`);
-	L.push(`流年十二神（${c.opts.flowSet}组）以本命年支「${c.input.yearBranch}」起太岁顺布，四柱/命宫落宫值神：` +
-		[['年', c.fourIdx.year], ['月', c.fourIdx.month], ['日', c.fourIdx.day], ['时', c.fourIdx.time], ['命', c.mingIdx]]
-			.map(([lab, idx]) => `${lab}=${xunShenAt(BRANCHES.indexOf(c.input.yearBranch), idx, c.opts.flowSet)}`).join(' '));
-	if (model.liunianZong) {
+	if (showXiao) {
+		L.push(`小限一宫一年·起${xiaoLabel}·${model.xiaoDir === 'always' ? '一律顺行' : '随盘向'}：${xiaoStars.join(' ')}`);
+	}
+	if (showLiunian) {
+		L.push(`流年十二神（${c.opts.flowSet}组）以本命年支「${c.input.yearBranch}」起太岁顺布，四柱/命宫落宫值神：` +
+			[['年', c.fourIdx.year], ['月', c.fourIdx.month], ['日', c.fourIdx.day], ['时', c.fourIdx.time], ['命', c.mingIdx]]
+				.map(([lab, idx]) => `${lab}=${xunShenAt(BRANCHES.indexOf(c.input.yearBranch), idx, c.opts.flowSet)}`).join(' '));
+		if (model.xunRoles && model.xunRoles.length) {
+			L.push(`巡宫四位：${model.xunRoles.map((r) => `${r.pillar}${r.role}=${r.shen}`).join('　')}`);
+		}
+	}
+	if (model.flowSub) {
+		L.push('');
+		L.push('【流月流日流时】');
+		L.push('（流年宫起正月→初一→子时·一律顺行）');
+		L.push(`流月：${model.flowSub.month.branch}${model.flowSub.month.star}　流日：${model.flowSub.day.branch}${model.flowSub.day.star}　流时：${model.flowSub.time.branch}${model.flowSub.time.star}`);
+	}
+	if (model.liunianZong && showLiunian) {
 		L.push('');
 		L.push('【流年总论】');
 		L.push(`（主星${model.timeStar}）：${model.liunianZong}`);
+	}
+	// 【叠断】默认关段（builder 恒产，导出层按设置控）：刑冲害/星组合互见/阴阳克父母/兄弟数/四柱旺衰
+	const dieLines = [];
+	if (model.clashes && model.clashes.hits && model.clashes.hits.length) {
+		dieLines.push('◆ 刑冲害：' + model.clashes.hits.map((h) => h.type === '刑' ? `${h.group}刑` : `${h.a}${h.b}${h.type}`).join('、'));
+	}
+	if (model.pairHits && model.pairHits.length) {
+		model.pairHits.forEach((r) => dieLines.push(`◆ 互见 ${r.text}`));
+	}
+	if (model.polarity && model.polarity.judge) {
+		dieLines.push(`◆ 阴阳（星曜六阳${model.polarity.yang}·六阴${model.polarity.yin}）：${model.polarity.judge}`);
+	}
+	if (model.brothers) {
+		dieLines.push(`◆ 兄弟数：${model.brothers.text}（${model.brothers.note}）`);
+	}
+	if (model.pillarWuxing && model.pillarWuxing.length) {
+		dieLines.push('◆ 四柱旺衰：' + model.pillarWuxing.map((w) => `${w.pillar}${w.branch}(${w.wuxing})${w.state}`).join('　'));
+	}
+	if (dieLines.length) {
+		L.push('');
+		L.push('【叠断】');
+		dieLines.forEach((x) => L.push(x));
 	}
 	// 神煞合参层（默认关；开启且有落宫时才入快照）：按人事宫列本盘落入之神煞与断语
 	if (model.shenshaLayer && model.shenshaHits && model.shenshaHits.length) {
@@ -294,9 +510,70 @@ export function buildYizhangjingSnapshotText(model) {
 			if (!grouped[h.palace]) { grouped[h.palace] = { branch: h.branch, star: h.star, items: [] }; order.push(h.palace); }
 			grouped[h.palace].items.push(h);
 		});
+		L.push('| 宫位 | 坐 | 神煞 | 断语 |');
+		L.push('| --- | --- | --- | --- |');
 		order.forEach((pal) => {
 			const g = grouped[pal];
-			L.push(`${pal}(${g.branch}·${g.star})：` + g.items.map((it) => `${it.name}—${it.text || '（无断语）'}`).join('；'));
+			g.items.forEach((it, ii) => {
+				const palCell = ii === 0 ? pal : '—';
+				const seatCell = ii === 0 ? `${g.branch}·${g.star}` : '—';
+				L.push(`| ${palCell} | ${seatCell} | ${it.name} | ${it.text || '（无断语）'} |`);
+			});
+		});
+	}
+	// 【诗文】doctrine 段（默认关段：builder 恒产，导出层按设置控）：与右栏「诗文」tab renderLore 同口径，
+	// 只取本盘命中的月诗（真实农历生月）与时文（生时支），非全库；原文引自 yizhangjingLore.json 零改写。
+	const loreMonthKey = LORE_MONTH_LABELS[model.input.lunarMonth || c.input.month] || '';
+	const loreMonthPoem = (LORE.poems && LORE.poems.month && LORE.poems.month[loreMonthKey]) || null;
+	const loreHourMain = (LORE.poems && LORE.poems.hourMain && LORE.poems.hourMain[c.input.hourBranch]) || null;
+	if (loreMonthPoem || (loreHourMain && loreHourMain.text)) {
+		L.push('');
+		L.push('【诗文】');
+		L.push('（古本诗文含旧时代观念，仅作文献保留）');
+		if (loreMonthPoem) {
+			L.push(`◆ 本月生人诗（${loreMonthKey}）`);
+			if (loreMonthPoem.poem) L.push(loreMonthPoem.poem);
+			if (loreMonthPoem.prose) L.push(loreMonthPoem.prose);
+		}
+		if (loreHourMain && loreHourMain.text) {
+			L.push(`◆ 本时生人（${c.input.hourBranch}时${loreHourMain.range ? '·' + loreHourMain.range : ''}）`);
+			L.push(loreHourMain.text);
+		}
+		if (model.hourGroupPick && model.hourGroupPick.poem) {
+			L.push(`◆ 时组诗（${model.hourGroupPick.key}）`);
+			L.push(model.hourGroupPick.poem);
+		}
+	}
+	// 【逐日值星】doctrine 段（默认关段）：按农历生日命中 6 轮值星之一（非全库罗列）。
+	if (model.dayStarPick && model.dayStarPick.text) {
+		L.push('');
+		L.push('【逐日值星】');
+		L.push('（古本逐日值星含旧时代观念，仅作文献保留）');
+		L.push(`◆ ${model.dayStarPick.star}值日（${model.dayStarPick.days}）`);
+		L.push(model.dayStarPick.text);
+	}
+	// 【时辰细断】doctrine 段（默认关段）：按子初/中/末（或时初中末）命中 1/3（非全库罗列）。
+	if (model.hourDetail && (model.hourDetail.prose || (model.hourDetail.poems && model.hourDetail.poems.length))) {
+		L.push('');
+		L.push('【时辰细断】');
+		L.push('（古本时辰细断含旧时代观念，仅作文献保留）');
+		L.push(`◆ ${c.input.hourBranch}时${model.hourSub}${model.hourDetail.range ? '（' + model.hourDetail.range + '）' : ''}`);
+		if (model.hourDetail.prose) L.push(model.hourDetail.prose);
+		(model.hourDetail.poems || []).forEach((pm) => L.push(pm));
+	}
+	// 【四柱文献】doctrine 段（默认关段）：与右栏「四柱文献」tab renderSiZhuLore 同口径，
+	// 只取本盘四柱各主星的逐星全文（非全库十二星）；原文零改写；全缺不产段。
+	const loreSizhuLabels = ['年柱 · 祖上', '月柱 · 父母事业', '日柱 · 夫妻', '时柱 · 自身主星'];
+	const loreStarBlocks = (model.pillars || [])
+		.map((p, i) => ({ label: loreSizhuLabels[i] || '', star: p.star, full: (LORE.starFull && LORE.starFull[p.star]) || '' }))
+		.filter((b) => b.full);
+	if (loreStarBlocks.length) {
+		L.push('');
+		L.push('【四柱文献】');
+		L.push('（各柱主星逐星全文·古本文献层）');
+		loreStarBlocks.forEach((b) => {
+			L.push(`◆ ${b.label} · ${b.star}`);
+			L.push(b.full);
 		});
 	}
 	return L.join('\n');

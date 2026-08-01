@@ -5,10 +5,10 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 254,
+    "missing_sections": 241,
     "extra_sections": 45,
     "absent_keys": 8,
-    "keys_with_debt": 59
+    "keys_with_debt": 57
   },
   "keys": {
     "acg": {
@@ -510,12 +510,6 @@
       ],
       "extra": []
     },
-    "taiyi": {
-      "missing": [
-        "起盘"
-      ],
-      "extra": []
-    },
     "tarot": {
       "missing": [
         "开钥",
@@ -589,23 +583,6 @@
     "yearsystem129": {
       "missing": [
         "起盘信息"
-      ],
-      "extra": []
-    },
-    "yizhangjing": {
-      "missing": [
-        "四世与权重",
-        "人事十二宫寓意",
-        "九品定格",
-        "年上运程",
-        "位置速断",
-        "童限",
-        "流月流日流时",
-        "叠断",
-        "诗文",
-        "逐日值星",
-        "时辰细断",
-        "四柱文献"
       ],
       "extra": []
     },

@@ -18,6 +18,7 @@ Usage:  python scripts/revendor_core_js.py <upstream-src-root> <relative/path/Fi
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from pathlib import Path
@@ -96,7 +97,74 @@ def transform(text: str) -> tuple[str, list[str]]:
     text, count = _RELATIVE_IMPORT.subn(add_suffix, text)
     if count:
         notes.append(f"suffixed {count} relative import(s)")
+
+    # 原生 Node ESM 要求 JSON import 显式带 `with { type: 'json' }`；bundler 不需要，所以上游没有。
+    # 漏了它模块直接加载失败（"needs an import attribute of type: json"）——AGENTS §5 的老坑，机械化掉。
+    text, json_count = re.subn(
+        r"(^import\s+[^;\n]*?from\s+['\"][^'\"]+\.json['\"])(\s*;)",
+        r"\1 with { type: 'json' }\2",
+        text,
+        flags=re.M,
+    )
+    if json_count:
+        notes.append(f"added json import attribute ×{json_count}")
     return text, notes
+
+
+def _reexport_required(text: str, target: Path) -> tuple[str, list[str]]:
+    """把 skill 侧 `tools/*.js` 需要、而上游是模块私有的函数补上 `export`。
+
+    上游把 `normalizeBackendPan` 一类叠加函数留作私有（组件内部自用），但 skill 的 headless 工具层
+    正是靠它把 ken 响应叠到本地脚手架上。之前的 vendored 副本是人手加的 export，一次全文件重 vendor
+    就会把它抹掉，症状是 `SyntaxError: does not provide an export named …`（本轮踩到）。
+    按「谁在 import 它」反查，自动补 export——不写死函数名清单。
+    """
+    notes: list[str] = []
+    tools_dir = VENDOR_ROOT.parent / "tools"
+    needed: set[str] = set()
+    stem = target.stem
+    for tool in tools_dir.glob("*.js") if tools_dir.is_dir() else []:
+        for match in re.finditer(r"import\s+\{([^}]+)\}\s+from\s+['\"][^'\"]*" + re.escape(stem) + r"\.js['\"]", tool.read_text(encoding="utf-8")):
+            needed |= {s.strip().split(" as ")[0].strip() for s in match.group(1).split(",") if s.strip()}
+    for name in sorted(needed):
+        if re.search(rf"^export\s+(?:async\s+)?function\s+{re.escape(name)}\b", text, re.M):
+            continue
+        pattern = re.compile(rf"^(function\s+{re.escape(name)}\b)", re.M)
+        if pattern.search(text):
+            text = pattern.sub(r"export \1", text, count=1)
+            notes.append(f"re-exported {name} (skill tools import it; upstream keeps it module-private)")
+    return text, notes
+
+
+def _relocate_imports(text: str, target: Path) -> tuple[str, list[str]]:
+    """把上游 src 布局的相对 import 重指到 vendor 树里该文件的真实位置。
+
+    上游是 `astrostudyui/src/{components,utils,constants}/…`，vendor 树按技法分目录
+    （`vendor/bazi/baziLunarLocal.js` 等），所以 `../../utils/baziLunarLocal.js` 在这里解析不到。
+    按 basename 在 vendor 树里找唯一匹配后重写；找不到就**报出来**而不是留个坏 import 让模块加载失败
+    ——那正是「load 过≠真盘不崩」之前的一步，必须显式暴露给人决定是补 vendor 还是写 shim。
+    """
+    notes: list[str] = []
+    index: dict[str, list[Path]] = {}
+    for path in VENDOR_ROOT.rglob("*.js"):
+        index.setdefault(path.name, []).append(path)
+
+    def fix(match: re.Match[str]) -> str:
+        rel = match.group(2)
+        resolved = (target.parent / rel).resolve()
+        if resolved.exists():
+            return match.group(0)
+        candidates = index.get(Path(rel).name, [])
+        if len(candidates) == 1:
+            new_rel = os.path.relpath(candidates[0], target.parent)
+            if not new_rel.startswith("."):
+                new_rel = f"./{new_rel}"
+            notes.append(f"relocated {rel} → {new_rel}")
+            return f"{match.group(1)}{new_rel}{match.group(3)}"
+        notes.append(f"⚠ UNRESOLVED import {rel} ({len(candidates)} candidates) — vendor it or add a shim")
+        return match.group(0)
+
+    return _RELATIVE_IMPORT.sub(fix, text), notes
 
 
 def main() -> None:
@@ -114,6 +182,10 @@ def main() -> None:
         subdir = args.vendor_subdir or Path(rel).parent.name
         target = VENDOR_ROOT / subdir / Path(rel).name
         new_text, notes = transform(source.read_text(encoding="utf-8"))
+        new_text, export_notes = _reexport_required(new_text, target)
+        notes.extend(export_notes)
+        new_text, reloc_notes = _relocate_imports(new_text, target)
+        notes.extend(reloc_notes)
         old_text = target.read_text(encoding="utf-8") if target.is_file() else ""
         status = "unchanged" if old_text == new_text else ("new" if not old_text else "updated")
         delta = len(new_text.splitlines()) - len(old_text.splitlines())

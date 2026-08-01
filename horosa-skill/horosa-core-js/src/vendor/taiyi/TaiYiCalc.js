@@ -7,6 +7,13 @@ import {
 	getTaiyiAccumLabel,
 } from './core/TaiYiCore.js';
 
+
+
+
+import buildLocalBaziResult from '../bazi/baziLunarLocal.js';
+import { defaultLateZiHourUseNextDay } from '../bazi/dayBoundary.js';
+import { parseDateParts } from '../bazi/dateStrSafe.js';
+
 export const STYLE_OPTIONS = [
 	...TAIYI_STYLE_OPTIONS.slice(),
 	{ value: 5, label: '太乙命法' },
@@ -41,10 +48,12 @@ export const TIME_BASIS_OPTIONS = [
 	{ value: 'trueSolar', label: '真太阳时' },
 ];
 
+// 用户语义(拍板,字面直觉版): after23NewDay=1「23点算第二天」=日柱进位次日(壬寅)；=0「24点算第二天」=日柱守今(辛丑)。
 export const DAY_SWITCH_OPTIONS = [
-	{ value: 0, label: '子正换日' },
-	{ value: 1, label: '子初换日' },
+	{ value: 1, label: '23点算第二天' },
+	{ value: 0, label: '24点算第二天' },
 ];
+
 
 export const GAME_THEORY_OPTIONS = [
 	{ value: 0, label: '关闭' },
@@ -86,7 +95,7 @@ function buildOptions(opt, pan){
 		sexLabel: options.sex || (pan && pan.sex) || '男',
 		rotationLabel: options.rotation || '固定',
 		timeBasisLabel: options.timeBasis === 'trueSolar' ? '真太阳时' : '直接时间',
-		daySwitchLabel: options.after23NewDay === 1 ? '子初换日' : '子正换日',
+		daySwitchLabel: options.after23NewDay === 1 ? '23点算第二天' : '24点算第二天',
 		gameTheoryLabel: options.gameTheory === 1 ? '开启' : '关闭',
 	};
 }
@@ -119,23 +128,53 @@ function pickPillar(nongli, key, flatKey){
 	return safeText((item && (item.ganzi || item.ganZhi || item.text)) || '');
 }
 
-function applyNongliDisplay(pan, nongli){
-	if(!pan || !nongli){
+function pillarFromFourColumns(four, key){
+	const item = four && four[key] ? four[key] : null;
+	return safeText((item && (item.ganzi || item.ganZhi || item.text)) || '');
+}
+
+function buildTaiyiBaziLocal(fields, options){
+	if(!fields || !fields.date || !fields.time){
+		return null;
+	}
+	try{
+		return buildLocalBaziResult({
+			date: fields.date.value.format('YYYY-MM-DD'),
+			time: fields.time.value.format('HH:mm:ss'),
+			zone: fields.zone ? fields.zone.value : undefined,
+			lon: fields.lon ? fields.lon.value : undefined,
+			lat: fields.lat ? fields.lat.value : undefined,
+			gpsLat: fields.gpsLat ? fields.gpsLat.value : undefined,
+			gpsLon: fields.gpsLon ? fields.gpsLon.value : undefined,
+			gender: fields.gender ? fields.gender.value : 1,
+			timeAlg: options && options.timeBasis === 'trueSolar' ? 0 : 1,
+			after23NewDay: options ? options.after23NewDay : undefined,
+			// v2.2.1: 太乙也要把时柱开关透传给 buildLocalBaziResult,否则 hour==23 + lateZi=0 时太乙的时柱会算错。
+			lateZiHourUseNextDay: options ? options.lateZiHourUseNextDay : undefined,
+		});
+	}catch(e){
+		return null;
+	}
+}
+
+function applyNongliDisplay(pan, nongli, baziLocal){
+	if(!pan || (!nongli && !baziLocal)){
 		return pan;
 	}
+	const baziNongli = baziLocal && baziLocal.bazi ? baziLocal.bazi.nongli : null;
+	const four = baziLocal && baziLocal.bazi && baziLocal.bazi.fourColumns ? baziLocal.bazi.fourColumns : null;
 	return {
 		...pan,
-		lunarText: formatNongliText(nongli) || pan.lunarText,
-		realSunTime: safeText(nongli.birth) || pan.realSunTime,
-		jiedelta: safeText(nongli.jiedelta) || pan.jiedelta,
-		// 四柱优先取 ken 引擎(kintaiyi)算出的 pan.ganzhi —— 它带 v2.1.8 月柱节气边界修正，且与太乙盘同源；
-		// 仅在 ken 未给出时回退到 /nongli/time。对应星阙 v2.1.8「用修正后的八字而非原始农历」的意图
-		// (星阙前端用 buildLocalBaziResult 本地八字；skill 是 ken 架构,故用同引擎的 pan.ganzhi 等效对齐)。
+		lunarText: (nongli && formatNongliText(nongli)) || pan.lunarText,
+		// 真太阳时 与 直接时间 都稳定显示(与所选时间基准无关);随基准变的只是四柱/计算基准 —— 和八字一致
+		realSunTime: (baziNongli && safeText(baziNongli.solarTime)) || (nongli && safeText(nongli.birth)) || pan.realSunTime,
+		clockTime: (baziNongli && safeText(baziNongli.clockTime)) || pan.clockTime,
+		jiedelta: (nongli && safeText(nongli.jiedelta)) || pan.jiedelta,
 		ganzhi: {
-			year: (pan.ganzhi && pan.ganzhi.year) || pickPillar(nongli, 'year', 'yearGanZi') || '',
-			month: (pan.ganzhi && pan.ganzhi.month) || pickPillar(nongli, 'month', 'monthGanZi') || '',
-			day: (pan.ganzhi && pan.ganzhi.day) || pickPillar(nongli, 'day', 'dayGanZi') || '',
-			time: (pan.ganzhi && pan.ganzhi.time) || pickPillar(nongli, 'time', 'timeGanZi') || safeText(nongli.time) || '',
+			year: pillarFromFourColumns(four, 'year') || pickPillar(nongli, 'year', 'yearGanZi') || (pan.ganzhi && pan.ganzhi.year) || '',
+			month: pillarFromFourColumns(four, 'month') || pickPillar(nongli, 'month', 'monthGanZi') || (pan.ganzhi && pan.ganzhi.month) || '',
+			day: pillarFromFourColumns(four, 'day') || pickPillar(nongli, 'day', 'dayGanZi') || (pan.ganzhi && pan.ganzhi.day) || '',
+			time: pillarFromFourColumns(four, 'time') || pickPillar(nongli, 'time', 'timeGanZi') || (nongli && safeText(nongli.time)) || (pan.ganzhi && pan.ganzhi.time) || '',
 			minute: (pan.ganzhi && pan.ganzhi.minute) || '',
 		},
 	};
@@ -147,13 +186,20 @@ export function calcTaiyi(fields, nongli, options){
 	if(!pan){
 		return null;
 	}
+	const baziLocal = buildTaiyiBaziLocal(fields, opt);
+	// 直接时间=用户输入的钟表时,恒可自 fields 直出;极端年(lunar-js 域外 baziLocal 缺席、
+	// 后端 pan 无 clockTime)也不许显示「—」。
+	const clockFallback = (fields && fields.date && fields.date.value && fields.time && fields.time.value)
+		? `${fields.date.value.format('YYYY-MM-DD')} ${fields.time.value.format('HH:mm:ss')}`
+		: '';
 	return applyNongliDisplay({
 		...pan,
+		clockTime: pan.clockTime || clockFallback,
 		tenching: opt.tenching !== undefined ? opt.tenching : 0,
 		rotation: opt.rotation || '固定',
 		options: buildOptions(opt, pan),
 		palaces: normalizePalaces(pan.palace16),
-	}, nongli);
+	}, nongli, baziLocal);
 }
 
 function parseFieldsDateTime(fields){
@@ -162,7 +208,9 @@ function parseFieldsDateTime(fields){
 	}
 	const dateStr = fields.date.value.format('YYYY-MM-DD');
 	const timeStr = fields.time.value.format('HH:mm:ss');
-	const d = dateStr.split('-').map((item)=>parseInt(item, 10));
+	// BC 安全解析:'-7040-07-19' 裸 split('-') 会撕成 [NaN,7040,7,19](年 NaN 静默传播)
+	const _dp = parseDateParts(dateStr);
+	const d = _dp ? [_dp.year, _dp.month, _dp.day] : [];
 	const t = timeStr.split(':').map((item)=>parseInt(item, 10));
 	if(d.length < 3 || t.length < 2){
 		return null;
@@ -205,25 +253,18 @@ function resolveCalculationDateTime(fields, nongli, options){
 	return direct;
 }
 
-export function normalizeBackendPan(pan, options, nongli){
+export function normalizeBackendPan(pan, options, nongli, baziLocal){
 	if(!pan){
 		return null;
 	}
 	const opt = options || {};
-	// The kintaiyi backend returns a 起盘 section that duplicates what buildTaiyiSnapshotText
-	// already emits as [起盘信息]; drop it so the snapshot has no doubled起盘 block. The remaining
-	// reading sections (太乙诸神/风游/… ) flow through to the snapshot + export contract.
-	const backendSections = Array.isArray(pan.sections)
-		? pan.sections.filter((section) => section && section.title !== '起盘')
-		: pan.sections;
 	return applyNongliDisplay({
 		...pan,
-		sections: backendSections,
 		tenching: opt.tenching !== undefined ? opt.tenching : 0,
 		rotation: opt.rotation || '固定',
 		options: buildOptions(opt, pan),
 		palaces: normalizePalaces(pan.palace16),
-	}, nongli);
+	}, nongli, baziLocal);
 }
 
 export function buildTaiyiSnapshotText(pan){
