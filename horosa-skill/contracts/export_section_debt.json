@@ -5,10 +5,10 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 12,
+    "missing_sections": 11,
     "extra_sections": 30,
     "absent_keys": 0,
-    "keys_with_debt": 24
+    "keys_with_debt": 23
   },
   "keys": {
     "acg": {
@@ -102,12 +102,6 @@
       "extra": [
         "当前时点"
       ]
-    },
-    "mundane": {
-      "missing": [
-        "年之九主"
-      ],
-      "extra": []
     },
     "primarydirchart": {
       "missing": [],

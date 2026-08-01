@@ -78,7 +78,10 @@ def _strip_network_orchestrators(text: str, removed: list[str]) -> tuple[str, li
         return text, notes
     while True:
         hit = None
-        for match in re.finditer(r"^export\s+async\s+function\s+(\w+)\s*\(", text, re.M):
+        # 也认非导出的 `async function`：上游有「async function X(){} … export { X }」的写法
+        # （vedicMundane.js 的 solveVedicSolarIngress），只认 `export async function` 会漏掉它，
+        # 留下一个一调用就 ReferenceError 的导出入口。
+        for match in re.finditer(r"^(?:export\s+)?async\s+function\s+(\w+)\s*\(", text, re.M):
             start = match.start()
             brace = text.index("{", match.end() - 1)
             depth, index = 1, brace + 1
@@ -169,6 +172,22 @@ def _prune_default_export(text: str, removed: list[str]) -> tuple[str, list[str]
     notes: list[str] = []
     if not removed:
         return text, notes
+    removed_set = set(removed)
+    for pattern in (r"^export default \{([^}]*)\};?\s*$", r"^export \{([^}]*)\};?\s*$"):
+        for match in list(re.finditer(pattern, text, re.M)):
+            names = [s.strip() for s in match.group(1).split(",") if s.strip()]
+            kept = [n for n in names if n.split(":")[0].split(" as ")[0].strip() not in removed_set]
+            if len(kept) == len(names):
+                continue
+            notes.append(f"pruned export list ×{len(names) - len(kept)}")
+            head = "export default { " if "default" in match.group(0) else "export { "
+            replacement = (head + ", ".join(kept) + " };") if kept else ""
+            text = text[: match.start()] + replacement + text[match.end():]
+    return text, notes
+
+
+def _prune_default_export_unused(text: str, removed: list[str]) -> tuple[str, list[str]]:
+    notes: list[str] = []
     match = re.search(r"^export default \{([^}]*)\};?\s*$", text, re.M)
     if not match:
         return text, notes

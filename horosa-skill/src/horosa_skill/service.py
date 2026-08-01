@@ -8038,6 +8038,129 @@ class HorosaSkillService:
             moment = _shift_moment(moment, diff / speed)
         return moment, chart
 
+    # 年之九主：九职的入境目标度与种子日，逐字取自上游 vedicMundane.js 的 EVENT_TARGET / APPROX_DAY。
+    _NAVANAYAKA_EVENTS = {
+        "ingress_0": (0.0, "04-14"),
+        "ingress_60": (60.0, "06-15"),
+        "ingress_90": (90.0, "07-16"),
+        "ingress_120": (120.0, "08-17"),
+        "ingress_180": (180.0, "10-17"),
+        "ingress_240": (240.0, "12-16"),
+        "ingress_270": (270.0, "01-14"),
+        "ingress_ardra": (66 + 40 / 60, "06-22"),
+    }
+    # 九职表（key / 中文 / 事件 / 年偏移 / 管辖），同上游 NAVANAYAKA_OFFICES。
+    _NAVANAYAKA_OFFICES = [
+        ("raja", "王", "lunar_new_year", 0, "全年总基调、统治者、国运"),
+        ("mantri", "相", "ingress_0", 0, "行政、内阁、治理"),
+        ("senadhipati", "军帅", "ingress_120", 0, "国防、军队、治安"),
+        ("sasyadhipati", "田主", "ingress_90", 0, "田间庄稼、收成"),
+        ("dhanyadhipati", "谷主", "ingress_240", 0, "谷物、存粮"),
+        ("arghadhipati", "价主", "ingress_60", 0, "物价、生活成本"),
+        ("meghadhipati", "云主", "ingress_ardra", 0, "云、降雨"),
+        ("rasadhipati", "汁主", "ingress_180", 0, "油、糖、盐、汁液类"),
+        # 🔴 yearOffset=1：吠陀太阳年自梅沙入境起，摩羯入境(01-14)落在**次一公历年**才属同一
+        # samvatsara；与其余八职同传 year 会取到梅沙年首之前 3 个月的那次，归属上一年度（上游原注）。
+        ("nirasadhipati", "干主", "ingress_270", 1, "金属、宝石、矿、干货"),
+    ]
+
+    def _solve_vedic_ingress(self, event_key: str, year: int, payload: dict[str, Any]) -> str | None:
+        """太阳入某恒星黄道度（Lahiri）的时刻（上游 solveVedicSolarIngress 的 Python 端口）。
+
+        与恒星派那支的关键差异：**首步也须取最短带符号弧**（上游 :60-62 明确写了「曾加 i>0 守卫 →
+        种子晚于真实入境时 diff≈360⁻ 被当成向前一整年，收敛到次年的入境盘」）。九职的种子都是
+        approx 近似日，属近种子，故无远种子那条限制。
+        """
+        spec = self._NAVANAYAKA_EVENTS.get(event_key)
+        if not spec:
+            return None
+        target, approx = spec
+        moment = f"{year}-{approx} 12:00:00"
+        for _ in range(4):
+            chart = self._call_remote(
+                "/chart",
+                {
+                    "date": moment.split(" ")[0].replace("-", "/"),
+                    "time": moment.split(" ")[1],
+                    "zone": payload.get("zone") or "+08:00",
+                    "lat": payload.get("lat") or "31n13",
+                    "lon": payload.get("lon") or "121e28",
+                    "gpsLat": payload.get("gpsLat"),
+                    "gpsLon": payload.get("gpsLon"),
+                    "ad": payload.get("ad", 1),
+                    "zodiacal": 1,
+                    "siderealAyanamsa": "lahiri",
+                    "hsys": 0,
+                    "tradition": 0,
+                    "predictive": 0,
+                },
+            )
+            lon = _solunar_body_lon(chart, "sun")
+            if lon is None:
+                return None
+            diff = (target - lon) % 360.0
+            if diff > 180.0:
+                diff -= 360.0  # 首步也取最短带符号弧 —— 见 docstring
+            if abs(diff) < 0.002:
+                return moment
+            moment = _shift_moment(moment, diff / 0.98565)
+        return moment
+
+    def _build_navanayaka_section(self, year: int, mesha_moment: str, payload: dict[str, Any]) -> str:
+        """[年之九主]：九职各由一次恒星入境求根定时刻，再按该日的 vāra（星期主）定职星。
+
+        「王」职是唯一例外：上游取梅沙入境前 35 日窗内**最近一次新月**，走
+        `fetchMundaneEvents({kinds:['lunations']})`。本仓改用语义等价且**已在白名单**的
+        `/astroextra/prenatal_syzygy`（「某时刻之前最近一次朔」正是它），避免为一职新放行端点。
+        任一职求根失败留空（同上游「王位留空,UI 提示」的降级）。
+        """
+        try:
+            js_v = self.js_client.run("mundane_navanayaka", {"offices": self._solve_navanayaka(year, mesha_moment, payload)})
+            return f"{(js_v or {}).get('text') or ''}".strip()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("navanayaka build failed: %s", exc)
+            return ""
+
+    def _solve_navanayaka(self, year: int, mesha_moment: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
+        offices: list[dict[str, Any]] = []
+        for key, cn, event, offset, domain in self._NAVANAYAKA_OFFICES:
+            moment = None
+            if event == "lunar_new_year":
+                moment = self._last_new_moon_before(mesha_moment, payload)
+            else:
+                try:
+                    moment = self._solve_vedic_ingress(event, year + offset, payload)
+                except Exception as exc:  # noqa: BLE001 — 单职失败只留空
+                    logger.warning("navanayaka office %s failed: %s", key, exc)
+            offices.append({"key": key, "cn": cn, "domain": domain, "moment": moment})
+        return offices
+
+    def _last_new_moon_before(self, moment: str, payload: dict[str, Any]) -> str | None:
+        """梅沙入境前最近一次朔。/astroextra/prenatal_syzygy 的语义即「此前最近一次朔望」。"""
+        try:
+            date_part = moment.split(" ")[0]
+            rsp = self._call_remote(
+                "/astroextra/prenatal_syzygy",
+                {
+                    "date": date_part.replace("-", "/"),
+                    "time": moment.split(" ")[1] if " " in moment else "12:00:00",
+                    "zone": payload.get("zone") or "+08:00",
+                    "lat": payload.get("lat") or "31n13",
+                    "lon": payload.get("lon") or "121e28",
+                    "gpsLat": payload.get("gpsLat"),
+                    "gpsLon": payload.get("gpsLon"),
+                    "ad": payload.get("ad", 1),
+                },
+            )
+            if isinstance(rsp, dict):
+                for field in ("date", "localTime", "moment", "time"):
+                    value = rsp.get(field)
+                    if isinstance(value, str) and len(value) >= 10:
+                        return value
+        except Exception as exc:  # noqa: BLE001 — 王位留空
+            logger.warning("navanayaka raja syzygy failed: %s", exc)
+        return None
+
     def _run_mundane_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 世俗入宫盘 (mundane ingress): (1) get the precise solar-term ingress moment for the year via
         # /jieqi/year, (2) cast a /chart at that moment, (3) enrich with the v2.4.0 natal extras, then
@@ -8136,6 +8259,9 @@ class HorosaSkillService:
                             f"梅沙入境时刻：{v_moment}",
                         ]
                     )
+                    nav = self._build_navanayaka_section(int(vedic_year), v_moment, payload)
+                    if nav:
+                        vedic_text = f"{vedic_text}\n\n{nav}"
             except Exception as exc:  # noqa: BLE001
                 logger.warning("mundane vedic ingress failed: %s", exc)
         horary_text = ""

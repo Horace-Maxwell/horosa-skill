@@ -31,6 +31,7 @@ import { runCalendarExtras } from './calendarExtras.js';
 import { runGuolaoStarDignity } from './guolaoStarDignity.js';
 import { runMundaneHorary } from './mundaneHorary.js';
 import { runMundaneSolunar } from './mundaneSolunar.js';
+import { runMundaneNavanayaka } from './mundaneNavanayaka.js';
 
 const TOOL_RUNNERS = {
   uranian_extra: runUranianExtra,
@@ -44,6 +45,7 @@ const TOOL_RUNNERS = {
   guolao_star_dignity: runGuolaoStarDignity,
   mundane_horary: runMundaneHorary,
   mundane_solunar: runMundaneSolunar,
+  mundane_navanayaka: runMundaneNavanayaka,
   india_jyotish: runIndiaJyotish,
   qimen: runQimen,
   taiyi: runTaiyi,
