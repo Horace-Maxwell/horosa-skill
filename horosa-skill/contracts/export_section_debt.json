@@ -5,8 +5,8 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 241,
-    "extra_sections": 45,
+    "missing_sections": 237,
+    "extra_sections": 44,
     "absent_keys": 8,
     "keys_with_debt": 57
   },
@@ -566,19 +566,13 @@
     },
     "xianqin": {
       "missing": [
-        "三星·元辰",
-        "大限",
-        "流年小限",
-        "神煞·待校",
         "演法·流派",
         "演法·起禽",
         "演法·择日",
         "演法·占卜",
         "演法·投胎"
       ],
-      "extra": [
-        "三星"
-      ]
+      "extra": []
     },
     "yearsystem129": {
       "missing": [
