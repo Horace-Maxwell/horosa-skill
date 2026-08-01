@@ -371,6 +371,47 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   `mcp-publisher login github`（PyPI README 放 `mcp-name:` 行验证）；MCP Apps 扩展值得盯（Claude Code 尚未支持，
   支持后可做盘面可视化）。
 
+### v0.25.0 段级回填（上游 v50，216 → 141 段）— 四条会反复咬人的坑
+
+- **🔴 上游前端源不在 `vendor/runtime-source`。** 该树的 `astrostudyui/src/` 只镜像了 `utils/`（供 aiExport
+  对账），**只有 1 个文件**；`components/` 与 `divination/` 整个不在。在那棵树上 grep 段头会得到「上游根本
+  没有这段」的**错误结论**。真身在 `Horosa-Public/Horosa-Web/astrostudyui/src`（12712 文件）。
+  判据：`find <树>/astrostudyui/src -type f | wc -l` —— 个位数就是镜像树，别在上面找 builder。
+
+- **🔴 桩比真实响应「更简单」＝ 把 bug 盖住。** 本轮抓到两处同一形态，都是线上真坏、离线恒绿：
+  1. `/astroextra/harmonic` 真实响应把整个 chart-wrap 放在 `chart` 键下（比通用段构建器预期深一层），
+     调波盘 14 段全是占位存根；FakeClient 的桩**根本没有 chart 字段**。
+  2. `/predict/*` 的交叉相位是 `chart.aspects` **数组**；FakeClient 在**顶层**塞了本命形状的 aspects，
+     于是推运族 5 键的 `[相位]` 段在真机上只有三个空子标题、零条相位，而测试还断言着 `"标准相位" in text`
+     —— 等于在断言 bug 的产物。
+  **规则**：写桩时以真实响应的**嵌套层级与容器类型**为准，宁可繁琐；桩每简化一层，就等于给自己关掉一层守卫。
+  改完桩顺手加反向断言（如 `assert "标准相位" not in text`）锁住方向。
+
+- **段在 `sections` 里 ≠ 真的产出了。** 导出层会给 preset 里没产出的段注入占位存根
+  （「本次本地计算结果未返回「X」细项…」）。看产出要看 **`section_titles_detected`**；`sections` 含存根。
+  「某段同时出现在 `sections` 和 `missing_selected_sections`」是这个信号的典型形态。
+
+- **工具自带 `snapshot_text` 会短路自动渲染器。** 统一出口是 `if not snapshot_text:` 才调
+  `_auto_snapshot_text_for_tool`。工具里回填一份「只含自家几段」的文本，会把整套通用盘面段挡在门外
+  （调波盘就是这么丢了 12 段）。要合并通用段 + 技法段，就**不要**在 `_run_*_tool` 里回填。
+
+- **`revendor_core_js.py` 的落点默认值会丢嵌套层级。** 旧实现取 `Path(rel).parent.name`，于是
+  `divination/data/x.js` 落到 `vendor/data/`，与既有的 `vendor/divination/data/` 形成**同名重复树**，
+  且 relocate 还会把 import 指回旧树 —— 同一模块两份、改一份不生效。已改为「vendor 里存在完整相对父
+  路径就用它」。
+
+- **从上游 React 文件抽函数，记得扫模块级 const。** 抽 `buildJinKouSnapshotText` 时漏了 `MD_DASH`，
+  运行期才炸。做法：抽完用正则把上游所有 `^const X =` 与新文件里已定义的符号做差集，一次补齐。
+
+- **往 registry 插条目时，正则必须锚定字典起点。** `"liureng":` 在 PRESET 与 OPTIONAL 两个字典里都有，
+  `re.search` 命中第一个 → optional 条目被插进了 PRESET（重复键被后一条覆盖，行为无害但语义错、且
+  下次读代码会误判）。先 `t.index("AI_EXPORT_OPTIONAL_SECTIONS = {")` 再在其后找锚点。
+
+- **上游把一族盘按「哪个页面出的」拆成独立导出键**（`aiExport.js` 的 `ASTRO_LIKE_EXPORT_KEYS`：
+  astrochart_like / hellenastro / dwadasamsa / harmonic / draconic / relocation / locastro）。段单同构，
+  所以 `locastro`(=本仓 acg) 这种「看起来是独立技法」的键，导出其实是 **astrochart 全套盘段 + 尾部地图段**。
+  判据：技法在该常量里 → 它的 builder 应复用通用盘面渲染器，而不是自建几段线表。
+
 ### v0.14.0 sync lessons (古典占星 [古典] + [古典格局] 补到 chart 家族 — vendor 源 = Horosa-Public, 72 工具不变)
 
 - **新增任何到 chart 服务的 `_call_remote(endpoint)` 必须把 endpoint 加进 `_PYTHON_CHART_ENDPOINTS`。** `[古典格局]` 经
