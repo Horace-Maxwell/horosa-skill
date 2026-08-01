@@ -4850,9 +4850,14 @@ def _build_jieqi_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
             one = charts.get(title)
             if not isinstance(one, dict):
                 continue
-            sections.append((f"{title}星盘", _build_jieqi_compact_chart_text(one.get("params", payload), one)))
+            chart_body = _build_jieqi_compact_chart_text(one.get("params", payload), one)
+            sections.append((f"{title}星盘", chart_body))
             su_body = _build_jieqi_compact_suzhan_text(one.get("params", payload), one)
             sections.append((f"{title}宿盘", su_body))
+            # [X3D盘]：上游不是 3D 渲染产物 —— JieQiChartsMain.js 对 astro3d 页签走的同样是
+            # `buildAstroSnapshotContent(one, flds, {headerless:true})`，与 [X星盘] 逐字同一份盘面
+            # 文本，只是挂在 3D 页签名下。上游 preset 两段都列，故这里照样两段都出。
+            sections.append((f"{title}3D盘", chart_body))
     return _render_snapshot_text(sections)
 
 

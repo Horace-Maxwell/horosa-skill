@@ -5,10 +5,10 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 35,
+    "missing_sections": 27,
     "extra_sections": 29,
     "absent_keys": 0,
-    "keys_with_debt": 30
+    "keys_with_debt": 25
   },
   "keys": {
     "acg": {
@@ -98,39 +98,6 @@
         "星与虚点",
         "月宿"
       ]
-    },
-    "jieqi": {
-      "missing": [
-        "春分3D盘",
-        "夏至3D盘",
-        "秋分3D盘",
-        "冬至3D盘"
-      ],
-      "extra": []
-    },
-    "jieqi_chunfen": {
-      "missing": [
-        "春分3D盘"
-      ],
-      "extra": []
-    },
-    "jieqi_dongzhi": {
-      "missing": [
-        "冬至3D盘"
-      ],
-      "extra": []
-    },
-    "jieqi_qiufen": {
-      "missing": [
-        "秋分3D盘"
-      ],
-      "extra": []
-    },
-    "jieqi_xiazhi": {
-      "missing": [
-        "夏至3D盘"
-      ],
-      "extra": []
     },
     "lunarreturn": {
       "missing": [],
