@@ -3621,7 +3621,7 @@ def _build_vedicprog_snapshot_text(response: dict[str, Any]) -> str:
     return _render_snapshot_text([("恒星推运（Vedic Sidereal）", "\n".join(lines))])
 
 
-def _build_planetaryarc_snapshot_text(response: dict[str, Any]) -> str:
+def _build_planetaryarc_snapshot_text(response: dict[str, Any], payload: dict[str, Any] | None = None) -> str:
     # Port of 星阙 AstroPlanetaryArc.formatArcSnapshot. response = {chart:{aspects:[{directId,objects:[{aspect,natalId,delta}]}]}}.
     chart = response.get("chart") if isinstance(response.get("chart"), dict) else {}
     aspects = chart.get("aspects") if isinstance(chart.get("aspects"), list) else []
@@ -3636,9 +3636,40 @@ def _build_planetaryarc_snapshot_text(response: dict[str, Any]) -> str:
             delta_text = f"{round(float(delta) * 1000) / 1000}" if isinstance(delta, (int, float)) else ""
             rows.append(f"| {_astro_msg(row.get('directId'))} | {_aspect_label(o.get('aspect'))} | {_astro_msg(o.get('natalId'))} | {delta_text} |")
     if not rows:
-        return _render_snapshot_text([("行星弧（Planetary Arc）", "（本盘无行星弧数据）")])
-    body = ["行星弧(默认月亮弧)：以所选天体的二次推运移动量为弧推进全盘，看向运星对本命的相位。", "", "| 向运星 | 相位 | 本命星 | 误差 |", "| --- | --- | --- | --- |"] + rows
-    return _render_snapshot_text([("行星弧（Planetary Arc）", "\n".join(body))])
+        arc_body = "（本盘无行星弧数据）"
+    else:
+        arc_body = "\n".join(
+            ["行星弧(默认月亮弧)：以所选天体的二次推运移动量为弧推进全盘，看向运星对本命的相位。", "", "| 向运星 | 相位 | 本命星 | 误差 |", "| --- | --- | --- | --- |"] + rows
+        )
+    # 上游 preset 除技法主段外还列 [本命盘配置]/[时段盘配置]/[相位]（与推运族同结构）——
+    # 本命盘由 _attach_predictive_chart_context 补拉，时段盘就是响应里的 chart。
+    sections: list[tuple[str, str]] = [("行星弧（Planetary Arc）", arc_body)]
+    fields = payload or {}
+    natal_wrap = _natal_chart_wrap(response)
+    predictive_wrap = _predictive_chart_wrap(response)
+    if natal_wrap:
+        natal_lines = _build_base_info_lines(natal_wrap, fields)
+        cusp_lines = _build_house_cusp_lines(natal_wrap)
+        if cusp_lines:
+            natal_lines.extend(["宫位宫头", *cusp_lines])
+        star_lines = _build_star_and_lot_position_lines(natal_wrap)
+        if star_lines:
+            natal_lines.extend(["星与虚点", *star_lines])
+        if natal_lines:
+            sections.append(("本命盘配置", "\n".join(natal_lines)))
+    directed_lines: list[str] = []
+    directed_stars = _build_star_and_lot_position_lines(predictive_wrap)
+    if directed_stars:
+        directed_lines.extend(["时段盘 星与虚点", *directed_stars])
+    directed_cusps = _build_house_cusp_lines(predictive_wrap)
+    if directed_cusps:
+        directed_lines.extend(["时段盘 宫位宫头", *directed_cusps])
+    if directed_lines:
+        sections.append(("时段盘配置", "\n".join(directed_lines)))
+    cross = _build_predictive_cross_aspect_lines(response, predictive_wrap, natal_wrap)
+    if cross:
+        sections.append(("相位", "\n".join(cross)))
+    return _render_snapshot_text(sections)
 
 
 # 托勒密人生七阶 (Ports of Man) — fixed age bands, each ruled by a classical planet (= 星阙 PLANETARY_AGES).
@@ -5809,7 +5840,9 @@ class HorosaSkillService:
             return None
 
     def _attach_predictive_chart_context(self, tool_name: str, payload: dict[str, Any], response: dict[str, Any]) -> dict[str, Any]:
-        if tool_name not in {"solarreturn", "lunarreturn", "solararc", "givenyear", "profection", "pd", "pdchart", "zr"}:
+        # planetaryarc 同属「本命 ↔ 时段两盘对照」形态（上游 preset 也列 [本命盘配置]/[时段盘配置]/[相位]），
+        # 但 /predict/planetaryarc 只回时段盘 → 同样需要补拉本命盘。
+        if tool_name not in {"solarreturn", "lunarreturn", "solararc", "givenyear", "profection", "pd", "pdchart", "zr", "planetaryarc"}:
             return response
         enriched = dict(response)
         if "params" not in enriched:
@@ -7360,7 +7393,7 @@ class HorosaSkillService:
             "arcSource": payload.get("arcSource", "Moon"),
         }
         response = self._call_remote("/predict/planetaryarc", remote_payload)
-        snapshot_text = _build_planetaryarc_snapshot_text(response)
+        snapshot_text = _build_planetaryarc_snapshot_text(response, payload)
         return {
             "chart": response.get("chart"),
             "raw": response,

@@ -5,10 +5,10 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 115,
+    "missing_sections": 112,
     "extra_sections": 24,
     "absent_keys": 6,
-    "keys_with_debt": 36
+    "keys_with_debt": 35
   },
   "keys": {
     "acg": {
@@ -214,14 +214,6 @@
         "角化",
         "年之九主",
         "世运问判"
-      ],
-      "extra": []
-    },
-    "planetaryarc": {
-      "missing": [
-        "本命盘配置",
-        "时段盘配置",
-        "相位"
       ],
       "extra": []
     },

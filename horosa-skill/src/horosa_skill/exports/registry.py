@@ -217,7 +217,7 @@ AI_EXPORT_PRESET_SECTIONS = {
     "distributions": ["起盘信息", "界推运（分配法 / Distributions）", "当前时点", "方法说明"],
     "jaynesprog": ["赤纬推运（Declination）", "本命盘配置", "时段盘 赤纬平行/反平行", "当前时点", "方法说明"],
     "vedicprog": ["恒星推运（Vedic Sidereal）", "当前时点", "方法说明"],
-    "planetaryarc": ["行星弧（Planetary Arc）", "当前时点", "方法说明"],
+    "planetaryarc": ["行星弧（Planetary Arc）", "本命盘配置", "时段盘配置", "相位", "当前时点", "方法说明"],
     "planetaryages": ["起盘信息", "行星年龄（Ages of Man）", "当前时点", "方法说明"],
     "balbillus": ["起盘信息", "Balbillus", "当前时点", "方法说明"],
     "yearsystem129": ["起盘信息", "129年系统表格", "当前时点", "方法说明"],
