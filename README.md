@@ -301,7 +301,7 @@ uv run horosa-skill client config --format codex            # Codex config.toml 
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.24.0",
+  "ok": true, "tool": "qimen", "version": "0.25.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -371,7 +371,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 63 个导出 technique） |
 | 🗄️ 本地 memory / report | 83 / 83 写入 + 83 / 83 JSON artifact |
 | 🔄 GitHub CI | Linux / macOS 单测 + JS golden 自检 + Windows OpenClaw smoke |
-| 📦 Release runtime | macOS (arm64) `v0.24.0` 已打包并校验；Windows (x64) 由构建机补传（补传前 win 用户拿到上一版 runtime）；其余平台安装时明确报不支持 |
+| 📦 Release runtime | macOS (arm64) `v0.25.0` 已打包并校验；Windows (x64) 由构建机补传（补传前 win 用户拿到上一版 runtime）；其余平台安装时明确报不支持 |
 
 第一次 clone 后确认非空壳的最小验证：
 

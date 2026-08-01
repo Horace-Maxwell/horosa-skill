@@ -51,7 +51,7 @@ License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICEN
 
 ## Current stable baseline
 
-**Current public version: `Horosa Skill 0.24.0` (89 callable tools).**
+**Current public version: `Horosa Skill 0.25.0` (89 callable tools).**
 
 This release line brings the capability surface roughly to parity with the desktop app:
 
@@ -247,7 +247,7 @@ Every tool call returns a uniform envelope:
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.24.0",
+  "ok": true, "tool": "qimen", "version": "0.25.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }

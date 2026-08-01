@@ -3,7 +3,7 @@
   "name": "io.github.horace-maxwell/horosa-skill",
   "title": "Horosa Skill",
   "description": "Local-first offline Horosa / Xingque MCP server with structured export contracts, bundled hover knowledge, local memory, and release-managed runtime payloads.",
-  "version": "0.24.0",
+  "version": "0.25.0",
   "websiteUrl": "https://github.com/Horace-Maxwell/horosa-skill",
   "repository": {
     "url": "https://github.com/Horace-Maxwell/horosa-skill",
@@ -12,8 +12,8 @@
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.24.0/horosa-skill.mcpb",
-      "version": "0.24.0",
+      "identifier": "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.25.0/horosa-skill.mcpb",
+      "version": "0.25.0",
       "fileSha256": "TBD-set-by-release-pipeline",
       "runtimeHint": "uv",
       "transport": {
