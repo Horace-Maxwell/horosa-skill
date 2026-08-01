@@ -5,10 +5,10 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 174,
-    "extra_sections": 50,
+    "missing_sections": 161,
+    "extra_sections": 49,
     "absent_keys": 6,
-    "keys_with_debt": 49
+    "keys_with_debt": 48
   },
   "keys": {
     "acg": {
@@ -259,26 +259,6 @@
         "夏至3D盘"
       ],
       "extra": []
-    },
-    "jinkou": {
-      "missing": [
-        "发用·五动三动",
-        "格局",
-        "太岁月建",
-        "四象所属",
-        "四象五行",
-        "方位神煞",
-        "合占扣题与内外",
-        "二遁与次客",
-        "阴盘·六亲六神旺衰",
-        "专题起式",
-        "贵神月将象意",
-        "分类用神",
-        "数理"
-      ],
-      "extra": [
-        "分类用神·求财"
-      ]
     },
     "keypoints": {
       "missing": [
