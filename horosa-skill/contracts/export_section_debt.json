@@ -5,10 +5,10 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 22,
+    "missing_sections": 18,
     "extra_sections": 30,
     "absent_keys": 0,
-    "keys_with_debt": 25
+    "keys_with_debt": 24
   },
   "keys": {
     "acg": {
@@ -27,7 +27,6 @@
     },
     "bazi": {
       "missing": [
-        "月令司令（分野）",
         "多运限·指定时段"
       ],
       "extra": []
@@ -136,14 +135,6 @@
       "extra": [
         "当前时点"
       ]
-    },
-    "relative": {
-      "missing": [
-        "时空中点·合成图盘",
-        "马克斯·影响图盘-星盘A",
-        "马克斯·影响图盘-星盘B"
-      ],
-      "extra": []
     },
     "relocation": {
       "missing": [],

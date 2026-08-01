@@ -4,6 +4,7 @@
 import { computeWuxingStrength } from '../vendor/bazi/baziWuxing.js';
 import { computeMangPai } from '../vendor/bazi/baziMangPai.js';
 import { computeGejuYongShen } from '../vendor/bazi/baziGejuYongShen.js';
+import { buildLocalBaziResult } from '../vendor/bazi/baziLunarLocal.js';
 
 export function runBaziGeju(payload) {
   try {
@@ -68,7 +69,18 @@ export function runBaziGeju(payload) {
       if (mp.feishen && mp.feishen.length) { out.push(`废神：${mp.feishen.join('、')}`); }
     }
 
-    const fy = payload?.fenYe;
+    // [月令司令（分野）]：上游在 baziLunarLocal.js:1048 用 computeFenYe(monthZhi, daysAfterJie, version)
+    // 本地算出来挂在 bazi.fenYe 上。Python 侧只传 fourColumns（后端响应里没有节后日数），所以给了
+    // birth 就用 vendored 的同一个本地引擎补算 —— 与上游同函数同版本，不是另起一套。
+    let fy = payload?.fenYe;
+    if (!fy && payload?.birth) {
+      try {
+        const local = buildLocalBaziResult(payload.birth);
+        fy = local && local.bazi ? local.bazi.fenYe : null;
+      } catch (error) {
+        fy = null;
+      }
+    }
     if (fy && fy.ruler) {
       out.push('');
       out.push('[月令司令（分野）]');

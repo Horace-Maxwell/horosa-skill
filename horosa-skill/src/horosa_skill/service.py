@@ -4469,12 +4469,19 @@ def _build_relative_snapshot_text(payload: dict[str, Any], response: dict[str, A
         ("B对A反映点", _relative_antiscia_lines(response.get("outToInCAnti"), "反映点")),
     ]
 
+    # 段名按盘型（payload.relative）分：上游 AstroRelative.js:164-181 —— 组合盘/影响盘保持原段名，
+    # 时空中点盘(relative=3)与马克斯盘(relative=4)用独立段名，否则设置面无法分开勾选、导出文本也
+    # 不辨盘型。本仓此前无条件用普通名，两个变体的段因此恒缺。
+    _rel_mode = f"{payload.get('relative', 0)}"
+    _composite_title = "时空中点·合成图盘" if _rel_mode == "3" else "合成图盘"
+    _inner_title = "马克斯·影响图盘-星盘A" if _rel_mode == "4" else "影响图盘-星盘A"
+    _outer_title = "马克斯·影响图盘-星盘B" if _rel_mode == "4" else "影响图盘-星盘B"
     rendered: list[tuple[str, str]] = [("关系起盘信息", _join_lines(lines[1:]))]
     for title, body_lines in sections:
         rendered.append((title, _join_lines(body_lines) or _missing_detail_text(title)))
     rendered.append(
         (
-            "合成图盘",
+            _composite_title,
             embedded_chart_text(response)
             if isinstance(response.get("chart"), dict) and isinstance(response["chart"].get("objects"), list)
             else "无",
@@ -4482,18 +4489,18 @@ def _build_relative_snapshot_text(payload: dict[str, Any], response: dict[str, A
     )
     rendered.append(
         (
-            "影响图盘-星盘A",
+            _inner_title,
             embedded_chart_text(response["inner"])
             if isinstance(response.get("inner"), dict) and isinstance(response["inner"].get("chart"), dict)
-            else _missing_detail_text("影响图盘-星盘A"),
+            else _missing_detail_text(_inner_title),
         )
     )
     rendered.append(
         (
-            "影响图盘-星盘B",
+            _outer_title,
             embedded_chart_text(response["outer"])
             if isinstance(response.get("outer"), dict) and isinstance(response["outer"].get("chart"), dict)
-            else _missing_detail_text("影响图盘-星盘B"),
+            else _missing_detail_text(_outer_title),
         )
     )
     # 关系量化（v3.3.1）：契合分数 + 顺畅/张力连接，源 AstroRelative.js Score 页三段。
@@ -6108,7 +6115,7 @@ class HorosaSkillService:
             return enriched
         return response_data
 
-    def _attach_bazi_geju(self, tool_name: str, response_data: dict[str, Any]) -> dict[str, Any]:
+    def _attach_bazi_geju(self, tool_name: str, response_data: dict[str, Any], payload: dict[str, Any] | None = None) -> dict[str, Any]:
         if tool_name not in self._BAZI_GEJU_TOOLS or not isinstance(response_data, dict):
             return response_data
         bazi = response_data.get("bazi")
@@ -6116,7 +6123,19 @@ class HorosaSkillService:
         if not isinstance(fc, dict):
             return response_data
         try:
-            geju = self.js_client.run("bazi_geju", {"fourColumns": fc})
+            # 传 birth 让 JS 侧用 vendored 本地引擎补算 fenYe（[月令司令（分野）] 要节后日数，
+            # 后端 fourColumns 里没有）。给不出出生资料时该段自然缺席。
+            birth = None
+            fields = payload or {}
+            if fields.get("date"):
+                birth = {
+                    "date": fields.get("date"),
+                    "time": fields.get("time"),
+                    "gender": fields.get("gender"),
+                    "after23NewDay": fields.get("after23NewDay"),
+                    "lateZiHourUseNextDay": fields.get("lateZiHourUseNextDay"),
+                }
+            geju = self.js_client.run("bazi_geju", {"fourColumns": fc, "birth": birth})
             text = geju.get("snapshot_text") if isinstance(geju, dict) else None
             if isinstance(text, str) and text.strip():
                 enriched = dict(response_data)
@@ -8563,7 +8582,7 @@ class HorosaSkillService:
                 response_data = self._attach_classical_analysis(tool_name, input_normalized, response_data)
                 response_data = self._attach_jyotish_sections(tool_name, response_data)
                 response_data = self._attach_calendar_extras(tool_name, input_normalized, response_data)
-                response_data = self._attach_bazi_geju(tool_name, response_data)
+                response_data = self._attach_bazi_geju(tool_name, response_data, input_normalized)
                 response_data = self._attach_relative_score(tool_name, input_normalized, response_data)
                 response_data = _attach_export_contract(tool_name, input_normalized, response_data)
                 summary = _generic_summary(tool_name, response_data)
