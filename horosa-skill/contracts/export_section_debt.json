@@ -5,10 +5,10 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 226,
+    "missing_sections": 221,
     "extra_sections": 44,
     "absent_keys": 8,
-    "keys_with_debt": 52
+    "keys_with_debt": 51
   },
   "keys": {
     "acg": {
@@ -494,16 +494,6 @@
       "missing": [
         "开钥",
         "组合读法"
-      ],
-      "extra": []
-    },
-    "tieban": {
-      "missing": [
-        "框架·流派刻制",
-        "框架·考刻六亲",
-        "框架·八卦滚",
-        "框架·批断顺序",
-        "框架·借用子系统"
       ],
       "extra": []
     },

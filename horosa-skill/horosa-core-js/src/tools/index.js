@@ -21,8 +21,10 @@ import { runGuice } from './guice.js';
 import { runZhengChuan } from './zhengchuan.js';
 import { runIndiaJyotish } from './indiaJyotish.js';
 import { runYanqinYanfa } from './yanqinYanfa.js';
+import { runTiebanFramework } from './tiebanFramework.js';
 
 const TOOL_RUNNERS = {
+  tieban_framework: runTiebanFramework,
   yanqin_yanfa: runYanqinYanfa,
   india_jyotish: runIndiaJyotish,
   qimen: runQimen,

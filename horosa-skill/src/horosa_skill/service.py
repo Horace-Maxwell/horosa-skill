@@ -7281,6 +7281,27 @@ class HorosaSkillService:
                 code="transport.shenshu_snapshot_unavailable",
                 details={"technique": key, "endpoint": endpoint, "engine": response.get("engine") if isinstance(response, dict) else None},
             )
+        # 铁板「框架推演层」五段：kinastro 后端出盘面与条文，刻分/三元/八卦滚这层是上游前端按四柱
+        # 本地推演的。后端响应里的 pillars 即入参，失败只是这几段不出。
+        if key == "tieban":
+            try:
+                parts = _split_birth_ymdhm(payload)
+                framework = self.js_client.run(
+                    "tieban_framework",
+                    {
+                        "pillars": (response or {}).get("pillars") if isinstance(response, dict) else None,
+                        "birthYear": parts.get("year"),
+                        "minute": parts.get("minute", 0),
+                        "gender": payload.get("gender"),
+                        "school": (payload.get("options") or {}).get("school"),
+                        "keSystem": (payload.get("options") or {}).get("keSystem"),
+                    },
+                )
+                extra = f"{(framework or {}).get('text') or ''}".strip()
+                if extra:
+                    snapshot_text = f"{snapshot_text}\n{extra}".strip()
+            except Exception as exc:  # noqa: BLE001 — 富化失败不影响盘面
+                logger.warning("tieban framework snapshot failed: %s", exc)
         # 演禽「演法」五段（流派/起禽/择日/占卜/投胎）：kinastro 后端不产，它们是上游前端按出生四数
         # 本地推演的（yanqin/yanqinSnapshot.js），与盘面互补。追加在后端快照之后，失败只是这几段不出。
         if key == "xianqin":
