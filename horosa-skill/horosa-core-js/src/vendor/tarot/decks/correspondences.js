@@ -120,3 +120,66 @@ export function majorElement(corr){
 	if(corr.astro && SIGN_ELEMENT[corr.astro]){ return SIGN_ELEMENT[corr.astro]; }
 	return null;
 }
+
+// —— 对应叠层补全（卡巴拉质点 / 路径连质点 / Ace 象限 / 花色↔极性季节扑克）——
+// 数据源:古典对应体系(生命之树 10 质点、22 路径、天界象限、四花色社会/元素属性),公有领域体系事实。
+
+// 卡巴拉十质点 Sephiroth:序号 = 小牌 Ace–10 的对应(每花色一套);name/中文 + 生命之树标准坐标(x,y∈[0,1],供 G6 可视化)。
+export const SEPHIROTH = {
+	1: { name: 'Kether', cn: '王冠', x: 0.5, y: 0.05 },
+	2: { name: 'Chokmah', cn: '智慧', x: 0.74, y: 0.18 },
+	3: { name: 'Binah', cn: '理解', x: 0.26, y: 0.18 },
+	4: { name: 'Chesed', cn: '仁慈', x: 0.74, y: 0.40 },
+	5: { name: 'Geburah', cn: '严厉', x: 0.26, y: 0.40 },
+	6: { name: 'Tiphareth', cn: '美', x: 0.5, y: 0.53 },
+	7: { name: 'Netzach', cn: '胜利', x: 0.74, y: 0.72 },
+	8: { name: 'Hod', cn: '荣耀', x: 0.26, y: 0.72 },
+	9: { name: 'Yesod', cn: '根基', x: 0.5, y: 0.84 },
+	10: { name: 'Malkuth', cn: '王国', x: 0.5, y: 0.97 },
+};
+// 小牌数字 → Sephira 文本(Ace=Kether…10=Malkuth)
+export function sephiraLabel(n){ const s = SEPHIROTH[n]; return s ? `${s.name} ${s.cn}` : null; }
+// 宫廷牌 → 质点(YHVH 四界):Knight/RWS-King=Chokmah、Queen=Binah、Prince/RWS-Knight=Tiphareth、Princess/RWS-Page=Malkuth
+export const COURT_SEPHIRA = { king: 2, queen: 3, knight: 6, page: 10 };
+
+// 大牌路径连接的两质点(「连接质点」列;变体 A=Golden Dawn)。键=sid,值=[质点号a, 质点号b]。
+export const PATH_JOIN = {
+	the_fool: [1, 2], the_magician: [1, 3], high_priestess: [1, 6], the_empress: [2, 3],
+	the_emperor: [2, 6], the_hierophant: [2, 4], the_lovers: [3, 6], the_chariot: [3, 5],
+	strength: [4, 5], the_hermit: [4, 6], wheel_of_fortune: [4, 7], justice: [5, 6],
+	hanged_man: [5, 8], death: [6, 7], temperance: [6, 9], the_devil: [6, 8],
+	the_tower: [7, 8], the_star: [7, 9], the_moon: [7, 10], the_sun: [8, 9],
+	judgement: [8, 10], the_world: [9, 10],
+};
+// 变体 B(托特 Tzaddi/Heh 互换):星座不变、字母+路径整对对调 → Emperor 走 Star 路径、Star 走 Emperor 路径。
+export const PATH_JOIN_VARIANT_B = { the_emperor: [7, 9], the_star: [2, 6] };
+export function pathJoin(sid, variant){
+	if(variant === 'B' && PATH_JOIN_VARIANT_B[sid]){ return PATH_JOIN_VARIANT_B[sid]; }
+	return PATH_JOIN[sid] || null;
+}
+
+// 四张 Ace / 四位 Princess 守护的 90° 天界象限(三星座 + 季节起点)。键=花色。
+export const ACE_QUADRANT = {
+	wands: { signs: '巨蟹–狮子–处女', season: '夏至' },
+	cups: { signs: '天秤–天蝎–射手', season: '秋分' },
+	swords: { signs: '摩羯–水瓶–双鱼', season: '冬至' },
+	pentacles: { signs: '白羊–金牛–双子', season: '春分' },
+};
+
+// 花色 ↔ 极性 / 季节方位 / 扑克花色(通用框架;季节非硬规则,仅占卜参考)。键=花色。
+export const SUIT_POLARITY = { wands: '阳·主动', cups: '阴·接受', swords: '阳·主动', pentacles: '阴·接受' };
+export const SUIT_SEASON = { wands: '南·春', cups: '西·夏', swords: '东·秋', pentacles: '北·冬' };
+export const SUIT_PLAYING_CARD = { wands: '♣ Clubs', cups: '♥ Hearts', swords: '♠ Spades', pentacles: '♦ Diamonds' };
+export const SUIT_ESTATE = { wands: '农民 Peasants', cups: '教士 Clergy', swords: '贵族 Nobility', pentacles: '商人 Merchants' };
+
+// 36 旬星「大致日期」段（对应 DECAN 的 suit/rank；供计时法附日期）。DECAN_DATE[suit][rank 2..10]。
+export const DECAN_DATE = {
+	wands: { 2: '03-21~03-30', 3: '03-31~04-10', 4: '04-11~04-20', 5: '07-22~08-01', 6: '08-02~08-11', 7: '08-12~08-22', 8: '11-23~12-02', 9: '12-03~12-12', 10: '12-13~12-21' },
+	cups: { 2: '06-21~07-01', 3: '07-02~07-11', 4: '07-12~07-21', 5: '10-23~11-01', 6: '11-02~11-12', 7: '11-13~11-22', 8: '02-19~02-29', 9: '03-01~03-10', 10: '03-11~03-20' },
+	swords: { 2: '09-23~10-02', 3: '10-03~10-12', 4: '10-13~10-22', 5: '01-20~01-29', 6: '01-30~02-08', 7: '02-09~02-18', 8: '05-21~05-31', 9: '06-01~06-10', 10: '06-11~06-20' },
+	pentacles: { 2: '04-21~04-30', 3: '05-01~05-10', 4: '05-11~05-20', 5: '08-23~09-01', 6: '09-02~09-11', 7: '09-12~09-22', 8: '12-22~12-30', 9: '12-31~01-09', 10: '01-10~01-19' },
+};
+export function decanDate(card){
+	if(!card || card.court || !card.suit || !(card.number >= 2 && card.number <= 10)){ return null; }
+	return (DECAN_DATE[card.suit] && DECAN_DATE[card.suit][card.number]) || null;
+}

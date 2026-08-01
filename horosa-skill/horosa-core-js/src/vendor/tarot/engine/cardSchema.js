@@ -6,7 +6,35 @@
 import {
 	SUIT_NAME, SUIT_CN, PIP_NAME_EN, PIP_NAME_CN, COURT_NAME, COURT_CN,
 	NUM_OVERRIDE, SIGN_CN, PLANET_CN, ELEMENT_EN_CN, CONTINENTAL_HEBREW,
+	SEPHIROTH, sephiraLabel, pathJoin, ACE_QUADRANT, COURT_SEPHIRA,
 } from '../decks/correspondences.js';
+import { reversedText } from './reversalModes.js';
+
+// 对应叠层后缀（G3）：仅在 UI「显示对应」开启时追加，故经 opts.showCorrespondences 门控——
+// reportText 不传该 opts → [逐牌详解] 占象列逐字节不变（reportTextTable fixture 稳定）。
+export function correspondenceSuffix(card, variant){
+	if(!card){ return ''; }
+	if(card.arcana === 'major'){
+		const j = pathJoin(card.sid, variant);
+		if(!j){ return ''; }
+		const a = SEPHIROTH[j[0]];
+		const b = SEPHIROTH[j[1]];
+		return (a && b) ? ` · 路径连 ${a.name}–${b.name}` : '';
+	}
+	if(card.number === 1){
+		const q = ACE_QUADRANT[card.suit];
+		return ` · ${sephiraLabel(1)}${q ? ` · 象限 ${q.signs}(${q.season})` : ''}`;
+	}
+	if(card.number !== null && card.number !== undefined && !card.court){
+		const lbl = sephiraLabel(card.sephira);
+		return lbl ? ` · ${lbl}` : '';
+	}
+	if(card.court){
+		const lbl = sephiraLabel(COURT_SEPHIRA[card.court]);
+		return lbl ? ` · ${lbl}` : '';
+	}
+	return '';
+}
 
 // deck 的 name_key(各派命名取哪一套)。未注册的 deck 回落 rws。
 export function deckNameKey(deck){
@@ -17,8 +45,13 @@ export function deckNameKey(deck){
 export function cardNumber(card, deck){
 	if(card.arcana !== 'major'){ return null; }
 	const ov = NUM_OVERRIDE[card.sid];
+	if(!ov){ return card.number; }
 	const deckId = (deck && deck.id) || 'rws';
-	if(ov && ov[deckId] !== undefined){ return ov[deckId]; }
+	if(ov[deckId] !== undefined){ return ov[deckId]; }
+	// [X1] 换号随【命名体系】走:wirth/egyptian/visconti 等 nameKey='tdm' 的牌组按大陆序
+	// (正义8·力量11),此前按 deck.id 查表(表内无其 id)恒回落 RWS 序,与其自declared命名矛盾。
+	const nk = deckNameKey(deck);
+	if(ov[nk] !== undefined){ return ov[nk]; }
 	return card.number;
 }
 
@@ -100,12 +133,41 @@ export function astroLine(card, deck, variantOverride){
 	return `${card.courtEie} · ${card.courtSpan}`;
 }
 
-// card → 元素(尊位用):自带 element;大牌无 element 时经占星星座推。
-export function cardElement(card){
-	if(card.element){ return card.element; }
-	if(card.arcana === 'major' && card.astro && SIGN_CN[card.astro]){
-		const SIGN_ELEMENT = { Aries: 'fire', Leo: 'fire', Sagittarius: 'fire', Taurus: 'earth', Virgo: 'earth', Capricorn: 'earth', Gemini: 'air', Libra: 'air', Aquarius: 'air', Cancer: 'water', Scorpio: 'water', Pisces: 'water' };
-		return SIGN_ELEMENT[card.astro] || null;
+// 双轨牌义统一取值（G5）：system='manual' 走逐牌唯一义（meaningsManual 字符串）,'waite' 走「数字原型×花色」派生义
+// （meanings 关键词数组，join 显示）。默认 manual（手册逐牌义为权威主轴）。返回统一为显示字符串。
+// reversalMode（G2）：逆位时按五模式动态生成文案（默认 'stored' 用预存逆位义，零回归）。
+export function cardMeaning(card, reversed, system, reversalMode){
+	if(!card){ return ''; }
+	const sys = system === 'waite' ? 'waite' : 'manual';
+	let up;
+	let rev;
+	if(sys === 'manual' && card.meaningsManual){
+		up = card.meaningsManual.up || '';
+		rev = card.meaningsManual.rev || '';
+	}else{
+		const m = card.meanings || {};
+		const upArr = (m.up || card.keywords_upright) || [];
+		const revArr = (m.rev || card.keywords_reversed) || [];
+		up = Array.isArray(upArr) ? upArr.join('、') : String(upArr || '');
+		rev = Array.isArray(revArr) ? revArr.join('、') : String(revArr || '');
 	}
-	return null;
+	if(!reversed){ return up; }
+	if(reversalMode && reversalMode !== 'stored'){ return reversedText(up, rev, reversalMode); }
+	return rev;
+}
+
+// card → 元素(尊位用):自带 element;大牌无 element 时经占星星座推。
+// swap（G4 火/风互换·少数派 分歧点1）：仅小牌花色层——Wands 火→风、Swords 风→火（Cups/Pentacles 不变；大牌占星元素不动）。
+export function cardElement(card, swap){
+	let e = null;
+	if(card.element){ e = card.element; }
+	else if(card.arcana === 'major' && card.astro && SIGN_CN[card.astro]){
+		const SIGN_ELEMENT = { Aries: 'fire', Leo: 'fire', Sagittarius: 'fire', Taurus: 'earth', Virgo: 'earth', Capricorn: 'earth', Gemini: 'air', Libra: 'air', Aquarius: 'air', Cancer: 'water', Scorpio: 'water', Pisces: 'water' };
+		e = SIGN_ELEMENT[card.astro] || null;
+	}
+	if(swap && card.arcana !== 'major'){
+		if(card.suit === 'wands' && e === 'fire'){ return 'air'; }
+		if(card.suit === 'swords' && e === 'air'){ return 'fire'; }
+	}
+	return e;
 }

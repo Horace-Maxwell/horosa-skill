@@ -8,6 +8,7 @@ import { dignify } from './dignities.js';
 import { synthesize } from './verdict.js';
 import { cardElement } from './cardSchema.js';
 import { grandTableau, box9, pairString } from './lenormandReading.js';
+import { openingOfKey } from './openingOfKey.js';
 
 // 解析有效设置:用户值优先,缺省回落 deck 默认。
 export function resolveSettings(deck, settings){
@@ -20,6 +21,9 @@ export function resolveSettings(deck, settings){
 		sig: s.sig || { mode: 'none' },
 		verdictMode: s.verdictMode || 'majority',
 		birth: s.birth || null,
+		meaningSystem: s.meaningSystem === 'waite' ? 'waite' : 'manual', // G5 双轨,默认逐牌义
+		reversalMode: s.reversalMode || 'stored', // G2 逆位五模式,默认预存
+		suitElementSwap: !!s.suitElementSwap, // G4 火/风互换,默认 off
 	};
 }
 
@@ -58,7 +62,7 @@ export function buildReading(deckId, spreadType, seed, settings){
 
 	// 元素尊位(线性邻接)
 	if(eff.dignities){
-		const elems = draws.map((d) => (d.card ? cardElement(d.card) : null));
+		const elems = draws.map((d) => (d.card ? cardElement(d.card, eff.suitElementSwap) : null));
 		draws.forEach((d, i) => {
 			const le = i > 0 ? elems[i - 1] : null;
 			const re = i < draws.length - 1 ? elems[i + 1] : null;
@@ -67,6 +71,11 @@ export function buildReading(deckId, spreadType, seed, settings){
 	}
 
 	const spread = SPREADS[type];
+	// G7 开钥:opening_of_key + 支持 ook 的牌组(gd/thoth)+ 已选指示牌 → 五操作挂 reading.ook。
+	let ook = null;
+	if(type === 'opening_of_key' && deck.caps && deck.caps.ook){
+		ook = openingOfKey(cards, sigId, seed, { table: eff.ookTable });
+	}
 	// Lenormand 读法:Grand Tableau / 9 宫盒 / 成句 分析挂到 reading.lenormand
 	let lenormand = null;
 	if(deck.caps && deck.caps.readingMethod === 'lenormand'){
@@ -81,8 +90,9 @@ export function buildReading(deckId, spreadType, seed, settings){
 		settings: eff,
 		significator: sigCard ? { sid: sigCard.sid, cardId: sigCard.id, card: sigCard } : null,
 		draws,
-		summary: synthesize(draws),
+		summary: synthesize(draws, eff.suitElementSwap),
 		lenormand,
+		ook,
 	};
 }
 

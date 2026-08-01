@@ -133,6 +133,11 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   而非分号——上游多数常量**不带结尾分号**，按分号切会把后续所有声明卷进来（`Identifier already
   declared`）；② 必须保持**上游原序**，`LIST_URANIAN` 这类聚合常量引用了排在其后的符号，重排即
   `ReferenceError: before initialization`。宁可逐值抽取也不手写猜值——这类表以 AstroConst.* 为键。
+- **重 vendor 一个技法要按「上游文件清单」而不是本地清单**：按本地 `ls` 拼参数会漏掉上游**新增**的
+  文件（tarot 的 `openingOfKey.js`/`reversalModes.js` 就这样被漏了），随后重 vendor 报「0 个文件变化」
+  却依旧运行失败——同名文件也可能不同源。判据：报 0 变化但功能仍缺 = 清单取错了，不是已同源。
+- **shell 里 `cd` 到上游树后不要再跑仓内脚本**：相对路径会解析到上游目录（本轮出现过
+  `can't open .../Horosa-Public/.../scripts/revendor_core_js.py`）。命令一律从包根起。
 - **回填铁律的实操顺序**：先 live 跑出**实产段名**，再拿它与上游 preset 做三向差（都有 → 进 preset；
   上游有实产无 → preset+optional 双登记；实产有上游无 → 查是 skill 自有基础段还是占位名族）。
   绝不能照抄上游 preset 了事——那会造出死条目，让每次真实导出都报 missing。

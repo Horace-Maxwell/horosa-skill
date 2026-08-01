@@ -1,6 +1,7 @@
 // 牌组注册表:统一 Deck schema + capabilities + 各 deck 注册。caps 驱动 UI 条件渲染与读法分派。
 // 全部流派(可变张数 22/36/52/74/78/97、可变结构、可变读法)都在此登记;P0/P1 先登记 4 大核心 78 张。
 import { CORE78, CORE_DECKS } from '../decks/core78.js';
+import { TAROT_SPREADS } from './spreads.js';
 
 const REGISTRY = {};
 const GROUPS = []; // [{ group, items:[deckId] }]
@@ -38,7 +39,11 @@ export function listDeckGroups(){
 export function listDeckIds(){ return Object.keys(REGISTRY); }
 
 // 默认能力(4 核心 78 张):有大小阿卡纳、78 张、塔罗读法、可指示牌、可变体
+// G1:补全牌阵大全(20+ 新阵,78 张核心牌组全开放);G7:开钥(opening_of_key)仅 golden_dawn/thoth 开放(+ ook 标记驱动专属分堆视图)。
 function tarot78Caps(deck){
+	const spreads = TAROT_SPREADS.slice();
+	const ook = deck.id === 'golden_dawn' || deck.id === 'thoth';
+	if(ook){ spreads.push('opening_of_key'); }
 	return {
 		reversals: !!deck.usesReversals,
 		dignities: !!deck.dignities,
@@ -47,7 +52,8 @@ function tarot78Caps(deck){
 		numOverride: true,
 		embeddedPlayingCard: false,
 		readingMethod: 'tarot',
-		spreads: ['single', 'three', 'three_sit', 'horseshoe', 'celtic', 'relation', 'tree_of_life', 'zodiac', 'annual', 'croix'],
+		ook,
+		spreads,
 	};
 }
 

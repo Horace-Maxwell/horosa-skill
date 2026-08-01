@@ -3,10 +3,12 @@
 // + 富对应字段(sid/arcana/court/names/hebrew/astro/path/decan*/courtEie/courtSpan/polarity/countingValue)。
 import {
 	SUITS, SUIT_ELEMENT, MAJORS_CORR, DECAN, COURT_ASTRO, COURT_ORDER,
+	PATH_JOIN, COURT_SEPHIRA,
 } from './correspondences.js';
 import {
 	SUIT_KW, MAJOR_KW, NUM_KW, COURT_KW, ACE_KW,
 } from './meanings78.js';
+import { MAJOR_MANUAL, PIP_MANUAL, COURT_MANUAL } from './manualMeanings.js';
 
 // 花色符号 + 中文前缀(facade 兼容:沿用现有 静态 name_cn 口径)
 export const SUIT_META = {
@@ -52,11 +54,12 @@ export function buildCore78(){
 			name_cn: m.cn, name_en: m.rws,
 			names: { rws: m.rws, thoth: m.thoth, tdm: m.tdm, golden_dawn: m.rws },
 			element: m.elem || '', symbol: SUIT_META.major.symbol,
-			hebrew: m.heb, astro: m.astro, path: m.path,
+			hebrew: m.heb, astro: m.astro, path: m.path, join: PATH_JOIN[m.id] || null, sephira: null,
 			decanTitle: null, decanPlanet: null, decanSign: null, courtEie: null, courtSpan: null,
 			polarity: majorPolarity(m.id), countingValue: majorCounting(m.id),
 			keywords_upright: kw.up, keywords_reversed: kw.rev,
 			meanings: { up: kw.up, rev: kw.rev },
+			meaningsManual: MAJOR_MANUAL[m.id] || null,
 		});
 	});
 	SUITS.forEach((suit, si) => {
@@ -104,11 +107,13 @@ export function buildCore78(){
 				arcana: 'minor', suit, number: rank, court,
 				name_cn: `${meta.cnPrefix}${RANK_CN[rank]}`, name_en: `${RANK_EN[rank]} of ${SUIT_EN[suit]}`,
 				names: null, element: meta.element, symbol: meta.symbol,
-				hebrew: null, astro: null, path: null,
+				hebrew: null, astro: null, path: null, join: null,
+				sephira: court ? COURT_SEPHIRA[court] : rank,
 				decanTitle, decanPlanet, decanSign, courtEie, courtSpan,
 				polarity, countingValue,
 				keywords_upright: up, keywords_reversed: rev,
 				meanings: { up, rev },
+				meaningsManual: court ? (COURT_MANUAL[suit] && COURT_MANUAL[suit][court]) || null : (PIP_MANUAL[suit] && PIP_MANUAL[suit][rank]) || null,
 			});
 		}
 	});

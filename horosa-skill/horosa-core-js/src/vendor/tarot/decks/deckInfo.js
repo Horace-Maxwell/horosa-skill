@@ -1,0 +1,103 @@
+// 各流派简介（身份/历史/图义/小牌读法/与他派差异）——公有领域体系事实，中性措辞，仅公有署名。
+// 供左栏「流派简介」折叠面板随 deckId 实时切换。键=deckId（对齐 deckRegistry）。
+export const DECK_INFO = {
+	tdm: {
+		identity: '西方塔罗的祖型。由民间木刻游戏牌演化的占卜牌,非某人设计的作者牌,而是一个印刷传统/谱系(pattern)。Continental神秘学派与现代TdM直读派的共同根。78张=22大牌(Atouts)+56小牌。',
+		history: '定型于约1650–1760法国里昂、马赛地区印牌作坊,如Noblet(1650)、Dodal(1701)、Conver(1760)——后者为复原TdM最常用母本。',
+		visual: '重视人物朝向、视线、手势指向(牌阵中"看向哪张牌"有意义);经典仅用有限几色(红、蓝、黄、肉、绿),被神秘学派赋义(蓝=灵性/水、红=行动/火);小牌无场景图是与RWS最大视觉差异。',
+		pips: '小牌为几何排列的花色符号(pips),无人物场景;解读靠数字学×花色元素×牌阵位置×邻牌,而非读图;多不用逆位,或以"花色能量受阻"表达逆位含义。',
+		differences: '对RWS:8/11相反(Justice=VIII、Strength=XI),小牌无场景图,用大陆式字母(Aleph=魔术师),宗教意象(女教皇/教皇);习用加法式罗马数字(IIII/VIIII/XIIII);愚者无编号。对Thoth:同为Justice在8位,但无占星/卡巴拉叠层。',
+	},
+	rws: {
+		identity: '全球最主流的塔罗范式,几乎所有现代克隆牌/灵感牌都基于其图义系统。78张=22大牌+56小牌;大牌名英国神秘学化(女教皇→High Priestess、教皇→Hierophant)。',
+		history: '1909年伦敦Rider & Co.出版;设计/概念Arthur Edward Waite(金色黎明成员),全78张由画师Pamela Colman Smith(PCS)绘制;官方牌义见Waite《The Pictorial Key to the Tarot》(1910/1911)。',
+		visual: 'PCS视觉密码——人物姿态、色彩、背景元素、花卉(如魔术师玫瑰百合)皆有义;每张为一个定格瞬间,鼓励代入式解读;大牌细节承载金色黎明象征(女祭司B/J双柱+石榴幔帐、命运之轮四活物+TARO/ROTA+YHVH、教皇双钥匙)。',
+		pips: '核心创新——56张小牌全部配叙事场景插画,可纯靠读图解牌(如三剑穿心=心碎、十杖负重、八杯离去=放弃/寻找);亦可叠加数字学与旬星占星。',
+		differences: '对TdM:8/11相反(Strength=VIII、Justice=XI),小牌有场景图,英国神秘学命名(High Priestess/Hierophant/Pentacles),金色黎明字母(愚者=Aleph)。对Thoth:编号逻辑一致,但保留Strength/Justice之名,写实叙事,字母星象刻意隐藏不印。',
+	},
+	thoth: {
+		identity: '高度系统化的神秘学作者牌,融合金色黎明体系+Thelema(泰勒玛)、占星、卡巴拉、易经、炼金术。78张=22大牌+56小牌;宫廷用Knight/Queen/Prince/Princess。',
+		history: '1938–1943绘制;设计/文本Aleister Crowley(前金色黎明成员、Thelema创立者),画师Lady Frieda Harris;配套《The Book of Thoth》(1944)先出,牌至1969年(两人均已故)才正式印行。',
+		visual: 'Frieda Harris的投影几何/未来主义画风;强烈用色对应金色黎明四色阶(King/Queen/Prince/Princess scales);大牌承载Thelema符号(如The Aeon以荷鲁斯/努特/哈迪特取代基督教审判图)。',
+		pips: '小牌有抽象象征插画(几何化、能量化,非写实场景),印"行星in星座"+"Lord of…"标题;读法=数字(Sephira)×元素×行星-星座(旬星)×标题语义,如5剑="Defeat"(Venus in Aquarius)、10剑="Ruin"(Sun in Gemini)。',
+		differences: '对RWS:编号逻辑同(8=Adjustment、11=Lust),但多处改名(Magus/Priestess/Adjustment/Lust/Art/Aeon/Universe/Disks),图风抽象,占星-卡巴拉显式印牌,有Tzaddi/Heh互换(变体B:星座不动、字母对调)。对TdM:仅Justice在8位近似(但此为Adjustment),余体系全异。',
+	},
+	golden_dawn: {
+		identity: '现代西方塔罗的"算法母层",是体系本身而非某副市售牌;RWS与Thoth皆为其"前端实现"。把塔罗与卡巴拉生命之树、希伯来字母、占星(行星/星座/旬星)、四元素焊成统一系统。78张;宫廷用King(骑乘者)/Queen/Prince/Princess。',
+		history: '源自英国Hermetic Order of the Golden Dawn(1888创立)内部教材,核心文本"Book T – The Tarot"(归于MacGregor Mathers,据称源自Cipher Manuscripts);会内有成员手绘临摹的仪式用牌,现代有Wang/Regardie复原版。',
+		visual: '高度象征化的会内仪式牌;小牌带"Lord of…"标题与行星×星座(旬星);承载生命之树10质点(Kether…Malkuth)+22路径符号;愚者=Aleph起,12简单字母配12星座、7双字母配7行星、3母字母配三元素,占星对应自洽。',
+		pips: '小牌Ace–10对应同序数Sephira(Ace=Kether…10=Malkuth),带"Lord of…"标题与旬星;核心为Elemental Dignities邻牌算法——同元素强化,火风/水土友好,火水/风土敌对,火土/风水中立,看牌参考左右邻牌元素定强弱善恶(逆位的替代)。',
+		differences: '是体系本身而非市售牌,RWS/Thoth都是其"发行版"。复原要点:愚者=Aleph起字母-占星全对应、生命之树10质点+22路径、36旬星配小牌+Lord标题、宫廷YHVH/四界+黄道度数、Elemental Dignities邻牌算法、8=Strength/11=Justice占星正位。',
+	},
+	wirth: {
+		identity: 'Continental(大陆)神秘学派代表,定位为冥想/象征牌;仅22张大牌,无小牌。',
+		history: 'Oswald Wirth,1889年首版22大牌,1926/1927修订并出《Le Tarot des imagiers du Moyen Âge》。',
+		visual: '图基于TdM但精修;融入炼金、占星、共济会象征。',
+		pips: '无小牌(仅22张大牌),不适用小牌读法;整体定位为象征/冥想牌。',
+		differences: '仅22张大牌、无小牌;用Continental字母(魔术师=Aleph,愚者=Shin置20–21间);8/11为Continental传统(Justice=8、Strength=11);TdM系图像但精修;不用逆位、不用元素尊位。',
+	},
+	bota: {
+		identity: 'B.O.T.A.(Builders of the Adytum)学派牌,基于RWS/金色黎明并作修正;78张;黑白线稿鼓励学习者亲手上色。',
+		history: 'Paul Foster Case(前金色黎明系)于1920s–30s创B.O.T.A.学派;牌由Case与Jessie Burns Parke绘,约1931。',
+		visual: '黑白线稿待上色(按Case的颜色-声音对应/color-sound scales);牌面印希伯来字母(显式卡巴拉);大牌细节修订(女祭司、愚者、世界的象征校正)。',
+		pips: '全场景小牌(承RWS骨架);逆位可选、元素尊位可选。',
+		differences: 'RWS骨架+印字母+黑白待上色+Case色音对应表;采用金色黎明属性(愚者=Aleph);8/11随金色黎明(Strength=8、Justice=11);宫廷用Page/Knight/Queen/King。',
+	},
+	egyptian: {
+		identity: 'Continental衍生的"埃及式"塔罗系列,以埃及意象+占星-数字叠层重构22大牌(部分为纯文本描述,部分有实牌);与金色黎明不兼容。',
+		history: 'Paul Christian(1863/1870)于《Histoire de la magie》虚构"埃及大奥义"(无实物牌);Falconnier–Wegener(1896)据其描述绘出埃及风22大牌;Papus《Tarot of the Bohemians》(1889)系统化Continental体系;C.C. Zain/Brotherhood of Light为20世纪美国占星学派埃及式重绘。',
+		visual: '埃及风格意象;22大牌起"Arcana"式名称与埃及描述;占星-数字叠层。',
+		pips: '小牌以四字神名YHVH套小牌+数字学叠层(Papus系);具体逐牌读法依所选重构本,待校。',
+		differences: '用Continental字母(愚者=Shin);占星-数字叠层+埃及意象;与金色黎明不兼容。',
+	},
+	etteilla: {
+		identity: '史上第一个职业塔罗系统,最早系统化每张牌正逆位含义;体系自成一格,与金色黎明不兼容。含78张Grand Etteilla(Livre de Thot)与32张Petit Etteilla(皮克牌版)。',
+		history: 'Jean-Baptiste Alliette(笔名Etteilla,姓氏倒拼),18世纪法国,史上第一位职业塔罗占卜师。',
+		visual: '大牌全部重排、重命名、重编号(自认"埃及式");前8张对应"创世七日"宇宙主题(启蒙/谈论/剥夺/旅程/夜/支持等)。',
+		pips: '首创每张牌droit(正)/renversé(逆)双义;逐牌义以某一复原版为准存表(不同重构本略有出入)。',
+		differences: '用0–77阿拉伯编号(似书页);大牌全部重命名重排(勿套TdM名);设男(Card 1 Le Questionnant)/女(Card 8 La Questionnante)双指示牌;首创逆位;不用元素尊位。',
+	},
+	lenormand: {
+		identity: '严格说非塔罗(结构、张数、读法皆不同),36张具象象征物神谕卡;无大/小阿卡纳之分,无逆位。',
+		history: '以拿破仑时代名占卜师Marie Anne Lenormand命名,实成形于其身后的"Game of Hope / Das Spiel der Hoffnung"(1799)棋牌。',
+		visual: '每张一个具体象征物(非抽象原型),多数版本角上嵌一张扑克牌(piquet 7–A)与小诗句;读图重人物/动物面朝方向(指示牌阵中所指对象)。',
+		pips: '无小牌概念;读法靠位置、邻接、名词×修饰组合成句(第一张为主题noun、后续修饰);有9张盒(3×3)、Grand Tableau(全36张,含宫位/镜像/跳马/远近/连线/四角);凶吉靠固定polarity+邻接修正,不解逆位。',
+		differences: '36张具象象征物;嵌扑克牌;不用大小阿卡纳、不用逆位、不用元素尊位(用镜像);Grand Tableau/宫位法为核心读法。',
+	},
+	kipper: {
+		identity: '德语区36张具名人物/情境神谕卡(如"主要男性""主要女性""好先生""假人");神谕卡结构自由,与78张塔罗并行。',
+		history: '德语区,19世纪。',
+		visual: '36张具名人物/情境牌;极重位置/朝向/距离,叙事literal(直白写实)。',
+		pips: '无小牌概念;用Grand Tableau,主牌(本人)定位后看上下左右;组合叙事。',
+		differences: '36张具象人物;重朝向/距离的literal叙事;不用8/11、字母、逆位、元素尊位;较Lenormand(象征物)更具名、较78张塔罗无体系叠层。',
+	},
+	sibilla: {
+		identity: '意大利19世纪"命运女神"神谕牌,52张(或类塔罗);意式日常占卜。',
+		history: '意大利,19世纪。',
+		visual: '场景化、情节化。',
+		pips: '待校',
+		differences: '52张(或类塔罗);场景化、情节化的意式日常占卜;与36张Lenormand/Kipper及78张塔罗并行的神谕卡。',
+	},
+	cartomancy: {
+		identity: '不用塔罗、仅用普通扑克的占卜体系,塔罗的"民间表亲";52张(+可选Joker/百搭·愚者)。',
+		history: '待校(地区变体多,须择一锁定)。',
+		visual: '花色对应♥Hearts≈Cups情感、♣Clubs≈Wands事业/运、♦Diamonds≈Pentacles金钱/消息、♠Spades≈Swords挑战;红牌偏吉、黑牌偏挑战。',
+		pips: '按牌义表读(如♥9=许愿牌、♠9=最凶/厄运);宫廷牌多按"人物"(花色定气质+点数定亲疏)读;可套用三张、十字、Grand Tableau。',
+		differences: '52张(+可选Joker);红吉黑凶;逆位视流派而定;与塔罗同构但无大阿卡纳与体系叠层。',
+	},
+	minchiate: {
+		identity: '塔罗最大扩展变体,佛罗伦萨97张=41张tarocchi/trionfi(含愚者Il Matto)+56小牌(宫廷含女侍Fante/Maid)。',
+		history: '佛罗伦萨扩展牌;精确编号序依佛罗伦萨标准。具体年代待校。',
+		visual: '顶端四张Star/Moon/Sun/World(名"号角/Fame声誉")居最高位(常不编号);新增12星座、4元素、审慎(Prudence)+信/望/爱三神学德等图序。',
+		pips: '56小牌为pips(几何符号),宫廷含女侍Maid;不用逆位、不用元素尊位。',
+		differences: '97张,比标准多约19张(4德+4元素+12星座);去掉女教皇La Papesse,低位大牌改为Grand Duke、东/西皇帝等世俗人物;不用金色黎明字母体系;8/11随J8/S11。',
+	},
+	visconti: {
+		identity: '15世纪米兰手绘金箔贵族订制牌;现存多副不全(约74张),部分含额外宫廷(女骑士/侍女Maid),张数与标准78不同。',
+		history: '15世纪米兰,手绘金箔(如Pierpont-Morgan-Bergamo本),现存多副部分缺失/后补。',
+		visual: '原牌无编号、无标题(号与名为后世所加);图像华贵、施金箔。',
+		pips: '小牌为pips(金箔几何符号,无场景图);不用逆位、不用元素尊位。',
+		differences: '约74张不全;原牌无编号无名;涉三种历史大牌顺序(A/B/C地区序:Ferrara-Bologna/Milan/Florence),尤其德性牌与世界/审判位次不同;复原须选定存世本与地区trump序。',
+	},
+};
+export function deckInfo(deckId){ return DECK_INFO[deckId] || null; }
