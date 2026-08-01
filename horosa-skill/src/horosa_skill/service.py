@@ -4756,11 +4756,26 @@ def _build_ziwei_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
             head = f"{pname}（{cat}）{broke}" if cat else f"{pname}{broke}"
             pattern_lines.append(f"{head}：{duan}" if duan else head)
 
+    # [来因宫]：与生年天干同干的宫（上游 ZiWeiMain.js:418-428 —— houses 按 ganzi 首字过滤年干，
+    # 排版 `宫名（干支）`、顿号连接）。纯查表，响应里 chart.yearGan 与 houses[].ganzi 都现成。
+    year_gan = f"{chart.get('yearGan') or ''}".strip() if isinstance(chart, dict) else ""
+    laiyin_lines: list[str] = []
+    if year_gan and isinstance(houses, list):
+        hits = [
+            f"{h.get('name') or ''}（{h.get('ganzi')}）"
+            for h in houses
+            if isinstance(h, dict) and f"{h.get('ganzi') or ''}".startswith(year_gan)
+        ]
+        if hits:
+            laiyin_lines.append("、".join(hits))
+
     blocks = [
         ("起盘信息", _join_lines(lines)),
         ("宫位总览", _join_lines(overview) or "无"),
         ("命中格局", _join_lines(pattern_lines) or "无"),
     ]
+    if laiyin_lines:
+        blocks.append(("来因宫", _join_lines(laiyin_lines)))
     return _render_snapshot_text(blocks)
 
 

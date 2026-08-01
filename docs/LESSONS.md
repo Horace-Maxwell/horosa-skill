@@ -409,6 +409,11 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   可改用已放行的 `/astroextra/prenatal_syzygy` 求「梅沙入境前最近一次朔」绕开新端点。
   记在这里是为了区分「不可得」与「可得但排期未到」—— 它属后者。
 
+- **`ziwei` 的 `[运限]` 与 `[流派叠层]`** —— 前者由用户勾选的大运/流年/流月组合驱动（`body.length === 0`
+  就整段不产，同 `bazi` 多运限）；后者由紫微流派开关驱动（`ZWEngineOptions.taiSuiRuGua` 等），本仓
+  尚未开放这组开关。两者都属**需新增显式入参的功能缺口**。同批的 `[来因宫]` 则**可得**（纯查表：
+  按生年天干筛同干宫，`chart.yearGan` 与 `houses[].ganzi` 响应里都现成），已于 v0.25 补上。
+
 - 对比一条**看起来像**排除项、实际不是的：`jieqi` 的 `[X3D盘]` 曾被我判为 3D 渲染而搁置，
   读码后发现上游 astro3d 页签走的是 `buildAstroSnapshotContent(one, flds, {headerless:true})`
   —— 与 `[X星盘]` 逐字同一份文本。**「名字里有 3D」不等于不可 headless**，一律以 builder 实际取数为准。

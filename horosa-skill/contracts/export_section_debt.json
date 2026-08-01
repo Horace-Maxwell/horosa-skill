@@ -5,7 +5,7 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 13,
+    "missing_sections": 12,
     "extra_sections": 30,
     "absent_keys": 0,
     "keys_with_debt": 24
@@ -163,7 +163,6 @@
     },
     "ziwei": {
       "missing": [
-        "来因宫",
         "运限",
         "流派叠层"
       ],
