@@ -3611,7 +3611,7 @@ def _build_jaynesprog_snapshot_text(response: dict[str, Any]) -> str:
     ])
 
 
-def _build_vedicprog_snapshot_text(response: dict[str, Any]) -> str:
+def _build_vedicprog_snapshot_text(response: dict[str, Any], payload: dict[str, Any] | None = None) -> str:
     # Port of 星阙 AstroVedicProgressions.buildVedicProgSnapshotText. response = {methods:[{method,positions}]}.
     methods = response.get("methods") if isinstance(response.get("methods"), list) else []
     sec = next((m for m in methods if isinstance(m, dict) and m.get("method") == "secondary"), methods[0] if methods else None)
@@ -3628,7 +3628,21 @@ def _build_vedicprog_snapshot_text(response: dict[str, Any]) -> str:
     for p in rows:
         deg, minute = _split_degree(p.get("signlon", p.get("lon")))
         lines.append(f"| {_astro_msg(p.get('id'))} | {_astro_msg(p.get('sign'))} {deg}˚{minute}分 |")
-    return _render_snapshot_text([("恒星推运（Vedic Sidereal）", "\n".join(lines))])
+    # 上游 preset 除技法主段外还列 [本命盘配置] 与 [时段盘配置 二次推运位置]；本命盘由
+    # _attach_predictive_chart_context 补拉（/predict/vedicprog 只回 methods），时段盘就是 methods
+    # 里的二次推运位置表 —— 它与主段同源，故这里复用同一批行，不重算。
+    sections: list[tuple[str, str]] = [("恒星推运（Vedic Sidereal）", "\n".join(lines))]
+    natal_wrap = _natal_chart_wrap(response)
+    if natal_wrap:
+        natal_lines = _natal_config_lines(natal_wrap)
+        if natal_lines:
+            sections.append(("本命盘配置", "\n".join(natal_lines)))
+    directed = [f"{_astro_msg(p.get('id'))}：{_astro_msg(p.get('sign'))} "
+                f"{_split_degree(p.get('signlon', p.get('lon')))[0]}˚{_split_degree(p.get('signlon', p.get('lon')))[1]}分"
+                for p in rows]
+    if directed:
+        sections.append(("时段盘配置 二次推运位置", "\n".join(directed)))
+    return _render_snapshot_text(sections)
 
 
 def _build_planetaryarc_snapshot_text(response: dict[str, Any], payload: dict[str, Any] | None = None) -> str:
@@ -5033,6 +5047,23 @@ def _natal_chart_wrap(response: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _natal_config_lines(chart_wrap: dict[str, Any]) -> list[str]:
+    """[本命盘配置]（内圈）：星与虚点 + 宫位宫头 两个子块（上游 AstroPrimaryDirectionChart.js:351-358）。"""
+    lines: list[str] = []
+    stars = _build_star_and_lot_position_lines(chart_wrap)
+    if stars:
+        lines.extend(["星与虚点", *stars])
+    cusps = _build_house_cusp_lines(chart_wrap)
+    if cusps:
+        lines.extend(["宫位宫头", *cusps])
+    return lines
+
+
+def _directed_config_lines(chart_wrap: dict[str, Any]) -> list[str]:
+    """[主限法盘配置]（外圈/时段盘）：同上两子块，取推导后的盘（上游 :359-366）。"""
+    return _natal_config_lines(chart_wrap)
+
+
 def _build_chart_info_lines(chart_wrap: dict[str, Any], payload: dict[str, Any]) -> list[str]:
     """[星盘信息] 段：盘面口径（经纬度 / 时区 / 黄道 / 宫制 / 盘型）。
 
@@ -5307,6 +5338,11 @@ def _build_pdchart_snapshot_text(payload: dict[str, Any], response: dict[str, An
                     ]
                 ),
             ),
+            # 上游这两段是「本命盘配置(内圈)」与「主限法盘配置(外圈/时段盘)」，各含 星与虚点 + 宫位宫头
+            # 两个子块（AstroPrimaryDirectionChart.js:351-366）。本仓原有的 主限法盘星体表格 / 主限法盘相位
+            # 是 skill-extra，保留在后面。
+            ("本命盘配置", _join_lines(_natal_config_lines(natal_wrap)) or "无"),
+            ("主限法盘配置", _join_lines(_directed_config_lines(pd_wrap)) or "无"),
             ("主限法盘星体表格", _join_lines(_chart_position_table_lines(pd_wrap)) or "无"),
             ("主限法盘相位", _join_lines(_build_aspect_section(pd_wrap)) or "无"),
             (
@@ -5897,7 +5933,7 @@ class HorosaSkillService:
     def _attach_predictive_chart_context(self, tool_name: str, payload: dict[str, Any], response: dict[str, Any]) -> dict[str, Any]:
         # planetaryarc 同属「本命 ↔ 时段两盘对照」形态（上游 preset 也列 [本命盘配置]/[时段盘配置]/[相位]），
         # 但 /predict/planetaryarc 只回时段盘 → 同样需要补拉本命盘。
-        if tool_name not in {"solarreturn", "lunarreturn", "solararc", "givenyear", "profection", "pd", "pdchart", "zr", "planetaryarc"}:
+        if tool_name not in {"solarreturn", "lunarreturn", "solararc", "givenyear", "profection", "pd", "pdchart", "zr", "planetaryarc", "vedicprog"}:
             return response
         enriched = dict(response)
         if "params" not in enriched:
@@ -7607,7 +7643,10 @@ class HorosaSkillService:
         # 恒星推运 Vedic (v2.5.0): /astroextra/progressions with zodiacal=1 (sidereal).
         remote_payload = {**payload, **self._progression_target(payload), "zodiacal": 1, "orb": payload.get("orb", 1.5)}
         response = self._call_remote("/astroextra/progressions", remote_payload)
-        snapshot_text = _build_vedicprog_snapshot_text(response)
+        # execution="local" 的工具不走统一出口的 _attach_predictive_chart_context（那一支只对
+        # remote 工具生效），所以这里显式补拉本命盘 —— [本命盘配置] 段要它。
+        response = self._attach_predictive_chart_context("vedicprog", payload, response)
+        snapshot_text = _build_vedicprog_snapshot_text(response, payload)
         return {
             "methods": response.get("methods", []),
             "raw": response,
