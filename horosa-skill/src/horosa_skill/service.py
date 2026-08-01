@@ -7992,6 +7992,20 @@ class HorosaSkillService:
         chart_response = self._call_remote("/chart", chart_payload)
         chart_response = self._attach_natal_extras("mundane", chart_response)
         head = "\n".join(["[世俗入宫]", f"入宫节气：{term}", f"年份：{year or '-'}", f"入宫时刻：{ingress_time}"])
+        # 世运卜卦（mundaneType='mundanehorary'）：上游对该盘型走的是「问事时刻的普通 /chart →
+        # buildFacts → describeXQuestion」，机制同卜卦、问主=公众/国家、宫义按世运读。这里复用
+        # 已经算好的入宫盘作为问事盘面（headless 无「问事时刻」这个交互输入，故以本盘为准），
+        # 由 vendored 的三个纯函数出 [世运卜卦]/[世运问判] 两段。失败只是这两段不出。
+        horary_text = ""
+        if f"{payload.get('mundaneType') or ''}" == "mundanehorary":
+            try:
+                js = self.js_client.run(
+                    "mundane_horary",
+                    {"chart": chart_response, "mhKind": payload.get("mhKind") or "war"},
+                )
+                horary_text = f"{(js or {}).get('text') or ''}".strip()
+            except Exception as exc:  # noqa: BLE001 — 富化失败不许带崩入宫盘
+                logger.warning("mundane horary build failed: %s", exc)
         # 子盘群：新月/满月/日月食/地区盘/行星周期 + 世俗宫义/定局·年主·盘主/入境骨架/地理分野/地区盘推运。
         subchart_sections = self._build_mundane_subchart_sections(
             base_chart_payload=chart_payload,
@@ -8003,7 +8017,7 @@ class HorosaSkillService:
         )
         subcharts_text = _render_snapshot_text(subchart_sections) if subchart_sections else ""
         body = _build_astro_snapshot_text(chart_payload, chart_response)
-        snapshot_text = "\n\n".join(part for part in (head, subcharts_text, body) if part).strip()
+        snapshot_text = "\n\n".join(part for part in (head, horary_text, subcharts_text, body) if part).strip()
         result = {
             "ingressTerm": term,
             "ingressYear": year,

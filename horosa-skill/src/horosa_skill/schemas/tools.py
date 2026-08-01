@@ -856,6 +856,10 @@ class MundaneInput(FlexibleModel):
     ad: int | None = 1
     hsys: int | None = 0
     tradition: bool | None = False
+    # 盘型分派（上游 MundaneMain 的 TITLE 映射）：当前 headless 支持 ingress（默认）与
+    # mundanehorary；后者按 mhKind 出 [世运卜卦]/[世运问判] 两段。
+    mundaneType: str | None = Field(default=None, description="盘型：ingress（默认）/ mundanehorary。")
+    mhKind: str | None = Field(default=None, description="世运卜卦问类：war 战争（默认）/ weather 天候 / price 物价。")
 
 
 class OtherBuInput(BirthInput):
