@@ -5,10 +5,10 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 237,
+    "missing_sections": 232,
     "extra_sections": 44,
     "absent_keys": 8,
-    "keys_with_debt": 57
+    "keys_with_debt": 56
   },
   "keys": {
     "acg": {
@@ -561,16 +561,6 @@
     "wangji": {
       "missing": [
         "经典原文"
-      ],
-      "extra": []
-    },
-    "xianqin": {
-      "missing": [
-        "演法·流派",
-        "演法·起禽",
-        "演法·择日",
-        "演法·占卜",
-        "演法·投胎"
       ],
       "extra": []
     },

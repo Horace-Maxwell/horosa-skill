@@ -16,3 +16,12 @@ export function isQuotaError() {
 export function clearRecoverableCaches() {
   return 0;
 }
+
+// 演禽 yanqinStore 用的 JSON 变体（上游 v50 新增）。headless 无 localStorage、也不该有跨调用的隐式
+// 偏好——设置一律由每次调用显式传入，所以读恒为 null（调用方回退到 DEFAULT_*），写为 no-op。
+export function safeJsonParseFromStorage() {
+  return null;
+}
+export function safeJsonStringifyToStorage() {
+  return false;
+}

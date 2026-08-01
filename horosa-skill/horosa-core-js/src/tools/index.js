@@ -20,8 +20,10 @@ import { runXiaoChengTu } from './xiaochengtu.js';
 import { runGuice } from './guice.js';
 import { runZhengChuan } from './zhengchuan.js';
 import { runIndiaJyotish } from './indiaJyotish.js';
+import { runYanqinYanfa } from './yanqinYanfa.js';
 
 const TOOL_RUNNERS = {
+  yanqin_yanfa: runYanqinYanfa,
   india_jyotish: runIndiaJyotish,
   qimen: runQimen,
   taiyi: runTaiyi,

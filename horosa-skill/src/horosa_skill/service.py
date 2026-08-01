@@ -7281,6 +7281,25 @@ class HorosaSkillService:
                 code="transport.shenshu_snapshot_unavailable",
                 details={"technique": key, "endpoint": endpoint, "engine": response.get("engine") if isinstance(response, dict) else None},
             )
+        # 演禽「演法」五段（流派/起禽/择日/占卜/投胎）：kinastro 后端不产，它们是上游前端按出生四数
+        # 本地推演的（yanqin/yanqinSnapshot.js），与盘面互补。追加在后端快照之后，失败只是这几段不出。
+        if key == "xianqin":
+            try:
+                parts = _split_birth_ymdhm(payload)
+                yanfa = self.js_client.run(
+                    "yanqin_yanfa",
+                    {
+                        "year": parts.get("year"),
+                        "month": parts.get("month"),
+                        "day": parts.get("day"),
+                        "hour": parts.get("hour", 0),
+                    },
+                )
+                extra = f"{(yanfa or {}).get('text') or ''}".strip()
+                if extra:
+                    snapshot_text = f"{snapshot_text}\n{extra}".strip()
+            except Exception as exc:  # noqa: BLE001 — 富化失败不影响盘面
+                logger.warning("yanqin 演法 snapshot failed: %s", exc)
         return {
             "engine": response.get("engine") if isinstance(response, dict) else key,
             "raw": response,
