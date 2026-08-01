@@ -275,7 +275,9 @@ AI_EXPORT_PRESET_SECTIONS = {
         "12分度", "主宰星链", "古典", "埃及历", "寿命格局", "可能性",
     ],
     "jieqi": ["节气盘参数", "春分星盘", "春分宿盘", "夏至星盘", "夏至宿盘", "秋分星盘", "秋分宿盘", "冬至星盘", "冬至宿盘"],
-    "calendar": ["起盘信息", "当月月历", "选中日详情", "方法说明"],
+    # 上游 calendar 是**页面聚合快照**（NongLi + HuangLi + Tongshu + Rizi 四子并出），
+    # 不是单技法导出——单技法各自还有 huangli / tongshu 两个独立键。
+    "calendar": ["起盘信息", "当月月历", "选中日详情", "今日宜忌", "值神值宿", "彭祖百忌", "吉神凶煞", "冲煞·胎神·方位", "时辰吉凶", "物候·六曜·数九三伏", "流年年神方位", "通书择日", "日子馆·个性化择日", "当事人八字", "方法说明"],
     **JIEQI_SETTING_PRESETS,
     "otherbu": ["起盘信息", "骰子结果", "骰子盘宫位与星体", "天象盘宫位与星体"],
     # 天文地占（上游 v3.5.1 地占大改版；builder 段序照 GeomancyMain.buildGeomancySnapshotText）+ 起卦信息
@@ -418,7 +420,8 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     # lotsSet=core15）出 —— 默认 classical 档不产，属口径差异不是缺陷。
     "horary": ["专题深化·X", "偶然尊贵满分表", "阿拉伯点全集"],
     # 黄历: 选中日详情仅在请求指定 day（选中某日）时产出 → 可选段。
-    "calendar": ["选中日详情"],
+    # 选中日详情需 payload.day；老黄历/通书三段按数据条件产出；日子馆两段只在给了 rizi.persons 时出。
+    "calendar": ["选中日详情", "时辰吉凶", "物候·六曜·数九三伏", "流年年神方位", "通书择日", "日子馆·个性化择日", "当事人八字"],
     # 择日: 用事专属 only when the topic rule-pack produced items; 应期 is never emitted by 星阙's builder.
     "election": ["用事专属", "应期", "危象日参照", "本命合参", "时势合参"],
     # 七政四余: 政余格局 = Moira 格局 DSL（~280 行子系统），headless 版未移植 → 可选段（如实标出）。

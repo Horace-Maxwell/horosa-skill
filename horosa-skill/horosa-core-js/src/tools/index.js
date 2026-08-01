@@ -27,6 +27,7 @@ import { runEgyptSection } from './egyptSection.js';
 import { runBabylon } from './babylon.js';
 import { runHuangli } from './huangli.js';
 import { runTongshu } from './tongshu.js';
+import { runCalendarExtras } from './calendarExtras.js';
 
 const TOOL_RUNNERS = {
   uranian_extra: runUranianExtra,
@@ -36,6 +37,7 @@ const TOOL_RUNNERS = {
   babylon: runBabylon,
   huangli: runHuangli,
   tongshu: runTongshu,
+  calendar_extras: runCalendarExtras,
   india_jyotish: runIndiaJyotish,
   qimen: runQimen,
   taiyi: runTaiyi,

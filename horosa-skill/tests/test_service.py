@@ -820,6 +820,25 @@ class FakeJsClient(HorosaJsEngineClient):
                     {"name": "孛犯太阳", "level": "bad", "detail": "政余忌格：孛与太阳同宫。"},
                 ]},
             }
+        if tool_name == "calendar_extras":
+            # 黄历页三个子模块的段块（真实 builder 纯本地、零后端）。日子馆两段只在给了
+            # rizi.persons 时产 —— 桩沿用同一条件，好让 optional 的语义在离线也成立。
+            blocks = [
+                "[今日宜忌]\n宜：祭祀\n忌：动土",
+                "[值神值宿]\n值神：金匮（黄道）",
+                "[彭祖百忌]\n丁不剃头",
+                "[吉神凶煞]\n吉神：天德",
+                "[冲煞·胎神·方位]\n冲牛煞西",
+                "[时辰吉凶]\n子时 吉",
+                "[物候·六曜·数九三伏]\n候：温风至",
+                "[流年年神方位]\n太岁：东南",
+                "[通书择日]\n流派：董公择日",
+            ]
+            rizi = payload.get("rizi") if isinstance(payload.get("rizi"), dict) else None
+            if rizi and rizi.get("persons"):
+                blocks.append("[日子馆·个性化择日]\n事项：嫁娶")
+                blocks.append("[当事人八字]\nmale（甲）：乙亥年 属猪")
+            return {"text": "\n\n".join(blocks)}
         if tool_name in {"huangli", "tongshu"}:
             # 纯本地技法的离线替身：段头与顺序取自上游 preset（真实 builder 零后端往返，
             # 这里只是让契约测试有稳定输入）。

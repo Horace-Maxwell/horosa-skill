@@ -4962,7 +4962,19 @@ def _build_calendar_month_snapshot_text(payload: dict[str, Any], response: dict[
             ),
         )
     )
-    return _render_snapshot_text(sections)
+    text = _render_snapshot_text(sections)
+    # 子模块段块（老黄历 8 段 / 通书择日 / 日子馆 2 段）按上游段序插在 [选中日详情] 与 [方法说明] 之间。
+    # 文本已由 vendored builder 带好各自的 `[段名]` 段头，故不进 sections 列表（那会被再包一层段头），
+    # 而是在渲染完成后按 [方法说明] 的位置整块拼进去。
+    extras = response.get("_calendarExtras")
+    if isinstance(extras, str) and extras.strip():
+        marker = "[方法说明]"
+        at = text.find(marker)
+        if at >= 0:
+            text = f"{text[:at]}{extras.strip()}\n\n{text[at:]}"
+        else:
+            text = f"{text}\n\n{extras.strip()}"
+    return text
 
 
 def _build_gua_lookup_snapshot_text(tool_name: str, payload: dict[str, Any], response: dict[str, Any]) -> str:
@@ -7341,6 +7353,42 @@ class HorosaSkillService:
         except (IndexError, ValueError):
             raise ToolValidationError(f"Invalid date for tool `{tool}`: {value!r}") from None
 
+    def _attach_calendar_extras(self, tool_name: str, payload: dict[str, Any], response_data: dict[str, Any]) -> dict[str, Any]:
+        """黄历页的三个子模块段块（老黄历 8 段 + 通书择日 + 日子馆 2 段）。
+
+        上游 `calendar` 是页面聚合快照：NongLi（走后端 /calendar/month，本仓已有）+ HuangLi +
+        Tongshu + Rizi 四子并出。后三子纯前端推演，由 vendored builder 一次跑完。
+        日子馆两段只在传了 `rizi.persons` 时产出——没有当事人就没有「个性化」可言，故列 optional。
+        """
+        if tool_name != "calendar_month" or not isinstance(response_data, dict):
+            return response_data
+        selected = f"{payload.get('day') or payload.get('date') or ''}".replace("/", "-")
+        parts = selected.split("-")
+        try:
+            year, month, day = int(parts[0]), int(parts[1]), int(parts[2][:2])
+        except (IndexError, ValueError):
+            return response_data
+        try:
+            js = self.js_client.run(
+                "calendar_extras",
+                {
+                    "year": year,
+                    "month": month,
+                    "day": day,
+                    "hour": payload.get("hour"),
+                    "tongshu": payload.get("tongshu") if isinstance(payload.get("tongshu"), dict) else None,
+                    "rizi": payload.get("rizi") if isinstance(payload.get("rizi"), dict) else None,
+                },
+            )
+            text = f"{(js or {}).get('text') or ''}".strip()
+            if text:
+                enriched = dict(response_data)
+                enriched["_calendarExtras"] = text
+                return enriched
+        except Exception as exc:  # noqa: BLE001 — 子模块失败不许影响月历本体
+            logger.warning("calendar extras build failed: %s", exc)
+        return response_data
+
     def _run_huangli_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 老黄历日课：上游这支是纯前端本地推演（lunar-javascript + 择日表），**零后端往返**，
         # 所以这里没有任何 _call_remote —— 与 canping/heluo 一类的 execution="local" 同款。
@@ -8424,6 +8472,7 @@ class HorosaSkillService:
                 response_data = self._attach_natal_extras(tool_name, response_data)
                 response_data = self._attach_classical_analysis(tool_name, input_normalized, response_data)
                 response_data = self._attach_jyotish_sections(tool_name, response_data)
+                response_data = self._attach_calendar_extras(tool_name, input_normalized, response_data)
                 response_data = self._attach_bazi_geju(tool_name, response_data)
                 response_data = self._attach_relative_score(tool_name, input_normalized, response_data)
                 response_data = _attach_export_contract(tool_name, input_normalized, response_data)

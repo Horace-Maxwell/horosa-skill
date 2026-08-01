@@ -285,6 +285,10 @@ class CalendarMonthInput(FlexibleModel):
     lat: str | None = None
     ad: int | None = 1
     day: str | None = None  # 选中日（YYYY-MM-DD）：给出则产 [选中日详情] 段
+    # 以下三组喂给页面聚合快照的三个子模块（老黄历 / 通书择日 / 日子馆），纯前端推演、零后端往返。
+    hour: int | None = Field(default=None, description="0–23 整点小时；影响 [时辰吉凶] 的当前时标记。")
+    tongshu: dict[str, Any] | None = Field(default=None, description="通书择日设置 {school, event, liexiuUse, zuoShan, mingYear}；school 结果敏感。")
+    rizi: dict[str, Any] | None = Field(default=None, description="日子馆 {event, year, topN, persons:[{name,date,time,gender,role}]}；给了 persons 才产 [日子馆·个性化择日]/[当事人八字]。")
 
 
 class HuangliInput(FlexibleModel):

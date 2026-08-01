@@ -5,10 +5,10 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 54,
+    "missing_sections": 43,
     "extra_sections": 29,
     "absent_keys": 0,
-    "keys_with_debt": 32
+    "keys_with_debt": 31
   },
   "keys": {
     "acg": {
@@ -29,22 +29,6 @@
       "missing": [
         "月令司令（分野）",
         "多运限·指定时段"
-      ],
-      "extra": []
-    },
-    "calendar": {
-      "missing": [
-        "今日宜忌",
-        "值神值宿",
-        "彭祖百忌",
-        "吉神凶煞",
-        "冲煞·胎神·方位",
-        "时辰吉凶",
-        "物候·六曜·数九三伏",
-        "流年年神方位",
-        "通书择日",
-        "日子馆·个性化择日",
-        "当事人八字"
       ],
       "extra": []
     },
