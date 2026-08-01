@@ -20,8 +20,8 @@ import {
 export const POS_GUA = { 1: '巽', 2: '离', 3: '坤', 4: '震', 5: '中', 6: '兑', 7: '艮', 8: '坎', 9: '乾' };
 // 宫号 → 现实方位
 export const POS_DIRECTION = { 1: '东南', 2: '正南', 3: '西南', 4: '正东', 5: '中宫', 6: '正西', 7: '东北', 8: '正北', 9: '西北' };
-// 对宫（后天八卦方位 180° 对冲；opp = 10 − 宫号；仅外八宫，中5无对宫）：巽1↔乾9·离2↔坎8·坤3↔艮7·震4↔兑6。
-// 旧值 {1:6,3:9,4:7,6:1,7:4,9:3} 按方位错（巽东南应对乾西北=9，非兑=6），污染法奇门反吟/对宫叠加判定，上游已订正。
+// 对宫（后天八卦方位 180° 对冲；仅外八宫，中5无对宫）：巽↔乾·离↔坎·坤↔艮·震↔兑，即 opp = 10 − 宫号。
+// 🔴 旧值 {1:6,3:9,4:7,9:3…} 错(巽东南 误对兑正西);真对宫按方位:巽东南↔乾西北=9、坤西南↔艮东北=7、震正东↔兑正西=6。
 export const OPPOSITE_PALACE = { 1: 9, 2: 8, 3: 7, 4: 6, 6: 4, 7: 3, 8: 2, 9: 1 };
 const OUTER_PALACES = [1, 2, 3, 4, 6, 7, 8, 9];
 
@@ -78,7 +78,13 @@ export function readCells(pan){
 			assign(byStar, c.tianXing, c.palaceNum);
 		});
 	});
-	return { cells, byPalace, byTianGan, byDiGan, byGod, byDoor, byStar };
+	// 🔴 值符/值使落宫以「盘面 cells」为单一真值(与盘面八神/八门渲染同源),弃 pan.zhi*Palace 派生字段
+	//（那是 GUA_POS_MAP[值符星宫]+移星旋转 另算,移星档下会与盘面漂移 → 用神值符宫对不上盘面八神）。
+	// 值符=八神「符」所在宫；值使=值使门(pan.zhiShi,如「死门」)所在宫；均以 cells 为准、派生字段仅兜底。
+	const zhiFuPalace = byGod['符'] || byGod['值符'] || Number(pan.zhiFuPalace) || 0;
+	const zhiShiDoorKey = `${(pan && pan.zhiShi) || ''}`.replace(/门$/, '');
+	const zhiShiPalace = (zhiShiDoorKey && byDoor[zhiShiDoorKey]) || byDoor[`${(pan && pan.zhiShi) || ''}`] || Number(pan.zhiShiPalace) || 0;
+	return { cells, byPalace, byTianGan, byDiGan, byGod, byDoor, byStar, zhiFuPalace, zhiShiPalace };
 }
 
 // 八神归一：引擎在阳遁回「勾/雀」但前端 DunJiaCalc:1209 已 replace 勾→虎、雀→玄；
@@ -148,7 +154,7 @@ export function computeWuHe(pan){
 		return { pairs: [], tianDiHe: [] };
 	}
 	const idx = readCells(pan);
-	const zhiFuPalace = Number(pan.zhiFuPalace) || 0;
+	const zhiFuPalace = idx.zhiFuPalace;
 	const locate = (gan)=>(gan === '甲' ? zhiFuPalace : (idx.byTianGan[gan] || 0));
 	const pairs = WU_HE_PAIRS.map(([a, b])=>{
 		const pa = locate(a);
@@ -334,6 +340,14 @@ function protectRowAt(label, gan, palace, pan, idx){
 const TOPIC_YIXIANG = { wealth: { gan: '戊', label: '财富' }, career: { gan: '甲', label: '事业' }, romance: { gan: '癸', label: '婚恋' } };
 
 // 八门化气大阵·布阵保护清单：日干 / 时干 / 生年干 / 意象干 / 符使。
+// 命局/事局 语义:命盘 日干=内心·时干=外在;事盘 日干=实质·时干=表象。
+// ctx.chartCategory('ming'/'shi')优先,pan.options 兜底(AI 挂载无 ctx 时)。
+function panDayTimeRoles(pan, ctx){
+	const cat = (ctx && ctx.chartCategory) || (pan && pan.options && pan.options.chartCategory) || 'shi';
+	const isMing = cat === 'ming';
+	return { isMing, day: isMing ? '内心' : '实质', time: isMing ? '外在' : '表象' };
+}
+
 export function computeProtect(pan, ctx){
 	if(!pan){
 		return [];
@@ -341,16 +355,17 @@ export function computeProtect(pan, ctx){
 	const idx = readCells(pan);
 	const gz = pan.ganzhi || {};
 	const topic = ctx && ctx.topic;
+	const roles = panDayTimeRoles(pan, ctx);
 	const out = [];
-	const locate = (gan)=>(gan === '甲' ? (Number(pan.zhiFuPalace) || 0) : (idx.byTianGan[gan] || 0));
+	const locate = (gan)=>(gan === '甲' ? idx.zhiFuPalace : (idx.byTianGan[gan] || 0));
 	const addGan = (label, gan)=>{
 		if(!gan){
 			return;
 		}
 		out.push(protectRowAt(label, gan, locate(gan), pan, idx));
 	};
-	addGan('日干·内心/实质', (gz.day || '').charAt(0));
-	addGan('时干·外在/表象', (gz.time || '').charAt(0));
+	addGan(`日干·${roles.day}`, (gz.day || '').charAt(0));
+	addGan(`时干·${roles.time}`, (gz.time || '').charAt(0));
 	// 生年干·局中各人：从左栏「相关人员」选入者的生年干（捕获快照，逐人一行）；未选则不显示该类。
 	// pan.faRelatedPeople 为显式数组(含空[])时以它为准(储存/重开/已保存记录)；缺省(undefined)时兜底读全局当前选择
 	// (覆盖 AI 挂载里「重算 pan 不带 stamp」的路径，保证四同步无遗漏)。
@@ -366,10 +381,10 @@ export function computeProtect(pan, ctx){
 	if(yx){
 		addGan(`意象·${yx.label}`, yx.gan);
 	}
-	const zfCell = idx.byPalace[pan.zhiFuPalace] || {};
-	const zsCell = idx.byPalace[pan.zhiShiPalace] || {};
-	out.push(protectRowAt('值符（话语权）', zfCell.tianGan || '', pan.zhiFuPalace, pan, idx));
-	out.push(protectRowAt('值使（用武之地）', zsCell.tianGan || '', pan.zhiShiPalace, pan, idx));
+	const zfCell = idx.byPalace[idx.zhiFuPalace] || {};
+	const zsCell = idx.byPalace[idx.zhiShiPalace] || {};
+	out.push(protectRowAt('值符（话语权）', zfCell.tianGan || '', idx.zhiFuPalace, pan, idx));
+	out.push(protectRowAt('值使（用武之地）', zsCell.tianGan || '', idx.zhiShiPalace, pan, idx));
 	return out;
 }
 
@@ -389,7 +404,7 @@ function palaceInfo(pan, idx, palace){
 	return { palaceNum: p, palaceName: p ? nameOf(p) : '—', direction: p ? dirOf(p) : '', hazards: hz, ok: p > 0 && hz.length === 0 };
 }
 function locateStem(pan, idx, gan){
-	const p = gan === '甲' ? (Number(pan.zhiFuPalace) || 0) : (idx.byTianGan[gan] || 0);
+	const p = gan === '甲' ? idx.zhiFuPalace : (idx.byTianGan[gan] || 0);
 	return { symbol: gan || '', ...palaceInfo(pan, idx, p) };
 }
 function locateGod(pan, idx, god){
@@ -409,12 +424,16 @@ export function computeYongShen(pan, ctx){
 	const monthGan = (gz.month || '').charAt(0);
 	const yearGan = (gz.year || '').charAt(0);
 	const heGan = WU_HE_MAP[dayGan] || '';
+	const roles = panDayTimeRoles(pan, ctx);
 	const out = {
+		isMing: roles.isMing,
+		dayRole: roles.day,
+		timeRole: roles.time,
 		dayGan: locateStem(pan, idx, dayGan),
 		timeGan: locateStem(pan, idx, timeGan),
 		ganHe: heGan ? { heOf: dayGan, ...locateStem(pan, idx, heGan) } : null,
-		zhiFu: palaceInfo(pan, idx, pan.zhiFuPalace),
-		zhiShi: palaceInfo(pan, idx, pan.zhiShiPalace),
+		zhiFu: palaceInfo(pan, idx, idx.zhiFuPalace),
+		zhiShi: palaceInfo(pan, idx, idx.zhiShiPalace),
 		liuQin: [
 			{ rel: '年干·父母长辈', ...locateStem(pan, idx, yearGan) },
 			{ rel: '月干·兄弟同辈', ...locateStem(pan, idx, monthGan) },
@@ -422,7 +441,7 @@ export function computeYongShen(pan, ctx){
 			{ rel: '时干·子女晚辈', ...locateStem(pan, idx, timeGan) },
 		],
 	};
-	out.yongShenText = `用神＝日干「${dayGan}」（${GAN_YINYANG[dayGan] || ''}），落 ${out.dayGan.palaceName}${out.dayGan.palaceNum ? out.dayGan.palaceNum + '宫' : ''}；时干为平台（事之表象 / 人之外在）。`;
+	out.yongShenText = `用神＝日干「${dayGan}」（${GAN_YINYANG[dayGan] || ''}·${roles.day}），落 ${out.dayGan.palaceName}${out.dayGan.palaceNum ? LUOSHU_NUM[out.dayGan.palaceName] + '宫' : ''}；时干为平台（${roles.isMing ? '此人外在' : '事之表象'}）。`;
 	return out;
 }
 
@@ -477,8 +496,8 @@ export function computeCareer(pan){
 			{ name: '庚虎·压力', note: same ? '庚＋白虎同宫，强敌压力' : '庚与白虎（压力/敌人）', ...palaceInfo(pan, idx, same ? gengP : (gengP || huP)) },
 		],
 		fuShi: [
-			{ rel: '值符·一把手', ...palaceInfo(pan, idx, pan.zhiFuPalace) },
-			{ rel: '值使·二把手', ...palaceInfo(pan, idx, pan.zhiShiPalace) },
+			{ rel: '值符·一把手', ...palaceInfo(pan, idx, idx.zhiFuPalace) },
+			{ rel: '值使·二把手', ...palaceInfo(pan, idx, idx.zhiShiPalace) },
 		],
 		zhuGan: [
 			{ rel: '年干·大老板', ...locateStem(pan, idx, (gz.year || '').charAt(0)) },
@@ -502,8 +521,8 @@ export function computeRomance(pan){
 	const trouble = [];
 	if(pt.type === '伏吟'){ trouble.push('伏吟局：孤独执着、舔狗纯爱，难逢变通。'); }
 	if(pt.type === '反吟'){ trouble.push('反吟局：反复折腾、朝三暮四，难长久。'); }
-	const dayP = (dayGan === '甲') ? (Number(pan.zhiFuPalace) || 0) : (idx.byTianGan[dayGan] || 0);
-	const heP = heGan ? ((heGan === '甲') ? (Number(pan.zhiFuPalace) || 0) : (idx.byTianGan[heGan] || 0)) : 0;
+	const dayP = (dayGan === '甲') ? idx.zhiFuPalace : (idx.byTianGan[dayGan] || 0);
+	const heP = heGan ? ((heGan === '甲') ? idx.zhiFuPalace : (idx.byTianGan[heGan] || 0)) : 0;
 	const heP6 = idx.byGod['合'] || 0;
 	const kp = pan.kongWangPalaces || [];
 	if(dayP && kp.indexOf(dayP) >= 0){ trouble.push('日干空亡：自身不现实、错失机会。'); }

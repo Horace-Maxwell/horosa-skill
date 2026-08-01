@@ -5,10 +5,10 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 255,
+    "missing_sections": 254,
     "extra_sections": 45,
     "absent_keys": 8,
-    "keys_with_debt": 60
+    "keys_with_debt": 59
   },
   "keys": {
     "acg": {
@@ -429,12 +429,6 @@
         "推运盘相位",
         "当前时点"
       ]
-    },
-    "qimen": {
-      "missing": [
-        "八宫克应"
-      ],
-      "extra": []
     },
     "relative": {
       "missing": [

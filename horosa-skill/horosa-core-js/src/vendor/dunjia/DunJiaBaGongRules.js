@@ -1098,6 +1098,26 @@ export function buildQimenBaGongSnapshotLines(pan){
 	return lines;
 }
 
+// [八宫克应] doctrine 段(默认关段:builder 恒产,导出层按设置控;可独立于[八宫详解]勾选)：
+// 与右栏「八宫」tab 同源 buildQimenBaGongPanelData,只导本盘八宫在位组合的
+// 十干克应/八门克应/奇仪主应/八神加八门 释义原文(非全库),克应文零改写。
+export function buildQimenBaGongKeYingSnapshotLines(pan){
+	if(!pan){
+		return [];
+	}
+	const lines = ['[八宫克应]'];
+	BAGONG_PALACE_ORDER.forEach((palaceNum)=>{
+		const item = buildQimenBaGongPanelData(pan, palaceNum);
+		const palaceName = item.palaceName || BAGONG_PALACE_NAME[palaceNum] || '';
+		lines.push(`◆ ${palaceName}宫`);
+		lines.push(`十干克应（天${item.tianGan || '—'}加地${item.diGan || '—'}）：${item.tenGanText}`);
+		lines.push(`八门克应（人${item.renDoor || '—'}加地${item.baseDoor || '—'}）：${item.doorBaseText}`);
+		lines.push(`奇仪主应（人${item.renDoor || '—'}加天${item.tianGan || '—'}）：${item.doorTianText}`);
+		lines.push(`八神加八门（${item.godFull || '—'}加${item.renDoor || '—'}门）：${item.godDoorText}`);
+	});
+	return lines;
+}
+
 export {
 	BAGONG_PALACE_ORDER,
 	BAGONG_PALACE_NAME,
