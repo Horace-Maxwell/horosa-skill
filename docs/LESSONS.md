@@ -109,6 +109,17 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 - **主限法语义变更（v3.6.0）**：`pdSyncRev` v12→**v15**，方位法从「核 5 + legacy」开放到全谱 13 法，
   **placidus 已是真方位法、不再回退 core_alchabitius**（实测 114 行 vs 64 行）。原测试断言「两法逐位
   一致」在新引擎下必红，而且方向危险——引擎真回退时它反而会绿。已改为「都产真行集且彼此不同」。
+- **整文件重 vendor 会抹掉手工加的 `export`。** 上游把 `normalizeBackendPan` 一类叠加函数留作模块私有
+  （组件内部自用），skill 的 headless 工具层却要 import 它——旧 vendored 副本是人手加的 export，一次
+  全文件重 vendor 就把它抹了，症状是 `SyntaxError: does not provide an export named …`（太乙栽过）。
+  `revendor_core_js.py` 现按「skill tools 谁在 import 它」反查自动补 export，不写死函数名清单。
+- **vendor 树布局 ≠ 上游 src 布局**：上游 `../../utils/baziLunarLocal` 在 vendor 树里是 `../bazi/…`。
+  重 vendor 器按 basename 自动重定位；**找不到唯一匹配就大声报 UNRESOLVED**，绝不留坏 import——
+  留着的话模块加载直接失败，而那比「load 过但真盘崩」还早一步，必须显式暴露给人决定补 vendor 还是写 shim。
+- **剥 `fetch*Pan` 会留下孤儿 import**（`cachedKentangFetch` 等网络层助手），同样让模块加载失败；
+  按「符号是否仍被引用」判定删除，不按文件名黑名单。
+- **本命增补段的门控本就该覆盖整个 chart 家族**：`_attach_natal_extras` 只开给 `{chart, mundane}`，
+  而上游给 13 宫/希腊化盘也出 12分度/主宰星链/寿命格局 —— 放开门控即得 3 段（chart13/hellen_chart）。
 - **回填铁律的实操顺序**：先 live 跑出**实产段名**，再拿它与上游 preset 做三向差（都有 → 进 preset；
   上游有实产无 → preset+optional 双登记；实产有上游无 → 查是 skill 自有基础段还是占位名族）。
   绝不能照抄上游 preset 了事——那会造出死条目，让每次真实导出都报 missing。
