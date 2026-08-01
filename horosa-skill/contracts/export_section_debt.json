@@ -5,31 +5,16 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 188,
+    "missing_sections": 174,
     "extra_sections": 50,
     "absent_keys": 6,
     "keys_with_debt": 49
   },
   "keys": {
     "acg": {
-      "missing": [
-        "宫位宫头",
-        "星与虚点",
-        "信息",
-        "相位",
-        "行星",
-        "希腊点",
-        "12分度",
-        "主宰星链",
-        "古典",
-        "古典格局",
-        "埃及历",
-        "寿命格局",
-        "可能性",
-        "占星地图"
-      ],
+      "missing": [],
       "extra": [
-        "行星线经度",
+        "月宿",
         "偕升纬度带",
         "线交点"
       ]

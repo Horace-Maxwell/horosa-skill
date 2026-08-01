@@ -6319,9 +6319,33 @@ class HorosaSkillService:
             line_rows.append(
                 f"| {_astro_msg(pid, short=True)} | {geo_lon(mc.get('lon'))} | {geo_lon(ic.get('lon'))} | {zen_txt} | {'是' if pd.get('oob') else '—'} |"
             )
+        # 上游 locastro 是**辅盘 tab**：导出走 extractAstroContent（与 astrochart 逐字同一套本命盘段），
+        # 再把地图段拼在尾巴上。此前本仓只出线表 4 段，13 个盘段整体缺席。这里补拉一次 /chart 并复用
+        # 通用盘面渲染器；失败只是盘段不出，线表照常。
+        chart_body = ""
+        try:
+            chart_payload = {
+                "date": payload["date"],
+                "time": payload["time"],
+                "zone": payload["zone"],
+                "lat": payload["lat"],
+                "lon": payload["lon"],
+                "gpsLat": payload.get("gpsLat"),
+                "gpsLon": payload.get("gpsLon"),
+                "ad": payload.get("ad", 1),
+                "hsys": payload.get("hsys"),
+                "predictive": 0,
+            }
+            chart_response = self._call_remote("/chart", {k: v for k, v in chart_payload.items() if v is not None})
+            if _is_astro_chart_payload(chart_response):
+                chart_response = self._attach_natal_extras("chart", chart_response)
+                chart_response = self._attach_classical_analysis("chart", chart_payload, chart_response)
+                chart_body = _build_astro_snapshot_text(chart_payload, chart_response)
+        except Exception as exc:  # noqa: BLE001 — 盘面富化失败不许带崩线表
+            logger.warning("acg natal chart fetch failed: %s", exc)
+        # 上游把地图内容收在单段 [占星地图]（口径 + 线表）；偕升纬度带/线交点是本仓相对上游的 extra。
         sections: list[tuple[str, str]] = [
-            ("起盘信息", "\n".join(info_lines)),
-            ("行星线经度", "\n".join(line_rows) if len(line_rows) > 2 else "未取得行星线数据。"),
+            ("占星地图", "\n".join(info_lines + [""] + line_rows) if len(line_rows) > 2 else "\n".join(info_lines)),
         ]
         parans = response.get("parans") if isinstance(response.get("parans"), list) else []
         if parans:
@@ -6347,7 +6371,10 @@ class HorosaSkillService:
                     lat_txt = f"{float(lat_v):.2f}°" if isinstance(lat_v, (int, float)) else "—"
                     rows.append(f"{a}·{a_ang} × {b}·{b_ang}：纬 {lat_txt}，经 {geo_lon(lon_v)}")
             sections.append(("线交点", "\n".join(rows)))
+        # 段序对齐上游：本命盘段在前、[占星地图] 及其明细在后。
         snapshot_text = _render_snapshot_text(sections)
+        if chart_body:
+            snapshot_text = f"{chart_body}\n{snapshot_text}"
         return {
             "acg": {
                 "meta": meta,
