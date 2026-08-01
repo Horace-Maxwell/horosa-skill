@@ -2989,6 +2989,17 @@ def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
     dasha_lines = _build_vimshottari_dasha_lines(response)
     if dasha_lines:
         rendered.append(("大运Dasha", "\n".join(dasha_lines).strip()))
+    # 印占 Jyotish 派生段（星阙 v3.6.0）：由 vendored `buildJyotishSnapshotLines` 逐字产出，
+    # 段名与顺序均由上游 builder 决定（此处不重排、不改名），已出现过的段不重复追加。
+    jyotish_sections = response.get("_jyotishSections")
+    if isinstance(jyotish_sections, dict):
+        seen_titles = {title for title, _ in rendered}
+        for title, lines in jyotish_sections.items():
+            if title in seen_titles:
+                continue
+            body = "\n".join(str(line) for line in lines).strip() if isinstance(lines, list) else f"{lines}".strip()
+            if body:
+                rendered.append((str(title), body))
     return _render_snapshot_text(rendered)
 
 
@@ -5720,6 +5731,31 @@ class HorosaSkillService:
             pass
         return response_data
 
+    def _attach_jyotish_sections(self, tool_name: str, response_data: dict[str, Any]) -> dict[str, Any]:
+        """印占 Jyotish 派生段 (星阙 v3.6.0 印占大扩容)。
+
+        后端 `/india/chart` 本就返回整棵 `jyotish` 树（panchanga / jaimini / kp / shadbala / dasha /
+        ashtakavarga … 30 个子树），星阙前端用一个纯格式化函数把它铺成 50+ 个具名段——skill 此前只登记
+        了 11 段，其余全被丢弃。这里复用逐字 vendor 的同一个 builder（`horosa-core-js` 的
+        `india_jyotish` 工具），保持与桌面端逐字同源。与其他 `_attach_*` 同款：gated + 优雅降级，
+        任何失败都只是这些段不出，绝不带崩排盘本身。
+        """
+        if tool_name != "india_chart":
+            return response_data
+        if not isinstance(response_data, dict) or not response_data.get("jyotish"):
+            return response_data
+        try:
+            # js_client 已解包 envelope 的 data，返回的就是 runner 的结果对象。
+            js = self.js_client.run("india_jyotish", {"chart": response_data})
+            sections = js.get("sections") if isinstance(js, dict) else None
+            if isinstance(sections, dict) and sections:
+                enriched = dict(response_data)
+                enriched["_jyotishSections"] = sections
+                return enriched
+        except Exception as exc:  # noqa: BLE001 — 富化失败不许影响主盘
+            logger.warning("jyotish section build failed: %s", exc)
+        return response_data
+
     # 古典格局派生分析 (星阙 v2.6.7): astrochart/astrochart_like 的 [古典格局] 段来自 /astroextra/analysis
     # (护卫/优势相位/相位动态/逐题主星/偶然尊贵/恒星/行星时/埃及历/巴比伦/格局/分布/气质/almutem/吉化-extraLots)。
     # 与前端同源:按需 fetch、优雅降级(失败→不挂载→该段不出)。[古典](逐曜状态/围攻/围绕)直接读 /chart 响应,无需此 fetch。
@@ -7971,6 +8007,7 @@ class HorosaSkillService:
                     response_data = self._attach_predictive_chart_context(tool_name, input_normalized, response_data)
                 response_data = self._attach_natal_extras(tool_name, response_data)
                 response_data = self._attach_classical_analysis(tool_name, input_normalized, response_data)
+                response_data = self._attach_jyotish_sections(tool_name, response_data)
                 response_data = self._attach_bazi_geju(tool_name, response_data)
                 response_data = self._attach_relative_score(tool_name, input_normalized, response_data)
                 response_data = _attach_export_contract(tool_name, input_normalized, response_data)

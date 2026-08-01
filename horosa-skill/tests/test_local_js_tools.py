@@ -1482,25 +1482,40 @@ def _pd_live_payload(**overrides):
     return payload
 
 
+# 主限法引擎同源版本（星阙 v3.6.0）；重同步上游后随之推进，与 AGENTS.md §8 的防陈旧闸同源。
+PD_SYNC_REV = "pd_method_sync_v15"
+
+
 @requires_chart
 def test_pd_v12_engine_rev_and_core5_fallback(tmp_path) -> None:
-    """主限法 v12 (星阙 v2.6.6)：(1) 服务心跳回显 pd_method_sync_v12——防陈旧进程跑旧引擎；
-    (2) 未核验方位法（placidus）按核5白名单在引擎内回退 core_alchabitius——行集与显式 core 逐位一致。
+    """主限法引擎同源闸 (星阙 v3.6.0 / pd_method_sync_v15)：
+
+    (1) 服务心跳回显当前 `pdSyncRev`——防陈旧进程跑旧引擎（旧引擎会把未知时间钥匙静默按 Ptolemy 算）。
+    (2) **v3.6.0 起 placidus 是真方位法，不再回退**：方位法从「核 5 + legacy」开放到全谱 13 法，
+        实测 placidus 与 core_alchabitius 行集不同（114 vs 64 行）。此前本用例断言二者逐位一致，
+        那是 v12 时代「未核验值回退 core_alchabitius」的语义；引擎语义变了，断言随之改为「两法都
+        产出真行集且彼此不同」，否则这条闸会在引擎真的回退时反而变绿。
     pd 行结构: [arc, prom, sig, type, date]。"""
     import httpx
 
     heartbeat = httpx.get(f"{CHART_SERVER_ROOT}/", timeout=10).json()
-    assert heartbeat.get("pdSyncRev") == "pd_method_sync_v12"
+    assert heartbeat.get("pdSyncRev") == PD_SYNC_REV, (
+        f"chart 服务的 pdSyncRev={heartbeat.get('pdSyncRev')} != 期望 {PD_SYNC_REV}；"
+        "多半是打到了默认端口上的陈旧常驻实例，而不是仓内 vendored 引擎（AGENTS.md §8）。"
+    )
 
     service = make_service(tmp_path)
     core = service.run_tool("pd", _pd_live_payload(), save_result=False)
-    fallback = service.run_tool("pd", _pd_live_payload(pdMethod="placidus"), save_result=False)
+    placidus = service.run_tool("pd", _pd_live_payload(pdMethod="placidus"), save_result=False)
     assert core.ok is True, core.error
-    assert fallback.ok is True, fallback.error
+    assert placidus.ok is True, placidus.error
     core_rows = [tuple(row) for row in core.data.get("pd") or []]
-    fallback_rows = [tuple(row) for row in fallback.data.get("pd") or []]
-    assert core_rows
-    assert core_rows == fallback_rows
+    placidus_rows = [tuple(row) for row in placidus.data.get("pd") or []]
+    assert core_rows and placidus_rows, "两个方位法都必须产出真行集"
+    assert core_rows != placidus_rows, (
+        "placidus 与 core_alchabitius 行集逐位相同 —— 说明引擎把 placidus 当未知值回退了（v12 语义），"
+        "而 v3.6.0 起它是全谱 13 法之一。多半是 vendored 引擎陈旧。"
+    )
 
 
 @requires_chart

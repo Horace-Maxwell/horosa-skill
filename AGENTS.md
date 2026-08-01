@@ -359,7 +359,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
    runtime/mac/bundle/astrostudyboot.jar --server.port=… --astrosrv=…`（root 500 = 正常无路由）。测试经
    `HOROSA_CHART_SERVER_ROOT` / `HOROSA_SERVER_ROOT` 指过去（tests 的 gate + `make_service` 尊重这两个
    env——曾经写死默认端口导致「带覆盖的全绿」实测的是旧实例）。
-3. **防陈旧闸**：chart 心跳 `GET /` 回显 `pdSyncRev`，断言 == 当前 rev（当前 `pd_method_sync_v12`）再信
+3. **防陈旧闸**：chart 心跳 `GET /` 回显 `pdSyncRev`，断言 == 当前 rev（当前 `pd_method_sync_v15`，见 tests 的 PD_SYNC_REV 常量）再信
    结果——陈旧引擎会把未知时间钥匙**静默按 Ptolemy 算**。钥匙分叉探针用每盘真算的 Kepler，别用 Kündig
    （静态标度 1.0 与 Ptolemy 同日期，探不出分叉）。**kentang 懒挂载**：`registry.py` 用
    `_LazyMountedService`（`HOROSA_KENTANG_LAZY=1`），缺引擎/坏引擎不再启动即炸，改为**首请求**才 500 —

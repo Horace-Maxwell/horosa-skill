@@ -164,7 +164,7 @@ AI_EXPORT_TECHNIQUES = [
 
 AI_EXPORT_PRESET_SECTIONS = {
     "astrochart": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "12分度", "主宰星链", "古典", "古典格局", "寿命格局", "可能性"],
-    "indiachart": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "古典", "可能性", "大运Dasha"],
+    "indiachart": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "古典", "可能性", "大运Dasha", "星盘信息", "Panchanga 五要素", "卡拉卡（8 Chara Karakas）", "节点主照（Rasi Drishti）", "星曜状态", "分盘吉位 Vimśopaka", "八分点 SAV", "Sodhya Pinda 凝量", "Shadbala 六力", "Ishta/Kashta 吉凶果", "Vimśopaka 分盘 20 分力", "Hora 行星时", "Choghadia 民用择时", "择时 Panchaka/Abhijit", "Mūla 大运", "Sudarśana Chakra 大运", "Naisargika 自然大运", "补充上升（Supplementary Lagnas）", "Nāḍī · Bhrigu Bindu 福点", "Nāḍī · D150 纳地盘", "Āyurdāya 寿命基础", "特殊上升 Special Lagnas", "D60 六十分盘吉凶", "分盘变体对照", "功能吉凶（Functional Nature）", "宫位力（Bhava Bala）", "星曜战（Graha Yuddha）", "扩展大运（Conditional / Chara）", "Kartari 夹击格局", "Sudarshana 三盘（命/日/月起）", "KP 宫头次主星 CSL", "KP 意义者 Significators", "KP 六级细分 / 当令星", "敌友（复合五分）", "行运 Gochara（从月·八分点）", "化解（信息·非处方）", "Jaimini Argala 干涉", "Tajika Harsha Bala", "Tajika Pancha-Vargeeya", "Tajika Mudda 年运", "行运 Gochara（从命）", "座运·X", "瑜伽格局 Yogas", "副星 Upagraha", "敏感点 Sphuta", "全吉盘 SBC", "问事 Praśna", "Nāḍī · 行星组合(同座合)", "Nāḍī · 星座交换", "Nāḍī · 木星推进时间轴", "Jaimini 三对法寿命", "Tripataki 宿距三旗", "寿命判读"],
     "astrochart_like": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "古典", "古典格局", "可能性"],
     "relative": ["关系起盘信息", "A对B相位", "B对A相位", "A对B中点相位", "B对A中点相位", "A对B映点", "A对B反映点", "B对A映点", "B对A反映点", "合成图盘", "影响图盘-星盘A", "影响图盘-星盘B", "关系量化", "顺畅连接", "张力连接"],
     # 上游 v48 段名对齐：主/界限法设置|表格 → 主限法设置|表格（旧名走 map_legacy_section_title）。UI-only
@@ -313,7 +313,7 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     # [古典格局] 仅 /astroextra/analysis 成功(astrochart/astrochart_like)时出 → 列可选段, 优雅降级不误报 missing。
     "astrochart": ["月宿", "古典", "古典格局"],
     "astrochart_like": ["月宿", "古典", "古典格局"],
-    "indiachart": ["月宿", "古典", "大运Dasha"],
+    "indiachart": ["月宿", "古典", "大运Dasha", "可能性", "星盘信息", "星曜战（Graha Yuddha）", "Kartari 夹击格局", "Tajika Mudda 年运", "问事 Praśna", "Nāḍī · 星座交换"],
     # 世俗盘为非推运入宫盘（predictive=0），[可能性] 依赖 predict.PlanetSign 故恒不产出 → 可选段。
     "mundane": ["古典", "可能性"],
     # 六壬 Phase4 (星阙 v2.5.x)：毕法（已命中）只在 refContext 成功且有命中时出；占断向导只在指定占类
@@ -414,6 +414,11 @@ def map_legacy_section_title(key: str, title: str | None) -> str:
         # （与 preset 两侧归一，一个纳入开关控 3 类专题）。
         if normalized.startswith("专题深化·"):
             return "专题深化·X"
+    if key == "indiachart":
+        # 座运（Rāśi daśā）有 11 个变体（Narayana/Sudasa/Drig/Kalachakra…），上游 preset 以单个占位
+        # 段名 `座运·X` 登记整族（同 horary 专题深化·X 的做法），实际段头是 [座运·<变体>]。
+        if normalized.startswith("座运·"):
+            return "座运·X"
     if key == "primarydirect":
         # 上游 v48 段名对齐：旧名 主/界限法设置|表格 → 新 canonical 主限法设置|表格（外部旧导出/旧 skill 输出兼容）。
         if normalized == "主/界限法设置":
