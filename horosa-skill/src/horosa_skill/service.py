@@ -35,6 +35,7 @@ from horosa_skill.engine.registry import TOOL_DEFINITIONS, ToolDefinition
 from horosa_skill.engine.router import select_tools
 from horosa_skill.errors import DispatchResolutionError, HorosaSkillError, ToolTransportError, ToolValidationError
 from horosa_skill.exports import build_export_registry, get_technique_info, parse_export_content
+from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS
 from horosa_skill.input_normalization import normalize_request_payload
 from horosa_skill.knowledge import build_knowledge_registry, read_knowledge_entry
 from horosa_skill.memory.store import MemoryStore
@@ -821,10 +822,36 @@ _PREDICTIVE_METHOD_NOTES: dict[str, list[str]] = {
 }
 
 
+def _predictive_setup_section_text(technique: str | None, payload: dict[str, Any], response: dict[str, Any]) -> str:
+    """星运族的 [起盘信息] 段（上游 = buildBaseInfoLines(chartObj, fields)，位于段首）。
+
+    这批技法的响应形态不一：balbillus/keypoints 等带 `chart`，agepoint 只有自家时间线。
+    `_build_base_info_lines` 对空 wrap 会退化成「只用载荷」的三行（日期/时区/经纬度），
+    正好是优雅降级——所以两种形态都能出段，不必逐工具分支。
+    """
+    # 门控按「该键的 preset 是否真列了 [起盘信息]」，而不是按「是不是星运键」——primarydirect /
+    # primarydirchart / zodialrelease 同属星运族但上游段首是 [出生时间]，多塞一段会变成 unknown 段。
+    # 这样写也自洽：以后 preset 增删该段，无需再回来改名单。
+    if not _PREDICTIVE_METHOD_NOTES.get(technique or ""):
+        return ""
+    if "起盘信息" not in (AI_EXPORT_PRESET_SECTIONS.get(technique or "") or []):
+        return ""
+    wrap = _natal_chart_wrap(response) or _top_level_chart_wrap(response) or {}
+    lines = _build_base_info_lines(wrap, payload)
+    if not lines:
+        return ""
+    return _render_snapshot_text([("起盘信息", "\n".join(lines))])
+
+
 def _predictive_common_sections_text(technique: str | None, payload: dict[str, Any]) -> str:
     """星运族公共两段：[当前时点](导出时刻+盘主年龄) + [方法说明](机理与读法)。
 
-    [起盘信息]等价段各技法快照已有,不重复。非星运键返回空串(零变化)。
+    非星运键返回空串(零变化)。
+
+    注：早先这里写着「[起盘信息]等价段各技法快照已有,不重复」——**该说法已过期**。实测 10 个星运键
+    (agepoint/balbillus/distributions/extrareturns/keypoints/lunationphase/persiandirected/
+    planetaryages/triplicityrulers/yearsystem129) 的快照根本没有这一段，而上游 preset 里有
+    (= buildBaseInfoLines)。故另由 `_predictive_setup_section_text` 前置补出。
     """
     notes = _PREDICTIVE_METHOD_NOTES.get(technique or "")
     if not notes:
@@ -5488,6 +5515,12 @@ def _attach_export_contract(tool_name: str, input_normalized: dict[str, Any], re
         snapshot_text = _auto_snapshot_text_for_tool(tool_name, input_normalized, response_data)
         augmented["snapshot_text"] = snapshot_text
     # 星运族公共段（当前时点/方法说明）在统一出口追加一次,22 键全覆盖;追加后强制重解析。
+    # [起盘信息] 按上游位于段首；已有该段的技法（推运族等）不重复加。
+    predictive_setup = _predictive_setup_section_text(technique, input_normalized, response_data)
+    if snapshot_text and predictive_setup and "[起盘信息]" not in snapshot_text:
+        snapshot_text = f"{predictive_setup}\n\n{snapshot_text}"
+        augmented["snapshot_text"] = snapshot_text
+        parsed_snapshot = None
     predictive_common = _predictive_common_sections_text(technique, input_normalized)
     if snapshot_text and predictive_common and "[方法说明]" not in snapshot_text:
         snapshot_text = f"{snapshot_text}\n\n{predictive_common}"

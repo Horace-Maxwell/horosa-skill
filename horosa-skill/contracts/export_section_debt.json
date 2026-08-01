@@ -5,10 +5,10 @@
     "aiexport_settings_version": 50
   },
   "totals": {
-    "missing_sections": 125,
+    "missing_sections": 115,
     "extra_sections": 24,
     "absent_keys": 6,
-    "keys_with_debt": 46
+    "keys_with_debt": 36
   },
   "keys": {
     "acg": {
@@ -18,12 +18,6 @@
         "偕升纬度带",
         "线交点"
       ]
-    },
-    "agepoint": {
-      "missing": [
-        "起盘信息"
-      ],
-      "extra": []
     },
     "astrochart": {
       "missing": [],
@@ -42,12 +36,6 @@
       ],
       "extra": [],
       "absent_key": true
-    },
-    "balbillus": {
-      "missing": [
-        "起盘信息"
-      ],
-      "extra": []
     },
     "bazi": {
       "missing": [
@@ -69,12 +57,6 @@
         "通书择日",
         "日子馆·个性化择日",
         "当事人八字"
-      ],
-      "extra": []
-    },
-    "distributions": {
-      "missing": [
-        "起盘信息"
       ],
       "extra": []
     },
@@ -115,12 +97,6 @@
       ],
       "extra": [],
       "absent_key": true
-    },
-    "extrareturns": {
-      "missing": [
-        "起盘信息"
-      ],
-      "extra": []
     },
     "fengshui": {
       "missing": [
@@ -224,23 +200,11 @@
       ],
       "extra": []
     },
-    "keypoints": {
-      "missing": [
-        "起盘信息"
-      ],
-      "extra": []
-    },
     "lunarreturn": {
       "missing": [],
       "extra": [
         "当前时点"
       ]
-    },
-    "lunationphase": {
-      "missing": [
-        "起盘信息"
-      ],
-      "extra": []
     },
     "mundane": {
       "missing": [
@@ -250,18 +214,6 @@
         "角化",
         "年之九主",
         "世运问判"
-      ],
-      "extra": []
-    },
-    "persiandirected": {
-      "missing": [
-        "起盘信息"
-      ],
-      "extra": []
-    },
-    "planetaryages": {
-      "missing": [
-        "起盘信息"
       ],
       "extra": []
     },
@@ -364,22 +316,10 @@
       "extra": [],
       "absent_key": true
     },
-    "triplicityrulers": {
-      "missing": [
-        "起盘信息"
-      ],
-      "extra": []
-    },
     "vedicprog": {
       "missing": [
         "本命盘配置",
         "时段盘配置 二次推运位置"
-      ],
-      "extra": []
-    },
-    "yearsystem129": {
-      "missing": [
-        "起盘信息"
       ],
       "extra": []
     },
