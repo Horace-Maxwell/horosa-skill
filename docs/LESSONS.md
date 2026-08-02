@@ -93,6 +93,33 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.25.0+ / 2026-08 — 一个 em dash 打死整个 Windows runtime（无 BOM 的 .ps1 + PowerShell 认花引号）
+
+- **症状**：v0.25.0 Windows 半边刚建完，装进独立 runtime root 跑 `selfcheck` → `runtime.start_failed`，
+  stderr 是启动器自己的 **4 个 parse error**：`Missing closing '}' in statement block`、
+  `Unexpected token 'chartpy:'`、`The string is missing the terminator: "`——启动器**一行都没跑**就死，
+  Java/chart 双半边全不起。zip 里文件一个不少、`verify_runtime_release.py` 全绿。
+- **根因链**：① runtime manager 用 `powershell`（**Windows PowerShell 5.1**，见
+  `manager._platform_command`）跑 `.ps1`；② 5.1 对**无 BOM** 的 `.ps1` 按**系统 ANSI 代码页**解码
+  （本机 ACP=1252）；③ UTF-8 的 `—`(U+2014, `E2 80 94`) 于是解成 `â` `€` + **U+201D**；
+  ④ PowerShell 词法分析器**把 U+201D 当字符串定界符**——`Write-Host "…without them — it may…"` 的字符串
+  就地截断，后半行变成代码，级联炸穿整个文件。
+- **为什么以前没炸**：`—` 早就在这两个模板里（v0.12.0 加固时进的注释），但**都在注释行**——注释到行尾
+  为止，混进一个花引号也无所谓。issue #14（`3706c94`）把降级提示写进了一个 **`Write-Host` 字符串字面量**，
+  这是第一次让非 ASCII 落进可执行的字符串里；而那之后**第一次 Windows 构建**就是本次 v0.25.0 补建。
+  实证：同一文件去掉 BOM + 把 `—` 放回字符串 → 4 errors；去掉 BOM 但字符串里用 ASCII `-` → parse OK。
+- **修复**：两个模板改为 **UTF-8 with BOM**（正解，连注释里的 `格局/神煞` 也不再 mojibake）+ 那条
+  `Write-Host` 里的 `—` 换成 ASCII `-`（第二层：BOM 万一被工具剥掉也不会炸成 parse error）。
+  `manager._apply_runtime_overrides` 与 builder 都是 `shutil.copy2`，BOM 逐字节随行。
+- **守卫**（三层）：① `tests/test_runtime_launcher_templates.py`——BOM 断言 + 「非 ASCII 只许出现在注释行」
+  （到处跑，含 Linux CI）；② 同文件里 Windows-only 用 `powershell`
+  `[Parser]::ParseFile` **真解析**，CI 的 `windows-smoke` job 会执行；③ 发布闸
+  `verify_runtime_release.py::_assert_windows_launchers_are_bom_encoded`——直接读 zip 里那两个 `.ps1`
+  的前三字节，上传前拦住（配套 fake-zip 正反测试）。
+- **横切教训**：`verify_runtime_release.py` 查的是「文件在不在」，查不出「文件能不能跑」。**跨引擎升级版的
+  Windows 补建必须真装真跑**（AGENTS §7 的 native-verify 一步不能省）——这次正是靠它逮住的，否则上传的
+  就是一颗谁也起不来的 runtime，而所有绿灯都会说没问题。
+
 ### v0.25.0+ / 2026-08 — 维护机装着 runtime，把「其实要 runtime」的线材契约测试藏到了 CI 才炸
 
 - **症状**：v0.25.0 发布 commit 的门禁本地 254 passed 全绿，push 后 main 上 `CI` 的 `test` 与

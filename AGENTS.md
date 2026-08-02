@@ -296,6 +296,14 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   会转绿）；chart 不活 → throw（真失败）。该契约与 `manager._run_start_command` 的 chart-only 降级判定
   **锁步——改一边必改另一边**。Java 带
   `-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8`（Temurin 17 pre-JEP-400，OS 代码页会 mojibake CJK jar 表）。
+- **两个 `.ps1` 模板必须存成 UTF-8 with BOM，且非 ASCII 只许出现在注释行。** manager 用
+  `powershell`（Windows PowerShell **5.1**）跑它们，5.1 对无 BOM 的 `.ps1` 按系统 ANSI 代码页解码：
+  UTF-8 的 `—`(U+2014) 在 CP1252 下末字节解成 **U+201D**，而 PowerShell 词法分析器**认花引号作字符串
+  定界符** → 字符串截断 → parse error → 启动器未跑先死（`runtime.start_failed`，v0.25.0 补建实炸）。
+  注释里的非 ASCII 无害，字符串字面量里的致命。守卫三层：
+  `tests/test_runtime_launcher_templates.py`（BOM + 非注释行纯 ASCII，全平台；Windows 上再用
+  `[Parser]::ParseFile` 真解析，CI `windows-smoke` 跑）+ 发布闸
+  `verify_runtime_release.py::_assert_windows_launchers_are_bom_encoded`（直接验 zip 里的前三字节）。
 - **launcher「假失败」已收敛（issue #14 降级门之后）**：无 Mongo/Redis 机器上 Java 连库重试可超就绪窗——
   现在 chart 就绪即 exit 0（java 慢 = 降级 marker，之后自愈则 `doctor` 转绿）。launcher 仍 throw = chart
   半边真没起来，按真失败排查（看 astropy.stderr 日志），不再有「throw 但其实都起来了」的假阳。
@@ -392,6 +400,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | 新时间钥匙/新参数结果与 Ptolemy/默认完全一致 | 长驻旧 chart 进程静默吞新键 | 心跳核 `pdSyncRev`；重启 vendored 实例 |
 | `/predict/pd` params 回显 = 你送的白名单外值 | 回显是原样输入，引擎内已回退 core_alchabitius | 快照如实标注「未核验，引擎回退 Alcabitius 半弧法」，不静默换标签 |
 | Windows 启动器超时 throw 但服务随后可用 | Java 连 Mongo/Redis 重试超 readiness 窗 | 忽略 throw，poll `doctor` / 双端点几分钟 |
+| `runtime.start_failed`，stderr 是启动器**自己的** parse error（`Missing closing '}'` / `string is missing the terminator`） | `.ps1` 无 BOM → Windows PowerShell 5.1 按 ANSI 解码，非 ASCII 字符变 U+201D 被当成字符串定界符 | 模板存成 UTF-8 with BOM + 字符串字面量纯 ASCII（§6）；`uv run pytest tests/test_runtime_launcher_templates.py` 定案 |
 | release guard 绿但 Windows 用户拿到旧功能 | pin-forward（manifest 指旧 zip） | `sync_windows_release.py --check` 定案 → §7 修复流 |
 | 结果段缺失，客户端想报「缺依赖」 | 幻觉依赖风险 | 按 SKILL.md：说本地未返回该段，跑 `doctor` / `openclaw-check`，不发明 MongoDB/7897 |
 | chart 启动日志整段 traceback：`kintaiyi/game_theory.py … No module named 'scipy'` | prewarm 碰到 opt-in 博弈论子模块（默认关、懒 import）；scipy 两平台 bundle 均无（mac 同样） | 良性，无需处置；判据 = `/taiyi/pan` 回 `ResultCode 0 + source kintaiyi`；勿为此加 scipy（瘦身红线） |

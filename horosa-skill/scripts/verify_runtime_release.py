@@ -171,6 +171,43 @@ def _assert_payload_manifest(path: Path, platform_key: str, expected_version: st
         raise SystemExit(f"{path.name} has stale or mismatched embedded runtime manifest: " + "; ".join(errors))
 
 
+def _read_archive_bytes(path: Path, entry_name: str) -> bytes:
+    if path.name.endswith(".tar.gz"):
+        with tarfile.open(path, "r:gz") as archive:
+            file_obj = archive.extractfile(archive.getmember(entry_name))
+            if file_obj is None:
+                raise SystemExit(f"{path.name} has unreadable entry: {entry_name}")
+            return file_obj.read()
+    if path.suffix.lower() == ".zip":
+        with zipfile.ZipFile(path) as archive:
+            return archive.read(entry_name)
+    raise SystemExit(f"unsupported archive type: {path}")
+
+
+# 发布闸：Windows 启动器必须带 UTF-8 BOM。runtime manager 用 `powershell`（Windows PowerShell 5.1）
+# 跑它，5.1 对无 BOM 的 .ps1 按系统 ANSI 代码页解码——UTF-8 的 `—`(U+2014) 在 CP1252 下末字节 0x94
+# 解成 U+201D，而 PowerShell 词法分析器**认它作字符串定界符** → 字符串截断 → parse error → 启动器
+# 未跑先死（runtime.start_failed，整个 Windows runtime 起不来）。模板侧守卫见
+# tests/test_runtime_launcher_templates.py；这条是 zip 里的最终形态守卫。
+_WINDOWS_BOM_REQUIRED = (
+    "runtime-payload/Horosa-Web/start_horosa_local.ps1",
+    "runtime-payload/Horosa-Web/stop_horosa_local.ps1",
+)
+
+
+def _assert_windows_launchers_are_bom_encoded(path: Path) -> None:
+    offenders: list[str] = []
+    for entry in _WINDOWS_BOM_REQUIRED:
+        if not _read_archive_bytes(path, entry).startswith(b"\xef\xbb\xbf"):
+            offenders.append(entry)
+    if offenders:
+        raise SystemExit(
+            f"{path.name}: Windows launcher(s) lack a UTF-8 BOM — Windows PowerShell 5.1 will decode them "
+            "as ANSI and a single non-ASCII char can break the parse (runtime.start_failed):\n- "
+            + "\n- ".join(offenders)
+        )
+
+
 def _validate_manifest(path: Path) -> dict:
     data = json.loads(path.read_text(encoding="utf-8"))
     platforms = data.get("platforms")
@@ -216,6 +253,7 @@ def main() -> None:
         windows_archive = Path(args.windows_archive).expanduser().resolve()
         _assert_entries(windows_archive, "win32-x64")
         _assert_payload_manifest(windows_archive, "win32-x64", expected_version)
+        _assert_windows_launchers_are_bom_encoded(windows_archive)
         verified_archives["windows"] = str(windows_archive)
 
     if args.linux_archive:

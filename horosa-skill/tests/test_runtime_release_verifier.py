@@ -86,10 +86,20 @@ _WIN_FILE_ENTRIES = [
 _SWEFILES_DIR = "runtime-payload/Horosa-Web/flatlib-ctrad2/flatlib/resources/swefiles/"
 
 
-def _write_full_win_zip(path: Path, *, swefiles_empty: bool) -> None:
+_LAUNCHERS = (
+    "runtime-payload/Horosa-Web/start_horosa_local.ps1",
+    "runtime-payload/Horosa-Web/stop_horosa_local.ps1",
+)
+
+
+def _write_full_win_zip(path: Path, *, swefiles_empty: bool, launcher_bom: bool = True) -> None:
     with zipfile.ZipFile(path, "w") as archive:
         for name in _WIN_FILE_ENTRIES:
-            archive.writestr(name, b"x")
+            if name in _LAUNCHERS:
+                # 真实形态：UTF-8 BOM 打头（Windows PowerShell 5.1 才会按 UTF-8 解码）
+                archive.writestr(name, (b"\xef\xbb\xbf" if launcher_bom else b"") + b"Write-Host 'x'\n")
+            else:
+                archive.writestr(name, b"x")
         if swefiles_empty:
             archive.writestr(_SWEFILES_DIR, b"")  # bare directory-marker entry, no files inside
         else:
@@ -109,3 +119,18 @@ def test_assert_entries_accepts_required_directory_with_a_real_file(tmp_path: Pa
     archive = tmp_path / "runtime.zip"
     _write_full_win_zip(archive, swefiles_empty=False)
     verify_runtime_release._assert_entries(archive, "win32-x64")  # must not raise
+
+
+def test_windows_launchers_must_carry_a_utf8_bom(tmp_path: Path) -> None:
+    """无 BOM 的 .ps1 会被 Windows PowerShell 5.1 按 ANSI 解码 —— 一个非 ASCII 字符就能打成 parse
+    error，启动器未跑先死（v0.25.0 Windows 补建时真炸过）。发布闸必须拦在上传之前。"""
+    archive = tmp_path / "runtime.zip"
+    _write_full_win_zip(archive, swefiles_empty=False, launcher_bom=False)
+    with pytest.raises(SystemExit, match="lack a UTF-8 BOM"):
+        verify_runtime_release._assert_windows_launchers_are_bom_encoded(archive)
+
+
+def test_windows_launchers_with_a_bom_pass(tmp_path: Path) -> None:
+    archive = tmp_path / "runtime.zip"
+    _write_full_win_zip(archive, swefiles_empty=False)
+    verify_runtime_release._assert_windows_launchers_are_bom_encoded(archive)  # must not raise

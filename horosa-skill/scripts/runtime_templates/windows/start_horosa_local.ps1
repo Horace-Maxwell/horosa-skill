@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RuntimeRoot = Join-Path $Root "..\\runtime\\windows"
@@ -175,7 +175,7 @@ while ((Get-Date) -lt $Deadline) {
 }
 
 if ($ChartReady) {
-  Write-Host "degraded: chart-only (java backend not ready within the window; Mongo/Redis boot retries are slow on machines without them — it may still become ready)"
+  Write-Host "degraded: chart-only (java backend not ready within the window; Mongo/Redis boot retries are slow on machines without them - it may still become ready)"
   Write-Host "chartpy:  http://127.0.0.1:$ChartPort"
   exit 0
 }
