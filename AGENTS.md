@@ -368,7 +368,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 4. `uv run pytest`：`@requires_runtime` / `@requires_chart` 集成测试在服务 down 时 **skip**——带 skip 的
    全绿**不是完整验证**；服务全起时 0 skipped 才是最强信号。验收 = 各技法产出 aiExport 段 + 干净导出契约
    （`missing_selected_sections == []` 且 `unknown_detected_sections == []`；election 等条件段技法按
-   optional 白名单放宽）。
+   optional 白名单放宽）。**反向陷阱：维护机装着 runtime，会让「其实依赖 runtime」的离线测试恒绿，
+   只有 CI（唯一无 runtime 的环境）才炸**——离线/线材契约测试**禁以「算成功」为判据**（那是
+   `@requires_runtime` 的活）；`tests/test_mcp_contract.py` 已用 autouse fixture 把 `HOROSA_RUNTIME_ROOT`
+   钉到空目录强制与 CI 同形，发版前另跑一遍 `HOROSA_RUNTIME_ROOT=<空目录> uv run pytest` 复现该形状。
 5. **`pkill` 法则**：bundled 与 live 星阙都跑 `webchartsrv.py`——`pkill -f webchartsrv.py` 会连星阙
    `:8899` 一起杀。按端口/PID 停；stop 脚本已按 runtime root 限定 kill 范围，保持住。
 
@@ -383,6 +386,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | `Cannot find package 'lunar-javascript'` | `horosa-core-js` 未装 npm 依赖 | `npm ci --omit=dev`；打包/CI 已内置该步 |
 | `needs an import attribute of type: json` / 全 JS 工具集体语法炸 | PATH 上 Node < 20.10 | 用 bundled Node 22（`engines` 已声明地板） |
 | pytest 全绿但 `requires_*` 全 skip | 本地服务没起 | 起 vendored 实例（上面第 2 步）再跑 |
+| 本地 pytest 全绿，CI 上离线测试红在 `runtime.not_installed` | 维护机装着离线 runtime，测试其实一路真算；CI 是唯一无 runtime 的环境 | 该测试要么进 `@requires_runtime`，要么改成不以「算成功」为判据；`HOROSA_RUNTIME_ROOT=<空目录> uv run pytest` 复现 CI 形状（§8 验证流程 4） |
 | `pydantic_core` dylib/签名报错 | miniconda symlink venv 触 library-validation | `uv venv --clear --python-preference only-managed --python 3.12 && uv sync` |
 | `uv run pytest` 报缺新 API（如 `mcp.types` 无 `Icon`）而 `python -m pytest` 正常 | 仓库搬家后 `.venv/bin/*` shebang 仍指旧路径 → 静默回退全局 pytest（旧依赖环境） | 同上重建 venv；判据 = 直接跑 `.venv/bin/pytest` 报 `bad interpreter` |
 | 新时间钥匙/新参数结果与 Ptolemy/默认完全一致 | 长驻旧 chart 进程静默吞新键 | 心跳核 `pdSyncRev`；重启 vendored 实例 |
@@ -403,6 +407,12 @@ A global stability pass hardened these; keep them true when you touch the releva
   `ValidationError`（raised *before* that try）intentionally surfaces as `tool.invalid_payload`. Do not
   add a tool/post-processing path that can raise out of `run_tool` — it would crash the CLI, break the
   MCP session, or abort a whole `dispatch`.
+- **错误信封的顶层镜像三键在所有错误路径上一致。** `ToolEnvelope` / `DispatchEnvelope` 的
+  `code`/`message`/`details` 是 `error.*` 的向后兼容镜像（给按顶层键读的 CLI / 旧 agent 提示词）。
+  MCP 面构造的错误（闸门、pydantic 校验）与 `service.run_tool` / `dispatch` 自己构造的错误
+  （`runtime.*` / `transport.*` / `tool.ken_compute_failed` / `tool.internal_error`）**两条路径都要填**——
+  只填一边时，调用方恰恰在最常见的失败上读到 `None`。守卫：
+  `test_mcp_contract.py::test_error_paths_return_a_conformant_envelope` 同时覆盖闸门与闸门之后的失败。
 - **Surfaces never dump a traceback.** CLI file reads（`--ai-report-file` / `--ai-answer-file`）raise
   clean `typer.BadParameter`; the MCP `horosa_report_*` handlers wrap unexpected renderer/IO errors via
   `_mcp_internal_error_payload`; subprocess calls carry timeouts（incl. `openclaw-check --full`, 900s）.

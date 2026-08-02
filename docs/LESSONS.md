@@ -93,6 +93,33 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.25.0+ / 2026-08 — 维护机装着 runtime，把「其实要 runtime」的线材契约测试藏到了 CI 才炸
+
+- **症状**：v0.25.0 发布 commit 的门禁本地 254 passed 全绿，push 后 main 上 `CI` 的 `test` 与
+  `windows-smoke` **两个 job 同时红**——`tests/test_mcp_contract.py` 的
+  `test_numeric_coordinates_reach_normalization_instead_of_being_rejected` 与
+  `test_request_escape_hatch_works_over_the_wire` 断言 `ok is True`，实收
+  `error.code == runtime.not_installed`。两平台同一原因，红了一整天没人发现（发布当天没人再看 CI）。
+- **根因**：这两条是**线材契约**测试（考 MCP 面广告的 schema / 归一化 / `request` 逃生通道），却用
+  「算成功」当判据 → 走 `call_tool` 一路真算。维护机装着离线 runtime，所以本地恒绿；CI runner 上没有
+  runtime，`_require_runtime` 直接抛 `runtime.not_installed`。**「本地全绿」在这类测试上不构成证据——
+  维护机与 CI 的形状不同**，而 CI 是唯一无 runtime 的环境。
+- **顺带挖出的第二个真 bug**：`ToolEnvelope` 的顶层镜像三键（`code`/`message`/`details`，
+  `schemas/common.py` 明写「使既有按 code/message/details 读的调用方零改动」）**只在 MCP 面构造的错误
+  信封上填**（闸门 / pydantic 校验），`service.run_tool` 自己构造的错误信封一个都没填 → 最常见的失败
+  （`runtime.not_installed` / `tool.ken_compute_failed` / `transport.*` / `tool.internal_error`）在顶层
+  `code` 上读到 `None`。既有测试只覆盖闸门那条路径，所以「信封契约」看起来是有守卫的。
+- **守卫**：① `test_mcp_contract.py` 加 autouse fixture 把 `HOROSA_RUNTIME_ROOT` 钉到空临时目录——
+  整个文件**一律在「runtime 未安装」形状下跑**，维护机与 CI 同形，此类依赖当场暴露（新写的线材测试
+  再想偷偷依赖 runtime 也会本地就红）；② 两条测试改为断言真正要考的东西（`input_normalized` 里
+  数字经纬度已被吸收成 `39n54`/`116e24`；逃生通道的内层字段确实到了归一化），并共用
+  `_assert_passed_the_mcp_surface`（只否掉 `tool.invalid_payload` / `agent_guidance.required` 两个
+  「归一化之前就被打回」的 code），与本机有没有 runtime 解耦；③ `run_tool` 两条错误路径 + dispatch
+  解析失败路径补齐镜像三键，`test_error_paths_return_a_conformant_envelope` 扩到闸门**之后**的失败
+  信封，逐键断言 `顶层 == error.*`。
+- **可复现判据**（没有 CI 也能在维护机上验）：`HOROSA_RUNTIME_ROOT=<空目录> uv run pytest` —— 这条
+  等价于 CI 的形状；发版前值得跑一遍。
+
 ### v0.25.0-dev / 2026-08 — 段级欠账回填（批 1 起）
 
 - **印占 53 段：verbatim vendor 胜过 Python 移植。** 上游 `buildJyotishSnapshotLines`（IndiaChart.js:479，

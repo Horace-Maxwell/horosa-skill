@@ -8970,6 +8970,12 @@ class HorosaSkillService:
                     warnings=[],
                     memory_ref=None,
                     error=ErrorInfo(code=exc.code, message=str(exc), details=error_details),
+                    # 顶层镜像三键（见 schemas/common.py）：MCP 面的闸门/校验错误一直镜像，工具自身的
+                    # 错误（runtime.not_installed / tool.ken_compute_failed / transport.*）却没有，
+                    # 按顶层 `code` 读的调用方在最常见的失败上读到 None。两条路径口径必须一致。
+                    code=exc.code,
+                    message=str(exc),
+                    details=error_details,
                     trace_id=trace["trace_id"],
                     group_id=trace["group_id"],
                 )
@@ -8994,6 +9000,9 @@ class HorosaSkillService:
                         message=str(exc),
                         details={"exception_type": type(exc).__name__},
                     ),
+                    code="tool.internal_error",
+                    message=str(exc),
+                    details={"exception_type": type(exc).__name__},
                     trace_id=trace["trace_id"],
                     group_id=trace["group_id"],
                 )
@@ -9614,6 +9623,9 @@ class HorosaSkillService:
                 warnings=[],
                 memory_ref=None,
                 error=ErrorInfo(code=exc.code, message=str(exc), details=exc.details),
+                code=exc.code,
+                message=str(exc),
+                details=exc.details,
             )
 
         normalized_inputs: dict[str, dict[str, Any]] = {}

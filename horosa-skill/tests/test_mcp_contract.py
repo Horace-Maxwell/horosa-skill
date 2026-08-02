@@ -19,6 +19,18 @@ from horosa_skill.service import HorosaSkillService
 from horosa_skill.surfaces.mcp_server import _SERVER_INSTRUCTIONS, create_mcp_server
 
 
+@pytest.fixture(autouse=True)
+def _no_installed_runtime(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """线材契约测试一律在「离线 runtime 未安装」的形状下跑——包括维护机。
+
+    这些测试考的是 MCP 面（广告的 schema、归一化、逃生通道、错误信封），不是计算。维护机上装着
+    runtime，`call_tool` 会一路真算并 `ok=True`，于是「其实依赖 runtime」的断言在本地恒绿、到了
+    CI（无 runtime）才炸——v0.25.0 发布 commit 就是这么带着红 CI 上 main 的。把 runtime root 钉到
+    空目录，本地与 CI 同形，这类依赖当场暴露。
+    """
+    monkeypatch.setenv("HOROSA_RUNTIME_ROOT", str(tmp_path / "runtime"))
+
+
 def _server(*, compact: bool = False):
     settings = Settings.from_env()
     settings.mcp_compact = compact
@@ -28,6 +40,16 @@ def _server(*, compact: bool = False):
 def _payload(result) -> dict:
     content = result[0] if not isinstance(result, tuple) else result[0][0]
     return json.loads(content.text)
+
+
+# 在归一化之前就把调用打回去的两种拒绝：pydantic 校验 与 澄清闸。技法计算能不能成功取决于本机有没有
+# 装 runtime，但「有没有进到归一化」不取决于——这两个 code 不出现，就说明请求穿过了 MCP 面。
+_REJECTED_BEFORE_NORMALIZATION = {"tool.invalid_payload", "agent_guidance.required"}
+
+
+def _assert_passed_the_mcp_surface(body: dict) -> None:
+    code = (body.get("error") or {}).get("code")
+    assert code not in _REJECTED_BEFORE_NORMALIZATION, f"请求在归一化之前就被 MCP 面拒了: {body}"
 
 
 @pytest.mark.parametrize("compact", [False, True])
@@ -134,8 +156,9 @@ def test_numeric_coordinates_reach_normalization_instead_of_being_rejected() -> 
         )
     )
     body = _payload(result)
-    assert body["ok"] is True, body
+    _assert_passed_the_mcp_surface(body)
     assert body["input_normalized"]["lat"] == "39n54", "数字经纬度应被 normalize_request_payload 吸收"
+    assert body["input_normalized"]["lon"] == "116e24"
 
 
 def test_request_escape_hatch_works_over_the_wire() -> None:
@@ -154,7 +177,13 @@ def test_request_escape_hatch_works_over_the_wire() -> None:
             },
         )
     )
-    assert _payload(result)["ok"] is True
+    body = _payload(result)
+    # 逃生通道没被解包的话，内层字段一个都到不了引擎：闸门会以 agent_guidance.required 打回
+    # （被 _assert_passed_the_mcp_surface 拦下），归一化里也不会有这盘的日期与经纬度。
+    _assert_passed_the_mcp_surface(body)
+    normalized = body["input_normalized"]
+    assert normalized["date"] == "2028-04-06" and normalized["time"] == "09:33:00"
+    assert normalized["lat"] == "31n13" and normalized["lon"] == "121e28"
 
 
 def test_error_paths_return_a_conformant_envelope() -> None:
@@ -172,6 +201,31 @@ def test_error_paths_return_a_conformant_envelope() -> None:
     assert gate["ok"] is False and gate["tool"] == "qimen"
     # 顶层镜像键保持向后兼容（旧调用方按 code/message/details 读）
     assert gate["code"] == gate["error"]["code"] == "agent_guidance.required"
+
+    # 闸门之后的失败（工具自身抛的 runtime/transport/内部错误）走的是 service.run_tool 的信封，
+    # 与上面的 MCP 面信封是两条构造路径——镜像三键曾只在 MCP 面那条上填，按顶层 `code` 读的调用方
+    # 在最常见的失败（runtime.not_installed）上读到 None。两条路径口径必须一致。
+    failed = _payload(
+        asyncio.run(
+            _server().call_tool(
+                "horosa_cn_qimen",
+                {
+                    "date": "2028-04-06",
+                    "time": "09:33:00",
+                    "zone": "+08:00",
+                    "lat": "31n13",
+                    "lon": "121e28",
+                    "defaults_accepted": True,
+                },
+            )
+        )
+    )
+    for key in ("ok", "tool", "version", "input_normalized", "error"):
+        assert key in failed, f"tool error missing envelope key {key}: {failed}"
+    assert failed["ok"] is False and failed["error"]["code"] == "runtime.not_installed"
+    assert failed["code"] == failed["error"]["code"]
+    assert failed["message"] == failed["error"]["message"]
+    assert failed["details"] == failed["error"]["details"]
 
 
 def test_structured_output_is_opt_in_and_keeps_the_gate_working(monkeypatch: pytest.MonkeyPatch) -> None:
