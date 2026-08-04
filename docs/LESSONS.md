@@ -93,6 +93,117 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.26.0 / 2026-08-04 — 上游 v3.7.x 同步：三个**机制**缺口比内容缺口更贵
+
+本轮真正的发现不是「少了两个技法」，而是**四把守卫全绿的情况下少了两个技法**。内容一天补完，
+机制缺口不堵会以同样的形状再来一次。
+
+- 🔴 **上游会「只加技法键、不动版本闸」——版本恒等永远测不出新技法。**
+  上游 `aiExport.js:306` 把纪律写死了：「新技法键只加键、两把版本闸恒不动——老用户本无自定义走
+  preset 全量」。那是针对 localStorage **迁移闸**的正确纪律，但下游拿版本号当「上游有没有变」的
+  探针就此失效：`tianxing`(v3.7.0) 与 `qimenzeri`(v3.7.1) 都在 `AI_EXPORT_SETTINGS_VERSION = 50`
+  不变的情况下到货。
+  → 唯一可能的信号是**技法键集合差分**。`verify_upstream_sync.py` 新增 check 1b，把上游 preset 键集
+  与 `contracts/upstream_provenance.json` 记录的键集相比，报「upstream gained N technique key(s): …」。
+  两个方向的基线**不同**：gained 要并上「skill 已登记的键」（登记即已处理，让检查在登记后自愈），
+  lost 只能对着 recorded（skill 合法持有 `acg`/`astrodata`/`wangji` 这些上游无对应的键，并进去必误报）。
+
+- 🔴 **`_upstream_preset.py` 看不见对象字面量之外的 preset 条目 —— 20 段整键隐形。**
+  上游 `AI_EXPORT_PRESET_SECTIONS.qimenzeri = [...AI_EXPORT_PRESET_SECTIONS.qimen, …]`
+  写在字面量**闭合之后**（aiExport.js:735）。`_object_block` 只做花括号匹配，于是整个 `qimenzeri`
+  从未进入解析结果——段级欠账棘轮一边报「0 absent keys」，一边漏着一个 20 段的技法。
+  这是该 docstring 已记的两个陷阱（注释里引段名 / `...JIEQI_SETTING_PRESETS` spread）的**同族第三个**。
+  → 补一趟成员赋值扫描，且必须跑在字面量+spread 之后（它的 spread 要对着已解析的 `qimen` 求值），
+  token 按**源码顺序**走，spread 段与字面段才能正确交织。`tests/test_upstream_preset_parser.py` 钉死。
+
+- 🔴 **`revendor_core_js.py` 的落地路径靠猜，会分叉出重复树。**
+  它按上游父目录名推断 vendor 子目录，但本树是按技法分目录的：`utils/balbillus.js` 的真身在
+  `vendor/astroextra/`。实测不带 `--vendor-subdir` 驱动全树，会造出 `vendor/utils/balbillus.js`
+  与真身并存，且 relocate 还会把别的文件的 import 指回**新造的那棵**。
+  → `contracts/vendor_manifest.json`：显式 upstream↔vendor 路径对 + 声明式偏离（`stub_import` /
+  `import_redirect`），三种 mode（verbatim / curated / bespoke）各有可断言的判据。此后
+  `--from-manifest --check` 全树 `unchanged` 就是「已同步」的机械结论，不再靠考古。
+
+- 🔴 **`--write-state` 在守卫失败时照写 —— 把失败洗成一条持久的「已核对」声明。**
+  写入在 `:145`、失败 raise 在 `:162`。本轮实测复现：sync 脚本跑完守卫 FAIL，`vendor_sync_state.json`
+  仍被写成「最近一次核对过的上游状态」。**红着写比不写更糟**——没有记录只是不知道，错误记录是被骗。
+  → 写入移到 raise 之后，并由 `tests/test_verify_upstream_sync.py` 断言源码顺序。
+
+- **裸 sha256 对未变换的上游比对，注定永远红。** vendored 文件个个带 headless 变换，raw 比对报 133/257
+  漂移，其中大半是变换本身。**永远红的检查等于没有检查**——人会学会略过它。
+  → check 3 改用 manifest 作 oracle：按声明的偏离重渲染上游，再比对。可达到的绿才是有意义的绿。
+
+- **中文措辞躲过了英文正则。** `verify_docs_sync` 只认 `badge/tools-(\d+)-`；中文 README 用
+  `badge/技法-83-`，于是在注册表已到 89 时陈旧了整整一个版本，**同一行的 `alt="89 tools"` 就在旁边**。
+  同类漏网还有 `manifest.json`、`banner.svg`、以及**发给每个 MCP 客户端**的 `_SERVER_INSTRUCTIONS`
+  （两处 83，此前无任何守卫读它）。旧闸报 0 处，新闸一次报出 16 处。
+  → 教训不是「数字写错了」，而是**守卫的覆盖面被措辞的偶然决定**。计数检查一律做成语言无关，
+  并对「同一行 badge 与 alt 自相矛盾」单独设断言——那种自相矛盾任何时候都是 bug。
+
+- **上游工作树是活的。** 本轮进行中上游连提交两次（`afdac78` → `8fe5771` 二十八宿六处算法勘误
+  → `23aa38e`），中途还出现过未提交的 WIP。守卫按**磁盘文件**比对，于是别人的未提交编辑会读成
+  「上游漂移」，而照着 re-vendor 等于把**未评审的半成品**打进发布物；provenance 记的又是 commit，
+  脏树让那条记录自相矛盾。→ 新增 check 0：脏树在本地只提示，`--require-upstream`（发布链）判红。
+
+- **「已 vendored」≠「是当前的」。** `qimenzeri` 依赖的 `DunJiaCalc`/`DunJiaBaGongRules`/`baziLunarLocal`
+  三个文件都在树里，但都是旧版，缺的正是新模块要 import 的符号。查依赖要查**具体符号**，不是查文件在不在。
+
+- **`gua/liuyaoTianshi.js` 从未 vendor —— `liuyaoFacade.js` 一直 import 着一个不存在的模块。**
+  上游 v3.6.0「六爻天时占法五家」，本仓漏了整整一个文件。同类：`taiyi/core/taiyiSchool.js` 的
+  `../../../utils/dateStrSafe.js` 是死链，只因无人 import 才没炸。两者都是 `loadcheck.mjs`（新增，
+  `import()` 全部 264 个 vendored 模块）当场抓到的。**AGENTS §5 说得对：load 过 ≠ 真盘不崩——
+  但 load 不过一定崩，而这一层此前完全没有。**
+
+- **`selfcheck.mjs` 断言的是形状不是值 —— 三传重排能静默通过。** 六壬只断言
+  `sanChuanBranches.length === 3`。上游 v3.7.1 两处勘正（#46 八专/遥克判定序、#62 伏吟末传子卯互刑）
+  恰好改的就是三传。
+  → **穷举分桶把「是不是回归」从判断题变成计数题**：60 日干支 × 12 月将 × 12 时 = 8640 课全跑，
+  新旧差分 336 条，三传变 120 / 仅课名 216；伏吟桶恰为 **丁卯/己卯/辛卯** 三日（上游自述
+  「全域仅此 3/720 课变」），非伏吟桶恰为 **己未/庚申/甲寅** 三个八专日，上游点名的
+  「甲寅日戌将丑时/午时」2/2 命中，**桶外 0 条**。桶闭合即证明「改动恰好是上游那两处修复」。
+  ⚠️ 上游自述当年「并用金标锁死」了**错**答案——这个文件上「golden 变了」不构成回归证据。
+  → 两个具名课式已值级钉进 `selfcheck.mjs`。
+
+- **一次 re-vendor 抹掉两处蓄意偏离，都是被测试当场抓到的。**
+  ① `tarot/engine/shuffle.js` 上游 v3.7.x 把 sha256 从 `node:crypto` 换成 `node-forge`，整棵
+  `tarot/engine` 因缺包加载失败（loadcheck 抓到）→ 改用 `stub_import` 提供 forge 形状的 shim，
+  上游函数体保持逐字。② `zhengchuanTiebanLocal.js` 的**动态** `import('./x.json')` 也需要
+  `with { type: 'json' }`，而变换的正则只覆盖静态 import（selfcheck 抓到——loadcheck 抓不到，
+  因为那是懒加载路径）。后者是通用规则，已并入 `transform()`。
+  → 蓄意偏离必须**声明**（manifest）或**机械化**（transform），写在文件里的偏离下一次重 vendor 必被抹掉。
+
+- **`_reexport_required` 只认 `export function`，不认尾部 `export { … }` 清单。** 上游给
+  `baziLunarLocal` 的 `buildFlowDays/buildFlowHours` 补了尾部清单，于是自动补 export 变成
+  "Duplicate export"，模块整个加载不了。loadcheck 抓到。
+
+- **两个同名 `AstroConst.js` 是一个真陷阱。** `src/constants/`（151 行共享 shim，**有** `SignsProp`/
+  `LIST_SIGNS`）与 `src/vendor/constants/`（32 行 Uranian 子集，**没有**）。上游写
+  `'../constants/AstroConst'`，在 vendor 树里恰好解析到**后者**，relocate 因此认为无需重指——
+  `SignsProp` 静默变 `undefined`，`buildTriplicityPeriods` 真机抛 `reading 'Gemini'`。
+  → 三个 astroextra 文件 + `tianxingSnapshot` 都用 `import_redirect` 钉死到共享 shim。
+
+- **条件树用 passthrough，不建模。** 上游两套条件表共 60+ 类，各自 `params` 形状/`validate`/`compile`
+  都不同。在 skill 侧重编一遍 = 造第二份真值源，上游一加条件类就烂。让 vendored `compileTree`/
+  `compileQimenTree` 跑各叶子自己的 `validate`，错误信息还是本地化的。可发现性放 `agent_guidance`。
+
+- **`scanQimen` 吃的是编译后的树，不是 UI 树。** UI 树 `{kind:'group', joiner, children}` 供快照渲染，
+  编译树 `{type:'all', conditions}` 供求值。传错**不会报错**——它安静地匹配不到任何东西，
+  产出一个看起来完全合理的「零命中」。真机实测 0 命中才发现（同窗同条件正解是 11 命中）。
+
+- **零命中不是缺段。** 两个新技法的段头都是**无条件 push**，零命中时上游写的是「时间段内无满足条件的
+  时辰。」这类真话。所以它们**不进** `AI_EXPORT_OPTIONAL_SECTIONS`——登记成 optional 等于拿一个真实的
+  回归探测器（builder 哪天不产该段了）换零收益。判据是**读 builder 源码**，不是猜「搜索可能没结果」。
+
+- **`/electionscan/scan` 属「HTTP 200 带失败信封」家族。** 失败包成
+  `{"ResultCode": -1, "Result": {"err": …}}`，而 `HorosaPlainJsonClient` 只看顶层 `err` → 不加守卫
+  时 `span_too_large` 会**静默退化成零命中**。新增 `_require_electionscan_ok`，与 `_require_ken_pan` 同族。
+
+- **契约版本该不该跟着上游不动？不。** 上游那个数是 localStorage 迁移闸（新键无存档，迁移本就是
+  no-op）；skill 这个数是**内容版本**，进每个信封的 `settings_used.version`，是下游判断「段目录变了」
+  的依据。24 个新段正是该事件，故 11 → 12（仓内先例：v8 三技法入册、v11 五技法入册）。
+  `MIRRORED_UPSTREAM_AIEXPORT_VERSION` 保持 50——上游数字确实没动。两个数字语义不同，别「修」成一致。
+
+
 ### v0.25.0-dev / 2026-08 — 段级欠账回填（批 1 起）
 
 - **印占 53 段：verbatim vendor 胜过 Python 移植。** 上游 `buildJyotishSnapshotLines`（IndiaChart.js:479，

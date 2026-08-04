@@ -34,6 +34,20 @@ class FakeClient(HorosaApiClient):
         return True
 
     def call(self, endpoint: str, payload: dict) -> dict:
+        if endpoint == "/electionscan/scan":
+            # 真实形状：每行必带 pick/pickEnd（ε 缓冲后的安全起盘时刻）与 startJd/endJd。缺 pick 时
+            # runner 会退回按分钟截断的 start，恰落征象边界外侧 —— 桩里必须有。
+            if str(payload.get("startDate", "")).startswith("1999"):
+                return {"err": "span_too_large", "detail": "span 400.0d exceeds 93d; split the request"}
+            return {
+                "intervals": [{
+                    "start": "2028-04-01 00:00", "end": "2028-04-19 21:09",
+                    "pick": "2028-04-01 00:01:30", "pickEnd": "2028-04-19 21:07:59",
+                    "startJd": 2461862.1666666665, "endJd": 2461881.048255995, "durationMin": 27189.5,
+                }],
+                "truncated": False,
+                "stats": {"evalPoints": 42, "spanDays": 20.0},
+            }
         house_signs = [
             ("House8", 0.0),
             ("House9", 30.0),
@@ -510,6 +524,66 @@ class FakeJsClient(HorosaJsEngineClient):
         self.settings = None
 
     def run(self, tool_name: str, payload: dict[str, object]) -> dict:
+        if tool_name == "tianxing":
+            action = str(payload.get("action") or "snapshot")
+            if action == "compile":
+                return {"data": {"ok": True, "compiled": {"type": "all", "conditions": [
+                    {"type": "in_sign", "params": {"planet": "Sun", "signs": [0]}},
+                ]}}}
+            if action == "split":
+                # 跨月切成两段 —— 真正走到「按月切分 + 缝合」两条路径，单段会把它们双双绕过。
+                # ⚠ 必须从**真实 cfg** 派生：写死日期会让「换个窗口」的用例静默拿到旧窗口。
+                cfg = payload.get("cfg") or {}
+                s, e = str(cfg.get("startDate") or ""), str(cfg.get("endDate") or "")
+                mid = f"{s[:7]}-28" if len(s) >= 7 else s
+                return {"data": {"ok": True, "segments": [
+                    {"startDate": s, "startTime": cfg.get("startTime", "00:00"), "endDate": mid, "endTime": "00:00:00"},
+                    {"startDate": mid, "startTime": "00:00:00", "endDate": e, "endTime": cfg.get("endTime", "23:59")},
+                ]}}
+            if action == "stitch":
+                merged = [row for group in (payload.get("lists") or []) for row in group]
+                return {"data": {"ok": True, "intervals": merged}}
+            results = ((payload.get("ctx") or {}).get("results")) or []
+            rows = "\n".join(
+                f"{i + 1}. {r.get('start')} ~ {r.get('end')}" for i, r in enumerate(results)
+            ) or "时间段内无满足全部条件的时刻。"
+            return {"data": {"ok": True}, "snapshot_text": "\n".join([
+                "[起盘信息]", "时间：2028-04-01 00:00　时区：+08:00", "地点：福州　119°19′E, 26°05′N", "",
+                "[征象搜索配置]", "时间段：2028-04-01 00:00 → 2028-05-20 23:59",
+                "搜索盘面：回归黄道 · 宫制：Placidus", "",
+                "[征象条件]", "查找 太阳 在 白羊座", "",
+                f"[命中区间]\n共 {len(results)} 个区间：\n{rows}",
+            ])}
+        if tool_name == "qimenzeri":
+            action = str(payload.get("action") or "scan")
+            if action == "scan":
+                return {"data": {
+                    "ok": True,
+                    "intervals": [
+                        {"start": "2028-04-01 19:00", "end": "2028-04-01 21:00",
+                         "pick": "2028-04-01 19:01", "pickEnd": "2028-04-01 20:59",
+                         "startMs": 1838286000000, "endMs": 1838293200000,
+                         "durationMin": 120, "juText": "阳遁九局中元"},
+                        {"start": "2028-04-03 01:00", "end": "2028-04-03 03:00",
+                         "pick": "2028-04-03 01:01", "pickEnd": "2028-04-03 02:59",
+                         "startMs": 1838444400000, "endMs": 1838451600000,
+                         "durationMin": 120, "juText": "阳遁九局中元"},
+                    ],
+                    "truncated": False,
+                    "stats": {"samples": 193, "evalCount": 769, "spanDays": 8},
+                    "hit_count": 2,
+                    "compiled_tree": {"type": "pattern_ji", "params": {"names": ["青龙回首"]}},
+                }}
+            results = payload.get("results") or []
+            rows = "\n".join(
+                f"{i + 1}. {r.get('start')} ~ {r.get('end')}　{r.get('juText', '')}" for i, r in enumerate(results)
+            ) or "时间段内无满足条件的时辰。"
+            return {"data": {"ok": True}, "snapshot_text": "\n".join([
+                "[择日搜索配置]", "时间段：2028-04-01 00:00 → 2028-04-08 23:59",
+                "地点：福州　时区：8", "参数：时家转盘·拆补·阴盘", "",
+                "[择日条件]", "吉格·青龙回首", "",
+                f"[命中时辰]\n{rows}",
+            ])}
         if tool_name == "qimen":
             # 法奇门叠加层 (星阙 v-next)：snapshot 含全 14 段 preset（含六害/化解/八门化气大阵/用神分论/七要/孤辰寡宿）。
             from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS as _PRESETS
@@ -3469,3 +3543,108 @@ def test_run_tool_wraps_unexpected_exception_into_error_envelope(tmp_path) -> No
     assert result.error.code == "tool.internal_error"
     assert "boom from backend" in result.error.message
     assert result.error.details.get("exception_type") == "ValueError"
+
+
+# --- 择日搜索族（上游 v3.7.0 tianxing / v3.7.1 qimenzeri）--------------------------------------
+
+
+def _zeri_service(tmp_path):
+    settings = Settings(
+        server_root="http://127.0.0.1:9999", db_path=tmp_path / "memory.db", output_dir=tmp_path / "runs"
+    )
+    return HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+
+
+def test_tianxing_splits_by_month_and_stitches(tmp_path) -> None:
+    """窗口超 93 天必须切分（后端单请求硬顶），且缝合回一份区间表。"""
+    service = _zeri_service(tmp_path)
+    calls: list[dict] = []
+    original = service.client.call
+
+    def spy(endpoint: str, payload: dict) -> dict:
+        if endpoint == "/electionscan/scan":
+            calls.append(payload)
+        return original(endpoint, payload)
+
+    service.client.call = spy  # type: ignore[method-assign]
+    result = service.run_tool("tianxing", build_sample_payloads()["tianxing"], save_result=False)
+    assert result.ok is True, result.error
+    assert len(calls) == 2, "跨月窗口必须切成多段请求"
+    assert result.data["stats"]["segments"] == 2
+    assert result.data["hit_count"] == len(result.data["intervals"]) == 2
+
+
+def test_tianxing_fails_loudly_on_electionscan_error_envelope(tmp_path) -> None:
+    """端点 HTTP 200 回 {'err': …}；没有守卫时会静默退化成「零命中」——那是一个看起来合理的假结果。"""
+    service = _zeri_service(tmp_path)
+    payload = {**build_sample_payloads()["tianxing"], "startDate": "1999-01-01", "endDate": "1999-03-01"}
+    result = service.run_tool("tianxing", payload, save_result=False)
+    assert result.ok is False, "span_too_large 必须报错，绝不能变成零命中"
+    assert result.error.code == "tool.electionscan_failed"
+    assert result.error.details["scan_error"]["err"] == "span_too_large"
+
+
+def test_tianxing_rejects_invalid_conditions_before_any_http(tmp_path) -> None:
+    service = _zeri_service(tmp_path)
+    payload = {**build_sample_payloads()["tianxing"]}
+    payload.pop("conditions")
+    result = service.run_tool("tianxing", payload, save_result=False)
+    assert result.ok is False
+    assert result.error.code == "tool.tianxing_missing_conditions"
+
+
+def test_qimenzeri_carries_qimen_sections_plus_three(tmp_path) -> None:
+    """20 段 = 奇门 17 + 择日 3；八宫克应 是 default-off，既不该被检出也不该记为缺段。"""
+    service = _zeri_service(tmp_path)
+    result = service.run_tool("qimenzeri", build_sample_payloads()["qimenzeri"], save_result=False)
+    assert result.ok is True, result.error
+    export = result.data["export_snapshot"]
+    assert export["technique"]["key"] == "qimenzeri"
+    assert len(export["technique"]["preset_sections"]) == 20
+    for title in ("择日搜索配置", "择日条件", "命中时辰"):
+        assert title in export["section_titles_detected"], title
+    assert "八宫克应" not in export["missing_selected_sections"], "default-off 段不得记为缺段"
+    assert export["missing_selected_sections"] == []
+    assert export["unknown_detected_sections"] == []
+
+
+def test_qimenzeri_discloses_the_split_compute_authority(tmp_path) -> None:
+    """展示盘走 ken、区间搜索走本地引擎 —— 结果必须逐项写明，不许含糊成「都是 ken 算的」。"""
+    service = _zeri_service(tmp_path)
+    result = service.run_tool("qimenzeri", build_sample_payloads()["qimenzeri"], save_result=False)
+    assert result.data["compute_sources"] == {"scan": "local_calcDunJia", "pan": "kinqimen"}
+    # 起盘时刻取 pick（两端各内缩 1 分钟的边界安全值），不是 start —— 用 start 会落到时辰边界外侧。
+    assert result.data["pan_moment"] == "2028-04-01 19:01"
+
+
+def test_qimenzeri_rejects_oversized_span(tmp_path) -> None:
+    service = _zeri_service(tmp_path)
+    payload = {**build_sample_payloads()["qimenzeri"], "endDate": "2029-04-08"}
+    result = service.run_tool("qimenzeri", payload, save_result=False)
+    assert result.ok is False
+    assert result.error.code == "tool.qimenzeri_span_too_large"
+    assert "HOROSA_JS_ENGINE_TIMEOUT_SECONDS" in result.error.details["hint"]
+
+
+def test_zero_hit_search_still_emits_the_hit_section(tmp_path) -> None:
+    """零命中时上游写的是「无满足条件」这句真话，而不是丢段 —— 所以这两段**不是**条件段，
+    不进 AI_EXPORT_OPTIONAL_SECTIONS。登记成 optional 等于拿一个真实回归探测器换零收益。"""
+    from horosa_skill.exports.registry import AI_EXPORT_OPTIONAL_SECTIONS
+
+    for key in ("tianxing", "qimenzeri"):
+        assert not AI_EXPORT_OPTIONAL_SECTIONS.get(key), f"{key} 应保持空 optional 集"
+
+    service = _zeri_service(tmp_path)
+
+    class NoHits(FakeJsClient):
+        def run(self, tool_name: str, payload: dict) -> dict:
+            out = super().run(tool_name, payload)
+            if tool_name == "qimenzeri" and str(payload.get("action")) == "scan":
+                out["data"] = {**out["data"], "intervals": [], "hit_count": 0}
+            return out
+
+    service.js_client = NoHits()
+    result = service.run_tool("qimenzeri", build_sample_payloads()["qimenzeri"], save_result=False)
+    assert result.ok is True, result.error
+    assert result.data["hit_count"] == 0
+    assert "命中时辰" in result.data["export_snapshot"]["section_titles_detected"]

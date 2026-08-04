@@ -1,18 +1,18 @@
 <div align="center">
 
-<img src="./docs/assets/banner.svg" alt="Horosa Skill — 把星阙 89 个术数 / 占星技法做成任何 AI 都能本地调用的 MCP server 与 CLI" width="880" />
+<img src="./docs/assets/banner.svg" alt="Horosa Skill — 把星阙 91 个术数 / 占星技法做成任何 AI 都能本地调用的 MCP server 与 CLI" width="880" />
 
 # 🔮 Horosa Skill
 
-**把星阙（Horosa）的 89 个真实术数 / 占星技法，做成任何 AI 都能本地调用的 MCP server 与 CLI。**<br/>
-**A local-first MCP server & CLI that exposes 89 real astrology / metaphysics techniques from Horosa (星阙) to any AI client.**
+**把星阙（Horosa）的 91 个真实术数 / 占星技法，做成任何 AI 都能本地调用的 MCP server 与 CLI。**<br/>
+**A local-first MCP server & CLI that exposes 91 real astrology / metaphysics techniques from Horosa (星阙) to any AI client.**
 
 简体中文 · [English](./README_EN.md)
 
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
-  <img src="https://img.shields.io/badge/技法-83-1d4ed8?style=for-the-badge" alt="89 tools" />
-  <img src="https://img.shields.io/badge/测试-326_passed-16a34a?style=for-the-badge" alt="326 passed" />
+  <img src="https://img.shields.io/badge/技法-91-1d4ed8?style=for-the-badge" alt="91 tools" />
+  <img src="https://img.shields.io/badge/测试-372_passed-16a34a?style=for-the-badge" alt="372 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
 
@@ -30,7 +30,7 @@
 
 | ✨ | ✨ | ✨ |
 |:--|:--|:--|
-| 🌌 **83 技法一次装齐** | ⚡ **算法本机跑 · 断网可用** | 🧠 **为 AI 稳定消费而设计** |
+| 🌌 **91 技法一次装齐** | ⚡ **算法本机跑 · 断网可用** | 🧠 **为 AI 稳定消费而设计** |
 | 🛡️ **AI 不许乱补参数** | 🗄️ **每次调用自动落成知识库** | 📄 **一键出 Word / PDF 报告** |
 | 🔁 **断点续传 · 版本短路装** | 🀄 **中西术数 + 全 14 路神数** | 🔓 **免费 · 开源 · AGPL** |
 
@@ -44,7 +44,7 @@
         │  MCP  /  JSON-first CLI
         ▼
    ┌──────────────────────────────────────────────────────────────┐
-   │  🔮 Horosa Skill   本地进程 · 83 工具 · 澄清闸 · 统一 envelope │
+   │  🔮 Horosa Skill   本地进程 · 91 工具 · 澄清闸 · 统一 envelope │
    │  自然语言调度 · 逐技法直调 · 报告渲染 · 本地记忆检索           │
    └──────────────────────────────────────────────────────────────┘
         │  全部在本机 · 断网可用
@@ -74,7 +74,7 @@
 
 ## ✨ 核心特性
 
-- 🌌 **89 个真实技法，一次安装，全程离线。** 覆盖西洋占星全链路、中文术数主干、数算与卜法、全 14 路神数；算法在本机运行，不联网、不上传。
+- 🌌 **91 个真实技法，一次安装，全程离线。** 覆盖西洋占星全链路、中文术数主干、数算与卜法、全 14 路神数；算法在本机运行，不联网、不上传。
 - 🧠 **为 AI 消费而设计的稳定契约。** 每次调用返回统一 envelope，接入导出协议的技法附带 `export_snapshot`（段结构化正文）。同一技法连续调用得到同一套字段，落库后结构不丢。
 - 🛡️ **调用前的硬性澄清闸。** 只要技法受时间 / 地点 / 时区 / 性别 / 事项 / 宫制 / 历法 / 起局方式影响，agent 在用户确认前会被结构化拦截，并收到可直接转发给用户的追问文本。
 - 🪙 **精简的响应体量。** 导出契约单份化，同一份快照不再重复；大盘单次响应体量较早期显著下降。可用 `response_view=titles|sections` 仅取段标题或指定段，完整快照始终已归档。
@@ -137,7 +137,7 @@ uv run horosa-skill client config --format codex            # Codex config.toml 
 | ⚪ **OpenClaw / mcporter** | `uv run horosa-skill client openclaw-setup --workspace ~/.openclaw/workspace` |
 
 > [!TIP]
-> 上下文预算受限的客户端可设 `HOROSA_MCP_COMPACT=1`，只暴露约 9 个门面工具（含按名直调的 `horosa_tool_run` 与 83 技法目录索引），澄清闸照常生效。根目录 `server.json` 为 MCP Registry 元数据，普通用户无需手改。
+> 上下文预算受限的客户端可设 `HOROSA_MCP_COMPACT=1`，只暴露约 9 个门面工具（含按名直调的 `horosa_tool_run` 与 91 技法目录索引），澄清闸照常生效。根目录 `server.json` 为 MCP Registry 元数据，普通用户无需手改。
 
 ## 🎯 一次调用的完整流程
 
@@ -222,6 +222,8 @@ uv run horosa-skill client config --format codex            # Codex config.toml 
 | --- | --- | --- |
 | `horary` ⓟ | 卜卦（horary） | 根本性 / 14 类征象星 / 完成分析 / 月亮的故事 / 裁决 / 应期方位 |
 | `election` ⓟ | 择日（electional） | 红线 / 28 类用事规则包 / 评分定级 / 起盘时刻 / 建议 |
+| `tianxing` ⓟ | 天星择日·征象搜索 | 时间窗内扫西占征象条件树 / 起盘信息 / 搜索配置 / 条件 / 命中区间 |
+| `qimenzeri` ⓟ | 奇门择日「找局」 | 时间窗内扫奇门条件树 / 命中时辰 + 完整奇门盘 17 段 |
 
 </details>
 
@@ -301,7 +303,7 @@ uv run horosa-skill client config --format codex            # Codex config.toml 
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.25.0",
+  "ok": true, "tool": "qimen", "version": "0.26.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -365,20 +367,20 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 
 | 检查项 | 结果 |
 | --- | --- |
-| 🧰 可调用工具 | 83 / 83 `ok=true` |
-| 🧪 工程测试 | **326 / 326 pass**（ken / 神数后端实时集成 + 离线 golden 单测 + node JS golden） |
-| 🛡️ 未确认参数时强制追问 | 67 个技法工具触发 `must_ask_user=true` |
+| 🧰 可调用工具 | 91 / 91 `ok=true` |
+| 🧪 工程测试 | **372 / 372 pass**（ken / 神数后端实时集成 + 离线 golden 单测 + node JS golden） |
+| 🛡️ 未确认参数时强制追问 | 83 个技法工具触发 `must_ask_user=true` |
 | 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 63 个导出 technique） |
-| 🗄️ 本地 memory / report | 83 / 83 写入 + 83 / 83 JSON artifact |
+| 🗄️ 本地 memory / report | 91 / 91 写入 + 91 / 91 JSON artifact |
 | 🔄 GitHub CI | Linux / macOS 单测 + JS golden 自检 + Windows OpenClaw smoke |
-| 📦 Release runtime | macOS (arm64) `v0.25.0` 已打包并校验；Windows (x64) 由构建机补传（补传前 win 用户拿到上一版 runtime）；其余平台安装时明确报不支持 |
+| 📦 Release runtime | macOS (arm64) `v0.26.0` 已打包并校验；Windows (x64) 由构建机补传（补传前 win 用户拿到上一版 runtime）；其余平台安装时明确报不支持 |
 
 第一次 clone 后确认非空壳的最小验证：
 
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 326 passed
+uv run pytest -q                                        # 372 passed
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 
