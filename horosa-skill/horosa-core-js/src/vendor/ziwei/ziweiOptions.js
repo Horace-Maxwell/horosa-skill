@@ -44,9 +44,11 @@ export const DAXIAN_SPAN_OPTIONS = [
 	{ value: 10, label: '10 年(三合·默认)' },
 	{ value: 'ju', label: '局数年(钦天)' },
 ];
+// 天马依据:两表逐支同位、本是同一颗星。选年支三合马时,年支系的「年马」会自动跳过
+// (否则同盘出现两颗马星)。默认保持 month 以守既有盘与前后端字节一致;正统紫微多用年支三合马。
 export const TIANMA_BASIS_OPTIONS = [
-	{ value: 'month', label: '月马(现状)' },
-	{ value: 'year', label: '年支三合马' },
+	{ value: 'month', label: '月马(默认·沿用现状)' },
+	{ value: 'year', label: '年支三合马(紫微通行)' },
 ];
 export const STAR_SET_OPTIONS = [
 	{ value: 'full', label: '全星系(默认)' },
@@ -74,9 +76,12 @@ export const LATE_ZI_OPTIONS = [
 	{ value: 'zi_zheng', label: '子正换日' },
 	{ value: 'dual', label: '双盘(当日/次日各一)' },
 ];
+// 定年界线:紫微斗数是五术里的例外——**正月初一换年是紫微正统**,立春换年是八字口径。
+// 生辰落在春节↔立春之间者两口径不同年,会连带改掉十二宫干(五虎遁)/生年四化/年干支系诸星/
+// 小限起宫/身主/旬空/大限顺逆。默认仍保 lichun 以守既有盘与前后端字节一致,按需自行切换。
 export const YEAR_BOUNDARY_OPTIONS = [
-	{ value: 'lichun', label: '立春换年(默认)' },
-	{ value: 'lunar_1_1', label: '正月初一换年' },
+	{ value: 'lichun', label: '立春换年(默认·八字口径)' },
+	{ value: 'lunar_1_1', label: '正月初一换年(紫微正统)' },
 ];
 export const HUOLING_OPTIONS = [
 	{ value: 'sanhe', label: '三合通行(默认·年支+生时)' },

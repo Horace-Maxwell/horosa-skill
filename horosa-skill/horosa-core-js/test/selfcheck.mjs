@@ -183,6 +183,45 @@ try {
   console.error(`  FAIL zhengchuan: ${err.message}`);
 }
 
+// 六壬三传 **值级** 钉死（v0.26.0）。此前只断言 `sanChuanBranches.length === 3` —— 那是形状不是值，
+// 三传重排能静默通过。上游 v3.7.1 的两处勘正各留了可复核的具名课式，正好当金标：
+//   #46 列举序≠判定序：八专须在遥克**之前**。旧序把「八专结构 + 遥克」误发蒿矢/弹射。
+//   #62 伏吟末传子卯互刑：丁卯/己卯/辛卯 三日伏吟，末传 卯 → 午。
+// 全域 8640 课（60 日干支 × 12 月将 × 12 时）穷举差分显示：改动仅落在这两桶内，桶外为 0。
+try {
+  const { buildLiuRengLayout, buildKeData } = await import('../src/vendor/liureng/liurengRefContext.js');
+  const ChuangChart = (await import('../src/vendor/liureng/ChuangChart.js')).default;
+  const baseObj = normalizeChart(liurengFix);
+  const cast = (dayGanZi, yue, timeZhi) => {
+    const chartObj = { ...baseObj, nongli: { ...baseObj.nongli, dayGanZi, time: `甲${timeZhi}` } };
+    const layout = buildLiuRengLayout(chartObj, 2, { yue, timeZhi });
+    const ke = buildKeData(layout, chartObj);
+    const h = new ChuangChart({
+      owner: null, chartObj, nongli: chartObj.nongli, ke: ke.raw,
+      liuRengChart: { upZi: layout.upZi, downZi: layout.downZi, houseTianJiang: layout.houseTianJiang },
+      x: 0, y: 0, width: 0, height: 0,
+    });
+    h.genCuangs();
+    return { name: h.cuangs.name, chuan: h.cuangs.cuang.join('→') };
+  };
+  // #46 —— 上游逐字点名的两课。旧（错）序在此发蒿矢课/弹射课。
+  const a = cast('甲寅', '戌', '丑');
+  assert(a.name === '八专课', `甲寅日戌将丑时 应为八专课(上游 #46)，实得 ${a.name}`);
+  assert(a.chuan === '空丑→癸亥→癸亥', `甲寅日戌将丑时 三传应为 空丑→癸亥→癸亥，实得 ${a.chuan}`);
+  const b = cast('甲寅', '戌', '午');
+  assert(b.name === '八专课', `甲寅日戌将午时 应为八专课(上游 #46)，实得 ${b.name}`);
+  assert(b.chuan === '庚申→戊午→戊午', `甲寅日戌将午时 三传应为 庚申→戊午→戊午，实得 ${b.chuan}`);
+  // #62 —— 伏吟(月将=时支)三卯日，末传取 午 而非 卯。
+  for (const day of ['丁卯', '己卯', '辛卯']) {
+    const r = cast(day, '子', '子');
+    assert(r.chuan.endsWith('午'), `${day}日伏吟 末传应为 午(上游 #62 子卯互刑)，实得 ${r.chuan}`);
+  }
+  console.log('  ok   liureng 三传值级金标：#46 八专序 + #62 伏吟末传子卯互刑');
+} catch (err) {
+  failures += 1;
+  console.error(`  FAIL liureng 三传值级金标: ${err.message}`);
+}
+
 if (failures > 0) {
   console.error(`\nselfcheck: ${failures} failure(s)`);
   process.exit(1);

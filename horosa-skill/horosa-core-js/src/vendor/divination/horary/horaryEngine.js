@@ -302,7 +302,9 @@ export function runHorary(result, category, opts){
 	const theft = (category === 'theft') ? runTheft(facts) : null;
 	return {
 		facts, category: category || 'general', school: opts.school || 'classical',
-		significators: { querentKey, quesitedKey, natural: sigs.natural, moon: 'moon', quesitedHouse: sigs.quesitedHouse, quesitedLabel: sigs.quesitedLabel },
+		// sharedRuler 必须透传:significators.js 在命主=事主同星时写出五法(A-E)裁决对象,
+		// 此处重组曾把它丢弃 → HoraryJudgment 的同主一星卡片恒不显示(2026-08 死开关审计抓出)。
+		significators: { querentKey, quesitedKey, natural: sigs.natural, moon: 'moon', quesitedHouse: sigs.quesitedHouse, quesitedLabel: sigs.quesitedLabel, sharedRuler: sigs.sharedRuler || null },
 		radicality: rad, moon, perfection: perf, thirds, conditions: conds, queries, timing, verdict, describe, theft,
 		almuten, moonPromotion,
 		allAspects: buildAllAspects(facts, !!opts.includeOuter), moonStory: buildMoonStory(facts, !!opts.includeOuter),

@@ -258,11 +258,14 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 			result.perfects = true; result.method = 'position';
 			detail.push('落位：征象星落对方/事项宫位 → 完成。');
 		}
-		// 映点也可促成（力≈六合/三合）
-		const ant = antiscionBetween(facts, sigA, sigB);
-		if(!result.perfects && ant){
-			result.perfects = true; result.method = 'antiscion';
-			detail.push('两征象星成映点（力量≈六合/三合）→ 完成。');
+		// 映点也可促成（力≈六合/三合）。antiscia 开关门控(spec default=true):
+		// 只有显式 false 才关闭 —— true/undefined(择日等旧调用不传)保持历史恒开行为,默认路径字节不变。
+		if(!result.perfects && opts.antiscia !== false){
+			const ant = antiscionBetween(facts, sigA, sigB);
+			if(ant){
+				result.perfects = true; result.method = 'antiscion';
+				detail.push('两征象星成映点（力量≈六合/三合）→ 完成。');
+			}
 		}
 	}
 

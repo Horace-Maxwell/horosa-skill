@@ -19,6 +19,80 @@ const DEFAULT_WEIGHTS = {
 
 const PILLARS = ['year', 'month', 'day', 'time'];
 
+// ── 三维分列(得令/得地/得势)数据表 —— 学理见八字大全 §9.1;全部只供新增 dimensions 字段,
+//    不参与 scores/percent/verdict 计算(零回归)。 ──
+// 月支 → 季(三会);四库月对土日主特判「四季土旺」(土旺四季通行口径),非土日主仍按所属季。
+const BRANCH_SEASON = {
+	寅: 'spring', 卯: 'spring', 辰: 'spring',
+	巳: 'summer', 午: 'summer', 未: 'summer',
+	申: 'autumn', 酉: 'autumn', 戌: 'autumn',
+	亥: 'winter', 子: 'winter', 丑: 'winter',
+};
+// 季 → 各五行 旺/相/休/囚/死(§1.4 表:当令旺·我生相·生我休·克我囚·我克死)。
+const SEASON_STATE = {
+	spring: { Wood: '旺', Fire: '相', Water: '休', Metal: '囚', Earth: '死' },
+	summer: { Fire: '旺', Earth: '相', Wood: '休', Water: '囚', Metal: '死' },
+	autumn: { Metal: '旺', Water: '相', Earth: '休', Fire: '囚', Wood: '死' },
+	winter: { Water: '旺', Wood: '相', Metal: '休', Earth: '囚', Fire: '死' },
+	siji:   { Earth: '旺', Metal: '相', Fire: '休', Wood: '囚', Water: '死' },
+};
+const STATE_SCORE = { 旺: 40, 相: 30, 休: -10, 囚: -20, 死: -30 };
+// 十干禄(临官)支与阳刃(阳干帝旺)支;十干长生支(通行十二长生,水土之干各从其表)。
+const LU_ZHI = { 甲: '寅', 乙: '卯', 丙: '巳', 丁: '午', 戊: '巳', 己: '午', 庚: '申', 辛: '酉', 壬: '亥', 癸: '子' };
+const REN_ZHI = { 甲: '卯', 丙: '午', 戊: '午', 庚: '酉', 壬: '子' };
+const CHANG_SHENG_ZHI = { 甲: '亥', 乙: '午', 丙: '寅', 丁: '酉', 戊: '寅', 己: '酉', 庚: '巳', 辛: '子', 壬: '申', 癸: '卯' };
+const KU_ZHI = new Set(['辰', '戌', '丑', '未']);
+// 通根分级分值(禄刃 > 本气/本气库 > 长生 > 中气 > 余气;月支根加倍,§9.1.1)。
+const ROOT_SCORE = { 禄刃: 30, 本气库: 25, 本气: 20, 长生: 15, 中气: 10, 余气: 6 };
+const PILLAR_CN = { year: '年支', month: '月支', day: '日支', time: '时支' };
+
+// 三维分列:得令(月令旺衰) / 得地(通根分级) / 得势(透干印比)。纯新增,输入同主函数。
+function computeDimensions(four, dayEl, dayGan){
+	if(!dayEl || !dayGan){ return null; }
+	// 得令:月支定季(土日主逢四库月按「四季土」行)。
+	const monZhi = four.month && four.month.branch ? four.month.branch.cell : '';
+	let deLing = null;
+	if(monZhi && BRANCH_SEASON[monZhi]){
+		const season = (dayEl === 'Earth' && KU_ZHI.has(monZhi)) ? 'siji' : BRANCH_SEASON[monZhi];
+		const state = SEASON_STATE[season][dayEl] || '休';
+		deLing = { state, score: STATE_SCORE[state] || 0, got: state === '旺' || state === '相' };
+	}
+	// 得地:四支通根分级(藏干含日主五行者记根;禄刃支 > 本气(库) > 长生支中余气 > 中气 > 余气)。
+	const roots = [];
+	let deDiScore = 0;
+	PILLARS.forEach((pk) => {
+		const p = four[pk];
+		const zhi = p && p.branch ? p.branch.cell : '';
+		const cang = (p && p.stemInBranch) || [];
+		const idx = cang.findIndex((c) => c && c.element === dayEl);
+		if(idx < 0 || !zhi){ return; }
+		let type;
+		if(LU_ZHI[dayGan] === zhi || REN_ZHI[dayGan] === zhi){ type = '禄刃'; }
+		else if(idx === 0){ type = KU_ZHI.has(zhi) ? '本气库' : '本气'; }
+		else if(CHANG_SHENG_ZHI[dayGan] === zhi){ type = '长生'; }
+		else { type = idx === 1 ? '中气' : '余气'; }
+		const base = ROOT_SCORE[type] || 6;
+		const score = pk === 'month' ? base * 2 : base;
+		deDiScore += score;
+		roots.push({ pillar: PILLAR_CN[pk], branch: zhi, type, score });
+	});
+	// 得势:年/月/时透干中的 印(印枭)与 比劫 计数与力量。
+	const helpers = [];
+	['year', 'month', 'time'].forEach((pk) => {
+		const st = four[pk] && four[pk].stem;
+		const rel = st && st.relative ? st.relative : '';
+		if(rel === '印' || rel === '枭' || rel === '比' || rel === '劫'){
+			helpers.push({ pillar: PILLAR_CN[pk].replace('支', '干'), gan: st.cell, rel });
+		}
+	});
+	const deShi = { count: helpers.length, stems: helpers, score: helpers.length * 20 };
+	const parts = [];
+	if(deLing){ parts.push(deLing.got ? `得令(${deLing.state})` : `失令(${deLing.state})`); }
+	parts.push(roots.length ? `得地(${roots.length}根)` : '不得地');
+	parts.push(deShi.count ? `得势(${deShi.count}透)` : '不得势');
+	return { deLing, deDi: { roots, score: Math.round(deDiScore) }, deShi, summary: parts.join('·') };
+}
+
 // 返回 { scores:[{key,label,score,percent}](木火土金水序), total, dominant, weakest, dayMaster, weights, method, cangVersion }
 // opt.cangVersion='fenye'（分野加权）+ opt.siLingGan（月令当前司令之干，取 fenYe.ruler.gan）：
 //   月柱藏干不再整月匀加 monthMult，而是仅「当令司令」之干吃 monthMult（得令本气），
@@ -91,6 +165,8 @@ export function computeWuxingStrength(four, options){
 		dominant: sorted[0] ? sorted[0].label : '',
 		weakest: sorted[sorted.length - 1] ? sorted[sorted.length - 1].label : '',
 		dayMaster,
+		// 三维分列(得令/得地/得势)——纯新增展示派生;上面全部既有字段的取值路径未变。
+		dimensions: computeDimensions(four, dayEl, four.day && four.day.stem ? four.day.stem.cell : ''),
 		weights: w,
 		cangVersion: fenye ? 'fenye' : 'common',
 		method: fenye ? '分野加权' : '通行示例',

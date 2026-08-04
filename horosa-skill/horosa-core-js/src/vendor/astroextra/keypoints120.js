@@ -1,5 +1,15 @@
 import * as AstroConst from '../../constants/AstroConst.js';
 import * as AstroText from '../../constants/AstroText.js';
+// [YB] 三段补厚共享 helper(起盘信息/当前时点/方法说明;astroAiSnapshot 不回引本文件,无环)。
+// namespace import + typeof 守卫:测试环境可能部分 mock astroAiSnapshot(只留 buildAstroSnapshotContent 等),
+// 缺函数时回 [] 保底 → 输出与补厚前逐字节一致,不炸挂载。
+// headless stub：上游 [YB] 三段补厚用它产 [起盘信息]/[当前时点]/[方法说明]，但 skill 的 Python 层
+// 已经产这三段（契约 v10 的 _predictive_setup_section_text / _predictive_common_sections_text），
+// 再让 JS 产一遍会重段。上游每个调用点都写了 typeof …==='function' 守卫，缺失即回退 []，故空对象即正解。
+const astroAiSnapshot = {};
+const birthHeaderLines = (c) => (typeof astroAiSnapshot.buildPredictiveBirthHeaderLines === 'function' ? astroAiSnapshot.buildPredictiveBirthHeaderLines(c) : []);
+const currentMomentLines = (c, x) => (typeof astroAiSnapshot.buildCurrentMomentLines === 'function' ? astroAiSnapshot.buildCurrentMomentLines(c, x) : []);
+const methodNoteLines = (k) => (typeof astroAiSnapshot.buildMethodNoteLines === 'function' ? astroAiSnapshot.buildMethodNoteLines(k) : []);
 
 // 数字相位推运（120 年关键点）。纯前端：仅重新切分本命盘。
 //  ① 七星「小年数」：土3 / 水8 / 日18 / 金5 / 火7 / 木9 / 月13。
@@ -105,7 +115,10 @@ export function buildKeypointsSnapshotText(chartObj, opts){
 	if(!chartObj){ return ''; }
 	const r = buildKeypoints(chartObj, opts);
 	if(!r || !r.rows || !r.rows.length){ return ''; }
-	const lines = ['[数字相位推运]'];
+	const lines = [];
+	// [YB] 头部盘主生辰([起盘信息];无数据 helper 自返 [],不产空段头)。
+	lines.push(...birthHeaderLines(chartObj));
+	lines.push('[数字相位推运]');
 	lines.push(`释放点=${r.modeCn}。各星与「自释放点起第 k 个星座」挂钩数字 k，凡年龄为 k 或其小年（土3/水8/日18/金5/火7/木9/月13）之倍数即激活该星（过运传递：释放点→该星）。`);
 	lines.push('');
 	lines.push('星位挂钩：' + r.positions.map((x) => `${x.planetCn}=第${x.k}座(小年${x.period})`).join('，'));
@@ -118,6 +131,12 @@ export function buildKeypointsSnapshotText(chartObj, opts){
 		const tab = row.tableActive.length ? row.tableActive.map((x) => x.planetCn).join('·') : '-';
 		lines.push(`| ${row.age} | ${fac} | ${pos} | ${tab} |`);
 	});
+	// [YB] 尾部 [当前时点]+[方法说明](年龄行由 helper 自算,激活表按年龄自查即可,不另加定位行)。
+	const tail = [...currentMomentLines(chartObj), ...methodNoteLines('keypoints')];
+	if(tail.length){
+		lines.push('');
+		lines.push(...tail);
+	}
 	return lines.join('\n');
 }
 

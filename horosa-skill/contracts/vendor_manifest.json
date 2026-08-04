@@ -1,0 +1,1461 @@
+{
+  "_comment": "vendor 树的唯一驱动清单：显式 upstream↔vendor 路径对 + 声明式偏离。revendor_core_js.py 的路径推断对本树是错的（会分叉出重复树），故一律用 --from-manifest。",
+  "_modes": {
+    "verbatim": "流水线输出（含 deviations）必须与 vendored 文件逐字相同",
+    "curated": "蓄意子集/shim，永不自动 vendor；断言 extracts 里每个名字仍是上游顶层 export",
+    "bespoke": "skill 自写、上游无对应文件；断言上游确实没有同名文件",
+    "needs-review": "有真实漂移，待人工分类为上面三种之一（这就是 re-vendor 工单）"
+  },
+  "files": {
+    "astroextra/balbillus.js": {
+      "upstream": "utils/balbillus.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroConst.js",
+          "to": "./progConst.js",
+          "why": "AGENTS §5：progConst 是 7 经典行星 + LIST_SIGNS + AstroTxtMsg 的窄 shim，避免拖进 1128 行 AstroConst"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroText.js",
+          "to": "./progConst.js"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./astroAiSnapshot.js",
+          "stub": "// headless stub：上游 [YB] 三段补厚用它产 [起盘信息]/[当前时点]/[方法说明]，但 skill 的 Python 层\n// 已经产这三段（契约 v10 的 _predictive_setup_section_text / _predictive_common_sections_text），\n// 再让 JS 产一遍会重段。上游每个调用点都写了 typeof …==='function' 守卫，缺失即回退 []，故空对象即正解。\nconst astroAiSnapshot = {};",
+          "why": "避免与 Python 层重复产段；上游调用点自带 typeof 守卫"
+        }
+      ]
+    },
+    "astroextra/keypoints120.js": {
+      "upstream": "utils/keypoints120.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroConst.js",
+          "to": "../../constants/AstroConst.js",
+          "why": "树里有两个 AstroConst.js：src/constants/ 的 151 行共享 shim（有 SignsProp/LIST_SIGNS）与 vendor/constants/ 的 32 行 Uranian 子集（没有）。上游写 '../constants/AstroConst' 在 vendor 树里恰好解析到**后者**，relocate 因此认为无需重指 —— 结果 SignsProp 静默变 undefined，三分主星表整个取不到（真机症状：buildTriplicityPeriods 抛 reading 'Gemini'）。钉死到共享 shim。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./astroAiSnapshot.js",
+          "stub": "// headless stub：上游 [YB] 三段补厚用它产 [起盘信息]/[当前时点]/[方法说明]，但 skill 的 Python 层\n// 已经产这三段（契约 v10 的 _predictive_setup_section_text / _predictive_common_sections_text），\n// 再让 JS 产一遍会重段。上游每个调用点都写了 typeof …==='function' 守卫，缺失即回退 []，故空对象即正解。\nconst astroAiSnapshot = {};",
+          "why": "避免与 Python 层重复产段；上游调用点自带 typeof 守卫"
+        }
+      ]
+    },
+    "astroextra/lunationPhase.js": {
+      "upstream": "utils/lunationPhase.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroConst.js",
+          "to": "../../constants/AstroConst.js",
+          "why": "树里有两个 AstroConst.js：src/constants/ 的 151 行共享 shim（有 SignsProp/LIST_SIGNS）与 vendor/constants/ 的 32 行 Uranian 子集（没有）。上游写 '../constants/AstroConst' 在 vendor 树里恰好解析到**后者**，relocate 因此认为无需重指 —— 结果 SignsProp 静默变 undefined，三分主星表整个取不到（真机症状：buildTriplicityPeriods 抛 reading 'Gemini'）。钉死到共享 shim。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./astroAiSnapshot.js",
+          "stub": "// headless stub：上游 [YB] 三段补厚用它产 [起盘信息]/[当前时点]/[方法说明]，但 skill 的 Python 层\n// 已经产这三段（契约 v10 的 _predictive_setup_section_text / _predictive_common_sections_text），\n// 再让 JS 产一遍会重段。上游每个调用点都写了 typeof …==='function' 守卫，缺失即回退 []，故空对象即正解。\nconst astroAiSnapshot = {};",
+          "why": "避免与 Python 层重复产段；上游调用点自带 typeof 守卫"
+        }
+      ]
+    },
+    "astroextra/natalExtras.js": {
+      "mode": "bespoke",
+      "why": "no upstream file of this name (skill-authored)"
+    },
+    "astroextra/progConst.js": {
+      "mode": "bespoke",
+      "why": "no upstream file of this name (skill-authored)"
+    },
+    "astroextra/triplicityRulers.js": {
+      "upstream": "utils/triplicityRulers.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroConst.js",
+          "to": "../../constants/AstroConst.js",
+          "why": "树里有两个 AstroConst.js：src/constants/ 的 151 行共享 shim（有 SignsProp/LIST_SIGNS）与 vendor/constants/ 的 32 行 Uranian 子集（没有）。上游写 '../constants/AstroConst' 在 vendor 树里恰好解析到**后者**，relocate 因此认为无需重指 —— 结果 SignsProp 静默变 undefined，三分主星表整个取不到（真机症状：buildTriplicityPeriods 抛 reading 'Gemini'）。钉死到共享 shim。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./astroAiSnapshot.js",
+          "stub": "// headless stub：上游 [YB] 三段补厚用它产 [起盘信息]/[当前时点]/[方法说明]，但 skill 的 Python 层\n// 已经产这三段（契约 v10 的 _predictive_setup_section_text / _predictive_common_sections_text），\n// 再让 JS 产一遍会重段。上游每个调用点都写了 typeof …==='function' 守卫，缺失即回退 []，故空对象即正解。\nconst astroAiSnapshot = {};",
+          "why": "避免与 Python 层重复产段；上游调用点自带 typeof 守卫"
+        }
+      ]
+    },
+    "babylon/babylonSchools.js": {
+      "upstream": "divination/babylon/babylonSchools.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "babylon/calendar.js": {
+      "upstream": "divination/babylon/calendar.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "babylon/horoscope.js": {
+      "upstream": "divination/babylon/horoscope.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "babylon/microzodiac.js": {
+      "upstream": "divination/babylon/microzodiac.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "babylon/units.js": {
+      "upstream": "divination/babylon/units.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "bazi/ZWConst.js": {
+      "upstream": "constants/ZWConst.js",
+      "mode": "curated",
+      "why": "skill 侧**多于**上游：四化多流派表（beipai/zhongzhou/beixiang/custom）是本仓自加的已发布能力，整文件重 vendor 会把它删掉。上游 import 的 ziweiSchools 不进 headless 树。",
+      "extracts": []
+    },
+    "bazi/baziFenYe.js": {
+      "upstream": "utils/baziFenYe.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "bazi/baziGejuYongShen.js": {
+      "upstream": "utils/baziGejuYongShen.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "bazi/baziLunarLocal.js": {
+      "upstream": "utils/baziLunarLocal.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "bazi/baziMangPai.js": {
+      "upstream": "utils/baziMangPai.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "bazi/baziShenShaLocal.js": {
+      "upstream": "utils/baziShenShaLocal.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "bazi/baziTiaoHou.js": {
+      "upstream": "utils/baziTiaoHou.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "bazi/baziWuxing.js": {
+      "upstream": "utils/baziWuxing.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "bazi/baziZaGe.js": {
+      "upstream": "utils/baziZaGe.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "bazi/dateStrSafe.js": {
+      "upstream": "utils/dateStrSafe.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "bazi/dayBoundary.js": {
+      "upstream": "utils/dayBoundary.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "bazi/lunarDomainGuard.js": {
+      "upstream": "utils/lunarDomainGuard.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "calendar/huangliDay.js": {
+      "upstream": "components/calendar/huangliDay.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "calendar/huangliSnapshot.js": {
+      "upstream": "components/calendar/huangliSnapshot.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "calendar/riziEngine.js": {
+      "upstream": "components/calendar/riziEngine.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "calendar/riziSnapshot.js": {
+      "upstream": "components/calendar/riziSnapshot.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "calendar/tongshuData.js": {
+      "upstream": "components/calendar/tongshuData.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "calendar/tongshuSchools.js": {
+      "upstream": "components/calendar/tongshuSchools.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "calendar/tongshuSnapshot.js": {
+      "upstream": "components/calendar/tongshuSnapshot.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "calendar/yearAuspicious.js": {
+      "upstream": "components/calendar/yearAuspicious.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "canping/canpingLocal.js": {
+      "upstream": "utils/canpingLocal.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "constants/AstroConst.js": {
+      "upstream": "constants/AstroConst.js",
+      "mode": "curated",
+      "why": "Uranian 虚星表所需子集，**逐值抽取**。块界=下一个顶层 `export const`（上游多数常量不带结尾分号，按分号切会卷进后续声明）；且必须保持上游原序——LIST_URANIAN 引用了排在其后的符号，重排即 ReferenceError before initialization。",
+      "extracts": []
+    },
+    "divination/data/accidentalDignity.js": {
+      "upstream": "divination/data/accidentalDignity.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/aspects.js": {
+      "upstream": "divination/data/aspects.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/babylonianData.js": {
+      "upstream": "divination/data/babylonianData.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/bodyParts.js": {
+      "upstream": "divination/data/bodyParts.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/castMoments.js": {
+      "upstream": "divination/data/castMoments.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/decanImages.js": {
+      "upstream": "divination/data/decanImages.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/dignities.js": {
+      "upstream": "divination/data/dignities.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/directions.js": {
+      "upstream": "divination/data/directions.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/dorotheusDegrees.js": {
+      "upstream": "divination/data/dorotheusDegrees.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/egyptianData.js": {
+      "upstream": "divination/data/egyptianData.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/egyptianDays.js": {
+      "upstream": "divination/data/egyptianDays.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/egyptianDecanImages.js": {
+      "upstream": "divination/data/egyptianDecanImages.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/egyptianGods.js": {
+      "upstream": "divination/data/egyptianGods.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/egyptianParans.js": {
+      "upstream": "divination/data/egyptianParans.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/egyptianSchools.js": {
+      "upstream": "divination/data/egyptianSchools.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/fixedStars.js": {
+      "upstream": "divination/data/fixedStars.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/glossary.js": {
+      "upstream": "divination/data/glossary.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/hellenisticData.js": {
+      "upstream": "divination/data/hellenisticData.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/houseMeanings.js": {
+      "upstream": "divination/data/houseMeanings.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/lots.js": {
+      "upstream": "divination/data/lots.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/lunarMansions.js": {
+      "upstream": "divination/data/lunarMansions.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/midpoints.js": {
+      "upstream": "divination/data/midpoints.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/monomoiriaTriplicity.js": {
+      "upstream": "divination/data/monomoiriaTriplicity.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/naturalSignificators.js": {
+      "upstream": "divination/data/naturalSignificators.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/planetaryHours.js": {
+      "upstream": "divination/data/planetaryHours.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/planets.js": {
+      "upstream": "divination/data/planets.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/regionCharts.js": {
+      "upstream": "divination/data/regionCharts.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/shipParts.js": {
+      "upstream": "divination/data/shipParts.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/signFertility.js": {
+      "upstream": "divination/data/signFertility.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/signs.js": {
+      "upstream": "divination/data/signs.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/themaMundi.js": {
+      "upstream": "divination/data/themaMundi.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/topicMaster.js": {
+      "upstream": "divination/data/topicMaster.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/election/considerations.js": {
+      "upstream": "divination/election/considerations.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/election/dignityReport.js": {
+      "upstream": "divination/election/dignityReport.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/election/electionEngine.js": {
+      "upstream": "divination/election/electionEngine.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/election/electionParams.js": {
+      "upstream": "divination/election/electionParams.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/election/electionSnapshot.js": {
+      "upstream": "divination/election/electionSnapshot.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/election/hardFlags.js": {
+      "upstream": "divination/election/hardFlags.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/election/lotsEngine.js": {
+      "upstream": "divination/election/lotsEngine.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/election/modules.js": {
+      "upstream": "divination/election/modules.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/election/mundaneIntegration.js": {
+      "upstream": "divination/election/mundaneIntegration.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/election/natalIntegration.js": {
+      "upstream": "divination/election/natalIntegration.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/election/orbPolicy.js": {
+      "upstream": "divination/election/orbPolicy.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/election/rulePacks.js": {
+      "upstream": "divination/election/rulePacks.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/election/scoring.js": {
+      "upstream": "divination/election/scoring.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/election/westernSchools.js": {
+      "upstream": "divination/election/westernSchools.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/election/workflow.js": {
+      "upstream": "divination/election/workflow.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/engine/almuten.js": {
+      "upstream": "divination/engine/almuten.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/engine/aspectsEngine.js": {
+      "upstream": "divination/engine/aspectsEngine.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/engine/chartFacts.js": {
+      "upstream": "divination/engine/chartFacts.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/engine/chartRequest.js": {
+      "upstream": "divination/engine/chartRequest.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/engine/conditions.js": {
+      "upstream": "divination/engine/conditions.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/engine/moon.js": {
+      "upstream": "divination/engine/moon.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/engine/paransLocal.js": {
+      "upstream": "divination/engine/paransLocal.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/engine/perfection.js": {
+      "upstream": "divination/engine/perfection.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/engine/radicality.js": {
+      "upstream": "divination/engine/radicality.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/engine/reception.js": {
+      "upstream": "divination/engine/reception.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/engine/timeLords.js": {
+      "upstream": "divination/engine/timeLords.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/engine/utils.js": {
+      "upstream": "divination/engine/utils.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/horary/describe.js": {
+      "upstream": "divination/horary/describe.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/horary/horaryEngine.js": {
+      "upstream": "divination/horary/horaryEngine.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/horary/horarySchools.js": {
+      "upstream": "divination/horary/horarySchools.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/horary/horarySnapshot.js": {
+      "upstream": "divination/horary/horarySnapshot.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/horary/questionGuide.js": {
+      "upstream": "divination/horary/questionGuide.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/horary/significators.js": {
+      "upstream": "divination/horary/significators.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/horary/theftModule.js": {
+      "upstream": "divination/horary/theftModule.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/horary/timing.js": {
+      "upstream": "divination/horary/timing.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/horary/topicModule.js": {
+      "upstream": "divination/horary/topicModule.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/lifespan/lifespanData.js": {
+      "upstream": "divination/lifespan/lifespanData.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/lifespan/lifespanEngine.js": {
+      "upstream": "divination/lifespan/lifespanEngine.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "dunjia/DunJiaBaGongRules.js": {
+      "upstream": "components/dunjia/DunJiaBaGongRules.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "dunjia/DunJiaCalc.js": {
+      "upstream": "components/dunjia/DunJiaCalc.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "dunjia/DunJiaFaCalc.js": {
+      "upstream": "components/dunjia/DunJiaFaCalc.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "dunjia/DunJiaFaDoc.js": {
+      "upstream": "components/dunjia/DunJiaFaDoc.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "feigong/feigongConst.js": {
+      "upstream": "components/feigong/core/feigongConst.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "feigong/feigongDuan.js": {
+      "upstream": "components/feigong/core/feigongDuan.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "feigong/feigongJu.js": {
+      "upstream": "components/feigong/core/feigongJu.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "feigong/feigongSnapshot.js": {
+      "mode": "bespoke",
+      "why": "no upstream file of this name (skill-authored)"
+    },
+    "fengshui/fengshuiData.js": {
+      "upstream": "components/fengshui/fengshuiData.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "fengshui/liqiCore.js": {
+      "upstream": "components/fengshui/liqiCore.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "fengshui/zeri.js": {
+      "upstream": "components/fengshui/zeri.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "gua/GuaConst.js": {
+      "upstream": "components/gua/GuaConst.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../utils/helper.js",
+          "to": "./guaHelper.js",
+          "why": "上游 utils/helper.js 是 41 导出的绘图/DOM 大杂烩；skill 只需 littleEndian/randomNum，抽成 bespoke guaHelper.js"
+        }
+      ]
+    },
+    "gua/LiuYaoConst.js": {
+      "upstream": "components/gua/LiuYaoConst.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../utils/helper.js",
+          "to": "./guaHelper.js",
+          "why": "上游 utils/helper.js 是 41 导出的绘图/DOM 大杂烩；skill 只需 littleEndian/randomNum，抽成 bespoke guaHelper.js"
+        }
+      ]
+    },
+    "gua/LiuYaoEngine.js": {
+      "upstream": "components/gua/LiuYaoEngine.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../utils/helper.js",
+          "to": "./guaHelper.js",
+          "why": "上游 utils/helper.js 是 41 导出的绘图/DOM 大杂烩；skill 只需 littleEndian/randomNum，抽成 bespoke guaHelper.js"
+        }
+      ]
+    },
+    "gua/data/liuyaoDoctrineCache.js": {
+      "upstream": "components/gua/data/liuyaoDoctrineCache.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "gua/data/liuyaoJiangRef.js": {
+      "upstream": "components/gua/data/liuyaoJiangRef.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "gua/data/tianjiDoctrine.js": {
+      "upstream": "components/gua/data/tianjiDoctrine.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "gua/data/tianjiGuaLore.js": {
+      "upstream": "components/gua/data/tianjiGuaLore.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "gua/data/tianjiShenSha.js": {
+      "upstream": "components/gua/data/tianjiShenSha.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "gua/data/tianjiZhanleiCore.js": {
+      "upstream": "components/gua/data/tianjiZhanleiCore.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "gua/guaHelper.js": {
+      "mode": "bespoke",
+      "why": "no upstream file of this name (skill-authored)"
+    },
+    "gua/littleEndian.js": {
+      "mode": "bespoke",
+      "why": "no upstream file of this name (skill-authored)"
+    },
+    "gua/liuyaoDongBian.js": {
+      "upstream": "components/gua/liuyaoDongBian.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../utils/helper.js",
+          "to": "./guaHelper.js",
+          "why": "上游 utils/helper.js 是 41 导出的绘图/DOM 大杂烩；skill 只需 littleEndian/randomNum，抽成 bespoke guaHelper.js"
+        }
+      ]
+    },
+    "gua/liuyaoDuanJue.js": {
+      "upstream": "components/gua/liuyaoDuanJue.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "gua/liuyaoFacade.js": {
+      "upstream": "components/gua/liuyaoFacade.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../utils/helper.js",
+          "to": "./guaHelper.js",
+          "why": "上游 utils/helper.js 是 41 导出的绘图/DOM 大杂烩；skill 只需 littleEndian/randomNum，抽成 bespoke guaHelper.js"
+        }
+      ]
+    },
+    "gua/liuyaoGuFa.js": {
+      "upstream": "components/gua/liuyaoGuFa.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../utils/helper.js",
+          "to": "./guaHelper.js",
+          "why": "上游 utils/helper.js 是 41 导出的绘图/DOM 大杂烩；skill 只需 littleEndian/randomNum，抽成 bespoke guaHelper.js"
+        }
+      ]
+    },
+    "gua/liuyaoLiuShen.js": {
+      "upstream": "components/gua/liuyaoLiuShen.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../utils/helper.js",
+          "to": "./guaHelper.js",
+          "why": "上游 utils/helper.js 是 41 导出的绘图/DOM 大杂烩；skill 只需 littleEndian/randomNum，抽成 bespoke guaHelper.js"
+        }
+      ]
+    },
+    "gua/liuyaoReference.js": {
+      "upstream": "components/gua/liuyaoReference.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "gua/liuyaoSchools.js": {
+      "upstream": "components/gua/liuyaoSchools.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "gua/liuyaoShenSha.js": {
+      "upstream": "components/gua/liuyaoShenSha.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "gua/liuyaoShenShaEx.js": {
+      "upstream": "components/gua/liuyaoShenShaEx.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "gua/liuyaoYingQi.js": {
+      "upstream": "components/gua/liuyaoYingQi.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "gua/liuyaoYongShen.js": {
+      "upstream": "components/gua/liuyaoYongShen.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "gua/safeStorage.js": {
+      "upstream": "utils/safeStorage.js",
+      "mode": "curated",
+      "why": "headless no-op localStorage shim（上游 117 行是 WKWebView QuotaExceeded 包装；skill 从不持久化六爻设置，逐调用显式传参）。",
+      "extracts": []
+    },
+    "guice/core/guiceConst.js": {
+      "upstream": "components/guice/core/guiceConst.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "guice/core/guiceDading.js": {
+      "upstream": "components/guice/core/guiceDading.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "guice/core/guiceDuanfa.js": {
+      "upstream": "components/guice/core/guiceDuanfa.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "guice/core/guiceEngine.js": {
+      "upstream": "components/guice/core/guiceEngine.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "guice/core/guiceGuaBian.js": {
+      "upstream": "components/guice/core/guiceGuaBian.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "guice/core/guiceJiaziShu.js": {
+      "upstream": "components/guice/core/guiceJiaziShu.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "guice/core/guiceLishi.js": {
+      "upstream": "components/guice/core/guiceLishi.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "guice/core/guicePan.js": {
+      "upstream": "components/guice/core/guicePan.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "guice/core/guiceQiGua.js": {
+      "upstream": "components/guice/core/guiceQiGua.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "guice/core/guiceShiFang.js": {
+      "upstream": "components/guice/core/guiceShiFang.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "guice/core/guiceShiYing.js": {
+      "upstream": "components/guice/core/guiceShiYing.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "guice/guiceSchools.js": {
+      "upstream": "components/guice/guiceSchools.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "guice/guiceSnapshot.js": {
+      "upstream": "components/guice/guiceSnapshot.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "guolao/guolaoData.js": {
+      "upstream": "components/guolao/guolaoData.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "guolao/guolaoMoira.js": {
+      "mode": "bespoke",
+      "why": "no upstream file of this name (skill-authored)"
+    },
+    "heluo/heluoLocal.js": {
+      "upstream": "utils/heluoLocal.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "india/jyotishSnapshot.js": {
+      "mode": "bespoke",
+      "why": "no upstream file of this name (skill-authored)"
+    },
+    "jinkou/JinKouCalc.js": {
+      "upstream": "components/jinkou/JinKouCalc.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "jinkou/JinKouDoc.js": {
+      "upstream": "components/jinkou/JinKouDoc.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "jinkou/JinKouSnapshot.js": {
+      "mode": "bespoke",
+      "why": "no upstream file of this name (skill-authored)"
+    },
+    "jinkou/JinKouState.js": {
+      "upstream": "components/jinkou/JinKouState.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "liureng/ChuangChart.js": {
+      "upstream": "components/liureng/ChuangChart.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "stub_import",
+          "specifier": "../../utils/helper.js",
+          "stub": "// headless stub：genCuangs(三传计算) 不用绘图/tooltip；randomStr 只产 this.id 占位串。\nconst randomStr = (n) => 'x'.repeat(Number(n) || 4);\nconst creatTooltip = () => {};"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../graph/GraphHelper.js",
+          "stub": "const drawPath = () => {}; const drawTextH = () => {}; const drawTextV = () => {};"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./LRShenJiangDoc.js",
+          "stub": "const buildLiuRengHouseTipObj = () => ({}); const buildLiuRengShenTipObj = () => ({});"
+        }
+      ]
+    },
+    "liureng/LRBiFa.js": {
+      "upstream": "components/liureng/LRBiFa.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "liureng/LRBiFaDoc.js": {
+      "upstream": "components/liureng/LRBiFaDoc.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "liureng/LRConst.js": {
+      "upstream": "components/liureng/LRConst.js",
+      "mode": "curated",
+      "why": "curated 常量文件（AGENTS §5 点名）：上游全文件 import 了 headless 不存在的路径，只追加新增纯常量，不整文件重 vendor。",
+      "extracts": []
+    },
+    "liureng/LRJianChuanDoc.js": {
+      "upstream": "components/liureng/LRJianChuanDoc.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "liureng/LRKongDunNianDoc.js": {
+      "upstream": "components/liureng/LRKongDunNianDoc.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "liureng/LRPanStyle.js": {
+      "upstream": "components/liureng/LRPanStyle.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "liureng/LRShenShaDoc.js": {
+      "upstream": "components/liureng/LRShenShaDoc.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "liureng/LRZhanDuanDoc.js": {
+      "upstream": "components/liureng/LRZhanDuanDoc.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "liureng/LRZhangSheng.js": {
+      "upstream": "components/liureng/LRZhangSheng.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "liureng/liurengRefContext.js": {
+      "mode": "bespoke",
+      "why": "no upstream file of this name (skill-authored)"
+    },
+    "mundane/chorography.js": {
+      "upstream": "divination/mundane/chorography.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "mundane/describe.js": {
+      "upstream": "divination/mundane/describe.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "mundane/mundaneHorary.js": {
+      "upstream": "divination/mundane/mundaneHorary.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "mundane/ruleset.js": {
+      "upstream": "divination/mundane/ruleset.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "mundane/solunar.js": {
+      "upstream": "divination/mundane/solunar.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "mundane/vedicMundane.js": {
+      "upstream": "divination/mundane/vedicMundane.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "suzhan/SZConst.js": {
+      "upstream": "components/suzhan/SZConst.js",
+      "mode": "curated",
+      "why": "模块加载期读 localStorage → 硬编码 no-op shim（Node 实验性全局 localStorage 无 flag 会 throw，故不探测 globalThis）。",
+      "extracts": []
+    },
+    "taiyi/TaiYiCalc.js": {
+      "upstream": "components/taiyi/TaiYiCalc.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "taiyi/core/TaiYiCore.js": {
+      "upstream": "components/taiyi/core/TaiYiCore.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "taiyi/core/taiyiDuanfa.js": {
+      "upstream": "components/taiyi/core/taiyiDuanfa.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "taiyi/core/taiyiGeju.js": {
+      "upstream": "components/taiyi/core/taiyiGeju.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "taiyi/core/taiyiNayin.js": {
+      "upstream": "components/taiyi/core/taiyiNayin.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "taiyi/core/taiyiSchool.js": {
+      "upstream": "components/taiyi/core/taiyiSchool.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "taiyi/core/taiyiShuli.js": {
+      "upstream": "components/taiyi/core/taiyiShuli.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/decks/cartomancy.js": {
+      "upstream": "components/tarot/decks/cartomancy.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/decks/continental.js": {
+      "upstream": "components/tarot/decks/continental.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/decks/core78.js": {
+      "upstream": "components/tarot/decks/core78.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/decks/correspondences.js": {
+      "upstream": "components/tarot/decks/correspondences.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/decks/deckInfo.js": {
+      "upstream": "components/tarot/decks/deckInfo.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/decks/etteilla.js": {
+      "upstream": "components/tarot/decks/etteilla.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/decks/kipper.js": {
+      "upstream": "components/tarot/decks/kipper.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/decks/lenormand.js": {
+      "upstream": "components/tarot/decks/lenormand.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/decks/manualMeanings.js": {
+      "upstream": "components/tarot/decks/manualMeanings.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/decks/meanings78.js": {
+      "upstream": "components/tarot/decks/meanings78.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/decks/minchiate.js": {
+      "upstream": "components/tarot/decks/minchiate.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/decks/sibilla.js": {
+      "upstream": "components/tarot/decks/sibilla.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/decks/visconti.js": {
+      "upstream": "components/tarot/decks/visconti.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/engine/cardArt.js": {
+      "upstream": "components/tarot/engine/cardArt.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/engine/cardSchema.js": {
+      "upstream": "components/tarot/engine/cardSchema.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/engine/colorScales.js": {
+      "upstream": "components/tarot/engine/colorScales.js",
+      "mode": "curated",
+      "why": "金色黎明四色阶的 King 阶子集；其余三阶是 128 格大表，按需扩。",
+      "extracts": []
+    },
+    "tarot/engine/deckRegistry.js": {
+      "upstream": "components/tarot/engine/deckRegistry.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/engine/dignities.js": {
+      "upstream": "components/tarot/engine/dignities.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/engine/lenormandReading.js": {
+      "upstream": "components/tarot/engine/lenormandReading.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/engine/openingOfKey.js": {
+      "upstream": "components/tarot/engine/openingOfKey.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/engine/reading.js": {
+      "upstream": "components/tarot/engine/reading.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/engine/reportText.js": {
+      "upstream": "components/tarot/engine/reportText.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/engine/reversalModes.js": {
+      "upstream": "components/tarot/engine/reversalModes.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/engine/shuffle.js": {
+      "upstream": "components/tarot/engine/shuffle.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "stub_import",
+          "specifier": "node-forge",
+          "stub": "// headless shim：上游只用 node-forge 取 SHA-256。改用 Node 内置 crypto —— 摘要逐字节一致，\n// 却省掉一个 npm 依赖（离线 runtime 要打包，且 loadcheck 会因缺包整棵 tarot/engine 加载失败）。\n// 保留 forge 的调用形状而不改上游函数体，是为了让本文件其余部分继续逐字 verbatim。\nimport { createHash } from 'node:crypto';\nfunction _sha256Md(){\n\tconst parts = [];\n\treturn {\n\t\tupdate(s){ parts.push(String(s)); return this; },\n\t\tdigest(){ return { toHex: () => createHash('sha256').update(parts.join(''), 'utf8').digest('hex') }; },\n\t};\n}\nconst forge = { md: { sha256: { create: _sha256Md } } };",
+          "why": "上游 v3.7.x 把 sha256 从 node:crypto 换成 node-forge；headless 侧不引入该依赖"
+        }
+      ]
+    },
+    "tarot/engine/significator.js": {
+      "upstream": "components/tarot/engine/significator.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/engine/spreads.js": {
+      "upstream": "components/tarot/engine/spreads.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/engine/verdict.js": {
+      "upstream": "components/tarot/engine/verdict.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tieban/tiebanFrameworkLocal.js": {
+      "upstream": "utils/tiebanFrameworkLocal.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tongshefa/TongSheFaCore.js": {
+      "mode": "bespoke",
+      "why": "no upstream file of this name (skill-authored)"
+    },
+    "tongshu/donggong.js": {
+      "upstream": "components/calendar/tongshu/donggong.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tongshu/donggongData.js": {
+      "upstream": "components/calendar/tongshu/donggongData.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tongshu/qimenData.js": {
+      "upstream": "components/calendar/tongshu/qimenData.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tongshu/qimenDieShu.js": {
+      "upstream": "components/calendar/tongshu/qimenDieShu.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tongshu/sanyuanData.js": {
+      "upstream": "components/calendar/tongshu/sanyuanData.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tongshu/sanyuanLiexiu.js": {
+      "upstream": "components/calendar/tongshu/sanyuanLiexiu.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tongshu/wutu.js": {
+      "upstream": "components/calendar/tongshu/wutu.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tongshu/xuankong.js": {
+      "upstream": "components/calendar/tongshu/xuankong.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tongshu/xuankongData.js": {
+      "upstream": "components/calendar/tongshu/xuankongData.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "uranian/uranianMeanings.js": {
+      "upstream": "data/uranianMeanings.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "uranian/uranianTnpReference.js": {
+      "upstream": "data/uranianTnpReference.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/babylonAiSnapshot.js": {
+      "upstream": "utils/babylonAiSnapshot.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/classicalChartGlobals.js": {
+      "upstream": "utils/classicalChartGlobals.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/julianDayIndex.js": {
+      "upstream": "utils/julianDayIndex.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "xiaochengtu/xiaochengtuConst.js": {
+      "upstream": "components/xiaochengtu/core/xiaochengtuConst.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "xiaochengtu/xiaochengtuPan.js": {
+      "upstream": "components/xiaochengtu/core/xiaochengtuPan.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "xiaochengtu/xiaochengtuQiGua.js": {
+      "upstream": "components/xiaochengtu/core/xiaochengtuQiGua.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "xiaochengtu/xiaochengtuSnapshot.js": {
+      "mode": "bespoke",
+      "why": "no upstream file of this name (skill-authored)"
+    },
+    "xiaoliuren/xiaoliurenConst.js": {
+      "upstream": "components/xiaoliuren/core/xiaoliurenConst.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "xiaoliuren/xiaoliurenKe.js": {
+      "upstream": "components/xiaoliuren/core/xiaoliurenKe.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "xiaoliuren/xiaoliurenSnapshot.js": {
+      "mode": "bespoke",
+      "why": "no upstream file of this name (skill-authored)"
+    },
+    "yanqin/chaiziEngine.js": {
+      "upstream": "components/yanqin/chaiziEngine.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "yanqin/xiuyaoEngine.js": {
+      "upstream": "components/yanqin/xiuyaoEngine.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "yanqin/yanqinConst.js": {
+      "upstream": "components/yanqin/yanqinConst.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "yanqin/yanqinData.js": {
+      "upstream": "components/yanqin/yanqinData.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "yanqin/yanqinEngine.js": {
+      "upstream": "components/yanqin/yanqinEngine.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "yanqin/yanqinSchools.js": {
+      "upstream": "components/yanqin/yanqinSchools.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "yanqin/yanqinSnapshot.js": {
+      "upstream": "components/yanqin/yanqinSnapshot.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "yanqin/yanqinStore.js": {
+      "upstream": "components/yanqin/yanqinStore.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "yizhangjing/yizhangjingLocal.js": {
+      "upstream": "utils/yizhangjingLocal.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "yizhangjing/yizhangjingReport.js": {
+      "upstream": "utils/yizhangjingReport.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "zhengchuan/tiebanFrameworkLocal.js": {
+      "upstream": "utils/tiebanFrameworkLocal.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "zhengchuan/zhengchuanDadingLocal.js": {
+      "upstream": "utils/zhengchuanDadingLocal.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "zhengchuan/zhengchuanLiuqinLocal.js": {
+      "upstream": "utils/zhengchuanLiuqinLocal.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "zhengchuan/zhengchuanShaoziLocal.js": {
+      "upstream": "utils/zhengchuanShaoziLocal.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "zhengchuan/zhengchuanSnapshot.js": {
+      "upstream": "utils/zhengchuanSnapshot.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "zhengchuan/zhengchuanTiebanLocal.js": {
+      "upstream": "utils/zhengchuanTiebanLocal.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "zhengchuan/zhengchuanXinyiLocal.js": {
+      "upstream": "utils/zhengchuanXinyiLocal.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/ZiWeiHelper.js": {
+      "upstream": "components/ziwei/ZiWeiHelper.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/data/ziweiTables.js": {
+      "upstream": "components/ziwei/data/ziweiTables.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/ziweiCore.js": {
+      "upstream": "components/ziwei/ziweiCore.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/ziweiOptions.js": {
+      "upstream": "components/ziwei/ziweiOptions.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/ziweiOverlays.js": {
+      "upstream": "components/ziwei/ziweiOverlays.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/zwLuckItems.js": {
+      "mode": "bespoke",
+      "why": "no upstream file of this name (skill-authored)"
+    },
+    "gua/liuyaoTianshi.js": {
+      "upstream": "components/gua/liuyaoTianshi.js",
+      "mode": "verbatim",
+      "deviations": [],
+      "why": "上游 v3.6.0「六爻天时占法五家」，本仓从未 vendor —— liuyaoFacade.js 一直 import 着一个不存在的模块。"
+    },
+    "divination/zeri/conditionTypes.js": {
+      "upstream": "divination/zeri/conditionTypes.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/qimenConditionTypes.js": {
+      "upstream": "divination/zeri/qimenConditionTypes.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/qimenScanEngine.js": {
+      "upstream": "divination/zeri/qimenScanEngine.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/qimenZeriSnapshot.js": {
+      "upstream": "divination/zeri/qimenZeriSnapshot.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/conditionGlyph.js": {
+      "upstream": "divination/zeri/conditionGlyph.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/tianxingSnapshot.js": {
+      "upstream": "divination/zeri/tianxingSnapshot.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../constants/AstroConst.js",
+          "to": "../../../constants/AstroConst.js",
+          "why": "钉到 src/constants 的共享 shim（HOUSE_SYSTEM_OPTIONS 在那里；vendor/constants 是 Uranian 子集）"
+        }
+      ]
+    },
+    "divination/zeri/intervalOps.js": {
+      "upstream": "divination/zeri/intervalOps.js",
+      "mode": "verbatim",
+      "deviations": []
+    }
+  }
+}

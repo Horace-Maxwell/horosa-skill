@@ -1,11 +1,22 @@
 // 通用确定性洗牌(可复现 + size 感知)。SHA-256(seed)→mulberry32→Fisher–Yates(size)→逐张定逆位。
 // 兼容铁律:size=78、usesReversals、pReversed=0.5 时与旧 tarotShuffle 字节一致(order 与 reversed 全等)。
 // 逆位谓词 rng()>=(1-p)(p=0.5 即旧 >=0.5)。逆位关=同 order、reversed 全 false(只改朝向不改抽到的牌)。
+// headless shim：上游只用 node-forge 取 SHA-256。改用 Node 内置 crypto —— 摘要逐字节一致，
+// 却省掉一个 npm 依赖（离线 runtime 要打包，且 loadcheck 会因缺包整棵 tarot/engine 加载失败）。
+// 保留 forge 的调用形状而不改上游函数体，是为了让本文件其余部分继续逐字 verbatim。
 import { createHash } from 'node:crypto';
-
+function _sha256Md(){
+	const parts = [];
+	return {
+		update(s){ parts.push(String(s)); return this; },
+		digest(){ return { toHex: () => createHash('sha256').update(parts.join(''), 'utf8').digest('hex') }; },
+	};
+}
+const forge = { md: { sha256: { create: _sha256Md } } };
 function sha256Hex(str){
-	// 换用 Node 内置 crypto（原上游用 node-forge，headless 无需该 npm 依赖，SHA-256 逐字节一致）。
-	return createHash('sha256').update(String(str === undefined || str === null ? '' : str), 'utf8').digest('hex');
+	const md = forge.md.sha256.create();
+	md.update(String(str === undefined || str === null ? '' : str), 'utf8');
+	return md.digest().toHex();
 }
 
 function mulberry32(a){
