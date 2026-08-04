@@ -115,10 +115,102 @@ def check_tool_coverage() -> None:
         missing = sorted(t for t in TOOL_DEFINITIONS if f"`{t}`" not in text)
         if missing:
             err(f"{path.relative_to(ROOT)}: tool ids not documented: {', '.join(missing)}")
-    for path in (ROOT / "README.md", ROOT / "README_EN.md"):
-        for badge in re.findall(r"badge/tools-(\d+)-", read(path)):
-            if int(badge) != len(TOOL_DEFINITIONS):
-                err(f"{path.name}: tools badge says {badge}, registry has {len(TOOL_DEFINITIONS)}")
+    check_tool_counts()
+
+
+# --- 2b. tool-count claims outside the guarded headline --------------------------------------
+# Every drift found in the v0.26.0 audit lived here: the zh README's badge said 83 while the very same
+# line's alt said 89, three prose lines said 83, and `_SERVER_INSTRUCTIONS` — which ships to every MCP
+# client — said 83 twice. The old regex only matched `badge/tools-(\d+)-`, so the English phrasing
+# happened to be guarded and the Chinese one was not. Make the checks language-agnostic instead.
+
+COUNT_BADGE = re.compile(r"badge/(tools|技法|工具)-(\d+)-")
+COUNT_ALT = re.compile(r'alt="(\d+)\s*tools?"')
+COUNT_PROSE = re.compile(r"(\d+)\s*(?:个)?\s*(技法|工具|tools\b|techniques\b)")
+# manifest.json phrases it as "83 real technique tools" / "83 real 术数/占星 techniques" — a bounded
+# lazy filler catches those without the tight form's false-positive risk.
+COUNT_PROSE_EN = re.compile(r"(\d+)\s+real\s+[^,.;]{0,30}?\b(tools?|techniques?)\b")
+# 「N 个术数/占星技法」逐字出现在 CLAUDE.md / AGENTS.md / banner.svg 三处 —— 用精确短语而不是放宽
+# 通用正则，否则「约 9 个门面工具」这类真·小数字会被误报。
+COUNT_PHRASE_ZH = re.compile(r"(\d+)\s*个术数\s*/?\s*占星技法")
+# README 自检表的「N / N ok=true」「N / N 写入」行 —— 描述的是本次发布的构建，必须跟注册表同步。
+COUNT_SELFCHECK = re.compile(r"(\d+)\s*/\s*(\d+)\s*`?\s*(?:ok=true|写入|writes)")
+# 行内先剥掉强调/标签，`<strong>83</strong> real techniques`、`**83 个**` 才能被上面的模式看到。
+EMPHASIS = re.compile(r"</?[A-Za-z][^>]*>|\*\*|`")
+# 「N 个技法工具触发 must_ask_user」是**另一个量**（registry 减去 PREFLIGHT_EXEMPT_TOOLS），
+# 不是工具总数——单独算、单独断言，好过打 ignore 标记让它继续陈旧下去。
+GATED_PROSE = re.compile(r"(\d+)\s*个技法工具触发")
+IGNORE_COUNT = "<!-- docs-sync:ignore-count -->"
+
+COUNT_DOCS = [
+    "README.md",
+    "README_EN.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "manifest.json",
+    "skills/horosa-agent/SKILL.md",
+    ".claude-plugin/plugin.json",
+    ".claude-plugin/marketplace.json",
+    "docs/assets/banner.svg",
+]
+
+
+def check_tool_counts() -> None:
+    expected = len(TOOL_DEFINITIONS)
+    for rel in COUNT_DOCS:
+        path = ROOT / rel
+        if not path.exists():
+            continue
+        for lineno, raw_line in enumerate(read(path).splitlines(), 1):
+            if IGNORE_COUNT in raw_line:
+                continue
+            line = EMPHASIS.sub("", raw_line)
+            badge = COUNT_BADGE.search(raw_line)
+            if badge and int(badge.group(2)) != expected:
+                err(f"{rel}:{lineno}: {badge.group(1)} badge says {badge.group(2)}, registry has {expected}")
+            # alt lives *inside* a tag, so it must be read before EMPHASIS strips tags away
+            alt = COUNT_ALT.search(raw_line)
+            # a badge and its own alt disagreeing on one line is always a bug, whatever the registry says
+            if badge and alt and badge.group(2) != alt.group(1):
+                err(f"{rel}:{lineno}: badge {badge.group(2)} contradicts alt {alt.group(1)} on the same line")
+            if alt and int(alt.group(1)) != expected:
+                err(f"{rel}:{lineno}: alt says {alt.group(1)} tools, registry has {expected}")
+            gated = GATED_PROSE.search(line)
+            if gated:
+                if int(gated.group(1)) != expected_gated():
+                    err(
+                        f"{rel}:{lineno}: claims {gated.group(1)} gated tools, "
+                        f"registry minus PREFLIGHT_EXEMPT_TOOLS is {expected_gated()}"
+                    )
+                continue  # a gated-count line is not a total-count line
+            for a, b in COUNT_SELFCHECK.findall(line):
+                if int(a) != expected or int(b) != expected:
+                    err(f"{rel}:{lineno}: self-check row says {a} / {b}, registry has {expected}")
+            phrase = [(c, "技法") for c in COUNT_PHRASE_ZH.findall(line)]
+            for count, _noun in COUNT_PROSE.findall(line) + COUNT_PROSE_EN.findall(line) + phrase:
+                if int(count) != expected:
+                    err(
+                        f"{rel}:{lineno}: prose claims {count} tools, registry has {expected} "
+                        f"(add {IGNORE_COUNT} if this line is a frozen historical record)"
+                    )
+    check_server_instructions()
+
+
+def expected_gated() -> int:
+    from horosa_skill.agent_guidance import PREFLIGHT_EXEMPT_TOOLS
+
+    return len(TOOL_DEFINITIONS) - len(PREFLIGHT_EXEMPT_TOOLS)
+
+
+def check_server_instructions() -> None:
+    """`_SERVER_INSTRUCTIONS` ships to every MCP client and had no guard at all."""
+    from horosa_skill.surfaces.mcp_server import _SERVER_INSTRUCTIONS
+
+    expected = len(TOOL_DEFINITIONS)
+    for count in re.findall(r"\((\d+)\s*tools?\)|instead of (\d+)", _SERVER_INSTRUCTIONS):
+        got = count[0] or count[1]
+        if int(got) != expected:
+            err(f"mcp_server._SERVER_INSTRUCTIONS: claims {got} tools, registry has {expected}")
 
 
 # --- 3. stale "current: `X`" claims in docs -------------------------------------------------

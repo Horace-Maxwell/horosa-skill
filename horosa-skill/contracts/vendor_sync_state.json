@@ -1,6 +1,0 @@
-{
-  "_comment": "最近一次核对过的上游状态；每次同步都在 git 留痕，避免 vendored 树静默落后。",
-  "upstream_aiexport_settings_version": 50,
-  "skill_mirrored_version": 48,
-  "core_js_files_compared": 162
-}

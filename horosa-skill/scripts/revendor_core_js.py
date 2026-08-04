@@ -18,6 +18,7 @@ Usage:  python scripts/revendor_core_js.py <upstream-src-root> <relative/path/Fi
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -25,6 +26,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VENDOR_ROOT = REPO_ROOT / "horosa-skill/horosa-core-js/src/vendor"
+MANIFEST = REPO_ROOT / "horosa-skill/contracts/vendor_manifest.json"
 
 _DROP_IMPORT_PATTERNS = (
     re.compile(r"^import\s+request\s+from\s+['\"][^'\"]*utils/request['\"];?\s*$", re.M),
@@ -255,6 +257,19 @@ def transform(text: str) -> tuple[str, list[str]]:
     )
     if json_count:
         notes.append(f"added json import attribute ×{json_count}")
+
+    # 同一条规则的**动态** import 形态：`import('./x.json')` 在原生 Node ESM 同样要显式属性。
+    # 上游常带 `/* webpackChunkName: … */` 注释（纯 bundler 提示），一并去掉。
+    # 静态形态的正则要求同行以 `;` 收尾，天然覆盖不到这里 —— 漏了它模块**能加载**（因为是懒加载），
+    # 只在真正调用那条路径时才炸，selfcheck 才抓得到，loadcheck 抓不到（zhengchuan 条文库正是此例）。
+    text, dyn_count = re.subn(
+        r"import\(\s*(?:/\*.*?\*/\s*)?(['\"][^'\"]+\.json['\"])\s*\)",
+        r"import(\1, { with: { type: 'json' } })",
+        text,
+        flags=re.S,
+    )
+    if dyn_count:
+        notes.append(f"added dynamic json import attribute ×{dyn_count}")
     return text, notes
 
 
@@ -273,7 +288,15 @@ def _reexport_required(text: str, target: Path) -> tuple[str, list[str]]:
     for tool in tools_dir.glob("*.js") if tools_dir.is_dir() else []:
         for match in re.finditer(r"import\s+\{([^}]+)\}\s+from\s+['\"][^'\"]*" + re.escape(stem) + r"\.js['\"]", tool.read_text(encoding="utf-8")):
             needed |= {s.strip().split(" as ")[0].strip() for s in match.group(1).split(",") if s.strip()}
+    # 上游也可能用**尾部导出清单** `export { a, b };` 而不是 `export function a`。只认前者会把
+    # 已导出的符号再加一次 `export`，产出 "Duplicate export of 'x'" —— 该模块整个加载不了。
+    # （上游 v3.7.x 给 baziLunarLocal 的 buildFlowDays/buildFlowHours 补了尾部清单，正好踩中。）
+    exported_by_list: set[str] = set()
+    for block in re.findall(r"^export\s*\{([^}]*)\}\s*;", text, re.M):
+        exported_by_list |= {s.strip().split(" as ")[0].strip() for s in block.split(",") if s.strip()}
     for name in sorted(needed):
+        if name in exported_by_list:
+            continue
         if re.search(rf"^export\s+(?:async\s+)?function\s+{re.escape(name)}\b", text, re.M):
             continue
         pattern = re.compile(rf"^(function\s+{re.escape(name)}\b)", re.M)
@@ -322,13 +345,254 @@ def _relocate_imports(text: str, target: Path) -> tuple[str, list[str]]:
     return _RELATIVE_IMPORT.sub(fix, text), notes
 
 
+# --------------------------------------------------------------------------------------------
+# Manifest mode
+#
+# The positional form below infers the vendor destination from the upstream parent directory name.
+# That inference is WRONG for most of this tree — `utils/balbillus.js` lands in `vendor/astroextra/`,
+# `components/gua/data/*.js` in `vendor/data/`, and so on — so driving it over the existing tree
+# forks duplicate parallel copies (`vendor/utils/balbillus.js` beside the real one), with relocate
+# then pointing imports at the stale copy. The manifest carries both sides explicitly, which is what
+# makes "which files still need re-vendoring?" a mechanical `--check` answer instead of archaeology.
+#
+# modes:
+#   verbatim  — pipeline output (+ declared deviations) must equal the vendored file
+#   curated   — never auto-vendored (deliberate subset/shim); every name in `extracts` must still be
+#               a top-level upstream export, which is what catches an upstream rename turning a
+#               hand-extracted constant into a silent `undefined`
+#   bespoke   — skill-authored, no upstream counterpart; asserts none appears, so a file that BECOMES
+#               vendorable upstream is loud instead of sitting in the "reported, not failed" bucket
+#
+# deviations (applied after the transform pipeline, in order):
+#   {"kind": "import_redirect", "specifier": "...", "to": "..."}  — pin a specifier relocate mis-picks
+#   {"kind": "stub_import", "specifier": "...", "stub": "..."}    — replace a draw-only/browser import
+# --------------------------------------------------------------------------------------------
+
+_IMPORT_FROM = r"(from\s+['\"]){spec}(['\"])"
+_IMPORT_STMT = r"^import\s+[^;\n]*?from\s+['\"]{spec}['\"]\s*;?\s*$"
+
+
+def load_manifest() -> dict:
+    if not MANIFEST.is_file():
+        raise SystemExit(f"vendor manifest not found: {MANIFEST} (run --bootstrap-manifest once)")
+    return json.loads(MANIFEST.read_text(encoding="utf-8"))["files"]
+
+
+def apply_deviations(text: str, deviations: list[dict]) -> tuple[str, list[str]]:
+    notes: list[str] = []
+    for dev in deviations or []:
+        kind, spec = dev.get("kind"), dev.get("specifier", "")
+        if kind == "import_redirect":
+            pattern = re.compile(_IMPORT_FROM.format(spec=re.escape(spec)))
+            text, n = pattern.subn(lambda m: f"{m.group(1)}{dev['to']}{m.group(2)}", text)
+            if not n:
+                notes.append(f"⚠ import_redirect specifier not found: {spec}")
+            else:
+                notes.append(f"redirected {spec} → {dev['to']}")
+        elif kind == "stub_import":
+            pattern = re.compile(_IMPORT_STMT.format(spec=re.escape(spec)), re.M)
+            text, n = pattern.subn(dev["stub"].rstrip("\n"), text)
+            if not n:
+                notes.append(f"⚠ stub_import specifier not found: {spec}")
+            else:
+                notes.append(f"stubbed {spec}")
+        else:
+            notes.append(f"⚠ unknown deviation kind: {kind}")
+    return text, notes
+
+
+def _top_level_exports(text: str) -> set[str]:
+    names: set[str] = set()
+    for match in re.finditer(r"^export\s+(?:async\s+)?(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)", text, re.M):
+        names.add(match.group(1))
+    return names
+
+
+def render_one(upstream_src: Path, rel_upstream: str, target: Path, deviations: list[dict]) -> tuple[str, list[str]]:
+    source = upstream_src / rel_upstream
+    if not source.is_file():
+        raise SystemExit(f"upstream file not found: {source}")
+    text, notes = transform(source.read_text(encoding="utf-8"))
+    text, more = _reexport_required(text, target)
+    notes.extend(more)
+    # Deviations run BEFORE relocate, not after: relocate rewrites specifiers by basename, so a
+    # post-relocate redirect would be looking for a specifier that no longer exists, and a stubbed
+    # import would already have been reported UNRESOLVED. Running first makes both authoritative —
+    # a redirected path is resolvable so relocate leaves it alone, and a stubbed import is gone.
+    text, more = apply_deviations(text, deviations)
+    notes.extend(more)
+    text, more = _relocate_imports(text, target)
+    notes.extend(more)
+    return text, notes
+
+
+def run_manifest(upstream_src: Path, only: str | None, check: bool) -> int:
+    files = load_manifest()
+    problems = 0
+    stats = {"unchanged": 0, "updated": 0, "curated": 0, "bespoke": 0}
+    upstream_names = {p.name for p in upstream_src.rglob("*.js")}
+
+    for vendor_rel in sorted(files):
+        if only and not vendor_rel.startswith(only):
+            continue
+        entry = files[vendor_rel]
+        mode = entry.get("mode")
+        target = VENDOR_ROOT / vendor_rel
+
+        if mode == "bespoke":
+            stats["bespoke"] += 1
+            if Path(vendor_rel).name in upstream_names:
+                problems += 1
+                print(f"{vendor_rel}: BESPOKE but upstream now ships a file of that name — reclassify")
+            continue
+
+        if mode == "curated":
+            stats["curated"] += 1
+            source = upstream_src / entry["upstream"]
+            if not source.is_file():
+                problems += 1
+                print(f"{vendor_rel}: CURATED but upstream source is gone ({entry['upstream']})")
+                continue
+            upstream_exports = _top_level_exports(source.read_text(encoding="utf-8"))
+            lost = sorted(set(entry.get("extracts") or []) - upstream_exports)
+            if lost:
+                problems += 1
+                print(
+                    f"{vendor_rel}: CURATED — {len(lost)} extracted name(s) no longer exported upstream: "
+                    f"{', '.join(lost)} (a renamed constant becomes a silent `undefined` key)"
+                )
+            continue
+
+        if mode != "verbatim":
+            problems += 1
+            print(f"{vendor_rel}: NEEDS-REVIEW (mode={mode!r}) — classify it before this batch can go green")
+            continue
+
+        new_text, notes = render_one(upstream_src, entry["upstream"], target, entry.get("deviations") or [])
+        old_text = target.read_text(encoding="utf-8") if target.is_file() else ""
+        unresolved = [n for n in notes if n.startswith("⚠")]
+        if unresolved:
+            problems += 1
+            print(f"{vendor_rel}: {'; '.join(unresolved)}")
+        if old_text == new_text:
+            stats["unchanged"] += 1
+            continue
+        stats["updated"] += 1
+        delta = len(new_text.splitlines()) - len(old_text.splitlines())
+        print(f"{vendor_rel}: {'would update' if check else 'updated'} ({delta:+d} lines) [{'; '.join(notes) or 'verbatim'}]")
+        if check:
+            problems += 1
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(new_text, encoding="utf-8")
+
+    summary = ", ".join(f"{k}={v}" for k, v in stats.items())
+    print(f"\nrevendor-manifest: {'FAIL' if problems else 'ok'} ({summary}; {problems} need attention)")
+    return 1 if problems else 0
+
+
+def manifest_drift(upstream_src: Path) -> list[str]:
+    """Files whose vendored copy no longer equals the manifest-declared render of upstream.
+
+    This is the precise oracle for "what still needs re-vendoring" — unlike a raw sha256 against
+    untransformed upstream, which flags every file that legitimately carries the headless transform.
+    """
+    out: list[str] = []
+    for vendor_rel, entry in sorted(load_manifest().items()):
+        if entry.get("mode") != "verbatim":
+            continue
+        target = VENDOR_ROOT / vendor_rel
+        try:
+            new_text, notes = render_one(upstream_src, entry["upstream"], target, entry.get("deviations") or [])
+        except SystemExit as exc:
+            out.append(f"{vendor_rel}: {exc}")
+            continue
+        if any(n.startswith("⚠") for n in notes):
+            out.append(f"{vendor_rel}: {'; '.join(n for n in notes if n.startswith('⚠'))}")
+        elif not target.is_file() or target.read_text(encoding="utf-8") != new_text:
+            out.append(vendor_rel)
+    return out
+
+
+def bootstrap_manifest(upstream_src: Path) -> None:
+    """Generate the manifest from the current tree: clean files become `verbatim`, unmatched become
+    `bespoke`, and everything the pipeline would change becomes `needs-review` — i.e. the worklist."""
+    index: dict[str, list[Path]] = {}
+    for path in upstream_src.rglob("*.js"):
+        index.setdefault(path.name, []).append(path)
+
+    files: dict[str, dict] = {}
+    for target in sorted(VENDOR_ROOT.rglob("*.js")):
+        vendor_rel = target.relative_to(VENDOR_ROOT).as_posix()
+        candidates = index.get(target.name, [])
+        if not candidates:
+            files[vendor_rel] = {"mode": "bespoke", "why": "no upstream file of this name (skill-authored)"}
+            continue
+        if len(candidates) > 1:  # disambiguate by longest shared trailing path
+            def tail(path: Path) -> int:
+                a, b = vendor_rel.split("/"), path.relative_to(upstream_src).as_posix().split("/")
+                k = 0
+                while k < min(len(a), len(b)) and a[-1 - k] == b[-1 - k]:
+                    k += 1
+                return k
+
+            candidates = sorted(candidates, key=tail, reverse=True)
+        rel_upstream = candidates[0].relative_to(upstream_src).as_posix()
+        new_text, notes = render_one(upstream_src, rel_upstream, target, [])
+        if new_text == target.read_text(encoding="utf-8"):
+            files[vendor_rel] = {"upstream": rel_upstream, "mode": "verbatim", "deviations": []}
+        else:
+            files[vendor_rel] = {
+                "upstream": rel_upstream,
+                "mode": "needs-review",
+                "why": "; ".join(notes) or "body drift",
+            }
+    MANIFEST.parent.mkdir(parents=True, exist_ok=True)
+    MANIFEST.write_text(
+        json.dumps(
+            {
+                "_comment": (
+                    "vendor 树的唯一驱动清单：显式 upstream↔vendor 路径对 + 声明式偏离。"
+                    "revendor_core_js.py 的路径推断对本树是错的（会分叉出重复树），故一律用 --from-manifest。"
+                ),
+                "_modes": {
+                    "verbatim": "流水线输出（含 deviations）必须与 vendored 文件逐字相同",
+                    "curated": "蓄意子集/shim，永不自动 vendor；断言 extracts 里每个名字仍是上游顶层 export",
+                    "bespoke": "skill 自写、上游无对应文件；断言上游确实没有同名文件",
+                    "needs-review": "有真实漂移，待人工分类为上面三种之一（这就是 re-vendor 工单）",
+                },
+                "files": files,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    counts: dict[str, int] = {}
+    for entry in files.values():
+        counts[entry["mode"]] = counts.get(entry["mode"], 0) + 1
+    print(f"bootstrapped {MANIFEST.relative_to(REPO_ROOT)}: {counts}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("upstream_src", type=Path, help="upstream astrostudyui/src root")
-    parser.add_argument("files", nargs="+", help="paths relative to the upstream src root")
+    parser.add_argument("files", nargs="*", help="paths relative to the upstream src root")
     parser.add_argument("--vendor-subdir", default=None, help="override the vendor destination subdir")
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--from-manifest", action="store_true", help="drive every file in contracts/vendor_manifest.json")
+    parser.add_argument("--only", default=None, help="with --from-manifest: restrict to vendor paths under this prefix")
+    parser.add_argument("--bootstrap-manifest", action="store_true", help="(re)generate the manifest from the current tree")
     args = parser.parse_args()
+
+    if args.bootstrap_manifest:
+        bootstrap_manifest(args.upstream_src)
+        return
+    if args.from_manifest:
+        raise SystemExit(run_manifest(args.upstream_src, args.only, args.check))
+    if not args.files:
+        parser.error("give files to vendor, or use --from-manifest / --bootstrap-manifest")
 
     for rel in args.files:
         source = args.upstream_src / rel
