@@ -1,10 +1,15 @@
 name: Release Runtime
 
+# ⚠️ 这条流水线只能在**注册了 self-hosted runner 且该机器上有 Horosa-Public checkout** 时跑。
+# 曾经它挂在 `push: tags: v*` 上——但仓库注册的 self-hosted runner 数是 0，于是 v0.9.2→v0.25.0 的
+# **20 次 tag 推送全部排队 24 小时后被 GitHub 自动 cancelled，一个 step 都没执行过**。后果是它独占的
+# 那两道跨树闸（verify_upstream_sync --require-upstream / export-section-baseline --source upstream）
+# 从未真跑过，而 ci.yml 里的同名 step 没有 --require-upstream、在无上游 checkout 时自报 skipped——
+# 于是「上游漂移」这一类问题在任何自动化环境里都无人把守，runs 页面上却显示成有覆盖。
+# 现在改为**仅手动触发**：宁可没有，也不要一条看起来在跑、其实每次都被取消的流水线。
+# 发 tag 前的跨树核对请在 mac 维护机上跑 `scripts/preflight_release.py`（AGENTS §7）。
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*"
 
 permissions:
   contents: write
@@ -13,8 +18,9 @@ permissions:
 
 jobs:
   build-release:
-    # Owner guard: forks pushing v* tags must not queue jobs against the maintainer's
-    # self-hosted runner (also avoids 24h phantom queued runs on forks).
+    # Owner guard: keep forks from queueing jobs against the maintainer's self-hosted runner.
+    # (Tag-push triggering is gone — see the header — so this now only covers manual dispatch
+    # from a fork, but it costs nothing and the fork-side phantom-queue failure mode is real.)
     if: github.repository_owner == 'Horace-Maxwell'
     runs-on: self-hosted
     timeout-minutes: 180

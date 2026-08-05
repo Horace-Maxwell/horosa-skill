@@ -333,6 +333,17 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   bump 6→7、v0.22.0 前 linux+scaffold 曾滞留 6，均为该检查射程外时的漏网）。
   改一个 builder / 加一个必需 artifact = 同一 change 里 grep 另一个 builder + 两份 REQUIRED_ENTRIES；
   **新增 manifest-stamping 脚本 = 同一 change 里进 `CONSTANT_STAMPERS`**。
+- **发 tag 前必须在有上游 checkout 的机器上跑 `scripts/preflight_release.py`**（`HOROSA_SOURCE_ROOT`
+  指向 Horosa-Public）。跨树两闸（`verify_upstream_sync --require-upstream`、
+  `verify_export_section_baseline --source upstream --require-upstream`）**只有那里能做真**——
+  `ci.yml` 里的同名 step 不带 `--require-upstream`，无上游 checkout 时自报 skipped。
+  `release.yml` 曾挂在 `push: tags` 上号称覆盖这两闸，但仓库注册的 self-hosted runner 数是 **0**，
+  v0.9.2→v0.25.0 的 **20 次 tag 触发全部排队 24h 后被自动 cancelled，零 step 执行**；该 workflow
+  现已改为**仅 `workflow_dispatch`**，不再制造「看起来在跑」的假覆盖。preflight 成功会重写
+  `contracts/vendor_sync_state.json`，**该 diff 就是跨树核对真发生过的 git 证据，随发布一起提交**。
+  没跑 preflight 时，`verify_upstream_sync.py`（CI 里那次）会打 `::warning` 指出
+  state 里的 `skill_mirrored_version` 已落后于 registry 常量——**看到这条 warning 就说明镜像在无跨树
+  核对的情况下前进过**（v0.25.0/v0.25.1 就是这个状态：state 记 48、常量已 50）。
 - **发布完整性三失效模式**（完整案例史：[`docs/LESSONS.md`](./docs/LESSONS.md)「发布完整性编年」）：
   1. **缺半**：`latest` 只有 darwin 半（v0.10.0–v0.16.0 每个 minor 都犯过；v0.10.0 连 manifest 都没有，
      双平台 install 全断）→ `release-completeness.yml`（release/schedule/dispatch 事件）会红，信它。

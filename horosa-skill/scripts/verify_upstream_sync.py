@@ -67,6 +67,40 @@ def _skill_mirror_version() -> int:
     return int(MIRRORED_UPSTREAM_AIEXPORT_VERSION)
 
 
+def _package_version() -> str:
+    sys.path.insert(0, str(PKG_ROOT / "src"))
+    from horosa_skill import __version__
+
+    return str(__version__)
+
+
+def _report_state_currency() -> None:
+    """跨树比对做不了时的替代信号：上一次真跑记录的 mirror 版本还等于现在的常量吗？
+
+    `contracts/vendor_sync_state.json` 只由带 `--write-state` 的**真**跨树比对写入。所以它记的
+    `skill_mirrored_version` 一旦落后于当前 `MIRRORED_UPSTREAM_AIEXPORT_VERSION`，就说明镜像版本
+    在没有任何跨树核对的情况下往前走过——v0.24.0 记 48、而 v0.25.0 起常量已是 50，正是这个形状。
+    """
+    if not SYNC_STATE.is_file():
+        print(f"::warning::upstream-sync: {SYNC_STATE.name} missing — cross-tree sync has never been recorded")
+        return
+    state = json.loads(SYNC_STATE.read_text(encoding="utf-8"))
+    recorded = state.get("skill_mirrored_version")
+    current = _skill_mirror_version()
+    at_version = state.get("upstream_checked_at_package_version", "unknown")
+    if recorded == current:
+        print(f"upstream-sync: state current (mirror v{current}, last cross-tree check at package {at_version})")
+        return
+    message = (
+        f"vendor_sync_state.json is STALE: it records skill_mirrored_version={recorded} (checked at package "
+        f"{at_version}) but the registry constant is now {current} — the mirror moved forward without any "
+        "cross-tree verification against upstream HEAD. Re-run on a box with the Horosa-Public checkout:\n"
+        "    HOROSA_SOURCE_ROOT=<Horosa-Public> uv run python scripts/verify_upstream_sync.py "
+        "--require-upstream --write-state"
+    )
+    print(f"::warning::upstream-sync: {message}")
+
+
 def _upstream_basename_index(upstream: Path) -> dict[str, list[Path]]:
     index: dict[str, list[Path]] = {}
     for rel_root in CORE_JS_UPSTREAM_ROOTS:
@@ -90,8 +124,12 @@ def main() -> None:
         message = "HOROSA_SOURCE_ROOT unset or does not contain Horosa-Web/"
         if args.require_upstream:
             raise SystemExit(f"upstream-sync: FAIL — {message} (release pipeline requires the upstream checkout).")
-        print(json.dumps({"skipped": True, "reason": message}, ensure_ascii=False))
-        print(f"::notice::upstream-sync skipped — {message}")
+        # 没有上游树时也**不再什么都不断言**：跨树比对做不了，但「上一次真跑距今多远」是仓内可判的。
+        # 这条以前是纯 skip，于是这个守卫在任何自动化环境里都从未断言过任何东西——release.yml 里那次
+        # 带 --require-upstream 的调用从 v0.9.2 起 20 次全部排队 24h 后被取消（无 self-hosted runner）。
+        print(json.dumps({"cross_tree": "skipped", "reason": message}, ensure_ascii=False))
+        print(f"::notice::upstream-sync cross-tree check skipped — {message}")
+        _report_state_currency()
         return
 
     failures: list[str] = []
@@ -147,10 +185,13 @@ def main() -> None:
         SYNC_STATE.write_text(
             json.dumps(
                 {
-                    "_comment": "最近一次核对过的上游状态；每次同步都在 git 留痕，避免 vendored 树静默落后。",
+                    "_comment": "最近一次**真**跨树核对（vendored ↔ 上游 HEAD）的状态；只由带 "
+                    "--write-state 的真跑写入。`skill_mirrored_version` 落后于 registry 常量 = "
+                    "镜像在无跨树核对的情况下前进过（见 verify_upstream_sync._report_state_currency）。",
                     "upstream_aiexport_settings_version": upstream_version,
                     "skill_mirrored_version": mirrored,
                     "core_js_files_compared": compared,
+                    "upstream_checked_at_package_version": _package_version(),
                 },
                 ensure_ascii=False,
                 indent=2,
