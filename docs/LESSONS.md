@@ -93,6 +93,26 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.26.0+ / 2026-08-05 — 守卫都对，却一条都不在 Windows 构建路径上（vendor 陈旧可静默出货）
+
+- **症状**：v0.26.0 补 Windows 半边前例行跑守卫，`verify_export_contract_mirror.py` 报
+  `tianxing`/`qimenzeri` 不在 vendored 上游键表——本机 `vendor/runtime-source` 停在 08-01，
+  而 v0.26.0 的引擎树已对齐上游 v3.7.x（含**会改变既有输出**的六壬三传勘正）。
+  **若照常构建**：Windows 用户拿到的引擎落后一整轮同步，且 `verify_runtime_release.py` 只查
+  文件在不在、照样全绿放行。
+- **根因（两层）**：① `vendor/runtime-source` 是 **gitignored 本地构建输入**——`git pull` 到发布
+  commit 不会刷新它，仓库层面看不出陈旧；② 两把新鲜度守卫**只挂在 `release.yml`**，而 Windows 半边
+  恰恰是唯一**不走 CI**、在本机 off-CI 构建的产物——**守卫没长在会踩的那条路上等于没有守卫**。
+  连带确认上一条台账的「只加键纪律」在这里同样致命：`verify_vendor_runtime_sources.py` 的
+  `AI_EXPORT_SETTINGS_VERSION == 50` 恒等**在陈旧树上照样绿**（上游加键不 bump 版本），
+  唯一能判红的是 mirror 的**逐键覆盖**——所以两把必须都跑，缺一个就漏。
+- **guard**：`sync_windows_release.py` 新增 `preflight_vendor_sources()`，在**调用 builder 之前**
+  依次跑两把守卫，任一红即 `SystemExit` 并给出重灌指引（拒绝构建，而不是构建完再说）。
+  回归 `tests/test_sync_windows_release.py`：两把都被调用 / 任一红都拒绝 / **preflight 必须早于
+  builder**（顺序断言——闸开在 builder 之后等于没开）。
+- **法则**：新增任何「只在 CI 跑」的守卫时，问一句**这条路径 CI 走得到吗**；Windows/离线 runtime
+  这类 off-CI 产物必须在其**本机入口脚本**里复跑同一把守卫。
+
 ### v0.26.0 / 2026-08-04 — 上游 v3.7.x 同步：三个**机制**缺口比内容缺口更贵
 
 本轮真正的发现不是「少了两个技法」，而是**四把守卫全绿的情况下少了两个技法**。内容一天补完，

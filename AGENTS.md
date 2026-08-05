@@ -397,7 +397,14 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
      缺 → `[GAP]`（**权威，无视 guard 颜色**）。
 - **修复一律**：Windows 构建机 `git pull` 到发布 commit → `python scripts/sync_windows_release.py`
   （默认 build+verify 无副作用；`--upload` 才执行 构建→拉 darwin→双平台 manifest+SHA256SUMS→
-  `verify_runtime_release.py`→上传 全链；幂等，已同步则 no-op exit 0）。发布通常已是 `latest`，补传即恢复
+  `verify_runtime_release.py`→上传 全链；幂等，已同步则 no-op exit 0）。
+  **`git pull` 刷不到 vendor**：`vendor/runtime-source` 是 gitignored 本地构建输入，跳版必先从当前
+  Windows workspace 重灌，否则打出落后一轮同步的引擎而 `verify_runtime_release.py`（只查文件在不在）
+  照样绿。闸已内建：`sync_windows_release.py` 的 `preflight_vendor_sources()` 在 builder 之前跑
+  `verify_vendor_runtime_sources.py` **和** `verify_export_contract_mirror.py`，任一红即拒绝构建
+  （两把都要——上游「只加键纪律」下版本恒等在陈旧树上照样绿，只有 mirror 的逐键覆盖判得出）。
+  **推论**：新增只挂 CI 的守卫时，先问这条路径 CI 走不走得到；Windows/离线 runtime 是 off-CI 产物，
+  必须在其本机入口脚本里复跑同一把守卫。发布通常已是 `latest`，补传即恢复
   Windows install（无需 flip）。pin-forward 跨「引擎升级」版（如 v0.17 新增 `/location/acg` 占星地图、
   `/astroextra/relative`、名人库 `astrodata-aa.sqlite.gz` ~50MB）时：先从**当前** Windows workspace 重灌
   `vendor/runtime-source`（核 astropy / dist-file mtime 新于目标版）+ native-verify 新端点回真数据再打包。
