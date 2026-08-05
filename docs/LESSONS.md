@@ -113,6 +113,21 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 - **法则**：新增任何「只在 CI 跑」的守卫时，问一句**这条路径 CI 走得到吗**；Windows/离线 runtime
   这类 off-CI 产物必须在其**本机入口脚本**里复跑同一把守卫。
 
+- 🔴 **五个 stamper 可以「一致地错」——N 路互证够不到源头常量**（同轮补 Windows 半边时发现）。
+  **症状**：装完新构建的 v0.26.0 runtime，内嵌 manifest 写 `export_registry_version: 11`，而
+  v0.26.0 的择日提交已把 `AI_EXPORT_SETTINGS_VERSION` 11→12。**根因**：`verify_builder_parity.py`
+  的 `SHARED_MANIFEST_CONSTANTS` 只做 **stamper 之间**的 N 路交叉断言——五个 stamper 全停在 11 时
+  它们彼此完全一致，守卫必绿。这是 v0.16.1（mac 单边 6→7）那条教训的**镜像面**：当年怕的是「有人漏
+  bump 一个」，这次是「**没人 bump 任何一个**」，同一把守卫对后者天然失明。
+  **实证**：v0.22.0~v0.25.0 两数恒等（10=10、11=11×3），v0.26.0 首次分叉。
+  **guard**：`ANCHORED_CONSTANTS` —— `export_registry_version` 锚定到
+  `exports/registry.py::AI_EXPORT_SETTINGS_VERSION`（源码解析），五个 stamper 必须同时等于它。
+  加完先跑一遍**确认它对本次真漂移判红**（五个都报 lagging），再 bump 到 12 转绿；
+  `tests/test_verify_builder_parity.py` 用假 registry 常量钉死锚定生效。
+  **法则**：交叉断言只证明「彼此一致」；凡有**源码里的权威常量**，守卫必须锚到它，否则一致地错=绿。
+  **本次处置**：v0.26.0 的 darwin 半边已发布且 stamp 11，故 Windows 半边**照 11 出货**（同版内两平台
+  一致优先——该字段无运行时消费方，只是元数据）；stamper 已改 12，v0.27.0 起两边都对。
+
 ### v0.26.0 / 2026-08-04 — 上游 v3.7.x 同步：三个**机制**缺口比内容缺口更贵
 
 本轮真正的发现不是「少了两个技法」，而是**四把守卫全绿的情况下少了两个技法**。内容一天补完，

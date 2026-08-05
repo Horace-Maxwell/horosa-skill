@@ -368,7 +368,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   （v0.10.0 曾 mac 侧加 shaozi 条文生成 + 验证项而 Windows 侧漏，win 构建会静默出占位条文还照样过验）。
   数字常量（`schema_version` / `runtime_layout_version` / `export_registry_version`）由
   `verify_builder_parity.py` 对**全部 manifest-stamping 脚本**（mac/win/linux 三 builder +
-  windows/linux 两 scaffold，`CONSTANT_STAMPERS` 清单）N 路交叉断言（CI 常跑；v0.16.1 曾 mac 单边
+  windows/linux 两 scaffold，`CONSTANT_STAMPERS` 清单）N 路交叉断言；**且 `export_registry_version`
+  另行锚定到源头常量** `exports/registry.py::AI_EXPORT_SETTINGS_VERSION`（`ANCHORED_CONSTANTS`）——
+  N 路互证只证明「彼此一致」，五个 stamper 可以一致地错（v0.26.0 就是：registry 11→12，五个 stamper
+  全留在 11，守卫照绿）。**改 registry 版本常量 = 同一 change 里 bump 全部 stamper**（CI 常跑；v0.16.1 曾 mac 单边
   bump 6→7、v0.22.0 前 linux+scaffold 曾滞留 6，均为该检查射程外时的漏网）。
   改一个 builder / 加一个必需 artifact = 同一 change 里 grep 另一个 builder + 两份 REQUIRED_ENTRIES；
   **新增 manifest-stamping 脚本 = 同一 change 里进 `CONSTANT_STAMPERS`**。
