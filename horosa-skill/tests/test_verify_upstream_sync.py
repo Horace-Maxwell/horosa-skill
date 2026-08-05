@@ -94,3 +94,42 @@ def test_load_provenance_tolerates_missing_and_malformed(tmp_path: Path, monkeyp
     bad.write_text("{not json", encoding="utf-8")
     monkeypatch.setattr(guard, "PROVENANCE", bad)
     assert guard.load_provenance() == {}, "a corrupt record must degrade to 'no record', never crash the guard"
+
+
+# --- defect 3: point sentinels can never cover whole engine trees ------------------------------
+
+
+def test_sentinel_trees_cover_the_ken_engine_directory() -> None:
+    """v0.26.0: `kintaiyi/jieqi.py` 的全年份域修复卡在 vendored 树里没人发现——7 个哨兵一个都不在
+    ken 引擎目录下，而 verify_vendor_runtime_sources 只查 REQUIRED_PATHS 是否**存在**。"""
+    assert "Horosa-Web/vendor" in guard.SENTINEL_TREES, "ken 引擎树必须整棵比对，不能只靠点哨兵"
+    # 记录「为什么需要子树比对」：点哨兵里唯一在 vendor/ 下的是根级共享件 kin_year_domain.py，
+    # **引擎目录内部**（kintaiyi/… 等）一个都没有 —— jieqi.py 正是这么漏掉的。
+    inside_engine_dirs = [
+        s for s in guard.SENTINELS
+        if s.startswith("Horosa-Web/vendor/") and s.count("/") > 2
+    ]
+    assert inside_engine_dirs == [], f"若已给引擎目录加点哨兵，请更新本测试的叙述: {inside_engine_dirs}"
+
+
+def test_tree_file_walk_honours_the_sync_scripts_exclusions(tmp_path: Path) -> None:
+    """比对口径必须等于同步口径，否则守卫会对着「本就故意没拷」的文件恒红。"""
+    root = tmp_path / "t"
+    (root / "kinastro" / "astro").mkdir(parents=True)
+    (root / "kinastro" / "astro" / "engine.py").write_text("x", encoding="utf-8")
+    for junk in [
+        root / "kinastro" / "tools" / "cities.py",      # sync 脚本裁掉（~26MB 地理编码库）
+        root / "kinastro" / "tests" / "test_x.py",
+        root / "kinastro" / ".github" / "workflows" / "ci.yml",
+        root / "kinastro" / "astro" / "__pycache__" / "engine.cpython-312.pyc",
+    ]:
+        junk.parent.mkdir(parents=True, exist_ok=True)
+        junk.write_text("x", encoding="utf-8")
+    (root / "kinastro" / "astro" / "stale.pyc").write_text("x", encoding="utf-8")
+
+    found = set(guard._tree_files(root))
+    assert found == {"kinastro/astro/engine.py"}, f"排除口径与 sync 脚本不一致: {sorted(found)}"
+
+
+def test_tree_walk_returns_empty_for_a_missing_root(tmp_path: Path) -> None:
+    assert guard._tree_files(tmp_path / "nope") == {}

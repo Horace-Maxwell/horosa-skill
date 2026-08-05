@@ -21,6 +21,12 @@ Checks (upstream located via `$HOROSA_SOURCE_ROOT`, the same env the sync script
    `qimenzeri` (v3.7.1) both arrived under an unchanged v50 and went unnoticed until v0.26.0.
 2. **Vendored sentinels** — sha256 equality for the high-signal files the sync script copies (the export
    contract itself plus the modules whose absence/staleness produced past incidents).
+2b. **Vendored runtime subtrees** — every file under the ken-engine / astrostudy / websrv trees compared
+   both ways (changed, removed, and *newly added upstream*). Point sentinels can never be complete:
+   the v3.7.3 `kintaiyi/jieqi.py` full-year-domain fix sat stale in the vendored tree because none of
+   the 7 sentinels lives under a ken engine directory, and verify_vendor_runtime_sources only asserts
+   REQUIRED_PATHS *existence*. Exclusions mirror the sync script's, or the guard goes permanently red
+   on files it was never meant to copy.
 3. **core-js vendor drift** — each `verbatim` entry in `contracts/vendor_manifest.json` is re-rendered
    from upstream through the headless transform plus its declared deviations, and must equal the
    vendored file. `curated`/`bespoke` entries are excluded by design (they have their own assertions in
@@ -70,6 +76,43 @@ SENTINELS = [
     "Horosa-Web/astropy/astrostudy/perpredict.py",
     "Horosa-Web/astropy/astrostudy/perchart.py",
 ]
+# 逐文件比对的整棵子树。单点哨兵永远补不全：v0.26.0 审计时 `kintaiyi/jieqi.py` 的**全年份域修复**
+# （首版误用 `datetime(year,…)`，域外直接 ValueError 炸掉整个 taiyi/pan）就卡在 vendored 树里，
+# 因为 7 个哨兵一个都不在 ken 引擎目录下，而 verify_vendor_runtime_sources 只查 REQUIRED_PATHS 是否存在。
+# 子树比对不挑文件，新增/改动/丢失都报。
+SENTINEL_TREES = [
+    "Horosa-Web/vendor",                    # ken + 神数 引擎（kinqimen/kintaiyi/kinjinkou/…）
+    "Horosa-Web/astropy/astrostudy",        # Python 算法本体
+    "Horosa-Web/astropy/websrv",            # HTTP 端点层
+]
+# 与 sync_vendored_runtime_sources.sh 的 RSYNC_FILTERS 及 kinastro 裁剪保持一致——比对口径必须
+# 等于同步口径，否则守卫会对着「本就故意没拷」的文件恒红。
+TREE_EXCLUDE_DIRS = {
+    "__pycache__", ".pytest_cache", ".cache", "_CodeSignature", ".horosa-logs",
+    # kinastro 只 vendor 引擎（sync 脚本 :89-90 裁掉这些，含 ~26MB 地理编码库）
+    "tools", "ui", "frontend", "docs", "wiki", "examples", "tests", "styles", "scripts",
+    ".devcontainer", ".streamlit", ".git", ".github",
+}
+TREE_EXCLUDE_SUFFIXES = (".pyc", ".pyo", ".map", ".tmp", ".temp", ".pid")
+
+
+def _tree_files(root: Path) -> dict[str, Path]:
+    """Relative-path → file, honouring the sync script's exclusion set."""
+    out: dict[str, Path] = {}
+    if not root.is_dir():
+        return out
+    for path in root.rglob("*"):
+        if not path.is_file() or path.name.startswith("._") or path.name == ".DS_Store":
+            continue
+        rel = path.relative_to(root)
+        if any(part in TREE_EXCLUDE_DIRS for part in rel.parts):
+            continue
+        if path.suffix in TREE_EXCLUDE_SUFFIXES:
+            continue
+        out[rel.as_posix()] = path
+    return out
+
+
 # 上游应用版本的唯一机器可读来源（astrostudyui/package.json 不带版本）。
 UPSTREAM_VERSION_MANIFEST = "Horosa_Desktop_Installer/package.json"
 
@@ -243,6 +286,42 @@ def main() -> None:
             sentinel_drift.append(f"{rel}: vendored copy differs from upstream")
     if sentinel_drift:
         failures.append("vendored sentinels drifted:\n    - " + "\n    - ".join(sentinel_drift))
+
+    # 2b. whole-subtree comparison. Point sentinels can never be complete — the kintaiyi 全年份域 fix
+    #     sat stale in the vendored tree because none of the 7 sentinels lives under a ken engine dir.
+    tree_drift: list[str] = []
+    tree_checked = 0
+    for rel in SENTINEL_TREES:
+        vendored_files = _tree_files(VENDOR_ROOT / rel)
+        upstream_files = _tree_files(upstream / rel)
+        tree_checked += len(vendored_files)
+        for name, vendored_path in sorted(vendored_files.items()):
+            up_path = upstream_files.get(name)
+            if up_path is None:
+                tree_drift.append(f"{rel}/{name}: not in upstream (renamed/removed?)")
+            elif _sha256(vendored_path) != _sha256(up_path):
+                tree_drift.append(f"{rel}/{name}: vendored copy differs")
+        # 上游新增、vendored 没有的文件（新引擎/新端点整个漏掉正是这一类）。
+        # 但比对口径必须等于**同步口径**：sync 脚本对 Horosa-Web/vendor 是逐个引擎目录拷贝，
+        # 不拷根级杂项（README 等），所以只在「已 vendor 的顶层目录内部」判缺失，
+        # 否则守卫会对着从来就不该拷的文件恒红。
+        vendored_tops = {n.split("/", 1)[0] for n in vendored_files}
+        for name in sorted(set(upstream_files) - set(vendored_files)):
+            top = name.split("/", 1)[0]
+            if top in vendored_tops:
+                tree_drift.append(f"{rel}/{name}: present upstream, missing from vendor/runtime-source")
+        # 上游整个**新增**的顶层目录 = 潜在新引擎/新能力，单独报（要不要 vendor 是人的决定）。
+        new_tops = sorted(
+            {n.split("/", 1)[0] for n in upstream_files if "/" in n} - vendored_tops - set(TREE_EXCLUDE_DIRS)
+        )
+        for top in new_tops:
+            tree_drift.append(f"{rel}/{top}/: 上游新增整个目录，未 vendor —— 判断是否为新引擎/新能力")
+    if tree_drift:
+        failures.append(
+            f"vendored runtime subtrees drifted ({len(tree_drift)}; re-run "
+            f"scripts/sync_vendored_runtime_sources.sh):\n    - " + "\n    - ".join(tree_drift[:15])
+            + ("\n    - …" if len(tree_drift) > 15 else "")
+        )
 
     # 3. core-js vendor drift — the oracle is the manifest, NOT a raw sha256.
     #    A raw-byte compare against untransformed upstream flags every file that legitimately carries

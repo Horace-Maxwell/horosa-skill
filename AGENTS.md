@@ -162,6 +162,16 @@ you, it will bite the next agent：
 `_upstream_preset.py` 必须扫成员赋值，且跑在 spread 解析之后）；**provenance 只在全绿时写**
 （红着写等于把失败洗成持久的「已核对」声明——v0.25.0 就这么发出去过）。
 
+🔴 **点哨兵覆盖不全整棵引擎树（v0.26.0）。** 7 个哨兵一个都不在 ken 引擎目录内部，
+`verify_vendor_runtime_sources` 又只查 REQUIRED_PATHS **是否存在**——于是「引擎文件在、但是旧的」
+整类漂移无人看管，`kintaiyi/jieqi.py` 的全年份域修复（域外 ValueError 炸 taiyi/pan）就这么卡了一版。
+守卫 = `verify_upstream_sync.py` 的 **check 2b 子树逐文件比对**（`Horosa-Web/vendor` /
+`astropy/astrostudy` / `astropy/websrv`），三向都报。两条纪律：**比对口径必须等于同步口径**
+（排除集逐条对齐 sync 脚本，否则对着故意没拷的文件恒红）；「上游有而 vendored 缺」只在已 vendor 的
+顶层目录内部判，上游**整个新增的顶层目录**单独报一行（那是新引擎/新能力的信号）。
+配套：审计权威清单是 `aiExport.js` 的技法表，**不是 kentang 服务注册表**——`qizhengelection`/
+`xuanshi` 是服务不是导出技法，已进排除台账（有数据 ≠ 有技法）。
+
 🔴 **vendor 树一律用 manifest 驱动，禁裸路径（v0.26.0）。** `revendor_core_js.py` 按上游父目录名
 猜落点，对本树是错的（`utils/balbillus.js` 真身在 `vendor/astroextra/`），裸驱动会**分叉出重复树**
 且 relocate 把 import 指回新造的那棵。唯一入口 = `contracts/vendor_manifest.json` +

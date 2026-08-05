@@ -198,6 +198,30 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   `{"ResultCode": -1, "Result": {"err": …}}`，而 `HorosaPlainJsonClient` 只看顶层 `err` → 不加守卫
   时 `span_too_large` 会**静默退化成零命中**。新增 `_require_electionscan_ok`，与 `_require_ken_pan` 同族。
 
+- 🔴 **第四个机制缺口：点哨兵永远覆盖不全整棵引擎树（同批复盘时才发现）。**
+  以为 v3.7.x 已经同步干净，再审一遍才发现 `vendor/kintaiyi/src/kintaiyi/jieqi.py`
+  **卡在有 bug 的首版**：`datetime.datetime(year,…)` 只支持公元 1–9999，而太乙服务的是全年份域
+  （前 12999 ~ 16799），域外直接 `ValueError` —— 上游自己的注释写着这会「炸掉整个 taiyi/pan
+  （kentang 极端年矩阵三例转红）」，它已改为全程走 `ephem.Date`。
+  漏掉的原因很具体：**7 个哨兵一个都不在 ken 引擎目录内部**（`vendor/` 下唯一那个
+  `kin_year_domain.py` 是根级共享件），而 `verify_vendor_runtime_sources` 只查
+  `REQUIRED_PATHS` 是否**存在**、不查内容。于是「引擎文件在、但是旧的」这一整类漂移无人看管。
+  → 新增 check 2b **整棵子树逐文件比对**（`Horosa-Web/vendor` ken 引擎 / `astropy/astrostudy` /
+  `astropy/websrv`），三个方向都报：内容改了、vendored 有而上游没了、上游有而 vendored 缺。
+  两条实现纪律：① **比对口径必须等于同步口径**——排除集要逐条对齐 sync 脚本的 RSYNC_FILTERS 与
+  kinastro 裁剪，否则守卫会对着「本就故意没拷」的文件恒红（README.md / .github 就这么先红了一轮）；
+  ② 「上游有而 vendored 缺」只在**已 vendor 的顶层目录内部**判，根级杂项不算欠账，
+  但上游**整个新增的顶层目录**单独报一行——那才是「新引擎/新能力」的信号。
+  已做负向对照：故意改脏 jieqi.py，守卫精确报出该文件；还原即绿。不是空绿。
+
+- **一次「已经同步完了」之后再审一遍是值的。** 本条就是在宣布 v3.7.x 同步完成、三个提交都落地
+  之后，重跑同一套审计发现的。守卫全绿只等于「守卫覆盖到的部分是绿的」——覆盖面本身要被质疑。
+
+- **上游 UI 层改动不必跟。** 同批 `ZeriMain/DunJiaMain/SanShiUnitedMain/models/astro/perfFlags`
+  五个文件共 +75 行，全是 `requestIdleCallback` 预挂载 / `forceRender` / kill-switch 之类的
+  响应性改造，零引擎逻辑（逐行核过），且五个文件本仓一个都没 vendor（都是 React 页面壳）。
+  判据：本仓 vendor 的是**引擎**（DunJiaCalc / sanshi/core/*），不是页面壳。
+
 - **契约版本该不该跟着上游不动？不。** 上游那个数是 localStorage 迁移闸（新键无存档，迁移本就是
   no-op）；skill 这个数是**内容版本**，进每个信封的 `settings_used.version`，是下游判断「段目录变了」
   的依据。24 个新段正是该事件，故 11 → 12（仓内先例：v8 三技法入册、v11 五技法入册）。
@@ -486,6 +510,17 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 判据统一是：**上游 builder 依赖的数据在开源 Horosa-Public 栈上取不到**（后端无该路由 / 依赖 canvas
 渲染 / 依赖交互点位），而不是「本仓还没写」。每条都附可复核的证据，下次审计直接引用。
+
+**另有一类不是「取不到」，而是「上游自己就不当它是可导出技法」——同样别当缺口重查（v0.26.0 记）：**
+
+- **kentang 服务 `qizhengelection`（七政四余择日）与 `xuanshi`（玄学史）** —— 两者都在上游
+  `integrations/kentang/serviceRoot.js` 的 21 个服务里，本仓无对应工具。判据：**两者都不在
+  `aiExport.js` 的 `AI_EXPORT_TECHNIQUES` / `AI_EXPORT_PRESET_SECTIONS` 里**（grep 零命中）——
+  即上游自身没把它们登记为 AI 可导出技法，没有 preset 段表，也就不存在「缺段」。
+  `xuanshi` 是 ECharts 驱动的史料检索/地图页（`XuanShiCelestial/XuanShiMap`），非排盘技法；
+  其 SQLite 数据仍在 `REQUIRED_PATHS` 里（打包需要），**有数据 ≠ 有技法**，别据此判缺口。
+  → 沿用 AGENTS §5 审计前置的老结论：**权威清单是 `aiExport.js` 的技法表，不是服务注册表、
+  也不是组件目录**。「上游有 engine/服务 ≠ 可进公开 skill」。
 
 - **`guolao` 的 `[虚实]` / `[本命化曜]` / `[流年流曜]`（3 段）** —— 三者读 `moiraRules.weakSolid`
   与 `moiraRules.yearStars`，该对象来自后端 **`/qizheng/moira`**（上游 `services/qizheng.js:10`
