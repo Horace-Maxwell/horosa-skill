@@ -227,6 +227,55 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   的依据。24 个新段正是该事件，故 11 → 12（仓内先例：v8 三技法入册、v11 五技法入册）。
   `MIRRORED_UPSTREAM_AIEXPORT_VERSION` 保持 50——上游数字确实没动。两个数字语义不同，别「修」成一致。
 
+### v0.25.1+ / 2026-08 — 被指定为「唯一能做真」的那条发布闸，20 次里一次都没跑过
+
+**症状**：v0.25.1 发完复查，发现 `Release Runtime`（`release.yml`）那次 run 卡在 `queued`。翻历史：
+**从 v0.9.2（2026-06）到 v0.25.0，20 次 tag 触发的 run 全部 `cancelled`**。抽查 v0.25.0 那次：
+created `08/01 17:08:57` → updated `08/02 17:09:04`，正好 24 小时，`build-release` job
+`conclusion=cancelled`、**一个 step 都没执行**。
+
+**根因**：`release.yml` 是 `runs-on: self-hosted`，而 `gh api repos/.../actions/runners` 回
+`total_count: 0`——仓库**从来没有注册过 self-hosted runner**。于是每次推 tag 都排队到 GitHub 的
+24h 上限被自动取消。而这条流水线**独占**着三样东西：① `verify_upstream_sync.py --require-upstream`
+② `verify_export_section_baseline.py --source upstream --require-upstream` ③ SBOM + 构建 provenance
+attestation。`ci.yml` 里虽然也调前两个脚本，但**不带 `--require-upstream`**，GitHub runner 上没有上游
+checkout，脚本自报 `{"skipped": true}` 直接放行（那个 step 名字本身就写着 "skipped without an upstream
+checkout"）。两处合起来 = **「vendored 树 vs 上游 HEAD」这一类漂移在任何自动化环境里都从未被断言过**，
+而 runs 页面上显示得像有覆盖。
+
+**同一次排查里还揪出第二个空转的**：`verify_export_section_baseline.py` 的 docstring 白纸黑字写着
+vendored 模式 "works with no upstream checkout, e.g. GitHub CI"，ci.yml 的注释也跟着说「基线本身的
+自洽在这里就能红」——**两句都是假的**。它读的 `vendor/runtime-source` 是 **gitignored** 的，CI 全新
+checkout 上根本没有，实测输出 `::notice::export-section-baseline skipped`。于是段级欠账棘轮
+（「只减不增」那道）在 CI 里同样零断言。**注释写「这里能红」不等于真会红——要去 run 的注解里看。**
+
+旁证：`contracts/vendor_sync_state.json` 至今记着
+`skill_mirrored_version: 48`（v0.24.0 手工跑时写的），而 registry 常量从 v0.25.0 起已是 **50**——
+那个专门用来「避免 vendored 树静默落后」的文件，自己静默落后了两个版本。
+
+这是 v0.24.0「守卫结构性失明」的**第四例**，也是最讽刺的一例：为了堵住失明而新建的守卫，本身从不执行。
+前三例是守卫射程不够（比对自己的 vendored 拷贝 / 只比键不比段 / 正则只认英文标签），这一例是**守卫压根
+没运行**——比射程不够更难发现，因为射程可以读代码看出来，「有没有真跑」只能去翻 runs 历史。
+
+**守卫/法则**：
+
+- **判一个守卫是否有效，先问「它上一次真跑是什么时候」，再问「它断言了什么」。** `runs-on: self-hosted`
+  + 零注册 runner = 永久排队后取消，颜色是灰的不是红的，谁都不会注意。
+- `release.yml` 去掉 `push: tags` 触发，改为**仅 `workflow_dispatch`**——宁可明确没有，也不要一条看起来
+  在跑、实际每次都被取消的流水线。
+- 跨树两闸落地为**本机 pre-tag 步骤** `scripts/preflight_release.py`（须 `HOROSA_SOURCE_ROOT` 指向
+  Horosa-Public，否则直接拒绝运行），写进 AGENTS §7 发布协议。成功会重写
+  `vendor_sync_state.json`，**该 diff 即「跨树核对真发生过」的 git 证据**。
+- `verify_upstream_sync.py` 在无上游树时**不再纯 skip**：改为断言 state 里的 `skill_mirrored_version`
+  是否仍等于 registry 常量，落后就打 `::warning`（当前就在报 48 vs 50）。CI 保持绿（避免 v0.25.0 那种
+  带红上 main），但漂移从此在每次 run 里可见，而不是无声无息。
+- `verify_export_section_baseline.py` 同样不再纯 skip：无 aiExport 源时改为断言**基线 vs 仓内 registry
+  自洽**（`_assert_baseline_coherent`——基线里的键必须都还在 `AI_EXPORT_PRESET_SECTIONS` 里），抓
+  「技法改名/删了而基线还留着旧键」。已用反向测试确认它**真会红**（往基线塞一个不存在的键 → FAIL）。
+  docstring 与 ci.yml 里那两句不实描述一并改掉。
+- **`::warning::` 是单行命令**：消息里带 `\n` 会被 GitHub 在第一个换行处截断，注解结尾留个悬空冒号
+  （第一版就是这样，补救命令整条没进注解）。补救指令必须写在同一行。
+
 ### v0.25.1 / 2026-08 — 第一次真跑全套 live：7 红里 4 个是本机无 Mongo、2 个是真段缺陷、1 个是隔离没做全
 
 **症状**：在 v0.25.0 runtime（独立 root `rt-verify`，心跳 `pdSyncRev = pd_method_sync_v15` 与当前 rev 一致）

@@ -13,8 +13,16 @@ This guard closes it with a lint-baseline ratchet:
 * **Paid debt also fails** (with a clear "run --update-baseline" hint), so the baseline can never drift
   upward silently and every backfill visibly ratchets the number down in git.
 
-Source of truth: the **vendored** aiExport by default (works with no upstream checkout, e.g. GitHub CI);
-`--source upstream` compares against `$HOROSA_SOURCE_ROOT` for the release pipeline.
+Source of truth: the **vendored** aiExport by default; `--source upstream` compares against
+`$HOROSA_SOURCE_ROOT`.
+
+⚠️ **On GitHub CI neither source exists.** `vendor/runtime-source` is gitignored and there is no
+upstream checkout, so the section diff is *skipped* there — this file used to claim the vendored mode
+"works with no upstream checkout, e.g. GitHub CI", which was simply false and let the ratchet read as
+CI-enforced when it never ran (found 2026-08, alongside the release.yml-never-ran discovery). What CI
+*can* still assert is the baseline's own coherence against the in-repo registry, and it now does
+(`_assert_baseline_coherent`). The real section diff is a maintainer-machine step —
+`scripts/preflight_release.py` runs it with `--source upstream --require-upstream` before tagging.
 """
 
 from __future__ import annotations
@@ -38,6 +46,33 @@ _UPSTREAM_REL = "Horosa-Web/astrostudyui/src/utils/aiExport.js"
 KEY_ALIAS = {"wangji": "huangji", "acg": "locastro"}
 # 上游无对应技法的 skill-only 键（compat alias / catch-all / skill 自建工具）
 SKILL_ONLY_KEYS = {"astrochart_like", "generic", "astrodata"}
+
+
+def _assert_baseline_coherent() -> None:
+    """无 aiExport 源时（GitHub CI）唯一还能做真的断言：基线 vs 仓内 registry 的自洽。
+
+    抓的是「技法被改名/删掉，而 `export_section_debt.json` 里还留着旧键」这类漂移——不需要任何
+    vendored/上游树。以前这条路径是纯 skip，于是整个 step 在 CI 里零断言。
+    """
+    if not BASELINE.is_file():
+        raise SystemExit(f"export-section-baseline: FAIL — baseline missing at {BASELINE}")
+    baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
+    presets = _skill_presets()
+    stale = sorted(
+        key
+        for key, entry in baseline.get("keys", {}).items()
+        if not entry.get("absent_key") and key not in presets
+    )
+    if stale:
+        raise SystemExit(
+            "export-section-baseline: FAIL — baseline references keys that no longer exist in "
+            f"AI_EXPORT_PRESET_SECTIONS: {', '.join(stale)} (technique renamed/removed? re-run "
+            "--update-baseline on a box with a vendored tree)"
+        )
+    print(
+        f"export-section-baseline: baseline coherent ({len(baseline.get('keys', {}))} keys, "
+        f"all present in the registry) — section diff needs a vendored/upstream tree, see preflight_release.py"
+    )
 
 
 def _skill_presets() -> dict[str, list[str]]:
@@ -99,8 +134,9 @@ def main() -> None:
 
     aiexport = _resolve_source(args.source, args.require_upstream)
     if aiexport is None:
-        print(json.dumps({"skipped": True, "reason": f"{args.source} aiExport.js unavailable"}, ensure_ascii=False))
-        print(f"::notice::export-section-baseline skipped ({args.source} aiExport.js unavailable)")
+        print(json.dumps({"section_diff": "skipped", "reason": f"{args.source} aiExport.js unavailable"}, ensure_ascii=False))
+        print(f"::notice::export-section-baseline section diff skipped ({args.source} aiExport.js unavailable)")
+        _assert_baseline_coherent()
         return
 
     version, upstream = load_upstream_aiexport(aiexport)

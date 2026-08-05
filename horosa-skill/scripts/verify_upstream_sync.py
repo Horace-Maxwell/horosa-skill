@@ -190,6 +190,47 @@ def diff_preset_keys(upstream_keys: set[str], recorded_keys: set[str]) -> tuple[
     """Return (gained, lost). Split out for direct testing — this is check 1b's whole logic."""
     return sorted(upstream_keys - recorded_keys), sorted(recorded_keys - upstream_keys)
 
+def _package_version() -> str:
+    sys.path.insert(0, str(PKG_ROOT / "src"))
+    from horosa_skill import __version__
+
+    return str(__version__)
+
+
+def _report_state_currency() -> None:
+    """跨树比对做不了时的替代信号：上一次真跑记录的 mirror 版本还等于现在的常量吗？
+
+    原实现读 `contracts/vendor_sync_state.json`；该文件已被 `upstream_provenance.json` 取代
+    （超集：另记上游 commit / 应用版本 / preset 键集 / core-js 树摘要），语义一致地搬过来。
+    provenance 只由**全部检查通过**的 `--write-state` 写入，所以它记的 skill_mirrored_version
+    一旦落后于当前常量，就说明镜像版本在没有任何跨树核对的情况下往前走过——v0.24.0 记 48、
+    而 v0.25.0 起常量已是 50，正是这个形状。
+    """
+    provenance = load_provenance()
+    if not provenance:
+        print(f"::warning::upstream-sync: {PROVENANCE.name} missing — cross-tree sync has never been recorded")
+        return
+    recorded = provenance.get("skill_mirrored_version")
+    current = _skill_mirror_version()
+    at_sha = (provenance.get("upstream_git_sha") or "unknown")[:12]
+    at_version = provenance.get("upstream_app_version", "unknown")
+    if recorded == current:
+        print(
+            f"upstream-sync: state current (mirror v{current}; last cross-tree check against "
+            f"upstream {at_version} @ {at_sha})"
+        )
+        return
+    # `::warning::` 是单行命令——消息里带换行会被 GitHub 在第一个 \n 处截断，注解结尾留个悬空冒号。
+    # 所以补救命令写在同一行；多行的详细说明另外用普通 log 输出。
+    print(
+        f"::warning::upstream-sync: {PROVENANCE.name} is STALE — it records "
+        f"skill_mirrored_version={recorded} (upstream {at_version} @ {at_sha}) but the registry constant is now "
+        f"{current}; the mirror moved forward with no cross-tree verification against upstream HEAD. Fix: run "
+        f"`HOROSA_SOURCE_ROOT=<Horosa-Public> uv run python scripts/preflight_release.py` on the maintenance box."
+    )
+
+
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -203,8 +244,12 @@ def main() -> None:
         message = "HOROSA_SOURCE_ROOT unset or does not contain Horosa-Web/"
         if args.require_upstream:
             raise SystemExit(f"upstream-sync: FAIL — {message} (release pipeline requires the upstream checkout).")
-        print(json.dumps({"skipped": True, "reason": message}, ensure_ascii=False))
-        print(f"::notice::upstream-sync skipped — {message}")
+        # 没有上游树时也**不再什么都不断言**：跨树比对做不了，但「上一次真跑距今多远」是仓内可判的。
+        # 这条以前是纯 skip，于是这个守卫在任何自动化环境里都从未断言过任何东西——release.yml 里那次
+        # 带 --require-upstream 的调用从 v0.9.2 起 20 次全部排队 24h 后被取消（无 self-hosted runner）。
+        print(json.dumps({"cross_tree": "skipped", "reason": message}, ensure_ascii=False))
+        print(f"::notice::upstream-sync cross-tree check skipped — {message}")
+        _report_state_currency()
         return
 
     failures: list[str] = []
@@ -372,6 +417,8 @@ def main() -> None:
                     "upstream_app_version": _upstream_app_version(upstream),
                     "aiexport_settings_version": upstream_version,
                     "skill_mirrored_version": mirrored,
+                    # 记「这次核对时 skill 是哪个版本」——provenance 落后时的报错能指出是哪一版之后失联的。
+                    "upstream_checked_at_package_version": _package_version(),
                     "upstream_preset_keys": sorted(upstream_keys),
                     "core_js": {
                         "files_compared": compared,
