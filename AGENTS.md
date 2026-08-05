@@ -392,8 +392,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 5. **无 Mongo 的机器跑不出「live 全绿」**：Java 聚合层的 app 注册在 Mongo 里，缺 Mongo 时
    `/nongli/time`·`/bazi/birth`·`/ziwei/birth`·`/liureng/*` 一族恒返 HTTP 500
    `{"ResultCode":9999,"Result":"no.register.app.in.sys.forapp"}`，依赖它们的技法测试必红。
-   **`doctor` 探的是 `/common/time`，不碰这族路由，所以 `status: ready` 不等于 Java 侧技法可用**——
-   判据是直接打 `/nongli/time` 看是不是 9999。干净 Windows 机的最强信号只有 chart 半边。
+   **`doctor` 探的是 `/common/time`，不碰这族路由，所以 `status: ready` 不等于 Java 侧技法可用；
+   `selfcheck` 的 `compute` 步骤会走 issue #14 的 chart 侧回退探针，报 `nongli_time ok=true` 同样
+   不作数**——判据只有一个：直接打 `/nongli/time` 看是不是 `ResultCode 9999`。
+   干净 Windows 机的最强信号只有 chart 半边。
 6. **`pkill` 法则**：bundled 与 live 星阙都跑 `webchartsrv.py`——`pkill -f webchartsrv.py` 会连星阙
    `:8899` 一起杀。按端口/PID 停；stop 脚本已按 runtime root 限定 kill 范围，保持住。
 
@@ -419,7 +421,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | 结果段缺失，客户端想报「缺依赖」 | 幻觉依赖风险 | 按 SKILL.md：说本地未返回该段，跑 `doctor` / `openclaw-check`，不发明 MongoDB/7897 |
 | chart 启动日志整段 traceback：`kintaiyi/game_theory.py … No module named 'scipy'` | prewarm 碰到 opt-in 博弈论子模块（默认关、懒 import）；scipy 两平台 bundle 均无（mac 同样） | 良性，无需处置；判据 = `/taiyi/pan` 回 `ResultCode 0 + source kintaiyi`；勿为此加 scipy（瘦身红线） |
 | `doctor` 报 `services:java_backend_not_running` / runtime_state `degraded_chart_only` | Java 后端死或被拦（Windows 常见 = 代理/VPN/安全软件 WFP 拦 JDK-17 AF_UNIX loopback，jar 在 Spring bean 构造期秒退且自身日志为空） | 降级模式设计行为：chart 侧技法照常可用；`doctor.java_diagnostics` 有启动器捕获的崩溃摘录；用户侧处置 = 禁用干扰软件并重启（issue #14） |
-| `doctor` 报 ready，但 nongli / bazi / ziwei / liureng 族技法一律 HTTP 500 | 该族路由的 app 注册在 Mongo 里，本机无 Mongo；`doctor` 只探 `/common/time` 探不到 | 环境限制非回归；判据 = 直接打 `/nongli/time` 见 `ResultCode 9999 / no.register.app.in.sys.forapp`（§8 验证流程 5） |
+| `doctor` 报 ready、`selfcheck` 也全绿，但 nongli / bazi / ziwei / liureng 族技法一律 HTTP 500 | 该族路由的 app 注册在 Mongo 里，本机无 Mongo；`doctor` 只探 `/common/time`，`selfcheck` 的 compute 步骤走 chart 侧回退探针，两者都探不到 | 环境限制非回归；判据 = 直接打 `/nongli/time` 见 `ResultCode 9999 / no.register.app.in.sys.forapp`（§8 验证流程 5） |
 | 维护机上 `test_error_paths_return_a_conformant_envelope` 红、CI 绿 | 默认端口上有活服务，只钉 `HOROSA_RUNTIME_ROOT` 拦不住，本该失败的路径成功了 | 同时把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指到不可达地址（§8 验证流程 4） |
 
 ## 9. Stability invariants（稳定性不变量 — don't regress these）

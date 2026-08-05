@@ -105,7 +105,10 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
    全部死在 `/nongli/time` → HTTP 500 `{"ResultCode":9999,"Result":"no.register.app.in.sys.forapp%3A"}`。
    Java 聚合层的 app 注册在 **Mongo** 里，本机无 Mongo → 这一族路由（`/nongli/time`·`/bazi/birth`·
    `/ziwei/birth`·`/liureng/*`）恒 9999。**`doctor` 探的是 `/common/time`，根本不碰这族路由——
-   所以 `status: ready` 不构成「Java 侧技法可用」的证据。**
+   所以 `status: ready` 不构成「Java 侧技法可用」的证据。`selfcheck` 更迷惑：它的 `compute` 步骤
+   报 `tool: nongli_time, ok: true`，但那是 issue #14 加的 **chart 侧回退探针**在答题——同一时刻
+   直接 POST `/nongli/time` 仍是 500 / 9999（v0.25.1 装完新 runtime 实测）。
+   **doctor 绿 + selfcheck 绿 都不等于这族路由活着。**
 2. **2 条是 v0.25.0 段级回填留下的「陈旧断言」，不是产品缺陷**——第一直觉判成段缺陷是错的，
    判据是**去 preset 里查这个段名到底还在不在**：
    - **`taiyi`**：断言写 `assert "[起盘]" not in snapshot`（"no doubled 起盘"）。但上游 v50 起
