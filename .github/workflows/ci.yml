@@ -43,12 +43,15 @@ jobs:
       - name: Verify docs sync (version lockstep / tool coverage / links / frontmatter)
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_docs_sync.py
-      # 段级欠账棘轮：只减不增。GitHub runner 无 vendored/上游树时脚本自报 skipped（不装绿），
-      # 但基线本身的自洽（registry 改了段表却没更基线）在这里就能红。
-      - name: Verify export-section debt ratchet
+      # ⚠️ 这两个 step 在 GitHub runner 上**做不了本行的核心比对**：`vendor/runtime-source` 是
+      # gitignored、也没有上游 checkout。以前注释声称棘轮「在这里就能红」，实际是整段 skip，
+      # 于是两个守卫在 CI 里零断言（2026-08 连同 release.yml 从未执行一并发现）。
+      # 现在各自退而断言仓内可判的部分：基线键 vs registry 自洽 / state 文件是否已落后于镜像常量。
+      # 真正的跨树比对是维护机上的 pre-tag 步骤：scripts/preflight_release.py（AGENTS §7）。
+      - name: Verify export-section baseline coherence (section diff needs a vendored tree)
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_export_section_baseline.py
-      - name: Verify upstream sync (skipped without an upstream checkout)
+      - name: Verify upstream-sync state currency (cross-tree diff needs an upstream checkout)
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_upstream_sync.py
       - name: Verify macOS/Windows runtime-builder parity

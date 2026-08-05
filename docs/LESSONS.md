@@ -107,7 +107,15 @@ created `08/01 17:08:57` → updated `08/02 17:09:04`，正好 24 小时，`buil
 attestation。`ci.yml` 里虽然也调前两个脚本，但**不带 `--require-upstream`**，GitHub runner 上没有上游
 checkout，脚本自报 `{"skipped": true}` 直接放行（那个 step 名字本身就写着 "skipped without an upstream
 checkout"）。两处合起来 = **「vendored 树 vs 上游 HEAD」这一类漂移在任何自动化环境里都从未被断言过**，
-而 runs 页面上显示得像有覆盖。旁证：`contracts/vendor_sync_state.json` 至今记着
+而 runs 页面上显示得像有覆盖。
+
+**同一次排查里还揪出第二个空转的**：`verify_export_section_baseline.py` 的 docstring 白纸黑字写着
+vendored 模式 "works with no upstream checkout, e.g. GitHub CI"，ci.yml 的注释也跟着说「基线本身的
+自洽在这里就能红」——**两句都是假的**。它读的 `vendor/runtime-source` 是 **gitignored** 的，CI 全新
+checkout 上根本没有，实测输出 `::notice::export-section-baseline skipped`。于是段级欠账棘轮
+（「只减不增」那道）在 CI 里同样零断言。**注释写「这里能红」不等于真会红——要去 run 的注解里看。**
+
+旁证：`contracts/vendor_sync_state.json` 至今记着
 `skill_mirrored_version: 48`（v0.24.0 手工跑时写的），而 registry 常量从 v0.25.0 起已是 **50**——
 那个专门用来「避免 vendored 树静默落后」的文件，自己静默落后了两个版本。
 
@@ -127,6 +135,12 @@ checkout"）。两处合起来 = **「vendored 树 vs 上游 HEAD」这一类漂
 - `verify_upstream_sync.py` 在无上游树时**不再纯 skip**：改为断言 state 里的 `skill_mirrored_version`
   是否仍等于 registry 常量，落后就打 `::warning`（当前就在报 48 vs 50）。CI 保持绿（避免 v0.25.0 那种
   带红上 main），但漂移从此在每次 run 里可见，而不是无声无息。
+- `verify_export_section_baseline.py` 同样不再纯 skip：无 aiExport 源时改为断言**基线 vs 仓内 registry
+  自洽**（`_assert_baseline_coherent`——基线里的键必须都还在 `AI_EXPORT_PRESET_SECTIONS` 里），抓
+  「技法改名/删了而基线还留着旧键」。已用反向测试确认它**真会红**（往基线塞一个不存在的键 → FAIL）。
+  docstring 与 ci.yml 里那两句不实描述一并改掉。
+- **`::warning::` 是单行命令**：消息里带 `\n` 会被 GitHub 在第一个换行处截断，注解结尾留个悬空冒号
+  （第一版就是这样，补救命令整条没进注解）。补救指令必须写在同一行。
 
 ### v0.25.1 / 2026-08 — 第一次真跑全套 live：7 红里 4 个是本机无 Mongo、2 个是真段缺陷、1 个是隔离没做全
 

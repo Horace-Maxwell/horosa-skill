@@ -91,14 +91,14 @@ def _report_state_currency() -> None:
     if recorded == current:
         print(f"upstream-sync: state current (mirror v{current}, last cross-tree check at package {at_version})")
         return
-    message = (
-        f"vendor_sync_state.json is STALE: it records skill_mirrored_version={recorded} (checked at package "
-        f"{at_version}) but the registry constant is now {current} — the mirror moved forward without any "
-        "cross-tree verification against upstream HEAD. Re-run on a box with the Horosa-Public checkout:\n"
-        "    HOROSA_SOURCE_ROOT=<Horosa-Public> uv run python scripts/verify_upstream_sync.py "
-        "--require-upstream --write-state"
+    # `::warning::` 是单行命令——消息里带换行会被 GitHub 在第一个 \n 处截断，注解结尾留个悬空冒号。
+    # 所以补救命令写在同一行；多行的详细说明另外用普通 log 输出。
+    print(
+        f"::warning::upstream-sync: vendor_sync_state.json is STALE — it records "
+        f"skill_mirrored_version={recorded} (checked at package {at_version}) but the registry constant is now "
+        f"{current}; the mirror moved forward with no cross-tree verification against upstream HEAD. Fix: run "
+        f"`HOROSA_SOURCE_ROOT=<Horosa-Public> uv run python scripts/preflight_release.py` on the maintenance box."
     )
-    print(f"::warning::upstream-sync: {message}")
 
 
 def _upstream_basename_index(upstream: Path) -> dict[str, list[Path]]:
