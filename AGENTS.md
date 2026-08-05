@@ -361,6 +361,9 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 - **版本 bump 全覆盖**：发 vX.Y.Z 同一 commit bump 全部——`pyproject.toml`、
   `src/horosa_skill/__init__.py.__version__`（CLI `--version`）、`server.json`（×2）、`CITATION.cff`、
+  **`horosa-core-js/package.json` 与 `package-lock.json`（含 `packages[""].version`，两处）**——
+  core-js 随每个 runtime payload 分发、自带版本号，此前完全在锁步检查之外，v0.26.0 就漏了 lock
+  （package.json 0.26.0 / lock 0.25.1，直到某次构建的 `npm install` 改写才暴露）——
   `README.md`/`README_EN.md` 的「当前公开版本」行（工具数/测试数一并更新）。bump 后 `git grep -n "<OLD>"`
   只应剩合法历史引用（CHANGELOG、台账、Windows 交接文档）。`docs/DATA_CONTRACTS.md` 的
   `tool envelope: <ver>` 是**独立** schema 版本，不跟包版本连动。CI 守卫：`verify_docs_sync.py`。
