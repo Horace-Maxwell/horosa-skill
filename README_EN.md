@@ -3,7 +3,7 @@
 <div align="center">
   <h1>Horosa Skill</h1>
   <p><strong>Turn Xingque / Horosa into an offline metaphysics capability layer any AI can call locally.</strong></p>
-  <p>Clone the repo, install the offline runtime once, and let Claude, Codex, Open WebUI, OpenClaw, etc. call <strong>83</strong> real techniques on your own machine — Western natal / predictive / horary / electional, BaZi / Zi Wei / Da Liu Ren / the Three Styles, and all <strong>14 Shen Shu</strong> systems — read the full Xingque AI-export protocol, return stable structured output, and persist every analysis as a retrievable local record. Works offline, value-for-value identical to the Xingque desktop app.</p>
+  <p>Clone the repo, install the offline runtime once, and let Claude, Codex, Open WebUI, OpenClaw, etc. call <strong>89</strong> real techniques on your own machine — Western natal / predictive / horary / electional, BaZi / Zi Wei / Da Liu Ren / the Three Styles, and all <strong>14 Shen Shu</strong> systems — read the full Xingque AI-export protocol, return stable structured output, and persist every analysis as a retrievable local record. Works offline, value-for-value identical to the Xingque desktop app.</p>
 
   <p><a href="https://github.com/Horace-Maxwell/horosa-skill"><img src="https://img.shields.io/badge/GitHub-Repository-111827?style=for-the-badge&logo=github" alt="Repository" /></a>&nbsp;<a href="https://github.com/Horace-Maxwell/horosa-skill/releases"><img src="https://img.shields.io/badge/GitHub-Releases-1d4ed8?style=for-the-badge&logo=github" alt="Releases" /></a>&nbsp;<a href="./README.md"><img src="https://img.shields.io/badge/阅读-简体中文-0f766e?style=for-the-badge" alt="Read in Chinese" /></a></p>
 
@@ -51,7 +51,7 @@ License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICEN
 
 ## Current stable baseline
 
-**Current public version: `Horosa Skill 0.25.0` (89 callable tools).**
+**Current public version: `Horosa Skill 0.25.1` (89 callable tools).**
 
 This release line brings the capability surface roughly to parity with the desktop app:
 
@@ -71,11 +71,11 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `89 / 89 ok=true` |
-| Engineering tests | `326 / 326 pass` (ken / Shen Shu live integration + offline golden unit tests + node JS golden) |
+| Engineering tests | `278 / 278 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 62 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `67` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `7` registry / knowledge / parser tools are directly readable |
-| Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`63` export techniques modeled) |
-| Local memory / report | `83 / 83` writes + `83 / 83` JSON artifacts |
+| Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`86` export techniques modeled) |
+| Local memory / report | every technique call writes 1 local run record + 1 JSON artifact |
 | Qi Men / Tai Yi / Jin Kou / Three Styles | unified on `ken`, same as the desktop app |
 | Tong She Fa / Decennials | headless, value-for-value with Xingque (`decennials.test.js` golden) |
 | GitHub CI | Linux/macOS unit tests + horosa-core-js JS golden self-check + Windows OpenClaw smoke |
@@ -247,7 +247,7 @@ Every tool call returns a uniform envelope:
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.25.0",
+  "ok": true, "tool": "qimen", "version": "0.25.1",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -376,7 +376,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 315 passed with local backends up; live integration tests auto-skip offline
+uv run pytest -q                                        # 278 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

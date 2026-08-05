@@ -32,6 +32,7 @@ PKG = ROOT / "horosa-skill"
 
 sys.path.insert(0, str(PKG / "src"))
 from horosa_skill.engine.registry import TOOL_DEFINITIONS  # noqa: E402
+from horosa_skill.exports.registry import AI_EXPORT_TECHNIQUES  # noqa: E402
 
 ERRORS: list[str] = []
 
@@ -108,6 +109,49 @@ def check_versions(version: str) -> None:
 
 # --- 2. tool coverage ----------------------------------------------------------------------
 
+# 每一处把「工具数」写死进散文/徽章/表格的地方。散文里的数字没人守，83→89 那次 bump 就在中文首页留下
+# 四处 83（徽章 URL 的 alt 甚至已经写着 89）。凡是 registry 的纯函数就在这里登记，别靠人记得改。
+# 模式找不到时报错而非静默跳过——文案改写了要来这里同步，这正是我们想要的提醒。
+TOOL_COUNT_CLAIMS = {
+    "README.md": (
+        r"badge/技法-(\d+)-",
+        r"星阙 (\d+) 个术数",
+        r"星阙（Horosa）的 (\d+) 个真实术数",
+        r"exposes (\d+) real astrology",
+        r"(\d+) 技法一次装齐",
+        r"本地进程 · (\d+) 工具",
+        r"(\d+) 个真实技法，一次安装",
+        r"(\d+) 技法目录索引",
+        r"可调用工具 \| (\d+) / (\d+)",
+    ),
+    "README_EN.md": (
+        r"badge/tools-(\d+)-",
+        r"call <strong>(\d+)</strong> real techniques",
+        r"Capability map \((\d+) tools\)",
+        r"Callable tools \| `(\d+) / (\d+) ok=true`",
+    ),
+}
+
+EXPORT_COUNT_CLAIMS = {
+    "README.md": (r"已建模 (\d+) 个导出 technique",),
+    "README_EN.md": (r"`(\d+)` export techniques modeled",),
+}
+
+
+def check_counted_claims(claims: dict[str, tuple[str, ...]], expected: int, label: str) -> None:
+    for name, patterns in claims.items():
+        text = read(ROOT / name)
+        for pattern in patterns:
+            found = re.findall(pattern, text)
+            if not found:
+                err(f"{name}: {label} pattern not found (copy drifted?): {pattern}")
+                continue
+            for match in found:
+                for got in (match if isinstance(match, tuple) else (match,)):
+                    if int(got) != expected:
+                        err(f"{name}: {label} says {got}, registry has {expected} ({pattern})")
+
+
 def check_tool_coverage() -> None:
     docs = [ROOT / "README.md", ROOT / "README_EN.md", ROOT / "skills/horosa-agent/SKILL.md"]
     for path in docs:
@@ -115,10 +159,37 @@ def check_tool_coverage() -> None:
         missing = sorted(t for t in TOOL_DEFINITIONS if f"`{t}`" not in text)
         if missing:
             err(f"{path.relative_to(ROOT)}: tool ids not documented: {', '.join(missing)}")
+    check_counted_claims(TOOL_COUNT_CLAIMS, len(TOOL_DEFINITIONS), "tool count")
+    # 「已建模 N 个导出 technique」= len(AI_EXPORT_TECHNIQUES)（曾停在 63 而实际 86）。
+    check_counted_claims(EXPORT_COUNT_CLAIMS, len(AI_EXPORT_TECHNIQUES), "export-technique count")
+
+
+# --- 2b. test-count consistency ------------------------------------------------------------
+
+# 测试数不能从代码静态推出（要真跑一轮），所以这里只能守「四处口径一致」——但那正是它漏掉的：
+# v0.25.0 时 zh 三处写 326、EN 表格写 326 而 EN 代码块写 315，实际收集数早已不是这些。
+TEST_COUNT_PATTERNS = (
+    r"badge/测试-(\d+)_passed",
+    r'alt="(\d+) passed"',
+    r"工程测试 \| \*\*(\d+) / (\d+) pass",
+    r"Engineering tests \| `(\d+) / (\d+) pass",
+    r"#\s*(\d+) passed",
+)
+
+
+def check_test_count_consistency() -> None:
+    seen: dict[int, list[str]] = {}
     for path in (ROOT / "README.md", ROOT / "README_EN.md"):
-        for badge in re.findall(r"badge/tools-(\d+)-", read(path)):
-            if int(badge) != len(TOOL_DEFINITIONS):
-                err(f"{path.name}: tools badge says {badge}, registry has {len(TOOL_DEFINITIONS)}")
+        text = read(path)
+        for pattern in TEST_COUNT_PATTERNS:
+            for match in re.findall(pattern, text):
+                for got in (match if isinstance(match, tuple) else (match,)):
+                    seen.setdefault(int(got), []).append(f"{path.name}:{pattern}")
+    if not seen:
+        err("README.md/README_EN.md: no test-count claim found (patterns drifted?)")
+    elif len(seen) > 1:
+        detail = "; ".join(f"{count} ({len(where)}x)" for count, where in sorted(seen.items()))
+        err(f"README test-count claims disagree: {detail} — all mentions must carry one number")
 
 
 # --- 3. stale "current: `X`" claims in docs -------------------------------------------------
@@ -206,6 +277,7 @@ def main() -> None:
     version = expected_version()
     check_versions(version)
     check_tool_coverage()
+    check_test_count_consistency()
     check_stale_claims(version)
     check_links()
     check_conflict_markers()

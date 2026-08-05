@@ -243,10 +243,12 @@ def test_taiyi_runs_via_ken_backend(tmp_path) -> None:
     snapshot = result.data["snapshot_text"]
     assert "[太乙盘]" in snapshot
     # 星阙 v2.6.x: the kintaiyi backend's rich 太乙 reading sections now surface (previously stripped).
-    # The backend's 起盘 section is dropped (the builder emits [起盘信息]); these come through.
     for header in ("[太乙诸神]", "[风游]", "[主客定算]", "[八门与宿曜]", "[断法]", "[七大兵法]"):
         assert header in snapshot, header
-    assert "[起盘]" not in snapshot  # no doubled 起盘 (builder emits 起盘信息)
+    # 上游 v50 起 [起盘] 是后端透传的**正式**段（已在 taiyi preset 里），与 builder 的 [起盘信息]
+    # 并存不是「重复」——旧断言 `"[起盘]" not in snapshot` 是 v50 段级回填前的遗留，会误报。
+    assert "[起盘信息]" in snapshot
+    assert "[起盘]" in snapshot
     _assert_clean_export(result)
 
 
@@ -508,7 +510,8 @@ def test_acg_lines_via_chart_service(tmp_path) -> None:
     assert isinstance((sun_lines.get("mc") or {}).get("lon"), (int, float))
     snapshot = result.data["snapshot_text"]
     assert "[起盘信息]" in snapshot
-    assert "[行星线经度]" in snapshot
+    # 上游 v50 起旧段名 [行星线经度] 已并入单段 [占星地图]（见 registry.map_legacy_section_title）。
+    assert "[占星地图]" in snapshot
     assert "MC线经度" in snapshot
     # 线交点若产出，角色标签必须落地（源返回键 aAngle/bAngle；曾误读 av/aEvent 致标签恒空）。
     crossings = acg.get("crossings") or []

@@ -27,8 +27,14 @@ def _no_installed_runtime(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     runtime，`call_tool` 会一路真算并 `ok=True`，于是「其实依赖 runtime」的断言在本地恒绿、到了
     CI（无 runtime）才炸——v0.25.0 发布 commit 就是这么带着红 CI 上 main 的。把 runtime root 钉到
     空目录，本地与 CI 同形，这类依赖当场暴露。
+
+    **只钉 runtime root 不够**：维护机上若默认端口（8899/9999）恰好有活服务，请求照样打通、
+    本该失败的错误路径会成功（`assert True is False`）。所以同时把两个 service root 指到一个
+    不监听的端口，让「未安装 runtime」这个形状在网络层也成立。
     """
     monkeypatch.setenv("HOROSA_RUNTIME_ROOT", str(tmp_path / "runtime"))
+    monkeypatch.setenv("HOROSA_SERVER_ROOT", "http://127.0.0.1:9")
+    monkeypatch.setenv("HOROSA_CHART_SERVER_ROOT", "http://127.0.0.1:9")
 
 
 def _server(*, compact: bool = False):

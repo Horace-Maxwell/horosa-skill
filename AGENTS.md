@@ -318,6 +318,12 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   `README.md`/`README_EN.md` 的「当前公开版本」行（工具数/测试数一并更新）。bump 后 `git grep -n "<OLD>"`
   只应剩合法历史引用（CHANGELOG、台账、Windows 交接文档）。`docs/DATA_CONTRACTS.md` 的
   `tool envelope: <ver>` 是**独立** schema 版本，不跟包版本连动。CI 守卫：`verify_docs_sync.py`。
+- **README 里的数字只有两种合法形态**：能从代码断言的（工具数、导出 technique 数）→ 当场在
+  `verify_docs_sync.py` 里加断言；推不出又没测试覆盖的手测计数（如「memory / report N / N」）→ 改写成
+  **不含数字的结构性陈述**。绝不留「只能靠人记得更新」的计数。测试数属第三类（要真跑才知道），故只守
+  「两份 README 所有提及必须同一个数」（`check_test_count_consistency`）。**双语文档的守卫正则必须覆盖
+  两种语言的标签**——徽章正则曾只写 `badge/tools-`，中文首页的 `badge/技法-` 整个漏出射程，工具数在
+  83 上停了两代而 CI 全绿（v0.25.1，台账有原文）。
 - **两个 runtime builder 永远锁步**：mac `package_runtime_payload.sh` 每一步都要有
   `build_runtime_release_windows.py` 对应步；`verify_runtime_release.py` 的 REQUIRED_ENTRIES 两平台对称
   （v0.10.0 曾 mac 侧加 shaozi 条文生成 + 验证项而 Windows 侧漏，win 构建会静默出占位条文还照样过验）。
@@ -380,7 +386,15 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
    只有 CI（唯一无 runtime 的环境）才炸**——离线/线材契约测试**禁以「算成功」为判据**（那是
    `@requires_runtime` 的活）；`tests/test_mcp_contract.py` 已用 autouse fixture 把 `HOROSA_RUNTIME_ROOT`
    钉到空目录强制与 CI 同形，发版前另跑一遍 `HOROSA_RUNTIME_ROOT=<空目录> uv run pytest` 复现该形状。
-5. **`pkill` 法则**：bundled 与 live 星阙都跑 `webchartsrv.py`——`pkill -f webchartsrv.py` 会连星阙
+   **⚠️ 只钉 runtime root 不够**：默认端口上若有活服务，请求照样打通，本该失败的错误路径会成功
+   （`test_error_paths_return_a_conformant_envelope` 实测在服务起着时红）——要真与 CI 同形，
+   **必须同时把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指到不可达地址**。
+5. **无 Mongo 的机器跑不出「live 全绿」**：Java 聚合层的 app 注册在 Mongo 里，缺 Mongo 时
+   `/nongli/time`·`/bazi/birth`·`/ziwei/birth`·`/liureng/*` 一族恒返 HTTP 500
+   `{"ResultCode":9999,"Result":"no.register.app.in.sys.forapp"}`，依赖它们的技法测试必红。
+   **`doctor` 探的是 `/common/time`，不碰这族路由，所以 `status: ready` 不等于 Java 侧技法可用**——
+   判据是直接打 `/nongli/time` 看是不是 9999。干净 Windows 机的最强信号只有 chart 半边。
+6. **`pkill` 法则**：bundled 与 live 星阙都跑 `webchartsrv.py`——`pkill -f webchartsrv.py` 会连星阙
    `:8899` 一起杀。按端口/PID 停；stop 脚本已按 runtime root 限定 kill 范围，保持住。
 
 **症状速查表**：
@@ -405,6 +419,8 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | 结果段缺失，客户端想报「缺依赖」 | 幻觉依赖风险 | 按 SKILL.md：说本地未返回该段，跑 `doctor` / `openclaw-check`，不发明 MongoDB/7897 |
 | chart 启动日志整段 traceback：`kintaiyi/game_theory.py … No module named 'scipy'` | prewarm 碰到 opt-in 博弈论子模块（默认关、懒 import）；scipy 两平台 bundle 均无（mac 同样） | 良性，无需处置；判据 = `/taiyi/pan` 回 `ResultCode 0 + source kintaiyi`；勿为此加 scipy（瘦身红线） |
 | `doctor` 报 `services:java_backend_not_running` / runtime_state `degraded_chart_only` | Java 后端死或被拦（Windows 常见 = 代理/VPN/安全软件 WFP 拦 JDK-17 AF_UNIX loopback，jar 在 Spring bean 构造期秒退且自身日志为空） | 降级模式设计行为：chart 侧技法照常可用；`doctor.java_diagnostics` 有启动器捕获的崩溃摘录；用户侧处置 = 禁用干扰软件并重启（issue #14） |
+| `doctor` 报 ready，但 nongli / bazi / ziwei / liureng 族技法一律 HTTP 500 | 该族路由的 app 注册在 Mongo 里，本机无 Mongo；`doctor` 只探 `/common/time` 探不到 | 环境限制非回归；判据 = 直接打 `/nongli/time` 见 `ResultCode 9999 / no.register.app.in.sys.forapp`（§8 验证流程 5） |
+| 维护机上 `test_error_paths_return_a_conformant_envelope` 红、CI 绿 | 默认端口上有活服务，只钉 `HOROSA_RUNTIME_ROOT` 拦不住，本该失败的路径成功了 | 同时把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指到不可达地址（§8 验证流程 4） |
 
 ## 9. Stability invariants（稳定性不变量 — don't regress these）
 

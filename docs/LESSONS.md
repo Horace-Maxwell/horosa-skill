@@ -93,6 +93,70 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.25.1 / 2026-08 — 第一次真跑全套 live：7 红里 4 个是本机无 Mongo、2 个是真段缺陷、1 个是隔离没做全
+
+**症状**：在 v0.25.0 runtime（独立 root `rt-verify`，心跳 `pdSyncRev = pd_method_sync_v15` 与当前 rev 一致）
+上跑全套 `uv run pytest` → **7 failed / 332 passed / 1 skipped**；而同一棵树在服务未起时是
+**278 passed / 62 skipped / 0 failed**。更迷惑的是 `doctor` 同时报 `status: ready` + 双端点 reachable。
+
+**根因分三类（别混为一谈）**：
+
+1. **4 条是本机环境，不是回归**：`xiaoliuren` / `feigong` / `zhengchuan_tieban` / `zhengchuan_dading`
+   全部死在 `/nongli/time` → HTTP 500 `{"ResultCode":9999,"Result":"no.register.app.in.sys.forapp%3A"}`。
+   Java 聚合层的 app 注册在 **Mongo** 里，本机无 Mongo → 这一族路由（`/nongli/time`·`/bazi/birth`·
+   `/ziwei/birth`·`/liureng/*`）恒 9999。**`doctor` 探的是 `/common/time`，根本不碰这族路由——
+   所以 `status: ready` 不构成「Java 侧技法可用」的证据。**
+2. **2 条是 v0.25.0 段级回填留下的「陈旧断言」，不是产品缺陷**——第一直觉判成段缺陷是错的，
+   判据是**去 preset 里查这个段名到底还在不在**：
+   - **`taiyi`**：断言写 `assert "[起盘]" not in snapshot`（"no doubled 起盘"）。但上游 v50 起
+     `起盘` 已是**注册在 taiyi preset 里的正式透传段**，与 builder 的 `[起盘信息]` 并存是对的。
+     旧断言编码的是 v50 之前「后端 起盘 段被丢弃」的行为。
+   - **`acg`**：断言写 `assert "[行星线经度]" in snapshot`。但该旧段名在 v50 已**并入单段
+     `占星地图`**（`registry.map_legacy_section_title` 里就写着这条映射），preset 里只有 `占星地图`。
+   两者都是「registry 改了、live 断言没跟着改」，而 live 测试**进不了 CI**，于是无人发现。
+3. **1 条是隔离没做全**：`test_error_paths_return_a_conformant_envelope`——v0.25.0 之后新加的 autouse
+   fixture 把 `HOROSA_RUNTIME_ROOT` 钉到空目录，本意是与 CI 同形；但**默认端口上有活服务**时它照样失败，
+   因为只钉了 runtime root、没钉 service endpoint，请求照样打通 → 本该失败的错误路径成功了
+   （`assert True is False`）。CI（无服务）绿、维护机（服务在）红，正是 v0.25.0 那条教训的**镜像**。
+
+**法则/守卫**：
+
+- **「live 全绿」在无 Mongo 的机器上不可达**——干净 Windows 机的最强信号只有 chart 半边。README 的测试数
+  因此改按**离线 CI 形状**标注（278 passed / 62 skipped），不再声称一个没人真验过的 `N / N pass`。
+- **改 export preset / 段名映射时，必须同步 grep live 测试里的段名断言**。段级回填（v0.25.0 那种
+  216→7 的大批量）只跑得动 CI 里的离线契约；`@requires_runtime` 的段名断言在 CI 里恒 skip，
+  改错了要等下一次有人真起服务才炸。判据永远是 **preset 里有没有这个段名**，不是凭印象说「重复/缺失」。
+- 想把 `requires_*` 测试真正钉成 CI 形状，**必须同时把 service root 指到不可达地址**——只钉 runtime root
+  不够（本条是 `HOROSA_RUNTIME_ROOT=<空目录>` 复现法的补丁：那招只在服务也没起时成立）。
+- 判 Java 侧是否真可用，别看 `doctor`，直接打 `/nongli/time` 看是不是 `ResultCode 9999`。
+
+### v0.25.1 / 2026-08 — 中文首页的数字漂了两代，因为守卫的徽章正则只认英文标签
+
+**症状**：`verify_docs_sync.py` 全程绿，而 `README.md`（中文首页 = 默认落地页）上：徽章写
+`技法-83`（同一行的 `alt` 却写着 "89 tools"）、验收表写 `可调用工具 83 / 83`、`已建模 63 个导出
+technique`；测试数四处写 `326` 而 `README_EN.md` 的代码块写 `315`；`📦 Release runtime` 行还写着
+「Windows (x64) 由构建机补传（补传前 win 用户拿到上一版 runtime）」——而 v0.25.0 的 Windows 半边
+早在 2026-08-02 就已补齐，`sync_windows_release.py --check` 判定 in-sync。即：中文首页在劝退
+Windows 用户，并把工具数少报了 6 个。
+
+**根因**：`check_tool_coverage()` 的徽章正则是 `badge/tools-(\d+)-`，只能匹配 EN 侧的
+`badge/tools-89-`；zh 侧标签是中文的 `badge/技法-83-`，**整个漏出守卫射程**。于是 83→89 那次 bump
+只有被守卫盯着的 EN 侧被迫改对，中文首页无人拦。同源问题一串：验收表的 `可调用工具 N / N` 与
+`已建模 N 个导出 technique` 都是 registry 的纯函数，却从来没人断言。测试数更糟——它**无法从代码静态
+推出**，于是五处提及各写各的，分叉成 326×7 + 315×1 谁也没发现。这是 v0.24.0「守卫结构性失明」的第三例：
+守卫不是不存在，是**射程比它自称的窄**。
+
+**守卫**：① 徽章正则拓宽为 `badge/(?:tools|技法)-(\d+)-`；② 新增 zh/EN 两侧「可调用工具 N / N」行
+断言 == `len(TOOL_DEFINITIONS)`；③ 新增「已建模 N 个导出 technique」断言 == `len(AI_EXPORT_TECHNIQUES)`；
+④ 测试数不可静态推导 → 新增 `check_test_count_consistency()`，只守「两份 README 的所有提及必须是同一个
+数」，首跑即抓出 315/326 分叉；⑤ `本地 memory / report 83 / 83` 这类**既推不出、也没有测试覆盖的手测
+计数**直接改写成结构性陈述（「每次技法调用写 1 条 run 记录 + 1 份 JSON artifact」），不再留一个会腐烂
+的数字。
+
+**法则**：README 里的每个数字，要么**能从代码断言**（那就当场加断言），要么**改写成不含数字的结构性
+陈述**——绝不留「只能靠人记得更新」的计数。双语文档的守卫正则**必须覆盖两种语言的标签**，只写英文
+pattern 等于只守了一半。
+
 ### v0.25.0+ / 2026-08 — 一个 em dash 打死整个 Windows runtime（无 BOM 的 .ps1 + PowerShell 认花引号）
 
 - **症状**：v0.25.0 Windows 半边刚建完，装进独立 runtime root 跑 `selfcheck` → `runtime.start_failed`，
