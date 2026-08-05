@@ -113,6 +113,28 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 - **法则**：新增任何「只在 CI 跑」的守卫时，问一句**这条路径 CI 走得到吗**；Windows/离线 runtime
   这类 off-CI 产物必须在其**本机入口脚本**里复跑同一把守卫。
 
+- 🔴 **那 4 条 live 红被误判成「本机无 Mongo」整整几个版本——实测是另一回事。**
+  台账/交接口径一直说：本机 live 全套必有 4 红（`xiaoliuren` / `feigong` / `zhengchuan`×2），因为无
+  Mongo 时 Java 侧一律 `no.register.app.in.sys`，「环境限制而非代码问题」。**本轮逐一实测推翻**：
+  ① 经 skill 正规路径（`_call_remote`，带 app 注册归一化）打 Java **是通的**——`doctor issues: []`、
+  两端点 reachable、382 条 live 用例通过，其中大量走 Java；② 这 4 条报的是
+  `ResultCode 9999 / "begin 1, end 3, length 1"`（上游 `substring(1,3)` 打在长度 1 的串上），
+  **与 `no.register.app.in.sys` 是两个完全不同的错**；③ 实测矩阵定位触发条件是「**日期 × 缺 `lat`**」
+  的组合，不是单一因素：
+  | 载荷 | 结果 |
+  | --- | --- |
+  | `2028-04-06` + 仅 lon | ok |
+  | `2028-04-06` + lon&lat | ok |
+  | `2026-05-20` + 仅 lon | **500 / begin 1, end 3, length 1** |
+  | `2026-05-20` + lon&lat | ok |
+  给这 4 条测试的载荷补上 `lat` 即全绿。**结论**：这不是 Mongo/环境问题，是上游对某些
+  「日期+无纬度」组合的输入处理崩溃，skill 侧原样透传成不透明 HTTP 500。
+  **未决**：上游真因需在有上游源码的机器上定位（本仓对上游只读）；skill 侧该「先问 lat」还是
+  「转结构化错误」待定，故本轮**只纠正判据、不改代码**。
+  **法则**：「已知非回归」这类豁免必须挂在**可复现的判据**上（此处 = 错误串 + 复现矩阵），
+  不能挂在测试名单上——名单会把后来的真 bug 一起豁免掉。裸 HTTP 探针在本机不可用
+  （无 Mongo 注册，任何形状都回 `no.register.app.in.sys`），**判据一律取 skill 正规路径的结果**。
+
 - 🔴 **五个 stamper 可以「一致地错」——N 路互证够不到源头常量**（同轮补 Windows 半边时发现）。
   **症状**：装完新构建的 v0.26.0 runtime，内嵌 manifest 写 `export_registry_version: 11`，而
   v0.26.0 的择日提交已把 `AI_EXPORT_SETTINGS_VERSION` 11→12。**根因**：`verify_builder_parity.py`

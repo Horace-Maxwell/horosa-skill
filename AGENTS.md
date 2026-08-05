@@ -313,6 +313,13 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   `shutil.copytree(src, dst/src.name, ignore=ignore_patterns(*excludes), dirs_exist_ok=True)`；
   不许 `rsync`/`cp`/`tar` 回潮（`rsync_copy()` 曾让 Windows builder 第一步 `FileNotFoundError` 死掉）；
   `download()` 用 `curl`（Win10/11 自带）。
+- **下载缓存跨重建保留，但必须「按解析后的 URL 键控 + `.part` 落地」**：win/linux builder 开头只清
+  `PAYLOAD_ROOT`（旧代码清整个 `BUILD_ROOT`，连 `downloads/` 一起删 → 每次重建重下 JDK 180MB + Node +
+  CPython，改个启动器模板也要等一小时）。缓存一旦长存，原先靠「每次删掉」白拿的两条性质必须补上：
+  ① `download()` 写 `<dest>.url` sidecar，**只有 URL 完全相同才复用**——固定文件名会把首次下到的
+  JDK/Node 永久钉死；② 先下到 `<dest>.part` 再 `replace`，中断的 curl 不会留下截断文件冒充缓存命中。
+  故 `latest_temurin_jdk_url()` 要**解析重定向**返回带版本号的真实 URL（API URL 跨 GA 恒定，不可作缓存键）。
+  回归：`tests/test_builder_download_cache.py`。
 - **JDK 下载走 Adoptium API，禁 GitHub `releases/latest`**：temurin17-binaries 的 `releases/latest` 按
   tag 提交日期取，GA 刚打 tag 的窗口内平台二进制可能还没传完（jdk-17.0.20-ga 曾使 win/linux builder
   空手），`/releases` 列表顺序亦不可靠（老版本重发插队到最前）。下载 JDK 的 builder 一律用
@@ -450,13 +457,16 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
    **⚠️ 只钉 runtime root 不够**：默认端口上若有活服务，请求照样打通，本该失败的错误路径会成功
    （`test_error_paths_return_a_conformant_envelope` 实测在服务起着时红）——要真与 CI 同形，
    **必须同时把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指到不可达地址**。
-5. **无 Mongo 的机器跑不出「live 全绿」**：Java 聚合层的 app 注册在 Mongo 里，缺 Mongo 时
-   `/nongli/time`·`/bazi/birth`·`/ziwei/birth`·`/liureng/*` 一族恒返 HTTP 500
-   `{"ResultCode":9999,"Result":"no.register.app.in.sys.forapp"}`，依赖它们的技法测试必红。
-   **`doctor` 探的是 `/common/time`，不碰这族路由，所以 `status: ready` 不等于 Java 侧技法可用；
-   `selfcheck` 的 `compute` 步骤会走 issue #14 的 chart 侧回退探针，报 `nongli_time ok=true` 同样
-   不作数**——判据只有一个：直接打 `/nongli/time` 看是不是 `ResultCode 9999`。
-   干净 Windows 机的最强信号只有 chart 半边。
+5. **Java 侧是否可用，判据取「skill 正规路径」，不是裸 HTTP**（2026-08-05 实测纠正）：
+   **裸 `curl`/`httpx` 打 `/nongli/time` 在无 Mongo 机器上任何载荷形状都回
+   `{"ResultCode":9999,"Result":"no.register.app.in.sys.forapp"}`——包括那些经 skill 调用完全成功的
+   载荷**，所以裸探针会把好路由误判成坏的，不可作判据。`_call_remote` 带 app 注册归一化，经它
+   （或 `service.run_tool`）打才作数：实测本机 `doctor issues: []` + live 382 条通过，其中大量走 Java。
+   `doctor` 只探 `/common/time`、`selfcheck` 的 compute 步骤有 issue #14 的 chart 侧回退，
+   两者仍不足以证明 Java 族技法可用——**要证就跑一条真 Java 技法**（如
+   `service.run_tool("nongli_time", {...带 lat...})`）。
+   区分两种 500：`no.register.app.in.sys` = 注册/环境；
+   `begin 1, end 3, length 1` = 上游输入处理崩溃（见 `docs/LESSONS.md` 该条的复现矩阵，与 Mongo 无关）。
 6. **`pkill` 法则**：bundled 与 live 星阙都跑 `webchartsrv.py`——`pkill -f webchartsrv.py` 会连星阙
    `:8899` 一起杀。按端口/PID 停；stop 脚本已按 runtime root 限定 kill 范围，保持住。
 
@@ -482,7 +492,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | 结果段缺失，客户端想报「缺依赖」 | 幻觉依赖风险 | 按 SKILL.md：说本地未返回该段，跑 `doctor` / `openclaw-check`，不发明 MongoDB/7897 |
 | chart 启动日志整段 traceback：`kintaiyi/game_theory.py … No module named 'scipy'` | prewarm 碰到 opt-in 博弈论子模块（默认关、懒 import）；scipy 两平台 bundle 均无（mac 同样） | 良性，无需处置；判据 = `/taiyi/pan` 回 `ResultCode 0 + source kintaiyi`；勿为此加 scipy（瘦身红线） |
 | `doctor` 报 `services:java_backend_not_running` / runtime_state `degraded_chart_only` | Java 后端死或被拦（Windows 常见 = 代理/VPN/安全软件 WFP 拦 JDK-17 AF_UNIX loopback，jar 在 Spring bean 构造期秒退且自身日志为空） | 降级模式设计行为：chart 侧技法照常可用；`doctor.java_diagnostics` 有启动器捕获的崩溃摘录；用户侧处置 = 禁用干扰软件并重启（issue #14） |
-| `doctor` 报 ready、`selfcheck` 也全绿，但 nongli / bazi / ziwei / liureng 族技法一律 HTTP 500 | 该族路由的 app 注册在 Mongo 里，本机无 Mongo；`doctor` 只探 `/common/time`，`selfcheck` 的 compute 步骤走 chart 侧回退探针，两者都探不到 | 环境限制非回归；判据 = 直接打 `/nongli/time` 见 `ResultCode 9999 / no.register.app.in.sys.forapp`（§8 验证流程 5） |
+| Java 族技法（nongli / bazi / ziwei / liureng）报 HTTP 500 | **先分错串**：`no.register.app.in.sys.forapp` = app 注册缺失（环境）；`begin 1, end 3, length 1` = 上游输入处理崩溃（本仓实测由「特定日期 × 缺 `lat`」触发，与 Mongo 无关） | 裸 HTTP 探针在无 Mongo 机上恒回前者、不可作判据；一律用 `service.run_tool` 正规路径复现，再对照 `docs/LESSONS.md` 的复现矩阵（§8 验证流程 5） |
 | 维护机上 `test_error_paths_return_a_conformant_envelope` 红、CI 绿 | 默认端口上有活服务，只钉 `HOROSA_RUNTIME_ROOT` 拦不住，本该失败的路径成功了 | 同时把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指到不可达地址（§8 验证流程 4） |
 
 ## 9. Stability invariants（稳定性不变量 — don't regress these）
