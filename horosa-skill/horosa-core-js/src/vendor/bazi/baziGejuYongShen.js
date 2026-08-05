@@ -108,13 +108,55 @@ function computeBianGe(four, wuxingStat){
 		});
 	}else if(same <= 12 && !hasRoot){
 		const shi = GEN[dayEl], cai = KE[dayEl], guan = KE_BY[dayEl];
-		const cand = [['从儿格', shi], ['从财格', cai], ['从杀格', guan]]
-			.sort((a, b) => (scoreOf[b[1]] || 0) - (scoreOf[a[1]] || 0))[0];
-		out.push({
-			type: '从弱', name: cand[0],
-			cond: `同党${same}%·日主无本气根`, yong: `顺${EL_LABEL[cand[1]]}之势`, bei: '印·比劫（破从）',
-			note: '真从须印比无根不现；尚有微根为假从，逢帮身运败，请复核。',
-		});
+		const trio = [[shi, scoreOf[shi] || 0], [cai, scoreOf[cai] || 0], [guan, scoreOf[guan] || 0]];
+		const mx = Math.max(trio[0][1], trio[1][1], trio[2][1]);
+		const mn = Math.min(trio[0][1], trio[1][1], trio[2][1]);
+		// 从势格（§9.3.1）：财官食三势均旺、无一独大、日主无依 → 顺三势，以财通关；先于从儿/从财/从杀判。
+		if(mn >= 15 && mx - mn <= 12){
+			out.push({
+				type: '从势', name: '从势格',
+				cond: `同党${same}%·食${trio[0][1]}%财${trio[1][1]}%官杀${trio[2][1]}%三势均停`,
+				yong: `顺三势·以${EL_LABEL[cai]}(财)通关（食伤生财、财生官杀）`, bei: '印·比劫（破从）',
+				note: '从势须三势均旺无一独大；若一势独旺则依从儿/从财/从杀论，请复核。',
+			});
+		}else{
+			const cand = [['从儿格', shi], ['从财格', cai], ['从杀格', guan]]
+				.sort((a, b) => (scoreOf[b[1]] || 0) - (scoreOf[a[1]] || 0))[0];
+			out.push({
+				type: '从弱', name: cand[0],
+				cond: `同党${same}%·日主无本气根`, yong: `顺${EL_LABEL[cand[1]]}之势`, bei: '印·比劫（破从）',
+				note: '真从须印比无根不现；尚有微根为假从，逢帮身运败，请复核。',
+			});
+		}
+	}
+
+	// 两神成象（§9.3.4）：全局只见两行、各占其半（余行近无、日主居其一）。
+	// 相生两象喜两行流通；相克（相成）两象须通关之神；均忌第三行破象。
+	const desc = ['Wood', 'Fire', 'Earth', 'Metal', 'Water']
+		.map((e) => ({ e, p: scoreOf[e] || 0 })).sort((a, b) => b.p - a.p);
+	const t1 = desc[0], t2 = desc[1], t3 = desc[2];
+	if(t1 && t2 && t2.p >= 35 && t1.p + t2.p >= 85 && (!t3 || t3.p <= 8) && (dayEl === t1.e || dayEl === t2.e)){
+		const la = EL_LABEL[t1.e], lb = EL_LABEL[t2.e];
+		if(GEN[t1.e] === t2.e || GEN[t2.e] === t1.e){
+			const mu = GEN[t1.e] === t2.e ? t1.e : t2.e; // 母(生方)
+			const zi = GEN[mu];
+			out.push({
+				type: '两神成象', name: `${EL_LABEL[mu]}${EL_LABEL[zi]}相生两象`,
+				cond: `${la}${t1.p}%·${lb}${t2.p}%·余行近无`,
+				yong: '两行流通为用（顺其气势）', bei: '第三行破象（尤忌克泄交加）',
+				note: '相生两象贵在纯粹流通；行运引出第三行即破象，请复核。',
+			});
+		}else{
+			const gong = KE[t1.e] === t2.e ? t1.e : t2.e; // 攻方(克者)
+			const tgEl = GEN[gong]; // 通关之神：攻方所生、又生受方（GEN[GEN[A]]===KE[A]）
+			out.push({
+				type: '两神成象', name: `${la}${lb}相成两象`,
+				cond: `${la}${t1.p}%·${lb}${t2.p}%·两行相战`,
+				yong: `取${EL_LABEL[tgEl]}通关（${EL_LABEL[gong]}生${EL_LABEL[tgEl]}生${EL_LABEL[KE[gong]]}）`,
+				bei: '无通关而两行交战',
+				note: '相克两象须食伤或印通关成象；通关神被夺即破，请复核。',
+			});
+		}
 	}
 
 	[['月干', four.month && four.month.stem && four.month.stem.cell], ['时干', four.time && four.time.stem && four.time.stem.cell]].forEach((pair) => {
@@ -185,32 +227,124 @@ function computeTongGuan(four, wuxingStat){
 	return {
 		school: '通关派',
 		xi: [EL_LABEL[best.guan]],
-		ji: [],
-		note: `${EL_LABEL[best.a]}${EL_LABEL[best.b]}交战(${best.sa}%/${best.sb}%)，取${EL_LABEL[best.guan]}通关（${EL_LABEL[best.a]}生${EL_LABEL[best.guan]}生${EL_LABEL[best.b]}）。`,
+		// 忌=克通关之神者：通关神被夺则两强复战（与两神成象「通关神被夺即破」同口径）。
+		ji: [EL_LABEL[KE_BY[best.guan]]],
+		note: `${EL_LABEL[best.a]}${EL_LABEL[best.b]}交战(${best.sa}%/${best.sb}%)，取${EL_LABEL[best.guan]}通关（${EL_LABEL[best.a]}生${EL_LABEL[best.guan]}生${EL_LABEL[best.b]}）；忌${EL_LABEL[KE_BY[best.guan]]}夺通关。`,
 	};
 }
 
 // 格局派相神（§9.2.2）：顺用格生护、逆用格制化，相对日主取相神五行。
+// ji=坏格忌神之五行（与成败救应 GE_JI 十神口径同源转译）——此前恒空致对照表「忌」列无据。
 function computeGejuYong(four, geju){
 	const dayEl = four.day && four.day.stem ? four.day.stem.element : '';
 	if(!geju || !geju.tenGod || !dayEl){ return null; }
-	const yin = GEN_BY[dayEl], shi = GEN[dayEl], cai = KE[dayEl], guan = KE_BY[dayEl];
+	const yin = GEN_BY[dayEl], bi = dayEl, shi = GEN[dayEl], cai = KE[dayEl], guan = KE_BY[dayEl];
 	const MAP = {
-		官: { xi: [cai, yin], note: '正官格顺用：财生官、印护身；忌伤官见官、刑冲。' },
-		杀: { xi: [shi, yin], note: '七杀格逆用：食神制杀、印化杀；忌财党生杀攻身。' },
-		财: { xi: [shi, guan], note: '财格顺用：食伤生财、官护财；忌比劫夺财。' },
-		才: { xi: [shi, guan], note: '偏财格顺用：食伤生财、官护财；忌比劫夺财。' },
-		印: { xi: [guan], note: '正印格顺用：官杀生印；忌财坏印。' },
-		枭: { xi: [cai], note: '偏印格逆用：财制枭；忌枭夺食。' },
-		食: { xi: [cai], note: '食神格顺用：财泄食、身旺有气；忌枭印夺食。' },
-		伤: { xi: [yin, cai], note: '伤官格逆用：伤官配印、伤官生财；忌伤官见官。' },
-		比: { xi: [guan, shi, cai], note: '建禄格无格：另取官杀/食伤/财为用。' },
-		劫: { xi: [guan, shi], note: '阳刃格逆用：官杀制刃、食伤泄秀；忌群刃无制。' },
+		官: { xi: [cai, yin], ji: [shi], note: '正官格顺用：财生官、印护身；忌伤官见官、刑冲。' },
+		杀: { xi: [shi, yin], ji: [cai], note: '七杀格逆用：食神制杀、印化杀；忌财党生杀攻身。' },
+		财: { xi: [shi, guan], ji: [bi], note: '财格顺用：食伤生财、官护财；忌比劫夺财。' },
+		才: { xi: [shi, guan], ji: [bi], note: '偏财格顺用：食伤生财、官护财；忌比劫夺财。' },
+		印: { xi: [guan], ji: [cai], note: '正印格顺用：官杀生印；忌财坏印。' },
+		枭: { xi: [cai], ji: [yin], note: '偏印格逆用：财制枭；忌枭夺食。' },
+		食: { xi: [cai], ji: [yin], note: '食神格顺用：财泄食、身旺有气；忌枭印夺食。' },
+		伤: { xi: [yin, cai], ji: [guan], note: '伤官格逆用：伤官配印、伤官生财；忌伤官见官。' },
+		比: { xi: [guan, shi, cai], ji: [bi], note: '建禄格无格：另取官杀/食伤/财为用；忌比劫再成群。' },
+		劫: { xi: [guan, shi], ji: [bi], note: '阳刃格逆用：官杀制刃、食伤泄秀；忌群刃无制。' },
 	};
 	const m = MAP[geju.tenGod];
 	if(!m){ return null; }
 	const xi = Array.from(new Set(m.xi)).map((e) => EL_LABEL[e]);
-	return { school: '格局派', xi, ji: [], note: `${geju.name}·相神 ${xi.join('·')}。${m.note}` };
+	const ji = Array.from(new Set(m.ji || [])).map((e) => EL_LABEL[e]).filter((l) => xi.indexOf(l) < 0);
+	return { school: '格局派', xi, ji, note: `${geju.name}·相神 ${xi.join('·')}。${m.note}` };
+}
+
+// ── 成败救应（§9.2.2）小数据表：六冲对/三刑组/天干五合对/各格破格忌神(十神短名) ──
+const ZHI_CHONG = { 子: '午', 午: '子', 丑: '未', 未: '丑', 寅: '申', 申: '寅', 卯: '酉', 酉: '卯', 辰: '戌', 戌: '辰', 巳: '亥', 亥: '巳' };
+const ZHI_XING = { 寅: ['巳', '申'], 巳: ['寅', '申'], 申: ['寅', '巳'], 丑: ['戌', '未'], 戌: ['丑', '未'], 未: ['丑', '戌'], 子: ['卯'], 卯: ['子'], 辰: ['辰'], 午: ['午'], 酉: ['酉'], 亥: ['亥'] };
+const GAN_HE_PAIR = { 甲: '己', 己: '甲', 乙: '庚', 庚: '乙', 丙: '辛', 辛: '丙', 丁: '壬', 壬: '丁', 戊: '癸', 癸: '戊' };
+const GE_JI = {
+	官: { rels: ['伤'], why: '伤官见官' },
+	财: { rels: ['比', '劫'], why: '比劫夺财' },
+	才: { rels: ['比', '劫'], why: '比劫夺财' },
+	印: { rels: ['财', '才'], why: '财星坏印' },
+	食: { rels: ['枭'], why: '枭神夺食' },
+	伤: { rels: ['官'], why: '伤官见官' },
+	枭: { rels: ['食'], why: '枭夺食伤局' },
+};
+
+// 成败救应判定（§9.2.2）：相神得力→成格；忌神坏相/月令刑冲→破格；忌神被合去/克制→败中复成。
+// 只依「透干十神 + 四支本气 + 月支刑冲」的机械判据，量化近似必带请复核提示；纯新增字段。
+function computeChengBai(four, geju, gejuYong){
+	if(!geju || !geju.tenGod){ return null; }
+	const tou = ['year', 'month', 'time']
+		.map((k) => four[k] && four[k].stem ? four[k].stem : null)
+		.filter((s) => s && s.cell);
+	const benqiEls = ['year', 'month', 'day', 'time']
+		.map((k) => four[k] && four[k].stemInBranch && four[k].stemInBranch[0] ? four[k].stemInBranch[0].element : '')
+		.filter(Boolean);
+	const relOf = (s) => (s && s.relative ? s.relative : '');
+	const CN2EL = { 木: 'Wood', 火: 'Fire', 土: 'Earth', 金: 'Metal', 水: 'Water' };
+
+	// ① 忌神坏格：查各格忌神透干（杀格=财党无制、阳刃=刃旺无制、建禄=群比无依 另判）
+	const breaks = [];
+	const g = GE_JI[geju.tenGod];
+	if(g){
+		tou.forEach((s) => { if(g.rels.indexOf(relOf(s)) >= 0){ breaks.push({ gan: s.cell, el: s.element, why: g.why }); } });
+	}
+	if(geju.tenGod === '杀'){
+		const caiTou = tou.filter((s) => relOf(s) === '财' || relOf(s) === '才');
+		const hasShi = tou.some((s) => relOf(s) === '食' || relOf(s) === '伤');
+		if(caiTou.length && !hasShi){ caiTou.forEach((s) => breaks.push({ gan: s.cell, el: s.element, why: '财党生杀攻身（无食制）' })); }
+	}
+	if(geju.tenGod === '劫'){
+		const hasZhi = tou.some((s) => ['官', '杀', '食', '伤'].indexOf(relOf(s)) >= 0)
+			|| benqiEls.indexOf(KE_BY[four.day.stem.element]) >= 0;
+		if(!hasZhi){ breaks.push({ gan: '', el: '', why: '刃旺无制（官杀食伤俱缺）' }); }
+	}
+	if(geju.tenGod === '比'){
+		const biCnt = tou.filter((s) => relOf(s) === '比' || relOf(s) === '劫').length;
+		const hasYong = tou.some((s) => ['官', '杀', '财', '才', '食', '伤'].indexOf(relOf(s)) >= 0);
+		if(biCnt >= 2 && !hasYong){ breaks.push({ gan: '', el: '', why: '比劫成群无泄无克' }); }
+	}
+	// ② 月令刑冲动摇格基
+	const monZhi = four.month && four.month.branch ? four.month.branch.cell : '';
+	const others = ['year', 'day', 'time'].map((k) => four[k] && four[k].branch ? four[k].branch.cell : '').filter(Boolean);
+	if(monZhi){
+		if(others.indexOf(ZHI_CHONG[monZhi]) >= 0){ breaks.push({ gan: '', el: '', why: `月令${monZhi}逢冲` }); }
+		else if((ZHI_XING[monZhi] || []).some((x) => others.indexOf(x) >= 0)){ breaks.push({ gan: '', el: '', why: `月令${monZhi}逢刑` }); }
+	}
+	// ③ 相神得力：格局派相神五行 透干或四支本气藏之
+	const xiEls = ((gejuYong && gejuYong.xi) || []).map((cn) => CN2EL[cn]).filter(Boolean);
+	let xiang = null;
+	tou.forEach((s) => { if(!xiang && xiEls.indexOf(s.element) >= 0){ xiang = { how: '透干', gan: s.cell, el: EL_LABEL[s.element] }; } });
+	if(!xiang){
+		const hitEl = xiEls.find((e) => benqiEls.indexOf(e) >= 0);
+		if(hitEl){ xiang = { how: '本气藏支', gan: '', el: EL_LABEL[hitEl] }; }
+	}
+	// ④ 救应：忌神干被五合（余三干或日干合之）或被透干克制 → 败中复成
+	const allGans = ['year', 'month', 'day', 'time'].map((k) => four[k] && four[k].stem ? four[k].stem.cell : '').filter(Boolean);
+	const rescues = [];
+	breaks.forEach((b) => {
+		if(!b.gan){ return; }
+		if(allGans.some((x) => x !== b.gan && GAN_HE_PAIR[b.gan] === x)){ rescues.push(`${b.gan}被${GAN_HE_PAIR[b.gan]}合去`); return; }
+		const keSrc = tou.find((s) => s.element && b.el && KE[s.element] === b.el && s.cell !== b.gan);
+		if(keSrc){ rescues.push(`${keSrc.cell}(${EL_LABEL[keSrc.element]})克制${b.gan}`); }
+	});
+
+	let verdict, reason;
+	if(breaks.length){
+		const whys = breaks.map((b) => b.why).join('、');
+		if(rescues.length){ verdict = '败中复成'; reason = `${whys}；幸 ${rescues.join('、')}，破而有救。`; }
+		else { verdict = '破格'; reason = `${whys}，忌神坏格无救。`; }
+	}else if(xiang){
+		verdict = '成格';
+		reason = `相神${xiang.el}${xiang.how}${xiang.gan ? `(${xiang.gan})` : ''}得力，格局有成。`;
+	}else{
+		verdict = '待复核';
+		reason = '无明显破格忌神，然相神不透不藏、得力与否待参旺衰。';
+	}
+	return { verdict, reason, breaks: breaks.map((b) => b.why), rescues, xiang,
+		note: '按透干十神/月令刑冲机械判定，会合牵制之细致变化请人工复核。' };
 }
 
 export function computeGejuYongShen(four, wuxingStat){
@@ -225,11 +359,13 @@ export function computeGejuYongShen(four, wuxingStat){
 	const schools = [];
 	if(fuyi){ schools.push(fuyi); }
 	if(gejuYong){ schools.push(gejuYong); }
-	if(tiaohou){ schools.push({ school: '调候派', xi: tiaohou.yong, ji: [], note: `${tiaohou.climate}；${tiaohou.school}·${tiaohou.version}调候用神。` }); }
+	// 调候派源表只给用神干、不设忌口径（学理：调候以急缓论、不单列忌）——ji 恒空、注明缘由，不臆造。
+	if(tiaohou){ schools.push({ school: '调候派', xi: tiaohou.yong, ji: [], note: `${tiaohou.climate}；${tiaohou.school}·${tiaohou.version}调候用神。调候以寒暖燥湿论急缓，本派不单列忌神。` }); }
 	if(bingyao){ schools.push(bingyao); }
 	if(tongguan){ schools.push(tongguan); }
 	return {
 		geju,
+		chengBai: computeChengBai(four, geju, gejuYong),
 		yongshen: fuyi,
 		tiaohou,
 		bianGe: computeBianGe(four, wuxingStat),

@@ -149,3 +149,34 @@ export const SignsProp = {
         ExaltDeg: 27,
     },
 };
+
+// 宫制表 —— 逐值抽自上游 `constants/AstroConst.js:1045-1071`（v0.26.0 天星择日入册时补）。
+// tianxingSnapshot 的 [征象搜索配置] 段按 cfg.hsys 查这张表出中文/拉丁宫制名；缺它该行恒空。
+// 顺序即 value，勿重排：上游用下标当 value 语义，重排会让宫制串位。
+export const HOUSE_SYSTEM_OPTIONS = [
+    { value: 0, label: '整宫制' },
+    { value: 1, label: 'Alcabitus' },
+    { value: 2, label: 'Regiomontanus' },
+    { value: 3, label: 'Placidus' },
+    { value: 4, label: 'Koch' },
+    { value: 5, label: 'Vehlow Equal' },
+    { value: 6, label: 'Polich Page' },
+    { value: 7, label: 'Sripati' },
+    { value: 8, label: '天顶为10宫中点等宫制' },
+    { value: 9, label: 'Porphyry' },
+    { value: 10, label: 'Campanus' },
+    { value: 11, label: 'Equal' },
+    { value: 12, label: 'Equal MC' },
+    { value: 13, label: 'Meridian' },
+    { value: 14, label: 'Horizontal' },
+    { value: 15, label: 'Morinus' },
+    { value: 16, label: 'Carter Poli-Equatorial' },
+    { value: 17, label: 'Sunshine' },
+    { value: 18, label: 'Sunshine Alternate' },
+    { value: 19, label: 'Krusinski-Pisa-Goelzer' },
+    { value: 20, label: 'Pullen SD' },
+    { value: 21, label: 'Pullen SR' },
+    { value: 22, label: 'APC Houses' },
+    { value: 23, label: 'Savard-A' },
+    { value: 24, label: '福点整宫制' },
+];

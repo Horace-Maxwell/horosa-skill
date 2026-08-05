@@ -12,9 +12,9 @@ const TRIGRAM_BITS = {
 // 洛书数 → 八卦（5 寄中宫，另行处理）
 const LUOSHU_TRIGRAM = { 1: '坎', 2: '坤', 3: '震', 4: '巽', 6: '乾', 7: '兌', 8: '艮', 9: '離' };
 // 天干 → 洛书纳甲数
-const GAN_NUM = { 甲: 6, 乙: 2, 丙: 8, 丁: 7, 戊: 1, 己: 9, 庚: 3, 辛: 4, 壬: 6, 癸: 2 };
+export const GAN_NUM = { 甲: 6, 乙: 2, 丙: 8, 丁: 7, 戊: 1, 己: 9, 庚: 3, 辛: 4, 壬: 6, 癸: 2 };
 // 地支 → 河图数对 [奇, 偶]
-const ZHI_PAIR = {
+export const ZHI_PAIR = {
 	子: [1, 6], 亥: [1, 6], 寅: [3, 8], 卯: [3, 8], 巳: [7, 2], 午: [7, 2],
 	申: [9, 4], 酉: [9, 4], 辰: [5, 10], 戌: [5, 10], 丑: [5, 10], 未: [5, 10],
 };
@@ -70,8 +70,10 @@ function reduceDi(d) {
 }
 
 // 5 寄中宫【分歧 D】。mode:
-//  'manualSanYuan'(古籍§3.4 三元表·默认)——统一按「阳男阴女→艮/阴男阳女→坤(上中元);阳男阴女→离/阴男阳女→兑(下元)」;
+//  'manualSanYuan'(古籍三元表·默认)——统一按「阳男阴女→艮/阴男阳女→坤(上中元);阳男阴女→离/阴男阳女→兑(下元)」;
 //  'legacy'(旧代码)——上下元按性别、中元按阳男阴女(自相不一致)。三元界按民国年(甲子起60年一元)。
+// 【存疑·不实现】古籍标此为全流程最未确定处:头号实证例(中元·阳女)实际寄落「震」,与三元表(寄坤)冲突,
+//   且底本未给可复原的通用规则。→ 两档并存、依所据底本择;不新增第三档、不硬编特例。
 function wuJiGong(minguoYear, yangGan, isMale, mode = 'manualSanYuan') {
 	const ay = (yangGan && isMale) || (!yangGan && !isMale); // 阳男 or 阴女(=阳男阴女组)
 	if (mode === 'legacy') {
@@ -88,7 +90,7 @@ function nextPos(p) { return (p % 6) + 1; }
 
 // ── 起元堂（动爻 1-6）──
 // 阳时数本卦阳爻、阴时数阴爻；自下而上，count≤3 重数(M+M)再寄(O)，count≥4 直排(M+O)。
-function yuanTang(lines, hourZhi, isMale, gua) {
+export function yuanTang(lines, hourZhi, isMale, gua) {
 	const yang = YANG_HOURS.includes(hourZhi);
 	const hours = yang ? YANG_HOURS : YIN_HOURS;
 	const hi = hours.indexOf(hourZhi);
@@ -275,28 +277,56 @@ export function liuNian(seg, birthYear = 0, opts = {}) {
 	return out.slice(0, seg.years);
 }
 
-// 流月卦：以流年卦+动爻为本。阳月(正三五七九十一)自元堂后一爻起、逐奇月往上累变；
-// 阴月(二四六八十十二)取前一奇月所变爻之应爻、在该奇月卦上变。返回 12 月。
+// 流月卦：以流年卦+动爻为本。返回 12 月。两档口径（opts.mode）——
+//  'ying'（古籍应爻校准★默认）：阳月(正三五七九十一)在本卦(yearLines)上翻累积集——
+//         正月＝元堂后一爻之应爻{seed}，三月起自初爻累进{1..step}；阴月(二四…)在紧邻前一阳月卦上翻
+//         「该阳月最新变爻之应爻」。经古籍实证例（本卦上乾下艮·元堂上爻）逐卦机器核验十二卦序全中；
+//         🔴 古籍仅核验元堂在上爻一例(seed=4)，余元堂位以同式(ying(nextPos))外推，注此存照。
+//  'legacy'（现行·逐字保留零回归）：阳月自元堂后一爻起逐奇月往上累变（running 链式）；阴月应爻。
 const YUE_LABEL = ['正', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二'];
 const YUE_ZHI = ['寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥', '子', '丑'];
-export function liuYue(yearLines, yuanPos) {
+export function liuYue(yearLines, yuanPos, opts = {}) {
+	const mode = opts.mode === 'legacy' ? 'legacy' : 'ying';
 	const out = [];
-	let running = yearLines.slice();
-	let lastOddLines = running.slice();
-	let lastOddChanged = yuanPos;
+	if (mode === 'legacy') {
+		let running = yearLines.slice();
+		let lastOddLines = running.slice();
+		let lastOddChanged = yuanPos;
+		for (let mi = 1; mi <= 12; mi += 1) {
+			let lines;
+			let pos;
+			if (mi % 2 === 1) {
+				const step = (mi + 1) / 2;                       // 正1 三2 五3 … 十一6
+				pos = ((yuanPos - 1 + step) % 6) + 1;
+				running = flipLine(running, pos);
+				lastOddLines = running.slice();
+				lastOddChanged = pos;
+				lines = running.slice();
+			} else {
+				pos = ying(lastOddChanged);                      // 应爻
+				lines = flipLine(lastOddLines, pos);
+			}
+			out.push({ month: mi, label: YUE_LABEL[mi - 1], zhi: YUE_ZHI[mi - 1], gua: linesToGua(lines).name, lines, pos });
+		}
+		return out;
+	}
+	// 'ying' 校准
+	const seed = ying(nextPos(yuanPos));                      // 正月种子爻＝元堂后一爻之应爻
+	let lastYangLines = null;
+	let lastYangChanged = null;
 	for (let mi = 1; mi <= 12; mi += 1) {
 		let lines;
 		let pos;
-		if (mi % 2 === 1) {
-			const step = (mi + 1) / 2;                       // 正1 三2 五3 … 十一6
-			pos = ((yuanPos - 1 + step) % 6) + 1;
-			running = flipLine(running, pos);
-			lastOddLines = running.slice();
-			lastOddChanged = pos;
-			lines = running.slice();
-		} else {
-			pos = ying(lastOddChanged);                      // 应爻
-			lines = flipLine(lastOddLines, pos);
+		if (mi % 2 === 1) {                                  // 阳月：本卦(非 running)上翻累积集
+			const step = (mi + 1) / 2;
+			lines = yearLines.slice();
+			if (mi === 1) { lines = flipLine(lines, seed); pos = seed; }
+			else { for (let k = 1; k <= step; k += 1) { lines = flipLine(lines, k); } pos = step; }
+			lastYangLines = lines.slice();
+			lastYangChanged = pos;
+		} else {                                             // 阴月：前一阳月卦上翻该阳月最新变爻之应爻
+			pos = ying(lastYangChanged);
+			lines = flipLine(lastYangLines, pos);
 		}
 		out.push({ month: mi, label: YUE_LABEL[mi - 1], zhi: YUE_ZHI[mi - 1], gua: linesToGua(lines).name, lines, pos });
 	}
@@ -713,7 +743,11 @@ export function buildSnapshotText(chart, jg, dy, extra = {}) {
 	if (dy && dy.all) {
 		lines.push('');
 		lines.push('[大限·岁运]');
-		dy.all.forEach((s) => { lines.push(`${s.ageStart}-${s.ageEnd}岁 ${s.gua} ${yaoName(s.lines, s.pos)}（${s.yang ? '阳9' : '阴6'}）`); });
+		// [v2 排版批量·表化] 同构逐条行改 GFM 表(紫微宫位总览范式):段头/值表达式零变更
+		// (ageStart-ageEnd岁/gua/yaoName/阳9|阴6 逐字复用),仅排版骨架换表头+分隔行+数据行。
+		lines.push('| 岁段 | 卦 | 爻 | 爻性 |');
+		lines.push('| --- | --- | --- | --- |');
+		dy.all.forEach((s) => { lines.push(`| ${s.ageStart}-${s.ageEnd}岁 | ${s.gua} | ${yaoName(s.lines, s.pos)} | ${s.yang ? '阳9' : '阴6'} |`); });
 		// 流年卦(全生涯):此前 buildSnapshotText 从不调用 liuNian → 挂载/导出都丢了整层流年卦(用户反馈「缺一大部分流年卦」)。
 		// birthYear 由 dy.all[0].yearStart 反推(daYun 传 birthYear 时 segs 带 yearStart);缺则流年仍出 岁/卦/动爻(year/干支为空)。
 		const birthYear = (dy.all[0] && dy.all[0].yearStart) ? (dy.all[0].yearStart - dy.all[0].ageStart + 1) : 0;
@@ -722,9 +756,13 @@ export function buildSnapshotText(chart, jg, dy, extra = {}) {
 		if (ynRows.length) {
 			lines.push('');
 			lines.push('[流年·岁运]');
+			// [v2 排版批量·表化] 全生涯流年卦改 GFM 表:值表达式逐字复用(age岁/yzz/gua/yaoName),
+			// 仅排版骨架变化;诗文类段([先天卦·元堂爻辞] 等)不表化保持原样。
+			lines.push('| 岁 | 年·干支 | 卦 | 爻 |');
+			lines.push('| --- | --- | --- | --- |');
 			ynRows.forEach((r) => {
 				const yzz = r.year ? `${r.year}·${r.ganzhi}` : (r.ganzhi || '');
-				lines.push(`${r.age}岁${yzz ? ` ${yzz}` : ''} ${r.gua} ${yaoName(r.lines, r.pos)}`);
+				lines.push(`| ${r.age}岁 | ${yzz} | ${r.gua} | ${yaoName(r.lines, r.pos)} |`);
 			});
 		}
 	}

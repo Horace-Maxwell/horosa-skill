@@ -395,6 +395,69 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         do_not_assume=["question", "location", "non-default qijuMethod"],
     ),
+    "qimenzeri": _policy(
+        intent=(
+            "奇门择日「找局」：在一段时间窗内扫出满足奇门条件树的时辰，并附命中首刻的完整奇门盘"
+            "（17 段奇门 + [择日搜索配置]/[择日条件]/[命中时辰]）。"
+            "\n算权：**展示盘由 ken 后端计算**（/qimen/pan，与普通 qimen 工具同源）；"
+            "**区间搜索用本地引擎**——ken 无区间扫描端点，一个月窗口走 HTTP 是约 44,000 次往返；"
+            "上游对本地排盘与后端做过 42,731 点 0 差 parity 锚。结果里 compute_sources 逐项写明。"
+            "\n条件树形状：组 {kind:'group', joiner:'all'|'any'|'xor', negate?, children:[…]}；"
+            "叶 {type:'<键>', params:{…}}。常用条件类键（完整表见 vendored qimenConditionTypes）："
+            "pattern_ji/pattern_xiong（格局，params.names 必填）、tian_gan/di_gan（天/地盘干）、"
+            "door（八门）、star（九星）、god（八神）、palace_flag（宫位标记）、men_gong_relation（门宫关系）、"
+            "zhifu/zhishi（值符值使）、ju_info（局象：dun/juShu/sanYuan 至少给一项）。"
+        ),
+        required_context=COMMON_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
+        ask_if_missing=[
+            {"field": "startDate/endDate", "question": "要在哪段时间里找日子？（起止日期）"},
+            {"field": "conditions", "question": "择日要满足什么条件？（如某吉格出现、某门某宫等）"},
+            {"field": "location", "question": "起盘地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
+            {"field": "topic", "question": "这次择日是为什么事？（搬家/开业/婚嫁…）"},
+            {"field": "qijuMethod", "question": "起局方式是否沿用星阙默认？", "options": ["星阙默认", "指定置闰/拆补/茅山等"]},
+        ],
+        safe_defaults=[
+            {"field": "paiPanType", "value": 3, "meaning": "时家奇门"},
+            {"field": "maxSpanDays", "value": 92, "meaning": "搜索窗上限；更长请分段，否则 JS 引擎会超时"},
+        ],
+        do_not_assume=["搜索时间窗", "择日条件", "location", "non-default qijuMethod"],
+        output_contract=(
+            "intervals 为本地引擎扫出的命中时辰（含 pick/pickEnd 边界安全时刻）；pan 为 ken 计算的展示盘，"
+            "起于 intervals[0].pick。零命中时 [命中时辰] 段仍会出现并写明「时间段内无满足条件的时辰」，"
+            "不是缺段。切勿把本地搜索结果说成 ken 算出的。"
+        ),
+    ),
+    "tianxing": _policy(
+        intent=(
+            "天星择日·征象搜索：在一段时间窗内扫出满足西占征象条件树的时段"
+            "（[起盘信息]/[征象搜索配置]/[征象条件]/[命中区间]）。搜索由 Python 端 /electionscan/scan 计算；"
+            "窗口超 93 天时 skill 自动按月切分再缝合。"
+            "\n条件树形状：组 {kind:'group', joiner:'all'|'any'|'xor', negate?, children:[…]}；"
+            "叶 {type:'<键>', params:{…}}。32 个条件类键（运行时孪生：GET /electionscan/conditiontypes）："
+            "aspect(planetA,planetB,angle,orb)、in_sign(planet,signs=星座序号 0-11)、"
+            "numeric(planet,field,op,value)、midpoint(a,b,target,modulus,orb)、"
+            "point_relation(planet,point,relation)、in_house(planet,houses)、reception(planetA,planetB)、"
+            "mutual_reception、rulership、dignity_state、degree_state、decan_state、fixed_star、"
+            "besieged、antiscia、moon_phase、void_of_course、considerations、chart_shape、"
+            "almuten_is、eminence_level、light_dynamics、distribution_state、lifespan_state、"
+            "classical_pattern、aspect_pattern、dispositor_cycle、accidental_score、day_window、"
+            "mansion、sect_joy、royal_slot 等。星座/宫位一律用**序号**，不是英文名。"
+        ),
+        required_context=COMMON_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "征象条件 conditions", "用事主题"],
+        ask_if_missing=[
+            {"field": "startDate/endDate", "question": "要在哪段时间里找吉时？（起止日期）"},
+            {"field": "conditions", "question": "要满足什么天象条件？（如月亮拱木星、日在白羊等）"},
+            {"field": "location", "question": "择日地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
+            {"field": "topic", "question": "这次择日是为什么事？"},
+            {"field": "hsys", "question": "宫制是否沿用默认？", "options": ["默认", "指定宫制"]},
+        ],
+        safe_defaults=[{"field": "precision", "value": "minute", "meaning": "扫描到分钟"}],
+        do_not_assume=["搜索时间窗", "征象条件", "location"],
+        output_contract=(
+            "intervals 为命中时段（含 pick/pickEnd 边界安全时刻）。零命中时 [命中区间] 段仍会出现并写明"
+            "「时间段内无满足全部条件的时刻」，不是缺段。条件不合法会明确报错，不会退化成零命中。"
+        ),
+    ),
     "taiyi": _policy(
         intent="太乙起盘。",
         required_context=COMMON_LOCATION_FIELDS + ["question/topic"],

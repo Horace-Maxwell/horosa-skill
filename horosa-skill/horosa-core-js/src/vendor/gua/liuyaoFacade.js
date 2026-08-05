@@ -17,6 +17,7 @@ import { ganForYaos, nayinOf, shiShenOf, yueLiuShenOnYaos, zhiFuOf, shengJiangOf
 	sixteenPositionOf, guaShengOf as guaShengZhangOf, pastFutureOf, sanXianOf, baJieGuaQi, neiTaiOf,
 	zhongQiByMonth, baJieByMonth, pickZhongQi, pickBaJie } from './liuyaoGuFa.js';
 import { computeYingQi, qiRiByAsk } from './liuyaoYingQi.js';
+import { analyzeTianshiAncient } from './liuyaoTianshi.js';
 
 // 关联卦(之/互/伏神/错/综)完整装卦:与本卦同口径;六亲一律以「本卦卦宫五行」为我(京房锚定);不递归。
 function analyzeGuaFull(g, engCtx, s, benGongElem, c){
@@ -215,6 +216,13 @@ export function analyzeLiuyao(gua, movingPositions, ctx, settings){
 	// A4 间爻:世应之间(三、四爻),中介/媒人/第三方
 	const jianYao = [3, 4].map((p) => ({ pos: p, liuqin: base.yaos[p - 1] ? base.yaos[p - 1].liuqin : '', zhi: base.yaos[p - 1] ? base.yaos[p - 1].zhi : '' }));
 
+	// 占天时(晴雨)古法:tianshiSchool='ancient' 才产出,'fumu'(通行:父母主雨/子孙主晴)恒 null
+	// —— 通行档走原有用神映射,行为一字不改(零回归)。古法按家分列,不合成单一结论。
+	const tianshi = s.tianshiSchool === 'ancient' ? analyzeTianshiAncient({
+		yaos: base.yaos, liuShen: liushen, gans, guaShen: base.guaShen,
+		palaceType: pt, moves, gua, bianGua: bian, ctx: c,
+	}) : null;
+
 	return {
 		settings: s,
 		gua: { name: gua.name, index: gua.index, value: gua.value.slice() },
@@ -240,6 +248,8 @@ export function analyzeLiuyao(gua, movingPositions, ctx, settings){
 		env: env.env, gans, riYue, nayinDay, shiShen, yueLiuShenAnn, shenShaEx, duanJue, gufa, yingqi,
 		// —— 典籍补齐派生 ——
 		shiYingRel, guaBianDuan, dongTai, jianYao,
+		// —— 占天时古法(按开关;'fumu' 档为 null) ——
+		tianshi,
 	};
 }
 

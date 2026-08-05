@@ -136,6 +136,21 @@ def build_sample_payloads() -> dict[str, dict]:
         "extrareturns": {**chart_birth, "predictive": 0},
         "horary": {**chart_birth, "hsys": 0, "tradition": True, "predictive": 0, "category": "marriage"},
         "election": {**chart_birth, "hsys": 0, "tradition": True, "predictive": 0, "topicId": "marriage"},
+        # 择日搜索族：窗口 + 条件树。tianxing 的 signs 用**星座序号**（后端 int()，传 "Aries" 直接 invalid_conditions）。
+        "tianxing": {
+            **chart_birth, "hsys": 3, "pos": "福州",
+            "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-20", "endTime": "23:59",
+            "conditions": {"kind": "group", "joiner": "all", "children": [
+                {"type": "in_sign", "params": {"planet": "Sun", "signs": [0]}},
+            ]},
+        },
+        "qimenzeri": {
+            **chart_birth, "pos": "福州",
+            "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-08", "endTime": "23:59",
+            "conditions": {"kind": "group", "joiner": "all", "children": [
+                {"type": "pattern_ji", "params": {"names": ["青龙回首"], "palaces": [], "matchMode": "any"}},
+            ]},
+        },
         "geomancy": {**chart_birth, "question": "事业能否升迁", "questionType": "career"},
         "tarot": {**chart_birth, "question": "事业能否升迁", "spread": "three"},
         "xiaoliuren": {**confirmed, "nums": [5, 20, 7], "school": "dao", "askEvent": "求财"},

@@ -11,14 +11,19 @@ const COMBUST_CAZIMI = 17 / 60;   // 17′（1647 口径;16′含黄纬为中世
 const COMBUST_LIMIT = 8.5;        // 燃烧 8°30′（~8° 为中世纪档）
 const UNDER_BEAMS_LIMIT = 17;     // 日光束下 17°（15° 为较古档）
 
-function combustionState(planetLon, sunLon, orbs){
+function combustionState(planetLon, sunLon, orbs, mitigateSameSign){
 	if(sunLon === null || sunLon === undefined || planetLon === null || planetLon === undefined) return null;
 	const cz = (orbs && orbs.cazimiOrb > 0) ? orbs.cazimiOrb : COMBUST_CAZIMI;
 	const cb = (orbs && orbs.combustOrb > 0) ? orbs.combustOrb : COMBUST_LIMIT;
 	const ub = (orbs && orbs.underBeamsOrb > 0) ? orbs.underBeamsOrb : UNDER_BEAMS_LIMIT;
 	const d = angularDist(planetLon, sunLon);
-	if(d <= cz) return 'cazimi';
-	if(d < cb) return 'combust';
+	// 燃烧限同座(combustMitigateSameSign,1647 主流口径;2026-08 死开关审计接线——此前 spec
+	// default true 但从未实现):cazimi/combust 须与太阳同座,异座近日降级为日光束下
+	// (under_beams 17° 本就不限座)。门=显式 true 才限:不传 opts 的调用方(世俗/寿限/返照)
+	// 保持纯角距旧行为字节不变;卜卦/择日经 horaryJudgeOpts 携 spec 默认 true 生效。
+	const sameSign = mitigateSameSign === true ? signOfLon(planetLon) === signOfLon(sunLon) : true;
+	if(d <= cz) return sameSign ? 'cazimi' : (d < ub ? 'under_beams' : null);
+	if(d < cb) return sameSign ? 'combust' : (d < ub ? 'under_beams' : null);
 	if(d < ub) return 'under_beams';
 	return null;
 }
@@ -53,6 +58,7 @@ export function buildFacts(result, opts){
 	if(!result || !result.chart) return null;
 	const solarOrbs = opts && (opts.cazimiOrb || opts.combustOrb || opts.underBeamsOrb)
 		? { cazimiOrb: opts.cazimiOrb, combustOrb: opts.combustOrb, underBeamsOrb: opts.underBeamsOrb } : null;
+	const combustSameSignGate = !!(opts && opts.combustMitigateSameSign === true);
 	const chart = result.chart;
 	const sun = getObj(result, 'Sun');
 	const moon = getObj(result, 'Moon');
@@ -76,7 +82,7 @@ export function buildFacts(result, opts){
 			dignities: o.dignities || {},
 			dignityScore: scoreSelfDignity(o.selfDignity),
 			antiscion: o.antisciaPoint || null,
-			combustion: cid === 'Sun' ? null : combustionState(o.lon, sunLon, solarOrbs),
+			combustion: cid === 'Sun' ? null : combustionState(o.lon, sunLon, solarOrbs, combustSameSignGate),
 			orientality: cid === 'Sun' ? null : orientalityOf(o.lon, sunLon),
 			hayyiz: o.hayyiz,
 			outOfBounds: !!o.outOfBounds,

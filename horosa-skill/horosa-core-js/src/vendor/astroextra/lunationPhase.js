@@ -1,5 +1,15 @@
 import moment from 'moment';
 import * as AstroConst from '../../constants/AstroConst.js';
+// [YB] 三段补厚共享 helper(起盘信息/当前时点/方法说明;astroAiSnapshot 不回引本文件,无环)。
+// namespace import + typeof 守卫:测试环境可能部分 mock astroAiSnapshot(只留 buildAstroSnapshotContent 等),
+// 缺函数时回 [] 保底 → 输出与补厚前逐字节一致,不炸挂载。
+// headless stub：上游 [YB] 三段补厚用它产 [起盘信息]/[当前时点]/[方法说明]，但 skill 的 Python 层
+// 已经产这三段（契约 v10 的 _predictive_setup_section_text / _predictive_common_sections_text），
+// 再让 JS 产一遍会重段。上游每个调用点都写了 typeof …==='function' 守卫，缺失即回退 []，故空对象即正解。
+const astroAiSnapshot = {};
+const birthHeaderLines = (c) => (typeof astroAiSnapshot.buildPredictiveBirthHeaderLines === 'function' ? astroAiSnapshot.buildPredictiveBirthHeaderLines(c) : []);
+const currentMomentLines = (c, x) => (typeof astroAiSnapshot.buildCurrentMomentLines === 'function' ? astroAiSnapshot.buildCurrentMomentLines(c, x) : []);
+const methodNoteLines = (k) => (typeof astroAiSnapshot.buildMethodNoteLines === 'function' ? astroAiSnapshot.buildMethodNoteLines(k) : []);
 
 // 月相推运（8 相）。纯前端派生：由本命日月黄经差 + 次限推进率求推运月相。
 //  次限「日为年」：月每年约进 13.18°、日约 0.986° → 日月差每年约 12.19° → 约 29.53 年走完一轮 8 相。
@@ -91,7 +101,10 @@ export function buildLunationPhaseSnapshotText(chartObj, opts){
 	if(!chartObj){ return ''; }
 	const r = buildLunationPhases(chartObj, opts);
 	if(!r || !r.natalPhase){ return ''; }
-	const lines = ['[月相推运]'];
+	const lines = [];
+	// [YB] 头部盘主生辰([起盘信息];无数据 helper 自返 [],不产空段头)。
+	lines.push(...birthHeaderLines(chartObj));
+	lines.push('[月相推运]');
 	lines.push(`本命月相=${r.natalPhase.name}（日月差 ${r.natalElong.toFixed(1)}°）。次限推运日月差每年约 ${PROG_ELONG_RATE}°，约 ${SYNODIC_YEARS.toFixed(1)} 年走完一轮八相。`);
 	lines.push('');
 	lines.push('| 起始年龄 | 日期 | 月相 | 关键词 |');
@@ -99,6 +112,21 @@ export function buildLunationPhaseSnapshotText(chartObj, opts){
 	r.timeline.forEach((t) => {
 		lines.push(`| ${t.age.toFixed(1)} 岁${t.isStart ? '(本命)' : ''} | ${t.date || '-'} | ${t.phase.name} | ${t.phase.keyword} |`);
 	});
+	// [YB] 尾部 [当前时点]+[方法说明];定位行=当前年龄的推运月相(与组件高亮同源 phaseAtAge)。
+	const extraLines = [];
+	const birth = parseBirth(chartObj);
+	if(birth){
+		const curAge = moment().diff(birth, 'years', true);
+		const curPhase = phaseAtAge(chartObj, curAge);
+		if(curPhase){
+			extraLines.push(`当前推运月相：${curPhase.name}（${curPhase.keyword}）`);
+		}
+	}
+	const tail = [...currentMomentLines(chartObj, extraLines), ...methodNoteLines('lunationphase')];
+	if(tail.length){
+		lines.push('');
+		lines.push(...tail);
+	}
 	return lines.join('\n');
 }
 

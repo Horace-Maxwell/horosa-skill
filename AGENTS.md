@@ -15,7 +15,7 @@ Claude Code 的薄入口是根 [`CLAUDE.md`](./CLAUDE.md)（与本文 §0 路由
 
 ## 0. 30 秒定向与路由
 
-Horosa Skill 把星阙（Horosa）的 **83 个**术数/占星技法打包成 local-first 的 **MCP server + CLI**：
+Horosa Skill 把星阙（Horosa）的 **91 个**术数/占星技法打包成 local-first 的 **MCP server + CLI**：
 算法跑在本机离线 runtime（Java 聚合层 `:9999` + Python chart 服务 `:8899`（含 ken/kentang 引擎）+
 bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 envelope + 星阙式
 `export_snapshot`/`export_format`；仓库保持轻量，重 runtime 走 GitHub Releases 分发。
@@ -99,7 +99,15 @@ you, it will bite the next agent：
 `_call_remote` 不 raise、`_unwrap_result` 原样放行，转给 JS 后 formatter guard（`ken.selected || ken.raw`）
 为假 → **静默回退本地旧引擎 = 错结果无报错**。守卫：`service.py::_require_ken_pan` 在每次 ken
 `_call_remote` 后断言 `ken_response.get("source") == engine`，否则 raise `tool.ken_compute_failed`。
-**新增 ken-backed 技法必须同样调 `_require_ken_pan`。** 回归测试：
+**新增 ken-backed 技法必须同样调 `_require_ken_pan`。**
+🔴 **同族第二例（v0.26.0）：`/electionscan/scan`。** 它把失败包成
+`{"ResultCode": -1, "Result": {"err": …}}`，而 `HorosaPlainJsonClient` 只看**顶层** `err` → 不加守卫时
+`span_too_large`/`invalid_conditions` 会**静默退化成「零命中」**：一个看起来完全合理的空结果。
+守卫 = `service.py::_require_electionscan_ok`。凡「200 也回失败信封」的端点，一律照此办理。
+同类静默失败还有一种形状：**传错数据结构不报错、只是匹配不到**——`scanQimen` 吃的是**编译后**的条件树
+（`{type:'all', conditions}`），传 UI 树（`{kind:'group', joiner, children}`）安静地产出零命中。
+真机跑一遍才能发现，离线桩不会。
+回归测试：
 `tests/test_service.py::test_qimen_fails_loudly_when_ken_returns_failure_envelope`（连带要求 ken 端点的
 测试 fake 返回带正确 `source` 的 body，见 `FakeClient`）。
 
@@ -144,6 +152,37 @@ you, it will bite the next agent：
 （受 git 跟踪，新增欠账 fail、还清也 fail 提示 `--update-baseline`）。
 **`MIRRORED_UPSTREAM_AIEXPORT_VERSION` 只表示「对账基准版本」，不表示「该版段全有了」**——键级对齐
 不等于段级对齐（v0.23.0 曾据此宣称整版对齐而实欠 180 段）。两个数字必须一起读。
+
+🔴 **版本恒等测不出新技法（v0.26.0）。** 上游明文纪律是「新技法键只加键、两把版本闸恒不动」
+（`aiExport.js:306`）——`tianxing`/`qimenzeri` 都在 v50 不变时到货。唯一可能的信号是
+`verify_upstream_sync.py` 的 **check 1b 技法键集合差分**（对着 `contracts/upstream_provenance.json`）。
+两个方向基线不同：gained 并上「skill 已登记的键」（登记即已处理，检查自愈），lost 只对 recorded
+（skill 合法持有 `acg`/`astrodata`/`wangji` 等上游无对应键）。
+另两条同批教训：**上游 preset 条目可能在对象字面量之外**（后置 `AI_EXPORT_PRESET_SECTIONS.<key> = [...]`，
+`_upstream_preset.py` 必须扫成员赋值，且跑在 spread 解析之后）；**provenance 只在全绿时写**
+（红着写等于把失败洗成持久的「已核对」声明——v0.25.0 就这么发出去过）。
+
+🔴 **点哨兵覆盖不全整棵引擎树（v0.26.0）。** 7 个哨兵一个都不在 ken 引擎目录内部，
+`verify_vendor_runtime_sources` 又只查 REQUIRED_PATHS **是否存在**——于是「引擎文件在、但是旧的」
+整类漂移无人看管，`kintaiyi/jieqi.py` 的全年份域修复（域外 ValueError 炸 taiyi/pan）就这么卡了一版。
+守卫 = `verify_upstream_sync.py` 的 **check 2b 子树逐文件比对**（`Horosa-Web/vendor` /
+`astropy/astrostudy` / `astropy/websrv`），三向都报。两条纪律：**比对口径必须等于同步口径**
+（排除集逐条对齐 sync 脚本，否则对着故意没拷的文件恒红）；「上游有而 vendored 缺」只在已 vendor 的
+顶层目录内部判，上游**整个新增的顶层目录**单独报一行（那是新引擎/新能力的信号）。
+配套：审计权威清单是 `aiExport.js` 的技法表，**不是 kentang 服务注册表**——`qizhengelection`/
+`xuanshi` 是服务不是导出技法，已进排除台账（有数据 ≠ 有技法）。
+
+🔴 **vendor 树一律用 manifest 驱动，禁裸路径（v0.26.0）。** `revendor_core_js.py` 按上游父目录名
+猜落点，对本树是错的（`utils/balbillus.js` 真身在 `vendor/astroextra/`），裸驱动会**分叉出重复树**
+且 relocate 把 import 指回新造的那棵。唯一入口 = `contracts/vendor_manifest.json` +
+`--from-manifest [--only 前缀]`；「还有什么没同步」= `--check` 全树 `unchanged`。
+蓄意偏离必须**声明**（manifest 的 `stub_import`/`import_redirect`）或**机械化**（进 `transform()`）——
+写在文件里的偏离，下一次重 vendor 必被抹掉（本轮 shuffle.js 的 node-forge 替换、
+zhengchuan 的动态 JSON import 属性，都是这么被抹掉又被测试抓回来的）。
+⚠️ 树里有**两个** `AstroConst.js`：`src/constants/`（151 行共享 shim，有 `SignsProp`/`LIST_SIGNS`）与
+`src/vendor/constants/`（32 行 Uranian 子集，没有）。上游的 `'../constants/AstroConst'` 在 vendor 树里
+恰好解析到后者 → 静默 `undefined`。一律 `import_redirect` 钉死。
+⚠️ 「已 vendored」≠「是当前的」——查依赖要查新模块 import 的**具体符号**，不是查文件在不在。
 
 **MCP 服务器面法则**（`surfaces/mcp_server.py`）：全部工具带 **tool annotations**（口径：openWorldHint
 一律 False（local-first）；查询类 readOnly+idempotent=True；技法计算类 readOnly=False、destructive=False、

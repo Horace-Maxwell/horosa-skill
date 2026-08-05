@@ -83,11 +83,13 @@ export const QIJU_METHOD_OPTIONS = [
 	{ value: 'shuzi', label: '阴盘' },   // 阴盘奇门:报数各位和%9(余0作9)定局(数字起局);原「阴盘」盘式归此(取数定局),与盘式正交
 ];
 
-// 置闰天数(传本差异·设置面板可调):超神累计阈值。默认9=现行口径(超神>9日才闰,2015-12-22 即阳七);
-//   8=从宽(超神≥9日即闰)。仅影响超神接气置闰法(置闰起局)。
+// 置闰天数(传本差异·设置面板可调):超神累计阈值,至点超神距(dgap=二至日−其前最近上元符头)
+//   ≥该值即置闰。默认9=主流口径(满9天即闰)。修(2026-08-02 置闰事故复盘):旧实现三处检查点在
+//   上年大雪/芒种/本年大雪各自量距且比较符不一(>=/>/>),与 kinqimen fork 的「至点锚」在节气
+//   间距≠15天的年份差±1天,临界年整段错一节气块——现统一按至点锚判闰(见 buildYinyangdunMap)。
 export const ZHIRUN_LEAP_OPTIONS = [
-	{ value: 9, label: '置闰·超神大于9天（默认）' },
-	{ value: 8, label: '置闰·超神大于等于9天' },
+	{ value: 9, label: '置闰·超神满9天即闰（默认·主流）' },
+	{ value: 8, label: '置闰·超神满8天即闰（从宽）' },
 ];
 
 // WP-A 盘式(排盘法):转盘=排宫(八神,八卦轮转,默认) / 飞盘=飞宫(九神,洛书飞泊含中宫) / 飞转=混合(星转·门飞·九神)。
@@ -1148,10 +1150,15 @@ function resolvePaiPanMeta(opts, ganzhi, jieqi, dateParts, context){
 	const seeds = context && context.jieqiYearSeeds ? context.jieqiYearSeeds : {};
 	const m = normalizeQijuMethod(opts && opts.qijuMethod);
 	let qmju;
+	// 定局节气:拆补/茅山/阴盘=曆法节气;置闰/无闰=超神接气链上的节气(超神时可≠曆法,口径同
+	// Python 侧 config.dingju_jieqi)。展示/快照用它,免「局对节气错」自相矛盾(2026-08-02 缺陷②修)。
+	let dingjuJieqi = jieqi;
 	if(m === 'zhirun'){
 		qmju = qimenJuNameZhirun(dateParts, ganzhi.day, seeds, jieqi, opts && opts.after23NewDay, false, opts && opts.zhirunLeapDays);
+		dingjuJieqi = qimenDingjuJieqi(dateParts, seeds, opts && opts.after23NewDay, false, opts && opts.zhirunLeapDays) || jieqi;
 	}else if(m === 'wurun'){
 		qmju = qimenJuNameWurun(dateParts, ganzhi.day, seeds, jieqi, opts && opts.after23NewDay, opts && opts.zhirunLeapDays);
+		dingjuJieqi = qimenDingjuJieqi(dateParts, seeds, opts && opts.after23NewDay, true, opts && opts.zhirunLeapDays) || jieqi;
 	}else if(m === 'maoshan'){
 		qmju = qimenJuNameMaoshan(dateParts, jieqi, seeds, ganzhi.day);
 	}else{
@@ -1163,6 +1170,7 @@ function resolvePaiPanMeta(opts, ganzhi, jieqi, dateParts, context){
 		juShu: CNUMBER.indexOf(parsed.kook) + 1,
 		yinYangDun: parsed.yy === '阴' ? '阴遁' : '阳遁',
 		qmju,
+		dingjuJieqi,
 	};
 }
 
@@ -1720,6 +1728,22 @@ function buildYinyangdunMap(year, yearSeeds, noLeap, leapThresholdDays){
 	}
 	const leapDays = normalizeNum(leapThresholdDays, 9);   // 置闰超神天数阈值(可配,默认9=现行口径,字节不漂)
 	// WP-C 无闰法:同超神接气但永不置闰。noLeap/非默认 leapDays 进缓存键 → 默认(置闰·9日)路径键不变、字节不漂。
+	// 至点种子直捡(2026-08-02 二次修):lunar-javascript 年表键「冬至」属上年12月(本年12月冬至
+	// 在表里键作 'DONG_ZHI',种子未采)——不赌表语义,按「目标公历年+月份窗」从三年种子里直捡:
+	// 冬至=目标年12月、夏至=目标年6月。捡不到(域外等)时各判定点回退旧法。
+	const pickSolstice = (term, targetYear, monthWant)=>{
+		for(let k=-1; k<=1; k++){
+			const ys = yearSeeds ? yearSeeds[targetYear + k] : null;
+			const s = ys && ys[term];
+			if(s && s.dateKey && `${s.dateKey}`.slice(0, 4) === `${targetYear}` && parseInt(`${s.dateKey}`.slice(4, 6), 10) === monthWant){
+				return s;
+			}
+		}
+		return null;
+	};
+	const dzPrevSeed = pickSolstice('冬至', year - 1, 12);   // 上年12月冬至(管链首·上年大雪段)
+	const xzSeed = pickSolstice('夏至', year, 6);            // 本年6月夏至(管芒种段)
+	const dzCurrSeed = pickSolstice('冬至', year, 12);       // 本年12月冬至(管本年大雪段)
 	const seedSig = [
 		year,
 		prev.大雪.dateKey || '',
@@ -1728,6 +1752,13 @@ function buildYinyangdunMap(year, yearSeeds, noLeap, leapThresholdDays){
 		curr.芒种.dayGanzhi || '',
 		curr.大雪.dateKey || '',
 		curr.大雪.dayGanzhi || '',
+		/* 至点锚种子(2026-08-02 二次修)进缓存键:置闰判定改锚二至后,键必须随至点种子变 */
+		(dzPrevSeed && dzPrevSeed.dateKey) || '',
+		(dzPrevSeed && dzPrevSeed.dayGanzhi) || '',
+		(xzSeed && xzSeed.dateKey) || '',
+		(xzSeed && xzSeed.dayGanzhi) || '',
+		(dzCurrSeed && dzCurrSeed.dateKey) || '',
+		(dzCurrSeed && dzCurrSeed.dayGanzhi) || '',
 	].join('|') + (noLeap ? '|noleap' : '') + (leapDays !== 9 ? `|leap${leapDays}` : '');
 	if(YINYANGDUN_CACHE.has(seedSig)){
 		return YINYANGDUN_CACHE.get(seedSig);
@@ -1747,8 +1778,26 @@ function buildYinyangdunMap(year, yearSeeds, noLeap, leapThresholdDays){
 		rizhuIndex = (rizhuIndex + 1) % 60;
 	}
 
+	// 至锚置闰(2026-08-02 二次修,对齐 kinqimen fork jieqi.py zhirun_jieqi 的「至点锚」框架):
+	// dgap = 二至日 − 其前最近上元符头(严格在前;即至日日柱序%15,0 作 15);dgap≥阈值 → 该至前
+	// 插入闰(重复大雪/芒种三元)。链上表现为:至的上元块起 = F*(至) + (闰?15:0),默认步进若未到位
+	// 则补一块重复节气。旧法在上年大雪/芒种/本年大雪三点各自量距(且比较符 >=/>/> 不一),与至点
+	// 锚在节气间距≠15天的年份差±1天:1996芒种类临界年漏闰(阴七/应阴八·客诉案),1950/1956 类
+	// 临界年与 Python 真值整段错一节气块(全域平价扫描 720+ 差异)。三处判定必须永远同锚同阈。
+	const solsticeAnchorStart = (seed)=>{
+		if(!seed || !seed.dateKey || !seed.dayGanzhi){ return null; }
+		const day = keyToUtcDay(seed.dateKey);
+		if(!Number.isFinite(day)){ return null; }
+		const off = getGanzhiIndex(normalizeGanZhi(seed.dayGanzhi)) % 15;
+		const dgap = off === 0 ? 15 : off;
+		return day - dgap + ((!noLeap && dgap >= leapDays) ? 15 : 0);
+	};
+
 	let jieqiCur = '冬至';
-	if(!noLeap && daxueIndex - futouIndex >= leapDays){
+	const dzPrevStart = solsticeAnchorStart(dzPrevSeed);
+	if(dzPrevStart !== null){
+		if(!noLeap && tday < dzPrevStart){ jieqiCur = '大雪'; }
+	}else if(!noLeap && daxueIndex - futouIndex >= leapDays){   // 冬至种子缺失时的旧法兜底
 		jieqiCur = '大雪';
 	}
 
@@ -1774,10 +1823,15 @@ function buildYinyangdunMap(year, yearSeeds, noLeap, leapThresholdDays){
 		}
 	}
 
-	const mangzhongStartDay = keyToUtcDay(curr.芒种.dateKey);
 	jieqiCur = '夏至';
-	if(!noLeap && Number.isFinite(mangzhongStartDay) && mangzhongDay !== null && mangzhongStartDay > mangzhongDay + leapDays){
-		jieqiCur = '芒种';
+	const xzStart = solsticeAnchorStart(xzSeed);   // 至点锚:夏至上元块应起于此(2026-08-02 二次修)
+	if(xzStart !== null){
+		if(!noLeap && tday < xzStart){ jieqiCur = '芒种'; }
+	}else{
+		const mangzhongStartDay = keyToUtcDay(curr.芒种.dateKey);   // 夏至种子缺失时的旧法兜底
+		if(!noLeap && Number.isFinite(mangzhongStartDay) && mangzhongDay !== null && mangzhongStartDay >= mangzhongDay + leapDays){
+			jieqiCur = '芒种';
+		}
 	}
 
 	jieqiDays = 0;
@@ -1802,10 +1856,15 @@ function buildYinyangdunMap(year, yearSeeds, noLeap, leapThresholdDays){
 		}
 	}
 
-	const daxueStartDay = keyToUtcDay(curr.大雪.dateKey);
 	jieqiCur = '冬至';
-	if(!noLeap && Number.isFinite(daxueStartDay) && daxueDay !== null && daxueStartDay > daxueDay + leapDays){
-		jieqiCur = '大雪';
+	const dzStart = solsticeAnchorStart(dzCurrSeed);   // 至点锚:本年冬至上元块应起于此(2026-08-02 二次修)
+	if(dzStart !== null){
+		if(!noLeap && tday < dzStart){ jieqiCur = '大雪'; }
+	}else{
+		const daxueStartDay = keyToUtcDay(curr.大雪.dateKey);   // 冬至种子缺失时的旧法兜底
+		if(!noLeap && Number.isFinite(daxueStartDay) && daxueDay !== null && daxueStartDay >= daxueDay + leapDays){
+			jieqiCur = '大雪';
+		}
 	}
 
 	jieqiDays = 0;
@@ -1836,10 +1895,13 @@ function buildYinyangdunMap(year, yearSeeds, noLeap, leapThresholdDays){
 	return ret;
 }
 
-function qimenJuNameZhirun(dateParts, dayGanzhi, yearSeeds, fallbackJieqi, after23NewDay, noLeap, leapThresholdDays){
+// 置闰/无闰查表单源:算 dkey(含 after23NewDay=1 的 23 时进位)→ 查 buildYinyangdunMap 逐日表,
+// 返回「节气+日柱」标签(如「小暑己酉」)或 null。qimenJuNameZhirun 与 qimenDingjuJieqi 共用,
+// 保证"定局所用节气"与"对外报的定局节气"永远同一次查表口径(2026-08-02 缺陷②修)。
+function lookupYinyangdunLabel(dateParts, yearSeeds, after23NewDay, noLeap, leapThresholdDays){
 	const yyd = buildYinyangdunMap(dateParts.year, yearSeeds, noLeap, leapThresholdDays);
 	if(!yyd){
-		return qimenJuNameChaibu(fallbackJieqi || '', dayGanzhi);
+		return null;
 	}
 	let dkey = `${dateParts.year}${`${dateParts.month}`.padStart(2, '0')}${`${dateParts.day}`.padStart(2, '0')}`;
 	// 用户语义(拍板,字面直觉版): after23NewDay=1「23点算第二天」时 hour==23 进位到次日;after23NewDay=0 守今。
@@ -1848,6 +1910,21 @@ function qimenJuNameZhirun(dateParts, dayGanzhi, yearSeeds, fallbackJieqi, after
 	}
 	const jqrz = yyd[dkey];
 	if(!jqrz || jqrz.length < 4){
+		return null;
+	}
+	return jqrz;
+}
+
+// 定局节气(置闰/无闰):超神时定局节气≠曆法节气,展示/快照必须用它,否则出现「阳遁七局中元+
+// 大雪中元」式矛盾串(缺陷②)。查不到返回 ''(调用方回退曆法节气,与 qimenJuNameZhirun 退拆补对齐)。
+function qimenDingjuJieqi(dateParts, yearSeeds, after23NewDay, noLeap, leapThresholdDays){
+	const jqrz = lookupYinyangdunLabel(dateParts, yearSeeds, after23NewDay, noLeap, leapThresholdDays);
+	return jqrz ? jqrz.substring(0, 2) : '';
+}
+
+function qimenJuNameZhirun(dateParts, dayGanzhi, yearSeeds, fallbackJieqi, after23NewDay, noLeap, leapThresholdDays){
+	const jqrz = lookupYinyangdunLabel(dateParts, yearSeeds, after23NewDay, noLeap, leapThresholdDays);
+	if(!jqrz){
 		return qimenJuNameChaibu(fallbackJieqi || '', dayGanzhi);
 	}
 	const jieqi = jqrz.substring(0, 2);
@@ -2141,7 +2218,11 @@ export function calcDunJia(fields, nongli, options, context){
 		jiedelta: nongli ? (nongli.jiedelta || '') : '',
 		ganzhi,
 		fuTou: resolveFuTouByBacktrack(ganzhi.day),
-		jieqiText: `${jieqi || '未知节气'}${paiPanMeta.sanYuan || qmjuMeta.yuan}`,
+		// 节气 chip/快照用「定局节气」——置闰超神时≠曆法节气,旧拼法(曆法节气+定局元)会出
+		// 「阳遁七局中元+大雪中元」矛盾串(2026-08-02 缺陷②修);曆法节气另存 lifaJieqi 供参照。
+		jieqiText: `${paiPanMeta.dingjuJieqi || jieqi || '未知节气'}${paiPanMeta.sanYuan || qmjuMeta.yuan}`,
+		dingjuJieqi: paiPanMeta.dingjuJieqi || jieqi || '',
+		lifaJieqi: jieqi || '',
 		yinYangDun: paiPanMeta.yinYangDun || (qmjuMeta.yy === '阴' ? '阴遁' : '阳遁'),
 		sanYuan: paiPanMeta.sanYuan || qmjuMeta.yuan,
 		juShu: juNumberToCn(paiPanMeta.juShu || (CNUMBER.indexOf(qmjuMeta.kook) + 1)),
@@ -2261,6 +2342,9 @@ export function buildDunJiaSnapshotText(pan){
 	lines.push(`换日：${pan.options.daySwitchLabel || '23点算第二天'}`);
 	lines.push(`时间算法：${timeAlgLabel}`);
 	lines.push(`节气：${pan.jieqiText}`);
+	if(pan.lifaJieqi && pan.dingjuJieqi && pan.lifaJieqi !== pan.dingjuJieqi){
+		lines.push(`历法节气：${pan.lifaJieqi}（置闰超神，定局取${pan.dingjuJieqi}）`);
+	}
 	lines.push(`局数：${pan.juText}`);
 	lines.push(`定局法：${pan.options.dingFaLabel || pan.options.qijuMethodLabel}`);
 	lines.push(`盘式：${pan.options.schoolLabel || '转盘（排宫）'}`);

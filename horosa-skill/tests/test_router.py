@@ -74,3 +74,19 @@ def test_router_zhengchuan_excludes_component_shensu_and_canping() -> None:
     assert "zhengchuan" in got and "tieban" not in got and "canping" not in got
     got2 = select_tools(DispatchInput.model_validate({"query": "铁板神数条文"}))
     assert "tieban" in got2 and "zhengchuan" not in got2
+
+
+# 择日三工具互斥（上游 v3.7.x 新增两个「搜索型」择日）。三个词面互相包含：
+#   「奇门择日」含「奇门」也含「择日」，「天星择日」含「择日」——不排除就一句话点亮三个工具。
+def test_election_family_is_mutually_exclusive() -> None:
+    cases = {
+        "奇门择日搬家": ["qimenzeri"],
+        "奇门找局挑时辰": ["qimenzeri"],
+        "天星择日选婚期": ["tianxing"],
+        "征象搜索找吉时": ["tianxing"],
+        "择日结婚": ["election"],          # 单点评估仍归 election
+        "奇门遁甲问出行": ["qimen"],        # 不带「择日」的奇门仍归 qimen
+        "飞宫小奇门问出行": ["feigong"],    # 既有排除不能被新分支破坏
+    }
+    for query, expected in cases.items():
+        assert select_tools(DispatchInput(query=query)) == expected, query

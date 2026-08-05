@@ -1,6 +1,16 @@
 import moment from 'moment';
 import * as AstroConst from './progConst.js';
 import * as AstroText from './progConst.js';
+// [YB] 三段补厚共享 helper(起盘信息/当前时点/方法说明;astroAiSnapshot 不回引本文件,无环)。
+// namespace import + typeof 守卫:测试环境可能部分 mock astroAiSnapshot(只留 buildAstroSnapshotContent 等),
+// 缺函数时回 [] 保底 → 输出与补厚前逐字节一致,不炸挂载。
+// headless stub：上游 [YB] 三段补厚用它产 [起盘信息]/[当前时点]/[方法说明]，但 skill 的 Python 层
+// 已经产这三段（契约 v10 的 _predictive_setup_section_text / _predictive_common_sections_text），
+// 再让 JS 产一遍会重段。上游每个调用点都写了 typeof …==='function' 守卫，缺失即回退 []，故空对象即正解。
+const astroAiSnapshot = {};
+const birthHeaderLines = (c) => (typeof astroAiSnapshot.buildPredictiveBirthHeaderLines === 'function' ? astroAiSnapshot.buildPredictiveBirthHeaderLines(c) : []);
+const currentMomentLines = (c, x) => (typeof astroAiSnapshot.buildCurrentMomentLines === 'function' ? astroAiSnapshot.buildCurrentMomentLines(c, x) : []);
+const methodNoteLines = (k) => (typeof astroAiSnapshot.buildMethodNoteLines === 'function' ? astroAiSnapshot.buildMethodNoteLines(k) : []);
 
 // Balbillus 法（129 年系统 · 旺距削减变体）。还原自经典占星 Balbillus / 129-year Time-Lord 体系：
 //  ① 七星各有「Balbillus 小年」(Σ=129)；
@@ -227,6 +237,8 @@ export function buildBalbillusSnapshotText(chartObj, opts){
 	if(!roots.length){ return ''; }
 	const o = ctx.opts;
 	const lines = [];
+	// [YB] 头部盘主生辰([起盘信息];无数据 helper 自返 [],不产空段头)。
+	lines.push(...birthHeaderLines(chartObj));
 	lines.push('[Balbillus]');
 	lines.push(`Balbillus 法（129 年系统 · 旺距削减）：主限长度 = 小年 × (1 − 离擢升度角距/360)，七星按本命黄经序从 ${planetTxt(o.startPlanet)} 起铺开，再按 129 权重递归切子限。年制=${BALBILLUS_YEAR_TYPES[o.yearType].label}、距离口径=${BALBILLUS_MODES[o.mode]}。`);
 	lines.push('');
@@ -243,5 +255,23 @@ export function buildBalbillusSnapshotText(chartObj, opts){
 			lines.push(`| ${mainLabel} | ${planetTxt(sub.planet)} | ${sub.startDate || '-'} | ${sub.durYears.toFixed(2)} |`);
 		});
 	});
+	// [YB] 尾部 [当前时点]+[方法说明];定位行用本引擎自己的天数轴(startDays/durDays=自出生起日历天)找今日落点。
+	const extraLines = [];
+	if(ctx.birthMs !== null && ctx.birthMs !== undefined){
+		const ageDays = (Date.now() - ctx.birthMs) / 86400000;
+		const curMain = roots.find((n) => ageDays >= n.startDays && ageDays < n.startDays + n.durDays);
+		if(curMain){
+			extraLines.push(`当前主限：${planetTxt(curMain.planet)}（起 ${curMain.startDate || '-'}，时长 ${curMain.durYears.toFixed(2)} 年）`);
+			const curSub = buildBalbillusChildren(ctx, curMain).find((n) => ageDays >= n.startDays && ageDays < n.startDays + n.durDays);
+			if(curSub){
+				extraLines.push(`当前子限：${planetTxt(curSub.planet)}（起 ${curSub.startDate || '-'}）`);
+			}
+		}
+	}
+	const tail = [...currentMomentLines(chartObj, extraLines), ...methodNoteLines('balbillus')];
+	if(tail.length){
+		lines.push('');
+		lines.push(...tail);
+	}
 	return lines.join('\n');
 }

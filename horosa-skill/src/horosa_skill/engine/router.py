@@ -38,8 +38,17 @@ def select_tools(request: DispatchInput) -> list[str]:
     # 皇极轨策：用「轨策」全词，禁裸「皇极」（皇极经世=wangji 神数，键名分叉不可混）。
     if _contains_any(text, ["皇极轨策", "轨策", "guice"]):
         add("guice")
+    # 择日搜索族（上游 v3.7.x）：在时间窗内**找**时刻，与「评一个候选时刻」的 election 是两回事。
+    if _contains_any(text, ["奇门择日", "qimenzeri", "奇门找局", "找局"]):
+        add("qimenzeri")
+    if _contains_any(text, ["天星择日", "征象搜索", "tianxing"]):
+        add("tianxing")
     # 飞宫小奇门 含「奇门」二字 → 奇门遁甲分支须排除，否则「飞宫小奇门问出行」误路由 qimen。
-    if _contains_any(text, ["奇门", "qimen"]) and not _contains_any(text, ["飞宫", "小奇门", "feigong"]):
+    # 「奇门择日」同理：它有自己的工具，落到 qimen 会给出一张单点盘而不是一段搜索结果。
+    if (
+        _contains_any(text, ["奇门", "qimen"])
+        and not _contains_any(text, ["飞宫", "小奇门", "feigong", "奇门择日", "qimenzeri", "奇门找局"])
+    ):
         add("qimen")
     if _contains_any(text, ["太乙", "taiyi", "太一"]):
         add("taiyi")
@@ -125,7 +134,10 @@ def select_tools(request: DispatchInput) -> list[str]:
         text, ["小成图", "小六壬", "飞宫", "轨策", "皇极轨策", "xiaochengtu", "xiaoliuren", "feigong", "guice"]
     ):
         add("horary")
-    if _contains_any(text, ["择日", "择吉", "election", "electional", "选时", "用事时刻"]):
+    # 「奇门择日」/「天星择日」都含「择日」二字 → 必须排除，否则一句话点亮三个工具。
+    if _contains_any(text, ["择日", "择吉", "election", "electional", "选时", "用事时刻"]) and not _contains_any(
+        text, ["奇门择日", "天星择日", "qimenzeri", "tianxing", "奇门找局", "征象搜索"]
+    ):
         add("election")
     if _contains_any(text, ["皇极经世", "心易发微", "wangji", "邵雍数"]):
         add("wangji")
@@ -195,6 +207,8 @@ _CANDIDATE_POOL: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("tarot", ("塔罗", "tarot", "牌")),
     ("horary", ("卜卦占星", "horary", "问事")),
     ("election", ("择日", "择吉", "election")),
+    ("tianxing", ("天星择日", "征象搜索", "tianxing")),
+    ("qimenzeri", ("奇门择日", "奇门找局", "qimenzeri")),
     ("calendar_month", ("黄历", "万年历", "农历", "老黄历")),
     ("astrodata", ("名人", "celebrity", "明星")),
     ("acg", ("地图", "acg", "迁移", "行星线")),

@@ -1,6 +1,6 @@
 {
   "name": "horosa-core-js",
-  "version": "0.25.1",
+  "version": "0.26.0",
   "private": true,
   "type": "module",
   "description": "Headless Horosa engine: local 统摄法 (tongshefa) calculation plus ken-response formatting for qimen/taiyi/jinkou into 星阙 aiExport.js sections.",
@@ -9,7 +9,7 @@
     "horosa-core-js": "./bin/cli.mjs"
   },
   "scripts": {
-    "test": "node test/selfcheck.mjs"
+    "test": "node test/loadcheck.mjs && node test/selfcheck.mjs"
   },
   "engines": {
     "//": "canping/heluo's vendored JSON uses `import ... with { type: 'json' }` (import attributes), which needs Node >= 20.10. tools/index.js imports them at the top, so an older Node would fail to load ALL JS tools, not just 数算. The bundled offline runtime ships Node 22; this floor guards dev/PATH-node setups.",

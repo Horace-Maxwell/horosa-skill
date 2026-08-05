@@ -103,7 +103,9 @@ export function normalizeLiuyaoSettings(raw){
 // 选项键(任一变 → 重算中右栏 + AI 快照)
 export function getLiuyaoOptionsKey(settings){
 	const s = normalizeLiuyaoSettings(settings);
-	return [s.school, s.askType, s.yuepoMode, s.tuChangsheng, s.bianyaoScope, s.guashen, s.fushen, s.biangua,
+	// 🔴 键清单须含全部会改变判读的设置:曾漏 yongOverride → 压测「每设置改变必触发重算」
+	// 的断言对它空转(运行时缓存键走 JSON.stringify(settings) 无实害,oracle 面必须补齐)。
+	return [s.school, s.askType, s.yongOverride, s.yuepoMode, s.tuChangsheng, s.bianyaoScope, s.guashen, s.fushen, s.biangua,
 		s.shensha.on, s.shensha.base, (s.shensha.set || []).join('|'), s.sixGods, s.yearBoundary, s.coinFace, s.writeDir,
 		s.shenshaEx.on, (s.shenshaEx.set || ['ALL']).join('|'), s.shishen, s.yueLiushen, s.jinTuiTu,
 		s.changshengYinYang, s.changshengUse, s.tianshiSchool, s.yuqi, s.yingqi, s.doctrine, s.gufa, s.benming].join(',');

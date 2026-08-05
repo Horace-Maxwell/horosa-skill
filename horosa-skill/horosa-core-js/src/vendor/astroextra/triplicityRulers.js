@@ -2,6 +2,16 @@ import moment from 'moment';
 import * as AstroConst from '../../constants/AstroConst.js';
 import * as AstroText from '../../constants/AstroText.js';
 import { TRIPLICITY } from '../divination/data/hellenisticData.js';
+// [YB] 三段补厚共享 helper(起盘信息/当前时点/方法说明;astroAiSnapshot 不回引本文件,无环)。
+// namespace import + typeof 守卫:测试环境可能部分 mock astroAiSnapshot(只留 buildAstroSnapshotContent 等),
+// 缺函数时回 [] 保底 → 输出与补厚前逐字节一致,不炸挂载。
+// headless stub：上游 [YB] 三段补厚用它产 [起盘信息]/[当前时点]/[方法说明]，但 skill 的 Python 层
+// 已经产这三段（契约 v10 的 _predictive_setup_section_text / _predictive_common_sections_text），
+// 再让 JS 产一遍会重段。上游每个调用点都写了 typeof …==='function' 守卫，缺失即回退 []，故空对象即正解。
+const astroAiSnapshot = {};
+const birthHeaderLines = (c) => (typeof astroAiSnapshot.buildPredictiveBirthHeaderLines === 'function' ? astroAiSnapshot.buildPredictiveBirthHeaderLines(c) : []);
+const currentMomentLines = (c, x) => (typeof astroAiSnapshot.buildCurrentMomentLines === 'function' ? astroAiSnapshot.buildCurrentMomentLines(c, x) : []);
+const methodNoteLines = (k) => (typeof astroAiSnapshot.buildMethodNoteLines === 'function' ? astroAiSnapshot.buildMethodNoteLines(k) : []);
 
 // 三分主星推运（Triplicity-Ruler Periods）。纯前端：仅重新切分本命盘。
 //  ① 区间光体：昼生看太阳所在座、夜生看月亮所在座。
@@ -257,7 +267,10 @@ export function buildTriplicityRulersSnapshotText(chartObj, opts){
 	if(!chartObj){ return ''; }
 	const r = buildTriplicityPeriods(chartObj, opts);
 	if(!r || !r.periods || !r.periods.length){ return ''; }
-	const lines = ['[三分主星推运]'];
+	const lines = [];
+	// [YB] 头部盘主生辰([起盘信息];无数据 helper 自返 [],不产空段头)。
+	lines.push(...birthHeaderLines(chartObj));
+	lines.push('[三分主星推运]');
 	lines.push(`${r.isDiurnal ? '昼' : '夜'}生盘，区间光体=${r.sectLightCn}（${r.signCn}），三分体系＝${TRIPLICITY_SYSTEMS[r.system] || TRIPLICITY_SYSTEMS[TRIPLICITY_SYSTEM_DEFAULT]}，三分主星依其落宫与状态主导人生各阶段（${TRIPLICITY_DIVISIONS[r.division]}）。`);
 	lines.push('');
 	lines.push('| 阶段 | 主星 | 年龄段 | 日期段 | 落宫 | 状态 |');
@@ -270,6 +283,31 @@ export function buildTriplicityRulersSnapshotText(chartObj, opts){
 	});
 	lines.push('');
 	lines.push('注：行星落角宫主该阶段鼎盛、续宫居中、果宫衰减；再结合入庙旺/受剋与定位星综合论断。');
+	// bug 修:UI 的 12 宫逐宫三分主星象征块(AstroTriplicityRulers 用 TRIPLICITY_HOUSE_SIGS 渲染)此前整块缺;
+	// 值/拼接口径同 UI(一主必出,二主/三主为「—」时省略),并入本段尾 ◆ 子块。
+	lines.push('');
+	lines.push('◆ 十二宫三分主星象征');
+	Object.keys(TRIPLICITY_HOUSE_SIGS).forEach((h) => {
+		const s = TRIPLICITY_HOUSE_SIGS[h];
+		const second = (s.second && s.second !== '—') ? `；二主：${s.second}` : '';
+		const third = (s.third && s.third !== '—') ? `；三主：${s.third}` : '';
+		lines.push(`${h}宫：一主：${s.first}${second}${third}`);
+	});
+	// [YB] 尾部 [当前时点]+[方法说明];定位行=当前年龄所处阶段(halves 划分下协作主星贯穿,可多段并列)。
+	const extraLines = [];
+	const birth = parseBirth(chartObj);
+	if(birth){
+		const curAge = moment().diff(birth, 'years', true);
+		const curPeriods = r.periods.filter((p) => curAge >= p.fromAge && curAge < p.toAge);
+		if(curPeriods.length){
+			extraLines.push(`当前所处阶段：${curPeriods.map((p) => `${p.role}·${p.rulerCn}（${p.fromAge.toFixed(0)}–${p.toAge.toFixed(0)}岁）`).join('；')}`);
+		}
+	}
+	const tail = [...currentMomentLines(chartObj, extraLines), ...methodNoteLines('triplicityrulers')];
+	if(tail.length){
+		lines.push('');
+		lines.push(...tail);
+	}
 	return lines.join('\n');
 }
 

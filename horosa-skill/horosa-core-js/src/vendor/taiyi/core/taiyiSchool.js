@@ -3,7 +3,7 @@
 // 公式移植自文档「古法复原」引擎(jishen_zhi/shiji_index/wenchang_index/junji/chenji/dayou/xiaoyou)。
 // 存疑项(C-3)标【古法几何】来源;始击坐标系(九宫/十六神)二式未核实,做【实验开关】+「存疑·待源」徽标,默认仍从盘。
 import { suanFrom } from './taiyiDuanfa.js';
-import { parseDateParts } from '../../../utils/dateStrSafe.js';
+import { parseDateParts } from '../../bazi/dateStrSafe.js';
 
 // 遁向单一判据:值在 kook.text(形如「陰遁六十局」)且用**繁体**陰/陽;
 // kook.year 的值域是 理天/理地/理人,拿它判「阴」恒不命中 —— 阴遁盘会被当成阳遁,

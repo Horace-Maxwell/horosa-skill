@@ -4,6 +4,12 @@ from copy import deepcopy
 from typing import Any
 
 AI_EXPORT_SETTINGS_KEY = "horosa.ai.export.settings.v1"
+# v12 (v0.26.0): 上游 v3.7.0/v3.7.1 两个新技法键 tianxing/qimenzeri 入册。
+#   ⚠️ 上游 aiExport 仍是 v50 —— 它那句「新技法键只加键、两把版本闸恒不动」(aiExport.js:306) 是针对
+#   localStorage **迁移闸**的纪律（新键无存档，迁移对它本就是 no-op）。本常量语义不同：它是**内容版本**，
+#   无持久化 blob，进每个信封的 settings_used.version / provenance.bundle_version，是下游客户端判断
+#   「段目录变了、我的缓存过期了」的依据。24 个新段正是该事件，故按仓内先例（v8 三技法入册、v11 五技法
+#   入册）照常 +1。MIRRORED_UPSTREAM_AIEXPORT_VERSION 保持 50（上游数字确实没动）——别把两者「修」成一致。
 # v10: 星运族 22 键补 当前时点/方法说明 公共段；六壬补 七政（日月五星临支合参）段。
 # v9: tarot 段结构对齐引擎直出（牌阵综览/逐牌详解/综合断语/定局/生命牌），relative 补关系量化
 # 三段，qimen 补全局速览，horary 补专题深化·X，cetian 补今制 4 宫识别 → preset 内容变更须升版。
@@ -11,8 +17,8 @@ AI_EXPORT_SETTINGS_KEY = "horosa.ai.export.settings.v1"
 #   geomancy 升 v3.5.1 地占大改版段表、primarydirect 段名对齐 v48、sixyao [断卦结构] 富化。
 # v8: 新技法 yizhangjing/acg/astrodata 入册，heluo/canping 补全生涯流年与断验段，fengshui 扩十三派。
 # v7: sanshiunited 追加三独立技法富化段、mundane 追加子盘群段。
-AI_EXPORT_SETTINGS_VERSION = 11
-AI_EXPORT_SECTION_MIGRATION_VERSION = 11
+AI_EXPORT_SETTINGS_VERSION = 12
+AI_EXPORT_SECTION_MIGRATION_VERSION = 12
 # 镜像基线（机读）：vendored aiExport.js 的版本，也就是本注册表**对账所依据**的上游版本。
 #
 # ⚠️ 语义澄清（v0.23.0 的教训）：这个数字表示「对到了哪一版」，**不**表示「该版的段全都有了」。
@@ -33,6 +39,8 @@ AI_EXPORT_SECTION_MIGRATION_KEYS = [
     "lunarreturn", "givenyear", "decennials", "agepoint", "distributions", "jaynesprog",
     "vedicprog", "planetaryarc", "planetaryages", "balbillus", "yearsystem129", "persiandirected",
     "triplicityrulers", "keypoints", "lunationphase", "extrareturns",
+    # v12 上游 v3.7.x 新技法键
+    "tianxing", "qimenzeri",
 ]
 MODULE_SNAPSHOT_PREFIX = "horosa.ai.snapshot.module.v1."
 AI_EXPORT_PLANET_INFO_DEFAULT = {"showHouse": 1, "showRuler": 1}
@@ -131,6 +139,8 @@ AI_EXPORT_TECHNIQUES = [
     {"key": "extrareturns", "label": "星运-多重回归"},
     {"key": "horary", "label": "卜卦盘"},
     {"key": "election", "label": "择日盘"},
+    {"key": "tianxing", "label": "天星择日"},
+    {"key": "qimenzeri", "label": "奇门择日"},
     {"key": "wangji", "label": "皇极经世"},
     {"key": "wuzhao", "label": "五兆"},
     {"key": "taixuan", "label": "太玄"},
@@ -251,6 +261,8 @@ AI_EXPORT_PRESET_SECTIONS = {
     "horary": ["起卦信息", "根本性", "征象星指派", "完成分析", "月亮的故事", "相位全览", "裁决", "应期方位", "描述", "专题深化·X", "古典接纳", "征象力量", "定盘考量", "Almuten", "映点对映点", "行星时", "尊贵明细", "偶然尊贵满分表", "阿拉伯点全集"],
     # 上游 v50 的 14 段。危象日参照/本命合参/时势合参 需额外入参（病始时刻 / 本命出生资料 /
     # 四张世运附加盘），当前工具尚未提供 → 列 optional，缺席不误报。
+    # 🔒 段头与 vendor/divination/zeri/tianxingSnapshot.js 逐字成对（四同步铁律）。
+    "tianxing": ["起盘信息", "征象搜索配置", "征象条件", "命中区间"],
     "election": ["起盘信息", "流派口径", "总评", "红线", "分项", "尊贵强弱", "阿拉伯点", "择前考量", "用事专属", "危象日参照", "应期", "本命合参", "时势合参", "建议"],
     "wangji": ["起盘", "元会运世", "天道卦", "人事卦", "历史年表", "心易发微", "经典原文"],
     "wuzhao": ["起盘", "揲筮", "兆", "木乡", "火乡", "土乡", "金乡", "水乡", "特殊标记"],
@@ -330,10 +342,16 @@ AI_EXPORT_PRESET_SECTIONS = {
     "astrodata": ["检索条件", "命中列表", "名人详情", "维基摘要", "数据来源"],
     "generic": ["起盘信息"],
 }
+# 奇门择日 = 奇门 17 段全量 + 择日三段（单一真值源：qimen 段表改动自动跟随，与上游 aiExport.js:735 同构）。
+# 🔒 三个追加段头与 vendor/divination/zeri/qimenZeriSnapshot.js 逐字成对（四同步铁律）。
+AI_EXPORT_PRESET_SECTIONS["qimenzeri"] = [
+    *AI_EXPORT_PRESET_SECTIONS["qimen"], "择日搜索配置", "择日条件", "命中时辰",
+]
 
 AI_EXPORT_FORBIDDEN_SECTIONS = {
     "liureng": ["右侧栏目"],
     "qimen": ["右侧栏目"],
+    "qimenzeri": ["右侧栏目"],
     "sanshiunited": ["右侧栏目"],
 }
 
@@ -355,6 +373,7 @@ AI_EXPORT_DEFAULT_OFF_SECTIONS = {
     "geomancy": ["图形释义"],
     "yizhangjing": ["诗文", "四柱文献", "逐日值星", "时辰细断", "叠断"],
     "qimen": ["八宫克应"],
+    "qimenzeri": ["八宫克应"],
     "liureng": ["取象"],
 }
 

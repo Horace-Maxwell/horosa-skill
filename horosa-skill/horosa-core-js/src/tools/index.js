@@ -35,6 +35,8 @@ import { runMundaneNavanayaka } from './mundaneNavanayaka.js';
 import { runBaziPeriod } from './baziPeriod.js';
 import { runZiweiExtras } from './ziweiExtras.js';
 import { runSanshiZiweiSihua } from './sanshiZiweiSihua.js';
+import { runQimenZeri } from './qimenzeri.js';
+import { runTianxing } from './tianxing.js';
 
 const TOOL_RUNNERS = {
   uranian_extra: runUranianExtra,
@@ -52,6 +54,8 @@ const TOOL_RUNNERS = {
   bazi_period: runBaziPeriod,
   ziwei_extras: runZiweiExtras,
   sanshi_ziwei_sihua: runSanshiZiweiSihua,
+  qimenzeri: runQimenZeri,
+  tianxing: runTianxing,
   india_jyotish: runIndiaJyotish,
   qimen: runQimen,
   taiyi: runTaiyi,

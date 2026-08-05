@@ -2,6 +2,10 @@
 // 供资料页(G35)显示 + 未来左栏选项;纯数据,无副作用。中性词(无软件名/版权书名)。
 
 export const SU28 = '角亢氐房心尾箕斗牛女虚危室壁奎娄胃昴毕觜参井鬼柳星张翼轸'.split('');
+// ⚠ 这【不是】排盘所用的宿界(本仓当前亦无任何 import):实际排盘按 doubingSu28 档位走
+//   perchart.py 的 MOIRA_* 宿界(默认 mode 4 恒星制),逐宿宽度与本表最大差 6.6°;两者分属
+//   不同历元与分度制,各自自洽。呈现给用户的宿界/入宿度一律取盘面实测 chart.fixedStarSu28
+//   (档位口径由 guolaoSu28Mode 单一下发,见 GuoLaoChartMain),勿拿本表冒充。
 export const SU28_DISTANCE = [11, 10, 18, 5, 8, 15, 9, 24, 8, 12, 10, 20, 15, 14, 11, 13, 13, 9, 15, 1, 10, 31, 4, 17, 9, 18, 17, 13];
 const DUZHU_CYCLE = ['木', '金', '土', '日', '月', '火', '水'];
 export const SU28_DEGREE_LORD = SU28.map((_, i)=>DUZHU_CYCLE[i % 7]);

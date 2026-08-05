@@ -1,7 +1,7 @@
 ---
 name: horosa-agent
 description: >-
-  Call Horosa (星阙) local metaphysics tools correctly over MCP or CLI — 89 real techniques: Western
+  Call Horosa (星阙) local metaphysics tools correctly over MCP or CLI — 91 real techniques: Western
   natal/predictive astrology (returns, progressions, primary directions, horary 卜卦, election 择日),
   八字, 紫微, 大六壬, 奇门遁甲, 太乙, 金口诀, 三式合一, 河洛理数, 邵子参评数, 六爻, 天文地占, 塔罗, and
   the full 14 神数. Use whenever a user asks to 起盘 / 排盘 / 起课 / 起卦 / 算命 / 推运 / 看盘 / 合盘 /
@@ -11,7 +11,7 @@ description: >-
 license: AGPL-3.0-only
 compatibility: Requires the local Horosa Skill MCP server/CLI (Python 3.12 + uv + installed offline runtime)
 metadata:
-  version: "0.25.1"
+  version: "0.26.0"
 ---
 
 # Horosa Skill Agent Guide
@@ -145,6 +145,7 @@ question context.”
 | Triplicity rulers / keypoints / lunation phase / extra returns | `triplicityrulers` / `keypoints` / `lunationphase` / `extrareturns` |
 | More progressions (v2.5.0) | `jaynesprog` / `vedicprog` / `planetaryarc` / `planetaryages` / `balbillus` / `yearsystem129` / `persiandirected` |
 | Horary 卜卦 / Election 择日 | `horary` / `election` |
+| 择日「找日子」——要在一段时间里搜时刻，而不是评一个候选时刻 | 西占征象 → `tianxing`；奇门条件 → `qimenzeri`（两者都要 startDate/endDate + conditions 条件树；单点评估仍用 `election`） |
 | Harmonic 调波盘 | `harmonic` |
 | 八字 | `bazi_birth` / `bazi_direct` |
 | 紫微斗数 | `ziwei_birth` (`ziwei_rules` returns the rules library) |

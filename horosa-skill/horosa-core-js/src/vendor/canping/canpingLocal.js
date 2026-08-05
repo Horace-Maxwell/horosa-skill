@@ -91,19 +91,66 @@ function verses(element, info, kind) {
 	};
 }
 
-export function dayunSequence(dayPalaceBranch, hourBranch, qiyunAge = 1, count = 9) {
+// 大运排法三档（诸法分歧；默认 mingGongQiyun）：
+//   mingGongQiyun —— 命宫顺行 + 起运岁按生日推算（《参评诀》口径，本仓默认）
+//   mingGongOne   —— 命宫顺行 + 恒一岁起（v3.6.0 及以前的旧行为，保留可回退）
+//   baziStyle     —— 八字大运法：阳男阴女顺／阴男阳女逆，自月建下一位起，十年一运
+//                    （《河洛理数》注解所载「采用推八字取大运之法」；起运岁沿用所选起运推算）
+export const CANPING_DAYUN_RULES = ['mingGongQiyun', 'mingGongOne', 'baziStyle'];
+export const CANPING_DAYUN_RULE_LABELS = {
+	mingGongQiyun: '命宫顺行 · 生日推起运（默认）',
+	mingGongOne: '命宫顺行 · 恒一岁起',
+	baziStyle: '八字大运法（阳男阴女顺／阴男阳女逆）',
+};
+const YANG_GANS = ['甲', '丙', '戊', '庚', '壬'];
+
+/**
+ * 起运岁（《参评诀》口径）：农历**单月**由三十逆数至生日、**双月**由初一顺数至生日；
+ * 得数 ÷3 → 商＝岁、余 2 ＝ +8 个月、余 1 ＝ +4 个月。
+ * 表格起始整岁 = 商 + (有余数 ? 1 : 0)（如 1 岁 8 个月 → 自 2 岁起行）。
+ * 缺农历月日时退回 1（＝旧行为，绝不抛）。
+ */
+export function qiyunFromLunarDate(lunarMonth, lunarDay) {
+	const m = Math.trunc(Number(lunarMonth) || 0);
+	const d = Math.trunc(Number(lunarDay) || 0);
+	if (m < 1 || m > 12 || d < 1 || d > 30) {
+		return { startAge: 1, years: 0, months: 0, count: 0, usable: false };
+	}
+	const count = (m % 2 === 1) ? (30 - d + 1) : d;   // 单月三十逆数 ／ 双月初一顺数
+	const years = Math.floor(count / 3);
+	const rem = count % 3;
+	const months = rem === 2 ? 8 : (rem === 1 ? 4 : 0);
+	const startAge = Math.max(1, years + (rem > 0 ? 1 : 0));
+	return { startAge, years, months, count, usable: true };
+}
+
+export function dayunSequence(dayPalaceBranch, hourBranch, qiyunAge = 1, count = 9, opts = {}) {
 	const mg = mingGong(dayPalaceBranch, hourBranch);
-	const startIdx = BRANCH_NUM[mg];
+	const rule = CANPING_DAYUN_RULES.indexOf(opts.rule) >= 0 ? opts.rule : 'mingGongQiyun';
 	const seq = [];
+	if (rule === 'baziStyle') {
+		// 阳年干男／阴年干女 顺行；阴年干男／阳年干女 逆行。自月建**下一位**起（八字通例）。
+		const yangYear = YANG_GANS.indexOf(`${opts.yearGz || ''}`.charAt(0)) >= 0;
+		const male = opts.gender !== '女';
+		const forward = yangYear === male;
+		const startIdx = BRANCH_NUM[opts.monthBranch] || BRANCH_NUM[mg];
+		for (let k = 0; k < count; k += 1) {
+			const branch = branchFromNum(forward ? startIdx + k + 1 : startIdx - k - 1);
+			const ageStart = qiyunAge + 10 * k;
+			seq.push({ index: k, branch, ageStart, ageEnd: ageStart + 9 });
+		}
+		return { seq, mingGong: mg, rule, forward };
+	}
+	const startIdx = BRANCH_NUM[mg];
 	for (let k = 0; k < count; k += 1) {
 		const branch = branchFromNum(startIdx + k);
 		const ageStart = qiyunAge + 10 * k;
 		seq.push({ index: k, branch, ageStart, ageEnd: ageStart + 9 });
 	}
-	return { seq, mingGong: mg };
+	return { seq, mingGong: mg, rule, forward: true };
 }
 
-export function calculate({ yearGz, monthBranch, dayBranch, hourBranch, gender = '男', method = 'ming', qiyunAge = 1, liunianBranch = null }) {
+export function calculate({ yearGz, monthBranch, dayBranch, hourBranch, gender = '男', method = 'ming', qiyunAge = 1, liunianBranch = null, lunarMonth = 0, lunarDay = 0, dayunRule = 'mingGongQiyun' }) {
 	const element = nayinElement(yearGz);
 	const dpBranch = dayPalace(monthBranch, dayBranch, method);
 	const kindMain = (gender === '女' || gender === 'F' || gender === 'female' || gender === 0) ? 'female' : 'male';
@@ -111,7 +158,16 @@ export function calculate({ yearGz, monthBranch, dayBranch, hourBranch, gender =
 	const benming = computeNumber(dpBranch, hourBranch, element);
 	const benmingVerses = verses(element, benming, kindMain);
 
-	const { seq, mingGong: mg } = dayunSequence(dpBranch, hourBranch, qiyunAge);
+	// 起运岁：mingGongOne 档恒 1（旧行为）；其余档按生日推算，农历缺失时自动退回 1。
+	const rule = CANPING_DAYUN_RULES.indexOf(dayunRule) >= 0 ? dayunRule : 'mingGongQiyun';
+	const qiyun = rule === 'mingGongOne'
+		? { startAge: Math.max(1, Math.trunc(Number(qiyunAge) || 1)), years: 0, months: 0, count: 0, usable: false }
+		: qiyunFromLunarDate(lunarMonth, lunarDay);
+	const effQiyunAge = qiyun.usable ? qiyun.startAge : Math.max(1, Math.trunc(Number(qiyunAge) || 1));
+
+	const { seq, mingGong: mg, forward } = dayunSequence(dpBranch, hourBranch, effQiyunAge, 9, {
+		rule, yearGz, monthBranch, gender,
+	});
 	const dayun = seq.map((d) => {
 		const info = computeNumber(dpBranch, d.branch, element);
 		return { ...d, ...info, verses: verses(element, info, 'luck') };
@@ -129,7 +185,8 @@ export function calculate({ yearGz, monthBranch, dayBranch, hourBranch, gender =
 		fourPillars: { yearGz, monthBranch, dayBranch, hourBranch },
 		dayPalaceBranch: dpBranch, mingGong: mg, kindMain,
 		benming: { ...benming, verses: benmingVerses },
-		dayun, liunian, qiyunAge,
+		dayun, liunian, qiyunAge: effQiyunAge,
+		dayunRule: rule, dayunForward: forward, qiyunDetail: qiyun,
 	};
 }
 
@@ -138,12 +195,15 @@ function yearGanzhi(year) { return GANS[((year - 4) % 10 + 10) % 10] + BRANCHES[
 
 // 全表流年：自 startAge 至 endAge(虚岁)逐岁。太岁(当年年支)替日宫支、当时大运支替时支起数。
 // 大运用命宫顺行(calculate 内 dayunSequence)，每岁按虚岁定位所属大运。
-export function liunianSeries({ yearGz, monthBranch, dayBranch, hourBranch, gender = '男', method = 'ming', qiyunAge = 1, birthYear = 0, startAge = 1, endAge = 120 }) {
-	const r = calculate({ yearGz, monthBranch, dayBranch, hourBranch, gender, method, qiyunAge });
+export function liunianSeries({ yearGz, monthBranch, dayBranch, hourBranch, gender = '男', method = 'ming', qiyunAge = 1, birthYear = 0, startAge = 1, endAge = 120, lunarMonth = 0, lunarDay = 0, dayunRule = 'mingGongQiyun' }) {
+	const r = calculate({ yearGz, monthBranch, dayBranch, hourBranch, gender, method, qiyunAge, lunarMonth, lunarDay, dayunRule });
 	const { element, dayun } = r;
+	// 🔴 定位大运用**引擎实算的起运岁**(r.qiyunAge),不是入参 qiyunAge——起运岁按生日推算后
+	// 两者会不同,用入参会让整张流年表的大运列错位。
+	const effQiyunAge = r.qiyunAge;
 	const dayunAt = (age) => {
 		if (!dayun.length) return { branch: r.mingGong, ageStart: 1, ageEnd: 10 };
-		let k = Math.floor((age - qiyunAge) / 10);
+		let k = Math.floor((age - effQiyunAge) / 10);
 		if (k < 0) k = 0;
 		if (k > dayun.length - 1) k = dayun.length - 1;
 		return dayun[k];
@@ -160,7 +220,8 @@ export function liunianSeries({ yearGz, monthBranch, dayBranch, hourBranch, gend
 			...info, verses: verses(element, info, 'luck'),
 		});
 	}
-	return { element, partName: r.partName, dayun, rows, qiyunAge };
+	// 回传**实算**起运岁与档位（消费方按此渲染/对齐；回传入参会与表内容不符）
+	return { element, partName: r.partName, dayun, rows, qiyunAge: effQiyunAge, dayunRule: r.dayunRule, qiyunDetail: r.qiyunDetail };
 }
 
 export function buildSnapshotText(result, opts = {}) {
@@ -171,15 +232,32 @@ export function buildSnapshotText(result, opts = {}) {
 	lines.push('[起盘]');
 	lines.push(`年纳音：${result.element}（${result.partName}）  取法：${result.method === 'gu' ? '古法(八字日支)' : '明法(月支反向)'}`);
 	lines.push(`日宫支：${result.dayPalaceBranch}  命宫：${result.mingGong}`);
+	// 性别取层与大运法必须进快照:AI 此前看不出取的是上层洞门(男命)还是中层闺门(女命)、
+	// 也看不出大运用了哪一法(段头字串是导出锚点,一律不动,只在段内补行)。
+	lines.push(`性别取层：${result.kindMain === 'female' ? '女命（中层闺门）' : '男命（上层洞门）'}`);
 	lines.push('');
 	lines.push('[本命]');
 	lines.push(`顺 ${v.numShun}：${v.textShun}`);
 	lines.push(`逆 ${v.numNi}：${v.textNi}`);
 	lines.push('');
 	lines.push('[大运·歲運]');
+	{
+		const q = result.qiyunDetail || {};
+		const ruleCn = result.dayunRule === 'baziStyle'
+			? `八字大运法（${result.dayunForward ? '顺行' : '逆行'}，自月建下一位起）`
+			: '命宫顺行';
+		const qCn = q.usable
+			? `起运 ${q.years} 岁${q.months ? `${q.months} 个月` : ''}（自 ${result.qiyunAge} 岁行运）`
+			: '一岁起运';
+		lines.push(`排法：${ruleCn}  ${qCn}`);
+	}
+	// [v2 排版批量·表化] 同构逐条行改 GFM 表(紫微宫位总览范式):段头/值表达式零变更
+	// (ageStart-ageEnd岁/branch/顺numShun/textShun/逆numNi/textNi 逐字复用),仅排版骨架换表头+分隔行+数据行。
+	lines.push('| 歲段 | 大运支 | 顺 | 顺辞 | 逆 | 逆辞 |');
+	lines.push('| --- | --- | --- | --- | --- | --- |');
 	(result.dayun || []).forEach((d) => {
 		const dv = d.verses || {};
-		lines.push(`${d.ageStart}-${d.ageEnd}岁 ${d.branch}：顺${dv.numShun} ${dv.textShun} ／ 逆${dv.numNi} ${dv.textNi}`);
+		lines.push(`| ${d.ageStart}-${d.ageEnd}岁 | ${d.branch} | 顺${dv.numShun} | ${dv.textShun} | 逆${dv.numNi} | ${dv.textNi} |`);
 	});
 	const ynRows = opts && Array.isArray(opts.liunianRows) ? opts.liunianRows : null;
 	if (ynRows && ynRows.length) {
@@ -187,10 +265,14 @@ export function buildSnapshotText(result, opts = {}) {
 		// 挂载/导出都缺流年。改由调用方喂入 liunianSeries(...).rows,逐岁出 太岁/大运/顺逆数(紧凑,不含逐句判语避免过长)。
 		lines.push('');
 		lines.push('[流年·歲運]');
+		// [v2 排版批量·表化] 1-120 岁全表改 GFM 表:值表达式逐字复用(age岁/yzz/太岁taisuiBranch/
+		// 大运dayunBranch/顺numShun/逆numNi),仅排版骨架变化;单行 else 分支(非同构全表)保持原样。
+		lines.push('| 歲 | 年·干支 | 太岁 | 大运 | 顺 | 逆 |');
+		lines.push('| --- | --- | --- | --- | --- | --- |');
 		ynRows.forEach((row) => {
 			const rv = row.verses || {};
 			const yzz = row.year ? `${row.year}·${row.ganzhi}` : '';
-			lines.push(`${row.age}岁${yzz ? ` ${yzz}` : ''} 太岁${row.taisuiBranch || '-'}·大运${row.dayunBranch || '-'} 顺${rv.numShun}/逆${rv.numNi}`);
+			lines.push(`| ${row.age}岁 | ${yzz} | 太岁${row.taisuiBranch || '-'} | 大运${row.dayunBranch || '-'} | 顺${rv.numShun} | 逆${rv.numNi} |`);
 		});
 	} else if (result.liunian) {
 		const lv = result.liunian.verses || {};

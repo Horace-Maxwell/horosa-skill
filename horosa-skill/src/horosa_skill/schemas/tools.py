@@ -337,6 +337,57 @@ class QimenInput(BirthInput):
     faRelatedPeople: list[dict[str, Any]] | None = None
 
 
+class QimenZeriInput(QimenInput):
+    """奇门择日「找局」：在时间窗内扫出满足条件树的时辰。
+
+    盘面参数与 QimenInput 逐字相同（同一套 22 项 options / 晚子时 / 时家算法），只多出搜索窗与条件树 ——
+    展示盘仍走 ken `/qimen/pan`，只有区间**搜索**用本地引擎（见 service._run_qimenzeri_tool 的算权说明）。
+    """
+
+    startDate: str | None = Field(default=None, description="搜索窗起始日（YYYY-MM-DD）")
+    startTime: str | None = Field(default="00:00", description="搜索窗起始时刻（HH:mm）")
+    endDate: str | None = Field(default=None, description="搜索窗结束日（YYYY-MM-DD）")
+    endTime: str | None = Field(default="23:59", description="搜索窗结束时刻（HH:mm）")
+    # 条件树按 passthrough 而非建模：上游有 30+ 条件类，各自 params 形状/validate/compile 都不同，
+    # 在此重编一遍等于造第二份真值源，上游一加条件类就烂；vendored compileQimenTree 会跑各叶子自己的
+    # validate 抛本地化错误。可发现性放 agent_guidance（列条件类键与必填 params）。
+    conditions: Any | None = Field(
+        default=None,
+        description=(
+            "条件树。组节点 {kind:'group', joiner:'all'|'any'|'xor', negate?, children:[…]}；"
+            "叶节点 {type:'<条件类键>', params:{…}}。条件类键与参数见本工具的 agent_guidance。"
+        ),
+    )
+    maxSpanDays: int | None = Field(default=None, description="搜索窗跨度上限（天），缺省 92")
+    maxHits: int | None = Field(default=None, description="命中区间数上限，缺省 1000")
+
+
+class TianxingInput(BirthInput):
+    """天星择日·征象搜索：在时间窗内扫出满足西占征象条件的时段。
+
+    lat/lon/zone/hsys/zodiacal 复用 BirthInput —— 它们就是**搜索盘**的坐标与口径，不另起一套词汇。
+    date/time 是 [起盘信息] 展示的锚点时刻，缺省取窗口起点。
+    """
+
+    startDate: str | None = Field(default=None, description="搜索窗起始日（YYYY-MM-DD）")
+    startTime: str | None = Field(default="00:00", description="搜索窗起始时刻（HH:mm）")
+    endDate: str | None = Field(default=None, description="搜索窗结束日（YYYY-MM-DD）")
+    endTime: str | None = Field(default="23:59", description="搜索窗结束时刻（HH:mm）")
+    pos: str | None = Field(default=None, description="地点显示名，进 [征象搜索配置] 段")
+    conditions: Any | None = Field(
+        default=None,
+        description=(
+            "征象条件树。组节点 {kind:'group', joiner:'all'|'any'|'xor', negate?, children:[…]}；"
+            "叶节点 {type:'<条件类键>', params:{…}}。32 个条件类键见本工具的 agent_guidance。"
+        ),
+    )
+    precision: str | None = Field(default=None, description="扫描精度，缺省 minute")
+    options: dict[str, Any] = Field(
+        default_factory=dict,
+        description="古典口径直通（cazimiOrb/combustOrb/vocMode/termsVariant/triplicity…）。",
+    )
+
+
 class TaiyiInput(BirthInput):
     # after23NewDay None=不发送（ken 权威引擎默认 1）；显式 0/1 直达 /taiyi/pan 与 nongli 前置。
     after23NewDay: bool | None = None

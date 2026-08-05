@@ -124,6 +124,8 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "extrareturns": "extrareturns",
     "horary": "horary",
     "election": "election",
+    "tianxing": "tianxing",
+    "qimenzeri": "qimenzeri",
     "geomancy": "geomancy",
     "tarot": "tarot",
     "wangji": "wangji",
@@ -156,6 +158,8 @@ _JAVA_DATE_FALLBACK_ENDPOINTS = {
 }
 _PYTHON_CHART_ENDPOINTS = {
     "/chart",
+    # 天星择日·征象搜索（上游 v3.7.0；挂在主 chart 服务，Java 侧无此路由）
+    "/electionscan/scan",
     "/chart12",
     "/chart13",
     "/predict/solarreturn",
@@ -332,6 +336,55 @@ def _java_chart_payload_candidates(endpoint: str, payload: dict[str, Any]) -> li
 
 def _only_payload_keys(payload: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
     return {key: payload[key] for key in keys if key in payload and payload[key] is not None}
+
+
+# --- 天星择日 / 奇门择日 helpers ------------------------------------------------------------
+
+# election_scan.ScanContext.eff 实际读取的口径键；白名单而非 **payload —— 否则 skill 自有的
+# agent_confirmed_settings / response_view 之类会一起灌进引擎。
+_ELECTIONSCAN_OPTION_KEYS = (
+    "cazimiOrb", "combustOrb", "underBeamsOrb", "vocMode", "vocIncludeOuter", "viaCombustaVariant",
+    "partileDef", "termsVariant", "triplicity", "sectBuffer", "houseCuspAdvance", "westNodeType",
+    "height", "leoBoundFirst", "geminiBoundEmended",
+)
+
+
+def _electionscan_options(options: Any) -> dict[str, Any]:
+    if not isinstance(options, dict):
+        return {}
+    return {k: options[k] for k in _ELECTIONSCAN_OPTION_KEYS if options.get(k) is not None}
+
+
+def _electionscan_zone(zone: Any) -> str:
+    """election_scan 期望 '+08:00' 形状；skill 的 zone 常是数字小时（8 / -5 / 5.5）。"""
+    if zone is None:
+        return "+08:00"
+    text = str(zone).strip()
+    if ":" in text:
+        return text
+    try:
+        hours = float(text)
+    except ValueError:
+        return "+08:00"
+    sign = "-" if hours < 0 else "+"
+    total = int(round(abs(hours) * 60))
+    return f"{sign}{total // 60:02d}:{total % 60:02d}"
+
+
+def _day_span(start_date: str, end_date: str) -> int | None:
+    from datetime import date as _date
+
+    def parse(text: str) -> _date | None:
+        parts = str(text).replace("/", "-").split("-")
+        if len(parts) < 3:
+            return None
+        try:
+            return _date(int(parts[0]), int(parts[1]), int(parts[2]))
+        except (ValueError, TypeError):
+            return None
+
+    a, b = parse(start_date), parse(end_date)
+    return None if a is None or b is None else (b - a).days
 
 
 def _day_boundary_switches(payload: dict[str, Any], keys: tuple[str, ...] = ("after23NewDay", "lateZiHourUseNextDay")) -> dict[str, int]:
@@ -6378,6 +6431,229 @@ class HorosaSkillService:
             "prerequisites": {"nongli": nongli, "jieqi_year_prev": prev_year, "jieqi_year_current": current_year},
         }
 
+    # --- 天星择日 / 奇门择日（上游 v3.7.0 / v3.7.1）------------------------------------------
+
+    def _require_electionscan_ok(self, result: Any, *, endpoint: str) -> dict[str, Any]:
+        """Fail loudly when /electionscan/scan returned a failure envelope.
+
+        Same family as `_require_ken_pan` (AGENTS §4「HTTP 200 也回失败信封，永不信状态码」):
+        the endpoint wraps errors as ``{"ResultCode": -1, "Result": {"err": …, "detail": …}}``,
+        and `_call_remote` only inspects a **top-level** `err`, so the unwrapped `{"err": …}` comes
+        back with no exception. Without this guard a `span_too_large` / `invalid_conditions` would
+        silently degrade into "zero hits" — a plausible-looking empty search that is actually a
+        rejected request.
+        """
+        if isinstance(result, dict) and not result.get("err"):
+            return result
+        detail = result if not isinstance(result, dict) else {"err": result.get("err"), "detail": result.get("detail")}
+        raise ToolTransportError(
+            "Horosa 征象搜索端点未返回结果。",
+            code="tool.electionscan_failed",
+            details={
+                "endpoint": endpoint,
+                "scan_error": detail,
+                "hint": (
+                    "invalid_conditions=条件树不合法（叶子 params 见 agent_guidance）；"
+                    "span_too_large=单次请求超 93 天（skill 已按月切分，出现即切分逻辑有误）。"
+                ),
+            },
+        )
+
+    @staticmethod
+    def _tianxing_window(payload: dict[str, Any]) -> tuple[str, str, str, str]:
+        start_date = str(payload.get("startDate") or payload.get("date") or "")
+        end_date = str(payload.get("endDate") or start_date)
+        return start_date, str(payload.get("startTime") or "00:00"), end_date, str(payload.get("endTime") or "23:59")
+
+    def _run_tianxing_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        start_date, start_time, end_date, end_time = self._tianxing_window(payload)
+        if not start_date or not end_date:
+            raise ToolValidationError(
+                "天星择日需要搜索时间窗（startDate/endDate）。",
+                code="tool.tianxing_missing_window",
+                details={"startDate": start_date, "endDate": end_date},
+            )
+        conditions = payload.get("conditions")
+        if not conditions:
+            raise ToolValidationError(
+                "天星择日需要征象条件树（conditions）。",
+                code="tool.tianxing_missing_conditions",
+                details={"hint": "条件类键与参数见本工具的 agent_guidance。"},
+            )
+        # Compile through the vendored table so validation messages come from the same source the
+        # backend uses — never re-encode 32 condition schemas here (they go stale on every upstream add).
+        compiled_result = self.js_client.run("tianxing", {"action": "compile", "tree": conditions})
+        compiled_data = compiled_result.get("data") or {}
+        if not compiled_data.get("ok"):
+            error = compiled_data.get("error") or {}
+            raise ToolValidationError(
+                f"征象条件树不合法：{error.get('message') or '未知错误'}",
+                code="tool.tianxing_invalid_conditions",
+                details={"error": error},
+            )
+        compiled = compiled_data.get("compiled")
+
+        cfg = {"startDate": start_date, "startTime": start_time, "endDate": end_date, "endTime": end_time}
+        # The backend hard-caps ONE request at 93 days (election_scan.py MAX_SPAN_DAYS); upstream works
+        # around it by month-splitting in the UI. §5「请求型 builder 一律归 Python」→ the loop lives here,
+        # but the split/stitch arithmetic stays the vendored one so boundaries match 星阙 byte-for-byte.
+        split = (self.js_client.run("tianxing", {"action": "split", "cfg": cfg}).get("data") or {})
+        segments = split.get("segments") or [cfg]
+        base = {
+            "zone": _electionscan_zone(payload.get("zone")),
+            "ad": payload.get("ad", 1),
+            "gpsLat": payload.get("gpsLat"),
+            "gpsLon": payload.get("gpsLon"),
+            "lat": payload.get("lat"),
+            "lon": payload.get("lon"),
+            "hsys": payload.get("hsys"),
+            "zodiacal": payload.get("zodiacal"),
+            "conditions": compiled,
+            # protocol salt: invalidates cached rows predating the pick/pickEnd fields (scanOrchestrator.js)
+            "_v": 2,
+        }
+        base.update(_electionscan_options(payload.get("options")))
+
+        lists: list[list[dict[str, Any]]] = []
+        truncated = False
+        eval_points = 0
+        for segment in segments:
+            raw = self._call_remote("/electionscan/scan", {**base, **segment})
+            data = self._require_electionscan_ok(raw, endpoint="/electionscan/scan")
+            lists.append(list(data.get("intervals") or []))
+            truncated = truncated or bool(data.get("truncated"))
+            eval_points += int(((data.get("stats") or {}).get("evalPoints")) or 0)
+        stitched = (self.js_client.run("tianxing", {"action": "stitch", "lists": lists}).get("data") or {})
+        intervals = stitched.get("intervals") or []
+
+        fields = {
+            "date": {"value": payload.get("date") or start_date},
+            "time": {"value": payload.get("time") or start_time},
+            "pos": {"value": payload.get("pos")},
+            "lon": {"value": payload.get("lon")},
+            "lat": {"value": payload.get("lat")},
+            "zone": {"value": payload.get("zone")},
+            "zodiacal": {"value": payload.get("zodiacal")},
+            "siderealAyanamsa": {"value": payload.get("siderealAyanamsa")},
+        }
+        ctx = {
+            # the snapshot renders the **UI** tree (chain joiners), not the compiled one
+            "cfg": {**cfg, "hsys": payload.get("hsys"), "pos": payload.get("pos"), "zone": payload.get("zone")},
+            "tree": conditions,
+            "results": intervals,
+            "truncated": truncated,
+        }
+        js_result = self.js_client.run(
+            "tianxing", {"action": "snapshot", "chart": payload.get("chart"), "fields": fields, "ctx": ctx}
+        )
+        raw_snapshot = js_result.get("snapshot_text")
+        snapshot_text = raw_snapshot if isinstance(raw_snapshot, str) and raw_snapshot.strip() else None
+        return {
+            "intervals": intervals,
+            "hit_count": len(intervals),
+            "truncated": truncated,
+            "stats": {"evalPoints": eval_points, "segments": len(segments)},
+            "compiled_conditions": compiled,
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="tianxing", snapshot_text=snapshot_text),
+        }
+
+    def _run_qimenzeri_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        start_date, start_time, end_date, end_time = self._tianxing_window(payload)
+        if not start_date or not end_date:
+            raise ToolValidationError(
+                "奇门择日需要搜索时间窗（startDate/endDate）。",
+                code="tool.qimenzeri_missing_window",
+                details={"startDate": start_date, "endDate": end_date},
+            )
+        conditions = payload.get("conditions")
+        if not conditions:
+            raise ToolValidationError(
+                "奇门择日需要择日条件树（conditions）。",
+                code="tool.qimenzeri_missing_conditions",
+                details={"hint": "条件类键与参数见本工具的 agent_guidance。"},
+            )
+        # Skill-side span guard, tighter than the engine's own 1830-day cap: the JS subprocess has a
+        # 60s wall clock (config.js_engine_timeout_seconds) and the scan costs ~2s per month-window,
+        # so the engine limit would blow the timeout ~30x over. Never silently truncate (§5.9).
+        max_span = int(payload.get("maxSpanDays") or 92)
+        span_days = _day_span(start_date, end_date)
+        if span_days is not None and span_days > max_span:
+            raise ToolValidationError(
+                f"奇门择日搜索窗 {span_days} 天超过上限 {max_span} 天。",
+                code="tool.qimenzeri_span_too_large",
+                details={
+                    "span_days": span_days,
+                    "max_span_days": max_span,
+                    "hint": "分段搜索，或调高 maxSpanDays；JS 引擎超时上限见 HOROSA_JS_ENGINE_TIMEOUT_SECONDS。",
+                },
+            )
+
+        cfg = {"startDate": start_date, "startTime": start_time, "endDate": end_date, "endTime": end_time}
+        geo = {
+            "zone": payload.get("zone"),
+            "gpsLon": payload.get("gpsLon"),
+            "gpsLat": payload.get("gpsLat"),
+            "lon": payload.get("lon"),
+            "lat": payload.get("lat"),
+            "pos": payload.get("pos"),
+        }
+        options = payload.get("options") or {}
+        scan = self.js_client.run(
+            "qimenzeri",
+            {
+                "action": "scan", "cfg": cfg, "geo": geo, "options": options, "tree": conditions,
+                "limits": {"maxHits": payload.get("maxHits")} if payload.get("maxHits") else None,
+            },
+        )
+        scan_data = scan.get("data") or {}
+        if not scan_data.get("ok"):
+            error = scan_data.get("error") or {}
+            raise ToolValidationError(
+                f"奇门择日搜索失败：{error.get('message') or '未知错误'}",
+                code=f"tool.qimenzeri_{error.get('code') or 'scan_failed'}",
+                details={"error": error},
+            )
+        intervals = scan_data.get("intervals") or []
+
+        # Cast the DISPLAYED pan through ken at the winning moment, so all 17 奇门 段 keep their normal
+        # compute authority (`_require_ken_pan` inside `_run_qimen_tool`). Only the interval search is
+        # local — ken exposes no range endpoint (see the tool's compute_sources disclosure below).
+        # `pick` is upstream's boundary-safe instant (both ends pulled 1 minute inward); using `start`
+        # lands the pan on the wrong side of a 时辰 boundary.
+        pan_moment = intervals[0].get("pick") if intervals else f"{start_date} {start_time}"
+        pan_date, _, pan_time = str(pan_moment).partition(" ")
+        qimen = self._run_qimen_tool({
+            **payload,
+            "date": pan_date or start_date,
+            "time": pan_time or start_time or "00:00:00",
+        })
+        extra = self.js_client.run(
+            "qimenzeri",
+            {
+                "action": "snapshot", "cfg": cfg, "geo": geo, "options": options, "tree": conditions,
+                "results": intervals, "truncated": bool(scan_data.get("truncated")),
+            },
+        )
+        base_text = qimen.get("snapshot_text")
+        extra_text = extra.get("snapshot_text")
+        snapshot_text = "\n\n".join(part.strip() for part in (base_text, extra_text) if isinstance(part, str) and part.strip()) or None
+        return {
+            "pan": qimen.get("pan"),
+            "pan_moment": pan_moment,
+            "intervals": intervals,
+            "hit_count": len(intervals),
+            "truncated": bool(scan_data.get("truncated")),
+            "stats": scan_data.get("stats"),
+            "compiled_conditions": scan_data.get("compiled_tree"),
+            # Honest算权 disclosure: the pan is ken-computed, the interval search is not. Upstream
+            # anchors the local排盘 against the backend on a 42,731-point 0-diff parity grid.
+            "compute_sources": {"scan": "local_calcDunJia", "pan": "kinqimen"},
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="qimenzeri", snapshot_text=snapshot_text),
+            "prerequisites": qimen.get("prerequisites"),
+        }
+
     def _run_taiyi_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         nongli = payload.get("nongli")
         if not isinstance(nongli, dict):
@@ -8773,6 +9049,10 @@ class HorosaSkillService:
             return read_knowledge_entry(payload)
         if definition.name == "qimen":
             return self._run_qimen_tool(payload)
+        if definition.name == "qimenzeri":
+            return self._run_qimenzeri_tool(payload)
+        if definition.name == "tianxing":
+            return self._run_tianxing_tool(payload)
         if definition.name == "taiyi":
             return self._run_taiyi_tool(payload)
         if definition.name == "jinkou":

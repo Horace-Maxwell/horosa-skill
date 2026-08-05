@@ -1122,3 +1122,32 @@ export {
 	BAGONG_PALACE_ORDER,
 	BAGONG_PALACE_NAME,
 };
+
+// [奇门择日] 加性导出 —— 择日条件注册表/扫描引擎消费,zeri 侧绝不另拷格局或五行表。
+// 格局名清单 = 释义表键集;其与 calcJiPatterns/calcXiongPatterns 的 addPattern 字面量集
+// 恒等(现各 31)由 divination/zeri/__tests__/qimenConditionTypes.test.js 机械提取哨兵钉死,
+// 任一侧加格局/改名而另一侧未动即红。
+export const QIMEN_JI_PATTERN_NAMES = Object.keys(QIMEN_JIGE_INTERPRETATION);
+export const QIMEN_XIONG_PATTERN_NAMES = Object.keys(QIMEN_XIONGGE_INTERPRETATION);
+
+// 门宫生克五态:sheng 门生宫 / beisheng 宫生门 / po 门克宫(迫) / shouzhi 宫克门(受制) / bihe 比和;
+// 门取不到五行(空值/飞盘中门)或宫无五行(中五宫)时返 ''。
+export function getMenGongRelation(door, palaceNum){
+	const doorChar = getDoorChar(door);
+	if(!doorChar || !DOOR_WUXING[doorChar] || !PALACE_WUXING[palaceNum]){
+		return '';
+	}
+	if(isMenKeGong(doorChar, palaceNum)){
+		return 'po';
+	}
+	if(isGongKeMen(doorChar, palaceNum)){
+		return 'shouzhi';
+	}
+	if(isMenShengGong(doorChar, palaceNum)){
+		return 'sheng';
+	}
+	if(isGongShengMen(doorChar, palaceNum)){
+		return 'beisheng';
+	}
+	return DOOR_WUXING[doorChar] === PALACE_WUXING[palaceNum] ? 'bihe' : '';
+}
