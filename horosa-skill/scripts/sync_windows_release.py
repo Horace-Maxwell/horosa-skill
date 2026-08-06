@@ -108,11 +108,40 @@ def is_complete(a: dict) -> bool:
     return a["has_win_zip"] and a["has_darwin_tar"] and a["has_manifest_asset"] and a["manifest_dual"]
 
 
+def preflight_vendor_sources() -> None:
+    """Refuse to build off a stale `vendor/runtime-source`.
+
+    The Windows payload is built from the local vendored tree, which is gitignored — nothing in a
+    `git pull` refreshes it. Both freshness guards existed but only ran in `release.yml`, never on
+    the path that actually builds the Windows half, so a stale tree would ship silently (engines
+    lagging the release's upstream sync). Version equality alone is NOT enough: upstream adds export
+    keys under a "只加键纪律" (key-only addition) rule *without* bumping AI_EXPORT_SETTINGS_VERSION,
+    so `verify_vendor_runtime_sources.py` can pass on a tree that is genuinely behind — only
+    `verify_export_contract_mirror.py`'s per-key coverage catches that. Both, before every build.
+    """
+    print("\n[preflight] vendored runtime-source freshness (required-paths + export-contract mirror)…")
+    for script, hint in (
+        ("verify_vendor_runtime_sources.py", "required vendored inputs are missing"),
+        ("verify_export_contract_mirror.py", "the vendored upstream tree is behind this release"),
+    ):
+        try:
+            run(["uv", "run", "python", f"scripts/{script}"], cwd=SKILL_ROOT)
+        except subprocess.CalledProcessError:
+            sys.exit(
+                f"\n[STOP] {script} failed — {hint}.\n"
+                "       Building now would ship a stale Windows payload. Re-sync the vendored tree from a\n"
+                "       current 星阙 workspace (sync_vendored_runtime_sources.sh, or the robocopy equivalent\n"
+                "       on Windows — see AGENTS.md §7), then re-run this script."
+            )
+
+
 def build_and_verify(a: dict) -> tuple[Path, Path]:
     """Build the win zip, download darwin, regenerate dual manifest + SHA256SUMS, verify both. Returns paths."""
     version = a["version"]
     win_zip = DIST / a["win_zip"]
     darwin_tar = DIST / a["darwin_tar"]
+
+    preflight_vendor_sources()
 
     print("\n[build] win32-x64 runtime (downloads Node/JDK/Python, npm-installs lunar-javascript, bakes hardened launchers)…")
     run(["uv", "run", "python", "scripts/build_runtime_release_windows.py"], cwd=SKILL_ROOT)

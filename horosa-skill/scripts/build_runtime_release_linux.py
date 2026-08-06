@@ -69,11 +69,24 @@ def require_path(path: Path) -> None:
 
 
 def download(url: str, dest: Path) -> Path:
-    """Download *url* to *dest* via ``curl``, skipping if the file already exists."""
+    """Fetch *url* to *dest*, reusing a cached copy only when it came from the same URL.
+
+    The cache (DOWNLOAD_ROOT) now survives rebuilds, so two things it used to get for free from the
+    wipe have to be earned: (1) a cached file is only reused when the sidecar records the *same*
+    resolved URL — a fixed filename would otherwise pin the first JDK/Node we ever downloaded and
+    silently keep shipping it after a new release lands; (2) the download is staged through a
+    `.part` file so an interrupted curl can never leave a truncated archive posing as a cache hit.
+    """
     dest.parent.mkdir(parents=True, exist_ok=True)
-    if dest.exists():
+    stamp = dest.with_name(dest.name + ".url")
+    if dest.is_file() and stamp.is_file() and stamp.read_text(encoding="utf-8").strip() == url:
+        print(f"reusing cached download: {dest.name}")
         return dest
-    subprocess.run(["curl", "-fL", url, "-o", str(dest)], check=True)
+    partial = dest.with_name(dest.name + ".part")
+    partial.unlink(missing_ok=True)
+    subprocess.run(["curl", "-fL", url, "-o", str(partial)], check=True)
+    partial.replace(dest)
+    stamp.write_text(url, encoding="utf-8")
     return dest
 
 
@@ -93,14 +106,30 @@ def latest_node_linux_url() -> str:
     raise SystemExit("could not resolve latest Node.js linux-x64 archive")
 
 
+TEMURIN_JDK_API = "https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse"
+
+
 def latest_temurin_jdk_url() -> str:
     """Latest GA Temurin 17 JDK linux-x64 via the Adoptium API redirect.
 
     Adoptium's own API only redirects to a binary that actually exists. GitHub `releases/latest`
     on temurin17-binaries picks by tag commit date, so during the hours after a GA tag lands it
-    can point at a release with zero platform assets (jdk-17.0.20-ga did).
+    can point at a release with zero platform assets (jdk-17.0.20-ga did). Resolve the redirect so
+    the returned URL carries the JDK version: the API URL itself is constant across GA releases,
+    which would make the download cache pin whichever JDK it first saw.
     """
-    return "https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse"
+    try:
+        head = subprocess.run(
+            ["curl", "-fsI", TEMURIN_JDK_API], check=True, capture_output=True, text=True, timeout=60
+        )
+        for line in head.stdout.splitlines():
+            if line.lower().startswith("location:"):
+                target = line.split(":", 1)[1].strip()
+                if target.endswith(".tar.gz"):
+                    return target
+    except (subprocess.SubprocessError, OSError):
+        pass
+    return TEMURIN_JDK_API
 
 
 def extract_tar_strip_first(archive: Path, target: Path) -> None:
@@ -343,7 +372,7 @@ def write_manifest(version: str) -> None:
         "platform": "linux-x64",
         "runtime_layout_version": 1,
         "runtime_payload_version": version,
-        "export_registry_version": 11,
+        "export_registry_version": 12,
         "services": {
             "backend_url": "http://127.0.0.1:9999",
             "chart_url": "http://127.0.0.1:8899",
@@ -390,8 +419,11 @@ def build() -> Path:
     require_path(CORE_JS_ROOT / "bin" / "cli.mjs")
 
     # -- Clean and recreate build directories --
-    if BUILD_ROOT.exists():
-        shutil.rmtree(BUILD_ROOT)
+    # Staging only: DOWNLOAD_ROOT is a sibling inside BUILD_ROOT and wiping it re-downloaded the
+    # JDK + Node + CPython on every rebuild. `download()` keys each cached file by its resolved URL
+    # and stages through `.part`, so the preserved cache can neither go stale nor be poisoned.
+    if PAYLOAD_ROOT.exists():
+        shutil.rmtree(PAYLOAD_ROOT)
     PAYLOAD_ROOT.mkdir(parents=True, exist_ok=True)
     DIST_ROOT.mkdir(parents=True, exist_ok=True)
 

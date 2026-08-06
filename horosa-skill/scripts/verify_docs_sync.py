@@ -79,6 +79,22 @@ def check_versions(version: str) -> None:
     if not m or m.group(1) != version:
         err(f"CITATION.cff version = {m.group(1) if m else '?'} != {version}")
 
+    # horosa-core-js ships inside every runtime payload and carries its own version. It was outside
+    # this lockstep check entirely, so v0.26.0 bumped package.json to 0.26.0 and left package-lock
+    # at 0.25.1 — nothing noticed until a build's `npm install` rewrote the lock. Both, every release.
+    core_js = ROOT / "horosa-skill" / "horosa-core-js"
+    for name, keys in (("package.json", ("version",)), ("package-lock.json", ("version",))):
+        path = core_js / name
+        if not path.exists():
+            continue
+        data = json.loads(read(path))
+        candidates = [data.get(key) for key in keys]
+        if name == "package-lock.json":
+            candidates.append((data.get("packages", {}).get("") or {}).get("version"))
+        for got in [c for c in candidates if c is not None]:
+            if got != version:
+                err(f"horosa-core-js/{name} version = {got} != {version}")
+
     plugin = ROOT / ".claude-plugin/plugin.json"
     if plugin.exists():
         got = json.loads(read(plugin)).get("version")

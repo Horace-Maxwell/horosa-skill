@@ -154,6 +154,62 @@ v0.26.0 发布时七把守卫全绿、320 测试全过。发布**之后**做了�
   症状看着就是「这些技法坏了」。**判据 = 启动日志 `kentang prewarm ready (loaded=18, failed=0)`。**
   经验：**当「环境问题」开始解释越来越多的失败时，先怀疑自己的复现命令。**
 
+### v0.26.0+ / 2026-08-05 — 守卫都对，却一条都不在 Windows 构建路径上（vendor 陈旧可静默出货）
+
+- **症状**：v0.26.0 补 Windows 半边前例行跑守卫，`verify_export_contract_mirror.py` 报
+  `tianxing`/`qimenzeri` 不在 vendored 上游键表——本机 `vendor/runtime-source` 停在 08-01，
+  而 v0.26.0 的引擎树已对齐上游 v3.7.x（含**会改变既有输出**的六壬三传勘正）。
+  **若照常构建**：Windows 用户拿到的引擎落后一整轮同步，且 `verify_runtime_release.py` 只查
+  文件在不在、照样全绿放行。
+- **根因（两层）**：① `vendor/runtime-source` 是 **gitignored 本地构建输入**——`git pull` 到发布
+  commit 不会刷新它，仓库层面看不出陈旧；② 两把新鲜度守卫**只挂在 `release.yml`**，而 Windows 半边
+  恰恰是唯一**不走 CI**、在本机 off-CI 构建的产物——**守卫没长在会踩的那条路上等于没有守卫**。
+  连带确认上一条台账的「只加键纪律」在这里同样致命：`verify_vendor_runtime_sources.py` 的
+  `AI_EXPORT_SETTINGS_VERSION == 50` 恒等**在陈旧树上照样绿**（上游加键不 bump 版本），
+  唯一能判红的是 mirror 的**逐键覆盖**——所以两把必须都跑，缺一个就漏。
+- **guard**：`sync_windows_release.py` 新增 `preflight_vendor_sources()`，在**调用 builder 之前**
+  依次跑两把守卫，任一红即 `SystemExit` 并给出重灌指引（拒绝构建，而不是构建完再说）。
+  回归 `tests/test_sync_windows_release.py`：两把都被调用 / 任一红都拒绝 / **preflight 必须早于
+  builder**（顺序断言——闸开在 builder 之后等于没开）。
+- **法则**：新增任何「只在 CI 跑」的守卫时，问一句**这条路径 CI 走得到吗**；Windows/离线 runtime
+  这类 off-CI 产物必须在其**本机入口脚本**里复跑同一把守卫。
+
+- 🔴 **那 4 条 live 红被误判成「本机无 Mongo」整整几个版本——实测是另一回事。**
+  台账/交接口径一直说：本机 live 全套必有 4 红（`xiaoliuren` / `feigong` / `zhengchuan`×2），因为无
+  Mongo 时 Java 侧一律 `no.register.app.in.sys`，「环境限制而非代码问题」。**本轮逐一实测推翻**：
+  ① 经 skill 正规路径（`_call_remote`，带 app 注册归一化）打 Java **是通的**——`doctor issues: []`、
+  两端点 reachable、382 条 live 用例通过，其中大量走 Java；② 这 4 条报的是
+  `ResultCode 9999 / "begin 1, end 3, length 1"`（上游 `substring(1,3)` 打在长度 1 的串上），
+  **与 `no.register.app.in.sys` 是两个完全不同的错**；③ 实测矩阵定位触发条件是「**日期 × 缺 `lat`**」
+  的组合，不是单一因素：
+  | 载荷 | 结果 |
+  | --- | --- |
+  | `2028-04-06` + 仅 lon | ok |
+  | `2028-04-06` + lon&lat | ok |
+  | `2026-05-20` + 仅 lon | **500 / begin 1, end 3, length 1** |
+  | `2026-05-20` + lon&lat | ok |
+  给这 4 条测试的载荷补上 `lat` 即全绿。**结论**：这不是 Mongo/环境问题，是上游对某些
+  「日期+无纬度」组合的输入处理崩溃，skill 侧原样透传成不透明 HTTP 500。
+  **未决**：上游真因需在有上游源码的机器上定位（本仓对上游只读）；skill 侧该「先问 lat」还是
+  「转结构化错误」待定，故本轮**只纠正判据、不改代码**。
+  **法则**：「已知非回归」这类豁免必须挂在**可复现的判据**上（此处 = 错误串 + 复现矩阵），
+  不能挂在测试名单上——名单会把后来的真 bug 一起豁免掉。裸 HTTP 探针在本机不可用
+  （无 Mongo 注册，任何形状都回 `no.register.app.in.sys`），**判据一律取 skill 正规路径的结果**。
+
+- 🔴 **五个 stamper 可以「一致地错」——N 路互证够不到源头常量**（同轮补 Windows 半边时发现）。
+  **症状**：装完新构建的 v0.26.0 runtime，内嵌 manifest 写 `export_registry_version: 11`，而
+  v0.26.0 的择日提交已把 `AI_EXPORT_SETTINGS_VERSION` 11→12。**根因**：`verify_builder_parity.py`
+  的 `SHARED_MANIFEST_CONSTANTS` 只做 **stamper 之间**的 N 路交叉断言——五个 stamper 全停在 11 时
+  它们彼此完全一致，守卫必绿。这是 v0.16.1（mac 单边 6→7）那条教训的**镜像面**：当年怕的是「有人漏
+  bump 一个」，这次是「**没人 bump 任何一个**」，同一把守卫对后者天然失明。
+  **实证**：v0.22.0~v0.25.0 两数恒等（10=10、11=11×3），v0.26.0 首次分叉。
+  **guard**：`ANCHORED_CONSTANTS` —— `export_registry_version` 锚定到
+  `exports/registry.py::AI_EXPORT_SETTINGS_VERSION`（源码解析），五个 stamper 必须同时等于它。
+  加完先跑一遍**确认它对本次真漂移判红**（五个都报 lagging），再 bump 到 12 转绿；
+  `tests/test_verify_builder_parity.py` 用假 registry 常量钉死锚定生效。
+  **法则**：交叉断言只证明「彼此一致」；凡有**源码里的权威常量**，守卫必须锚到它，否则一致地错=绿。
+  **本次处置**：v0.26.0 的 darwin 半边已发布且 stamp 11，故 Windows 半边**照 11 出货**（同版内两平台
+  一致优先——该字段无运行时消费方，只是元数据）；stamper 已改 12，v0.27.0 起两边都对。
 
 ### v0.26.0 / 2026-08-04 — 上游 v3.7.x 同步：三个**机制**缺口比内容缺口更贵
 

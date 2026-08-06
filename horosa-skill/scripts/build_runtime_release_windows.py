@@ -32,10 +32,24 @@ def require_path(path: Path) -> None:
 
 
 def download(url: str, dest: Path) -> Path:
+    """Fetch *url* to *dest*, reusing a cached copy only when it came from the same URL.
+
+    The cache (DOWNLOAD_ROOT) now survives rebuilds, so two things it used to get for free from the
+    wipe have to be earned: (1) a cached file is only reused when the sidecar records the *same*
+    resolved URL — a fixed filename would otherwise pin the first JDK/Node we ever downloaded and
+    silently keep shipping it after a new release lands; (2) the download is staged through a
+    `.part` file so an interrupted curl can never leave a truncated archive posing as a cache hit.
+    """
     dest.parent.mkdir(parents=True, exist_ok=True)
-    if dest.exists():
+    stamp = dest.with_name(dest.name + ".url")
+    if dest.is_file() and stamp.is_file() and stamp.read_text(encoding="utf-8").strip() == url:
+        print(f"reusing cached download: {dest.name}")
         return dest
-    subprocess.run(["curl", "-fL", url, "-o", str(dest)], check=True)
+    partial = dest.with_name(dest.name + ".part")
+    partial.unlink(missing_ok=True)
+    subprocess.run(["curl", "-fL", url, "-o", str(partial)], check=True)
+    partial.replace(dest)
+    stamp.write_text(url, encoding="utf-8")
     return dest
 
 
@@ -54,11 +68,28 @@ def latest_node_win_url() -> str:
     raise SystemExit("could not resolve latest Node.js win-x64 zip")
 
 
+TEMURIN_JDK_API = "https://api.adoptium.net/v3/binary/latest/17/ga/windows/x64/jdk/hotspot/normal/eclipse"
+
+
 def latest_temurin_jdk_url() -> str:
     # Adoptium's own API redirects to the newest GA JDK whose windows/x64 binary actually exists.
     # GitHub `releases/latest` on temurin17-binaries picks by tag commit date, so during the hours
     # after a GA tag lands it can point at a release with zero platform assets (jdk-17.0.20-ga did).
-    return "https://api.adoptium.net/v3/binary/latest/17/ga/windows/x64/jdk/hotspot/normal/eclipse"
+    # Resolve the redirect so the returned URL carries the JDK version: the API URL itself is
+    # constant across GA releases, which would make the download cache pin whichever JDK it first
+    # saw. Fall back to the API URL (still correct, just not cache-keyable) if the probe fails.
+    try:
+        head = subprocess.run(
+            ["curl", "-fsI", TEMURIN_JDK_API], check=True, capture_output=True, text=True, timeout=60
+        )
+        for line in head.stdout.splitlines():
+            if line.lower().startswith("location:"):
+                target = line.split(":", 1)[1].strip()
+                if target.endswith(".zip"):
+                    return target
+    except (subprocess.SubprocessError, OSError):
+        pass
+    return TEMURIN_JDK_API
 
 
 def extract_zip_strip_first(archive: Path, target: Path) -> None:
@@ -162,7 +193,7 @@ def write_manifest(version: str) -> None:
         "platform": "win32-x64",
         "runtime_layout_version": 1,
         "runtime_payload_version": version,
-        "export_registry_version": 11,
+        "export_registry_version": 12,
         "services": {
             "backend_url": "http://127.0.0.1:9999",
             "chart_url": "http://127.0.0.1:8899",
@@ -212,8 +243,13 @@ def build() -> Path:
     require_path(SOURCE_ROOT / "runtime" / "windows" / "bundle" / "wheels")
     require_path(CORE_JS_ROOT / "bin" / "cli.mjs")
 
-    if BUILD_ROOT.exists():
-        shutil.rmtree(BUILD_ROOT)
+    # Wipe the staging tree only — DOWNLOAD_ROOT is a sibling inside BUILD_ROOT, and nuking the whole
+    # BUILD_ROOT re-downloaded the JDK (~180 MB) + Node + CPython on every rebuild, which on a slow
+    # link cost an hour per launcher/template tweak. `download()` keys each cached file by its
+    # resolved URL and stages through `.part`, so a preserved cache can neither go stale nor be
+    # poisoned by an interrupted transfer.
+    if PAYLOAD_ROOT.exists():
+        shutil.rmtree(PAYLOAD_ROOT)
     PAYLOAD_ROOT.mkdir(parents=True, exist_ok=True)
     DIST_ROOT.mkdir(parents=True, exist_ok=True)
 

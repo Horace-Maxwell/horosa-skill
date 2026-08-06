@@ -61,6 +61,14 @@ CONSTANT_STAMPERS = {
     "Linux scaffold": SCRIPTS / "scaffold_linux_runtime.py",
 }
 
+# The N-way cross-check above only proves the stampers agree with *each other* — five scripts can be
+# unanimously wrong. `export_registry_version` declares which export contract a payload was built
+# against, so its source of truth is the registry constant in code. v0.26.0 drifted exactly here: the
+# 天星/奇门择日 change bumped AI_EXPORT_SETTINGS_VERSION 11→12 and left all five stampers at 11, and
+# this lint stayed green because every stamper still matched every other stamper. Anchor it.
+EXPORT_REGISTRY_SOURCE = SCRIPTS.parent / "src" / "horosa_skill" / "exports" / "registry.py"
+ANCHORED_CONSTANTS = {"export_registry_version": ("AI_EXPORT_SETTINGS_VERSION", EXPORT_REGISTRY_SOURCE)}
+
 # Builders that download a Temurin JDK must resolve it via the Adoptium API redirect, which only
 # points at binaries that exist. GitHub `releases/latest` on temurin17-binaries picks by tag commit
 # date, so a freshly-tagged GA can have zero platform assets for hours (jdk-17.0.20-ga stranded both
@@ -128,6 +136,25 @@ def main() -> int:
                 f"embedded-manifest constant `{name}` drifted across manifest-stamping scripts: {detail} "
                 "— bump the lagging script(s) in the same change"
             )
+        anchor = ANCHORED_CONSTANTS.get(name)
+        if anchor and stamped:
+            const_name, source = anchor
+            if not source.exists():
+                errors.append(f"cannot anchor `{name}`: {source} is missing")
+                continue
+            match = re.search(rf"^{const_name}\s*=\s*(\d+)", source.read_text(encoding="utf-8"), re.MULTILINE)
+            if not match:
+                errors.append(f"cannot anchor `{name}`: {const_name} not found in {source.name}")
+                continue
+            expected = int(match.group(1))
+            lagging = {label: vals for label, vals in stamped.items() if vals != [expected]}
+            if lagging:
+                detail = ", ".join(f"{label}={vals}" for label, vals in sorted(lagging.items()))
+                errors.append(
+                    f"embedded-manifest constant `{name}` does not match its source of truth "
+                    f"{const_name}={expected} ({source.name}): {detail} — the stampers can be unanimously "
+                    "wrong, so bump every stamper in the same change as the registry constant"
+                )
 
     for label, path in JDK_DOWNLOADING_BUILDERS.items():
         if not path.exists():
