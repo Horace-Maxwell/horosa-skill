@@ -3694,6 +3694,22 @@ def test_java_result_codes_are_translated_not_swallowed() -> None:
     assert _java_result_code_hint('{"ResultCode" : 0, "Result" : {}}') == ""
 
 
+def test_generic_9999_is_not_labelled_a_mongo_problem() -> None:
+    """9999 是通用失败码，不是 no.register.app 的同义词。
+
+    Windows 构建机实测：缺 lat 触发的上游字符串越界回的是
+    `{"ResultCode": 9999, "Result": "begin 1, end 3, length 1"}`（不是 mac 侧看到的 200001）。
+    只按码值贴「app 注册没读到（在 MongoDB 里）」，会把一个参数 bug 指去查 Mongo——正是本仓
+    连着两轮在清的那类误诊。认不出就给中性提示，不替用户断案。
+    """
+    from horosa_skill.engine.client import _java_result_code_hint
+
+    hint = _java_result_code_hint('{"ResultCode" : 9999, "Result" : "begin 1, end 3, length 1"}')
+    assert "MongoDB" not in hint, f"不得把参数 bug 指去查 Mongo: {hint}"
+    assert "不等于" in hint, f"要显式否掉「9999 == app 注册问题」这个等式: {hint}"
+    assert "Result" in hint and "lat" in hint, "中性提示要指向 Result 原文并提醒核经纬度"
+
+
 # --- tianxing 三个「用户拿到错答案」的 bug（v0.26.1）------------------------------------------
 
 

@@ -117,22 +117,33 @@ def _decrypt_response_payload(payload_text: str) -> str:
 
 # Java 聚合层把业务失败塞进 200/500 的 body 里，只看状态码得到的永远是一句
 # 「本地 Horosa 后端返回 HTTP 500」——两个最常见的码值有完全不同的处置，值得直接翻译出来。
-_JAVA_RESULT_CODE_HINTS = {
-    "200001": (
-        "ResultCode 200001 = 参数错误。最常见的成因是必填的经纬度传了 null —— "
-        "/nongli/time 要求 lon 与 lat 均非空。"
-    ),
-    "9999": (
-        "ResultCode 9999 (no.register.app) = Java 聚合层的 app 注册没读到（注册信息在 MongoDB 里）。"
-        "注意 doctor 探的是 /common/time，不碰这族路由，所以 doctor 绿不代表它活着。"
-    ),
-}
+_JAVA_PARAM_HINT = (
+    "ResultCode 200001 = 参数错误。最常见的成因是必填的经纬度传了 null —— "
+    "/nongli/time 要求 lon 与 lat 均非空。"
+)
+_JAVA_NO_REGISTER_HINT = (
+    "ResultCode 9999 (no.register.app) = Java 聚合层的 app 注册没读到（注册信息在 MongoDB 里）。"
+    "注意 doctor 探的是 /common/time，不碰这族路由，所以 doctor 绿不代表它活着。"
+)
+# 9999 是**通用**失败码，不是 no.register.app 的同义词：实测同一台机器上，缺 lat 触发的上游字符串
+# 越界回的也是 `{"ResultCode": 9999, "Result": "begin 1, end 3, length 1"}`。只按码值贴「app 注册没
+# 读到（在 MongoDB 里）」，会把一个参数 bug 指去查 Mongo——正是本仓花了两轮才清掉的那类误诊。
+# 所以：9999 必须再看 `Result` 原文，认不出就给中性提示，不替用户断案。
+_JAVA_GENERIC_9999_HINT = (
+    "ResultCode 9999 是 Java 聚合层的通用失败码，**不等于** app 注册问题——请以 `Result` 原文为准。"
+    "本仓实测过的一例：`begin/end/length` 形态的字符串越界，真因是请求缺 lat（先核 lon 与 lat 是否齐全）。"
+)
+
+
+def _java_result_code(body: str, code: str) -> bool:
+    return f'"ResultCode" : {code}' in body or f'"ResultCode": {code}' in body
 
 
 def _java_result_code_hint(body: str) -> str:
-    for code, hint in _JAVA_RESULT_CODE_HINTS.items():
-        if f'"ResultCode" : {code}' in body or f'"ResultCode": {code}' in body:
-            return hint
+    if _java_result_code(body, "200001"):
+        return _JAVA_PARAM_HINT
+    if _java_result_code(body, "9999"):
+        return _JAVA_NO_REGISTER_HINT if "no.register.app" in body else _JAVA_GENERIC_9999_HINT
     return ""
 
 

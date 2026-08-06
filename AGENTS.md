@@ -485,8 +485,13 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
    `doctor` 只探 `/common/time`、`selfcheck` 的 compute 步骤有 issue #14 的 chart 侧回退，
    两者仍不足以证明 Java 族技法可用——**要证就跑一条真 Java 技法**（如
    `service.run_tool("nongli_time", {...带 lat...})`）。
-   区分两种 500：`no.register.app.in.sys` = 注册/环境；
-   `begin 1, end 3, length 1` = 上游输入处理崩溃（见 `docs/LESSONS.md` 该条的复现矩阵，与 Mongo 无关）。
+   **`ResultCode 9999` 是通用失败码、不是 `no.register.app` 的同义词**——必读 `Result` 原文再定性：
+   `no.register.app.in.sys` = 注册/环境；`begin 1, end 3, length 1`（或 mac 侧看到的 `200001`）
+   = 请求缺 `lat` 的上游输入处理崩溃，与 Mongo 无关。`_java_result_code_hint` 已按此二次判别，
+   认不出的 9999 只给中性提示（v0.26.1+ 台账）。
+   **缺 lat 的失败会「时好时坏」**：Java 农历结果按**年**缓存，任何一次带 lat 的请求会焐热该年，
+   此后同年无 lat 请求全部成功——复现必须换**冷年份**（v0.26.1 已给五个占时工具加
+   `tool.<name>_cast_geo_required` 前置闸，缺谁报谁）。
 6. **`pkill` 法则**：bundled 与 live 星阙都跑 `webchartsrv.py`——`pkill -f webchartsrv.py` 会连星阙
    `:8899` 一起杀。按端口/PID 停；stop 脚本已按 runtime root 限定 kill 范围，保持住。
 
@@ -512,7 +517,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | 结果段缺失，客户端想报「缺依赖」 | 幻觉依赖风险 | 按 SKILL.md：说本地未返回该段，跑 `doctor` / `openclaw-check`，不发明 MongoDB/7897 |
 | chart 启动日志整段 traceback：`kintaiyi/game_theory.py … No module named 'scipy'` | prewarm 碰到 opt-in 博弈论子模块（默认关、懒 import）；scipy 两平台 bundle 均无（mac 同样） | 良性，无需处置；判据 = `/taiyi/pan` 回 `ResultCode 0 + source kintaiyi`；勿为此加 scipy（瘦身红线） |
 | `doctor` 报 `services:java_backend_not_running` / runtime_state `degraded_chart_only` | Java 后端死或被拦（Windows 常见 = 代理/VPN/安全软件 WFP 拦 JDK-17 AF_UNIX loopback，jar 在 Spring bean 构造期秒退且自身日志为空） | 降级模式设计行为：chart 侧技法照常可用；`doctor.java_diagnostics` 有启动器捕获的崩溃摘录；用户侧处置 = 禁用干扰软件并重启（issue #14） |
-| Java 族技法（nongli / bazi / ziwei / liureng）报 HTTP 500 | **先分错串**：`no.register.app.in.sys.forapp` = app 注册缺失（环境）；`begin 1, end 3, length 1` = 上游输入处理崩溃（本仓实测由「特定日期 × 缺 `lat`」触发，与 Mongo 无关） | 裸 HTTP 探针在无 Mongo 机上恒回前者、不可作判据；一律用 `service.run_tool` 正规路径复现，再对照 `docs/LESSONS.md` 的复现矩阵（§8 验证流程 5） |
+| Java 族技法（nongli / bazi / ziwei / liureng）报 HTTP 500 | **9999 是通用码，先读 `Result` 原文**：`no.register.app.in.sys.forapp` = app 注册缺失（环境）；`begin 1, end 3, length 1` / `200001` = 请求缺 `lat` 的上游崩溃，与 Mongo 无关（按**年**缓存，故时好时坏——复现要换冷年份） | 裸 HTTP 探针在无 Mongo 机上恒回前者、不可作判据；一律用 `service.run_tool` 正规路径复现（§8 验证流程 5） |
 | 维护机上 `test_error_paths_return_a_conformant_envelope` 红、CI 绿 | 默认端口上有活服务，只钉 `HOROSA_RUNTIME_ROOT` 拦不住，本该失败的路径成功了 | 同时把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指到不可达地址（§8 验证流程 4） |
 
 ## 9. Stability invariants（稳定性不变量 — don't regress these）
