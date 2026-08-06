@@ -12,7 +12,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-91-1d4ed8?style=for-the-badge" alt="91 tools" />
-  <img src="https://img.shields.io/badge/测试-320_passed-16a34a?style=for-the-badge" alt="320 passed" />
+  <img src="https://img.shields.io/badge/测试-336_passed-16a34a?style=for-the-badge" alt="336 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
 
@@ -303,7 +303,7 @@ uv run horosa-skill client config --format codex            # Codex config.toml 
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.26.0",
+  "ok": true, "tool": "qimen", "version": "0.26.1",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -368,19 +368,19 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 🧰 可调用工具 | 91 / 91 `ok=true` |
-| 🧪 工程测试 | **320 / 320 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 63 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 🧪 工程测试 | **336 / 336 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 63 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 🛡️ 未确认参数时强制追问 | 83 个技法工具触发 `must_ask_user=true` |
 | 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 88 个导出 technique） |
 | 🗄️ 本地 memory / report | 每次技法调用写 1 条本地 run 记录 + 1 份 JSON artifact |
-| 🔄 GitHub CI | Linux / macOS 单测 + JS golden 自检 + Windows OpenClaw smoke |
-| 📦 Release runtime | macOS (arm64) `v0.26.0` 已打包并校验；Windows (x64) 由构建机补传（补传前 win 用户拿到上一版 runtime）；其余平台安装时明确报不支持 |
+| 🔄 GitHub CI | Linux 单测 + JS golden 自检 + Windows OpenClaw smoke（**不覆盖跨树上游校验**——那两闸需要上游 checkout，只能在维护机跑 `preflight_release.py`） |
+| 📦 Release runtime | macOS (arm64) `v0.26.1` 已打包并校验；Windows (x64) 由构建机补传（补传前 win 用户拿到上一版 runtime）；其余平台安装时明确报不支持 |
 
 第一次 clone 后确认非空壳的最小验证：
 
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 320 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 336 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

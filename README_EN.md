@@ -51,7 +51,7 @@ License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICEN
 
 ## Current stable baseline
 
-**Current public version: `Horosa Skill 0.26.0` (91 callable tools).**
+**Current public version: `Horosa Skill 0.26.1` (91 callable tools).**
 
 This release line brings the capability surface roughly to parity with the desktop app:
 
@@ -71,14 +71,14 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `91 / 91 ok=true` |
-| Engineering tests | `320 / 320 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 63 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `336 / 336 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 63 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `83` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `8` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`88` export techniques modeled) |
 | Local memory / report | every technique call writes 1 local run record + 1 JSON artifact |
 | Qi Men / Tai Yi / Jin Kou / Three Styles | unified on `ken`, same as the desktop app |
 | Tong She Fa / Decennials | headless, value-for-value with Xingque (`decennials.test.js` golden) |
-| GitHub CI | Linux/macOS unit tests + horosa-core-js JS golden self-check + Windows OpenClaw smoke |
+| GitHub CI | Linux unit tests + horosa-core-js JS golden self-check + Windows OpenClaw smoke (**does not cover the cross-tree upstream checks** — those need an upstream checkout and only run via `preflight_release.py` on the maintenance box) |
 | Release runtime | macOS (arm64) + Windows (x64) assets (ken + 14 Shen Shu engines bundled) packaged and verified on every release; other platforms/arches fail install with an explicit unsupported error |
 
 > About `solarreturn` / `lunarreturn` / `solararc` / `givenyear` / `profection` / `pd` / `pdchart` / `zr`: these predictive tools are verified working in this version and should not be flagged by an agent as "Java `/predict/*` unavailable". If a client still says so, check whether it is on an old runtime, bypassing MCP to hand-compute, or hasn't run `doctor` / `openclaw-check --full`.
@@ -249,7 +249,7 @@ Every tool call returns a uniform envelope:
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.26.0",
+  "ok": true, "tool": "qimen", "version": "0.26.1",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -378,7 +378,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 320 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 336 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

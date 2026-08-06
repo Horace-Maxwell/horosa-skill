@@ -480,7 +480,7 @@ class YizhangjingInput(FlexibleModel):
 
 class XiaoLiuRenInput(FlexibleModel):
     # 小六壬：三数起三传（主流六宫 main / 道门九宫 dao，dao 才有五行生克与拜解）。起课为【冻结值】——
-    # nums=[月,日,时] 三正整数显式优先；缺 nums 则按占时正统起（date/time/zone[+lon] → 农历月/日/时支序，
+    # nums=[月,日,时] 三正整数显式优先；缺 nums 则按占时正统起（date/time/zone+lon+lat → 农历月/日/时支序，
     # 前置 /nongli/time 派生）。askEvent=所问；showOneThree=道门是否列一↔三关系（默认列）。
     nums: list[int] | None = None
     school: str | None = "main"

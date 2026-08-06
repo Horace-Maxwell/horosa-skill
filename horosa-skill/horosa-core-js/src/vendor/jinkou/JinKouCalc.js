@@ -3,7 +3,7 @@ import * as LRConst from '../liureng/LRConst.js';
 
 
 
-import { defaultAfter23NewDay, defaultLateZiHourUseNextDay } from '../bazi/dayBoundary.js';
+
 import {
 
 	JINKOU_SHENSHA_DOC,

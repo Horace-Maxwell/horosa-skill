@@ -3648,3 +3648,135 @@ def test_zero_hit_search_still_emits_the_hit_section(tmp_path) -> None:
     assert result.ok is True, result.error
     assert result.data["hit_count"] == 0
     assert "命中时辰" in result.data["export_snapshot"]["section_titles_detected"]
+
+
+# --- 占时起课的经纬度前置（v0.26.1）---------------------------------------------------------
+
+
+def test_time_cast_tools_demand_geo_before_hitting_nongli(tmp_path) -> None:
+    """五个占时工具此前把 `lat: null` 发给 /nongli/time → Java 回 200001 → 用户只看到一句
+    「本地 Horosa 后端返回 HTTP 500」。现在缺 lon/lat 就提前报结构化错误，指名缺哪个。
+
+    ⚠️ 这个 bug 曾被误诊为环境问题：Java 的农历结果按**年**缓存，任何一次带 lat 的请求都会焐热该年，
+    此后同年无 lat 请求全部成功 —— 所以它表现为时好时坏。复现必须换冷年份。
+    """
+    service = _zeri_service(tmp_path)
+    cases = {
+        "xiaoliuren": {"date": "2031-05-20", "time": "12:30:00", "zone": "+08:00", "school": "dao", "askEvent": "问事"},
+        "feigong": {"date": "2031-05-20", "time": "12:30:00", "zone": "+08:00", "qiMode": "hour", "askEvent": "求财"},
+        "xiaochengtu": {"date": "2031-05-20", "time": "12:30:00", "zone": "+08:00", "qiguaFa": "time", "askEvent": "问事"},
+        "guice": {"date": "2031-05-20", "time": "12:30:00", "zone": "+08:00", "qiguaFa": "time", "askEvent": "问事"},
+        "zhengchuan": {"date": "2031-05-20", "time": "12:30:00", "zone": "+08:00", "school": "tieban", "gender": 1},
+    }
+    for tool, payload in cases.items():
+        result = service.run_tool(tool, {**payload, "agent_confirmed_settings": True}, save_result=False)
+        assert result.ok is False, f"{tool}: 缺 lat 时不该成功"
+        assert result.error.code == f"tool.{tool}_cast_geo_required", f"{tool}: {result.error.code}"
+        assert "lat" in result.error.details["missing"], tool
+
+
+def test_time_cast_geo_guard_names_only_what_is_missing(tmp_path) -> None:
+    service = _zeri_service(tmp_path)
+    payload = {
+        "date": "2031-05-20", "time": "12:30:00", "zone": "+08:00", "lon": "121e28",
+        "school": "dao", "askEvent": "问事", "agent_confirmed_settings": True,
+    }
+    result = service.run_tool("xiaoliuren", payload, save_result=False)
+    assert result.error.details["missing"] == ["lat"], "给了 lon 就不该再报 lon"
+
+
+def test_java_result_codes_are_translated_not_swallowed() -> None:
+    """`HorosaApiClient.call` 从不看 ResultCode，两个语义完全不同的失败都长成同一句 HTTP 500。"""
+    from horosa_skill.engine.client import _java_result_code_hint
+
+    assert "经纬度" in _java_result_code_hint('{"ResultCode" : 200001, "Result" : "param error"}')
+    assert "MongoDB" in _java_result_code_hint('{"ResultCode" : 9999, "Result" : "no.register.app"}')
+    assert _java_result_code_hint('{"ResultCode" : 0, "Result" : {}}') == ""
+
+
+# --- tianxing 三个「用户拿到错答案」的 bug（v0.26.1）------------------------------------------
+
+
+def test_tianxing_forwards_top_level_classical_options(tmp_path) -> None:
+    """古典口径既可走 options 字典、也可走 BirthInput 继承的**顶层**同名字段（schema 逐个带描述）。
+    v0.26.0 只读 options → 顶层写法被静默丢弃，搜索用默认口径跑，结果不同却零报错。"""
+    service = _zeri_service(tmp_path)
+    sent: list[dict] = []
+    original = service.client.call
+
+    def spy(endpoint: str, payload: dict) -> dict:
+        if endpoint == "/electionscan/scan":
+            sent.append(payload)
+        return original(endpoint, payload)
+
+    service.client.call = spy  # type: ignore[method-assign]
+    payload = {**build_sample_payloads()["tianxing"], "combustOrb": 15, "termsVariant": "ptolemy",
+               "siderealAyanamsa": "fagan_bradley", "precision": "minute"}
+    assert service.run_tool("tianxing", payload, save_result=False).ok is True
+    assert sent, "没有发出扫描请求"
+    first = sent[0]
+    assert first["combustOrb"] == 15, "顶层 combustOrb 被丢了"
+    assert first["termsVariant"] == "ptolemy", "顶层 termsVariant 被丢了"
+    # 快照会把 siderealAyanamsa 印出来，所以它必须真的进请求，否则输出在声称一个没用上的设置
+    assert first["siderealAyanamsa"] == "fagan_bradley", "siderealAyanamsa 没进请求，但快照会印它"
+    assert first["precision"] == "minute", "precision 是个文档化了却没接线的死旋钮"
+
+
+def test_tianxing_options_dict_wins_over_top_level(tmp_path) -> None:
+    service = _zeri_service(tmp_path)
+    sent: list[dict] = []
+    original = service.client.call
+    service.client.call = lambda e, p: (sent.append(p) if e == "/electionscan/scan" else None) or original(e, p)  # type: ignore[method-assign,assignment]
+    payload = {**build_sample_payloads()["tianxing"], "combustOrb": 15, "options": {"combustOrb": 9}}
+    service.run_tool("tianxing", payload, save_result=False)
+    assert sent[0]["combustOrb"] == 9, "显式 options 应压过顶层"
+
+
+def test_tianxing_js_failure_never_becomes_a_fabricated_export(tmp_path) -> None:
+    """JS 侧失败时旧实现只读 snapshot_text → None → format_source 回落 generated_template，
+    产出一份拿 payload YAML 填出来的伪造导出，而 agent 被要求只依据 export_text 解读。"""
+    service = _zeri_service(tmp_path)
+
+    class SnapshotBroken(FakeJsClient):
+        def run(self, tool_name: str, payload: dict) -> dict:
+            if tool_name == "tianxing" and str(payload.get("action")) == "snapshot":
+                return {"data": {"ok": False, "error": {"code": "snapshot_failed", "message": "boom"}},
+                        "snapshot_text": ""}
+            return super().run(tool_name, payload)
+
+    service.js_client = SnapshotBroken()
+    result = service.run_tool("tianxing", build_sample_payloads()["tianxing"], save_result=False)
+    assert result.ok is False, "JS 快照失败必须报错，不能伪造出一份导出"
+    assert result.error.code == "tool.tianxing_snapshot_failed"
+
+
+def test_tianxing_stitch_failure_is_not_reported_as_zero_hits(tmp_path) -> None:
+    service = _zeri_service(tmp_path)
+
+    class StitchBroken(FakeJsClient):
+        def run(self, tool_name: str, payload: dict) -> dict:
+            if tool_name == "tianxing" and str(payload.get("action")) == "stitch":
+                return {"data": {"ok": False, "error": {"code": "stitch_failed", "message": "boom"}}}
+            return super().run(tool_name, payload)
+
+    service.js_client = StitchBroken()
+    result = service.run_tool("tianxing", build_sample_payloads()["tianxing"], save_result=False)
+    assert result.ok is False, "缝合失败会变成一个看起来完全合理的「零命中」"
+    assert result.error.code == "tool.tianxing_stitch_failed"
+
+
+def test_tianxing_rejects_unparseable_inverted_and_oversized_windows(tmp_path) -> None:
+    """旧守卫用 `span is not None` 判 → 解析不出来的日期形状**直接跳过上限**；倒置窗口得负数，
+    `负数 > max` 恒 False 也能溜过去。而 JS 侧 wallToMs 照样能解析它们，于是一路跑到超时。"""
+    service = _zeri_service(tmp_path)
+    base = build_sample_payloads()["tianxing"]
+    cases = [
+        ({"startDate": "2028-04-01T00:00", "endDate": "2032-12-31"}, "tool.tianxing_bad_window"),
+        ({"startDate": "2028-04-01 10:00", "endDate": "2032-12-31"}, "tool.tianxing_bad_window"),
+        ({"startDate": "2028-12-31", "endDate": "2028-01-01"}, "tool.tianxing_inverted_window"),
+        ({"startDate": "2028-01-01", "endDate": "2038-01-01"}, "tool.tianxing_span_too_large"),
+    ]
+    for override, expected in cases:
+        result = service.run_tool("tianxing", {**base, **override}, save_result=False)
+        assert result.ok is False, f"{override} 不该放行"
+        assert result.error.code == expected, f"{override}: {result.error.code}"

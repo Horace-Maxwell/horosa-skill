@@ -26,19 +26,25 @@ from pathlib import Path
 
 PKG_ROOT = Path(__file__).resolve().parents[1]
 
-GATES: tuple[tuple[str, list[str]], ...] = (
+# (label, argv, blocking)：blocking=False 的闸失败只警告，不阻止打 tag。
+GATES: tuple[tuple[str, list[str], bool], ...] = (
     (
         "upstream sync (contract version + sentinel sha256 + core-js per-file)",
         ["scripts/verify_upstream_sync.py", "--require-upstream", "--write-state"],
+        True,
     ),
     (
         "export-section debt ratchet against upstream",
         ["scripts/verify_export_section_baseline.py", "--source", "upstream", "--require-upstream"],
+        True,
     ),
-    ("vendored runtime inputs", ["scripts/verify_vendor_runtime_sources.py"]),
-    ("export-contract mirror", ["scripts/verify_export_contract_mirror.py"]),
-    ("docs sync", ["scripts/verify_docs_sync.py"]),
-    ("runtime-builder parity", ["scripts/verify_builder_parity.py"]),
+    # ⚠️ 打包输入闸：mac 维护机本来就没有 runtime/windows 与 prepareruntime（它们只在 Windows
+    # 构建机上），所以它在 mac 上恒红。打 tag 本身不产出包（发布是另起 workflow / 本机构建，
+    # Windows 半由 sync_windows_release.py --upload 另传），因此这一闸只**警告**、不拦。
+    ("vendored runtime inputs", ["scripts/verify_vendor_runtime_sources.py"], False),
+    ("export-contract mirror", ["scripts/verify_export_contract_mirror.py"], True),
+    ("docs sync", ["scripts/verify_docs_sync.py"], True),
+    ("runtime-builder parity", ["scripts/verify_builder_parity.py"], True),
 )
 
 
@@ -54,13 +60,17 @@ def main() -> int:
         return 2
 
     failed: list[str] = []
-    for label, argv in GATES:
+    warned: list[str] = []
+    for label, argv, blocking in GATES:
         print(f"\n=== {label} ===", flush=True)
         result = subprocess.run([sys.executable, *argv], cwd=PKG_ROOT)
         if result.returncode != 0:
-            failed.append(label)
+            (failed if blocking else warned).append(label)
 
     print()
+    for label in warned:
+        print(f"::warning::preflight: {label} 未通过（非阻断）—— 该闸的输入只在 Windows 构建机上；"
+              f"发布 Windows 半时由 sync_windows_release.py --upload 负责，判据是它 --check 的 [GAP]/[OK]。")
     if failed:
         print("preflight: FAIL — do not tag. Failing gates:", file=sys.stderr)
         for label in failed:

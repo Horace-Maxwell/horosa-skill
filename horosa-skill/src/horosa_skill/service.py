@@ -349,6 +349,74 @@ _ELECTIONSCAN_OPTION_KEYS = (
 )
 
 
+# 天星择日窗口上限（天）。每段 = 一次串行后端扫描；再往上 splitByMonth 的 800 段 guard 会耗尽并
+# **丢掉最后一段**，而结果仍会被报成完整搜索。取 2 年：60 段左右，已经很慢，但还不至于丢结果。
+_TIANXING_MAX_SPAN_DAYS = 731
+
+
+def _require_sane_window(start_date: str, end_date: str, *, max_span: int, tool: str) -> None:
+    """搜索窗必须可解析、非倒置、不超上限 —— 三者缺一都不能放行。
+
+    🔴 `startDate`/`endDate` **不经** normalize_request_payload（它只管 date/time 等，见
+    input_normalization），所以 agent 传什么就是什么。旧实现用 `_day_span(...) is not None` 判，
+    于是 `'2026-08-05 10:00'` / `'2026-08-05T00:00'` 这类解析不出来的形状**直接跳过上限**——
+    而 JS 侧 wallToMs 照样能解析它们，于是超长窗口一路跑到超时。解析失败必须报错，不是放行。
+    倒置窗口（end < start）得负数，`负数 > max` 恒 False，同样能溜过去。
+    """
+    span = _day_span(start_date, end_date)
+    if span is None:
+        raise ToolValidationError(
+            f"{tool} 无法解析搜索窗日期（需 YYYY-MM-DD）。",
+            code=f"tool.{tool}_bad_window",
+            details={"startDate": start_date, "endDate": end_date,
+                     "hint": "只接受 YYYY-MM-DD；时刻请用 startTime/endTime 单独给。"},
+        )
+    if span < 0:
+        raise ToolValidationError(
+            f"{tool} 搜索窗倒置：结束日期早于起始日期。",
+            code=f"tool.{tool}_inverted_window",
+            details={"startDate": start_date, "endDate": end_date, "span_days": span},
+        )
+    if span > max_span:
+        raise ToolValidationError(
+            f"{tool} 搜索窗 {span} 天超过上限 {max_span} 天。",
+            code=f"tool.{tool}_span_too_large",
+            details={
+                "span_days": span, "max_span_days": max_span,
+                "hint": "分段搜索，或调高 maxSpanDays；每段都是一次串行后端扫描，窗口越长越慢。",
+            },
+        )
+
+
+def _require_cast_geo(payload: dict[str, Any], *, tool: str) -> None:
+    """占时（按当下时刻起课）路径打 `/nongli/time` 前，先确认 lon/lat 真的有值。
+
+    🔴 v0.26.0 的实际故障：这五个工具（xiaoliuren / feigong / xiaochengtu / guice / zhengchuan）
+    的 schema 把 `lat` 列为可选、docstring 还写着「date/time/zone[+lon] 就够」，于是它们用
+    `payload.get("lat")` 取值，缺省时把 **`lat: null`** 发给 Java 层 → 回 `200001 param error`
+    → 用户只看到一句「本地 Horosa 后端返回 HTTP 500」。对照 qimen/taiyi 用的是 `payload["lat"]`（必填）。
+
+    ⚠️ 这个 bug 极易被误诊成「环境问题」：Java 的农历结果按**年**缓存，任何一次带 lat 的请求都会把
+    该年焐热，此后同年的无 lat 请求全部成功。所以它表现为「有时好有时坏」，v0.25.1 的台账据此把它
+    错归因成「本机无 Mongo」。复现务必换一个**冷年份**。
+    """
+    missing = [k for k in ("lon", "lat") if payload.get(k) in (None, "")]
+    if not missing:
+        return
+    raise ToolValidationError(
+        f"{tool} 按时刻起课需要起课地点的经纬度（缺 {'/'.join(missing)}）。",
+        code=f"tool.{tool}_cast_geo_required",
+        details={
+            "missing": missing,
+            "why": (
+                "起课要先经 /nongli/time 定四柱，该端点要求 lon+lat 均非空；缺任一个后端回 "
+                "200001 param error（表现为 HTTP 500）。"
+            ),
+            "hint": "提供 lon/lat（或 gpsLon/gpsLat），或改用直接给定 nums/干支 的免起课路径。",
+        },
+    )
+
+
 def _electionscan_options(options: Any) -> dict[str, Any]:
     if not isinstance(options, dict):
         return {}
@@ -6465,6 +6533,26 @@ class HorosaSkillService:
         end_date = str(payload.get("endDate") or start_date)
         return start_date, str(payload.get("startTime") or "00:00"), end_date, str(payload.get("endTime") or "23:59")
 
+    def _tianxing_js(self, request: dict[str, Any], *, stage: str) -> dict[str, Any]:
+        """跑 tianxing 的 JS 侧动作并**检查 data.ok**。
+
+        🔴 tianxing.js 在 buildTianxingSnapshot 抛异常时返回 {data:{ok:false,…}, snapshot_text:''}。
+        旧实现只读 snapshot_text → 拿到 None → _augment_export_payload 回落
+        `format_source: "generated_template"`，产出一份拿 payload YAML 填出来的**伪造四段导出**，
+        而 SKILL.md 要求 agent 只依据 export_snapshot.export_text 解读。stitch 那侧的 `or []`
+        同理会把失败变成「零命中」——一个看起来完全合理的空结果。
+        """
+        result = self.js_client.run("tianxing", request)
+        data = result.get("data") or {}
+        if not data.get("ok"):
+            error = data.get("error") or {}
+            raise ToolTransportError(
+                f"天星择日 JS 层 {stage} 失败：{error.get('message') or '未知错误'}",
+                code=f"tool.tianxing_{error.get('code') or f'{stage}_failed'}",
+                details={"stage": stage, "error": error},
+            )
+        return {**data, "snapshot_text": result.get("snapshot_text")}
+
     def _run_tianxing_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         start_date, start_time, end_date, end_time = self._tianxing_window(payload)
         if not start_date or not end_date:
@@ -6493,12 +6581,19 @@ class HorosaSkillService:
             )
         compiled = compiled_data.get("compiled")
 
+        # 窗口上限。每一段都是一次串行后端扫描，5 年窗口 = 60 次；而 splitByMonth 的 800 次 guard 一旦
+        # 耗尽（约 66 年）会**不 push 最后一段**就退出——尾部被丢，结果却仍报成对整个窗口的完整搜索。
+        # 绝不静默截断（AGENTS §5.9）。
+        max_span = int(payload.get("maxSpanDays") or _TIANXING_MAX_SPAN_DAYS)
+        _require_sane_window(start_date, end_date, max_span=max_span, tool="tianxing")
+
         cfg = {"startDate": start_date, "startTime": start_time, "endDate": end_date, "endTime": end_time}
         # The backend hard-caps ONE request at 93 days (election_scan.py MAX_SPAN_DAYS); upstream works
         # around it by month-splitting in the UI. §5「请求型 builder 一律归 Python」→ the loop lives here,
         # but the split/stitch arithmetic stays the vendored one so boundaries match 星阙 byte-for-byte.
-        split = (self.js_client.run("tianxing", {"action": "split", "cfg": cfg}).get("data") or {})
-        segments = split.get("segments") or [cfg]
+        segments = self._tianxing_js(
+            {"action": "split", "cfg": cfg}, stage="split"
+        ).get("segments") or [cfg]
         base = {
             "zone": _electionscan_zone(payload.get("zone")),
             "ad": payload.get("ad", 1),
@@ -6508,10 +6603,20 @@ class HorosaSkillService:
             "lon": payload.get("lon"),
             "hsys": payload.get("hsys"),
             "zodiacal": payload.get("zodiacal"),
+            # 恒星黄道口径：ScanContext 会读它，缺失就回落 Lahiri —— 而 [起盘信息] 段照样把用户给的值
+            # 印出来，等于输出主动声称了一个没被使用的设置。
+            "siderealAyanamsa": payload.get("siderealAyanamsa"),
+            # schema 声明了 precision，之前全代码没人消费它（后端 election_scan.py:1994 恒取默认
+            # 'minute'）。文档化了却什么都不做的旋钮比没有更糟——接上。
+            "precision": payload.get("precision"),
             "conditions": compiled,
             # protocol salt: invalidates cached rows predating the pick/pickEnd fields (scanOrchestrator.js)
             "_v": 2,
         }
+        # 古典口径既可走 `options` 字典，也可走 BirthInput 继承来的**顶层**同名字段（schema 里逐个带
+        # 描述，agent 照着传是完全正确的用法）。此前只读 options → 顶层写法被静默丢弃、搜索结果不同
+        # 却无任何报错。两处都收，options 优先。
+        base.update(_electionscan_options(payload))
         base.update(_electionscan_options(payload.get("options")))
 
         lists: list[list[dict[str, Any]]] = []
@@ -6523,7 +6628,7 @@ class HorosaSkillService:
             lists.append(list(data.get("intervals") or []))
             truncated = truncated or bool(data.get("truncated"))
             eval_points += int(((data.get("stats") or {}).get("evalPoints")) or 0)
-        stitched = (self.js_client.run("tianxing", {"action": "stitch", "lists": lists}).get("data") or {})
+        stitched = self._tianxing_js({"action": "stitch", "lists": lists}, stage="stitch")
         intervals = stitched.get("intervals") or []
 
         fields = {
@@ -6543,8 +6648,8 @@ class HorosaSkillService:
             "results": intervals,
             "truncated": truncated,
         }
-        js_result = self.js_client.run(
-            "tianxing", {"action": "snapshot", "chart": payload.get("chart"), "fields": fields, "ctx": ctx}
+        js_result = self._tianxing_js(
+            {"action": "snapshot", "chart": payload.get("chart"), "fields": fields, "ctx": ctx}, stage="snapshot"
         )
         raw_snapshot = js_result.get("snapshot_text")
         snapshot_text = raw_snapshot if isinstance(raw_snapshot, str) and raw_snapshot.strip() else None
@@ -6623,8 +6728,14 @@ class HorosaSkillService:
         # lands the pan on the wrong side of a 时辰 boundary.
         pan_moment = intervals[0].get("pick") if intervals else f"{start_date} {start_time}"
         pan_date, _, pan_time = str(pan_moment).partition(" ")
+        # ⚠️ 必须剔掉调用方可能传进来的农历/节气**预取**：QimenInput 声明 nongli / jieqi_year_prev /
+        # jieqi_year_current 作为缓存，_run_qimen_tool 见到就跳过 HTTP。但展示盘的时刻已经换成 pick，
+        # 沿用按原 date 预取的那份 → realSunTime/jiedelta 对不上 → 时柱/局错；窗口跨年时
+        # jieqi_year_current 更是整年都错。本工具自己返回 prerequisites，正诱使 agent 回传它们。
+        qimen_payload = {k: v for k, v in payload.items()
+                         if k not in ("nongli", "jieqi_year_prev", "jieqi_year_current")}
         qimen = self._run_qimen_tool({
-            **payload,
+            **qimen_payload,
             "date": pan_date or start_date,
             "time": pan_time or start_time or "00:00:00",
         })
@@ -7234,6 +7345,7 @@ class HorosaSkillService:
         nums = payload.get("nums")
         time_lines: list[str] = []
         if not (isinstance(nums, list) and len(nums) == 3):
+            _require_cast_geo(payload, tool="xiaoliuren")
             nongli = self._call_remote(
                 "/nongli/time",
                 {
@@ -7289,6 +7401,7 @@ class HorosaSkillService:
         time_lines: list[str] = []
         need_hour = qi_mode == "hour" and not payload.get("qiZhi") and not hour_zhi
         if (not day_gan or not day_zhi or need_hour) and payload.get("date"):
+            _require_cast_geo(payload, tool="feigong")
             nongli = self._call_remote(
                 "/nongli/time",
                 {
@@ -7369,6 +7482,7 @@ class HorosaSkillService:
             "timeLines": [],
         }
         if fa == "time":
+            _require_cast_geo(payload, tool="xiaochengtu")
             nongli = self._call_remote(
                 "/nongli/time",
                 {
@@ -7435,6 +7549,7 @@ class HorosaSkillService:
         request["askEvent"] = payload.get("askEvent") or payload.get("question") or ""
         time_lines: list[str] = []
         if payload.get("date"):
+            _require_cast_geo(payload, tool="guice")
             nongli = self._call_remote(
                 "/nongli/time",
                 {
@@ -7501,6 +7616,7 @@ class HorosaSkillService:
                 if payload.get(key) is not None:
                     request[key] = payload[key]
         else:
+            _require_cast_geo(payload, tool="zhengchuan")
             nongli = self._call_remote(
                 "/nongli/time",
                 {

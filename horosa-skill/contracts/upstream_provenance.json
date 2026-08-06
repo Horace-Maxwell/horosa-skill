@@ -5,7 +5,7 @@
   "upstream_app_version": "3.7.3",
   "aiexport_settings_version": 50,
   "skill_mirrored_version": 50,
-  "upstream_checked_at_package_version": "0.26.0",
+  "upstream_checked_at_package_version": "0.26.1",
   "upstream_preset_keys": [
     "agepoint",
     "astrochart",
@@ -98,7 +98,7 @@
   "core_js": {
     "files_compared": 245,
     "files_unmatched": 19,
-    "tree_sha256": "c7670c6fde6f3d7231473a1014b97ee6233cb765d6728e32a11a7e6ec2bf7f9f"
+    "tree_sha256": "74e8a9053b130bb0735b784904ecba29a02a285892fa00613cd6b54c140084b9"
   },
   "runtime_source": {
     "sentinels_verified": 7

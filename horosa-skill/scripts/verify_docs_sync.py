@@ -114,7 +114,6 @@ def check_versions(version: str) -> None:
 # 模式找不到时报错而非静默跳过——文案改写了要来这里同步，这正是我们想要的提醒。
 TOOL_COUNT_CLAIMS = {
     "README.md": (
-        r"badge/技法-(\d+)-",
         r"星阙 (\d+) 个术数",
         r"星阙（Horosa）的 (\d+) 个真实术数",
         r"exposes (\d+) real astrology",
@@ -122,13 +121,10 @@ TOOL_COUNT_CLAIMS = {
         r"本地进程 · (\d+) 工具",
         r"(\d+) 个真实技法，一次安装",
         r"(\d+) 技法目录索引",
-        r"可调用工具 \| (\d+) / (\d+)",
     ),
     "README_EN.md": (
-        r"badge/tools-(\d+)-",
         r"call <strong>(\d+)</strong> real techniques",
         r"Capability map \((\d+) tools\)",
-        r"Callable tools \| `(\d+) / (\d+) ok=true`",
     ),
 }
 
@@ -168,10 +164,11 @@ def check_tool_coverage() -> None:
     check_counted_claims(EXPORT_COUNT_CLAIMS, len(AI_EXPORT_TECHNIQUES), "export-technique count")
 
 
-# --- 2b. test-count consistency ------------------------------------------------------------
+# --- 2c. test-count consistency ------------------------------------------------------------
 
-# 测试数不能从代码静态推出（要真跑一轮），所以这里只能守「四处口径一致」——但那正是它漏掉的：
-# v0.25.0 时 zh 三处写 326、EN 表格写 326 而 EN 代码块写 315，实际收集数早已不是这些。
+# 「几处一致」不等于「数字是真的」——v0.26.0 五处齐刷刷写 320/63，而 CI 实测 318/65，守卫全绿。
+# 一致性只能抓「改了一处忘了另一处」。真值这一半靠下面的 check_test_count_is_real()：
+# offline + live-skipped 必须等于 `pytest --collect-only` 的收集总数，那个数是**静态可得**的。
 TEST_COUNT_PATTERNS = (
     r"badge/测试-(\d+)_passed",
     r'alt="(\d+) passed"',
@@ -179,6 +176,39 @@ TEST_COUNT_PATTERNS = (
     r"Engineering tests \| `(\d+) / (\d+) pass",
     r"#\s*(\d+) passed",
 )
+
+
+def check_test_count_is_real() -> None:
+    """声明的 offline + live-skipped 必须等于真实收集总数。
+
+    收集总数用 `--collect-only` 静态取（不跑测试、秒级）。这条能抓到「一致但全错」——
+    即五处写着同一个假数字、consistency 守卫照样绿的那种。
+    """
+    import subprocess
+
+    text = read(ROOT / "README.md")
+    m = re.search(r"\*\*(\d+) / \d+ pass\*\*（离线 CI 形状[^）]*?另 (\d+) 项 live", text)
+    if not m:
+        err("README.md: 测试数声明的形状变了，check_test_count_is_real 需要同步")
+        return
+    claimed = int(m.group(1)) + int(m.group(2))
+    try:
+        out = subprocess.run(
+            [sys.executable, "-m", "pytest", "--collect-only", "-q"],
+            cwd=PKG, capture_output=True, text=True, timeout=180,
+        ).stdout
+    except Exception as exc:  # noqa: BLE001 — 环境问题不该让文档守卫变红
+        print(f"::notice::test-count truth check skipped ({exc})")
+        return
+    got = re.search(r"(\d+) tests? collected", out)
+    if not got:
+        print("::notice::test-count truth check skipped (could not read collected count)")
+        return
+    if claimed != int(got.group(1)):
+        err(
+            f"README 声明 offline+live = {claimed}，而 pytest 实际收集 {got.group(1)} —— "
+            "数字对不上真值（五处写成同一个假数字时，一致性守卫是绿的）"
+        )
 
 
 def check_test_count_consistency() -> None:
@@ -379,6 +409,7 @@ def main() -> None:
     check_versions(version)
     check_tool_coverage()
     check_test_count_consistency()
+    check_test_count_is_real()
     check_stale_claims(version)
     check_links()
     check_conflict_markers()

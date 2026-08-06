@@ -115,23 +115,44 @@ def _drop_orphaned_imports(text: str) -> tuple[str, list[str]]:
     `utils/kentangCache`). Leaving the import behind makes the module unloadable headless — the
     referenced file simply is not in the vendor tree. Keyed on *actual usage* rather than a filename
     denylist, so the next upstream helper is handled without editing this script.
+
+    🔴 每删一条都必须**重新搜索**，不能先 materialize 一批 match 再拿旧偏移去切新字符串——删掉第一条
+    之后 text 变短，后面那些 match.start()/end() 全部失效。实测后果不是「漏删」而是**毁文件**：
+    两个孤儿 namespace import 会把
+        import * as d3 from 'd3';\\nimport * as lodash from 'lodash';\\nexport function f(){…}
+    切成  \\nimport * as lodash from 'urn 1; }  —— 整个模块体没了。具名分支同样的病，症状轻些
+    （第 2 条起静默残留，留下 utils/kentangCache 这类不在 vendor 树里的 import → ERR_MODULE_NOT_FOUND）。
     """
     notes: list[str] = []
-    for match in list(_NAMED_IMPORT.finditer(text)):
-        symbols = [s.strip().split(" as ")[-1].strip() for s in match.group(1).split(",") if s.strip()]
-        body = text[: match.start()] + text[match.end() :]
-        if symbols and not any(re.search(rf"\b{re.escape(sym)}\b", body) for sym in symbols):
-            text = body
-            notes.append(f"dropped orphaned import {{{', '.join(symbols)}}}")
+
+    def _drop_all(pattern: re.Pattern[str], is_orphan, describe) -> None:
+        nonlocal text
+        while True:
+            for match in pattern.finditer(text):
+                body = text[: match.start()] + text[match.end() :]
+                if is_orphan(match, body):
+                    text = body
+                    notes.append(describe(match))
+                    break  # 重新搜索：偏移量已失效
+            else:
+                return
+
+    _drop_all(
+        _NAMED_IMPORT,
+        lambda m, body: (syms := [s.strip().split(" as ")[-1].strip() for s in m.group(1).split(",") if s.strip()])
+        and not any(re.search(rf"\b{re.escape(sym)}\b", body) for sym in syms),
+        lambda m: "dropped orphaned import {"
+        + ", ".join(s.strip().split(" as ")[-1].strip() for s in m.group(1).split(",") if s.strip())
+        + "}",
+    )
     # namespace 形式 `import * as X from '…'` 同理。上游偶有**死 import**（ZiWeiHelper.js 引了 d3
     # 却一次没用），headless 侧 d3 不在依赖里 → 模块直接加载失败。按「实际是否被引用」判定，
     # 不写死包名黑名单。
-    for match in list(re.finditer(r"^import\s+\*\s+as\s+(\w+)\s+from\s+['\"][^'\"]+['\"];?\s*$", text, re.M)):
-        alias = match.group(1)
-        body = text[: match.start()] + text[match.end() :]
-        if not re.search(rf"\b{re.escape(alias)}\s*\.", body):
-            text = body
-            notes.append(f"dropped orphaned namespace import {alias}")
+    _drop_all(
+        re.compile(r"^import\s+\*\s+as\s+(\w+)\s+from\s+['\"][^'\"]+['\"];?\s*$", re.M),
+        lambda m, body: not re.search(rf"\b{re.escape(m.group(1))}\s*\.", body),
+        lambda m: f"dropped orphaned namespace import {m.group(1)}",
+    )
     return text, notes
 
 
@@ -179,36 +200,35 @@ def _prune_default_export(text: str, removed: list[str]) -> tuple[str, list[str]
     只删函数体不够：上游多数模块末尾有一行 `export default { A, B, C }` 汇总导出，其中若仍列着
     被剥掉的网络函数，模块**加载期**就 `ReferenceError`（本轮 solunar.js 踩到）——比留个坏 import
     更早炸，且报错信息只说「X is not defined」，不指向 vendor 流程。
+
+    🔴 与 _drop_orphaned_imports 同一个坑：改一条就要重新搜索，否则第二条 `export { … };` 会拿失效
+    偏移去切，产出 `export {export { q };` 这种语法错误（整个模块解析不了）。
+    🔴 另一个坑：head 必须由**匹配到的是哪个 pattern** 决定，不能用 `"default" in match.group(0)`
+    子串判断——名单里出现 `defaultRules` / `defaultOrb` 这类符号就会把具名导出清单翻成
+    `export default { … }`，随后所有 `import { x } from …` 全报 does not provide an export named。
     """
     notes: list[str] = []
     if not removed:
         return text, notes
     removed_set = set(removed)
-    for pattern in (r"^export default \{([^}]*)\};?\s*$", r"^export \{([^}]*)\};?\s*$"):
-        for match in list(re.finditer(pattern, text, re.M)):
-            names = [s.strip() for s in match.group(1).split(",") if s.strip()]
-            kept = [n for n in names if n.split(":")[0].split(" as ")[0].strip() not in removed_set]
-            if len(kept) == len(names):
-                continue
-            notes.append(f"pruned export list ×{len(names) - len(kept)}")
-            head = "export default { " if "default" in match.group(0) else "export { "
-            replacement = (head + ", ".join(kept) + " };") if kept else ""
-            text = text[: match.start()] + replacement + text[match.end():]
+    for pattern, head in (
+        (r"^export default \{([^}]*)\};?\s*$", "export default { "),
+        (r"^export \{([^}]*)\};?\s*$", "export { "),
+    ):
+        compiled = re.compile(pattern, re.M)
+        while True:
+            for match in compiled.finditer(text):
+                names = [s.strip() for s in match.group(1).split(",") if s.strip()]
+                kept = [n for n in names if n.split(":")[0].split(" as ")[0].strip() not in removed_set]
+                if len(kept) == len(names):
+                    continue
+                notes.append(f"pruned export list ×{len(names) - len(kept)}")
+                replacement = (head + ", ".join(kept) + " };") if kept else ""
+                text = text[: match.start()] + replacement + text[match.end():]
+                break  # 重新搜索：偏移量已失效
+            else:
+                break
     return text, notes
-
-
-def _prune_default_export_unused(text: str, removed: list[str]) -> tuple[str, list[str]]:
-    notes: list[str] = []
-    match = re.search(r"^export default \{([^}]*)\};?\s*$", text, re.M)
-    if not match:
-        return text, notes
-    names = [s.strip() for s in match.group(1).split(",") if s.strip()]
-    kept = [n for n in names if n.split(":")[0].strip() not in set(removed)]
-    if len(kept) == len(names):
-        return text, notes
-    notes.append(f"pruned default export ×{len(names) - len(kept)}")
-    replacement = "export default { " + ", ".join(kept) + " };"
-    return text[: match.start()] + replacement + text[match.end():], notes
 
 
 def transform(text: str) -> tuple[str, list[str]]:
@@ -391,7 +411,10 @@ def apply_deviations(text: str, deviations: list[dict]) -> tuple[str, list[str]]
                 notes.append(f"redirected {spec} → {dev['to']}")
         elif kind == "stub_import":
             pattern = re.compile(_IMPORT_STMT.format(spec=re.escape(spec)), re.M)
-            text, n = pattern.subn(dev["stub"].rstrip("\n"), text)
+            # lambda 而非字符串模板：stub 是 JS，里面出现 `\1` 会被当分组回填、`\c` 直接抛
+            # re.error 把整轮 re-vendor 打死。JS stub 里带正则字面量或转义引号是很正常的事。
+            stub = dev["stub"].rstrip("\n")
+            text, n = pattern.subn(lambda _m: stub, text)
             if not n:
                 notes.append(f"⚠ stub_import specifier not found: {spec}")
             else:

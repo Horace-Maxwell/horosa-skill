@@ -16,12 +16,23 @@
 
 ## 发布前检查
 
+**打 tag 之前必须先跑这一条**（AGENTS §7 标为强制；它把跨树校验一并跑完，成功会重写
+`contracts/upstream_provenance.json`，那个 diff 就是「跨树核对真发生过」的 git 证据）：
+
+```bash
+HOROSA_SOURCE_ROOT=<Horosa-Public checkout> uv run python scripts/preflight_release.py
+```
+
+它内部已含 verify_upstream_sync（`--require-upstream`）/ verify_export_section_baseline
+（`--source upstream`）/ verify_vendor_runtime_sources / verify_export_contract_mirror /
+verify_docs_sync / verify_builder_parity。此外单独跑：
+
 - `uv run pytest -q`
+- `cd horosa-core-js && npm test`（loadcheck 全量 import 冒烟 + selfcheck golden）
 - `uv run python scripts/verify_readme_links.py`
 - `uv run python scripts/verify_server_json.py`
 - `uv run python scripts/build_knowledge_index.py --check`
 - `uv run python scripts/run_benchmark.py --skip-runtime`
-- `uv run python scripts/verify_vendor_runtime_sources.py`
 
 ## ken 技法验证（奇门 / 太乙 / 金口 / 三式合一）
 
@@ -55,13 +66,14 @@ Runtime release 采用“轻仓库 + 重 release 资产”模式。
 
 ## Provenance / Attestation
 
-release workflow 会上传 runtime 资产并调用 GitHub artifact attestation。发布后可在本机执行：
+🔴 **当前没有 attestation，这条以前写反了。** `release.yml` 是
+`runs-on: self-hosted` 而本仓**从未注册过 self-hosted runner** —— v0.9.2→v0.25.0 的 20 次 tag
+触发全部排队 24h 后被取消，其中的 SBOM 与 `attest-build-provenance` 一步都没执行过。
+实测 v0.26.0 的 manifest（`sha256:ab43d2e6…`）查 attestation 返回 **404**。
 
-```bash
-gh attestation verify horosa-skill/dist/runtime/runtime-manifest.json --repo Horace-Maxwell/horosa-skill
-```
-
-当前 release workflow 设计为 `self-hosted runner` 路径，因为完整 runtime 组装依赖本地维护者持有的 vendored runtime source。
+所以：`gh attestation verify` 现在必然失败，**别照着跑再去怀疑资产有问题**。
+SBOM 由发布者在本机手动生成并上传（见「手动发布」）；provenance attestation 暂缺。
+`release.yml` 已改为仅 `workflow_dispatch`（推 tag 不再触发）——宁可明确没有，也不要假覆盖。
 
 ## 故障处理
 

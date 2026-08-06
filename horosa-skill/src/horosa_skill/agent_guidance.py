@@ -727,7 +727,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     ),
     "zhengchuan": _policy(
         intent="神数正传 / zhengchuan：铁板/邵子/大定/六亲/铁算心易 五流派共一入口。除铁算心易（查询层）外，以生辰四柱（立春界年柱 + 农历月日）起数装卦、查条文、推大运死月。",
-        required_context=["流派 school", "生辰 date/time/zone[+lon]（除 xinyi 外）", "性别 gender", "流派专属参数"],
+        required_context=["流派 school", "生辰 date/time/zone+lon+lat（除 xinyi 外）", "性别 gender", "流派专属参数"],
         ask_if_missing=[
             {"field": "school", "question": "用哪一流派？", "options": ["铁板神数 tieban", "邵子神数 shaozi(fatherAge/motherAge/yuan)", "大定数 dading(dadingYear)", "六亲数 liuqin(askHourZhi/env)", "铁算心易 xinyi(查询 item/sound/ke/gong)"]},
             {"field": "date/time/gender", "question": "请提供出生的日期、时间、时区（+经度）与性别（铁算心易查询层除外）。"},

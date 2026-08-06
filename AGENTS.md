@@ -162,6 +162,17 @@ you, it will bite the next agent：
 `_upstream_preset.py` 必须扫成员赋值，且跑在 spread 解析之后）；**provenance 只在全绿时写**
 （红着写等于把失败洗成持久的「已核对」声明——v0.25.0 就这么发出去过）。
 
+🔴 **四条会反复咬人的写法（v0.26.1 一次性踩齐）。**
+① **`x is not None` 当守卫 = 解析失败即放行**（`_day_span` 让 `'…T00:00'` 跳过整个上限）——解析失败必须报错。
+② **只读 payload 的某个子字段，不看顶层同名字段** —— schema 声明为顶层的东西 agent 一定会传顶层，
+静默丢弃比报错糟得多。判据：**改这个参数，结果必须变**。
+③ **只读 `snapshot_text` 不看 `data.ok`** —— 失败会回落 `generated_template`，产出一份假导出。
+④ **materialize 一批 regex match 再拿旧偏移切新字符串 = 毁文件**（revendor 三处），边扫边改必须每轮重搜。
+🔴 **「时好时坏」先怀疑缓存，别归因环境。** Java 农历按**年**缓存，一次带 lat 的请求焐热该年后，
+同年的坏请求全都成功 —— 这让一个真 bug（占时传 `lat: null`）被当成「本机无 Mongo」整整一个版本。
+诊断务必换冷年份。同理：**当「环境问题」开始解释越来越多的失败时，先怀疑自己的复现命令**
+（少一段 PYTHONPATH 就能让 taiyi/jinkou/sanshiunited/wangji/taixuan/chunzi 一起红）。
+
 🔴 **点哨兵覆盖不全整棵引擎树（v0.26.0）。** 7 个哨兵一个都不在 ken 引擎目录内部，
 `verify_vendor_runtime_sources` 又只查 REQUIRED_PATHS **是否存在**——于是「引擎文件在、但是旧的」
 整类漂移无人看管，`kintaiyi/jieqi.py` 的全年份域修复（域外 ValueError 炸 taiyi/pan）就这么卡了一版。
@@ -419,8 +430,14 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
    library-validation）。
 2. **live 验证必须打本仓 vendored 引擎实例，不是默认端口上恰好在跑的东西**（默认 `:8899`/`:9999` 上的常驻
    服务不保证与 vendored 引擎同版本，陈旧实例会掩盖白名单/钥匙/段位问题）。起法：chart =
-   `PYTHONPATH=<vendor>/Horosa-Web/astropy` + `HOROSA_CHART_PORT=<port>` 起 `webchartsrv.py`（脚本只自动
-   解析 flatlib，不解析自身包根）；java = vendored `runtime/mac/java/bin/java -jar
+   **三段** `PYTHONPATH=<vendor>/Horosa-Web/{flatlib-ctrad2,astropy,vendor}` + `HOROSA_CHART_PORT=<port>`，
+   且用**内嵌解释器** `<vendor>/runtime/mac/python/bin/python3` 起 `webchartsrv.py`。
+   🔴 少 `Horosa-Web/vendor` 那段 → ken 与神数引擎（kinqimen/kintaiyi/kinjinkou/kinwangji/taixuanshifa/
+   kinastro）全挂不上，taiyi/jinkou/sanshiunited/wangji/taixuan/chunzi 一起红，症状看着像「这些技法坏了」；
+   用裸 `python` → 缺 9 个第三方依赖（pandas/numpy/pendulum/cnlunar/cn2an/bidict/drawsvg/kinliuren/
+   kerykeion，只装在内嵌 python 里）。**判据 = 启动日志 `kentang prewarm ready (loaded=18, failed=0)`**，
+   failed 非 0 就是没按这个起。v0.26.0 整轮把真 bug 误判成「环境问题」正是栽在这条。
+   java = vendored `runtime/mac/java/bin/java -jar
    runtime/mac/bundle/astrostudyboot.jar --server.port=… --astrosrv=…`（root 500 = 正常无路由）。测试经
    `HOROSA_CHART_SERVER_ROOT` / `HOROSA_SERVER_ROOT` 指过去（tests 的 gate + `make_service` 尊重这两个
    env——曾经写死默认端口导致「带覆盖的全绿」实测的是旧实例）。

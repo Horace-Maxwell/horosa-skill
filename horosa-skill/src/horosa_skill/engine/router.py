@@ -47,7 +47,7 @@ def select_tools(request: DispatchInput) -> list[str]:
     # 「奇门择日」同理：它有自己的工具，落到 qimen 会给出一张单点盘而不是一段搜索结果。
     if (
         _contains_any(text, ["奇门", "qimen"])
-        and not _contains_any(text, ["飞宫", "小奇门", "feigong", "奇门择日", "qimenzeri", "奇门找局"])
+        and not _contains_any(text, ["飞宫", "小奇门", "feigong", "奇门择日", "qimenzeri", "找局"])
     ):
         add("qimen")
     if _contains_any(text, ["太乙", "taiyi", "太一"]):

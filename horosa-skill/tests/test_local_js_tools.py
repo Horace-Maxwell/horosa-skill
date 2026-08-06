@@ -41,12 +41,37 @@ def _server_up(host: str, port: int) -> bool:
         return False
 
 
+def _java_routes_alive(root: str) -> bool:
+    """Java 层「在听」不等于「能用」。
+
+    🔴 `_server_up` 只做 TCP connect。Java 聚合层有两种「listening 但业务全死」的形态实测都见过：
+    app 注册读不到（ResultCode 9999，注册信息在 Mongo 里）与参数校验失败（200001）。两种情况下
+    `RUNTIME_UP` 照样为 True，于是该跳过的 live 测试**跑起来然后红**，把环境问题伪装成回归。
+    探针打 `/nongli/time` 而不是 `/common/time` —— 后者正是那条「其余全死它还绿」的路由。
+    """
+    try:
+        from horosa_skill.engine.client import HorosaApiClient
+
+        data = HorosaApiClient(root, timeout=5.0).call(
+            "/nongli/time",
+            {"date": "2000-01-01", "time": "12:00:00", "zone": "+08:00", "lon": "121e28", "lat": "31n13"},
+        )
+        return isinstance(data, dict) and bool(data)
+    except Exception:
+        return False
+
+
 _CHART_HOST_PORT = _root_host_port(CHART_SERVER_ROOT, 8899)
 _JAVA_HOST_PORT = _root_host_port(JAVA_SERVER_ROOT, 9999)
-RUNTIME_UP = _server_up(*_CHART_HOST_PORT) and _server_up(*_JAVA_HOST_PORT)
+_JAVA_LISTENING = _server_up(*_JAVA_HOST_PORT)
+_JAVA_USABLE = _JAVA_LISTENING and _java_routes_alive(JAVA_SERVER_ROOT)
+RUNTIME_UP = _server_up(*_CHART_HOST_PORT) and _JAVA_USABLE
 requires_runtime = pytest.mark.skipif(
     not RUNTIME_UP,
-    reason=f"Horosa runtime not listening on {JAVA_SERVER_ROOT} (Java) + {CHART_SERVER_ROOT} (chart/ken)",
+    reason=(
+        f"Horosa runtime unusable — chart {CHART_SERVER_ROOT}, Java {JAVA_SERVER_ROOT} "
+        f"({'java_routes_dead' if _JAVA_LISTENING and not _JAVA_USABLE else 'not_listening'})"
+    ),
 )
 # Chart-only gate: harmonic / agepoint / distributions are pure Python chart-service computations
 # (/astroextra/*, /predict/*) and do NOT need the Java backend on :9999. Gating them on the chart
@@ -425,7 +450,7 @@ def test_canping_heluo_late_zi_switches_thread(tmp_path) -> None:
     # 2026-05-27 23:30 子时段：after23=1 日柱进次日；lateZi 移时干。heluo 用全干支起卦故两开关皆可见；
     # canping 只用时支（子恒定），故 after23 移日支、lateZi 对其为 no-op —— 但两开关均已 verbatim 透传。
     service = make_service(tmp_path)
-    base = {"date": "2026-05-27", "time": "23:30:00", "zone": "+08:00", "lon": "121e28", "gender": 1, "timeAlg": 1}
+    base = {"date": "2026-05-27", "time": "23:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gender": 1, "timeAlg": 1}
 
     def heluo_pillars(a23, lz):
         r = service.run_tool("heluo", {**base, "after23NewDay": a23, "lateZiHourUseNextDay": lz}, save_result=False)
@@ -569,7 +594,7 @@ def test_yizhangjing_local_tool_runs_headless_engine(tmp_path) -> None:
     # 一掌经：原生·非 ken 工具，进程内纯函数排盘（农历/四柱来自 vendored bazi 链）。
     # 岁首=正月初一（异八字）；此生日：生年支寅(虎)、农历1月24日、时支戌。
     service = make_service(tmp_path)
-    payload = {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lon": "121e28", "gender": 1}
+    payload = {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gender": 1}
     result = service.run_tool("yizhangjing", payload, save_result=False)
     assert result.ok is True, result.error
     data = result.data["yizhangjing"]
@@ -612,11 +637,11 @@ def test_xiaoliuren_local_tool_runs_headless_engine(tmp_path) -> None:
     assert again.data["snapshot_text"] == snap
 
 
-@requires_chart
+@requires_runtime  # 打 /nongli/time → 走 Java，不是 chart-only
 def test_xiaoliuren_time_cast_derives_nums_from_nongli(tmp_path) -> None:
     # 占时起课：缺 nums → 前置 /nongli/time 派生 农历月/日/时支序三数（JS 不发 HTTP）。
     service = make_service(tmp_path)
-    r = service.run_tool("xiaoliuren", {"date": "2026-05-20", "time": "12:30:00", "zone": "+08:00", "lon": "121e28", "school": "dao", "askEvent": "问事"}, save_result=False)
+    r = service.run_tool("xiaoliuren", {"date": "2026-05-20", "time": "12:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "school": "dao", "askEvent": "问事"}, save_result=False)
     assert r.ok is True, r.error
     assert len(r.data["xiaoliuren"]["nums"]) == 3
     assert "起卦时间:2026-05-20" in r.data["snapshot_text"]
@@ -644,11 +669,11 @@ def test_feigong_local_tool_runs_headless_engine(tmp_path) -> None:
     assert again.data["snapshot_text"] == snap
 
 
-@requires_chart
+@requires_runtime  # 打 /nongli/time → 走 Java，不是 chart-only
 def test_feigong_time_cast_derives_ganzhi_from_nongli(tmp_path) -> None:
     # 占时起局：缺 dayGan/dayZhi → 前置 /nongli/time 派生 时支（起支）+ 日干支（JS 不发 HTTP）。
     service = make_service(tmp_path)
-    r = service.run_tool("feigong", {"date": "2026-05-20", "time": "12:30:00", "zone": "+08:00", "lon": "121e28", "mingAge": 35, "askEvent": "问出行"}, save_result=False)
+    r = service.run_tool("feigong", {"date": "2026-05-20", "time": "12:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "mingAge": 35, "askEvent": "问出行"}, save_result=False)
     assert r.ok is True, r.error
     assert r.data["feigong"]["qiZhi"]
     assert "起卦时间:2026-05-20" in r.data["snapshot_text"]
@@ -717,11 +742,11 @@ def test_zhengchuan_xinyi_query_layer_needs_no_birth(tmp_path) -> None:
     assert export.get("unknown_detected_sections") == []
 
 
-@requires_chart
+@requires_runtime  # 打 /nongli/time → 走 Java，不是 chart-only
 def test_zhengchuan_tieban_derives_pillars_and_links_verses(tmp_path) -> None:
     # 神数正传·铁板：四柱走 /nongli/time 权威口径；条文正文库异步载入（本命条文段带真条文）。
     service = make_service(tmp_path)
-    r = service.run_tool("zhengchuan", {"school": "tieban", "date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lon": "121e28", "gender": 1}, save_result=False)
+    r = service.run_tool("zhengchuan", {"school": "tieban", "date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gender": 1}, save_result=False)
     assert r.ok is True, r.error
     snap = r.data["snapshot_text"]
     assert "[起盘信息]" in snap and "[本命条文]" in snap
@@ -730,11 +755,11 @@ def test_zhengchuan_tieban_derives_pillars_and_links_verses(tmp_path) -> None:
     assert export.get("missing_selected_sections") == [] and export.get("unknown_detected_sections") == []
 
 
-@requires_chart
+@requires_runtime  # 打 /nongli/time → 走 Java，不是 chart-only
 def test_zhengchuan_dading_uses_bazi_direction_table(tmp_path) -> None:
     # 大定流派：四柱=权威柱；小运/大运/岁君取自 vendored bazi 推运表（pillar_source_note 标注双源）。
     service = make_service(tmp_path)
-    r = service.run_tool("zhengchuan", {"school": "dading", "date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lon": "121e28", "gender": 1, "dadingYear": 2026}, save_result=False)
+    r = service.run_tool("zhengchuan", {"school": "dading", "date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gender": 1, "dadingYear": 2026}, save_result=False)
     assert r.ok is True, r.error
     assert "[起盘信息]" in r.data["snapshot_text"]
     assert r.data["zhengchuan"].get("pillar_source_note")

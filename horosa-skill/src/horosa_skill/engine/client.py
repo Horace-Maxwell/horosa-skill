@@ -114,6 +114,28 @@ def _decrypt_response_payload(payload_text: str) -> str:
     return plain.decode("utf-8")
 
 
+
+# Java 聚合层把业务失败塞进 200/500 的 body 里，只看状态码得到的永远是一句
+# 「本地 Horosa 后端返回 HTTP 500」——两个最常见的码值有完全不同的处置，值得直接翻译出来。
+_JAVA_RESULT_CODE_HINTS = {
+    "200001": (
+        "ResultCode 200001 = 参数错误。最常见的成因是必填的经纬度传了 null —— "
+        "/nongli/time 要求 lon 与 lat 均非空。"
+    ),
+    "9999": (
+        "ResultCode 9999 (no.register.app) = Java 聚合层的 app 注册没读到（注册信息在 MongoDB 里）。"
+        "注意 doctor 探的是 /common/time，不碰这族路由，所以 doctor 绿不代表它活着。"
+    ),
+}
+
+
+def _java_result_code_hint(body: str) -> str:
+    for code, hint in _JAVA_RESULT_CODE_HINTS.items():
+        if f'"ResultCode" : {code}' in body or f'"ResultCode": {code}' in body:
+            return hint
+    return ""
+
+
 class HorosaApiClient:
     def __init__(
         self,
@@ -182,13 +204,15 @@ class HorosaApiClient:
                     )
                 return data
         except httpx.HTTPStatusError as exc:
+            body = self._decode_response_text(exc.response)[:1000]
             raise ToolTransportError(
-                f"本地 Horosa 后端返回 HTTP {exc.response.status_code}。",
+                f"本地 Horosa 后端返回 HTTP {exc.response.status_code}。{_java_result_code_hint(body)}",
                 code="transport.http_error",
                 details={
                     "endpoint": endpoint,
                     "status_code": exc.response.status_code,
-                    "body": self._decode_response_text(exc.response)[:1000],
+                    "body": body,
+                    **({"diagnosis": hint} if (hint := _java_result_code_hint(body)) else {}),
                 },
             ) from exc
         except httpx.HTTPError as exc:

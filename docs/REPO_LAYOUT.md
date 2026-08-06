@@ -124,6 +124,12 @@ no ken engine and stays a pure headless JS calculation.
 - `verify_runtime_release.py`, `verify_vendor_runtime_sources.py`, `verify_server_json.py`,
   `verify_readme_links.py`, `verify_docs_sync.py`, `verify_builder_parity.py` — release / source /
   metadata / docs-drift / builder-parity verifiers.
+- **跨树校验（需要上游 checkout，CI 跑不了）**：`verify_upstream_sync.py`（vendored ↔ 上游 HEAD：
+  契约版本 / 技法键集 / 哨兵 / 运行时子树 / core-js manifest）、`verify_export_section_baseline.py`
+  （段级欠账棘轮）、`verify_export_contract_mirror.py`（skill 注册表 ↔ vendored aiExport）。
+  编排入口 = `preflight_release.py`，**打 tag 前必跑**（AGENTS §7）。
+- 支撑件：`_upstream_preset.py`（上游 aiExport 解析器，三个陷阱都在它 docstring 里）、
+  `revendor_core_js.py`（vendor 树唯一驱动入口，`--from-manifest`）、`gen_shaozi_tiaowen.py`。
 - `sync_windows_release.py` — detect + remediate a `latest` release missing its Windows half
   (`--check` is the authoritative pin-forward detector; `--upload` runs the full build→verify→upload
   pipeline on the Windows box).

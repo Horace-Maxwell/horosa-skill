@@ -93,6 +93,68 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.26.1 / 2026-08-05 — 「守卫全绿 + 测试全绿」的 v0.26.0 里躺着 16 个 bug
+
+v0.26.0 发布时七把守卫全绿、320 测试全过。发布**之后**做了一轮三路对抗性复审，查出 16 个真 bug，
+其中 5 类会让用户直接拿到错答案。**发布前跑一遍全绿 ≠ 没 bug** —— 复审要当成发布流程的一环，
+而不是出事之后才做的事。
+
+- 🔴 **「时好时坏」几乎总是缓存，不是环境。** 五个占时工具（xiaoliuren/feigong/xiaochengtu/guice/
+  zhengchuan）用 `payload.get("lat")` 取值而 schema 把 `lat` 列为可选 → 把 `lat: null` 发给要求
+  lon+lat 均非空的 `/nongli/time` → `200001 param error`（表现为一句无信息量的 HTTP 500）。
+  对照 qimen/taiyi 用 `payload["lat"]`（必填），从来不犯。
+  **它之所以被误诊成「本机无 Mongo」整整一个版本**：Java 的农历按**年**缓存，任何一次带 lat 的请求
+  都会焐热该年，此后同年无 lat 请求全部成功。决定性实验 = 同一 commit 下先对 1998 年发一次带 lat 的
+  请求，两个原本红的测试立刻转绿。**诊断这类问题务必换冷年份**，否则你在测一个自己刚焐热的缓存。
+  守卫 = `service.py::_require_cast_geo`；另把 Java 的 200001/9999 翻译成人能读的诊断
+  （`engine/client.py::_java_result_code_hint`）——此前 `HorosaApiClient.call` 从不看 ResultCode。
+
+- 🔴 **schema 声明了却没接线的字段，比没有更糟。** `TianxingInput` 继承 `BirthInput`，12 个古典口径
+  字段是顶层带描述的（agent 照 schema 传完全正确），而 `_run_tianxing_tool` 只读 `payload["options"]`
+  → 顶层写法被**静默丢弃**，用默认口径跑出不同结果、零报错。`siderealAyanamsa` 更糟：它不进请求
+  （后端回落 Lahiri），却照样印在 `[起盘信息]` 里 —— **输出主动声称了一个没被使用的设置**。
+  `precision` 则是纯死旋钮。判据很简单：**改这个参数，结果必须变**。实测 combustOrb 3 vs 17 现在
+  给出明显不同的区间（修前完全一样）。
+
+- 🔴 **只读 `snapshot_text` 不看 `data.ok`，会把失败伪造成一份正常导出。** tianxing.js 失败时返回
+  `{data:{ok:false}, snapshot_text:''}`；Python 拿到 None → `_augment_export_payload` 回落
+  `format_source: "generated_template"` → 产出一份拿 payload YAML 填出来的四段假导出，而 SKILL.md
+  要求 agent **只依据 export_text 解读**。stitch 那侧的 `or []` 同理把失败变成「零命中」。
+  凡是 JS 侧带 `ok` 的返回，一律走统一的检查入口（`_tianxing_js`）。
+
+- 🔴 **`x is not None` 当守卫用 = 解析失败即放行。** `_day_span` 解析不出来就返回 None，而
+  `if span is not None and span > max` 让 `'2026-08-05T00:00'` 这类形状**跳过整个上限**——JS 侧
+  wallToMs 却能解析它们，于是超长窗口一路跑到超时。倒置窗口得负数，`负数 > max` 恒 False 同样溜过。
+  **解析失败必须报错**。另外 tianxing 此前压根没接窗口上限（真正按段发 HTTP 的是它），5 年窗口
+  = 60 次串行扫描，>66 年时 `splitByMonth` 的 800 段 guard 耗尽会**丢掉最后一段**却仍报成完整搜索。
+
+- 🔴 **materialize 一批 regex match 再拿旧偏移切新字符串 = 毁文件。** `revendor_core_js.py` 三处犯这个：
+  两个孤儿 namespace import 就能把整个模块体切没（实测 `export function f` 消失）；两条
+  `export {…};` 产出 `export {export { q };` 语法错误；第 2 个及以后的孤儿具名 import 静默残留
+  （实测 JinKouCalc/TaiYiCalc 里就留着两条）。**边扫边改必须每轮重新搜索**（`_rewrite_inline_requires`
+  一开始就是对的，另三处照抄它即可）。同处还有 `"default" in match.group(0)` 的子串误判——
+  名单里出现 `defaultRules` 就把具名导出清单翻成 `export default`，所有 `import { x }` 全崩。
+  **head 要由「匹配到哪个 pattern」决定，不是子串。** vendor 树是 git 跟踪的，这些会直接进仓。
+
+- **「几处一致」不等于「数字是真的」。** README 五处齐刷刷写 320/63，CI 实测 318/65 —— 一致性守卫
+  全绿。一致性只能抓「改了一处忘了另一处」。真值那一半要能**够到源头**：现在断言
+  offline + live-skipped == `pytest --collect-only` 的收集总数（静态可得，秒级）。
+  同族的还有 README 宣称「Linux / macOS 单测」而仓里**零 macOS runner**，以及公开 README 从不提
+  「CI 不覆盖跨树上游校验」（AGENTS 和 ci.yml 注释都诚实，只有面向用户的那份不是）。
+
+- **测试门只探 TCP = 半死的后端会让该跳的测试跑起来然后红。** `_server_up` 只 connect，Java
+  「在听但每条业务路由都 500」照样 `RUNTIME_UP=True`。且四个打 `/nongli/time`（走 Java）的测试
+  标成了 `@requires_chart`。现在 Java 侧改成功能探针，且探 `/nongli/time` 而不是 `/common/time`
+  —— 后者正是那条「其余全死它还绿」的路由。⚠️ 顺序要紧：先修 lat bug 再改门，否则功能探针本身
+  会焐热年缓存、把 bug 盖住。
+
+- **文档里一条起服务命令，能让人把真 bug 误判成环境问题一整轮。** `horosa-dev/SKILL.md` 的
+  PYTHONPATH 少了 `Horosa-Web/vendor`（ken 与神数引擎都在那儿）且用裸 `python`（缺 9 个只装在内嵌
+  解释器里的依赖）。照它起服务，taiyi/jinkou/sanshiunited/wangji/taixuan/chunzi 全挂不上，
+  症状看着就是「这些技法坏了」。**判据 = 启动日志 `kentang prewarm ready (loaded=18, failed=0)`。**
+  经验：**当「环境问题」开始解释越来越多的失败时，先怀疑自己的复现命令。**
+
+
 ### v0.26.0 / 2026-08-04 — 上游 v3.7.x 同步：三个**机制**缺口比内容缺口更贵
 
 本轮真正的发现不是「少了两个技法」，而是**四把守卫全绿的情况下少了两个技法**。内容一天补完，
@@ -266,6 +328,8 @@ checkout 上根本没有，实测输出 `::notice::export-section-baseline skipp
 - 跨树两闸落地为**本机 pre-tag 步骤** `scripts/preflight_release.py`（须 `HOROSA_SOURCE_ROOT` 指向
   Horosa-Public，否则直接拒绝运行），写进 AGENTS §7 发布协议。成功会重写
   `vendor_sync_state.json`，**该 diff 即「跨树核对真发生过」的 git 证据**。
+  （v0.26.0 起该文件已被 `contracts/upstream_provenance.json` 取代——超集，另记上游 commit /
+  应用版本 / preset 键集 / core-js 树摘要；`tests/test_verify_upstream_sync.py` 断言旧文件必须不存在。）
 - `verify_upstream_sync.py` 在无上游树时**不再纯 skip**：改为断言 state 里的 `skill_mirrored_version`
   是否仍等于 registry 常量，落后就打 `::warning`（当前就在报 48 vs 50）。CI 保持绿（避免 v0.25.0 那种
   带红上 main），但漂移从此在每次 run 里可见，而不是无声无息。
@@ -284,10 +348,22 @@ checkout 上根本没有，实测输出 `::notice::export-section-baseline skipp
 
 **根因分三类（别混为一谈）**：
 
-1. **4 条是本机环境，不是回归**：`xiaoliuren` / `feigong` / `zhengchuan_tieban` / `zhengchuan_dading`
-   全部死在 `/nongli/time` → HTTP 500 `{"ResultCode":9999,"Result":"no.register.app.in.sys.forapp%3A"}`。
-   Java 聚合层的 app 注册在 **Mongo** 里，本机无 Mongo → 这一族路由（`/nongli/time`·`/bazi/birth`·
-   `/ziwei/birth`·`/liureng/*`）恒 9999。**`doctor` 探的是 `/common/time`，根本不碰这族路由——
+1. **4 条死在 `/nongli/time`** ：`xiaoliuren` / `feigong` / `zhengchuan_tieban` / `zhengchuan_dading`。
+
+   > 🔴 **本条的归因在 v0.26.1 被推翻，保留原文供对照。** 当时判为「Java 聚合层的 app 注册在 Mongo 里，
+   > 本机无 Mongo → 这一族路由恒 9999（`no.register.app.in.sys.forapp`）」。v0.26.1 复审实测：**Mongo
+   > 在跑**、日志里**零** `no.register.app`、真实错误码是 **`200001 param error`**。真因是**本仓的产品
+   > bug**：这五个占时工具（还有无测试覆盖的 `xiaochengtu`/`guice`）用 `payload.get("lat")` 取值，而
+   > schema 把 `lat` 列为可选 → 把 **`lat: null`** 发给要求 lon+lat 均非空的 `/nongli/time`。
+   > 对照 `qimen`/`taiyi` 用的是 `payload["lat"]`（必填），所以它们从来不犯。
+   >
+   > **为什么会误诊成环境问题**：Java 的农历结果按**年**缓存。任何一次带 lat 的请求都会把该年焐热，
+   > 此后同年的无 lat 请求**全部成功**。于是它表现为「有时好有时坏、换台机器就好了」。决定性实验：
+   > 同一 commit 下先对 1998 年发一次带 lat 的请求，两个原本红的 zhengchuan 测试立刻转绿。
+   > **诊断这类「时好时坏」务必换一个冷年份**，否则你在测一个已经被自己焐热的缓存。
+   > 修复见 `service.py::_require_cast_geo`（缺 lon/lat 提前报结构化错误，不再把 null 发出去）。
+
+   下面这段关于 doctor / selfcheck 的结论**仍然成立**，与归因无关：**`doctor` 探的是 `/common/time`，根本不碰这族路由——
    所以 `status: ready` 不构成「Java 侧技法可用」的证据。`selfcheck` 更迷惑：它的 `compute` 步骤
    报 `tool: nongli_time, ok: true`，但那是 issue #14 加的 **chart 侧回退探针**在答题——同一时刻
    直接 POST `/nongli/time` 仍是 500 / 9999（v0.25.1 装完新 runtime 实测）。

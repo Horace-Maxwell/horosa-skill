@@ -438,7 +438,8 @@ def main() -> None:
     print(
         f"upstream-sync: ok (upstream {app_version} @ {upstream_sha[:12] or '?'}; aiExport v{upstream_version} "
         f"== mirror; {len(upstream_keys)} technique keys; {len(SENTINELS)} sentinels identical; "
-        f"{compared} core-js files identical, {len(unmatched)} unmatched/bespoke)"
+        f"{compared} core-js files identical, {len(unmatched)} unmatched/bespoke; "
+        f"{tree_checked} runtime-subtree files compared)"
     )
 
 

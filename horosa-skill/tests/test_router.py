@@ -82,6 +82,10 @@ def test_election_family_is_mutually_exclusive() -> None:
     cases = {
         "奇门择日搬家": ["qimenzeri"],
         "奇门找局挑时辰": ["qimenzeri"],
+        # v0.26.1：触发词是裸「找局」，排除表却只写了连写的「奇门找局」——
+        # 「奇门遁甲找局挑吉时」于是同时点亮 qimenzeri 与 qimen。
+        "奇门遁甲找局挑吉时": ["qimenzeri"],
+        "奇门 找局": ["qimenzeri"],
         "天星择日选婚期": ["tianxing"],
         "征象搜索找吉时": ["tianxing"],
         "择日结婚": ["election"],          # 单点评估仍归 election
