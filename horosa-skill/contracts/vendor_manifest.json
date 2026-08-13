@@ -579,6 +579,48 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "divination/zeri/conditionGlyph.js": {
+      "upstream": "divination/zeri/conditionGlyph.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/conditionTypes.js": {
+      "upstream": "divination/zeri/conditionTypes.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/intervalOps.js": {
+      "upstream": "divination/zeri/intervalOps.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/qimenConditionTypes.js": {
+      "upstream": "divination/zeri/qimenConditionTypes.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/qimenScanEngine.js": {
+      "upstream": "divination/zeri/qimenScanEngine.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/qimenZeriSnapshot.js": {
+      "upstream": "divination/zeri/qimenZeriSnapshot.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/tianxingSnapshot.js": {
+      "upstream": "divination/zeri/tianxingSnapshot.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../constants/AstroConst.js",
+          "to": "../../../constants/AstroConst.js",
+          "why": "钉到 src/constants 的共享 shim（HOUSE_SYSTEM_OPTIONS 在那里；vendor/constants 是 Uranian 子集）"
+        }
+      ]
+    },
     "dunjia/DunJiaBaGongRules.js": {
       "upstream": "components/dunjia/DunJiaBaGongRules.js",
       "mode": "verbatim",
@@ -596,6 +638,11 @@
     },
     "dunjia/DunJiaFaDoc.js": {
       "upstream": "components/dunjia/DunJiaFaDoc.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "dunjia/jinhanRiJia.js": {
+      "upstream": "components/dunjia/jinhanRiJia.js",
       "mode": "verbatim",
       "deviations": []
     },
@@ -623,6 +670,11 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "fengshui/fengshuiZeriDeepData.js": {
+      "upstream": "components/fengshui/fengshuiZeriDeepData.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "fengshui/liqiCore.js": {
       "upstream": "components/fengshui/liqiCore.js",
       "mode": "verbatim",
@@ -630,6 +682,11 @@
     },
     "fengshui/zeri.js": {
       "upstream": "components/fengshui/zeri.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "fengshui/zeriDeep.js": {
+      "upstream": "components/fengshui/zeriDeep.js",
       "mode": "verbatim",
       "deviations": []
     },
@@ -780,6 +837,12 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "gua/liuyaoTianshi.js": {
+      "upstream": "components/gua/liuyaoTianshi.js",
+      "mode": "verbatim",
+      "deviations": [],
+      "why": "上游 v3.6.0「六爻天时占法五家」，本仓从未 vendor —— liuyaoFacade.js 一直 import 着一个不存在的模块。"
+    },
     "gua/liuyaoYingQi.js": {
       "upstream": "components/gua/liuyaoYingQi.js",
       "mode": "verbatim",
@@ -895,6 +958,33 @@
     },
     "jinkou/JinKouState.js": {
       "upstream": "components/jinkou/JinKouState.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "lingqi/core/lingqiCast.js": {
+      "upstream": "components/lingqi/core/lingqiCast.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "stub_import",
+          "specifier": "node-forge",
+          "stub": "// headless shim：上游只用 node-forge 取 SHA-256。改用 Node 内置 crypto —— 摘要逐字节一致，\n// 却省掉一个 npm 依赖（离线 runtime 要打包，且 loadcheck 会因缺包整棵 tarot/engine 加载失败）。\n// 保留 forge 的调用形状而不改上游函数体，是为了让本文件其余部分继续逐字 verbatim。\nimport { createHash } from 'node:crypto';\nfunction _sha256Md(){\n\tconst parts = [];\n\treturn {\n\t\tupdate(s){ parts.push(String(s)); return this; },\n\t\tdigest(){ return { toHex: () => createHash('sha256').update(parts.join(''), 'utf8').digest('hex') }; },\n\t};\n}\nconst forge = { md: { sha256: { create: _sha256Md } } };",
+          "why": "与 tarot/engine/shuffle.js 同因同治：上游只用 node-forge 取 SHA-256，headless 改用 node:crypto，摘要逐字节一致且不给离线 runtime 增依赖"
+        }
+      ]
+    },
+    "lingqi/data/lingqiJing.js": {
+      "upstream": "components/lingqi/data/lingqiJing.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "lingqi/data/lingqiT2S.js": {
+      "upstream": "components/lingqi/data/lingqiT2S.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "lingqi/lingqiSnapshot.js": {
+      "upstream": "components/lingqi/lingqiSnapshot.js",
       "mode": "verbatim",
       "deviations": []
     },
@@ -1040,8 +1130,18 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "tarot/decks/cardNotes.js": {
+      "upstream": "components/tarot/decks/cardNotes.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "tarot/decks/cartomancy.js": {
       "upstream": "components/tarot/decks/cartomancy.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/decks/comboThemes.js": {
+      "upstream": "components/tarot/decks/comboThemes.js",
       "mode": "verbatim",
       "deviations": []
     },
@@ -1057,6 +1157,11 @@
     },
     "tarot/decks/correspondences.js": {
       "upstream": "components/tarot/decks/correspondences.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/decks/courtSystems.js": {
+      "upstream": "components/tarot/decks/courtSystems.js",
       "mode": "verbatim",
       "deviations": []
     },
@@ -1085,6 +1190,11 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "tarot/decks/marseilleMeanings.js": {
+      "upstream": "components/tarot/decks/marseilleMeanings.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "tarot/decks/meanings78.js": {
       "upstream": "components/tarot/decks/meanings78.js",
       "mode": "verbatim",
@@ -1102,6 +1212,11 @@
     },
     "tarot/decks/visconti.js": {
       "upstream": "components/tarot/decks/visconti.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/engine/arcana.js": {
+      "upstream": "components/tarot/engine/arcana.js",
       "mode": "verbatim",
       "deviations": []
     },
@@ -1141,6 +1256,11 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "tarot/engine/pairReading.js": {
+      "upstream": "components/tarot/engine/pairReading.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "tarot/engine/reading.js": {
       "upstream": "components/tarot/engine/reading.js",
       "mode": "verbatim",
@@ -1175,6 +1295,11 @@
     },
     "tarot/engine/spreads.js": {
       "upstream": "components/tarot/engine/spreads.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "tarot/engine/timingMethods.js": {
+      "upstream": "components/tarot/engine/timingMethods.js",
       "mode": "verbatim",
       "deviations": []
     },
@@ -1385,6 +1510,11 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "ziwei/data/tables/ziweistarlight_quanshu_full.json": {
+      "upstream": "components/ziwei/data/tables/ziweistarlight_quanshu_full.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "ziwei/data/ziweiTables.js": {
       "upstream": "components/ziwei/data/ziweiTables.js",
       "mode": "verbatim",
@@ -1405,57 +1535,14 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "ziwei/ziweiSchools.js": {
+      "upstream": "components/ziwei/ziweiSchools.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "ziwei/zwLuckItems.js": {
       "mode": "bespoke",
       "why": "no upstream file of this name (skill-authored)"
-    },
-    "gua/liuyaoTianshi.js": {
-      "upstream": "components/gua/liuyaoTianshi.js",
-      "mode": "verbatim",
-      "deviations": [],
-      "why": "上游 v3.6.0「六爻天时占法五家」，本仓从未 vendor —— liuyaoFacade.js 一直 import 着一个不存在的模块。"
-    },
-    "divination/zeri/conditionTypes.js": {
-      "upstream": "divination/zeri/conditionTypes.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "divination/zeri/qimenConditionTypes.js": {
-      "upstream": "divination/zeri/qimenConditionTypes.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "divination/zeri/qimenScanEngine.js": {
-      "upstream": "divination/zeri/qimenScanEngine.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "divination/zeri/qimenZeriSnapshot.js": {
-      "upstream": "divination/zeri/qimenZeriSnapshot.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "divination/zeri/conditionGlyph.js": {
-      "upstream": "divination/zeri/conditionGlyph.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "divination/zeri/tianxingSnapshot.js": {
-      "upstream": "divination/zeri/tianxingSnapshot.js",
-      "mode": "verbatim",
-      "deviations": [
-        {
-          "kind": "import_redirect",
-          "specifier": "../../constants/AstroConst.js",
-          "to": "../../../constants/AstroConst.js",
-          "why": "钉到 src/constants 的共享 shim（HOUSE_SYSTEM_OPTIONS 在那里；vendor/constants 是 Uranian 子集）"
-        }
-      ]
-    },
-    "divination/zeri/intervalOps.js": {
-      "upstream": "divination/zeri/intervalOps.js",
-      "mode": "verbatim",
-      "deviations": []
     }
   }
 }

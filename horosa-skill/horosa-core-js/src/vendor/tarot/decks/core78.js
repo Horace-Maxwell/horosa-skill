@@ -122,6 +122,21 @@ export function buildCore78(){
 
 export const CORE78 = buildCore78();
 
+// TP4 空白牌(第 79 张,可选):传统上以其入占,义为「未揭示的更大安排/拒答」。id=池尾。
+export function makeBlankCard(id){
+	return {
+		id, sid: 'blank', arcana: 'blank', suit: 'blank', number: null, court: null,
+		name_cn: '空白牌', name_en: 'The Blank', names: null, element: '', symbol: '□',
+		hebrew: null, astro: null, path: null, join: null, sephira: null,
+		decanTitle: null, decanPlanet: null, decanSign: null, courtEie: null, courtSpan: null,
+		polarity: 0, countingValue: 0,
+		keywords_upright: ['未揭示的更大安排', '留白', '顺其自然'],
+		keywords_reversed: ['拒答', '未定', '此刻不宜追问'],
+		meanings: { up: ['未揭示的更大安排', '留白', '顺其自然'], rev: ['拒答', '未定', '此刻不宜追问'] },
+		meaningsManual: { up: '生命保留的更大安排——尚未揭示,顺其自然,无需强解', rev: '拒答/未定——此题此刻不宜追问,换个时间或问法' },
+	};
+}
+
 // id(0..77)→ 牌,越界 null(facade 兼容)
 export function getCard(id){
 	if(typeof id !== 'number' || id < 0 || id >= CORE78.length){ return null; }
@@ -137,7 +152,7 @@ export function cardKeywords(card, reversed){
 // 4 大核心牌组配置(uses_reversals/p_reversed/dignities/variant/illustrated_pips)
 export const CORE_DECKS = {
 	rws: { id: 'rws', title: 'Rider–Waite–Smith (RWS) 韦特-史密斯', nameKey: 'rws', size: 78, structure: '78major56minor', usesReversals: true, pReversed: 0.5, dignities: false, variant: 'A', illustratedPips: true },
-	tdm: { id: 'tdm', title: 'Tarot de Marseille (TdM) 马赛塔罗', nameKey: 'tdm', size: 78, structure: '78major56minor', usesReversals: false, pReversed: 0.5, dignities: false, variant: 'C', illustratedPips: false },
+	tdm: { id: 'tdm', title: 'Tarot de Marseille (TdM) 马赛塔罗', nameKey: 'tdm', size: 78, structure: '78major56minor', usesReversals: false, pReversed: 0.5, dignities: false, variant: 'C', illustratedPips: false, meaningDefault: 'degrees' },
 	thoth: { id: 'thoth', title: 'Thoth 托特塔罗', nameKey: 'thoth', size: 78, structure: '78major56minor', usesReversals: false, pReversed: 0.5, dignities: true, variant: 'B', illustratedPips: true },
 	golden_dawn: { id: 'golden_dawn', title: 'Golden Dawn (Book T) 金色黎明', nameKey: 'golden_dawn', size: 78, structure: '78major56minor', usesReversals: false, pReversed: 0.5, dignities: true, variant: 'A', illustratedPips: true },
 };

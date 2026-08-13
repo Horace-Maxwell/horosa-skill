@@ -1,3 +1,5 @@
+import ast
+import collections
 import json
 from pathlib import Path
 
@@ -9,6 +11,31 @@ from horosa_skill.service import HorosaSkillService
 
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "export_snapshots"
+REGISTRY_SOURCE = Path(__file__).resolve().parents[1] / "src/horosa_skill/exports/registry.py"
+
+
+def test_registry_tables_have_no_duplicate_keys() -> None:
+    """重复字面量键 = Python 静默保留最后一个，前面那份整条消失。
+
+    registry 的每张表都是「技法键 → 段列表」，一个技法的条目常常分散在几百行里按主题分组，
+    给某族补段时非常容易在另一处又写一个同名键——解释器不报错，导入后前一份 list 直接不存在，
+    症状是「明明加了 optional 段，missing 里还在报」。本轮补 v13 段时就现场踩了一次
+    （cetian / astrochart_like 各一处）。
+    """
+    tree = ast.parse(REGISTRY_SOURCE.read_text(encoding="utf-8"))
+    problems: list[str] = []
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Dict):
+            continue
+        name = node.targets[0].id if isinstance(node.targets[0], ast.Name) else "<expr>"
+        keys = [key.value for key in node.value.keys if isinstance(key, ast.Constant)]
+        for key, count in collections.Counter(keys).items():
+            if count > 1:
+                lines = [
+                    k.lineno for k in node.value.keys if isinstance(k, ast.Constant) and k.value == key
+                ]
+                problems.append(f"{name}[{key!r}] appears {count}× at lines {lines}")
+    assert problems == [], "合并到同一个键上，别新增重复键：\n  " + "\n  ".join(problems)
 
 
 def make_service(tmp_path) -> HorosaSkillService:
@@ -32,7 +59,7 @@ def test_export_registry_returns_ai_export_catalog(tmp_path) -> None:
 
     assert result.ok is True
     assert result.data["settings_key"] == "horosa.ai.export.settings.v1"
-    assert result.data["settings_version"] == 12  # v0.23.0: 5 新技法 + geomancy/primarydirect 对齐
+    assert result.data["settings_version"] == 13  # v0.27.0: lingqi 入册 + 八键补段（上游 v3.8.0→v3.9.1）
     assert result.data["selected_technique"]["key"] == "qimen"
     assert "奇门演卦" in result.data["selected_technique"]["preset_sections"]
 

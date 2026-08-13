@@ -8,6 +8,7 @@ import { runJinkou } from './jinkou.js';
 import { runLiureng } from './liureng.js';
 import { runLiuyao } from './liuyao.js';
 import { runBaziGeju } from './baziGeju.js';
+import { runLingqi } from './lingqi.js';
 import { runTarot } from './tarot.js';
 import { runProgExtra } from './progextra.js';
 import { runQimen } from './qimen.js';
@@ -63,6 +64,7 @@ const TOOL_RUNNERS = {
   liureng: runLiureng,
   liuyao: runLiuyao,
   bazi_geju: runBaziGeju,
+  lingqi: runLingqi,
   tarot: runTarot,
   tongshefa: runTongSheFa,
   canping: runCanping,

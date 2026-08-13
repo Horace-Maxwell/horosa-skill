@@ -43,6 +43,7 @@ GATES: tuple[tuple[str, list[str], bool], ...] = (
     # Windows 半由 sync_windows_release.py --upload 另传），因此这一闸只**警告**、不拦。
     ("vendored runtime inputs", ["scripts/verify_vendor_runtime_sources.py"], False),
     ("export-contract mirror", ["scripts/verify_export_contract_mirror.py"], True),
+    ("technique compute-source declarations", ["scripts/verify_technique_provenance.py"], True),
     ("docs sync", ["scripts/verify_docs_sync.py"], True),
     ("runtime-builder parity", ["scripts/verify_builder_parity.py"], True),
 )

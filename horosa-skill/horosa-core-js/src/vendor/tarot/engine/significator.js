@@ -15,10 +15,12 @@ export function significatorId(gender, age, sign){
 	return `${suit}_${rank}`;
 }
 
-// 据 settings.sig 解析出要剔除的 sid(none/auto/manual)。返回 sid 或 null。
+// 据 settings.sig 解析出要剔除的 sid(none/auto/manual/etteilla)。返回 sid 或 null。
+// etteilla(TP4):此制双指示牌——男问者=牌一(库首),女问者=牌八(库第八);按性别取其一剔池为锚。
 export function resolveSignificatorSid(sig){
 	if(!sig || !sig.mode || sig.mode === 'none'){ return null; }
 	if(sig.mode === 'manual'){ return sig.manualId || null; }
+	if(sig.mode === 'etteilla'){ return sig.gender === 'female' ? 'the_chariot' : 'the_fool'; }
 	if(sig.mode === 'auto'){
 		const age = (sig.age === '' || sig.age === null || sig.age === undefined) ? null : Number(sig.age);
 		return significatorId(sig.gender || 'male', Number.isFinite(age) ? age : null, sig.sign || null);

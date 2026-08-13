@@ -1,7 +1,7 @@
 // 牌组注册表:统一 Deck schema + capabilities + 各 deck 注册。caps 驱动 UI 条件渲染与读法分派。
 // 全部流派(可变张数 22/36/52/74/78/97、可变结构、可变读法)都在此登记;P0/P1 先登记 4 大核心 78 张。
 import { CORE78, CORE_DECKS } from '../decks/core78.js';
-import { TAROT_SPREADS } from './spreads.js';
+import { TAROT_SPREADS, TAROT_SPREADS_78_EXTRA } from './spreads.js';
 
 const REGISTRY = {};
 const GROUPS = []; // [{ group, items:[deckId] }]
@@ -41,9 +41,12 @@ export function listDeckIds(){ return Object.keys(REGISTRY); }
 // 默认能力(4 核心 78 张):有大小阿卡纳、78 张、塔罗读法、可指示牌、可变体
 // G1:补全牌阵大全(20+ 新阵,78 张核心牌组全开放);G7:开钥(opening_of_key)仅 golden_dawn/thoth 开放(+ ook 标记驱动专属分堆视图)。
 function tarot78Caps(deck){
-	const spreads = TAROT_SPREADS.slice();
+	// TP5:78 张核心另享大牌子集/26 张/31 张三阵(22 大牌组位数或结构不敷,不入)。
+	const spreads = TAROT_SPREADS.concat(TAROT_SPREADS_78_EXTRA);
 	const ook = deck.id === 'golden_dawn' || deck.id === 'thoth';
 	if(ook){ spreads.push('opening_of_key'); }
+	// TP1 单张逆位占卜:仅默认用逆位的牌组开放(无逆位教义的牌组不出此阵)。
+	if(deck.usesReversals){ spreads.push('first_reversal'); }
 	return {
 		reversals: !!deck.usesReversals,
 		dignities: !!deck.dignities,
@@ -53,6 +56,8 @@ function tarot78Caps(deck){
 		embeddedPlayingCard: false,
 		readingMethod: 'tarot',
 		ook,
+		colorScale: ook,          // TP3:色阶母体系牌组(golden_dawn/thoth)开四色阶点(大牌路径色+小牌辉耀色);bota 另于自身 caps 开
+		blank: true,              // TP4:78 张核心牌组可选加入空白牌(79 张制)
 		spreads,
 	};
 }

@@ -40,8 +40,14 @@ from horosa_skill.input_normalization import normalize_request_payload
 from horosa_skill.knowledge import build_knowledge_registry, read_knowledge_entry
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.reports import ReportBuilder, render_report
+from horosa_skill.reports.technique_card import build_technique_card, build_technique_report
 from horosa_skill.runtime import HorosaRuntimeManager
-from horosa_skill.schemas.common import DispatchEnvelope, ErrorInfo, ToolEnvelope
+from horosa_skill.schemas.common import (
+    TOOL_ENVELOPE_SCHEMA_VERSION,
+    DispatchEnvelope,
+    ErrorInfo,
+    ToolEnvelope,
+)
 from horosa_skill.schemas.tools import (
     DispatchInput,
     MemoryAnswerInput,
@@ -50,6 +56,7 @@ from horosa_skill.schemas.tools import (
     ReportFromToolInput,
     ReportRenderInput,
     ReportTemplateInput,
+    TechniqueReportInput,
 )
 from horosa_skill.tracing import TraceRecorder
 
@@ -128,6 +135,7 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "qimenzeri": "qimenzeri",
     "geomancy": "geomancy",
     "tarot": "tarot",
+    "lingqi": "lingqi",
     "wangji": "wangji",
     "wuzhao": "wuzhao",
     "taixuan": "taixuan",
@@ -5909,6 +5917,8 @@ def _apply_response_view(envelope: ToolEnvelope, input_normalized: dict[str, Any
         data["export_snapshot"] = slim
     if isinstance(data.get("snapshot_text"), str):
         data["snapshot_text"] = ""
+    # `technique_card` **不裁**：它几行大小，而且正是「省 token 时也要知道这盘是谁算的、什么口径」
+    # 的那份数据。裁掉它等于让最需要溯源的场景（精简模式）反而没有溯源。
     envelope.data = data
     envelope.warnings = [
         *envelope.warnings,
@@ -9042,6 +9052,124 @@ class HorosaSkillService:
             "export_snapshot": self._augment_export_payload(technique="tarot", snapshot_text=snapshot_text),
         }
 
+    def _attach_technique_card(
+        self, tool_name: str, input_normalized: dict[str, Any], response_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        """给技法响应挂上技法依据卡（`data.technique_card`）。
+
+        best-effort：卡片是元数据，任何构造失败都不许影响技法结果本身——宁可没有卡，
+        也不能因为一份说明性数据让一次真实起盘失败（与 tracing 同款纪律，§9）。
+        `HOROSA_TECHNIQUE_CARD=0` 关闭。
+        """
+        if not isinstance(response_data, dict):
+            return response_data
+        if os.environ.get("HOROSA_TECHNIQUE_CARD", "1").strip() in {"0", "false", "no"}:
+            return response_data
+        try:
+            card = build_technique_card(
+                tool_name=tool_name,
+                technique_key=TOOL_EXPORT_TECHNIQUE_MAP.get(tool_name),
+                domain=TOOL_DEFINITIONS[tool_name].domain if tool_name in TOOL_DEFINITIONS else None,
+                input_normalized=input_normalized,
+                response_data=response_data,
+                skill_version=__version__,
+                envelope_schema=TOOL_ENVELOPE_SCHEMA_VERSION,
+                runtime_version=self._installed_runtime_version(),
+            )
+        except Exception:  # noqa: BLE001 - 元数据失败绝不拖垮技法调用
+            logger.debug("technique card build failed for %s", tool_name, exc_info=True)
+            return response_data
+        augmented = dict(response_data)
+        augmented["technique_card"] = card
+        return augmented
+
+    def _installed_runtime_version(self) -> str | None:
+        try:
+            manifest = self.runtime_manager.load_installed_manifest()
+        except Exception:  # noqa: BLE001 - 没装 runtime 是正常状态，不是错误
+            return None
+        if isinstance(manifest, dict):
+            version = manifest.get("version")
+            if isinstance(version, str) and version.strip():
+                return version.strip()
+        return None
+
+    def _run_lingqi_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 灵棋经（上游 v3.9.0）：纯 headless JS —— 占时种子掷十二棋 → counts[上,中,下] → 六十四卦查表，
+        # 七段快照由 vendored lingqiSnapshot 产出。种子算法留在 vendored core 里（tools/lingqi.js 只喂
+        # 等价的 date/time 字段 shim），两边不各写一份。
+        parts = _ken_datetime_parts(payload)
+        js_payload: dict[str, Any] = {
+            "year": parts["year"],
+            "month": parts["month"],
+            "day": parts["day"],
+            "hour": parts["hour"],
+            "minute": parts["minute"],
+            "question": payload.get("question") or "",
+            "category": payload.get("category") or "general",
+            "timeLines": self._lingqi_time_lines(payload, parts),
+        }
+        if isinstance(payload.get("counts"), list):
+            js_payload["counts"] = payload["counts"]
+        if isinstance(payload.get("zhuVisible"), dict):
+            js_payload["zhuVisible"] = payload["zhuVisible"]
+        # 六戊日提示（卷首「六戊日不宜占卜」）需要日干支。走本仓 nongli 后端拿，**不**在 JS 侧引
+        # lunar-javascript 另算一份——同口径原则（法奇门 faRelatedPeople 年干也是这么处理的）。
+        # 拿不到就不给该行：提示缺失远好于按错口径印一行假的。
+        day_ganzhi = self._lingqi_day_ganzhi(payload)
+        if day_ganzhi:
+            js_payload["dayGanZi"] = day_ganzhi
+        try:
+            result = self.js_client.run("lingqi", js_payload)
+        except ToolTransportError:
+            result = {}
+        snapshot_text = result.get("snapshot_text") if isinstance(result, dict) else ""
+        return {
+            "counts": (isinstance(result, dict) and result.get("counts")) or js_payload.get("counts"),
+            "seed": (isinstance(result, dict) and result.get("seed")) or None,
+            "category": js_payload["category"],
+            "day_ganzhi": day_ganzhi,
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="lingqi", snapshot_text=snapshot_text),
+        }
+
+    def _lingqi_time_lines(self, payload: dict[str, Any], parts: dict[str, int]) -> list[str]:
+        """[起盘信息] 的占时行。上游由 UI 拼，headless 这边按归一化输入如实拼一行。"""
+        zone = f"{payload.get('zone') or ''}".strip()
+        stamp = (
+            f"{parts['year']:04d}-{parts['month']:02d}-{parts['day']:02d} "
+            f"{parts['hour']:02d}:{parts['minute']:02d}"
+        )
+        return [f"占时：{stamp}{f'（{zone}）' if zone else ''}"]
+
+    def _lingqi_day_ganzhi(self, payload: dict[str, Any]) -> str:
+        try:
+            nongli = self._call_remote(
+                "/nongli/time",
+                {
+                    "date": payload.get("date"),
+                    "time": payload.get("time") or "00:00:00",
+                    "zone": payload.get("zone"),
+                    "lat": payload.get("lat"),
+                    "lon": payload.get("lon"),
+                    "after23NewDay": payload.get("after23NewDay"),
+                    "lateZiHourUseNextDay": payload.get("lateZiHourUseNextDay"),
+                },
+            )
+        except HorosaSkillError:
+            return ""
+        if not isinstance(nongli, dict):
+            return ""
+        # 后端两种形状都见过：顶层 dayGanZi 串，或 bazi.day.stem.cell。取到哪个用哪个，取不到就空。
+        raw = nongli.get("dayGanZi") or nongli.get("dayGanzhi")
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip()
+        bazi = nongli.get("bazi") if isinstance(nongli.get("bazi"), dict) else {}
+        day = bazi.get("day") if isinstance(bazi.get("day"), dict) else {}
+        stem = day.get("stem") if isinstance(day.get("stem"), dict) else {}
+        cell = stem.get("cell")
+        return f"{cell}".strip() if isinstance(cell, str) else ""
+
     def _run_geomancy_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 天文地占：以起卦时刻确定性起卦（castMethod='time' + timeSeed 由 年月日时分 派生，同盘可复现），
         # 后端 /geomancy/reading 由 4 母卦推 16 图形 + 十二宫图形入宫 + 判官/见证/解读技法 + 转宫派生 + 定局落星。
@@ -9183,6 +9311,8 @@ class HorosaSkillService:
             return self._run_geomancy_tool(payload)
         if definition.name == "tarot":
             return self._run_tarot_tool(payload)
+        if definition.name == "lingqi":
+            return self._run_lingqi_tool(payload)
         if definition.name == "tongshefa":
             return self._run_tongshefa_tool(payload)
         if definition.name == "canping":
@@ -9332,6 +9462,9 @@ class HorosaSkillService:
                 response_data = self._attach_ziwei_extras(tool_name, input_normalized, response_data)
                 response_data = self._attach_relative_score(tool_name, input_normalized, response_data)
                 response_data = _attach_export_contract(tool_name, input_normalized, response_data)
+                # 技法依据卡：必须在 save_result **之前**挂，memory 才存到全量卡；
+                # `_apply_response_view` 在存档之后裁剪，且显式豁免这个键（见那里的说明）。
+                response_data = self._attach_technique_card(tool_name, input_normalized, response_data)
                 summary = _generic_summary(tool_name, response_data)
                 # 工具内部经 `_warnings` 上抛的降级说明（如子引擎不可用）落入 envelope.warnings，
                 # 不静默：调用方能看到「结果不完整」而 ok 仍为 True（优雅降级 ≠ 无声降级）。
@@ -9427,6 +9560,15 @@ class HorosaSkillService:
                 envelope.memory_ref = memory_ref
                 trace["run_id"] = effective_run_id
                 trace["artifact_path"] = memory_ref.artifact_path
+                # run_id 要到存档时才存在，所以技法卡的 refs 只能在这里补。存档里的那份没有自己的
+                # run_id（自指），这是正常的——取回时 run_id 本来就是你用来取它的那把钥匙。
+                card = envelope.data.get("technique_card") if isinstance(envelope.data, dict) else None
+                if isinstance(card, dict):
+                    card["refs"] = {
+                        "run_id": effective_run_id,
+                        "trace_id": trace["trace_id"],
+                        "group_id": trace["group_id"],
+                    }
 
             # response_view 视图裁剪在存档之后：memory 保全量，返回体按需精简。
             envelope = _apply_response_view(envelope, input_normalized)
@@ -9927,6 +10069,135 @@ class HorosaSkillService:
                 elif isinstance(section, str) and section.strip():
                     return section.strip()
         return ""
+
+    def technique_report(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """技法依据报告：把已存运行的技法卡渲染成 markdown / json / docx / pdf。
+
+        与 `report_render` 的分工：那份是 **AI 写正文的咨询报告**（没有 ai_report 就拒绝出终稿）；
+        这份是**确定性元数据**——用了什么技法、什么口径、谁算的、段落全不全、版本链——所以随时能出，
+        不需要也不接受 AI 正文。两者不混：`references/reports.md` 明令咨询报告正文不带机器元数据。
+        """
+        with self.tracer.span(
+            workflow_name="report.technique",
+            metadata={"entrypoint": "report.technique", "payload": payload},
+        ) as trace:
+            try:
+                request = TechniqueReportInput.model_validate(payload)
+            except ValidationError as exc:
+                trace["error_code"] = "report.technique.invalid_payload"
+                errors = exc.errors()
+                raise ToolValidationError(
+                    "Invalid payload for technique report.",
+                    code="report.technique.invalid_payload",
+                    details={
+                        "errors": errors,
+                        "agent_recovery": build_validation_recovery(operation_name="technique_report", errors=errors),
+                    },
+                ) from exc
+
+            normalized_format = str(request.format or "markdown").lower().strip()
+            if normalized_format not in {"markdown", "json", "docx", "pdf"}:
+                raise ToolValidationError(
+                    "format must be one of: markdown, json, docx, pdf",
+                    code="report.technique.invalid_format",
+                    details={"format": request.format},
+                )
+
+            scope = "group" if request.group_id else "run"
+            cards, source_runs = self._collect_technique_cards(
+                run_id=request.run_id, group_id=request.group_id
+            )
+            if not cards:
+                raise ToolValidationError(
+                    "No stored run carries a technique card yet — run a technique tool first "
+                    "(cards are attached to every successful technique call).",
+                    code="report.technique.no_cards",
+                    details={"run_id": request.run_id, "group_id": request.group_id},
+                )
+            document = build_technique_report(
+                cards=cards,
+                scope=scope,
+                scope_id=request.group_id or request.run_id or (source_runs[0] if source_runs else None),
+                title=request.title,
+            )
+            if request.include_sections is False:
+                for card in document.get("cards", []):
+                    (card.get("sections") or {}).pop("titles", None)
+
+            scope_id = document["scope_id"] or "latest"
+            if request.output_path:
+                output_path = Path(request.output_path).expanduser().resolve()
+            else:
+                suffix = "md" if normalized_format == "markdown" else normalized_format
+                base = self.store.default_report_path(
+                    run_id=str(scope_id), tool_name="technique", format_name="json"
+                )
+                output_path = base.with_suffix(f".{suffix}")
+            try:
+                rendered = render_report(document, output_path=output_path, format_name=normalized_format)
+            except ValueError as exc:
+                raise ToolValidationError(
+                    str(exc), code="report.technique.render_failed", details={"format": normalized_format}
+                ) from exc
+
+            result = {
+                "ok": True,
+                "schema": document["schema"],
+                "scope": scope,
+                "scope_id": document["scope_id"],
+                "technique_count": document["technique_count"],
+                "consistency": document["consistency"],
+                "artifact_path": rendered["path"],
+                "format": rendered["format"],
+                "file_size": rendered.get("file_size"),
+                "document": document,
+                "summary": [
+                    f"已生成技法依据报告（{document['technique_count']} 个技法）：{rendered['path']}",
+                    *(
+                        []
+                        if document["consistency"]["all_clear"]
+                        else ["⚠️ 报告含一致性告警，请阅读「一致性检查」一节后再引用结论。"]
+                    ),
+                ],
+                "trace_id": trace["trace_id"],
+                "group_id": trace["group_id"],
+            }
+            trace["artifact_path"] = rendered["path"]
+            trace["success"] = True
+            return result
+
+    def _collect_technique_cards(
+        self, *, run_id: str | None, group_id: str | None
+    ) -> tuple[list[dict[str, Any]], list[str]]:
+        """取出目标运行的技法卡（按调用先后）。都不给时取最近一次带卡的运行。"""
+        if group_id:
+            runs = self.store.query_runs(group_id=group_id, include_payload=True, limit=200)
+        elif run_id:
+            runs = self.store.query_runs(run_id=run_id, include_payload=True, limit=1)
+        else:
+            runs = self.store.query_runs(include_payload=True, limit=20)
+        cards: list[dict[str, Any]] = []
+        seen_runs: list[str] = []
+        for run in sorted(runs, key=lambda item: str(item.get("created_at") or "")):
+            for artifact in run.get("artifacts") or []:
+                if artifact.get("kind") != "tool_result":
+                    continue
+                payload = artifact.get("payload")
+                if not isinstance(payload, dict):
+                    continue
+                card = (payload.get("data") or {}).get("technique_card")
+                if isinstance(card, dict):
+                    cards.append(card)
+                    # query_runs 的键是 `run_id`（不是 `id`）。读错键 + `str(None)` = 报告标题和
+                    # 文件名里出现字面 "None" —— f-string None 陷阱的同族（AGENTS §5 步骤 10）：
+                    # 先取值判空，别把 None 直接格式化。
+                    identifier = run.get("run_id")
+                    if isinstance(identifier, str) and identifier and identifier not in seen_runs:
+                        seen_runs.append(identifier)
+            # 无 group 无 run 时只要最近的一份，多取会把不相干的历史运行混进同一份报告。
+            if cards and not group_id and not run_id:
+                break
+        return cards, seen_runs
 
     def _load_report_source(self, run_id: str, tool_name: str | None) -> tuple[dict[str, Any], dict[str, Any]]:
         runs = self.store.query_runs(run_id=run_id, tool=tool_name, include_payload=True, limit=1)

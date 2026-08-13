@@ -1618,3 +1618,60 @@ def test_late_zi_switch_matrix_changes_bazi_pillars(tmp_path) -> None:
     assert pillars({**base, "after23NewDay": 1, "lateZiHourUseNextDay": 1}) == ("壬寅", "庚子")
     assert pillars({**base, "after23NewDay": 0, "lateZiHourUseNextDay": 1}) == ("辛丑", "庚子")
     assert pillars({**base, "after23NewDay": 0, "lateZiHourUseNextDay": 0}) == ("辛丑", "戊子")
+
+
+def test_lingqi_local_tool_runs_headless_engine(tmp_path) -> None:
+    """灵棋经（上游 v3.9.0）：纯 headless JS，无后端依赖 —— 七段恒出 + 导出契约干净。
+
+    与 tongshefa 同档，不挂 @requires_runtime：它只需要 node + vendored 引擎，CI 已 `npm ci --omit=dev`。
+    """
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "lingqi",
+        {
+            "date": "2028-04-06",
+            "time": "09:33:00",
+            "zone": "+08:00",
+            # lat/lon 是 BirthInput 必填：灵棋经本身不用地点，但六戊日提示要打 /nongli/time，
+            # 而它缺 lat 会在冷年份直接 500（v0.26.1 占时五工具那条教训）——所以一并要齐。
+            "lat": "31n13",
+            "lon": "121e28",
+            "question": "事业能否升迁",
+            "category": "career",
+            "agent_confirmed_settings": True,
+            "clarification_notes": "test fixture",
+        },
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    text = result.data["snapshot_text"]
+    for header in ("[起盘信息]", "[棋势]", "[卦象]", "[繇辞]", "[诸家注]", "[课断]", "[断诗]"):
+        assert header in text, header
+    counts = result.data["counts"]
+    assert isinstance(counts, list) and len(counts) == 3 and all(0 <= n <= 4 for n in counts), counts
+    _assert_clean_export(result)
+
+
+def test_lingqi_is_deterministic_per_query_moment_and_honours_frozen_counts(tmp_path) -> None:
+    """古法「不可再擲」：同一占时必须同卦；给了 counts 就复排，绝不重掷。
+
+    这条同时挡住一个很容易犯的实现错误 —— 上游 random 档读 `window.crypto`，headless 无 window 会
+    落到 `Math.random()`，于是同一时刻两次调用得到不同卦。skill 侧只走占时种子，正是为了这个。
+    """
+    service = make_service(tmp_path)
+    payload = {
+        "date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28",
+        "question": "事业", "agent_confirmed_settings": True, "clarification_notes": "test fixture",
+    }
+    first = service.run_tool("lingqi", payload, save_result=False)
+    second = service.run_tool("lingqi", dict(payload), save_result=False)
+    assert first.data["counts"] == second.data["counts"]
+    assert first.data["snapshot_text"] == second.data["snapshot_text"], "同刻同卦必须字节幂等"
+
+    later = service.run_tool("lingqi", {**payload, "time": "10:33:00"}, save_result=False)
+    assert later.ok is True
+    assert later.data["seed"] != first.data["seed"], "换了占时就该换种子（否则占时是死输入）"
+
+    frozen = service.run_tool("lingqi", {**payload, "counts": [4, 0, 2]}, save_result=False)
+    assert frozen.data["counts"] == [4, 0, 2], "冻结卦必须原样复排"
+    assert frozen.data["snapshot_text"] != first.data["snapshot_text"]

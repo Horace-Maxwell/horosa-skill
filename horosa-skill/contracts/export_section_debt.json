@@ -2,13 +2,13 @@
   "_comment": "上游 preset 段级欠账基线（棘轮：只减不增）。回填后跑 --update-baseline 收紧。",
   "source": {
     "kind": "upstream",
-    "aiexport_settings_version": 50
+    "aiexport_settings_version": 55
   },
   "totals": {
-    "missing_sections": 7,
-    "extra_sections": 30,
+    "missing_sections": 11,
+    "extra_sections": 31,
     "absent_keys": 0,
-    "keys_with_debt": 20
+    "keys_with_debt": 21
   },
   "keys": {
     "acg": {
@@ -20,6 +20,12 @@
       ]
     },
     "astrochart": {
+      "missing": [],
+      "extra": [
+        "月宿"
+      ]
+    },
+    "astrochart_like": {
       "missing": [],
       "extra": [
         "月宿"
@@ -43,7 +49,11 @@
       "missing": [
         "风水·玄空六法",
         "风水·命理派",
-        "风水·综合罗经"
+        "风水·综合罗经",
+        "风水·大玄空",
+        "风水·水龙平洋",
+        "风水·改造化煞",
+        "风水·阳宅判断"
       ],
       "extra": []
     },

@@ -36,6 +36,7 @@ from horosa_skill.schemas.tools import (
     ReportFromToolInput,
     ReportRenderInput,
     ReportTemplateInput,
+    TechniqueReportInput,
 )
 from horosa_skill.service import HorosaSkillService
 
@@ -117,7 +118,7 @@ def _return_type(annotation: Any) -> Any:
 def _selected_toolsets() -> set[str] | None:
     """`HOROSA_TOOLSETS=astro,cn` → 只平铺这些 domain 的技法工具（门面工具永远注册）。
 
-    动机：Claude Code 已用工具搜索解决了 91 工具的上下文膨胀，但 Cursor 一类客户端仍有较紧的工具数
+    动机：Claude Code 已用工具搜索解决了 92 工具的上下文膨胀，但 Cursor 一类客户端仍有较紧的工具数
     上限，全量平铺会被静默截断。分组白名单是注册期过滤，不触碰 service 层。
     `HOROSA_TOOLSETS=none` == 精简模式（等价 HOROSA_MCP_COMPACT=1 的技法面）。
     """
@@ -135,28 +136,28 @@ machine (offline); nothing is sent to a remote service.
 
 WHEN TO REACH FOR THIS SERVER
 Any request to 起盘 / 排盘 / 起课 / 起卦 / 算命 / 看运势 / 合盘 / 择日 / 卜卦, or to explain, store, or
-report on such a chart — in any language. Also for 农历/节气/黄历 conversions and celebrity birth data.
+report on such a chart — in any language. Also 农历/节气/黄历 conversions and celebrity birth data.
 
-WHAT IT COVERS (91 tools)
+WHAT IT COVERS (92 tools)
 · Western astrology: natal + derived charts, 20+ predictive systems (returns, progressions, primary
-  directions with 13 house-division methods, zodiacal releasing, firdaria), horary 卜卦, election 择日,
-  astrocartography, harmonics, midpoints/Uranian.
+  directions, zodiacal releasing, firdaria), horary 卜卦, election 择日, astrocartography, midpoints.
 · Chinese metaphysics: 八字, 紫微斗数, 大六壬, 奇门遁甲, 太乙, 金口诀, 三式合一, 六爻, 河洛理数,
-  邵子参评数, 一掌经, 小六壬, 飞宫小奇门, 小成图, 皇极轨策, 统摄法, 宿占.
-· 神数 family (14 engines) + 神数正传 (5 schools), 天文地占 geomancy, tarot.
+  邵子参评数, 一掌经, 小六壬, 飞宫小奇门, 小成图, 皇极轨策, 统摄法, 宿占, 灵棋经.
+· 神数 family (14 engines) + 神数正传 (5 schools), 天文地占, tarot.
 
 HOW TO USE IT
 1. Unsure which tool? Call horosa_agent_guidance (or horosa_dispatch with the raw request).
-2. A calculation tool will REFUSE (agent_guidance.required) when a result-changing setting is missing
-   — time, place, timezone, gender, 流派/宫制/起局方式. Ask the user with the returned
-   details.agent_recovery.prompt_to_user, then retry with agent_confirmed_settings=true (or
-   defaults_accepted=true if they accept Xingque defaults). Never self-confirm.
-3. Explain ONLY from the returned export_snapshot.export_text sections — never hand-calculate a
-   chart, and never claim a missing section means a missing dependency.
-4. Every call is stored locally: horosa_memory_query finds past runs, horosa_report_render turns one
-   into a DOCX/PDF consulting report.
+2. A tool REFUSES (agent_guidance.required) when a result-changing setting is missing — time, place,
+   timezone, gender, 流派/宫制/起局方式. Ask via details.agent_recovery.prompt_to_user, then retry with
+   agent_confirmed_settings=true (or defaults_accepted=true). Never self-confirm.
+3. Explain ONLY from the returned export_snapshot.export_text sections — never hand-calculate, and
+   never read a missing section as a missing dependency.
+4. Every result carries data.technique_card (technique, settings in force, which engine computed it)
+   — quote it after your answer; horosa_technique_report renders it for a run or a whole session.
+5. Calls are stored: horosa_memory_query finds past runs; horosa_report_render writes a DOCX/PDF
+   consulting report from your ai_report.
 
-Set HOROSA_MCP_COMPACT=1 to expose 9 facade tools instead of 91 (horosa_tool_run reaches every
+Set HOROSA_MCP_COMPACT=1 to expose 10 facade tools instead of 92 (horosa_tool_run reaches every
 technique by name); HOROSA_TOOLSETS=astro,cn limits which technique groups are exposed."""
 
 
@@ -733,6 +734,34 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
         annotations=_ANN_RENDER,
     )(horosa_report_render)
 
+    def horosa_technique_report(**kwargs: Any) -> dict[str, Any]:
+        try:
+            return service.technique_report(
+                _normalize_mcp_request(_merge_mcp_arguments(kwargs), TechniqueReportInput)
+            )
+        except ToolValidationError as exc:
+            return _mcp_error_payload(exc)
+        except Exception as exc:  # noqa: BLE001 - never break the MCP session on a report/IO error
+            return _mcp_internal_error_payload(exc)
+    horosa_technique_report.__doc__ = (
+        "Render the DETERMINISTIC method/provenance report for stored runs: which techniques ran, "
+        "which result-sensitive settings were in force (晚子时 switches, 贵人法, ayanamsa, …), which "
+        "engine actually computed each one, section coverage, and the version chain. Pass run_id for "
+        "one call or group_id to cover a whole session (it then also flags cross-technique setting "
+        "conflicts). format = markdown | json | docx | pdf.\n\n"
+        "This is NOT the consulting report: it needs no ai_report and never contains an interpretation. "
+        "Use horosa_report_render for the AI-authored reading."
+    )
+    horosa_technique_report.__signature__ = _signature_for_input_model(TechniqueReportInput)
+    horosa_technique_report.__annotations__ = {"return": dict[str, Any]}
+    mcp.tool(
+        name="horosa_technique_report",
+        title="技法依据报告 / technique provenance report",
+        # 只读已存 run + 渲染一个文件：不起盘、不改盘面记录，同参数同结果 → readOnly + idempotent。
+        # openWorld 恒 False（local-first）。如实标注，目录审核会核。
+        annotations=_ANN_QUERY,
+    )(horosa_technique_report)
+
     # horosa_report_from_run 已下线：与 horosa_report_render 逐行同义（同一 ReportRenderInput
     # → service.report_render），两个同义工具挤占 tools/list 并造成「该用哪个」歧义。
 
@@ -845,7 +874,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
 
     if settings.mcp_compact:
         # 精简模式（8 门面 + tool_run = 9 工具）：技法工具不平铺，注册一个按名直呼的通用工具（dispatch 关键词路由只覆盖部分技法，
-        # 直呼通道保证 78 技法全部可达）；澄清闸照常生效。
+        # 直呼通道保证 92 技法全部可达）；澄清闸照常生效。
         async def horosa_tool_run(**kwargs: Any) -> ToolEnvelope:
             # tool_name 必须在合并之前取走：它是 `request` 的**兄弟**参数，而 `_merge_mcp_arguments`
             # 在 request 存在时会整体改用 request 作为载荷（否则 `{tool_name, request}` 这种最常见的

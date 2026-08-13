@@ -468,6 +468,7 @@ class MemoryStore:
         self,
         *,
         run_id: str | None = None,
+        group_id: str | None = None,
         tool: str | None = None,
         entity: str | None = None,
         text: str | None = None,
@@ -493,6 +494,11 @@ class MemoryStore:
         if run_id:
             sql.append("AND runs.id = ?")
             params.append(run_id)
+        # 会话过滤：`runs.group_id` 一直有值也一直有索引（idx_runs_group），只是从来没被当过查询条件——
+        # 「这次会话用了哪些技法」需要它。
+        if group_id:
+            sql.append("AND runs.group_id = ?")
+            params.append(group_id)
         if tool:
             sql.append("AND tool_calls.tool_name = ?")
             params.append(tool)

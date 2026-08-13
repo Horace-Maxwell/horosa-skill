@@ -27,6 +27,8 @@ export const XUSHI_OPTIONS = [
 	{ value: 1, label: '实岁' },
 ];
 
+import { JINHAN_TABLE, JINHAN_DIRS, JINHAN_STAR_JI, JINHAN_DOOR_JI } from './jinhanRiJia.js';
+
 export const JIEQI_OPTIONS = [
 	{ value: 0, label: '节气按天' },
 	{ value: 1, label: '节气按分' },
@@ -37,7 +39,25 @@ export const PAIPAN_OPTIONS = [
 	{ value: 1, label: '月家奇门' },
 	{ value: 2, label: '日家奇门' },
 	{ value: 3, label: '时家奇门' },
-	// 刻家(4)/综合(5):暂无确切算法,从排盘下拉移除(引擎/后端保留分支但 UI 不暴露,待校准后再开)。
+	{ value: 4, label: '刻家奇门' },   // [H-F] 十分局本地引擎(一时辰十刻,初局=时家局,逐刻阳顺阴逆推移)
+	{ value: 6, label: '日家·古籍金函系' },   // [H-G] 六十干支占方全表(书表直录:八方星门+吉凶+喜神/吉时),独立体系不走局法
+	// 综合(5):暂无确切算法,不暴露(引擎/后端分支保留,待校准后再开)。
+];
+// [H-F] 刻家分遁两档:zihou=子后阳午后阴(时支子~巳=阳遁、午~亥=阴遁,与节气无关,默认)/jieqi=冬至后阳夏至后阴(沿时家节气分遁)。
+// [H-G] 古籍日家八门两档:book=书表直录(默认;阴阳盘各按原表);shun=全顺变体(休生伤杜景死惊开自北起顺布八方,星仍书表)。
+export const JINHAN_MENPAI_OPTIONS = [
+	{ value: 'book', label: '书表直录（默认）' },
+	{ value: 'shun', label: '全顺变体（休门北起顺布）' },
+];
+export const KEJIA_FENDUN_OPTIONS = [
+	{ value: 'zihou', label: '子后阳·午后阴（默认）' },
+	{ value: 'jieqi', label: '按节气分遁（冬至后阳）' },
+];
+// [H-F] 日家定局粒度三档:yiyuan=六十日一局(现行经典,默认)/shitian=十日一局(逐旬按符头换元)/yitian=一日一局(至甲子起逐日推局,阳顺阴逆)。
+export const DAYJIA_JU_OPTIONS = [
+	{ value: 'yiyuan', label: '六十日一局（默认）' },
+	{ value: 'shitian', label: '十日一局（逐旬换元）' },
+	{ value: 'yitian', label: '一日一局（逐日推移）' },
 ];
 
 export const ZHISHI_OPTIONS = [
@@ -49,6 +69,7 @@ export const ZHISHI_OPTIONS = [
 export const YUEJIA_QIJU_OPTIONS = [
 	{ value: 0, label: '年符头' },
 	{ value: 1, label: '年支' },
+	{ value: 2, label: '逐月换局（一月一局）' },
 ];
 
 export const YEAR_GZ_OPTIONS = [
@@ -90,7 +111,140 @@ export const QIJU_METHOD_OPTIONS = [
 export const ZHIRUN_LEAP_OPTIONS = [
 	{ value: 9, label: '置闰·超神满9天即闰（默认·主流）' },
 	{ value: 8, label: '置闰·超神满8天即闰（从宽）' },
+	{ value: 10, label: '置闰·超神满10天才闰（从严）' },   // [H-E] 第三口径:超神须超过 9 天(即≥10)才置闰
 ];
+
+// [H-B] 暗干五法(通行诸法;默认关=零回归):
+//   dipan=八门对应地盘干(每宫暗干=本宫之门「本位宫」的地盘干);
+//   zhishi_fei=时干加值使宫,十干自然序洛书飞布(阳顺阴逆;时干与值使宫地盘干相同=伏吟,时干入中再飞);
+//   zhishi_zhuan=同起点同序,改八卦轮转布(中宫不入);
+//   manpan_fei=满盘旋转飞(自地盘戊所在宫起「甲」,十干自然序洛书飞满盘)。
+export const ANGAN_MODE_OPTIONS = [
+	{ value: 'off', label: '不用暗干（默认）' },
+	{ value: 'dipan', label: '八门对应地盘干' },
+	{ value: 'zhishi_fei', label: '时干加值使·飞布' },
+	{ value: 'zhishi_zhuan', label: '时干加值使·转布' },
+	{ value: 'manpan_fei', label: '满盘旋转飞' },
+];
+const TEN_GAN = '甲乙丙丁戊己庚辛壬癸'.split('');
+const DOOR_HOME = { 休: '坎', 生: '艮', 伤: '震', 杜: '巽', 景: '离', 死: '坤', 惊: '兑', 开: '乾' };
+const LUOSHU_GONG_SEQ = '坎坤震巽中乾兑艮离'.split('');   // 洛书 1-9 宫序(=EIGHT_GUA)
+export function panAnGan(mode, ctx){
+	const c = ctx || {};
+	if(!mode || mode === 'off'){ return null; }
+	const out = {};
+	if(mode === 'dipan'){
+		Object.keys(c.menGua || {}).forEach((g)=>{
+			const door = String(c.menGua[g] || '').charAt(0);
+			const home = DOOR_HOME[door];
+			if(home && c.dipanGua && c.dipanGua[home]){ out[g] = c.dipanGua[home]; }
+		});
+		return out;
+	}
+	const isYang = c.yy === '阳';
+	const step = isYang ? 1 : -1;
+	if(mode === 'manpan_fei'){
+		// 起宫=地盘戊所在宫;自「甲」起十干自然序,洛书飞满盘(含中),第十干与首宫重合成环。
+		let startGong = '坎';
+		Object.keys(c.dipanGua || {}).forEach((g)=>{ if(c.dipanGua[g] === '戊'){ startGong = g; } });
+		const si = LUOSHU_GONG_SEQ.indexOf(startGong);
+		for(let i = 0; i < 9; i++){
+			const g = LUOSHU_GONG_SEQ[((si + step * i) % 9 + 9) % 9];
+			out[g] = TEN_GAN[i % 10];
+		}
+		return out;
+	}
+	// zhishi_fei / zhishi_zhuan:时干加值使宫起,十干自然序续布
+	const shiGan = String(c.shiGan || '').charAt(0);
+	if(!shiGan){ return null; }
+	let startGong = (c.zhishiGong && c.zhishiGong !== '中') ? c.zhishiGong : '中';
+	// 伏吟判:值使宫地盘干===时干 → 时干入中宫再布
+	if(c.dipanGua && c.dipanGua[startGong] === shiGan){ startGong = '中'; }
+	const gi = TEN_GAN.indexOf(shiGan);
+	if(mode === 'zhishi_fei'){
+		const si = LUOSHU_GONG_SEQ.indexOf(startGong === '中' ? '中' : startGong);
+		for(let i = 0; i < 9; i++){
+			const g = LUOSHU_GONG_SEQ[((si + step * i) % 9 + 9) % 9];
+			out[g] = TEN_GAN[(gi + i) % 10];
+		}
+		return out;
+	}
+	// 转布:八卦轮转(中不入);起宫若中则从寄宫起(ctx.jiGong,缺省坤=历史默认)
+	const ring = isYang ? CLOCKWISE_EIGHTGUA : [...CLOCKWISE_EIGHTGUA].reverse();
+	const ringStart = startGong === '中' ? (c.jiGong || '坤') : startGong;
+	const seq = newList(ring, ringStart);
+	for(let i = 0; i < 8; i++){ out[seq[i]] = TEN_GAN[(gi + i) % 10]; }
+	return out;
+}
+// [H-B] 暗支:暗干在「时柱所在旬」内的配支(旬内干支一一对应,确定映射;甲=旬首支)。
+export function anZhiOf(anGan, timeGz){
+	const head = getXunHead(timeGz || '甲子');
+	if(!head || !anGan){ return ''; }
+	const GAN10 = TEN_GAN;
+	const ZHI12 = '子丑寅卯辰巳午未申酉戌亥'.split('');
+	const hz = ZHI12.indexOf(head.charAt(1));
+	const gidx = GAN10.indexOf(String(anGan).charAt(0));
+	if(hz < 0 || gidx < 0){ return ''; }
+	return ZHI12[(hz + gidx) % 12];
+}
+
+// [H-B] 转盘八神预设:基串本为正统(阳遁勾陈朱雀/阴遁白虎玄武);现状默认=两遁恒虎玄(历史行为,零回归默认)。
+export const GODS_PRESET_OPTIONS = [
+	{ value: 'baihu_xuanwu', label: '两遁恒白虎玄武（默认）' },
+	{ value: 'system', label: '按遁取神（阳勾陈朱雀·阴白虎玄武）' },
+	{ value: 'gouchen_zhuque', label: '两遁恒勾陈朱雀' },
+];
+// 转盘八神名替换分派:baihu_xuanwu=勾雀→虎玄(默认=现状) / system=保基串(阳勾雀阴虎玄) / gouchen_zhuque=虎玄→勾雀。
+export function applyGodsPreset(name, preset){
+	const v = String(name || '');
+	if(preset === 'system'){ return v; }
+	if(preset === 'gouchen_zhuque'){ return v.replace(/虎/g, '勾').replace(/玄/g, '雀'); }
+	return v.replace(/勾/g, '虎').replace(/雀/g, '玄');
+}
+
+// [H-C] 中宫寄宫五档:转盘系当值符/值使落中宫时,从寄宫起排(飞盘九星含中宫,不受辖)。
+//   kun=恒寄坤二(历史默认,零回归) / yang_gen_yin_kun=阳遁寄艮八·阴遁寄坤二 / gen=恒寄艮八 /
+//   siwei=按季寄四维(四立分界:立春起艮·立夏起巽·立秋起坤·立冬起乾,各领一季六气) /
+//   bajie=按八节寄八宫(每节领三气:立春艮/春分震/立夏巽/夏至离/立秋坤/秋分兑/立冬乾/冬至坎)。
+export const JIGONG_MODE_OPTIONS = [
+	{ value: 'kun', label: '恒寄坤二宫（默认）' },
+	{ value: 'yang_gen_yin_kun', label: '阳遁寄艮·阴遁寄坤' },
+	{ value: 'gen', label: '恒寄艮八宫' },
+	{ value: 'siwei', label: '按季寄四维（四立分界）' },
+	{ value: 'bajie', label: '按八节寄八宫（一节三气）' },
+];
+const BAJIE_JIGONG = {
+	立春: '艮', 雨水: '艮', 惊蛰: '艮',
+	春分: '震', 清明: '震', 谷雨: '震',
+	立夏: '巽', 小满: '巽', 芒种: '巽',
+	夏至: '离', 小暑: '离', 大暑: '离',
+	立秋: '坤', 处暑: '坤', 白露: '坤',
+	秋分: '兑', 寒露: '兑', 霜降: '兑',
+	立冬: '乾', 小雪: '乾', 大雪: '乾',
+	冬至: '坎', 小寒: '坎', 大寒: '坎',
+};
+const SIWEI_JIGONG = {
+	立春: '艮', 雨水: '艮', 惊蛰: '艮', 春分: '艮', 清明: '艮', 谷雨: '艮',
+	立夏: '巽', 小满: '巽', 芒种: '巽', 夏至: '巽', 小暑: '巽', 大暑: '巽',
+	立秋: '坤', 处暑: '坤', 白露: '坤', 秋分: '坤', 寒露: '坤', 霜降: '坤',
+	立冬: '乾', 小雪: '乾', 大雪: '乾', 冬至: '乾', 小寒: '乾', 大寒: '乾',
+};
+// [H-E] 移星换宫后的值符/值使标记两档:follow=标记随几何平移(历史默认);recalc=移后盘视为新局重解(星门名+落宫)。
+export const SHIFT_ZHIFU_OPTIONS = [
+	{ value: 'follow', label: '随盘平移（默认）' },
+	{ value: 'recalc', label: '移后重定值符值使' },
+];
+// 寄宫解析:未知模式/未知节气一律回落坤二(历史默认=诚实兜底,绝不臆造)。yy 收 '阳'/'阴'(或 '阳遁'/'阴遁')。
+export function resolveJiGong(mode, yy, jieqi){
+	if(mode === 'gen'){ return '艮'; }
+	if(mode === 'yang_gen_yin_kun'){ return String(yy || '').charAt(0) === '阳' ? '艮' : '坤'; }
+	if(mode === 'siwei'){ return SIWEI_JIGONG[normalizeJieqi(jieqi)] || '坤'; }
+	if(mode === 'bajie'){ return BAJIE_JIGONG[normalizeJieqi(jieqi)] || '坤'; }
+	return '坤';
+}
+function jiGongOf(ext, yy){
+	return resolveJiGong(ext && ext.jiGongMode, yy, ext && ext.jieqi);
+}
 
 // WP-A 盘式(排盘法):转盘=排宫(八神,八卦轮转,默认) / 飞盘=飞宫(九神,洛书飞泊含中宫) / 飞转=混合(星转·门飞·九神)。
 // 锚点规则三派一致(值符随时干、值使随时辰、神随值符、阳顺阴逆),差别只在转环 vs 飞宫 vs 飞转结合。
@@ -586,7 +740,10 @@ function normalizeJieqi(jieqi){
 
 function getOptionLabel(list, value){
 	const one = list.find((item)=>item.value === value);
-	return one ? one.label : `${value}`;
+	// 缺省值兜底为空串:此前 `${undefined}` 字符串化成「undefined」脏字样直入快照(如「命式：undefined」),
+	// 且 truthy 穿透一切 if 拦截——空串既能被 || 兜底又能被 if 拦。
+	if(one){ return one.label; }
+	return (value === undefined || value === null) ? '' : `${value}`;
 }
 
 function getGanzhiGan(gz){
@@ -805,18 +962,26 @@ function isYangDunJieqi(jieqi){
 	return YANG_JIEQI.indexOf(normalizeJieqi(jieqi)) >= 0;
 }
 
-function calcYearJiaMeta(year){
+// [H-I] 年家定局两档:sanyuan(默认)=六十年一元恒一局(上1/中4/下7,皆阴遁,历史行为);
+//   yinian=逐年换局——三元甲子起元首局逐年逆退九局循环,与通行年游九星完全同构
+//   (公域可核验锚:1984甲子=7、2025乙巳=2、2026丙午=1)。元名仍按六十年块显示。
+export const YEARJIA_JU_OPTIONS = [
+	{ value: 'sanyuan', label: '六十年一局（默认）' },
+	{ value: 'yinian', label: '一年一局（逐年逆退）' },
+];
+function calcYearJiaMeta(year, yearJiaJu){
 	if(year >= 0 && year <= 3){
 		return { sanYuan: '中元', juShu: 4, yinYangDun: '阴遁' };
 	}
 	const cycle = ((Math.floor((year - 4) / 60) % 3) + 3) % 3;
-	if(cycle === 0){
-		return { sanYuan: '下元', juShu: 7, yinYangDun: '阴遁' };
+	const FIRST = [7, 1, 4][cycle];
+	const YUAN = ['下元', '上元', '中元'][cycle];
+	if(yearJiaJu === 'yinian'){
+		const n = (((year - 4) % 60) + 60) % 60;
+		const ju = (((FIRST - 1 - n) % 9) + 9) % 9 + 1;
+		return { sanYuan: YUAN, juShu: ju, yinYangDun: '阴遁' };
 	}
-	if(cycle === 1){
-		return { sanYuan: '上元', juShu: 1, yinYangDun: '阴遁' };
-	}
-	return { sanYuan: '中元', juShu: 4, yinYangDun: '阴遁' };
+	return { sanYuan: YUAN, juShu: FIRST, yinYangDun: '阴遁' };
 }
 
 // 月家奇门(经典「附月奇门·年干支定局法」/又法,五年一元):局由年柱「符头」(最近甲/己年)定,整个 5 年元块同一局,皆阴遁。
@@ -828,10 +993,25 @@ function calcYearJiaMeta(year){
 // yueJiaQiJuType:0=年柱符头(正传,默认) / 1=年支直取(变体,不取符头,供对比)。
 const MONTH_ZHI_JU = { 子: 7, 午: 7, 卯: 7, 酉: 7, 寅: 1, 申: 1, 巳: 1, 亥: 1, 辰: 4, 戌: 4, 丑: 4, 未: 4 };
 const MONTH_JU_YUAN = { 7: '上元', 1: '中元', 4: '下元' };
+// [H-I] 逐月换局(一月一局):正月入中局按年支组(仲年子午卯酉=8/孟年寅申巳亥=2/季年辰戌丑未=5),
+//   逐月逆退九局循环——月家文献自载「孟年正月二黑、仲年八白、季年五黄,星顺月逆而布」,
+//   与通行月游九星同构(公域可核验)。月序按月柱地支(寅=正月…丑=十二月),皆阴遁。
+const MONTH_START_JU_MONTHLY = { 子: 8, 午: 8, 卯: 8, 酉: 8, 寅: 2, 申: 2, 巳: 2, 亥: 2, 辰: 5, 戌: 5, 丑: 5, 未: 5 };
 function calcYueJiaMeta(ganzhi, yueJiaQiJuType){
+	const t = normalizeNum(yueJiaQiJuType, 0);
+	if(t === 2){
+		const yearZhi = `${ganzhi.year || '甲子'}`.charAt(1);
+		const monthZhi = `${ganzhi.month || '丙寅'}`.charAt(1);
+		const first = MONTH_START_JU_MONTHLY[yearZhi] || 8;
+		const zi = ZHI.indexOf(monthZhi);
+		const m = zi >= 0 ? ((zi - 2 + 12) % 12) : 0;
+		const ju = (((first - 1 - m) % 9) + 9) % 9 + 1;
+		// qmju 显式给出(无元名尾)——否则 calcDunJia 兜底 buildQmjuByMeta 会拼上「上元」假元名进 juText
+		return { sanYuan: '', juShu: ju, yinYangDun: '阴遁', qmju: `阴遁${juNumberToCn(ju)}局` };
+	}
 	const yearIdx = ((getGanzhiIndex(ganzhi.year || '甲子') % 60) + 60) % 60;
 	// 符头 = 最近的甲/己年(60 序向下取到 5 的倍数);变体则直接用年支。
-	const baseIdx = (normalizeNum(yueJiaQiJuType, 0) === 1) ? yearIdx : (yearIdx - (yearIdx % 5));
+	const baseIdx = (t === 1) ? yearIdx : (yearIdx - (yearIdx % 5));
 	const zhi = ZHI[baseIdx % 12];
 	const juShu = MONTH_ZHI_JU[zhi] || 4;
 	return { sanYuan: MONTH_JU_YUAN[juShu] || '下元', juShu, yinYangDun: '阴遁' };
@@ -872,12 +1052,18 @@ function dayJiaHalfYear(seeds, dateParts){
 	if(dU >= xzU){ return { yang: false, zhiSeed: xz }; }                                                      // 本年夏至后 → 阴遁
 	return { yang: true, zhiSeed: dzStart || null };                                                           // 夏至前 → 阳遁(至=上年冬至)
 }
-function calcDayJiaMeta(dateParts, dayGanZhi, jieqi, context){
+function calcDayJiaMeta(dateParts, dayGanZhi, jieqi, context, dayJiaJu){
 	const seeds = context && context.jieqiYearSeeds ? context.jieqiYearSeeds : null;
 	const half = dayJiaHalfYear(seeds, dateParts);
 	const yang = half ? half.yang : isYangDunJieqi(jieqi);   // 有种子=至定半年(准);无种子退化用节气(可能滞后)
 	const yy = yang ? '阳' : '阴';
+	// [H-F] 十日一局:逐旬按符头换元(甲子甲午旬=上元/甲戌甲辰=中元/甲申甲寅=下元),局取该元经典局。
+	if(dayJiaJu === 'shitian'){
+		const block = ({ 上元: 0, 中元: 1, 下元: 2 })[findYuan(dayGanZhi)] || 0;
+		return { sanYuan: DAY_BLOCK_YUAN[block], juShu: DAY_BLOCK_JU[yy][block], yinYangDun: yang ? '阳遁' : '阴遁' };
+	}
 	let block = null;
+	let sinceJiazi = null;
 	const zhiSeed = half ? half.zhiSeed : null;
 	if(zhiSeed && zhiSeed.dateKey && zhiSeed.dayGanzhi){
 		const dayUtc = keyToUtcDay(`${dateParts.year}${`${dateParts.month}`.padStart(2, '0')}${`${dateParts.day}`.padStart(2, '0')}`);
@@ -886,6 +1072,7 @@ function calcDayJiaMeta(dateParts, dayGanZhi, jieqi, context){
 		const jiaziUtc = zhiUtc - z + (z > 30 ? 60 : 0);                     // 至甲子=最近甲子(超30日置闰取后一甲子)
 		if(Number.isFinite(dayUtc) && Number.isFinite(jiaziUtc) && dayUtc >= jiaziUtc){
 			block = Math.floor((dayUtc - jiaziUtc) / 60) % 3;
+			sinceJiazi = dayUtc - jiaziUtc;
 		}
 	}
 	if(block === null){
@@ -893,6 +1080,14 @@ function calcDayJiaMeta(dateParts, dayGanZhi, jieqi, context){
 		block = { 上元: 0, 中元: 1, 下元: 2 }[findYuan(dayGanZhi)] || 0;
 	}
 	block = ((block % 3) + 3) % 3;
+	// [H-F] 一日一局:自「至甲子」起逐日推局(阳:上元首局起顺进;阴:逆退);元仍按六十日块显示。
+	//   无种子时退化用日柱 60 序近似(60≢0 mod 9,跨甲子有断点,如实近似不掩盖)。
+	if(dayJiaJu === 'yitian'){
+		const d = sinceJiazi !== null ? sinceJiazi : ((getGanzhiIndex(dayGanZhi) % 60) + 60) % 60;
+		const startJu = DAY_BLOCK_JU[yy][0];
+		const ju = yang ? ((startJu - 1 + d) % 9) + 1 : (((startJu - 1 - d) % 9) + 9) % 9 + 1;
+		return { sanYuan: DAY_BLOCK_YUAN[block], juShu: ju, yinYangDun: yang ? '阳遁' : '阴遁' };
+	}
 	return { sanYuan: DAY_BLOCK_YUAN[block], juShu: DAY_BLOCK_JU[yy][block], yinYangDun: yang ? '阳遁' : '阴遁' };
 }
 
@@ -914,8 +1109,8 @@ function normalizeQijuMethod(method){
 
 export function isKinqimenMode(paiPanType){
 	const type = normalizeNum(paiPanType, 3);
-	// 年(0)/月(1)/日(2)家走本地全盘(各家局法 + 年/月/日柱锚点);时(3)/刻(4)/综合(5)走后端(时家保后端=转盘字节护栏)。
-	return type >= 3;
+	// 年(0)/月(1)/日(2)/刻(4)家走本地全盘(各家局法 + 各柱锚点;刻家=十分局本地引擎);时(3)/综合(5)走后端(时家保后端=转盘字节护栏)。
+	return type === 3 || type === 5;
 }
 
 function getKinqimenMode(paiPanType){
@@ -1135,16 +1330,61 @@ export function normalizeKinqimenData(backendPan, fallbackPan, options, nongli){
 	};
 }
 
+// [H-F] 刻家十分局:一时辰(2h)分十刻(12min/刻),初局=本时辰时家局(沿当前起局法链),
+//   逐刻推移:阳遁顺进一局、阴遁逆退一局(第k刻=初局±(k-1),九局循环)。
+//   分遁 keJiaFenDun:zihou(默认)=子后阳午后阴(时支子~巳阳/午~亥阴,与节气无关)/jieqi=沿时家节气分遁。
+//   keZiZhengHuanShi=子正换时:开=时辰界取偶数整点(子时 00:00 起),关(默认)=奇数整点(子时 23:00 起)。
+function calcKeJiaMeta(opts, ganzhi, jieqi, dateParts, context){
+	// 初局基准=时家局(拆掉刻家键后按当前 qijuMethod 走时家链)
+	const base = resolvePaiPanMeta({ ...opts, paiPanType: 3 }, ganzhi, jieqi, dateParts, context);
+	const zhengShift = (opts && opts.keZiZhengHuanShi) ? 0 : 1;
+	const hour = dateParts && Number.isFinite(dateParts.hour) ? dateParts.hour : 0;
+	const minute = dateParts && Number.isFinite(dateParts.minute) ? dateParts.minute : 0;
+	const sinceStart = ((hour + zhengShift) % 2) * 60 + minute;      // 时辰内分钟数(0..119)
+	const keIndex = Math.min(9, Math.floor(sinceStart / 12));        // 第 1..10 刻(0 基)
+	let yang;
+	if((opts && opts.keJiaFenDun) === 'jieqi'){
+		yang = `${base.yinYangDun || ''}`.indexOf('阳') >= 0;
+	}else{
+		const zhi = `${ganzhi.time || ''}`.charAt(1);
+		yang = '子丑寅卯辰巳'.indexOf(zhi) >= 0;
+	}
+	const baseJu = base.juShu || 1;
+	const ju = yang ? ((baseJu - 1 + keIndex) % 9) + 1 : (((baseJu - 1 - keIndex) % 9) + 9) % 9 + 1;
+	// 刻柱干支:时柱锚法——本时辰第 1 刻即时柱本身,此后逐刻按六十甲子序进一位
+	// (刻为时之细分,首刻同时柱,与「初局=时家局」同构;口径于帮助文档如实说明)。
+	let keGanZhi = '';
+	{
+		const ti = getGanzhiIndex(ganzhi.time || '');
+		if(ti >= 0){
+			const idx = ((ti + keIndex) % 60 + 60) % 60;
+			keGanZhi = GAN[idx % 10] + ZHI[idx % 12];
+		}
+	}
+	return {
+		sanYuan: base.sanYuan,
+		juShu: ju,
+		yinYangDun: yang ? '阳遁' : '阴遁',
+		qmju: buildQmjuByMeta(yang ? '阳遁' : '阴遁', ju, base.sanYuan),
+		dingjuJieqi: base.dingjuJieqi,
+		keIndex: keIndex + 1,
+		keGanZhi,
+	};
+}
+
 function resolvePaiPanMeta(opts, ganzhi, jieqi, dateParts, context){
 	const paiPanType = normalizeNum(opts && opts.paiPanType, 3);
 	if(paiPanType === 0){
-		return calcYearJiaMeta(dateParts.year);
+		return calcYearJiaMeta(dateParts.year, opts && opts.yearJiaJu);
 	}
 	if(paiPanType === 1){
 		return calcYueJiaMeta(ganzhi, opts && opts.yueJiaQiJuType);
 	}
 	if(paiPanType === 2){
-		return calcDayJiaMeta(dateParts, ganzhi.day, jieqi, context);
+		return calcDayJiaMeta(dateParts, ganzhi.day, jieqi, context, opts && opts.dayJiaJu);
+	}
+	if(paiPanType === 4){
+		return calcKeJiaMeta(opts, ganzhi, jieqi, dateParts, context);
 	}
 	const base = calcShiJiaMeta(ganzhi.day, jieqi);
 	const seeds = context && context.jieqiYearSeeds ? context.jieqiYearSeeds : {};
@@ -1361,11 +1601,12 @@ function panGod(ganzhi, qmju, ext){
 	const meta = parseQmju(qmju);
 	const startingGong = zfzs.值符星宫[1];
 	const rotate = meta.yy === '阳' ? CLOCKWISE_EIGHTGUA : [...CLOCKWISE_EIGHTGUA].reverse();
-	const gongReorder = startingGong === '中' ? newList(rotate, '坤') : newList(rotate, startingGong);
+	const gongReorder = startingGong === '中' ? newList(rotate, jiGongOf(ext, meta.yy)) : newList(rotate, startingGong);
 	const vals = (meta.yy === '阳' ? '符蛇阴合勾雀地天' : '符蛇阴合虎玄地天').split('');
 	const out = zipToMap(gongReorder, vals);
+	// [H-B] 八神名按预设分派(ext.godsPreset;缺省=历史默认恒虎玄)
 	Object.keys(out).forEach((k)=>{
-		out[k] = out[k].replace(/勾/g, '虎').replace(/雀/g, '玄');
+		out[k] = applyGodsPreset(out[k], ext && ext.godsPreset);
 	});
 	return out;
 }
@@ -1376,7 +1617,7 @@ function panDoor(ganzhi, qmju, ext){
 	const startingDoor = zfzs.值使门宫[0];
 	const startingGong = zfzs.值使门宫[1];
 	const rotate = meta.yy === '阳' ? CLOCKWISE_EIGHTGUA : [...CLOCKWISE_EIGHTGUA].reverse();
-	const gongReorder = startingGong === '中' ? newList(rotate, '坤') : newList(rotate, startingGong);
+	const gongReorder = startingGong === '中' ? newList(rotate, jiGongOf(ext, meta.yy)) : newList(rotate, startingGong);
 	const yydoor = meta.yy === '阳' ? newList(DOOR_R, startingDoor) : newList([...DOOR_R].reverse(), startingDoor);
 	return zipToMap(gongReorder, yydoor);
 }
@@ -1388,7 +1629,7 @@ function panStar(ganzhi, qmju, ext){
 	const startingGong = zfzs.值符星宫[1];
 	const rotate = meta.yy === '阳' ? CLOCKWISE_EIGHTGUA : [...CLOCKWISE_EIGHTGUA].reverse();
 	const stars = meta.yy === '阳' ? newList(STAR_R, startingStar) : newList([...STAR_R].reverse(), startingStar);
-	const gongReorder = startingGong === '中' ? newList(rotate, '坤') : newList(rotate, startingGong);
+	const gongReorder = startingGong === '中' ? newList(rotate, jiGongOf(ext, meta.yy)) : newList(rotate, startingGong);
 	const out = zipToMap(gongReorder, stars);
 	Object.keys(out).forEach((k)=>{
 		out[k] = out[k].replace(/[芮禽]+/g, '内');   // 转盘(8星)天禽随中显「内」(天内);飞盘9星含中宫照显「禽」(用户:内对芮讹)
@@ -1406,18 +1647,19 @@ function panSky(ganzhi, qmju, ext){
 	const ganHead = zfzs.值符天干[1];
 	const starGong = zfzs.值符星宫[1];
 	const earthOnRing = rotate.map((g)=>earth[g]);
+	const jiGong = jiGongOf(ext, meta.yy);
 	if(starGong === '中'){
-		const gongReorder = newList(rotate, '坤');
+		const gongReorder = newList(rotate, jiGong);
 		let ganReorder;
-		if(panGod(ganzhi, qmju, ext).坤 !== '符'){
-			ganReorder = newList(earthOnRing, earth.坤);
-		}else if(earth.坤 === ganHead){
+		if(panGod(ganzhi, qmju, ext)[jiGong] !== '符'){
+			ganReorder = newList(earthOnRing, earth[jiGong]);
+		}else if(earth[jiGong] === ganHead){
 			ganReorder = newList(earthOnRing, earthOnRing[earthOnRing.length - 1]);
 		}else{
 			try{
 				ganReorder = newList(earthOnRing, ganHead);
 			}catch(e){
-				ganReorder = newList(earthOnRing, earth.坤);
+				ganReorder = newList(earthOnRing, earth[jiGong]);
 			}
 		}
 		const out = zipToMap(gongReorder, ganReorder);
@@ -1425,7 +1667,7 @@ function panSky(ganzhi, qmju, ext){
 		return out;
 	}
 	const timeGan = getGanzhiGan(ganzhi.time);
-	const normalizeTianpanGong = (gong)=>gong === '中' ? '坤' : gong;
+	const normalizeTianpanGong = (gong)=>gong === '中' ? jiGong : gong;
 	const sourceGong = normalizeTianpanGong(earthR[fuHead]);
 	const targetGong = normalizeTianpanGong(earthR[timeGan]);
 	const safeSourceGong = rotate.indexOf(sourceGong) >= 0 ? sourceGong : rotate[0];
@@ -1448,7 +1690,12 @@ const FEI_GODS_YANG = '符蛇阴合勾常雀地天'.split('');
 const FEI_GODS_YIN = '符蛇阴合虎常玄地天'.split('');
 const lpFei = (n)=>((n - 1) % 9 + 9) % 9 + 1;
 
-export function panFeipan(ganzhi, qmju){
+// [H-D] fopts 飞盘细项(全缺省=历史行为零回归):
+//   feiXingShun/feiMenShun/feiShenShun=该层阴阳遁皆顺飞(只改飞布方向,值符/值使定位不动);
+//   feiMenZhongCan=false 时门层按「八门跳中5」传派布(中宫永不布门,数飞跳中);
+//   feiMenZhongShow=true 且中门不参与时,中宫标「中」字样(纯显示)。
+export function panFeipan(ganzhi, qmju, fopts){
+	const fo = fopts || {};
 	const meta = parseQmju(qmju);
 	const isY = meta.yy === '阳';
 	const earthGua = panEarth(qmju);                                  // 卦→干
@@ -1465,20 +1712,38 @@ export function panFeipan(ganzhi, qmju){
 	// 值使门整盘静默偏一宫;非法输入按旬首(xord=1)兜底,不再产出错位盘。
 	const xord = Math.max(1, GAN.indexOf(timeGan) + 1);
 	const step = isY ? 1 : -1;
+	const stepXing = (isY || fo.feiXingShun) ? 1 : -1;
+	const stepMen = (isY || fo.feiMenShun) ? 1 : -1;
+	const stepShen = (isY || fo.feiShenShun) ? 1 : -1;
 	// 值使门落宫:从值符宫(旬首遁仪宫,含中5)顺(阳)/逆(阴)数至时柱(参考实现门入中宫,Pu 可为中5)。
 	const Pu = lpFei(Hv + step * (xord - 1));                         // 中宫值符(Hv=5)时值使=中门,亦从中5起数(6-22→震3、02-04→坎1 已对参考实现)
 	const starG = {}, skyG = {}, gateG = {}, godG = {};
 	// 九星:值符星(JIU_XING[Hv-1])落时干宫P,蓬芮冲辅禽心柱任英按号顺(阳)/逆(阴)飞九宫(含中5)。
-	for(let n = 1; n <= 9; n++){ starG[lpFei(P + step * (n - Hv))] = JIU_XING[n - 1]; }
+	for(let n = 1; n <= 9; n++){ starG[lpFei(P + stepXing * (n - Hv))] = JIU_XING[n - 1]; }
 	// 天盘(六仪三奇):地盘整体随值符平移(值符遁仪→时干宫,平移量 P-Hv),非随星逆飞——
 	//   阴遁星逆飞但天盘是整体平移,故各宫天盘干须单独按平移算(对齐参考实现:坎1=庚/巽4=乙…)。
 	const dPan = ((P - Hv) % 9 + 9) % 9;
 	for(let q = 1; q <= 9; q++){ skyG[lpFei(q + dPan)] = earthGong[q]; }
 	// 九门:值使门(FEI_GATE_HOME[Hv],中宫值符时=中门)落Pu,休死伤杜中开惊生景九门按九宫顺(阳)/逆(阴)整体飞——
 	//   对齐参考实现(门入中宫:中门是第9门随飞,落中5者中宫得门),非书本「八门跳中5」传本(以本引擎为准)。
-	Object.keys(FEI_GATE_HOME).forEach((hk)=>{ const h = Number(hk); const np = lpFei(Pu + step * (h - Hv)); gateG[np] = FEI_GATE_HOME[hk]; });
+	if(fo.feiMenZhongCan === false){
+		// [H-D] 跳中传派:八门(无中门)全程 8 宫环(洛书序跳中5),值使定位数宫亦跳中;值符宫=中5 时值使取死门、自死门本位起数。
+		const RING8 = [1, 2, 3, 4, 6, 7, 8, 9];
+		const DOORS8 = ['休', '死', '伤', '杜', '开', '惊', '生', '景'];   // 洛书本位序(1休2死3伤4杜6开7惊8生9景)
+		let vDoor = FEI_GATE_HOME[`${Hv}`] || '死';
+		if(vDoor === '中'){ vDoor = '死'; }
+		const vHome = RING8[DOORS8.indexOf(vDoor)];
+		const hv8 = Hv === 5 ? vHome : Hv;
+		const pos8 = (g)=>RING8.indexOf(g);
+		const pu8 = RING8[(((pos8(hv8) + step * (xord - 1)) % 8) + 8) % 8];
+		const di = DOORS8.indexOf(vDoor);
+		for(let k = 0; k < 8; k++){ gateG[RING8[(((pos8(pu8) + stepMen * k) % 8) + 8) % 8]] = DOORS8[(di + k) % 8]; }
+		if(fo.feiMenZhongShow){ gateG[5] = '中'; }
+	}else{
+		Object.keys(FEI_GATE_HOME).forEach((hk)=>{ const h = Number(hk); const np = lpFei(Pu + stepMen * (h - Hv)); gateG[np] = FEI_GATE_HOME[hk]; });
+	}
 	// 九神:值符落时干宫P(同值符星),阳遁勾常雀顺、阴遁白玄逆,飞九宫(含中5)。
-	(isY ? FEI_GODS_YANG : FEI_GODS_YIN).forEach((god, i)=>{ const np = lpFei(P + i * step); godG[np] = god; });
+	(isY ? FEI_GODS_YANG : FEI_GODS_YIN).forEach((god, i)=>{ const np = lpFei(P + i * stepShen); godG[np] = god; });
 	const toGua = (gongMap)=>{ const out = {}; for(let g = 1; g <= 9; g++){ out[EIGHT_GUA[g - 1]] = gongMap[g] || ''; } return out; };
 	return {
 		tianpanGua: toGua(skyG),
@@ -1488,7 +1753,15 @@ export function panFeipan(ganzhi, qmju){
 		zfzs: {
 			值符天干: [xunHead, dunYi],
 			值符星宫: [JIU_XING[Hv - 1], EIGHT_GUA[lpFei(P) - 1]],
-			值使门宫: [FEI_GATE_HOME[`${Hv}`] || '死', EIGHT_GUA[lpFei(Pu) - 1]],
+			值使门宫: (function(){
+				if(fo.feiMenZhongCan === false){
+					let vd = FEI_GATE_HOME[`${Hv}`] || '死';
+					if(vd === '中'){ vd = '死'; }
+					const gong = Object.keys(gateG).find((g)=>gateG[g] === vd);
+					return [vd, EIGHT_GUA[(Number(gong) || 2) - 1]];
+				}
+				return [FEI_GATE_HOME[`${Hv}`] || '死', EIGHT_GUA[lpFei(Pu) - 1]];
+			})(),
 		},
 	};
 }
@@ -1514,9 +1787,8 @@ function getKongByMode(mode, dayShiKong){
 function resolveKongWangPalaces(kongWang){
 	const list = [];
 	const palaces = [];
-	const a = kongWang.substring(0, 1);
-	const b = kongWang.substring(1, 2);
-	[a, b].forEach((zhi)=>{
+	// [H-E] 逐字遍历(两字串=历史行为字节同;kongMarkBoth 并集串为四字,全标)
+	String(kongWang || '').split('').forEach((zhi)=>{
 		const pos = BRANCH_TO_POS[zhi];
 		if(pos && palaces.indexOf(pos) < 0){
 			palaces.push(pos);
@@ -1649,7 +1921,7 @@ function buildCells(diPan, tianPan, men, shen, star, zhiFuPalace, zhiShiPalace, 
 		diGan: diPan[palaceNum] || '',
 		tianXing: star[palaceNum] || '',
 		door: men[palaceNum] || '',
-		god: (status && (status.school === '飞盘' || status.school === '混合')) ? String(shen[palaceNum] || '') : String(shen[palaceNum] || '').replace(/勾/g, '虎').replace(/雀/g, '玄'),
+		god: (status && (status.school === '飞盘' || status.school === '混合')) ? String(shen[palaceNum] || '') : applyGodsPreset(String(shen[palaceNum] || ''), status && status.godsPreset),
 		tianGan: tianPan[palaceNum] || '',
 		isCenter: palaceNum === 5,
 		isFeipan: !!(status && (status.school === '飞盘' || status.school === '混合')),   // 混合:门神飞泊可入中5,中宫按飞盘渲染(星仍转盘寄坤2)
@@ -1660,6 +1932,8 @@ function buildCells(diPan, tianPan, men, shen, star, zhiFuPalace, zhiShiPalace, 
 		hasMenPo: menPoSet.has(palaceNum),
 		hasKongWang: kongSet.has(palaceNum),
 		isYiMa: palaceNum === yimaPalace,
+		anGan: (status && status.anGanByNum && status.anGanByNum[palaceNum]) || '',   // [H-B] 暗干(off=空)
+		anZhi: (status && status.anZhiByNum && status.anZhiByNum[palaceNum]) || '',   // [H-B] 暗支(随开关)
 	}));
 }
 
@@ -2094,7 +2368,88 @@ function buildQimenShenSha(ganzhi, isDiurnal){
 	};
 }
 
+// [H-G] 日家·古籍金函系独立盘:不走局法/三盘,直接查六十干支占方全表。
+//   阴阳盘=冬至后阳/夏至后阴(与日家同源 half-year 判定,书文「冬至节始为阳/夏至节始为阴」);
+//   八方星门按表列序(北东北东东南南西南西西北)落到九宫格;中宫=本干支之星;吉凶着色按书定分类。
+const JINHAN_DIR_TO_POS = { 北: 8, 东北: 7, 东: 4, 东南: 1, 南: 2, 西南: 3, 西: 6, 西北: 9 };
+export function buildJinhanRiJiaPan(fields, nongli, opts, context){
+	const dateParts = parseDateTime(fields);
+	if(!dateParts){ return null; }
+	// 🔴 四柱必须走 buildGanzhiForQimen 同源(年界档/晚子时/字段别名兜底全语义)——
+	// 曾手写简版只读 nongli.yearGanZi,后端农历字段别名下年柱空(用户实机抓)。
+	const ganzhi = buildGanzhiForQimen(nongli || {}, dateParts, opts || {}, context || {});
+	const dayGz = ganzhi.day;
+	const rec = JINHAN_TABLE[dayGz];
+	if(!rec){ return null; }
+	const jieqi = normalizeText(nongli && nongli.jieqi ? nongli.jieqi : '');
+	const seeds = context && context.jieqiYearSeeds ? context.jieqiYearSeeds : null;
+	const half = dayJiaHalfYear(seeds, dateParts);
+	const yang = half ? half.yang : isYangDunJieqi(jieqi);
+	const doorsBook = yang ? rec.yangDoors : rec.yinDoors;
+	const stars = yang ? rec.yangStars : rec.yinStars;
+	const menPai = (opts && opts.jinhanMenPai) === 'shun' ? 'shun' : 'book';
+	const doors = menPai === 'shun' ? '休生伤杜景死惊开'.split('') : doorsBook;
+	const daJi = yang ? rec.daJiYang : rec.daJiYin;
+	const daJiNote = yang ? (rec.daJiYangNote || '') : (rec.daJiYinNote || '');
+	const cells = PALACE_GRID.map((palaceNum)=>{
+		if(palaceNum === 5){
+			return {
+				palaceNum, palaceName: '中', isCenter: true,
+				diGan: '', tianGan: '', god: '',
+				door: '', tianXing: rec.center,
+				jinhanStarJi: JINHAN_STAR_JI[rec.center] || '',
+				jinhanDoorJi: '',
+				isJinhan: true,
+			};
+		}
+		const dirIdx = JINHAN_DIRS.findIndex((d)=>JINHAN_DIR_TO_POS[d] === palaceNum);
+		const dir = JINHAN_DIRS[dirIdx];
+		const door = doors[dirIdx] || '';
+		const star = stars[dirIdx] || '';
+		return {
+			palaceNum, palaceName: PALACE_NAME[palaceNum] || '', isCenter: false,
+			diGan: '', tianGan: '', god: '',
+			door, tianXing: star,
+			jinhanDir: dir,
+			jinhanDoorJi: JINHAN_DOOR_JI[door] || '',
+			jinhanStarJi: JINHAN_STAR_JI[star] || '',
+			isXiShen: rec.xiShen === dir,
+			isDaJi: (daJi || []).indexOf(dir) >= 0,
+			isJinhan: true,
+		};
+	});
+	return {
+		isJinhan: true,
+		dateStr: dateParts.dateStr,
+		timeStr: dateParts.timeStr,
+		lunarText: nongli ? `${nongli.year || ''}年${nongli.leap ? '闰' : ''}${nongli.month || ''}${nongli.day || ''}` : '',
+		ganzhi,
+		cells,
+		juText: `古籍日家·${yang ? '阳盘' : '阴盘'}`,
+		jinhan: {
+			dayGz,
+			pantype: yang ? '阳' : '阴',
+			menPai,
+			center: rec.center,
+			xiShen: rec.xiShen,
+			jiShi: rec.jiShi,
+			daJiFang: (daJi || []).join('、') + (daJiNote ? `（${daJiNote}）` : ''),
+			shiText: rec.shiText,
+		},
+		options: {
+			paiPanType: 6,
+			paiPanLabel: '日家·古籍金函系',
+			jinhanMenPai: menPai,
+			jinhanMenPaiLabel: getOptionLabel(JINHAN_MENPAI_OPTIONS, menPai),
+		},
+	};
+}
+
 export function calcDunJia(fields, nongli, options, context){
+	// [H-G] 日家·古籍金函系=独立体系(查表盘,无局法/三盘),早返专用构建器。
+	if(normalizeNum(options && options.paiPanType, 3) === 6){
+		return buildJinhanRiJiaPan(fields, nongli, options || {}, context);
+	}
 	const dateParts = parseDateTime(fields);
 	if(!dateParts){
 		return null;
@@ -2148,7 +2503,10 @@ export function calcDunJia(fields, nongli, options, context){
 	}
 	const isFeipan = opts.school === '飞盘';
 	const isHuohe = opts.school === '混合';                          // 飞转混合:星转·门飞·九神(专题§4.2)
-	const fei = (isFeipan || isHuohe) ? panFeipan(panGanzhi, qmju) : null;
+	const fei = (isFeipan || isHuohe) ? panFeipan(panGanzhi, qmju, {
+		feiXingShun: !!opts.feiXingShun, feiMenShun: !!opts.feiMenShun, feiShenShun: !!opts.feiShenShun,
+		feiMenZhongCan: opts.feiMenZhongCan !== false, feiMenZhongShow: !!opts.feiMenZhongShow,
+	}) : null;
 	// 转盘/混合 都需转盘值符值使(混合的值符星宫走转盘);飞盘走飞盘 zfzs。
 	// 🔴 值符值使解算上下文:此前只有这一处传了 ext,而下面排八门的 panDoor 没传 →
 	//    「值符星=禽」时 resolveSpecialZhiShi(undefined,…) 恒取 0 档,八门实际起排永远从死门起,
@@ -2157,15 +2515,28 @@ export function calcDunJia(fields, nongli, options, context){
 		zhiShiType: opts.zhiShiType,
 		yinYangDun: paiPanMeta.yinYangDun,
 		jieqi,
+		godsPreset: opts.godsPreset,   // [H-B] 八神预设透传(panGod 消费)
+		jiGongMode: opts.jiGongMode,   // [H-C] 中宫寄宫档透传(panGod/panDoor/panStar/panSky 消费)
 	};
 	const zfzsZhuan = isFeipan ? null : zhifuNZhishi(panGanzhi, qmju, zfzsExt);
 	// 混合:值符星宫=转盘(星轮转),值使门宫=飞盘(门飞泊);故取转盘 zfzs 但门宫换飞盘的。
-	const zfzs = isFeipan ? fei.zfzs : (isHuohe ? { ...zfzsZhuan, 值使门宫: (fei && fei.zfzs ? fei.zfzs.值使门宫 : zfzsZhuan.值使门宫) } : zfzsZhuan);
+	// [H-D] 混合盘四层自由装配(mixTian/mixXing/mixMen/mixShen ∈ ''|'zhuan'|'fei';全缺省=历史组合:天转·星转·门飞·神飞)。
+	const mixOf = (key, dft)=>{ const v = opts[key]; return (v === 'fei' || v === 'zhuan') ? v : dft; };
+	const mixTian = mixOf('mixTian', 'zhuan');
+	const mixXing = mixOf('mixXing', 'zhuan');
+	const mixMen = mixOf('mixMen', 'fei');
+	const mixShen = mixOf('mixShen', 'fei');
+	const zfzs = isFeipan ? fei.zfzs : (isHuohe ? {
+		...zfzsZhuan,
+		// 值符星宫随星层来源、值使门宫随门层来源(层取转则用转盘解算,取飞则用飞盘解算)
+		值符星宫: (mixXing === 'fei' && fei && fei.zfzs) ? fei.zfzs.值符星宫 : zfzsZhuan.值符星宫,
+		值使门宫: (mixMen === 'fei' && fei && fei.zfzs) ? fei.zfzs.值使门宫 : zfzsZhuan.值使门宫,
+	} : zfzsZhuan);
 	const dipanGua = panEarth(qmju);
-	const tianpanGua = isFeipan ? fei.tianpanGua : panSky(panGanzhi, qmju, zfzsExt);   // 混合天盘=转盘
-	const menGua = (isFeipan || isHuohe) ? fei.menGua : panDoor(panGanzhi, qmju, zfzsExt);   // 混合八门=飞盘飞宫
-	const starGua = isFeipan ? fei.starGua : panStar(panGanzhi, qmju, zfzsExt);        // 混合九星=转盘排宫
-	const shenGua = (isFeipan || isHuohe) ? fei.shenGua : panGod(panGanzhi, qmju, zfzsExt);  // 混合九神=飞盘
+	const tianpanGua = isFeipan ? fei.tianpanGua : (isHuohe && mixTian === 'fei' ? fei.tianpanGua : panSky(panGanzhi, qmju, zfzsExt));
+	const menGua = isFeipan ? fei.menGua : (isHuohe ? (mixMen === 'fei' ? fei.menGua : panDoor(panGanzhi, qmju, zfzsExt)) : panDoor(panGanzhi, qmju, zfzsExt));
+	const starGua = isFeipan ? fei.starGua : (isHuohe && mixXing === 'fei' ? fei.starGua : panStar(panGanzhi, qmju, zfzsExt));
+	const shenGua = isFeipan ? fei.shenGua : (isHuohe ? (mixShen === 'fei' ? fei.shenGua : panGod(panGanzhi, qmju, zfzsExt)) : panGod(panGanzhi, qmju, zfzsExt));
 	const xunkong = daykongShikong(ganzhi.day, ganzhi.time);
 
 	const diPanBase = convertGuaMapToPos(dipanGua);
@@ -2178,39 +2549,107 @@ export function calcDunJia(fields, nongli, options, context){
 	const men = rotateOuterMapByShift(menBase, shiftPalace);
 	const star = rotateOuterMapByShift(starBase, shiftPalace);
 	const shen = rotateOuterMapByShift(shenBase, shiftPalace);
-	// 转盘八神把勾→虎/雀→玄;飞盘/混合九神保真(含勾陈/太常/朱雀),不替换。
+	// 转盘八神名按预设分派(默认=历史恒虎玄);飞盘/混合九神保真(含勾陈/太常/朱雀),不替换。
 	if(!isFeipan && !isHuohe){
-		Object.keys(shen).forEach((k)=>{ shen[k] = String(shen[k] || '').replace(/勾/g, '虎').replace(/雀/g, '玄'); });
+		Object.keys(shen).forEach((k)=>{ shen[k] = applyGodsPreset(String(shen[k] || ''), opts.godsPreset); });
 	}
+
+	// [H-B] 暗干层(默认 off=null 零回归):模式产每宫暗干;showAnZhi 开再配旬内暗支。
+	// 🔴 ctx 必须传「卦名键」盘面(panAnGan 输出以卦名为键,cells 装配经 GUA_TO_NUM 反查):
+	//   直接传 rotate 后的 men/diPan(宫号键)会产出数字键 → cells 全滤空(真机实抓的死链);
+	//   故此处以 PALACE_NAME 把移星后的门/地盘归一回卦名键(暗干基于最终盘面,含移星)。
+	const menByGua = {};
+	const diByGua = {};
+	for(let g = 1; g <= 9; g++){
+		const guaName = PALACE_NAME[g];
+		if(!guaName){ continue; }
+		menByGua[guaName] = men[g] || '';
+		diByGua[guaName] = diPan[g] || '';
+	}
+	const anGanMap = panAnGan(opts.anGanMode, {
+		menGua: menByGua, dipanGua: diByGua, yy: paiPanMeta.yinYangDun,
+		shiGan: (panGanzhi.time || '').charAt(0),
+		zhishiGong: zfzs && zfzs.值使门宫 ? zfzs.值使门宫[1] : '',
+		jiGong: resolveJiGong(opts.jiGongMode, paiPanMeta.yinYangDun, jieqi),
+	});
+	const anZhiMap = (anGanMap && opts.showAnZhi)
+		? Object.keys(anGanMap).reduce((acc, g)=>{ acc[g] = anZhiOf(anGanMap[g], panGanzhi.time); return acc; }, {})
+		: null;
 
 	const specials = resolveSpecials(tianPan);
 	const menPo = resolveMenPo(men);
-	const kongWang = getKongByMode(opts.kongMode, xunkong);
+	// [H-E] kongMarkBoth=同时标日空+时空(并集);默认关=单模式(现状字节稳)
+	const kongWang = opts.kongMarkBoth ? `${xunkong.日空 || ''}${xunkong.时空 || ''}` : getKongByMode(opts.kongMode, xunkong);
 	const kongWangMeta = resolveKongWangPalaces(kongWang);
+	// [H-E] showAllKong=四柱空亡全览(纯附加信息,默认关=null 零回归)
+	const allKong = opts.showAllKong ? {
+		年空: GUXU[getXunHead(ganzhi.year)] || '',
+		月空: GUXU[getXunHead(ganzhi.month)] || '',
+		日空: xunkong.日空 || '',
+		时空: xunkong.时空 || '',
+	} : null;
 	const yiMaMeta = resolveYiMa(opts.yimaMode, ganzhi);
 	const isDiurnal = context && context.isDiurnal !== undefined && context.isDiurnal !== null
 		? !!context.isDiurnal
 		: (nongli && nongli.isDiurnal !== undefined && nongli.isDiurnal !== null ? !!nongli.isDiurnal : null);
 
-	const zhiFuPalace = rotateOuterPalaceNum(GUA_POS_MAP[zfzs.值符星宫[1]] || 5, shiftPalace);
-	const zhiShiPalace = rotateOuterPalaceNum(GUA_POS_MAP[zfzs.值使门宫[1]] || 5, shiftPalace);
-	const zfStarRaw = (zfzs.值符星宫[0] || '');
+	let zhiFuPalace = rotateOuterPalaceNum(GUA_POS_MAP[zfzs.值符星宫[1]] || 5, shiftPalace);
+	let zhiShiPalace = rotateOuterPalaceNum(GUA_POS_MAP[zfzs.值使门宫[1]] || 5, shiftPalace);
+	let zfStarRaw = (zfzs.值符星宫[0] || '');
+	let zsDoorRaw = (zfzs.值使门宫[0] || '');
+	// [H-E] 移星值符两档:follow(默认)=标记随几何平移;recalc=移后盘视为新局按标准定义重解——
+	//   新值符星/值使门 = 移后地盘旬首遁仪所在宫的本位星/本位门(门为「中」依转盘传统取死门),
+	//   标记宫 = 新星名/门名在移后星层/门层的实际落宫。仅移星≠0 时生效(=0 两档恒同,默认零回归)。
+	if(opts.shiftZhiFuMode === 'recalc' && normalizeShiftPalace(shiftPalace) !== 0){
+		const dunYi = JJ[getXunHead(panGanzhi.time)] || '戊';
+		let dg = 0;
+		for(let i = 1; i <= 9; i++){ if(String(diPan[i] || '') === dunYi){ dg = i; break; } }
+		if(dg){
+			const luoshu = LUOSHU_NUM[PALACE_NAME[dg]] || 5;
+			const newStar = JIU_XING[luoshu - 1] || '';
+			let newDoor = '休死伤杜中开惊生景'.charAt(luoshu - 1) || '';
+			if(newDoor === '中' && !isFeipan){ newDoor = '死'; }
+			const starMatch = (cellStar)=>{
+				const cs = String(cellStar || '');
+				if(!newStar){ return false; }
+				if(cs.indexOf(newStar) >= 0){ return true; }
+				return ('芮禽'.indexOf(newStar) >= 0) && cs.indexOf('内') >= 0;   // 转盘芮/禽归一显「内」
+			};
+			for(let i = 1; i <= 9; i++){ if(starMatch(star[i])){ zhiFuPalace = i; break; } }
+			for(let i = 1; i <= 9; i++){ if(String(men[i] || '').charAt(0) === newDoor){ zhiShiPalace = i; break; } }
+			zfStarRaw = newStar || zfStarRaw;
+			zsDoorRaw = newDoor || zsDoorRaw;
+		}
+	}
 	const zfStarDisp = isFeipan ? zfStarRaw : zfStarRaw.replace(/[芮禽]+/g, '内');   // 转盘值符=天禽(中宫禽/芮)时显「内」(天内),飞盘保「禽」
 	const zhiFu = JIU_XING_NAME[zfStarDisp] || `${zfStarDisp}`;
-	const zhiShi = BA_MEN_NAME[zfzs.值使门宫[0]] || `${zfzs.值使门宫[0]}门`;
+	const zhiShi = BA_MEN_NAME[zsDoorRaw] || `${zsDoorRaw}门`;
 
+	// [H-B] 暗干卦名键→宫号键(cells 以 palaceNum 索引)
+	const GUA_TO_NUM = Object.keys(PALACE_NAME).reduce((acc, n)=>{ acc[PALACE_NAME[n]] = Number(n); return acc; }, {});
+	const anGanByNum = anGanMap ? Object.keys(anGanMap).reduce((acc, gua)=>{ if(GUA_TO_NUM[gua]){ acc[GUA_TO_NUM[gua]] = anGanMap[gua]; } return acc; }, {}) : null;
+	const anZhiByNum = anZhiMap ? Object.keys(anZhiMap).reduce((acc, gua)=>{ if(GUA_TO_NUM[gua]){ acc[GUA_TO_NUM[gua]] = anZhiMap[gua]; } return acc; }, {}) : null;
 	const cells = buildCells(diPan, tianPan, men, shen, star, zhiFuPalace, zhiShiPalace, {
 		jiXingPalaces: specials.jiXingPalaces,
 		ruMuPalaces: specials.ruMuPalaces,
 		menPoPalaces: menPo.palaces,
 		kongWangPalaces: kongWangMeta.palaces,
 		yimaPalace: yiMaMeta.palace,
+		godsPreset: opts.godsPreset,
+		anGanByNum,
+		anZhiByNum,
 		school: opts.school,
 	});
 
 	const qmjuMeta = parseQmju(qmju);
 
 	return {
+		anGan: anGanMap,   // [H-B] 每宫暗干(off=null);盘面/快照消费
+		anZhi: anZhiMap,   // [H-B] 每宫暗支(showAnZhi 开时;随暗干)
+		allKong,           // [H-E] 四柱空亡全览(showAllKong 开;默认 null)
+		xunKong: xunkong,  // [H-E] {日空,时空}恒暴露(kongMarkBoth 显示层拆分消费)
+		keIndex: paiPanMeta.keIndex || null,   // [H-F] 刻家第几刻(1..10;非刻家=null)
+		keGanZhi: paiPanMeta.keGanZhi || '',   // [H-F] 刻柱干支(时柱锚法:首刻=时柱逐刻进一;非刻家='')
 		dateStr: dateParts.dateStr,
 		timeStr: dateParts.timeStr,
 		realSunTime: (context && context.displaySolarTime) || (nongli ? (nongli.birth || '') : ''),
@@ -2220,11 +2659,11 @@ export function calcDunJia(fields, nongli, options, context){
 		fuTou: resolveFuTouByBacktrack(ganzhi.day),
 		// 节气 chip/快照用「定局节气」——置闰超神时≠曆法节气,旧拼法(曆法节气+定局元)会出
 		// 「阳遁七局中元+大雪中元」矛盾串(2026-08-02 缺陷②修);曆法节气另存 lifaJieqi 供参照。
-		jieqiText: `${paiPanMeta.dingjuJieqi || jieqi || '未知节气'}${paiPanMeta.sanYuan || qmjuMeta.yuan}`,
+		jieqiText: `${paiPanMeta.dingjuJieqi || jieqi || '未知节气'}${paiPanMeta.sanYuan !== undefined ? paiPanMeta.sanYuan : (qmjuMeta.yuan || '')}`,
 		dingjuJieqi: paiPanMeta.dingjuJieqi || jieqi || '',
 		lifaJieqi: jieqi || '',
 		yinYangDun: paiPanMeta.yinYangDun || (qmjuMeta.yy === '阴' ? '阴遁' : '阳遁'),
-		sanYuan: paiPanMeta.sanYuan || qmjuMeta.yuan,
+		sanYuan: paiPanMeta.sanYuan !== undefined ? paiPanMeta.sanYuan : (qmjuMeta.yuan || ''),
 		juShu: juNumberToCn(paiPanMeta.juShu || (CNUMBER.indexOf(qmjuMeta.kook) + 1)),
 		juText: qmju,
 		xunShou: getXunHead(ganzhi.day),
@@ -2273,21 +2712,47 @@ export function calcDunJia(fields, nongli, options, context){
 			daySwitchLabel: getOptionLabel(DAY_SWITCH_OPTIONS, opts.after23NewDay),
 			qijuMethodLabel: getOptionLabel(QIJU_METHOD_OPTIONS, opts.qijuMethod),
 			schoolLabel: getOptionLabel(SCHOOL_OPTIONS, opts.school),
+			godsPreset: opts.godsPreset || 'baihu_xuanwu',
+			godsPresetLabel: getOptionLabel(GODS_PRESET_OPTIONS, opts.godsPreset || 'baihu_xuanwu'),
+			jiGongMode: opts.jiGongMode || 'kun',
+			jiGongModeLabel: getOptionLabel(JIGONG_MODE_OPTIONS, opts.jiGongMode || 'kun'),
+			feiXingShun: !!opts.feiXingShun,
+			feiMenShun: !!opts.feiMenShun,
+			feiShenShun: !!opts.feiShenShun,
+			feiMenZhongCan: opts.feiMenZhongCan !== false,
+			feiMenZhongShow: !!opts.feiMenZhongShow,
+			mixTian: (opts.mixTian === 'fei' || opts.mixTian === 'zhuan') ? opts.mixTian : '',
+			mixXing: (opts.mixXing === 'fei' || opts.mixXing === 'zhuan') ? opts.mixXing : '',
+			mixMen: (opts.mixMen === 'fei' || opts.mixMen === 'zhuan') ? opts.mixMen : '',
+			mixShen: (opts.mixShen === 'fei' || opts.mixShen === 'zhuan') ? opts.mixShen : '',
+			kongMarkBoth: !!opts.kongMarkBoth,
+			showAllKong: !!opts.showAllKong,
+			shiftZhiFuMode: opts.shiftZhiFuMode === 'recalc' ? 'recalc' : 'follow',
+			dayJiaJu: opts.dayJiaJu || 'yiyuan',
+			dayJiaJuLabel: getOptionLabel(DAYJIA_JU_OPTIONS, opts.dayJiaJu || 'yiyuan'),
+			keJiaFenDun: opts.keJiaFenDun || 'zihou',
+			keJiaFenDunLabel: getOptionLabel(KEJIA_FENDUN_OPTIONS, opts.keJiaFenDun || 'zihou'),
+			keZiZhengHuanShi: !!opts.keZiZhengHuanShi,
+			yearJiaJu: opts.yearJiaJu === 'yinian' ? 'yinian' : 'sanyuan',
+			yearJiaJuLabel: getOptionLabel(YEARJIA_JU_OPTIONS, opts.yearJiaJu === 'yinian' ? 'yinian' : 'sanyuan'),
+			anGanModeLabel: getOptionLabel(ANGAN_MODE_OPTIONS, opts.anGanMode || 'off'),
+			fullNameTips: !!opts.fullNameTips,
 			// 当前实际所用定局法:数字盘=报数定局;各家自有定局(年/月/日/刻);时家/综合用拆补/置闰/茅山/无闰选择。
 			dingFaLabel: (opts.qijuMethod === 'shuzi' && shuziInfo) ? '阴盘·报数定局'
-				: opts.paiPanType === 0 ? '三元起宫·皆阴遁'
-					: opts.paiPanType === 1 ? (normalizeNum(opts.yueJiaQiJuType, 0) === 1 ? '年支直取·皆阴遁' : '年符头定局·皆阴遁')
+				: opts.paiPanType === 0 ? (opts.yearJiaJu === 'yinian' ? '逐年换局·皆阴遁' : '三元起宫·皆阴遁')
+					: opts.paiPanType === 1 ? (normalizeNum(opts.yueJiaQiJuType, 0) === 2 ? '逐月换局·皆阴遁' : (normalizeNum(opts.yueJiaQiJuType, 0) === 1 ? '年支直取·皆阴遁' : '年符头定局·皆阴遁'))
 						: opts.paiPanType === 2 ? '节气三元·六十日一局'
-							: opts.paiPanType === 4 ? '时支定遁·时柱符头'
+							: opts.paiPanType === 4 ? (opts.keJiaFenDun === 'jieqi' ? '十分局·节气分遁' : '十分局·子后阳午后阴')
 								: getOptionLabel(QIJU_METHOD_OPTIONS, opts.qijuMethod),
 			// 中间盘角标:X家（X盘）=排盘体例（定局法/盘式短名）。
 			boardTag: (function(){
 				const fam = String(getOptionLabel(PAIPAN_OPTIONS, opts.paiPanType) || '时家奇门').replace('奇门', '').replace('排盘', '');
 				let method;
 				if(opts.qijuMethod === 'shuzi' && shuziInfo){ method = '阴盘'; }
-				else if(opts.paiPanType === 0){ method = '三元'; }
-				else if(opts.paiPanType === 1){ method = (normalizeNum(opts.yueJiaQiJuType, 0) === 1 ? '年支' : '符头'); }
+				else if(opts.paiPanType === 0){ method = (opts.yearJiaJu === 'yinian' ? '逐年' : '三元'); }
+				else if(opts.paiPanType === 1){ method = (normalizeNum(opts.yueJiaQiJuType, 0) === 2 ? '逐月' : (normalizeNum(opts.yueJiaQiJuType, 0) === 1 ? '年支' : '符头')); }
 				else if(opts.paiPanType === 2){ method = '节气'; }
+				else if(opts.paiPanType === 4){ method = '十分局'; }
 				else { method = getOptionLabel(QIJU_METHOD_OPTIONS, opts.qijuMethod); }
 				const panShi = (opts.school === '飞盘') ? '飞盘' : (opts.school === '混合' ? '飞转' : '转盘');
 				return fam + '·' + panShi + '（' + method + '）';
@@ -2312,6 +2777,27 @@ function pushMdRows(lines, header, rows){
 }
 
 export function buildDunJiaSnapshotText(pan){
+	// [H-G] 古籍金函系日家专段(独立体系,与常规盘快照结构不同)
+	if(pan && pan.isJinhan && pan.jinhan){
+		const L = [];
+		L.push('【日家占方（古籍金函系）】');
+		L.push(`日期：${pan.dateStr || ''} ${pan.timeStr || ''}（${pan.lunarText || ''}）`);
+		L.push(`日干支：${pan.jinhan.dayGz}（${pan.jinhan.pantype}盘·冬至后为阳/夏至后为阴）`);
+		L.push(`八门排法：${pan.options.jinhanMenPaiLabel || '书表直录'}`);
+		L.push(`中宫星：${pan.jinhan.center}（${JINHAN_STAR_JI[pan.jinhan.center] || ''}）`);
+		const parts = [];
+		(pan.cells || []).forEach((c)=>{
+			if(!c || c.isCenter){ return; }
+			parts.push(`${c.jinhanDir}:${c.tianXing}(${c.jinhanStarJi})${c.door}门(${c.jinhanDoorJi})${c.isXiShen ? '·喜神' : ''}${c.isDaJi ? '·大吉' : ''}`);
+		});
+		L.push(`八方星门：${parts.join('；')}`);
+		L.push(`喜神方：${pan.jinhan.xiShen}；大吉方：${pan.jinhan.daJiFang || '—'}`);
+		L.push(`大吉时：${pan.jinhan.jiShi}`);
+		L.push(`十二时辰黄黑道：${pan.jinhan.shiText}`);
+		L.push('吉凶判则（书定）：门重于星；开休生=吉门，杜景=平，死惊伤=凶门；天乙太乙太阴青龙=吉星，轩辕招摇=平，摄提咸池天符=凶星。');
+		return L.join('\n');
+	}
+
 	if(!pan){
 		return '';
 	}
@@ -2336,7 +2822,8 @@ export function buildDunJiaSnapshotText(pan){
 
 	lines.push('[盘型]');
 	lines.push(`奇门遁甲方盘（${pan.options.paiPanLabel}）`);
-	lines.push(`命式：${pan.options.sexLabel}`);
+	// sexLabel 缺(直调链未传 sex)时不出此行——零信息优于「命式：undefined」脏行。
+	if(pan.options.sexLabel){ lines.push(`命式：${pan.options.sexLabel}`); }
 	lines.push(`移星：${pan.options.shiftLabel || '原宫'}`);
 	lines.push(`奇门封局：${pan.options.fengJuLabel || (pan.fengJu ? '已封局' : '未封局')}`);
 	lines.push(`换日：${pan.options.daySwitchLabel || '23点算第二天'}`);
@@ -2348,6 +2835,43 @@ export function buildDunJiaSnapshotText(pan){
 	lines.push(`局数：${pan.juText}`);
 	lines.push(`定局法：${pan.options.dingFaLabel || pan.options.qijuMethodLabel}`);
 	lines.push(`盘式：${pan.options.schoolLabel || '转盘（排宫）'}`);
+	// [H-B] 非默认档才出注记(默认字节稳)
+	if(pan.options.godsPresetLabel && (pan.options.godsPreset && pan.options.godsPreset !== 'baihu_xuanwu')){ lines.push(`八神取神：${pan.options.godsPresetLabel}`); }
+	// [H-C] 中宫寄宫非默认档注记(默认恒坤=零注记字节稳)
+	if(pan.options.jiGongModeLabel && pan.options.jiGongMode && pan.options.jiGongMode !== 'kun'){ lines.push(`中宫寄宫：${pan.options.jiGongModeLabel}`); }
+	// [H-D] 飞盘细项/混合装配非默认注记(默认零注记字节稳)
+	(function(){
+		const o = pan.options;
+		const shun = [o.feiXingShun ? '九星' : '', o.feiMenShun ? '九门' : '', o.feiShenShun ? '九神' : ''].filter(Boolean);
+		if(shun.length){ lines.push(`飞宫顺飞：${shun.join('、')}（阴阳遁皆顺）`); }
+		if(o.feiMenZhongCan === false){ lines.push(`门层跳中：八门不入中宫${o.feiMenZhongShow ? '（中宫标「中」）' : ''}`); }
+		const mixParts = [];
+		if(o.mixTian){ mixParts.push(`天盘${o.mixTian === 'fei' ? '飞' : '转'}`); }
+		if(o.mixXing){ mixParts.push(`九星${o.mixXing === 'fei' ? '飞' : '转'}`); }
+		if(o.mixMen){ mixParts.push(`八门${o.mixMen === 'fei' ? '飞' : '转'}`); }
+		if(o.mixShen){ mixParts.push(`九神${o.mixShen === 'fei' ? '飞' : '转'}`); }
+		if(mixParts.length){ lines.push(`混合装配：${mixParts.join('、')}`); }
+		// [H-E]
+		if(o.kongMarkBoth){ lines.push('空亡标注：日空＋时空并标'); }
+		// [H-F]
+		if(o.dayJiaJuLabel && o.dayJiaJu && o.dayJiaJu !== 'yiyuan'){ lines.push(`日家定局：${o.dayJiaJuLabel}`); }
+		if(o.yearJiaJu === 'yinian'){ lines.push(`年家定局：${o.yearJiaJuLabel}`); }
+		if(o.shiftZhiFuMode === 'recalc'){ lines.push('移星值符：移后重定值符值使'); }
+	})();
+	if(pan.allKong){
+		lines.push(`四柱空亡：年空${pan.allKong.年空}、月空${pan.allKong.月空}、日空${pan.allKong.日空}、时空${pan.allKong.时空}`);
+	}
+	if(pan.keIndex){
+		lines.push(`刻序：本时辰第${pan.keIndex}刻${pan.keGanZhi ? `（刻柱${pan.keGanZhi}）` : ''}（十二分钟一局，${pan.options.keJiaFenDunLabel || '子后阳·午后阴'}）`);
+	}
+	if(pan.anGan){
+		lines.push(`暗干：${pan.options.anGanModeLabel || ''}`);
+		const parts = [];
+		'坎坤震巽中乾兑艮离'.split('').forEach((gua)=>{
+			if(pan.anGan[gua]){ parts.push(`${gua}${pan.anGan[gua]}${pan.anZhi && pan.anZhi[gua] ? pan.anZhi[gua] : ''}`); }
+		});
+		if(parts.length){ lines.push(`暗干分布：${parts.join('、')}`); }
+	}
 	if(pan.shuziInfo){
 		lines.push(`阴盘起局：报数 ${pan.shuziInfo.digits}，各位求和 ${pan.shuziInfo.sum}，除9(余0作9)定局数；用神宫 ${pan.shuziInfo.gong} 宫（${pan.shuziInfo.gua}·${pan.shuziInfo.direction}）。阴阳遁按节气、局已据报数置换；阴盘奇门取数与余数映射各家有别，断盘侧重用神宫象意。`);
 	}

@@ -26,6 +26,8 @@ export const JU_NAME = { 2: '水二局', 3: '木三局', 4: '金四局', 5: '土
 // 长生十二神 + 各局起宫（古籍：水二申/木三亥/金四巳/土五申/火六寅）。
 export const CHANGSHENG_12 = ['长生', '沐浴', '冠带', '临官', '帝旺', '衰', '病', '死', '墓', '绝', '胎', '养'];
 export const CHANGSHENG_START = { 2: '申', 3: '亥', 4: '巳', 5: '申', 6: '寅' };
+// [P3b] 火土同宫档:仅土五局改起寅(随火六),余局不动。默认表=水土同宫(土五随水二起申)=现状。
+export const CHANGSHENG_START_HUO_TU = { 2: '申', 3: '亥', 4: '巳', 5: '寅', 6: '寅' };
 // 十二宫名（自命宫起逆时针）
 export const HOUSES = ['命宫', '兄弟', '夫妻', '子女', '财帛', '疾厄', '迁移', '奴仆', '官禄', '田宅', '福德', '父母'];
 // 紫微系（自紫微逆行）+ 天府系（自天府顺行），步长与 ziweistarsmain.json 一致。
@@ -86,6 +88,25 @@ export function fourteenStars(ziweiIdx){
 export function isClockwise(yearGan, male){
 	const yang = isYangGan(yearGan);
 	return (yang && male) || (!yang && !male);
+}
+
+// ── [B15b] 小限顺逆·单一真值源纯函数 ──
+// 消费方三处必须全走这里:右栏 ZWLuckPanel.buildXiaoxianItems / 盘面岁数条 ZiWeiHelper.xiaoxianAgesOf /
+// 本地引擎 ZiweiCalc (16) 段。mode '0'=男顺女逆(默认,与 Java setupSmallDirection 字节同构) /
+// '1'=阳男阴女顺、阴男阳女逆(中州,判式同 isClockwise)。
+export function xiaoxianClockwiseFor(mode, male, yearYang){
+	if(`${mode}` === '1'){ return (yearYang && male) || (!yearYang && !male); }
+	return !!male;
+}
+// 某宫的小限岁列(1..maxAge 中落此宫者,升序)。小限逐岁走地支环,与 houses 数组起始宫无关。
+export function xiaoxianAgesForHouse(mode, male, yearYang, startZhi, houseZhi, maxAge = 100){
+	const si = ZHI.indexOf(startZhi), hi = ZHI.indexOf(houseZhi);
+	if(si < 0 || hi < 0){ return []; }
+	const cw = xiaoxianClockwiseFor(mode, male, yearYang);
+	const dist = cw ? ((hi - si) % 12 + 12) % 12 : ((si - hi) % 12 + 12) % 12;
+	const out = [];
+	for(let a = dist + 1; a <= maxAge; a += 12){ out.push(a); }
+	return out;
 }
 
 // 长生十二神：按五行局起宫，阳男阴女顺、阴男阳女逆。返回 idx→神名。

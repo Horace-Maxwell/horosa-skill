@@ -2,6 +2,7 @@
 // 干支/节气月/值宿用 lunar-javascript;年神/建除/黄黑道用 fengshuiData 表。
 import { Solar } from 'lunar-javascript';
 import { yearZhiOf, yearGanZhi, zibaiYearCenter, mingGua, mingGroup, nayinOf } from './liqiCore.js';
+import { zeriDeep } from './zeriDeep.js';
 import {
 	DIZHI, ZHI_TO_GONG, ZHI_CHONG, ZHI_SANHE_JU, SANSHA_BY_JU, TWELVE_YEAR_GODS, YEAR_GOD_JX,
 	JIANCHU_12, JIANCHU_JX, HUANG_HEI_ORDER, HUANGDAO_SET, QINGLONG_START, XIU_28,
@@ -85,9 +86,19 @@ function wuxingEffect(my, other) {
 	if (WUXING_SHENG[my] === other) { return { rel: '我生(泄)', dir: 'harm' }; }
 	return { rel: '我克(耗)', dir: 'neutral' };
 }
+// 月 → 季（寒暖调候用：冬＝亥子丑月即公历 11-1 月；夏＝巳午未月即公历 5-7 月）。
+function seasonOf(m) {
+	const n = Math.trunc(Number(m)) || 0;
+	if (n === 11 || n === 12 || n === 1) { return 'dong'; }
+	if (n >= 5 && n <= 7) { return 'xia'; }
+	return '';
+}
+
 // zaoMing({ zuoShan, y, m, d, laiLong, zhuMing:{year,isMale} })
 //   laiLong / zhuMing 缺省时行为与旧版完全一致（补龙、相主两纲不产出、不计分）。
-export function zaoMing({ zuoShan = '子', y, m, d, laiLong, zhuMing } = {}) {
+export function zaoMing({ zuoShan = '子', y, m, d, laiLong, zhuMing,
+	showDeep = false, yongShi = '', hourGanZhi = '', zibaiA = 0, zibaiB = 0,
+	chongFuStar = 0, chongFuGong = 0, dongCombo = '', yun = 9 } = {}) {
 	if (y == null) { return { available: false }; }
 	const lunar = Solar.fromYmd(y, m, d).getLunar();
 	const pillars = [lunar.getYearInGanZhi(), lunar.getMonthInGanZhi(), lunar.getDayInGanZhi()];
@@ -156,6 +167,13 @@ export function zaoMing({ zuoShan = '子', y, m, d, laiLong, zhuMing } = {}) {
 	return {
 		available: true, zuoShan, date: `${y}-${m}-${d}`, pillars, zuoJu: zss ? `${zss.ju}局` : null,
 		items, score, grade, laiLong: longInfo, zhuMing: zhuInfo, gangDone: done,
+		// 深化层（additive）：不开 showDeep 时为 null，其余字段逐字段零回归。
+		deep: showDeep ? zeriDeep({
+			zuoShan, yongShi, yun,
+			pillars: hourGanZhi ? pillars.concat([hourGanZhi]) : pillars,
+			season: seasonOf(Number(m)),
+			zibaiA, zibaiB, chongFuStar, chongFuGong, dongCombo,
+		}) : null,
 		note: `造命四纲=补龙·扶山·相主·避煞；本课已评 ${done.join('·')}`
 			+ (longInfo ? '' : '；未填来龙则不评补龙')
 			+ (zhuInfo ? '' : '；未填主命则不评相主'),

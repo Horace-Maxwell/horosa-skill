@@ -3,6 +3,18 @@
 
 // ── 日干起 ──
 const GUIREN = { 甲: '丑未', 乙: '子申', 丙: '亥酉', 丁: '亥酉', 戊: '丑未', 己: '子申', 庚: '丑未', 辛: '寅午', 壬: '卯巳', 癸: '卯巳' };
+// 贵人歌诀变体(delta 承载,基表零动):此诀历代刻版庚干归属互有出入——
+// standard(默认=基表)取「甲戊庚牛羊」庚落丑未;geng_ma_hu 取「庚辛逢马虎」庚随辛落寅午。
+// 其余八干各版全同。未知档回落基表=安全降级(旧存档/降级场景)。
+const GUIREN_VARIANTS = {
+	geng_ma_hu: { 庚: '寅午' },
+};
+export function guirenOf(gan, variant){
+	if(!gan){ return ''; }
+	const delta = GUIREN_VARIANTS[variant];
+	if(delta && delta[gan]){ return delta[gan]; }
+	return GUIREN[gan] || '';
+}
 const LU = { 甲: '寅', 乙: '卯', 丙: '巳', 丁: '午', 戊: '巳', 己: '午', 庚: '申', 辛: '酉', 壬: '亥', 癸: '子' };
 const YANGREN = { 甲: '卯', 丙: '午', 戊: '午', 庚: '酉', 壬: '子' }; // 阳干;阴干有异说,默认不取
 const WENCHANG = { 甲: '巳', 乙: '午', 丙: '申', 丁: '酉', 戊: '申', 己: '酉', 庚: '亥', 辛: '子', 壬: '寅', 癸: '卯' };
@@ -32,9 +44,9 @@ export const SHENSHA_META = [
 // 默认精简 9 种(不含文昌)
 export const DEFAULT_SHENSHA_SET = ['天乙贵人', '禄神', '羊刃', '驿马', '桃花', '将星', '华盖', '劫煞', '亡神'];
 
-function ganSha(name, gan){
+function ganSha(name, gan, guirenFa){
 	if(!gan){ return ''; }
-	if(name === '天乙贵人'){ return GUIREN[gan] || ''; }
+	if(name === '天乙贵人'){ return guirenOf(gan, guirenFa); }
 	if(name === '禄神'){ return LU[gan] || ''; }
 	if(name === '羊刃'){ return YANGREN[gan] || ''; }
 	if(name === '文昌'){ return WENCHANG[gan] || ''; }
@@ -56,7 +68,7 @@ export function computeShenSha(ctx, opts){
 	const res = {}; // name → [支...]
 	SHENSHA_META.forEach((m) => {
 		if(set.indexOf(m.name) < 0){ return; }
-		const raw = m.source === 'gan' ? ganSha(m.name, gan) : zhiSha(m.name, zhi);
+		const raw = m.source === 'gan' ? ganSha(m.name, gan, o.guirenFa) : zhiSha(m.name, zhi);
 		if(raw){ res[m.name] = raw.split(''); }
 	});
 	return res;

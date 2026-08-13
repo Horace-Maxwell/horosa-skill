@@ -2,6 +2,7 @@
 // 这些是公有领域的体系事实(非受版权保护),据古典对应体系(Golden Dawn Book T 1888、传统占星界系)落数据。
 // 单一真值源:大牌/小牌/宫廷的对应叠层与各流派命名皆出自此,供 cardSchema.display_name / astro_line 消费。
 
+import { isTrumpArcana } from '../engine/arcana.js'; // [QA-9] 王牌判据单一真值源
 export const SUITS = ['wands', 'cups', 'swords', 'pentacles'];
 export const SUIT_ELEMENT = { wands: 'fire', cups: 'water', swords: 'air', pentacles: 'earth' };
 export const ELEMENT_CN = { fire: '火', water: '水', air: '风', earth: '土' };
@@ -177,9 +178,248 @@ export const DECAN_DATE = {
 	wands: { 2: '03-21~03-30', 3: '03-31~04-10', 4: '04-11~04-20', 5: '07-22~08-01', 6: '08-02~08-11', 7: '08-12~08-22', 8: '11-23~12-02', 9: '12-03~12-12', 10: '12-13~12-21' },
 	cups: { 2: '06-21~07-01', 3: '07-02~07-11', 4: '07-12~07-21', 5: '10-23~11-01', 6: '11-02~11-12', 7: '11-13~11-22', 8: '02-19~02-29', 9: '03-01~03-10', 10: '03-11~03-20' },
 	swords: { 2: '09-23~10-02', 3: '10-03~10-12', 4: '10-13~10-22', 5: '01-20~01-29', 6: '01-30~02-08', 7: '02-09~02-18', 8: '05-21~05-31', 9: '06-01~06-10', 10: '06-11~06-20' },
-	pentacles: { 2: '04-21~04-30', 3: '05-01~05-10', 4: '05-11~05-20', 5: '08-23~09-01', 6: '09-02~09-11', 7: '09-12~09-22', 8: '12-22~12-30', 9: '12-31~01-09', 10: '01-10~01-19' },
+	// [TP-DATA 真bug修] 钱币三组日期段原互相错位(2-4 摩羯旬误挂金牛日期/5-7 误挂处女/8-10 误挂摩羯),
+	// 与 DECAN 旬星表(2-4=Capricorn·5-6-7=Taurus·8-9-10=Virgo)自相矛盾;tarotDataFoundation 派生锚咬出,按旬星归位。
+	pentacles: { 2: '12-22~12-30', 3: '12-31~01-09', 4: '01-10~01-19', 5: '04-21~04-30', 6: '05-01~05-10', 7: '05-11~05-20', 8: '08-23~09-01', 9: '09-02~09-11', 10: '09-12~09-22' },
 };
 export function decanDate(card){
 	if(!card || card.court || !card.suit || !(card.number >= 2 && card.number <= 10)){ return null; }
 	return (DECAN_DATE[card.suit] && DECAN_DATE[card.suit][card.number]) || null;
+}
+
+// ═══════════ 对应叠层二期(五书补齐·TP-DATA):以下全为公有领域体系事实 ═══════════
+// 据 Book T(1888)/Liber 777/《创世之书》字母传统/古典占星尊贵体系落数据;中文为原创转录。
+
+// 大牌 GD 秘传称号(Book T 原文,公有领域)。键=sid。
+export const ESOTERIC_TITLE_MAJOR = {
+	the_fool: 'The Spirit of Ether', the_magician: 'The Magus of Power', high_priestess: 'The Priestess of the Silver Star',
+	the_empress: 'Daughter of the Mighty Ones', the_emperor: 'Son of the Morning, Chief Among the Mighty',
+	the_hierophant: 'Magus of the Eternal Gods', the_lovers: 'Children of the Voice Divine',
+	the_chariot: 'Child of the Power of the Waters, Lord of the Triumph of Light',
+	strength: 'Daughter of the Flaming Sword, Leader of the Lion', the_hermit: 'Magus of the Voice of Light, Prophet of the Gods',
+	wheel_of_fortune: 'The Lord of the Forces of Life', justice: 'Daughter of the Lord of Truth, Holder of the Balances',
+	hanged_man: 'The Spirit of the Mighty Waters', death: 'Child of the Great Transformers, Lord of the Gates of Death',
+	temperance: 'Daughter of the Reconcilers, Bringer Forth of Life', the_devil: 'Lord of the Gates of Matter, Child of the Forces of Time',
+	the_tower: 'Lord of the Hosts of the Mighty', the_star: 'Daughter of the Firmament, Dweller Between the Waters',
+	the_moon: 'Ruler of Flux and Reflux, Child of the Sons of the Mighty', the_sun: 'Lord of the Fire of the World',
+	judgement: 'The Spirit of the Primal Fire', the_world: 'The Great One of the Night of Time',
+};
+
+// 宫廷 Book T 称号(公有领域;RWS 内部键)。COURT_TITLE[suit][court]。
+export const COURT_TITLE = {
+	wands: { king: 'Lord of the Flame and the Lightning; King of the Spirits of Fire', queen: 'Queen of the Thrones of Flame', knight: 'Prince of the Chariot of Fire', page: 'Princess of the Shining Flame; the Rose of the Palace of Fire' },
+	cups: { king: 'Lord of the Waves and the Waters; King of the Hosts of the Sea', queen: 'Queen of the Thrones of the Waters', knight: 'Prince of the Chariot of the Waters', page: 'Princess of the Waters; Lotus of the Palace of Floods' },
+	swords: { king: 'Lord of the Winds and the Breezes; King of the Spirit of Air', queen: 'Queen of the Thrones of Air', knight: 'Prince of the Chariots of the Winds', page: 'Princess of the Rushing Winds; Lotus of the Palace of Air' },
+	pentacles: { king: 'Lord of the Wide and Fertile Land; King of the Spirits of Earth', queen: 'Queen of the Thrones of Earth', knight: 'Prince of the Chariot of Earth', page: 'Princess of the Echoing Hills; Rose of the Palace of Earth' },
+};
+
+// 希伯来字母元数据(《创世之书》传统):kind 母/双/单 · sense 字母义 · value 数值 · gift 天赋属性 · gateway 身体门户 · note 音符。键=sid。
+export const LETTER_META = {
+	the_fool: { kind: '母', sense: '牛·力量', value: '1', gift: '风(温)', gateway: '胸', note: 'E' },
+	the_magician: { kind: '双', sense: '房屋·在内', value: '2', gift: '生与死', gateway: '右眼', note: 'E' },
+	high_priestess: { kind: '双', sense: '骆驼·行旅', value: '3', gift: '智与愚', gateway: '右耳', note: 'G#' },
+	the_empress: { kind: '双', sense: '门·出入', value: '4', gift: '和平与战争', gateway: '右鼻孔', note: 'F#' },
+	the_emperor: { kind: '单', sense: '窗·显示', value: '5', gift: '视觉', gateway: '右足', note: 'C' },
+	the_hierophant: { kind: '单', sense: '钉·连结', value: '6', gift: '听觉', gateway: '右肾', note: 'C#' },
+	the_lovers: { kind: '单', sense: '剑·切分', value: '7', gift: '嗅觉', gateway: '左足', note: 'D' },
+	the_chariot: { kind: '单', sense: '篱·护域', value: '8', gift: '言语', gateway: '右手', note: 'D#' },
+	strength: { kind: '单', sense: '蛇·盘绕', value: '9', gift: '味觉', gateway: '左肾', note: 'E' },
+	the_hermit: { kind: '单', sense: '手·授受', value: '10', gift: '交合', gateway: '左手', note: 'F' },
+	wheel_of_fortune: { kind: '双', sense: '掌·承接', value: '20/500', gift: '富与贫', gateway: '左眼', note: 'G#' },
+	justice: { kind: '单', sense: '刺棒·驱策', value: '30', gift: '工作', gateway: '胆', note: 'F#' },
+	hanged_man: { kind: '母', sense: '水·众流', value: '40/600', gift: '地(冷)', gateway: '腹', note: 'G#' },
+	death: { kind: '单', sense: '鱼·繁衍', value: '50/700', gift: '运动', gateway: '肠', note: 'G' },
+	temperance: { kind: '单', sense: '支柱·扶持', value: '60', gift: '怒', gateway: '下腹', note: 'G#' },
+	the_devil: { kind: '单', sense: '眼·看见', value: '70', gift: '笑', gateway: '肝', note: 'A' },
+	the_tower: { kind: '双', sense: '口·言说', value: '80/800', gift: '恩典与义愤', gateway: '左耳', note: 'C' },
+	the_star: { kind: '单', sense: '鱼钩·牵引', value: '90/900', gift: '想象', gateway: '胃', note: 'A#' },
+	the_moon: { kind: '单', sense: '后脑·回环', value: '100', gift: '睡眠', gateway: '生殖', note: 'B' },
+	the_sun: { kind: '双', sense: '头·首领', value: '200', gift: '丰与瘠', gateway: '左鼻孔', note: 'D' },
+	judgement: { kind: '母', sense: '齿·锐化', value: '300', gift: '火(热)', gateway: '头', note: 'C' },
+	the_world: { kind: '双', sense: '印记·十字', value: '400', gift: '权能与奴役', gateway: '口', note: 'A' },
+};
+
+// 历史别名(早期意/法牌张登记名,仅录有据者,公有史实)。键=sid。
+export const MAJOR_ALIAS = {
+	the_fool: 'Il Matto', the_magician: 'Il Bagatto', high_priestess: 'La Papesse(女教皇)',
+	the_hierophant: 'Le Pape(教皇)', the_hermit: 'Rerum Edax(蚀万物者)', wheel_of_fortune: 'Omnium Dominatrix(万物主宰)',
+	hanged_man: 'Il Traditore(叛徒)', death: 'L’Arcane sans Nom(无名之牌)', the_tower: 'La Maison Dieu(神之家)',
+	the_star: 'Inclitum Sydus(煌煌之星)', judgement: 'L’Ange(天使)',
+};
+
+// 现代行星补充对应(三元素大牌的近代增补;显示层可选注,不改传统七曜主线)。键=sid。
+export const MODERN_PLANET = { the_fool: 'Uranus', hanged_man: 'Neptune', judgement: 'Pluto' };
+export const MODERN_PLANET_CN = { Uranus: '天王星', Neptune: '海王星', Pluto: '冥王星' };
+
+// 行星曜日(古典七曜,计时法用)。
+export const PLANET_WEEKDAY = { Sun: '周日', Moon: '周一', Mars: '周二', Mercury: '周三', Jupiter: '周四', Venus: '周五', Saturn: '周六' };
+
+// 宫廷↔三态模式(Queen 全本位/Knight(RWS)全固定/King(RWS)全变动;Page 辖一季近固定)。
+export const COURT_MODE = { king: '变动', queen: '本位', knight: '固定', page: '(一季)' };
+
+// 宫廷黄道跨段(结构化:前一星座末旬 + 本星座前两旬;Page 辖三星座象限)。COURT_SPAN_SIGNS[suit][court]=[跨入星座,本位星座] / page=[三星座]。
+export const COURT_SPAN_SIGNS = {
+	wands: { king: ['Scorpio', 'Sagittarius'], queen: ['Pisces', 'Aries'], knight: ['Cancer', 'Leo'], page: ['Cancer', 'Leo', 'Virgo'] },
+	cups: { king: ['Aquarius', 'Pisces'], queen: ['Gemini', 'Cancer'], knight: ['Libra', 'Scorpio'], page: ['Libra', 'Scorpio', 'Sagittarius'] },
+	swords: { king: ['Taurus', 'Gemini'], queen: ['Virgo', 'Libra'], knight: ['Capricorn', 'Aquarius'], page: ['Capricorn', 'Aquarius', 'Pisces'] },
+	pentacles: { king: ['Leo', 'Virgo'], queen: ['Sagittarius', 'Capricorn'], knight: ['Aries', 'Taurus'], page: ['Aries', 'Taurus', 'Gemini'] },
+};
+
+// 宫廷辖下小牌(King/Queen/Knight 各 3 张=跨段三旬;Page 辖其象限 9 张)。值=sid 数组(Book T 口径;含对底本两处错行的勘正)。
+export const COURT_SHADOW_PIPS = {
+	wands: { king: ['cups_07', 'wands_08', 'wands_09'], queen: ['cups_10', 'wands_02', 'wands_03'], knight: ['cups_04', 'wands_05', 'wands_06'], page: ['cups_02', 'cups_03', 'cups_04', 'wands_05', 'wands_06', 'wands_07', 'pentacles_08', 'pentacles_09', 'pentacles_10'] },
+	cups: { king: ['swords_07', 'cups_08', 'cups_09'], queen: ['swords_10', 'cups_02', 'cups_03'], knight: ['swords_04', 'cups_05', 'cups_06'], page: ['swords_02', 'swords_03', 'swords_04', 'cups_05', 'cups_06', 'cups_07', 'wands_08', 'wands_09', 'wands_10'] },
+	swords: { king: ['pentacles_07', 'swords_08', 'swords_09'], queen: ['pentacles_10', 'swords_02', 'swords_03'], knight: ['pentacles_04', 'swords_05', 'swords_06'], page: ['pentacles_02', 'pentacles_03', 'pentacles_04', 'swords_05', 'swords_06', 'swords_07', 'cups_08', 'cups_09', 'cups_10'] },
+	pentacles: { king: ['wands_07', 'pentacles_08', 'pentacles_09'], queen: ['wands_10', 'pentacles_02', 'pentacles_03'], knight: ['wands_04', 'pentacles_05', 'pentacles_06'], page: ['wands_02', 'wands_03', 'wands_04', 'pentacles_05', 'pentacles_06', 'pentacles_07', 'swords_08', 'swords_09', 'swords_10'] },
+};
+
+// Ace 象限三星座(结构化,配 ACE_QUADRANT 显示串)。
+export const ACE_QUADRANT_SIGNS = {
+	wands: ['Cancer', 'Leo', 'Virgo'], cups: ['Libra', 'Scorpio', 'Sagittarius'],
+	swords: ['Capricorn', 'Aquarius', 'Pisces'], pentacles: ['Aries', 'Taurus', 'Gemini'],
+};
+
+// 四花色扩展对应(古典四元素学说链:性质/体液/气质/感官/时辰/节气点/四字母/四界/斯芬克斯四力/大天使/四活物/元素灵)。
+export const SUIT_EXTENDED = {
+	wands: { quality: '热+干', humor: '黄胆汁', temperament: '胆汁质(奋发)', sense: '视', hour: '正午', festival: '夏至', letter: 'Yod', world: 'Atziluth 原型界', power: '意志 Velle', archangel: 'Michael', creature: '狮', elemental: '火精 Salamander' },
+	cups: { quality: '冷+湿', humor: '黏液', temperament: '黏液质(沉静)', sense: '味', hour: '日落', festival: '秋分', letter: 'Heh', world: 'Briah 创造界', power: '敢为 Audere', archangel: 'Gabriel', creature: '鹰', elemental: '水精 Undine' },
+	swords: { quality: '热+湿', humor: '血液', temperament: '多血质(活跃)', sense: '嗅', hour: '黎明', festival: '春分', letter: 'Vav', world: 'Yetzirah 形成界', power: '知晓 Scire', archangel: 'Raphael', creature: '人/天使', elemental: '风精 Sylph' },
+	pentacles: { quality: '冷+干', humor: '黑胆汁', temperament: '抑郁质(沉稳)', sense: '触', hour: '午夜', festival: '冬至', letter: 'Heh(末)', world: 'Assiah 行动界', power: '缄默 Tacere', archangel: 'Auriel', creature: '牛', elemental: '地精 Gnome' },
+};
+
+// 数字 1-10 元数据:行星(托勒密天球序)/几何/辩证(开端·对立·平衡两级嵌套)/旬相(上升·续座·下降)。
+export const NUMBER_META = {
+	1: { planet: '原动天', geometry: '点(单子)', papus: '开端之开端', phase: null },
+	2: { planet: '黄道带', geometry: '线(二元)', papus: '开端之对立', phase: '上升(初发)' },
+	3: { planet: 'Saturn', geometry: '三角(面)', papus: '开端之平衡', phase: '续座(全盛)' },
+	4: { planet: 'Jupiter', geometry: '四方(体)', papus: '对立之开端', phase: '下降(收变)' },
+	5: { planet: 'Mars', geometry: '五角星', papus: '对立之对立', phase: '上升(初发)' },
+	6: { planet: 'Sun', geometry: '六芒星', papus: '对立之平衡', phase: '续座(全盛)' },
+	7: { planet: 'Venus', geometry: '七芒星', papus: '平衡之开端', phase: '下降(收变)' },
+	8: { planet: 'Mercury', geometry: '八芒星', papus: '平衡之对立', phase: '上升(初发)' },
+	9: { planet: 'Moon', geometry: '九芒星', papus: '平衡之平衡', phase: '续座(全盛)' },
+	10: { planet: 'Earth', geometry: '十点阵', papus: '循环归元', phase: '下降(收变)' },
+};
+
+// 星座三态模式(本位/固定/变动)与行星主题词/星座性情词(归组主题线用,原创短语)。
+export const SIGN_MODE = {
+	Aries: '本位', Cancer: '本位', Libra: '本位', Capricorn: '本位',
+	Leo: '固定', Scorpio: '固定', Aquarius: '固定', Taurus: '固定',
+	Sagittarius: '变动', Pisces: '变动', Gemini: '变动', Virgo: '变动',
+};
+export const PLANET_THEME = {
+	Saturn: '限制/边界/时间', Jupiter: '扩张/机遇/幸运', Mars: '激烈/切割/勇进', Sun: '创造/自我/成功',
+	Venus: '吸引/和合/美', Mercury: '沟通/思辨/往来', Moon: '流变/直觉/滋养',
+};
+export const SIGN_BRIEF = {
+	Aries: '冲动开拓', Taurus: '沉稳固执', Gemini: '多才善言', Cancer: '护巢重情',
+	Leo: '张扬慷慨', Virgo: '勤谨挑剔', Libra: '权衡重谊', Scorpio: '专注隐深',
+	Sagittarius: '坦率尚自由', Capricorn: '谨慎善谋', Aquarius: '博爱独行', Pisces: '敏感可塑',
+};
+
+// 古典行星尊贵表(庙/陷/旺/弱;传统占星公有口径)。
+export const PLANET_DIGNITY = {
+	Saturn: { domicile: ['Capricorn', 'Aquarius'], detriment: ['Cancer', 'Leo'], exaltation: 'Libra', fall: 'Aries' },
+	Jupiter: { domicile: ['Sagittarius', 'Pisces'], detriment: ['Gemini', 'Virgo'], exaltation: 'Cancer', fall: 'Capricorn' },
+	Mars: { domicile: ['Aries', 'Scorpio'], detriment: ['Libra', 'Taurus'], exaltation: 'Capricorn', fall: 'Cancer' },
+	Sun: { domicile: ['Leo'], detriment: ['Aquarius'], exaltation: 'Aries', fall: 'Libra' },
+	Venus: { domicile: ['Taurus', 'Libra'], detriment: ['Scorpio', 'Aries'], exaltation: 'Pisces', fall: 'Virgo' },
+	Mercury: { domicile: ['Gemini', 'Virgo'], detriment: ['Sagittarius', 'Pisces'], exaltation: 'Virgo', fall: 'Pisces' },
+	Moon: { domicile: ['Cancer'], detriment: ['Capricorn'], exaltation: 'Taurus', fall: 'Scorpio' },
+};
+
+// 数字牌旬星尊贵:decanPlanet 在 decanSign 的庙旺陷弱标注(无则 null)。
+export function pipDignity(card){
+	if(!card || card.court || !card.decanPlanet || !card.decanSign){ return null; }
+	const d = PLANET_DIGNITY[card.decanPlanet];
+	if(!d){ return null; }
+	if(d.domicile.includes(card.decanSign)){ return { status: 'domicile', label: '入庙(本垣得力)' }; }
+	if(d.exaltation === card.decanSign){ return { status: 'exaltation', label: '入旺(高扬得势)' }; }
+	if(d.detriment.includes(card.decanSign)){ return { status: 'detriment', label: '入陷(客乡失势)' }; }
+	if(d.fall === card.decanSign){ return { status: 'fall', label: '入弱(沉降受抑)' }; }
+	return null;
+}
+
+// 占星值 → 大牌 sid 反查(行星/星座各一张;元素型不参与)。
+const MAJOR_BY_ASTRO = {};
+MAJORS_CORR.forEach((m) => { MAJOR_BY_ASTRO[m.astro] = m.id; });
+export function majorSidByAstro(astro){ return MAJOR_BY_ASTRO[astro] || null; }
+
+// 「大牌读小牌」:数字牌 → 其旬星的行星大牌+星座大牌(二连);宫廷 → 跨段两星座大牌;Ace/Page → 象限三星座大牌。
+export function decanMajors(card){
+	if(!card || isTrumpArcana(card.arcana)){ return null; }
+	if(card.court){
+		const spans = COURT_SPAN_SIGNS[card.suit] && COURT_SPAN_SIGNS[card.suit][card.court];
+		if(!spans){ return null; }
+		return { kind: card.court === 'page' ? 'quadrant' : 'span', majors: spans.map((s) => majorSidByAstro(s)).filter(Boolean) };
+	}
+	if(card.number === 1){
+		const signs = ACE_QUADRANT_SIGNS[card.suit] || [];
+		return { kind: 'quadrant', majors: signs.map((s) => majorSidByAstro(s)).filter(Boolean) };
+	}
+	if(card.decanPlanet && card.decanSign){
+		return { kind: 'decan', majors: [majorSidByAstro(card.decanPlanet), majorSidByAstro(card.decanSign)].filter(Boolean) };
+	}
+	return null;
+}
+
+// 星座日期段(由 36 旬日期派生,单一真值不另立日期表):起=该星座首旬起,止=末旬止。
+const SIGN_DATE_CACHE = {};
+export function signDateRange(sign){
+	if(SIGN_DATE_CACHE[sign] !== undefined){ return SIGN_DATE_CACHE[sign]; }
+	let start = null;
+	let end = null;
+	SUITS.forEach((suit) => {
+		Object.keys(DECAN[suit]).forEach((rank) => {
+			const [, , dSign] = DECAN[suit][rank];
+			if(dSign !== sign){ return; }
+			const dd = DECAN_DATE[suit][rank];
+			if(!dd){ return; }
+			const [a, b] = dd.split('~');
+			// 旬序内此星座的三旬:rank%3==2 为首旬(2/5/8),==1 为末旬(4/7/10)
+			const r = Number(rank);
+			if(r === 2 || r === 5 || r === 8){ start = a; }
+			if(r === 4 || r === 7 || r === 10){ end = b; }
+		});
+	});
+	const out = start && end ? `${start}~${end}` : null;
+	SIGN_DATE_CACHE[sign] = out;
+	return out;
+}
+
+// 生命树:质点 m↔n 之间的大牌路径。直连=返回该大牌;无直连=BFS 全部最短路(可多解),每跳带 {sid, from, to}。
+export function pathsBetween(m, n, variant){
+	if(!(m >= 1 && m <= 10 && n >= 1 && n <= 10) || m === n){ return []; }
+	const edges = [];
+	MAJORS_CORR.forEach((mc) => {
+		const j = pathJoin(mc.id, variant);
+		if(j){ edges.push({ sid: mc.id, a: j[0], b: j[1] }); }
+	});
+	const adj = {};
+	edges.forEach((e) => {
+		(adj[e.a] = adj[e.a] || []).push({ to: e.b, sid: e.sid });
+		(adj[e.b] = adj[e.b] || []).push({ to: e.a, sid: e.sid });
+	});
+	// BFS 层级 + 回溯全部最短路
+	const dist = { [m]: 0 };
+	const prev = {}; // node -> [{from, sid}]
+	let frontier = [m];
+	while(frontier.length && dist[n] === undefined){
+		const next = [];
+		frontier.forEach((u) => {
+			(adj[u] || []).forEach(({ to, sid }) => {
+				if(dist[to] === undefined){ dist[to] = dist[u] + 1; next.push(to); }
+				if(dist[to] === dist[u] + 1){ (prev[to] = prev[to] || []).push({ from: u, sid }); }
+			});
+		});
+		frontier = next;
+	}
+	if(dist[n] === undefined){ return []; }
+	const routes = [];
+	const walk = (node, acc) => {
+		if(node === m){ routes.push(acc.slice().reverse()); return; }
+		(prev[node] || []).forEach(({ from, sid }) => walk(from, acc.concat({ sid, from, to: node })));
+	};
+	walk(n, []);
+	return routes;
 }

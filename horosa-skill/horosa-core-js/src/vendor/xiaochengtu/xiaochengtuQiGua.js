@@ -83,7 +83,7 @@ function yaoFromRoll16(n) {
 	if (r < 15) return 8;  // 少阴(7/16)
 	return 6;              // 老阴(1/16)
 }
-const DAYAN_LABEL = { 6: '老阴 ×', 7: '少阳', 8: '少阴', 9: '老阳 ○' };
+const YAO_LABEL = { 6: '老阴 ×', 7: '少阳', 8: '少阴', 9: '老阳 ○' };
 export function qiGuaByDaYan({ seed, manualCounts } = {}) {
 	let counts;
 	if (Array.isArray(manualCounts) && manualCounts.length === 6 && manualCounts.every((v) => [6, 7, 8, 9].indexOf(Number(v)) >= 0)) {
@@ -98,7 +98,34 @@ export function qiGuaByDaYan({ seed, manualCounts } = {}) {
 	const zhiLines = dongYaos.length ? flipYao(benLines, dongYaos) : benLines.slice();
 	return {
 		mode: 'dayan', counts, ben: hexInfo(benLines), zhi: hexInfo(zhiLines), dongYaos,
-		steps: counts.map((c, i) => ({ label: `第${i + 1}爻`, detail: `十八变之三变得 ${c}(${DAYAN_LABEL[c]})`, value: c })),
+		steps: counts.map((c, i) => ({ label: `第${i + 1}爻`, detail: `十八变之三变得 ${c}(${YAO_LABEL[c]})`, value: c })),
+	};
+}
+
+// ── 模式一·补二：摇钱三变起卦（可复现） ─────────────────
+// 古籍两载例皆自「摇钱/摇卦」而得(「摇钱得家人之损」「用小成图摇卦得乾之兑」),
+// 🔴 惟书中只记所得之卦而未记铜钱规则,故此处按通行摇钱古法:三枚铜钱一掷为一变,三变成一爻;
+//    背数 0/1/2/3 → 老阴6(三字,1/8) / 少阳7(3/8) / 少阴8(3/8) / 老阳9(三背,1/8),老阴老阳为动爻。
+//    与大衍蓍草之十六分概率(3/5/7/1)不同,是为两法之别(同为六爻十八变而分布有异)。
+// 之卦=动爻取变,无动爻则之卦=本卦(沿用现口径)。seed 可复现;或手录每爻 6/7/8/9。
+export function qiGuaByYaoQian({ seed, manualCounts } = {}) {
+	let counts;
+	if (Array.isArray(manualCounts) && manualCounts.length === 6 && manualCounts.every((v) => [6, 7, 8, 9].indexOf(Number(v)) >= 0)) {
+		counts = manualCounts.map(Number);
+	} else {
+		const rng = seededRng(seed || 1);
+		// 每爻三掷,每掷背(1)/字(0);背数 + 6 = 该爻之数。
+		counts = Array.from({ length: 6 }, () => 6 + [0, 1, 2].reduce((acc) => acc + (rng() < 0.5 ? 1 : 0), 0));
+	}
+	const benLines = counts.map((c) => ((c === 9 || c === 7) ? 1 : 0));
+	const dongYaos = counts.map((c, i) => ((c === 6 || c === 9) ? i + 1 : 0)).filter(Boolean);
+	const zhiLines = dongYaos.length ? flipYao(benLines, dongYaos) : benLines.slice();
+	return {
+		mode: 'yaoqian', counts, ben: hexInfo(benLines), zhi: hexInfo(zhiLines), dongYaos,
+		steps: counts.map((c, i) => {
+			const bei = c - 6;
+			return { label: `第${i + 1}爻`, detail: `三变得 ${bei}背${3 - bei}字 → ${c}(${YAO_LABEL[c]})`, value: c };
+		}),
 	};
 }
 

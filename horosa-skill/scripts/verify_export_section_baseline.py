@@ -44,8 +44,13 @@ _UPSTREAM_REL = "Horosa-Web/astrostudyui/src/utils/aiExport.js"
 
 # skill 键 → 上游键（键名分叉，与 verify_export_contract_mirror.py 的 KEY_ALIAS 同源）
 KEY_ALIAS = {"wangji": "huangji", "acg": "locastro"}
-# 上游无对应技法的 skill-only 键（compat alias / catch-all / skill 自建工具）
-SKILL_ONLY_KEYS = {"astrochart_like", "generic", "astrodata"}
+# 上游无对应技法的 skill-only 键（compat alias / catch-all / skill 自建工具）。
+# ⚠️ 这里每多一个键，就整键**不做段级比对**——写错一个等于给自己开一个永久盲区。
+# `astrochart_like` 曾经在这份名单里，而上游**确实**有同名 preset（15 段）：于是它的
+# `占星地图` 段缺失从来没被计入过任何一版欠账。判据是「上游 AI_EXPORT_PRESET_SECTIONS 里有没有这个键」，
+# 不是「skill 侧觉得它是不是别名」——verify_export_contract_mirror.py 的 DIVERGENCE_WHITELIST 管的是
+# 键**覆盖**（skill 有而上游无），跟这里的段级比对不是同一个问题，两份名单不该互相抄。
+SKILL_ONLY_KEYS = {"generic", "astrodata"}
 
 
 def _assert_baseline_coherent() -> None:

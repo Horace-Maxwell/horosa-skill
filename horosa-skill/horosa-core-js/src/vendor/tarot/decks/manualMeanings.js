@@ -3,6 +3,7 @@
 // 结构:MAJOR_MANUAL[sid]{up,rev} · PIP_MANUAL[suit][rank1..10]{up,rev} · COURT_MANUAL[suit][court]{up,rev}。
 
 // 大阿卡纳 22 张逐牌正/逆义
+import { isTrumpArcana } from '../engine/arcana.js'; // [QA-9] 王牌判据单一真值源
 export const MAJOR_MANUAL = {
 	the_fool: { up: '新开始、纯真、自发、信念跳跃、冒险、无限潜能', rev: '鲁莽、天真、犹疑、逃避、愚行、风险失算' },
 	the_magician: { up: '显化、意志、技能、资源齐备、专注、行动', rev: '操纵、欺骗、才能闲置、自欺、计划落空' },
@@ -111,7 +112,7 @@ export const COURT_MANUAL = {
 // 取一张牌的逐牌义（返回 {up,rev} 字符串对；无则 null）。card 需带 sid/arcana/suit/number/court。
 export function manualMeaningOf(card){
 	if(!card){ return null; }
-	if(card.arcana === 'major'){ return MAJOR_MANUAL[card.sid] || null; }
+	if(isTrumpArcana(card.arcana)){ return MAJOR_MANUAL[card.sid] || null; }
 	if(card.court){ return (COURT_MANUAL[card.suit] && COURT_MANUAL[card.suit][card.court]) || null; }
 	if(card.number >= 1 && card.number <= 10){ return (PIP_MANUAL[card.suit] && PIP_MANUAL[card.suit][card.number]) || null; }
 	return null;

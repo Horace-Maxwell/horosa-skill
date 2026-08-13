@@ -15,7 +15,7 @@ Claude Code 的薄入口是根 [`CLAUDE.md`](./CLAUDE.md)（与本文 §0 路由
 
 ## 0. 30 秒定向与路由
 
-Horosa Skill 把星阙（Horosa）的 **91 个**术数/占星技法打包成 local-first 的 **MCP server + CLI**：
+Horosa Skill 把星阙（Horosa）的 **92 个**术数/占星技法打包成 local-first 的 **MCP server + CLI**：
 算法跑在本机离线 runtime（Java 聚合层 `:9999` + Python chart 服务 `:8899`（含 ken/kentang 引擎）+
 bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 envelope + 星阙式
 `export_snapshot`/`export_format`；仓库保持轻量，重 runtime 走 GitHub Releases 分发。
@@ -82,6 +82,9 @@ you, it will bite the next agent：
 - 预测类光有本命数据不够：必须有目标 `datetime` / `dirZone` / `dirLat` / `dirLon` / PD 方法设置
   （逐工具契约表：`references/predictive.md`）。
 - 禁幻觉依赖：没有当前 `doctor` / `openclaw-check` 证据，永不说「需要 MongoDB / 7897 / 星阙桌面端 / 远程库」。
+- **每次给出结论后附技法尾注**：把 `data.technique_card`（技法/口径/算源/段落健康度/版本链）原样转述，
+  不得改写或省略口径行；`matches_declaration: false` 必须明说。要文件调 `horosa_technique_report`
+  （`run_id` 单次 / `group_id` 整场，后者另检出跨技法口径冲突）。它与咨询报告是两种文档，不混。
 
 ## 4. 计算模型铁律（compute model）
 
@@ -145,6 +148,14 @@ you, it will bite the next agent：
 `chart.siderealModeKey`+`ayanamsaValue`（**字段名不同**）；`chart.zodiacal` 是本地化字符串（"恒星黄道"），
 不许 `== 1` 判断；nakshatras 在 `response.chart.nakshatras`，非顶层。
 
+🔴 **`execution` 不是算源（v0.27.0）。** `ToolDefinition.execution`（`local`/`remote`）说的是「runner
+在哪跑」，**不是**「谁算的」——`qimen` 是 `execution="local"` 而整盘由 ken 后端算。算源的唯一机读来源是
+`contracts/technique_provenance.json`（七分类逐工具声明，本节这份普查的机读版），由
+`verify_technique_provenance.py` 守：**新增技法不声明算源即红**；声明 `ken_backed` 的必须真调过
+`_require_ken_pan`（反之亦然）；算盘端点必须已在 `_PYTHON_CHART_ENDPOINTS`。
+**运行期实测优先于声明**：`data.technique_card` 以 `pan.source` / `jinkou.source` / `compute_sources`
+为准，与声明不符时标 `matches_declaration: false`——ken 端点失败也回 200，静默回退正是这个形状。
+
 **同步守卫三层（缺一层就会静默漂）**：① `verify_upstream_sync.py` = vendored ↔ **上游 HEAD**
 （版本恒等 + 哨兵 sha256 + core-js 逐文件；无上游树时 skipped 而非绿，release 链用 `--require-upstream`）；
 ② `verify_export_contract_mirror.py` = skill 常量 ↔ vendored（版本 + 技法键）；
@@ -172,6 +183,22 @@ you, it will bite the next agent：
 同年的坏请求全都成功 —— 这让一个真 bug（占时传 `lat: null`）被当成「本机无 Mongo」整整一个版本。
 诊断务必换冷年份。同理：**当「环境问题」开始解释越来越多的失败时，先怀疑自己的复现命令**
 （少一段 PYTHONPATH 就能让 taiyi/jinkou/sanshiunited/wangji/taixuan/chunzi 一起红）。
+
+🔴 **守卫的盲区比缺口更贵（v0.27.0，落后上游 4 个 release 而四把守卫全绿）。** 三条现行纪律：
+① **「上游有 vendored 无」必须按每棵树的同步口径判**——`SENTINEL_TREES` 现在带 `copy` 语义
+（`whole` 整棵 rsync / `per-dir` 逐目录 + 点名根级文件）。旧实现用 `split("/",1)[0]` 求 top，对根级文件
+等于文件名自己，于是**上游新增的根级文件整类被丢**（实测漏掉 6 个引擎模块 / 5,512 行）。
+**堵一个漏洞时要问：同样的错能不能在别的层级上再犯一次。**
+② **键集比对必须双向**：`verify_export_contract_mirror` 只断言 `skill ⊆ upstream` 时，结构上抓不到
+**新增技法**（哪怕 vendored 树是全新的）。反向差已补，要跳过必须写进 `UPSTREAM_ONLY_LEDGER` 并给理由。
+③ **每个 `verify_*.py` 都必须被某个 runner 调用**（`tests/test_guard_wiring.py`）——挂不进 CI 的
+（需要 vendored 树/上游 checkout 的）就必须挂进 `preflight_release.py`，否则它只是装饰。
+配套：`--require-upstream --write-state` 不再自锁（staleness 是 `--write-state` 自身的补救动作）；
+无上游时印 `state unverified since …` 而非 `state current`；FAIL 输出带总数 + `--full`。
+
+⚠️ **Python 字典重复字面量键静默保留最后一个**——registry 的段表按主题分组、同一技法的条目散落几百行，
+给某族补段时极易在别处再写一个同名键，前一份 list 直接消失（症状：「明明加了 optional 段，missing 还在报」）。
+守卫 = `tests/test_export_tools.py::test_registry_tables_have_no_duplicate_keys`。
 
 🔴 **点哨兵覆盖不全整棵引擎树（v0.26.0）。** 7 个哨兵一个都不在 ken 引擎目录内部，
 `verify_vendor_runtime_sources` 又只查 REQUIRED_PATHS **是否存在**——于是「引擎文件在、但是旧的」
@@ -396,6 +423,9 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   bump 6→7、v0.22.0 前 linux+scaffold 曾滞留 6，均为该检查射程外时的漏网）。
   改一个 builder / 加一个必需 artifact = 同一 change 里 grep 另一个 builder + 两份 REQUIRED_ENTRIES；
   **新增 manifest-stamping 脚本 = 同一 change 里进 `CONSTANT_STAMPERS`**。
+- **`main` 必须跟踪 `origin/main`，发布前 `git log main..origin/main` 必须为空**（v0.27.0）：
+  没有 upstream tracking 时 `git status` 只印一句干净的 `## main`，另一台机器的修复可以无声滞留一周
+  （`git branch -u origin/main` 一次性修好）。多机维护的仓，这条比看起来重要。
 - **发 tag 前必须在有上游 checkout 的机器上跑 `scripts/preflight_release.py`**（`HOROSA_SOURCE_ROOT`
   指向 Horosa-Public）。跨树两闸（`verify_upstream_sync --require-upstream`、
   `verify_export_section_baseline --source upstream --require-upstream`）**只有那里能做真**——

@@ -32,13 +32,13 @@
   <!-- text block -->
   <text x="440" y="150" font-size="72" font-weight="800" fill="#f4f7ff" letter-spacing="0.5">Horosa Skill</text>
   <text x="444" y="196" font-size="26" font-weight="600" fill="url(#tealb)" letter-spacing="2">星阙 · LOCAL-FIRST · MCP</text>
-  <text x="444" y="250" font-size="30" font-weight="600" fill="#cdd6ea">把星阙 91 个术数 / 占星技法，做成任何 AI 都能</text>
+  <text x="444" y="250" font-size="30" font-weight="600" fill="#cdd6ea">把星阙 92 个术数 / 占星技法，做成任何 AI 都能</text>
   <text x="444" y="290" font-size="30" font-weight="600" fill="#cdd6ea"><tspan fill="url(#goldb)" font-weight="800">本地调用</tspan>的 MCP server 与 CLI。</text>
 
   <!-- stat chips -->
   <g font-weight="700">
     <rect x="444" y="316" width="118" height="42" rx="11" fill="rgba(45,212,191,.12)" stroke="#2dd4bf" stroke-opacity="0.4"/>
-    <text x="503" y="343" font-size="20" text-anchor="middle" fill="#5eead4">91 技法</text>
+    <text x="503" y="343" font-size="20" text-anchor="middle" fill="#5eead4">92 技法</text>
     <rect x="574" y="316" width="128" height="42" rx="11" fill="rgba(224,169,59,.12)" stroke="#e0a93b" stroke-opacity="0.4"/>
     <text x="638" y="343" font-size="20" text-anchor="middle" fill="#f7d774">本地离线</text>
     <rect x="714" y="316" width="150" height="42" rx="11" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.14)"/>

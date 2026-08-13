@@ -133,3 +133,145 @@ def test_tree_file_walk_honours_the_sync_scripts_exclusions(tmp_path: Path) -> N
 
 def test_tree_walk_returns_empty_for_a_missing_root(tmp_path: Path) -> None:
     assert guard._tree_files(tmp_path / "nope") == {}
+
+
+def test_kinastro_only_exclusions_do_not_apply_to_other_trees(tmp_path: Path) -> None:
+    """排除口径按**树**限定，不按名字全局限定。
+
+    `tools/ui/tests/docs/scripts/…` 是 sync 脚本**只**加在 kinastro 那一条 rsync 上的
+    `--exclude`。曾经它们是全局排除的，等于「任何树下叫 tests/scripts 的目录都不比对」——
+    astrostudy/websrv 下同名目录里的真漂移会整片溜过（当前上游恰好没有这种目录，所以是个
+    还没爆的哑弹，不是没子弹）。
+    """
+    root = tmp_path / "astrostudy"
+    for rel in ["geomancy/reading.py", "tests/test_geomancy.py", "scripts/gen.py", "docs/notes.md"]:
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x", encoding="utf-8")
+    found = set(guard._tree_files(root))
+    assert found == {"geomancy/reading.py", "tests/test_geomancy.py", "scripts/gen.py", "docs/notes.md"}, (
+        f"kinastro 专属排除泄漏到了别的树: {sorted(found)}"
+    )
+
+
+# --- defect 4: check 2b silently dropped every upstream-only ROOT-LEVEL file --------------------
+
+
+def test_upstream_only_root_level_file_is_reported_in_a_wholesale_tree() -> None:
+    """v0.26.1 之后的真实事故形状：6 个上游引擎模块对**所有**守卫隐形。
+
+    旧实现 `vendored_tops = {n.split("/",1)[0] for n in vendored_files}` 对根级文件求出的 top 就是
+    文件名自己，于是上游新增的根级文件永远匹配不上任何已 vendor 的顶层目录 → 整类丢弃；
+    配套的「新增顶层目录」检查又要求 `"/" in n`，两头都漏。实测漏掉
+    `cetian_yiyu{,_data,_texts}.py` + `wuzhao_{classics,duanci,leizhan}.py`，共 5,512 行。
+    """
+    missing, notices = guard.missing_upstream_files(
+        upstream_names={"geomancy/reading.py", "cetian_yiyu.py", "wuzhao_classics.py"},
+        vendored_names={"geomancy/reading.py"},
+        copy_mode="whole",
+        root_files=set(),
+    )
+    assert missing == ["cetian_yiyu.py", "wuzhao_classics.py"], "整棵 rsync 的树里，根级文件缺失就是缺口"
+    assert notices == []
+
+
+def test_per_dir_tree_only_fails_on_the_root_files_the_sync_script_names() -> None:
+    """`Horosa-Web/vendor` 是逐引擎目录拷 + 点名两个根级文件——比对口径必须等于同步口径。
+
+    点名内的缺失是硬缺口（v3.5.0 的 kin_year_domain.py：16 个引擎懒 import 它，漏拷 = 全线 500）；
+    点名外的（README.md）只报 notice，否则守卫对着「本就故意没拷」的文件恒红。
+    """
+    missing, notices = guard.missing_upstream_files(
+        upstream_names={"kinqimen/qimen.py", "kin_year_domain.py", "README.md"},
+        vendored_names={"kinqimen/qimen.py"},
+        copy_mode="per-dir",
+        root_files={"kin_year_domain.py", "test_month_pillar_boundary.py"},
+    )
+    assert missing == ["kin_year_domain.py"]
+    assert notices == ["README.md"], "清单外的根级新增要可见，但不阻断"
+
+
+def test_files_inside_an_entirely_new_upstream_directory_are_not_listed_one_by_one() -> None:
+    """整个新增的目录由 new_tops 报一行；逐文件展开会让一棵新引擎树刷出几百行。"""
+    missing, notices = guard.missing_upstream_files(
+        upstream_names={"newengine/a.py", "newengine/b.py", "kinqimen/qimen.py"},
+        vendored_names={"kinqimen/qimen.py"},
+        copy_mode="whole",
+        root_files=set(),
+    )
+    assert missing == [] and notices == []
+
+
+def test_sentinel_trees_declare_a_copy_mode_matching_the_sync_script() -> None:
+    assert guard.SENTINEL_TREES["Horosa-Web/vendor"]["copy"] == "per-dir"
+    assert guard.SENTINEL_TREES["Horosa-Web/astropy/astrostudy"]["copy"] == "whole"
+    assert guard.SENTINEL_TREES["Horosa-Web/astropy/websrv"]["copy"] == "whole"
+    sync = (Path(guard.__file__).resolve().parent / "sync_vendored_runtime_sources.sh").read_text(encoding="utf-8")
+    for named in guard.SENTINEL_TREES["Horosa-Web/vendor"]["root_files"]:
+        assert named in sync, f"{named} 声明为点名拷贝，但 sync 脚本里没有它 —— 两边口径必须锁步"
+
+
+# --- defect 5: truncated FAIL output made a large drift look small ------------------------------
+
+
+def test_drift_block_states_the_total_and_what_it_hid() -> None:
+    text = guard._drift_block("things drifted", [f"f{i}.py" for i in range(56)], limit=15, full=False)
+    assert "56 条" in text, "总数必须在标题里——56 条和 16 条不能长得一样"
+    assert "另有 41 条未显示" in text
+    assert guard._drift_block("x", ["a", "b"], limit=15, full=False).count("…") == 0
+
+
+def test_drift_block_full_prints_everything() -> None:
+    text = guard._drift_block("x", [f"f{i}" for i in range(56)], limit=15, full=True)
+    assert "未显示" not in text and "f55" in text
+
+
+# --- defect 6: the no-upstream path claimed currency it had not verified ------------------------
+
+
+def test_no_upstream_path_never_claims_the_state_is_current(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """这条路径没做任何跨树比对，就不许说 current。
+
+    旧文案是 "state current (mirror v50; last cross-tree check against upstream 3.7.3 …)"——
+    本仓落后上游 4 个 release、少一个整技法时，它照样这么印。
+    """
+    record = tmp_path / "prov.json"
+    record.write_text(
+        json.dumps({"skill_mirrored_version": 50, "upstream_git_sha": "f8275b32d393", "upstream_app_version": "3.7.3"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(guard, "PROVENANCE", record)
+    monkeypatch.setattr(guard, "_skill_mirror_version", lambda: 50)
+    guard._report_state_currency()
+    out = capsys.readouterr().out
+    assert "state current" not in out
+    assert "unverified" in out and "3.7.3" in out
+
+
+# --- defect 7: `--require-upstream --write-state` 自锁 -------------------------------------------
+
+
+def test_write_state_is_not_blocked_by_the_staleness_it_exists_to_fix() -> None:
+    """staleness 的补救动作就是 --write-state，所以两者同时在场时它不能是 blocking failure。
+
+    preflight_release.py 用的正是 `--require-upstream --write-state`。旧逻辑下，「刚重同步到新上游」
+    这个**最常见**的发布前状态会自锁：check 4 先 raise，写记录的代码块在 raise 之后，于是那句
+    「re-record with --write-state」在它自己的参数组合下永远做不到。
+    """
+    source = _SCRIPT.read_text(encoding="utf-8")
+    assert "if args.require_upstream and not args.write_state:" in source, (
+        "staleness 在 --write-state 在场时必须降级为 notice"
+    )
+    # 但「红着写记录」仍必须不可能——写记录只发生在全部检查通过之后。
+    raise_at = source.index('raise SystemExit("upstream-sync: FAIL\\n- "')
+    write_at = source.index("if args.write_state:")
+    assert write_at > raise_at
+
+
+def test_preflight_uses_the_flag_combination_this_guard_supports() -> None:
+    preflight = (_SCRIPT.parent / "preflight_release.py").read_text(encoding="utf-8")
+    assert '"--require-upstream", "--write-state"' in preflight, (
+        "preflight 的跨树闸必须同时带这两个参数：前者让它做真，后者留下 git 可见的核对证据"
+    )

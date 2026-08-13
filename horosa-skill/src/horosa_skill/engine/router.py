@@ -60,6 +60,10 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("sixyao")
     if _contains_any(text, ["统摄法", "tongshefa"]):
         add("tongshefa")
+    # 灵棋经：用「灵棋」全词。禁裸「棋」——它会把「奇门棋盘」这类说法误点亮；也别写裸「经」
+    # （皇极经世/一掌经/太玄经全在射程内）。互斥检查：本词不与任何既有分派词重叠。
+    if _contains_any(text, ["灵棋", "靈棋", "lingqi"]):
+        add("lingqi")
     if _contains_any(text, ["参评数", "邵子", "金锁银匙", "canping"]) and not _contains_any(text, ["正传", "zhengchuan"]):
         add("canping")
     if _contains_any(text, ["河洛理数", "河洛", "heluo"]):
@@ -205,6 +209,7 @@ _CANDIDATE_POOL: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("ziwei_birth", ("紫微", "斗数", "ziwei")),
     ("sixyao", ("六爻", "卦", "起卦", "周易")),
     ("tarot", ("塔罗", "tarot", "牌")),
+    ("lingqi", ("灵棋", "灵棋经", "lingqi")),
     ("horary", ("卜卦占星", "horary", "问事")),
     ("election", ("择日", "择吉", "election")),
     ("tianxing", ("天星择日", "征象搜索", "tianxing")),

@@ -18,6 +18,7 @@ import { runFeiGong } from '../src/tools/feigong.js';
 import { runXiaoChengTu } from '../src/tools/xiaochengtu.js';
 import { runGuice } from '../src/tools/guice.js';
 import { runZhengChuan } from '../src/tools/zhengchuan.js';
+import { runLingqi } from '../src/tools/lingqi.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const chart = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_traditional.json'), 'utf8'));
@@ -221,6 +222,36 @@ try {
   failures += 1;
   console.error(`  FAIL liureng 三传值级金标: ${err.message}`);
 }
+
+// 灵棋经（上游 v3.9.0）值级金标 —— 段集恒定 + 同刻同卦幂等 + 卦是冻结值。
+// 这三条是上游 __tests__/lingqi*.test.js 的不变量，headless 侧必须同样成立：
+//   ① 七段恒出（注家开关只影响段内行，不改段集 —— 上游 parityAll 双向哨兵口径）；
+//   ② 同一占时两次调用字节幂等（占时种子；headless 不走 random 档，否则古法「不可再擲」失守）；
+//   ③ 给了 counts 就复排、绝不重掷（读档/事盘纪律）。
+check('lingqi 七段恒出 + 同刻幂等 + counts 冻结不重掷', () => {
+  const at = { year: 2028, month: 4, day: 6, hour: 9, minute: 33, question: '事业', category: 'career' };
+  const a = runLingqi(at);
+  const b = runLingqi({ ...at });
+  const titles = a.snapshot_text.split('\n').filter((l) => l.startsWith('[')).map((l) => l.trim());
+  assert(
+    JSON.stringify(titles) === JSON.stringify(['[起盘信息]', '[棋势]', '[卦象]', '[繇辞]', '[诸家注]', '[课断]', '[断诗]']),
+    `段集应恒为七段，实得 ${titles.join(' ')}`,
+  );
+  assert(a.snapshot_text === b.snapshot_text, '同一占时两次调用必须字节幂等（占时种子）');
+  assert(Array.isArray(a.counts) && a.counts.length === 3, 'counts 必须是三层');
+  assert(a.counts.every((n) => n >= 0 && n <= 4), `counts 各层应在 0..4，实得 ${a.counts}`);
+  // 关掉全部注家显示：段头仍在，只有段内行变 —— 这正是「开关不改段集」。
+  const hidden = runLingqi({ ...at, zhuVisible: { yan: 0, he: 0, chen: 0, liu: 0, ke: 0, shi: 0 } });
+  const hiddenTitles = hidden.snapshot_text.split('\n').filter((l) => l.startsWith('[')).map((l) => l.trim());
+  assert(JSON.stringify(hiddenTitles) === JSON.stringify(titles), '注家开关不得改变段集');
+  assert(hidden.snapshot_text !== a.snapshot_text, '注家开关必须改变段内文本（否则开关是死旋钮）');
+  // 冻结卦：显式 counts 必须被照单复排，而不是按种子重掷。
+  const frozen = runLingqi({ ...at, counts: [4, 0, 2] });
+  assert(
+    JSON.stringify(frozen.counts) === JSON.stringify([4, 0, 2]),
+    `冻结 counts 必须原样复排，实得 ${frozen.counts}`,
+  );
+});
 
 if (failures > 0) {
   console.error(`\nselfcheck: ${failures} failure(s)`);

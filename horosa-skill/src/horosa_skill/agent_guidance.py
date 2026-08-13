@@ -670,6 +670,26 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         do_not_assume=["起卦时刻/种子（决定抽到的牌，须真实）", "所问内容"],
     ),
+    "lingqi": _policy(
+        intent=(
+            "灵棋经 / lingqi：以「起卦时刻」确定性掷十二棋（上四·中四·下四，一时掷之，古法「不可再擲」），"
+            "上中下三层正面枚数成六十四卦之一，出 棋势（三才层位·耦敌·阴阳）/ 卦象 / 繇辞 / 诸家注（颜何陈刘）/ 课断 / 断诗。"
+        ),
+        required_context=["起卦时刻 date/time（派生种子，同刻同卦可复现）", "所问 question"],
+        ask_if_missing=[
+            {"field": "date/time", "question": "请提供起卦的日期与时间（灵棋经以起卦时刻确定性掷棋）。"},
+            {"field": "question", "question": "想问什么？请给出具体问题。"},
+            {
+                "field": "category",
+                "question": "属于哪一类问事？（只影响问类标注，不改卦）",
+                "options": ["通用 general", "仕途 career", "求财 wealth", "婚姻 marriage", "疾病 health", "行人 travel", "官讼 lawsuit", "家宅 home"],
+            },
+        ],
+        safe_defaults=[
+            {"field": "category", "value": "general", "meaning": "默认按通用问类标注"},
+        ],
+        do_not_assume=["起卦时刻（决定掷出的卦，须真实）", "所问内容", "counts（冻结卦只在复算既有盘时传，不许自造）"],
+    ),
     "xiaoliuren": _policy(
         intent="小六壬 / xiaoliuren：任取三数（月/日/时）作一顺数自大安起，推三传（主流六宫 / 道门九宫）。起课为冻结值——三数一经起出即不重起，改流派只重排判读。占时可起（农历月/日/时支序三数）。",
         required_context=["起课三数 nums 或 起课时刻 date/time", "所问 askEvent", "流派 school"],

@@ -80,18 +80,29 @@ SENTINELS = [
 # （首版误用 `datetime(year,…)`，域外直接 ValueError 炸掉整个 taiyi/pan）就卡在 vendored 树里，
 # 因为 7 个哨兵一个都不在 ken 引擎目录下，而 verify_vendor_runtime_sources 只查 REQUIRED_PATHS 是否存在。
 # 子树比对不挑文件，新增/改动/丢失都报。
-SENTINEL_TREES = [
-    "Horosa-Web/vendor",                    # ken + 神数 引擎（kinqimen/kintaiyi/kinjinkou/…）
-    "Horosa-Web/astropy/astrostudy",        # Python 算法本体
-    "Horosa-Web/astropy/websrv",            # HTTP 端点层
-]
-# 与 sync_vendored_runtime_sources.sh 的 RSYNC_FILTERS 及 kinastro 裁剪保持一致——比对口径必须
-# 等于同步口径，否则守卫会对着「本就故意没拷」的文件恒红。
-TREE_EXCLUDE_DIRS = {
-    "__pycache__", ".pytest_cache", ".cache", "_CodeSignature", ".horosa-logs",
-    # kinastro 只 vendor 引擎（sync 脚本 :89-90 裁掉这些，含 ~26MB 地理编码库）
+# `copy` 记录 sync_vendored_runtime_sources.sh 对这棵树的**同步口径**——比对口径必须等于同步口径，
+# 否则守卫要么对着「本就故意没拷」的文件恒红，要么（更糟）对着真缺口静默放行。
+#   whole   — 整棵 rsync：上游有而 vendored 缺的一律是缺口，**含根级文件**。
+#   per-dir — 逐个引擎目录拷 + 点名若干根级文件：目录内缺失是缺口；根级文件只有点名清单内的算缺口，
+#             清单外的报 notice（上游把子逻辑上提为根级共享模块 = v3.5.0 kin_year_domain.py 事故形状）。
+SENTINEL_TREES: dict[str, dict[str, object]] = {
+    # ken + 神数 引擎（kinqimen/kintaiyi/kinjinkou/…）——sync 脚本 :74-84 逐目录拷 + 点名两个根级文件。
+    "Horosa-Web/vendor": {
+        "copy": "per-dir",
+        "root_files": {"kin_year_domain.py", "test_month_pillar_boundary.py"},
+    },
+    "Horosa-Web/astropy/astrostudy": {"copy": "whole"},   # Python 算法本体（sync 脚本 :71 整棵 rsync）
+    "Horosa-Web/astropy/websrv": {"copy": "whole"},       # HTTP 端点层（同上）
+}
+# 与 sync_vendored_runtime_sources.sh 的 RSYNC_FILTERS 保持一致。
+TREE_EXCLUDE_DIRS = {"__pycache__", ".pytest_cache", ".cache", "_CodeSignature", ".horosa-logs", ".git"}
+# kinastro **单树**裁剪：sync 脚本只在那一条 rsync 上加这些 `--exclude`（含 ~26MB 地理编码库）。
+# 这批名字曾经是全局排除的，等于「任何树下叫 tests/scripts/docs 的目录都不比对」——与 kinastro
+# 无关的真漂移会整片溜过。排除按树限定，不按名字全局限定。
+KINASTRO_PREFIX = "kinastro/"
+KINASTRO_EXCLUDE_DIRS = {
     "tools", "ui", "frontend", "docs", "wiki", "examples", "tests", "styles", "scripts",
-    ".devcontainer", ".streamlit", ".git", ".github",
+    ".devcontainer", ".streamlit", ".github",
 }
 TREE_EXCLUDE_SUFFIXES = (".pyc", ".pyo", ".map", ".tmp", ".temp", ".pid")
 
@@ -107,10 +118,47 @@ def _tree_files(root: Path) -> dict[str, Path]:
         rel = path.relative_to(root)
         if any(part in TREE_EXCLUDE_DIRS for part in rel.parts):
             continue
+        if rel.as_posix().startswith(KINASTRO_PREFIX) and any(
+            part in KINASTRO_EXCLUDE_DIRS for part in rel.parts[1:]
+        ):
+            continue
         if path.suffix in TREE_EXCLUDE_SUFFIXES:
             continue
         out[rel.as_posix()] = path
     return out
+
+
+def missing_upstream_files(
+    *,
+    upstream_names: set[str],
+    vendored_names: set[str],
+    copy_mode: str,
+    root_files: set[str],
+) -> tuple[list[str], list[str]]:
+    """「上游有、vendored 缺」→ (缺口, notice)。拆出来单测——这是 check 2b 出过盲区的那一半。
+
+    🔴 旧实现把根级文件整类丢了：`vendored_tops = {n.split("/",1)[0] for n in vendored_files}` 对根级
+    文件 `foo.py` 求出的 top 就是 `"foo.py"` 自己，于是上游新增的根级文件永远匹配不上任何已 vendor
+    的顶层目录；配套的「新增顶层目录」检查又要求 `"/" in n`，两头都漏。实测让 6 个上游引擎模块
+    （`cetian_yiyu{,_data,_texts}.py` / `wuzhao_{classics,duanci,leizhan}.py`，共 5,512 行）对**所有**
+    守卫隐形，而这正是 check 2b 当初要堵的那一类失效（LESSONS 的 kintaiyi/jieqi.py 那条），只是高了
+    一个目录层级。
+    """
+    missing: list[str] = []
+    notices: list[str] = []
+    vendored_dirs = {name.split("/", 1)[0] for name in vendored_names if "/" in name}
+    for name in sorted(upstream_names - vendored_names):
+        if "/" in name:
+            # 已 vendor 的顶层目录内部才逐文件报；上游**整个新增**的目录由 new_tops 报一行，
+            # 否则一棵新引擎树会刷出几百行。
+            if name.split("/", 1)[0] in vendored_dirs:
+                missing.append(name)
+            continue
+        if copy_mode == "whole" or name in root_files:
+            missing.append(name)
+        else:
+            notices.append(name)
+    return missing, notices
 
 
 # 上游应用版本的唯一机器可读来源（astrostudyui/package.json 不带版本）。
@@ -190,6 +238,18 @@ def diff_preset_keys(upstream_keys: set[str], recorded_keys: set[str]) -> tuple[
     """Return (gained, lost). Split out for direct testing — this is check 1b's whole logic."""
     return sorted(upstream_keys - recorded_keys), sorted(recorded_keys - upstream_keys)
 
+
+def _drift_block(header: str, items: list[str], *, limit: int, full: bool) -> str:
+    """一条失败块：总数写在标题里，截断时明说还剩多少 —— 截断不许掩盖规模。
+
+    旧写法只在末尾缀一个 `…`：56 条漂移和 16 条漂移长得一模一样，扫一眼像小事。
+    """
+    shown = items if full else items[:limit]
+    text = f"{header} — {len(items)} 条:\n    - " + "\n    - ".join(shown)
+    if len(shown) < len(items):
+        text += f"\n    - …另有 {len(items) - len(shown)} 条未显示（加 --full 全部打印）"
+    return text
+
 def _package_version() -> str:
     sys.path.insert(0, str(PKG_ROOT / "src"))
     from horosa_skill import __version__
@@ -215,9 +275,13 @@ def _report_state_currency() -> None:
     at_sha = (provenance.get("upstream_git_sha") or "unknown")[:12]
     at_version = provenance.get("upstream_app_version", "unknown")
     if recorded == current:
+        # 措辞很重要：这条路径**没有**跨树比对，它只知道「常量自上次核对以来没动过」。
+        # 旧文案是 "state current" —— 本仓落后上游 4 个 release（v3.7.3 → v3.9.1，含一个全新技法）时，
+        # 它照样这么印。能断言的只有「未再核对」，就只说这个。
         print(
-            f"upstream-sync: state current (mirror v{current}; last cross-tree check against "
-            f"upstream {at_version} @ {at_sha})"
+            f"upstream-sync: state unverified since {at_version} @ {at_sha} "
+            f"(mirror v{current} unchanged since then; cross-tree comparison NOT performed — "
+            f"run with HOROSA_SOURCE_ROOT=<Horosa-Public> to actually check)"
         )
         return
     # `::warning::` 是单行命令——消息里带换行会被 GitHub 在第一个 \n 处截断，注解结尾留个悬空冒号。
@@ -236,6 +300,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--require-upstream", action="store_true")
     parser.add_argument("--write-state", action="store_true", help="record the compared upstream in contracts/")
+    parser.add_argument("--full", action="store_true", help="print every drift line instead of a capped sample")
     args = parser.parse_args()
 
     root = os.environ.get("HOROSA_SOURCE_ROOT")
@@ -335,8 +400,9 @@ def main() -> None:
     # 2b. whole-subtree comparison. Point sentinels can never be complete — the kintaiyi 全年份域 fix
     #     sat stale in the vendored tree because none of the 7 sentinels lives under a ken engine dir.
     tree_drift: list[str] = []
+    tree_notices: list[str] = []
     tree_checked = 0
-    for rel in SENTINEL_TREES:
+    for rel, spec in SENTINEL_TREES.items():
         vendored_files = _tree_files(VENDOR_ROOT / rel)
         upstream_files = _tree_files(upstream / rel)
         tree_checked += len(vendored_files)
@@ -346,26 +412,36 @@ def main() -> None:
                 tree_drift.append(f"{rel}/{name}: not in upstream (renamed/removed?)")
             elif _sha256(vendored_path) != _sha256(up_path):
                 tree_drift.append(f"{rel}/{name}: vendored copy differs")
-        # 上游新增、vendored 没有的文件（新引擎/新端点整个漏掉正是这一类）。
-        # 但比对口径必须等于**同步口径**：sync 脚本对 Horosa-Web/vendor 是逐个引擎目录拷贝，
-        # 不拷根级杂项（README 等），所以只在「已 vendor 的顶层目录内部」判缺失，
-        # 否则守卫会对着从来就不该拷的文件恒红。
-        vendored_tops = {n.split("/", 1)[0] for n in vendored_files}
-        for name in sorted(set(upstream_files) - set(vendored_files)):
-            top = name.split("/", 1)[0]
-            if top in vendored_tops:
-                tree_drift.append(f"{rel}/{name}: present upstream, missing from vendor/runtime-source")
+        # 上游新增、vendored 没有的文件（新引擎/新端点整个漏掉正是这一类）——口径见 SENTINEL_TREES。
+        missing, root_only = missing_upstream_files(
+            upstream_names=set(upstream_files),
+            vendored_names=set(vendored_files),
+            copy_mode=str(spec.get("copy")),
+            root_files=set(spec.get("root_files") or ()),
+        )
+        tree_drift.extend(f"{rel}/{name}: present upstream, missing from vendor/runtime-source" for name in missing)
+        tree_notices.extend(
+            f"{rel}/{name}: 上游根级新增，sync 脚本未点名拷贝 —— 若是被引擎懒 import 的共享模块"
+            "（kin_year_domain.py 那类），必须显式加进 sync_vendored_runtime_sources.sh"
+            for name in root_only
+        )
         # 上游整个**新增**的顶层目录 = 潜在新引擎/新能力，单独报（要不要 vendor 是人的决定）。
+        vendored_dirs = {n.split("/", 1)[0] for n in vendored_files if "/" in n}
         new_tops = sorted(
-            {n.split("/", 1)[0] for n in upstream_files if "/" in n} - vendored_tops - set(TREE_EXCLUDE_DIRS)
+            {n.split("/", 1)[0] for n in upstream_files if "/" in n} - vendored_dirs - TREE_EXCLUDE_DIRS
         )
         for top in new_tops:
             tree_drift.append(f"{rel}/{top}/: 上游新增整个目录，未 vendor —— 判断是否为新引擎/新能力")
+    for notice in tree_notices:
+        print(f"::notice::upstream-sync — {notice}")
     if tree_drift:
         failures.append(
-            f"vendored runtime subtrees drifted ({len(tree_drift)}; re-run "
-            f"scripts/sync_vendored_runtime_sources.sh):\n    - " + "\n    - ".join(tree_drift[:15])
-            + ("\n    - …" if len(tree_drift) > 15 else "")
+            _drift_block(
+                f"vendored runtime subtrees drifted (re-run scripts/sync_vendored_runtime_sources.sh)",
+                tree_drift,
+                limit=15,
+                full=args.full,
+            )
         )
 
     # 3. core-js vendor drift — the oracle is the manifest, NOT a raw sha256.
@@ -378,10 +454,13 @@ def main() -> None:
     unmatched = [k for k, e in load_manifest().items() if e.get("mode") in {"curated", "bespoke"}]
     if drifted:
         failures.append(
-            f"core-js vendored JS out of sync with upstream ({len(drifted)}; "
-            f"re-vendor with `revendor_core_js.py <upstream-src> --from-manifest --only <prefix>`):\n    - "
-            + "\n    - ".join(drifted[:20])
-            + ("\n    - …" if len(drifted) > 20 else "")
+            _drift_block(
+                "core-js vendored JS out of sync with upstream "
+                "(re-vendor with `revendor_core_js.py <upstream-src> --from-manifest --only <prefix>`)",
+                drifted,
+                limit=20,
+                full=args.full,
+            )
         )
 
     # 4. provenance staleness — "which upstream commit is this tree from?" must be machine-answerable.
@@ -394,7 +473,12 @@ def main() -> None:
             f"{upstream_sha[:12]} ({behind} commit(s) ahead) — re-sync, or re-record with --write-state "
             "once you have verified the delta."
         )
-        if args.require_upstream:
+        # `--write-state` 是这条失败**自身的补救动作**，所以它在场时降级为 notice。
+        # 否则 `--require-upstream --write-state`（preflight_release.py 用的正是这个组合）在
+        # 「刚重同步到新上游」时必然自锁：staleness 先 raise，写记录的代码块在 raise 之后，
+        # 于是那句「re-record with --write-state」在它自己的参数组合下永远做不到。
+        # 其余检查照常拦——写记录仍然只发生在全绿时，红着写记录才是真正危险的那件事。
+        if args.require_upstream and not args.write_state:
             failures.append(message)
         else:
             print(f"::notice::upstream-sync — {message}")

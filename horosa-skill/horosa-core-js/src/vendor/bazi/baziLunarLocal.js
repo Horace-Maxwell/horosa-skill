@@ -1,4 +1,4 @@
-import { Solar, LunarUtil } from 'lunar-javascript';
+import { Solar, LunarUtil, Lunar, LunarMonth } from 'lunar-javascript';
 import { isLunarJsYearReliable, lunarDomainNotice } from './lunarDomainGuard.js';
 import { NaYin, SixtyJiaZi } from './ZWConst.js';
 import { calcFourPillarShenSha } from './baziShenShaLocal.js';
@@ -29,41 +29,55 @@ function naYinPhase(naying, zhi){
 	return (row && zi >= 0) ? row[zi] : '';
 }
 
-// 天干在地支的十二长生（阳干顺行、阴干逆行，
-// offset 取 lunar CHANG_SHENG_OFFSET）。星运=日干vs各支；自坐=本柱干vs本柱支。
-export function getSelfZuo(gan, zhi){
+// ── [长生三派统一内核 2026-08-08] 与 Java 权威 wuxingphase.json 三表逐格全等(360 格对拍金标锁):
+//   0 火土同  :全干不分阴阳(阴干随其阳干搭档同起同顺),土随火(戊己与丙丁同起寅顺)
+//   1 水土同  :同上不分阴阳,但土(戊己)寄水从申起顺(off=4)
+//   2 阳顺阴逆:阳干顺、阴干逆(= lunar.js 现状口径)
+// 曾为半截接线:档0 与档2 恒等、档1 只动戊己(乙丁辛癸仍逆)——主盘/细盘上 0↔2 死档对、
+// 档1 名不副实(与 Java 三档真分裂成双端两口径)。P012 时代「档0 不覆盖」golden 锚锚住的是错值,
+// 按「golden 是法律,错了重生成」纪律更新;档2 恒 = lunar 原值(byte-perfect 锚转移到此档)。
+const CHANG_SHENG_SEQ = ['长生', '沐浴', '冠带', '临官', '帝旺', '衰', '病', '死', '墓', '绝', '胎', '养'];
+const SHUITU_EARTH_OFFSET = 4;   // 水土同:戊/己 长生在申(zhiIdx 8)顺行 → off=4(申=(4+8)%12=0=长生)
+const YIN_YANG_PAIR = { 乙: '甲', 丁: '丙', 己: '戊', 辛: '庚', 癸: '壬' };   // 阴干→阳干搭档(不分阴阳档随之起顺)
+export function changShengOf(gan, zhi, phaseType){
 	if(!gan || !zhi){ return ''; }
-	const sv = GANS.indexOf(gan) + 1; // 甲=1…癸=10
-	const bv = ZHIS.indexOf(zhi) + 1; // 子=1…亥=12
+	const bv = ZHIS.indexOf(zhi);
+	if(bv < 0){ return ''; }
+	const pt = Number(phaseType);
+	if(pt === 0 || pt === 1){
+		const base = YIN_YANG_PAIR[gan] || gan;
+		let off = LunarUtil.CHANG_SHENG_OFFSET && LunarUtil.CHANG_SHENG_OFFSET[base];
+		if(off === undefined){ return ''; }
+		if(pt === 1 && base === '戊'){ off = SHUITU_EARTH_OFFSET; }
+		return CHANG_SHENG_SEQ[((off + bv) % 12 + 12) % 12] || '';
+	}
+	// 档2/缺参:阳顺阴逆(= lunar 原式,byte-perfect)
+	const sv = GANS.indexOf(gan) + 1;
 	const off = LunarUtil.CHANG_SHENG_OFFSET && LunarUtil.CHANG_SHENG_OFFSET[gan];
-	if(sv < 1 || bv < 1 || off === undefined){ return ''; }
-	let i = off + (((sv - 1) % 2 === 0) ? (bv - 1) : -(bv - 1));
+	if(sv < 1 || off === undefined){ return ''; }
+	let i = off + (((sv - 1) % 2 === 0) ? bv : -bv);
 	i = ((i % 12) + 12) % 12;
 	return (LunarUtil.CHANG_SHENG && LunarUtil.CHANG_SHENG[i]) || '';
 }
 
-// 死选项接线·phaseType（长生派别）覆盖四柱「星运」（日元十二长生 diShi）的起点。
-//   现状（fallback）= lunar.js eightChar.getXxxDiShi()，其对戊=寅顺、己=酉逆（= Java「阳顺阴逆 yingyang」语义）。
-//   据 Java 权威 wuxingphase.json 三派对照（HuoTu0/ShuiTu1/YingYang2）：
-//     · phaseType=2 阳顺阴逆：戊寅顺/己酉逆 == lunar 现状 → 不覆盖（byte-perfect）。
-//     · phaseType=0 火土同  ：本实现以 lunar 现状为 0 档基线（任务钉死「phaseType=0 不覆盖」，与 golden 锚定）→ 不覆盖。
-//     · phaseType=1 水土同  ：土寄水，戊/己 长生同在「申」且顺行（off=4）→ 仅此档覆盖土日元四柱 diShi。
-//   非土日元（非戊/己）任何档均不覆盖。覆盖时复刻 lunar.js _getDiShi 的 index 公式：index = off + (顺?+zhiIdx:-zhiIdx)。
-const CHANG_SHENG_SEQ = ['长生', '沐浴', '冠带', '临官', '帝旺', '衰', '病', '死', '墓', '绝', '胎', '养'];
-// 水土同：戊/己 长生在申（zhiIdx 8）且顺行 → off=4（验证 申=(4+8)%12=0=长生）。复刻整列与 wuxingphase.json suitutong 戊/己 逐项一致。
-const SHUITU_EARTH_OFFSET = 4;
+// 天干在地支的十二长生。星运=日干vs各支;自坐=本柱干vs本柱支。
+// [B 三档接活] 第三参 phaseType:缺省(全部旧调用)= 阳顺阴逆旧口径,字节零回归;
+// 显式传 0/1/2 则按三派统一内核(细盘/快照星运·自坐行随「长生」档跟随)。
+export function getSelfZuo(gan, zhi, phaseType){
+	if(phaseType === undefined || phaseType === null){
+		return changShengOf(gan, zhi, 2);
+	}
+	return changShengOf(gan, zhi, phaseType);
+}
+
+// 四柱「星运」(日元十二长生 diShi)按 phaseType 覆盖:档2/缺参恒返 fallback(= lunar 原值,byte-perfect);
+// 档0/1 走统一内核(阳干在档0 下与 fallback 同值=幂等覆盖,阴干/档1 土干真变)。
 export function resolveDiShiByPhaseType(dayGan, zhi, phaseType, fallback){
-	// 仅水土同(1) + 土日元(戊/己) 覆盖；其余一律返回现状 fallback（byte-perfect）。
-	if(Number(phaseType) !== 1 || (dayGan !== '戊' && dayGan !== '己')){
+	const pt = Number(phaseType);
+	if(pt !== 0 && pt !== 1){
 		return fallback;
 	}
-	const bv = ZHIS.indexOf(zhi);
-	if(bv < 0){
-		return fallback;
-	}
-	// 戊/己 在水土同均顺行（土寄水、阴阳同生），故恒用 +bv（不按干阴阳镜像）。
-	const idx = ((SHUITU_EARTH_OFFSET + bv) % 12 + 12) % 12;
-	return CHANG_SHENG_SEQ[idx] || fallback;
+	return changShengOf(dayGan, zhi, pt) || fallback;
 }
 
 // 地支藏干 + 相对日干十神（供流年/大运列就地补算，与四柱同口径）。
@@ -968,6 +982,30 @@ function ziweiLunarFor(lunar, solar, dayPillarShift, apparentHour){
 	}
 }
 
+// 紫微闰月两口径派生字段(仅生辰落闰月时计算;非闰返回 {} 零成本零影响;八字侧不读)。
+// ziweiPassedNextJie 按**日粒度**判(getPrevJie(true) 含当日):农历排盘以日为粒度,节当日视为已过节。
+function ziweiLeapMonthFields(zwLunar){
+	try{
+		if(!zwLunar || !zwLunar.getMonth || zwLunar.getMonth() >= 0){ return {}; }
+		const y = zwLunar.getYear();
+		const m = zwLunar.getMonth();               // 负值=闰月(lunar-javascript 约定)
+		let monthDays = null;
+		try{
+			const lm = LunarMonth.fromYm(y, m);
+			if(lm && typeof lm.getDayCount === 'function'){ monthDays = lm.getDayCount(); }
+		}catch(e){ monthDays = null; }
+		let passed = false;
+		try{
+			// 闰月无中气必含恰一「节」:该节的儒略日 ≥ 本闰月初一儒略日 ⇒ 生辰已过节
+			const firstJD = Lunar.fromYmd(y, m, 1).getSolar().getJulianDay();
+			const jie = zwLunar.getPrevJie(true);
+			const jieSolar = jie && jie.getSolar ? jie.getSolar() : null;
+			passed = !!(jieSolar && jieSolar.getJulianDay() >= firstJD);
+		}catch(e){ passed = false; }
+		return { ziweiMonthDays: monthDays, ziweiPassedNextJie: passed };
+	}catch(e){ return {}; }
+}
+
 function buildNongli(lunar, solar, apparentSolar, ziweiLunar){
 	const prev = lunar.getPrevJieQi ? lunar.getPrevJieQi(false) : lunar.getPrevJie(false);
 	const prevSolar = prev && prev.getSolar ? prev.getSolar() : null;
@@ -990,6 +1028,9 @@ function buildNongli(lunar, solar, apparentSolar, ziweiLunar){
 		ziweiLeap: zwLunar.getMonth ? zwLunar.getMonth() < 0 : (lunar.getMonth ? lunar.getMonth() < 0 : false),
 		// 正月初一口径年干支(紫微「定年界线=初一」用;纯新增字段,八字/奇门等不读→零影响。八字 fourColumns.year 仍走立春不变)。
 		yearGZByLunar: lunar.getYearInGanZhi ? lunar.getYearInGanZhi() : null,
+		// 紫微闰月两口径所需(纯新增,仅 leap 时有值;八字侧不读→零影响):
+		// ziweiMonthDays=生辰农历月总天数(split_days 真半点);ziweiPassedNextJie=闰月内是否已过「节」(solar_term 档)。
+		...ziweiLeapMonthFields(zwLunar),
 		// 生肖两口径(立春=与年柱一致默认 / 正月初一=民俗);纯展示,年柱永按立春不变。
 		shengXiaoLichun: lunar.getYearShengXiaoByLiChun ? lunar.getYearShengXiaoByLiChun() : (lunar.getYearShengXiao ? lunar.getYearShengXiao() : ''),
 		shengXiaoLunar: lunar.getYearShengXiao ? lunar.getYearShengXiao() : '',
@@ -1077,10 +1118,12 @@ export function buildLocalBaziResult(params){
 	// v3 第二开关 lateZiHourUseNextDay: 默认 1 (跟现有 lunar.js Exact 行为一致, 时干用次日干起子时)。
 	const lateZiHourUseNextDay = (params && (params.lateZiHourUseNextDay === 0 || params.lateZiHourUseNextDay === '0' || params.lateZiHourUseNextDay === false)) ? 0 : 1;
 	const minggongMethod = (params && params.minggongMethod === 'shufa') ? 'shufa' : 'tongxing';
-	// 死选项接线·phaseType（长生派别 0火土同/1水土同/2阳顺阴逆）：默认 0 = lunar.js 现状（byte-perfect）。
-	// 仅在 phaseType=1 且日元为土（戊/己）时覆盖四柱 diShi；其余档/非土日元 → 不覆盖（详见 resolveDiShiByPhaseType）。
-	const phaseType = (params && (params.phaseType === 1 || params.phaseType === '1' || params.phaseType === 2 || params.phaseType === '2'))
-		? Number(params.phaseType) : 0;
+	// [B 三档接活] phaseType 归一:显式 0/1/2 才按档生效;缺参恒 2(= lunar 原值,byte-perfect)。
+	// 🔴 缺参不许归 0:档0 已补全火土同语义(覆盖阴干 diShi),而 9 个不传参的技法调用方
+	// (紫微/择时/运势/一掌经/日历…)只要干支、期望旧字节——「显式才变,缺省恒旧」。
+	// 八字主盘 genParams 恒显式带档(fields 默认 0)→ 默认档=真火土同(名实相符修正,仅八字自身可见)。
+	const phaseType = (params && ['0', '1', '2'].indexOf(`${params.phaseType}`) >= 0)
+		? Number(params.phaseType) : 2;
 	// 死选项接线·godKeyPos（神煞主位 年/日/年日）：默认 '年'（与 Java GodsHelper/BaZiDirect 一致；
 	// 旧本地实现恒并年+日是 bug）。月柱基组恒含；按年/日/年日切年柱与日柱基组（见 calcFourPillarShenSha）。
 	const godKeyPos = (params && (params.godKeyPos === '日' || params.godKeyPos === '年日')) ? params.godKeyPos : '年';
@@ -1160,7 +1203,9 @@ export function buildLocalNongliLite(params){
 	const dayPillarShift = params && (params.after23NewDay === 1 || params.after23NewDay === '1' || params.after23NewDay === true);
 	eightChar.setSect(dayPillarShift ? 1 : 2);
 	const lateZiHourUseNextDay = (params && (params.lateZiHourUseNextDay === 0 || params.lateZiHourUseNextDay === '0' || params.lateZiHourUseNextDay === false)) ? 0 : 1;
-	const fourColumns = buildFourColumns(eightChar, { lateZiHourUseNextDay, minggongMethod: 'tongxing', phaseType: 0, godKeyPos: '年' });
+	// [B 三档接活] 兼容出口钉 phaseType:2(=lunar 原值):此前硬码 0 的原意即「lunar 现状」(旧世界 0≡2),
+	// 档0 补全火土同语义后,0 会覆盖阴干 diShi——其他技法(遁甲/三式等)消费面保持逐字节不变须钉 2。
+	const fourColumns = buildFourColumns(eightChar, { lateZiHourUseNextDay, minggongMethod: 'tongxing', phaseType: 2, godKeyPos: '年' });
 	const ziweiLunar = ziweiLunarFor(lunar, solar, dayPillarShift, apparentParts.hour);
 	const gender = Number(params && params.gender) === 0 ? 0 : 1;
 	const genderText = gender === 1 ? 'Male' : 'Female';

@@ -619,6 +619,23 @@ class FakeJsClient(HorosaJsEngineClient):
                     "[定局]\nYes/No=NO(majority,score -1) · 精华牌 17 The Star 星星"
                 ),
             }
+        if tool_name == "lingqi":
+            # 灵棋经：七段恒出（注家开关只影响段内行、不改段集）。离线替身给真内容，
+            # 供 lingqi 导出契约 round-trip —— 禁裸「无」段、禁 generated_template 回退。
+            return {
+                "counts": [3, 2, 1],
+                "seed": "t-656577286",
+                "snapshot_text": (
+                    "[起盘信息]\n所问:事业能否升迁(问类:仕途)\n占时：2028-04-06 09:33（+08:00）\n\n"
+                    "[棋势]\n上位:3 枚(太阳)—— 君·天\n中位:2 枚(少阴)—— 臣·人\n下位:1 枚(少阳)—— 民·地\n"
+                    "层际:中下为耦(得耦而悦)\n阴阳:阳数 2 层、阴数 1 层(阳多者道同而助)\n\n"
+                    "[卦象]\n第三十二 中平卦(3·2·1)· 阴获外阳之象\n\n"
+                    "[繇辞]\n象曰:居安思危,守成有终。\n\n"
+                    "[诸家注]\n颜氏(颜幼明):进退在己,不可躁动。\n何氏(何承天):守常则吉。\n\n"
+                    "[课断]\n此课:先难后易,宜静待时。\n\n"
+                    "[断诗]\n诗曰:春来花自开 / 何须苦相催"
+                ),
+            }
         if tool_name == "bazi_geju":
             # 八字格局 (baziGeju 引擎)：离线替身给 [五行力量]/[格局·用神]/[盲派结构]，供 bazi 契约 round-trip。
             return {
@@ -1273,10 +1290,12 @@ def test_local_tool_call_always_attaches_complete_export_contract(tmp_path) -> N
     assert result.ok is True
     assert result.data["export_snapshot"]["technique"]["key"] == "qimen"
     assert result.data["export_snapshot"]["format_source"] == "snapshot_parser"
+    # v13（上游 v3.9.x 重同步）：段序改为**逐字镜像上游** preset —— 八宫克应 回到上游位置（八宫详解 之后），
+    # 末尾新增条件段 日家占方（古籍金函系）。段序不是装饰：selected_sections 决定导出正文的出段顺序。
     assert result.data["export_snapshot"]["selected_sections"] == [
-        "起盘信息", "盘型", "全局速览", "盘面要素", "奇门演卦", "八宫详解", "九宫方盘", "旺相休囚死·月令能量",
-        "六害总览", "化解方案", "八门化气大阵", "用神分论", "财富七要", "事业七要", "恋爱姻缘", "孤辰寡宿",
-        "八宫克应",
+        "起盘信息", "盘型", "全局速览", "盘面要素", "奇门演卦", "八宫详解", "八宫克应", "九宫方盘",
+        "旺相休囚死·月令能量", "六害总览", "化解方案", "八门化气大阵", "用神分论", "财富七要", "事业七要",
+        "恋爱姻缘", "孤辰寡宿", "日家占方（古籍金函系）",
     ]
     assert any(section["title"] == "奇门演卦" for section in result.data["export_snapshot"]["sections"])
     assert any(section["title"] == "化解方案" for section in result.data["export_snapshot"]["sections"])
@@ -3594,13 +3613,15 @@ def test_tianxing_rejects_invalid_conditions_before_any_http(tmp_path) -> None:
 
 
 def test_qimenzeri_carries_qimen_sections_plus_three(tmp_path) -> None:
-    """20 段 = 奇门 17 + 择日 3；八宫克应 是 default-off，既不该被检出也不该记为缺段。"""
+    """21 段 = 奇门 18 + 择日 3（v13：奇门侧多了条件段 日家占方）；八宫克应 是 default-off，
+    既不该被检出也不该记为缺段。段表仍由 qimen 的 preset spread 派生 —— 单一真值源不变。"""
     service = _zeri_service(tmp_path)
     result = service.run_tool("qimenzeri", build_sample_payloads()["qimenzeri"], save_result=False)
     assert result.ok is True, result.error
     export = result.data["export_snapshot"]
     assert export["technique"]["key"] == "qimenzeri"
-    assert len(export["technique"]["preset_sections"]) == 20
+    assert len(export["technique"]["preset_sections"]) == 21
+    assert "日家占方（古籍金函系）" in export["technique"]["preset_sections"]
     for title in ("择日搜索配置", "择日条件", "命中时辰"):
         assert title in export["section_titles_detected"], title
     assert "八宫克应" not in export["missing_selected_sections"], "default-off 段不得记为缺段"
@@ -3627,12 +3648,23 @@ def test_qimenzeri_rejects_oversized_span(tmp_path) -> None:
 
 
 def test_zero_hit_search_still_emits_the_hit_section(tmp_path) -> None:
-    """零命中时上游写的是「无满足条件」这句真话，而不是丢段 —— 所以这两段**不是**条件段，
-    不进 AI_EXPORT_OPTIONAL_SECTIONS。登记成 optional 等于拿一个真实回归探测器换零收益。"""
+    """零命中时上游写的是「无满足条件」这句真话，而不是丢段 —— 所以**搜索/命中这几段不是条件段**，
+    不进 AI_EXPORT_OPTIONAL_SECTIONS。登记成 optional 等于拿一个真实回归探测器换零收益。
+
+    ⚠ 断言口径是「这几段不许在 optional 里」，不是「optional 集必须为空」：v13 起 qimenzeri
+    从 qimen spread 继承了真·条件段 日家占方（vendored DunJiaCalc 只在 pan.isJinhan 时出，
+    且那时常规段一个都不出）。把整集断言成空，会逼下一个人要么删掉真条件段的登记、要么删掉本测试。
+    """
     from horosa_skill.exports.registry import AI_EXPORT_OPTIONAL_SECTIONS
 
-    for key in ("tianxing", "qimenzeri"):
-        assert not AI_EXPORT_OPTIONAL_SECTIONS.get(key), f"{key} 应保持空 optional 集"
+    never_optional = {
+        "tianxing": ("起盘信息", "搜索配置", "条件", "命中区间"),
+        "qimenzeri": ("择日搜索配置", "择日条件", "命中时辰"),
+    }
+    for key, titles in never_optional.items():
+        optional = set(AI_EXPORT_OPTIONAL_SECTIONS.get(key) or ())
+        leaked = sorted(optional.intersection(titles))
+        assert leaked == [], f"{key} 的零命中仍出段，不该登记为条件段: {leaked}"
 
     service = _zeri_service(tmp_path)
 
@@ -3796,3 +3828,78 @@ def test_tianxing_rejects_unparseable_inverted_and_oversized_windows(tmp_path) -
         result = service.run_tool("tianxing", {**base, **override}, save_result=False)
         assert result.ok is False, f"{override} 不该放行"
         assert result.error.code == expected, f"{override}: {result.error.code}"
+
+
+def _service(tmp_path) -> HorosaSkillService:
+    """离线技法服务（FakeClient + FakeJsClient）——技法卡/技法报告用例共用。"""
+    settings = Settings(
+        server_root="http://127.0.0.1:9",
+        chart_server_root="http://127.0.0.1:9",
+        runtime_root=tmp_path / "runtime",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    return HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+
+
+def test_technique_card_rides_every_technique_response_and_survives_response_view(tmp_path) -> None:
+    """技法卡必须**随每次输出**给出，且 `response_view` 精简时也留着。
+
+    精简模式恰恰是最需要溯源的场景（快照都不回了），把卡一起裁掉等于让它在唯一需要它的时候消失。
+    """
+    service = _service(tmp_path)
+    payload = build_sample_payloads()["tarot"]
+    result = service.run_tool("tarot", payload, save_result=True)
+    card = result.data["technique_card"]
+    assert card["schema"] == "horosa.skill.technique_card.v1"
+    assert card["tool"] == "tarot"
+    assert card["technique"]["key"] == "tarot"
+    assert card["versions"]["skill"] and card["versions"]["export_settings"] == 13
+    assert card["refs"]["run_id"] == result.memory_ref.run_id
+
+    slim = service.run_tool("tarot", {**payload, "response_view": "titles"}, save_result=False)
+    assert slim.data["snapshot_text"] == "", "response_view 该裁的还是要裁"
+    assert slim.data["technique_card"]["tool"] == "tarot", "但技法卡不裁"
+
+
+def test_technique_card_can_be_switched_off(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HOROSA_TECHNIQUE_CARD", "0")
+    service = _service(tmp_path)
+    result = service.run_tool("tarot", build_sample_payloads()["tarot"], save_result=False)
+    assert "technique_card" not in result.data
+
+
+def test_technique_report_covers_a_whole_session_and_needs_no_ai_report(tmp_path) -> None:
+    """与咨询报告的分界线：这份不需要 ai_report，也**永远**不含解读。"""
+    service = _service(tmp_path)
+    samples = build_sample_payloads()
+    group_id = None
+    for tool in ("tarot", "tongshefa"):
+        result = service.run_tool(tool, samples[tool], save_result=True, group_id=group_id)
+        group_id = group_id or result.group_id
+
+    report = service.technique_report({"group_id": group_id, "format": "markdown"})
+    assert report["ok"] is True
+    assert report["technique_count"] == 2
+    assert report["scope"] == "group"
+    artifact = Path(report["artifact_path"])
+    assert artifact.is_file() and artifact.stat().st_size > 0
+    text = artifact.read_text(encoding="utf-8")
+    assert "# 会话技法依据报告" in text
+    assert "## 一致性检查" in text
+    # 确定性文档：不许出现任何「解读/建议」字样的伪装——它不是咨询报告。
+    assert "ai_report" not in text
+
+
+def test_technique_report_refuses_cleanly_when_nothing_has_been_run(tmp_path) -> None:
+    service = _service(tmp_path)
+    with pytest.raises(ToolValidationError) as excinfo:
+        service.technique_report({"format": "markdown"})
+    assert excinfo.value.code == "report.technique.no_cards"
+
+
+def test_technique_report_rejects_an_unknown_format(tmp_path) -> None:
+    service = _service(tmp_path)
+    with pytest.raises(ToolValidationError) as excinfo:
+        service.technique_report({"format": "html"})
+    assert excinfo.value.code == "report.technique.invalid_format"

@@ -15,7 +15,7 @@ export const VISCONTI_CARDS = CORE78.map((c) => ({ ...c, arcana: c.arcana === 'm
 
 export const VISCONTI_DECK = {
 	id: 'visconti', title: 'Visconti-Sforza(历史·~78)', nameKey: 'tdm', size: 78, structure: '78major56minor',
-	usesReversals: false, pReversed: 0.5, dignities: false, variant: 'C', illustratedPips: false,
+	usesReversals: false, pReversed: 0.5, dignities: false, variant: 'C', illustratedPips: false, meaningDefault: 'degrees',
 	group: '历史扩展', cards: VISCONTI_CARDS, dummettOrder: 'C',
 	caps: { reversals: false, dignities: false, variant: true, significator: false, numOverride: true, embeddedPlayingCard: false, readingMethod: 'tarot', colorScale: false, dummett: true, spreads: ['single', 'three', 'three_sit', 'celtic', 'croix'] },
 };

@@ -28,7 +28,7 @@ function analyzeGuaFull(g, engCtx, s, benGongElem, c){
 	}
 	const liushen = s.sixGods ? annotateLiuShen(base.yaos, engCtx.dayGan) : null;
 	const shensha = (s.shensha && s.shensha.on)
-		? annotateShenSha(base.yaos, { dayGan: c.dayGan, dayZhi: c.dayZhi, yearGan: c.yearGan, yearZhi: c.yearZhi }, s.shensha)
+		? annotateShenSha(base.yaos, { dayGan: c.dayGan, dayZhi: c.dayZhi, yearGan: c.yearGan, yearZhi: c.yearZhi }, { ...s.shensha, guirenFa: s.guirenFa })
 		: null;
 	// 关联卦亦配逐爻天干 + 日辰月建引动(装卦表「日·月」列同源填充,不再空列)。
 	const gans = ganForYaos(g);
@@ -80,7 +80,7 @@ export function analyzeLiuyao(gua, movingPositions, ctx, settings){
 		dongbian.blindEffects = eff;
 	}
 	const shensha = s.shensha && s.shensha.on
-		? annotateShenSha(base.yaos, { dayGan: c.dayGan, dayZhi: c.dayZhi, yearGan: c.yearGan, yearZhi: c.yearZhi }, s.shensha)
+		? annotateShenSha(base.yaos, { dayGan: c.dayGan, dayZhi: c.dayZhi, yearGan: c.yearGan, yearZhi: c.yearZhi }, { ...s.shensha, guirenFa: s.guirenFa })
 		: null;
 	const liushen = s.sixGods ? annotateLiuShen(base.yaos, c.dayGan) : null;
 

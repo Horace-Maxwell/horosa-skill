@@ -8,11 +8,12 @@
 // 上述 22 大牌制牌组的「78 张」变体只接大牌,花色小牌无成套 PD 单卡扫描 → 回退符号。
 // 托特(1944)/BOTA/现代金色黎明牌仍在版权保护期,不接入真实牌面。
 
+import { isTrumpArcana } from './arcana.js'; // [QA-9] 王牌判据单一真值源
 const SUIT_CODE = { wands: 'wa', cups: 'cu', swords: 'sw', pentacles: 'pe' };
 const COURT_CODE = { page: 'pa', knight: 'kn', queen: 'qu', king: 'ki' };
 
 function rwsCode(card){
-	if(card.arcana === 'major'){ return `ar${String(card.number).padStart(2, '0')}`; }
+	if(isTrumpArcana(card.arcana)){ return `ar${String(card.number).padStart(2, '0')}`; }
 	const sc = SUIT_CODE[card.suit];
 	if(!sc){ return null; }
 	if(card.court){ return COURT_CODE[card.court] ? `${sc}${COURT_CODE[card.court]}` : null; }
@@ -38,7 +39,7 @@ export function cardImageUrl(deckId, card){
 	}
 	const local = LOCAL_ART[deckId];
 	if(local){
-		if(card.arcana === 'major'){ return (local.majors && card.sid) ? `${local.base}${card.sid}.jpg` : null; }
+		if(isTrumpArcana(card.arcana)){ return (local.majors && card.sid) ? `${local.base}${card.sid}.jpg` : null; }
 		if(card.court){ return local.minorCourts && card.sid ? `${local.base}${card.sid}.jpg` : null; }
 		return local.minorPips && card.sid ? `${local.base}${card.sid}.jpg` : null;
 	}

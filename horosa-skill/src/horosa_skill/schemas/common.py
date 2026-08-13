@@ -21,6 +21,13 @@ class MemoryRef(BaseModel):
     group_id: str | None = None
 
 
+# tool envelope 的 schema 版本。**独立于包版本**（docs/DATA_CONTRACTS.md 的「版本面」）。
+# v0.7.0（v0.27.0）：每个技法响应的 `data` 里恒定多一个 `technique_card`（技法依据卡：算源 / 口径 /
+#   段落健康度 / 版本链）。加键是向后兼容的，但下游可以据此**依赖**它存在，所以要升次版本号。
+# 以前这个数字只活在文档里、没人能对它做断言；现在它是常量，verify_docs_sync 逐字核对两边一致。
+TOOL_ENVELOPE_SCHEMA_VERSION = "0.7.0"
+
+
 class ToolEnvelope(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

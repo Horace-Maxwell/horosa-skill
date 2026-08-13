@@ -93,6 +93,72 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.27.0 / 2026-08-13 — 落后上游 4 个 release 而四把守卫全绿：盲区在「根级文件」和「单向键差」
+
+**症状。** 例行「还有什么没同步」审计，结果不是零星缺口：本仓 vendored 树停在上游 `f8275b3`(v3.7.3)，
+而上游 HEAD 是 `44a1c9b`(v3.9.1)，中间 381 文件 / +220,597 行；导出契约上游已 v55、本仓镜像基线写 50；
+多了一个**整技法** `lingqi`（灵棋经）和 **56 个新段**。CI 全绿，四把守卫也全绿。
+
+**根因（三个互相独立的盲区，任何一个单独存在都足以让这次同步继续隐形）。**
+
+1. 🔴 **`verify_upstream_sync` check 2b 静默丢掉所有「上游新增的根级文件」。**
+   `vendored_tops = {n.split("/",1)[0] for n in vendored_files}` 对根级文件 `foo.py` 求出的 top 就是
+   文件名自己，于是上游新增的根级文件永远匹配不上任何已 vendor 的顶层目录 → 整类丢弃；配套的
+   「新增顶层目录」检查又要求 `"/" in n`，两头都漏。实测让 **6 个引擎模块 / 5,512 行**
+   （`cetian_yiyu{,_data,_texts}.py`、`wuzhao_{classics,duanci,leizhan}.py`）对**所有**守卫隐形。
+   这正是 check 2b 当初要堵的那一类失效（v0.26.0 的 `kintaiyi/jieqi.py`），只是高了一个目录层级——
+   **堵漏时要问「同样的错还能在别的层级上犯一次吗」**。
+2. **`verify_export_contract_mirror` 是单向的。** 它只断言 `skill_keys ⊆ upstream_keys`，所以只能抓
+   改名/删除，**结构上抓不到新增技法**——哪怕 vendored 树是全新的，`lingqi` 也永远不会让它变红。
+3. **两条跨树闸在 CI 上是零断言。** `ci.yml` 调它们时不带 `--require-upstream` / `--source upstream`
+   （因为 GitHub runner 上既没有 gitignored 的 vendored 树也没有上游 checkout）。这本身是诚实的设计，
+   但意味着「PR 全绿」对跨树漂移**什么都没说**——真闸只在维护机的 `preflight_release.py` 里。
+
+**另外三条本轮现场踩到的。**
+
+- **`--require-upstream --write-state` 自锁**：provenance 陈旧时 check 4 先 raise，而写记录的代码块在
+  raise 之后 —— 那句「re-record with --write-state」在它自己的参数组合下永远做不到。而 preflight 用的
+  正是这个组合，也就是说「刚重同步到新上游」这个**最常见**的发布前状态必然卡住。
+- **无上游时那句 `state current`**：它只知道「常量自上次核对以来没动过」，却印成「当前」。落后 4 个
+  release 时它照样这么印。能断言什么就只说什么。
+- **`SKILL_ONLY_KEYS` 写错一个键 = 一个永久盲区**：`astrochart_like` 被列为 skill-only 而上游确有该
+  preset，于是它的 `占星地图` 缺失**从未被任何一版欠账计入**。
+- **Python 字典重复字面量键静默吞掉前一份**：给 v13 补段时在 `AI_EXPORT_OPTIONAL_SECTIONS` 里为
+  `cetian`/`astrochart_like` 各写了第二个同名键，解释器不报错，前一份 list 直接消失，症状是
+  「明明加了 optional 段，missing 里还在报」。
+
+**守卫。** ① check 2b 拆出 `missing_upstream_files()`，按每棵树的**同步口径**（`whole` 整棵 rsync /
+`per-dir` 逐目录+点名根级文件）分别判缺失，根级文件不再被丢；kinastro 专属排除也从全局收窄到单树。
+② mirror 守卫补 `upstream_keys − skill_keys` 反向检查 + `UPSTREAM_ONLY_LEDGER`（要跳过必须写理由）。
+③ 新增 `tests/test_guard_wiring.py`：**每个 `verify_*.py` 都必须被某个 runner 调用**——它当场抓到了
+本轮新写的 `verify_technique_provenance.py` 还没挂进 CI/preflight。④ staleness 在 `--write-state`
+在场时降级为 notice。⑤ FAIL 输出带总数 + `--full`，截断不再掩盖规模（56 条和 16 条曾长得一模一样）。
+⑥ registry 重复键守卫进 `tests/test_export_tools.py`。
+
+### v0.27.0 / 2026-08-13 — `execution` 不是算源：技法依据卡要是照它写，会系统性说错「谁算的」
+
+**症状。** 要给每次输出附一张「这盘怎么来的」卡片时，发现代码里唯一能机读的算源线索是
+`ToolDefinition.execution`（`local`/`remote`），而 AGENTS §4 的「工具算源普查」只是**散文**。
+
+**根因。** `execution` 说的是「runner 在哪跑」，不是「谁算的」：`qimen` 是 `execution="local"`，
+整盘却由 ken 后端算（JS 只格式化）。照它写卡片，会给 3 个 ken 技法、14 个神数技法**一致地印错**。
+
+**守卫。** `contracts/technique_provenance.json`（七分类逐工具声明）+ `verify_technique_provenance.py`：
+覆盖率（新增技法不声明算源即红，补上 §5 布线清单缺的一环）× ken 一致性（声明 ken 的必须真调过
+`_require_ken_pan`，反之亦然）× 算盘端点必须已登记 `_PYTHON_CHART_ENDPOINTS`。
+**运行期实测优先于声明**：卡片以 `pan.source`/`compute_sources` 为准，与声明不符时标
+`matches_declaration: false` —— ken 端点失败也回 HTTP 200，静默回退本地脚手架正是这个形状。
+
+### v0.27.0 / 2026-08-13 — 一台机器的修复可以无声滞留：`main` 没有 upstream tracking
+
+**症状。** 另一台机器把「9999 不是 no.register.app 的同义词」修复推到了 `origin/main`，本地 `main`
+落后一个 commit 一周多，无人察觉。
+
+**根因。** `git config branch.main.remote` / `.merge` 都是空的 —— 没有 upstream tracking，
+`git status` 永远不显示 `behind 1`，只显示一句干净的 `## main`。
+
+**守卫。** `git branch -u origin/main`；发布前检查加一条「`git log main..origin/main` 必须为空」。
+
 ### v0.26.1+ / 2026-08-06 — 反误诊的提示自己成了误诊源：9999 不是 no.register.app 的同义词
 
 - **背景**：v0.26.1 为终结「HTTP 500 一句话看不出所以然」，给 `HorosaApiClient` 加了

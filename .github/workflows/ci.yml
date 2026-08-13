@@ -54,6 +54,9 @@ jobs:
       - name: Verify upstream-sync state currency (cross-tree diff needs an upstream checkout)
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_upstream_sync.py
+      - name: Verify technique compute-source declarations
+        working-directory: ./horosa-skill
+        run: uv run python scripts/verify_technique_provenance.py
       - name: Verify macOS/Windows runtime-builder parity
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_builder_parity.py

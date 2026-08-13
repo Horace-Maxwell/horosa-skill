@@ -1,7 +1,7 @@
 ---
 name: horosa-agent
 description: >-
-  Call Horosa (星阙) local metaphysics tools correctly over MCP or CLI — 91 real techniques: Western
+  Call Horosa (星阙) local metaphysics tools correctly over MCP or CLI — 92 real techniques: Western
   natal/predictive astrology (returns, progressions, primary directions, horary 卜卦, election 择日),
   八字, 紫微, 大六壬, 奇门遁甲, 太乙, 金口诀, 三式合一, 河洛理数, 邵子参评数, 六爻, 天文地占, 塔罗, and
   the full 14 神数. Use whenever a user asks to 起盘 / 排盘 / 起课 / 起卦 / 算命 / 推运 / 看盘 / 合盘 /
@@ -11,7 +11,7 @@ description: >-
 license: AGPL-3.0-only
 compatibility: Requires the local Horosa Skill MCP server/CLI (Python 3.12 + uv + installed offline runtime)
 metadata:
-  version: "0.26.1"
+  version: "0.27.0"
 ---
 
 # Horosa Skill Agent Guide
@@ -43,6 +43,10 @@ horosa_report_render {run_id, tool_name:"qimen", format:"docx", ai_report:{execu
 ```
 
 省 token：技法工具可传 `response_view:"titles"`（只回段标题）或 `"sections"`；完整快照始终已存档（`horosa_memory_show(run_id)` 取回）。注意 `horosa_report_from_tool` 会重新起盘——已有 run_id 用 `report_render`。
+
+**每次给出结论后，把 `data.technique_card` 原样转述成一段技法尾注**（技法 / 口径 / 算源 / 段落 / 版本）——
+它是确定性元数据，`response_view` 精简时也在。要文件就调 `horosa_technique_report`（`run_id` 单次、
+`group_id` 整场，后者还会检出跨技法口径冲突）。细则与两种报告的分界：[`references/reports.md`](./references/reports.md)。
 
 ## Core Rule
 
@@ -164,6 +168,7 @@ question context.”
 | 皇极轨策 | `guice`（十二法起卦，冻结值；十开关流派只重排断法） |
 | 天文地占 geomancy | `geomancy` |
 | 塔罗 tarot | `tarot` |
+| 灵棋经 lingqi | `lingqi`（以起卦时刻确定性掷十二棋；给了 counts 就复排，绝不重掷） |
 | 占星地图 ACG | `acg` |
 | 名人库 celebrity data | `astrodata` (read-only, no confirmation gate) |
 | Astrology dice 西占游戏 | `otherbu` |

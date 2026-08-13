@@ -30,8 +30,8 @@ HUMAN_RENDER_HIDDEN_SECTION_IDS = {
 
 def render_report(document: dict[str, Any], *, output_path: Path, format_name: str) -> dict[str, Any]:
     normalized = format_name.lower()
-    if normalized not in {"json", "docx", "pdf"}:
-        raise ValueError("format must be one of: json, docx, pdf")
+    if normalized not in {"json", "docx", "pdf", "markdown"}:
+        raise ValueError("format must be one of: json, docx, pdf, markdown")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Render to a temp sibling first, then atomically os.replace() into place. A mid-render failure
@@ -43,6 +43,12 @@ def render_report(document: dict[str, Any], *, output_path: Path, format_name: s
     try:
         if normalized == "json":
             tmp_path.write_text(json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
+        elif normalized == "markdown":
+            # markdown 只服务**技法依据报告**（确定性元数据）。咨询报告不走这条：它的正文样式规矩
+            # 由 DOCX/PDF 渲染器承载，且 references/reports.md 明令正文不带机器元数据。
+            from horosa_skill.reports.technique_card import render_technique_report_markdown
+
+            tmp_path.write_text(render_technique_report_markdown(document), encoding="utf-8")
         elif normalized == "docx":
             _render_docx(document, tmp_path)
         else:  # pdf

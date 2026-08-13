@@ -15,9 +15,19 @@ export const DEFAULT_LIUYAO_SETTINGS = {
 	fushen: 'missing',          // 飞伏:'missing' 仅缺用神取 / 'all' 逐爻全标
 	biangua: 'full',            // 变卦:'full' 全装变卦表(=旧版恒显之卦,零回归默认) / 'movingOnly' 仅显变爻行
 	shensha: { on: true, set: DEFAULT_SHENSHA_SET.slice(), base: 'day' }, // 基础神煞(既有 10 种)
+	guirenFa: 'standard',       // 贵人歌诀:standard 甲戊庚牛羊(默认=现状,庚丑未) / 'geng_ma_hu' 庚辛逢马虎(庚寅午)
 	sixGods: true,              // 六神显示
 	yearBoundary: 'lichun',     // 定年界线(年支类神煞):'lichun' 立春 / 'lunar' 正月初一
 	coinFace: 'standard',       // 摇钱字背口径:'standard' 背为阳 / 'alt' 字为阳(手动录入与寻物盘用)
+	randomAlgo: 'coins',        // 随机起卦概率源:'coins' 三钱(老阳老阴各1/8,默认=现状) / 'yarrow' 大衍蓍草(3/16·1/16)
+	randomConfirm: false,       // 随机前确认:开=当前卦为手动来源时,整卦/逐爻随机先弹确认防误覆盖
+	defaultYaoState: 'shaoyang', // 手动录入默认爻态:'shaoyang' 少阳(默认=现状) / 'shaoyin' 少阴
+	bianguaSimplify: false,     // 之卦简显:开=之卦装卦表仅动爻位标五行六亲(非动爻只留爻象地支)
+	relatedCards: null,         // 关联卦显隐:null=全显(之/互/伏/综/错,默认) / ['bian','hu','fu','zong','cuo'] 子集
+	wangShuaiCol: true,         // 装卦表「旺衰」列显示
+	showTips: true,             // 悬停提示(藏干/卦身/世身/状态断语等 title 族)总开关
+	yaoHotkeys: false,          // 改爻快捷键:开=键盘 1-6 翻对应爻动/静(输入框聚焦时不响应)
+	titleAlign: 'center',       // 盘顶信息区对齐:'center' 居中(默认) / 'right' 靠右
 	writeDir: 'bottomUp',       // 装卦表行序:'bottomUp' 上爻在上(默认)/'topDown' 初爻在上
 	// —— 扩展(断易天机/古法/断诀/应期) ——
 	shenshaEx: { on: false, set: null }, // 扩展神煞:set=null 表示启用时全选
@@ -106,9 +116,13 @@ export function getLiuyaoOptionsKey(settings){
 	// 🔴 键清单须含全部会改变判读的设置:曾漏 yongOverride → 压测「每设置改变必触发重算」
 	// 的断言对它空转(运行时缓存键走 JSON.stringify(settings) 无实害,oracle 面必须补齐)。
 	return [s.school, s.askType, s.yongOverride, s.yuepoMode, s.tuChangsheng, s.bianyaoScope, s.guashen, s.fushen, s.biangua,
-		s.shensha.on, s.shensha.base, (s.shensha.set || []).join('|'), s.sixGods, s.yearBoundary, s.coinFace, s.writeDir,
+		s.shensha.on, s.shensha.base, (s.shensha.set || []).join('|'), s.guirenFa, s.sixGods, s.yearBoundary, s.coinFace, s.writeDir,
 		s.shenshaEx.on, (s.shenshaEx.set || ['ALL']).join('|'), s.shishen, s.yueLiushen, s.jinTuiTu,
-		s.changshengYinYang, s.changshengUse, s.tianshiSchool, s.yuqi, s.yingqi, s.doctrine, s.gufa, s.benming].join(',');
+		s.changshengYinYang, s.changshengUse, s.tianshiSchool, s.yuqi, s.yingqi, s.doctrine, s.gufa, s.benming,
+		// [G 批] 起卦体验+显示新键:与 writeDir/coinFace 先例同律全入 key——右栏读 analysis.settings,
+		// key 不变则 analysis 不重建,新键即死开关(显示键重算一次成本可忽略,快照文本不消费它们=字节稳)。
+		s.randomAlgo, s.randomConfirm, s.defaultYaoState,
+		s.bianguaSimplify, (s.relatedCards || ['ALL']).join('|'), s.wangShuaiCol, s.showTips, s.yaoHotkeys, s.titleAlign].join(',');
 }
 
 // ── 跨会话持久化(独立轻量,不依赖 AI 存储;走 safeStorage=配额满自动清理重试,FL-4 治理口径) ──

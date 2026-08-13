@@ -1,11 +1,11 @@
 {
   "_comment": "vendored 树对到的上游状态。只由 verify_upstream_sync.py --write-state 在**全部检查通过**时写入——红着写等于把失败洗成一条持久的「已核对」声明。",
-  "upstream_git_sha": "f8275b32d39388ab6060af09c20f37a63d08795d",
-  "upstream_git_committed_at": "2026-08-04T18:52:15-07:00",
-  "upstream_app_version": "3.7.3",
-  "aiexport_settings_version": 50,
-  "skill_mirrored_version": 50,
-  "upstream_checked_at_package_version": "0.26.1",
+  "upstream_git_sha": "44a1c9b03fdc5e8997c4aef780b9ef09ef265b2a",
+  "upstream_git_committed_at": "2026-08-13T00:00:35-07:00",
+  "upstream_app_version": "3.9.1",
+  "aiexport_settings_version": 55,
+  "skill_mirrored_version": 55,
+  "upstream_checked_at_package_version": "0.27.0",
   "upstream_preset_keys": [
     "agepoint",
     "astrochart",
@@ -51,6 +51,7 @@
     "jingjue",
     "jinkou",
     "keypoints",
+    "lingqi",
     "liureng",
     "locastro",
     "lunarreturn",
@@ -96,9 +97,9 @@
     "zodialrelease"
   ],
   "core_js": {
-    "files_compared": 245,
+    "files_compared": 261,
     "files_unmatched": 19,
-    "tree_sha256": "74e8a9053b130bb0735b784904ecba29a02a285892fa00613cd6b54c140084b9"
+    "tree_sha256": "c790b819b1328f4c8c987bd32c8b17965e80c85490b193440503575c50868612"
   },
   "runtime_source": {
     "sentinels_verified": 7

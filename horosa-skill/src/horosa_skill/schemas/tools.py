@@ -884,6 +884,34 @@ class TarotInput(BirthInput):
     birth: dict[str, Any] | None = None
 
 
+class TechniqueReportInput(FlexibleModel):
+    # 技法依据报告：确定性的「这次用了什么技法、什么口径、谁算的」，**不需要 AI 正文**
+    # （那是 horosa_report_render 的活，两种文档不混）。
+    # run_id 或 group_id 二选一；都不给则取最近一次有技法卡的运行。
+    run_id: str | None = None
+    group_id: str | None = None
+    format: str = "markdown"
+    title: str | None = None
+    output_path: str | None = None
+    # 是否把每个技法的产出段目录写进报告（默认写；关掉可得到极短的一页）。
+    include_sections: bool | None = True
+
+
+class LingqiInput(BirthInput):
+    # 灵棋经（上游 v3.9.0）：十二棋子（上4/中4/下4）一时掷之成卦，古法「不可再擲」。
+    # 以起卦时刻确定性起卦（date/time 派生种子，同刻同卦可复现）——headless 不暴露 random 档，
+    # 否则同一时刻两次调用得到不同卦，既违古法也让回归测试无从写起。
+    question: str | None = None
+    # 问类：general 通用 / career 仕途 / wealth 求财 / marriage 婚姻 / health 疾病 /
+    # travel 行人 / lawsuit 官讼 / home 家宅。只影响[起盘信息]的问类标注。
+    category: str | None = "general"
+    # 冻结卦：读档或复算时传入 [上,中,下] 三层正面枚数（各 0–4），传了就照它复排，绝不重掷。
+    counts: list[int] | None = None
+    # 注家显示（yan 颜氏/he 何氏/chen 陈氏/liu 刘氏 + ke 课断 + shi 断诗）。段头恒出，
+    # 开关只影响段内行——段集恒定是上游 parityAll 哨兵口径，不要拿它当条件段。
+    zhuVisible: dict[str, Any] | None = None
+
+
 class ShenShuInput(FlexibleModel):
     # 神数 family (wangji 皇极经世 / wuzhao 五兆 / taixuan 太玄 / jingjue 京房易/靖瞶 / shenyishu 神乙数):
     # ganzhi-based, so only date (+ optional time) + the 晚子时 switches are needed; lat/lon/zone are not used.

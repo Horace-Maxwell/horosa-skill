@@ -1,10 +1,13 @@
 // 元素尊位(Elemental Dignities)——金色黎明/托特核心,逆位的替代法。
 // 基础:中心牌看左右两邻元素(同元素+2 强化 / 友+1 / 敌-1 / 中立 0);两邻相争→本牌主导。
+// version(TP3):'modern'(默认,现行三档:友=火风/水土,敌=火水/风土,其余中立)
+//            | 'mathers'(原典四档:火土/风水 亦算「稍微支持」+0.5,不再有中立对)。
 // 进阶 dignify3(古籍§6.7):三张式主从——同元素全增、主元素决定基调。
 import { ELEMENT_CN, isFriend, isEnemy } from '../decks/correspondences.js';
 
 // 基础尊位:center/left/right 为元素('fire'/'water'/'air'/'earth'/null)。返回 { strength, score, notes }
-export function dignify(center, left, right){
+export function dignify(center, left, right, version){
+	const mathers = version === 'mathers';
 	let score = 0;
 	const notes = [];
 	[['左', left], ['右', right]].forEach(([label, nb]) => {
@@ -15,6 +18,7 @@ export function dignify(center, left, right){
 		if(nb === center){ score += 2; notes.push(`${label}邻同元素·强烈强化`); }
 		else if(isFriend(center, nb)){ score += 1; notes.push(`${label}邻${ELEMENT_CN[nb]}友好·强化`); }
 		else if(isEnemy(center, nb)){ score -= 1; notes.push(`${label}邻${ELEMENT_CN[nb]}敌对·削弱`); }
+		else if(mathers){ score += 0.5; notes.push(`${label}邻${ELEMENT_CN[nb]}同性·稍微支持`); }
 		else{ notes.push(`${label}邻${ELEMENT_CN[nb]}中立`); }
 	});
 	if(left && right && isEnemy(left, right)){ notes.push('两邻相争→本牌主导'); }
@@ -23,7 +27,7 @@ export function dignify(center, left, right){
 }
 
 // 进阶三张式(§6.7):三张牌元素综合,判主从。返回 { strength, dominant, notes }
-export function dignify3(elemA, elemB, elemC){
+export function dignify3(elemA, elemB, elemC, version){
 	const els = [elemA, elemB, elemC].filter(Boolean);
 	if(els.length < 2){ return { strength: '平', dominant: elemB || null, notes: '元素不足,无尊位综合' }; }
 	const counts = {};
@@ -32,7 +36,7 @@ export function dignify3(elemA, elemB, elemC){
 	let max = 0;
 	Object.keys(counts).forEach((e) => { if(counts[e] > max){ max = counts[e]; dominant = e; } });
 	// 中心牌(B)与两邻的基础尊位
-	const base = dignify(elemB, elemA, elemC);
+	const base = dignify(elemB, elemA, elemC, version);
 	const notes = [];
 	if(max >= 2){ notes.push(`${ELEMENT_CN[dominant]}元素占主(${max}/${els.length})·该气质主导全局`); }
 	if(elemA && elemC && isEnemy(elemA, elemC)){ notes.push('首尾相争·以中心牌为枢纽'); }

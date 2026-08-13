@@ -1661,6 +1661,34 @@ def report_render(
     _print_json(result)
 
 
+@report_app.command("technique", help="技法依据报告：本次/本会话用了什么技法、什么口径、谁算的（确定性，无需 AI 正文）。Deterministic method/provenance report — no ai_report needed.")
+def report_technique(
+    run_id: str | None = typer.Option(None, "--run-id", help="Report on a single stored run."),
+    group_id: str | None = typer.Option(None, "--group-id", help="Report on a whole session (all runs sharing this group id)."),
+    format_name: str = typer.Option("markdown", "--format", help="Output format: markdown, json, docx, or pdf."),
+    output: Path | None = typer.Option(None, "--output", help="Optional output path. Defaults to the Horosa memory output directory."),
+    title: str | None = typer.Option(None, "--title", help="Optional report title."),
+    include_sections: bool = typer.Option(True, "--include-sections/--no-include-sections", help="List each technique's produced section titles."),
+) -> None:
+    service = _service()
+    try:
+        result = service.technique_report(
+            {
+                "run_id": run_id,
+                "group_id": group_id,
+                "format": format_name,
+                "title": title,
+                "include_sections": include_sections,
+                "output_path": str(output.expanduser()) if output else None,
+            }
+        )
+    except ToolValidationError as exc:
+        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
+        raise typer.Exit(code=2)
+    # 报告正文已落盘；命令行只回摘要 + 一致性结论（把整篇 markdown 打进 stdout 会淹掉真正要看的告警）。
+    _print_json({key: value for key, value in result.items() if key != "document"})
+
+
 @report_app.command("from-tool")
 def report_from_tool(
     tool: str = typer.Argument(..., help="Tool name such as chart, qimen, liureng_gods, or sixyao."),

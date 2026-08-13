@@ -28,5 +28,5 @@ export const ETTEILLA_DECK = {
 	usesReversals: true, pReversed: 0.5, dignities: false, variant: 'A', illustratedPips: true,
 	group: '重排体系', cards: ETTEILLA_CARDS,
 	// 双指示牌(男 Card1 / 女 Card8)经 significator etteillaDual 处理;不用 GD/大陆字母变体。
-	caps: { reversals: true, dignities: false, variant: false, significator: true, etteillaDual: true, numOverride: true, embeddedPlayingCard: false, readingMethod: 'tarot', colorScale: false, spreads: ['single', 'three', 'three_sit', 'horseshoe', 'celtic', 'relation'] },
+	caps: { reversals: true, dignities: false, variant: false, significator: true, etteillaDual: true, numOverride: true, embeddedPlayingCard: false, readingMethod: 'tarot', colorScale: false, spreads: ['single', 'three', 'three_sit', 'horseshoe', 'celtic', 'relation', 'first_reversal'] },
 };

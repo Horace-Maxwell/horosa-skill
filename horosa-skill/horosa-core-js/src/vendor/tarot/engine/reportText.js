@@ -3,7 +3,10 @@
 import { getDeck, getDeckCards } from './deckRegistry.js';
 import { displayName, astroLine, cardMeaning } from './cardSchema.js';
 import { orientationLabel } from './spreads.js';
-import { synthesizeText, yesNo, quintessence, birthCards, yearCard, majorByNumber, countingChain } from './verdict.js';
+import { synthesizeText, yesNo, quintessence, theosophicalGroups, birthCards, yearCard, majorByNumber, countingChain } from './verdict.js';
+import { comboHints, COMBO_GUARD_NOTES } from '../decks/comboThemes.js';
+import { computeTimingLines, TIMING_METHOD_LABEL } from './timingMethods.js';
+import { courtSignDetect } from '../decks/courtSystems.js';
 
 // 含义列（G5 双轨 + G2 逆位模式）:按 meaningSystem/reversalMode 走 cardMeaning 单一真值。
 function meaningOf(card, isReversed, system, reversalMode){
@@ -31,6 +34,19 @@ export function buildReadingText(reading, question){
 	if(reading.significator && reading.significator.card){
 		lines.push(`指示牌:${displayName(reading.significator.card, deck)}`);
 	}
+	// TP1 单张逆位占卜:计数诊断入综览(与右栏总览同源)。
+	if(reading.firstReversal){
+		if(reading.firstReversal.error){ lines.push(`单张逆位占卜:${reading.firstReversal.error}`); }
+		else{ lines.push(`单张逆位占卜:翻至第${reading.firstReversal.count}张现逆位(${reading.firstReversal.level})——${reading.firstReversal.note}`); }
+	}
+	// TP2 牌底牌(基调,开关开启时)。
+	if(reading.bottomCard && reading.bottomCard.card){
+		lines.push(`牌底牌(基调):${displayName(reading.bottomCard.card, deck)}(${orientationLabel(reading.bottomCard.isReversed)})——牌堆最深处亦最显明,为整局定调`);
+	}
+	// TP4 切牌(问卜者心态,开关开启时)。
+	if(reading.cutCard && reading.cutCard.card){
+		lines.push(`切牌(心态):${displayName(reading.cutCard.card, deck)}(${orientationLabel(reading.cutCard.isReversed)})——问卜者对此问的底层心态`);
+	}
 	lines.push('[逐牌详解]');
 	lines.push('| 位置 | 牌 | 正逆 | 占象 | 关键词 | 尊位 |');
 	lines.push('| --- | --- | --- | --- | --- | --- |');
@@ -38,20 +54,62 @@ export function buildReadingText(reading, question){
 		const card = d.card;
 		if(!card){ return; }
 		const dig = d.dignity ? `${d.dignity.strength}(${d.dignity.notes})` : '—';
-		lines.push(`| 位置${d.position.i}(${d.position.label}) | ${displayName(card, deck)} | ${orientationLabel(d.isReversed)} | ${astroLine(card, deck, eff.variant)} | ${meaningOf(card, d.isReversed, eff.meaningSystem, eff.reversalMode)} | ${dig} |`);
+		const orient = d.crossed ? '横置' : orientationLabel(d.isReversed);
+		lines.push(`| 位置${d.position.i}(${d.position.label}) | ${displayName(card, deck)} | ${orient} | ${astroLine(card, deck, eff.variant, eff.astroModern, { elementSystem: eff.courtElementSystem, zodiacSystem: eff.courtZodiacSystem })} | ${meaningOf(card, d.isReversed, eff.meaningSystem, eff.reversalMode)} | ${dig} |`);
+	});
+	// TP4 大牌加盖(表后逐条,与右栏牌义页同源)。
+	reading.draws.forEach((d) => {
+		if(!d.overlay || !d.overlay.card){ return; }
+		lines.push(`加盖:位置${d.position.i} ${d.card.name_cn} → 盖 ${displayName(d.overlay.card, deck)}(${orientationLabel(d.overlay.isReversed)}):${meaningOf(d.overlay.card, d.overlay.isReversed, eff.meaningSystem, eff.reversalMode)}`);
 	});
 	if(reading.summary){ lines.push('[综合断语]'); lines.push(synthesizeText(reading.summary)); }
-	// 定局摘要(Yes/No + 精华牌)
+	// 定局摘要(Yes/No + 精华牌;TP2 精华牌按 quintMode 口径,fool22 时另出三张分组加法)
 	try{
 		const cards = getDeckCards(reading.deckId);
 		const v = yesNo(reading.draws, eff.verdictMode || 'majority');
-		const quint = quintessence(reading.draws, cards);
+		const quint = quintessence(reading.draws, cards, undefined, eff.quintMode);
 		lines.push('[定局]');
-		lines.push(`Yes/No=${v.verdict}(${eff.verdictMode || 'majority'},score ${v.score})${quint ? ` · 精华牌 ${displayName(quint, deck)}` : ''}`);
+		lines.push(`Yes/No=${v.verdict}(${eff.verdictMode || 'majority'},score ${v.score})${quint ? ` · 精华牌 ${displayName(quint, deck)}${eff.quintMode === 'fool22' ? '(愚人廿二口径)' : ''}` : ''}`);
+		if(eff.quintMode === 'fool22'){
+			const groups = theosophicalGroups(reading.draws, cards);
+			if(groups && groups.total){
+				lines.push(`数值加法:底层 ${displayName(groups.total, deck)} · 外显 ${groups.outer ? displayName(groups.outer, deck) : '—'} · 左/承受 ${groups.left ? displayName(groups.left, deck) : '—'} · 右/主动 ${groups.right ? displayName(groups.right, deck) : '—'}`);
+			}
+		}
 		// [X1·P2-34] 计数链与右栏定局 tab 同源(此前显示有而 AI 不见)。
 		const chain = countingChain(reading.draws, 0, Math.min(reading.draws.length, 8));
 		if(chain && chain.length > 1){ lines.push(`计数链:${chain.map((c)=>displayName(c, deck)).join(' → ')}`); }
+		// TP4 组合征象(命中才出;转化/健康类附护栏)。
+		const hints = comboHints(reading.draws);
+		hints.forEach((h) => { lines.push(`征象:${h.theme}(${h.matched.join('、')})——${h.hint}`); });
+		const guards = [...new Set(hints.filter((h) => h.guard).map((h) => COMBO_GUARD_NOTES[h.guard]))];
+		guards.forEach((g) => lines.push(g));
+		// TP4 计时(按当前计时法;与右栏定局 tab 同源)。
+		const tl = computeTimingLines(reading, cards, eff.timingMethod, { unit: eff.timingUnit });
+		if(tl.length){ lines.push(`计时(${TIMING_METHOD_LABEL[eff.timingMethod] || '花色单位'}):${tl.join(' ｜ ')}`); }
+		// TP7 宫廷指认(阵含宫廷牌时;伴牌触发星座检测与右栏同源)。
+		const courts = courtSignDetect(reading.draws);
+		courts.forEach((c) => {
+			const det = c.hits.length ? `伴牌检测:更似${c.hits.map((h) => `${h.signCn}座`).join('/')}之人` : (c.baseSignCn ? `单座制约${c.baseSignCn}座` : '');
+			// [QA-6] 年龄/外貌取自 courtSignDetect 备好的结果(单源),不在此另行查表
+			lines.push(`宫廷指认:${c.name}=${c.age};${c.appearance}${det ? `;${det}` : ''}(先人物解,不通再事件解)`);
+		});
 	}catch(e){ /* 定局可选,失败不阻断 */ }
+	// [对读] TP2 马赛两两解读(与右栏「对读」tab 同源 reading.pairs;塔罗读法牌组产出)。
+	if(reading.pairs){
+		const pr = reading.pairs;
+		const prLines = [];
+		(pr.majors || []).forEach((m) => { if(m.text && m.text !== '—'){ prLines.push(`${m.name}:${m.text}`); } });
+		(pr.adjacent || []).forEach((x) => {
+			const body = [x.relation, x.couple, x.gaze].filter(Boolean).join('；');
+			if(body){ prLines.push(`${x.a}×${x.b}:${body}`); }
+		});
+		(pr.couples || []).forEach((x) => { prLines.push(`配偶对 ${x.a}×${x.b}:${x.text}`); });
+		if(prLines.length){
+			lines.push('[对读]');
+			prLines.forEach((l) => lines.push(l));
+		}
+	}
 	// 生命牌(若给生日)
 	if(eff.birth && eff.birth.year && eff.birth.month && eff.birth.day){
 		try{
