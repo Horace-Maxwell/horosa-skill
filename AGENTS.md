@@ -461,7 +461,13 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   必须在其本机入口脚本里复跑同一把守卫。发布通常已是 `latest`，补传即恢复
   Windows install（无需 flip）。pin-forward 跨「引擎升级」版（如 v0.17 新增 `/location/acg` 占星地图、
   `/astroextra/relative`、名人库 `astrodata-aa.sqlite.gz` ~50MB）时：先从**当前** Windows workspace 重灌
-  `vendor/runtime-source`（核 astropy / dist-file mtime 新于目标版）+ native-verify 新端点回真数据再打包。
+  `vendor/runtime-source`，再 native-verify 新端点回真数据才打包。
+  **判源树新旧一律按内容，不看目录 mtime**：目录 mtime 只在直接子项增删时变，嵌套更新不冒泡——
+  v0.27.0 那次 workspace 的 `astropy/` 顶层 mtime 停在 07-03（比 08-13 的目标版旧一个月），内容却已是
+  上游 v3.9.1。判据用三样：① 本版新增的 `require_path`/`REQUIRED_ENTRIES` 目标文件在不在
+  （如 `vendor/kin_year_domain.py`、`geomancy/data/ifa_odu.json`）；② 新端点名 grep 得到
+  `astropy/websrv`（如 `electionscan`/`chart12`/`ephemeris`/`draconic`）；③ 构建后 native-verify 这些端点
+  回真数据。缺任一 → 源树真陈旧，先重同步 workspace。
 - **首诊命令**：`gh release view vX.Y.Z --json assets`（应见 darwin tar.gz + win32 zip +
   runtime-manifest.json + SHA256SUMS.txt）+ 确认 `releases/latest/download/runtime-manifest.json` 同时含
   `darwin-arm64` 与 `win32-x64`。

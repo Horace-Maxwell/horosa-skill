@@ -93,6 +93,26 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.27.0 / 2026-08-13 — 目录 mtime 判源树新旧会误判（Windows 侧补半）
+
+- **症状**：v0.27.0（上游 v3.9.1 全量同步，92 工具）以 **darwin-only** 发布，守卫自发布起连红三次。
+  Windows 侧补半时按当时 AGENTS 的规则「核 astropy / dist-file mtime 新于目标版」判源树新鲜度——
+  workspace 的 `astropy/` 顶层 mtime 停在 **07-03**，比 08-13 的目标版旧一个月，按该规则应判「源树陈旧、
+  不能构建」。
+- **根因**：目录 mtime 只在**直接子项增删**时更新，嵌套深处的文件更新不冒泡到顶层目录。该 astropy 树
+  实际已是上游 v3.9.1（`vendor/kin_year_domain.py`、`astropy/astrostudy/geomancy/data/ifa_odu.json` 俱在，
+  `electionscan`/`chart12`/`ephemeris`/`draconic` 四个新端点都 grep 得到）。**规则本身是错的**，
+  照做会白白拒掉一次可行的构建、或反过来给陈旧树发绿灯（mtime 可被无关操作 touch 新）。
+- **守卫/现行规则**：AGENTS §7 改为**按内容判**三条判据（本版新增的 `require_path`/`REQUIRED_ENTRIES`
+  目标文件是否存在 → 新端点名是否 grep 得到 `astropy/websrv` → 构建后 native-verify 这些端点是否回真数据），
+  明确「不看目录 mtime」。机器守卫侧本已覆盖大半：builder 的 `require_path` 拦缺文件、
+  `verify_runtime_release.py` 的 `REQUIRED_ENTRIES` 拦缺 payload 项（本版新增
+  `kin_year_domain.py` + `ifa_odu.json` 两项即由它把关）；端点级新鲜度无法静态断言，由 native-verify 兜底。
+- **本轮验证留痕**：BC −500 与 2400 年 qimen 均 `rc=0`（缺 `kin_year_domain.py` 会 500）；
+  geomancy 响应体从旧版 ~86KB 涨到 **210KB**（`ifa_odu.json` 生效，v3.5.1 地占大改版）；
+  `/astroextra/ephemeris`、`/astroextra/draconic` 回真数据；两个启动器带 UTF-8 BOM 通过新 zip 级 BOM 闸。
+- 注：协议第 3 件（CHANGELOG）仍不可执行——树内无 `CHANGELOG.md`（同前条）。
+
 ### v0.27.0 / 2026-08-13 — 落后上游 4 个 release 而四把守卫全绿：盲区在「根级文件」和「单向键差」
 
 **症状。** 例行「还有什么没同步」审计，结果不是零星缺口：本仓 vendored 树停在上游 `f8275b3`(v3.7.3)，
