@@ -33,6 +33,19 @@ jobs:
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "Published latest release: ${tag}"
 
+      # OPERATIONS.md 的「必要资产」清单里，manifest/两平台包由下一步逐项校验；SBOM 此前只活在文档里
+      # ——v0.27.0 首发时就漏了它，靠人看 v0.26.1 的资产列表对比才发现。文档列的资产必须有 CI 断言。
+      - name: Assert the SBOM asset is present
+        env:
+          TAG: ${{ steps.latest.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! gh api "repos/${REPO}/releases/tags/${TAG}" --jq '.assets[].name' | grep -qx "horosa-skill-sbom.json"; then
+            echo "::error::latest release ${TAG} is missing horosa-skill-sbom.json — OPERATIONS.md lists it as a required asset; generate with scripts/generate_sbom.py and upload (publish_darwin_release.sh does this automatically)."
+            exit 1
+          fi
+          echo "OK: horosa-skill-sbom.json present on ${TAG}."
+
       - name: Assert the latest runtime-manifest.json is complete and dual-platform
         env:
           TAG: ${{ steps.latest.outputs.tag }}

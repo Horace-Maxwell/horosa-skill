@@ -93,6 +93,36 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.27.0+ / 2026-08-13 — 发布后制度化批次：口头注意点不收进机器，下一轮还会原样再犯
+
+**背景。** v0.27.0 发布过程里暴露了五件「说过、但没有任何机制拦」的事，当场逐件收进机器。
+横切法则：**对话里的注意点 = 还没发生的复发**——能写成断言/脚本的，当场写；只能写成文档的，
+问一句「哪个 runner 会读到它」。
+
+1. **live 曾打到默认端口上的另一棵树。** 审计中途从默认 `:8899` 的服务读过段名，事后靠 lsof
+   才发现那个实例根本不是本仓的树（来源、版本全不可知），数据当场弃用重推。旧规则「live 必须打
+   vendored 实例」只是 §8 的文字。守卫：① live 门禁改为**只认显式 env**——
+   `HOROSA_CHART_SERVER_ROOT`/`HOROSA_SERVER_ROOT` 未设一律 skip，且短路在探针左侧，
+   **连 TCP 都不碰默认端口**；② 起法收进 `scripts/start_vendored_instance.sh`
+   （三段 PYTHONPATH + 内嵌解释器 + failed=0 判据 + 不达标自动回收），停法
+   `stop_vendored_instance.sh` 只按 pidfile PID。回归：`test_guard_wiring.py` 断言短路形状与两纪律。
+2. **git 身份没配，发布 commit 作者串成 `…@主机名.local`。** git 只在 commit 那一刻才猜，全程无
+   提示，GitHub 不归属任何账号，要 amend 才能救。守卫：`preflight_release.py::identity_problems`
+   （纯函数，直接测），name/email 未配或 email 以 `.local` 结尾 → 阻断。
+3. **main 滞留只有文档没有闸。** v0.27.0 写进了 §7 文字；本批把它变成 preflight 的
+   `git_gate_failures()`：fetch 后 `HEAD..origin/main` 非空 → 阻断（离线 fetch 失败只警告）。
+   **该闸首跑当天就抓到构建机补 Windows 半边时推的一个 commit** —— 不是假想敌。
+4. **SBOM 生成器一直在仓里，发布时却漏传了。** `generate_sbom.py` 不在任何发布脚本的调用链上，
+   v0.27.0 首发的资产列表少了它，靠人对比 v0.26.1 才发现（「守卫挂在什么都不跑的地方」的资产版）。
+   守卫：mac 半边发布收进 `scripts/publish_darwin_release.sh`（SBOM 是显式步骤；无 `--publish`
+   不上传）；`release-completeness.yml` 新增 SBOM 资产断言。发布步骤从此只允许以脚本形态存在。
+5. **算源生成器躺在 scratchpad（会随会话蒸发）。** 契约可再生 ⇒ 生成器必须入仓：
+   `scripts/gen_technique_provenance.py`（仓内相对路径，输出与在册契约逐字节幂等）。
+   §5 布线清单补第 11 步「算源声明」。
+6. **附带小坑：`json.dumps` 重写 package-lock 会把非 ASCII 转义成 `\uXXXX`**，下次 `npm install`
+   按 npm 规范写回真 UTF-8，凭空造一个与版本无关的噪音 diff。规则（§7）：lock 只许字符串替换
+   两处版本串，禁整文件 json 往返。
+
 ### v0.27.0 / 2026-08-13 — 目录 mtime 判源树新旧会误判（Windows 侧补半）
 
 - **症状**：v0.27.0（上游 v3.9.1 全量同步，92 工具）以 **darwin-only** 发布，守卫自发布起连红三次。

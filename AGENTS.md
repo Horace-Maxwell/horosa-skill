@@ -322,6 +322,9 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
    不许裸 `except: pass`。
 10. **f-string None 陷阱**：`f"{response.get('snapshot')}"` 在键缺失时产出字面 `"None"`（6 字符真值串）——
     先 `raw = response.get(...)` 判空再格式化；`f"{... or ''}"` 只有显式 `or ''` 才安全。
+11. **算源声明**：`contracts/technique_provenance.json` 加条目（可用 `scripts/gen_technique_provenance.py`
+    重生成，输出幂等），`verify_technique_provenance.py` 不声明即红；ken-backed 必须真调
+    `_require_ken_pan`。技法依据卡按它标注「这盘是谁算的」。
 
 **审计前置**（补「未同步技法」缺口前）：先 grep 仓内**明确排除项**（`fengshui`：canvas + 户型图上传 +
 交互点位驱动，无 birth/time 输入，无法 headless——是政策性排除不是缺口），再确认候选的
@@ -405,6 +408,9 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   `README.md`/`README_EN.md` 的「当前公开版本」行（工具数/测试数一并更新）。bump 后 `git grep -n "<OLD>"`
   只应剩合法历史引用（CHANGELOG、台账、Windows 交接文档）。`docs/DATA_CONTRACTS.md` 的
   `tool envelope: <ver>` 是**独立** schema 版本，不跟包版本连动。CI 守卫：`verify_docs_sync.py`。
+  ⚠️ **lock 只许字符串替换两处版本串，禁 `json.dumps` 整文件重写**——Python 默认把非 ASCII 转义成
+  `\uXXXX`，下次 `npm install` 又按 npm 规范写回真 UTF-8，凭空造一个与版本无关的噪音 diff
+  （v0.27.0 实踩）。
 - **README 里的数字只有两种合法形态**：能从代码断言的（工具数、导出 technique 数）→ 当场在
   `verify_docs_sync.py` 里加断言；推不出又没测试覆盖的手测计数（如「memory / report N / N」）→ 改写成
   **不含数字的结构性陈述**。绝不留「只能靠人记得更新」的计数。测试数属第三类（要真跑才知道），故只守
@@ -423,9 +429,16 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   bump 6→7、v0.22.0 前 linux+scaffold 曾滞留 6，均为该检查射程外时的漏网）。
   改一个 builder / 加一个必需 artifact = 同一 change 里 grep 另一个 builder + 两份 REQUIRED_ENTRIES；
   **新增 manifest-stamping 脚本 = 同一 change 里进 `CONSTANT_STAMPERS`**。
-- **`main` 必须跟踪 `origin/main`，发布前 `git log main..origin/main` 必须为空**（v0.27.0）：
-  没有 upstream tracking 时 `git status` 只印一句干净的 `## main`，另一台机器的修复可以无声滞留一周
-  （`git branch -u origin/main` 一次性修好）。多机维护的仓，这条比看起来重要。
+- **git 身份与 origin 滞留由 preflight 机器闸拦，不再靠人记**（v0.27.0+，两条都真实咬过）：
+  `preflight_release.py` 现在先跑 `git_gate_failures()`——① `user.name`/`user.email` 未配或 email 是
+  `…@主机名.local` 占位串（git 只在 commit 那刻才猜，作者串错了 GitHub 不归属任何账号）→ 阻断；
+  ② fetch 后 `HEAD..origin/main` 非空（另一台机器的工作会被本次发布落下；此闸首跑当天就抓到
+  构建机推的一个 commit）→ 阻断，离线 fetch 失败只警告。`git branch -u origin/main` 保持配置。
+- **发布步骤只允许以脚本形态存在**（v0.27.0：SBOM 生成器一直在仓里、却因发布流程是手打清单而漏传）：
+  mac 半边一律走 `scripts/publish_darwin_release.sh`（payload → darwin manifest → **SBOM** →
+  SHA256SUMS → verify → `--publish` 才上传；无 `--publish` 是安全默认）。资产契约由
+  `release-completeness.yml` 断言（manifest 双平台 + 两包可达 + **SBOM 在场**）。
+  Windows 半边不变：构建机 `sync_windows_release.py --upload`，判据 `--check` 的 `[GAP]`/`[OK]`。
 - **发 tag 前必须在有上游 checkout 的机器上跑 `scripts/preflight_release.py`**（`HOROSA_SOURCE_ROOT`
   指向 Horosa-Public）。跨树两闸（`verify_upstream_sync --require-upstream`、
   `verify_export_section_baseline --source upstream --require-upstream`）**只有那里能做真**——
@@ -484,19 +497,20 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 1. venv 坏了先修（miniconda symlink 触 macOS library-validation on `pydantic_core`）：
    `uv venv --clear --python-preference only-managed --python 3.12 && uv sync`（uv-managed CPython 无
    library-validation）。
-2. **live 验证必须打本仓 vendored 引擎实例，不是默认端口上恰好在跑的东西**（默认 `:8899`/`:9999` 上的常驻
-   服务不保证与 vendored 引擎同版本，陈旧实例会掩盖白名单/钥匙/段位问题）。起法：chart =
-   **三段** `PYTHONPATH=<vendor>/Horosa-Web/{flatlib-ctrad2,astropy,vendor}` + `HOROSA_CHART_PORT=<port>`，
-   且用**内嵌解释器** `<vendor>/runtime/mac/python/bin/python3` 起 `webchartsrv.py`。
-   🔴 少 `Horosa-Web/vendor` 那段 → ken 与神数引擎（kinqimen/kintaiyi/kinjinkou/kinwangji/taixuanshifa/
-   kinastro）全挂不上，taiyi/jinkou/sanshiunited/wangji/taixuan/chunzi 一起红，症状看着像「这些技法坏了」；
-   用裸 `python` → 缺 9 个第三方依赖（pandas/numpy/pendulum/cnlunar/cn2an/bidict/drawsvg/kinliuren/
-   kerykeion，只装在内嵌 python 里）。**判据 = 启动日志 `kentang prewarm ready (loaded=18, failed=0)`**，
-   failed 非 0 就是没按这个起。v0.26.0 整轮把真 bug 误判成「环境问题」正是栽在这条。
-   java = vendored `runtime/mac/java/bin/java -jar
-   runtime/mac/bundle/astrostudyboot.jar --server.port=… --astrosrv=…`（root 500 = 正常无路由）。测试经
-   `HOROSA_CHART_SERVER_ROOT` / `HOROSA_SERVER_ROOT` 指过去（tests 的 gate + `make_service` 尊重这两个
-   env——曾经写死默认端口导致「带覆盖的全绿」实测的是旧实例）。
+2. **live 验证必须打本仓 vendored 引擎实例，不是默认端口上恰好在跑的东西**——默认 `:8899`/`:9999` 上的
+   常驻服务不保证与 vendored 引擎同版本，甚至可能**根本不是本仓的树**（v0.27.0 审计当天实测过一次，
+   靠 lsof 偶然发现；从它读回的任何值都不可信）。两道制度化（v0.27.0+）：
+   ① **起法只走脚本** `scripts/start_vendored_instance.sh`（封装三段
+   `PYTHONPATH=<vendor>/Horosa-Web/{flatlib-ctrad2,astropy,vendor}` + **内嵌解释器**
+   `runtime/mac/python/bin/python3` + 非默认端口 + 就绪判据 `kentang prewarm ready … failed=0`，
+   不达标自动回收不留半死实例；`--with-java` 连 Java 一起起；打印可直接粘贴的 env 行）。
+   停 = `stop_vendored_instance.sh`，只按 pidfile 的 PID。
+   🔴 手打的历史坑仍然成立：少 `Horosa-Web/vendor` 那段 → ken/神数引擎全挂不上，
+   taiyi/jinkou/sanshiunited/wangji/taixuan/chunzi 一起红，症状像「这些技法坏了」；裸 `python` → 缺
+   9 个只装在内嵌 python 里的依赖。v0.26.0 整轮误判正是栽在手打命令上——所以起法收进了脚本。
+   ② **live 门禁只认显式点名的实例**：`HOROSA_CHART_SERVER_ROOT`/`HOROSA_SERVER_ROOT` 未设时
+   live 测试一律 skip 并给出起法指引，**连 TCP 都不去碰默认端口**（对来源不明的栈连「在不在听」
+   都不该问）。java 只起半边时把 `HOROSA_SERVER_ROOT` 显式指向不可达地址，别留空。
 3. **防陈旧闸**：chart 心跳 `GET /` 回显 `pdSyncRev`，断言 == 当前 rev（当前 `pd_method_sync_v15`，见 tests 的 PD_SYNC_REV 常量）再信
    结果——陈旧引擎会把未知时间钥匙**静默按 Ptolemy 算**。钥匙分叉探针用每盘真算的 Kepler，别用 Kündig
    （静态标度 1.0 与 Ptolemy 同日期，探不出分叉）。**kentang 懒挂载**：`registry.py` 用

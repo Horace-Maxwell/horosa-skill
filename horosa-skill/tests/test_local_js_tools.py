@@ -22,8 +22,20 @@ from horosa_skill.memory.store import MemoryStore
 from horosa_skill.service import HorosaSkillService
 
 # Honor the same env overrides as Settings.from_env so the live suite can be pointed at an
-# alternate backend instance (e.g. one started from vendor/runtime-source on a free port)
-# instead of whatever happens to occupy the default :8899/:9999.
+# alternate backend instance (e.g. one started from vendor/runtime-source on a free port).
+#
+# 🔴 live 门禁只认**显式点名**的实例（v0.27.0 收紧）。以前 env 缺省时会静默探默认 :8899/:9999——
+# 而默认端口上恰好在跑的东西来源完全不可知：可能是陈旧实例，也可能**根本不是本仓的树**
+# （v0.27.0 审计当天实测过一次，靠人偶然查 lsof 才发现）。从它那里读回来的任何值都不可信，
+# 所以 env 未设时 live 测试一律 skip 并给出起法指引，连 TCP 都不去碰默认端口。
+# 起本仓 vendored 实例：`bash scripts/start_vendored_instance.sh`（打印可直接粘贴的 export 行）。
+_CHART_EXPLICIT = bool(os.environ.get("HOROSA_CHART_SERVER_ROOT"))
+_JAVA_EXPLICIT = bool(os.environ.get("HOROSA_SERVER_ROOT"))
+_EXPLICIT_HINT = (
+    "live gates only run against an explicitly named instance — "
+    "export HOROSA_CHART_SERVER_ROOT / HOROSA_SERVER_ROOT (boot one with "
+    "scripts/start_vendored_instance.sh); default-port stacks are untrusted (AGENTS §8)"
+)
 CHART_SERVER_ROOT = os.environ.get("HOROSA_CHART_SERVER_ROOT") or "http://127.0.0.1:8899"
 JAVA_SERVER_ROOT = os.environ.get("HOROSA_SERVER_ROOT") or "http://127.0.0.1:9999"
 
@@ -63,22 +75,32 @@ def _java_routes_alive(root: str) -> bool:
 
 _CHART_HOST_PORT = _root_host_port(CHART_SERVER_ROOT, 8899)
 _JAVA_HOST_PORT = _root_host_port(JAVA_SERVER_ROOT, 9999)
-_JAVA_LISTENING = _server_up(*_JAVA_HOST_PORT)
+# env 未显式给出 → 不探端口（短路在 and 左侧）：对一个来源不明的栈连「它在不在听」都不该问。
+_JAVA_LISTENING = _JAVA_EXPLICIT and _server_up(*_JAVA_HOST_PORT)
 _JAVA_USABLE = _JAVA_LISTENING and _java_routes_alive(JAVA_SERVER_ROOT)
-RUNTIME_UP = _server_up(*_CHART_HOST_PORT) and _JAVA_USABLE
-requires_runtime = pytest.mark.skipif(
-    not RUNTIME_UP,
-    reason=(
+CHART_UP = _CHART_EXPLICIT and _server_up(*_CHART_HOST_PORT)
+RUNTIME_UP = CHART_UP and _JAVA_USABLE
+
+
+def _runtime_skip_reason() -> str:
+    if not (_CHART_EXPLICIT and _JAVA_EXPLICIT):
+        return _EXPLICIT_HINT
+    return (
         f"Horosa runtime unusable — chart {CHART_SERVER_ROOT}, Java {JAVA_SERVER_ROOT} "
         f"({'java_routes_dead' if _JAVA_LISTENING and not _JAVA_USABLE else 'not_listening'})"
-    ),
-)
+    )
+
+
+requires_runtime = pytest.mark.skipif(not RUNTIME_UP, reason=_runtime_skip_reason())
 # Chart-only gate: harmonic / agepoint / distributions are pure Python chart-service computations
 # (/astroextra/*, /predict/*) and do NOT need the Java backend on :9999. Gating them on the chart
 # service alone lets them run whenever the chart service is up, not only when the full stack is.
-CHART_UP = _server_up(*_CHART_HOST_PORT)
 requires_chart = pytest.mark.skipif(
-    not CHART_UP, reason=f"Horosa chart service not listening on {CHART_SERVER_ROOT}"
+    not CHART_UP,
+    reason=(
+        _EXPLICIT_HINT if not _CHART_EXPLICIT
+        else f"Horosa chart service not listening on {CHART_SERVER_ROOT}"
+    ),
 )
 
 

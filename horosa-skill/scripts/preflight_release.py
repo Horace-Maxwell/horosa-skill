@@ -49,6 +49,56 @@ GATES: tuple[tuple[str, list[str], bool], ...] = (
 )
 
 
+def _git(*args: str) -> tuple[int, str]:
+    result = subprocess.run(
+        ["git", "-C", str(PKG_ROOT.parent), *args], capture_output=True, text=True, timeout=60, check=False
+    )
+    return result.returncode, (result.stdout or "").strip()
+
+
+def identity_problems(name: str, email: str) -> list[str]:
+    """git 身份是否可用于发布 commit。拆成纯函数——tests/test_guard_wiring.py 直接测它。
+
+    v0.27.0 现场：本仓 `user.name`/`user.email` 都没配，git 按用户名+主机名猜出
+    `horacedong@Horaces-MacBook-Pro.local` —— GitHub 不会把它算到任何账号上，而 git 只在
+    commit 那一刻才猜，`git status` 全程无提示。发布 commit 的作者串错了要 amend 才能救，
+    所以在 tag 之前拦。
+    """
+    problems: list[str] = []
+    if not name.strip():
+        problems.append("git user.name 未配置（git 会按用户名猜一个）")
+    if not email.strip():
+        problems.append("git user.email 未配置（git 会按 用户名@主机名 猜一个）")
+    elif email.strip().lower().endswith(".local"):
+        problems.append(f"git user.email 是主机名生成的占位串（{email}）——GitHub 不会归属到任何账号")
+    return problems
+
+
+def git_gate_failures() -> list[str]:
+    """发布前的两道 git 闸。此前它们只是 AGENTS §7 里的文字，本轮两条都真实咬过人。"""
+    failures: list[str] = []
+
+    _, name = _git("config", "user.name")
+    _, email = _git("config", "user.email")
+    failures.extend(identity_problems(name, email))
+
+    # main 滞留检查：没有 upstream tracking 时 `git status` 只印一句干净的 `## main`，
+    # 另一台机器推上去的修复可以无声滞留一周（v0.27.0 前夜：9999 诊断修复躺了 8 天没人拉）。
+    # fetch 失败（离线）只警告不拦——发布本来就需要网络，真离线时 gh 那步会更早失败。
+    fetch_code, _ = _git("fetch", "--quiet", "origin", "main")
+    if fetch_code != 0:
+        print("::warning::preflight: 无法 fetch origin/main，滞留检查未执行（离线？）——发布上传前必须补做。")
+    else:
+        _, behind = _git("log", "--oneline", "HEAD..origin/main")
+        if behind:
+            failures.append(
+                "origin/main 上有本地没有的提交（另一台机器的工作会被本次发布落下）：\n      "
+                + behind.replace("\n", "\n      ")
+                + "\n      先 `git pull --ff-only`（或 merge）再发。"
+            )
+    return failures
+
+
 def main() -> int:
     source_root = os.environ.get("HOROSA_SOURCE_ROOT")
     if not source_root or not (Path(source_root).expanduser() / "Horosa-Web").is_dir():
@@ -62,6 +112,16 @@ def main() -> int:
 
     failed: list[str] = []
     warned: list[str] = []
+
+    print("\n=== git identity + origin currency ===", flush=True)
+    git_failures = git_gate_failures()
+    if git_failures:
+        for item in git_failures:
+            print(f"  ✗ {item}")
+        failed.append("git identity / origin currency")
+    else:
+        print("  ok — identity configured, no stranded origin/main commits")
+
     for label, argv, blocking in GATES:
         print(f"\n=== {label} ===", flush=True)
         result = subprocess.run([sys.executable, *argv], cwd=PKG_ROOT)
