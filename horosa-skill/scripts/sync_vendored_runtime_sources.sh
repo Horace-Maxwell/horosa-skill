@@ -82,6 +82,10 @@ rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/vendor/kin_year_domain
 if [ -f "${SOURCE_ROOT}/Horosa-Web/vendor/test_month_pillar_boundary.py" ]; then
   rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/vendor/test_month_pillar_boundary.py" "${VENDOR_ROOT}/Horosa-Web/vendor/"
 fi
+# vendor 根级的第三方引擎清单 README（纯文档）：随镜像走，省得守卫每轮报「根级新增」notice。
+if [ -f "${SOURCE_ROOT}/Horosa-Web/vendor/README.md" ]; then
+  rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/vendor/README.md" "${VENDOR_ROOT}/Horosa-Web/vendor/"
+fi
 # kinastro engine backs the 9 kinastro-* 神数 (shaozi/tieban/fendjing/beiji/nanji/chunzi/xianqin/
 # cetian/qizhengkin). Vendor only the engine (`astro/` + root .py + interpretations + LICENSE); the
 # ~26 MB tools/cities geocoding DB + the streamlit ui/frontend/docs are not needed for ganzhi 神数.

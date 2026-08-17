@@ -89,7 +89,7 @@ SENTINEL_TREES: dict[str, dict[str, object]] = {
     # ken + 神数 引擎（kinqimen/kintaiyi/kinjinkou/…）——sync 脚本 :74-84 逐目录拷 + 点名两个根级文件。
     "Horosa-Web/vendor": {
         "copy": "per-dir",
-        "root_files": {"kin_year_domain.py", "test_month_pillar_boundary.py"},
+        "root_files": {"kin_year_domain.py", "test_month_pillar_boundary.py", "README.md"},
     },
     "Horosa-Web/astropy/astrostudy": {"copy": "whole"},   # Python 算法本体（sync 脚本 :71 整棵 rsync）
     "Horosa-Web/astropy/websrv": {"copy": "whole"},       # HTTP 端点层（同上）
