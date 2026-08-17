@@ -5,18 +5,22 @@
 喂错盘掉 20-45% 准确率。我们的结构优势：导出契约是**机读真值**，校验可以完全**确定性**做，
 不需要 LLM 判官。
 
-设计（v1，覆盖最强可判族）：
+设计（v2，覆盖最强可判族）：
 - `extract_facts(envelope)`：从已存 envelope 抽 typed facts——四柱干支（槽位化）、西占落座
-  （行星→星座）、紫微身宫、大六壬三传，外加**快照词元全集**（出现在计算文本里的干支/卦名/
-  牌名等原子值 = 兜底 supported 判据）。
+  （行星→星座）、紫微身宫 + **紫微十四主星落宫**、大六壬三传、**六爻卦名与动爻**、
+  **塔罗抽牌正逆**，外加**快照词元全集**（出现在计算文本里的干支/卦名/牌名等原子值 =
+  兜底 supported 判据）。
 - `verify_answer(answer_text, facts)`：识别答案里的事实型断言并逐条判：
     supported     —— 与真值一致 / 词元在快照全集中
     contradicted  —— 槽位型断言与真值**不同**（最危险：读起来言之凿凿）
     invented      —— 值在本盘任何计算输出里都不存在
 - 指标：faithfulness ratio、invented 率、contradicted 率；`ok` = 零 contradicted 且零 invented。
+- **族门槛**：新族（紫微主星/卦名动爻/塔罗）只在该族真值**存在**时才判——合参一答多盘时，
+  别拿八字盘的空真值去红一段紫微话；喂错盘对抗照常成立（真值在场、值不同 → 红）。
 
 明确不做（诚实边界，进 docstring 不进营销）：不判断**解读**对错（那是判官/人评的活）、
-不覆盖所有 92 技法的全部事实类型（v1 = 四柱/落座/身宫/三传/词元兜底，逐版扩）。
+不覆盖所有 92 技法的全部事实类型（v1 = 四柱/落座/身宫/三传/词元兜底；v2 + 紫微主星落宫/
+六爻卦名动爻/塔罗牌名正逆，逐版扩）。
 Sycophancy probe（「我月亮在天蝎对吧」而实际不是）天然被 contradicted 通道覆盖。
 """
 
@@ -50,6 +54,56 @@ _PLACEMENT_CLAIM = re.compile(
 _BODY_PALACE_CLAIM = re.compile(r"身宫[^，。；\n]{0,4}?(?:落在|落入|落|在)([一-鿿]{2,3}[宫宮])")
 _SANCHUAN_CLAIM = re.compile(r"(初传|中传|末传)[^，。；\n甲-癸]{0,4}([甲乙丙丁戊己庚辛壬癸]?[子丑寅卯辰巳午未申酉戌亥])")
 
+# --- v2 族：紫微十四主星落宫 -----------------------------------------------------------------
+_ZIWEI_MAJORS = "紫微|天机|太阳|武曲|天同|廉贞|天府|太阴|贪狼|巨门|天相|天梁|七杀|破军"
+_ZIWEI_STAR_CLAIM = re.compile(
+    rf"({_ZIWEI_MAJORS})(?:星)?[^，。；\n]{{0,6}}?(?:落在|落入|坐守|坐|入|在|守)[^，。；\n]{{0,3}}?([一-鿿]{{1,3}})[宫宮]"
+)
+# 宫名流派别名 → 同组归一（引擎与答案各写各的也能对上）。
+_PALACE_ALIAS = {"事业": "官禄", "仆役": "交友", "朋友": "交友", "奴仆": "交友", "相貌": "父母"}
+
+
+def _palace_canon(name: str) -> str:
+    base = f"{name}".replace("宮", "宫").rstrip("宫")
+    return _PALACE_ALIAS.get(base, base)
+
+
+# --- v2 族：六爻卦名与动爻 -------------------------------------------------------------------
+_GUA_NAME_CLAIM = re.compile(r"(本卦|之卦|变卦)[为是：:\s]*[「『]?([一-鿿]{1,8})")
+_GUA_CODE = re.compile(r"[01]{6}")
+_YAO_LABELS = ("初", "二", "三", "四", "五", "上")
+# 「一/六」只认带「第」前缀的写法（第六爻动）——否则「六爻动向」这类技法名短语会误击中。
+_MOVING_YAO_CLAIM = re.compile(
+    r"(?:第([一二三四五六])|([初二三四五上]))爻[^，。；\n]{0,2}?(?:发动|动)"
+    r"|动爻[为是在：:\s]*(?:第([一二三四五六])|([初二三四五上]))爻?"
+)
+_YAO_NUM = {"一": "初", "二": "二", "三": "三", "四": "四", "五": "五", "六": "上"}
+
+# --- v2 族：塔罗牌名正逆 ---------------------------------------------------------------------
+# 词表 = vendored 牌库的中文正名（correspondences.js 大牌 cn + SUIT_CN/PIP/COURT 组合）；
+# 快照小牌用「钱币」、facade 用「星币」，两写法都归一到快照形。
+_TAROT_MAJORS = (
+    "愚者", "魔术师", "女祭司", "皇后", "皇帝", "教皇", "恋人", "战车", "力量", "隐士",
+    "命运之轮", "正义", "倒吊人", "死神", "节制", "恶魔", "高塔", "星星", "月亮", "太阳", "审判", "世界",
+)
+_TAROT_MAJOR_ALIAS = {"愚人": "愚者", "隐者": "隐士", "吊人": "倒吊人"}
+_TAROT_NAME_RE = (
+    r"(?:权杖|圣杯|宝剑|钱币|星币)(?:王牌|[一二三四五六七八九十]|侍从|骑士|王后|国王|公主|王子)"
+    r"|" + "|".join(_TAROT_MAJORS) + "|" + "|".join(_TAROT_MAJOR_ALIAS)
+)
+_TAROT_ORIENT_CLAIM = re.compile(rf"({_TAROT_NAME_RE})[^，。；\n]{{0,4}}?[（(]?(正位|逆位|横置)[)）]?")
+_TAROT_DRAWN_CLAIM = re.compile(rf"(?:抽到|抽出|翻出|出现)[了的]?[^，。；\n]{{0,6}}?({_TAROT_NAME_RE})")
+_TAROT_SNAPSHOT_ROW = re.compile(r"^\|\s*位置\d+[^|]*\|[^|]*\|([^|]+)\|\s*(正位|逆位|横置)\s*\|", re.M)
+
+
+def _tarot_canon(name: str) -> str:
+    text = f"{name}".replace("星币", "钱币").replace("王牌", "一")
+    if text.endswith("公主"):
+        text = text[:-2] + "侍从"
+    elif text.endswith("王子"):
+        text = text[:-2] + "骑士"
+    return _TAROT_MAJOR_ALIAS.get(text, text)
+
 
 def extract_facts(envelope: dict[str, Any]) -> dict[str, Any]:
     """从已存 envelope（`memory_show` 取回的 tool_result payload）抽机读真值。"""
@@ -60,6 +114,10 @@ def extract_facts(envelope: dict[str, Any]) -> dict[str, Any]:
         "placements": {},
         "body_palace": None,
         "sanchuan": [],
+        "ziwei_stars": {},   # 主星名 → 宫名（canon）
+        "gua": {},           # 本卦/之卦 → 卦名（code 未解析成名时不入）
+        "moving_yao": None,  # None=无爻线数据；[]=有数据且静卦
+        "tarot_draws": {},   # 牌名（canon）→ 正位/逆位/横置
         "tokens": set(),
     }
 
@@ -82,17 +140,45 @@ def extract_facts(envelope: dict[str, Any]) -> dict[str, Any]:
         if planet_names and sign_names:
             facts["placements"][planet_names[0]] = sign_names[0]
 
-    # 紫微身宫（houses[].isBody——与 v3.9.2 [身宫] 段同判据）
+    # 紫微身宫（houses[].isBody——与 v3.9.2 [身宫] 段同判据）+ 十四主星落宫（houses[].starsMain）
     for house in data.get("houses") or []:
-        if isinstance(house, dict) and house.get("isBody") and house.get("name"):
+        if not isinstance(house, dict):
+            continue
+        if house.get("isBody") and house.get("name") and facts["body_palace"] is None:
             facts["body_palace"] = f"{house['name']}"
-            break
+        palace = _palace_canon(house.get("name") or "")
+        if not palace:
+            continue
+        for item in house.get("starsMain") or []:
+            star = item.get("name") if isinstance(item, dict) else item
+            if isinstance(star, str) and re.fullmatch(_ZIWEI_MAJORS, star):
+                facts["ziwei_stars"][star] = palace
 
     # 大六壬三传（结构键随引擎版本略变，稳妥起见从快照文本行抽）
     snapshot = f"{data.get('snapshot_text') or ''}"
     m = re.search(r"三传[：: ]*([^\n]+)", snapshot)
     if m:
         facts["sanchuan"] = _GANZHI.findall(m.group(1)) or re.findall(r"[子丑寅卯辰巳午未申酉戌亥]", m.group(1))
+
+    # 六爻卦名（快照 `本卦：X` / `之卦：X` 行；X 仍是 0/1 卦码 = 名字未解析，不入真值）
+    for slot in ("本卦", "之卦"):
+        gm = re.search(rf"{slot}[：: ]*([^\s，。；]+)", snapshot)
+        if gm and not _GUA_CODE.fullmatch(gm.group(1)):
+            facts["gua"][slot] = gm.group(1).rstrip("卦")
+
+    # 六爻动爻（data.lines[].change，自下而上第 1..6 爻 → 初/二/三/四/五/上）
+    lines = data.get("lines")
+    if isinstance(lines, list) and lines and all(isinstance(ln, dict) and "value" in ln for ln in lines):
+        facts["moving_yao"] = [
+            _YAO_LABELS[i] for i, ln in enumerate(lines[:6]) if ln.get("change")
+        ]
+
+    # 塔罗抽牌（快照 [逐牌详解] 表行：`| 位置N(…) | 位义 | 各派名 中文名 | 正逆 | …`——
+    # 牌列取末尾 CJK 连续串即中文短名，钱币/星币两写法归一）
+    for cell, orient in _TAROT_SNAPSHOT_ROW.findall(snapshot):
+        cjk_runs = re.findall(r"[一-鿿]+", cell)
+        if cjk_runs:
+            facts["tarot_draws"][_tarot_canon(cjk_runs[-1])] = orient
 
     # 词元全集：出现在**计算输出**里的原子值——兜底 supported 判据。贪婪切词会把「食神制杀」
     # 吃成一个词元而丢掉「食神」，所以对每段 CJK 连续串取全部 2–4 字**子串**（含重叠）。
@@ -165,6 +251,67 @@ def verify_answer(answer_text: str, facts: dict[str, Any]) -> dict[str, Any]:
             add("sanchuan", m.group(0), "supported", expected=truth, actual=claimed)
         else:
             add("sanchuan", m.group(0), "contradicted", expected=truth, actual=claimed)
+
+    # v2 族门槛：真值不存在的族整族跳过（合参一答多盘时不拿别家空真值判红）。
+    ziwei_stars: dict[str, str] = facts.get("ziwei_stars") or {}
+    if ziwei_stars:
+        for m in _ZIWEI_STAR_CLAIM.finditer(text):
+            star, palace = m.group(1), _palace_canon(m.group(2))
+            truth = ziwei_stars.get(star)
+            if truth is None:
+                add("ziwei_star", m.group(0), "invented", actual=f"{star}→{palace}")
+            elif palace == truth:
+                add("ziwei_star", m.group(0), "supported", expected=truth, actual=palace)
+            else:
+                add("ziwei_star", m.group(0), "contradicted", expected=truth, actual=palace)
+
+    gua: dict[str, str] = facts.get("gua") or {}
+    if gua:
+        for m in _GUA_NAME_CLAIM.finditer(text):
+            slot = "之卦" if m.group(1) in ("之卦", "变卦") else "本卦"
+            claimed = m.group(2).rstrip("卦")
+            truth = gua.get(slot)
+            if truth is None:
+                continue  # 该槽名字未解析 → 不判（宁缺毋枉）
+            # 「泰」与「地天泰」互为缩略——包含即视为同卦，仅两不相含才矛盾。
+            if claimed == truth or claimed.endswith(truth) or truth.endswith(claimed):
+                add("gua_name", m.group(0), "supported", expected=truth, actual=claimed)
+            else:
+                add("gua_name", m.group(0), "contradicted", expected=truth, actual=claimed)
+
+    moving_yao = facts.get("moving_yao")
+    if isinstance(moving_yao, list):
+        moving = set(moving_yao)
+        for m in _MOVING_YAO_CLAIM.finditer(text):
+            numbered = m.group(1) or m.group(3)
+            label = _YAO_NUM[numbered] if numbered else (m.group(2) or m.group(4))
+            if label in moving:
+                add("moving_yao", m.group(0), "supported", expected=label, actual=label)
+            else:
+                add("moving_yao", m.group(0), "contradicted", expected="、".join(moving_yao) or "（静卦）", actual=label)
+
+    tarot_draws: dict[str, str] = facts.get("tarot_draws") or {}
+    if tarot_draws:
+        judged_names: set[str] = set()
+        for m in _TAROT_ORIENT_CLAIM.finditer(text):
+            name, orient = _tarot_canon(m.group(1)), m.group(2)
+            judged_names.add(name)
+            truth = tarot_draws.get(name)
+            if truth is None:
+                add("tarot_card", m.group(0), "invented", actual=f"{name}（{orient}）")
+            elif orient == truth:
+                add("tarot_card", m.group(0), "supported", expected=truth, actual=orient)
+            else:
+                add("tarot_card", m.group(0), "contradicted", expected=truth, actual=orient)
+        for m in _TAROT_DRAWN_CLAIM.finditer(text):
+            name = _tarot_canon(m.group(1))
+            if name in judged_names:
+                continue
+            judged_names.add(name)
+            if name in tarot_draws:
+                add("tarot_card", m.group(0), "supported", expected=name, actual=name)
+            else:
+                add("tarot_card", m.group(0), "invented", actual=name)
 
     # 兜底：槽位断言之外的裸干支引用——不在本盘任何计算输出里出现即 invented。
     slotted_spans = [(c["text"]) for c in claims]

@@ -12,7 +12,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-92-1d4ed8?style=for-the-badge" alt="92 tools" />
-  <img src="https://img.shields.io/badge/测试-414_passed-16a34a?style=for-the-badge" alt="414 passed" />
+  <img src="https://img.shields.io/badge/测试-427_passed-16a34a?style=for-the-badge" alt="427 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
 
@@ -388,7 +388,7 @@ uv run horosa-skill report technique --group-id <group_id> --format markdown
 
 ### 3. 盘面事实忠实性评测
 
-`horosa-skill benchmark faithfulness` 用**确定性校验器**（非 LLM 打分）把 AI 解读中的事实断言逐条对盘面机读真值：四柱干支 / 行星落宫落座 / 身宫 / 三传……三通道判 **supported / invented / contradicted**。喂错盘的答案、诱导复述（「我月亮在天蝎对吧」而实际不是）都会判红。HorosaBench 92 条基准用例由工具注册表生成、与工具集锁步——新增技法没有用例直接红。
+`horosa-skill benchmark faithfulness` 用**确定性校验器**（非 LLM 打分）把 AI 解读中的事实断言逐条对盘面机读真值：四柱干支 / 行星落座 / 紫微主星落宫与身宫 / 大六壬三传 / 六爻卦名与动爻 / 塔罗牌名正逆……三通道判 **supported / invented / contradicted**。喂错盘的答案、诱导复述（「我月亮在天蝎对吧」「我抽到的月亮是逆位吧」而实际不是）都会判红。HorosaBench 92 条基准用例由工具注册表生成、与工具集锁步——新增技法没有用例直接红。
 
 ### 4. 一问多技法合参
 
@@ -424,7 +424,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 🧰 可调用工具 | 92 / 92 `ok=true` |
-| 🧪 工程测试 | **414 / 414 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 63 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 🧪 工程测试 | **427 / 427 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 63 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 🛡️ 未确认参数时强制追问 | 84 个技法工具触发 `must_ask_user=true` |
 | 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 89 个导出 technique；契约 v14 镜像桌面端 aiExport v56） |
 | 🧾 技法依据卡 | 每个技法响应附 `data.technique_card`；算源声明与运行实测不符时显式亮警 |
@@ -439,7 +439,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 414 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 427 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 
