@@ -1137,6 +1137,26 @@ def knowledge_read(
     _print_json(result.model_dump(mode="json"))
 
 
+@knowledge_app.command("search")
+def knowledge_search(
+    query: str = typer.Argument(..., help="Full-text query across all 24 knowledge domains."),
+    domain: Optional[str] = typer.Option(None, help="Optional domain filter (e.g. bazi, ziwei, qimen)."),
+    limit: int = typer.Option(8, help="Max matches to return (1-20)."),
+    save_result: bool = typer.Option(False, help="Persist the result in local memory."),
+) -> None:
+    """Search bundled knowledge (hover + technique manuals); every match carries a citation."""
+    payload: dict[str, Any] = {"query": query, "limit": limit}
+    if domain:
+        payload["domain"] = domain
+    service = _service()
+    try:
+        result = service.run_tool("knowledge_read", payload, save_result=save_result)
+    except ToolValidationError as exc:
+        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
+        raise typer.Exit(code=2)
+    _print_json(result.model_dump(mode="json"))
+
+
 @app.command()
 def dispatch(
     stdin: bool = typer.Option(False, "--stdin", help="Read a JSON object from stdin."),

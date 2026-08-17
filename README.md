@@ -12,7 +12,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-92-1d4ed8?style=for-the-badge" alt="92 tools" />
-  <img src="https://img.shields.io/badge/测试-427_passed-16a34a?style=for-the-badge" alt="427 passed" />
+  <img src="https://img.shields.io/badge/测试-435_passed-16a34a?style=for-the-badge" alt="435 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
 
@@ -308,7 +308,7 @@ uv run horosa-skill client config --format codex            # Codex config.toml 
 | --- | --- | --- |
 | `gua_desc` / `gua_meiyi` | 卦义 / 梅易卦义 | 卦名卦辞 / 梅花易数卦义 |
 | `export_registry` / `export_parse` | 导出协议注册表 / 正文解析器 | 机器可读导出总表 / 把导出文本解析回 JSON |
-| `knowledge_registry` / `knowledge_read` | 知识目录 / 读取器 | 24 域（hover 知识 + 技法操作手册）列出 / 读取，逐条带出处 |
+| `knowledge_registry` / `knowledge_read` | 知识目录 / 读取器 | 24 域（hover 知识 + 技法操作手册）列出 / 读取 / `query` 跨域全文检索，逐条带出处 |
 
 计算工具之外，MCP 面还有 11 个门面工具（`HOROSA_MCP_COMPACT=1` 时只暴露这一层）：
 
@@ -424,7 +424,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 🧰 可调用工具 | 92 / 92 `ok=true` |
-| 🧪 工程测试 | **427 / 427 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 63 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 🧪 工程测试 | **435 / 435 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 63 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 🛡️ 未确认参数时强制追问 | 84 个技法工具触发 `must_ask_user=true` |
 | 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 89 个导出 technique；契约 v14 镜像桌面端 aiExport v56） |
 | 🧾 技法依据卡 | 每个技法响应附 `data.technique_card`；算源声明与运行实测不符时显式亮警 |
@@ -439,7 +439,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 427 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 435 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

@@ -617,3 +617,140 @@ def _read_helpdoc_entry(bundle: dict[str, Any], *, domain: str, category: str, k
             f"（{entry_src.get('file')} @ 星阙 {src.get('upstream_app_version')}）"
         ),
     }
+
+
+# --- 全文检索（v0.30.0）：query 模式 —— 跨 24 域一把搜，命中带出处、可直接回读 -----------------
+
+
+def _flat_strings(value: Any) -> list[str]:
+    """递归收集条目里所有字符串值（tips/blocks/verse… 各域形状不一，搜索只关心文本本体）。"""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [s for v in value.values() for s in _flat_strings(v)]
+    if isinstance(value, list):
+        return [s for v in value for s in _flat_strings(v)]
+    return []
+
+
+def _iter_search_entries():
+    """产出 (domain, category, key, title, body_text, citation)——覆盖全部四种 bundle 形状，
+    且 (domain, category, key) 恒可直接喂回 `knowledge_read` 精读。"""
+    bundles = load_knowledge_bundles()
+    for domain in sorted(bundles):
+        bundle = bundles[domain]
+        if bundle.get("schema") == "horosa.knowledge.helpdoc.v1":
+            src = bundle.get("source") or {}
+            label = bundle.get("label")
+            for cat in bundle.get("categories") or []:
+                for entry in cat.get("entries") or []:
+                    key = f"{entry.get('key')}"
+                    citation = (
+                        f"星阙操作手册 · {label} · {key}"
+                        f"（{src.get('file')} @ 星阙 {src.get('upstream_app_version')}）"
+                    )
+                    yield domain, f"{cat.get('name')}", key, f"{label} · {key}", f"{entry.get('text') or ''}", citation
+            continue
+        if domain == "liureng":
+            for key, entry in (bundle.get("shen_entries") or {}).items():
+                yield (
+                    domain, "shen", key, entry.get("title", key),
+                    "\n".join(_flat_strings(entry)),
+                    f"Xingque hover knowledge · liureng/shen/{key}",
+                )
+            notes = bundle.get("jiang_branch_note") or {}
+            for key, entry in (bundle.get("jiang_info") or {}).items():
+                body = "\n".join(_flat_strings(entry) + _flat_strings(notes.get(key)))
+                yield (
+                    domain, "house", key, f"十二天将 · {key}", body,
+                    f"Xingque hover knowledge · liureng/house/{key}",
+                )
+            continue
+        for category, entries in (bundle.get("categories") or {}).items():
+            if not isinstance(entries, dict):
+                continue
+            for key, entry in entries.items():
+                title = entry.get("title", key) if isinstance(entry, dict) else key
+                yield (
+                    domain, category, f"{key}", f"{title}",
+                    "\n".join(_flat_strings(entry)),
+                    f"Xingque hover knowledge · {domain}/{category}/{key}",
+                )
+
+
+def _search_snippet(body: str, query: str, width: int = 45) -> str:
+    pos = body.find(query)
+    if pos < 0:
+        return " ".join(body[: width * 2].split())
+    start, end = max(0, pos - width), pos + len(query) + width
+    prefix = "…" if start > 0 else ""
+    suffix = "…" if end < len(body) else ""
+    return prefix + " ".join(body[start:end].split()) + suffix
+
+
+def search_knowledge(payload: dict[str, Any]) -> dict[str, Any]:
+    """`knowledge_read` 的 query 模式：跨全部知识域全文检索。
+
+    排序确定性：得分（key 全等 100 > key 含 40 > 标题含 30 > 正文出现次数封顶 10）降序，
+    同分按 (domain, category, key) 字典序——同一 query 永远同一结果，评测可 golden。
+    """
+    query = f"{payload.get('query') or ''}".strip()
+    if not query:
+        raise ToolValidationError(
+            "knowledge search requires a non-empty `query`",
+            code="knowledge.search.empty_query",
+            details={},
+        )
+    domain_filter = f"{payload.get('domain') or ''}".strip() or None
+    if domain_filter and domain_filter not in load_knowledge_bundles():
+        raise ToolValidationError(
+            f"Unknown knowledge domain: {domain_filter}",
+            code="knowledge.unknown_domain",
+            details={"domain": domain_filter},
+        )
+    try:
+        limit = int(payload.get("limit") or 8)
+    except (TypeError, ValueError):
+        limit = 8
+    limit = max(1, min(limit, 20))
+
+    scored: list[tuple[int, str, str, str, dict[str, Any]]] = []
+    scanned = 0
+    for domain, category, key, title, body, citation in _iter_search_entries():
+        if domain_filter and domain != domain_filter:
+            continue
+        scanned += 1
+        score = 0
+        if key == query:
+            score += 100
+        elif query in key:
+            score += 40
+        if query in title:
+            score += 30
+        occurrences = body.count(query)
+        score += min(occurrences, 10)
+        if score <= 0:
+            continue
+        scored.append((
+            score, domain, category, key,
+            {
+                "domain": domain,
+                "category": category,
+                "key": key,
+                "title": title,
+                "score": score,
+                "snippet": _search_snippet(body, query),
+                "citation": citation,
+            },
+        ))
+    scored.sort(key=lambda item: (-item[0], item[1], item[2], item[3]))
+    return {
+        "mode": "search",
+        "query": query,
+        "domain": domain_filter,
+        "limit": limit,
+        "total_scanned": scanned,
+        "total_matched": len(scored),
+        "matches": [row[4] for row in scored[:limit]],
+        "bundle_version": load_knowledge_index().get("bundle_version"),
+    }

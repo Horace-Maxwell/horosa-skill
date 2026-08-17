@@ -1045,9 +1045,13 @@ class KnowledgeRegistryInput(FlexibleModel):
 
 
 class KnowledgeReadInput(FlexibleModel):
-    domain: str
-    category: str
+    # query 模式（v0.30.0）：给 `query` 即跨域全文检索，domain 变可选过滤器、category 不用；
+    # 不给 `query` 走精读老路（domain 必填，category 手册域可缺省首类）。
+    domain: str = ""
+    category: str = ""
     key: str | None = None
+    query: str | None = None
+    limit: int | None = None
     aspect_degree: int | str | None = None
     object_a: str | None = None
     object_b: str | None = None
