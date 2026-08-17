@@ -5,7 +5,7 @@
   "upstream_app_version": "3.9.3",
   "aiexport_settings_version": 56,
   "skill_mirrored_version": 56,
-  "upstream_checked_at_package_version": "0.28.0",
+  "upstream_checked_at_package_version": "0.29.0",
   "upstream_preset_keys": [
     "agepoint",
     "astrochart",
