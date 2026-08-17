@@ -1172,6 +1172,61 @@ def benchmark_run(
     _print_json(report)
 
 
+@app.command(help="合参：一问多技法交叉印证，产出合参模板（分歧必须披露）。Cross-technique synthesis template.")
+def hecan(
+    query: str = typer.Option(..., "--query", help="用户的问题（路由据此选盘，除非显式 --tool）。"),
+    tool: list[str] = typer.Option([], "--tool", help="显式指定技法（可重复），缺省由路由选。"),
+    max_tools: int = typer.Option(5, "--max-tools", help="最多同时起几个技法。"),
+    stdin: bool = typer.Option(False, "--stdin", help="Read birth/subject JSON from stdin."),
+    input_file: Optional[Path] = typer.Option(None, "--input", help="Read birth/subject JSON from a file."),
+) -> None:
+    payload = _load_optional_payload(stdin=stdin, input_file=input_file)
+    payload.update({"query": query, "max_tools": max_tools})
+    if tool:
+        payload["tools"] = list(tool)
+    service = _service()
+    try:
+        result = service.hecan(payload)
+    except ToolValidationError as exc:
+        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
+        raise typer.Exit(code=2)
+    _print_json(result)
+
+
+@benchmark_app.command("faithfulness", help="盘面事实忠实性校验：AI 答案 vs 已存 run 的机读真值（supported/invented/contradicted）。Verify an AI answer against a stored run's computed chart facts.")
+def benchmark_faithfulness(
+    run_id: str = typer.Option(..., "--run-id", help="Stored run whose computed facts are the ground truth."),
+    answer_file: Optional[Path] = typer.Option(None, "--answer-file", help="Read the AI answer text from a file."),
+    answer_text: Optional[str] = typer.Option(None, "--answer-text", help="Short inline AI answer text."),
+    tool: str | None = typer.Option(None, "--tool", help="Optional tool name for multi-tool runs."),
+) -> None:
+    from horosa_skill.benchmark.faithfulness import extract_facts, verify_answer
+
+    if not answer_file and not answer_text:
+        typer.echo(json.dumps({"ok": False, "message": "需要 --answer-file 或 --answer-text"}, ensure_ascii=False), err=True)
+        raise typer.Exit(code=2)
+    if answer_file:
+        try:
+            answer = answer_file.expanduser().read_text(encoding="utf-8")
+        except OSError as exc:
+            raise typer.BadParameter(f"无法读取 --answer-file：{exc}") from exc
+    else:
+        answer = answer_text or ""
+    service = _service()
+    try:
+        run, artifact = service._load_report_source(run_id, tool)  # noqa: SLF001 - 同包 CLI 面复用装载器
+    except ToolValidationError as exc:
+        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc)}, ensure_ascii=False, indent=2), err=True)
+        raise typer.Exit(code=2)
+    facts = extract_facts(artifact.get("payload") or {})
+    report = verify_answer(answer, facts)
+    report["run_id"] = run_id
+    report["tool"] = artifact.get("tool_name")
+    _print_json(report)
+    if not report["ok"]:
+        raise typer.Exit(code=1)
+
+
 @trace_app.command("latest")
 def trace_latest(
     limit: int = typer.Option(30, help="How many recent trace rows to print from the newest local trace file."),

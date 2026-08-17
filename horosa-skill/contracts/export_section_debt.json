@@ -2,7 +2,7 @@
   "_comment": "上游 preset 段级欠账基线（棘轮：只减不增）。回填后跑 --update-baseline 收紧。",
   "source": {
     "kind": "upstream",
-    "aiexport_settings_version": 55
+    "aiexport_settings_version": 56
   },
   "totals": {
     "missing_sections": 11,

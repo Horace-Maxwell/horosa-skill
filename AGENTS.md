@@ -85,6 +85,9 @@ you, it will bite the next agent：
 - **每次给出结论后附技法尾注**：把 `data.technique_card`（技法/口径/算源/段落健康度/版本链）原样转述，
   不得改写或省略口径行；`matches_declaration: false` 必须明说。要文件调 `horosa_technique_report`
   （`run_id` 单次 / `group_id` 整场，后者另检出跨技法口径冲突）。它与咨询报告是两种文档，不混。
+- **引教义必带出处**（v0.28.0）：口径/流派/方法论先 `knowledge_read`（24 域，逐条 citation 落到
+  上游组件文件），没有的按通则推理并明说无出处；多技法互证走 `horosa_hecan`——它产**模板**不产
+  终稿，分歧必须披露不许平均（铁律在模板 instructions 里，不靠自觉）。
 
 ## 4. 计算模型铁律（compute model）
 
@@ -155,6 +158,11 @@ you, it will bite the next agent：
 `_require_ken_pan`（反之亦然）；算盘端点必须已在 `_PYTHON_CHART_ENDPOINTS`。
 **运行期实测优先于声明**：`data.technique_card` 以 `pan.source` / `jinkou.source` / `compute_sources`
 为准，与声明不符时标 `matches_declaration: false`——ken 端点失败也回 200，静默回退正是这个形状。
+
+**知识包（v0.28.0）**：方法论手册域由 `scripts/gen_knowledge_packs.py` 从上游 HelpDoc 收割
+（21 域/177 条，逐条带出处；幂等 = generated_at 取上游 commit 时间）；store 按 schema
+`horosa.knowledge.helpdoc.v1` 自动发现，**新增域零代码**。上游改 HelpDoc 后重跑生成器即同步；
+hover 三域（astro/liureng/qimen）保持专用渲染分支不动。
 
 **同步守卫三层（缺一层就会静默漂）**：① `verify_upstream_sync.py` = vendored ↔ **上游 HEAD**
 （版本恒等 + 哨兵 sha256 + core-js 逐文件；无上游树时 skipped 而非绿，release 链用 `--require-upstream`）；

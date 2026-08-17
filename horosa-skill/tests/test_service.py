@@ -39,6 +39,9 @@ class FakeClient(HorosaApiClient):
             # runner 会退回按分钟截断的 start，恰落征象边界外侧 —— 桩里必须有。
             if str(payload.get("startDate", "")).startswith("1999"):
                 return {"err": "span_too_large", "detail": "span 400.0d exceeds 93d; split the request"}
+            # 零命中窗（1997 起点）：合法响应但 intervals 空 —— 供「零命中仍出段/选中时刻星盘不产」用例。
+            if str(payload.get("startDate", "")).startswith("1997"):
+                return {"intervals": [], "truncated": False, "stats": {"evalPoints": 7, "spanDays": 3.0}}
             return {
                 "intervals": [{
                     "start": "2028-04-01 00:00", "end": "2028-04-19 21:09",
@@ -169,7 +172,14 @@ class FakeClient(HorosaApiClient):
                     },
                 ],
             },
-            "bazi": {"fourColumns": {"year": {"ganzi": "甲子"}}},
+            # fourColumns 附带 v3.9.2 合冲字段（four.ganHe/ziHe6/ziXing…，后端真值同构：
+            # {关系名: [{cell,zhu}…]}）——[干支合冲] 是纯排版段，桩必须给真内容（§5 规则 6）。
+            "bazi": {"fourColumns": {
+                "year": {"ganzi": "甲子"},
+                "ganHe": {"甲己合土": [{"cell": "甲", "zhu": "年干"}, {"cell": "己", "zhu": "时干"}]},
+                "ziCong": {"子午冲": [{"cell": "子", "zhu": "年支"}, {"cell": "午", "zhu": "日支"}]},
+                "ziXing": {"子卯刑": [{"cell": "子", "zhu": "年支"}, {"cell": "卯", "zhu": "月支"}]},
+            }},
             "liureng": {"ke": ["一课"], "overview": ["概览"]},
             "nongli": {"bazi": {"guolaoGods": {"ziGods": {"子": {"allGods": ["青龙"], "taisuiGods": ["岁驾"]}}}}},
         }
@@ -1377,7 +1387,11 @@ def test_knowledge_registry_and_read_are_queryable_and_persisted(tmp_path) -> No
 
 def test_knowledge_registry_bundle_has_expected_domains() -> None:
     registry = build_knowledge_registry()
-    assert [item["domain"] for item in registry["domains"]] == ["astro", "liureng", "qimen"]
+    # v0.28.0：3 个 hover 域之外新增 21 个方法论手册域（helpdocs 自动发现）——断超集不断全集，
+    # 手册域自己的契约在 tests/test_knowledge_helpdocs.py。
+    domains = [item["domain"] for item in registry["domains"]]
+    assert {"astro", "liureng", "qimen"} <= set(domains)
+    assert len(domains) >= 24
 
 
 def test_phase2_tools_attach_export_contracts(tmp_path) -> None:
@@ -3854,7 +3868,7 @@ def test_technique_card_rides_every_technique_response_and_survives_response_vie
     assert card["schema"] == "horosa.skill.technique_card.v1"
     assert card["tool"] == "tarot"
     assert card["technique"]["key"] == "tarot"
-    assert card["versions"]["skill"] and card["versions"]["export_settings"] == 13
+    assert card["versions"]["skill"] and card["versions"]["export_settings"] == 14
     assert card["refs"]["run_id"] == result.memory_ref.run_id
 
     slim = service.run_tool("tarot", {**payload, "response_view": "titles"}, save_result=False)
@@ -3903,3 +3917,105 @@ def test_technique_report_rejects_an_unknown_format(tmp_path) -> None:
     with pytest.raises(ToolValidationError) as excinfo:
         service.technique_report({"format": "html"})
     assert excinfo.value.code == "report.technique.invalid_format"
+
+
+# --- v0.28.0（上游 v3.9.2）：干支合冲 / 选中时刻星盘 ---------------------------------------------
+
+
+def test_bazi_hechong_lines_mirror_the_upstream_relline_format() -> None:
+    """[干支合冲] 行格式金标——逐字镜像上游 BaZi.js relLine：`{cell}（{zhu}） …→{key}`，分号连接，
+    全空不产段。字段来自后端 fourColumns（纯排版，零新计算）。"""
+    from horosa_skill.service import _build_bazi_hechong_lines
+
+    four = {
+        "ganHe": {"甲己合土": [{"cell": "甲", "zhu": "年干"}, {"cell": "己", "zhu": "时干"}]},
+        "ziCong": {"子午冲": [{"cell": "子", "zhu": "年支"}, {"cell": "午", "zhu": "日支"}]},
+        "ziXing": {},
+    }
+    lines = _build_bazi_hechong_lines(four)
+    assert lines == [
+        "干合：甲（年干） 己（时干）→甲己合土",
+        "支冲：子（年支） 午（日支）→子午冲",
+    ]
+    assert _build_bazi_hechong_lines({}) == [], "全空不产段（上游 heCongLines.length 同判）"
+
+
+def test_bazi_snapshot_carries_hechong_between_fenye_and_dayun(tmp_path) -> None:
+    service = _service(tmp_path)
+    result = service.run_tool("bazi_birth", build_sample_payloads()["bazi_birth"], save_result=False)
+    assert result.ok is True
+    titles = [s["title"] for s in result.data["export_snapshot"]["sections"]]
+    assert "干支合冲" in titles
+    body = next(s["body"] for s in result.data["export_snapshot"]["sections"] if s["title"] == "干支合冲")
+    assert "干合：甲（年干） 己（时干）→甲己合土" in body
+
+
+def test_tianxing_selected_moment_chart_is_conditional_on_hits(tmp_path) -> None:
+    """[选中时刻星盘]（v3.9.2）：有命中→补铸 /chart 并入（headerless 子段头 `· X`）；零命中→不产段
+    且不误报 missing（条件段双登记）。"""
+    service = _service(tmp_path)
+    payload = build_sample_payloads()["tianxing"]
+    hit = service.run_tool("tianxing", payload, save_result=False)
+    assert hit.ok is True
+    export = hit.data["export_snapshot"]
+    assert "选中时刻星盘" in export["section_titles_detected"]
+    body = next(s["body"] for s in export["sections"] if s["title"] == "选中时刻星盘")
+    assert body.startswith("选中命中：")
+    assert "· 起盘信息" in body, "整张盘 headerless 并入：子段头必须已转 `· X`，防被顶层拆段"
+    assert "\n[" not in f"\n{body}", "段内不得残留顶层段头"
+
+    # 零命中窗口（FakeClient 对 1999 起点回空 intervals）→ 段自然缺席、契约仍干净。
+    miss = service.run_tool(
+        "tianxing", {**payload, "startDate": "1997-01-02", "endDate": "1997-01-05"}, save_result=False
+    )
+    assert miss.ok is True
+    miss_export = miss.data["export_snapshot"]
+    assert "选中时刻星盘" not in miss_export["section_titles_detected"]
+    assert miss_export["missing_selected_sections"] == []
+
+
+# --- v0.28.0 B3：合参 horosa_hecan --------------------------------------------------------------
+
+
+def test_hecan_routes_and_returns_a_synthesis_template(tmp_path) -> None:
+    """合参 = 模板不是终稿：逐技法证据表 + 口径一致性 + ai_fillable 综合槽，分歧披露写进 instructions。"""
+    service = _service(tmp_path)
+    result = service.hecan({
+        "query": "综合奇门和六壬分析当前事业局势",
+        "birth": build_sample_payloads()["qimen"],
+        "save_result": True,
+    })
+    assert result["ok"] is True
+    assert result["schema"] == "horosa.skill.hecan.v1"
+    assert set(result["selected_tools"]) == {"qimen", "liureng_gods"}
+    rows = result["synthesis_contract"]["ai_fillable"]["cross_validation"]
+    assert [r["tool"] for r in rows] == result["selected_tools"]
+    assert all(r["conclusion"] == "" for r in rows), "结论槽必须留白给 AI——预填即伪造"
+    instructions = "\n".join(result["synthesis_contract"]["instructions"])
+    assert "分歧" in instructions and "不许平均" in instructions
+    assert "只准引用" in instructions or "不许引用未导出" in instructions
+    # 证据是指针不是全文（memory_show 取全量），响应不背 N 份快照。
+    for tech in result["techniques"]:
+        assert tech["evidence_pointer"]["read_with"] == "horosa_memory_show"
+        assert "export_snapshot" not in tech
+    assert result["consistency"]["setting_conflicts"] == []
+
+
+def test_hecan_accepts_explicit_tools_and_caps_them(tmp_path) -> None:
+    service = _service(tmp_path)
+    result = service.hecan({
+        "query": "全面看这个人",
+        "tools": ["bazi_birth", "ziwei_birth", "liureng_gods", "qimen", "taiyi", "jinkou", "sixyao"],
+        "max_tools": 3,
+        "birth": build_sample_payloads()["bazi_birth"],
+        "save_result": False,
+    })
+    assert result["ok"] is True
+    assert result["selected_tools"] == ["bazi_birth", "ziwei_birth", "liureng_gods"], "上限必须截断"
+
+
+def test_hecan_routing_failure_passes_through_recovery(tmp_path) -> None:
+    service = _service(tmp_path)
+    result = service.hecan({"query": "呵呵", "save_result": False})
+    assert result["ok"] is False
+    assert result["code"], "路由失败必须透出结构化错误，不包一层假成功"

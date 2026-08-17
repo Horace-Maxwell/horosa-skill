@@ -29,6 +29,18 @@
 uv run horosa-skill report technique --group-id <group_id> --format markdown
 ```
 
+## 合参（多技法交叉印证，v0.28.0）
+
+一问需要多技法互证时用 `horosa_hecan`（`query` + 出生数据，可显式 `tools`，上限 `max_tools`）。
+它返回**合参模板**，不是终稿：
+
+1. 逐技法读全量段落（`horosa_memory_show(run_id)`——响应里只有证据指针，不背全文）。
+2. 填 `synthesis_contract.ai_fillable`：每技法一条结论（必须绑定该技法真实段落）、
+   `convergence`（仅多技法独立同判）、`divergence`（**逐条披露，不许平均、不许只挑一边**）、
+   `final_answer`（先直答，再依据与边界）。
+3. `consistency.setting_conflicts` 非空时先声明口径冲突（例如两技法晚子时开关不同 = 结论不可互证）。
+4. 要文件：`horosa_technique_report --group-id` 出方法报告；解读终稿走 `horosa_report_render`。
+
 ## Structured report flow (MCP)
 
 1. Call the calculation tool.

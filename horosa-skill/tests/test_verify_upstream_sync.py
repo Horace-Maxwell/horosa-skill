@@ -275,3 +275,14 @@ def test_preflight_uses_the_flag_combination_this_guard_supports() -> None:
     assert '"--require-upstream", "--write-state"' in preflight, (
         "preflight 的跨树闸必须同时带这两个参数：前者让它做真，后者留下 git 可见的核对证据"
     )
+
+
+def test_skill_only_key_demoted_upstream_is_a_notice_not_a_retirement(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """v3.9.2 实况：上游把 `generic` 从 preset 键降为运行时兜底 context。它在 skill 侧本就是
+    DIVERGENCE_WHITELIST 里的 skill-only 键——上游撤它不构成任何镜像内容的 retirement。
+    不减这层时 lost 检查会自锁：红 → --write-state 拒写 → recorded 永含旧键 → 永远红。"""
+    source = _SCRIPT.read_text(encoding="utf-8")
+    assert "_skill_only_keys()" in source and "whitelisted_lost" in source
+    assert "generic" in guard._skill_only_keys(), "generic 必须在 skill-only 集里（mirror 白名单单源）"

@@ -1020,6 +1020,14 @@ class DispatchInput(FlexibleModel):
     save_result: bool = True
 
 
+class HecanInput(DispatchInput):
+    # 合参（v0.28.0）：一问多技法交叉印证。入参 = dispatch 全形（query + birth/subject + 确认字段），
+    # 另加 tools 显式指定技法（缺省由路由选盘）与 max_tools 上限。产出不是终稿而是**合参模板**
+    # （ai_fillable：各技法结论槽 + 相互印证/分歧槽），分歧必须披露、不许平均——AI 填完即合参报告。
+    tools: list[str] | None = None
+    max_tools: int | None = 5
+
+
 class ExportRegistryInput(FlexibleModel):
     technique: str | None = None
 

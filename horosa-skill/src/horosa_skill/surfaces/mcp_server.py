@@ -30,6 +30,7 @@ from horosa_skill.schemas.common import DispatchEnvelope, ToolEnvelope
 from horosa_skill.schemas.tools import (
     AgentGuidanceInput,
     DispatchInput,
+    HecanInput,
     MemoryAnswerInput,
     MemoryQueryInput,
     MemoryShowInput,
@@ -135,8 +136,8 @@ _SERVER_INSTRUCTIONS = """Horosa (星阙) — local-first 术数/占星 computat
 machine (offline); nothing is sent to a remote service.
 
 WHEN TO REACH FOR THIS SERVER
-Any request to 起盘 / 排盘 / 起课 / 起卦 / 算命 / 看运势 / 合盘 / 择日 / 卜卦, or to explain, store, or
-report on such a chart — in any language. Also 农历/节气/黄历 conversions and celebrity birth data.
+Any request to 起盘 / 排盘 / 起课 / 起卦 / 算命 / 看运势 / 合盘 / 择日 / 卜卦, or to explain, store,
+or report such a chart. Also 农历/节气/黄历 conversion and celebrity birth data.
 
 WHAT IT COVERS (92 tools)
 · Western astrology: natal + derived charts, 20+ predictive systems (returns, progressions, primary
@@ -146,18 +147,19 @@ WHAT IT COVERS (92 tools)
 · 神数 family (14 engines) + 神数正传 (5 schools), 天文地占, tarot.
 
 HOW TO USE IT
-1. Unsure which tool? Call horosa_agent_guidance (or horosa_dispatch with the raw request).
+1. Unsure? horosa_agent_guidance / horosa_dispatch. horosa_hecan runs several techniques on one
+   question → cross-validation template (divergence disclosed, never averaged).
 2. A tool REFUSES (agent_guidance.required) when a result-changing setting is missing — time, place,
    timezone, gender, 流派/宫制/起局方式. Ask via details.agent_recovery.prompt_to_user, then retry with
    agent_confirmed_settings=true (or defaults_accepted=true). Never self-confirm.
 3. Explain ONLY from the returned export_snapshot.export_text sections — never hand-calculate, and
    never read a missing section as a missing dependency.
-4. Every result carries data.technique_card (technique, settings in force, which engine computed it)
-   — quote it after your answer; horosa_technique_report renders it for a run or a whole session.
-5. Calls are stored: horosa_memory_query finds past runs; horosa_report_render writes a DOCX/PDF
-   consulting report from your ai_report.
+4. Every result carries data.technique_card (technique, settings, computing engine) — quote it
+   after your answer; horosa_technique_report renders it per run or session.
+5. Runs are stored: horosa_memory_query finds them; horosa_report_render writes DOCX/PDF from
+   your ai_report.
 
-Set HOROSA_MCP_COMPACT=1 to expose 10 facade tools instead of 92 (horosa_tool_run reaches every
+Set HOROSA_MCP_COMPACT=1 to expose 11 facade tools instead of 92 (horosa_tool_run reaches every
 technique by name); HOROSA_TOOLSETS=astro,cn limits which technique groups are exposed."""
 
 
@@ -733,6 +735,29 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
         title="渲染报告 / render report",
         annotations=_ANN_RENDER,
     )(horosa_report_render)
+
+    def horosa_hecan(**kwargs: Any) -> dict[str, Any]:
+        try:
+            return service.hecan(_normalize_mcp_request(_merge_mcp_arguments(kwargs), HecanInput))
+        except ToolValidationError as exc:
+            return _mcp_error_payload(exc)
+        except Exception as exc:  # noqa: BLE001 - orchestration must never break the MCP session
+            return _mcp_internal_error_payload(exc)
+    horosa_hecan.__doc__ = (
+        "合参 / cross-technique synthesis: run SEVERAL techniques on one question (router-selected or "
+        "explicit `tools`, capped by max_tools) under one group, then return a synthesis TEMPLATE — "
+        "per-technique evidence tables, cross-technique setting-consistency verdicts, and ai_fillable "
+        "slots (per-technique conclusion / convergence / divergence / final answer). Fill it from the "
+        "real exported sections; divergence must be disclosed, never averaged. This returns a template, "
+        "not a finished reading."
+    )
+    horosa_hecan.__signature__ = _signature_for_input_model(HecanInput)
+    horosa_hecan.__annotations__ = {"return": dict[str, Any]}
+    mcp.tool(
+        name="horosa_hecan",
+        title="合参 / cross-technique synthesis",
+        annotations=_ANN_CALC,
+    )(horosa_hecan)
 
     def horosa_technique_report(**kwargs: Any) -> dict[str, Any]:
         try:

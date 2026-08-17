@@ -105,6 +105,8 @@ export function buildBabylonSnapshotText(bab, opts){
 	const o = opts || {};
 	const lines = [];
 	lines.push('[起盘信息]');
+	// [V6-W2] 兜底串锚:'现代实位·A 规范' 必须与 babylonSchools swissA10(默认档).cn 逐字一致
+	// (挂载有齿轮时上游已传 schemeCn=真实档名;无齿轮=默认档,此兜底即默认档名的事实标注)。
 	lines.push(`技法:巴比伦占星(美索不达米亚天象体系);坐标:恒星黄道 · 毕宿锚(Aldebaran=金牛15°);派系:${o.schemeCn || '现代实位·A 规范'};分至规范:${o.solstice === 'B8' ? '春分白羊 8°' : '春分白羊 10°'}。`);
 	lines.push(`出生历日(算术历):${bab.babylonianDateText};19 年周期第 ${bab.babylonianDate.cycleYear} 年;该月${bab.monthLen === 30 ? '满(30 日)' : '缺(29 日)'}。算术历与逐月观测实历可差 ±1–2 日。`);
 	lines.push('本体系无十二宫位、无相位、无上升点——星盘为数据清单,解读装置为「位」(三分+日段)与行星神性吉凶。');

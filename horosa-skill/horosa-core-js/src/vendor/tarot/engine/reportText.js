@@ -37,7 +37,13 @@ export function buildReadingText(reading, question){
 	// TP1 单张逆位占卜:计数诊断入综览(与右栏总览同源)。
 	if(reading.firstReversal){
 		if(reading.firstReversal.error){ lines.push(`单张逆位占卜:${reading.firstReversal.error}`); }
-		else{ lines.push(`单张逆位占卜:翻至第${reading.firstReversal.count}张现逆位(${reading.firstReversal.level})——${reading.firstReversal.note}`); }
+		else{
+			lines.push(`单张逆位占卜:翻至第${reading.firstReversal.count}张现逆位(${reading.firstReversal.level})——${reading.firstReversal.note}`);
+			// [审计修] 自问句(右栏「可就此牌自问」渲染有快照无)。
+			if(Array.isArray(reading.firstReversal.questions) && reading.firstReversal.questions.length){
+				lines.push(`　可就此牌自问:${reading.firstReversal.questions.join('；')}`);
+			}
+		}
 	}
 	// TP2 牌底牌(基调,开关开启时)。
 	if(reading.bottomCard && reading.bottomCard.card){
@@ -48,14 +54,18 @@ export function buildReadingText(reading, question){
 		lines.push(`切牌(心态):${displayName(reading.cutCard.card, deck)}(${orientationLabel(reading.cutCard.isReversed)})——问卜者对此问的底层心态`);
 	}
 	lines.push('[逐牌详解]');
-	lines.push('| 位置 | 牌 | 正逆 | 占象 | 关键词 | 尊位 |');
-	lines.push('| --- | --- | --- | --- | --- | --- |');
+	// [审计修] 补「位义」列(牌阵位含义 position.meaning+宫位元素相合注 slotElement——解读骨架,
+	// 「牌位」tab 渲染有快照曾无;缺省 —)。
+	lines.push('| 位置 | 位义 | 牌 | 正逆 | 占象 | 关键词 | 尊位 |');
+	lines.push('| --- | --- | --- | --- | --- | --- | --- |');
 	reading.draws.forEach((d) => {
 		const card = d.card;
 		if(!card){ return; }
 		const dig = d.dignity ? `${d.dignity.strength}(${d.dignity.notes})` : '—';
 		const orient = d.crossed ? '横置' : orientationLabel(d.isReversed);
-		lines.push(`| 位置${d.position.i}(${d.position.label}) | ${displayName(card, deck)} | ${orient} | ${astroLine(card, deck, eff.variant, eff.astroModern, { elementSystem: eff.courtElementSystem, zodiacSystem: eff.courtZodiacSystem })} | ${meaningOf(card, d.isReversed, eff.meaningSystem, eff.reversalMode)} | ${dig} |`);
+		const posMeaning = [d.position && d.position.meaning ? d.position.meaning : '', d.position && d.position.slotElement ? `元素${d.position.slotElement}` : '']
+			.filter(Boolean).join('·') || '—';
+		lines.push(`| 位置${d.position.i}(${d.position.label}) | ${posMeaning} | ${displayName(card, deck)} | ${orient} | ${astroLine(card, deck, eff.variant, eff.astroModern, { elementSystem: eff.courtElementSystem, zodiacSystem: eff.courtZodiacSystem })} | ${meaningOf(card, d.isReversed, eff.meaningSystem, eff.reversalMode)} | ${dig} |`);
 	});
 	// TP4 大牌加盖(表后逐条,与右栏牌义页同源)。
 	reading.draws.forEach((d) => {

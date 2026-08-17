@@ -41,6 +41,8 @@ from horosa_skill.knowledge import build_knowledge_registry, read_knowledge_entr
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.reports import ReportBuilder, render_report
 from horosa_skill.reports.technique_card import build_technique_card, build_technique_report
+
+HECAN_SCHEMA = "horosa.skill.hecan.v1"
 from horosa_skill.runtime import HorosaRuntimeManager
 from horosa_skill.schemas.common import (
     TOOL_ENVELOPE_SCHEMA_VERSION,
@@ -55,6 +57,7 @@ from horosa_skill.schemas.tools import (
     MemoryShowInput,
     ReportFromToolInput,
     ReportRenderInput,
+    HecanInput,
     ReportTemplateInput,
     TechniqueReportInput,
 )
@@ -3138,6 +3141,15 @@ def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
     classical = _build_classical_section(response)
     if classical:
         rendered.append(("古典", "\n".join(classical).strip()))
+    # v3.9.2 古典衍化四段（派生宫转宫/气候带/显赫计分/世界范式盘）：vendored astroClassicalDerived
+    # 单源计算，上游 opt-in（仅本命 astro 快照路径）→ 只在 `_classicalDerived` 已挂载（= chart 工具）
+    # 时出段；段序按上游 v56 preset 插在 古典 与 古典格局 之间。
+    derived = response.get("_classicalDerived") if isinstance(response.get("_classicalDerived"), dict) else None
+    if derived:
+        for title in ("古典·派生宫转宫", "古典·气候带", "古典·显赫计分", "古典·世界范式盘"):
+            body = derived.get(title)
+            if body and f"{body}".strip():
+                rendered.append((title, f"{body}".strip()))
     classical_analysis = _build_classical_analysis_section(response.get("_classicalAnalysis") or {})
     # 格局速览 (龙脉/孤月独明/先验权力/…) 仅随 [古典格局] 段一并出 —— 即仅 _classicalAnalysis 已挂载的
     # chart 家族(astrochart/astrochart_like)；india/mundane 等无 [古典格局] preset 的盘不挂，避免 unknown 段。
@@ -3175,6 +3187,13 @@ def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
             body = "\n".join(str(line) for line in lines).strip() if isinstance(lines, list) else f"{lines}".strip()
             if body:
                 rendered.append((str(title), body))
+    # 派生盘专属段（v3.9.2「快照重定源」）：[龙盘]/[调波盘]/[重置盘]，由各 runner 按上游 AuxLab
+    # builder 逐字排出并挂 `_derivedSelf`；段序按上游 v56 preset 居末。空 lines 不产段（上游同形）。
+    derived_self = response.get("_derivedSelf")
+    if isinstance(derived_self, dict) and derived_self.get("title") and derived_self.get("lines"):
+        body = "\n".join(str(line) for line in derived_self["lines"]).strip()
+        if body:
+            rendered.append((str(derived_self["title"]), body))
     return _render_snapshot_text(rendered)
 
 
@@ -4704,6 +4723,69 @@ def _collect_god_names(node: Any) -> list[str]:
     return values
 
 
+def _derived_position_lines(positions: Any, label: str) -> list[str]:
+    """派生盘位置行——镜像 AuxLab：`{id}：本命黄经 X° → {label} {sign}{signlon}°`。"""
+    out: list[str] = []
+    for row in positions if isinstance(positions, list) else []:
+        if not isinstance(row, dict) or not row.get("id"):
+            continue
+        natal = f"{float(row['natalLon']):.2f}" if row.get("natalLon") is not None else "—"
+        signlon = f"{float(row['signlon']):.2f}°" if row.get("signlon") is not None else ""
+        out.append(f"{row['id']}：本命黄经 {natal}° → {label} {row.get('sign') or ''}{signlon}")
+    return out
+
+
+def _derived_conjunction_lines(conjunctions: Any) -> list[str]:
+    out: list[str] = []
+    for c in conjunctions if isinstance(conjunctions, list) else []:
+        if isinstance(c, dict) and c.get("a") and c.get("b"):
+            orb = f"{float(c['orb']):.3f}" if c.get("orb") is not None else "—"
+            out.append(f"同频：{c['a']} 合 {c['b']}（误差 {orb}）")
+    return out
+
+
+def _chart_angles(chart_shaped: Any) -> dict[str, dict[str, Any]]:
+    """四角（Asc/MC/Desc/IC）——镜像 AstroRelocationLab.anglesOf：读 chart.objects 按 id 过滤。"""
+    chart = chart_shaped.get("chart") if isinstance(chart_shaped, dict) else None
+    objects = chart.get("objects") if isinstance(chart, dict) else None
+    out: dict[str, dict[str, Any]] = {}
+    for obj in objects if isinstance(objects, list) else []:
+        if isinstance(obj, dict) and obj.get("id") in ("Asc", "MC", "Desc", "IC"):
+            out[obj["id"]] = obj
+    return out
+
+
+def _angle_text(obj: dict[str, Any] | None) -> str:
+    if not isinstance(obj, dict):
+        return "—"
+    signlon = f"{float(obj['signlon']):.2f}°" if obj.get("signlon") is not None else ""
+    return f"{obj.get('sign') or ''}{signlon}" or "—"
+
+
+def _build_bazi_hechong_lines(four: dict[str, Any]) -> list[str]:
+    """[干支合冲] 行——镜像上游 BaZi.js relLine：`{label}：{cell}（{zhu}） …→{key}；…`，全空回 []。"""
+    def rel_line(label: str, rec: Any) -> str:
+        parts: list[str] = []
+        if isinstance(rec, dict):
+            for key, ary in rec.items():
+                if isinstance(ary, list) and ary:
+                    cells = " ".join(
+                        f"{(item or {}).get('cell', '')}（{(item or {}).get('zhu', '')}）"
+                        for item in ary
+                        if isinstance(item, dict)
+                    )
+                    parts.append(f"{cells}→{key}")
+        return f"{label}：{'；'.join(parts)}" if parts else ""
+
+    pairs = [
+        ("干合", four.get("ganHe")), ("干冲", four.get("ganCong")),
+        ("支合", four.get("ziHe6")), ("支拱", four.get("ziHe3")), ("支会", four.get("ziHui")),
+        ("支刑", four.get("ziXing")), ("支冲", four.get("ziCong")), ("支穿", four.get("ziCuan")),
+        ("支破", four.get("ziPo")),
+    ]
+    return [line for line in (rel_line(label, rec) for label, rec in pairs) if line]
+
+
 def _build_bazi_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
     bazi = response.get("bazi", response if isinstance(response, dict) else {})
     four = bazi.get("fourColumns", {}) if isinstance(bazi, dict) else {}
@@ -4783,6 +4865,12 @@ def _build_bazi_snapshot_text(payload: dict[str, Any], response: dict[str, Any])
         geju_body = "\n".join(blk_lines[1:]).strip()
         if geju_title and geju_body:
             sections.append((geju_title, geju_body))
+    # [干支合冲]（上游 v3.9.2）：legacy 天干/地支两 tab 的刑冲合害全表——**后端已带字段的纯排版**
+    # （four.ganHe/ganCong + ziHe6/ziHe3/ziHui/ziXing/ziCong/ziCuan/ziPo），行格式逐字镜像
+    # BaZi.js:496-514 的 relLine（`cell（zhu） … →key`；全空不产段）。段序按上游 v56：分野 之后、大运 之前。
+    hechong_lines = _build_bazi_hechong_lines(four)
+    if hechong_lines:
+        sections.append(("干支合冲", _join_lines(hechong_lines)))
     if dayun_lines:
         sections.append(("大运", _join_lines(dayun_lines)))
     sections.append(
@@ -4885,26 +4973,62 @@ def _build_ziwei_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
             head = f"{pname}（{cat}）{broke}" if cat else f"{pname}{broke}"
             pattern_lines.append(f"{head}：{duan}" if duan else head)
 
-    # [来因宫]：与生年天干同干的宫（上游 ZiWeiMain.js:418-428 —— houses 按 ganzi 首字过滤年干，
-    # 排版 `宫名（干支）`、顿号连接）。纯查表，响应里 chart.yearGan 与 houses[].ganzi 都现成。
+    # [来因宫]：与生年天干同干的宫。v3.9.2 起口径收紧为 isLaiyinPalace 单源
+    # （ziweiSchools.js:127-131：首字 == 年干 **且** 地支非子非丑——子丑是借干宫，排除），
+    # 排版 `宫名（干支）`、顿号连接。纯查表，响应里 chart.yearGan 与 houses[].ganzi 都现成。
     year_gan = f"{chart.get('yearGan') or ''}".strip() if isinstance(chart, dict) else ""
     laiyin_lines: list[str] = []
     if year_gan and isinstance(houses, list):
         hits = [
             f"{h.get('name') or ''}（{h.get('ganzi')}）"
             for h in houses
-            if isinstance(h, dict) and f"{h.get('ganzi') or ''}".startswith(year_gan)
+            if isinstance(h, dict)
+            and f"{h.get('ganzi') or ''}".startswith(year_gan)
+            and f"{h.get('ganzi') or ''}"[1:2] not in ("子", "丑")
         ]
         if hits:
             laiyin_lines.append("、".join(hits))
 
+    # [身宫]（v3.9.2）：判据钉死引擎输出 house.isBody（本地/后端两引擎皆保证；bodyHouseIndex 仅本地
+    # 引擎有故禁走旁路——上游 ZiWeiMain.js:477 原话）。找不到整段不产（best-effort，与来因宫同范式）。
+    body_lines: list[str] = []
+    if isinstance(houses, list):
+        body_house = next((h for h in houses if isinstance(h, dict) and h.get("isBody")), None)
+        if body_house and body_house.get("name"):
+            ganzi = body_house.get("ganzi")
+            body_lines.append(f"身宫落{body_house['name']}{f'（{ganzi}）' if ganzi else ''}")
+
+    # [八字大运]（v3.9.2）：盘心十列（起运虚岁+大运干支+起始年）。数据与盘心/info 面板同源
+    # chart.bazi.direct.direction，缺省（本地引擎无 direct）整段不产。GFM 表镜像 ZiWeiMain.js:498-508。
+    bz_dayun_lines: list[str] = []
+    bazi_node = chart.get("bazi") if isinstance(chart, dict) else None
+    direct = bazi_node.get("direct") if isinstance(bazi_node, dict) else None
+    direction = direct.get("direction") if isinstance(direct, dict) else None
+    if isinstance(direction, list) and direction:
+        rows = []
+        for item in direction:
+            if not isinstance(item, dict):
+                continue
+            main_direct = item.get("mainDirect") if isinstance(item.get("mainDirect"), dict) else {}
+            gz = main_direct.get("ganzi")
+            if not gz:
+                continue
+            rows.append(f"| {(item.get('age') or 0) + 1} | {item.get('startYear') or '无'} | {gz} |")
+        if rows:
+            bz_dayun_lines = ["| 起运虚岁 | 起始年份 | 大运干支 |", "| --- | --- | --- |", *rows]
+
+    # 段序逐字镜像上游 v56 preset：起盘信息, 宫位总览, 身宫, 来因宫, 八字大运, 命中格局, (运限, 流派叠层)。
     blocks = [
         ("起盘信息", _join_lines(lines)),
         ("宫位总览", _join_lines(overview) or "无"),
-        ("命中格局", _join_lines(pattern_lines) or "无"),
     ]
+    if body_lines:
+        blocks.append(("身宫", _join_lines(body_lines)))
     if laiyin_lines:
         blocks.append(("来因宫", _join_lines(laiyin_lines)))
+    if bz_dayun_lines:
+        blocks.append(("八字大运", _join_lines(bz_dayun_lines)))
+    blocks.append(("命中格局", _join_lines(pattern_lines) or "无"))
     text = _render_snapshot_text(blocks)
     # [运限] / [流派叠层]：由 vendored builder 出（自带段头），仅在调用方给了 period / schools 时产。
     extras = response.get("_ziweiExtras")
@@ -5160,14 +5284,32 @@ def _build_calendar_month_snapshot_text(payload: dict[str, Any], response: dict[
     # 子模块段块（老黄历 8 段 / 通书择日 / 日子馆 2 段）按上游段序插在 [选中日详情] 与 [方法说明] 之间。
     # 文本已由 vendored builder 带好各自的 `[段名]` 段头，故不进 sections 列表（那会被再包一层段头），
     # 而是在渲染完成后按 [方法说明] 的位置整块拼进去。
+    #
+    # v3.9.2 [E-6] 聚合导出**子源标签**：整行 `【农历】/【老黄历】/【通书择日】/【日子馆】` 是来源分界
+    # 而非内容段（上游 CALENDAR_SUB_SOURCE_LABELS + extractCalendarContent：每个子模块文本前冠一行标签，
+    # 经 parseSectionTitleLine 归一为段名）。skill 同形：农历标签置顶（NongLi 主 tab 内容之前）；
+    # 老黄历/通书择日/日子馆标签由 calendar_extras 的分块边界插入。标签必须进 preset，
+    # 否则用户自定义段时标签行会被过滤删掉、同名段无法分辨来源（上游原话）。
+    text = f"【农历】\n{text}"
     extras = response.get("_calendarExtras")
     if isinstance(extras, str) and extras.strip():
+        block = extras.strip()
+        # 老黄历块以 [今日宜忌] 起、通书块以 [通书择日] 起、日子馆块以 [日子馆·个性化择日] 起——
+        # 在各自块首插入子源标签行（缺块则该标签自然不出，与上游「未挂载子 tab 被跳过」同形）。
+        for marker, label in (
+            ("[今日宜忌]", "【老黄历】"),
+            ("[通书择日]", "【通书择日】"),
+            ("[日子馆·个性化择日]", "【日子馆】"),
+        ):
+            at = block.find(marker)
+            if at >= 0:
+                block = f"{block[:at]}{label}\n{block[at:]}"
         marker = "[方法说明]"
         at = text.find(marker)
         if at >= 0:
-            text = f"{text[:at]}{extras.strip()}\n\n{text[at:]}"
+            text = f"{text[:at]}{block}\n\n{text[at:]}"
         else:
-            text = f"{text}\n\n{extras.strip()}"
+            text = f"{text}\n\n{block}"
     return text
 
 
@@ -6155,6 +6297,35 @@ class HorosaSkillService:
             pass
         return response_data
 
+    def _attach_classical_derived(self, tool_name: str, response_data: dict[str, Any]) -> dict[str, Any]:
+        """古典衍化四段（上游 v3.9.2）：仅本命 astrochart 挂载。
+
+        上游 opt-in 语义（astroAiSnapshot.js:1550）：只有本命 astro 快照路径传 classicalDerived，
+        germany/mundane/indiachart 等嵌套消费方缺省 falsy = 零输出——skill 同口径，只 gate `chart`。
+        计算走 vendored `astroClassicalDerived.js`（与上游四组件同引），JS 失败优雅降级不产段
+        （条件段双登记，缺席不算漏）。
+        """
+        if tool_name != "chart":
+            return response_data
+        if not isinstance(response_data, dict) or not _is_astro_chart_payload(response_data):
+            return response_data
+        try:
+            js = self.js_client.run("classical_derived", {"chart": response_data})
+            text = js.get("snapshot_text") if isinstance(js, dict) else ""
+            if isinstance(text, str) and text.strip():
+                sections: dict[str, str] = {}
+                for block in text.split("\n\n"):
+                    lines = block.strip().splitlines()
+                    if lines and lines[0].startswith("[") and lines[0].endswith("]"):
+                        sections[lines[0][1:-1]] = "\n".join(lines[1:]).strip()
+                if sections:
+                    enriched = dict(response_data)
+                    enriched["_classicalDerived"] = sections
+                    return enriched
+        except Exception:  # noqa: BLE001 - enrichment must never fail the chart
+            pass
+        return response_data
+
     def _attach_jyotish_sections(self, tool_name: str, response_data: dict[str, Any]) -> dict[str, Any]:
         """印占 Jyotish 派生段 (星阙 v3.6.0 印占大扩容)。
 
@@ -6663,6 +6834,14 @@ class HorosaSkillService:
         )
         raw_snapshot = js_result.get("snapshot_text")
         snapshot_text = raw_snapshot if isinstance(raw_snapshot, str) and raw_snapshot.strip() else None
+        # [选中时刻星盘]（v3.9.2）：命中时刻的整张判读底盘。上游在 UI 里把选中命中的 chart 喂
+        # buildAstroSnapshotContent(headerless)——headless 侧同语义：取首个命中的 pick 时刻补铸
+        # /chart（走完整 chart 工具管线，享受同一套段构建），再把子段头 `[X]` 转 `· X` 并入本段
+        # （上游 headerless 正则逐字同款，防子段被顶层拆走）。无命中/铸盘失败不产段（条件段，零回归）。
+        if snapshot_text and intervals:
+            moment_section = self._tianxing_selected_moment_section(payload, intervals[0])
+            if moment_section:
+                snapshot_text = f"{snapshot_text}\n\n{moment_section}"
         return {
             "intervals": intervals,
             "hit_count": len(intervals),
@@ -6672,6 +6851,38 @@ class HorosaSkillService:
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="tianxing", snapshot_text=snapshot_text),
         }
+
+    def _tianxing_selected_moment_section(self, payload: dict[str, Any], hit: dict[str, Any]) -> str:
+        try:
+            pick = f"{(hit or {}).get('pick') or (hit or {}).get('start') or ''}".strip()
+            if not pick:
+                return ""
+            parts = pick.split(" ")
+            moment_payload = {
+                "date": parts[0],
+                "time": (parts[1] if len(parts) > 1 else "12:00") + (":00" if len(parts) > 1 and parts[1].count(":") == 1 else ""),
+                "zone": payload.get("zone"),
+                "lat": payload.get("lat"),
+                "lon": payload.get("lon"),
+                "pos": payload.get("pos"),
+                "hsys": payload.get("hsys"),
+                "zodiacal": payload.get("zodiacal"),
+                "siderealAyanamsa": payload.get("siderealAyanamsa"),
+                # 择时盘沿用调用方已确认的设置；这里是同一次请求的内部子盘，不再过闸。
+                "agent_confirmed_settings": True,
+                "clarification_notes": "tianxing selected-moment sub-chart (same confirmed settings)",
+            }
+            moment_payload = {k: v for k, v in moment_payload.items() if v is not None}
+            chart_env = self.run_tool("chart", moment_payload, save_result=False)
+            body = ""
+            if chart_env.ok and isinstance(chart_env.data, dict):
+                body = f"{chart_env.data.get('snapshot_text') or ''}".strip()
+            if not body:
+                return ""
+            headerless = re.sub(r"^\[(.+?)\]$", r"· \1", body, flags=re.MULTILINE)
+            return f"[选中时刻星盘]\n选中命中：{pick}\n{headerless}"
+        except Exception:  # noqa: BLE001 - 星盘正文失败不阻断搜索段（上游同款 try 包裹）
+            return ""
 
     def _run_qimenzeri_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         start_date, start_time, end_date, end_time = self._tianxing_window(payload)
@@ -7947,12 +8158,17 @@ class HorosaSkillService:
         # 转发，导致 [宫位宫头]/[星与虚点]/[相位]/[行星]/[希腊点]/[12分度]/[主宰星链]/[寿命格局] 等
         # 一整批段只出「本次本地计算结果未返回…」占位存根。摊平到顶层，通用构建器才认得。
         chart_wrap = response.get("chart") if isinstance(response.get("chart"), dict) else {}
+        # [调波盘] 专属段（v3.9.2）：H 数/位置表/同频，镜像 AstroHarmonicLab.js:65-73。
+        lines = [f"调波数：H{response.get('harmonic', harmonic_num)}"]
+        lines.extend(_derived_position_lines(response.get("positions"), "调波"))
+        lines.extend(_derived_conjunction_lines(response.get("conjunctions")))
         return {
             **chart_wrap,
             "harmonic": response.get("harmonic", harmonic_num),
             "positions": response.get("positions", []),
             "conjunctions": response.get("conjunctions", []),
             "raw": response,
+            **({"_derivedSelf": {"title": "调波盘", "lines": lines}} if len(lines) > 1 else {}),
         }
 
     @staticmethod
@@ -8091,12 +8307,20 @@ class HorosaSkillService:
         # 与 /astroextra/harmonic 同一形状，比导出层通用段构建器预期深一层，故同样摊平到顶层。
         response = self._call_remote("/astroextra/draconic", {**payload, "predictive": 0})
         chart_wrap = response.get("chart") if isinstance(response.get("chart"), dict) else {}
+        # [龙盘] 专属段（v3.9.2 派生盘快照重定源）：龙首归零基准/位置/同频，逐字镜像
+        # AstroDraconicLab.js:46-55；仅头一行（无位置无同频）不产段（上游 out.length > 1 同判）。
+        lines: list[str] = []
+        if response.get("nodeLon") is not None:
+            lines.append(f"北交点 {float(response['nodeLon']):.2f}° → 归零白羊 0°（龙盘基准）")
+        lines.extend(_derived_position_lines(response.get("positions"), "龙盘"))
+        lines.extend(_derived_conjunction_lines(response.get("conjunctions")))
         return {
             **chart_wrap,
             "nodeLon": response.get("nodeLon"),
             "positions": response.get("positions", []),
             "conjunctions": response.get("conjunctions", []),
             "raw": response,
+            **({"_derivedSelf": {"title": "龙盘", "lines": lines}} if lines else {}),
         }
 
     def _run_relocation_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -8104,6 +8328,21 @@ class HorosaSkillService:
         # 响应同 harmonic/draconic 的嵌套形状 → 同样摊平。relocLat/relocLon 缺省回退出生地。
         response = self._call_remote("/astroextra/relocation", {**payload, "predictive": 0})
         chart_wrap = response.get("chart") if isinstance(response.get("chart"), dict) else {}
+        # [重置盘] 专属段（v3.9.2）：地点 + 四角对比，镜像 AstroRelocationLab.js:138-149。
+        # 本命四角需另铸一张本命盘（上游用页面上已有的 props.value；headless 补一次 /chart）——
+        # 上游同款 try 包裹：「角点缺省不产行」，本命盘取不到就只出地点行。
+        lines = [f"重置地点：纬 {response.get('relocLat')} / 经 {response.get('relocLon')}"]
+        try:
+            natal_payload = {k: v for k, v in payload.items() if k not in {"relocLat", "relocLon"}}
+            natal = self._call_remote("/chart", {**natal_payload, "predictive": 0})
+            natal_angles = _chart_angles(natal)
+            reloc_angles = _chart_angles(chart_wrap)
+            for angle_id in ("Asc", "MC", "Desc", "IC"):
+                n, r = natal_angles.get(angle_id), reloc_angles.get(angle_id)
+                if n or r:
+                    lines.append(f"{angle_id}：本命 {_angle_text(n)} → 重置后 {_angle_text(r)}")
+        except Exception:  # noqa: BLE001 - 角点对比失败不阻断重置盘本体
+            pass
         return {
             **chart_wrap,
             "relocLat": response.get("relocLat"),
@@ -8111,6 +8350,8 @@ class HorosaSkillService:
             "natalLat": response.get("natalLat"),
             "natalLon": response.get("natalLon"),
             "raw": response,
+            # 上游 out = [段头, 地点行, …角点]：地点行无条件 push，故 [重置盘] 恒出（角点缺省只少行）。
+            "_derivedSelf": {"title": "重置盘", "lines": lines},
         }
 
     def _run_agepoint_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -9455,6 +9696,7 @@ class HorosaSkillService:
                     response_data = self._call_remote(definition.endpoint, input_normalized)
                     response_data = self._attach_predictive_chart_context(tool_name, input_normalized, response_data)
                 response_data = self._attach_natal_extras(tool_name, response_data)
+                response_data = self._attach_classical_derived(tool_name, response_data)
                 response_data = self._attach_classical_analysis(tool_name, input_normalized, response_data)
                 response_data = self._attach_jyotish_sections(tool_name, response_data)
                 response_data = self._attach_calendar_extras(tool_name, input_normalized, response_data)
@@ -10259,7 +10501,139 @@ class HorosaSkillService:
             )
         return run, source
 
-    def dispatch(self, payload: dict[str, Any], *, evaluation_case_id: str | None = None) -> DispatchEnvelope:
+    def hecan(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """合参（v0.28.0 B3）：一问多技法交叉印证——全行业没有的形态，也只有 92 技法才做得起。
+
+        传统方法论（三式互参、八字紫微互证）+ orchestrator-workers 编排：路由/显式选盘（上限
+        max_tools）→ 同一 group 逐技法起盘（复用 dispatch 全部载荷管线与澄清闸）→ 产出**合参模板**：
+        逐技法证据表（引用不复制全文）+ 口径一致性（复用技法卡冲突检测）+ ai_fillable 综合槽。
+        两条铁律写进模板 instructions：**只准引用已导出段落的事实**；**分歧必须披露，不许平均**。
+        """
+        with self.tracer.span(
+            workflow_name="hecan.run",
+            metadata={"entrypoint": "hecan", "payload": payload},
+        ) as trace:
+            try:
+                request = HecanInput.model_validate(payload)
+            except ValidationError as exc:
+                errors = exc.errors()
+                raise ToolValidationError(
+                    "Invalid payload for horosa_hecan.",
+                    code="hecan.invalid_payload",
+                    details={
+                        "errors": errors,
+                        "agent_recovery": build_validation_recovery(
+                            operation_name="horosa_hecan", tool_name="hecan", errors=errors
+                        ),
+                    },
+                ) from exc
+
+            max_tools = max(1, min(int(request.max_tools or 5), 8))
+            preselected = [t for t in (request.tools or []) if t][:max_tools] or None
+            dispatch_payload = request.model_dump(exclude_none=True)
+            dispatch_payload.pop("tools", None)
+            dispatch_payload.pop("max_tools", None)
+            envelope = self.dispatch(dispatch_payload, preselected_tools=preselected)
+            if not envelope.ok and not envelope.results:
+                # 路由失败原样透出（含 agent_recovery），不包一层假成功。
+                return {
+                    "ok": False,
+                    "schema": HECAN_SCHEMA,
+                    "question": request.query,
+                    "error": envelope.error.model_dump(mode="json") if envelope.error else None,
+                    "code": envelope.code,
+                    "message": envelope.message,
+                    "details": envelope.details,
+                    "trace_id": trace["trace_id"],
+                    "group_id": envelope.group_id,
+                }
+
+            selected = envelope.selected_tools[:max_tools]
+            techniques: list[dict[str, Any]] = []
+            cards: list[dict[str, Any]] = []
+            for tool_name in selected:
+                result = envelope.results.get(tool_name)
+                if result is None:
+                    continue
+                data = result.data if isinstance(result.data, dict) else {}
+                export = data.get("export_snapshot") if isinstance(data.get("export_snapshot"), dict) else {}
+                card = data.get("technique_card") if isinstance(data.get("technique_card"), dict) else None
+                if card:
+                    cards.append(card)
+                technique_info = export.get("technique") if isinstance(export.get("technique"), dict) else {}
+                titles = [
+                    section.get("title")
+                    for section in export.get("sections", [])
+                    if isinstance(section, dict) and section.get("title")
+                ]
+                techniques.append({
+                    "tool": tool_name,
+                    "ok": result.ok,
+                    "technique": {"key": technique_info.get("key"), "label": technique_info.get("label")},
+                    "summary": list(result.summary),
+                    "section_titles": titles,
+                    "sections_health": {
+                        "missing_selected_sections": export.get("missing_selected_sections") or [],
+                        "unknown_detected_sections": export.get("unknown_detected_sections") or [],
+                    },
+                    "error": result.error.model_dump(mode="json") if result.error else None,
+                    # 证据指针而非全文：完整段落在 dispatch 存档里，memory_show(run_id) 可取。
+                    "evidence_pointer": {
+                        "run_id": envelope.memory_ref.run_id if envelope.memory_ref else None,
+                        "read_with": "horosa_memory_show",
+                    },
+                })
+
+            consistency = build_technique_report(
+                cards=cards, scope="group", scope_id=envelope.group_id
+            )["consistency"] if cards else {"setting_conflicts": [], "export_contract_unclean": [], "compute_mismatched": [], "all_clear": None}
+
+            template = {
+                "ok": True,
+                "schema": HECAN_SCHEMA,
+                "question": request.query,
+                "selected_tools": selected,
+                "techniques": techniques,
+                "consistency": consistency,
+                "synthesis_contract": {
+                    "instructions": [
+                        "先读每个技法的导出段落（memory_show 取全量），再填 cross_validation：每技法一条结论，"
+                        "必须绑定该技法真实段落里的事实，不许引用未导出的内容。",
+                        "convergence 只写多技法**独立**得出的共同判断；一个技法的结论不算共识。",
+                        "divergence 必须逐条披露（哪两个技法、各说什么、可能因口径差异还是体系差异）——"
+                        "**分歧不许平均、不许只挑一边**；无法调和就写无法调和。",
+                        "consistency.setting_conflicts 非空时，先声明口径冲突再谈结论可比性。",
+                        "final_answer 先直答用户问题，再给依据与边界；引用口径/教义按 SKILL.md 带出处。",
+                    ],
+                    "ai_fillable": {
+                        "cross_validation": [
+                            {"tool": t["tool"], "label": (t["technique"] or {}).get("label"), "conclusion": "", "evidence_lines": []}
+                            for t in techniques
+                        ],
+                        "convergence": "",
+                        "divergence": "",
+                        "final_answer": "",
+                    },
+                },
+                "memory_ref": envelope.memory_ref.model_dump(mode="json") if envelope.memory_ref else None,
+                "summary": [
+                    f"合参已起 {len(techniques)} 个技法（{('、'.join(selected))}），同组存档待综合。",
+                    "这是合参模板，不是终稿：请按 synthesis_contract 填写后给出结论（分歧必须披露）。",
+                ],
+                "trace_id": trace["trace_id"],
+                "group_id": envelope.group_id,
+            }
+            trace["success"] = True
+            trace["selected_tools"] = selected
+            return template
+
+    def dispatch(
+        self,
+        payload: dict[str, Any],
+        *,
+        evaluation_case_id: str | None = None,
+        preselected_tools: list[str] | None = None,
+    ) -> DispatchEnvelope:
         try:
             request = DispatchInput.model_validate(payload)
         except ValidationError as exc:
@@ -10278,7 +10652,8 @@ class HorosaSkillService:
             ) from exc
 
         try:
-            selected_tools = select_tools(request)
+            # 合参等上层可显式点名技法（跳过关键词路由）；未知名照常走 run_tool 的 tool.unknown。
+            selected_tools = list(preselected_tools) if preselected_tools else select_tools(request)
         except DispatchResolutionError as exc:
             return DispatchEnvelope(
                 ok=False,

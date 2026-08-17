@@ -88,11 +88,40 @@ def _load_json(name: str) -> dict[str, Any]:
 
 @lru_cache(maxsize=1)
 def load_knowledge_bundles() -> dict[str, dict[str, Any]]:
-    return {
+    bundles = {
         "astro": _load_json("astro.json"),
         "liureng": _load_json("liureng.json"),
         "qimen": _load_json("qimen.json"),
     }
+    bundles.update(load_helpdoc_bundles())
+    return bundles
+
+
+@lru_cache(maxsize=1)
+def load_helpdoc_bundles() -> dict[str, dict[str, Any]]:
+    """方法论手册知识包（v0.28.0，`scripts/gen_knowledge_packs.py` 从上游 HelpDoc 收割）。
+
+    统一 schema `horosa.knowledge.helpdoc.v1`：{domain, label, source, categories:[{name,
+    entries:[{key, text, source}]}]}——按目录自动发现，新增域零代码（三个 hover 域仍走各自的
+    专用渲染分支，不动）。每条自带出处（组件文件 + tab + 上游版本/commit），是 SKILL.md
+    「引教义必带出处」策略的机器前提。
+    """
+    out: dict[str, dict[str, Any]] = {}
+    try:
+        root = files("horosa_skill.knowledge.data").joinpath("helpdocs")
+        for item in root.iterdir():
+            if not item.name.endswith(".json"):
+                continue
+            try:
+                bundle = json.loads(item.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            domain = f"{bundle.get('domain') or ''}".strip()
+            if domain and bundle.get("schema") == "horosa.knowledge.helpdoc.v1":
+                out[domain] = bundle
+    except (FileNotFoundError, OSError):
+        return {}
+    return out
 
 
 @lru_cache(maxsize=1)
@@ -326,6 +355,26 @@ def build_knowledge_registry(domain: str | None = None) -> dict[str, Any]:
                 code="knowledge.unknown_domain",
                 details={"domain": name},
             )
+        if bundle.get("schema") == "horosa.knowledge.helpdoc.v1":
+            result_domains.append(
+                {
+                    "domain": name,
+                    "label": bundle.get("label"),
+                    "source": "xingque_help_docs",
+                    "bundle_version": (bundle.get("source") or {}).get("upstream_app_version"),
+                    "provenance": bundle.get("source") or {},
+                    "categories": [
+                        {
+                            "name": cat.get("name"),
+                            "count": len(cat.get("entries") or []),
+                            "keys": [e.get("key") for e in (cat.get("entries") or [])][:24],
+                            "supports": ["read"],
+                        }
+                        for cat in bundle.get("categories") or []
+                    ],
+                }
+            )
+            continue
         if name == "astro":
             categories = [
                 {
@@ -394,6 +443,8 @@ def read_knowledge_entry(payload: dict[str, Any]) -> dict[str, Any]:
             code="knowledge.unknown_domain",
             details={"domain": domain},
         )
+    if bundles[domain].get("schema") == "horosa.knowledge.helpdoc.v1":
+        return _read_helpdoc_entry(bundles[domain], domain=domain, category=category, key=key)
     if domain == "astro":
         bundle = bundles["astro"]
         categories = bundle.get("categories", {})
@@ -514,4 +565,55 @@ def read_knowledge_entry(payload: dict[str, Any]) -> dict[str, Any]:
         "bundle_version": load_knowledge_index().get("bundle_version"),
         "provenance": _knowledge_provenance(domain=domain, category=category, key=normalized_key),
         "citation": f"Xingque hover knowledge · {domain}/{category}/{normalized_key}",
+    }
+
+
+def _read_helpdoc_entry(bundle: dict[str, Any], *, domain: str, category: str, key: str) -> dict[str, Any]:
+    """手册域通用读取：category 缺省取首类（多数域只有「手册」一类）；key 精确或前缀匹配。
+
+    返回体与 hover 域同形（rendered_text + provenance + citation），citation 逐条落到
+    组件文件 + tab + 上游版本——「引教义必带出处」在这里闭环。
+    """
+    cats = bundle.get("categories") or []
+    cat = next((c for c in cats if c.get("name") == category), None) if category else (cats[0] if cats else None)
+    if cat is None:
+        raise ToolValidationError(
+            f"Unknown knowledge category: {domain}/{category}",
+            code="knowledge.unknown_category",
+            details={"domain": domain, "category": category, "available": [c.get("name") for c in cats]},
+        )
+    entries = cat.get("entries") or []
+    if not key:
+        raise ToolValidationError(
+            f"knowledge_read({domain}) 需要 key（条目名）。",
+            code="knowledge.helpdoc.key_required",
+            details={"domain": domain, "category": cat.get("name"), "keys": [e.get("key") for e in entries]},
+        )
+    entry = next((e for e in entries if e.get("key") == key), None)
+    if entry is None:  # 前缀/包含式兜底：手册 tab 名较长，允许「排盘」命中「排盘设置」
+        loose = [e for e in entries if key in f"{e.get('key')}"]
+        entry = loose[0] if len(loose) == 1 else None
+    if entry is None:
+        raise ToolValidationError(
+            f"Unknown knowledge key: {domain}/{cat.get('name')}/{key}",
+            code="knowledge.helpdoc.unknown_key",
+            details={"domain": domain, "category": cat.get("name"), "key": key,
+                     "available": [e.get("key") for e in entries]},
+        )
+    src = bundle.get("source") or {}
+    entry_src = entry.get("source") or {}
+    return {
+        "domain": domain,
+        "category": cat.get("name"),
+        "key": entry.get("key"),
+        "query_normalized": {"key": entry.get("key")},
+        "title": f"{bundle.get('label')} · {entry.get('key')}",
+        "rendered_text": entry.get("text", ""),
+        "source": "xingque_help_docs",
+        "bundle_version": src.get("upstream_app_version"),
+        "provenance": {**src, **entry_src},
+        "citation": (
+            f"星阙操作手册 · {bundle.get('label')} · {entry.get('key')}"
+            f"（{entry_src.get('file')} @ 星阙 {src.get('upstream_app_version')}）"
+        ),
     }

@@ -59,7 +59,7 @@ def test_export_registry_returns_ai_export_catalog(tmp_path) -> None:
 
     assert result.ok is True
     assert result.data["settings_key"] == "horosa.ai.export.settings.v1"
-    assert result.data["settings_version"] == 13  # v0.27.0: lingqi 入册 + 八键补段（上游 v3.8.0→v3.9.1）
+    assert result.data["settings_version"] == 14  # v0.28.0: 上游 v3.9.2 十四段/八键补齐
     assert result.data["selected_technique"]["key"] == "qimen"
     assert "奇门演卦" in result.data["selected_technique"]["preset_sections"]
 

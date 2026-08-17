@@ -594,6 +594,12 @@ const PALACE_NAME = {
 };
 const OUTER_RING_CLOCKWISE = [1, 2, 3, 6, 9, 8, 7, 4];
 
+// 十干五合(甲己/乙庚/丙辛/丁壬/戊癸)——盘面每宫中位注记(DunJiaBoard)与快照 [盘面要素] 同源单表。
+export const QIMEN_WU_HE = {
+	甲: '己', 乙: '庚', 丙: '辛', 丁: '壬', 戊: '癸',
+	己: '甲', 庚: '乙', 辛: '丙', 壬: '丁', 癸: '戊',
+};
+
 const JI_XING_RULE = {
 	1: '壬癸',
 	2: '辛',
@@ -2909,6 +2915,14 @@ export function buildDunJiaSnapshotText(pan){
 	lines.push(`符头：${pan.fuTou}`);
 	lines.push(`地盘：${pan.diPanList.join(' ')}`);
 	lines.push(`天盘：${pan.tianPanList.join(' ')}`);
+	// 五合配干(盘面每宫恒画的十干合注记,快照曾恒缺):判据与盘面同源=cell.tianGan||cell.diGan 经 QIMEN_WU_HE。
+	const wuHeParts = (pan.cells || []).map((cell)=>{
+		const g = (cell && (cell.tianGan || cell.diGan)) || '';
+		return g && QIMEN_WU_HE[g] ? `${cell.palaceName}${LUOSHU_NUM[cell.palaceName] || ''}宫${g}合${QIMEN_WU_HE[g]}` : '';
+	}).filter(Boolean);
+	if(wuHeParts.length){
+		lines.push(`五合配干：${wuHeParts.join('、')}`);
+	}
 	lines.push(`人盘：${pan.renPanList.join(' ')}`);
 	lines.push(`神盘：${pan.shenPanList.join(' ')}`);
 	lines.push(`六仪击刑：${joinList(pan.liuYiJiXing)}`);
@@ -2918,6 +2932,10 @@ export function buildDunJiaSnapshotText(pan){
 	lines.push(`${pan.yiMa ? pan.yiMa.text : '日马：无'}`);
 	if(pan.shenSha && pan.shenSha.summary && pan.shenSha.summary.length){
 		lines.push(`神煞概览：${pan.shenSha.summary.map((item)=>`${item.name}-${item.value}`).join('  ')}`);
+	}
+	// [审计修] 神煞全量(右栏「神煞」tab 渲染 allItems 30+ 条,快照曾只有概览 5 条;与三式合一同口径)。
+	if(pan.shenSha && Array.isArray(pan.shenSha.allItems) && pan.shenSha.allItems.length){
+		lines.push(`神煞全量：${pan.shenSha.allItems.map((item)=>`${item.name}-${item.value}`).join('  ')}`);
 	}
 	lines.push('');
 
@@ -3012,6 +3030,8 @@ export function buildDunJiaSnapshotText(pan){
 			pushMdRows(lines, ['用神', '落宫', '危害'], fa.wealth.items.map((it)=>[it.name, posTxt(it), it.hazards && it.hazards.length ? '[' + it.hazards.join('/') + ']' : '']));
 			lines.push(`月令:${fa.wealth.month.zhi}(${fa.wealth.month.wuxing}) ${fa.wealth.month.relation}`);
 			if(fa.wealth.ganCai.length){ lines.push(`干财:${fa.wealth.ganCai.map((c)=>c.src + c.symbol + posTxt(c)).join(' ')}`); }
+			// [审计修] 行业取象(渲染有快照无;事业段同款字段早有,财富段曾独漏)。
+			if(fa.wealth.industryHint){ lines.push(fa.wealth.industryHint); }
 		}
 
 		lines.push('');

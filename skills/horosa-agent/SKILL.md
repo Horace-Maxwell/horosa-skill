@@ -11,7 +11,7 @@ description: >-
 license: AGPL-3.0-only
 compatibility: Requires the local Horosa Skill MCP server/CLI (Python 3.12 + uv + installed offline runtime)
 metadata:
-  version: "0.27.0"
+  version: "0.28.0"
 ---
 
 # Horosa Skill Agent Guide
@@ -175,11 +175,16 @@ question context.”
 | 14 神数 | `wangji` / `wuzhao` / `taixuan` / `jingjue` / `shenyishu` / `shaozi` / `tieban` / `fendjing` / `beiji` / `nanji` / `chunzi` / `xianqin` / `cetian` / `qizhengkin` |
 | 节气 / 农历 | `jieqi_year` / `nongli_time` |
 | 黄历 / 万年历 | `calendar_month` |
-| Hover knowledge | `knowledge_registry`, `knowledge_read` |
+| Hover knowledge + 方法论手册 | `knowledge_registry`, `knowledge_read`（24 域 = hover 三域 + 各技法操作手册域，逐条带出处） |
 | Export protocol | `export_registry`, `export_parse` |
 | Natural-language dispatch | `horosa_dispatch` (MCP) |
+| 合参（多技法交叉印证） | `horosa_hecan`（模板制：结论槽留白，分歧必须披露；细则见 [`references/reports.md`](./references/reports.md)） |
 
 Fengshui is intentionally excluded from this public skill surface (not headless-ready).
+
+**引知识必带出处（v0.28.0 反 Barnum 第一机制）**：解读中引用口径/流派/教义时，先用
+`knowledge_read` 取条目并转述其 `citation`（形如「星阙操作手册 · 八字四柱 · 算法与口径」）；
+`knowledge_read` 没有的内容按通则推理并**明说无出处**。不许把通则包装成「古籍说」「星阙口径」。
 
 Payload shapes and defaults: [`references/payloads.md`](./references/payloads.md). 中式技法 specifics
 (大六壬 guirengType, current-time casting, 法奇门 sections):

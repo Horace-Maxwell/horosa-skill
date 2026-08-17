@@ -198,6 +198,14 @@ def _skill_registered_keys() -> set[str]:
     return keys | {KEY_ALIAS.get(k, k) for k in keys}
 
 
+def _skill_only_keys() -> set[str]:
+    """mirror 守卫声明的 skill-only 键（generic/astrodata/…）——它们不镜像任何上游键。"""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from verify_export_contract_mirror import DIVERGENCE_WHITELIST
+
+    return set(DIVERGENCE_WHITELIST)
+
+
 def _skill_mirror_version() -> int:
     sys.path.insert(0, str(PKG_ROOT / "src"))
     from horosa_skill.exports.registry import MIRRORED_UPSTREAM_AIEXPORT_VERSION
@@ -370,6 +378,17 @@ def main() -> None:
         #            as "upstream removed it" is a guaranteed false alarm.
         gained, _ = diff_preset_keys(upstream_keys, recorded_keys | _skill_registered_keys())
         _, lost = diff_preset_keys(upstream_keys, recorded_keys)
+        # lost 再减一层：skill 自己声明为 skill-only 的键（mirror 守卫的 DIVERGENCE_WHITELIST）从来
+        # 不是「镜像自上游」——上游把它降级/撤掉（v3.9.2 的 generic 从 preset 键降为运行时兜底 context
+        # 就是这一形状）不构成任何我们所镜像内容的 retirement，只报 notice 供再核。
+        # 不减这一层时它还会自锁：lost 红 → --write-state 拒写 → recorded 永远含旧键 → 永远红。
+        whitelisted_lost = sorted(set(lost) & _skill_only_keys())
+        lost = sorted(set(lost) - _skill_only_keys())
+        for key in whitelisted_lost:
+            print(
+                f"::notice::upstream-sync — upstream no longer lists '{key}' as a preset key; the skill "
+                "declares it skill-only (DIVERGENCE_WHITELIST), so nothing mirrored was retired."
+            )
         if gained:
             failures.append(
                 f"upstream gained {len(gained)} technique key(s): {', '.join(gained)} — "

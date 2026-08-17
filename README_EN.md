@@ -51,7 +51,7 @@ License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICEN
 
 ## Current stable baseline
 
-**Current public version: `Horosa Skill 0.27.0` (92 callable tools).**
+**Current public version: `Horosa Skill 0.28.0` (92 callable tools).**
 
 This release line brings the capability surface roughly to parity with the desktop app:
 
@@ -71,7 +71,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `92 / 92 ok=true` |
-| Engineering tests | `391 / 391 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 63 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `414 / 414 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 63 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `83` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `8` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`89` export techniques modeled) |
@@ -250,7 +250,7 @@ Every tool call returns a uniform envelope:
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.27.0",
+  "ok": true, "tool": "qimen", "version": "0.28.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -379,7 +379,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 391 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 414 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

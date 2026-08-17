@@ -34,7 +34,7 @@ def build_manifest(version: str) -> dict:
         "version": version,
         "platform": "linux-x64",
         "runtime_layout_version": 1,
-        "export_registry_version": 13,
+        "export_registry_version": 14,
         "services": {
             "backend_url": "http://127.0.0.1:9999",
             "chart_url": "http://127.0.0.1:8899",

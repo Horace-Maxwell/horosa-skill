@@ -618,6 +618,12 @@
           "specifier": "../../constants/AstroConst.js",
           "to": "../../../constants/AstroConst.js",
           "why": "钉到 src/constants 的共享 shim（HOUSE_SYSTEM_OPTIONS 在那里；vendor/constants 是 Uranian 子集）"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../../utils/astroAiSnapshot.js",
+          "stub": "// headless stub：上游 v3.9.2 用 buildAstroSnapshotContent 产 [选中时刻星盘]（chart 传入才出段，\n// try 包裹零回归）。skill 侧该段由 Python 在命中时刻补铸 /chart 后 append（请求型 builder 归\n// Python 的既有法则）——JS 层恒回空串，段自然不产，与上游「无盘不产段」同形。\nconst buildAstroSnapshotContent = () => '';",
+          "why": "1951 行前端总装模块不整树 vendor；[选中时刻星盘] 由 Python 补铸 /chart 生成"
         }
       ]
     },
@@ -1372,6 +1378,18 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "utils/astroClassicalDerived.js": {
+      "upstream": "utils/astroClassicalDerived.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroConst.js",
+          "to": "../../constants/AstroConst.js",
+          "why": "两个 AstroConst 陷阱（AGENTS §5）：vendor/constants 是 32 行 Uranian 子集，无 LIST_SIGNS/SignsProp → 静默 undefined；钉到 151 行共享 shim"
+        }
+      ]
+    },
     "utils/babylonAiSnapshot.js": {
       "upstream": "utils/babylonAiSnapshot.js",
       "mode": "verbatim",
@@ -1379,6 +1397,11 @@
     },
     "utils/classicalChartGlobals.js": {
       "upstream": "utils/classicalChartGlobals.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/dispositorChain.js": {
+      "upstream": "utils/dispositorChain.js",
       "mode": "verbatim",
       "deviations": []
     },
