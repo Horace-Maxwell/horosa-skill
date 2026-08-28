@@ -74,6 +74,8 @@ _WIN_FILE_ENTRIES = [
     "runtime-payload/Horosa-Web/vendor/shenyishu/__init__.py",
     "runtime-payload/Horosa-Web/vendor/kin_year_domain.py",
     "runtime-payload/Horosa-Web/astropy/astrostudy/geomancy/data/ifa_odu.json",
+    "runtime-payload/Horosa-Web/astropy/astrostudy/xuanshi/data/public_data.sqlite",
+    "runtime-payload/Horosa-Web/astropy/astrostudy/xuanshi/data/editorial.sqlite",
     "runtime-payload/Horosa-Web/vendor/kinastro/astro/__init__.py",
     "runtime-payload/Horosa-Web/vendor/kinastro/astro/shaozi/data/shaozi_tiaowen_6144.json",
     "runtime-payload/runtime/windows/python/python.exe",

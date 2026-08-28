@@ -20,6 +20,8 @@ REQUIRED_PATHS = [
     "vendor/runtime-source/Horosa-Web/astropy/astrostudy/geomancy/data/ifa_odu.json",
     # 政余/xuanshi 神数 backing SQLite (kentang /xuanshi mount) — a real file inside, never an empty dir.
     "vendor/runtime-source/Horosa-Web/astropy/astrostudy/xuanshi/data/public_data.sqlite",
+    # 玄史知识库编辑层（v0.32.0 xuanshi 工具）——缺席时引擎静默降级为 {}，只有这里判红。
+    "vendor/runtime-source/Horosa-Web/astropy/astrostudy/xuanshi/data/editorial.sqlite",
     # export-contract source of truth; also content-checked for version currency (see below).
     "vendor/runtime-source/Horosa-Web/astrostudyui/src/utils/aiExport.js",
 ]

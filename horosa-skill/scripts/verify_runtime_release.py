@@ -23,6 +23,11 @@ REQUIRED_ENTRIES = {
         "runtime-payload/Horosa-Web/vendor/kin_year_domain.py",
         # v3.5.1 地占大改版 data — the ifa/numbers/vedic geomancy engines read these; real file, not empty dir.
         "runtime-payload/Horosa-Web/astropy/astrostudy/geomancy/data/ifa_odu.json",
+        # v0.32.0 xuanshi 玄史知识库 backing SQLites — /xuanshi/* endpoints read both; editorial
+        # degrades SILENTLY to {} when absent, so only this entry (real files, not empty dirs)
+        # keeps a stripped/mispackaged archive from shipping green.
+        "runtime-payload/Horosa-Web/astropy/astrostudy/xuanshi/data/public_data.sqlite",
+        "runtime-payload/Horosa-Web/astropy/astrostudy/xuanshi/data/editorial.sqlite",
         # 5 standalone 神数 engines back /wangji/pan · /wuzhao/pan · /taixuan/pan · /jingjue/pan ·
         # /shenyishu/pan — without these the kentang mount skips them and the 神数 tools fail offline.
         "runtime-payload/Horosa-Web/vendor/kinwangji/",
@@ -57,6 +62,11 @@ REQUIRED_ENTRIES = {
         "runtime-payload/Horosa-Web/vendor/kin_year_domain.py",
         # v3.5.1 地占大改版 data — the ifa/numbers/vedic geomancy engines read these; real file, not empty dir.
         "runtime-payload/Horosa-Web/astropy/astrostudy/geomancy/data/ifa_odu.json",
+        # v0.32.0 xuanshi 玄史知识库 backing SQLites — /xuanshi/* endpoints read both; editorial
+        # degrades SILENTLY to {} when absent, so only this entry (real files, not empty dirs)
+        # keeps a stripped/mispackaged archive from shipping green.
+        "runtime-payload/Horosa-Web/astropy/astrostudy/xuanshi/data/public_data.sqlite",
+        "runtime-payload/Horosa-Web/astropy/astrostudy/xuanshi/data/editorial.sqlite",
         # 5 standalone 神数 engines (see darwin note).
         "runtime-payload/Horosa-Web/vendor/kinwangji/",
         "runtime-payload/Horosa-Web/vendor/kinwuzhao/",
@@ -89,6 +99,11 @@ REQUIRED_ENTRIES = {
         "runtime-payload/Horosa-Web/vendor/kin_year_domain.py",
         # v3.5.1 地占大改版 data — the ifa/numbers/vedic geomancy engines read these; real file, not empty dir.
         "runtime-payload/Horosa-Web/astropy/astrostudy/geomancy/data/ifa_odu.json",
+        # v0.32.0 xuanshi 玄史知识库 backing SQLites — /xuanshi/* endpoints read both; editorial
+        # degrades SILENTLY to {} when absent, so only this entry (real files, not empty dirs)
+        # keeps a stripped/mispackaged archive from shipping green.
+        "runtime-payload/Horosa-Web/astropy/astrostudy/xuanshi/data/public_data.sqlite",
+        "runtime-payload/Horosa-Web/astropy/astrostudy/xuanshi/data/editorial.sqlite",
         # 5 standalone 神数 engines (see darwin note).
         "runtime-payload/Horosa-Web/vendor/kinwangji/",
         "runtime-payload/Horosa-Web/vendor/kinwuzhao/",
