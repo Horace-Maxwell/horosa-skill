@@ -3,14 +3,14 @@
 <div align="center">
   <h1>Horosa Skill</h1>
   <p><strong>Turn Xingque / Horosa into an offline metaphysics capability layer any AI can call locally.</strong></p>
-  <p>Clone the repo, install the offline runtime once, and let Claude, Codex, Open WebUI, OpenClaw, etc. call <strong>92</strong> real techniques on your own machine — Western natal / predictive / horary / electional, BaZi / Zi Wei / Da Liu Ren / the Three Styles, and all <strong>14 Shen Shu</strong> systems — read the full Xingque AI-export protocol, return stable structured output, and persist every analysis as a retrievable local record. Every answer ships with a deterministic provenance card, a cited methodology knowledge base, a chart-fact faithfulness evaluator, and a multi-technique synthesis contract. Works offline, value-for-value identical to the Xingque desktop app.</p>
+  <p>Clone the repo, install the offline runtime once, and let Claude, Codex, Open WebUI, OpenClaw, etc. call <strong>93</strong> real techniques on your own machine — Western natal / predictive / horary / electional, BaZi / Zi Wei / Da Liu Ren / the Three Styles, and all <strong>14 Shen Shu</strong> systems — read the full Xingque AI-export protocol, return stable structured output, and persist every analysis as a retrievable local record. Every answer ships with a deterministic provenance card, a cited methodology knowledge base, a chart-fact faithfulness evaluator, and a multi-technique synthesis contract. Works offline, value-for-value identical to the Xingque desktop app.</p>
 
   <p><a href="https://github.com/Horace-Maxwell/horosa-skill"><img src="https://img.shields.io/badge/GitHub-Repository-111827?style=for-the-badge&logo=github" alt="Repository" /></a>&nbsp;<a href="https://github.com/Horace-Maxwell/horosa-skill/releases"><img src="https://img.shields.io/badge/GitHub-Releases-1d4ed8?style=for-the-badge&logo=github" alt="Releases" /></a>&nbsp;<a href="./README.md"><img src="https://img.shields.io/badge/阅读-简体中文-0f766e?style=for-the-badge" alt="Read in Chinese" /></a></p>
 
   <p>
     <img src="https://img.shields.io/github/stars/Horace-Maxwell/horosa-skill?style=flat-square" alt="GitHub stars" />
     <img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square" alt="Release" />
-    <img src="https://img.shields.io/badge/tools-92-1d4ed8?style=flat-square" alt="92 tools" />
+    <img src="https://img.shields.io/badge/tools-93-1d4ed8?style=flat-square" alt="93 tools" />
     <img src="https://img.shields.io/badge/platform-macOS%20(arm64)%20%7C%20Windows%20(x64)-0f766e?style=flat-square" alt="Platforms" />
     <img src="https://img.shields.io/badge/runtime-offline%20first-111827?style=flat-square" alt="Offline runtime" />
     <img src="https://img.shields.io/badge/MCP-ready-111827?style=flat-square" alt="MCP ready" />
@@ -53,7 +53,7 @@ License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICEN
 
 ## Current stable baseline
 
-**Current public version: `Horosa Skill 0.31.0` (92 callable tools).**
+**Current public version: `Horosa Skill 0.31.0` (93 callable tools).**
 
 This release line brings the capability surface roughly to parity with the desktop app — and adds a trust stack no other metaphysics tool ships:
 
@@ -74,14 +74,14 @@ Local end-to-end signals:
 
 | Check | Result |
 | --- | --- |
-| Callable tools | `92 / 92 ok=true` |
+| Callable tools | `93 / 93 ok=true` |
 | Engineering tests | `435 / 435 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 63 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `84` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `8` registry / knowledge / parser tools are directly readable |
-| Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`89` export techniques modeled; contract v14 mirrors desktop aiExport v56) |
+| Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`90` export techniques modeled; contract v14 mirrors desktop aiExport v56) |
 | Technique provenance | every technique response carries `data.technique_card`; a declared-vs-measured compute mismatch is flagged explicitly |
 | Knowledge base | 24 domains; 177 manual entries, each returned with a file-and-version citation |
-| HorosaBench | 92 registry-locked benchmark cases + chart-fact faithfulness evaluation (wrong-chart and sycophancy adversarial cases go red) |
+| HorosaBench | 93 registry-locked benchmark cases + chart-fact faithfulness evaluation (wrong-chart and sycophancy adversarial cases go red) |
 | Local memory / report | every technique call writes 1 local run record + 1 JSON artifact |
 | Qi Men / Tai Yi / Jin Kou / Three Styles | unified on `ken`, same as the desktop app |
 | Tong She Fa / Decennials | headless, value-for-value with Xingque (`decennials.test.js` golden) |
@@ -90,7 +90,7 @@ Local end-to-end signals:
 
 > About `solarreturn` / `lunarreturn` / `solararc` / `givenyear` / `profection` / `pd` / `pdchart` / `zr`: these predictive tools are verified working in this version and should not be flagged by an agent as "Java `/predict/*` unavailable". If a client still says so, check whether it is on an old runtime, bypassing MCP to hand-compute, or hasn't run `doctor` / `openclaw-check --full`.
 
-## Capability map (92 tools)
+## Capability map (93 tools)
 
 > Every business technique returns a uniform envelope plus a Xingque-style `export_snapshot` / `export_format` and a `data.technique_card` provenance card. Tools marked ⓟ are setting-sensitive and require parameter confirmation before calling.
 
@@ -140,6 +140,7 @@ Local end-to-end signals:
 | `extrareturns` ⓟ | Multiple returns | Saturn / Jupiter / lunar-node return dates |
 | `acg` ⓟ | AstroCartoGraphy | planetary geographic lines (MC/IC longitudes, zenith points, parans, crossings) |
 | `astrodata` ⓟ | Celebrity chart catalog | offline celebrity birth-data search (FTS/category/Rodden, chart-ready detail) |
+| `xuanshi` | Esoteric-history KB | 7900+ sourced events (original text / reading / citations), 27000+ celestial records, figure graph, dynasty & timeline views (read-only) |
 
 ### Western divination · horary / electional (4)
 
@@ -228,7 +229,7 @@ Beyond the calculation tools, the MCP surface adds 11 facades (`HOROSA_MCP_COMPA
 | --- | --- |
 | `horosa_dispatch` | routes natural-language intent to the right technique; the aggregation layer carries each sub-result's export contract |
 | `horosa_hecan` | multi-technique synthesis: casts several techniques in parallel on one question (default 5, up to 8) and returns a synthesis template with evidence pointers and conclusion slots |
-| `horosa_tool_run` | call any of the 92 tools by name + payload |
+| `horosa_tool_run` | call any of the 93 tools by name + payload |
 | `horosa_agent_guidance` | which fields must be asked first, which Xingque defaults may be used after the user accepts |
 | `horosa_technique_report` | the deterministic "which techniques, which settings, computed by what" methods report (per run or per conversation) |
 | `horosa_report_template` / `horosa_report_render` / `horosa_report_from_tool` | consulting reports: AI final text → JSON / DOCX / PDF, auto-written back to memory |
@@ -274,7 +275,7 @@ The biggest risk in metaphysics output is not a miscalculation — it is the AI 
 
 - **Technique provenance card** — every technique response carries `data.technique_card`: technique + school settings (incl. the late-Zi midnight switches), **declared vs. measured compute source** (`compute.matches_declaration=false` must be surfaced as "treat with caution"), section completeness, version chain. `horosa_technique_report` renders a methods report (markdown / json / docx / pdf) for one run (`run_id`) or a whole conversation (`group_id`) and detects **cross-technique setting conflicts** (two techniques on different late-Zi switches cannot corroborate each other). Disable with `HOROSA_TECHNIQUE_CARD=0`.
 - **Cited knowledge base** — 24 domains = 3 in-app hover domains + 21 technique operation manuals (177 entries: per-setting values and differences, school splits, algorithms and conventions), harvested from the desktop app's help panels. `knowledge_read` returns each entry with a "manual · domain · entry (file @ upstream version)" citation. Policy (in [SKILL.md](./skills/horosa-agent/SKILL.md)): doctrine quotes must carry a source; uncited readings must be labeled as general inference — the first anti-Barnum mechanism.
-- **Chart-fact faithfulness evaluation** — `horosa-skill benchmark faithfulness` runs a **deterministic verifier** (no LLM judge) over an AI reading: factual claims (pillar ganzhi, planet-in-sign, Zi Wei major-star palaces and body palace, Liu Ren three transmissions, Liu Yao hexagram names and moving lines, tarot card names and orientations, …) are checked one by one against machine-read chart truth and classified **supported / invented / contradicted**. Wrong-chart answers and sycophantic echoes ("my Moon is in Scorpio, right?" when it isn't) go red. HorosaBench: 92 benchmark cases generated from the tool registry and locked to it — a new tool without a case fails.
+- **Chart-fact faithfulness evaluation** — `horosa-skill benchmark faithfulness` runs a **deterministic verifier** (no LLM judge) over an AI reading: factual claims (pillar ganzhi, planet-in-sign, Zi Wei major-star palaces and body palace, Liu Ren three transmissions, Liu Yao hexagram names and moving lines, tarot card names and orientations, …) are checked one by one against machine-read chart truth and classified **supported / invented / contradicted**. Wrong-chart answers and sycophantic echoes ("my Moon is in Scorpio, right?" when it isn't) go red. HorosaBench: 93 benchmark cases generated from the tool registry and locked to it — a new tool without a case fails.
 - **Multi-technique synthesis (合参)** — `horosa_hecan` (CLI: `horosa-skill hecan`) casts several techniques in parallel on one question (same `group_id`; default 5, up to 8; `tools` may be explicit) and returns a synthesis **template**, not a verdict: per-technique conclusion slots must bind to that technique's real exported sections (responses carry evidence pointers; full text via `memory_show(run_id)`); `convergence` only when independently agreed; **`divergence` disclosed item by item — never averaged away, never one-sided**; setting conflicts (`consistency.setting_conflicts`) must be declared first.
 
 ## Output protocol: the point is "stably consumable", not just "compute"

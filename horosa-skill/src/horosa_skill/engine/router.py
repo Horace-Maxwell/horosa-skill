@@ -216,6 +216,7 @@ _CANDIDATE_POOL: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("qimenzeri", ("奇门择日", "奇门找局", "qimenzeri")),
     ("calendar_month", ("黄历", "万年历", "农历", "老黄历")),
     ("astrodata", ("名人", "celebrity", "明星")),
+    ("xuanshi", ("玄史", "玄学史", "星占史", "天象记录", "史书天象", "占验")),
     ("acg", ("地图", "acg", "迁移", "行星线")),
     ("relative", ("合盘", "关系", "synastry", "配对")),
     ("yizhangjing", ("一掌经", "掌经")),

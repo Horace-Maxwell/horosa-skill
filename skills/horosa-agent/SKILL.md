@@ -1,7 +1,7 @@
 ---
 name: horosa-agent
 description: >-
-  Call Horosa (星阙) local metaphysics tools correctly over MCP or CLI — 92 real techniques: Western
+  Call Horosa (星阙) local metaphysics tools correctly over MCP or CLI — 93 real techniques: Western
   natal/predictive astrology (returns, progressions, primary directions, horary 卜卦, election 择日),
   八字, 紫微, 大六壬, 奇门遁甲, 太乙, 金口诀, 三式合一, 河洛理数, 邵子参评数, 六爻, 天文地占, 塔罗, and
   the full 14 神数. Use whenever a user asks to 起盘 / 排盘 / 起课 / 起卦 / 算命 / 推运 / 看盘 / 合盘 /
@@ -171,6 +171,7 @@ question context.”
 | 灵棋经 lingqi | `lingqi`（以起卦时刻确定性掷十二棋；给了 counts 就复排，绝不重掷） |
 | 占星地图 ACG | `acg` |
 | 名人库 celebrity data | `astrodata` (read-only, no confirmation gate) |
+| 玄史知识库 Esoteric-history KB | `xuanshi` (action: search / events / event / celestial / figures / dynasty / timeline / graph …; read-only, no result-sensitive settings) |
 | Astrology dice 西占游戏 | `otherbu` |
 | 14 神数 | `wangji` / `wuzhao` / `taixuan` / `jingjue` / `shenyishu` / `shaozi` / `tieban` / `fendjing` / `beiji` / `nanji` / `chunzi` / `xianqin` / `cetian` / `qizhengkin` |
 | 节气 / 农历 | `jieqi_year` / `nongli_time` |

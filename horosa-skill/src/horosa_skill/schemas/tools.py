@@ -667,6 +667,39 @@ class AstrodataInput(FlexibleModel):
     offset: int | None = 0
 
 
+class XuanshiInput(FlexibleModel):
+    # 玄史（中国玄学史知识库）：runtime 自带两个只读 SQLite bundle（玄学事件 7900+ / 天象记录 27000+ /
+    # 地名 / 人物图 2200+ 节点），由 python chart 服务的 /xuanshi/* 只读端点提供检索与结构视图。
+    # 纯检索工具，无结果敏感设置。action 决定查哪个面：
+    #   search（默认）= q 全文检索玄学事件；events/event = 多维过滤列表 / 单事件全档
+    #   （原文+白话+解读+流程+结局+引证）；celestial/celestial_event = 天象记录；
+    #   figures/figure = 人物；dynasties/dynasty = 朝代；techniques/technique = 术数门类；
+    #   terms/term/term_profile = 天象名词；timeline = 宏观时间线（带 macro 下钻）；
+    #   map = 地理点位；graph = 人物共现网络；stories/story = 专题故事；channels = 频道；
+    #   daily = 今日推送；summary = 全库统计；microchronology / decade_omens / facets /
+    #   events_meta = 编年细化 / 十年灾异 / 分面计数 / 列表页元数据。
+    action: str | None = "search"
+    q: str | None = Field(default=None, description="全文检索词（事件/人物/术数名皆可）。")
+    id: str | None = Field(default=None, description="详情类 action 的条目 id（如事件 XTS-027）。")
+    tradition: str | None = Field(default=None, description="传统过滤：正史 / 野载。")
+    dynasty: str | None = Field(default=None, description="朝代过滤（如 唐 / 南北朝 / 志怪笔记）。")
+    technique: str | None = Field(default=None, description="术数门类过滤（如 占星 / 相术 / 卜筮）。")
+    history: str | None = Field(default=None, description="史书过滤（如 新唐书 / 晋书）。")
+    evidence: str | None = Field(default=None, description="证据等级过滤。")
+    omen: str | None = Field(default=None, description="天象类别过滤（如 彗星 / 日食，celestial 用）。")
+    source: str | None = Field(default=None, description="天象出处过滤（celestial 用）。")
+    year_from: int | None = Field(default=None, description="天象起始公历年（可负=公元前）。")
+    year_to: int | None = Field(default=None, description="天象结束公历年。")
+    macro: str | None = Field(default=None, description="timeline 宏观段下钻键。")
+    period: str | None = Field(default=None, description="map 的时期过滤。")
+    date_key: str | None = Field(default=None, description="daily 的日期键（YYYY-MM-DD，缺省今日）。")
+    page: int | None = Field(default=None, description="列表页码（1 起）。")
+    page_size: int | None = Field(default=None, description="每页条数（默认 30）。")
+    limit: int | None = Field(default=None, description="search/timeline 下钻的条数上限。")
+    top_n: int | None = Field(default=None, description="graph 节点上限（默认 70）。")
+    min_weight: int | None = Field(default=None, description="graph 边最小权重（默认 2）。")
+
+
 class SanShiUnitedInput(FlexibleModel):
     date: str
     time: str

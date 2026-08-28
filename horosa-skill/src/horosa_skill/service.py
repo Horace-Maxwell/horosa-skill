@@ -72,6 +72,7 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "chart12": "dwadasamsa",
     "draconic": "draconic",
     "babylon": "babylon",
+    "xuanshi": "xuanshi",
     "huangli": "huangli",
     "tongshu": "tongshu",
     "relocation": "relocation",
@@ -188,6 +189,33 @@ _PYTHON_CHART_ENDPOINTS = {
     "/india/chart",
     "/germany/midpoint",
     "/astroextra/harmonic",
+    # 玄史知识库（只读 SQLite bundle，随 runtime 分发）：26 个检索/结构视图端点。
+    "/xuanshi/summary",
+    "/xuanshi/events",
+    "/xuanshi/event",
+    "/xuanshi/celestial",
+    "/xuanshi/celestial_event",
+    "/xuanshi/microchronology",
+    "/xuanshi/decade_omens",
+    "/xuanshi/celestial_term_profile",
+    "/xuanshi/figures",
+    "/xuanshi/figure",
+    "/xuanshi/techniques",
+    "/xuanshi/technique",
+    "/xuanshi/celestial_terms",
+    "/xuanshi/celestial_term",
+    "/xuanshi/dynasties",
+    "/xuanshi/dynasty",
+    "/xuanshi/stories",
+    "/xuanshi/story",
+    "/xuanshi/channels",
+    "/xuanshi/map",
+    "/xuanshi/persons_graph",
+    "/xuanshi/timeline",
+    "/xuanshi/events_meta",
+    "/xuanshi/facets",
+    "/xuanshi/search",
+    "/xuanshi/daily",
     "/astroextra/ephemeris",
     "/astroextra/draconic",
     "/astroextra/relocation",
@@ -4584,6 +4612,96 @@ def _shift_moment(moment: str, days: float) -> str:
     return (base + timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
 
 
+# 玄史条目的展示键序（存在才渲染；覆盖 事件/天象/人物/朝代/术数/名词/故事 各族的常见字段）。
+_XUANSHI_FIELD_ORDER: tuple[tuple[str, str], ...] = (
+    ("title", "标题"), ("name", "名称"), ("event_id", "编号"), ("id", "编号"),
+    ("tradition", "传统"), ("dynasty", "朝代"), ("period", "时期"), ("year", "公历年"),
+    ("history", "史书"), ("volume_no", "卷次"), ("citation", "引证"),
+    ("region", "地域"), ("operators", "施术者"), ("targets", "对象"), ("techniques", "术数"),
+    ("omen", "天象类"), ("source", "出处"), ("trigger", "起因"), ("procedure", "过程"),
+    ("outcome", "结局"), ("evidence", "证据"), ("original_text", "原文"), ("modern_text", "白话"),
+    ("reading", "解读"), ("reliability_note", "可信度"), ("cross_ref", "互见"),
+    ("summary", "摘要"), ("text", "正文"), ("desc", "说明"), ("note", "注"),
+)
+
+
+def _xuanshi_record_lines(rec: dict[str, Any], *, brief: bool) -> list[str]:
+    lines: list[str] = []
+    seen: set[str] = set()
+    for key, label in _XUANSHI_FIELD_ORDER:
+        if key in seen:
+            continue
+        value = rec.get(key)
+        if value is None or value == "" or value == []:
+            continue
+        seen.add(key)
+        if isinstance(value, list):
+            value = "、".join(f"{v}" for v in value[:12])
+        text = f"{value}"
+        if brief and len(text) > 120:
+            text = text[:120] + "…"
+        lines.append(f"{label}：{text}")
+        if brief and len(lines) >= 4:
+            break
+    return lines
+
+
+def _build_xuanshi_snapshot_text(action: str, body: dict[str, Any], response: Any) -> str:
+    cond = [f"action：{action}"] + [f"{k}：{v}" for k, v in body.items()]
+    sections: list[tuple[str, str]] = [("检索条件", _join_lines(cond))]
+    # 列表族：裸数组，或 {items|list|events|figures…: [...], total: n} 包装；详情族：单 dict 条目。
+    items: list[Any] | None = None
+    total: Any = None
+    detail: dict[str, Any] | None = None
+    if isinstance(response, list):
+        items = response
+    elif isinstance(response, dict):
+        for key in ("items", "list", "events", "figures", "records", "results", "rows", "points", "nodes", "stories"):
+            if isinstance(response.get(key), list):
+                items = response[key]
+                total = response.get("total")
+                break
+        if items is None:
+            # summary/timeline/facets 一类结构响应：作总览渲染；带 title/event_id 的当详情。
+            if any(k in response for k in ("title", "event_id", "original_text", "name")):
+                detail = response
+            else:
+                overview = _stringify_export_body(response)
+                if overview.strip():
+                    sections.append(("结果总览", overview.strip()[:4000]))
+    if items is not None:
+        head = f"命中 {total if total is not None else len(items)} 条（列出 {min(len(items), 20)} 条）"
+        sections.append(("结果总览", head))
+        rows: list[str] = []
+        for i, rec in enumerate(items[:20], 1):
+            if isinstance(rec, dict):
+                brief = "；".join(_xuanshi_record_lines(rec, brief=True)) or _stringify_export_body(rec)[:120]
+            else:
+                brief = f"{rec}"
+            rows.append(f"{i}. {brief}")
+        if rows:
+            sections.append(("条目列表", _join_lines(rows)))
+    if detail is not None:
+        lines = _xuanshi_record_lines(detail, brief=False)
+        if lines:
+            sections.append(("条目详情", _join_lines(lines)))
+        related = detail.get("related") or detail.get("same_dyn") or detail.get("same_hist")
+        if isinstance(related, list) and related:
+            rel = ["、".join(f"{(r.get('title') or r.get('event_id') or r)}" if isinstance(r, dict) else f"{r}" for r in related[:8])]
+            sections.append(("相关条目", _join_lines(rel)))
+    # 出处引证聚合（列表与详情通吃）
+    cites: list[str] = []
+    pool = (items or [])[:20] + ([detail] if detail else [])
+    for rec in pool:
+        if isinstance(rec, dict) and rec.get("citation"):
+            c = f"{rec['citation']}"
+            if c not in cites:
+                cites.append(c)
+    if cites:
+        sections.append(("出处引证", _join_lines(cites[:20])))
+    return _render_snapshot_text(sections)
+
+
 def _build_relative_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
     def embedded_chart_text(chart_payload: Any) -> str:
         if not isinstance(chart_payload, dict):
@@ -6240,6 +6358,10 @@ class HorosaSkillService:
             self._java_runtime_ready = True
         unwrapped = self._unwrap_result(data)
         if not isinstance(unwrapped, dict):
+            # 玄史检索端点（/xuanshi/search、/xuanshi/timeline 等）按 jsonpickle 直吐**裸数组**——
+            # 对这族端点数组是合法形状，包一层交给调用方；其余端点维持 dict 硬约束（形状漂移要炸出来）。
+            if endpoint.startswith("/xuanshi/") and isinstance(unwrapped, list):
+                return {"items": unwrapped}
             raise ToolTransportError(
                 "Horosa endpoint returned a non-object result payload.",
                 code="transport.invalid_result_shape",
@@ -7366,6 +7488,65 @@ class HorosaSkillService:
             return any(r[1] == column for r in con.execute(f"PRAGMA table_info({table})"))
         except sqlite3.Error:
             return False
+
+    # 玄史 action → 端点全路径（存字面量：端点登记守卫按字面调用点核对）与该端点认识的参数名。
+    _XUANSHI_ACTIONS: dict[str, tuple[str, tuple[str, ...]]] = {
+        "search": ("/xuanshi/search", ("q", "limit", "tradition")),
+        "events": ("/xuanshi/events", ("q", "tradition", "dynasty", "technique", "history", "evidence", "page", "page_size")),
+        "event": ("/xuanshi/event", ("id",)),
+        "celestial": ("/xuanshi/celestial", ("dynasty", "omen", "history", "source", "year_from", "year_to", "page", "page_size")),
+        "celestial_event": ("/xuanshi/celestial_event", ("id",)),
+        "figures": ("/xuanshi/figures", ("q", "page", "page_size")),
+        "figure": ("/xuanshi/figure", ("id", "q")),
+        "dynasties": ("/xuanshi/dynasties", ()),
+        "dynasty": ("/xuanshi/dynasty", ("id", "q")),
+        "techniques": ("/xuanshi/techniques", ()),
+        "technique": ("/xuanshi/technique", ("id", "q")),
+        "terms": ("/xuanshi/celestial_terms", ()),
+        "term": ("/xuanshi/celestial_term", ("id", "q")),
+        "term_profile": ("/xuanshi/celestial_term_profile", ("id", "q")),
+        "timeline": ("/xuanshi/timeline", ("macro", "limit")),
+        "map": ("/xuanshi/map", ("period",)),
+        "graph": ("/xuanshi/persons_graph", ("top_n", "min_weight")),
+        "stories": ("/xuanshi/stories", ("page", "page_size")),
+        "story": ("/xuanshi/story", ("id",)),
+        "channels": ("/xuanshi/channels", ()),
+        "daily": ("/xuanshi/daily", ("date_key",)),
+        "summary": ("/xuanshi/summary", ()),
+        "microchronology": ("/xuanshi/microchronology", ("dynasty", "year_from", "year_to")),
+        "decade_omens": ("/xuanshi/decade_omens", ("year_from", "year_to")),
+        "facets": ("/xuanshi/facets", ("tradition", "q", "dynasty", "technique", "history", "evidence")),
+        "events_meta": ("/xuanshi/events_meta", ("tradition",)),
+    }
+
+    def _run_xuanshi_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """玄史知识库检索：runtime 自带的只读 SQLite bundle，经 chart 服务 /xuanshi/* 端点查询。
+
+        纯检索、无结果敏感设置；按 action 分派到 26 个端点之一。快照四段与 astrodata 同范式：
+        [检索条件] 恒出；[结果总览]/[条目列表]/[条目详情] 按响应形状条件产出（列表响应出总览+列表，
+        详情响应出详情）；[出处引证] 聚合条目里的 citation。
+        """
+        action = f"{payload.get('action') or 'search'}".strip() or "search"
+        spec = self._XUANSHI_ACTIONS.get(action)
+        if spec is None:
+            raise ToolValidationError(
+                f"Unknown xuanshi action: {action!r}",
+                code="tool.invalid_argument",
+                details={"allowed_actions": sorted(self._XUANSHI_ACTIONS)},
+            )
+        path, keys = spec
+        body = {k: payload.get(k) for k in keys if payload.get(k) is not None}
+        # 详情端点服务侧参名为 event_id/id 双认；figure/dynasty 等以 id 或名称查——q 兜到 id 位。
+        if "id" in keys and body.get("id") is None and payload.get("q") is not None:
+            body["id"] = payload.get("q")
+        response = self._call_remote(path, body)
+        snapshot_text = _build_xuanshi_snapshot_text(action, body, response)
+        return {
+            "action": action,
+            "xuanshi": response,
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="xuanshi", snapshot_text=snapshot_text),
+        }
 
     def _run_astrodata_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         con = self._astrodata_connect()
@@ -9596,6 +9777,8 @@ class HorosaSkillService:
             return self._run_huangli_tool(payload)
         if definition.name == "tongshu":
             return self._run_tongshu_tool(payload)
+        if definition.name == "xuanshi":
+            return self._run_xuanshi_tool(payload)
         if definition.name == "babylon":
             return self._run_babylon_tool(payload)
         if definition.name == "draconic":

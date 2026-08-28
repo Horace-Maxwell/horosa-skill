@@ -22,7 +22,7 @@ GLOBAL_AGENT_RULES: list[str] = [
 COMMON_LOCATION_FIELDS = ["date", "time", "zone/timezone", "lat/lon or gpsLat/gpsLon/location"]
 COMMON_BIRTH_FIELDS = ["birth date", "birth time", "birth timezone", "birth place / longitude / latitude"]
 CONFIRMATION_FIELDS = ["agent_confirmed_settings", "defaults_accepted", "clarification_notes"]
-PREFLIGHT_EXEMPT_TOOLS = {"export_registry", "export_parse", "knowledge_registry", "knowledge_read", "ziwei_rules", "gua_desc", "gua_meiyi", "astrodata"}
+PREFLIGHT_EXEMPT_TOOLS = {"export_registry", "export_parse", "knowledge_registry", "knowledge_read", "ziwei_rules", "gua_desc", "gua_meiyi", "astrodata", "xuanshi"}
 INPUT_CONTRACT_SCHEMA = "horosa.skill.input_contract.v1"
 
 
@@ -588,6 +588,17 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         safe_defaults=[
             {"field": "mode", "value": "mundo", "meaning": "真黄纬本体（Jim Lewis 原版口径）"},
             {"field": "lsMode", "value": "great", "meaning": "本地空间线取大圆"},
+        ],
+    ),
+    "xuanshi": _policy(
+        intent="玄史（中国玄学史知识库）：7900+ 玄学事件（原文/白话/解读/引证）、27000+ 史书天象、人物图谱、朝代/术数/天象名词与时间线。纯检索，只读。",
+        required_context=["action 或 q"],
+        ask_if_missing=[
+            {"field": "q", "question": "要查什么？（人物 / 事件关键词 / 术数名 / 天象类别皆可；也可给 action 走结构视图）"},
+        ],
+        safe_defaults=[
+            {"field": "action", "value": "search", "meaning": "缺省走全文检索"},
+            {"field": "limit", "value": 30, "meaning": "默认返回前 30 条"},
         ],
     ),
     "astrodata": _policy(

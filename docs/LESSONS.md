@@ -93,6 +93,24 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.32.0 玄史知识库接入 —— runtime 里躺了 66MB 只读库，skill 层零调用
+
+- **上游能力不只在导出面。** `/xuanshi/*` 26 个只读端点（7900+ 玄学事件 / 27000+ 史书天象 / 人物图 /
+  编辑层）随 runtime 分发已久（editorial.sqlite 66MB 就在 astropy/astrostudy/xuanshi/data/、服务挂载表
+  里一直有 /xuanshi），但它不在 aiExport 导出面上，所以段级/镜像守卫**永远不会报它**——「上游有什么
+  我们没接」的普查必须包含 websrv 端点清单 vs `_PYTHON_CHART_ENDPOINTS` 的差集，不能只看导出键。
+- **jsonpickle 直吐的端点可能返回裸数组**（/xuanshi/search、timeline 下钻等）。`_call_remote` 的
+  dict 硬约束会把它判成 `transport.invalid_result_shape`——放行必须**按端点前缀圈死**（仅 /xuanshi/*
+  包成 {items: […]}），其余端点维持硬约束，形状漂移要炸出来。
+- **端点登记守卫只认 `_call_remote("字面量")`。** 分发表形态（action → 端点全路径存表、调用处传变量）
+  的字面量在表里不在调用点——守卫要加一条对应的采集规则（本轮给 test_endpoint_registry 加了
+  `/xuanshi/[a-z_]+` 字面量扫描），否则 26 个端点全被判成死项。
+- 新工具布线在本仓已是**九件套**：schema + ToolDefinition + runner/分派 + 端点白名单 + 导出注册
+  （skill-only 键还要进 mirror 白名单）+ guidance（含 PREFLIGHT_EXEMPT，检索类工具无出生盘闸）+
+  router 关键词 + technique_provenance 条目 + 样例载荷/FakeClient 桩。bench case 与 server
+  instructions 计数由锁步守卫自动拦，文档计数由 docs-sync 拦（本轮它逐处点名了 banner.svg /
+  CLAUDE.md / AGENTS.md / 徽章 / 自检行 / 导出技法数 / bench 数——共 12 处，一处不落）。
+
 ### v0.31.0 重同步 v3.9.5 —— 版本常量锁步被证伪 + 三种 require 形态 + caller 旧于依赖
 
 - **🔴 `AI_EXPORT_SETTINGS_VERSION` 锁步不可信。** 上游 v3.9.5 给 `horary` 导出段 19 → 28（+9 段），

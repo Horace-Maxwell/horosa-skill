@@ -47,6 +47,7 @@ DIVERGENCE_WHITELIST = {
     "astrochart_like": "skill compat alias for chart13/derived astro presets",
     "generic": "skill catch-all preset for unrecognized pasted exports; no upstream technique",
     "astrodata": "名人星盘库为 skill 侧离线检索 tool；上游 aiExport 无对应导出技法（celebrity DB 页无 AI 导出契约）",
+    "xuanshi": "玄史知识库为 skill 侧检索 tool（runtime 自带只读 SQLite bundle，/xuanshi/* 端点）；上游玄史页无 AI 导出契约",
 }
 
 # upstream export keys the skill deliberately does NOT mirror. Every entry needs a reason and a ledger

@@ -387,6 +387,22 @@ class FakeClient(HorosaApiClient):
                 "conjunctions": [{"a": "Mars", "b": "Saturn", "orb": 0.05}],
                 "chart": chart_payload,
             }
+        if endpoint.startswith("/xuanshi/"):
+            # 玄史只读检索：search 返回**裸数组**（真实服务 jsonpickle 直吐 list），条目带史书引证等
+            # 富字段——桩照真实形状，桩每简化一层就关掉一层守卫。
+            return [
+                {
+                    "event_id": "XTS-027", "tradition": "正史", "history": "新唐书", "volume_no": "204",
+                    "citation": "《新唐书》卷二百零四（CCDH 17-204；对照 Kanripo KR2a0027），段29",
+                    "title": "尚献甫以荧惑犯五诸侯断己死并求厌", "period": "长安二年", "dynasty": "唐",
+                    "techniques": ["占星"], "outcome": "如断而卒",
+                },
+                {
+                    "event_id": "XTS-031", "tradition": "正史", "history": "旧唐书", "volume_no": "191",
+                    "citation": "《旧唐书》卷一百九十一", "title": "袁天纲相武则天当为天子",
+                    "period": "贞观初", "dynasty": "唐", "techniques": ["相术"], "outcome": "验",
+                },
+            ]
         if endpoint in {"/astroextra/draconic", "/astroextra/relocation"}:
             # 与 /astroextra/harmonic 同一嵌套形状：标准 chart-wrap 挂在 `chart` 键下，技法专属字段并列。
             # 桩必须同形——否则 skill 侧「盘面段全是占位存根」这类 off-by-one-level 缺陷离线看不见。

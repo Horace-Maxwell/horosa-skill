@@ -179,6 +179,7 @@ def build_sample_payloads() -> dict[str, dict]:
         "chart13": {**chart_birth, "predictive": 0},
         "huangli": {"date": "2028-04-06", "hour": 9},
         "tongshu": {"date": "2028-04-06", "school": "donggong", "event": "嫁娶"},
+        "xuanshi": {"action": "search", "q": "武则天", "limit": 5},
         "babylon": {**chart_birth, "predictive": 0},
         "chart12": {**chart_birth, "predictive": 0},
         "draconic": {**chart_birth, "predictive": 0, "orb": 2.0},

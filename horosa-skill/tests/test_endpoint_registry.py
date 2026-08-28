@@ -50,6 +50,9 @@ def _call_site_endpoints() -> set[str]:
     # ∪ 神数端点映射表（经 `_call_remote(_SHENSHU_ENDPOINTS[name], …)`）。
     text = SERVICE_PATH.read_text(encoding="utf-8")
     literals = set(re.findall(r"_call_remote\(\s*[\"']([^\"']+)[\"']", text))
+    # 分发表形态的调用点：xuanshi 一类「action → 端点全路径」表把字面量存在表里、_call_remote 传变量。
+    # 表里存的就是全路径字面量，等价于调用点——一并采集，端点守卫才不把它们误判成死项。
+    literals |= set(re.findall(r"[\"'](/xuanshi/[a-z_]+)[\"']", text))
     declared = {d.endpoint for d in TOOL_DEFINITIONS.values() if d.endpoint}
     return literals | declared | set(_SHENSHU_ENDPOINTS.values())
 

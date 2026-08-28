@@ -194,6 +194,7 @@ AI_EXPORT_TECHNIQUES = [
     {"key": "zhengchuan", "label": "神数正传"},
     {"key": "acg", "label": "占星地图"},
     {"key": "astrodata", "label": "名人星盘库"},
+    {"key": "xuanshi", "label": "玄史知识库"},
     {"key": "generic", "label": "其他页面"},
 ]
 
@@ -390,6 +391,9 @@ AI_EXPORT_PRESET_SECTIONS = {
     # 名人星盘库（离线只读检索）：列表态出 检索条件/命中列表；单人态出 检索条件/名人详情/
     # 维基摘要/数据来源 → 两态互斥，非「检索条件」外全列 optional。
     "astrodata": ["检索条件", "命中列表", "名人详情", "维基摘要", "数据来源"],
+    # 玄史知识库（skill 侧检索 tool，上游 aiExport 无对应导出技法——与 astrodata 同类，进 mirror 白名单）。
+    # 段按 action 的响应形状条件产出：列表响应出 总览+列表、详情响应出 详情，引证有则聚合。
+    "xuanshi": ["检索条件", "结果总览", "条目列表", "条目详情", "相关条目", "出处引证"],
     "generic": ["起盘信息"],
 }
 # 奇门择日 = 奇门 17 段全量 + 择日三段（单一真值源：qimen 段表改动自动跟随，与上游 aiExport.js:735 同构）。
@@ -499,6 +503,7 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     "acg": ["月宿", "古典", "古典格局", "埃及历", "可能性", "偕升纬度带", "线交点"],
     # 名人星盘库：列表态/单人态互斥，各态专属段全列可选（检索条件恒出）。
     "astrodata": ["命中列表", "名人详情", "维基摘要", "数据来源"],
+    "xuanshi": ["结果总览", "条目列表", "条目详情", "相关条目", "出处引证"],
     # 卜卦专题深化（诉讼/买房/怀孕）：仅在起卦命中 3 类专题之一时产出 [专题深化·<title>]（归一为专题深化·X）。
     # 专题深化·X 仅特定 category 出；后两段仅 renaissance/medieval 档（accidentalMode=lilly /
     # lotsSet=core15）出 —— 默认 classical 档不产，属口径差异不是缺陷。
