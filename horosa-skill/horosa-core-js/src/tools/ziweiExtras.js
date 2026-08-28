@@ -212,12 +212,22 @@ function formatLuckLayerLines(chart, layer, levelLabel, subText){
 	const head = `◆ ${levelLabel}：${layer.ganzi || ''}${subText ? `（${subText}）` : ''}`
 		+ `，命宫【${luckHouseName(chart, mingIdx, true)}】·对宫【${luckHouseName(chart, oppIdx, true)}】`;
 	lines.push(head);
-	const sihua = ZiWeiHelper.getLayerSihua(chart, layer.gan) || [];
+	// [B10-fix] 与面板同口径:消费期现算(effLayerSihuaGan),快照与 UI 恒同源
+	const sihua = ZiWeiHelper.getLayerSihua(chart, ZiWeiHelper.effLayerSihuaGan(chart, layer)) || [];
 	if(sihua.length > 0){
 		const parts = sihua.map((h)=>`${h.star}化${h.hua}（${luckHouseName(chart, h.houseIndex, true)}）`);
 		lines.push(`四化：${parts.join('、')}`);
 	}
-	const flowStars = ZiWeiHelper.getFlowStars(layer.gan, layer.zhi) || [];
+	// [D3] 流年神煞上盘开时:流年层追加 12 神落宫行(快照与盘面同源 getFlowJiangSui;默认关=基线字节稳)。
+	if(ZWEngineOptions.flowShenshaOnChart && layer.zhi && levelLabel === ZW_PERIOD_LEVEL_LABEL.liunian){
+		const fss = ZiWeiHelper.getFlowJiangSui(layer.zhi) || [];
+		if(fss.length){
+			const fmt = (g)=>fss.filter((x)=>x.group === g).map((x)=>`${x.name}(${x.zhi})`).join('、');
+			lines.push(`流年神煞·将前：${fmt('jiang')}`);
+			lines.push(`流年神煞·岁前：${fmt('sui')}`);
+		}
+	}
+	const flowStars = ZiWeiHelper.getFlowStars(layer.gan, layer.zhi, ZiWeiHelper.hourZhiOf(chart)) || [];
 	if(flowStars.length > 0){
 		const parts = flowStars.map((s)=>`${s.name}（${luckHouseName(chart, luckHouseIdxByBranch(chart, s.zhi), true)}）`);
 		lines.push(`流曜：${parts.join('、')}`);

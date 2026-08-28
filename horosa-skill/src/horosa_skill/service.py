@@ -8602,6 +8602,11 @@ class HorosaSkillService:
         # horary engine (runHorary + buildHorarySnapshot) over it. category drives the quesited house.
         category = f"{payload.get('category') or 'general'}".strip() or "general"
         chart_payload = {**payload, "predictive": 0, "tradition": payload.get("tradition", 1)}
+        # HoraryInput 把 hsys 覆写成 None 默认（「随流派档」），归一化后 None 被剥掉——而后端
+        # /chart 的 params 回显块无守卫地读 data['hsys']（上游前端恒发 hsys，从他们视角没毛病），
+        # 缺键直接 KeyError→「param error」。补 PerChart 自身默认 0（整宫制），与 BirthInput 一致。
+        if chart_payload.get("hsys") is None:
+            chart_payload["hsys"] = 0
         for stale in ("datetime", "dirZone", "dirLat", "dirLon", "category", "school"):
             chart_payload.pop(stale, None)
         response = self._call_remote("/chart", chart_payload)

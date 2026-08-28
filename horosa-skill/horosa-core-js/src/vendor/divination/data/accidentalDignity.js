@@ -113,9 +113,9 @@ export function scoreAccidental(planetKey, facts, opts){
 	// 王者/凶恒星（只取合相）
 	if(starHit(facts, p.lon, 'Regulus', opts)) add('conj_regulus', 6, '合轩辕十四 Regulus（+6）');
 	if(starHit(facts, p.lon, 'Spica', opts)) add('conj_spica', 5, '合角宿一 Spica（+5）');
-	if(starHit(facts, p.lon, 'Algol', opts)) add('conj_algol', -4, '合大陵五 Algol（−4）');
+	if(starHit(facts, p.lon, 'Algol', opts)) add('conj_algol', -5, '合大陵五 Algol（−5）');   // [H1c] 1647 传统 −5
 	// 围攻
-	if(isBesieged(planetKey, facts)) add('besieged', -4, '被土火围攻 besieged（−4）');
+	if(isBesieged(planetKey, facts)) add('besieged', -5, '被土火围攻 besieged（−5）');   // [H1c] 1647 传统 −5(旧 −4 系数值偏差;死链修复时一并校正)
 
 	const total = items.reduce((s, x) => s + x.score, 0);
 	return { total, items };

@@ -259,6 +259,14 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 ## 5. 新增技法 / re-vendor（集成决策树 + 布线清单）
 
+**同步健康的权威判据（v0.31.0 教训）**：`AI_EXPORT_SETTINGS_VERSION` 锁步**不可信**——上游可以加段
+不 bump 版本（v3.9.5 给 horary +9 段、常量原地 56）。判断是否漂移只认两个：
+`verify_upstream_sync.py --require-upstream`（sentinel sha256）与
+`verify_export_section_baseline.py --source upstream --require-upstream`（段级、preflight 同款）；
+裸跑默认参数在这类失败上**恒绿**。重灌 vendor 树后，`vendor_manifest.json` 里 bespoke/curated 条目
+（手工抽取件）要逐一与上游现函数对文本——机械 `--from-manifest` 不覆盖它们，「caller 旧于 vendored
+依赖」是它们的专属漂移形态。
+
 **四分决策树**（新技法先归类，再动手）：
 
 1. **后端已有 `/predict/*` · `/astroextra/*` 端点** → Python：`_call_remote` + Python snapshot builder；

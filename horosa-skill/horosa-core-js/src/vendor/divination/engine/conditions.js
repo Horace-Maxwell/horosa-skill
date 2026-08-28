@@ -2,6 +2,8 @@
 // 单星状态 → 统一结构 {key,value,polarity,weight,text_zh}（构建清单 §2.1）。
 import { PLANETS } from '../data/planets.js';
 
+import { marsSaturnAttacksOf } from './resultShapes.js';
+import { benignSurroundsOf } from './resultShapes.js';
 import { scoreAccidental } from '../data/accidentalDignity.js';
 
 function cn(key){ return (PLANETS[key] || {}).cn || key; }
@@ -18,13 +20,13 @@ function speedNote(p){
 
 // 被夹（surround.attacks 含该星 chartId）
 export function isBesieged(key, facts){
-	const sur = facts && facts.result && facts.result.surround;
-	if(!sur) return false;
-	const cid = (facts.planets[key] || {}).chartId;
-	const inList = (arr) => Array.isArray(arr) && arr.some((x) => x === cid || (x && (x.id === cid || x.planet === cid || x.target === cid)));
-	if(inList(sur.attacks)) return true;
-	if(sur.planets && inList(sur.planets.attacks)) return true;
-	return false;
+	// [H1c 死链根修] 旧读法期待 surround.attacks 为数组——后端真形状是按行星分桶的 dict,
+	// 本函数恒 false → 判前考量#11/#16、单星 −2、1647 满分表围攻分四处全哑。
+	// ⚠️ 语义陷阱:attacks 按型分桶,仅 MarsSaturn 桶是凶围(围攻);VenusJupiter=围荣(吉)、
+	// SunMoon=围耀(贵)——「非空即被围」会把吉围判凶=反向错判。凶围恒走 marsSaturnAttacksOf。
+	const cid = (facts && facts.planets && facts.planets[key] || {}).chartId;
+	if(!cid) return false;
+	return marsSaturnAttacksOf(facts.result, cid).length >= 2;   // 围=两侧夹击(火+土两攻方记录)
 }
 
 // opts（可选;不传=既有行为字节不变）:
@@ -73,6 +75,35 @@ export function planetCondition(key, facts, opts){
 
 	const sp = speedNote(p);
 	if(sp) f.push(sp);
+
+	// [H4b 门控] backendConditionNotes(default false=现状零回归;renaissance/medieval 绑 true):
+	// 后端金矿字段入证词——留驻/度性/特殊度注记+围荣围耀正面证词(H4a 只映射,此处消费)。
+	if(opts && opts.backendConditionNotes){
+		if(p.stationState === 'S'){
+			f.push({ key: 'station', value: 'S', polarity: 'negative', weight: 1, text_zh: `${name} 临留驻（将转向），事有停滞/转折` });
+		}else if(p.stationState === 'D'){
+			f.push({ key: 'station', value: 'D', polarity: 'neutral', weight: 0, text_zh: `${name} 刚回顺，停滞方过、事渐启动` });
+		}
+		if(p.degreeQuality){
+			const DQ = { Bright: ['positive', '光明度，事显而顺'], Smoky: ['negative', '烟雾度，事晦暗不明'], Dark: ['negative', '暗黑度，事阻而暗'], Empty: ['neutral', '亏空度，事平淡少应'] };
+			const dq = DQ[p.degreeQuality];
+			if(dq){ f.push({ key: 'degree_quality', value: p.degreeQuality, polarity: dq[0], weight: dq[0] === 'neutral' ? 0 : 1, text_zh: `${name} 落${dq[1]}` }); }
+		}
+		if(p.specialDegree){
+			f.push({ key: 'special_degree', value: p.specialDegree, polarity: 'neutral', weight: 0, text_zh: `${name} 临特殊度（${p.specialDegree}）` });
+		}
+		// 围荣(金木环护)/围耀(日月环护)正面证词——与凶围(isBesieged)互斥面,分桶读法恒不混
+		const cid2 = p.chartId;   // chartFacts 映射恒带 chartId
+		if(cid2){
+			const bn = benignSurroundsOf(facts.result, cid2);
+			if(bn.venusJupiter.length >= 2){
+				f.push({ key: 'benign_vj', value: true, polarity: 'positive', weight: 2, text_zh: `${name} 围荣（金木两侧环护），得吉星卫拱` });
+			}
+			if(bn.sunMoon.length >= 2){
+				f.push({ key: 'benign_sm', value: true, polarity: 'positive', weight: 1, text_zh: `${name} 围耀（日月两侧环护），得二曜辉映` });
+			}
+		}
+	}
 
 	let accidental = null;
 	if(opts && opts.accidentalMode === 'lilly'){

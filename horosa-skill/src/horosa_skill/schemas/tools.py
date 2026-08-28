@@ -85,8 +85,9 @@ class BirthInput(FlexibleModel):
     leoBoundFirst: Any | None = Field(default=None, description="狮子座界首主星口径。")
     geminiBoundEmended: Any | None = Field(default=None, description="双子界表勘误（v3.6.0 修订）。")
     triplicity: Any | None = Field(default=None, description="三分主星体系（Dorotheus / Ptolemy 等）。")
+    # saturnExalt20 已随上游 v3.9.3 删档（2026-08-18 上游拍板：degree 位全仓零消费者=真死开关，
+    # push_request_exalt_variants 签名 2→1 参）。typed 字段保留只会向 agent 广告一个死开关。
     nodeExaltation: Any | None = Field(default=None, description="交点是否参与旺弱(exaltation)判定。")
-    saturnExalt20: Any | None = Field(default=None, description="土星旺度取 20° 还是 21°。")
     gpsLat: float | None = None
     gpsLon: float | None = None
     includePrimaryDirection: bool | None = None

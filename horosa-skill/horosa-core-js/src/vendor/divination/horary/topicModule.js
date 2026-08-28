@@ -3,6 +3,11 @@
 // 纯派生自 facts（宫主 + 单星状态），不改动通用完成法/裁决；供右栏「裁决」专题卡 + AI 快照。
 import { PLANETS } from '../data/planets.js';
 import { SIGNS } from '../data/signs.js';
+import { aspectBetween } from '../engine/aspectsEngine.js';
+import { mutualReceptionBetween } from '../engine/reception.js';
+import { DIR_BY_ELEMENT } from '../data/directions.js';
+import { signOfLon } from '../data/signs.js';
+import { lotDispositor } from '../data/lots.js';
 
 function cn(k){ return (PLANETS[k] || {}).cn || k || '—'; }
 const ANG_BONUS = { angular: 2, succedent: 0, cadent: -1.5 };
@@ -39,7 +44,7 @@ function cmpLine(facts, aKey, aLabel, bKey, bLabel){
 	return { polarity: pol, text: `${aLabel}（${cn(aKey)}·${stateWord(facts, aKey)}） 对 ${bLabel}（${cn(bKey)}·${stateWord(facts, bKey)}） → ${who}。` };
 }
 
-export function buildTopicDeepening(facts, category){
+export function buildTopicDeepening(facts, category, opts){
 	if(category === 'lawsuit'){
 		const l1 = lordOf(facts, 1); const l7 = lordOf(facts, 7); const l10 = lordOf(facts, 10);
 		const lines = [cmpLine(facts, l1, '本方（1宫）', l7, '对方（7宫）')];
@@ -144,9 +149,73 @@ export function buildTopicDeepening(facts, category){
 		};
 	}
 	if(category === 'lost'){
-		return buildLostObject(facts);
+		return buildLostObject(facts, opts);
+	}
+	// ── [H6] 三新专题:婚姻分科 / 走失活物 / 通用买卖 ──
+	if(category === 'marriage'){
+		return buildMarriageTopic(facts);
+	}
+	if(category === 'lost_animal'){
+		return buildLostAnimal(facts);
+	}
+	if(category === 'trade'){
+		const l1 = lordOf(facts, 1); const l7 = lordOf(facts, 7); const l10 = lordOf(facts, 10); const l4 = lordOf(facts, 4);
+		const lines = [
+			cmpLine(facts, l1, '买方（1宫）', l7, '卖方（7宫）'),
+			{ polarity: (strengthOf(facts, l4) >= 0 ? 'positive' : 'negative'), text: `货物/标的＝4宫主 ${cn(l4)}（${stateWord(facts, l4)}）→ ${strengthOf(facts, l4) >= 0 ? '货物品质尚可' : '货物有瑕/名不副实'}。` },
+			{ polarity: (strengthOf(facts, l10) >= 0 ? 'positive' : 'negative'), text: `价格/成交＝10宫主 ${cn(l10)}（${stateWord(facts, l10)}）→ ${strengthOf(facts, l10) >= 0 ? '价钱公道、成交趋顺' : '价钱纠葛、成交多波折'}。` },
+			{ polarity: 'neutral', text: '成交之征：1宫主与7宫主入相位（尤有接纳/传递）;两主刑冲无接纳/被阻 → 谈不拢。' },
+		];
+		return { title: '通用买卖四角（1买·7卖·4货·10价）', lines };
 	}
 	return null;
+}
+
+// ── [H6] 婚姻分科:两主接通 + 金星(婚姻自然征象) + 日月配合(男女光体) + 7 宫互容专查。──
+function buildMarriageTopic(facts){
+	const l1 = lordOf(facts, 1); const l7 = lordOf(facts, 7);
+	const lines = [cmpLine(facts, l1, '问者（1宫）', l7, '对象（7宫）')];
+	const venus = facts.planets.venus;
+	const venusBad = venus && (venus.retro || venus.combustion === 'combust' || venus.dignityScore <= -4);
+	lines.push({ polarity: venusBad ? 'negative' : 'positive', text: venusBad ? `金星（婚姻自然征象）受损（${stateWord(facts, 'venus')}）→ 情缘之象偏弱。` : `金星（婚姻自然征象）状态尚可（${stateWord(facts, 'venus')}）→ 有利情缘。` });
+	// 日月配合:传统以日=男方光体、月=女方光体,两光吉相=阴阳相谐。
+	const sm = aspectBetween(facts, 'sun', 'moon');
+	if(sm && [0, 60, 120].indexOf(sm.angle) >= 0){
+		lines.push({ polarity: 'positive', text: `日月${sm.angle === 0 ? '合相' : (sm.angle === 60 ? '六合' : '三合')}（男女光体相谐）→ 阴阳相合,婚象得助。` });
+	}else if(sm && [90, 180].indexOf(sm.angle) >= 0){
+		lines.push({ polarity: 'negative', text: `日月${sm.angle === 90 ? '四分' : '对分'}（男女光体相违）→ 两家/两人之间多扞格。` });
+	}else{
+		lines.push({ polarity: 'neutral', text: '日月无主相位 → 光体配合中平,以两主接通为断。' });
+	}
+	// 7 宫互容专查(契约层 mutualPairsOf;两主互容=婚成有力之征)。
+	if(l1 && l7 && l1 !== l7){
+		const mu = mutualReceptionBetween(facts, l1, l7);
+		if(mu){
+			const strong = mu.some((x) => x.strong);
+			lines.push({ polarity: 'positive', text: `两主互容（${strong ? '庙旺级·有力' : '次尊贵级'}）→ 彼此接纳,婚象大利${strong ? ',几可独立成事' : ''}。` });
+		}
+	}
+	return { title: '婚姻分科（两主接通·金星·日月配合·互容）', lines };
+}
+
+// ── [H6] 走失活物:小活物(猫犬禽)＝6 宫;大牲畜(马牛等驮畜)＝12 宫——两宫对照并给方位。──
+function buildLostAnimal(facts){
+	const l6 = lordOf(facts, 6); const l12 = lordOf(facts, 12);
+	const dirLine = (key, label) => {
+		const pp = key && facts.planets[key];
+		const el = pp && SIGNS[pp.sign] ? SIGNS[pp.sign].element : null;
+		const d = el && DIR_BY_ELEMENT[el];
+		return d ? `${label}征象星落${el === 'fire' ? '火' : (el === 'earth' ? '土' : (el === 'air' ? '风' : '水'))}象 → 方位偏${d.dir}（${d.terrain}）` : null;
+	};
+	const lines = [
+		{ polarity: 'neutral', text: `小活物（猫犬禽类）＝6宫主 ${cn(l6)}（${stateWord(facts, l6)}）;大牲畜（马牛驮畜）＝12宫主 ${cn(l12)}（${stateWord(facts, l12)}）。` },
+		{ polarity: 'neutral', text: '寻回之征：该征象星与 1宫主/月亮入相位（尤有容纳）;征象星落角宫 → 未走远。' },
+	];
+	const d6 = dirLine(l6, '小活物'); if(d6){ lines.push({ polarity: 'neutral', text: d6 + '。' }); }
+	const d12 = dirLine(l12, '大牲畜'); if(d12){ lines.push({ polarity: 'neutral', text: d12 + '。' }); }
+	const p6 = l6 && facts.planets[l6];
+	if(p6 && (p6.house === 8 || p6.house === 12)){ lines.push({ polarity: 'negative', text: '小活物征象星落 8/12 宫 → 有失亡/被困之虞。' }); }
+	return { title: '走失活物（6宫小活物·12宫大牲畜）', lines };
 }
 
 // ── B6 疾病 decumbiture + 危象日（月亮自本位每 45° 一站;90°/180° 为最凶险节点）。
@@ -179,17 +248,33 @@ const LOST_PLACE_BY_ELEMENT = {
 	air: '高处/空中/墙上/窗架通风处',
 	water: '近水/低湿处/水管盥洗/北向之所',
 };
-function buildLostObject(facts){
+function buildLostObject(facts, opts){
 	const l2 = lordOf(facts, 2);
 	const p2 = l2 && facts.planets[l2];
 	const el = p2 && SIGNS[p2.sign] ? SIGNS[p2.sign].element : null;
 	const near = p2 && p2.angularity === 'angular';
 	const lines = [
-		{ polarity: 'neutral', text: `失物＝2宫主 ${cn(l2)}（${stateWord(facts, l2)}）;以最能描述该物之星为准（活物另按 6/12 宫）。` },
+		{ polarity: 'neutral', text: `失物＝2宫主 ${cn(l2)}（${stateWord(facts, l2)}）;以最能描述该物之星为准（活物另按「走失活物」类）。` },
 		{ polarity: near ? 'positive' : 'neutral', text: near ? '失物象征星落角宫 → 在近处/易得。' : (p2 && p2.angularity === 'cadent' ? '失物象征星落果宫 → 远/难寻或被移动。' : '失物象征星落续宫 → 不远不近。') },
 	];
 	if(el) lines.push({ polarity: 'neutral', text: `场所类型（象征星元素=${el}）：${LOST_PLACE_BY_ELEMENT[el]}。` });
 	if(p2 && (p2.house === 8 || p2.house === 12)) lines.push({ polarity: 'negative', text: '象征星落 8/12 宫 → 难寻或被藏匿。' });
+	// [H6] 福点=失物之所在(传统失物三征之一):按 pofReversal 口径算落座+定位星。
+	const asc = facts.meta.ascLon; const sun = facts.planets.sun && facts.planets.sun.lon; const moon = facts.planets.moon && facts.planets.moon.lon;
+	if(asc != null && sun != null && moon != null){
+		const useNight = !!(opts && opts.pofReversal) && !facts.meta.isDiurnal;
+		const pofLon = (((useNight ? (asc + sun - moon) : (asc + moon - sun)) % 360) + 360) % 360;
+		const pofSign = SIGNS[signOfLon(pofLon)];
+		const disp = lotDispositor(pofLon);
+		const pofEl = pofSign && pofSign.element;
+		lines.push({ polarity: 'neutral', text: `福点（失物之所）落${pofSign ? pofSign.cn : '—'}座 ${(pofLon % 30).toFixed(1)}°${disp ? '·定位星' + cn(disp) : ''}${pofEl ? '（' + LOST_PLACE_BY_ELEMENT[pofEl] + '）' : ''}。` });
+	}
+	// [H6] 月亮方位(线索之向):月亮所落元素定方向。
+	const pm = facts.planets.moon;
+	if(pm && SIGNS[pm.sign]){
+		const d = DIR_BY_ELEMENT[SIGNS[pm.sign].element];
+		if(d){ lines.push({ polarity: 'neutral', text: `月亮（线索）方位：偏${d.dir}（${d.terrain}）。` }); }
+	}
 	lines.push({ polarity: 'neutral', text: '寻回之征：失物象征星与 1宫主/月亮入相位（尤有容纳）;月亮入相位失物星 → 有线索。' });
 	return { title: '失物寻回（非盗窃·2宫动产）', lines };
 }

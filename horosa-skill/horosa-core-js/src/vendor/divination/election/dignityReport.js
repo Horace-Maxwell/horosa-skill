@@ -11,6 +11,7 @@ import { receptionsOf } from '../engine/reception.js';
 import { aspectsOf, applyingAspects } from '../engine/aspectsEngine.js';
 import { isBesieged } from '../engine/conditions.js';
 import { norm360, angularDist } from '../engine/utils.js';
+import { classicalGlobalValue } from '../../utils/classicalChartGlobals.js';
 
 const SEVEN = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn'];
 const OUTER = ['uranus', 'neptune', 'pluto'];
@@ -53,7 +54,15 @@ export function essentialMatrix(facts, eff){
 		if(row.face) score += DIGNITY_SCORE.face;
 		if(row.detriment) score += DIGNITY_SCORE.detriment;
 		if(row.fall) score += DIGNITY_SCORE.fall;
-		if(row.peregrine && !row.detriment && !row.fall) score -= 5;   // 外来 −5(1647 计分)
+		// [WP-4] 外来减分可调:默认 −5(1647 计分零回归)/0(不减,另派口径)——读全局仓单键。
+		if(row.peregrine && !row.detriment && !row.fall){
+			let pg = -5;
+			try{
+				const v = Number(classicalGlobalValue('peregrineScore'));
+				if(Number.isFinite(v)){ pg = v; }
+			}catch(e){ /* 守默认 */ }
+			score += pg;
+		}
 		row.score = score;
 		return row;
 	});

@@ -3,6 +3,7 @@
 // 星座 0=白羊..11=双鱼;界/外观度数为座内 0-30;行星名 Sun/Moon/Mercury/Venus/Mars/Jupiter/Saturn/NorthNode/SouthNode。
 import DATA from './hellenisticData.json' with { type: 'json' };
 import EXT from './hellenisticDataExt.json' with { type: 'json' };
+import * as __req0 from '../../utils/customCalibreStores.js';
 
 export const HELLENISTIC = DATA;
 export const HELLENISTIC_EXT = EXT;
@@ -95,6 +96,17 @@ let _geminiVariantCache = null;
 export function termsTableForVariant(variant, isDiurnal, baseTables, egyptianFallback, opts){
 	const v = Number(variant) || 0;
 	if(v === 3){ return isDiurnal ? CHALDEAN_TERMS_DAY : CHALDEAN_TERMS_NIGHT; }
+	// [F5] 4=自定义界表:显示层与后端同表(否则界环/行星表按埃及画、尊贵按自定义算,同屏矛盾);
+	// 无合法表回落埃及=与后端降级同语义。
+	if(v === 4){
+		try{
+			// [R2-3] 随盘/回显表体优先(opts=chartObj.params,后端算的就是这份表);无则回落本机编辑器仓。
+			const custom = __req0.customTermsDisplayTables(
+				isDiurnal, opts && opts.customTermsDay, opts && opts.customTermsNight);
+			if(custom && custom.upper){ return custom.upper; }
+		}catch(e){ /* 回落埃及 */ }
+		return (baseTables && baseTables[0]) || egyptianFallback;
+	}
 	const base = (baseTables && baseTables[v]) || egyptianFallback;
 	if(v === 1 && opts && opts.leoBoundFirst && base){
 		if(!_leoVariantCache || _leoVariantCache.base !== base){

@@ -1,10 +1,17 @@
 // 从上游 ZWLuckPanel.js 精确抽出的运限项构建闭包（该文件其余部分是 React 组件，整份 vendor
-// 会把 JSX 带进来、Node 直接解析失败 —— 本轮踩到）。函数体与常量逐字未改。
+// 会把 JSX 带进来、Node 直接解析失败）。函数体与常量逐字未改。
+// v3.9.4/v3.9.5 对齐：birthYearOf 补 ganzhiYearBase 干支年基准修正（真值修复——此前流年归属
+// 可能错年）；buildLiunianItems 补 liunianSihuaGan='ming_gong_gan' 分支；buildLiuyueItems 补
+// liuYueBasis='taisui' 锚；buildXiaoxianItems 改走 ZiWeiHelper.xiaoxianClockwise（此前 inline 读
+// localStorage，headless 恒抛 → 阴阳选项被静默忽略）。
 import { julianDayIndex } from '../utils/julianDayIndex.js';
 import { parseYearFromDateStr } from '../bazi/dateStrSafe.js';
+import { ganzhiYearBase } from '../utils/ganzhiYearBase.js';
 import { Lunar, LunarMonth } from 'lunar-javascript';
 import * as ZWConst from '../bazi/ZWConst.js';
 import * as ZiWeiHelper from './ZiWeiHelper.js';
+import { ZWEngineOptions } from './ziweiOptions.js';
+import { XIAOXIAN_START } from './data/ziweiTables.js';   // [B15b] 小限起宫表单源
 
 const DAY_ANCHOR_IDX = 28;
 
@@ -17,13 +24,7 @@ const GANS = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '�
 const LUNAR_MONTH = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月'];
 
 const SHICHEN = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
-
-const XIAOXIAN_START = {
-	'寅': '辰', '午': '辰', '戌': '辰', '申': '戌', '子': '戌', '辰': '戌',
-	'亥': '丑', '卯': '丑', '未': '丑', '巳': '未', '酉': '未', '丑': '未',
-};
-
-// houses[] 是连续地支但起始宫不固定 → 必须按地支搜数组下标，不可用 DIZI 位置
+// [D0] 四化底色并入 ZWConst.ZWColor 单源(本地副本已删;值经逐项核对相同)。
 
 const ZI_HOUR_START = { '甲': '甲', '己': '甲', '乙': '丙', '庚': '丙', '丙': '戊', '辛': '戊', '丁': '庚', '壬': '庚', '戊': '壬', '癸': '壬' };
 
@@ -52,11 +53,19 @@ function buildLiunianItems(chart, daxian) {
 		const gz = yearGanzi(year);
 		if (!gz || gz.length < 2) continue;
 		const zhi = gz.charAt(1);
-		out.push({
+		const mingIndex = houseIdxByBranch(chart, zhi);
+		const item = {
 			id: `ln-${year}`, level: 'liunian', year, age: daxian.start + k, ganzi: gz,
-			gan: gz.charAt(0), zhi, mingIndex: houseIdxByBranch(chart, zhi),
+			gan: gz.charAt(0), zhi, mingIndex,
 			top: `${year}`, sub: `${gz}`,
-		});
+		};
+		// [B10] 流年四化取干两法:ming_gong_gan=以流年命宫宫干起四化(飞星系用法)。
+		// 默认档不加字段(item 形状字节稳);消费点统一 `layer.sihuaGan || layer.gan`。
+		// 流曜恒用 layer.gan(流曜按流年干,不随此档);流月干独立五虎遁不受染。
+		if(ZWEngineOptions.liunianSihuaGan === 'ming_gong_gan' && mingIndex >= 0 && chart.houses[mingIndex] && chart.houses[mingIndex].ganzi){
+			item.sihuaGan = chart.houses[mingIndex].ganzi.charAt(0);
+		}
+		out.push(item);
 	}
 	return out;
 }
@@ -67,17 +76,12 @@ function buildXiaoxianItems(chart, daxian) {
 	if (!startZhi) return [];
 	const startIdx = houseIdxByBranch(chart, startZhi);
 	if (startIdx < 0) return [];
-	const male = chart.gender === 'Male' || chart.gender === 1 || chart.gender === '1';
 	// P1-B 小限顺逆：'0'=男顺女逆(现状默认，零回归) / '1'=阳男阴女顺、阴男阳女逆(中州)。
-	let xxMode = '0';
-	try { xxMode = localStorage.getItem('ziweiXiaoxianYinyang') || '0'; } catch (e) { xxMode = '0'; }
-	let clockwise;
-	if (xxMode === '1') {
-		const yang = chart.yearPolar === 'Positive';
-		clockwise = (yang && male) || (!yang && !male);
-	} else {
-		clockwise = male;
-	}
+	// [B15] 迁入 ZWEngineOptions 单例(挂载/导出走 builder set/finally 临时覆盖,不再兜转 localStorage);
+	// LS 键 ziweiXiaoxianYinyang 沿用,由 ZiWeiInput 构造器读入单例。
+	// [B15b] 判定单源化:ZiWeiHelper.xiaoxianClockwise(内核=ziweiCore.xiaoxianClockwiseFor,读同一单例)——
+	// 盘面岁数条/本地引擎与本函数三消费点同口径,金标对拍锁(ziweiXiaoxianSyncWiring)。
+	const clockwise = ZiWeiHelper.xiaoxianClockwise(chart);
 	const birthY = birthYearOf(chart);
 	const out = [];
 	for (let age = daxian.start; age <= daxian.end; age++) {
@@ -100,13 +104,17 @@ function buildLiuyueItems(chart, year) {
 	const gz = yearGanzi(year);
 	const yearGan = gz.charAt(0);
 	const yearZhi = gz.charAt(1);
-	const doujunZhi = ZiWeiHelper.getDouJun(chart.zidou, yearZhi);
-	const doujunIdx = houseIdxByBranch(chart, doujunZhi);
+	// [P3c] 流月起法两档:doujun 斗君宫起正月(默认=现状,三合/四化主流) / taisui 太岁宫(流年支所在宫)起正月。
+	// 本函数同时喂 UI 面板与快照 builder(ZiWeiMain import),两处口径自动一致。
+	const anchorZhi = ZWEngineOptions.liuYueBasis === 'taisui'
+		? yearZhi
+		: ZiWeiHelper.getDouJun(chart.zidou, yearZhi);
+	const anchorIdx = houseIdxByBranch(chart, anchorZhi);
 	const out = [];
 	for (let m = 0; m < 12; m++) {
 		const gan = monthGan(yearGan, m);
 		const zhi = DIZI[(2 + m) % 12]; // 正月建寅
-		const mingIndex = doujunIdx < 0 ? -1 : (doujunIdx + m) % 12;
+		const mingIndex = anchorIdx < 0 ? -1 : (anchorIdx + m) % 12;
 		out.push({
 			id: `ly-${year}-${m}`, level: 'liuyue', month: m + 1, year,
 			ganzi: gan + zhi, gan, zhi, mingIndex,
@@ -182,7 +190,10 @@ function houseIdxByBranch(chart, zhi) {
 function birthYearOf(chart) {
 	if (chart && chart.birth) {
 		const y = parseYearFromDateStr(`${chart.birth}`);
-		if (!Number.isNaN(y)) return y;
+		if (!Number.isNaN(y)) {
+			const gz = `${(chart.yearGan || '')}${(chart.yearZi || '')}`.trim();
+			return gz.length >= 2 ? ganzhiYearBase(y, gz) : y;
+		}
 	}
 	return 2000;
 }

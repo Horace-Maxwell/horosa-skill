@@ -181,13 +181,51 @@ def _rewrite_inline_requires(text: str) -> tuple[str, list[str]]:
         if not target.startswith("."):
             continue  # 第三方包（moment 之类）不在 vendor 闭包里，留给人工判断
         suffixed = target if target.endswith((".js", ".json", ".mjs")) else f"{target}.js"
-        imports.append(f"import {{ {symbols} }} from '{suffixed}';")
-        text = text.replace(match.group(0), "", 1)
+        # 去重：上游偶有「顶层已静态 import 某符号，函数体内又惰性 require 同一符号」的写法
+        # （astroClassicalDerived.js 的 SIGNS）。此时只删 require 行、不再造第二条 import——
+        # 否则 `Identifier 'X' has already been declared`，整个模块图加载失败。
+        symbol_names = [s.strip().split(" as ")[-1].strip() for s in symbols.split(",") if s.strip()]
+        rest = text.replace(match.group(0), "", 1)
+        already = all(
+            re.search(rf"^import\s+(?:\{{[^}}]*\b{re.escape(name)}\b[^}}]*\}}|\*\s+as\s+{re.escape(name)}\b|{re.escape(name)}\b)[^\n]*from\s", rest, re.M)
+            for name in symbol_names
+        )
+        text = rest
+        if already:
+            notes.append(f"require dropped (already imported): {{{symbols}}}")
+            continue
+        stmt = f"import {{ {symbols} }} from '{suffixed}';"
+        # 同一文件里同一符号可能被惰性 require **多次**（topicModule.js 的 DIR_BY_ELEMENT ×2）——
+        # 队列内也要去重，否则 hoist 出两条相同 import → `Identifier 'X' has already been declared`。
+        queued = {n for s in imports for n in re.findall(r"\{\s*([^}]+?)\s*\}", s) for n in [x.strip().split(" as ")[-1].strip() for x in n.split(",")]}
+        if stmt in imports or any(name in queued for name in symbol_names):
+            notes.append(f"require dropped (queued dup): {{{symbols}}}")
+            continue
+        imports.append(stmt)
         notes.append(f"require→import {{{symbols}}} from {target}")
+    # 第三种形态：**表达式内** `require('./x').prop`（既非顶层也非解构语句，直接嵌在表达式里——
+    # ZiWeiHelper.js 的 `require('./ziweiOptions').ZWEngineOptions.kuiYue`）。语句形正则抓不到它，
+    # ESM 下运行到就 ReferenceError。改写：hoist 成命名空间 import，表达式处换成别名。
+    expr_targets: dict[str, str] = {}
+    def _expr_alias(match: re.Match[str]) -> str:
+        target = match.group(1)
+        if not target.startswith("."):
+            return match.group(0)  # 第三方包留给人工
+        if target not in expr_targets:
+            expr_targets[target] = f"__req{len(expr_targets)}"
+        return expr_targets[target]
+    text = re.sub(r"require\(\s*['\"]([^'\"]+)['\"]\s*\)", _expr_alias, text)
+    for target, alias in expr_targets.items():
+        suffixed = target if target.endswith((".js", ".json", ".mjs")) else f"{target}.js"
+        imports.append(f"import * as {alias} from '{suffixed}';")
+        notes.append(f"require-expr→namespace import {alias} ← {target}")
     if imports:
-        # 插在最后一条既有 import 之后；文件若无 import 则置顶。
+        # 插在最后一条**完整** import 语句之后；文件若无 import 则置顶。
+        # 🔴 插入点必须按完整语句匹配（含多行 `import {\n …\n} from '…';` 形态）——按单行匹配时，
+        # 多行块的首行 `import {` 也命中，「最后一条 import 之后」会落在块**中间**，把它劈成
+        # 两截 → SyntaxError: Unexpected token '}'（lifespanEngine.js 实测踩到）。
         last = None
-        for m in re.finditer(r"^import\s[^\n]*\n", text, re.M):
+        for m in re.finditer(r"^import\b[^;'\"]*(?:['\"][^'\"]*['\"])?;?\s*?\n|^import\s*\{[^}]*\}\s*from\s*['\"][^'\"]+['\"];?\s*?\n|^import\b[\s\S]*?from\s*['\"][^'\"]+['\"];?\s*?\n", text, re.M):
             last = m
         block = "\n".join(imports) + "\n"
         text = (text[: last.end()] + block + text[last.end() :]) if last else block + text

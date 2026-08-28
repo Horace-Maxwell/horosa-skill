@@ -99,7 +99,7 @@ export function runElection(result, topicId, natalFacts, mundaneSet, opts){
 	const sections = runModules(facts, topic, school);
 	const flags = evalHardFlags(facts, topic, school);
 	const topicPack = evaluateTopicPack(facts, topic, opts);
-	const scored = scoreReport(sections, flags, school);
+	const scored = scoreReport(sections, flags, school, topic);   // [重标定] critical 按用事 must_avoid 分流
 	const natal = natalFacts ? natalIntegration(natalFacts, facts, eff) : null;
 	const mundane = mundaneSet ? mundaneIntegration(facts, mundaneSet) : null;
 	return {

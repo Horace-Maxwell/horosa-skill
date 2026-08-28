@@ -1,8 +1,6 @@
-// Vendored from 星阙 JinKouMain.js —— 金口诀 AI 快照 32 段（buildJinKouSnapshotText + 5 个模块级
-// 格式化助手）。网络/React 部分不取；纯格式化函数，消费 buildJinKouData(解读层) + liureng 前置数据。
-//
-// 与上游 JinKouMain.js 的差异仅为「去掉 React 与网络层」——段构建逻辑逐字未改，包括 pushMdRows
-// 产出的 GFM 表格排版（金口诀四位/三盘/四位生克/十二长生 四段上游已表化）。
+// Vendored from 星阙 JinKouMain.js —— 金口诀 AI 快照（buildJinKouSnapshotText + 5 个模块级
+// 格式化助手 + MD_DASH）。网络/React 部分不取；纯格式化函数，消费 buildJinKouData(解读层) +
+// liureng 前置数据。v3.9.4 对齐：四位表后补类象图例行、地支关系补 desc 后缀。
 import { ZSList, ZhangSheng } from '../liureng/LRZhangSheng.js';
 import { JINKOU_SIXIANG_SHU_COLS, JINKOU_SIXIANG_WUXING_COLS } from './JinKouDoc.js';
 
@@ -188,6 +186,8 @@ export function buildJinKouSnapshotText(params, liureng, runyear, jinkouData, wu
 			row.label, fmtValue(row.gan), fmtValue(row.content), fmtValue(row.shenjiang), fmtValue(row.power), fmtValue(row.kong), row.nayin ? fmtValue(row.nayin) : '',
 		]);
 		pushMdRows(lines, ['位', '天干', '内容', '神将', '状态', '空亡', '纳音'], siWeiRows);
+		// [审计修] 四位类象参考行(右栏「四位」tab 渲染有快照无;固定类象表,与渲染同文)。
+		lines.push('四位类象：四人元=尊、客、天、君、祖、外；三贵神=上、主、宰相、臣、父、官禄；二月将=中、己身、妻财、亲戚、内；一地分=下、田宅、子孙、奴仆、鞍马、六畜');
 	}else{
 		lines.push('无');
 	}
@@ -286,7 +286,8 @@ export function buildJinKouSnapshotText(params, liureng, runyear, jinkouData, wu
 	if(jinkouData && jinkouData.branchRelations && jinkouData.branchRelations.length){
 		for(let i=0; i<jinkouData.branchRelations.length; i++){
 			const b = jinkouData.branchRelations[i];
-			lines.push(`${b.aLabel}${b.a} ${b.type} ${b.bLabel}${b.b}`);
+			// [审计修] 补关系说明句 b.desc(右栏渲染有快照无)。
+			lines.push(`${b.aLabel}${b.a} ${b.type} ${b.bLabel}${b.b}${b.desc ? `：${b.desc}` : ''}`);
 		}
 	}else{
 		lines.push('无');

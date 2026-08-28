@@ -92,6 +92,37 @@ export const HORARY_PARAM_SPEC = [
 		options: [ { value: 'either', label: '两口径任一' }, { value: 'lilly', label: '行星统辖版' }, { value: 'bonatti', label: '落座元素版' } ] },
 	{ key: 'perfectionStrict', group: '判读', scope: 'horary', label: '完成法严格度', type: 'select', default: 'standard',
 		options: [ { value: 'standard', label: '标准' }, { value: 'strict', label: '严格' }, { value: 'lenient', label: '宽松' } ] },
+	// —— [H2] 完成法新五键(default 全=现状零回归;流派学理差异见 SCHOOL_JUDGE_DIFF) ——
+	{ key: 'perfectionCandidates', group: '判读', scope: 'horary', label: '传光候选星集', type: 'select', default: 'withOuter',
+		options: [ { value: 'withOuter', label: '含三王星（现行）' }, { value: 'classical7', label: '仅七政（古典）' } ],
+		hint: '光线传递/汇集/阻断的第三星池;古典口径三王星不传光。交点/福点任何档皆不入池。' },
+	{ key: 'receptionForHardAspects', group: '判读', scope: 'horary', label: '刑冲接纳门槛', type: 'select', default: 'any',
+		options: [ { value: 'any', label: '任意接纳（现行）' }, { value: 'strong', label: '庙旺级' }, { value: 'strong_or_double_minor', label: '庙旺或双次尊贵' } ],
+		hint: '1647 口径:庙/旺主尊贵接纳才可靠化解四分/对分;界/面次尊贵仅减损。' },
+	{ key: 'receptionPerfection', group: '判读', scope: 'horary', label: '互容独立成事', type: 'switch', default: false,
+		hint: '庙旺级互容本身即成事路径（无需相位）;弱互容仍仅作证词。' },
+	{ key: 'rescueAfterDestruction', group: '判读', scope: 'horary', label: '破后中介可改判', type: 'switch', default: false,
+		hint: '判破坏后仍见光线传递/汇集/庙旺互容 → 改判可成（带波折）;关=只作注记。' },
+	{ key: 'timingStationAware', group: '判读', scope: 'horary', label: '应期计留驻', type: 'switch', default: false,
+		hint: '入相星临留驻/刚回顺时,应期附「事有停滞/渐启动」修正注记。' },
+	{ key: 'backendConditionNotes', group: '判读', scope: 'horary', label: '实测状态入证词', type: 'switch', default: false,
+		hint: '后端实测字段入单星证词:留驻/度性(光明暗黑烟雾)/特殊度注记+围荣围耀正面证词+临留驻撤回风险。' },
+	// —— [H5] 徵象星语义四键(default 全=现状零回归;personScope/querentGender 属问事档不绑流派) ——
+	{ key: 'personScope', group: '判读', scope: 'horary', label: '问谁的事', type: 'select', default: 'self',
+		options: [ { value: 'self', label: '自己（默认）' }, { value: 'spouse', label: '配偶（7 起）' }, { value: 'child', label: '子女（5 起）' }, { value: 'parent', label: '父母（随两派）' }, { value: 'sibling', label: '兄弟姊妹（3 起）' }, { value: 'friend', label: '朋友（11 起）' }, { value: 'boss', label: '上司（10 起）' }, { value: 'pet', label: '宠物（6 起）' } ],
+		hint: '问他人之事时用事宫经转宫法换算(如问配偶的事业=7 起第 10=本盘 4 宫);征象星/根本性同步吃转换后语义。' },
+	{ key: 'querentGender', group: '判读', scope: 'horary', label: '问者性别', type: 'select', default: '',
+		options: [ { value: '', label: '不指定（默认）' }, { value: 'male', label: '男' }, { value: 'female', label: '女' } ],
+		hint: '婚恋类对象自然征象分流:男问者→对象取金/月;女问者→对象取日/火(1647 口径)。不指定=恒金星。' },
+	{ key: 'moonPromotion', group: '判读', scope: 'horary', label: '月亮升格', type: 'select', default: 'note',
+		options: [ { value: 'note', label: '仅注记（现行）' }, { value: 'apply', label: '真升主象征' } ],
+		hint: '四条件命中且主径无完成时,apply 档以月亮×事项星的完成法续判(应期随之)。' },
+	{ key: 'naturalSignifEnhanced', group: '判读', scope: 'horary', label: '自然征象增强', type: 'switch', default: false,
+		hint: '父/母类自然征象按昼夜分流(昼父=日/夜父=土);用事宫主三重受克凑二时自然征象升 co-quesited 标注。' },
+	// —— [H7] 裁决双轨(default legacy=旧四源阈值算法逐字节;流派默认翻转推迟 H10 凭双闸拍板) ——
+	{ key: 'verdictProfile', group: '判读', scope: 'horary', label: '裁决算法', type: 'select', default: 'legacy',
+		options: [ { value: 'legacy', label: '传统四源（现行）' }, { value: 'v2', label: '全证词池＋置信度' } ],
+		hint: 'v2=互容/接纳/时主/恒星/映点/almuten/围攻/月亮径/驻星等全证词入天平,去重软封顶,产 0-100 置信度+五档判语;结构护栏保完成法权威。' },
 	{ key: 'timingVariant', group: '判读', scope: 'horary', label: '应期基准星', type: 'select', default: 'applier',
 		options: [ { value: 'applier', label: '看入相星（现行）' }, { value: 'applied', label: '看被入相星' }, { value: 'byHouse', label: '按宫（皆果→天/皆续→周/皆角→月）' } ] },
 	{ key: 'timingModifiers', group: '判读', scope: 'horary', label: '应期修正链', type: 'switch', default: false },
@@ -128,6 +159,12 @@ export const SCHOOL_JUDGE_DIFF = {
 		ascEarlyDeg: 3, ascLateDeg: 27, considerationsMode: 'warn',
 		vocMode: 'classic', vocMitigateSigns: false, combustMitigateSameSign: true,
 		pofReversal: false, fixedStarOrb: 2, perfectionStrict: 'standard', includeOuter: false,
+		// [H2] 新五键 classical 一律不绑=零回归锚(参数不存在时=引擎既有行为);
+		// 传光候选收七政等学理绑定只落 renaissance/strict/sequence/hellenistic/medieval 五档。
+		// [H10 拍板 2026-08-24] classical 默认翻转(verdictProfile v2/receptionPerfection/
+		// rescueAfterDestruction 等)本轮一律不翻:分布闸首测健康(180 真盘 legacy↔v2 零强反转、
+		// 中位置信度 58、判别力 78%),但教科书真值闸未上线——历史文献卦例时刻须人工核实后录
+		// fixture(臆造时刻=学术造假风险)。翻默认推迟至文献闸+真实使用反馈到位后凭证据逐项再议。
 	},
 	renaissance: {
 		ascEarlyDeg: 3, ascLateDeg: 27, considerationsMode: 'warn',
@@ -137,12 +174,16 @@ export const SCHOOL_JUDGE_DIFF = {
 		detectAbscission: true, refranationAsDestruction: true, refranationIncludeSignChange: false,
 		oppositionVerdict: 'yes_but', combustExemptConjAnswer: true, interferenceTiming: 'speed',
 		timingModifiers: true, timingSecondLaw: true, hourAgreementVariant: 'either', onePlanetBoth: 'A',
+		perfectionCandidates: 'classical7', receptionForHardAspects: 'strong',
+		receptionPerfection: true, rescueAfterDestruction: true, timingStationAware: true,
+		backendConditionNotes: true,
 	},
 	strict: {
 		ascEarlyDeg: 3, ascLateDeg: 27, considerationsMode: 'strict',
 		vocMode: 'classic', vocMitigateSigns: false, combustMitigateSameSign: true,
 		pofReversal: true, fixedStarOrb: 2, perfectionStrict: 'strict', includeOuter: false,
 		collectionRequireReception: true, refranationAsDestruction: true,
+		perfectionCandidates: 'classical7', receptionForHardAspects: 'strong', rescueAfterDestruction: true,
 	},
 	sequence: {
 		ascEarlyDeg: 0, ascLateDeg: 30, considerationsMode: 'ignore',
@@ -150,13 +191,13 @@ export const SCHOOL_JUDGE_DIFF = {
 		pofReversal: false, fixedStarOrb: 1, perfectionStrict: 'strict', includeOuter: false,
 		orbMode: 'sequence', collectionRequireReception: true, refranationAsDestruction: true,
 		refranationIncludeSignChange: true, interferenceTiming: 'speed', combustExemptConjAnswer: true,
-		onePlanetBoth: 'D',
+		onePlanetBoth: 'D', perfectionCandidates: 'classical7',
 	},
 	hellenistic: {
 		ascEarlyDeg: 2, ascLateDeg: 28, considerationsMode: 'lenient',
 		vocMode: 'kenodromia', vocMitigateSigns: false, combustMitigateSameSign: false,
 		pofReversal: true, fixedStarOrb: 1.5, perfectionStrict: 'standard', includeOuter: false,
-		lotsSet: 'core15', cazimiOrb: 1, underBeamsOrb: 15,
+		lotsSet: 'core15', cazimiOrb: 1, underBeamsOrb: 15, perfectionCandidates: 'classical7',
 	},
 	medieval: {
 		ascEarlyDeg: 3, ascLateDeg: 27, considerationsMode: 'warn',
@@ -164,12 +205,15 @@ export const SCHOOL_JUDGE_DIFF = {
 		pofReversal: true, fixedStarOrb: 3, perfectionStrict: 'standard', includeOuter: false,
 		cazimiOrb: 16 / 60, combustOrb: 8, underBeamsOrb: 15, hourAgreementVariant: 'bonatti',
 		collectionRequireReception: true, timingVariant: 'byHouse',
+		perfectionCandidates: 'classical7', receptionForHardAspects: 'strong', receptionPerfection: true,
+		backendConditionNotes: true,
 	},
 	modern: {
 		ascEarlyDeg: 0, ascLateDeg: 30, considerationsMode: 'ignore',
 		vocMode: 'classic', vocMitigateSigns: false, combustMitigateSameSign: true,
 		pofReversal: false, fixedStarOrb: 5, perfectionStrict: 'lenient', includeOuter: true,
 		vocIncludeOuter: true, partileDef: 'le1', oppositionVerdict: 'yes_but', parentHousesVariant: 'modern',
+		perfectionCandidates: 'withOuter',
 	},
 };
 

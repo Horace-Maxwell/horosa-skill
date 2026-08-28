@@ -76,6 +76,12 @@ function shortMidpoint(a, b){
 function moonModule(facts){
 	const r = moonReport(facts, vocOptsOf(facts));
 	const findings = r.findings.map((f) => ({ ...f, message: f.text_zh }));
+	// [重标定] 良态确认(标准古典判据,引擎早已算出、旧制只扣不奖):
+	// 月不空亡=行动有果(Lilly 第一考量的正面态);月速 ≥13.5°/日=快月载事;盈光=生长向(多数用事喜)。
+	const m = facts.planets.moon;
+	if(!r.voc) findings.push(mkFinding('positive', '月亮不空亡（入相有果）', 1.5));
+	if(m && m.speed !== undefined && Math.abs(m.speed) >= 13.5) findings.push(mkFinding('positive', `月行速快（${Math.abs(m.speed).toFixed(1)}°/日）`, 1));
+	if(r.phase === 'waxing') findings.push(mkFinding('positive', '月盈光增（生长向）', 0.5));
 	const score = scoreFromFindings(findings, 64);
 	// 口径注记:仅当空亡/火道口径偏离内建默认时追加(默认档 detail 与既往逐字一致)。
 	const eff = effOf(facts);
@@ -93,6 +99,7 @@ function ascRulerModule(facts){
 	if(l && facts.planets[l]){
 		const p = facts.planets[l];
 		if(p.retro) findings.push(mkFinding('negative', `命主星 ${cn(l)} 逆行（命主不可逆行）`, 3));
+		else findings.push(mkFinding('positive', `命主星 ${cn(l)} 顺行`, 1));   // [重标定] 良态确认
 		if(p.dignityScore >= 4) findings.push(mkFinding('positive', `命主星 ${cn(l)} 有力（+${p.dignityScore}）`, 2));
 		else if(p.dignityScore <= -4) findings.push(mkFinding('negative', `命主星 ${cn(l)} 落陷/弱`, 2));
 		if(p.angularity === 'angular' || p.angularity === 'succedent') findings.push(mkFinding('positive', `命主星入${p.angularity === 'angular' ? '角' : '续'}宫`, 1));
@@ -125,6 +132,7 @@ function sunModule(facts){
 	const s = facts.planets.sun;
 	if(s){
 		if([12].indexOf(s.house) >= 0) findings.push(mkFinding('negative', '太阳落 12 宫（出版/魅力类用事尤忌）', 1));
+		if(s.dignityScore >= 4) findings.push(mkFinding('positive', '太阳有必然尊贵（庙/旺）', 1));   // [重标定] 良态确认
 		const asp = aspOf(facts, 'sun').filter((a) => [60, 120].indexOf(a.angle) >= 0 && BENEFICS.indexOf(a.other) >= 0);
 		if(asp.length) findings.push(mkFinding('positive', `太阳与吉星${asp[0].angle}°`, 1));
 	}
@@ -145,6 +153,8 @@ function anglesModule(facts){
 		// 七曜档(classical7)不出三王星条目(红线层仍按流派 annotate 降级另行注记)。
 		if(!sevenOnly && k === 'uranus' && (p.house === 1 || p.house === 7)) findings.push(mkFinding('negative', '天王星在 1/7 宫（变动/分离）', 2));
 	});
+	// [重标定] 良态确认:四角无受剋凶星=「排凶」已成(择日角宫铁律的正面态)。
+	if(!findings.some((f) => f.polarity === 'negative')) findings.push(mkFinding('positive', '四角无受剋凶星', 1));
 	const score = scoreFromFindings(findings, 60);
 	return { key: 'angles', title: '角宫吉凶分布（纳吉排凶）', verdict: verdictOf(score), score, findings, detail_md: '' };
 }
@@ -157,6 +167,7 @@ function maleficHandlingModule(facts){
 		const benefHelp = aspOf(facts, k).filter((a) => [60, 120].indexOf(a.angle) >= 0 && BENEFICS.indexOf(a.other) >= 0);
 		if(hardNoHelp.length && !benefHelp.length) findings.push(mkFinding('negative', `${cn(k)} 凶相无吉相援助`, 2));
 		else if(benefHelp.length) findings.push(mkFinding('positive', `${cn(k)} 有吉相援助（化解）`, 1));
+		if(p.angularity === 'cadent' && !p.retro) findings.push(mkFinding('positive', `${cn(k)} 退居果宫（凶星低伏）`, 0.5));   // [重标定] 良态确认
 	});
 	const score = scoreFromFindings(findings, 62);
 	return { key: 'malefic_handling', title: '凶星处理', verdict: verdictOf(score), score, findings, detail_md: '' };
@@ -170,6 +181,7 @@ function topicSigModule(facts, topic){
 		if(c.score > 0) findings.push(mkFinding('positive', `自然徵象星 ${cn(k)} 有力(+${c.score})`, 2));
 		else if(c.score < 0) findings.push(mkFinding('negative', `自然徵象星 ${cn(k)} 受剋(${c.score})`, 2));
 		if(p.retro) findings.push(mkFinding('negative', `自然徵象星 ${cn(k)} 逆行`, 2));
+		else findings.push(mkFinding('positive', `自然徵象星 ${cn(k)} 顺行`, 0.5));   // [重标定] 良态确认
 	});
 	(topic.key_houses || []).slice(0, 2).forEach((hn) => {
 		const lord = facts.houses[hn] && facts.houses[hn].ruler;
@@ -714,7 +726,7 @@ export function runModules(facts, topic, school){
 		moonMechanicsModule(facts),
 		planetaryHourModule(facts, topic),
 		mansionModule(facts, topic),
-		antisciaModule(facts),
+		...((facts && facts.opts && facts.opts.antiscia === false) ? [] : [antisciaModule(facts)]),   // [R5-P2] 全局「映点参与判读」门(缺省 true=零回归)
 		paransModule(facts, topic),
 		radicalityModule(facts),
 		almutenModule(facts),

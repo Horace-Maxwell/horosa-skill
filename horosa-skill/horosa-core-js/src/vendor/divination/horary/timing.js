@@ -4,11 +4,15 @@ import { SIGNS } from '../data/signs.js';
 import { DIR_BY_ELEMENT } from '../data/directions.js';
 import { MEAN_DAILY_MOTION } from '../data/planets.js';
 
+// [H2 应期修复] 九格表补全:传统口径为**单调递进**(角=最快带,续=中带,果=最慢带;
+// 座内 动<变<固)。旧表五格塌成「几乎无望」且当单位拼进数字产出「约 3.2 几乎无望」畸形串。
+// 果×固保留「极久(难期)」附注语义——由 hopeless 标记驱动文案分叉,不再作可拼数的单位。
 const UNIT_TABLE = {
-	angular: { cardinal: '天', fixed: '月', mutable: '周' },
-	succedent: { cardinal: '月', fixed: '几乎无望', mutable: '年' },
-	cadent: { cardinal: '几乎无望/充满忧虑', fixed: '几乎无望', mutable: '几乎无望' },
+	angular: { cardinal: '天', mutable: '周', fixed: '月' },
+	succedent: { cardinal: '周', mutable: '月', fixed: '年' },
+	cadent: { cardinal: '月', mutable: '年', fixed: '年' },
 };
+const HOPELESS_CELL = { cadent: { fixed: true } };   // 果×固=极久且难期(数目仅供参考)
 
 // 双体（变动）座主「变慢」注记的星座集合。
 const DOUBLE_BODIED = ['gemini', 'virgo', 'sagittarius', 'pisces'];
@@ -29,18 +33,23 @@ export function timingFrom(facts, sigKey, orbDeg, opts){
 	const mod = sign ? sign.modality : 'cardinal';
 	let unit = ((UNIT_TABLE[p.angularity] || {})[mod]) || '不定';
 	// byHouse 变体（Bonatti 口径）：两星宫类一致时以宫类直接定单位。
+	let byHouseOverride = false;
 	if(variant === 'byHouse'){
 		const q = opts.otherKey && facts.planets[opts.otherKey];
 		const both = (band) => p.angularity === band && q && q.angularity === band;
-		if(both('cadent')) unit = '天';
-		else if(both('succedent')) unit = '周';
-		else if(both('angular')) unit = '月';
+		if(both('cadent')){ unit = '天'; byHouseOverride = true; }
+		else if(both('succedent')){ unit = '周'; byHouseOverride = true; }
+		else if(both('angular')){ unit = '月'; byHouseOverride = true; }
 	}
 	const qty = (orbDeg !== null && orbDeg !== undefined) ? Math.round(orbDeg * 10) / 10 : null;
+	// [复审C4] byHouse 真覆盖单位时抑制 hopeless 附注——否则「约 2.0 天…应期极久难期」自相矛盾。
+	const hopeless = !byHouseOverride && !!((HOPELESS_CELL[p.angularity] || {})[mod]);
 	const out = {
-		unit, quantity: qty,
+		unit, quantity: qty, hopeless,
 		text: qty !== null
-			? `约 ${qty} ${unit}（征象星距准确相位 ${qty}°；南纬延长、北纬缩短）`
+			? (hopeless
+				? `约 ${qty} ${unit}，且征象星居果宫固定座 → 应期极久、事多迁延难期（数目仅供参考）`
+				: `约 ${qty} ${unit}（征象星距准确相位 ${qty}°；南纬延长、北纬缩短）`)
 			: `时间单位：${unit}（需有准确相位才能定数值）`,
 	};
 	if(variant !== 'applier'){ out.variant = variant; out.baseKey = baseKey; }
@@ -61,6 +70,19 @@ export function timingFrom(facts, sigKey, orbDeg, opts){
 		}
 		out.modifiers = mods;
 		out.adjustedQuantity = Math.round(adj * 10) / 10;
+	}
+	// [H2] 副应期:征象星/月亮换座(距 30° 的度数按当前速度折算天数)——传统「换座=事态换阶段」。
+	if(qty !== null && p.signlon !== undefined && p.speed){
+		const remain = 30 - p.signlon;
+		const spd = Math.abs(p.speed);
+		if(spd > 1e-6){
+			out.signChange = { deg: Math.round(remain * 10) / 10, days: Math.round((remain / spd) * 10) / 10 };
+		}
+	}
+	// [H2] 留驻修正(timingStationAware 门控,default 关=零回归):后端 stationState('S'留/'D'回顺)
+	// 在场时,留驻星主导的应期附「临留驻,事有停滞/转折」注记。
+	if(opts.timingStationAware && p.stationState){
+		out.stationNote = p.stationState === 'S' ? '入相星临留驻(将转向)→ 事有停滞,应期常另起算' : '入相星刚回顺 → 停滞方过,事渐启动';
 	}
 	// —— 第二法：实时凌犯折算（门控;t=Δ/|相对速度|,只作枝节参考绝不替代主法）——
 	if(opts.timingSecondLaw && qty !== null && opts.otherKey && facts.planets[opts.otherKey]){

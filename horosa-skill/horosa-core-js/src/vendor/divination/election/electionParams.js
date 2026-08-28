@@ -88,6 +88,8 @@ const GLOBAL_JUDGE_KEYS = [
 	'cazimiOrb', 'combustOrb', 'underBeamsOrb',
 	'vocMode', 'vocIncludeOuter', 'viaCombustaVariant',
 	'fixedStarOrb', 'fixedStarOrbMode', 'partileDef', 'antisciaOrb',
+	// [R5-P2] 判读两键(抽屉④节 scope note 明言「作用于卜卦盘/择日盘」——此前只接了卜卦腿)
+	'combustMitigateSameSign', 'antiscia',
 ];
 
 // 内建默认 = 引擎既有硬编码行为（零回归锚）。

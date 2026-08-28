@@ -1566,6 +1566,30 @@
     "ziwei/zwLuckItems.js": {
       "mode": "bespoke",
       "why": "no upstream file of this name (skill-authored)"
+    },
+    "divination/engine/resultShapes.js": {
+      "upstream": "divination/engine/resultShapes.js",
+      "mode": "verbatim"
+    },
+    "divination/horary/verdictScoring.js": {
+      "upstream": "divination/horary/verdictScoring.js",
+      "mode": "verbatim"
+    },
+    "divination/horary/antisciaTable.js": {
+      "upstream": "divination/horary/antisciaTable.js",
+      "mode": "verbatim"
+    },
+    "utils/customCalibreStores.js": {
+      "upstream": "utils/customCalibreStores.js",
+      "mode": "verbatim"
+    },
+    "utils/classicalParamSpec.js": {
+      "upstream": "utils/classicalParamSpec.js",
+      "mode": "verbatim"
+    },
+    "utils/ganzhiYearBase.js": {
+      "upstream": "utils/ganzhiYearBase.js",
+      "mode": "verbatim"
     }
   }
 }

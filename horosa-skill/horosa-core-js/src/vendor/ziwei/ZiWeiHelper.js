@@ -4,6 +4,7 @@ import * as TB from './data/ziweiTables.js';
 import { xiaoxianClockwiseFor, xiaoxianAgesForHouse, isYangGan as coreIsYangGan } from './ziweiCore.js';
 import { placeKuiYue } from './ziweiSchools.js';
 import { placeHuoLing } from './ziweiSchools.js';
+import * as __req0 from './ziweiOptions.js';
 
 let DiZi = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
 let DiZiMap = new Map();
@@ -121,7 +122,7 @@ function chartYearYang(chart){
 	return !!(chart && chart.yearPolar === 'Positive');
 }
 function xiaoxianModeNow(){
-	try{ return `${require('./ziweiOptions').ZWEngineOptions.xiaoxianMode || '0'}`; }catch(e){ return '0'; }
+	try{ return `${__req0.ZWEngineOptions.xiaoxianMode || '0'}`; }catch(e){ return '0'; }
 }
 export function xiaoxianClockwise(chart){
 	if(!chart){ return true; }
@@ -294,7 +295,7 @@ export function getFlowStars(gan, zhi, hourZhi){
 		}
 	}
 	// 流魁流钺随魁钺歌诀档(placeKuiYue delta;默认档返 null 落表)
-	const kuiV = require('./ziweiOptions').ZWEngineOptions.kuiYue;
+	const kuiV = __req0.ZWEngineOptions.kuiYue;
 	const kui = placeKuiYue('天魁', gan, kuiV) || flowGanPos('天魁', gan);
 	const yue = placeKuiYue('天钺', gan, kuiV) || flowGanPos('天钺', gan);
 	if(kui) out.push({ name: '流魁', zhi: kui });
@@ -309,7 +310,7 @@ export function getFlowStars(gan, zhi, hourZhi){
 	// hourZhi 缺省不出两星=旧调用零回归。
 	if(zhi && hourZhi && zwFlowHuoLingEnabled()){
 		try{
-			const hl = placeHuoLing(zhi, hourZhi, require('./ziweiOptions').ZWEngineOptions.huoling);
+			const hl = placeHuoLing(zhi, hourZhi, __req0.ZWEngineOptions.huoling);
 			if(hl && hl['火星']){ out.push({ name: '流火', zhi: hl['火星'] }); }
 			if(hl && hl['铃星']){ out.push({ name: '流铃', zhi: hl['铃星'] }); }
 		}catch(e){ /* 内核缺位不阻断其余流曜 */ }
@@ -325,10 +326,10 @@ export function getFlowStars(gan, zhi, hourZhi){
 }
 // [P3d] 开关读取(经 ZWEngineOptions 单例;require 防循环 import——ziweiOptions 零依赖纯常量,实际无环,双保险)
 function zwFlowLuanXiEnabled(){
-	try{ return !!require('./ziweiOptions').ZWEngineOptions.flowLuanXi; }catch(e){ return false; }
+	try{ return !!__req0.ZWEngineOptions.flowLuanXi; }catch(e){ return false; }
 }
 function zwFlowHuoLingEnabled(){
-	try{ return !!require('./ziweiOptions').ZWEngineOptions.flowHuoLing; }catch(e){ return false; }
+	try{ return !!__req0.ZWEngineOptions.flowHuoLing; }catch(e){ return false; }
 }
 
 // 干支地支 → 本命宫 index（houses[i] 地支 = DiZi[i]）
@@ -373,7 +374,7 @@ export function getFlowJiangSui(zhi){
 // 并携 natal 字段(被替换的本命神煞名)供 tooltip 对照。任何形状不符(≠3条)诚实降级返原引用。
 export function resolveSmallStarsForDisplay(smalls, houseZhi, flowZhi){
 	let on = false;
-	try{ on = !!require('./ziweiOptions').ZWEngineOptions.flowShenshaOnChart; }catch(e){ on = false; }
+	try{ on = !!__req0.ZWEngineOptions.flowShenshaOnChart; }catch(e){ on = false; }
 	if(!on || !flowZhi || !houseZhi || !Array.isArray(smalls) || smalls.length !== 3){
 		return smalls;
 	}
@@ -398,7 +399,7 @@ export function effLayerSihuaGan(chartObj, layer){
 	const isLiunian = layer.level === 'liunian' || layer.key === 'liunian';
 	if(isLiunian){
 		let mode = 'year_gan';
-		try{ mode = require('./ziweiOptions').ZWEngineOptions.liunianSihuaGan || 'year_gan'; }catch(e){ /* 默认档 */ }
+		try{ mode = __req0.ZWEngineOptions.liunianSihuaGan || 'year_gan'; }catch(e){ /* 默认档 */ }
 		if(mode === 'ming_gong_gan'){
 			try{
 				const i = layer.mingIndex;

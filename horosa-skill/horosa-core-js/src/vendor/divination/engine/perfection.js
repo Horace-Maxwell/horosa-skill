@@ -18,6 +18,46 @@ function hasReception(facts, a, b){
 	return receives(facts, a, b) || receives(facts, b, a) || mutualReceptionBetween(facts, a, b);
 }
 
+// [H2] 接纳质量分层(1647 口径:庙/旺=主尊贵接纳才可靠化解硬相位;界/面=次尊贵仅减损)。
+// receives 返回的 rulerShip/token 与 mutualPairsOf 的 level 双源归一。
+const STRONG_TOKENS = ['ruler', 'exalt', 'domicile'];
+// ⚠ 键名对拍(H0 教训的复读):receives() 项的真键名=supplierRulership(reception.js 归一层),
+// 且自带 strong 布尔(hasStrongReception 已算好)——绝不猜 rulerShip/dignity 等不存在的键。
+function shipIsStrong(r){
+	if(!r){ return false; }
+	if(r.strong !== undefined){ return !!r.strong; }
+	const ships = r.supplierRulership || [];
+	return ships.some((s) => STRONG_TOKENS.indexOf(`${s}`.toLowerCase()) >= 0);
+}
+function receptionQuality(facts, a, b){
+	const rAB = receives(facts, a, b);
+	const rBA = receives(facts, b, a);
+	const mu = mutualReceptionBetween(facts, a, b);
+	const any = !!(rAB || rBA || mu);
+	const strong = !!((mu && mu.some((x) => x.strong)) || shipIsStrong(rAB) || shipIsStrong(rBA));
+	// 双次尊贵(1647:两项以上次尊贵≈一项主尊贵):单向接纳 token≥2 或互容双向皆 weak
+	const doubleMinor = !!((rAB && ((rAB.supplierRulership || []).length >= 2)) || (rBA && ((rBA.supplierRulership || []).length >= 2))
+		|| (mu && mu.length && mu.every((x) => x.level === 'weak') && mu.length >= 1 && ((mu[0].dignity || []).length >= 4)));
+	return { any, strong, doubleMinor, mutual: mu, oneWayAB: rAB, oneWayBA: rBA };
+}
+// 硬相位可否被接纳化解——receptionForHardAspects 三档('any'=现状零回归/'strong'/'strong_or_double_minor')
+function receptionMitigatesHard(q, opts){
+	const mode = (opts && opts.receptionForHardAspects) || 'any';
+	if(mode === 'strong'){ return q.strong; }
+	if(mode === 'strong_or_double_minor'){ return q.strong || q.doubleMinor; }
+	return q.any;
+}
+
+// [H2] 完成法第三星候选集:传统口径下交点/福点/四轴/点位**永不**传光收光(bug 恒清非门控);
+// 三王星按 perfectionCandidates 档('withOuter'=现状零回归/'classical7'——古典五档绑七政)。
+const CLASSICAL7 = ['moon', 'mercury', 'venus', 'sun', 'mars', 'jupiter', 'saturn'];
+const OUTERS = ['uranus', 'neptune', 'pluto'];
+function perfectionCands(facts, sigA, sigB, opts){
+	const withOuter = !opts || opts.perfectionCandidates !== 'classical7';
+	const pool = withOuter ? CLASSICAL7.concat(OUTERS) : CLASSICAL7;
+	return pool.filter((k) => k !== sigA && k !== sigB && facts.planets[k]);
+}
+
 // 阻碍 / 挫败 / 切断识别（两征象星入相位成相前，光线被第三星截断或事项另有所属）。
 // 时序判据两口径（opts.interferenceTiming）：
 //   'degree'(默认,零回归)＝以「入相位所差度数」近似「谁先成相」；
@@ -35,7 +75,7 @@ function detectInterference(facts, sigA, sigB, mover, target, dAB, opts){
 	if(typeof dAB !== 'number') return null;
 	const mode = (opts && opts.interferenceTiming) || 'degree';
 	const dABm = mode === 'speed' ? arriveMetric(facts, { orb: dAB }, mover, target, mode) : dAB;
-	const cands = Object.keys(facts.planets).filter((k) => k !== sigA && k !== sigB);
+	const cands = perfectionCands(facts, sigA, sigB, opts);   // [H2] 交点/福点/点位永不作阻断第三星
 	// 阻碍 prohibition：第三星 T 抢先入相 target（比 mover 更快成相）→ 第三方/意外插入截断。
 	for(let i = 0; i < cands.length; i++){
 		const T = cands[i];
@@ -131,7 +171,10 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 
 	// —— 完成法 ——
 	// 1) 入相位 Application（先查阻碍/挫败：光线在成相前被截 → 阻断完成）
-	const asp = aspectBetween(facts, sigA, sigB);
+	// [H2] 非托勒密角(45°/135° 等)不构成完成法——后端相位表含半刑族,旧码未滤,
+	// 45° 入相曾被判「直接完成(hard)」。
+	let asp = aspectBetween(facts, sigA, sigB);
+	if(asp && PTOL.indexOf(asp.angle) < 0){ asp = null; }
 	result.aspect = asp;
 	if(asp && asp.applying){
 		const mover = (asp.from === sigA) ? sigA : sigB;
@@ -145,7 +188,11 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 	}
 	if(asp && asp.applying && !result.destroyed){
 		const mover = (asp.from === sigA) ? sigA : sigB;
-		const rec = hasReception(facts, sigA, sigB);
+		// [H2] 接纳分层:receptionForHardAspects 档决定「哪一级接纳能化解硬相位」
+		// ('any'=任意接纳即化解=现状零回归;'strong'=仅庙旺;'strong_or_double_minor' 含双次尊贵)。
+		const recQ = receptionQuality(facts, sigA, sigB);
+		const rec = recQ.any ? recQ : null;
+		const recMitigates = receptionMitigatesHard(recQ, opts);
 		// 撤回 refranation 独立破坏态（opts.refranationAsDestruction 门控;默认仍为风险注记=零回归）。
 		// 变体：refranationIncludeSignChange —— mover 在精确前先出本座（顺行且剩余弧 < 所差度数）亦作撤回。
 		let refranationHit = null;
@@ -159,12 +206,12 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 		if(refranationHit){
 			result.destroyed = true; result.destruction = 'refranation';
 			detail.push(refranationHit);
-		}else if((asp.angle === 90 || asp.angle === 180) && rec && opts.perfectionStrict === 'strict'){
+		}else if((asp.angle === 90 || asp.angle === 180) && recMitigates && opts.perfectionStrict === 'strict'){
 			// 严格档独有差异:硬相位即使有接纳也只减损不豁免——完成但带「得而复失/成而后悔」。
 			// (standard 档接纳即化解=零回归;strict 只在「硬相位+有接纳」的边缘局面显形。)
 			result.perfects = true; result.method = 'application'; result.ease = 'hard'; result.regret = true;
 			detail.push(`两征象星以${asp.angle}°硬相位入相、虽有接纳——严格档:接纳仅减损不免破,事可成但常伴反复/后悔。`);
-		}else if((asp.angle === 90 || asp.angle === 180) && !rec){
+		}else if((asp.angle === 90 || asp.angle === 180) && !recMitigates){
 			// 冲相三态（opts.oppositionVerdict='yes_but' 时 180° 无接纳 → YES-but 得而复失;默认破坏=零回归）。
 			if(asp.angle === 180 && opts.oppositionVerdict === 'yes_but'){
 				result.perfects = true; result.method = 'application'; result.ease = 'hard'; result.regret = true;
@@ -172,7 +219,7 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 			}else{
 				result.destroyed = true;
 				result.destruction = 'no_reception_hard';
-				detail.push(`${cn(sigA)} 与 ${cn(sigB)} 以${asp.angle}°（${asp.angle === 90 ? '四分' : '对分'}）入相位且无接纳 → 破坏。`);
+				detail.push(`${cn(sigA)} 与 ${cn(sigB)} 以${asp.angle}°（${asp.angle === 90 ? '四分' : '对分'}）入相位且${recQ.any ? '接纳不足级（本档要求庙旺级）' : '无接纳'} → 破坏。`);
 			}
 		}else{
 			result.perfects = true; result.method = 'application';
@@ -183,6 +230,11 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 			else { result.byWhom = 'other_initiates'; detail.push('对方入相位问卜者 → 由对方主动/自愿促成。'); }
 			// 折返 refranation：入相方逆行 → 临成又退，恐反复/告吹。
 			if(pm && pm.retro){ result.refranationRisk = true; detail.push(`注意：入相方 ${cn(mover)} 逆行 → 恐折返（refranation），临成又退、事有反复。`); }
+			// [H4b 门控] 留驻精化:顺行但临留驻('S'=将转向)的入相方,精确前可能转逆=同类撤回风险。
+			else if(opts.backendConditionNotes && pm && pm.stationState === 'S'){
+				result.refranationRisk = true;
+				detail.push(`注意：入相方 ${cn(mover)} 临留驻（将转向）→ 有折返之虞（精确前转逆），事有停滞反复。`);
+			}
 		}
 	}
 
@@ -199,28 +251,44 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 				result.perfects = true; result.method = 'application'; result.sequence = true;
 				result.ease = EASY.indexOf(seq.angle) >= 0 ? 'easy' : 'hard';
 				if(seq.angle === 180 && !rec && opts.oppositionVerdict === 'yes_but'){ result.regret = true; }
-				result.aspect = result.aspect || { angle: seq.angle, orb: seq.orbNow, from: sigA, to: sigB, sequence: true };
+				// [复审C6] 无条件覆写:残留的陈旧出相位会让应期拿「出相 orb」折算,与序列将精确的相位无关。
+				// from 恒取 sigA 是既有近似(sequenceFuturePerfect 不区分追者;应期基准星可用
+				// timingVariant='applied'/'byHouse' 档另取)——非本轮引入,标注留案。
+				result.aspect = { angle: seq.angle, orb: seq.orbNow, from: sigA, to: sigB, sequence: true };
 				detail.push(`序列完成（无-orb）：线性外推约 ${Math.round(seq.tDays * 10) / 10} 天后 ${cn(sigA)} 与 ${cn(sigB)} 以 ${seq.angle}° 精确（双方均未出本座）→ 事终能成。`);
 			}
 		}
 	}
 
+	// 1c) [H2] 互容独立成事法（receptionPerfection 门控,default false=现状零回归;1647 口径:
+	//     庙/旺级互容本身即成事路径,无需相位;weak 级互容不成事(留作证词)。
+	if(!result.perfects && !result.destroyed && opts.receptionPerfection){
+		const q = receptionQuality(facts, sigA, sigB);
+		if(q.strong && q.mutual){
+			result.perfects = true; result.method = 'reception';
+			detail.push(`互容成事：${cn(sigA)} 与 ${cn(sigB)} 互落对方主尊贵（庙/旺级互容）→ 双方互相接纳,事可成（互容成事口径）。`);
+		}
+	}
+
 	// 2) 光线传递 Translation（较轻星先出相一方、再入相另一方）—— 明确指出谁在哪两者之间传递
 	if(!result.perfects && !result.destroyed){
-		const cands = Object.keys(facts.planets).filter((k) => k !== sigA && k !== sigB);
+		const cands = perfectionCands(facts, sigA, sigB, opts);   // [H2] 交点/福点永不传光;三王按档
 		for(let i = 0; i < cands.length; i++){
 			const T = cands[i];
-			const sepA = separatingAspects(facts, T).some((x) => x.other === sigA);
-			const appB = applyingAspects(facts, T).some((x) => x.other === sigB);
-			const sepB = separatingAspects(facts, T).some((x) => x.other === sigB);
-			const appA = applyingAspects(facts, T).some((x) => x.other === sigA);
+			// [H2] 传递四判全部限托勒密角(45° 半刑不传光);入相腿用 find 取 orb → timingLeg(应期用 T→target 腿)
+			const sepA = separatingAspects(facts, T).some((x) => x.other === sigA && PTOL.indexOf(x.angle) >= 0);
+			const appB = applyingAspects(facts, T).find((x) => x.other === sigB && PTOL.indexOf(x.angle) >= 0);
+			const sepB = separatingAspects(facts, T).some((x) => x.other === sigB && PTOL.indexOf(x.angle) >= 0);
+			const appA = applyingAspects(facts, T).find((x) => x.other === sigA && PTOL.indexOf(x.angle) >= 0);
 			if(sepA && appB){
 				result.perfects = true; result.method = 'translation'; result.translator = T; result.translatorFrom = sigA; result.translatorTo = sigB;
+				result.timingLeg = { orb: appB.orb, angle: appB.angle, mover: T, target: sigB };
 				detail.push(`光线传递：${cn(T)} 刚从 ${cn(sigA)} 出相位、正入相位 ${cn(sigB)} → 由 ${cn(T)} 把 ${cn(sigA)} 的光线带给 ${cn(sigB)}（中间人/信使＝${cn(T)}）促成。`);
 				break;
 			}
 			if(sepB && appA){
 				result.perfects = true; result.method = 'translation'; result.translator = T; result.translatorFrom = sigB; result.translatorTo = sigA;
+				result.timingLeg = { orb: appA.orb, angle: appA.angle, mover: T, target: sigA };
 				detail.push(`光线传递：${cn(T)} 刚从 ${cn(sigB)} 出相位、正入相位 ${cn(sigA)} → 由 ${cn(T)} 把 ${cn(sigB)} 的光线带给 ${cn(sigA)}（中间人/信使＝${cn(T)}）促成。`);
 				break;
 			}
@@ -231,11 +299,11 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 	//    严格派条件（opts.collectionRequireReception 门控）：汇集星须同时被双方容纳
 	//    （CA p.111「they both receive him in some of their essential dignities」——C 落 A 与 B 的尊贵中）。
 	if(!result.perfects && !result.destroyed){
-		const cands = Object.keys(facts.planets).filter((k) => k !== sigA && k !== sigB);
+		const cands = perfectionCands(facts, sigA, sigB, opts);   // [H2] speedIdx=99 冒充法官的交点/福点根除
 		for(let i = 0; i < cands.length; i++){
 			const C = cands[i];
-			const aToC = applyingAspects(facts, sigA).some((x) => x.other === C);
-			const bToC = applyingAspects(facts, sigB).some((x) => x.other === C);
+			const aToC = applyingAspects(facts, sigA).find((x) => x.other === C && PTOL.indexOf(x.angle) >= 0);
+			const bToC = applyingAspects(facts, sigB).find((x) => x.other === C && PTOL.indexOf(x.angle) >= 0);
 			if(aToC && bToC && !lighter(C, sigA) && !lighter(C, sigB)){
 				if(opts.collectionRequireReception){
 					const bothReceive = receives(facts, sigA, C) && receives(facts, sigB, C);
@@ -245,6 +313,9 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 					}
 				}
 				result.perfects = true; result.method = 'collection'; result.collector = C;
+				// 应期腿=双腿较大 orb(后成相的那腿才是「事成」时点)
+				const slow = (aToC.orb >= bToC.orb) ? { orb: aToC.orb, angle: aToC.angle, mover: sigA } : { orb: bToC.orb, angle: bToC.angle, mover: sigB };
+				result.timingLeg = { orb: slow.orb, angle: slow.angle, mover: slow.mover, target: C };
 				detail.push(`光线汇集：${cn(sigA)} 与 ${cn(sigB)} 同时入相位较重的 ${cn(C)} → 两方的光线汇集到 ${cn(C)}，经「法官/居中求助对象＝${cn(C)}」促成${opts.collectionRequireReception ? '（且满足双方容纳的严格条件）' : ''}。`);
 				break;
 			}
@@ -254,9 +325,11 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 	// 4) 落位 Position（征象星互落对方/事项宫位）
 	if(!result.perfects && !result.destroyed){
 		const qh = opts.quesitedHouse;
-		if(qh && (pA.house === qh || pB.house === 1 || pB.house === qh)){
+		// [H2] 删 pB.house===qh 误判支:事项主落自己本宫=有力(尊贵证词),不是落位成事——
+		// 传统落位法=征象星**互入对方**宫位(问方星入事项宫/事项星入一宫)。
+		if(qh && (pA.house === qh || pB.house === 1)){
 			result.perfects = true; result.method = 'position';
-			detail.push('落位：征象星落对方/事项宫位 → 完成。');
+			detail.push('落位：征象星落对方宫位（问方星入事项宫/事项星入命宫）→ 完成。');
 		}
 		// 映点也可促成（力≈六合/三合）。antiscia 开关门控(spec default=true):
 		// 只有显式 false 才关闭 —— true/undefined(择日等旧调用不传)保持历史恒开行为,默认路径字节不变。
@@ -279,9 +352,58 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 		else if(result.perfects){ detail.push(`注意：${pA.combustion === 'combust' ? cn(sigA) : cn(sigB)} 燃烧，完成受严重削弱。`); }
 		else { result.destroyed = true; result.destruction = 'combustion'; detail.push('征象星燃烧 → 最严重破坏。'); }
 	}
+	// [H2] 破坏后救援扫描:传统口径「刑冲被截不排除中介成事」——destroyed 时仍查
+	// 传递/汇集/strong 互容,命中记 result.rescue;rescueAfterDestruction 档(default false=现状)
+	// 决定是否改判为完成(改判时 overrodeDestruction 记录供 UI/快照可释)。
+	// [复审C5] 只有「光线被截/无接纳刑冲」族可由中介救(传统口径「刑冲被截不排除中介成事」);
+	// 燃烧/撤回/出相位不在此列——化解燃烧的是与太阳互容(radicality #8 救济),不是两主互容。
+	const RESCUABLE = ['prohibition', 'frustration', 'abscission', 'no_reception_hard'];
+	if(result.destroyed && !result.perfects && RESCUABLE.indexOf(result.destruction) >= 0){
+		let rescue = null;
+		const rCands = perfectionCands(facts, sigA, sigB, opts);
+		for(let i = 0; i < rCands.length && !rescue; i++){
+			const T = rCands[i];
+			const sepA = separatingAspects(facts, T).some((x) => x.other === sigA && PTOL.indexOf(x.angle) >= 0);
+			const appB = applyingAspects(facts, T).find((x) => x.other === sigB && PTOL.indexOf(x.angle) >= 0);
+			const sepB = separatingAspects(facts, T).some((x) => x.other === sigB && PTOL.indexOf(x.angle) >= 0);
+			const appA = applyingAspects(facts, T).find((x) => x.other === sigA && PTOL.indexOf(x.angle) >= 0);
+			if(sepA && appB){ rescue = { method: 'translation', by: T, leg: { orb: appB.orb, angle: appB.angle, mover: T, target: sigB } }; }
+			else if(sepB && appA){ rescue = { method: 'translation', by: T, leg: { orb: appA.orb, angle: appA.angle, mover: T, target: sigA } }; }
+		}
+		if(!rescue){
+			for(let i = 0; i < rCands.length && !rescue; i++){
+				const C = rCands[i];
+				const aToC = applyingAspects(facts, sigA).find((x) => x.other === C && PTOL.indexOf(x.angle) >= 0);
+				const bToC = applyingAspects(facts, sigB).find((x) => x.other === C && PTOL.indexOf(x.angle) >= 0);
+				if(aToC && bToC && !lighter(C, sigA) && !lighter(C, sigB)){
+					const slow = (aToC.orb >= bToC.orb) ? { orb: aToC.orb, angle: aToC.angle, mover: sigA } : { orb: bToC.orb, angle: bToC.angle, mover: sigB };
+					rescue = { method: 'collection', by: C, leg: { orb: slow.orb, angle: slow.angle, mover: slow.mover, target: C } };
+				}
+			}
+		}
+		if(!rescue){
+			const q = receptionQuality(facts, sigA, sigB);
+			if(q.strong && q.mutual){ rescue = { method: 'reception', by: null }; }
+		}
+		if(rescue){
+			result.rescue = rescue;
+			if(opts.rescueAfterDestruction){
+				result.perfects = true; result.method = rescue.method;
+				if(rescue.method === 'translation'){ result.translator = rescue.by; }
+				if(rescue.method === 'collection'){ result.collector = rescue.by; }
+				if(rescue.leg){ result.timingLeg = rescue.leg; }
+				result.overrodeDestruction = result.destruction;
+				result.destroyed = false; result.destruction = null;
+				detail.push(`破而得救：虽遭破坏,但${rescue.by ? cn(rescue.by) + ' 的' : ''}${rescue.method === 'translation' ? '光线传递' : (rescue.method === 'collection' ? '光线汇集' : '庙旺互容')}仍可促成 → 改判可成(带波折)。`);
+			}else{
+				detail.push(`注:虽判破坏,盘面另见${rescue.by ? cn(rescue.by) + ' 的' : ''}${rescue.method === 'translation' ? '光线传递' : (rescue.method === 'collection' ? '光线汇集' : '庙旺互容')}——本档不改判,仅供参酌(rescueAfterDestruction 档可改判)。`);
+			}
+		}
+	}
+
 	// 刚出相 = 事败（无任何完成法且两征象星正出相）
 	if(!result.perfects && !result.destroyed){
-		const sep = separatingAspects(facts, sigA).find((x) => x.other === sigB);
+		const sep = separatingAspects(facts, sigA).find((x) => x.other === sigB && PTOL.indexOf(x.angle) >= 0);
 		if(sep){ result.destroyed = true; result.destruction = 'separation'; detail.push('两征象星刚出相位 → 事已过/绝对失败。'); }
 	}
 	if(!result.perfects && !result.destroyed){

@@ -6,6 +6,9 @@ import { PLANETARY_HOURS } from '../data/planetaryHours.js';
 import { CATEGORY_DEF } from './significators.js';
 import { schoolOf } from './horarySchools.js';
 import * as AstroText from '../../../constants/AstroText.js';
+import { buildAntisciaTable } from './antisciaTable.js';
+import { getQuestionGuide } from './questionGuide.js';
+import { NATURAL_SIGNIFICATORS } from '../data/naturalSignificators.js';
 
 function cn(k){ return (PLANETS[k] || {}).cn || k || '—'; }
 const ASPECT_CN = { 0: '合相', 60: '六合', 90: '四分(刑)', 120: '三合', 180: '对分(冲)' };
@@ -47,7 +50,21 @@ export function buildHorarySnapshot(j, chart, opts3){
 	L.push(j.radicality.suitable ? '适合判断。' : ('有警告（不阻断）：' + j.radicality.warnings.map((w) => w.text).join('；')));
 	L.push('[征象星指派]');
 	L.push(`问卜者 = 1宫主 ${cn(sig.querentKey)} ＋ 月亮`);
-	L.push(`${sig.quesitedLabel || '事项'} = ${sig.quesitedHouse ? sig.quesitedHouse + '宫主 ' : ''}${cn(sig.quesitedKey)}${sig.natural ? '（自然征象星 ' + cn(sig.natural) + '）' : ''}`);
+	// [复审P5] 法E almuten 拆分出的星不是宫主——标签如实标「宫头总管」。
+	const qRole = (sig.sharedRuler && sig.sharedRuler.almutenSplit === sig.quesitedKey)
+		? (sig.quesitedHouse ? sig.quesitedHouse + '宫头总管 ' : '宫头总管 ')
+		: (sig.quesitedHouse ? sig.quesitedHouse + '宫主 ' : '');
+	L.push(`${sig.quesitedLabel || '事项'} = ${qRole}${cn(sig.quesitedKey)}${sig.natural ? '（自然征象星 ' + cn(sig.natural) + '）' : ''}`);
+	// [H5] 转宫/宫内驻星/自然征象升格——字段在场才产行(缺省档全空=零回归)。
+	if(sig.turned){
+		L.push(`转宫：第 ${sig.turned.personHouse} 宫人的第 ${sig.turned.radicalHouse} 宫事 → 本盘第 ${sig.turned.turnedHouse} 宫（引擎已自动转宫）`);
+	}
+	if(sig.coSignificators && sig.coSignificators.length){
+		L.push(`用事宫内驻星（co-significator，低权参证）：${sig.coSignificators.map(cn).join('、')}`);
+	}
+	if(sig.naturalPromoted){
+		L.push(`自然征象星升 co-quesited：${sig.naturalPromotionReason || ''}`);
+	}
 	L.push('[完成分析]');
 	if(j.perfection){ j.perfection.detail.forEach((d) => L.push('- ' + d)); }
 	L.push(`完成度三分：安全征象 ${j.thirds.count}/${j.thirds.total} → ${j.thirds.fraction}`);
@@ -65,7 +82,14 @@ export function buildHorarySnapshot(j, chart, opts3){
 		j.allAspects.forEach((a) => L.push(`| ${cn(a.a)} | ${ASPECT_CN[a.angle] || a.angle + '°'} | ${cn(a.b)} | ${a.applying ? '入相/将成' : '出相/已过'} | 差 ${a.orb.toFixed(1)}°${a.exact ? '·正相位' : ''} |`));
 	}
 	L.push('[裁决]');
-	L.push('倾向：' + j.verdict.summary);
+	// [H7] v2 档判语带置信度五档(legacy 分支逐字保留=基线零变);单显规则:只按当前 profile 出一轨。
+	if(j.verdict.profile === 'v2'){
+		L.push(`裁决（全证词池）：${j.verdict.summary}`);
+		if((j.verdict.conditions || []).length){ L.push('条件式结论：' + j.verdict.conditions.map((c) => c.text).join('；')); }
+		if((j.verdict.guards || []).length){ L.push('结构护栏：完成法/破坏为结构性证词,数值分不越其界。'); }
+	}else{
+		L.push('倾向：' + j.verdict.summary);
+	}
 	if(j.verdict.positive.length) L.push('有利证词：' + j.verdict.positive.map((p) => p.text).join('；'));
 	if(j.verdict.negative.length) L.push('不利证词：' + j.verdict.negative.map((n) => n.text).join('；'));
 	L.push(`Query：①能否成事=${j.queries.canHappen.text} ②好坏=${j.queries.goodEvil.text} ③真假=${j.queries.reportTrue.text}`);
@@ -108,29 +132,13 @@ export function buildHorarySnapshot(j, chart, opts3){
 		if(j.almuten.quesitedCusp){ L.push(`事项宫头 almuten＝${j.almuten.quesitedCusp.winners.map(cn).join('/')}（${Object.keys(j.almuten.quesitedCusp.scores).map((k) => `${cn(k)}${j.almuten.quesitedCusp.scores[k]}`).join('、')}）`); }
 		if(j.moonPromotion && j.moonPromotion.promote){ L.push(`月亮升格条件命中：${j.moonPromotion.reasons.join('、')}。`); }
 	}
-	// [映点对映点] 全盘表(映点=180−λ≈合;对映点=360−λ≈冲;命中≤1°标注)。
+	// [映点对映点] 全盘表——[H8] 与 UI 同源(antisciaTable.js 单实现;orb 同吃 opts.antisciaOrb,缺省 1°=旧值)。
 	if(j.facts && j.facts.planets){
-		const SEVEN = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn'];
-		const f = j.facts;
-		const dist = (a, b) => { const d = Math.abs(((a - b) % 360 + 360) % 360); return Math.min(d, 360 - d); };
-		const rows = [];
-		SEVEN.filter((k) => f.planets[k]).forEach((k) => {
-			const lam = f.planets[k].lon;
-			const anti = ((180 - lam) % 360 + 360) % 360;
-			const contra = ((360 - lam) % 360 + 360) % 360;
-			const hitOf = (lon) => {
-				const hits = [];
-				SEVEN.forEach((o) => { if(o !== k && f.planets[o] && dist(lon, f.planets[o].lon) <= 1) hits.push(cn(o)); });
-				if(f.meta.ascLon != null && dist(lon, f.meta.ascLon) <= 1) hits.push('命度');
-				if(f.meta.mcLon != null && dist(lon, f.meta.mcLon) <= 1) hits.push('天顶');
-				return hits;
-			};
-			const fmt = (l) => `${(SIGNS[signOfLon(l)] || {}).cn || ''}${(((l % 30) + 30) % 30).toFixed(1)}°`;
-			rows.push(`- ${cn(k)}：映点 ${fmt(anti)}${hitOf(anti).length ? '（命中 ' + hitOf(anti).join('、') + '≈合）' : ''}；对映点 ${fmt(contra)}${hitOf(contra).length ? '（命中 ' + hitOf(contra).join('、') + '≈冲）' : ''}`);
-		});
+		const aorb = (j.facts.opts && typeof j.facts.opts.antisciaOrb === 'number') ? j.facts.opts.antisciaOrb : 1;
+		const rows = buildAntisciaTable(j.facts, aorb).map((r) => `- ${r.cn}：映点 ${r.antiText.replace(' ', '')}${r.antiHits.length ? '（命中 ' + r.antiHits.join('、') + '≈合）' : ''}；对映点 ${r.contraText.replace(' ', '')}${r.contraHits.length ? '（命中 ' + r.contraHits.join('、') + '≈冲）' : ''}`);
 		if(rows.length){
 			L.push('[映点对映点]');
-			L.push('映点=关于至点轴镜像(180°−λ)力≈合相;对映点(360°−λ)=映点之冲;命中≤1°计入判读。');
+			L.push(`映点=关于至点轴镜像(180°−λ)力≈合相;对映点(360°−λ)=映点之冲;命中≤${aorb}°计入判读。`);
 			rows.forEach((r) => L.push(r));
 		}
 	}
@@ -138,6 +146,16 @@ export function buildHorarySnapshot(j, chart, opts3){
 	if(j.facts && (j.facts.meta.dayRuler || j.hourRuler)){
 		L.push('[行星时]');
 		L.push(`日主星＝${cn(j.facts.meta.dayRuler)}；当前时主星＝${cn(j.hourRuler)}${PLANETARY_HOURS[j.hourRuler] ? `；本时象征：${PLANETARY_HOURS[j.hourRuler].join(' / ')}` : ''}`);
+		// [H9] 全表两行(迦勒底序,昼 12+夜 12;与 UI 行星时表同法)。
+		if(j.facts.meta.dayRuler){
+			const SEQ = ['saturn', 'jupiter', 'mars', 'sun', 'venus', 'mercury', 'moon'];
+			const d0 = SEQ.indexOf(j.facts.meta.dayRuler);
+			if(d0 >= 0){
+				const row = (base) => Array.from({ length: 12 }, (_, i) => cn(SEQ[(d0 + base + i) % 7]).replace('星', '')).join(' ');
+				L.push(`昼时序（日出起）：${row(0)}`);
+				L.push(`夜时序（日落起）：${row(12)}`);
+			}
+		}
 	}
 	// [尊贵明细] 逐星必然尊贵 token+计分;lilly 满分表另段(仅该档)。
 	if(j.facts && j.facts.planets){
@@ -154,6 +172,94 @@ export function buildHorarySnapshot(j, chart, opts3){
 				const a = j.conditions[k].accidental;
 				L.push(`- ${cn(k)} 合计 ${a.total > 0 ? '+' : ''}${a.total}：${a.items.map((it) => it.text_zh).join('；')}`);
 			});
+		}
+	}
+	// ── [H9] 官方 gap 八项补齐(只加新段;段头同步登记 AI_EXPORT_PRESET_SECTIONS.horary) ──
+	// [断法要点] 题型判断重点+典型吉凶徵。
+	{
+		const g = getQuestionGuide(j.category);
+		if(g){
+			L.push('[断法要点]');
+			L.push(`${g.title}：${g.focus}`);
+			L.push(`吉徵：${g.yes}；凶徵：${g.no}`);
+		}
+	}
+	// [六类问法] Query I–VI 全量(此前主链只推 ①②③,④方位⑤应期⑥结局恒缺)。
+	if(j.queries){
+		const q = j.queries;
+		L.push('[六类问法]');
+		L.push(`① 能否成事：${q.canHappen ? q.canHappen.text : '—'}`);
+		L.push(`② 事情好坏：${q.goodEvil ? q.goodEvil.text : '—'}`);
+		L.push(`③ 消息真假：${q.reportTrue ? q.reportTrue.text : '—'}`);
+		L.push(`④ 何处何向：${q.where ? `${q.where.dir}（${q.where.terrain}），${q.where.distance}` : '—'}`);
+		L.push(`⑤ 何时：${q.when ? q.when.text : '—'}`);
+		L.push(`⑥ 结局如何：${q.outcome ? q.outcome.text : '—'}`);
+	}
+	// [恒星会合] 前端精选表+后端实测(徵象星三键;两套口径并列)。
+	if((j.fixedStars && j.fixedStars.length) || (j.backendStars && Object.keys(j.backendStars).length)){
+		L.push('[恒星会合]');
+		(j.fixedStars || []).forEach((s) => {
+			L.push(`- ${s.point} 会合 ${s.star}（${s.meaning}）${s.royal ? '·王者' : ''}${s.nature === 'caution' ? '·凶性' : '·增益'}`);
+		});
+		if(j.backendStars && j.facts){
+			const rows = [];
+			[[sig.querentKey, '命主'], [sig.quesitedKey, '事项'], ['moon', '月亮']].forEach(([k, label]) => {
+				const pp = k && j.facts.planets[k];
+				const hit = pp && j.backendStars[pp.chartId];
+				if(hit && hit.length){ rows.push(`${label}·${cn(k)}：${hit.map((s) => `${s.cn || s.star}（差${s.orb.toFixed(1)}°)`).join('、')}`); }
+			});
+			if(rows.length){ L.push('后端实测（星历全表口径）：' + rows.join('；')); }
+		}
+	}
+	// [同主一星] 命主=事主时的五法裁决(A-E;C 真查容纳/E almuten 拆分)。
+	if(sig.sharedRuler){
+		L.push('[同主一星]');
+		L.push(`共用星＝${cn(sig.sharedRuler.planet)}${sig.sharedRuler.method ? '（法' + sig.sharedRuler.method + '）' : '（未选裁决法）'}`);
+		if(sig.sharedRuler.note){ L.push(sig.sharedRuler.note); }
+		if(sig.sharedRuler.almutenSplit){ L.push(`almuten 拆分：事项改由 ${cn(sig.sharedRuler.almutenSplit)} 代表`); }
+	}
+	// [自然象征] 该事项自然征象星完整词条。
+	if(sig.natural){
+		const ns = NATURAL_SIGNIFICATORS[sig.natural];
+		if(ns){
+			L.push('[自然象征]');
+			L.push(`${ns.cn} ${ns.glyph}：人物＝${(ns.persons || []).join('、')}`);
+			L.push(`事物＝${(ns.things || []).join('、')}${ns.note ? '；' + ns.note : ''}`);
+		}
+	}
+	// [盗窃研判] 11 步流程(theft 类才有)。
+	if(j.theft && j.theft.steps && j.theft.steps.length){
+		L.push('[盗窃研判]');
+		L.push(`失主＝命主＋月亮；盗贼＝7宫主 ${cn(j.theft.thief)}；赃物＝2宫主 ${cn(j.theft.obj)}；藏匿地＝4宫。`);
+		j.theft.steps.forEach((s) => L.push(`- ${s.label}：${s.text}`));
+	}
+	// [应期修正链] timingModifiers/secondLaw/换座副应期/留驻(有料才产段)。
+	if(j.timing && (j.timing.modifiers || j.timing.secondLaw || j.timing.signChange || j.timing.stationNote)){
+		L.push('[应期修正链]');
+		(j.timing.modifiers || []).forEach((m) => L.push('- ' + m));
+		if(j.timing.adjustedQuantity !== undefined){ L.push(`修正后数目：约 ${j.timing.adjustedQuantity} ${j.timing.unit}`); }
+		if(j.timing.secondLaw){ L.push('- ' + j.timing.secondLaw.text); }
+		if(j.timing.signChange){ L.push(`- 副应期（换座）：入相星距出本座 ${j.timing.signChange.deg}°，按当前速度约 ${j.timing.signChange.days} 天后换座（事态换阶段）`); }
+		if(j.timing.stationNote){ L.push('- ' + j.timing.stationNote); }
+	}
+	// ── [H4a 金矿] 两新段(只加新段;段头已登记 AI_EXPORT_PRESET_SECTIONS.horary) ──
+	// [围攻详断] 后端 surround.besiegement 十六式(凶围/围荣/围耀+协防+凶级);此前该表零消费。
+	if(j.besiegement && j.besiegement.length){
+		L.push('[围攻详断]');
+		j.besiegement.forEach((b) => {
+			const bs = (b.besiegers || []).map((x) => `${clsPlanetCn(x.id)}（${ASPECT_CN[Math.abs(x.aspect)] || (Math.abs(x.aspect) + '°')} 差${typeof x.delta === 'number' ? x.delta.toFixed(1) : '—'}°${x.retro ? '·逆' : ''}）`).join('＋');
+			const df = (b.defense || []).map((d) => `${clsPlanetCn(d.id)}（${ASPECT_CN[Math.abs(d.aspect)] || (Math.abs(d.aspect) + '°')}解${clsPlanetCn(d.against)}侧${d.strong ? '·有力' : ''}）`).join('、');
+			L.push(`- ${clsPlanetCn(b.target)} ${b.kind || '围攻'}（${b.nature || ''}${b.severe ? '·重' : ''}${b.targetRetro ? '·被围者逆行' : ''}）：${bs}${df ? '；协防：' + df : ''}`);
+		});
+	}
+	// [月亮实测相位] 后端 immediateAsp 权威源(按紧密度排序)+月亮本座终局相位(真计算)。
+	if((j.moonStory && j.moonStory.immediate && j.moonStory.immediate.length) || j.moonFinal){
+		L.push('[月亮实测相位]');
+		if(j.moonStory && j.moonStory.immediate && j.moonStory.immediate.length){
+			L.push('后端实测紧密相位（按距精确度序·权威源）：' + j.moonStory.immediate.slice(0, 4).map((a) => `${cn(a.other)} ${ASPECT_CN[a.angle] || a.angle + '°'} 差${a.orb.toFixed(1)}°`).join('；'));
+		}
+		if(j.moonFinal){
+			L.push(`月亮本座终局相位：与 ${cn(j.moonFinal.other)} 成${ASPECT_CN[j.moonFinal.angle] || j.moonFinal.angle + '°'}（约 ${j.moonFinal.tDays} 天后精确）→ 事之收尾${j.moonFinal.angle === 90 || j.moonFinal.angle === 180 ? '偏凶' : '偏吉'}。`);
 		}
 	}
 	// 扩展点集(lots_set=core15 档才有;classical 默认无=零回归)。

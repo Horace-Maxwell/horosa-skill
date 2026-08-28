@@ -93,6 +93,36 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.31.0 重同步 v3.9.5 —— 版本常量锁步被证伪 + 三种 require 形态 + caller 旧于依赖
+
+- **🔴 `AI_EXPORT_SETTINGS_VERSION` 锁步不可信。** 上游 v3.9.5 给 `horary` 导出段 19 → 28（+9 段），
+  **版本常量原地不动仍是 56**。后果：`verify_export_contract_mirror.py`（只比版本号 + key 集合，且只读
+  vendored 镜像）全绿穿透；`verify_export_section_baseline.py` 默认 `--source vendored` 也绿——那是拿
+  自己的旧镜像对账，同义反复。**权威判据只有两个**：`verify_upstream_sync.py --require-upstream`
+  （sentinel sha256）与段级棘轮的 `--source upstream --require-upstream` 形态（`preflight_release.py`
+  在跑的就是它）。日常手跑判断同步健康，必须用后一形态，裸跑默认参数会在这类失败上恒绿。
+- **上游 require 有三种形态，逐形态踩齐才算修完**：①语句形 `const {X} = require('…')`（v0.25 已处理）
+  ②**表达式形** `require('./x').prop`（ZiWeiHelper 的 `require('./ziweiOptions').ZWEngineOptions.kuiYue`，
+  语句正则抓不到，ESM 运行到即 ReferenceError；改写=hoist 成命名空间 import + 表达式处换别名。该规则
+  顺带抓出 dignities.js / hellenisticData.js 两处同病）③同符号 require **多次**（topicModule 的
+  DIR_BY_ELEMENT ×2）→ hoist 队列内也要去重，否则 `Identifier already declared`。另一坑同族：hoist 的
+  **插入点必须按完整语句匹配**——按单行匹配时多行 `import {…\n…} from` 块的首行也命中，「最后一条
+  import 之后」会落进块中间把它劈成两截（lifespanEngine 实测 SyntaxError）。
+- **「caller 旧于 vendored 依赖」是手工抽取件的专属漂移形态。** 本轮 `ZiWeiHelper.js`/`ziweiOptions.js`
+  机械重灌后已是新版（effLayerSihuaGan / xiaoxianClockwise / 各流派开关全在），但手工抽取的 caller
+  （zwLuckItems 4 函数 / ziweiExtras.formatLuckLayerLines / JinKouSnapshot.buildJinKouSnapshotText）
+  还是旧文本——能力在场但不可达，其中 `birthYearOf` 缺 `ganzhiYearBase` 是 v3.9.4 修的**真值错误**
+  （流年归属可能错年）。规矩：每轮重灌 vendor 树后，把 `contracts/vendor_manifest.json` 里 mode 为
+  bespoke/curated 的条目**逐一与上游现函数对文本**，机械 `--from-manifest` 不覆盖它们。
+- **上游后端的「param error」可能是本仓载荷的锅**：`/chart` 的 params 回显块无守卫读 `data['hsys']`
+  （上游前端恒发 hsys，从他们视角没毛病）。`HoraryInput` v0.24 typed 化时把 hsys 覆写成 None 默认
+  （「随流派档」），归一化剥掉 None → 缺键 KeyError。此前一直误判为「vendored 实例拒绝载荷、改前即
+  如此」并绕道 JS 层直验——**其实是真 bug，线上任何 python chart 后端上 horary 全挂**。修=调用侧补
+  PerChart 默认 0。教训：typed 化把父类有默认值的字段改成 None 默认时，要查每个直调后端的工具是否
+  依赖那个默认值。
+- **saturnExalt20 已删档**（上游 2026-08-18 拍板：degree 位全仓零消费者=真死开关，
+  `push_request_exalt_variants` 签名 2→1 参）。本仓 typed 字段同步删除；`nodeExaltation` 保留。
+
 ### v0.28.0 / 2026-08-17 — v3.9.2/v3.9.3 同步轮的四条 + 首个「AI 层」批次的三条
 
 **同步侧（缺口小了，说明守卫在做功；坑换了形态）。**

@@ -8,6 +8,7 @@ import * as AstroConst from '../../constants/AstroConst.js';
 import { SIGNS } from '../divination/data/signs.js';
 import { houseNum as dcHouseNum, signOf as dcSignOf } from './dispositorChain.js';
 import { KLIMATA, SIGN_CN, PLANET_CN, THEMA_MUNDI, parseSignDegree } from '../divination/data/hellenisticData.js';
+import { termRulerForVariant } from '../divination/engine/almuten.js';
 
 // ─────────────────────────── 通用小工具 ───────────────────────────
 
@@ -476,8 +477,102 @@ export function buildKlimataSnapshotLines(chartObj, fields){
 	return lines;
 }
 
+// ─────────────── [WP-4] 主宰光体 predominator + 庙/界主两派(Valens 式三判据) ───────────────
+// 判据:①落有利宫(chrematistikoi,busyPlaces 集合可配,默认 1/4/5/7/10/11) ②区分得体(sect light +1)
+// ③近轴角(距 ASC/MC/DESC/IC 黄经 <10° +1)。dynamicalDivisions=1 时逐判据乘象限动力权
+// (角宫 ×1.0 / 续宫 ×0.75 / 果宫 ×0.5)。两光加总取高者;平分取 sect light。
+// domicileMasterMethod:'domicile'(庙主派 Porphyry·Antiochus,默认=寿命法现状)/'bound'(界主派 Valens·Rhetorius)。
+const _PRED_ANGULAR = [1, 10, 7, 4];
+const _PRED_SUCCEDENT = [2, 5, 8, 11];
+
+export function computePredominator(chartObj, opts){
+	const chart = chartObj && chartObj.chart;
+	if(!chart || !Array.isArray(chart.objects)){ return { ok: false }; }
+	const o = opts || {};
+	const busy = Array.isArray(o.busyPlaces) && o.busyPlaces.length ? o.busyPlaces : [1, 4, 5, 7, 10, 11];
+	const dyn = o.dynamicalDivisions === 1 || o.dynamicalDivisions === '1' || o.dynamicalDivisions === true;
+	const isDay = !!chart.isDiurnal;
+	const sun = findObj(chart, AstroConst.SUN);
+	const moon = findObj(chart, AstroConst.MOON);
+	if(!sun || !moon){ return { ok: false }; }
+	const angles = Array.isArray(chart.angles) ? chart.angles : [];
+	const angleLons = angles.map((a) => lonOf(a)).filter((x) => Number.isFinite(x));
+	const quadWeight = (h) => {
+		if(!dyn || h == null){ return 1.0; }
+		if(_PRED_ANGULAR.indexOf(h) >= 0){ return 1.0; }
+		if(_PRED_SUCCEDENT.indexOf(h) >= 0){ return 0.75; }
+		return 0.5;
+	};
+	const judge = (obj, ofSect) => {
+		const h = emHouseNum(obj.house);
+		const w = quadWeight(h);
+		const factors = [];
+		let score = 0;
+		if(h != null && busy.indexOf(h) >= 0){ score += 1 * w; factors.push(`有利宫(${h})`); }
+		if(ofSect){ score += 1 * w; factors.push('区分得体'); }
+		const lon = lonOf(obj);
+		const nearAxis = Number.isFinite(lon) && angleLons.some((al) => {
+			const d = Math.abs(((lon - al + 180) % 360) - 180);
+			return d < 10;
+		});
+		if(nearAxis){ score += 1 * w; factors.push('近轴角'); }
+		return { score: Math.round(score * 100) / 100, factors, house: h };
+	};
+	const sunJ = judge(sun, isDay);
+	const moonJ = judge(moon, !isDay);
+	let winnerId = sunJ.score > moonJ.score ? AstroConst.SUN : (moonJ.score > sunJ.score ? AstroConst.MOON : (isDay ? AstroConst.SUN : AstroConst.MOON));
+	const winner = winnerId === AstroConst.SUN ? sun : moon;
+	// 庙主/界主两派(termRulerAt 与后端界表同源四档)。
+	const signKeyOf = (obj) => `${obj.sign || ''}`.toLowerCase();
+	const domicileMaster = (SIGNS[signKeyOf(winner)] || SIGNS[winner.sign] || {}).domicile || null;
+	let boundMaster = null;
+	try{
+		// [F6][R4-P2] 统一走 almuten.termRulerForVariant 单源:迦勒底昼夜/自定义表体/双子校勘全档齐
+		// (termRulerAt 直调无 chaldean 分支,tv=3 恒埃及=同屏与行星表两结论)。
+		boundMaster = termRulerForVariant(lonOf(winner), {
+			termsVariant: o.termsVariant !== undefined ? Number(o.termsVariant) : 0,
+			isDiurnal: isDay,
+			geminiEmended: !!(o.geminiBoundEmended && Number(o.geminiBoundEmended) === 1),
+			customTermsDay: o.customTermsDay, customTermsNight: o.customTermsNight,
+		}) || null;
+	}catch(e){ boundMaster = null; }
+	const method = o.domicileMasterMethod === 'bound' ? 'bound' : 'domicile';
+	return {
+		ok: true, isDay, winner: winnerId,
+		sunScore: sunJ.score, moonScore: moonJ.score,
+		sunFactors: sunJ.factors, moonFactors: moonJ.factors,
+		domicileMaster, boundMaster, method,
+		master: method === 'bound' ? (boundMaster || domicileMaster) : domicileMaster,
+		dynamical: dyn,
+	};
+}
+
+// ─────────────── [WP-8] 七射线分布(灵学体系推算;默认 off 不算不显) ───────────────
+// Bailey 体系公开映射:星座→射线 / 行星→射线;权重档 equal(每命中 1)/weighted(发光体×3/内行星×2/外行星×1)。
+const RAY_OF_SIGN = { Aries: [1], Taurus: [4], Gemini: [2], Cancer: [3, 7], Leo: [1, 5], Virgo: [2, 6],
+	Libra: [3], Scorpio: [4], Sagittarius: [4, 5, 6], Capricorn: [1, 3, 7], Aquarius: [5], Pisces: [2, 6] };
+const RAY_OF_PLANET = { Sun: 1, Moon: 4, Mercury: 4, Venus: 5, Mars: 6, Jupiter: 2, Saturn: 3,
+	Uranus: 7, Neptune: 6, Pluto: 1 };
+const RAY_WEIGHT = { Sun: 3, Moon: 3, Mercury: 2, Venus: 2, Mars: 2, Jupiter: 1, Saturn: 1, Uranus: 1, Neptune: 1, Pluto: 1 };
+export const RAY_NAMES_CN = ['意志', '爱智', '活性', '谐美', '实学', '虔诚', '仪轨'];
+
+export function computeSevenRays(chartObj, weighting){
+	const chart = chartObj && chartObj.chart;
+	if(!chart || !Array.isArray(chart.objects)){ return null; }
+	const totals = [0, 0, 0, 0, 0, 0, 0];
+	chart.objects.forEach((o) => {
+		const pr = RAY_OF_PLANET[o.id];
+		if(pr === undefined){ return; }
+		const w = weighting === 'weighted' ? (RAY_WEIGHT[o.id] || 1) : 1;
+		totals[pr - 1] += w;
+		(RAY_OF_SIGN[o.sign] || []).forEach((r) => { totals[r - 1] += w; });
+	});
+	const max = Math.max(...totals);
+	return { totals, max, weighting: weighting === 'weighted' ? 'weighted' : 'equal' };
+}
+
 // [古典·显赫计分]:五指标计分表 + 总分等级(computeEminence 单源)。
-export function buildEminenceSnapshotLines(chartObj){
+export function buildEminenceSnapshotLines(chartObj, predOpts){
 	const data = computeEminence(chartObj);
 	if(!data.ok){ return []; }
 	const lines = [];
@@ -489,6 +584,28 @@ export function buildEminenceSnapshotLines(chartObj){
 	});
 	lines.push(`总分 ${data.total} / 10 → ${data.level}（≥8 显赫 / 6-7 显著 / 3-5 平凡 / <3 暗晦）。`);
 	if(data.note){ lines.push(data.note); }
+	// [WP-4] 主宰光体行(段内增行不加段头):判定三判据+两派主星并列自陈。
+	const pred = computePredominator(chartObj, predOpts);
+	if(pred.ok){
+		const fx = (pred.winner === AstroConst.SUN ? pred.sunFactors : pred.moonFactors).join('·') || '判据全空(按区分光体)';
+		lines.push(`主宰光体(predominator):${pred.winner === AstroConst.SUN ? '太阳' : '月亮'}(日 ${pred.sunScore} 分 / 月 ${pred.moonScore} 分;${fx}${pred.dynamical ? ';动力学分区加权' : ''})。庙主=${planetCn(pred.domicileMaster) || '—'}${pred.boundMaster ? `,界主=${planetCn(pred.boundMaster)}` : ''};当前判法=${pred.method === 'bound' ? '界主派' : '庙主派'} → 主宰主星 ${planetCn(pred.master) || '—'}。`);
+	}
+	// [WP-8] 七射线分布(灵学推算;默认 off 零增行)+祝融星行(响应有 vulcan 字段才显)。
+	const rw = predOpts && predOpts.rayWeighting;
+	if(rw === 'equal' || rw === 'weighted'){
+		const rays = computeSevenRays(chartObj, rw);
+		if(rays){
+			lines.push(`七射线分布(${rw === 'weighted' ? '加权' : '等权'} · 灵学体系推算):` +
+				rays.totals.map((v, i) => `${i + 1}·${RAY_NAMES_CN[i]} ${v}`).join('／') + '。');
+		}
+	}
+	if(chartObj && chartObj.vulcan){
+		const v = chartObj.vulcan;
+		const mtxt = (v.method === 'baker' || v.method === 'baker(fallback)') ? '水星系推算' : '轨道根数法';
+		const SIGNS_EN = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'];
+		const signCn = SIGN_CN[SIGNS_EN.indexOf(v.sign)] || v.sign;
+		lines.push(`祝融星(推算行星·${mtxt}):${signCn} ${Math.round(v.signlon * 100) / 100}˚(距日 ${v.distToSun}˚)。`);
+	}
 	return lines;
 }
 

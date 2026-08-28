@@ -10,6 +10,8 @@ import {
 	PLANETARY_YEARS, APHETIC_RULES, HYLEG_CANDIDATE_ORDER,
 	HARD_ASPECTS, SOFT_ASPECTS, yearsBandForAngularity,
 } from './lifespanData.js';
+import { classicalGlobalValue } from '../../utils/classicalChartGlobals.js';
+import { termRulerForVariant } from '../engine/almuten.js';
 
 // ---- 几何/相位小工具（whole-sign beholding：古典 Hyleg/Alcocoden 标准用整宫相照）----
 const SIGN_ASPECT = { 0: 0, 2: 60, 3: 90, 4: 120, 6: 180 }; // 整宫间隔→相位角；1/5=不相照(aversion)
@@ -224,13 +226,31 @@ function computeAlmuten(facts, variants){
 
 function rulersOfLife(facts, hyleg, almutenWinner){
 	if(!hyleg) return null;
-	const oikodespotes = (SIGNS[hyleg.sign] || {}).domicile || null;
+	// [WP-4] 家主星判法两派:'domicile'(庙主派 Porphyry·Antiochus,默认=历史现状)/
+	// 'bound'(界主派 Valens·Rhetorius:取占控星度数的界主;界表随全局 termsVariant 四档)。
+	let oikodespotes = (SIGNS[hyleg.sign] || {}).domicile || null;
+	let masterMethod = 'domicile';
+	try{
+		if(classicalGlobalValue('domicileMasterMethod') === 'bound' && Number.isFinite(hyleg.lon)){
+			// [N4][R4-P2] 统一走 almuten.termRulerForVariant 单源(迦勒底昼夜/自定义表体全档);
+			// isDiurnal 从盘上取,缺省按昼(与后端主口径一致)。
+			const bound = termRulerForVariant(hyleg.lon, {
+				termsVariant: Number(classicalGlobalValue('termsVariant')) || 0,
+				isDiurnal: facts && facts.meta && facts.meta.isDiurnal !== undefined ? !!facts.meta.isDiurnal : true,
+				geminiEmended: Number(classicalGlobalValue('geminiBoundEmended')) === 1,
+				customTermsDay: (facts && facts.result && facts.result.params && facts.result.params.customTermsDay) || undefined,
+				customTermsNight: (facts && facts.result && facts.result.params && facts.result.params.customTermsNight) || undefined,
+			});
+			if(bound){ oikodespotes = bound; masterMethod = 'bound'; }
+		}
+	}catch(e){ /* 全局仓不可用(极端环境)守默认庙主派 */ }
 	return {
 		epikratetor: hyleg.key,                 // 占控星=选定的释放发光体/点
-		oikodespotes,                            // 家主星=占控星座的本垣主（船主）
+		oikodespotes,                            // 家主星=占控星座主(船主;两派见 masterMethod)
 		kurios: almutenWinner,                   // 盘主星=综合 almuten 胜者（舵手）
 		concordant: !!(oikodespotes && oikodespotes === almutenWinner),
-		model: '船主(家主星)/舵手(盘主星)',
+		model: masterMethod === 'bound' ? '船主(家主星·界主派)/舵手(盘主星)' : '船主(家主星)/舵手(盘主星)',
+		masterMethod,
 	};
 }
 

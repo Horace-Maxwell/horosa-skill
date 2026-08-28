@@ -4,6 +4,7 @@
 // 元素 {id, asp, orb}。X.Applicative = X 正入相位这些星。
 import { aspectByAngle } from '../data/aspects.js';
 import { keyOfChartId, chartIdOfKey } from './utils.js';
+import { antisciaPairsOf } from './resultShapes.js';
 
 function natureOf(angle){
 	const a = aspectByAngle(angle);
@@ -49,11 +50,14 @@ export function aspectBetween(facts, a, b){
 
 // 映点相位（读 result.antiscias: [[id1,id2,orb],...]）
 export function antiscionBetween(facts, a, b){
-	const list = (facts.result && facts.result.antiscias) || [];
+	// [H1a 死链根修] 旧读法猜 result.antiscias(顶层扁平数组)——后端真形状是
+	// result.chart.antiscias.{antiscia,cantiscia},此路径恒空 → 映点成事法从未触发过。
+	// 改消费 resultShapes 契约层;仅 antiscia(隐合)入完成法,cantiscia(对映点=隐冲性质)不在此。
 	const ca = chartIdOfKey(a) || a;
 	const cb = chartIdOfKey(b) || b;
-	const hit = list.find((x) => (x[0] === ca && x[1] === cb) || (x[0] === cb && x[1] === ca));
-	return hit ? { a, b, orb: hit[2], type: 'antiscion' } : null;
+	const hit = antisciaPairsOf(facts.result).find((x) => x.kind === 'antiscia'
+		&& ((x.a === ca && x.b === cb) || (x.a === cb && x.b === ca)));
+	return hit ? { a, b, orb: hit.orb, type: 'antiscion' } : null;
 }
 
 export default aspectsOf;

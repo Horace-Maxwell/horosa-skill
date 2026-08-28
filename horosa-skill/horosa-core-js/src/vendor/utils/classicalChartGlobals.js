@@ -10,35 +10,19 @@
 // 优先级铁律（用户拍板）：页面显式字段（含卜卦流派预设 patch 的键）> 本仓全局值 > 内建默认。
 // 本仓默认值 == 各内建默认 —— 用户从未改过设置时，一切请求体逐字节零变（零回归锚）。
 import { safeJsonParseFromStorage, safeJsonStringifyToStorage } from '../gua/safeStorage.js';
+import { CLASSICAL_PARAM_SPEC, specDefaults, specKeysByValueType } from './classicalParamSpec.js';
+import { loadCustomTerms } from './customCalibreStores.js';
 
 export const CLASSICAL_GLOBALS_STORAGE_KEY = 'horosa.chart.classicalGlobals.v1';
 export const CLASSICAL_GLOBALS_EVENT = 'horosa:classical-globals-changed';
 
-// 默认值 = 现内建默认（fieldsToParams 条件透传的「不下发」侧）。
-export const CLASSICAL_GLOBAL_DEFAULTS = {
-	termsVariant: 0,          // 0=埃及 1=托勒密·校勘本 2=托勒密·经典传本 3=迦勒底(推演)
-	geminiBoundEmended: 0,    // 仅 termsVariant==2 生效:1=双子末两界校勘对调
-	westNodeType: 'mean',     // 'mean' | 'true'
-	sectBuffer: 'geo',        // 'geo' | 'ptolemy5'
-	leoBoundFirst: 0,         // 仅 termsVariant==1 生效:1=狮子首界主木→土
-	triplicity: 'Dorothean',  // 'Dorothean' | 'Ptolemaic' | 'PtolemaicWaterVariant'
-	lotReversal: 1,           // 1=福点按昼夜反转(默认) 0=恒昼式
-	// ── 2026-07 二批:落宫/三态/空亡/恒星/映点升排盘级(后端 perchart 参数化;默认=后端现硬编码值)──
-	houseCuspAdvance: 5,      // 落宫宫头前移(5°律):5 默认/3/1/0=纯宫界;整宫制天然豁免
-	cazimiOrb: 17 / 60,       // 日心(度):传键时后端 sunPos/phase 两套统一;缺省各保现值(17′/16′)
-	combustOrb: 8.5,          // 燃烧上界(度):同上(8.5/8)
-	underBeamsOrb: 17,        // 日光束外界(度):sunPos 用;phase 束级恒逐星 arcus visionis
-	vocMode: 'classic',       // 空亡口径:classic(=后端 lilly「无入相即空」1647)/by_orb/by_sign_perfect/by_sign_orb/kenodromia/exempt4
-	vocIncludeOuter: 0,       // 1=空亡目标星集含三王星(仅非 classic 口径)
-	fixedStarOrb: 1,          // 恒星合相平轨(度):后端 chart.stars 现值 1°(卜卦判读层由流派绑定,不受此默认影响)
-	fixedStarOrbMode: 'school',   // 'school'=平轨 | 'byMagnitude'=按星等表(1等7.5°…)
-	antisciaOrb: 1,           // 映点接触容许度(度,同座 signlon 差)
-	viaCombustaVariant: 'standard',   // 燃烧之路边界:standard=195–225 传统(2026-07 由旧窄口径归正)/narrow=208–217 旧值/scorpioFull/bothFull
-	partileDef: 'same_degree',        // 正相位(partile)判据:同整数度(1647)/le3/le1——主盘相位表标记列+卜卦尊贵计分共用(纯前端,不进排盘请求)
-};
+// [WP-1] 默认表/类型表由 classicalParamSpec 单源派生(此前七方手工登记漂移:viaCombustaVariant
+// 漏播种、三开关漏 UI 皆实锤)。语义不变:默认值 = 现内建默认(fieldsToParams 条件透传的「不下发」侧)。
+// 逐键注释(取值域/后端消费点)移居 spec 表本体;契约测试锁本表≡spec≡播种≡齿轮≡Java 白名单五方全等。
+export const CLASSICAL_GLOBAL_DEFAULTS = specDefaults();
 
-const INT_KEYS = ['termsVariant', 'geminiBoundEmended', 'leoBoundFirst', 'lotReversal', 'houseCuspAdvance', 'vocIncludeOuter'];
-const FLOAT_KEYS = ['cazimiOrb', 'combustOrb', 'underBeamsOrb', 'fixedStarOrb', 'antisciaOrb'];
+const INT_KEYS = specKeysByValueType('int');
+const FLOAT_KEYS = specKeysByValueType('float');
 const ALL_KEYS = Object.keys(CLASSICAL_GLOBAL_DEFAULTS);
 
 // 存储迁移:此七键 2026-07 初版曾住 divinationJudgeGlobals 仓——normalize 时若新仓缺键而旧仓有值,
@@ -47,6 +31,26 @@ const MIGRATED_FROM_JUDGE = ['cazimiOrb', 'combustOrb', 'underBeamsOrb', 'vocMod
 const LEGACY_JUDGE_STORAGE_KEY = 'horosa.chart.divinationJudgeGlobals.v1';
 
 let cache = null;   // 模块级缓存;写侧失效。localStorage 只读一次,热路径零 IO。
+// [SURF-R5c] 读侧自愈:全量备份「恢复」直写 localStorage 不经 setClassicalChartGlobal,
+// 热 cache 恒返回旧值;更重的次生病=恢复后改任一档,set 以旧 cache 为基整包回写,把刚恢复
+// 的其它键永久覆盖(重启不救)。照 customCalibreStores rawStr 比对范式:get 时原串不同即重建
+// +广播;1s 节流防构参热路径(逐键 classicalGlobalValue)IO 放大——恢复场景秒级足够。
+let cacheRawStr = null;
+let lastRawCheckAt = 0;
+function rawSelfHealCheck(){
+	if(!cache){ return; }
+	const now = Date.now();
+	if(now - lastRawCheckAt < 1000){ return; }
+	lastRawCheckAt = now;
+	let rawStr = null;
+	try{ rawStr = (typeof window !== 'undefined' && window.localStorage) ? window.localStorage.getItem(CLASSICAL_GLOBALS_STORAGE_KEY) : null; }catch(e){ return; }
+	if(rawStr === cacheRawStr){ return; }
+	cache = null;   // 外部直写(备份恢复等):失效重建,读侧下一行重建后广播
+	getClassicalChartGlobals();
+	if(typeof window !== 'undefined' && typeof window.dispatchEvent === 'function'){
+		try{ window.dispatchEvent(new CustomEvent(CLASSICAL_GLOBALS_EVENT, { detail: { key: '*', value: null } })); }catch(e){ /* ignore */ }
+	}
+}
 
 function normalize(raw){
 	const out = { ...CLASSICAL_GLOBAL_DEFAULTS };
@@ -68,7 +72,11 @@ function normalize(raw){
 
 // 全量读取（默认 ∪ 已存偏好）。返回新对象，调用方可安全解构。
 export function getClassicalChartGlobals(){
+	rawSelfHealCheck();
 	if(!cache){
+		let _rawStr = null;
+		try{ _rawStr = (typeof window !== 'undefined' && window.localStorage) ? window.localStorage.getItem(CLASSICAL_GLOBALS_STORAGE_KEY) : null; }catch(e){ _rawStr = null; }
+		cacheRawStr = _rawStr;
 		const raw = safeJsonParseFromStorage(CLASSICAL_GLOBALS_STORAGE_KEY) || {};
 		// 一次性并入旧 judge 仓的七个迁移键(新仓缺键才并;并入后立即固化,后续读零成本)。
 		const legacy = safeJsonParseFromStorage(LEGACY_JUDGE_STORAGE_KEY);
@@ -85,6 +93,7 @@ export function getClassicalChartGlobals(){
 		cache = normalize(raw);
 		if(migrated){
 			safeJsonStringifyToStorage(CLASSICAL_GLOBALS_STORAGE_KEY, cache);
+			try{ cacheRawStr = (typeof window !== 'undefined' && window.localStorage) ? window.localStorage.getItem(CLASSICAL_GLOBALS_STORAGE_KEY) : cacheRawStr; }catch(e){ /* keep */ }
 		}
 	}
 	return { ...cache };
@@ -112,6 +121,8 @@ export function setClassicalChartGlobal(key, value){
 	const next = normalize({ ...getClassicalChartGlobals(), [key]: value });
 	cache = next;
 	safeJsonStringifyToStorage(CLASSICAL_GLOBALS_STORAGE_KEY, next);
+	try{ cacheRawStr = (typeof window !== 'undefined' && window.localStorage) ? window.localStorage.getItem(CLASSICAL_GLOBALS_STORAGE_KEY) : cacheRawStr; }catch(e){ /* keep */ }
+	lastRawCheckAt = Date.now();   // 写侧刚同步,节流窗口内免重比
 	if(typeof window !== 'undefined' && typeof window.dispatchEvent === 'function'){
 		try{
 			window.dispatchEvent(new CustomEvent(CLASSICAL_GLOBALS_EVENT, { detail: { key, value: next[key] } }));
@@ -128,45 +139,71 @@ function _neqNum(a, b){
 	return !Number.isFinite(n) ? false : Math.abs(n - b) > 1e-9;
 }
 
+// [WP-1] spec 驱动版:逐键手写段收编为 CLASSICAL_PARAM_SPEC 循环——新键在 spec 登记
+// (send:'nonDefault')即自动进本单源,不再逐键手补。判据语义与手写版逐字节等价
+// (mountRequestDiff/chartGlobalsStores/natalClassicalParams 三组契约全绿自证):
+// - float 键:与默认差 >1e-9 才发(数值净化 Number);
+// - int 键:强转后 ≠ 默认才发(0/1 开关天然涵盖「=1 才发」);
+// - str 键:字符串化 ≠ 默认(defaultAliases 同义词也算默认,vocMode 的 lilly/backend);
+// - 值域校验:有 options 的键,值不在档内不发(脏值防线,较手写版更严);
+// - 键名映射:spec.backendKey(fixedStarOrb→starOrb);
+// - 伴发特例:vocIncludeOuter 仅随非默认 vocMode 下发(lilly 口径后端忽略之,单独发白扰缓存键);
+// - partileDef 等 send:'never' 纯前端键恒不发。
 export function classicalBackendOverrides(getVal){
 	const out = {};
-	const v = (k) => {
-		const x = getVal(k);
-		return (x === undefined || x === null || x === '') ? undefined : x;
-	};
-	const hca = v('houseCuspAdvance');
-	if(hca !== undefined){
-		const n = parseInt(hca + '', 10);
-		if([0, 1, 3].indexOf(n) >= 0){ out.houseCuspAdvance = n; }   // 5=默认不发
-	}
-	const cz = v('cazimiOrb');
-	if(cz !== undefined && _neqNum(cz, 17 / 60)){ out.cazimiOrb = Number(cz); }
-	const cb = v('combustOrb');
-	if(cb !== undefined && _neqNum(cb, 8.5)){ out.combustOrb = Number(cb); }
-	const ub = v('underBeamsOrb');
-	if(ub !== undefined && _neqNum(ub, 17)){ out.underBeamsOrb = Number(ub); }
-	const vm = v('vocMode');
-	if(vm !== undefined && ['classic', 'lilly', 'backend'].indexOf(vm + '') < 0){
-		out.vocMode = vm + '';
-		const vo = v('vocIncludeOuter');
-		if(vo === 1 || vo === '1' || vo === true){ out.vocIncludeOuter = 1; }
-	}
-	const fo = v('fixedStarOrb');
-	if(fo !== undefined && _neqNum(fo, 1)){ out.starOrb = Number(fo); }
-	if(v('fixedStarOrbMode') === 'byMagnitude'){ out.starOrbMode = 'byMagnitude'; }
-	const ao = v('antisciaOrb');
-	if(ao !== undefined && _neqNum(ao, 1)){ out.antisciaOrb = Number(ao); }
-	const vcv = v('viaCombustaVariant');
-	if(vcv !== undefined && vcv !== 'standard'){ out.viaCombustaVariant = vcv + ''; }
-	// 三个 0/1 流派开关(默认 0 不发):点公式文档序反转 / 交点入旺 / 土星旺 20°。
-	// 必须走本单源:六个构参点(主盘/13宫/12分盘/合盘/节气/卜卦)自动同步,
-	// 后端 /chart、/chart13、/chart12 已按 push_request_lots_doc_reverse /
-	// push_request_exalt_variants 令牌纪律接好,只等键到。
-	['lotsDocReverse', 'nodeExaltation', 'saturnExalt20'].forEach((k) => {
-		const x = v(k);
-		if(x === 1 || x === '1' || x === true){ out[k] = 1; }
+	CLASSICAL_PARAM_SPEC.forEach((s) => {
+		if(s.send !== 'nonDefault'){ return; }
+		let raw;
+		try{ raw = getVal(s.key); }catch(e){ return; }   // [R4-P3] 单键取值炸不拖垮整包(forEach 回调里 return=跳过本键)
+		// [SURF-R2b] 改名键双名回退:后端回显/params 派生链按 backendKey 存(starOrb/starOrbMode),
+		// 只按前端名取=fixedStarOrb 两键在「回显形 plain 再派生」(FromPlain(chartObj.params)/
+		// chartRequestKey/natalClassicalParams)恒 undefined——字符串键名双轨族第五处。前端名优先,
+		// 对既有正确调用零语义变化。
+		if((raw === undefined || raw === null || raw === '') && s.backendKey && s.backendKey !== s.key){
+			try{ raw = getVal(s.backendKey); }catch(e){ return; }
+		}
+		if(raw === undefined || raw === null || raw === ''){ return; }
+		let val;
+		if(s.valueType === 'float'){
+			val = Number(raw);
+			if(!Number.isFinite(val) || !_neqNum(val, s.default)){ return; }
+		}else if(s.valueType === 'int'){
+			// boolean 归一(true→1/false→0):旧手写版接受 x===true,divinationJudgeGlobals 迁移值
+			// 与部分 record 还原值为 bool 形态——parseInt('true')=NaN 会静默丢开。
+			val = raw === true ? 1 : (raw === false ? 0 : parseInt(raw + '', 10));
+			if(!Number.isFinite(val) || val === s.default){ return; }
+		}else{
+			val = raw + '';
+			if(val === s.default){ return; }
+			if(Array.isArray(s.defaultAliases) && s.defaultAliases.indexOf(val) >= 0){ return; }
+		}
+		if(s.options && !s.options.some((o) => o.value === val)){ return; }   // 值域外脏值不发
+		out[s.backendKey || s.key] = val;
 	});
-	// partileDef 为纯前端键(主盘相位标记+判读计分),不进排盘请求。
+	// 伴发规则:vocIncludeOuter 仅随非默认 vocMode(后端 classic/lilly 口径忽略它)。
+	if(out.vocIncludeOuter !== undefined && out.vocMode === undefined){ delete out.vocIncludeOuter; }
+	// [WP-7] 自定义界表附表体:termsVariant=4 时随请求带 customTermsDay/Night(后端强校验+回落埃及);
+	// 本地无合法表 → 降级不发 4(等效埃及,防「选了自定义却无表」的静默怪盘)。
+	if(out.termsVariant === 4){
+		try{
+			// [F14] 随盘表体优先(record 载入场景 getVal 能取到 customTermsDay)——换机/清仓后
+			// 旧盘不再静默变埃及;无随盘表才回落本机编辑器仓;两处都无 → 降级不发 4。
+			const recDay = getVal('customTermsDay');
+			const recNight = getVal('customTermsNight');
+			if(Array.isArray(recDay) && recDay.length === 12){
+				out.customTermsDay = recDay;
+				if(Array.isArray(recNight) && recNight.length === 12){ out.customTermsNight = recNight; }
+			}else{
+				const tbl = loadCustomTerms();
+				if(tbl && tbl.day){
+					out.customTermsDay = tbl.day;
+					if(tbl.night){ out.customTermsNight = tbl.night; }
+				}else{
+					delete out.termsVariant;
+				}
+			}
+		}catch(e){ delete out.termsVariant; }
+	}
 	return out;
 }
 
@@ -180,7 +217,51 @@ export function classicalBackendOverridesFromPlain(plain){
 	return classicalBackendOverrides((k) => (plain ? plain[k] : undefined));
 }
 
+// [SURF-T1] 推运组件 hook 增量 merge({...state.params, ...fresh})的粘滞剔除:
+// send:nonDefault 键改回默认后 fresh 不再携带,但旧 state 里的非默认值会被 merge 永久保留
+// → 请求持续发已废档(返照法拨回「精确回归」后仍按希腊式取盘,真机 fiber 三证)。
+// 修法=以 fresh 为「当前应发全集」,spec 键(backendKey 与 key 双名)fresh 缺席则从 merge 结果删除。
+// ⚠ 入参 merged 必须是新建对象(调用点恒 {...state.params, ...fresh} 字面量)——本函数就地
+// delete,直传 this.state.params 会静默突变 React state。
+export function pruneStaleClassicalParams(merged, fresh){
+	if(!merged){ return merged; }
+	const f = fresh || {};
+	CLASSICAL_PARAM_SPEC.forEach((s) => {
+		[s.backendKey || s.key, s.key].forEach((name) => {
+			if(f[name] === undefined && merged[name] !== undefined){
+				delete merged[name];
+			}
+		});
+	});
+	// [SURF-R3p] 伴生附表键不在 spec:termsVariant 拨离自定义(4)后 fresh 无此二键,
+	// 12 座死表会随每次推运请求(后端 tv≠4 门控不消费=不错盘,但请求膨胀+缓存键碎片)。
+	['customTermsDay', 'customTermsNight'].forEach((name) => {
+		if(f[name] === undefined && merged[name] !== undefined){ delete merged[name]; }
+	});
+	return merged;
+}
+
 // 测试用：清缓存（storage 由测试自理）。
 export function __resetClassicalGlobalsCacheForTest(){
 	cache = null;
+	cacheRawStr = null;
+	lastRawCheckAt = 0;
 }
+
+// [F11] 快照敏感 never 键:不进请求体(纯前端消费)但改变 AI 快照内容(显赫段/相位正列)——
+// 改动必须失效旧快照,否则 AI 挂旧口径文本。签名层专用(两侧同构拼进 classicalOv JSON),
+// 与请求体 overrides 严格分离(never 键恒不下发)。
+const SNAPSHOT_SENSITIVE_NEVER_KEYS = ['busyPlaces', 'dynamicalDivisions', 'domicileMasterMethod', 'rayWeighting', 'partileDef'];
+export function classicalSnapshotNeverSig(getVal){
+	const out = {};
+	SNAPSHOT_SENSITIVE_NEVER_KEYS.forEach((k) => {
+		let v;
+		try{ v = getVal(k); }catch(e){ return; }   // [R4-P3] 同上
+		const d = CLASSICAL_GLOBAL_DEFAULTS[k];
+		if(v !== undefined && v !== null && `${v}` !== `${d}`){
+			out[`~${k}`] = `${v}`;   // ~ 前缀:与请求体键名空间隔离,自证不可能混进 body
+		}
+	});
+	return out;
+}
+

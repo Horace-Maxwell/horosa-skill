@@ -97,6 +97,16 @@ export function buildFacts(result, opts){
 			monomoiria: o.monomoiria || null,
 			ninthPart: o.ninthPart || null,
 			darijan: o.darijan || null,
+			// [H4a 金矿纯增] 后端早已落盘、前端此前零消费的六字段(本包只映射零消费=零行为;
+			// 消费面 H4b 按流派门控接入):stationState 留驻带('S'留/'D'回顺等)/decl 赤纬
+			// (declParallel 平行相位料)/ruleHouses 统辖宫/degreeQuality 度性(光明暗黑烟雾亏空)/
+			// specialDegree 特殊度/backendDignityScore 后端综合分。
+			stationState: o.stationState || null,
+			decl: o.decl != null ? o.decl : null,
+			ruleHouses: o.ruleHouses || null,
+			degreeQuality: o.degreeQuality || null,
+			specialDegree: o.specialDegree || null,
+			backendDignityScore: o.score != null ? o.score : null,
 		};
 	});
 
@@ -136,6 +146,7 @@ export function buildFacts(result, opts){
 	if(houses[8]){ lons.eighth = houses[8].lon; }
 
 	return {
+		opts: opts || null,   // [R5-P2] 判读口径随 facts 携带(择日 antiscia 门等模块级门读 facts.opts;不传=null 门恒开=零回归)
 		meta: {
 			isDiurnal: !!chart.isDiurnal,
 			sect: chart.isDiurnal ? 'day' : 'night',

@@ -26,7 +26,7 @@ export function termRulerForVariant(lon, opts){
 		}
 		return segs.length ? String(segs[segs.length - 1][0]).toLowerCase() : null;
 	}
-	return termRulerAt(lon, key, { geminiEmended: !!opts.geminiEmended });
+	return termRulerAt(lon, key, { geminiEmended: !!opts.geminiEmended, customTermsDay: opts.customTermsDay, customTermsNight: opts.customTermsNight, isDiurnal: opts.isDiurnal });   // [R4-P2] 表体+昼夜透传
 }
 
 // (a) 逐度 almuten。opts：isDiurnal(默认 true)、termsVariant(默认'ptolemaic'=经典传本)、
