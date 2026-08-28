@@ -185,7 +185,7 @@ Fengshui is intentionally excluded from this public skill surface (not headless-
 
 **引知识必带出处（v0.28.0 反 Barnum 第一机制）**：解读中引用口径/流派/教义时，先用
 `knowledge_read` 取条目并转述其 `citation`（形如「星阙操作手册 · 八字四柱 · 算法与口径」）；
-不知道条目在哪个域时，先 `knowledge_read {"query": "晚子时"}` 跨 24 域全文检索（v0.31.0）——
+不知道条目在哪个域时，先 `knowledge_read {"query": "晚子时"}` 跨 24 域全文检索（v0.32.0）——
 命中自带 citation 与可直接回读的 (domain, category, key) 坐标，再精读引用；
 `knowledge_read` 没有的内容按通则推理并**明说无出处**。不许把通则包装成「古籍说」「星阙口径」。
 
