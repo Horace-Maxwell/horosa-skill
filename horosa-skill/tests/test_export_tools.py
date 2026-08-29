@@ -24,15 +24,21 @@ def test_registry_tables_have_no_duplicate_keys() -> None:
     """
     tree = ast.parse(REGISTRY_SOURCE.read_text(encoding="utf-8"))
     problems: list[str] = []
+    named: dict[int, str] = {}
     for node in tree.body:
-        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Dict):
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Dict) and isinstance(node.targets[0], ast.Name):
+            named[id(node.value)] = node.targets[0].id
+    # ast.walk 全量扫（含嵌套 dict）——只看顶层 Assign 会漏掉 AnnAssign/嵌套字面量整类位置。
+    for dict_node in ast.walk(tree):
+        if not isinstance(dict_node, ast.Dict):
             continue
-        name = node.targets[0].id if isinstance(node.targets[0], ast.Name) else "<expr>"
-        keys = [key.value for key in node.value.keys if isinstance(key, ast.Constant)]
+        node_value = dict_node
+        name = named.get(id(node_value), f"<dict@L{dict_node.lineno}>")
+        keys = [key.value for key in node_value.keys if isinstance(key, ast.Constant)]
         for key, count in collections.Counter(keys).items():
             if count > 1:
                 lines = [
-                    k.lineno for k in node.value.keys if isinstance(k, ast.Constant) and k.value == key
+                    k.lineno for k in node_value.keys if isinstance(k, ast.Constant) and k.value == key
                 ]
                 problems.append(f"{name}[{key!r}] appears {count}× at lines {lines}")
     assert problems == [], "合并到同一个键上，别新增重复键：\n  " + "\n  ".join(problems)
@@ -150,3 +156,4 @@ def test_export_parse_fixture_catalog_matches_app_snapshot_shapes(tmp_path, fixt
     payload = queried[0]["artifacts"][0]["payload"]
     assert payload["data"]["selected_sections"] == fixture_case["selected_sections"]
     assert payload["data"]["section_titles_detected"] == fixture_case["expected_detected"]
+

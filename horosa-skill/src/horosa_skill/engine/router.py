@@ -49,6 +49,12 @@ def select_tools(request: DispatchInput) -> list[str]:
     # 生时校正：KP 法扫描候选出生时刻（与「出生时间不确定要不要校正」一类问法都指这里）。
     if _contains_any(text, ["生时校正", "出生时间校正", "校时", "rectify", "rectification", "不知道几点出生", "出生时间不准"]):
         add("india_rectify")
+    # 行星周期：世运两星合冲时间轴（「木土合相」「土冥周期」一类问法）。
+    if _contains_any(text, ["行星周期", "木土合", "土冥", "天海", "大会合", "conjunction cycle", "planetcycles", "planet cycles"]):
+        add("planet_cycles")
+    # 出生节气窗：定位出生前后节气（「我出生在哪个节气」「距立春几天」）。
+    if _contains_any(text, ["出生节气", "节气窗", "哪个节气出生", "距节", "jieqi birth"]):
+        add("jieqi_birth")
     # 飞宫小奇门 含「奇门」二字 → 奇门遁甲分支须排除，否则「飞宫小奇门问出行」误路由 qimen。
     # 「奇门择日」同理：它有自己的工具，落到 qimen 会给出一张单点盘而不是一段搜索结果。
     if (
@@ -78,7 +84,7 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("harmonic")
     if _contains_any(text, ["三式合一", "sanshi", "sanshiunited"]):
         add("sanshiunited")
-    if _contains_any(text, ["节气", "jieqi"]):
+    if _contains_any(text, ["节气", "jieqi"]) and not _contains_any(text, ["出生节气", "节气窗", "哪个节气出生"]):
         add("jieqi_year")
     if _contains_any(text, ["农历", "nongli"]):
         add("nongli_time")
@@ -221,6 +227,8 @@ _CANDIDATE_POOL: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("tianxing", ("天星择日", "征象搜索", "tianxing")),
     ("qizhengelection", ("七政择日", "择日动盘", "方位搜索", "日食", "月食", "qizhengelection")),
     ("india_rectify", ("生时校正", "出生时间校正", "校时", "rectify")),
+    ("planet_cycles", ("行星周期", "木土合", "大会合", "planet_cycles")),
+    ("jieqi_birth", ("出生节气", "节气窗", "jieqi_birth")),
     ("qimenzeri", ("奇门择日", "奇门找局", "qimenzeri")),
     ("calendar_month", ("黄历", "万年历", "农历", "老黄历")),
     ("astrodata", ("名人", "celebrity", "明星")),

@@ -120,6 +120,25 @@ class IndiaChartInput(BirthInput):
     yuddhaCriterion: Any | None = Field(default=None, description="行星战(graha yuddha)胜负判据。")
 
 
+class PlanetCyclesInput(FlexibleModel):
+    """行星周期：任意两星的合/冲时间轴（世运周期研究的骨架数据；无出生盘概念）。"""
+
+    startYear: int | None = Field(default=None, description="起始年（缺省 1900）")
+    endYear: int | None = Field(default=None, description="结束年（缺省 2100；区间上限 3400 年）")
+    p1: str | None = Field(default=None, description="星一（英文名，缺省 Jupiter）：Jupiter/Saturn/Uranus/Neptune/Pluto/Mars…")
+    p2: str | None = Field(default=None, description="星二（英文名，缺省 Saturn）")
+    aspect: float | None = Field(default=None, description="相位角：0=合（缺省）/ 180=冲（任意角度亦可）")
+    center: str | None = Field(default=None, description="坐标系：geo=地心（缺省）| helio=日心 | topo=站心")
+    response_view: str | None = None
+
+
+class JieQiBirthInput(BirthInput):
+    """出生节气窗：定位出生时刻前后的节气精确时刻（八字起运窗的同源数据）。"""
+
+    useLocalMao: int | None = Field(default=None, description="真太阳时卯时口径开关（0/1，缺省 0，上游同默认）")
+    byLon: int | None = Field(default=None, description="按经度修正开关（0/1，缺省 0，上游同默认）")
+
+
 class IndiaRectifyInput(BirthInput):
     """印度（KP 法）出生时间校正：以给定时刻为锚，在 ±半窗内扫描候选并按判据打分排序。
 
@@ -898,6 +917,12 @@ class LunationPhaseInput(BirthInput):
 class ExtraReturnsInput(BirthInput):
     # 多重回归 (星阙 v2.6.x): 土/木/月交三体返照——逐体走后端 /astroextra/planetreturn 取最近数回返照日期。
     predictive: bool | None = False
+    # 日月返照年表（v0.33.0 批 I-3，/astroextra/returns）：逐年太阳返照/首月返精确时刻 + 返照上升。
+    timelineStartYear: int | None = Field(
+        default=None,
+        description="日月返照年表起始年（给了本参数或 timelineCount 才加产 [日月返照年表] 段；缺省取出生年）",
+    )
+    timelineCount: int | None = Field(default=None, description="年表年数（缺省 10，上限 40）")
 
 
 class HoraryInput(BirthInput):

@@ -461,6 +461,45 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "条件类型表），不会退化成零命中。给了 explainAt 时结果多一个 explain 键与 [单时判读] 段。"
         ),
     ),
+    "planet_cycles": _policy(
+        intent=(
+            "行星周期：任意两星（木土/土冥/天海/火木…）在给定年区间内合(0°)或冲(180°)的精确时间轴——"
+            "世运周期研究的骨架数据；支持地心/日心/站心坐标系。无出生盘概念，事件时刻为 UT。"
+        ),
+        required_context=["星对 p1/p2（或接受木土默认）", "年区间 startYear/endYear"],
+        ask_if_missing=[
+            {"field": "p1/p2", "question": "看哪两颗星的周期？", "options": ["木土（默认，20 年会合）", "指定星对"]},
+            {"field": "startYear/endYear", "question": "看哪段年区间？", "options": ["1900–2100（默认）", "指定区间"]},
+            {"field": "aspect", "question": "合还是冲？", "options": ["合 0°（默认）", "冲 180°", "指定角度"]},
+        ],
+        safe_defaults=[
+            {"field": "center", "value": "geo", "meaning": "地心（上游缺省；日心 helio 用于纯周期研究）"},
+        ],
+        do_not_assume=["星对", "年区间"],
+        output_contract=(
+            "cycles.events 为逐次事件（jd/年月日/UT 小时/黄经/宫）；快照 [会合事件] 行 = 时刻(UT) + 黄经度分。"
+            "地心模式下外行星合冲附近可因逆行三次经过——多行同年是真实现象不是重复。"
+        ),
+    ),
+    "jieqi_birth": _policy(
+        intent=(
+            "出生节气窗：给出出生时刻前后各节气（节/气标注）的精确时刻，并标出出生所落的区间——"
+            "八字起运数窗的同源数据（BirthJieQi）。"
+        ),
+        required_context=COMMON_LOCATION_FIELDS,
+        ask_if_missing=[
+            {"field": "date/time", "question": "出生的公历日期和时间？"},
+            {"field": "location", "question": "出生地点用哪里？"},
+        ],
+        safe_defaults=[
+            {"field": "useLocalMao/byLon", "value": 0, "meaning": "上游缺省（不开真太阳时卯正/经度修正）"},
+        ],
+        do_not_assume=["location"],
+        output_contract=(
+            "jieqi 为节气行表（ord/名/节气性/精确时刻）；[出生节气窗] 末行标出出生落于哪两个节气之间"
+            "（纯时刻比较）。起运天数换算属八字断法，请交给 bazi 工具而非自行推算。"
+        ),
+    ),
     "india_rectify": _policy(
         intent=(
             "印度 KP 法出生时间校正：以给定 date/time 为锚，±半窗内扫描候选出生时刻并按判据打分排序"

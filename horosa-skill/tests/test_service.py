@@ -62,6 +62,30 @@ class FakeClient(HorosaApiClient):
             }
         if endpoint == "/electionscan/conditiontypes":
             return {"types": ["aspect", "in_sign", "numeric"], "groups": ["all", "any", "not", "xor"]}
+        if endpoint == "/astroextra/planetcycles":
+            return {
+                "events": [
+                    {"jd": 2459205.26, "year": 2020, "month": 12, "day": 21, "hour": 18.34, "lon": 300.49, "sign": 10},
+                ],
+                "startYear": payload.get("startYear"), "endYear": payload.get("endYear"),
+                "p1": payload.get("p1") or "Jupiter", "p2": payload.get("p2") or "Saturn",
+                "aspect": float(payload.get("aspect") or 0), "center": payload.get("center") or "geo",
+            }
+        if endpoint == "/astroextra/returns":
+            return {"rows": [{
+                "year": 2026,
+                "solarReturn": {"jd": 2461193.9, "datetime": "2026-06-02 17:35:27", "date": "2026-06-02", "time": "17:35:27"},
+                "lunarReturn": {"jd": 2461045.15, "datetime": "2026-01-04 23:34:20", "date": "2026-01-04", "time": "23:34:20"},
+                "solarAsc": {"id": "Asc", "lon": 236.256, "sign": "Scorpio", "signlon": 26.256},
+                "lunarAsc": {"id": "Asc", "lon": 120.5, "sign": "Leo", "signlon": 0.5},
+            }]}
+        if endpoint == "/jieqi/birth":
+            # 样例出生 2028-04-06 09:33 → 落在 清明~谷雨 之间（括界判定用）。
+            return {"jieqi": [
+                {"ord": 4, "jieqi": "清明", "jie": True, "time": "2028-04-04 15:02:44", "ad": 1, "jdn": 2461865.13},
+                {"ord": 5, "jieqi": "谷雨", "jie": False, "time": "2028-04-19 22:08:00", "ad": 1, "jdn": 2461880.42},
+                {"ord": 6, "jieqi": "立夏", "jie": True, "time": "2028-05-05 07:30:15", "ad": 1, "jdn": 2461895.81},
+            ]}
         if endpoint == "/india/rectify":
             # 真实形状（rectify_core，jsonpickle 直吐无信封；vara.note/disclaimer 上游原文）。
             return {
@@ -3813,6 +3837,58 @@ def test_tianxing_invalid_conditions_error_carries_server_types(tmp_path) -> Non
     assert result.ok is False
     assert result.error.code == "tool.tianxing_invalid_conditions"
     assert result.error.details["server_condition_types"] == ["aspect", "in_sign", "numeric"]
+
+
+def test_planet_cycles_renders_timeline(tmp_path) -> None:
+    """批 I-3：行星周期两段恒出；事件行 = UT 时刻 + 黄经度分（_sign_degree）。"""
+    service = _zeri_service(tmp_path)
+    result = service.run_tool("planet_cycles", build_sample_payloads()["planet_cycles"], save_result=False)
+    assert result.ok is True, result.error
+    assert result.data["cycles"]["events"]
+    text = result.data["snapshot_text"]
+    assert "[周期配置]" in text and "[会合事件]" in text
+    assert "木星-土星" in text and "合" in text and "地心" in text
+    assert "2020-12-21 18:20（UT）" in text and "宝瓶" in text, "2020 大合相在宝瓶 0°29′"
+    export = result.data["export_snapshot"]
+    assert export["missing_selected_sections"] == [] and export["unknown_detected_sections"] == []
+
+
+def test_jieqi_birth_marks_bracketing_terms(tmp_path) -> None:
+    """批 I-3：出生节气窗——节/气标注 + 出生所落区间（纯时刻比较）。"""
+    service = _zeri_service(tmp_path)
+    result = service.run_tool("jieqi_birth", build_sample_payloads()["jieqi_birth"], save_result=False)
+    assert result.ok is True, result.error
+    text = result.data["snapshot_text"]
+    assert "[出生节气窗]" in text
+    assert "清明（节）　2028-04-04 15:02:44" in text
+    assert "谷雨（气）" in text
+    assert "出生落于 清明（2028-04-04 15:02:44）与 谷雨（2028-04-19 22:08:00）之间" in text
+    export = result.data["export_snapshot"]
+    assert export["missing_selected_sections"] == [] and export["unknown_detected_sections"] == []
+
+
+def test_extrareturns_timeline_conditional_section(tmp_path) -> None:
+    """批 I-3：timelineStartYear/timelineCount 才产 [日月返照年表]；缺省不打 /astroextra/returns。"""
+    service = _zeri_service(tmp_path)
+    calls: list[str] = []
+    original = service.client.call
+    service.client.call = lambda e, p: (calls.append(e) or original(e, p))  # type: ignore[method-assign]
+    plain = service.run_tool("extrareturns", build_sample_payloads()["extrareturns"], save_result=False)
+    assert plain.ok is True, plain.error
+    assert "/astroextra/returns" not in calls
+    assert "[日月返照年表]" not in (plain.data["snapshot_text"] or "")
+    dated = service.run_tool(
+        "extrareturns", {**build_sample_payloads()["extrareturns"], "timelineStartYear": 2026, "timelineCount": 1},
+        save_result=False,
+    )
+    assert dated.ok is True, dated.error
+    assert "/astroextra/returns" in calls
+    text = dated.data["snapshot_text"]
+    assert "[日月返照年表]" in text
+    assert "2026：日返 2026-06-02 17:35:27（升 26˚天蝎15分）" in text
+    assert dated.data["timeline"][0]["year"] == 2026
+    export = dated.data["export_snapshot"]
+    assert export["missing_selected_sections"] == [] and export["unknown_detected_sections"] == []
 
 
 def test_india_rectify_emits_five_sections_with_upstream_vocabulary(tmp_path) -> None:

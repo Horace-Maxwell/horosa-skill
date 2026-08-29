@@ -146,6 +146,9 @@ def build_sample_payloads() -> dict[str, dict]:
         },
         # 七政择日动盘：date/time 是候选择日时刻（非出生盘）；坐标经归一自动补 gpsLat/gpsLon。
         "qizhengelection": {**chart_birth, "pos": "福州", "action": "pan"},
+        # 行星周期：窄区间防样例载荷拖慢 live 门禁；出生节气窗直接吃 chart_birth。
+        "planet_cycles": {"startYear": 2019, "endYear": 2022, "p1": "Jupiter", "p2": "Saturn", "aspect": 0},
+        "jieqi_birth": {**chart_birth},
         # 印度生时校正：date/time 是待校正锚点；小窗大步防样例载荷把 live 门禁拖慢。
         "india_rectify": {**chart_birth, "pos": "福州", "rectifyWindowMinutes": 10, "rectifyStepSeconds": 120, "rectifyTopK": 3},
         "qimenzeri": {

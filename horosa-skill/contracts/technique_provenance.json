@@ -213,7 +213,8 @@
       "compute_class": "composite",
       "engines": [],
       "endpoints": [
-        "/astroextra/planetreturn"
+        "/astroextra/planetreturn",
+        "/astroextra/returns"
       ],
       "export_technique": "extrareturns",
       "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
@@ -395,6 +396,15 @@
       "export_technique": "jaynesprog",
       "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
     },
+    "jieqi_birth": {
+      "compute_class": "python_chart_backend",
+      "engines": [],
+      "endpoints": [
+        "/jieqi/birth"
+      ],
+      "export_technique": null,
+      "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
+    },
     "jieqi_year": {
       "compute_class": "python_chart_backend",
       "engines": [],
@@ -567,6 +577,15 @@
       ],
       "export_technique": "persiandirected",
       "notes": "读已算好的 chart 对象再排版的 Python 移植"
+    },
+    "planet_cycles": {
+      "compute_class": "python_chart_backend",
+      "engines": [],
+      "endpoints": [
+        "/astroextra/planetcycles"
+      ],
+      "export_technique": null,
+      "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
     },
     "planetaryages": {
       "compute_class": "frontend_read_port",

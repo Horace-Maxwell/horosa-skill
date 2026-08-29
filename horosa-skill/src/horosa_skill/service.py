@@ -239,12 +239,17 @@ _PYTHON_CHART_ENDPOINTS = {
     "/astroextra/prenatal_syzygy",
     "/astroextra/eclipsedetail",
     "/astroextra/greatconj",
+    # 批 I-3：行星周期（任意两星合冲时间轴）+ 日月返照年表
+    "/astroextra/planetcycles",
+    "/astroextra/returns",
     "/astroextra/barbault",
     "/geomancy/reading",
     # 占星地图（AstroCartoGraphy）：行星地理投影线精算端点。
     "/location/acg",
     "/predict/planetaryarc",
     "/jieqi/year",
+    # 批 I-3：出生节气窗（BirthJieQi，八字起运窗同源）
+    "/jieqi/birth",
     "/qimen/pan",
     "/taiyi/pan",
     "/jinkou/pan",
@@ -7306,6 +7311,104 @@ class HorosaSkillService:
             "export_snapshot": self._augment_export_payload(technique="india_rectify", snapshot_text=snapshot_text),
         }
 
+    # ── 行星周期（批 I-3，/astroextra/planetcycles）─────────────────────────────
+
+    def _run_planet_cycles_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        remote: dict[str, Any] = {}
+        for key in ("startYear", "endYear", "p1", "p2", "aspect", "center"):
+            if payload.get(key) is not None:
+                remote[key] = payload.get(key)
+        response = self._call_remote("/astroextra/planetcycles", remote)
+        events = response.get("events") if isinstance(response, dict) else None
+        if not isinstance(events, list):
+            raise ToolTransportError(
+                "行星周期端点返回了意外形状。",
+                code="tool.planet_cycles_failed",
+                details={"endpoint": "/astroextra/planetcycles"},
+            )
+        aspect = response.get("aspect")
+        aspect_cn = {0.0: "合", 180.0: "冲"}.get(float(aspect) if aspect is not None else 0.0, f"{_round3(aspect)}°")
+        center_cn = {"geo": "地心", "helio": "日心", "topo": "站心"}.get(str(response.get("center") or "geo"), str(response.get("center")))
+        config_lines = [
+            f"星对：{_astro_msg(response.get('p1'))}-{_astro_msg(response.get('p2'))}　相位：{aspect_cn}　"
+            f"区间：{response.get('startYear')}–{response.get('endYear')}　坐标系：{center_cn}",
+        ]
+        event_lines: list[str] = [f"共 {len(events)} 次"]
+        for ev in events:
+            if not isinstance(ev, dict):
+                continue
+            try:
+                hour_val = float(ev.get("hour") or 0.0)
+                hh, mm = int(hour_val), int(round((hour_val - int(hour_val)) * 60)) % 60
+                when = f"{ev.get('year')}-{int(ev.get('month') or 0):02d}-{int(ev.get('day') or 0):02d} {hh:02d}:{mm:02d}"
+            except (TypeError, ValueError):
+                when = f"{ev.get('year')}"
+            event_lines.append(f"{when}（UT）　{_sign_degree(ev.get('lon'))}")
+        snapshot_text = _render_snapshot_text([
+            ("周期配置", "\n".join(config_lines)),
+            ("会合事件", "\n".join(event_lines)),
+        ])
+        return {
+            "cycles": response,
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="planet_cycles", snapshot_text=snapshot_text),
+        }
+
+    # ── 出生节气窗（批 I-3，/jieqi/birth）───────────────────────────────────────
+
+    def _run_jieqi_birth_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        remote = {
+            "date": payload.get("date"),
+            "time": payload.get("time"),
+            "zone": payload.get("zone"),
+            "lat": payload.get("lat"),
+            "lon": payload.get("lon"),
+        }
+        for key in ("ad", "useLocalMao", "byLon"):
+            if payload.get(key) is not None:
+                remote[key] = payload.get(key)
+        response = self._call_remote("/jieqi/birth", remote)
+        rows = response.get("jieqi") if isinstance(response, dict) else None
+        if not isinstance(rows, list) or not rows:
+            raise ToolTransportError(
+                "出生节气端点返回了意外形状。",
+                code="tool.jieqi_birth_failed",
+                details={"endpoint": "/jieqi/birth"},
+            )
+        info_lines = [
+            f"出生：{payload.get('date')} {payload.get('time')}（{payload.get('zone')}）",
+            f"地点：{payload.get('pos') or ''}　经度 {payload.get('lon')} 纬度 {payload.get('lat')}".rstrip(),
+        ]
+        birth_key = f"{payload.get('date')} {payload.get('time')}".replace("/", "-")
+        if len(birth_key) == 16:
+            birth_key = f"{birth_key}:00"
+        row_lines: list[str] = []
+        prev_row: dict[str, Any] | None = None
+        bracket: tuple[dict[str, Any], dict[str, Any]] | None = None
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            row_lines.append(f"{row.get('jieqi')}（{'节' if row.get('jie') else '气'}）　{row.get('time')}")
+            # 括界判定：纯字符串时刻比较（后端时刻同时区），非任何技法推算。
+            if prev_row is not None and bracket is None:
+                if f"{prev_row.get('time')}" <= birth_key < f"{row.get('time')}":
+                    bracket = (prev_row, row)
+            prev_row = row
+        if bracket:
+            row_lines.append(
+                f"出生落于 {bracket[0].get('jieqi')}（{bracket[0].get('time')}）与 "
+                f"{bracket[1].get('jieqi')}（{bracket[1].get('time')}）之间"
+            )
+        snapshot_text = _render_snapshot_text([
+            ("起盘信息", "\n".join(info_lines)),
+            ("出生节气窗", "\n".join(row_lines)),
+        ])
+        return {
+            "jieqi": rows,
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="jieqi_birth", snapshot_text=snapshot_text),
+        }
+
     def _tianxing_selected_moment_section(self, payload: dict[str, Any], hit: dict[str, Any]) -> str:
         try:
             pick = f"{(hit or {}).get('pick') or (hit or {}).get('start') or ''}".strip()
@@ -9012,10 +9115,45 @@ class HorosaSkillService:
             if cells:
                 lines.append(f"{cn}（{period}）：" + "，".join(cells))
         snapshot_text = "\n".join(lines) if len(lines) > 1 else ""
-        return {
-            "snapshot_text": snapshot_text,
-            "export_snapshot": self._augment_export_payload(technique="extrareturns", snapshot_text=snapshot_text),
-        }
+        result: dict[str, Any] = {}
+        # [日月返照年表]（v0.33.0 批 I-3，/astroextra/returns）：逐年日返/月返精确时刻 + 返照上升。
+        # 条件段：给 timelineStartYear/timelineCount 才产，零回归。
+        if payload.get("timelineStartYear") is not None or payload.get("timelineCount") is not None:
+            timeline_remote = {**remote_base}
+            if payload.get("timelineStartYear") is not None:
+                timeline_remote["startYear"] = payload.get("timelineStartYear")
+            if payload.get("timelineCount") is not None:
+                timeline_remote["count"] = payload.get("timelineCount")
+            timeline = self._call_remote("/astroextra/returns", timeline_remote)
+            t_rows = timeline.get("rows") if isinstance(timeline, dict) else None
+            if not isinstance(t_rows, list):
+                raise ToolTransportError(
+                    "日月返照年表端点返回了意外形状。",
+                    code="tool.extrareturns_timeline_failed",
+                    details={"endpoint": "/astroextra/returns"},
+                )
+            result["timeline"] = t_rows
+            timeline_lines = ["[日月返照年表]"]
+            for row in t_rows:
+                if not isinstance(row, dict):
+                    continue
+                solar = row.get("solarReturn") if isinstance(row.get("solarReturn"), dict) else {}
+                lunar = row.get("lunarReturn") if isinstance(row.get("lunarReturn"), dict) else {}
+                solar_asc = row.get("solarAsc") if isinstance(row.get("solarAsc"), dict) else {}
+                lunar_asc = row.get("lunarAsc") if isinstance(row.get("lunarAsc"), dict) else {}
+                bits = [f"{row.get('year')}："]
+                if solar.get("datetime"):
+                    asc_txt = f"（升 {_sign_degree(solar_asc.get('lon'))}）" if solar_asc.get("lon") is not None else ""
+                    bits.append(f"日返 {solar.get('datetime')}{asc_txt}")
+                if lunar.get("datetime"):
+                    asc_txt = f"（升 {_sign_degree(lunar_asc.get('lon'))}）" if lunar_asc.get("lon") is not None else ""
+                    bits.append(f"　首月返 {lunar.get('datetime')}{asc_txt}")
+                timeline_lines.append("".join(bits))
+            section = "\n".join(timeline_lines)
+            snapshot_text = f"{snapshot_text}\n\n{section}" if snapshot_text else section
+        result["snapshot_text"] = snapshot_text
+        result["export_snapshot"] = self._augment_export_payload(technique="extrareturns", snapshot_text=snapshot_text)
+        return result
 
     def _run_shenshu_tool(self, payload: dict[str, Any], key: str) -> dict[str, Any]:
         # 神数 family (wangji / wuzhao / taixuan / jingjue / shenyishu): each is a kentang engine mounted on
@@ -10085,6 +10223,10 @@ class HorosaSkillService:
             return self._run_qizheng_election_tool(payload)
         if definition.name == "india_rectify":
             return self._run_india_rectify_tool(payload)
+        if definition.name == "planet_cycles":
+            return self._run_planet_cycles_tool(payload)
+        if definition.name == "jieqi_birth":
+            return self._run_jieqi_birth_tool(payload)
         if definition.name == "taiyi":
             return self._run_taiyi_tool(payload)
         if definition.name == "jinkou":

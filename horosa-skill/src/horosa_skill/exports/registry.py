@@ -197,6 +197,8 @@ AI_EXPORT_TECHNIQUES = [
     {"key": "xuanshi", "label": "玄史知识库"},
     {"key": "qizhengelection", "label": "七政择日动盘"},
     {"key": "india_rectify", "label": "印度生时校正"},
+    {"key": "planet_cycles", "label": "行星周期"},
+    {"key": "jieqi_birth", "label": "出生节气窗"},
     {"key": "generic", "label": "其他页面"},
 ]
 
@@ -290,7 +292,8 @@ AI_EXPORT_PRESET_SECTIONS = {
     "triplicityrulers": ["起盘信息", "三分主星推运", "当前时点", "方法说明"],
     "keypoints": ["起盘信息", "数字相位推运", "当前时点", "方法说明"],
     "lunationphase": ["起盘信息", "月相推运", "当前时点", "方法说明"],
-    "extrareturns": ["起盘信息", "多重回归", "当前时点", "方法说明"],
+    # v0.33.0 批 I-3：+日月返照年表（timelineStartYear/Count 时产；条件段双登记）。
+    "extrareturns": ["起盘信息", "多重回归", "当前时点", "方法说明", "日月返照年表"],
     # 上游 v50 的 19 段。此前 vendored 的 divination/ 闭包缺 27 个文件、另有 33 个内容陈旧，
     # 解读层的 9 段整体缺席（其中 2 段还需 renaissance 档口径才产）。
     # 上游 v3.9.5「卜卦盘全面改进」：19 → 28 段（+9），版本常量未 bump 仍是 56 —— 段序照抄上游，
@@ -402,6 +405,9 @@ AI_EXPORT_PRESET_SECTIONS = {
     "qizhengelection": ["起盘信息", "择日动盘", "天象要素", "日月食搜索", "方位搜索"],
     # 印度生时校正（v0.33.0 批 I-2，/india/rectify）：五段恒出（语汇照上游校时器抽屉 §17）。
     "india_rectify": ["起盘信息", "校时扫描", "Lagna 子主区段", "候选榜", "声明"],
+    # 行星周期 / 出生节气窗（v0.33.0 批 I-3，skill 侧工具）：段恒出。
+    "planet_cycles": ["周期配置", "会合事件"],
+    "jieqi_birth": ["起盘信息", "出生节气窗"],
     "generic": ["起盘信息"],
 }
 # 奇门择日 = 奇门 17 段全量 + 择日三段（单一真值源：qimen 段表改动自动跟随，与上游 aiExport.js:735 同构）。
@@ -533,7 +539,9 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     # 七政四余: 政余格局 = Moira 格局 DSL（~280 行子系统），headless 版未移植 → 可选段（如实标出）。
     "guolao": ["政余格局"],
     # 多重回归: 单段技法；某体若无返照数据则该体行不出，三体皆空时整段不出 → 列为可选段，避免误报 missing。
-    "extrareturns": ["多重回归"],
+    # v0.33.0 批 I-3：+日月返照年表（timelineStartYear/Count 时才产）。⚠ 本字典禁止重复键——
+    # 曾把同键写两处，后写者静默覆盖前者（test_registry_dicts_have_no_duplicate_keys 现在守着）。
+    "extrareturns": ["多重回归", "日月返照年表"],
     # 赤纬推运 (jaynesprog): [本命盘配置](本命星与虚点/宫位宫头) 需另取本命盘，headless 工具仅 fetch
     # /astroextra/jaynesprog（平行表）→ 不挂该段 → 列可选段，缺失不误报。
     "jaynesprog": ["本命盘配置"],
