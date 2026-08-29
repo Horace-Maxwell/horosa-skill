@@ -164,6 +164,33 @@ def _env_bool(name: str, default: bool) -> bool:
     return default
 
 
+# 字段 ↔ env 旗标映射（provenance 用；新增 env 驱动字段须同步登记，测试锁步）。
+FIELD_ENV_MAP = {
+    "server_root": "HOROSA_SERVER_ROOT",
+    "chart_server_root": "HOROSA_CHART_SERVER_ROOT",
+    "data_dir": "HOROSA_SKILL_DATA_DIR",
+    "db_path": "HOROSA_SKILL_DB_PATH",
+    "output_dir": "HOROSA_SKILL_OUTPUT_DIR",
+    "runtime_root": "HOROSA_RUNTIME_ROOT",
+    "runtime_manifest_url": "HOROSA_RUNTIME_MANIFEST_URL",
+    "runtime_platform": "HOROSA_RUNTIME_PLATFORM",
+    "runtime_release_repo": "HOROSA_RUNTIME_RELEASE_REPO",
+    "local_backend_port": "HOROSA_LOCAL_BACKEND_PORT",
+    "local_chart_port": "HOROSA_LOCAL_CHART_PORT",
+    "runtime_start_timeout_seconds": "HOROSA_RUNTIME_START_TIMEOUT_SECONDS",
+    "mcp_compact": "HOROSA_MCP_COMPACT",
+    "js_engine_timeout_seconds": "HOROSA_JS_ENGINE_TIMEOUT_SECONDS",
+    "host": "HOROSA_SKILL_HOST",
+    "port": "HOROSA_SKILL_PORT",
+    "log_level": "HOROSA_SKILL_LOG_LEVEL",
+    "trace_enabled": "HOROSA_TRACE_ENABLED",
+    "trace_dir": "HOROSA_TRACE_DIR",
+    "trace_capture_payloads": "HOROSA_TRACE_CAPTURE_PAYLOADS",
+    "trace_capture_ai_answers": "HOROSA_TRACE_CAPTURE_AI_ANSWERS",
+    "trace_otlp_endpoint": "HOROSA_TRACE_OTLP_ENDPOINT",
+}
+
+
 class Settings(BaseModel):
     server_root: str = Field(default="http://127.0.0.1:9999")
     chart_server_root: str = Field(default="http://127.0.0.1:8899")
@@ -190,6 +217,9 @@ class Settings(BaseModel):
     trace_capture_payloads: bool = False
     trace_capture_ai_answers: bool = False
     trace_otlp_endpoint: str | None = None
+    # Settings provenance（v0.33.0 批 II-3）：每字段的取值来源（env:<NAME> / derived:<字段> / default），
+    # doctor 三列（字段/值/来源）据此呈现——「这项配置为什么是这个值」一眼可答。exclude 不入序列化。
+    settings_provenance: dict[str, str] = Field(default_factory=dict, exclude=True)
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -221,6 +251,13 @@ class Settings(BaseModel):
             trace_capture_payloads=_env_bool("HOROSA_TRACE_CAPTURE_PAYLOADS", False),
             trace_capture_ai_answers=_env_bool("HOROSA_TRACE_CAPTURE_AI_ANSWERS", False),
             trace_otlp_endpoint=_env_text("HOROSA_TRACE_OTLP_ENDPOINT"),
+            settings_provenance={
+                field: (f"env:{env_name}" if _env_text(env_name) is not None else (
+                    # 三个路径字段无独立 env 时由 data_dir 派生（而非模型默认）
+                    "derived:data_dir" if field in {"db_path", "output_dir", "trace_dir"} else "default"
+                ))
+                for field, env_name in FIELD_ENV_MAP.items()
+            },
         )
 
     def ensure_dirs(self) -> None:

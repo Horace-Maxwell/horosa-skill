@@ -970,13 +970,22 @@ def doctor() -> None:
         report["memory_db"] = {"path": str(settings.db_path), **_MemoryStore(settings).integrity_check()}
     except Exception as exc:  # noqa: BLE001 - 体检项自身失败也要如实入报告
         report["memory_db"] = {"path": str(settings.db_path), "ok": False, "detail": [f"{exc}"]}
-    # env 旗标审计（批 II-1）：未知 HOROSA_* 的 warn-and-ignore 结果入报告。
+    # env 旗标审计（批 II-1）：未知 HOROSA_* 的 warn-and-ignore 结果 + 已设旗标的生命周期档。
+    from horosa_skill.config import ENV_FLAG_REGISTRY as _ENV_REGISTRY
     from horosa_skill.config import audit_env_flags as _audit_env_flags
 
     try:
         report["env_flags"] = {"ok": True, "warnings": _audit_env_flags(force=True)}
     except ValueError as exc:
         report["env_flags"] = {"ok": False, "warnings": [str(exc)]}
+    report["env_flags"]["set"] = {
+        key: _ENV_REGISTRY.get(key, "unknown") for key in sorted(os.environ) if key.startswith("HOROSA_")
+    }
+    # Settings provenance 三列（批 II-3）：字段 / 当前值 / 来源（env:<NAME> | derived:data_dir | default）。
+    report["settings_provenance"] = [
+        {"field": field, "value": str(getattr(settings, field, None)), "source": source}
+        for field, source in sorted(settings.settings_provenance.items())
+    ]
     report.update(_doctor_summary(report))
     _print_json(report)
 
