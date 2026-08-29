@@ -93,6 +93,27 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.33.0+ / 2026-08-29 — codex TOML 裸插值：Windows 路径的反斜杠打穿整个 config（main 连红两次）
+
+- **症状**：v0.33.0 发布 commit 起 main 上 `CI` 连红两次——`windows-smoke` 里
+  `tests/test_client_config.py` 三条全炸：`tomllib.TOMLDecodeError: Unescaped '\' in a string`
+  + 两条 `--write` exit 1；Linux `test` job 与 CodeQL 恒绿。不只是测试红：Windows 用户跑
+  `client config --format codex` 拿到的 `toml_stdio` 就是**非法 TOML**，`--write` 也因 tomlkit
+  解析失败而拒绝写入——新功能在 Windows 上整个不可用。
+- **根因**：`cli.py` 的 codex 片段里 `command = \"{stdio_command[0]}\"` 是**裸 f-string 插值**进
+  TOML 基本字符串；Windows 的 `C:\Users\…` 反斜杠在 TOML 里是转义引导符 → 整文件不可解析。
+  同块的 `args`/`cwd` 都走了 `json.dumps`（JSON 转义 ⊂ TOML 基本字符串转义，天然兼容），
+  唯独 `command` 手写引号。mac/Linux 路径无反斜杠 → 维护机与 Linux CI 恒绿，windows-smoke
+  是唯一能红的地方（v0.25.0「维护机形状 ≠ CI 形状”教训的路径分隔符变体）。
+- **修复**：`command` 改走 `json.dumps`，与 args/cwd 同惯用法（一行 + 注释）。全仓 sweep 确认
+  无兄弟病灶（其余 client 格式全是 dict→`json.dumps`）。真机抽验：本机 `C:\Users\…` 路径下
+  `toml_stdio`/`toml_http` 均可被 tomllib round-trip。
+- **守卫**：既有 `tests/test_client_config.py`（v0.33.0 III-6 新增）就是逮住它的那把——CI 红得
+  完全正确，说明"五格式零测试"补的这层真在工作；无需新守卫，修代码即可。
+- **法则（蒸馏进 AGENTS §9）**：凡把路径/用户值序列化进配置文本（TOML/JSON/YAML/deep-link），
+  一律走该格式的序列化器（`json.dumps` / tomlkit / `quote`），**禁裸 f-string 插值**——
+  「本地能解析」不算证据，Windows 反斜杠路径才是判据。
+
 ### v0.33.0 / 2026-08 — 功能大扩容（93→97）+ 成熟度升级：四个现场踩坑 + 一批排除判定
 
 本轮双主线（收割未接入端点 + Codex 标尺工程成熟度）落地：tianxing explainAt、qizhengelection、

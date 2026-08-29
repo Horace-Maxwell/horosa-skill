@@ -1394,7 +1394,10 @@ def client_config(
             ),
             "toml_stdio": (
                 f"[mcp_servers.{server_name}]\n"
-                f"command = \"{stdio_command[0]}\"\n"
+                # command 必须与 args/cwd 一样走 json.dumps：JSON 转义 ⊂ TOML 基本字符串转义。
+                # 裸插值在 Windows 上会把路径里的反斜杠原样写进 TOML → 整个文件不可解析
+                # （tomllib: Unescaped '\'；mac/Linux 路径无反斜杠故恒绿，windows-smoke 才炸）。
+                f"command = {json.dumps(stdio_command[0])}\n"
                 f"args = {json.dumps(stdio_command[1:])}\n"
                 f"cwd = {json.dumps(str(resolved_skill_root))}\n"
                 "# 冷启动（首次装 runtime/预热）可超 Codex 默认 30s；长盘（择日扫描）可超默认工具 60s。\n"

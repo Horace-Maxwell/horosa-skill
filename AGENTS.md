@@ -609,6 +609,11 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **Surfaces never dump a traceback.** CLI file reads（`--ai-report-file` / `--ai-answer-file`）raise
   clean `typer.BadParameter`; the MCP `horosa_report_*` handlers wrap unexpected renderer/IO errors via
   `_mcp_internal_error_payload`; subprocess calls carry timeouts（incl. `openclaw-check --full`, 900s）.
+- **路径/用户值进配置文本必须走序列化器，禁裸 f-string 插值。** `client config` 各格式产物
+  （TOML/JSON/deep-link）里的 command/args/cwd 一律 `json.dumps`（JSON 转义 ⊂ TOML 基本字符串转义）
+  或 `quote`；裸插值在 Windows 上会把 `C:\Users\…` 的反斜杠原样写进 TOML → 整文件不可解析、
+  `--write` 拒绝合并（v0.33.0 codex `command` 就这么在 mac/Linux 恒绿、windows-smoke 连红两次）。
+  守卫：`tests/test_client_config.py`（windows-smoke 上跑 = 唯一能判红的形状）。
 - **`input_normalization` degrades, never crashes.** The date/time regexes are shape-only（they accept
   month `13`, day `45`）, so anything building a `datetime` from them must tolerate `ValueError`（see
   `_combine_date_time`）. IANA-zone→offset conversion uses the *chart date*, not `now()`. `Z`/`UTC`/
