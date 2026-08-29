@@ -93,6 +93,39 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.33.0 / 2026-08 — 功能大扩容（93→97）+ 成熟度升级：四个现场踩坑 + 一批排除判定
+
+本轮双主线（收割未接入端点 + Codex 标尺工程成熟度）落地：tianxing explainAt、qizhengelection、
+india_rectify、planet_cycles、jieqi_birth、persiandirected 指定日期盘、extrareturns 年表、acg 落点/
+事件、cetian 判词库、wangji 心易三法、geomancy 十六卦目录、古典参数 30 键 typed 化、/healthz 探针、
+SQLite 分类恢复、env 旗标 warn-and-ignore、澄清闸策略即数据、记忆点用记账/prune、hermetic 评测、
+codex --write 拆雷、.agents/skills 镜像。现场教训四条：
+
+1. 🔴 **`TOOL_EXPORT_TECHNIQUE_MAP` 漏登记 = bench 静默不覆盖。** 症状：批 I 四个新工具功能全绿
+   （契约 missing/unknown 空、live 实产），bench 生成 case 却只 +1。根因：README 承诺的「新增技法
+   自动获得用例」由 `generate_tool_cases()` 兑现，它遍历的是 `TOOL_EXPORT_TECHNIQUE_MAP`——而新
+   runner 都自己调 `_augment_export_payload`，不经过这张表也一切正常，于是没有任何信号提示入表。
+   守卫：`test_every_business_tool_is_in_export_technique_map`（工具 − 表 = 显式非业务四件）；
+   §5 布线清单 +第 12 步。
+2. **exports registry 同字典重复键第二次踩**（v13 首踩 cetian/astrochart_like，本轮 extrareturns 条件
+   段被后写键静默覆盖）。两个新事实：①旧守卫只扫**顶层 `ast.Assign`**，本可抓到却因我用 `-k` 分批跑
+   测试而没被触发——守卫只在全量套件里兜底，**每批提交前必须全量跑 offline**（本轮全批照做后再未漏）；
+   ②守卫本体已扩 `ast.walk` 全量（嵌套 dict/AnnAssign 位置同防）。另附带：用 regex 从「提及目标字典名
+   的注释」处起段做文本编辑，会把条目插进后面**任意**同名键的字典——锚定真赋值行，改完必跑
+   `test_export_tools` 全量。
+3. **`_unwrap_result` 连剥小写 `result` 键。** `/wangji/xinyi` 返回 `{method, result:{卦面}, sections}`，
+   经 `_call_remote` 后 `sections` 整个消失——unwrap 循环对 `Result`/`result` 都剥（至多 4 层）。新端点
+   接入时凡响应含这两个键名，先想清剥壳后拿到的是什么；runner 按剥后形状消费（离线桩发全信封，
+   两侧形状一致）。
+4. **测试期望值不等于真值。** selfcheck 金标里我手写的 `08未51`（处女镜像地支）与 `摩羯`（2020 木土
+   大合相落宫）都是错的，渲染器是对的（处女↔巳；合相在宝瓶 0°29′）——金标的期望值必须从权威来源
+   （上游表/天文事实）核过再写，测试红先怀疑期望值。
+
+**排除判定入册**（主线 I 收割时逐端点核）：`/predict/pd3d`、`/chart3d/state`、`/planetarium/*` ——
+3D/实景渲染场景数据（three.js 场景态/贴图坐标），无文本语义，UI-only 排除，与 fengshui 同性质；
+`/jdn/*`、`/calc/*` —— 儒略日/角度换算器，价值低，defer（不计缺口，将来要做随手可加）。
+`/qizheng/moira` 排除维持（qizhengelection 的升殿失垣列因此如实不产，见工具 guidance）。
+
 ### v0.32.0 玄史知识库接入 —— runtime 里躺了 66MB 只读库，skill 层零调用
 
 - **上游能力不只在导出面。** `/xuanshi/*` 26 个只读端点（7900+ 玄学事件 / 27000+ 史书天象 / 人物图 /

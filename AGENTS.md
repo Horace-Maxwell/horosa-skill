@@ -341,6 +341,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 11. **算源声明**：`contracts/technique_provenance.json` 加条目（可用 `scripts/gen_technique_provenance.py`
     重生成，输出幂等），`verify_technique_provenance.py` 不声明即红；ken-backed 必须真调
     `_require_ken_pan`。技法依据卡按它标注「这盘是谁算的」。
+12. **入 `TOOL_EXPORT_TECHNIQUE_MAP`**（v0.33.0 教训）：bench 的「新增技法自动获得用例」只覆盖这张表，
+    runner 自己 `_augment_export_payload` 不经过它 → 功能全绿、bench 静默不覆盖。守卫
+    `test_every_business_tool_is_in_export_technique_map`（工具 − 表 = 显式非业务清单）已锁死；
+    新工具照样入表，别等守卫红。
 
 **审计前置**（补「未同步技法」缺口前）：先 grep 仓内**明确排除项**（`fengshui`：canvas + 户型图上传 +
 交互点位驱动，无 birth/time 输入，无法 headless——是政策性排除不是缺口），再确认候选的
