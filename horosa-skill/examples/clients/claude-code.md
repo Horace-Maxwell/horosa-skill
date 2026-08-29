@@ -27,7 +27,7 @@ claude mcp add horosa --transport http http://127.0.0.1:8765/mcp
 
 ## 精简工具面（可选）
 
-小上下文场景可让 MCP 只暴露 9 个门面工具（含按名直呼的 `horosa_tool_run`）：
+小上下文场景可让 MCP 只暴露 11 个门面工具（含按名直呼的 `horosa_tool_run`）：
 
 在注册命令的 env 中加 `HOROSA_MCP_COMPACT=1`（stdio 例：`claude mcp add horosa --env HOROSA_MCP_COMPACT=1 -- uv run …`）。
 

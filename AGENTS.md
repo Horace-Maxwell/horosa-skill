@@ -15,7 +15,7 @@ Claude Code 的薄入口是根 [`CLAUDE.md`](./CLAUDE.md)（与本文 §0 路由
 
 ## 0. 30 秒定向与路由
 
-Horosa Skill 把星阙（Horosa）的 **93 个**术数/占星技法打包成 local-first 的 **MCP server + CLI**：
+Horosa Skill 把星阙（Horosa）的 **97 个**术数/占星技法打包成 local-first 的 **MCP server + CLI**：
 算法跑在本机离线 runtime（Java 聚合层 `:9999` + Python chart 服务 `:8899`（含 ken/kentang 引擎）+
 bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 envelope + 星阙式
 `export_snapshot`/`export_format`；仓库保持轻量，重 runtime 走 GitHub Releases 分发。

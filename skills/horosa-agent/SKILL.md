@@ -1,7 +1,7 @@
 ---
 name: horosa-agent
 description: >-
-  Call Horosa (星阙) local metaphysics tools correctly over MCP or CLI — 93 real techniques: Western
+  Call Horosa (星阙) local metaphysics tools correctly over MCP or CLI — 97 real techniques: Western
   natal/predictive astrology (returns, progressions, primary directions, horary 卜卦, election 择日),
   八字, 紫微, 大六壬, 奇门遁甲, 太乙, 金口诀, 三式合一, 河洛理数, 邵子参评数, 六爻, 天文地占, 塔罗, and
   the full 14 神数. Use whenever a user asks to 起盘 / 排盘 / 起课 / 起卦 / 算命 / 推运 / 看盘 / 合盘 /
@@ -11,7 +11,7 @@ description: >-
 license: AGPL-3.0-only
 compatibility: Requires the local Horosa Skill MCP server/CLI (Python 3.12 + uv + installed offline runtime)
 metadata:
-  version: "0.28.0"
+  version: "0.33.0"
 ---
 
 # Horosa Skill Agent Guide
@@ -149,7 +149,9 @@ question context.”
 | Triplicity rulers / keypoints / lunation phase / extra returns | `triplicityrulers` / `keypoints` / `lunationphase` / `extrareturns` |
 | More progressions (v2.5.0) | `jaynesprog` / `vedicprog` / `planetaryarc` / `planetaryages` / `balbillus` / `yearsystem129` / `persiandirected` |
 | Horary 卜卦 / Election 择日 | `horary` / `election` |
-| 择日「找日子」——要在一段时间里搜时刻，而不是评一个候选时刻 | 西占征象 → `tianxing`；奇门条件 → `qimenzeri`（两者都要 startDate/endDate + conditions 条件树；单点评估仍用 `election`） |
+| 择日「找日子」——要在一段时间里搜时刻，而不是评一个候选时刻 | 西占征象 → `tianxing`（`explainAt` 可对单时刻逐叶判读）；奇门条件 → `qimenzeri`（两者都要 startDate/endDate + conditions 条件树；单点评估仍用 `election`） |
+| 七政择日动盘（十一曜山位 / 日月食 / 方位到达） | `qizhengelection`（action: pan / eclipses / azimuthsearch；date/time 是候选时刻非出生盘） |
+| 生时校正（出生时间不确定） | `india_rectify`（KP 法锚点±半窗扫描；输出证据与排序，采用与否由用户决定） |
 | Harmonic 调波盘 | `harmonic` |
 | 八字 | `bazi_birth` / `bazi_direct` |
 | 紫微斗数 | `ziwei_birth` (`ziwei_rules` returns the rules library) |
@@ -169,12 +171,14 @@ question context.”
 | 天文地占 geomancy | `geomancy` |
 | 塔罗 tarot | `tarot` |
 | 灵棋经 lingqi | `lingqi`（以起卦时刻确定性掷十二棋；给了 counts 就复排，绝不重掷） |
-| 占星地图 ACG | `acg` |
+| 占星地图 ACG | `acg`（clickLat/clickLon 加落点分析段；eventKind 加世运事件时刻段） |
+| 行星周期（木土合 / 土冥…任意两星合冲时间轴） | `planet_cycles`（无出生盘概念；星对与年区间仍需确认） |
 | 名人库 celebrity data | `astrodata` (read-only, no confirmation gate) |
 | 玄史知识库 Esoteric-history KB | `xuanshi` (action: search / events / event / celestial / figures / dynasty / timeline / graph …; read-only, no result-sensitive settings) |
 | Astrology dice 西占游戏 | `otherbu` |
 | 14 神数 | `wangji` / `wuzhao` / `taixuan` / `jingjue` / `shenyishu` / `shaozi` / `tieban` / `fendjing` / `beiji` / `nanji` / `chunzi` / `xianqin` / `cetian` / `qizhengkin` |
 | 节气 / 农历 | `jieqi_year` / `nongli_time` |
+| 出生节气窗（八字起运窗同源） | `jieqi_birth` |
 | 黄历 / 万年历 | `calendar_month` |
 | Hover knowledge + 方法论手册 | `knowledge_registry`, `knowledge_read`（24 域 = hover 三域 + 各技法操作手册域，逐条带出处；传 `query` 即跨域全文检索） |
 | Export protocol | `export_registry`, `export_parse` |

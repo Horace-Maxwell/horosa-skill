@@ -73,6 +73,11 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "draconic": "draconic",
     "babylon": "babylon",
     "xuanshi": "xuanshi",
+    # v0.33.0 主线 I 新工具（bench 生成 case 与导出契约挂接都吃本表——漏登记有锁步测试守）。
+    "qizhengelection": "qizhengelection",
+    "india_rectify": "india_rectify",
+    "planet_cycles": "planet_cycles",
+    "jieqi_birth": "jieqi_birth",
     "huangli": "huangli",
     "tongshu": "tongshu",
     "relocation": "relocation",

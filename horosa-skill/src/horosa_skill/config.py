@@ -205,8 +205,8 @@ class Settings(BaseModel):
     local_chart_port: int = 8899
     # 冷启动等待：Java(Spring Boot fat jar)+Python(星历重导入) 后端首启常超 15s，45s 覆盖常见机器。
     runtime_start_timeout_seconds: float = 45.0
-    # MCP 精简工具面：True 时只暴露 dispatch/guidance/memory/report 门面 + 通用直呼 horosa_tool_run，
-    # 技法工具不平铺（省 tools/list 上下文预算）；默认 False 保持 87 工具全量平铺。
+    # MCP 精简工具面：True 时只暴露 11 个门面工具（dispatch/guidance/memory/report 等 + 通用直呼
+    # horosa_tool_run），技法工具不平铺（省 tools/list 上下文预算）；默认 False 保持 97 工具全量平铺。
     mcp_compact: bool = False
     js_engine_timeout_seconds: float = 60.0
     host: str = "127.0.0.1"

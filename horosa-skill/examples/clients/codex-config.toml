@@ -1,3 +1,18 @@
-[mcp_servers.horosa]
-url = "http://127.0.0.1:8765/mcp"
+# Codex 接入样例（完整说明与硬约束表：codex.md；生成带真实路径的版本：
+#   uv run horosa-skill client config --format codex
+# 下面的 /ABS/PATH 需替换为 horosa-skill 包目录的绝对路径。）
 
+[mcp_servers.horosa]
+command = "uv"
+args = ["run", "--directory", "/ABS/PATH/horosa-skill", "horosa-skill", "serve", "--transport", "stdio"]
+cwd = "/ABS/PATH/horosa-skill"
+# 首次冷启动（runtime 预热）常到 ~45s，Codex 默认 30s 不够；长盘可超默认工具 60s。
+startup_timeout_sec = 120
+tool_timeout_sec = 600
+# 首轮即见工具（否则冷启动首轮目录可能缺 horosa，第二轮恢复）；代价：起不来时 Codex 启动报错。
+# required = true
+
+[mcp_servers.horosa.env]
+# Codex 只透传 11 个系统变量白名单——任何 HOROSA_* 必须在此显式声明，例如：
+# HOROSA_MCP_COMPACT = "1"        # 11 门面模式（Codex 无工具搜索，97 工具全量较重）
+# HOROSA_TOOLSETS = "astro,cn"    # 或按域裁剪

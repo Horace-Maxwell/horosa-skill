@@ -278,6 +278,12 @@ COUNT_DOCS = [
     ".claude-plugin/plugin.json",
     ".claude-plugin/marketplace.json",
     "docs/assets/banner.svg",
+    # v0.33.0 批 III-5 盲区修补：examples/ 客户端文档与 .agents 镜像也写工具数——此前不在扫描面，
+    # 计数漂移在这两处永不报警（claude-code.md 的门面数就这样陈旧了两个版本）。
+    "horosa-skill/examples/clients/codex.md",
+    "horosa-skill/examples/clients/codex-config.toml",
+    "horosa-skill/examples/clients/claude-code.md",
+    ".agents/skills/horosa-agent/SKILL.md",
 ]
 
 
@@ -418,6 +424,16 @@ def check_frontmatter() -> None:
         for field in ("name:", "description:"):
             if field not in head:
                 err(f"{path.relative_to(ROOT)}: frontmatter missing '{field}'")
+    # metadata.version 锁步（v0.33.0 批 III-5 盲区修补）：SKILL frontmatter 版本曾滞留 0.28.0
+    # 两个发布无人察觉——现在与 pyproject 版本锁死。
+    skill_path = ROOT / "skills/horosa-agent/SKILL.md"
+    if skill_path.exists():
+        m = re.search(r'version:\s*"?([0-9.]+)"?', read(skill_path).split("\n---", 2)[0])
+        pkg_version = expected_version()
+        if not m:
+            err("skills/horosa-agent/SKILL.md: frontmatter missing metadata.version")
+        elif m.group(1) != pkg_version:
+            err(f"skills/horosa-agent/SKILL.md: metadata.version {m.group(1)} != package {pkg_version}")
 
 
 def main() -> None:
