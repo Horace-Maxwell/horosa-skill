@@ -1925,6 +1925,7 @@ def memory_query(
     before: str | None = typer.Option(None, help="Only return runs created before this ISO timestamp."),
     limit: int = typer.Option(20, help="Maximum runs to return."),
     include_payload: bool = typer.Option(True, "--include-payload/--no-include-payload", help="Embed saved JSON payloads in the query output."),
+    worthy_only: bool = typer.Option(False, "--worthy-only", help="只留召回语料级条目（有产物/答案/成功调用；空失败 run 滤除）。"),
 ) -> None:
     service = _service()
     data = service.store.query_runs(
@@ -1938,6 +1939,8 @@ def memory_query(
         limit=limit,
         include_payload=include_payload,
     )
+    if worthy_only:
+        data = [record for record in data if service.store.is_memory_worthy(record)]
     _print_json(data)
 
 
@@ -1952,6 +1955,15 @@ def memory_show(
         typer.echo(json.dumps({"ok": False, "code": "memory.run.not_found", "message": f"Run not found: {run_id}", "details": {}}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
     _print_json(data[0])
+
+
+@memory_app.command("prune", help="清理长期未点用的 run（默认 dry-run 只打印计划；--yes 才删）。Prune runs never recalled within N days.")
+def memory_prune(
+    unused_days: int = typer.Option(90, "--unused-days", help="判据：创建/最后点用早于 N 天且从未点用（usage_count=0）。"),
+    yes: bool = typer.Option(False, "--yes", help="真正删除（含磁盘产物文件）。缺省只打印将删清单。"),
+) -> None:
+    service = _service()
+    _print_json(service.store.prune_unused(unused_days=unused_days, yes=yes))
 
 
 @memory_app.command("answer")

@@ -141,3 +141,77 @@ def test_integrity_check_ok_on_fresh_store(tmp_path) -> None:
     settings = Settings(server_root="http://127.0.0.1:9999", db_path=tmp_path / "m.db", output_dir=tmp_path / "runs")
     check = MemoryStore(settings).integrity_check()
     assert check == {"ok": True, "detail": ["ok"]}
+
+
+# ── v0.33.0 批 II-4 · 使用度/双谓词/prune ─────────────────────────────────────────
+
+
+def _store_with_run(tmp_path, *, ok=True, with_artifact=True):
+    settings = Settings(server_root="http://127.0.0.1:9999", db_path=tmp_path / "m.db", output_dir=tmp_path / "runs")
+    store = MemoryStore(settings)
+    run_id = store.create_run(entrypoint="tool", query_text="八字 测试", group_id="g")
+    store.record_tool_result(
+        run_id=run_id, tool_name="chart", ok=ok, input_normalized={"date": "1990-01-01"},
+        envelope_dict={"ok": ok, "tool": "chart"} if with_artifact else None,
+        summary=["s"], warnings=[], error=None, trace_id="t", group_id="g", evaluation_case_id=None,
+    ) if with_artifact else store.record_tool_result(
+        run_id=run_id, tool_name="chart", ok=ok, input_normalized={}, envelope_dict=None,
+        summary=[], warnings=[], error={"code": "x"} if not ok else None, trace_id="t", group_id="g", evaluation_case_id=None,
+    )
+    return store, run_id
+
+
+def test_usage_count_bumps_on_targeted_fetch_not_listing(tmp_path) -> None:
+    store, run_id = _store_with_run(tmp_path)
+    store.query_runs(limit=10)  # 浏览列表不记账
+    listed = store.query_runs(limit=10)
+    assert listed[0]["usage_count"] == 0
+    store.query_runs(run_id=run_id)  # 点取记账
+    store.query_runs(run_id=run_id)
+    after = store.query_runs(limit=10)
+    assert after[0]["usage_count"] == 2
+    assert after[0]["last_used_at"]
+
+
+def test_text_recall_ranks_used_runs_first(tmp_path) -> None:
+    settings = Settings(server_root="http://127.0.0.1:9999", db_path=tmp_path / "m.db", output_dir=tmp_path / "runs")
+    store = MemoryStore(settings)
+    old_used = store.create_run(entrypoint="tool", query_text="八字 甲", group_id="g")
+    newer = store.create_run(entrypoint="tool", query_text="八字 乙", group_id="g")
+    store.query_runs(run_id=old_used)  # 老 run 被点用过
+    hits = store.query_runs(text="八字", limit=10, include_payload=False)
+    assert [h["run_id"] for h in hits][:2] == [old_used, newer], "点用过的排前（无 text 浏览仍纯新近序）"
+    browse = store.query_runs(limit=10, include_payload=False)
+    assert browse[0]["run_id"] == newer, "浏览列表保持新近序零回归"
+
+
+def test_is_memory_worthy_dual_predicate(tmp_path) -> None:
+    store, _ = _store_with_run(tmp_path)
+    worthy = store.query_runs(limit=1)[0]
+    assert store.is_memory_worthy(worthy) is True
+    assert store.is_memory_worthy({"artifacts": [], "ai_answer_text": None, "tool_calls": [{"ok": 0}]}) is False
+    assert store.is_memory_worthy({"artifacts": [], "ai_answer_text": "答", "tool_calls": []}) is True
+
+
+def test_prune_unused_dry_run_then_delete(tmp_path) -> None:
+    import sqlite3 as _sq
+
+    store, run_id = _store_with_run(tmp_path)
+    used_id = store.create_run(entrypoint="tool", query_text="被点用的", group_id="g")
+    store.query_runs(run_id=used_id)
+    # 把两条 run 都做旧 100 天
+    with _sq.connect(store.db_path) as conn:
+        conn.execute("UPDATE runs SET created_at = '2020-01-01T00:00:00+00:00'")
+        conn.execute("UPDATE runs SET last_used_at = '2020-01-02T00:00:00+00:00' WHERE id = ?", (used_id,))
+        conn.commit()
+    dry = store.prune_unused(unused_days=30)
+    assert dry["dry_run"] is True and dry["deleted"] == 0
+    assert dry["candidates"] == 1 and dry["sample"] == [run_id], "点用过的 run 永不入选"
+    # 裸 SQL 取产物路径——query_runs(run_id=…) 会点用记账，把候选洗出 prune 集（记账语义本身正确）。
+    with _sq.connect(store.db_path) as conn:
+        artifact_paths = [Path(row[0]) for row in conn.execute("SELECT path FROM artifacts WHERE run_id = ?", (run_id,))]
+    real = store.prune_unused(unused_days=30, yes=True)
+    assert real["deleted"] == 1 and real["dry_run"] is False
+    assert store.query_runs(run_id=run_id) == []
+    assert store.query_runs(run_id=used_id), "点用过的 run 保留"
+    assert all(not p.exists() for p in artifact_paths), "磁盘产物随删"

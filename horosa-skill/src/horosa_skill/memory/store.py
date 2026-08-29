@@ -188,6 +188,10 @@ class MemoryStore:
             # 检索读取不再对每个文件全量 read_bytes 重算（老行列为 NULL → 读取端回退现算）。
             self._ensure_column(conn, "artifacts", "file_size", "INTEGER")
             self._ensure_column(conn, "artifacts", "sha256", "TEXT")
+            # 记忆使用度（v0.33.0 批 II-4，照 codex history usage 形状）：按 id 点取（memory_show /
+            # 回读）时 +1 并记时刻；召回排序与 prune --unused-days 都吃这两列。老行 NULL=从未点用。
+            self._ensure_column(conn, "runs", "usage_count", "INTEGER")
+            self._ensure_column(conn, "runs", "last_used_at", "TEXT")
             # 二级索引：按技法/时间/实体/产物类型的组合过滤从全表扫变索引查（IF NOT EXISTS 幂等，老库自动补建）。
             conn.executescript(
                 """
@@ -546,6 +550,7 @@ class MemoryStore:
             """
             SELECT DISTINCT runs.id, runs.entrypoint, runs.query_text, runs.created_at, runs.updated_at
                 , runs.subject_json, runs.group_id, runs.user_question_text, runs.ai_answer_text, runs.ai_answer_json, runs.answer_meta_json
+                , runs.usage_count, runs.last_used_at
             FROM runs
             LEFT JOIN tool_calls ON tool_calls.run_id = runs.id
             LEFT JOIN entities ON entities.run_id = runs.id
@@ -635,6 +640,8 @@ class MemoryStore:
                         "answer_meta": self._parse_json_field(row["answer_meta_json"]) or {},
                         "created_at": row["created_at"],
                         "updated_at": row["updated_at"],
+                        "usage_count": row["usage_count"] or 0,
+                        "last_used_at": row["last_used_at"],
                         "tool_calls": [self._tool_call_record_to_dict(item) for item in tool_calls],
                         "artifacts": artifact_records,
                         "artifact_summary": self._artifact_summary(artifact_records),
@@ -642,8 +649,82 @@ class MemoryStore:
                 )
                 if len(results) >= target_count:
                     break
+        # 使用度记账（批 II-4）：按 id 点取 = 真被用到（memory_show / 回读），列表浏览不记。
+        if run_id and results:
+            self.touch_run_usage(run_id)
+        # 召回排序（批 II-4）：text 检索命中集内，点用多者优先（次键仍是新近）——常被回读的盘
+        # 排到前面；无 text 的浏览列表保持纯新近序（零回归）。
+        if text:
+            results.sort(key=lambda item: item.get("created_at") or "", reverse=True)
+            results.sort(key=lambda item: -(item.get("usage_count") or 0))
         # offset 分页：收集满 offset+limit 后切片（text 深扫语义下 SQL OFFSET 不可用，此处统一处理）。
         return results[offset:]
+
+    def touch_run_usage(self, run_id: str) -> None:
+        """点用记账：usage_count+1 + last_used_at=now（召回排序与 prune 的依据）。"""
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE runs SET usage_count = COALESCE(usage_count, 0) + 1, last_used_at = ? WHERE id = ?",
+                (utc_now_iso(), run_id),
+            )
+            conn.commit()
+
+    @staticmethod
+    def is_memory_worthy(record: dict[str, Any]) -> bool:
+        """召回语料谓词（批 II-4，双谓词分离）：`should_persist` 恒真（审计契约——所有调用全存，
+        本方法**不**影响写入）；本谓词只回答「这条值得进召回语料吗」——有产物、或有 AI 答案、
+        或有成功的工具调用，三者其一即值得；三无（失败且零产物）的空 run 不值得。"""
+        if record.get("artifacts") or record.get("ai_answer_text"):
+            return True
+        return any(bool(call.get("ok")) for call in record.get("tool_calls") or [])
+
+    def prune_unused(self, *, unused_days: int, yes: bool = False) -> dict[str, Any]:
+        """清理长期未点用的 run（默认 dry-run）：判据 = COALESCE(last_used_at, created_at) 早于
+        cutoff **且** usage_count 为空/0。删除级联 tool_calls/artifacts/entities 行 + 磁盘产物文件。
+        点用过的 run 永不入选（哪怕很老）——「用过」就是价值证明。"""
+        from datetime import timedelta
+
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=max(1, unused_days))).replace(microsecond=0).isoformat()
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, created_at, last_used_at, usage_count FROM runs
+                WHERE COALESCE(last_used_at, created_at) < ? AND COALESCE(usage_count, 0) = 0
+                ORDER BY created_at ASC
+                """,
+                (cutoff,),
+            ).fetchall()
+            candidates = [dict(row) for row in rows]
+            report: dict[str, Any] = {
+                "unused_days": unused_days,
+                "cutoff": cutoff,
+                "candidates": len(candidates),
+                "sample": [row["id"] for row in candidates[:10]],
+                "dry_run": not yes,
+                "deleted": 0,
+                "files_removed": 0,
+            }
+            if not yes or not candidates:
+                return report
+            ids = [row["id"] for row in candidates]
+            files_removed = 0
+            for chunk_start in range(0, len(ids), 400):
+                chunk = ids[chunk_start : chunk_start + 400]
+                marks = ",".join("?" for _ in chunk)
+                for path_row in conn.execute(f"SELECT path FROM artifacts WHERE run_id IN ({marks})", chunk):
+                    try:
+                        Path(path_row["path"]).unlink(missing_ok=True)
+                        files_removed += 1
+                    except OSError:
+                        pass
+                conn.execute(f"DELETE FROM entities WHERE run_id IN ({marks})", chunk)
+                conn.execute(f"DELETE FROM artifacts WHERE run_id IN ({marks})", chunk)
+                conn.execute(f"DELETE FROM tool_calls WHERE run_id IN ({marks})", chunk)
+                conn.execute(f"DELETE FROM runs WHERE id IN ({marks})", chunk)
+            conn.commit()
+            report["deleted"] = len(ids)
+            report["files_removed"] = files_removed
+            return report
 
     def _write_artifact(
         self,
