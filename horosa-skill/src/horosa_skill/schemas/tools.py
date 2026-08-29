@@ -88,6 +88,38 @@ class BirthInput(FlexibleModel):
     # saturnExalt20 已随上游 v3.9.3 删档（2026-08-18 上游拍板：degree 位全仓零消费者=真死开关，
     # push_request_exalt_variants 签名 2→1 参）。typed 字段保留只会向 agent 广告一个死开关。
     nodeExaltation: Any | None = Field(default=None, description="交点是否参与旺弱(exaltation)判定。")
+    # ── 古典参数 typed 化（v0.33.0 批 I-6：上游 WP-2~8 30 键补全声明；描述照 classicalParamSpec.js
+    # 标签逐条对齐，helper.py 45 键白名单为回显权威。全部 None=不发送=后端默认，零回归。──
+    dignityDebilities: Any | None = Field(default=None, description="弱陷计负分（陷 −5 · 落 −4；缺省开）。")
+    almutenTripMode: str | None = Field(default=None, description="Almuten 三分计分：all=三主全计（缺省）| sectRulerOnly=仅当值主。")
+    planetaryHourMethod: str | None = Field(default=None, description="行星时制式：sunrise=日出起算等长时（缺省）| unequal=昼夜不等时（传统）| equal24=廿四时等分。")
+    combustOwnChariotExempt: Any | None = Field(default=None, description="界内三分内免燃烧 own chariot（Porphyry；缺省关）。")
+    westLilithType: str | None = Field(default=None, description="黑月莉莉丝：mean=平均远地点（缺省）| true=真实远地点(osculating)。")
+    topocentricMoon: Any | None = Field(default=None, description="月亮站心视差修正（影响月亮黄经 ≤1°，福点随动；缺省关）。")
+    lotReversal: Any | None = Field(default=None, description="福点按昼夜反转（缺省开；关则恒昼式）。")
+    lotsDocReverse: Any | None = Field(default=None, description="婚·子·友·疾四点用文档序公式（缺省关）。")
+    hermeticLotsReversal: Any | None = Field(default=None, description="七星点按昼夜反转（批判本校勘；缺省开，关则恒同式）。")
+    erosConstruction: str | None = Field(default=None, description="爱欲点构成：paulus=金星·水星系（缺省）| valens=福点·精神系。")
+    lotFortuneVariant: str | None = Field(default=None, description="福点公式变体：standard=标准昼夜式（缺省）| moonAboveNight=月在地平上恒夜式。")
+    lotFatherCombustAlt: Any | None = Field(default=None, description="父点土星伏时替代式（Dorotheus 系；缺省关）。")
+    lotProjection: str | None = Field(default=None, description="希腊点点度计数法：portion=度数投射（缺省）| sign=整星座。")
+    orbSystem: str | None = Field(default=None, description="容许度判据体系：perObject=星体轨任一覆盖（缺省）| byAspect=按相位名(合冲刑拱8°/六合4°) | wholeSign=整星座位相 | wholeSignMoiety=整星座内两轨半距和。")
+    luminaryOrbBonus: int | None = Field(default=None, description="发光体·四轴轨加成：0（缺省）/10/20/30（%）。")
+    orbs: dict[str, Any] | None = Field(default=None, description="逐星容许度覆盖（星体 id → 度；缺省用默认表）。")
+    orbScale: float | None = Field(default=None, description="容许度全局倍数（缺省 1.0）。")
+    aspectIncludeCusps: Any | None = Field(default=None, description="宫头参与相位（≤3°；缺省关）。")
+    aspectIncludeLots: Any | None = Field(default=None, description="希腊点参与相位（点为受体 ≤3°；缺省关）。")
+    aspectIncludeMidpoints: Any | None = Field(default=None, description="中点参与相位（日月四轴硬相 ≤1.5°；缺省关）。")
+    starOrbMode: str | None = Field(default=None, description="恒星轨档：school=按流派平轨（缺省）| byMagnitude=按星等。")
+    stationMarking: str | None = Field(default=None, description="留驻判定（盘面 S·D 标）：off=仅逆行R标（缺省）| exactWindow=距留点≤1日 | distance=距留点黄经≤2′ | absSpeed=日速<1′ | relSpeed=日速<3%均速。")
+    solarReturnVariant: str | None = Field(default=None, description="太阳返照法：precise=精确回归（缺省，现代）| hellenistic=希腊式（月定上升）。")
+    returnLatitudeMode: str | None = Field(default=None, description="返照落宫投影：ecliptic=黄道度（缺省）| withLatitude=计入黄纬（Umar al-Tabari 法）。")
+    houseCuspAdvance: int | None = Field(default=None, description="行星落宫宫头前移：5°（缺省，传统）/3/1/0（整宫制豁免）。")
+    vulcanCalc: str | None = Field(default=None, description="祝融星（推算行星）：off（缺省）| weston=轨道根数法 | baker=水星系推算。")
+    customTermsDay: Any | None = Field(default=None, description="自定义界表·昼表（termsVariant=4 时生效；非法整表回落埃及界）。")
+    customTermsNight: Any | None = Field(default=None, description="自定义界表·夜表（可缺=昼夜同表）。")
+    userAyanT0: float | None = Field(default=None, description="自定义恒星黄道参考历元 JD（siderealAyanamsa='user' 配套）。")
+    userAyanDeg: float | None = Field(default=None, description="自定义恒星黄道在 T0 历元的岁差度（'user' 配套）。")
     gpsLat: float | None = None
     gpsLon: float | None = None
     includePrimaryDirection: bool | None = None

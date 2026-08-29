@@ -4513,3 +4513,26 @@ def test_hecan_routing_failure_passes_through_recovery(tmp_path) -> None:
     result = service.hecan({"query": "呵呵", "save_result": False})
     assert result["ok"] is False
     assert result["code"], "路由失败必须透出结构化错误，不包一层假成功"
+
+
+def test_birthinput_declares_upstream_classical_echo_whitelist() -> None:
+    """批 I-6 锁步：上游 helper.py 古典回显白名单（45 键）必须全部在 BirthInput typed 声明——
+    typed 化是可发现性契约（agent 只能看见声明过的旋钮），删声明=旋钮对 agent 隐形。
+    新键到达由重同步侦察负责；本测试防「已声明键被误删」的回退。"""
+    from horosa_skill.schemas.tools import BirthInput
+
+    upstream_echo_keys = {
+        "termsVariant", "leoBoundFirst", "geminiBoundEmended", "triplicity", "lotReversal",
+        "westNodeType", "sectBuffer", "houseCuspAdvance", "cazimiOrb", "combustOrb", "underBeamsOrb",
+        "vocMode", "vocIncludeOuter", "starOrb", "starOrbMode", "antisciaOrb", "viaCombustaVariant",
+        "lotsDocReverse", "nodeExaltation", "combustOwnChariotExempt", "westLilithType",
+        "topocentricMoon", "stationMarking", "hermeticLotsReversal", "erosConstruction",
+        "lotFortuneVariant", "lotFatherCombustAlt", "lotProjection", "dignityDebilities",
+        "almutenTripMode", "planetaryHourMethod", "orbSystem", "luminaryOrbBonus",
+        "aspectIncludeCusps", "aspectIncludeLots", "aspectIncludeMidpoints", "solarReturnVariant",
+        "returnLatitudeMode", "vulcanCalc", "customTermsDay", "customTermsNight",
+        "siderealAyanamsa", "userAyanT0", "userAyanDeg", "orbs", "orbScale",
+    }
+    declared = set(BirthInput.model_fields.keys())
+    missing = sorted(upstream_echo_keys - declared)
+    assert missing == [], f"BirthInput 缺少上游古典白名单键的 typed 声明：{missing}"

@@ -6433,7 +6433,8 @@ class HorosaSkillService:
     def _call_remote(self, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
         use_chart_server = endpoint in _PYTHON_CHART_ENDPOINTS
         client = self.chart_client if use_chart_server else self.client
-        probe_endpoint = "/" if use_chart_server else "/common/time"
+        # /healthz（批 I-6）：chart 服务的真就绪探针（ok/warm）；老 runtime 无此路由时 404 仍算「服务在」。
+        probe_endpoint = "/healthz" if use_chart_server else "/common/time"
         runtime_ready = self._chart_runtime_ready if use_chart_server else self._java_runtime_ready
         if not runtime_ready and not client.probe(probe_endpoint):
             self.runtime_manager.start_local_services()

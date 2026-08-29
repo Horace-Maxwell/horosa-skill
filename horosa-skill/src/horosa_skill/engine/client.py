@@ -260,7 +260,18 @@ class HorosaPlainJsonClient:
                     response = client.get(url)
                 else:
                     response = client.post(url, json=payload)
-                return response.status_code < 500
+                if response.status_code >= 500:
+                    return False
+                # /healthz（v0.33.0 批 I-6）：真就绪探针——新 runtime 回 {ok, warm}，ok=false 视为未就绪。
+                # 老 runtime 无此路由（404<500）→ 维持「服务在」判定，与旧探 "/" 行为等价（诚实回退）。
+                if endpoint == "/healthz" and response.status_code == 200:
+                    try:
+                        body = response.json()
+                        if isinstance(body, dict) and body.get("ok") is False:
+                            return False
+                    except ValueError:
+                        pass
+                return True
         except Exception:
             return False
 
