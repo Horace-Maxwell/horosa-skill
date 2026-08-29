@@ -608,6 +608,13 @@
       "export_technique": "qimenzeri",
       "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
+    "qizhengelection": {
+      "compute_class": "local_data",
+      "engines": [],
+      "endpoints": [],
+      "export_technique": null,
+      "notes": "不起盘：读本地离线库 / 内置注册表"
+    },
     "qizhengkin": {
       "compute_class": "chart_service_shenshu",
       "engines": [
@@ -633,7 +640,8 @@
       "compute_class": "python_chart_backend",
       "engines": [],
       "endpoints": [
-        "/astroextra/relocation"
+        "/astroextra/relocation",
+        "/chart"
       ],
       "export_technique": "relocation",
       "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
@@ -751,6 +759,7 @@
         "tianxing"
       ],
       "endpoints": [
+        "/electionscan/conditiontypes",
         "/electionscan/scan"
       ],
       "export_technique": "tianxing",
@@ -861,38 +870,11 @@
       "notes": "纯 headless JS，无后端引擎"
     },
     "xuanshi": {
-      "compute_class": "python_chart_backend",
+      "compute_class": "local_data",
       "engines": [],
-      "endpoints": [
-        "/xuanshi/search",
-        "/xuanshi/events",
-        "/xuanshi/event",
-        "/xuanshi/celestial",
-        "/xuanshi/celestial_event",
-        "/xuanshi/figures",
-        "/xuanshi/figure",
-        "/xuanshi/dynasties",
-        "/xuanshi/dynasty",
-        "/xuanshi/techniques",
-        "/xuanshi/technique",
-        "/xuanshi/celestial_terms",
-        "/xuanshi/celestial_term",
-        "/xuanshi/celestial_term_profile",
-        "/xuanshi/timeline",
-        "/xuanshi/map",
-        "/xuanshi/persons_graph",
-        "/xuanshi/stories",
-        "/xuanshi/story",
-        "/xuanshi/channels",
-        "/xuanshi/daily",
-        "/xuanshi/summary",
-        "/xuanshi/microchronology",
-        "/xuanshi/decade_omens",
-        "/xuanshi/facets",
-        "/xuanshi/events_meta"
-      ],
+      "endpoints": [],
       "export_technique": "xuanshi",
-      "notes": "只读检索：runtime 自带玄史 SQLite bundle（事件/天象/地名/人物图 + 编辑层），经 chart 服务 /xuanshi/* 查询；不起盘"
+      "notes": "不起盘：读本地离线库 / 内置注册表"
     },
     "yearsystem129": {
       "compute_class": "frontend_read_port",

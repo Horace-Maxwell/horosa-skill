@@ -20,6 +20,7 @@ import { runGuice } from '../src/tools/guice.js';
 import { runZhengChuan } from '../src/tools/zhengchuan.js';
 import { runLingqi } from '../src/tools/lingqi.js';
 import { runTianxing } from '../src/tools/tianxing.js';
+import { runQizhengElection } from '../src/tools/qizhengElection.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const chart = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_traditional.json'), 'utf8'));
@@ -281,6 +282,62 @@ check('tianxing explain_section renders 设定/实际 pairs with ✓✗', () => 
   assert(settings.length === 2 && actuals.length === 2, `expected 2 设定/实际 pairs, got ${settings.length}/${actuals.length}`);
   assert(s.includes('(取反)'), 'negate leaf must carry (取反)');
   assert(actuals[1].includes('金-月'), 'actual text must come from the explain tree');
+});
+
+// 七政择日动盘（v0.33.0 批 I-1b）：山位换算走 vendored electionCore（232.9° 罗盘 → 00申山24，
+// 与 GuoLaoElectionTable 同式）；黄道列为地支镜像度（白羊=戌）。
+check('qizhengelection pan renders 地支度+山位+地平号', () => {
+  const r = runQizhengElection({
+    kind: 'pan',
+    fields: { date: '2026-09-01', time: '14:30', zone: '+08:00', pos: '北京' },
+    options: { plate: 'di', ziZheng: 'true', eleLifeMode: 'sunrise' },
+    data: {
+      trueSolarTime: '14:15:31', equationOfTimeMin: -0.0809, lifeDeg: 157.578,
+      sunAzimuthSpeedDegPerMin: 0.2819,
+      rise: { sunrise: '05:42:11', sunset: '18:31:04', moonrise: '20:02:00', moonset: '08:11:00' },
+      planets: [
+        { id: 'Sun', label: '日', lonTropical: 158.855, retrograde: false, azimuth: 232.9188, altitudeTrue: 46.25 },
+        { id: 'Mercury', label: '水', lonTropical: 172.4, retrograde: true, azimuth: 245.1, altitudeTrue: -3.4 },
+      ],
+    },
+  });
+  assert(r.data.ok === true, `ok=false: ${JSON.stringify(r.data.error || {})}`);
+  const s = r.snapshot_text || '';
+  for (const sec of ['[起盘信息]', '[择日动盘]', '[天象要素]']) {
+    assert(s.includes(sec), `missing ${sec}`);
+  }
+  // 158.855° = 处女 8°51′ → 镜像地支 巳（白羊=戌序）；232.92° 罗盘 → 00申山25（vendored mountainPosition 实算）。
+  assert(s.includes('日：08巳51 | 00申山25+ | 方位 232.9° 高度 46.3° | 平'), `sun row wrong: ${s.split('\n').find((l) => l.startsWith('日：'))}`);
+  assert(s.includes('| 逆'), 'retrograde mark missing');
+  assert(s.includes('真太阳时：14:15:31') && s.includes('命度：07巳34（日出起）'), 'astronomy extras wrong');
+});
+
+check('qizhengelection eclipses decodes swisseph kind flags', () => {
+  const r = runQizhengElection({
+    kind: 'eclipses',
+    fields: { date: '2026-09-01', zone: '+08:00' },
+    options: { kind: 'solar' },
+    data: { rows: [
+      { date: '2027-02-06', time: '23:59:39', kindFlag: 9 },
+      { date: '2027-08-02', time: '18:06:41', kindFlag: 5 },
+    ] },
+  });
+  const s = r.snapshot_text || '';
+  assert(s.includes('未来日食'), 'missing title');
+  assert(s.includes('2027-02-06 23:59:39　环食·中心'), 'annular decode wrong');
+  assert(s.includes('2027-08-02 18:06:41　全食·中心'), 'total decode wrong');
+});
+
+check('qizhengelection azimuthsearch rows carry 山位', () => {
+  const r = runQizhengElection({
+    kind: 'azimuthsearch',
+    fields: { date: '2026-09-01', zone: '+08:00' },
+    options: { body: '日', targetAz: 180, days: 1 },
+    data: { rows: [{ date: '2026-09-01', time: '12:14:31', azimuth: 180.0 }] },
+  });
+  const s = r.snapshot_text || '';
+  assert(s.includes('日 到达 180.0°(未来 1 天)'), 'missing title (upstream verbatim)');
+  assert(s.includes('12:14:31　180.0°（07午山30）'), `row wrong: ${s}`);
 });
 
 check('tianxing explain_section without explain tree fails loudly', () => {

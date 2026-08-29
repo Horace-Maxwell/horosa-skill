@@ -43,6 +43,9 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("qimenzeri")
     if _contains_any(text, ["天星择日", "征象搜索", "tianxing"]):
         add("tianxing")
+    # 七政择日动盘：单时刻十一曜山位/方位 + 日月食/方位搜索（与「窗口搜时刻」的 tianxing 两回事）。
+    if _contains_any(text, ["七政择日", "择日动盘", "择日双轮", "方位搜索", "日食", "月食", "二十四山方位", "qizhengelection"]):
+        add("qizhengelection")
     # 飞宫小奇门 含「奇门」二字 → 奇门遁甲分支须排除，否则「飞宫小奇门问出行」误路由 qimen。
     # 「奇门择日」同理：它有自己的工具，落到 qimen 会给出一张单点盘而不是一段搜索结果。
     if (
@@ -140,7 +143,7 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("horary")
     # 「奇门择日」/「天星择日」都含「择日」二字 → 必须排除，否则一句话点亮三个工具。
     if _contains_any(text, ["择日", "择吉", "election", "electional", "选时", "用事时刻"]) and not _contains_any(
-        text, ["奇门择日", "天星择日", "qimenzeri", "tianxing", "奇门找局", "征象搜索"]
+        text, ["奇门择日", "天星择日", "qimenzeri", "tianxing", "奇门找局", "征象搜索", "七政择日", "择日动盘", "择日双轮"]
     ):
         add("election")
     if _contains_any(text, ["皇极经世", "心易发微", "wangji", "邵雍数"]):
@@ -213,6 +216,7 @@ _CANDIDATE_POOL: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("horary", ("卜卦占星", "horary", "问事")),
     ("election", ("择日", "择吉", "election")),
     ("tianxing", ("天星择日", "征象搜索", "tianxing")),
+    ("qizhengelection", ("七政择日", "择日动盘", "方位搜索", "日食", "月食", "qizhengelection")),
     ("qimenzeri", ("奇门择日", "奇门找局", "qimenzeri")),
     ("calendar_month", ("黄历", "万年历", "农历", "老黄历")),
     ("astrodata", ("名人", "celebrity", "明星")),

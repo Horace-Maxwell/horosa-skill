@@ -119,7 +119,7 @@ def _return_type(annotation: Any) -> Any:
 def _selected_toolsets() -> set[str] | None:
     """`HOROSA_TOOLSETS=astro,cn` → 只平铺这些 domain 的技法工具（门面工具永远注册）。
 
-    动机：Claude Code 已用工具搜索解决了 93 工具的上下文膨胀，但 Cursor 一类客户端仍有较紧的工具数
+    动机：Claude Code 已用工具搜索解决了 94 工具的上下文膨胀，但 Cursor 一类客户端仍有较紧的工具数
     上限，全量平铺会被静默截断。分组白名单是注册期过滤，不触碰 service 层。
     `HOROSA_TOOLSETS=none` == 精简模式（等价 HOROSA_MCP_COMPACT=1 的技法面）。
     """
@@ -139,7 +139,7 @@ WHEN TO REACH FOR THIS SERVER
 Any request to 起盘 / 排盘 / 起课 / 起卦 / 算命 / 看运势 / 合盘 / 择日 / 卜卦, or to explain, store,
 or report such a chart. Also 农历/节气/黄历 conversion and celebrity birth data.
 
-WHAT IT COVERS (93 tools)
+WHAT IT COVERS (94 tools)
 · Western astrology: natal + derived charts, 20+ predictive systems (returns, progressions, primary
   directions, zodiacal releasing, firdaria), horary 卜卦, election 择日, astrocartography, midpoints.
 · Chinese metaphysics: 八字, 紫微斗数, 大六壬, 奇门遁甲, 太乙, 金口诀, 三式合一, 六爻, 河洛理数,
@@ -159,7 +159,7 @@ HOW TO USE IT
 5. Runs are stored: horosa_memory_query finds them; horosa_report_render writes DOCX/PDF from
    your ai_report.
 
-Set HOROSA_MCP_COMPACT=1 to expose 11 facade tools instead of 93 (horosa_tool_run reaches every
+Set HOROSA_MCP_COMPACT=1 to expose 11 facade tools instead of 94 (horosa_tool_run reaches every
 technique by name); HOROSA_TOOLSETS=astro,cn limits which technique groups are exposed."""
 
 
@@ -899,7 +899,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
 
     if settings.mcp_compact:
         # 精简模式（8 门面 + tool_run = 9 工具）：技法工具不平铺，注册一个按名直呼的通用工具（dispatch 关键词路由只覆盖部分技法，
-        # 直呼通道保证 93 技法全部可达）；澄清闸照常生效。
+        # 直呼通道保证 94 技法全部可达）；澄清闸照常生效。
         async def horosa_tool_run(**kwargs: Any) -> ToolEnvelope:
             # tool_name 必须在合并之前取走：它是 `request` 的**兄弟**参数，而 `_merge_mcp_arguments`
             # 在 request 存在时会整体改用 request 作为载荷（否则 `{tool_name, request}` 这种最常见的

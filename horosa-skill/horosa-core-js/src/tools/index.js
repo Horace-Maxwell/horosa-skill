@@ -39,6 +39,7 @@ import { runZiweiExtras } from './ziweiExtras.js';
 import { runSanshiZiweiSihua } from './sanshiZiweiSihua.js';
 import { runQimenZeri } from './qimenzeri.js';
 import { runTianxing } from './tianxing.js';
+import { runQizhengElection } from './qizhengElection.js';
 
 const TOOL_RUNNERS = {
   uranian_extra: runUranianExtra,
@@ -58,6 +59,7 @@ const TOOL_RUNNERS = {
   sanshi_ziwei_sihua: runSanshiZiweiSihua,
   qimenzeri: runQimenZeri,
   tianxing: runTianxing,
+  qizhengelection: runQizhengElection,
   india_jyotish: runIndiaJyotish,
   qimen: runQimen,
   taiyi: runTaiyi,

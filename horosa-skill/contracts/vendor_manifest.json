@@ -930,6 +930,11 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "guolao/electionCore.js": {
+      "upstream": "components/guolao/electionCore.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "guolao/guolaoData.js": {
       "upstream": "components/guolao/guolaoData.js",
       "mode": "verbatim",

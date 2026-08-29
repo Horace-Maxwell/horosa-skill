@@ -62,6 +62,32 @@ class FakeClient(HorosaApiClient):
             }
         if endpoint == "/electionscan/conditiontypes":
             return {"types": ["aspect", "in_sign", "numeric"], "groups": ["all", "any", "not", "xor"]}
+        if endpoint == "/qizhengelection/pan":
+            # 真实形状（webqizhengelectionsrv.pan）：Result 是 dict → _unwrap_result 剥出内层。
+            return {
+                "jdUt": 2461284.77, "trueSolarTime": "14:15:31", "equationOfTimeMin": -0.08,
+                "lifeDeg": 157.58, "lifeJd": 2461284.4, "sunAzimuthSpeedDegPerMin": 0.2819,
+                "rise": {"sunrise": "05:42:11", "sunset": "18:31:04", "moonrise": "20:02:00", "moonset": "08:11:00"},
+                "planets": [
+                    {"id": "Sun", "label": "日", "lonTropical": 158.855, "lat": 0.0002, "speedLon": 0.967,
+                     "retrograde": False, "azimuth": 232.92, "altitudeTrue": 46.25, "altitudeAppa": 46.27},
+                    {"id": "Mercury", "label": "水", "lonTropical": 172.4, "lat": 1.2, "speedLon": -0.5,
+                     "retrograde": True, "azimuth": 245.1, "altitudeTrue": -3.4, "altitudeAppa": -3.2},
+                ],
+                "housesBySystem": {"A": [150.0 + i * 30 for i in range(12)]},
+                "stellarLon": [{"name": "壁", "lon": 10.46}],
+                "ascmc": {"asc": 250.1, "mc": 160.2},
+            }
+        if endpoint == "/qizhengelection/eclipses":
+            # 真实形状：Result 是**数组** → _unwrap_result 不剥，信封原样返回。
+            return {"ResultCode": 0, "Result": [
+                {"jd": 2461443.17, "date": "2027-02-06", "time": "23:59:39", "kindFlag": 9},
+                {"jd": 2461619.92, "date": "2027-08-02", "time": "18:06:41", "kindFlag": 5},
+            ]}
+        if endpoint == "/qizhengelection/azimuthsearch":
+            return {"ResultCode": 0, "Result": [
+                {"jd": 2461284.68, "date": "2026-09-01", "time": "12:14:31", "azimuth": 180.0},
+            ]}
         house_signs = [
             ("House8", 0.0),
             ("House9", 30.0),
@@ -604,6 +630,25 @@ class FakeJsClient(HorosaJsEngineClient):
                 "[征象条件]", "查找 太阳 在 白羊座", "",
                 f"[命中区间]\n共 {len(results)} 个区间：\n{rows}",
             ])}
+        if tool_name == "qizhengelection":
+            # canned 但段头/行形照真渲染器（qizhengElection.js）；真展示换算由 npm selfcheck 金标守。
+            kind = str(payload.get("kind") or "pan")
+            fields = payload.get("fields") or {}
+            if not isinstance(payload.get("data"), dict):
+                return {"data": {"ok": False, "error": {"code": "missing_data", "message": "缺少后端返回数据（data）。"}}, "snapshot_text": ""}
+            header = f"[起盘信息]\n时间：{fields.get('date')} {fields.get('time')}　时区：{fields.get('zone')}\n地点：{fields.get('pos')}"
+            if kind == "pan":
+                body = (
+                    "[择日动盘]\n山位口径：二十四山·地盘　真北\n"
+                    "日：08巳51 | 00申山25+ | 方位 232.9° 高度 46.3° | 平\n"
+                    "水：22卯24 | 01酉山12− | 方位 245.1° 高度 -3.4° | 逆\n\n"
+                    "[天象要素]\n真太阳时：14:15:31　均时差：-0.08 分\n日出：05:42:11　日没：18:31:04\n命度：07巳34（日出起）"
+                )
+            elif kind == "eclipses":
+                body = "[日月食搜索]\n未来日食\n2027-02-06 23:59:39　环食·中心\n2027-08-02 18:06:41　全食·中心"
+            else:
+                body = "[方位搜索]\n日 到达 180.0°(未来 3 天)\n2026-09-01 12:14:31　180.0°（07午山30）"
+            return {"data": {"ok": True}, "snapshot_text": f"{header}\n\n{body}"}
         if tool_name == "qimenzeri":
             action = str(payload.get("action") or "scan")
             if action == "scan":
@@ -3724,6 +3769,63 @@ def test_tianxing_invalid_conditions_error_carries_server_types(tmp_path) -> Non
     assert result.ok is False
     assert result.error.code == "tool.tianxing_invalid_conditions"
     assert result.error.details["server_condition_types"] == ["aspect", "in_sign", "numeric"]
+
+
+def test_qizhengelection_pan_emits_sections_and_data(tmp_path) -> None:
+    """七政择日动盘（批 I-1b）：pan 出 [起盘信息]+[择日动盘]+[天象要素]，契约零缺零未知。"""
+    service = _zeri_service(tmp_path)
+    result = service.run_tool("qizhengelection", build_sample_payloads()["qizhengelection"], save_result=False)
+    assert result.ok is True, result.error
+    assert result.data["action"] == "pan"
+    assert result.data["pan"]["planets"], "pan 原始数据必须带回"
+    text = result.data["snapshot_text"]
+    for section in ("[起盘信息]", "[择日动盘]", "[天象要素]"):
+        assert section in text, section
+    export = result.data["export_snapshot"]
+    assert export["technique"]["key"] == "qizhengelection"
+    assert export["missing_selected_sections"] == []
+    assert export["unknown_detected_sections"] == []
+
+
+def test_qizhengelection_eclipses_action(tmp_path) -> None:
+    service = _zeri_service(tmp_path)
+    payload = {**build_sample_payloads()["qizhengelection"], "action": "eclipses", "kind": "solar", "count": 2}
+    result = service.run_tool("qizhengelection", payload, save_result=False)
+    assert result.ok is True, result.error
+    assert len(result.data["eclipses"]) == 2
+    assert "[日月食搜索]" in result.data["snapshot_text"]
+    assert result.data["export_snapshot"]["missing_selected_sections"] == []
+
+
+def test_qizhengelection_azimuthsearch_requires_target(tmp_path) -> None:
+    service = _zeri_service(tmp_path)
+    payload = {**build_sample_payloads()["qizhengelection"], "action": "azimuthsearch"}
+    result = service.run_tool("qizhengelection", payload, save_result=False)
+    assert result.ok is False
+    assert result.error.code == "tool.qizhengelection_missing_target"
+    ok = service.run_tool("qizhengelection", {**payload, "targetAz": 180}, save_result=False)
+    assert ok.ok is True, ok.error
+    assert ok.data["hits"] and "[方位搜索]" in ok.data["snapshot_text"]
+
+
+def test_qizhengelection_fails_loudly_on_error_envelope(tmp_path) -> None:
+    """HTTP 200 + {'ResultCode':-1,'Result':'… failed'} 必须报错，绝不能静默变空结果。"""
+
+    class FailingClient(FakeClient):
+        def call(self, endpoint: str, payload: dict) -> dict:
+            if endpoint == "/qizhengelection/eclipses":
+                return {"ResultCode": -1, "Result": "eclipse search failed"}
+            return super().call(endpoint, payload)
+
+    settings = Settings(
+        server_root="http://127.0.0.1:9999", db_path=tmp_path / "memory.db", output_dir=tmp_path / "runs"
+    )
+    service = HorosaSkillService(settings, client=FailingClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    payload = {**build_sample_payloads()["qizhengelection"], "action": "eclipses"}
+    result = service.run_tool("qizhengelection", payload, save_result=False)
+    assert result.ok is False
+    assert result.error.code == "tool.qizhengelection_failed"
+    assert "eclipse search failed" in str(result.error.details.get("error"))
 
 
 def test_qimenzeri_carries_qimen_sections_plus_three(tmp_path) -> None:

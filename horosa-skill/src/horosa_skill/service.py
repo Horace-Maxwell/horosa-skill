@@ -175,6 +175,10 @@ _PYTHON_CHART_ENDPOINTS = {
     # 单时刻逐叶判读 + 条件类型自省（上游 v3.9.x R4；explainAt 参数与条件树报错自愈用）
     "/electionscan/explain",
     "/electionscan/conditiontypes",
+    # 七政择日动盘三路由（批 I-1b；同挂主 chart 服务 webqizhengelectionsrv）
+    "/qizhengelection/pan",
+    "/qizhengelection/eclipses",
+    "/qizhengelection/azimuthsearch",
     "/chart12",
     "/chart13",
     "/predict/solarreturn",
@@ -7023,6 +7027,142 @@ class HorosaSkillService:
         section = js.get("snapshot_text")
         return t_raw, (tree if isinstance(tree, dict) else None), (section if isinstance(section, str) else "")
 
+    # ── 七政择日动盘（批 I-1b，/qizhengelection/*）────────────────────────────────
+
+    def _require_qizhengelection_ok(self, result: Any, *, endpoint: str, expect: str) -> Any:
+        """信封判读（同 _require_electionscan_ok 家族，HTTP 200 也回失败信封）。
+
+        pan 的 Result 是 dict → `_unwrap_result` 已剥出内层；eclipses/azimuthsearch 的 Result
+        是**数组** → 信封原样返回（unwrap 只剥 dict）。失败时 Result 是字符串（"… failed"）。
+        """
+        if isinstance(result, dict) and "ResultCode" in result:
+            if result.get("ResultCode") == 0:
+                inner = result.get("Result")
+                if expect == "list" and isinstance(inner, list):
+                    return inner
+                if expect == "dict" and isinstance(inner, dict):
+                    return inner
+            raise ToolTransportError(
+                "七政择日端点返回失败信封。",
+                code="tool.qizhengelection_failed",
+                details={"endpoint": endpoint, "error": result.get("Result")},
+            )
+        if expect == "dict" and isinstance(result, dict):
+            return result
+        raise ToolTransportError(
+            "七政择日端点返回了意外形状。",
+            code="tool.qizhengelection_failed",
+            details={"endpoint": endpoint, "shape": type(result).__name__},
+        )
+
+    def _qizhengelection_snapshot(self, kind: str, fields: dict[str, Any], data: dict[str, Any], options: dict[str, Any]) -> str:
+        result = self.js_client.run(
+            "qizhengelection", {"kind": kind, "fields": fields, "data": data, "options": options}
+        )
+        js_data = result.get("data") or {}
+        if not js_data.get("ok"):
+            error = js_data.get("error") or {}
+            raise ToolTransportError(
+                f"七政择日快照渲染失败：{error.get('message') or '未知错误'}",
+                code=f"tool.qizhengelection_{error.get('code') or 'snapshot_failed'}",
+                details={"error": error},
+            )
+        text = result.get("snapshot_text")
+        return text if isinstance(text, str) else ""
+
+    def _run_qizheng_election_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        action = str(payload.get("action") or "pan").strip().lower()
+        if action not in {"pan", "eclipses", "azimuthsearch"}:
+            raise ToolValidationError(
+                f"未知动作 {action}（可选：pan / eclipses / azimuthsearch）。",
+                code="tool.qizhengelection_unknown_action",
+                details={"action": action},
+            )
+        zone = payload.get("zone") or "+08:00"
+        fields = {
+            "date": payload.get("date"),
+            "time": payload.get("time"),
+            "zone": zone,
+            "pos": payload.get("pos"),
+            "lat": payload.get("lat"),
+            "lon": payload.get("lon"),
+        }
+        options: dict[str, Any] = {
+            "plate": payload.get("plate") or "di",
+            "ziZheng": payload.get("ziZheng") or "true",
+            "declination": payload.get("declination") or 0,
+            "eleLifeMode": payload.get("eleLifeMode") or "sunrise",
+        }
+        if action == "pan":
+            if payload.get("gpsLat") is None or payload.get("gpsLon") is None:
+                raise ToolValidationError(
+                    "七政择日动盘需要经纬度（lat/lon 或 gpsLat/gpsLon）。",
+                    code="tool.qizhengelection_missing_geo",
+                    details={"lat": payload.get("lat"), "lon": payload.get("lon")},
+                )
+            remote: dict[str, Any] = {
+                "date": payload.get("date"),
+                "time": payload.get("time") or "12:00:00",
+                "zone": zone,
+                "gpsLat": payload.get("gpsLat"),
+                "gpsLon": payload.get("gpsLon"),
+            }
+            for key in ("height", "nodeType", "lilithType", "ayanamsaDeg", "eleLifeMode", "eleLifeCustomTime", "extraBodies"):
+                if payload.get(key) is not None:
+                    remote[key] = payload.get(key)
+            data = self._require_qizhengelection_ok(
+                self._call_remote("/qizhengelection/pan", remote), endpoint="/qizhengelection/pan", expect="dict"
+            )
+            snapshot_text = self._qizhengelection_snapshot("pan", fields, data, options)
+            body: dict[str, Any] = {"pan": data}
+        elif action == "eclipses":
+            options["kind"] = "lunar" if str(payload.get("kind") or "").strip().lower() == "lunar" else "solar"
+            remote = {"date": payload.get("date"), "zone": zone, "kind": options["kind"]}
+            if payload.get("count") is not None:
+                remote["count"] = payload.get("count")
+            rows = self._require_qizhengelection_ok(
+                self._call_remote("/qizhengelection/eclipses", remote), endpoint="/qizhengelection/eclipses", expect="list"
+            )
+            snapshot_text = self._qizhengelection_snapshot("eclipses", fields, {"rows": rows}, options)
+            body = {"eclipses": rows}
+        else:  # azimuthsearch
+            if payload.get("targetAz") is None:
+                raise ToolValidationError(
+                    "方位搜索需要目标罗盘方位 targetAz（0-359.9，0=北顺时针）。",
+                    code="tool.qizhengelection_missing_target",
+                    details={},
+                )
+            if payload.get("gpsLat") is None or payload.get("gpsLon") is None:
+                raise ToolValidationError(
+                    "方位搜索需要经纬度（lat/lon 或 gpsLat/gpsLon）。",
+                    code="tool.qizhengelection_missing_geo",
+                    details={"lat": payload.get("lat"), "lon": payload.get("lon")},
+                )
+            options["body"] = str(payload.get("body") or "日")
+            options["targetAz"] = payload.get("targetAz")
+            options["days"] = payload.get("days") or 3
+            remote = {
+                "date": payload.get("date"),
+                "time": payload.get("time") or "00:00:00",
+                "zone": zone,
+                "gpsLat": payload.get("gpsLat"),
+                "gpsLon": payload.get("gpsLon"),
+                "targetAz": payload.get("targetAz"),
+                "days": options["days"],
+                "body": options["body"],
+            }
+            rows = self._require_qizhengelection_ok(
+                self._call_remote("/qizhengelection/azimuthsearch", remote), endpoint="/qizhengelection/azimuthsearch", expect="list"
+            )
+            snapshot_text = self._qizhengelection_snapshot("azimuthsearch", fields, {"rows": rows}, options)
+            body = {"hits": rows}
+        return {
+            "action": action,
+            **body,
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="qizhengelection", snapshot_text=snapshot_text),
+        }
+
     def _tianxing_selected_moment_section(self, payload: dict[str, Any], hit: dict[str, Any]) -> str:
         try:
             pick = f"{(hit or {}).get('pick') or (hit or {}).get('start') or ''}".strip()
@@ -9776,6 +9916,8 @@ class HorosaSkillService:
             return self._run_qimenzeri_tool(payload)
         if definition.name == "tianxing":
             return self._run_tianxing_tool(payload)
+        if definition.name == "qizhengelection":
+            return self._run_qizheng_election_tool(payload)
         if definition.name == "taiyi":
             return self._run_taiyi_tool(payload)
         if definition.name == "jinkou":

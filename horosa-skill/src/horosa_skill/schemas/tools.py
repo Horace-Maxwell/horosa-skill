@@ -397,6 +397,44 @@ class TianxingInput(BirthInput):
     )
 
 
+class QizhengElectionInput(BirthInput):
+    """七政择日动盘（果老「择日双轮」headless 版）。
+
+    date/time/zone/lat/lon 复用 BirthInput —— 它们就是**候选择日时刻**的坐标，非出生盘。
+    三个动作共用一套入参：pan 用全部；eclipses 只用 date/zone(+kind/count)；
+    azimuthsearch 用 date/time/zone/坐标(+body/targetAz/days)。
+    """
+
+    action: str | None = Field(
+        default="pan",
+        description=(
+            "pan=十一曜动盘（黄道地支度/二十四山位/地平高度/顺逆）| eclipses=未来日月食搜索 | "
+            "azimuthsearch=星曜到达目标罗盘方位的时刻搜索"
+        ),
+    )
+    height: float | None = Field(default=None, description="海拔（米），缺省 0")
+    nodeType: str | None = Field(default=None, description="罗计口径：mean（缺省）|true")
+    lilithType: str | None = Field(default=None, description="月孛口径：mean（缺省）|true")
+    ayanamsaDeg: float | None = Field(default=None, description="恒星制岁差回加度（回归制传 0/不传）")
+    eleLifeMode: str | None = Field(default=None, description="命度起法：sunrise（缺省）|sunset|custom")
+    eleLifeCustomTime: str | None = Field(default=None, description="eleLifeMode=custom 时的起命时刻 HH:mm:ss")
+    extraBodies: list[dict[str, Any]] | None = Field(
+        default=None,
+        description=(
+            "外圈透传星（照上游果老盘惯例：紫炁/天海冥从流年盘取黄经黄纬传入）："
+            "[{id,label,lon,lat?,speed?}…]，后端按 lon/lat 算地平方位。"
+        ),
+    )
+    plate: str | None = Field(default=None, description="二十四山盘别：di=地盘（缺省）|tian=天盘(+7.5°)|ren=人盘(−7.5°)")
+    ziZheng: str | None = Field(default=None, description="子正口径：true=真北（缺省）|magnetic=磁北（配 declination）")
+    declination: float | None = Field(default=None, description="磁偏角（东偏为正；仅 ziZheng=magnetic 时套用）")
+    kind: str | None = Field(default=None, description="eclipses 专用：solar=日食（缺省）|lunar=月食")
+    count: int | None = Field(default=None, description="eclipses 专用：搜索数量（缺省 8，上限 24）")
+    targetAz: float | None = Field(default=None, description="azimuthsearch 专用：目标罗盘方位 0-359.9（0=北顺时针）")
+    days: int | None = Field(default=None, description="azimuthsearch 专用：向后搜索天数（缺省 3，上限 30）")
+    body: str | None = Field(default=None, description="azimuthsearch 专用：星曜中文标签 日月金木水火土（缺省 日）")
+
+
 class TaiyiInput(BirthInput):
     # after23NewDay None=不发送（ken 权威引擎默认 1）；显式 0/1 直达 /taiyi/pan 与 nongli 前置。
     after23NewDay: bool | None = None

@@ -461,6 +461,36 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "条件类型表），不会退化成零命中。给了 explainAt 时结果多一个 explain 键与 [单时判读] 段。"
         ),
     ),
+    "qizhengelection": _policy(
+        intent=(
+            "七政择日动盘（果老「择日双轮」headless 版）：候选时刻的十一曜黄道地支度 / 二十四山方位"
+            "（山分度+地平上下）/ 顺逆 + 真太阳时·均时差·日月出没·命度。action=eclipses 搜未来日月食；"
+            "action=azimuthsearch 搜星曜到达指定罗盘方位（0=北顺时针）的时刻。date/time 是**候选择日"
+            "时刻**，不是出生时间。"
+        ),
+        required_context=COMMON_LOCATION_FIELDS + ["候选时刻（或搜索起点）", "用事主题"],
+        ask_if_missing=[
+            {"field": "date/time", "question": "要评估哪个候选时刻？（择日用时，非出生时间）"},
+            {"field": "location", "question": "用事地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
+            {"field": "plate", "question": "二十四山用哪套盘？", "options": ["地盘（默认）", "天盘(+7.5°)", "人盘(−7.5°)"]},
+            {"field": "ziZheng", "question": "子正用真北还是磁北？", "options": ["真北（默认）", "磁北（请提供当地磁偏角）"]},
+        ],
+        safe_defaults=[
+            {"field": "plate", "value": "di", "meaning": "地盘（上游缺省）"},
+            {"field": "ziZheng", "value": "true", "meaning": "真北（不套磁偏）"},
+            {"field": "nodeType/lilithType", "value": "mean", "meaning": "平均罗计/月孛（上游缺省）"},
+            {"field": "eleLifeMode", "value": "sunrise", "meaning": "命度从日出起（上游缺省）"},
+        ],
+        do_not_assume=["候选时刻", "location", "磁偏角"],
+        output_contract=(
+            "pan 键为后端原始动盘数据（十一曜/宫位系/28宿界/日月出没）；快照 [择日动盘] 每行 = "
+            "星：黄道地支度 | 山分度±地平 | 方位/高度 | 顺逆。升殿失垣列依赖 /qizheng/moira——开源栈"
+            "无此路由（排除台账），故不产。eclipses/hits 为搜索行表，附 [日月食搜索]/[方位搜索] 段。"
+            "方位搜索行自带实测 azimuth 列——上游粗扫在与目标差 180° 的对冲方位也会报行（±180 回绕），"
+            "取用时以 azimuth 列为准。"
+            "紫炁与天海冥不在默认十一曜内，需经 extraBodies 透传（照上游从流年盘取黄经）。"
+        ),
+    ),
     "taiyi": _policy(
         intent="太乙起盘。",
         required_context=COMMON_LOCATION_FIELDS + ["question/topic"],

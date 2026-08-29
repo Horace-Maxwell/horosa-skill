@@ -144,6 +144,8 @@ def build_sample_payloads() -> dict[str, dict]:
                 {"type": "in_sign", "params": {"planet": "Sun", "signs": [0]}},
             ]},
         },
+        # 七政择日动盘：date/time 是候选择日时刻（非出生盘）；坐标经归一自动补 gpsLat/gpsLon。
+        "qizhengelection": {**chart_birth, "pos": "福州", "action": "pan"},
         "qimenzeri": {
             **chart_birth, "pos": "福州",
             "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-08", "endTime": "23:59",
