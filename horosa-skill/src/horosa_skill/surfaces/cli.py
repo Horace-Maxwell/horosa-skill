@@ -241,8 +241,15 @@ def _write_json_file(path: Path, payload: object) -> Path:
 def _client_config_write(path: Path, payload: object) -> Path:
     """`client config --write` 落盘：目标文件已是 JSON 对象且本次产物含 `mcpServers` 时，
     按 server 键合并（保留用户已有的其他 MCP server），其余情况整文件写入。
-    防止把用户真实的 claude_desktop_config.json / mcp.json 清空成只剩 horosa。"""
+    防止把用户真实的 claude_desktop_config.json / mcp.json 清空成只剩 horosa。
+
+    codex（TOML）产物走 tomlkit 保注释合并（v0.33.0 批 III-1）：此前 codex payload 没有
+    `mcpServers` 键 → 落到整文件 JSON 写入，`--write ~/.codex/config.toml` 会把用户的
+    config.toml 整个覆盖成 JSON——毁文件雷。现在只动 `[mcp_servers.<name>]` 表，写前备份。
+    """
     target = path.expanduser().resolve()
+    if isinstance(payload, dict) and isinstance(payload.get("toml_stdio"), str):
+        return _write_codex_toml_merge(target, payload["toml_stdio"])
     if isinstance(payload, dict) and isinstance(payload.get("mcpServers"), dict) and target.exists():
         try:
             existing = json.loads(target.read_text(encoding="utf-8"))
@@ -255,6 +262,39 @@ def _client_config_write(path: Path, payload: object) -> Path:
             merged["mcpServers"] = servers
             return _write_json_file(target, merged)
     return _write_json_file(target, payload)
+
+
+def _write_codex_toml_merge(target: Path, toml_snippet: str) -> Path:
+    """把生成的 `[mcp_servers.<name>]` 片段合并进已有 config.toml：只 upsert 该 server 表，
+    其余内容（含注释）逐字保留（tomlkit）；覆盖前先备份 `<file>.horosa-bak`。目标不存在/为空
+    则整文件写入片段。目标不是合法 TOML 时拒绝合并（绝不静默覆盖用户文件）。"""
+    import tomlkit
+
+    snippet_doc = tomlkit.parse(toml_snippet)
+    snippet_servers = snippet_doc.get("mcp_servers")
+    if not snippet_servers:
+        raise typer.BadParameter("codex 片段缺少 [mcp_servers.<name>] 表，拒绝写入。")
+    if target.exists() and target.read_text(encoding="utf-8").strip():
+        raw = target.read_text(encoding="utf-8")
+        try:
+            existing = tomlkit.parse(raw)
+        except Exception as exc:  # noqa: BLE001 - 解析失败=用户文件形状未知，绝不覆盖
+            raise typer.BadParameter(
+                f"{target} 不是合法 TOML（{exc}），拒绝合并——请手动把生成片段粘进去。"
+            ) from exc
+        backup = target.with_name(f"{target.name}.horosa-bak")
+        backup.write_text(raw, encoding="utf-8")
+        servers_table = existing.get("mcp_servers")
+        if servers_table is None:
+            existing["mcp_servers"] = snippet_servers
+        else:
+            for name, table in snippet_servers.items():
+                servers_table[name] = table
+        target.write_text(tomlkit.dumps(existing), encoding="utf-8")
+        return target
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(toml_snippet, encoding="utf-8")
+    return target
 
 
 def _default_openclaw_native_config_path() -> Path:
@@ -1331,14 +1371,41 @@ def client_config(
             },
         }
     elif key == "codex":
+        # Codex 硬约束（examples/clients/codex.md 有全文）：RawMcpServerConfig deny_unknown_fields
+        # （字段写错=整段拒收）；env 只透传 11 个系统变量白名单 → HOROSA_* 必须显式写进 env 表；
+        # 启动超时默认 30s < 首次冷启动（runtime 预热 ~45s）→ 显式 120s；工具默认 60s < 长盘
+        # （tianxing 跨月扫描）→ 600s。首轮工具目录只等 1s（mcp_optional_startup_grace_ms=1000）：
+        # 冷启动时第一轮对话可能看不到 horosa 工具，第二轮即恢复——要首轮即见就解开 required 注释
+        # （代价：server 起不来时 Codex 启动直接报错）。
         payload = {
-            "note": "追加到 Codex 的 config.toml；HTTP 变体需先 `uv run horosa-skill serve`。",
+            "note": (
+                "追加到 ~/.codex/config.toml（或用 --write 原位合并，只动 [mcp_servers." + server_name + "] 表并先备份）。"
+                "HTTP 变体需先 `uv run horosa-skill serve`。"
+            ),
             "toml_stdio": (
                 f"[mcp_servers.{server_name}]\n"
                 f"command = \"{stdio_command[0]}\"\n"
                 f"args = {json.dumps(stdio_command[1:])}\n"
+                f"cwd = {json.dumps(str(resolved_skill_root))}\n"
+                "# 冷启动（首次装 runtime/预热）可超 Codex 默认 30s；长盘（择日扫描）可超默认工具 60s。\n"
+                "startup_timeout_sec = 120\n"
+                "tool_timeout_sec = 600\n"
+                "# 首轮即见工具（否则冷启动首轮目录里可能没有 horosa，第二轮恢复）；\n"
+                "# 代价：server 启动失败时 Codex 直接报错。按需解开：\n"
+                "# required = true\n"
+                "\n"
+                f"[mcp_servers.{server_name}.env]\n"
+                "# Codex 只透传 11 个系统变量白名单——任何 HOROSA_* 必须在这里显式声明才可见，例如：\n"
+                "# HOROSA_MCP_COMPACT = \"1\"          # 11 门面模式（Codex 无工具搜索，95 工具全量较重）\n"
+                "# HOROSA_TOOLSETS = \"astro,cn\"      # 或按域裁剪\n"
             ),
-            "toml_http": f"[mcp_servers.{server_name}]\nurl = \"http://127.0.0.1:8765/mcp\"\n",
+            "toml_http": (
+                f"[mcp_servers.{server_name}]\n"
+                "url = \"http://127.0.0.1:8765/mcp\"\n"
+                "startup_timeout_sec = 120\n"
+                "tool_timeout_sec = 600\n"
+            ),
+            "docs": "examples/clients/codex.md（含 exec 模式文本回落、enabled_tools 高频入口集、排障清单）",
         }
     elif key == "cursor":
         # Cursor 官方 install deep link：config = base64({"command","args"})，点击即装。

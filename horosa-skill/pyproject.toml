@@ -15,6 +15,8 @@ dependencies = [
   "pydantic>=2.8.0",
   "python-docx>=1.1.2",
   "reportlab>=4.2.0",
+  # codex config.toml 的保注释合并（client config --write --format codex 只动 [mcp_servers.<name>]）
+  "tomlkit>=0.12.0",
   "tzdata>=2025.2",
   "typer>=0.16.0",
 ]
