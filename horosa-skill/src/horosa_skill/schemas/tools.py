@@ -735,6 +735,21 @@ class ACGInput(BirthInput):
     lsMode: str | None = "great"
     geodetic: str | None = "sepharial"
     geodeticVar: str | None = "longitude"
+    # 落点分析（v0.33.0 批 I-4，/location/acgpoint）：给 clickLat/clickLon 时加产 [落点分析] 段。
+    clickLat: float | None = Field(default=None, description="落点纬度（十进制；给了 clickLat+clickLon 才产 [落点分析] 段：该地命中线/重置四角/敏感点）")
+    clickLon: float | None = Field(default=None, description="落点经度（十进制，西经为负）")
+    pointOrb: float | None = Field(default=None, description="落点命中容许度（度，缺省 2.0）")
+    pointHsys: str | None = Field(default=None, description="落点重置盘分宫制（缺省 whole）")
+    # 事件时刻（/location/acgevent）：给 eventKind 时加产 [事件时刻] 段（CCG 事件线时刻）。
+    eventKind: str | None = Field(
+        default=None,
+        description=(
+            "世运事件类型：solar_eclipse|lunar_eclipse|newmoon|fullmoon|aries_ingress|cancer_ingress|"
+            "libra_ingress|capricorn_ingress（给了才产 [事件时刻] 段，返回 UTC 时刻）"
+        ),
+    )
+    eventDirection: str | None = Field(default=None, description="事件查找方向：next（缺省）|prev")
+    eventFromDate: str | None = Field(default=None, description="事件查找起点日期 YYYY-MM-DD（缺省取盘面日期）")
 
 
 class AstrodataInput(FlexibleModel):

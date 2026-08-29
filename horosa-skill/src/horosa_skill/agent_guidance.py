@@ -686,7 +686,13 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         safe_defaults=[
             {"field": "mode", "value": "mundo", "meaning": "真黄纬本体（Jim Lewis 原版口径）"},
             {"field": "lsMode", "value": "great", "meaning": "本地空间线取大圆"},
+            {"field": "pointOrb", "value": 2.0, "meaning": "落点命中容许度（上游缺省）"},
         ],
+        output_contract=(
+            "问「某城市对我如何」时传 clickLat/clickLon（十进制，西经为负）→ [落点分析] 段给该地"
+            "命中线（临角的星+距离）/重置四角/敏感点（宿命点/东升点/共升点/极地上升/映点）。"
+            "传 eventKind（日月食/朔望/四至入境）→ [事件时刻] 段给 UTC 时刻（CCG 事件线用）。"
+        ),
     ),
     "xuanshi": _policy(
         intent="玄史（中国玄学史知识库）：7900+ 玄学事件（原文/白话/解读/引证）、27000+ 史书天象、人物图谱、朝代/术数/天象名词与时间线。纯检索，只读。",

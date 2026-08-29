@@ -62,6 +62,17 @@ class FakeClient(HorosaApiClient):
             }
         if endpoint == "/electionscan/conditiontypes":
             return {"types": ["aspect", "in_sign", "numeric"], "groups": ["all", "any", "not", "xor"]}
+        if endpoint == "/location/acgpoint":
+            return {
+                "lat": payload.get("clickLat"), "lon": payload.get("clickLon"),
+                "orb": payload.get("orb") or 2.0, "hsys": "W",
+                "hits": [{"planet": "North Node", "angle": "Asc", "orb": 1.27}],
+                "relocAngles": {"Asc": 218.94, "Desc": 38.94, "MC": 136.93, "IC": 316.93},
+                "sensitive": {"vertex": 79.92, "eastpoint": 231.8},
+                "cusps": [210.0 + i * 30 for i in range(12)],
+            }
+        if endpoint == "/location/acgevent":
+            return {"kind": payload.get("kind"), "jd": 2461443.17, "date": "2027/02/06", "time": "15:59:39"}
         if endpoint == "/astroextra/planetcycles":
             return {
                 "events": [
@@ -3837,6 +3848,31 @@ def test_tianxing_invalid_conditions_error_carries_server_types(tmp_path) -> Non
     assert result.ok is False
     assert result.error.code == "tool.tianxing_invalid_conditions"
     assert result.error.details["server_condition_types"] == ["aspect", "in_sign", "numeric"]
+
+
+def test_acg_click_point_and_event_conditional_sections(tmp_path) -> None:
+    """批 I-4：clickLat/clickLon → [落点分析]；eventKind → [事件时刻]；缺省两段不产、不打端点。"""
+    service = _zeri_service(tmp_path)
+    calls: list[str] = []
+    original = service.client.call
+    service.client.call = lambda e, p: (calls.append(e) or original(e, p))  # type: ignore[method-assign]
+    base = build_sample_payloads()["acg"]
+    plain = service.run_tool("acg", base, save_result=False)
+    assert plain.ok is True, plain.error
+    assert "/location/acgpoint" not in calls and "/location/acgevent" not in calls
+    assert "[落点分析]" not in plain.data["snapshot_text"] and "[事件时刻]" not in plain.data["snapshot_text"]
+    rich = service.run_tool(
+        "acg", {**base, "clickLat": 40.7, "clickLon": -74.0, "eventKind": "solar_eclipse"}, save_result=False
+    )
+    assert rich.ok is True, rich.error
+    text = rich.data["snapshot_text"]
+    assert "[落点分析]" in text and "[事件时刻]" in text
+    assert "北交 临 Asc（距 1.27°）" in text
+    assert "重置四角：" in text and "宿命点" in text
+    assert "日食（next）：2027/02/06 15:59:39 UTC" in text
+    assert rich.data["acg"]["point"]["hits"] and rich.data["acg"]["event"]["date"] == "2027/02/06"
+    export = rich.data["export_snapshot"]
+    assert export["missing_selected_sections"] == [] and export["unknown_detected_sections"] == []
 
 
 def test_planet_cycles_renders_timeline(tmp_path) -> None:

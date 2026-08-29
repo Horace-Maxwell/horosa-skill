@@ -197,6 +197,9 @@ _PYTHON_CHART_ENDPOINTS = {
     "/india/chart",
     # 印度出生时间校正（批 I-2；独立端点，照 shadbalarange 骨架不进命盘缓存键）
     "/india/rectify",
+    # ACG 落点/事件（批 I-4）
+    "/location/acgpoint",
+    "/location/acgevent",
     "/germany/midpoint",
     "/astroextra/harmonic",
     # 玄史知识库（只读 SQLite bundle，随 runtime 分发）：26 个检索/结构视图端点。
@@ -7814,17 +7817,92 @@ class HorosaSkillService:
                     lat_txt = f"{float(lat_v):.2f}°" if isinstance(lat_v, (int, float)) else "—"
                     rows.append(f"{a}·{a_ang} × {b}·{b_ang}：纬 {lat_txt}，经 {geo_lon(lon_v)}")
             sections.append(("线交点", "\n".join(rows)))
+        acg_data: dict[str, Any] = {
+            "meta": meta,
+            "planets": planets,
+            "parans": parans,
+            "crossings": crossings,
+        }
+        # [落点分析]（v0.33.0 批 I-4，/location/acgpoint）：给 clickLat/clickLon 才产（条件段）。
+        if payload.get("clickLat") is not None and payload.get("clickLon") is not None:
+            point_remote = {
+                **{k: payload.get(k) for k in ("date", "time", "zone", "lat", "lon", "gpsLat", "gpsLon", "ad", "mode", "lsMode") if payload.get(k) is not None},
+                "clickLat": payload.get("clickLat"),
+                "clickLon": payload.get("clickLon"),
+            }
+            if payload.get("pointOrb") is not None:
+                point_remote["orb"] = payload.get("pointOrb")
+            if payload.get("pointHsys") is not None:
+                point_remote["hsys"] = payload.get("pointHsys")
+            point = self._call_remote("/location/acgpoint", point_remote)
+            if not isinstance(point, dict) or not isinstance(point.get("relocAngles"), dict):
+                raise ToolTransportError(
+                    "落点分析端点返回了意外形状。",
+                    code="tool.acg_point_failed",
+                    details={"endpoint": "/location/acgpoint"},
+                )
+            acg_data["point"] = point
+            point_lines = [
+                f"落点：纬 {point.get('lat')}°，经 {geo_lon(point.get('lon'))}　容许度 {_round3(point.get('orb'))}°　"
+                f"重置盘分宫制 {point.get('hsys')}",
+            ]
+            hits = point.get("hits") if isinstance(point.get("hits"), list) else []
+            if hits:
+                point_lines.append("命中线（该地临角的星）：")
+                for hit in hits:
+                    if isinstance(hit, dict):
+                        point_lines.append(
+                            f"{_astro_msg(hit.get('planet'), short=True)} 临 {hit.get('angle')}（距 {_round3(hit.get('orb'))}°）"
+                        )
+            else:
+                point_lines.append("命中线：容许度内无星临角。")
+            reloc = point.get("relocAngles") or {}
+            point_lines.append(
+                "重置四角：" + "　".join(f"{k} {_sign_degree(v)}" for k, v in reloc.items() if v is not None)
+            )
+            sensitive = point.get("sensitive") if isinstance(point.get("sensitive"), dict) else {}
+            if sensitive:
+                sens_cn = {
+                    "vertex": "宿命点", "eastpoint": "东升点", "coasc_koch": "共升点(Koch)",
+                    "coasc_munkasey": "共升点(Munkasey)", "polarasc": "极地上升",
+                    "antiscia_mc": "映点MC", "antiscia_asc": "映点ASC",
+                }
+                point_lines.append(
+                    "敏感点：" + "　".join(
+                        f"{sens_cn.get(k, k)} {_sign_degree(v)}" for k, v in sensitive.items() if v is not None
+                    )
+                )
+            sections.append(("落点分析", "\n".join(point_lines)))
+        # [事件时刻]（/location/acgevent）：给 eventKind 才产（CCG 事件线的 UTC 时刻）。
+        if payload.get("eventKind"):
+            event_remote = {
+                "kind": payload.get("eventKind"),
+                "direction": payload.get("eventDirection") or "next",
+                "fromDate": (payload.get("eventFromDate") or payload.get("date") or "").replace("-", "/"),
+            }
+            event = self._call_remote("/location/acgevent", event_remote)
+            if not isinstance(event, dict) or not event.get("date"):
+                raise ToolTransportError(
+                    "世运事件端点未找到该事件。",
+                    code="tool.acg_event_failed",
+                    details={"endpoint": "/location/acgevent", "kind": payload.get("eventKind"), "response": event if isinstance(event, dict) else None},
+                )
+            acg_data["event"] = event
+            kind_cn = {
+                "solar_eclipse": "日食", "lunar_eclipse": "月食", "newmoon": "新月", "fullmoon": "满月",
+                "aries_ingress": "白羊入境（春分）", "cancer_ingress": "巨蟹入境（夏至）",
+                "libra_ingress": "天秤入境（秋分）", "capricorn_ingress": "摩羯入境（冬至）",
+            }.get(str(event.get("kind")), str(event.get("kind")))
+            sections.append((
+                "事件时刻",
+                f"{kind_cn}（{payload.get('eventDirection') or 'next'}）：{event.get('date')} {event.get('time')} UTC",
+            ))
         # 段序对齐上游：本命盘段在前、[占星地图] 及其明细在后。
         snapshot_text = _render_snapshot_text(sections)
         if chart_body:
             snapshot_text = f"{chart_body}\n{snapshot_text}"
         return {
-            "acg": {
-                "meta": meta,
-                "planets": planets,
-                "parans": parans,
-                "crossings": crossings,
-            },
+            "acg": acg_data,
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="acg", snapshot_text=snapshot_text),
         }
