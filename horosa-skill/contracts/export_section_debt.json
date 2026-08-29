@@ -6,9 +6,9 @@
   },
   "totals": {
     "missing_sections": 11,
-    "extra_sections": 31,
+    "extra_sections": 39,
     "absent_keys": 0,
-    "keys_with_debt": 21
+    "keys_with_debt": 26
   },
   "keys": {
     "acg": {
@@ -16,7 +16,9 @@
       "extra": [
         "月宿",
         "偕升纬度带",
-        "线交点"
+        "线交点",
+        "落点分析",
+        "事件时刻"
       ]
     },
     "astrochart": {
@@ -31,6 +33,12 @@
         "月宿"
       ]
     },
+    "cetian": {
+      "missing": [],
+      "extra": [
+        "判词原文"
+      ]
+    },
     "draconic": {
       "missing": [],
       "extra": [
@@ -43,6 +51,12 @@
       "extra": [
         "月宿",
         "古典格局"
+      ]
+    },
+    "extrareturns": {
+      "missing": [],
+      "extra": [
+        "日月返照年表"
       ]
     },
     "fengshui": {
@@ -60,7 +74,8 @@
     "geomancy": {
       "missing": [],
       "extra": [
-        "起卦信息"
+        "起卦信息",
+        "十六卦目录"
       ]
     },
     "givenyear": {
@@ -107,6 +122,12 @@
         "当前时点"
       ]
     },
+    "persiandirected": {
+      "missing": [],
+      "extra": [
+        "指定日期向运盘"
+      ]
+    },
     "primarydirchart": {
       "missing": [],
       "extra": [
@@ -147,10 +168,22 @@
         "当前时点"
       ]
     },
+    "tianxing": {
+      "missing": [],
+      "extra": [
+        "单时判读"
+      ]
+    },
     "vedicprog": {
       "missing": [],
       "extra": [
         "起盘信息"
+      ]
+    },
+    "wangji": {
+      "missing": [],
+      "extra": [
+        "心易起卦"
       ]
     },
     "zodialrelease": {
