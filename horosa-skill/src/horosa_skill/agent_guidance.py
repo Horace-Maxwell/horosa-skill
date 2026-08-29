@@ -1,12 +1,21 @@
 from __future__ import annotations
 
+import json
+import os
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
 
 
 GUIDANCE_SCHEMA = "horosa.skill.agent_guidance.v1"
+
+# ── 澄清闸单一真值源（v0.33.0 批 II-2：策略即数据）────────────────────────────────
+# 豁免表/过闸字段/失败码/逃生舱档位全部声明在 data/sensitive_settings.json（自带 self_tests，
+# pytest 与 benchmark 直接跑）；本模块只留判定逻辑。改闸策略改表，不改代码。
+_SENSITIVE_SETTINGS_PATH = Path(__file__).parent / "data" / "sensitive_settings.json"
+SENSITIVE_SETTINGS: dict[str, Any] = json.loads(_SENSITIVE_SETTINGS_PATH.read_text(encoding="utf-8"))
 
 GLOBAL_AGENT_RULES: list[str] = [
     "If the client does not expose native horosa_* MCP tools, stop and ask the user/admin to run OpenClaw setup/check; do not fall back to shell or hand-written calculations.",
@@ -21,9 +30,43 @@ GLOBAL_AGENT_RULES: list[str] = [
 
 COMMON_LOCATION_FIELDS = ["date", "time", "zone/timezone", "lat/lon or gpsLat/gpsLon/location"]
 COMMON_BIRTH_FIELDS = ["birth date", "birth time", "birth timezone", "birth place / longitude / latitude"]
-CONFIRMATION_FIELDS = ["agent_confirmed_settings", "defaults_accepted", "clarification_notes"]
-PREFLIGHT_EXEMPT_TOOLS = {"export_registry", "export_parse", "knowledge_registry", "knowledge_read", "ziwei_rules", "gua_desc", "gua_meiyi", "astrodata", "xuanshi"}
+CONFIRMATION_FIELDS: list[str] = list(SENSITIVE_SETTINGS["confirmation_fields"])
+PREFLIGHT_EXEMPT_TOOLS: set[str] = set(SENSITIVE_SETTINGS["exempt_tools"])
+GATE_FAILURE_CODE: str = str(SENSITIVE_SETTINGS["failure_code"])
 INPUT_CONTRACT_SCHEMA = "horosa.skill.input_contract.v1"
+
+
+def _clarify_override(tool_name: str) -> str | None:
+    """HOROSA_CLARIFY 逃生舱：never=闸全关；granular:{"exempt":[…]}=按工具豁免；其余/缺省=always。
+    返回 None（不干预）或放行模式名（写进闸结果的 mode，审计可见）。解析失败按 always（安全侧）。"""
+    raw = os.environ.get("HOROSA_CLARIFY", "").strip()
+    if not raw or raw.lower() == "always":
+        return None
+    if raw.lower() == "never":
+        return "env_never"
+    if raw.lower().startswith("granular:"):
+        try:
+            spec = json.loads(raw[len("granular:"):])
+            if isinstance(spec, dict) and tool_name in set(spec.get("exempt") or []):
+                return "env_granular_exempt"
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
+def run_sensitive_settings_selftests() -> dict[str, Any]:
+    """跑闸表自带的 self_tests（match/not_match 行为例）+ coverage 不变量（每个注册工具必须
+    有 guidance 策略或在豁免表——新工具漏登记=红）。pytest 与 benchmark 共用本执行器。"""
+    failures: list[str] = []
+    for case in SENSITIVE_SETTINGS.get("self_tests", []):
+        verdict = validate_agent_preflight(str(case["tool"]), dict(case.get("payload") or {}))
+        actual = "pass" if verdict.get("ok") else "block"
+        if actual != case["expect"]:
+            failures.append(f"{case['name']}: expect {case['expect']}, got {actual}")
+    unclassified = sorted(set(TOOL_DEFINITIONS) - set(TOOL_GUIDANCE) - PREFLIGHT_EXEMPT_TOOLS)
+    if unclassified:
+        failures.append(f"未分类工具（既无 guidance 策略也不在豁免表）：{unclassified}")
+    return {"ok": not failures, "failures": failures, "cases": len(SENSITIVE_SETTINGS.get("self_tests", []))}
 
 
 COMMON_ASTRO_PAYLOAD_EXAMPLE: dict[str, Any] = {
@@ -1345,6 +1388,9 @@ def validate_agent_preflight(tool_name: str, payload: dict[str, Any]) -> dict[st
 
     if tool_name in PREFLIGHT_EXEMPT_TOOLS:
         return {"ok": True, "tool_name": tool_name, "enforced": False}
+    override = _clarify_override(tool_name)
+    if override is not None:
+        return {"ok": True, "tool_name": tool_name, "enforced": False, "mode": override}
     is_dispatch = tool_name in {"dispatch", "horosa_dispatch"}
     if tool_name not in TOOL_GUIDANCE and not is_dispatch:
         return {"ok": True, "tool_name": tool_name, "enforced": False}
@@ -1378,7 +1424,7 @@ def validate_agent_preflight(tool_name: str, payload: dict[str, Any]) -> dict[st
         "ok": False,
         "tool_name": tool_name,
         "enforced": True,
-        "code": "agent_guidance.required",
+        "code": GATE_FAILURE_CODE,
         "message": (
             "This Horosa tool is protected by the agent guidance gate. "
             "Ask the user for missing result-changing settings first, or pass "

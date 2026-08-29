@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 # 指路替代（删旗标不删兼容）。
 ENV_FLAG_REGISTRY: dict[str, str] = {
     "HOROSA_STRICT_CONFIG": "stable",
+    "HOROSA_CLARIFY": "stable",
     "HOROSA_SERVER_ROOT": "stable",
     "HOROSA_CHART_SERVER_ROOT": "stable",
     "HOROSA_SKILL_DATA_DIR": "stable",

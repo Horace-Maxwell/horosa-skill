@@ -118,9 +118,18 @@ def _summarize(results: list[dict[str, Any]], *, skipped: list[str], dataset: di
         "skipped_case_ids": skipped,
         "cases_passed": passed,
         "pass_rate": round((passed / executed_count), 4) if executed_count else 0.0,
-        "ok": executed_count > 0 and passed == executed_count,
+        # 澄清闸自测（v0.33.0 批 II-2）：bench 与 pytest 共跑 sensitive_settings.json 的
+        # self_tests + coverage 不变量（新工具漏登记闸表/策略=整轮 bench 红）。
+        "gate_selftests": _gate_selftests(),
+        "ok": executed_count > 0 and passed == executed_count and _gate_selftests()["ok"],
         "results": results,
     }
+
+
+def _gate_selftests() -> dict[str, Any]:
+    from horosa_skill.agent_guidance import run_sensitive_settings_selftests
+
+    return run_sensitive_settings_selftests()
 
 
 def generate_tool_cases() -> list[dict[str, Any]]:

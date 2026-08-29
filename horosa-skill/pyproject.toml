@@ -43,6 +43,7 @@ packages = ["src/horosa_skill"]
 include = [
   "src/horosa_skill/knowledge/data/*.json",
   "src/horosa_skill/benchmark/data/*.json",
+  "src/horosa_skill/data/*.json",
 ]
 
 [tool.pytest.ini_options]

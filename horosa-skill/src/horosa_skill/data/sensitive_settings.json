@@ -1,0 +1,99 @@
+{
+  "_comment": "澄清闸单一真值源（v0.33.0 批 II-2，照 codex execpolicy『策略即数据+内联自测』形状）。gate 判定逻辑住 agent_guidance.validate_agent_preflight；本表声明：谁豁免、过闸字段、失败码、逃生舱档位。self_tests 是本表自带的行为例（match=必须放行 / not_match=必须拦），pytest 与 benchmark 都直接跑它们——改表不改例=红。coverage 不变量：每个注册工具必须либо有 guidance 策略либо在 exempt_tools（新工具漏登记=红）。",
+  "version": 1,
+  "confirmation_fields": [
+    "agent_confirmed_settings",
+    "defaults_accepted",
+    "clarification_notes"
+  ],
+  "pass_when_any_true": [
+    "agent_confirmed_settings",
+    "defaults_accepted"
+  ],
+  "failure_code": "agent_guidance.required",
+  "exempt_tools": [
+    "astrodata",
+    "export_parse",
+    "export_registry",
+    "gua_desc",
+    "gua_meiyi",
+    "knowledge_read",
+    "knowledge_registry",
+    "xuanshi",
+    "ziwei_rules"
+  ],
+  "clarify_env": {
+    "name": "HOROSA_CLARIFY",
+    "modes": {
+      "always": "默认：闸全开（未确认结果敏感设置即拦）",
+      "never": "闸全关（power-user 逃生舱；结果里 enforced=false, mode=env_never）",
+      "granular:<json>": "细粒度：{\"exempt\":[\"chart\",…]} 按工具豁免，其余照常"
+    }
+  },
+  "self_tests": [
+    {
+      "name": "confirmed passes",
+      "tool": "chart",
+      "payload": {
+        "agent_confirmed_settings": true
+      },
+      "expect": "pass"
+    },
+    {
+      "name": "defaults accepted passes",
+      "tool": "bazi_birth",
+      "payload": {
+        "defaults_accepted": true
+      },
+      "expect": "pass"
+    },
+    {
+      "name": "bare gated tool blocks",
+      "tool": "chart",
+      "payload": {},
+      "expect": "block"
+    },
+    {
+      "name": "false is not confirmation",
+      "tool": "chart",
+      "payload": {
+        "agent_confirmed_settings": false
+      },
+      "expect": "block"
+    },
+    {
+      "name": "string true is not confirmation",
+      "tool": "chart",
+      "payload": {
+        "agent_confirmed_settings": "true"
+      },
+      "expect": "block"
+    },
+    {
+      "name": "exempt tool passes bare",
+      "tool": "xuanshi",
+      "payload": {},
+      "expect": "pass"
+    },
+    {
+      "name": "dispatch blocks bare",
+      "tool": "dispatch",
+      "payload": {},
+      "expect": "block"
+    },
+    {
+      "name": "new tools are gated too (I-1b)",
+      "tool": "qizhengelection",
+      "payload": {},
+      "expect": "block"
+    },
+    {
+      "name": "notes alone do not pass",
+      "tool": "chart",
+      "payload": {
+        "clarification_notes": "asked"
+      },
+      "expect": "block"
+    }
+  ]
+}
