@@ -1,11 +1,95 @@
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
 from pydantic import BaseModel, Field
 
 DEFAULT_RELEASE_REPO = "Horace-Maxwell/horosa-skill"
+
+logger = logging.getLogger(__name__)
+
+# ── env 旗标生命周期注册表（v0.33.0 批 II-1/II-3）────────────────────────────────
+# 单一真值源：每个 HOROSA_* 旗标在此登记生命周期档（stable=文档化用户面 / experimental=试验 /
+# internal=构建机·脚本·runtime 机务，用户一般不设 / deprecated=保留但劝退）。前向兼容纪律：
+# **未知旗标 warn-and-ignore**（一次性告警，绝不硬拒——codex 0.112.0 因未知 key 硬拒配置直接
+# 起不来的反面教材）；只有显式 HOROSA_STRICT_CONFIG=1 才升级为报错。removed 档=接受并忽略+
+# 指路替代（删旗标不删兼容）。
+ENV_FLAG_REGISTRY: dict[str, str] = {
+    "HOROSA_STRICT_CONFIG": "stable",
+    "HOROSA_SERVER_ROOT": "stable",
+    "HOROSA_CHART_SERVER_ROOT": "stable",
+    "HOROSA_SKILL_DATA_DIR": "stable",
+    "HOROSA_SKILL_DB_PATH": "stable",
+    "HOROSA_SKILL_OUTPUT_DIR": "stable",
+    "HOROSA_RUNTIME_ROOT": "stable",
+    "HOROSA_RUNTIME_MANIFEST_URL": "stable",
+    "HOROSA_RUNTIME_PLATFORM": "stable",
+    "HOROSA_RUNTIME_RELEASE_REPO": "stable",
+    "HOROSA_RUNTIME_MIRROR": "stable",
+    "HOROSA_LOCAL_BACKEND_PORT": "stable",
+    "HOROSA_LOCAL_CHART_PORT": "stable",
+    "HOROSA_RUNTIME_START_TIMEOUT_SECONDS": "stable",
+    "HOROSA_MCP_COMPACT": "stable",
+    "HOROSA_MCP_ELICIT": "stable",
+    "HOROSA_TOOLSETS": "stable",
+    "HOROSA_JS_ENGINE_TIMEOUT_SECONDS": "stable",
+    "HOROSA_SKILL_HOST": "stable",
+    "HOROSA_SKILL_PORT": "stable",
+    "HOROSA_SKILL_LOG_LEVEL": "stable",
+    "HOROSA_TRACE_ENABLED": "stable",
+    "HOROSA_TRACE_DIR": "stable",
+    "HOROSA_TRACE_CAPTURE_PAYLOADS": "stable",
+    "HOROSA_TRACE_CAPTURE_AI_ANSWERS": "stable",
+    "HOROSA_TRACE_OTLP_ENDPOINT": "stable",
+    "HOROSA_TECHNIQUE_CARD": "stable",
+    "HOROSA_OUTPUT_SCHEMA": "stable",
+    "HOROSA_ASTRODATA_DB": "stable",
+    "HOROSA_NODE_BIN": "stable",
+    "HOROSA_CORE_JS_ROOT": "experimental",
+    "HOROSA_UV_BIN": "internal",
+    "HOROSA_MCPORTER_BIN": "internal",
+    "HOROSA_SERVER_PORT": "internal",
+    "HOROSA_CHART_PORT": "internal",
+    "HOROSA_BACKEND_PORT": "internal",
+    "HOROSA_ROOT": "internal",
+    "HOROSA_LOG_ROOT": "internal",
+    "HOROSA_SOURCE_ROOT": "internal",
+    "HOROSA_WINDOWS_SOURCE_ROOT": "internal",
+    "HOROSA_LINUX_JAVA_HOME": "internal",
+    "HOROSA_LINUX_PYTHON_HOME": "internal",
+    "HOROSA_LINUX_SKIP_DOWNLOAD": "internal",
+    "HOROSA_RUNTIME_RELEASE_BASE_URL": "internal",
+    "HOROSA_SKILL_PYPROJECT": "internal",
+}
+# removed 档：曾存在于历史版本、现已删除的旗标 → 接受并忽略 + 指路。删代码不删兼容。
+REMOVED_ENV_FLAGS: dict[str, str] = {}
+
+_ENV_AUDIT_DONE = False
+
+
+def audit_env_flags(*, force: bool = False) -> list[str]:
+    """扫描 HOROSA_* 环境变量：未知 → warn-and-ignore（返回并记日志，进程内只告警一次）；
+    HOROSA_STRICT_CONFIG=1 时未知升级为 ValueError（显式选择加入的严格档）。"""
+    global _ENV_AUDIT_DONE
+    warnings: list[str] = []
+    for key in sorted(os.environ):
+        if not key.startswith("HOROSA_"):
+            continue
+        if key in ENV_FLAG_REGISTRY:
+            continue
+        if key in REMOVED_ENV_FLAGS:
+            warnings.append(f"环境变量 {key} 已在新版移除：{REMOVED_ENV_FLAGS[key]}（本次忽略）")
+            continue
+        warnings.append(f"未知环境变量 {key}（拼写有误？或来自更新版本的 skill）——已忽略，不影响运行。")
+    if warnings and (os.environ.get("HOROSA_STRICT_CONFIG", "").strip().lower() in {"1", "true", "yes"}):
+        raise ValueError("HOROSA_STRICT_CONFIG=1：" + "；".join(warnings))
+    if warnings and (force or not _ENV_AUDIT_DONE):
+        for line in warnings:
+            logger.warning("%s", line)
+    _ENV_AUDIT_DONE = True
+    return warnings
 
 
 def _default_home_dir() -> Path:
@@ -108,6 +192,7 @@ class Settings(BaseModel):
 
     @classmethod
     def from_env(cls) -> "Settings":
+        audit_env_flags()
         data_dir = _env_path("HOROSA_SKILL_DATA_DIR", _default_home_dir())
         db_path_env = _env_text("HOROSA_SKILL_DB_PATH")
         output_dir_env = _env_text("HOROSA_SKILL_OUTPUT_DIR")

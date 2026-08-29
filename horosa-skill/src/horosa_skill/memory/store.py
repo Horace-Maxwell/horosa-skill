@@ -31,6 +31,19 @@ def _safe_file_component(name: str) -> str:
     return "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in str(name or "")) or "_"
 
 
+_CORRUPTION_MARKERS = ("malformed", "not a database", "corrupt")
+
+
+def _is_corruption_error(exc: sqlite3.Error) -> bool:
+    """损坏 vs 锁占用的分类（照 codex state_db_recovery 的形状）：
+    「database is locked」是并发占用——重试/等待的问题，**绝不能**按损坏走隔离重建（会把好库搬走）；
+    只有 malformed / not a database / corrupt 这类 DatabaseError 才判损坏。"""
+    text = f"{exc}".lower()
+    if "locked" in text:
+        return False
+    return isinstance(exc, sqlite3.DatabaseError) and any(marker in text for marker in _CORRUPTION_MARKERS)
+
+
 class MemoryStore:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -39,6 +52,8 @@ class MemoryStore:
         self.output_dir = self.settings.output_dir
         assert self.db_path is not None
         assert self.output_dir is not None
+        # 损坏自愈痕迹：非 None = 本次启动时把坏库隔离到了该路径（doctor/health 面板据此告知用户）。
+        self.corruption_recovery: dict[str, str] | None = None
         self.initialize()
 
     @contextmanager
@@ -60,6 +75,54 @@ class MemoryStore:
             connection.close()
 
     def initialize(self) -> None:
+        """建库/迁移；损坏库走分类恢复：隔离为 `<db>.corrupt-<ts>.bak`（连 -wal/-shm）后重建空库。
+
+        记忆库是**便利缓存**（完整快照另有 runs/ 磁盘产物），重建的代价是历史检索为空——
+        远好于每次调用都因 malformed 崩死。锁占用绝不按损坏处理（_is_corruption_error）。
+        """
+        try:
+            self._initialize_schema()
+        except sqlite3.Error as exc:
+            if not _is_corruption_error(exc):
+                raise
+            backup = self._quarantine_corrupt_db(exc)
+            self._initialize_schema()
+            self.corruption_recovery = {"backup": str(backup), "at": utc_now_iso(), "error": f"{exc}"}
+
+    def _quarantine_corrupt_db(self, exc: sqlite3.Error) -> Path:
+        stamp = utc_now_iso().replace(":", "").replace("-", "").replace("+0000", "Z")
+        backup = self.db_path.with_name(f"{self.db_path.name}.corrupt-{stamp}.bak")
+        import logging
+
+        logger = logging.getLogger(__name__)
+        for suffix in ("", "-wal", "-shm"):
+            src = Path(f"{self.db_path}{suffix}")
+            if src.exists():
+                try:
+                    src.replace(Path(f"{backup}{suffix}"))
+                except OSError as move_exc:  # 移不动（权限/占用）→ 如实上抛原始损坏错误
+                    raise exc from move_exc
+        logger.warning(
+            "记忆库损坏（%s）——已隔离到 %s 并重建空库；历史快照仍在 runs/ 目录，可用 memory 工具重建索引。",
+            exc,
+            backup,
+        )
+        return backup
+
+    def integrity_check(self) -> dict[str, Any]:
+        """PRAGMA quick_check 探针（doctor 用）：ok=True/False + 前几行诊断 + 损坏自愈痕迹。"""
+        try:
+            with self.connect() as conn:
+                rows = [str(row[0]) for row in conn.execute("PRAGMA quick_check")]
+            ok = rows == ["ok"]
+        except sqlite3.Error as exc:
+            ok, rows = False, [f"{exc}"]
+        result: dict[str, Any] = {"ok": ok, "detail": rows[:5]}
+        if self.corruption_recovery:
+            result["recovered_from_corruption"] = self.corruption_recovery
+        return result
+
+    def _initialize_schema(self) -> None:
         with self.connect() as conn:
             conn.executescript(
                 """

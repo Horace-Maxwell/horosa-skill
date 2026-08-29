@@ -100,3 +100,44 @@ def test_memory_store_attach_ai_response_updates_artifacts_and_manifest(tmp_path
     exact = store.query_runs(run_id=run_id, include_payload=True)
     assert len(exact) == 1
     assert exact[0]["run_id"] == run_id
+
+
+# ── v0.33.0 批 II-1 · SQLite 分类恢复（照 codex state_db_recovery 形状）─────────────
+
+
+def test_corrupt_db_is_quarantined_and_rebuilt(tmp_path) -> None:
+    """坏库（malformed）→ 隔离 .corrupt-<ts>.bak + 重建空库 + 痕迹入 corruption_recovery，库可用。"""
+    db = tmp_path / "memory.db"
+    db.write_bytes(b"this is not a sqlite database, definitely garbage " * 20)
+    (tmp_path / "memory.db-wal").write_bytes(b"wal junk")
+    settings = Settings(server_root="http://127.0.0.1:9999", db_path=db, output_dir=tmp_path / "runs")
+    store = MemoryStore(settings)
+    assert store.corruption_recovery is not None
+    backup = Path(store.corruption_recovery["backup"])
+    assert backup.exists() and backup.name.startswith("memory.db.corrupt-") and backup.name.endswith(".bak")
+    # -wal/-shm 隔离是尽力而为：SQLite 在失败打开期间可能已把无效 -wal 自行清掉。
+    # 硬约束 = 主库已隔离 + 新库旁不残留旧 -wal（要么随隔离走了，要么被 SQLite 清了）。
+    leftover_wal = tmp_path / "memory.db-wal"
+    assert (not leftover_wal.exists()) or leftover_wal.stat().st_size == 0 or Path(f"{backup}-wal").exists()
+    run_id = store.create_run(entrypoint="tool", query_text="after recovery", group_id="g")
+    assert run_id
+    check = store.integrity_check()
+    assert check["ok"] is True
+    assert check["recovered_from_corruption"]["backup"] == str(backup)
+
+
+def test_locked_error_is_not_classified_as_corruption() -> None:
+    import sqlite3
+
+    from horosa_skill.memory.store import _is_corruption_error
+
+    assert _is_corruption_error(sqlite3.OperationalError("database is locked")) is False
+    assert _is_corruption_error(sqlite3.DatabaseError("database disk image is malformed")) is True
+    assert _is_corruption_error(sqlite3.DatabaseError("file is not a database")) is True
+    assert _is_corruption_error(sqlite3.OperationalError("no such table: runs")) is False
+
+
+def test_integrity_check_ok_on_fresh_store(tmp_path) -> None:
+    settings = Settings(server_root="http://127.0.0.1:9999", db_path=tmp_path / "m.db", output_dir=tmp_path / "runs")
+    check = MemoryStore(settings).integrity_check()
+    assert check == {"ok": True, "detail": ["ok"]}

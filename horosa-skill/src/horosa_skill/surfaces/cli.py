@@ -922,6 +922,21 @@ def doctor() -> None:
     manager = _runtime_manager(settings)
     report = manager.doctor()
     report["environment"] = _doctor_environment_context(settings)
+    # 记忆库完整性探针（v0.33.0 批 II-1）：PRAGMA quick_check + 损坏自愈痕迹；坏库在 MemoryStore
+    # 构造时已分类恢复（隔离 .corrupt-<ts>.bak 并重建），这里如实呈现。
+    try:
+        from horosa_skill.memory.store import MemoryStore as _MemoryStore
+
+        report["memory_db"] = {"path": str(settings.db_path), **_MemoryStore(settings).integrity_check()}
+    except Exception as exc:  # noqa: BLE001 - 体检项自身失败也要如实入报告
+        report["memory_db"] = {"path": str(settings.db_path), "ok": False, "detail": [f"{exc}"]}
+    # env 旗标审计（批 II-1）：未知 HOROSA_* 的 warn-and-ignore 结果入报告。
+    from horosa_skill.config import audit_env_flags as _audit_env_flags
+
+    try:
+        report["env_flags"] = {"ok": True, "warnings": _audit_env_flags(force=True)}
+    except ValueError as exc:
+        report["env_flags"] = {"ok": False, "warnings": [str(exc)]}
     report.update(_doctor_summary(report))
     _print_json(report)
 
