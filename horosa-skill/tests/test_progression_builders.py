@@ -34,6 +34,25 @@ def test_persiandirected_matches_golden() -> None:
     assert S._build_persiandirected_snapshot_text(_chart()) == _golden("persiandirected")
 
 
+def test_persianchart_section_renders_directed_positions_and_hits() -> None:
+    """[指定日期向运盘]（v0.33.0）：目标行 + directed 点位 + 向运→本命命中 + lots 计数。"""
+    directed = {
+        "date": "2026/09/01 12:00:00", "rateKey": "persian", "direction": "direct", "ageYears": 31.2485,
+        "chart": {
+            "objects": [{"id": "Sun", "sign": "Virgo", "signlon": 8.855}],
+            "aspects": [{"directId": "Sun", "objects": [{"natalId": "Pluto", "aspect": 135, "delta": 0.7396}]}],
+        },
+        "lots": [{"id": "Pars Spirit"}] * 33,
+    }
+    text = S._build_persianchart_section_text(directed)
+    assert text.startswith("[指定日期向运盘]")
+    assert "目标日期：2026/09/01 12:00:00" in text and "行进 31.248 年" in text
+    assert "太阳：室女 8°51′" in text
+    assert "向运太阳 补八分相(135°) 本命冥王（差 0.74°）" in text or "向运太阳" in text
+    assert "directed 阿拉伯点 33 枚" in text
+    assert S._build_persianchart_section_text({}) == "", "缺 chart 必须空段（条件段零回归）"
+
+
 def test_yearsystem129_matches_golden() -> None:
     assert S._build_yearsystem129_snapshot_text(_chart()) == _golden("yearsystem129")
 

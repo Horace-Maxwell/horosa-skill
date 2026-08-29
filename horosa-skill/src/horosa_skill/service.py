@@ -181,6 +181,7 @@ _PYTHON_CHART_ENDPOINTS = {
     "/qizhengelection/azimuthsearch",
     "/chart12",
     "/chart13",
+    "/predict/persianchart",
     "/predict/solarreturn",
     "/predict/lunarreturn",
     "/predict/solararc",
@@ -194,6 +195,8 @@ _PYTHON_CHART_ENDPOINTS = {
     # 合盘关系量化打分（契合分数 + 顺畅/张力连接），与 /modern/relative 比较盘互补。
     "/astroextra/relative",
     "/india/chart",
+    # 印度出生时间校正（批 I-2；独立端点，照 shadbalarange 骨架不进命盘缓存键）
+    "/india/rectify",
     "/germany/midpoint",
     "/astroextra/harmonic",
     # 玄史知识库（只读 SQLite bundle，随 runtime 分发）：26 个检索/结构视图端点。
@@ -977,6 +980,7 @@ _PREDICTIVE_METHOD_NOTES: dict[str, list[str]] = {
     "persiandirected": [
         "波斯向运：中世纪波斯法,诸点按约 1 度/年向前推进与本命点会照。",
         "读法：向运点与本命点的相位事件按年龄排布;近期命中(距今最近)优先解读。",
+        "指定日期：传 datetime=YYYY-MM-DD 可整铸该日向运盘(「指定日期向运盘」段:directed 点位+向运→本命命中);rateKey/direction 可换速率与顺逆。",
     ],
     "yearsystem129": [
         "129 年系统：以行星大年合计 129 年为总周期,先按大年切主限,再按比例切子限。",
@@ -4063,6 +4067,124 @@ def _build_persiandirected_snapshot_text(response: dict[str, Any]) -> str:
         sig_name = sig if "宫头" in f"{sig}" else _astro_msg(sig)
         lines.append(f"| {h['age']} | {h['date'] or '-'} | {_astro_msg(h['promittor'])} | {_aspect_label(h['aspect'])} | {sig_name} |")
     return _render_snapshot_text([("波斯向运（Persian Directed）", "\n".join(lines))])
+
+
+_KP_LORD_CN = {
+    # 逐字取 IndiaChartMain.js KP_LORD_CN（罗睺/计都口径与 KP 面板同源）。
+    "Sun": "太阳", "Moon": "月亮", "Mars": "火星", "Mercury": "水星", "Jupiter": "木星",
+    "Venus": "金星", "Saturn": "土星", "Rahu": "罗睺", "Ketu": "计都",
+    "North Node": "罗睺", "South Node": "计都",
+}
+
+
+def _kp_lord_cn(value: Any) -> str:
+    text = f"{value or ''}".strip()
+    return _KP_LORD_CN.get(text, text or "—")
+
+
+def _build_india_rectify_snapshot_text(payload: dict[str, Any], res: dict[str, Any]) -> str:
+    """[生时校正]（/india/rectify 的文本化）。语汇照上游校时器抽屉（IndiaChartMain.js §17）：
+    「校时之靶」「N 采样」「总/RP/PP」「步长诊断…充分/建议步长 ≤Ns」；vara.note 与 disclaimer 原样带回。"""
+    info_lines = [
+        f"锚点时刻：{res.get('anchorTime') or '—'}（{payload.get('zone') or ''}）",
+        f"地点：{payload.get('pos') or ''}　经度 {payload.get('lon')} 纬度 {payload.get('lat')}".rstrip(),
+    ]
+    criteria = res.get("criteriaActive") or []
+    vara = res.get("vara") if isinstance(res.get("vara"), dict) else {}
+    diag = res.get("resolution") if isinstance(res.get("resolution"), dict) else {}
+    scan_lines = [
+        f"扫描半窗：{_round3(res.get('windowMinutes'))} 分　步长：{res.get('stepSeconds')} 秒　候选：{res.get('candidates')} 个",
+        f"RP 取法：{res.get('rpSource') or 'anchor'}　参评判据：{' / '.join(str(c) for c in criteria) or '—'}",
+        f"日主(vara)：民用日 {_kp_lord_cn(vara.get('civil'))} · 日出日 {_kp_lord_cn(vara.get('sunrise'))}（以 {vara.get('basisUsed') or 'sunrise'} 为准）",
+    ]
+    if diag:
+        adequacy = " · 充分" if diag.get("adequate") else f" · 会整段跳过子主,建议步长 ≤{diag.get('suggestedStepSeconds')}s"
+        scan_lines.append(
+            f"步长诊断:单步 Lagna 最大位移 {_round3(diag.get('maxLagnaDeltaDeg'))}° / KP 最窄 Sub {_round3(diag.get('narrowestSubDeg'))}°{adequacy}"
+        )
+    runs = ((res.get("runs") or {}).get("lagnaSubLord")) or []
+    run_lines = [f"校时之靶 · {len(runs)} 段"]
+    for r in runs:
+        if isinstance(r, dict):
+            run_lines.append(f"{_kp_lord_cn(r.get('value'))}：{r.get('fromTime')} ~ {r.get('toTime')}（{r.get('count')} 采样）")
+    top = res.get("top") or []
+    top_lines: list[str] = [f"Top {len(top)} 候选（按判据总分排序）"]
+    for i, t in enumerate(top):
+        if not isinstance(t, dict):
+            continue
+        score = t.get("score") if isinstance(t.get("score"), dict) else {}
+        rp = t.get("rp") if isinstance(t.get("rp"), dict) else {}
+        pp = t.get("pranapada") if isinstance(t.get("pranapada"), dict) else {}
+        boundary = t.get("boundary") if isinstance(t.get("boundary"), dict) else {}
+        warn_bits = []
+        if boundary.get("moonGandanta"):
+            warn_bits.append("月亮落界")
+        if boundary.get("lagnaGandanta"):
+            warn_bits.append("Lagna 落界")
+        lords = (
+            f"签 {_kp_lord_cn(t.get('lagnaSignLord'))} / 星 {_kp_lord_cn(t.get('lagnaStarLord'))} / "
+            f"子主 {_kp_lord_cn(t.get('lagnaSubLord'))}"
+        )
+        top_lines.append(
+            f"{i + 1}. {t.get('time')}（偏移 {t.get('offsetSeconds')}s）　总 {_round3(score.get('total'))}　"
+            f"RP {_round3(rp.get('score'))}/{_round3(rp.get('maxScore'))}　PP {pp.get('overall') or '—'}　{lords}"
+            + (f"　⚠ {'/'.join(warn_bits)}" if warn_bits else "")
+        )
+    note_lines = [line for line in (vara.get("note"), res.get("disclaimer")) if line]
+    return _render_snapshot_text([
+        ("起盘信息", "\n".join(info_lines)),
+        ("校时扫描", "\n".join(scan_lines)),
+        ("Lagna 子主区段", "\n".join(run_lines)),
+        ("候选榜", "\n".join(top_lines)),
+        ("声明", "\n".join(note_lines) or "—"),
+    ])
+
+
+def _build_persianchart_section_text(directed: dict[str, Any]) -> str:
+    """[指定日期向运盘]（/predict/persianchart，getPersianDirectedByDate 的文本化）。
+
+    directed 形状：{date, rateKey, direction, ageYears, chart:{objects, aspects}, natalChart, lots}。
+    aspects 为向运点→本命点命中：[{directId, objects:[{natalId, aspect, delta}]}]。
+    """
+    if not isinstance(directed, dict) or not isinstance(directed.get("chart"), dict):
+        return ""
+    chart = directed["chart"]
+    lines = [
+        f"目标日期：{directed.get('date') or '—'}　速率：{directed.get('rateKey') or 'persian'}　"
+        f"方向：{'逆向' if directed.get('direction') == 'converse' else '顺向'}　行进 {_round3(directed.get('ageYears'))} 年",
+        "",
+        "向运点位：",
+    ]
+    for obj in chart.get("objects") or []:
+        if not isinstance(obj, dict) or obj.get("id") is None:
+            continue
+        sign = _astro_msg(obj.get("sign"))
+        try:
+            signlon = float(obj.get("signlon"))
+            deg, minute = int(signlon), int(round((signlon - int(signlon)) * 60)) % 60
+            pos = f"{sign} {deg}°{minute:02d}′"
+        except (TypeError, ValueError):
+            pos = sign or "—"
+        lines.append(f"{_astro_msg(obj.get('id'))}：{pos}")
+    aspect_rows: list[str] = []
+    for row in chart.get("aspects") or []:
+        if not isinstance(row, dict):
+            continue
+        direct_name = _astro_msg(row.get("directId"))
+        for hit in row.get("objects") or []:
+            if not isinstance(hit, dict):
+                continue
+            aspect_rows.append(
+                f"向运{direct_name} {_aspect_label(hit.get('aspect'))} 本命{_astro_msg(hit.get('natalId'))}"
+                f"（差 {_round3(hit.get('delta'))}°）"
+            )
+    if aspect_rows:
+        lines.extend(["", "向运→本命相位命中："])
+        lines.extend(aspect_rows)
+    lots = directed.get("lots")
+    if isinstance(lots, list) and lots:
+        lines.append(f"（另有 directed 阿拉伯点 {len(lots)} 枚，见 directed_chart.lots）")
+    return _render_snapshot_text([("指定日期向运盘", "\n".join(lines))])
 
 
 _SHENSHU_ENDPOINTS = {
@@ -7163,6 +7285,27 @@ class HorosaSkillService:
             "export_snapshot": self._augment_export_payload(technique="qizhengelection", snapshot_text=snapshot_text),
         }
 
+    # ── 印度出生时间校正（批 I-2，/india/rectify）───────────────────────────────
+
+    def _run_india_rectify_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        remote = {**payload}
+        for key in ("rectifyWindowMinutes", "rectifyStepSeconds", "rectifyTopK", "rectifyRpSource", "rectifyEvents"):
+            if remote.get(key) is None:
+                remote.pop(key, None)
+        response = self._call_remote("/india/rectify", remote)
+        if not isinstance(response, dict) or response.get("available") is not True:
+            raise ToolTransportError(
+                "印度校时端点未返回可用结果。",
+                code="tool.india_rectify_failed",
+                details={"endpoint": "/india/rectify", "response": response if isinstance(response, dict) else {"shape": type(response).__name__}},
+            )
+        snapshot_text = _build_india_rectify_snapshot_text(payload, response)
+        return {
+            "rectify": response,
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="india_rectify", snapshot_text=snapshot_text),
+        }
+
     def _tianxing_selected_moment_section(self, payload: dict[str, Any], hit: dict[str, Any]) -> str:
         try:
             pick = f"{(hit or {}).get('pick') or (hit or {}).get('start') or ''}".strip()
@@ -9053,12 +9196,34 @@ class HorosaSkillService:
         chart_payload.pop("dirZone", None)
         response = self._call_remote("/chart", chart_payload)
         snapshot_text = _build_persiandirected_snapshot_text(response)
-        return {
+        result: dict[str, Any] = {
             "chart": response.get("chart"),
             "raw": response,
-            "snapshot_text": snapshot_text,
-            "export_snapshot": self._augment_export_payload(technique="persiandirected", snapshot_text=snapshot_text),
         }
+        # [指定日期向运盘]（v0.33.0 批 I-2）：datetime 时后端整铸该日向运盘（/predict/persianchart，
+        # getPersianDirectedByDate）。条件段：缺省不产，零回归。
+        if payload.get("datetime"):
+            directed = self._persianchart_by_date(payload)
+            result["directed_chart"] = directed
+            section = _build_persianchart_section_text(directed)
+            if snapshot_text and section:
+                snapshot_text = f"{snapshot_text}\n\n{section}"
+        result["snapshot_text"] = snapshot_text
+        result["export_snapshot"] = self._augment_export_payload(
+            technique="persiandirected", snapshot_text=snapshot_text
+        )
+        return result
+
+    def _persianchart_by_date(self, payload: dict[str, Any]) -> dict[str, Any]:
+        target = str(payload.get("datetime") or "").strip().replace("-", "/")
+        if len(target) == 10:  # 只给日期 → 补正午（与上游 predict 面板日期选择同义）
+            target = f"{target} 12:00:00"
+        remote = {**payload, "datetime": target, "predictive": 0}
+        remote.pop("dirZone", None)
+        for key in ("rateKey", "direction", "nodeRetrograde"):
+            if payload.get(key) is None:
+                remote.pop(key, None)
+        return self._call_remote("/predict/persianchart", remote)
 
     # 恒星派入境（solunar）盘型表：逐字取自上游 divination/mundane/solunar.js 的 SOLUNAR_TYPES。
     _SOLUNAR_TYPES = {
@@ -9918,6 +10083,8 @@ class HorosaSkillService:
             return self._run_tianxing_tool(payload)
         if definition.name == "qizhengelection":
             return self._run_qizheng_election_tool(payload)
+        if definition.name == "india_rectify":
+            return self._run_india_rectify_tool(payload)
         if definition.name == "taiyi":
             return self._run_taiyi_tool(payload)
         if definition.name == "jinkou":

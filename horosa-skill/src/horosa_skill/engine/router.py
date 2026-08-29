@@ -46,6 +46,9 @@ def select_tools(request: DispatchInput) -> list[str]:
     # 七政择日动盘：单时刻十一曜山位/方位 + 日月食/方位搜索（与「窗口搜时刻」的 tianxing 两回事）。
     if _contains_any(text, ["七政择日", "择日动盘", "择日双轮", "方位搜索", "日食", "月食", "二十四山方位", "qizhengelection"]):
         add("qizhengelection")
+    # 生时校正：KP 法扫描候选出生时刻（与「出生时间不确定要不要校正」一类问法都指这里）。
+    if _contains_any(text, ["生时校正", "出生时间校正", "校时", "rectify", "rectification", "不知道几点出生", "出生时间不准"]):
+        add("india_rectify")
     # 飞宫小奇门 含「奇门」二字 → 奇门遁甲分支须排除，否则「飞宫小奇门问出行」误路由 qimen。
     # 「奇门择日」同理：它有自己的工具，落到 qimen 会给出一张单点盘而不是一段搜索结果。
     if (
@@ -217,6 +220,7 @@ _CANDIDATE_POOL: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("election", ("择日", "择吉", "election")),
     ("tianxing", ("天星择日", "征象搜索", "tianxing")),
     ("qizhengelection", ("七政择日", "择日动盘", "方位搜索", "日食", "月食", "qizhengelection")),
+    ("india_rectify", ("生时校正", "出生时间校正", "校时", "rectify")),
     ("qimenzeri", ("奇门择日", "奇门找局", "qimenzeri")),
     ("calendar_month", ("黄历", "万年历", "农历", "老黄历")),
     ("astrodata", ("名人", "celebrity", "明星")),

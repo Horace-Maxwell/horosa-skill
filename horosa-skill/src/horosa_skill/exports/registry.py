@@ -196,6 +196,7 @@ AI_EXPORT_TECHNIQUES = [
     {"key": "astrodata", "label": "名人星盘库"},
     {"key": "xuanshi", "label": "玄史知识库"},
     {"key": "qizhengelection", "label": "七政择日动盘"},
+    {"key": "india_rectify", "label": "印度生时校正"},
     {"key": "generic", "label": "其他页面"},
 ]
 
@@ -284,7 +285,8 @@ AI_EXPORT_PRESET_SECTIONS = {
     "planetaryages": ["起盘信息", "行星年龄（Ages of Man）", "当前时点", "方法说明"],
     "balbillus": ["起盘信息", "Balbillus", "当前时点", "方法说明"],
     "yearsystem129": ["起盘信息", "129年系统表格", "当前时点", "方法说明"],
-    "persiandirected": ["起盘信息", "波斯向运（Persian Directed）", "当前时点", "方法说明"],
+    # v0.33.0 批 I-2：+指定日期向运盘（datetime 时 /predict/persianchart 整铸；条件段双登记）。
+    "persiandirected": ["起盘信息", "波斯向运（Persian Directed）", "当前时点", "方法说明", "指定日期向运盘"],
     "triplicityrulers": ["起盘信息", "三分主星推运", "当前时点", "方法说明"],
     "keypoints": ["起盘信息", "数字相位推运", "当前时点", "方法说明"],
     "lunationphase": ["起盘信息", "月相推运", "当前时点", "方法说明"],
@@ -398,6 +400,8 @@ AI_EXPORT_PRESET_SECTIONS = {
     "xuanshi": ["检索条件", "结果总览", "条目列表", "条目详情", "相关条目", "出处引证"],
     # 七政择日动盘（v0.33.0 批 I-1b，skill 侧工具）：起盘信息恒出；其余按 action 出（条件段双登记）。
     "qizhengelection": ["起盘信息", "择日动盘", "天象要素", "日月食搜索", "方位搜索"],
+    # 印度生时校正（v0.33.0 批 I-2，/india/rectify）：五段恒出（语汇照上游校时器抽屉 §17）。
+    "india_rectify": ["起盘信息", "校时扫描", "Lagna 子主区段", "候选榜", "声明"],
     "generic": ["起盘信息"],
 }
 # 奇门择日 = 奇门 17 段全量 + 择日三段（单一真值源：qimen 段表改动自动跟随，与上游 aiExport.js:735 同构）。
@@ -511,6 +515,8 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     "xuanshi": ["结果总览", "条目列表", "条目详情", "相关条目", "出处引证"],
     # 七政择日动盘条件段：pan 出 [择日动盘]+[天象要素]；eclipses 出 [日月食搜索]；azimuthsearch 出 [方位搜索]。
     "qizhengelection": ["择日动盘", "天象要素", "日月食搜索", "方位搜索"],
+    # 波斯向运条件段：[指定日期向运盘] 仅给 datetime 时产（/predict/persianchart 整铸）。
+    "persiandirected": ["指定日期向运盘"],
     # 卜卦专题深化（诉讼/买房/怀孕）：仅在起卦命中 3 类专题之一时产出 [专题深化·<title>]（归一为专题深化·X）。
     # 专题深化·X 仅特定 category 出；后两段仅 renaissance/medieval 档（accidentalMode=lilly /
     # lotsSet=core15）出 —— 默认 classical 档不产，属口径差异不是缺陷。

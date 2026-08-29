@@ -62,6 +62,50 @@ class FakeClient(HorosaApiClient):
             }
         if endpoint == "/electionscan/conditiontypes":
             return {"types": ["aspect", "in_sign", "numeric"], "groups": ["all", "any", "not", "xor"]}
+        if endpoint == "/india/rectify":
+            # 真实形状（rectify_core，jsonpickle 直吐无信封；vara.note/disclaimer 上游原文）。
+            return {
+                "available": True, "anchorTime": "1990-01-01 12:00:00",
+                "windowMinutes": 10.0, "stepSeconds": 120, "candidates": 11,
+                "rpSource": payload.get("rectifyRpSource") or "anchor",
+                "anchorRp": {"set": ["Venus", "Mars", "Moon", "Saturn", "Jupiter", "Mercury"]},
+                "vara": {"civil": "Saturn", "sunrise": "Saturn", "basisUsed": "sunrise",
+                         "note": "日界=日出;既有本命 KP 面板用民用日口径,二者不同时此处以日出为准并双份回显"},
+                "resolution": {"maxLagnaDeltaDeg": 0.4926, "narrowestSubDeg": 0.6667, "adequate": True,
+                               "stepSeconds": 120, "suggestedStepSeconds": 120},
+                "criteriaActive": ["rp", "pranapada", "boundary"],
+                "runs": {"lagnaSubLord": [
+                    {"value": "Rahu", "fromIndex": 0, "toIndex": 3, "count": 4, "fromTime": "11:50:00", "toTime": "11:56:00"},
+                    {"value": "Jupiter", "fromIndex": 4, "toIndex": 10, "count": 7, "fromTime": "11:58:00", "toTime": "12:10:00"},
+                ]},
+                "top": [{
+                    "offsetSeconds": 0, "time": "12:00:00", "ascLon": 56.86,
+                    "lagnaSignLord": "Venus", "lagnaStarLord": "Mars", "lagnaSubLord": "Jupiter",
+                    "score": {"total": 13.0, "parts": {"pranapada": 1.0, "rp": 6.0, "events": 0}},
+                    "rp": {"score": 6.0, "maxScore": 6.0, "hits": {}},
+                    "pranapada": {"overall": "good", "score": 1.0},
+                    "boundary": {"moonGandanta": None, "lagnaGandanta": {"inGandanta": True}},
+                }],
+                "samples": [], "elapsedMs": 18.2,
+                "disclaimer": "半自动校时:输出证据与排序,采信与「采用」由用户决定",
+            }
+        if endpoint == "/predict/persianchart":
+            # 真实形状（getPersianDirectedByDate，jsonpickle 直吐无信封）。
+            return {
+                "date": payload.get("datetime"), "rateKey": payload.get("rateKey") or "persian",
+                "direction": payload.get("direction") or "direct", "ageYears": 31.25,
+                "chart": {
+                    "objects": [
+                        {"id": "Sun", "sign": "Virgo", "signlon": 8.855},
+                        {"id": "Moon", "sign": "Scorpio", "signlon": 12.5},
+                    ],
+                    "aspects": [
+                        {"directId": "Sun", "objects": [{"natalId": "Pluto", "aspect": 135, "delta": 0.74}]},
+                    ],
+                },
+                "natalChart": {"chart": {}},
+                "lots": [{"id": "Pars Spirit", "lon": 62.67}],
+            }
         if endpoint == "/qizhengelection/pan":
             # 真实形状（webqizhengelectionsrv.pan）：Result 是 dict → _unwrap_result 剥出内层。
             return {
@@ -3769,6 +3813,65 @@ def test_tianxing_invalid_conditions_error_carries_server_types(tmp_path) -> Non
     assert result.ok is False
     assert result.error.code == "tool.tianxing_invalid_conditions"
     assert result.error.details["server_condition_types"] == ["aspect", "in_sign", "numeric"]
+
+
+def test_india_rectify_emits_five_sections_with_upstream_vocabulary(tmp_path) -> None:
+    """批 I-2：生时校正五段恒出，语汇照上游校时器（校时之靶/采样/总-RP-PP/免责声明原样）。"""
+    service = _zeri_service(tmp_path)
+    result = service.run_tool("india_rectify", build_sample_payloads()["india_rectify"], save_result=False)
+    assert result.ok is True, result.error
+    assert result.data["rectify"]["available"] is True
+    text = result.data["snapshot_text"]
+    for section in ("[起盘信息]", "[校时扫描]", "[Lagna 子主区段]", "[候选榜]", "[声明]"):
+        assert section in text, section
+    assert "校时之靶 · 2 段" in text
+    assert "罗睺：11:50:00 ~ 11:56:00（4 采样）" in text, "KP 主星须走罗睺/计都中文口径"
+    assert "总 13　RP 6/6　PP good" in text
+    assert "⚠ Lagna 落界" in text, "gandanta 边界预警必须上榜行"
+    assert "半自动校时:输出证据与排序,采信与「采用」由用户决定" in text, "免责声明须原样带回"
+    export = result.data["export_snapshot"]
+    assert export["technique"]["key"] == "india_rectify"
+    assert export["missing_selected_sections"] == [] and export["unknown_detected_sections"] == []
+
+
+def test_india_rectify_fails_loudly_when_unavailable(tmp_path) -> None:
+    class UnavailableClient(FakeClient):
+        def call(self, endpoint: str, payload: dict) -> dict:
+            if endpoint == "/india/rectify":
+                return {"available": False, "reason": "scan_error"}
+            return super().call(endpoint, payload)
+
+    settings = Settings(
+        server_root="http://127.0.0.1:9999", db_path=tmp_path / "memory.db", output_dir=tmp_path / "runs"
+    )
+    service = HorosaSkillService(settings, client=UnavailableClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    result = service.run_tool("india_rectify", build_sample_payloads()["india_rectify"], save_result=False)
+    assert result.ok is False
+    assert result.error.code == "tool.india_rectify_failed"
+
+
+def test_persiandirected_datetime_appends_directed_chart_section(tmp_path) -> None:
+    """批 I-2：datetime 时 /predict/persianchart 整铸 + [指定日期向运盘] 段；缺省不打端点（零回归）。"""
+    service = _zeri_service(tmp_path)
+    calls: list[str] = []
+    original = service.client.call
+    service.client.call = lambda e, p: (calls.append(e) or original(e, p))  # type: ignore[method-assign]
+    base = {"date": "1995-06-03", "time": "05:30", "zone": "+08:00", "lat": "31n13", "lon": "121e28"}
+    plain = service.run_tool("persiandirected", base, save_result=False)
+    assert plain.ok is True, plain.error
+    assert "/predict/persianchart" not in calls
+    assert "directed_chart" not in plain.data
+    assert "\n[指定日期向运盘]\n" not in plain.data["snapshot_text"]
+    dated = service.run_tool("persiandirected", {**base, "datetime": "2026-09-01"}, save_result=False)
+    assert dated.ok is True, dated.error
+    assert "/predict/persianchart" in calls
+    assert dated.data["directed_chart"]["chart"]["objects"]
+    text = dated.data["snapshot_text"]
+    assert "[指定日期向运盘]" in text and text.index("[指定日期向运盘]") > text.index("[波斯向运（Persian Directed）]")
+    assert "向运太阳" in text
+    export = dated.data["export_snapshot"]
+    assert "指定日期向运盘" in export["section_titles_detected"]
+    assert export["missing_selected_sections"] == [] and export["unknown_detected_sections"] == []
 
 
 def test_qizhengelection_pan_emits_sections_and_data(tmp_path) -> None:

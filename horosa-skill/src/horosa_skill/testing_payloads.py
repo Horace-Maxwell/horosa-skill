@@ -146,6 +146,8 @@ def build_sample_payloads() -> dict[str, dict]:
         },
         # 七政择日动盘：date/time 是候选择日时刻（非出生盘）；坐标经归一自动补 gpsLat/gpsLon。
         "qizhengelection": {**chart_birth, "pos": "福州", "action": "pan"},
+        # 印度生时校正：date/time 是待校正锚点；小窗大步防样例载荷把 live 门禁拖慢。
+        "india_rectify": {**chart_birth, "pos": "福州", "rectifyWindowMinutes": 10, "rectifyStepSeconds": 120, "rectifyTopK": 3},
         "qimenzeri": {
             **chart_birth, "pos": "福州",
             "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-08", "endTime": "23:59",

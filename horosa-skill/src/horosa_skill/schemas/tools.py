@@ -118,6 +118,26 @@ class IndiaChartInput(BirthInput):
     vargaVariant: Any | None = Field(default=None, description="分割盘(varga)流派：Parāśara / Jaimini 等口径。")
     karakaScheme: Any | None = Field(default=None, description="Chara Kāraka 取法（7/8 星制）。")
     yuddhaCriterion: Any | None = Field(default=None, description="行星战(graha yuddha)胜负判据。")
+
+
+class IndiaRectifyInput(BirthInput):
+    """印度（KP 法）出生时间校正：以给定时刻为锚，在 ±半窗内扫描候选并按判据打分排序。
+
+    date/time 是**待校正的出生时刻锚点**；判据 = RP（Ruling Planets 命中）/ Pranapada /
+    边界（gandanta 甘丹塔预警）+ 可选事件评分（rectifyEvents 录入后才参评）。
+    输出证据与排序，是否采用由用户决定（上游免责声明原样带回）。
+    """
+
+    rectifyWindowMinutes: float | None = Field(default=None, description="扫描半窗（分钟），缺省 30，上限 240（锚点前后各半窗）")
+    rectifyStepSeconds: int | None = Field(default=None, description="扫描步长（秒），缺省 60，上限 600；过粗会整段跳过 KP 子主（响应带步长诊断）")
+    rectifyTopK: int | None = Field(default=None, description="返回候选榜条数，缺省 3，上限 10")
+    rectifyRpSource: str | None = Field(default=None, description="RP 取法：anchor（缺省，按原始钟表时刻取 RP，无自指）|candidate（字面读法，自动消解自指）")
+    rectifyEvents: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="人生事件列表（可选）：录入后事件评分才参评（criteriaActive 会如实回显参评判据）。",
+    )
+    indiaHsys: Any | None = Field(default=None, description="印占分宫制 0–24（缺省 0=整宫）")
+    indiaAyanamsa: Any | None = Field(default=None, description="印占岁差键（缺省 lahiri，47 套同西洋 siderealAyanamsa）")
     tripataki: Any | None = Field(default=None, description="Tripatāki 三旗盘（opt-in，宿距三旗）。")
     prashnaTime: Any | None = Field(default=None, description="问事(Praśna)盘时刻；不传则用主盘时刻。")
     prashnaSchools: Any | None = Field(default=None, description="问事三派选择。")
@@ -1011,6 +1031,18 @@ class YearSystem129Input(BirthInput):
 class PersianDirectedInput(BirthInput):
     # 波斯向运 (v2.5.0): symbolic 1°/year direction — every planet/point advances +1°/年, natal cusps fixed.
     predictive: bool | None = False
+    # 指定日期向运盘（v0.33.0 批 I-2，/predict/persianchart）：给 datetime 时后端整铸该日向运盘
+    # （27 directed 点 + 33 directed lots + 向运→本命相位命中），加产 [指定日期向运盘] 段。
+    datetime: str | None = Field(
+        default=None,
+        description=(
+            "目标日期 YYYY-MM-DD[ HH:mm:ss]：铸该日的波斯向运盘（directed 点位 + 向运→本命相位命中），"
+            "加产 [指定日期向运盘] 段。缺省只出 1°/年应期表。Cast the directed chart at this date."
+        ),
+    )
+    rateKey: str | None = Field(default=None, description="向运速率键（缺省 persian=1°/年；其余速率键与上游 rateKey 同名直通）")
+    direction: str | None = Field(default=None, description="向运方向：direct（缺省）|converse（逆向）")
+    nodeRetrograde: bool | None = Field(default=None, description="交点按逆行处理（缺省 false，上游同默认）")
 
 
 class MundaneInput(FlexibleModel):

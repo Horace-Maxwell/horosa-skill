@@ -377,6 +377,15 @@
       "export_technique": "indiachart",
       "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
     },
+    "india_rectify": {
+      "compute_class": "python_chart_backend",
+      "engines": [],
+      "endpoints": [
+        "/india/rectify"
+      ],
+      "export_technique": null,
+      "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
+    },
     "jaynesprog": {
       "compute_class": "python_chart_backend",
       "engines": [],

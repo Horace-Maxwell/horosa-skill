@@ -461,6 +461,32 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "条件类型表），不会退化成零命中。给了 explainAt 时结果多一个 explain 键与 [单时判读] 段。"
         ),
     ),
+    "india_rectify": _policy(
+        intent=(
+            "印度 KP 法出生时间校正：以给定 date/time 为锚，±半窗内扫描候选出生时刻并按判据打分排序"
+            "（RP 命中 / Pranapada / gandanta 边界预警；录入 rectifyEvents 后事件评分才参评）。"
+            "输出证据与排序（候选榜 / Lagna 子主区段 / 步长诊断），**是否采用由用户决定**。"
+        ),
+        required_context=COMMON_LOCATION_FIELDS + ["锚点出生时刻（待校正）", "扫描半窗与步长（或接受默认）"],
+        ask_if_missing=[
+            {"field": "date/time", "question": "大致的出生时间是？（作为扫描锚点）"},
+            {"field": "location", "question": "出生地点用哪里？"},
+            {"field": "rectifyWindowMinutes", "question": "扫描半窗多大？", "options": ["30 分钟（默认）", "自定（≤240 分）"]},
+            {"field": "rectifyEvents", "question": "有已知人生大事可供参评吗？（可选，录入后事件判据才生效）"},
+        ],
+        safe_defaults=[
+            {"field": "rectifyWindowMinutes", "value": 30, "meaning": "锚点前后各 30 分钟"},
+            {"field": "rectifyStepSeconds", "value": 60, "meaning": "60 秒步长（诊断不充分时按建议改小）"},
+            {"field": "rectifyRpSource", "value": "anchor", "meaning": "RP 按原始钟表时刻取（无自指）"},
+        ],
+        do_not_assume=["出生时刻已准确", "location", "事件列表"],
+        output_contract=(
+            "rectify 键为后端原始响应（top/samples/runs/vara/resolution/criteriaActive）。判据常态为三项"
+            "（rp/pranapada/boundary），事件评分仅在请求携 rectifyEvents 时参评——criteriaActive 如实回显，"
+            "勿宣称五判据。候选榜是打分排序不是二值判定；免责声明原样在 [声明] 段，采用与否由用户决定。"
+            "步长诊断 adequate=false 时须按 suggestedStepSeconds 建议用户改小步长重扫。"
+        ),
+    ),
     "qizhengelection": _policy(
         intent=(
             "七政择日动盘（果老「择日双轮」headless 版）：候选时刻的十一曜黄道地支度 / 二十四山方位"
