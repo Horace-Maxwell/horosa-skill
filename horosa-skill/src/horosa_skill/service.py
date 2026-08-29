@@ -253,6 +253,10 @@ _PYTHON_CHART_ENDPOINTS = {
     "/jieqi/year",
     # 批 I-3：出生节气窗（BirthJieQi，八字起运窗同源）
     "/jieqi/birth",
+    # 批 I-5：文本库三件（判词库/心易起卦/十六卦目录）
+    "/cetian/texts",
+    "/wangji/xinyi",
+    "/geomancy/catalog",
     "/qimen/pan",
     "/taiyi/pan",
     "/jinkou/pan",
@@ -9313,12 +9317,76 @@ class HorosaSkillService:
                     snapshot_text = f"{snapshot_text}\n{extra}".strip()
             except Exception as exc:  # noqa: BLE001 — 富化失败不影响盘面
                 logger.warning("yanqin 演法 snapshot failed: %s", exc)
-        return {
+        result: dict[str, Any] = {
             "engine": response.get("engine") if isinstance(response, dict) else key,
             "raw": response,
-            "snapshot_text": snapshot_text,
-            "export_snapshot": self._augment_export_payload(technique=key, snapshot_text=snapshot_text),
         }
+        # [判词原文]（v0.33.0 批 I-5，/cetian/texts）：textKey=list 出目录 / all 全库 / <键> 单篇。条件段。
+        if key == "cetian" and payload.get("textKey"):
+            text_key = str(payload.get("textKey")).strip()
+            texts_raw = self._call_remote("/cetian/texts", {})
+            texts = (texts_raw or {}).get("texts") if isinstance(texts_raw, dict) else None
+            if not isinstance(texts, dict) or not texts:
+                raise ToolTransportError(
+                    "策天判词库端点返回了意外形状。",
+                    code="tool.cetian_texts_failed",
+                    details={"endpoint": "/cetian/texts"},
+                )
+            result["texts"] = texts if text_key in ("all",) else {k: texts[k] for k in texts if text_key in ("list", k)}
+            text_lines: list[str] = []
+            if text_key == "list":
+                text_lines.append(f"判词库 {len(texts)} 篇（textKey 取单篇）：")
+                for k, v in texts.items():
+                    n_chars = sum(len(f"{s.get('body') or ''}") for s in (v.get("sections") or []) if isinstance(s, dict))
+                    text_lines.append(f"{k}：{v.get('title')}（{n_chars} 字）")
+            else:
+                picked = texts if text_key == "all" else ({text_key: texts[text_key]} if text_key in texts else {})
+                if not picked:
+                    raise ToolValidationError(
+                        f"判词库无此篇：{text_key}（可用键：{'、'.join(texts.keys())}；或 textKey=list 看目录）。",
+                        code="tool.cetian_text_unknown_key",
+                        details={"available": sorted(texts.keys())},
+                    )
+                for k, v in picked.items():
+                    text_lines.append(f"《{v.get('title')}》（{k}）")
+                    for s in v.get("sections") or []:
+                        if isinstance(s, dict):
+                            subtitle = f"{s.get('subtitle') or ''}".strip()
+                            if subtitle:
+                                text_lines.append(f"· {subtitle}")
+                            text_lines.append(f"{s.get('body') or ''}".strip())
+            if snapshot_text and text_lines:
+                snapshot_text = f"{snapshot_text}\n\n[判词原文]\n" + "\n".join(text_lines)
+        # [心易起卦]（v0.33.0 批 I-5，/wangji/xinyi）：数/方位/字画三法独立起卦（datetime 法已内嵌
+        # 于 /wangji/pan 的 [心易发微]，不重复）。条件段：给 xinyiMethod 才产。
+        if key == "wangji" and payload.get("xinyiMethod"):
+            method = str(payload.get("xinyiMethod")).strip()
+            xinyi_remote: dict[str, Any] = {"method": method}
+            for src_key, dst_key in (
+                ("upperNum", "upperNum"), ("lowerNum", "lowerNum"), ("objectGua", "objectGua"),
+                ("xinyiDirection", "direction"), ("upperStrokes", "upperStrokes"),
+                ("lowerStrokes", "lowerStrokes"), ("xinyiHour", "hour"),
+            ):
+                if payload.get(src_key) is not None:
+                    xinyi_remote[dst_key] = payload.get(src_key)
+            # ⚠ _unwrap_result 会连剥 {Result:{…}} 与内层小写 {result:{…}} 两层 —— 这里拿到的
+            # 直接就是卦面 dict（本卦/變卦/動爻/體用…），外层的 method/sections 已被剥掉。
+            xinyi = self._call_remote("/wangji/xinyi", xinyi_remote)
+            if not isinstance(xinyi, dict) or not xinyi or "本卦" not in xinyi:
+                raise ToolTransportError(
+                    "心易起卦端点返回了意外形状。",
+                    code="tool.wangji_xinyi_failed",
+                    details={"endpoint": "/wangji/xinyi", "method": method,
+                             "keys": sorted(xinyi.keys()) if isinstance(xinyi, dict) else type(xinyi).__name__},
+                )
+            result["xinyi"] = {"method": method, "result": xinyi}
+            method_cn = {"number": "报数", "direction": "方位", "character": "字画", "datetime": "时刻"}.get(method, method)
+            xy_lines = [f"起法：{method_cn}"] + [f"{k}：{v}" for k, v in xinyi.items()]
+            if snapshot_text and len(xy_lines) > 1:
+                snapshot_text = f"{snapshot_text}\n\n[心易起卦]\n" + "\n".join(xy_lines)
+        result["snapshot_text"] = snapshot_text
+        result["export_snapshot"] = self._augment_export_payload(technique=key, snapshot_text=snapshot_text)
+        return result
 
     def _run_horary_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 卜卦 (horary): cast the traditional chart at the question moment, then run the vendored 星阙
@@ -10204,12 +10272,44 @@ class HorosaSkillService:
                 request[key] = options[key]
         response = self._call_remote("/geomancy/reading", request)
         snapshot_text = _build_geomancy_snapshot_text(response if isinstance(response, dict) else {})
-        return {
+        result: dict[str, Any] = {
             "reading": response.get("reading") if isinstance(response, dict) else None,
             "figures": response.get("figures") if isinstance(response, dict) else None,
-            "snapshot_text": snapshot_text,
-            "export_snapshot": self._augment_export_payload(technique="geomancy", snapshot_text=snapshot_text),
         }
+        # [十六卦目录]（v0.33.0 批 I-5，/geomancy/catalog）：16 图形属性总表（agent grounding 用）。
+        # 条件段：includeCatalog=true 才产。
+        if payload.get("includeCatalog"):
+            catalog = self._call_remote("/geomancy/catalog", {})
+            figures = catalog.get("figures") if isinstance(catalog, dict) else None
+            if not isinstance(figures, list) or not figures:
+                raise ToolTransportError(
+                    "地占十六卦目录端点返回了意外形状。",
+                    code="tool.geomancy_catalog_failed",
+                    details={"endpoint": "/geomancy/catalog"},
+                )
+            result["catalog"] = catalog
+            cat_lines = [f"十六图形属性总表（{len(figures)} 形）："]
+            for fig in figures:
+                if not isinstance(fig, dict):
+                    continue
+                dots = fig.get("dots") if isinstance(fig.get("dots"), list) else []
+                dots_txt = " ".join("●" if int(d or 0) == 1 else "●●" for d in dots)
+                bits = [
+                    f"{fig.get('nameZh')}（{fig.get('nameEn')}）",
+                    f"卦形 {dots_txt}",
+                    f"五行 {fig.get('elementZh')}",
+                    f"主星 {fig.get('planetZh')}",
+                    f"星座 {fig.get('signZh')}",
+                    f"性 {fig.get('qualityZh')}",
+                ]
+                if fig.get("keywordsZh"):
+                    bits.append(f"象 {fig.get('keywordsZh')}")
+                cat_lines.append("　".join(bits))
+            if snapshot_text:
+                snapshot_text = f"{snapshot_text}\n\n[十六卦目录]\n" + "\n".join(cat_lines)
+        result["snapshot_text"] = snapshot_text
+        result["export_snapshot"] = self._augment_export_payload(technique="geomancy", snapshot_text=snapshot_text)
+        return result
 
     def _run_sixyao_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         nongli = self._call_remote(

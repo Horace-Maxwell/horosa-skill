@@ -990,6 +990,8 @@ class GeomancyInput(BirthInput):
     # questionType 择 11 类问类。
     question: str | None = None
     questionType: str | None = "custom"
+    # 十六卦目录（v0.33.0 批 I-5，/geomancy/catalog）：includeCatalog=true 加产 [十六卦目录] 段（16 图形属性总表）。
+    includeCatalog: bool | None = Field(default=None, description="附十六图形属性总表（五行/主星/星座/性/象意，agent grounding 用）")
     # 传本流派：european_classical/european_planetary/european_modern/arabic_raml/india_ramal/sikidy/
     # hakata/greek（8 家占断传本）。ifa（西非同族结构对照）为结构对照模式、不产占断，本 skill 不暴露 ——
     # 传 ifa 会以 tool.geomancy_structural_only_unsupported 明确拒绝并说明。
@@ -1061,6 +1063,29 @@ class ShenShuInput(FlexibleModel):
     after23NewDay: int | None = 1
     lateZiHourUseNextDay: int | None = 1
     options: dict | None = None
+
+
+class CetianInput(ShenShuInput):
+    # 策天飞星（v0.33.0 批 I-5）：+判词库原文（/cetian/texts，13 篇古籍判词）。
+    textKey: str | None = Field(
+        default=None,
+        description="判词原文：list=目录 | all=全库（约 9 千字）| zhaodan/taiyuan/wuxing/qili/feixing/liming/yunxian/shengsi/keying/xianglun/jinjing/shenming/ruyuan 单篇。给了才产 [判词原文] 段。",
+    )
+
+
+class WangjiInput(ShenShuInput):
+    # 皇极经世（v0.33.0 批 I-5）：+心易三法独立起卦（/wangji/xinyi；时刻法已内嵌于盘面 [心易发微]）。
+    xinyiMethod: str | None = Field(
+        default=None,
+        description="心易起卦法：number=报数（upperNum/lowerNum）| direction=方位（objectGua/xinyiDirection/xinyiHour）| character=字画（upperStrokes/lowerStrokes）。给了才产 [心易起卦] 段。",
+    )
+    upperNum: int | None = Field(default=None, description="报数法上卦数")
+    lowerNum: int | None = Field(default=None, description="报数法下卦数")
+    objectGua: str | None = Field(default=None, description="方位法物象卦（乾坤震巽坎离艮兑）")
+    xinyiDirection: str | None = Field(default=None, description="方位法方位（北/东北/东/东南/南/西南/西/西北）")
+    xinyiHour: int | None = Field(default=None, description="方位法时辰小时 0-23（动爻用）")
+    upperStrokes: int | None = Field(default=None, description="字画法上字笔画数")
+    lowerStrokes: int | None = Field(default=None, description="字画法下字笔画数")
 
 
 class YearSystem129Input(BirthInput):

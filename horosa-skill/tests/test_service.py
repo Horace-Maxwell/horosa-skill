@@ -62,6 +62,26 @@ class FakeClient(HorosaApiClient):
             }
         if endpoint == "/electionscan/conditiontypes":
             return {"types": ["aspect", "in_sign", "numeric"], "groups": ["all", "any", "not", "xor"]}
+        if endpoint == "/cetian/texts":
+            return {"texts": {
+                "zhaodan": {"title": "照胆经叙跋", "sections": [{"subtitle": "", "body": "立命即知富贵，安身便见根基。"}]},
+                "keying": {"title": "克应歌", "sections": [{"subtitle": "", "body": "克应之说最玄微。"}]},
+            }}
+        if endpoint == "/wangji/xinyi":
+            # 真实端点回 {ResultCode, Result:{method, result:{卦面}, sections}}；_unwrap_result 会连剥
+            # Result 与内层小写 result 两层 → runner 拿到的是裸卦面 dict。桩照全信封发。
+            return {"ResultCode": 0, "Result": {
+                "method": payload.get("method"),
+                "result": {"本卦": "頤", "變卦": "蠱", "動爻": 1},
+                "sections": [{"title": "心易发微", "rows": [{"label": "本卦", "value": "頤"}]}],
+            }}
+        if endpoint == "/geomancy/catalog":
+            return {"figures": [
+                {"nameEn": "Via", "nameZh": "道路", "dots": [1, 1, 1, 1], "elementZh": "水", "planetZh": "太阴",
+                 "signZh": "狮子", "qualityZh": "变动", "keywordsZh": "中性偏凶·利出行/变化"},
+                {"nameEn": "Populus", "nameZh": "民众", "dots": [2, 2, 2, 2], "elementZh": "水", "planetZh": "太阴",
+                 "signZh": "巨蟹", "qualityZh": "稳定", "keywordsZh": "中性·随众"},
+            ], "traditions": []}
         if endpoint == "/location/acgpoint":
             return {
                 "lat": payload.get("clickLat"), "lon": payload.get("clickLon"),
@@ -571,6 +591,8 @@ class FakeClient(HorosaApiClient):
             }
         # 神数 family — synthesize a snapshot whose [小节] headers cover the full export preset, so the
         # offline export-contract suite round-trips cleanly for all 14 (5 standalone + 9 kinastro-*).
+        # 条件段（OPTIONAL）不合成 —— 真实后端只在特定入参时产它们（心易起卦/判词原文等 skill 侧追加段）。
+        from horosa_skill.exports.registry import AI_EXPORT_OPTIONAL_SECTIONS as _OPTIONALS
         from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS as _PRESETS
 
         _SHENSHU_ENGINE = {
@@ -583,7 +605,8 @@ class FakeClient(HorosaApiClient):
         if endpoint in _SHENSHU_ENGINE:
             engine = _SHENSHU_ENGINE[endpoint]
             tech = endpoint.strip("/").split("/")[0]
-            sections = _PRESETS.get(tech, ["起盘"])
+            optional = set(_OPTIONALS.get(tech, []))
+            sections = [s for s in _PRESETS.get(tech, ["起盘"]) if s not in optional]
             snapshot = "\n".join(f"[{title}]\n{title}：戊寅 —" for title in sections)
             return {
                 "source": engine,
@@ -3848,6 +3871,60 @@ def test_tianxing_invalid_conditions_error_carries_server_types(tmp_path) -> Non
     assert result.ok is False
     assert result.error.code == "tool.tianxing_invalid_conditions"
     assert result.error.details["server_condition_types"] == ["aspect", "in_sign", "numeric"]
+
+
+def test_cetian_text_key_appends_classics(tmp_path) -> None:
+    """批 I-5：textKey=list 出目录 / 单篇出原文；未给不打 /cetian/texts。"""
+    service = _zeri_service(tmp_path)
+    calls: list[str] = []
+    original = service.client.call
+    service.client.call = lambda e, p: (calls.append(e) or original(e, p))  # type: ignore[method-assign]
+    base = {"date": "1998-02-20", "time": "20:48", "gender": 1}
+    plain = service.run_tool("cetian", base, save_result=False)
+    assert plain.ok is True, plain.error
+    assert "/cetian/texts" not in calls and "[判词原文]" not in plain.data["snapshot_text"]
+    listing = service.run_tool("cetian", {**base, "textKey": "list"}, save_result=False)
+    assert listing.ok is True, listing.error
+    assert "判词库 2 篇" in listing.data["snapshot_text"] and "照胆经叙跋" in listing.data["snapshot_text"]
+    one = service.run_tool("cetian", {**base, "textKey": "keying"}, save_result=False)
+    assert "《克应歌》（keying）" in one.data["snapshot_text"] and "克应之说最玄微" in one.data["snapshot_text"]
+    bad = service.run_tool("cetian", {**base, "textKey": "nope"}, save_result=False)
+    assert bad.ok is False and bad.error.code == "tool.cetian_text_unknown_key"
+    export = one.data["export_snapshot"]
+    assert export["missing_selected_sections"] == [] and export["unknown_detected_sections"] == []
+
+
+def test_wangji_xinyi_casting_methods(tmp_path) -> None:
+    """批 I-5：xinyiMethod=number 独立起卦产 [心易起卦]；缺省零回归。"""
+    service = _zeri_service(tmp_path)
+    base = {"date": "1998-02-20", "time": "20:48"}
+    plain = service.run_tool("wangji", base, save_result=False)
+    assert plain.ok is True, plain.error
+    assert "[心易起卦]" not in plain.data["snapshot_text"]
+    cast = service.run_tool("wangji", {**base, "xinyiMethod": "number", "upperNum": 7, "lowerNum": 12}, save_result=False)
+    assert cast.ok is True, cast.error
+    text = cast.data["snapshot_text"]
+    assert "[心易起卦]" in text and "起法：报数" in text and "本卦：頤" in text
+    assert cast.data["xinyi"]["result"]["本卦"] == "頤" and cast.data["xinyi"]["method"] == "number"
+    export = cast.data["export_snapshot"]
+    assert export["missing_selected_sections"] == [] and export["unknown_detected_sections"] == []
+
+
+def test_geomancy_include_catalog(tmp_path) -> None:
+    """批 I-5：includeCatalog=true 产 [十六卦目录]（属性总表）；缺省零回归。"""
+    service = _zeri_service(tmp_path)
+    base = build_sample_payloads()["geomancy"]
+    plain = service.run_tool("geomancy", base, save_result=False)
+    assert plain.ok is True, plain.error
+    assert "[十六卦目录]" not in plain.data["snapshot_text"]
+    rich = service.run_tool("geomancy", {**base, "includeCatalog": True}, save_result=False)
+    assert rich.ok is True, rich.error
+    text = rich.data["snapshot_text"]
+    assert "[十六卦目录]" in text and "道路（Via）" in text and "五行 水" in text and "主星 太阴" in text
+    assert "●" in text, "卦形点须渲染"
+    assert rich.data["catalog"]["figures"]
+    export = rich.data["export_snapshot"]
+    assert export["missing_selected_sections"] == [] and export["unknown_detected_sections"] == []
 
 
 def test_acg_click_point_and_event_conditional_sections(tmp_path) -> None:

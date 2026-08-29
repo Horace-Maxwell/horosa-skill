@@ -770,6 +770,9 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         safe_defaults=[{"field": "questionType", "value": "custom", "meaning": "自定问类：按主问句判事项宫"}],
         do_not_assume=["起卦时刻（须是真实起卦当下）", "所问内容"],
+        output_contract=(
+            "includeCatalog=true 附 [十六卦目录] 段（16 图形五行/主星/星座/性/象意总表，判读 grounding 用）。"
+        ),
     ),
     "tarot": _policy(
         intent="塔罗 / tarot：以「起卦时刻」确定性抽牌（SHA-256(种子)→洗牌，同刻同盘可复现），按牌阵逐位取牌 + 正逆位 + 花色/元素/大牌统计 + Yes/No 定局与精华牌。",
@@ -871,6 +874,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         safe_defaults=[{"field": "school", "value": "tieban", "meaning": "默认铁板神数"}],
         do_not_assume=["生辰四柱（决定起数，须真实）", "流派", "性别"],
     ),
+    # wangji/cetian 沿用神数家族策略；三法心易起卦与判词库见各自 schema 字段描述（xinyiMethod/textKey）。
     "wangji": SHENSHU_POLICY,
     "wuzhao": SHENSHU_POLICY,
     "taixuan": SHENSHU_POLICY,
