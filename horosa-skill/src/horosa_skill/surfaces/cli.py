@@ -1250,9 +1250,10 @@ def benchmark_run(
     dataset: Optional[Path] = typer.Option(None, help="Optional benchmark dataset JSON path."),
     skip_runtime: bool = typer.Option(False, help="Skip runtime-backed cases and run only local knowledge / metadata checks."),
     save_result: bool = typer.Option(False, help="Persist benchmark tool outputs into the local record layer."),
+    hermetic: bool = typer.Option(False, "--hermetic", help="可复现模式：剥除白名单外全部 HOROSA_* env（本机旗标不再左右结论），报告记录剥了什么。"),
 ) -> None:
     settings = Settings.from_env()
-    report = run_benchmark(settings=settings, dataset_path=dataset, skip_runtime=skip_runtime, save_result=save_result)
+    report = run_benchmark(settings=settings, dataset_path=dataset, skip_runtime=skip_runtime, save_result=save_result, hermetic=hermetic)
     _print_json(report)
 
 

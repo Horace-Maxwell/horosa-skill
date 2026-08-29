@@ -162,13 +162,53 @@ def generate_tool_cases() -> list[dict[str, Any]]:
     return cases
 
 
+from contextlib import contextmanager
+
+
+# hermetic 模式保留的 env：显式实例指向 + 引擎二进制定位——剥掉它们评测就打不到被测栈了。
+_HERMETIC_KEEP_ENV = {
+    "HOROSA_CHART_SERVER_ROOT",
+    "HOROSA_SERVER_ROOT",
+    "HOROSA_NODE_BIN",
+    "HOROSA_CORE_JS_ROOT",
+    "HOROSA_RUNTIME_ROOT",
+    "HOROSA_UV_BIN",
+}
+
+
+@contextmanager
+def _hermetic_env():
+    """剥掉除白名单外的所有 HOROSA_* 环境变量（退出恢复）。堵「本机旗标改评测结论」：
+    HOROSA_CLARIFY=never 会放掉闸自测、HOROSA_MCP_COMPACT/TOOLSETS 会改工具面、
+    HOROSA_TECHNIQUE_CARD 会改响应形状——评测报告却看不出这台机器开了什么。"""
+    removed: dict[str, str] = {}
+    for key in list(os.environ):
+        if key.startswith("HOROSA_") and key not in _HERMETIC_KEEP_ENV:
+            removed[key] = os.environ.pop(key)
+    try:
+        yield sorted(removed)
+    finally:
+        os.environ.update(removed)
+
+
 def run_benchmark(
     *,
     settings: Settings,
     dataset_path: Path | None = None,
     skip_runtime: bool = False,
     save_result: bool = False,
+    hermetic: bool = False,
 ) -> dict[str, Any]:
+    if hermetic:
+        with _hermetic_env() as scrubbed:
+            report = run_benchmark(
+                settings=settings, dataset_path=dataset_path, skip_runtime=skip_runtime,
+                save_result=save_result, hermetic=False,
+            )
+            report["hermetic"] = {"enabled": True, "scrubbed_env": scrubbed, "kept_env": sorted(
+                key for key in _HERMETIC_KEEP_ENV if os.environ.get(key)
+            )}
+            return report
     dataset = load_benchmark_dataset(dataset_path)
     # v2：手写 case（路由/知识/精选 parity）+ 注册表生成的逐工具 case 合并跑；id 冲突以手写为准。
     curated_ids = {case.get("id") for case in dataset.get("cases", [])}

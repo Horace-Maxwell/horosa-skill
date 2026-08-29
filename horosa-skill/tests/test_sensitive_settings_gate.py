@@ -73,3 +73,21 @@ def test_table_is_valid_json_with_required_keys() -> None:
     for key in ("confirmation_fields", "exempt_tools", "failure_code", "self_tests", "clarify_env"):
         assert key in SENSITIVE_SETTINGS, key
     assert json.dumps(SENSITIVE_SETTINGS)  # 可序列化（无奇异对象混入）
+
+
+def test_hermetic_benchmark_scrubs_local_flags(monkeypatch) -> None:
+    """批 II-5：--hermetic 剥掉本机旗标（HOROSA_CLARIFY=never 不再能放掉闸自测），
+    报告如实记录剥了什么，退出后环境恢复。"""
+    import os
+
+    from horosa_skill.benchmark.runner import _hermetic_env
+
+    monkeypatch.setenv("HOROSA_CLARIFY", "never")
+    monkeypatch.setenv("HOROSA_MCP_COMPACT", "1")
+    monkeypatch.setenv("HOROSA_NODE_BIN", "/fake/node")
+    with _hermetic_env() as scrubbed:
+        assert "HOROSA_CLARIFY" in scrubbed and "HOROSA_MCP_COMPACT" in scrubbed
+        assert os.environ.get("HOROSA_CLARIFY") is None
+        assert os.environ.get("HOROSA_NODE_BIN") == "/fake/node", "实例/引擎定位白名单必须保留"
+        assert validate_agent_preflight("chart", {})["ok"] is False, "剥掉 never 后闸恢复"
+    assert os.environ.get("HOROSA_CLARIFY") == "never", "退出恢复"
