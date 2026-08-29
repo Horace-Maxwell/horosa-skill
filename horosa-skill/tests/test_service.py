@@ -51,6 +51,17 @@ class FakeClient(HorosaApiClient):
                 "truncated": False,
                 "stats": {"evalPoints": 42, "spanDays": 20.0},
             }
+        if endpoint == "/electionscan/explain":
+            # 真实形状（election_scan.explain）：{'t', 'tree'}，tree 与条件树同构 {kind,op,pass,children}。
+            return {
+                "t": payload.get("t"),
+                "tree": {"kind": "group", "op": "all", "pass": False, "children": [
+                    {"kind": "leaf", "type": "in_sign", "pass": True, "actual": "金 158°51′ 处女"},
+                    {"kind": "leaf", "type": "aspect", "pass": False, "actual": "金-月 差 8.2°(限 6°)"},
+                ]},
+            }
+        if endpoint == "/electionscan/conditiontypes":
+            return {"types": ["aspect", "in_sign", "numeric"], "groups": ["all", "any", "not", "xor"]}
         house_signs = [
             ("House8", 0.0),
             ("House9", 30.0),
@@ -569,6 +580,19 @@ class FakeJsClient(HorosaJsEngineClient):
             if action == "stitch":
                 merged = [row for group in (payload.get("lists") or []) for row in group]
                 return {"data": {"ok": True, "intervals": merged}}
+            if action == "explain_section":
+                # canned 但形状照真渲染器（tianxing.js explain_section）；真语汇由 npm selfcheck 金标守。
+                explain = payload.get("explain")
+                if not isinstance(explain, dict):
+                    return {
+                        "data": {"ok": False, "error": {"code": "missing_explain_tree", "message": "缺少判读树（explain）。"}},
+                        "snapshot_text": "",
+                    }
+                return {"data": {"ok": True}, "snapshot_text": (
+                    f"[单时判读]\n判读时刻：{payload.get('t')}\n且(全部满足) ✗\n"
+                    "  设定 金 在 处女座\n  实际 金 158°51′ 处女 ✓\n"
+                    "  设定 金 三合 月\n  实际 金-月 差 8.2°(限 6°) ✗"
+                )}
             results = ((payload.get("ctx") or {}).get("results")) or []
             rows = "\n".join(
                 f"{i + 1}. {r.get('start')} ~ {r.get('end')}" for i, r in enumerate(results)
@@ -3640,6 +3664,66 @@ def test_tianxing_rejects_invalid_conditions_before_any_http(tmp_path) -> None:
     result = service.run_tool("tianxing", payload, save_result=False)
     assert result.ok is False
     assert result.error.code == "tool.tianxing_missing_conditions"
+
+
+def test_tianxing_explain_at_appends_section_and_tree(tmp_path) -> None:
+    """explainAt（v0.33.0）：结果多 explain 键 + 快照尾追 [单时判读]；t 归一 '-'→'/'、缺秒补 ':00'。"""
+    service = _zeri_service(tmp_path)
+    seen: list[dict] = []
+    original = service.client.call
+
+    def spy(endpoint: str, payload: dict) -> dict:
+        if endpoint == "/electionscan/explain":
+            seen.append(payload)
+        return original(endpoint, payload)
+
+    service.client.call = spy  # type: ignore[method-assign]
+    payload = {**build_sample_payloads()["tianxing"], "explainAt": "2028-04-01 00:01"}
+    result = service.run_tool("tianxing", payload, save_result=False)
+    assert result.ok is True, result.error
+    assert seen and seen[0]["t"] == "2028/04/01 00:01:00", "t 必须照上游 explainInterval 归一"
+    assert seen[0].get("conditions"), "explain 必须带编译后的条件树"
+    explain = result.data["explain"]
+    assert explain["tree"]["kind"] == "group" and explain["tree"]["children"], "判读树必须原样带回"
+    text = result.data["snapshot_text"]
+    assert "[单时判读]" in text and text.index("[单时判读]") > text.index("[命中区间]"), "段须追加在快照尾部"
+    assert "设定" in text and "实际" in text
+    export = result.data["export_snapshot"]
+    assert "单时判读" in export["section_titles_detected"]
+    assert export["missing_selected_sections"] == [] and export["unknown_detected_sections"] == []
+
+
+def test_tianxing_without_explain_at_emits_no_explain_key(tmp_path) -> None:
+    """条件段零回归：未给 explainAt 时无 explain 键、无 [单时判读] 段、不打 /electionscan/explain。"""
+    service = _zeri_service(tmp_path)
+    calls: list[str] = []
+    original = service.client.call
+    service.client.call = lambda e, p: (calls.append(e) or original(e, p))  # type: ignore[method-assign]
+    result = service.run_tool("tianxing", build_sample_payloads()["tianxing"], save_result=False)
+    assert result.ok is True, result.error
+    assert "explain" not in result.data
+    assert "[单时判读]" not in (result.data["snapshot_text"] or "")
+    assert "/electionscan/explain" not in calls
+    assert "单时判读" not in result.data["export_snapshot"]["missing_selected_sections"]
+
+
+def test_tianxing_invalid_conditions_error_carries_server_types(tmp_path) -> None:
+    """条件树编译失败时（自愈式报错），details 附服务端 /electionscan/conditiontypes 实现集。"""
+
+    class RejectingJs(FakeJsClient):
+        def run(self, tool_name: str, payload: dict[str, object]) -> dict:
+            if tool_name == "tianxing" and str(payload.get("action")) == "compile":
+                return {"data": {"ok": False, "error": {"code": "invalid_conditions", "message": "「相位」条件：planetA 缺失"}}}
+            return super().run(tool_name, payload)
+
+    settings = Settings(
+        server_root="http://127.0.0.1:9999", db_path=tmp_path / "memory.db", output_dir=tmp_path / "runs"
+    )
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=RejectingJs())
+    result = service.run_tool("tianxing", build_sample_payloads()["tianxing"], save_result=False)
+    assert result.ok is False
+    assert result.error.code == "tool.tianxing_invalid_conditions"
+    assert result.error.details["server_condition_types"] == ["aspect", "in_sign", "numeric"]
 
 
 def test_qimenzeri_carries_qimen_sections_plus_three(tmp_path) -> None:

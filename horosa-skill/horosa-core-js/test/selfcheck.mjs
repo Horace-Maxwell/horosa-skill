@@ -19,6 +19,7 @@ import { runXiaoChengTu } from '../src/tools/xiaochengtu.js';
 import { runGuice } from '../src/tools/guice.js';
 import { runZhengChuan } from '../src/tools/zhengchuan.js';
 import { runLingqi } from '../src/tools/lingqi.js';
+import { runTianxing } from '../src/tools/tianxing.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const chart = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_traditional.json'), 'utf8'));
@@ -251,6 +252,41 @@ check('lingqi 七段恒出 + 同刻幂等 + counts 冻结不重掷', () => {
     JSON.stringify(frozen.counts) === JSON.stringify([4, 0, 2]),
     `冻结 counts 必须原样复排，实得 ${frozen.counts}`,
   );
+});
+
+// 天星择日 [单时判读]（v0.33.0）：explain 树（编译形）+ UI 树 DFS 配对 → 设定/实际 文本段。
+check('tianxing explain_section renders 设定/实际 pairs with ✓✗', () => {
+  // 叶用 skill schema 的裸形（{type, params}，无 kind）——这是 agent 实际传入的形状。
+  const uiTree = {
+    kind: 'group', joiner: 'all', children: [
+      { type: 'in_sign', params: { planet: 'Venus', signs: [5] } },
+      { type: 'aspect', params: { planetA: 'Venus', planetB: 'Moon', angle: 120, orb: 6 }, negate: true },
+    ],
+  };
+  const explain = {
+    kind: 'group', op: 'all', pass: false, children: [
+      { kind: 'leaf', type: 'in_sign', pass: true, actual: '金 158°51′ 处女' },
+      { kind: 'leaf', type: 'aspect', pass: false, actual: '金-月 距 120° 差 8.2°(限 6°)' },
+    ],
+  };
+  const r = runTianxing({ action: 'explain_section', t: '2026/09/01 14:30:00', tree: uiTree, explain });
+  assert(r.data.ok === true, 'data.ok should be true');
+  const s = r.snapshot_text || '';
+  assert(s.startsWith('[单时判读]'), 'missing [单时判读] header');
+  assert(s.includes('判读时刻：2026/09/01 14:30:00'), 'missing 判读时刻 line');
+  assert(s.includes('且(全部满足) ✗'), 'missing group gate line');
+  assert(s.includes('✓') && s.includes('✗'), 'missing pass marks');
+  const settings = s.split('\n').filter((l) => l.trim().startsWith('设定 '));
+  const actuals = s.split('\n').filter((l) => l.trim().startsWith('实际 '));
+  assert(settings.length === 2 && actuals.length === 2, `expected 2 设定/实际 pairs, got ${settings.length}/${actuals.length}`);
+  assert(s.includes('(取反)'), 'negate leaf must carry (取反)');
+  assert(actuals[1].includes('金-月'), 'actual text must come from the explain tree');
+});
+
+check('tianxing explain_section without explain tree fails loudly', () => {
+  const r = runTianxing({ action: 'explain_section', t: 'x', tree: null, explain: null });
+  assert(r.data.ok === false, 'missing explain must be ok=false');
+  assert(r.data.error.code === 'missing_explain_tree', `code=${r.data.error.code}`);
 });
 
 if (failures > 0) {

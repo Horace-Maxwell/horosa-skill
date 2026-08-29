@@ -442,6 +442,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "almuten_is、eminence_level、light_dynamics、distribution_state、lifespan_state、"
             "classical_pattern、aspect_pattern、dispositor_cycle、accidental_score、day_window、"
             "mansion、sect_joy、royal_slot 等。星座/宫位一律用**序号**，不是英文名。"
+            "\n单时判读：传 explainAt='YYYY-MM-DD HH:mm[:ss]' 可对该时刻逐叶判读（[单时判读] 段，"
+            "每叶「设定/实际 ✓✗」，与扫描求值器绝对同源）——用于回答「为什么这个时刻中/不中选」。"
         ),
         required_context=COMMON_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "征象条件 conditions", "用事主题"],
         ask_if_missing=[
@@ -455,7 +457,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         do_not_assume=["搜索时间窗", "征象条件", "location"],
         output_contract=(
             "intervals 为命中时段（含 pick/pickEnd 边界安全时刻）。零命中时 [命中区间] 段仍会出现并写明"
-            "「时间段内无满足全部条件的时刻」，不是缺段。条件不合法会明确报错，不会退化成零命中。"
+            "「时间段内无满足全部条件的时刻」，不是缺段。条件不合法会明确报错（details 附服务端支持的"
+            "条件类型表），不会退化成零命中。给了 explainAt 时结果多一个 explain 键与 [单时判读] 段。"
         ),
     ),
     "taiyi": _policy(

@@ -383,6 +383,14 @@ class TianxingInput(BirthInput):
         ),
     )
     precision: str | None = Field(default=None, description="扫描精度，缺省 minute")
+    explainAt: str | None = Field(
+        default=None,
+        description=(
+            "单时刻判据判读（YYYY-MM-DD HH:mm[:ss]）：对该时刻逐叶判读条件树（与扫描求值器绝对同源），"
+            "加产 [单时判读] 段——每叶列「设定/实际 ✓✗」。用于回答「为什么这个时刻中/不中选」。"
+            "Explain one moment leaf-by-leaf against the condition tree (adds a [单时判读] section)."
+        ),
+    )
     options: dict[str, Any] = Field(
         default_factory=dict,
         description="古典口径直通（cazimiOrb/combustOrb/vocMode/termsVariant/triplicity…）。",

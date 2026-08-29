@@ -172,6 +172,9 @@ _PYTHON_CHART_ENDPOINTS = {
     "/chart",
     # 天星择日·征象搜索（上游 v3.7.0；挂在主 chart 服务，Java 侧无此路由）
     "/electionscan/scan",
+    # 单时刻逐叶判读 + 条件类型自省（上游 v3.9.x R4；explainAt 参数与条件树报错自愈用）
+    "/electionscan/explain",
+    "/electionscan/conditiontypes",
     "/chart12",
     "/chart13",
     "/predict/solarreturn",
@@ -6883,10 +6886,19 @@ class HorosaSkillService:
         compiled_data = compiled_result.get("data") or {}
         if not compiled_data.get("ok"):
             error = compiled_data.get("error") or {}
+            details: dict[str, Any] = {"error": error}
+            # 自愈式报错：把**服务端实现集**（运行时孪生）一并带回，agent 不用猜哪些条件类键合法。
+            # _call_remote 已剥 {ResultCode, Result} 信封 → 这里拿到的就是 {types, groups}。
+            try:
+                ct = self._call_remote("/electionscan/conditiontypes", {})
+                if isinstance(ct, dict) and isinstance(ct.get("types"), list):
+                    details["server_condition_types"] = ct.get("types")
+            except Exception:  # noqa: BLE001 - 自省失败不该遮住原始校验错误
+                pass
             raise ToolValidationError(
                 f"征象条件树不合法：{error.get('message') or '未知错误'}",
                 code="tool.tianxing_invalid_conditions",
-                details={"error": error},
+                details=details,
             )
         compiled = compiled_data.get("compiled")
 
@@ -6970,7 +6982,15 @@ class HorosaSkillService:
             moment_section = self._tianxing_selected_moment_section(payload, intervals[0])
             if moment_section:
                 snapshot_text = f"{snapshot_text}\n\n{moment_section}"
-        return {
+        # [单时判读]（v0.33.0）：explainAt 时刻的逐叶判读，与扫描求值器绝对同源（/electionscan/explain
+        # pass 复用微域自证）。条件段：未给 explainAt 不产段，零回归。
+        explain_tree: dict[str, Any] | None = None
+        explained_at: str | None = None
+        if payload.get("explainAt"):
+            explained_at, explain_tree, explain_section = self._tianxing_explain(payload, base, conditions)
+            if snapshot_text and explain_section:
+                snapshot_text = f"{snapshot_text}\n\n{explain_section}"
+        result_payload = {
             "intervals": intervals,
             "hit_count": len(intervals),
             "truncated": truncated,
@@ -6979,6 +6999,29 @@ class HorosaSkillService:
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="tianxing", snapshot_text=snapshot_text),
         }
+        if explain_tree is not None:
+            result_payload["explain"] = {"t": explained_at, "tree": explain_tree}
+        return result_payload
+
+    def _tianxing_explain(
+        self, payload: dict[str, Any], base: dict[str, Any], ui_tree: Any
+    ) -> tuple[str, dict[str, Any] | None, str]:
+        """/electionscan/explain 往返 + [单时判读] 段文本（JS 侧同源语汇渲染）。
+
+        t 归一照上游 explainInterval（TianxingElectionMain.js:346）：'-'→'/'，缺秒补 ':00'。
+        """
+        t_raw = str(payload.get("explainAt") or "").strip().replace("-", "/")
+        if len(t_raw) == 16:  # YYYY/MM/DD HH:mm
+            t_raw = f"{t_raw}:00"
+        raw = self._call_remote("/electionscan/explain", {**base, "t": t_raw})
+        data = self._require_electionscan_ok(raw, endpoint="/electionscan/explain")
+        tree = data.get("tree") if isinstance(data, dict) else None
+        js = self._tianxing_js(
+            {"action": "explain_section", "t": data.get("t") or t_raw, "tree": ui_tree, "explain": tree},
+            stage="explain_section",
+        )
+        section = js.get("snapshot_text")
+        return t_raw, (tree if isinstance(tree, dict) else None), (section if isinstance(section, str) else "")
 
     def _tianxing_selected_moment_section(self, payload: dict[str, Any], hit: dict[str, Any]) -> str:
         try:
