@@ -18,7 +18,9 @@
       "engines": [],
       "endpoints": [
         "/chart",
-        "/location/acg"
+        "/location/acg",
+        "/location/acgevent",
+        "/location/acgpoint"
       ],
       "export_technique": "acg",
       "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
@@ -76,6 +78,13 @@
       "export_technique": "bazi",
       "notes": "Java 聚合层（:9999）计算，Python 只转发与排版"
     },
+    "bazizeri": {
+      "compute_class": "composite",
+      "engines": [],
+      "endpoints": [],
+      "export_technique": null,
+      "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
+    },
     "beiji": {
       "compute_class": "chart_service_shenshu",
       "engines": [
@@ -83,7 +92,9 @@
         "yanqin_yanfa"
       ],
       "endpoints": [
-        "/beiji/pan"
+        "/beiji/pan",
+        "/cetian/texts",
+        "/wangji/xinyi"
       ],
       "export_technique": "beiji",
       "notes": "kentang 神数引擎挂在 Python chart 服务上，后端直出 snapshot（真身在 Result.snapshot）"
@@ -113,7 +124,9 @@
         "yanqin_yanfa"
       ],
       "endpoints": [
-        "/cetian/pan"
+        "/cetian/pan",
+        "/cetian/texts",
+        "/wangji/xinyi"
       ],
       "export_technique": "cetian",
       "notes": "kentang 神数引擎挂在 Python chart 服务上，后端直出 snapshot（真身在 Result.snapshot）"
@@ -152,7 +165,9 @@
         "yanqin_yanfa"
       ],
       "endpoints": [
-        "/chunzi/pan"
+        "/cetian/texts",
+        "/chunzi/pan",
+        "/wangji/xinyi"
       ],
       "export_technique": "chunzi",
       "notes": "kentang 神数引擎挂在 Python chart 服务上，后端直出 snapshot（真身在 Result.snapshot）"
@@ -237,7 +252,9 @@
         "yanqin_yanfa"
       ],
       "endpoints": [
-        "/fendjing/pan"
+        "/cetian/texts",
+        "/fendjing/pan",
+        "/wangji/xinyi"
       ],
       "export_technique": "fendjing",
       "notes": "kentang 神数引擎挂在 Python chart 服务上，后端直出 snapshot（真身在 Result.snapshot）"
@@ -255,6 +272,7 @@
       "compute_class": "python_chart_backend",
       "engines": [],
       "endpoints": [
+        "/geomancy/catalog",
         "/geomancy/reading"
       ],
       "export_technique": "geomancy",
@@ -369,6 +387,13 @@
       "export_technique": "huangli",
       "notes": "纯 headless JS，无后端引擎"
     },
+    "huanglizeri": {
+      "compute_class": "composite",
+      "engines": [],
+      "endpoints": [],
+      "export_technique": null,
+      "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
+    },
     "india_chart": {
       "compute_class": "python_chart_backend",
       "engines": [],
@@ -384,8 +409,17 @@
       "endpoints": [
         "/india/rectify"
       ],
-      "export_technique": null,
+      "export_technique": "india_rectify",
       "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
+    },
+    "indiazeri": {
+      "compute_class": "composite",
+      "engines": [],
+      "endpoints": [
+        "/indiaelectionscan/scan"
+      ],
+      "export_technique": null,
+      "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
     "jaynesprog": {
       "compute_class": "python_chart_backend",
@@ -402,7 +436,7 @@
       "endpoints": [
         "/jieqi/birth"
       ],
-      "export_technique": null,
+      "export_technique": "jieqi_birth",
       "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
     },
     "jieqi_year": {
@@ -421,7 +455,9 @@
         "yanqin_yanfa"
       ],
       "endpoints": [
-        "/jingjue/pan"
+        "/cetian/texts",
+        "/jingjue/pan",
+        "/wangji/xinyi"
       ],
       "export_technique": "jingjue",
       "notes": "kentang 神数引擎挂在 Python chart 服务上，后端直出 snapshot（真身在 Result.snapshot）"
@@ -492,6 +528,13 @@
       "export_technique": "liureng",
       "notes": "纯 headless JS，无后端引擎"
     },
+    "liurengzeri": {
+      "compute_class": "composite",
+      "engines": [],
+      "endpoints": [],
+      "export_technique": null,
+      "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
+    },
     "lunarreturn": {
       "compute_class": "python_chart_backend",
       "engines": [],
@@ -528,7 +571,9 @@
         "yanqin_yanfa"
       ],
       "endpoints": [
-        "/nanji/pan"
+        "/cetian/texts",
+        "/nanji/pan",
+        "/wangji/xinyi"
       ],
       "export_technique": "nanji",
       "notes": "kentang 神数引擎挂在 Python chart 服务上，后端直出 snapshot（真身在 Result.snapshot）"
@@ -584,7 +629,7 @@
       "endpoints": [
         "/astroextra/planetcycles"
       ],
-      "export_technique": null,
+      "export_technique": "planet_cycles",
       "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
     },
     "planetaryages": {
@@ -640,7 +685,7 @@
       "compute_class": "local_data",
       "engines": [],
       "endpoints": [],
-      "export_technique": null,
+      "export_technique": "qizhengelection",
       "notes": "不起盘：读本地离线库 / 内置注册表"
     },
     "qizhengkin": {
@@ -650,10 +695,21 @@
         "yanqin_yanfa"
       ],
       "endpoints": [
-        "/qizhengkin/pan"
+        "/cetian/texts",
+        "/qizhengkin/pan",
+        "/wangji/xinyi"
       ],
       "export_technique": "qizhengkin",
       "notes": "kentang 神数引擎挂在 Python chart 服务上，后端直出 snapshot（真身在 Result.snapshot）"
+    },
+    "qizhengzeri": {
+      "compute_class": "composite",
+      "engines": [],
+      "endpoints": [
+        "/qizhengelectionscan/scan"
+      ],
+      "export_technique": null,
+      "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
     "relative": {
       "compute_class": "python_chart_backend",
@@ -685,6 +741,13 @@
       "export_technique": "sanshiunited",
       "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
+    "sanshizeri": {
+      "compute_class": "composite",
+      "engines": [],
+      "endpoints": [],
+      "export_technique": null,
+      "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
+    },
     "shaozi": {
       "compute_class": "chart_service_shenshu",
       "engines": [
@@ -692,7 +755,9 @@
         "yanqin_yanfa"
       ],
       "endpoints": [
-        "/shaozi/pan"
+        "/cetian/texts",
+        "/shaozi/pan",
+        "/wangji/xinyi"
       ],
       "export_technique": "shaozi",
       "notes": "kentang 神数引擎挂在 Python chart 服务上，后端直出 snapshot（真身在 Result.snapshot）"
@@ -704,7 +769,9 @@
         "yanqin_yanfa"
       ],
       "endpoints": [
-        "/shenyishu/pan"
+        "/cetian/texts",
+        "/shenyishu/pan",
+        "/wangji/xinyi"
       ],
       "export_technique": "shenyishu",
       "notes": "kentang 神数引擎挂在 Python chart 服务上，后端直出 snapshot（真身在 Result.snapshot）"
@@ -755,7 +822,9 @@
         "yanqin_yanfa"
       ],
       "endpoints": [
-        "/taixuan/pan"
+        "/cetian/texts",
+        "/taixuan/pan",
+        "/wangji/xinyi"
       ],
       "export_technique": "taixuan",
       "notes": "kentang 神数引擎挂在 Python chart 服务上，后端直出 snapshot（真身在 Result.snapshot）"
@@ -771,6 +840,13 @@
       ],
       "export_technique": "taiyi",
       "notes": "ken 后端算、JS 只格式化；健康结果带 pan.source/jinkou.source == 引擎名，runner 必须调 _require_ken_pan"
+    },
+    "taiyizeri": {
+      "compute_class": "composite",
+      "engines": [],
+      "endpoints": [],
+      "export_technique": null,
+      "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
     "tarot": {
       "compute_class": "headless_js",
@@ -800,7 +876,9 @@
         "yanqin_yanfa"
       ],
       "endpoints": [
-        "/tieban/pan"
+        "/cetian/texts",
+        "/tieban/pan",
+        "/wangji/xinyi"
       ],
       "export_technique": "tieban",
       "notes": "kentang 神数引擎挂在 Python chart 服务上，后端直出 snapshot（真身在 Result.snapshot）"
@@ -846,7 +924,9 @@
         "yanqin_yanfa"
       ],
       "endpoints": [
-        "/wangji/pan"
+        "/cetian/texts",
+        "/wangji/pan",
+        "/wangji/xinyi"
       ],
       "export_technique": "wangji",
       "notes": "kentang 神数引擎挂在 Python chart 服务上，后端直出 snapshot（真身在 Result.snapshot）"
@@ -858,6 +938,8 @@
         "yanqin_yanfa"
       ],
       "endpoints": [
+        "/cetian/texts",
+        "/wangji/xinyi",
         "/wuzhao/pan"
       ],
       "export_technique": "wuzhao",
@@ -870,6 +952,8 @@
         "yanqin_yanfa"
       ],
       "endpoints": [
+        "/cetian/texts",
+        "/wangji/xinyi",
         "/xianqin/pan"
       ],
       "export_technique": "xianqin",
@@ -950,6 +1034,13 @@
       ],
       "export_technique": "ziwei",
       "notes": "Java 聚合层（:9999）计算，Python 只转发与排版"
+    },
+    "ziweizeri": {
+      "compute_class": "composite",
+      "engines": [],
+      "endpoints": [],
+      "export_technique": null,
+      "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
     "zr": {
       "compute_class": "python_chart_backend",

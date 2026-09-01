@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.34.0 (2026-09) | 上游 v3.10.0 择日十技法同步 | 闭包按停止节点算；抽壳要机械化；解析器盲区造假债务；兜底分类=待确认 |
 | v0.33.1 (2026-09) | issue #15 家族全清剿 | presence 级断言对值失明；跨边界不改键；静默降级会上移；schema 描述不是愿望清单 |
 | v0.14.0 (2026-06) | 古典占星 [古典]/[古典格局] | endpoint 必须登记 `_PYTHON_CHART_ENDPOINTS`；段补≠新工具；离线/live 覆盖分层 |
 | v0.13.0 (2026-06) | 4 未同步 AI 技法 + 太乙/八字段口径 | 审计先查自家排除项；`EXPORT_TECHNIQUES` 才是权威清单；请求型 builder 归 Python |
@@ -93,6 +94,45 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.34.0 / 2026-09-01 — 同步上游 v3.10.0 择日十技法：抽壳、解析器盲区、与「假债务」
+
+上游一次发了 182 文件 / +25k 行的择日大版本（8 个新技法键）。同步过程本身踩出四条。
+
+- 🔴 **依赖闭包要按「已 vendored 即停止节点」算，否则数字会吓人。** 天真闭包把整个 React 壳
+  （amap 地图 / D3 / xq-ui / request.js）都拉进来，六壬那支报 69 个新文件；把已 vendored 的文件
+  当停止节点重算后是 5 个。**先算对再决策** —— 按 69 那个数字很容易误判成「这支做不了」。
+
+- 🔴 **上游把纯逻辑和 React 放同一个文件时，剥壳要机械化，不要手抄。** `LiuRengMain.js` 6436 行，
+  1–4553 纯逻辑、4554 起 `class … extends Component`，20 个纯 export 全在前半。仓里此前手抄过
+  其中三个函数进 `liurengRefContext.js` —— 而上游的 `buildSanChuanData` 早已多出第 4 个参数
+  `castOverride`，手抄那份还是三参。**手抄件会静默落后于上游**。改为 `truncate_before` 按正则
+  锚点整头 vendored（锚点而非行号：行号随上游编辑漂移，锚点找不到会报错而不是悄悄剪错）。
+
+- 🔴 **截断必须跑在孤儿 import 清理之前。** 孤儿判据是「符号在正文里还用不用」，而截断正是改变
+  正文的那一步。放后面的话，React 尾部专用的 16 个 import 在判定时还“在用”，于是全部留下 ——
+  模块引用了 vendor 树里根本不存在的路径，加载即炸，**而 re-vendor 那一步看起来是成功的**。
+  同族：`_IMPORT_STMT` 不吃行尾注释（`import {...} from '…'; // [观象P1]`）时，stub 报 not found、
+  import 原样留下，症状一模一样。
+
+- 🔴 **解析器盲区会造出「假债务」，比漏检更坏。** 上游同一个文件里 spread 有两种写法：
+  `...AI_EXPORT_PRESET_SECTIONS.qimen`（v3.7.1）与 `...(AI_EXPORT_PRESET_SECTIONS.bazi || [])`
+  （v3.10.0）。只认第一种时，八个新键的基底段全被 export-section 守卫报成「skill 多出来的段」
+  （bazizeri +11、sanshizeri +50…）。**这种噪声会诱使人去 `--update-baseline`**，把一条本该常绿的
+  检查一次性腌成永久噪声。判据：报出来的债务，要先问「它和某个已入账的基底债务是不是同一笔」——
+  本轮七键是解析器的错，第八键（qizhengzeri 缺 3 段）才是 `guolao` 既有债务的真继承。
+
+- 🔴 **execution 标错会让整个 runner 被绕过。** 给 `qizhengzeri`/`indiazeri` 在 registry 上挂了
+  endpoint + `execution="remote"`，通用远端路径抢先接管 → 自写的按月分段与快照合成一次都没跑，
+  而工具**返回 ok=true**、只是 hit_count 恒 None。tianxing 一直是 `execution="local"` + runner 自己
+  打端点，照抄它即可。同一形状：`export_snapshot` 恒 None 是因为忘了把新键加进
+  `AI_EXPORT_TECHNIQUES`（有 preset 却不在这张表 → parse 抛 Unknown technique，而调用方 `except
+  ValueError: return None` 把它吞成 None）。
+
+- 🔴 **算源分类落到兜底 = 不诚实的披露。** provenance 生成器按显式名单分类，新工具落到兜底
+  `local_data`（「不起盘：读本地离线库」）—— 而它们确实铸盘，只是盘不是搜索算的。正确类是
+  `composite`（两条腿算权不同，`compute_sources` 逐项写明）。**兜底类别永远要当成「待人工确认」，
+  不是「默认正确」。**
 
 ### v0.33.1 / 2026-09-01 — issue #15 不是一个 bug，是一个**家族**：边界改键 + presence 级绿灯
 

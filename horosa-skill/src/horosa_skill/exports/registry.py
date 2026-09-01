@@ -57,6 +57,9 @@ AI_EXPORT_SECTION_MIGRATION_KEYS = [
     "triplicityrulers", "keypoints", "lunationphase", "extrareturns",
     # v12 上游 v3.7.x 新技法键
     "tianxing", "qimenzeri",
+    # v13 上游 v3.10.0「择日十技法」新增八键
+    "huanglizeri", "bazizeri", "taiyizeri", "ziweizeri", "liurengzeri", "sanshizeri",
+    "qizhengzeri", "indiazeri",
 ]
 MODULE_SNAPSHOT_PREFIX = "horosa.ai.snapshot.module.v1."
 AI_EXPORT_PLANET_INFO_DEFAULT = {"showHouse": 1, "showRuler": 1}
@@ -157,6 +160,16 @@ AI_EXPORT_TECHNIQUES = [
     {"key": "election", "label": "择日盘"},
     {"key": "tianxing", "label": "天星择日"},
     {"key": "qimenzeri", "label": "奇门择日"},
+    # 择日十技法（上游 v3.10.0，aiExport.js:531 起同名同序）。有 preset 却不入这张表 →
+    # 在导出设置里隐身、且不被自检矩阵覆盖，parse_export_content 更会直接抛 Unknown technique。
+    {"key": "huanglizeri", "label": "黄历择吉"},
+    {"key": "bazizeri", "label": "八字择日"},
+    {"key": "taiyizeri", "label": "太乙择日"},
+    {"key": "ziweizeri", "label": "紫微择日"},
+    {"key": "liurengzeri", "label": "六壬择日"},
+    {"key": "sanshizeri", "label": "三式择日"},
+    {"key": "qizhengzeri", "label": "七政择日"},
+    {"key": "indiazeri", "label": "印度择日"},
     {"key": "wangji", "label": "皇极经世"},
     {"key": "wuzhao", "label": "五兆"},
     {"key": "taixuan", "label": "太玄"},
@@ -417,6 +430,26 @@ AI_EXPORT_PRESET_SECTIONS = {
 AI_EXPORT_PRESET_SECTIONS["qimenzeri"] = [
     *AI_EXPORT_PRESET_SECTIONS["qimen"], "择日搜索配置", "择日条件", "命中时辰",
 ]
+
+# 择日十技法（上游 v3.10.0，aiExport.js:832-847）：每个 <x>zeri = 基底技法段表 + 择时三段。
+# 同样是**单一真值源**——基底段表一改自动跟随。🔒 三个追加段头与各自的 <x>ZeriSnapshot.js builder
+# 逐字成对（四同步铁律）；黄历那支是日粒度，故段头是「择吉…/命中日段」而非「择时…/命中时段」。
+AI_EXPORT_PRESET_SECTIONS["huanglizeri"] = [
+    *AI_EXPORT_PRESET_SECTIONS["huangli"], "择吉搜索配置", "择吉条件", "命中日段",
+]
+for _zeri_key, _base_key in (
+    ("bazizeri", "bazi"),
+    ("taiyizeri", "taiyi"),
+    ("ziweizeri", "ziwei"),
+    ("liurengzeri", "liureng"),
+    ("sanshizeri", "sanshiunited"),
+    ("qizhengzeri", "guolao"),
+):
+    AI_EXPORT_PRESET_SECTIONS[_zeri_key] = [
+        *AI_EXPORT_PRESET_SECTIONS[_base_key], "择时搜索配置", "择时条件", "命中时段",
+    ]
+# 印度择时段自足：印度页是 A 类星盘系，上游没有 module 快照槽（盘全文见 india_chart 本身）。
+AI_EXPORT_PRESET_SECTIONS["indiazeri"] = ["择时搜索配置", "择时条件", "命中时段"]
 
 AI_EXPORT_FORBIDDEN_SECTIONS = {
     "liureng": ["右侧栏目"],

@@ -60,6 +60,22 @@ class FakeClient(HorosaApiClient):
                     {"kind": "leaf", "type": "aspect", "pass": False, "actual": "金-月 差 8.2°(限 6°)"},
                 ]},
             }
+        if endpoint in ("/qizhengelectionscan/scan", "/indiaelectionscan/scan"):
+            # 七政/印度择时（上游 v3.10.0）：与 /electionscan/scan 同形（区间 + pick/pickEnd + stats），
+            # 判定跑在 astropy 侧。桩只保证形状；值级真相归 live 测试与 selfcheck。
+            return {
+                "intervals": [{
+                    "start": "2028-04-01 06:12", "end": "2028-04-01 07:48",
+                    "pick": "2028-04-01 06:13:30", "pickEnd": "2028-04-01 07:46:30",
+                    "startJd": 2461862.7583333333, "endJd": 2461862.825, "durationMin": 96.0,
+                }],
+                "truncated": False,
+                "stats": {"evalPoints": 96, "spanDays": 8.0},
+            }
+        if endpoint in ("/qizhengelectionscan/conditiontypes", "/indiaelectionscan/conditiontypes"):
+            return {"types": ["day_night", "vara", "tithi"], "groups": ["all", "any", "not", "xor"]}
+        if endpoint in ("/qizhengelectionscan/explain", "/indiaelectionscan/explain"):
+            return {"t": payload.get("t"), "tree": {"kind": "group", "op": "all", "pass": True, "children": []}}
         if endpoint == "/electionscan/conditiontypes":
             return {"types": ["aspect", "in_sign", "numeric"], "groups": ["all", "any", "not", "xor"]}
         if endpoint == "/cetian/texts":
@@ -751,6 +767,43 @@ class FakeJsClient(HorosaJsEngineClient):
             else:
                 body = "[方位搜索]\n日 到达 180.0°(未来 3 天)\n2026-09-01 12:14:31　180.0°（07午山30）"
             return {"data": {"ok": True}, "snapshot_text": f"{header}\n\n{body}"}
+        if tool_name in ("zeri_scan", "zeri_scan_remote"):
+            # 择日十技法（v3.10.0）。这个桩只负责**形状**：段头一律从真 preset 末三段取，
+            # 不手抄 —— 手抄段头正是 v0.33.1 记的那条「桩比真实响应更简单」的亚型，
+            # 段头一改桩就悄悄对不上而测试照绿。值级真相归 selfcheck.mjs 的金标（跑真引擎）。
+            from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS as _PRESETS
+
+            technique = str(payload.get("technique") or "")
+            action = str(payload.get("action") or "scan")
+            if action == "compile":
+                return {"data": {"ok": True, "compiled": {"type": "all", "conditions": []}}}
+            if action == "scan":
+                return {"data": {
+                    "ok": True,
+                    "intervals": [
+                        {"start": "2028-04-01 19:00", "end": "2028-04-01 21:00",
+                         "pick": "2028-04-01 19:01", "pickEnd": "2028-04-01 20:59",
+                         "startMs": 1838286000000, "endMs": 1838293200000, "durationMin": 120},
+                        {"start": "2028-04-03 01:00", "end": "2028-04-03 03:00",
+                         "pick": "2028-04-03 01:01", "pickEnd": "2028-04-03 02:59",
+                         "startMs": 1838444400000, "endMs": 1838451600000, "durationMin": 120},
+                    ],
+                    "truncated": False,
+                    "stats": {"samples": 193, "evalCount": 769, "spanDays": 8},
+                    "hit_count": 2,
+                    "compiled_tree": {"type": "all", "conditions": []},
+                    "limits": {"max_hits": 1000, "max_span_days": 1830},
+                }}
+            sections = _PRESETS.get(technique, [])[-3:] or ["择时搜索配置", "择时条件", "命中时段"]
+            results = payload.get("results") or []
+            rows = "\n".join(
+                f"{i + 1}. {r.get('start')} ~ {r.get('end')}" for i, r in enumerate(results)
+            ) or "范围内无满足条件的时段。"
+            return {"data": {"ok": True}, "snapshot_text": "\n\n".join([
+                f"[{sections[0]}]\n时间段：2028-04-01 00:00 → 2028-04-08 23:59\n地点：福州　时区：8",
+                f"[{sections[1]}]\n条件组（全部满足）",
+                f"[{sections[2]}]\n{rows}",
+            ])}
         if tool_name == "qimenzeri":
             action = str(payload.get("action") or "scan")
             if action == "scan":

@@ -49,7 +49,12 @@ CLASS = {
     # 纯 headless JS：无后端引擎，JS 内完成计算与排版。
     "headless_js": {"tongshefa", "tarot", "lingqi", "huangli", "tongshu", "yizhangjing"},
     # 复合型：多腿聚合 / 多次请求拼段（请求型 builder 一律归 Python）。
-    "composite": {"sanshiunited", "mundane", "extrareturns", "qimenzeri", "tianxing"},
+    # 择日十技法（v3.10.0）全是复合型：区间搜索一条腿 + 展示盘另一条腿（各按基底技法的原算源），
+    # 两条腿算权不同，`compute_sources` 逐项写明。落到兜底会被判成 local_data「不起盘」——
+    # 那是**不诚实**的：它们确实铸盘，只是盘不是搜索算的。
+    "composite": {"sanshiunited", "mundane", "extrareturns", "qimenzeri", "tianxing",
+                  "huanglizeri", "bazizeri", "taiyizeri", "ziweizeri", "liurengzeri", "sanshizeri",
+                  "qizhengzeri", "indiazeri"},
     # Python port：星阙前端算法的 Python 移植。
     "python_port": {"decennials"},
     # frontend 读数型 Python 移植：读已算好的 chart 对象再排版。

@@ -1,11 +1,11 @@
 {
   "_comment": "vendored 树对到的上游状态。只由 verify_upstream_sync.py --write-state 在**全部检查通过**时写入——红着写等于把失败洗成一条持久的「已核对」声明。",
-  "upstream_git_sha": "12d39a1f8ee7670d9811e9e464a35c7ad23370d0",
-  "upstream_git_committed_at": "2026-08-27T23:06:09-04:00",
-  "upstream_app_version": "3.9.5",
+  "upstream_git_sha": "0604fa416f95e330dbd798ba2ede0f2aa0cb1688",
+  "upstream_git_committed_at": "2026-09-01T13:48:43-04:00",
+  "upstream_app_version": "3.10.0",
   "aiexport_settings_version": 56,
   "skill_mirrored_version": 56,
-  "upstream_checked_at_package_version": "0.33.0",
+  "upstream_checked_at_package_version": "0.34.0",
   "upstream_preset_keys": [
     "agepoint",
     "astrochart",
@@ -13,6 +13,7 @@
     "babylon",
     "balbillus",
     "bazi",
+    "bazizeri",
     "beiji",
     "calendar",
     "canping",
@@ -39,7 +40,9 @@
     "horary",
     "huangji",
     "huangli",
+    "huanglizeri",
     "indiachart",
+    "indiazeri",
     "jaynesprog",
     "jieqi",
     "jieqi_chunfen",
@@ -52,6 +55,7 @@
     "keypoints",
     "lingqi",
     "liureng",
+    "liurengzeri",
     "locastro",
     "lunarreturn",
     "lunationphase",
@@ -67,9 +71,11 @@
     "qimen",
     "qimenzeri",
     "qizhengkin",
+    "qizhengzeri",
     "relative",
     "relocation",
     "sanshiunited",
+    "sanshizeri",
     "shaozi",
     "shenyishu",
     "sixyao",
@@ -78,6 +84,7 @@
     "suzhan",
     "taixuan",
     "taiyi",
+    "taiyizeri",
     "tarot",
     "tianxing",
     "tieban",
@@ -93,12 +100,13 @@
     "yizhangjing",
     "zhengchuan",
     "ziwei",
+    "ziweizeri",
     "zodialrelease"
   ],
   "core_js": {
-    "files_compared": 270,
+    "files_compared": 300,
     "files_unmatched": 19,
-    "tree_sha256": "796a3884557815315de88f7e53d3daa46a00d93d3bf5ed479631a7e03a4d00ed"
+    "tree_sha256": "1ff777f2de1525289a470bd5eafd2534f70f84fe8f3b846dc2362be294c8e7ef"
   },
   "runtime_source": {
     "sentinels_verified": 7

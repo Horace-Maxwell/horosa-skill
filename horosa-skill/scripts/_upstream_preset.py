@@ -24,7 +24,7 @@ from pathlib import Path
 _LINE_COMMENT = re.compile(r"//[^\n]*")
 _ENTRY = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*:\s*\[([^\]]*)\]", re.DOTALL)
 _STRING = re.compile(r"'([^']*)'|\"([^\"]*)\"")
-_SPREAD = re.compile(r"\.\.\.([A-Za-z_][A-Za-z0-9_]*)")
+_SPREAD = re.compile(r"\.\.\.\(?\s*([A-Za-z_][A-Za-z0-9_]*)")
 _VERSION = re.compile(r"AI_EXPORT_SETTINGS_VERSION\s*=\s*(\d+)")
 
 # trap 3: `AI_EXPORT_PRESET_SECTIONS.key = [...]` / `AI_EXPORT_PRESET_SECTIONS['key'] = [...]`
@@ -35,8 +35,14 @@ _MEMBER_ASSIGN = re.compile(
     re.M | re.DOTALL,
 )
 # tokens inside such an array, walked in source order: a spread of another preset key, or a literal.
+# 🔴 spread 有**两种写法**，上游同一个文件里两种都在用：
+#   `...AI_EXPORT_PRESET_SECTIONS.qimen`              （v3.7.1 的 qimenzeri）
+#   `...(AI_EXPORT_PRESET_SECTIONS.bazi || [])`       （v3.10.0 的择日八技法，带括号与 || 兜底）
+# 只认第一种时，第二种会被整个跳过 —— 解析结果只剩 3 个字面量段，于是基底那十几段全被
+# export-section 守卫报成「skill 多出来的段」。假债务比漏检更坏：它会诱使人去 --update-baseline，
+# 把一条本该常绿的检查腌成永久噪声。
 _MEMBER_TOKEN = re.compile(
-    r"\.\.\.AI_EXPORT_PRESET_SECTIONS(?:\.([A-Za-z_][A-Za-z0-9_]*)|\[\s*['\"]([^'\"]+)['\"]\s*\])"
+    r"\.\.\.\(?\s*AI_EXPORT_PRESET_SECTIONS(?:\.([A-Za-z_][A-Za-z0-9_]*)|\[\s*['\"]([^'\"]+)['\"]\s*\])"
     r"|'([^']*)'"
     r"|\"([^\"]*)\""
 )

@@ -470,6 +470,230 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "不是缺段。切勿把本地搜索结果说成 ken 算出的。"
         ),
     ),
+    "huanglizeri": _policy(
+        intent=(
+            "黄历择吉：在一段时间窗内扫出满足条件树的日，并附命中首刻的完整黄历日课 10 段"
+            "（[择吉搜索配置]/[择吉条件]/[命中日段]）。"
+            "\n算权：**区间搜索由本地 vendored 通书引擎计算**；"
+            "**展示盘按 huangli 自己的算源铸**（与直接调该工具逐字同段）；"
+            "结果里 compute_sources 逐项写明，切勿把搜索结果说成别的引擎算的。"
+            "\n日粒度：命中的是整**日**，不是时辰。通书五流派口径由 school 决定，结果敏感。"
+            "\n条件树形状：组 {kind:'group', joiner:'all'|'any'|'xor', negate?, children:[…]}；"
+            "叶 {kind:'leaf', type:'<键>', negate?, params:{…}}。条件类键（引擎自带词表，非本文件手抄）："
+            "yi_has（宜含事项） / ji_not（忌避事项） / jianchu（建除十二神） / tianshen_dao（黄黑道） / zhixiu（值宿(廿八宿)） / jishen_has（吉神宜趋） / xiongsha_not（凶煞回避） / nine_star（九星值日） / chong_shengxiao（冲煞生肖） / day_ganzhi（日干支） / nayin_wuxing（日纳音五行） / liuyao（六曜）；…共 26 类，完整表见 vendored huangliZeriConditionTypes。"
+        ),
+        required_context=COMMON_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
+        ask_if_missing=[
+            {"field": "startDate/endDate", "question": "要在哪段时间里找？（起止日期）"},
+            {"field": "conditions", "question": "择日要满足什么条件？"},
+            {"field": "location", "question": "起盘地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
+            {"field": "topic", "question": "这次择日是为什么事？（搬家/开业/婚嫁…）"},
+        ],
+        safe_defaults=[
+            {"field": "maxSpanDays", "value": 366, "meaning": "搜索窗上限；更长请分段"},
+        ],
+        do_not_assume=["搜索时间窗", "择日条件", "location"],
+        output_contract=(
+            "intervals 是命中区间（含 pick/pickEnd 边界安全时刻，取盘请用 pick 而非 start——"
+            "start 会落到时辰边界的另一侧）。零命中时三段仍会出现并写明范围内无满足条件的时段，不是缺段。"
+        ),
+    ),
+    "bazizeri": _policy(
+        intent=(
+            "八字择时：在一段时间窗内扫出满足条件树的时辰，并附命中首刻的完整八字盘（四柱/大运/神煞/五行力量/格局）"
+            "（[择时搜索配置]/[择时条件]/[命中时段]）。"
+            "\n算权：**区间搜索由本地 vendored 八字引擎计算**；"
+            "**展示盘按 bazi_birth 自己的算源铸**（与直接调该工具逐字同段）；"
+            "结果里 compute_sources 逐项写明，切勿把搜索结果说成别的引擎算的。"
+            "\n起局三开关（timeAlg/after23NewDay/lateZiHourUseNextDay）顶层与 options 双读，options 优先；真太阳时会改时支，改它命中集就变。"
+            "\n条件树形状：组 {kind:'group', joiner:'all'|'any'|'xor', negate?, children:[…]}；"
+            "叶 {kind:'leaf', type:'<键>', negate?, params:{…}}。条件类键（引擎自带词表，非本文件手抄）："
+            "day_ganzhi（日柱干支） / hour_ganzhi（时柱干支） / month_year_gz（年月柱干支） / zhi_relation（支间关系） / gan_wuhe（天干五合） / sanhe_ju（地支三合局） / shensha_has（吉神在柱） / shensha_not（凶煞回避） / nayin_wuxing（柱纳音五行） / changsheng（日干长生态） / xunkong（旬空） / wuxing_day（日主五行）；…共 26 类，完整表见 vendored baziZeriConditionTypes。"
+        ),
+        required_context=COMMON_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
+        ask_if_missing=[
+            {"field": "startDate/endDate", "question": "要在哪段时间里找？（起止日期）"},
+            {"field": "conditions", "question": "择日要满足什么条件？"},
+            {"field": "location", "question": "起盘地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
+            {"field": "topic", "question": "这次择日是为什么事？（搬家/开业/婚嫁…）"},
+        ],
+        safe_defaults=[
+            {"field": "maxSpanDays", "value": 92, "meaning": "搜索窗上限；更长请分段"},
+        ],
+        do_not_assume=["搜索时间窗", "择日条件", "location"],
+        output_contract=(
+            "intervals 是命中区间（含 pick/pickEnd 边界安全时刻，取盘请用 pick 而非 start——"
+            "start 会落到时辰边界的另一侧）。零命中时三段仍会出现并写明范围内无满足条件的时段，不是缺段。"
+        ),
+    ),
+    "taiyizeri": _policy(
+        intent=(
+            "太乙择时：在一段时间窗内扫出满足条件树的时辰，并附命中首刻的完整太乙盘（十六宫/十精/分野）"
+            "（[择时搜索配置]/[择时条件]/[命中时段]）。"
+            "\n算权：**区间搜索由本地 vendored 太乙引擎计算**；"
+            "**展示盘按 taiyi 自己的算源铸**（与直接调该工具逐字同段）；"
+            "结果里 compute_sources 逐项写明，切勿把搜索结果说成别的引擎算的。"
+            "\n太乙时基是**钟表时**（上游口径，与后端 kentang 太乙一致），故 timeAlg 在本技法不改盘。"
+            "\n条件树形状：组 {kind:'group', joiner:'all'|'any'|'xor', negate?, children:[…]}；"
+            "叶 {kind:'leaf', type:'<键>', negate?, params:{…}}。条件类键（引擎自带词表，非本文件手抄）："
+            "yinyang_ju（阴阳遁） / ju_num（局数） / taiyi_gong（太乙落宫） / wenchang_gong（文昌(天目)落宫） / shiji_gong（始击落宫） / jishen_gong（计神/合神落宫） / youshen_gong（游神落宫(五福/大游/小游)） / geju_kind（格局(掩迫关囚格对提挟击)） / victory_side（主客胜负） / suan_range（主客算区间） / suan_parity（算数阴阳(奇偶)） / dajiang_gong（主客大将宫）；…共 24 类，完整表见 vendored taiyiZeriConditionTypes。"
+        ),
+        required_context=COMMON_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
+        ask_if_missing=[
+            {"field": "startDate/endDate", "question": "要在哪段时间里找？（起止日期）"},
+            {"field": "conditions", "question": "择日要满足什么条件？"},
+            {"field": "location", "question": "起盘地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
+            {"field": "topic", "question": "这次择日是为什么事？（搬家/开业/婚嫁…）"},
+        ],
+        safe_defaults=[
+            {"field": "maxSpanDays", "value": 92, "meaning": "搜索窗上限；更长请分段"},
+        ],
+        do_not_assume=["搜索时间窗", "择日条件", "location"],
+        output_contract=(
+            "intervals 是命中区间（含 pick/pickEnd 边界安全时刻，取盘请用 pick 而非 start——"
+            "start 会落到时辰边界的另一侧）。零命中时三段仍会出现并写明范围内无满足条件的时段，不是缺段。"
+        ),
+    ),
+    "ziweizeri": _policy(
+        intent=(
+            "紫微择时：在一段时间窗内扫出满足条件树的时辰，并附命中首刻的完整紫微斗数盘（十二宫方盘）"
+            "（[择时搜索配置]/[择时条件]/[命中时段]）。"
+            "\n算权：**区间搜索由本地 vendored 紫微引擎计算**；"
+            "**展示盘按 ziwei_birth 自己的算源铸**（与直接调该工具逐字同段）；"
+            "结果里 compute_sources 逐项写明，切勿把搜索结果说成别的引擎算的。"
+            "\n格局条件含**破格**判定；宫干四化与来因宫都可作条件。"
+            "\n条件树形状：组 {kind:'group', joiner:'all'|'any'|'xor', negate?, children:[…]}；"
+            "叶 {kind:'leaf', type:'<键>', negate?, params:{…}}。条件类键（引擎自带词表，非本文件手抄）："
+            "wuxing_ju（五行局） / ming_gong_zhi（命宫地支） / ming_zhu_xing（命宫正曜） / shen_zhu_xing（身宫正曜） / ming_changsheng（命宫长生态） / star_in_gong（星落宫名） / star_in_zhi（星落地支） / star_tong_gong（两星同宫） / sihua_star（生年四化为星） / sihua_in_gong（生年四化入宫） / sihua_dui_ming（四化会命宫(同宫/对照)） / star_brightness（星曜亮度）；…共 28 类，完整表见 vendored ziweiZeriConditionTypes。"
+        ),
+        required_context=COMMON_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
+        ask_if_missing=[
+            {"field": "startDate/endDate", "question": "要在哪段时间里找？（起止日期）"},
+            {"field": "conditions", "question": "择日要满足什么条件？"},
+            {"field": "location", "question": "起盘地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
+            {"field": "topic", "question": "这次择日是为什么事？（搬家/开业/婚嫁…）"},
+        ],
+        safe_defaults=[
+            {"field": "maxSpanDays", "value": 92, "meaning": "搜索窗上限；更长请分段"},
+        ],
+        do_not_assume=["搜索时间窗", "择日条件", "location"],
+        output_contract=(
+            "intervals 是命中区间（含 pick/pickEnd 边界安全时刻，取盘请用 pick 而非 start——"
+            "start 会落到时辰边界的另一侧）。零命中时三段仍会出现并写明范围内无满足条件的时段，不是缺段。"
+        ),
+    ),
+    "liurengzeri": _policy(
+        intent=(
+            "六壬择时：在一段时间窗内扫出满足条件树的时辰，并附命中首刻的完整六壬盘（天地盘/四课/三传）"
+            "（[择时搜索配置]/[择时条件]/[命中时段]）。"
+            "\n算权：**区间搜索由本地 vendored 六壬引擎计算**；"
+            "**展示盘按 liureng_gods 自己的算源铸**（与直接调该工具逐字同段）；"
+            "结果里 compute_sources 逐项写明，切勿把搜索结果说成别的引擎算的。"
+            "\n贵人昼夜会切分区间；不涉贵人的条件不会被日出日落切碎（上游的行粒度折叠）。"
+            "\n条件树形状：组 {kind:'group', joiner:'all'|'any'|'xor', negate?, children:[…]}；"
+            "叶 {kind:'leaf', type:'<键>', negate?, params:{…}}。条件类键（引擎自带词表，非本文件手抄）："
+            "ke_name（课名(九宗门)） / chuan_zhi（三传含支） / chuan_jiang（三传天将） / chuan_liuqin（三传六亲） / chuan_kong（三传旬空） / chuan_ju（三传合局） / fa_yong（发用(初传)神煞） / tianpan_at（天盘乘临） / guiren_pos（贵人临支·顺逆） / jiang_at（天将临支） / yue_jiang_is（月将） / zhou_ye（昼占/夜占）；…共 27 类，完整表见 vendored liurengZeriConditionTypes。"
+        ),
+        required_context=COMMON_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
+        ask_if_missing=[
+            {"field": "startDate/endDate", "question": "要在哪段时间里找？（起止日期）"},
+            {"field": "conditions", "question": "择日要满足什么条件？"},
+            {"field": "location", "question": "起盘地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
+            {"field": "topic", "question": "这次择日是为什么事？（搬家/开业/婚嫁…）"},
+        ],
+        safe_defaults=[
+            {"field": "maxSpanDays", "value": 92, "meaning": "搜索窗上限；更长请分段"},
+        ],
+        do_not_assume=["搜索时间窗", "择日条件", "location"],
+        output_contract=(
+            "intervals 是命中区间（含 pick/pickEnd 边界安全时刻，取盘请用 pick 而非 start——"
+            "start 会落到时辰边界的另一侧）。零命中时三段仍会出现并写明范围内无满足条件的时段，不是缺段。"
+        ),
+    ),
+    "sanshizeri": _policy(
+        intent=(
+            "三式合一择时：在一段时间窗内扫出满足条件树的时辰，并附命中首刻的完整三式合一盘"
+            "（[择时搜索配置]/[择时条件]/[命中时段]）。"
+            "\n算权：**区间搜索由本地 vendored 三式引擎（六壬+奇门+太乙同跑）计算**；"
+            "**展示盘按 sanshi_united 自己的算源铸**（与直接调该工具逐字同段）；"
+            "结果里 compute_sources 逐项写明，切勿把搜索结果说成别的引擎算的。"
+            "\n70 个条件类，前缀标明来自哪一式：lr_=六壬、qm_=奇门、ty_=太乙，可跨式自由组合。"
+            "\n条件树形状：组 {kind:'group', joiner:'all'|'any'|'xor', negate?, children:[…]}；"
+            "叶 {kind:'leaf', type:'<键>', negate?, params:{…}}。条件类键（引擎自带词表，非本文件手抄）："
+            "lr_ke_name（六壬·课名(九宗门)） / lr_chuan_zhi（六壬·三传含支） / lr_chuan_jiang（六壬·三传天将） / lr_chuan_liuqin（六壬·三传六亲） / lr_chuan_kong（六壬·三传旬空） / lr_chuan_ju（六壬·三传合局） / lr_fa_yong（六壬·发用(初传)神煞） / lr_tianpan_at（六壬·天盘乘临） / lr_guiren_pos（六壬·贵人临支·顺逆） / lr_jiang_at（六壬·天将临支） / lr_yue_jiang_is（六壬·月将） / lr_zhou_ye（六壬·昼占/夜占）；…共 70 类，完整表见 vendored sanshiZeriConditionTypes。"
+        ),
+        required_context=COMMON_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
+        ask_if_missing=[
+            {"field": "startDate/endDate", "question": "要在哪段时间里找？（起止日期）"},
+            {"field": "conditions", "question": "择日要满足什么条件？"},
+            {"field": "location", "question": "起盘地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
+            {"field": "topic", "question": "这次择日是为什么事？（搬家/开业/婚嫁…）"},
+        ],
+        safe_defaults=[
+            {"field": "maxSpanDays", "value": 92, "meaning": "搜索窗上限；更长请分段"},
+        ],
+        do_not_assume=["搜索时间窗", "择日条件", "location"],
+        output_contract=(
+            "intervals 是命中区间（含 pick/pickEnd 边界安全时刻，取盘请用 pick 而非 start——"
+            "start 会落到时辰边界的另一侧）。零命中时三段仍会出现并写明范围内无满足条件的时段，不是缺段。"
+        ),
+    ),
+    "qizhengzeri": _policy(
+        intent=(
+            "七政择时：在一段时间窗内扫出满足条件树的分钟级区间，并附命中首刻的完整七政四余/果老盘"
+            "（[择时搜索配置]/[择时条件]/[命中时段]）。"
+            "\n算权：**区间搜索由astropy 后端（swisseph 直连）计算**；"
+            "**展示盘按 guolao_chart 自己的算源铸**（与直接调该工具逐字同段）；"
+            "结果里 compute_sources 逐项写明，切勿把搜索结果说成别的引擎算的。"
+            "\n判定与搜索**都在后端**，不是本地重算；窗口超 93 天时 skill 自动按月切分再缝合。"
+            "\n条件树形状：组 {kind:'group', joiner:'all'|'any'|'xor', negate?, children:[…]}；"
+            "叶 {kind:'leaf', type:'<键>', negate?, params:{…}}。条件类键（引擎自带词表，非本文件手抄）："
+            "body_in_gong（曜落地支宫） / body_in_xiu（曜落二十八宿） / dignity（曜庙旺状态） / dignity_seven（曜七态(殿垣庙旺乐喜怒)） / deg_lord（所在宿度主） / speed_state（曜行度态） / combust（合日伏焦） / day_night（昼占/夜占） / asc_gong（命宫(上升)落支） / body_rel（两曜宫位关系） / hua_lu（化曜(年干禄主)落处）。"
+        ),
+        required_context=COMMON_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
+        ask_if_missing=[
+            {"field": "startDate/endDate", "question": "要在哪段时间里找？（起止日期）"},
+            {"field": "conditions", "question": "择日要满足什么条件？"},
+            {"field": "location", "question": "起盘地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
+            {"field": "topic", "question": "这次择日是为什么事？（搬家/开业/婚嫁…）"},
+        ],
+        safe_defaults=[
+            {"field": "maxSpanDays", "value": 731, "meaning": "搜索窗上限；更长请分段"},
+        ],
+        do_not_assume=["搜索时间窗", "择日条件", "location"],
+        output_contract=(
+            "intervals 是命中区间（含 pick/pickEnd 边界安全时刻，取盘请用 pick 而非 start——"
+            "start 会落到时辰边界的另一侧）。零命中时三段仍会出现并写明范围内无满足条件的时段，不是缺段。"
+        ),
+    ),
+    "indiazeri": _policy(
+        intent=(
+            "印度择时（Muhurta）：在一段时间窗内扫出满足条件树的分钟级区间，（不附基底盘）"
+            "（[择时搜索配置]/[择时条件]/[命中时段]）。"
+            "\n算权：**区间搜索由astropy 后端计算**；"
+            ""
+            "结果里 compute_sources 逐项写明，切勿把搜索结果说成别的引擎算的。"
+            "\n段自足：印度盘全文见 india_chart 本身，本工具只出择时三段（上游同款）。条件覆盖 Panchanga 五肢（tithi/vara/nakshatra/yoga/karana）+ Lagna + 日凶段 + 三十须臾等。"
+            "\n条件树形状：组 {kind:'group', joiner:'all'|'any'|'xor', negate?, children:[…]}；"
+            "叶 {kind:'leaf', type:'<键>', negate?, params:{…}}。条件类键（引擎自带词表，非本文件手抄）："
+            "tithi（Tithi(月相日)） / vara（Vara(曜日·日出界)） / nakshatra（Nakshatra(月宿)） / yoga（Yoga(日月合行)） / karana（Karana(半日)） / lagna（Lagna(上升星座)） / planet_sign（曜落星座） / retro（曜顺逆） / day_kalam（日凶段(Rahu Kalam 类)） / tara_bala（Tara Bala(宿力)） / chandra_bala（Chandra Bala(月力)） / muhurta_seg（三十须臾(Muhurta/Abhijit)）；…共 18 类，完整表见 vendored indiaZeriConditionTypes。"
+        ),
+        required_context=COMMON_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
+        ask_if_missing=[
+            {"field": "startDate/endDate", "question": "要在哪段时间里找？（起止日期）"},
+            {"field": "conditions", "question": "择日要满足什么条件？"},
+            {"field": "location", "question": "起盘地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
+            {"field": "topic", "question": "这次择日是为什么事？（搬家/开业/婚嫁…）"},
+        ],
+        safe_defaults=[
+            {"field": "maxSpanDays", "value": 731, "meaning": "搜索窗上限；更长请分段"},
+        ],
+        do_not_assume=["搜索时间窗", "择日条件", "location"],
+        output_contract=(
+            "intervals 是命中区间（含 pick/pickEnd 边界安全时刻，取盘请用 pick 而非 start——"
+            "start 会落到时辰边界的另一侧）。零命中时三段仍会出现并写明范围内无满足条件的时段，不是缺段。"
+        ),
+    ),
     "tianxing": _policy(
         intent=(
             "天星择日·征象搜索：在一段时间窗内扫出满足西占征象条件树的时段"

@@ -142,6 +142,16 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "election": "election",
     "tianxing": "tianxing",
     "qimenzeri": "qimenzeri",
+    # 择日十技法（v3.10.0）：工具名与导出技法键同名，逐个入表 —— bench 的「新增技法自动获得
+    # 用例」只覆盖这张表（v0.33.0 教训）。
+    "huanglizeri": "huanglizeri",
+    "bazizeri": "bazizeri",
+    "taiyizeri": "taiyizeri",
+    "ziweizeri": "ziweizeri",
+    "liurengzeri": "liurengzeri",
+    "sanshizeri": "sanshizeri",
+    "qizhengzeri": "qizhengzeri",
+    "indiazeri": "indiazeri",
     "geomancy": "geomancy",
     "tarot": "tarot",
     "lingqi": "lingqi",
@@ -7619,6 +7629,247 @@ class HorosaSkillService:
             "prerequisites": qimen.get("prerequisites"),
         }
 
+    # ── 择日十技法（上游 v3.10.0）：六个本地扫描成员 ──────────────────────────────────
+    # 每个 <x>zeri = 「基底技法的完整快照」+「择时三段」，与上游 aiExport 的 preset 组成
+    # 逐字同构（AI_EXPORT_PRESET_SECTIONS.bazizeri = [...bazi, '择时搜索配置', '择时条件', '命中时段']）。
+    # 六个引擎共享 makeHourlyScanEngine，API 逐字同形，所以这里也只有一个 runner ——
+    # 复制六份近似代码等于复制六份同样的坑（尤其是「编译树 vs UI 树」那条，qimenzeri 上踩过）。
+    _ZERI_SCAN_TOOLS: dict[str, dict[str, Any]] = {
+        "huanglizeri": {"label": "黄历择吉", "base_tool": "huangli", "hourly": False,
+                        "sections": ("择吉搜索配置", "择吉条件", "命中日段")},
+        "bazizeri": {"label": "八字择时", "base_tool": "bazi_birth", "hourly": True,
+                     "sections": ("择时搜索配置", "择时条件", "命中时段")},
+        "taiyizeri": {"label": "太乙择时", "base_tool": "taiyi", "hourly": True,
+                      "sections": ("择时搜索配置", "择时条件", "命中时段")},
+        "ziweizeri": {"label": "紫微择时", "base_tool": "ziwei_birth", "hourly": True,
+                      "sections": ("择时搜索配置", "择时条件", "命中时段")},
+        "liurengzeri": {"label": "六壬择时", "base_tool": "liureng_gods", "hourly": True,
+                        "sections": ("择时搜索配置", "择时条件", "命中时段")},
+        "sanshizeri": {"label": "三式合一择时", "base_tool": "sanshiunited", "hourly": True,
+                       "sections": ("择时搜索配置", "择时条件", "命中时段")},
+    }
+
+    # 各择日成员的窗口上限（天）。都比引擎自带上限紧：JS 子进程有墙钟，而扫描成本随窗口线性涨。
+    # 日粒度的黄历便宜得多，故放宽。绝不静默截断（AGENTS §5.9）。
+    _ZERI_MAX_SPAN_DAYS = {"huanglizeri": 366}
+    _ZERI_DEFAULT_MAX_SPAN_DAYS = 92
+
+    def _run_zeri_scan_tool(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+        spec = self._ZERI_SCAN_TOOLS[tool_name]
+        label = spec["label"]
+        start_date, start_time, end_date, end_time = self._tianxing_window(payload)
+        if not start_date or not end_date:
+            raise ToolValidationError(
+                f"{label}需要搜索时间窗（startDate/endDate）。",
+                code=f"tool.{tool_name}_missing_window",
+                details={"startDate": start_date, "endDate": end_date},
+            )
+        conditions = payload.get("conditions")
+        if not conditions:
+            raise ToolValidationError(
+                f"{label}需要择日条件树（conditions）。",
+                code=f"tool.{tool_name}_missing_conditions",
+                details={"hint": "条件类键与参数见本工具的 agent_guidance。"},
+            )
+        max_span = int(payload.get("maxSpanDays")
+                       or self._ZERI_MAX_SPAN_DAYS.get(tool_name, self._ZERI_DEFAULT_MAX_SPAN_DAYS))
+        _require_sane_window(start_date, end_date, max_span=max_span, tool=tool_name)
+
+        cfg = {"startDate": start_date, "startTime": start_time, "endDate": end_date, "endTime": end_time}
+        geo = {k: payload.get(k) for k in ("zone", "gpsLon", "gpsLat", "lon", "lat", "pos")
+               if payload.get(k) is not None}
+        # 起局开关既可走顶层（schema 逐个带描述，agent 照传是正确用法）也可走 options，options 优先
+        # —— 与 tianxing / qimenzeri 同款双读合并。只读 options 会让顶层写法被静默丢弃，
+        # 于是命中区间与展示盘不同局，而配置段还打出一个没用上的设置（v0.33.1 教训）。
+        options = {
+            **{k: payload[k] for k in ("timeAlg", "after23NewDay", "lateZiHourUseNextDay",
+                                       "godKeyPos", "phaseType", "guirengType", "school")
+               if payload.get(k) is not None},
+            **(payload.get("options") or {}),
+        }
+        natal = payload.get("natal") if isinstance(payload.get("natal"), dict) else None
+
+        request = {"technique": tool_name, "action": "scan", "cfg": cfg, "geo": geo,
+                   "options": options, "tree": conditions}
+        if natal:
+            request["natal"] = natal
+        if payload.get("maxHits"):
+            request["limits"] = {"maxHits": payload.get("maxHits")}
+        scan = self.js_client.run("zeri_scan", request)
+        scan_data = scan.get("data") or {}
+        if not scan_data.get("ok"):
+            error = scan_data.get("error") or {}
+            raise ToolValidationError(
+                f"{label}搜索失败：{error.get('message') or '未知错误'}",
+                code=f"tool.{tool_name}_{error.get('code') or 'scan_failed'}",
+                details={"error": error},
+            )
+        intervals = scan_data.get("intervals") or []
+
+        # 展示盘走**基底技法自己的 runner**，所有段保持它原本的算权（ken/后端/本地各按其旧）。
+        # 只有区间搜索在本地跑。`pick` 是上游的边界安全时刻（两端各内缩），用 `start` 会把盘
+        # 落到时辰边界的另一侧 —— qimenzeri 上已验证过这一条。
+        pan_moment = intervals[0].get("pick") if intervals else f"{start_date} {start_time}"
+        pan_date, _, pan_time = str(pan_moment).partition(" ")
+        base_payload = {k: v for k, v in payload.items()
+                        if k not in ("conditions", "options", "natal", "maxHits", "maxSpanDays",
+                                     "startDate", "startTime", "endDate", "endTime",
+                                     "nongli", "jieqi_year_prev", "jieqi_year_current")}
+        base_payload["date"] = pan_date or start_date
+        base_payload["time"] = pan_time or start_time or "00:00:00"
+        # 走公共 run_tool 而非各自的私有 runner：六个基底技法的内部调用形状并不统一
+        # （qimen 是 _run_qimen_tool(payload)、liureng 是 _run_liureng_tool(name, payload)、
+        # bazi/ziwei 干脆没有私有 runner 而走通用远端路径）。run_tool 对四种都一致，
+        # 且顺带跑完富化层（_attach_bazi_geju 等），展示盘因此与直接调该技法**逐字同段**。
+        # agent_confirmed_settings：这是同一次请求内部的子盘，设置已在外层过闸，
+        # 不再重复拦（与 _tianxing_selected_moment_section 同款）。
+        base_payload["agent_confirmed_settings"] = True
+        base_payload.setdefault("clarification_notes", f"{tool_name} selected-moment sub-chart")
+        base_env = self.run_tool(spec["base_tool"], base_payload, save_result=False)
+        if not base_env.ok:
+            raise ToolTransportError(
+                f"{label}的展示盘（{spec['base_tool']}）铸盘失败，命中区间已算出但无法出盘。",
+                code=f"tool.{tool_name}_base_chart_failed",
+                details={"base_tool": spec["base_tool"], "pan_moment": pan_moment,
+                         "error": base_env.error.code if base_env.error else None},
+            )
+        base = base_env.data if isinstance(base_env.data, dict) else {}
+
+        extra = self.js_client.run(
+            "zeri_scan",
+            {"technique": tool_name, "action": "snapshot", "cfg": cfg, "geo": geo, "options": options,
+             **({"natal": natal} if natal else {}),
+             "tree": conditions, "results": intervals, "truncated": bool(scan_data.get("truncated"))},
+        )
+        base_text = base.get("snapshot_text") if isinstance(base, dict) else None
+        extra_text = extra.get("snapshot_text")
+        snapshot_text = "\n\n".join(
+            part.strip() for part in (base_text, extra_text) if isinstance(part, str) and part.strip()
+        ) or None
+        return {
+            "pan_moment": pan_moment,
+            "pan": base.get("pan") if isinstance(base, dict) else None,
+            "base": base,
+            "intervals": intervals,
+            "hit_count": len(intervals),
+            "truncated": bool(scan_data.get("truncated")),
+            "stats": scan_data.get("stats"),
+            "compiled_conditions": scan_data.get("compiled_tree"),
+            "limits": scan_data.get("limits"),
+            # 算权如实披露：展示盘按基底技法的原算源，区间搜索是本地 vendored 引擎
+            # （上游对每个成员都有跨引擎一致性金标与压力网看守，见 v3.10.0 发行说明）。
+            "compute_sources": {"scan": f"local_{tool_name}_engine", "pan": spec["base_tool"]},
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique=tool_name, snapshot_text=snapshot_text),
+        }
+
+    # ── 择日十技法：两个**后端扫描**成员（七政 / 印度）───────────────────────────────
+    # 与上面六个的分工不同：判定跑在 astropy（swisseph 直连分钟粒度），skill 只发请求 ——
+    # 与 tianxing 走 /electionscan/* 是同一条路，端点三件套 scan/conditiontypes/explain 也同形。
+    _ZERI_BACKEND_TOOLS: dict[str, dict[str, Any]] = {
+        "qizhengzeri": {"label": "七政择时", "endpoint": "/qizhengelectionscan",
+                        "base_tool": "guolao_chart", "js": "qizhengzeri"},
+        "indiazeri": {"label": "印度择时（Muhurta）", "endpoint": "/indiaelectionscan",
+                      # 印度页是 A 类星盘系，上游 preset 里 indiazeri 只有择时三段、无基底快照槽
+                      # （盘全文见 india_chart 本身）—— 故不铸展示盘，段自足。
+                      "base_tool": None, "js": "indiazeri"},
+    }
+    # 后端单请求硬上限 93 天（election_scan 家族共用），上游用按月分段绕开。
+    _ZERI_BACKEND_MAX_SPAN_DAYS = 731
+
+    def _run_zeri_backend_tool(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+        spec = self._ZERI_BACKEND_TOOLS[tool_name]
+        label, endpoint = spec["label"], spec["endpoint"]
+        start_date, start_time, end_date, end_time = self._tianxing_window(payload)
+        if not start_date or not end_date:
+            raise ToolValidationError(
+                f"{label}需要搜索时间窗（startDate/endDate）。",
+                code=f"tool.{tool_name}_missing_window",
+                details={"startDate": start_date, "endDate": end_date},
+            )
+        conditions = payload.get("conditions")
+        if not conditions:
+            raise ToolValidationError(
+                f"{label}需要择时条件树（conditions）。",
+                code=f"tool.{tool_name}_missing_conditions",
+                details={"hint": "条件类键与参数见本工具的 agent_guidance。"},
+            )
+        max_span = int(payload.get("maxSpanDays") or self._ZERI_BACKEND_MAX_SPAN_DAYS)
+        _require_sane_window(start_date, end_date, max_span=max_span, tool=tool_name)
+
+        cfg = {"startDate": start_date, "startTime": start_time, "endDate": end_date, "endTime": end_time}
+        base_request: dict[str, Any] = {
+            **cfg,
+            "zone": _electionscan_zone(payload.get("zone")),
+            "ad": payload.get("ad", 1),
+            "conditions": conditions,
+        }
+        for key in ("lat", "lon", "gpsLat", "gpsLon", "pos", "hsys", "zodiacal", "siderealAyanamsa",
+                    "height", "ayanamsaDeg", "indiaAyanamsa", "indiaHsys", "natal"):
+            if payload.get(key) is not None:
+                base_request[key] = payload[key]
+        base_request.update(_electionscan_options(payload))
+        base_request.update(_electionscan_options(payload.get("options")))
+
+        # 按月分段：后端单请求 93 天硬顶，上游在 UI 里分段绕开。§5「请求型 builder 归 Python」→
+        # 循环写在这里；分段/缝合的算术仍走 vendored 那份，边界才与星阙逐字一致。
+        segments = self._tianxing_js({"action": "split", "cfg": cfg}, stage="split").get("segments") or [cfg]
+        lists: list[list[dict[str, Any]]] = []
+        truncated = False
+        for segment in segments:
+            raw = self._call_remote(f"{endpoint}/scan", {**base_request, **segment})
+            data = self._require_electionscan_ok(raw, endpoint=f"{endpoint}/scan")
+            lists.append(list(data.get("intervals") or []))
+            truncated = truncated or bool(data.get("truncated"))
+        stitched = self._tianxing_js({"action": "stitch", "lists": lists}, stage="stitch")
+        intervals = stitched.get("intervals") or []
+
+        extra = self.js_client.run(
+            "zeri_scan_remote",
+            {"technique": tool_name, "action": "snapshot",
+             "cfg": {**cfg, **{k: payload.get(k) for k in ("pos", "hsys", "zodiacal", "siderealAyanamsa",
+                                                           "gpsLon", "gpsLat") if payload.get(k) is not None}},
+             "geo": {k: payload.get(k) for k in ("zone", "lat", "lon", "gpsLat", "gpsLon", "pos")
+                     if payload.get(k) is not None},
+             "tree": conditions, "results": intervals, "truncated": truncated},
+        )
+        extra_text = extra.get("snapshot_text")
+
+        base_text = None
+        base: dict[str, Any] = {}
+        if spec["base_tool"]:
+            pan_moment = intervals[0].get("pick") if intervals else f"{start_date} {start_time}"
+            pan_date, _, pan_time = str(pan_moment).partition(" ")
+            base_payload = {k: v for k, v in payload.items()
+                            if k not in ("conditions", "options", "natal", "maxHits", "maxSpanDays",
+                                         "startDate", "startTime", "endDate", "endTime")}
+            base_payload.update({"date": pan_date or start_date,
+                                 "time": pan_time or start_time or "00:00:00",
+                                 "agent_confirmed_settings": True,
+                                 "clarification_notes": f"{tool_name} selected-moment sub-chart"})
+            base_env = self.run_tool(spec["base_tool"], base_payload, save_result=False)
+            if base_env.ok and isinstance(base_env.data, dict):
+                base = base_env.data
+                base_text = base.get("snapshot_text")
+        else:
+            pan_moment = intervals[0].get("pick") if intervals else f"{start_date} {start_time}"
+
+        snapshot_text = "\n\n".join(
+            part.strip() for part in (base_text, extra_text) if isinstance(part, str) and part.strip()
+        ) or None
+        return {
+            "pan_moment": pan_moment,
+            "base": base or None,
+            "intervals": intervals,
+            "hit_count": len(intervals),
+            "truncated": truncated,
+            "segments": len(segments),
+            # 算权如实披露：判定与区间搜索都在后端 astropy（swisseph 直连），不是本地重算。
+            "compute_sources": {"scan": f"astropy{endpoint}", "pan": spec["base_tool"] or "none"},
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique=tool_name, snapshot_text=snapshot_text),
+        }
+
     def _run_taiyi_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         nongli = payload.get("nongli")
         if not isinstance(nongli, dict):
@@ -10524,6 +10775,10 @@ class HorosaSkillService:
             return self._run_qimen_tool(payload)
         if definition.name == "qimenzeri":
             return self._run_qimenzeri_tool(payload)
+        if definition.name in self._ZERI_SCAN_TOOLS:
+            return self._run_zeri_scan_tool(definition.name, payload)
+        if definition.name in self._ZERI_BACKEND_TOOLS:
+            return self._run_zeri_backend_tool(definition.name, payload)
         if definition.name == "tianxing":
             return self._run_tianxing_tool(payload)
         if definition.name == "qizhengelection":

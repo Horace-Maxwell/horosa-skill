@@ -417,6 +417,100 @@ class QimenInput(BirthInput):
     faRelatedPeople: list[dict[str, Any]] | None = None
 
 
+class ZeriScanInput(BirthInput):
+    """择日十技法的共享入参（上游 v3.10.0）。
+
+    `date`/`time`/`zone`/`lat`/`lon` 继承自 BirthInput —— 它们是**候选时刻**的坐标，不是出生盘；
+    真正的搜索范围由 startDate/startTime/endDate/endTime 给。命中后展示盘按基底技法自己的算源铸，
+    只有区间搜索在本地/后端扫描引擎里跑（各工具的 `compute_sources` 如实标出这一分工）。
+
+    条件树按 passthrough 建模而非在此重编：上游十技法合计三百余个条件类，各自 params 形状/validate/
+    compile 都不同，在这里重写一遍等于造第二份真值源，上游一加条件类就烂。vendored 的
+    `compile<X>Tree` 会跑各叶子自己的 validate 抛本地化错误；条件类键与参数走 agent_guidance 暴露。
+    """
+
+    startDate: str | None = Field(default=None, description="搜索窗起始日（YYYY-MM-DD）")
+    startTime: str | None = Field(default="00:00", description="搜索窗起始时刻（HH:mm）")
+    endDate: str | None = Field(default=None, description="搜索窗结束日（YYYY-MM-DD）")
+    endTime: str | None = Field(default="23:59", description="搜索窗结束时刻（HH:mm）")
+    pos: str | None = Field(default=None, description="地点显示名，进配置段与搜索请求")
+    conditions: Any | None = Field(
+        default=None,
+        description=(
+            "条件树。组节点 {kind:'group', joiner:'all'|'any'|'xor', negate?, children:[…]}；"
+            "叶节点 {kind:'leaf', type:'<条件类键>', negate?, params:{…}}。"
+            "条件类键与参数见本工具的 agent_guidance。"
+        ),
+    )
+    options: dict[str, Any] | None = Field(
+        default=None, description="起局/判读口径覆写；与顶层同名字段双读合并，options 优先。"
+    )
+    natal: dict[str, Any] | None = Field(
+        default=None, description="本命盘上下文（部分条件类按本命比对时需要，如八字/紫微/六壬的本命组）。"
+    )
+    maxHits: int | None = Field(default=None, description="命中上限（缺省用引擎自带上限）。")
+    maxSpanDays: int | None = Field(default=None, description="搜索窗天数上限覆写。")
+
+
+class HuangliZeriInput(ZeriScanInput):
+    """黄历择吉：**日粒度**扫描（不吃起局开关），命中段是整日。"""
+
+
+class BaziZeriInput(ZeriScanInput):
+    """八字择时：时辰粒度。起局三开关 + godKeyPos/phaseType 与 bazi_birth 同词表。"""
+
+    timeAlg: int | None = None
+    after23NewDay: int | None = None
+    lateZiHourUseNextDay: int | None = None
+    godKeyPos: str | None = None
+    phaseType: int | None = None
+
+
+class TaiyiZeriInput(ZeriScanInput):
+    """太乙择时：时辰粒度。太乙时基是**钟表时**（上游口径，与后端 kentang 太乙一致）。"""
+
+    school: str | None = Field(default=None, description="太乙流派档，与 taiyi 工具同词表。")
+
+
+class ZiweiZeriInput(ZeriScanInput):
+    """紫微择时：时辰粒度。"""
+
+    timeAlg: int | None = None
+    after23NewDay: int | None = None
+    lateZiHourUseNextDay: int | None = None
+
+
+class LiurengZeriInput(ZeriScanInput):
+    """六壬择时：时辰粒度。"""
+
+    guirengType: int | None = Field(default=None, description="贵人取法，与 liureng_gods 同词表。")
+    after23NewDay: int | None = None
+    lateZiHourUseNextDay: int | None = None
+
+
+class SanshiZeriInput(ZeriScanInput):
+    """三式合一择时：时辰粒度，条件可跨六壬/奇门/太乙三盘（70 个条件类，最多的一支）。"""
+
+    timeAlg: int | None = None
+    after23NewDay: int | None = None
+    lateZiHourUseNextDay: int | None = None
+    guirengType: int | None = None
+
+
+class QizhengZeriInput(ZeriScanInput):
+    """七政择时：判定与区间搜索都在 astropy 后端（swisseph 直连分钟粒度），非本地重算。"""
+
+    height: float | None = Field(default=None, description="海拔（米），缺省 0")
+    ayanamsaDeg: float | None = Field(default=None, description="恒星制岁差回加度")
+
+
+class IndiaZeriInput(ZeriScanInput):
+    """印度择时（Muhurta）：后端扫描。段自足 —— 印度盘全文见 india_chart 本身，本工具只出择时三段。"""
+
+    indiaAyanamsa: Any | None = Field(default=None, description="印度岁差档，与 india_chart 同词表。")
+    indiaHsys: Any | None = Field(default=None, description="印度分宫制，与 india_chart 同词表。")
+
+
 class QimenZeriInput(QimenInput):
     """奇门择日「找局」：在时间窗内扫出满足条件树的时辰。
 

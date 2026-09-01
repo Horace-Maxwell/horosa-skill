@@ -28,6 +28,7 @@ import { computeQimenScanPan, buildQimenScanSeeds } from '../src/vendor/divinati
 import { buildLocalBaziResult } from '../src/vendor/bazi/baziLunarLocal.js';
 import { runCanping } from '../src/tools/canping.js';
 import { personBazi } from '../src/vendor/calendar/riziEngine.js';
+import { runZeriScan, ZERI_TECHNIQUES } from '../src/tools/zeriScan.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const chart = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_traditional.json'), 'utf8'));
@@ -297,6 +298,59 @@ check('horary/election 判读层旋钮真的接进引擎（锚定引擎自带词
   assert(e1.data.school === 'modern_main' && e2.data.school === 'hellenistic',
     `流派档未生效：${e1.data.school} / ${e2.data.school}`);
   assert(e1.snapshot_text !== e2.snapshot_text, 'election 流派/参数覆写必须改变快照');
+});
+
+check('zeriScan 择日六技法：命中区间锚定到独立算出的真值', async () => {
+  // 值级锚定：八字择时搜「甲子日」，61 天窗内必须恰好命中一次，且那一天由**另一条链**
+  // （buildLocalBaziResult）独立确认确实是甲子日。这不是自证 —— 扫描引擎与八字排盘是两套代码。
+  const geo = { zone: 8, lon: '121e28', lat: '31n14' };
+  const jiazi = await runZeriScan({
+    technique: 'bazizeri', action: 'scan',
+    cfg: { startDate: '2026-03-01', startTime: '00:00', endDate: '2026-04-30', endTime: '23:59' },
+    geo, options: { timeAlg: 1 },
+    tree: { kind: 'group', joiner: 'all', negate: false, children: [
+      { kind: 'leaf', type: 'day_ganzhi', negate: false, joiner: 'all', params: { values: ['甲子'] } }] },
+  });
+  assert(jiazi.data.ok === true, `扫描失败：${JSON.stringify(jiazi.data.error)}`);
+  assert(jiazi.data.hit_count === 1, `61 天窗内甲子日应恰好 1 次，实得 ${jiazi.data.hit_count}`);
+  const hit = jiazi.data.intervals[0];
+  assert(hit.start === '2026-04-19 23:00' && hit.end === '2026-04-20 23:00',
+    `命中区间应是子时为界的甲子日，实得 ${hit.start} ~ ${hit.end}`);
+  // 独立锚：那一天的日柱由八字引擎自己算，必须是甲子。
+  const dayGz = (d) => buildLocalBaziResult({ date: d, time: '12:00:00', zone: 8, lon: '121e28', gender: 1, timeAlg: 1 })
+    .bazi.fourColumns.day.ganZhi;
+  assert(dayGz('2026-04-20') === '甲子', `锚定日应为甲子，实得 ${dayGz('2026-04-20')}`);
+  assert(dayGz('2026-04-19') === '癸亥' && dayGz('2026-04-21') === '乙丑', '前后日应为癸亥/乙丑');
+
+  // 六个成员都必须能跑通并给出**结构化**结果（零命中也是合法结果，但错误绝不能降级成零命中）。
+  // 叶参数取**引擎自带的 defaults**（newXLeaf 的产物），不是手编 —— 手编的参数会被 validate 拒掉，
+  // 而「拒掉」在这条金标里恰好也会红，于是很难分清是接线坏了还是我参数写错了。
+  const probes = {
+    huanglizeri: { type: 'yi_has', params: { values: ['嫁娶'], matchMode: 'any' } },
+    taiyizeri: { type: 'yinyang_ju', params: { value: '阳' } },
+    ziweizeri: { type: 'wuxing_ju', params: { values: ['3'] } },
+    liurengzeri: { type: 'ke_name', params: { values: ['元首课'] } },
+    sanshizeri: { type: 'lr_ke_name', params: { values: ['元首课'] } },
+  };
+  for (const [technique, leaf] of Object.entries(probes)) {
+    const r = await runZeriScan({
+      technique, action: 'scan',
+      cfg: { startDate: '2026-03-01', startTime: '00:00', endDate: '2026-03-08', endTime: '23:59' },
+      geo, options: { timeAlg: 1 },
+      tree: { kind: 'group', joiner: 'all', negate: false, children: [{ kind: 'leaf', negate: false, joiner: 'all', ...leaf }] },
+    });
+    assert(r.data.ok === true, `${technique} 扫描失败：${JSON.stringify(r.data.error)}`);
+    assert(Number.isFinite(r.data.hit_count), `${technique} 未给出 hit_count`);
+  }
+  // 认不出的条件类必须**报错**，不能静默零命中（那读起来是一个有效的空结果）。
+  const bogus = await runZeriScan({
+    technique: 'bazizeri', action: 'scan',
+    cfg: { startDate: '2026-03-01', startTime: '00:00', endDate: '2026-03-02', endTime: '23:59' },
+    geo, tree: { kind: 'group', joiner: 'all', children: [{ kind: 'leaf', type: 'notARealConditionType', params: {} }] },
+  });
+  assert(bogus.data.ok === false && bogus.data.error.code === 'invalid_conditions',
+    `未知条件类应结构化报错，实得 ${JSON.stringify(bogus.data)}`);
+  assert(Object.keys(ZERI_TECHNIQUES).length === 6, '本地扫描成员应为 6 个');
 });
 
 check('xiaoliuren(dao) 三数起三传 + 生克/化解，determinism', () => {

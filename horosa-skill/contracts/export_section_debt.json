@@ -1,14 +1,14 @@
 {
   "_comment": "上游 preset 段级欠账基线（棘轮：只减不增）。回填后跑 --update-baseline 收紧。",
   "source": {
-    "kind": "upstream",
+    "kind": "vendored",
     "aiexport_settings_version": 56
   },
   "totals": {
-    "missing_sections": 11,
+    "missing_sections": 14,
     "extra_sections": 39,
     "absent_keys": 0,
-    "keys_with_debt": 26
+    "keys_with_debt": 27
   },
   "keys": {
     "acg": {
@@ -149,6 +149,14 @@
       "extra": [
         "当前时点"
       ]
+    },
+    "qizhengzeri": {
+      "missing": [
+        "虚实",
+        "本命化曜",
+        "流年流曜"
+      ],
+      "extra": []
     },
     "relocation": {
       "missing": [],

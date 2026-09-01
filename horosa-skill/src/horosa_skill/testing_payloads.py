@@ -158,6 +158,57 @@ def build_sample_payloads() -> dict[str, dict]:
                 {"type": "pattern_ji", "params": {"names": ["青龙回首"], "palaces": [], "matchMode": "any"}},
             ]},
         },
+        # 择日十技法（v3.10.0）。条件叶取各引擎自带词表里的真键（huangli 的 yi_has、bazi 的
+        # day_ganzhi …），不是编出来的名字——编的名字会被 compile 拒掉，而离线契约测试只看「能不能
+        # 跑通」，于是一个假条件也能绿。窗口取一周，够命中又不至于让离线跑变慢。
+        "huanglizeri": {
+            **chart_birth, "pos": "福州", "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-08", "endTime": "23:59",
+            "conditions": {"kind": "group", "joiner": "all", "children": [
+                {"kind": "leaf", "type": "yi_has", "params": {"values": ["祭祀"]}},
+            ]},
+        },
+        "bazizeri": {
+            **chart_birth, "pos": "福州", "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-08", "endTime": "23:59",
+            "conditions": {"kind": "group", "joiner": "all", "children": [
+                {"kind": "leaf", "type": "day_ganzhi", "params": {"values": ["甲子", "乙丑", "丙寅"]}},
+            ]},
+        },
+        "taiyizeri": {
+            **chart_birth, "pos": "福州", "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-08", "endTime": "23:59",
+            "conditions": {"kind": "group", "joiner": "all", "children": [
+                {"kind": "leaf", "type": "yinyang_ju", "params": {}},
+            ]},
+        },
+        "ziweizeri": {
+            **chart_birth, "pos": "福州", "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-08", "endTime": "23:59",
+            "conditions": {"kind": "group", "joiner": "all", "children": [
+                {"kind": "leaf", "type": "wuxing_ju", "params": {}},
+            ]},
+        },
+        "liurengzeri": {
+            **chart_birth, "pos": "福州", "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-08", "endTime": "23:59",
+            "conditions": {"kind": "group", "joiner": "all", "children": [
+                {"kind": "leaf", "type": "ke_name", "params": {}},
+            ]},
+        },
+        "sanshizeri": {
+            **chart_birth, "pos": "福州", "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-08", "endTime": "23:59",
+            "conditions": {"kind": "group", "joiner": "all", "children": [
+                {"kind": "leaf", "type": "lr_ke_name", "params": {}},
+            ]},
+        },
+        "qizhengzeri": {
+            **chart_birth, "pos": "福州", "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-08", "endTime": "23:59",
+            "conditions": {"kind": "group", "joiner": "all", "children": [
+                {"kind": "leaf", "type": "day_night", "params": {}},
+            ]},
+        },
+        "indiazeri": {
+            **chart_birth, "pos": "福州", "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-08", "endTime": "23:59",
+            "conditions": {"kind": "group", "joiner": "all", "children": [
+                {"kind": "leaf", "type": "vara", "params": {}},
+            ]},
+        },
         "geomancy": {**chart_birth, "question": "事业能否升迁", "questionType": "career"},
         "tarot": {**chart_birth, "question": "事业能否升迁", "spread": "three"},
         "lingqi": {**chart_birth, "question": "事业能否升迁", "category": "career"},

@@ -1,7 +1,7 @@
 ---
 name: horosa-agent
 description: >-
-  Call Horosa (星阙) local metaphysics tools correctly over MCP or CLI — 97 real techniques: Western
+  Call Horosa (星阙) local metaphysics tools correctly over MCP or CLI — 105 real techniques: Western
   natal/predictive astrology (returns, progressions, primary directions, horary 卜卦, election 择日),
   八字, 紫微, 大六壬, 奇门遁甲, 太乙, 金口诀, 三式合一, 河洛理数, 邵子参评数, 六爻, 天文地占, 塔罗, and
   the full 14 神数. Use whenever a user asks to 起盘 / 排盘 / 起课 / 起卦 / 算命 / 推运 / 看盘 / 合盘 /
@@ -11,7 +11,7 @@ description: >-
 license: AGPL-3.0-only
 compatibility: Requires the local Horosa Skill MCP server/CLI (Python 3.12 + uv + installed offline runtime)
 metadata:
-  version: "0.33.1"
+  version: "0.34.0"
 ---
 
 # Horosa Skill Agent Guide
@@ -149,7 +149,7 @@ question context.”
 | Triplicity rulers / keypoints / lunation phase / extra returns | `triplicityrulers` / `keypoints` / `lunationphase` / `extrareturns` |
 | More progressions (v2.5.0) | `jaynesprog` / `vedicprog` / `planetaryarc` / `planetaryages` / `balbillus` / `yearsystem129` / `persiandirected` |
 | Horary 卜卦 / Election 择日 | `horary` / `election` |
-| 择日「找日子」——要在一段时间里搜时刻，而不是评一个候选时刻 | 西占征象 → `tianxing`（`explainAt` 可对单时刻逐叶判读）；奇门条件 → `qimenzeri`（两者都要 startDate/endDate + conditions 条件树；单点评估仍用 `election`） |
+| 择日「找日子」——要在一段时间里搜时刻，而不是评一个候选时刻 | 西占征象 → `tianxing`（`explainAt` 可对单时刻逐叶判读）；奇门 → `qimenzeri`；另有择日十技法的其余八支：黄历 `huanglizeri`（日粒度）/ 八字 `bazizeri` / 太乙 `taiyizeri` / 紫微 `ziweizeri` / 六壬 `liurengzeri` / 三式合一 `sanshizeri`（条件可跨三式）/ 七政 `qizhengzeri` / 印度 Muhurta `indiazeri`。全部要 startDate/endDate + conditions 条件树；条件类键见各工具 agent_guidance（引擎自带词表，别自己编）；单点评估仍用 `election` |
 | 七政择日动盘（十一曜山位 / 日月食 / 方位到达） | `qizhengelection`（action: pan / eclipses / azimuthsearch；date/time 是候选时刻非出生盘） |
 | 生时校正（出生时间不确定） | `india_rectify`（KP 法锚点±半窗扫描；输出证据与排序，采用与否由用户决定） |
 | Harmonic 调波盘 | `harmonic` |

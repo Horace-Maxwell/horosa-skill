@@ -47,9 +47,9 @@ tool_timeout_sec = 600
 
 ## 工具面建议
 
-Codex 没有工具搜索，97 个工具全量平铺会占相当的上下文。二选一：
+Codex 没有工具搜索，105 个工具全量平铺会占相当的上下文。二选一：
 
-- `HOROSA_MCP_COMPACT = "1"`：11 门面工具 + `horosa_tool_run` 直呼通道（97 技法全部可达）。
+- `HOROSA_MCP_COMPACT = "1"`：11 门面工具 + `horosa_tool_run` 直呼通道（105 技法全部可达）。
 - `HOROSA_TOOLSETS = "astro,cn"`：按域裁剪平铺面（域名见 SKILL.md）。
 
 也可用 Codex 侧 `enabled_tools` 只放行高频入口，例如：

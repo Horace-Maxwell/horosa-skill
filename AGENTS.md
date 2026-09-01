@@ -15,7 +15,7 @@ Claude Code 的薄入口是根 [`CLAUDE.md`](./CLAUDE.md)（与本文 §0 路由
 
 ## 0. 30 秒定向与路由
 
-Horosa Skill 把星阙（Horosa）的 **97 个**术数/占星技法打包成 local-first 的 **MCP server + CLI**：
+Horosa Skill 把星阙（Horosa）的 **105 个**术数/占星技法打包成 local-first 的 **MCP server + CLI**：
 算法跑在本机离线 runtime（Java 聚合层 `:9999` + Python chart 服务 `:8899`（含 ken/kentang 引擎）+
 bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 envelope + 星阙式
 `export_snapshot`/`export_format`；仓库保持轻量，重 runtime 走 GitHub Releases 分发。
@@ -322,12 +322,12 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 5. **条件段双登记**：可能不出现的段**同时**进 preset（出现时不算 unknown）**和** `AI_EXPORT_OPTIONAL_SECTIONS`
    （缺席时不算 missing）——单进 optional 不够（`exports/parser.py:130`）。段名不一致走
    `map_legacy_section_title`，快照 byte-identical，不改 vendored builder。
-6. 离线 fakes：`FakeClient`（HTTP 桩，覆盖新端点，含 `/chart` 的 `predictives.*` 等衍生键）+
-   `FakeJsClient`（新 JS tool handler）返回**真内容**——离线契约测试禁裸 `无` 段、禁 `generated_template`
-   回退；条件段 FakeClient 发全集（真实导出少几段是预期，如 election / 部分 kinastro preset）。
-7. 测试三层：离线契约（全技法可调、export clean）+ live `@requires_chart`/`@requires_runtime`（服务在才跑）
-   + golden/export-fixture（真 live 快照锁解析契约）。kinastro-9 无 live 测试（用户 runtime 旧）→ 离线 +
-   in-process srv 验证（**中立 CWD** 跑，别 `cd $HW`——本地 `astropy/__init__.py` 会 shadow PyPI astropy）。
+6. 离线 fakes：`FakeClient`（HTTP 桩，覆盖新端点）+ `FakeJsClient`（新 JS tool handler）返回**真内容**
+   —— 禁裸 `无` 段、禁 `generated_template` 回退；段头从真 preset 取而**不手抄**（手抄段头是「桩比真实
+   响应更简单」的亚型，段头一改桩就悄悄对不上而测试照绿）。桩管形状，值级真相归 selfcheck 金标。
+7. 测试三层：离线契约（全技法可调、export clean）+ live `@requires_chart`/`@requires_runtime` + golden/
+   export-fixture。kinastro-9 无 live 测试 → 离线 + in-process srv（**中立 CWD** 跑，别 `cd $HW`——
+   本地 `astropy/__init__.py` 会 shadow PyPI astropy）。
 8. 版本与文档：§7 版本 bump 全覆盖；README×2 全景表加行 + SKILL.md 工具路由加意图行
    （CI `verify_docs_sync.py` 因缺行而红）；「段补到既有工具 ≠ 新工具」——工具数徽章不动，测试数照更。
 9. **勿静默回退**：解析失败一律 raise 结构化错误，不许换默认值蒙混；快照失败 log + `snapshot_error`，
@@ -350,6 +350,18 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
     `_warnings`）。统一判据：「改这个参数，结果必须变」。守卫 `verify_js_boundary_contracts.py` /
     `verify_value_goldens.py` / `verify_silent_returns.py` / `verify_schema_knob_wiring.py`——
     每把都要用**真 bug 注回去**验过：「守卫跑绿」≠「守卫抓得到它声称防的那个 bug」。
+
+13. **re-vendor 抽壳纪律**（v0.34.0 · 上游把纯逻辑与 React 放同一文件时）：依赖闭包**按「已 vendored
+    即停止节点」算**（天真闭包会把整个 UI 壳拉进来，数字差一个数量级，容易误判成「这支做不了」）；
+    剥壳用 `truncate_before` 的**正则锚点**而非手抄（手抄件会静默落后 —— 仓里手抄的
+    `buildSanChuanData` 比上游少一个参数）；截断必须跑在孤儿 import 清理**之前**（孤儿判据是
+    「符号还用不用」，截断正是改变正文那一步；放后面则 UI 专用 import 全留下 → 加载即炸，
+    而 re-vendor 看起来成功）。新技法接线后必查三处易漏：registry 的 `execution`
+    （标 remote 会让通用远端路径抢先接管、runner 一次都不跑而工具照回 ok=true）、
+    `AI_EXPORT_TECHNIQUES`（有 preset 不在表里 → parse 抛 Unknown 被吞成 export_snapshot=None）、
+    provenance 分类（**兜底类别永远是「待人工确认」，不是「默认正确」**）。守卫报出的债务先问
+    「是不是某笔已入账基底债务的继承」——解析器盲区造出的**假债务**会诱使人 `--update-baseline`，
+    把常绿检查一次腌成永久噪声。
 
 **审计前置**（补「未同步技法」缺口前）：先 grep 仓内**明确排除项**（`fengshui`：canvas + 户型图上传 +
 交互点位驱动，无 birth/time 输入，无法 headless——是政策性排除不是缺口），再确认候选的

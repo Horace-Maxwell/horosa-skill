@@ -119,7 +119,7 @@ def _return_type(annotation: Any) -> Any:
 def _selected_toolsets() -> set[str] | None:
     """`HOROSA_TOOLSETS=astro,cn` → 只平铺这些 domain 的技法工具（门面工具永远注册）。
 
-    动机：Claude Code 已用工具搜索解决了 97 工具的上下文膨胀，但 Cursor 一类客户端仍有较紧的工具数
+    动机：Claude Code 已用工具搜索解决了 105 工具的上下文膨胀，但 Cursor 一类客户端仍有较紧的工具数
     上限，全量平铺会被静默截断。分组白名单是注册期过滤，不触碰 service 层。
     `HOROSA_TOOLSETS=none` == 精简模式（等价 HOROSA_MCP_COMPACT=1 的技法面）。
     """
@@ -136,31 +136,31 @@ _SERVER_INSTRUCTIONS = """Horosa (星阙) — local-first 术数/占星 computat
 machine (offline); nothing is sent to a remote service.
 
 WHEN TO REACH FOR THIS SERVER
-Any request to 起盘 / 排盘 / 起课 / 起卦 / 算命 / 看运势 / 合盘 / 择日 / 卜卦, or to explain, store,
-or report such a chart. Also 农历/节气/黄历 conversion and celebrity birth data.
+Any request to 起盘/排盘/起课/起卦/算命/看运势/合盘/择日/卜卦, or to explain, store, or report
+such a chart. Also 农历/节气/黄历 conversion and celebrity birth data.
 
-WHAT IT COVERS (97 tools)
-· Western astrology: natal + derived charts, 20+ predictive systems (returns, progressions, primary
-  directions, zodiacal releasing, firdaria), horary 卜卦, election 择日, astrocartography, midpoints.
-· Chinese metaphysics: 八字, 紫微斗数, 大六壬, 奇门遁甲, 太乙, 金口诀, 三式合一, 六爻, 河洛理数,
+WHAT IT COVERS (105 tools)
+· Western: natal + derived charts, 20+ predictive systems (returns, progressions, primary
+  directions, zodiacal releasing, firdaria), horary 卜卦, astrocartography, midpoints.
+· Chinese: 八字, 紫微斗数, 大六壬, 奇门遁甲, 太乙, 金口诀, 三式合一, 六爻, 河洛理数,
   邵子参评数, 一掌经, 小六壬, 飞宫小奇门, 小成图, 皇极轨策, 统摄法, 宿占, 灵棋经.
-· 神数 family (14 engines) + 神数正传 (5 schools), 天文地占, tarot.
+· 择日 ×10: condition-tree window search (天星/奇门/黄历/八字/太乙/紫微/六壬/三式/七政/印度).
+· 神数 ×14 + 神数正传 (5 schools), 天文地占, tarot.
 
 HOW TO USE IT
 1. Unsure? horosa_agent_guidance / horosa_dispatch. horosa_hecan runs several techniques on one
-   question → cross-validation template (divergence disclosed, never averaged).
+   question → cross-validation (divergence disclosed, never averaged).
 2. A tool REFUSES (agent_guidance.required) when a result-changing setting is missing — time, place,
    timezone, gender, 流派/宫制/起局方式. Ask via details.agent_recovery.prompt_to_user, then retry with
    agent_confirmed_settings=true (or defaults_accepted=true). Never self-confirm.
 3. Explain ONLY from the returned export_snapshot.export_text sections — never hand-calculate, and
    never read a missing section as a missing dependency.
-4. Every result carries data.technique_card (technique, settings, computing engine) — quote it
-   after your answer; horosa_technique_report renders it per run or session.
-5. Runs are stored: horosa_memory_query finds them; horosa_report_render writes DOCX/PDF from
-   your ai_report.
+4. Every result carries data.technique_card (technique, settings, engine) — quote it after your
+   answer; horosa_technique_report renders it per run/session.
+5. Runs are stored: horosa_memory_query finds them; horosa_report_render writes DOCX/PDF.
 
-Set HOROSA_MCP_COMPACT=1 to expose 11 facade tools instead of 97 (horosa_tool_run reaches every
-technique by name); HOROSA_TOOLSETS=astro,cn limits which technique groups are exposed."""
+HOROSA_MCP_COMPACT=1 exposes 11 facade tools instead of 105 (horosa_tool_run reaches any technique
+by name); HOROSA_TOOLSETS=astro,cn limits which groups are exposed."""
 
 
 _TITLE_TAIL_PAREN = re.compile(r"[（(][^（()）]*[)）]\s*$")
@@ -899,7 +899,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
 
     if settings.mcp_compact:
         # 精简模式（8 门面 + tool_run = 9 工具）：技法工具不平铺，注册一个按名直呼的通用工具（dispatch 关键词路由只覆盖部分技法，
-        # 直呼通道保证 97 技法全部可达）；澄清闸照常生效。
+        # 直呼通道保证 105 技法全部可达）；澄清闸照常生效。
         async def horosa_tool_run(**kwargs: Any) -> ToolEnvelope:
             # tool_name 必须在合并之前取走：它是 `request` 的**兄弟**参数，而 `_merge_mcp_arguments`
             # 在 request 存在时会整体改用 request 作为载荷（否则 `{tool_name, request}` 这种最常见的
