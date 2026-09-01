@@ -14,6 +14,7 @@ function _sha256Md(){
 	};
 }
 const forge = { md: { sha256: { create: _sha256Md } } };
+
 function sha256Hex(str) {
 	const md = forge.md.sha256.create();
 	md.update(String(str === undefined || str === null ? '' : str), 'utf8');

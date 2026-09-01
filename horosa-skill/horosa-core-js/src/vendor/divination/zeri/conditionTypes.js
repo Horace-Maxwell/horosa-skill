@@ -84,7 +84,10 @@ export const EMINENCE_BAND_OPTIONS = [
 	{ value: 'obscure', label: '暗晦(<3)' },
 ];
 export const BEHENIAN_STARS = ['Algol', 'Alcyone', 'Aldebaran', 'Capella', 'Sirius', 'Procyon',
-	'Regulus', 'Algorab', 'Spica', 'Arcturus', 'Alphecca', 'Antares', 'Vega', 'Deneb Algedi', 'Fomalhaut'];
+	'Regulus', 'Algorab', 'Spica', 'Arcturus', 'Alphecca', 'Antares', 'Vega', 'Deneb Algedi', 'Fomalhaut',
+	// [W8 全谱轮] 扩编:古典常用亮星(后端 fixstar_ut 本就接受任意 swisseph 星名——原 15 颗
+	// Behenian 是纯前端值域收窄;扩编面=古典文献高频亮星,名称须与 sefstars.txt 星名恰合)
+	'Betelgeuse', 'Rigel', 'Pollux', 'Castor', 'Altair', 'Canopus', 'Achernar', 'Bellatrix', 'Alphard', 'Denebola', 'Zosma', 'Sadalmelek', 'Markab', 'Scheat'];
 export const STAR_OPTIONS = BEHENIAN_STARS.map((v) => {
 	const royal = { Aldebaran: '王者·东', Regulus: '王者·北', Antares: '王者·西', Fomalhaut: '王者·南' }[v];
 	return { value: v, label: royal ? `${v}(${royal})` : v };
@@ -398,11 +401,12 @@ export const CONDITION_TYPES = {
 	point_relation: {
 		category: 'continuous',
 		label: '星体与点',
-		defaults: { planet: 'Moon', pointKind: 'angle', pointId: 'ASC', pointLon: 0, relation: 'any', angles: [0], orb: 3 },
+		defaults: { planet: 'Moon', pointKind: 'angle', pointId: 'ASC', lotId: 'fortuna', pointLon: 0, relation: 'any', angles: [0], orb: 3 },
 		fields: [
 			{ key: 'planet', kind: 'body', label: '星体' },
 			{ key: 'pointKind', kind: 'select', label: '点类型', options: POINT_KIND_OPTIONS },
 			{ key: 'pointId', kind: 'select', label: '四轴', options: ANGLE_ID_OPTIONS, showIf: (p) => p.pointKind === 'angle' },
+			{ key: 'lotId', kind: 'select', label: '希腊点', options: [{ value: 'fortuna', label: '福点 Fortuna' }, { value: 'spirit', label: '灵点 Spirit' }, { value: 'basis', label: '基点 Basis' }, { value: 'exaltation', label: '跃升点 Exaltation' }], showIf: (p) => p.pointKind === 'lot' },
 			{ key: 'pointId', kind: 'body', label: '目标星', showIf: (p) => p.pointKind === 'planet' },
 			{ key: 'pointLon', kind: 'number', label: '黄经°', min: 0, max: 360, step: 0.5, showIf: (p) => p.pointKind === 'fixedLon' },
 			{ key: 'relation', kind: 'select', label: '关系', options: RELATION_OPTIONS },
@@ -418,7 +422,7 @@ export const CONDITION_TYPES = {
 		compile(p){
 			const point = { kind: p.pointKind };
 			if(p.pointKind === 'angle' || p.pointKind === 'planet'){ point.id = p.pointId; }
-			if(p.pointKind === 'lot'){ point.id = 'fortuna'; }
+			if(p.pointKind === 'lot'){ point.id = p.lotId || 'fortuna'; }	// [W8] 四点放开(py lot_lon 已算 spirit/basis/exaltation)
 			if(p.pointKind === 'fixedLon'){ point.lon = Number(p.pointLon); }
 			const out = { planet: p.planet, point, relation: p.relation, orb: Number(p.orb) };
 			if(p.relation === 'angles'){ out.angles = (p.angles || []).map(Number); }
@@ -867,7 +871,77 @@ export const CONDITION_TYPES = {
 			return out;
 		},
 	},
+	cusp_state: {
+		category: 'continuous',
+		label: '宫头状态(落座/近座界)',
+		defaults: { house: 10, mode: 'in_sign', signs: [0], orb: 3 },
+		fields: [
+			{ key: 'house', kind: 'number', label: '宫(1-12)', min: 1, max: 12, step: 1 },
+			{ key: 'mode', kind: 'select', label: '判面', options: [{ value: 'in_sign', label: '宫头落座' }, { value: 'near_boundary', label: '宫头近座界(整宫制下无意义)' }] },
+			{ key: 'signs', kind: 'multiselect', label: '星座(任一)', options: SIGN_OPTIONS, showIf: (p) => p.mode !== 'near_boundary' },
+			{ key: 'orb', kind: 'number', label: '距界°', min: 0.5, max: 10, step: 0.5, showIf: (p) => p.mode === 'near_boundary' },
+		],
+		validate(p){
+			if(p.mode !== 'near_boundary' && !nonEmptyArr(p.signs)){ return '至少选一个星座'; }
+			return '';
+		},
+		summary(p){ return p.mode === 'near_boundary' ? `第${p.house}宫头近界±${p.orb}°` : `第${p.house}宫头落${(p.signs || []).length}座`; },
+		compile(p){
+			const out = { house: Number(p.house), mode: p.mode };
+			if(p.mode === 'near_boundary'){ out.orb = Number(p.orb); }
+			else{ out.signs = (p.signs || []).map(Number); }
+			return out;
+		},
+	},
 };
+
+// ── [F7 复审遗留根修] 方案树 × 注册表 值域审计(2026-08-30) ────────────────────
+// 病理:方案/历史里存的 UI 树,若其叶引用了后续版本已删除的条件类、或 select/multiselect
+// 字段里已删除的选项值,载入后一路绿灯——needValues 只拦空数组、compile 不查值域、
+// evaluate 对未知值 includes() 恒 false ⇒ **该行静默恒不命中**,用户以为条件在生效。
+// 本函数在「载入方案/历史」时对 UI 树做一次静态审计,返回人话 issue 列表(空=全合法)。
+// 只审 select/multiselect 且 options 为静态数组的字段;text/number/动态 options 无法
+// 静态判定,不报(宁漏勿误——误报会训练用户无视警告)。
+export function auditTreeAgainstRegistry(root, conditionTypes){
+	const issues = [];
+	const optionValue = (o)=>(o && typeof o === 'object' && o.value !== undefined ? o.value : o);
+	const walk = (node)=>{
+		if(!node){ return; }
+		if(node.kind === 'group' || Array.isArray(node.children)){
+			(node.children || []).forEach(walk);
+			return;
+		}
+		const spec = conditionTypes[node.type];
+		if(!spec){
+			issues.push(`条件类「${node.type}」已不存在(该行将恒不命中)`);
+			return;
+		}
+		const params = node.params || {};
+		// showIf 判定用「defaults 打底再盖 params」的完整形态(与 UI 渲染同一口径)
+		const effective = { ...(spec.defaults || {}), ...params };
+		(spec.fields || []).forEach((f)=>{
+			if(!f || (f.kind !== 'select' && f.kind !== 'multiselect') || !Array.isArray(f.options) || !f.options.length){ return; }
+			// 条件渲染字段:showIf 为假=该字段在当前参数形态下不生效,其值域不适用——
+			// 必须跳过,否则同 key 多形态字段(如中点的 targetId:planet 形态存星名、
+			// angle 形态才受四轴值域约束)会被不相干分支的 options 误判(自证:首版
+			// 正是把缺省 targetId='Venus' 误报成「四轴含已失效选项」)。showIf 抛异常
+			// 同样跳过——宁漏勿误。
+			if(typeof f.showIf === 'function'){
+				try{ if(!f.showIf(effective)){ return; } }catch(e){ return; }
+			}
+			const legal = f.options.map(optionValue);
+			const raw = params[f.key];
+			if(raw === undefined || raw === null){ return; }	// 缺省=UI 兜底,非失效
+			const vals = f.kind === 'multiselect' ? (Array.isArray(raw) ? raw : [raw]) : [raw];
+			const dead = vals.filter((v)=>legal.indexOf(v) < 0);
+			if(dead.length){
+				issues.push(`「${spec.label || node.type}」的 ${f.label || f.key} 含已失效选项:${dead.join('、')}(该行将恒不命中)`);
+			}
+		});
+	};
+	walk(root);
+	return issues;
+}
 
 export function newLeaf(type, joiner){
 	const spec = CONDITION_TYPES[type];

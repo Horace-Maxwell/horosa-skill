@@ -10,6 +10,7 @@ import { HOUSE_SYSTEM_OPTIONS } from '../../../constants/AstroConst.js';
 // try 包裹零回归）。skill 侧该段由 Python 在命中时刻补铸 /chart 后 append（请求型 builder 归
 // Python 的既有法则）——JS 层恒回空串，段自然不产，与上游「无盘不产段」同形。
 const buildAstroSnapshotContent = () => '';
+
 // 经纬度显示格式:度分制+大写方向字母(用户规格,如 119°19′E, 26°05′N;拒绝裸十进制)。
 export function formatGpsDms(lon, lat){
 	const part = (v, pos, neg) => {

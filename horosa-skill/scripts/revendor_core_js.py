@@ -105,7 +105,10 @@ def _strip_network_orchestrators(text: str, removed: list[str]) -> tuple[str, li
         text = text[:start] + text[end:].lstrip("\n")
 
 
-_NAMED_IMPORT = re.compile(r"^import\s+\{\s*([^}]+?)\s*\}\s+from\s+['\"]([^'\"]+)['\"];?\s*$", re.M)
+_NAMED_IMPORT = re.compile(
+    # 行尾注释同上：不吃它就等于放过一整类孤儿具名 import。
+    r"^import\s+\{\s*([^}]+?)\s*\}\s+from\s+['\"]([^'\"]+)['\"];?[ \t]*(?://[^\n]*)?$", re.M
+)
 
 
 def _drop_orphaned_imports(text: str) -> tuple[str, list[str]]:
@@ -427,7 +430,10 @@ def _relocate_imports(text: str, target: Path) -> tuple[str, list[str]]:
 # --------------------------------------------------------------------------------------------
 
 _IMPORT_FROM = r"(from\s+['\"]){spec}(['\"])"
-_IMPORT_STMT = r"^import\s+[^;\n]*?from\s+['\"]{spec}['\"]\s*;?\s*$"
+# 行尾注释（上游写 `import { sideSectionIcon } from '…'; // [观象P1]`）与 `import 'x';` 副作用形态
+# 都要吃得下：早先的 `\s*$` 收尾让带注释的那一行匹配不上，stub 报 "not found" 而 import 原样留下 ——
+# 于是模块引用了一个 vendor 树里不存在的路径，加载即炸，而 re-vendor 那一步看起来是成功的。
+_IMPORT_STMT = r"^import\s+(?:[^;\n]*?from\s+)?['\"]{spec}['\"]\s*;?[ \t]*(?://[^\n]*)?$"
 
 
 def load_manifest() -> dict:
@@ -457,6 +463,31 @@ def apply_deviations(text: str, deviations: list[dict]) -> tuple[str, list[str]]
                 notes.append(f"⚠ stub_import specifier not found: {spec}")
             else:
                 notes.append(f"stubbed {spec}")
+        elif kind == "replace_text":
+            # 精确文本替换（可空 = 删除）。给的是「import 之外的残留」用的：例如 LiuRengMain 头部
+            # `const {Option} = Select;` 这类模块级 UI 解构——它们只服务被剥离的 React 尾部，
+            # 留着就是 ReferenceError。find 必须**唯一命中**，命中 0 次或多次都报错而不是猜。
+            find = dev["find"]
+            n = text.count(find)
+            if n != 1:
+                notes.append(f"⚠ replace_text 命中 {n} 次（需恰好 1 次）: {find[:60]!r}")
+            else:
+                text = text.replace(find, dev.get("to", ""))
+                notes.append(f"replaced {find[:40]!r}")
+        elif kind == "truncate_before":
+            # 上游把纯逻辑与 React 组件放在同一个文件里（LiuRengMain.js：1–4553 纯逻辑，
+            # 4554 起 `class … extends Component`）。手抄那 4553 行必然漂移 —— 上游的
+            # buildSanChuanData 早已多出第 4 个参数 castOverride，而仓里手抄的那份还是三参。
+            # 这条 deviation 把「剥掉 React 尾部」变成**可机械复现**的一步：锚点是一行正则，
+            # 不是行号（行号会随上游编辑漂移，锚点找不到就报错而不是悄悄少剪/多剪）。
+            pattern = re.compile(dev["anchor"], re.M)
+            m = pattern.search(text)
+            if not m:
+                notes.append(f"⚠ truncate_before anchor not found: {dev['anchor']}")
+            else:
+                dropped = text[m.start():].count("\n") + 1
+                text = text[: m.start()].rstrip() + "\n"
+                notes.append(f"truncated at /{dev['anchor']}/ (dropped {dropped} trailing line(s))")
         else:
             notes.append(f"⚠ unknown deviation kind: {kind}")
     return text, notes
@@ -473,14 +504,25 @@ def render_one(upstream_src: Path, rel_upstream: str, target: Path, deviations: 
     source = upstream_src / rel_upstream
     if not source.is_file():
         raise SystemExit(f"upstream file not found: {source}")
-    text, notes = transform(source.read_text(encoding="utf-8"))
+    raw = source.read_text(encoding="utf-8")
+    # 🔴 truncate_before 必须跑在 transform **之前**：孤儿 import 的判据是「符号在正文里还用不用」，
+    # 而截断正是改变正文的那一步。放在后面的话，React 尾部专用的 16 个 import（LiuRengChart /
+    # DateTime / QuickDockBar / perfFlags …）在判定时还“在用”，于是全部留下 → 模块加载即炸。
+    # 其余 deviation（redirect/stub）仍在 transform 之后、relocate 之前，理由见下方注释。
+    pre = [d for d in (deviations or []) if d.get("kind") == "truncate_before"]
+    post = [d for d in (deviations or []) if d.get("kind") != "truncate_before"]
+    pre_notes: list[str] = []
+    if pre:
+        raw, pre_notes = apply_deviations(raw, pre)
+    text, notes = transform(raw)
+    notes = pre_notes + notes
     text, more = _reexport_required(text, target)
     notes.extend(more)
     # Deviations run BEFORE relocate, not after: relocate rewrites specifiers by basename, so a
     # post-relocate redirect would be looking for a specifier that no longer exists, and a stubbed
     # import would already have been reported UNRESOLVED. Running first makes both authoritative —
     # a redirected path is resolvable so relocate leaves it alone, and a stubbed import is gone.
-    text, more = apply_deviations(text, deviations)
+    text, more = apply_deviations(text, post)
     notes.extend(more)
     text, more = _relocate_imports(text, target)
     notes.extend(more)

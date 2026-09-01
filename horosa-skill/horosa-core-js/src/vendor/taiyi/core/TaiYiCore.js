@@ -442,7 +442,9 @@ function calcJiyuan(style, accNum){
 	return `第${cnum[jiNum - 1] || '一'}纪第${cnum[yuanNum - 1] || '一'}元`;
 }
 
-function buildPalaceMarks(pan){
+// [择日宿主] 加性导出:taiyiZeriScanEngine 阴遁对齐补丁翻 taiyiPalace 后须重建
+// marks/palace16/branch12(曾只翻 taiyiPalace 一键,gong16_has 与 taiyi_gong 互斥——审查实抓)。
+export function buildPalaceMarks(pan){
 	const marks = [
 		{ label: '太乙', palace: pan.taiyiPalace },
 		{ label: '文昌', palace: pan.skyeyes },

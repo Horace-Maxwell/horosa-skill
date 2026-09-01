@@ -284,9 +284,30 @@ function dayOfYearUTC(date){
 	return Math.floor((date.getTime() - start.getTime()) / 86400000) + 1;
 }
 
-function equationOfTime(dayOfYear){
-	const b = (360 / 365) * (dayOfYear - 81) * Math.PI / 180;
-	return 9.87 * Math.sin(2 * b) - 7.53 * Math.cos(b) - 1.5 * Math.sin(b);
+// [十三轮根修] 均时差 NOAA/Meeus 高精度式(太阳平黄经/平近点角/偏心率/黄赤交角级数,
+// 误差 <15s,1800-2200)。旧教科书简式(9.87sin2B−7.53cosB−1.5sinB,dayOfYear 粒度,
+// 误差 ±1-2 分钟)与后端 swiss 精确 EoT 在时辰界骑线级分叉——用户实抓:2026-08-31
+// 简式 +29s vs swiss −60s 差 89s,六壬择日行 17:14 起而主页酉界 17:15:10,pick 落
+// 上一时辰盘(元首/掩目两课)。后端六壬/紫微时柱的 timeOffset 来自 py jieqiinfo(swiss),
+// RealSunTimeOffset.java 查表仅显式 RealSun 档覆写(且该表 zip 存疑),权威=swiss。
+// 返回分钟(视−平,+=真太阳快);输入=UTC 毫秒(儒略世纪级数,非 dayOfYear)。
+function equationOfTime(utcMs){
+	const jd = utcMs / 86400000 + 2440587.5;
+	const T = (jd - 2451545.0) / 36525.0;
+	const rad = Math.PI / 180;
+	const L0 = (280.46646 + 36000.76983 * T + 0.0003032 * T * T) % 360;
+	const M = 357.52911 + 35999.05029 * T - 0.0001537 * T * T;
+	const e = 0.016708634 - 0.000042037 * T - 0.0000001267 * T * T;
+	const eps0 = 23.43929111 - (46.8150 * T + 0.00059 * T * T - 0.001813 * T * T * T) / 3600.0;
+	const y = Math.tan((eps0 / 2) * rad);
+	const y2 = y * y;
+	const sin2L0 = Math.sin(2 * L0 * rad);
+	const sinM = Math.sin(M * rad);
+	const cos2L0 = Math.cos(2 * L0 * rad);
+	const sin4L0 = Math.sin(4 * L0 * rad);
+	const sin2M = Math.sin(2 * M * rad);
+	const eotRad = y2 * sin2L0 - 2 * e * sinM + 4 * e * y2 * sinM * cos2L0 - 0.5 * y2 * y2 * sin4L0 - 1.25 * e * e * sin2M;
+	return (eotRad / rad) * 4;	// 度→分钟(1°=4min)
 }
 
 function applyApparentSolarTime(parts, params){
@@ -295,8 +316,17 @@ function applyApparentSolarTime(parts, params){
 	if(alg !== 0 && alg !== 3){
 		return parts;
 	}
-	const lon = parseGeoDegrees(params.lon, 180);
+	// [十三轮] lon 缺失回退 gpsLon(紫微家 Z4「只认 lon 键,缺失=真太阳静默不生效」实抓
+	// 修法收编到源头;六壬工作台 geo 曾只发 gpsLon=整条校正静默跳过退化成钟表口径)。
+	let lon = parseGeoDegrees(params.lon, 180);
 	if(!Number.isFinite(lon)){
+		lon = parseGeoDegrees(params.gpsLon, 180);
+	}
+	if(!Number.isFinite(lon)){
+		if(typeof console !== 'undefined' && !applyApparentSolarTime._warnedNoLon){
+			applyApparentSolarTime._warnedNoLon = true;
+			console.warn('[baziLunarLocal] 真太阳时档缺经度(lon/gpsLon 均无):校正跳过,退化为钟表口径');
+		}
 		return parts;
 	}
 	const zoneHours = parseZoneHours(params.zone);
@@ -308,7 +338,7 @@ function applyApparentSolarTime(parts, params){
 	wall.setUTCHours(parts.hour, parts.minute, parts.second, 0);
 	const utcForEot = new Date(wall.getTime() - zoneHours * 3600000);
 	const ltcSeconds = (lon - zoneHours * 15) * 4 * 60;
-	const eotSeconds = alg === 0 ? equationOfTime(dayOfYearUTC(utcForEot)) * 60 : 0;
+	const eotSeconds = alg === 0 ? equationOfTime(utcForEot.getTime()) * 60 : 0;
 	const adjusted = new Date(wall.getTime() + Math.round(ltcSeconds + eotSeconds) * 1000);
 	return {
 		year: adjusted.getUTCFullYear(),
@@ -1224,3 +1254,6 @@ export function buildLocalNongliLite(params){
 export { buildFlowDays, buildFlowHours };
 
 export default buildLocalBaziResult;
+
+// 测试内窥(跨链判别网 zeriCrossChainParity 用;生产勿引)。
+export const __testing__ = { equationOfTime, applyApparentSolarTime };

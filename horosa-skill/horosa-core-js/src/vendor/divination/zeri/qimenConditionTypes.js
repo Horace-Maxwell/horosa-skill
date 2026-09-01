@@ -9,6 +9,12 @@
 // 与主盘格局判定同源同名(机械同源哨兵见 __tests__/qimenConditionTypes.test.js)。
 // 🔴 宫位口径:cells 的 palaceNum 是 3×3 grid 位序(1巽2离3坤4震5中6兑7艮8坎9乾),非洛书号;
 //   本表 palaces 字段的 value 一律用 grid 位序,label 拼「卦名+洛书号+方位」供用户按洛书认宫。
+// [十一轮] keyDeps 合同(六壬同协议):每类显式声明所吃「可掩 plateKey 位」——值域
+//   ['yearGz','monthGz','dayGz','timeGz','diurnal'] 子集;数组或 (params)=>数组(kong_all/
+//   pillar_ganzhi 按参数维精掩)。cells/juText/值符使派生面=基础位不声明。面→位依据(逐面实核):
+//   xunShou·fuTou=日柱 / allKong=各柱 / anGan·anZhi=时柱干+时旬 / wangShuai=月支五行 /
+//   shenSha=四柱+isDiurnal(buildQimenShenSha 入参)/ ju_info 的 sanYuan 从 juText 解析=基础位。
+//   缺 keyDeps 键=树掩码回退全位(qimenKeyMaskOf 保守兜底)+完备闸红。
 import { GROUP_TYPES } from './conditionTypes.js';
 import {
 	BAGONG_PALACE_NAME,
@@ -18,7 +24,12 @@ import {
 	getMenGongRelation,
 } from '../../dunjia/DunJiaBaGongRules.js';
 import { LUOSHU_NUM } from '../../dunjia/DunJiaFaDoc.js';
+// [W3 全谱轮] 旺衰五路=主页「看旺衰」同函数(DunJiaCalc.buildQimenWangShuai);
+// 伏反吟局=法奇门同函数(全盘级,≠宫级伏吟格)。
+import { buildQimenWangShuai } from '../../dunjia/DunJiaCalc.js';
+import { computePanType } from '../../dunjia/DunJiaFaCalc.js';
 
+const opt = (arr)=>arr.map((v)=>({ value: v, label: v }));
 const PALACE_DIR = { 1: '东南', 2: '正南', 3: '西南', 4: '正东', 5: '中宫', 6: '正西', 7: '东北', 8: '正北', 9: '西北' };
 // 洛书 1..9 序 → grid 位序(坎1→8、坤2→3、震3→4、巽4→1、中5→5、乾6→9、兑7→6、艮8→7、离9→2)。
 const GRID_BY_LUOSHU_ORDER = [8, 3, 4, 1, 5, 9, 6, 7, 2];
@@ -55,10 +66,10 @@ const GOD_OPTIONS = [
 	{ value: '勾', label: '勾陈(仅飞盘/混合)' }, { value: '雀', label: '朱雀(仅飞盘/混合)' }, { value: '常', label: '太常(仅飞盘/混合)' },
 ];
 const FLAG_OPTIONS = [
-	{ value: 'kongWang', label: '空亡' }, { value: 'yima', label: '驿马' },
+	{ value: 'kongWang', label: '空亡' }, { value: 'yima', label: '驿马' }, { value: 'gengHu', label: '庚/白虎' },
 	{ value: 'jiXing', label: '六仪击刑' }, { value: 'ruMu', label: '奇仪入墓' }, { value: 'menPo', label: '门迫' },
 ];
-const FLAG_CN = { kongWang: '空亡', yima: '驿马', jiXing: '击刑', ruMu: '入墓', menPo: '门迫' };
+const FLAG_CN = { kongWang: '空亡', yima: '驿马', jiXing: '击刑', ruMu: '入墓', menPo: '门迫', gengHu: '庚/虎' };	// [W3] overview.sixHarm 已算的第六害
 const RELATION_OPTIONS = [
 	{ value: 'sheng', label: '门生宫' }, { value: 'beisheng', label: '宫生门' },
 	{ value: 'po', label: '门克宫(门迫)' }, { value: 'shouzhi', label: '宫克门(受制)' }, { value: 'bihe', label: '门宫比和' },
@@ -155,6 +166,8 @@ function starNameMatches(actualStarName, wantedChars){
 export function makeQimenEvalCtx(pan){
 	let overview;
 	let overviewReady = false;
+	let wangShuai;
+	let panType;
 	return {
 		pan,
 		overview(){
@@ -164,6 +177,20 @@ export function makeQimenEvalCtx(pan){
 			}
 			return overview;
 		},
+		// [W3 全谱轮] 旺衰五路(星/门/天干/地干/宫)一次惰性:主页「看旺衰」同函数。
+		wangShuai(){
+			if(wangShuai === undefined){
+				try{ wangShuai = buildQimenWangShuai(pan) || null; }catch(e){ wangShuai = null; }
+			}
+			return wangShuai;
+		},
+		// 伏吟/反吟局(全盘级,法奇门同函数;≠宫级伏吟格)。
+		panType(){
+			if(panType === undefined){
+				try{ panType = computePanType(pan) || { type: null, text: '' }; }catch(e){ panType = { type: null, text: '' }; }
+			}
+			return panType;
+		},
 	};
 }
 
@@ -172,6 +199,7 @@ export function makeQimenEvalCtx(pan){
 export const QIMEN_CONDITION_TYPES = {
 	pattern_ji: {
 		category: '格局',
+		keyDeps: [],
 		label: '吉格',
 		defaults: { names: ['青龙回首'], palaces: [], matchMode: 'any' },
 		fields: [
@@ -193,6 +221,7 @@ export const QIMEN_CONDITION_TYPES = {
 	},
 	pattern_xiong: {
 		category: '格局',
+		keyDeps: [],
 		label: '凶格',
 		defaults: { names: ['伏吟'], palaces: [], matchMode: 'any' },
 		fields: [
@@ -209,6 +238,7 @@ export const QIMEN_CONDITION_TYPES = {
 	},
 	tian_gan: {
 		category: '盘面',
+		keyDeps: [],
 		label: '天盘干',
 		defaults: { values: ['丙'], palaces: [], matchMode: 'any' },
 		fields: [
@@ -224,6 +254,7 @@ export const QIMEN_CONDITION_TYPES = {
 	},
 	di_gan: {
 		category: '盘面',
+		keyDeps: [],
 		label: '地盘干',
 		defaults: { values: ['戊'], palaces: [], matchMode: 'any' },
 		fields: [
@@ -239,6 +270,7 @@ export const QIMEN_CONDITION_TYPES = {
 	},
 	door: {
 		category: '盘面',
+		keyDeps: [],
 		label: '八门',
 		defaults: { values: ['开'], palaces: [], matchMode: 'any' },
 		fields: [
@@ -254,6 +286,7 @@ export const QIMEN_CONDITION_TYPES = {
 	},
 	star: {
 		category: '盘面',
+		keyDeps: [],
 		label: '九星',
 		defaults: { values: ['辅'], palaces: [], matchMode: 'any' },
 		fields: [
@@ -269,6 +302,7 @@ export const QIMEN_CONDITION_TYPES = {
 	},
 	god: {
 		category: '盘面',
+		keyDeps: [],
 		label: '八神',
 		defaults: { values: ['符'], palaces: [], matchMode: 'any' },
 		fields: [
@@ -284,6 +318,7 @@ export const QIMEN_CONDITION_TYPES = {
 	},
 	palace_flag: {
 		category: '盘面',
+		keyDeps: [],
 		label: '宫位标记',
 		defaults: { values: ['kongWang'], palaces: [], matchMode: 'any' },
 		fields: [
@@ -302,6 +337,7 @@ export const QIMEN_CONDITION_TYPES = {
 				if(cell.hasJiXing){ out.push('jiXing'); }
 				if(cell.hasRuMu){ out.push('ruMu'); }
 				if(cell.hasMenPo){ out.push('menPo'); }
+				if((cell.tianGan === '庚') || `${cell.god || ''}`.indexOf('虎') >= 0){ out.push('gengHu'); }	// [W3] 同 overview gengHu 判据(god 为简称「虎」/全名双形)
 				return out;
 			};
 			return evalCellValueCondition(pan, p, flagsOf, (v)=>FLAG_CN[v] || v);
@@ -309,6 +345,7 @@ export const QIMEN_CONDITION_TYPES = {
 	},
 	men_gong_relation: {
 		category: '盘面',
+		keyDeps: [],
 		label: '门宫生克',
 		defaults: { values: ['sheng'], palaces: [], matchMode: 'any' },
 		fields: [
@@ -328,6 +365,7 @@ export const QIMEN_CONDITION_TYPES = {
 	},
 	zhifu: {
 		category: '纲要',
+		keyDeps: [],
 		label: '值符',
 		defaults: { stars: [], palaces: [9] },
 		fields: [
@@ -357,6 +395,7 @@ export const QIMEN_CONDITION_TYPES = {
 	},
 	zhishi: {
 		category: '纲要',
+		keyDeps: [],
 		label: '值使',
 		defaults: { doors: ['开'], palaces: [] },
 		fields: [
@@ -387,6 +426,7 @@ export const QIMEN_CONDITION_TYPES = {
 	},
 	ju_info: {
 		category: '纲要',
+		keyDeps: [],
 		label: '局象',
 		defaults: { dun: '阳遁', juShu: [], sanYuan: [] },
 		fields: [
@@ -414,6 +454,7 @@ export const QIMEN_CONDITION_TYPES = {
 	},
 	pillar_ganzhi: {
 		category: '四柱',
+		keyDeps: (p)=>({ year: ['yearGz'], month: ['monthGz'], day: ['dayGz'], time: ['timeGz'] })[(p && p.pillar) || 'time'] || ['yearGz', 'monthGz', 'dayGz', 'timeGz'],
 		label: '四柱干支',
 		defaults: { pillar: 'time', gans: [], zhis: ['子'] },
 		fields: [
@@ -441,6 +482,125 @@ export const QIMEN_CONDITION_TYPES = {
 			const ganOk = (!p.gans || !p.gans.length) || p.gans.indexOf(gan) >= 0;
 			const zhiOk = (!p.zhis || !p.zhis.length) || p.zhis.indexOf(zhi) >= 0;
 			return { pass: ganOk && zhiOk, actual: `${PILLAR_CN[p.pillar] || p.pillar}=${gz}` };
+		},
+	},
+	wang_shuai: {
+		category: '盘面',
+		keyDeps: ['monthGz'],
+		label: '旺衰(星门干宫·旺相休囚死)',
+		defaults: { road: 'door', states: ['旺', '相'], palaces: [], matchMode: 'any' },
+		fields: [
+			{ key: 'road', kind: 'select', label: '判路', options: [{ value: 'star', label: '九星' }, { value: 'door', label: '八门' }, { value: 'tianGan', label: '天盘干' }, { value: 'diGan', label: '地盘干' }, { value: 'gong', label: '宫' }] },
+			{ key: 'states', kind: 'multiselect', label: '旺衰态(任一)', options: opt(['旺', '相', '休', '囚', '死']), hint: '月令五行定态;判定=主页「看旺衰」buildQimenWangShuai 同函数' },
+			{ key: 'palaces', kind: 'multiselect', label: '宫位', options: QIMEN_PALACE_OPTIONS, hint: '空=任意宫' },
+			MATCH_MODE_FIELD,
+		],
+		validate: (p)=>(!p.states || !p.states.length) ? '至少选择一项' : '',
+		summary(p){ return `${({ star: '星', door: '门', tianGan: '天干', diGan: '地干', gong: '宫' })[p.road] || '门'}旺衰:${(p.states || []).join('/')}${scopeText(p.palaces)}${p.matchMode === 'all' ? '(全部)' : ''}`; },
+		evaluate(pan, p, ctx){
+			const ws = ctx.wangShuai();
+			if(!ws){ return { pass: false, actual: '旺衰:—' }; }
+			const KEY = { star: 'starWangShuai', door: 'doorWangShuai', tianGan: 'tianGanWangShuai', diGan: 'diGanWangShuai', gong: 'gongWangShuai' };
+			const k = KEY[p.road || 'door'];
+			const scope = (p.palaces && p.palaces.length) ? ws.palaces.filter((c)=>p.palaces.includes(`${c.palaceNum}`)) : ws.palaces;
+			const hits = scope.filter((c)=>(p.states || []).includes(c[k]));
+			const pass = p.matchMode === 'all' ? (scope.length > 0 && hits.length === scope.length) : hits.length > 0;
+			return { pass, actual: `月令${ws.monthElem}·${scope.map((c)=>`${c.palaceName}${c[k] || '—'}`).join(' ')}` };
+		},
+	},
+	qm_shensha: {
+		category: '神煞',
+		keyDeps: ['yearGz', 'monthGz', 'dayGz', 'timeGz', 'diurnal'],
+		label: '神煞值支(日禄天马桃花…)',
+		defaults: { name: '日禄', values: ['午'] },
+		fields: [
+			{ key: 'name', kind: 'select', label: '神煞', options: opt(['日禄', '日德', '天马', '日马', '年马', '桃花', '破碎', '生气', '死气', '病符', '血支', '孤辰', '寡宿', '丧门', '吊客', '成神', '会神', '解神', '天目', '医星', '月厌', '月破', '贼神', '贵人', '游都', '文昌', '丧车', '幕贵']), hint: '判定=盘顶层 shenSha(buildQimenShenSha 同源 28 名)' },
+			{ key: 'values', kind: 'multiselect', label: '值支(任一)', options: opt(['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥']) },
+		],
+		validate: needValues,
+		summary(p){ return `${p.name || '日禄'}值${(p.values || []).join('/')}`; },
+		evaluate(pan, p){
+			const items = (pan.shenSha && pan.shenSha.allItems) || [];
+			const row = items.find((it)=>it.name === (p.name || '日禄'));
+			const v = row ? `${row.value || ''}` : '';
+			// 贵人类 value 可能是「午/申」双值文本——按包含判。
+			const pass = !!v && v !== '—' && (p.values || []).some((z)=>v.indexOf(z) >= 0);
+			return { pass, actual: `${p.name || '日禄'}:${v || '—'}` };
+		},
+	},
+	fuyin_ju: {
+		category: '格局',
+		keyDeps: [],
+		label: '伏吟/反吟局(全盘)',
+		defaults: { value: 'none' },
+		fields: [
+			{ key: 'value', kind: 'select', label: '局态', options: [{ value: 'none', label: '非伏非反(正局)' }, { value: '伏吟', label: '天地伏吟局' }, { value: '反吟', label: '反吟局' }], hint: '全盘级(computePanType 法奇门同函数);与宫级「伏吟格」不同判面' },
+		],
+		validate: ()=>'',	// 奇门契约:每类必有 validate(单选类恒过)
+		summary(p){ return ({ none: '正局(非伏反)', 伏吟: '伏吟局', 反吟: '反吟局' })[p.value] || p.value; },
+		evaluate(pan, p, ctx){
+			const t = ctx.panType();
+			const cur = t && t.type ? t.type : 'none';
+			return { pass: cur === (p.value || 'none'), actual: `盘局:${cur === 'none' ? '正局' : cur}` };
+		},
+	},
+	kong_all: {
+		category: '纲要',
+		keyDeps: (p)=>({ rikong: ['dayGz'], shikong: ['timeGz'], year: ['yearGz'], month: ['monthGz'], day: ['dayGz'], time: ['timeGz'] })[(p && p.dim) || 'shikong'] || ['yearGz', 'monthGz', 'dayGz', 'timeGz'],
+		label: '空亡细判(日空/时空/柱空)',
+		defaults: { dim: 'shikong', values: ['子'] },
+		fields: [
+			{ key: 'dim', kind: 'select', label: '判面', options: [{ value: 'rikong', label: '日空(旬空)' }, { value: 'shikong', label: '时空' }, { value: 'year', label: '年柱空亡' }, { value: 'month', label: '月柱空亡' }, { value: 'day', label: '日柱空亡' }, { value: 'time', label: '时柱空亡' }] },
+			{ key: 'values', kind: 'multiselect', label: '空亡支(任一)', options: opt(['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥']), hint: 'pan.xunkong{日空,时空}+allKong 四柱全览同源;palace_flag 只判宫是否空亡,此类判空亡支本身' },
+		],
+		validate: needValues,
+		summary(p){ return `${({ rikong: '日空', shikong: '时空', year: '年柱空', month: '月柱空', day: '日柱空', time: '时柱空' })[p.dim] || '时空'}:${(p.values || []).join('/')}`; },
+		evaluate(pan, p){
+			const dim = p.dim || 'shikong';
+			let txt = '';
+			if(dim === 'rikong'){ txt = `${(pan.xunkong && pan.xunkong['日空']) || pan.kongWang || ''}`; }
+			else if(dim === 'shikong'){ txt = `${(pan.xunkong && pan.xunkong['时空']) || ''}`; }
+			else{
+				const ak = pan.allKong || {};
+				txt = `${ak[({ year: '年空', month: '月空', day: '日空', time: '时空' })[dim]] || ''}`;	// 真键=中文「X空」(dump 实抓)
+			}
+			const pass = !!txt && (p.values || []).some((z)=>txt.indexOf(z) >= 0);
+			return { pass, actual: `${({ rikong: '日空', shikong: '时空', year: '年柱空', month: '月柱空', day: '日柱空', time: '时柱空' })[dim]}:${txt || '—'}` };
+		},
+	},
+	xun_shou: {
+		category: '纲要',
+		keyDeps: ['dayGz'],
+		label: '旬首/符头',
+		defaults: { dim: 'xunShou', values: ['甲子'] },
+		fields: [
+			{ key: 'dim', kind: 'select', label: '判面', options: [{ value: 'xunShou', label: '旬首' }, { value: 'fuTou', label: '符头' }] },
+			{ key: 'values', kind: 'multiselect', label: '取值(任一;含判)', options: opt(['甲子', '甲戌', '甲申', '甲午', '甲辰', '甲寅', '戊', '己', '庚', '辛', '壬', '癸']), hint: '旬首=六甲;符头文本可含六仪(按包含匹配)' },
+		],
+		validate: needValues,
+		summary(p){ return `${p.dim === 'fuTou' ? '符头' : '旬首'}:${(p.values || []).join('/')}`; },
+		evaluate(pan, p){
+			const txt = `${pan[p.dim || 'xunShou'] || ''}`;
+			const pass = !!txt && (p.values || []).some((v)=>txt.indexOf(v) >= 0);
+			return { pass, actual: `旬首${pan.xunShou || '—'}·符头${pan.fuTou || '—'}` };
+		},
+	},
+	an_ganzhi: {
+		category: '盘面',
+		keyDeps: ['timeGz'],
+		label: '暗干/暗支',
+		defaults: { dim: 'anGan', values: ['甲'], palaces: [], matchMode: 'any' },
+		fields: [
+			{ key: 'dim', kind: 'select', label: '判面', options: [{ value: 'anGan', label: '暗干' }, { value: 'anZhi', label: '暗支' }] },
+			{ key: 'values', kind: 'multiselect', label: '取值(任一)', options: opt(['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸', '子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥']), hint: '暗干随 anGanMode 开关产出;未开启则各宫为空恒不命中' },
+			{ key: 'palaces', kind: 'multiselect', label: '宫位', options: QIMEN_PALACE_OPTIONS, hint: '空=任意宫' },
+			MATCH_MODE_FIELD,
+		],
+		validate: needValues,
+		summary(p){ return `${p.dim === 'anZhi' ? '暗支' : '暗干'}:${(p.values || []).join('/')}${scopeText(p.palaces)}${p.matchMode === 'all' ? '(全部)' : ''}`; },
+		evaluate(pan, p){
+			const dim = p.dim || 'anGan';
+			return evalCellValueCondition(pan, p, (cell)=>(cell && cell[dim] ? [cell[dim]] : []));
 		},
 	},
 };

@@ -8,6 +8,7 @@ import * as AstroText from './progConst.js';
 // 已经产这三段（契约 v10 的 _predictive_setup_section_text / _predictive_common_sections_text），
 // 再让 JS 产一遍会重段。上游每个调用点都写了 typeof …==='function' 守卫，缺失即回退 []，故空对象即正解。
 const astroAiSnapshot = {};
+
 const birthHeaderLines = (c) => (typeof astroAiSnapshot.buildPredictiveBirthHeaderLines === 'function' ? astroAiSnapshot.buildPredictiveBirthHeaderLines(c) : []);
 const currentMomentLines = (c, x) => (typeof astroAiSnapshot.buildCurrentMomentLines === 'function' ? astroAiSnapshot.buildCurrentMomentLines(c, x) : []);
 const methodNoteLines = (k) => (typeof astroAiSnapshot.buildMethodNoteLines === 'function' ? astroAiSnapshot.buildMethodNoteLines(k) : []);

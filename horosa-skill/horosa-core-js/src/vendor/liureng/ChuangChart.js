@@ -5,6 +5,7 @@ const randomStr = (n) => 'x'.repeat(Number(n) || 4);
 const creatTooltip = () => {};
 const drawPath = () => {}; const drawTextH = () => {}; const drawTextV = () => {};
 const buildLiuRengHouseTipObj = () => ({}); const buildLiuRengShenTipObj = () => ({});
+
 function extractBranch(value){
 	const txt = `${value || ''}`;
 	const match = txt.match(/[子丑寅卯辰巳午未申酉戌亥]/);

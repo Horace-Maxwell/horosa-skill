@@ -514,6 +514,10 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "divination/engine/resultShapes.js": {
+      "upstream": "divination/engine/resultShapes.js",
+      "mode": "verbatim"
+    },
     "divination/engine/timeLords.js": {
       "upstream": "divination/engine/timeLords.js",
       "mode": "verbatim",
@@ -523,6 +527,10 @@
       "upstream": "divination/engine/utils.js",
       "mode": "verbatim",
       "deviations": []
+    },
+    "divination/horary/antisciaTable.js": {
+      "upstream": "divination/horary/antisciaTable.js",
+      "mode": "verbatim"
     },
     "divination/horary/describe.js": {
       "upstream": "divination/horary/describe.js",
@@ -569,6 +577,10 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "divination/horary/verdictScoring.js": {
+      "upstream": "divination/horary/verdictScoring.js",
+      "mode": "verbatim"
+    },
     "divination/lifespan/lifespanData.js": {
       "upstream": "divination/lifespan/lifespanData.js",
       "mode": "verbatim",
@@ -576,6 +588,21 @@
     },
     "divination/lifespan/lifespanEngine.js": {
       "upstream": "divination/lifespan/lifespanEngine.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/baziZeriConditionTypes.js": {
+      "upstream": "divination/zeri/baziZeriConditionTypes.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/baziZeriScanEngine.js": {
+      "upstream": "divination/zeri/baziZeriScanEngine.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/baziZeriSnapshot.js": {
+      "upstream": "divination/zeri/baziZeriSnapshot.js",
       "mode": "verbatim",
       "deviations": []
     },
@@ -589,8 +616,77 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "divination/zeri/hourlyScanEngine.js": {
+      "upstream": "divination/zeri/hourlyScanEngine.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/huangliZeriConditionTypes.js": {
+      "upstream": "divination/zeri/huangliZeriConditionTypes.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/huangliZeriScanEngine.js": {
+      "upstream": "divination/zeri/huangliZeriScanEngine.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/huangliZeriSnapshot.js": {
+      "upstream": "divination/zeri/huangliZeriSnapshot.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/indiaZeriConditionTypes.js": {
+      "upstream": "divination/zeri/indiaZeriConditionTypes.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/indiaZeriSnapshot.js": {
+      "upstream": "divination/zeri/indiaZeriSnapshot.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "divination/zeri/intervalOps.js": {
       "upstream": "divination/zeri/intervalOps.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/liurengGodsData.js": {
+      "upstream": "divination/zeri/liurengGodsData.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/liurengLocal.js": {
+      "upstream": "divination/zeri/liurengLocal.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/liurengZeriConditionTypes.js": {
+      "upstream": "divination/zeri/liurengZeriConditionTypes.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../components/lrzhan/LiuRengMain.js",
+          "to": "../../liureng/LiuRengMain.js",
+          "why": "上游那个文件把 20 个纯逻辑 export 和 React 组件放在一起；本仓 vendored 的同名文件就是它 truncate_before 剥掉 React 尾部后的**逐字**版本，故指向它即等价。"
+        }
+      ]
+    },
+    "divination/zeri/liurengZeriScanEngine.js": {
+      "upstream": "divination/zeri/liurengZeriScanEngine.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../components/lrzhan/LiuRengMain.js",
+          "to": "../../liureng/LiuRengMain.js",
+          "why": "上游那个文件把 20 个纯逻辑 export 和 React 组件放在一起；本仓 vendored 的同名文件就是它 truncate_before 剥掉 React 尾部后的**逐字**版本，故指向它即等价。"
+        }
+      ]
+    },
+    "divination/zeri/liurengZeriSnapshot.js": {
+      "upstream": "divination/zeri/liurengZeriSnapshot.js",
       "mode": "verbatim",
       "deviations": []
     },
@@ -606,6 +702,51 @@
     },
     "divination/zeri/qimenZeriSnapshot.js": {
       "upstream": "divination/zeri/qimenZeriSnapshot.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/qizhengZeriConditionTypes.js": {
+      "upstream": "divination/zeri/qizhengZeriConditionTypes.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/qizhengZeriSnapshot.js": {
+      "upstream": "divination/zeri/qizhengZeriSnapshot.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/sanshiOptionSplit.js": {
+      "upstream": "divination/zeri/sanshiOptionSplit.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/sanshiZeriConditionTypes.js": {
+      "upstream": "divination/zeri/sanshiZeriConditionTypes.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/sanshiZeriScanEngine.js": {
+      "upstream": "divination/zeri/sanshiZeriScanEngine.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/sanshiZeriSnapshot.js": {
+      "upstream": "divination/zeri/sanshiZeriSnapshot.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/taiyiZeriConditionTypes.js": {
+      "upstream": "divination/zeri/taiyiZeriConditionTypes.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/taiyiZeriScanEngine.js": {
+      "upstream": "divination/zeri/taiyiZeriScanEngine.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/taiyiZeriSnapshot.js": {
+      "upstream": "divination/zeri/taiyiZeriSnapshot.js",
       "mode": "verbatim",
       "deviations": []
     },
@@ -626,6 +767,28 @@
           "why": "1951 行前端总装模块不整树 vendor；[选中时刻星盘] 由 Python 补铸 /chart 生成"
         }
       ]
+    },
+    "divination/zeri/ziweiZeriConditionTypes.js": {
+      "upstream": "divination/zeri/ziweiZeriConditionTypes.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../components/ziwei/data/tables/ziweige.json",
+          "to": "../../ziwei/data/tables/ziweige.json",
+          "why": "该表早已随 ziweiPatterns 一起 vendored（vendor/ziwei/data/tables/ziweige.json）；自动重定位只覆盖 .js，.json 需显式一条。"
+        }
+      ]
+    },
+    "divination/zeri/ziweiZeriScanEngine.js": {
+      "upstream": "divination/zeri/ziweiZeriScanEngine.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/ziweiZeriSnapshot.js": {
+      "upstream": "divination/zeri/ziweiZeriSnapshot.js",
+      "mode": "verbatim",
+      "deviations": []
     },
     "dunjia/DunJiaBaGongRules.js": {
       "upstream": "components/dunjia/DunJiaBaGongRules.js",
@@ -1051,6 +1214,11 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "liureng/LRShenJiangDoc.js": {
+      "upstream": "components/liureng/LRShenJiangDoc.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "liureng/LRShenShaDoc.js": {
       "upstream": "components/liureng/LRShenShaDoc.js",
       "mode": "verbatim",
@@ -1065,6 +1233,96 @@
       "upstream": "components/liureng/LRZhangSheng.js",
       "mode": "verbatim",
       "deviations": []
+    },
+    "liureng/LiuRengMain.js": {
+      "upstream": "components/lrzhan/LiuRengMain.js",
+      "mode": "verbatim",
+      "why": "上游把 20 个纯逻辑 export（DA_GE_META/XIAO_JU_META/matchDaGeReferences/matchXiaoJuReferences/buildLiuRengLayout/buildKeData/buildSanChuanData/buildLiuRengSnapshotText …）与 React 组件放在同一个 6436 行文件里。1–4553 行是纯逻辑，4554 起 `class LiuRengMain extends Component`。六壬择时/三式合一择时的条件层直接吃这 20 个 export —— 手抄它们会漂移（仓里 liurengRefContext.js 手抄的 buildSanChuanData 只有 3 参，上游早已是 4 参含 castOverride）。故整头 vendored，React 尾部由 truncate_before 机械剥离。 用 verbatim 而非 curated：截断由 truncate_before 机械完成，流水线输出逐字可复现，因此该受「输出必须与 vendored 文件逐字相同」这条约束 —— curated 是给手工子集用的，会豁免掉这层保护。",
+      "deviations": [
+        {
+          "kind": "truncate_before",
+          "anchor": "^class LiuRengMain extends Component",
+          "why": "剥掉 React 组件尾部（4554–6436）。锚点是正则而非行号：上游一编辑行号就漂，锚点找不到会报错而不是悄悄剪错。"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../../constants/AstroConst.js",
+          "to": "../astroextra/progConst.js",
+          "why": "纯逻辑段只用到 SUN/MOON/MERCURY/VENUS/MARS/JUPITER/SATURN 七个经典行星常量；progConst 是仓里现成的窄 shim（balbillus 已在用），避免拖进 1128 行 AstroConst。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../xq-ui.js",
+          "stub": "",
+          "why": "UI 组件库（同上）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../xq-icons.js",
+          "stub": "",
+          "why": "图标库（同上）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../liureng/ChuangChart.js",
+          "stub": "",
+          "why": "React 元素（同上）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../liureng/LRSanChuanRelationMini.js",
+          "stub": "",
+          "why": "React 元素（同上）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../liureng/LRXiangDoc.js",
+          "stub": "",
+          "why": "仅 React 尾部使用。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./LiuRengChart.js",
+          "stub": "",
+          "why": "React 元素（同上）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./LiuRengInput.js",
+          "stub": "",
+          "why": "React 元素（同上）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./LiuRengBirthInput.js",
+          "stub": "",
+          "why": "React 元素（同上）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../comp/DateTime.js",
+          "stub": "",
+          "why": "React 元素（同上）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../common/QuickDockBar.js",
+          "stub": "",
+          "why": "React 元素（同上）。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "const {Option} = Select;\n",
+          "to": "",
+          "why": "模块级 UI 解构，只服务被剥离的 React 尾部（Option 在纯逻辑段一次都没用到）。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "const TabPane = Tabs.TabPane;\n",
+          "to": "",
+          "why": "同上（TabPane 在纯逻辑段一次都没用到）。"
+        }
+      ]
     },
     "liureng/liurengRefContext.js": {
       "mode": "bespoke",
@@ -1405,10 +1663,22 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "utils/classicalParamSpec.js": {
+      "upstream": "utils/classicalParamSpec.js",
+      "mode": "verbatim"
+    },
+    "utils/customCalibreStores.js": {
+      "upstream": "utils/customCalibreStores.js",
+      "mode": "verbatim"
+    },
     "utils/dispositorChain.js": {
       "upstream": "utils/dispositorChain.js",
       "mode": "verbatim",
       "deviations": []
+    },
+    "utils/ganzhiYearBase.js": {
+      "upstream": "utils/ganzhiYearBase.js",
+      "mode": "verbatim"
     },
     "utils/julianDayIndex.js": {
       "upstream": "utils/julianDayIndex.js",
@@ -1538,6 +1808,11 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "ziwei/ZiweiCalc.js": {
+      "upstream": "components/ziwei/ZiweiCalc.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "ziwei/data/tables/ziweistarlight_quanshu_full.json": {
       "upstream": "components/ziwei/data/tables/ziweistarlight_quanshu_full.json",
       "mode": "verbatim",
@@ -1563,6 +1838,11 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "ziwei/ziweiPatterns.js": {
+      "upstream": "components/ziwei/ziweiPatterns.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "ziwei/ziweiSchools.js": {
       "upstream": "components/ziwei/ziweiSchools.js",
       "mode": "verbatim",
@@ -1571,30 +1851,6 @@
     "ziwei/zwLuckItems.js": {
       "mode": "bespoke",
       "why": "no upstream file of this name (skill-authored)"
-    },
-    "divination/engine/resultShapes.js": {
-      "upstream": "divination/engine/resultShapes.js",
-      "mode": "verbatim"
-    },
-    "divination/horary/verdictScoring.js": {
-      "upstream": "divination/horary/verdictScoring.js",
-      "mode": "verbatim"
-    },
-    "divination/horary/antisciaTable.js": {
-      "upstream": "divination/horary/antisciaTable.js",
-      "mode": "verbatim"
-    },
-    "utils/customCalibreStores.js": {
-      "upstream": "utils/customCalibreStores.js",
-      "mode": "verbatim"
-    },
-    "utils/classicalParamSpec.js": {
-      "upstream": "utils/classicalParamSpec.js",
-      "mode": "verbatim"
-    },
-    "utils/ganzhiYearBase.js": {
-      "upstream": "utils/ganzhiYearBase.js",
-      "mode": "verbatim"
     }
   }
 }

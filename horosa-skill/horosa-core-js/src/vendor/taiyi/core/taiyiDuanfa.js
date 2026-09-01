@@ -208,7 +208,7 @@ export function computeVictory(pan, geju){
 	const reasons = [`主客算总则:${verdict}`];
 	// 太乙宫气(旺衰底色)
 	const tNum = Number(pan.taiyiNum);
-	if(tNum && TAIYI_GONG_INFO[tNum]){ const g = TAIYI_GONG_INFO[tNum]; reasons.push(`太乙临${g.gong}${g.gua}·${g.qi}(${g.men}),${QI_OMEN[g.qi] || ''}。`); }
+	if(tNum && TAIYI_GONG_INFO[tNum]){ const g = TAIYI_GONG_INFO[tNum]; reasons.push(`太乙临${g.gua}·${g.qi}(${g.men}),${QI_OMEN[g.qi] || ''}。`); }
 	// 格局压制
 	const gj = geju || [];
 	const yanQiu = gj.filter((x) => x.kind === 'yan' || x.kind === 'qiu' || x.kind === 'ge');

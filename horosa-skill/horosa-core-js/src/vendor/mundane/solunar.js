@@ -4,6 +4,7 @@
 // 角化在 Campanus 宫框上按宫内比例插值成 mundo 度(宫头=卯酉圈等分,忠实量角化口径)。
 
 
+
 const norm360 = (x) => (((x % 360) + 360) % 360);
 const fwd = (from, to) => norm360(to - from);                  // 前向弧
 const angDist = (a, b) => { const d = Math.abs(norm360(a) - norm360(b)); return Math.min(d, 360 - d); };
