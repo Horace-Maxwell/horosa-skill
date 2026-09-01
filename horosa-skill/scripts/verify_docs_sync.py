@@ -95,6 +95,17 @@ def check_versions(version: str) -> None:
             if got != version:
                 err(f"horosa-core-js/{name} version = {got} != {version}")
 
+    # uv.lock 与 package-lock 同族：编辑安装的本包版本也写在锁文件里，发版忘了 `uv lock` 就会
+    # 掉版（v0.33.0 前实测停在 0.32.0 且缺 tomlkit 锁定）。锁文件掉版不影响本地跑，却让复现
+    # 构建装到旧元数据 —— 与 package-lock 那次一模一样的形状，所以一并纳入锁步。
+    uv_lock = ROOT / "horosa-skill" / "uv.lock"
+    if uv_lock.exists():
+        m = re.search(r'name = "horosa-skill"\nversion = "([^"]+)"', read(uv_lock))
+        if not m:
+            err("uv.lock: 找不到 horosa-skill 自身的 version 条目")
+        elif m.group(1) != version:
+            err(f"uv.lock horosa-skill version = {m.group(1)} != {version}（发版前跑 `uv lock`）")
+
     plugin = ROOT / ".claude-plugin/plugin.json"
     if plugin.exists():
         got = json.loads(read(plugin)).get("version")

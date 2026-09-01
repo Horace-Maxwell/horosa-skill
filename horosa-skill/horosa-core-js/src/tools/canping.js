@@ -88,7 +88,33 @@ export function runCanping(payload) {
 
   const gender = bazi.gender === 'Female' ? '女' : '男';
   const birthYear = parseInt(`${date}`.slice(0, 4), 10) || 0;
-  const base = { yearGz, monthBranch, dayBranch, hourBranch, gender, method, qiyunAge: 1 };
+  // 🔴 lunarMonth/lunarDay/baziYun 必须转发：引擎默认 dayunRule='mingGongQiyun' → 走
+  // qiyunFromLunarDate(lunarMonth, lunarDay)，两者缺省为 0 时守卫判非法 → 起运岁回落 1
+  // （canpingLocal.js:113/185）。于是九个大运区间整体平移，liunianSeries 又按
+  // floor((age-qiyun)/10) 分段 → 120 行流年全部归错大运。数据本来就在 bazi 里，只是没传。
+  const nl = (bazi && bazi.nongli) || {};
+  const dayunRule = ['mingGongQiyun', 'mingGongOne', 'baziStyle'].indexOf(input.dayunRule) >= 0
+    ? input.dayunRule
+    : 'mingGongQiyun';
+  // baziStyle 档要的是**扁平化**的运列（`{branch, ganzi, ageStart, ageEnd, startYear, endYear}`），
+  // 不是 bazi.direction 原样 —— 引擎 `filter((d) => d && d.branch)`（canpingLocal.js:138）对
+  // 原样数组会全滤空、静默回落旧排序法。映射逐字照上游 aiAnalysisContext.js:1909。
+  let baziYun = null;
+  if (dayunRule === 'baziStyle' && Array.isArray(bazi && bazi.direction) && bazi.direction.length) {
+    try {
+      baziYun = bazi.direction.map((d) => {
+        const gzd = (d.mainDirect && (d.mainDirect.ganzi || d.mainDirect.ganZhi)) || '';
+        return { branch: gzd.charAt(1) || '', ganzi: gzd, ageStart: d.age, ageEnd: d.age + 9, startYear: d.startYear, endYear: d.endYear };
+      }).filter((d) => d.branch);
+      if (!baziYun.length) { baziYun = null; }
+    } catch (error) { baziYun = null; }
+  }
+  const base = {
+    yearGz, monthBranch, dayBranch, hourBranch, gender, method, dayunRule, baziYun,
+    lunarMonth: Number(nl.monthNum) || 0,
+    lunarDay: Number(nl.dayNum) || 0,
+    qiyunAge: 1,
+  };
   const result = canpingCalculate(base);
 
   let series = null;

@@ -1,0 +1,30 @@
+{
+  "_comment": "Fields with no consumer inside this repo. The seeded set is verified-live-via-backend: each is forwarded verbatim to the upstream astropy/ken endpoints and read there by name (checked by hand against the upstream tree — e.g. pdProjection -> perchart.py:821). A NEW entry is not automatically that; point at the consumer before baselining it, or the guard degrades into a dumping ground. Refresh with `uv run python scripts/verify_schema_knob_wiring.py --update-baseline`.",
+  "unwired": [
+    "BirthInput.pdProjection",
+    "BirthInput.pdFrame",
+    "BirthInput.pdFramework",
+    "BirthInput.pdSignificators",
+    "BirthInput.pdPromissorTypes",
+    "BirthInput.pdTimeKeyCustom",
+    "BirthInput.pdParallel",
+    "BirthInput.pdRaptParallel",
+    "BirthInput.orbScale",
+    "BirthInput.includePrimaryDirection",
+    "IndiaChartInput.dashaVariants",
+    "IndiaChartInput.dashaYearLength",
+    "IndiaChartInput.karakaScheme",
+    "IndiaChartInput.yuddhaCriterion",
+    "IndiaRectifyInput.prashnaTime",
+    "IndiaRectifyInput.prashnaSchools",
+    "IndiaRectifyInput.prashnaMatter",
+    "IndiaRectifyInput.prashnaNumber",
+    "IndiaRectifyInput.prashnaCuspMode",
+    "IndiaRectifyInput.prashnaPrimaryHouse",
+    "IndiaRectifyInput.tajakaYear",
+    "IndiaRectifyInput.annualChartType",
+    "IndiaRectifyInput.varshaLat",
+    "IndiaRectifyInput.varshaLon",
+    "ZiWeiBirthInput.sihuaSchool"
+  ]
+}

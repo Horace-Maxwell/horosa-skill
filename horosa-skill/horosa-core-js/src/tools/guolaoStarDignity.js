@@ -70,9 +70,12 @@ export function runGuolaoStarDignity(payload) {
   const result = source.chart && typeof source.chart === 'object' ? source.chart : source;
   try {
     const body = buildStarDignityMotionSection(result, source.fields || {}) || '';
-    return { text: body ? `[星曜庙旺与星点动态（殿垣庙旺乐喜怒 · 顺逆留伏迟速）]\n${body}` : '' };
+    if (!body) {
+      return { text: '', error: { code: 'empty_star_dignity', message: '星曜庙旺/动态段为空（盘里没有可判的星点）。' } };
+    }
+    return { text: `[星曜庙旺与星点动态（殿垣庙旺乐喜怒 · 顺逆留伏迟速）]\n${body}` };
   } catch (error) {
-    return { text: '' };
+    return { text: '', error: { code: 'star_dignity_build_failed', message: error instanceof Error ? error.message : `${error}` } };
   }
 }
 

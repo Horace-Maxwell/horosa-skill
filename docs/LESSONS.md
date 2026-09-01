@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.33.1 (2026-09) | issue #15 家族全清剿 | presence 级断言对值失明；跨边界不改键；静默降级会上移；schema 描述不是愿望清单 |
 | v0.14.0 (2026-06) | 古典占星 [古典]/[古典格局] | endpoint 必须登记 `_PYTHON_CHART_ENDPOINTS`；段补≠新工具；离线/live 覆盖分层 |
 | v0.13.0 (2026-06) | 4 未同步 AI 技法 + 太乙/八字段口径 | 审计先查自家排除项；`EXPORT_TECHNIQUES` 才是权威清单；请求型 builder 归 Python |
 | v0.12.0 (2026-06) | 主限法 v12 核5收敛 + faRelatedPeople | vendor 源=Horosa-Public；params 回显≠引擎值；live 必打 vendored 实例；pdSyncRev 心跳 |
@@ -92,6 +93,64 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.33.1 / 2026-09-01 — issue #15 不是一个 bug，是一个**家族**：边界改键 + presence 级绿灯
+
+外部贡献者 [zeno17z](https://github.com/Horace-Maxwell/horosa-skill/pull/16) 报了一个具体错误：八字格局段
+把 正财格 判成 正官格。根因是 `baziGeju.js` 写 `hour:` 而三个引擎一律读 `time` —— 时柱静默缺席，
+取格/五行力量/盲派整批错，而输出照常自信。顺着这个形状全树对抗性扫描（43 个 JS tool、44 个
+`js_client.run` 调用点、78 个 Input class）之后，同族活体 **4 个 P0 + 10 个 P1**，外加 36 处无错误码的
+静默空返回与 15 个 schema 撒谎的死旋钮。
+
+- 🔴 **presence 级断言对值回归结构性失明。** 「段在 `section_titles_detected` 里」≠「段里的值是对的」。
+  六层防线全绿而 bug 照样出货：loadcheck 只扫 `src/vendor/` 不扫 `src/tools/`；selfcheck 对
+  baziGeju 零覆盖；vendor manifest 只管引擎不管调用方；离线 fake **手编答案**（引擎从不运行）；
+  live 测试 presence-only 且 `@requires_runtime` 在 CI 里 skip；golden fixture 里压根没这三个段。
+  `src/tools/` 是整棵 JS 树里**唯一没有任何静态守卫**的部分 —— 而所有改键都发生在那里。
+  守卫 = `verify_js_boundary_contracts.py`（死键向 + 锚定向）+ `verify_value_goldens.py`（值级金标棘轮，
+  AGENTS §5 第 12 步）。接上一条 :1139 的下一阶：那条讲「桩比真实响应更简单」，这条讲「断言比真实
+  结论更浅」。
+
+- 🔴 **跨边界不改键。** 上游原样透传是唯一被证明安全的形状。本轮五例全是同一句话的反例：
+  `hour`↔`time`（#15）、`minute`↔`ke`（铁板，96 局塌成 12）、`lunarMonth`/`lunarDay` 在手却不转发
+  （参评，起运岁恒 1、九个大运整体平移）、`params: response` 指向 /chart 信封而非起盘时刻（果老
+  moira，`isDay` 恒真 → 夜生盘拿天贵而非玉贵）、裸 `gender` 经 `Number('女')`=NaN 判男（神数正传，
+  女命大定死限年错）。**判据统一为一句**：「改这个参数，结果必须变」—— 每条修复都配了这样的
+  值级金标 + 负向对照（把 bug 改回去，金标必须红）。
+
+- 🔴 **静默降级会沿调用链上移。** #15 的修复给 JS 侧加了结构化错误，而 Python 侧
+  `_attach_bazi_geju` 只读 `snapshot_text` —— `data.error` 无人看，四段消失依旧零信号。
+  **修一层不等于修一条链**：错误信号每上一层都要有人接。守卫 = `verify_silent_returns.py` 棘轮。
+
+- 🔴 **selfcheck 的 harness 自己也犯同一个病。** `check()` 只 `fn()` 不看返回值 → async 断言体的失败
+  变成 unhandled rejection，打印 `ok`、退出码 0、CI 全绿，断言其实根本没验。写这一条时它正好吃掉了
+  我自己刚写的 canping 金标里的一处笔误。**给 harness 也要做负向对照。**
+
+- 🔴 **schema 描述不是愿望清单。** `ElectionInput` 的注释一边引着正确出处（"上游 electionParams.js 的
+  13 键"），一边列着 11 个与那 13 键**零重合**的发明名字；`HoraryInput` 的 `receptionMode`/
+  `almutenScheme` 在任何引擎词表里都不存在。它们被描述、被文档化、三个版本一次都没生效 ——
+  agent 照描述传参、读到自信输出，永远学不到那个旋钮被忽略了。
+  修法不是一删了事：`lotsSet`/`considerationsMode` 是**真词表**里的名字，真正的病是
+  `horaryJudgeOpts(school)` 只喂了四层口径链的第 1 层、`runElection(chart, topicId)` 干脆把 `opts`
+  整个丢了 —— 46 + 13 个真参数结构上不可达。**接线时把白名单锚到引擎自带的词表**
+  （`HORARY_PARAM_BY_KEY` / `ELECTION_PARAM_BY_KEY` / `BABYLON_SCHEMES`），不手抄会漂移的清单；
+  认不出的键回执在 `data.params_ignored`，不静默吞。发明的名字整批删。
+  守卫 = `verify_schema_knob_wiring.py`。
+
+- 🔴 **新守卫也要做负向对照，否则它只是更贵的装饰。** `verify_js_boundary_contracts.py` 第一版能抓
+  铁板的 `minute`，却抓不到 #15 自己的 `hour` —— 因为 #15 的字面量不在调用处，而在上一行的
+  `const four = {…}`，采集器只扫内联实参。**「守卫跑绿了」和「守卫能抓到它声称防的那个 bug」是两件事**；
+  后者必须用真 bug 注回去验证。同理，第一版生成器每次 regen 都会把手写豁免块冲掉，而 regen 恰恰是
+  修完调用点后的常规动作 —— 等于豁免永远活不过一次修复。
+
+- 🔴 **上游删掉的东西，下游也要跟着删。** `zuoShan` 上游已判定是「双重幽灵」（无流派声明 needs、
+  快照 builder 全文不消费）并删除，skill 侧还在 schema/service/JS 三处带着它，白白打散 memo 缓存。
+  同理 babylon 的 `era`/`scheme`：流派只当**标签**传，judge 层的 `dodecaVariant`/`cubitDeg` 一个没传，
+  于是无论选哪档十二分恒 B，而 [起盘信息] 行照常打出所选档名。
+
+- 🔴 **fork 首次贡献者的 PR，workflow 需维护者手动批准**（`action_required`），否则 CI 永远 pending，
+  看起来像「贡献者的代码跑不过」。另：本仓 Dependency graph 未开启，`dependency-review` 在**每个** PR
+  上都红，与 PR 内容无关 —— 判断 CI 时要先分清「这条红是不是每个 PR 都红」。
 
 ### v0.33.0+ / 2026-08-29 — codex TOML 裸插值：Windows 路径的反斜杠打穿整个 config（main 连红两次）
 

@@ -408,10 +408,22 @@ def _only_payload_keys(payload: dict[str, Any], keys: tuple[str, ...]) -> dict[s
 
 # election_scan.ScanContext.eff 实际读取的口径键；白名单而非 **payload —— 否则 skill 自有的
 # agent_confirmed_settings / response_view 之类会一起灌进引擎。
+# 🔴 这份白名单必须覆盖后端**实读**的键，否则就是在客户端把已修好的后端 bug 重新装回去：
+# election_scan.scan 走 `_cls_req = dict(data)` 整包下发（election_scan.py:1993），
+# perchart.push_classical_request 从中实读 termsVariant / leoBoundFirst / geminiBoundEmended /
+# customTermsDay / customTermsNight / triplicity / houseCuspAdvance / lotsDocReverse /
+# nodeExaltation / dignityDebilities / orbSystem / luminaryOrbBonus 十二键
+# （perchart.py:696-703），另有 ScanContext 读 height / partileDef、PerChart.__init__ 读
+# cazimiOrb / combustOrb / underBeamsOrb 等。上游 [F8] 那条注释记的正是「dignityDebilities/
+# orbSystem 等发了不生效」—— 后端已收编，而此处白名单窄 7 键，等于把它们又静默滤掉：
+# schema 上带着描述、chart 工具上照常生效，唯独天星择日搜索里无声失效。
 _ELECTIONSCAN_OPTION_KEYS = (
     "cazimiOrb", "combustOrb", "underBeamsOrb", "vocMode", "vocIncludeOuter", "viaCombustaVariant",
     "partileDef", "termsVariant", "triplicity", "sectBuffer", "houseCuspAdvance", "westNodeType",
     "height", "leoBoundFirst", "geminiBoundEmended",
+    # push_classical_request 实读、此前被滤掉的七键：
+    "nodeExaltation", "dignityDebilities", "lotsDocReverse", "orbSystem", "luminaryOrbBonus",
+    "customTermsDay", "customTermsNight",
 )
 
 
@@ -420,7 +432,9 @@ _ELECTIONSCAN_OPTION_KEYS = (
 _TIANXING_MAX_SPAN_DAYS = 731
 
 
-def _require_sane_window(start_date: str, end_date: str, *, max_span: int, tool: str) -> None:
+def _require_sane_window(
+    start_date: str, end_date: str, *, max_span: int, tool: str, span_hint: str | None = None
+) -> None:
     """搜索窗必须可解析、非倒置、不超上限 —— 三者缺一都不能放行。
 
     🔴 `startDate`/`endDate` **不经** normalize_request_payload（它只管 date/time 等，见
@@ -449,7 +463,7 @@ def _require_sane_window(start_date: str, end_date: str, *, max_span: int, tool:
             code=f"tool.{tool}_span_too_large",
             details={
                 "span_days": span, "max_span_days": max_span,
-                "hint": "分段搜索，或调高 maxSpanDays；每段都是一次串行后端扫描，窗口越长越慢。",
+                "hint": span_hint or "分段搜索，或调高 maxSpanDays；每段都是一次串行后端扫描，窗口越长越慢。",
             },
         )
 
@@ -6777,7 +6791,27 @@ class HorosaSkillService:
                     "after23NewDay": fields.get("after23NewDay"),
                     "lateZiHourUseNextDay": fields.get("lateZiHourUseNextDay"),
                 }
-            geju = self.js_client.run("bazi_geju", {"fourColumns": fc, "birth": birth})
+            geju = self.js_client.run(
+                "bazi_geju",
+                {
+                    "fourColumns": fc,
+                    "birth": birth,
+                    # 五行力量的藏干口径必须跟着走，否则 [月令司令（分野）] 段报着司令干、
+                    # [五行力量] 段却按通行版加权，同一份输出里两段自相矛盾。
+                    "cangVersion": fields.get("cangVersion"),
+                    "fenyeVersion": fields.get("fenyeVersion"),
+                },
+            )
+            # 🔴 JS 侧的结构化失败必须捞出来：只读 snapshot_text 时，四柱不全（issue #15 修的那类）
+            # 会让这四段整体消失且零信号——同一个「静默降级」形状沿调用链上移了一层。
+            geju_data = geju.get("data") if isinstance(geju, dict) else None
+            if isinstance(geju_data, dict) and geju_data.get("ok") is False:
+                degraded = dict(response_data)
+                degraded.setdefault("_warnings", []).append(
+                    "八字格局引擎未能出段（原因："
+                    f"{geju_data.get('reason') or 'unknown'}）：{geju_data.get('message') or ''}".strip()
+                )
+                return degraded
             # [多运限·指定时段]：仅在调用方显式给了 period 选择时产出（上游由界面勾选驱动，
             # 无勾选整段不产 —— headless 把同一份选择开成入参，语义一致）。
             period = fields.get("period") if isinstance(fields.get("period"), dict) else None
@@ -6788,6 +6822,11 @@ class HorosaSkillService:
                     period_text = f"{(js_p or {}).get('text') or ''}".strip()
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("bazi period build failed: %s", exc)
+                    # 调用方显式点了 period 却拿不到段——只写日志等于对调用方静默。
+                    response_data = dict(response_data)
+                    response_data.setdefault("_warnings", []).append(
+                        "多运限[指定时段]本次未能产出（period 引擎失败），其余段不受影响。"
+                    )
             text = geju.get("snapshot_text") if isinstance(geju, dict) else None
             if period_text:
                 text = f"{text}\n\n{period_text}" if isinstance(text, str) and text.strip() else period_text
@@ -7108,7 +7147,22 @@ class HorosaSkillService:
         }
         ctx = {
             # the snapshot renders the **UI** tree (chain joiners), not the compiled one
-            "cfg": {**cfg, "hsys": payload.get("hsys"), "pos": payload.get("pos"), "zone": payload.get("zone")},
+            # 🔴 zodiacal / siderealAyanamsa 必须进 cfg：快照的 [征象搜索配置] 段读 cfg.zodiacal
+            # 决定打「回归黄道」还是「恒星黄道(ayanamsa)」（tianxingSnapshot.js:76）。此前没送 →
+            # 恒星盘搜索也恒打「回归黄道」，而同一份输出里 [起盘信息] 的「黄道：」行读的是 fields
+            # （已正确填充）→ 一份交付物里两行自相矛盾，且声称的口径不是真正跑的那个。
+            # gpsLon/gpsLat 同理：pos 缺省时「搜索地点」行读它们（:74），不送就渲染成空。
+            "cfg": {
+                **cfg,
+                "hsys": payload.get("hsys"),
+                "pos": payload.get("pos"),
+                # zone 不放这里：tianxingSnapshot.js 全文只读 startDate/startTime/endDate/endTime/
+                # pos/gpsLon/gpsLat/hsys/zodiacal/siderealAyanamsa 十键，cfg.zone 无人消费。
+                "zodiacal": payload.get("zodiacal"),
+                "siderealAyanamsa": payload.get("siderealAyanamsa"),
+                "gpsLon": payload.get("gpsLon"),
+                "gpsLat": payload.get("gpsLat"),
+            },
             "tree": conditions,
             "results": intervals,
             "truncated": truncated,
@@ -7472,18 +7526,17 @@ class HorosaSkillService:
         # Skill-side span guard, tighter than the engine's own 1830-day cap: the JS subprocess has a
         # 60s wall clock (config.js_engine_timeout_seconds) and the scan costs ~2s per month-window,
         # so the engine limit would blow the timeout ~30x over. Never silently truncate (§5.9).
+        # 🔴 用 _require_sane_window，不要写 `span is not None and span > max` —— 后者正是
+        # 当初为 tianxing 杀掉的形状：解析不出来（`'2026-08-05 10:00'`）就跳过上限、倒置窗
+        # 拿负数恒 False 也溜过去，而 JS 侧 wallToMs 照样能解析，于是超长窗一路跑到超时。
+        # 这把帮手写出来就是为了根治它，此处此前漏改。
         max_span = int(payload.get("maxSpanDays") or 92)
-        span_days = _day_span(start_date, end_date)
-        if span_days is not None and span_days > max_span:
-            raise ToolValidationError(
-                f"奇门择日搜索窗 {span_days} 天超过上限 {max_span} 天。",
-                code="tool.qimenzeri_span_too_large",
-                details={
-                    "span_days": span_days,
-                    "max_span_days": max_span,
-                    "hint": "分段搜索，或调高 maxSpanDays；JS 引擎超时上限见 HOROSA_JS_ENGINE_TIMEOUT_SECONDS。",
-                },
-            )
+        _require_sane_window(
+            start_date, end_date, max_span=max_span, tool="qimenzeri",
+            # 奇门择日的上限成因与 tianxing 不同：JS 子进程有 60s 墙钟（js_engine_timeout_seconds），
+            # 扫描约 2s/月窗，所以引擎自带的 1830 天上限会把超时撑爆约 30 倍。提示保留这条成因。
+            span_hint="分段搜索，或调高 maxSpanDays；JS 引擎超时上限见 HOROSA_JS_ENGINE_TIMEOUT_SECONDS。",
+        )
 
         cfg = {"startDate": start_date, "startTime": start_time, "endDate": end_date, "endTime": end_time}
         geo = {
@@ -7494,7 +7547,17 @@ class HorosaSkillService:
             "lat": payload.get("lat"),
             "pos": payload.get("pos"),
         }
-        options = payload.get("options") or {}
+        # 🔴 起局三开关（timeAlg / after23NewDay / lateZiHourUseNextDay）是 QimenInput 继承来的
+        # **顶层**字段（schemas/tools.py:397-400，各带描述），agent 照 schema 传顶层是正确用法。
+        # 扫描引擎只从 `options` 读（qimenScanEngine.js:124-126），此前顶层写法被静默丢弃 →
+        # 命中区间用默认起局算、而同一次调用里的**展示盘**走 _run_qimen_tool 是honor 顶层的，
+        # 于是两者不同局；[奇门择日配置] 段还会打出一个根本没用上的设置标签。
+        # 与 tianxing 同款双读合并（见上方 _electionscan_options 两连击），options 优先。
+        options = {
+            **{k: payload[k] for k in ("timeAlg", "after23NewDay", "lateZiHourUseNextDay")
+               if payload.get(k) is not None},
+            **(payload.get("options") or {}),
+        }
         scan = self.js_client.run(
             "qimenzeri",
             {
@@ -8278,6 +8341,10 @@ class HorosaSkillService:
                     "time": payload["time"],
                     "zone": payload["zone"],
                     "lon": payload.get("lon"),
+                    # 🔴 timeAlg 必须转发：真太阳时会改时支（经度差 >7.5° 即可跨支），
+                    # 时支一变卦局/起支全变。qimen/taiyi/zhengchuan 三处一直在转发，端点
+                    # 明确支持；这几处漏了 → 同一份入参在不同技法间起出不同的盘。
+                    "timeAlg": payload.get("timeAlg"),
                     "lat": payload.get("lat"),
                     **_day_boundary_switches(payload),
                 },
@@ -8334,6 +8401,10 @@ class HorosaSkillService:
                     "time": payload.get("time"),
                     "zone": payload.get("zone"),
                     "lon": payload.get("lon"),
+                    # 🔴 timeAlg 必须转发：真太阳时会改时支（经度差 >7.5° 即可跨支），
+                    # 时支一变卦局/起支全变。qimen/taiyi/zhengchuan 三处一直在转发，端点
+                    # 明确支持；这几处漏了 → 同一份入参在不同技法间起出不同的盘。
+                    "timeAlg": payload.get("timeAlg"),
                     "lat": payload.get("lat"),
                     **_day_boundary_switches(payload),
                 },
@@ -8415,6 +8486,10 @@ class HorosaSkillService:
                     "time": payload.get("time"),
                     "zone": payload.get("zone"),
                     "lon": payload.get("lon"),
+                    # 🔴 timeAlg 必须转发：真太阳时会改时支（经度差 >7.5° 即可跨支），
+                    # 时支一变卦局/起支全变。qimen/taiyi/zhengchuan 三处一直在转发，端点
+                    # 明确支持；这几处漏了 → 同一份入参在不同技法间起出不同的盘。
+                    "timeAlg": payload.get("timeAlg"),
                     "lat": payload.get("lat"),
                     **_day_boundary_switches(payload),
                 },
@@ -8482,6 +8557,10 @@ class HorosaSkillService:
                     "time": payload.get("time"),
                     "zone": payload.get("zone"),
                     "lon": payload.get("lon"),
+                    # 🔴 timeAlg 必须转发：真太阳时会改时支（经度差 >7.5° 即可跨支），
+                    # 时支一变卦局/起支全变。qimen/taiyi/zhengchuan 三处一直在转发，端点
+                    # 明确支持；这几处漏了 → 同一份入参在不同技法间起出不同的盘。
+                    "timeAlg": payload.get("timeAlg"),
                     "lat": payload.get("lat"),
                     **_day_boundary_switches(payload),
                 },
@@ -8770,7 +8849,16 @@ class HorosaSkillService:
         pattern_text: str | None = None
         patterns: Any = None
         try:
-            js = self.js_client.run("guolao_moira", {"chart": response, "fields": {}, "params": response})
+            # 🔴 params 必须是**起盘时刻**，不是 /chart 信封。引擎读 `params.time`（判昼夜，
+            # guolaoMoira.js:390）与 `params.date`（判冬令，:397），而信封顶层与其 `params` 子对象
+            # 都没有 date/time（只有 `birth`）——此前传 `response` 等于两者恒缺省：
+            # isDay 恒真（夜生盘拿天贵而非玉贵、孤月独明永不触发），isWinter 恒假（冬令排除永不生效）。
+            # 段照出、格局照列，只有判据是错的。
+            js = self.js_client.run("guolao_moira", {
+                "chart": response,
+                "fields": {},
+                "params": {"date": payload.get("date"), "time": payload.get("time")},
+            })
             if isinstance(js, dict):
                 pattern_text = js.get("snapshot_text")
                 patterns = js.get("data", {}).get("patterns") if isinstance(js.get("data"), dict) else None
@@ -8943,7 +9031,10 @@ class HorosaSkillService:
             "tongshu",
             {
                 "date": f"{payload.get('date') or ''}".replace("/", "-"),
-                **{k: payload.get(k) for k in ("school", "event", "liexiuUse", "zuoShan", "mingYear") if payload.get(k)},
+                # zuoShan 不在此列：上游 techniqueMountSettings.js:1938 已把它删掉并记明理由
+                # ——「双重幽灵：无任何流派声明 needs.zuoShan，快照 builder 全文不消费，齿轮选它
+                # 100% 无效果」。继续转发只会白白打散下游 memo 缓存。
+                **{k: payload.get(k) for k in ("school", "event", "liexiuUse", "mingYear") if payload.get(k)},
             },
         )
         snapshot_text = f"{(js or {}).get('text') or ''}".strip()
@@ -8969,7 +9060,8 @@ class HorosaSkillService:
             "zodiacal": 1,
             "siderealAyanamsa": "aldebaran_15tau",
         }
-        for stale in ("scheme", "solstice", "era", "datetime", "dirZone", "dirLat", "dirLon"):
+        for stale in ("scheme", "solstice", "era", "dodecaVariant", "cubitDeg", "schemeCn",
+                      "datetime", "dirZone", "dirLat", "dirLon"):
             chart_payload.pop(stale, None)
         chart = self._call_remote("/chart", chart_payload)
         date_text = f"{payload.get('date') or ''}".replace("/", "-")
@@ -8993,9 +9085,12 @@ class HorosaSkillService:
                 "month": month,
                 "day": day,
                 "ephemeris": ephemeris,
+                # scheme 是**档 id**（JS 侧据它查 BABYLON_SCHEMES 解析出 judge 参数），
+                # solstice/dodecaVariant/cubitDeg 是显式覆写，缺省则跟档走。
+                # era 不再下发：整棵 vendored 树无人消费它，它只是档内元数据。
                 "scheme": payload.get("scheme"),
                 "solstice": payload.get("solstice"),
-                "era": payload.get("era"),
+                **{k: payload[k] for k in ("dodecaVariant", "cubitDeg", "schemeCn") if payload.get(k) is not None},
             },
         )
         snapshot_text = f"{(js or {}).get('text') or ''}".strip()
@@ -9293,6 +9388,9 @@ class HorosaSkillService:
                     {
                         "pillars": (response or {}).get("pillars") if isinstance(response, dict) else None,
                         "birthYear": parts.get("year"),
+                        # 刻要按**时辰内**分钟算（一时辰 = 8 刻 × 15′ = 120 分），所以 hour 必须一起送：
+                        # 单看时内分钟无法区分 19:47（戌初四刻）与 20:47（戌末八刻）。JS 侧换算成 ke。
+                        "hour": parts.get("hour", 0),
                         "minute": parts.get("minute", 0),
                         "gender": payload.get("gender"),
                         "school": (payload.get("options") or {}).get("school"),
@@ -9309,6 +9407,11 @@ class HorosaSkillService:
         if key == "xianqin":
             try:
                 parts = _split_birth_ymdhm(payload)
+                # 域外年份（公元前 / 万年后）lunar-js 会静默算错农历月，引擎因此只认调用方注入的
+                # lunarMonth（yanqinSnapshot.js:20）；不注入就退公历月兜底，而月禽/投胎照常自信输出。
+                lunar_month = (payload.get("options") or {}).get("lunarMonth") if isinstance(payload.get("options"), dict) else None
+                if lunar_month is None:
+                    lunar_month = payload.get("lunarMonth")
                 yanfa = self.js_client.run(
                     "yanqin_yanfa",
                     {
@@ -9316,6 +9419,7 @@ class HorosaSkillService:
                         "month": parts.get("month"),
                         "day": parts.get("day"),
                         "hour": parts.get("hour", 0),
+                        **({"lunarMonth": lunar_month} if lunar_month is not None else {}),
                     },
                 )
                 extra = f"{(yanfa or {}).get('text') or ''}".strip()
@@ -9404,14 +9508,22 @@ class HorosaSkillService:
         # 缺键直接 KeyError→「param error」。补 PerChart 自身默认 0（整宫制），与 BirthInput 一致。
         if chart_payload.get("hsys") is None:
             chart_payload["hsys"] = 0
-        for stale in ("datetime", "dirZone", "dirLat", "dirLon", "category", "school"):
+        for stale in ("datetime", "dirZone", "dirLat", "dirLon", "category", "school", "options"):
             chart_payload.pop(stale, None)
         response = self._call_remote("/chart", chart_payload)
         snapshot_text, data, snapshot_error = "", {}, None
         try:
             js = self.js_client.run(
                 "horary",
-                {"chart": response, "category": category, "school": payload.get("school") or "classical"},
+                {
+                    "chart": response,
+                    "category": category,
+                    "school": payload.get("school") or "classical",
+                    # 判读层覆写：JS 侧按引擎自带词表 HORARY_PARAM_BY_KEY 过滤，认不出的键
+                    # 原样回执在 data.params_ignored（不静默吞）。顶层写法与 options 都收。
+                    "options": payload.get("options"),
+                    **{k: payload[k] for k in ("considerationsMode", "lotsSet") if payload.get(k) is not None},
+                },
             )
             if isinstance(js, dict):
                 snapshot_text = f"{js.get('snapshot_text') or ''}".strip()
@@ -9438,12 +9550,21 @@ class HorosaSkillService:
         # election engine (runElection + buildElectionSnapshot). topicId drives the rule pack + hard flags.
         topic_id = f"{payload.get('topicId') or payload.get('topic') or 'marriage'}".strip() or "marriage"
         chart_payload = {**payload, "predictive": 0, "tradition": payload.get("tradition", 1)}
-        for stale in ("datetime", "dirZone", "dirLat", "dirLon", "topicId", "topic"):
+        for stale in ("datetime", "dirZone", "dirLat", "dirLon", "topicId", "topic", "school", "options"):
             chart_payload.pop(stale, None)
         response = self._call_remote("/chart", chart_payload)
         snapshot_text, data, snapshot_error = "", {}, None
         try:
-            js = self.js_client.run("election", {"chart": response, "topicId": topic_id})
+            js = self.js_client.run(
+                "election",
+                {
+                    "chart": response,
+                    "topicId": topic_id,
+                    # 流派档 + 13 个判读层参数：JS 侧按 ELECTION_PARAM_BY_KEY 过滤并回执。
+                    "school": payload.get("school"),
+                    "options": payload.get("options"),
+                },
+            )
             if isinstance(js, dict):
                 snapshot_text = f"{js.get('snapshot_text') or ''}".strip()
                 data = js.get("data") if isinstance(js.get("data"), dict) else {}
@@ -10223,8 +10344,10 @@ class HorosaSkillService:
                     "zone": payload.get("zone"),
                     "lat": payload.get("lat"),
                     "lon": payload.get("lon"),
-                    "after23NewDay": payload.get("after23NewDay"),
-                    "lateZiHourUseNextDay": payload.get("lateZiHourUseNextDay"),
+                    "timeAlg": payload.get("timeAlg"),
+                    # 显式 None 会把 null 发上线；帮手的纪律是「只在显式给定时发送」，
+                    # 缺省不发 → 后端按默认 1/1 起算，与未传字节级等价。
+                    **_day_boundary_switches(payload),
                 },
             )
         except HorosaSkillError:

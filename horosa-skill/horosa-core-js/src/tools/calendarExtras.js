@@ -18,7 +18,7 @@ import { personBazi, buildPersonalizedDates } from '../vendor/calendar/riziEngin
  *
  * payload: {
  *   year, month, day, hour?,                       // 选中日
- *   tongshu?: {school, event, liexiuUse, zuoShan, mingYear},
+ *   tongshu?: {school, event, liexiuUse, mingYear},
  *   rizi?: {event, year, topN?, persons:[{name, date, time, gender, role}]}
  * }
  * return : { text }   // 已按上游段序拼好，段间空行分隔
@@ -67,13 +67,17 @@ export function runCalendarExtras(payload) {
     const people = rz && Array.isArray(rz.persons) ? rz.persons : [];
     if (people.length) {
       // 上游 RiziMain.baziOf：person 本身保留，八字挂在它的 `bazi` 字段上（riziSnapshot 用
-      // `persons.filter(p => p && p.bazi)` 决定 [当事人八字] 段出不出）。`time` 传完整日期时间串。
+      // `persons.filter(p => p && p.bazi)` 决定 [当事人八字] 段出不出）。
+      // 🔴 `time` 必须是**纯时刻**。下游 parseDateTime（baziLunarLocal.js:265）做
+      // `time.split(':')` 后 Number()，传完整日期时间串时首段 '2020-01-01 14' → NaN → hour 恒 0，
+      // 于是每个当事人都按 00:30 起盘、时柱恒子时、23 点日界永不触发；而这些喜忌又喂
+      // scoreDayForPerson，整个 [日子馆·个性化择日] 排名都建立在错盘上。
       const persons = people.map((p) => {
         let bazi = null;
         try {
           bazi = personBazi({
             date: `${p.date || ''}`.slice(0, 10),
-            time: `${p.date || ''}`.slice(0, 10) + ' ' + `${p.time || '12:00:00'}`.slice(0, 8),
+            time: `${p.time || '12:00:00'}`.slice(0, 8),
             gender: p.gender,
           });
         } catch (error) {

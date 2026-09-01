@@ -22,7 +22,12 @@ import { runLingqi } from '../src/tools/lingqi.js';
 import { runTianxing } from '../src/tools/tianxing.js';
 import { runQizhengElection } from '../src/tools/qizhengElection.js';
 import { runBaziGeju } from '../src/tools/baziGeju.js';
+import { runTiebanFramework } from '../src/tools/tiebanFramework.js';
+import { buildTiebanFramework } from '../src/vendor/tieban/tiebanFrameworkLocal.js';
+import { computeQimenScanPan, buildQimenScanSeeds } from '../src/vendor/divination/zeri/qimenScanEngine.js';
 import { buildLocalBaziResult } from '../src/vendor/bazi/baziLunarLocal.js';
+import { runCanping } from '../src/tools/canping.js';
+import { personBazi } from '../src/vendor/calendar/riziEngine.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const chart = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_traditional.json'), 'utf8'));
@@ -30,9 +35,24 @@ const liurengFix = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_liureng
 const guolaoFix = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_guolao.json'), 'utf8'));
 
 let failures = 0;
+// 🔴 check() 必须认异步：早先它只 `fn()` 不看返回值，async 断言体的失败会变成
+// unhandled rejection —— 打印 `ok`、退出码 0、CI 全绿，而断言其实根本没验。这与本轮清剿的
+// 「presence 级绿灯掩盖值级错误」是同一形状，只不过发生在 harness 自己身上。
+const pending = [];
+process.on('unhandledRejection', (err) => {
+  failures += 1;
+  console.error(`  FAIL <unhandled rejection>: ${err && err.message ? err.message : err}`);
+});
 function check(name, fn) {
   try {
-    fn();
+    const out = fn();
+    if (out && typeof out.then === 'function') {
+      pending.push(out.then(
+        () => console.log(`  ok   ${name}`),
+        (err) => { failures += 1; console.error(`  FAIL ${name}: ${err.message}`); },
+      ));
+      return;
+    }
     console.log(`  ok   ${name}`);
   } catch (err) {
     failures += 1;
@@ -122,6 +142,161 @@ check('guolaoMoira evaluates 政余格局 patterns', () => {
   assert(names.includes('孛犯太阳'), `expected 孛犯太阳, got ${names.join(',')}`);
   const s = r.snapshot_text || '';
   assert(s.includes('喜格：') && s.includes('忌格：'), 'snapshot missing 喜格/忌格 lines');
+});
+
+// 🔴 v0.33.1 值级金标：params 必须是**起盘时刻**，不是 /chart 信封。
+// 引擎读 params.time 判昼夜（:390）、params.date 判冬令（:397）；信封里两者都没有
+// （只有 birth），于是 isDay 恒真、isWinter 恒假 —— 夜生盘拿天贵而非玉贵、孤月独明永不触发、
+// 冬令排除永不生效。段照出、格局照列，只有判据是错的。
+// 负向对照：把 params 换回整个信封，「12月 冬令」这条即红（金水相涵 会重新出现）。
+check('guolaoMoira params 是起盘时刻：冬令排除真的生效', () => {
+  const names = (params) => (runGuolaoMoira({ ...guolaoFix, params }).data.patterns || []).map((p) => p.name);
+  const spring = names({ date: '1985-03-21', time: '10:00:00' });
+  const winter = names({ date: '1985-12-21', time: '10:00:00' });
+  assert(spring.includes('金水相涵'), `非冬令应命中金水相涵，实得 ${spring.join(',')}`);
+  assert(!winter.includes('金水相涵'), `冬令须排除金水相涵（引擎 :203 的 !isWinter），实得 ${winter.join(',')}`);
+  // 传整个信封 = 修复前的形状：date 取不到 → 恒非冬 → 冬令盘也会误报金水相涵
+  const envelope = names(guolaoFix.chart || guolaoFix);
+  assert(envelope.includes('金水相涵'), '信封形状应复现旧行为（此断言记录 bug 形状，勿删）');
+});
+
+// 🔴 v0.33.1 值级金标：起局三开关（timeAlg / after23NewDay / lateZiHourUseNextDay）是 QimenInput
+// 继承来的**顶层**字段，扫描引擎却只从 options 读（qimenScanEngine.js:124-126）。Python 侧此前只传
+// payload["options"] → 顶层写法静默丢弃，命中区间用默认起局算，而同一次调用的展示盘（走
+// _run_qimen_tool）是 honor 顶层的 → 两者不同局，配置段还打出一个没用上的设置标签。
+// ⚠️ 真太阳时校正需要 `lon`（不是只有 gpsLon）——测本条时 geo 必须带 lon，否则 timeAlg 看不出差异。
+// 负向对照：Python 侧改回只读 options 并用顶层 timeAlg 调用，命中集即与 timeAlg=0 相同。
+check('qimenzeri 起局口径真的生效：timeAlg 改变时柱', () => {
+  const seeds = buildQimenScanSeeds(2028, 2028, 8);
+  const geo = { zone: 8, lon: '119e18', lat: '26n05', gpsLon: 119.3, gpsLat: 26.08 };
+  const at = (timeAlg) => computeQimenScanPan(geo, { timeAlg }, seeds, '2028-04-01', '19:02:00').ganzhi.time;
+  assert(at(0) === '丁酉', `timeAlg=0 应为平太阳时 丁酉，实得 ${at(0)}`);
+  assert(at(1) === '戊戌', `timeAlg=1 应为真太阳时 戊戌，实得 ${at(1)}`);
+});
+
+// 🔴 v0.33.1 值级金标：cfg 必须带黄道口径。[征象搜索配置] 的「搜索盘面」行读 cfg.zodiacal
+// （tianxingSnapshot.js:76），Python 此前没往 ctx.cfg 里送 → 恒星盘搜索也恒打「回归黄道」，
+// 而同一份输出里 [起盘信息] 的「黄道：」行读 fields（已正确填充）→ 一份交付物两行自相矛盾。
+// 负向对照：从 cfg 里拿掉 zodiacal，本条即红。
+check('tianxing 搜索盘面口径与实际搜索一致（恒星黄道不再被打成回归）', () => {
+  const fields = { date: { value: '2029-03-01' }, time: { value: '00:00:00' }, zone: { value: 8 },
+    zodiacal: { value: 1 }, siderealAyanamsa: { value: 'fagan_bradley' } };
+  const line = (cfg) => (runTianxing({ action: 'snapshot', fields,
+    ctx: { cfg, tree: { kind: 'group', joiner: 'all', children: [] }, results: [], truncated: false } }).snapshot_text || '')
+    .split('\n').find((l) => l.startsWith('搜索盘面')) || '';
+  const withZod = line({ startDate: '2029-03-01', endDate: '2029-03-10', hsys: 3, zodiacal: 1, siderealAyanamsa: 'fagan_bradley' });
+  assert(withZod.includes('恒星黄道(fagan_bradley)'), `恒星盘应打恒星黄道，实得 ${withZod}`);
+  // 缺 zodiacal = 修复前形状：恒打回归（此断言记录 bug 形状，勿删）
+  assert(line({ startDate: '2029-03-01', endDate: '2029-03-10', hsys: 3 }).includes('回归黄道'), 'bug 形状复现失败');
+});
+
+// 🔴 v0.33.1 值级金标：铁板「考刻」。引擎读 opts.ke（tiebanFrameworkLocal.js:253），从不读
+// opts.minute —— 工具此前传的正是 minute，于是 ke 恒为 1：eightKe.active 恒高亮初刻，
+// 96 局（12 时辰 × 8 刻）塌缩成 12 个可达值，14:47 与 14:03 出同一局。刻分是铁板的立身之本。
+// 换算口径：一时辰 120 分 = 8 刻 × 15′，时辰自**奇数**小时起（子 23、丑 1…），故偶数小时要 +60。
+// 负向对照：把 ke 换回 minute 传入，下面 ju.ke 全变 1。
+check('tiebanFramework 考刻由时分换算，96 局不再塌缩', () => {
+  const fp = { year: '己巳', month: '壬申', day: '丁卯', hour: '庚子' };
+  const ju = (ke) => buildTiebanFramework(fp, { birthYear: 1989, gender: 1, ke }).ju;
+  assert(ju(1).label === '子时初刻＝全日第1刻', `ke=1 → ${ju(1).label}`);
+  assert(ju(8).label === '子时八刻＝全日第8刻', `ke=8 → ${ju(8).label}`);
+  // 端到端：同一时辰内的不同分钟必须落到不同刻（这正是修复前做不到的）
+  const keOf = (hour, minute) => {
+    const r = runTiebanFramework({ pillars: [
+      { key: 'year', ganzhi: '己巳' }, { key: 'month', ganzhi: '壬申' },
+      { key: 'day', ganzhi: '丁卯' }, { key: 'hour', ganzhi: '庚子' }], birthYear: 1989, gender: 1, hour, minute });
+    return /全日第(\d+)刻/.exec(r.text || '');
+  };
+  const a = keOf(19, 3);   // 戌初，第 1 刻
+  const b = keOf(20, 47);  // 戌末，第 8 刻
+  assert(a && b && a[1] !== b[1], `同时辰不同分钟须落不同刻，实得 ${a && a[1]} vs ${b && b[1]}`);
+});
+
+check('calendarExtras 当事人时辰真的进盘（time 只喂时刻）', () => {
+  // 值级：同日不同时辰的当事人，喜忌必须不同。修复前 calendarExtras 把
+  // `YYYY-MM-DD HH:MM:SS` 整串塞给 time，parseDateTime 做 `time.split(':')` 后
+  // Number('1990-05-15 03') = NaN → hour 恒 0 → 每个当事人都按子时起盘。
+  const xi = (clock) => JSON.stringify(personBazi({ date: '1990-05-15', time: clock, gender: 1 }).xi);
+  assert(xi('03:00:00') === '["水","木","火"]', `03:00 喜用实得 ${xi('03:00:00')}`);
+  assert(xi('21:00:00') === '["水"]', `21:00 喜用实得 ${xi('21:00:00')}`);
+  // 负向对照：把旧的整串形状喂回去，两个时辰会重新塌成同一盘（bug 复现）。
+  const old = (clock) => JSON.stringify(personBazi({ date: '1990-05-15', time: `1990-05-15 ${clock}`, gender: 1 }).xi);
+  assert(old('03:00:00') === old('21:00:00'), '旧整串形状本应塌盘，负向对照失效说明引擎已改口径');
+});
+
+check('canping 起运岁走农历真源，不再恒 1 岁', async () => {
+  // 值级锚定：baziStyle 档的起运岁必须等于八字盘 direction[0].age（同源判据，
+  // 不是自证）；默认《参评诀》档由农历月日推算，同盘得 3 岁。修复前 lunarMonth/
+  // lunarDay 没转发 → 引擎守卫判非法 → 起运岁恒回落 1，九个大运区间整体平移。
+  const birth = { date: '1998-02-20', time: '20:48:00', zone: 8, lon: '121e28', gender: '男' };
+  const firstDayunAge = buildLocalBaziResult({ ...birth, gender: 1, timeAlg: 1 }).bazi.direction[0].age;
+  assert(firstDayunAge === 5, `八字盘首运虚岁应为 5，实得 ${firstDayunAge}`);
+  const qiyunOf = async (dayunRule) => (await runCanping({ ...birth, dayunRule })).data.qiyunAge;
+  assert(await qiyunOf(undefined) === 3, `默认档起运岁应为 3，实得 ${await qiyunOf(undefined)}`);
+  assert(await qiyunOf('baziStyle') === firstDayunAge,
+    `baziStyle 档须与八字盘同源（${firstDayunAge}），实得 ${await qiyunOf('baziStyle')}`);
+});
+
+check('zhengchuan 大定男女分行，性别不再被 NaN 吃掉', async () => {
+  // 值级：同盘男女的 大运／小运／岁君 必须不同。修复前传的是裸 gender，
+  // 而 baziLunarLocal 做 `Number(params.gender) === 0 ? 0 : 1` —— Number('女') = NaN
+  // ≠ 0 → 一律判男顺行 → 女命的大定死限年整体错位，且照常自信输出。
+  const base = { school: 'dading', pillars: ['戊寅', '甲寅', '壬戌', '庚戌'], date: '1998-02-20',
+    time: '20:48:00', zone: 8, lon: '121e28', lunarMonth: 1, lunarDay: 24, dadingYear: 2030 };
+  const textOf = async (gender) => (await runZhengChuan({ ...base, gender })).snapshot_text || '';
+  const male = await textOf('男');
+  const female = await textOf('女');
+  const yunLine = (s) => (s.split('\n').find((l) => l.includes('大运／小运／岁君')) || '').trim();
+  assert(yunLine(male) && yunLine(female), '大定快照应含 大运／小运／岁君 行');
+  assert(yunLine(male) !== yunLine(female),
+    `男女须分行，实得同一行：${yunLine(male)}`);
+  // 数字形式与中文形式必须等价（'女' 与 0 同盘）。
+  assert(yunLine(await textOf(0)) === yunLine(female), '性别 0 应与 “女” 同盘');
+});
+
+check('baziGeju 分野口径真的进五行力量 + 缺柱不再无声', async () => {
+  // 值级：cangVersion='fenye' 必须改变百分比分布（修复前 fy 在 st 之后才算，
+  // 分野档结构上不可达 —— [月令司令（分野）] 报着司令干，[五行力量] 却按通行版加权）。
+  const birth = { date: '1989-08-15', time: '23:30:00', zone: 8, lon: '121e28', gender: 1, timeAlg: 1 };
+  const fc = buildLocalBaziResult(birth).bazi.fourColumns;
+  const distOf = async (cangVersion) => {
+    const s = (await runBaziGeju({ fourColumns: fc, birth, cangVersion })).snapshot_text || '';
+    return (s.split('\n').find((l) => l.startsWith('分布：')) || '').trim();
+  };
+  const common = await distOf(undefined);
+  const fenye = await distOf('fenye');
+  assert(common === '分布：木2.6%　火22.3%　土23.6%　金18%　水33.5%', `通行档实得 ${common}`);
+  assert(fenye === '分布：木2.7%　火23.6%　土23.6%　金14.5%　水35.5%', `分野档实得 ${fenye}`);
+  assert(common !== fenye, '分野档必须改变加权，相同即说明 siLingGan 没接上');
+  // 说明行须与实算口径一致（两段自相矛盾正是修复前的症状）。
+  const fenyeText = (await runBaziGeju({ fourColumns: fc, birth, cangVersion: 'fenye' })).snapshot_text;
+  assert(fenyeText.includes('（分野加权：'), '分野档说明行未切换');
+  // 守卫查的是引擎真读的字段：柱在、stemInBranch 缺时必须结构化报错，而不是无声空段。
+  const noCang = await runBaziGeju({ fourColumns: { ...fc, time: { stem: fc.time.stem } } });
+  assert(noCang.data && noCang.data.ok === false && noCang.data.reason === 'incomplete_four_pillars',
+    `藏干缺应结构化报错，实得 ${JSON.stringify(noCang.data)}`);
+  assert(noCang.data.message.includes('time'), '错误须点名缺哪一柱');
+});
+
+check('horary/election 判读层旋钮真的接进引擎（锚定引擎自带词表）', () => {
+  // 值级：覆写判读层参数必须改变快照。修复前 horary 只喂 horaryJudgeOpts 第 1 层、
+  // election 干脆 runElection(chart, topicId) 两参调用 —— 46+13 个真参数结构上不可达，
+  // 而 schema 上挂着一排旋钮（其中 receptionMode/almutenScheme/dignityScheme 等
+  // 在引擎词表里根本不存在，是发明的名字）。
+  const base = runHoraryTool({ chart, category: 'marriage' });
+  const over = runHoraryTool({ chart, category: 'marriage', considerationsMode: 'ignore', lotsSet: 'core15' });
+  assert(JSON.stringify(over.data.params_applied) === '["considerationsMode","lotsSet"]',
+    `覆写未被采纳：${JSON.stringify(over.data.params_applied)}`);
+  assert(base.snapshot_text !== over.snapshot_text, 'horary 判读层覆写必须改变快照');
+  // 认不出的键要**回执**，不能像整包 opts 那样无声吞掉。
+  const bogus = runHoraryTool({ chart, category: 'marriage', options: { notARealKnob: 1 } });
+  assert(JSON.stringify(bogus.data.params_ignored) === '["notARealKnob"]',
+    `未知键须回执，实得 ${JSON.stringify(bogus.data.params_ignored)}`);
+  const e1 = runElectionTool({ chart, topicId: 'marriage' });
+  const e2 = runElectionTool({ chart, topicId: 'marriage', school: 'hellenistic', options: { orbProfile: 'classic' } });
+  assert(e1.data.school === 'modern_main' && e2.data.school === 'hellenistic',
+    `流派档未生效：${e1.data.school} / ${e2.data.school}`);
+  assert(e1.snapshot_text !== e2.snapshot_text, 'election 流派/参数覆写必须改变快照');
 });
 
 check('xiaoliuren(dao) 三数起三传 + 生克/化解，determinism', () => {
@@ -374,6 +549,7 @@ check('baziGeju 值级金标：时柱入算 + 取格/成败/盲派逐字', () =>
   assert(!/时宾\(\)/.test(s), '时柱 dropped out of 盲派 (fourColumns key must be `time`, not `hour`)');
 });
 
+await Promise.all(pending);
 if (failures > 0) {
   console.error(`\nselfcheck: ${failures} failure(s)`);
   process.exit(1);

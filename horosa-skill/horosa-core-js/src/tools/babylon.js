@@ -4,6 +4,7 @@ import {
   digestBabylonEphemeris,
 } from '../vendor/utils/babylonAiSnapshot.js';
 import { buildHoroscope } from '../vendor/babylon/horoscope.js';
+import { BABYLON_SCHEMES } from '../vendor/babylon/babylonSchools.js';
 import { julianDayIndex } from '../vendor/utils/julianDayIndex.js';
 
 /**
@@ -40,11 +41,19 @@ export function runBabylon(payload) {
     return { text: '' };
   }
   const lons = chartToLons(source.chart && typeof source.chart === 'object' ? source.chart : null);
+  // 🔴 流派档必须**解析成参数**，不能只当标签传：judge 层的 dodecaVariant/cubitDeg 决定
+  // 十二分变体（horoscope.js:43 与快照 :167）与肘度换算（units.js:80），此前一个都没传 ——
+  // 于是无论选哪一档，十二分恒 B、肘度恒默认，而 [起盘信息] 行照常打出所选档名。
+  // 同时 `era` 与 `scheme` 本身在整棵 vendored 树里无人消费（scheme 只用于查表，era 只是
+  // 档内的元数据），所以不再原样下发。派系显示名由档派生，不再要求调用方自带 schemeCn。
+  const preset = BABYLON_SCHEMES[`${source.scheme || ''}`] || null;
   const opts = {
-    scheme: source.scheme,
-    solstice: source.solstice,
-    era: source.era,
-    schemeCn: source.schemeCn,
+    solstice: source.solstice || (preset && preset.backend ? preset.backend.solstice : undefined),
+    schemeCn: source.schemeCn || (preset ? preset.cn : undefined),
+    ...(preset && preset.judge ? preset.judge : {}),
+    // 显式覆写压过档默认（与 horary/election 同一层级语义）。
+    ...(source.dodecaVariant ? { dodecaVariant: source.dodecaVariant } : {}),
+    ...(source.cubitDeg ? { cubitDeg: source.cubitDeg } : {}),
   };
   const bab = buildHoroscope(lons, jdn, opts);
   if (!bab) {

@@ -4295,6 +4295,31 @@ def test_tianxing_options_dict_wins_over_top_level(tmp_path) -> None:
     assert sent[0]["combustOrb"] == 9, "显式 options 应压过顶层"
 
 
+def test_tianxing_forwards_every_key_the_backend_actually_reads(tmp_path) -> None:
+    """白名单窄于后端实读集 = 在客户端把已修好的后端 bug 重新装回去。
+
+    election_scan.scan 把整个请求体交给 perchart.push_classical_request（`_cls_req = dict(data)`），
+    后者实读 nodeExaltation/dignityDebilities/lotsDocReverse/orbSystem/luminaryOrbBonus/
+    customTermsDay/customTermsNight 等键；上游 [F8] 那条注释记的正是「dignityDebilities/orbSystem
+    等发了不生效」，后端收编修好了，而 skill 的白名单窄 7 键又把它们静默滤掉 ——
+    schema 上带着描述、chart 工具上照常生效，唯独天星择日搜索里无声失效。
+    """
+    service = _zeri_service(tmp_path)
+    sent: list[dict] = []
+    original = service.client.call
+    service.client.call = lambda e, p: (sent.append(p) if e == "/electionscan/scan" else None) or original(e, p)  # type: ignore[method-assign,assignment]
+    backend_read_keys = {
+        "nodeExaltation": 1, "dignityDebilities": 0, "lotsDocReverse": 1,
+        "orbSystem": "lilly", "luminaryOrbBonus": 2, "customTermsDay": "egyptian",
+        "customTermsNight": "ptolemy",
+    }
+    payload = {**build_sample_payloads()["tianxing"], **backend_read_keys}
+    assert service.run_tool("tianxing", payload, save_result=False).ok is True
+    assert sent, "没有发出扫描请求"
+    for key, value in backend_read_keys.items():
+        assert sent[0].get(key) == value, f"{key} 被白名单滤掉了，但后端实读它"
+
+
 def test_tianxing_js_failure_never_becomes_a_fabricated_export(tmp_path) -> None:
     """JS 侧失败时旧实现只读 snapshot_text → None → format_source 回落 generated_template，
     产出一份拿 payload YAML 填出来的伪造导出，而 agent 被要求只依据 export_text 解读。"""

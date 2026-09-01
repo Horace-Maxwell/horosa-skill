@@ -1,0 +1,23 @@
+{
+  "_comment": "Ratchet baseline for src/tools/*.js early-returns that carry no error code. New ones fail CI; paying debt down means lowering these numbers. Refresh with `uv run python scripts/verify_silent_returns.py --update-baseline`.",
+  "total": 30,
+  "per_file": {
+    "babylon.js": 3,
+    "baziGeju.js": 1,
+    "baziPeriod.js": 2,
+    "calendarExtras.js": 1,
+    "classicalDerived.js": 2,
+    "egyptSection.js": 2,
+    "huangli.js": 1,
+    "indiaJyotish.js": 1,
+    "lingqi.js": 3,
+    "liuyao.js": 4,
+    "mundaneHorary.js": 1,
+    "mundaneNavanayaka.js": 1,
+    "mundaneSolunar.js": 1,
+    "sanshiZiweiSihua.js": 1,
+    "tarot.js": 4,
+    "tongshu.js": 1,
+    "ziweiExtras.js": 1
+  }
+}

@@ -11,7 +11,7 @@ import { DEFAULT_TONGSHU_SETTINGS } from '../vendor/calendar/tongshuSchools.js';
  *
  * 同样是纯前端推演，零后端往返。
  *
- * payload: { date: 'YYYY-MM-DD', school?, event?, liexiuUse?, zuoShan?, mingYear? }
+ * payload: { date: 'YYYY-MM-DD', school?, event?, liexiuUse?, mingYear? }
  * return : { text }
  */
 export function runTongshu(payload) {
@@ -23,7 +23,7 @@ export function runTongshu(payload) {
   const settings = {
     ...DEFAULT_TONGSHU_SETTINGS,
     ...Object.fromEntries(
-      ['school', 'event', 'liexiuUse', 'zuoShan', 'mingYear']
+      ['school', 'event', 'liexiuUse', 'mingYear']
         .filter((k) => source[k] !== undefined && source[k] !== null && `${source[k]}` !== '')
         .map((k) => [k, source[k]]),
     ),

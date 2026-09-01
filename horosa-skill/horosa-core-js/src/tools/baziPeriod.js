@@ -198,9 +198,13 @@ export function runBaziPeriod(payload) {
       return { text: '' };
     }
     const lines = buildBaziPeriodLines(bazi, period, source.birth) || [];
-    return { text: lines.length ? lines.filter((l) => l !== '').join('\n') : '' };
+    if (!lines.length) {
+      return { text: '', error: { code: 'empty_period_lines', message: '所选运限时段未产出任何行（period 选择可能不含有效项）。' } };
+    }
+    return { text: lines.filter((l) => l !== '').join('\n') };
   } catch (error) {
-    return { text: '' };
+    // 🔴 裸 catch 回空 = 调用方拿不到任何信号，段消失得像「本来就没有」。
+    return { text: '', error: { code: 'period_build_failed', message: error instanceof Error ? error.message : `${error}` } };
   }
 }
 

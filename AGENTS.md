@@ -317,14 +317,11 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 2. `service.py` `_run_*_tool` runner；远端端点进 `_PYTHON_CHART_ENDPOINTS`；ken-backed 加 `_require_ken_pan`。
 3. `engine/registry.py` TOOL_DEFINITIONS 注册；`router.py` 分派词做互斥检查（**卜卦含「卦」字**：梅易/卦
    分支必须排除 卜卦/horary/起卦/占问 短语，否则「卜卦问婚姻」误路由 `gua_desc`——同类新词照此办理）。
-4. 导出契约：`exports/registry.py` preset **逐工具**对齐 builder 实际产段。照抄 `aiExport.js` 可能多列
-   星阙-UI-only 段（死条目）、也可能漏列后端真产段（→ `unknown_detected_sections`，补进 preset）。
-   **权威清单 = `aiExport.js` 的 `EXPORT_TECHNIQUES` + `EXPORT_PRESET_SECTIONS`**（不是组件目录）。
-5. **条件段双登记**：可能不出现的段要**同时**进 preset（出现时不算 unknown）**和**
-   `AI_EXPORT_OPTIONAL_SECTIONS`（缺席时不算 missing）——单进 optional 不够（parser 的 unknown 只对照
-   preset，见 `exports/parser.py:130`）。election 的 `用事专属`/`应期`、liureng 的 `占断向导` 都是此类；
-   严格技法保持空 optional 集。星阙自带段名不一致走 `map_legacy_section_title`（`三传(…)→三传`、canping
-   `[大运·歲運]`、heluo `[大限·岁运]`），快照 byte-identical，不改 vendored builder。
+4. 导出契约：`exports/registry.py` preset **逐工具**对齐 builder 实际产段（权威清单 = `aiExport.js` 的
+   `EXPORT_TECHNIQUES` + `EXPORT_PRESET_SECTIONS`，不是组件目录；照抄会多列 UI-only 死条目、漏列真产段）。
+5. **条件段双登记**：可能不出现的段**同时**进 preset（出现时不算 unknown）**和** `AI_EXPORT_OPTIONAL_SECTIONS`
+   （缺席时不算 missing）——单进 optional 不够（`exports/parser.py:130`）。段名不一致走
+   `map_legacy_section_title`，快照 byte-identical，不改 vendored builder。
 6. 离线 fakes：`FakeClient`（HTTP 桩，覆盖新端点，含 `/chart` 的 `predictives.*` 等衍生键）+
    `FakeJsClient`（新 JS tool handler）返回**真内容**——离线契约测试禁裸 `无` 段、禁 `generated_template`
    回退；条件段 FakeClient 发全集（真实导出少几段是预期，如 election / 部分 kinastro preset）。
@@ -333,18 +330,26 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
    in-process srv 验证（**中立 CWD** 跑，别 `cd $HW`——本地 `astropy/__init__.py` 会 shadow PyPI astropy）。
 8. 版本与文档：§7 版本 bump 全覆盖；README×2 全景表加行 + SKILL.md 工具路由加意图行
    （CI `verify_docs_sync.py` 因缺行而红）；「段补到既有工具 ≠ 新工具」——工具数徽章不动，测试数照更。
-9. **勿静默回退**：compute runner 解析失败一律 raise 结构化错误（`tool.shenshu_bad_date` /
-   `transport.shenshu_snapshot_unavailable`），不许换默认值蒙混；快照失败 log + `snapshot_error`，
-   不许裸 `except: pass`。
-10. **f-string None 陷阱**：`f"{response.get('snapshot')}"` 在键缺失时产出字面 `"None"`（6 字符真值串）——
-    先 `raw = response.get(...)` 判空再格式化；`f"{... or ''}"` 只有显式 `or ''` 才安全。
-11. **算源声明**：`contracts/technique_provenance.json` 加条目（可用 `scripts/gen_technique_provenance.py`
+9. **勿静默回退**：解析失败一律 raise 结构化错误，不许换默认值蒙混；快照失败 log + `snapshot_error`，
+   不许裸 `except: pass`。同族陷阱：`f"{response.get('x')}"` 键缺失时产出字面 `"None"`（6 字符真值串）——
+   先判空再格式化，`f"{... or ''}"` 只有显式 `or ''` 才安全。
+10. **算源声明**：`contracts/technique_provenance.json` 加条目（可用 `scripts/gen_technique_provenance.py`
     重生成，输出幂等），`verify_technique_provenance.py` 不声明即红；ken-backed 必须真调
     `_require_ken_pan`。技法依据卡按它标注「这盘是谁算的」。
-12. **入 `TOOL_EXPORT_TECHNIQUE_MAP`**（v0.33.0 教训）：bench 的「新增技法自动获得用例」只覆盖这张表，
+11. **入 `TOOL_EXPORT_TECHNIQUE_MAP`**（v0.33.0 教训）：bench 的「新增技法自动获得用例」只覆盖这张表，
     runner 自己 `_augment_export_payload` 不经过它 → 功能全绿、bench 静默不覆盖。守卫
     `test_every_business_tool_is_in_export_technique_map`（工具 − 表 = 显式非业务清单）已锁死；
     新工具照样入表，别等守卫红。
+
+12. **值级金标 + 边界纪律**（v0.33.1 · issue #15 家族，原文见 LESSONS）：**跨边界不改键**（原样透传是
+    唯一被证明安全的形状；改键必在 `contracts/js_boundary_contracts.json` 留豁免与理由）。**每个本地 JS
+    技法至少一条值级金标** —— 钉具体算出值而非段头/行数，期望值带权威来源注释，并附**负向对照**（把
+    bug 改回去，金标必须红）；棘轮 `contracts/value_golden_debt.json`。参数接线**锚到引擎自带的词表**
+    （`HORARY_PARAM_BY_KEY` / `ELECTION_PARAM_BY_KEY` / `BABYLON_SCHEMES`），不手抄会漂移的清单；认不出的
+    键回执 `data.params_ignored`。**错误信号每上一层都要有人接**（JS 结构化错误 → Python enricher →
+    `_warnings`）。统一判据：「改这个参数，结果必须变」。守卫 `verify_js_boundary_contracts.py` /
+    `verify_value_goldens.py` / `verify_silent_returns.py` / `verify_schema_knob_wiring.py`——
+    每把都要用**真 bug 注回去**验过：「守卫跑绿」≠「守卫抓得到它声称防的那个 bug」。
 
 **审计前置**（补「未同步技法」缺口前）：先 grep 仓内**明确排除项**（`fengshui`：canvas + 户型图上传 +
 交互点位驱动，无 birth/time 输入，无法 headless——是政策性排除不是缺口），再确认候选的

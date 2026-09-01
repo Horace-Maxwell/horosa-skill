@@ -53,11 +53,11 @@ License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICEN
 
 ## Current stable baseline
 
-**Current public version: `Horosa Skill 0.33.0` (97 callable tools).**
+**Current public version: `Horosa Skill 0.33.1` (97 callable tools).**
 
 This release line brings the capability surface roughly to parity with the desktop app — and adds a trust stack no other metaphysics tool ships:
 
-- **Trust stack (v0.27.0–v0.33.0)** — every response carries a deterministic **technique provenance card** (`data.technique_card`); `horosa_technique_report` renders methods reports and detects cross-technique setting conflicts; a **24-domain knowledge base** (177 manual entries) returns every doctrine entry with a file-and-version citation; a **chart-fact faithfulness evaluator** verifies AI readings claim-by-claim against machine-read chart truth; and **`horosa_hecan`** runs multi-technique synthesis under a divergence-disclosure contract.
+- **Trust stack (v0.27.0–v0.33.1)** — every response carries a deterministic **technique provenance card** (`data.technique_card`); `horosa_technique_report` renders methods reports and detects cross-technique setting conflicts; a **24-domain knowledge base** (177 manual entries) returns every doctrine entry with a file-and-version citation; a **chart-fact faithfulness evaluator** verifies AI readings claim-by-claim against machine-read chart truth; and **`horosa_hecan`** runs multi-technique synthesis under a divergence-disclosure contract.
 - **Upstream parity (v0.28.0)** — export contract v14 mirrors the desktop app's aiExport v56 (Xingque v3.9.3): four classical-derived sections, BaZi stem/branch combination-clash lines, Zi Wei body palace + BaZi major periods, almanac sub-source labels, derived-chart dedicated sections, and the 天星择日 selected-moment chart.
 - **Full Western astrology** — natal and derived charts, 10 classic return/progression/timeline tools, 3 v2.4.0 Western additions (Age Point / Distributions / mundane ingress), 7 v2.5.0 progressions (Jayne declination / Vedic sidereal / Planetary Arc / Ages of Man / Balbillus / 129-year system / Persian Directed), plus full **horary** and **electional** judgment engines.
 - **Primary Direction v12, verified methods (v2.6.6)** — the directions table converges on the **5 per-row-verified methods** (Alcabitius / Meridian / Porphyry / Equal-ecliptic / Equal-hour-circle; unverified values fall back to Alcabitius inside the engine), In Zodiaco/In Mundo frames, direct+converse, **22 time keys** (incl. per-chart Simmonite/Kepler/Brahe and dynamic True/Symbolic Solar Arc), antiscia/terms as promissors, **Vertex significator rows**, and **pdYears up to 3000** with per-revolution recurrence rows; the **midpoint chart** is a Hamburg/Uranian 90° dial (8 TNP + planetary pictures / antiscia / midpoint list).
@@ -75,7 +75,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `97 / 97 ok=true` |
-| Engineering tests | `489 / 489 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 63 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `499 / 499 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 63 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `84` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `8` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`94` export techniques modeled; contract v14 mirrors desktop aiExport v56) |
@@ -288,7 +288,7 @@ Every tool call returns a uniform envelope:
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.33.0",
+  "ok": true, "tool": "qimen", "version": "0.33.1",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -417,7 +417,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 489 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 499 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

@@ -76,9 +76,12 @@ export function runSanshiZiweiSihua(payload) {
   }
   try {
     const lines = buildSanShiZiweiSihuaSnapshotLines(chart, source.daxianIdx || 0, source.liunianIdx || 0) || [];
-    return { text: lines.length ? ['[紫微四化]', ...lines].join('\n') : '' };
+    if (!lines.length) {
+      return { text: '', error: { code: 'empty_sihua_lines', message: '紫微四化未产出行（盘可能缺 daxian/liunian 索引所指的运限）。' } };
+    }
+    return { text: ['[紫微四化]', ...lines].join('\n') };
   } catch (error) {
-    return { text: '' };
+    return { text: '', error: { code: 'sihua_build_failed', message: error instanceof Error ? error.message : `${error}` } };
   }
 }
 

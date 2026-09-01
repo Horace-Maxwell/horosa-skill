@@ -264,6 +264,12 @@ class BaZiBirthInput(FlexibleModel):
     lat: str
     lon: str
     godKeyPos: str | None = None
+    # 五行力量·藏干版本（上游 baziLunarLocal.js:1141）：'fenye'=分野加权（月柱仅当令司令之干
+    # 吃月乘）/ 缺省 'common'=通行版。此前 skill 无入口 → [五行力量] 段那条「分野加权」说明行
+    # 结构上永不可达，而 [月令司令（分野）] 段却照出司令干，两段口径自相矛盾。
+    cangVersion: str | None = None
+    # 分野轮值表版本（上游 baziLunarLocal.js:1136）：'fajue' / 缺省 'common'。
+    fenyeVersion: str | None = None
     timeAlg: int | None = 0
     byLon: bool | None = False
     after23NewDay: bool | None = False
@@ -368,7 +374,7 @@ class CalendarMonthInput(FlexibleModel):
     day: str | None = None  # 选中日（YYYY-MM-DD）：给出则产 [选中日详情] 段
     # 以下三组喂给页面聚合快照的三个子模块（老黄历 / 通书择日 / 日子馆），纯前端推演、零后端往返。
     hour: int | None = Field(default=None, description="0–23 整点小时；影响 [时辰吉凶] 的当前时标记。")
-    tongshu: dict[str, Any] | None = Field(default=None, description="通书择日设置 {school, event, liexiuUse, zuoShan, mingYear}；school 结果敏感。")
+    tongshu: dict[str, Any] | None = Field(default=None, description="通书择日设置 {school, event, liexiuUse, mingYear}；school 结果敏感。")
     rizi: dict[str, Any] | None = Field(default=None, description="日子馆 {event, year, topN, persons:[{name,date,time,gender,role}]}；给了 persons 才产 [日子馆·个性化择日]/[当事人八字]。")
 
 
@@ -384,7 +390,9 @@ class TongshuInput(FlexibleModel):
     school: str | None = Field(default=None, description="流派：donggong 董公 / qimen 奇门叠数 / sanyuan 三垣列宿 / wutu 天元乌兔 / xuankong 三元玄空大卦。")
     event: str | None = Field(default=None, description="用事（嫁娶 / 开市 / 安葬 …），缺省「嫁娶」。")
     liexiuUse: str | None = Field(default=None, description="三垣列宿用事类（断语高亮），缺省「建宅」。")
-    zuoShan: str | None = Field(default=None, description="坐山（玄空大卦用），缺省「子」。")
+    # zuoShan 已删：上游 techniqueMountSettings.js:1938 判定它是「双重幽灵」——无流派声明
+    # needs.zuoShan、快照 builder 全文不消费（三元玄空段末自注「坐向卦须六十四卦天圆图…本法从缺」），
+    # 选它 100% 无效果。声称一个不存在的能力比缺这个能力更糟。
     mingYear: str | None = Field(default=None, description="命年干支（乌兔/玄空用），缺省「甲子」。")
 
 
@@ -416,6 +424,9 @@ class QimenZeriInput(QimenInput):
     展示盘仍走 ken `/qimen/pan`，只有区间**搜索**用本地引擎（见 service._run_qimenzeri_tool 的算权说明）。
     """
 
+    # service 会把 pos 读进搜索请求（_run_qimenzeri_tool 的 geo），但此前 schema 不声明 ——
+    # FlexibleModel 收得下，agent 却无从得知它存在。声明即可发现。
+    pos: str | None = Field(default=None, description="地点显示名，进配置段与搜索请求")
     startDate: str | None = Field(default=None, description="搜索窗起始日（YYYY-MM-DD）")
     startTime: str | None = Field(default="00:00", description="搜索窗起始时刻（HH:mm）")
     endDate: str | None = Field(default=None, description="搜索窗结束日（YYYY-MM-DD）")
@@ -441,6 +452,9 @@ class TianxingInput(BirthInput):
     date/time 是 [起盘信息] 展示的锚点时刻，缺省取窗口起点。
     """
 
+    # 后端 ScanContext 实读 partileDef（election_scan.py:367），白名单也一直带着它，
+    # 唯独 schema 没声明 —— 能用、agent 看不见。
+    partileDef: str | None = Field(default=None, description="精确相位(partile)判定：same_degree（缺省）等。")
     startDate: str | None = Field(default=None, description="搜索窗起始日（YYYY-MM-DD）")
     startTime: str | None = Field(default="00:00", description="搜索窗起始时刻（HH:mm）")
     endDate: str | None = Field(default=None, description="搜索窗结束日（YYYY-MM-DD）")
@@ -483,6 +497,7 @@ class QizhengElectionInput(BirthInput):
             "azimuthsearch=星曜到达目标罗盘方位的时刻搜索"
         ),
     )
+    pos: str | None = Field(default=None, description="地点显示名，进快照的起盘信息行")
     height: float | None = Field(default=None, description="海拔（米），缺省 0")
     nodeType: str | None = Field(default=None, description="罗计口径：mean（缺省）|true")
     lilithType: str | None = Field(default=None, description="月孛口径：mean（缺省）|true")
@@ -525,6 +540,9 @@ class TaiyiInput(BirthInput):
 
 class JinKouInput(LiuRengGodsInput):
     diFen: str | None = None
+    # 快照的贵人/占断层按性别取用（jinkou.js:59 读 payload.gender，Python 整包透传），
+    # 但此前无人声明它 —— 能用、agent 却看不见。
+    gender: str | int | None = Field(default=None, description="性别：1/男 或 0/女；影响贵人取用与占断行。")
     guirengType: int | None = None
     options: dict[str, Any] = Field(default_factory=dict)
     liureng: dict[str, Any] | None = None
@@ -555,6 +573,10 @@ class CanPingInput(FlexibleModel):
     lateZiHourUseNextDay: int | None = None
     # method: 'ming' (明法·月支反向取日宫) or 'gu' (古法·八字日支为日宫).
     method: str | None = "ming"
+    # dayunRule: 'mingGongQiyun'(默认·《参评诀》单双月数日÷3) / 'mingGongOne'(一岁起运) /
+    # 'baziStyle'(节气起运，与八字盘同源)。镜像上游 aiAnalysisContext.js:1903 的每技法设置；
+    # 上游 [Win-D69] 记的正是「页面选了档、挂载不传 → 挂载恒回落默认档+一岁起」这个 bug。
+    dayunRule: str | None = None
 
 
 class HeLuoInput(FlexibleModel):
@@ -879,8 +901,11 @@ class BabylonInput(BirthInput):
     # 派系口径直接改分至规范与「位」的落点 → 结果敏感，缺省不静默切换。
     predictive: bool | None = False
     scheme: str | None = Field(default=None, description="实位派系：swissA10（默认）/ systemA / systemB。")
-    solstice: str | None = Field(default=None, description="分至规范：A10（春分白羊 10°，默认）/ B8（春分白羊 8°）。")
-    era: str | None = Field(default=None, description="纪元口径（塞琉古纪年等）。")
+    solstice: str | None = Field(default=None, description="分至规范：A10（春分白羊 10°）/ B8（春分白羊 8°）；缺省跟派系档。")
+    # era 已删：整棵 vendored 巴比伦树无人消费它（只是 BABYLON_SCHEMES 档内的元数据字段），
+    # 传了永远无效果。真正的判读参数是下面两个，此前一个都没接。
+    dodecaVariant: str | None = Field(default=None, description="十二分变体：A（加于宫起点）/ B（加于点本身·楔文）；缺省跟派系档。")
+    cubitDeg: float | None = Field(default=None, description="肘度（1 cubit 折合黄经度数），缺省跟派系档（2.2）。")
 
 
 class DraconicInput(BirthInput):
@@ -988,10 +1013,18 @@ class HoraryInput(BirthInput):
     hsys: Any | None = Field(default=None, description="卜卦盘分宫制（Regiomontanus 等，随流派档）。")
     termsVariant: Any | None = Field(default=None, description="界(terms)表流派：埃及 / 托勒密。")
     geminiBoundEmended: Any | None = Field(default=None, description="双子界表勘误开关（v3.6.0 修订）。")
-    considerationsMode: Any | None = Field(default=None, description="定盘考量(considerations before judgment)口径。")
-    receptionMode: Any | None = Field(default=None, description="接纳(reception)判定口径。")
-    almutenScheme: Any | None = Field(default=None, description="Almuten 取法（Ibn Ezra / Lilly 等）。")
-    lotsSet: Any | None = Field(default=None, description="阿拉伯点集合范围（全集 / 常用）。")
+    considerationsMode: Any | None = Field(
+        default=None, description="定盘考量(considerations before judgment)硬度：warn / strict / lenient / ignore。"
+    )
+    lotsSet: Any | None = Field(default=None, description="阿拉伯点集：minimal（默认）/ core15。")
+    # 判读层参数覆写（HORARY_PARAM_SPEC 里 sendToBackend=false 的 46 键全可覆写，压过流派档）。
+    # 键名以引擎自带词表为准；不认识的键会原样回执在 data.params_ignored，不静默吞。
+    # 🔴 receptionMode / almutenScheme 两个字段已删：引擎词表里**根本没有这两个名字**（近邻是
+    # receptionForHardAspects / receptionPerfection / accidentalMode，语义并不等同）。
+    # 它们是凭空发明的旋钮，声称了三个版本、一次都没生效过。
+    options: dict[str, Any] | None = Field(
+        default=None, description="判读层参数覆写 {key: value}；键取自引擎词表 HORARY_PARAM_SPEC。"
+    )
 
 
 class ElectionInput(BirthInput):
@@ -1001,19 +1034,24 @@ class ElectionInput(BirthInput):
     topicId: str | None = "marriage"
     tradition: bool | None = True
     predictive: bool | None = False
-    # 择日五档真差异化（星阙 v3.6.0）：流派轴 + 八大分析模块 + 医疗择日危象参照。
-    # 上游 electionParams.js 的 13 键；未声明前 agent 无从得知这些档位存在。
-    school: Any | None = Field(default=None, description="择日流派档（五档：古典 / 现代 / 中西合参 等）。")
-    dignityScheme: Any | None = Field(default=None, description="尊贵五重矩阵取法。")
-    lotsSet: Any | None = Field(default=None, description="阿拉伯点全谱 / 常用集。")
-    starSet: Any | None = Field(default=None, description="恒星集（41 恒星）参与与否。")
-    considerationsMode: Any | None = Field(default=None, description="择前三清单(considerations)口径。")
-    medicalCritical: Any | None = Field(default=None, description="医疗择日危象日参照开关。")
-    hourRuler: Any | None = Field(default=None, description="时主(planetary hour)合参。")
-    returnCharts: Any | None = Field(default=None, description="回归盘合参（太阳/月亮返照）。")
-    primaryDirections: Any | None = Field(default=None, description="主限合参。")
-    natalCompare: Any | None = Field(default=None, description="本命合参（与当事人本命盘比对）。")
-    mundaneCompare: Any | None = Field(default=None, description="时势合参（世运盘比对）。")
+    # 择日口径（星阙 v3.6.0）：流派轴 + 13 个判读层参数，全部取自上游 electionParams.js。
+    # 🔴 此前这里挂着 dignityScheme / starSet / medicalCritical / hourRuler / returnCharts /
+    # primaryDirections / natalCompare / mundaneCompare / lotsSet / considerationsMode 十个字段，
+    # 与 ELECTION_PARAM_SPEC 的 13 键**零重合**，且 skill 与上游全树都无人消费 —— 注释一边引着
+    # 正确出处、字段一边写着发明的名字，声称了三个版本一次都没生效。诚实起见整批删除。
+    school: Any | None = Field(
+        default=None,
+        description="择日流派档：modern_main（默认）/ hellenistic / persian / renaissance / modern_revival。",
+    )
+    options: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "判读层参数覆写 {key: value}；键取自引擎词表 ELECTION_PARAM_SPEC："
+            "termsVariant / tripSystem / orbProfile / vocMode / bodySet / mansionAnchor / "
+            "marriageTradition / querentGender / erosConstruction / lotsReversal / "
+            "firdariaNightOrder / zrLot / pdTimeKey。不认识的键原样回执在 data.params_ignored。"
+        ),
+    )
 
 
 class GeomancyInput(BirthInput):

@@ -4,7 +4,7 @@
 import { runHorary } from '../vendor/divination/horary/horaryEngine.js';
 import { buildHorarySnapshot } from '../vendor/divination/horary/horarySnapshot.js';
 import { CATEGORY_DEF } from '../vendor/divination/horary/significators.js';
-import { horaryJudgeOpts, HORARY_SCHOOLS } from '../vendor/divination/horary/horarySchools.js';
+import { horaryJudgeOpts, HORARY_SCHOOLS, HORARY_PARAM_BY_KEY } from '../vendor/divination/horary/horarySchools.js';
 
 export function runHoraryTool(payload) {
   const input = payload && typeof payload === 'object' ? payload : {};
@@ -20,7 +20,24 @@ export function runHoraryTool(payload) {
   if (!HORARY_SCHOOLS[school]) {
     school = 'classical';
   }
-  const opts = horaryJudgeOpts(school);
+  // 🔴 horaryJudgeOpts(id, overrides, globals) 是四层口径链，此前只喂第 1 层（流派档），
+  // 于是 46 个判读层参数（lotsSet/considerationsMode/vocMode/…）结构上不可达 ——
+  // schema 却挂着其中两个的描述。可覆写键**锚定引擎自己的词表** HORARY_PARAM_BY_KEY，
+  // 后端层四键（hsys/termsVariant/geminiBoundEmended/tradition）不走这里，它们随 /chart 发。
+  const rawOverrides = { ...(input.options && typeof input.options === 'object' ? input.options : {}) };
+  Object.keys(input).forEach((k) => {
+    const spec = HORARY_PARAM_BY_KEY[k];
+    if (spec && !spec.sendToBackend && input[k] !== undefined && input[k] !== null && !(k in rawOverrides)) {
+      rawOverrides[k] = input[k];
+    }
+  });
+  const overrides = {};
+  const ignoredParams = [];
+  Object.keys(rawOverrides).forEach((k) => {
+    const spec = HORARY_PARAM_BY_KEY[k];
+    if (spec && !spec.sendToBackend) { overrides[k] = rawOverrides[k]; } else { ignoredParams.push(k); }
+  });
+  const opts = horaryJudgeOpts(school, overrides);
   let snapshot_text = '';
   let judgment = null;
   try {
@@ -40,6 +57,9 @@ export function runHoraryTool(payload) {
       verdict: judgment && judgment.verdict ? judgment.verdict.summary : null,
       significators: judgment ? judgment.significators : null,
       radicality: judgment && judgment.radicality ? { suitable: judgment.radicality.suitable } : null,
+      // 口径回执：不认识的键必须说出来，不能无声吞掉（后端层键走 /chart，不在此列）。
+      params_applied: Object.keys(overrides).sort(),
+      params_ignored: ignoredParams.sort(),
     },
     snapshot_text,
   };

@@ -87,7 +87,11 @@ export async function runZhengChuan(payload) {
     // 大定：四柱=权威柱；小运/大运/岁君（年粒度）取自 vendored bazi 链的推运表（同八字盘一源）。
     let bazi = null;
     try {
-      const b = buildLocalBaziResult({ date: input.date, time: input.time, zone: input.zone, lon: input.lon, gender, timeAlg: input.timeAlg == null ? 1 : input.timeAlg, after23NewDay: input.after23NewDay, lateZiHourUseNextDay: input.lateZiHourUseNextDay });
+      // 🔴 gender 必须传 0/1：baziLunarLocal.js:1079 做 `Number(params.gender) === 0 ? 0 : 1`，
+      // 而本文件上游收到的可能是 '女' —— Number('女') = NaN ≠ 0 → 判男 → 大运顺行方向错 →
+      // deriveDadingYearPillars 取到错的 小运/岁君/大运 → 大定死限年错，且照常自信输出。
+      // 本文件顶部已有 isFemale（:63）做同样的归一（genderBit 是 liuqin 分支的块内变量，此处不可见）。
+      const b = buildLocalBaziResult({ date: input.date, time: input.time, zone: input.zone, lon: input.lon, gender: isFemale ? 0 : 1, timeAlg: input.timeAlg == null ? 1 : input.timeAlg, after23NewDay: input.after23NewDay, lateZiHourUseNextDay: input.lateZiHourUseNextDay });
       bazi = (b && b.bazi) || b;
     } catch (e) { bazi = null; }  // 无推运表 → deriveDadingYearPillars 回落月柱（古法「未行大运」）
     const derived = deriveDadingYearPillars(bazi, input.dadingYear);
