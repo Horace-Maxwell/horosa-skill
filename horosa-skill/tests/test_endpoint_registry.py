@@ -53,6 +53,10 @@ def _call_site_endpoints() -> set[str]:
     # 分发表形态的调用点：xuanshi 一类「action → 端点全路径」表把字面量存在表里、_call_remote 传变量。
     # 表里存的就是全路径字面量，等价于调用点——一并采集，端点守卫才不把它们误判成死项。
     literals |= set(re.findall(r"[\"'](/xuanshi/[a-z_]+)[\"']", text))
+    # 同一形状（v0.34.0）：择日十技法的两个后端扫描成员把 scan/explain/conditiontypes 三条全路径
+    # 存在 _ZERI_BACKEND_TOOLS 里、_call_remote 传 spec["scan"]。写成字面量而不是 f"{prefix}/scan"
+    # 正是为了让这条守卫看得见 —— 拼接会让「登记了却没接线」和「拼写漂移」两类问题一起隐身。
+    literals |= set(re.findall(r"[\"'](/(?:qizheng|india)electionscan/[a-z]+)[\"']", text))
     declared = {d.endpoint for d in TOOL_DEFINITIONS.values() if d.endpoint}
     return literals | declared | set(_SHENSHU_ENDPOINTS.values())
 

@@ -497,14 +497,23 @@ class SanshiZeriInput(ZeriScanInput):
     guirengType: int | None = None
 
 
-class QizhengZeriInput(ZeriScanInput):
+class ZeriBackendScanInput(ZeriScanInput):
+    """后端扫描成员共享：多一个单时刻逐叶判读入口（与 tianxing 的 explainAt 同款）。"""
+
+    explainAt: str | None = Field(
+        default=None,
+        description="对该时刻做逐叶判读（YYYY-MM-DD HH:mm[:ss]）；与扫描求值器同源。不给则不产该段。",
+    )
+
+
+class QizhengZeriInput(ZeriBackendScanInput):
     """七政择时：判定与区间搜索都在 astropy 后端（swisseph 直连分钟粒度），非本地重算。"""
 
     height: float | None = Field(default=None, description="海拔（米），缺省 0")
     ayanamsaDeg: float | None = Field(default=None, description="恒星制岁差回加度")
 
 
-class IndiaZeriInput(ZeriScanInput):
+class IndiaZeriInput(ZeriBackendScanInput):
     """印度择时（Muhurta）：后端扫描。段自足 —— 印度盘全文见 india_chart 本身，本工具只出择时三段。"""
 
     indiaAyanamsa: Any | None = Field(default=None, description="印度岁差档，与 india_chart 同词表。")

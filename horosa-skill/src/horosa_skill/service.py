@@ -190,6 +190,15 @@ _PYTHON_CHART_ENDPOINTS = {
     # 单时刻逐叶判读 + 条件类型自省（上游 v3.9.x R4；explainAt 参数与条件树报错自愈用）
     "/electionscan/explain",
     "/electionscan/conditiontypes",
+    # 择日十技法（v3.10.0）的两个后端扫描成员。不登记的后果不是 404 而是**被路由去 Java 聚合层**，
+    # 那边没有这条路由 → HTTP 500，而同样的请求体直接打 chart 服务是好的 —— 症状像「后端坏了」，
+    # 实则是路由表漏登记（AGENTS §5 布线清单第 2 步）。
+    "/qizhengelectionscan/scan",
+    "/qizhengelectionscan/explain",
+    "/qizhengelectionscan/conditiontypes",
+    "/indiaelectionscan/scan",
+    "/indiaelectionscan/explain",
+    "/indiaelectionscan/conditiontypes",
     # 七政择日动盘三路由（批 I-1b；同挂主 chart 服务 webqizhengelectionsrv）
     "/qizhengelection/pan",
     "/qizhengelection/eclipses",
@@ -7727,11 +7736,18 @@ class HorosaSkillService:
         base_payload.setdefault("clarification_notes", f"{tool_name} selected-moment sub-chart")
         base_env = self.run_tool(spec["base_tool"], base_payload, save_result=False)
         if not base_env.ok:
+            # 🔴 把基底工具的**原始报错**带出来。只说「铸盘失败」时，无 Mongo 机器上的
+            # Java 9999 与真正的接线错误长得一模一样 —— 本轮 live 验证为区分这两者做了整轮排查，
+            # 而那轮排查本可以由这一行错误信息省掉。
+            base_err = base_env.error
             raise ToolTransportError(
-                f"{label}的展示盘（{spec['base_tool']}）铸盘失败，命中区间已算出但无法出盘。",
+                f"{label}的展示盘（{spec['base_tool']}）铸盘失败，命中区间已算出但无法出盘："
+                f"{(base_err.message if base_err else '') or '未知错误'}",
                 code=f"tool.{tool_name}_base_chart_failed",
                 details={"base_tool": spec["base_tool"], "pan_moment": pan_moment,
-                         "error": base_env.error.code if base_env.error else None},
+                         "base_error": {"code": base_err.code, "message": base_err.message} if base_err else None,
+                         "hint": f"先单独调 {spec['base_tool']} 同刻复现：它也红 = 基底技法/环境问题"
+                                 f"（如无 Mongo 时 Java 族回 9999），只有择日这条红才是接线问题。"},
             )
         base = base_env.data if isinstance(base_env.data, dict) else {}
 
@@ -7766,20 +7782,31 @@ class HorosaSkillService:
     # ── 择日十技法：两个**后端扫描**成员（七政 / 印度）───────────────────────────────
     # 与上面六个的分工不同：判定跑在 astropy（swisseph 直连分钟粒度），skill 只发请求 ——
     # 与 tianxing 走 /electionscan/* 是同一条路，端点三件套 scan/conditiontypes/explain 也同形。
+    # 端点写**完整字面量**而不是 f"{prefix}/scan" 拼出来：`test_registered_endpoints_have_call_sites`
+    # 靠在源码里搜字面量确认「登记的端点真有人调」，拼接会让它看不见 —— 那条守卫的价值恰恰在于
+    # 抓「登记了却没接线」和「拼写漂移」，为省几个字符把它弄瞎不划算。
     _ZERI_BACKEND_TOOLS: dict[str, dict[str, Any]] = {
-        "qizhengzeri": {"label": "七政择时", "endpoint": "/qizhengelectionscan",
-                        "base_tool": "guolao_chart", "js": "qizhengzeri"},
-        "indiazeri": {"label": "印度择时（Muhurta）", "endpoint": "/indiaelectionscan",
-                      # 印度页是 A 类星盘系，上游 preset 里 indiazeri 只有择时三段、无基底快照槽
-                      # （盘全文见 india_chart 本身）—— 故不铸展示盘，段自足。
-                      "base_tool": None, "js": "indiazeri"},
+        "qizhengzeri": {
+            "label": "七政择时", "base_tool": "guolao_chart",
+            "scan": "/qizhengelectionscan/scan",
+            "explain": "/qizhengelectionscan/explain",
+            "conditiontypes": "/qizhengelectionscan/conditiontypes",
+        },
+        "indiazeri": {
+            # 印度页是 A 类星盘系，上游 preset 里 indiazeri 只有择时三段、无基底快照槽
+            # （盘全文见 india_chart 本身）—— 故不铸展示盘，段自足。
+            "label": "印度择时（Muhurta）", "base_tool": None,
+            "scan": "/indiaelectionscan/scan",
+            "explain": "/indiaelectionscan/explain",
+            "conditiontypes": "/indiaelectionscan/conditiontypes",
+        },
     }
     # 后端单请求硬上限 93 天（election_scan 家族共用），上游用按月分段绕开。
     _ZERI_BACKEND_MAX_SPAN_DAYS = 731
 
     def _run_zeri_backend_tool(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
         spec = self._ZERI_BACKEND_TOOLS[tool_name]
-        label, endpoint = spec["label"], spec["endpoint"]
+        label = spec["label"]
         start_date, start_time, end_date, end_time = self._tianxing_window(payload)
         if not start_date or not end_date:
             raise ToolValidationError(
@@ -7797,12 +7824,37 @@ class HorosaSkillService:
         max_span = int(payload.get("maxSpanDays") or self._ZERI_BACKEND_MAX_SPAN_DAYS)
         _require_sane_window(start_date, end_date, max_span=max_span, tool=tool_name)
 
+        # 🔴 后端吃的是**编译树**，不是 UI 树。直接发 UI 树的后果不是报「形状不对」，而是
+        # `unknown condition type: None`——它按编译树的键去读 type，读到 None。这与
+        # zeriScan.js 里那条注释是同一个坑，只不过发生在 HTTP 边界上。tianxing 一直是先 compile
+        # 再发（service.py:7126），此处照办；本地先编译还能把条件错误挡在一次远端往返之前。
+        compile_result = self.js_client.run(
+            "zeri_scan_remote", {"technique": tool_name, "action": "compile", "tree": conditions}
+        )
+        compile_data = compile_result.get("data") or {}
+        if not compile_data.get("ok"):
+            error = compile_data.get("error") or {}
+            details: dict[str, Any] = {"error": error}
+            # 自愈式报错：把服务端**实现集**（运行时孪生）带回，agent 不用猜哪些键合法。
+            try:
+                ct = self._call_remote(spec["conditiontypes"], {})
+                if isinstance(ct, dict) and isinstance(ct.get("types"), list):
+                    details["server_condition_types"] = ct.get("types")
+            except Exception:  # noqa: BLE001 - 自省失败不该遮住原始校验错误
+                pass
+            raise ToolValidationError(
+                f"{label}条件树不合法：{error.get('message') or '未知错误'}",
+                code=f"tool.{tool_name}_invalid_conditions",
+                details=details,
+            )
+        compiled = compile_data.get("compiled")
+
         cfg = {"startDate": start_date, "startTime": start_time, "endDate": end_date, "endTime": end_time}
         base_request: dict[str, Any] = {
             **cfg,
             "zone": _electionscan_zone(payload.get("zone")),
             "ad": payload.get("ad", 1),
-            "conditions": conditions,
+            "conditions": compiled,
         }
         for key in ("lat", "lon", "gpsLat", "gpsLon", "pos", "hsys", "zodiacal", "siderealAyanamsa",
                     "height", "ayanamsaDeg", "indiaAyanamsa", "indiaHsys", "natal"):
@@ -7817,8 +7869,8 @@ class HorosaSkillService:
         lists: list[list[dict[str, Any]]] = []
         truncated = False
         for segment in segments:
-            raw = self._call_remote(f"{endpoint}/scan", {**base_request, **segment})
-            data = self._require_electionscan_ok(raw, endpoint=f"{endpoint}/scan")
+            raw = self._call_remote(spec["scan"], {**base_request, **segment})
+            data = self._require_electionscan_ok(raw, endpoint=spec["scan"])
             lists.append(list(data.get("intervals") or []))
             truncated = truncated or bool(data.get("truncated"))
         stitched = self._tianxing_js({"action": "stitch", "lists": lists}, stage="stitch")
@@ -7854,18 +7906,32 @@ class HorosaSkillService:
         else:
             pan_moment = intervals[0].get("pick") if intervals else f"{start_date} {start_time}"
 
+        # [单时判读]：与 tianxing 同款能力 —— 后端 explain 端点复用**同一个求值器**，
+        # 所以逐叶 pass 与扫描结果绝对同源。未给 explainAt 不产，零回归。
+        explain_payload = None
+        if payload.get("explainAt"):
+            t_raw = str(payload.get("explainAt") or "").strip().replace("-", "/")
+            if len(t_raw) == 16:  # YYYY/MM/DD HH:mm
+                t_raw = f"{t_raw}:00"
+            raw = self._call_remote(spec["explain"], {**base_request, "t": t_raw})
+            data = self._require_electionscan_ok(raw, endpoint=spec["explain"])
+            if isinstance(data, dict) and data.get("tree") is not None:
+                explain_payload = {"t": data.get("t") or t_raw, "tree": data.get("tree")}
+
         snapshot_text = "\n\n".join(
             part.strip() for part in (base_text, extra_text) if isinstance(part, str) and part.strip()
         ) or None
         return {
             "pan_moment": pan_moment,
             "base": base or None,
+            **({"explain": explain_payload} if explain_payload else {}),
             "intervals": intervals,
             "hit_count": len(intervals),
             "truncated": truncated,
             "segments": len(segments),
+            "compiled_conditions": compiled,
             # 算权如实披露：判定与区间搜索都在后端 astropy（swisseph 直连），不是本地重算。
-            "compute_sources": {"scan": f"astropy{endpoint}", "pan": spec["base_tool"] or "none"},
+            "compute_sources": {"scan": f"astropy{spec['scan']}", "pan": spec["base_tool"] or "none"},
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique=tool_name, snapshot_text=snapshot_text),
         }

@@ -158,13 +158,14 @@ def build_sample_payloads() -> dict[str, dict]:
                 {"type": "pattern_ji", "params": {"names": ["青龙回首"], "palaces": [], "matchMode": "any"}},
             ]},
         },
-        # 择日十技法（v3.10.0）。条件叶取各引擎自带词表里的真键（huangli 的 yi_has、bazi 的
-        # day_ganzhi …），不是编出来的名字——编的名字会被 compile 拒掉，而离线契约测试只看「能不能
-        # 跑通」，于是一个假条件也能绿。窗口取一周，够命中又不至于让离线跑变慢。
+        # 择日十技法（v3.10.0）。条件叶的**键与参数都取引擎自带 defaults**（newXLeaf 的产物）：
+        # 编出来的键会被 compile 拒掉，而离线桩根本不 compile，于是假条件也能绿 —— live 实测里
+        # 这批 payload 一次报出四个「至少选择一项」，全是我 params 写成 {} 造成的。
+        # 「离线绿 ≠ 参数对」，参数正确性只有真引擎能判。
         "huanglizeri": {
             **chart_birth, "pos": "福州", "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-08", "endTime": "23:59",
             "conditions": {"kind": "group", "joiner": "all", "children": [
-                {"kind": "leaf", "type": "yi_has", "params": {"values": ["祭祀"]}},
+                {"kind": "leaf", "type": "yi_has", "params": {"values": ["嫁娶"], "matchMode": "any"}},
             ]},
         },
         "bazizeri": {
@@ -176,37 +177,37 @@ def build_sample_payloads() -> dict[str, dict]:
         "taiyizeri": {
             **chart_birth, "pos": "福州", "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-08", "endTime": "23:59",
             "conditions": {"kind": "group", "joiner": "all", "children": [
-                {"kind": "leaf", "type": "yinyang_ju", "params": {}},
+                {"kind": "leaf", "type": "yinyang_ju", "params": {"value": "阳"}},
             ]},
         },
         "ziweizeri": {
             **chart_birth, "pos": "福州", "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-08", "endTime": "23:59",
             "conditions": {"kind": "group", "joiner": "all", "children": [
-                {"kind": "leaf", "type": "wuxing_ju", "params": {}},
+                {"kind": "leaf", "type": "wuxing_ju", "params": {"values": ["3"]}},
             ]},
         },
         "liurengzeri": {
             **chart_birth, "pos": "福州", "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-08", "endTime": "23:59",
             "conditions": {"kind": "group", "joiner": "all", "children": [
-                {"kind": "leaf", "type": "ke_name", "params": {}},
+                {"kind": "leaf", "type": "ke_name", "params": {"values": ["元首课"]}},
             ]},
         },
         "sanshizeri": {
             **chart_birth, "pos": "福州", "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-08", "endTime": "23:59",
             "conditions": {"kind": "group", "joiner": "all", "children": [
-                {"kind": "leaf", "type": "lr_ke_name", "params": {}},
+                {"kind": "leaf", "type": "lr_ke_name", "params": {"values": ["元首课"]}},
             ]},
         },
         "qizhengzeri": {
             **chart_birth, "pos": "福州", "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-08", "endTime": "23:59",
             "conditions": {"kind": "group", "joiner": "all", "children": [
-                {"kind": "leaf", "type": "day_night", "params": {}},
+                {"kind": "leaf", "type": "day_night", "params": {"value": "day"}},
             ]},
         },
         "indiazeri": {
             **chart_birth, "pos": "福州", "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-08", "endTime": "23:59",
             "conditions": {"kind": "group", "joiner": "all", "children": [
-                {"kind": "leaf", "type": "vara", "params": {}},
+                {"kind": "leaf", "type": "vara", "params": {"values": [4]}},
             ]},
         },
         "geomancy": {**chart_birth, "question": "事业能否升迁", "questionType": "career"},
