@@ -21,6 +21,8 @@ import { runZhengChuan } from '../src/tools/zhengchuan.js';
 import { runLingqi } from '../src/tools/lingqi.js';
 import { runTianxing } from '../src/tools/tianxing.js';
 import { runQizhengElection } from '../src/tools/qizhengElection.js';
+import { runBaziGeju } from '../src/tools/baziGeju.js';
+import { buildLocalBaziResult } from '../src/vendor/bazi/baziLunarLocal.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const chart = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_traditional.json'), 'utf8'));
@@ -344,6 +346,32 @@ check('tianxing explain_section without explain tree fails loudly', () => {
   const r = runTianxing({ action: 'explain_section', t: 'x', tree: null, explain: null });
   assert(r.data.ok === false, 'missing explain must be ok=false');
   assert(r.data.error.code === 'missing_explain_tree', `code=${r.data.error.code}`);
+});
+
+// 八字格局 值级金标：固定盘 1989-09-04 00:30 男（己巳 壬申 丁卯 庚子）跑真引擎，逐字冻结四项。
+//
+// 🔴 为什么要值级、不只查段头：baziGeju.js 曾把时柱键写成 `hour`（三个引擎一律读 `time`），四柱
+// 静默变三柱 —— 段头照出、行数照够、任何「有没有 [格局·用神]」式断言全绿，只有值是错的：取格从
+// 正财格塌成正官格、日主同党 34.3%(真值 27.9%)、盲派 `时宾()` 空。四柱来源与生产同构
+// （buildLocalBaziResult 即上游本地引擎），所以这里冻的就是用户会看到的那串字。
+check('baziGeju 值级金标：时柱入算 + 取格/成败/盲派逐字', () => {
+  const birth = { date: '1989-09-04', time: '00:30:00', zone: 8, lon: 120, gender: 1, timeAlg: 1 };
+  const bazi = buildLocalBaziResult(birth).bazi;
+  const fc = bazi.fourColumns;
+  assert(fc.time && fc.time.ganzi === '庚子', `fixture 时柱 drifted: ${fc.time && fc.time.ganzi}`);
+  const s = runBaziGeju({ fourColumns: fc, birth }).snapshot_text || '';
+  for (const sec of ['[五行力量]', '[格局·用神]', '[盲派结构]', '[月令司令（分野）]']) {
+    assert(s.includes(sec), `missing ${sec}`);
+  }
+  // 取格：时柱缺席时会误判成「正官格（月令官·中气透干）」。
+  assert(s.includes('格局：正财格（月令财·本气透干）'), `geju wrong: ${s.split('\n').find((l) => l.startsWith('格局：'))}`);
+  // 成败/破格行（桌面 BaZi.js 有、快照层曾整行不渲染）。
+  assert(s.includes('成败：破格——月令申逢刑，忌神坏格无救。'), 'missing 成败 line');
+  // 五行力量：时柱庚子入算才是 27.9%（缺时柱 34.3%）。
+  assert(s.includes('日主火：身弱（同党印比 27.9%'), `dayMaster wrong: ${s.split('\n').find((l) => l.startsWith('日主'))}`);
+  // 盲派宾主四位齐全 —— 时柱缺席时这里是 `时宾()`。
+  assert(s.includes('宾主：年宾(己巳) 月宾(壬申) 日主(丁卯) 时宾(庚子)'), `mangpai wrong: ${s.split('\n').find((l) => l.startsWith('宾主：'))}`);
+  assert(!/时宾\(\)/.test(s), '时柱 dropped out of 盲派 (fourColumns key must be `time`, not `hour`)');
 });
 
 if (failures > 0) {

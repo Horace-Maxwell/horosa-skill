@@ -12,7 +12,9 @@ export function runBaziGeju(payload) {
     if (!fc || !fc.year || !fc.month || !fc.day || !fc.time) {
       return { snapshot_text: '' };
     }
-    const four = { year: fc.year, month: fc.month, day: fc.day, hour: fc.time };
+    // 时柱键名必须是 time：三个引擎（baziWuxing/baziMangPai/baziGejuYongShen）一律按
+    // ['year','month','day','time'] 取柱，写成 hour 会让时柱静默缺席（取格/五行力量/盲派全错）。
+    const four = { year: fc.year, month: fc.month, day: fc.day, time: fc.time };
     const st = computeWuxingStrength(four, {});
     const gy = st ? computeGejuYongShen(four, st) : null;
     const mp = computeMangPai(four);
@@ -35,6 +37,7 @@ export function runBaziGeju(payload) {
       out.push('[格局·用神]');
       out.push('当前主用流派：传统综合（各派取用可异，下列多派对照）');
       if (gy.geju) { out.push(`格局：${gy.geju.name}（月令${gy.geju.tenGod || '—'}·${gy.geju.via}）`); }
+      if (gy.chengBai) { out.push(`成败：${gy.chengBai.verdict}——${gy.chengBai.reason}（${gy.chengBai.note}）`); }
       if (Array.isArray(gy.schools) && gy.schools.length) {
         out.push('多派用神对照：');
         gy.schools.forEach((s) => {
@@ -50,8 +53,11 @@ export function runBaziGeju(payload) {
         gy.bianGe.forEach((b) => out.push(`· ${b.type}·${b.name}（${b.cond}）→ 若成立用${b.yong}、忌${b.bei}；${b.note}`));
       }
       if (Array.isArray(gy.zaGe) && gy.zaGe.length) {
-        out.push('杂格（正格优先，需复核填实刑冲）：');
-        gy.zaGe.forEach((b) => out.push(`· ${b.name}（${b.cond}）：${b.note}`));
+        out.push('杂格（正格优先，需复核填实刑冲；虚邀暗冲类附真/假判定）：');
+        gy.zaGe.forEach((b) => {
+          const tag = b.quality ? `【${b.quality}${b.broken && b.broken.length ? `·${b.broken.join('、')}` : ''}】` : '';
+          out.push(`· ${b.name}${tag}（${b.cond}）：${b.note}`);
+        });
       }
     }
 
