@@ -90,6 +90,8 @@ REQUIRED_ON_BOTH = (
         "node_modules/lunar-javascript/package.json",
         "vendor/kin_year_domain.py",
         "geomancy/data/ifa_odu.json",
+        "astrostudy/qizheng_election_scan.py",
+        "astrostudy/india_election_scan.py",
     ]
 )
 

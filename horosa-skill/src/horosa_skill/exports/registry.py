@@ -437,14 +437,16 @@ AI_EXPORT_PRESET_SECTIONS["qimenzeri"] = [
 AI_EXPORT_PRESET_SECTIONS["huanglizeri"] = [
     *AI_EXPORT_PRESET_SECTIONS["huangli"], "择吉搜索配置", "择吉条件", "命中日段",
 ]
-for _zeri_key, _base_key in (
+# 派生键 → 基底键。段表与 optional 集**都**从基底继承（见 AI_EXPORT_OPTIONAL_SECTIONS 之后的循环）。
+ZERI_DERIVED_KEYS = (
     ("bazizeri", "bazi"),
     ("taiyizeri", "taiyi"),
     ("ziweizeri", "ziwei"),
     ("liurengzeri", "liureng"),
     ("sanshizeri", "sanshiunited"),
     ("qizhengzeri", "guolao"),
-):
+)
+for _zeri_key, _base_key in ZERI_DERIVED_KEYS:
     AI_EXPORT_PRESET_SECTIONS[_zeri_key] = [
         *AI_EXPORT_PRESET_SECTIONS[_base_key], "择时搜索配置", "择时条件", "命中时段",
     ]
@@ -603,6 +605,23 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     # 末九项（衣鉢…相品，上游 v3.9.1）是僧道宫制专属段：常规命盘走十二宫，缺席不算漏。
     "cetian": ["四化", "飞星", "格局", "宫干四化表", "飞化规则", "古法格局规则", "夫妻宮", "子女宮", "交友宮", "父母宮", "衣鉢宮", "徒弟宮", "本師宮", "小師宮", "人刀宮", "僧道宮", "遊行宮", "師號宮", "相品宮", "判词原文"],
 }
+
+# 择日派生键继承基底的 optional 集。段表按 spread 从基底继承了，optional 集此前没有——于是基底里
+# 本就「有条件才出」的段（bazi 大运 / taiyi 博弈·命法·命宫行限 / ziwei 运限 / liureng 年命上神 /
+# sanshiunited 奇门遁甲·紫微四化）对派生键成了**必出段**，v0.34.0 Windows live 验证时 5 个择日键
+# `missing_selected_sections` 非空（离线 FakeJsClient 发全集所以照绿，只有真 runtime 能抓）。
+# 择时盘是「时刻盘」没有出生信息，这些段在各 <x>ZeriSnapshot.js 里根本没有发射点（静态检索为零），
+# 所以是结构性缺席，不是接线错——按 §5.5「条件段双登记」进 optional，preset 保留供 parse 识别。
+_ZERI_MOMENT_CHART_DEAD = {
+    # 六壬 `取象` 在基底是必出段，但 liurengZeriSnapshot.js 不发射它（时刻盘无年命/课体取象）。
+    "liurengzeri": ["取象"],
+}
+for _zeri_key, _base_key in ZERI_DERIVED_KEYS:
+    AI_EXPORT_OPTIONAL_SECTIONS[_zeri_key] = list(dict.fromkeys([
+        *AI_EXPORT_OPTIONAL_SECTIONS.get(_zeri_key, []),
+        *AI_EXPORT_OPTIONAL_SECTIONS.get(_base_key, []),
+        *_ZERI_MOMENT_CHART_DEAD.get(_zeri_key, []),
+    ]))
 
 
 def normalize_planet_info_setting(raw: dict[str, Any] | None) -> dict[str, int]:

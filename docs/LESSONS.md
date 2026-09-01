@@ -95,6 +95,43 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.34.0+ / 2026-09-01 — 择日派生键继承了基底段表、没继承基底 optional 集：5/10 新技法 live 导出「缺段」
+
+- **症状**：v0.34.0 Windows 半边原生验证，十个择日技法 live 全部 `ok`，但 5 个的
+  `missing_selected_sections` 非空——bazizeri 缺 大运/多运限、taiyizeri 缺 博弈/命法/命宫行限、
+  ziweizeri 缺 运限/流派叠层、liurengzeri 缺 年命上神/占断向导/取象、sanshizeri 缺 奇门遁甲/紫微四化。
+  离线契约测试全绿（FakeJsClient 发全集），无 live 测试断言择日键的导出洁净——**只有真 runtime 能抓**
+  （v0.34.0 上一条台账「离线绿 ≠ 参数对」的同族）。
+- **根因**：`AI_EXPORT_PRESET_SECTIONS[<x>zeri] = [*基底段表, 择时三段]` 按 spread 继承了段表，
+  `AI_EXPORT_OPTIONAL_SECTIONS` 没有跟着继承——基底里「有条件才出」的 11 段对派生键成了必出段。
+  静态证据：12 个缺段全在基底段表内，11 个在基底 optional 内，且 `vendor/divination/zeri/*Snapshot.js`
+  对这 12 段**零发射点**（择时盘是时刻盘、无出生信息）——结构性缺席，不是接线错。
+  唯一例外 `取象`（liureng 基底必出、zeri builder 不发射）= 派生键的死条目。
+- **guard**：`ZERI_DERIVED_KEYS` 提为常量，段表与 optional 集**都**从基底继承（`取象` 单列进
+  `_ZERI_MOMENT_CHART_DEAD`）；`tests/test_zeri_optional_inheritance.py` 断言 派生 optional ⊇ 基底
+  optional 且 optional ⊆ preset。修后 live 重探：十个键 `missing=[] unknown=[]`。
+- **法则**：**凡按 spread 派生的导出键，optional 集必须与段表一起继承**——段表继承、条件集不继承
+  = 把基底的条件段升格成必出段，这种「多出来的严格」只在 live 才现形。派生新键时把这条写进 §5.5。
+
+### v0.34.0+ / 2026-09-01 — 补 Windows 半边时：择日十技法的 Python 引擎在三把验证器里没有新鲜度标记
+
+- **症状**：v0.34.0 补 Windows 半边前，本机 `vendor/runtime-source` 停在 08-24（v3.7.x 时代的 astropy），
+  而发布已对齐上游 v3.10.0（新增 `qizheng_election_scan.py` / `india_election_scan.py` 与
+  `/qizhengelectionscan/*` `/indiaelectionscan/*` 两族路由）。`verify_vendor_runtime_sources.py`
+  在这棵陈旧树上**照样全绿**——它的内容断言只有 `AI_EXPORT_SETTINGS_VERSION == 56`，而上游按「只加键
+  纪律」把 8 个新技法键加进 aiExport 时**没有 bump 56**。唯一判红的是 mirror 守卫（逐键覆盖）。
+  若 mirror 也漏了（或有人为过关加 alias），构建会打出**没有择日后端路由**的 Windows 包，而
+  `verify_runtime_release.py` 只查文件在不在、照样放行。
+- **根因**：三把验证器（vendor 源 / 发布归档 / builder parity）的「真文件标记」停在 v3.5.1
+  （`ifa_odu.json`）与 v0.32.0（xuanshi sqlite），v3.10.0 这一整个新子树没有任何一个文件被点名。
+  **标记文件是版本恒等之外唯一能证明「树是当前的」的东西**，每次上游加子树都要同步加一个。
+- **guard**：`astrostudy/qizheng_election_scan.py` + `india_election_scan.py` 进
+  `verify_vendor_runtime_sources.py::REQUIRED_PATHS`、`verify_runtime_release.py::REQUIRED_ENTRIES`
+  （三平台块）与 `verify_builder_parity.py::REQUIRED_ON_BOTH`；fixture 同步。加完对**真归档**跑过：
+  mac 打的 darwin tar 与本机打的 win zip 都含这两个文件（顺带证明两平台 payload 同源 v3.10.0）。
+- **法则**：上游每新增一个会被 skill 调到的后端子树，同一 change 里给三把验证器加一个**该子树独有
+  的真文件**作标记（照 `ifa_odu.json` 先例）。版本号恒等在「只加键纪律」下不是证据。
+
 ### v0.34.0 / 2026-09-01 — 同步上游 v3.10.0 择日十技法：抽壳、解析器盲区、与「假债务」
 
 上游一次发了 182 文件 / +25k 行的择日大版本（8 个新技法键）。同步过程本身踩出四条。

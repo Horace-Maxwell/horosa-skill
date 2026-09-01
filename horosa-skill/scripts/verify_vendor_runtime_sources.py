@@ -18,6 +18,11 @@ REQUIRED_PATHS = [
     # v3.5.1 地占大改版 data — the new ifa/numbers/vedic engines read these; a real file here proves
     # the geomancy subtree is the current one (not a pre-v3.5.1 stale copy).
     "vendor/runtime-source/Horosa-Web/astropy/astrostudy/geomancy/data/ifa_odu.json",
+    # v3.10.0 择日十技法 — the qizheng/india election-scan engines behind /qizhengelectionscan/* and
+    # /indiaelectionscan/*. aiExport stayed at v56 when they landed (只加键纪律), so version equality
+    # passed on a stale tree; a real engine file is the freshness marker (same pattern as ifa_odu.json).
+    "vendor/runtime-source/Horosa-Web/astropy/astrostudy/qizheng_election_scan.py",
+    "vendor/runtime-source/Horosa-Web/astropy/astrostudy/india_election_scan.py",
     # 政余/xuanshi 神数 backing SQLite (kentang /xuanshi mount) — a real file inside, never an empty dir.
     "vendor/runtime-source/Horosa-Web/astropy/astrostudy/xuanshi/data/public_data.sqlite",
     # 玄史知识库编辑层（v0.32.0 xuanshi 工具）——缺席时引擎静默降级为 {}，只有这里判红。

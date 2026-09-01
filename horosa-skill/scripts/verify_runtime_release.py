@@ -23,6 +23,11 @@ REQUIRED_ENTRIES = {
         "runtime-payload/Horosa-Web/vendor/kin_year_domain.py",
         # v3.5.1 地占大改版 data — the ifa/numbers/vedic geomancy engines read these; real file, not empty dir.
         "runtime-payload/Horosa-Web/astropy/astrostudy/geomancy/data/ifa_odu.json",
+        # v3.10.0 择日十技法 — the qizheng/india election-scan engines behind /qizhengelectionscan/* and
+        # /indiaelectionscan/*. aiExport stayed at v56 when they landed (只加键纪律), so version equality
+        # passed on a stale tree; a real engine file is the freshness marker (same pattern as ifa_odu.json).
+        "runtime-payload/Horosa-Web/astropy/astrostudy/qizheng_election_scan.py",
+        "runtime-payload/Horosa-Web/astropy/astrostudy/india_election_scan.py",
         # v0.32.0 xuanshi 玄史知识库 backing SQLites — /xuanshi/* endpoints read both; editorial
         # degrades SILENTLY to {} when absent, so only this entry (real files, not empty dirs)
         # keeps a stripped/mispackaged archive from shipping green.
@@ -62,6 +67,11 @@ REQUIRED_ENTRIES = {
         "runtime-payload/Horosa-Web/vendor/kin_year_domain.py",
         # v3.5.1 地占大改版 data — the ifa/numbers/vedic geomancy engines read these; real file, not empty dir.
         "runtime-payload/Horosa-Web/astropy/astrostudy/geomancy/data/ifa_odu.json",
+        # v3.10.0 择日十技法 — the qizheng/india election-scan engines behind /qizhengelectionscan/* and
+        # /indiaelectionscan/*. aiExport stayed at v56 when they landed (只加键纪律), so version equality
+        # passed on a stale tree; a real engine file is the freshness marker (same pattern as ifa_odu.json).
+        "runtime-payload/Horosa-Web/astropy/astrostudy/qizheng_election_scan.py",
+        "runtime-payload/Horosa-Web/astropy/astrostudy/india_election_scan.py",
         # v0.32.0 xuanshi 玄史知识库 backing SQLites — /xuanshi/* endpoints read both; editorial
         # degrades SILENTLY to {} when absent, so only this entry (real files, not empty dirs)
         # keeps a stripped/mispackaged archive from shipping green.
@@ -99,6 +109,11 @@ REQUIRED_ENTRIES = {
         "runtime-payload/Horosa-Web/vendor/kin_year_domain.py",
         # v3.5.1 地占大改版 data — the ifa/numbers/vedic geomancy engines read these; real file, not empty dir.
         "runtime-payload/Horosa-Web/astropy/astrostudy/geomancy/data/ifa_odu.json",
+        # v3.10.0 择日十技法 — the qizheng/india election-scan engines behind /qizhengelectionscan/* and
+        # /indiaelectionscan/*. aiExport stayed at v56 when they landed (只加键纪律), so version equality
+        # passed on a stale tree; a real engine file is the freshness marker (same pattern as ifa_odu.json).
+        "runtime-payload/Horosa-Web/astropy/astrostudy/qizheng_election_scan.py",
+        "runtime-payload/Horosa-Web/astropy/astrostudy/india_election_scan.py",
         # v0.32.0 xuanshi 玄史知识库 backing SQLites — /xuanshi/* endpoints read both; editorial
         # degrades SILENTLY to {} when absent, so only this entry (real files, not empty dirs)
         # keeps a stripped/mispackaged archive from shipping green.

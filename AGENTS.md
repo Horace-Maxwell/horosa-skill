@@ -322,6 +322,9 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 5. **条件段双登记**：可能不出现的段**同时**进 preset（出现时不算 unknown）**和** `AI_EXPORT_OPTIONAL_SECTIONS`
    （缺席时不算 missing）——单进 optional 不够（`exports/parser.py:130`）。段名不一致走
    `map_legacy_section_title`，快照 byte-identical，不改 vendored builder。
+   **按 spread 派生的键（择日十技法 `<x>zeri` = 基底段表 + 择时三段）optional 集必须与段表一起从
+   基底继承**（`ZERI_DERIVED_KEYS` 一处定义、两处循环）——只继承段表会把基底的条件段升格成派生键的
+   必出段，离线全绿、live 才报缺段（v0.34.0+ 台账）。
 6. 离线 fakes：`FakeClient`（HTTP 桩，覆盖新端点）+ `FakeJsClient`（新 JS tool handler）返回**真内容**
    —— 禁裸 `无` 段、禁 `generated_template` 回退；段头从真 preset 取而**不手抄**（手抄段头是「桩比真实
    响应更简单」的亚型，段头一改桩就悄悄对不上而测试照绿）。桩管形状，值级真相归 selfcheck 金标。
@@ -507,6 +510,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   照样绿。闸已内建：`sync_windows_release.py` 的 `preflight_vendor_sources()` 在 builder 之前跑
   `verify_vendor_runtime_sources.py` **和** `verify_export_contract_mirror.py`，任一红即拒绝构建
   （两把都要——上游「只加键纪律」下版本恒等在陈旧树上照样绿，只有 mirror 的逐键覆盖判得出）。
+  **且每个上游新子树都要有真文件标记**：三把验证器（vendor 源 `REQUIRED_PATHS` / 发布归档
+  `REQUIRED_ENTRIES` / parity `REQUIRED_ON_BOTH`）各点名一个该子树独有的文件（v3.5.1=`ifa_odu.json`、
+  v0.32.0=xuanshi sqlite、v3.10.0=`astrostudy/{qizheng,india}_election_scan.py`）——没有标记的子树，
+  陈旧树在版本恒等下照样绿（v0.34.0 补 Windows 半边时实测）。
   **推论**：新增只挂 CI 的守卫时，先问这条路径 CI 走不走得到；Windows/离线 runtime 是 off-CI 产物，
   必须在其本机入口脚本里复跑同一把守卫。发布通常已是 `latest`，补传即恢复
   Windows install（无需 flip）。pin-forward 跨「引擎升级」版（如 v0.17 新增 `/location/acg` 占星地图、
