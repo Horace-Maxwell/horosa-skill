@@ -8,6 +8,7 @@ import { runJinkou } from './jinkou.js';
 import { runLiureng } from './liureng.js';
 import { runLiuyao } from './liuyao.js';
 import { runBaziGeju } from './baziGeju.js';
+import { runBaziLocal } from './baziLocal.js';
 import { runClassicalDerived } from './classicalDerived.js';
 import { runLingqi } from './lingqi.js';
 import { runTarot } from './tarot.js';
@@ -55,6 +56,7 @@ const TOOL_RUNNERS = {
   mundane_solunar: runMundaneSolunar,
   mundane_navanayaka: runMundaneNavanayaka,
   bazi_period: runBaziPeriod,
+  bazi_local: runBaziLocal,
   ziwei_extras: runZiweiExtras,
   sanshi_ziwei_sihua: runSanshiZiweiSihua,
   qimenzeri: runQimenZeri,

@@ -4978,6 +4978,7 @@ def _gz_text(item: Any) -> str:
         branch = item.get("branch")
         if isinstance(stem, dict) and isinstance(branch, dict):
             return f"{_msg(stem.get('name') or stem.get('gan'))}{_msg(branch.get('name') or branch.get('zhi'))}".strip()
+        return ""  # dict 但无可输出命名字段（如起运前占位步骤）：不把原始 dict 打进快照
     return _msg(item)
 
 
@@ -6817,6 +6818,45 @@ class HorosaSkillService:
             degraded = dict(response_data)
             degraded.setdefault("_warnings", []).append(
                 "八字格局引擎（五行力量/格局·用神/盲派结构）本次不可用，已降级为基础四柱输出。"
+            )
+            return degraded
+        return response_data
+
+    def _attach_bazi_direction(self, tool_name: str, response_data: dict[str, Any], payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        """birth 路径补算大运/流年明细：Java `/bazi/birth` 响应不带 direction 三键，
+        用本地引擎按出生资料重算并合并进 `bazi`。快照侧 `_build_bazi_snapshot_text`
+        已在消费 `mainDirection`/`direction`，此步必须在 `_attach_export_contract`（负责
+        生成 snapshot_text）之前挂。已有三键（如 direct 路径自带）时不重复计算。"""
+        if tool_name != "bazi_birth" or not isinstance(response_data, dict):
+            return response_data
+        bazi = response_data.get("bazi")
+        if not isinstance(bazi, dict):
+            return response_data
+        if "direction" in bazi or "mainDirection" in bazi:
+            return response_data
+        try:
+            core = self.js_client.run("bazi_local", payload or {})
+            if not isinstance(core, dict):
+                return response_data
+            direction = core.get("direction")
+            main_direction = core.get("mainDirection")
+            if not isinstance(direction, list) or not isinstance(main_direction, list):
+                return response_data
+            enriched = dict(response_data)
+            enriched["bazi"] = {
+                **bazi,
+                "direction": direction,
+                "mainDirection": main_direction,
+                "smallDirection": core.get("smallDirection") if isinstance(core.get("smallDirection"), list) else [],
+                "directTime": core.get("directTime"),
+                "directInfo": core.get("directInfo"),
+            }
+            return enriched
+        except ToolTransportError as exc:
+            logger.warning("bazi direction engine failed (tool=%s): %s", tool_name, exc)
+            degraded = dict(response_data)
+            degraded.setdefault("_warnings", []).append(
+                "八字大运/流年引擎本次不可用，已降级为基础四柱输出。"
             )
             return degraded
         return response_data
@@ -10592,6 +10632,7 @@ class HorosaSkillService:
                 response_data = self._attach_jyotish_sections(tool_name, response_data)
                 response_data = self._attach_calendar_extras(tool_name, input_normalized, response_data)
                 response_data = self._attach_bazi_geju(tool_name, response_data, input_normalized)
+                response_data = self._attach_bazi_direction(tool_name, response_data, input_normalized)
                 response_data = self._attach_ziwei_extras(tool_name, input_normalized, response_data)
                 response_data = self._attach_relative_score(tool_name, input_normalized, response_data)
                 response_data = _attach_export_contract(tool_name, input_normalized, response_data)
