@@ -271,6 +271,17 @@ class BaZiBirthInput(FlexibleModel):
     lateZiHourUseNextDay: int | bool | None = None
     phaseType: int | None = 0
     ad: int | None = 1
+    gender: bool | None = Field(
+        default=None,
+        description="性别：true/1=男；false/0=女；缺省=未指定（未指定时大运/流年顺逆方向无法判定）。'男'/'女'/'M'/'F' 会自动归一。",
+    )
+    # 响应精简视图（同 BirthInput）：'sections'=段标题+正文；'titles'=只留段标题索引。
+    # 八字工具（尤其 bazi_direct）返回体可能达到数 MB 级（export_snapshot 直断全文），
+    # 客户端往往只需要 snapshot_text；用 titles/sections 可显著精简返回体（完整结果已存档）。
+    response_view: str | None = Field(
+        default=None,
+        description="响应精简视图：缺省=完整；'sections'=段标题+正文；'titles'=只留段标题索引（完整结果已存档，memory_show 可取回）。",
+    )
     # [多运限·指定时段]：上游由界面勾选驱动，headless 开成显式入参。语义同上游 ——
     # 流年 × 流月笛卡尔各一段；流日/流时锚定到所选的第一个上层；总段数封顶 50。
     period: dict[str, Any] | None = Field(default=None, description="多运限时段选择 {liunian:[公历年], liuyue:[月序1-12], liuri:[公历日], liushi:[时辰序0-11]}。")

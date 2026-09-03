@@ -5056,11 +5056,26 @@ def _build_bazi_hechong_lines(four: dict[str, Any]) -> list[str]:
     return [line for line in (rel_line(label, rec) for label, rec in pairs) if line]
 
 
+def _gender_label(value: Any) -> str:
+    """性别值 → 中文标签：True/1/'1'/'男'/'male'/'M'/'乾'→男；False/0/'0'/'女'/'female'/'F'/'坤'→女；其余(含 None/缺省)→未知。"""
+    if isinstance(value, str):
+        s = value.strip().lower()
+        if s in {"1", "男", "male", "m", "nan", "乾"}:
+            return "男"
+        if s in {"0", "女", "female", "f", "nv", "坤"}:
+            return "女"
+        return "未知"
+    if value is True or value == 1:
+        return "男"
+    if value is False or value == 0:
+        return "女"
+    return "未知"
+
+
 def _build_bazi_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
     bazi = response.get("bazi", response if isinstance(response, dict) else {})
     four = bazi.get("fourColumns", {}) if isinstance(bazi, dict) else {}
     nongli = bazi.get("nongli", {}) if isinstance(bazi, dict) else {}
-    gender_map = {"-1": "未知", "0": "女", "1": "男"}
     time_alg_map = {"0": "真太阳时", "1": "直接时间", "2": "春分定卯时"}
     adjust_map = {"0": "不调整节气", "1": "节气按纬度调整"}
 
@@ -5076,7 +5091,7 @@ def _build_bazi_snapshot_text(payload: dict[str, Any], response: dict[str, Any])
         f"日期：{payload.get('date', '—')} {payload.get('time', '—')}",
         f"时区：{payload.get('zone', '—')}",
         f"经纬度：{payload.get('lon', '—')} {payload.get('lat', '—')}",
-        f"性别：{gender_map.get(str(payload.get('gender')), payload.get('gender', '未知'))}",
+        f"性别：{_gender_label(payload.get('gender'))}",
         f"时间算法：{time_alg_map.get(str(payload.get('timeAlg', 0)), payload.get('timeAlg', 0))}",
         f"节气修正：{adjust_map.get(str(payload.get('adjustJieqi', 0)), payload.get('adjustJieqi', 0))}",
         f"农历：{nongli.get('year', '')}年{'闰' if nongli.get('leap') else ''}{nongli.get('month', '')}{nongli.get('day', '')}".strip() or "农历：未知",
@@ -5190,7 +5205,7 @@ def _build_ziwei_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
         f"日期：{payload.get('date', '—')} {payload.get('time', '—')}",
         f"时区：{payload.get('zone', '—')}",
         f"经纬度：{payload.get('lon', '—')} {payload.get('lat', '—')}",
-        f"性别：{payload.get('gender', '—')}",
+        f"性别：{_gender_label(payload.get('gender'))}",
         f"时间算法：{'直接时间' if str(payload.get('timeAlg', 0)) == '1' else '真太阳时'}",
     ]
     # 命主/身主/五行局/斗君/年命（星阙 P0 杂曜与全盘信息一并落盘）。
@@ -6327,8 +6342,9 @@ def _apply_response_view(envelope: ToolEnvelope, input_normalized: dict[str, Any
             ]
         slim.pop("export_text", None)
         data["export_snapshot"] = slim
-    if isinstance(data.get("snapshot_text"), str):
-        data["snapshot_text"] = ""
+    # `snapshot_text` 是命盘精华文本（通常仅几 KB），精简视图下**保留**——客户端展示依赖它，
+    # 而真正的体积大头（export_snapshot.export_text 直断/命盘全文，可达数 MB）已被上面的
+    # slim 裁掉。清空它只会让精简模式的展示落空，省不下多少体积。
     # `technique_card` **不裁**：它几行大小，而且正是「省 token 时也要知道这盘是谁算的、什么口径」
     # 的那份数据。裁掉它等于让最需要溯源的场景（精简模式）反而没有溯源。
     envelope.data = data
