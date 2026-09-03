@@ -12,6 +12,7 @@ import { runProgExtra } from '../src/tools/progextra.js';
 import { runLiureng, normalizeChart } from '../src/tools/liureng.js';
 import { buildLiuRengReferenceContext } from '../src/vendor/liureng/liurengRefContext.js';
 import { matchBiFa } from '../src/vendor/liureng/LRBiFaDoc.js';
+import { ZiLiuQin } from '../src/vendor/liureng/LRConst.js';
 import { runGuolaoMoira } from '../src/tools/guolaoMoira.js';
 import { runXiaoLiuRen } from '../src/tools/xiaoliuren.js';
 import { runFeiGong } from '../src/tools/feigong.js';
@@ -131,6 +132,36 @@ check('liureng snapshot carries 毕法 + 占断向导 sections', () => {
   assert(s.includes('[毕法（已命中）]'), 'missing 毕法 section');
   assert(/\n\d+\.\s/.test(s), 'no numbered 毕法 entries');
   assert(s.includes('[占断向导]') && s.includes('占事：婚姻'), 'missing 占断向导 for hunyin');
+});
+
+// 🔴 v0.35.0 值级金标：六亲表 ≡ 五行生克公式，120 格逐格对拍（上游 v3.9.4 真值校准同法）。
+// LRConst.js 是 curated 手工件，`--from-manifest` 不碰它：乙日巳/午两格「父母」（应为「子孙」：
+// 乙木生巳午火＝我生者）在四轮同步里静默滞留。负向对照：把任一格改回去，本检查必红。
+check('liureng ZiLiuQin 六亲表与五行生克公式 120 格逐格一致', () => {
+  const WX_GAN = { 甲: '木', 乙: '木', 丙: '火', 丁: '火', 戊: '土', 己: '土', 庚: '金', 辛: '金', 壬: '水', 癸: '水' };
+  const WX_ZHI = { 子: '水', 亥: '水', 寅: '木', 卯: '木', 巳: '火', 午: '火', 申: '金', 酉: '金', 辰: '土', 戌: '土', 丑: '土', 未: '土' };
+  const SHENG = { 木: '火', 火: '土', 土: '金', 金: '水', 水: '木' };  // 我生
+  const KE = { 木: '土', 土: '水', 水: '火', 火: '金', 金: '木' };     // 我克
+  const expect = (gan, zhi) => {
+    const me = WX_GAN[gan], it = WX_ZHI[zhi];
+    if (me === it) return '兄弟';
+    if (SHENG[me] === it) return '子孙';
+    if (SHENG[it] === me) return '父母';
+    if (KE[me] === it) return '妻财';
+    return '官鬼';
+  };
+  const bad = [];
+  let cells = 0;
+  for (const zhi of Object.keys(WX_ZHI)) {
+    for (const gan of Object.keys(WX_GAN)) {
+      cells += 1;
+      const got = ZiLiuQin[zhi] && ZiLiuQin[zhi][gan];
+      if (got !== expect(gan, zhi)) bad.push(`${zhi}.${gan}=${got}(应${expect(gan, zhi)})`);
+    }
+  }
+  assert(cells === 120, `expected 120 cells, walked ${cells}`);
+  assert(bad.length === 0, `六亲表与公式不符: ${bad.join(' ')}`);
+  assert(ZiLiuQin['巳']['乙'] === '子孙' && ZiLiuQin['午']['乙'] === '子孙', '乙日巳/午 must be 子孙 (upstream v3.9.4)');
 });
 
 // 七政四余 政余格局 (星阙 v2.6.x Moira DSL)：buildLocalMoiraPatterns verbatim 抽取。固定盘

@@ -5,10 +5,10 @@
  "source": {
   "file": "components/help/CalendarHelpDoc.js",
   "upstream_source_marker": "xingque_help_docs",
-  "upstream_app_version": "3.9.3",
-  "upstream_git_sha": "8d77f6eed16f"
+  "upstream_app_version": "3.10.0",
+  "upstream_git_sha": "0604fa416f95"
  },
- "generated_at": "2026-08-17T01:25:30-04:00",
+ "generated_at": "2026-09-01T13:48:43-04:00",
  "categories": [
   {
    "name": "手册",

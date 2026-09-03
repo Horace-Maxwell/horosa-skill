@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -122,6 +123,11 @@ def test_tree_file_walk_honours_the_sync_scripts_exclusions(tmp_path: Path) -> N
         root / "kinastro" / "tests" / "test_x.py",
         root / "kinastro" / ".github" / "workflows" / "ci.yml",
         root / "kinastro" / "astro" / "__pycache__" / "engine.cpython-312.pyc",
+        # SQLite 日志侧车：上游进程打开过库就留在磁盘、git 不跟踪；v0.35.0 preflight 对着干净 clone
+        # 比对时它们恒报「not in upstream」，而对着脏工作树又恒绿——两边口径一起排除。
+        root / "kinastro" / "astro" / "editorial.sqlite-wal",
+        root / "kinastro" / "astro" / "editorial.sqlite-shm",
+        root / "kinastro" / "astro" / "editorial.sqlite-journal",
     ]:
         junk.parent.mkdir(parents=True, exist_ok=True)
         junk.write_text("x", encoding="utf-8")
@@ -204,11 +210,31 @@ def test_files_inside_an_entirely_new_upstream_directory_are_not_listed_one_by_o
 
 def test_sentinel_trees_declare_a_copy_mode_matching_the_sync_script() -> None:
     assert guard.SENTINEL_TREES["Horosa-Web/vendor"]["copy"] == "per-dir"
-    assert guard.SENTINEL_TREES["Horosa-Web/astropy/astrostudy"]["copy"] == "whole"
-    assert guard.SENTINEL_TREES["Horosa-Web/astropy/websrv"]["copy"] == "whole"
+    assert guard.SENTINEL_TREES["Horosa-Web/astropy"]["copy"] == "whole"
+    assert guard.SENTINEL_TREES["Horosa-Web/flatlib-ctrad2"]["copy"] == "whole"
     sync = (Path(guard.__file__).resolve().parent / "sync_vendored_runtime_sources.sh").read_text(encoding="utf-8")
     for named in guard.SENTINEL_TREES["Horosa-Web/vendor"]["root_files"]:
         assert named in sync, f"{named} 声明为点名拷贝，但 sync 脚本里没有它 —— 两边口径必须锁步"
+
+
+# --- defect 8: sync copied whole trees the guard never compared -------------------------------
+
+
+def test_every_tree_the_sync_script_rsyncs_wholesale_is_a_sentinel_tree() -> None:
+    """v3.9.3 实况：上游改了 flatlib 的 aspects.py / chart.py / ephem/swe.py，sync 脚本整棵拷它，
+    守卫却一个字都不看——而 perchart.push_classical_request 硬 import flatlib 的新 API，少拷等于
+    每个 /chart 请求 ImportError。astropy 同病：只比 astrostudy/websrv 两个子树，tests/ 里上游
+    自 v3.9.3 起的 11 个校准套件、resources/ 与根级文件全在盲区。守卫树集合必须等于 sync 脚本里
+    整棵 rsync 的树集合，少一棵就是一片静默漂移区。"""
+    sync = (Path(guard.__file__).resolve().parent / "sync_vendored_runtime_sources.sh").read_text(encoding="utf-8")
+    wholesale = re.findall(r'rsync -a "\$\{RSYNC_FILTERS\[@\]\}" "\$\{SOURCE_ROOT\}/(Horosa-Web/(?:astropy|flatlib-ctrad2))" ', sync)
+    assert set(wholesale) == {"Horosa-Web/astropy", "Horosa-Web/flatlib-ctrad2"}, (
+        f"sync 脚本整棵拷的树变了，请同步 SENTINEL_TREES 与本测试: {wholesale}"
+    )
+    for tree in wholesale:
+        assert guard.SENTINEL_TREES.get(tree, {}).get("copy") == "whole", f"{tree} 被整棵 rsync 却不在守卫树集合里"
+    # 子树粒度是盲区的来源：整棵树在集合里时，不许再用它的子树替代（子树外的文件会重新失守）。
+    assert not [k for k in guard.SENTINEL_TREES if k.startswith("Horosa-Web/astropy/")], "astropy 必须整棵比对，不许退回子树"
 
 
 # --- defect 5: truncated FAIL output made a large drift look small ------------------------------

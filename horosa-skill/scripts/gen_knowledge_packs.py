@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """收割上游 HelpDoc 面板 → 知识包（B1：grounded interpretation 的地基）。
 
-上游 `components/help/*.js` 是 30+ 份**方法论手册**（每个设置项的取值与差别、流派分歧、算法与
+上游 `components/help/*HelpDoc.js` 是近 30 份**方法论手册**（每个设置项的取值与差别、流派分歧、算法与
 口径），一直只活在桌面端帮助页里——AI 客户端解读时最需要的正是这些口径知识。本脚本在维护机上
 读 `$HOROSA_SOURCE_ROOT`（shaozi 条文生成器同模式），把 JSX 手册转成结构化知识包入仓：
 
@@ -14,19 +14,28 @@
 - 抽取是**结构保持**的降级（TabPane→条目、card 标题→###、h→##、li→列表行、kv→`k：v`），
   不做任何改写；正文即上游文本。
 - 幂等：同一上游 commit 重跑输出逐字节一致（generated_at 取上游 commit 时间，不取 now）。
+- **正文与出处同源**：默认读上游 **HEAD 提交的 blob**（`git show HEAD:<path>`），不读工作区——
+  出处记的是 commit、正文却取自带未提交改动的磁盘文件，这份出处就是假的（上游维护机常年有 WIP）。
+  `--worktree` 才读磁盘，只用于非 git 的快照目录。
+- **上游每一册手册要么收割、要么明文排除**：`*HelpDoc.js` 里既不在 `HELPDOC_DOMAINS` 也不在
+  `EXCLUDED_HELPDOCS` 的，本脚本 FAIL。v0.35.0 之前白名单与已上架技法脱钩——择日十技法 / 太乙 /
+  三式 / 演禽 / 一掌经 / 玄史的工具发了三个版本，它们的手册一册没收。
 - 不收割条文数据集（铁板 12000/邵子 6144 等是引擎数据，随工具输出流动，不进知识库）。
 """
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import re
 import subprocess
 import sys
+from collections.abc import Iterable
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 OUT_DIR = REPO / "src" / "horosa_skill" / "knowledge" / "data" / "helpdocs"
+HELP_REL = "Horosa-Web/astrostudyui/src/components/help"
 
 # HelpDoc 组件 → (domain, 中文标签)。域名不与既有 hover 域（astro/liureng/qimen）冲突：
 # 冲突者带 _manual 后缀；其余用技法页自然名。纯 3D/观星操作页信息密度低，仍收（体量小）。
@@ -52,10 +61,27 @@ HELPDOC_DOMAINS: dict[str, tuple[str, str]] = {
     "AIAnalysisHelpDoc": ("aianalysis", "AI 分析与挂载 · 操作手册"),
     "Astro3DHelpDoc": ("astro3d", "3D 天球 · 操作手册"),
     "PlanetariumHelpDoc": ("planetarium", "观星 · 操作手册"),
+    "ZeriHelpDoc": ("zeri", "择日十技法 · 操作手册"),
+    "TaiyiHelpDoc": ("taiyi", "太乙神数 · 操作手册"),
+    "SanshiHelpDoc": ("sanshi", "三式合一 · 操作手册"),
+    "YanqinHelpDoc": ("yanqin", "演禽 · 操作手册"),
+    "YizhangjingHelpDoc": ("yizhangjing", "一掌经 · 操作手册"),
+    "XuanshiHelpDoc": ("xuanshi", "玄史知识库 · 操作手册"),
+}
+
+# 明文排除的手册（政策性排除，不是缺口）——排除项台账见 docs/LESSONS.md「开源栈上不可得的段」。
+EXCLUDED_HELPDOCS: dict[str, str] = {
+    "FengshuiHelpDoc": "fengshui 是 canvas + 户型图上传 + 交互点位驱动的技法，skill 无法 headless，整技法不上架。",
 }
 
 _TABPANE = re.compile(r'<TabPane\s+tab="([^"]+)"\s+key="[^"]+">')
 _TITLE = re.compile(r"<div style=\{title\}>([^<]+)</div>")
+
+
+def unlisted_helpdocs(present: Iterable[str]) -> list[str]:
+    """`*HelpDoc.js` 组件里既未收割也未明文排除的——每一个都是「技法可能已上架、口径知识却缺席」。"""
+    names = {Path(name).stem for name in present if name.endswith("HelpDoc.js")}
+    return sorted(names - set(HELPDOC_DOMAINS) - set(EXCLUDED_HELPDOCS))
 
 
 def _jsx_to_markdown(fragment: str) -> str:
@@ -115,23 +141,66 @@ def _split_tabs(source: str) -> list[tuple[str, str]]:
     return tabs
 
 
-def _git(upstream: Path, *args: str) -> str:
+def _git(upstream: Path, *args: str) -> str | None:
+    """stdout on success, None on any failure（区分「空输出」与「不是 git 树」）。"""
     try:
         out = subprocess.run(["git", "-C", str(upstream), *args], capture_output=True, text=True, timeout=30)
-        return out.stdout.strip() if out.returncode == 0 else ""
     except (OSError, subprocess.SubprocessError):
-        return ""
+        return None
+    return out.stdout if out.returncode == 0 else None
+
+
+class _HelpSource:
+    """手册来源：HEAD blob（默认）或工作区文件（--worktree）。"""
+
+    def __init__(self, upstream: Path, worktree: bool) -> None:
+        self.upstream = upstream
+        self.worktree = worktree
+        self.help_dir = upstream / HELP_REL
+
+    def names(self) -> list[str] | None:
+        if self.worktree:
+            return sorted(p.name for p in self.help_dir.glob("*.js")) if self.help_dir.is_dir() else None
+        listing = _git(self.upstream, "ls-tree", "--name-only", "HEAD", f"{HELP_REL}/")
+        if listing is None:
+            return None
+        return sorted(Path(line).name for line in listing.splitlines() if line.strip())
+
+    def read(self, component: str) -> str | None:
+        if self.worktree:
+            path = self.help_dir / f"{component}.js"
+            return path.read_text(encoding="utf-8") if path.is_file() else None
+        return _git(self.upstream, "show", f"HEAD:{HELP_REL}/{component}.js")
+
+    def dirty(self) -> list[str]:
+        status = _git(self.upstream, "status", "--porcelain", "--", HELP_REL) or ""
+        return [line[3:] for line in status.splitlines() if line.strip()]
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--worktree", action="store_true", help="read the working-tree files instead of HEAD blobs (non-git snapshots only)")
+    args = parser.parse_args()
+
     root = os.environ.get("HOROSA_SOURCE_ROOT")
     upstream = Path(root).expanduser().resolve() if root else None
     if upstream is None or not (upstream / "Horosa-Web").is_dir():
         print("gen-knowledge-packs: FAIL — HOROSA_SOURCE_ROOT must point at a Horosa-Public checkout.", file=sys.stderr)
         return 2
-    help_dir = upstream / "Horosa-Web/astrostudyui/src/components/help"
-    sha = _git(upstream, "rev-parse", "HEAD")[:12]
-    committed_at = _git(upstream, "log", "-1", "--format=%cI")
+    source = _HelpSource(upstream, args.worktree)
+    present = source.names()
+    if not present:
+        mode = "the working tree" if args.worktree else "HEAD (not a git checkout? pass --worktree for a snapshot directory)"
+        print(f"gen-knowledge-packs: FAIL — no HelpDoc components found in {mode}: {HELP_REL}", file=sys.stderr)
+        return 2
+    sha = (_git(upstream, "rev-parse", "HEAD") or "").strip()[:12]
+    committed_at = (_git(upstream, "log", "-1", "--format=%cI") or "").strip()
+    dirty = source.dirty()
+    if dirty and not args.worktree:
+        print(
+            f"gen-knowledge-packs: notice — {len(dirty)} manual(s) modified but uncommitted upstream; harvesting HEAD, "
+            f"those edits are NOT included: {', '.join(Path(d).name for d in dirty)}"
+        )
     app_version = ""
     manifest = upstream / "Horosa_Desktop_Installer/package.json"
     if manifest.is_file():
@@ -143,14 +212,13 @@ def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     written, skipped, total_entries = 0, [], 0
     for component, (domain, label) in sorted(HELPDOC_DOMAINS.items()):
-        path = help_dir / f"{component}.js"
-        if not path.is_file():
+        text_source = source.read(component)
+        if text_source is None:
             skipped.append(component)
             continue
-        source = path.read_text(encoding="utf-8")
-        title_match = _TITLE.search(source)
+        title_match = _TITLE.search(text_source)
         entries = []
-        for tab_name, fragment in _split_tabs(source):
+        for tab_name, fragment in _split_tabs(text_source):
             text = _jsx_to_markdown(fragment)
             if len(text) < 40:  # 空 tab / 纯组件引用 tab 不入库
                 continue
@@ -181,9 +249,20 @@ def main() -> int:
         written += 1
         total_entries += len(entries)
     print(f"gen-knowledge-packs: wrote {written} domains / {total_entries} entries (upstream {app_version} @ {sha})")
+    failed = False
     if skipped:
-        print(f"  skipped (missing/empty): {', '.join(skipped)}")
-    return 0
+        failed = True
+        print(f"gen-knowledge-packs: FAIL — whitelisted manual(s) missing or empty upstream: {', '.join(skipped)}", file=sys.stderr)
+    unlisted = unlisted_helpdocs(present)
+    if unlisted:
+        failed = True
+        print(
+            "gen-knowledge-packs: FAIL — upstream manual(s) neither harvested nor explicitly excluded: "
+            f"{', '.join(unlisted)} — add each to HELPDOC_DOMAINS (technique shipped → its manual ships) or to "
+            "EXCLUDED_HELPDOCS with the policy reason.",
+            file=sys.stderr,
+        )
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

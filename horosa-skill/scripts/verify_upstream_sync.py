@@ -21,7 +21,7 @@ Checks (upstream located via `$HOROSA_SOURCE_ROOT`, the same env the sync script
    `qimenzeri` (v3.7.1) both arrived under an unchanged v50 and went unnoticed until v0.26.0.
 2. **Vendored sentinels** — sha256 equality for the high-signal files the sync script copies (the export
    contract itself plus the modules whose absence/staleness produced past incidents).
-2b. **Vendored runtime subtrees** — every file under the ken-engine / astrostudy / websrv trees compared
+2b. **Vendored runtime subtrees** — every file under the ken-engine / astropy / flatlib-ctrad2 trees compared
    both ways (changed, removed, and *newly added upstream*). Point sentinels can never be complete:
    the v3.7.3 `kintaiyi/jieqi.py` full-year-domain fix sat stale in the vendored tree because none of
    the 7 sentinels lives under a ken engine directory, and verify_vendor_runtime_sources only asserts
@@ -91,8 +91,12 @@ SENTINEL_TREES: dict[str, dict[str, object]] = {
         "copy": "per-dir",
         "root_files": {"kin_year_domain.py", "test_month_pillar_boundary.py", "README.md"},
     },
-    "Horosa-Web/astropy/astrostudy": {"copy": "whole"},   # Python 算法本体（sync 脚本 :71 整棵 rsync）
-    "Horosa-Web/astropy/websrv": {"copy": "whole"},       # HTTP 端点层（同上）
+    # 树集合 = sync 脚本里**整棵 rsync** 的每一条。sync 拷了、守卫不看的树就是盲区：v3.9.3 时 flatlib 的
+    # aspects/chart/ephem/swe 三个文件真漂过而零信号，而 perchart 硬 import 它的新 API（少拷 = 每个 /chart
+    # 请求 ImportError）；astropy 早先只看 astrostudy/websrv 两个子树，tests/（上游 v3.9.3 起 11 个校准
+    # 套件）、resources/ 与根级文件同样无人比对。
+    "Horosa-Web/astropy": {"copy": "whole"},          # Python 算法本体 + 端点层 + 上游测试（sync 脚本 :71 整棵 rsync）
+    "Horosa-Web/flatlib-ctrad2": {"copy": "whole"},   # 天文/相位内核（sync 脚本 :72 整棵 rsync）
 }
 # 与 sync_vendored_runtime_sources.sh 的 RSYNC_FILTERS 保持一致。
 TREE_EXCLUDE_DIRS = {"__pycache__", ".pytest_cache", ".cache", "_CodeSignature", ".horosa-logs", ".git"}
@@ -104,7 +108,9 @@ KINASTRO_EXCLUDE_DIRS = {
     "tools", "ui", "frontend", "docs", "wiki", "examples", "tests", "styles", "scripts",
     ".devcontainer", ".streamlit", ".github",
 }
-TREE_EXCLUDE_SUFFIXES = (".pyc", ".pyo", ".map", ".tmp", ".temp", ".pid")
+# `.sqlite-wal/-shm/-journal` 是 SQLite 运行期日志侧车：上游进程打开过库就留在磁盘、git 不跟踪。sync 脚本
+# 同样排除它们——否则对着干净 checkout 比对时恒报「not in upstream」，而对着脏工作树又恒绿。
+TREE_EXCLUDE_SUFFIXES = (".pyc", ".pyo", ".map", ".tmp", ".temp", ".pid", ".sqlite-wal", ".sqlite-shm", ".sqlite-journal")
 
 
 def _tree_files(root: Path) -> dict[str, Path]:
@@ -339,7 +345,10 @@ def main() -> None:
     #    tree also makes that record incoherent. Report it prominently; hard-fail the release chain.
     dirty = [
         line[3:]
-        for line in _git(upstream, "status", "--porcelain", "Horosa-Web/astropy", "Horosa-Web/astrostudyui").splitlines()
+        for line in _git(
+            upstream, "status", "--porcelain",
+            "Horosa-Web/astropy", "Horosa-Web/astrostudyui", "Horosa-Web/flatlib-ctrad2", "Horosa-Web/vendor",
+        ).splitlines()
         if line.strip()
     ]
     if dirty:

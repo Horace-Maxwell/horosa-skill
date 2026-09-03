@@ -36,6 +36,10 @@ RSYNC_FILTERS=(
   "--exclude=*.tmp"
   "--exclude=*.temp"
   "--exclude=*.pid"
+  # SQLite 运行期日志侧车：非源文件；非空 WAL 打进包 = runtime 打开库时回放上游未 checkpoint 的写入。
+  "--exclude=*.sqlite-wal"
+  "--exclude=*.sqlite-shm"
+  "--exclude=*.sqlite-journal"
 )
 
 read -r VERSION ARCHIVE_NAME <<EOF

@@ -335,6 +335,10 @@ def rsync_copy(src: Path, dst: Path, *, extra_excludes: list[str] | None = None)
         ".pytest_cache",
         ".cache",
         "*.map",
+        # SQLite 运行期日志侧车：非源文件；非空 WAL 打进包 = runtime 打开库时回放上游未 checkpoint 的写入。
+        "*.sqlite-wal",
+        "*.sqlite-shm",
+        "*.sqlite-journal",
     ]
     if extra_excludes:
         excludes.extend(extra_excludes)

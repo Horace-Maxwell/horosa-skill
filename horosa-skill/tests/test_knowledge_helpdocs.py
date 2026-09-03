@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
 
@@ -21,11 +22,37 @@ from horosa_skill.knowledge.store import (
 PACK_DIR = Path(__file__).resolve().parents[1] / "src/horosa_skill/knowledge/data/helpdocs"
 
 
+_GEN_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "gen_knowledge_packs.py"
+_spec = importlib.util.spec_from_file_location("gen_knowledge_packs", _GEN_SCRIPT)
+gen = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(gen)
+
+
 def test_helpdoc_packs_exist_and_cover_the_major_technique_manuals() -> None:
     bundles = load_helpdoc_bundles()
     assert len(bundles) >= 18, f"收割面塌了：只剩 {sorted(bundles)}"
-    for must in ("bazi", "ziwei", "dunjia", "liureng_manual", "astro_manual", "tarot", "cnyibu"):
+    for must in (
+        "bazi", "ziwei", "dunjia", "liureng_manual", "astro_manual", "tarot", "cnyibu",
+        # v0.35.0：这六册的技法早已上架（择日十技法 / taiyi / sanshiunited / yanqin_yanfa / yizhangjing /
+        # xuanshi），手册却三个版本没收——白名单与已上架技法脱钩就是这么发生的。
+        "zeri", "taiyi", "sanshi", "yanqin", "yizhangjing", "xuanshi",
+    ):
         assert must in bundles, f"缺关键手册域 {must}"
+
+
+def test_whitelist_and_packs_on_disk_are_the_same_set() -> None:
+    """白名单改了必须重跑生成器，生成器跑了必须提交产物——两边任一单独动都是半成品。"""
+    listed = {domain for domain, _label in gen.HELPDOC_DOMAINS.values()}
+    on_disk = {path.stem for path in PACK_DIR.glob("*.json")}
+    assert listed == on_disk, f"白名单 − 磁盘: {sorted(listed - on_disk)}; 磁盘 − 白名单: {sorted(on_disk - listed)}"
+
+
+def test_unlisted_manual_detector_only_forgives_explicit_exclusions() -> None:
+    """上游每一册手册要么收割、要么明文排除；第三种状态（默默漏掉）是生成器的 FAIL 条件。"""
+    present = ["ZeriHelpDoc.js", "FengshuiHelpDoc.js", "HelpDocTwoLevel.js", "helpDocStyle.js", "BrandNewHelpDoc.js"]
+    assert gen.unlisted_helpdocs(present) == ["BrandNewHelpDoc"]
+    assert "FengshuiHelpDoc" in gen.EXCLUDED_HELPDOCS and "headless" in gen.EXCLUDED_HELPDOCS["FengshuiHelpDoc"]
+    assert not set(gen.EXCLUDED_HELPDOCS) & set(gen.HELPDOC_DOMAINS), "一册手册不能既收割又排除"
 
 
 def test_every_entry_carries_a_nonempty_source_and_text() -> None:

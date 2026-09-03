@@ -16,6 +16,9 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.35.0 (2026-09) | 手工件零信号 + 整拷树不比对（六亲两格错值滞留四轮） | 不经流水线的文件都要有「源变了就叫人」的边；守卫树集合 == sync 整拷集合 |
+| v0.35.0 (2026-09) | 手册知识包白名单脱钩 + 读脏工作区 | 每册手册要么收割要么明文排除；出处与正文同源于同一 commit |
+| v0.35.0 (2026-09) | SQLite 日志侧车混进镜像与发布包 | 排除集四处同加（sync / 守卫 / 三 builder）；侧车不是源文件 |
 | v0.34.0 (2026-09) | 上游 v3.10.0 择日十技法同步 | 闭包按停止节点算；抽壳要机械化；解析器盲区造假债务；兜底分类=待确认 |
 | v0.33.1 (2026-09) | issue #15 家族全清剿 | presence 级断言对值失明；跨边界不改键；静默降级会上移；schema 描述不是愿望清单 |
 | v0.14.0 (2026-06) | 古典占星 [古典]/[古典格局] | endpoint 必须登记 `_PYTHON_CHART_ENDPOINTS`；段补≠新工具；离线/live 覆盖分层 |
@@ -94,6 +97,56 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.35.0 / 2026-09-03 — 手工件零信号 + 两棵整拷树不比对：六壬六亲两格错值静默滞留四轮同步
+
+- **症状**：上游 v3.9.4（08-20）真值校准改了六壬六亲表 `ZiLiuQin` 乙日巳/午两格（父母→子孙，乙木生
+  巳午火＝我生者），本仓 v0.31~v0.34 四轮同步、每轮 `verify_upstream_sync` 全绿，vendored
+  `liureng/LRConst.js` 仍是旧值——三传/毕法两条链（`ChuangChart.js:176`、`LRBiFaDoc.js:149`）都从它取
+  六亲，用户拿到错答案。同批的紫微年基准（`ziwei/zwLuckItems.js`，bespoke）是人读 release note 才补的；
+  flatlib 在 v3.9.3 漂过三个文件（aspects / chart / ephem/swe），守卫同样零信号。
+- **根因**：三处结构性盲区。① `revendor_core_js.py` 对 `curated` 只断言 extracts 名字仍导出、对 `bespoke`
+  只断言上游无同名文件，`manifest_drift()` 对非 verbatim 直接 `continue`——手工件的**内容**从不与上游比；
+  ② `SENTINEL_TREES` 只收 astropy 的两个子树，`tests/`（上游 v3.9.3 起 11 个校准套件）、`resources/`、根级
+  文件与整棵 flatlib 都不在集合里，而 sync 脚本对这两棵是整棵 rsync——**同步口径 ≠ 比对口径**，正是
+  v0.26.0 jieqi.py 事故换了一个层级再犯；③ 六亲表没有值级金标。
+- **guard**：手工件记源 sha（curated `upstream_sha256` / bespoke `derived_from` + `derived_sha256`，13 条全部
+  打戳），`--from-manifest` 与 `manifest_drift()`（`verify_upstream_sync` check 3）源一动即红、复核后
+  `--restamp <条目>` 才灭；`SENTINEL_TREES` = sync 脚本整棵 rsync 的每一棵（astropy 整棵 + flatlib 整棵），
+  `tests/test_verify_upstream_sync.py` 用正则从 sync 脚本抓整拷树集合与守卫锁步；`selfcheck.mjs` 六亲表 ≡
+  五行生克公式 120 格逐格对拍（负向对照：把任一格改回去即红，验过）；`tests/test_vendor_manifest_watch.py`。
+- **法则**：**凡不经流水线的文件都要有一条「源变了就叫人」的边**——名字/basename 检查只证明「还叫这个名」，
+  不证明「还是这个值」。**守卫树集合 == sync 脚本整棵 rsync 的集合**，加一条 rsync 就加一棵树。
+
+### v0.35.0 / 2026-09-03 — SQLite 日志侧车被当成源文件：镜像与首版发布包里混进 `editorial.sqlite-wal/-shm`
+
+- **症状**：preflight 对着上游 HEAD 的干净 clone 跑，`verify_upstream_sync` 报
+  `astrostudy/xuanshi/data/editorial.sqlite-shm/-wal`「not in upstream」；对着上游脏工作树却恒绿——这两个
+  文件在上游磁盘上（进程打开过库就会留下），git 不跟踪。v0.35.0 首次构建的 darwin 包也带着它们
+  （wal 0 字节、shm 32KB，这次无害，但形状是错的）。
+- **根因**：sync 脚本、守卫与三个 builder 的排除集都没有 SQLite 运行期侧车——「同步口径 == 比对口径」在这类
+  文件上**一致地错**，所以只有换一棵干净树才现形。非空 WAL 打进包 = runtime 打开库时回放上游未 checkpoint
+  的写入，库内容偏离 git 里那份 `.sqlite`。
+- **guard**：`sync_vendored_runtime_sources.sh` RSYNC_FILTERS、`verify_upstream_sync.py` TREE_EXCLUDE_SUFFIXES、
+  `package_runtime_payload.sh` 与 windows/linux builder 的排除集同加 `*.sqlite-wal/-shm/-journal`；
+  `test_tree_file_walk_honours_the_sync_scripts_exclusions` 覆盖三种后缀；本地 vendored 树已删侧车、包已重打。
+- **法则**：排除集加一项要在**四处**同加（sync / 守卫 / 三 builder）；跨树比对的输入用上游 **HEAD 的干净
+  checkout**（浅 clone 即可），脏工作树会把「两边一致地错」洗成绿。
+
+### v0.35.0 / 2026-09-03 — 手册知识包白名单与已上架技法脱钩，且生成器读的是脏工作区
+
+- **症状**：`helpdocs/` 21 域全部停在 08-17（上游 v3.9.3 预发），之后上游三个版本改了 AstroHelpDoc（古典
+  设置九子组一览）/ AuxchartHelpDoc / ZeriHelpDoc（+113 行择日十技法）；而 `HELPDOC_DOMAINS` 根本没有
+  Zeri/Taiyi/Sanshi/Yanqin/Yizhangjing/Xuanshi 六册——对应工具（十个 `*zeri`、`taiyi`、`sanshiunited`、
+  `yanqin_yanfa`、`yizhangjing`、`xuanshi`）早在 v0.32~v0.34 上架。技法有了、口径知识没有，AI 客户端引不到教义。
+- **根因**：① 白名单是手写常量，与「上游有哪些手册」「skill 上架了哪些技法」都没有机器边；② 生成器从磁盘
+  读手册、出处却记 `git rev-parse HEAD`——上游维护机常年带 WIP（本轮 AstroHelpDoc.js 就是脏的），按磁盘
+  收割等于把未提交改动记成某个 commit 的内容。
+- **guard**：生成器默认读 HEAD blob（`git show HEAD:…`；`--worktree` 只给非 git 快照），脏手册报 notice；
+  `*HelpDoc.js` 既未收割也未进 `EXCLUDED_HELPDOCS`（仅 fengshui，政策性排除）即 FAIL；
+  `tests/test_knowledge_helpdocs.py` 断言白名单域 == 磁盘包集合 + 六个新域在场。
+- **法则**：**上游每一册手册要么收割、要么明文排除，没有第三种状态**；出处与正文必须同源于同一个 commit。
+  同步上游新技法时（§5 布线清单第 14 步）把「它的手册进白名单并重跑生成器」算进同一个 change。
 
 ### v0.34.0+ / 2026-09-01 — 择日派生键继承了基底段表、没继承基底 optional 集：5/10 新技法 live 导出「缺段」
 

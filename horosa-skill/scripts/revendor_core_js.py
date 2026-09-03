@@ -13,11 +13,15 @@ and reviewable:
 
 Usage:  python scripts/revendor_core_js.py <upstream-src-root> <relative/path/File.js> [more...]
         (`--check` reports what would change without writing)
+        python scripts/revendor_core_js.py <upstream-src-root> --from-manifest [--only <prefix>] [--check]
+        python scripts/revendor_core_js.py <upstream-src-root> --restamp <vendor/rel.js>... | --restamp-all
+        (`--restamp` records the upstream source sha of a hand-made entry — run it only after re-auditing)
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -500,6 +504,101 @@ def _top_level_exports(text: str) -> set[str]:
     return names
 
 
+def _sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+# 手工件（curated 子集 / 自上游文件抽出的 bespoke）不走流水线，`--from-manifest` 对它们只能断言
+# 「名字还在」——内容漂移零信号。v3.9.4 的两处真值修正就这么静默滞留了四轮同步：`liureng/LRConst.js`
+# （curated）的六亲表两格、`ziwei/zwLuckItems.js`（bespoke，抽自 ZWLuckPanel.js）的干支年基准。
+# 现在每个手工件都记「最近一次人工核对时上游源文件的 sha256」：源一动就红，复核后 `--restamp` 才灭。
+def watched_source(entry: dict) -> tuple[str, str] | None:
+    """(upstream_rel, stamp_field) for a hand-made entry; None when it declares no upstream source."""
+    mode = entry.get("mode")
+    if mode == "curated":
+        return entry["upstream"], "upstream_sha256"
+    if mode == "bespoke" and entry.get("derived_from"):
+        return entry["derived_from"], "derived_sha256"
+    return None
+
+
+def hand_made_drift(upstream_src: Path, vendor_rel: str, entry: dict) -> str | None:
+    """Problem text when a hand-made entry's upstream source moved since its stamp (or was never stamped)."""
+    watched = watched_source(entry)
+    if watched is None:
+        return None
+    rel, field = watched
+    source = upstream_src / rel
+    label = str(entry.get("mode")).upper()
+    if not source.is_file():
+        return f"{vendor_rel}: {label} source {rel} is gone upstream — re-audit the hand-made copy, then reclassify"
+    current = _sha256_file(source)
+    recorded = entry.get(field)
+    if not recorded:
+        return f"{vendor_rel}: {label} entry is unstamped — audit the hand-made copy against {rel}, then `--restamp {vendor_rel}`"
+    if recorded != current:
+        return (
+            f"{vendor_rel}: {label} source {rel} changed upstream since the last audit "
+            f"(sha {recorded[:12]} → {current[:12]}) — re-audit the hand-made copy, then `--restamp {vendor_rel}`"
+        )
+    return None
+
+
+_MODES = {
+    "verbatim": "流水线输出（含 deviations）必须与 vendored 文件逐字相同",
+    "curated": (
+        "蓄意子集/shim，永不自动 vendor；断言 extracts 里每个名字仍是上游顶层 export，"
+        "且上游源 sha256 == upstream_sha256（最近一次人工核对的记录：源一动即红，复核后 --restamp）"
+    ),
+    "bespoke": (
+        "skill 自写、上游无同名文件；声明 derived_from（自上游某文件手工抽出）的，"
+        "另断言该源 sha256 == derived_sha256（与 curated 同一复核纪律）"
+    ),
+    "needs-review": "有真实漂移，待人工分类为上面三种之一（这就是 re-vendor 工单）",
+}
+
+
+def _write_manifest(files: dict[str, dict]) -> None:
+    MANIFEST.parent.mkdir(parents=True, exist_ok=True)
+    MANIFEST.write_text(
+        json.dumps(
+            {
+                "_comment": (
+                    "vendor 树的唯一驱动清单：显式 upstream↔vendor 路径对 + 声明式偏离。"
+                    "revendor_core_js.py 的路径推断对本树是错的（会分叉出重复树），故一律用 --from-manifest。"
+                ),
+                "_modes": _MODES,
+                "files": files,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def restamp(upstream_src: Path, targets: list[str] | None) -> int:
+    """Record the current upstream source sha of hand-made entries — only after a human re-audit."""
+    files = load_manifest()
+    chosen = targets or [k for k, e in files.items() if watched_source(e)]
+    for vendor_rel in chosen:
+        entry = files.get(vendor_rel)
+        if entry is None:
+            raise SystemExit(f"--restamp: {vendor_rel} is not in the manifest")
+        watched = watched_source(entry)
+        if watched is None:
+            raise SystemExit(f"--restamp: {vendor_rel} is {entry.get('mode')} without an upstream source — nothing to stamp")
+        rel, field = watched
+        source = upstream_src / rel
+        if not source.is_file():
+            raise SystemExit(f"--restamp: upstream source not found: {source}")
+        entry[field] = _sha256_file(source)
+    _write_manifest(files)
+    print(f"restamped {len(chosen)} hand-made entr{'y' if len(chosen) == 1 else 'ies'} in {MANIFEST.relative_to(REPO_ROOT)}")
+    return 0
+
+
 def render_one(upstream_src: Path, rel_upstream: str, target: Path, deviations: list[dict]) -> tuple[str, list[str]]:
     source = upstream_src / rel_upstream
     if not source.is_file():
@@ -547,6 +646,10 @@ def run_manifest(upstream_src: Path, only: str | None, check: bool) -> int:
             if Path(vendor_rel).name in upstream_names:
                 problems += 1
                 print(f"{vendor_rel}: BESPOKE but upstream now ships a file of that name — reclassify")
+            problem = hand_made_drift(upstream_src, vendor_rel, entry)
+            if problem:
+                problems += 1
+                print(problem)
             continue
 
         if mode == "curated":
@@ -564,6 +667,10 @@ def run_manifest(upstream_src: Path, only: str | None, check: bool) -> int:
                     f"{vendor_rel}: CURATED — {len(lost)} extracted name(s) no longer exported upstream: "
                     f"{', '.join(lost)} (a renamed constant becomes a silent `undefined` key)"
                 )
+            problem = hand_made_drift(upstream_src, vendor_rel, entry)
+            if problem:
+                problems += 1
+                print(problem)
             continue
 
         if mode != "verbatim":
@@ -603,6 +710,11 @@ def manifest_drift(upstream_src: Path) -> list[str]:
     out: list[str] = []
     for vendor_rel, entry in sorted(load_manifest().items()):
         if entry.get("mode") != "verbatim":
+            # 手工件不渲染，但它们的上游源一动就是「需人工复审」——以前这里直接 continue，
+            # 于是 curated/bespoke 在这把守卫眼里永远是绿的。
+            problem = hand_made_drift(upstream_src, vendor_rel, entry)
+            if problem:
+                out.append(problem)
             continue
         target = VENDOR_ROOT / vendor_rel
         try:
@@ -650,28 +762,7 @@ def bootstrap_manifest(upstream_src: Path) -> None:
                 "mode": "needs-review",
                 "why": "; ".join(notes) or "body drift",
             }
-    MANIFEST.parent.mkdir(parents=True, exist_ok=True)
-    MANIFEST.write_text(
-        json.dumps(
-            {
-                "_comment": (
-                    "vendor 树的唯一驱动清单：显式 upstream↔vendor 路径对 + 声明式偏离。"
-                    "revendor_core_js.py 的路径推断对本树是错的（会分叉出重复树），故一律用 --from-manifest。"
-                ),
-                "_modes": {
-                    "verbatim": "流水线输出（含 deviations）必须与 vendored 文件逐字相同",
-                    "curated": "蓄意子集/shim，永不自动 vendor；断言 extracts 里每个名字仍是上游顶层 export",
-                    "bespoke": "skill 自写、上游无对应文件；断言上游确实没有同名文件",
-                    "needs-review": "有真实漂移，待人工分类为上面三种之一（这就是 re-vendor 工单）",
-                },
-                "files": files,
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    _write_manifest(files)
     counts: dict[str, int] = {}
     for entry in files.values():
         counts[entry["mode"]] = counts.get(entry["mode"], 0) + 1
@@ -687,8 +778,15 @@ def main() -> None:
     parser.add_argument("--from-manifest", action="store_true", help="drive every file in contracts/vendor_manifest.json")
     parser.add_argument("--only", default=None, help="with --from-manifest: restrict to vendor paths under this prefix")
     parser.add_argument("--bootstrap-manifest", action="store_true", help="(re)generate the manifest from the current tree")
+    parser.add_argument(
+        "--restamp", nargs="+", metavar="VENDOR_PATH", default=None,
+        help="after re-auditing a curated / derived bespoke entry, record its current upstream source sha256",
+    )
+    parser.add_argument("--restamp-all", action="store_true", help="restamp every hand-made entry (initial bootstrap of the stamps)")
     args = parser.parse_args()
 
+    if args.restamp or args.restamp_all:
+        raise SystemExit(restamp(args.upstream_src, args.restamp))
     if args.bootstrap_manifest:
         bootstrap_manifest(args.upstream_src)
         return

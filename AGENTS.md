@@ -159,10 +159,12 @@ you, it will bite the next agent：
 **运行期实测优先于声明**：`data.technique_card` 以 `pan.source` / `jinkou.source` / `compute_sources`
 为准，与声明不符时标 `matches_declaration: false`——ken 端点失败也回 200，静默回退正是这个形状。
 
-**知识包（v0.28.0）**：方法论手册域由 `scripts/gen_knowledge_packs.py` 从上游 HelpDoc 收割
-（21 域/177 条，逐条带出处；幂等 = generated_at 取上游 commit 时间）；store 按 schema
-`horosa.knowledge.helpdoc.v1` 自动发现，**新增域零代码**。上游改 HelpDoc 后重跑生成器即同步；
-hover 三域（astro/liureng/qimen）保持专用渲染分支不动。
+**知识包（v0.28.0 起，v0.35.0 收紧）**：方法论手册域由 `scripts/gen_knowledge_packs.py` 从上游 HelpDoc 收割
+（27 域/235 条，逐条带出处；幂等 = generated_at 取上游 commit 时间；**正文读上游 HEAD blob、不读工作区**，
+出处与正文同源）；store 按 schema `horosa.knowledge.helpdoc.v1` 自动发现，**新增域零代码**。
+**上游每一册 `*HelpDoc.js` 要么进 `HELPDOC_DOMAINS`、要么进 `EXCLUDED_HELPDOCS`（仅 fengshui，政策性排除），
+第三种状态生成器直接 FAIL**——同步新技法时把它的手册一并收进来（v0.35.0 之前六册已上架技法的手册三个版本
+没收）。上游改 HelpDoc 后重跑生成器即同步；hover 三域（astro/liureng/qimen）保持专用渲染分支不动。
 
 **同步守卫三层（缺一层就会静默漂）**：① `verify_upstream_sync.py` = vendored ↔ **上游 HEAD**
 （版本恒等 + 哨兵 sha256 + core-js 逐文件；无上游树时 skipped 而非绿，release 链用 `--require-upstream`）；
@@ -211,10 +213,13 @@ hover 三域（astro/liureng/qimen）保持专用渲染分支不动。
 🔴 **点哨兵覆盖不全整棵引擎树（v0.26.0）。** 7 个哨兵一个都不在 ken 引擎目录内部，
 `verify_vendor_runtime_sources` 又只查 REQUIRED_PATHS **是否存在**——于是「引擎文件在、但是旧的」
 整类漂移无人看管，`kintaiyi/jieqi.py` 的全年份域修复（域外 ValueError 炸 taiyi/pan）就这么卡了一版。
-守卫 = `verify_upstream_sync.py` 的 **check 2b 子树逐文件比对**（`Horosa-Web/vendor` /
-`astropy/astrostudy` / `astropy/websrv`），三向都报。两条纪律：**比对口径必须等于同步口径**
-（排除集逐条对齐 sync 脚本，否则对着故意没拷的文件恒红）；「上游有而 vendored 缺」只在已 vendor 的
-顶层目录内部判，上游**整个新增的顶层目录**单独报一行（那是新引擎/新能力的信号）。
+守卫 = `verify_upstream_sync.py` 的 **check 2b 子树逐文件比对**（`Horosa-Web/vendor` 逐引擎目录 /
+**整棵** `Horosa-Web/astropy` / **整棵** `Horosa-Web/flatlib-ctrad2`），三向都报。三条纪律：**比对口径必须
+等于同步口径**（排除集逐条对齐 sync 脚本，否则对着故意没拷的文件恒红）；**守卫树集合 == sync 脚本整棵
+rsync 的树集合**——加一条整棵 rsync 就加一棵树（v0.35.0 之前 flatlib 整棵拷却不比、astropy 只比两个子树，
+tests/resources/根级文件全在盲区，v3.9.3 的 flatlib 三文件漂移零信号；
+`test_every_tree_the_sync_script_rsyncs_wholesale_is_a_sentinel_tree` 锁步）；「上游有而 vendored 缺」只在
+已 vendor 的顶层目录内部判，上游**整个新增的顶层目录**单独报一行（那是新引擎/新能力的信号）。
 配套：审计权威清单是 `aiExport.js` 的技法表，**不是 kentang 服务注册表**——`qizhengelection`/
 `xuanshi` 是服务不是导出技法，已进排除台账（有数据 ≠ 有技法）。
 
@@ -263,9 +268,11 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 不 bump 版本（v3.9.5 给 horary +9 段、常量原地 56）。判断是否漂移只认两个：
 `verify_upstream_sync.py --require-upstream`（sentinel sha256）与
 `verify_export_section_baseline.py --source upstream --require-upstream`（段级、preflight 同款）；
-裸跑默认参数在这类失败上**恒绿**。重灌 vendor 树后，`vendor_manifest.json` 里 bespoke/curated 条目
-（手工抽取件）要逐一与上游现函数对文本——机械 `--from-manifest` 不覆盖它们，「caller 旧于 vendored
-依赖」是它们的专属漂移形态。
+裸跑默认参数在这类失败上**恒绿**。手工件（curated 子集 / 声明了 `derived_from` 的 bespoke 抽出件）不走
+流水线，靠 `vendor_manifest.json` 里的**源 sha 戳**看守：上游源一动，`--from-manifest` 与
+`verify_upstream_sync` check 3 即红，逐一与上游现函数对过文本后
+`revendor_core_js.py <src> --restamp <条目>` 才灭（v3.9.4 六亲两格就是在没有这条边时静默滞留了四轮）。
+「caller 旧于 vendored 依赖」是它们的专属漂移形态。
 
 **四分决策树**（新技法先归类，再动手）：
 
@@ -300,7 +307,9 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   （GraphHelper/helper/LRShenJiangDoc）用 no-op stub 替换。vendor 后必须 `node -e "import('...')"`
   load-check **加**真数据整链跑（load 过 ≠ 真盘不崩；追 refCtx/三传是否真的非 null）。
 - **curated 常量文件**（如 `vendor/liureng/LRConst.js`）：上游全文件 import 了 headless 不存在的路径时，
-  **只追加新增的纯常量**，不整文件重 vendor。
+  **只追加新增的纯常量**，不整文件重 vendor；条目必须带 `upstream_sha256`，上游改了该文件就把子集里的每个
+  值重新对一遍再 `--restamp`。**bespoke 抽出件同理声明 `derived_from`**（抽自哪份上游文件）——不声明它就
+  对上游漂移永远失明（`zwLuckItems.js` 的干支年基准修正曾靠人读 release note 才补上）。
 - **重同步 `vendor/runtime-source`**：`sync_vendored_runtime_sources.sh` + 显式 `HOROSA_SOURCE_ROOT`
   （对上游 READ-ONLY）。**顶层共享件必须显式补**：上游把子逻辑上提为 vendor 根级单文件时（如
   v3.5.0 全年份域的 `Horosa-Web/vendor/kin_year_domain.py`，被 16 个 ken/神数 引擎懒 import），逐引擎
@@ -366,6 +375,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
     「是不是某笔已入账基底债务的继承」——解析器盲区造出的**假债务**会诱使人 `--update-baseline`，
     把常绿检查一次腌成永久噪声。
 
+14. **手册随技法走**（v0.35.0）：上游每个技法页都有一册 `components/help/<X>HelpDoc.js`；技法上架的同一
+    change 里把它加进 `gen_knowledge_packs.py::HELPDOC_DOMAINS` 并重跑生成器提交包——生成器对「既未收割
+    也未明文排除」的手册 FAIL，`test_whitelist_and_packs_on_disk_are_the_same_set` 锁白名单与产物同步。
+
 **审计前置**（补「未同步技法」缺口前）：先 grep 仓内**明确排除项**（`fengshui`：canvas + 户型图上传 +
 交互点位驱动，无 birth/time 输入，无法 headless——是政策性排除不是缺口），再确认候选的
 `buildXxxSnapshotText` 是纯 `chart/data→text`（无 canvas/DOM/上传/点击依赖），过了 headless-readiness
@@ -373,6 +386,11 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 ## 6. 打包不变量（offline runtime packaging — 每条都咬过人）
 
+- **排除集四处同加，SQLite 日志侧车不是源文件**（v0.35.0）：`*.sqlite-wal/-shm/-journal` 是上游进程打开库
+  留下的运行期文件，git 不跟踪、磁盘上有；sync 脚本 RSYNC_FILTERS、`verify_upstream_sync` TREE_EXCLUDE_SUFFIXES、
+  `package_runtime_payload.sh` 与 windows/linux builder 的 `rsync_copy` 排除集**必须同时**列出它们——只在
+  一处排除，剩下三处要么对着干净树恒红、要么把侧车打进包（首版 v0.35.0 darwin 包就带过一对）。
+  以后排除集加任何一项，都在这四处同加。跨树比对/preflight 的输入一律用上游 **HEAD 的干净 checkout**。
 - **flatlib 必须活过 strip**：`package_runtime_payload.sh` 保留 `flatlib-ctrad2/flatlib` 拷贝行，
   否则 bundled chart 服务 `ModuleNotFoundError: No module named 'flatlib'`。
 - **python-strip 先 `-prune` `site-packages`** 再删 `test`/`tests` 目录：删了 `site-packages/astropy/tests`

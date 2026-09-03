@@ -6681,6 +6681,9 @@ class HorosaSkillService:
             analysis = self._call_remote(
                 "/astroextra/analysis",
                 {
+                    # 缓存代次盐，与上游 aiExport.js / AstroHelper.java 同值：后端 paramhash 磁盘缓存不区分
+                    # 「古典口径进入临界区之前/之后」算出的结果，不带盐的请求会命中旧代次的缓存条目。
+                    "_v": "cls1",
                     "date": payload.get("date"),
                     "time": payload.get("time"),
                     "zone": payload.get("zone"),

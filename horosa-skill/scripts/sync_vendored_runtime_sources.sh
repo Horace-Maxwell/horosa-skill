@@ -24,6 +24,11 @@ RSYNC_FILTERS=(
   '--exclude=*/${env:*'
   "--exclude=.horosa-logs"
   "--exclude=*/.horosa-logs"
+  # SQLite 日志侧车（WAL/SHM/journal）：上游进程打开过库就会留在磁盘上、git 不跟踪。拷进镜像等于
+  # 让打包出去的 runtime 在打开库时回放一段上游未 checkpoint 的写入——库内容偏离 git 里的那份 .sqlite。
+  "--exclude=*.sqlite-wal"
+  "--exclude=*.sqlite-shm"
+  "--exclude=*.sqlite-journal"
 )
 
 require_path() {

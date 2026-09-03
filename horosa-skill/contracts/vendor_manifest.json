@@ -2,8 +2,8 @@
   "_comment": "vendor 树的唯一驱动清单：显式 upstream↔vendor 路径对 + 声明式偏离。revendor_core_js.py 的路径推断对本树是错的（会分叉出重复树），故一律用 --from-manifest。",
   "_modes": {
     "verbatim": "流水线输出（含 deviations）必须与 vendored 文件逐字相同",
-    "curated": "蓄意子集/shim，永不自动 vendor；断言 extracts 里每个名字仍是上游顶层 export",
-    "bespoke": "skill 自写、上游无对应文件；断言上游确实没有同名文件",
+    "curated": "蓄意子集/shim，永不自动 vendor；断言 extracts 里每个名字仍是上游顶层 export，且上游源 sha256 == upstream_sha256（最近一次人工核对的记录：源一动即红，复核后 --restamp）",
+    "bespoke": "skill 自写、上游无同名文件；声明 derived_from（自上游某文件手工抽出）的，另断言该源 sha256 == derived_sha256（与 curated 同一复核纪律）",
     "needs-review": "有真实漂移，待人工分类为上面三种之一（这就是 re-vendor 工单）"
   },
   "files": {
@@ -121,7 +121,8 @@
       "upstream": "constants/ZWConst.js",
       "mode": "curated",
       "why": "skill 侧**多于**上游：四化多流派表（beipai/zhongzhou/beixiang/custom）是本仓自加的已发布能力，整文件重 vendor 会把它删掉。上游 import 的 ziweiSchools 不进 headless 树。",
-      "extracts": []
+      "extracts": [],
+      "upstream_sha256": "5363df320401a6ff4f7ed24b66e9b22bb24ecb6580b108689cc0aff1465c7a6e"
     },
     "bazi/baziFenYe.js": {
       "upstream": "utils/baziFenYe.js",
@@ -227,7 +228,8 @@
       "upstream": "constants/AstroConst.js",
       "mode": "curated",
       "why": "Uranian 虚星表所需子集，**逐值抽取**。块界=下一个顶层 `export const`（上游多数常量不带结尾分号，按分号切会卷进后续声明）；且必须保持上游原序——LIST_URANIAN 引用了排在其后的符号，重排即 ReferenceError before initialization。",
-      "extracts": []
+      "extracts": [],
+      "upstream_sha256": "53aa78f226d316c30fee680f6ed48aa11f5d5c5cda4191fc3d91c49b00866fe8"
     },
     "divination/data/accidentalDignity.js": {
       "upstream": "divination/data/accidentalDignity.js",
@@ -927,11 +929,15 @@
     },
     "gua/guaHelper.js": {
       "mode": "bespoke",
-      "why": "no upstream file of this name (skill-authored)"
+      "why": "自上游 utils/helper.js 抽出 littleEndian / randomNum（供 gua 引擎装卦用）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "derived_from": "utils/helper.js",
+      "derived_sha256": "dc69320105d82b4361e5096f88f038308e286726218779705e72b7b70b999625"
     },
     "gua/littleEndian.js": {
       "mode": "bespoke",
-      "why": "no upstream file of this name (skill-authored)"
+      "why": "自上游 utils/helper.js 逐字取出的单个纯函数；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "derived_from": "utils/helper.js",
+      "derived_sha256": "dc69320105d82b4361e5096f88f038308e286726218779705e72b7b70b999625"
     },
     "gua/liuyaoDongBian.js": {
       "upstream": "components/gua/liuyaoDongBian.js",
@@ -1026,7 +1032,8 @@
       "upstream": "utils/safeStorage.js",
       "mode": "curated",
       "why": "headless no-op localStorage shim（上游 117 行是 WKWebView QuotaExceeded 包装；skill 从不持久化六爻设置，逐调用显式传参）。",
-      "extracts": []
+      "extracts": [],
+      "upstream_sha256": "51209365767ecb09d8a726cd776f2223e7b1142ca5be611d734230cefb07b0a7"
     },
     "guice/core/guiceConst.js": {
       "upstream": "components/guice/core/guiceConst.js",
@@ -1105,7 +1112,9 @@
     },
     "guolao/guolaoMoira.js": {
       "mode": "bespoke",
-      "why": "no upstream file of this name (skill-authored)"
+      "why": "自上游 GuoLaoChartMain.js verbatim 抽出的政余格局 Moira DSL 闭包；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "derived_from": "components/guolao/GuoLaoChartMain.js",
+      "derived_sha256": "54762bd17a55ab64a97f65ebc6a432227cc43f363e849bd4471101567b8d3375"
     },
     "heluo/heluoLocal.js": {
       "upstream": "utils/heluoLocal.js",
@@ -1114,7 +1123,9 @@
     },
     "india/jyotishSnapshot.js": {
       "mode": "bespoke",
-      "why": "no upstream file of this name (skill-authored)"
+      "why": "自上游 IndiaChart.js 逐字抽出的 Jyotish 快照段构造器（仅剥 React 外壳）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "derived_from": "components/astro/IndiaChart.js",
+      "derived_sha256": "0483875542dba7a0be148b31da53f959c4373c2e206f3a2cfa4a8cc461ccce4e"
     },
     "jinkou/JinKouCalc.js": {
       "upstream": "components/jinkou/JinKouCalc.js",
@@ -1128,7 +1139,9 @@
     },
     "jinkou/JinKouSnapshot.js": {
       "mode": "bespoke",
-      "why": "no upstream file of this name (skill-authored)"
+      "why": "自上游 JinKouMain.js 抽出的金口诀 AI 快照格式化层（网络/React 不取）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "derived_from": "components/jinkou/JinKouMain.js",
+      "derived_sha256": "bd908c9e4f5716ccd3686662efb0de8aad98a75a179b424cb0547987b58db09d"
     },
     "jinkou/JinKouState.js": {
       "upstream": "components/jinkou/JinKouState.js",
@@ -1197,7 +1210,8 @@
       "upstream": "components/liureng/LRConst.js",
       "mode": "curated",
       "why": "curated 常量文件（AGENTS §5 点名）：上游全文件 import 了 headless 不存在的路径，只追加新增纯常量，不整文件重 vendor。",
-      "extracts": []
+      "extracts": [],
+      "upstream_sha256": "8180c68258d16f71dd1888b494043e98d98d730d8a00b337675e1126a155e6a9"
     },
     "liureng/LRJianChuanDoc.js": {
       "upstream": "components/liureng/LRJianChuanDoc.js",
@@ -1362,7 +1376,8 @@
       "upstream": "components/suzhan/SZConst.js",
       "mode": "curated",
       "why": "模块加载期读 localStorage → 硬编码 no-op shim（Node 实验性全局 localStorage 无 flag 会 throw，故不探测 globalThis）。",
-      "extracts": []
+      "extracts": [],
+      "upstream_sha256": "e634abfda895c88afa773e1156193240177c96ac2062e79fb6262f3f6ab99a58"
     },
     "taiyi/TaiYiCalc.js": {
       "upstream": "components/taiyi/TaiYiCalc.js",
@@ -1503,7 +1518,8 @@
       "upstream": "components/tarot/engine/colorScales.js",
       "mode": "curated",
       "why": "金色黎明四色阶的 King 阶子集；其余三阶是 128 格大表，按需扩。",
-      "extracts": []
+      "extracts": [],
+      "upstream_sha256": "5e45bb8f79ed477231df74214c2a7a8e533f83b7b768487d691cfaa7c57e99aa"
     },
     "tarot/engine/deckRegistry.js": {
       "upstream": "components/tarot/engine/deckRegistry.js",
@@ -1584,7 +1600,9 @@
     },
     "tongshefa/TongSheFaCore.js": {
       "mode": "bespoke",
-      "why": "no upstream file of this name (skill-authored)"
+      "why": "自上游 TongSheFaMain.js 逐字抽出的统摄法纯计算层（React 类之前的常量与 40 个函数）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "derived_from": "components/tongshefa/TongSheFaMain.js",
+      "derived_sha256": "aa6fad4af6b01afdb3de9706431e86efd315129aac3aef49fda4e39928020ec9"
     },
     "tongshu/donggong.js": {
       "upstream": "components/calendar/tongshu/donggong.js",
@@ -1850,7 +1868,9 @@
     },
     "ziwei/zwLuckItems.js": {
       "mode": "bespoke",
-      "why": "no upstream file of this name (skill-authored)"
+      "why": "自上游 ZWLuckPanel.js 精确抽出的运限项构建闭包（其余是 React 组件，整份 vendor 不可行）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "derived_from": "components/ziwei/ZWLuckPanel.js",
+      "derived_sha256": "d2a9bbd4d09abe8db45b6d109e25719b2f68eacf3e35e9b89803608c99ecacfe"
     }
   }
 }
