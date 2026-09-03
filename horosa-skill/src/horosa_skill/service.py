@@ -5073,7 +5073,7 @@ def _gender_label(value: Any) -> str:
     return "未知"
 
 
-def _build_bazi_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
+def _build_bazi_snapshot_text(payload: dict[str, Any], response: dict[str, Any], tool_name: str | None = None) -> str:
     bazi = response.get("bazi", response if isinstance(response, dict) else {})
     four = bazi.get("fourColumns", {}) if isinstance(bazi, dict) else {}
     nongli = bazi.get("nongli", {}) if isinstance(bazi, dict) else {}
@@ -5157,6 +5157,24 @@ def _build_bazi_snapshot_text(payload: dict[str, Any], response: dict[str, Any])
     hechong_lines = _build_bazi_hechong_lines(four)
     if hechong_lines:
         sections.append(("干支合冲", _join_lines(hechong_lines)))
+    # [起运]（bazi_direct 专属）：直断端点自带起运时间/年龄（Java 按年干阴阳+性别顺逆排），
+    # 插于大运之前——「起运」是直断结果的独有增量，让直断与命盘结果可区分。
+    if tool_name == "bazi_direct":
+        qiyun_lines: list[str] = []
+        direct_time = bazi.get("directTime")
+        if isinstance(direct_time, str) and direct_time.strip():
+            qiyun_lines.append(f"起运时间：{direct_time.strip()}")
+        direct_age = bazi.get("directAge")
+        if isinstance(direct_age, (int, float)) and not isinstance(direct_age, bool):
+            age_num = float(direct_age)
+            years = int(age_num)
+            months = int(round((age_num - years) * 12))
+            if months >= 12:
+                years += 1
+                months -= 12
+            qiyun_lines.append(f"起运年龄：{years} 岁 {months} 个月（{age_num:.2f} 岁）")
+        if qiyun_lines:
+            sections.append(("起运", _join_lines(qiyun_lines)))
     if dayun_lines:
         sections.append(("大运", _join_lines(dayun_lines)))
     sections.append(
@@ -6028,7 +6046,7 @@ def _auto_snapshot_text_for_tool(tool_name: str, input_normalized: dict[str, Any
     if tool_name == "relative":
         return _build_relative_snapshot_text(input_normalized, response_data)
     if tool_name in {"bazi_birth", "bazi_direct"}:
-        return _build_bazi_snapshot_text(input_normalized, response_data)
+        return _build_bazi_snapshot_text(input_normalized, response_data, tool_name)
     if tool_name in {"ziwei_birth", "ziwei_rules"}:
         return _build_ziwei_snapshot_text(input_normalized, response_data)
     if tool_name in {"liureng_gods", "liureng_runyear"}:
