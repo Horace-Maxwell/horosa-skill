@@ -677,6 +677,12 @@ A global stability pass hardened these; keep them true when you touch the releva
   keep it that way.
 - **Report rendering is atomic.** `render_report` renders to a temp sibling then `os.replace()`s —
   never write a report format directly to its final `output_path`（a mid-render failure would corrupt it）.
+- **Hand-made vendor stamps are line-ending independent.** `revendor_core_js._sha256_file` hashes the
+  CRLF→LF-normalized UTF-8 text（raw bytes only for non-UTF-8）, so `upstream_sha256`/`derived_sha256`
+  stamped on mac over LF sources still match on a Windows checkout（`core.autocrlf=true`）— a raw-bytes
+  digest made the hand-made-drift guard permanently red on Windows（v0.35.0+ 台账）. Don't switch it
+  back to `read_bytes()`; and any script that *writes* LF source files must pass `newline="
+"`.
 
 ## 10. 上游镜像注记（upstream 星阙 — skill 必须镜像的行为）
 

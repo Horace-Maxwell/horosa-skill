@@ -98,6 +98,29 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.35.0+ / 2026-09-03 — 手工件 sha 戳按裸字节算：CRLF 平台上守卫恒红（windows-smoke 连红两次）
+
+- **症状**：v0.35.0 发布 commit 在 main 上 `CI` 红——`windows-smoke` 里
+  `tests/test_vendor_manifest_watch.py` 两条（curated 戳相符应安静 / bespoke derived_from 同理）
+  报「source changed upstream since the last audit (sha 13514c5a → 212ca9da)」；Linux `test` job 恒绿。
+  本机（`core.autocrlf=true`）一跑即复现。
+- **根因**：`revendor_core_js._sha256_file` 对**裸字节**取 sha256，而戳是 mac 侧对 LF 源算的。
+  Windows 上同一份文件到手就是 CRLF（autocrlf 检出、`Path.write_text` 文本模式写入都会），
+  裸字节摘要永远对不上戳 → 每个 curated/bespoke 条目都被判「上游改了」——**守卫在它最该保护的平台上
+  恒红**（恒红 = 没有守卫，人会学会略过它；v0.26.0 台账「永远红的检查等于没有检查」的同族）。
+  测试红只是表象：真正的手工件漂移守卫（`--from-manifest --check`）在任何 Windows 检出上也会全体误报。
+- **guard**：`_sha256_file` 改为对 **CRLF→LF 归一化后的 UTF-8 文本**取摘要（非 UTF-8 才退回裸字节）。
+  LF 源的摘要逐字节不变 → 既有 `upstream_sha256` / `derived_sha256` 戳**无需 restamp**；CRLF 检出
+  从此也能对上。新增 `test_stamp_is_line_ending_independent`：**显式**以 `newline="
+"` 写源再断言
+  戳相符——只靠 `write_text` 的平台换行差异，这条在 mac/Linux 上永远测不到。
+- **法则**：**凡跨平台比对文本文件的摘要，先归一化换行再算**；同时记住 Windows 上 `Path.write_text`
+  默认会把 `
+` 写成 `
+`，写 LF 源文件要 `newline="
+"`（本轮自己就在改脚本时把整个文件
+  写成了 CRLF 一次）。
+
 ### v0.35.0 / 2026-09-03 — 手工件零信号 + 两棵整拷树不比对：六壬六亲两格错值静默滞留四轮同步
 
 - **症状**：上游 v3.9.4（08-20）真值校准改了六壬六亲表 `ZiLiuQin` 乙日巳/午两格（父母→子孙，乙木生

@@ -505,7 +505,21 @@ def _top_level_exports(text: str) -> set[str]:
 
 
 def _sha256_file(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    """sha256 of the file's *newline-normalized* text (raw bytes only if it is not UTF-8 text).
+
+    Stamps are written on the mac side over LF sources. On Windows the very same file arrives as CRLF
+    (git `core.autocrlf=true` checkouts, and `Path.write_text` in text mode), so a raw-bytes digest
+    can never equal the stamp there: every curated/bespoke entry reports "changed upstream" and the
+    hand-made-drift guard cries wolf on exactly the platform it is meant to protect (windows-smoke
+    red twice on v0.35.0). Hashing CRLF->LF text keeps LF digests byte-for-byte identical (no
+    restamp needed) and makes the stamp line-ending independent.
+    """
+    data = path.read_bytes()
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return hashlib.sha256(data).hexdigest()
+    return hashlib.sha256(text.replace("\r\n", "\n").encode("utf-8")).hexdigest()
 
 
 # 手工件（curated 子集 / 自上游文件抽出的 bespoke）不走流水线，`--from-manifest` 对它们只能断言

@@ -87,3 +87,18 @@ def test_real_manifest_stamps_every_hand_made_entry() -> None:
     # 两个真事故的当事文件必须在受看守之列。
     assert files["liureng/LRConst.js"]["mode"] == "curated"
     assert files["ziwei/zwLuckItems.js"].get("derived_from") == "components/ziwei/ZWLuckPanel.js"
+
+
+def test_stamp_is_line_ending_independent(tmp_path: Path) -> None:
+    """Stamps are written on the mac side over LF sources; on Windows the same file shows up as CRLF
+    (core.autocrlf=true checkouts, write_text in text mode). A raw-bytes digest can then never match,
+    and the guard cries wolf on exactly the platform it protects — windows-smoke went red twice on
+    v0.35.0 with the two tests above. Write CRLF *explicitly* so this holds on every OS, not only
+    where write_text happens to translate newlines.
+    """
+    source = tmp_path / "a.js"
+    with source.open("w", encoding="utf-8", newline="\r\n") as fh:
+        fh.write("export const X = 1;\n")
+    assert b"\r\n" in source.read_bytes()
+    entry = {"mode": "curated", "upstream": "a.js", "extracts": [], "upstream_sha256": _sha("export const X = 1;\n")}
+    assert rv.hand_made_drift(tmp_path, "v/a.js", entry) is None
