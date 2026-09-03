@@ -5073,6 +5073,54 @@ def _gender_label(value: Any) -> str:
     return "未知"
 
 
+def _build_bazi_direct_summary_lines(bazi: dict[str, Any], geju_blocks: dict[str, str]) -> list[str]:
+    """[直断小结]（bazi_direct 专属）：把快照其他段已出现的事实压缩成直断式要点——
+    四柱日主/五行强弱/格局成败/用神倾向/首步大运。逐条取自响应实际值，缺失即跳过；
+    不新造事实（防幻觉口径与 AI 解读一致）。"""
+    lines: list[str] = []
+    four = bazi.get("fourColumns") if isinstance(bazi, dict) else {}
+    year_gz = _gz_text(four.get("year")) if isinstance(four, dict) else ""
+    day_gz = _gz_text(four.get("day")) if isinstance(four, dict) else ""
+    wuxing = geju_blocks.get("五行力量", "")
+    geju = geju_blocks.get("格局·用神", "")
+
+    head: list[str] = []
+    if day_gz:
+        head.append(f"日主 {day_gz}")
+    m = re.search(r"最旺：([^\s　]+)[　\s]+最弱：([^\s　]+)", wuxing)
+    if m:
+        head.append(f"五行最旺 {m.group(1)}、最弱 {m.group(2)}")
+    m = re.search(r"日主[^\s　：]+：身(弱|强|旺|平)", wuxing)
+    if m:
+        head.append(f"日主身{m.group(1)}")
+    if head:
+        lines.append(f"{f'{year_gz}年生，' if year_gz else ''}{'，'.join(head)}。")
+
+    gm = re.search(r"格局[：:]\s*([^\n（(]+)", geju)
+    bm = re.search(r"成败[：:]\s*([^\n（(]+)", geju)
+    if gm:
+        gtxt = f"格局 {gm.group(1).strip().rstrip('。.')}"
+        if bm:
+            gtxt += f"；{bm.group(1).strip().rstrip('。.')}"
+        lines.append(gtxt + "。")
+
+    fm = re.search(r"扶抑派[^；]*：喜用 ([^　\s]+).*?忌 ([^；　\s]+)", geju)
+    if fm:
+        lines.append(f"喜用 {fm.group(1)}、忌 {fm.group(2)}（扶抑派参考）。")
+
+    steps: list[str] = []
+    for block in bazi.get("direction") or []:
+        if isinstance(block, dict):
+            gz = _gz_text(block.get("mainDirect"))
+            if gz:
+                steps.append(f"{gz}（{block.get('startYear', '—')}）")
+        if len(steps) >= 5:
+            break
+    if steps:
+        lines.append("大运：" + "→".join(steps) + "。")
+    return lines
+
+
 def _build_bazi_snapshot_text(payload: dict[str, Any], response: dict[str, Any], tool_name: str | None = None) -> str:
     bazi = response.get("bazi", response if isinstance(response, dict) else {})
     four = bazi.get("fourColumns", {}) if isinstance(bazi, dict) else {}
@@ -5142,6 +5190,7 @@ def _build_bazi_snapshot_text(payload: dict[str, Any], response: dict[str, Any],
     # 八字格局（五行力量/格局·用神/盲派结构/月令司令）：core-js baziGeju 引擎（_attach_bazi_geju 挂载）
     # 从后端 fourColumns 派生，插于 神煞 与 大运 之间；无 node/引擎失败则 _baziGeju 缺 → 该批段不出。
     geju_text = response.get("_baziGeju") if isinstance(response.get("_baziGeju"), str) else ""
+    geju_blocks: dict[str, str] = {}
     for block in (geju_text or "").split("\n\n"):
         block = block.strip()
         if not block.startswith("["):
@@ -5151,6 +5200,12 @@ def _build_bazi_snapshot_text(payload: dict[str, Any], response: dict[str, Any],
         geju_body = "\n".join(blk_lines[1:]).strip()
         if geju_title and geju_body:
             sections.append((geju_title, geju_body))
+            geju_blocks[geju_title] = geju_body
+    # [直断小结]（bazi_direct 专属）：紧贴四柱后，把五行/格局/喜忌/首步大运压缩成直断要点。
+    if tool_name == "bazi_direct":
+        summary_lines = _build_bazi_direct_summary_lines(bazi, geju_blocks)
+        if summary_lines:
+            sections.insert(2, ("直断小结", _join_lines(summary_lines)))
     # [干支合冲]（上游 v3.9.2）：legacy 天干/地支两 tab 的刑冲合害全表——**后端已带字段的纯排版**
     # （four.ganHe/ganCong + ziHe6/ziHe3/ziHui/ziXing/ziCong/ziCuan/ziPo），行格式逐字镜像
     # BaZi.js:496-514 的 relLine（`cell（zhu） … →key`；全空不产段）。段序按上游 v56：分野 之后、大运 之前。
