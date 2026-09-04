@@ -3297,30 +3297,11 @@ def _is_astro_chart_payload(response_data: dict[str, Any]) -> bool:
     return isinstance(chart, dict) and isinstance(chart.get("objects"), list) and isinstance(chart.get("houses"), list)
 
 
-def _export_body_data(body: str, data: Any) -> dict[str, Any]:
-    return {"__export_body__": body, "__export_data__": data}
-
-
-def _sanitize_section_data(value: Any, seen: set[int] | None = None) -> Any:
-    if seen is None:
-        seen = set()
-    if value is None or isinstance(value, (str, int, float, bool)):
-        return value
-    value_id = id(value)
-    if value_id in seen:
-        return "<circular>"
-    if isinstance(value, list):
-        seen.add(value_id)
-        return [_sanitize_section_data(item, seen) for item in value]
-    if isinstance(value, dict):
-        seen.add(value_id)
-        cleaned: dict[str, Any] = {}
-        for key, item in value.items():
-            if key in {"export_snapshot", "export_format", "snapshot_text"}:
-                continue
-            cleaned[key] = _sanitize_section_data(item, seen)
-        return cleaned
-    return _msg(value)
+def _export_body(body: str) -> dict[str, Any]:
+    """段正文载体（v0.36.0）：只带 body。此前还带 `__export_data__`（整份 chart/objects…）并落进每个
+    段的 `data` 键——同一引擎对象被复制 10+ 次，真实存档 qimen 5 MB / india_chart 101 MB（正文仅几 KB）。
+    引擎对象只在 `data.<key>` 出现一次；段一律 body-only（LESSONS v0.36.0）。"""
+    return {"__export_body__": body}
 
 
 def _normalize_gua_lines(lines: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
@@ -6063,85 +6044,40 @@ def _auto_snapshot_text_for_tool(tool_name: str, input_normalized: dict[str, Any
 
 def _pick_section_data(title: str, *, input_normalized: dict[str, Any], response_data: dict[str, Any]) -> Any:
     normalized_title = title.strip()
-    chart = response_data.get("chart")
-    pan = response_data.get("pan")
-    bazi = response_data.get("bazi")
-    liureng = response_data.get("liureng")
-    jinkou = response_data.get("jinkou")
-    predictives = response_data.get("predictives")
     if _is_astro_chart_payload(response_data):
         if normalized_title in {"起盘信息", "出生时间", "关系起盘信息", "节气盘参数", "星盘信息"}:
             lines = _build_base_info_lines(response_data, input_normalized)
-            return _export_body_data("\n".join(lines).strip(), {"input": input_normalized, "chart": chart or response_data})
+            return _export_body("\n".join(lines).strip())
         if normalized_title in {"宫位宫头", "宫位总览"}:
             lines = _build_house_cusp_lines(response_data)
-            return _export_body_data("\n".join(lines).strip(), (chart or {}).get("houses") or [])
+            return _export_body("\n".join(lines).strip())
         if normalized_title in {"星与虚点"}:
             lines = _build_star_and_lot_position_lines(response_data)
-            return _export_body_data("\n".join(lines).strip(), {"objects": (chart or {}).get("objects") or [], "lots": response_data.get("lots") or []})
+            return _export_body("\n".join(lines).strip())
         if normalized_title == "信息":
             lines = _build_info_section(response_data, input_normalized)
-            return _export_body_data("\n".join(lines).strip(), {"chart": chart or response_data, "receptions": response_data.get("receptions"), "mutuals": response_data.get("mutuals"), "surround": response_data.get("surround"), "declParallel": response_data.get("declParallel")})
+            return _export_body("\n".join(lines).strip())
         if normalized_title == "相位":
             lines = _build_aspect_section(response_data)
-            return _export_body_data("\n".join(lines).strip(), response_data.get("aspects") or {})
+            return _export_body("\n".join(lines).strip())
         if normalized_title == "行星":
             lines = _build_planet_section(response_data)
-            return _export_body_data("\n".join(lines).strip(), (chart or {}).get("objects") or [])
+            return _export_body("\n".join(lines).strip())
         if normalized_title == "希腊点":
             lines = _build_lots_section(response_data)
-            return _export_body_data("\n".join(lines).strip(), response_data.get("lots") or [])
+            return _export_body("\n".join(lines).strip())
         if normalized_title == "可能性":
             lines = _build_possibility_section(response_data)
-            return _export_body_data("\n".join(lines).strip(), response_data.get("predict", {}) or {})
+            return _export_body("\n".join(lines).strip())
 
     if normalized_title in {"起盘信息", "出生时间", "关系起盘信息", "节气盘参数"}:
         return input_normalized
-    if normalized_title in {"星盘信息", "合成图盘", "影响图盘-星盘A", "影响图盘-星盘B"}:
-        return chart or response_data
-    if normalized_title in {"宫位宫头", "宫位总览"}:
-        if isinstance(chart, dict) and chart.get("houses") is not None:
-            return chart.get("houses")
-        return chart or response_data
-    if normalized_title in {"星与虚点", "行星"}:
-        if isinstance(chart, dict):
-            return chart.get("planets") or chart.get("stars") or chart
-        return response_data.get("planets") or response_data
-    if normalized_title == "相位":
-        if isinstance(chart, dict) and chart.get("aspects") is not None:
-            return chart.get("aspects")
-        return response_data.get("aspects") or response_data
-    if normalized_title == "希腊点":
-        if isinstance(chart, dict):
-            return chart.get("greekPoints") or chart.get("lots") or {}
-        return response_data.get("greekPoints") or response_data.get("lots") or {}
-    if normalized_title == "可能性":
-        if isinstance(chart, dict):
-            return chart.get("possibility") or chart.get("possibilities") or {}
-        return response_data.get("possibility") or response_data.get("possibilities") or {}
     if normalized_title in {"主限法设置", "主/界限法设置", "主限法盘设置", "十年大运设置"}:
-        return {"input": input_normalized, "predictives": predictives or response_data}
-    if normalized_title in {"主限法表格", "主/界限法表格", "主限法盘说明", "法达星限表格", "基于X点推运", "基于X起运"}:
-        return predictives or response_data
-    if normalized_title in {"中点", "中点相位"}:
-        return response_data
-    if normalized_title in {"宿盘宫位与二十八宿星曜"}:
-        return chart or response_data
-    if normalized_title in {"骰子结果", "骰子盘宫位与星体", "天象盘宫位与星体"}:
-        return response_data
-    if normalized_title in {"四柱与三元", "流年行运概略", "神煞（四柱与三元）"}:
-        return bazi or response_data
-    if normalized_title in {"十二盘式", "十二地盘/十二天盘/十二贵神对应", "四课", "三传", "行年", "旬日", "旺衰", "基础神煞", "干煞", "月煞", "支煞", "岁煞", "十二长生", "大格", "小局", "参考", "概览"}:
-        return liureng or response_data
-    if normalized_title in {"金口诀速览", "金口诀四位", "四位神煞"}:
-        return jinkou or response_data
-    if normalized_title in {"盘型", "盘面要素", "奇门演卦", "八宫详解", "九宫方盘"}:
-        return pan or response_data
-    if normalized_title in {"太乙盘", "十六宫标记"}:
-        return pan or response_data
-    if normalized_title in {"卦象", "六爻与动爻", "卦辞与断语", "本卦", "六爻", "潜藏", "亲和"}:
-        return response_data
-    return response_data
+        return {"input": input_normalized}
+    # 其余段一律不带 data（v0.36.0）：引擎对象 chart/pan/liureng/bazi/jinkou/predictives 只在
+    # `data.<key>` 出现一次。此前这里兜底 `return response_data` / `X or response_data` 把整份引擎
+    # 对象复制进每个段，见 LESSONS v0.36.0「导出段 data 逐段整份复制」。
+    return None
 
 
 def _build_generated_export_snapshot(
@@ -6195,23 +6131,25 @@ def _build_generated_export_snapshot(
     rendered_blocks: list[str] = []
     for index, title in enumerate(selected_sections, start=1):
         parsed_section = parsed_sections_by_title.get(title, {})
-        section_data = _pick_section_data(title, input_normalized=input_normalized, response_data=response_data)
-        section_body_override = None
-        section_payload = section_data
-        if isinstance(section_data, dict) and ("__export_body__" in section_data or "__export_data__" in section_data):
-            section_body_override = _stringify_export_body(section_data.get("__export_body__"))
-            section_payload = section_data.get("__export_data__")
-        # 兜底 body：段未进快照(parsed body 空)且无 __export_body__ 时，退回 stringify(section_payload)。
-        # 但 _pick_section_data 对未识别段名兜底返回整份 response_data → stringify 会把整份响应 dump 进段正文，
-        # 导出文本暴涨百倍(条件 preset 段未产出时触发)。故超阈值即判定为原始 dump，改用简短「未产出」占位。
-        fallback_body = _stringify_export_body(section_payload)
-        if fallback_body and len(fallback_body.splitlines()) > 80:
-            fallback_body = _missing_detail_text(title)
-        body = parsed_section.get("body") or section_body_override or fallback_body
+        body = f"{parsed_section.get('body') or ''}".strip()
+        if not body:
+            # 段未进快照时才生成兜底正文（此前对每段都算一遍、还把整份引擎对象塞进段 data）。
+            section_data = _pick_section_data(title, input_normalized=input_normalized, response_data=response_data)
+            if isinstance(section_data, dict) and "__export_body__" in section_data:
+                body = _stringify_export_body(section_data.get("__export_body__"))
+            else:
+                body = _stringify_export_body(section_data)
+                # 守卫按**字节+行数**双判：单行 JSON dump 曾靠「只数行」漏进 export_text（303 KB）。
+                if body and (len(body.encode("utf-8")) > 2048 or len(body.splitlines()) > 80):
+                    body = _missing_detail_text(title)
+            # 段既不在快照里、又无可生成正文 → 明示「未产出」占位（旧实现靠整份 dump 触发 80 行守卫才得到同一
+            # 占位；段正文绝不裸空——faithfulness/报告/「不得臆造依赖」检查都以非空正文为前提）。
+            if not body:
+                body = _missing_detail_text(title)
         content = parsed_section.get("content") or (f"[{title}]\n{body}".strip() if body else f"[{title}]")
         rendered_blocks.append(content)
-        # 段仅存 body（content = "[title]\nbody" 可推导，不重复存），全文仅存 export_text 一份；
-        # 原始全段快照以顶层 data.snapshot_text 为唯一权威，此处不再内嵌复制。
+        # 段只存 body（content 可由 "[title]\nbody" 推导）；全文只存 export_text 一份；引擎对象只在
+        # data.<key> 存一份 —— 段不再带 data 键（envelope schema 0.8.0）。
         sections.append(
             {
                 "index": index,
@@ -6219,7 +6157,6 @@ def _build_generated_export_snapshot(
                 "title": title,
                 "included": True,
                 "body": body,
-                "data": _sanitize_section_data(section_payload),
             }
         )
 

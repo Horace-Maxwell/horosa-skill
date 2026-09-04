@@ -98,6 +98,24 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.36.0 / 2026-09-04 — 导出段 `data` 逐段整份复制：qimen 5 MB / india_chart 101 MB（正文仅几 KB）
+
+- **症状**：用户存档里一次奇门调用返回 5.07 MB，其中 `export_snapshot.sections` 1.55 MB、段正文合计
+  2.8 KB——**550:1**；印度盘存档最大 101 MB。agent 一次调用就把上下文撑爆。合成复现：23.8 KB 后端响应
+  → 917 KB 导出快照（38×），且 303 KB 原始 dump 直接落进 `export_text`（agent 被要求当真值读的那个字段）。
+- **根因**：三处叠加。① `_pick_section_data` 兜底 `return response_data` / `X or response_data`——任何未识别
+  段拿到整份引擎对象，qimen 18 段里 11 段各带一份 137 KB 的 `pan`；② `_build_generated_export_snapshot`
+  对**每个**段都算 `section_data` 并塞进 `section["data"]`（仓内零消费者：parser/reports/technique_card/
+  faithfulness 都不读它）；③ 兜底正文守卫只数行不数字节，单行 JSON dump 穿过。唯一的反膨胀测试只数一个
+  24 字符文本探针出现次数，对 `data` 键一字不提。
+- **guard**：段形状固定 `{index, raw_title, title, included, body}`（envelope schema 0.7.0→0.8.0，
+  `docs/DATA_CONTRACTS.md` 与常量由 `verify_docs_sync::check_envelope_schema_version` 锁步——common.py
+  的注释多年宣称有此检查，实际文档停在 0.6.3 无人察觉）；`tests/test_response_budget.py`：段不带 data、
+  引擎对象在响应体里**恰出现一次**、全工具循环「信封字节 ≤ data 基线 + 3×正文 + 16 KB」；兜底正文按
+  字节+行数双守卫，空正文一律占位（faithfulness/报告/「不得臆造依赖」检查都以非空正文为前提）。
+- **法则**：**引擎对象只在 `data.<key>` 存一份，段只存 body**；「有没有膨胀」要量字节、按内容封顶，
+  数文本探针的守卫只能证明「没多印那一句」。
+
 ### v0.35.0+ / 2026-09-03 — 手工件 sha 戳按裸字节算：CRLF 平台上守卫恒红（windows-smoke 连红两次）
 
 - **症状**：v0.35.0 发布 commit 在 main 上 `CI` 红——`windows-smoke` 里
@@ -111,12 +129,12 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   测试红只是表象：真正的手工件漂移守卫（`--from-manifest --check`）在任何 Windows 检出上也会全体误报。
 - **guard**：`_sha256_file` 改为对 **CRLF→LF 归一化后的 UTF-8 文本**取摘要（非 UTF-8 才退回裸字节）。
   LF 源的摘要逐字节不变 → 既有 `upstream_sha256` / `derived_sha256` 戳**无需 restamp**；CRLF 检出
-  从此也能对上。新增 `test_stamp_is_line_ending_independent`：**显式**以 `newline="
+  从此也能对上。新增 `test_stamp_is_line_ending_independent`：**显式**以 `newline="
 "` 写源再断言
   戳相符——只靠 `write_text` 的平台换行差异，这条在 mac/Linux 上永远测不到。
 - **法则**：**凡跨平台比对文本文件的摘要，先归一化换行再算**；同时记住 Windows 上 `Path.write_text`
   默认会把 `
-` 写成 `
+` 写成 `
 `，写 LF 源文件要 `newline="
 "`（本轮自己就在改脚本时把整个文件
   写成了 CRLF 一次）。

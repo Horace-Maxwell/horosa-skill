@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from horosa_skill.schemas.common import TOOL_ENVELOPE_SCHEMA_VERSION
 from horosa_skill.reports.technique_card import (
     TECHNIQUE_CARD_SCHEMA,
     build_technique_card,
@@ -45,7 +46,7 @@ def _card(**overrides):
             },
         },
         skill_version="0.27.0",
-        envelope_schema="0.7.0",
+        envelope_schema=TOOL_ENVELOPE_SCHEMA_VERSION,
         domain="cn",
     )
     base.update(overrides)

@@ -130,3 +130,27 @@ def test_server_instructions_check_actually_fires(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(docs, "err", errors.append)
     docs.check_server_instructions()
     assert len(errors) == 2, "both the '(N tools)' and 'instead of N' forms must be checked"
+
+
+# --- tool envelope 版本锁步（v0.36.0 A1）--------------------------------------------------------
+
+
+def test_envelope_schema_version_lockstep_fires_on_drift(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """common.py 的注释多年宣称 verify_docs_sync 核对 envelope 版本，实际没有——文档 0.6.3 vs 代码 0.7.0
+    漂了两个版本无人察觉。负向对照：文档写错版本必须报错；写对必须静默。"""
+    from horosa_skill.schemas.common import TOOL_ENVELOPE_SCHEMA_VERSION
+
+    (tmp_path / "docs").mkdir()
+    doc = tmp_path / "docs" / "DATA_CONTRACTS.md"
+    monkeypatch.setattr(docs, "ROOT", tmp_path)
+
+    doc.write_text("## 版本面\n\n- tool envelope：`0.0.1`\n", encoding="utf-8")
+    errors: list[str] = []
+    monkeypatch.setattr(docs, "err", errors.append)
+    docs.check_envelope_schema_version()
+    assert errors and "0.0.1" in errors[0] and TOOL_ENVELOPE_SCHEMA_VERSION in errors[0]
+
+    doc.write_text(f"## 版本面\n\n- tool envelope：`{TOOL_ENVELOPE_SCHEMA_VERSION}`（说明）\n", encoding="utf-8")
+    errors.clear()
+    docs.check_envelope_schema_version()
+    assert errors == []

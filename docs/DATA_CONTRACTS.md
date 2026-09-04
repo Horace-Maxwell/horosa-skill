@@ -4,7 +4,9 @@
 
 ## 版本面
 
-- tool envelope：`0.6.3`
+- tool envelope：`0.8.0`（与 `schemas/common.py::TOOL_ENVELOPE_SCHEMA_VERSION` 由 `verify_docs_sync` 锁步；
+  0.8.0 起 `export_snapshot.sections[*]` 只有 `{index, raw_title, title, included, body}`，不再带 `data`——
+  引擎对象只在 `data.<key>` 出现一次）
 - export contract：`horosa.ai.export.settings.v1`
 - record schema：`horosa.skill.record.v1`
 - run manifest schema：`horosa.skill.run.manifest`

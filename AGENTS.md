@@ -636,6 +636,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 A global stability pass hardened these; keep them true when you touch the relevant code:
 
+- **导出段只存 body，引擎对象只在 `data.<key>` 存一份。** `export_snapshot.sections[*]` 形状固定为
+  `{index, raw_title, title, included, body}`（envelope 0.8.0）；`_pick_section_data` 对未识别段返回
+  `None`，绝不兜底整份 `response_data`（v0.36.0：qimen 5 MB / india_chart 101 MB 的来历）。守卫：
+  `tests/test_response_budget.py`（引擎对象恰出现一次 + 信封字节按内容封顶）——加段/加数据键前先跑它。
 - **`run_tool` always returns a `ToolEnvelope`, never lets an unexpected exception escape.** Tool
   execution + snapshot/summary/export post-processing run inside a try that catches `HorosaSkillError`
   **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`. Only invalid-payload

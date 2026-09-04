@@ -447,6 +447,26 @@ def check_frontmatter() -> None:
             err(f"skills/horosa-agent/SKILL.md: metadata.version {m.group(1)} != package {pkg_version}")
 
 
+def check_envelope_schema_version() -> None:
+    """docs/DATA_CONTRACTS.md 的「tool envelope：`X`」必须等于 `schemas/common.py::TOOL_ENVELOPE_SCHEMA_VERSION`。
+    common.py 的注释一直宣称本脚本核对它，实际从未有此检查——文档停在 0.6.3、代码走到 0.7.0 两个版本无人察觉
+    （v0.36.0 升 0.8.0 时才发现）。"""
+    from horosa_skill.schemas.common import TOOL_ENVELOPE_SCHEMA_VERSION
+
+    path = ROOT / "docs" / "DATA_CONTRACTS.md"
+    if not path.exists():
+        err("docs/DATA_CONTRACTS.md missing (tool envelope version has no documented home)")
+        return
+    match = re.search(r"tool envelope[：:]\s*`([0-9.]+)`", read(path))
+    if not match:
+        err("docs/DATA_CONTRACTS.md: 「tool envelope：`X`」版本行未找到（pattern drifted?）")
+    elif match.group(1) != TOOL_ENVELOPE_SCHEMA_VERSION:
+        err(
+            f"docs/DATA_CONTRACTS.md: tool envelope {match.group(1)} != "
+            f"schemas/common.py TOOL_ENVELOPE_SCHEMA_VERSION {TOOL_ENVELOPE_SCHEMA_VERSION}"
+        )
+
+
 def main() -> None:
     version = expected_version()
     check_versions(version)
@@ -457,6 +477,7 @@ def main() -> None:
     check_links()
     check_conflict_markers()
     check_frontmatter()
+    check_envelope_schema_version()
     if ERRORS:
         raise SystemExit("docs-sync: FAIL\n- " + "\n- ".join(ERRORS))
     print(f"docs-sync: ok (version {version}, {len(TOOL_DEFINITIONS)} tools, "

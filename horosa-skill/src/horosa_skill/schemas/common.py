@@ -25,7 +25,10 @@ class MemoryRef(BaseModel):
 # v0.7.0（v0.27.0）：每个技法响应的 `data` 里恒定多一个 `technique_card`（技法依据卡：算源 / 口径 /
 #   段落健康度 / 版本链）。加键是向后兼容的，但下游可以据此**依赖**它存在，所以要升次版本号。
 # 以前这个数字只活在文档里、没人能对它做断言；现在它是常量，verify_docs_sync 逐字核对两边一致。
-TOOL_ENVELOPE_SCHEMA_VERSION = "0.7.0"
+# v0.8.0（v0.36.0）：`export_snapshot.sections[*]` **不再带 `data` 键**——此前每段都复制整份引擎对象
+#   （qimen 5 MB / india_chart 101 MB，正文仅几 KB）。引擎对象只在 `data.<key>`（pan/chart/liureng…）
+#   出现一次；段形状固定为 {index, raw_title, title, included, body}。删键是破坏性变更 → 升次版本号。
+TOOL_ENVELOPE_SCHEMA_VERSION = "0.8.0"
 
 
 class ToolEnvelope(BaseModel):

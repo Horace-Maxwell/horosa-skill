@@ -42,7 +42,7 @@ horosa_cn_qimen {date, time, zone:"+08:00", lat:"31n13", lon:"121e28", agent_con
 horosa_report_render {run_id, tool_name:"qimen", format:"docx", ai_report:{executive_summary, answer_text, analysis_sections, recommendations, limitations}}
 ```
 
-省 token：技法工具可传 `response_view:"titles"`（只回段标题）或 `"sections"`；完整快照始终已存档（`horosa_memory_show(run_id)` 取回）。注意 `horosa_report_from_tool` 会重新起盘——已有 run_id 用 `report_render`。
+省 token：技法工具可传 `response_view:"titles"`（只回段标题）或 `"sections"`；完整快照始终已存档（`horosa_memory_show(run_id)` 取回）。`export_snapshot.sections[*]` 只含 `body`；机读数据在 `data.<key>`（`data.pan` / `data.chart` / `data.liureng` …）只出现一次，别去段里找。注意 `horosa_report_from_tool` 会重新起盘——已有 run_id 用 `report_render`。
 
 **每次给出结论后，把 `data.technique_card` 原样转述成一段技法尾注**（技法 / 口径 / 算源 / 段落 / 版本）——
 它是确定性元数据，`response_view` 精简时也在。要文件就调 `horosa_technique_report`（`run_id` 单次、
