@@ -28,6 +28,9 @@ import { buildTiebanFramework } from '../src/vendor/tieban/tiebanFrameworkLocal.
 import { computeQimenScanPan, buildQimenScanSeeds } from '../src/vendor/divination/zeri/qimenScanEngine.js';
 import { buildLocalBaziResult } from '../src/vendor/bazi/baziLunarLocal.js';
 import { runCanping } from '../src/tools/canping.js';
+import { runHeluo } from '../src/tools/heluo.js';
+import { runYizhangjing } from '../src/tools/yizhangjing.js';
+import { runTongSheFa } from '../src/tools/tongshefa.js';
 import { personBazi } from '../src/vendor/calendar/riziEngine.js';
 import { runZeriScan, ZERI_TECHNIQUES } from '../src/tools/zeriScan.js';
 
@@ -273,6 +276,65 @@ check('calendarExtras 当事人时辰真的进盘（time 只喂时刻）', () =>
   // 负向对照：把旧的整串形状喂回去，两个时辰会重新塌成同一盘（bug 复现）。
   const old = (clock) => JSON.stringify(personBazi({ date: '1990-05-15', time: `1990-05-15 ${clock}`, gender: 1 }).xi);
   assert(old('03:00:00') === old('21:00:00'), '旧整串形状本应塌盘，负向对照失效说明引擎已改口径');
+});
+
+// ---- v0.36.0 A4 半成品收官：三个「引擎已就绪、旋钮未接」的工具各加**能翻转**的值金标（改参数结果必变 + 负向对照）----
+check('heluo liunianStep2/ziShuMode 走到引擎：2 岁流年 应爻法≠逐爻上行；写错键名不得翻转；立春前生者干支年基准', () => {
+  const base = { date: '2026-02-17', time: '21:50:07', zone: '+08:00', lon: '120e00', gender: 1, timeAlg: 1 };
+  const ying = runHeluo(base);
+  const seq = runHeluo({ ...base, liunianStep2: 'sequential' });
+  assert(ying.input_normalized.liunianStep2 === 'ying' && seq.input_normalized.liunianStep2 === 'sequential', 'liunianStep2 must be echoed');
+  const row = (r) => r.snapshot_text.split('\n').find((l) => l.startsWith('| 2岁 |')) || '';
+  // 权威：vendored heluoLocal.js liuNian() —— 'ying' 应爻法★（opts.step2 默认，line 244）/ 'sequential' 逐爻上行
+  // （line 262），与桌面 HeLuoMain 同一引擎；先天火風鼎的 2 岁流年：应爻法落 雷風恆·上六，逐爻上行落 山風蠱·六四。
+  assert(row(ying).includes('雷風恆') && row(ying).includes('上六'), `ying 2岁 row: ${row(ying)}`);
+  assert(row(seq).includes('山風蠱') && row(seq).includes('六四'), `sequential 2岁 row: ${row(seq)}`);
+  // 负向对照：旋钮名写成 step2（v0.35 的死键）必须**不**翻转——死键就是这样溜过去的。
+  const dead = runHeluo({ ...base, step2: 'sequential' });
+  assert(row(dead) === row(ying), 'unknown knob name must not change the result');
+  // ziShuMode 'single'（heluoLocal.js line 146 每支阴阳取一数）改取数 → 天地数/先天卦必变：pair 火風鼎 19/44 → single 山風蠱 18/24
+  const single = runHeluo({ ...base, ziShuMode: 'single' });
+  assert(ying.data.chart.xian.name === '火風鼎' && ying.data.chart.tian === 19 && ying.data.chart.di === 44, 'pair baseline');
+  assert(single.data.chart.xian.name === '山風蠱' && single.data.chart.tian === 18 && single.data.chart.di === 24, `single: ${single.data.chart.xian.name} ${single.data.chart.tian}/${single.data.chart.di}`);
+  // 流年年基准 = 干支年（vendor/utils/ganzhiYearBase.js）：2026-02-03 在立春（2026-02-04）前，年柱乙巳 → 基准 2025
+  const pre = runHeluo({ ...base, date: '2026-02-03' });
+  assert(pre.data.fourPillars.year === '乙巳' && pre.data.birthYear === 2025 && ying.data.birthYear === 2026, `birthYear: ${pre.data.birthYear}/${ying.data.birthYear}`);
+});
+
+check('yizhangjing gradeSet/leapRule 走到引擎：天驛 中品→下品；闰二月十五 00:xx 夜半折半作下月；23:xx 不作', () => {
+  const base = { date: '1998-02-20', time: '20:48:00', zone: '+08:00', lat: '31n13', lon: '121e28', gender: 1 };
+  const std = runYizhangjing(base);
+  const variant = runYizhangjing({ ...base, gradeSet: 'variant' });
+  const cell = (r) => r.data.renshi.find((row) => row.palace === '迁移');
+  // 权威：vendored yizhangjingReport.js gradeOf(star, gradeSet) 两套品级表（标准表 天驛=中品，变体表 天驛=下品）
+  assert(cell(std).star === '天驛' && cell(std).grade === '中品', `standard: ${JSON.stringify(cell(std))}`);
+  assert(cell(variant).star === '天驛' && cell(variant).grade === '下品', `variant: ${JSON.stringify(cell(variant))}`);
+  assert(std.data.opts.gradeSet === 'standard' && variant.data.opts.gradeSet === 'variant', 'gradeSet must be echoed in opts');
+  // 权威：yizhangjingReport.js 闰月归属分支——leapRule='midnight' && 十五 && 生时子且 00:xx → 作下月。
+  // 2023-04-05 = 闰二月十五；十五折半★作本月（month 2），夜半折半作下月（month 3）。
+  const leap = { ...base, date: '2023-04-05', time: '00:30:00' };
+  const half = runYizhangjing(leap);
+  const midnight = runYizhangjing({ ...leap, leapRule: 'midnight' });
+  assert(half.data.input.leap === true && half.data.input.day === 15 && half.data.input.month === 2, `half: ${JSON.stringify(half.data.input)}`);
+  assert(midnight.data.input.month === 3 && midnight.data.input.monthNote === '闰月·十五夜半(晚子)作下月', `midnight: ${JSON.stringify(midnight.data.input)}`);
+  // 负向对照：23:30 不满足引擎的 00:xx 条件，夜半折半不得作下月
+  const notLate = runYizhangjing({ ...leap, time: '23:30:00', leapRule: 'midnight' });
+  assert(notLate.data.input.month === 2, `23:30 must stay month 2: ${JSON.stringify(notLate.data.input)}`);
+});
+
+check('tongshefa 纳甲逐爻/世应/左右爻变入 data：风雷益 子寅辰未巳卯、世三应六、益→晋 变在 1/4/5 爻', () => {
+  const r = runTongSheFa({ taiyin: '巽', taiyang: '离', shaoyang: '震', shaoyin: '坤' });
+  assert(r.data.baseLeft.name === '风雷益' && r.data.baseRight.name === '火地晋', 'fixture pair');
+  // 权威：京房纳甲（震内卦 子寅辰、巽外卦 未巳卯）+ 巽宫木六亲生克（水父母/木兄弟/土妻财/火子孙）+ 益为巽宫三世卦（世三应六）
+  const branches = r.data.leftLines.map((l) => l.branch).join('');
+  const kin = r.data.leftLines.map((l) => l.kin).join('/');
+  assert(branches === '子寅辰未巳卯', `branches: ${branches}`);
+  assert(kin === '父母/兄弟/妻财/妻财/子孙/兄弟', `kin: ${kin}`);
+  assert(r.data.leftLines[2].shiYing === '世' && r.data.leftLines[5].shiYing === '应', 'shi/ying');
+  assert(r.data.main_relation === '实克思' && r.data.main_relation_label === '实践改造思想', `label: ${r.data.main_relation_label}`);
+  // 益 (自下 1,0,0,0,1,1) vs 晋 (0,0,0,1,0,1) → 变在 1/4/5 爻
+  const changed = r.data.yaoChanges.filter((y) => y.changed).map((y) => y.line).sort((a, b) => a - b).join(',');
+  assert(changed === '1,4,5', `changed lines: ${changed}`);
 });
 
 check('canping 起运岁走农历真源，不再恒 1 岁', async () => {

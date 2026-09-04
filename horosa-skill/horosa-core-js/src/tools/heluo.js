@@ -13,6 +13,7 @@
 import { Solar } from 'lunar-javascript';
 import { buildLocalBaziResult } from '../vendor/bazi/baziLunarLocal.js';
 import calc, { daYun, judge, buildSnapshotText, solarTermHuagong } from '../vendor/heluo/heluoLocal.js';
+import { ganzhiYearBase } from '../vendor/utils/ganzhiYearBase.js';
 
 // 四立 — 土用 window markers, mirrored from HeLuoMain.js.
 const LI_TERMS = ['立春', '立夏', '立秋', '立冬'];
@@ -110,12 +111,26 @@ export function runHeluo(payload) {
 
   const monthZhi = fourPillars.month.charAt(1);
   const hourZhi = fourPillars.hour.charAt(1);
-  const birthYear = parseInt(`${date}`.slice(0, 4), 10) || 0;
+  // 2026-09-04：第 N 岁流年以干支年为基准（桌面 HeLuoMain/ganzhiYearBase 同修；立春前生者此前错一位）
+  const birthYear = ganzhiYearBase(parseInt(`${date}`.slice(0, 4), 10) || 0, fourPillars.year);
   const gender = bazi.gender === 'Female' ? '女' : '男';
 
+  // 取法四轴 + 阳令手定（缺省与 vendor calculate() 内建默认逐字相同 → 不给即字节不变）
+  const hlOpts = {
+    ziShuMode: input.ziShuMode === 'single' ? 'single' : 'pair',
+    jiGongMode: input.jiGongMode === 'legacy' ? 'legacy' : 'manualSanYuan',
+    zhiZunEnabled: !(input.zhiZunEnabled === false || input.zhiZunEnabled === 0 || input.zhiZunEnabled === 'false' || input.zhiZunEnabled === '0'),
+    pureGanKunVariant: input.pureGanKunVariant === 'alt' ? 'alt' : 'current',
+    // 键名必须是 liunianStep2：buildSnapshotText 读 snapOpts.liunianStep2 再转成 liuNian 的 step2；
+    // 此前发 step2 → 引擎永远走默认应爻法（同模块另一函数恰有 step2 参数，子串式边界契约看不见这条死键）。
+    liunianStep2: input.liunianStep2 === 'sequential' ? 'sequential' : 'ying',
+  };
+  const monthYangLing = (input.monthYangLing === undefined || input.monthYangLing === null || input.monthYangLing === '')
+    ? undefined
+    : (input.monthYangLing === true || input.monthYangLing === 1 || input.monthYangLing === 'yang' || input.monthYangLing === '1' || input.monthYangLing === 'true');
   let chart;
   try {
-    chart = calc({ fourPillars, gender, hourZhi, birthYear, monthZhi });
+    chart = calc({ fourPillars, gender, hourZhi, birthYear, monthZhi, monthYangLing, opts: hlOpts });
   } catch (error) {
     return insufficient(normalized, 'heluo_calc_failed', error instanceof Error ? error.message : `${error}`);
   }
@@ -137,6 +152,8 @@ export function runHeluo(payload) {
       fourPillars,
       monthZhi,
       hourZhi,
+      ...hlOpts,
+      ...(monthYangLing === undefined ? {} : { monthYangLing }),
     },
     data: {
       gender,
@@ -149,6 +166,7 @@ export function runHeluo(payload) {
       judge: jg,
       solarTerm: st,
     },
-    snapshot_text: buildSnapshotText(chart, jg, dy),
+    // extra 带 opts/monthZhi：流年分歧口径随取法走，且 [断验] 的时令/先后天卦气三行由 monthZhi→SEASON 救活
+    snapshot_text: buildSnapshotText(chart, jg, dy, { opts: hlOpts, monthZhi, birthYear }),
   };
 }

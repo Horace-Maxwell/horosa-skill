@@ -98,6 +98,24 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.36.0 / 2026-09-04 — 河洛流年法旋钮发成死键 `step2`：边界契约看不见，issue #15 同型再现
+
+- **症状**：`tools/heluo.js` 把 `liunianStep2` 装进 `opts.step2`，而引擎 `buildSnapshotText` 读的是
+  `snapOpts.liunianStep2`（再转成 `liuNian` 的 `step2`）——`liunianStep2:'sequential'` 传了等于没传，
+  流年永远应爻法。半成品里同批的 yizhangjing `leapRule/gradeSet`、tongshefa 纳甲逐爻也都是「引擎接好、
+  schema 没声明、金标没有」。
+- **根因**：两层盲区叠加。① 边界契约生成器的 import 正则只认 `import { a } from`，`import calc, { … } from`
+  的**默认导入**整个不进契约，`calc(...)`/`buildSnapshotText(...)` 两处边界根本没被记录；② 就算记录了，
+  verifier 的 oracle 是「键名出现在被调模块源码里」——同模块另一函数 `liuNian` 恰有参数 `step2`，子串命中，
+  死键照样绿。契约能抓的是「模块里根本没有这个词」的死键，抓不住「词在、但不是这个函数读」的死键。
+- **guard**：生成器补默认导入 + `opts: localLiteral` 嵌套展开（`nested_under`）+ 成员访问 `x.year` 不当整对象
+  （否则误报）；真正的守卫是 **能翻转的值金标**：selfcheck 三条——heluo `liunianStep2`（2 岁流年 雷風恆·上六 →
+  山風蠱·六四，且写错键名 `step2` 必须**不**翻）、`ziShuMode`、立春前干支年基准；yizhangjing `gradeSet`
+  （天驛 中品→下品）、`leapRule`（闰二月十五 00:xx 作下月，23:xx 不作）；tongshefa 纳甲六爻/世应/爻变。
+  Python 面同型三条；`value_golden_debt` 24→21。
+- **法则**：**声明一个旋钮 = 交付一条「改它结果必变」的金标 + 一条「写错名结果不变」的负向对照**；子串式
+  静态契约只能当第一道网，不能替代翻转测试。
+
 ### v0.36.0 / 2026-09-04 — 六壬工具手抄了 24 张 LRConst 表：vendor 修了、金标绿了、消费点还是旧值
 
 - **症状**：v0.35.0 修正 vendored `LRConst.ZiLiuQin` 乙日巳/午→子孙并加了 120 格逐格金标，CI 全绿；但

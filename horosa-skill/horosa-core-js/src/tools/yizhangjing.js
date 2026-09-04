@@ -10,6 +10,27 @@ import {
   buildYizhangjingModel,
   buildYizhangjingSnapshotText,
 } from '../vendor/yizhangjing/yizhangjingReport.js';
+import { BRANCHES, mod12, xiaoxianStarAtDir, xunShenAt } from '../vendor/yizhangjing/yizhangjingLocal.js';
+
+// 小限（一宫一年，1–120 岁逐年落宫）与流年十二神（流年支 × 宫支 12×12 全表）：
+// 此前两者只进快照文本，网页拿不到结构化值——小限起宫/十二神传本等口径轴改了盘面零反馈。
+function buildXiaoxianRows(c, model) {
+  const dir = model.xiaoDir === 'always' ? 1 : c.dir;
+  const rows = [];
+  for (let age = 1; age <= 120; age++) {
+    const idx = mod12(c.xiaoStartIdx + dir * (age - 1));
+    rows.push({ age, branch: BRANCHES[idx], star: xiaoxianStarAtDir(c.xiaoStartIdx, c.dir, age, model.xiaoDir) });
+  }
+  return { start: c.xiaoStartLabel || '日柱宫', dir: model.xiaoDir === 'always' ? '一律顺行' : (c.dir === 1 ? '随盘顺行' : '随盘逆行'), rows };
+}
+function buildFlowShenTable(c) {
+  const set = (c.opts && c.opts.flowSet) || 'A';
+  return {
+    set,
+    natalYearBranch: (c.input && c.input.yearBranch) || null,
+    table: BRANCHES.map((yearBranch, fi) => ({ yearBranch, shen: BRANCHES.map((_, ti) => xunShenAt(fi, ti, set)) })),
+  };
+}
 
 function insufficient(normalized, reason, message) {
   return {
@@ -42,6 +63,9 @@ export function runYizhangjing(payload) {
     zaoZiAdjust: !!input.zaoZiAdjust,
     chongfanKou: input.chongfanKou === 'beta' ? 'beta' : 'alpha',
     shenshaLayer: input.shenshaLayer === undefined || input.shenshaLayer === null ? true : !!input.shenshaLayer,
+    // 折半法（十五折半/夜半折半）与品级变体：只在显式给出时进 opts（缺省字节不变）
+    ...(input.leapRule === 'midnight' ? { leapRule: 'midnight' } : {}),
+    ...(input.gradeSet === 'variant' ? { gradeSet: 'variant' } : {}),
   };
   const normalized = {
     date,
@@ -101,6 +125,8 @@ export function runYizhangjing(payload) {
       liunianZong: model.liunianZong,
       shenshaHits: model.shenshaHits,
       shenshaLayer: model.shenshaLayer,
+      xiaoxian: buildXiaoxianRows(c, model),
+      flowShen: buildFlowShenTable(c),
     },
     snapshot_text: snapshotText,
   };

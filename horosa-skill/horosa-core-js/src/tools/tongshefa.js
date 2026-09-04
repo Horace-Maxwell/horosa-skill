@@ -50,8 +50,14 @@ export function runTongSheFa(payload) {
       left_elem: model ? model.leftElem : null,
       right_elem: model ? model.rightElem : null,
       main_relation: model ? model.mainRelation : null,
+      // 体用关系人话（上游 MAIN_RELATION_LABEL：思克实=思想改造实践…）——此前只在快照文本里，网页 chip 裸出「思克实」
+      main_relation_label: model ? (model.mainRelationLabel || null) : null,
       left_house: model ? model.leftHouseLabel : null,
       right_house: model ? model.rightHouseLabel : null,
+      // 纳甲逐爻（地支/五行/世应）与左右爻变：网页纳甲表用
+      leftLines: model ? model.leftLines : null,
+      rightLines: model ? model.rightLines : null,
+      yaoChanges: model ? model.yaoChanges : null,
     },
     snapshot_text,
   };

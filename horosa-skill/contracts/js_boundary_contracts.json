@@ -161,7 +161,7 @@
       {
         "callee": "buildLocalBaziResult",
         "module": "../vendor/bazi/baziLunarLocal.js",
-        "line": 75,
+        "line": 76,
         "arg": 0,
         "via_local": "baziParams",
         "keys": [
@@ -178,7 +178,7 @@
       {
         "callee": "canpingCalculate",
         "module": "../vendor/canping/canpingLocal.js",
-        "line": 118,
+        "line": 120,
         "arg": 0,
         "via_local": "base",
         "keys": [
@@ -198,7 +198,7 @@
       {
         "callee": "liunianSeries",
         "module": "../vendor/canping/canpingLocal.js",
-        "line": 122,
+        "line": 124,
         "arg": 0,
         "keys": [
           "birthYear",
@@ -209,7 +209,7 @@
       {
         "callee": "buildSnapshotText",
         "module": "../vendor/canping/canpingLocal.js",
-        "line": 138,
+        "line": 140,
         "arg": 1,
         "keys": [
           "liunianRows"
@@ -310,7 +310,7 @@
       {
         "callee": "buildLocalBaziResult",
         "module": "../vendor/bazi/baziLunarLocal.js",
-        "line": 95,
+        "line": 96,
         "arg": 0,
         "via_local": "baziParams",
         "keys": [
@@ -322,6 +322,75 @@
           "time",
           "timeAlg",
           "zone"
+        ]
+      },
+      {
+        "callee": "calc",
+        "module": "../vendor/heluo/heluoLocal.js",
+        "line": 133,
+        "arg": 0,
+        "keys": [
+          "birthYear",
+          "fourPillars",
+          "gender",
+          "hourZhi",
+          "monthYangLing",
+          "monthZhi",
+          "opts"
+        ]
+      },
+      {
+        "callee": "calc",
+        "module": "../vendor/heluo/heluoLocal.js",
+        "line": 133,
+        "arg": 0,
+        "nested_under": "opts",
+        "via_local": "hlOpts",
+        "keys": [
+          "jiGongMode",
+          "liunianStep2",
+          "pureGanKunVariant",
+          "zhiZunEnabled",
+          "ziShuMode"
+        ]
+      },
+      {
+        "callee": "judge",
+        "module": "../vendor/heluo/heluoLocal.js",
+        "line": 143,
+        "arg": 1,
+        "via_local": "fourPillars",
+        "keys": [
+          "day",
+          "hour",
+          "month",
+          "year"
+        ]
+      },
+      {
+        "callee": "buildSnapshotText",
+        "module": "../vendor/heluo/heluoLocal.js",
+        "line": 170,
+        "arg": 3,
+        "keys": [
+          "birthYear",
+          "monthZhi",
+          "opts"
+        ]
+      },
+      {
+        "callee": "buildSnapshotText",
+        "module": "../vendor/heluo/heluoLocal.js",
+        "line": 170,
+        "arg": 3,
+        "nested_under": "opts",
+        "via_local": "hlOpts",
+        "keys": [
+          "jiGongMode",
+          "liunianStep2",
+          "pureGanKunVariant",
+          "zhiZunEnabled",
+          "ziShuMode"
         ]
       }
     ],
@@ -554,7 +623,7 @@
       {
         "callee": "buildLocalBaziResult",
         "module": "../vendor/bazi/baziLunarLocal.js",
-        "line": 62,
+        "line": 86,
         "arg": 0,
         "via_local": "baziParams",
         "keys": [
@@ -569,7 +638,7 @@
       {
         "callee": "buildYizhangjingModel",
         "module": "../vendor/yizhangjing/yizhangjingReport.js",
-        "line": 69,
+        "line": 93,
         "arg": 1,
         "via_local": "opts",
         "keys": [

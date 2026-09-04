@@ -11,6 +11,7 @@
 // 流年·歲運→流年 so the parsed sections match 星阙's declared aiExport contract ['起盘','本命','大运','流年'].
 import { buildLocalBaziResult } from '../vendor/bazi/baziLunarLocal.js';
 import { calculate as canpingCalculate, liunianSeries, buildSnapshotText } from '../vendor/canping/canpingLocal.js';
+import { ganzhiYearBase } from '../vendor/utils/ganzhiYearBase.js';
 
 const METHODS = new Set(['ming', 'gu']);
 
@@ -87,7 +88,8 @@ export function runCanping(payload) {
   }
 
   const gender = bazi.gender === 'Female' ? '女' : '男';
-  const birthYear = parseInt(`${date}`.slice(0, 4), 10) || 0;
+  // 2026-09-04：第 N 岁流年以干支年为基准（桌面 HeLuoMain/ganzhiYearBase 同修；立春前生者此前错一位）
+  const birthYear = ganzhiYearBase(parseInt(`${date}`.slice(0, 4), 10) || 0, yearGz);
   // 🔴 lunarMonth/lunarDay/baziYun 必须转发：引擎默认 dayunRule='mingGongQiyun' → 走
   // qiyunFromLunarDate(lunarMonth, lunarDay)，两者缺省为 0 时守卫判非法 → 起运岁回落 1
   // （canpingLocal.js:113/185）。于是九个大运区间整体平移，liunianSeries 又按

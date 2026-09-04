@@ -8,6 +8,7 @@
     "feigong",
     "guice",
     "guolaoMoira",
+    "heluo",
     "horary",
     "lingqi",
     "liureng",
@@ -16,8 +17,10 @@
     "qizhengElection",
     "tianxing",
     "tiebanFramework",
+    "tongshefa",
     "xiaochengtu",
     "xiaoliuren",
+    "yizhangjing",
     "zeriScan",
     "zhengchuan"
   ],
@@ -28,7 +31,6 @@
     "classicalDerived",
     "egyptSection",
     "guolaoStarDignity",
-    "heluo",
     "huangli",
     "indiaJyotish",
     "jinkou",
@@ -40,11 +42,9 @@
     "sanshiZiweiSihua",
     "taiyi",
     "tarot",
-    "tongshefa",
     "tongshu",
     "uranianExtra",
     "yanqinYanfa",
-    "yizhangjing",
     "ziweiExtras"
   ]
 }

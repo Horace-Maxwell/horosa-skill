@@ -1697,3 +1697,51 @@ def test_lingqi_is_deterministic_per_query_moment_and_honours_frozen_counts(tmp_
     frozen = service.run_tool("lingqi", {**payload, "counts": [4, 0, 2]}, save_result=False)
     assert frozen.data["counts"] == [4, 0, 2], "冻结卦必须原样复排"
     assert frozen.data["snapshot_text"] != first.data["snapshot_text"]
+
+
+# ---- v0.36.0 A4：半成品收官——schema 声明的旋钮必须真的改变结果（值金标在 selfcheck.mjs，这里守 Python 面）----
+def test_heluo_liunian_step2_and_zishu_mode_reach_engine(tmp_path) -> None:
+    service = make_service(tmp_path)
+    base = {"date": "2026-02-17", "time": "21:50:07", "zone": "+08:00", "lon": "120e00", "gender": 1, "timeAlg": 1}
+    ying = service.run_tool("heluo", base, save_result=False)
+    seq = service.run_tool("heluo", {**base, "liunianStep2": "sequential"}, save_result=False)
+    assert ying.ok and seq.ok, (ying.error, seq.error)
+
+    def row(result):
+        return next(line for line in result.data["snapshot_text"].splitlines() if line.startswith("| 2岁 |"))
+
+    assert "雷風恆" in row(ying) and "山風蠱" in row(seq)
+    # 此前 tools/heluo.js 发的是死键 step2 → 引擎永远应爻法：同名错键现在必须仍不生效（负向对照）
+    dead = service.run_tool("heluo", {**base, "step2": "sequential"}, save_result=False)
+    assert row(dead) == row(ying)
+    single = service.run_tool("heluo", {**base, "ziShuMode": "single"}, save_result=False)
+    assert single.data["heluo"]["chart"]["xian"]["name"] == "山風蠱"
+    assert ying.data["heluo"]["chart"]["xian"]["name"] == "火風鼎"
+
+
+def test_yizhangjing_grade_set_and_leap_rule_reach_engine(tmp_path) -> None:
+    service = make_service(tmp_path)
+    base = {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gender": 1}
+    std = service.run_tool("yizhangjing", base, save_result=False)
+    variant = service.run_tool("yizhangjing", {**base, "gradeSet": "variant"}, save_result=False)
+    assert std.ok and variant.ok, (std.error, variant.error)
+    cell = lambda result: next(r for r in result.data["yizhangjing"]["renshi"] if r["palace"] == "迁移")  # noqa: E731
+    assert cell(std)["grade"] == "中品" and cell(variant)["grade"] == "下品"
+    leap = {**base, "date": "2023-04-05", "time": "00:30:00"}  # 闰二月十五 00:30
+    half = service.run_tool("yizhangjing", leap, save_result=False)
+    midnight = service.run_tool("yizhangjing", {**leap, "leapRule": "midnight"}, save_result=False)
+    assert half.data["yizhangjing"]["input"]["month"] == 2
+    assert midnight.data["yizhangjing"]["input"]["month"] == 3
+
+
+def test_tongshefa_exposes_najia_lines_and_yao_changes(tmp_path) -> None:
+    service = make_service(tmp_path)
+    result = service.run_tool(
+        "tongshefa", {"taiyin": "巽", "taiyang": "离", "shaoyang": "震", "shaoyin": "坤"}, save_result=False
+    )
+    assert result.ok, result.error
+    data = result.data["tongshefa"]
+    assert "".join(line["branch"] for line in data["leftLines"]) == "子寅辰未巳卯"
+    assert data["leftLines"][2]["shiYing"] == "世" and data["leftLines"][5]["shiYing"] == "应"
+    assert [y["line"] for y in data["yaoChanges"] if y["changed"]] == [5, 4, 1]
+    assert data["main_relation_label"] == "实践改造思想"

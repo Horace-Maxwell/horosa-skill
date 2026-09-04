@@ -695,6 +695,14 @@ class HeLuoInput(FlexibleModel):
     # 晚子时双开关（仅 hour==23 生效，见 references/late-zi.md）：缺省不传 → 上游默认口径。
     after23NewDay: int | None = None
     lateZiHourUseNextDay: int | None = None
+    # 取法分歧四轴 + 流年法 + 阳令手定（缺省 = 引擎内建默认，逐字零回归；口径见 vendor/heluo/heluoLocal.js
+    # 顶部【分歧参数】注释）。v0.36.0：此前 tools/heluo.js 把流年法发成死键 step2，引擎永远走应爻法。
+    ziShuMode: str | None = None  # 'pair'★ 成对全取 | 'single' 每支阴阳取一数（实验）
+    jiGongMode: str | None = None  # 'manualSanYuan'★ 三元表 | 'legacy'
+    zhiZunEnabled: bool | int | str | None = None  # 三至尊卦（默认启用）
+    pureGanKunVariant: str | None = None  # 'current'★ | 'alt' 纯卦乾坤落爻反向（抄本异·待核）
+    liunianStep2: str | None = None  # 'ying'★ 应爻法 | 'sequential' 逐爻上行
+    monthYangLing: bool | int | str | None = None  # 阳令手定；缺省按月支推
 
 
 class YizhangjingInput(FlexibleModel):
@@ -719,6 +727,9 @@ class YizhangjingInput(FlexibleModel):
     zaoZiAdjust: bool | None = False
     chongfanKou: str | None = "alpha"
     shenshaLayer: bool | None = True
+    # 折半法与品级变体（缺省字节不变；vendor/yizhangjing/yizhangjingReport.js）：
+    leapRule: str | None = None  # 'half'★ 十五折半 | 'midnight' 夜半折半（十五日晚子时作下月）
+    gradeSet: str | None = None  # 'standard'★ | 'variant' 品级变体表
 
 
 class XiaoLiuRenInput(FlexibleModel):

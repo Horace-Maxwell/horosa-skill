@@ -36,10 +36,14 @@ CONTRACT = PKG_ROOT / "contracts" / "js_boundary_contracts.json"
 
 # `import { a, b as c } from '../vendor/x/y.js'` — only vendor imports matter; tool-to-tool calls
 # are skill-authored on both ends and move together.
+# `import calc, { daYun } from '../vendor/heluo/heluoLocal.js'` — the default import is a call target
+# too. Until v0.36.0 this regex only matched the braces form, so heluo.js's `calc(...)` and
+# `buildSnapshotText(...)` boundaries (where the `step2`/`liunianStep2` dead key lived) were invisible.
 _IMPORT_RE = re.compile(
-    r"import\s*\{([^}]*)\}\s*from\s*'(\.\./vendor/[^']+)'",
+    r"import\s*(?:([A-Za-z_$][\w$]*)\s*,\s*)?\{([^}]*)\}\s*from\s*'(\.\./vendor/[^']+)'",
     re.MULTILINE,
 )
+_DEFAULT_IMPORT_RE = re.compile(r"import\s+([A-Za-z_$][\w$]*)\s+from\s*'(\.\./vendor/[^']+)'")
 
 # A call to an imported engine function. Object literals are collected from **every** argument
 # position, not just the first: `buildTiebanFramework(fp, { ke, birthYear })` puts the hand-written
@@ -145,6 +149,26 @@ def _top_level_keys(blank_body: str) -> list[str]:
 
 _IDENT_RE = re.compile(r"[A-Za-z_$][\w$]*")
 
+# `opts: hlOpts` at depth 1 of an object-literal argument: the nested key set lives in a local literal
+# one hop away. Recorded as its own site (`nested_under`) so the verifier checks those keys too.
+_IDENT_VALUE_RE = re.compile(r"(?:^|[,{])\s*([\w$]+)\s*:\s*([A-Za-z_$][\w$]*)\s*(?=[,}])")
+
+
+def _top_level_ident_values(blank_body: str) -> list[tuple[str, str]]:
+    depth = 0
+    buf: list[str] = []
+    for ch in blank_body:
+        if ch in "{[(":
+            depth += 1
+            if depth == 1:
+                continue
+        elif ch in "}])":
+            depth -= 1
+            if depth == 0:
+                break
+        buf.append(ch if depth == 1 else " ")
+    return [(m.group(1), m.group(2)) for m in _IDENT_VALUE_RE.finditer("{" + "".join(buf) + "}")]
+
 
 def _local_literal_keys(blank: str, name: str) -> list[str]:
     """Keys of the most recent `const <name> = { … }` in this file, or [] if there is none."""
@@ -176,8 +200,12 @@ def _match_parens(blank: str, open_idx: int) -> int | None:
 def _imports(src: str) -> dict[str, str]:
     """local name -> vendor module path (repo-relative from horosa-core-js/src/tools/)."""
     mapping: dict[str, str] = {}
+    for m in _DEFAULT_IMPORT_RE.finditer(src):
+        mapping[m.group(1)] = m.group(2)
     for m in _IMPORT_RE.finditer(src):
-        names, module = m.group(1), m.group(2)
+        default_name, names, module = m.group(1), m.group(2), m.group(3)
+        if default_name:
+            mapping[default_name] = module
         for part in names.split(","):
             part = part.strip()
             if not part:
@@ -215,7 +243,10 @@ def collect(tool_path: Path) -> list[dict[str, Any]]:
             elif ch not in " \t\n," and depth == 0 and blank[i:i + 1].isidentifier() and _IDENT_RE.match(blank, i):
                 im = _IDENT_RE.match(blank, i)
                 name = im.group(0)
-                lit = _local_literal_keys(blank, name)
+                # `fourPillars.year` / `opts[key]` passes one member, not the literal — resolving the
+                # whole object here would report its other keys as dead (heluo.js ganzhiYearBase()).
+                is_member = blank[im.end():im.end() + 1] in (".", "[")
+                lit = [] if is_member else _local_literal_keys(blank, name)
                 if lit:
                     sites.append(
                         {
@@ -244,6 +275,20 @@ def collect(tool_path: Path) -> list[dict[str, Any]]:
                             "keys": sorted(keys),
                         }
                     )
+                for nested_key, ident in _top_level_ident_values(blank[i:close]):
+                    lit = _local_literal_keys(blank, ident)
+                    if lit:
+                        sites.append(
+                            {
+                                "callee": fn,
+                                "module": imported[fn],
+                                "line": src[: m.start()].count("\n") + 1,
+                                "arg": arg_index,
+                                "nested_under": nested_key,
+                                "via_local": ident,
+                                "keys": sorted(lit),
+                            }
+                        )
                 i = close
                 continue
             i += 1
