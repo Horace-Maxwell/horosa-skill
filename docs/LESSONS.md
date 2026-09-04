@@ -98,6 +98,25 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.36.0 / 2026-09-04 — 35 处「优雅降级」只写日志：ok=True、warnings=[]、少 10 段
+
+- **症状**：真实奇门存档 `missing_selected_sections` 10/17 而 `warnings: []`；agent 把「少了十段」当完整结果
+  写报告。`service.py` 35 处 `logger.warning("X failed: %s", exc)` 只有 2 处把说明推进 `_warnings`
+  （v0.33.1 修 issue #15 时只补了八字格局/多运限两处），其余 33 处——奇门年干、七政庙旺、天王附注、
+  世运子盘、印度分盘、月历附注……——失败即消失。MCP elicitation 更彻底：`except Exception: return None`，
+  表单崩了和「客户端不支持表单」在 agent 眼里一模一样。
+- **根因**：降级点各自为政——每处 except 里的返回值形状不同（dict/文本/None/continue），把说明「带回」
+  信封要改每一处的返回路径，于是都只写了日志；同一层的 `_warnings` 出信封管道只有直接持有
+  `response_data` 的两处能用。「优雅降级」被当成了「不炸就行」。
+- **guard**：`_degrade(fmt, *args[, note=])` + `contextvars` 收集器（`_degrade_collector`，`run_tool` 作用域，
+  嵌套调用冒泡到外层）——不管 except 里返回什么，说明都进 `envelope.warnings`；预设段缺席自动生成
+  「结果不完整：预设 N 段中 M 段未产出（…）」进 warnings + summary，dispatch 汇总一行；
+  `scripts/verify_silent_degrades.py` 棘轮包内裸 `logger.warning(` 计数（基线 **0**；启动期通知改
+  `logger.log(WARNING)` 并注明「无调用方可告知」）；elicitation 拆纯函数
+  `_apply_gate_decision`，七种出口各写 `details.elicitation.status`，首批 9 条离线测试。
+- **法则**：**降级的定义是「调用方知道少了什么」，不是「没报错」**；降级说明的出口要和返回值解耦（收集器），
+  否则每加一处富化就多一处静默。
+
 ### v0.36.0 / 2026-09-04 — 导出段 `data` 逐段整份复制：qimen 5 MB / india_chart 101 MB（正文仅几 KB）
 
 - **症状**：用户存档里一次奇门调用返回 5.07 MB，其中 `export_snapshot.sections` 1.55 MB、段正文合计

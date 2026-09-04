@@ -44,6 +44,10 @@ horosa_report_render {run_id, tool_name:"qimen", format:"docx", ai_report:{execu
 
 省 token：技法工具可传 `response_view:"titles"`（只回段标题）或 `"sections"`；完整快照始终已存档（`horosa_memory_show(run_id)` 取回）。`export_snapshot.sections[*]` 只含 `body`；机读数据在 `data.<key>`（`data.pan` / `data.chart` / `data.liureng` …）只出现一次，别去段里找。注意 `horosa_report_from_tool` 会重新起盘——已有 run_id 用 `report_render`。
 
+**`warnings` 非空 = 结果不完整**（`ok` 仍为 true）：「降级：…」是某个子引擎/可选后端本次失败、对应段缺席；
+「结果不完整：预设 N 段中 M 段未产出」列出缺了哪些段。报告里必须如实转述，不得把缺席的段当成「该技法没有此项」，
+也不得自行补算；dispatch 的 `warnings` 只汇总哪些工具带说明，细节在 `results.<tool>.warnings`。
+
 **每次给出结论后，把 `data.technique_card` 原样转述成一段技法尾注**（技法 / 口径 / 算源 / 段落 / 版本）——
 它是确定性元数据，`response_view` 精简时也在。要文件就调 `horosa_technique_report`（`run_id` 单次、
 `group_id` 整场，后者还会检出跨技法口径冲突）。细则与两种报告的分界：[`references/reports.md`](./references/reports.md)。

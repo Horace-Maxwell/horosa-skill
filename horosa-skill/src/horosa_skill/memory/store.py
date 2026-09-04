@@ -102,7 +102,9 @@ class MemoryStore:
                     src.replace(Path(f"{backup}{suffix}"))
                 except OSError as move_exc:  # 移不动（权限/占用）→ 如实上抛原始损坏错误
                     raise exc from move_exc
-        logger.warning(
+        # 建库期通知，没有工具调用可告知——不是降级点（verify_silent_degrades 只盯 logger.warning）。
+        logger.log(
+            logging.WARNING,
             "记忆库损坏（%s）——已隔离到 %s 并重建空库；历史快照仍在 runs/ 目录，可用 memory 工具重建索引。",
             exc,
             backup,

@@ -640,6 +640,11 @@ A global stability pass hardened these; keep them true when you touch the releva
   `{index, raw_title, title, included, body}`（envelope 0.8.0）；`_pick_section_data` 对未识别段返回
   `None`，绝不兜底整份 `response_data`（v0.36.0：qimen 5 MB / india_chart 101 MB 的来历）。守卫：
   `tests/test_response_budget.py`（引擎对象恰出现一次 + 信封字节按内容封顶）——加段/加数据键前先跑它。
+- **降级必须让调用方看见。** 富化/子引擎/可选后端失败一律 `_degrade(fmt, *args[, note=])`（日志 +
+  当前 `run_tool` 的收集器 → `envelope.warnings`，嵌套调用冒泡）；预设段缺席自动进 warnings + summary
+  （「结果不完整：预设 N 段中 M 段未产出」），dispatch 汇总一行。包内裸 `logger.warning(` 基线 **0**
+  （`scripts/verify_silent_degrades.py`；启动期通知用 `logger.log(WARNING)` 并注明无调用方）。MCP
+  elicitation 每个出口写 `details.elicitation.status`，纯函数 `_apply_gate_decision` 可离线测（v0.36.0）。
 - **`run_tool` always returns a `ToolEnvelope`, never lets an unexpected exception escape.** Tool
   execution + snapshot/summary/export post-processing run inside a try that catches `HorosaSkillError`
   **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`. Only invalid-payload

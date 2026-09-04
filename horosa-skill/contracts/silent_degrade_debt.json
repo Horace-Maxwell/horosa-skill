@@ -1,0 +1,5 @@
+{
+  "_comment": "Ratchet baseline for bare `logger.warning(` calls inside src/horosa_skill. A degrade site must call service._degrade(...) so the note reaches envelope.warnings; new bare warnings fail CI. Refresh with `uv run python scripts/verify_silent_degrades.py --update-baseline`.",
+  "total": 0,
+  "per_file": {}
+}

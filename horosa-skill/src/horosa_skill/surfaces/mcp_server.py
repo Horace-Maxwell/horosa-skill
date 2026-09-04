@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from inspect import Parameter, Signature
@@ -502,8 +503,49 @@ _ELICIT_PROVIDE = "我在对话里补充设置 (I will provide settings in chat)
 _ELICIT_CANCEL = "取消 (cancel)"
 
 
+logger = logging.getLogger(__name__)
+
+
 def _elicitation_enabled() -> bool:
     return os.environ.get("HOROSA_MCP_ELICIT", "1").strip().lower() not in {"0", "false", "off"}
+
+
+def _gate_elicitation_schema() -> type[BaseModel]:
+    """闸门表单：三选一 + 备注。单点可替换——B3 按 ask_if_missing 逐题生成字段时只改这里。"""
+    return create_model(
+        "HorosaGateDecision",
+        decision=(
+            Literal[_ELICIT_DEFAULTS, _ELICIT_PROVIDE, _ELICIT_CANCEL],  # type: ignore[valid-type]
+            _ELICIT_DEFAULTS,
+        ),
+        notes=(str, ""),
+    )
+
+
+def _note_elicitation(gate_error: dict[str, Any], status: str, **extra: Any) -> None:
+    """把 elicitation 的去向写进 details.elicitation：agent 看得到「问过没有、为什么没问成」。"""
+    details = gate_error.setdefault("details", {})
+    if isinstance(details, dict):
+        details["elicitation"] = {"status": status, **extra}
+
+
+def _apply_gate_decision(
+    payload: dict[str, Any], gate_error: dict[str, Any], decision: str, notes: str
+) -> dict[str, Any] | None:
+    """纯函数：把表单答案落到载荷（接受默认）或闸门错误（用户备注），不碰传输层，可离线测。"""
+    if decision == _ELICIT_DEFAULTS:
+        updated = dict(payload)
+        updated["defaults_accepted"] = True
+        note = "user accepted Xingque defaults via MCP elicitation form"
+        updated["clarification_notes"] = f"{note}; user notes: {notes}" if notes else note
+        return updated
+    if notes:
+        # 用户选了「补充设置」并给了备注：不代答具体参数，把原话带回给 agent 追问闭环。
+        gate_error.setdefault("details", {})["user_notes"] = notes
+        recovery = gate_error.get("details", {}).get("agent_recovery")
+        if isinstance(recovery, dict):
+            recovery["user_notes"] = notes
+    return None
 
 
 async def _maybe_elicit_gate(
@@ -513,8 +555,12 @@ async def _maybe_elicit_gate(
 
     Returns an updated payload to proceed with, or None to fall back to the structured
     gate error (which may be enriched with the user's form answer in details.user_notes).
+    Every exit leaves ``details.elicitation.status`` behind (disabled / unsupported / declined /
+    cancelled / answered / defaults / failed): a swallowed exception used to look exactly like
+    "the client never supported elicitation" (v0.36.0 A2).
     """
     if not _elicitation_enabled():
+        _note_elicitation(gate_error, "disabled")
         return None
     try:
         ctx = mcp.get_context()
@@ -522,38 +568,26 @@ async def _maybe_elicit_gate(
         if not session.check_client_capability(
             mcp_types.ClientCapabilities(elicitation=mcp_types.ElicitationCapability())
         ):
+            _note_elicitation(gate_error, "unsupported")
             return None
         prompt = (
             gate_error.get("details", {}).get("agent_recovery", {}).get("prompt_to_user")
             or f"调用 {tool_name} 前需要确认会影响结果的设置。"
         )
-        schema = create_model(
-            "HorosaGateDecision",
-            decision=(
-                Literal[_ELICIT_DEFAULTS, _ELICIT_PROVIDE, _ELICIT_CANCEL],  # type: ignore[valid-type]
-                _ELICIT_DEFAULTS,
-            ),
-            notes=(str, ""),
-        )
-        result = await ctx.elicit(message=prompt, schema=schema)
+        result = await ctx.elicit(message=prompt, schema=_gate_elicitation_schema())
         if result.action != "accept" or result.data is None:
+            _note_elicitation(gate_error, "declined", action=f"{result.action}")
             return None
-        decision = getattr(result.data, "decision", "")
+        decision = f"{getattr(result.data, 'decision', '') or ''}"
         notes = str(getattr(result.data, "notes", "") or "").strip()
-        if decision == _ELICIT_DEFAULTS:
-            updated = dict(payload)
-            updated["defaults_accepted"] = True
-            note = "user accepted Xingque defaults via MCP elicitation form"
-            updated["clarification_notes"] = f"{note}; user notes: {notes}" if notes else note
-            return updated
-        if notes:
-            # 用户选了「补充设置」并给了备注：不代答具体参数，把原话带回给 agent 追问闭环。
-            gate_error.setdefault("details", {})["user_notes"] = notes
-            recovery = gate_error.get("details", {}).get("agent_recovery")
-            if isinstance(recovery, dict):
-                recovery["user_notes"] = notes
-        return None
-    except Exception:  # noqa: BLE001 — elicitation must never become a new failure mode
+        updated = _apply_gate_decision(payload, gate_error, decision, notes)
+        status = "defaults" if updated is not None else ("cancelled" if decision == _ELICIT_CANCEL else "answered")
+        _note_elicitation(gate_error, status, decision=decision)
+        return updated
+    except Exception as exc:  # noqa: BLE001 — elicitation must never become a new failure mode
+        # 记进 details 就是给调用方的交代；日志用 info（包内 logger.warning 只留给未上抛的真降级）。
+        logger.info("MCP elicitation for %s failed: %s", tool_name, exc)
+        _note_elicitation(gate_error, "failed", error=f"{type(exc).__name__}: {exc}")
         return None
 
 

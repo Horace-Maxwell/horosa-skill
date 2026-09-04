@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import copy
 import gzip
 import logging
@@ -9,6 +11,7 @@ import shutil
 import sqlite3
 import time
 import uuid
+from collections.abc import Iterator
 from datetime import timezone, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -64,6 +67,54 @@ from horosa_skill.schemas.tools import (
 from horosa_skill.tracing import TraceRecorder
 
 logger = logging.getLogger(__name__)
+
+# ---- 降级说明收集器（v0.36.0 A2）----
+# 35 处「富化失败不许带崩主盘」的 except 分支此前只写 logger.warning：日志里有、信封里没有，agent 看到的是
+# ok=True + warnings=[] + 少几段——静默降级。`_degrade` 把同一句话同时写日志并投进当前 run_tool 的收集器，
+# 出信封时并入 envelope.warnings；嵌套 run_tool（三式合一/合参）的说明冒泡到外层。守卫：
+# scripts/verify_silent_degrades.py（包内 `_degrade(` 计数棘轮，基线 0——降级点一律走 `_degrade`）。
+_DEGRADE_NOTES: contextvars.ContextVar[list[str] | None] = contextvars.ContextVar("horosa_degrade_notes", default=None)
+
+
+def _degrade(fmt: str, *args: Any, note: str | None = None) -> str:
+    """记一次优雅降级：日志一句 + 当前工具调用的收集器一条（→ envelope.warnings）。返回给调用方的说明。"""
+    message = (fmt % args) if args else fmt
+    logger.log(logging.WARNING, "%s", message)
+    text = note or f"降级：{message}——相关段落缺席，其余结果仍可用。"
+    notes = _DEGRADE_NOTES.get()
+    if notes is not None and text not in notes:
+        notes.append(text)
+    return text
+
+
+@contextlib.contextmanager
+def _degrade_collector() -> Iterator[list[str]]:
+    """一次 run_tool 的降级说明作用域；退出时冒泡到外层调用（嵌套工具的缺段外层也要知道）。"""
+    parent = _DEGRADE_NOTES.get()
+    notes: list[str] = []
+    token = _DEGRADE_NOTES.set(notes)
+    try:
+        yield notes
+    finally:
+        _DEGRADE_NOTES.reset(token)
+        if parent is not None:
+            parent.extend(item for item in notes if item not in parent)
+
+
+def _missing_sections_warning(response_data: Any) -> str | None:
+    """预设段有缺 → 一条可读的「结果不完整」说明（此前只躺在 export_snapshot.missing_selected_sections 里）。"""
+    export = response_data.get("export_snapshot") if isinstance(response_data, dict) else None
+    if not isinstance(export, dict):
+        return None
+    missing = [f"{title}".strip() for title in (export.get("missing_selected_sections") or []) if f"{title}".strip()]
+    if not missing:
+        return None
+    selected = export.get("selected_sections") or []
+    shown = "、".join(missing[:8]) + ("…" if len(missing) > 8 else "")
+    return (
+        f"结果不完整：预设 {len(selected)} 段中 {len(missing)} 段未产出（{shown}）；"
+        "缺段原因见 warnings 其余条目，清单见 export_snapshot.missing_selected_sections。"
+    )
 
 
 TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
@@ -6515,7 +6566,7 @@ class HorosaSkillService:
             try:
                 enriched["natalChart"] = self._call_remote("/chart", natal_payload)
             except HorosaSkillError as exc:
-                logger.warning("predictive natal chart fetch failed (tool=%s): %s", tool_name, exc)
+                _degrade("predictive natal chart fetch failed (tool=%s): %s", tool_name, exc)
         return enriched
 
     def _attach_natal_extras(self, tool_name: str, response_data: dict[str, Any]) -> dict[str, Any]:
@@ -6593,7 +6644,7 @@ class HorosaSkillService:
                 enriched["_jyotishSections"] = sections
                 return enriched
         except Exception as exc:  # noqa: BLE001 — 富化失败不许影响主盘
-            logger.warning("jyotish section build failed: %s", exc)
+            _degrade("jyotish section build failed: %s", exc)
         return response_data
 
     # 古典格局派生分析 (星阙 v2.6.7): astrochart/astrochart_like 的 [古典格局] 段来自 /astroextra/analysis
@@ -6641,7 +6692,7 @@ class HorosaSkillService:
                 enriched["_egyptSection"] = self._build_egypt_section(enriched, analysis)
                 return enriched
         except Exception as exc:
-            logger.warning("classical /astroextra/analysis failed (tool=%s): %s", tool_name, exc)
+            _degrade("classical /astroextra/analysis failed (tool=%s): %s", tool_name, exc)
         return response_data
 
     def _build_egypt_section(self, chart: dict[str, Any], analysis: dict[str, Any]) -> str:
@@ -6661,7 +6712,7 @@ class HorosaSkillService:
             text = js.get("text") if isinstance(js, dict) else None
             return f"{text}".strip() if text else ""
         except Exception as exc:  # noqa: BLE001 — 富化失败不许影响主盘
-            logger.warning("egypt section build failed: %s", exc)
+            _degrade("egypt section build failed: %s", exc)
             return ""
 
     # 八字格局（v3.0.x 本地化）：五行力量/格局·用神/盲派结构 由 core-js baziGeju 引擎从后端 fourColumns 派生，
@@ -6691,7 +6742,7 @@ class HorosaSkillService:
                 },
             )
         except Exception as exc:  # noqa: BLE001 - degrade to no-score, keep comparison chart
-            logger.warning("relative score failed: %s", exc)
+            _degrade("relative score failed: %s", exc)
             return response_data
         if isinstance(score, dict) and score.get("score") is not None:
             enriched = dict(response_data)
@@ -6727,7 +6778,7 @@ class HorosaSkillService:
                 enriched["_ziweiExtras"] = text
                 return enriched
         except Exception as exc:  # noqa: BLE001 — 富化失败不许影响命盘
-            logger.warning("ziwei extras build failed: %s", exc)
+            _degrade("ziwei extras build failed: %s", exc)
         return response_data
 
     def _attach_bazi_geju(self, tool_name: str, response_data: dict[str, Any], payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -6780,11 +6831,10 @@ class HorosaSkillService:
                     js_p = self.js_client.run("bazi_period", {"birth": birth, "period": period})
                     period_text = f"{(js_p or {}).get('text') or ''}".strip()
                 except Exception as exc:  # noqa: BLE001
-                    logger.warning("bazi period build failed: %s", exc)
                     # 调用方显式点了 period 却拿不到段——只写日志等于对调用方静默。
-                    response_data = dict(response_data)
-                    response_data.setdefault("_warnings", []).append(
-                        "多运限[指定时段]本次未能产出（period 引擎失败），其余段不受影响。"
+                    _degrade(
+                        "bazi period build failed: %s", exc,
+                        note="多运限[指定时段]本次未能产出（period 引擎失败），其余段不受影响。",
                     )
             text = geju.get("snapshot_text") if isinstance(geju, dict) else None
             if period_text:
@@ -6794,13 +6844,12 @@ class HorosaSkillService:
                 enriched["_baziGeju"] = text
                 return enriched
         except ToolTransportError as exc:
-            logger.warning("bazi geju engine failed (tool=%s): %s", tool_name, exc)
-            # 不静默：把降级说明抛到 envelope.warnings（结果仍可用，但格局段缺席要让调用方知道）。
-            degraded = dict(response_data)
-            degraded.setdefault("_warnings", []).append(
-                "八字格局引擎（五行力量/格局·用神/盲派结构）本次不可用，已降级为基础四柱输出。"
+            # 不静默：降级说明进 envelope.warnings（结果仍可用，但格局段缺席要让调用方知道）。
+            _degrade(
+                "bazi geju engine failed (tool=%s): %s", tool_name, exc,
+                note="八字格局引擎（五行力量/格局·用神/盲派结构）本次不可用，已降级为基础四柱输出。",
             )
-            return degraded
+            return response_data
         return response_data
 
     def _require_ken_pan(self, ken_response: Any, *, engine: str, endpoint: str) -> None:
@@ -8118,7 +8167,7 @@ class HorosaSkillService:
                 chart_response = self._attach_classical_analysis("chart", chart_payload, chart_response)
                 chart_body = _build_astro_snapshot_text(chart_payload, chart_response)
         except Exception as exc:  # noqa: BLE001 — 盘面富化失败不许带崩线表
-            logger.warning("acg natal chart fetch failed: %s", exc)
+            _degrade("acg natal chart fetch failed: %s", exc)
         # 上游把地图内容收在单段 [占星地图]（口径 + 线表）；偕升纬度带/线交点是本仓相对上游的 extra。
         sections: list[tuple[str, str]] = [
             ("占星地图", "\n".join(info_lines + [""] + line_rows) if len(line_rows) > 2 else "\n".join(info_lines)),
@@ -8559,7 +8608,7 @@ class HorosaSkillService:
             }
         except sqlite3.Error as exc:
             # 老版本库缺 person_fts / birth_year·has_time 列，或检索式仍非法 → 优雅降级，不让整工具 ok=False。
-            logger.warning("astrodata query failed: %s", exc)
+            _degrade("astrodata query failed: %s", exc)
             snapshot_text = _render_snapshot_text([
                 ("检索条件", "名人库检索未能完成（数据库版本过旧或检索式无效）；请改用英文姓名关键词，或更新离线 runtime。"),
             ])
@@ -9071,7 +9120,7 @@ class HorosaSkillService:
                     if sihua_text:
                         snapshot_text = f"{snapshot_text}\n\n{sihua_text}"
             except Exception as exc:  # noqa: BLE001 — 富化失败不许带崩三式主盘
-                logger.warning("sanshi ziwei sihua build failed: %s", exc)
+                _degrade("sanshi ziwei sihua build failed: %s", exc)
         return {
             "qimen": qimen_result.data.get("pan", {}),
             "taiyi": taiyi_result.data.get("pan", {}),
@@ -9120,7 +9169,7 @@ class HorosaSkillService:
                 pattern_text = js.get("snapshot_text")
                 patterns = js.get("data", {}).get("patterns") if isinstance(js.get("data"), dict) else None
         except Exception as exc:  # noqa: BLE001 - degrade to '无', never break the guolao chart
-            logger.warning("guolao_moira pattern eval failed: %s", exc)
+            _degrade("guolao_moira pattern eval failed: %s", exc)
         # [星曜庙旺与星点动态]：上游导出的纯函数，只吃 /chart 响应（不需要 Moira 规则服务）。
         # 同批的 [虚实]/[本命化曜]/[流年流曜] 读 moiraRules.weakSolid / .yearStars，只来自后端
         # /qizheng/moira —— 开源 astropy 无该路由，本地回退也不产这两个字段，故那三段不可得。
@@ -9130,7 +9179,7 @@ class HorosaSkillService:
             if isinstance(js2, dict):
                 dignity_text = f"{js2.get('text') or ''}".strip() or None
         except Exception as exc:  # noqa: BLE001 - 富化失败只是该段不出
-            logger.warning("guolao star dignity build failed: %s", exc)
+            _degrade("guolao star dignity build failed: %s", exc)
         snapshot_text = _build_guolao_snapshot_text(remote_payload, response, pattern_text=pattern_text)
         if dignity_text:
             # 段序对齐上游：紧跟 [七政四余宫位与二十八宿星曜]、在 [神煞] 之前。
@@ -9177,7 +9226,7 @@ class HorosaSkillService:
             if extra_text:
                 snapshot_text = f"{snapshot_text}\n{extra_text}".strip()
         except Exception as exc:  # noqa: BLE001 — 附注段失败不影响量化盘
-            logger.warning("uranian extra sections failed: %s", exc)
+            _degrade("uranian extra sections failed: %s", exc)
         result = {
             "chart": chart_response.get("chart"),
             "midpoints": germany_result.get("midpoints", germany_result if isinstance(germany_result, list) else []),
@@ -9261,7 +9310,7 @@ class HorosaSkillService:
                 enriched["_calendarExtras"] = text
                 return enriched
         except Exception as exc:  # noqa: BLE001 — 子模块失败不许影响月历本体
-            logger.warning("calendar extras build failed: %s", exc)
+            _degrade("calendar extras build failed: %s", exc)
         return response_data
 
     def _run_huangli_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -9333,7 +9382,7 @@ class HorosaSkillService:
         try:
             ephemeris = self._call_remote("/astroextra/ephemeris", {**chart_payload, "kinds": "lunations"})
         except Exception as exc:  # noqa: BLE001 — 实算历象缺失只丢两行，不影响成段
-            logger.warning("babylon ephemeris fetch failed: %s", exc)
+            _degrade("babylon ephemeris fetch failed: %s", exc)
         js = self.js_client.run(
             "babylon",
             {
@@ -9520,7 +9569,7 @@ class HorosaSkillService:
             if isinstance(js, dict):
                 snapshot_text = f"{js.get('snapshot_text') or ''}".strip()
         except Exception as exc:
-            logger.warning("progextra JS engine failed (technique=%s): %s", technique, exc)
+            _degrade("progextra JS engine failed (technique=%s): %s", technique, exc)
         return {
             "chart": response.get("chart"),
             "raw": response,
@@ -9546,7 +9595,7 @@ class HorosaSkillService:
             try:
                 resp = self._call_remote("/astroextra/planetreturn", {**remote_base, "body": body_key, "count": 4})
             except Exception as exc:
-                logger.warning("extrareturns planetreturn failed (body=%s): %s", body_key, exc)
+                _degrade("extrareturns planetreturn failed (body=%s): %s", body_key, exc)
                 continue
             rows = resp.get("returns") if isinstance(resp, dict) else None
             if not isinstance(rows, list) or not rows:
@@ -9658,7 +9707,7 @@ class HorosaSkillService:
                 if extra:
                     snapshot_text = f"{snapshot_text}\n{extra}".strip()
             except Exception as exc:  # noqa: BLE001 — 富化失败不影响盘面
-                logger.warning("tieban framework snapshot failed: %s", exc)
+                _degrade("tieban framework snapshot failed: %s", exc)
         # 演禽「演法」五段（流派/起禽/择日/占卜/投胎）：kinastro 后端不产，它们是上游前端按出生四数
         # 本地推演的（yanqin/yanqinSnapshot.js），与盘面互补。追加在后端快照之后，失败只是这几段不出。
         if key == "xianqin":
@@ -9683,7 +9732,7 @@ class HorosaSkillService:
                 if extra:
                     snapshot_text = f"{snapshot_text}\n{extra}".strip()
             except Exception as exc:  # noqa: BLE001 — 富化失败不影响盘面
-                logger.warning("yanqin 演法 snapshot failed: %s", exc)
+                _degrade("yanqin 演法 snapshot failed: %s", exc)
         result: dict[str, Any] = {
             "engine": response.get("engine") if isinstance(response, dict) else key,
             "raw": response,
@@ -9789,7 +9838,7 @@ class HorosaSkillService:
                 category = f"{js.get('category') or category}".strip() or category
         except Exception as exc:  # don't fail the chart, but don't hide the empty snapshot either
             snapshot_error = str(exc)
-            logger.warning("horary JS engine failed (category=%s): %s", category, exc)
+            _degrade("horary JS engine failed (category=%s): %s", category, exc)
         result = {
             "chart": response.get("chart"),
             "category": category,
@@ -9829,7 +9878,7 @@ class HorosaSkillService:
                 topic_id = f"{js.get('topicId') or topic_id}".strip() or topic_id
         except Exception as exc:  # don't fail the chart, but don't hide the empty snapshot either
             snapshot_error = str(exc)
-            logger.warning("election JS engine failed (topicId=%s): %s", topic_id, exc)
+            _degrade("election JS engine failed (topicId=%s): %s", topic_id, exc)
         result = {
             "chart": response.get("chart"),
             "topicId": topic_id,
@@ -10037,7 +10086,7 @@ class HorosaSkillService:
             js_v = self.js_client.run("mundane_navanayaka", {"offices": self._solve_navanayaka(year, mesha_moment, payload)})
             return f"{(js_v or {}).get('text') or ''}".strip()
         except Exception as exc:  # noqa: BLE001
-            logger.warning("navanayaka build failed: %s", exc)
+            _degrade("navanayaka build failed: %s", exc)
             return ""
 
     def _solve_navanayaka(self, year: int, mesha_moment: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -10050,7 +10099,7 @@ class HorosaSkillService:
                 try:
                     moment = self._solve_vedic_ingress(event, year + offset, payload)
                 except Exception as exc:  # noqa: BLE001 — 单职失败只留空
-                    logger.warning("navanayaka office %s failed: %s", key, exc)
+                    _degrade("navanayaka office %s failed: %s", key, exc)
             offices.append({"key": key, "cn": cn, "domain": domain, "moment": moment})
         return offices
 
@@ -10077,7 +10126,7 @@ class HorosaSkillService:
                     if isinstance(value, str) and len(value) >= 10:
                         return value
         except Exception as exc:  # noqa: BLE001 — 王位留空
-            logger.warning("navanayaka raja syzygy failed: %s", exc)
+            _degrade("navanayaka raja syzygy failed: %s", exc)
         return None
 
     def _run_mundane_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -10158,7 +10207,7 @@ class HorosaSkillService:
                     )
                     solunar_text = f"{(js_s or {}).get('text') or ''}".strip()
             except Exception as exc:  # noqa: BLE001 — 求根/富化失败不许带崩入宫盘
-                logger.warning("mundane solunar build failed: %s", exc)
+                _degrade("mundane solunar build failed: %s", exc)
         # 吠陀世运（vedicmundane）：恒星黄道 Lahiri 的梅沙（白羊）入境盘 —— 同一个求根器，只换
         # ayanamsa 与目标度。盘型头之外的判读段（[年之九主]）另需九职求根 + 王职的月相搜索，未做。
         vedic_text = ""
@@ -10182,7 +10231,7 @@ class HorosaSkillService:
                     if nav:
                         vedic_text = f"{vedic_text}\n\n{nav}"
             except Exception as exc:  # noqa: BLE001
-                logger.warning("mundane vedic ingress failed: %s", exc)
+                _degrade("mundane vedic ingress failed: %s", exc)
         horary_text = ""
         if f"{payload.get('mundaneType') or ''}" == "mundanehorary":
             try:
@@ -10192,7 +10241,7 @@ class HorosaSkillService:
                 )
                 horary_text = f"{(js or {}).get('text') or ''}".strip()
             except Exception as exc:  # noqa: BLE001 — 富化失败不许带崩入宫盘
-                logger.warning("mundane horary build failed: %s", exc)
+                _degrade("mundane horary build failed: %s", exc)
         # 子盘群：新月/满月/日月食/地区盘/行星周期 + 世俗宫义/定局·年主·盘主/入境骨架/地理分野/地区盘推运。
         subchart_sections = self._build_mundane_subchart_sections(
             base_chart_payload=chart_payload,
@@ -10261,7 +10310,7 @@ class HorosaSkillService:
                 if isinstance(s2, dict) and s2.get("type") and s2["type"] not in syz_by_type:
                     syz_by_type[s2["type"]] = s2
         except Exception as exc:  # noqa: BLE001 - degrade to a note, never break mundane
-            logger.warning("mundane prenatal_syzygy failed: %s", exc)
+            _degrade("mundane prenatal_syzygy failed: %s", exc)
         for title, syz_type, phase_cn in (("新月图", "new", "朔（新月·日月合）"), ("满月图", "full", "望（满月·日月冲）")):
             syz = syz_by_type.get(syz_type)
             if not isinstance(syz, dict):
@@ -10278,7 +10327,7 @@ class HorosaSkillService:
                 if digest:
                     lines.append("子盘四轴/日月：" + "；".join(digest))
             except Exception as exc:  # noqa: BLE001
-                logger.warning("mundane %s chart failed: %s", title, exc)
+                _degrade("mundane %s chart failed: %s", title, exc)
             sections.append((title, "\n".join(lines)))
 
         # ── 日食图 / 月食图：eclipsedetail 只回全球食时长（食时长定则的关键量），呈影响时长判词 ──
@@ -10292,7 +10341,7 @@ class HorosaSkillService:
                     {"date": ing_date, "time": ing_time, "zone": zone, "eclipseKind": kind},
                 )
             except Exception as exc:  # noqa: BLE001
-                logger.warning("mundane eclipsedetail(%s) failed: %s", kind, exc)
+                _degrade("mundane eclipsedetail(%s) failed: %s", kind, exc)
                 ed = {}
             if isinstance(ed, dict) and ed.get("durationHours"):
                 unit = ed.get("influenceUnit") or unit_default
@@ -10319,7 +10368,7 @@ class HorosaSkillService:
             body.append("——同一天象、异地宫位；与上文本地入宫盘四轴对照可见地域落点差异。")
             sections.append(("地区盘", "\n".join(body)))
         except Exception as exc:  # noqa: BLE001
-            logger.warning("mundane world chart failed: %s", exc)
+            _degrade("mundane world chart failed: %s", exc)
             sections.append(("地区盘", "未能取得世界年图基准盘。"))
 
         # ── 行星周期：木土大合相（前后 20 年最近三次）+ Barbault 行星聚散指数拐点 ──
@@ -10334,7 +10383,7 @@ class HorosaSkillService:
                     for c in sorted(nearest, key=lambda c: int(c.get("year", 0))):
                         cycle_lines.append(f"  {c.get('year')}-{int(c.get('month', 0)):02d} 合于 {_lon_to_sign_degree(c.get('lon'))}")
             except Exception as exc:  # noqa: BLE001
-                logger.warning("mundane greatconj failed: %s", exc)
+                _degrade("mundane greatconj failed: %s", exc)
             try:
                 bb = self._call_remote(
                     "/astroextra/barbault",
@@ -10349,7 +10398,7 @@ class HorosaSkillService:
                         kind_cn = "极小（聚集·危机/紧张）" if e.get("kind") == "min" else "极大（四散·扩张/繁荣）"
                         cycle_lines.append(f"  {e.get('year')}-{int(e.get('month', 0)):02d} 指数 {e.get('index')} {kind_cn}")
             except Exception as exc:  # noqa: BLE001
-                logger.warning("mundane barbault failed: %s", exc)
+                _degrade("mundane barbault failed: %s", exc)
         sections.append(("行星周期", "\n".join(cycle_lines) if cycle_lines else "未能取得慢星周期数据（需有效年份）。"))
 
         # ── 世俗宫义（通行定则静态释义）──
@@ -10388,7 +10437,7 @@ class HorosaSkillService:
                     if t in by_term:
                         prog_rows.append(f"  {t}入宫：{by_term[t]}")
         except Exception as exc:  # noqa: BLE001
-            logger.warning("mundane seasonal ingress failed: %s", exc)
+            _degrade("mundane seasonal ingress failed: %s", exc)
         prog_body = ["年度四季入宫定盘序列（地区盘随每季太阳入基本宫逐季推移）："]
         prog_body.extend(prog_rows or ["未能取得四季入宫时刻。"])
         sections.append(("地区盘推运", "\n".join(prog_body)))
@@ -10924,7 +10973,7 @@ class HorosaSkillService:
                 "payload": payload,
                 "evaluation_case_id": evaluation_case_id,
             },
-        ) as trace:
+        ) as trace, _degrade_collector() as degrade_notes:
             try:
                 payload = normalize_request_payload(payload)
                 validated = definition.input_model.model_validate(payload)
@@ -10974,6 +11023,12 @@ class HorosaSkillService:
                     raised = response_data.pop("_warnings", None)
                     if isinstance(raised, list):
                         warnings.extend(str(item) for item in raised if f"{item}".strip())
+                warnings.extend(note for note in degrade_notes if note not in warnings)
+                # 预设段缺席 → warnings + summary 各一条：agent 不翻 export_snapshot 也知道结果不完整。
+                missing_note = _missing_sections_warning(response_data)
+                if missing_note:
+                    warnings.append(missing_note)
+                    summary = [*summary, missing_note]
                 envelope = ToolEnvelope(
                     ok=True,
                     tool=tool_name,
@@ -10997,7 +11052,7 @@ class HorosaSkillService:
                     input_normalized=input_normalized,
                     data={},
                     summary=[f"工具 `{tool_name}` 调用失败（{exc.code}）。"],
-                    warnings=[],
+                    warnings=list(degrade_notes),
                     memory_ref=None,
                     error=ErrorInfo(code=exc.code, message=str(exc), details=error_details),
                     # 顶层镜像三键（见 schemas/common.py）：MCP 面的闸门/校验错误一直镜像，工具自身的
@@ -11023,7 +11078,7 @@ class HorosaSkillService:
                     input_normalized=input_normalized,
                     data={},
                     summary=[f"工具 `{tool_name}` 调用时发生内部错误。"],
-                    warnings=[],
+                    warnings=list(degrade_notes),
                     memory_ref=None,
                     error=ErrorInfo(
                         code="tool.internal_error",
@@ -12020,6 +12075,12 @@ class HorosaSkillService:
                 )
                 result_export_contracts[tool_name] = _build_dispatch_export_contract(results[tool_name])
 
+            degraded_tools = [name for name, result in results.items() if result.ok and result.warnings]
+            if degraded_tools:
+                dispatch_warnings.append(
+                    f"{len(degraded_tools)} 个工具结果带降级/缺段说明：{', '.join(degraded_tools)}"
+                    "（详见 results.<tool>.warnings，报告须如实转述）。"
+                )
             summary = [f"horosa_dispatch 选择了 {len(selected_tools)} 个工具：{', '.join(selected_tools)}。"]
             summary.extend([line for result in results.values() for line in result.summary[:1]])
 

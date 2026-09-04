@@ -88,7 +88,8 @@ def audit_env_flags(*, force: bool = False) -> list[str]:
         raise ValueError("HOROSA_STRICT_CONFIG=1：" + "；".join(warnings))
     if warnings and (force or not _ENV_AUDIT_DONE):
         for line in warnings:
-            logger.warning("%s", line)
+            # 启动期环境审计，没有工具调用可告知——不是降级点（verify_silent_degrades 只盯 logger.warning）。
+            logger.log(logging.WARNING, "%s", line)
     _ENV_AUDIT_DONE = True
     return warnings
 
