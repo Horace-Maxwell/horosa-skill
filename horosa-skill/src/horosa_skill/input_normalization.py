@@ -38,6 +38,10 @@ _GENDER_FEMALE_LABELS = {"女", "female", "f", "girl", "woman", "nv", "女性", 
 
 def _normalize_gender_field(payload: dict[str, Any]) -> None:
     value = payload.get("gender")
+    if isinstance(value, bool):
+        # Java 后端读 1/0；bool 直传会变成 JSON true/false（v0.36.0，PR #17）
+        payload["gender"] = 1 if value else 0
+        return
     if not isinstance(value, str):
         return
     key = value.strip().lower()

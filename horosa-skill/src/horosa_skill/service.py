@@ -101,6 +101,23 @@ def _degrade_collector() -> Iterator[list[str]]:
             parent.extend(item for item in notes if item not in parent)
 
 
+def _gender_label(value: Any, *, unknown: str = "未知") -> str:
+    """性别值 → 中文标签（PR #17 @xipfs 的 _gender_label 收编）：True/1/'1'/'男'/'male'/'M'/'乾'→男；
+    False/0/'0'/'女'/'female'/'F'/'坤'→女；其余（含 None/-1）→ unknown。"""
+    if isinstance(value, str):
+        key = value.strip().lower()
+        if key in {"1", "男", "male", "m", "nan", "乾"}:
+            return "男"
+        if key in {"0", "女", "female", "f", "nv", "坤"}:
+            return "女"
+        return unknown
+    if value is True or value == 1:
+        return "男"
+    if value is False or value == 0:
+        return "女"
+    return unknown
+
+
 def _missing_sections_warning(response_data: Any) -> str | None:
     """预设段有缺 → 一条可读的「结果不完整」说明（此前只躺在 export_snapshot.missing_selected_sections 里）。"""
     export = response_data.get("export_snapshot") if isinstance(response_data, dict) else None
@@ -5125,7 +5142,6 @@ def _build_bazi_snapshot_text(payload: dict[str, Any], response: dict[str, Any])
     bazi = response.get("bazi", response if isinstance(response, dict) else {})
     four = bazi.get("fourColumns", {}) if isinstance(bazi, dict) else {}
     nongli = bazi.get("nongli", {}) if isinstance(bazi, dict) else {}
-    gender_map = {"-1": "未知", "0": "女", "1": "男"}
     time_alg_map = {"0": "真太阳时", "1": "直接时间", "2": "春分定卯时"}
     adjust_map = {"0": "不调整节气", "1": "节气按纬度调整"}
 
@@ -5141,7 +5157,7 @@ def _build_bazi_snapshot_text(payload: dict[str, Any], response: dict[str, Any])
         f"日期：{payload.get('date', '—')} {payload.get('time', '—')}",
         f"时区：{payload.get('zone', '—')}",
         f"经纬度：{payload.get('lon', '—')} {payload.get('lat', '—')}",
-        f"性别：{gender_map.get(str(payload.get('gender')), payload.get('gender', '未知'))}",
+        f"性别：{_gender_label(payload.get('gender'))}",
         f"时间算法：{time_alg_map.get(str(payload.get('timeAlg', 0)), payload.get('timeAlg', 0))}",
         f"节气修正：{adjust_map.get(str(payload.get('adjustJieqi', 0)), payload.get('adjustJieqi', 0))}",
         f"农历：{nongli.get('year', '')}年{'闰' if nongli.get('leap') else ''}{nongli.get('month', '')}{nongli.get('day', '')}".strip() or "农历：未知",
@@ -5255,7 +5271,7 @@ def _build_ziwei_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
         f"日期：{payload.get('date', '—')} {payload.get('time', '—')}",
         f"时区：{payload.get('zone', '—')}",
         f"经纬度：{payload.get('lon', '—')} {payload.get('lat', '—')}",
-        f"性别：{payload.get('gender', '—')}",
+        f"性别：{_gender_label(payload.get('gender'), unknown='—')}",
         f"时间算法：{'直接时间' if str(payload.get('timeAlg', 0)) == '1' else '真太阳时'}",
     ]
     # 命主/身主/五行局/斗君/年命（星阙 P0 杂曜与全盘信息一并落盘）。

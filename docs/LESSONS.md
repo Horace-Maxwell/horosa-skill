@@ -98,6 +98,32 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.36.0 / 2026-09-04 — MCP 扁平面静默丢未声明键：PR #17「性别恒为未知」只是 63 个工具同一类病的一例
+
+- **症状**：外部 PR #17（@xipfs）报 `bazi_birth` 传「男」快照仍「性别：未知」、大运顺逆无法判定。复现只在 MCP
+  面：CLI / `horosa_tool_run` / dispatch 都正常。
+- **根因**：不是 pydantic 丢字段（`FlexibleModel` 是 `extra="allow"`），是 MCP 扁平面——`_signature_for_input_model`
+  只广告模型声明的字段，FastMCP 按广告签名生成的 arg model 把未声明的顶层键丢掉，之后才 normalize/validate。
+  `BaZiBirthInput` 没声明 `gender`，于是丢。用「每个样例载荷键必须在模型上」一扫：**63 个工具**中招——西占/推运
+  /择日全族的 `name`/`pos`（透传盘头）、八字/紫微/正传的 `gpsLat/gpsLon`（后端载荷候选回退键）、
+  **神数五支的 `gender` 与 `zone/lat/lon`**（`_run_shenshu_tool` 原样转发，MCP 上全丢）、`pdchart.showPdBounds`
+  （服务在读、指南在写、schema 没有）。样例载荷、文档、服务消费点三处都有这些键，唯独 schema 没有。
+- **guard**：`tests/test_mcp_flat_surface_keys.py`——每个技法工具的样例载荷（离线套件/Bench/烟测共用的那份）
+  的每个**原始**键都必须出现在广告签名里，否则列出「哪个工具丢哪个键」；配套 `tests/test_bazi_gender.py`
+  （PR #17 的用例收编，bool→1/0 归一 + `_gender_label`）。修法一律「声明字段」，不是改样例：样例就是文档。
+- **法则**：**一个键要么在 schema 上，要么它不存在**——服务读它、文档写它、样例带它而 schema 没声明，就是
+  MCP 用户静默拿到另一张盘。新增消费点先加字段（`verify_schema_knob_wiring` 管反向：字段必须有消费点）。
+
+### v0.36.0 / 2026-09-04 — `hsys` 描述写「1=Placidus」：上游索引表 1 是 Alcabitus、3 才是 Placidus
+
+- **症状**：`BirthInput.hsys` 描述「0=整宫、1=Placidus 等」；服务自己的 `ASTRO_HOUSE_SYSTEM_TEXT` 与上游
+  perchart 表都是 1=Alcabitus / 2=Regiomontanus / 3=Placidus / 4=Koch…。按描述传 1 想要 Placidus 的 agent
+  拿到 Alcabitus 盘，且无任何告警（宫制合法值，闸门不拦）。
+- **根因**：描述是手写的，和表没有锁步；印度盘另有一套索引（8=Alcabitus），两套表并存更容易记串。
+- **guard**：描述改为逐项列全表并明示「1 不是 Placidus」；`tests/test_house_system_docs.py` 锁步描述 ⊇
+  `ASTRO_HOUSE_SYSTEM_TEXT` 每一项且不含「1=Placidus」；B1 出 enum 时以该表为唯一源。
+- **法则**：**枚举类参数的文档必须从表生成或被表锁步**，手写一次就是一次抄错的机会。
+
 ### v0.36.0 / 2026-09-04 — Java 起不来时，每个碰 Java 的调用都先杀掉健康的 chart 服务再全量重启
 
 - **症状**：Java 后端（:9999）挂着、chart 服务（:8899）健康时，任何 Java 端点调用（含 qimen/taiyi 等前置

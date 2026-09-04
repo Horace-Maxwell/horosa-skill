@@ -655,6 +655,11 @@ A global stability pass hardened these; keep them true when you touch the releva
   （`runtime_java_retry_cooldown_seconds`，默认 120s）内返回 `{degraded, skipped_restart}`，**绝不** stop 健康的
   chart 服务；`_call_remote` 对 Java 端点冷却期内快速失败 `runtime.java_backend_unavailable`，chart 端点不受
   影响。新增「探针失败就重启」的路径前先读管理器的降级状态（v0.36.0）。
+- **一个键要么在 schema 上，要么它不存在。** MCP 扁平面按广告签名丢未声明的顶层键（FastMCP arg_model），
+  CLI/tool_run/dispatch 不丢——服务读、文档写、样例带而 schema 没声明的键，MCP 用户会静默拿到另一张盘
+  （PR #17 性别、神数五支性别/地点、`showPdBounds`……共 63 例）。守卫 `tests/test_mcp_flat_surface_keys.py`
+  （样例载荷原始键 ⊆ 广告签名）；反向由 `verify_schema_knob_wiring` 管。枚举参数的描述与表锁步
+  （`test_house_system_docs.py`：hsys 1=Alcabitus、3=Placidus）。
 - **`run_tool` always returns a `ToolEnvelope`, never lets an unexpected exception escape.** Tool
   execution + snapshot/summary/export post-processing run inside a try that catches `HorosaSkillError`
   **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`. Only invalid-payload

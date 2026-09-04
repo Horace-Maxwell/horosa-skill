@@ -447,6 +447,44 @@ def check_frontmatter() -> None:
             err(f"skills/horosa-agent/SKILL.md: metadata.version {m.group(1)} != package {pkg_version}")
 
 
+def check_compact_surface_count() -> None:
+    """README×2 写的「11 个门面工具 / 11 facades」必须等于 mcp_server.COMPACT_SURFACE_TOOL_COUNT。
+
+    v0.36.0 之前 mcp_server 里的注释还写着「8 门面 + tool_run = 9 工具」——常量化 + 锁步，数字只准有一个源。
+    """
+    src = (ROOT / "horosa-skill/src/horosa_skill/surfaces/mcp_server.py").read_text(encoding="utf-8")
+    m = re.search(r"^COMPACT_SURFACE_TOOL_COUNT\s*=\s*(\d+)", src, re.MULTILINE)
+    if not m:
+        err("mcp_server.py 缺 COMPACT_SURFACE_TOOL_COUNT 常量")
+        return
+    n = int(m.group(1))
+    for rel, patterns in {
+        "README.md": [rf"{n}\s*个门面工具", rf"MCP 门面（{n}）"],
+        "README_EN.md": [rf"\b{n} facades\b", rf"MCP facades \({n}\)"],
+    }.items():
+        text = (ROOT / rel).read_text(encoding="utf-8")
+        for pat in patterns:
+            if not re.search(pat, text):
+                err(f"{rel} 未按 COMPACT_SURFACE_TOOL_COUNT={n} 写门面数（缺 /{pat}/）")
+        stale = re.findall(r"(\d+)\s*个门面工具|\b(\d+) facades\b", text)
+        for a, b in stale:
+            val = a or b
+            if val and int(val) != n:
+                err(f"{rel} 门面数 {val} ≠ COMPACT_SURFACE_TOOL_COUNT={n}")
+
+
+def check_root_manifest_version() -> None:
+    """根 manifest.json 的 version 必须与包版本锁步（曾停在 0.32.0 两个版本无人察觉）。"""
+    init = (ROOT / "horosa-skill/src/horosa_skill/__init__.py").read_text(encoding="utf-8")
+    m = re.search(r"__version__\s*=\s*[\"']([^\"']+)[\"']", init)
+    manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
+    if not m:
+        err("__init__.py 读不到 __version__")
+        return
+    if manifest.get("version") != m.group(1):
+        err(f"根 manifest.json version={manifest.get('version')!r} ≠ 包版本 {m.group(1)!r}")
+
+
 def check_envelope_schema_version() -> None:
     """docs/DATA_CONTRACTS.md 的「tool envelope：`X`」必须等于 `schemas/common.py::TOOL_ENVELOPE_SCHEMA_VERSION`。
     common.py 的注释一直宣称本脚本核对它，实际从未有此检查——文档停在 0.6.3、代码走到 0.7.0 两个版本无人察觉
@@ -478,6 +516,8 @@ def main() -> None:
     check_conflict_markers()
     check_frontmatter()
     check_envelope_schema_version()
+    check_compact_surface_count()
+    check_root_manifest_version()
     if ERRORS:
         raise SystemExit("docs-sync: FAIL\n- " + "\n- ".join(ERRORS))
     print(f"docs-sync: ok (version {version}, {len(TOOL_DEFINITIONS)} tools, "

@@ -34,7 +34,11 @@ class BirthInput(FlexibleModel):
         default=None,
         description="响应精简视图：缺省=完整；'sections'=段标题+正文；'titles'=只留段标题索引（完整结果已存档，memory_show 可取回）。",
     )
-    hsys: int | None = Field(default=0, description="宫制：0=整宫 Whole Sign（默认）、1=Placidus 等（详见 agent_guidance）。")
+    hsys: int | None = Field(default=0, description="宫制索引（上游 perchart 表）：0=整宫 Whole Sign（默认）、1=Alcabitus、2=Regiomontanus、3=Placidus、4=Koch、5=Vehlow Equal、6=Polich Page、7=Sripati、8=天顶为10宫中点等宫制。注意 1 不是 Placidus（Placidus=3）。")
+    # 地点显示名：进 [起盘信息]/配置段与搜索请求（样例载荷一直带它，此前 MCP 扁平面静默丢弃）。
+    pos: str | None = None
+    # 当事人显示名：随请求透传到后端并进盘头（样例载荷一直带它，此前 MCP 扁平面静默丢弃）。
+    name: str | None = None
     tradition: bool | None = False
     predictive: bool | None = True
     southchart: bool | None = False
@@ -204,6 +208,8 @@ class IndiaRectifyInput(BirthInput):
 
 class PredictiveInput(BirthInput):
     predictive: bool | None = False
+    # pdchart 界限显示开关（service 读 params.showPdBounds；agent_guidance 一直在文档里写它，schema 此前未声明 → MCP 扁平面丢弃）。
+    showPdBounds: int | bool | None = None
 
 
 class RelativePartyInput(FlexibleModel):
@@ -227,6 +233,9 @@ class RelativeInput(FlexibleModel):
 
 class ZiWeiBirthInput(FlexibleModel):
     date: str
+    # 十进制坐标别名（与 BirthInput 同：后端载荷候选会回退到 gpsLat/gpsLon；此前 MCP 扁平面静默丢弃）。
+    gpsLat: float | None = None
+    gpsLon: float | None = None
     time: str
     zone: str
     lat: str
@@ -259,6 +268,9 @@ class ZiWeiRulesInput(FlexibleModel):
 
 class BaZiBirthInput(FlexibleModel):
     date: str
+    # 十进制坐标别名（与 BirthInput 同：后端载荷候选会回退到 gpsLat/gpsLon；此前 MCP 扁平面静默丢弃）。
+    gpsLat: float | None = None
+    gpsLon: float | None = None
     time: str
     zone: str
     lat: str
@@ -277,6 +289,16 @@ class BaZiBirthInput(FlexibleModel):
     lateZiHourUseNextDay: int | bool | None = None
     phaseType: int | None = 0
     ad: int | None = 1
+    # v0.36.0（PR #17，@xipfs）：此前未声明 → MCP 扁平面（FastMCP arg_model 丢未声明键）静默丢性别，快照恒
+    # 「性别：未知」、大运顺逆无法判定；CLI/tool_run/dispatch 不受影响（FlexibleModel extra=allow）。
+    gender: int | str | None = Field(
+        default=None,
+        description="性别：1/'男'/'M'/true=男；0/'女'/'F'/false=女；缺省=未指定（大运/流年顺逆无法判定）。",
+    )
+    response_view: str | None = Field(
+        default=None,
+        description="响应精简视图：缺省=完整；'sections'=段标题+正文；'titles'=只留段标题索引（完整结果已存档，memory_show 可取回）。",
+    )
     # [多运限·指定时段]：上游由界面勾选驱动，headless 开成显式入参。语义同上游 ——
     # 流年 × 流月笛卡尔各一段；流日/流时锚定到所选的第一个上层；总段数封顶 50。
     period: dict[str, Any] | None = Field(default=None, description="多运限时段选择 {liunian:[公历年], liuyue:[月序1-12], liuri:[公历日], liushi:[时辰序0-11]}。")
@@ -284,6 +306,9 @@ class BaZiBirthInput(FlexibleModel):
 
 class BaZiDirectInput(BaZiBirthInput):
     gender: bool | None = True
+    # 十进制坐标别名（与 BirthInput 同：后端载荷候选会回退到 gpsLat/gpsLon；此前 MCP 扁平面静默丢弃）。
+    gpsLat: float | None = None
+    gpsLon: float | None = None
     adjustJieqi: bool | None = False
     # [多运限·指定时段]：上游由界面勾选驱动，headless 开成显式入参。语义同上游 ——
     # 流年 × 流月笛卡尔各一段；流日/流时锚定到所选的第一个上层；总段数封顶 50。
@@ -840,6 +865,14 @@ class GuiceInput(FlexibleModel):
     shu: int | None = None
     shu2: int | None = None
     hourZhi: str | None = None
+    # 免起课路径（guice.js:29-39 逐键读取；样例载荷一直这样调）：给了四柱/农历月日就不再从 date/time 起课。
+    yearZhi: str | None = None
+    monthZhi: str | None = None
+    lunarMonth: int | None = None
+    lunarDay: int | None = None
+    year: int | None = None
+    dayGan: str | None = None
+    pillars: list[str] | None = None
     # 十应之录（占时耳目所及，机不能代）+ 方位 + 所问：
     shiyingInputs: dict[str, Any] | None = None
     fangKey: str | None = None
@@ -861,6 +894,9 @@ class ZhengChuanInput(FlexibleModel):
     # 神数正传：五流派——tieban 铁板神数 / shaozi 邵子神数 / dading 大定数 / liuqin 六亲数 / xinyi 铁算心易。
     # 除 xinyi（查询层，不需生辰）外，四柱走 /nongli/time 权威口径（立春界年柱 + 农历月日）。gender 男/女 或 1/0。
     school: str | None = "tieban"
+    # 十进制坐标别名（与 BirthInput 同：后端载荷候选会回退到 gpsLat/gpsLon；此前 MCP 扁平面静默丢弃）。
+    gpsLat: float | None = None
+    gpsLon: float | None = None
     gender: str | int | None = None
     # 生辰（tieban/shaozi/dading/liuqin 起四柱所需；dading 另需 date/time 建 bazi 推运表）：
     date: str | None = None
@@ -1243,6 +1279,14 @@ class ShenShuInput(FlexibleModel):
     # ganzhi-based, so only date (+ optional time) + the 晚子时 switches are needed; lat/lon/zone are not used.
     # `options` passes any technique-specific override straight to the engine (e.g. wuzhao mode/number, seed).
     date: str
+    # v0.36.0：神数五支的性别/地点此前未声明——`_run_shenshu_tool` 原样转发，CLI 有效而 MCP 扁平面静默丢弃
+    # （PR #17 同型）。gender 五支皆用；zone/lat/lon（或 gpsLat/gpsLon）xianqin/qizhengkin/cetian 起盘需要。
+    gender: int | str | None = None
+    zone: str | None = None
+    lat: str | None = None
+    lon: str | None = None
+    gpsLat: float | None = None
+    gpsLon: float | None = None
     time: str | None = "00:00:00"
     after23NewDay: int | None = 1
     lateZiHourUseNextDay: int | None = 1
@@ -1255,6 +1299,14 @@ class CetianInput(ShenShuInput):
         default=None,
         description="判词原文：list=目录 | all=全库（约 9 千字）| zhaodan/taiyuan/wuxing/qili/feixing/liming/yunxian/shengsi/keying/xianglun/jinjing/shenming/ruyuan 单篇。给了才产 [判词原文] 段。",
     )
+    # v0.36.0：神数五支的性别/地点此前未声明——`_run_shenshu_tool` 原样转发，CLI 有效而 MCP 扁平面静默丢弃
+    # （PR #17 同型）。gender 五支皆用；zone/lat/lon（或 gpsLat/gpsLon）xianqin/qizhengkin/cetian 起盘需要。
+    gender: int | str | None = None
+    zone: str | None = None
+    lat: str | None = None
+    lon: str | None = None
+    gpsLat: float | None = None
+    gpsLon: float | None = None
 
 
 class WangjiInput(ShenShuInput):

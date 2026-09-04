@@ -498,6 +498,9 @@ def _agent_preflight_error(tool_name: str, payload: dict[str, Any]) -> dict[str,
 # 只能是增强，不能成为新的失败点。
 # ---------------------------------------------------------------------------
 
+# 精简面工具数 = 10 门面 + horosa_tool_run。README×2 的「11 个门面/11 facades」由 verify_docs_sync 锁步到此常量。
+COMPACT_SURFACE_TOOL_COUNT = 11
+
 _ELICIT_DEFAULTS = "按星阙默认继续 (use Xingque defaults)"
 _ELICIT_PROVIDE = "我在对话里补充设置 (I will provide settings in chat)"
 _ELICIT_CANCEL = "取消 (cancel)"
@@ -932,7 +935,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
         )
 
     if settings.mcp_compact:
-        # 精简模式（8 门面 + tool_run = 9 工具）：技法工具不平铺，注册一个按名直呼的通用工具（dispatch 关键词路由只覆盖部分技法，
+        # 精简模式（10 门面 + tool_run = COMPACT_SURFACE_TOOL_COUNT=11 工具）：技法工具不平铺，注册一个按名直呼的通用工具（dispatch 关键词路由只覆盖部分技法，
         # 直呼通道保证 105 技法全部可达）；澄清闸照常生效。
         async def horosa_tool_run(**kwargs: Any) -> ToolEnvelope:
             # tool_name 必须在合并之前取走：它是 `request` 的**兄弟**参数，而 `_merge_mcp_arguments`

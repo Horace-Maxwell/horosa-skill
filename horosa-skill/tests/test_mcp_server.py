@@ -3,7 +3,12 @@ from __future__ import annotations
 import pytest
 
 from horosa_skill.schemas.tools import AgentGuidanceInput, BirthInput, DispatchInput, KnowledgeReadInput, KnowledgeRegistryInput, MemoryQueryInput, ReportRenderInput
-from horosa_skill.surfaces.mcp_server import _agent_preflight_error, _merge_mcp_arguments, _normalize_mcp_request
+from horosa_skill.surfaces.mcp_server import (
+    COMPACT_SURFACE_TOOL_COUNT,
+    _agent_preflight_error,
+    _merge_mcp_arguments,
+    _normalize_mcp_request,
+)
 
 
 def test_normalize_mcp_request_accepts_json_string_for_empty_request() -> None:
@@ -162,7 +167,7 @@ def test_mcp_compact_mode_exposes_facade_plus_tool_run(tmp_path) -> None:
     settings.mcp_compact = True
     tools = asyncio.run(create_mcp_server(service, settings).list_tools())
     names = {tool.name for tool in tools}
-    assert len(names) == 11
+    assert len(names) == COMPACT_SURFACE_TOOL_COUNT
     assert "horosa_tool_run" in names and "horosa_cn_qimen" not in names
     # 技法目录随 docstring 在场（dispatch 与 tool_run 均可发现全部技法）。
     by_name = {tool.name: tool for tool in tools}

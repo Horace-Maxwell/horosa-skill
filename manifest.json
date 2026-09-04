@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "horosa-skill",
   "display_name": "Horosa 星阙 — 术数 / 占星",
-  "version": "0.32.0",
+  "version": "0.35.0",
   "description": "Local-first Horosa (星阙) metaphysics: 105 real technique tools over MCP, fully offline.",
   "long_description": "Horosa Skill exposes 105 real 术数/占星 techniques — Western natal & predictive astrology (returns, progressions, 13-method primary directions, horary 卜卦, election 择日, astrocartography), 八字 / 紫微斗数 / 大六壬 / 奇门遁甲 / 太乙 / 金口诀 / 三式合一 / 六爻 / 河洛理数 / 一掌经, the full 14 神数 family, tarot and 天文地占 — as MCP tools that run entirely on your machine. Every result carries a Xingque-compatible export snapshot, every call is stored in a local searchable archive, and a runtime gate forces the assistant to confirm result-changing settings with you instead of inventing them.",
   "author": {
