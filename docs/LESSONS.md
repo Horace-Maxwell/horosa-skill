@@ -98,6 +98,24 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.36.0 / 2026-09-04 — Java 起不来时，每个碰 Java 的调用都先杀掉健康的 chart 服务再全量重启
+
+- **症状**：Java 后端（:9999）挂着、chart 服务（:8899）健康时，任何 Java 端点调用（含 qimen/taiyi 等前置
+  `/nongli/time` 的技法）都要等 ~90s 才失败，期间 chart 族技法也跟着断——用户存档里「起盘慢/时好时坏」的
+  一类主诉。issue 里的 Windows「后端起不来」多属此型。
+- **根因**：`_call_remote` 探针失败 → `start_local_services()`；管理器见「任一服务在」就 `stop_local_services()`
+  先杀健康的 chart 再全量重启，等满 45s 超时才判 degraded 返回；随后调用连不上 → `connection_retry` 再
+  `start_local_services()` 一次——同样的 stop+restart 又来一遍。「降级」只在管理器一头有（degraded_chart_only
+  状态写进文件），调用侧完全不看它，每次都当冷启动处理。
+- **guard**：`runtime_java_retry_cooldown_seconds`（env `HOROSA_RUNTIME_JAVA_RETRY_COOLDOWN_SECONDS`，默认 120）；
+  管理器记住上次 degraded 启动时刻（进程内 + state 文件回读），冷却期内 `start_local_services` 直接返回
+  `{degraded, skipped_restart}` 不 stop 任何服务；`_call_remote` 对 Java 端点冷却期内快速失败
+  `runtime.java_backend_unavailable`（带 retry_after/hint），start 回来 degraded 也立即失败而不是等连接错误再
+  重启；chart 端点全程不受影响；可选 Java 富化经 A2 `_degrade` 落 warnings。测试：冷却期内 Java 工具失败、
+  `started==0`、chart 工具照常；start 回 degraded 只起一次。
+- **法则**：**就绪是分后端的**——一个后端挂了不能连累另一个；重启是昂贵且有副作用的恢复动作，要有冷却，
+  且调用侧必须读管理器的降级状态而不是把每次失败当冷启动。
+
 ### v0.36.0 / 2026-09-04 — 河洛流年法旋钮发成死键 `step2`：边界契约看不见，issue #15 同型再现
 
 - **症状**：`tools/heluo.js` 把 `liunianStep2` 装进 `opts.step2`，而引擎 `buildSnapshotText` 读的是

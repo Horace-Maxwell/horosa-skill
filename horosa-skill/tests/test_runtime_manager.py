@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tarfile
 import threading
+import time
 import zipfile
 from pathlib import Path
 from types import MethodType
@@ -1403,3 +1404,51 @@ def test_doctor_names_dead_java_and_surfaces_boot_excerpt(tmp_path: Path) -> Non
     assert diagnostics is not None
     assert any("SocketException" in line for line in diagnostics["excerpt"])
     assert any("Application run failed" in line for line in diagnostics["excerpt"])
+
+
+def test_start_local_services_skips_restart_during_java_cooldown(tmp_path: Path) -> None:
+    # v0.36.0 A5：Java 挂、chart 健康、冷却期内 → 直接返回 degraded，不 stop 任何服务、不跑启动脚本。
+    archive = create_runtime_archive(tmp_path)
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+        runtime_start_timeout_seconds=0.5,
+        runtime_java_retry_cooldown_seconds=120.0,
+    )
+    manager = HorosaRuntimeManager(settings)
+    manager.install(archive=str(archive))
+
+    def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+        return [
+            {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": False},
+            {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": True},
+        ]
+
+    def forbidden(self: HorosaRuntimeManager, *args: object, **kwargs: object) -> None:
+        raise AssertionError("a healthy chart service must not be stopped or restarted during the Java cooldown")
+
+    manager._service_status = MethodType(fake_service_status, manager)
+    manager.stop_local_services = MethodType(forbidden, manager)  # type: ignore[method-assign]
+    manager._run_start_command = MethodType(forbidden, manager)  # type: ignore[method-assign]
+
+    manager._last_degraded_start_at = time.monotonic()
+    started = manager.start_local_services()
+    assert started["ok"] is True and started["degraded"] is True and started["skipped_restart"] is True
+    assert 0 < started["cooldown_remaining_seconds"] <= 120
+
+    # 冷却过期 → 归零（真正的重启路径由既有 start 测试覆盖）
+    manager._last_degraded_start_at = time.monotonic() - 1000
+    assert manager.java_backend_cooldown_remaining() == 0.0
+
+    # 新进程：从 runtime state 文件回读 degraded_chart_only 的时间戳；状态回到 running 即归零
+    fresh = HorosaRuntimeManager(settings)
+    fresh._write_runtime_state({"managed": True, "status": "degraded_chart_only", "updated_at": fresh._utc_now()})
+    assert fresh.java_backend_cooldown_remaining() > 100
+    fresh._write_runtime_state({"managed": True, "status": "running", "updated_at": fresh._utc_now()})
+    assert fresh.java_backend_cooldown_remaining() == 0.0
+
+    # 冷却设 0 = 关闭
+    off = HorosaRuntimeManager(Settings(**{**settings.model_dump(), "runtime_java_retry_cooldown_seconds": 0.0}))
+    off._last_degraded_start_at = time.monotonic()
+    assert off.java_backend_cooldown_remaining() == 0.0

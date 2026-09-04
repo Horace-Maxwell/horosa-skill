@@ -1218,12 +1218,17 @@ class FakeJsClient(HorosaJsEngineClient):
 
 
 class FakeRuntimeManager:
-    def __init__(self) -> None:
+    def __init__(self, *, degraded: bool = False, cooldown: float = 0.0) -> None:
         self.started = 0
+        self.degraded = degraded
+        self.cooldown = cooldown
 
     def start_local_services(self) -> dict[str, object]:
         self.started += 1
-        return {"ok": True, "already_running": False}
+        return {"ok": True, "already_running": False, "degraded": self.degraded}
+
+    def java_backend_cooldown_remaining(self) -> float:
+        return self.cooldown
 
 
 class ProbeClient(FakeClient):
@@ -4621,3 +4626,50 @@ def test_birthinput_declares_upstream_classical_echo_whitelist() -> None:
     declared = set(BirthInput.model_fields.keys())
     missing = sorted(upstream_echo_keys - declared)
     assert missing == [], f"BirthInput 缺少上游古典白名单键的 typed 声明：{missing}"
+
+
+# ---- v0.36.0 A5 分后端就绪：Java 挂了不许先杀健康的 chart 服务再全量重启 ----
+def _java_cooldown_service(tmp_path, runtime_manager: FakeRuntimeManager) -> tuple[HorosaSkillService, ProbeClient]:
+    settings = Settings(server_root="http://127.0.0.1:9999", db_path=tmp_path / "memory.db", output_dir=tmp_path / "runs")
+    java_client = ProbeClient(probe_ok=False)  # Java 探针失败
+    service = HorosaSkillService(
+        settings,
+        client=java_client,
+        chart_client=FakeClient(),  # chart 服务健康（probe True）
+        store=MemoryStore(settings),
+        js_client=FakeJsClient(),
+        runtime_manager=runtime_manager,
+    )
+    return service, java_client
+
+
+def test_java_endpoint_fails_fast_during_cooldown_and_chart_tool_stays_up(tmp_path) -> None:
+    from horosa_skill.testing_payloads import build_sample_payloads
+
+    runtime_manager = FakeRuntimeManager(cooldown=90.0)
+    service, java_client = _java_cooldown_service(tmp_path, runtime_manager)
+    payloads = build_sample_payloads()
+
+    bazi = service.run_tool("bazi_birth", payloads["bazi_birth"], save_result=False)
+    assert bazi.ok is False
+    assert bazi.error is not None and bazi.error.code == "runtime.java_backend_unavailable"
+    assert bazi.error.details["retry_after_seconds"] == 90.0
+    assert "doctor" in bazi.error.details["hint"]
+    assert runtime_manager.started == 0  # 冷却期内：不重启、更不 stop 健康的 chart 服务
+    assert java_client.probe_calls == 1
+
+    chart = service.run_tool("chart", payloads["chart"], save_result=False)
+    assert chart.ok is True, chart.error
+    assert runtime_manager.started == 0
+
+
+def test_java_endpoint_starts_once_and_does_not_restart_again_when_start_comes_back_degraded(tmp_path) -> None:
+    from horosa_skill.testing_payloads import build_sample_payloads
+
+    runtime_manager = FakeRuntimeManager(degraded=True, cooldown=0.0)
+    service, _java_client = _java_cooldown_service(tmp_path, runtime_manager)
+    bazi = service.run_tool("bazi_birth", build_sample_payloads()["bazi_birth"], save_result=False)
+    assert bazi.ok is False
+    assert bazi.error is not None and bazi.error.code == "runtime.java_backend_unavailable"
+    # 此前：start(degraded) → 调用连不上 → connection_retry 再 start 一次（又杀一次 chart）。现在只起一次。
+    assert runtime_manager.started == 1

@@ -651,6 +651,10 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **声明旋钮 = 交付翻转金标。** 每个新 schema 字段在 `selfcheck.mjs` 至少一条「改它结果必变」+ 一条「写错
   键名结果不变」的负向对照。`js_boundary_contracts` 的子串 oracle 对「同模块另一函数恰有同名参数」的死键
   失明（v0.36.0 heluo `step2`），只当第一道网；生成器已认默认导入与 `opts: local` 嵌套，regen 后仍要翻转验证。
+- **就绪分后端，重启有冷却。** Java 挂/chart 健康时，`start_local_services` 在冷却期
+  （`runtime_java_retry_cooldown_seconds`，默认 120s）内返回 `{degraded, skipped_restart}`，**绝不** stop 健康的
+  chart 服务；`_call_remote` 对 Java 端点冷却期内快速失败 `runtime.java_backend_unavailable`，chart 端点不受
+  影响。新增「探针失败就重启」的路径前先读管理器的降级状态（v0.36.0）。
 - **`run_tool` always returns a `ToolEnvelope`, never lets an unexpected exception escape.** Tool
   execution + snapshot/summary/export post-processing run inside a try that catches `HorosaSkillError`
   **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`. Only invalid-payload

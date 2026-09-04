@@ -32,6 +32,7 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     "HOROSA_LOCAL_BACKEND_PORT": "stable",
     "HOROSA_LOCAL_CHART_PORT": "stable",
     "HOROSA_RUNTIME_START_TIMEOUT_SECONDS": "stable",
+    "HOROSA_RUNTIME_JAVA_RETRY_COOLDOWN_SECONDS": "stable",
     "HOROSA_MCP_COMPACT": "stable",
     "HOROSA_MCP_ELICIT": "stable",
     "HOROSA_TOOLSETS": "stable",
@@ -179,6 +180,7 @@ FIELD_ENV_MAP = {
     "local_backend_port": "HOROSA_LOCAL_BACKEND_PORT",
     "local_chart_port": "HOROSA_LOCAL_CHART_PORT",
     "runtime_start_timeout_seconds": "HOROSA_RUNTIME_START_TIMEOUT_SECONDS",
+    "runtime_java_retry_cooldown_seconds": "HOROSA_RUNTIME_JAVA_RETRY_COOLDOWN_SECONDS",
     "mcp_compact": "HOROSA_MCP_COMPACT",
     "js_engine_timeout_seconds": "HOROSA_JS_ENGINE_TIMEOUT_SECONDS",
     "host": "HOROSA_SKILL_HOST",
@@ -206,6 +208,9 @@ class Settings(BaseModel):
     local_chart_port: int = 8899
     # 冷启动等待：Java(Spring Boot fat jar)+Python(星历重导入) 后端首启常超 15s，45s 覆盖常见机器。
     runtime_start_timeout_seconds: float = 45.0
+    # Java 后端起不来（degraded_chart_only）后的重试冷却：冷却期内碰 Java 的调用快速失败
+    # （runtime.java_backend_unavailable），不再为了再试 Java 先杀掉健康的 chart 服务再全量重启；0 = 关闭冷却。
+    runtime_java_retry_cooldown_seconds: float = 120.0
     # MCP 精简工具面：True 时只暴露 11 个门面工具（dispatch/guidance/memory/report 等 + 通用直呼
     # horosa_tool_run），技法工具不平铺（省 tools/list 上下文预算）；默认 False 保持 97 工具全量平铺。
     mcp_compact: bool = False
@@ -242,6 +247,7 @@ class Settings(BaseModel):
             local_backend_port=_env_int("HOROSA_LOCAL_BACKEND_PORT", 9999, minimum=1, maximum=65535),
             local_chart_port=_env_int("HOROSA_LOCAL_CHART_PORT", 8899, minimum=1, maximum=65535),
             runtime_start_timeout_seconds=_env_float("HOROSA_RUNTIME_START_TIMEOUT_SECONDS", 45.0, minimum=0.1),
+            runtime_java_retry_cooldown_seconds=_env_float("HOROSA_RUNTIME_JAVA_RETRY_COOLDOWN_SECONDS", 120.0, minimum=0.0),
             mcp_compact=_env_bool("HOROSA_MCP_COMPACT", False),
             js_engine_timeout_seconds=_env_float("HOROSA_JS_ENGINE_TIMEOUT_SECONDS", 60.0, minimum=0.1),
             host=_env_text("HOROSA_SKILL_HOST", "127.0.0.1") or "127.0.0.1",

@@ -291,6 +291,30 @@ class HorosaRuntimeManager:
         self.current_dir = settings.runtime_current_dir
         self.tracer = TraceRecorder(settings)
         self._service_lock = threading.Lock()
+        # 上一次「Java 起不来、只剩 chart」的启动时刻（monotonic）；冷却期内 start_local_services 不重启。
+        self._last_degraded_start_at: float | None = None
+
+    def java_backend_cooldown_remaining(self) -> float:
+        """Seconds left in the degraded-chart-only retry cooldown (0 when healthy / expired / disabled).
+
+        In-process timestamp first; falls back to the runtime state file so a fresh CLI process after an
+        MCP server's degraded start does not immediately tear the healthy chart service down again.
+        """
+        cooldown = float(self.settings.runtime_java_retry_cooldown_seconds or 0.0)
+        if cooldown <= 0:
+            return 0.0
+        if self._last_degraded_start_at is not None:
+            return max(0.0, cooldown - (time.monotonic() - self._last_degraded_start_at))
+        state = self.load_runtime_state()
+        if not isinstance(state, dict) or state.get("status") != "degraded_chart_only":
+            return 0.0
+        try:
+            updated = datetime.fromisoformat(str(state.get("updated_at") or ""))
+        except ValueError:
+            return 0.0
+        if updated.tzinfo is None:
+            updated = updated.replace(tzinfo=UTC)
+        return max(0.0, cooldown - (datetime.now(UTC) - updated).total_seconds())
 
     def load_installed_manifest(self, *, strict: bool = False) -> dict[str, Any] | None:
         manifest_path = self.current_dir / "runtime-manifest.json"
@@ -670,6 +694,24 @@ class HorosaRuntimeManager:
 
                 recovered_partial_state = False
                 recovery_details: dict[str, Any] | None = None
+                if self._chart_only_degraded(initial_status):
+                    remaining = self.java_backend_cooldown_remaining()
+                    if remaining > 0:
+                        # Java 挂、chart 健康、冷却期内：不许为了再试 Java 先杀掉健康的 chart 服务再全量重启
+                        # （v0.36.0 前每个碰 Java 的调用都这么干一次——含 qimen 等前置 /nongli/time 的技法）。
+                        return {
+                            "ok": True,
+                            "already_running": True,
+                            "degraded": True,
+                            "skipped_restart": True,
+                            "cooldown_remaining_seconds": round(remaining, 1),
+                            "command": None,
+                            "stdout": "",
+                            "stderr": "",
+                            "endpoints": initial_status,
+                            "trace_id": trace["trace_id"],
+                            "group_id": trace["group_id"],
+                        }
                 if self._any_services_reachable(initial_status):
                     recovery_details = self.stop_local_services()
                     recovered_partial_state = True
@@ -722,6 +764,7 @@ class HorosaRuntimeManager:
                         manifest=manifest,
                     )
                 degraded = bool(readiness.get("degraded"))
+                self._last_degraded_start_at = time.monotonic() if degraded else None
                 startup_warning: dict[str, Any] | None = None
                 if degraded:
                     startup_warning = {

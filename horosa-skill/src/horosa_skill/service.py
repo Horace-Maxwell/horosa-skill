@@ -6456,6 +6456,32 @@ class HorosaSkillService:
             return current
         return current
 
+    def _java_cooldown_remaining(self) -> float:
+        probe = getattr(self.runtime_manager, "java_backend_cooldown_remaining", None)
+        try:
+            return float(probe()) if callable(probe) else 0.0
+        except Exception:  # noqa: BLE001 — a broken state file must not turn into a new failure mode
+            return 0.0
+
+    @staticmethod
+    def _java_unavailable_error(endpoint: str, remaining: float) -> ToolTransportError:
+        return ToolTransportError(
+            "Horosa Java backend (:9999) is unavailable; the runtime is running degraded on the chart service only.",
+            code="runtime.java_backend_unavailable",
+            details={
+                "endpoint": endpoint,
+                "runtime_target": "java_backend",
+                "retry_after_seconds": round(max(0.0, remaining), 1),
+                "hint": (
+                    "Chart-side techniques (西占 chart 族/推运/三式 ken/神数/地占/塔罗) still work. Java-side ones "
+                    "(nongli/bazi/ziwei/liureng and 占时 casts) fail fast until the backend recovers; it is retried "
+                    "automatically after the cooldown (HOROSA_RUNTIME_JAVA_RETRY_COOLDOWN_SECONDS, default 120s). "
+                    "Run `horosa-skill doctor` for the captured Java boot error."
+                ),
+                "next_action": "run_doctor_or_retry_after_cooldown",
+            },
+        )
+
     def _call_remote(self, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
         use_chart_server = endpoint in _PYTHON_CHART_ENDPOINTS
         client = self.chart_client if use_chart_server else self.client
@@ -6463,7 +6489,15 @@ class HorosaSkillService:
         probe_endpoint = "/healthz" if use_chart_server else "/common/time"
         runtime_ready = self._chart_runtime_ready if use_chart_server else self._java_runtime_ready
         if not runtime_ready and not client.probe(probe_endpoint):
-            self.runtime_manager.start_local_services()
+            # 分后端就绪（v0.36.0 A5）：Java 在冷却期内快速失败，不触发会先杀健康 chart 服务的全量重启；
+            # chart 端点不受 Java 状态影响。
+            if not use_chart_server:
+                remaining = self._java_cooldown_remaining()
+                if remaining > 0:
+                    raise self._java_unavailable_error(endpoint, remaining)
+            started = self.runtime_manager.start_local_services()
+            if not use_chart_server and isinstance(started, dict) and started.get("degraded"):
+                raise self._java_unavailable_error(endpoint, self._java_cooldown_remaining())
         remote_endpoint = _chart_server_endpoint(endpoint) if use_chart_server else endpoint
         connection_retry_used = False
         data: dict[str, Any] | None = None
@@ -6482,6 +6516,8 @@ class HorosaSkillService:
                     if not is_param_error:
                         if exc.code == "transport.connection_error" and not connection_retry_used:
                             connection_retry_used = True
+                            if not use_chart_server and self._java_cooldown_remaining() > 0:
+                                raise self._java_unavailable_error(endpoint, self._java_cooldown_remaining()) from exc
                             self.runtime_manager.start_local_services()
                             time.sleep(1.0)
                             break
