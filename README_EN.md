@@ -75,7 +75,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `105 / 105 ok=true` |
-| Engineering tests | `556 / 556 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 63 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `576 / 576 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 63 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `84` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `8` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`102` export techniques modeled; contract v14 mirrors desktop aiExport v56) |
@@ -335,7 +335,7 @@ Troubleshooting install: `uv: command not found` -> install uv first (one-liner 
 
 More troubleshooting: if `github.com:443` is unreachable but `api.github.com` works, download the runtime via the assets API (`curl -s https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/latest` to find your platform archive's `assets[].id`, then `curl -L -H "Accept: application/octet-stream" -o runtime.zip https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/assets/<id>`) and run `uv run horosa-skill install --archive runtime.zip`. If the Java backend (:9999) will not come up — `doctor` reports `services:java_backend_not_running` — the runtime now degrades to **chart-only** instead of locking everything: 三式 ken (qimen/taiyi/jinkou), 神数, geomancy, tarot and the western chart family keep working while nongli/bazi/ziwei/liureng and time-cast flows error until it recovers; `doctor` attaches the captured Java boot error under `java_diagnostics` and `selfcheck` falls back to a chart-side probe. A known Windows cause is proxy/VPN/security software whose WFP filters block `java.exe` loopback (JDK 17's internal pipes prefer AF_UNIX with no TCP fallback on connect — see issue #14); stopping the service is usually not enough, disable it and reboot.
 
-For stdio clients like Claude Desktop: `uv run horosa-skill serve --transport stdio`. Context-constrained clients can set `HOROSA_MCP_COMPACT=1` to expose only the 11 facades, or `HOROSA_TOOLSETS=astro,cn` to flatten just those domains (`none` = compact; facades always register). The clarification gate still applies.
+For stdio clients like Claude Desktop: `uv run horosa-skill serve --transport stdio`. Context-constrained clients can set `HOROSA_MCP_COMPACT=1` to expose only the 11 facades, or `HOROSA_TOOLSETS=astro,cn` to flatten just those domains (domains astro/predict/chart/cn/shenshu/other, aliases western/chinese/all/none; unknown tokens are warned about and ignored, an empty result falls back to the full surface; any effective filter also registers `horosa_tool_run`; facades always register). The clarification gate still applies.
 
 ### Let the dispatcher pick the technique
 
@@ -425,7 +425,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 556 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 576 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

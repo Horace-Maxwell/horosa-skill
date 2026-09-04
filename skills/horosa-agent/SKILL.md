@@ -42,6 +42,10 @@ horosa_cn_qimen {date, time, zone:"+08:00", lat:"31n13", lon:"121e28", agent_con
 horosa_report_render {run_id, tool_name:"qimen", format:"docx", ai_report:{executive_summary, answer_text, analysis_sections, recommendations, limitations}}
 ```
 
+找工具：每个工具描述带 `aka:` 别名（中文口语/拼音/英文）；不确定就 `horosa_dispatch`（路由覆盖全部技法，
+含 8 个择日搜索）或 `horosa_agent_guidance`（响应里的 `server_profile` 告诉你本进程实际平铺了哪些域、
+`HOROSA_TOOLSETS` 有没有拼错、`horosa_tool_run` 在不在）。
+
 tools/list 只广告每个工具的域核心字段 + 自有字段；BirthInput 长尾旋钮（`orbSystem`/`extraBodies`/`termsVariant`…）
 **顶层按名直接传即可、不会被丢**，全表用 `horosa_agent_guidance(tool_name=…)` 查（v0.36.0 两层 schema）。
 

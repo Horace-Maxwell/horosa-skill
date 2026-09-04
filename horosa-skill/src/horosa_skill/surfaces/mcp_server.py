@@ -125,10 +125,65 @@ def _selected_toolsets() -> set[str] | None:
     上限，全量平铺会被静默截断。分组白名单是注册期过滤，不触碰 service 层。
     `HOROSA_TOOLSETS=none` == 精简模式（等价 HOROSA_MCP_COMPACT=1 的技法面）。
     """
-    raw = os.environ.get("HOROSA_TOOLSETS", "").strip()
-    if not raw:
-        return None
-    return {part.strip().lower() for part in raw.split(",") if part.strip()}
+    return _resolve_toolsets(os.environ.get("HOROSA_TOOLSETS", ""))["effective"]
+
+
+# HOROSA_TOOLSETS 合法域 + 别名（v0.36.0 B2：此前拼错一个 token = 零技法且无 tool_run 直呼，客户端只剩门面）。
+_TOOLSET_DOMAINS: frozenset[str] = frozenset({"astro", "predict", "chart", "cn", "shenshu", "other"})
+_TOOLSET_ALIASES: dict[str, frozenset[str]] = {
+    "western": frozenset({"astro", "predict", "chart"}),
+    "chinese": frozenset({"cn", "shenshu"}),
+    "all": _TOOLSET_DOMAINS,
+    "none": frozenset(),
+}
+
+
+def _resolve_toolsets(raw: str) -> dict[str, Any]:
+    """`HOROSA_TOOLSETS` 文本 → {requested, effective(set|None), unknown}；未知 token 告警丢弃，全空回落全量。"""
+    tokens = [part.strip().lower() for part in f"{raw or ''}".split(",") if part.strip()]
+    if not tokens:
+        return {"requested": [], "effective": None, "unknown": []}
+    effective: set[str] = set()
+    unknown: list[str] = []
+    saw_none = False
+    for token in tokens:
+        if token in _TOOLSET_ALIASES:
+            effective |= _TOOLSET_ALIASES[token]
+            saw_none = saw_none or token == "none"
+        elif token in _TOOLSET_DOMAINS:
+            effective.add(token)
+        else:
+            unknown.append(token)
+    if unknown:
+        # 启动期配置通知，无工具调用可告知——不是降级点（verify_silent_degrades 只盯 logger.warning）。
+        logger.log(
+            logging.WARNING,
+            "HOROSA_TOOLSETS 含未知 token %s（合法：%s + 别名 %s）——已忽略；%s",
+            unknown, sorted(_TOOLSET_DOMAINS), sorted(_TOOLSET_ALIASES),
+            "回落全量平铺" if not effective and not saw_none else "只平铺已识别的域",
+        )
+    if not effective and not saw_none:
+        return {"requested": tokens, "effective": None, "unknown": unknown}
+    return {"requested": tokens, "effective": effective, "unknown": unknown}
+
+
+def _server_profile(settings: Settings) -> dict[str, Any]:
+    """本进程实际暴露了什么（经 horosa_agent_guidance 可查；_SERVER_INSTRUCTIONS 没预算放它）。"""
+    resolved = _resolve_toolsets(os.environ.get("HOROSA_TOOLSETS", ""))
+    effective = resolved["effective"]
+    compact = bool(settings.mcp_compact)
+    registered = (
+        0 if compact else sum(1 for d in TOOL_DEFINITIONS.values() if effective is None or d.domain.lower() in effective)
+    )
+    return {
+        "compact": compact,
+        "toolsets_requested": resolved["requested"],
+        "toolsets_effective": None if effective is None else sorted(effective),
+        "toolsets_unknown": resolved["unknown"],
+        "technique_tools_registered": registered,
+        "tool_run_registered": compact or effective is not None,
+        "hint": "技法工具未平铺时用 horosa_tool_run(tool_name=…) 直呼；HOROSA_TOOLSETS 合法域见 toolsets_effective。",
+    }
 
 
 # Server instructions：客户端把它当「这台服务器是干什么的」说明书常驻上下文。自 Claude Code 起
@@ -648,11 +703,14 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
 
     def horosa_agent_guidance(**kwargs: Any) -> dict[str, Any]:
         payload = _normalize_mcp_request(_merge_mcp_arguments(kwargs), AgentGuidanceInput)
-        return build_agent_guidance(
+        guidance = build_agent_guidance(
             tool_name=payload.get("tool_name"),
             intent=payload.get("intent"),
             include_all=payload.get("include_all", False),
         )
+        if isinstance(guidance, dict):
+            guidance["server_profile"] = _server_profile(settings)
+        return guidance
     horosa_agent_guidance.__doc__ = (
         "Return machine-readable guidance for agents before calling Horosa tools. "
         "Use this to decide which user settings must be clarified instead of silently defaulted."
@@ -939,8 +997,9 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
             "引用盘面证据、机会/风险/时机/建议分列、保留「排盘规则」行；不要出现 run_id/JSON 等机器元数据。"
         )
 
-    if settings.mcp_compact:
-        # 精简模式（10 门面 + tool_run = COMPACT_SURFACE_TOOL_COUNT=11 工具）：技法工具不平铺，注册一个按名直呼的通用工具（dispatch 关键词路由只覆盖部分技法，
+    toolsets = _selected_toolsets()
+    if settings.mcp_compact or toolsets is not None:
+        # 精简模式（10 门面 + tool_run = COMPACT_SURFACE_TOOL_COUNT=11 工具）或 HOROSA_TOOLSETS 裁剪面：只要技法面被过滤就注册直呼通道。：技法工具不平铺，注册一个按名直呼的通用工具（dispatch 关键词路由只覆盖部分技法，
         # 直呼通道保证 105 技法全部可达）；澄清闸照常生效。
         async def horosa_tool_run(**kwargs: Any) -> ToolEnvelope:
             # tool_name 必须在合并之前取走：它是 `request` 的**兄弟**参数，而 `_merge_mcp_arguments`
@@ -1000,10 +1059,10 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
             annotations=_ANN_CALC,
             meta=_tool_meta("horosa_tool_run"),
         )(horosa_tool_run)
+    if settings.mcp_compact:
         apply_advertised_schemas(mcp)
         return mcp
 
-    toolsets = _selected_toolsets()
     for definition in TOOL_DEFINITIONS.values():
         if toolsets is not None and definition.domain.lower() not in toolsets:
             continue

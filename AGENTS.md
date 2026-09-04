@@ -664,6 +664,10 @@ A global stability pass hardened these; keep them true when you touch the releva
   `tools/list` 的瘦身只在注册后重写 `Tool.parameters`（`surfaces/mcp_schema.py`：域核心 + 推运目标 + 工具自有
   字段 + 闸门三键 + `request`）。硬预算全量 ≤256 KB / 精简 ≤30 KB（`verify_mcp_list_budget.py` 棘轮只降不升）；
   加字段/加描述前先量。enum 只进广告层且与表锁步（v0.36.0）。
+- **能算 ≠ 能被找到。** 新技法必须同时带：`engine/synonyms.py` 一条（键集与 TOOL_DEFINITIONS 锁步）、
+  `engine/router.py` 一条规则（或进 `ROUTING_EXEMPT`）、`contracts/router_corpus.json` 至少一句语料
+  （`verify_router_corpus.py` 的 `min_pass` 只升不降）。择日搜索族词面含基底技法名，基底规则一律
+  `and not is_zeri`。`HOROSA_TOOLSETS` 未知 token 告警丢弃、全空回落全量，过滤生效即注册 `horosa_tool_run`。
 - **`run_tool` always returns a `ToolEnvelope`, never lets an unexpected exception escape.** Tool
   execution + snapshot/summary/export post-processing run inside a try that catches `HorosaSkillError`
   **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`. Only invalid-payload

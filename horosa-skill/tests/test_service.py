@@ -3594,10 +3594,11 @@ def test_dispatch_no_match_returns_candidates(tmp_path) -> None:
         output_dir=tmp_path / "runs",
     )
     service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
-    result = service.dispatch({"query": "看看老黄历宜忌", "agent_confirmed_settings": True, "save_result": False})
+    # 「老黄历宜忌」自 v0.36.0 起有路由（huangli）；玄史是查询层工具，故意不进 dispatch 规则 → 只能靠候选建议到达。
+    result = service.dispatch({"query": "查一下玄学史里的天象记录", "agent_confirmed_settings": True, "save_result": False})
     assert result.ok is False
     details = result.error.details or {}
-    assert details.get("candidates") and "calendar_month" in details["candidates"]
+    assert details.get("candidates") and details["candidates"][0] == "xuanshi"
 
 
 def test_response_view_trims_payload_but_archives_full(tmp_path) -> None:

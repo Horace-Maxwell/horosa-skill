@@ -1,0 +1,606 @@
+{
+  "_comment": "Router corpus ratchet (v0.36.0 B2): natural-language queries (zh + en) → the technique tool(s) horosa_dispatch must pick, verified by scripts/verify_router_corpus.py. `min_pass` may only go up; refresh with --update-baseline after improving the router. Expected values are what a user would mean, not what the router happens to do.",
+  "min_pass": 100,
+  "cases": [
+    {
+      "query": "帮我起一个奇门遁甲盘看出行",
+      "expect": [
+        "qimen"
+      ]
+    },
+    {
+      "query": "用太乙神数看今年国运",
+      "expect": [
+        "taiyi"
+      ]
+    },
+    {
+      "query": "金口诀问失物",
+      "expect": [
+        "jinkou"
+      ]
+    },
+    {
+      "query": "大六壬起课问婚姻",
+      "expect": [
+        "liureng_gods"
+      ]
+    },
+    {
+      "query": "六壬行年看明年运势",
+      "expect": [
+        "liureng_runyear"
+      ]
+    },
+    {
+      "query": "小六壬测走失的猫",
+      "expect": [
+        "xiaoliuren"
+      ]
+    },
+    {
+      "query": "飞宫小奇门问出行吉凶",
+      "expect": [
+        "feigong"
+      ]
+    },
+    {
+      "query": "小成图看股市",
+      "expect": [
+        "xiaochengtu"
+      ]
+    },
+    {
+      "query": "皇极轨策起卦问事业",
+      "expect": [
+        "guice"
+      ]
+    },
+    {
+      "query": "三式合一看这个时辰",
+      "expect": [
+        "sanshiunited"
+      ]
+    },
+    {
+      "query": "排一下紫微斗数命盘",
+      "expect": [
+        "ziwei_birth"
+      ]
+    },
+    {
+      "query": "我想看紫微格局规则库里的说明",
+      "expect": [
+        "ziwei_rules"
+      ]
+    },
+    {
+      "query": "排八字命盘看五行",
+      "expect": [
+        "bazi_birth"
+      ]
+    },
+    {
+      "query": "八字直断大运流年",
+      "expect": [
+        "bazi_direct"
+      ]
+    },
+    {
+      "query": "六爻起卦问考试",
+      "expect": [
+        "sixyao"
+      ]
+    },
+    {
+      "query": "周易占卜一下这件事",
+      "expect": [
+        "sixyao"
+      ]
+    },
+    {
+      "query": "河洛理数看命运篇",
+      "expect": [
+        "heluo"
+      ]
+    },
+    {
+      "query": "一掌经看十二宫",
+      "expect": [
+        "yizhangjing"
+      ]
+    },
+    {
+      "query": "邵子参评数条文",
+      "expect": [
+        "canping"
+      ]
+    },
+    {
+      "query": "神数正传起数",
+      "expect": [
+        "zhengchuan"
+      ]
+    },
+    {
+      "query": "铁板神数条文",
+      "expect": [
+        "tieban"
+      ]
+    },
+    {
+      "query": "统摄法起卦",
+      "expect": [
+        "tongshefa"
+      ]
+    },
+    {
+      "query": "宿占看今天",
+      "expect": [
+        "suzhan"
+      ]
+    },
+    {
+      "query": "灵棋经掷棋问事",
+      "expect": [
+        "lingqi"
+      ]
+    },
+    {
+      "query": "抽一个塔罗牌阵问感情",
+      "expect": [
+        "tarot"
+      ]
+    },
+    {
+      "query": "天文地占起卦",
+      "expect": [
+        "geomancy"
+      ]
+    },
+    {
+      "query": "今天老黄历宜忌",
+      "expect": [
+        "huangli"
+      ]
+    },
+    {
+      "query": "查通书择日的吉日",
+      "expect": [
+        "huanglizeri"
+      ]
+    },
+    {
+      "query": "通书五流派看看这一天",
+      "expect": [
+        "tongshu"
+      ]
+    },
+    {
+      "query": "生成本月万年历",
+      "expect": [
+        "calendar_month"
+      ]
+    },
+    {
+      "query": "农历换算 2026-02-17",
+      "expect": [
+        "nongli_time"
+      ]
+    },
+    {
+      "query": "今年全年节气盘",
+      "expect": [
+        "jieqi_year"
+      ]
+    },
+    {
+      "query": "我出生在哪个节气",
+      "expect": [
+        "jieqi_birth"
+      ]
+    },
+    {
+      "query": "奇门择日搬家",
+      "expect": [
+        "qimenzeri"
+      ]
+    },
+    {
+      "query": "八字择日开业",
+      "expect": [
+        "bazizeri"
+      ]
+    },
+    {
+      "query": "紫微择时看开张",
+      "expect": [
+        "ziweizeri"
+      ]
+    },
+    {
+      "query": "六壬择日结婚",
+      "expect": [
+        "liurengzeri"
+      ]
+    },
+    {
+      "query": "太乙择时出行",
+      "expect": [
+        "taiyizeri"
+      ]
+    },
+    {
+      "query": "三式择时签约",
+      "expect": [
+        "sanshizeri"
+      ]
+    },
+    {
+      "query": "七政择时看动土",
+      "expect": [
+        "qizhengzeri"
+      ]
+    },
+    {
+      "query": "印度择日 muhurta 看婚期",
+      "expect": [
+        "indiazeri"
+      ]
+    },
+    {
+      "query": "天星择日选婚期",
+      "expect": [
+        "tianxing"
+      ]
+    },
+    {
+      "query": "七政择日动盘看这个时刻的方位",
+      "expect": [
+        "qizhengelection"
+      ]
+    },
+    {
+      "query": "择日结婚",
+      "expect": [
+        "election"
+      ]
+    },
+    {
+      "query": "卜卦占星问这笔生意",
+      "expect": [
+        "horary"
+      ]
+    },
+    {
+      "query": "合盘看我们俩的关系",
+      "expect": [
+        "relative"
+      ]
+    },
+    {
+      "query": "七政四余排盘",
+      "expect": [
+        "guolao_chart"
+      ]
+    },
+    {
+      "query": "张果星宗断语",
+      "expect": [
+        "qizhengkin"
+      ]
+    },
+    {
+      "query": "印度占星排盘",
+      "expect": [
+        "india_chart"
+      ]
+    },
+    {
+      "query": "出生时间不准，帮我做生时校正",
+      "expect": [
+        "india_rectify"
+      ]
+    },
+    {
+      "query": "占星地图看迁移方向",
+      "expect": [
+        "acg"
+      ]
+    },
+    {
+      "query": "名人星盘库找爱因斯坦",
+      "expect": [
+        "astrodata"
+      ]
+    },
+    {
+      "query": "巴比伦占星盘",
+      "expect": [
+        "babylon"
+      ]
+    },
+    {
+      "query": "起一个龙盘",
+      "expect": [
+        "draconic"
+      ]
+    },
+    {
+      "query": "重置盘看搬到上海之后",
+      "expect": [
+        "relocation"
+      ]
+    },
+    {
+      "query": "土星回归什么时候",
+      "expect": [
+        "extrareturns"
+      ]
+    },
+    {
+      "query": "行星周期木土合相时间",
+      "expect": [
+        "planet_cycles"
+      ]
+    },
+    {
+      "query": "太阳返照盘看明年",
+      "expect": [
+        "solarreturn"
+      ]
+    },
+    {
+      "query": "小限推运",
+      "expect": [
+        "profection"
+      ]
+    },
+    {
+      "query": "法达星限",
+      "expect": [
+        "firdaria"
+      ]
+    },
+    {
+      "query": "黄道释放看事业时段",
+      "expect": [
+        "zr"
+      ]
+    },
+    {
+      "query": "cast a qimen dunjia chart for travel",
+      "expect": [
+        "qimen"
+      ]
+    },
+    {
+      "query": "natal chart for 1990-01-01 12:00 shanghai",
+      "expect": [
+        "chart"
+      ]
+    },
+    {
+      "query": "my birth chart please",
+      "expect": [
+        "chart"
+      ]
+    },
+    {
+      "query": "western horoscope reading",
+      "expect": [
+        "chart"
+      ]
+    },
+    {
+      "query": "four pillars bazi reading",
+      "expect": [
+        "bazi_birth"
+      ]
+    },
+    {
+      "query": "purple star astrology chart",
+      "expect": [
+        "ziwei_birth"
+      ]
+    },
+    {
+      "query": "i ching hexagram for my question",
+      "expect": [
+        "sixyao"
+      ]
+    },
+    {
+      "query": "tarot spread about love",
+      "expect": [
+        "tarot"
+      ]
+    },
+    {
+      "query": "horary question about a lost item",
+      "expect": [
+        "horary"
+      ]
+    },
+    {
+      "query": "electional astrology for a wedding date",
+      "expect": [
+        "election"
+      ]
+    },
+    {
+      "query": "synastry between two charts",
+      "expect": [
+        "relative"
+      ]
+    },
+    {
+      "query": "vedic chart with lahiri ayanamsa",
+      "expect": [
+        "india_chart"
+      ]
+    },
+    {
+      "query": "vedic progression for next year",
+      "expect": [
+        "vedicprog"
+      ]
+    },
+    {
+      "query": "solar return chart 2031",
+      "expect": [
+        "solarreturn"
+      ]
+    },
+    {
+      "query": "lunar return this month",
+      "expect": [
+        "lunarreturn"
+      ]
+    },
+    {
+      "query": "solar arc directions",
+      "expect": [
+        "solararc"
+      ]
+    },
+    {
+      "query": "primary directions timeline",
+      "expect": [
+        "pd"
+      ]
+    },
+    {
+      "query": "annual profection year lord",
+      "expect": [
+        "profection"
+      ]
+    },
+    {
+      "query": "firdaria periods",
+      "expect": [
+        "firdaria"
+      ]
+    },
+    {
+      "query": "zodiacal releasing from spirit",
+      "expect": [
+        "zr"
+      ]
+    },
+    {
+      "query": "astrocartography lines for moving abroad",
+      "expect": [
+        "acg"
+      ]
+    },
+    {
+      "query": "draconic chart",
+      "expect": [
+        "draconic"
+      ]
+    },
+    {
+      "query": "relocation chart for tokyo",
+      "expect": [
+        "relocation"
+      ]
+    },
+    {
+      "query": "harmonic chart h5",
+      "expect": [
+        "harmonic"
+      ]
+    },
+    {
+      "query": "hellenistic chart",
+      "expect": [
+        "hellen_chart"
+      ]
+    },
+    {
+      "query": "midpoint uranian chart",
+      "expect": [
+        "germany"
+      ]
+    },
+    {
+      "query": "saturn return timing",
+      "expect": [
+        "extrareturns"
+      ]
+    },
+    {
+      "query": "birth time rectification",
+      "expect": [
+        "india_rectify"
+      ]
+    },
+    {
+      "query": "celebrity chart database search",
+      "expect": [
+        "astrodata"
+      ]
+    },
+    {
+      "query": "chinese almanac today",
+      "expect": [
+        "huangli"
+      ]
+    },
+    {
+      "query": "lunar calendar conversion",
+      "expect": [
+        "nongli_time"
+      ]
+    },
+    {
+      "query": "geomancy reading",
+      "expect": [
+        "geomancy"
+      ]
+    },
+    {
+      "query": "da liu ren divination",
+      "expect": [
+        "liureng_gods"
+      ]
+    },
+    {
+      "query": "xiao liu ren quick divination",
+      "expect": [
+        "xiaoliuren"
+      ]
+    },
+    {
+      "query": "tie ban shen shu",
+      "expect": [
+        "tieban"
+      ]
+    },
+    {
+      "query": "he luo li shu chart",
+      "expect": [
+        "heluo"
+      ]
+    },
+    {
+      "query": "babylonian astrology chart",
+      "expect": [
+        "babylon"
+      ]
+    },
+    {
+      "query": "mundane ingress chart for 2026",
+      "expect": [
+        "mundane"
+      ]
+    },
+    {
+      "query": "muhurta for a new business",
+      "expect": [
+        "indiazeri"
+      ]
+    }
+  ]
+}

@@ -98,6 +98,24 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.36.0 / 2026-09-04 — 找不到：25 个技法无路由规则、英文触发 67% 零命中、`HOROSA_TOOLSETS` 拼错＝零技法
+
+- **症状**：8 个择日搜索工具、tarot/地占/一掌经/龙盘/重置盘/占星地图/多重回归……25 个技法在 `horosa_dispatch`
+  里没有任何规则（5 个只在未命中候选池），用户说「八字择日开业」拿到的是八字命盘 + 通用择日两张盘；
+  58 个常见英文触发词 67% 零命中，`vedic chart` 路由到**推运**工具；`HOROSA_TOOLSETS=astr`（拼错）注册零个
+  技法且没有 `horosa_tool_run`，客户端只剩门面、任何技法都到不了。
+- **根因**：路由规则是逐个手写的 `if _contains_any(...)`，新工具接线九件套里没有「加路由」这一步；同义词
+  没有单一来源（描述里一句、候选池里一份、路由里再一份）；`_selected_toolsets` 把任何 token 都当域名。
+- **guard**：`engine/synonyms.py`（105 工具全覆盖，中文口语 + 拼音 + 英文；键集与 TOOL_DEFINITIONS 锁步）
+  三处消费：MCP 描述 `aka:` 一行、路由候选打分、语料；路由补 25 条规则 + 择日族互斥表 `_ZERI_PHRASES`
+  （基底技法规则一律 `and not is_zeri`）+ 英文触发 + `vedic` 修正；`contracts/router_corpus.json`
+  100 条 zh/en 语料 + `verify_router_corpus.py`（`min_pass` 只升不降，现 100/100）；`test_router_corpus`
+  「每个技法必须有规则或在豁免表」；`HOROSA_TOOLSETS` 合法域表 + 别名 western/chinese/all/none，未知
+  token 告警丢弃、全空回落全量，只要有过滤生效就注册 `horosa_tool_run`；`server_profile` 经
+  `horosa_agent_guidance` 可查。
+- **法则**：**一个技法「能算」不等于「能被找到」**——接线清单必须含路由规则 + 同义词 + 语料各一条；
+  配置解析对拼错要告警回落，不能静默变成「什么都没有」。
+
 ### v0.36.0 / 2026-09-04 — tools/list 1186 KB（≈318k token）：agent 开口前先付一本字典的钱
 
 - **症状**：默认 MCP 面 115 工具的 `tools/list` 1186 KB；57 个工具各继承 BirthInput 全部 95 字段（每工具 17 KB、

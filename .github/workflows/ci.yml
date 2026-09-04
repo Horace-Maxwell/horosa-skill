@@ -72,6 +72,9 @@ jobs:
       - name: Verify MCP tools/list byte budget (advertised-layer schema ratchet)
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_mcp_list_budget.py
+      - name: Verify dispatch router corpus (zh+en queries → expected tools; min_pass only goes up)
+        working-directory: ./horosa-skill
+        run: uv run python scripts/verify_router_corpus.py
       - name: Verify every schema knob has a consumer
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_schema_knob_wiring.py

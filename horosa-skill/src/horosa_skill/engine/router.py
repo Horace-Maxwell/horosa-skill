@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from horosa_skill.engine.synonyms import synonym_scores
 from horosa_skill.errors import DispatchResolutionError
 from horosa_skill.schemas.tools import DispatchInput
 
@@ -8,28 +9,52 @@ def _contains_any(text: str, words: list[str]) -> bool:
     return any(word in text for word in words)
 
 
+# 择日搜索族（v0.36.0 B2 补 8 支）：词面都含基底技法名（「八字择日」含「八字」）→ 基底规则必须排除，
+# 否则一句话点亮两个工具；generic「择日」→ election 也要排除这些词面。
+_ZERI_PHRASES: dict[str, list[str]] = {
+    "huanglizeri": ["黄历择吉", "黄历择日", "通书择日", "huanglizeri", "almanac election"],
+    "bazizeri": ["八字择时", "八字择日", "bazizeri", "bazi election"],
+    "taiyizeri": ["太乙择时", "太乙择日", "taiyizeri", "taiyi election"],
+    "ziweizeri": ["紫微择时", "紫微择日", "ziweizeri", "ziwei election"],
+    "liurengzeri": ["六壬择时", "六壬择日", "liurengzeri", "liureng election"],
+    "sanshizeri": ["三式择时", "三式择日", "三式合一择时", "sanshizeri", "sanshi election"],
+    "qizhengzeri": ["七政择时", "七政四余择时", "qizhengzeri"],
+    "indiazeri": ["印度择时", "印度择日", "吠陀择日", "muhurta", "indiazeri"],
+}
+_ALL_ZERI_WORDS: list[str] = [word for words in _ZERI_PHRASES.values() for word in words]
+
+
 def select_tools(request: DispatchInput) -> list[str]:
     text = request.query.lower()
     selected: list[str] = []
+    is_zeri = _contains_any(text, _ALL_ZERI_WORDS)
 
     def add(tool_name: str) -> None:
         if tool_name not in selected:
             selected.append(tool_name)
 
-    if _contains_any(text, ["紫微", "ziwei"]):
+    if _contains_any(text, ["紫微", "ziwei", "purple star", "斗数"]) and not is_zeri and not _contains_any(
+        text, ["紫微规则", "斗数规则", "格局规则", "ziwei rules", "ziwei_rules", "策天", "飞星紫微", "cetian"]
+    ):
         add("ziwei_birth")
-    if _contains_any(text, ["八字", "bazi", "四柱"]):
+    if _contains_any(text, ["紫微规则", "斗数规则", "格局规则", "ziwei rules", "ziwei_rules"]):
+        add("ziwei_rules")
+    if _contains_any(text, ["八字", "bazi", "四柱", "four pillars"]) and not is_zeri:
         if _contains_any(text, ["直断", "direct", "大运", "流年"]):
             add("bazi_direct")
         else:
             add("bazi_birth")
     # 小六壬 含「六壬」二字 → 大六壬分支须排除，否则「小六壬测走失」误路由 liureng（同「卜卦含卦字」先例）。
-    if _contains_any(text, ["六壬", "liureng"]) and not _contains_any(text, ["小六壬", "xiaoliuren"]):
+    if (
+        _contains_any(text, ["六壬", "liureng", "liu ren"])
+        and not _contains_any(text, ["小六壬", "xiaoliuren", "xiao liu ren", "金口诀", "jinkou"])
+        and not is_zeri
+    ):
         if _contains_any(text, ["年运", "runyear", "行年"]):
             add("liureng_runyear")
         else:
             add("liureng_gods")
-    if _contains_any(text, ["小六壬", "xiaoliuren"]):
+    if _contains_any(text, ["小六壬", "xiaoliuren", "xiao liu ren"]):
         add("xiaoliuren")
     if _contains_any(text, ["飞宫", "小奇门", "feigong"]):
         add("feigong")
@@ -53,22 +78,23 @@ def select_tools(request: DispatchInput) -> list[str]:
     if _contains_any(text, ["行星周期", "木土合", "土冥", "天海", "大会合", "conjunction cycle", "planetcycles", "planet cycles"]):
         add("planet_cycles")
     # 出生节气窗：定位出生前后节气（「我出生在哪个节气」「距立春几天」）。
-    if _contains_any(text, ["出生节气", "节气窗", "哪个节气出生", "距节", "jieqi birth"]):
+    if _contains_any(text, ["出生节气", "节气窗", "哪个节气出生", "哪个节气", "距节", "jieqi birth", "jieqi_birth"]):
         add("jieqi_birth")
     # 飞宫小奇门 含「奇门」二字 → 奇门遁甲分支须排除，否则「飞宫小奇门问出行」误路由 qimen。
     # 「奇门择日」同理：它有自己的工具，落到 qimen 会给出一张单点盘而不是一段搜索结果。
     if (
-        _contains_any(text, ["奇门", "qimen"])
+        _contains_any(text, ["奇门", "qimen", "qi men"])
         and not _contains_any(text, ["飞宫", "小奇门", "feigong", "奇门择日", "qimenzeri", "找局"])
+        and not is_zeri
     ):
         add("qimen")
-    if _contains_any(text, ["太乙", "taiyi", "太一"]):
+    if _contains_any(text, ["太乙", "taiyi", "太一", "tai yi"]) and not is_zeri:
         add("taiyi")
     if _contains_any(text, ["金口诀", "jinkou"]):
         add("jinkou")
     if _contains_any(text, ["宿占", "宿盘", "suzhan"]):
         add("suzhan")
-    if _contains_any(text, ["六爻", "易卦", "sixyao", "guazhan", "liuyao"]):
+    if _contains_any(text, ["六爻", "易卦", "sixyao", "guazhan", "liuyao", "i ching", "yi jing", "周易"]):
         add("sixyao")
     if _contains_any(text, ["统摄法", "tongshefa"]):
         add("tongshefa")
@@ -78,13 +104,15 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("lingqi")
     if _contains_any(text, ["参评数", "邵子", "金锁银匙", "canping"]) and not _contains_any(text, ["正传", "zhengchuan"]):
         add("canping")
-    if _contains_any(text, ["河洛理数", "河洛", "heluo"]):
+    if _contains_any(text, ["河洛理数", "河洛", "heluo", "he luo"]):
         add("heluo")
     if _contains_any(text, ["调波盘", "调波", "谐波盘", "harmonic"]):
         add("harmonic")
-    if _contains_any(text, ["三式合一", "sanshi", "sanshiunited"]):
+    if _contains_any(text, ["三式合一", "sanshi", "sanshiunited"]) and not is_zeri:
         add("sanshiunited")
-    if _contains_any(text, ["节气", "jieqi"]) and not _contains_any(text, ["出生节气", "节气窗", "哪个节气出生"]):
+    if _contains_any(text, ["节气", "jieqi", "solar terms"]) and not _contains_any(
+        text, ["出生节气", "节气窗", "哪个节气出生", "哪个节气", "jieqi_birth", "jieqi birth"]
+    ):
         add("jieqi_year")
     if _contains_any(text, ["农历", "nongli"]):
         add("nongli_time")
@@ -94,7 +122,7 @@ def select_tools(request: DispatchInput) -> list[str]:
             add("gua_meiyi")
         else:
             add("gua_desc")
-    if _contains_any(text, ["合盘", "关系", "relative", "synastry", "composite"]):
+    if _contains_any(text, ["合盘", "关系盘", "relative", "synastry", "composite", "配对盘"]):
         add("relative")
     if _contains_any(text, ["solar return", "solarreturn", "太阳返照"]):
         add("solarreturn")
@@ -113,13 +141,18 @@ def select_tools(request: DispatchInput) -> list[str]:
             add("pd")
     if _contains_any(text, ["profection", "小限"]):
         add("profection")
-    if _contains_any(text, ["given year", "流年"]):
+    # 「流年」是中式通用词（八字直断/紫微/六壬都用）：只在没有更具体技法命中时才指西占指定年推运。
+    if _contains_any(text, ["given year", "givenyear"]) or ("流年" in text and not selected):
         add("givenyear")
     if _contains_any(text, ["zodiacal release", "zr"]):
         add("zr")
-    if _contains_any(text, ["印度", "india"]):
+    if _contains_any(text, ["印度", "india", "vedic", "jyotish", "kundli", "吠陀"]) and not is_zeri and not _contains_any(
+        text, ["恒星推运", "印度推运", "vedicprog", "vedic progression", "sidereal progression", "生时校正", "rectif", "校时"]
+    ):
         add("india_chart")
-    if _contains_any(text, ["七政四余", "guolao"]):
+    if _contains_any(text, ["七政四余", "guolao", "果老"]) and not is_zeri and not _contains_any(
+        text, ["张果", "qizhengkin", "七政择日", "择日动盘", "qizhengelection"]
+    ):
         add("guolao_chart")
     if _contains_any(text, ["希腊", "hellen", "hellenistic"]):
         add("hellen_chart")
@@ -133,7 +166,8 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("mundane")
     if _contains_any(text, ["赤纬推运", "jayne", "jaynesprog"]):
         add("jaynesprog")
-    if _contains_any(text, ["恒星推运", "vedic", "vedicprog", "印度推运"]):
+    # vedic 单独出现是印度本命盘（india_chart）；只有带推运语义才是 vedicprog（v0.36.0 修 vedic→vedicprog 误路由）。
+    if _contains_any(text, ["恒星推运", "印度推运", "vedicprog", "vedic progression", "sidereal progression"]):
         add("vedicprog")
     if _contains_any(text, ["行星弧", "planetary arc", "planetaryarc", "月亮弧"]):
         add("planetaryarc")
@@ -147,14 +181,27 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("persiandirected")
     # 卜卦盘 的「起卦」通用词会被小成图/小六壬/飞宫/皇极轨策的「…起卦」误触 → 显式排除新式起卦技法。
     if _contains_any(text, ["卜卦", "horary", "占问", "起卦"]) and not _contains_any(
-        text, ["小成图", "小六壬", "飞宫", "轨策", "皇极轨策", "xiaochengtu", "xiaoliuren", "feigong", "guice"]
+        text,
+        [
+            "小成图", "小六壬", "飞宫", "轨策", "皇极轨策", "xiaochengtu", "xiaoliuren", "feigong", "guice",
+            # v0.36.0：「六爻起卦/统摄法起卦/地占起卦」的通用「起卦」不是卜卦占星
+            "六爻", "统摄", "地占", "灵棋", "梅易", "sixyao", "tongshefa", "geomancy", "lingqi",
+        ],
     ):
         add("horary")
     # 「奇门择日」/「天星择日」都含「择日」二字 → 必须排除，否则一句话点亮三个工具。
-    if _contains_any(text, ["择日", "择吉", "election", "electional", "选时", "用事时刻"]) and not _contains_any(
-        text, ["奇门择日", "天星择日", "qimenzeri", "tianxing", "奇门找局", "征象搜索", "七政择日", "择日动盘", "择日双轮"]
+    if (
+        _contains_any(text, ["择日", "择吉", "election", "electional", "选时", "用事时刻"])
+        and not _contains_any(
+            text, ["奇门择日", "天星择日", "qimenzeri", "tianxing", "奇门找局", "征象搜索", "七政择日", "择日动盘", "择日双轮"]
+        )
+        and not is_zeri
+        and not _contains_any(text, ["通书", "tongshu"])
     ):
         add("election")
+    for zeri_tool, zeri_words in _ZERI_PHRASES.items():
+        if _contains_any(text, zeri_words):
+            add(zeri_tool)
     if _contains_any(text, ["皇极经世", "心易发微", "wangji", "邵雍数"]):
         add("wangji")
     if _contains_any(text, ["五兆", "wuzhao"]):
@@ -170,7 +217,7 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("zhengchuan")
     if _contains_any(text, ["邵子神数", "邵子数", "shaozi"]) and not _contains_any(text, ["正传", "zhengchuan"]):
         add("shaozi")
-    if _contains_any(text, ["铁板神数", "铁板", "tieban"]) and not _contains_any(text, ["正传", "zhengchuan"]):
+    if _contains_any(text, ["铁板神数", "铁板", "tieban", "tie ban"]) and not _contains_any(text, ["正传", "zhengchuan"]):
         add("tieban")
     if _contains_any(text, ["分经神数", "两头钳", "fendjing", "fenjing"]):
         add("fendjing")
@@ -188,8 +235,52 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("qizhengkin")
     if _contains_any(text, ["西洋游戏", "dice", "占星骰子", "otherbu"]):
         add("otherbu")
-    if _contains_any(text, ["13宫", "chart13"]):
+    if _contains_any(text, ["13宫", "chart13", "十三宫"]):
         add("chart13")
+    # ---- v0.36.0 B2：此前无路由规则的 25 个技法 ----
+    if _contains_any(text, ["一掌经", "掌经", "yizhangjing"]):
+        add("yizhangjing")
+    if _contains_any(text, ["占星地图", "astrocartography", "astro-cartography", "行星线", "acg"]):
+        add("acg")
+    if _contains_any(text, ["名人星盘", "名人库", "名人出生", "celebrity", "astrodata", "famous birth"]):
+        add("astrodata")
+    if _contains_any(text, ["巴比伦", "babylon"]):
+        add("babylon")
+    if _contains_any(text, ["十二分盘", "dwadasamsa", "dwad", "chart12"]):
+        add("chart12")
+    if _contains_any(text, ["龙盘", "龙头盘", "draconic"]):
+        add("draconic")
+    if _contains_any(text, ["重置盘", "迁居盘", "移居盘", "relocation", "relocated chart"]):
+        add("relocation")
+    if _contains_any(text, ["三分主", "triplicity"]):
+        add("triplicityrulers")
+    if _contains_any(text, ["数字相位推运", "释放点", "小年数", "keypoints", "key points"]):
+        add("keypoints")
+    if _contains_any(text, ["月相推运", "次限月相", "lunation phase", "lunationphase", "progressed lunation"]):
+        add("lunationphase")
+    if _contains_any(text, ["多重回归", "行星回归", "土星回归", "木星回归", "saturn return", "jupiter return", "extrareturns", "月交返照"]):
+        add("extrareturns")
+    if _contains_any(text, ["地占", "geomancy", "geomantic"]):
+        add("geomancy")
+    if _contains_any(text, ["塔罗", "tarot", "牌阵"]):
+        add("tarot")
+    if _contains_any(text, ["通书", "通胜", "董公", "tongshu"]) and not _contains_any(text, ["通书择日", "黄历择"]):
+        add("tongshu")
+    if _contains_any(text, ["万年历", "月历", "日历", "month calendar", "calendar_month", "本月黄历"]):
+        add("calendar_month")
+    if (
+        _contains_any(text, ["黄历", "宜忌", "huangli", "almanac"])
+        and not is_zeri
+        and not _contains_any(text, ["万年历", "月历", "日历", "本月黄历", "month calendar", "almanac election"])
+    ):
+        add("huangli")
+    if _contains_any(text, ["黄道释放", "zodiacal releasing"]):
+        add("zr")
+    if _contains_any(text, ["lunar calendar", "阴历换算"]):
+        add("nongli_time")
+    # 英文/口语本命盘触发：只在没有更具体的技法命中时兜底（避免「紫微星盘」双点）。
+    if not selected and _contains_any(text, ["natal chart", "birth chart", "horoscope", "本命盘", "西洋星盘", "占星盘", "western astrology"]):
+        add("chart")
 
     if not selected:
         birth = request.birth or (request.subject.birth if request.subject else None)
@@ -241,10 +332,15 @@ _CANDIDATE_POOL: tuple[tuple[str, tuple[str, ...]], ...] = (
 
 
 def _suggest_candidates(text: str, limit: int = 5) -> list[str]:
+    """未命中时的候选：先按全表同义词打分（v0.36.0 B2，覆盖全部技法），再用常用池补满。"""
+    hits = [name for _score, name in synonym_scores(text)]
     lowered = text.lower()
     scored: list[tuple[int, int, str]] = []
     for order, (name, keywords) in enumerate(_CANDIDATE_POOL):
         score = sum(1 for keyword in keywords if keyword.lower() in lowered)
         scored.append((-score, order, name))
     scored.sort()
-    return [name for _, _, name in scored[:limit]]
+    for _, _, name in scored:
+        if name not in hits:
+            hits.append(name)
+    return hits[:limit]

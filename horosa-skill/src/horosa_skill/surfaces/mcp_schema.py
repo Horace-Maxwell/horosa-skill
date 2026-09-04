@@ -22,6 +22,7 @@ from typing import Any
 from horosa_skill.agent_guidance import PREDICTIVE_INPUT_CONTRACTS
 from horosa_skill.astro_sidereal import INDIA_HOUSE_SYSTEM_LABELS, SIDEREAL_AYANAMSA_LABELS
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
+from horosa_skill.engine.synonyms import aka_line
 from horosa_skill.schemas.tools import BirthInput
 
 GATE_KEYS: tuple[str, ...] = ("agent_confirmed_settings", "defaults_accepted", "clarification_notes")
@@ -64,6 +65,7 @@ CORE_TYPE: dict[str, Any] = {
     "agent_confirmed_settings": "boolean", "defaults_accepted": "boolean", "clarification_notes": "string",
 }
 OWN_FIELD_DOC_LIMIT = 72  # 字符；工具自有字段描述超长截断（全文见 horosa_agent_guidance）
+DESCRIPTION_CHAR_LIMIT = 200  # 字符；技法双语描述超长截断（全文在 guidance / 技法目录资源）
 
 
 def _enum_for(field: str, tool_name: str) -> dict[str, Any]:
@@ -175,7 +177,12 @@ def advertised_dispatch_schema(*, hecan: bool) -> dict[str, Any]:
 
 def advertised_description(tool_name: str) -> str:
     definition = TOOL_DEFINITIONS[tool_name]
-    return f"{definition.description.strip()}\n口径/输出段/全部旋钮：horosa_agent_guidance(tool_name=\"{tool_name}\")"
+    aka = aka_line(tool_name, limit=4)
+    tail = f"口径/输出段/全部旋钮：horosa_agent_guidance(tool_name=\"{tool_name}\")"
+    desc = definition.description.strip()
+    if len(desc) > DESCRIPTION_CHAR_LIMIT:
+        desc = desc[: DESCRIPTION_CHAR_LIMIT - 1] + "…"
+    return f"{desc}\n{aka + '；' if aka else ''}{tail}"
 
 
 def apply_advertised_schemas(mcp: Any) -> dict[str, int]:
