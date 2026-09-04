@@ -42,6 +42,9 @@ horosa_cn_qimen {date, time, zone:"+08:00", lat:"31n13", lon:"121e28", agent_con
 horosa_report_render {run_id, tool_name:"qimen", format:"docx", ai_report:{executive_summary, answer_text, analysis_sections, recommendations, limitations}}
 ```
 
+tools/list 只广告每个工具的域核心字段 + 自有字段；BirthInput 长尾旋钮（`orbSystem`/`extraBodies`/`termsVariant`…）
+**顶层按名直接传即可、不会被丢**，全表用 `horosa_agent_guidance(tool_name=…)` 查（v0.36.0 两层 schema）。
+
 省 token：技法工具可传 `response_view:"titles"`（只回段标题）或 `"sections"`；完整快照始终已存档（`horosa_memory_show(run_id)` 取回）。`export_snapshot.sections[*]` 只含 `body`；机读数据在 `data.<key>`（`data.pan` / `data.chart` / `data.liureng` …）只出现一次，别去段里找。注意 `horosa_report_from_tool` 会重新起盘——已有 run_id 用 `report_render`。
 
 **`warnings` 非空 = 结果不完整**（`ok` 仍为 true）：「降级：…」是某个子引擎/可选后端本次失败、对应段缺席；

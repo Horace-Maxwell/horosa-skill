@@ -172,7 +172,9 @@ def test_mcp_compact_mode_exposes_facade_plus_tool_run(tmp_path) -> None:
     # 技法目录随 docstring 在场（dispatch 与 tool_run 均可发现全部技法）。
     by_name = {tool.name: tool for tool in tools}
     assert "yizhangjing" in (by_name["horosa_tool_run"].description or "")
-    assert "yizhangjing" in (by_name["horosa_dispatch"].description or "")
+    # 目录只放一份（tool_run）；dispatch 只指路（精简面预算 ≤30 KB，v0.36.0 B1）
+    assert "horosa_tool_run" in (by_name["horosa_dispatch"].description or "")
+    assert "yizhangjing" not in (by_name["horosa_dispatch"].description or "")
 
 
 def test_mcp_compact_tool_run_executes_and_keeps_gate(tmp_path) -> None:

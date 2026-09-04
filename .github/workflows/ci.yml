@@ -69,6 +69,9 @@ jobs:
       - name: Verify silent-degrade ratchet (a bare logger.warning tells the log, not the caller)
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_silent_degrades.py
+      - name: Verify MCP tools/list byte budget (advertised-layer schema ratchet)
+        working-directory: ./horosa-skill
+        run: uv run python scripts/verify_mcp_list_budget.py
       - name: Verify every schema knob has a consumer
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_schema_knob_wiring.py

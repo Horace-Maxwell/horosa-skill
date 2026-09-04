@@ -11,6 +11,7 @@ from typing import Annotated
 
 from mcp import types as mcp_types
 from mcp.server.fastmcp import FastMCP
+from horosa_skill.surfaces.mcp_schema import apply_advertised_schemas
 from pydantic import BaseModel, ValidationError, WithJsonSchema, create_model
 
 from horosa_skill.agent_guidance import (
@@ -320,26 +321,26 @@ def _merge_mcp_arguments(kwargs: dict[str, Any]) -> dict[str, Any] | str | None:
 # `horosa_tool_run` 的公共字段：覆盖绝大多数技法的起盘输入 + 闸门确认位。
 # 其余技法专属字段走 `request`（arg model 是 extra=ignore，未声明的顶层键会被静默吞）。
 _TOOL_RUN_COMMON_FIELDS: tuple[tuple[str, Any, str], ...] = (
-    ("date", str | None, "公历日期 YYYY-MM-DD / solar date"),
-    ("time", str | None, "时间 HH:mm:ss / time of day"),
-    ("zone", str | None, "时区偏移，如 +08:00 / timezone offset"),
-    ("lat", str | float | None, "纬度，如 31n13 或 31.22 / latitude"),
-    ("lon", str | float | None, "经度，如 121e28 或 121.47 / longitude"),
-    ("gpsLat", float | None, "十进制纬度 / decimal latitude"),
-    ("gpsLon", float | None, "十进制经度 / decimal longitude"),
-    ("ad", int | None, "公元前后，1=公元 / era flag"),
-    ("gender", str | int | None, "性别 / gender (男/女 or 1/0)"),
-    ("name", str | None, "当事人姓名 / subject name"),
-    ("pos", str | None, "地点名 / place name"),
-    ("datetime", str | None, "推运类的目标时刻 / predictive target datetime"),
-    ("dirZone", str | None, "推运目标地时区 / directed timezone"),
-    ("dirLat", str | float | None, "推运目标地纬度 / directed latitude"),
-    ("dirLon", str | float | None, "推运目标地经度 / directed longitude"),
-    ("question", str | None, "所问事项 / the question asked"),
-    ("response_view", str | None, "响应裁剪：titles | sections / response view"),
-    ("agent_confirmed_settings", bool | None, "用户已确认结果敏感设置后置 true"),
-    ("defaults_accepted", bool | None, "用户明确接受星阙默认值后置 true"),
-    ("clarification_notes", str | None, "澄清摘要 / what the user confirmed"),
+    ("date", str | None, "公历日期 YYYY-MM-DD"),
+    ("time", str | None, "HH:mm:ss"),
+    ("zone", str | None, "时区偏移，如 +08:00"),
+    ("lat", str | float | None, "纬度 31n13 / 31.22"),
+    ("lon", str | float | None, "经度 121e28 / 121.47"),
+    ("gpsLat", float | None, "十进制纬度"),
+    ("gpsLon", float | None, "十进制经度"),
+    ("ad", int | None, "纪元 1=公元后 -1=公元前"),
+    ("gender", str | int | None, "性别 1/男 0/女"),
+    ("name", str | None, "当事人姓名"),
+    ("pos", str | None, "地点名"),
+    ("datetime", str | None, "推运目标时刻"),
+    ("dirZone", str | None, "推运目标地时区"),
+    ("dirLat", str | float | None, "推运目标地纬度"),
+    ("dirLon", str | float | None, "推运目标地经度"),
+    ("question", str | None, "所问事项"),
+    ("response_view", str | None, "响应裁剪 titles|sections"),
+    ("agent_confirmed_settings", bool | None, "用户已确认设置→true"),
+    ("defaults_accepted", bool | None, "用户接受默认→true"),
+    ("clarification_notes", str | None, "确认摘要"),
 )
 
 
@@ -629,7 +630,11 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
         "Results are saved to local memory by default (save_result=false to disable)."
     )
     if settings.mcp_compact:
-        dispatch_doc += "\n\n" + build_technique_catalog()
+        # 目录只在 horosa_tool_run 的描述里放一份（精简面预算 ≤30 KB）；这里只指路。
+        dispatch_doc += (
+            f"\n\nCompact surface: {len(TOOL_DEFINITIONS)} techniques are reachable by name via horosa_tool_run "
+            "(its description lists them all; resource horosa://catalog/techniques has the full index)."
+        )
     horosa_dispatch.__doc__ = dispatch_doc
     horosa_dispatch.__signature__ = _signature_for_input_model(
         DispatchInput, return_type=_return_type(DispatchEnvelope)
@@ -983,7 +988,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
             "field must go inside `request`** (e.g. request={\"guirengType\":2}) — undeclared "
             "top-level keys are dropped by the MCP argument layer. Same clarification gate and "
             "envelope as the dedicated tools.\n\n"
-            + build_technique_catalog()
+            + build_technique_catalog(label_chars=22)
         )
         # 必须手写 signature：函数是 `**kwargs` 多态入口，没有单一 input model 可推导。
         # 缺了它 FastMCP 会内省出一个名叫 `kwargs` 的 string 必填参数，整个工具无法调用——
@@ -995,6 +1000,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
             annotations=_ANN_CALC,
             meta=_tool_meta("horosa_tool_run"),
         )(horosa_tool_run)
+        apply_advertised_schemas(mcp)
         return mcp
 
     toolsets = _selected_toolsets()
@@ -1040,6 +1046,8 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
 
         _factory(definition.name, input_model)
 
+    # 广告层瘦身（B1）：注册后重写 Tool.parameters/description；签名（校验层）不动，隐藏旋钮顶层照收。
+    apply_advertised_schemas(mcp)
     return mcp
 
 

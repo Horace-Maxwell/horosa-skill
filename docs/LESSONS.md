@@ -98,6 +98,23 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.36.0 / 2026-09-04 — tools/list 1186 KB（≈318k token）：agent 开口前先付一本字典的钱
+
+- **症状**：默认 MCP 面 115 工具的 `tools/list` 1186 KB；57 个工具各继承 BirthInput 全部 95 字段（每工具 17 KB、
+  112 个属性），dispatch/hecan 把 5 路 union 内联两次（各 24 KB），每个工具描述重复一段 322 B 的澄清闸说明；
+  精简面也有 93 KB（技法目录在 dispatch 与 tool_run 各放一份）。schema 零 enum，`hsys` 描述还写错（A7）。
+- **根因**：广告层与校验层是同一份东西——`_signature_for_input_model` 为了「未声明键不被丢」（A6 那类病）
+  把全模型字段都放进签名，FastMCP 又照签名原样广告。想瘦就得砍签名，砍签名就静默丢键：两难被当成没得选。
+- **guard**：两层 schema（`surfaces/mcp_schema.py`）：签名不动（校验层，隐藏旋钮顶层照收），注册后重写
+  `Tool.parameters`（广告层 = 域核心 + 推运目标字段 + 工具自有字段 + 闸门三键 + `request` 逃生舱，注明还有
+  N 个高级旋钮按名可传，`additionalProperties: true`）；enum 只进广告层（hsys 按西占/印占两表、zodiacal/ad/
+  response_view；47 岁差制只给常用键——全表 enum 每工具 600 B 超预算）；dispatch/hecan 换单一宽松对象；
+  描述去闸门段、指向 guidance；目录只放 tool_run 一份且标签截 28 字。结果 **1186 KB → 253 KB、93 KB → 30 KB**。
+  棘轮 `scripts/verify_mcp_list_budget.py`（进程内量两档，硬上限 256/30 KB + 只降不升 2%）；
+  `tests/test_mcp_list_budget.py`：隐藏旋钮顶层照收、无 `$ref`、enum 与表锁步、dispatch birth 为单对象。
+- **法则**：**广告什么和接受什么是两件事**——校验层求全，广告层求准；任何「瘦 schema」的改法先证明未声明键
+  仍然到达 `run_tool`，再看字节。
+
 ### v0.36.0 / 2026-09-04 — MCP 扁平面静默丢未声明键：PR #17「性别恒为未知」只是 63 个工具同一类病的一例
 
 - **症状**：外部 PR #17（@xipfs）报 `bazi_birth` 传「男」快照仍「性别：未知」、大运顺逆无法判定。复现只在 MCP

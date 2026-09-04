@@ -1557,16 +1557,17 @@ SOFTWARE_USAGE_HELP: dict[str, list[str]] = {
 }
 
 
-def build_technique_catalog() -> str:
-    """78 技法一行索引（按 domain 分组）——精简 MCP 模式下拼进 dispatch/tool_run 的 docstring。
+def build_technique_catalog(*, label_chars: int = 72) -> str:
+    """技法一行索引（按 domain 分组）——精简 MCP 模式下拼进 tool_run 的 docstring，资源面给全文。
 
-    每行 `name — 描述首句`，全目录约 1-1.5K token；完整输入契约经 horosa_agent_guidance 获取。
+    每行 `name — 描述首句`（截到 label_chars 字），完整输入契约经 horosa_agent_guidance 获取。
+    精简面预算 ≤30 KB（verify_mcp_list_budget）：tool_run 用 label_chars=28（约 6 KB），资源用 72。
     """
     groups: dict[str, list[str]] = {}
     for definition in TOOL_DEFINITIONS.values():
         first_sentence = str(definition.description or "").split(". ")[0].split("。")[0].strip()
-        if len(first_sentence) > 72:
-            first_sentence = first_sentence[:71] + "…"
+        if len(first_sentence) > label_chars:
+            first_sentence = first_sentence[: label_chars - 1] + "…"
         groups.setdefault(definition.domain, []).append(f"  {definition.name} — {first_sentence}")
     lines = ["Available techniques (call by tool_name; full input contract via horosa_agent_guidance):"]
     for domain in sorted(groups):

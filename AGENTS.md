@@ -660,6 +660,10 @@ A global stability pass hardened these; keep them true when you touch the releva
   （PR #17 性别、神数五支性别/地点、`showPdBounds`……共 63 例）。守卫 `tests/test_mcp_flat_surface_keys.py`
   （样例载荷原始键 ⊆ 广告签名）；反向由 `verify_schema_knob_wiring` 管。枚举参数的描述与表锁步
   （`test_house_system_docs.py`：hsys 1=Alcabitus、3=Placidus）。
+- **MCP schema 两层：签名求全、广告求准。** `__signature__`（校验层）永远声明全模型字段——瘦它 = 静默丢键；
+  `tools/list` 的瘦身只在注册后重写 `Tool.parameters`（`surfaces/mcp_schema.py`：域核心 + 推运目标 + 工具自有
+  字段 + 闸门三键 + `request`）。硬预算全量 ≤256 KB / 精简 ≤30 KB（`verify_mcp_list_budget.py` 棘轮只降不升）；
+  加字段/加描述前先量。enum 只进广告层且与表锁步（v0.36.0）。
 - **`run_tool` always returns a `ToolEnvelope`, never lets an unexpected exception escape.** Tool
   execution + snapshot/summary/export post-processing run inside a try that catches `HorosaSkillError`
   **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`. Only invalid-payload
