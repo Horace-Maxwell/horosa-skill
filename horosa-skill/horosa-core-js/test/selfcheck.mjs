@@ -125,6 +125,25 @@ check('liureng refContext builds + matchBiFa hits', () => {
   assert(hits.every((h) => h.no && h.name && h.verse), 'each 毕法 hit needs no/name/verse');
 });
 
+check('liureng 三传六亲走 vendor ZiLiuQin（消费点金标——手抄表时代 vendor 金标看不见它）', () => {
+  const r = runLiureng({ ...liurengFix });
+  const chartObj = normalizeChart(liurengFix);
+  const daygan = `${chartObj.nongli.dayGanZi}`.charAt(0);
+  const find = (o) => {
+    if (!o || typeof o !== 'object') return null;
+    if (Array.isArray(o.cuang) && Array.isArray(o.liuQin)) return o;
+    for (const v of Object.values(o)) { const hit = find(v); if (hit) return hit; }
+    return null;
+  };
+  const sanchuan = find(r.data);
+  assert(sanchuan && sanchuan.liuQin.length === 3, 'sanchuan object with cuang/liuQin not found in data');
+  sanchuan.cuang.forEach((gz, i) => {
+    const zi = `${gz}`.slice(-1);
+    const want = (ZiLiuQin[zi] || {})[daygan] || '无';
+    assert(sanchuan.liuQin[i] === want, `三传 ${gz} 六亲 ${sanchuan.liuQin[i]} ≠ vendor ${want}（日干 ${daygan}）`);
+  });
+});
+
 check('liureng snapshot carries 毕法 + 占断向导 sections', () => {
   const r = runLiureng({ ...liurengFix, zhanCategory: 'hunyin' });
   const s = r.snapshot_text || '';

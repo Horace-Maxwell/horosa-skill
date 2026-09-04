@@ -98,6 +98,20 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.36.0 / 2026-09-04 — 六壬工具手抄了 24 张 LRConst 表：vendor 修了、金标绿了、消费点还是旧值
+
+- **症状**：v0.35.0 修正 vendored `LRConst.ZiLiuQin` 乙日巳/午→子孙并加了 120 格逐格金标，CI 全绿；但
+  `tools/liureng.js` 顶部自带一份 `ZI_LIU_QIN`（连同 ZI_LIST/GAN_LIST/贵人六表/刑冲害合/干支相克……共 **24 张**
+  与 vendor 逐字相同的表），三传六亲仍按旧表出——金标只看 vendor 导出，对手抄消费点结构性失明。
+- **根因**：早期为省 import 把 vendor 常量抄进工具文件，形成第二真值源；此后所有 vendor 同步/修正都绕过它。
+  「vendor 金标」验证的是「表对不对」，不是「工具用的是不是这张表」。
+- **guard**：24 张表改为 `const { ZiList: ZI_LIST, … } = LRConst` 解构（`SIGN_TO_YUE` 无 vendor 对应保留）；
+  `test/handcopy.mjs` 入 `npm test`：`tools/*.js` 顶层字面量 vs 文件所 import 的 vendor 模块导出，按规范化
+  名（`ZI_LIU_QIN`~`ZiLiuQin`）或深比对相等即红，内置负向对照（种一份抄表必须被抓、解构与无对应表不许误报）；
+  selfcheck 加**消费点**金标：`runLiureng` 输出的三传六亲逐项 == `ZiLiuQin[支][日干]`。
+- **法则**：**常量只准有一个源，工具文件只准引用不准抄**；改 vendor 真值时，金标必须打在消费点（工具输出），
+  不是打在被修的那张表上。
+
 ### v0.36.0 / 2026-09-04 — 35 处「优雅降级」只写日志：ok=True、warnings=[]、少 10 段
 
 - **症状**：真实奇门存档 `missing_selected_sections` 10/17 而 `warnings: []`；agent 把「少了十段」当完整结果

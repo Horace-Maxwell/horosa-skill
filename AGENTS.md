@@ -645,6 +645,9 @@ A global stability pass hardened these; keep them true when you touch the releva
   （「结果不完整：预设 N 段中 M 段未产出」），dispatch 汇总一行。包内裸 `logger.warning(` 基线 **0**
   （`scripts/verify_silent_degrades.py`；启动期通知用 `logger.log(WARNING)` 并注明无调用方）。MCP
   elicitation 每个出口写 `details.elicitation.status`，纯函数 `_apply_gate_decision` 可离线测（v0.36.0）。
+- **`tools/*.js` 只准引用 vendor 常量，不准抄。** 顶层字面量若与所 import 的 vendor 模块导出同名（规范化）
+  或深相等，`npm test` 的 `test/handcopy.mjs` 即红（v0.36.0：liureng.js 曾抄 24 张 LRConst 表，vendor 修了
+  六亲、消费点仍旧值）。改 vendor 真值时，金标打在**工具输出**（消费点）上，不只打在那张表上。
 - **`run_tool` always returns a `ToolEnvelope`, never lets an unexpected exception escape.** Tool
   execution + snapshot/summary/export post-processing run inside a try that catches `HorosaSkillError`
   **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`. Only invalid-payload
