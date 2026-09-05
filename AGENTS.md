@@ -449,6 +449,9 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   `tests/test_runtime_launcher_templates.py`（BOM + 非注释行纯 ASCII，全平台；Windows 上再用
   `[Parser]::ParseFile` 真解析，CI `windows-smoke` 跑）+ 发布闸
   `verify_runtime_release.py::_assert_windows_launchers_are_bom_encoded`（直接验 zip 里的前三字节）。
+  **wheel 里的副本另守**：v0.36.0 起 `uvx horosa-skill` 用户的启动器来自 wheel 内 force-include 的副本
+  （`horosa_skill/runtime/templates/windows/`），`scripts/verify_wheel_contents.py` 断言该副本前三字节仍是
+  BOM——源码树的测试管不到 hatch 打包这一步。
 - **launcher「假失败」已收敛（issue #14 降级门之后）**：无 Mongo/Redis 机器上 Java 连库重试可超就绪窗——
   现在 chart 就绪即 exit 0（java 慢 = 降级 marker，之后自愈则 `doctor` 转绿）。launcher 仍 throw = chart
   半边真没起来，按真失败排查（看 astropy.stderr 日志），不再有「throw 但其实都起来了」的假阳。
