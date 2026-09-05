@@ -120,6 +120,7 @@ def build_sample_payloads() -> dict[str, dict]:
         },
         "acg": {**chart_birth},
         "astrodata": {**confirmed, "query": "Einstein", "limit": 5},
+        "bazi_inverse": {**confirmed, "pillars": ["甲子", "丙寅", "戊辰", "庚申"], "count": 3, "fromYear": 2030},
         "harmonic": {**chart_birth, "harmonic": 9, "orb": 2.0},
         "agepoint": {**chart_birth, "predictive": 1},
         "distributions": {**chart_birth, "predictive": 1},

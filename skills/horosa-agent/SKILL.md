@@ -1,7 +1,7 @@
 ---
 name: horosa-agent
 description: >-
-  Call Horosa (星阙) local metaphysics tools correctly over MCP or CLI — 105 real techniques: Western
+  Call Horosa (星阙) local metaphysics tools correctly over MCP or CLI — 106 real techniques: Western
   natal/predictive astrology (returns, progressions, primary directions, horary 卜卦, election 择日),
   八字, 紫微, 大六壬, 奇门遁甲, 太乙, 金口诀, 三式合一, 河洛理数, 邵子参评数, 六爻, 天文地占, 塔罗, and
   the full 14 神数. Use whenever a user asks to 起盘 / 排盘 / 起课 / 起卦 / 算命 / 推运 / 看盘 / 合盘 /
@@ -45,6 +45,9 @@ horosa_report_render {run_id, tool_name:"qimen", format:"docx", ai_report:{execu
 七政四余 `guolao_chart` 可传 `guolaoLifeMode`（asc/yumao/cotrans）、`guolaoBodyMode`、`moiraTransitDate`（[流年流曜]
 的流年时刻，缺省今天）；[虚实]/[本命化曜]/[流年流曜] 三段来自 Java 规则层，Java 不可用时缺席并进 `warnings`。
 河洛 `heluo` 可传 `liunianStep2`（ying/sequential）、`ziShuMode`、`jiGongMode` 等取法旋钮（全表见 guidance）。
+只知道四柱不知道生日：`bazi_inverse {pillars:["甲子","丙寅","戊辰","庚申"], fromYear, count}` 反查候选出生时刻
+（免确认门，候选每 60 年重现，请让用户确认年代）。八字口诀层：`knowledge_read {domain:"bazi_pithy", category:"三字诀", key:"甲"}`
+或 `query` 全文检索（21 类 173 条，引必带出处）。
 
 闸门问题带 `options` 的，直接把用户选的那一项原话记进 `clarification_notes`（同名 `values` 是该选项对应的
 schema 值，可直接放进载荷）；`planetaryarc` 的弧源、神数的性别/地点这类工具自有敏感项闸门会点名问，别替用户默认。
@@ -175,7 +178,7 @@ question context.”
 | 七政择日动盘（十一曜山位 / 日月食 / 方位到达） | `qizhengelection`（action: pan / eclipses / azimuthsearch；date/time 是候选时刻非出生盘） |
 | 生时校正（出生时间不确定） | `india_rectify`（KP 法锚点±半窗扫描；输出证据与排序，采用与否由用户决定） |
 | Harmonic 调波盘 | `harmonic` |
-| 八字 | `bazi_birth` / `bazi_direct` |
+| 八字 | `bazi_birth` / `bazi_direct` / `bazi_inverse`（四柱干支反查候选出生时刻，free of the confirmation gate） |
 | 紫微斗数 | `ziwei_birth` (`ziwei_rules` returns the rules library) |
 | 大六壬 / 行年 | `liureng_gods` / `liureng_runyear` |
 | 奇门遁甲 / 太乙 / 金口诀 / 三式合一 | `qimen` / `taiyi` / `jinkou` / `sanshiunited` |

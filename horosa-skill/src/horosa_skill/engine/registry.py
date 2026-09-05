@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Type
 
 from horosa_skill.schemas.tools import (
+    BaziInverseInput,
     GuoLaoInput,
     AgePointInput,
     BalbillusInput,
@@ -127,6 +128,7 @@ TOOL_DEFINITIONS: dict[str, ToolDefinition] = {
     "zhengchuan": ToolDefinition("zhengchuan", "cn", "zhengchuan", None, ZhengChuanInput, "本地神数正传（铁板 / 邵子 / 大定 / 六亲 / 铁算心易 五流派·四柱起数·装卦·条文·大运死月）。Run the local 神数正传 engine (铁板/邵子/大定/六亲/铁算心易 five schools; 四柱 casting, 装卦, 条文, 大运/死月).", execution="local"),
     "acg": ToolDefinition("acg", "astro", "acg", None, ACGInput, "起占星地图 / AstroCartoGraphy 行星线图（MC/IC/ASC/DESC 地理线、天顶点、偕升带、线交点）。Generate the AstroCartoGraphy line map — per-planet MC/IC/ASC/DESC geographic lines, zenith points, parans, and crossings.", execution="local"),
     "xuanshi": ToolDefinition("xuanshi", "knowledge", "xuanshi", None, XuanshiInput, "检索玄史（中国玄学史知识库）：7900+ 玄学事件（原文/白话/解读/引证）、27000+ 史书天象记录、人物图谱、朝代/术数/天象名词与时间线。Query the Chinese esoteric-history knowledge base — 7900+ sourced events (original text / modern reading / citations), 27000+ celestial records from the official histories, figure co-occurrence graph, dynasty & technique views, and timelines.", execution="local"),
+    "bazi_inverse": ToolDefinition("bazi_inverse", "cn", "bazi_inverse", "/common/inversebazi", BaziInverseInput, "八字反查：四柱干支反推候选公历出生时刻（逐年回推，最多 10 条）。Reverse-lookup candidate birth moments from four-pillar ganzhi.", execution="local"),
     "astrodata": ToolDefinition("astrodata", "astro", "astrodata", None, AstrodataInput, "离线名人星盘库检索（全文 / 分类 / Rodden 评级，单人可直接排盘）。Query the offline celebrity birth-data catalog (FTS search / category / Rodden filter, per-person chart-ready birth data).", execution="local"),
     "chart": ToolDefinition("chart", "astro", "chart", "/chart", BirthInput, "生成基础西洋星盘（含完整 AI 导出正文）。Generate a core Horosa chart."),
     "chart13": ToolDefinition("chart13", "astro", "chart13", "/chart13", BirthInput, "生成 13 宫扩展盘（chart13 形态）。Generate the chart13 variant."),

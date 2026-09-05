@@ -39,7 +39,9 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("ziwei_birth")
     if _contains_any(text, ["紫微规则", "斗数规则", "格局规则", "ziwei rules", "ziwei_rules"]):
         add("ziwei_rules")
-    if _contains_any(text, ["八字", "bazi", "四柱", "four pillars"]) and not is_zeri:
+    if _contains_any(text, ["八字反查", "反推八字", "四柱反推", "干支反查", "反推出生", "inverse bazi", "reverse bazi", "bazi_inverse"]):
+        add("bazi_inverse")
+    elif _contains_any(text, ["八字", "bazi", "四柱", "four pillars"]) and not is_zeri:
         if _contains_any(text, ["直断", "direct", "大运", "流年"]):
             add("bazi_direct")
         else:

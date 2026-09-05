@@ -43,6 +43,7 @@ MIRRORED_UPSTREAM_AIEXPORT_VERSION = 56
 AI_EXPORT_SECTION_MIGRATION_KEYS = [
     "liureng", "qimen", "sanshiunited", "mundane",
     "yizhangjing", "acg", "astrodata", "heluo", "canping", "fengshui",
+    "bazi_inverse",
     "geomancy", "xiaoliuren", "feigong", "xiaochengtu", "guice", "zhengchuan",
     "tarot", "relative", "horary", "cetian",
     # v13 上游 v3.8.0→v3.9.1：新技法键 + 八个补段键（补段也要进迁移键，否则老客户端的
@@ -207,6 +208,7 @@ AI_EXPORT_TECHNIQUES = [
     {"key": "zhengchuan", "label": "神数正传"},
     {"key": "acg", "label": "占星地图"},
     {"key": "astrodata", "label": "名人星盘库"},
+    {"key": "bazi_inverse", "label": "八字反查"},
     {"key": "xuanshi", "label": "玄史知识库"},
     {"key": "qizhengelection", "label": "七政择日动盘"},
     {"key": "india_rectify", "label": "印度生时校正"},
@@ -413,6 +415,8 @@ AI_EXPORT_PRESET_SECTIONS = {
     # 名人星盘库（离线只读检索）：列表态出 检索条件/命中列表；单人态出 检索条件/名人详情/
     # 维基摘要/数据来源 → 两态互斥，非「检索条件」外全列 optional。
     "astrodata": ["检索条件", "命中列表", "名人详情", "维基摘要", "数据来源"],
+    # 八字反查（skill 侧 Java /common/inversebazi 反查 tool，上游 aiExport 无对应导出技法——与 astrodata 同类）。
+    "bazi_inverse": ["反查条件", "候选时刻", "口径说明"],
     # 玄史知识库（skill 侧检索 tool，上游 aiExport 无对应导出技法——与 astrodata 同类，进 mirror 白名单）。
     # 段按 action 的响应形状条件产出：列表响应出 总览+列表、详情响应出 详情，引证有则聚合。
     "xuanshi": ["检索条件", "结果总览", "条目列表", "条目详情", "相关条目", "出处引证"],
@@ -555,6 +559,7 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     "acg": ["月宿", "古典", "古典格局", "埃及历", "可能性", "偕升纬度带", "线交点", "落点分析", "事件时刻"],
     # 名人星盘库：列表态/单人态互斥，各态专属段全列可选（检索条件恒出）。
     "astrodata": ["命中列表", "名人详情", "维基摘要", "数据来源"],
+    "bazi_inverse": ["候选时刻"],
     "xuanshi": ["结果总览", "条目列表", "条目详情", "相关条目", "出处引证"],
     # 七政择日动盘条件段：pan 出 [择日动盘]+[天象要素]；eclipses 出 [日月食搜索]；azimuthsearch 出 [方位搜索]。
     "qizhengelection": ["择日动盘", "天象要素", "日月食搜索", "方位搜索"],

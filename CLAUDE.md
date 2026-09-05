@@ -1,6 +1,6 @@
 # Horosa Skill — Claude Code 入口
 
-本仓把星阙（Horosa）的 105 个术数/占星技法打包成 local-first 的 MCP server + CLI（离线 runtime 走
+本仓把星阙（Horosa）的 106 个术数/占星技法打包成 local-first 的 MCP server + CLI（离线 runtime 走
 GitHub Releases）。本仓是星阙的**下游**（sync 方向：星阙 → skill，永不反向）。
 
 **总规则与完整路由在 [AGENTS.md](./AGENTS.md)（§0 路由 · §1 铁律 · §2 问题记录协议）——先读它。**

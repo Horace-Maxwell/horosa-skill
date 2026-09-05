@@ -36,7 +36,7 @@ from horosa_skill.engine.decennials import (
 from horosa_skill.engine.js_client import HorosaJsEngineClient
 from horosa_skill.engine.registry import TOOL_DEFINITIONS, ToolDefinition
 from horosa_skill.engine.router import select_tools
-from horosa_skill.errors import DispatchResolutionError, HorosaSkillError, ToolTransportError, ToolValidationError, recovery_for
+from horosa_skill.errors import DispatchResolutionError, HorosaSkillError, ToolTransportError, ToolValidationError, bilingual, recovery_for
 from horosa_skill.exports import build_export_registry, get_technique_info, parse_export_content
 from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS
 from horosa_skill.input_normalization import normalize_request_payload
@@ -191,6 +191,7 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "zhengchuan": "zhengchuan",
     "acg": "acg",
     "astrodata": "astrodata",
+    "bazi_inverse": "bazi_inverse",
     "sanshiunited": "sanshiunited",
     "germany": "germany",
     "agepoint": "agepoint",
@@ -816,6 +817,11 @@ def _generic_summary(tool_name: str, data: dict[str, Any]) -> list[str]:
         if isinstance(parans, list) and parans:
             summary.append(f"偕升纬度带 {len(parans)} 条。")
         return summary
+    if tool_name == "bazi_inverse":
+        model = data.get("bazi_inverse", {})
+        pillars = "".join(f"{x} " for x in (model.get("pillars") or [])).strip()
+        candidates = model.get("candidates") or []
+        return [f"八字反查 {pillars or '—'}：{len(candidates)} 个候选时刻。"]
     if tool_name == "astrodata":
         model = data.get("astrodata", {})
         summary = ["已检索离线名人星盘数据库。"]
@@ -8489,6 +8495,62 @@ class HorosaSkillService:
             "export_snapshot": self._augment_export_payload(technique="xuanshi", snapshot_text=snapshot_text),
         }
 
+    def _run_bazi_inverse_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """八字反查（Java /common/inversebazi）：四柱干支 → 候选公历出生时刻。
+
+        上游契约（CommController.inverseBazi / BaZiHelper.getBirthes）：Year/Month/Date/Time 四柱干支，
+        Count 条数，Desc=true 从 FromYear 向过去逐年回推；返回 Dates=["YYYY-MM-DD HH:mm:ss", …]。
+        """
+        pillars = payload.get("pillars")
+        if not isinstance(pillars, list) or len(pillars) != 4:
+            pillars = [payload.get("year"), payload.get("month"), payload.get("day"), payload.get("hour")]
+        cleaned = [f"{item or ''}".strip() for item in pillars]
+        bad = [item for item in cleaned if len(item) != 2 or item[0] not in _GANZHI_STEMS or item[1] not in _GANZHI_BRANCHES]
+        if bad or len(cleaned) != 4:
+            raise ToolValidationError(
+                bilingual("八字反查需要四柱干支（年/月/日/时各一组，如 甲子）。", "bazi_inverse needs four ganzhi pillars (year/month/day/hour, e.g. 甲子)."),
+                code="tool.bazi_inverse_invalid_pillars",
+                details={"pillars": cleaned, "invalid": bad, "hint": "pillars=['甲子','丙寅','戊辰','庚申'] 或 year/month/day/hour 四键"},
+            )
+        count = payload.get("count")
+        try:
+            count = max(1, min(10, int(count if count is not None else 3)))
+        except (TypeError, ValueError):
+            count = 3
+        desc = payload.get("desc")
+        desc = True if desc is None else bool(desc)
+        remote_payload: dict[str, Any] = {
+            "Year": cleaned[0], "Month": cleaned[1], "Date": cleaned[2], "Time": cleaned[3],
+            "Count": count, "Desc": desc,
+        }
+        from_year = payload.get("fromYear")
+        if from_year is not None:
+            remote_payload["FromYear"] = int(from_year)
+        response = self._call_remote("/common/inversebazi", remote_payload)
+        dates = response.get("Dates") if isinstance(response, dict) else None
+        candidates = []
+        for item in dates or []:
+            text = f"{item}".strip()
+            if not text:
+                continue
+            date_part, _, time_part = text.partition(" ")
+            candidates.append({"datetime": text, "date": date_part.replace("/", "-"), "time": time_part or None})
+        condition_lines = [
+            f"四柱：{' '.join(cleaned)}",
+            f"回推方向：{'向过去' if desc else '向未来'}；起始年：{from_year if from_year is not None else '后端当前年'}；数量：{count}",
+        ]
+        candidate_lines = [f"{index}. {c['datetime']}" for index, c in enumerate(candidates, start=1)]
+        snapshot_text = _render_snapshot_text([
+            ("反查条件", "\n".join(condition_lines)),
+            ("候选时刻", "\n".join(candidate_lines) if candidate_lines else "无（该四柱在起始年前后未找到匹配时刻）"),
+            ("口径说明", "候选由后端按四柱干支自起始年起逐年匹配（BaZiHelper.getBirthes）；同一四柱约每 60 年重现；时刻取该时辰的代表时间，实际排盘请以候选时刻附近的真实钟表时间与地点重新起盘。"),
+        ])
+        return {
+            "bazi_inverse": {"pillars": cleaned, "count": count, "desc": desc, "fromYear": from_year, "candidates": candidates},
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="bazi_inverse", snapshot_text=snapshot_text),
+        }
+
     def _run_astrodata_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         con = self._astrodata_connect()
         if con is None:
@@ -10982,6 +11044,8 @@ class HorosaSkillService:
             return self._run_acg_tool(payload)
         if definition.name == "astrodata":
             return self._run_astrodata_tool(payload)
+        if definition.name == "bazi_inverse":
+            return self._run_bazi_inverse_tool(payload)
         if definition.name == "sanshiunited":
             return self._run_sanshiunited_tool(payload)
         if definition.name == "huangli":

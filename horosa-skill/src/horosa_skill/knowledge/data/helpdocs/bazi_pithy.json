@@ -1,0 +1,1849 @@
+{
+ "schema": "horosa.knowledge.helpdoc.v1",
+ "domain": "bazi_pithy",
+ "label": "八字断语库 · 口诀 21 类",
+ "source": {
+  "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+  "upstream_source_marker": "xingque_bazi_pithy",
+  "upstream_app_version": "3.10.0",
+  "upstream_git_sha": "5311d893c99d"
+ },
+ "generated_at": "2026-02-22T18:12:59-08:00",
+ "categories": [
+  {
+   "name": "三字诀",
+   "entries": [
+    {
+     "key": "甲",
+     "text": "三甲天上贵，孤独守空房。",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "甲"
+     }
+    },
+    {
+     "key": "乙",
+     "text": "三乙多阴私，又是败祖业。",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "乙"
+     }
+    },
+    {
+     "key": "丙",
+     "text": "三丙人孤老，母在产中亡。",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "丙"
+     }
+    },
+    {
+     "key": "丁",
+     "text": "三丁多恶疾，手足也自伤。",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "丁"
+     }
+    },
+    {
+     "key": "戊",
+     "text": "三戊子随出，离祖别家乡。",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "戊"
+     }
+    },
+    {
+     "key": "己",
+     "text": "三己别父母，兄弟各一人。",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "己"
+     }
+    },
+    {
+     "key": "庚",
+     "text": "三庚是财郎，万里置田庄。",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "庚"
+     }
+    },
+    {
+     "key": "辛",
+     "text": "三辛寿数长，财滞多灾郎。",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "辛"
+     }
+    },
+    {
+     "key": "壬",
+     "text": "三壬家业盛，有富不久长。",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "壬"
+     }
+    },
+    {
+     "key": "癸",
+     "text": "三癸一亥全，烈火烧居屋。",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "癸"
+     }
+    },
+    {
+     "key": "子",
+     "text": "三子婚事重",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "子"
+     }
+    },
+    {
+     "key": "丑",
+     "text": "三丑四夫妻",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "丑"
+     }
+    },
+    {
+     "key": "寅",
+     "text": "三寅守孤寡",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "寅"
+     }
+    },
+    {
+     "key": "卯",
+     "text": "三卯凶恶多",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "卯"
+     }
+    },
+    {
+     "key": "辰",
+     "text": "三辰好斗伤",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "辰"
+     }
+    },
+    {
+     "key": "巳",
+     "text": "三巳遭邢害",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "巳"
+     }
+    },
+    {
+     "key": "午",
+     "text": "三午克夫妻",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "午"
+     }
+    },
+    {
+     "key": "未",
+     "text": "三未守空房",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "未"
+     }
+    },
+    {
+     "key": "申",
+     "text": "三申人不足",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "申"
+     }
+    },
+    {
+     "key": "酉",
+     "text": "三酉独居房",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "酉"
+     }
+    },
+    {
+     "key": "戌",
+     "text": "三戌讼事多",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "戌"
+     }
+    },
+    {
+     "key": "亥",
+     "text": "三亥孤苦怜",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "三字诀",
+      "category": "三字诀",
+      "key": "亥"
+     }
+    }
+   ]
+  },
+  {
+   "name": "四字诀",
+   "entries": [
+    {
+     "key": "甲",
+     "text": "四甲少夫妻",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "四字诀",
+      "category": "四字诀",
+      "key": "甲"
+     }
+    },
+    {
+     "key": "乙",
+     "text": "四乙命早亡",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "四字诀",
+      "category": "四字诀",
+      "key": "乙"
+     }
+    },
+    {
+     "key": "丙",
+     "text": "四丙子息空",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "四字诀",
+      "category": "四字诀",
+      "key": "丙"
+     }
+    },
+    {
+     "key": "丁",
+     "text": "四丁寿不长",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "四字诀",
+      "category": "四字诀",
+      "key": "丁"
+     }
+    },
+    {
+     "key": "戊",
+     "text": "四戊人孤刑",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "四字诀",
+      "category": "四字诀",
+      "key": "戊"
+     }
+    },
+    {
+     "key": "己",
+     "text": "四己人忠良",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "四字诀",
+      "category": "四字诀",
+      "key": "己"
+     }
+    },
+    {
+     "key": "庚",
+     "text": "四庚他乡走",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "四字诀",
+      "category": "四字诀",
+      "key": "庚"
+     }
+    },
+    {
+     "key": "辛",
+     "text": "四辛寿限长",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "四字诀",
+      "category": "四字诀",
+      "key": "辛"
+     }
+    },
+    {
+     "key": "壬",
+     "text": "四壬定福足",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "四字诀",
+      "category": "四字诀",
+      "key": "壬"
+     }
+    },
+    {
+     "key": "癸",
+     "text": "四癸人夭亡",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "四字诀",
+      "category": "四字诀",
+      "key": "癸"
+     }
+    }
+   ]
+  },
+  {
+   "name": "纳音断运",
+   "entries": [
+    {
+     "key": "木",
+     "text": "木见绝字实可哀",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "纳音断运",
+      "category": "纳音断运",
+      "key": "木"
+     }
+    },
+    {
+     "key": "金",
+     "text": "金怕临官又怕衰",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "纳音断运",
+      "category": "纳音断运",
+      "key": "金"
+     }
+    },
+    {
+     "key": "水",
+     "text": "水病绝来自生灾",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "纳音断运",
+      "category": "纳音断运",
+      "key": "水"
+     }
+    },
+    {
+     "key": "火",
+     "text": "火见沐浴必生焚",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "纳音断运",
+      "category": "纳音断运",
+      "key": "火"
+     }
+    },
+    {
+     "key": "土",
+     "text": "土见养病身不利",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "纳音断运",
+      "category": "纳音断运",
+      "key": "土"
+     }
+    }
+   ]
+  },
+  {
+   "name": "五行颠倒",
+   "entries": [
+    {
+     "key": "木",
+     "text": "- 木太旺似金\n- 木旺极似火\n- 木太衰似水\n- 木衰极似土",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "五行颠倒",
+      "category": "五行颠倒",
+      "key": "木"
+     }
+    },
+    {
+     "key": "火",
+     "text": "- 火太旺似水\n- 水旺极似木\n- 火太衰似木\n- 火衰极似金",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "五行颠倒",
+      "category": "五行颠倒",
+      "key": "火"
+     }
+    },
+    {
+     "key": "土",
+     "text": "- 土太旺似木\n- 土旺极似金\n- 土太衰似火\n- 土衰极似水",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "五行颠倒",
+      "category": "五行颠倒",
+      "key": "土"
+     }
+    },
+    {
+     "key": "金",
+     "text": "- 金太旺似火\n- 金旺极似水\n- 金太衰似土\n- 金衰极似木",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "五行颠倒",
+      "category": "五行颠倒",
+      "key": "金"
+     }
+    },
+    {
+     "key": "水",
+     "text": "- 水太旺似土\n- 水旺极似木\n- 水太衰似金\n- 水衰极似火",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "五行颠倒",
+      "category": "五行颠倒",
+      "key": "水"
+     }
+    },
+    {
+     "key": "速记",
+     "text": "- 五行太旺似克我之物\n- 五行旺极似我生之物\n- 五行太衰似生我之物\n- 五行衰极似我克之物",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "五行颠倒",
+      "category": "五行颠倒",
+      "key": "速记"
+     }
+    }
+   ]
+  },
+  {
+   "name": "从格",
+   "entries": [
+    {
+     "key": "弱极",
+     "text": "- 日元孤立无气\n- 四柱毫无生扶\n- 即或微浮印比\n- 印比自顾不暇\n- 官旺则要从官\n- 财旺则要随财\n- 财官食伤共存\n- 必要财运解围\n- 若行比劫印绶\n- 日元必凶无疑",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "从格",
+      "category": "从格",
+      "key": "弱极"
+     }
+    },
+    {
+     "key": "旺极",
+     "text": "- 四柱皆为比劫\n- 无有官杀食伤\n- 即或一二印枭\n- 必然随期旺神\n- 运行比劫印绶\n- 富贵自然通达\n- 运行官杀犯旺\n- 当知凶祸即至\n- 如果印星无力\n- 方可行走食伤\n- 若行财运之地\n- 立断九死一生",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "从格",
+      "category": "从格",
+      "key": "旺极"
+     }
+    },
+    {
+     "key": "强极",
+     "text": "- 命局印比叠叠\n- 绝无财官食伤\n- 印比二人同心\n- 可顺而不可逆\n- 只要运行印比\n- 人生定可亨通\n- 若走财官之地\n- 触怒强神大凶\n- 唯有印星得局\n- 方能化杀生印",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "从格",
+      "category": "从格",
+      "key": "强极"
+     }
+    }
+   ]
+  },
+  {
+   "name": "从儿格",
+   "entries": [
+    {
+     "key": "01",
+     "text": "从儿不管身强弱，只要吾儿又见儿",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "从儿格",
+      "category": "从儿格",
+      "key": "01"
+     }
+    },
+    {
+     "key": "02",
+     "text": "见杀不成立",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "从儿格",
+      "category": "从儿格",
+      "key": "02"
+     }
+    },
+    {
+     "key": "03",
+     "text": "本质必须是自身不行，干不了啥事，只要儿能生儿，可以坐享儿孙之福",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "从儿格",
+      "category": "从儿格",
+      "key": "03"
+     }
+    },
+    {
+     "key": "04",
+     "text": "一般没学历，出生家庭一般，基本都是一般，儿孙也一般，就是儿孙满堂这类幸福",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "从儿格",
+      "category": "从儿格",
+      "key": "04"
+     }
+    }
+   ]
+  },
+  {
+   "name": "格局",
+   "entries": [
+    {
+     "key": "01",
+     "text": "格局有正变",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "格局",
+      "category": "格局",
+      "key": "01"
+     }
+    },
+    {
+     "key": "02",
+     "text": "正者兼五理",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "格局",
+      "category": "格局",
+      "key": "02"
+     }
+    },
+    {
+     "key": "03",
+     "text": "印可配官煞",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "格局",
+      "category": "格局",
+      "key": "03"
+     }
+    },
+    {
+     "key": "04",
+     "text": "官煞依乎财",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "格局",
+      "category": "格局",
+      "key": "04"
+     }
+    },
+    {
+     "key": "05",
+     "text": "身衰遇官煞",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "格局",
+      "category": "格局",
+      "key": "05"
+     }
+    },
+    {
+     "key": "06",
+     "text": "枭印乃可化",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "格局",
+      "category": "格局",
+      "key": "06"
+     }
+    },
+    {
+     "key": "07",
+     "text": "身强遇官煞",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "格局",
+      "category": "格局",
+      "key": "07"
+     }
+    },
+    {
+     "key": "08",
+     "text": "食伤显其威",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "格局",
+      "category": "格局",
+      "key": "08"
+     }
+    },
+    {
+     "key": "09",
+     "text": "二者如替换",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "格局",
+      "category": "格局",
+      "key": "09"
+     }
+    },
+    {
+     "key": "10",
+     "text": "定是贫穷汉",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "格局",
+      "category": "格局",
+      "key": "10"
+     }
+    },
+    {
+     "key": "11",
+     "text": "身旺食生财",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "格局",
+      "category": "格局",
+      "key": "11"
+     }
+    },
+    {
+     "key": "12",
+     "text": "身衰伤配印",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "格局",
+      "category": "格局",
+      "key": "12"
+     }
+    },
+    {
+     "key": "13",
+     "text": "变着随其势",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "格局",
+      "category": "格局",
+      "key": "13"
+     }
+    },
+    {
+     "key": "14",
+     "text": "财官伤旺弱",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "格局",
+      "category": "格局",
+      "key": "14"
+     }
+    },
+    {
+     "key": "15",
+     "text": "去寡之造富贵齐",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "格局",
+      "category": "格局",
+      "key": "15"
+     }
+    },
+    {
+     "key": "16",
+     "text": "时师浅见乱昏迷",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "格局",
+      "category": "格局",
+      "key": "16"
+     }
+    },
+    {
+     "key": "17",
+     "text": "得时当令有几局",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "格局",
+      "category": "格局",
+      "key": "17"
+     }
+    },
+    {
+     "key": "18",
+     "text": "克泄引从玄妙藏",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "格局",
+      "category": "格局",
+      "key": "18"
+     }
+    }
+   ]
+  },
+  {
+   "name": "去寡（去官杀）",
+   "entries": [
+    {
+     "key": "01",
+     "text": "日主通根得气",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "去寡（去官杀）",
+      "category": "去寡（去官杀）",
+      "key": "01"
+     }
+    },
+    {
+     "key": "02",
+     "text": "官杀无根气，四柱无财；即使有财，财无根气不生官",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "去寡（去官杀）",
+      "category": "去寡（去官杀）",
+      "key": "02"
+     }
+    },
+    {
+     "key": "03",
+     "text": "有食伤",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "去寡（去官杀）",
+      "category": "去寡（去官杀）",
+      "key": "03"
+     }
+    }
+   ]
+  },
+  {
+   "name": "寒暖调侯",
+   "entries": [
+    {
+     "key": "01",
+     "text": "暖虽甚，要寒有根",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "寒暖调侯",
+      "category": "寒暖调侯",
+      "key": "01"
+     }
+    },
+    {
+     "key": "02",
+     "text": "寒虽至，要暖有气",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "寒暖调侯",
+      "category": "寒暖调侯",
+      "key": "02"
+     }
+    }
+   ]
+  },
+  {
+   "name": "顺逆",
+   "entries": [
+    {
+     "key": "01",
+     "text": "逆来顺去富之基",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "顺逆",
+      "category": "顺逆",
+      "key": "01"
+     }
+    },
+    {
+     "key": "02",
+     "text": "顺来逆去贫之意",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "顺逆",
+      "category": "顺逆",
+      "key": "02"
+     }
+    },
+    {
+     "key": "03",
+     "text": "去其有余补不足",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "顺逆",
+      "category": "顺逆",
+      "key": "03"
+     }
+    },
+    {
+     "key": "04",
+     "text": "虽是正理不究深",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "顺逆",
+      "category": "顺逆",
+      "key": "04"
+     }
+    },
+    {
+     "key": "05",
+     "text": "不拘财官印食类️",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "顺逆",
+      "category": "顺逆",
+      "key": "05"
+     }
+    },
+    {
+     "key": "06",
+     "text": "乘权得势局中神",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "顺逆",
+      "category": "顺逆",
+      "key": "06"
+     }
+    },
+    {
+     "key": "07",
+     "text": "助其强暴则同心",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "顺逆",
+      "category": "顺逆",
+      "key": "07"
+     }
+    },
+    {
+     "key": "08",
+     "text": "权在一人只可顺",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "顺逆",
+      "category": "顺逆",
+      "key": "08"
+     }
+    },
+    {
+     "key": "09",
+     "text": "勉强得制激其性",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "顺逆",
+      "category": "顺逆",
+      "key": "09"
+     }
+    },
+    {
+     "key": "10",
+     "text": "必罹凶咎不须题",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "顺逆",
+      "category": "顺逆",
+      "key": "10"
+     }
+    }
+   ]
+  },
+  {
+   "name": "清浊",
+   "entries": [
+    {
+     "key": "01",
+     "text": "一清到底有精神",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "清浊",
+      "category": "清浊",
+      "key": "01"
+     }
+    },
+    {
+     "key": "02",
+     "text": "管取生平富贵真",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "清浊",
+      "category": "清浊",
+      "key": "02"
+     }
+    },
+    {
+     "key": "03",
+     "text": "澄浊求清清得去",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "清浊",
+      "category": "清浊",
+      "key": "03"
+     }
+    },
+    {
+     "key": "04",
+     "text": "时来寒谷也回春",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "清浊",
+      "category": "清浊",
+      "key": "04"
+     }
+    },
+    {
+     "key": "05",
+     "text": "满盘浊气令人苦",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "清浊",
+      "category": "清浊",
+      "key": "05"
+     }
+    },
+    {
+     "key": "06",
+     "text": "一局清枯也苦人",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "清浊",
+      "category": "清浊",
+      "key": "06"
+     }
+    },
+    {
+     "key": "07",
+     "text": "半浊半清犹是可",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "清浊",
+      "category": "清浊",
+      "key": "07"
+     }
+    },
+    {
+     "key": "08",
+     "text": "多成多败度晨昏",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "清浊",
+      "category": "清浊",
+      "key": "08"
+     }
+    },
+    {
+     "key": "09",
+     "text": "寒虽甚要暖有气",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "清浊",
+      "category": "清浊",
+      "key": "09"
+     }
+    },
+    {
+     "key": "10",
+     "text": "暖虽至要寒有根",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "清浊",
+      "category": "清浊",
+      "key": "10"
+     }
+    }
+   ]
+  },
+  {
+   "name": "清浊层次",
+   "entries": [
+    {
+     "key": "01",
+     "text": "干支都清，大贵",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "清浊层次",
+      "category": "清浊层次",
+      "key": "01"
+     }
+    },
+    {
+     "key": "02",
+     "text": "天干浊，地支清，能发贵",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "清浊层次",
+      "category": "清浊层次",
+      "key": "02"
+     }
+    },
+    {
+     "key": "03",
+     "text": "天干清，地支浊，碰到好运能发财",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "清浊层次",
+      "category": "清浊层次",
+      "key": "03"
+     }
+    },
+    {
+     "key": "04",
+     "text": "原本浊，但有清气，碰到好运可富贵",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "清浊层次",
+      "category": "清浊层次",
+      "key": "04"
+     }
+    },
+    {
+     "key": "05",
+     "text": "干支都浊，按严重情况，1.非贫即夭；2.牢狱；3无财与事业，无配偶",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "清浊层次",
+      "category": "清浊层次",
+      "key": "05"
+     }
+    }
+   ]
+  },
+  {
+   "name": "父母(出生层次)",
+   "entries": [
+    {
+     "key": "01",
+     "text": "重点看年月柱，辅助看时柱。",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "父母(出生层次)",
+      "category": "父母(出生层次)",
+      "key": "01"
+     }
+    },
+    {
+     "key": "02",
+     "text": "看喜用是否在年月柱，时柱是配合还是破坏年月柱的喜用",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "父母(出生层次)",
+      "category": "父母(出生层次)",
+      "key": "02"
+     }
+    },
+    {
+     "key": "03",
+     "text": "喜用在月上，年上的星破坏了月上的喜用，只要月上的喜用没被坏尽，就可以继承祖业",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "父母(出生层次)",
+      "category": "父母(出生层次)",
+      "key": "03"
+     }
+    },
+    {
+     "key": "04",
+     "text": "喜用在月上，年上的星克制了月上的喜用，时上的星帮助保护(生助)了月上的喜用，帮父兴家或白手起家",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "父母(出生层次)",
+      "category": "父母(出生层次)",
+      "key": "04"
+     }
+    },
+    {
+     "key": "05",
+     "text": "喜用在月上，年上的星耗泄了月上的喜用，时上的星帮助保护(生助)了月上的喜用，知其父母创业之命(说明父母会有财产)，命主可以继承祖业",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "父母(出生层次)",
+      "category": "父母(出生层次)",
+      "key": "05"
+     }
+    },
+    {
+     "key": "06",
+     "text": "喜用在月上，年上的星耗泄了月上的喜用，时上的星耗泄了月上的喜用，自己一般",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "父母(出生层次)",
+      "category": "父母(出生层次)",
+      "key": "06"
+     }
+    },
+    {
+     "key": "07",
+     "text": "喜用在月上，年上的星耗泄了月上的喜用，时上的星克制了月上的喜用，自己是败家子",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "父母(出生层次)",
+      "category": "父母(出生层次)",
+      "key": "07"
+     }
+    },
+    {
+     "key": "08",
+     "text": "喜用在年上，月上的星克制了年上的喜用，坏尽，无法继承祖业；没坏尽，并且时上克制耗泄尽了月上的忌神，则也能继承祖业",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "父母(出生层次)",
+      "category": "父母(出生层次)",
+      "key": "08"
+     }
+    },
+    {
+     "key": "09",
+     "text": "喜用在年上，月上的星耗泄了年上的喜用，时上的星克制了月上的耗泄星，出生富贵",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "父母(出生层次)",
+      "category": "父母(出生层次)",
+      "key": "09"
+     }
+    },
+    {
+     "key": "10",
+     "text": "喜用在年上，月上的星克制了年上的喜用，日时逢克制或耗泄月上的忌神，出生贫寒，创业之命",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "父母(出生层次)",
+      "category": "父母(出生层次)",
+      "key": "10"
+     }
+    },
+    {
+     "key": "11",
+     "text": "以上喜用在年月与时柱的配合分析，一切都要考虑力量，喜用力量不足要参看头2个大运；喜用力量充足或忌神力量充足，都无需看大运",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "父母(出生层次)",
+      "category": "父母(出生层次)",
+      "key": "11"
+     }
+    },
+    {
+     "key": "12",
+     "text": "父母不以十神进行定位，本质上以父母宫位(年月)上的喜用的状态就代表父母的状态",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "父母(出生层次)",
+      "category": "父母(出生层次)",
+      "key": "12"
+     }
+    },
+    {
+     "key": "13",
+     "text": "年月上的用神就代表父母，大运流年对年月上的用神影响判断父母状态",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "父母(出生层次)",
+      "category": "父母(出生层次)",
+      "key": "13"
+     }
+    },
+    {
+     "key": "14",
+     "text": "年月无用神，年月宫位本身代表父母，直接看大运流年对年月的影响判断父母状态",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "父母(出生层次)",
+      "category": "父母(出生层次)",
+      "key": "14"
+     }
+    },
+    {
+     "key": "15",
+     "text": "父母富贵：命主自身1.守业；2.败家",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "父母(出生层次)",
+      "category": "父母(出生层次)",
+      "key": "15"
+     }
+    },
+    {
+     "key": "16",
+     "text": "普通，出生贫寒：1.父母贫，自己也贫；2.父母贫，帮父兴家",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "父母(出生层次)",
+      "category": "父母(出生层次)",
+      "key": "16"
+     }
+    },
+    {
+     "key": "17",
+     "text": "父母早亡或离异，或自己是过继",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "父母(出生层次)",
+      "category": "父母(出生层次)",
+      "key": "17"
+     }
+    }
+   ]
+  },
+  {
+   "name": "子息",
+   "entries": [
+    {
+     "key": "01",
+     "text": "身旺财为子",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "01"
+     }
+    },
+    {
+     "key": "02",
+     "text": "身衰印做儿",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "02"
+     }
+    },
+    {
+     "key": "03",
+     "text": "伤官不见财",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "03"
+     }
+    },
+    {
+     "key": "04",
+     "text": "男孩不见面(身旺有食伤泄秀，但有印夺食，这时必须要有财来破印，才有儿子，否则无子)",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "04"
+     }
+    },
+    {
+     "key": "05",
+     "text": "命中子星落空亡(不是指神煞)",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "05"
+     }
+    },
+    {
+     "key": "06",
+     "text": "亲身儿女防早丧（身旺有财，被比劫劫财，大运来官杀，此大运有儿子，但运一过，儿子恐夭折，或离婚随配偶）",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "06"
+     }
+    },
+    {
+     "key": "07",
+     "text": "家中有子是抱养",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "07"
+     }
+    },
+    {
+     "key": "08",
+     "text": "假子假女防早丧",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "08"
+     }
+    },
+    {
+     "key": "09",
+     "text": "年时七杀两头挂",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "09"
+     }
+    },
+    {
+     "key": "10",
+     "text": "家中长子难留下(身弱，官杀无制攻身，无儿子)",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "10"
+     }
+    },
+    {
+     "key": "11",
+     "text": "身旺无财命无子",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "11"
+     }
+    },
+    {
+     "key": "12",
+     "text": "运行财地可生儿",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "12"
+     }
+    },
+    {
+     "key": "13",
+     "text": "财运过后防损子",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "13"
+     }
+    },
+    {
+     "key": "14",
+     "text": "墓(不是指四墓库)中子星要送出（命局无子，但大运补起来，此大运有儿子，此大运一过，儿子恐损，或离异，儿子随配偶）",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "14"
+     }
+    },
+    {
+     "key": "15",
+     "text": "不变之中也有变化",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "15"
+     }
+    },
+    {
+     "key": "16",
+     "text": "而子星要昌",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "16"
+     }
+    },
+    {
+     "key": "17",
+     "text": "伤官配印得子",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "17"
+     }
+    },
+    {
+     "key": "18",
+     "text": "也怕财地（身弱又有食伤泄身，有印制食伤，有子，但命局中有财坏印，或大运行财运，就无子）",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "18"
+     }
+    },
+    {
+     "key": "19",
+     "text": "身旺财星做儿",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "19"
+     }
+    },
+    {
+     "key": "20",
+     "text": "也怕劫地",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "20"
+     }
+    },
+    {
+     "key": "21",
+     "text": "无财官煞为儿",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "21"
+     }
+    },
+    {
+     "key": "22",
+     "text": "也怕食地",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "22"
+     }
+    },
+    {
+     "key": "23",
+     "text": "比劫抗煞之格",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "23"
+     }
+    },
+    {
+     "key": "24",
+     "text": "也要详推（身旺无财，官杀为儿，但比劫帮我抗杀，比劫替我抗杀，比劫有儿子，我就没儿子。身弱，比劫帮我抗杀，我就有儿子）",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "24"
+     }
+    },
+    {
+     "key": "25",
+     "text": "子女更看重食伤星",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "25"
+     }
+    },
+    {
+     "key": "26",
+     "text": "必须参看食伤状态，起到的作用是好还是坏，",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "26"
+     }
+    },
+    {
+     "key": "27",
+     "text": "官杀欺衰主无子，除非有印，有印就有子，除非财坏印；财特别轻，没坏成这个印，能生儿子。万一凑合生出儿子，必然是逆子",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "27"
+     }
+    },
+    {
+     "key": "28",
+     "text": "官杀欺衰主，有比劫扛住，比劫够旺也能生子，否则无子",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "28"
+     }
+    },
+    {
+     "key": "29",
+     "text": "日主强旺，食伤泄秀，没有破坏的，多子",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "子息",
+      "category": "子息",
+      "key": "29"
+     }
+    }
+   ]
+  },
+  {
+   "name": "兄弟",
+   "entries": [
+    {
+     "key": "01",
+     "text": "身旺财为兄弟，财要起到该起的作用，财没被劫尽，才有兄弟",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "兄弟",
+      "category": "兄弟",
+      "key": "01"
+     }
+    },
+    {
+     "key": "02",
+     "text": "身弱比劫为兄弟，比劫要起到该起的作用才有兄弟",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "兄弟",
+      "category": "兄弟",
+      "key": "02"
+     }
+    }
+   ]
+  },
+  {
+   "name": "婚姻",
+   "entries": [
+    {
+     "key": "01",
+     "text": "日支无论是哪个十神，都带有配偶的某些信息",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "婚姻",
+      "category": "婚姻",
+      "key": "01"
+     }
+    },
+    {
+     "key": "02",
+     "text": "男命财为妻子，财起好作用，妻漂亮或者贤惠",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "婚姻",
+      "category": "婚姻",
+      "key": "02"
+     }
+    },
+    {
+     "key": "03",
+     "text": "女命官星都可为男人，但以用神为夫",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "婚姻",
+      "category": "婚姻",
+      "key": "03"
+     }
+    },
+    {
+     "key": "04",
+     "text": "女命若用神不是官星，则官星为其他男人，或者丈夫与命主的对待关系，或用于非吉凶类判断",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "婚姻",
+      "category": "婚姻",
+      "key": "04"
+     }
+    },
+    {
+     "key": "05",
+     "text": "女命是否离婚看用神受制情况来定",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "婚姻",
+      "category": "婚姻",
+      "key": "05"
+     }
+    }
+   ]
+  },
+  {
+   "name": "喜用两伤男命",
+   "entries": [
+    {
+     "key": "01",
+     "text": "结婚前，六亲走（受灾）的顺序：父亲，哥哥，母亲(或自己)",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "喜用两伤男命",
+      "category": "喜用两伤男命",
+      "key": "01"
+     }
+    },
+    {
+     "key": "02",
+     "text": "结婚后，六亲走（受灾）的顺序：老丈人，父亲，哥哥，母亲(或自己)",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "喜用两伤男命",
+      "category": "喜用两伤男命",
+      "key": "02"
+     }
+    }
+   ]
+  },
+  {
+   "name": "喜用两伤女命",
+   "entries": [
+    {
+     "key": "01",
+     "text": "结婚前，六亲走（受灾）的顺序：父亲，哥哥，母亲(或自己)",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "喜用两伤女命",
+      "category": "喜用两伤女命",
+      "key": "01"
+     }
+    },
+    {
+     "key": "02",
+     "text": "结婚(同居，发生关系)后，六亲走（受灾）的顺序：官人(男人，丈夫)，父亲，公婆，哥哥，母亲(或自己)",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "喜用两伤女命",
+      "category": "喜用两伤女命",
+      "key": "02"
+     }
+    }
+   ]
+  },
+  {
+   "name": "兵卒",
+   "entries": [
+    {
+     "key": "01",
+     "text": "杀刃双清气势特，比劫抗煞",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "兵卒",
+      "category": "兵卒",
+      "key": "01"
+     }
+    },
+    {
+     "key": "02",
+     "text": "命局浊，官印被制，但有护官或护印",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "兵卒",
+      "category": "兵卒",
+      "key": "02"
+     }
+    },
+    {
+     "key": "03",
+     "text": "假去寡，官不好用，但大运又助起官，此大运当兵",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "兵卒",
+      "category": "兵卒",
+      "key": "03"
+     }
+    },
+    {
+     "key": "04",
+     "text": "无礼的人(食伤制煞，财坏印)，但官印被护，大运走扶起官印的运",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "兵卒",
+      "category": "兵卒",
+      "key": "04"
+     }
+    },
+    {
+     "key": "05",
+     "text": "财杀旺，需印，但印被财坏，此时有比劫夺财来护印，护不住，但有这动作在，虽层次不高，但可当兵",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "兵卒",
+      "category": "兵卒",
+      "key": "05"
+     }
+    },
+    {
+     "key": "06",
+     "text": "假从格，造成假从的星在年月，85%父死母改嫁，15%过继或父母有大问题；若初运扶起官星，不是军官就是赌博",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "兵卒",
+      "category": "兵卒",
+      "key": "06"
+     }
+    }
+   ]
+  },
+  {
+   "name": "牢狱",
+   "entries": [
+    {
+     "key": "01",
+     "text": "群劫争财(没有官；或者有食伤，但枭神夺食)",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "牢狱",
+      "category": "牢狱",
+      "key": "01"
+     }
+    },
+    {
+     "key": "02",
+     "text": "用官，伤官见官，无印护官，或无财化食伤",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "牢狱",
+      "category": "牢狱",
+      "key": "02"
+     }
+    },
+    {
+     "key": "03",
+     "text": "独食泄秀，但枭夺食",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "牢狱",
+      "category": "牢狱",
+      "key": "03"
+     }
+    },
+    {
+     "key": "04",
+     "text": "独用神，无配件配合护卫这个用神，大运一行到制去(制死，制尽)用神，此运有牢狱",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "牢狱",
+      "category": "牢狱",
+      "key": "04"
+     }
+    },
+    {
+     "key": "05",
+     "text": "身强官弱(无视法律)",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "牢狱",
+      "category": "牢狱",
+      "key": "05"
+     }
+    },
+    {
+     "key": "06",
+     "text": "身弱官杀旺，无情逼身(被社会逼迫，不知怎么处理，铤而走险)",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "牢狱",
+      "category": "牢狱",
+      "key": "06"
+     }
+    },
+    {
+     "key": "07",
+     "text": "从弱，无一丝一毫生扶，有食伤，官煞，弱财时，一有帮身，比劫来夺财，则伤官见官",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "牢狱",
+      "category": "牢狱",
+      "key": "07"
+     }
+    },
+    {
+     "key": "08",
+     "text": "忌神辗转功，用神无力，力量对比忌神力量差距太大，会有大牢狱。必须是原局就有呈现，原局没有这个信息，就不会有牢狱",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "牢狱",
+      "category": "牢狱",
+      "key": "08"
+     }
+    }
+   ]
+  },
+  {
+   "name": "流年",
+   "entries": [
+    {
+     "key": "01",
+     "text": "呼应到哪个六亲星，哪个六亲有事情",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "流年",
+      "category": "流年",
+      "key": "01"
+     }
+    },
+    {
+     "key": "02",
+     "text": "呼应到用神，自己有事情",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "流年",
+      "category": "流年",
+      "key": "02"
+     }
+    },
+    {
+     "key": "03",
+     "text": "生助用神，有好事",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "流年",
+      "category": "流年",
+      "key": "03"
+     }
+    },
+    {
+     "key": "04",
+     "text": "克泄用神，有坏事",
+     "source": {
+      "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
+      "tab": "流年",
+      "category": "流年",
+      "key": "04"
+     }
+    }
+   ]
+  }
+ ]
+}

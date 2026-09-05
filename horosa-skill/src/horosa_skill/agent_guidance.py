@@ -483,7 +483,7 @@ FREE_TEXT_GATE_FIELDS: frozenset[str] = frozenset({
     "date", "time", "date/time", "date/time/place", "date/time/gender", "datetime", "targetDate/targetTime", "asOf",
     "startDate/endDate", "conditions", "topic", "question", "natal data", "target time", "location", "askEvent",
     "birth data", "year", "name", "technique", "content", "category/key", "rectifyEvents", "guaDate/guaYearGanZi",
-    "q", "query", "nums / date-time", "qiZhi / date-time", "dayGan/dayZhi", "cast-input", "cast-input + date/time",
+    "q", "query", "pillars", "fromYear", "nums / date-time", "qiZhi / date-time", "dayGan/dayZhi", "cast-input", "cast-input + date/time",
     "school-params", "event", "relocLat/relocLon", "inner/outer", "zone", "target technique",
 })
 
@@ -1074,6 +1074,18 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         safe_defaults=[
             {"field": "action", "value": "search", "meaning": "缺省走全文检索"},
             {"field": "limit", "value": 30, "meaning": "默认返回前 30 条"},
+        ],
+    ),
+    "bazi_inverse": _policy(
+        intent="八字反查：四柱干支 → 候选公历出生时刻（逐年回推）。纯反查，无结果敏感设置。",
+        required_context=["pillars (四柱干支)"],
+        ask_if_missing=[
+            {"field": "pillars", "question": "四柱干支是什么？（年/月/日/时各一组，如 甲子 丙寅 戊辰 庚申）"},
+            {"field": "fromYear", "question": "从哪一年开始回推？（缺省=今年）"},
+        ],
+        safe_defaults=[
+            {"field": "count", "value": 3, "meaning": "默认给 3 个候选"},
+            {"field": "desc", "value": True, "meaning": "默认向过去回推"},
         ],
     ),
     "astrodata": _policy(

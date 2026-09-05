@@ -48,6 +48,7 @@ DIVERGENCE_WHITELIST = {
     "generic": "skill catch-all preset for unrecognized pasted exports; no upstream technique",
     "astrodata": "名人星盘库为 skill 侧离线检索 tool；上游 aiExport 无对应导出技法（celebrity DB 页无 AI 导出契约）",
     "xuanshi": "玄史知识库为 skill 侧检索 tool（runtime 自带只读 SQLite bundle，/xuanshi/* 端点）；上游玄史页无 AI 导出契约",
+    "bazi_inverse": "八字反查为 skill 侧 tool（Java /common/inversebazi，上游桌面端 commtools 页无 AI 导出契约）",
     "qizhengelection": "七政择日动盘为 skill 侧工具（/qizhengelection/pan|eclipses|azimuthsearch 直连）；上游择日双轮是果老盘内嵌 UI，无 AI 导出契约",
     "india_rectify": "印度生时校正为 skill 侧工具（/india/rectify 直连）；上游校时器是印占页抽屉 UI（§17），无 AI 导出契约",
     "planet_cycles": "行星周期为 skill 侧工具（/astroextra/planetcycles 直连，greatconj 泛化）；上游是世运页图层，无 AI 导出契约",

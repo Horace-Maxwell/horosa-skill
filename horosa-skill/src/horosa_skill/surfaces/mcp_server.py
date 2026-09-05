@@ -196,7 +196,7 @@ WHEN TO REACH FOR THIS SERVER
 Any request to 起盘/排盘/起课/起卦/算命/看运势/合盘/择日/卜卦, or to explain, store, or report
 such a chart. Also 农历/节气/黄历 conversion and celebrity birth data.
 
-WHAT IT COVERS (105 tools)
+WHAT IT COVERS (106 tools)
 · Western: natal + derived charts, 20+ predictive systems (returns, progressions, primary
   directions, zodiacal releasing, firdaria), horary 卜卦, astrocartography, midpoints.
 · Chinese: 八字, 紫微斗数, 大六壬, 奇门遁甲, 太乙, 金口诀, 三式合一, 六爻, 河洛理数,
@@ -216,7 +216,7 @@ HOW TO USE IT
    answer; horosa_technique_report renders it per run/session.
 5. Runs are stored: horosa_memory_query finds them; horosa_report_render writes DOCX/PDF.
 
-HOROSA_MCP_COMPACT=1 exposes 11 facade tools instead of 105 (horosa_tool_run reaches any technique
+HOROSA_MCP_COMPACT=1 exposes 11 facade tools instead of 106 (horosa_tool_run reaches any technique
 by name); HOROSA_TOOLSETS=astro,cn limits which groups are exposed."""
 
 

@@ -965,6 +965,18 @@ class ACGInput(BirthInput):
     eventFromDate: str | None = Field(default=None, description="事件查找起点日期 YYYY-MM-DD（缺省取盘面日期）")
 
 
+class BaziInverseInput(FlexibleModel):
+    # 八字反查（v0.36.0 C2）：四柱干支 → 候选公历出生时刻（Java /common/inversebazi，上游 BaZiHelper.getBirthes）。
+    # 纯反查、不涉结果敏感设置 → 免确认门（与 astrodata 同类）。
+    pillars: list[str] | None = Field(default=None, description="四柱干支 [年, 月, 日, 时]，如 ['甲子','丙寅','戊辰','庚申']；也可分给 year/month/day/hour。")
+    year: str | None = None
+    month: str | None = None
+    day: str | None = None
+    hour: str | None = None
+    count: int | None = Field(default=3, description="候选时刻数量（1–10，默认 3）。")
+    desc: bool | None = Field(default=True, description="true=从 fromYear 向过去逐年回推（默认）；false=向未来。")
+    fromYear: int | None = Field(default=None, description="回推起始公历年（缺省=后端当前年）。")
+
 class AstrodataInput(FlexibleModel):
     # 名人星盘数据库（离线只读检索）：query 走 FTS 全文（姓名/条目/出生地/维基摘要），
     # category 按分类过滤，rodden 按可信度评级过滤（AA/A/B/C/DD/X/XX，可传多个），

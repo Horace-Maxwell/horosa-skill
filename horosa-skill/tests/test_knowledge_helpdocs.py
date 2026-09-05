@@ -42,7 +42,7 @@ def test_helpdoc_packs_exist_and_cover_the_major_technique_manuals() -> None:
 
 def test_whitelist_and_packs_on_disk_are_the_same_set() -> None:
     """白名单改了必须重跑生成器，生成器跑了必须提交产物——两边任一单独动都是半成品。"""
-    listed = {domain for domain, _label in gen.HELPDOC_DOMAINS.values()}
+    listed = {domain for domain, _label in gen.HELPDOC_DOMAINS.values()} | set(gen.EXTRA_PACK_DOMAINS)
     on_disk = {path.stem for path in PACK_DIR.glob("*.json")}
     assert listed == on_disk, f"白名单 − 磁盘: {sorted(listed - on_disk)}; 磁盘 − 白名单: {sorted(on_disk - listed)}"
 

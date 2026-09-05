@@ -335,6 +335,9 @@ class FakeClient(HorosaApiClient):
             "liureng": {"ke": ["一课"], "overview": ["概览"]},
             "nongli": {"bazi": {"guolaoGods": {"ziGods": {"子": {"allGods": ["青龙"], "taisuiGods": ["岁驾"]}}}}},
         }
+        if endpoint == "/common/inversebazi":
+            # Java CommController.inverseBazi：Dates=["YYYY-MM-DD HH:mm:ss", …]（Desc=true 向过去回推）
+            return {"Dates": ["2024-02-15 15:30:00", "1964-02-29 15:30:00", "1904-03-15 15:30:00"][: int(payload.get("Count") or 3)]}
         if endpoint == "/qizheng/moira":
             # Java QizhengMoiraRuleService.analyze 响应形状（weakSolid / yearStars.birth|transit / transitYearStars），
             # 值取自上游 guolaoWeakSolidBirthStars.test.js 夹具。
@@ -4755,3 +4758,35 @@ def test_guolao_moira_off_or_java_down_degrades_with_warning(tmp_path) -> None:
     assert down.ok is True
     assert "[虚实]" not in down.data["snapshot_text"] and "[政余格局]" in down.data["snapshot_text"]
     assert any("[虚实]/[本命化曜]/[流年流曜] 本次未产出" in w for w in down.warnings), down.warnings
+
+
+# ---- v0.36.0 C2：八字反查（Java /common/inversebazi）----
+def test_bazi_inverse_returns_candidates_and_sections(tmp_path) -> None:
+    from horosa_skill.agent_guidance import validate_agent_preflight
+
+    settings = Settings(server_root="http://127.0.0.1:9999", db_path=tmp_path / "memory.db", output_dir=tmp_path / "runs")
+    client = CaptureClient()
+    service = HorosaSkillService(settings, client=client, store=MemoryStore(settings), js_client=FakeJsClient())
+    result = service.run_tool("bazi_inverse", {"pillars": ["甲子", "丙寅", "戊辰", "庚申"], "count": 2, "fromYear": 2030}, save_result=False)
+    assert result.ok is True, result.error
+    model = result.data["bazi_inverse"]
+    assert [c["date"] for c in model["candidates"]] == ["2024-02-15", "1964-02-29"]
+    assert model["candidates"][0]["time"] == "15:30:00"
+    call = next(payload for endpoint, payload in client.calls if endpoint == "/common/inversebazi")
+    assert call == {"Year": "甲子", "Month": "丙寅", "Date": "戊辰", "Time": "庚申", "Count": 2, "Desc": True, "FromYear": 2030}
+    snap = result.data["snapshot_text"]
+    assert "[反查条件]" in snap and "[候选时刻]" in snap and "1. 2024-02-15 15:30:00" in snap
+    assert result.data["export_snapshot"]["technique"]["key"] == "bazi_inverse"
+    assert result.data["export_snapshot"]["missing_selected_sections"] == []
+    assert result.summary[0].startswith("八字反查 甲子 丙寅 戊辰 庚申：2 个候选时刻")
+    # 纯反查免确认门（与 astrodata 同类）
+    assert validate_agent_preflight("bazi_inverse", {})["ok"] is True
+
+
+def test_bazi_inverse_rejects_bad_pillars(tmp_path) -> None:
+    settings = Settings(server_root="http://127.0.0.1:9999", db_path=tmp_path / "memory.db", output_dir=tmp_path / "runs")
+    service = HorosaSkillService(settings, client=CaptureClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    result = service.run_tool("bazi_inverse", {"year": "甲子", "month": "丙寅", "day": "戊辰", "hour": "庚"}, save_result=False)
+    assert result.ok is False and result.error.code == "tool.bazi_inverse_invalid_pillars"
+    assert result.error.details["invalid"] == ["庚"]
+    assert result.error.details["agent_recovery"]["kind"] == "input"

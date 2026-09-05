@@ -1,6 +1,6 @@
 {
   "_comment": "Router corpus ratchet (v0.36.0 B2): natural-language queries (zh + en) → the technique tool(s) horosa_dispatch must pick, verified by scripts/verify_router_corpus.py. `min_pass` may only go up; refresh with --update-baseline after improving the router. Expected values are what a user would mean, not what the router happens to do.",
-  "min_pass": 100,
+  "min_pass": 102,
   "cases": [
     {
       "query": "帮我起一个奇门遁甲盘看出行",
@@ -600,6 +600,18 @@
       "query": "muhurta for a new business",
       "expect": [
         "indiazeri"
+      ]
+    },
+    {
+      "query": "甲子 丙寅 戊辰 庚申 这个八字反查出生时间",
+      "expect": [
+        "bazi_inverse"
+      ]
+    },
+    {
+      "query": "reverse bazi lookup for these four pillars",
+      "expect": [
+        "bazi_inverse"
       ]
     }
   ]

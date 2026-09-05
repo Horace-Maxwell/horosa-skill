@@ -1051,6 +1051,15 @@
       ],
       "export_technique": "zodialrelease",
       "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
+    },
+    "bazi_inverse": {
+      "compute_class": "java_backend",
+      "engines": [],
+      "endpoints": [
+        "/common/inversebazi"
+      ],
+      "export_technique": "bazi_inverse",
+      "notes": "Java BaZiHelper.getBirthes 逐年回推；Python 只校验四柱干支、转发与排版"
     }
   }
 }

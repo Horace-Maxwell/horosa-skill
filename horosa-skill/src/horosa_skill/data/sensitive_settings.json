@@ -20,7 +20,8 @@
     "knowledge_read",
     "knowledge_registry",
     "xuanshi",
-    "ziwei_rules"
+    "ziwei_rules",
+    "bazi_inverse"
   ],
   "clarify_env": {
     "name": "HOROSA_CLARIFY",

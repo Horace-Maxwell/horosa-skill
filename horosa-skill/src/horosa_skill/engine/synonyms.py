@@ -106,6 +106,7 @@ TOOL_SYNONYMS: dict[str, tuple[str, ...]] = {
     "ziwei_rules": ("紫微规则库", "斗数规则", "紫微格局规则", "ziwei rules"),
     "bazi_birth": ("八字", "四柱", "生辰八字", "four pillars", "ba zi", "bazi"),
     "bazi_direct": ("八字直断", "直断", "八字大运流年", "bazi reading", "bazi direct"),
+    "bazi_inverse": ("八字反查", "四柱反推出生时间", "干支反查", "反推八字", "inverse bazi", "reverse bazi lookup"),
     "liureng_gods": ("大六壬", "六壬", "壬课", "da liu ren", "liureng"),
     "liureng_runyear": ("六壬行年", "行年", "年运", "liureng runyear"),
     "jieqi_year": ("全年节气", "节气盘", "二十四节气", "solar terms", "jieqi"),

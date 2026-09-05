@@ -39,6 +39,12 @@ HELP_REL = "Horosa-Web/astrostudyui/src/components/help"
 
 # HelpDoc 组件 → (domain, 中文标签)。域名不与既有 hover 域（astro/liureng/qimen）冲突：
 # 冲突者带 _manual 后缀；其余用技法页自然名。纯 3D/观星操作页信息密度低，仍收（体量小）。
+# 非 HelpDoc 来源、由各自生成器产出的知识包（同 helpdoc.v1 schema）：域名 → 生成脚本。磁盘上的包必须
+# 要么在 HELPDOC_DOMAINS 要么在这里（tests/test_knowledge_helpdocs 守），否则是没人认领的孤儿包。
+EXTRA_PACK_DOMAINS: dict[str, str] = {
+    "bazi_pithy": "scripts/gen_bazi_pithy_pack.py",  # v0.36.0 C2：上游 Java bazipithy.json 21 类口诀
+}
+
 HELPDOC_DOMAINS: dict[str, tuple[str, str]] = {
     "AstroHelpDoc": ("astro_manual", "西洋占星 · 操作手册"),
     "BaziHelpDoc": ("bazi", "八字四柱 · 操作手册"),
