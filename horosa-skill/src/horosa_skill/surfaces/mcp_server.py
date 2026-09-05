@@ -12,7 +12,7 @@ from typing import Annotated
 from mcp import types as mcp_types
 from mcp.server.fastmcp import FastMCP
 from horosa_skill.surfaces.mcp_schema import apply_advertised_schemas
-from pydantic import BaseModel, ValidationError, WithJsonSchema, create_model
+from pydantic import BaseModel, Field, ValidationError, WithJsonSchema, create_model
 
 from horosa_skill.agent_guidance import (
     build_agent_guidance,
@@ -569,16 +569,48 @@ def _elicitation_enabled() -> bool:
     return os.environ.get("HOROSA_MCP_ELICIT", "1").strip().lower() not in {"0", "false", "off"}
 
 
-def _gate_elicitation_schema() -> type[BaseModel]:
-    """闸门表单：三选一 + 备注。单点可替换——B3 按 ask_if_missing 逐题生成字段时只改这里。"""
-    return create_model(
-        "HorosaGateDecision",
-        decision=(
+_ELICIT_MAX_QUESTIONS = 6
+
+
+def _form_field_name(field: Any) -> str:
+    name = re.sub(r"[^0-9A-Za-z_]+", "_", f"{field or ''}").strip("_")
+    if not name:
+        return ""
+    if name[0].isdigit():
+        name = f"q_{name}"
+    return name if name not in {"decision", "notes"} else f"q_{name}"
+
+
+def _gate_questions(gate_error: dict[str, Any] | None) -> list[dict[str, Any]]:
+    details = (gate_error or {}).get("details") or {}
+    items = details.get("ask_if_missing") or (details.get("agent_recovery") or {}).get("ask_if_missing") or []
+    return [item for item in items if isinstance(item, dict)]
+
+
+def _gate_elicitation_schema(gate_error: dict[str, Any] | None = None) -> type[BaseModel]:
+    """闸门表单（v0.36.0 B3）：三选一 + 每个带 options 的闸问题一个枚举字段（≤6）+ 备注。
+
+    字段只从策略声明的 options 生成，答案也只允许写回策略声明过的 values——表单不是新的自由输入口。
+    """
+    fields: dict[str, Any] = {
+        "decision": (
             Literal[_ELICIT_DEFAULTS, _ELICIT_PROVIDE, _ELICIT_CANCEL],  # type: ignore[valid-type]
             _ELICIT_DEFAULTS,
         ),
-        notes=(str, ""),
-    )
+    }
+    for item in _gate_questions(gate_error):
+        options = [str(option) for option in (item.get("options") or []) if str(option).strip()]
+        name = _form_field_name(item.get("field"))
+        if not options or not name or name in fields:
+            continue
+        if len(fields) - 1 >= _ELICIT_MAX_QUESTIONS:
+            break
+        fields[name] = (
+            str,
+            Field(default="", description=str(item.get("question") or item.get("field") or ""), json_schema_extra={"enum": [*options, ""]}),
+        )
+    fields["notes"] = (str, "")
+    return create_model("HorosaGateDecision", **fields)
 
 
 def _note_elicitation(gate_error: dict[str, Any], status: str, **extra: Any) -> None:
@@ -588,14 +620,53 @@ def _note_elicitation(gate_error: dict[str, Any], status: str, **extra: Any) -> 
         details["elicitation"] = {"status": status, **extra}
 
 
+def _apply_gate_answers(
+    gate_error: dict[str, Any], answers: dict[str, Any] | None
+) -> tuple[dict[str, Any], list[str]]:
+    """表单逐题答案 → (可写回载荷的字段值, 人话记录)。只认策略声明过的 option；有 values 才写值。"""
+    applied: dict[str, Any] = {}
+    noted: list[str] = []
+    if not answers:
+        return applied, noted
+    by_name = {_form_field_name(item.get("field")): item for item in _gate_questions(gate_error)}
+    for key, answer in answers.items():
+        text = f"{answer or ''}".strip()
+        item = by_name.get(str(key))
+        if not text or item is None:
+            continue
+        options = [str(option) for option in (item.get("options") or [])]
+        if text not in options:
+            continue
+        field = str(item.get("field") or "")
+        noted.append(f"{field}={text}")
+        values = item.get("values")
+        if isinstance(values, list) and len(values) == len(options) and field and "/" not in field:
+            value = values[options.index(text)]
+            if value is not None:
+                applied[field] = value
+    return applied, noted
+
+
 def _apply_gate_decision(
-    payload: dict[str, Any], gate_error: dict[str, Any], decision: str, notes: str
+    payload: dict[str, Any], gate_error: dict[str, Any], decision: str, notes: str, answers: dict[str, Any] | None = None
 ) -> dict[str, Any] | None:
-    """纯函数：把表单答案落到载荷（接受默认）或闸门错误（用户备注），不碰传输层，可离线测。"""
+    """纯函数：把表单答案落到载荷（接受默认 / 逐题作答）或闸门错误（用户备注），不碰传输层，可离线测。"""
+    applied, noted = _apply_gate_answers(gate_error, answers)
     if decision == _ELICIT_DEFAULTS:
         updated = dict(payload)
+        updated.update(applied)
         updated["defaults_accepted"] = True
         note = "user accepted Xingque defaults via MCP elicitation form"
+        if noted:
+            note += "; answered: " + "; ".join(noted)
+        updated["clarification_notes"] = f"{note}; user notes: {notes}" if notes else note
+        return updated
+    if decision == _ELICIT_PROVIDE and noted:
+        # 用户在表单里逐题选了具体设置：这就是确认，写回声明过的值后带 agent_confirmed_settings 重试
+        updated = dict(payload)
+        updated.update(applied)
+        updated["agent_confirmed_settings"] = True
+        note = "user answered the clarification form via MCP elicitation: " + "; ".join(noted)
         updated["clarification_notes"] = f"{note}; user notes: {notes}" if notes else note
         return updated
     if notes:
@@ -633,14 +704,20 @@ async def _maybe_elicit_gate(
             gate_error.get("details", {}).get("agent_recovery", {}).get("prompt_to_user")
             or f"调用 {tool_name} 前需要确认会影响结果的设置。"
         )
-        result = await ctx.elicit(message=prompt, schema=_gate_elicitation_schema())
+        result = await ctx.elicit(message=prompt, schema=_gate_elicitation_schema(gate_error))
         if result.action != "accept" or result.data is None:
             _note_elicitation(gate_error, "declined", action=f"{result.action}")
             return None
         decision = f"{getattr(result.data, 'decision', '') or ''}"
         notes = str(getattr(result.data, "notes", "") or "").strip()
-        updated = _apply_gate_decision(payload, gate_error, decision, notes)
-        status = "defaults" if updated is not None else ("cancelled" if decision == _ELICIT_CANCEL else "answered")
+        data_fields = getattr(result.data, "model_dump", None)
+        raw_answers = data_fields() if callable(data_fields) else dict(getattr(result.data, "__dict__", {}) or {})
+        answers = {k: v for k, v in raw_answers.items() if k not in {"decision", "notes"}}
+        updated = _apply_gate_decision(payload, gate_error, decision, notes, answers=answers)
+        if updated is not None:
+            status = "defaults" if decision == _ELICIT_DEFAULTS else "answered_form"
+        else:
+            status = "cancelled" if decision == _ELICIT_CANCEL else "answered"
         _note_elicitation(gate_error, status, decision=decision)
         return updated
     except Exception as exc:  # noqa: BLE001 — elicitation must never become a new failure mode

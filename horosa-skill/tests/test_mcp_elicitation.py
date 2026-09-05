@@ -16,6 +16,7 @@ from horosa_skill.surfaces.mcp_server import (
     _ELICIT_DEFAULTS,
     _ELICIT_PROVIDE,
     _apply_gate_decision,
+    _gate_elicitation_schema,
     _maybe_elicit_gate,
 )
 
@@ -138,3 +139,60 @@ def test_apply_gate_decision_is_pure() -> None:
     assert payload == {"date": "x"}
     assert _apply_gate_decision(payload, error, _ELICIT_PROVIDE, "") is None
     assert "user_notes" not in error["details"]
+
+
+# ---- v0.36.0 B3：表单从闸问题生成，答案只写回策略声明过的值 ----
+def _gate_error_with_questions() -> dict:
+    return {
+        "ok": False,
+        "code": "tool.clarification_required",
+        "details": {
+            "agent_recovery": {"prompt_to_user": "请确认宫制"},
+            "ask_if_missing": [
+                {"field": "date/time/place", "question": "请提供出生日期时间地点。"},
+                {"field": "hsys", "question": "宫制？", "options": ["0 整宫", "3 Placidus"], "values": [0, 3]},
+                {"field": "zodiacal", "question": "黄道？", "options": ["回归", "恒星"], "values": [0, 1]},
+                {"field": "tradition", "question": "扩展项？", "options": ["需要", "不需要"]},
+            ],
+        },
+    }
+
+
+def test_form_schema_has_one_enum_field_per_option_question() -> None:
+    schema = _gate_elicitation_schema(_gate_error_with_questions())
+    fields = schema.model_fields
+    assert list(fields) == ["decision", "hsys", "zodiacal", "tradition", "notes"]  # 自由文本题不进表单
+    json_schema = schema.model_json_schema()
+    assert json_schema["properties"]["hsys"]["enum"] == ["0 整宫", "3 Placidus", ""]
+    assert "$ref" not in str(json_schema["properties"]["hsys"])
+
+
+def test_answers_write_back_only_declared_values_and_confirm() -> None:
+    error = _gate_error_with_questions()
+    updated = _apply_gate_decision(
+        {"date": "1990-01-01"}, error, _ELICIT_PROVIDE, "", answers={"hsys": "3 Placidus", "zodiacal": "", "tradition": "需要", "bogus": "x"}
+    )
+    assert updated is not None
+    assert updated["hsys"] == 3 and "zodiacal" not in updated and "tradition" not in updated  # tradition 无 values → 只记不写
+    assert updated["agent_confirmed_settings"] is True
+    assert "hsys=3 Placidus" in updated["clarification_notes"] and "tradition=需要" in updated["clarification_notes"]
+
+
+def test_answer_outside_declared_options_is_ignored() -> None:
+    error = _gate_error_with_questions()
+    assert _apply_gate_decision({"date": "x"}, error, _ELICIT_PROVIDE, "", answers={"hsys": "7 Sripati"}) is None
+
+
+def test_defaults_plus_answers_merge() -> None:
+    error = _gate_error_with_questions()
+    updated = _apply_gate_decision({"date": "x"}, error, _ELICIT_DEFAULTS, "", answers={"zodiacal": "恒星"})
+    assert updated is not None and updated["zodiacal"] == 1 and updated["defaults_accepted"] is True
+
+
+def test_maybe_elicit_gate_records_form_answers() -> None:
+    result = SimpleNamespace(action="accept", data=SimpleNamespace(decision=_ELICIT_PROVIDE, notes="", hsys="3 Placidus", zodiacal="", tradition=""))
+    ctx = _Ctx(_Session(True), result=result)
+    error = _gate_error_with_questions()
+    updated = asyncio.run(_maybe_elicit_gate(_Mcp(ctx), "chart", {"date": "1990-01-01"}, error))
+    assert updated is not None and updated["hsys"] == 3
+    assert error["details"]["elicitation"]["status"] == "answered_form"

@@ -668,6 +668,10 @@ A global stability pass hardened these; keep them true when you touch the releva
   `engine/router.py` 一条规则（或进 `ROUTING_EXEMPT`）、`contracts/router_corpus.json` 至少一句语料
   （`verify_router_corpus.py` 的 `min_pass` 只升不降）。择日搜索族词面含基底技法名，基底规则一律
   `and not is_zeri`。`HOROSA_TOOLSETS` 未知 token 告警丢弃、全空回落全量，过滤生效即注册 `horosa_tool_run`。
+- **工具自有的结果敏感项，闸门必须点名问到。** 族策略（ASTRO_BIRTH/SHENSHU/PREDICTIVE）只是底座；有自有旋钮
+  的工具用工厂出专属策略（`_progression_target_policy`）。闸问题要么带 `options`（可枚举者并行 `values`，
+  表单答案只写回这些值），要么字段进 `FREE_TEXT_GATE_FIELDS`；`tests/test_gate_policies.py` 守。
+  加旋钮 = 加问题 + `sensitive_settings.json` 自测 + live 翻转测试（v0.36.0）。
 - **`run_tool` always returns a `ToolEnvelope`, never lets an unexpected exception escape.** Tool
   execution + snapshot/summary/export post-processing run inside a try that catches `HorosaSkillError`
   **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`. Only invalid-payload

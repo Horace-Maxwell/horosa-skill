@@ -94,6 +94,27 @@
         "clarification_notes": "asked"
       },
       "expect": "block"
+    },
+    {
+      "name": "planetaryarc bare (no arcSource/target confirmed) blocked",
+      "tool": "planetaryarc",
+      "payload": {
+        "date": "1990-01-01",
+        "time": "12:00:00",
+        "zone": "+08:00",
+        "lat": "31n13",
+        "lon": "121e28"
+      },
+      "expect": "block"
+    },
+    {
+      "name": "tieban bare (gender never asked before v0.36.0) blocked",
+      "tool": "tieban",
+      "payload": {
+        "date": "1990-01-01",
+        "time": "12:00:00"
+      },
+      "expect": "block"
     }
   ]
 }

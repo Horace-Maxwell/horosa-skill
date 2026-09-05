@@ -98,6 +98,25 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.36.0 / 2026-09-04 — 闸门半盲：推运五支从不问目标/弧源，神数五支从不问性别，163/326 问题没选项
+
+- **症状**：`planetaryarc` 用本命盘策略——问宫制、不问 `arcSource`（月亮弧/太阳弧结果完全不同）也不问目标
+  时刻；vedicprog/jaynesprog/planetaryages/extrareturns 同病；铁板/邵子按性别分条文、演禽/策天/张果按地点
+  起盘，五支共用「只要日期」的神数策略，性别地点从不问；163 个闸问题没有选项，MCP 原生表单只有一个三选一，
+  用户在表单里答不了任何具体设置。
+- **根因**：策略按「族」复用（ASTRO_BIRTH/SHENSHU），没有「该工具自有的结果敏感项必须出现在问题里」的
+  约束；问题与 schema 值之间没有映射，表单答案只能当备注。
+- **guard**：`_progression_target_policy` 工厂给五个推运工具各自的目标问题（arcSource 带 options+values）；
+  `SHENSHU_GENDER_POLICY`（tieban/shaozi）与 `SHENSHU_PLACE_POLICY`（xianqin/cetian/qizhengkin：性别+地点+时区，
+  与 `_run_shenshu_tool` 实际转发一致）；可枚举问题配 `options` + 并行 `values`（hsys 带上游索引、zodiacal、
+  岁差制、晚子时双开关、diFen 十二支、gender、arcSource），自由文本项进 `FREE_TEXT_GATE_FIELDS` 白名单
+  （`test_gate_policies`：新问题要么带选项要么显式入白名单）；elicitation 表单从 `ask_if_missing` 生成
+  （每个带选项的问题一个枚举字段，≤6），答案只写回策略声明过的 `values`，逐题作答即视为确认
+  （`agent_confirmed_settings=true` + 记录）；`sensitive_settings.json` 加 planetaryarc/tieban 裸调用自测；
+  live 翻转测试（tieban/shaozi 性别、xianqin/qizhengkin 地点）随 runtime 跑。
+- **法则**：**一个工具自有的结果敏感项，闸门必须点名问到**，族策略只能是底座不能是全部；问题要能落回
+  schema 值（options↔values），否则表单只是装饰。
+
 ### v0.36.0 / 2026-09-04 — 找不到：25 个技法无路由规则、英文触发 67% 零命中、`HOROSA_TOOLSETS` 拼错＝零技法
 
 - **症状**：8 个择日搜索工具、tarot/地占/一掌经/龙盘/重置盘/占星地图/多重回归……25 个技法在 `horosa_dispatch`

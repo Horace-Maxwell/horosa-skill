@@ -326,14 +326,42 @@ SHENSHU_POLICY = _policy(
     do_not_assume=["date"],
 )
 
+# v0.36.0 B3：神数五支此前共用 SHENSHU_POLICY，从不问性别/地点——而 `_run_shenshu_tool` 一直在转发它们，
+# 铁板/邵子按性别分条文，演禽/策天/张果按地点起盘：不问就是静默默认。
+_GENDER_QUESTION = {"field": "gender", "question": "性别？（条文按男女分列）", "options": ["男", "女"], "values": [1, 0]}
+_PLACE_QUESTION = {
+    "field": "location",
+    "question": "起盘地点（经纬度或城市）与时区？",
+    "options": ["当前位置/客户端位置", "指定城市或经纬度"],
+}
+SHENSHU_GENDER_POLICY = _policy(
+    intent="神数 (铁板/邵子)：以干支起数并按性别取条文；需日期(含时间更准)与性别。",
+    required_context=["date (公历日期)", "time (可选，影响时柱)", "gender (性别)"],
+    ask_if_missing=[*SHENSHU_POLICY["ask_if_missing"], _GENDER_QUESTION],
+    safe_defaults=SHENSHU_POLICY["safe_defaults"],
+    do_not_assume=["date", "gender"],
+)
+SHENSHU_PLACE_POLICY = _policy(
+    intent="神数 (演禽/策天飞星/张果星宗)：按出生时刻+地点起盘并按性别取用；需日期、时间、时区、地点与性别。",
+    required_context=["date (公历日期)", "time", "zone (时区)", "lat/lon 或 gpsLat/gpsLon (地点)", "gender (性别)"],
+    ask_if_missing=[*SHENSHU_POLICY["ask_if_missing"], _GENDER_QUESTION, _PLACE_QUESTION, {"field": "zone", "question": "时区偏移（如 +08:00）？"}],
+    safe_defaults=SHENSHU_POLICY["safe_defaults"],
+    do_not_assume=["date", "gender", "location", "timezone"],
+)
+
 
 ASTRO_BIRTH_POLICY = _policy(
     intent="Birth/event astrology chart calculation.",
     required_context=COMMON_BIRTH_FIELDS,
     ask_if_missing=[
         {"field": "date/time/place", "question": "请提供出生/事件的日期、时间、时区和地点。"},
-        {"field": "hsys", "question": "宫制要用哪一种？", "options": ["整宫制/Whole Sign（默认推荐）", "Placidus", "其他指定宫制"]},
-        {"field": "zodiacal", "question": "黄道体系要用哪一种？", "options": ["回归黄道（默认推荐）", "恒星黄道（需配 siderealAyanamsa）"]},
+        {
+            "field": "hsys",
+            "question": "宫制要用哪一种？（索引见上游表：1 是 Alcabitus，不是 Placidus）",
+            "options": ["0 整宫制/Whole Sign（默认推荐）", "3 Placidus", "1 Alcabitus", "2 Regiomontanus", "4 Koch", "其他指定宫制（5 Vehlow/6 Polich Page/7 Sripati/8 MC等宫）"],
+            "values": [0, 3, 1, 2, 4, None],
+        },
+        {"field": "zodiacal", "question": "黄道体系要用哪一种？", "options": ["回归黄道（默认推荐）", "恒星黄道（需配 siderealAyanamsa）"], "values": [0, 1]},
         {
             "field": "siderealAyanamsa",
             "question": "若用恒星黄道，岁差(ayanāṃśa)取哪一制？（仅 zodiacal=1 时生效，缺省=lahiri）",
@@ -344,6 +372,7 @@ ASTRO_BIRTH_POLICY = _policy(
                 "fagan_bradley",
                 "yukteshwar / true_citra / ss_revati 等（共 47 制，见 SIDEREAL_AYANAMSA_LABELS）",
             ],
+            "values": ["lahiri", "raman", "krishnamurti", "fagan_bradley", None],
         },
         {"field": "tradition", "question": "是否需要传统占星扩展项？", "options": ["需要", "不需要/默认"]},
     ],
@@ -378,8 +407,8 @@ EVENT_METHOD_POLICY = _policy(
         {"field": "date/time", "question": "是用当前时间，还是你要指定一个起盘时间？", "options": ["当前时间", "指定时间"]},
         {"field": "location", "question": "起盘地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
         {"field": "question", "question": "这次主要问什么事？", "options": ["事业/财务", "感情/关系", "健康", "出行/失物/选择", "整体局势"]},
-        {"field": "after23NewDay", "question": "23 点后是否按次日换日？", "options": ["按星阙默认", "23 点后换日", "23 点后不换日"]},
-        {"field": "lateZiHourUseNextDay", "question": "晚子时（23-24点）时柱是否按次日日干起子时？", "options": ["按星阙默认（次日）", "按当日"]},
+        {"field": "after23NewDay", "question": "23 点后是否按次日换日？", "options": ["按星阙默认", "23 点后换日", "23 点后不换日"], "values": [None, 1, 0]},
+        {"field": "lateZiHourUseNextDay", "question": "晚子时（23-24点）时柱是否按次日日干起子时？", "options": ["按星阙默认（次日）", "按当日"], "values": [None, 0]},
     ],
     safe_defaults=[
         {"field": "ad", "value": 1, "meaning": "公历"},
@@ -387,6 +416,76 @@ EVENT_METHOD_POLICY = _policy(
     ],
     do_not_assume=["location for location-sensitive methods", "question context"],
 )
+
+
+def _progression_target_policy(*, intent: str, targets: list[dict[str, Any]], do_not_assume: list[str]) -> dict[str, Any]:
+    """推运族专属策略工厂（v0.36.0 B3）：此前 vedicprog/jaynesprog/planetaryarc/planetaryages/extrareturns
+    共用 ASTRO_BIRTH_POLICY——问宫制却从不问目标时刻/弧源，agent 只能静默默认。"""
+    return _policy(
+        intent=intent,
+        required_context=COMMON_BIRTH_FIELDS + [str(item.get("field")) for item in targets],
+        ask_if_missing=[
+            {"field": "natal data", "question": "请提供本命出生日期、时间、时区和地点。"},
+            *targets,
+            {"field": "technique settings", "question": "是否沿用星阙默认推运设置？", "options": ["沿用默认", "指定参数"]},
+        ],
+        safe_defaults=[
+            {"field": "hsys", "value": 0, "meaning": "Whole Sign / 整宫制"},
+            {"field": "zodiacal", "value": 0, "meaning": "Tropical / 回归黄道"},
+        ],
+        do_not_assume=["birth time", "timezone", *do_not_assume],
+    )
+
+
+_TARGET_DATE_QUESTION = {"field": "targetDate/targetTime", "question": "推到哪一天？（targetDate YYYY-MM-DD，可加 targetTime；缺省=今天）"}
+VEDICPROG_POLICY = _progression_target_policy(
+    intent="恒星推运 / Vedic sidereal 二次推运：本命 + 目标日期。",
+    targets=[_TARGET_DATE_QUESTION],
+    do_not_assume=["target date"],
+)
+JAYNESPROG_POLICY = _progression_target_policy(
+    intent="赤纬推运 / Jayne：二次推运 + 赤纬平行，本命 + 目标日期。",
+    targets=[_TARGET_DATE_QUESTION],
+    do_not_assume=["target date"],
+)
+PLANETARYARC_POLICY = _progression_target_policy(
+    intent="行星弧向运：整盘按 arcSource 的二次推运弧推进，本命 + 弧源 + 目标时刻。",
+    targets=[
+        {
+            "field": "arcSource",
+            "question": "弧源用哪颗星？（月亮弧=Moon，太阳弧=Sun）",
+            "options": ["Moon（默认·月亮弧）", "Sun（太阳弧）", "Mercury", "Venus", "Mars", "Jupiter", "Saturn"],
+            "values": ["Moon", "Sun", "Mercury", "Venus", "Mars", "Jupiter", "Saturn"],
+        },
+        {"field": "datetime", "question": "推到哪个目标时刻？（datetime YYYY-MM-DD HH:mm:ss + dirZone）"},
+    ],
+    do_not_assume=["arcSource", "target datetime"],
+)
+PLANETARYAGES_POLICY = _progression_target_policy(
+    intent="行星年龄 / 托勒密人生七阶：本命 + 观察基准日。",
+    targets=[{"field": "asOf", "question": "以哪一天为基准算当前所在阶段？（asOf YYYY-MM-DD，缺省=今天）"}],
+    do_not_assume=["asOf"],
+)
+EXTRARETURNS_POLICY = _progression_target_policy(
+    intent="多重回归（土星/木星/月交返照）应期表：本命 + 年表范围。",
+    targets=[
+        {
+            "field": "timelineStartYear/timelineCount",
+            "question": "日月返照年表从哪一年起、算几年？",
+            "options": ["缺省（出生年起 10 年）", "指定起始年与年数"],
+        }
+    ],
+    do_not_assume=["timeline range"],
+)
+
+# 闸问题允许没有 options 的字段（自由文本/复合输入）；新问题要么带 options 要么在这里登记（tests/test_gate_policies.py 守）。
+FREE_TEXT_GATE_FIELDS: frozenset[str] = frozenset({
+    "date", "time", "date/time", "date/time/place", "date/time/gender", "datetime", "targetDate/targetTime", "asOf",
+    "startDate/endDate", "conditions", "topic", "question", "natal data", "target time", "location", "askEvent",
+    "birth data", "year", "name", "technique", "content", "category/key", "rectifyEvents", "guaDate/guaYearGanZi",
+    "q", "query", "nums / date-time", "qiZhi / date-time", "dayGan/dayZhi", "cast-input", "cast-input + date/time",
+    "school-params", "event", "relocLat/relocLon", "inner/outer", "zone", "target technique",
+})
 
 
 TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
@@ -838,7 +937,12 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         intent="金口诀起课。",
         required_context=COMMON_LOCATION_FIELDS + ["question/topic", "diFen/地分 when the method requires it"],
         ask_if_missing=[
-            {"field": "diFen", "question": "金口诀地分/方位用哪一支？如不确定，请说明取数方式。"},
+            {
+                "field": "diFen",
+                "question": "金口诀地分/方位用哪一支？如不确定，请说明取数方式。",
+                "options": ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"],
+                "values": ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"],
+            },
             {"field": "guirengType", "question": "贵人体系用哪一种？", "options": ["六壬法贵人（星阙金口诀默认）", "星占法贵人", "遁甲法贵人"]},
             {"field": "question", "question": "这课主要问什么事？"},
         ],
@@ -996,17 +1100,17 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     "germany": ASTRO_BIRTH_POLICY,
     "agepoint": ASTRO_BIRTH_POLICY,
     "distributions": ASTRO_BIRTH_POLICY,
-    "jaynesprog": ASTRO_BIRTH_POLICY,
-    "vedicprog": ASTRO_BIRTH_POLICY,
-    "planetaryarc": ASTRO_BIRTH_POLICY,
-    "planetaryages": ASTRO_BIRTH_POLICY,
+    "jaynesprog": JAYNESPROG_POLICY,
+    "vedicprog": VEDICPROG_POLICY,
+    "planetaryarc": PLANETARYARC_POLICY,
+    "planetaryages": PLANETARYAGES_POLICY,
     "balbillus": ASTRO_BIRTH_POLICY,
     "yearsystem129": ASTRO_BIRTH_POLICY,
     "persiandirected": ASTRO_BIRTH_POLICY,
     "triplicityrulers": ASTRO_BIRTH_POLICY,
     "keypoints": ASTRO_BIRTH_POLICY,
     "lunationphase": ASTRO_BIRTH_POLICY,
-    "extrareturns": ASTRO_BIRTH_POLICY,
+    "extrareturns": EXTRARETURNS_POLICY,
     "horary": _policy(
         intent="卜卦 / horary：盘的时刻是「提问的当下」（占者收到问题、心中疑问成形的那一刻），不是当事人的出生时间。按问题类别取事项宫。",
         required_context=["提问时刻 date/time/zone", "提问地点 lon/lat", "问题类别 category"],
@@ -1147,15 +1251,15 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     "taixuan": SHENSHU_POLICY,
     "jingjue": SHENSHU_POLICY,
     "shenyishu": SHENSHU_POLICY,
-    "shaozi": SHENSHU_POLICY,
-    "tieban": SHENSHU_POLICY,
+    "shaozi": SHENSHU_GENDER_POLICY,
+    "tieban": SHENSHU_GENDER_POLICY,
     "fendjing": SHENSHU_POLICY,
     "beiji": SHENSHU_POLICY,
     "nanji": SHENSHU_POLICY,
     "chunzi": SHENSHU_POLICY,
-    "xianqin": SHENSHU_POLICY,
-    "cetian": SHENSHU_POLICY,
-    "qizhengkin": SHENSHU_POLICY,
+    "xianqin": SHENSHU_PLACE_POLICY,
+    "cetian": SHENSHU_PLACE_POLICY,
+    "qizhengkin": SHENSHU_PLACE_POLICY,
     "mundane": _policy(
         intent="世俗入宫盘 / mundane ingress：在某年某节气(春分/夏至/秋分/冬至)的精确入宫时刻排世俗盘。",
         required_context=["year", "入宫节气(春分/夏至/秋分/冬至)", "观测地点 lon/lat/zone"],
