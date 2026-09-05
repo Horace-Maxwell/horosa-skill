@@ -1,0 +1,415 @@
+{
+ "chartId": "astro-v2-synth",
+ "params": {
+  "birth": "1990-05-04 12:30:00",
+  "zone": "+08:00",
+  "lon": "121E30",
+  "lat": "31N14"
+ },
+ "chart": {
+  "isDiurnal": true,
+  "dayofweek": "星期五",
+  "zodiacal": "回归黄道",
+  "hsys": "Alcabitius",
+  "houses": [
+   {
+    "id": "House10",
+    "sign": "Aries",
+    "lon": 15.5
+   },
+   {
+    "id": "House11",
+    "sign": "Taurus",
+    "lon": 48.25
+   },
+   {
+    "id": "House12",
+    "sign": "Gemini",
+    "lon": 77.9
+   },
+   {
+    "id": "House1",
+    "sign": "Cancer",
+    "lon": 102.33
+   },
+   {
+    "id": "House2",
+    "sign": "Leo",
+    "lon": 128.75
+   },
+   {
+    "id": "House3",
+    "sign": "Virgo",
+    "lon": 161.02
+   },
+   {
+    "id": "House4",
+    "sign": "Libra",
+    "lon": 195.5
+   },
+   {
+    "id": "House5",
+    "sign": "Scorpio",
+    "lon": 228.25
+   },
+   {
+    "id": "House6",
+    "sign": "Sagittarius",
+    "lon": 257.9
+   },
+   {
+    "id": "House7",
+    "sign": "Capricorn",
+    "lon": 282.33
+   },
+   {
+    "id": "House8",
+    "sign": "Aquarius",
+    "lon": 308.75
+   },
+   {
+    "id": "House9",
+    "sign": "Pisces",
+    "lon": 341.02
+   }
+  ],
+  "objects": [
+   {
+    "id": "Asc",
+    "sign": "Cancer",
+    "signlon": 12.33,
+    "lon": 102.33
+   },
+   {
+    "id": "MC",
+    "sign": "Aries",
+    "signlon": 15.5,
+    "lon": 15.5
+   },
+   {
+    "id": "Sun",
+    "sign": "Taurus",
+    "signlon": 13.9,
+    "lon": 43.9,
+    "lat": 0.0001,
+    "lonspeed": 0.973,
+    "meanSpeed": 0.9856,
+    "house": "House11",
+    "ra": 41.5,
+    "decl": 15.9,
+    "altitudeTrue": 61.2,
+    "altitudeAppa": 61.23,
+    "azimuth": 178.5,
+    "selfDignity": [],
+    "hayyiz": "Hayyiz",
+    "isVOC": false,
+    "score": 3,
+    "ruleHouses": [
+     "House2"
+    ],
+    "exaltHouse": "House10",
+    "governSign": "Leo",
+    "governPlanets": [
+     "Mars"
+    ],
+    "antisciaPoint": {
+     "sign": "Leo",
+     "signlon": 16.1
+    },
+    "cantisciaPoint": {
+     "sign": "Aquarius",
+     "signlon": 16.1
+    }
+   },
+   {
+    "id": "Moon",
+    "sign": "Scorpio",
+    "signlon": 29.42,
+    "lon": 239.42,
+    "lat": -4.9,
+    "lonspeed": 13.18,
+    "meanSpeed": 13.176,
+    "house": "House5",
+    "ra": 236.8,
+    "decl": -18.2,
+    "moonPhase": "FirstQuarter",
+    "selfDignity": [
+     "fall"
+    ],
+    "isVOC": true,
+    "score": -2,
+    "ruleHouses": [
+     "House1"
+    ]
+   },
+   {
+    "id": "Mercury",
+    "sign": "Aries",
+    "signlon": 2.02,
+    "lon": 2.02,
+    "lonspeed": -1.234,
+    "meanSpeed": 1.383,
+    "house": "House10",
+    "isViaRepression": true,
+    "sunPos": "Combust"
+   },
+   {
+    "id": "Venus",
+    "sign": "Gemini",
+    "signlon": 20.5,
+    "lon": 80.5,
+    "lonspeed": 0.002,
+    "meanSpeed": 0.9,
+    "house": "House12",
+    "antisciaPoint": {
+     "sign": "Cancer",
+     "signlon": 9.5
+    }
+   },
+   {
+    "id": "Mars",
+    "sign": "Pisces",
+    "signlon": 5.75,
+    "lon": 335.75,
+    "isViaCombust": true,
+    "governSign": "Aries"
+   },
+   {
+    "id": "Jupiter",
+    "sign": "Cancer",
+    "signlon": 11.11,
+    "lon": 101.11,
+    "lonspeed": 0.13,
+    "meanSpeed": 0.083,
+    "house": "House1",
+    "score": 8,
+    "selfDignity": [
+     "exalt",
+     "triplicity"
+    ],
+    "exaltHouse": "House1"
+   },
+   {
+    "id": "Saturn",
+    "sign": "Capricorn",
+    "signlon": 25.4,
+    "lon": 295.4,
+    "lonspeed": 0.05,
+    "meanSpeed": 0.033,
+    "house": "House7",
+    "ruleHouses": [
+     "House7",
+     "House8"
+    ]
+   },
+   {
+    "id": "North Node",
+    "sign": "Aquarius",
+    "signlon": 17.77
+   },
+   {
+    "id": "Pars Fortuna",
+    "sign": "Virgo",
+    "signlon": 3.21,
+    "lon": 153.21,
+    "house": "House3"
+   }
+  ],
+  "stars": [
+   {
+    "id": "Sun",
+    "stars": [
+     [
+      "Aldebaran",
+      "Gemini",
+      9.79
+     ],
+     [
+      "Regulus",
+      "Leo",
+      29.9,
+      0,
+      "轩辕十四"
+     ]
+    ]
+   },
+   {
+    "id": "Saturn",
+    "stars": [
+     [
+      "Spica",
+      "Libra",
+      23.85
+     ]
+    ]
+   },
+   {
+    "id": "Pars Spirit",
+    "stars": [
+     [
+      "Antares",
+      "Sagittarius",
+      9.9
+     ]
+    ]
+   }
+  ],
+  "nakshatras": {
+   "Moon": {
+    "index": 16,
+    "name": "Vishakha",
+    "label": "氐宿",
+    "pada": 3,
+    "lord": "Jupiter"
+   },
+   "Sun": {
+    "index": 2,
+    "name": "Bharani",
+    "label": "",
+    "pada": 4,
+    "lord": "Venus"
+   }
+  },
+  "orientOccident": {
+   "Venus": {
+    "oriental": [
+     {
+      "id": "Mars"
+     },
+     {
+      "id": "Saturn"
+     }
+    ],
+    "occidental": [
+     {
+      "id": "Mercury"
+     }
+    ]
+   },
+   "Jupiter": {
+    "oriental": [],
+    "occidental": []
+   }
+  },
+  "antiscias": {}
+ },
+ "lots": [
+  {
+   "id": "Pars Spirit",
+   "sign": "Virgo",
+   "signlon": 5.67,
+   "house": "House3"
+  },
+  {
+   "id": "Pars Eros",
+   "sign": "Leo",
+   "signlon": 12.34
+  }
+ ],
+ "aspects": {
+  "normalAsp": {
+   "Sun": {
+    "Applicative": [
+     {
+      "asp": 0,
+      "id": "Moon",
+      "orb": 2.345
+     },
+     {
+      "asp": 90,
+      "id": "Mars",
+      "orb": 0.5
+     }
+    ],
+    "Exact": [
+     {
+      "asp": 120,
+      "id": "Jupiter",
+      "orb": 0.01
+     }
+    ],
+    "Separative": [
+     {
+      "asp": 60,
+      "id": "Venus",
+      "orb": 3.21
+     }
+    ],
+    "None": [
+     {
+      "asp": 180,
+      "id": "Saturn",
+      "orb": 7.89
+     }
+    ]
+   },
+   "Moon": {
+    "Separative": [
+     {
+      "asp": 0,
+      "id": "Sun",
+      "orb": 2.345
+     }
+    ]
+   },
+   "Asc": {
+    "Applicative": [
+     {
+      "asp": 90,
+      "id": "Mercury",
+      "orb": 1.15
+     }
+    ]
+   }
+  },
+  "immediateAsp": {
+   "Sun": [
+    {
+     "asp": 0,
+     "id": "Mercury",
+     "orb": 0.75
+    },
+    {
+     "asp": 120,
+     "id": "Jupiter",
+     "orb": 2.125
+    }
+   ],
+   "Moon": [
+    {
+     "asp": 60,
+     "id": "Venus",
+     "orb": 1.5
+    },
+    {
+     "asp": 90,
+     "id": "Saturn",
+     "orb": 4.25
+    }
+   ]
+  },
+  "signAsp": {
+   "Sun": [
+    {
+     "asp": 120,
+     "id": "Jupiter"
+    },
+    {
+     "asp": 180,
+     "id": "Saturn"
+    }
+   ],
+   "Moon": [
+    {
+     "asp": 60,
+     "id": "Venus"
+    }
+   ]
+  }
+ },
+ "receptions": {},
+ "mutuals": {},
+ "declParallel": {},
+ "surround": {},
+ "predict": {}
+}

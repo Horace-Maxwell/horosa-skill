@@ -687,6 +687,9 @@ A global stability pass hardened these; keep them true when you touch the releva
   一次性 pending publisher 见 docs/OFFLINE_RUNTIME_RELEASES.md）；`verify_wheel_contents.py` 守「uvx 装出来的东西」
   （知识包/bench/闸表/Windows 启动模板/入口点；core-js 不进 wheel、随 runtime）；`server.json` 只登记 pypi 条目，
   与 pyproject name/version 锁步、禁 TBD（v0.36.0）。
+- **宫主/宫神星只从 `astro_rulers.py` 取。** 它是上游 `wholeSignRulers.js` 的移植（夹具与断言照抄上游 jest），
+  Python 面不许再各自算宫主（上游 #79 双实现漂移）；段内子块（如 [主宰星链] 的「◆ 宫神星(houseRows)」）段级
+  棘轮看不见，加子块要配逐字夹具测试。`MIRRORED_UPSTREAM_AIEXPORT_VERSION` 切 v57 时四件同动（v0.36.0 C6）。
 - **`run_tool` always returns a `ToolEnvelope`, never lets an unexpected exception escape.** Tool
   execution + snapshot/summary/export post-processing run inside a try that catches `HorosaSkillError`
   **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`. Only invalid-payload

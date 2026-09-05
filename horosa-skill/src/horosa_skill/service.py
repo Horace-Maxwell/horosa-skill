@@ -20,6 +20,7 @@ from pydantic import ValidationError
 
 from horosa_skill import __version__
 from horosa_skill.agent_guidance import build_tool_input_contract, build_validation_recovery
+from horosa_skill.astro_rulers import build_house_ruler_lines
 from horosa_skill.astro_sidereal import nakshatra_lord_cn, sidereal_ayanamsa_label
 from horosa_skill.config import Settings
 from horosa_skill.engine.client import HorosaApiClient, HorosaPlainJsonClient
@@ -38,7 +39,7 @@ from horosa_skill.engine.registry import TOOL_DEFINITIONS, ToolDefinition
 from horosa_skill.engine.router import select_tools
 from horosa_skill.errors import DispatchResolutionError, HorosaSkillError, ToolTransportError, ToolValidationError, bilingual, recovery_for
 from horosa_skill.exports import build_export_registry, get_technique_info, parse_export_content
-from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS
+from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS, MIRRORED_UPSTREAM_AIEXPORT_VERSION
 from horosa_skill.input_normalization import normalize_request_payload
 from horosa_skill.knowledge import build_knowledge_registry, read_knowledge_entry, search_knowledge
 from horosa_skill.memory.store import MemoryStore
@@ -1227,6 +1228,8 @@ def _build_export_provenance(technique: str, snapshot_text: str | None) -> dict[
         "bundle_version": registry.get("settings_version"),
         "section_migration_version": registry.get("section_migration_version"),
         "upstream_source_marker": "aiExport.js",
+        # v0.36.0 C6：快照排版口径 = 镜像的上游 aiExport 版本（与 exports.registry 常量锁步；v57 切换时同批动）
+        "astro_snapshot_format_version": MIRRORED_UPSTREAM_AIEXPORT_VERSION,
         "build_timestamp": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "snapshot_text_present": bool(snapshot_text),
     }
@@ -6646,12 +6649,18 @@ class HorosaSkillService:
             extras_data = js.get("data") if isinstance(js, dict) else None
             if isinstance(extras_data, dict):
                 sections = _build_natal_extra_sections(extras_data)
+                # v0.36.0 C6：上游 v56 [主宰星链] 段末的「◆ 宫神星(houseRows)」子块（宫|宫头座|宫主|宫主落宫|宫主落座）——
+                # 此前 skill 只出链行，子块缺席而段级棘轮看不见。派生走 astro_rulers.py（Python 单一真值源）。
+                house_lines = build_house_ruler_lines(response_data, _astro_msg)
+                if house_lines:
+                    chain = sections.get("主宰星链") or ""
+                    sections["主宰星链"] = "\n".join([chain, *house_lines]).strip()
                 if sections:
                     enriched = dict(response_data)
                     enriched["_natalExtras"] = sections
                     return enriched
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — 富化失败不许影响主盘；此前裸 pass 连日志都没有
+            _degrade("astro natal extras (12分度/主宰星链/寿命格局) build failed: %s", exc)
         return response_data
 
     def _attach_classical_derived(self, tool_name: str, response_data: dict[str, Any]) -> dict[str, Any]:
