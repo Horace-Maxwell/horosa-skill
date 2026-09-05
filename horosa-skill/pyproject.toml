@@ -46,6 +46,12 @@ include = [
   "src/horosa_skill/data/*.json",
 ]
 
+# Windows 启动/停止脚本覆盖模板（issue #14 loopback 修补）住在 scripts/ 供 builder 共用；wheel 里没有
+# scripts/ → `uvx horosa-skill` 装出来的 Windows 用户会跑 runtime 原版脚本。force-include 进包，
+# manager._runtime_template_root 先找包内副本再回退源码树（v0.36.0 C4；scripts/verify_wheel_contents.py 守）。
+[tool.hatch.build.targets.wheel.force-include]
+"scripts/runtime_templates/windows" = "horosa_skill/runtime/templates/windows"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]

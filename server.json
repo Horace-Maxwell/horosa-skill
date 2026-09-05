@@ -11,24 +11,69 @@
   },
   "packages": [
     {
-      "registryType": "mcpb",
-      "identifier": "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.35.0/horosa-skill.mcpb",
+      "registryType": "pypi",
+      "identifier": "horosa-skill",
       "version": "0.35.0",
-      "fileSha256": "TBD-set-by-release-pipeline",
-      "runtimeHint": "uv",
+      "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
-      }
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "serve"
+        },
+        {
+          "type": "positional",
+          "value": "--transport"
+        },
+        {
+          "type": "positional",
+          "value": "stdio"
+        }
+      ],
+      "environmentVariables": [
+        {
+          "name": "HOROSA_RUNTIME_ROOT",
+          "description": "Offline runtime directory (default ~/.horosa/runtime or %LOCALAPPDATA%\\\\Horosa\\\\runtime)",
+          "isRequired": false
+        },
+        {
+          "name": "HOROSA_SKILL_DATA_DIR",
+          "description": "Local runs / reports / SQLite directory (default ~/.horosa-skill)",
+          "isRequired": false
+        }
+      ]
     }
   ],
   "_meta": {
     "io.github.horace-maxwell/horosa-skill": {
       "category": "knowledge-and-reasoning",
-      "tags": ["mcp", "horosa", "xingque", "astrology", "metaphysics", "offline-first", "local-memory"],
-      "platforms": ["macOS", "Windows"],
-      "transports": ["stdio", "streamable-http"],
-      "install": ["uv sync --dev", "uv run horosa-skill install"],
-      "start": ["uv run horosa-skill serve --transport stdio"],
+      "tags": [
+        "mcp",
+        "horosa",
+        "xingque",
+        "astrology",
+        "metaphysics",
+        "offline-first",
+        "local-memory"
+      ],
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "transports": [
+        "stdio",
+        "streamable-http"
+      ],
+      "install": [
+        "uvx horosa-skill install",
+        "或源码：uv sync --dev && uv run horosa-skill install"
+      ],
+      "start": [
+        "uvx horosa-skill serve --transport stdio",
+        "或源码：uv run horosa-skill serve --transport stdio"
+      ],
       "releaseManifest": "https://github.com/Horace-Maxwell/horosa-skill/releases/latest/download/runtime-manifest.json"
     }
   }

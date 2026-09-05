@@ -1225,6 +1225,10 @@ class HorosaRuntimeManager:
         return patched
 
     def _runtime_template_root(self) -> Path:
+        # 包内副本（wheel / uvx 安装）优先；源码树回退（scripts/runtime_templates 是 builder 共用的原件）。
+        packaged = Path(__file__).resolve().parent / "templates"
+        if packaged.is_dir():
+            return packaged
         return Path(__file__).resolve().parents[3] / "scripts" / "runtime_templates"
 
     def _patch_windows_boot_jar(self, manifest: dict[str, Any] | None, jar_path: Path) -> None:

@@ -100,3 +100,26 @@ def test_json_write_still_merges_mcp_servers(tmp_path: Path) -> None:
     merged = json.loads(target.read_text(encoding="utf-8"))
     assert merged["theme"] == "dark"
     assert set(merged["mcpServers"]) == {"other", "horosa"}
+
+
+# ---- v0.36.0 C4：PyPI 分发 → `--launcher uvx` ----
+def test_client_config_launcher_uvx_emits_uvx_command() -> None:
+    import json as _json
+
+    from typer.testing import CliRunner
+
+    from horosa_skill.surfaces.cli import app
+
+    result = CliRunner().invoke(app, ["client", "config", "--format", "claude-desktop", "--launcher", "uvx"])
+    assert result.exit_code == 0, result.output
+    payload = _json.loads(result.stdout)
+    server = payload["mcpServers"]["horosa"]
+    assert server["command"] == "uvx"
+    assert server["args"] == ["horosa-skill", "serve", "--transport", "stdio"]
+
+    claude_code = CliRunner().invoke(app, ["client", "config", "--format", "claude-code", "--launcher", "uvx"])
+    assert claude_code.exit_code == 0
+    assert "claude mcp add horosa -- uvx horosa-skill serve --transport stdio" in _json.loads(claude_code.stdout)["command"]
+
+    bad = CliRunner().invoke(app, ["client", "config", "--format", "claude-desktop", "--launcher", "pipx"])
+    assert bad.exit_code != 0

@@ -683,6 +683,10 @@ A global stability pass hardened these; keep them true when you touch the releva
   三传/紫微主星/卦名动爻/塔罗/奇门值符值使九宫/择日命中区间/推运时段边界/词元兜底），每族至少三条对抗测试；
   HorosaBench `faithfulness` 类 case 跑工具→抽真值→判答案（`expect_ok`/`expect_min_flagged`）。新技法上架时
   若其结果有可抽的机读真值，同批加族或加 case（v0.36.0）。
+- **发布三件：darwin 资产 + PyPI + Windows 半。** `publish-pypi.yml` 随 Release published 自动跑（trusted publishing，
+  一次性 pending publisher 见 docs/OFFLINE_RUNTIME_RELEASES.md）；`verify_wheel_contents.py` 守「uvx 装出来的东西」
+  （知识包/bench/闸表/Windows 启动模板/入口点；core-js 不进 wheel、随 runtime）；`server.json` 只登记 pypi 条目，
+  与 pyproject name/version 锁步、禁 TBD（v0.36.0）。
 - **`run_tool` always returns a `ToolEnvelope`, never lets an unexpected exception escape.** Tool
   execution + snapshot/summary/export post-processing run inside a try that catches `HorosaSkillError`
   **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`. Only invalid-payload

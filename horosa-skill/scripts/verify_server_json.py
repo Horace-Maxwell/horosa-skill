@@ -60,6 +60,17 @@ def main() -> None:
         registry_type = package.get("registryType")
         if registry_type not in {"npm", "pypi", "nuget", "cargo", "oci", "mcpb"}:
             errors.append(f"registryType must be a real distribution channel, got {registry_type!r}")
+        if registry_type == "pypi":
+            # v0.36.0 C4：PyPI 是主分发通道（uvx horosa-skill …）；identifier/version 与 pyproject 锁步。
+            pyproject = (ROOT / "horosa-skill" / "pyproject.toml").read_text(encoding="utf-8")
+            name_match = re.search(r'^name\s*=\s*"([^"]+)"', pyproject, re.M)
+            version_match = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, re.M)
+            if not name_match or package.get("identifier") != name_match.group(1):
+                errors.append(f"pypi identifier must equal pyproject name ({name_match.group(1) if name_match else '?'}), got {package.get('identifier')!r}")
+            if not version_match or package.get("version") != version_match.group(1):
+                errors.append(f"pypi package version must equal pyproject version ({version_match.group(1) if version_match else '?'}), got {package.get('version')!r}")
+            if package.get("runtimeHint") != "uvx":
+                errors.append("pypi package runtimeHint must be 'uvx' (the documented launcher)")
         if registry_type == "mcpb":
             digest = str(package.get("fileSha256") or "")
             if not digest:
@@ -69,6 +80,9 @@ def main() -> None:
             if "mcp" not in str(package.get("identifier") or "").lower():
                 errors.append("mcpb identifier URL must contain 'mcp' (registry ownership rule)")
 
+    raw = SERVER_JSON.read_text(encoding="utf-8")
+    if "TBD" in raw:
+        errors.append("server.json must not carry TBD placeholders (a published registry entry is read by clients as-is)")
     if errors:
         raise SystemExit("server.json: FAIL\n- " + "\n- ".join(errors))
     print("server.json: ok (registry-schema conformant)")

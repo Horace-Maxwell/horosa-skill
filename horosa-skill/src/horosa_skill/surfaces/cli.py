@@ -1339,20 +1339,32 @@ def client_config(
     ),
     server_name: str = typer.Option("horosa", help="Server name key written into the MCP config."),
     write: Path | None = typer.Option(None, help="Optional output file path (also printed to stdout)."),
+    launcher: str = typer.Option(
+        "uv",
+        "--launcher",
+        help="How the client starts the server: `uv` (source checkout, uv run --directory …) or `uvx` (PyPI install, no checkout; v0.36.0+). mcporter/openclaw formats always use the checkout.",
+    ),
 ) -> None:
     """按客户端生成即用 MCP 配置（自动注入真实绝对路径，无手填占位符）。"""
     resolved_skill_root = _resolve_skill_root(skill_root)
-    uv_command = resolve_uv_command()
-    stdio_command = [
-        *uv_command,
-        "run",
-        "--directory",
-        str(resolved_skill_root),
-        "horosa-skill",
-        "serve",
-        "--transport",
-        "stdio",
-    ]
+    launcher_key = launcher.strip().lower()
+    if launcher_key not in {"uv", "uvx"}:
+        raise typer.BadParameter("`--launcher` must be `uv` or `uvx`.")
+    if launcher_key == "uvx":
+        # PyPI 分发（v0.36.0 C4）：不需要源码 checkout；离线 runtime 仍由 `uvx horosa-skill install` 装到默认目录。
+        stdio_command = ["uvx", "horosa-skill", "serve", "--transport", "stdio"]
+    else:
+        uv_command = resolve_uv_command()
+        stdio_command = [
+            *uv_command,
+            "run",
+            "--directory",
+            str(resolved_skill_root),
+            "horosa-skill",
+            "serve",
+            "--transport",
+            "stdio",
+        ]
     key = format_name.strip().lower()
     if key in {"mcporter", "openclaw"}:
         payload: dict[str, Any] = _build_openclaw_config(

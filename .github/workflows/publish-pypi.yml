@@ -1,0 +1,84 @@
+name: Publish to PyPI
+
+# v0.36.0 C4：PyPI 是主分发通道（`uvx horosa-skill install/doctor/serve`）。issue #6/#11/#14 的共同门槛都是
+# 「clone + uv sync + 手改配置」——`uvx` 一条命令消掉它。
+#
+# 触发：GitHub Release 发布（与 darwin runtime 半同一次发布）或手动 dispatch。
+# 认证：PyPI Trusted Publishing（OIDC，无 API token）。**一次性人工步骤**（维护者）：在 PyPI 建 `horosa-skill`
+# 项目并添加 pending publisher：owner=Horace-Maxwell / repo=horosa-skill / workflow=publish-pypi.yml /
+# environment=pypi；GitHub 仓库建 environment `pypi`。没做这一步前本工作流会在 publish 步骤 403——
+# 这是预期的、可见的失败，不是静默跳过。
+#
+# 守卫：发布前 `scripts/verify_wheel_contents.py` 重建 wheel 并断言知识包/bench/闸表/Windows 模板/入口点都在
+# （wheel 装得上但缺数据 = 用户机器上首次查知识就炸）。
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build and verify only (skip the PyPI upload)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.repository_owner == 'Horace-Maxwell'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify wheel contents (knowledge packs / bench / gate table / runtime templates / entry point)
+        working-directory: ./horosa-skill
+        run: uv run --no-project --with hatchling python scripts/verify_wheel_contents.py
+      - name: Verify server.json PyPI entry is lockstep with pyproject
+        working-directory: ./horosa-skill
+        run: uv run --no-project python scripts/verify_server_json.py
+      - name: Build sdist + wheel
+        working-directory: ./horosa-skill
+        run: uv build
+      - name: Assert the built version matches the release tag
+        if: github.event_name == 'release'
+        working-directory: ./horosa-skill
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -1)"
+          if [ "v${VERSION}" != "${TAG}" ]; then
+            echo "pyproject version ${VERSION} != release tag ${TAG}" >&2
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: horosa-skill-dist
+          path: horosa-skill/dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: github.repository_owner == 'Horace-Maxwell' && (github.event_name == 'release' || inputs.dry_run == false)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: pypi
+      url: https://pypi.org/project/horosa-skill/
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: horosa-skill-dist
+          path: dist
+      - name: Publish to PyPI (trusted publishing)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+          print-hash: true

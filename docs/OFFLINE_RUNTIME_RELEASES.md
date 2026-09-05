@@ -133,3 +133,18 @@ In this macOS development environment, Windows verification is structural rather
 See [`runtime-manifest.example.json`](./runtime-manifest.example.json).
 
 For the embedded payload manifest, see [`RUNTIME_MANIFEST_SPEC.md`](./RUNTIME_MANIFEST_SPEC.md).
+
+## PyPI（v0.36.0 起，`uvx horosa-skill`）
+
+- 通道：`.github/workflows/publish-pypi.yml`——GitHub Release **published** 自动触发（与 darwin 半同一次发布）或手动
+  dispatch（`dry_run=true` 只构建校验不上传）。认证走 PyPI Trusted Publishing（OIDC），仓库不存任何 token。
+- **一次性人工步骤**（维护者）：在 PyPI 创建 `horosa-skill` 项目并添加 pending publisher（owner `Horace-Maxwell`、
+  repo `horosa-skill`、workflow `publish-pypi.yml`、environment `pypi`）；GitHub 仓库 Settings → Environments 建 `pypi`。
+  没做之前 publish 步骤 403——可见失败，不是静默跳过。
+- 守卫：`scripts/verify_wheel_contents.py`（CI + 发布前）重建 wheel 并断言知识包/bench/闸表/Windows 启动模板/入口点
+  都在；`verify_server_json.py` 锁 `server.json` 的 pypi 条目与 `pyproject` 的 name/version；发布工作流断言
+  pyproject 版本 == release tag。
+- wheel **不含** `horosa-core-js`：它随离线 runtime payload 分发（manifest `artifacts.horosa_core_js_root`），
+  `HOROSA_CORE_JS_ROOT` 可覆盖；源码树回退只在 checkout 里有效。
+- 发布顺序：tag → `publish_darwin_release.sh --publish`（创建 Release）→ publish-pypi 自动跑 → 构建机补 Windows 半 →
+  `sync_windows_release.py --check` [OK] → `uvx horosa-skill --version` 烟测。
