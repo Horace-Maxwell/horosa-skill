@@ -335,6 +335,20 @@ class FakeClient(HorosaApiClient):
             "liureng": {"ke": ["一课"], "overview": ["概览"]},
             "nongli": {"bazi": {"guolaoGods": {"ziGods": {"子": {"allGods": ["青龙"], "taisuiGods": ["岁驾"]}}}}},
         }
+        if endpoint == "/qizheng/moira":
+            # Java QizhengMoiraRuleService.analyze 响应形状（weakSolid / yearStars.birth|transit / transitYearStars），
+            # 值取自上游 guolaoWeakSolidBirthStars.test.js 夹具。
+            return {
+                "weakSolid": {"houses": [
+                    {"house": "命宫", "label": "实", "solid": True, "weakPillars": [], "solidPillars": ["年", "日"]},
+                    {"house": "财帛", "label": "虚", "weak": True, "weakPillars": ["月"], "solidPillars": []},
+                ]},
+                "yearStars": {
+                    "birth": {"yearPole": "丙午", "planetRows": [{"star": "木", "changeTo": "天贵", "items": ["岁星"]}, {"star": "火", "changeTo": "天刑", "items": []}]},
+                    "transit": {"yearPole": "", "planetRows": [{"star": "火", "changeTo": "天刑", "items": []}]},
+                },
+                "transitYearStars": [{"name": "岁星", "star": "木", "shortName": "岁", "quality": "旺", "zi": "寅", "signName": "析木"}],
+            }
         if endpoint == "/qimen/pan":
             # ken (kinqimen) success shape — `source` is what _require_ken_pan checks.
             return {"source": "kinqimen", "selected": {"排局": "陽遁九局上"}, "raw": {"排局": "陽遁九局上"}, "mode": "hour", "sections": []}
@@ -1159,6 +1173,17 @@ class FakeJsClient(HorosaJsEngineClient):
                     "[概览]\n四课、三传已由本地 headless 六壬引擎根据离线盘面生成。"
                 ),
             }
+        if tool_name == "guolao_moira" and payload.get("action") == "rules_sections":
+            # v0.36.0 C1：[虚实]/[本命化曜]/[流年流曜] 三段——真渲染由 npm selfcheck 金标守；这里只回段体，
+            # 且只在拿到 Java 规则响应时回（桩与真 builder 同语义：无数据 → 空串不产段）。
+            rules = payload.get("moiraRules") or {}
+            if not (rules.get("weakSolid") or rules.get("yearStars")):
+                return {"sections": {"weakSolid": "", "birthStars": "", "transitStars": ""}}
+            return {"sections": {
+                "weakSolid": "| 宫位 | 虚实 | 虚柱 | 实柱 |\n| --- | --- | --- | --- |\n| 命宫 | 实 | 无 | 年、日 |\n口径：虚宫按四柱旬空推虚；实宫按年、月、日、时四柱地支定实。",
+                "birthStars": "本命年柱：丙午\n◆ 本命化曜\n木：化天贵（同归：岁星）",
+                "transitStars": f"流年干支：{payload.get('transitYearGz') or '—'}\n◆ 流年化曜\n火：化天刑",
+            }}
         if tool_name == "guolao_moira":
             # 七政四余 政余格局：headless buildLocalMoiraPatterns 的离线替身（喜/忌格各一）。
             return {
@@ -4152,7 +4177,8 @@ def test_qizhengelection_eclipses_action(tmp_path) -> None:
     assert result.ok is True, result.error
     assert len(result.data["eclipses"]) == 2
     assert "[日月食搜索]" in result.data["snapshot_text"]
-    assert result.data["export_snapshot"]["missing_selected_sections"] == []
+    # 夹具 JS 客户端不产 [星曜庙旺…]（另一条 optional）；只断言三段 moira 段不再缺席
+    assert not ({"虚实", "本命化曜", "流年流曜"} & set(result.data["export_snapshot"]["missing_selected_sections"]))
 
 
 def test_qizhengelection_azimuthsearch_requires_target(tmp_path) -> None:
@@ -4674,3 +4700,58 @@ def test_java_endpoint_starts_once_and_does_not_restart_again_when_start_comes_b
     assert bazi.error is not None and bazi.error.code == "runtime.java_backend_unavailable"
     # 此前：start(degraded) → 调用连不上 → connection_retry 再 start 一次（又杀一次 chart）。现在只起一次。
     assert runtime_manager.started == 1
+
+
+# ---- v0.36.0 C1：guolao [虚实]/[本命化曜]/[流年流曜] 走 Java /qizheng/moira ----
+def test_guolao_moira_sections_land_between_limit_and_patterns(tmp_path) -> None:
+    settings = Settings(server_root="http://127.0.0.1:9999", db_path=tmp_path / "memory.db", output_dir=tmp_path / "runs")
+    client = CaptureClient()
+    service = HorosaSkillService(settings, client=client, store=MemoryStore(settings), js_client=FakeJsClient())
+    result = service.run_tool(
+        "guolao_chart",
+        {"date": "1985-03-21", "time": "10:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28",
+         "moiraTransitDate": "2026-09-04", "guolaoLifeMode": "yumao", "agent_confirmed_settings": True},
+        save_result=False,
+    )
+    assert result.ok is True, result.error
+    snap = result.data["snapshot_text"]
+    for title in ("[虚实]", "[本命化曜]", "[流年流曜]"):
+        assert title in snap, title
+    assert snap.index("[大限]") < snap.index("[虚实]") < snap.index("[本命化曜]") < snap.index("[流年流曜]") < snap.index("[政余格局]")
+    assert "流年干支：丙午" in snap  # 2026 = 丙午（Python _ganzhi_year 兜底）
+    # 请求形状：流年盘二次铸盘 + moira 四键；lifeMode 透传
+    moira_calls = [payload for endpoint, payload in client.calls if endpoint == "/qizheng/moira"]
+    assert len(moira_calls) == 1
+    assert set(moira_calls[0]) == {"params", "chartObj", "transitParams", "transitChartObj"}
+    assert moira_calls[0]["params"]["guolaoLifeMode"] == "yumao" and moira_calls[0]["params"]["guolaoBodyMode"] == "taiyin"
+    assert moira_calls[0]["transitParams"]["date"] == "2026-09-04" and moira_calls[0]["transitParams"]["predictive"] is True
+    chart_calls = [payload for endpoint, payload in client.calls if endpoint in {"/chart", "/"}]  # chart 服务把 /chart 映射为 /
+    assert len(chart_calls) == 2 and str(chart_calls[1]["date"]).replace("/", "-") == "2026-09-04"  # chart 服务载荷用斜杠日期
+    assert result.data["guolaoMoiraRules"]["weakSolid"]["houses"][0]["house"] == "命宫"
+    # 夹具 JS 客户端不产 [星曜庙旺…]（另一条 optional）；只断言三段 moira 段不再缺席
+    assert not ({"虚实", "本命化曜", "流年流曜"} & set(result.data["export_snapshot"]["missing_selected_sections"]))
+    assert not any("虚实" in w for w in result.warnings)
+
+
+def test_guolao_moira_off_or_java_down_degrades_with_warning(tmp_path) -> None:
+    settings = Settings(server_root="http://127.0.0.1:9999", db_path=tmp_path / "memory.db", output_dir=tmp_path / "runs")
+    # moiraRules=false：不打 /qizheng/moira，也不铸流年盘
+    client = CaptureClient()
+    service = HorosaSkillService(settings, client=client, store=MemoryStore(settings), js_client=FakeJsClient())
+    off = service.run_tool("guolao_chart", {"date": "1985-03-21", "time": "10:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "moiraRules": False, "agent_confirmed_settings": True}, save_result=False)
+    assert off.ok and "[虚实]" not in off.data["snapshot_text"]
+    assert not any(endpoint == "/qizheng/moira" for endpoint, _ in client.calls)
+    assert len([1 for endpoint, _ in client.calls if endpoint in {"/chart", "/"}]) == 1
+
+    # Java 在冷却期：/qizheng/moira 快速失败 → 三段缺席 + warnings 说明，主盘照出
+    class JavaDownClient(CaptureClient):
+        def call(self, endpoint: str, payload: dict) -> dict:
+            if endpoint == "/qizheng/moira":
+                raise ToolTransportError("down", code="runtime.java_backend_unavailable", details={})
+            return super().call(endpoint, payload)
+
+    service2 = HorosaSkillService(settings, client=JavaDownClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    down = service2.run_tool("guolao_chart", {"date": "1985-03-21", "time": "10:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "agent_confirmed_settings": True}, save_result=False)
+    assert down.ok is True
+    assert "[虚实]" not in down.data["snapshot_text"] and "[政余格局]" in down.data["snapshot_text"]
+    assert any("[虚实]/[本命化曜]/[流年流曜] 本次未产出" in w for w in down.warnings), down.warnings

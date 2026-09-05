@@ -329,16 +329,17 @@
       "notes": "纯 headless JS，无后端引擎"
     },
     "guolao_chart": {
-      "compute_class": "headless_js",
+      "compute_class": "composite",
       "engines": [
         "guolao_moira",
         "guolao_star_dignity"
       ],
       "endpoints": [
-        "/chart"
+        "/chart",
+        "/qizheng/moira"
       ],
       "export_technique": "guolao",
-      "notes": "纯 headless JS，无后端引擎"
+      "notes": "盘面 /chart（Python chart 服务）+ 政余格局/庙旺 headless JS + [虚实]/[本命化曜]/[流年流曜] 走 Java /qizheng/moira 规则层（流年盘二次铸盘；Java 不可用时三段缺席进 warnings）"
     },
     "harmonic": {
       "compute_class": "python_chart_backend",

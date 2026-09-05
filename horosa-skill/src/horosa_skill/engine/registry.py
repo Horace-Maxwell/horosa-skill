@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Type
 
 from horosa_skill.schemas.tools import (
+    GuoLaoInput,
     AgePointInput,
     BalbillusInput,
     TriplicityRulersInput,
@@ -134,7 +135,7 @@ TOOL_DEFINITIONS: dict[str, ToolDefinition] = {
     "draconic": ToolDefinition("draconic", "astro", "draconic", None, DraconicInput, "生成龙盘 / Draconic chart（各点黄经减北交点，交点归零的盘）。Generate the 龙盘 / Draconic chart (all longitudes measured from the North Node).", execution="local"),
     "relocation": ToolDefinition("relocation", "astro", "relocation", None, RelocationInput, "生成重置盘 / Relocation chart（保留出生时刻，按新居住地重算宫位与角点）。Generate the 重置盘 / Relocation chart — same birth moment, houses and angles recomputed for a new location.", execution="local"),
     "hellen_chart": ToolDefinition("hellen_chart", "astro", "hellen_chart", None, BirthInput, "生成希腊占星取向盘。Generate the 希腊星盘 / Hellenistic chart output.", execution="local"),
-    "guolao_chart": ToolDefinition("guolao_chart", "astro", "guolao_chart", None, BirthInput, "生成七政四余 / 果老法盘。Generate the 七政四余 chart output.", execution="local"),
+    "guolao_chart": ToolDefinition("guolao_chart", "astro", "guolao_chart", None, GuoLaoInput, "生成七政四余 / 果老法盘。Generate the 七政四余 chart output.", execution="local"),
     "germany": ToolDefinition("germany", "astro", "germany", None, GermanyInput, "生成量化盘 / 汉堡学派中点分析盘。Generate the 量化盘 / midpoint analysis output.", execution="local"),
     "harmonic": ToolDefinition("harmonic", "astro", "harmonic", None, HarmonicInput, "生成调波盘（本命黄经×调波数 + 调波位置 + 同频合相）。Generate the 调波盘 / harmonic chart with 调波位置 and 同频合相.", execution="local"),
     "agepoint": ToolDefinition("agepoint", "predict", "agepoint", None, AgePointInput, "起年龄推进点 / Age Point（Huber）时间轴——Koch 宫年龄周期 + 本命触发。Generate the 年龄推进点 / Age Point (Huber) timeline — Koch-house age cycle with natal contacts.", execution="local"),

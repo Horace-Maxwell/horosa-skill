@@ -98,6 +98,23 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.36.0 / 2026-09-04 — `/qizheng/moira` 被误判「不存在」：测错了服务，6/14 段债务是一条写错的台账
+
+- **症状**：guolao 导出段债务 14 条里 6 条（guolao + qizhengzeri 各 [虚实]/[本命化曜]/[流年流曜]）被标为
+  「开源 astropy 无该路由，永久不可得」。上游 `services/qizheng.js` 明明白白 POST `${ServerRoot}/qizheng/moira`
+  ——ServerRoot 是 **Java** 聚合层（astrostudycn `QizhengMoiraController`），当年拿 Python chart 服务实测
+  500 就下了结论。
+- **根因**：把「某个服务返回 500」当成「路由不存在」，没有回到上游源码确认路由挂在哪一层；台账条目一旦写成
+  「维持排除」就再没人质疑。
+- **guard**：C1 接活——`tools/guolaoMoira.js` 加 `rules_sections` 入口，逐字移植上游三段 builder（selfcheck 金标
+  = 上游 jest 夹具 `guolaoWeakSolidBirthStars.test.js`）；`_run_guolao_chart_tool` 二次铸流年盘 → Java
+  `/qizheng/moira`（`{params, chartObj, transitParams, transitChartObj}`）→ 三段插在 [大限] 与 [政余格局]
+  之间；新 `GuoLaoInput`（guolaoLifeMode/guolaoBodyMode/moiraTransitDate/Time/moiraRules）；preset+optional
+  双登记，qizhengzeri 经 `ZERI_DERIVED_KEYS` 自动继承 → 段债务 14→8；Java 不可用走 A5 冷却快速失败 →
+  `_degrade` 进 warnings；provenance guolao→composite。旧台账两处**原文保留 + 加更正标注**。
+- **法则**：**排除一个上游能力前，先在上游源码里确认它挂在哪一层**；「某服务 500」只证明那台服务没有，
+  不证明路由不存在。台账里的「维持排除」要写清判据，便于日后推翻。
+
 ### v0.36.0 / 2026-09-04 — 108 个错误码只有 4 类带恢复说明，112/151 条错误文案单语
 
 - **症状**：`_with_operational_recovery` 只认 runtime./transport./js_engine./backend_param，其余 ~100 个码
@@ -552,7 +569,7 @@ codex --write 拆雷、.agents/skills 镜像。现场教训四条：
 **排除判定入册**（主线 I 收割时逐端点核）：`/predict/pd3d`、`/chart3d/state`、`/planetarium/*` ——
 3D/实景渲染场景数据（three.js 场景态/贴图坐标），无文本语义，UI-only 排除，与 fengshui 同性质；
 `/jdn/*`、`/calc/*` —— 儒略日/角度换算器，价值低，defer（不计缺口，将来要做随手可加）。
-`/qizheng/moira` 排除维持（qizhengelection 的升殿失垣列因此如实不产，见工具 guidance）。
+`/qizheng/moira` 排除维持（qizhengelection 的升殿失垣列因此如实不产，见工具 guidance）。【v0.36.0 更正：`/qizheng/moira` 是 Java 聚合层路由，当年拿 Python chart 服务测的 500——C1 已接活，三段落地，见本轮台账。】
 
 ### v0.32.0 玄史知识库接入 —— runtime 里躺了 66MB 只读库，skill 层零调用
 
@@ -1500,6 +1517,8 @@ pattern 等于只守了一半。
   与 `moiraRules.yearStars`，该对象来自后端 **`/qizheng/moira`**（上游 `services/qizheng.js:10`
   `fetchMoiraQizhengRules`）。开源 astropy 的 `websrv/` 只挂了 `webqizhengelectionsrv` 与
   `webqizhengkinsrv`，**没有这条路由**（仓内 vendored 实例实测 POST `/qizheng/moira` → 500）；
+  【v0.36.0 更正：上一行的「没有这条路由」是**测错了服务**——`/qizheng/moira` 挂在 Java 聚合层（astrostudycn
+  `QizhengMoiraController`），Python chart 服务 500 不能证明路由不存在；C1 已按 Java 契约接活。】
   上游的本地回退 `buildLocalMoiraRules` 只产 `houses/patterns/godHits`，不产这两个字段。
   → 同批的 `[星曜庙旺与星点动态]` **可得**（纯表查询、只吃 `/chart` 响应），已于 v0.25 补上；
   别因为「guolao 还欠 4 段」就以为整批同因。

@@ -707,6 +707,15 @@ class CanPingInput(FlexibleModel):
     dayunRule: str | None = None
 
 
+class GuoLaoInput(BirthInput):
+    # 七政四余（v0.36.0 C1）：Java /qizheng/moira 规则层入参 + 流年盘时刻。缺省与上游 UI 默认一致。
+    guolaoLifeMode: str | None = Field(default=None, description="七政命度取法：asc（上升，默认）| yumao（余毛）| cotrans（同躔）。")
+    guolaoBodyMode: str | None = Field(default=None, description="身宫法：taiyin（太阴落宫，默认）| youjin（逢酉·琴堂）| 指定地支。")
+    moiraTransitDate: str | None = Field(default=None, description="流年盘日期 YYYY-MM-DD（[流年流曜] 段的流年时刻；缺省=今天）。")
+    moiraTransitTime: str | None = Field(default=None, description="流年盘时间 HH:mm:ss（缺省 12:00:00）。")
+    moiraRules: bool | None = Field(default=None, description="false=跳过 /qizheng/moira（不产 [虚实]/[本命化曜]/[流年流曜]，省一次流年铸盘）。")
+
+
 class HeLuoInput(FlexibleModel):
     # 河洛理数 computes its four pillars from the bazi chain in-process (not the ken backend); it needs
     # the birth date/time plus longitude+zone for the true-solar option. `lat` is not required.

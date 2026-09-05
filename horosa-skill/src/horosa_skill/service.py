@@ -1368,6 +1368,34 @@ def _build_guolao_aspect_lines(chart: dict[str, Any], response: dict[str, Any]) 
     return lines
 
 
+_GANZHI_STEMS = "甲乙丙丁戊己庚辛壬癸"
+_GANZHI_BRANCHES = "子丑寅卯辰巳午未申酉戌亥"
+
+
+def _ganzhi_year(year: int) -> str:
+    """公历年 → 干支年（1984=甲子；与上游 GuoLaoChartMain.stemBranchForYear 同式）。"""
+    idx = ((int(year) - 1984) % 60 + 60) % 60
+    return f"{_GANZHI_STEMS[idx % 10]}{_GANZHI_BRANCHES[idx % 12]}"
+
+
+def _moira_transit_moment(payload: dict[str, Any]) -> tuple[str, str]:
+    """流年盘时刻：显式 moiraTransitDate/Time，缺省 = 当前日期（按出生时区）正午。"""
+    date = f"{payload.get('moiraTransitDate') or ''}".strip().replace("/", "-")
+    time_text = f"{payload.get('moiraTransitTime') or ''}".strip() or "12:00:00"
+    if date:
+        return date, time_text
+    zone = f"{payload.get('zone') or ''}".strip()
+    offset = timedelta(0)
+    m = re.match(r"^([+-])(\d{1,2})(?::?(\d{2}))?$", zone)
+    if m:
+        sign = -1 if m.group(1) == "-" else 1
+        offset = sign * timedelta(hours=int(m.group(2)), minutes=int(m.group(3) or 0))
+    elif re.fullmatch(r"-?\d{1,2}(\.\d+)?", zone):
+        offset = timedelta(hours=float(zone))
+    now = datetime.now(timezone.utc) + offset
+    return now.strftime("%Y-%m-%d"), time_text
+
+
 def _build_guolao_snapshot_text(payload: dict[str, Any], response: dict[str, Any], pattern_text: str | None = None) -> str:
     chart = response.get("chart", {})
     houses = chart.get("houses") if isinstance(chart, dict) else []
@@ -9198,8 +9226,8 @@ class HorosaSkillService:
         except Exception as exc:  # noqa: BLE001 - degrade to '无', never break the guolao chart
             _degrade("guolao_moira pattern eval failed: %s", exc)
         # [星曜庙旺与星点动态]：上游导出的纯函数，只吃 /chart 响应（不需要 Moira 规则服务）。
-        # 同批的 [虚实]/[本命化曜]/[流年流曜] 读 moiraRules.weakSolid / .yearStars，只来自后端
-        # /qizheng/moira —— 开源 astropy 无该路由，本地回退也不产这两个字段，故那三段不可得。
+        # 同批的 [虚实]/[本命化曜]/[流年流曜] 读 moiraRules.weakSolid / .yearStars，来自 **Java** 聚合层的
+        # /qizheng/moira（v0.36.0 接活；此前误记为「开源 astropy 无该路由」而永久排除，见 LESSONS）。
         dignity_text: str | None = None
         try:
             js2 = self.js_client.run("guolao_star_dignity", {"chart": response, "fields": {}})
@@ -9207,6 +9235,38 @@ class HorosaSkillService:
                 dignity_text = f"{js2.get('text') or ''}".strip() or None
         except Exception as exc:  # noqa: BLE001 - 富化失败只是该段不出
             _degrade("guolao star dignity build failed: %s", exc)
+        # [虚实]/[本命化曜]/[流年流曜]（v0.36.0 C1）：Java /qizheng/moira 规则层 + 流年盘二次铸盘。
+        # Java 不可用（A5 冷却快速失败 / 降级）→ 三段缺席并进 envelope.warnings，其余段不受影响（optional 段）。
+        moira_sections: dict[str, str] = {}
+        moira_rules_slim: dict[str, Any] | None = None
+        if payload.get("moiraRules", True) is not False:
+            try:
+                transit_date, transit_time = _moira_transit_moment(payload)
+                moira_params = {
+                    **remote_payload,
+                    "guolaoLifeMode": payload.get("guolaoLifeMode") or "asc",
+                    "guolaoBodyMode": payload.get("guolaoBodyMode") or "taiyin",
+                }
+                transit_params = {**moira_params, "date": transit_date, "time": transit_time, "predictive": True}
+                transit_chart = self._call_remote("/chart", {k: v for k, v in transit_params.items() if v is not None})
+                rules = self._call_remote(
+                    "/qizheng/moira",
+                    {"params": moira_params, "chartObj": response, "transitParams": transit_params, "transitChartObj": transit_chart},
+                )
+                js3 = self.js_client.run(
+                    "guolao_moira",
+                    {"action": "rules_sections", "moiraRules": rules, "transitYearGz": _ganzhi_year(int(str(transit_date)[:4]))},
+                )
+                sections = js3.get("sections") if isinstance(js3, dict) else None
+                if isinstance(sections, dict):
+                    moira_sections = {k: f"{v or ''}".strip() for k, v in sections.items()}
+                if isinstance(rules, dict):
+                    moira_rules_slim = {k: rules.get(k) for k in ("weakSolid", "yearStars", "transitYearStars") if k in rules}
+            except Exception as exc:  # noqa: BLE001 — 三段为 optional；说明进 warnings
+                _degrade(
+                    "guolao moira rules (/qizheng/moira) unavailable: %s", exc,
+                    note="七政四余 [虚实]/[本命化曜]/[流年流曜] 本次未产出（Java /qizheng/moira 不可用或流年盘失败），其余段不受影响。",
+                )
         snapshot_text = _build_guolao_snapshot_text(remote_payload, response, pattern_text=pattern_text)
         if dignity_text:
             # 段序对齐上游：紧跟 [七政四余宫位与二十八宿星曜]、在 [神煞] 之前。
@@ -9216,9 +9276,22 @@ class HorosaSkillService:
                 f"{snapshot_text[:at]}{dignity_text}\n\n{snapshot_text[at:]}" if at >= 0
                 else f"{snapshot_text}\n\n{dignity_text}"
             )
+        moira_blocks = [
+            f"[{title}]\n{moira_sections.get(key)}"
+            for title, key in (("虚实", "weakSolid"), ("本命化曜", "birthStars"), ("流年流曜", "transitStars"))
+            if moira_sections.get(key)
+        ]
+        if moira_blocks:
+            # 段序对齐上游 aiExport preset：[大限] 之后、[政余格局] 之前。
+            marker = "[政余格局]"
+            at = snapshot_text.find(marker)
+            joined = "\n\n".join(moira_blocks)
+            snapshot_text = f"{snapshot_text[:at]}{joined}\n\n{snapshot_text[at:]}" if at >= 0 else f"{snapshot_text}\n\n{joined}"
         response = dict(response)
         response["snapshot_text"] = snapshot_text
         response["guolaoPatterns"] = patterns
+        if moira_rules_slim is not None:
+            response["guolaoMoiraRules"] = moira_rules_slim
         response["export_snapshot"] = self._augment_export_payload(technique="guolao", snapshot_text=snapshot_text)
         return response
 

@@ -290,7 +290,7 @@ AI_EXPORT_PRESET_SECTIONS = {
     # 上游同批还有 [虚实]/[本命化曜]/[流年流曜]，读 moiraRules.weakSolid / .yearStars —— 二者只来自
     # 后端 /qizheng/moira，开源 astropy 无该路由（vendored 实例实测 500），本地回退 buildLocalMoiraRules
     # 也只产 houses/patterns/godHits。故那三段在开源栈上不可得，属带理由的欠账，不登记为 preset。
-    "guolao": ["起盘信息", "七政四余宫位与二十八宿星曜", "星曜庙旺与星点动态（殿垣庙旺乐喜怒 · 顺逆留伏迟速）", "神煞", "大限", "政余格局", "相位"],
+    "guolao": ["起盘信息", "七政四余宫位与二十八宿星曜", "星曜庙旺与星点动态（殿垣庙旺乐喜怒 · 顺逆留伏迟速）", "神煞", "大限", "虚实", "本命化曜", "流年流曜", "政余格局", "相位"],
     "germany": ["起盘信息", "宫位宫头", "行星", "中点", "TNP星体", "中点相位", "90°中点盘", "行星图", "映点", "中点列表", "汉堡学派要素", "组合盘", "戴维森盘", "虚星参考"],
     "agepoint": ["起盘信息", "年龄推进点（Age Point / Huber）", "当前时点", "方法说明"],
     "distributions": ["起盘信息", "界推运（分配法 / Distributions）", "当前时点", "方法说明"],
@@ -575,8 +575,9 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     "calendar": ["选中日详情", "时辰吉凶", "物候·六曜·数九三伏", "流年年神方位", "通书择日", "日子馆·个性化择日", "当事人八字", "老黄历", "日子馆"],
     # 择日: 用事专属 only when the topic rule-pack produced items; 应期 is never emitted by 星阙's builder.
     "election": ["用事专属", "应期", "危象日参照", "本命合参", "时势合参"],
-    # 七政四余: 政余格局 = Moira 格局 DSL（~280 行子系统），headless 版未移植 → 可选段（如实标出）。
-    "guolao": ["政余格局"],
+    # 七政四余: 政余格局 = Moira 格局 DSL 本地评估（失败 → '无'）；虚实/本命化曜/流年流曜 = Java /qizheng/moira
+    # 规则层（v0.36.0 C1 接活）——Java 不可用（chart-only 降级）时三段缺席并进 warnings → 可选段。
+    "guolao": ["政余格局", "虚实", "本命化曜", "流年流曜"],
     # 多重回归: 单段技法；某体若无返照数据则该体行不出，三体皆空时整段不出 → 列为可选段，避免误报 missing。
     # v0.33.0 批 I-3：+日月返照年表（timelineStartYear/Count 时才产）。⚠ 本字典禁止重复键——
     # 曾把同键写两处，后写者静默覆盖前者（test_registry_dicts_have_no_duplicate_keys 现在守着）。

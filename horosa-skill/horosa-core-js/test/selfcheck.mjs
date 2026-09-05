@@ -337,6 +337,41 @@ check('tongshefa 纳甲逐爻/世应/左右爻变入 data：风雷益 子寅辰�
   assert(changed === '1,4,5', `changed lines: ${changed}`);
 });
 
+check('guolao moira rules_sections：[虚实]/[本命化曜]/[流年流曜] 三段与上游 jest 夹具逐行一致', () => {
+  // 权威：上游 astrostudyui/src/components/guolao/__tests__/guolaoWeakSolidBirthStars.test.js（v44 硬缺修）
+  // 的夹具与断言；transit 侧同一 builder 形状（GuoLaoChartMain.buildGuolaoTransitStarsSection）。
+  const rules = {
+    weakSolid: { houses: [
+      { house: '命宫', label: '实', solid: true, weakPillars: [], solidPillars: ['年', '日'] },
+      { house: '财帛', label: '虚', weak: true, weakPillars: ['月'], solidPillars: [] },
+    ] },
+    yearStars: {
+      birth: { yearPole: '丙午', planetRows: [{ star: '木', changeTo: '天贵', items: ['岁星'] }, { star: '火', changeTo: '天刑', items: [] }] },
+      transit: { yearPole: '', planetRows: [{ star: '火', changeTo: '天刑', items: [] }] },
+    },
+    transitYearStars: [{ name: '岁星', star: '木', shortName: '岁', quality: '旺', zi: '寅', signName: '析木' }],
+  };
+  const { sections } = runGuolaoMoira({ action: 'rules_sections', moiraRules: rules, transitYearGz: '丙午' });
+  const ws = sections.weakSolid.split('\n');
+  assert(ws[0] === '| 宫位 | 虚实 | 虚柱 | 实柱 |' && ws[1] === '| --- | --- | --- | --- |', 'weakSolid header');
+  assert(ws[2] === '| 命宫 | 实 | 无 | 年、日 |', `row1: ${ws[2]}`);
+  assert(ws[3] === '| 财帛 | 虚 | 月 | 无 |', `row2: ${ws[3]}`);
+  assert(ws[4] === '口径：虚宫按四柱旬空推虚；实宫按年、月、日、时四柱地支定实。', 'weakSolid footer');
+  const bs = sections.birthStars.split('\n');
+  assert(bs[0] === '本命年柱：丙午' && bs[1] === '◆ 本命化曜', 'birthStars head');
+  assert(bs[2] === '木：化天贵（同归：岁星）' && bs[3] === '火：化天刑', `birthStars rows: ${bs[2]} / ${bs[3]}`);
+  assert(bs[4] === '◆ 十神序（参考）' && bs[5].startsWith('原十神序：天禄、') && bs[6].startsWith('替代十神序：比肩、'), 'ten-god seq');
+  assert(bs[7] === '◆ 天禄至天权（年曜主项）' && bs[8] === '天禄：科名、天马、生官' && bs[bs.length - 1] === '天权：爵星、产星、伤官', 'year info groups');
+  const ts = sections.transitStars.split('\n');
+  assert(ts[0] === '流年干支：丙午' && ts[1] === '◆ 流年化曜' && ts[2] === '火：化天刑', `transit head: ${ts.slice(0, 3)}`);
+  assert(ts[3] === '◆ 流曜落宫' && ts[4] === '岁星：木（岁；旺 · 寅 · 析木）', `transit sign row: ${ts[4]}`);
+  // 无数据 → 空串不产段（上游「零字节变化」契约）
+  const empty = runGuolaoMoira({ action: 'rules_sections', moiraRules: {} }).sections;
+  assert(empty.weakSolid === '' && empty.birthStars === '' && empty.transitStars === '', 'empty rules → empty sections');
+  // 缺省入口（patterns）不受影响
+  assert(typeof runGuolaoMoira({ chart: { chart: {} } }).snapshot_text === 'string', 'patterns entry still works');
+});
+
 check('canping 起运岁走农历真源，不再恒 1 岁', async () => {
   // 值级锚定：baziStyle 档的起运岁必须等于八字盘 direction[0].age（同源判据，
   // 不是自证）；默认《参评诀》档由农历月日推算，同盘得 3 岁。修复前 lunarMonth/

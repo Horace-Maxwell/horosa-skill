@@ -13,7 +13,8 @@ import {
  * 只吃 /chart 七政四余响应，不需要 Moira 规则服务。
  *
  * ⚠️ 同一批的另外三段（[虚实] / [本命化曜] / [流年流曜]）读的是 `moiraRules.weakSolid` 与
- * `moiraRules.yearStars`，二者只来自后端 `/qizheng/moira`。开源 astropy 只挂了
+ * `moiraRules.yearStars`，二者来自 **Java** 聚合层的 `/qizheng/moira`（v0.36.0 起由
+ * tools/guolaoMoira.js 的 rules_sections 入口渲染；此前误记为「开源 astropy 无该路由」）。开源 astropy 只挂了
  * webqizhengelectionsrv / webqizhengkinsrv，**没有该路由**（仓内 vendored 实例实测 500），
  * 而本地回退 `buildLocalMoiraRules` 只产 houses/patterns/godHits，不产这两个字段。
  * 所以那三段在开源栈上不可得 —— 属带理由的欠账，不是待办。

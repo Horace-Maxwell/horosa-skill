@@ -676,6 +676,9 @@ A global stability pass hardened these; keep them true when you touch the releva
   `*_missing_*`/`*invalid*`（修入参）/`*_failed`/`*_unavailable`（重试再体检）后缀），`verify_error_recovery.py`
   硬红；文案用 `errors.bilingual(zh, en)`，非双语计数只降不升。service 与 MCP 两条错误路径都走
   `recovery_for`（agent_recovery.kind/prompt_to_user/next_action + details.hint）（v0.36.0）。
+- **排除上游能力前先在上游源码确认它挂在哪一层。** `/qizheng/moira` 是 Java 聚合层路由，曾因 Python chart
+  服务 500 被记成「不存在」两个版本（v0.36.0 C1 接活）。「某服务 500」≠「路由不存在」；台账「维持排除」条目
+  必须写判据。Java 端可选富化一律经 `_call_remote` + `_degrade`，段列 optional。
 - **`run_tool` always returns a `ToolEnvelope`, never lets an unexpected exception escape.** Tool
   execution + snapshot/summary/export post-processing run inside a try that catches `HorosaSkillError`
   **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`. Only invalid-payload

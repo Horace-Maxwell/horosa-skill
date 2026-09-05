@@ -85,11 +85,7 @@
       ]
     },
     "guolao": {
-      "missing": [
-        "虚实",
-        "本命化曜",
-        "流年流曜"
-      ],
+      "missing": [],
       "extra": []
     },
     "harmonic": {
@@ -151,11 +147,7 @@
       ]
     },
     "qizhengzeri": {
-      "missing": [
-        "虚实",
-        "本命化曜",
-        "流年流曜"
-      ],
+      "missing": [],
       "extra": []
     },
     "relocation": {

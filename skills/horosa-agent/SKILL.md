@@ -42,6 +42,10 @@ horosa_cn_qimen {date, time, zone:"+08:00", lat:"31n13", lon:"121e28", agent_con
 horosa_report_render {run_id, tool_name:"qimen", format:"docx", ai_report:{executive_summary, answer_text, analysis_sections, recommendations, limitations}}
 ```
 
+七政四余 `guolao_chart` 可传 `guolaoLifeMode`（asc/yumao/cotrans）、`guolaoBodyMode`、`moiraTransitDate`（[流年流曜]
+的流年时刻，缺省今天）；[虚实]/[本命化曜]/[流年流曜] 三段来自 Java 规则层，Java 不可用时缺席并进 `warnings`。
+河洛 `heluo` 可传 `liunianStep2`（ying/sequential）、`ziShuMode`、`jiGongMode` 等取法旋钮（全表见 guidance）。
+
 闸门问题带 `options` 的，直接把用户选的那一项原话记进 `clarification_notes`（同名 `values` 是该选项对应的
 schema 值，可直接放进载荷）；`planetaryarc` 的弧源、神数的性别/地点这类工具自有敏感项闸门会点名问，别替用户默认。
 
