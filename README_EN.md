@@ -331,7 +331,7 @@ uv run horosa-skill selfcheck    # live check: cast one chart -> store -> read b
 uv run horosa-skill serve        # start local MCP (default http://127.0.0.1:8765/mcp)
 ```
 
-No checkout needed since v0.36.0 — the package is on PyPI, so one `uvx` does it (the runtime still installs to the default `~/.horosa/runtime`):
+No checkout needed once PyPI is switched on — the `uvx horosa-skill …` channel is wired (workflow + wheel guard) but **not yet live** (it needs the maintainer's one-time Trusted Publisher setup; the commands below stay the same). Until then, use the source install above:
 
 ```bash
 uvx horosa-skill install         # install the offline runtime (same as above)

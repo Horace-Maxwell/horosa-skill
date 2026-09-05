@@ -105,7 +105,7 @@ uv run horosa-skill selfcheck    # ✅ 活体验证：起一张盘 → 存 → �
 uv run horosa-skill serve        # 🚀 启动本地 MCP（默认 http://127.0.0.1:8765/mcp）
 ```
 
-不想 clone 源码？v0.36.0 起发布到 PyPI，一条 `uvx` 即用（runtime 仍装到默认目录 `~/.horosa/runtime`）：
+不想 clone 源码？PyPI 通道（`uvx horosa-skill …`）已就绪但**暂未开通**（等维护者完成一次性 Trusted Publisher 配置后即可用，届时无需改任何命令）；开通前请走上面的源码安装：
 
 ```bash
 uvx horosa-skill install         # 📦 装离线 runtime（同上）

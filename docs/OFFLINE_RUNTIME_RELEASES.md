@@ -134,7 +134,9 @@ See [`runtime-manifest.example.json`](./runtime-manifest.example.json).
 
 For the embedded payload manifest, see [`RUNTIME_MANIFEST_SPEC.md`](./RUNTIME_MANIFEST_SPEC.md).
 
-## PyPI（v0.36.0 起，`uvx horosa-skill`）
+## PyPI（v0.36.0 通道就绪、**尚未开通**；开通后 `uvx horosa-skill`）
+
+- 状态（2026-09-04）：v0.36.0 发布时 publish-pypi 的 build 作业已绿，publish 作业因 pypi.org 侧尚无项目/Trusted Publisher 而失败（预期）；维护者决定暂缓，GitHub Release 仍是安装渠道。开通只需下面的一次性步骤，之后手动 dispatch 一次即可补发 0.36.0。
 
 - 通道：`.github/workflows/publish-pypi.yml`——GitHub Release **published** 自动触发（与 darwin 半同一次发布）或手动
   dispatch（`dry_run=true` 只构建校验不上传）。认证走 PyPI Trusted Publishing（OIDC），仓库不存任何 token。
