@@ -11,9 +11,10 @@
 #
 # 用法：
 #   bash scripts/start_vendored_instance.sh                 # chart @ 8877
-#   bash scripts/start_vendored_instance.sh --with-java     # + java @ 9977（无 Mongo 的机器上
-#                                                           #   java 族技法会 500，脚本会提示）
+#   bash scripts/start_vendored_instance.sh --with-java     # + java @ 9977（桌面模式：无 Mongo/Redis
+#                                                           #   的机器也能跑全 java 族，见下方 🔴 注释）
 #   CHART_PORT=8878 JAVA_PORT=9978 bash scripts/start_vendored_instance.sh --with-java
+#   MONGO_PORT=27099 … --with-java                           # 故意指向空端口 = 模拟干净机器（走文件回退）
 #
 # 就绪判据（AGENTS §8）：启动日志 `kentang prewarm ready (loaded=N, failed=0)`——failed 非 0
 # 就是没起对，本脚本直接失败并打日志尾，绝不留一个半死实例给你测。
@@ -95,16 +96,44 @@ if [ "${WITH_JAVA}" = "1" ]; then
     echo "port ${JAVA_PORT} is busy — pick another: JAVA_PORT=<n> $0 --with-java" >&2
     exit 1
   fi
+  # 🔴 必须按上游桌面启动器（Horosa-Web/start_horosa_local.sh）的方式起 jar，不能裸 `-jar`：
+  #   jar 内 conf/properties/cache/*.properties 把 Mongo 主机写死为 `mongodb.host`（DNS 不存在 → 每个
+  #   碰库的请求等 30s 连接超时 → ResultCode 9999）。上游桌面模式靠三样东西免 Mongo/Redis：
+  #   `--mongodb.ip/--redis.ip` 覆盖主机 + `HOROSA_DESKTOP_MONGO_OPTIONAL=1` 连不上就退到
+  #   `HOROSA_MONGO_FALLBACK_DIR` 的 json 文件 + `needtranslog=false` 不往 Mongo 写请求日志。
+  #   v0.36.0 收尾实测：裸起 = nongli/bazi/inversebazi 全 9999；照桌面方式起 = Mongo 端口指向空端口
+  #   也全部真数据返回（fallback 目录出现 nongli.json/bazi.json）。「live 需 Mongo」从来只是本脚本的锅。
+  #   app 注册（ClientApp=1 + SHA-256 签名）读的是 jar 内 data/rsakey.json，与 Mongo 无关。
+  MONGO_FALLBACK_DIR="${RUNDIR}/mongo-fallback"
+  mkdir -p "${MONGO_FALLBACK_DIR}"
   (
     cd "${VENDOR}"
-    nohup "${JAVA_BIN}" -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 \
-      -jar "${JAR}" --server.port="${JAVA_PORT}" --astrosrv="http://127.0.0.1:${CHART_PORT}" \
+    env HOROSA_DESKTOP_MONGO_OPTIONAL=1 HOROSA_DESKTOP_MONGO_SKIP_PING=0 \
+      HOROSA_MONGO_FALLBACK_DIR="${MONGO_FALLBACK_DIR}" \
+      HOROSA_ENABLE_STARTUP_CRON=0 HOROSA_ENABLE_STARTUP_TRANSGROUP_INIT=0 needtranslog=false \
+      SPRING_MAIN_LAZY_INITIALIZATION=true \
+      JAVA_TOOL_OPTIONS="-Dlog4j2.statusLevel=WARN -Djava.awt.headless=true -Dspring.main.banner-mode=off" \
+      nohup "${JAVA_BIN}" -Dhorosa.runtime.owner=horosa-skill-vendored \
+      -Duser.language=zh -Duser.country=CN -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 \
+      -Dparamhash.cache.redis.enable=false -Dhorosa.cache.lazyinit=true \
+      -jar "${JAR}" --server.port="${JAVA_PORT}" --server.address=127.0.0.1 \
+      --astrosrv="http://127.0.0.1:${CHART_PORT}" \
+      --mongodb.ip="${MONGO_IP:-127.0.0.1}" --mongodb.port="${MONGO_PORT:-27017}" \
+      --redis.ip=127.0.0.1 --paramhash.cache.redis.enable=false \
       > "${JAVA_LOG}" 2>&1 &
     echo $! > "${JAVA_PID}"
   )
   echo "java starting (pid $(cat "${JAVA_PID}"), port ${JAVA_PORT})… root 回 500 是正常（无 / 路由）"
-  echo "⚠ 无 Mongo/Redis 的机器：java 族技法（nongli/bazi/ziwei/liureng）会 ResultCode 9999 —— 那是环境，"
-  echo "  不是回归（AGENTS §8.5：9999 必须再读 Result 原文再定性）。"
+  deadline=$((SECONDS + 180))
+  while [ ${SECONDS} -lt ${deadline} ] && ! port_busy "${JAVA_PORT}"; do sleep 2; done
+  if ! port_busy "${JAVA_PORT}"; then
+    echo "java never opened :${JAVA_PORT} within 180s — log tail:" >&2
+    tail -15 "${JAVA_LOG}" >&2
+    bash "${ROOT}/horosa-skill/scripts/stop_vendored_instance.sh" || true
+    exit 1
+  fi
+  echo "java ready on :${JAVA_PORT}（桌面模式：本机有 Mongo 就用 127.0.0.1:${MONGO_PORT:-27017}，没有就退到 ${MONGO_FALLBACK_DIR}）"
+  echo "  java 族技法仍回 ResultCode 9999 时先读 Result 原文（AGENTS §8.5）——那不再是「本机无 Mongo」。"
 fi
 
 echo

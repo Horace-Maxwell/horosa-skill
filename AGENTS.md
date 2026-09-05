@@ -590,16 +590,22 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
    （`test_error_paths_return_a_conformant_envelope` 实测在服务起着时红）——要真与 CI 同形，
    **必须同时把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指到不可达地址**。
 5. **Java 侧是否可用，判据取「skill 正规路径」，不是裸 HTTP**（2026-08-05 实测纠正）：
-   **裸 `curl`/`httpx` 打 `/nongli/time` 在无 Mongo 机器上任何载荷形状都回
+   **裸 `curl`/`httpx` 打 `/nongli/time` 任何载荷形状都回
    `{"ResultCode":9999,"Result":"no.register.app.in.sys.forapp"}`——包括那些经 skill 调用完全成功的
-   载荷**，所以裸探针会把好路由误判成坏的，不可作判据。`_call_remote` 带 app 注册归一化，经它
+   载荷**，所以裸探针会把好路由误判成坏的，不可作判据。原因是裸探针没带 `ClientApp`/`Signature` 头：
+   注册表是 jar 内 classpath 的 `data/rsakey.json`（`RequestHeaderInterceptor` 核 ClientApp + SHA-256 签名），
+   **与 Mongo 无关**（v0.36.0 收尾实锤，本机 Mongo 里根本没有注册表）。`_call_remote` 带 app 注册归一化，经它
    （或 `service.run_tool`）打才作数：实测本机 `doctor issues: []` + live 382 条通过，其中大量走 Java。
    `doctor` 只探 `/common/time`、`selfcheck` 的 compute 步骤有 issue #14 的 chart 侧回退，
    两者仍不足以证明 Java 族技法可用——**要证就跑一条真 Java 技法**（如
    `service.run_tool("nongli_time", {...带 lat...})`）。
    **`ResultCode 9999` 是通用失败码、不是 `no.register.app` 的同义词**——必读 `Result` 原文再定性：
    `no.register.app.in.sys` = 注册/环境；`begin 1, end 3, length 1`（或 mac 侧看到的 `200001`）
-   = 请求缺 `lat` 的上游输入处理崩溃，与 Mongo 无关。`_java_result_code_hint` 已按此二次判别，
+   = 请求缺 `lat` 的上游输入处理崩溃，与 Mongo 无关；`Timed out … waiting to connect … mongodb.host`
+   = **实例起法错**（裸 `java -jar` 用 jar 内写死的 `mongodb.host`），不是「本机无 Mongo」——按上游桌面模式起
+   （`--mongodb.ip=127.0.0.1` + `HOROSA_DESKTOP_MONGO_OPTIONAL=1` + `HOROSA_MONGO_FALLBACK_DIR` + `needtranslog=false`，
+   `start_vendored_instance.sh --with-java` 已内置）后无 Mongo/Redis 也全 Java 族真数据（v0.36.0 收尾实锤，
+   本 Mac 首次 0-skip 全量 live 678 绿）。`_java_result_code_hint` 已按此三分判别，
    认不出的 9999 只给中性提示（v0.26.1+ 台账）。
    **缺 lat 的失败会「时好时坏」**：Java 农历结果按**年**缓存，任何一次带 lat 的请求会焐热该年，
    此后同年无 lat 请求全部成功——复现必须换**冷年份**（v0.26.1 已给五个占时工具加
@@ -629,7 +635,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | 结果段缺失，客户端想报「缺依赖」 | 幻觉依赖风险 | 按 SKILL.md：说本地未返回该段，跑 `doctor` / `openclaw-check`，不发明 MongoDB/7897 |
 | chart 启动日志整段 traceback：`kintaiyi/game_theory.py … No module named 'scipy'` | prewarm 碰到 opt-in 博弈论子模块（默认关、懒 import）；scipy 两平台 bundle 均无（mac 同样） | 良性，无需处置；判据 = `/taiyi/pan` 回 `ResultCode 0 + source kintaiyi`；勿为此加 scipy（瘦身红线） |
 | `doctor` 报 `services:java_backend_not_running` / runtime_state `degraded_chart_only` | Java 后端死或被拦（Windows 常见 = 代理/VPN/安全软件 WFP 拦 JDK-17 AF_UNIX loopback，jar 在 Spring bean 构造期秒退且自身日志为空） | 降级模式设计行为：chart 侧技法照常可用；`doctor.java_diagnostics` 有启动器捕获的崩溃摘录；用户侧处置 = 禁用干扰软件并重启（issue #14） |
-| Java 族技法（nongli / bazi / ziwei / liureng）报 HTTP 500 | **9999 是通用码，先读 `Result` 原文**：`no.register.app.in.sys.forapp` = app 注册缺失（环境）；`begin 1, end 3, length 1` / `200001` = 请求缺 `lat` 的上游崩溃，与 Mongo 无关（按**年**缓存，故时好时坏——复现要换冷年份） | 裸 HTTP 探针在无 Mongo 机上恒回前者、不可作判据；一律用 `service.run_tool` 正规路径复现（§8 验证流程 5） |
+| Java 族技法（nongli / bazi / ziwei / liureng）报 HTTP 500 | **9999 是通用码，先读 `Result` 原文**：`no.register.app.in.sys.forapp` = 请求没带/没签对 `ClientApp`（注册表在 jar 内 `data/rsakey.json`，与 Mongo 无关）；`begin 1, end 3, length 1` / `200001` = 请求缺 `lat` 的上游崩溃（按**年**缓存，故时好时坏——复现要换冷年份）；`Timed out … mongodb.host` = 实例裸 `-jar` 起的，jar 内写死的 Mongo 主机名解析不到 | 裸 HTTP 探针恒回第一种、不可作判据；一律用 `service.run_tool` 正规路径复现（§8 验证流程 5）；第三种改用 `start_vendored_instance.sh --with-java`（桌面模式，无 Mongo 也全族可用） |
 | 维护机上 `test_error_paths_return_a_conformant_envelope` 红、CI 绿 | 默认端口上有活服务，只钉 `HOROSA_RUNTIME_ROOT` 拦不住，本该失败的路径成功了 | 同时把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指到不可达地址（§8 验证流程 4） |
 
 ## 9. Stability invariants（稳定性不变量 — don't regress these）
@@ -690,6 +696,15 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **宫主/宫神星只从 `astro_rulers.py` 取。** 它是上游 `wholeSignRulers.js` 的移植（夹具与断言照抄上游 jest），
   Python 面不许再各自算宫主（上游 #79 双实现漂移）；段内子块（如 [主宰星链] 的「◆ 宫神星(houseRows)」）段级
   棘轮看不见，加子块要配逐字夹具测试。`MIRRORED_UPSTREAM_AIEXPORT_VERSION` 切 v57 时四件同动（v0.36.0 C6）。
+- **Java 实例只按上游桌面模式起，「live 需 Mongo」不再是合法理由。** jar 内 `conf/properties/cache/*.properties`
+  把 Mongo 主机写死为 `mongodb.host`；裸 `java -jar` = 每个碰库请求 30s 超时后 9999，被当成环境限制记了十个版本。
+  起法四件（`--mongodb.ip=127.0.0.1`、`HOROSA_DESKTOP_MONGO_OPTIONAL=1`、`HOROSA_MONGO_FALLBACK_DIR`、
+  `needtranslog=false`）由 `start_vendored_instance.sh --with-java` 内置、`test_guard_wiring` 守；app 注册在 jar 内
+  `data/rsakey.json`，与 Mongo 无关。发版前的 live 判据从此是 **0-skip 全量**（本 Mac v0.36.0 收尾 678 绿），
+  `MONGO_PORT=<空端口>` 可模拟干净机器（走文件回退）。
+- **闸门问什么，以 live「改参数结果必变」为准，不以代码转发了什么为准。** 演禽（xianqin）转发了 lat/lon，引擎却不读
+  （上海↔乌鲁木齐逐字节相同）——问地点就是假闸门。给工具挂结果敏感项前先翻转一次；不敏感的项用**反向** live
+  断言钉住（`test_xianqin_ignores_place_so_its_gate_must_not_ask_for_it`），上游哪天读了它会先红（v0.36.0 收尾）。
 - **`run_tool` always returns a `ToolEnvelope`, never lets an unexpected exception escape.** Tool
   execution + snapshot/summary/export post-processing run inside a try that catches `HorosaSkillError`
   **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`. Only invalid-payload

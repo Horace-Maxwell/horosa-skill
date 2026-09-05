@@ -122,9 +122,24 @@ _JAVA_PARAM_HINT = (
     "/nongli/time 要求 lon 与 lat 均非空。"
 )
 _JAVA_NO_REGISTER_HINT = (
-    "ResultCode 9999 (no.register.app) = Java 聚合层的 app 注册没读到（注册信息在 MongoDB 里）。"
+    "ResultCode 9999 (no.register.app) = Java 聚合层没认出 ClientApp：注册表是 jar 内 classpath 的 "
+    "data/rsakey.json（RequestHeaderInterceptor 读它核 ClientApp + SHA-256 签名），与 MongoDB 无关——"
+    "先核请求头 ClientApp/Signature 是否走本仓 HorosaApiClient 的正规路径。"
     "注意 doctor 探的是 /common/time，不碰这族路由，所以 doctor 绿不代表它活着。"
 )
+# v0.36.0 收尾实测的第三种 9999：jar 内 conf/properties/cache/*.properties 把 Mongo 主机写死为
+# `mongodb.host`，裸 `java -jar` 起的实例每个碰库的请求都要等 30s 连接超时后回 9999，Result 原文是
+# `Timed out after 30000 ms while waiting to connect … mongodb.host … UnknownHostException`。这不是
+# 「本机无 Mongo」——上游桌面启动器用 `--mongodb.ip=127.0.0.1` + 桌面模式的 MONGO_OPTIONAL 开关 +
+# 文件回退目录起 jar 时，Mongo 完全不在也全族真数据返回。所以这种 Result 要直接指回起法。
+# （开关的环境变量名故意不写在这里：它是上游启动器读的，不是本包读的；`test_env_registry_covers_all_flags_code_reads`
+#   会把包内出现的任何 HOROSA_* 字面量当成本包旗标要求登记。全名见 scripts/start_vendored_instance.sh。）
+_JAVA_MONGO_UNREACHABLE_HINT = (
+    "ResultCode 9999 + Result 含 Mongo 连接超时/UnknownHostException(mongodb.host) = 这个 Java 实例没按桌面模式起"
+    "（裸 `java -jar` 用的是 jar 内写死的 `mongodb.host`）。用 runtime 启动器或 scripts/start_vendored_instance.sh "
+    "--with-java 起（`--mongodb.ip=127.0.0.1` + 桌面模式 MONGO_OPTIONAL 开关 + 文件回退目录），无 Mongo 的机器也能跑全 Java 族。"
+)
+_JAVA_MONGO_UNREACHABLE_MARKERS = ("mongodb.host", "MongoSocketException", "MongoTimeoutException", "while waiting to connect")
 # 9999 是**通用**失败码，不是 no.register.app 的同义词：实测同一台机器上，缺 lat 触发的上游字符串
 # 越界回的也是 `{"ResultCode": 9999, "Result": "begin 1, end 3, length 1"}`。只按码值贴「app 注册没
 # 读到（在 MongoDB 里）」，会把一个参数 bug 指去查 Mongo——正是本仓花了两轮才清掉的那类误诊。
@@ -143,7 +158,11 @@ def _java_result_code_hint(body: str) -> str:
     if _java_result_code(body, "200001"):
         return _JAVA_PARAM_HINT
     if _java_result_code(body, "9999"):
-        return _JAVA_NO_REGISTER_HINT if "no.register.app" in body else _JAVA_GENERIC_9999_HINT
+        if "no.register.app" in body:
+            return _JAVA_NO_REGISTER_HINT
+        if any(marker in body for marker in _JAVA_MONGO_UNREACHABLE_MARKERS):
+            return _JAVA_MONGO_UNREACHABLE_HINT
+        return _JAVA_GENERIC_9999_HINT
     return ""
 
 

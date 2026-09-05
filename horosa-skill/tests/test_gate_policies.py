@@ -57,11 +57,12 @@ def test_progression_tools_ask_their_target_fields() -> None:
 
 
 def test_shenshu_gender_and_place_policies() -> None:
-    for tool in ("tieban", "shaozi"):
+    # 演禽（xianqin）live 实测不读地点（test_live_shenshu_gender 有反向断言钉住）：问了就是假闸门
+    for tool in ("tieban", "shaozi", "xianqin"):
         asked = _asked(tool, {"date": "1990-01-01", "time": "12:00:00"})
         assert asked["gender"]["values"] == [1, 0], tool
         assert "location" not in asked, tool
-    for tool in ("xianqin", "cetian", "qizhengkin"):
+    for tool in ("cetian", "qizhengkin"):
         asked = _asked(tool, {"date": "1990-01-01", "time": "12:00:00"})
         assert "gender" in asked and "location" in asked and "zone" in asked, tool
     # 提供了性别就不再问（已提供字段过滤）

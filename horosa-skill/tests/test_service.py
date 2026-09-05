@@ -4325,8 +4325,29 @@ def test_java_result_codes_are_translated_not_swallowed() -> None:
     from horosa_skill.engine.client import _java_result_code_hint
 
     assert "经纬度" in _java_result_code_hint('{"ResultCode" : 200001, "Result" : "param error"}')
-    assert "MongoDB" in _java_result_code_hint('{"ResultCode" : 9999, "Result" : "no.register.app"}')
+    register = _java_result_code_hint('{"ResultCode" : 9999, "Result" : "no.register.app"}')
+    # v0.36.0 收尾实锤：注册表是 jar 内 data/rsakey.json（RequestHeaderInterceptor 读），不在 Mongo
+    assert "rsakey.json" in register and "无关" in register, register
     assert _java_result_code_hint('{"ResultCode" : 0, "Result" : {}}') == ""
+
+
+def test_mongo_unreachable_9999_points_back_to_the_launch_mode() -> None:
+    """第三种 9999（v0.36.0 收尾首次全量 live 抓到）：裸 `java -jar` 起的实例连 jar 内写死的 `mongodb.host`
+    超时。它不是「本机无 Mongo」——按上游桌面模式起（--mongodb.ip + MONGO_OPTIONAL + 文件回退）Mongo 不在
+    也全族真数据。提示必须指回起法，且不许污染另外两种 9999 的提示。"""
+    from horosa_skill.engine.client import _java_result_code_hint
+
+    body = ('{"ResultCode" : 9999, "Result" : "Timed out after 30000 ms while waiting to connect. Client view of '
+            'cluster state is {type=UNKNOWN, servers=[{address=mongodb.host:27017, exception={com.mongodb.'
+            'MongoSocketException: mongodb.host}, caused by {java.net.UnknownHostException: mongodb.host}}]"}')
+    hint = _java_result_code_hint(body)
+    assert "桌面模式" in hint and "start_vendored_instance.sh" in hint and "--mongodb.ip" in hint, hint
+    assert "本机无 Mongo" not in hint, "不得把它定性成环境限制"
+    # 负向对照：参数越界与 no.register.app 两种 9999 不得被 Mongo 分支抢走
+    generic = _java_result_code_hint('{"ResultCode" : 9999, "Result" : "begin 1, end 3, length 1"}')
+    register = _java_result_code_hint('{"ResultCode" : 9999, "Result" : "no.register.app.in.sys.forapp:1"}')
+    assert "桌面模式" not in generic and "桌面模式" not in register
+    assert "rsakey.json" in register
 
 
 def test_generic_9999_is_not_labelled_a_mongo_problem() -> None:

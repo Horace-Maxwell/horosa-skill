@@ -7806,7 +7806,8 @@ class HorosaSkillService:
                 details={"base_tool": spec["base_tool"], "pan_moment": pan_moment,
                          "base_error": {"code": base_err.code, "message": base_err.message} if base_err else None,
                          "hint": f"先单独调 {spec['base_tool']} 同刻复现：它也红 = 基底技法/环境问题"
-                                 f"（如无 Mongo 时 Java 族回 9999），只有择日这条红才是接线问题。"},
+                                 f"（Java 族回 9999 时先读 Result 原文；裸 -jar 起的实例连不上 Mongo 就是这样），"
+                                 f"只有择日这条红才是接线问题。"},
             )
         base = base_env.data if isinstance(base_env.data, dict) else {}
 
@@ -9828,7 +9829,8 @@ class HorosaSkillService:
             "after23NewDay": payload.get("after23NewDay", 1),
             "lateZiHourUseNextDay": payload.get("lateZiHourUseNextDay", 1),
         }
-        # cetian / qizhengkin / xianqin also read gender + place; forward them when present (no-op for the rest).
+        # cetian / qizhengkin read gender + place; xianqin reads gender only (live: place/timeAlg never change its
+        # output). Forward the keys when present — the backend ignores what it does not read.
         for extra in ("gender", "lat", "lon", "gpsLat", "gpsLon", "zone"):
             if payload.get(extra) is not None:
                 remote_payload[extra] = payload.get(extra)

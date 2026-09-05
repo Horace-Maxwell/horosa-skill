@@ -327,7 +327,7 @@ SHENSHU_POLICY = _policy(
 )
 
 # v0.36.0 B3：神数五支此前共用 SHENSHU_POLICY，从不问性别/地点——而 `_run_shenshu_tool` 一直在转发它们，
-# 铁板/邵子按性别分条文，演禽/策天/张果按地点起盘：不问就是静默默认。
+# 铁板/邵子/演禽按性别分条文（演禽不读地点，live 实测），策天/张果按地点起盘：不问就是静默默认。
 _GENDER_QUESTION = {"field": "gender", "question": "性别？（条文按男女分列）", "options": ["男", "女"], "values": [1, 0]}
 _PLACE_QUESTION = {
     "field": "location",
@@ -342,7 +342,7 @@ SHENSHU_GENDER_POLICY = _policy(
     do_not_assume=["date", "gender"],
 )
 SHENSHU_PLACE_POLICY = _policy(
-    intent="神数 (演禽/策天飞星/张果星宗)：按出生时刻+地点起盘并按性别取用；需日期、时间、时区、地点与性别。",
+    intent="神数 (策天飞星/张果星宗)：按出生时刻+地点起盘并按性别取用；需日期、时间、时区、地点与性别。",
     required_context=["date (公历日期)", "time", "zone (时区)", "lat/lon 或 gpsLat/gpsLon (地点)", "gender (性别)"],
     ask_if_missing=[*SHENSHU_POLICY["ask_if_missing"], _GENDER_QUESTION, _PLACE_QUESTION, {"field": "zone", "question": "时区偏移（如 +08:00）？"}],
     safe_defaults=SHENSHU_POLICY["safe_defaults"],
@@ -1269,7 +1269,9 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     "beiji": SHENSHU_POLICY,
     "nanji": SHENSHU_POLICY,
     "chunzi": SHENSHU_POLICY,
-    "xianqin": SHENSHU_PLACE_POLICY,
+    # 演禽 live 实测（v0.36.0 收尾）：输出无时区/经纬度行，上海↔乌鲁木齐、timeAlg 翻转全部逐字节相同——
+    # 它只按钟表时间换农历 + 性别取用，问地点就是假闸门（§5.12「改参数结果必变」的反例）。
+    "xianqin": SHENSHU_GENDER_POLICY,
     "cetian": SHENSHU_PLACE_POLICY,
     "qizhengkin": SHENSHU_PLACE_POLICY,
     "mundane": _policy(

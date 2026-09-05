@@ -16,6 +16,8 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.36.0 收尾 (2026-09) | 「Java 族 live 需 Mongo」十个版本的误定性 = vendored 脚本裸 `-jar`；演禽假闸门 | 贴「环境限制」前先读 `Result` 原文、用上游桌面起法起一遍；闸门问项以 live 翻转为准，不以转发为准 |
+| v0.36.0 (2026-09) | 止血/可用性/捞回能力 15 批（响应放大、静默降级、手抄表、死键、降级误杀、扁平面丢键、moira 误排除、闸门半盲、错误码……） | 每批四件套 + 全量门禁；台账正文按批见下 |
 | v0.35.0 (2026-09) | 手工件零信号 + 整拷树不比对（六亲两格错值滞留四轮） | 不经流水线的文件都要有「源变了就叫人」的边；守卫树集合 == sync 整拷集合 |
 | v0.35.0 (2026-09) | 手册知识包白名单脱钩 + 读脏工作区 | 每册手册要么收割要么明文排除；出处与正文同源于同一 commit |
 | v0.35.0 (2026-09) | SQLite 日志侧车混进镜像与发布包 | 排除集四处同加（sync / 守卫 / 三 builder）；侧车不是源文件 |
@@ -98,6 +100,36 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.36.0 收尾 / 2026-09-04 — 「Java 族 live 需要 Mongo」记了十个版本，真因是 vendored 实例脚本裸 `-jar`；顺手抓出一个假闸门
+
+- **症状**：v0.25.1 起台账一路写「本机无 Mongo → Java 聚合层 app 注册读不到 → nongli/bazi/ziwei/liureng 恒 9999，
+  live 0-skip 留给带 Mongo 的发布机」。本轮为验 C2（`/common/inversebazi`）和 B3 神数翻转，起 `--with-java` 实例，
+  `bazi_birth`/`nongli_time`/`bazi_inverse` 全 500，而同一实例上 `/qizheng/moira`（C1）却成功。
+- **排查**：读 `Result` 原文（§8.5 的规矩）——不是 `no.register.app`，是
+  `Timed out after 30000 ms while waiting to connect … address=mongodb.host:27017 … UnknownHostException: mongodb.host`。
+  ① `unzip -p astrostudyboot.jar BOOT-INF/classes/conf/properties/cache/*.properties`：Mongo 主机写死 `mongodb.host`
+  （nongli/bazi/translog/…共 10 份），Redis 写 127.0.0.1；② `strings RequestHeaderInterceptor.class`：app 注册读 classpath
+  `data/rsakey.json`（`checksig` + `ClientApp` + `checkSha256Signature`），**没有任何 Mongo 访问**；本机 brew mongod 里
+  只有 astrochart.nongli / astrolog / astrouser / bazidb（缓存与日志），没有注册表；③ 上游桌面启动器
+  `Horosa-Web/start_horosa_local.sh` 起 jar 时带 `--mongodb.ip=127.0.0.1 --redis.ip=127.0.0.1` + 环境
+  `HOROSA_DESKTOP_MONGO_OPTIONAL=1 HOROSA_MONGO_FALLBACK_DIR=… needtranslog=false`——本仓 runtime manager 走的正是它，
+  所以**终端用户从来没受过这个影响**；只有本仓的 `start_vendored_instance.sh` 是裸 `java -jar`。
+- **实锤**：照桌面方式起、且故意把 `--mongodb.port` 指到空端口 27099（= 模拟干净机器）：nongli/bazi/inversebazi 全部
+  真数据，回退目录出现 `nongli.json`/`bazi.json`。本 Mac **首次 0-skip 全量 live：678 passed**（v0.25.1 以来所有
+  「4 条/7 条 live 红属环境」的定性，其实都是这个脚本）。
+- **顺手抓出的假闸门**：全量 live 唯一一条红是本轮 B3 自己加的 `test_shenshu_place_changes_the_reading[xianqin]`——演禽
+  输出没有时区/经纬度行，上海↔乌鲁木齐、`timeAlg` 翻转逐字节相同。B3 当时按「`_run_shenshu_tool` 转发了 lat/lon」
+  给它挂了地点问题，而 guard 行里明明写着「合并前按 §5.12 live 验改参数结果必变」——Java 起不来就跳过了那一步。
+- **guard**：① `start_vendored_instance.sh --with-java` 改为桌面模式四件（`test_guard_wiring` 断言非注释行含
+  `HOROSA_DESKTOP_MONGO_OPTIONAL=1`/`HOROSA_MONGO_FALLBACK_DIR=`/`needtranslog=false`/`--mongodb.ip=` 且不含
+  `mongodb.host`），并等 Java 端口真开；`MONGO_PORT=<空端口>` 模拟干净机器。② `_java_result_code_hint` 三分：
+  `no.register.app` → 指回请求头与 jar 内 `rsakey.json`（不再说「在 MongoDB 里」）；Mongo 超时/`mongodb.host` →
+  指回起法；其余中性（`test_mongo_unreachable_9999_points_back_to_the_launch_mode` 含两条负向对照）。③ xianqin 归
+  `SHENSHU_GENDER_POLICY`，live 加反向断言 `test_xianqin_ignores_place_so_its_gate_must_not_ask_for_it`；
+  `test_gate_policies` 断言 xianqin 不问 location。④ 台账 v0.25.1「live 0-skip 需 Mongo」条目加 🔴 推翻批注（原文保留）。
+- **法则**：**「环境限制」是最容易写进台账、最难被推翻的定性——每次给失败贴「环境」标签前，先读原文、再用上游自己的
+  起法起一遍。** 判据永远是「上游桌面模式下能不能跑」，不是「我这台机器有没有装 X」。闸门问项同理：以翻转为准。
+
 ### v0.36.0 / 2026-09-04 — [主宰星链] 段在、段内「◆ 宫神星(houseRows)」子块缺了两个版本：段级棘轮看不见段内缺项
 
 - **症状**：上游 v56 的 [主宰星链] 段末带一张宫神星 12 宫表（宫|宫头座|宫主|宫主落宫|宫主落座，FIX-1 并入段内、
@@ -170,7 +202,12 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   约束；问题与 schema 值之间没有映射，表单答案只能当备注。
 - **guard**：`_progression_target_policy` 工厂给五个推运工具各自的目标问题（arcSource 带 options+values）；
   `SHENSHU_GENDER_POLICY`（tieban/shaozi）与 `SHENSHU_PLACE_POLICY`（xianqin/cetian/qizhengkin：性别+地点+时区，
-  与 `_run_shenshu_tool` 实际转发一致）；可枚举问题配 `options` + 并行 `values`（hsys 带上游索引、zodiacal、
+  与 `_run_shenshu_tool` 实际转发一致）
+  > 🔴 **收尾更正（同日，首次带 Java 的全量 live）**：演禽（xianqin）对地点/时区/timeAlg **完全不敏感**——输出无
+  > 时区/经纬度行，上海↔乌鲁木齐逐字节相同；「转发了就问」是假闸门。xianqin 改归 `SHENSHU_GENDER_POLICY`，
+  > live 测试改成**反向断言**（地点必不变）钉住引擎事实。教训：闸门问什么以 live「改参数结果必变」为准，
+  > 不以代码转发了什么为准——本条 guard 行原本就写着这个判据，却在 Java 起不来时跳过了它。
+  ；可枚举问题配 `options` + 并行 `values`（hsys 带上游索引、zodiacal、
   岁差制、晚子时双开关、diFen 十二支、gender、arcSource），自由文本项进 `FREE_TEXT_GATE_FIELDS` 白名单
   （`test_gate_policies`：新问题要么带选项要么显式入白名单）；elicitation 表单从 `ask_if_missing` 生成
   （每个带选项的问题一个枚举字段，≤6），答案只写回策略声明过的 `values`，逐题作答即视为确认
@@ -1445,7 +1482,13 @@ pattern 等于只守了一半。
 - **primarydirect 段名对齐**：上游 v48 判 `主/界限法设置|表格` 为死名、真名 `主限法设置|表格`；skill builder/
   preset/report-payload-map 同步改真名，旧名走 `map_legacy_section_title`。UI-only 新段
   `主限天球·当前动画所指`（3D 动画所指）headless 不产，**故意不进 preset**（§5 UI-only 段过滤）。
-- **live 0-skip 需 Mongo：干净机器只能验 chart 半边**：vendored chart 服务（`:8896`）**完全独立**，
+- **live 0-skip 需 Mongo：干净机器只能验 chart 半边**：
+  > 🔴 **本条归因在 v0.36.0 收尾被推翻，原文保留供对照**（见 v0.36.0 段「Java 族 live 从来不需要 Mongo」）。
+  > 实锤：app 注册读的是 jar 内 `data/rsakey.json`（`RequestHeaderInterceptor`），本机 Mongo 里根本没有注册表；
+  > 9999 的真因是 vendored 实例脚本**裸 `java -jar`** → jar 内写死的 `mongodb.host` 解析不到 → 每个碰库请求
+  > 30s 连接超时。按上游桌面模式起（`--mongodb.ip` + `HOROSA_DESKTOP_MONGO_OPTIONAL=1` + 文件回退目录）后，
+  > Mongo/Redis 都不在也全 Java 族真数据；本 Mac 首次 0-skip 全量 live：678 passed。
+  vendored chart 服务（`:8896`）**完全独立**，
   geomancy/predict/astroextra/ken-formatter 全可验；但 Java 聚合层（`:9996`）的 app 注册在 Mongo 里，
   无 Mongo 时 `/nongli/time`·`/bazi/birth`·`/ziwei/birth`·`/liureng/*` 一律返 `ResultCode 9999
   "no.register.app.in.sys"`（不是启动慢、是缺注册）。连带 qimen/taiyi/jinkou（需 `/nongli/time` 脚手架）

@@ -127,6 +127,13 @@ def test_vendored_instance_scripts_keep_the_boot_and_kill_disciplines() -> None:
     assert "flatlib-ctrad2" in start and "Horosa-Web/astropy" in start and "Horosa-Web/vendor" in start
     assert "runtime/mac/python/bin/python3" in start, "必须用内嵌解释器（裸 python 缺 9 个依赖）"
     assert "failed=0" in start, "就绪判据必须是 kentang prewarm failed=0"
+    # v0.36.0 收尾：Java 必须按上游桌面模式起。裸 `-jar` 连 jar 内写死的 `mongodb.host` 超时 → 全 Java 族 9999，
+    # 被当成「本机无 Mongo 的环境限制」写进文档整整十个版本。四样缺一样就退回那个状态。
+    java_lines = [line for line in start.splitlines() if not line.lstrip().startswith("#")]
+    java_code = "\n".join(java_lines)
+    for flag in ("HOROSA_DESKTOP_MONGO_OPTIONAL=1", "HOROSA_MONGO_FALLBACK_DIR=", "needtranslog=false", "--mongodb.ip="):
+        assert flag in java_code, f"Java 起法缺桌面模式开关 {flag}（裸 -jar = 全 Java 族 9999）"
+    assert "-jar" in java_code and "mongodb.host" not in java_code, "主机名必须被 --mongodb.ip 覆盖，不能把 mongodb.host 写进命令"
     stop = (SCRIPTS / "stop_vendored_instance.sh").read_text(encoding="utf-8")
     # 注释里**应该**提 pkill 法则（解释为什么不用它）；不许出现的是把它当命令用——只查非注释行。
     code_lines = [line for line in stop.splitlines() if not line.lstrip().startswith("#")]
