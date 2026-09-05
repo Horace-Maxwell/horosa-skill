@@ -12,6 +12,7 @@ from horosa_skill.config import Settings
 from horosa_skill.evaluation_lock import acquire_evaluation_lock
 from horosa_skill.runtime import HorosaRuntimeManager
 from horosa_skill.service import HorosaSkillService
+from horosa_skill.errors import HorosaSkillError, bilingual
 from horosa_skill.testing_payloads import build_sample_payloads
 
 
@@ -78,6 +79,34 @@ def _evaluate_dispatch_case(case: dict[str, Any], result: Any) -> dict[str, Any]
     }
 
 
+def _evaluate_faithfulness_case(case: dict[str, Any], result: Any) -> dict[str, Any]:
+    """faithfulness 类 case（v0.36.0 C3）：跑工具 → 抽真值 → 判一段给定答案；期望 ok 或期望被判红。
+
+    离线可跑（tarot/六爻等本地 JS 工具不需 runtime）；对抗用例（喂错值）期望 `expect_ok=false` 且
+    contradicted/invented ≥ expect_min_flagged。
+    """
+    from horosa_skill.benchmark.faithfulness import extract_facts, verify_answer
+
+    envelope = result.model_dump(mode="json") if hasattr(result, "model_dump") else dict(result)
+    verdict = verify_answer(case.get("answer_text", ""), extract_facts(envelope)) if result.ok else {"ok": False, "claims": [], "metrics": {}}
+    flagged = int(verdict.get("metrics", {}).get("contradicted", 0)) + int(verdict.get("metrics", {}).get("invented", 0))
+    expect_ok = bool(case.get("expect_ok", True))
+    expect_min_flagged = int(case.get("expect_min_flagged", 0 if expect_ok else 1))
+    return {
+        "id": case["id"],
+        "kind": case["kind"],
+        "tool": case["tool"],
+        "ok": bool(result.ok),
+        "trace_id": result.trace_id,
+        "group_id": result.group_id,
+        "faithfulness_ok": bool(verdict.get("ok")),
+        "flagged": flagged,
+        "claims": verdict.get("claims", []),
+        "expect_ok": expect_ok,
+        "verdict_ok": bool(result.ok) and (bool(verdict.get("ok")) == expect_ok) and flagged >= expect_min_flagged,
+    }
+
+
 def _evaluate_knowledge_case(case: dict[str, Any], result: Any) -> dict[str, Any]:
     rendered = result.data.get("rendered_text", "") if isinstance(result.data, dict) else ""
     required_fragments = case.get("required_fragments", [])
@@ -90,6 +119,49 @@ def _evaluate_knowledge_case(case: dict[str, Any], result: Any) -> dict[str, Any
         "required_fragments": required_fragments,
         "required_fragments_ok": all(fragment in rendered for fragment in required_fragments),
     }
+
+
+def _run_case(case: dict[str, Any], service: Any, sample_payloads: dict[str, Any], *, save_result: bool) -> dict[str, Any]:
+    """按 case.kind 跑一条并返回评测结果（HorosaSkillError 交给调用方按条记红）。"""
+    if case["kind"] == "tool":
+        payload = _build_case_payload(case, sample_payloads)
+        result = service.run_tool(
+            case["tool"],
+            payload,
+            save_result=save_result,
+            query_text=case.get("query"),
+            evaluation_case_id=case["id"],
+        )
+        return _evaluate_tool_case(case, result)
+    elif case["kind"] == "dispatch":
+        payload = _build_case_payload(case, sample_payloads)
+        result = service.dispatch(payload, evaluation_case_id=case["id"])
+        return _evaluate_dispatch_case(case, result)
+    elif case["kind"] == "knowledge":
+        payload = _build_case_payload(case, sample_payloads)
+        result = service.run_tool(
+            "knowledge_read",
+            payload,
+            save_result=save_result,
+            query_text=case.get("query"),
+            evaluation_case_id=case["id"],
+        )
+        return _evaluate_knowledge_case(case, result)
+    elif case["kind"] == "faithfulness":
+        payload = _build_case_payload(case, sample_payloads)
+        result = service.run_tool(
+            case["tool"],
+            payload,
+            save_result=save_result,
+            query_text=case.get("query"),
+            evaluation_case_id=case["id"],
+        )
+        return _evaluate_faithfulness_case(case, result)
+    raise HorosaSkillError(
+        bilingual(f"未知的 bench case 类型：{case.get('kind')!r}", f"unknown bench case kind: {case.get('kind')!r}"),
+        code="benchmark.invalid_case_kind",
+        details={"id": case.get("id")},
+    )
 
 
 def _summarize(results: list[dict[str, Any]], *, skipped: list[str], dataset: dict[str, Any]) -> dict[str, Any]:
@@ -107,6 +179,9 @@ def _summarize(results: list[dict[str, Any]], *, skipped: list[str], dataset: di
                 passed += 1
         elif item["kind"] == "knowledge":
             if item["ok"] and item["required_fragments_ok"]:
+                passed += 1
+        elif item["kind"] == "faithfulness":
+            if item["verdict_ok"]:
                 passed += 1
     executed_count = len(executed)
     return {
@@ -245,30 +320,18 @@ def run_benchmark(
                     if skip_runtime and case.get("requires_runtime", False):
                         skipped.append(case["id"])
                         continue
-                    if case["kind"] == "tool":
-                        payload = _build_case_payload(case, sample_payloads)
-                        result = service.run_tool(
-                            case["tool"],
-                            payload,
-                            save_result=save_result,
-                            query_text=case.get("query"),
-                            evaluation_case_id=case["id"],
-                        )
-                        results.append(_evaluate_tool_case(case, result))
-                    elif case["kind"] == "dispatch":
-                        payload = _build_case_payload(case, sample_payloads)
-                        result = service.dispatch(payload, evaluation_case_id=case["id"])
-                        results.append(_evaluate_dispatch_case(case, result))
-                    elif case["kind"] == "knowledge":
-                        payload = _build_case_payload(case, sample_payloads)
-                        result = service.run_tool(
-                            "knowledge_read",
-                            payload,
-                            save_result=save_result,
-                            query_text=case.get("query"),
-                            evaluation_case_id=case["id"],
-                        )
-                        results.append(_evaluate_knowledge_case(case, result))
+                    try:
+                        results.append(_run_case(case, service, sample_payloads, save_result=save_result))
+                    except HorosaSkillError as exc:
+                        # 单 case 的校验/传输错误只红这一条，不许让整轮 bench 白跑（v0.36.0 C3：tarot case
+                        # 缺 date/time 曾把整个 --skip-runtime 烟测炸成 traceback）。
+                        results.append({
+                            "id": case["id"], "kind": case["kind"], "tool": case.get("tool"), "ok": False,
+                            "error_code": exc.code, "error": str(exc), "trace_id": None, "group_id": None,
+                            "technique_ok": False, "required_sections_ok": False, "required_fragments_ok": False,
+                            "selection_ok": False, "contracts_ok": False, "verdict_ok": False,
+                        })
+                    continue
             finally:
                 if runtime_started:
                     manager.stop_local_services()

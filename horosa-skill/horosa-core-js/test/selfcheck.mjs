@@ -31,6 +31,9 @@ import { runCanping } from '../src/tools/canping.js';
 import { runHeluo } from '../src/tools/heluo.js';
 import { runYizhangjing } from '../src/tools/yizhangjing.js';
 import { runTongSheFa } from '../src/tools/tongshefa.js';
+import { runTarot } from '../src/tools/tarot.js';
+import { runHuangli } from '../src/tools/huangli.js';
+import { runLiuyao } from '../src/tools/liuyao.js';
 import { personBazi } from '../src/vendor/calendar/riziEngine.js';
 import { runZeriScan, ZERI_TECHNIQUES } from '../src/tools/zeriScan.js';
 
@@ -370,6 +373,49 @@ check('guolao moira rules_sections：[虚实]/[本命化曜]/[流年流曜] 三�
   assert(empty.weakSolid === '' && empty.birthStars === '' && empty.transitStars === '', 'empty rules → empty sections');
   // 缺省入口（patterns）不受影响
   assert(typeof runGuolaoMoira({ chart: { chart: {} } }).snapshot_text === 'string', 'patterns entry still works');
+});
+
+// ---- v0.36.0 C3：三个本地 JS 引擎的值金标（此前只有存在性断言）----
+check('huangli 2000-01-01：干支/农历/生肖 = 万年历公开事实', () => {
+  // 权威：公开万年历——2000-01-01 为 己卯年 丙子月 戊午日，农历一九九九年冬月廿五，生肖兔（lunar-javascript 与万年历一致）。
+  const text = runHuangli({ year: 2000, month: 1, day: 1, hour: 12 }).text;
+  assert(text.includes('干支：己卯年 丙子月 戊午日'), `ganzhi line: ${text.split('\n').find((l) => l.startsWith('干支'))}`);
+  assert(text.includes('农历：一九九九年冬月廿五'), 'lunar date');
+  assert(text.includes('生肖：兔'), 'zodiac');
+  // 负向对照：换一天，日柱必变（1999-12-31 = 丁巳日）
+  const prev = runHuangli({ year: 1999, month: 12, day: 31, hour: 12 }).text;
+  assert(prev.includes('丁巳日') && !prev.includes('戊午日'), 'previous day must be 丁巳');
+});
+
+check('liuyao 乾为天静卦：乾宫本宫世六应三、六冲、纳甲六亲六神 = 京房纳甲/六亲生克/六神起例', () => {
+  // 权威：京房纳甲（乾内卦 子寅辰）+ 六亲生克（乾宫属金：水=子孙、木=妻财、土=父母、火=官鬼、金=兄弟）
+  // + 六神起例（甲乙日青龙起初爻）+ 八宫卦序（乾为天=乾宫本宫卦，世六应三，六冲）。
+  const nongli = { dayGanZi: '甲子', monthGanZi: '丙寅', yearGanZi: '甲辰' };
+  const text = runLiuyao({ lines: [1, 1, 1, 1, 1, 1].map((v) => ({ value: v, change: false })), nongli }).snapshot_text;
+  assert(text.includes('卦序：乾宫·本宫(世6应3)'), 'palace / shi-ying');
+  assert(text.includes('卦象：六冲卦'), 'liuchong');
+  const line = (n) => text.split('\n').find((l) => l.startsWith(`第${n}爻：`)) || '';
+  assert(line(1).includes('青龙 子水子孙'), `line1: ${line(1)}`);
+  assert(line(2).includes('朱雀 寅木妻财'), `line2: ${line(2)}`);
+  assert(line(3).includes('勾陈 辰土父母(应)'), `line3: ${line(3)}`);
+  assert(line(4).includes('螣蛇 午火官鬼'), `line4: ${line(4)}`);
+  assert(line(5).includes('白虎 申金兄弟'), `line5: ${line(5)}`);
+  // 负向对照：初爻动 → 成局/动变段出现（静卦没有）
+  const moving = runLiuyao({ lines: [1, 1, 1, 1, 1, 1].map((v, i) => ({ value: v, change: i === 0 })), nongli }).snapshot_text;
+  assert(moving.includes('成局：') && !text.includes('成局：'), 'moving line changes the structure section');
+});
+
+check('tarot 种子洗牌确定性：同种子同牌阵逐牌相同、换种子必变', () => {
+  // 权威：vendored 上游塔罗引擎的种子洗牌（同 seed 同 reading 是设计契约）；三牌值为本 vendor sha 下的回归钉。
+  const rows = (seed) => runTarot({ spread: 'three', deck: 'rws', seed, question: '测试', usesReversals: true })
+    .snapshot_text.split('\n').filter((l) => /^\| 位置\d/.test(l));
+  const a = rows('horosa-golden-1');
+  assert(a.length === 3, `three rows: ${a.length}`);
+  assert(a[0].includes('宝剑骑士') && a[0].includes('| 逆位 |'), `pos1: ${a[0]}`);
+  assert(a[1].includes('宝剑五') && a[1].includes('| 逆位 |'), `pos2: ${a[1]}`);
+  assert(a[2].includes('宝剑四') && a[2].includes('| 逆位 |'), `pos3: ${a[2]}`);
+  assert(JSON.stringify(rows('horosa-golden-1')) === JSON.stringify(a), 'same seed → identical reading');
+  assert(JSON.stringify(rows('horosa-golden-2')) !== JSON.stringify(a), 'different seed → different reading');
 });
 
 check('canping 起运岁走农历真源，不再恒 1 岁', async () => {

@@ -679,6 +679,10 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **排除上游能力前先在上游源码确认它挂在哪一层。** `/qizheng/moira` 是 Java 聚合层路由，曾因 Python chart
   服务 500 被记成「不存在」两个版本（v0.36.0 C1 接活）。「某服务 500」≠「路由不存在」；台账「维持排除」条目
   必须写判据。Java 端可选富化一律经 `_call_remote` + `_degrade`，段列 optional。
+- **校验族按「最常调 × 最易编」排优先级；评测器必须有 bench 入口。** faithfulness v3 = 11 族（四柱/落座/身宫/
+  三传/紫微主星/卦名动爻/塔罗/奇门值符值使九宫/择日命中区间/推运时段边界/词元兜底），每族至少三条对抗测试；
+  HorosaBench `faithfulness` 类 case 跑工具→抽真值→判答案（`expect_ok`/`expect_min_flagged`）。新技法上架时
+  若其结果有可抽的机读真值，同批加族或加 case（v0.36.0）。
 - **`run_tool` always returns a `ToolEnvelope`, never lets an unexpected exception escape.** Tool
   execution + snapshot/summary/export post-processing run inside a try that catches `HorosaSkillError`
   **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`. Only invalid-payload

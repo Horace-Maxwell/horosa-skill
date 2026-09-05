@@ -98,6 +98,23 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.36.0 / 2026-09-04 — 忠实性校验器 8 族只盖 6 类技法：调用量第一的奇门、10 择日、23 推运零覆盖
+
+- **症状**：faithfulness v2 的族（四柱/落座/身宫/三传/紫微主星/卦名动爻/塔罗）全是「本命/占卜」类；奇门（值符值使
+  说错宫、门星张冠李戴）、择日（推荐一个不在命中区间的日子、有命中却说无命中）、推运（把土星期说成 2005 年
+  起）这三类最常见的编造完全不判，`ok=True` 照发。HorosaBench 也没有 faithfulness 类 case，评测器只在 pytest 里活。
+- **根因**：族按「已有机读真值最好抽的技法」长出来，不按「agent 最常调、最容易编」排；bench case 类型只有
+  tool/dispatch/knowledge，评测器没有进 bench 的入口。
+- **guard**：v3 三族——`qimen_zhifu/zhishi/palace`（快照 `值符：/值使：` 行 + 九宫行）、`hit_window`
+  （`data.intervals` 命中区间；推荐日期必须落在区间内、有命中说无命中判红）、`period_boundary`（推运表行的
+  行星↔年月配对，EN 行星 id 归一到中文正名）；每族三条对抗测试（supported / contradicted / gated+invented）；
+  bench 新 case 类型 `faithfulness`（跑工具→抽真值→判给定答案，`expect_ok` + `expect_min_flagged`），塔罗两条
+  离线可跑、六爻两条随 runtime；精选 case 4→10。值金标补 huangli（万年历公开事实）/ liuyao（京房纳甲 +
+  六亲生克 + 六神起例）/ tarot（种子确定性），`value_golden_debt` 21→18；qimen/taiyi/jinkou 三个 ken 格式器
+  没有离线 pan 夹具，仍在债务表（如实）。
+- **法则**：**校验族按「最常调 × 最易编」排优先级，不按真值好不好抽**；评测器必须有 bench 入口，否则它只
+  是一段没人跑的代码。
+
 ### v0.36.0 / 2026-09-04 — `/qizheng/moira` 被误判「不存在」：测错了服务，6/14 段债务是一条写错的台账
 
 - **症状**：guolao 导出段债务 14 条里 6 条（guolao + qizhengzeri 各 [虚实]/[本命化曜]/[流年流曜]）被标为

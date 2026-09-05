@@ -257,3 +257,96 @@ def test_wrong_tarot_reading_floods_red() -> None:
     report = verify_answer(other_reading, _tarot_facts())
     assert report["ok"] is False
     assert report["metrics"]["contradicted"] + report["metrics"]["invented"] >= 3
+
+
+# ---- v3（v0.36.0 C3）：奇门 / 择日命中区间 / 推运时段边界 ----
+def _qimen_envelope() -> dict:
+    return {
+        "tool": "qimen",
+        "data": {
+            "pan": {"source": "kinqimen"},
+            "snapshot_text": (
+                "[值符值使]\n值符：天蓬（坎一宫）\n值使：休门（坎一宫）\n\n"
+                "[八宫]\n坎一宫：天蓬 休门 值符\n坤二宫：天芮 死门 太阴\n震三宫：天冲 伤门 六合\n"
+            ),
+        },
+    }
+
+
+def test_qimen_zhifu_zhishi_and_palace_three_channels() -> None:
+    facts = extract_facts(_qimen_envelope())
+    assert facts["qimen"]["值符"] == "天蓬" and facts["qimen"]["值使"] == "休门"
+    assert set(facts["qimen"]["palaces"]) == {"坎一宫", "坤二宫", "震三宫"}
+    ok = verify_answer("此局值符是天蓬，值使为休门，天芮落坤二宫，死门临坤宫。", facts)
+    assert ok["ok"], ok["claims"]
+    assert {c["type"] for c in ok["claims"]} == {"qimen_zhifu", "qimen_zhishi", "qimen_palace"}
+    bad = verify_answer("值符是天英，值使为开门，天蓬落震三宫。", facts)
+    statuses = {c["type"]: c["status"] for c in bad["claims"]}
+    assert statuses == {"qimen_zhifu": "contradicted", "qimen_zhishi": "contradicted", "qimen_palace": "contradicted"}
+    assert not bad["ok"]
+    invented = verify_answer("开门落兑七宫。", facts)
+    assert invented["claims"][0]["status"] == "invented"  # 兑宫不在本盘任何行
+
+
+def test_qimen_family_gated_when_no_qimen_truth() -> None:
+    facts = extract_facts({"tool": "bazi_birth", "data": {"snapshot_text": "[四柱]\n年柱 甲子"}})
+    assert facts["qimen"] == {}
+    assert verify_answer("值符是天英。", facts)["claims"] == []
+
+
+def _zeri_envelope(intervals: list) -> dict:
+    return {"tool": "bazizeri", "data": {"intervals": intervals, "snapshot_text": "[命中区间]\n…"}}
+
+
+def test_hit_window_dates_must_fall_inside_hits() -> None:
+    facts = extract_facts(_zeri_envelope([
+        {"startDate": "2026/09/12", "startTime": "09:00", "endDate": "2026/09/12", "endTime": "11:00"},
+        {"startDate": "2026-09-20", "startTime": "13:00", "endDate": "2026-09-21", "endTime": "15:00"},
+    ]))
+    assert facts["hit_windows"] == [("2026-09-12", "2026-09-12"), ("2026-09-20", "2026-09-21")]
+    good = verify_answer("推荐 2026-09-12 上午，或选在 2026年9月21日。", facts)
+    assert good["ok"] and len(good["claims"]) == 2
+    bad = verify_answer("建议定在 2026-09-15 开业。", facts)
+    assert bad["claims"][0]["status"] == "contradicted" and not bad["ok"]
+    denial = verify_answer("本窗口内没有命中的吉时。", facts)
+    assert denial["claims"][0]["status"] == "contradicted"
+
+
+def test_hit_window_empty_hits_and_gating() -> None:
+    empty = extract_facts(_zeri_envelope([]))
+    assert empty["hit_windows"] == []
+    res = verify_answer("推荐 2026-09-12。", empty)
+    assert res["claims"][0]["status"] == "invented"
+    assert verify_answer("没有命中的吉时。", empty)["ok"]  # 真的没命中：说「无命中」是对的
+    none = extract_facts({"tool": "chart", "data": {"snapshot_text": ""}})
+    assert none["hit_windows"] is None and verify_answer("推荐 2026-09-12。", none)["claims"] == []
+
+
+def _firdaria_envelope() -> dict:
+    return {
+        "tool": "firdaria",
+        "data": {
+            "snapshot_text": (
+                "[法达星限表格]\n| 主限 | 子限 | 日期 |\n| --- | --- | --- |\n"
+                "| 太阳 | 太阳 | 1990-01-01 |\n| 太阳 | 金星 | 1991-06-05 |\n| 金星 | 金星 | 2000-01-01 |\n| Saturn | Jupiter | 2011-03-15 |\n"
+            ),
+        },
+    }
+
+
+def test_period_boundary_planet_year_pairing() -> None:
+    facts = extract_facts(_firdaria_envelope())
+    assert facts["period_rows"]["太阳"] == {"1990-01", "1991-06"} and facts["period_rows"]["土星"] == {"2011-03"}
+    good = verify_answer("太阳期从 1990 年开始，金星大限 2000-01 起，土星主限 2011年3月 交接。", facts)
+    assert good["ok"], good["claims"]
+    assert all(c["type"] == "period_boundary" for c in good["claims"]) and len(good["claims"]) == 3
+    bad = verify_answer("土星期从 2005 年开始。", facts)
+    assert bad["claims"][0]["status"] == "contradicted"
+    invented = verify_answer("火星期从 1990 年开始。", facts)
+    assert invented["claims"][0]["status"] == "invented"
+
+
+def test_period_boundary_gated_without_tables() -> None:
+    facts = extract_facts({"tool": "chart", "data": {"snapshot_text": "[起盘信息]\n日期：1990-01-01 12:00"}})
+    assert facts["period_rows"] == {}
+    assert verify_answer("土星期从 2005 年开始。", facts)["claims"] == []

@@ -2,8 +2,8 @@
   "schema_version": 1,
   "metadata": {
     "name": "HorosaBench",
-    "version": "0.1.0",
-    "description": "Local benchmark suite for Horosa Skill tool routing, export parity, and bundled hover knowledge quality."
+    "version": "0.2.0",
+    "description": "Local benchmark suite for Horosa Skill tool routing, export parity, bundled knowledge quality, and chart-fact faithfulness (v0.36.0: faithfulness case kind)."
   },
   "cases": [
     {
@@ -79,6 +79,123 @@
       },
       "required_fragments": [
         "休门"
+      ]
+    },
+    {
+      "id": "faith_tarot_supported",
+      "kind": "faithfulness",
+      "tool": "tarot",
+      "requires_runtime": false,
+      "payload": {
+        "agent_confirmed_settings": true,
+        "clarification_notes": "bench fixture",
+        "date": "2028-04-06",
+        "time": "09:33:00",
+        "zone": "+08:00",
+        "lat": "31n13",
+        "lon": "121e28",
+        "question": "测试",
+        "spread": "three",
+        "deck": "rws",
+        "seed": "horosa-golden-1",
+        "usesReversals": true
+      },
+      "answer_text": "抽到了宝剑骑士（逆位），现在位是宝剑五逆位，未来位出现宝剑四（逆位）。",
+      "expect_ok": true
+    },
+    {
+      "id": "faith_tarot_wrong_orientation",
+      "kind": "faithfulness",
+      "tool": "tarot",
+      "requires_runtime": false,
+      "payload": {
+        "agent_confirmed_settings": true,
+        "clarification_notes": "bench fixture",
+        "date": "2028-04-06",
+        "time": "09:33:00",
+        "zone": "+08:00",
+        "lat": "31n13",
+        "lon": "121e28",
+        "question": "测试",
+        "spread": "three",
+        "deck": "rws",
+        "seed": "horosa-golden-1",
+        "usesReversals": true
+      },
+      "answer_text": "抽到了宝剑骑士（正位），未来是愚者（逆位）。",
+      "expect_ok": false,
+      "expect_min_flagged": 2
+    },
+    {
+      "id": "faith_sixyao_supported",
+      "kind": "faithfulness",
+      "tool": "sixyao",
+      "requires_runtime": true,
+      "payload": {
+        "agent_confirmed_settings": true,
+        "clarification_notes": "bench fixture",
+        "date": "2028-04-06",
+        "time": "09:33:00",
+        "zone": "+08:00",
+        "lat": "31n13",
+        "lon": "121e28",
+        "question": "bench",
+        "gua_code": "111111",
+        "changed_code": "011111"
+      },
+      "answer_text": "本卦为乾为天，初爻动。",
+      "expect_ok": true
+    },
+    {
+      "id": "faith_sixyao_wrong_gua",
+      "kind": "faithfulness",
+      "tool": "sixyao",
+      "requires_runtime": true,
+      "payload": {
+        "agent_confirmed_settings": true,
+        "clarification_notes": "bench fixture",
+        "date": "2028-04-06",
+        "time": "09:33:00",
+        "zone": "+08:00",
+        "lat": "31n13",
+        "lon": "121e28",
+        "question": "bench",
+        "gua_code": "111111",
+        "changed_code": "011111"
+      },
+      "answer_text": "本卦为坤为地，上爻动。",
+      "expect_ok": false,
+      "expect_min_flagged": 1
+    },
+    {
+      "id": "guolao_moira_sections",
+      "kind": "tool",
+      "tool": "guolao_chart",
+      "sample_payload": "guolao_chart",
+      "requires_runtime": true,
+      "expected_technique": "guolao",
+      "required_sections": [
+        "起盘信息",
+        "大限",
+        "政余格局"
+      ],
+      "required_fragments": [
+        "[大限]"
+      ]
+    },
+    {
+      "id": "bazi_inverse_candidates",
+      "kind": "tool",
+      "tool": "bazi_inverse",
+      "sample_payload": "bazi_inverse",
+      "requires_runtime": true,
+      "expected_technique": "bazi_inverse",
+      "required_sections": [
+        "反查条件",
+        "口径说明"
+      ],
+      "required_fragments": [
+        "四柱："
       ]
     }
   ]

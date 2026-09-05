@@ -44,6 +44,7 @@ _SIGN_CN = {
 }
 _SIGN_ALIAS = {alias: names[0] for names in _SIGN_CN.values() for alias in names}
 _PLANET_ALIAS = {alias: names[0] for names in _PLANET_CN.values() for alias in names}
+_PLANET_ALIAS.update({en: names[0] for en, names in _PLANET_CN.items()})  # EN id（表格/引擎输出）→ CN 正名
 _GANZHI = re.compile(r"[甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥]")
 _PILLAR_CLAIM = re.compile(r"([年月日时時])柱[^，。；\n甲-癸]{0,4}([甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥])")
 _PLACEMENT_CLAIM = re.compile(
@@ -93,6 +94,27 @@ _TAROT_NAME_RE = (
 )
 _TAROT_ORIENT_CLAIM = re.compile(rf"({_TAROT_NAME_RE})[^，。；\n]{{0,4}}?[（(]?(正位|逆位|横置)[)）]?")
 _TAROT_DRAWN_CLAIM = re.compile(rf"(?:抽到|抽出|翻出|出现)[了的]?[^，。；\n]{{0,6}}?({_TAROT_NAME_RE})")
+# ---- v3 三族（v0.36.0 C3）：奇门值符值使/九宫、择日命中区间、推运时段边界 ----
+_QIMEN_STARS = "蓬|芮|冲|辅|禽|心|柱|任|英"
+_QIMEN_DOORS = "休|生|伤|杜|景|死|惊|开"
+_QIMEN_PALACE = "[乾坎艮震巽离坤兑中][一二三四五六七八九]?宫"
+_QIMEN_ZHIFU_FACT = re.compile(rf"值符[^\n，；]{{0,8}}?(天(?:{_QIMEN_STARS}))")
+_QIMEN_ZHISHI_FACT = re.compile(rf"值使[^\n，；]{{0,8}}?((?:{_QIMEN_DOORS})门)")
+_QIMEN_PALACE_ROW = re.compile(rf"^\s*\|?\s*({_QIMEN_PALACE})\s*[：:|]\s*([^\n]+)$", re.M)
+_QIMEN_ZHIFU_CLAIM = re.compile(rf"值符[^，。；\n]{{0,6}}?(?:是|为|：|:)?\s*(天(?:{_QIMEN_STARS}))")
+_QIMEN_ZHISHI_CLAIM = re.compile(rf"值使[^，。；\n]{{0,6}}?(?:是|为|：|:)?\s*((?:{_QIMEN_DOORS})门)")
+_QIMEN_PALACE_CLAIM = re.compile(rf"(天(?:{_QIMEN_STARS})|(?:{_QIMEN_DOORS})门)[^，。；\n]{{0,6}}?(?:落在|落入|落|在|居|临)\s*({_QIMEN_PALACE})")
+_DATE_TOKEN = re.compile(r"(\d{4})[-/年.](\d{1,2})(?:[-/月.](\d{1,2}))?")
+_HIT_DATE_CLAIM = re.compile(
+    r"(?:命中|可选|吉时|吉日|推荐|建议|选在|定在|宜(?:于|在)|最佳|候选|时段)[^，。；\n]{0,12}?(\d{4})[-/年.](\d{1,2})[-/月.](\d{1,2})"
+)
+_NO_HIT_CLAIM = re.compile(r"(?:无|没有|未找到|找不到|不存在)[^，。；\n]{0,4}?(?:命中|合适|可用|吉时|吉日|时段|结果)")
+_PERIOD_LABEL = re.compile(r"[一-鿿]{1,6}|[A-Za-z]{3,10}")
+_PERIOD_CLAIM = re.compile(
+    r"(太阳|月亮|水星|金星|火星|木星|土星|天王星|海王星|冥王星|北交|南交|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn)"
+    r"[^，。；\n]{0,10}?(?:期|限|时段|阶段|主限|子限|大限|从|自|在|于)?[^，。；\n]{0,6}?(\d{4})(?:[-/年.](\d{1,2}))?"
+)
+
 _TAROT_SNAPSHOT_ROW = re.compile(r"^\|\s*位置\d+[^|]*\|[^|]*\|([^|]+)\|\s*(正位|逆位|横置)\s*\|", re.M)
 
 
@@ -118,6 +140,9 @@ def extract_facts(envelope: dict[str, Any]) -> dict[str, Any]:
         "gua": {},           # 本卦/之卦 → 卦名（code 未解析成名时不入）
         "moving_yao": None,  # None=无爻线数据；[]=有数据且静卦
         "tarot_draws": {},   # 牌名（canon）→ 正位/逆位/横置
+        "qimen": {},         # {"值符": 天X, "值使": X门, "palaces": {宫: 行文本}}（v3）
+        "hit_windows": None, # None=非择日；[(start, end)]=命中区间（v3）
+        "period_rows": {},   # 推运表：标签（行星）→ {YYYY-MM…} 日期集（v3）
         "tokens": set(),
     }
 
@@ -179,6 +204,50 @@ def extract_facts(envelope: dict[str, Any]) -> dict[str, Any]:
         cjk_runs = re.findall(r"[一-鿿]+", cell)
         if cjk_runs:
             facts["tarot_draws"][_tarot_canon(cjk_runs[-1])] = orient
+
+    # v3 奇门值符/值使/九宫（快照文本：`值符…天X` / `值使…X门` / `坎一宫：…` 行；pan 键名随 ken 版本变，文本更稳）
+    if data.get("pan") is not None or "值符" in snapshot:
+        qimen: dict[str, Any] = {}
+        zf = _QIMEN_ZHIFU_FACT.search(snapshot)
+        zs = _QIMEN_ZHISHI_FACT.search(snapshot)
+        if zf:
+            qimen["值符"] = zf.group(1)
+        if zs:
+            qimen["值使"] = zs.group(1)
+        palaces = {m.group(1): m.group(2) for m in _QIMEN_PALACE_ROW.finditer(snapshot)}
+        if palaces:
+            qimen["palaces"] = palaces
+        facts["qimen"] = qimen
+
+    # v3 择日命中区间（data.intervals 行：startDate/startTime/endDate/endTime；日期 - 或 /）
+    intervals = data.get("intervals")
+    if isinstance(intervals, list):
+        windows = []
+        for row in intervals:
+            if not isinstance(row, dict):
+                continue
+            start = f"{row.get('startDate') or ''}".replace("/", "-").strip()
+            end = f"{row.get('endDate') or start}".replace("/", "-").strip()
+            if _DATE_TOKEN.match(start):
+                windows.append((start, end or start))
+        facts["hit_windows"] = windows
+
+    # v3 推运时段表（快照里任何「标签 | … | 日期」表行：行星/宿主 → 该行出现的年月集合）
+    for line in snapshot.splitlines():
+        if not line.startswith("|") or line.startswith("| ---"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        found = []
+        for cell in cells:
+            for y, mo, _d in _DATE_TOKEN.findall(cell):
+                found.append(f"{y}-{int(mo):02d}")
+        if not found or not cells:
+            continue
+        label_match = _PERIOD_LABEL.search(cells[0])
+        if not label_match:
+            continue
+        label = _PLANET_ALIAS.get(label_match.group(0), label_match.group(0))
+        facts["period_rows"].setdefault(label, set()).update(found)
 
     # 词元全集：出现在**计算输出**里的原子值——兜底 supported 判据。贪婪切词会把「食神制杀」
     # 吃成一个词元而丢掉「食神」，所以对每段 CJK 连续串取全部 2–4 字**子串**（含重叠）。
@@ -312,6 +381,65 @@ def verify_answer(answer_text: str, facts: dict[str, Any]) -> dict[str, Any]:
                 add("tarot_card", m.group(0), "supported", expected=name, actual=name)
             else:
                 add("tarot_card", m.group(0), "invented", actual=name)
+
+    # v3 奇门：值符星 / 值使门 / 星门落宫（只在有奇门真值时判）
+    qimen: dict[str, Any] = facts.get("qimen") or {}
+    if qimen:
+        truth_zf, truth_zs = qimen.get("值符"), qimen.get("值使")
+        for m in _QIMEN_ZHIFU_CLAIM.finditer(text):
+            if truth_zf is None:
+                continue
+            add("qimen_zhifu", m.group(0), "supported" if m.group(1) == truth_zf else "contradicted", expected=truth_zf, actual=m.group(1))
+        for m in _QIMEN_ZHISHI_CLAIM.finditer(text):
+            if truth_zs is None:
+                continue
+            add("qimen_zhishi", m.group(0), "supported" if m.group(1) == truth_zs else "contradicted", expected=truth_zs, actual=m.group(1))
+        palaces: dict[str, str] = qimen.get("palaces") or {}
+        if palaces:
+            for m in _QIMEN_PALACE_CLAIM.finditer(text):
+                item, palace = m.group(1), m.group(2)
+                row = next((body for name, body in palaces.items() if name.startswith(palace[0])), None)
+                if row is None:
+                    add("qimen_palace", m.group(0), "invented", actual=f"{item}→{palace}")
+                elif item in row:
+                    add("qimen_palace", m.group(0), "supported", expected=palace, actual=palace)
+                else:
+                    where = next((name for name, body in palaces.items() if item in body), None)
+                    add("qimen_palace", m.group(0), "contradicted", expected=where or "（不在任何宫）", actual=palace)
+
+    # v3 择日：推荐/命中日期必须落在命中区间内；有命中却说「无命中」判红
+    windows = facts.get("hit_windows")
+    if isinstance(windows, list):
+        def _inside(day: str) -> bool:
+            return any(start[:10] <= day <= end[:10] for start, end in windows)
+        for m in _HIT_DATE_CLAIM.finditer(text):
+            day = f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+            if not windows:
+                add("hit_window", m.group(0), "invented", actual=day)
+            elif _inside(day):
+                add("hit_window", m.group(0), "supported", expected=f"{len(windows)} window(s)", actual=day)
+            else:
+                add("hit_window", m.group(0), "contradicted", expected="; ".join(f"{s}~{e}" for s, e in windows[:5]), actual=day)
+        if windows:
+            for m in _NO_HIT_CLAIM.finditer(text):
+                add("hit_window", m.group(0), "contradicted", expected=f"{len(windows)} hit window(s)", actual="无命中")
+
+    # v3 推运时段：行星 ↔ 年（月）必须出现在该行星的表行里
+    period_rows: dict[str, set] = facts.get("period_rows") or {}
+    if period_rows:
+        for m in _PERIOD_CLAIM.finditer(text):
+            label = _PLANET_ALIAS.get(m.group(1), m.group(1))
+            year, month = m.group(2), m.group(3)
+            dates = period_rows.get(label)
+            if dates is None:
+                add("period_boundary", m.group(0), "invented", actual=f"{label}→{year}")
+                continue
+            if month:
+                ok = f"{year}-{int(month):02d}" in dates
+            else:
+                ok = any(d.startswith(f"{year}-") for d in dates)
+            add("period_boundary", m.group(0), "supported" if ok else "contradicted",
+                expected="、".join(sorted(dates)[:6]), actual=f"{year}{'-' + month if month else ''}")
 
     # 兜底：槽位断言之外的裸干支引用——不在本盘任何计算输出里出现即 invented。
     slotted_spans = [(c["text"]) for c in claims]

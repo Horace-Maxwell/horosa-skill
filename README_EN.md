@@ -75,13 +75,13 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `106 / 106 ok=true` |
-| Engineering tests | `599 / 599 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 67 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `607 / 607 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 67 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `84` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `8` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`103` export techniques modeled; contract v14 mirrors desktop aiExport v56) |
 | Technique provenance | every technique response carries `data.technique_card`; a declared-vs-measured compute mismatch is flagged explicitly |
 | Knowledge base | 30 domains; 235 manual entries, each returned with a file-and-version citation |
-| HorosaBench | 105 registry-locked benchmark cases + chart-fact faithfulness evaluation (wrong-chart and sycophancy adversarial cases go red) |
+| HorosaBench | 106 registry-locked benchmark cases + chart-fact faithfulness evaluation (wrong-chart and sycophancy adversarial cases go red) |
 | Local memory / report | every technique call writes 1 local run record + 1 JSON artifact |
 | Qi Men / Tai Yi / Jin Kou / Three Styles | unified on `ken`, same as the desktop app |
 | Tong She Fa / Decennials | headless, value-for-value with Xingque (`decennials.test.js` golden) |
@@ -425,7 +425,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 599 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 607 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```
