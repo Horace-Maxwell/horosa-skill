@@ -75,6 +75,9 @@ jobs:
       - name: Verify dispatch router corpus (zh+en queries → expected tools; min_pass only goes up)
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_router_corpus.py
+      - name: Verify error-code recovery (every code classifies; bilingual messages only increase)
+        working-directory: ./horosa-skill
+        run: uv run python scripts/verify_error_recovery.py
       - name: Verify every schema knob has a consumer
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_schema_knob_wiring.py

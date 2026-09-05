@@ -36,7 +36,7 @@ from horosa_skill.engine.decennials import (
 from horosa_skill.engine.js_client import HorosaJsEngineClient
 from horosa_skill.engine.registry import TOOL_DEFINITIONS, ToolDefinition
 from horosa_skill.engine.router import select_tools
-from horosa_skill.errors import DispatchResolutionError, HorosaSkillError, ToolTransportError, ToolValidationError
+from horosa_skill.errors import DispatchResolutionError, HorosaSkillError, ToolTransportError, ToolValidationError, recovery_for
 from horosa_skill.exports import build_export_registry, get_technique_info, parse_export_content
 from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS
 from horosa_skill.input_normalization import normalize_request_payload
@@ -6310,37 +6310,12 @@ def _slim_export_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
 
 
 def _with_operational_recovery(code: str, details: dict[str, Any] | None) -> dict[str, Any]:
-    """给运行时/传输/引擎类错误统一补 agent_recovery（安装/体检/重试语义），已带者不覆盖。"""
-    result = dict(details) if isinstance(details, dict) else {}
-    if "agent_recovery" in result:
-        return result
-    code_text = str(code or "")
-    if code_text.startswith("runtime."):
-        result["agent_recovery"] = {
-            "kind": "runtime",
-            "prompt_to_user": "本地 Horosa 运行时不可用。请执行 `uv run horosa-skill doctor` 查看体检结果；未安装则先 `uv run horosa-skill install`。",
-            "commands": ["uv run horosa-skill doctor", "uv run horosa-skill install"],
-        }
-    elif code_text.startswith("transport."):
-        result["agent_recovery"] = {
-            "kind": "transport",
-            "prompt_to_user": "本地后端暂时不可达（可能正在冷启动或已停止）。可稍候数秒重试一次；仍失败请执行 `uv run horosa-skill doctor` 检查服务状态。",
-            "retry": "backend cold start can take up to ~45s on first call; one retry is usually enough",
-            "commands": ["uv run horosa-skill doctor"],
-        }
-    elif code_text.startswith("js_engine."):
-        result["agent_recovery"] = {
-            "kind": "js_engine",
-            "prompt_to_user": "本地 JS 引擎不可用或执行失败。请确认已安装离线 runtime（自带 node），或设 HOROSA_NODE_BIN 指向 node 后重试；`uv run horosa-skill doctor` 可定位。",
-            "commands": ["uv run horosa-skill doctor"],
-        }
-    elif code_text == "tool.backend_param_error":
-        result["agent_recovery"] = {
-            "kind": "input",
-            "prompt_to_user": "后端拒绝了本次参数。请核对 date=YYYY-MM-DD、time=HH:mm:ss、zone=+08:00、lat=31n13、lon=121e28 这类格式后重试；details.hint 里有具体建议。",
-        }
-    return result
+    """给每个错误码统一补 agent_recovery（安装/体检/重试/修入参语义，双语），已带者不覆盖。
 
+    v0.36.0 B4：此前只认 runtime./transport./js_engine./backend_param 四类，其余 ~100 个码裸奔；现在
+    走 errors.recovery_for 的三层规则（精确码表 → 后缀 → 前缀），新码落不到规则即 CI 红。
+    """
+    return recovery_for(code, details)
 
 def _apply_response_view(envelope: ToolEnvelope, input_normalized: dict[str, Any]) -> ToolEnvelope:
     """response_view 响应视图：titles=只留段标题索引；sections=段标题+正文。

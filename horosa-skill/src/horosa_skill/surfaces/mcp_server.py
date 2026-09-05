@@ -24,7 +24,7 @@ from horosa_skill.agent_guidance import (
 from horosa_skill import __version__
 from horosa_skill.config import Settings
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
-from horosa_skill.errors import ToolValidationError
+from horosa_skill.errors import ToolValidationError, recovery_for
 from horosa_skill.schemas.common import ErrorInfo
 from horosa_skill.exports.registry import build_export_registry
 from horosa_skill.input_normalization import normalize_request_payload
@@ -436,7 +436,7 @@ def _mcp_error_envelope(exc: ToolValidationError, *, tool_name: str) -> ToolEnve
     技法工具/dispatch/tool_run 的返回类型是信封；错误路径若返回裸 dict，一旦声明 outputSchema，
     server 与 client 两侧的出参校验都会失败并被包成协议级 ToolError——整个澄清闸会当场报废。
     """
-    details = dict(exc.details or {})
+    details = recovery_for(exc.code, exc.details)  # MCP 面与 run_tool 同一套恢复码表（v0.36.0 B4）
     return ToolEnvelope(
         ok=False,
         tool=tool_name,
@@ -485,15 +485,16 @@ def _gate_to_dispatch_envelope(error: dict[str, Any]) -> DispatchEnvelope:
 
 
 def _mcp_error_payload(exc: ToolValidationError) -> dict[str, Any]:
+    details = recovery_for(exc.code, exc.details)
     return {
         "ok": False,
         "code": exc.code,
         "message": str(exc),
-        "details": exc.details,
+        "details": details,
         "error": {
             "code": exc.code,
             "message": str(exc),
-            "details": exc.details,
+            "details": details,
         },
     }
 

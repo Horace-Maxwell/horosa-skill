@@ -1,0 +1,20 @@
+{
+  "_comment": "Ratchet baseline for error raise sites whose literal message is not bilingual (CJK + Latin). May only go down; refresh with `uv run python scripts/verify_error_recovery.py --update-baseline`. Code classification (every code must reach a recovery rule) is a hard rule, not a baseline.",
+  "non_bilingual_messages": 112,
+  "per_file": {
+    "agent_guidance.py": 1,
+    "client_tools.py": 2,
+    "engine/client.py": 6,
+    "engine/js_client.py": 4,
+    "evaluation_lock.py": 1,
+    "exports/parser.py": 1,
+    "knowledge/store.py": 9,
+    "memory/store.py": 5,
+    "reports/renderers.py": 1,
+    "runtime/manager.py": 29,
+    "service.py": 48,
+    "surfaces/cli.py": 4,
+    "surfaces/mcp_server.py": 1
+  },
+  "codes_seen": 108
+}

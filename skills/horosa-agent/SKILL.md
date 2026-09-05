@@ -54,6 +54,10 @@ tools/list 只广告每个工具的域核心字段 + 自有字段；BirthInput �
 
 省 token：技法工具可传 `response_view:"titles"`（只回段标题）或 `"sections"`；完整快照始终已存档（`horosa_memory_show(run_id)` 取回）。`export_snapshot.sections[*]` 只含 `body`；机读数据在 `data.<key>`（`data.pan` / `data.chart` / `data.liureng` …）只出现一次，别去段里找。注意 `horosa_report_from_tool` 会重新起盘——已有 run_id 用 `report_render`。
 
+出错时看 `details.agent_recovery`：`kind` 说谁能修（input=问用户/修入参、retry_or_doctor=重试一次再让用户跑
+`uv run horosa-skill doctor`、runtime/js_engine=装 runtime 或设 HOROSA_NODE_BIN），`next_action` 是机器可读的下一步，
+`prompt_to_user` 双语可直接转述；不要把 `ok:false` 当成「该技法没有此项」。
+
 **`warnings` 非空 = 结果不完整**（`ok` 仍为 true）：「降级：…」是某个子引擎/可选后端本次失败、对应段缺席；
 「结果不完整：预设 N 段中 M 段未产出」列出缺了哪些段。报告里必须如实转述，不得把缺席的段当成「该技法没有此项」，
 也不得自行补算；dispatch 的 `warnings` 只汇总哪些工具带说明，细节在 `results.<tool>.warnings`。

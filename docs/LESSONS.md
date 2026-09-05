@@ -98,6 +98,22 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.36.0 / 2026-09-04 — 108 个错误码只有 4 类带恢复说明，112/151 条错误文案单语
+
+- **症状**：`_with_operational_recovery` 只认 runtime./transport./js_engine./backend_param，其余 ~100 个码
+  （`tool.qimenzeri_missing_window`、`report.technique.no_cards`、`knowledge.*`……）返回给 agent 的只有
+  code + message：该问用户、该修入参、该重试还是该让用户跑 doctor，agent 只能猜；MCP 面的错误信封连那
+  4 类都不带（`_mcp_error_envelope` 直接透传 details）。新守卫第一次跑就抓出一个三层规则都落不到的码。
+- **根因**：错误码被当成日志标签而不是接口——没有「每个码必须可分类」的约束，也没有文案语言要求。
+- **guard**：`errors.py`：`bilingual(zh, en)`；`RECOVERY_KINDS`（input / retry_or_doctor / runtime / transport /
+  js_engine / environment，各带双语 prompt + next_action[+commands]）+ `RECOVERY_TABLE` 精确码表 +
+  `classify_code`（精确 → **前缀** → 后缀：基础设施前缀优先于通用后缀，否则 `js_engine.node_unavailable`
+  会被 `unavailable` 抢成泛泛「重试」）+ `recovery_for`（补 agent_recovery/hint/next_action，已带者不覆盖）；
+  service 与 MCP 两条错误路径同一码表；`scripts/verify_error_recovery.py`：包内每个 `code="…"` 必须可
+  分类（硬规则），非双语文案计数 `contracts/error_recovery_debt.json` 只降不升（现 112）。
+- **法则**：**错误码是接口**——新码要么进精确表要么用可分类后缀（`*_missing_*`/`*invalid*`/`*_failed`/
+  `*_unavailable`），文案用 `bilingual()`；恢复语义按「谁能修」分层（用户/入参/重试/环境），不按模块分。
+
 ### v0.36.0 / 2026-09-04 — 闸门半盲：推运五支从不问目标/弧源，神数五支从不问性别，163/326 问题没选项
 
 - **症状**：`planetaryarc` 用本命盘策略——问宫制、不问 `arcSource`（月亮弧/太阳弧结果完全不同）也不问目标
