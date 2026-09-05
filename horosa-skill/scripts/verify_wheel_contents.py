@@ -8,7 +8,8 @@ publish workflow (`uv build --wheel`) and checks the entries the runtime code re
 `importlib.resources` / `Path(__file__)`:
 
 - knowledge packs + index (`knowledge/data/**`), the bench dataset, the clarification-gate table,
-- the Windows start/stop script overrides (force-included from scripts/runtime_templates),
+- the Windows start/stop script overrides (force-included from scripts/runtime_templates), with their
+  UTF-8 BOM intact,
 - the console script entry point.
 
 `horosa-core-js` is deliberately NOT in the wheel: the offline runtime payload bundles it
@@ -54,7 +55,15 @@ def main() -> int:
             names = set(archive.namelist())
             entry_points = next((n for n in names if n.endswith("entry_points.txt")), None)
             entry_text = archive.read(entry_points).decode("utf-8") if entry_points else ""
+            launcher_heads = {n: archive.read(n)[:3] for n in names if n.endswith(".ps1")}
         errors = [f"missing {entry}" for entry in REQUIRED_ENTRIES if entry not in names]
+        # The .ps1 overrides must keep their UTF-8 BOM *inside the wheel*: Windows PowerShell 5.1
+        # decodes a BOM-less file as ANSI, and one non-ASCII character then unparses the whole
+        # launcher (v0.25.1 — `runtime.start_failed` before a single service starts). The source-tree
+        # test covers scripts/runtime_templates; this covers the artifact `uvx horosa-skill` ships.
+        for name, head in launcher_heads.items():
+            if head != b"\xef\xbb\xbf":
+                errors.append(f"{name} lost its UTF-8 BOM inside the wheel (Windows PowerShell 5.1 would parse it as ANSI)")
         packs = [n for n in names if n.startswith("horosa_skill/knowledge/data/helpdocs/") and n.endswith(".json")]
         if len(packs) < MIN_HELPDOC_PACKS:
             errors.append(f"only {len(packs)} helpdoc packs in the wheel (expected ≥ {MIN_HELPDOC_PACKS})")
