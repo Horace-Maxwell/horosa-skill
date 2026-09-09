@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 import uuid
 from contextlib import contextmanager
@@ -39,6 +40,7 @@ def utc_now_iso() -> str:
 
 # 单条 trace 行的字节上限。超过就只留骨架键 + truncated 标记 —— 一条几 MB 的行既写不原子，
 # 也会让整个 .jsonl 变得没法读。
+_WRITE_LOCK = threading.Lock()
 _MAX_TRACE_LINE_BYTES = 256 * 1024
 _TRACE_LINE_KEEP_KEYS = (
     "trace_id", "group_id", "workflow_name", "tool", "started_at", "finished_at",
@@ -143,21 +145,30 @@ class TraceRecorder:
                     "original_bytes": len(line),
                 }
                 line = (json.dumps(event, ensure_ascii=False) + "\n").encode("utf-8")
-            fd = os.open(str(target), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
-            try:
-                # 🔴 `os.write` **可以短写**，返回值必须看。不看的后果不是「少几个字节」，而是
-                # 那一行没有结尾的 \n —— 下一条记录接在它后面，两条并成一行，整行解析不了。
-                # 症状是「行数比写入次数少」，而不是显眼的报错（CI 上实测 240 次写只剩 191 行）。
-                written = 0
-                while written < len(line):
-                    written += os.write(fd, line[written:])
-            finally:
-                os.close(fd)
+            # 🔴 进程内串行化。Windows 上**线程之间**就会丢行（CI 实测 6 线程 × 40 次写只剩 190 行）：
+            # 每次 _write_event 各开一个 fd，而 Windows 的 O_APPEND 由 CRT 模拟，
+            # 「定位到末尾 + 写」不是一个原子操作，两个 fd 各按自己的偏移写就互相盖。
+            # 一把模块级锁只挡同进程的并发，成本可忽略；跨进程的边界如实留在下面的说明里。
+            with _WRITE_LOCK:
+                self._append_line(target, line)
         except Exception:
             # Best-effort local trace recorder: a write failure (unwritable/deleted dir, disk
             # full, serialization error) must never crash or mask the operation being traced.
             pass
         self._emit_otlp(event)
+
+    def _append_line(self, target: Path, line: bytes) -> None:
+        """把一整行追加到 target。调用方必须持有 `_WRITE_LOCK`。"""
+        fd = os.open(str(target), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+        try:
+            # 🔴 `os.write` **可以短写**，返回值必须看。不看的后果不是「少几个字节」，而是
+            # 那一行没有结尾的 \n —— 下一条记录接在它后面，两条并成一行，整行解析不了。
+            # 症状是「行数比写入次数少」，而不是显眼的报错。
+            written = 0
+            while written < len(line):
+                written += os.write(fd, line[written:])
+        finally:
+            os.close(fd)
 
     def _emit_otlp(self, event: dict[str, Any]) -> None:
         endpoint = self.settings.trace_otlp_endpoint

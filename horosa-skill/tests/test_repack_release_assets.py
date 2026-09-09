@@ -97,7 +97,11 @@ def test_tar_repack_preserves_every_other_member(tmp_path) -> None:
         manifest = json.loads(archive.extractfile("runtime-payload/runtime-manifest.json").read())
         assert manifest["version"] == "0.37.0"
         member = archive.getmember("runtime-payload/Horosa-Web/start_horosa_local.sh")
-        assert member.mode & 0o111, "可执行位必须保住，否则启动脚本跑不了"
+        # 🔴 断言的是「mode 原样搬运」，不是「有可执行位」：Windows 上源文件本来就没有 exec 位
+        # （CI 实测 mode=0o666），把「exec 位在」当契约会在那儿假红。真正要守的是 repack 不动它。
+        with tarfile.open(source) as before:
+            expected_mode = before.getmember("runtime-payload/Horosa-Web/start_horosa_local.sh").mode
+        assert member.mode == expected_mode, "mode 必须原样搬运，否则启动脚本可能跑不了"
         assert archive.extractfile(member).read().decode() == "#!/usr/bin/env bash\necho 起动\n"
 
 

@@ -75,7 +75,11 @@ jobs:
         # 🔴 `#subdirectory=` 是 README 与 server.json 里给用户的唯一零安装命令（PyPI 未开通）。
         # 用 file:// 指向本 checkout：不上网、不依赖 tag 已推送，但把「subdirectory 语法解析得对吗」
         # 这一条真的跑一遍 —— 写错时的症状是用户端一句 `Distribution not found`。
-        run: HOME=$(mktemp -d) uvx --from "git+file://$GITHUB_WORKSPACE#subdirectory=horosa-skill" horosa-skill --version
+        # 🔴 URL 里必须钉一个 rev。actions/checkout 的工作树没有 `refs/remotes/origin/HEAD`，
+        # uv 解析 file:// 仓库的默认分支时会 `git rev-parse refs/remotes/origin/HEAD` 失败
+        # （CI 实测：`failed to find default branch HEAD`）。钉 SHA 同时也更贴近用户拿到的
+        # `@v<tag>` 形式 —— 那一条本来就带 rev。
+        run: HOME=$(mktemp -d) uvx --from "git+file://$GITHUB_WORKSPACE@$GITHUB_SHA#subdirectory=horosa-skill" horosa-skill --version
       - name: Verify JS tool→engine boundary contracts (the issue #15 dead-key shape)
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_js_boundary_contracts.py
