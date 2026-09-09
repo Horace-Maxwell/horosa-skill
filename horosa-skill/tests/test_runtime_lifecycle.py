@@ -73,13 +73,18 @@ def test_auto_ports_reuse_what_the_registry_recorded(monkeypatch, tmp_path) -> N
 # ---------------------------------------------------------------- D7 trace 并发
 
 def test_concurrent_processes_never_corrupt_the_trace_file(tmp_path) -> None:
-    """N 进程 × M 事件全部可解析。
+    """N 进程 × M 事件全部可解析 —— **POSIX only**。
 
-    诚实说明：旧写法在本机（macOS/APFS）上撕不出来 —— 8 进程 × 520 KB 行并发追加，250 行全绿。
-    它安全靠的是 CPython 的实现细节（TextIOWrapper 在 close 时把整行交给一次 raw.write）。
-    这条用例锁的是「不依赖那个细节」：O_APPEND + 单次 os.write 让整行原子是**显式**保证，
-    换实现、换文件系统（NFS、某些 Windows 共享）或触发短写时仍然成立。
+    诚实说明，两条都被现实纠正过：
+    ① 旧写法在 macOS/APFS 上撕不出来（8 进程 × 520 KB 行，250 行全绿）；它靠的是 CPython 的
+       实现细节。改成 O_APPEND + 单次写是把「碰巧成立」变成「写明成立」。
+    ② 但 O_APPEND 的跨进程原子性**在 Windows 上不成立** —— CI 当场打脸：4 进程 × 60 次写
+       只剩 191/213 行（每次跑还不一样）。Windows 的 O_APPEND 由 CRT 模拟，
+       「定位到末尾 + 写」不是一个原子操作。trace 是尽力而为的本地记录器，为它上跨进程锁
+       不划算，所以这条断言只在 POSIX 上做，Windows 的边界如实写在 tracing.py 的注释里。
     """
+    if os.name == "nt":
+        pytest.skip("Windows 的 O_APPEND 由 CRT 模拟，跨进程追加本就不原子（见 tracing.py 注释）")
     worker = tmp_path / "w.py"
     worker.write_text(
         "import os, sys\n"
@@ -97,12 +102,22 @@ def test_concurrent_processes_never_corrupt_the_trace_file(tmp_path) -> None:
     for proc in procs:
         assert proc.wait(timeout=120) == 0
 
-    files = list(tmp_path.glob("*.jsonl"))
+    files = sorted(tmp_path.glob("*.jsonl"))
     assert files, "没有写出 trace 文件"
-    lines = files[0].read_text(encoding="utf-8").splitlines()
-    assert len(lines) == 240
+    lines: list[str] = []
+    for path in files:  # 按 UTC 日期分文件，跨零点时会有两份
+        lines.extend(path.read_text(encoding="utf-8").splitlines())
+
+    bad: list[tuple[int, str]] = []
     for index, line in enumerate(lines, 1):
-        json.loads(line)  # 任何一行坏掉都在这里炸，并指出行号
+        try:
+            json.loads(line)
+        except ValueError:
+            bad.append((index, line[:120]))
+    # 先报「坏在哪」再报「数量对不对」：行数变少的典型成因是**两条记录并成一行**
+    # （某次写没写完 → 那行没有结尾的 \n），而不是「事件凭空消失」。
+    assert not bad, f"{len(bad)}/{len(lines)} 行不是合法 JSON，前几条：{bad[:3]}"
+    assert len(lines) == 240, f"写了 240 次却只有 {len(lines)} 行（文件：{[p.name for p in files]}）"
 
 
 def test_an_oversized_event_is_truncated_not_dropped(tmp_path, monkeypatch) -> None:
@@ -197,3 +212,42 @@ def test_config_records_unexpanded_placeholders_for_doctor(monkeypatch) -> None:
     assert config.unexpanded_env_templates()["HOROSA_RUNTIME_ROOT"] == "${user_config.runtimeRoot}"
     monkeypatch.delenv("HOROSA_RUNTIME_ROOT", raising=False)
     importlib.reload(config)
+
+
+def test_threads_in_one_process_never_lose_a_trace_line(tmp_path, monkeypatch) -> None:
+    """同进程内并发写不许丢行 —— 这条各平台都成立，也是短写循环的守卫。
+
+    🔴 `os.write` **可以短写**，返回值必须看。不看的后果不是「少几个字节」，而是那一行没有
+    结尾的换行 —— 下一条记录接在它后面，两条并成一行，整行解析不了。症状是「行数比写入次数少」。
+    """
+    import threading
+
+    monkeypatch.setenv("HOROSA_TRACE_ENABLED", "1")
+    monkeypatch.setenv("HOROSA_TRACE_DIR", str(tmp_path))
+    monkeypatch.setenv("HOROSA_SKILL_DATA_DIR", str(tmp_path))
+    from horosa_skill.tracing import TraceRecorder
+
+    recorder = TraceRecorder(Settings.from_env())
+    total = 6 * 40
+
+    def worker(tag: str) -> None:
+        for index in range(40):
+            recorder._write_event({"trace_id": f"{tag}-{index}", "workflow_name": "probe", "blob": "x" * 900})
+
+    threads = [threading.Thread(target=worker, args=(f"t{i}",)) for i in range(6)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=120)
+
+    lines: list[str] = []
+    for path in sorted(tmp_path.glob("*.jsonl")):
+        lines.extend(path.read_text(encoding="utf-8").splitlines())
+    bad = []
+    for index, line in enumerate(lines, 1):
+        try:
+            json.loads(line)
+        except ValueError:
+            bad.append((index, line[:120]))
+    assert not bad, f"{len(bad)}/{len(lines)} 行不是合法 JSON，前几条：{bad[:3]}"
+    assert len(lines) == total, f"写了 {total} 次却只有 {len(lines)} 行"

@@ -119,17 +119,21 @@ class TraceRecorder:
             return
         target = self.trace_dir / f"{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.jsonl"
         try:
-            # 一次 os.write 写完整行 + O_APPEND。
+            # 一次写完整行 + O_APPEND。**跨进程原子性只在 POSIX 上成立。**
             #
-            # 诚实记录：旧写法（`target.open("a", encoding="utf-8")` 后 write 一行）在本机
-            # (macOS/APFS) 上**撕不出来** —— 8 进程 × 520 KB 的行并发追加，250 行全部可解析。
-            # 它之所以安全靠的是实现细节：CPython 的 TextIOWrapper 在 close 时把整行交给一次
-            # raw.write，而 O_APPEND 让那一次 write(2) 原子。换个 Python 实现、换个文件系统
-            # （NFS、某些 Windows 共享）、或者行大到触发短写，这个前提就不再成立。
-            # 这里把它从「碰巧成立」变成「显式成立」，成本是零。
+            # 两次被现实纠正，都记在这里：
+            # ① 「旧写法（TextIOWrapper 追加）会撕行」—— 本机 (macOS/APFS) **复现不了**：
+            #    8 进程 × 520 KB 行并发追加，250 行全部可解析。它安全靠的是 CPython 的实现细节
+            #    （close 时把整行交给一次 raw.write），而 O_APPEND 让那次 write(2) 原子。
+            #    改成显式的 O_APPEND + 单次写不是「修了一个 bug」，是把「碰巧成立」变成「写明成立」。
+            # ② 「那 O_APPEND 就到处成立了吧」—— **Windows 上不成立**，CI 当场打脸：
+            #    4 进程 × 60 次写只剩 191/213 行（每次跑还不一样）。Windows 的 O_APPEND 由 CRT
+            #    模拟，「定位到末尾 + 写」不是一个原子操作，并发追加会互相盖。
+            #    trace 是尽力而为的本地记录器，为它上跨进程锁不划算；所以这里如实承认边界，
+            #    对应的守卫用例也只在 POSIX 上断言跨进程完整性（见 test_runtime_lifecycle）。
             #
-            # 真正**能演示**的旧缺陷是没有上限：开了 HOROSA_TRACE_CAPTURE_PAYLOADS 之后，一个
-            # 几 MB 的事件会被整条写进去，.jsonl 迅速膨胀到没法读。下面的截断补上这一条。
+            # 真正**能演示**、且各平台一致的旧缺陷是没有行长上限：开了 HOROSA_TRACE_CAPTURE_PAYLOADS
+            # 之后一个几 MB 的事件会被整条写进去，.jsonl 迅速膨胀到没法读。下面的截断补上这一条。
             line = (json.dumps(event, ensure_ascii=False) + "\n").encode("utf-8")
             if len(line) > _MAX_TRACE_LINE_BYTES:
                 # 超大事件（巨型 payload）截断并打标，绝不静默丢：截断后仍是合法 JSON 行。
@@ -141,7 +145,12 @@ class TraceRecorder:
                 line = (json.dumps(event, ensure_ascii=False) + "\n").encode("utf-8")
             fd = os.open(str(target), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
             try:
-                os.write(fd, line)
+                # 🔴 `os.write` **可以短写**，返回值必须看。不看的后果不是「少几个字节」，而是
+                # 那一行没有结尾的 \n —— 下一条记录接在它后面，两条并成一行，整行解析不了。
+                # 症状是「行数比写入次数少」，而不是显眼的报错（CI 上实测 240 次写只剩 191 行）。
+                written = 0
+                while written < len(line):
+                    written += os.write(fd, line[written:])
             finally:
                 os.close(fd)
         except Exception:

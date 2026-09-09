@@ -192,6 +192,28 @@ marketplace 说 97、instructions 说 106、契约基线 115、实际 116。一�
      但**如实改口**：真正能演示的旧缺陷是没有行长上限（一个 3 MB 事件整条写进去）。
    **规则**：负向对照跑不红时，不许把「它本来就没问题」写成「我修好了它」。
 
+   ↳ **同一条 trace 断言又被现实纠正了第二次**：改成 O_APPEND + 单次写之后，我写下「这下各平台
+   都显式成立了」。CI 的 Windows job 当场打脸 —— 4 进程 × 60 次写只剩 191/213 行（每次跑还不一样）。
+   Windows 的 `O_APPEND` 由 CRT 模拟，「定位到末尾 + 写」不是一个原子操作。
+   结论第二次改口：跨进程完整性**只在 POSIX 断言**，Windows 的边界写进代码注释；
+   同进程线程并发那条各平台都跑（它守的是 `os.write` 的**短写**必须循环补齐 —— 不看返回值的后果
+   不是「少几个字节」，而是那行没有换行、两条记录并成一行）。
+   **规则加一句**：「我改对了」也要被负向对照或 CI 证一次；一个平台上成立不等于所有平台上成立。
+
+7. **维护机的环境会替测试补上它没声明的前提。** CI 上四条 `test_runtime_manager` 红在
+   `runtime.port_conflict_unknown_holder`，而维护机全绿 —— 因为本机 9999/8899 上正跑着真 runtime，
+   归属判定回 `ours`。只 stub `_service_status`（返回 `reachable=True`）的用例，会拿那个 URL 去**真的**
+   跑一遍归属判定。**规则**：新增「探真环境」的代码路径时，同批检查既有测试是不是在靠你的机器过关；
+   复现 CI 形状的 recipe 要跟着扩（AGENTS §8 已补第三条）。
+
+8. **Windows 的默认编码不是 UTF-8，这条每隔几个版本咬一次。** 新写的 `repack_release_assets.py`
+   在最后一步打印 `→`（U+2192），cp1252 控制台上直接 `UnicodeEncodeError` 并让脚本 exit 1 ——
+   一个**发布脚本**在「打印成功信息」时失败。与 v0.25.1 的 `.ps1` 丢 BOM 是同一族。
+   同批还有一条反向的：`subprocess.run(..., text=True)` 按 locale 解码**子进程**输出，
+   Windows 上就是 cp1252，而我们的 initialize instructions 全是中文 → 读回来是 None/乱码。
+   **规则**：脚本自己的输出保持 ASCII（或开头 reconfigure 成 UTF-8）；读子进程输出一律收字节、
+   自己按 UTF-8 解，别用 `text=True`。
+
 4. **gitignore 语义在三个地方咬人，形状一模一样**：父目录被整体忽略时反选无效
    （`.vscode/` → 必须写 `.vscode/*` + `!.vscode/mcp.json`）；`.mcpbignore` 里不带前导 `/` 的
    `vendor/` 在**任意层级**匹配（把运行时真正需要的 `src/**/vendor/` 一起排掉）；

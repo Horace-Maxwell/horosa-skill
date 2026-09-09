@@ -659,6 +659,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | 某个客户端里 horosa 一个工具都没有 / 装了却不出现 | 配置写错（占位符未展开、缺 `--transport stdio`、目录搬了、`uvx horosa-skill` 指着未开通的 PyPI、Codex 默认 10/60 s 超时） | `uv run horosa-skill client check`（读它**实际写着什么**）→ 按 `fix_command` 重生成 |
 | 容器里连不上而宿主 curl 正常 / `421 Misdirected Request` | Host 头不在 DNS-rebinding 白名单 | `host.docker.internal` 已默认放行；自定义域名加 `HOROSA_MCP_ALLOWED_HOSTS` |
 | 维护机上 `test_error_paths_return_a_conformant_envelope` 红、CI 绿 | 默认端口上有活服务，只钉 `HOROSA_RUNTIME_ROOT` 拦不住，本该失败的路径成功了 | 同时把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指到不可达地址（§8 验证流程 4） |
+| 维护机上 `test_runtime_manager.py` 全绿、CI 上四条红在 `runtime.port_conflict_unknown_holder` | v0.37.0 起只 stub `_service_status` 的用例会拿那个 URL **真的**跑归属判定：维护机 9999/8899 上跑着真 runtime → ours；CI 上没人监听 → unknown | 本机复现要连**归属**一起伪装：autouse fixture 把 `identity.probe_identity` 打成返回 None、`listener_pids` 打成返回 `[]`，`pytest -p <plugin>` 挂上去。`_managed_mode` 已内置 classify_endpoint 桩 |
 
 ## 9. Stability invariants（稳定性不变量 — don't regress these）
 

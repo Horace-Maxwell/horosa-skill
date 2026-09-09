@@ -157,13 +157,19 @@ def test_stdout_carries_only_json_rpc_frames(tmp_path) -> None:
         {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
     ]
     stdin_text = "".join(json.dumps(frame) + "\n" for frame in frames)
+    # 🔴 **不要**用 text=True：它按 locale 解码子进程输出，Windows 上就是 cp1252，
+    # 而 initialize 的 instructions 里全是中文（UTF-8 字节含 0x8D 等 cp1252 未定义位）。
+    # 自己读字节、自己按 UTF-8 解，才是这条测试真正想验的东西。
     completed = subprocess.run(
         [params.command, *params.args],
-        input=stdin_text, capture_output=True, text=True, timeout=180,
+        input=stdin_text.encode("utf-8"),
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180,
         env=params.env, cwd=params.cwd, check=False,
     )
-    lines = [line for line in completed.stdout.splitlines() if line.strip()]
-    assert lines, f"stdout 一行都没有；stderr:\n{completed.stderr[-2000:]}"
+    stdout = (completed.stdout or b"").decode("utf-8", errors="replace")
+    stderr = (completed.stderr or b"").decode("utf-8", errors="replace")
+    lines = [line for line in stdout.splitlines() if line.strip()]
+    assert lines, f"stdout 一行都没有（returncode={completed.returncode}）；stderr:\n{stderr[-2000:]}"
     for index, line in enumerate(lines, 1):
         try:
             json.loads(line)

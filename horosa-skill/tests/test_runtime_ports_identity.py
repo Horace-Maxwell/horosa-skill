@@ -80,7 +80,18 @@ def test_listener_pids_finds_a_real_listener(listening_server) -> None:
     if not _listener_lookup_available():
         pytest.skip("本平台的监听查询工具不可用（Linux 需 iproute2 的 ss）")
     port, proc = listening_server
-    assert proc.pid in listener_pids(port)
+    pids = listener_pids(port)
+    assert pids, "端口上明明有监听进程，却一个持有者都查不出来"
+    # 🔴 断言的是「查得出持有者」，不是「持有者 pid == 我们 spawn 的那个」：Windows 上
+    # venv 的 python.exe 可能是个 shim，真正监听的是它 spawn 的子进程（CI 实测 8792 vs 1764）。
+    # 产品侧要的能力是「端口上有人、且能拿到它的命令行」，pid 的父子关系不在契约里。
+    if proc.pid not in pids:
+        from horosa_skill.runtime.procs import process_command
+
+        commands = [process_command(pid) or "" for pid in pids]
+        assert any("http.server" in c or "python" in c.lower() for c in commands), (
+            f"持有者 {pids} 的命令行看不出是我们起的那个监听进程：{commands}"
+        )
 
 
 def test_port_bindable_distinguishes_held_from_free(listening_server) -> None:
@@ -110,11 +121,12 @@ def test_a_stranger_on_our_port_is_classified_foreign(listening_server, tmp_path
     """
     if not _listener_lookup_available():
         pytest.skip("本平台的监听查询工具不可用（Linux 需 iproute2 的 ss）")
-    port, proc = listening_server
+    port, _proc = listening_server
     verdict = classify_endpoint(f"http://127.0.0.1:{port}", runtime_root=tmp_path / "runtime")
     assert verdict.verdict == "foreign"
     assert verdict.evidence == "process.command_is_not_ours"
-    assert proc.pid in [h["pid"] for h in verdict.holders]
+    # 判据是「查得出持有者、且它的命令行不是我方 runtime」；具体 pid 是谁不在契约里（见上一条）。
+    assert verdict.holders and any(h.get("command") for h in verdict.holders)
     assert verdict.started_by_us is False
 
 

@@ -93,6 +93,14 @@ def repack_tar(source: Path, out: Path, version: str) -> int:
 
 
 def main() -> int:
+    # 🔴 Windows 控制台默认 cp1252：脚本自己的输出里出现任何非 ASCII 字符（一个 `→` 就够）
+    # 会抛 UnicodeEncodeError 并让脚本 exit 1 —— 发布脚本因此在最后一步「打印成功信息」时失败。
+    # 这与 v0.25.1 的 `.ps1` BOM 是同一族：Windows 的默认编码不是 UTF-8。
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--source", required=True, help="已发布的归档（.zip / .tar.gz）")
     parser.add_argument("--out", required=True, help="输出归档路径")
@@ -120,7 +128,7 @@ def main() -> int:
         tmp.unlink(missing_ok=True)
         raise
 
-    print(f"repacked {count} entries → {out} (embedded manifest version = {args.version})")
+    print(f"repacked {count} entries -> {out} (embedded manifest version = {args.version})")
     print("next: uv run python scripts/verify_runtime_release.py --manifest <release manifest> "
           f"--{'windows' if out.name.endswith('.zip') else 'darwin'}-archive {out}")
     return 0

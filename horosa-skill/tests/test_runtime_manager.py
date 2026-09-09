@@ -32,6 +32,19 @@ def _managed_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("HOROSA_PORTS", raising=False)
     monkeypatch.delenv("HOROSA_RUNTIME_TRUST_PORTS", raising=False)
 
+    # 🔴 归属判定也要钉住。本文件的用例几乎都只 stub `_service_status`（返回 reachable=True），
+    # 而 `endpoint_identities` 会拿那个 URL 去**真的**跑 classify_endpoint：CI 上 9999/8899 没人监听
+    # → unknown → `runtime.port_conflict_unknown_holder`，整批 start 用例红。
+    # 而在维护机上它们**全绿**，因为本机 9999/8899 正跑着真 runtime，identity 回 ours ——
+    # 「因为错误的原因通过」的又一例：本机的环境替测试补了一个它没声明的前提。
+    # 想测归属的用例自己覆盖 endpoint_identities（如 test_start_refuses_when_a_foreign_process_holds_the_port）。
+    from horosa_skill.runtime.identity import EndpointIdentity
+
+    monkeypatch.setattr(
+        "horosa_skill.runtime.manager.classify_endpoint",
+        lambda url, **kwargs: EndpointIdentity("ours", "identity.nonce_match", url),
+    )
+
 
 def create_runtime_archive(tmp_path: Path) -> Path:
     payload_root = tmp_path / "runtime-payload"
@@ -1683,3 +1696,26 @@ def test_start_lock_is_released_when_the_start_fails(tmp_path: Path, monkeypatch
         manager.start_local_services(wait_seconds=0.2)
 
     assert not (manager.runtime_root / ".runtime-start.lock").exists()
+
+
+def test_ci_shape_recipe_is_documented_and_the_fixture_covers_it() -> None:
+    """🔴 维护机与 CI 的差别不止「装没装 runtime」，还有「默认端口上有没有活服务」。
+
+    v0.37.0 引入归属判定后，只 stub `_service_status`（返回 reachable=True）的用例会拿那个 URL
+    去**真的**跑 classify_endpoint。维护机的 9999/8899 上正跑着真 runtime → 判成 ours → 全绿；
+    CI 上没人监听 → unknown → `runtime.port_conflict_unknown_holder` → 四条用例红。
+    本机的环境替测试补了一个它没声明的前提，这是「因为错误的原因通过」的典型形状。
+
+    本机复现 CI 条件（AGENTS §8 recipe 之外还要这一条）：
+        创建一个 autouse fixture 把 `probe_identity` 打成返回 None、`listener_pids` 打成返回 []，
+        用 `pytest -p <plugin>` 挂上去；不打 `_managed_mode` 里那个 classify_endpoint 桩时必红。
+    """
+    import inspect
+
+    source = inspect.getsource(_managed_mode)
+    assert "classify_endpoint" in source, (
+        "_managed_mode 必须钉住归属判定 —— 否则这批用例在维护机上绿、在 CI 上红，"
+        "而红的原因是「端口上没人应答」，与用例想测的东西毫无关系"
+    )
+    for name in ("HOROSA_SERVER_ROOT", "HOROSA_CHART_SERVER_ROOT"):
+        assert name in source, f"_managed_mode 必须清 {name}（否则切进 external 模式）"
