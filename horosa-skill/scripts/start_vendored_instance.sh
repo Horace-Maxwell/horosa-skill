@@ -106,6 +106,20 @@ if [ "${WITH_JAVA}" = "1" ]; then
   #   app 注册（ClientApp=1 + SHA-256 签名）读的是 jar 内 data/rsakey.json，与 Mongo 无关。
   MONGO_FALLBACK_DIR="${RUNDIR}/mongo-fallback"
   mkdir -p "${MONGO_FALLBACK_DIR}"
+
+  # log4j 的 basedir 必须落到真路径，否则日志落进一个**字面量**目录（成因与办法见
+  # extract_log4j_config.py 的说明）。v0.37.0 清理时仓根 / horosa-skill/ / vendor/runtime-source/
+  # 下各攒了一份 `${env:HOME:-${sys:user.home}}/.horosa-logs/…`，来源就是这里裸起 jar。
+  LOG4J_CFG="${RUNDIR}/log4j2.xml"
+  if python3 "${ROOT}/horosa-skill/scripts/extract_log4j_config.py" \
+       "${JAR}" "${LOG4J_CFG}" "${RUNDIR}/horosa-logs"; then
+    LOG4J_OPT="-Dlog4j2.configurationFile=file://${LOG4J_CFG}"
+    echo "log4j basedir → ${RUNDIR}/horosa-logs（避免在 CWD 造字面量目录）"
+  else
+    LOG4J_OPT=""
+    echo "warn: 无法从 jar 抽出 log4j2.xml —— 日志可能落进字面量目录，请事后检查 CWD" >&2
+  fi
+
   (
     cd "${VENDOR}"
     env HOROSA_DESKTOP_MONGO_OPTIONAL=1 HOROSA_DESKTOP_MONGO_SKIP_PING=0 \
@@ -113,7 +127,7 @@ if [ "${WITH_JAVA}" = "1" ]; then
       HOROSA_ENABLE_STARTUP_CRON=0 HOROSA_ENABLE_STARTUP_TRANSGROUP_INIT=0 needtranslog=false \
       SPRING_MAIN_LAZY_INITIALIZATION=true \
       JAVA_TOOL_OPTIONS="-Dlog4j2.statusLevel=WARN -Djava.awt.headless=true -Dspring.main.banner-mode=off" \
-      nohup "${JAVA_BIN}" -Dhorosa.runtime.owner=horosa-skill-vendored \
+      nohup "${JAVA_BIN}" -Dhorosa.runtime.owner=horosa-skill-vendored ${LOG4J_OPT} \
       -Duser.language=zh -Duser.country=CN -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 \
       -Dparamhash.cache.redis.enable=false -Dhorosa.cache.lazyinit=true \
       -jar "${JAR}" --server.port="${JAVA_PORT}" --server.address=127.0.0.1 \

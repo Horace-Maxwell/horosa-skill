@@ -50,6 +50,7 @@ GATES: tuple[tuple[str, list[str], bool], ...] = (
     # 这一闸验的是「补丁在**当前上游树**上仍然打得上且结果正确」——preflight 是唯一能看到
     # vendor/runtime-source（gitignored 的本地构建输入）的运行器。
     ("runtime launcher kill discipline", ["scripts/verify_runtime_scripts.py"], True),
+    ("no stray runtime log dirs", ["scripts/verify_no_stray_runtime_dirs.py"], True),
 )
 
 
