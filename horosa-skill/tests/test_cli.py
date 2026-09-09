@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import typer
 
 from horosa_skill.config import Settings
 from horosa_skill.surfaces import cli
@@ -20,6 +21,17 @@ class _ManagerStub:
     def start_local_services(self, *, wait_seconds: float | None = None) -> dict[str, object]:
         self.started += 1
         return {"ok": True, "already_running": False}
+
+    LAUNCHER_LOG_NAME = "launcher.log"
+
+    def runtime_mode(self) -> str:
+        return "managed"
+
+    def endpoint_identities(self, manifest, *, endpoints=None) -> list[dict[str, object]]:
+        return []
+
+    def load_runtime_state(self, *, strict: bool = False) -> dict[str, object] | None:
+        return None
 
     def stop_local_services(self, *, force: bool = False) -> dict[str, object]:
         self.stopped += 1
@@ -43,18 +55,67 @@ def test_stdio_serve_skips_eager_runtime_start(monkeypatch) -> None:
     assert manager.stopped == 0
 
 
-def test_streamable_http_serve_stops_runtime_after_exit(monkeypatch) -> None:
-    settings = Settings(db_path=Path("memory.db"), output_dir=Path("runs"))
+def test_streamable_http_serve_keeps_the_runtime_warm_by_default(monkeypatch, tmp_path) -> None:
+    """HTTP serve 退出时**默认不停** runtime。
+
+    🔴 旧行为是「这次 serve 起的就在退出时停掉」，而 runtime 是**共享**的：Claude Desktop 与
+    Cursor 同时挂着时，关掉其中一个会把另一个的后端一起停掉，而重启一次要几十秒到几分钟。
+
+    🔴 旧用例还是「因为错误的原因通过」的：它直接以 Python 函数调用 `cli.serve(...)`，
+    没传 `stop_runtime_on_exit`，于是那个形参拿到的是 typer 的 `OptionInfo` **对象**——
+    对象恒真，所以停机分支照走。任何直接调 typer 命令函数的测试都有这个陷阱：布尔默认值
+    必须显式传，否则测的是 `bool(OptionInfo)` 而不是你的默认值。
+    """
+    settings = Settings(db_path=tmp_path / "memory.db", output_dir=tmp_path / "runs",
+                        runtime_root=tmp_path / "rt")
     manager = _ManagerStub()
 
     monkeypatch.setattr(cli.Settings, "from_env", classmethod(lambda cls: settings))
     monkeypatch.setattr(cli, "_runtime_manager", lambda settings_arg: manager)
     monkeypatch.setattr(cli, "run_mcp_server", lambda settings_arg, transport, service=None: None)
+    monkeypatch.setattr("horosa_skill.runtime.ports.port_bindable", lambda *a, **k: True)
 
-    cli.serve(transport="streamable-http", host="127.0.0.1", port=8765, skip_runtime_start=False)
+    cli.serve(transport="streamable-http", host="127.0.0.1", port=8765,
+              skip_runtime_start=False, stop_runtime_on_exit=False)
+
+    assert manager.started == 1
+    assert manager.stopped == 0, "默认必须保温，否则会切断另一个还挂着的客户端"
+
+
+def test_streamable_http_serve_stops_runtime_when_asked(monkeypatch, tmp_path) -> None:
+    settings = Settings(db_path=tmp_path / "memory.db", output_dir=tmp_path / "runs",
+                        runtime_root=tmp_path / "rt")
+    manager = _ManagerStub()
+
+    monkeypatch.setattr(cli.Settings, "from_env", classmethod(lambda cls: settings))
+    monkeypatch.setattr(cli, "_runtime_manager", lambda settings_arg: manager)
+    monkeypatch.setattr(cli, "run_mcp_server", lambda settings_arg, transport, service=None: None)
+    monkeypatch.setattr("horosa_skill.runtime.ports.port_bindable", lambda *a, **k: True)
+
+    cli.serve(transport="streamable-http", host="127.0.0.1", port=8765,
+              skip_runtime_start=False, stop_runtime_on_exit=True)
 
     assert manager.started == 1
     assert manager.stopped == 1
+
+
+def test_serve_refuses_a_port_already_in_use(monkeypatch, tmp_path) -> None:
+    """8765 被占是最常见的一次失败（两个终端各起一个 serve），不能是 uvicorn 的裸 traceback。"""
+    settings = Settings(db_path=tmp_path / "memory.db", output_dir=tmp_path / "runs",
+                        runtime_root=tmp_path / "rt")
+    monkeypatch.setattr(cli.Settings, "from_env", classmethod(lambda cls: settings))
+    monkeypatch.setattr("horosa_skill.runtime.ports.port_bindable", lambda *a, **k: False)
+    monkeypatch.setattr("horosa_skill.runtime.ports.port_holders",
+                        lambda port: [{"pid": 1234, "command": "python -m http.server 8765"}])
+    ran: list[str] = []
+    monkeypatch.setattr(cli, "run_mcp_server", lambda *a, **k: ran.append("served"))
+
+    with pytest.raises(typer.Exit) as excinfo:
+        cli.serve(transport="streamable-http", host="127.0.0.1", port=8765,
+                  skip_runtime_start=True, stop_runtime_on_exit=False)
+
+    assert excinfo.value.exit_code == 2
+    assert ran == []
 
 
 def test_load_payload_decodes_utf8_stdin_bytes_when_text_encoding_is_legacy(monkeypatch) -> None:
@@ -275,6 +336,8 @@ def test_doctor_adds_user_facing_summary(monkeypatch, tmp_path: Path) -> None:
     captured: dict[str, object] = {}
 
     class ManagerStub:
+        LAUNCHER_LOG_NAME = "launcher.log"
+
         def doctor(self) -> dict[str, object]:
             return {
                 "ok": True,
@@ -284,6 +347,18 @@ def test_doctor_adds_user_facing_summary(monkeypatch, tmp_path: Path) -> None:
                 "issues": ["services:not_running"],
                 "endpoints": [{"label": "java_backend", "reachable": False}],
             }
+
+        def runtime_mode(self) -> str:
+            return "managed"
+
+        def endpoint_identities(self, manifest, *, endpoints=None) -> list[dict[str, object]]:
+            return [{"label": "java_backend", "reachable": False, "identity": None}]
+
+        def load_installed_manifest(self, *, strict: bool = False) -> dict[str, object] | None:
+            return {"version": "0.5.11"}
+
+        def load_runtime_state(self, *, strict: bool = False) -> dict[str, object] | None:
+            return None
 
     monkeypatch.setattr(cli.Settings, "from_env", classmethod(lambda cls: settings))
     monkeypatch.setattr(cli, "_runtime_manager", lambda settings_arg: ManagerStub())

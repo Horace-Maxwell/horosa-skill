@@ -216,6 +216,17 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "fix_external_address_or_unset",
     },
+    "runtime.install_long_path": {
+        "kind": "runtime",
+        "prompt_to_user": bilingual(
+            "Windows 的 260 字符路径上限会让解包失败。开启长路径支持（注册表 LongPathsEnabled=1，"
+            "需重启），或把 runtime 装到更短的路径：设 HOROSA_RUNTIME_ROOT=C:\\horosa 后重试。",
+            "Windows' 260-character path limit would make extraction fail. Enable long paths "
+            "(registry LongPathsEnabled=1, needs a reboot), or install to a shorter path: set "
+            "HOROSA_RUNTIME_ROOT=C:\\horosa and retry.",
+        ),
+        "next_action": "enable_long_paths_or_shorten_runtime_root",
+    },
     "runtime.starting": {
         "kind": "transport",
         "prompt_to_user": bilingual(

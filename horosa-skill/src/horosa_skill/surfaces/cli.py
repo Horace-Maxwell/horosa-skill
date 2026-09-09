@@ -52,6 +52,7 @@ trace_app = typer.Typer(help="Inspect recent local trace records for tool runs, 
 client_app = typer.Typer(help="Default OpenClaw entry: `openclaw-setup`. Also generate configs and run smoke checks for OpenClaw / mcporter.")
 report_app = typer.Typer(help="Generate structured Horosa reports as JSON, DOCX, or PDF artifacts.")
 agent_app = typer.Typer(help="Show agent-safe tool routing and clarification guidance before calculation.")
+runtime_app = typer.Typer(help="Inspect and control the local offline runtime: status / start / stop / restart。查看与控制本机 runtime。")
 app.add_typer(tool_app, name="tool")
 app.add_typer(memory_app, name="memory")
 app.add_typer(export_app, name="export")
@@ -61,6 +62,7 @@ app.add_typer(trace_app, name="trace")
 app.add_typer(client_app, name="client")
 app.add_typer(report_app, name="report")
 app.add_typer(agent_app, name="agent")
+app.add_typer(runtime_app, name="runtime")
 
 
 def _version_callback(value: bool) -> None:
@@ -405,6 +407,49 @@ def _openclaw_check_command(workspace_root: Path | str, config_path: Path | str 
     return _format_cli_command(command)
 
 
+def _network_hints() -> dict[str, Any]:
+    """代理/镜像相关的现场事实 —— 这些是「装不上 / 连不上本地后端」最常见的两类成因。"""
+    proxy_vars = {
+        name: os.environ[name]
+        for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy")
+        if os.environ.get(name)
+    }
+    no_proxy = os.environ.get("NO_PROXY") or os.environ.get("no_proxy") or ""
+    loopback_excluded = any(token in no_proxy for token in ("127.0.0.1", "localhost"))
+    hints: list[str] = []
+    if proxy_vars and not loopback_excluded:
+        hints.append(
+            "检测到代理环境变量。本工具对回环地址已内建绕代理（不受影响）；"
+            "但你自己的 curl / 浏览器仍会走代理，排查时请设 NO_PROXY=127.0.0.1,localhost。"
+        )
+    if not os.environ.get("HOROSA_RUNTIME_MIRROR"):
+        hints.append("下载慢或超时可设 HOROSA_RUNTIME_MIRROR 指向就近镜像；Python 包源用 UV_INDEX_URL。")
+    return {
+        "proxy_env": proxy_vars,
+        "no_proxy": no_proxy or None,
+        "loopback_excluded_from_proxy": loopback_excluded,
+        "hints": hints,
+    }
+
+
+def _doctor_port_holders(report: dict[str, Any]) -> list[dict[str, Any]]:
+    """可达但不是我们的端点 —— 点名端口、PID、镜像，并明说本工具不会去终止它。"""
+    conflicts: list[dict[str, Any]] = []
+    for endpoint in report.get("endpoints", []) or []:
+        identity = endpoint.get("identity")
+        if not isinstance(identity, dict) or identity.get("verdict") not in {"foreign", "unknown"}:
+            continue
+        conflicts.append({
+            "label": endpoint.get("label"),
+            "url": endpoint.get("url"),
+            "port": identity.get("port"),
+            "verdict": identity.get("verdict"),
+            "holders": identity.get("holders") or [],
+            "will_not_kill": "本工具不会终止不属于自己的进程。",
+        })
+    return conflicts
+
+
 def _doctor_summary(report: dict[str, Any]) -> dict[str, Any]:
     issues = [str(issue) for issue in report.get("issues", [])]
     reachable_endpoints = [
@@ -413,10 +458,69 @@ def _doctor_summary(report: dict[str, Any]) -> dict[str, Any]:
         if endpoint.get("reachable") is True
     ]
     installed = report.get("installed") is True
-    ready_for_openclaw = installed and not issues
+    conflicts = report.get("port_conflicts") or []
+    unexpanded = report.get("unexpanded_env_templates") or {}
+    unsupported = report.get("platform_supported") is False
+    ready_for_openclaw = installed and not issues and not conflicts and not unexpanded
+    if unsupported:
+        user_summary = (
+            "本机平台没有离线 runtime 载荷 —— 这不是发布疏漏，而是只发 darwin-arm64 与 win32-x64。"
+        )
+        next_action = (
+            "走网关模式：在一台受支持的机器上跑 runtime，本机设 HOROSA_SERVER_ROOT 与 "
+            "HOROSA_CHART_SERVER_ROOT 指过去（外部模式，本机不启动任何服务）。"
+        )
+        return {
+            "status": "needs_attention", "ready_for_openclaw": False,
+            "user_summary": user_summary, "next_action": next_action,
+            "reachable_endpoints": reachable_endpoints,
+        }
+    if unexpanded:
+        names = "、".join(sorted(unexpanded))
+        return {
+            "status": "needs_attention", "ready_for_openclaw": False,
+            "user_summary": (
+                f"环境变量 {names} 的值还是**未展开的占位符**（宿主没有替换它），已按未设置处理。"
+                "这通常意味着 MCPB / 插件配置里的 user_config 没填。"
+            ),
+            "next_action": "在客户端的扩展设置里补上这些值，或直接删掉这些环境变量用默认路径。",
+            "reachable_endpoints": reachable_endpoints,
+        }
+    if conflicts:
+        named = "；".join(
+            f"{c.get('label')} 端口 {c.get('port')} 被 "
+            + (", ".join(f"pid {h.get('pid')} {(h.get('command') or '')[:60]}" for h in c.get("holders") or [])
+               or "一个查不出身份的进程")
+            + " 占着"
+            for c in conflicts
+        )
+        return {
+            "status": "needs_attention", "ready_for_openclaw": False,
+            "user_summary": f"端口被非本工具的进程占用：{named}。本工具不会去终止它们。",
+            "next_action": (
+                "关掉上面点名的进程，或换端口：设 HOROSA_PORTS=auto 自动挑空闲端口，"
+                "或显式设 HOROSA_LOCAL_BACKEND_PORT / HOROSA_LOCAL_CHART_PORT；"
+                "若那正是你想用的服务，设 HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT 指向它。"
+            ),
+            "reachable_endpoints": reachable_endpoints,
+        }
+    if report.get("registry_status") == "starting":
+        return {
+            "status": "starting", "ready_for_openclaw": False,
+            "user_summary": "runtime 正在启动（首次运行含解压与 CDS 训练，可能几分钟）。",
+            "next_action": "等一会儿再跑 `horosa-skill runtime status`；启动器日志路径见 launcher_log。",
+            "reachable_endpoints": reachable_endpoints,
+        }
     if ready_for_openclaw:
+        # 🔴 措辞改为客户端无关：doctor 是给**任何** MCP 客户端的用户看的（Claude Code/Desktop、
+        # Cursor、VS Code、Codex、Gemini CLI…），把「去开 OpenClaw」当成唯一下一步，对其余客户端
+        # 的用户既没用又误导。`ready_for_openclaw` 这个键名保留一版作兼容别名。
         user_summary = "Ready. The offline runtime is installed and the local Horosa endpoints are responding."
-        next_action = "Open OpenClaw, or rerun `uv run horosa-skill client openclaw-check --workspace <your-openclaw-workspace>` any time you want a fresh smoke report."
+        next_action = (
+            "Point your MCP client at Horosa: `uv run horosa-skill client config --format <client>` "
+            "writes the right config (claude-code / claude-desktop / cursor / vscode / codex / gemini / "
+            "windsurf / cline / zed). Then `uv run horosa-skill selfcheck` for an end-to-end live check."
+        )
     elif not installed:
         user_summary = "The offline runtime is not installed yet."
         next_action = f"Run `{_openclaw_setup_command()}` to install the runtime, write a config, and verify the OpenClaw path."
@@ -445,6 +549,15 @@ def _doctor_summary(report: dict[str, Any]) -> dict[str, Any]:
         "next_action": next_action,
         "reachable_endpoints": reachable_endpoints,
     }
+
+
+def _platform_supported(report: dict[str, Any]) -> bool:
+    """本机平台有没有离线载荷。已装 runtime 就是最好的证据。"""
+    if report.get("installed") is True:
+        return True
+    from horosa_skill.runtime.manager import _platform_key
+
+    return _platform_key() in {"darwin-arm64", "win32-x64"}
 
 
 def _probe_executable(path: Path, args: list[str]) -> dict[str, Any]:
@@ -988,6 +1101,20 @@ def doctor() -> None:
         {"field": field, "value": str(getattr(settings, field, None)), "source": source}
         for field, source in sorted(settings.settings_provenance.items())
     ]
+    from horosa_skill.config import unexpanded_env_templates as _unexpanded
+
+    report["mode"] = manager.runtime_mode()
+    report["platform_supported"] = _platform_supported(report)
+    if settings.runtime_current_dir.exists():
+        try:
+            report["endpoints"] = manager.endpoint_identities(manager.load_installed_manifest())
+        except Exception:  # noqa: BLE001 - 体检不能因为归属判定失败就整份报废
+            pass
+    report["port_conflicts"] = _doctor_port_holders(report)
+    report["unexpanded_env_templates"] = _unexpanded()
+    report["network_hints"] = _network_hints()
+    report["registry_status"] = (manager.load_runtime_state() or {}).get("status")
+    report["launcher_log"] = str(settings.runtime_root / manager.LAUNCHER_LOG_NAME)
     report.update(_doctor_summary(report))
     _print_json(report)
 
@@ -1061,16 +1188,116 @@ def selfcheck() -> None:
         raise typer.Exit(code=1)
 
 
-@app.command()
-def stop() -> None:
+@app.command(help="Alias of `runtime stop`. 停止本机 runtime（等同 `runtime stop`）。")
+def stop(
+    force: bool = typer.Option(False, "--force", help="Stop even when the services were not started by this tool."),
+) -> None:
+    _runtime_stop_impl(force=force)
+
+
+def _runtime_stop_impl(*, force: bool) -> None:
     settings = Settings.from_env()
     manager = _runtime_manager(settings)
     try:
-        result = manager.stop_local_services()
+        result = manager.stop_local_services(force=force)
     except RuntimeError as exc:
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
     _print_json(result)
+    if result.get("refused"):
+        raise typer.Exit(code=2)
+
+
+@runtime_app.command("status", help="What is running, on which ports, started by whom. 谁在跑、跑在哪个端口、是谁起的。")
+def runtime_status() -> None:
+    """永远 exit 0：这是**诊断**命令，「没在跑」是一个正常答案而不是错误。"""
+    from horosa_skill.runtime.pidlock import describe_lock
+    from horosa_skill.runtime.registry import live_clients
+
+    settings = Settings.from_env()
+    manager = _runtime_manager(settings)
+    installed = settings.runtime_current_dir.exists()
+    manifest = manager.load_installed_manifest() if installed else None
+    state = manager.load_runtime_state() or {}
+    endpoints = manager.endpoint_identities(manifest) if installed else []
+    report: dict[str, Any] = {
+        "ok": True,
+        "installed": installed,
+        "mode": manager.runtime_mode(),
+        "runtime_root": str(settings.runtime_root),
+        "runtime_version": (manifest or {}).get("version"),
+        "platform": (manifest or {}).get("platform"),
+        "ports": {
+            "backend": settings.local_backend_port,
+            "chart": settings.local_chart_port,
+            "source": settings.settings_provenance.get("local_backend_port", "default"),
+        },
+        "endpoints": endpoints,
+        "registry_status": state.get("status"),
+        "launcher": state.get("launcher") or None,
+        "clients": live_clients(state),
+        "start_lock": describe_lock(settings.runtime_root / ".runtime-start.lock"),
+        "launcher_log": str(settings.runtime_root / manager.LAUNCHER_LOG_NAME),
+    }
+    reachable = [item for item in endpoints if item.get("reachable")]
+    if not installed:
+        report["summary"] = "runtime 未安装 —— 运行 `horosa-skill install`。"
+    elif report["mode"] == "external":
+        report["summary"] = "外部模式：地址已显式指向别处，本工具不会在本机启动或停止任何服务。"
+    elif len(reachable) == len(endpoints) and endpoints:
+        owners = {(item.get("identity") or {}).get("evidence") for item in reachable}
+        report["summary"] = f"全部服务在跑（归属证据：{', '.join(sorted(o for o in owners if o))}）。"
+    elif state.get("status") == "starting":
+        report["summary"] = "正在启动 —— 看 launcher_log 跟进度。"
+    elif reachable:
+        report["summary"] = "只有一部分服务在跑（Java 起不来时属正常降级；chart 族技法仍可用）。"
+    else:
+        report["summary"] = "没有服务在跑 —— 运行 `horosa-skill runtime start`。"
+    _print_json(report)
+
+
+@runtime_app.command("start", help="Start the local runtime. 启动本机 runtime。")
+def runtime_start(
+    wait: float = typer.Option(
+        None, "--wait", help="Max seconds to block (default: the full startup budget). 最多阻塞多少秒。"
+    ),
+    no_wait: bool = typer.Option(False, "--no-wait", help="Return immediately with `starting`. 立即返回。"),
+) -> None:
+    settings = Settings.from_env()
+    manager = _runtime_manager(settings)
+    budget = 0.0 if no_wait else wait
+    try:
+        result = manager.start_local_services(wait_seconds=budget)
+    except RuntimeError as exc:
+        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
+        raise typer.Exit(code=2)
+    _print_json(result)
+
+
+@runtime_app.command("stop", help="Stop the local runtime. 停止本机 runtime（只停本工具起的那份）。")
+def runtime_stop(
+    force: bool = typer.Option(False, "--force", help="Stop even when the services were not started by this tool."),
+) -> None:
+    _runtime_stop_impl(force=force)
+
+
+@runtime_app.command("restart", help="Stop then start. 重启（先停后起）。")
+def runtime_restart(
+    force: bool = typer.Option(False, "--force", help="Stop even when the services were not started by this tool."),
+    wait: float = typer.Option(None, "--wait", help="Max seconds to block on the start half."),
+) -> None:
+    settings = Settings.from_env()
+    manager = _runtime_manager(settings)
+    try:
+        stopped = manager.stop_local_services(force=force)
+        if stopped.get("refused"):
+            _print_json({"ok": False, "phase": "stop", **stopped})
+            raise typer.Exit(code=2)
+        started = manager.start_local_services(wait_seconds=wait)
+    except RuntimeError as exc:
+        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
+        raise typer.Exit(code=2)
+    _print_json({"ok": True, "stopped": stopped, "started": started})
 
 
 @app.command()
@@ -1079,11 +1306,45 @@ def serve(
     host: str = typer.Option("127.0.0.1", help="Host for streamable HTTP."),
     port: int = typer.Option(8765, help="Port for streamable HTTP."),
     skip_runtime_start: bool = typer.Option(False, help="Do not auto-start the installed offline runtime."),
+    stop_runtime_on_exit: bool = typer.Option(
+        False,
+        "--stop-runtime-on-exit",
+        help="Stop the offline runtime when this server exits (default: keep it warm). 退出时顺带停掉 runtime。",
+    ),
 ) -> None:
     settings = Settings.from_env()
     settings.host = host
     settings.port = port
     manager = _runtime_manager(settings)
+    # 🔴 端口先探再起：8765 被占时旧实现让 uvicorn 抛裸 traceback（OSError: [Errno 48]），
+    # 而这是**最常见**的一次失败 —— 用户在两个终端里各起一个 serve。
+    if transport != "stdio":
+        from horosa_skill.runtime.ports import port_bindable, port_holders
+
+        if not port_bindable(port, host if host not in {"0.0.0.0", "::"} else "127.0.0.1"):
+            holders = port_holders(port)
+            typer.echo(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "code": "serve.port_in_use",
+                        "message": f"端口 {port} 已被占用，MCP server 无法监听。",
+                        "details": {
+                            "host": host,
+                            "port": port,
+                            "holders": holders,
+                            "next_action": (
+                                f"换端口：`--port <其它端口>` 或设 HOROSA_SKILL_PORT；"
+                                "或关掉上面点名的进程（本工具不会代为终止）。"
+                            ),
+                        },
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                err=True,
+            )
+            raise typer.Exit(code=2)
     service = HorosaSkillService(settings, runtime_manager=manager)
     started_now = False
     if not skip_runtime_start:
@@ -1104,16 +1365,34 @@ def serve(
             f"其他客户端配置见 examples/clients/ 或 README「接入 AI 客户端」。",
             err=True,
         )
+    from horosa_skill.runtime import registry as _registry
+
+    try:
+        _registry.attach_client(settings.runtime_state_path, pid=os.getpid(), transport=transport)
+    except OSError:
+        pass
     try:
         run_mcp_server(settings, transport=transport, service=service)
     finally:
-        # For stdio clients such as OpenClaw/mcporter, keeping the runtime warm
-        # avoids a full local Java+Python restart on every tool call.
-        if started_now and transport != "stdio":
-            try:
-                manager.stop_local_services()
-            except RuntimeError:
-                pass
+        try:
+            _registry.detach_client(settings.runtime_state_path, pid=os.getpid())
+        except OSError:
+            pass
+        # 🔴 默认**保温**。旧行为是「这次 serve 起的就在退出时停掉」——而 runtime 是**共享**的：
+        # Claude Desktop 与 Cursor 同时挂着时，关掉其中一个会把另一个的后端一起停掉；
+        # 而重启一次要几十秒到几分钟。要恢复旧行为请显式加 --stop-runtime-on-exit。
+        if stop_runtime_on_exit and started_now and transport != "stdio":
+            others = _registry.live_clients(manager.load_runtime_state(), exclude_pid=os.getpid())
+            if others:
+                typer.echo(
+                    f"还有 {len(others)} 个客户端挂在这份 runtime 上，未停止（--stop-runtime-on-exit 让位于它们）。",
+                    err=True,
+                )
+            else:
+                try:
+                    manager.stop_local_services()
+                except RuntimeError:
+                    pass
 
 
 @tool_app.command("list")

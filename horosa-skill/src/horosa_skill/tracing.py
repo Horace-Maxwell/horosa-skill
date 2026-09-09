@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 import uuid
 from contextlib import contextmanager
@@ -34,6 +35,15 @@ SENSITIVE_ANSWER_KEYS = {
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+# 单条 trace 行的字节上限。超过就只留骨架键 + truncated 标记 —— 一条几 MB 的行既写不原子，
+# 也会让整个 .jsonl 变得没法读。
+_MAX_TRACE_LINE_BYTES = 256 * 1024
+_TRACE_LINE_KEEP_KEYS = (
+    "trace_id", "group_id", "workflow_name", "tool", "started_at", "finished_at",
+    "duration_ms", "ok", "error_code", "error_message",
+)
 
 
 class TraceRecorder:
@@ -109,8 +119,31 @@ class TraceRecorder:
             return
         target = self.trace_dir / f"{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.jsonl"
         try:
-            with target.open("a", encoding="utf-8") as handle:
-                handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+            # 一次 os.write 写完整行 + O_APPEND。
+            #
+            # 诚实记录：旧写法（`target.open("a", encoding="utf-8")` 后 write 一行）在本机
+            # (macOS/APFS) 上**撕不出来** —— 8 进程 × 520 KB 的行并发追加，250 行全部可解析。
+            # 它之所以安全靠的是实现细节：CPython 的 TextIOWrapper 在 close 时把整行交给一次
+            # raw.write，而 O_APPEND 让那一次 write(2) 原子。换个 Python 实现、换个文件系统
+            # （NFS、某些 Windows 共享）、或者行大到触发短写，这个前提就不再成立。
+            # 这里把它从「碰巧成立」变成「显式成立」，成本是零。
+            #
+            # 真正**能演示**的旧缺陷是没有上限：开了 HOROSA_TRACE_CAPTURE_PAYLOADS 之后，一个
+            # 几 MB 的事件会被整条写进去，.jsonl 迅速膨胀到没法读。下面的截断补上这一条。
+            line = (json.dumps(event, ensure_ascii=False) + "\n").encode("utf-8")
+            if len(line) > _MAX_TRACE_LINE_BYTES:
+                # 超大事件（巨型 payload）截断并打标，绝不静默丢：截断后仍是合法 JSON 行。
+                event = {
+                    **{k: v for k, v in event.items() if k in _TRACE_LINE_KEEP_KEYS},
+                    "truncated": True,
+                    "original_bytes": len(line),
+                }
+                line = (json.dumps(event, ensure_ascii=False) + "\n").encode("utf-8")
+            fd = os.open(str(target), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+            try:
+                os.write(fd, line)
+            finally:
+                os.close(fd)
         except Exception:
             # Best-effort local trace recorder: a write failure (unwritable/deleted dir, disk
             # full, serialization error) must never crash or mask the operation being traced.

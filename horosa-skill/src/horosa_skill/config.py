@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -212,6 +214,45 @@ def _env_bool(name: str, default: bool) -> bool:
     return default
 
 
+# 自动挑端口的备用区间：默认口被占时从这里往上找。避开常见开发端口（3000/5000/8000/8080）。
+_AUTO_BACKEND_BASE = 19999
+_AUTO_CHART_BASE = 18899
+_AUTO_SPAN = 100
+
+
+def _auto_ports(runtime_root: Path, backend_default: int, chart_default: int) -> tuple[int, int]:
+    """`HOROSA_PORTS=auto`：挑一对能用的端口。
+
+    顺序：① 注册表里记着的那对（这份 runtime 上次就跑在那儿；正在跑的话必须复用，否则每个新
+    客户端都会另起一套）→ ② 默认口若空闲就用默认 → ③ 从备用区间往上探。
+    挑出来只是**候选**：`start_local_services` 仍会做归属判定，占着的若不是我们的照样报冲突。
+    """
+    from horosa_skill.runtime.ports import find_free_port, port_bindable
+
+    recorded: dict[str, Any] = {}
+    try:
+        raw = (runtime_root / "runtime-state.json").read_text(encoding="utf-8")
+        state = json.loads(raw)
+        if isinstance(state, dict) and isinstance(state.get("ports"), dict):
+            recorded = state["ports"]
+    except (OSError, ValueError):
+        recorded = {}
+
+    def _pick(recorded_key: str, default_port: int, base: int) -> int:
+        candidate = recorded.get(recorded_key)
+        if isinstance(candidate, int) and 0 < candidate < 65536:
+            # 空闲（可重用）或正被占（很可能就是我们上次起的那份）都直接复用。
+            return candidate
+        if port_bindable(default_port):
+            return default_port
+        return find_free_port(base, span=_AUTO_SPAN)
+
+    return (
+        _pick("backend", backend_default, _AUTO_BACKEND_BASE),
+        _pick("chart", chart_default, _AUTO_CHART_BASE),
+    )
+
+
 # 字段 ↔ env 旗标映射（provenance 用；新增 env 驱动字段须同步登记，测试锁步）。
 FIELD_ENV_MAP = {
     "server_root": "HOROSA_SERVER_ROOT",
@@ -277,21 +318,32 @@ class Settings(BaseModel):
     def from_env(cls) -> "Settings":
         audit_env_flags()
         data_dir = _env_path("HOROSA_SKILL_DATA_DIR", _default_home_dir())
+        runtime_root = _env_path("HOROSA_RUNTIME_ROOT", _default_runtime_root())
+        backend_port = _env_int("HOROSA_LOCAL_BACKEND_PORT", 9999, minimum=1, maximum=65535)
+        chart_port = _env_int("HOROSA_LOCAL_CHART_PORT", 8899, minimum=1, maximum=65535)
+        ports_mode = (_env_text("HOROSA_PORTS", "") or "").strip().lower()
+        if ports_mode == "auto":
+            backend_port, chart_port = _auto_ports(runtime_root, backend_port, chart_port)
+        # 🔴 URL 必须跟着端口走。旧实现里 server_root 与 local_backend_port 是两个互不相干的字段：
+        # 只设 HOROSA_LOCAL_BACKEND_PORT=19999 时，启动器听 19999，而探针、客户端、doctor 全都还
+        # 打 9999 —— 用户「换个端口避开占用」的正常操作，结果是「服务起来了却一个技法都用不了」。
+        server_root_env = _env_text("HOROSA_SERVER_ROOT")
+        chart_root_env = _env_text("HOROSA_CHART_SERVER_ROOT")
         db_path_env = _env_text("HOROSA_SKILL_DB_PATH")
         output_dir_env = _env_text("HOROSA_SKILL_OUTPUT_DIR")
         trace_dir_env = _env_text("HOROSA_TRACE_DIR")
         return cls(
-            server_root=_env_text("HOROSA_SERVER_ROOT", "http://127.0.0.1:9999") or "http://127.0.0.1:9999",
-            chart_server_root=_env_text("HOROSA_CHART_SERVER_ROOT", "http://127.0.0.1:8899") or "http://127.0.0.1:8899",
+            server_root=server_root_env or f"http://127.0.0.1:{backend_port}",
+            chart_server_root=chart_root_env or f"http://127.0.0.1:{chart_port}",
             data_dir=data_dir,
             db_path=Path(db_path_env).expanduser() if db_path_env else data_dir / "memory.db",
             output_dir=Path(output_dir_env).expanduser() if output_dir_env else data_dir / "runs",
-            runtime_root=_env_path("HOROSA_RUNTIME_ROOT", _default_runtime_root()),
+            runtime_root=runtime_root,
             runtime_manifest_url=_env_text("HOROSA_RUNTIME_MANIFEST_URL"),
             runtime_platform=_env_text("HOROSA_RUNTIME_PLATFORM"),
             runtime_release_repo=_env_text("HOROSA_RUNTIME_RELEASE_REPO", DEFAULT_RELEASE_REPO) or DEFAULT_RELEASE_REPO,
-            local_backend_port=_env_int("HOROSA_LOCAL_BACKEND_PORT", 9999, minimum=1, maximum=65535),
-            local_chart_port=_env_int("HOROSA_LOCAL_CHART_PORT", 8899, minimum=1, maximum=65535),
+            local_backend_port=backend_port,
+            local_chart_port=chart_port,
             runtime_start_timeout_seconds=_env_float("HOROSA_RUNTIME_START_TIMEOUT_SECONDS", 45.0, minimum=0.1),
             runtime_java_retry_cooldown_seconds=_env_float("HOROSA_RUNTIME_JAVA_RETRY_COOLDOWN_SECONDS", 120.0, minimum=0.0),
             mcp_compact=_env_bool("HOROSA_MCP_COMPACT", False),
@@ -307,7 +359,14 @@ class Settings(BaseModel):
             settings_provenance={
                 field: (f"env:{env_name}" if _env_text(env_name) is not None else (
                     # 三个路径字段无独立 env 时由 data_dir 派生（而非模型默认）
-                    "derived:data_dir" if field in {"db_path", "output_dir", "trace_dir"} else "default"
+                    "derived:data_dir" if field in {"db_path", "output_dir", "trace_dir"}
+                    # 两个 URL 无独立 env 时由端口派生（auto 模式下端口本身也是探出来的）
+                    else "derived:local_backend_port" if field == "server_root"
+                    else "derived:local_chart_port" if field == "chart_server_root"
+                    else "auto:HOROSA_PORTS" if ports_mode == "auto" and field in {
+                        "local_backend_port", "local_chart_port"
+                    }
+                    else "default"
                 ))
                 for field, env_name in FIELD_ENV_MAP.items()
             },

@@ -290,6 +290,55 @@ WINDOWS_LOCAL_CACHE_FACTORY_INNER_CLASS_B64 = (
     "1wHkAAMB0wHcAdcB5AADAd8B4AHiAesAAAAiAAQACwD7AewAGAEYAJoB7UAZAXwANAHuBgkB7wHxAfMAGQ=="
 )
 
+def _windows_long_paths_enabled() -> bool:
+    """注册表里的 LongPathsEnabled。读不到就当没开（保守，宁可多给一次提示）。"""
+    if os.name != "nt":
+        return False
+    try:
+        import winreg  # type: ignore[import-not-found]
+
+        with winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\FileSystem"
+        ) as key:
+            value, _ = winreg.QueryValueEx(key, "LongPathsEnabled")
+            return int(value) == 1
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _platform_dead_end_advice(platform_name: str) -> dict[str, Any]:
+    """没有原生载荷时给出真正的出路，而不是把人卡在「不支持」四个字上。
+
+    🔴 之前这条错误只说「manifest 里没有这个平台」。Intel Mac 与 Linux 用户由此以为是发布疏漏，
+    于是反复重试、或去下载 arm64 包（在 Rosetta 下起不来：嵌入式 JDK/Python 是原生二进制）。
+    离线载荷确实只发 darwin-arm64 与 win32-x64 —— 但**网关模式**在任何平台上都可用：Python 包
+    本身跨平台，把 HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT 指向一台装了 runtime 的机器即可。
+    """
+    gateway = (
+        "网关模式：在一台受支持的机器（darwin-arm64 / win32-x64）上跑 runtime，本机只装 Python 包，"
+        "设 HOROSA_SERVER_ROOT 与 HOROSA_CHART_SERVER_ROOT 指过去即可（外部模式，本机不启动任何服务）。"
+    )
+    if platform_name.startswith("darwin-x64"):
+        reason = (
+            "Intel Mac 没有原生离线载荷；arm64 那份**不能**在 Rosetta 下跑（内含的 JDK 与 Python "
+            "是原生 arm64 二进制）。"
+        )
+    elif platform_name.startswith("linux"):
+        reason = "Linux 没有发布载荷（实验性）；可自建载荷，或走网关模式。"
+    elif platform_name.startswith("win32-arm64"):
+        reason = "Windows on ARM 没有原生载荷；x64 那份在模拟层下未经验证。"
+    else:
+        reason = f"平台 `{platform_name}` 没有发布载荷。"
+    return {
+        "reason": reason,
+        "next_action": gateway,
+        "agent_recovery": {
+            "must_ask_user": False,
+            "prompt_to_user": f"{reason} {gateway}",
+        },
+    }
+
+
 def _hand_lock_to(lock_path: Path, pid: Any) -> None:
     """把启动锁的持有者改写成启动器自己的 pid（锁的寿命 = 一次启动的寿命）。
 
@@ -408,7 +457,12 @@ class HorosaRuntimeManager:
                     raise RuntimeInstallError(
                         f"Runtime manifest does not include platform `{platform_name}`.",
                         code="runtime.install_missing_platform",
-                        details={"platform": platform_name, "manifest_url": manifest_location},
+                        details={
+                            "platform": platform_name,
+                            "manifest_url": manifest_location,
+                            "supported_platforms": sorted(k for k in platforms if isinstance(k, str)),
+                            **_platform_dead_end_advice(platform_name),
+                        },
                     )
                 source = str(asset_meta.get("url") or "").strip()
                 expected_sha256 = str(asset_meta.get("sha256") or "").strip() or None
@@ -1251,7 +1305,49 @@ class HorosaRuntimeManager:
             path_text = path_text[1:]
         return Path(path_text)
 
+    def _guard_windows_long_paths(self, archive_path: Path, extract_dir: Path) -> None:
+        r"""解包前先算最长目标路径，>259 且没开长路径支持就明说，别让 winerror 3/206 裸奔。
+
+        🔴 Horosa 载荷里最深的条目（嵌入式 JDK 的 module 目录 + Horosa-Web 的多层 vendor 树）
+        接近 200 字符。用户把 runtime 装在 `C:\Users\<长名字>\OneDrive\文档\...` 下时就会越过
+        260 上限，解包报 `[WinError 3] 系统找不到指定的路径` —— 那句话对「路径太长」毫无提示。
+        """
+        if os.name != "nt":
+            return
+        try:
+            names: list[str] = []
+            lower = archive_path.name.lower()
+            if lower.endswith((".tar.gz", ".tgz")):
+                with tarfile.open(archive_path, "r:gz") as archive:
+                    names = archive.getnames()
+            elif lower.endswith(".zip"):
+                with zipfile.ZipFile(archive_path) as archive:
+                    names = archive.namelist()
+        except Exception:  # noqa: BLE001 - 预检失败不该挡住真正的解包
+            return
+        if not names:
+            return
+        longest = max(names, key=len)
+        projected = len(str(extract_dir)) + 1 + len(longest)
+        if projected <= 259 or _windows_long_paths_enabled():
+            return
+        raise RuntimeInstallError(
+            "Windows 路径长度会超过 260 字符上限，解包必定失败。",
+            code="runtime.install_long_path",
+            details={
+                "projected_length": projected,
+                "extract_dir": str(extract_dir),
+                "longest_entry": longest,
+                "next_action": (
+                    "二选一：① 开启 Windows 长路径支持（注册表 "
+                    "HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem\\LongPathsEnabled = 1，需重启）；"
+                    "② 把 runtime 装到更短的路径：设 HOROSA_RUNTIME_ROOT=C:\\horosa 后重试。"
+                ),
+            },
+        )
+
     def _extract_archive(self, archive_path: Path, extract_dir: Path) -> None:
+        self._guard_windows_long_paths(archive_path, extract_dir)
         name = archive_path.name.lower()
         if name.endswith(".tar.gz") or name.endswith(".tgz"):
             with tarfile.open(archive_path, "r:gz") as archive:

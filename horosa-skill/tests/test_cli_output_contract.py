@@ -48,7 +48,12 @@ def test_settings_provenance_reflects_env(monkeypatch) -> None:
     monkeypatch.delenv("HOROSA_SERVER_ROOT", raising=False)
     s = Settings.from_env()
     assert s.settings_provenance["mcp_compact"] == "env:HOROSA_MCP_COMPACT"
-    assert s.settings_provenance["server_root"] == "default"
+    # v0.37.0 D1：两个 URL 不再是独立的默认值，而是由端口**派生**。
+    # 🔴 旧行为下 `HOROSA_LOCAL_BACKEND_PORT=19999` 只改启动器监听的端口，server_root 仍是
+    # 写死的 :9999 —— 用户「换端口避开占用」的正常操作，结果是「服务起来了却一个技法都用不了」。
+    # 旧断言把这两个字段的**互不相干**当成了契约，所以它不会为那个 bug 变红。
+    assert s.settings_provenance["server_root"] == "derived:local_backend_port"
+    assert s.settings_provenance["chart_server_root"] == "derived:local_chart_port"
     assert s.settings_provenance["db_path"] == "derived:data_dir"
 
 
