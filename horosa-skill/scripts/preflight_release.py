@@ -46,6 +46,10 @@ GATES: tuple[tuple[str, list[str], bool], ...] = (
     ("technique compute-source declarations", ["scripts/verify_technique_provenance.py"], True),
     ("docs sync", ["scripts/verify_docs_sync.py"], True),
     ("runtime-builder parity", ["scripts/verify_builder_parity.py"], True),
+    # 误杀纪律：上游 mac 启动器按命令行子串 kill -9，会杀掉用户的星阙桌面端；修复走安装时补丁，
+    # 这一闸验的是「补丁在**当前上游树**上仍然打得上且结果正确」——preflight 是唯一能看到
+    # vendor/runtime-source（gitignored 的本地构建输入）的运行器。
+    ("runtime launcher kill discipline", ["scripts/verify_runtime_scripts.py"], True),
 )
 
 

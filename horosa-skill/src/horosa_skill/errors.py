@@ -143,6 +143,18 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         "commands": [DOCTOR_CMD],
     },
     "runtime.start_timeout": {"kind": "runtime", "next_action": "doctor_then_retry_or_raise_timeout"},
+    "runtime.launcher_patch_anchor_missing": {
+        "kind": "runtime",
+        "prompt_to_user": bilingual(
+            "本机已装的 runtime 启动器与本版 horosa-skill 预期的结构对不上，「只杀自己人」的误杀"
+            "保护补丁打不上去。请升级 horosa-skill（uv sync 或 uvx --refresh）后重试；"
+            "确需临时跳过设 HOROSA_RUNTIME_LAUNCHER_PATCH=0（会失去该保护）。",
+            "The installed runtime launcher does not match what this horosa-skill version expects, so the "
+            "foreign-process kill guard could not be applied. Upgrade horosa-skill (uv sync / uvx --refresh) "
+            "and retry; set HOROSA_RUNTIME_LAUNCHER_PATCH=0 to skip it deliberately (you lose the guard).",
+        ),
+        "next_action": "upgrade_horosa_skill_then_retry",
+    },
     "transport.connection_error": {"kind": "transport"},
     "report.run_not_found": {
         "kind": "input",

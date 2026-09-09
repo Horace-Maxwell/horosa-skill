@@ -33,6 +33,10 @@ PKG = ROOT / "horosa-skill"
 sys.path.insert(0, str(PKG / "src"))
 from horosa_skill.engine.registry import TOOL_DEFINITIONS  # noqa: E402
 from horosa_skill.exports.registry import AI_EXPORT_TECHNIQUES  # noqa: E402
+from horosa_skill.surfaces.mcp_server import (  # noqa: E402
+    COMPACT_SURFACE_TOOL_COUNT,
+    FACADE_TOOL_COUNT,
+)
 
 ERRORS: list[str] = []
 
@@ -349,11 +353,16 @@ def check_server_instructions() -> None:
     """`_SERVER_INSTRUCTIONS` ships to every MCP client and had no guard at all."""
     from horosa_skill.surfaces.mcp_server import _SERVER_INSTRUCTIONS
 
-    expected = len(TOOL_DEFINITIONS)
+    # 🔴 客户端在 tools/list 里看到的是**门面 + 技法**，不是技法数。这条以前拿 len(TOOL_DEFINITIONS)
+    # 比，于是 instructions 写 106 时是绿的 —— 而模型据此以为只有 106 个工具，实际收到 116 个。
+    expected = FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)
     for count in re.findall(r"\((\d+)\s*tools?\)|instead of (\d+)", _SERVER_INSTRUCTIONS):
         got = count[0] or count[1]
         if int(got) != expected:
-            err(f"mcp_server._SERVER_INSTRUCTIONS: claims {got} tools, registry has {expected}")
+            err(
+                f"mcp_server._SERVER_INSTRUCTIONS: claims {got} tools, default surface is {expected}"
+                f" ({FACADE_TOOL_COUNT} facades + {len(TOOL_DEFINITIONS)} techniques)"
+            )
 
 
 # --- 3. stale "current: `X`" claims in docs -------------------------------------------------
@@ -452,12 +461,9 @@ def check_compact_surface_count() -> None:
 
     v0.36.0 之前 mcp_server 里的注释还写着「8 门面 + tool_run = 9 工具」——常量化 + 锁步，数字只准有一个源。
     """
-    src = (ROOT / "horosa-skill/src/horosa_skill/surfaces/mcp_server.py").read_text(encoding="utf-8")
-    m = re.search(r"^COMPACT_SURFACE_TOOL_COUNT\s*=\s*(\d+)", src, re.MULTILINE)
-    if not m:
-        err("mcp_server.py 缺 COMPACT_SURFACE_TOOL_COUNT 常量")
-        return
-    n = int(m.group(1))
+    # 🔴 直接 import 常量，别正则源码：常量一改成派生式（`FACADE_TOOL_COUNT + 1`）正则就抓瞎，
+    # 而「抓瞎」在这把守卫里表现为**报缺常量**，很容易被当成误报改掉正则而不是锚到源头。
+    n = COMPACT_SURFACE_TOOL_COUNT
     for rel, patterns in {
         "README.md": [rf"{n}\s*个门面工具", rf"MCP 门面（{n}）"],
         "README_EN.md": [rf"\b{n} facades\b", rf"MCP facades \({n}\)"],
@@ -471,6 +477,7 @@ def check_compact_surface_count() -> None:
             val = a or b
             if val and int(val) != n:
                 err(f"{rel} 门面数 {val} ≠ COMPACT_SURFACE_TOOL_COUNT={n}")
+
 
 
 def check_root_manifest_version() -> None:

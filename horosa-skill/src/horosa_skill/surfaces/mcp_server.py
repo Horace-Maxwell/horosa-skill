@@ -187,16 +187,25 @@ def _server_profile(settings: Settings) -> dict[str, Any]:
 
 
 # Server instructions：客户端把它当「这台服务器是干什么的」说明书常驻上下文。自 Claude Code 起
+# 门面工具数（非技法工具：dispatch / guidance / tool_run / memory×3 / report×2 / export×… 等）。
+# 🔴 计数单一真值：以前 marketplace 说 97、instructions 说 106、字节契约说 115、实际 116 —— 四处
+# 互不相同且都「有人守」。默认平铺面 = FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)，任何文案都从这里算。
+FACADE_TOOL_COUNT = 10
+
+# 精简面工具数 = 10 门面 + horosa_tool_run。README×2 的「11 个门面/11 facades」由 verify_docs_sync 锁步到此常量。
+COMPACT_SURFACE_TOOL_COUNT = FACADE_TOOL_COUNT + 1
+
+
 # MCP 工具默认 deferred（工具搜索按需加载），instructions 就成了模型决定「要不要来搜我」的唯一依据
 # ——它的作用更接近一份 skill 而非一句简介。上限约 2KB，超出截断，故关键信息前置。
-_SERVER_INSTRUCTIONS = """Horosa (星阙) — local-first 术数/占星 computation. All engines run on this
+_SERVER_INSTRUCTIONS = f"""Horosa (星阙) — local-first 术数/占星 computation. All engines run on this
 machine (offline); nothing is sent to a remote service.
 
 WHEN TO REACH FOR THIS SERVER
 Any request to 起盘/排盘/起课/起卦/算命/看运势/合盘/择日/卜卦, or to explain, store, or report
 such a chart. Also 农历/节气/黄历 conversion and celebrity birth data.
 
-WHAT IT COVERS (106 tools)
+WHAT IT COVERS ({FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} tools)
 · Western: natal + derived charts, 20+ predictive systems (returns, progressions, primary
   directions, zodiacal releasing, firdaria), horary 卜卦, astrocartography, midpoints.
 · Chinese: 八字, 紫微斗数, 大六壬, 奇门遁甲, 太乙, 金口诀, 三式合一, 六爻, 河洛理数,
@@ -216,7 +225,7 @@ HOW TO USE IT
    answer; horosa_technique_report renders it per run/session.
 5. Runs are stored: horosa_memory_query finds them; horosa_report_render writes DOCX/PDF.
 
-HOROSA_MCP_COMPACT=1 exposes 11 facade tools instead of 106 (horosa_tool_run reaches any technique
+HOROSA_MCP_COMPACT=1 exposes {COMPACT_SURFACE_TOOL_COUNT} facade tools instead of {FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} (horosa_tool_run reaches any technique
 by name); HOROSA_TOOLSETS=astro,cn limits which groups are exposed."""
 
 
@@ -555,13 +564,6 @@ def _agent_preflight_error(tool_name: str, payload: dict[str, Any]) -> dict[str,
 # 只能是增强，不能成为新的失败点。
 # ---------------------------------------------------------------------------
 
-# 门面工具数（非技法工具：dispatch / guidance / tool_run / memory×3 / report×2 / export×… 等）。
-# 🔴 计数单一真值：以前 marketplace 说 97、instructions 说 106、字节契约说 115、实际 116 —— 四处
-# 互不相同且都「有人守」。默认平铺面 = FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)，任何文案都从这里算。
-FACADE_TOOL_COUNT = 10
-
-# 精简面工具数 = 10 门面 + horosa_tool_run。README×2 的「11 个门面/11 facades」由 verify_docs_sync 锁步到此常量。
-COMPACT_SURFACE_TOOL_COUNT = FACADE_TOOL_COUNT + 1
 
 _ELICIT_DEFAULTS = "按星阙默认继续 (use Xingque defaults)"
 _ELICIT_PROVIDE = "我在对话里补充设置 (I will provide settings in chat)"

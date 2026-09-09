@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 # 起不来的反面教材）；只有显式 HOROSA_STRICT_CONFIG=1 才升级为报错。removed 档=接受并忽略+
 # 指路替代（删旗标不删兼容）。
 ENV_FLAG_REGISTRY: dict[str, str] = {
+    # v0.37.0 运行时安全：mac 启动器的「只杀自己人」补丁开关（设 0 会失去误杀保护），
+    # 以及 AppCDS 训练 JVM 的端口（上游硬编码 39997，与别的程序撞车时是静默降级）。
+    "HOROSA_RUNTIME_LAUNCHER_PATCH": "experimental",
+    "HOROSA_CDS_TRAIN_PORT": "experimental",
     "HOROSA_STRICT_CONFIG": "stable",
     "HOROSA_CLARIFY": "stable",
     "HOROSA_SERVER_ROOT": "stable",
