@@ -1784,7 +1784,9 @@ def _iter_client_entries(payload: Any) -> Any:
                 yield f"{project_path}::{name}", entry
 
 
-def _audit_client_entry(name: str, entry: dict[str, Any], *, client: str) -> list[dict[str, str]]:
+def _audit_client_entry(
+    name: str, entry: dict[str, Any], *, client: str, config_dir: Path | None = None
+) -> list[dict[str, str]]:
     """一条 horosa 配置的体检结果。纯函数，便于测试与守卫复用。"""
     problems: list[dict[str, str]] = []
     args = [str(a) for a in (entry.get("args") or [])]
@@ -1813,7 +1815,12 @@ def _audit_client_entry(name: str, entry: dict[str, Any], *, client: str) -> lis
         index = args.index("--directory")
         if index + 1 < len(args):
             target = args[index + 1]
-            if "${" not in target and not (Path(target).expanduser() / "pyproject.toml").is_file():
+            # 🔴 相对路径要按**配置文件所在目录**解析，不是按跑 check 的那一刻的 CWD ——
+            # 客户端启动 server 时的工作目录是项目根，而 `client check` 可能在任何地方被调用。
+            resolved = Path(target).expanduser()
+            if not resolved.is_absolute() and config_dir is not None:
+                resolved = (config_dir / resolved).resolve()
+            if "${" not in target and not (resolved / "pyproject.toml").is_file():
                 problems.append({
                     "code": "directory_missing",
                     "detail": f"--directory 指向的目录里没有 pyproject.toml：{target}",
@@ -1883,7 +1890,7 @@ def client_check(
                               "note": "该文件存在但没有 horosa 条目。"})
                 continue
             for entry_name, entry in entries:
-                problems = _audit_client_entry(entry_name, entry, client=name)
+                problems = _audit_client_entry(entry_name, entry, client=name, config_dir=path.parent)
                 found.append({
                     "path": str(path), "entry": entry_name, "ok": not problems,
                     "problems": problems,

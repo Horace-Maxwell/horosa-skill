@@ -1,11 +1,12 @@
 {
+  "//": "Cursor 的项目级 MCP 配置。生成命令：uv run horosa-skill client config --format cursor",
   "mcpServers": {
     "horosa": {
       "command": "uv",
       "args": [
         "run",
         "--directory",
-        "./horosa-skill",
+        "${workspaceFolder}/horosa-skill",
         "horosa-skill",
         "serve",
         "--transport",

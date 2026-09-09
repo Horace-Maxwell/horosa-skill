@@ -157,8 +157,8 @@ def test_server_info_reports_our_version_not_the_sdk_version(tmp_path) -> None:
 
 # ---------------------------------------------------------------- client check
 
-def _audit(entry: dict, client: str = "cursor") -> list[str]:
-    return [p["code"] for p in cli._audit_client_entry("horosa", entry, client=client)]
+def _audit(entry: dict, client: str = "cursor", config_dir=None) -> list[str]:
+    return [p["code"] for p in cli._audit_client_entry("horosa", entry, client=client, config_dir=config_dir)]
 
 
 def test_client_check_catches_an_unexpanded_placeholder() -> None:
@@ -210,3 +210,36 @@ def test_client_check_finds_nested_claude_code_project_entries() -> None:
     payload = {"projects": {"/some/repo": {"mcpServers": {"horosa": {"command": "uv", "args": []}}}}}
     found = list(cli._iter_client_entries(payload))
     assert len(found) == 1 and found[0][0].endswith("::horosa")
+
+
+def test_relative_directory_resolves_against_the_config_file_not_the_cwd(tmp_path) -> None:
+    """🔴 客户端启动 server 时的 CWD 是项目根，而 `client check` 可能在任何地方被调用。
+
+    仓里提交的 `.cursor/mcp.json` 曾用 `./horosa-skill`，从 horosa-skill/ 里跑 check 就被误报
+    `directory_missing`。相对路径必须按**配置文件所在目录**解析；仓内两份配置现在都用
+    `${workspaceFolder}`，这条锁的是审计器本身不会再误报。
+    """
+    package_dir = tmp_path / "horosa-skill"
+    package_dir.mkdir()
+    (package_dir / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+    entry = {"command": "uv", "args": ["run", "--directory", "./horosa-skill",
+                                       "horosa-skill", "serve", "--transport", "stdio"]}
+    assert _audit(entry, config_dir=tmp_path) == []
+    assert "directory_missing" in _audit(entry, config_dir=tmp_path / "elsewhere")
+
+
+def test_committed_client_configs_are_clean() -> None:
+    """仓里提交的 `.vscode/mcp.json` / `.cursor/mcp.json` 必须自己过体检。"""
+    import json
+    from pathlib import Path as _Path
+
+    repo_root = _Path(__file__).resolve().parents[2]
+    for rel, client in ((".vscode/mcp.json", "vscode"), (".cursor/mcp.json", "cursor")):
+        path = repo_root / rel
+        assert path.is_file(), f"{rel} 应随仓提交（打开仓即用）"
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        entries = list(cli._iter_client_entries(payload))
+        assert entries, f"{rel} 里没有 horosa 条目"
+        for entry_name, entry in entries:
+            problems = cli._audit_client_entry(entry_name, entry, client=client, config_dir=path.parent)
+            assert problems == [], f"{rel}: {[p['code'] for p in problems]}"
