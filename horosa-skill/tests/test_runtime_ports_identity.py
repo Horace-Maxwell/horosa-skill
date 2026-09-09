@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -61,7 +62,23 @@ def test_process_command_reads_the_command_line() -> None:
 
 # ------------------------------------------------------------------ ports
 
+def _listener_lookup_available() -> bool:
+    """本平台的监听查询工具在不在（Linux 需要 iproute2 的 `ss`，某些精简镜像里没有）。"""
+    if os.name == "nt":
+        return shutil.which("netstat") is not None
+    if sys.platform == "darwin":
+        return shutil.which("netstat") is not None
+    return shutil.which("ss") is not None
+
+
 def test_listener_pids_finds_a_real_listener(listening_server) -> None:
+    """🔴 这条要真跑到才有意义。
+
+    查不到持有者与「端口空着」必须区分开 —— `listener_pids` 返回空列表**只表示查不到**。
+    工具缺席时 skip 而不是把空列表当成通过：那样这条守卫会在最需要它的环境里静默失效。
+    """
+    if not _listener_lookup_available():
+        pytest.skip("本平台的监听查询工具不可用（Linux 需 iproute2 的 ss）")
     port, proc = listening_server
     assert proc.pid in listener_pids(port)
 
@@ -87,6 +104,12 @@ def test_empty_listener_pids_must_not_be_read_as_free() -> None:
 # ------------------------------------------------------------------ identity
 
 def test_a_stranger_on_our_port_is_classified_foreign(listening_server, tmp_path) -> None:
+    """真起一个陌生监听进程，判定必须是 foreign（而不是「HTTP 200 即可达」）。
+
+    工具缺席时 skip：没有监听查询就退到第三级证据，那条另有用例（`no_evidence_at_all`）。
+    """
+    if not _listener_lookup_available():
+        pytest.skip("本平台的监听查询工具不可用（Linux 需 iproute2 的 ss）")
     port, proc = listening_server
     verdict = classify_endpoint(f"http://127.0.0.1:{port}", runtime_root=tmp_path / "runtime")
     assert verdict.verdict == "foreign"
