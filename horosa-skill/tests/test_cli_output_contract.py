@@ -46,6 +46,7 @@ def test_settings_provenance_reflects_env(monkeypatch) -> None:
 
     monkeypatch.setenv("HOROSA_MCP_COMPACT", "1")
     monkeypatch.delenv("HOROSA_SERVER_ROOT", raising=False)
+    monkeypatch.delenv("HOROSA_CHART_SERVER_ROOT", raising=False)
     s = Settings.from_env()
     assert s.settings_provenance["mcp_compact"] == "env:HOROSA_MCP_COMPACT"
     # v0.37.0 D1：两个 URL 不再是独立的默认值，而是由端口**派生**。

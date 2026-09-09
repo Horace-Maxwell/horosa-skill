@@ -18,6 +18,21 @@ from horosa_skill.errors import RuntimeInstallError, RuntimeValidationError
 from horosa_skill.runtime import HorosaRuntimeManager
 
 
+@pytest.fixture(autouse=True)
+def _managed_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """本文件全部用例测的是 **managed** 模式（本机 runtime 由我们启停）。
+
+    🔴 v0.37.0 起 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指向别处会切进 **external**
+    模式（只探不起不停）。而 AGENTS §8 记的「复现 CI 形状」recipe 恰恰要求把这两个变量指到不可达
+    地址 —— 维护机上照那条 recipe 跑，这一整个文件会集体红，且报错完全指不到「模式不对」。
+    每个用例自己清一遍太容易漏，autouse 一次清干净。真要测 external 的用例自己 setenv 覆盖。
+    """
+    monkeypatch.delenv("HOROSA_SERVER_ROOT", raising=False)
+    monkeypatch.delenv("HOROSA_CHART_SERVER_ROOT", raising=False)
+    monkeypatch.delenv("HOROSA_PORTS", raising=False)
+    monkeypatch.delenv("HOROSA_RUNTIME_TRUST_PORTS", raising=False)
+
+
 def create_runtime_archive(tmp_path: Path) -> Path:
     payload_root = tmp_path / "runtime-payload"
     (payload_root / "Horosa-Web/astropy").mkdir(parents=True, exist_ok=True)
