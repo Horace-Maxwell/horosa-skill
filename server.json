@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.horace-maxwell/horosa-skill",
   "title": "Horosa Skill",
-  "description": "Local-first offline Horosa / Xingque MCP server with structured export contracts, bundled hover knowledge, local memory, and release-managed runtime payloads.",
+  "description": "Local-first offline 术数/占星 (Horosa 星阙): 106 technique tools, all computed on your machine.",
   "version": "0.36.0",
   "websiteUrl": "https://github.com/Horace-Maxwell/horosa-skill",
   "repository": {
@@ -44,10 +44,19 @@
           "isRequired": false
         }
       ]
+    },
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.36.0/horosa-skill-0.36.0.mcpb",
+      "version": "0.36.0",
+      "fileSha256": "",
+      "transport": {
+        "type": "stdio"
+      }
     }
   ],
   "_meta": {
-    "io.github.horace-maxwell/horosa-skill": {
+    "io.modelcontextprotocol.registry/publisher-provided": {
       "category": "knowledge-and-reasoning",
       "tags": [
         "mcp",
@@ -67,14 +76,15 @@
         "streamable-http"
       ],
       "install": [
-        "uvx horosa-skill install",
+        "uvx --from \"git+https://github.com/Horace-Maxwell/horosa-skill@v0.36.0#subdirectory=horosa-skill\" horosa-skill install",
         "或源码：uv sync --dev && uv run horosa-skill install"
       ],
       "start": [
-        "uvx horosa-skill serve --transport stdio",
+        "uvx --from \"git+https://github.com/Horace-Maxwell/horosa-skill@v0.36.0#subdirectory=horosa-skill\" horosa-skill serve --transport stdio",
         "或源码：uv run horosa-skill serve --transport stdio"
       ],
-      "releaseManifest": "https://github.com/Horace-Maxwell/horosa-skill/releases/latest/download/runtime-manifest.json"
+      "releaseManifest": "https://github.com/Horace-Maxwell/horosa-skill/releases/latest/download/runtime-manifest.json",
+      "publish_blocked_until": "pypi trusted publisher (deferred by the maintainer)"
     }
   }
 }

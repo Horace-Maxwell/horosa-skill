@@ -5,13 +5,15 @@
       "args": [
         "run",
         "--directory",
-        "<ABSOLUTE_PATH_TO_REPO>/horosa-skill",
+        "./horosa-skill",
         "horosa-skill",
         "serve",
         "--transport",
         "stdio"
       ],
-      "cwd": "<ABSOLUTE_PATH_TO_REPO>/horosa-skill"
+      "env": {
+        "HOROSA_MCP_COMPACT": "1"
+      }
     }
   }
 }

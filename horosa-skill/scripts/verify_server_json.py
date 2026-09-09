@@ -43,17 +43,35 @@ def main() -> None:
     if payload.get("$schema") != _PINNED_SCHEMA:
         errors.append(f"$schema must be pinned to {_PINNED_SCHEMA}")
 
+    # 注册表把 description 当卡片标题用，上限 100 字符 —— 超了整条记录被拒（我们曾是 158）。
+    description = str(payload.get("description") or "")
+    if len(description) > 100:
+        errors.append(f"description must be ≤100 chars (registry limit), got {len(description)}")
+
+    # 私有元数据必须住在注册表规定的命名空间下。自造 key（我们曾用 `io.github.<owner>/<name>`）
+    # 会被 publish 拒收，而本地校验此前完全看不见这一条。
+    meta = payload.get("_meta")
+    if isinstance(meta, dict):
+        allowed_meta = {"io.modelcontextprotocol.registry/publisher-provided"}
+        stray = set(meta) - allowed_meta
+        if stray:
+            errors.append(
+                f"_meta keys must be registry-defined namespaces {sorted(allowed_meta)}; got {sorted(stray)}"
+            )
+
     packages = payload.get("packages")
     if not isinstance(packages, list) or not packages:
         errors.append("packages must contain at least one package definition")
-    else:
-        package = packages[0]
+    # 🔴 逐个查，不是只查 packages[0]。加第二个 package（mcpb）时，只查首个的旧实现对它
+    # 一无所知 —— 一个 identifier 指向不存在的 release 资产、fileSha256 为空的条目会一路绿灯
+    # 进注册表，客户端安装时才 404。
+    for index, package in enumerate(packages or []):
         for field in ("registryType", "identifier", "version"):
             if field not in package:
-                errors.append(f"first package missing field: {field}")
+                errors.append(f"packages[{index}] missing field: {field}")
         transport = package.get("transport")
         if not isinstance(transport, dict) or "type" not in transport:
-            errors.append("first package transport must be an object with a 'type' (schema 2025-12-11 shape)")
+            errors.append(f"packages[{index}] transport must be an object with a 'type' (schema 2025-12-11 shape)")
         # Registry 认可的分发通道；`github` 不是其中之一（repository.source 只是元数据，不是通道）。
         # 我们走 `mcpb`：GitHub Release 上的 .mcpb + fileSha256，客户端安装前自校验 —— 这条路不需要
         # 发 PyPI，正好绕开 horosa-core-js 在 wheel 之外的分发归属问题。
@@ -73,12 +91,20 @@ def main() -> None:
                 errors.append("pypi package runtimeHint must be 'uvx' (the documented launcher)")
         if registry_type == "mcpb":
             digest = str(package.get("fileSha256") or "")
+            blocked = "publish_blocked_until" in json.dumps(payload.get("_meta") or {}, ensure_ascii=False)
             if not digest:
-                errors.append("mcpb packages must carry fileSha256 (clients verify it before install)")
-            elif digest != "TBD-set-by-release-pipeline" and len(digest) != 64:
+                if not blocked:
+                    errors.append("mcpb packages must carry fileSha256 (clients verify it before install)")
+            elif len(digest) != 64:
                 errors.append(f"fileSha256 must be a 64-char sha256 digest, got {len(digest)} chars")
-            if "mcp" not in str(package.get("identifier") or "").lower():
+            identifier = str(package.get("identifier") or "")
+            if "mcp" not in identifier.lower():
                 errors.append("mcpb identifier URL must contain 'mcp' (registry ownership rule)")
+            # 资产 URL 必须指向**当前**版本的 tag，否则升级后客户端装到的还是旧包。
+            if package.get("version") and f"/v{package['version']}/" not in identifier:
+                errors.append(
+                    f"mcpb identifier must point at the current release tag v{package['version']}: {identifier}"
+                )
 
     raw = SERVER_JSON.read_text(encoding="utf-8")
     if "TBD" in raw:

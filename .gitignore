@@ -12,7 +12,10 @@ Thumbs.db
 **/.venv/
 
 .idea/
-.vscode/
+# 🔴 目录整体忽略时，`!.vscode/mcp.json` 这类反选是**无效**的 —— git 不会下降到一个被忽略的
+# 目录里去看有没有例外。必须写成 `.vscode/*`（忽略其中的条目而非目录本身），反选才生效。
+.vscode/*
+!.vscode/mcp.json
 
 horosa-skill/.coverage
 horosa-skill/dist/
@@ -42,7 +45,9 @@ ${env:HOME*
 
 # local agent/session state — never upload
 .claude/
-.cursor/
+.cursor/*
+!.cursor/mcp.json
+!.cursor/rules/
 .editorconfig
 .gitattributes
 *.local.md

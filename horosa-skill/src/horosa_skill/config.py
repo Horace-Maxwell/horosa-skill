@@ -47,6 +47,8 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     "HOROSA_MCP_COMPACT": "stable",
     "HOROSA_MCP_ELICIT": "stable",
     "HOROSA_MCP_ELICIT_TIMEOUT_SECONDS": "stable",
+    "HOROSA_MCP_TOKEN": "stable",
+    "HOROSA_MCP_ALLOWED_HOSTS": "stable",
     "HOROSA_TOOLSETS": "stable",
     "HOROSA_JS_ENGINE_TIMEOUT_SECONDS": "stable",
     "HOROSA_SKILL_HOST": "stable",

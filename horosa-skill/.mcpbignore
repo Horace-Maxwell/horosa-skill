@@ -1,0 +1,41 @@
+# MCPB 打包排除项。bundle 根 = horosa-skill/（须持有 pyproject.toml，`server.type: "uv"` 靠它解析依赖）。
+#
+# 🔴 模式是 gitignore 语义：不带前导 `/` 的 `vendor/` 会在**任意层级**匹配 ——
+# 第一版就这么把 `src/horosa_skill/vendor/`（真正在运行时被调用的 vendored core-js）一起排掉了，
+# 包能打出来、能装上，然后每个 JS 技法在用户机器上失效。所有目录一律写成 `/xxx/` 锚到包根。
+/tests/
+/build/
+/dist/
+/.venv/
+# 🔴 scripts/ 不能整个排掉：pyproject 的 wheel force-include 会把
+# `scripts/runtime_templates/windows` 装进包（Windows 用户的启动脚本覆盖模板，issue #14）。
+# 排掉它 → `uv run --directory <bundle>` 在宿主机上构建时 hatchling 直接失败，
+# 包装得上、一跑就炸。同样因为「父目录被整体忽略时反选无效」，这里必须写 `/scripts/*`。
+/scripts/verify_*.py
+/scripts/gen_*.py
+/scripts/revendor_*.py
+/scripts/*.sh
+/scripts/preflight_release.py
+/scripts/sync_windows_release.py
+/contracts/
+/benchmarks/
+/docs/
+/examples/
+/.pytest_cache/
+/.ruff_cache/
+/.horosa-cache/
+/htmlcov/
+
+# 上游只读源树（187 MB）与 node 源（13 MB）都不参与运行 —— 运行时用的是
+# src/horosa_skill/vendor 下那份已 vendored 的副本。第一次打包实测：不排它们是 55.3 MB / 5311 文件。
+/vendor/
+/horosa-core-js/
+
+# 本机产物，绝不该进包
+memory.db
+runs/
+*.mcpb
+*.egg-info/
+__pycache__/
+*.pyc
+.coverage

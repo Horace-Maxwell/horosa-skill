@@ -288,7 +288,7 @@ COUNT_DOCS = [
     "README_EN.md",
     "AGENTS.md",
     "CLAUDE.md",
-    "manifest.json",
+    "horosa-skill/manifest.json",
     "skills/horosa-agent/SKILL.md",
     ".claude-plugin/plugin.json",
     ".claude-plugin/marketplace.json",
@@ -481,15 +481,18 @@ def check_compact_surface_count() -> None:
 
 
 def check_root_manifest_version() -> None:
-    """根 manifest.json 的 version 必须与包版本锁步（曾停在 0.32.0 两个版本无人察觉）。"""
+    """MCPB manifest 的 version 必须与包版本锁步（曾停在 0.32.0 两个版本无人察觉）。
+
+    v0.37.0 起它住在 horosa-skill/ —— MCPB 的 bundle 根必须持有 pyproject.toml，
+    `server.type: "uv"` 才解析得到依赖。"""
     init = (ROOT / "horosa-skill/src/horosa_skill/__init__.py").read_text(encoding="utf-8")
     m = re.search(r"__version__\s*=\s*[\"']([^\"']+)[\"']", init)
-    manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
+    manifest = json.loads((ROOT / "horosa-skill/manifest.json").read_text(encoding="utf-8"))
     if not m:
         err("__init__.py 读不到 __version__")
         return
     if manifest.get("version") != m.group(1):
-        err(f"根 manifest.json version={manifest.get('version')!r} ≠ 包版本 {m.group(1)!r}")
+        err(f"horosa-skill/manifest.json version={manifest.get('version')!r} ≠ 包版本 {m.group(1)!r}")
 
 
 def check_envelope_schema_version() -> None:

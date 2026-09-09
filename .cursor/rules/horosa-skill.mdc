@@ -1,0 +1,23 @@
+---
+description: Horosa Skill MCP usage rules for Cursor agents
+alwaysApply: true
+---
+
+# Horosa Skill MCP Rules (thin — policy source of truth: `skills/horosa-agent/SKILL.md`)
+
+- Any Horosa / 星阙 metaphysics output → call the Horosa MCP tools (`horosa_cn_qimen`,
+  `horosa_cn_liureng_gods`, `horosa_astro_chart`, …). **Never hand-calculate** with Exec/Python/JS/web
+  formulas — they bypass the runtime, Xingque defaults, export contract, memory, and reports.
+- **Clarify before calling**: if a result-changing setting is missing (time/place/timezone, gender,
+  house system, 起局方式, 贵人体系, 六爻 lines, 地分, target year/date, report format), ask a short
+  question with options first — or call `horosa_agent_guidance`. Defaults only when the user
+  explicitly accepts them (大六壬 default `guirengType: 2` 星占法贵人).
+- Gate protocol: tools reject unconfirmed calls with `agent_guidance.required`; after the user
+  answers include `agent_confirmed_settings: true` (`defaults_accepted: true` for accepted defaults)
+  + `clarification_notes`. On `details.agent_recovery` → stop and ask with `prompt_to_user`; never
+  self-confirm or switch tools to bypass.
+- Trust only the returned `export_snapshot.export_text` / `export_format.sections`. Missing section →
+  rerun `doctor` / `openclaw-check`; never claim MongoDB / port 7897 / Xingque Desktop / remote-DB
+  dependencies.
+- Full client policy + payload/report/troubleshooting sheets: `skills/horosa-agent/SKILL.md`
+  (+ its `references/`). Repo/maintainer rules: `AGENTS.md`.

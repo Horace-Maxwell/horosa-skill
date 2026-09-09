@@ -7,6 +7,11 @@ services:
       HOROSA_SERVER_ROOT: ${HOROSA_SERVER_ROOT:-http://host.docker.internal:9999}
       HOROSA_SKILL_HOST: 0.0.0.0
       HOROSA_SKILL_PORT: 8765
+      # 绑 0.0.0.0 必须给令牌（否则 serve 拒绝启动）。生成一个：
+      #   python3 -c "import secrets;print(secrets.token_urlsafe(24))"
+      HOROSA_MCP_TOKEN: ${HOROSA_MCP_TOKEN:?set HOROSA_MCP_TOKEN before `docker compose up`}
+      # 容器里的客户端用 host.docker.internal 访问宿主时的 Host 头（默认已放行，这里留作示例）
+      HOROSA_MCP_ALLOWED_HOSTS: ${HOROSA_MCP_ALLOWED_HOSTS:-host.docker.internal:8765}
     volumes:
       - horosa_skill_data:/root/.horosa-skill
 

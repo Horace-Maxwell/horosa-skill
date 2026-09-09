@@ -13,16 +13,23 @@
   "documentation": "https://github.com/Horace-Maxwell/horosa-skill#readme",
   "support": "https://github.com/Horace-Maxwell/horosa-skill/issues",
   "license": "AGPL-3.0-only",
-  "keywords": ["astrology", "metaphysics", "horosa", "xingque", "offline", "local-first"],
+  "keywords": [
+    "astrology",
+    "metaphysics",
+    "horosa",
+    "xingque",
+    "offline",
+    "local-first"
+  ],
   "server": {
     "type": "uv",
-    "entry_point": "horosa-skill/src/horosa_skill/surfaces/mcp_server.py",
+    "entry_point": "src/horosa_skill/surfaces/mcp_server.py",
     "mcp_config": {
       "command": "uv",
       "args": [
         "run",
         "--directory",
-        "${__dirname}/horosa-skill",
+        "${__dirname}",
         "horosa-skill",
         "serve",
         "--transport",
@@ -49,7 +56,10 @@
     }
   },
   "compatibility": {
-    "platforms": ["darwin", "win32"],
+    "platforms": [
+      "darwin",
+      "win32"
+    ],
     "runtimes": {
       "python": ">=3.12"
     }

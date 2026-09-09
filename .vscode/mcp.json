@@ -1,0 +1,21 @@
+{
+  "//": "VS Code (Copilot Chat) 的项目级 MCP 配置。打开本仓即可用，无需先装到全局。生成命令：uv run horosa-skill client config --format vscode",
+  "servers": {
+    "horosa": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${workspaceFolder}/horosa-skill",
+        "horosa-skill",
+        "serve",
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "HOROSA_MCP_COMPACT": "1"
+      }
+    }
+  }
+}

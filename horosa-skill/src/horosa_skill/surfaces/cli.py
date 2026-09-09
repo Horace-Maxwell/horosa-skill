@@ -407,6 +407,49 @@ def _openclaw_check_command(workspace_root: Path | str, config_path: Path | str 
     return _format_cli_command(command)
 
 
+def _opt(value: Any, default: Any = None) -> Any:
+    """把 typer 的 `OptionInfo` 还原成它承载的默认值。
+
+    🔴 直接以 Python 函数调用一个 typer 命令（测试、以及本模块内部的 `stop` → `runtime stop`
+    这类转调）时，未传的形参拿到的是 **OptionInfo 对象**而不是默认值。对象恒真、也没有 `.strip()`，
+    于是布尔开关全部按「真」走、字符串参数直接 AttributeError。
+    这个陷阱在 v0.37.0 前已经让 `test_streamable_http_serve_stops_runtime_after_exit`
+    「因为错误的原因通过」了很久：它断言的停机分支其实是被 `bool(OptionInfo)` 打开的。
+    """
+    if type(value).__name__ in {"OptionInfo", "ArgumentInfo"}:
+        inner = getattr(value, "default", None)
+        if inner is None or inner is Ellipsis:
+            return default
+        return inner
+    return value
+
+
+_TRANSPORT_ALIASES = {
+    "http": "streamable-http",
+    "streamable_http": "streamable-http",
+    "streamablehttp": "streamable-http",
+    "shttp": "streamable-http",
+}
+_TRANSPORTS = {"streamable-http", "stdio", "sse"}
+
+
+def _normalized_transport(value: str) -> str:
+    text = (value or "").strip().lower()
+    text = _TRANSPORT_ALIASES.get(text, text)
+    if text not in _TRANSPORTS:
+        raise typer.BadParameter(
+            f"未知传输 `{value}`。可选：streamable-http（默认）、stdio、sse（legacy）。"
+            "注意 `http` 是 Claude Code 注册命令里的说法，这里请写 streamable-http。"
+        )
+    return text
+
+
+def _mask_token(token: str | None) -> str:
+    if not token:
+        return ""
+    return f"{token[:4]}…{token[-2:]}" if len(token) > 8 else "****"
+
+
 def _network_hints() -> dict[str, Any]:
     """代理/镜像相关的现场事实 —— 这些是「装不上 / 连不上本地后端」最常见的两类成因。"""
     proxy_vars = {
@@ -1192,7 +1235,7 @@ def selfcheck() -> None:
 def stop(
     force: bool = typer.Option(False, "--force", help="Stop even when the services were not started by this tool."),
 ) -> None:
-    _runtime_stop_impl(force=force)
+    _runtime_stop_impl(force=bool(_opt(force, False)))
 
 
 def _runtime_stop_impl(*, force: bool) -> None:
@@ -1265,7 +1308,8 @@ def runtime_start(
 ) -> None:
     settings = Settings.from_env()
     manager = _runtime_manager(settings)
-    budget = 0.0 if no_wait else wait
+    wait = _opt(wait)
+    budget = 0.0 if bool(_opt(no_wait, False)) else wait
     try:
         result = manager.start_local_services(wait_seconds=budget)
     except RuntimeError as exc:
@@ -1278,7 +1322,7 @@ def runtime_start(
 def runtime_stop(
     force: bool = typer.Option(False, "--force", help="Stop even when the services were not started by this tool."),
 ) -> None:
-    _runtime_stop_impl(force=force)
+    _runtime_stop_impl(force=bool(_opt(force, False)))
 
 
 @runtime_app.command("restart", help="Stop then start. 重启（先停后起）。")
@@ -1302,9 +1346,20 @@ def runtime_restart(
 
 @app.command()
 def serve(
-    transport: str = typer.Option("streamable-http", help="MCP transport: streamable-http or stdio."),
-    host: str = typer.Option("127.0.0.1", help="Host for streamable HTTP."),
-    port: int = typer.Option(8765, help="Port for streamable HTTP."),
+    transport: str = typer.Option(
+        "streamable-http",
+        help="MCP transport: streamable-http | stdio | sse (legacy). 传输方式。",
+    ),
+    host: str = typer.Option(None, help="Host for streamable HTTP (default: HOROSA_SKILL_HOST or 127.0.0.1)."),
+    port: int = typer.Option(None, help="Port for streamable HTTP (default: HOROSA_SKILL_PORT or 8765)."),
+    token: str = typer.Option(
+        None, "--token",
+        help="Shared bearer token required on every request (or HOROSA_MCP_TOKEN). 共享访问令牌。",
+    ),
+    allow_unauthenticated: bool = typer.Option(
+        False, "--allow-unauthenticated",
+        help="Bind to a non-loopback address without a token (you accept the exposure). 明知无鉴权仍对外绑定。",
+    ),
     skip_runtime_start: bool = typer.Option(False, help="Do not auto-start the installed offline runtime."),
     stop_runtime_on_exit: bool = typer.Option(
         False,
@@ -1312,9 +1367,60 @@ def serve(
         help="Stop the offline runtime when this server exits (default: keep it warm). 退出时顺带停掉 runtime。",
     ),
 ) -> None:
+    # 直接函数调用时 typer 不做默认值解析，见 _opt 的说明。
+    transport = _opt(transport, "streamable-http")
+    host = _opt(host)
+    port = _opt(port)
+    token = _opt(token)
+    allow_unauthenticated = bool(_opt(allow_unauthenticated, False))
+    skip_runtime_start = bool(_opt(skip_runtime_start, False))
+    stop_runtime_on_exit = bool(_opt(stop_runtime_on_exit, False))
     settings = Settings.from_env()
-    settings.host = host
-    settings.port = port
+    # 🔴 `--transport http` 是最常见的手误（Claude Code 的 `claude mcp add --transport http` 用的
+    # 就是这个词）。旧实现把未知值原样传给 SDK，得到的是一句不知所云的内部报错。
+    transport = _normalized_transport(transport)
+    # host/port 缺省来自 env（旧实现把 typer 的字面默认写死，于是 docker-compose 里设的
+    # HOROSA_SKILL_HOST/PORT 永远不生效 —— 容器只监听 127.0.0.1，宿主怎么连都连不上）。
+    if host is not None:
+        settings.host = host
+    if port is not None:
+        settings.port = port
+    host, port = settings.host, settings.port
+    token = (token or os.environ.get("HOROSA_MCP_TOKEN", "") or "").strip() or None
+    if token:
+        os.environ["HOROSA_MCP_TOKEN"] = token
+    if transport != "stdio" and host not in {"127.0.0.1", "localhost", "::1"}:
+        if not token and not allow_unauthenticated:
+            typer.echo(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "code": "serve.token_required",
+                        "message": f"绑定到非回环地址 {host} 而没有设置访问令牌 —— 已拒绝启动。",
+                        "details": {
+                            "host": host,
+                            "next_action": (
+                                "设 --token <随机串>（或 HOROSA_MCP_TOKEN），客户端在 Authorization: Bearer "
+                                "头里带上它；确实想裸奔请显式加 --allow-unauthenticated。"
+                            ),
+                            "why": (
+                                "本 server 能读写本机记忆库、生成文件、驱动本地 runtime。"
+                                "对外绑定且无鉴权 = 同网段任何人都能做这些事。"
+                            ),
+                        },
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                err=True,
+            )
+            raise typer.Exit(code=2)
+        if not token:
+            typer.echo(
+                f"⚠️  正在以**无鉴权**方式绑定 {host}:{port}，且没有 TLS。"
+                "同网段的任何人都能调用本机的 Horosa 工具、读你的记忆库。仅在可信网络里这么做。",
+                err=True,
+            )
     manager = _runtime_manager(settings)
     # 🔴 端口先探再起：8765 被占时旧实现让 uvicorn 抛裸 traceback（OSError: [Errno 48]），
     # 而这是**最常见**的一次失败 —— 用户在两个终端里各起一个 serve。
@@ -1346,6 +1452,19 @@ def serve(
             )
             raise typer.Exit(code=2)
     service = HorosaSkillService(settings, runtime_manager=manager)
+    # 🔴 横幅必须在启动 runtime **之前**打印：start_local_services 可以阻塞到 45 秒
+    # （首次更久），期间用户盯着一个没有任何输出的终端，无从判断是卡住了还是在装。
+    if transport != "stdio":
+        path = "/sse" if transport == "sse" else "/mcp"
+        typer.echo(
+            f"Horosa Skill MCP 正在 http://{host}:{port}{path} 监听"
+            f"（{transport}{'（legacy）' if transport == 'sse' else ''}，{len(TOOL_DEFINITIONS)} 个技法工具）。\n"
+            + (f"访问令牌：已启用（Authorization: Bearer {_mask_token(token)}）。\n" if token else "")
+            + f"接入 Claude Code：claude mcp add horosa --transport http http://{host}:{port}{path}\n"
+            f"其他客户端：uv run horosa-skill client config --format <client>（见 README「接入 AI 客户端」）。\n"
+            + ("正在启动本机 runtime（首次可能要几分钟）……" if not skip_runtime_start else ""),
+            err=True,
+        )
     started_now = False
     if not skip_runtime_start:
         if transport == "stdio":
@@ -1357,14 +1476,6 @@ def serve(
             except RuntimeError as exc:
                 typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
                 raise typer.Exit(code=2)
-    # 启动横幅（stderr）：监听地址 + 客户端注册一行指引；stdio 模式不打印（协议流走 stdout/stdin）。
-    if transport != "stdio":
-        typer.echo(
-            f"Horosa Skill MCP 正在 http://{host}:{port}/mcp 监听（streamable-http，{len(TOOL_DEFINITIONS)} 个技法工具）。\n"
-            f"接入 Claude Code：claude mcp add horosa --transport http http://{host}:{port}/mcp\n"
-            f"其他客户端配置见 examples/clients/ 或 README「接入 AI 客户端」。",
-            err=True,
-        )
     from horosa_skill.runtime import registry as _registry
 
     try:
@@ -1632,6 +1743,172 @@ _CLIENT_COMPACT_REASON = {
     "cline": "Cline 无工具搜索，全量面偏重",
     "zed": "Zed 无工具搜索，全量面偏重",
 }
+
+
+# 各客户端配置文件在本机的位置（`client check` 用；找不到不是错误，只是「还没配」）。
+_CLIENT_CONFIG_PATHS: dict[str, list[str]] = {
+    "claude-code": ["~/.claude.json", "./.mcp.json"],
+    "claude-desktop": [
+        "~/Library/Application Support/Claude/claude_desktop_config.json",
+        "~/AppData/Roaming/Claude/claude_desktop_config.json",
+        "~/.config/Claude/claude_desktop_config.json",
+    ],
+    "cursor": ["~/.cursor/mcp.json", "./.cursor/mcp.json"],
+    "vscode": ["~/Library/Application Support/Code/User/mcp.json", "./.vscode/mcp.json"],
+    "codex": ["~/.codex/config.toml"],
+    "gemini": ["~/.gemini/settings.json"],
+    "windsurf": ["~/.codeium/windsurf/mcp_config.json"],
+    "cline": [
+        "~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
+    ],
+    "zed": ["~/.config/zed/settings.json"],
+}
+# 三种根键：mcpServers（多数）/ servers（VS Code）/ context_servers（Zed）。
+_SERVER_ROOT_KEYS = ("mcpServers", "servers", "context_servers", "mcp_servers")
+
+
+def _iter_client_entries(payload: Any) -> Any:
+    """从一份客户端配置里找出 horosa 条目（含 Claude Code 的 projects.<path>.mcpServers 嵌套）。"""
+    if not isinstance(payload, dict):
+        return
+    for key in _SERVER_ROOT_KEYS:
+        block = payload.get(key)
+        if isinstance(block, dict):
+            for name, entry in block.items():
+                if isinstance(entry, dict) and "horosa" in str(name).lower():
+                    yield name, entry
+    projects = payload.get("projects")
+    if isinstance(projects, dict):
+        for project_path, project in projects.items():
+            for name, entry in _iter_client_entries(project):
+                yield f"{project_path}::{name}", entry
+
+
+def _audit_client_entry(name: str, entry: dict[str, Any], *, client: str) -> list[dict[str, str]]:
+    """一条 horosa 配置的体检结果。纯函数，便于测试与守卫复用。"""
+    problems: list[dict[str, str]] = []
+    args = [str(a) for a in (entry.get("args") or [])]
+    command = str(entry.get("command") or "")
+    blob = " ".join([command, *args, json.dumps(entry.get("env") or {}, ensure_ascii=False)])
+
+    if "${" in blob and "${workspaceFolder}" not in blob and "${CLAUDE_PROJECT_DIR" not in blob:
+        problems.append({
+            "code": "unexpanded_placeholder",
+            "detail": f"配置里有客户端不会展开的占位符：{blob[blob.index('${'):][:60]}",
+            "fix": "换成真实路径，或用该客户端支持的变量（VS Code 用 ${workspaceFolder}）。",
+        })
+    if args and "--transport" not in args:
+        problems.append({
+            "code": "missing_transport",
+            "detail": "没有 `--transport stdio`。",
+            "fix": "在 args 末尾加 [\"--transport\", \"stdio\"]；缺它时旧版本会默认起 HTTP server，客户端连不上。",
+        })
+    if "mcp" in args and "serve" not in args:
+        problems.append({
+            "code": "legacy_subcommand",
+            "detail": "用的是已下线的 `horosa-skill mcp` 子命令。",
+            "fix": "改成 `serve --transport stdio`。",
+        })
+    if "--directory" in args:
+        index = args.index("--directory")
+        if index + 1 < len(args):
+            target = args[index + 1]
+            if "${" not in target and not (Path(target).expanduser() / "pyproject.toml").is_file():
+                problems.append({
+                    "code": "directory_missing",
+                    "detail": f"--directory 指向的目录里没有 pyproject.toml：{target}",
+                    "fix": "指向 horosa-skill 包目录（含 pyproject.toml 的那一层）。",
+                })
+    if command.endswith("uvx") and "--from" not in args:
+        problems.append({
+            "code": "pypi_not_published",
+            "detail": "`uvx horosa-skill` 依赖 PyPI，而本项目的 PyPI 通道尚未开通。",
+            "fix": "用 `uvx --from \"git+https://github.com/Horace-Maxwell/horosa-skill@v<版本>"
+                   "#subdirectory=horosa-skill\" horosa-skill`，或本地 checkout 走 `uv run --directory`。",
+        })
+    if client == "codex":
+        startup = entry.get("startup_timeout_sec")
+        if startup is not None and float(startup) < 120:
+            problems.append({
+                "code": "codex_startup_timeout_too_short",
+                "detail": f"startup_timeout_sec={startup}（默认 10 秒）。",
+                "fix": "设 120 以上：首次启动要解压 runtime。",
+            })
+        tool_timeout = entry.get("tool_timeout_sec")
+        if tool_timeout is not None and float(tool_timeout) < 600:
+            problems.append({
+                "code": "codex_tool_timeout_too_short",
+                "detail": f"tool_timeout_sec={tool_timeout}（默认 60 秒）。",
+                "fix": "设 600 以上：择日类扫描本来就要几分钟。",
+            })
+    return problems
+
+
+@client_app.command("check", help="Audit this machine's MCP client configs for horosa entries. 体检本机各客户端的 horosa 配置。")
+def client_check(
+    client: str = typer.Option(None, "--client", help="Only check this client (claude-code / cursor / vscode / codex / …)."),
+    config_path: Path = typer.Option(None, "--config", help="Check this exact config file instead of the known locations."),
+) -> None:
+    """看每个客户端**实际写着什么**，而不是我们建议它写什么。
+
+    🔴 `client config` 只会打印「应该长什么样」。用户配错时（占位符没展开、缺 --transport stdio、
+    目录搬了、Codex 超时是默认的 10/60 秒、`uvx horosa-skill` 指着还没开通的 PyPI）唯一的症状是
+    客户端里安静地少了这个 server —— 没有任何一处会告诉他们哪一步错了。
+    """
+    targets = [client] if client else sorted(_CLIENT_CONFIG_PATHS)
+    results: list[dict[str, Any]] = []
+    for name in targets:
+        if name not in _CLIENT_CONFIG_PATHS:
+            raise typer.BadParameter(f"未知客户端 `{name}`。可选：{', '.join(sorted(_CLIENT_CONFIG_PATHS))}")
+        candidates = [config_path] if config_path else [Path(item) for item in _CLIENT_CONFIG_PATHS[name]]
+        found: list[dict[str, Any]] = []
+        for candidate in candidates:
+            path = candidate.expanduser()
+            if not path.is_file():
+                continue
+            try:
+                if path.suffix == ".toml":
+                    import tomllib
+
+                    payload = tomllib.loads(path.read_text(encoding="utf-8"))
+                    payload = {"mcpServers": (payload.get("mcp_servers") or {})}
+                else:
+                    payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError) as exc:
+                found.append({"path": str(path), "ok": False, "error": f"{type(exc).__name__}: {exc}"})
+                continue
+            entries = list(_iter_client_entries(payload))
+            if not entries:
+                found.append({"path": str(path), "ok": True, "horosa_entries": 0,
+                              "note": "该文件存在但没有 horosa 条目。"})
+                continue
+            for entry_name, entry in entries:
+                problems = _audit_client_entry(entry_name, entry, client=name)
+                found.append({
+                    "path": str(path), "entry": entry_name, "ok": not problems,
+                    "problems": problems,
+                    "tool_surface": "compact" if (entry.get("env") or {}).get("HOROSA_MCP_COMPACT") else "full",
+                    "recommended_surface": "compact" if _CLIENT_COMPACT_DEFAULT.get(name) else "full",
+                })
+        results.append({
+            "client": name,
+            "searched": [str(Path(item).expanduser()) for item in (candidates if config_path else _CLIENT_CONFIG_PATHS[name])],
+            "configured": bool([f for f in found if f.get("entry")]),
+            "findings": found,
+            "fix_command": f"uv run horosa-skill client config --format {name}",
+        })
+    problems_total = sum(len(f.get("problems") or []) for r in results for f in r["findings"])
+    configured = [r["client"] for r in results if r["configured"]]
+    _print_json({
+        "ok": problems_total == 0,
+        "configured_clients": configured,
+        "problems": problems_total,
+        "summary": (
+            f"检查了 {len(results)} 个客户端；已配置 {len(configured)} 个"
+            + (f"，发现 {problems_total} 处问题。" if problems_total else "，未发现问题。")
+        ),
+        "clients": results,
+    })
 
 
 @client_app.command("config")
