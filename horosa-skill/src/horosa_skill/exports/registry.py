@@ -824,10 +824,27 @@ def get_technique_info(key: str) -> dict[str, Any] | None:
 
 
 def build_export_registry(*, technique: str | None = None) -> dict[str, Any]:
+    """星阙 AI 导出注册表。给了 `technique` 就**只返回那一条**（v0.37.0 C9）。
+
+    🔴 `technique=` 此前只多加一个 `selected_technique`，103 条全量 techniques 照发 —— 一次
+    「我只想看奇门的导出分段」要付 70 KB，而 agent 真正读的是其中 1 条。参数在 schema 里写着
+    「聚焦某个 technique」，行为上却什么也没收窄，属于文档化了却不做事的旋钮。
+    认不出来的 key 不静默返回空表：保留全量并附 `technique_not_found`，让调用方能就地改名字。
+    """
     techniques = [get_technique_info(item["key"]) for item in AI_EXPORT_TECHNIQUES]
     techniques = [item for item in techniques if item is not None]
+    total = len(techniques)
     selected = get_technique_info(technique) if technique else None
+    not_found: str | None = None
+    if technique:
+        if selected is None:
+            not_found = technique
+        else:
+            techniques = [item for item in techniques if item.get("key") == selected.get("key")]
     return {
+        "techniques_total": total,
+        "technique_filter": technique or None,
+        "technique_not_found": not_found,
         "source_of_truth": "Horosa-Web/astrostudyui/src/utils/aiExport.js",
         "settings_key": AI_EXPORT_SETTINGS_KEY,
         "settings_version": AI_EXPORT_SETTINGS_VERSION,

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import functools
+
+import anyio
+
 import json
 import logging
 import os
@@ -42,7 +46,7 @@ from horosa_skill.schemas.tools import (
     ReportTemplateInput,
     TechniqueReportInput,
 )
-from horosa_skill.service import HorosaSkillService
+from horosa_skill.service import HorosaSkillService, progress_sink
 
 # 太极图 SVG（data URI，离线友好）：server 级图标，客户端渲染刚起步、成本近零先埋。
 _SERVER_ICON = mcp_types.Icon(
@@ -538,16 +542,84 @@ def _gate_to_dispatch_envelope(error: dict[str, Any]) -> DispatchEnvelope:
     )
 
 
-def _guarded_facade(operation_name: str, fn: Any, *args: Any, **kwargs: Any) -> dict[str, Any]:
-    """门面工具的统一异常护栏。
+# 工作线程并发上限：每个在跑的工具会持有一个 JS 子进程或一条后端 HTTP 连接，无限并发会
+# 把本机 CPU 与后端连接池打满。4 是「几个客户端同时问一句」的常见峰值。
+_MAX_CONCURRENT_TOOLS = max(1, int(os.environ.get("HOROSA_MCP_MAX_CONCURRENT_TOOLS", "4") or 4))
+_TOOL_LIMITER: Any = None
+
+
+def _tool_limiter() -> Any:
+    """并发上限。必须在事件循环里惰性构造（CapacityLimiter 绑定当前 async 后端）。"""
+    global _TOOL_LIMITER
+    if _TOOL_LIMITER is None:
+        _TOOL_LIMITER = anyio.CapacityLimiter(_MAX_CONCURRENT_TOOLS)
+    return _TOOL_LIMITER
+
+
+async def _run_blocking(fn: Any, *args: Any, **kwargs: Any) -> Any:
+    """把同步的 service 调用挪到工作线程。
+
+    🔴 每个工具都是 `async def` 却直接调同步的 `service.run_tool`（内含阻塞 httpx 与
+    subprocess.run），而 FastMCP 1.x 不会替我们卸载（func_metadata: `if fn_is_async: await fn()
+    else: fn()`）。后果是**整个事件循环被占住**：一次 tianxing 731 天扫描（约 24 段串行后端调用）
+    期间服务器答不了 ping、处理不了 notifications/cancelled，streamable-HTTP 下所有客户端串行。
+    Claude Desktop / VS Code 会把它标成无响应。
+
+    anyio 4.13 的 to_thread 会 `copy_context()`，所以 `_DEGRADE_NOTES` 这类 ContextVar
+    与 lowlevel 的 request_ctx 在工作线程里都可见 —— 这是这个改法成立的前提，已核实。
+    """
+    return await anyio.to_thread.run_sync(
+        functools.partial(fn, *args, **kwargs), limiter=_tool_limiter(), abandon_on_cancel=True
+    )
+
+
+def _progress_tick_for(mcp: FastMCP) -> Any:
+    """构造交给服务层的 tick 回调（工作线程里被调用）。取不到请求上下文时返回 None。
+
+    两件事，顺序不可换：
+      1. `check_cancelled()` —— 客户端发了 notifications/cancelled 后，工作线程在**下一个段边界**
+         抛 CancelledError（BaseException，穿过服务层的 `except Exception` 旁路兜底）。没有它，
+         撤单只是让宿主任务提前返回，工作线程照样把剩下的几十次后端扫描跑完，白烧后端与本机。
+      2. `ctx.report_progress` —— 客户端没给 progressToken 时 SDK 自身 no-op，无需在这里判断。
+    """
+    try:
+        ctx = mcp.get_context()
+    except Exception:  # noqa: BLE001 - 不在请求上下文里（直调/测试）时安静降级为无进度
+        return None
+
+    def _tick(done: int, total: int, label: str) -> None:
+        anyio.from_thread.check_cancelled()
+        anyio.from_thread.run(ctx.report_progress, float(done), float(total), label)
+
+    return _tick
+
+
+async def _run_tool_blocking(mcp: FastMCP, fn: Any, *args: Any, **kwargs: Any) -> Any:
+    """`_run_blocking` + 把 MCP 进度/取消接到服务层的分段循环上。"""
+    tick = _progress_tick_for(mcp)
+    if tick is None:
+        return await _run_blocking(fn, *args, **kwargs)
+    # ContextVar 在**事件循环侧**设好，to_thread 的 copy_context 才会把它带进工作线程。
+    with progress_sink(tick):
+        return await _run_blocking(fn, *args, **kwargs)
+
+
+async def _guarded_facade(
+    mcp: FastMCP, operation_name: str, fn: Any, *args: Any, **kwargs: Any
+) -> dict[str, Any]:
+    """门面工具的统一异常护栏 **兼**线程卸载入口。
 
     🔴 门面此前各写各的（`horosa_agent_guidance` 干脆没有 try，memory 族只 catch
     ToolValidationError）。漏网的异常会被 lowlevel server 转成 `isError: true` + 裸字符串，
     绕过整个 agent_recovery 契约 —— 而在精简面（HOROSA_MCP_COMPACT=1）下门面**就是**全部工具，
     所以这条漏洞在最省 token 的那个配置里覆盖面最大。三分支与技法工具逐字同款。
+
+    fn 在工作线程里跑（`_run_blocking`）：门面同样会做磁盘 I/O（报告渲染、SQLite 查询）与后端
+    HTTP 调用，留在事件循环上会让 ping/cancel/其他工具全部排队。归一化也放进线程，这样
+    `_normalize_mcp_request` 抛的 ToolValidationError 一样落进本护栏，而不是从工具体外逃逸。
     """
     try:
-        return fn(*args, **kwargs)
+        return await _run_tool_blocking(mcp, fn, *args, **kwargs)
     except ToolValidationError as exc:
         return _mcp_error_payload(exc)
     except ValidationError as exc:
@@ -638,6 +710,23 @@ logger = logging.getLogger(__name__)
 
 def _elicitation_enabled() -> bool:
     return os.environ.get("HOROSA_MCP_ELICIT", "1").strip().lower() not in {"0", "false", "off"}
+
+
+def _elicit_timeout_seconds() -> float:
+    """`elicitation/create` 的等待预算（秒），0 或负数 = 不设超时。
+
+    🔴 `ctx.elicit()` 本身**没有超时**：客户端声明了 elicitation 能力却把表单丢给一个已经走开的
+    用户（或干脆不回应答），这次 tools/call 就永远挂着——占着一个并发名额、一个 JS 子进程配额，
+    而调用方那头只看到工具无响应。120 秒够真人读完并回答一张确认表，也远短于各家客户端自己的
+    工具超时（Codex 默认 60 秒、Cursor/VS Code 各有默认），所以超时后我们还来得及把**结构化闸门**
+    交回去，让 agent 走「问用户」的常规路径，而不是把整个会话拖死。
+    """
+    raw = os.environ.get("HOROSA_MCP_ELICIT_TIMEOUT_SECONDS", "120").strip()
+    try:
+        value = float(raw)
+    except ValueError:
+        return 120.0
+    return value
 
 
 _ELICIT_MAX_QUESTIONS = 6
@@ -775,7 +864,17 @@ async def _maybe_elicit_gate(
             gate_error.get("details", {}).get("agent_recovery", {}).get("prompt_to_user")
             or f"调用 {tool_name} 前需要确认会影响结果的设置。"
         )
-        result = await ctx.elicit(message=prompt, schema=_gate_elicitation_schema(gate_error))
+        budget = _elicit_timeout_seconds()
+        result = None
+        if budget > 0:
+            with anyio.move_on_after(budget):
+                result = await ctx.elicit(message=prompt, schema=_gate_elicitation_schema(gate_error))
+            if result is None:
+                # 超时 = 没人在那头。把结构化闸门原样交回，agent 照常「先问后调」。
+                _note_elicitation(gate_error, "timeout", timeout_seconds=f"{budget:g}")
+                return None
+        else:
+            result = await ctx.elicit(message=prompt, schema=_gate_elicitation_schema(gate_error))
         if result.action != "accept" or result.data is None:
             _note_elicitation(gate_error, "declined", action=f"{result.action}")
             return None
@@ -821,13 +920,17 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
                     return _gate_to_dispatch_envelope(error)
                 raw_payload = updated
         try:
-            return service.dispatch(_normalize_mcp_request(raw_payload, DispatchInput))
+            return await _run_tool_blocking(
+                mcp, service.dispatch, _normalize_mcp_request(raw_payload, DispatchInput)
+            )
         except ToolValidationError as exc:
             return _gate_to_dispatch_envelope(_mcp_error_payload(exc))
         except ValidationError as exc:
             return _gate_to_dispatch_envelope(
                 _mcp_error_payload(_validation_error("horosa_dispatch", "dispatch", exc))
             )
+        except Exception as exc:  # noqa: BLE001 - 兜底也必须是 envelope，不能变 isError 裸文本
+            return _gate_to_dispatch_envelope(_mcp_internal_error_payload(exc))
     dispatch_doc = (
         "Route a natural-language 术数/占星 request to the right Horosa technique tools and run them. "
         "Results are saved to local memory by default (save_result=false to disable)."
@@ -836,7 +939,8 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
         # 目录只在 horosa_tool_run 的描述里放一份（精简面预算 ≤30 KB）；这里只指路。
         dispatch_doc += (
             f"\n\nCompact surface: {len(TOOL_DEFINITIONS)} techniques are reachable by name via horosa_tool_run "
-            "(its description lists them all; resource horosa://catalog/techniques has the full index)."
+            "(resource horosa://catalog/techniques lists them all; horosa_agent_guidance(include_all=true) "
+            "returns the same index inline, and a wrong tool name comes back with the catalog attached)."
         )
     horosa_dispatch.__doc__ = dispatch_doc
     horosa_dispatch.__signature__ = _signature_for_input_model(
@@ -849,7 +953,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
         meta=_tool_meta("horosa_dispatch"),
     )(horosa_dispatch)
 
-    def horosa_agent_guidance(**kwargs: Any) -> dict[str, Any]:
+    async def horosa_agent_guidance(**kwargs: Any) -> dict[str, Any]:
         def _run() -> dict[str, Any]:
             payload = _normalize_mcp_request(_merge_mcp_arguments(kwargs), AgentGuidanceInput)
             guidance = build_agent_guidance(
@@ -861,7 +965,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
                 guidance["server_profile"] = _server_profile(settings)
             return guidance
 
-        return _guarded_facade("horosa_agent_guidance", _run)
+        return await _guarded_facade(mcp, "horosa_agent_guidance", _run)
     horosa_agent_guidance.__doc__ = (
         "Return machine-readable guidance for agents before calling Horosa tools. "
         "Use this to decide which user settings must be clarified instead of silently defaulted."
@@ -875,13 +979,13 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
         meta=_tool_meta("horosa_agent_guidance"),
     )(horosa_agent_guidance)
 
-    def horosa_memory_record_answer(**kwargs: Any) -> dict[str, Any]:
-        try:
+    async def horosa_memory_record_answer(**kwargs: Any) -> dict[str, Any]:
+        def _run() -> dict[str, Any]:
             return service.record_ai_answer(
                 _normalize_mcp_request(_merge_mcp_arguments(kwargs), MemoryAnswerInput)
             )
-        except ToolValidationError as exc:
-            return _mcp_error_payload(exc)
+
+        return await _guarded_facade(mcp, "horosa_memory_record_answer", _run)
     horosa_memory_record_answer.__doc__ = (
         "Attach your final AI answer to a stored run (by run_id) without rendering a report. "
         "Use this only when you are NOT calling horosa_report_render — that one already writes "
@@ -895,13 +999,13 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
         annotations=_ANN_RENDER,
     )(horosa_memory_record_answer)
 
-    def horosa_memory_query(**kwargs: Any) -> dict[str, Any]:
-        try:
+    async def horosa_memory_query(**kwargs: Any) -> dict[str, Any]:
+        def _run() -> dict[str, Any]:
             return service.query_memory(
                 _normalize_mcp_request(_merge_mcp_arguments(kwargs), MemoryQueryInput)
             )
-        except ToolValidationError as exc:
-            return _mcp_error_payload(exc)
+
+        return await _guarded_facade(mcp, "horosa_memory_query", _run)
     horosa_memory_query.__doc__ = (
         "Search past Horosa runs stored locally (every tool call is recorded). Filters combine with AND:\n"
         "  text — full-text over question / answer / snapshot (SQLite FTS5 trigram: Chinese substrings "
@@ -922,13 +1026,13 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
         annotations=_ANN_QUERY,
     )(horosa_memory_query)
 
-    def horosa_memory_show(**kwargs: Any) -> dict[str, Any]:
-        try:
+    async def horosa_memory_show(**kwargs: Any) -> dict[str, Any]:
+        def _run() -> dict[str, Any]:
             return service.show_memory(
                 _normalize_mcp_request(_merge_mcp_arguments(kwargs), MemoryShowInput)
             )
-        except ToolValidationError as exc:
-            return _mcp_error_payload(exc)
+
+        return await _guarded_facade(mcp, "horosa_memory_show", _run)
     horosa_memory_show.__doc__ = (
         "Fetch one stored run in full by run_id: the normalized input, the export snapshot, any AI "
         "answer written back, and the paths of generated artifacts (JSON/DOCX/PDF). Use it to resume "
@@ -942,15 +1046,13 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
         annotations=_ANN_QUERY,
     )(horosa_memory_show)
 
-    def horosa_report_template(**kwargs: Any) -> dict[str, Any]:
-        try:
+    async def horosa_report_template(**kwargs: Any) -> dict[str, Any]:
+        def _run() -> dict[str, Any]:
             return service.report_template(
                 _normalize_mcp_request(_merge_mcp_arguments(kwargs), ReportTemplateInput)
             )
-        except ToolValidationError as exc:
-            return _mcp_error_payload(exc)
-        except Exception as exc:  # noqa: BLE001 - never break the MCP session on a report/IO error
-            return _mcp_internal_error_payload(exc)
+
+        return await _guarded_facade(mcp, "horosa_report_template", _run)
     horosa_report_template.__doc__ = (
         "Return the empty ai_report skeleton for a stored run (run_id + tool_name): which analysis "
         "fields to fill (direct_answer / executive_summary / analysis_sections / evidence / "
@@ -965,15 +1067,13 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
         annotations=_ANN_QUERY,
     )(horosa_report_template)
 
-    def horosa_report_render(**kwargs: Any) -> dict[str, Any]:
-        try:
+    async def horosa_report_render(**kwargs: Any) -> dict[str, Any]:
+        def _run() -> dict[str, Any]:
             return service.report_render(
                 _normalize_mcp_request(_merge_mcp_arguments(kwargs), ReportRenderInput)
             )
-        except ToolValidationError as exc:
-            return _mcp_error_payload(exc)
-        except Exception as exc:  # noqa: BLE001 - never break the MCP session on a report/IO error
-            return _mcp_internal_error_payload(exc)
+
+        return await _guarded_facade(mcp, "horosa_report_render", _run)
     horosa_report_render.__doc__ = (
         "Render a stored run into a DOCX/PDF/JSON report. Preferred when you already have a run_id "
         "(from a prior tool call): pass run_id + format + your ai_report; the ai_report is auto "
@@ -987,13 +1087,11 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
         annotations=_ANN_RENDER,
     )(horosa_report_render)
 
-    def horosa_hecan(**kwargs: Any) -> dict[str, Any]:
-        try:
+    async def horosa_hecan(**kwargs: Any) -> dict[str, Any]:
+        def _run() -> dict[str, Any]:
             return service.hecan(_normalize_mcp_request(_merge_mcp_arguments(kwargs), HecanInput))
-        except ToolValidationError as exc:
-            return _mcp_error_payload(exc)
-        except Exception as exc:  # noqa: BLE001 - orchestration must never break the MCP session
-            return _mcp_internal_error_payload(exc)
+
+        return await _guarded_facade(mcp, "horosa_hecan", _run)
     horosa_hecan.__doc__ = (
         "合参 / cross-technique synthesis: run SEVERAL techniques on one question (router-selected or "
         "explicit `tools`, capped by max_tools) under one group, then return a synthesis TEMPLATE — "
@@ -1010,15 +1108,13 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
         annotations=_ANN_CALC,
     )(horosa_hecan)
 
-    def horosa_technique_report(**kwargs: Any) -> dict[str, Any]:
-        try:
+    async def horosa_technique_report(**kwargs: Any) -> dict[str, Any]:
+        def _run() -> dict[str, Any]:
             return service.technique_report(
                 _normalize_mcp_request(_merge_mcp_arguments(kwargs), TechniqueReportInput)
             )
-        except ToolValidationError as exc:
-            return _mcp_error_payload(exc)
-        except Exception as exc:  # noqa: BLE001 - never break the MCP session on a report/IO error
-            return _mcp_internal_error_payload(exc)
+
+        return await _guarded_facade(mcp, "horosa_technique_report", _run)
     horosa_technique_report.__doc__ = (
         "Render the DETERMINISTIC method/provenance report for stored runs: which techniques ran, "
         "which result-sensitive settings were in force (晚子时 switches, 贵人法, ayanamsa, …), which "
@@ -1055,16 +1151,14 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
                         return error
                     raw_payload = dict(raw_payload)
                     raw_payload["payload"] = updated
-        try:
+        payload_for_run = raw_payload
+
+        def _run() -> dict[str, Any]:
             return service.report_from_tool(
-                _normalize_mcp_request(raw_payload, ReportFromToolInput)
+                _normalize_mcp_request(payload_for_run, ReportFromToolInput)
             )
-        except ToolValidationError as exc:
-            return _mcp_error_payload(exc)
-        except ValidationError as exc:
-            return _mcp_validation_error_payload("horosa_report_from_tool", None, exc)
-        except Exception as exc:  # noqa: BLE001 - never break the MCP session on a report/IO error
-            return _mcp_internal_error_payload(exc)
+
+        return await _guarded_facade(mcp, "horosa_report_from_tool", _run)
     horosa_report_from_tool.__doc__ = (
         "One-shot: run a technique tool AND prepare its report. NOTE this re-casts the chart — if you "
         "already called the tool and hold a run_id, use horosa_report_render instead (avoids a duplicate "
@@ -1186,7 +1280,9 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
                     return _gate_to_envelope(error, tool_name=tool_name)
                 payload = updated
             try:
-                return service.run_tool(
+                return await _run_tool_blocking(
+                    mcp,
+                    service.run_tool,
                     tool_name,
                     _normalize_mcp_request(payload, TOOL_DEFINITIONS[tool_name].input_model),
                 )
@@ -1240,7 +1336,9 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
                             return _gate_to_envelope(error, tool_name=tool_name)
                         raw_payload = updated
                 try:
-                    return service.run_tool(
+                    return await _run_tool_blocking(
+                        mcp,
+                        service.run_tool,
                         tool_name,
                         _normalize_mcp_request(raw_payload, model),
                     )

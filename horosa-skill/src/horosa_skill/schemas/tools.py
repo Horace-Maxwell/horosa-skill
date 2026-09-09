@@ -474,7 +474,10 @@ class ZeriScanInput(BirthInput):
         default=None, description="本命盘上下文（部分条件类按本命比对时需要，如八字/紫微/六壬的本命组）。"
     )
     maxHits: int | None = Field(default=None, description="命中上限（缺省用引擎自带上限）。")
-    maxSpanDays: int | None = Field(default=None, description="搜索窗天数上限覆写。")
+    maxSpanDays: int | None = Field(
+        default=None,
+        description="搜索窗天数上限，只能**调低**：给的值超过本工具的硬上限时按硬上限执行，不会放宽。",
+    )
 
 
 class HuangliZeriInput(ZeriScanInput):
@@ -569,7 +572,10 @@ class QimenZeriInput(QimenInput):
             "叶节点 {type:'<条件类键>', params:{…}}。条件类键与参数见本工具的 agent_guidance。"
         ),
     )
-    maxSpanDays: int | None = Field(default=None, description="搜索窗跨度上限（天），缺省 92")
+    maxSpanDays: int | None = Field(
+        default=None,
+        description="搜索窗跨度上限（天），缺省即本工具硬上限；只能**调低**，给更大的值不会放宽。",
+    )
     maxHits: int | None = Field(default=None, description="命中区间数上限，缺省 1000")
 
 

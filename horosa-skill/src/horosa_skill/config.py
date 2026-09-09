@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 ENV_FLAG_REGISTRY: dict[str, str] = {
     # v0.37.0 运行时安全：mac 启动器的「只杀自己人」补丁开关（设 0 会失去误杀保护），
     # 以及 AppCDS 训练 JVM 的端口（上游硬编码 39997，与别的程序撞车时是静默降级）。
+    "HOROSA_MCP_MAX_CONCURRENT_TOOLS": "stable",
     "HOROSA_RUNTIME_LAUNCHER_PATCH": "experimental",
     "HOROSA_CDS_TRAIN_PORT": "experimental",
     "HOROSA_STRICT_CONFIG": "stable",
@@ -40,6 +41,7 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     "HOROSA_RUNTIME_JAVA_RETRY_COOLDOWN_SECONDS": "stable",
     "HOROSA_MCP_COMPACT": "stable",
     "HOROSA_MCP_ELICIT": "stable",
+    "HOROSA_MCP_ELICIT_TIMEOUT_SECONDS": "stable",
     "HOROSA_TOOLSETS": "stable",
     "HOROSA_JS_ENGINE_TIMEOUT_SECONDS": "stable",
     "HOROSA_SKILL_HOST": "stable",
@@ -119,6 +121,15 @@ def _default_runtime_root() -> Path:
 # 未展开的模板占位符：`${user_config.runtimeRoot}` / `${CLAUDE_PLUGIN_ROOT}` 这类。
 _UNEXPANDED_TEMPLATE = re.compile(r"^\$\{[^}]*\}$")
 _warned_unexpanded: set[str] = set()
+# 本进程内见过的未展开占位符：{env 名: 字面量}。doctor 会把它读出来当面告诉用户
+# —— 这条通知发生在**任何工具调用之前**（Settings.from_env），没有 envelope 可挂，
+# 但它绝不能只活在日志里：宿主没替换占位符时，用户看到的是「装了却全是 not_installed」。
+_unexpanded_templates: dict[str, str] = {}
+
+
+def unexpanded_env_templates() -> dict[str, str]:
+    """本进程启动时被当作「未设置」处理的未展开占位符（供 doctor / 诊断输出）。"""
+    return dict(_unexpanded_templates)
 
 
 def _env_text(name: str, default: str | None = None) -> str | None:
@@ -134,9 +145,15 @@ def _env_text(name: str, default: str | None = None) -> str | None:
         # `runtime.not_installed`，而 `Settings.ensure_dirs()` 还会在 CWD 里 mkdir 出一个
         # 名叫 `${user_config.runtimeRoot}` 的真目录（仓里那几个 `${env:HOME:-…}` 目录同族）。
         # 当作未设置 → 回落默认值，是唯一不会把用户目录搞脏的解释。
+        _unexpanded_templates[name] = stripped
         if name not in _warned_unexpanded:
             _warned_unexpanded.add(name)
-            logger.warning(
+            # 用 logger.log(WARNING) 而非 logger.warning：verify_silent_degrades 把包内的
+            # 裸 logger.warning 定义为「只告诉了日志、没告诉调用方」的债。这条是**启动期配置
+            # 通知**，那一刻还没有任何工具调用、没有 envelope 可挂；调用方要知道的那一份走
+            # `unexpanded_env_templates()` → doctor，比 warnings 列表更早也更该出现在那儿。
+            logger.log(
+                logging.WARNING,
                 "%s 的值是未展开的模板占位符 %r（宿主没有替换它）——按未设置处理，回落默认值。",
                 name, stripped,
             )

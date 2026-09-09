@@ -88,6 +88,39 @@ def _degrade(fmt: str, *args: Any, note: str | None = None) -> str:
     return text
 
 
+# ---- 进度上报与取消检查点（v0.37.0 C6）----
+# 分段扫描一次可跑 60 次后端请求、几分钟墙钟；这期间客户端**什么也看不到**，只能干等或按超时掐断
+# （Codex 的 tool_timeout_sec 默认 60 秒，Cursor/VS Code 也各有默认）。ContextVar 让表层注入一个
+# tick 回调，服务层每完成一段调一次；没人注入时是 no-op（CLI/测试路径零开销、零行为变化）。
+# tick 同时是**取消检查点**：MCP 侧的实现先调 `anyio.from_thread.check_cancelled()`，客户端撤单后
+# 下一段边界就抛 CancelledError（BaseException，不会被下面的 except Exception 吞掉），长扫描因此
+# 能在段边界停下，而不是把剩下 50 次后端请求全跑完才发现没人要结果。
+_TOOL_PROGRESS: contextvars.ContextVar[Any | None] = contextvars.ContextVar(
+    "horosa_tool_progress", default=None
+)
+
+
+@contextlib.contextmanager
+def progress_sink(tick: Any) -> Iterator[None]:
+    """在本作用域内把进度回调交给服务层（表层用；tick 签名 (done, total, label)）。"""
+    token = _TOOL_PROGRESS.set(tick)
+    try:
+        yield
+    finally:
+        _TOOL_PROGRESS.reset(token)
+
+
+def _progress_tick(done: int, total: int, label: str) -> None:
+    """报一次进度。未注入回调即 no-op；回调自身出错绝不能带崩正在跑的计算。"""
+    tick = _TOOL_PROGRESS.get()
+    if tick is None:
+        return
+    try:
+        tick(done, total, label)
+    except Exception:  # noqa: BLE001 - 进度是旁路，取消走 BaseException 不经此处
+        logger.debug("progress tick failed", exc_info=True)
+
+
 @contextlib.contextmanager
 def _degrade_collector() -> Iterator[list[str]]:
     """一次 run_tool 的降级说明作用域；退出时冒泡到外层调用（嵌套工具的缺段外层也要知道）。"""
@@ -520,6 +553,32 @@ _ELECTIONSCAN_OPTION_KEYS = (
 # **丢掉最后一段**，而结果仍会被报成完整搜索。取 2 年：60 段左右，已经很慢，但还不至于丢结果。
 _TIANXING_MAX_SPAN_DAYS = 731
 
+# 奇门择日窗口上限（天）。比引擎自带的 1830 天紧得多：区间搜索跑在 JS 子进程里，墙钟 60 秒
+# （config.js_engine_timeout_seconds），而扫描约 2 秒/月窗 —— 引擎那个上限会把超时撑爆约 30 倍。
+_QIMENZERI_MAX_SPAN_DAYS = 92
+
+
+def _clamped_max_span(payload: dict[str, Any], cap: int) -> int:
+    """把调用方给的 `maxSpanDays` **夹到**硬上限之内（v0.37.0 C7）。
+
+    🔴 此前 `int(payload.get("maxSpanDays") or CAP)` 让 maxSpanDays 变成一个**能把上限抬高**的
+    旋钮：传 5000 就真按 5000 天放行。上限不是礼貌建议——tianxing 的 731 天来自 splitByMonth 的
+    800 次 guard（耗尽会**不 push 最后一段**就退出，尾部被丢却仍报成完整搜索），本地扫描的 92 天
+    来自 JS 子进程 60 秒墙钟。抬高上限只会把这两个失败模式换成「跑到超时」或「静默截断」，
+    而调用方看到的仍是一个自称成功的结果。maxSpanDays 因此只保留「调**低**」这一半语义。
+    非法/缺省值一律回落 cap；≤0 也回落（0 会让任何窗口都超限）。
+    """
+    raw = payload.get("maxSpanDays")
+    if raw is None:
+        return cap
+    try:
+        requested = int(raw)
+    except (TypeError, ValueError):
+        return cap
+    if requested <= 0:
+        return cap
+    return min(requested, cap)
+
 
 def _require_sane_window(
     start_date: str, end_date: str, *, max_span: int, tool: str, span_hint: str | None = None
@@ -552,7 +611,11 @@ def _require_sane_window(
             code=f"tool.{tool}_span_too_large",
             details={
                 "span_days": span, "max_span_days": max_span,
-                "hint": span_hint or "分段搜索，或调高 maxSpanDays；每段都是一次串行后端扫描，窗口越长越慢。",
+                # 上限是硬的：maxSpanDays 只能调低（_clamped_max_span），提示不再暗示可以调高，
+                # 否则 agent 会照着重试、再被同一条错误挡回来，白烧一轮往返。
+                "max_span_days_cap": max_span,
+                "hint": span_hint or "把窗口拆成多段分别搜索；每段都是一次串行后端扫描，窗口越长越慢。"
+                                     "maxSpanDays 只能调低，不能超过本上限。",
             },
         )
 
@@ -695,10 +758,17 @@ def _chart_server_endpoint(endpoint: str) -> str:
 def _generic_summary(tool_name: str, data: dict[str, Any]) -> list[str]:
     if tool_name == "export_registry":
         count = len(data.get("techniques", []))
-        summary = [f"已输出 {count} 个星阙 AI 导出 technique 的完整注册表。"]
+        total = int(data.get("techniques_total") or count)
+        if count < total:
+            summary = [f"已输出 1 个星阙 AI 导出 technique 的注册表（全库共 {total} 个）。"]
+        else:
+            summary = [f"已输出 {count} 个星阙 AI 导出 technique 的完整注册表。"]
         selected = data.get("selected_technique")
         if isinstance(selected, dict) and selected.get("label"):
             summary.append(f"当前聚焦：{selected['label']}。")
+        missing = data.get("technique_not_found")
+        if missing:
+            summary.append(f"未识别的 technique「{missing}」——已返回全量注册表供比对名称。")
         return summary
     if tool_name == "export_parse":
         summary = ["已将星阙 AI 导出文本转换为结构化分段 JSON。"]
@@ -7166,7 +7236,7 @@ class HorosaSkillService:
         # 窗口上限。每一段都是一次串行后端扫描，5 年窗口 = 60 次；而 splitByMonth 的 800 次 guard 一旦
         # 耗尽（约 66 年）会**不 push 最后一段**就退出——尾部被丢，结果却仍报成对整个窗口的完整搜索。
         # 绝不静默截断（AGENTS §5.9）。
-        max_span = int(payload.get("maxSpanDays") or _TIANXING_MAX_SPAN_DAYS)
+        max_span = _clamped_max_span(payload, _TIANXING_MAX_SPAN_DAYS)
         _require_sane_window(start_date, end_date, max_span=max_span, tool="tianxing")
 
         cfg = {"startDate": start_date, "startTime": start_time, "endDate": end_date, "endTime": end_time}
@@ -7204,12 +7274,15 @@ class HorosaSkillService:
         lists: list[list[dict[str, Any]]] = []
         truncated = False
         eval_points = 0
-        for segment in segments:
+        total_segments = len(segments)
+        for index, segment in enumerate(segments, start=1):
+            _progress_tick(index - 1, total_segments, f"天星择时：扫描第 {index}/{total_segments} 段")
             raw = self._call_remote("/electionscan/scan", {**base, **segment})
             data = self._require_electionscan_ok(raw, endpoint="/electionscan/scan")
             lists.append(list(data.get("intervals") or []))
             truncated = truncated or bool(data.get("truncated"))
             eval_points += int(((data.get("stats") or {}).get("evalPoints")) or 0)
+        _progress_tick(total_segments, total_segments, "天星择时：缝合区间")
         stitched = self._tianxing_js({"action": "stitch", "lists": lists}, stage="stitch")
         intervals = stitched.get("intervals") or []
 
@@ -7608,12 +7681,13 @@ class HorosaSkillService:
         # 当初为 tianxing 杀掉的形状：解析不出来（`'2026-08-05 10:00'`）就跳过上限、倒置窗
         # 拿负数恒 False 也溜过去，而 JS 侧 wallToMs 照样能解析，于是超长窗一路跑到超时。
         # 这把帮手写出来就是为了根治它，此处此前漏改。
-        max_span = int(payload.get("maxSpanDays") or 92)
+        max_span = _clamped_max_span(payload, _QIMENZERI_MAX_SPAN_DAYS)
         _require_sane_window(
             start_date, end_date, max_span=max_span, tool="qimenzeri",
             # 奇门择日的上限成因与 tianxing 不同：JS 子进程有 60s 墙钟（js_engine_timeout_seconds），
             # 扫描约 2s/月窗，所以引擎自带的 1830 天上限会把超时撑爆约 30 倍。提示保留这条成因。
-            span_hint="分段搜索，或调高 maxSpanDays；JS 引擎超时上限见 HOROSA_JS_ENGINE_TIMEOUT_SECONDS。",
+            span_hint="把窗口拆成多段分别搜索；maxSpanDays 只能调低。"
+                      "本上限来自 JS 引擎墙钟（HOROSA_JS_ENGINE_TIMEOUT_SECONDS），不是可协商的礼貌建议。",
         )
 
         cfg = {"startDate": start_date, "startTime": start_time, "endDate": end_date, "endTime": end_time}
@@ -7636,6 +7710,7 @@ class HorosaSkillService:
                if payload.get(k) is not None},
             **(payload.get("options") or {}),
         }
+        _progress_tick(0, 2, "奇门择日：本地区间扫描")
         scan = self.js_client.run(
             "qimenzeri",
             {
@@ -7643,6 +7718,7 @@ class HorosaSkillService:
                 "limits": {"maxHits": payload.get("maxHits")} if payload.get("maxHits") else None,
             },
         )
+        _progress_tick(1, 2, "奇门择日：铸展示盘")
         scan_data = scan.get("data") or {}
         if not scan_data.get("ok"):
             error = scan_data.get("error") or {}
@@ -7739,8 +7815,9 @@ class HorosaSkillService:
                 code=f"tool.{tool_name}_missing_conditions",
                 details={"hint": "条件类键与参数见本工具的 agent_guidance。"},
             )
-        max_span = int(payload.get("maxSpanDays")
-                       or self._ZERI_MAX_SPAN_DAYS.get(tool_name, self._ZERI_DEFAULT_MAX_SPAN_DAYS))
+        max_span = _clamped_max_span(
+            payload, self._ZERI_MAX_SPAN_DAYS.get(tool_name, self._ZERI_DEFAULT_MAX_SPAN_DAYS)
+        )
         _require_sane_window(start_date, end_date, max_span=max_span, tool=tool_name)
 
         cfg = {"startDate": start_date, "startTime": start_time, "endDate": end_date, "endTime": end_time}
@@ -7763,7 +7840,9 @@ class HorosaSkillService:
             request["natal"] = natal
         if payload.get("maxHits"):
             request["limits"] = {"maxHits": payload.get("maxHits")}
+        _progress_tick(0, 2, f"{label}：本地区间扫描")
         scan = self.js_client.run("zeri_scan", request)
+        _progress_tick(1, 2, f"{label}：铸展示盘")
         scan_data = scan.get("data") or {}
         if not scan_data.get("ok"):
             error = scan_data.get("error") or {}
@@ -7881,7 +7960,7 @@ class HorosaSkillService:
                 code=f"tool.{tool_name}_missing_conditions",
                 details={"hint": "条件类键与参数见本工具的 agent_guidance。"},
             )
-        max_span = int(payload.get("maxSpanDays") or self._ZERI_BACKEND_MAX_SPAN_DAYS)
+        max_span = _clamped_max_span(payload, self._ZERI_BACKEND_MAX_SPAN_DAYS)
         _require_sane_window(start_date, end_date, max_span=max_span, tool=tool_name)
 
         # 🔴 后端吃的是**编译树**，不是 UI 树。直接发 UI 树的后果不是报「形状不对」，而是
@@ -7928,11 +8007,14 @@ class HorosaSkillService:
         segments = self._tianxing_js({"action": "split", "cfg": cfg}, stage="split").get("segments") or [cfg]
         lists: list[list[dict[str, Any]]] = []
         truncated = False
-        for segment in segments:
+        total_segments = len(segments)
+        for index, segment in enumerate(segments, start=1):
+            _progress_tick(index - 1, total_segments, f"{label}：扫描第 {index}/{total_segments} 段")
             raw = self._call_remote(spec["scan"], {**base_request, **segment})
             data = self._require_electionscan_ok(raw, endpoint=spec["scan"])
             lists.append(list(data.get("intervals") or []))
             truncated = truncated or bool(data.get("truncated"))
+        _progress_tick(total_segments, total_segments, f"{label}：缝合区间")
         stitched = self._tianxing_js({"action": "stitch", "lists": lists}, stage="stitch")
         intervals = stitched.get("intervals") or []
 
@@ -12200,7 +12282,9 @@ class HorosaSkillService:
                 }.items()
                 if value is not None
             }
-            for tool_name in selected_tools:
+            total_tools = len(selected_tools)
+            for tool_index, tool_name in enumerate(selected_tools, start=1):
+                _progress_tick(tool_index - 1, total_tools, f"调度：{tool_name}（{tool_index}/{total_tools}）")
                 if tool_name == "relative":
                     payload_for_tool = {
                         "inner": request.subject.inner.model_dump(exclude_none=True) if request.subject and request.subject.inner else {},
@@ -12249,6 +12333,7 @@ class HorosaSkillService:
                     evaluation_case_id=evaluation_case_id,
                 )
                 result_export_contracts[tool_name] = _build_dispatch_export_contract(results[tool_name])
+            _progress_tick(total_tools, total_tools, "调度：汇总结果")
 
             degraded_tools = [name for name, result in results.items() if result.ok and result.warnings]
             if degraded_tools:
