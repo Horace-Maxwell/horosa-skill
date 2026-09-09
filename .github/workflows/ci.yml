@@ -57,6 +57,9 @@ jobs:
       - name: Verify technique compute-source declarations
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_technique_provenance.py
+      - name: Verify MCP advertised schemas are portable across clients
+        working-directory: ./horosa-skill
+        run: uv run python scripts/verify_mcp_client_compat.py
       - name: Verify runtime launcher never kills foreign processes
         working-directory: ./horosa-skill
         run: |

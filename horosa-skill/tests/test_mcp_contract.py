@@ -143,8 +143,14 @@ def test_advertised_schema_is_faithful_but_validation_is_loose() -> None:
     schema = qimen.inputSchema
     assert not schema.get("required"), "MCP 层不应有必填参数（必填语义走 [required] 标记 + 内层校验）"
     assert schema["properties"]["date"]["description"].startswith("[required]")
-    assert schema["properties"]["lat"]["type"] == ["string", "number"], "归一化能吸收的键要放宽广告类型"
-    assert "$ref" not in json.dumps(schema), "残留 $ref 会让 pydantic 构不出 arg model"
+    # v0.37.0：广告层收窄成**恰一个** type。数组 type（["string","number"]）被 Gemini/Vertex 的
+    # FunctionDeclaration 与 OpenAI strict 拒收 —— 拒的是整张工具表，不是这一个字段。
+    # 收窄到 string 是无损的：校验层照旧宽松，`{"lat": 39.9}` 仍会被 normalize 吸收
+    # （下一条 test_numeric_coordinates_reach_normalization_instead_of_being_rejected 就是它的活证）。
+    assert schema["properties"]["lat"]["type"] == "string", "广告层每个属性必须恰一个标量 type"
+    blob = json.dumps(schema)
+    assert "$ref" not in blob, "残留 $ref 会让 pydantic 构不出 arg model"
+    assert "anyOf" not in blob, "anyOf 同样被严格客户端拒收"
 
 
 def test_numeric_coordinates_reach_normalization_instead_of_being_rejected() -> None:

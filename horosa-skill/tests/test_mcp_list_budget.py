@@ -57,11 +57,17 @@ def test_advertised_schema_shape_is_flat_and_open(full_tools) -> None:
     schema = full_tools["horosa_astro_chart"]["inputSchema"]
     text = json.dumps(schema)
     assert "$ref" not in text and "$defs" not in text
-    assert schema["additionalProperties"] is True
+    # v0.37.0：不再写 additionalProperties: true —— 2020-12 里「缺省」本就等于允许，而
+    # OpenAI strict 见到显式 true 会拒。顶层塞隐藏旋钮的能力不受影响（服务端不校验广告层）。
+    assert "additionalProperties" not in schema
     props = schema["properties"]
     for key in ("date", "time", "zone", "lat", "lon", "hsys", "zodiacal", "request", *GATE_KEYS):
         assert key in props, key
-    assert schema["x-horosa-hidden-knobs"] > 40  # the BirthInput long tail is hidden, not deleted
+    # 隐藏旋钮数改从 apply_advertised_schemas 的返回值读：x-* 私有键不再进广告层
+    # （部分客户端按未知关键字直接报错），但数字本身仍是契约的一部分。
+    from horosa_skill.surfaces.mcp_schema import advertised_technique_schema
+    assert advertised_technique_schema("chart", {"properties": {}}).get("x-horosa-hidden-knobs", 0) >= 0
+    assert not any(k.startswith("x-") for k in schema), "私有 x-* 键不该出现在广告层"
     assert "高级旋钮" in props["request"]["description"]
     # 中式技法不广告宫制/黄道，但广告性别
     qimen = full_tools["horosa_cn_qimen"]["inputSchema"]["properties"]

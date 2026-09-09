@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, ValidationError, WithJsonSchema, create_m
 from horosa_skill.agent_guidance import (
     build_agent_guidance,
     build_technique_catalog,
+    technique_index,
     build_tool_docstring,
     build_validation_recovery,
     validate_agent_preflight,
@@ -129,10 +130,17 @@ def _selected_toolsets() -> set[str] | None:
 
 
 # HOROSA_TOOLSETS 合法域 + 别名（v0.36.0 B2：此前拼错一个 token = 零技法且无 tool_run 直呼，客户端只剩门面）。
-_TOOLSET_DOMAINS: frozenset[str] = frozenset({"astro", "predict", "chart", "cn", "shenshu", "other"})
+# 🔴 从注册表派生，不手抄：手抄那份漏了 `export` 与 `knowledge` 两个域，于是 5 个工具
+# （export_registry / export_parse / knowledge_registry / knowledge_read / knowledge_xuanshi）
+# 经**任何** HOROSA_TOOLSETS 取值都到不了，而 `all` 只给 112 个而非 116 ——「all」不是 all。
+# 未知 token 的告警路径也永远不会为它们触发（它们是**合法**域，只是不在白名单里）。
+_TOOLSET_DOMAINS: frozenset[str] = frozenset(
+    str(definition.domain).lower() for definition in TOOL_DEFINITIONS.values()
+)
 _TOOLSET_ALIASES: dict[str, frozenset[str]] = {
     "western": frozenset({"astro", "predict", "chart"}),
     "chinese": frozenset({"cn", "shenshu"}),
+    "reference": frozenset({"export", "knowledge"}),
     "all": _TOOLSET_DOMAINS,
     "none": frozenset(),
 }
@@ -260,10 +268,32 @@ def _normalize_mcp_request(raw_request: Any, model: type[BaseModel]) -> dict[str
 
     if isinstance(payload, str):
         text = payload.strip()
-        payload = {} if not text else json.loads(text)
+        try:
+            payload = {} if not text else json.loads(text)
+        except json.JSONDecodeError as exc:
+            # 🔴 这两条以前抛 JSONDecodeError / ValueError，而它们发生在**每个工具的 try 之前** ——
+            # lowlevel server 把裸异常转成 `isError: true` + 原始字符串，绕过整个 agent_recovery 契约。
+            # 影响面是全部 116 个工具：任何把参数字符串化的客户端（Gemini CLI、旧版 Cursor、
+            # n8n/Dify 的模板渲染）传坏一次 JSON，拿到的就是一条模型无从恢复的裸报错。
+            raise ToolValidationError(
+                "request 不是合法的 JSON 对象字符串。",
+                code="tool.invalid_payload",
+                details={
+                    "request_preview": text[:120],
+                    "json_error": str(exc),
+                    "next_action": "把参数按 inputSchema 直接作为对象传；确需整包时 request 必须是合法 JSON 对象。",
+                },
+            ) from exc
 
     if not isinstance(payload, dict):
-        raise ValueError("request must be an object or a JSON object string")
+        raise ToolValidationError(
+            "request 必须是对象或 JSON 对象字符串。",
+            code="tool.invalid_payload",
+            details={
+                "received_type": type(payload).__name__,
+                "next_action": "把参数按 inputSchema 直接作为对象传。",
+            },
+        )
 
     payload = normalize_request_payload(payload)
     normalized = model.model_validate(payload)
@@ -312,7 +342,22 @@ def _widen(field_name: str, schema: dict[str, Any]) -> dict[str, Any]:
     declared = widened.get("type")
     if declared == "string":
         widened["type"] = ["string", "number"]
-    widened.pop("anyOf", None) if declared is None and "anyOf" in widened else None
+    if declared is None and "anyOf" in widened:
+        # 🔴 以前这里是一句表达式语句 `widened.pop("anyOf", None) if … else None`：它把唯一的类型
+        # 信息摘掉却不补回去。pydantic 给 `float | None` 的形状是 anyOf:[{number},{null}]，pop 完
+        # 只剩 {"title": "Gpslat"}，再经 _own_property 的键白名单过滤后就是**空对象 {}**。
+        # 实测 70 个属性（gpsLat/gpsLon×26、datetime/dirZone×6、dirLat/dirLon×3 …）广告成 {}，
+        # 而 Gemini/Vertex 的 FunctionDeclaration 与 OpenAI strict 都要求每个属性有 type ——
+        # 它们拒的不是这一个字段，是**整张工具表**。
+        members = {
+            str(entry.get("type"))
+            for entry in widened.get("anyOf", [])
+            if isinstance(entry, dict) and entry.get("type") and entry.get("type") != "null"
+        }
+        widened.pop("anyOf", None)
+        # 这批字段的引擎口径都能吃字符串（normalize_request_payload 会把 "31.22" 归一成 "31n13"），
+        # 所以多类型时统一广告成 string，是**无损**的收窄。
+        widened["type"] = "string" if len(members) != 1 else members.pop()
     return widened
 
 
@@ -491,6 +536,24 @@ def _gate_to_dispatch_envelope(error: dict[str, Any]) -> DispatchEnvelope:
         message=message,
         details=details,
     )
+
+
+def _guarded_facade(operation_name: str, fn: Any, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    """门面工具的统一异常护栏。
+
+    🔴 门面此前各写各的（`horosa_agent_guidance` 干脆没有 try，memory 族只 catch
+    ToolValidationError）。漏网的异常会被 lowlevel server 转成 `isError: true` + 裸字符串，
+    绕过整个 agent_recovery 契约 —— 而在精简面（HOROSA_MCP_COMPACT=1）下门面**就是**全部工具，
+    所以这条漏洞在最省 token 的那个配置里覆盖面最大。三分支与技法工具逐字同款。
+    """
+    try:
+        return fn(*args, **kwargs)
+    except ToolValidationError as exc:
+        return _mcp_error_payload(exc)
+    except ValidationError as exc:
+        return _mcp_validation_error_payload(operation_name, None, exc)
+    except Exception as exc:  # noqa: BLE001 - 兜底也必须是 envelope，不能变 isError 裸文本
+        return _mcp_internal_error_payload(exc)
 
 
 def _mcp_error_payload(exc: ToolValidationError) -> dict[str, Any]:
@@ -787,15 +850,18 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
     )(horosa_dispatch)
 
     def horosa_agent_guidance(**kwargs: Any) -> dict[str, Any]:
-        payload = _normalize_mcp_request(_merge_mcp_arguments(kwargs), AgentGuidanceInput)
-        guidance = build_agent_guidance(
-            tool_name=payload.get("tool_name"),
-            intent=payload.get("intent"),
-            include_all=payload.get("include_all", False),
-        )
-        if isinstance(guidance, dict):
-            guidance["server_profile"] = _server_profile(settings)
-        return guidance
+        def _run() -> dict[str, Any]:
+            payload = _normalize_mcp_request(_merge_mcp_arguments(kwargs), AgentGuidanceInput)
+            guidance = build_agent_guidance(
+                tool_name=payload.get("tool_name"),
+                intent=payload.get("intent"),
+                include_all=payload.get("include_all", False),
+            )
+            if isinstance(guidance, dict):
+                guidance["server_profile"] = _server_profile(settings)
+            return guidance
+
+        return _guarded_facade("horosa_agent_guidance", _run)
     horosa_agent_guidance.__doc__ = (
         "Return machine-readable guidance for agents before calling Horosa tools. "
         "Use this to decide which user settings must be clarified instead of silently defaulted."
@@ -967,9 +1033,10 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
     mcp.tool(
         name="horosa_technique_report",
         title="技法依据报告 / technique provenance report",
-        # 只读已存 run + 渲染一个文件：不起盘、不改盘面记录，同参数同结果 → readOnly + idempotent。
-        # openWorld 恒 False（local-first）。如实标注，目录审核会核。
-        annotations=_ANN_QUERY,
+        # 🔴 readOnlyHint=False：`format = docx | pdf` 时它**往磁盘写文件**。标 readOnly 的后果不是
+        # 目录审核不过，而是自动放行只读工具的客户端（Claude Code 白名单、Cline auto-approve、
+        # VS Code）会在不问用户的情况下落盘。idempotent 仍为真（同参数同产物），openWorld 恒 False。
+        annotations=_ANN_RENDER,
     )(horosa_technique_report)
 
     # horosa_report_from_run 已下线：与 horosa_report_render 逐行同义（同一 ReportRenderInput
@@ -1104,7 +1171,11 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
                     ToolValidationError(
                         f"Unknown tool: {tool_name or '(missing tool_name)'}",
                         code="tool.unknown",
-                        details={"tool_name": tool_name, "hint": "See the technique catalog in this tool's description."},
+                        details={
+                            "tool_name": tool_name,
+                            "catalog": technique_index(),
+                            "hint": "details.catalog 按域列出全部合法技法名；全文见资源 horosa://catalog/techniques。",
+                        },
                     ),
                     tool_name=tool_name or "horosa_tool_run",
                 )
@@ -1131,8 +1202,13 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
             "the common birth/event fields are declared below, and **any other technique-specific "
             "field must go inside `request`** (e.g. request={\"guirengType\":2}) — undeclared "
             "top-level keys are dropped by the MCP argument layer. Same clarification gate and "
-            "envelope as the dedicated tools.\n\n"
-            + build_technique_catalog(label_chars=22)
+            "envelope as the dedicated tools.\n"
+            # 🔴 技法目录不再内嵌：它有 4145 字符，而 OpenAI 的 function 描述上限是 1024 ——
+            # 超限的后果是被拒或截断，而本工具是精简面下抵达全部技法的**唯一**通道。
+            # 三条发现路径取代它：① 点错名字时 tool.unknown 的 details.catalog 直接给全部合法名字
+            # （自愈式报错）；② 资源 horosa://catalog/techniques 有全文；③ horosa_agent_guidance。
+            "Discover technique names via the horosa://catalog/techniques resource, "
+            "horosa_agent_guidance, or simply call with a wrong tool_name — the error lists them all."
         )
         # 必须手写 signature：函数是 `**kwargs` 多态入口，没有单一 input model 可推导。
         # 缺了它 FastMCP 会内省出一个名叫 `kwargs` 的 string 必填参数，整个工具无法调用——

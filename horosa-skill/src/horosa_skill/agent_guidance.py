@@ -1675,6 +1675,19 @@ SOFTWARE_USAGE_HELP: dict[str, list[str]] = {
 }
 
 
+def technique_index() -> dict[str, list[str]]:
+    """技法名索引：{domain: [tool_name, …]}。约 2.5 KB，只有名字没有描述。
+
+    用在 `tool.unknown` 的 details 里做**自愈式报错**：模型点错名字时当场拿到全部合法名字，
+    不必回头去读某个工具的描述。这让 `horosa_tool_run` 的描述得以从 4145 字符降到 1024 以内
+    （OpenAI 的 function 描述上限；超了会被拒或截断，而它是精简面下抵达全部技法的唯一通道）。
+    """
+    groups: dict[str, list[str]] = {}
+    for name, definition in TOOL_DEFINITIONS.items():
+        groups.setdefault(str(definition.domain), []).append(name)
+    return {domain: sorted(names) for domain, names in sorted(groups.items())}
+
+
 def build_technique_catalog(*, label_chars: int = 72) -> str:
     """技法一行索引（按 domain 分组）——精简 MCP 模式下拼进 tool_run 的 docstring，资源面给全文。
 

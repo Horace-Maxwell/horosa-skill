@@ -300,7 +300,7 @@ dev = [
 requires-dist = [
     { name = "cryptography", specifier = ">=45.0.0" },
     { name = "httpx", specifier = ">=0.28.0" },
-    { name = "mcp", extras = ["cli"], specifier = ">=1.28.1,<2" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.29.0,<2" },
     { name = "pydantic", specifier = ">=2.8.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
     { name = "python-docx", specifier = ">=1.1.2" },

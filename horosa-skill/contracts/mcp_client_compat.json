@@ -1,0 +1,15 @@
+{
+  "_comment": "客户端可移植性契约：广告层每个属性恰一个标量 type、array 有 items、无 anyOf/$ref/私有键/default、additionalProperties 缺省或 false、描述 ≤1024 字符、名字加 Gemini 前缀后 ≤63。debt 是「没有描述的属性数」，只减不增。刷新：uv run python scripts/verify_mcp_client_compat.py --update-baseline",
+  "limits": {
+    "description_chars": 1024,
+    "gemini_name_limit": 63
+  },
+  "tools": {
+    "full": 116,
+    "compact": 11
+  },
+  "debt": {
+    "full_properties_without_description": 492,
+    "compact_properties_without_description": 87
+  }
+}

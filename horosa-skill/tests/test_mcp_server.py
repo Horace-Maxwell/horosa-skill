@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from horosa_skill.errors import ToolValidationError
 from horosa_skill.schemas.tools import AgentGuidanceInput, BirthInput, DispatchInput, KnowledgeReadInput, KnowledgeRegistryInput, MemoryQueryInput, ReportRenderInput
 from horosa_skill.surfaces.mcp_server import (
     COMPACT_SURFACE_TOOL_COUNT,
@@ -31,8 +32,20 @@ def test_normalize_mcp_request_accepts_plain_dict() -> None:
 
 
 def test_normalize_mcp_request_rejects_non_object_payload() -> None:
-    with pytest.raises(ValueError, match="request must be an object"):
+    """坏 payload 必须抛**可分类**的 ToolValidationError，而不是裸 ValueError。
+
+    这两条（JSON 解析失败 / 不是对象）发生在每个工具的 try **之前**，所以裸异常会被 lowlevel
+    server 转成 `isError: true` + 原始字符串，绕过 agent_recovery 契约 —— 影响全部 116 个工具，
+    且任何把参数字符串化的客户端（Gemini CLI、旧版 Cursor、n8n/Dify 模板）踩一次就无从恢复。
+    """
+    with pytest.raises(ToolValidationError) as excinfo:
         _normalize_mcp_request('["not","an","object"]', KnowledgeRegistryInput)
+    assert excinfo.value.code == "tool.invalid_payload"
+
+    with pytest.raises(ToolValidationError) as excinfo:
+        _normalize_mcp_request("{bad json", KnowledgeRegistryInput)
+    assert excinfo.value.code == "tool.invalid_payload"
+    assert "next_action" in excinfo.value.details
 
 
 def test_merge_mcp_arguments_prefers_request_when_present() -> None:
@@ -161,6 +174,7 @@ def test_mcp_full_mode_exposes_all_technique_tools(tmp_path) -> None:
 def test_mcp_compact_mode_exposes_facade_plus_tool_run(tmp_path) -> None:
     import asyncio
 
+    from horosa_skill.engine.registry import TOOL_DEFINITIONS
     from horosa_skill.surfaces.mcp_server import create_mcp_server
 
     settings, service = _make_service(tmp_path)
@@ -171,8 +185,16 @@ def test_mcp_compact_mode_exposes_facade_plus_tool_run(tmp_path) -> None:
     assert "horosa_tool_run" in names and "horosa_cn_qimen" not in names
     # 技法目录随 docstring 在场（dispatch 与 tool_run 均可发现全部技法）。
     by_name = {tool.name: tool for tool in tools}
-    assert "yizhangjing" in (by_name["horosa_tool_run"].description or "")
-    # 目录只放一份（tool_run）；dispatch 只指路（精简面预算 ≤30 KB，v0.36.0 B1）
+    # v0.37.0：技法目录不再内嵌进描述（4145 字符 > OpenAI 的 1024 上限，而 tool_run 是精简面下
+    # 抵达全部技法的唯一通道）。发现改走三条路：点错名字的自愈式报错 / 资源 / guidance。
+    tool_run_desc = by_name["horosa_tool_run"].description or ""
+    assert len(tool_run_desc) <= 1024
+    assert "horosa://catalog/techniques" in tool_run_desc
+    from horosa_skill.agent_guidance import technique_index
+    catalog = technique_index()
+    assert any("yizhangjing" in names for names in catalog.values())
+    assert sum(len(v) for v in catalog.values()) == len(TOOL_DEFINITIONS)
+    # dispatch 仍只指路，不放目录（精简面预算 ≤30 KB，v0.36.0 B1）
     assert "horosa_tool_run" in (by_name["horosa_dispatch"].description or "")
     assert "yizhangjing" not in (by_name["horosa_dispatch"].description or "")
 

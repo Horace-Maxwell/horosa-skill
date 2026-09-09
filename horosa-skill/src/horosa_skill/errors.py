@@ -174,6 +174,16 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "run_technique_tool_first",
     },
+    "tool.invalid_payload": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "调用参数没解析成对象。把各个字段按工具的 inputSchema 直接传（不要整包塞进一个字符串），"
+            "确需整包时 request 必须是合法 JSON 对象。",
+            "The call arguments did not parse as an object. Pass fields directly per the tool's "
+            "inputSchema; if you must send one blob, `request` has to be a valid JSON object.",
+        ),
+        "next_action": "resend_arguments_as_object",
+    },
     "agent_guidance.required": {"kind": "input", "next_action": "ask_user_then_confirm"},
 }
 

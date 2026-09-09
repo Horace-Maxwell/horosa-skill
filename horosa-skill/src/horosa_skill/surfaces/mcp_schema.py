@@ -185,6 +185,83 @@ def advertised_description(tool_name: str) -> str:
     return f"{desc}\n{aka + '；' if aka else ''}{tail}"
 
 
+
+# ---------------------------------------------------------------------------
+# 可移植广告层（v0.37.0）
+#
+# 广告层与校验层是分开的：校验走 `_signature_for_input_model` 的 `Annotated[Any, …]`（一律宽松），
+# 广告层只影响客户端**看到**什么。所以把广告层收窄到「最低公分母客户端也能吃」是**零功能损失**的：
+# 服务器照样接受 request 传 JSON 字符串、lat/lon 传数字、顶层塞隐藏旋钮。
+#
+# 各客户端的硬约束（2026-09 实测/官方文档）：
+#   · Gemini CLI / Vertex FunctionDeclaration：每个属性必须有**单个** type；数组必须有 items；
+#     拒 $ref/$defs；严格按 JSON Schema 2020-12 校验 —— 违反时拒的是**整张工具表**。
+#   · OpenAI strict function calling：不接受 type 数组、不接受 additionalProperties: true。
+#   · 私有 x-* 键：部分客户端按未知关键字直接报错。
+# ---------------------------------------------------------------------------
+
+# 允许在属性里出现的键；其余（default/title/format/x-*/$…）一律剔除。
+_PORTABLE_PROP_KEYS = frozenset({"type", "enum", "items", "description"})
+
+
+def _portable_type(prop: dict[str, Any], name: str) -> str:
+    """把 anyOf / type 数组收敛成**恰一个**标量 type。"""
+    candidates: list[str] = []
+    declared = prop.get("type")
+    if isinstance(declared, str):
+        candidates = [declared]
+    elif isinstance(declared, list):
+        candidates = [str(x) for x in declared if x and x != "null"]
+    if not candidates:
+        for entry in prop.get("anyOf") or []:
+            if isinstance(entry, dict) and entry.get("type") and entry.get("type") != "null":
+                candidates.append(str(entry["type"]))
+    if not candidates:
+        return "string"
+    if len(candidates) == 1:
+        return candidates[0]
+    # 多类型：字符串永远是安全的收窄口径 —— 服务端的 normalize 层本来就吃字符串
+    # （"31.22" → "31n13"、"1" → 1），而 object 联合体（request）另有专门处理。
+    return "object" if "object" in candidates else "string"
+
+
+def portable_property(name: str, prop: dict[str, Any]) -> dict[str, Any]:
+    """单个属性的可移植化：恰一个 type、数组有 items、无私有键、绝不返回 {}。"""
+    out = {k: v for k, v in prop.items() if k in _PORTABLE_PROP_KEYS}
+    out["type"] = _portable_type(prop, name)
+    if out["type"] == "array":
+        items = out.get("items")
+        if not isinstance(items, dict) or not items.get("type"):
+            # Gemini 会因为「array 没有 items」直接 400 INVALID_ARGUMENT。
+            out["items"] = {"type": "string"}
+        else:
+            out["items"] = {k: v for k, v in items.items() if k in {"type", "enum"}}
+    else:
+        out.pop("items", None)
+    if not str(out.get("description") or "").strip():
+        out.pop("description", None)
+    return out
+
+
+def portable_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """整张 inputSchema 的可移植化。幂等。"""
+    if not isinstance(schema, dict):
+        return {"type": "object", "properties": {}}
+    out: dict[str, Any] = {"type": "object"}
+    props = schema.get("properties")
+    out["properties"] = {
+        str(name): portable_property(str(name), prop if isinstance(prop, dict) else {})
+        for name, prop in (props or {}).items()
+    }
+    # additionalProperties: true 在 2020-12 里等于「缺省」，但 OpenAI strict 见到 true 会拒；
+    # 隐藏旋钮走顶层透传的能力不受影响（服务端不校验广告层）。
+    if schema.get("additionalProperties") is False:
+        out["additionalProperties"] = False
+    if isinstance(schema.get("required"), list) and schema["required"]:
+        out["required"] = [str(x) for x in schema["required"]]
+    return out
+
+
 def apply_advertised_schemas(mcp: Any) -> dict[str, int]:
     """注册完成后重写各工具的广告层 schema/描述；返回 {mcp_name: 隐藏旋钮数}（测试/棘轮用）。"""
     manager = getattr(mcp, "_tool_manager", None)
@@ -201,4 +278,9 @@ def apply_advertised_schemas(mcp: Any) -> dict[str, int]:
             hidden[tool.name] = int(slim.get("x-horosa-hidden-knobs", 0))
         elif tool.name in {"horosa_dispatch", "horosa_hecan"}:
             tool.parameters = advertised_dispatch_schema(hecan=tool.name == "horosa_hecan")
+    # 🔴 最后对**全部**工具跑一遍可移植化 —— 包括 8 个门面与 horosa_tool_run。
+    # 此前只有技法 + dispatch/hecan 被重写，门面直接把 pydantic 的原始 schema
+    # （anyOf:[…,{null}] / default:null / title / $ref）发上线；而在精简面下门面**就是**全部工具。
+    for tool in manager.list_tools():
+        tool.parameters = portable_schema(tool.parameters or {})
     return hidden
