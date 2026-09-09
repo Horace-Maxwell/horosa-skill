@@ -101,6 +101,52 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.37.0+ / 2026-09-09 — DETACHED_PROCESS 让 Windows 启动器**从未运行过**；弱证据短路把自家 runtime 判成外人
+
+v0.37.0 把启动器从阻塞 `subprocess.run` 改成分离 `Popen`（为的是别让「首次调用」卡在一次 MCP 请求里，
+方向完全正确）。在真 Windows + 真 runtime 上试，两处新代码各有一个只有这台机器能看见的洞。
+
+- 🔴 **`DETACHED_PROCESS` = 无控制台 = `powershell -File` 静默秒退。** 症状：`selfcheck` 报
+  `runtime.start_timeout`（还建议「跑 doctor / install」），而 8899/9999 一个没起、`launcher.log`
+  **0 字节**、启动器自己的 `.horosa-local-logs` 目录都没建 —— 也就是**启动器从未运行**，却被报成
+  「没在 45 秒内就绪」。隔离实验（同一条命令、只换 creationflags）：
+  | creationflags | 12 秒后 |
+  | --- | --- |
+  | `DETACHED_PROCESS \| NEW_PROCESS_GROUP` | `poll()==0`、日志 0 字节、服务零 |
+  | `NEW_PROCESS_GROUP` 单独 | 仍在跑、服务真起来 |
+  | `NEW_PROCESS_GROUP \| CREATE_NO_WINDOW` | 仍在跑、**父进程退出后照旧存活**、chart 起来回 pdSyncRev |
+  根因：DETACHED 让子进程完全没有控制台，PowerShell 主机拿不到控制台就直接 exit 0 且**不写一个字节**
+  （所以连诊断都没有）。而 DETACHED 想要的「活过父进程」在 Windows 上本来就免费 —— 子进程不随父终止。
+  fix = 换 `CREATE_NO_WINDOW`（有控制台、只是不弹窗）。修后同一条 `selfcheck` 立刻变成设计意图的
+  `runtime.starting` + `retry_after_seconds: 5`，按提示重试即全绿（`doctor issues: []`）。
+  guard = `test_windows_launcher_spawn_never_uses_detached_process`（断言 flags：无 DETACHED、有
+  CREATE_NO_WINDOW + NEW_PROCESS_GROUP）。
+  **法则**：换进程创建方式属于「只有目标平台能验」的改动 —— CI 的 windows-smoke 没装离线 runtime，
+  永远走不到 spawn 启动器这一步，所以它全绿不代表这条路通。
+
+- 🔴 **弱证据（app 标记）抢在强证据（命令行）之前 return，`stop` 就停不掉自家 runtime。**
+  `classify_endpoint` 第 1 级：对面自报 `app: horosa-chart` 且**没报 nonce** 时直接返回
+  `identity.app_marker`。可 `app_marker` 不在 `_STRONG_EVIDENCE` 里 → `started_by_us=False` →
+  `stop` 报 `runtime.stop_refused_foreign`。实测：手动跑 payload 自带启动器起的 chart+java
+  （命令行明明在 `rt-verify\currentuntime\windows\...` 下）被拒停，用户只能按 PID 手杀，
+  或用 `--force`（那把锤子连用户自己的桌面端一起砸）。
+  fix = 只允许**升级**：app 标记先记成兜底，让第 2 级（命令行含 runtime 根）/第 3 级（注册表活 pid）
+  先说话；**绝不降级为 foreign** —— 对面已自报星阙协议，判 foreign 会打掉「外部模式：用用户开着的
+  桌面端当后端」。实测修后同样两个进程判 `process.command_matches_runtime_root` / `started_by_us=True`，
+  `stop` 真正释放了两个端口。guard = 三条 hermetic 测试（命令行升级 / 注册表 pid 升级 / 陌生命令行
+  只停在弱 ours 不判 foreign）。
+  **法则**：分级证据里，**弱证据一律只能作兜底**，不许早退 —— 早退等于把强证据从判定里删掉。
+  副产品：那条既有测试 `test_app_marker_alone_is_usable_but_not_stoppable` 没 mock `listener_pids`，
+  会读真机端口；本机 9999 上跑着 runtime 时它才暴露出来（同 mac 侧 9fd0ff4「维护机环境替测试补了
+  它没声明的前提」一族）。
+
+- **观察（未修，属状态机的设计决定）**：分离启动后，持久状态**永久停在 `status: "starting"`**。
+  写 `"running"` 的只有启动调用内的那一行，而 `starting` 分支已提前返回，服务随后就绪时没有任何
+  收敛点。实测：两个端点都可达、`doctor issues: []`（doctor 的健康判定读的是活探针，所以是对的），
+  但状态文件与 `runtime status` 的文案仍说「正在启动」。消费方只有 `cli.py` 两处文案（不阻塞
+  start/stop），故影响限于「诊断说谎」——与本仓清过两轮的 9999 误诊同族。修点在 mac 侧正在建的
+  状态机里（谁负责收敛：doctor / status / 一个后台 reconciler），留给属主定。
+
 ### v0.37.0 / 2026-09-09 — 「能被任意 AI 完美调用」：协议面只对着一个客户端调过、连通性从未验证过、端口安全只写在文档里
 
 **触发**：用户要求「全面检查是否还无法被任意 AI 完美调用，尤其是端口占用问题及其他一切因素」。

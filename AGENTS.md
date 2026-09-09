@@ -428,6 +428,13 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   JDK/Node 永久钉死；② 先下到 `<dest>.part` 再 `replace`，中断的 curl 不会留下截断文件冒充缓存命中。
   故 `latest_temurin_jdk_url()` 要**解析重定向**返回带版本号的真实 URL（API URL 跨 GA 恒定，不可作缓存键）。
   回归：`tests/test_builder_download_cache.py`。
+- **Windows 启动器只许用 `CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW` 起，禁 `DETACHED_PROCESS`**：
+  DETACHED 让子进程完全没有控制台，`powershell -File` 的主机拿不到控制台就 exit 0 且不写一个字节 ——
+  启动器从未运行，manager 只看到「已退出且未就绪」报 `runtime.start_timeout`，且 `launcher.log` 空、
+  无任何诊断（v0.37.0+ 台账，真机隔离实验）。「活过父进程」在 Windows 上本就免费。
+  guard = `test_windows_launcher_spawn_never_uses_detached_process`。
+  **推论**：改进程创建方式 / 启动器调用方式，CI 的 windows-smoke 验不到（它没装离线 runtime，走不到
+  spawn 这一步）—— 必须在装了 runtime 的 Windows 机器上真起一次。
 - **JDK 下载走 Adoptium API，禁 GitHub `releases/latest`**：temurin17-binaries 的 `releases/latest` 按
   tag 提交日期取，GA 刚打 tag 的窗口内平台二进制可能还没传完（jdk-17.0.20-ga 曾使 win/linux builder
   空手），`/releases` 列表顺序亦不可靠（老版本重发插队到最前）。下载 JDK 的 builder 一律用

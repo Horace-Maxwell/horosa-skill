@@ -282,3 +282,60 @@ def test_full_overwrite_keeps_long_lived_v2_fields(tmp_path) -> None:
     assert state["status"] == "running_with_warnings"
     assert state["launch_nonce"] == "n1"
     assert str(os.getpid()) in state["clients"]
+
+def test_app_marker_does_not_shadow_the_command_line_evidence(monkeypatch, tmp_path) -> None:
+    """app 标记（弱）不许挡住命令行（强）—— 否则 `stop` 停不掉自己启动的 runtime。
+
+    实测（Windows 构建机）：服务**没报 nonce** 时（直接跑 payload 自带的启动器、或状态里的 nonce
+    已被后一次启动覆盖），第 1 级的 app-marker 短路命中、`started_by_us` 恒为 False，于是
+    `horosa-skill stop` 对**跑在我们 runtime 根下的** chart+java 报 `runtime.stop_refused_foreign`，
+    用户只能按 PID 手杀。修法是只允许「弱 ours → 强 ours」的升级（绝不降级为 foreign，那会打掉
+    外部模式：用用户自己开着的桌面端当后端）。
+    """
+    monkeypatch.setattr(
+        "horosa_skill.runtime.identity.probe_identity",
+        lambda url: {"app": "horosa-chart", "proto": 2, "nonce": ""},
+    )
+    monkeypatch.setattr("horosa_skill.runtime.identity.listener_pids", lambda port: [4242])
+    monkeypatch.setattr(
+        "horosa_skill.runtime.identity.process_command",
+        lambda pid: f'"{tmp_path}/current/runtime/windows/python/python.exe" webchartsrv.py',
+    )
+    verdict = classify_endpoint("http://127.0.0.1:8899", runtime_root=tmp_path)
+    assert verdict.verdict == "ours"
+    assert verdict.evidence == "process.command_matches_runtime_root"
+    assert verdict.started_by_us is True, "命令行证明它就在我们的 runtime 根下，必须可停"
+
+
+def test_app_marker_is_upgraded_by_the_registry_pid_too(monkeypatch, tmp_path) -> None:
+    """命令行查不到时，我方注册表里记的活 pid 同样是强证据（同一条升级路径的第二条腿）。"""
+    monkeypatch.setattr(
+        "horosa_skill.runtime.identity.probe_identity",
+        lambda url: {"app": "horosa-backend", "proto": 2, "nonce": ""},
+    )
+    monkeypatch.setattr("horosa_skill.runtime.identity.listener_pids", lambda port: [])
+    monkeypatch.setattr("horosa_skill.runtime.identity.pid_alive", lambda pid: "alive")
+    verdict = classify_endpoint("http://127.0.0.1:9999", runtime_root=tmp_path, service_pids=[321])
+    assert verdict.evidence == "registry.service_pid_alive"
+    assert verdict.started_by_us is True
+
+
+def test_app_marker_with_a_stranger_command_stays_weak_not_foreign(monkeypatch, tmp_path) -> None:
+    """反向不许发生：对面已自报星阙协议，命令行不在我们根下时只能停在**弱 ours**。
+
+    判成 foreign 会连「外部模式：用用户自己开着的桌面端当后端」一起打掉；弱 ours 恰好是
+    「能用它、但不许停它」——正是 EndpointIdentity 那段注释要的语义。
+    """
+    monkeypatch.setattr(
+        "horosa_skill.runtime.identity.probe_identity",
+        lambda url: {"app": "horosa-chart", "proto": 2, "nonce": ""},
+    )
+    monkeypatch.setattr("horosa_skill.runtime.identity.listener_pids", lambda port: [999])
+    monkeypatch.setattr(
+        "horosa_skill.runtime.identity.process_command",
+        lambda pid: r'"C:\Program Files\Horosa Desktop\horosa.exe" --serve',
+    )
+    verdict = classify_endpoint("http://127.0.0.1:8899", runtime_root=tmp_path)
+    assert verdict.verdict == "ours", "自报星阙协议的对面不该被判 foreign"
+    assert verdict.evidence == "identity.app_marker"
+    assert verdict.started_by_us is False, "不是我们起的，就不许停它"

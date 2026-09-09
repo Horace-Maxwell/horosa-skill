@@ -2101,11 +2101,19 @@ horosa_owns_pid() {
                 "stdin": subprocess.DEVNULL,
             }
             if os.name == "nt":
-                # getattr 兜底：这两个常量只在真 Windows 的 subprocess 上存在，而把 os.name
+                # getattr 兜底：这些常量只在真 Windows 的 subprocess 上存在，而把 os.name
                 # 打成 "nt" 的跨平台模拟测试会走到这一支。
+                # 🔴 **绝不要 DETACHED_PROCESS**：它让子进程完全没有控制台，而启动器是
+                # `powershell -File …` —— 无控制台的 PowerShell 主机**立刻 exit 0 且一个字节都不写**。
+                # 实测（Windows 构建机，真 runtime）：DETACHED 下 12 秒内 poll()==0、launcher.log
+                # 0 字节、连启动器自己的 .horosa-local-logs 目录都没建、服务一个没起；manager 只能
+                # 看到「已退出且未就绪」→ 报 runtime.start_timeout 并建议「跑 doctor / install」，
+                # 而实际上启动器从未运行。于是 install/selfcheck/serve 在 Windows 上都起不了 runtime。
+                # CREATE_NO_WINDOW 才是要的东西：有控制台、只是不弹窗；实测父进程退出后启动器照旧
+                # 存活并把 chart 服务拉起来（Windows 的子进程本就不随父进程终止，无需 DETACHED）。
                 kwargs["creationflags"] = getattr(
                     subprocess, "CREATE_NEW_PROCESS_GROUP", 0
-                ) | getattr(subprocess, "DETACHED_PROCESS", 0)
+                ) | getattr(subprocess, "CREATE_NO_WINDOW", 0)
             else:
                 kwargs["start_new_session"] = True
             proc = subprocess.Popen(command, **kwargs)

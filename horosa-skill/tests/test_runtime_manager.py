@@ -1719,3 +1719,47 @@ def test_ci_shape_recipe_is_documented_and_the_fixture_covers_it() -> None:
     )
     for name in ("HOROSA_SERVER_ROOT", "HOROSA_CHART_SERVER_ROOT"):
         assert name in source, f"_managed_mode 必须清 {name}（否则切进 external 模式）"
+
+def test_windows_launcher_spawn_never_uses_detached_process(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Windows 启动器**不许**用 DETACHED_PROCESS 起。
+
+    DETACHED_PROCESS 让子进程完全没有控制台，而启动器是 `powershell -File …`：无控制台的
+    PowerShell 主机立刻 exit 0 且**一个字节都不写**。实测（真 Windows + 真 runtime）：12 秒内
+    poll()==0、launcher.log 0 字节、服务一个没起，manager 只看到「已退出且未就绪」→ 报
+    runtime.start_timeout 并建议跑 doctor/install，而启动器从未运行 —— install/selfcheck/serve
+    在 Windows 上都起不了 runtime，且没有任何诊断留痕。
+    CREATE_NO_WINDOW 有控制台、只是不弹窗；Windows 子进程本就不随父进程终止（实测父进程退出后
+    启动器照旧把 chart 服务拉起来），所以 DETACHED 提供的「活过父进程」本来就不需要。
+    """
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    manager = HorosaRuntimeManager(settings)
+    script = tmp_path / "start_horosa_local.ps1"
+    script.write_text("", encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    class _FakeProc:
+        pid = 4242
+
+        def poll(self):  # noqa: ANN201
+            return None
+
+    def fake_popen(command, **kwargs):  # noqa: ANN001, ANN003
+        captured.update(kwargs)
+        return _FakeProc()
+
+    monkeypatch.setattr(os, "name", "nt")
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200, raising=False)
+    monkeypatch.setattr(subprocess, "CREATE_NO_WINDOW", 0x8000000, raising=False)
+    monkeypatch.setattr(subprocess, "DETACHED_PROCESS", 0x8, raising=False)
+
+    manager._spawn_start_command(command=["powershell", "-File", str(script)], script=script, env={})
+
+    flags = int(captured["creationflags"])  # type: ignore[arg-type]
+    assert not flags & 0x8, "DETACHED_PROCESS kills the PowerShell launcher outright"
+    assert flags & 0x8000000, "CREATE_NO_WINDOW is what keeps it console-backed but silent"
+    assert flags & 0x200, "keep the new process group (Ctrl+C isolation)"

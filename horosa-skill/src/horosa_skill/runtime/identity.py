@@ -140,7 +140,24 @@ def classify_endpoint(
                 if reported and reported != launch_nonce:
                     # 是星阙，但**不是这次启动的那一份**（用户的桌面端 / 另一个实例）。
                     return EndpointIdentity("foreign", "identity.nonce_mismatch", url, port, app, False)
-            # 我方没有记录 nonce（外部模式 / 旧状态）：app 标记已足够认亲。
+            # app 标记只够「能当后端用」，不够「是我们起的」（`started_by_us` 要强证据）——两者的
+            # /horosaIdentity 一模一样，分不清我方托管的 runtime 与用户自己开的桌面端。
+            # 🔴 但**不能在这里 return**：那样监听进程的命令行（第 2 级强证据）永远没机会说话，
+            # 于是 `stop` 连**跑在我们 runtime 根下的**进程都报 runtime.stop_refused_foreign，
+            # 用户只能按 PID 手杀（或 --force —— 那把锤子连用户的桌面端一起砸）。
+            # 触发条件 = 对面**没报 nonce**：托管启动会把 HOROSA_LAUNCH_NONCE 传下去（实测 doctor
+            # 拿到 identity.nonce_match），但直接跑 payload 自带的 start_horosa_local.ps1（AGENTS §8
+            # 记录的 vendored 实例起法）、或状态里的 nonce 已被后一次启动覆盖时，报的就是 nonce=""。
+            # 本轮在 Windows 构建机上就是这么复现出 stop_refused_foreign 的。
+            # 只允许**升级**（弱 ours → 强 ours），绝不降级为 foreign：app 标记已经证明对面说的是
+            # 星阙协议，把它判成 foreign 会连「外部模式下用用户的桌面端当后端」一起打掉。
+            for pid in listener_pids(port) if port is not None else []:
+                if _command_says_ours(process_command(pid), runtime_root):
+                    return EndpointIdentity("ours", "process.command_matches_runtime_root", url, port,
+                                            app, None)
+            for pid in service_pids:
+                if pid_alive(pid) == "alive":
+                    return EndpointIdentity("ours", "registry.service_pid_alive", url, port, app, None)
             return EndpointIdentity("ours", "identity.app_marker", url, port, app, None)
         if app:
             return EndpointIdentity("foreign", "identity.other_app", url, port, app, None)
