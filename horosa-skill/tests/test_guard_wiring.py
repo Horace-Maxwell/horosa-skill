@@ -120,8 +120,12 @@ def test_release_asset_contract_is_asserted_not_just_documented() -> None:
     assert "has_mcpb" in sync, "双平台完整性判据必须把 .mcpb 算进去"
     publish = (SCRIPTS / "publish_darwin_release.sh").read_text(encoding="utf-8")
     for step in ("package_runtime_payload.sh", "generate_release_manifest.py", "generate_sbom.py",
-                 "SHA256SUMS.txt", "verify_runtime_release.py"):
+                 "build_mcpb.sh", "SHA256SUMS.txt", "verify_runtime_release.py"):
         assert step in publish, f"darwin 半边发布脚本缺步骤：{step}（手打清单必漏）"
+    # v0.37.0：mcpb 的 sha 必须在发布流程里回填进 server.json —— 客户端安装前会校验它，
+    # 留空发出去 = 注册表那条记录装不上。
+    assert "fileSha256" in publish, "publish 必须把 mcpb 的 sha 回填进 server.json"
+    assert ".mcpb" in publish, "publish 的资产列表必须含 .mcpb"
 
 
 def test_vendored_instance_scripts_keep_the_boot_and_kill_disciplines() -> None:
