@@ -72,23 +72,43 @@ def _pid_alive_windows(pid: int) -> Liveness:
         return "unknown"
 
 
-def process_command(pid: object) -> str | None:
-    """进程的完整命令行；取不到返回 None。只读，超时即放弃。"""
-    if not isinstance(pid, int) or pid <= 0:
-        return None
-    if os.name == "nt":
-        cmd = [
-            "powershell", "-NoProfile", "-NonInteractive", "-Command",
-            f"(Get-CimInstance Win32_Process -Filter 'ProcessId={pid}').CommandLine",
-        ]
-    else:
-        cmd = ["ps", "-o", "command=", "-p", str(pid)]
+def _run_text(cmd: list[str], timeout: float) -> str:
     try:
         out = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=4.0, check=False,
+            cmd, capture_output=True, text=True, timeout=timeout, check=False,
             encoding="utf-8", errors="replace",
         )
     except (OSError, subprocess.SubprocessError):
+        return ""
+    return (out.stdout or "").strip()
+
+
+def process_command(pid: object) -> str | None:
+    """进程的完整命令行；取不到返回 None。只读，超时即放弃。
+
+    🔴 Windows 上这条**曾经恒返回空**：PowerShell 冷启动在 CI runner 上常常超过 4 秒，
+    而超时被当成「查不到」。后果不是少一行日志 —— 归属判定的第二级证据（命令行含 runtime 根）
+    整个失效，端口冲突的报错也点不出持有者是谁，而 Windows 恰恰是端口冲突最常见的平台。
+    所以：给 PowerShell 15 秒，拿不到再退到 `tasklist` 取映像名（至少能在报错里点名）。
+    """
+    if not isinstance(pid, int) or pid <= 0:
         return None
-    text = (out.stdout or "").strip()
-    return text or None
+    if os.name != "nt":
+        return _run_text(["ps", "-o", "command=", "-p", str(pid)], 4.0) or None
+
+    text = _run_text(
+        [
+            "powershell", "-NoProfile", "-NonInteractive", "-NoLogo", "-Command",
+            f"(Get-CimInstance Win32_Process -Filter 'ProcessId={pid}').CommandLine",
+        ],
+        15.0,
+    )
+    if text:
+        return text
+    # 退路：映像名不含参数，但足以在「端口被谁占着」的报错里点名。
+    rows = _run_text(["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"], 10.0)
+    for row in rows.splitlines():
+        parts = [item.strip('"') for item in row.split('","')]
+        if len(parts) >= 2 and parts[1].strip('"') == str(pid):
+            return parts[0].strip('"') or None
+    return None

@@ -85,7 +85,9 @@ def test_tar_repack_preserves_every_other_member(tmp_path) -> None:
         json.dumps({"version": "0.36.0", "runtime_payload_version": "0.36.0"}), encoding="utf-8"
     )
     script = payload / "runtime-payload" / "Horosa-Web" / "start_horosa_local.sh"
-    script.write_text("#!/usr/bin/env bash\necho 起动\n", encoding="utf-8")
+    # 🔴 newline="" 关掉换行翻译：Windows 上 `write_text` 会把 \n 写成 \r\n，
+    # 于是「重打后字节与源相同」这条断言在那儿假红（源本来就是 CRLF，repack 忠实保留了它）。
+    script.write_text("#!/usr/bin/env bash\necho 起动\n", encoding="utf-8", newline="")
     script.chmod(0o755)
     with tarfile.open(source, "w:gz") as archive:
         archive.add(payload / "runtime-payload", arcname="runtime-payload")
@@ -102,7 +104,9 @@ def test_tar_repack_preserves_every_other_member(tmp_path) -> None:
         with tarfile.open(source) as before:
             expected_mode = before.getmember("runtime-payload/Horosa-Web/start_horosa_local.sh").mode
         assert member.mode == expected_mode, "mode 必须原样搬运，否则启动脚本可能跑不了"
-        assert archive.extractfile(member).read().decode() == "#!/usr/bin/env bash\necho 起动\n"
+        with tarfile.open(source) as before:
+            original = before.extractfile("runtime-payload/Horosa-Web/start_horosa_local.sh").read()
+        assert archive.extractfile(member).read() == original, "非清单条目必须逐字节原样"
 
 
 def test_repack_refuses_to_overwrite_an_existing_archive(tmp_path) -> None:
