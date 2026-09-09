@@ -379,6 +379,15 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
     change 里把它加进 `gen_knowledge_packs.py::HELPDOC_DOMAINS` 并重跑生成器提交包——生成器对「既未收割
     也未明文排除」的手册 FAIL，`test_whitelist_and_packs_on_disk_are_the_same_set` 锁白名单与产物同步。
 
+15. **新客户端 / 新传输的布线**（v0.37.0）：广告层默认**可移植**（每属性恰一个标量 type、array 必带
+    items、无 `default/title/x-*`、不写 `additionalProperties: true`）—— 严格客户端见到违例是拒**整张
+    工具表**，症状是「这个 server 在某某客户端里一个工具都没有」，不是「某个参数不好使」。
+    每次 service 调用必须**卸载到工作线程**（FastMCP 1.x 不替你做，`async def` 里直接调同步体
+    = 整个事件循环被占住）。分段循环必须 `_progress_tick`（既报进度也是取消检查点）。
+    `maxSpanDays` 是**上限**不是旋钮，只能调低。新增客户端格式时同批更新 README×2 的
+    Works-with 矩阵（`verify_docs_sync.check_client_matrix` 锁），并在 `client check` 的
+    `_CLIENT_CONFIG_PATHS` 里登记它的配置文件位置。
+
 **审计前置**（补「未同步技法」缺口前）：先 grep 仓内**明确排除项**（`fengshui`：canvas + 户型图上传 +
 交互点位驱动，无 birth/time 输入，无法 headless——是政策性排除不是缺口），再确认候选的
 `buildXxxSnapshotText` 是纯 `chart/data→text`（无 canvas/DOM/上传/点击依赖），过了 headless-readiness
@@ -498,7 +507,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 - **发布步骤只允许以脚本形态存在**（v0.27.0：SBOM 生成器一直在仓里、却因发布流程是手打清单而漏传）：
   mac 半边一律走 `scripts/publish_darwin_release.sh`（payload → darwin manifest → **SBOM** →
   SHA256SUMS → verify → `--publish` 才上传；无 `--publish` 是安全默认）。资产契约由
-  `release-completeness.yml` 断言（manifest 双平台 + 两包可达 + **SBOM 在场**）。
+  `release-completeness.yml` 断言（manifest 双平台 + 两包可达 + **SBOM 在场** + **`.mcpb` 在场**）。
+  `.mcpb` 是 Claude Desktop 的一键安装包（`scripts/build_mcpb.sh`：validate → pack → sha256），
+  它的 sha 要回填进 `server.json` 的 mcpb package —— 那条 URL 必须指向**当前**版本的 tag，
+  否则升级后客户端装到的还是旧包（`verify_server_json.py` 逐个 package 查，不只查第一个）。
   Windows 半边不变：构建机 `sync_windows_release.py --upload`，判据 `--check` 的 `[GAP]`/`[OK]`。
 - **发 tag 前必须在有上游 checkout 的机器上跑 `scripts/preflight_release.py`**（`HOROSA_SOURCE_ROOT`
   指向 Horosa-Public）。跨树两闸（`verify_upstream_sync --require-upstream`、
@@ -635,10 +647,17 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | Windows 启动器超时 throw 但服务随后可用 | Java 连 Mongo/Redis 重试超 readiness 窗 | 忽略 throw，poll `doctor` / 双端点几分钟 |
 | `runtime.start_failed`，stderr 是启动器**自己的** parse error（`Missing closing '}'` / `string is missing the terminator`） | `.ps1` 无 BOM → Windows PowerShell 5.1 按 ANSI 解码，非 ASCII 字符变 U+201D 被当成字符串定界符 | 模板存成 UTF-8 with BOM + 字符串字面量纯 ASCII（§6）；`uv run pytest tests/test_runtime_launcher_templates.py` 定案 |
 | release guard 绿但 Windows 用户拿到旧功能 | pin-forward（manifest 指旧 zip） | `sync_windows_release.py --check` 定案 → §7 修复流 |
+| 仓里冒出 `${env:HOME:-${sys:user.home}}/.horosa-logs/…` 目录 | dev 启动器裸跑未补丁的 vendored jar，log4j 的 basedir 没展开 | 已修（`extract_log4j_config.py` + `-Dlog4j2.configurationFile`）；`-Dbasedir=` 覆盖不了它。守卫 `verify_no_stray_runtime_dirs.py` |
 | 结果段缺失，客户端想报「缺依赖」 | 幻觉依赖风险 | 按 SKILL.md：说本地未返回该段，跑 `doctor` / `openclaw-check`，不发明 MongoDB/7897 |
 | chart 启动日志整段 traceback：`kintaiyi/game_theory.py … No module named 'scipy'` | prewarm 碰到 opt-in 博弈论子模块（默认关、懒 import）；scipy 两平台 bundle 均无（mac 同样） | 良性，无需处置；判据 = `/taiyi/pan` 回 `ResultCode 0 + source kintaiyi`；勿为此加 scipy（瘦身红线） |
 | `doctor` 报 `services:java_backend_not_running` / runtime_state `degraded_chart_only` | Java 后端死或被拦（Windows 常见 = 代理/VPN/安全软件 WFP 拦 JDK-17 AF_UNIX loopback，jar 在 Spring bean 构造期秒退且自身日志为空） | 降级模式设计行为：chart 侧技法照常可用；`doctor.java_diagnostics` 有启动器捕获的崩溃摘录；用户侧处置 = 禁用干扰软件并重启（issue #14） |
 | Java 族技法（nongli / bazi / ziwei / liureng）报 HTTP 500 | **9999 是通用码，先读 `Result` 原文**：`no.register.app.in.sys.forapp` = 请求没带/没签对 `ClientApp`（注册表在 jar 内 `data/rsakey.json`，与 Mongo 无关）；`begin 1, end 3, length 1` / `200001` = 请求缺 `lat` 的上游崩溃（按**年**缓存，故时好时坏——复现要换冷年份）；`Timed out … mongodb.host` = 实例裸 `-jar` 起的，jar 内写死的 Mongo 主机名解析不到 | 裸 HTTP 探针恒回第一种、不可作判据；一律用 `service.run_tool` 正规路径复现（§8 验证流程 5）；第三种改用 `start_vendored_instance.sh --with-java`（桌面模式，无 Mongo 也全族可用） |
+| 第一次调某个技法就超时（Codex 60s / 其它客户端各自默认），而 runtime 其实正常 | 首次启动含解压 + CDS 训练（300–900 s） | 已改为有界启动：超预算回 `runtime.starting` + `retry_after_seconds`，**重试同一个调用**即可；`HOROSA_RUNTIME_CALL_WAIT_SECONDS` 调预算；`runtime status` 看启动器日志 |
+| Clash / VPN 下「无法连接本地后端」而服务健康 | 回环探测走了用户代理 | 已内建绕代理（`loopback_httpx_client`）；自己 curl 排查时设 `NO_PROXY=127.0.0.1,localhost` |
+| 用户的星阙桌面端被本工具关掉 | 旧 stop 按端口动手，不问归属 | 已修：只停**强证据**属于自己的（nonce / 命令行含 runtime 根 / 我方 pid）；守卫 `verify_runtime_scripts.py` + `tests/test_runtime_ports_identity.py` |
+| `runtime.port_conflict_foreign` / `_unknown_holder` | 8899/9999 被别的进程占着，本工具**不会**代为终止 | 关掉报错里点名的进程，或 `HOROSA_PORTS=auto` 自动挑空闲口；确知是 Horosa 后端时 `HOROSA_RUNTIME_TRUST_PORTS=1` |
+| 某个客户端里 horosa 一个工具都没有 / 装了却不出现 | 配置写错（占位符未展开、缺 `--transport stdio`、目录搬了、`uvx horosa-skill` 指着未开通的 PyPI、Codex 默认 10/60 s 超时） | `uv run horosa-skill client check`（读它**实际写着什么**）→ 按 `fix_command` 重生成 |
+| 容器里连不上而宿主 curl 正常 / `421 Misdirected Request` | Host 头不在 DNS-rebinding 白名单 | `host.docker.internal` 已默认放行；自定义域名加 `HOROSA_MCP_ALLOWED_HOSTS` |
 | 维护机上 `test_error_paths_return_a_conformant_envelope` 红、CI 绿 | 默认端口上有活服务，只钉 `HOROSA_RUNTIME_ROOT` 拦不住，本该失败的路径成功了 | 同时把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指到不可达地址（§8 验证流程 4） |
 
 ## 9. Stability invariants（稳定性不变量 — don't regress these）
@@ -660,6 +679,19 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **声明旋钮 = 交付翻转金标。** 每个新 schema 字段在 `selfcheck.mjs` 至少一条「改它结果必变」+ 一条「写错
   键名结果不变」的负向对照。`js_boundary_contracts` 的子串 oracle 对「同模块另一函数恰有同名参数」的死键
   失明（v0.36.0 heluo `step2`），只当第一道网；生成器已认默认导入与 `opts: local` 嵌套，regen 后仍要翻转验证。
+- **启动是异步、幂等、跨进程互斥的。** `start_local_services(wait_seconds=)` 最多阻塞预算秒，
+  超出即 `{"starting": True, retry_after_seconds}` → 工具层的 `runtime.starting`。跨进程锁
+  （`runtime/pidlock.py`）的持有者写成**启动器自己的 pid**，锁的寿命恰等于一次启动；加锁后的每一条
+  出口都在 `finally` 里释放（不释放会让一个长命的 serve 把后续所有启动永久挡死）。
+- **绝不采用身份不符的服务栈，也绝不终止不属于自己的进程。** 「HTTP 200」不是身份证明：
+  归属判定走 `runtime/identity.py` 的三级证据（`/horosaIdentity` 的 app 标记 + 启动 nonce → 监听
+  进程命令行含 runtime 根 → 我方注册表 pid 存活）。`ours` 才用它，**强证据**才允许停/重启它
+  （只有 app 标记 = 可能是用户自己开着的桌面端）。查不到持有者 ≠ 端口空着。
+- **状态文件原子写。** `runtime-state.json` 走 tmp + `os.replace`（`runtime/registry.py`）；
+  一次 `write_text` 会让并发读者读到半个 JSON → 判成「没在跑」→ 再起一次。整份覆盖时保留
+  别的进程写进来的长寿字段（`launch_nonce` / `clients` / `launcher` / `service_pids` / `ports`）。
+- **pid 存活判定在 Windows 上走 ctypes `OpenProcess`，永远不调 `os.kill`。** Windows 的 `os.kill`
+  没有信号 0 语义 —— 对任何非 CTRL 信号它直接 `TerminateProcess`，也就是会把目标**杀掉**而不是探测。
 - **就绪分后端，重启有冷却。** Java 挂/chart 健康时，`start_local_services` 在冷却期
   （`runtime_java_retry_cooldown_seconds`，默认 120s）内返回 `{degraded, skipped_restart}`，**绝不** stop 健康的
   chart 服务；`_call_remote` 对 Java 端点冷却期内快速失败 `runtime.java_backend_unavailable`，chart 端点不受

@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.37.0 (2026-09) | 任意 AI 客户端可调用：广告层只对一个客户端对过 / 自家 .mcp.json 从未连通 / 端口静默采用与误杀 / 回环走代理 | 按**别人的**约束测；改 golden 前先答「旧断言为何不会红」；负向对照跑不红就如实改口 |
 | v0.36.0 收尾 (2026-09) | 「Java 族 live 需 Mongo」十个版本的误定性 = vendored 脚本裸 `-jar`；演禽假闸门 | 贴「环境限制」前先读 `Result` 原文、用上游桌面起法起一遍；闸门问项以 live 翻转为准，不以转发为准 |
 | v0.36.0 (2026-09) | 止血/可用性/捞回能力 15 批（响应放大、静默降级、手抄表、死键、降级误杀、扁平面丢键、moira 误排除、闸门半盲、错误码……） | 每批四件套 + 全量门禁；台账正文按批见下 |
 | v0.35.0 (2026-09) | 手工件零信号 + 整拷树不比对（六亲两格错值滞留四轮） | 不经流水线的文件都要有「源变了就叫人」的边；守卫树集合 == sync 整拷集合 |
@@ -99,6 +100,111 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.37.0 / 2026-09-09 — 「能被任意 AI 完美调用」：协议面只对着一个客户端调过、连通性从未验证过、端口安全只写在文档里
+
+**触发**：用户要求「全面检查是否还无法被任意 AI 完美调用，尤其是端口占用问题及其他一切因素」。
+四路只读审计 + 外部基准（Codex `startup_timeout_sec` 默认 10s / `tool_timeout_sec` 60s；Cursor
+全局约 40 工具静默丢弃；VS Code/OpenAI 128；Gemini CLI 工具名 ≤63 且严格 JSON Schema 2020-12；
+OpenAI 描述 ≤1024；MCP 2025-11-25；MCPB `manifest_version 0.4`/`type: uv`）。
+
+结论分六条，每条的共同点是：**在我们唯一常用的那个客户端上一切正常，所以从来没人看见。**
+
+#### ① 广告层只对 Claude Code 对过 —— 严格客户端会拒收整张工具表
+
+实测（116 个工具）：70 个属性广告成空对象 `{}`（gpsLat/gpsLon×26 …）、116/116 带**数组** type、
+108 个写 `additionalProperties: true`、106 个漏出私有键 `x-horosa-hidden-knobs`、8 个门面完全
+没被广告层重写。Gemini CLI / Vertex 的 FunctionDeclaration 与 OpenAI strict 见到这些是拒**整张表** ——
+症状不是「某个参数不好使」，而是「这个 server 在某某客户端里一个工具都没有」。
+根因三处：`_widen` 里一句表达式语句把唯一的类型信息 pop 掉却不补回去；`apply_advertised_schemas`
+豁免了 8 个门面（而精简面下门面**就是**全部工具）；`_normalize_mcp_request` 的两条裸 `ValueError`
+发生在每个工具的 try **之前**，被 lowlevel server 转成 `isError: true` + 原始字符串。
+**守卫**：`scripts/verify_mcp_client_compat.py` + `contracts/mcp_client_compat.json`。
+
+#### ② 仓自己的 `.mcp.json` 从未连通过
+
+仓根 `.mcp.json` 用的是**插件语法**（`${CLAUDE_PLUGIN_ROOT}` / `${user_config.*}`），而它被
+Claude Code 当作**项目**配置读 —— 目录不存在、env 值是字面量。本机 24/24 次连接日志（2026-08-21 起，
+含发现它的那一次会话）全部 `CONNECTION_CLOSED`。
+教训：**「我们自己的仓」不是被验证过的配置**，它只是没人注意到的那一个。
+**守卫**：`scripts/verify_client_configs.py`（项目配置不许有插件占位符；`--directory` 去占位符后
+必须指向真实的 `pyproject.toml`；插件占位符 ⊆ plugin.json 已声明的键）。
+
+#### ③ 端口与进程：静默采用、误杀、首调卡几分钟、多客户端竞态
+
+- `_service_status` 的全部判据是「HTTP 响应码 < 500」，于是 8899/9999 上**任何**应答者都算
+  「runtime 已在运行」：用户自己开着的星阙桌面端、另一个项目的 dev server、一个
+  `python -m http.server`。症状不是「连不上」，而是**排盘失败但 statusCode 200**。
+- 「能用它」与「能停它」被混为一谈：只有 app 标记的服务照样会被停脚本按端口关掉。
+- 启动器自己阻塞到就绪或 STARTUP_TIMEOUT（首次含解压 + CDS 训练，300–900 秒），而我们用
+  `subprocess.run` 等它 —— 全发生在**一次 MCP 请求内**。Codex 的 tool_timeout_sec 默认 60 秒。
+- `self._service_lock` 只是进程内锁：两个客户端同时冷启动会各起一个启动器，后到的看见
+  「pid files already exist」就先 stop 再 start，把先到的那个刚起好的服务停掉。
+- macOS 启动脚本的 `reclaim_stale_port` 按命令行子串 `kill -9`（stop 脚本与 Windows 脚本都有
+  ROOT 守卫，唯独 mac start 没有）。**注意**：已装的 v0.36.0 载荷里没有这段（它是 lsof 后拒绝），
+  危险构造只在更新的上游树里 —— 属于**潜伏**而非在线缺陷，补丁器因此设计成「有危险构造才打、
+  没有就一字不改」。
+**守卫**：`runtime/{identity,ports,procs,pidlock,registry}.py` + `tests/test_runtime_ports_identity.py`
++ `scripts/verify_runtime_scripts.py`（含 `--self-test` 负向对照）。
+
+#### ④ 回环探测走用户代理
+
+shell 层早就绕过了代理，Python 层没跟上。Clash / VPN 用户把 127.0.0.1 也塞进代理时，
+后端明明健康却报 `not_running`。同一台机器上 A/B 对拍 `doctor` 证实。
+**守卫**：`engine/client.py::loopback_httpx_client` + `tests/test_client_proxy_bypass.py`。
+
+#### ⑤ 杂目录的真根因不是「没修过」
+
+仓里三个 `${env:HOME:-${sys:user.home}}/.horosa-logs/…` 目录（仓根 / horosa-skill/ /
+vendor/runtime-source/）。已装 runtime **早就修好了**（安装时补丁 jar 内 log4j2.xml）；漏网的是
+dev 用的 `start_vendored_instance.sh` 直接跑**未补丁**的 vendored jar。
+`-Dbasedir=` 覆盖不了它 —— `<Property>` 在配置里已定义，系统属性只在未定义时兜底。
+**守卫**：`scripts/verify_no_stray_runtime_dirs.py`。
+
+#### ⑥ 假债务与真债务：四处工具计数互不相同
+
+marketplace 说 97、instructions 说 106、契约基线 115、实际 116。一致性守卫在「五处写成同一个
+假数字」时是绿的 —— 所以计数必须**派生**，不能各写各的。
+
+---
+
+### 本轮的横切教训（比上面任何一条都更值得记住）
+
+1. **「在我们的客户端上好用」不是「可用」的证据。** 上面六条里有五条在 Claude Code 上完全正常。
+   要证明跨客户端可用，必须按**别人的**约束去测：工具数上限、schema 严格度、描述长度、
+   超时默认值、Host 头、传输名拼写。
+
+2. **测试可以「因为错误的原因通过」。** 本轮抓到两例：
+   - `test_streamable_http_serve_stops_runtime_after_exit` 直接以 Python 函数调用 typer 命令，
+     未传的形参拿到的是 **OptionInfo 对象**（恒真），于是它断言的停机分支其实是被
+     `bool(OptionInfo)` 打开的，而不是被默认值打开的。→ 新 `cli._opt()` 从源头还原默认值，
+     并留一条测试把陷阱本身钉住。
+   - `test_start_runtime_recovers_partial_state_before_launch` 断言 `stop_calls == ["stop"]` ——
+     它把「部分可达就先停掉健康的那半边」这个 **bug 本身**写成了契约，所以永远不会为它变红。
+   **规则**：改一条既有 golden 之前，先回答「旧断言为什么不会为这个 bug 变红」，并把答案写进注释。
+
+3. **想当然的安全性要当场证伪。** 两例：
+   - 「stdio 握手成功就说明 stdout 干净」——**错**。Python SDK 的客户端遇到解析不了的行只记
+     一条日志就跳过，注入 `print('starting horosa...')` 后照样握手成功。改为逐行断言 stdout 是 JSON。
+   - 「旧的 trace 写法会撕行」——**没能复现**。8 进程 × 520 KB 行并发追加，250 行全部可解析；
+     它安全靠的是 CPython 的实现细节（TextIOWrapper 在 close 时把整行交给一次 raw.write）。
+     改动仍然保留（把「碰巧成立」变成 O_APPEND + 单次 write 的「显式成立」，成本为零），
+     但**如实改口**：真正能演示的旧缺陷是没有行长上限（一个 3 MB 事件整条写进去）。
+   **规则**：负向对照跑不红时，不许把「它本来就没问题」写成「我修好了它」。
+
+4. **gitignore 语义在三个地方咬人，形状一模一样**：父目录被整体忽略时反选无效
+   （`.vscode/` → 必须写 `.vscode/*` + `!.vscode/mcp.json`）；`.mcpbignore` 里不带前导 `/` 的
+   `vendor/` 在**任意层级**匹配（把运行时真正需要的 `src/**/vendor/` 一起排掉）；
+   排掉 `scripts/` 让 wheel 的 `force-include` 在宿主机上找不到源。三者的共同症状是
+   **「打得出来、装得上、一跑就炸」**，而 schema 校验器一概看不见。
+
+5. **`str.lstrip("./")` 剥的是字符集合不是前缀。** 本轮我自己新写的守卫踩了一次：
+   它吃掉了 `.claude-plugin` 的前导点，于是守卫误报插件配置缺失。用 `removeprefix`。
+
+6. **`pathlib.Path` 的类型由 `os.name` 决定。** 把 `os.name` 打成 `"nt"` 的跨平台模拟测试里，
+   `Path(tmp_name)` 会造出 `WindowsPath`，`str()` 出来是反斜杠 —— macOS 上 `os.replace` 直接
+   `FileNotFoundError`。路径全程用 `str` 传递，别 str→Path→str 转一圈。
+
 
 ### v0.36.0 收尾 / 2026-09-04 — 「Java 族 live 需要 Mongo」记了十个版本，真因是 vendored 实例脚本裸 `-jar`；顺手抓出一个假闸门
 

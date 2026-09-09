@@ -282,6 +282,10 @@ EMPHASIS = re.compile(r"</?[A-Za-z][^>]*>|\*\*|`")
 # 不是工具总数——单独算、单独断言，好过打 ignore 标记让它继续陈旧下去。
 GATED_PROSE = re.compile(r"(\d+)\s*个技法工具触发")
 IGNORE_COUNT = "<!-- docs-sync:ignore-count -->"
+# 「Cursor 全局约 40 个工具上限」「128 工具上限」说的是**别的客户端**的容量，不是我们的工具数。
+# 这类行没法像 GATED_PROSE 那样「单独算、单独断言」——第三方的上限不是我们能派生的量。
+# 用词判别比打 ignore 标记好：标记会连同行里真正的工具数一起放行，而这条只放行被 cap 词修饰的数。
+CAP_WORDS = ("上限", "cap", "caps at", "limit", "静默丢弃", "drops the rest")
 
 COUNT_DOCS = [
     "README.md",
@@ -334,7 +338,10 @@ def check_tool_counts() -> None:
                 if int(a) != expected or int(b) != expected:
                     err(f"{rel}:{lineno}: self-check row says {a} / {b}, registry has {expected}")
             phrase = [(c, "技法") for c in COUNT_PHRASE_ZH.findall(line)]
+            line_is_about_a_third_party_cap = any(word in line.lower() or word in line for word in CAP_WORDS)
             for count, _noun in COUNT_PROSE.findall(line) + COUNT_PROSE_EN.findall(line) + phrase:
+                if line_is_about_a_third_party_cap and int(count) != expected:
+                    continue
                 if int(count) != expected:
                     err(
                         f"{rel}:{lineno}: prose claims {count} tools, registry has {expected} "

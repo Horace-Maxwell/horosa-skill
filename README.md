@@ -137,27 +137,51 @@ uvx horosa-skill serve --transport stdio   # 🚀 给客户端直连；`client c
 
 ## 🔌 接入 AI 客户端
 
-一条命令生成**带真实绝对路径**的即用配置，无需手填占位符：
+一条命令生成**带真实绝对路径**的即用配置，无需手填占位符；生成器还会按客户端的工具数上限
+自动选合适的工具面：
 
 ```bash
-uv run horosa-skill client config --format claude-code      # 输出 claude mcp add … 命令
-uv run horosa-skill client config --format claude-desktop   # Claude Desktop mcpServers 片段
-uv run horosa-skill client config --format codex            # Codex config.toml 片段
+uv run horosa-skill client config --format claude-code   # 输出 claude mcp add … 命令
+uv run horosa-skill client config --format cursor        # deep link + mcpServers 片段
+uv run horosa-skill client config --format codex         # config.toml 片段（含超时设置）
+uv run horosa-skill client check                         # 体检本机各客户端**实际写着什么**
 ```
 
-| 客户端 | 接入方式 |
-| :-- | :-- |
-| 🟣 **Claude Code** | `claude mcp add horosa -- uv run --directory <abs> horosa-skill serve --transport stdio`；见 [接入说明](./horosa-skill/examples/clients/claude-code.md) |
-| 🟠 **Claude Desktop** | [配置示例](./horosa-skill/examples/clients/claude_desktop_config.json) 或 `client config --format claude-desktop` |
-| 🟡 **Cursor** | 一键安装：`uv run horosa-skill client config --format cursor` 输出官方 deep link（点击即装）与 mcpServers 片段 |
-| 🔷 **VS Code** | 一键安装：`uv run horosa-skill client config --format vscode` 输出 `vscode:mcp/install` 链接与 `code --add-mcp` 命令 |
-| 🧩 **Claude Code Plugin** | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill`（skill + MCP 一步到位；首次仍需在插件目录跑 `install` 装离线 runtime） |
-| 🔵 **Codex** | [配置示例](./horosa-skill/examples/clients/codex-config.toml) 或 `client config --format codex` |
-| 🟢 **Open WebUI** | [接入说明](./horosa-skill/examples/clients/openwebui-streamable-http.md) |
-| ⚪ **OpenClaw / mcporter** | `uv run horosa-skill client openclaw-setup --workspace ~/.openclaw/workspace` |
+### Works with
+
+| 客户端 | 传输 | 一行接入 | 默认工具面 | 注意 |
+| :-- | :-- | :-- | :-- | :-- |
+| 🟣 **Claude Code** | stdio | `claude mcp add horosa -- uv run --directory <abs> horosa-skill serve --transport stdio` | 全量 116 | 项目内直接用仓根 `.mcp.json`；[说明](./horosa-skill/examples/clients/claude-code.md) |
+| 🧩 **Claude Code Plugin** | stdio | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` | 全量 116 | skill + MCP 一步到位；首次仍需跑 `install` 装离线 runtime |
+| 🟠 **Claude Desktop** | stdio | `client config --format claude-desktop`，或安装 `.mcpb` 一键包 | 全量 116 | `.mcpb` 在每个 release 的资产里 |
+| 🟡 **Cursor** | stdio | `client config --format cursor`（输出官方 deep link，点击即装） | 精简 11 | Cursor 全局约 40 工具上限，**超出静默丢弃** |
+| 🔷 **VS Code (Copilot)** | stdio | `client config --format vscode`（`vscode:mcp/install` 链接 / `code --add-mcp`） | 精简 11 | 跨所有 server 共 128 工具上限；仓内已带 `.vscode/mcp.json` |
+| 🔵 **Codex** | stdio | `client config --format codex` | 精简 11 | 必须调高 `startup_timeout_sec`（默认 10 s）与 `tool_timeout_sec`（默认 60 s） |
+| 🟤 **Gemini CLI** | stdio | `client config --format gemini` | 精简 11 | 工具名 ≤63 字符 + 严格 JSON Schema 2020-12（广告层已按它收敛） |
+| 🌊 **Windsurf** | stdio | `client config --format windsurf` | 精简 11 | 100 工具上限 |
+| 🧱 **Cline** | stdio | `client config --format cline` | 精简 11 | 无工具搜索，全量面偏重 |
+| ⚡ **Zed** | stdio | `client config --format zed` | 精简 11 | 配置根键是 `context_servers` |
+| ⚪ **OpenClaw / mcporter** | stdio | `client openclaw-setup --workspace ~/.openclaw/workspace` | 全量 116 | — |
+| 🟢 **Open WebUI · n8n · Dify** | streamable-http | `horosa-skill serve --host 0.0.0.0 --token <随机串>` | 全量 116 | [接入说明](./horosa-skill/examples/clients/openwebui-streamable-http.md)；跨机必须带令牌，且**没有 TLS**，请放反代后面 |
+| 🔶 **ChatGPT / claude.ai 远程连接器** | streamable-http | 同上，再套一层 HTTPS 反代 | 全量 116 | **没有托管端点** —— 需要你自己的公网 HTTPS URL + 令牌 |
+
+`--surface full` / `--surface compact` 可覆盖默认；`--launcher uvx-git` 生成免 checkout 的
+零安装命令（`uvx --from "git+…#subdirectory=horosa-skill"`，PyPI 通道尚未开通）。
+
+### 平台
+
+| 平台 | 离线 runtime | 说明 |
+| :-- | :-- | :-- |
+| macOS arm64 | ✅ 官方载荷 | 主力平台 |
+| Windows x64 | ✅ 官方载荷 | 见 [Windows 说明](./docs/OFFLINE_RUNTIME_RELEASES.md) |
+| Linux | ⚠️ 无载荷（实验） | 走**网关模式**：把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指向一台受支持的机器 |
+| Intel Mac | ❌ 不支持 | arm64 载荷**不能**在 Rosetta 下跑（内含 JDK/Python 是原生 arm64）；同样走网关模式 |
 
 > [!TIP]
-> 上下文预算受限的客户端可设 `HOROSA_MCP_COMPACT=1`，只暴露 11 个门面工具（含按名直调的 `horosa_tool_run` 与 106 技法目录索引），澄清闸照常生效。或用 `HOROSA_TOOLSETS=astro,cn` 按域裁剪平铺面（合法域 astro/predict/chart/cn/shenshu/other，别名 western/chinese/all/none；拼错的 token 会告警并忽略、全空回落全量；只要裁剪生效就注册 `horosa_tool_run` 直呼通道；门面工具恒在）。根目录 `server.json` 为 MCP Registry 元数据，普通用户无需手改。
+> 上下文预算受限的客户端可设 `HOROSA_MCP_COMPACT=1`，只暴露 11 个门面工具（含按名直调的 `horosa_tool_run`，106 个技法仍可按名到达），澄清闸照常生效。或用 `HOROSA_TOOLSETS=astro,cn` 按域裁剪平铺面（合法域 astro/predict/chart/cn/shenshu/other/export/knowledge，别名 western/chinese/all/none；拼错的 token 会告警并忽略、全空回落全量；只要裁剪生效就注册 `horosa_tool_run` 直呼通道；门面工具恒在）。根目录 `server.json` 为 MCP Registry 元数据，普通用户无需手改。
+
+> [!TIP]
+> 配好了却在客户端里看不到 horosa？跑 `uv run horosa-skill client check` —— 它读的是各客户端**实际写着什么**，能指出未展开的占位符、缺失的 `--transport stdio`、搬走的目录、以及 Codex 的默认超时。
 
 ## 🎯 一次调用的完整流程
 
@@ -360,7 +384,7 @@ uv run horosa-skill client config --format codex            # Codex config.toml 
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.36.0",
+  "ok": true, "tool": "qimen", "version": "0.37.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -459,7 +483,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 🎯 HorosaBench | 106 条基准用例与工具注册表锁步 + 盘面事实忠实性评测（喂错盘 / 诱导复述判红的对抗用例全过） |
 | 🗄️ 本地 memory / report | 每次技法调用写 1 条本地 run 记录 + 1 份 JSON artifact |
 | 🔄 GitHub CI | Linux 单测 + JS golden 自检 + Windows OpenClaw smoke（**不覆盖跨树上游校验**——那两闸需要上游 checkout，只能在维护机跑 `preflight_release.py`） |
-| 📦 Release runtime | macOS (arm64) `v0.36.0` 已打包并校验；Windows (x64) 由构建机补传（补传前 win 用户拿到上一版 runtime）；其余平台安装时明确报不支持 |
+| 📦 Release runtime | macOS (arm64) `v0.37.0` 已打包并校验；Windows (x64) 由构建机补传（补传前 win 用户拿到上一版 runtime）；其余平台安装时明确报不支持 |
 
 第一次 clone 后确认非空壳的最小验证：
 

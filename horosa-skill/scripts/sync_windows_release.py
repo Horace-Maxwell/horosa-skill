@@ -97,6 +97,9 @@ def assess(tag: str) -> dict:
         "has_win_zip": win_zip in assets,
         "has_darwin_tar": darwin_tar in assets,
         "has_manifest_asset": "runtime-manifest.json" in assets,
+        # v0.37.0：Claude Desktop 的一键安装包。`server.json` 的 mcpb package 直指这个 URL，
+        # 缺了它 = 注册表里那条记录 404。
+        "has_mcpb": f"horosa-skill-{version}.mcpb" in assets,
         "manifest_platforms": platforms,
         "manifest_dual": bool(platforms) and all(p in platforms for p in PLATFORMS),
         "win_zip": win_zip,
@@ -105,7 +108,13 @@ def assess(tag: str) -> dict:
 
 
 def is_complete(a: dict) -> bool:
-    return a["has_win_zip"] and a["has_darwin_tar"] and a["has_manifest_asset"] and a["manifest_dual"]
+    return (
+        a["has_win_zip"]
+        and a["has_darwin_tar"]
+        and a["has_manifest_asset"]
+        and a["manifest_dual"]
+        and a["has_mcpb"]
+    )
 
 
 def preflight_vendor_sources() -> None:

@@ -114,6 +114,10 @@ def test_release_asset_contract_is_asserted_not_just_documented() -> None:
     才发现。文档列的必要资产必须有 CI 断言 + 脚本化的生成步骤。"""
     workflow = (REPO_ROOT / ".github/workflows/release-completeness.yml").read_text(encoding="utf-8")
     assert "horosa-skill-sbom.json" in workflow, "completeness 必须断言 SBOM 资产在场"
+    # v0.37.0：`.mcpb` 同理 —— server.json 的 mcpb package 直指这个资产 URL，缺了它注册表那条记录 404。
+    assert ".mcpb" in workflow, "completeness 必须断言 MCPB 包在场"
+    sync = (SCRIPTS / "sync_windows_release.py").read_text(encoding="utf-8")
+    assert "has_mcpb" in sync, "双平台完整性判据必须把 .mcpb 算进去"
     publish = (SCRIPTS / "publish_darwin_release.sh").read_text(encoding="utf-8")
     for step in ("package_runtime_payload.sh", "generate_release_manifest.py", "generate_sbom.py",
                  "SHA256SUMS.txt", "verify_runtime_release.py"):
@@ -133,6 +137,9 @@ def test_vendored_instance_scripts_keep_the_boot_and_kill_disciplines() -> None:
     java_code = "\n".join(java_lines)
     for flag in ("HOROSA_DESKTOP_MONGO_OPTIONAL=1", "HOROSA_MONGO_FALLBACK_DIR=", "needtranslog=false", "--mongodb.ip="):
         assert flag in java_code, f"Java 起法缺桌面模式开关 {flag}（裸 -jar = 全 Java 族 9999）"
+    # v0.37.0：log4j 的 basedir 不改写，日志会落进 CWD 下一个字面量 `${env:HOME…}` 目录
+    # （仓根 / horosa-skill/ / vendor/runtime-source/ 下各攒了一份）。`-Dbasedir=` 覆盖不了它。
+    assert "log4j2.configurationFile" in java_code, "必须指一份改写过的 log4j 配置，否则日志落进字面量目录"
     assert "-jar" in java_code and "mongodb.host" not in java_code, "主机名必须被 --mongodb.ip 覆盖，不能把 mongodb.host 写进命令"
     stop = (SCRIPTS / "stop_vendored_instance.sh").read_text(encoding="utf-8")
     # 注释里**应该**提 pkill 法则（解释为什么不用它）；不许出现的是把它当命令用——只查非注释行。

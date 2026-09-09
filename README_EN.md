@@ -53,7 +53,7 @@ License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICEN
 
 ## Current stable baseline
 
-**Current public version: `Horosa Skill 0.36.0` (106 callable tools).**
+**Current public version: `Horosa Skill 0.37.0` (106 callable tools).**
 
 This release line brings the capability surface roughly to parity with the desktop app — and adds a trust stack no other metaphysics tool ships:
 
@@ -296,7 +296,7 @@ Every tool call returns a uniform envelope:
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.36.0",
+  "ok": true, "tool": "qimen", "version": "0.37.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -374,16 +374,51 @@ uv run horosa-skill export registry
 
 ## Supported AI clients
 
-- **Claude Code** (one-command registration): `uv run horosa-skill client config --format claude-code` prints a ready-to-run `claude mcp add ...` with real absolute paths; see the [guide](./horosa-skill/examples/clients/claude-code.md)
-- [Claude Desktop config example](./horosa-skill/examples/clients/claude_desktop_config.json) (or `client config --format claude-desktop` to generate one, no placeholder editing)
-- **Cursor** (one-click): `uv run horosa-skill client config --format cursor` prints the official install deep link + an `mcpServers` snippet
-- **VS Code** (one-click): `uv run horosa-skill client config --format vscode` prints a `vscode:mcp/install` link + the `code --add-mcp` command
-- **Claude Code Plugin**: `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` (skill + MCP in one step; the offline runtime still needs a one-time `install` inside the plugin's `horosa-skill/` directory)
-- [Codex config example](./horosa-skill/examples/clients/codex-config.toml) (or `client config --format codex`)
-- [Open WebUI guide](./horosa-skill/examples/clients/openwebui-streamable-http.md)
-- [OpenClaw guide](./horosa-skill/examples/clients/openclaw-mcp.md)
+One command writes a ready-to-use config with real absolute paths, and picks the right tool
+surface for each client's tool-count limit:
 
-> `server.json` at the repo root is MCP Registry metadata — regular users never edit it; use the generator or the examples above.
+```bash
+uv run horosa-skill client config --format claude-code   # prints the `claude mcp add …` command
+uv run horosa-skill client config --format cursor        # deep link + mcpServers snippet
+uv run horosa-skill client config --format codex         # config.toml snippet (with timeouts)
+uv run horosa-skill client check                         # audit what each client ACTUALLY has
+```
+
+### Works with
+
+| Client | Transport | One-line setup | Default surface | Notes |
+| :-- | :-- | :-- | :-- | :-- |
+| **Claude Code** | stdio | `claude mcp add horosa -- uv run --directory <abs> horosa-skill serve --transport stdio` | full (116) | The repo ships a project `.mcp.json`; [guide](./horosa-skill/examples/clients/claude-code.md) |
+| **Claude Code Plugin** | stdio | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` | full (116) | Skill + MCP in one step; the offline runtime still needs a one-time `install` |
+| **Claude Desktop** | stdio | `client config --format claude-desktop`, or install the `.mcpb` bundle | full (116) | The `.mcpb` ships as a release asset |
+| **Cursor** | stdio | `client config --format cursor` (prints the official install deep link) | compact (11) | Cursor caps at ~40 tools globally and **drops the rest silently** |
+| **VS Code (Copilot)** | stdio | `client config --format vscode` (`vscode:mcp/install` link / `code --add-mcp`) | compact (11) | 128-tool cap across all servers; the repo ships `.vscode/mcp.json` |
+| **Codex** | stdio | `client config --format codex` | compact (11) | Raise `startup_timeout_sec` (default 10 s) and `tool_timeout_sec` (default 60 s) |
+| **Gemini CLI** | stdio | `client config --format gemini` | compact (11) | Tool names ≤63 chars + strict JSON Schema 2020-12 (the advertised layer already conforms) |
+| **Windsurf** | stdio | `client config --format windsurf` | compact (11) | 100-tool cap |
+| **Cline** | stdio | `client config --format cline` | compact (11) | No tool search; the full surface is heavy |
+| **Zed** | stdio | `client config --format zed` | compact (11) | Config root key is `context_servers` |
+| **OpenClaw / mcporter** | stdio | `client openclaw-setup --workspace ~/.openclaw/workspace` | full (116) | — |
+| **Open WebUI · n8n · Dify** | streamable-http | `horosa-skill serve --host 0.0.0.0 --token <random>` | full (116) | [Guide](./horosa-skill/examples/clients/openwebui-streamable-http.md); a token is required off-loopback, and there is **no TLS** — put it behind a reverse proxy |
+| **ChatGPT / claude.ai remote connectors** | streamable-http | As above, plus an HTTPS reverse proxy | full (116) | **No hosted endpoint** — you supply your own public HTTPS URL and token |
+
+`--surface full` / `--surface compact` overrides the default. `--launcher uvx-git` emits a
+checkout-free command (`uvx --from "git+…#subdirectory=horosa-skill"`; the PyPI channel is not open yet).
+
+### Platforms
+
+| Platform | Offline runtime | Notes |
+| :-- | :-- | :-- |
+| macOS arm64 | ✅ published | Primary platform |
+| Windows x64 | ✅ published | See [Windows notes](./docs/OFFLINE_RUNTIME_RELEASES.md) |
+| Linux | ⚠️ no payload (experimental) | Use **gateway mode**: point `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` at a supported machine |
+| Intel Mac | ❌ unsupported | The arm64 payload **cannot** run under Rosetta (its JDK/Python are native arm64); use gateway mode |
+
+> `server.json` at the repo root is MCP Registry metadata — regular users never edit it.
+
+> Configured it but the client shows no horosa tools? Run `uv run horosa-skill client check` —
+> it reads what each client **actually** has and names unexpanded placeholders, a missing
+> `--transport stdio`, a moved checkout, and Codex's default timeouts.
 
 For OpenClaw / mcporter, prefer the generator to avoid hand-editing JSON and paths:
 
