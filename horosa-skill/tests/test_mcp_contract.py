@@ -234,7 +234,12 @@ def test_error_paths_return_a_conformant_envelope() -> None:
     )
     for key in ("ok", "tool", "version", "input_normalized", "error"):
         assert key in failed, f"tool error missing envelope key {key}: {failed}"
-    assert failed["ok"] is False and failed["error"]["code"] == "runtime.not_installed"
+    # v0.37.0：本用例把 HOROSA_SERVER_ROOT 指向一个不可达地址（127.0.0.1:9），那正是**外部模式**
+    # 的定义 —— 用户明说了后端在别处。此时正确答案是 runtime.external_unreachable（去修那个地址
+    # 或取消变量），而不是 runtime.not_installed（那会把人打发去下载 730 MB 他根本不需要的 runtime，
+    # 而且外部模式下我们**绝不**在本机启动 runtime）。旧断言锁的是「显式指了地址也照样按本机没装
+    # 处理」，正是 B3 要修掉的那个行为。
+    assert failed["ok"] is False and failed["error"]["code"] == "runtime.external_unreachable"
     assert failed["code"] == failed["error"]["code"]
     assert failed["message"] == failed["error"]["message"]
     assert failed["details"] == failed["error"]["details"]

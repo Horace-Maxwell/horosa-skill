@@ -245,7 +245,75 @@ def test_service_status_prefers_explicit_env_urls_over_manifest(tmp_path: Path, 
     assert seen["chart"] == "http://127.0.0.1:34529"
 
 
-def test_run_start_command_uses_file_backed_capture_on_windows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def _stub_popen(monkeypatch, *, seen: dict, returncode=None, writes: bytes = b""):
+    """把 subprocess.Popen 换成一个不真起进程的替身；returncode=None 表示「还在跑」。"""
+    class _FakeProc:
+        def __init__(self, **kwargs):
+            self.pid = 4242
+            self._rc = returncode
+
+        def poll(self):
+            return self._rc
+
+    def fake_popen(command, **kwargs):
+        seen.update(kwargs)
+        seen["command"] = command
+        handle = kwargs.get("stdout")
+        if writes and hasattr(handle, "write"):
+            handle.write(writes)
+        return _FakeProc(**kwargs)
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+
+
+def test_run_start_command_spawns_the_launcher_detached(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """启动器必须**分离**着跑，输出写进一份追加日志。
+
+    旧实现是 `subprocess.run(...)`，而启动脚本自己会一直阻塞到服务就绪或 STARTUP_TIMEOUT
+    （首次运行含解压 + CDS 训练，实测 300–900 秒）——全都发生在一次 MCP 请求内部。旧断言锁的
+    正是那个形状（`capture_output=True` / 文件句柄 + `subprocess.run`），所以它**永远不会**为
+    「一次工具调用卡了五分钟」变红：那是被断言保护起来的行为，不是被检查的行为。
+    """
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    manager = HorosaRuntimeManager(settings)
+    script = tmp_path / "Horosa-Web" / "start_horosa_local.sh"
+    script.parent.mkdir(parents=True, exist_ok=True)
+    script.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+
+    monkeypatch.setattr("horosa_skill.runtime.manager.os.name", "posix", raising=False)
+    monkeypatch.setattr(
+        manager,
+        "_service_status",
+        lambda manifest: [
+            {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": True},
+            {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": True},
+        ],
+    )
+    seen: dict[str, object] = {}
+    _stub_popen(monkeypatch, seen=seen, returncode=0, writes=b"services are ready.\n")
+
+    completed, readiness = manager._run_start_command(
+        command=["/bin/bash", str(script)],
+        script=script,
+        env={"HOME": str(tmp_path)},
+        manifest=None,
+    )
+
+    assert seen.get("start_new_session") is True, "POSIX 上必须开新会话，否则父进程一退启动器跟着死"
+    assert seen.get("stdin") is subprocess.DEVNULL
+    assert seen.get("stderr") is subprocess.STDOUT, "stderr 必须并进同一份日志，两个句柄会交叉截断"
+    assert getattr(seen.get("stdout"), "name", "").endswith("launcher.log")
+    assert readiness["ready"] is True
+    assert "services are ready." in completed.stdout
+    assert (settings.runtime_root / "launcher.log").is_file()
+
+
+def test_run_start_command_uses_detached_process_group_on_windows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Windows 上要 DETACHED_PROCESS + 新进程组，否则 Ctrl-C 会连带打断 runtime。"""
     settings = Settings(
         runtime_root=tmp_path / "runtime-root",
         db_path=tmp_path / "memory.db",
@@ -260,27 +328,14 @@ def test_run_start_command_uses_file_backed_capture_on_windows(tmp_path: Path, m
     monkeypatch.setattr("horosa_skill.runtime.manager.os.name", "nt", raising=False)
     monkeypatch.setattr(
         manager,
-        "_wait_for_service_state",
-        lambda **_: {
-            "ready": True,
-            "endpoints": [
-                {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": True},
-                {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": True},
-            ],
-        },
+        "_service_status",
+        lambda manifest: [
+            {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": True},
+            {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": True},
+        ],
     )
-
     seen: dict[str, object] = {}
-
-    def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
-        seen.update(kwargs)
-        stdout_handle = kwargs["stdout"]
-        stderr_handle = kwargs["stderr"]
-        stdout_handle.write(b"services are ready.\n")
-        stderr_handle.write(b"chart warmup warning\n")
-        return subprocess.CompletedProcess(args=kwargs.get("args", args[0] if args else []), returncode=0)
-
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    _stub_popen(monkeypatch, seen=seen, returncode=0, writes=b"ok\n")
 
     completed, readiness = manager._run_start_command(
         command=["powershell", "-File", str(script)],
@@ -289,15 +344,19 @@ def test_run_start_command_uses_file_backed_capture_on_windows(tmp_path: Path, m
         manifest=None,
     )
 
-    assert getattr(seen.get("stdout"), "name", "").endswith("stdout.log")
-    assert getattr(seen.get("stderr"), "name", "").endswith("stderr.log")
-    assert seen.get("check") is False
-    assert completed.stdout == "services are ready.\n"
-    assert completed.stderr == "chart warmup warning\n"
+    assert "creationflags" in seen
+    assert "start_new_session" not in seen
     assert readiness["ready"] is True
+    assert completed.stdout.strip() == "ok"
 
 
-def test_run_start_command_keeps_pipe_capture_on_posix(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_start_command_returns_starting_instead_of_blocking(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """启动器还在跑而预算用尽 → 回 starting，不把调用方按在这儿等几分钟。
+
+    这条是 `runtime.starting` 整条恢复链的源头：没有它，第一次调用某个技法会在一次 MCP 请求内
+    卡到客户端自己的工具超时（Codex 默认 60 秒），用户看到「工具无响应」，而 runtime 其实
+    正常启动中。
+    """
     settings = Settings(
         runtime_root=tmp_path / "runtime-root",
         db_path=tmp_path / "memory.db",
@@ -306,42 +365,37 @@ def test_run_start_command_keeps_pipe_capture_on_posix(tmp_path: Path, monkeypat
     manager = HorosaRuntimeManager(settings)
     script = tmp_path / "Horosa-Web" / "start_horosa_local.sh"
     script.parent.mkdir(parents=True, exist_ok=True)
-    script.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+    script.write_text("#!/usr/bin/env bash\nsleep 600\n", encoding="utf-8")
 
     monkeypatch.setattr("horosa_skill.runtime.manager.os.name", "posix", raising=False)
     monkeypatch.setattr(
         manager,
-        "_wait_for_service_state",
-        lambda **_: {
-            "ready": True,
-            "endpoints": [
-                {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": True},
-                {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": True},
-            ],
-        },
+        "_service_status",
+        lambda manifest: [
+            {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": False},
+            {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": False},
+        ],
     )
-
     seen: dict[str, object] = {}
+    _stub_popen(monkeypatch, seen=seen, returncode=None)   # 还在跑
 
-    def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
-        seen.update(kwargs)
-        return subprocess.CompletedProcess(args=kwargs.get("args", args[0] if args else []), returncode=0, stdout="ok", stderr="")
-
-    monkeypatch.setattr(subprocess, "run", fake_run)
-
-    completed, readiness = manager._run_start_command(
+    started = time.monotonic()
+    _completed, readiness = manager._run_start_command(
         command=["/bin/bash", str(script)],
         script=script,
         env={"HOME": str(tmp_path)},
         manifest=None,
+        wait_seconds=0.5,
     )
+    elapsed = time.monotonic() - started
 
-    assert seen.get("capture_output") is True
-    assert seen.get("text") is True
-    assert seen.get("check") is False
-    assert completed.stdout == "ok"
-    assert completed.stderr == ""
-    assert readiness["ready"] is True
+    assert readiness["ready"] is False
+    assert readiness["starting"] is True
+    assert readiness["launcher_pid"] == 4242
+    assert elapsed < 3.0, f"预算 0.5s 却阻塞了 {elapsed:.1f}s"
+    # 启动器 pid 记进注册表，别的进程据此知道「已经有人在启动了」。
+    state = manager.load_runtime_state() or {}
+    assert (state.get("launcher") or {}).get("pid") == 4242
 
 
 def test_install_runtime_from_manifest_file_url(tmp_path: Path) -> None:
@@ -377,6 +431,30 @@ def test_install_runtime_from_manifest_file_url(tmp_path: Path) -> None:
     assert (settings.runtime_current_dir / "runtime-manifest.json").is_file()
 
 
+def _install_fake_spawn(manager, *, returncode=0, output: str = "", pid=4242, on_spawn=None):
+    """替掉真启动器。`on_spawn` 让用例在「启动器已起」这一刻翻转自己的服务状态。"""
+    from pathlib import Path as _Path
+
+    class _FakeProc:
+        def __init__(self):
+            self.pid = pid
+
+        def poll(self):
+            return returncode
+
+    def fake_spawn(*, command, script, env):
+        if on_spawn is not None:
+            on_spawn()
+        log_path = manager.runtime_root / manager.LAUNCHER_LOG_NAME
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "ab") as handle:
+            handle.write(output.encode("utf-8"))
+        return _FakeProc(), log_path
+
+    manager._spawn_start_command = fake_spawn
+
+
+
 def test_start_and_stop_runtime_updates_state(tmp_path: Path) -> None:
     archive = create_runtime_archive(tmp_path)
     settings = Settings(
@@ -396,11 +474,6 @@ def test_start_and_stop_runtime_updates_state(tmp_path: Path) -> None:
             {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": reachable},
         ]
 
-    def fake_write_runtime_state(self: HorosaRuntimeManager, payload: dict[str, object]) -> None:
-        self.runtime_root.mkdir(parents=True, exist_ok=True)
-        self.settings.runtime_state_path.write_text(json.dumps(payload), encoding="utf-8")
-        service_state["running"] = str(payload.get("status", "")).startswith("running")
-
     def fake_wait_for_service_state(
         self: HorosaRuntimeManager,
         *,
@@ -409,8 +482,6 @@ def test_start_and_stop_runtime_updates_state(tmp_path: Path) -> None:
         manifest: dict | None,
     ) -> dict[str, object]:
         service_state["running"] = expected_reachable
-        if not expected_reachable and self.settings.runtime_state_path.exists():
-            self.settings.runtime_state_path.unlink()
         return {
             "ready": True,
             "endpoints": [
@@ -420,22 +491,25 @@ def test_start_and_stop_runtime_updates_state(tmp_path: Path) -> None:
         }
 
     manager._service_status = MethodType(fake_service_status, manager)
-    manager._write_runtime_state = MethodType(fake_write_runtime_state, manager)
     manager._wait_for_service_state = MethodType(fake_wait_for_service_state, manager)
+    # 启动器一起来，服务就可达（新实现在 _run_start_command 内部自己轮询 _service_status）。
+    _install_fake_spawn(manager, output="services are ready.\n",
+                        on_spawn=lambda: service_state.__setitem__("running", True))
 
     started = manager.start_local_services()
 
     assert started["ok"] is True
     assert started["already_running"] is False
     assert settings.runtime_state_path.is_file()
+    # 启动锁必须已经释放（成功路径），否则下一次启动会被自己挡住。
+    assert not (settings.runtime_root / ".runtime-start.lock").exists()
 
-    stopped = manager.stop_local_services()
+    service_state["running"] = True
+    stopped = manager.stop_local_services(force=True)
 
     assert stopped["ok"] is True
     assert stopped["already_stopped"] is False
     assert not settings.runtime_state_path.exists()
-
-
 def test_doctor_reports_invalid_manifest_and_runtime_state_without_crashing(tmp_path: Path) -> None:
     settings = Settings(
         runtime_root=tmp_path / "runtime-root",
@@ -561,43 +635,33 @@ def test_start_runtime_succeeds_when_script_returns_nonzero_but_services_become_
     )
     manager = HorosaRuntimeManager(settings)
     manager.install(archive=str(archive))
+    reachable = {"value": False}
 
     def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
         return [
-            {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": False},
-            {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": False},
+            {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": reachable["value"]},
+            {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": reachable["value"]},
         ]
 
-    def fake_wait_for_service_state(
-        self: HorosaRuntimeManager,
-        *,
-        expected_reachable: bool,
-        timeout_seconds: float,
-        manifest: dict | None,
-    ) -> dict[str, object]:
-        return {
-            "ready": True,
-            "endpoints": [
-                {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": expected_reachable},
-                {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": expected_reachable},
-            ],
-        }
-
-    def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(args=["bash"], returncode=1, stdout="partial startup", stderr="pid warning")
-
     manager._service_status = MethodType(fake_service_status, manager)
-    manager._wait_for_service_state = MethodType(fake_wait_for_service_state, manager)
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    _install_fake_spawn(
+        manager, returncode=1, output="partial startup\npid warning\n",
+        on_spawn=lambda: reachable.__setitem__("value", True),
+    )
 
     started = manager.start_local_services()
 
     assert started["ok"] is True
     assert started["warning"]["code"] == "runtime.start_nonzero_but_ready"
     assert manager.load_runtime_state()["status"] == "running_with_warnings"
+def test_start_runtime_does_not_stop_the_healthy_half_before_relaunching(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """部分可达时**不许**先 stop 一遍。
 
-
-def test_start_runtime_recovers_partial_state_before_launch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    🔴 旧实现（本用例的旧版就是在锁那个行为）在「一半可达」时先调 stop_local_services 再全量
+    重启 —— Java 起不来的机器上，每一次碰 Java 的调用都要顺手弄死正常的 chart 服务，再赌一次
+    全量启动。启动脚本本身是幂等的，缺哪半边补哪半边即可。旧断言写的是 `stop_calls == ["stop"]`，
+    也就是把这个 bug 当成了契约，所以它永远不会为此变红。
+    """
     archive = create_runtime_archive(tmp_path)
     settings = Settings(
         runtime_root=tmp_path / "runtime-root",
@@ -607,55 +671,35 @@ def test_start_runtime_recovers_partial_state_before_launch(tmp_path: Path, monk
     )
     manager = HorosaRuntimeManager(settings)
     manager.install(archive=str(archive))
-
-    service_states = iter(
-        [
-            [
-                {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": True},
-                {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": False},
-            ],
-            [
-                {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": True},
-                {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": True},
-            ],
-        ]
-    )
+    chart_up = {"value": False}
 
     def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
-        return next(service_states)
+        return [
+            {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": True},
+            {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": chart_up["value"]},
+        ]
 
-    def fake_wait_for_service_state(
-        self: HorosaRuntimeManager,
-        *,
-        expected_reachable: bool,
-        timeout_seconds: float,
-        manifest: dict | None,
-    ) -> dict[str, object]:
-        return {
-            "ready": True,
-            "endpoints": [
-                {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": expected_reachable},
-                {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": expected_reachable},
-            ],
-        }
+    # java 可达那半边是我们自己的，冲突检查必须放行。
+    manager._service_status = MethodType(fake_service_status, manager)
+    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest, endpoints=None: [
+        {**item, "identity": {"verdict": "ours", "evidence": "identity.nonce_match", "started_by_us": True}}
+        for item in fake_service_status(manager, manifest)
+    ])
 
     stop_calls: list[str] = []
 
-    def fake_stop_local_services() -> dict[str, object]:
+    def fake_stop_local_services(*, force: bool = False) -> dict[str, object]:
         stop_calls.append("stop")
         return {"ok": True, "already_stopped": False}
 
-    manager._service_status = MethodType(fake_service_status, manager)
-    manager._wait_for_service_state = MethodType(fake_wait_for_service_state, manager)
     monkeypatch.setattr(manager, "stop_local_services", fake_stop_local_services)
+    _install_fake_spawn(manager, output="services are ready.\n",
+                        on_spawn=lambda: chart_up.__setitem__("value", True))
 
     started = manager.start_local_services()
 
     assert started["ok"] is True
-    assert started["recovered_partial_state"] is True
-    assert stop_calls == ["stop"]
-
-
+    assert stop_calls == [], "部分可达不该触发 stop —— 那会把健康的那半边也停掉"
 def test_start_runtime_retries_after_failed_launch_with_stale_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     archive = create_runtime_archive(tmp_path)
     settings = Settings(
@@ -705,12 +749,13 @@ def test_start_runtime_retries_after_failed_launch_with_stale_state(tmp_path: Pa
         script: Path,
         env: dict[str, str],
         manifest: dict | None,
+        wait_seconds: float | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
         return next(run_results)
 
     stop_calls: list[str] = []
 
-    def fake_stop_local_services() -> dict[str, object]:
+    def fake_stop_local_services(*, force: bool = False) -> dict[str, object]:
         stop_calls.append("stop")
         return {"ok": True, "already_stopped": False}
 
@@ -901,12 +946,18 @@ def test_start_runtime_reports_patched_files_on_windows(tmp_path: Path, monkeypa
             ],
         }
 
-    def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(args=["powershell"], returncode=0, stdout="ok", stderr="")
+    reachable = {"value": False}
 
-    manager._service_status = MethodType(fake_service_status, manager)
+    def flipping_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+        return [
+            {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": reachable["value"]},
+            {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": reachable["value"]},
+        ]
+
+    manager._service_status = MethodType(flipping_service_status, manager)
     manager._wait_for_service_state = MethodType(fake_wait_for_service_state, manager)
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    _install_fake_spawn(manager, output="ok\n",
+                        on_spawn=lambda: reachable.__setitem__("value", True))
 
     started = manager.start_local_services()
 
@@ -1000,6 +1051,7 @@ def test_start_runtime_sets_windows_home_env_defaults(tmp_path: Path, monkeypatc
         script: Path,
         env: dict[str, str],
         manifest: dict | None,
+        wait_seconds: float | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
         captured_env.update(env)
         return (
@@ -1051,6 +1103,7 @@ def test_start_runtime_serializes_concurrent_calls(tmp_path: Path) -> None:
         script: Path,
         env: dict[str, str],
         manifest: dict | None,
+        wait_seconds: float | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
         run_start_calls.append("start")
         entered.set()
@@ -1296,16 +1349,15 @@ def test_run_start_command_accepts_chart_only_as_degraded(tmp_path: Path) -> Non
         runtime_start_timeout_seconds=0.3,
     )
     manager = HorosaRuntimeManager(settings)
-
-    def fake_wait(self: HorosaRuntimeManager, *, expected_reachable: bool, timeout_seconds: float, manifest: dict | None) -> dict[str, object]:
-        return {"ready": False, "endpoints": _chart_only_endpoints()}
-
-    manager._wait_for_service_state = MethodType(fake_wait, manager)
+    manager._service_status = MethodType(
+        lambda self, manifest: _chart_only_endpoints(), manager
+    )
+    _install_fake_spawn(manager, returncode=0, output="java backend process exited (exit code 1)\n")
     script = tmp_path / "start.fake"
     script.write_text("", encoding="utf-8")
 
     completed, readiness = manager._run_start_command(
-        command=[sys.executable, "-c", "print('java backend process exited (exit code 1)')"],
+        command=["/bin/true"],
         script=script,
         env=os.environ.copy(),
         manifest=None,
@@ -1313,8 +1365,6 @@ def test_run_start_command_accepts_chart_only_as_degraded(tmp_path: Path) -> Non
     assert completed.returncode == 0
     assert readiness["ready"] is True
     assert readiness["degraded"] is True
-
-
 def test_start_local_services_reports_degraded_chart_only(tmp_path: Path) -> None:
     # 降级启动：ok=True + warning=runtime.start_degraded_chart_only + 状态文件 degraded_chart_only；
     # 不触发破坏性 stop+重试（readiness.ready=True 使旧的 partial-state 分支不进入）。
@@ -1348,6 +1398,7 @@ def test_start_local_services_reports_degraded_chart_only(tmp_path: Path) -> Non
         script: Path,
         env: dict[str, str],
         manifest: dict | None,
+        wait_seconds: float | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
         completed = subprocess.CompletedProcess(args=command, returncode=1, stdout="java backend process exited (exit code 1)", stderr="")
         return completed, {"ready": True, "degraded": True, "endpoints": _chart_only_endpoints()}
@@ -1452,3 +1503,168 @@ def test_start_local_services_skips_restart_during_java_cooldown(tmp_path: Path)
     off = HorosaRuntimeManager(Settings(**{**settings.model_dump(), "runtime_java_retry_cooldown_seconds": 0.0}))
     off._last_degraded_start_at = time.monotonic()
     assert off.java_backend_cooldown_remaining() == 0.0
+
+
+# ======================================================================================
+# v0.37.0 B3–B5：端口归属、启动锁、有界启动
+# ======================================================================================
+
+def _manager_with_runtime(tmp_path: Path) -> HorosaRuntimeManager:
+    archive = create_runtime_archive(tmp_path)
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+        runtime_start_timeout_seconds=0.5,
+    )
+    manager = HorosaRuntimeManager(settings)
+    manager.install(archive=str(archive))
+    return manager
+
+
+def _endpoints(*, verdict: str, reachable: bool = True) -> list[dict[str, object]]:
+    identity = {
+        "verdict": verdict,
+        "evidence": "identity.nonce_match" if verdict == "ours" else "process.command_is_not_ours",
+        "started_by_us": verdict == "ours",
+        "port": 8899,
+        "holders": [{"pid": 4242, "command": "python -m http.server 8899"}],
+    }
+    return [
+        {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": reachable,
+         "identity": dict(identity) if reachable else None},
+        {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": reachable,
+         "identity": dict(identity) if reachable else None},
+    ]
+
+
+def test_start_refuses_when_a_foreign_process_holds_the_port(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """端口上是别人的服务 → 报冲突退出，绝不采用、绝不代为终止。
+
+    🔴 旧实现只看 HTTP 响应码 < 500，任何应答者都会被静默采用为后端（症状：排盘失败但
+    statusCode 200），部分可达时还会先跑一遍停脚本 —— 那会按端口关掉用户自己开着的星阙桌面端。
+    既有测试只在 reachable True/False 上打转，对「可达的是谁」一无所问，所以全绿。
+    """
+    manager = _manager_with_runtime(tmp_path)
+    monkeypatch.setattr(manager, "endpoint_identities",
+                        lambda manifest, endpoints=None: _endpoints(verdict="foreign"))
+    spawned: list[str] = []
+    monkeypatch.setattr(manager, "_spawn_start_command",
+                        lambda **kw: spawned.append("spawn"))
+
+    with pytest.raises(RuntimeInstallError) as excinfo:
+        manager.start_local_services(wait_seconds=0.2)
+
+    assert excinfo.value.code == "runtime.port_conflict_foreign"
+    assert excinfo.value.details["conflicts"]
+    assert "不会终止" in excinfo.value.details["will_not_kill"]
+    assert spawned == [], "报冲突时不该还去起启动器"
+
+
+def test_start_refuses_an_unidentifiable_holder_unless_trusted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manager = _manager_with_runtime(tmp_path)
+    monkeypatch.setattr(manager, "endpoint_identities",
+                        lambda manifest, endpoints=None: _endpoints(verdict="unknown"))
+
+    with pytest.raises(RuntimeInstallError) as excinfo:
+        manager.start_local_services(wait_seconds=0.2)
+    assert excinfo.value.code == "runtime.port_conflict_unknown_holder"
+
+    # 用户明示信任后放行（此时全部可达 → already_running）
+    monkeypatch.setenv("HOROSA_RUNTIME_TRUST_PORTS", "1")
+    result = manager.start_local_services(wait_seconds=0.2)
+    assert result["already_running"] is True
+
+
+def test_stop_refuses_services_we_did_not_start(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """只有 app 标记不算「我们的」—— 停下去可能关掉用户正在用的星阙桌面端。"""
+    manager = _manager_with_runtime(tmp_path)
+    weak = _endpoints(verdict="ours")
+    for entry in weak:
+        entry["identity"]["evidence"] = "identity.app_marker"
+        entry["identity"]["started_by_us"] = False
+    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest, endpoints=None: weak)
+    ran: list[str] = []
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: ran.append("stop"))
+
+    result = manager.stop_local_services()
+
+    assert result["refused"] is True
+    assert result["code"] == "runtime.stop_refused_foreign"
+    assert ran == [], "拒绝时绝不能已经跑过停脚本"
+
+
+def test_external_mode_never_starts_or_stops_a_local_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """地址指到别处时只探不起不停。
+
+    docker-compose 把 HOROSA_SERVER_ROOT 指到 host.docker.internal:9999；旧实现探不到就去跑
+    **本机**的启动脚本，等于替用户在网关容器里装一整套 runtime。
+    """
+    manager = _manager_with_runtime(tmp_path)
+    monkeypatch.setenv("HOROSA_SERVER_ROOT", "http://198.51.100.7:9999")
+    assert manager.runtime_mode() == "external"
+    monkeypatch.setattr(manager, "endpoint_identities",
+                        lambda manifest, endpoints=None: _endpoints(verdict="unknown", reachable=False))
+    spawned: list[str] = []
+    monkeypatch.setattr(manager, "_spawn_start_command", lambda **kw: spawned.append("spawn"))
+
+    with pytest.raises(RuntimeInstallError) as excinfo:
+        manager.start_local_services(wait_seconds=0.2)
+    assert excinfo.value.code == "runtime.external_unreachable"
+    assert spawned == []
+
+    stopped = manager.stop_local_services()
+    assert stopped["refused"] is True and stopped["reason"] == "external_mode"
+
+
+def test_pointing_at_our_own_local_ports_stays_managed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """把地址显式写成本机 runtime 自己的端口是正常用法，不能被误判成 external。"""
+    manager = _manager_with_runtime(tmp_path)
+    monkeypatch.setenv("HOROSA_SERVER_ROOT", "http://localhost:9999")
+    monkeypatch.setenv("HOROSA_CHART_SERVER_ROOT", "http://127.0.0.1:8899")
+    assert manager.runtime_mode() == "managed"
+
+
+def test_second_process_does_not_launch_while_a_start_is_in_flight(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """跨进程启动锁：已有人在启动时，第二个调用只轮询，零 spawn。
+
+    🔴 `self._service_lock` 只是**进程内**的锁。两个 MCP 客户端同时冷启动会各起一个启动器：
+    抢同一个端口、互相覆盖 pid 文件，后到的看见「pid files already exist」就先 stop 再 start，
+    把先到的那个刚起好的服务停掉。
+    """
+    manager = _manager_with_runtime(tmp_path)
+    monkeypatch.setattr(manager, "endpoint_identities",
+                        lambda manifest, endpoints=None: _endpoints(verdict="ours", reachable=False))
+    monkeypatch.setattr(manager, "_service_status", lambda manifest: _endpoints(verdict="ours", reachable=False))
+    spawned: list[str] = []
+    monkeypatch.setattr(manager, "_spawn_start_command", lambda **kw: spawned.append("spawn"))
+
+    # 假装另一个**活着的**进程正持锁（用本进程 pid 冒充）
+    lock_path = manager.runtime_root / ".runtime-start.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path.write_text(json.dumps({"pid": os.getpid(), "owner": "runtime-start",
+                                     "created_at": "2026-01-01T00:00:00+00:00"}), encoding="utf-8")
+
+    result = manager.start_local_services(wait_seconds=0.3)
+
+    assert result["starting"] is True
+    assert result["started_by_other_process"] is True
+    assert spawned == [], "已有人在启动时不该再起第二个启动器"
+
+
+def test_start_lock_is_released_when_the_start_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """失败路径也必须释放锁 —— 否则本进程（一个长命的 serve）会把后续所有启动永久挡死。"""
+    manager = _manager_with_runtime(tmp_path)
+    monkeypatch.setattr(manager, "endpoint_identities",
+                        lambda manifest, endpoints=None: _endpoints(verdict="ours", reachable=False))
+    monkeypatch.setattr(manager, "_service_status", lambda manifest: _endpoints(verdict="ours", reachable=False))
+
+    def boom(**_kw):
+        raise RuntimeInstallError("nope", code="runtime.start_failed", details={})
+
+    monkeypatch.setattr(manager, "_spawn_start_command", boom)
+
+    with pytest.raises(RuntimeInstallError):
+        manager.start_local_services(wait_seconds=0.2)
+
+    assert not (manager.runtime_root / ".runtime-start.lock").exists()

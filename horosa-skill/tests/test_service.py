@@ -1251,7 +1251,7 @@ class FakeRuntimeManager:
         self.degraded = degraded
         self.cooldown = cooldown
 
-    def start_local_services(self) -> dict[str, object]:
+    def start_local_services(self, *, wait_seconds: float | None = None) -> dict[str, object]:
         self.started += 1
         return {"ok": True, "already_running": False, "degraded": self.degraded}
 

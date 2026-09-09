@@ -22,6 +22,8 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     # 以及 AppCDS 训练 JVM 的端口（上游硬编码 39997，与别的程序撞车时是静默降级）。
     "HOROSA_MCP_MAX_CONCURRENT_TOOLS": "stable",
     "HOROSA_RUNTIME_LAUNCHER_PATCH": "experimental",
+    "HOROSA_RUNTIME_TRUST_PORTS": "experimental",
+    "HOROSA_PORTS": "stable",
     "HOROSA_CDS_TRAIN_PORT": "experimental",
     "HOROSA_STRICT_CONFIG": "stable",
     "HOROSA_CLARIFY": "stable",
@@ -38,6 +40,7 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     "HOROSA_LOCAL_BACKEND_PORT": "stable",
     "HOROSA_LOCAL_CHART_PORT": "stable",
     "HOROSA_RUNTIME_START_TIMEOUT_SECONDS": "stable",
+    "HOROSA_RUNTIME_CALL_WAIT_SECONDS": "stable",
     "HOROSA_RUNTIME_JAVA_RETRY_COOLDOWN_SECONDS": "stable",
     "HOROSA_MCP_COMPACT": "stable",
     "HOROSA_MCP_ELICIT": "stable",
@@ -71,6 +74,7 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     "HOROSA_LINUX_SKIP_DOWNLOAD": "internal",
     "HOROSA_RUNTIME_RELEASE_BASE_URL": "internal",
     "HOROSA_SKILL_PYPROJECT": "internal",
+    "HOROSA_LAUNCH_NONCE": "internal",
 }
 # removed 档：曾存在于历史版本、现已删除的旗标 → 接受并忽略 + 指路。删代码不删兼容。
 REMOVED_ENV_FLAGS: dict[str, str] = {}

@@ -155,6 +155,79 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "upgrade_horosa_skill_then_retry",
     },
+    "runtime.port_conflict_foreign": {
+        "kind": "runtime",
+        "prompt_to_user": bilingual(
+            "Horosa 的本机服务端口被**其它进程**占用（可能是你自己开着的星阙桌面端，或另一个程序）。"
+            "本工具不会去终止不属于自己的进程。请关掉占用者，或改用别的端口："
+            "设 HOROSA_PORTS=auto 自动挑空闲端口，或显式设 HOROSA_LOCAL_BACKEND_PORT / "
+            "HOROSA_LOCAL_CHART_PORT；若那正是你想用的服务，设 HOROSA_SERVER_ROOT / "
+            "HOROSA_CHART_SERVER_ROOT 指向它。",
+            "Horosa's local service ports are held by ANOTHER process (possibly your own Horosa desktop "
+            "app, or an unrelated program). This tool never terminates processes it did not start. "
+            "Close the holder, or move ports: set HOROSA_PORTS=auto, or set HOROSA_LOCAL_BACKEND_PORT / "
+            "HOROSA_LOCAL_CHART_PORT explicitly. If that IS the server you want, point "
+            "HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT at it.",
+        ),
+        "next_action": "free_the_port_or_change_ports",
+    },
+    "runtime.port_conflict_unknown_holder": {
+        "kind": "runtime",
+        "prompt_to_user": bilingual(
+            "端口上有服务在应答，但查不出它是不是 Horosa 的，因此没有采用它 —— 把陌生服务当后端"
+            "的症状是「排盘失败但 HTTP 200」。确认那确实是 Horosa 后端后设 "
+            "HOROSA_RUNTIME_TRUST_PORTS=1；否则换端口（HOROSA_PORTS=auto）。",
+            "Something is answering on the port but could not be identified as Horosa, so it was not "
+            "adopted — adopting a stranger shows up as 'chart failed but HTTP 200'. If you know it is a "
+            "Horosa backend, set HOROSA_RUNTIME_TRUST_PORTS=1; otherwise move ports (HOROSA_PORTS=auto).",
+        ),
+        "next_action": "verify_holder_then_trust_or_change_ports",
+    },
+    "runtime.stop_refused_foreign": {
+        "kind": "runtime",
+        "prompt_to_user": bilingual(
+            "这些端口上的服务不是本工具启动的（可能是你自己开着的星阙桌面端），已拒绝停止 —— "
+            "停脚本按端口和 pid 文件动手，停下去会关掉你正在用的程序。确认无误请用 "
+            "`horosa-skill runtime stop --force`。",
+            "Those services were not started by this tool (possibly your own Horosa desktop app), so the "
+            "stop was refused — the stop script acts by port and pid file and would close a program you "
+            "are using. Use `horosa-skill runtime stop --force` if you are sure.",
+        ),
+        "next_action": "confirm_then_force_stop",
+    },
+    "runtime.stop_refused_clients_attached": {
+        "kind": "runtime",
+        "prompt_to_user": bilingual(
+            "还有别的 Horosa 客户端挂在这份 runtime 上，停止会打断它们。确认要停请加 --force。",
+            "Other Horosa clients are still attached to this runtime; stopping would cut them off. "
+            "Pass --force if you are sure.",
+        ),
+        "next_action": "confirm_then_force_stop",
+    },
+    "runtime.external_unreachable": {
+        "kind": "runtime",
+        "prompt_to_user": bilingual(
+            "你已显式把后端地址指到别处（HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT），"
+            "但那个地址不可达。外部模式下本工具**不会**在本机启动 runtime。请确认那台机器上的"
+            "服务在跑且地址可达；要改用本机 runtime，请取消这两个环境变量。",
+            "You pointed the backend elsewhere (HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT) but that "
+            "address is unreachable. In external mode this tool will NOT start a local runtime. Make sure "
+            "the remote services are up, or unset those variables to use the local runtime.",
+        ),
+        "next_action": "fix_external_address_or_unset",
+    },
+    "runtime.starting": {
+        "kind": "transport",
+        "prompt_to_user": bilingual(
+            "本机 runtime 正在启动（首次运行要解压并训练 CDS，可能几分钟）。等 retry_after_seconds "
+            "秒后重试**同一个调用**即可，不用改参数。连续三次仍是 starting 请跑 "
+            "`horosa-skill runtime status` 看启动器日志。",
+            "The local runtime is still starting (first run unpacks and trains CDS; this can take minutes). "
+            "Retry the SAME call after retry_after_seconds — no parameter changes needed. If it is still "
+            "starting after three tries, run `horosa-skill runtime status` for the launcher log.",
+        ),
+        "next_action": "retry_same_call_after_delay",
+    },
     "transport.connection_error": {"kind": "transport"},
     "report.run_not_found": {
         "kind": "input",

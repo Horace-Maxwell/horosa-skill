@@ -7,6 +7,7 @@ import logging
 import os
 import platform
 import re
+import secrets
 import sys
 import shutil
 import subprocess
@@ -26,6 +27,10 @@ import httpx
 from horosa_skill.config import Settings
 from horosa_skill.engine.client import HorosaApiClient, loopback_httpx_client
 from horosa_skill.errors import RuntimeInstallError, RuntimeValidationError
+from horosa_skill.runtime import registry as runtime_registry
+from horosa_skill.runtime.identity import EndpointIdentity, classify_endpoint, trust_unknown_ports
+from horosa_skill.runtime.pidlock import describe_lock, release as release_lock, try_pid_lock
+from horosa_skill.runtime.ports import port_holders
 from horosa_skill.tracing import TraceRecorder
 
 logger = logging.getLogger(__name__)
@@ -285,6 +290,28 @@ WINDOWS_LOCAL_CACHE_FACTORY_INNER_CLASS_B64 = (
     "1wHkAAMB0wHcAdcB5AADAd8B4AHiAesAAAAiAAQACwD7AewAGAEYAJoB7UAZAXwANAHuBgkB7wHxAfMAGQ=="
 )
 
+def _hand_lock_to(lock_path: Path, pid: Any) -> None:
+    """把启动锁的持有者改写成启动器自己的 pid（锁的寿命 = 一次启动的寿命）。
+
+    改写失败就直接释放：宁可放两个启动器进来（启动脚本本身对「端口已占用」是拒绝而非覆盖），
+    也不要留下一把没人能回收的锁把后续所有启动挡死。
+    """
+    if not isinstance(pid, int) or pid <= 0:
+        release_lock(lock_path)
+        return
+    try:
+        payload = json.loads(lock_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        release_lock(lock_path)
+        return
+    payload["pid"] = pid
+    payload["owner"] = "runtime-launcher"
+    try:
+        lock_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        release_lock(lock_path)
+
+
 class HorosaRuntimeManager:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -339,26 +366,16 @@ class HorosaRuntimeManager:
         return manifest
 
     def load_runtime_state(self, *, strict: bool = False) -> dict[str, Any] | None:
-        if not self.settings.runtime_state_path.is_file():
+        path = self.settings.runtime_state_path
+        if not path.is_file():
             return None
-        try:
-            payload = json.loads(self.settings.runtime_state_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            if strict:
-                raise RuntimeValidationError(
-                    "Runtime state file is invalid.",
-                    code="runtime.state_invalid",
-                    details={"path": str(self.settings.runtime_state_path), "error": str(exc)},
-                ) from exc
-            return None
-        if not isinstance(payload, dict):
-            if strict:
-                raise RuntimeValidationError(
-                    "Runtime state file must contain an object.",
-                    code="runtime.state_invalid",
-                    details={"path": str(self.settings.runtime_state_path)},
-                )
-            return None
+        payload = runtime_registry.read_state(path)
+        if payload is None and strict:
+            raise RuntimeValidationError(
+                "Runtime state file is invalid.",
+                code="runtime.state_invalid",
+                details={"path": str(path)},
+            )
         return payload
 
     def install(
@@ -664,13 +681,51 @@ class HorosaRuntimeManager:
                 "group_id": trace["group_id"],
             }
 
-    def start_local_services(self) -> dict[str, Any]:
+    def start_local_services(self, *, wait_seconds: float | None = None) -> dict[str, Any]:
+        """启动本机 runtime。
+
+        `wait_seconds=None` = 用满 runtime_start_timeout_seconds（`runtime start`/install/selfcheck）；
+        工具调用路径传一个小预算，超出即返回 `{"starting": True, "retry_after_seconds": …}`。
+        """
+        mode = self.runtime_mode()
+        if mode == "external":
+            # 外部模式：地址是用户给的，只探不起不停。
+            manifest = self.load_installed_manifest() if self.current_dir.exists() else None
+            endpoints = self.endpoint_identities(manifest)
+            reachable = self._all_services_reachable(endpoints)
+            if not reachable:
+                raise RuntimeInstallError(
+                    "外部模式（已显式设置 HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT）下服务不可达。",
+                    code="runtime.external_unreachable",
+                    details={
+                        "endpoints": endpoints,
+                        "next_action": (
+                            "确认那台机器上的 Horosa 服务在跑且地址可达；"
+                            "要改用本机 runtime，请取消 HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT。"
+                        ),
+                        "will_not_start": "外部模式下本工具不会在本机启动 runtime。",
+                    },
+                )
+            self._write_runtime_state({
+                "managed": False,
+                "mode": "external",
+                "status": "external",
+                "updated_at": self._utc_now(),
+                "endpoints": endpoints,
+            })
+            return {
+                "ok": True, "already_running": True, "mode": "external", "command": None,
+                "stdout": "", "stderr": "", "endpoints": endpoints,
+                "trace_id": None, "group_id": None,
+            }
         with self._service_lock:
             with self.tracer.span(workflow_name="runtime.start", metadata={"entrypoint": "runtime.start"}) as trace:
                 self._require_runtime()
                 manifest = self.load_installed_manifest(strict=True)
                 patched_files: list[str] = []
-                initial_status = self._service_status(manifest)
+                initial_status = self.endpoint_identities(manifest)
+                # 可达但不是我们的 → 报冲突并退出；绝不采用、绝不代为终止。
+                self._require_no_foreign_holders(initial_status)
                 if self._all_services_reachable(initial_status):
                     if self.load_runtime_state() is None:
                         self._write_runtime_state(
@@ -713,153 +768,286 @@ class HorosaRuntimeManager:
                             "trace_id": trace["trace_id"],
                             "group_id": trace["group_id"],
                         }
-                if self._any_services_reachable(initial_status):
-                    recovery_details = self.stop_local_services()
-                    recovered_partial_state = True
-
-                patched_files = self._apply_runtime_overrides(manifest)
-                script = self.current_dir / self._relative_manifest_path(manifest, "services", "start_script")
-                if not script.exists():
-                    raise RuntimeValidationError(
-                        f"Runtime start script missing: {script}",
-                        code="runtime.start_script_missing",
-                        details={"path": str(script)},
-                    )
-
-                env = os.environ.copy()
-                env.setdefault("HOROSA_SERVER_PORT", str(self.settings.local_backend_port))
-                env.setdefault("HOROSA_CHART_PORT", str(self.settings.local_chart_port))
-                home_value = self._default_home_value()
-                env.setdefault("HOME", home_value)
-                if os.name == "nt":
-                    env.setdefault("USERPROFILE", home_value)
-                    drive, tail = os.path.splitdrive(home_value)
-                    if drive:
-                        env.setdefault("HOMEDRIVE", drive)
-                        env.setdefault("HOMEPATH", tail or "\\")
-
-                command = self._platform_command(script)
-                completed, readiness = self._run_start_command(
-                    command=command,
-                    script=script,
-                    env=env,
-                    manifest=manifest,
+                # 🔴 旧实现在「部分可达」时先 stop 一遍再全量重启（L715-717）。那一步会把**健康的**
+                # 那半边也停掉：Java 起不来时，每一次碰 Java 的调用都要顺手弄死正常的 chart 服务，
+                # 再赌一次全量启动。既然此刻已确认可达的那些都是我们自己的（上面的冲突检查放行了），
+                # 就让启动脚本自己去补齐缺的那半边 —— 它本来就是幂等的。
+                # 跨进程启动锁：`self._service_lock` 只挡得住**本进程**。两个 MCP 客户端
+                # （Claude Desktop 与 Cursor，或一个 serve 与一次 doctor）同时冷启动时，两边各起
+                # 一个启动器：抢同一个端口、互相覆盖 pid 文件，后到的看见「pid files already
+                # exist」就先 stop 再 start —— 把先到的那个刚起好的服务停掉。
+                # 锁的持有者写成**启动器自己的 pid**，于是锁的寿命恰好等于一次启动；启动器崩了
+                # 锁自动可回收（pidlock 的死持有者判定），不需要看门狗线程。
+                budget = (
+                    float(self.settings.runtime_start_timeout_seconds)
+                    if wait_seconds is None
+                    else max(0.0, float(wait_seconds))
                 )
-                retried_after_cleanup = False
-                combined_output = f"{completed.stdout}\n{completed.stderr}".lower()
-                if (
-                    completed.returncode != 0
-                    and not readiness["ready"]
-                    and (
-                        self._any_services_reachable(readiness["endpoints"])
-                        or "pid files already exist" in combined_output
+                lock_path = self.runtime_root / ".runtime-start.lock"
+                if not try_pid_lock(lock_path, stale_after_seconds=960.0, owner="runtime-start"):
+                    holder = describe_lock(lock_path)
+                    waited = self._wait_for_service_state(
+                        expected_reachable=True, timeout_seconds=budget, manifest=manifest
                     )
-                ):
-                    recovery_details = self.stop_local_services()
-                    recovered_partial_state = True
-                    retried_after_cleanup = True
+                    if waited["ready"]:
+                        return {
+                            "ok": True, "already_running": True, "started_by_other_process": True,
+                            "command": None, "stdout": "", "stderr": "", "endpoints": waited["endpoints"],
+                            "trace_id": trace["trace_id"], "group_id": trace["group_id"],
+                        }
+                    return {
+                        "ok": True, "starting": True, "started_by_other_process": True,
+                        "retry_after_seconds": 5,
+                        "elapsed_seconds": round(budget, 1),
+                        "budget_seconds": round(budget, 1),
+                        "cap_seconds": float(self.settings.runtime_start_timeout_seconds),
+                        "launcher": holder,
+                        "command": None, "stdout": "", "stderr": "",
+                        "endpoints": waited["endpoints"],
+                        "trace_id": trace["trace_id"], "group_id": trace["group_id"],
+                    }
+                lock_released = False
+                # 加锁之后的**每一条**出口都必须释放：抛 runtime.start_failed / start_timeout /
+                # launcher_patch_anchor_missing 时若把锁留着，而本进程（一个长命的 serve）还活着，
+                # pidlock 的「活持有者永不回收」就会把后续所有启动永久挡死。
+                try:
+                    patched_files = self._apply_runtime_overrides(manifest)
+                    script = self.current_dir / self._relative_manifest_path(manifest, "services", "start_script")
+                    if not script.exists():
+                        raise RuntimeValidationError(
+                            f"Runtime start script missing: {script}",
+                            code="runtime.start_script_missing",
+                            details={"path": str(script)},
+                        )
+
+                    # 一次性身份口令：写进注册表并透给启动器，`/horosaIdentity` 会原样回报。
+                    # 这是「这个端口上的服务是不是**这次**启动的那一份」唯一可靠的答案 —— 仅靠 app
+                    # 标记分不出用户自己开着的星阙桌面端。
+                    launch_nonce = secrets.token_urlsafe(16)
+
+                    def _remember_nonce(state: dict[str, Any]) -> dict[str, Any]:
+                        state["launch_nonce"] = launch_nonce
+                        state["mode"] = "managed"
+                        state["ports"] = {
+                            "backend": self.settings.local_backend_port,
+                            "chart": self.settings.local_chart_port,
+                        }
+                        return state
+
+                    self._update_runtime_state(_remember_nonce)
+
+                    env = os.environ.copy()
+                    env["HOROSA_LAUNCH_NONCE"] = launch_nonce
+                    env.setdefault("HOROSA_SERVER_PORT", str(self.settings.local_backend_port))
+                    env.setdefault("HOROSA_CHART_PORT", str(self.settings.local_chart_port))
+                    home_value = self._default_home_value()
+                    env.setdefault("HOME", home_value)
+                    if os.name == "nt":
+                        env.setdefault("USERPROFILE", home_value)
+                        drive, tail = os.path.splitdrive(home_value)
+                        if drive:
+                            env.setdefault("HOMEDRIVE", drive)
+                            env.setdefault("HOMEPATH", tail or "\\")
+
+                    command = self._platform_command(script)
                     completed, readiness = self._run_start_command(
                         command=command,
                         script=script,
                         env=env,
                         manifest=manifest,
+                        wait_seconds=budget,
                     )
-                degraded = bool(readiness.get("degraded"))
-                self._last_degraded_start_at = time.monotonic() if degraded else None
-                startup_warning: dict[str, Any] | None = None
-                if degraded:
-                    startup_warning = {
-                        "code": "runtime.start_degraded_chart_only",
-                        "message": (
-                            "Java backend (:9999) did not become ready; running degraded on the chart service only. "
-                            "Chart-side techniques (三式 ken/神数/地占/塔罗/西占 chart 族) stay available; "
-                            "Java-side ones (nongli/bazi/ziwei/liureng and 占时 casts) will error until it recovers. "
-                            "Run `uv run horosa-skill doctor` for the captured Java boot error."
-                        ),
-                        "details": {
+                    if readiness.get("starting"):
+                        # 启动器还在跑。锁交给它的 pid 持有（谁都别再起第二个），本次调用先回
+                        # 「正在启动」，让调用方过几秒重试同一个调用，而不是干等几分钟被客户端掐断。
+                        _hand_lock_to(lock_path, readiness.get("launcher_pid"))
+                        lock_released = True
+                        self._write_runtime_state({
+                            "managed": True, "mode": "managed", "status": "starting",
+                            "updated_at": self._utc_now(),
+                            "manifest_version": manifest.get("version") if manifest else None,
+                            "platform": manifest.get("platform") if manifest else (self.settings.runtime_platform or _platform_key()),
                             "command": command,
-                            "returncode": completed.returncode,
-                            "stdout": completed.stdout[-4000:],
-                            "stderr": completed.stderr[-4000:],
-                            "retried_after_cleanup": retried_after_cleanup,
-                            "java_diagnostics": self._java_boot_diagnostics(manifest),
-                        },
-                    }
-                elif completed.returncode != 0 and readiness["ready"]:
-                    startup_warning = {
-                        "code": "runtime.start_nonzero_but_ready",
-                        "message": "Runtime start script exited non-zero, but all required services became reachable.",
-                        "details": {
-                            "command": command,
-                            "returncode": completed.returncode,
-                            "stdout": completed.stdout[-4000:],
-                            "stderr": completed.stderr[-4000:],
-                            "retried_after_cleanup": retried_after_cleanup,
-                        },
-                    }
-                elif completed.returncode != 0:
-                    raise RuntimeInstallError(
-                        "Failed to start local Horosa runtime.",
-                        code="runtime.start_failed",
-                        details={
-                            "command": command,
-                            "stdout": completed.stdout[-4000:],
-                            "stderr": completed.stderr[-4000:],
+                        })
+                        return {
+                            "ok": True, "starting": True,
+                            "retry_after_seconds": 5,
+                            "elapsed_seconds": readiness.get("elapsed_seconds"),
+                            "budget_seconds": readiness.get("budget_seconds"),
+                            "cap_seconds": readiness.get("cap_seconds"),
+                            "first_start": not (self.runtime_root / ".started-once").exists(),
+                            "launcher_log": readiness.get("launcher_log"),
+                            "launcher_pid": readiness.get("launcher_pid"),
+                            "command": command, "stdout": completed.stdout[-4000:], "stderr": "",
                             "endpoints": readiness["endpoints"],
-                        },
-                    )
-                if not readiness["ready"]:
-                    raise RuntimeInstallError(
-                        "Local Horosa runtime did not become ready in time.",
-                        code="runtime.start_timeout",
-                        details={
+                            "patched_files": patched_files,
+                            "trace_id": trace["trace_id"], "group_id": trace["group_id"],
+                        }
+                    retried_after_cleanup = False
+                    combined_output = f"{completed.stdout}\n{completed.stderr}".lower()
+                    if (
+                        completed.returncode != 0
+                        and not readiness["ready"]
+                        and (
+                            self._any_services_reachable(readiness["endpoints"])
+                            or "pid files already exist" in combined_output
+                        )
+                    ):
+                        recovery_details = self.stop_local_services()
+                        recovered_partial_state = True
+                        retried_after_cleanup = True
+                        completed, readiness = self._run_start_command(
+                            command=command,
+                            script=script,
+                            env=env,
+                            manifest=manifest,
+                            wait_seconds=budget,
+                        )
+                    degraded = bool(readiness.get("degraded"))
+                    self._last_degraded_start_at = time.monotonic() if degraded else None
+                    startup_warning: dict[str, Any] | None = None
+                    if degraded:
+                        startup_warning = {
+                            "code": "runtime.start_degraded_chart_only",
+                            "message": (
+                                "Java backend (:9999) did not become ready; running degraded on the chart service only. "
+                                "Chart-side techniques (三式 ken/神数/地占/塔罗/西占 chart 族) stay available; "
+                                "Java-side ones (nongli/bazi/ziwei/liureng and 占时 casts) will error until it recovers. "
+                                "Run `uv run horosa-skill doctor` for the captured Java boot error."
+                            ),
+                            "details": {
+                                "command": command,
+                                "returncode": completed.returncode,
+                                "stdout": completed.stdout[-4000:],
+                                "stderr": completed.stderr[-4000:],
+                                "retried_after_cleanup": retried_after_cleanup,
+                                "java_diagnostics": self._java_boot_diagnostics(manifest),
+                            },
+                        }
+                    elif completed.returncode != 0 and readiness["ready"]:
+                        startup_warning = {
+                            "code": "runtime.start_nonzero_but_ready",
+                            "message": "Runtime start script exited non-zero, but all required services became reachable.",
+                            "details": {
+                                "command": command,
+                                "returncode": completed.returncode,
+                                "stdout": completed.stdout[-4000:],
+                                "stderr": completed.stderr[-4000:],
+                                "retried_after_cleanup": retried_after_cleanup,
+                            },
+                        }
+                    elif completed.returncode != 0:
+                        raise RuntimeInstallError(
+                            "Failed to start local Horosa runtime.",
+                            code="runtime.start_failed",
+                            details={
+                                "command": command,
+                                "stdout": completed.stdout[-4000:],
+                                "stderr": completed.stderr[-4000:],
+                                "endpoints": readiness["endpoints"],
+                            },
+                        )
+                    if not readiness["ready"]:
+                        raise RuntimeInstallError(
+                            "Local Horosa runtime did not become ready in time.",
+                            code="runtime.start_timeout",
+                            details={
+                                "command": command,
+                                "timeout_seconds": self.settings.runtime_start_timeout_seconds,
+                                "endpoints": readiness["endpoints"],
+                            },
+                        )
+                    if degraded:
+                        runtime_status = "degraded_chart_only"
+                    elif startup_warning:
+                        runtime_status = "running_with_warnings"
+                    else:
+                        runtime_status = "running"
+                    self._write_runtime_state(
+                        {
+                            "managed": True,
+                            "status": runtime_status,
+                            "updated_at": self._utc_now(),
+                            "manifest_version": manifest.get("version") if manifest else None,
+                            "platform": manifest.get("platform") if manifest else (self.settings.runtime_platform or _platform_key()),
                             "command": command,
-                            "timeout_seconds": self.settings.runtime_start_timeout_seconds,
-                            "endpoints": readiness["endpoints"],
-                        },
+                            "startup_warning": startup_warning,
+                            "recovered_partial_state": recovered_partial_state,
+                        }
                     )
-                if degraded:
-                    runtime_status = "degraded_chart_only"
-                elif startup_warning:
-                    runtime_status = "running_with_warnings"
-                else:
-                    runtime_status = "running"
-                self._write_runtime_state(
-                    {
-                        "managed": True,
-                        "status": runtime_status,
-                        "updated_at": self._utc_now(),
-                        "manifest_version": manifest.get("version") if manifest else None,
-                        "platform": manifest.get("platform") if manifest else (self.settings.runtime_platform or _platform_key()),
+                    if not lock_released:
+                        release_lock(lock_path)
+                        lock_released = True
+                    try:
+                        (self.runtime_root / ".started-once").touch()
+                    except OSError:
+                        pass
+                    trace["command"] = command
+                    trace["patched_files"] = patched_files
+                    return {
+                        "ok": True,
+                        "already_running": False,
+                        "degraded": degraded,
                         "command": command,
-                        "startup_warning": startup_warning,
+                        "stdout": completed.stdout[-4000:],
+                        "stderr": completed.stderr[-4000:],
+                        "endpoints": readiness["endpoints"],
+                        "warning": startup_warning,
+                        "patched_files": patched_files,
                         "recovered_partial_state": recovered_partial_state,
+                        "recovery": recovery_details,
+                        "trace_id": trace["trace_id"],
+                        "group_id": trace["group_id"],
                     }
-                )
-                trace["command"] = command
-                trace["patched_files"] = patched_files
-                return {
-                    "ok": True,
-                    "already_running": False,
-                    "degraded": degraded,
-                    "command": command,
-                    "stdout": completed.stdout[-4000:],
-                    "stderr": completed.stderr[-4000:],
-                    "endpoints": readiness["endpoints"],
-                    "warning": startup_warning,
-                    "patched_files": patched_files,
-                    "recovered_partial_state": recovered_partial_state,
-                    "recovery": recovery_details,
-                    "trace_id": trace["trace_id"],
-                    "group_id": trace["group_id"],
-                }
+                finally:
+                    if not lock_released:
+                        release_lock(lock_path)
 
-    def stop_local_services(self) -> dict[str, Any]:
+    def stop_local_services(self, *, force: bool = False) -> dict[str, Any]:
+        """停止本机 runtime。**只停我们自己起的那一份。**
+
+        🔴 停脚本按端口/pid 文件动手。如果那个端口上跑的其实是用户自己开着的星阙桌面端（同一个
+        app 标记、同一个默认端口），一次 `runtime stop`（或旧代码里那些「先 stop 再重启」的反射）
+        就会把用户正在用的程序关掉。所以这里要求**强证据**（nonce 相等 / 命令行含我方 runtime 根 /
+        我方注册表里的 pid 仍活着）才动手；只有 app 标记不算数。
+        """
+        if self.runtime_mode() == "external":
+            return {
+                "ok": True, "already_stopped": True, "mode": "external", "refused": True,
+                "reason": "external_mode",
+                "message": "外部模式（HOROSA_SERVER_ROOT/HOROSA_CHART_SERVER_ROOT 已显式设置）下不会停止任何服务。",
+                "command": None, "stdout": "", "stderr": "", "returncode": 0,
+                "endpoints": self.endpoint_identities(None), "trace_id": None, "group_id": None,
+            }
         with self.tracer.span(workflow_name="runtime.stop", metadata={"entrypoint": "runtime.stop"}) as trace:
             self._require_runtime()
             manifest = self.load_installed_manifest(strict=True)
             script = self.current_dir / self._relative_manifest_path(manifest, "services", "stop_script")
-            initial_status = self._service_status(manifest)
+            initial_status = self.endpoint_identities(manifest)
+            reachable_now = [item for item in initial_status if item.get("reachable")]
+            not_ours = [
+                item for item in reachable_now
+                if not ((item.get("identity") or {}).get("started_by_us"))
+            ]
+            if reachable_now and not_ours and not force:
+                return {
+                    "ok": False, "already_stopped": False, "refused": True,
+                    "reason": "not_started_by_us",
+                    "code": "runtime.stop_refused_foreign",
+                    "message": (
+                        "这些端口上的服务不是本工具启动的（可能是你自己开着的星阙桌面端或另一个实例），"
+                        "已拒绝停止。"
+                    ),
+                    "next_action": (
+                        "确认要停的就是它们时用 `runtime stop --force`；"
+                        "只是想腾出端口给本工具，请改端口"
+                        "（HOROSA_LOCAL_BACKEND_PORT / HOROSA_LOCAL_CHART_PORT，或 HOROSA_PORTS=auto）。"
+                    ),
+                    "conflicts": not_ours,
+                    "command": None, "stdout": "", "stderr": "", "returncode": 0,
+                    "endpoints": initial_status,
+                    "trace_id": trace["trace_id"], "group_id": trace["group_id"],
+                }
             if not any(item["reachable"] for item in initial_status):
                 self._clear_runtime_state()
                 return {
@@ -1615,6 +1803,129 @@ horosa_owns_pid() {
             {"label": "python_chart", "url": chart_url, "reachable": self._http_reachable(chart_url)},
         ]
 
+    def runtime_mode(self) -> str:
+        """`external` = 用户把地址指到了**我们管不着的地方**，只探不起不停；否则 `managed`。
+
+        🔴 旧实现对显式地址一视同仁：探到不可达就去跑**本机**的启动脚本，探到部分可达又会先
+        stop 一遍 —— 指着同事机器 / 容器网关（docker-compose 里就是 host.docker.internal:9999）
+        的用户，一次工具调用就可能让本机起一整套 runtime，或者去停一个根本不归自己管的服务。
+
+        但「显式设了地址」≠「外部」：把 HOROSA_SERVER_ROOT 指到本机 runtime 自己的
+        127.0.0.1:9999 是完全正常的用法，那种情况仍是 managed，`runtime start` 照常启动。
+        判据因此是**地址是否就是我们会去启动的那一个**（回环主机名等价，端口须相同）。
+        """
+        ours = {
+            (True, int(self.settings.local_backend_port)),
+            (True, int(self.settings.local_chart_port)),
+        }
+        for name in ("HOROSA_SERVER_ROOT", "HOROSA_CHART_SERVER_ROOT"):
+            raw = os.environ.get(name, "").strip()
+            if not raw:
+                continue
+            parsed = urlparse(raw if "//" in raw else f"//{raw}")
+            host = (parsed.hostname or "").lower()
+            port = parsed.port or (443 if parsed.scheme == "https" else 80)
+            if (host in {"127.0.0.1", "localhost", "::1"}, int(port)) not in ours:
+                return "external"
+        return "managed"
+
+    def _launch_nonce(self) -> str | None:
+        state = self.load_runtime_state() or {}
+        nonce = state.get("launch_nonce")
+        return str(nonce) if nonce else None
+
+    def endpoint_identities(
+        self, manifest: dict[str, Any] | None, *, endpoints: list[dict[str, Any]] | None = None
+    ) -> list[dict[str, Any]]:
+        """给每个端点补上归属判定。
+
+        **只在决策点调用**（start 入口、stop 入口、doctor、runtime status），不要放进
+        `_wait_for_service_state` 的 0.25 秒轮询里 —— 判定要跑 netstat/ps 子进程，放进轮询会把
+        一次启动的开销翻好几倍。
+        """
+        items = endpoints if endpoints is not None else self._service_status(manifest)
+        state = self.load_runtime_state() or {}
+        nonce = self._launch_nonce()
+        service_pids = state.get("service_pids") or []
+        enriched: list[dict[str, Any]] = []
+        for item in items:
+            entry = dict(item)
+            if not entry.get("reachable"):
+                entry["identity"] = None
+                enriched.append(entry)
+                continue
+            verdict: EndpointIdentity = classify_endpoint(
+                str(entry.get("url") or ""),
+                runtime_root=self.runtime_root,
+                launch_nonce=nonce,
+                service_pids=service_pids,
+            )
+            entry["identity"] = verdict.as_dict()
+            enriched.append(entry)
+        return enriched
+
+    @staticmethod
+    def _verdict_of(entry: dict[str, Any]) -> str | None:
+        identity = entry.get("identity")
+        return (identity or {}).get("verdict") if isinstance(identity, dict) else None
+
+    def _require_no_foreign_holders(self, endpoints: list[dict[str, Any]]) -> None:
+        """可达但**不是我们的**服务：报冲突，绝不采用、绝不代为终止。
+
+        🔴 旧实现只看「HTTP 响应码 < 500」，于是 8899/9999 上任何应答者都被静默采用为后端：
+        用户自己开着的星阙桌面端、另一个项目的开发服务器、一个 `python -m http.server`。
+        症状不是「连不上」，而是排盘失败却 statusCode 200，或请求被发去一个无关服务。
+        """
+        conflicts = [
+            {
+                "port": (entry.get("identity") or {}).get("port"),
+                "url": entry.get("url"),
+                "label": entry.get("label"),
+                "evidence": (entry.get("identity") or {}).get("evidence"),
+                "app": (entry.get("identity") or {}).get("app"),
+                "holders": (entry.get("identity") or {}).get("holders") or [],
+            }
+            for entry in endpoints
+            if self._verdict_of(entry) == "foreign"
+        ]
+        if conflicts:
+            raise RuntimeInstallError(
+                "本机的 Horosa 服务端口被**其它进程**占用，已停止启动以免误用或误杀。",
+                code="runtime.port_conflict_foreign",
+                details={
+                    "conflicts": conflicts,
+                    "next_action": (
+                        "换端口：设 HOROSA_LOCAL_BACKEND_PORT 或 HOROSA_LOCAL_CHART_PORT，"
+                        "或设 HOROSA_PORTS=auto 让本工具自动挑空闲端口；"
+                        "若那正是你想用的服务，设 HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT 指向它（外部模式）。"
+                    ),
+                    "will_not_kill": "本工具不会终止不属于自己的进程；要腾出端口请你自己关掉上面点名的进程。",
+                },
+            )
+        unknown = [
+            {
+                "port": (entry.get("identity") or {}).get("port"),
+                "url": entry.get("url"),
+                "label": entry.get("label"),
+                "holders": (entry.get("identity") or {}).get("holders") or [],
+            }
+            for entry in endpoints
+            if self._verdict_of(entry) == "unknown"
+        ]
+        if unknown and not trust_unknown_ports():
+            raise RuntimeInstallError(
+                "端口上有服务在应答，但查不出它是不是 Horosa 的 —— 未予采用。",
+                code="runtime.port_conflict_unknown_holder",
+                details={
+                    "conflicts": unknown,
+                    "next_action": (
+                        "确认那确实是 Horosa 后端后，设 HOROSA_RUNTIME_TRUST_PORTS=1 采用它；"
+                        "否则换端口（HOROSA_LOCAL_BACKEND_PORT / HOROSA_LOCAL_CHART_PORT，或 HOROSA_PORTS=auto）。"
+                    ),
+                    "will_not_kill": "本工具不会终止不属于自己的进程。",
+                },
+            )
+
     def _all_services_reachable(self, endpoints: list[dict[str, Any]]) -> bool:
         return bool(endpoints) and all(bool(item.get("reachable")) for item in endpoints)
 
@@ -1665,6 +1976,56 @@ horosa_owns_pid() {
         except Exception:
             return None
 
+    # 启动器日志：Popen 的 stdout/stderr 都往这里追加（O_APPEND，多进程写不会互相截断）。
+    LAUNCHER_LOG_NAME = "launcher.log"
+
+    def _launcher_log_path(self) -> Path:
+        return self.runtime_root / self.LAUNCHER_LOG_NAME
+
+    def _spawn_start_command(
+        self, *, command: list[str], script: Path, env: dict[str, str]
+    ) -> tuple[subprocess.Popen[bytes], Path]:
+        """把启动器**分离**着跑起来，立即返回。
+
+        🔴 旧实现是 `subprocess.run(...)` —— 而启动器自己会一直阻塞到服务就绪或 STARTUP_TIMEOUT
+        （首次运行要解压 + CDS 训练，实测可达 300–900 秒）。于是「第一次调用某个技法」会在**一次
+        MCP 请求内**卡上几分钟：Codex 的 tool_timeout_sec 默认 60 秒、其它客户端各有默认，
+        用户看到的是工具超时，而 runtime 其实正在正常启动。分离 + 有界等待把这件事变成
+        「先回一个 runtime.starting，让调用方过几秒重试同一个调用」。
+        """
+        log_path = self._launcher_log_path()
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        handle = open(log_path, "ab", buffering=0)  # noqa: SIM115 - 交给子进程持有，见 finally
+        try:
+            kwargs: dict[str, Any] = {
+                "cwd": str(script.parent),
+                "env": env,
+                "stdout": handle,
+                "stderr": subprocess.STDOUT,
+                "stdin": subprocess.DEVNULL,
+            }
+            if os.name == "nt":
+                # getattr 兜底：这两个常量只在真 Windows 的 subprocess 上存在，而把 os.name
+                # 打成 "nt" 的跨平台模拟测试会走到这一支。
+                kwargs["creationflags"] = getattr(
+                    subprocess, "CREATE_NEW_PROCESS_GROUP", 0
+                ) | getattr(subprocess, "DETACHED_PROCESS", 0)
+            else:
+                kwargs["start_new_session"] = True
+            proc = subprocess.Popen(command, **kwargs)
+        finally:
+            # 父进程这边立刻关掉：句柄已经复制给子进程了。留着它会在 Windows 上让日志文件
+            # 无法被删除/轮转，在 POSIX 上则让 `tail -f` 看不到 EOF。
+            handle.close()
+        return proc, log_path
+
+    def _read_launcher_log(self, log_path: Path, *, limit: int = 8000) -> str:
+        try:
+            data = log_path.read_bytes()
+        except OSError:
+            return ""
+        return data[-limit:].decode("utf-8", errors="replace")
+
     def _run_start_command(
         self,
         *,
@@ -1672,68 +2033,88 @@ horosa_owns_pid() {
         script: Path,
         env: dict[str, str],
         manifest: dict[str, Any] | None,
+        wait_seconds: float | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
-        if os.name == "nt":
-            # Detached Windows runtime children can keep inherited pipe handles
-            # alive, so file-backed capture avoids hanging on communicate().
-            temp_dir = tempfile.mkdtemp(prefix="horosa-runtime-start-")
-            stdout_path = os.path.join(temp_dir, "stdout.log")
-            stderr_path = os.path.join(temp_dir, "stderr.log")
+        """启动并在预算内等待就绪。预算用尽仍未就绪时 readiness["starting"]=True。
+
+        `wait_seconds=None` = 用满 runtime_start_timeout_seconds（`runtime start` / install /
+        selfcheck 走这条，行为与从前一致）；工具调用路径传一个小预算（默认 5 秒）。
+        """
+        budget = (
+            float(self.settings.runtime_start_timeout_seconds)
+            if wait_seconds is None
+            else max(0.0, float(wait_seconds))
+        )
+        started_at = time.monotonic()
+        log_before = self._launcher_log_path()
+        log_offset = log_before.stat().st_size if log_before.is_file() else 0
+        proc, log_path = self._spawn_start_command(command=command, script=script, env=env)
+        self._record_launcher(proc.pid, log_path)
+
+        deadline = started_at + budget
+        endpoints = self._service_status(manifest)
+        java_dead_deadline: float | None = None
+        while True:
+            if all(item["reachable"] for item in endpoints):
+                break
+            exited = proc.poll() is not None
+            tail = self._read_launcher_log(log_path)[max(0, 0):]
+            if java_dead_deadline is None and "java backend process exited" in tail.lower():
+                # Issue #14：启动器已明说 java 死了，别再耗满整个就绪窗口等一个永远不会来的端点。
+                java_dead_deadline = min(deadline, time.monotonic() + 20.0)
+            effective_deadline = min(deadline, java_dead_deadline) if java_dead_deadline else deadline
+            if exited:
+                # 启动器退出后再看最后一眼：它可能刚把服务拉起来。
+                endpoints = self._service_status(manifest)
+                break
+            if time.monotonic() >= effective_deadline:
+                break
+            time.sleep(0.25)
+            endpoints = self._service_status(manifest)
+
+        returncode = proc.poll()
+        output = self._read_launcher_log(log_path)
+        if log_offset and len(output) > 0:
+            # 只保留本次启动写进去的那一段（日志是追加的，上一次的内容不该被当成这次的诊断）。
             try:
-                with open(stdout_path, "wb") as stdout_handle, open(stderr_path, "wb") as stderr_handle:
-                    completed_result = subprocess.run(
-                        command,
-                        cwd=str(script.parent),
-                        env=env,
-                        stdout=stdout_handle,
-                        stderr=stderr_handle,
-                        check=False,
-                    )
-                with open(stdout_path, "r", encoding="utf-8", errors="replace") as stdout_reader:
-                    captured_stdout = stdout_reader.read()
-                with open(stderr_path, "r", encoding="utf-8", errors="replace") as stderr_reader:
-                    captured_stderr = stderr_reader.read()
-                completed = subprocess.CompletedProcess(
-                    args=completed_result.args,
-                    returncode=completed_result.returncode,
-                    stdout=captured_stdout,
-                    stderr=captured_stderr,
-                )
-            finally:
-                # Close the readers (above) before rmtree — on Windows an open handle
-                # blocks deletion and would leak the temp dir.
-                shutil.rmtree(temp_dir, ignore_errors=True)
-        else:
-            completed = subprocess.run(
-                command,
-                cwd=str(script.parent),
-                env=env,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                check=False,
-            )
-        # Issue #14: when the launcher already reports the java process dead (its marker line),
-        # don't burn the full readiness window waiting for an endpoint that can never come up.
-        java_dead_marker = "java backend process exited" in f"{completed.stdout}\n{completed.stderr}"
-        wait_timeout = (
-            min(self.settings.runtime_start_timeout_seconds, 20.0)
-            if java_dead_marker
-            else self.settings.runtime_start_timeout_seconds
+                with open(log_path, "rb") as handle:
+                    handle.seek(log_offset)
+                    output = handle.read().decode("utf-8", errors="replace")
+            except OSError:
+                pass
+        completed = subprocess.CompletedProcess(
+            args=command,
+            returncode=0 if returncode is None else returncode,
+            stdout=output[-8000:],
+            stderr="",
         )
-        readiness = self._wait_for_service_state(
-            expected_reachable=True,
-            timeout_seconds=wait_timeout,
-            manifest=manifest,
-        )
-        readiness.setdefault("degraded", False)
-        if not readiness["ready"] and self._chart_only_degraded(readiness["endpoints"]):
+        ready = all(item["reachable"] for item in endpoints)
+        readiness: dict[str, Any] = {"ready": ready, "endpoints": endpoints, "degraded": False}
+        if not ready and returncode is None:
+            # 启动器还在跑 —— 这不是失败，是「还没好」。
+            readiness["starting"] = True
+            readiness["launcher_pid"] = proc.pid
+            readiness["launcher_log"] = str(log_path)
+            readiness["elapsed_seconds"] = round(time.monotonic() - started_at, 1)
+            readiness["budget_seconds"] = round(budget, 1)
+            readiness["cap_seconds"] = float(self.settings.runtime_start_timeout_seconds)
+            return completed, readiness
+        if not ready and self._chart_only_degraded(endpoints):
             # A dead/blocked Java backend (e.g. WFP/proxy software vetoing JDK-17 AF_UNIX
             # loopback pipes) must not lock out chart-only techniques: accept chart-up/java-down
             # as a degraded start instead of failing the whole runtime.
-            readiness = {"ready": True, "degraded": True, "endpoints": readiness["endpoints"]}
+            readiness = {"ready": True, "degraded": True, "endpoints": endpoints}
         return completed, readiness
+
+    def _record_launcher(self, pid: int, log_path: Path) -> None:
+        def _mutate(state: dict[str, Any]) -> dict[str, Any]:
+            state["launcher"] = {"pid": pid, "log": str(log_path), "started_at": runtime_registry.utc_now()}
+            return state
+
+        try:
+            self._update_runtime_state(_mutate)
+        except OSError:
+            pass
 
     def _wait_for_service_state(
         self,
@@ -1752,15 +2133,28 @@ horosa_owns_pid() {
         return {"ready": all(item["reachable"] == expected_reachable for item in endpoints), "endpoints": endpoints}
 
     def _write_runtime_state(self, payload: dict[str, Any]) -> None:
+        """整份覆盖写，原子（tmp + os.replace）。
+
+        🔴 旧实现是一次 `write_text`：两个进程同时冷启动时读者会读到半个 JSON（解析失败 →
+        `load_runtime_state` 返回 None → 调用方以为「没在跑」→ 再起一次），写者互相覆盖，
+        最后文件里记的是输的那一方。见 runtime/registry.py。
+        """
         self.runtime_root.mkdir(parents=True, exist_ok=True)
-        self.settings.runtime_state_path.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        merged = dict(payload)
+        # 保留 v2 的长寿字段（launch_nonce / clients / launcher …）：这些是别的进程写进来的，
+        # 一次 start/stop 的整份覆盖不该把它们抹掉。
+        existing = runtime_registry.read_state(self.settings.runtime_state_path) or {}
+        for key in ("launch_nonce", "clients", "launcher", "service_pids", "ports"):
+            if key not in merged and existing.get(key):
+                merged[key] = existing[key]
+        runtime_registry.write_state(self.settings.runtime_state_path, merged)
+
+    def _update_runtime_state(self, mutate: Any) -> dict[str, Any]:
+        self.runtime_root.mkdir(parents=True, exist_ok=True)
+        return runtime_registry.update_state(self.settings.runtime_state_path, mutate)
 
     def _clear_runtime_state(self) -> None:
-        if self.settings.runtime_state_path.exists():
-            self.settings.runtime_state_path.unlink()
+        runtime_registry.clear_state(self.settings.runtime_state_path)
 
     def _utc_now(self) -> str:
         return datetime.now(UTC).isoformat()

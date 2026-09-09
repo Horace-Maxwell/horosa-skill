@@ -17,11 +17,11 @@ class _ManagerStub:
         self.started = 0
         self.stopped = 0
 
-    def start_local_services(self) -> dict[str, object]:
+    def start_local_services(self, *, wait_seconds: float | None = None) -> dict[str, object]:
         self.started += 1
         return {"ok": True, "already_running": False}
 
-    def stop_local_services(self) -> dict[str, object]:
+    def stop_local_services(self, *, force: bool = False) -> dict[str, object]:
         self.stopped += 1
         return {"ok": True}
 
@@ -190,7 +190,7 @@ def test_openclaw_setup_bootstraps_workspace_and_runs_smoke(monkeypatch, tmp_pat
             assert int(os.environ["HOROSA_LOCAL_CHART_PORT"]) == int(os.environ["HOROSA_LOCAL_BACKEND_PORT"]) + 1
             return {"ok": True, "installed": True, "changed": True, "manifest": {"version": "0.5.11", "runtime_payload_version": "0.5.11"}}
 
-        def start_local_services(self) -> dict[str, object]:
+        def start_local_services(self, *, wait_seconds: float | None = None) -> dict[str, object]:
             return {"ok": True, "already_running": False}
 
         def doctor(self) -> dict[str, object]:

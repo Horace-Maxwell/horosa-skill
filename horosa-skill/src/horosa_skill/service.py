@@ -6580,6 +6580,43 @@ class HorosaSkillService:
             },
         )
 
+    @staticmethod
+    def _runtime_call_wait_seconds() -> float:
+        """一次工具调用**最多**为「等 runtime 起来」阻塞多久（秒）。
+
+        🔴 旧行为是一直等到启动器自己超时（runtime_start_timeout_seconds，首次运行含解压 + CDS
+        训练，实测 300–900 秒），全都发生在**一次 MCP 请求内部**。Codex 的 tool_timeout_sec 默认
+        60 秒，其它客户端各有默认 —— 用户看到的是「工具超时/无响应」，而 runtime 其实正常启动中。
+        默认 5 秒：够覆盖「已经起好了、只是探针慢一拍」，不够的场合改回 runtime.starting 让调用方重试。
+        """
+        raw = os.environ.get("HOROSA_RUNTIME_CALL_WAIT_SECONDS", "5").strip()
+        try:
+            value = float(raw)
+        except ValueError:
+            return 5.0
+        return max(0.0, value)
+
+    @staticmethod
+    def _runtime_starting_error(endpoint: str, started: dict[str, Any]) -> ToolTransportError:
+        retry_after = started.get("retry_after_seconds") or 5
+        return ToolTransportError(
+            "本机 Horosa runtime 正在启动，尚未就绪。",
+            code="runtime.starting",
+            details={
+                "endpoint": endpoint,
+                "retry_after_seconds": retry_after,
+                "elapsed_seconds": started.get("elapsed_seconds"),
+                "budget_seconds": started.get("budget_seconds"),
+                "cap_seconds": started.get("cap_seconds"),
+                "first_start": started.get("first_start"),
+                "launcher_log": started.get("launcher_log"),
+                "next_action": (
+                    f"等 {retry_after} 秒后重试**同一个调用**（参数不用改）。"
+                    "连续三次仍是 starting 就跑 `horosa-skill runtime status` 看启动器日志。"
+                ),
+            },
+        )
+
     def _call_remote(self, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
         use_chart_server = endpoint in _PYTHON_CHART_ENDPOINTS
         client = self.chart_client if use_chart_server else self.client
@@ -6593,7 +6630,11 @@ class HorosaSkillService:
                 remaining = self._java_cooldown_remaining()
                 if remaining > 0:
                     raise self._java_unavailable_error(endpoint, remaining)
-            started = self.runtime_manager.start_local_services()
+            started = self.runtime_manager.start_local_services(
+                wait_seconds=self._runtime_call_wait_seconds()
+            )
+            if isinstance(started, dict) and started.get("starting"):
+                raise self._runtime_starting_error(endpoint, started)
             if not use_chart_server and isinstance(started, dict) and started.get("degraded"):
                 raise self._java_unavailable_error(endpoint, self._java_cooldown_remaining())
         remote_endpoint = _chart_server_endpoint(endpoint) if use_chart_server else endpoint
@@ -6616,7 +6657,11 @@ class HorosaSkillService:
                             connection_retry_used = True
                             if not use_chart_server and self._java_cooldown_remaining() > 0:
                                 raise self._java_unavailable_error(endpoint, self._java_cooldown_remaining()) from exc
-                            self.runtime_manager.start_local_services()
+                            restarted = self.runtime_manager.start_local_services(
+                                wait_seconds=self._runtime_call_wait_seconds()
+                            )
+                            if isinstance(restarted, dict) and restarted.get("starting"):
+                                raise self._runtime_starting_error(endpoint, restarted) from exc
                             time.sleep(1.0)
                             break
                         raise
