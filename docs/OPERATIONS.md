@@ -63,6 +63,37 @@ Runtime release 采用“轻仓库 + 重 release 资产”模式。
   - `runtime-manifest.json`
   - `SHA256SUMS.txt`
   - `horosa-skill-sbom.json`
+  - `horosa-skill-<version>.mcpb`（Claude Desktop 一键安装包；`horosa-skill/scripts/build_mcpb.sh`
+    做 validate → pack → sha256。`server.json` 的 mcpb package 直指这个 URL，缺了它注册表那条记录 404。
+    断言在 `release-completeness.yml`）
+
+### 没有 payload 变化的发布：重打，不重建
+
+一次发布若**不含 payload-affecting 变化**（引擎 / core-js / 启动器包内容都没动，改动全在 Python 包
+或安装侧补丁），仍然必须换掉资产文件名与**嵌入清单里的版本**
+（`verify_runtime_release.py::_assert_payload_manifest` 要求嵌入版本 == 发布清单版本）。
+
+Windows 半边尤其只能重打：它的构建输入（`vendor/runtime-source/runtime/windows`、`prepareruntime`）
+**只存在于 Windows 构建机上**，mac 上无从重建。
+
+```bash
+cd horosa-skill
+gh release download v<old> -p 'horosa-runtime-win32-x64-v<old>.zip'
+uv run python scripts/repack_release_assets.py \
+    --source horosa-runtime-win32-x64-v<old>.zip \
+    --out    horosa-runtime-win32-x64-v<new>.zip \
+    --version <new>
+uv run python scripts/verify_runtime_release.py --manifest <新清单> \
+    --windows-archive horosa-runtime-win32-x64-v<new>.zip
+```
+
+重打只改 `runtime-payload/runtime-manifest.json` 的版本字段，其余条目**按条目原样搬运**——
+`.ps1` 的 UTF-8 BOM 必须原封不动（丢了 BOM → PowerShell 5.1 按 ANSI 解码 → 启动器不可用，
+v0.25.1 的坑）。守卫：`tests/test_repack_release_assets.py`。
+
+🔴 **绝不要在资产不齐时打 tag。** `releases/latest/download/runtime-manifest.json` 是安装路径的
+唯一入口；一个没有资产的新 tag 会让 `latest` 指向它，于是**每一次新安装都 404**——
+这正是本仓「缺半」台账反复记的那个失败模式。
 
 ## Provenance / Attestation
 
