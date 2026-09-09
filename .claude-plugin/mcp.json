@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "horosa": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${CLAUDE_PLUGIN_ROOT}/horosa-skill",
+        "horosa-skill",
+        "serve",
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "HOROSA_RUNTIME_ROOT": "${user_config.runtimeRoot}",
+        "HOROSA_SKILL_DATA_DIR": "${user_config.dataDir}"
+      }
+    }
+  }
+}

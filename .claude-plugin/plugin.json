@@ -11,9 +11,18 @@
   "homepage": "https://github.com/Horace-Maxwell/horosa-skill",
   "repository": "https://github.com/Horace-Maxwell/horosa-skill",
   "license": "AGPL-3.0-only",
-  "keywords": ["horosa", "xingque", "astrology", "metaphysics", "mcp", "offline"],
-  "skills": ["./skills/horosa-agent"],
-  "mcpServers": "./.mcp.json",
+  "keywords": [
+    "horosa",
+    "xingque",
+    "astrology",
+    "metaphysics",
+    "mcp",
+    "offline"
+  ],
+  "skills": [
+    "./skills/horosa-agent"
+  ],
+  "mcpServers": "./.claude-plugin/mcp.json",
   "userConfig": {
     "runtimeRoot": {
       "type": "directory",

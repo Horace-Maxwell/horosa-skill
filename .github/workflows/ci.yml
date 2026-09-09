@@ -57,6 +57,9 @@ jobs:
       - name: Verify technique compute-source declarations
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_technique_provenance.py
+      - name: Verify committed client configs actually connect (.mcp.json / plugin)
+        working-directory: ./horosa-skill
+        run: uv run python scripts/verify_client_configs.py
       - name: Verify JS tool→engine boundary contracts (the issue #15 dead-key shape)
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_js_boundary_contracts.py

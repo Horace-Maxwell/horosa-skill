@@ -1,20 +1,17 @@
 {
+  "_comment": "Claude Code **项目**配置：在本仓打开时自动发现，cwd = 项目根。插件形态的那份在 .claude-plugin/mcp.json —— 它用的是插件作用域才展开的占位符，在项目作用域会原样留下。两者混用过一次：占位符展开为空 → `uv run --directory /horosa-skill` → 自 2026-08-21 起 24/24 次连接全部 CONNECTION_CLOSED，本仓自己的 MCP 从未连通。守卫 scripts/verify_client_configs.py。",
   "mcpServers": {
     "horosa": {
       "command": "uv",
       "args": [
         "run",
         "--directory",
-        "${CLAUDE_PLUGIN_ROOT}/horosa-skill",
+        "${CLAUDE_PROJECT_DIR:-.}/horosa-skill",
         "horosa-skill",
         "serve",
         "--transport",
         "stdio"
-      ],
-      "env": {
-        "HOROSA_RUNTIME_ROOT": "${user_config.runtimeRoot}",
-        "HOROSA_SKILL_DATA_DIR": "${user_config.dataDir}"
-      }
+      ]
     }
   }
 }

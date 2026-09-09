@@ -3,8 +3,10 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import ipaddress
 import secrets
 import time
+from urllib.parse import urlsplit
 from typing import Any
 
 import httpx
@@ -166,6 +168,50 @@ def _java_result_code_hint(body: str) -> str:
     return ""
 
 
+_LOOPBACK_HOSTS = frozenset({"localhost", "::1", "[::1]"})
+
+
+def is_loopback_url(url: str) -> bool:
+    """URL 指向本机回环吗？（127.0.0.0/8、localhost、::1）"""
+    try:
+        host = urlsplit(url if "//" in url else f"//{url}").hostname or ""
+    except ValueError:
+        return False
+    host = host.strip("[]").lower()
+    if host in _LOOPBACK_HOSTS:
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def loopback_httpx_client(
+    server_root: str,
+    *,
+    timeout: Any,
+    transport: httpx.BaseTransport | None = None,
+    follow_redirects: bool = False,
+) -> httpx.Client:
+    """给回环目标建 httpx.Client 时**关掉 trust_env**。
+
+    🔴 httpx 没有隐式的 localhost 代理豁免（只认显式 NO_PROXY 条目）。用户开着
+    Clash/VPN（`HTTP(S)_PROXY=http://127.0.0.1:7890`）而没设 no_proxy 时，本地后端的
+    每一次探测与调用都会被塞进代理 → 后端明明健康，doctor 却报 `services:not_running`、
+    工具调用报「无法连接本地 Horosa 后端」。实测：同一台机器同一组后端，加上
+    `HTTPS_PROXY=http://127.0.0.1:1` 后 `ok:true` 立刻变 `services:not_running`。
+    shell 层早就修过这条（start_horosa_local.sh 的 `curl --noproxy '*'` 与
+    urllib 的 `ProxyHandler({})`），Python 层一直没跟上。
+    非回环目标（网关模式指向另一台机器）保持 trust_env=True——那种场景确实要走代理。
+    """
+    return httpx.Client(
+        timeout=timeout,
+        transport=transport,
+        follow_redirects=follow_redirects,
+        trust_env=not is_loopback_url(server_root),
+    )
+
+
 class HorosaApiClient:
     def __init__(
         self,
@@ -208,7 +254,7 @@ class HorosaApiClient:
         headers = self._build_headers(body_text)
         encoded_payload = _encrypt_request_payload(body_text)
         try:
-            with httpx.Client(timeout=min(self.timeout, 5.0), transport=self.transport) as client:
+            with loopback_httpx_client(self.server_root, timeout=min(self.timeout, 5.0), transport=self.transport) as client:
                 response = client.post(url, content=encoded_payload, headers=headers)
                 decoded = self._decode_response_text(response)
                 return response.status_code < 500 and bool(decoded.strip())
@@ -221,7 +267,7 @@ class HorosaApiClient:
         headers = self._build_headers(body_text)
         encoded_payload = _encrypt_request_payload(body_text)
         try:
-            with httpx.Client(timeout=self.timeout, transport=self.transport) as client:
+            with loopback_httpx_client(self.server_root, timeout=self.timeout, transport=self.transport) as client:
                 response = client.post(url, content=encoded_payload, headers=headers)
                 response_text = self._decode_response_text(response)
                 response.raise_for_status()
@@ -274,7 +320,7 @@ class HorosaPlainJsonClient:
     def probe(self, endpoint: str = "/", payload: dict[str, Any] | None = None) -> bool:
         url = f"{self.server_root}{endpoint}"
         try:
-            with httpx.Client(timeout=min(self.timeout, 5.0), transport=self.transport, follow_redirects=True) as client:
+            with loopback_httpx_client(self.server_root, timeout=min(self.timeout, 5.0), transport=self.transport, follow_redirects=True) as client:
                 if payload is None:
                     response = client.get(url)
                 else:
@@ -297,7 +343,7 @@ class HorosaPlainJsonClient:
     def call(self, endpoint: str, payload: dict[str, Any]) -> Any:
         url = f"{self.server_root}{endpoint}"
         try:
-            with httpx.Client(timeout=self.timeout, transport=self.transport) as client:
+            with loopback_httpx_client(self.server_root, timeout=self.timeout, transport=self.transport) as client:
                 response = client.post(url, json=payload)
                 response.raise_for_status()
                 data = response.json()

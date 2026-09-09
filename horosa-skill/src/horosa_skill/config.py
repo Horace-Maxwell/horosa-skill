@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -111,12 +112,32 @@ def _default_runtime_root() -> Path:
     return Path.home() / ".horosa" / "runtime"
 
 
+# 未展开的模板占位符：`${user_config.runtimeRoot}` / `${CLAUDE_PLUGIN_ROOT}` 这类。
+_UNEXPANDED_TEMPLATE = re.compile(r"^\$\{[^}]*\}$")
+_warned_unexpanded: set[str] = set()
+
+
 def _env_text(name: str, default: str | None = None) -> str | None:
     value = os.environ.get(name)
     if value is None:
         return default
     stripped = value.strip()
-    return stripped if stripped else default
+    if not stripped:
+        return default
+    if _UNEXPANDED_TEMPLATE.match(stripped):
+        # 🔴 宿主没展开占位符时，值是**字面量**而不是路径。照单全收的后果实测过两次：
+        # `HOROSA_RUNTIME_ROOT='${user_config.runtimeRoot}'` → 每个技法工具都回
+        # `runtime.not_installed`，而 `Settings.ensure_dirs()` 还会在 CWD 里 mkdir 出一个
+        # 名叫 `${user_config.runtimeRoot}` 的真目录（仓里那几个 `${env:HOME:-…}` 目录同族）。
+        # 当作未设置 → 回落默认值，是唯一不会把用户目录搞脏的解释。
+        if name not in _warned_unexpanded:
+            _warned_unexpanded.add(name)
+            logger.warning(
+                "%s 的值是未展开的模板占位符 %r（宿主没有替换它）——按未设置处理，回落默认值。",
+                name, stripped,
+            )
+        return default
+    return stripped
 
 
 def _env_path(name: str, default: Path) -> Path:

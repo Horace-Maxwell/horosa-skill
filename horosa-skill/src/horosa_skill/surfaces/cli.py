@@ -13,6 +13,7 @@ from typing import Any, Optional
 
 import typer
 
+from horosa_skill import __version__
 from horosa_skill.agent_guidance import build_agent_guidance, validate_agent_preflight
 from horosa_skill.config import Settings
 from horosa_skill.benchmark import run_benchmark
@@ -28,6 +29,7 @@ from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.errors import RuntimeError, ToolValidationError
 from horosa_skill.runtime import HorosaRuntimeManager
 from horosa_skill.service import HorosaSkillService
+from horosa_skill.surfaces.mcp_server import COMPACT_SURFACE_TOOL_COUNT, FACADE_TOOL_COUNT
 from horosa_skill.surfaces.mcp_server import run_mcp_server
 from horosa_skill.tracing import TraceRecorder
 
@@ -1326,12 +1328,42 @@ def trace_latest(
     )
 
 
+# 各客户端的工具总数上限（实测/官方文档，2026-09）：Cursor 全局约 40 个**静默丢弃**超出部分；
+# VS Code Copilot 与 OpenAI 兼容端 128（跨所有 server 共享）；Windsurf 100；Codex 无工具搜索，
+# 116 个工具的定义每轮都进上下文（约 7 万 token）。这些客户端默认发精简面（11 个门面工具，
+# 全部技法仍可经 horosa_tool_run 按名直达）；Claude Code / Claude Desktop 有工具搜索且无硬上限，
+# 保持全量平铺（按名可见 = 更好的发现性）。`--surface full|compact` 可覆盖。
+_CLIENT_COMPACT_DEFAULT = {
+    "cursor": True,
+    "vscode": True,
+    "codex": True,
+    "gemini": True,
+    "windsurf": True,
+    "cline": True,
+    "zed": True,
+    "claude-code": False,
+    "claude-desktop": False,
+}
+_CLIENT_COMPACT_REASON = {
+    "cursor": "Cursor 全局约 40 个工具上限，超出部分**静默丢弃**（不会报错）",
+    "vscode": "VS Code Copilot 跨所有 server 共 128 个工具上限",
+    "codex": "Codex 无工具搜索，全量工具定义每轮都进上下文",
+    "gemini": "Gemini CLI 对工具数与 schema 都更严格",
+    "windsurf": "Windsurf 100 个工具上限",
+    "cline": "Cline 无工具搜索，全量面偏重",
+    "zed": "Zed 无工具搜索，全量面偏重",
+}
+
+
 @client_app.command("config")
 def client_config(
     format_name: str = typer.Option(
         "claude-code",
         "--format",
-        help="Target client: claude-code / claude-desktop / cursor / vscode / codex / mcporter / openclaw.",
+        help=(
+            "Target client: claude-code / claude-desktop / cursor / vscode / codex / "
+            "gemini / windsurf / cline / zed / mcporter / openclaw."
+        ),
     ),
     skill_root: Path = typer.Option(
         _package_root(),
@@ -1342,17 +1374,37 @@ def client_config(
     launcher: str = typer.Option(
         "uv",
         "--launcher",
-        help="How the client starts the server: `uv` (source checkout, uv run --directory …) or `uvx` (PyPI install, no checkout; v0.36.0+). mcporter/openclaw formats always use the checkout.",
+        help=(
+            "How the client starts the server: `uv` (source checkout) / `uvx` (PyPI, not live yet) / "
+            "`uvx-git` (no checkout, installs from this repo — the working zero-install path today). "
+            "mcporter/openclaw formats always use the checkout."
+        ),
+    ),
+    surface: str = typer.Option(
+        "auto",
+        "--surface",
+        help=(
+            "Advertised tool surface: `auto`（按客户端上限自动选，见 _CLIENT_COMPACT_DEFAULT）/ "
+            "`full`（116 个工具）/ `compact`（11 个门面工具，全部技法仍可经 horosa_tool_run 到达）。"
+        ),
     ),
 ) -> None:
     """按客户端生成即用 MCP 配置（自动注入真实绝对路径，无手填占位符）。"""
     resolved_skill_root = _resolve_skill_root(skill_root)
     launcher_key = launcher.strip().lower()
-    if launcher_key not in {"uv", "uvx"}:
-        raise typer.BadParameter("`--launcher` must be `uv` or `uvx`.")
+    if launcher_key not in {"uv", "uvx", "uvx-git"}:
+        raise typer.BadParameter("`--launcher` must be `uv`, `uvx` or `uvx-git`.")
     if launcher_key == "uvx":
         # PyPI 分发（v0.36.0 C4）：不需要源码 checkout；离线 runtime 仍由 `uvx horosa-skill install` 装到默认目录。
         stdio_command = ["uvx", "horosa-skill", "serve", "--transport", "stdio"]
+    elif launcher_key == "uvx-git":
+        # 🔴 PyPI 尚未开通（`pip install horosa-skill` 现在是 404），所以 `uvx` 那条今天还跑不通。
+        # 直接从 Git 装是**当下唯一可用的零安装路径**；钉当前版本 tag 让配置可复现。
+        stdio_command = [
+            "uvx", "--from",
+            f"git+https://github.com/Horace-Maxwell/horosa-skill@v{__version__}#subdirectory=horosa-skill",
+            "horosa-skill", "serve", "--transport", "stdio",
+        ]
     else:
         uv_command = resolve_uv_command()
         stdio_command = [
@@ -1366,6 +1418,21 @@ def client_config(
             "stdio",
         ]
     key = format_name.strip().lower()
+    surface_key = surface.strip().lower()
+    if surface_key not in {"auto", "full", "compact"}:
+        raise typer.BadParameter("`--surface` must be `auto`, `full` or `compact`.")
+    use_compact = _CLIENT_COMPACT_DEFAULT.get(key, False) if surface_key == "auto" else surface_key == "compact"
+    surface_env = {"HOROSA_MCP_COMPACT": "1"} if use_compact else {}
+    tool_surface = {
+        "mode": "compact" if use_compact else "full",
+        "tools": COMPACT_SURFACE_TOOL_COUNT if use_compact else FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS),
+        "reason": (
+            _CLIENT_COMPACT_REASON.get(key, "该客户端对工具总数敏感")
+            if use_compact
+            else f"该客户端能吃下全量平铺面（{FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} 个工具）"
+        ),
+        "override": "--surface full / --surface compact",
+    }
     if key in {"mcporter", "openclaw"}:
         payload: dict[str, Any] = _build_openclaw_config(
             skill_root=resolved_skill_root,
@@ -1377,18 +1444,25 @@ def client_config(
         payload = {
             "note": "运行下面这一条命令即可把 Horosa 注册进 Claude Code（stdio 直连，无需常驻 serve）。",
             "command": "claude mcp add " + server_name + " -- " + " ".join(stdio_command),
+            "tool_surface": tool_surface,
+            **({"env_note": "精简面：给这条命令加 `-e HOROSA_MCP_COMPACT=1`"} if use_compact else {}),
             "alternative_http": {
-                "note": "或先 `uv run horosa-skill serve` 再注册 HTTP 端点：",
+                # 跟随 launcher：uvx/uvx-git 用户没有 checkout，`uv run` 那条对他们不成立。
+                "note": ("或先 `" + (" ".join(stdio_command[:-2]) if launcher_key != "uv"
+                                     else "uv run --directory <checkout>/horosa-skill horosa-skill")
+                         + " serve` 再注册 HTTP 端点："),
                 "command": f"claude mcp add {server_name} --transport http http://127.0.0.1:8765/mcp",
             },
         }
     elif key == "claude-desktop":
         payload = {
             "note": "合并进 Claude Desktop 的 claude_desktop_config.json（mcpServers 键下）。",
+            "tool_surface": tool_surface,
             "mcpServers": {
                 server_name: {
                     "command": stdio_command[0],
                     "args": stdio_command[1:],
+                    **({"env": surface_env} if surface_env else {}),
                 }
             },
         }
@@ -1411,7 +1485,10 @@ def client_config(
                 # （tomllib: Unescaped '\'；mac/Linux 路径无反斜杠故恒绿，windows-smoke 才炸）。
                 f"command = {json.dumps(stdio_command[0])}\n"
                 f"args = {json.dumps(stdio_command[1:])}\n"
-                f"cwd = {json.dumps(str(resolved_skill_root))}\n"
+                # 🔴 cwd 只在 uv（源码 checkout）形态写。uvx 形态是给**没有 checkout** 的机器用的，
+                # 写死本机路径 → 对方 Codex 起不来（cwd 不存在即 spawn 失败）。
+                + (f"cwd = {json.dumps(str(resolved_skill_root))}\n" if launcher_key == "uv" else "")
+                + (
                 "# 冷启动（首次装 runtime/预热）可超 Codex 默认 30s；长盘（择日扫描）可超默认工具 60s。\n"
                 "startup_timeout_sec = 120\n"
                 "tool_timeout_sec = 600\n"
@@ -1420,9 +1497,11 @@ def client_config(
                 "# required = true\n"
                 "\n"
                 f"[mcp_servers.{server_name}.env]\n"
-                "# Codex 只透传 11 个系统变量白名单——任何 HOROSA_* 必须在这里显式声明才可见，例如：\n"
-                "# HOROSA_MCP_COMPACT = \"1\"          # 11 门面模式（Codex 无工具搜索，95 工具全量较重）\n"
+                + ("HOROSA_MCP_COMPACT = \"1\"          # " + tool_surface["reason"] + "\n" if use_compact else "")
+                + "# Codex 只透传 11 个系统变量白名单——任何 HOROSA_* 必须在这里显式声明才可见，例如：\n"
+                f"# HOROSA_MCP_COMPACT = \"1\"          # 11 门面模式（Codex 无工具搜索，{len(TOOL_DEFINITIONS)} 技法全量较重）\n"
                 "# HOROSA_TOOLSETS = \"astro,cn\"      # 或按域裁剪\n"
+                )
             ),
             "toml_http": (
                 f"[mcp_servers.{server_name}]\n"
@@ -1431,33 +1510,67 @@ def client_config(
                 "tool_timeout_sec = 600\n"
             ),
             "docs": "examples/clients/codex.md（含 exec 模式文本回落、enabled_tools 高频入口集、排障清单）",
+            "tool_surface": tool_surface,
         }
     elif key == "cursor":
         # Cursor 官方 install deep link：config = base64({"command","args"})，点击即装。
         import base64
 
-        cursor_config = json.dumps({"command": stdio_command[0], "args": stdio_command[1:]}, ensure_ascii=False)
+        cursor_entry = {"command": stdio_command[0], "args": stdio_command[1:]}
+        if surface_env:
+            cursor_entry["env"] = surface_env
+        cursor_config = json.dumps(cursor_entry, ensure_ascii=False)
         encoded = base64.b64encode(cursor_config.encode("utf-8")).decode("ascii")
         payload = {
             "note": "点击 deep_link 一键安装进 Cursor；或把 mcpServers 合并进 ~/.cursor/mcp.json。",
             "deep_link": f"cursor://anysphere.cursor-deeplink/mcp/install?name={server_name}&config={encoded}",
-            "mcpServers": {server_name: {"command": stdio_command[0], "args": stdio_command[1:]}},
+            "mcpServers": {server_name: cursor_entry},
+            "tool_surface": tool_surface,
         }
     elif key == "vscode":
         # VS Code 官方安装链接（vscode:mcp/install?<url-encoded JSON>）+ CLI 等价命令。
         from urllib.parse import quote
 
-        vscode_config = json.dumps(
-            {"name": server_name, "command": stdio_command[0], "args": stdio_command[1:]}, ensure_ascii=False
-        )
+        vscode_entry = {"name": server_name, "command": stdio_command[0], "args": stdio_command[1:]}
+        if surface_env:
+            vscode_entry["env"] = surface_env
+        vscode_config = json.dumps(vscode_entry, ensure_ascii=False)
         payload = {
             "note": "点击 install_link 一键安装进 VS Code；或运行 cli_command。",
             "install_link": f"vscode:mcp/install?{quote(vscode_config, safe='')}",
+            # 单引号只在 POSIX shell 里成立；cmd.exe / PowerShell 会把它当字面量 → JSON 解析失败。
+            # 两条都给，让 Windows 用户不用自己猜转义。
             "cli_command": f"code --add-mcp '{vscode_config}'",
+            "cli_command_windows": "code --add-mcp \"" + vscode_config.replace('"', '\\"') + "\"",
+            "tool_surface": tool_surface,
+        }
+    elif key in {"gemini", "windsurf", "cline", "zed"}:
+        # 四家都是「一个 JSON 文件里挂一个 stdio server」，只是根键与个别字段不同。
+        entry: dict[str, Any] = {"command": stdio_command[0], "args": stdio_command[1:]}
+        if surface_env:
+            entry["env"] = surface_env
+        if key == "gemini":
+            # Gemini CLI 的 per-server `timeout` 是毫秒；默认 600000（10 分钟）已够长盘扫描。
+            # `trust: false` = 每次工具调用仍走确认，别替用户放开。
+            entry.update({"timeout": 600000, "trust": False})
+            root_key, config_path = "mcpServers", "~/.gemini/settings.json"
+        elif key == "windsurf":
+            root_key, config_path = "mcpServers", "~/.codeium/windsurf/mcp_config.json"
+        elif key == "cline":
+            entry["type"] = "stdio"
+            root_key, config_path = "mcpServers", "Cline 扩展的 cline_mcp_settings.json"
+        else:  # zed
+            root_key, config_path = "context_servers", "Zed settings.json"
+        payload = {
+            "note": f"合并进 {config_path}（{root_key} 键下）。",
+            "config_path": config_path,
+            root_key: {server_name: entry},
+            "tool_surface": tool_surface,
         }
     else:
         raise typer.BadParameter(
-            "format must be one of: claude-code / claude-desktop / cursor / vscode / codex / mcporter / openclaw"
+            "format must be one of: claude-code / claude-desktop / cursor / vscode / codex / "
+            "gemini / windsurf / cline / zed / mcporter / openclaw"
         )
     if write is not None:
         _client_config_write(write, payload)

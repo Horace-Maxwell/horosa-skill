@@ -23,7 +23,7 @@ from urllib.request import url2pathname
 import httpx
 
 from horosa_skill.config import Settings
-from horosa_skill.engine.client import HorosaApiClient
+from horosa_skill.engine.client import HorosaApiClient, loopback_httpx_client
 from horosa_skill.errors import RuntimeInstallError, RuntimeValidationError
 from horosa_skill.tracing import TraceRecorder
 
@@ -1445,8 +1445,10 @@ class HorosaRuntimeManager:
             return False
 
     def _http_reachable(self, url: str) -> bool:
+        # 回环目标绕开用户代理（Clash/VPN 会把 127.0.0.1 也塞进代理 → 后端健康却报 not_running，
+        # 见 engine.client.loopback_httpx_client 的说明）。下载/manifest 那两处仍走代理。
         try:
-            with httpx.Client(timeout=1.5, follow_redirects=True) as client:
+            with loopback_httpx_client(url, timeout=1.5, follow_redirects=True) as client:
                 response = client.get(url)
                 return response.status_code < 500
         except Exception:

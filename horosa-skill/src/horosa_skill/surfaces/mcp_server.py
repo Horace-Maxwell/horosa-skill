@@ -555,8 +555,13 @@ def _agent_preflight_error(tool_name: str, payload: dict[str, Any]) -> dict[str,
 # 只能是增强，不能成为新的失败点。
 # ---------------------------------------------------------------------------
 
+# 门面工具数（非技法工具：dispatch / guidance / tool_run / memory×3 / report×2 / export×… 等）。
+# 🔴 计数单一真值：以前 marketplace 说 97、instructions 说 106、字节契约说 115、实际 116 —— 四处
+# 互不相同且都「有人守」。默认平铺面 = FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)，任何文案都从这里算。
+FACADE_TOOL_COUNT = 10
+
 # 精简面工具数 = 10 门面 + horosa_tool_run。README×2 的「11 个门面/11 facades」由 verify_docs_sync 锁步到此常量。
-COMPACT_SURFACE_TOOL_COUNT = 11
+COMPACT_SURFACE_TOOL_COUNT = FACADE_TOOL_COUNT + 1
 
 _ELICIT_DEFAULTS = "按星阙默认继续 (use Xingque defaults)"
 _ELICIT_PROVIDE = "我在对话里补充设置 (I will provide settings in chat)"
