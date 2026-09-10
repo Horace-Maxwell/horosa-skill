@@ -116,7 +116,10 @@ v0.37.0 把启动器从阻塞 `subprocess.run` 改成分离 `Popen`（为的是�
   | `NEW_PROCESS_GROUP` 单独 | 仍在跑、服务真起来 |
   | `NEW_PROCESS_GROUP \| CREATE_NO_WINDOW` | 仍在跑、**父进程退出后照旧存活**、chart 起来回 pdSyncRev |
   根因：DETACHED 让子进程完全没有控制台，PowerShell 主机拿不到控制台就直接 exit 0 且**不写一个字节**
-  （所以连诊断都没有）。而 DETACHED 想要的「活过父进程」在 Windows 上本来就免费 —— 子进程不随父终止。
+  （所以连诊断都没有）。**判据顺带纠一处误导**：插桩实测这条错误是在 **13 秒**抛出的（启动器已退出即
+  跳出等待循环），而 details 里写着 `timeout_seconds: 45.0` —— 谁照这个数字去调大预算都白费，
+  真问题是「启动器压根没跑」。起不来时先看 `launcher.log` 是否 0 字节 + 启动器自己的
+  `.horosa-local-logs` 有没有新目录：两者都空 = 没跑，不是慢。而 DETACHED 想要的「活过父进程」在 Windows 上本来就免费 —— 子进程不随父终止。
   fix = 换 `CREATE_NO_WINDOW`（有控制台、只是不弹窗）。修后同一条 `selfcheck` 立刻变成设计意图的
   `runtime.starting` + `retry_after_seconds: 5`，按提示重试即全绿（`doctor issues: []`）。
   guard = `test_windows_launcher_spawn_never_uses_detached_process`（断言 flags：无 DETACHED、有
