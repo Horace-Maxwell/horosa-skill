@@ -1120,18 +1120,8 @@ class HorosaRuntimeManager:
 
                     self._update_runtime_state(_remember_nonce)
 
-                    env = os.environ.copy()
+                    env = self._launcher_env()
                     env["HOROSA_LAUNCH_NONCE"] = launch_nonce
-                    env.setdefault("HOROSA_SERVER_PORT", str(self.settings.local_backend_port))
-                    env.setdefault("HOROSA_CHART_PORT", str(self.settings.local_chart_port))
-                    home_value = self._default_home_value()
-                    env.setdefault("HOME", home_value)
-                    if os.name == "nt":
-                        env.setdefault("USERPROFILE", home_value)
-                        drive, tail = os.path.splitdrive(home_value)
-                        if drive:
-                            env.setdefault("HOMEDRIVE", drive)
-                            env.setdefault("HOMEPATH", tail or "\\")
 
                     command = self._platform_command(script)
                     completed, readiness = self._run_start_command(
@@ -1352,10 +1342,14 @@ class HorosaRuntimeManager:
                     details={"path": str(script)},
                 )
             command = self._platform_command(script)
+            # 🔴 停脚本按 pid 文件名里的**端口**找进程（`.horosa_py.<CHART_PORT>.pid`）。它必须拿到与启动器相同的
+            # HOROSA_SERVER_PORT / HOROSA_CHART_PORT —— 此前这里传的是裸 os.environ：端口一改（HOROSA_PORTS=auto、
+            # HOROSA_LOCAL_BACKEND_PORT / HOROSA_LOCAL_CHART_PORT、矩阵 lane），停脚本找默认端口的 pid 文件 → "not running" → 服务永远停不掉，
+            # 状态卡在 stop_requested（v0.38.0 A5 真机 lane 首跑抓到）。
             completed = subprocess.run(
                 command,
                 cwd=str(script.parent),
-                env=os.environ.copy(),
+                env=self._launcher_env(),
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -1390,6 +1384,21 @@ class HorosaRuntimeManager:
                 "trace_id": trace["trace_id"],
                 "group_id": trace["group_id"],
             }
+
+    def _launcher_env(self) -> dict[str, str]:
+        """启动器与停脚本共用的环境：端口（pid 文件按端口命名）+ HOME 族。两边必须同源，否则停不掉自己起的服务。"""
+        env = os.environ.copy()
+        env.setdefault("HOROSA_SERVER_PORT", str(self.settings.local_backend_port))
+        env.setdefault("HOROSA_CHART_PORT", str(self.settings.local_chart_port))
+        home_value = self._default_home_value()
+        env.setdefault("HOME", home_value)
+        if os.name == "nt":
+            env.setdefault("USERPROFILE", home_value)
+            drive, tail = os.path.splitdrive(home_value)
+            if drive:
+                env.setdefault("HOMEDRIVE", drive)
+                env.setdefault("HOMEPATH", tail or "\\")
+        return env
 
     def _require_runtime(self) -> None:
         if not self.current_dir.exists():

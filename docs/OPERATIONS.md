@@ -55,7 +55,15 @@ pendulum）——见 [`OFFLINE_RUNTIME_RELEASES.md`](./OFFLINE_RUNTIME_RELEASES.
 
 Runtime release 采用“轻仓库 + 重 release 资产”模式。
 
-- 构建脚本：[`build_runtime_release.sh`](./../horosa-skill/scripts/build_runtime_release.sh)
+**v0.38.0 起的发布流（A5）**：维护机 `bash horosa-skill/scripts/publish_release.sh --draft --dispatch`（seed + .mcpb + wheel +
+SBOM 上 draft，触发 `release-runtime.yml`）→ 托管 runner 从 seed 派生 Windows 半、装双平台清单（钉 tag + size）、SHA256SUMS、
+SBOM、provenance attestation、`runtime-matrix.yml` 三台真机验证 → `python horosa-skill/scripts/sync_windows_release.py --check
+--tag vX.Y.Z --draft` 报 `[OK]` → `gh workflow run release-runtime.yml -f version=X.Y.Z -f publish=true` 转公开 latest →
+`--check` 公开 latest。清单只在两平台齐了才上 release，「缺半」窗口不再存在。
+
+- 构建脚本（seed）：[`package_runtime_payload.sh`](./../horosa-skill/scripts/package_runtime_payload.sh)（经 `publish_release.sh`）；
+  Windows 半：[`build_runtime_release_windows.py --seed`](./../horosa-skill/scripts/build_runtime_release_windows.py)（流水线）；
+  旧的 [`build_runtime_release.sh`](./../horosa-skill/scripts/build_runtime_release.sh) 仍可本地双平台构建（vendor 模式后手）
 - 输出目录：`horosa-skill/dist/runtime/`
 - 必要资产：
   - `horosa-runtime-darwin-arm64-v<version>.tar.gz`
@@ -99,14 +107,11 @@ v0.25.1 的坑）。守卫：`tests/test_repack_release_assets.py`。
 
 ## Provenance / Attestation
 
-🔴 **当前没有 attestation，这条以前写反了。** `release.yml` 是
-`runs-on: self-hosted` 而本仓**从未注册过 self-hosted runner** —— v0.9.2→v0.25.0 的 20 次 tag
-触发全部排队 24h 后被取消，其中的 SBOM 与 `attest-build-provenance` 一步都没执行过。
-实测 v0.26.0 的 manifest（`sha256:ab43d2e6…`）查 attestation 返回 **404**。
-
-所以：`gh attestation verify` 现在必然失败，**别照着跑再去怀疑资产有问题**。
-SBOM 由发布者在本机手动生成并上传（见「手动发布」）；provenance attestation 暂缺。
-`release.yml` 已改为仅 `workflow_dispatch`（推 tag 不再触发）——宁可明确没有，也不要假覆盖。
+v0.38.0 A5 起 attestation 由 `release-runtime.yml` 的 `assemble` job 对两份归档 + 清单 + SHA256SUMS 做
+（`actions/attest-build-provenance@v2`，dry run 不做）：`gh attestation verify horosa-runtime-win32-x64-vX.Y.Z.zip
+--repo Horace-Maxwell/horosa-skill`。**≤ v0.37.0 的资产没有 attestation**——旧 `release.yml` 是 `runs-on: self-hosted`
+而本仓从未注册过 self-hosted runner（v0.9.2→v0.25.0 的 20 次 tag 触发全部排队 24h 后被取消，零 step 执行；
+实测 v0.26.0 的 manifest 查 attestation 404），该 workflow 已删除。对旧版本别照着跑 verify 再去怀疑资产。
 
 ## 故障处理
 

@@ -16,7 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
-| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基；A2 Windows 半边从 darwin 种子派生；A3 发布契约（清单钉 tag + size、按契约逐平台判完整、平台表锁）；A4 安装侧平台策略（Windows ARM 公告式回退、`min_os`、平台键看芯片）；B4 `setup --client` 一条命令接入（七步、失败包、真 stdio 探测）；B5 agent 文档（shell-only 契约、四份薄镜像、命令守卫）；B6 doctor 机器条件（码表人话、--explain、长路径余量、quarantine、仿真进程、下载旋钮、零外网） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数；回退只许公告着做、载荷自带解释器所以平台键看芯片不看宿主 Python；接入的终点是客户端那条命令真起了 server；给 agent 抄的每条命令都要有守卫对到真实 CLI；每个诊断码都要有人话、doctor 只报不改且默认不碰外网 |
+| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基；A2 Windows 半边从 darwin 种子派生；A3 发布契约（清单钉 tag + size、按契约逐平台判完整、平台表锁）；A4 安装侧平台策略（Windows ARM 公告式回退、`min_os`、平台键看芯片）；B4 `setup --client` 一条命令接入（七步、失败包、真 stdio 探测）；B5 agent 文档（shell-only 契约、四份薄镜像、命令守卫）；B6 doctor 机器条件（码表人话、--explain、长路径余量、quarantine、仿真进程、下载旋钮、零外网）；A5 托管流水线（draft → 派生 → 三台真机矩阵 → [OK] 才公开；首跑抓到非默认端口下 stop 停不掉） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数；回退只许公告着做、载荷自带解释器所以平台键看芯片不看宿主 Python；接入的终点是客户端那条命令真起了 server；给 agent 抄的每条命令都要有守卫对到真实 CLI；每个诊断码都要有人话、doctor 只报不改且默认不碰外网；清单只在两平台齐了才上 release、真机证据由流水线产出 |
 | v0.37.0 (2026-09) | 任意 AI 客户端可调用：广告层只对一个客户端对过 / 自家 .mcp.json 从未连通 / 端口静默采用与误杀 / 回环走代理 | 按**别人的**约束测；改 golden 前先答「旧断言为何不会红」；负向对照跑不红就如实改口 |
 | v0.36.0 收尾 (2026-09) | 「Java 族 live 需 Mongo」十个版本的误定性 = vendored 脚本裸 `-jar`；演禽假闸门 | 贴「环境限制」前先读 `Result` 原文、用上游桌面起法起一遍；闸门问项以 live 翻转为准，不以转发为准 |
 | v0.36.0 (2026-09) | 止血/可用性/捞回能力 15 批（响应放大、静默降级、手抄表、死键、降级误杀、扁平面丢键、moira 误排除、闸门半盲、错误码……） | 每批四件套 + 全量门禁；台账正文按批见下 |
@@ -101,6 +101,53 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.38.0 / 2026-09-11 — A5 首跑抓到的产品缺陷：非默认端口下 `runtime stop` 永远停不掉（停脚本拿的是裸 os.environ）
+
+- **症状**：本机跑 `verify_runtime_live.py`（`HOROSA_LOCAL_BACKEND_PORT=19999` / `HOROSA_LOCAL_CHART_PORT=18899`）：install / doctor /
+  start / 四引擎 / 四客户端 setup 全绿，`runtime stop` 退出 0、结果 `ok: false`、状态卡 `stop_requested`，两个端口照样在听——
+  Java 与 Python 服务留在机器上（本次按 PID 手动清掉）。
+- **根因**：上游停脚本按 **端口命名的 pid 文件** 找进程（`.horosa_py.<CHART_PORT>.pid` / `.horosa_java.<BACKEND_PORT>.pid`，
+  `CHART_PORT="${HOROSA_CHART_PORT:-8899}"`）。启动路径给启动器传了 `HOROSA_SERVER_PORT` / `HOROSA_CHART_PORT`，停路径却传裸
+  `os.environ` → 停脚本去找 8899 / 9999 的 pid 文件 → "not running (pid file missing)" → 什么都没杀。v0.37.0 的
+  `runtime stop` 测试全是 stub 脚本，端口一致性从没被断言；默认端口下两边恰好一致，所以维护机上永远绿——
+  `HOROSA_PORTS=auto`、显式改端口、矩阵 lane 三种真实用法全中招。
+- **guard**：`manager._launcher_env()` 单一来源（端口 + HOME 族），start 与 stop 都用它；
+  `tests/test_runtime_manager.py::test_stop_passes_the_same_ports_as_start_to_the_stop_script`（旧代码必红）；
+  `verify_runtime_live.py` 的 stop 步骤给 60 s 宽限后仍要求端口释放、状态清空，并把 stop 的原始结果带进 lane 报告。
+- **法则**：**起与停必须同源同环境**（端口、HOME、身份口令以外的一切），谁改启动器 env 就同一 change 改停脚本 env；
+  只用 stub 测过的生命周期操作，在真机 lane 上跑一遍才算数。
+
+### v0.38.0 / 2026-09-11 — A5 托管流水线 + 真机矩阵：「CI 起不了 runtime」是旧时代的规则，发布从此 draft → 派生 → 三台真机 → [OK] 才公开
+
+- **症状**：① 发布靠 `publish_darwin_release.sh --publish` 先发一个 darwin-only 清单的**公开** release，Windows 半由构建机人肉补传——
+  中间那段时间每一次 Windows install 都 404，「缺半」台账记了六个版本；② `release.yml` 挂 `runs-on: self-hosted` 而仓库从未注册过
+  runner，20 次 tag 触发排队 24 h 后被取消、零 step 执行，attestation / SBOM 都是纸面覆盖；③ 「CI 起不了 runtime」写进 AGENTS §7 的
+  年代只有 Linux runner，如今 macos-latest（arm64）/ windows-latest / windows-11-arm 都是现成的真机，但从未有一条流水线在它们上
+  装过、起过、调过 runtime——发布是否真的能装能跑，只在维护者一台 Mac 上成立过。
+- **guard**：① `scripts/publish_release.sh`（改名自 publish_darwin_release.sh）：无参只构建校验；`--draft` 把 seed / .mcpb / wheel / SBOM
+  放上 **draft** release，**永不上清单、永不建公开 release**（`--publish` 已删除并报错指路）；`--dispatch` 触发流水线并 `gh run watch`。
+  ② `.github/workflows/release-runtime.yml`（仅 dispatch，owner 守卫，并发组按版本）：`resolve`（draft 上必须有 seed；非 dry run
+  的 release 必须仍是 draft）→ `build-windows`（windows-latest 缓存钉版本工具链，`build_runtime_release_windows.py --seed`）→
+  `assemble`（`verify_runtime_python_lock --seed`、`generate_release_manifest --url-base <tag>`、SHA256SUMS、SBOM、
+  `verify_runtime_release --expect-platforms darwin-arm64,win32-x64`，artifact `runtime-release-assets`，非 dry run 才上 draft +
+  `attest-build-provenance`）→ `matrix`（workflow_call）→ `publish`（`inputs.publish && !dry_run && matrix 绿或跳过`：
+  `sync_windows_release.py --check --tag vX --draft` 必 [OK] → `gh release edit --draft=false --latest` → 再 `--check`）。
+  ③ `.github/workflows/runtime-matrix.yml`（workflow_call + dispatch + 每周一对公开 latest；**绝不挂 push/PR**）三 lane：
+  macos-latest→darwin-arm64、windows-latest→win32-x64、windows-11-arm→win32-arm64（装 win32-x64，x64 CPython 让依赖全有 wheel、
+  也正是用户 x64 Python 的形态）；ARM lane `continue-on-error: ${{ inputs.arm_nonblocking != false }}`；失败也上传 lane 报告 /
+  doctor 快照 / launcher.log / `.horosa-local-logs`。④ `scripts/verify_runtime_live.py`（纯 Python 驱动 CLI 子进程，JSON + 退出码）：
+  `--assets-dir` 把清单 URL 本地化成 file://（draft / dry run 时 tag URL 还不存在，但 ARM 回退仍走清单路径）→ install（断言
+  `platform` / `platform_fallback` 与 lane 期望一致）→ doctor（installed / platform_supported / payload_platform / emulated / files）→
+  `runtime start` + 轮询 doctor（issues==[]、双端点可达、**chart-only 降级即失败**）→ chart / qimen / nongli_time / bazi_birth
+  （ok、段非空、`missing_selected_sections==[]`、`technique_card.compute.matches_declaration`）→ `setup --client` 四客户端（写配置 →
+  回读 → 真 stdio 探测）→ live pytest（`HOROSA_*_SERVER_ROOT` / `HOROSA_NODE_BIN` 指向已装 runtime，`-rs` 输出里闸门 skip 理由
+  不得出现）→ `runtime stop`（端口释放、状态清空）；纯函数由 `tests/test_verify_runtime_live.py` 负向对照。⑤ 形状锁
+  `tests/test_release_pipeline_shape.py`（只手动触发 / 不 `gh release create` / publish 必 needs matrix 且先 [OK] / 矩阵不挂 push /
+  三 runner / ARM 由输入控制 / 旧 release.yml 与 publish_darwin_release.sh 不复活）；`test_guard_wiring.RUNNERS` 收录两条新
+  workflow 与 publish_release.sh（`verify_runtime_live.py` 由矩阵调用，不再是孤儿守卫）。
+- **法则**：**清单只在两平台齐了才上 release**；**发布前的真机证据由流水线产出，不由「维护者机器上跑过」代替**；「CI 做不到 X」
+  这类规则要写清时代前提，runner 变了就要重审。
 
 ### v0.38.0 / 2026-09-11 — B6 doctor 的机器条件：码没有人话、长路径与磁盘预检从没测过、quarantine 没人查、「不上外网」只是口头承诺
 

@@ -1,0 +1,103 @@
+"""verify_runtime_live.py 的纯函数（v0.38.0 A5）：矩阵 lane 的判据必须本身可测——负向对照各一。"""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+from pathlib import Path
+
+import pytest
+
+PKG_ROOT = Path(__file__).resolve().parents[1]
+_spec = importlib.util.spec_from_file_location("verify_runtime_live", PKG_ROOT / "scripts" / "verify_runtime_live.py")
+live = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(live)
+
+
+def _envelope(**overrides):
+    base = {
+        "ok": True,
+        "data": {
+            "export_snapshot": {"sections": [{"title": "起盘信息", "body": "…"}], "missing_selected_sections": []},
+            "technique_card": {"compute": {"matches_declaration": True, "declared_engines": ["java"], "measured": "java"}},
+        },
+    }
+    base.update(overrides)
+    return base
+
+
+def test_engine_result_accepts_a_healthy_envelope() -> None:
+    assert live.check_engine_result("nongli_time", _envelope()) == []
+
+
+def test_engine_result_rejects_failure_empty_sections_missing_sections_and_engine_mismatch() -> None:
+    assert live.check_engine_result("x", _envelope(ok=False, error={"code": "tool.internal_error", "message": "boom"}))[0].startswith("x: ok=False")
+    empty = _envelope(); empty["data"]["export_snapshot"]["sections"] = []
+    assert any("sections is empty" in p for p in live.check_engine_result("x", empty))
+    missing = _envelope(); missing["data"]["export_snapshot"]["missing_selected_sections"] = ["八宫详解"]
+    assert any("missing_selected_sections" in p for p in live.check_engine_result("x", missing))
+    mismatch = _envelope(); mismatch["data"]["technique_card"]["compute"]["matches_declaration"] = False
+    assert any("matches_declaration=False" in p for p in live.check_engine_result("x", mismatch))
+    # techniques without a declared engine set report None (chart / nongli_time / bazi_birth on a real runtime) — not a failure
+    undeclared = _envelope(); undeclared["data"]["technique_card"]["compute"] = {"matches_declaration": None, "declared_engines": [], "measured": {}}
+    assert live.check_engine_result("x", undeclared) == []
+    no_card = _envelope(); no_card["data"].pop("technique_card")
+    assert any("technique_card missing" in p for p in live.check_engine_result("x", no_card))
+
+
+def test_doctor_ready_requires_both_endpoints_and_no_degrade() -> None:
+    ready = {"installed": True, "platform_supported": True, "issues": [], "degraded": None,
+             "endpoints": [{"label": "java_backend", "reachable": True}, {"label": "python_chart", "reachable": True}]}
+    assert live.doctor_ready(ready) == []
+    chart_only = dict(ready, issues=["services:java_backend_not_running"], degraded="chart_only",
+                      endpoints=[{"label": "java_backend", "reachable": False}, {"label": "python_chart", "reachable": True}])
+    problems = live.doctor_ready(chart_only)
+    assert any("chart-only is a failure" in p for p in problems) and any("java_backend not reachable" in p for p in problems)
+    assert "not installed" in live.doctor_ready({"installed": False, "issues": [], "endpoints": []})
+
+
+def test_forbidden_skips_catch_live_gates_that_never_ran() -> None:
+    output = (
+        "SKIPPED [12] tests/test_local_js_tools.py:94: live gates only run against an explicitly named instance — export …\n"
+        "SKIPPED [1] tests/test_ports.py:10: powershell.exe not on PATH\n"
+        "SKIPPED [3] tests/test_local_js_tools.py:94: Horosa runtime unusable — chart http://127.0.0.1:8899 (java_routes_dead)\n"
+        "900 passed, 16 skipped in 80.0s\n"
+    )
+    hits = live.forbidden_skips(output)
+    assert len(hits) == 2 and all("test_local_js_tools" in h for h in hits)
+    assert live.forbidden_skips("SKIPPED [1] tests/test_ports.py:10: powershell.exe not on PATH\n") == []
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        ("905 passed, 72 skipped, 1 warning in 87.11s (0:01:27)", {"passed": 905, "failed": 0, "error": 0, "skipped": 72}),
+        ("2 failed, 900 passed, 3 skipped in 10s", {"passed": 900, "failed": 2, "error": 0, "skipped": 3}),
+        ("1 error, 5 passed in 1s", {"passed": 5, "failed": 0, "error": 1, "skipped": 0}),
+        ("no summary here", {"passed": 0, "failed": 0, "error": 0, "skipped": 0}),
+    ],
+)
+def test_pytest_summary_parses_the_final_line(line: str, expected: dict) -> None:
+    assert live.pytest_summary("noise\n" + line + "\n") == expected
+
+
+def test_localize_manifest_points_urls_at_local_archives_and_keeps_hashes(tmp_path: Path) -> None:
+    (tmp_path / "horosa-runtime-darwin-arm64-v1.tar.gz").write_bytes(b"a")
+    (tmp_path / "horosa-runtime-win32-x64-v1.zip").write_bytes(b"b")
+    manifest = {"version": "1", "platforms": {
+        "darwin-arm64": {"url": "https://github.com/x/y/releases/download/v1/horosa-runtime-darwin-arm64-v1.tar.gz", "sha256": "aa", "size": 1},
+        "win32-x64": {"url": "https://github.com/x/y/releases/download/v1/horosa-runtime-win32-x64-v1.zip", "sha256": "bb", "size": 1},
+    }}
+    localized = live.localize_manifest(manifest, tmp_path)
+    assert localized["platforms"]["darwin-arm64"]["url"].startswith("file://")
+    assert localized["platforms"]["darwin-arm64"]["sha256"] == "aa" and localized["platforms"]["win32-x64"]["size"] == 1
+    assert manifest["platforms"]["darwin-arm64"]["url"].startswith("https://"), "input untouched"
+    (tmp_path / "horosa-runtime-win32-x64-v1.zip").unlink()
+    with pytest.raises(FileNotFoundError):
+        live.localize_manifest(manifest, tmp_path)
+
+
+def test_engine_cases_carry_the_gate_confirmation_and_cover_three_engine_families() -> None:
+    assert set(live.ENGINE_CASES) == {"chart", "qimen", "nongli_time", "bazi_birth"}
+    assert live.CONFIRM["agent_confirmed_settings"] is True and live.CONFIRM["clarification_notes"]
+    assert set(live.CLIENTS) == {"claude-code", "codex", "cursor", "claude-desktop"}

@@ -1618,6 +1618,40 @@ def test_start_refuses_an_unidentifiable_holder_unless_trusted(tmp_path: Path, m
     assert result["already_running"] is True
 
 
+def test_stop_passes_the_same_ports_as_start_to_the_stop_script(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """🔴 停脚本按 `.horosa_py.<CHART_PORT>.pid` 找进程：端口不一致 = 找不到 pid 文件 = 服务永远停不掉。
+
+    v0.38.0 A5 真机 lane 首跑（HOROSA_LOCAL_*_PORT=19999/18899）抓到：`runtime stop` 退出 0、状态卡 stop_requested、
+    两个端口照样在听——停脚本拿到的是裸 os.environ，去找 8899/9999 的 pid 文件。负向对照：旧代码下本用例必红。
+    """
+    manager = _manager_with_runtime(tmp_path)
+    manager.settings.local_backend_port = 19999
+    manager.settings.local_chart_port = 18899
+    monkeypatch.delenv("HOROSA_SERVER_PORT", raising=False)
+    monkeypatch.delenv("HOROSA_CHART_PORT", raising=False)
+    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest, endpoints=None: _endpoints(verdict="ours", reachable=True))
+    monkeypatch.setattr(manager, "_wait_for_service_state", lambda **kw: {"ready": True, "endpoints": _endpoints(verdict="ours", reachable=False)})
+    seen: dict[str, object] = {}
+
+    class _Done:
+        returncode = 0
+        stdout = "stopped"
+        stderr = ""
+
+    def fake_run(command, **kwargs):
+        seen["command"] = command
+        seen["env"] = kwargs.get("env") or {}
+        return _Done()
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = manager.stop_local_services()
+
+    assert result["ok"] is True
+    assert seen["env"]["HOROSA_SERVER_PORT"] == "19999" and seen["env"]["HOROSA_CHART_PORT"] == "18899"
+    assert seen["env"].get("HOME"), "停脚本与启动器同一个 HOME（pid 文件与日志目录都在它下面）"
+
+
 def test_stop_refuses_services_we_did_not_start(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """只有 app 标记不算「我们的」—— 停下去可能关掉用户正在用的星阙桌面端。"""
     manager = _manager_with_runtime(tmp_path)

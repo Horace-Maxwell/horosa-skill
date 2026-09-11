@@ -97,7 +97,8 @@ Do not treat these three locations as interchangeable.
 
 > **v0.38.0 (A2)**: the Windows payload is now **derived from the darwin-arm64 seed** —
 > `python horosa-skill/scripts/build_runtime_release_windows.py --seed dist/runtime/horosa-runtime-darwin-arm64-v<ver>.tar.gz`
-> runs on any host (the release pipeline runs it on GitHub's `windows-latest`). The platform-independent tree comes from the seed;
+> runs on any host (`release-runtime.yml` runs it on GitHub's `windows-latest`, then `runtime-matrix.yml` installs the result on
+> macos-latest / windows-latest / windows-11-arm and boots it — v0.38.0 A5). The platform-independent tree comes from the seed;
 > JDK / Node / embedded CPython 3.12 come from the pins in `contracts/runtime_toolchain.json`; the Python dep set is
 > `contracts/runtime_python_lock.json` (seed-derived; pyswisseph and sxtwl are built from sdist on the Windows runner because PyPI
 > ships no cp312 Windows wheels). The vendor mode described below is the Windows-box fallback only.
@@ -158,5 +159,7 @@ For the embedded payload manifest, see [`RUNTIME_MANIFEST_SPEC.md`](./RUNTIME_MA
   pyproject 版本 == release tag。
 - wheel **不含** `horosa-core-js`：它随离线 runtime payload 分发（manifest `artifacts.horosa_core_js_root`），
   `HOROSA_CORE_JS_ROOT` 可覆盖；源码树回退只在 checkout 里有效。
-- 发布顺序：tag → `publish_darwin_release.sh --publish`（创建 Release）→ publish-pypi 自动跑 → 构建机补 Windows 半 →
-  `sync_windows_release.py --check` [OK] → `uvx horosa-skill --version` 烟测。
+- 发布顺序（v0.38.0 A5）：tag → `publish_release.sh --draft --dispatch`（draft + 触发 `release-runtime.yml`：派生 Windows 半、
+  双平台清单、真机矩阵）→ `sync_windows_release.py --check --tag vX --draft` [OK] → `gh workflow run release-runtime.yml
+  -f version=X -f publish=true`（转公开；publish-pypi 随 published 事件自动跑）→ `--check` 公开 latest →
+  `uvx --from <wheel URL> horosa-skill --version` 烟测。

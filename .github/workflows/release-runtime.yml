@@ -1,0 +1,246 @@
+name: release-runtime
+
+# v0.38.0 A5: the hosted release pipeline. The maintainer's Mac builds only the darwin-arm64 seed (plus wheel /
+# .mcpb / SBOM) and puts it on a DRAFT release (`publish_release.sh --draft`). This workflow then:
+#   resolve        — the draft (or, for dry runs, the public release) carries the seed
+#   build-windows  — windows-latest derives the win32-x64 payload from the seed (build_runtime_release_windows.py --seed)
+#   assemble       — dual-platform manifest (tag-pinned URLs + size), SHA256SUMS, SBOM, release verifier, provenance
+#                    attestation; uploads to the draft — the manifest reaches the release only with BOTH halves
+#   matrix         — runtime-matrix.yml installs the assembled assets on three real machines and runs the runtime
+#   publish        — sync_windows_release.py --check on the draft must say [OK]; only then `gh release edit --draft=false --latest`
+# This closes the "half a release" window for good: nothing public ever lacks its Windows half or its manifest.
+#
+# Dispatch-only. `dry_run=true` seeds from the PUBLIC assets of <version> and never uploads or publishes — the
+# acceptance run for this pipeline itself (AGENTS.md §7).
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version X.Y.Z (tag v<version>); must equal pyproject unless dry_run"
+        required: true
+        type: string
+      publish:
+        description: "Flip the draft to a public latest release after the checks (never with dry_run)"
+        type: boolean
+        default: false
+      run_matrix:
+        description: "Run the real-machine runtime matrix on the assembled assets"
+        type: boolean
+        default: true
+      arm_nonblocking:
+        description: "Windows-on-ARM lane is advisory (continue-on-error)"
+        type: boolean
+        default: true
+      dry_run:
+        description: "Seed from the public release assets of <version>; build + verify + matrix only, no upload, no publish"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-runtime-${{ inputs.version }}
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  resolve:
+    if: github.repository_owner == 'Horace-Maxwell'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.info.outputs.tag }}
+      seed: ${{ steps.info.outputs.seed }}
+      windows_zip: ${{ steps.info.outputs.windows_zip }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve tag, seed asset, and the release's draft state
+        id: info
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ inputs.version }}"
+          TAG="v${VERSION}"
+          PYPROJECT_VERSION="$(python3 -c 'import tomllib,pathlib; print(tomllib.loads(pathlib.Path("horosa-skill/pyproject.toml").read_text())["project"]["version"])')"
+          if [ "${{ inputs.dry_run }}" != "true" ] && [ "${PYPROJECT_VERSION}" != "${VERSION}" ]; then
+            echo "::error::pyproject is ${PYPROJECT_VERSION} but the pipeline was asked to release ${VERSION}"; exit 1
+          fi
+          SEED="horosa-runtime-darwin-arm64-${TAG}.tar.gz"
+          INFO="$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft,assets)"
+          IS_DRAFT="$(echo "${INFO}" | python3 -c 'import json,sys; print(str(json.load(sys.stdin)["isDraft"]).lower())')"
+          HAS_SEED="$(echo "${INFO}" | python3 -c "import json,sys; print(any(a['name']=='${SEED}' for a in json.load(sys.stdin)['assets']))")"
+          echo "tag=${TAG} draft=${IS_DRAFT} seed_present=${HAS_SEED}"
+          if [ "${HAS_SEED}" != "True" ]; then
+            echo "::error::${TAG} has no ${SEED} — run publish_release.sh --draft on the maintainer Mac first"; exit 1
+          fi
+          if [ "${{ inputs.dry_run }}" != "true" ] && [ "${IS_DRAFT}" != "true" ]; then
+            echo "::error::${TAG} is already public; the pipeline only fills DRAFT releases (use dry_run=true to exercise it)"; exit 1
+          fi
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "seed=${SEED}" >> "${GITHUB_OUTPUT}"
+          echo "windows_zip=horosa-runtime-win32-x64-${TAG}.zip" >> "${GITHUB_OUTPUT}"
+
+  build-windows:
+    needs: resolve
+    runs-on: windows-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cache pinned toolchain downloads (JDK / Node / embedded CPython)
+        uses: actions/cache@v4
+        with:
+          path: horosa-skill/build/downloads
+          key: runtime-toolchain-${{ hashFiles('horosa-skill/contracts/runtime_toolchain.json') }}
+      - name: Install dependencies
+        working-directory: ./horosa-skill
+        run: uv sync --dev
+      - name: Download the darwin seed from the release
+        working-directory: ./horosa-skill
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          New-Item -ItemType Directory -Force -Path dist\runtime | Out-Null
+          gh release download "${{ needs.resolve.outputs.tag }}" --repo "$env:GITHUB_REPOSITORY" -p "${{ needs.resolve.outputs.seed }}" -D dist\runtime --clobber
+          Get-ChildItem dist\runtime
+      - name: Derive the win32-x64 payload from the seed (pinned JDK jlink / Node / embedded CPython 3.12; sdists built here)
+        working-directory: ./horosa-skill
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          uv run python scripts/build_runtime_release_windows.py --seed "dist\runtime\${{ needs.resolve.outputs.seed }}" --out-dir dist\runtime
+          if (-not (Test-Path -LiteralPath "dist\runtime\${{ needs.resolve.outputs.windows_zip }}")) { throw "derived archive missing: ${{ needs.resolve.outputs.windows_zip }}" }
+      - name: Upload the derived Windows payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-payload
+          path: horosa-skill/dist/runtime/${{ needs.resolve.outputs.windows_zip }}
+          if-no-files-found: error
+          compression-level: 0
+
+  assemble:
+    needs: [resolve, build-windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        working-directory: ./horosa-skill
+        run: uv sync --dev
+      - name: Collect both halves (seed from the release, Windows payload from build-windows)
+        working-directory: ./horosa-skill
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/runtime
+          gh release download "${{ needs.resolve.outputs.tag }}" --repo "${GITHUB_REPOSITORY}" -D dist/runtime --clobber \
+            -p "${{ needs.resolve.outputs.seed }}" -p '*.mcpb' -p '*.whl' || true
+          test -f "dist/runtime/${{ needs.resolve.outputs.seed }}"
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-payload
+          path: horosa-skill/dist/runtime
+      - name: Verify the seed-derived Python lock against the seed
+        working-directory: ./horosa-skill
+        run: uv run python scripts/verify_runtime_python_lock.py --seed "dist/runtime/${{ needs.resolve.outputs.seed }}"
+      - name: Dual-platform manifest (tag-pinned URLs + size), SHA256SUMS, SBOM
+        working-directory: ./horosa-skill
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ needs.resolve.outputs.tag }}"
+          VERSION="${TAG#v}"
+          uv run python scripts/generate_release_manifest.py \
+            --version "${VERSION}" \
+            --darwin-archive "dist/runtime/${{ needs.resolve.outputs.seed }}" \
+            --windows-archive "dist/runtime/${{ needs.resolve.outputs.windows_zip }}" \
+            --url-base "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}" \
+            --output dist/runtime/runtime-manifest.json
+          ( cd dist/runtime && sha256sum "${{ needs.resolve.outputs.seed }}" "${{ needs.resolve.outputs.windows_zip }}" $(ls *.mcpb *.whl 2>/dev/null || true) > SHA256SUMS.txt && cat SHA256SUMS.txt )
+          uv run python scripts/generate_sbom.py --project-root . --runtime-manifest dist/runtime/runtime-manifest.json --output dist/runtime/horosa-skill-sbom.json
+      - name: Verify the release set (entries, embedded manifests, native arch, size, exact platform set)
+        working-directory: ./horosa-skill
+        run: |
+          uv run python scripts/verify_runtime_release.py \
+            --darwin-archive "dist/runtime/${{ needs.resolve.outputs.seed }}" \
+            --windows-archive "dist/runtime/${{ needs.resolve.outputs.windows_zip }}" \
+            --manifest dist/runtime/runtime-manifest.json \
+            --expect-platforms darwin-arm64,win32-x64
+      - name: Upload the assembled release set (the matrix installs from this)
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-release-assets
+          if-no-files-found: error
+          compression-level: 0
+          path: |
+            horosa-skill/dist/runtime/${{ needs.resolve.outputs.seed }}
+            horosa-skill/dist/runtime/${{ needs.resolve.outputs.windows_zip }}
+            horosa-skill/dist/runtime/runtime-manifest.json
+            horosa-skill/dist/runtime/SHA256SUMS.txt
+            horosa-skill/dist/runtime/horosa-skill-sbom.json
+      - name: Upload the Windows half, manifest, SHA256SUMS and SBOM to the draft (not on dry runs)
+        if: ${{ !inputs.dry_run }}
+        working-directory: ./horosa-skill
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "${{ needs.resolve.outputs.tag }}" --repo "${GITHUB_REPOSITORY}" --clobber \
+            "dist/runtime/${{ needs.resolve.outputs.windows_zip }}" \
+            dist/runtime/runtime-manifest.json dist/runtime/SHA256SUMS.txt dist/runtime/horosa-skill-sbom.json
+      - name: Attest build provenance (archives + manifest; the step release.yml never got to run)
+        if: ${{ !inputs.dry_run }}
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            horosa-skill/dist/runtime/${{ needs.resolve.outputs.seed }}
+            horosa-skill/dist/runtime/${{ needs.resolve.outputs.windows_zip }}
+            horosa-skill/dist/runtime/runtime-manifest.json
+            horosa-skill/dist/runtime/SHA256SUMS.txt
+
+  matrix:
+    needs: [resolve, assemble]
+    if: ${{ inputs.run_matrix }}
+    uses: ./.github/workflows/runtime-matrix.yml
+    with:
+      source: artifact
+      artifact_name: runtime-release-assets
+      arm_nonblocking: ${{ inputs.arm_nonblocking }}
+    secrets: inherit
+
+  publish:
+    needs: [resolve, assemble, matrix]
+    # runs only when asked, never on dry runs, and only after assemble succeeded and the matrix passed (or was skipped)
+    if: ${{ !cancelled() && inputs.publish && !inputs.dry_run && needs.assemble.result == 'success' && (needs.matrix.result == 'success' || needs.matrix.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        working-directory: ./horosa-skill
+        run: uv sync --dev
+      - name: The draft must be complete before it goes public (the [GAP]/[OK] verdict is authoritative)
+        working-directory: ./horosa-skill
+        run: uv run python scripts/sync_windows_release.py --check --tag "${{ needs.resolve.outputs.tag }}" --draft
+      - name: Publish the draft as latest
+        run: gh release edit "${{ needs.resolve.outputs.tag }}" --repo "${GITHUB_REPOSITORY}" --draft=false --latest
+      - name: Re-check the public latest
+        working-directory: ./horosa-skill
+        run: uv run python scripts/sync_windows_release.py --check

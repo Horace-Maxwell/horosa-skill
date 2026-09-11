@@ -26,6 +26,10 @@ SCRIPTS = PKG_ROOT / "scripts"
 # to be in one of these, or it is decoration.
 RUNNERS = (
     REPO_ROOT / ".github/workflows/ci.yml",
+    # v0.38.0 A5：托管发布流水线与真机矩阵也是守卫的运行者（verify_runtime_live / verify_runtime_python_lock --seed …）
+    REPO_ROOT / ".github/workflows/release-runtime.yml",
+    REPO_ROOT / ".github/workflows/runtime-matrix.yml",
+    SCRIPTS / "publish_release.sh",
     SCRIPTS / "preflight_release.py",
     SCRIPTS / "sync_windows_release.py",
     SCRIPTS / "build_runtime_release.sh",
@@ -118,7 +122,7 @@ def test_release_asset_contract_is_asserted_not_just_documented() -> None:
     assert ".mcpb" in workflow, "completeness 必须断言 MCPB 包在场"
     sync = (SCRIPTS / "sync_windows_release.py").read_text(encoding="utf-8")
     assert "has_mcpb" in sync, "双平台完整性判据必须把 .mcpb 算进去"
-    publish = (SCRIPTS / "publish_darwin_release.sh").read_text(encoding="utf-8")
+    publish = (SCRIPTS / "publish_release.sh").read_text(encoding="utf-8")
     for step in ("package_runtime_payload.sh", "generate_release_manifest.py", "generate_sbom.py",
                  "build_mcpb.sh", "SHA256SUMS.txt", "verify_runtime_release.py"):
         assert step in publish, f"darwin 半边发布脚本缺步骤：{step}（手打清单必漏）"

@@ -539,14 +539,24 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   `…@主机名.local` 占位串（git 只在 commit 那刻才猜，作者串错了 GitHub 不归属任何账号）→ 阻断；
   ② fetch 后 `HEAD..origin/main` 非空（另一台机器的工作会被本次发布落下；此闸首跑当天就抓到
   构建机推的一个 commit）→ 阻断，离线 fetch 失败只警告。`git branch -u origin/main` 保持配置。
+- **发布 = draft → 托管派生 → 真机矩阵 → [OK] 才转公开（v0.38.0 A5）。** 维护机只做 seed：`scripts/publish_release.sh`
+  （payload → darwin manifest（本地校验用）→ **SBOM** → MCPB → **wheel** → SHA256SUMS → verify；`--draft` 把 seed / .mcpb /
+  wheel / SBOM 放上 **draft** release，**永不上清单、永不建公开 release**；`--dispatch` 触发 `release-runtime.yml`）。
+  流水线：`resolve`（draft 上有 seed）→ `build-windows`（windows-latest `build_runtime_release_windows.py --seed`）→
+  `assemble`（`verify_runtime_python_lock --seed`、双平台清单钉 tag + size、`verify_runtime_release --expect-platforms`、
+  SHA256SUMS、SBOM、上 draft、`attest-build-provenance`）→ `matrix`（`runtime-matrix.yml` 三台真机装→起→四引擎→
+  `setup` 四客户端→live pytest→停）→ `publish`（`sync_windows_release.py --check --tag vX --draft` 必 `[OK]` →
+  `gh release edit --draft=false --latest` → 再 `--check` 公开 latest）。**清单只在两平台齐了才上到 release**——「缺半」
+  窗口从根上消灭；`dry_run=true` 以公开资产为 seed 走完全程不上传（流水线自己的验收）。形状锁
+  `tests/test_release_pipeline_shape.py`（只手动触发 / 不 `gh release create` / publish 必 needs matrix / draft 不带清单）。
 - **发布步骤只允许以脚本形态存在**（v0.27.0：SBOM 生成器一直在仓里、却因发布流程是手打清单而漏传）：
-  mac 半边一律走 `scripts/publish_darwin_release.sh`（payload → darwin manifest → **SBOM** → MCPB → **wheel** →
-  SHA256SUMS → verify → `--publish` 才上传；无 `--publish` 是安全默认）。资产契约由
+  维护机半边一律走 `scripts/publish_release.sh`（步骤见上；无参数是安全默认，只构建校验）。资产契约由
   `release-completeness.yml` 断言（manifest 双平台 + 两包可达 + **SBOM 在场** + **`.mcpb` 在场**）。
   `.mcpb` 是 Claude Desktop 的一键安装包（`scripts/build_mcpb.sh`：validate → pack → sha256），
   它的 sha 要回填进 `server.json` 的 mcpb package —— 那条 URL 必须指向**当前**版本的 tag，
   否则升级后客户端装到的还是旧包（`verify_server_json.py` 逐个 package 查，不只查第一个）。
-  Windows 半边不变：构建机 `sync_windows_release.py --upload`，判据 `--check` 的 `[GAP]`/`[OK]`。
+  Windows 半边由流水线派生；构建机 vendor 模式 `sync_windows_release.py --upload` 只是托管路径不可用时的后手，
+  判据始终是 `--check` 的 `[GAP]`/`[OK]`。
 - **发 tag 前必须在有上游 checkout 的机器上跑 `scripts/preflight_release.py`**（`HOROSA_SOURCE_ROOT`
   指向 Horosa-Public）。跨树两闸（`verify_upstream_sync --require-upstream`、
   `verify_export_section_baseline --source upstream --require-upstream`）**只有那里能做真**——
@@ -596,9 +606,11 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 - **首诊命令**：`gh release view vX.Y.Z --json assets`（应见 darwin tar.gz + win32 zip +
   runtime-manifest.json + SHA256SUMS.txt）+ 确认 `releases/latest/download/runtime-manifest.json` 同时含
   `darwin-arm64` 与 `win32-x64`。
-- **CI 起不了 runtime**（GitHub Linux runner 无 Linux 运行时；Linux PR 已拒；runtime macOS/Windows-only
-  且 gitignore）：别造「boot runtime」假 job。CI 网 = 离线 FakeClient 契约 + export-fixture 契约 +
-  horosa-core-js JS golden；**全套 live 在本机 vendored 实例发布前跑**（§8）。
+- **托管 runner 可以起 runtime——但只在 `release-runtime.yml` / `runtime-matrix.yml`，绝不在逐 push 的 `ci.yml`**
+  （v0.38.0 A5 改写；此前的「CI 起不了 runtime」写于只有 Linux runner 的时代）。`ci.yml` 仍是离线 FakeClient 契约 +
+  export-fixture 契约 + core-js JS golden，别在它里面造「boot runtime」job；真机证据来自矩阵三 lane
+  （macos-latest / windows-latest / windows-11-arm，`scripts/verify_runtime_live.py`：chart-only 降级在任何 lane 都算失败，
+  live pytest 的闸门 skip 理由不得出现）。**维护者本机 live 全套仍是 tag 前闸**（§8），矩阵是发布前的第二道、每周一次的第三道。
 - **合并后查冲突标记**：每次 fetch/ff 后 `git grep -nE '^(<<<<<<<|=======|>>>>>>>)'`（v0.11.0 曾把
   `>>>>>>> <sha>` 留上 main）；`verify_docs_sync.py` 在 CI 里也查。
 
@@ -697,6 +709,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | Windows 首次启动弹防火墙 / `doctor` 报 `listener:not_loopback_only` | 旧模板起 Java 没钉 `--server.address=127.0.0.1`，绑在 0.0.0.0 | 升级 horosa-skill 后 `runtime restart` 重套模板（每次 start 都会重拷 `.ps1`）；`doctor.listener_scope` 应变为 `loopback_only: true` |
 | Windows 用户名带空格（`C:\Users\John Doe`）时 chart/Java 都起不来，`.horosa-local-logs` 里 python 报找不到文件 | 旧模板 `-ArgumentList` 路径元素没引号，被拆成两段 | 升级后 `runtime restart`；判据 = `tests/test_runtime_launcher_templates.py` 的引号断言（v0.38.0 B1） |
 | Codex 里 horosa 一堆报错 / 首轮看不到工具 | 多半是 `startup_timeout_sec`/`tool_timeout_sec` 没写（Codex 默认 10 s/60 s，冷启动与择日扫描都超） | `horosa-skill client check --client codex`（v0.38.0 起缺省也报 `codex_*_timeout_missing`）；重跑 `client config --format codex --write ~/.codex/config.toml` |
+| 改了端口（`HOROSA_PORTS=auto` / `HOROSA_LOCAL_*_PORT`）后 `runtime stop` 退出 0 却 `ok: false`、状态 `stop_requested`、端口仍在听 | 停脚本按端口命名的 pid 文件找进程，此前拿的是裸 os.environ（找默认端口的文件） | v0.38.0 起 start/stop 共用 `_launcher_env()`；升级后 `runtime stop` 即生效；残留进程按 PID 停（`lsof -nP -iTCP:<port> -sTCP:LISTEN`，永不 `pkill -f`） |
 | `doctor` 报 `quarantine:runtime_binaries` / macOS 首次起 runtime 失败且无日志 | 浏览器下载的归档解出的 python / java / node 带 `com.apple.quarantine`，Gatekeeper 首次执行拦下 | 跑报告 `quarantine.fix` 给的 `xattr -dr com.apple.quarantine <current>`，再 `runtime restart`（只报不改，v0.38.0 B6） |
 | 看不懂 doctor 的码 / agent 把 issue 码原样甩给用户 | 码是给脚本的 | `doctor --explain`（stderr 6–10 行人话，stdout 仍纯 JSON）；报告 `advice[]` 每码一句 `user_summary` + `next_action`（码表 `cli._DOCTOR_ADVICE` 与 `manager.DOCTOR_ISSUE_CODES` 锁步） |
 | Windows 装到 OneDrive / 长用户名下 `runtime.install_long_path` | 最深载荷条目近 200 字符 + 安装临时目录 | `doctor.windows.headroom_chars`（按 `.hi-XXXXXXXX/x/` 前缀估，v0.38.0 起比旧 `.horosa-install-…/extract/` 多约 20 字符）为负即会拒：`HOROSA_RUNTIME_ROOT=C:\horosa` 或 `LongPathsEnabled=1` |
@@ -715,6 +728,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 A global stability pass hardened these; keep them true when you touch the relevant code:
 
+- **起与停同源同环境（v0.38.0 A5 真机 lane 首跑抓到）。** 启动器与停脚本的 env 只从 `manager._launcher_env()` 出
+  （`HOROSA_SERVER_PORT` / `HOROSA_CHART_PORT` / HOME 族）——上游停脚本按端口命名的 pid 文件找进程，端口不一致 =
+  永远停不掉、状态卡 `stop_requested`。守卫 `test_stop_passes_the_same_ports_as_start_to_the_stop_script`；
+  生命周期操作只在 stub 上绿过不算数，矩阵 lane 的 stop 步骤要求端口真释放。
 - **doctor 的每个码都要有人话，默认零外网请求（v0.38.0 B6）。** issue 码的真值 = `manager.DOCTOR_ISSUE_CODES`（`missing:*` 前缀族），
   warning 码 = `cli._DOCTOR_WARNING_CODES`；`cli._DOCTOR_ADVICE` 逐码给 `user_summary` + `next_action`，报告 `advice[]` 与 `--explain`
   都从它出。`tests/test_doctor_machine_conditions.py` 扫 `doctor()` 源码里新增的 `issues.append("…")` 字面量——不登记必红。

@@ -1,0 +1,157 @@
+name: runtime-matrix
+
+# v0.38.0 A5: real-machine proof that an installed runtime works — on the three hosts a release claims to
+# support: Apple Silicon (darwin-arm64), Windows x64, and Windows on ARM (which installs the win32-x64 payload
+# under emulation). Each lane installs → doctor → starts the runtime → calls chart / qimen / nongli_time /
+# bazi_birth → runs `setup --client …` for four clients (config → re-read → real stdio probe) → runs the live
+# pytest suite against the running endpoints → stops. A chart-only degrade (dead Java backend) fails the lane.
+#
+# Never on push / pull_request (a runtime boot per push would be minutes of hosted-runner time for nothing):
+# `workflow_call` from release-runtime.yml (installing from the assembled artifact, before anything is public),
+# manual dispatch against a published release, and a weekly run against the public latest.
+# The ARM lane is non-blocking (`continue-on-error`) until it has been green on a real release; flip
+# `arm_nonblocking` to false afterwards (AGENTS.md §7).
+
+on:
+  workflow_call:
+    inputs:
+      source:
+        description: "artifact (assembled by release-runtime.yml) or release (download assets from a GitHub release)"
+        type: string
+        required: true
+      artifact_name:
+        type: string
+        default: runtime-release-assets
+      tag:
+        description: "release mode: tag to test (empty = public latest)"
+        type: string
+        default: ""
+      arm_nonblocking:
+        type: boolean
+        default: true
+      skip_pytest:
+        type: boolean
+        default: false
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to test (empty = public latest)"
+        type: string
+        default: ""
+      arm_nonblocking:
+        type: boolean
+        default: true
+      skip_pytest:
+        type: boolean
+        default: false
+  schedule:
+    - cron: "0 3 * * 1" # weekly, Monday 03:00 UTC, against the public latest
+
+permissions:
+  contents: read
+
+jobs:
+  lane:
+    if: github.repository_owner == 'Horace-Maxwell'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            platform: darwin-arm64
+            expect_payload: darwin-arm64
+            emulated: false
+            python_arch: arm64
+          - runner: windows-latest
+            platform: win32-x64
+            expect_payload: win32-x64
+            emulated: false
+            python_arch: x64
+          - runner: windows-11-arm
+            platform: win32-arm64
+            expect_payload: win32-x64
+            emulated: true
+            # x64 CPython on the ARM64 host: every dependency has x64 wheels, and the skill then runs exactly the
+            # way a user with an x64 Python does (PROCESSOR_ARCHITEW6432 → win32-arm64 → win32-x64 payload).
+            python_arch: x64
+    runs-on: ${{ matrix.runner }}
+    # non-blocking ARM lane while the emulation story is young (flip arm_nonblocking=false once it is green on a release)
+    continue-on-error: ${{ matrix.platform == 'win32-arm64' && inputs.arm_nonblocking != false }}
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+      LANE_ROOT: ${{ runner.temp }}/horosa-lane
+      HOROSA_RUNTIME_START_TIMEOUT_SECONDS: "900"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        id: py
+        with:
+          python-version: "3.12"
+          architecture: ${{ matrix.python_arch }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install horosa-core-js deps (lunar-javascript)
+        working-directory: ./horosa-skill/horosa-core-js
+        run: npm ci --omit=dev
+      - name: Install dependencies (the interpreter setup-python provided, so the ARM lane really runs x64)
+        working-directory: ./horosa-skill
+        env:
+          UV_PYTHON: ${{ steps.py.outputs.python-path }}
+        run: uv sync --dev
+      - name: Download assembled assets (artifact mode)
+        if: ${{ inputs.source == 'artifact' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: ${{ runner.temp }}/horosa-assets
+      - name: Download release assets (release mode / dispatch / schedule)
+        if: ${{ inputs.source != 'artifact' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/horosa-assets"
+          TAG="${{ inputs.tag }}"
+          if [ -z "${TAG}" ]; then
+            TAG="$(gh release view --repo "${GITHUB_REPOSITORY}" --json tagName -q .tagName)"
+          fi
+          echo "testing release ${TAG}"
+          gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" -D "${RUNNER_TEMP}/horosa-assets" \
+            -p 'runtime-manifest.json' -p 'horosa-runtime-*'
+          ls -la "${RUNNER_TEMP}/horosa-assets"
+      - name: Live verification (POSIX)
+        if: runner.os != 'Windows'
+        working-directory: ./horosa-skill
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run python scripts/verify_runtime_live.py \
+            --assets-dir "${RUNNER_TEMP}/horosa-assets" \
+            --work-dir "${LANE_ROOT}" \
+            --expect-payload-platform "${{ matrix.expect_payload }}" \
+            ${{ matrix.emulated && '--expect-emulated' || '' }} \
+            ${{ inputs.skip_pytest && '--skip-pytest' || '' }} \
+            --out "${LANE_ROOT}/lane-report.json"
+      - name: Live verification (Windows)
+        if: runner.os == 'Windows'
+        working-directory: ./horosa-skill
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $extra = @()
+          if ('${{ matrix.emulated }}' -eq 'true') { $extra += '--expect-emulated' }
+          if ('${{ inputs.skip_pytest }}' -eq 'true') { $extra += '--skip-pytest' }
+          uv run python scripts/verify_runtime_live.py --assets-dir "$env:RUNNER_TEMP\horosa-assets" --work-dir "$env:LANE_ROOT" --expect-payload-platform "${{ matrix.expect_payload }}" @extra --out "$env:LANE_ROOT\lane-report.json"
+      - name: Upload lane evidence (report, doctor snapshots, launcher + service logs)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-matrix-${{ matrix.platform }}
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/horosa-lane/*.json
+            ${{ runner.temp }}/horosa-lane/pytest.log
+            ${{ runner.temp }}/horosa-lane/runtime/launcher.log
+            ~/.horosa-local-logs/**
