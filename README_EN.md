@@ -53,7 +53,7 @@ License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICEN
 
 ## Current stable baseline
 
-**Current public version: `Horosa Skill 0.37.0` (106 callable tools).**
+**Current public version: `Horosa Skill 0.38.0` (106 callable tools).**
 
 This release line brings the capability surface roughly to parity with the desktop app — and adds a trust stack no other metaphysics tool ships:
 
@@ -296,7 +296,7 @@ Every tool call returns a uniform envelope:
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.37.0",
+  "ok": true, "tool": "qimen", "version": "0.38.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -335,7 +335,7 @@ No checkout needed: **zero-install (no git, no PyPI)** — every release ships a
 straight from its URL; `HOROSA_RUNTIME_MIRROR` rewrites the wheel URL and the runtime URLs alike:
 
 ```bash
-WHL="https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.37.0/horosa_skill-0.37.0-py3-none-any.whl"
+WHL="https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.38.0/horosa_skill-0.38.0-py3-none-any.whl"
 uvx --from "$WHL" horosa-skill install                    # install the offline runtime (same as above)
 uvx --from "$WHL" horosa-skill doctor                     # health check
 uvx --from "$WHL" horosa-skill setup --client cursor       # zero-install one-command onboarding (picks `--launcher uvx-wheel`, writes the wheel URL)

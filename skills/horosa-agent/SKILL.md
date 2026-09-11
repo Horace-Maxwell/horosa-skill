@@ -11,7 +11,7 @@ description: >-
 license: AGPL-3.0-only
 compatibility: Requires the local Horosa Skill MCP server/CLI (Python 3.12 + uv + installed offline runtime)
 metadata:
-  version: "0.37.0"
+  version: "0.38.0"
 ---
 
 # Horosa Skill Agent Guide
@@ -287,16 +287,16 @@ client at hand (`claude-code` / `claude-desktop` / `vscode` / `codex` / `gemini`
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
-uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.37.0/horosa_skill-0.37.0-py3-none-any.whl" horosa-skill setup --client cursor
-uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.37.0/horosa_skill-0.37.0-py3-none-any.whl" horosa-skill selfcheck
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.38.0/horosa_skill-0.38.0-py3-none-any.whl" horosa-skill setup --client cursor
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.38.0/horosa_skill-0.38.0-py3-none-any.whl" horosa-skill selfcheck
 ```
 
 **Windows (PowerShell)**
 
 ```powershell
 irm https://astral.sh/uv/install.ps1 | iex
-uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.37.0/horosa_skill-0.37.0-py3-none-any.whl" horosa-skill setup --client cursor
-uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.37.0/horosa_skill-0.37.0-py3-none-any.whl" horosa-skill selfcheck
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.38.0/horosa_skill-0.38.0-py3-none-any.whl" horosa-skill setup --client cursor
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.38.0/horosa_skill-0.38.0-py3-none-any.whl" horosa-skill selfcheck
 ```
 
 **Source checkout (any OS)**

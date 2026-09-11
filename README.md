@@ -109,7 +109,7 @@ uv run horosa-skill serve        # 🚀 启动本地 MCP（默认 http://127.0.0
 `HOROSA_RUNTIME_MIRROR` 对 wheel 与 runtime 一并生效：
 
 ```bash
-WHL="https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.37.0/horosa_skill-0.37.0-py3-none-any.whl"
+WHL="https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.38.0/horosa_skill-0.38.0-py3-none-any.whl"
 uvx --from "$WHL" horosa-skill install                    # 📦 装离线 runtime（同上）
 uvx --from "$WHL" horosa-skill doctor                     # 🩺 体检
 uvx --from "$WHL" horosa-skill setup --client cursor       # 🪄 零安装一条命令接入（自动选 `--launcher uvx-wheel`，配置里写 wheel URL）
@@ -406,7 +406,7 @@ uv run horosa-skill client check                         # 体检本机各客户
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.37.0",
+  "ok": true, "tool": "qimen", "version": "0.38.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -505,7 +505,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 🎯 HorosaBench | 106 条基准用例与工具注册表锁步 + 盘面事实忠实性评测（喂错盘 / 诱导复述判红的对抗用例全过） |
 | 🗄️ 本地 memory / report | 每次技法调用写 1 条本地 run 记录 + 1 份 JSON artifact |
 | 🔄 GitHub CI | Linux 单测 + JS golden 自检 + Windows OpenClaw smoke（**不覆盖跨树上游校验**——那两闸需要上游 checkout，只能在维护机跑 `preflight_release.py`） |
-| 📦 Release runtime | macOS (arm64) `v0.37.0` 已打包并校验；Windows (x64) 由构建机补传（补传前 win 用户拿到上一版 runtime）；其余平台安装时明确报不支持 |
+| 📦 Release runtime | macOS (arm64) + Windows (x64) `v0.38.0` 已打包并校验——Windows 半从 darwin 种子在托管流水线派生、清单只在两半齐了才上线、三台真机（macOS / Windows x64 / Windows ARM）装起跑过；Windows ARM 自动走 x64 仿真；Intel Mac / Linux 安装时明确报不支持并指向网关模式 |
 
 第一次 clone 后确认非空壳的最小验证：
 
