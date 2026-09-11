@@ -123,6 +123,11 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   ④ 测试同时钉 `os.name`；⑤ `ports._darwin_listener_line`：外端地址 `*.*` 才是监听的签名，状态列不可信（负向对照：CLOSED 行必须
   被认出、已连接行必须被排除）。⑥ **机器闸**：`preflight_release.py` 新增 CI 闸——`gh run list --commit <HEAD>` 的 ci.yml 结论
   必须 success（红 / 未跑 / 进行中都阻断；`gh` 缺席只警告）；`publish_release.sh --draft` 同样先查。
+- **同一轮又追到两条**：⑤ CI 的 `test` job 跑 `verify_error_recovery.py`（双语消息棘轮），本机从没跑过它——`_assert_min_os`
+  与 uvx 缺席两条新消息是英文单语，110 → 112 就红（修：`errors.bilingual`；根治：`scripts/run_ci_gates.py` 把 ci.yml `test` job
+  的 23 条门禁原样在本机跑，`test_guard_wiring` 锁它覆盖每条单行 verify_*）；⑥ windows-smoke 的 qimen `tool run --stdin` 载荷没带
+  `agent_confirmed_settings`，B0 让 step 诚实之后它一直被闸门拒（exit 2）——之前几十轮是被 pwsh 吞掉的；修完又撞 pwsh
+  `ConvertFrom-Json` 默认大小写不敏感（信封里 `xunKong` / `xunkong` 并存直接抛错）→ `-AsHashtable` + `['key']` 取值。
 - **法则**：**推送之后看 CI 结论，红了先修再继续**——本机全绿只证明「在维护机上绿」；**新守卫要在三种 runner（ubuntu /
   windows / macos）的形状下都想一遍**：路径分隔符、行尾、宿主 OS 决定的默认值、系统工具的输出差异。
 
