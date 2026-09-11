@@ -71,6 +71,26 @@ def _listener_lookup_available() -> bool:
     return shutil.which("ss") is not None
 
 
+def _listener_pids_with_patience(port: int, attempts: int = 4) -> list[int]:
+    """托管 runner 在满负载下 netstat 可能慢/暂时空：给几次机会，别把一次抖动当成「查不到持有者」。"""
+    pids: list[int] = []
+    for _ in range(attempts):
+        pids = listener_pids(port)
+        if pids:
+            return pids
+        time.sleep(1.0)
+    return pids
+
+
+def _listener_diagnostics(port: int) -> str:
+    from horosa_skill.runtime import ports as _ports
+
+    tool = "netstat" if (os.name == "nt" or sys.platform == "darwin") else "ss"
+    raw = _ports._run(["netstat", "-anv", "-p", "tcp"] if sys.platform == "darwin" else (["netstat", "-ano", "-p", "TCP"] if os.name == "nt" else ["ss", "-lntp"]))
+    matching = [line for line in raw.splitlines() if f".{port}" in line or f":{port}" in line]
+    return f"tool={tool} on PATH={shutil.which(tool)} output_lines={len(raw.splitlines())} lines_with_port={matching[:3]}"
+
+
 def test_listener_pids_finds_a_real_listener(listening_server) -> None:
     """🔴 这条要真跑到才有意义。
 
@@ -80,8 +100,8 @@ def test_listener_pids_finds_a_real_listener(listening_server) -> None:
     if not _listener_lookup_available():
         pytest.skip("本平台的监听查询工具不可用（Linux 需 iproute2 的 ss）")
     port, proc = listening_server
-    pids = listener_pids(port)
-    assert pids, "端口上明明有监听进程，却一个持有者都查不出来"
+    pids = _listener_pids_with_patience(port)
+    assert pids, f"端口上明明有监听进程，却一个持有者都查不出来（{_listener_diagnostics(port)}）"
     # 🔴 断言的是「查得出持有者」，不是「持有者 pid == 我们 spawn 的那个」：Windows 上
     # venv 的 python.exe 可能是个 shim，真正监听的是它 spawn 的子进程（CI 实测 8792 vs 1764）。
     # 产品侧要的能力是「端口上有人、且能拿到它的命令行」，pid 的父子关系不在契约里。
@@ -124,6 +144,8 @@ def test_a_stranger_on_our_port_is_classified_foreign(listening_server, tmp_path
     """
     if not _listener_lookup_available():
         pytest.skip("本平台的监听查询工具不可用（Linux 需 iproute2 的 ss）")
+    # 托管 runner 满负载下第一次查询可能空：先耐心确认查得到持有者，再判归属（否则 unknown 会被误当成 foreign 失败）
+    assert _listener_pids_with_patience(listening_server[0]), f"监听查询空手而归（{_listener_diagnostics(listening_server[0])}）"
     port, _proc = listening_server
     verdict = classify_endpoint(f"http://127.0.0.1:{port}", runtime_root=tmp_path / "runtime")
     assert verdict.verdict == "foreign"

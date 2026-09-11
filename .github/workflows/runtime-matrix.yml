@@ -81,6 +81,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       HOROSA_RUNTIME_START_TIMEOUT_SECONDS: "900"
+      PYTHONIOENCODING: utf-8
+      PYTHONUTF8: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -149,8 +151,9 @@ jobs:
         with:
           name: runtime-matrix-${{ matrix.platform }}
           if-no-files-found: ignore
+          # one root only: mixing runner.temp with `~` made upload-artifact on Windows refuse the whole set
+          # ("rootDirectory … is not a parent directory"); the verifier copies service logs into <lane>/logs itself.
           path: |
             ${{ runner.temp }}/horosa-lane/*.json
             ${{ runner.temp }}/horosa-lane/pytest.log
-            ${{ runner.temp }}/horosa-lane/runtime/launcher.log
-            ~/.horosa-local-logs/**
+            ${{ runner.temp }}/horosa-lane/logs/**

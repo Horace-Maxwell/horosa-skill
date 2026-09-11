@@ -151,6 +151,17 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   显式 `--python` / 本解释器 / `sys.base_prefix` 的解释器（setup-python、uv-managed CPython 都带 pip）/ PATH 上的 python3|python，
   以 `-m pip --version` 为准；workflow 显式传 `--python "$env:pythonLocation\python.exe"`；`test_resolve_pip_python_skips_interpreters_without_pip`。
   另：job 级 `env:` 不能引用 `runner.temp`（dispatch 时解析即报错），只能在 step 里用 `$RUNNER_TEMP`。
+- **第二次 dry run（run 34563086660）——三台真机全部装起跑通**：build-windows 5 min 派生出 Windows 半、assemble 过双平台清单 +
+  verifier；macos-latest / windows-latest / **windows-11-arm（x64 仿真）** 三 lane 都 install → doctor → start → 四引擎 → 四客户端
+  `setup`（真 stdio 探测 116/11/11/116 工具）→ stop 全绿，只剩 live pytest 步骤与报告打印四处 verifier 自己的错：① doctor 的
+  `endpoints[*].url` 带探测路径（`…/common/time`），verifier 原样导出成 `HOROSA_SERVER_ROOT` → 闸门探 `…/common/time/nongli/time`
+  404 → `java_routes_dead`，Java 明明活着的 lane 把全部 Java 族 live 用例 skip 掉（修：`origin_of()` 只取 scheme://host:port）；
+  ② Windows 控制台 cp1252 编不了报告里的中文，`print(json)` 在全部步骤通过之后炸（修：`sys.stdout.reconfigure(utf-8)` +
+  job env `PYTHONIOENCODING`/`PYTHONUTF8`）；③ upload-artifact 在 Windows 上拒绝 `runner.temp` + `~` 混合根（"rootDirectory … is not
+  a parent directory"），证据一份都没传上来（修：verifier 把 launcher.log 与服务日志拷进 `<lane>/logs/`，上传只给一个根）；
+  ④ macOS lane 的 `test_runtime_ports_identity` 两条红：满负载下 `netstat -anv` 超过 `_run` 的 5 s → 空串 → 「查不到持有者」
+  （修：15 s + 用例耐心重试 + 失败信息带诊断）。另把 lane 的 runtime 端口改为非默认 19999/18899（维护者 live 配方同款；
+  默认端口上跑真服务会让假定端口空闲的离线用例误红——AGENTS §8 早有这条）。
 - **法则**：**清单只在两平台齐了才上 release**；**发布前的真机证据由流水线产出，不由「维护者机器上跑过」代替**；「CI 做不到 X」
   这类规则要写清时代前提，runner 变了就要重审。
 

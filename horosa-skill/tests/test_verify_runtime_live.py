@@ -101,3 +101,33 @@ def test_engine_cases_carry_the_gate_confirmation_and_cover_three_engine_familie
     assert set(live.ENGINE_CASES) == {"chart", "qimen", "nongli_time", "bazi_birth"}
     assert live.CONFIRM["agent_confirmed_settings"] is True and live.CONFIRM["clarification_notes"]
     assert set(live.CLIENTS) == {"claude-code", "codex", "cursor", "claude-desktop"}
+
+
+def test_origin_of_strips_the_probe_path() -> None:
+    """首跑真机矩阵：把 `…/common/time` 整个当 HOROSA_SERVER_ROOT 导出，闸门探 `…/common/time/nongli/time` → 404 → java_routes_dead。"""
+    assert live.origin_of("http://127.0.0.1:9999/common/time") == "http://127.0.0.1:9999"
+    assert live.origin_of("http://127.0.0.1:8899") == "http://127.0.0.1:8899"
+    assert live.origin_of("") == ""
+
+
+def test_failed_tests_are_kept_in_the_report() -> None:
+    output = "FAILED tests/test_a.py::test_x - AssertionError\nERROR tests/test_b.py::test_y\n2 failed in 1s\n"
+    assert live.failed_tests(output) == ["FAILED tests/test_a.py::test_x - AssertionError", "ERROR tests/test_b.py::test_y"]
+
+
+def test_pytest_env_carries_origins_and_node_but_not_the_lane_port_overrides(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """本机 lane #3：HOROSA_LOCAL_BACKEND_PORT 漏进 pytest 进程 → `test_auto_ports_avoid_a_held_default` 的 provenance 断言红。"""
+    import argparse
+
+    monkeypatch.setenv("HOROSA_SERVER_ROOT", "http://elsewhere:1")
+    args = argparse.Namespace(work_dir=str(tmp_path), runtime_root=None, data_dir=None, start_timeout=900,
+                              platform=None, backend_port=19999, chart_port=18899)
+    lane = live.Lane(args)
+    lane.endpoints = {"java_backend": "http://127.0.0.1:19999/common/time", "python_chart": "http://127.0.0.1:18899"}
+    lane.node_bin = "/x/node"
+    runtime_env = lane.env()
+    assert runtime_env["HOROSA_LOCAL_BACKEND_PORT"] == "19999" and "HOROSA_SERVER_ROOT" not in runtime_env
+    env = lane.pytest_env()
+    assert env["HOROSA_SERVER_ROOT"] == "http://127.0.0.1:19999" and env["HOROSA_CHART_SERVER_ROOT"] == "http://127.0.0.1:18899"
+    assert env["HOROSA_NODE_BIN"] == "/x/node"
+    assert "HOROSA_LOCAL_BACKEND_PORT" not in env and "HOROSA_LOCAL_CHART_PORT" not in env

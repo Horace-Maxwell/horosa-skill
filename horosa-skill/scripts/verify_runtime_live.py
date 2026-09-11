@@ -28,6 +28,13 @@ from urllib.parse import urlparse
 
 PKG_ROOT = Path(__file__).resolve().parents[1]
 CLI = [sys.executable, "-m", "horosa_skill.surfaces.cli"]
+# Windows consoles default to a code page that cannot encode the Chinese in doctor advice — the first matrix run
+# died printing its own report after every step had passed.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    except (AttributeError, ValueError):
+        pass
 
 # Budgets (seconds): the plan's install 10 / start 15 / engines 5 / pytest 25 minutes.
 BUDGET = {"install": 600, "doctor": 120, "start": 900, "engine": 300, "setup": 600, "pytest": 1500, "stop": 180}
@@ -133,6 +140,25 @@ def pytest_summary(pytest_output: str) -> dict[str, int]:
     return counts
 
 
+def origin_of(url: str) -> str:
+    """`http://127.0.0.1:9999/common/time` → `http://127.0.0.1:9999`.
+
+    Doctor's endpoint URLs include the probe path; the first matrix run exported that whole URL as
+    HOROSA_SERVER_ROOT, so the live gates probed `…/common/time/nongli/time`, saw 404, and skipped every
+    Java-backed test as `java_routes_dead` — on a lane whose Java backend was perfectly healthy.
+    """
+    parsed = urlparse(url)
+    if not parsed.scheme or not parsed.netloc:
+        return url
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def failed_tests(pytest_output: str, limit: int = 12) -> list[str]:
+    """`FAILED …` / `ERROR …` lines from `pytest -rf` (kept in the report so a lane is diagnosable without artifacts)."""
+    hits = [line.strip() for line in pytest_output.splitlines() if line.startswith(("FAILED ", "ERROR "))]
+    return hits[:limit]
+
+
 def localize_manifest(manifest: dict[str, Any], assets_dir: Path) -> dict[str, Any]:
     """Point every platform URL at the archive of the same name inside `assets_dir` (file://), keeping sha256/size.
 
@@ -171,6 +197,8 @@ class Lane:
             "HOROSA_RUNTIME_ROOT": str(self.runtime_root),
             "HOROSA_SKILL_DATA_DIR": str(self.data_dir),
             "HOROSA_RUNTIME_START_TIMEOUT_SECONDS": str(self.args.start_timeout),
+            "HOROSA_LOCAL_BACKEND_PORT": str(self.args.backend_port),
+            "HOROSA_LOCAL_CHART_PORT": str(self.args.chart_port),
             "HOROSA_TRACE_ENABLED": "0",
             "PYTHONIOENCODING": "utf-8",
         })
@@ -178,6 +206,23 @@ class Lane:
             base["HOROSA_RUNTIME_PLATFORM"] = self.args.platform
         base.update(extra)
         return base
+
+    def pytest_env(self) -> dict[str, str]:
+        """Env for the live pytest run: the running endpoints as *origins* (external mode) + the payload's node.
+
+        The lane's own port overrides (HOROSA_LOCAL_*_PORT) must NOT leak in: tests such as
+        `test_auto_ports_avoid_a_held_default` read `Settings.from_env()` provenance and an inherited
+        HOROSA_LOCAL_BACKEND_PORT turns `auto:HOROSA_PORTS` into `env:HOROSA_LOCAL_BACKEND_PORT` (local lane run #3).
+        """
+        env = self.env(
+            HOROSA_SERVER_ROOT=origin_of(self.endpoints.get("java_backend", "")),
+            HOROSA_CHART_SERVER_ROOT=origin_of(self.endpoints.get("python_chart", "")),
+        )
+        for key in ("HOROSA_LOCAL_BACKEND_PORT", "HOROSA_LOCAL_CHART_PORT"):
+            env.pop(key, None)
+        if self.node_bin:
+            env["HOROSA_NODE_BIN"] = self.node_bin
+        return env
 
     def cli(self, *args: str, timeout: float, env: dict[str, str] | None = None) -> tuple[int, str, str]:
         completed = subprocess.run(
@@ -341,14 +386,9 @@ class Lane:
     def live_pytest(self) -> bool:
         if self.args.skip_pytest:
             return self.step("pytest", True, skipped=True)
-        env = self.env(
-            HOROSA_SERVER_ROOT=self.endpoints.get("java_backend", ""),
-            HOROSA_CHART_SERVER_ROOT=self.endpoints.get("python_chart", ""),
-        )
-        if self.node_bin:
-            env["HOROSA_NODE_BIN"] = self.node_bin
+        env = self.pytest_env()
         started = time.perf_counter()
-        command = [sys.executable, "-m", "pytest", "-q", "-rs", "-p", "no:cacheprovider", *self.args.pytest_args]
+        command = [sys.executable, "-m", "pytest", "-q", "-rsf", "-p", "no:cacheprovider", *self.args.pytest_args]
         try:
             completed = subprocess.run(command, cwd=str(PKG_ROOT), env=env, capture_output=True, text=True,
                                        encoding="utf-8", errors="replace", timeout=BUDGET["pytest"])
@@ -358,13 +398,15 @@ class Lane:
         (self.work / "pytest.log").write_text(output, encoding="utf-8")
         counts = pytest_summary(output)
         skips = forbidden_skips(output)
+        failures = failed_tests(output)
         problems: list[str] = []
         if completed.returncode != 0 or counts["failed"] or counts["error"]:
-            problems.append(f"pytest exit {completed.returncode}: {counts}")
+            problems.append(f"pytest exit {completed.returncode}: {counts}; failed: {failures}")
         if skips:
             problems.append(f"live gates skipped: {skips[:3]}")
         tail = "\n".join(output.splitlines()[-40:])
         return self.step("pytest", not problems, seconds=round(time.perf_counter() - started, 1), counts=counts, problems=problems,
+                         failed=failures, env={"HOROSA_SERVER_ROOT": env["HOROSA_SERVER_ROOT"], "HOROSA_CHART_SERVER_ROOT": env["HOROSA_CHART_SERVER_ROOT"], "HOROSA_NODE_BIN": env.get("HOROSA_NODE_BIN")},
                          tail=tail if problems else None)
 
     def stop(self) -> bool:
@@ -406,7 +448,30 @@ class Lane:
         self.report["ok"] = bool(ok and stop_ok)
         self.report["seconds"] = round(time.perf_counter() - started, 1)
         self.report["launcher_log"] = str(self.runtime_root / "launcher.log")
+        self.report["service_logs"] = self._collect_service_logs()
         return self.report
+
+    def _collect_service_logs(self) -> list[str]:
+        """Copy launcher.log and the services' own logs next to the report (one artifact root, every OS)."""
+        import shutil
+
+        dest = self.work / "logs"
+        dest.mkdir(exist_ok=True)
+        copied: list[str] = []
+        candidates = [self.runtime_root / "launcher.log"]
+        current = self.runtime_root / "current"
+        for logs_root in (current / "Horosa-Web" / ".horosa-local-logs", Path.home() / ".horosa-local-logs"):
+            if logs_root.is_dir():
+                candidates.extend(p for p in logs_root.rglob("*") if p.is_file() and p.suffix in {".log", ".txt", ".out", ".err"})
+        for source in candidates[:40]:
+            try:
+                if source.is_file() and source.stat().st_size <= 5_000_000:
+                    target = dest / (source.name if source.parent == self.runtime_root else f"{source.parent.name}-{source.name}")
+                    shutil.copyfile(source, target)
+                    copied.append(str(target))
+            except OSError:
+                continue
+        return copied
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -422,6 +487,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--runtime-root", default=None)
     ap.add_argument("--data-dir", default=None)
     ap.add_argument("--start-timeout", type=int, default=900)
+    ap.add_argument("--backend-port", type=int, default=19999, help="HOROSA_LOCAL_BACKEND_PORT for the lane (non-default on purpose)")
+    ap.add_argument("--chart-port", type=int, default=18899, help="HOROSA_LOCAL_CHART_PORT for the lane (non-default on purpose)")
     ap.add_argument("--skip-pytest", action="store_true")
     ap.add_argument("--pytest-args", nargs="*", default=[])
     ap.add_argument("--out", default=None, help="also write the report here")

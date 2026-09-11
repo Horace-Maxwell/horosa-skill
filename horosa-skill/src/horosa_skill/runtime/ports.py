@@ -20,7 +20,10 @@ _SS_PID = re.compile(r"pid=(\d+)")
 _WIN_LISTEN = re.compile(r"^\s*TCP\s+(?P<local>\S+)\s+\S+\s+LISTENING\s+(?P<pid>\d+)\s*$", re.I)
 
 
-def _run(cmd: list[str], timeout: float = 5.0) -> str:
+# 15 s，不是 5 s：托管 macOS runner 在全量 pytest 的负载下 `netstat -anv` 曾超过 5 s → 返回空串 → `listener_pids` 空 →
+# 「端口上明明有监听进程，却一个持有者都查不出来」（v0.38.0 A5 矩阵首跑）；同一教训 v0.37.0 在 Windows 的
+# `process_command`（PowerShell 冷启动 > 4 s）上踩过一次。
+def _run(cmd: list[str], timeout: float = 15.0) -> str:
     try:
         out = subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout, check=False,

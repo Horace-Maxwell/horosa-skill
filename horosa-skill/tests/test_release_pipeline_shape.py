@@ -91,7 +91,11 @@ def test_arm_lane_blocking_is_an_input_not_a_hardcode() -> None:
 
 def test_matrix_uploads_evidence_even_on_failure() -> None:
     tail = MATRIX[MATRIX.index("Upload lane evidence"):]
-    assert "if: always()" in tail and "launcher.log" in tail and "lane-report.json" in MATRIX
+    assert "if: always()" in tail and "horosa-lane/logs/**" in tail and "lane-report.json" in MATRIX
+    # one artifact root only (Windows upload-artifact refused runner.temp + `~`); the verifier copies launcher.log into logs/
+    assert "~/" not in tail
+    verifier = (REPO_ROOT / "horosa-skill" / "scripts" / "verify_runtime_live.py").read_text(encoding="utf-8")
+    assert "launcher.log" in verifier and "_collect_service_logs" in verifier
 
 
 def test_publish_script_only_ever_makes_drafts() -> None:
