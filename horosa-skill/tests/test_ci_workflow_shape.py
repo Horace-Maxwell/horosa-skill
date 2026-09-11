@@ -20,18 +20,15 @@ REQUIRED_LINE = "$PSNativeCommandUseErrorActionPreference = $true"
 
 _JOB = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$")
 _RUN = re.compile(r"^(\s*)(?:- )?run:\s*\|\s*$")
+_SHELL = re.compile(r"^\s*shell:\s*(\S+)\s*$")
+_STEP_START = re.compile(r"^(\s*)- ")
 
 
 def _indent(line: str) -> int:
     return len(line) - len(line.lstrip(" "))
 
 
-def pwsh_run_blocks(text: str) -> list[tuple[str, str]]:
-    """Return (job, first_effective_line) for every multi-line `run: |` block executed by pwsh.
-
-    A job counts as pwsh when it declares `shell: pwsh` anywhere (job default or any step); bash jobs
-    are ignored. Comment and blank lines at the top of a block do not count as the first line.
-    """
+def _job_bodies(text: str) -> dict[str, list[str]]:
     lines = text.splitlines()
     jobs: dict[str, list[str]] = {}
     current: str | None = None
@@ -49,26 +46,75 @@ def pwsh_run_blocks(text: str) -> list[tuple[str, str]]:
             continue
         if current is not None:
             jobs[current].append(line)
+    return jobs
+
+
+def _steps(body: list[str]) -> list[list[str]]:
+    """Split a job body into its `- …` step blocks (the `steps:` list items)."""
+    try:
+        start = next(i for i, line in enumerate(body) if line.strip() == "steps:")
+    except StopIteration:
+        return []
+    step_indent: int | None = None
+    steps: list[list[str]] = []
+    for line in body[start + 1 :]:
+        match = _STEP_START.match(line)
+        if match and (step_indent is None or len(match.group(1)) == step_indent):
+            step_indent = len(match.group(1))
+            steps.append([line])
+        elif steps:
+            steps[-1].append(line)
+    return steps
+
+
+def _job_default_shell(body: list[str]) -> str | None:
+    """`defaults: run: shell: X` at job level (the part of the body before `steps:`)."""
+    head = []
+    for line in body:
+        if line.strip() == "steps:":
+            break
+        head.append(line)
+    for line in head:
+        match = _SHELL.match(line)
+        if match:
+            return match.group(1)
+    return None
+
+
+def pwsh_run_blocks(text: str) -> list[tuple[str, str]]:
+    """Return (job, first_effective_line) for every multi-line `run: |` block executed by pwsh.
+
+    The shell of a block is the step's own `shell:` key if present, else the job's `defaults.run.shell`.
+    A bash step inside a pwsh job (or vice versa) is judged by its own shell. Comment and blank lines
+    at the top of a block do not count as the first line.
+    """
     found: list[tuple[str, str]] = []
-    for job, body in jobs.items():
-        if not any(re.search(r"^\s*shell:\s*pwsh\s*$", entry) for entry in body):
-            continue
-        for index, entry in enumerate(body):
-            run = _RUN.match(entry)
-            if not run:
+    for job, body in _job_bodies(text).items():
+        default_shell = _job_default_shell(body)
+        for step in _steps(body):
+            shell = default_shell
+            for line in step:
+                match = _SHELL.match(line)
+                if match:
+                    shell = match.group(1)
+            if shell != "pwsh":
                 continue
-            base = _indent(entry)
-            first = ""
-            for block_line in body[index + 1 :]:
-                if block_line.strip() == "":
+            for index, entry in enumerate(step):
+                run = _RUN.match(entry)
+                if not run:
                     continue
-                if _indent(block_line) <= base:
+                base = _indent(entry)
+                first = ""
+                for block_line in step[index + 1 :]:
+                    if block_line.strip() == "":
+                        continue
+                    if _indent(block_line) <= base:
+                        break
+                    if block_line.strip().startswith("#"):
+                        continue
+                    first = block_line.strip()
                     break
-                if block_line.strip().startswith("#"):
-                    continue
-                first = block_line.strip()
-                break
-            found.append((job, first))
+                found.append((job, first))
     return found
 
 
@@ -108,14 +154,28 @@ jobs:
       - name: bash step
         run: |
           echo hello
+  mixed:
+    runs-on: windows-latest
+    steps:
+      - name: bash inside a windows job
+        shell: bash
+        run: |
+          set -euo pipefail
+      - name: pwsh by explicit step shell
+        shell: pwsh
+        run: |
+          {first}
 """
 
 
 def test_guard_catches_a_pwsh_block_without_the_switch() -> None:
     """Negative control: the exact shape that hid the `--output` failure must be red."""
     bad = _SYNTHETIC.format(first="$root = Join-Path $env:RUNNER_TEMP 'x'")
-    assert offending_blocks(bad) == [("win", "$root = Join-Path $env:RUNNER_TEMP 'x'")]
+    assert offending_blocks(bad) == [
+        ("win", "$root = Join-Path $env:RUNNER_TEMP 'x'"),
+        ("mixed", "$root = Join-Path $env:RUNNER_TEMP 'x'"),
+    ]
     good = _SYNTHETIC.format(first=REQUIRED_LINE)
     assert offending_blocks(good) == []
-    # bash jobs are never held to the pwsh rule
-    assert [job for job, _ in pwsh_run_blocks(good)] == ["win"]
+    # bash jobs — and bash steps inside a pwsh job — are never held to the pwsh rule
+    assert [job for job, _ in pwsh_run_blocks(good)] == ["win", "mixed"]
