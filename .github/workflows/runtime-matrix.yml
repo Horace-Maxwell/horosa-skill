@@ -80,7 +80,6 @@ jobs:
     timeout-minutes: 90
     env:
       GH_TOKEN: ${{ github.token }}
-      LANE_ROOT: ${{ runner.temp }}/horosa-lane
       HOROSA_RUNTIME_START_TIMEOUT_SECONDS: "900"
     steps:
       - uses: actions/checkout@v4
@@ -129,11 +128,11 @@ jobs:
           set -euo pipefail
           uv run python scripts/verify_runtime_live.py \
             --assets-dir "${RUNNER_TEMP}/horosa-assets" \
-            --work-dir "${LANE_ROOT}" \
+            --work-dir "${RUNNER_TEMP}/horosa-lane" \
             --expect-payload-platform "${{ matrix.expect_payload }}" \
             ${{ matrix.emulated && '--expect-emulated' || '' }} \
             ${{ inputs.skip_pytest && '--skip-pytest' || '' }} \
-            --out "${LANE_ROOT}/lane-report.json"
+            --out "${RUNNER_TEMP}/horosa-lane/lane-report.json"
       - name: Live verification (Windows)
         if: runner.os == 'Windows'
         working-directory: ./horosa-skill
@@ -143,7 +142,7 @@ jobs:
           $extra = @()
           if ('${{ matrix.emulated }}' -eq 'true') { $extra += '--expect-emulated' }
           if ('${{ inputs.skip_pytest }}' -eq 'true') { $extra += '--skip-pytest' }
-          uv run python scripts/verify_runtime_live.py --assets-dir "$env:RUNNER_TEMP\horosa-assets" --work-dir "$env:LANE_ROOT" --expect-payload-platform "${{ matrix.expect_payload }}" @extra --out "$env:LANE_ROOT\lane-report.json"
+          uv run python scripts/verify_runtime_live.py --assets-dir "$env:RUNNER_TEMP\horosa-assets" --work-dir "$env:RUNNER_TEMP\horosa-lane" --expect-payload-platform "${{ matrix.expect_payload }}" @extra --out "$env:RUNNER_TEMP\horosa-lane\lane-report.json"
       - name: Upload lane evidence (report, doctor snapshots, launcher + service logs)
         if: always()
         uses: actions/upload-artifact@v4
