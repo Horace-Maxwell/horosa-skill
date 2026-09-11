@@ -588,6 +588,100 @@ def _listener_scope_warnings(scope: dict[str, Any]) -> list[dict[str, str]]:
     return warnings
 
 
+# v0.38.0 B6：doctor 能报出的每个 issue / warning 码都要有人话（user_summary + next_action）。
+# 码集的真值：manager.DOCTOR_ISSUE_CODES（issues）+ _DOCTOR_WARNING_CODES（warnings）；
+# tests/test_doctor_machine_conditions.py::test_every_doctor_code_has_advice 锁步，并扫源码里新增的字面量。
+_DOCTOR_WARNING_CODES = ("listener:not_loopback_only", "platform:emulated_process")
+_DOCTOR_ADVICE: dict[str, dict[str, str]] = {
+    "runtime.manifest_invalid": {
+        "user_summary": "已装 runtime 的 runtime-manifest.json 缺失或损坏，doctor 无法信任这份安装。",
+        "next_action": "重跑 `horosa-skill install --force`（会重新解包并写回清单）。",
+    },
+    "runtime.state_invalid": {
+        "user_summary": "runtime-state.json 损坏（上次启动被打断或磁盘写坏），启停状态不可信。",
+        "next_action": "`horosa-skill runtime stop` 后再 `runtime start`；仍不行就删掉 runtime-state.json 重启。",
+    },
+    "missing:": {
+        "user_summary": "已装 runtime 缺文件（解包不完整、被安全软件隔离或手动删过）。",
+        "next_action": "`horosa-skill install --force` 重新解包；Windows 上先看安全软件的隔离区。",
+    },
+    "services:java_backend_not_running": {
+        "user_summary": "Python 图表服务在跑，Java 后端（:9999）没起来——chart 族可用，八字/紫微/六壬/农历族会报错。",
+        "next_action": "看报告里的 java_diagnostics；Windows 常见诱因是代理/VPN/安全软件拦 JDK 回环（issue #14）。",
+    },
+    "services:chart_not_running": {
+        "user_summary": "Java 后端在跑，Python 图表服务（:8899）没起来。",
+        "next_action": "`horosa-skill runtime restart`；仍不行看 launcher_log 里 python 的报错。",
+    },
+    "services:not_running": {
+        "user_summary": "runtime 文件都在，本机服务还没启动。",
+        "next_action": "`horosa-skill runtime start`（客户端首次调用也会自动起；冷启动 10–45 s）。",
+    },
+    "quarantine:runtime_binaries": {
+        "user_summary": "macOS Gatekeeper 给 runtime 里的可执行文件打了 com.apple.quarantine（浏览器下载的归档常见），首次执行会被拦。",
+        "next_action": "运行报告里 quarantine.fix 给出的 `xattr -dr com.apple.quarantine <runtime/current>` 后重启 runtime。",
+    },
+    "listener:not_loopback_only": {
+        "user_summary": "本机服务绑在 0.0.0.0（局域网可达，Windows 会弹防火墙）。",
+        "next_action": "升级后 `horosa-skill runtime restart` 重套启动器模板（钉 127.0.0.1）。",
+    },
+    "platform:emulated_process": {
+        "user_summary": "当前 Python 进程在仿真下跑（x64 Python 在 ARM 芯片 / Rosetta）——能用，只是慢一点；离线 runtime 按芯片选载荷，不受影响。",
+        "next_action": "可选：换成原生架构的 uv / Python 会更快；不换也没问题。",
+    },
+}
+
+
+def _advice_for(code: str) -> dict[str, str]:
+    if code in _DOCTOR_ADVICE:
+        return dict(_DOCTOR_ADVICE[code])
+    prefix = code.split(":", 1)[0] + ":"
+    if prefix in _DOCTOR_ADVICE:
+        return dict(_DOCTOR_ADVICE[prefix])
+    return {"user_summary": f"doctor 报了 {code}。", "next_action": "看报告里对应字段的 details；`horosa-skill doctor --explain` 给人话版。"}
+
+
+def _arch_warnings(report: dict[str, Any]) -> list[dict[str, str]]:
+    arch = report.get("arch") or {}
+    if arch.get("emulated") is not True:
+        return []
+    advice = _advice_for("platform:emulated_process")
+    return [{
+        "code": "platform:emulated_process",
+        "detail": f"process={arch.get('process')} native={arch.get('native')}：{advice['user_summary']}",
+        "fix": advice["next_action"],
+    }]
+
+
+def _explain_lines(report: dict[str, Any]) -> list[str]:
+    """`doctor --explain`：6–10 行人话写 stderr（stdout 仍是纯 JSON）。"""
+    issues = [str(item) for item in report.get("issues") or []]
+    warnings = [w for w in report.get("warnings") or [] if isinstance(w, dict)]
+    reachable = [e.get("label") for e in report.get("endpoints") or [] if e.get("reachable") is True]
+    lines = [
+        f"状态：{report.get('status')} —— {report.get('user_summary')}",
+        (
+            f"runtime：{'已装 ' + str(report.get('manifest_version') or '') if report.get('installed') else '未装'}；"
+            f"本机 {report.get('host_platform')}"
+            + (f" → 载荷 {report.get('payload_platform')}（仿真）" if report.get("emulated") else "")
+            + f"；进程架构 {(report.get('arch') or {}).get('process')} / 芯片 {(report.get('arch') or {}).get('native')}"
+        ),
+        f"服务：可达 {', '.join(str(x) for x in reachable) if reachable else '无'}；模式 {report.get('mode')}",
+    ]
+    for code in issues[:4]:
+        advice = _advice_for(code)
+        lines.append(f"问题 {code}：{advice['user_summary']} → {advice['next_action']}")
+    for warning in warnings[:2]:
+        lines.append(f"提示 {warning.get('code')}：{warning.get('fix') or warning.get('detail')}")
+    probe = report.get("network_probe")
+    if isinstance(probe, dict):
+        okay = [a.get("url") for a in probe.get("attempts") or [] if a.get("ok")]
+        lines.append(f"网络：清单 URL {'可达（' + str(okay[0]) + '）' if okay else '经所有镜像都不可达'}")
+    lines.append(f"下一步：{report.get('next_action')}")
+    lines.append(f"日志：{report.get('launcher_log')}")
+    return lines[:10]
+
+
 def _doctor_summary(report: dict[str, Any]) -> dict[str, Any]:
     issues = [str(issue) for issue in report.get("issues", [])]
     reachable_endpoints = [
@@ -1231,8 +1325,11 @@ def uninstall(
     _print_json(result)
 
 
-def _doctor_report(settings: Settings, manager: HorosaRuntimeManager) -> dict[str, Any]:
-    """`doctor` 的完整报告；`setup` 第 4 步用的是同一份（v0.38.0 B4）——两边永远同一套判定。"""
+def _doctor_report(settings: Settings, manager: HorosaRuntimeManager, *, probe_network: bool = False) -> dict[str, Any]:
+    """`doctor` 的完整报告；`setup` 第 4 步用的是同一份（v0.38.0 B4）——两边永远同一套判定。
+
+    默认**零外网请求**（回环探测只打 127.0.0.1 且 trust_env=False）；`probe_network=True` 才逐个镜像 HEAD 清单 URL。
+    """
     report = manager.doctor()
     report["environment"] = _doctor_environment_context(settings)
     # 记忆库完整性探针（v0.33.0 批 II-1）：PRAGMA quick_check + 损坏自愈痕迹；坏库在 MemoryStore
@@ -1271,7 +1368,20 @@ def _doctor_report(settings: Settings, manager: HorosaRuntimeManager) -> dict[st
     report["port_conflicts"] = _doctor_port_holders(report)
     # 监听范围（v0.38.0 B1）：绑 0.0.0.0 的服务不是"坏"，但 Windows 上会弹防火墙、暴露到局域网 —— 进 warnings 而非 issues。
     report["listener_scope"] = _doctor_listener_scope(settings)
-    report["warnings"] = [*(report.get("warnings") or []), *_listener_scope_warnings(report["listener_scope"])]
+    report["warnings"] = [
+        *(report.get("warnings") or []),
+        *_listener_scope_warnings(report["listener_scope"]),
+        *_arch_warnings(report),
+    ]
+    # v0.38.0 B6：每个码一条人话（issues 与 warnings 都有），脚本用户与 agent 不用再猜码的意思。
+    report["advice"] = [
+        {"code": code, **_advice_for(code)}
+        for code in [*(str(i) for i in report.get("issues") or []), *(w.get("code") for w in report["warnings"] if isinstance(w, dict))]
+    ]
+    report["network_probe"] = (
+        _probe_manifest_url(settings.runtime_manifest_url or settings.default_runtime_manifest_url, stop_at_first_success=False)
+        if probe_network else None
+    )
     report["unexpanded_env_templates"] = _unexpanded()
     report["network_hints"] = _network_hints()
     report["registry_status"] = (manager.load_runtime_state() or {}).get("status")
@@ -1281,9 +1391,16 @@ def _doctor_report(settings: Settings, manager: HorosaRuntimeManager) -> dict[st
 
 
 @app.command()
-def doctor() -> None:
+def doctor(
+    explain: bool = typer.Option(False, "--explain", help="Also print 6–10 lines of plain-language explanation to stderr (stdout stays pure JSON)."),
+    probe_network: bool = typer.Option(False, "--probe-network", help="HEAD the runtime manifest URL through every mirror and report reachability (default: no external request)."),
+) -> None:
     settings = Settings.from_env()
-    _print_json(_doctor_report(settings, _runtime_manager(settings)))
+    report = _doctor_report(settings, _runtime_manager(settings), probe_network=bool(_opt(probe_network, False)))
+    if _opt(explain, False):
+        for line in _explain_lines(report):
+            typer.echo(line, err=True)
+    _print_json(report)
 
 
 # ---------------------------------------------------------------------------
@@ -1322,7 +1439,7 @@ class _SetupFailure(Exception):
         self.payload = payload
 
 
-def _probe_manifest_url(url: str, *, timeout: float = _SETUP_NETWORK_TIMEOUT_SECONDS) -> dict[str, Any]:
+def _probe_manifest_url(url: str, *, timeout: float = _SETUP_NETWORK_TIMEOUT_SECONDS, stop_at_first_success: bool = True) -> dict[str, Any]:
     """5 s 内判断清单 URL 能不能取到（逐个镜像 HEAD；HEAD 被拒则 GET 流式只看状态）。
 
     失败在这里就失败——比等 120 s 下载超时再报清楚得多；`--no-probe-network` 可跳过。
@@ -1350,11 +1467,12 @@ def _probe_manifest_url(url: str, *, timeout: float = _SETUP_NETWORK_TIMEOUT_SEC
                         status = streamed.status_code
             ok = status < 400
             attempts.append({"url": candidate, "status": status, "ok": ok})
-            if ok:
+            if ok and stop_at_first_success:
                 return {"ok": True, "url": candidate, "attempts": attempts}
         except httpx.HTTPError as exc:
             attempts.append({"url": candidate, "ok": False, "error": f"{type(exc).__name__}: {exc}"[:200]})
-    return {"ok": False, "url": url, "attempts": attempts}
+    reachable = [a["url"] for a in attempts if a.get("ok")]
+    return {"ok": bool(reachable), "url": reachable[0] if reachable else url, "attempts": attempts}
 
 
 def _stdio_probe(*, command: str, args: list[str], env: dict[str, str], timeout: float) -> dict[str, Any]:

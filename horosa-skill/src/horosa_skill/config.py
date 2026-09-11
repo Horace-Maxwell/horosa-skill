@@ -39,6 +39,9 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     "HOROSA_RUNTIME_PLATFORM": "stable",
     "HOROSA_RUNTIME_RELEASE_REPO": "stable",
     "HOROSA_RUNTIME_MIRROR": "stable",
+    # v0.38.0 B6 下载旋钮：慢网 / 企业代理下 120 s 读超时与 3 次重试不够时可调（每个镜像各算一轮）。
+    "HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS": "stable",
+    "HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS": "stable",
     "HOROSA_LOCAL_BACKEND_PORT": "stable",
     "HOROSA_LOCAL_CHART_PORT": "stable",
     "HOROSA_RUNTIME_START_TIMEOUT_SECONDS": "stable",
@@ -270,6 +273,8 @@ FIELD_ENV_MAP = {
     "local_backend_port": "HOROSA_LOCAL_BACKEND_PORT",
     "local_chart_port": "HOROSA_LOCAL_CHART_PORT",
     "runtime_start_timeout_seconds": "HOROSA_RUNTIME_START_TIMEOUT_SECONDS",
+    "runtime_download_timeout_seconds": "HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS",
+    "runtime_download_attempts": "HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS",
     "runtime_java_retry_cooldown_seconds": "HOROSA_RUNTIME_JAVA_RETRY_COOLDOWN_SECONDS",
     "mcp_compact": "HOROSA_MCP_COMPACT",
     "js_engine_timeout_seconds": "HOROSA_JS_ENGINE_TIMEOUT_SECONDS",
@@ -298,6 +303,9 @@ class Settings(BaseModel):
     local_chart_port: int = 8899
     # 冷启动等待：Java(Spring Boot fat jar)+Python(星历重导入) 后端首启常超 15s，45s 覆盖常见机器。
     runtime_start_timeout_seconds: float = 45.0
+    # 归档下载：读超时（每块 1 MiB 之间的等待）与每个镜像的重试次数（v0.38.0 B6，此前写死 120 s / 3 次）。
+    runtime_download_timeout_seconds: float = 120.0
+    runtime_download_attempts: int = 3
     # Java 后端起不来（degraded_chart_only）后的重试冷却：冷却期内碰 Java 的调用快速失败
     # （runtime.java_backend_unavailable），不再为了再试 Java 先杀掉健康的 chart 服务再全量重启；0 = 关闭冷却。
     runtime_java_retry_cooldown_seconds: float = 120.0
@@ -348,6 +356,8 @@ class Settings(BaseModel):
             local_backend_port=backend_port,
             local_chart_port=chart_port,
             runtime_start_timeout_seconds=_env_float("HOROSA_RUNTIME_START_TIMEOUT_SECONDS", 45.0, minimum=0.1),
+            runtime_download_timeout_seconds=_env_float("HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS", 120.0, minimum=1.0),
+            runtime_download_attempts=_env_int("HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS", 3, minimum=1, maximum=20),
             runtime_java_retry_cooldown_seconds=_env_float("HOROSA_RUNTIME_JAVA_RETRY_COOLDOWN_SECONDS", 120.0, minimum=0.0),
             mcp_compact=_env_bool("HOROSA_MCP_COMPACT", False),
             js_engine_timeout_seconds=_env_float("HOROSA_JS_ENGINE_TIMEOUT_SECONDS", 60.0, minimum=0.1),

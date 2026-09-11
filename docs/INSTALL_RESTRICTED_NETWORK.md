@@ -75,6 +75,7 @@ uvx --from ./horosa_skill-0.37.0-py3-none-any.whl horosa-skill client config --f
 | `runtime.install_sha256_mismatch` | 归档内容与清单 sha256 不符（镜像给了别的文件） | 换镜像或走直链；别 `--force` 跳过校验 |
 | `runtime.install_long_path` | Windows 路径超 260 且未开长路径 | 设 `HOROSA_RUNTIME_ROOT=C:\horosa` 或开注册表 `LongPathsEnabled` |
 | `runtime.install_missing_platform` | 清单里没有本机平台 | Intel Mac / Linux 走网关模式（`HOROSA_SERVER_ROOT` 指向装了 runtime 的机器）；Windows ARM 不会走到这里——它自动装 win32-x64 载荷走仿真（结果里 `warnings[].code == runtime.platform_emulated`），走到这里说明清单连 win32-x64 都缺 |
+| `runtime.install_download_failed` 反复出现在慢网 / 企业代理下 | 每块 1 MiB 之间等待超过 120 s，或 3 次重试用尽 | `HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS=600` / `HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS=10`（每个镜像各算一轮）；`doctor --probe-network` 先看哪个镜像通 |
 | `runtime.install_os_too_old` | 本机系统版本低于载荷声明的 `min_os`（派生的 Windows 载荷要 Windows 10 1809+） | 升级系统，或走网关模式 |
 
 ---
@@ -111,4 +112,6 @@ Error codes: `runtime.install_manifest_fetch_failed` (try a mirror / the API pat
 skip verification), `runtime.install_long_path` (`HOROSA_RUNTIME_ROOT=C:\horosa` or enable `LongPathsEnabled`),
 `runtime.install_missing_platform` (gateway mode via `HOROSA_SERVER_ROOT`; Windows on ARM never lands here — it installs the
 win32-x64 payload under emulation and reports `runtime.platform_emulated` in `warnings`), `runtime.install_os_too_old` (the
-host is older than the payload's `min_os` — upgrade the OS or use gateway mode).
+host is older than the payload's `min_os` — upgrade the OS or use gateway mode). Slow or proxied networks: raise
+`HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS` (default 120, per 1 MiB chunk) / `HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS` (default 3, per
+mirror) and run `horosa-skill doctor --probe-network` to see which mirror answers.

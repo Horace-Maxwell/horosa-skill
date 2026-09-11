@@ -16,7 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
-| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基；A2 Windows 半边从 darwin 种子派生；A3 发布契约（清单钉 tag + size、按契约逐平台判完整、平台表锁）；A4 安装侧平台策略（Windows ARM 公告式回退、`min_os`、平台键看芯片）；B4 `setup --client` 一条命令接入（七步、失败包、真 stdio 探测）；B5 agent 文档（shell-only 契约、四份薄镜像、命令守卫） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数；回退只许公告着做、载荷自带解释器所以平台键看芯片不看宿主 Python；接入的终点是客户端那条命令真起了 server；给 agent 抄的每条命令都要有守卫对到真实 CLI |
+| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基；A2 Windows 半边从 darwin 种子派生；A3 发布契约（清单钉 tag + size、按契约逐平台判完整、平台表锁）；A4 安装侧平台策略（Windows ARM 公告式回退、`min_os`、平台键看芯片）；B4 `setup --client` 一条命令接入（七步、失败包、真 stdio 探测）；B5 agent 文档（shell-only 契约、四份薄镜像、命令守卫）；B6 doctor 机器条件（码表人话、--explain、长路径余量、quarantine、仿真进程、下载旋钮、零外网） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数；回退只许公告着做、载荷自带解释器所以平台键看芯片不看宿主 Python；接入的终点是客户端那条命令真起了 server；给 agent 抄的每条命令都要有守卫对到真实 CLI；每个诊断码都要有人话、doctor 只报不改且默认不碰外网 |
 | v0.37.0 (2026-09) | 任意 AI 客户端可调用：广告层只对一个客户端对过 / 自家 .mcp.json 从未连通 / 端口静默采用与误杀 / 回环走代理 | 按**别人的**约束测；改 golden 前先答「旧断言为何不会红」；负向对照跑不红就如实改口 |
 | v0.36.0 收尾 (2026-09) | 「Java 族 live 需 Mongo」十个版本的误定性 = vendored 脚本裸 `-jar`；演禽假闸门 | 贴「环境限制」前先读 `Result` 原文、用上游桌面起法起一遍；闸门问项以 live 翻转为准，不以转发为准 |
 | v0.36.0 (2026-09) | 止血/可用性/捞回能力 15 批（响应放大、静默降级、手抄表、死键、降级误杀、扁平面丢键、moira 误排除、闸门半盲、错误码……） | 每批四件套 + 全量门禁；台账正文按批见下 |
@@ -101,6 +101,30 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.38.0 / 2026-09-11 — B6 doctor 的机器条件：码没有人话、长路径与磁盘预检从没测过、quarantine 没人查、「不上外网」只是口头承诺
+
+- **症状**：① doctor 的 issue / warning 码只是字符串（`services:not_running`、`missing:boot_jar`…），agent 与脚本用户拿到码就原样甩给
+  用户；② `_guard_windows_long_paths` 只在 Windows 真机上才走到、`_require_install_disk_space` 只在磁盘真满时才走到——两者零测试，
+  而安装临时目录 `.horosa-install-XXXXXXXX/extract/` 白吃 20 个字符（最深载荷条目本身已近 200，260 上限下这 20 个字符就是装得上 /
+  装不上的差别）；③ macOS 上浏览器下载的归档解出来的 python / java / node 带 `com.apple.quarantine`，首次执行被 Gatekeeper 拦下，症状是
+  「起不来 + 无日志」，doctor 一个字不提；④ x64 Python 在 ARM 芯片 / Rosetta 下跑，用户不知道自己在仿真里；⑤ 下载读超时 120 s、
+  每镜像 3 次写死，慢网 / 企业代理下只能反复 `install`；⑥ 「doctor 不上外网」没有守卫。
+- **guard**：① `manager.DOCTOR_ISSUE_CODES`（`missing:*` 前缀族）+ `cli._DOCTOR_WARNING_CODES` + `cli._DOCTOR_ADVICE` 逐码
+  `user_summary` / `next_action`，报告新增 `advice[]`；`doctor --explain` 把 6–10 行人话写 **stderr**（stdout 仍纯 JSON）；
+  `test_every_doctor_code_has_advice` 锁步，`test_issue_codes_in_source_are_all_registered` 扫 `doctor()` 源码里的
+  `issues.append("…")` 字面量与 `f"missing:…"` 前缀（新码不登记必红）。② 临时目录改 `.hi-XXXXXXXX/x/`（常量 `_INSTALL_TEMP_PREFIX` /
+  `_INSTALL_EXTRACT_DIRNAME` / `_INSTALL_TEMP_OVERHEAD`），doctor 新增 `windows{long_paths_enabled, runtime_root_length,
+  projected_deepest_path, headroom_chars, ok, fix}` 按同一常量估；`_guard_windows_long_paths` 首个测试（注册表关 + 深条目 →
+  `runtime.install_long_path`；开 / 短条目 = 负向对照）；磁盘预检五组参数化（有 size 4×、无 size 3 GB、坏 size 回落）。
+  ③ `_quarantine_report`：`xattr -p com.apple.quarantine` 查 python / java / node，flagged → issue `quarantine:runtime_binaries` +
+  `quarantine.fix = xattr -dr …`，只报不改（非 macOS / 未装 = 空）。④ `platform:emulated_process` warning（`arch.emulated`）。
+  ⑤ `HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS` / `HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS` 进 `ENV_FLAG_REGISTRY` + `FIELD_ENV_MAP`
+  （provenance），`_download_with_resume` 读 settings（测试：2 次 × 1 源 = 2 个 Client、read=300）。⑥ `doctor --probe-network`
+  （默认关）逐镜像 HEAD 清单 URL（`stop_at_first_success=False`，每个镜像都报）；负向对照：默认路径把 `_probe_manifest_url` 换成
+  raise 仍绿。
+- **法则**：**每个诊断码都要有人话，且人话与码在同一处登记**；**只在真机才走到的分支必须有测试**（负向对照让它真红一次）；
+  **doctor 只报不改**——修复命令交给用户，且默认不碰外网。
 
 ### v0.38.0 / 2026-09-10 — B5 面向 agent 的文档：没有 MCP 的 agent 没有契约、四家客户端打开仓库第一眼看不到规则、SKILL 里抄的命令没人核对
 

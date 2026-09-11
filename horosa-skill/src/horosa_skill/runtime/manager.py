@@ -439,6 +439,47 @@ def _windows_long_paths_enabled() -> bool:
         return False
 
 
+# v0.38.0 B6：安装临时目录与 doctor 的长路径余量估算共用这几个常量（tests/test_doctor_machine_conditions.py 锁步）。
+_INSTALL_TEMP_PREFIX = ".hi-"
+_INSTALL_EXTRACT_DIRNAME = "x"
+# `<root>/.hi-XXXXXXXX/x/` — tempfile 随机后缀 8 个字符
+_INSTALL_TEMP_OVERHEAD = len(_INSTALL_TEMP_PREFIX) + 8 + 1 + len(_INSTALL_EXTRACT_DIRNAME) + 1
+# 载荷里最深的条目（含 `runtime-payload/` 前缀；嵌入式 JDK 的 module 目录 + Horosa-Web 多层 vendor 树）实测接近 200。
+PAYLOAD_LONGEST_ENTRY_CHARS = 200
+WINDOWS_PATH_LIMIT = 259
+# doctor 能报出的 issue 码（`missing:*` 是前缀族）；cli._DOCTOR_ADVICE 必须逐个给出人话（锁步测试）。
+DOCTOR_ISSUE_CODES = (
+    "runtime.manifest_invalid",
+    "runtime.state_invalid",
+    "missing:*",
+    "services:java_backend_not_running",
+    "services:chart_not_running",
+    "services:not_running",
+    "quarantine:runtime_binaries",
+)
+
+
+def windows_path_report(runtime_root: Path) -> dict[str, Any] | None:
+    """doctor.windows：长路径开关 + 按最深载荷条目估的余量（负数 = install 会以 runtime.install_long_path 拒绝）。"""
+    if os.name != "nt":
+        return None
+    enabled = _windows_long_paths_enabled()
+    root_length = len(str(runtime_root))
+    projected = root_length + 1 + _INSTALL_TEMP_OVERHEAD + PAYLOAD_LONGEST_ENTRY_CHARS
+    headroom = WINDOWS_PATH_LIMIT - projected
+    return {
+        "long_paths_enabled": enabled,
+        "runtime_root_length": root_length,
+        "projected_deepest_path": projected,
+        "limit": WINDOWS_PATH_LIMIT,
+        "headroom_chars": None if enabled else headroom,
+        "ok": enabled or headroom >= 0,
+        "fix": None if (enabled or headroom >= 0) else (
+            "设 HOROSA_RUNTIME_ROOT=C:\\horosa（更短的路径），或开启注册表 LongPathsEnabled=1 后重启。"
+        ),
+    }
+
+
 def _platform_dead_end_advice(platform_name: str) -> dict[str, Any]:
     """没有原生载荷时给出真正的出路，而不是把人卡在「不支持」四个字上。
 
@@ -660,7 +701,9 @@ class HorosaRuntimeManager:
             self.runtime_root.mkdir(parents=True, exist_ok=True)
             # 临时目录置于 runtime_root 同卷（非系统 /tmp）：最终 shutil.move(payload_root→current)
             # 落到同一文件系统即为原子 rename，避免跨卷退化成「复制+删除」（慢，且中途失败留半装）。
-            with tempfile.TemporaryDirectory(prefix=".horosa-install-", dir=self.runtime_root) as temp_dir_raw:
+            # 短前缀（v0.38.0 B6）：`.horosa-install-XXXXXXXX/extract/` 白吃 20 个字符——Windows 260 上限下这 20 个
+            # 字符就是「装得上 / 装不上」的差别（最深载荷条目本身已近 200）。doctor.windows.headroom_chars 按同一常量估。
+            with tempfile.TemporaryDirectory(prefix=_INSTALL_TEMP_PREFIX, dir=self.runtime_root) as temp_dir_raw:
                 temp_dir = Path(temp_dir_raw)
                 archive_path = self._materialize_archive(source, temp_dir, progress=progress)
                 if expected_sha256 and _sha256_file(archive_path).lower() != expected_sha256.lower():
@@ -689,7 +732,7 @@ class HorosaRuntimeManager:
                             details={"archive": str(archive_path), "declared_archive_type": declared_type},
                         )
 
-                extract_dir = temp_dir / "extract"
+                extract_dir = temp_dir / _INSTALL_EXTRACT_DIRNAME
                 extract_dir.mkdir(parents=True, exist_ok=True)
                 self._extract_archive(archive_path, extract_dir)
                 payload_root = self._locate_payload_root(extract_dir)
@@ -858,6 +901,11 @@ class HorosaRuntimeManager:
             for entry in files:
                 if not entry["exists"]:
                     issues.append(f"missing:{entry['label']}")
+            # macOS Gatekeeper（v0.38.0 B6）：浏览器下载的归档解出来的二进制带 com.apple.quarantine，
+            # 首次执行被系统拦下时症状是「起不来 + 无日志」。只报不动：修复命令交给用户。
+            quarantine = self._quarantine_report(manifest) if installed else {"checked": [], "flagged": [], "fix": None}
+            if quarantine["flagged"]:
+                issues.append("quarantine:runtime_binaries")
             degraded: str | None = None
             java_diagnostics: dict[str, Any] | None = None
             if installed and not self._all_services_reachable(endpoints):
@@ -891,6 +939,8 @@ class HorosaRuntimeManager:
                 ),
                 "platform_requirements": (manifest.get("platform_requirements") if manifest else None),
                 "arch": arch_report(),
+                "windows": windows_path_report(self.runtime_root),
+                "quarantine": quarantine,
                 "runtime_root": str(self.runtime_root),
                 "current_dir": str(self.current_dir),
                 "manifest_version": manifest_version,
@@ -1388,7 +1438,7 @@ class HorosaRuntimeManager:
         source: str,
         temp_dir: Path,
         *,
-        attempts: int = 3,
+        attempts: int | None = None,
         progress: Any | None = None,
     ) -> Path:
         """流式下载 + HTTP Range 断点续传 + 有限退避重试 + 多镜像回退。
@@ -1401,13 +1451,18 @@ class HorosaRuntimeManager:
         downloads_dir.mkdir(parents=True, exist_ok=True)
         part_path = downloads_dir / f"{filename}.part"
         candidates = self._mirror_candidates(source)
+        # v0.38.0 B6：慢网 / 企业代理下可调（HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS / _ATTEMPTS）。
+        if attempts is None:
+            attempts = max(1, int(getattr(self.settings, "runtime_download_attempts", 3) or 3))
+        read_timeout = float(getattr(self.settings, "runtime_download_timeout_seconds", 120.0) or 120.0)
+        connect_timeout = min(60.0, read_timeout)
         failures: list[str] = []
         for candidate in candidates:
             for attempt in range(attempts):
                 try:
                     offset = part_path.stat().st_size if part_path.exists() else 0
                     headers = {"Range": f"bytes={offset}-"} if offset else {}
-                    with httpx.Client(timeout=httpx.Timeout(60.0, read=120.0), follow_redirects=True) as client:
+                    with httpx.Client(timeout=httpx.Timeout(connect_timeout, read=read_timeout), follow_redirects=True) as client:
                         with client.stream("GET", candidate, headers=headers) as response:
                             response.raise_for_status()
                             if response.status_code == 206:
@@ -1486,6 +1541,29 @@ class HorosaRuntimeManager:
             path_text = path_text[1:]
         return Path(path_text)
 
+    def _quarantine_report(self, manifest: dict[str, Any] | None) -> dict[str, Any]:
+        """python / java / node 三个可执行文件是否带 com.apple.quarantine（仅 macOS；只查不改）。"""
+        report: dict[str, Any] = {"checked": [], "flagged": [], "fix": None}
+        if sys.platform != "darwin" or not self.current_dir.exists():
+            return report
+        for key in ("python", "java", "node"):
+            path = self.current_dir / self._relative_manifest_path(manifest, "runtimes", key)
+            if not path.is_file():
+                continue
+            report["checked"].append(str(path))
+            try:
+                completed = subprocess.run(
+                    ["/usr/bin/xattr", "-p", "com.apple.quarantine", str(path)],
+                    capture_output=True, text=True, timeout=5, check=False,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                continue
+            if completed.returncode == 0 and completed.stdout.strip():
+                report["flagged"].append(str(path))
+        if report["flagged"]:
+            report["fix"] = f'xattr -dr com.apple.quarantine "{self.current_dir}"'
+        return report
+
     def _guard_windows_long_paths(self, archive_path: Path, extract_dir: Path) -> None:
         r"""解包前先算最长目标路径，>259 且没开长路径支持就明说，别让 winerror 3/206 裸奔。
 
@@ -1510,7 +1588,7 @@ class HorosaRuntimeManager:
             return
         longest = max(names, key=len)
         projected = len(str(extract_dir)) + 1 + len(longest)
-        if projected <= 259 or _windows_long_paths_enabled():
+        if projected <= WINDOWS_PATH_LIMIT or _windows_long_paths_enabled():
             return
         raise RuntimeInstallError(
             "Windows 路径长度会超过 260 字符上限，解包必定失败。",

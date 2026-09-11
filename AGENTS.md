@@ -697,6 +697,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | Windows 首次启动弹防火墙 / `doctor` 报 `listener:not_loopback_only` | 旧模板起 Java 没钉 `--server.address=127.0.0.1`，绑在 0.0.0.0 | 升级 horosa-skill 后 `runtime restart` 重套模板（每次 start 都会重拷 `.ps1`）；`doctor.listener_scope` 应变为 `loopback_only: true` |
 | Windows 用户名带空格（`C:\Users\John Doe`）时 chart/Java 都起不来，`.horosa-local-logs` 里 python 报找不到文件 | 旧模板 `-ArgumentList` 路径元素没引号，被拆成两段 | 升级后 `runtime restart`；判据 = `tests/test_runtime_launcher_templates.py` 的引号断言（v0.38.0 B1） |
 | Codex 里 horosa 一堆报错 / 首轮看不到工具 | 多半是 `startup_timeout_sec`/`tool_timeout_sec` 没写（Codex 默认 10 s/60 s，冷启动与择日扫描都超） | `horosa-skill client check --client codex`（v0.38.0 起缺省也报 `codex_*_timeout_missing`）；重跑 `client config --format codex --write ~/.codex/config.toml` |
+| `doctor` 报 `quarantine:runtime_binaries` / macOS 首次起 runtime 失败且无日志 | 浏览器下载的归档解出的 python / java / node 带 `com.apple.quarantine`，Gatekeeper 首次执行拦下 | 跑报告 `quarantine.fix` 给的 `xattr -dr com.apple.quarantine <current>`，再 `runtime restart`（只报不改，v0.38.0 B6） |
+| 看不懂 doctor 的码 / agent 把 issue 码原样甩给用户 | 码是给脚本的 | `doctor --explain`（stderr 6–10 行人话，stdout 仍纯 JSON）；报告 `advice[]` 每码一句 `user_summary` + `next_action`（码表 `cli._DOCTOR_ADVICE` 与 `manager.DOCTOR_ISSUE_CODES` 锁步） |
+| Windows 装到 OneDrive / 长用户名下 `runtime.install_long_path` | 最深载荷条目近 200 字符 + 安装临时目录 | `doctor.windows.headroom_chars`（按 `.hi-XXXXXXXX/x/` 前缀估，v0.38.0 起比旧 `.horosa-install-…/extract/` 多约 20 字符）为负即会拒：`HOROSA_RUNTIME_ROOT=C:\horosa` 或 `LongPathsEnabled=1` |
+| 慢网 / 企业代理下 `runtime.install_download_failed` | 每块 1 MiB 之间的读超时 120 s、每镜像 3 次 | `HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS` / `HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS`；`doctor --probe-network` 看哪个镜像通（默认 doctor 零外网请求） |
 | `setup` 在第 1 步 `network_probe` 就失败（5 s 内，`setup.network_unreachable`） | 清单 URL 经所有镜像都取不到（github.com:443 不通 / 代理拦 HEAD） | 失败包 `details.next_action` 给三条路：`HOROSA_RUNTIME_MIRROR=<前缀>`、`--archive <本地归档>`、`--no-probe-network` 跳过预检；`retry_command` 已带后者（v0.38.0 B4） |
 | `setup` 在 `stdio_probe` 失败（`setup.stdio_probe_failed`） | 客户端将要执行的那条命令起不来 server：命令路径不对、uvx 首跑下载失败、工具数与工具面不符 | 看失败包 `details.command` 与 `details.stderr_tail`；uvx 形态可先手跑 `uvx --refresh --from <wheel URL> horosa-skill --version`；checkout 内改 `--launcher uv`（v0.38.0 B4） |
 | `setup --client claude-code` 只打印了命令没注册（`config_mode: printed`） | `claude` 不在 PATH（GUI 装的 Claude Code 没把 CLI 放进 shell PATH） | 复制 `steps.config.command` 到有 `claude` 的终端执行，或 `--scope project` 写当前项目的 `.mcp.json`（v0.38.0 B4） |
@@ -711,6 +715,11 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 A global stability pass hardened these; keep them true when you touch the relevant code:
 
+- **doctor 的每个码都要有人话，默认零外网请求（v0.38.0 B6）。** issue 码的真值 = `manager.DOCTOR_ISSUE_CODES`（`missing:*` 前缀族），
+  warning 码 = `cli._DOCTOR_WARNING_CODES`；`cli._DOCTOR_ADVICE` 逐码给 `user_summary` + `next_action`，报告 `advice[]` 与 `--explain`
+  都从它出。`tests/test_doctor_machine_conditions.py` 扫 `doctor()` 源码里新增的 `issues.append("…")` 字面量——不登记必红。
+  默认 `doctor` 只打 127.0.0.1（`trust_env=False`），`--probe-network` 才逐镜像 HEAD 清单 URL（负向对照：默认路径上
+  `_probe_manifest_url` 被替换成 raise 仍必须绿）。quarantine / 长路径余量 / 仿真进程都只**报**不改：修复命令交给用户。
 - **`setup` 的七步顺序与失败包是契约（v0.38.0 B4）。** `network_probe → install → config → doctor → client_check → stdio_probe →
   next_steps`，顺序冻结在 `tests/test_cli_output_contract.py::test_setup_public_keys`；失败包只走 stderr、退出码 2，键
   `step / code / config_untouched / backup_path / retry_command / steps`，**第 3 步之前失败保证 `config_untouched: true`**

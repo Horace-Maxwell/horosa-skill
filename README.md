@@ -12,7 +12,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-106-1d4ed8?style=for-the-badge" alt="106 tools" />
-  <img src="https://img.shields.io/badge/测试-919_passed-16a34a?style=for-the-badge" alt="919 passed" />
+  <img src="https://img.shields.io/badge/测试-940_passed-16a34a?style=for-the-badge" alt="940 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
 
@@ -136,7 +136,10 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # 🚀 给客户端直
 | `github.com:443` 直连不通（但 `api.github.com` 可达）——完整方案见 [docs/INSTALL_RESTRICTED_NETWORK.md](./docs/INSTALL_RESTRICTED_NETWORK.md) | 走 API 资产直链下载后本地安装：先 `curl -s https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/latest` 找到平台 zip/tar.gz 的 `assets[].id`，再 `curl -L -H "Accept: application/octet-stream" -o runtime.zip https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/assets/<id>`，最后 `uv run horosa-skill install --archive runtime.zip` |
 | Java 后端(:9999)未就绪 / `doctor` 报 `services:java_backend_not_running` | 会自动**降级 chart-only** 而不是全盘卡死：三式(奇门/太乙/金口)、神数、地占、塔罗、西占 chart 族照常可用；nongli/bazi/ziwei/liureng 与「占时」起课暂不可用。`doctor` 的 `java_diagnostics` 附捕获的 Java 启动错误，`selfcheck` 会自动改用 chart 侧探针 |
 | Windows 上 Java 进程秒退、无任何日志 | 已知诱因：代理/VPN/安全软件的 WFP 过滤会拦 `java.exe` 的 loopback（JDK-17 内部管道优先 AF_UNIX，connect 被拦即崩且无 TCP 回退，见 issue #14）。停掉相关服务通常不够（WFP 过滤驻留内核），需禁用后**重启**再试；期间 chart-only 降级模式可继续用 |
-| 磁盘不足 / 端口被占 | `uv run horosa-skill doctor` 逐项体检并给出 `next_action` |
+| 磁盘不足 / 端口被占 / 看不懂 doctor 的码 | `uv run horosa-skill doctor --explain`：stdout 仍是 JSON，stderr 多 6–10 行人话；报告里 `advice[]` 给每个 issue / warning 码一句 `user_summary` + `next_action`；`--probe-network` 逐个镜像探清单 URL（默认零外网请求） |
+| macOS 首次起 runtime 失败且无日志 / `doctor` 报 `quarantine:runtime_binaries` | 浏览器下载的归档解出来的 python / java / node 带 Gatekeeper 隔离属性：运行报告里 `quarantine.fix` 给出的 `xattr -dr com.apple.quarantine <runtime/current>` 后 `runtime restart` |
+| Windows 路径太长（`runtime.install_long_path`）| `doctor.windows.headroom_chars` 为负即会拒：设 `HOROSA_RUNTIME_ROOT=C:\horosa`，或开注册表 `LongPathsEnabled=1` 后重启（v0.38.0 起临时目录前缀缩短，多出约 20 字符余量） |
+| 慢网 / 企业代理下载总超时 | `HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS`（默认 120）、`HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS`（默认 3，每个镜像各算一轮）；`doctor` 报 `arch.emulated: true` 只是提示进程在仿真下跑，不影响安装 |
 | Windows 首次启动弹防火墙 / `doctor` 报 `listener:not_loopback_only` | 旧版启动器把 Java 绑在 0.0.0.0；升级后 `uv run horosa-skill runtime restart` 重套模板即钉回 127.0.0.1（`doctor.listener_scope` 可核） |
 | Codex 里一堆报错 / 首轮看不到工具 | 多半是超时没写（Codex 默认 10 s/60 s）：`uv run horosa-skill client check --client codex` 会指出缺哪项，`client config --format codex --write ~/.codex/config.toml` 原位合并修好 |
 | 终端里 `uvx` 能跑、GUI 客户端里起不来 | GUI 客户端不继承 shell PATH；重跑 `client config`（现在写绝对路径），`client check` 报 `command_not_on_path` 即此症 |
@@ -494,7 +497,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 🧰 可调用工具 | 106 / 106 `ok=true` |
-| 🧪 工程测试 | **919 / 919 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 72 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 🧪 工程测试 | **940 / 940 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 72 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 🛡️ 未确认参数时强制追问 | 96 个技法工具触发 `must_ask_user=true` |
 | 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 103 个导出 technique；契约 v14 镜像桌面端 aiExport v56） |
 | 🧾 技法依据卡 | 每个技法响应附 `data.technique_card`；算源声明与运行实测不符时显式亮警 |
@@ -509,7 +512,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 919 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 940 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 
