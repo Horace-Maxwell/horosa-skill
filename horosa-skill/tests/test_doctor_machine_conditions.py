@@ -25,6 +25,7 @@ from horosa_skill.surfaces import cli as cli_module
 from horosa_skill.surfaces.cli import app
 
 from test_runtime_manager import create_runtime_archive
+from test_setup_command import _fake_archive  # explicit mac runtime paths in the manifest → doctor finds them on any host OS
 
 runner = CliRunner()
 
@@ -261,7 +262,7 @@ def _fake_xattr(flagged: bool):
 
 def test_quarantined_binaries_become_an_issue_with_the_fix_command(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     manager = HorosaRuntimeManager(_settings(tmp_path))
-    manager.install(archive=str(create_runtime_archive(tmp_path)))
+    manager.install(archive=str(_fake_archive(tmp_path)))  # Windows lanes: the bare archive's defaults resolve to runtime/windows/*
     monkeypatch.setattr(manager_module.sys, "platform", "darwin")
     monkeypatch.setattr(manager_module.subprocess, "run", _fake_xattr(True))
 

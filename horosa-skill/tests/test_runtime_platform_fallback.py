@@ -348,6 +348,7 @@ def test_rosetta_python_still_gets_the_arm64_payload(monkeypatch) -> None:
     monkeypatch.setattr(manager_module, "_darwin_translated", lambda: True)
     assert _platform_key() == "darwin-arm64"
     monkeypatch.setattr(manager_module.sys, "platform", "darwin")
+    monkeypatch.setattr(manager_module.os, "name", "posix")  # native_machine() checks os.name first (Windows lanes)
     assert manager_module.native_machine() == "arm64"
 
     monkeypatch.setattr(manager_module, "_darwin_translated", lambda: False)

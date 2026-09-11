@@ -19,6 +19,7 @@ cross-tree comparison actually happened at this version — commit it with the r
 """
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -78,6 +79,45 @@ def identity_problems(name: str, email: str) -> list[str]:
     return problems
 
 
+def ci_conclusion_for(sha: str, *, runner=subprocess.run) -> tuple[str | None, str | None]:
+    """(conclusion, status) of the latest ci.yml run for `sha` via `gh`; (None, None) when gh is missing / no run."""
+    try:
+        result = runner(
+            ["gh", "run", "list", "--workflow", "ci.yml", "--commit", sha, "--limit", "1", "--json", "conclusion,status"],
+            capture_output=True, text=True, timeout=60, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None, None
+    if result.returncode != 0:
+        return None, None
+    try:
+        runs = json.loads(result.stdout or "[]")
+    except ValueError:
+        return None, None
+    if not runs:
+        return None, "none"
+    return runs[0].get("conclusion") or None, runs[0].get("status") or None
+
+
+def ci_gate_failures(sha: str, *, runner=subprocess.run) -> list[str]:
+    """🔴 v0.38.0：主干 CI 红了 19 个 commit 没人看——本机全量门禁绿只证明「在维护机上绿」。
+
+    发 tag 前 HEAD 的 ci.yml 必须是 success；红 / 未跑 / 进行中都阻断（进行中 = 再等一会儿）。
+    `gh` 缺席或查不到 run 只警告（离线维护机），但那时上传前必须补看。
+    """
+    conclusion, status = ci_conclusion_for(sha, runner=runner)
+    if conclusion == "success":
+        return []
+    if status == "none":
+        return [f"HEAD {sha[:7]} 在 GitHub 上没有 ci.yml 运行记录——先 push 再等 CI 绿（或者你还没推这个 commit）"]
+    if conclusion is None and status is None:
+        print("::warning::preflight: 查不到 CI 结论（gh 缺席或未登录）——发布前必须自己看 Actions 页面确认 ci.yml 绿。")
+        return []
+    if conclusion is None:
+        return [f"HEAD {sha[:7]} 的 ci.yml 还在跑（status={status}）——等它绿了再发"]
+    return [f"HEAD {sha[:7]} 的 ci.yml 结论是 {conclusion}——先修红再发（本机绿 ≠ CI 绿，Windows/macOS runner 各有一套形状）"]
+
+
 def git_gate_failures() -> list[str]:
     """发布前的两道 git 闸。此前它们只是 AGENTS §7 里的文字，本轮两条都真实咬过人。"""
     failures: list[str] = []
@@ -125,6 +165,16 @@ def main() -> int:
         failed.append("git identity / origin currency")
     else:
         print("  ok — identity configured, no stranded origin/main commits")
+
+    print("\n=== CI conclusion for HEAD (ci.yml must be green before a tag) ===", flush=True)
+    _code, head_sha = _git("rev-parse", "HEAD")
+    ci_failures = ci_gate_failures(head_sha) if head_sha else ["无法读取 HEAD sha"]
+    if ci_failures:
+        for item in ci_failures:
+            print(f"  ✗ {item}")
+        failed.append("CI conclusion for HEAD")
+    else:
+        print("  ok — ci.yml is green on HEAD (or unverifiable: see warning)")
 
     for label, argv, blocking in GATES:
         print(f"\n=== {label} ===", flush=True)

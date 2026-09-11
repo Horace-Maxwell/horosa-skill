@@ -237,7 +237,8 @@ def test_client_config_locations_darwin_and_linux_shapes(tmp_path: Path) -> None
     assert mac == str(tmp_path / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json")
     linux = str(cli._client_config_locations("claude-desktop", os_name="linux", home=tmp_path)[0])
     assert linux == str(tmp_path / ".config" / "Claude" / "claude_desktop_config.json")
-    assert str(cli._client_config_locations("zed", os_name="darwin", home=tmp_path)[0]).endswith(".config/zed/settings.json")
+    # as_posix(): on a Windows host str(Path) uses backslashes and this assertion went red on every Windows run
+    assert cli._client_config_locations("zed", os_name="darwin", home=tmp_path)[0].as_posix().endswith(".config/zed/settings.json")
     with pytest.raises(Exception):
         cli._client_config_locations("roo", os_name="darwin", home=tmp_path)
 

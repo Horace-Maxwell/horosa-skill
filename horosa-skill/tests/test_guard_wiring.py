@@ -163,3 +163,38 @@ def test_provenance_contract_is_regenerable_from_a_checked_in_generator() -> Non
     assert generator.is_file()
     source = generator.read_text(encoding="utf-8")
     assert "parents[1]" in source and "/Users/" not in source, "生成器必须用仓内相对路径"
+
+
+# --- v0.38.0：CI 闸（主干红了 19 个 commit 没人看） ----------------------------------------------
+
+
+def _fake_gh(stdout: str, returncode: int = 0):
+    class Done:
+        def __init__(self):
+            self.returncode, self.stdout, self.stderr = returncode, stdout, ""
+
+    def runner(cmd, **kwargs):
+        assert cmd[:3] == ["gh", "run", "list"] and "--commit" in cmd
+        return Done()
+
+    return runner
+
+
+def test_ci_gate_blocks_red_pending_and_missing_runs_but_only_warns_without_gh() -> None:
+    preflight = _load_preflight()
+    sha = "0123456789abcdef"
+    assert preflight.ci_gate_failures(sha, runner=_fake_gh('[{"conclusion":"success","status":"completed"}]')) == []
+    red = preflight.ci_gate_failures(sha, runner=_fake_gh('[{"conclusion":"failure","status":"completed"}]'))
+    assert red and "failure" in red[0]
+    pending = preflight.ci_gate_failures(sha, runner=_fake_gh('[{"conclusion":"","status":"in_progress"}]'))
+    assert pending and "in_progress" in pending[0]
+    missing = preflight.ci_gate_failures(sha, runner=_fake_gh("[]"))
+    assert missing and "没有 ci.yml 运行记录" in missing[0]
+
+    def no_gh(cmd, **kwargs):
+        raise FileNotFoundError("gh")
+
+    assert preflight.ci_gate_failures(sha, runner=no_gh) == [], "gh 缺席只警告，不把离线维护机锁死"
+    assert "ci_gate_failures(" in (SCRIPTS / "preflight_release.py").read_text(encoding="utf-8").split("def main")[1], "闸必须接进 main"
+    publish = (SCRIPTS / "publish_release.sh").read_text(encoding="utf-8")
+    assert "gh run list" in publish and "--commit" in publish, "publish_release.sh --draft 也要先查 CI 结论"

@@ -52,6 +52,13 @@ TAR="horosa-runtime-darwin-arm64-${TAG}.tar.gz"
 BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
 
 if [ "${DRAFT}" = "1" ]; then
+  # 🔴 CI 必须绿（v0.38.0：主干红了 19 个 commit 没人看——本机全绿 ≠ CI 绿）。gh 查 HEAD 的 ci.yml 结论。
+  HEAD_SHA="$(git -C "${ROOT}" rev-parse HEAD)"
+  CI_CONCLUSION="$(gh run list --repo "${REPO}" --workflow ci.yml --commit "${HEAD_SHA}" --limit 1 --json conclusion -q '.[0].conclusion' 2>/dev/null || echo "unknown")"
+  if [ "${CI_CONCLUSION}" != "success" ]; then
+    echo "HEAD ${HEAD_SHA:0:7} 的 ci.yml 结论是「${CI_CONCLUSION:-none}」（不是 success）—— 先让 CI 绿再 --draft。" >&2
+    exit 1
+  fi
   # tag 必须已存在且指向远端——发布资产挂在 tag 上，没 tag 的「发布」是走不完的半程。
   if ! git -C "${ROOT}" rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
     echo "tag ${TAG} 不存在 —— 先跑 preflight_release.py（全绿）再打 tag，再回来发布。" >&2

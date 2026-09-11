@@ -16,7 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
-| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基；A2 Windows 半边从 darwin 种子派生；A3 发布契约（清单钉 tag + size、按契约逐平台判完整、平台表锁）；A4 安装侧平台策略（Windows ARM 公告式回退、`min_os`、平台键看芯片）；B4 `setup --client` 一条命令接入（七步、失败包、真 stdio 探测）；B5 agent 文档（shell-only 契约、四份薄镜像、命令守卫）；B6 doctor 机器条件（码表人话、--explain、长路径余量、quarantine、仿真进程、下载旋钮、零外网）；A5 托管流水线（draft → 派生 → 三台真机矩阵 → [OK] 才公开；首跑抓到非默认端口下 stop 停不掉） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数；回退只许公告着做、载荷自带解释器所以平台键看芯片不看宿主 Python；接入的终点是客户端那条命令真起了 server；给 agent 抄的每条命令都要有守卫对到真实 CLI；每个诊断码都要有人话、doctor 只报不改且默认不碰外网；清单只在两平台齐了才上 release、真机证据由流水线产出 |
+| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基；A2 Windows 半边从 darwin 种子派生；A3 发布契约（清单钉 tag + size、按契约逐平台判完整、平台表锁）；A4 安装侧平台策略（Windows ARM 公告式回退、`min_os`、平台键看芯片）；B4 `setup --client` 一条命令接入（七步、失败包、真 stdio 探测）；B5 agent 文档（shell-only 契约、四份薄镜像、命令守卫）；B6 doctor 机器条件（码表人话、--explain、长路径余量、quarantine、仿真进程、下载旋钮、零外网）；A5 托管流水线（draft → 派生 → 三台真机矩阵 → [OK] 才公开；首跑抓到非默认端口下 stop 停不掉）；主干 CI 红了 19 个 commit 没人看（Windows CRLF checkout / 路径分隔符 / 宿主 OS 默认路径 / macOS runner netstat CLOSED） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数；回退只许公告着做、载荷自带解释器所以平台键看芯片不看宿主 Python；接入的终点是客户端那条命令真起了 server；给 agent 抄的每条命令都要有守卫对到真实 CLI；每个诊断码都要有人话、doctor 只报不改且默认不碰外网；清单只在两平台齐了才上 release、真机证据由流水线产出 |
 | v0.37.0 (2026-09) | 任意 AI 客户端可调用：广告层只对一个客户端对过 / 自家 .mcp.json 从未连通 / 端口静默采用与误杀 / 回环走代理 | 按**别人的**约束测；改 golden 前先答「旧断言为何不会红」；负向对照跑不红就如实改口 |
 | v0.36.0 收尾 (2026-09) | 「Java 族 live 需 Mongo」十个版本的误定性 = vendored 脚本裸 `-jar`；演禽假闸门 | 贴「环境限制」前先读 `Result` 原文、用上游桌面起法起一遍；闸门问项以 live 翻转为准，不以转发为准 |
 | v0.36.0 (2026-09) | 止血/可用性/捞回能力 15 批（响应放大、静默降级、手抄表、死键、降级误杀、扁平面丢键、moira 误排除、闸门半盲、错误码……） | 每批四件套 + 全量门禁；台账正文按批见下 |
@@ -101,6 +101,30 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.38.0 / 2026-09-11 — 主干 CI 红了 19 个 commit 没人看：本机门禁全绿 ≠ CI 绿；Windows checkout 与 macOS runner 各有一套「本机不会红」
+
+- **症状**：v0.38.0 专项从 B0（87da8ec）起每次推送都跑了本机全量 pytest + docs-sync 才提交，但 GitHub CI 的 `test` 与
+  `windows-smoke` **连续 19 个 commit 全红**，直到 A5 dry run #3 在真机 lane 上跑 live pytest 才撞见同一批失败，回头查
+  `gh run list` 才发现。四类根因，全部是「本机不会红」的形状：
+  ① `tests/test_tracked_text_is_lf.py`（B0 加的 CR 守卫）读**工作树**字节——Windows runner 的 checkout 把文本写成 CRLF：
+  本机的 `.gitattributes`（`* text=auto eol=lf`）**从来没进过仓库**（0d98f4b 把它当「本地 IDE 配置」一起 gitignore 了），
+  GitHub 的 Windows checkout 只有 Git for Windows 的 autocrlf，守卫从加上那天起在 Windows 上就没绿过，而 mac 上永远绿；
+  ② `test_client_config_locations_darwin_and_linux_shapes` 用 `str(Path).endswith(".config/zed/settings.json")`——Windows 上
+  `str(Path)` 是反斜杠；③ `test_quarantined_binaries…` 用只有 `{"version"}` 的假归档，manifest 默认路径按**宿主 OS** 解析
+  （Windows 上 `runtime/windows/*`）→ 文件全缺、quarantine 一个都没查；④ `test_rosetta_python_still_gets_the_arm64_payload`
+  只 monkeypatch 了 `sys.platform`，`native_machine()` 先看 `os.name`。另：托管 macOS 26 runner 的 `netstat -anv` 把别的进程的
+  监听 socket 打成 `CLOSED`（本机打 `LISTEN`），`_listener_pids_darwin` 只认 `LISTEN` → 「端口上明明有监听进程，却一个持有者都
+  查不出来」（A5 lane 两条红）。
+- **guard**：① `.gitattributes` 改为跟踪（它是仓库策略不是本地状态），CR 守卫改读 **git 索引 blob**（`git ls-files -s` 的 sha
+  喂 `git cat-file --batch`；`cat-file --batch` 不认 `:<path>`）——守的是提交内容，不是 checkout 写出来的字节，且断言
+  `.gitattributes` 已被跟踪并含 `eol=lf`；
+  ② 路径断言用 `Path.as_posix()`；③ 假归档 manifest 显式写全 `runtimes`/`artifacts` 路径（`test_setup_command._fake_archive`）；
+  ④ 测试同时钉 `os.name`；⑤ `ports._darwin_listener_line`：外端地址 `*.*` 才是监听的签名，状态列不可信（负向对照：CLOSED 行必须
+  被认出、已连接行必须被排除）。⑥ **机器闸**：`preflight_release.py` 新增 CI 闸——`gh run list --commit <HEAD>` 的 ci.yml 结论
+  必须 success（红 / 未跑 / 进行中都阻断；`gh` 缺席只警告）；`publish_release.sh --draft` 同样先查。
+- **法则**：**推送之后看 CI 结论，红了先修再继续**——本机全绿只证明「在维护机上绿」；**新守卫要在三种 runner（ubuntu /
+  windows / macos）的形状下都想一遍**：路径分隔符、行尾、宿主 OS 决定的默认值、系统工具的输出差异。
 
 ### v0.38.0 / 2026-09-11 — A5 首跑抓到的产品缺陷：非默认端口下 `runtime stop` 永远停不掉（停脚本拿的是裸 os.environ）
 

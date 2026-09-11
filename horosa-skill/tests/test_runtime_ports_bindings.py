@@ -78,3 +78,18 @@ def test_unknown_bindings_are_none_not_clean(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(ports, "_run", lambda cmd, timeout=5.0: "")
     assert ports.listener_bindings(9999) == []
     assert ports.loopback_only([]) is None
+
+
+def test_darwin_listener_detection_does_not_trust_the_state_column(monkeypatch: pytest.MonkeyPatch) -> None:
+    """托管 macOS 26 runner 把别的进程的监听 socket 打成 CLOSED（矩阵首跑抓到）；已连接的 socket 永远带具体外端地址。"""
+    text = (
+        "Proto Recv-Q Send-Q  Local Address          Foreign Address        (state)   rxbytes txbytes rhiwat shiwat process:pid\n"
+        "tcp4       0      0  127.0.0.1.49683        *.*                    CLOSED      0       0    131072 131072  Python:22808\n"
+        "tcp4       0      0  127.0.0.1.49683        127.0.0.1.50001        ESTABLISHED 0       0    131072 131072  Python:22808\n"
+        "tcp4       0      0  127.0.0.1.8899         *.*                    LISTEN      0       0    131072 131072  python3.12:6123\n"
+    )
+    monkeypatch.setattr(ports, "_run", lambda cmd, timeout=15.0: text)
+    assert ports._listener_pids_darwin(49683) == [22808], "CLOSED 状态列不可信：外端 *.* 才是监听的签名"
+    assert ports._bindings_darwin(49683) == [{"local_address": "127.0.0.1", "pid": 22808}]
+    assert ports._listener_pids_darwin(8899) == [6123]
+    assert ports._listener_pids_darwin(50001) == [], "已连接的对端不是监听者"

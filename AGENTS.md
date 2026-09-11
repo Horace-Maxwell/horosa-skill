@@ -539,6 +539,12 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   `…@主机名.local` 占位串（git 只在 commit 那刻才猜，作者串错了 GitHub 不归属任何账号）→ 阻断；
   ② fetch 后 `HEAD..origin/main` 非空（另一台机器的工作会被本次发布落下；此闸首跑当天就抓到
   构建机推的一个 commit）→ 阻断，离线 fetch 失败只警告。`git branch -u origin/main` 保持配置。
+- **推送之后看 CI 结论；发布前 CI 必须绿（v0.38.0 教训：主干红了 19 个 commit 没人看）。** 本机全量门禁绿只证明「在维护机上绿」；
+  `preflight_release.py` 的 CI 闸用 `gh run list --commit <HEAD>` 取 ci.yml 结论，非 success（红 / 未跑 / 进行中）即阻断，
+  `publish_release.sh --draft` 同样先查。写新守卫时按三种 runner 的形状各想一遍：路径分隔符（`Path.as_posix()`）、行尾
+  （Windows checkout 可能是 CRLF，守卫读 git 索引 blob 而不是工作树；`.gitattributes` 是仓库策略必须跟踪，曾被当本地配置 ignore 了
+  一整年）、宿主 OS 决定的默认值（假归档要显式写全路径）、
+  系统工具输出差异（托管 macOS 的 netstat 把别人的监听 socket 打成 CLOSED）。
 - **发布 = draft → 托管派生 → 真机矩阵 → [OK] 才转公开（v0.38.0 A5）。** 维护机只做 seed：`scripts/publish_release.sh`
   （payload → darwin manifest（本地校验用）→ **SBOM** → MCPB → **wheel** → SHA256SUMS → verify；`--draft` 把 seed / .mcpb /
   wheel / SBOM 放上 **draft** release，**永不上清单、永不建公开 release**；`--dispatch` 触发 `release-runtime.yml`）。

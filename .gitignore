@@ -49,7 +49,8 @@ ${env:HOME*
 !.cursor/mcp.json
 !.cursor/rules/
 .editorconfig
-.gitattributes
+# .gitattributes is repo policy (eol=lf + binary rules), NOT local state: ignoring it (0d98f4b) meant GitHub's
+# Windows checkouts never saw `eol=lf` and came out CRLF (v0.38.0 A5 lesson) — it is tracked again.
 *.local.md
 notes-local*
 .horosa-cache/

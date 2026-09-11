@@ -54,13 +54,25 @@ def _uname() -> str:
         return ""
 
 
+def _darwin_listener_line(fields: list[str]) -> bool:
+    """A listening socket in `netstat -anv -p tcp` output: foreign address `*.*` (nothing connected).
+
+    The state column is NOT reliable: GitHub's hosted macOS 26 runner prints `CLOSED` for another process's
+    listening socket (v0.38.0 A5 matrix, `Python:22808 … 127.0.0.1.49683 *.* CLOSED`), while a real Mac prints
+    `LISTEN`. Established connections always carry a concrete foreign address, so `*.*` is the signature.
+    """
+    if len(fields) < 5 or not fields[0].startswith("tcp"):
+        return False
+    return "*.*" in fields[2:5] or "LISTEN" in fields[4:7]
+
+
 def _listener_pids_darwin(port: int) -> list[int]:
     pids: list[int] = []
     suffix = f".{port}"
     for line in _run(["netstat", "-anv", "-p", "tcp"]).splitlines():
-        if "LISTEN" not in line:
-            continue
         fields = line.split()
+        if not _darwin_listener_line(fields):
+            continue
         if not any(f.endswith(suffix) for f in fields[:4]):
             continue
         for field in fields:
@@ -143,10 +155,8 @@ def _bindings_windows(port: int) -> list[dict[str, Any]]:
 def _bindings_darwin(port: int) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for line in _run(["netstat", "-anv", "-p", "tcp"]).splitlines():
-        if "LISTEN" not in line:
-            continue
         fields = line.split()
-        if len(fields) < 4:
+        if not _darwin_listener_line(fields):
             continue
         host, _, local_port = fields[3].rpartition(".")
         if local_port != str(port):
