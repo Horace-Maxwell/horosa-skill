@@ -95,6 +95,14 @@ Do not treat these three locations as interchangeable.
 
 ## Current Windows Reality
 
+> **v0.38.0 (A2)**: the Windows payload is now **derived from the darwin-arm64 seed** —
+> `python horosa-skill/scripts/build_runtime_release_windows.py --seed dist/runtime/horosa-runtime-darwin-arm64-v<ver>.tar.gz`
+> runs on any host (the release pipeline runs it on GitHub's `windows-latest`). The platform-independent tree comes from the seed;
+> JDK / Node / embedded CPython 3.12 come from the pins in `contracts/runtime_toolchain.json`; the Python dep set is
+> `contracts/runtime_python_lock.json` (seed-derived; pyswisseph and sxtwl are built from sdist on the Windows runner because PyPI
+> ships no cp312 Windows wheels). The vendor mode described below is the Windows-box fallback only.
+
+
 The repository now produces a real Windows runtime archive:
 
 - embedded Java runtime

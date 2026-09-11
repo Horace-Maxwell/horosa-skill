@@ -173,6 +173,27 @@ def main() -> int:
                 "a freshly-tagged GA can have zero platform assets; use the Adoptium API redirect"
             )
 
+    # v0.38.0 A2: the Windows builder's seed mode must derive only from a verified seed and must not stamp
+    # manifest constants itself (it inherits them); the jlink module list has ONE source of truth.
+    if "runtime_seed" not in win or "verify_seed(" not in win:
+        errors.append("Windows builder has no seed+derive mode (must import runtime_seed and call verify_seed( before deriving)")
+    if "derive_manifest(" not in win:
+        errors.append("Windows builder's seed mode must build its manifest with runtime_seed.derive_manifest (inherit, never stamp)")
+    toolchain_path = SCRIPTS.parent / "contracts" / "runtime_toolchain.json"
+    if toolchain_path.exists():
+        import json as _json
+
+        pinned = list(_json.loads(toolchain_path.read_text(encoding="utf-8"))["java"]["jlink_modules"])
+        mac_match = re.search(r'jlink_modules="([^"]+)"', mac)
+        mac_list = mac_match.group(1).split(",") if mac_match else []
+        if sorted(mac_list) != sorted(pinned):
+            errors.append(
+                "jlink module list drifted: package_runtime_payload.sh vs contracts/runtime_toolchain.json — "
+                f"mac-only {sorted(set(mac_list) - set(pinned))}, contract-only {sorted(set(pinned) - set(mac_list))}"
+            )
+        if "jlink_modules" not in win:
+            errors.append("Windows builder's seed mode must take the jlink module list from contracts/runtime_toolchain.json")
+
     required = _load_required_entries()
     for platform in ("darwin-arm64", "win32-x64"):
         joined = "\n".join(required.get(platform, []))

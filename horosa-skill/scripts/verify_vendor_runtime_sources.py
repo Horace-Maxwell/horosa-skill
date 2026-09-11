@@ -8,8 +8,10 @@ from pathlib import Path
 
 REQUIRED_PATHS = [
     "vendor/runtime-source/runtime/mac",
-    "vendor/runtime-source/runtime/windows",
-    "vendor/runtime-source/prepareruntime",
+    # v0.38.0 A2: `runtime/windows` and `prepareruntime` are no longer release inputs — the Windows payload
+    # is derived from the darwin-arm64 seed on a hosted runner (build_runtime_release_windows.py --seed).
+    # They existed only on the maintainer's Windows box, which is why this gate was permanently red on
+    # the mac maintenance machine and had to be demoted to a warning in preflight_release.py.
     "horosa-skill/scripts/build_runtime_release.sh",
     # v3.5.0 全年份域 shared module — 16 ken/神数 engine files lazily `from kin_year_domain import ...`
     # for the BC/远期 year fallback path. If the sync dropped it, every ken/神数 engine 500s on its

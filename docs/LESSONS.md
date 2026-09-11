@@ -16,7 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
-| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基（种子锁、工具链钉版本、pyswisseph/sxtwl 无 cp312 Windows wheel） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数 |
+| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基；A2 Windows 半边从 darwin 种子派生（arch 断言、seed 模式、preflight 硬闸） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数 |
 | v0.37.0 (2026-09) | 任意 AI 客户端可调用：广告层只对一个客户端对过 / 自家 .mcp.json 从未连通 / 端口静默采用与误杀 / 回环走代理 | 按**别人的**约束测；改 golden 前先答「旧断言为何不会红」；负向对照跑不红就如实改口 |
 | v0.36.0 收尾 (2026-09) | 「Java 族 live 需 Mongo」十个版本的误定性 = vendored 脚本裸 `-jar`；演禽假闸门 | 贴「环境限制」前先读 `Result` 原文、用上游桌面起法起一遍；闸门问项以 live 翻转为准，不以转发为准 |
 | v0.36.0 (2026-09) | 止血/可用性/捞回能力 15 批（响应放大、静默降级、手抄表、死键、降级误杀、扁平面丢键、moira 误排除、闸门半盲、错误码……） | 每批四件套 + 全量门禁；台账正文按批见下 |
@@ -101,6 +101,31 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.38.0 / 2026-09-10 — A2 Windows 半边从「只有构建机能产」变成「从 darwin 种子派生」
+
+- **症状**：Windows 载荷的唯一产地是维护者的 Windows 机（`vendor/runtime-source/runtime/windows/bundle/wheels` 与 `prepareruntime`
+  只在那台机器上），于是 v0.37.0 的代码推了 main 却没法 tag——空 tag 会让 `releases/latest` 指向没有资产的 release，所有新安装 404
+  （本仓「缺半」台账的老形状）；preflight 的「打包输入」闸在 mac 上恒红，只能降级成警告。
+- **根因**：Windows 构建器把「平台无关的树」（Horosa-Web 子集、jar、core-js）和「平台原生件」（JDK/Node/嵌入式 Python/19 个原生
+  wheel）混在同一条 vendor 输入链里；而前者在已通过 live 全套的 darwin-arm64 归档里本来就有。
+- **guard**：`build_runtime_release_windows.py --seed <darwin tar.gz>`：`verify_seed`（复用发布闸）→ `materialize_seed` → 逐字节复制
+  Horosa-Web/core-js/jar、换上仓内 `.ps1` 模板（BOM 原样）→ 钉版本 Temurin JDK（sha 校验）jlink 到与 mac 相同的 17 模块（非 Windows
+  主机用 host jlink 交叉链接，`--full-jdk` 兜底）→ 钉版本嵌入式 CPython 3.12.10（此前 3.11.9；与种子共用 cp312 wheel）→ 纯 dist 按
+  RECORD 逐文件复制 + 原生 wheel `pip download`（pyswisseph/sxtwl 在目标 runner 上 `pip wheel` 从 sdist 编）→ 钉版本 Node →
+  **`assert_binary_arch`** 对 python.exe/java.exe/node.exe/numpy .pyd 断言 x86_64 → `derive_manifest`（只继承种子的版本与注册表常量，
+  带 `platform_requirements{arch, min_os}` 与 `derived_from`）→ zip。`--skip-sdist-builds` 只给非 Windows 主机做干跑，产物带 `-DRYRUN`
+  后缀不可能被误当发布资产。`verify_runtime_release.py` 新增 `_assert_native_arch`（两平台都查：Windows 三个 exe + numpy .pyd 必须
+  x86_64、mac java/node + numpy .so 必须含 arm64）；`verify_builder_parity.py` 加「Windows 构建器必须有 seed 模式且经 `verify_seed(` /
+  `derive_manifest(`」与「jlink 模块表 = `contracts/runtime_toolchain.json`」；`verify_vendor_runtime_sources.py` 去掉 `runtime/windows` 与
+  `prepareruntime`，preflight 那一闸回到硬闸；`package_runtime_payload.sh` 删掉半接线的 x64 分支。`tests/test_windows_derive_mode.py`
+  用合成种子 + 假工具链 zip 走完 staging → 发布闸四项全过；负向对照：ARM64 的 java.exe 在 staging 就被拒、混进归档也被 verifier 抓。
+- **实测**：本 Mac 从 v0.36.0 种子交叉派生（`--skip-sdist-builds`）：713 MB 的 `-DRYRUN.zip`，jlink 交叉链接成功——前提是 host jlink
+  与目标同大版本（PATH 上的 `/usr/bin/jlink` 是 22，报 `jlink version 22.0 does not match target java.base version 17.0`，
+  `host_jlink(major)` 现在按 `--version` 选 vendored Zulu 17 的那把），`verify_runtime_release.py` 条目/内嵌清单/BOM/架构四闸全过，
+  site-packages 93 个 dist-info（76 纯 + 17 有 wheel 的原生；pyswisseph/sxtwl 留给 Windows runner 编）。
+- **法则**：**平台无关的树只有一个产地（种子），平台原生件只从钉死的工具链与锁取**；**派生出来的每个原生二进制都要按目标架构断言**；
+  「只有某台机器能产出的发布输入」是一种缺半等待发生。
 
 ### v0.38.0 / 2026-09-10 — A0/A1 托管派生的地基：种子即真值、依赖集是种子的纯函数；探针推翻了「靠版本号拉 wheel 就够」
 

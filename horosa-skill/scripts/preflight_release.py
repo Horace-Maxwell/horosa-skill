@@ -38,10 +38,9 @@ GATES: tuple[tuple[str, list[str], bool], ...] = (
         ["scripts/verify_export_section_baseline.py", "--source", "upstream", "--require-upstream"],
         True,
     ),
-    # ⚠️ 打包输入闸：mac 维护机本来就没有 runtime/windows 与 prepareruntime（它们只在 Windows
-    # 构建机上），所以它在 mac 上恒红。打 tag 本身不产出包（发布是另起 workflow / 本机构建，
-    # Windows 半由 sync_windows_release.py --upload 另传），因此这一闸只**警告**、不拦。
-    ("vendored runtime inputs", ["scripts/verify_vendor_runtime_sources.py"], False),
+    # 打包输入闸（v0.38.0 A2 起阻断）：Windows 半边改为从 darwin 种子在托管 runner 上派生，
+    # runtime/windows 与 prepareruntime 不再是输入，mac 维护机上这一闸不再恒红——所以它回到硬闸。
+    ("vendored runtime inputs", ["scripts/verify_vendor_runtime_sources.py"], True),
     ("export-contract mirror", ["scripts/verify_export_contract_mirror.py"], True),
     ("technique compute-source declarations", ["scripts/verify_technique_provenance.py"], True),
     ("docs sync", ["scripts/verify_docs_sync.py"], True),

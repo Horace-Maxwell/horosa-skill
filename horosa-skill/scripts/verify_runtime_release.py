@@ -238,6 +238,54 @@ def _assert_windows_launchers_are_bom_encoded(path: Path) -> None:
         )
 
 
+# 🔴 arch gate (v0.38.0 A2): a payload derived from the darwin-arm64 seed must carry x64 binaries for
+# win32-x64 — copying the seed's java/node/python by mistake would pass every entry check above and fail
+# only on the user's machine. Read the headers of the three runtimes + numpy's extension.
+_NATIVE_ARCH = {
+    "win32-x64": ("x86_64", (
+        "runtime-payload/runtime/windows/python/python.exe",
+        "runtime-payload/runtime/windows/java/bin/java.exe",
+        "runtime-payload/runtime/windows/node/node.exe",
+    ), "runtime-payload/runtime/windows/python/Lib/site-packages/numpy/_core/_multiarray_umath"),
+    "darwin-arm64": ("arm64", (
+        "runtime-payload/runtime/mac/java/bin/java",
+        "runtime-payload/runtime/mac/node/bin/node",
+    ), "runtime-payload/runtime/mac/python/lib/"),
+}
+
+
+def _binary_arches(data: bytes) -> set[str]:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("_horosa_runtime_seed_for_verify", Path(__file__).resolve().parent / "runtime_seed.py")
+    module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module.binary_arches(data)
+
+
+def _assert_native_arch(path: Path, platform_key: str) -> None:
+    if platform_key not in _NATIVE_ARCH:
+        return
+    expected, fixed, numpy_prefix = _NATIVE_ARCH[platform_key]
+    entries = _archive_entries(path)
+    numpy_entry = next(
+        (e for e in entries if e.startswith(numpy_prefix) and "numpy/_core/_multiarray_umath" in e and e.endswith((".pyd", ".so"))),
+        None,
+    )
+    targets = [*fixed, *([numpy_entry] if numpy_entry else [])]
+    offenders: list[str] = []
+    for entry in targets:
+        if entry not in entries:
+            offenders.append(f"{entry} (missing)")
+            continue
+        found = _binary_arches(_read_archive_bytes(path, entry)[:4096])
+        if expected not in found:
+            offenders.append(f"{entry} (built for {sorted(found) or 'not a native binary'})")
+    if offenders:
+        raise SystemExit(f"{path.name}: native binaries are not {expected} as {platform_key} requires:\n- " + "\n- ".join(offenders))
+
+
 def _validate_manifest(path: Path) -> dict:
     data = json.loads(path.read_text(encoding="utf-8"))
     platforms = data.get("platforms")
@@ -277,6 +325,7 @@ def main() -> None:
         darwin_archive = Path(args.darwin_archive).expanduser().resolve()
         _assert_entries(darwin_archive, "darwin-arm64")
         _assert_payload_manifest(darwin_archive, "darwin-arm64", expected_version)
+        _assert_native_arch(darwin_archive, "darwin-arm64")
         verified_archives["darwin"] = str(darwin_archive)
 
     if args.windows_archive:
@@ -284,6 +333,7 @@ def main() -> None:
         _assert_entries(windows_archive, "win32-x64")
         _assert_payload_manifest(windows_archive, "win32-x64", expected_version)
         _assert_windows_launchers_are_bom_encoded(windows_archive)
+        _assert_native_arch(windows_archive, "win32-x64")
         verified_archives["windows"] = str(windows_archive)
 
     if args.linux_archive:

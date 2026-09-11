@@ -11,7 +11,9 @@ JAVA_SOURCE_DIR="${SOURCE_ROOT}/runtime/mac/java"
 PYTHON_SOURCE_DIR="${SOURCE_ROOT}/runtime/mac/python"
 BOOT_JAR_SOURCE="${SOURCE_ROOT}/runtime/mac/bundle/astrostudyboot.jar"
 CORE_JS_ROOT="${SKILL_ROOT}/horosa-core-js"
-ARCHIVE_PLATFORM="${ARCHIVE_PLATFORM:-darwin-arm64}"
+# This packager only ever builds darwin-arm64 (the seed). Other platforms are DERIVED from that archive
+# (build_runtime_release_windows.py --seed, v0.38.0 A2); the old half-wired x64 branch is gone.
+ARCHIVE_PLATFORM="darwin-arm64"
 NODE_VERSION_LINE_URL="${NODE_VERSION_LINE_URL:-https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt}"
 DOWNLOAD_ROOT="${BUILD_ROOT}/downloads"
 
@@ -86,9 +88,6 @@ build_embedded_java_runtime() {
 
 resolve_node_archive_name() {
   local arch_suffix="darwin-arm64"
-  if [[ "${ARCHIVE_PLATFORM}" == *"x64"* ]]; then
-    arch_suffix="darwin-x64"
-  fi
   curl -fsSL "${NODE_VERSION_LINE_URL}" | awk "/node-v.*-${arch_suffix}\\.tar\\.gz/{print \$2; exit}"
 }
 

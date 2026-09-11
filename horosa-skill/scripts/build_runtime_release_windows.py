@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -364,6 +365,214 @@ def build() -> Path:
     return archive_path
 
 
+# --- seed + derive mode (v0.38.0 A2) ---------------------------------------------------------------
+# `--seed <darwin-arm64 tar.gz>`: no vendor/runtime-source, no npm, no Windows box. The platform-independent
+# tree comes from the live-tested seed; only the JDK / Node / embedded CPython / native wheels are fetched
+# for win32-x64 (pinned in contracts/runtime_toolchain.json) or built from sdist on the target runner
+# (pyswisseph, sxtwl: no cp312 Windows wheels on PyPI — see contracts/runtime_python_lock.json). The
+# vendor mode above stays intact as the Windows-box fallback.
+
+
+def _seed_module():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("horosa_runtime_seed", SKILL_ROOT / "scripts" / "runtime_seed.py")
+    module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
+def download_pinned(url: str, dest: Path, sha256: str | None) -> Path:
+    """`download()` plus a sha256 check: a pinned toolchain that is not verified is a pin in name only."""
+    path = download(url, dest)
+    if sha256:
+        import hashlib
+
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(chunk)
+        if digest.hexdigest() != sha256:
+            path.unlink(missing_ok=True)
+            path.with_name(path.name + ".url").unlink(missing_ok=True)
+            raise SystemExit(f"{path.name}: sha256 {digest.hexdigest()} != pinned {sha256} (contracts/runtime_toolchain.json)")
+    return path
+
+
+def download_toolchain(toolchain: dict, *, resolve_latest: bool = False) -> dict[str, Path]:
+    """JDK / embedded Python / Node archives for win32-x64, pinned URL + sha unless --resolve-latest."""
+    jdk = toolchain["java"]["windows_x64_jdk"]
+    py = toolchain["python"]["embed_windows_x64"]
+    node = toolchain["node"]["windows_x64"]
+    if resolve_latest:
+        return {
+            "jdk": download(latest_temurin_jdk_url(), DOWNLOAD_ROOT / "OpenJDK17U-jdk_x64_windows_hotspot-latest.zip"),
+            "python": download_pinned(py["url"], DOWNLOAD_ROOT / py["url"].rsplit("/", 1)[-1], py.get("sha256")),
+            "node": download(latest_node_win_url(), DOWNLOAD_ROOT / "node-win-x64-latest.zip"),
+        }
+    return {
+        "jdk": download_pinned(jdk["url"], DOWNLOAD_ROOT / jdk["name"], jdk.get("sha256")),
+        "python": download_pinned(py["url"], DOWNLOAD_ROOT / py["url"].rsplit("/", 1)[-1], py.get("sha256")),
+        "node": download_pinned(node["url"], DOWNLOAD_ROOT / node["name"], node.get("sha256")),
+    }
+
+
+def _lock_without_sdist(lock: dict, platform_key: str) -> dict:
+    sources = (lock.get("wheel_sources") or {}).get(platform_key, {})
+    import re as _re
+
+    def norm(name: str) -> str:
+        return _re.sub(r"[-_.]+", "-", name).lower()
+
+    trimmed = json.loads(json.dumps(lock))
+    trimmed["native"] = [r for r in lock["native"] if sources.get(norm(r.split("==")[0])) != "sdist"]
+    return trimmed
+
+
+def stage_from_seed(seed, tree, lock: dict, toolchain: dict, payload_root: Path, *, downloads: dict[str, Path],
+                    python: str | None = None, jlink: bool = True, skip_sdist: bool = False,
+                    jlink_bin: Path | None = None) -> dict:
+    """Assemble a win32-x64 payload tree from the seed tree + downloaded toolchain. Returns a summary."""
+    platform_key = "win32-x64"
+    os_dir = "windows"
+    if payload_root.exists():
+        shutil.rmtree(payload_root)
+    payload_root.mkdir(parents=True, exist_ok=True)
+    seed.copy_platform_tree(tree, payload_root, launchers="ps1", os_dir=os_dir)
+    horosa_web = payload_root / "Horosa-Web"
+    # the repo's launcher templates (UTF-8 BOM, loopback bind, quoted path args) — copy2 keeps bytes as-is
+    shutil.copy2(TEMPLATE_ROOT / "start_horosa_local.ps1", horosa_web / "start_horosa_local.ps1")
+    shutil.copy2(TEMPLATE_ROOT / "stop_horosa_local.ps1", horosa_web / "stop_horosa_local.ps1")
+    runtime_root = payload_root / "runtime" / os_dir
+    runtime_root.mkdir(parents=True, exist_ok=True)
+
+    # Java: pinned Temurin JDK → jlink to the same 17 modules the mac packager uses (or the full JDK)
+    jdk_extract = payload_root.parent / "seed-jdk"
+    if jdk_extract.exists():
+        shutil.rmtree(jdk_extract)
+    extract_zip_strip_first(downloads["jdk"], jdk_extract)
+    jdk_home = seed.find_jdk_home(jdk_extract)
+    if jlink:
+        seed.jlink_image(jdk_home, runtime_root / "java", list(toolchain["java"]["jlink_modules"]), jlink_bin=jlink_bin)
+    else:
+        shutil.copytree(jdk_home, runtime_root / "java", dirs_exist_ok=True)
+
+    # Python: pinned embeddable CPython + the seed's pure dists + native wheels for win_amd64
+    py_root = runtime_root / "python"
+    py_root.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(downloads["python"]) as zf:
+        zf.extractall(py_root)
+    patch_embedded_python(py_root)
+    site = py_root / "Lib" / "site-packages"
+    pure = seed.copy_pure_site_packages(tree, lock, site)
+    wheels_dir = payload_root.parent / "seed-wheels" / platform_key
+    if wheels_dir.exists():
+        shutil.rmtree(wheels_dir)
+    fetch_lock = _lock_without_sdist(lock, platform_key) if skip_sdist else lock
+    wheels = seed.fetch_native_wheels(fetch_lock, platform_key, wheels_dir, python=python, build_from_sdist=not skip_sdist)
+    unpack_wheels(wheels_dir, site)
+    # plotly never enters a derived payload (the seed is already stripped; kept for builder parity)
+    for plotly_path in list(site.glob("plotly")) + list(site.glob("plotly-*.dist-info")):
+        shutil.rmtree(plotly_path, ignore_errors=True)
+
+    # Node: pinned win-x64 zip
+    extract_zip_strip_first(downloads["node"], runtime_root / "node")
+
+    # 🔴 arch guard: a derived payload must never carry the seed's arm64 binaries
+    for rel in ("python/python.exe", "java/bin/java.exe", "node/node.exe"):
+        seed.assert_binary_arch(runtime_root / rel, "x86_64")
+    numpy_ext = next(site.glob("numpy/_core/_multiarray_umath*.pyd"), None)
+    if numpy_ext is not None:
+        seed.assert_binary_arch(numpy_ext, "x86_64")
+
+    manifest = seed.derive_manifest(
+        tree.manifest, platform=platform_key,
+        runtimes={"python": f"runtime/{os_dir}/python/python.exe", "java": f"runtime/{os_dir}/java/bin/java.exe", "node": f"runtime/{os_dir}/node/node.exe"},
+        boot_jar=f"runtime/{os_dir}/bundle/astrostudyboot.jar",
+        start_script="Horosa-Web/start_horosa_local.ps1", stop_script="Horosa-Web/stop_horosa_local.ps1",
+        platform_requirements={"arch": "x86_64", "min_os": toolchain["platforms"][platform_key].get("min_os")},
+    )
+    (payload_root / "runtime-manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return {"version": manifest["version"], "pure_dists": len(pure), "native_wheels": sorted(wheels), "jlink": jlink, "skip_sdist": skip_sdist}
+
+
+NATIVE_SMOKE_IMPORTS = "numpy, pandas, pyarrow, astropy, swisseph, sxtwl, ephem, pendulum, kerykeion, cherrypy, streamlit, bidict, cnlunar, cn2an"
+
+
+def native_smoke(payload_root: Path) -> bool:
+    """Only meaningful on Windows (the payload's binaries are x64 Windows): import every native-backed dep,
+    print java/node versions. Elsewhere it is deferred to the runtime matrix."""
+    if os.name != "nt":
+        print("cross build — native smoke deferred to runtime-matrix (this host cannot run x64 Windows binaries)")
+        return False
+    runtime_root = payload_root / "runtime" / "windows"
+    subprocess.run([str(runtime_root / "python" / "python.exe"), "-c", f"import {NATIVE_SMOKE_IMPORTS}; print('imports ok')"], check=True)
+    subprocess.run([str(runtime_root / "java" / "bin" / "java.exe"), "-version"], check=True)
+    subprocess.run([str(runtime_root / "node" / "node.exe"), "-v"], check=True)
+    return True
+
+
+def write_archive(payload_root: Path, archive_path: Path) -> Path:
+    """zip DEFLATE 6 with `runtime-payload/…` entry names; copy2'd .ps1 keep their BOM byte for byte."""
+    archive_path.parent.mkdir(parents=True, exist_ok=True)
+    if archive_path.exists():
+        archive_path.unlink()
+    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+        for path in sorted(payload_root.rglob("*")):
+            if path.is_dir():
+                continue
+            zf.write(path, path.relative_to(payload_root.parent))
+    return archive_path
+
+
+def build_from_seed(args) -> Path:
+    seed = _seed_module()
+    lock = seed.load_lock(args.lock)
+    toolchain = seed.load_toolchain(args.toolchain)
+    seed_manifest = seed.verify_seed(args.seed)
+    seed_version = str(seed_manifest["version"])
+    if seed_version != read_version():
+        print(f"note: seed is v{seed_version}, pyproject is v{read_version()} — the derived payload carries the seed's version")
+    tree = seed.materialize_seed(args.seed, BUILD_ROOT / "seed")
+    downloads = download_toolchain(toolchain, resolve_latest=args.resolve_latest)
+    jlink_bin = None
+    if not args.full_jdk and os.name != "nt":
+        jlink_bin = seed.host_jlink(int(toolchain["java"]["major"]))
+        if jlink_bin is None:
+            raise SystemExit(f"no host jlink of major {toolchain['java']['major']} for cross-linking; pass --full-jdk or build on Windows")
+    summary = stage_from_seed(seed, tree, lock, toolchain, PAYLOAD_ROOT, downloads=downloads, python=args.python,
+                              jlink=not args.full_jdk, skip_sdist=args.skip_sdist_builds, jlink_bin=jlink_bin)
+    if not args.skip_native_smoke:
+        native_smoke(PAYLOAD_ROOT)
+    suffix = "-DRYRUN" if args.skip_sdist_builds else ""
+    out_dir = args.out_dir or DIST_ROOT
+    archive = write_archive(PAYLOAD_ROOT, out_dir / f"horosa-runtime-win32-x64-v{seed_version}{suffix}.zip")
+    print(json.dumps({"archive": str(archive), **summary}, ensure_ascii=False, indent=2))
+    return archive
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+
+    ap = argparse.ArgumentParser(description="Build the win32-x64 runtime payload (vendor mode by default; --seed derives from a darwin-arm64 seed).")
+    ap.add_argument("--seed", type=Path, default=None, help="darwin-arm64 runtime archive to derive from (hosted mode)")
+    ap.add_argument("--lock", type=Path, default=None, help="contracts/runtime_python_lock.json override")
+    ap.add_argument("--toolchain", type=Path, default=None, help="contracts/runtime_toolchain.json override")
+    ap.add_argument("--out-dir", type=Path, default=None)
+    ap.add_argument("--python", default=None, help="interpreter with pip used for `pip download` / `pip wheel` (default: this one)")
+    ap.add_argument("--full-jdk", action="store_true", help="copy the whole JDK instead of jlinking the pinned module set")
+    ap.add_argument("--resolve-latest", action="store_true", help="ignore the toolchain pins and resolve latest JDK/Node (dev only)")
+    ap.add_argument("--skip-sdist-builds", action="store_true", help="dry run on a non-Windows host: skip dists that must be built from sdist (archive gets a -DRYRUN suffix)")
+    ap.add_argument("--skip-native-smoke", action="store_true")
+    args = ap.parse_args(argv)
+    if args.seed is None:
+        archive = build()
+        print(f"runtime payload ready: {archive}")
+        return 0
+    build_from_seed(args)
+    return 0
+
+
 if __name__ == "__main__":
-    archive = build()
-    print(f"runtime payload ready: {archive}")
+    raise SystemExit(main())

@@ -346,11 +346,42 @@ def find_jdk_home(extracted: Path) -> Path:
     raise SystemExit(f"no JDK home (bin/ + jmods/) under {extracted}")
 
 
-def jlink_image(jdk_home: Path, dest: Path, modules: list[str]) -> None:
-    jlink = jdk_home / "bin" / ("jlink.exe" if os.name == "nt" else "jlink")
+def _jlink_major(jlink: Path) -> int | None:
+    try:
+        out = subprocess.run([str(jlink), "--version"], capture_output=True, text=True, timeout=60).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    match = re.match(r"(\d+)", out)
+    return int(match.group(1)) if match else None
+
+
+def host_jlink(major: int = 17) -> Path | None:
+    """A jlink that can run on THIS machine AND matches the target JDK's major version (jlink refuses to
+    link jmods of another major: "jlink version 22.0 does not match target java.base version 17.0").
+    Candidates: the vendored mac Zulu JDK (the mac packager's own), then PATH."""
+    candidates: list[Path] = []
+    vendored = PKG_ROOT.parent / "vendor" / "runtime-source" / "runtime" / "mac" / "java" / "bin" / "jlink"
+    if vendored.is_file():
+        candidates.append(vendored)
+    found = shutil.which("jlink")
+    if found:
+        candidates.append(Path(found))
+    for java_home in (os.environ.get("JAVA_HOME"),):
+        if java_home and (Path(java_home) / "bin" / "jlink").is_file():
+            candidates.append(Path(java_home) / "bin" / "jlink")
+    for candidate in candidates:
+        if _jlink_major(candidate) == major:
+            return candidate
+    return None
+
+
+def jlink_image(jdk_home: Path, dest: Path, modules: list[str], *, jlink_bin: Path | None = None) -> None:
+    """Link `modules` from `jdk_home/jmods` into `dest`. `jlink_bin` defaults to the JDK's own jlink (native
+    build); a host jlink of the same major version cross-links a foreign platform's jmods (dry runs)."""
+    jlink = jlink_bin or (jdk_home / "bin" / ("jlink.exe" if os.name == "nt" else "jlink"))
     jmods = jdk_home / "jmods"
     if not jlink.is_file() or not jmods.is_dir():
-        raise SystemExit(f"jlink/jmods missing under {jdk_home}; pass --full-jdk to copy the whole JDK instead")
+        raise SystemExit(f"jlink ({jlink}) or jmods ({jmods}) missing; pass --full-jdk to copy the whole JDK instead")
     if dest.exists():
         shutil.rmtree(dest)
     subprocess.run([str(jlink), "--module-path", str(jmods), "--add-modules", ",".join(modules), "--strip-debug",

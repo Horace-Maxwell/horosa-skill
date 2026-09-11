@@ -480,6 +480,9 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   别造假条文；粗 grep `條文待補充` 会假阳——验 `基础条文` 是真条文即可。`gen_shaozi_tiaowen.py` 必须
   `newline="\n"` 写 LF（保两平台构建字节可复现）。
 
+- **Windows 半边 = 从 darwin 种子派生，不再有「构建机专属输入」（v0.38.0 A2）。** `build_runtime_release_windows.py --seed <darwin tar.gz>`
+  在任何主机（含 GitHub `windows-latest`）产出 win32-x64 载荷；`vendor/runtime-source/runtime/windows` 与 `prepareruntime` 不再是
+  发布输入（`verify_vendor_runtime_sources.py` 不再要求，preflight 那一闸回到硬闸）。vendor 模式保留为构建机回退。
 - **托管派生（seed + derive）的四条不变量（v0.38.0 A1）**：① 只从通过 `verify_runtime_release` 闸的 darwin-arm64 种子派生
   （`runtime_seed.verify_seed` 复用 REQUIRED_ENTRIES + 内嵌清单检查）；② 依赖集 = `contracts/runtime_python_lock.json`——种子的
   dist 集逐名逐版（pure 逐字节复制、native 同版本重拉或在目标 runner 从 sdist 编：pyswisseph / sxtwl 没有 cp312 Windows wheel），
