@@ -244,6 +244,11 @@ jobs:
         run: uv run python scripts/sync_windows_release.py --check --tag "${{ needs.resolve.outputs.tag }}" --draft
       - name: Publish the draft as latest
         run: gh release edit "${{ needs.resolve.outputs.tag }}" --repo "${GITHUB_REPOSITORY}" --draft=false --latest
+      # A `release: published` event raised with GITHUB_TOKEN does NOT start other workflows (GitHub's anti-recursion
+      # rule) — v0.38.0's publish fired neither release-completeness nor publish-pypi. workflow_dispatch is the
+      # documented exception, so the completeness guard is dispatched explicitly here.
+      - name: Dispatch the completeness guard (release events from GITHUB_TOKEN start no workflows)
+        run: gh workflow run release-completeness.yml --repo "${GITHUB_REPOSITORY}"
       - name: Re-check the public latest
         working-directory: ./horosa-skill
         run: uv run python scripts/sync_windows_release.py --check

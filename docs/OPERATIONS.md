@@ -107,7 +107,8 @@ v0.25.1 的坑）。守卫：`tests/test_repack_release_assets.py`。
 
 ## Provenance / Attestation
 
-v0.38.0 A5 起 attestation 由 `release-runtime.yml` 的 `assemble` job 对两份归档 + 清单 + SHA256SUMS 做
+v0.38.0 起 attestation 由 `release-runtime.yml` 的 `assemble` job 对两份归档 + 清单 + SHA256SUMS 做（v0.38.0 实测
+`gh attestation verify runtime-manifest.json --repo Horace-Maxwell/horosa-skill` exit 0）
 （`actions/attest-build-provenance@v2`，dry run 不做）：`gh attestation verify horosa-runtime-win32-x64-vX.Y.Z.zip
 --repo Horace-Maxwell/horosa-skill`。**≤ v0.37.0 的资产没有 attestation**——旧 `release.yml` 是 `runs-on: self-hosted`
 而本仓从未注册过 self-hosted runner（v0.9.2→v0.25.0 的 20 次 tag 触发全部排队 24h 后被取消，零 step 执行；

@@ -553,7 +553,8 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   SHA256SUMS、SBOM、上 draft、`attest-build-provenance`）→ `matrix`（`runtime-matrix.yml` 三台真机装→起→四引擎→
   ——三 lane **都阻断**，含 windows-11-arm（dry run #4 全绿后转阻断；`arm_nonblocking=true` 只是单次逃生口）→
   `setup` 四客户端→live pytest→停）→ `publish`（`sync_windows_release.py --check --tag vX --draft` 必 `[OK]` →
-  `gh release edit --draft=false --latest` → 再 `--check` 公开 latest）。**清单只在两平台齐了才上到 release**——「缺半」
+  `gh release edit --draft=false --latest` → `gh workflow run release-completeness.yml`（GITHUB_TOKEN 产生的 release 事件不触发任何
+  workflow，completeness / publish-pypi 都得由 publish job 显式 dispatch）→ 再 `--check` 公开 latest）。**清单只在两平台齐了才上到 release**——「缺半」
   窗口从根上消灭；`dry_run=true` 以公开资产为 seed 走完全程不上传（流水线自己的验收）。形状锁
   `tests/test_release_pipeline_shape.py`（只手动触发 / 不 `gh release create` / publish 必 needs matrix / draft 不带清单）。
 - **发布步骤只允许以脚本形态存在**（v0.27.0：SBOM 生成器一直在仓里、却因发布流程是手打清单而漏传）：

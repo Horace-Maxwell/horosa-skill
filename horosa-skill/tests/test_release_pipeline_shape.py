@@ -40,6 +40,9 @@ def test_release_pipeline_never_creates_a_public_release_itself() -> None:
     assert "--draft=false --latest" in publish
     assert "!inputs.dry_run" in publish and "inputs.publish" in publish
     assert publish.index("sync_windows_release.py --check --tag") < publish.index("--draft=false --latest"), "[OK] before flipping"
+    # release events raised with GITHUB_TOKEN start no workflows: the guard must be dispatched by the publish job itself
+    assert "gh workflow run release-completeness.yml" in publish
+    assert publish.index("--draft=false --latest") < publish.index("gh workflow run release-completeness.yml")
     # after flipping, the public latest is checked again
     assert publish.rstrip().endswith("sync_windows_release.py --check")
 

@@ -16,7 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
-| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基；A2 Windows 半边从 darwin 种子派生；A3 发布契约（清单钉 tag + size、按契约逐平台判完整、平台表锁）；A4 安装侧平台策略（Windows ARM 公告式回退、`min_os`、平台键看芯片）；B4 `setup --client` 一条命令接入（七步、失败包、真 stdio 探测）；B5 agent 文档（shell-only 契约、四份薄镜像、命令守卫）；B6 doctor 机器条件（码表人话、--explain、长路径余量、quarantine、仿真进程、下载旋钮、零外网）；A5 托管流水线（draft → 派生 → 三台真机矩阵 → [OK] 才公开；首跑抓到非默认端口下 stop 停不掉）；主干 CI 红了 19 个 commit 没人看（Windows CRLF checkout / 路径分隔符 / 宿主 OS 默认路径 / macOS runner netstat CLOSED） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数；回退只许公告着做、载荷自带解释器所以平台键看芯片不看宿主 Python；接入的终点是客户端那条命令真起了 server；给 agent 抄的每条命令都要有守卫对到真实 CLI；每个诊断码都要有人话、doctor 只报不改且默认不碰外网；清单只在两平台齐了才上 release、真机证据由流水线产出 |
+| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基；A2 Windows 半边从 darwin 种子派生；A3 发布契约（清单钉 tag + size、按契约逐平台判完整、平台表锁）；A4 安装侧平台策略（Windows ARM 公告式回退、`min_os`、平台键看芯片）；B4 `setup --client` 一条命令接入（七步、失败包、真 stdio 探测）；B5 agent 文档（shell-only 契约、四份薄镜像、命令守卫）；B6 doctor 机器条件（码表人话、--explain、长路径余量、quarantine、仿真进程、下载旋钮、零外网）；A5 托管流水线（draft → 派生 → 三台真机矩阵 → [OK] 才公开；首跑抓到非默认端口下 stop 停不掉）；主干 CI 红了 19 个 commit 没人看（Windows CRLF checkout / 路径分隔符 / 宿主 OS 默认路径 / macOS runner netstat CLOSED）；A6 v0.38.0 首次托管双平台一次公开（GITHUB_TOKEN 的 release 事件不触发下游 workflow） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数；回退只许公告着做、载荷自带解释器所以平台键看芯片不看宿主 Python；接入的终点是客户端那条命令真起了 server；给 agent 抄的每条命令都要有守卫对到真实 CLI；每个诊断码都要有人话、doctor 只报不改且默认不碰外网；清单只在两平台齐了才上 release、真机证据由流水线产出 |
 | v0.37.0 (2026-09) | 任意 AI 客户端可调用：广告层只对一个客户端对过 / 自家 .mcp.json 从未连通 / 端口静默采用与误杀 / 回环走代理 | 按**别人的**约束测；改 golden 前先答「旧断言为何不会红」；负向对照跑不红就如实改口 |
 | v0.36.0 收尾 (2026-09) | 「Java 族 live 需 Mongo」十个版本的误定性 = vendored 脚本裸 `-jar`；演禽假闸门 | 贴「环境限制」前先读 `Result` 原文、用上游桌面起法起一遍；闸门问项以 live 翻转为准，不以转发为准 |
 | v0.36.0 (2026-09) | 止血/可用性/捞回能力 15 批（响应放大、静默降级、手抄表、死键、降级误杀、扁平面丢键、moira 误排除、闸门半盲、错误码……） | 每批四件套 + 全量门禁；台账正文按批见下 |
@@ -101,6 +101,24 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.38.0 / 2026-09-11 — A6 首次托管发布：v0.38.0 双平台一次公开；两条发布期新知（GITHUB_TOKEN 的 release 事件不触发下游、publish 会再派生一次）
+
+- **过程**：CI 绿（6987a3e）→ `git tag v0.38.0` → `publish_release.sh --draft --dispatch`（seed 737 MB + .mcpb + wheel + SBOM 上 draft；
+  run 34572343136：build-windows 5 min 派生、assemble 双平台清单 + attestation、三 lane 真机全绿）→ `sync_windows_release.py --check
+  --tag v0.38.0 --draft` **[OK] complete** → `gh workflow run release-runtime.yml -f version=0.38.0 -f publish=true`（run 34574921999，
+  再跑一遍派生 + 三 lane，publish job 先 `--check --tag --draft` 再 `gh release edit --draft=false --latest`）→ 公开 `--check` [OK]，
+  `releases/latest/download/runtime-manifest.json` 列 darwin-arm64 + win32-x64（URL 钉 v0.38.0、带 size），
+  `uvx --from <wheel URL> horosa-skill --version` = 0.38.0，`gh attestation verify` 对清单与 seed 归档 exit 0。
+  「缺半」窗口首次为零：Windows 用户从公开的第一秒起就有自己的半边。
+- **新知 ①**：用 `GITHUB_TOKEN` 做的 `gh release edit --draft=false` 产生的 `release: published` 事件**不触发任何 workflow**
+  （GitHub 防递归规则）——`release-completeness.yml` 与 `publish-pypi.yml` 都没跑。`workflow_dispatch` 是明文例外，所以 publish job
+  现在自己 `gh workflow run release-completeness.yml`；PyPI 通道开通后也要在 publish job 里显式 dispatch（或用 PAT）。本次手动
+  dispatch 了 completeness（绿）。
+- **新知 ②**：`publish=true` 那一跑会**再派生一次** Windows 半（zip 字节不同：723171512 → 723171643，时间戳所致），清单 / SHA256SUMS /
+  attestation 在同一跑里同步重生成，所以自洽；但 draft 上的第一份 zip 被 --clobber 覆盖、第一次的 attestation 作废。可接受，
+  但更好的形状是 publish 跑复用 draft 上已验证的资产（后续项，记在 memory）。
+- **法则**：**公开的判据只有 `--check` 的 [OK]**（本次两次都 [OK]）；**下游 workflow 不要指望 release 事件，publish 侧显式 dispatch**。
 
 ### v0.38.0 / 2026-09-11 — 主干 CI 红了 19 个 commit 没人看：本机门禁全绿 ≠ CI 绿；Windows checkout 与 macOS runner 各有一套「本机不会红」
 
