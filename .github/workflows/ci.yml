@@ -188,18 +188,19 @@ jobs:
           # 这条命令其实已经这样红了几十轮而没人看见。
           '{"date":"2028-04-06","time":"09:33:00","zone":"+08:00","lat":"31n13","lon":"121e28","gpsLat":31.2167,"gpsLon":121.4667,"agent_confirmed_settings":true,"clarification_notes":"windows smoke: defaults accepted"}' | uv run horosa-skill tool run qimen --stdin --output "$root\qimen-smoke.json"
           if (-not (Test-Path -LiteralPath "$root\qimen-smoke.json")) { throw "qimen smoke wrote no --output file" }
-          $smoke = Get-Content -Raw -LiteralPath "$root\qimen-smoke.json" | ConvertFrom-Json
-          if (-not $smoke.ok) { throw "qimen smoke returned ok=false: $($smoke.error | ConvertTo-Json -Compress)" }
+          # -AsHashtable：pwsh 的 ConvertFrom-Json 默认大小写不敏感，信封里 xunKong / xunkong 并存会直接抛错（CI 实测）
+          $smoke = Get-Content -Raw -LiteralPath "$root\qimen-smoke.json" | ConvertFrom-Json -AsHashtable
+          if (-not $smoke['ok']) { throw "qimen smoke returned ok=false: $($smoke['error'] | ConvertTo-Json -Compress -Depth 5)" }
           uv run horosa-skill memory query --tool qimen --limit 1
           # v0.38.0 B4：`setup` 在 Windows 真机上写配置 → 回读体检 → 用客户端将要执行的命令真起一次 stdio server（cursor = 11 个工具）
           uv run horosa-skill setup --client cursor --config "$root\cursor-mcp.json" --skip-install --no-probe-network > "$root\setup-cursor.json"
           if (-not (Test-Path -LiteralPath "$root\cursor-mcp.json")) { throw "setup wrote no cursor config" }
-          $setupReport = Get-Content -Raw -LiteralPath "$root\setup-cursor.json" | ConvertFrom-Json
-          if (-not $setupReport.ok) { throw "setup returned ok=false: $($setupReport.summary)" }
-          if ($setupReport.steps.stdio_probe.tools -ne 11) { throw "stdio probe listed $($setupReport.steps.stdio_probe.tools) tools, expected 11" }
+          $setupReport = Get-Content -Raw -LiteralPath "$root\setup-cursor.json" | ConvertFrom-Json -AsHashtable
+          if (-not $setupReport['ok']) { throw "setup returned ok=false: $($setupReport['summary'])" }
+          if ($setupReport['steps']['stdio_probe']['tools'] -ne 11) { throw "stdio probe listed $($setupReport['steps']['stdio_probe']['tools']) tools, expected 11" }
           # v0.38.0 B5：codex 形状 TOML 生成 → 回读体检（client check）→ tomllib 断言超时字段在场、command 是绝对路径
           uv run horosa-skill client config --format codex --write "$root\codex-config.toml" > $null
           uv run horosa-skill client check --client codex --config "$root\codex-config.toml" > "$root\codex-check.json"
-          $codexCheck = Get-Content -Raw -LiteralPath "$root\codex-check.json" | ConvertFrom-Json
-          if (-not $codexCheck.ok) { throw "codex client check found problems: $($codexCheck.summary)" }
+          $codexCheck = Get-Content -Raw -LiteralPath "$root\codex-check.json" | ConvertFrom-Json -AsHashtable
+          if (-not $codexCheck['ok']) { throw "codex client check found problems: $($codexCheck['summary'])" }
           uv run python -c 'import sys, tomllib; s = tomllib.load(open(sys.argv[1], "rb"))["mcp_servers"]["horosa"]; assert s["startup_timeout_sec"] == 120 and s["tool_timeout_sec"] == 600, s; assert ":" in s["command"] and s["command"].lower().endswith("uv.exe"), s["command"]; print("codex toml ok:", s["command"])' "$root\codex-config.toml"
