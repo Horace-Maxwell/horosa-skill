@@ -692,6 +692,9 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | Windows 首次启动弹防火墙 / `doctor` 报 `listener:not_loopback_only` | 旧模板起 Java 没钉 `--server.address=127.0.0.1`，绑在 0.0.0.0 | 升级 horosa-skill 后 `runtime restart` 重套模板（每次 start 都会重拷 `.ps1`）；`doctor.listener_scope` 应变为 `loopback_only: true` |
 | Windows 用户名带空格（`C:\Users\John Doe`）时 chart/Java 都起不来，`.horosa-local-logs` 里 python 报找不到文件 | 旧模板 `-ArgumentList` 路径元素没引号，被拆成两段 | 升级后 `runtime restart`；判据 = `tests/test_runtime_launcher_templates.py` 的引号断言（v0.38.0 B1） |
 | Codex 里 horosa 一堆报错 / 首轮看不到工具 | 多半是 `startup_timeout_sec`/`tool_timeout_sec` 没写（Codex 默认 10 s/60 s，冷启动与择日扫描都超） | `horosa-skill client check --client codex`（v0.38.0 起缺省也报 `codex_*_timeout_missing`）；重跑 `client config --format codex --write ~/.codex/config.toml` |
+| `setup` 在第 1 步 `network_probe` 就失败（5 s 内，`setup.network_unreachable`） | 清单 URL 经所有镜像都取不到（github.com:443 不通 / 代理拦 HEAD） | 失败包 `details.next_action` 给三条路：`HOROSA_RUNTIME_MIRROR=<前缀>`、`--archive <本地归档>`、`--no-probe-network` 跳过预检；`retry_command` 已带后者（v0.38.0 B4） |
+| `setup` 在 `stdio_probe` 失败（`setup.stdio_probe_failed`） | 客户端将要执行的那条命令起不来 server：命令路径不对、uvx 首跑下载失败、工具数与工具面不符 | 看失败包 `details.command` 与 `details.stderr_tail`；uvx 形态可先手跑 `uvx --refresh --from <wheel URL> horosa-skill --version`；checkout 内改 `--launcher uv`（v0.38.0 B4） |
+| `setup --client claude-code` 只打印了命令没注册（`config_mode: printed`） | `claude` 不在 PATH（GUI 装的 Claude Code 没把 CLI 放进 shell PATH） | 复制 `steps.config.command` 到有 `claude` 的终端执行，或 `--scope project` 写当前项目的 `.mcp.json`（v0.38.0 B4） |
 | Windows ARM（骁龙本）上 `install` 成功但结果带 `runtime.platform_emulated`、`doctor` 报 `emulated: true` | 不是故障：本机没有原生载荷，自动装了 win32-x64 载荷走 Windows 11 x64 仿真（v0.38.0 A4） | 正常使用；冷启动更慢，矩阵里 `HOROSA_RUNTIME_START_TIMEOUT_SECONDS=900`；若报 `install_missing_platform` 说明清单连 win32-x64 都缺，先查发布完整性 |
 | Apple Silicon 上 `install` 报 `install_missing_platform`，`platform` 却是 `darwin-x64` | 宿主 Python 是 x86_64（Rosetta 下的旧 Homebrew / conda），旧 `_platform_key()` 照抄 `platform.machine()` | v0.38.0 起 `sysctl.proc_translated` 判出真芯片给 arm64 载荷（载荷自带解释器，宿主架构无关）；`doctor.arch.emulated: true` 只是提示 |
 | `install` 报 `runtime.install_os_too_old` | 载荷声明的 `min_os`（派生 Windows 载荷 = 10.0.17763，即 Windows 10 1809）高于本机 | 升级系统或网关模式；`details.host_os` / `min_os` 已给出两边版本 |
@@ -703,6 +706,13 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 A global stability pass hardened these; keep them true when you touch the relevant code:
 
+- **`setup` 的七步顺序与失败包是契约（v0.38.0 B4）。** `network_probe → install → config → doctor → client_check → stdio_probe →
+  next_steps`，顺序冻结在 `tests/test_cli_output_contract.py::test_setup_public_keys`；失败包只走 stderr、退出码 2，键
+  `step / code / config_untouched / backup_path / retry_command / steps`，**第 3 步之前失败保证 `config_untouched: true`**
+  （`tests/test_setup_command.py` 负向：装失败时预置配置逐字节相等）。`doctor` / `client check` 与 `setup` 永远共用
+  `_doctor_report` / `_client_check_report`（不许各写一套判定）；`stdio_probe` 必须真 spawn 配置里那条命令（进程内
+  `create_mcp_server` 证明不了客户端能起它）；`_build_client_config_payload` 只在 `uv` 启动器与 mcporter/openclaw 形态下解析
+  checkout——wheel 装出来的包旁边没有 pyproject.toml，uvx 形态必须能在没有 checkout 的机器上生成配置（ci.yml wheel 步骤锁）。
 - **平台策略只有一处真值、两处镜像，回退只许公告着做（v0.38.0 A4）。** 真值 = `contracts/release_platforms.json`；镜像 =
   `manager.SUPPORTED_PAYLOAD_PLATFORMS` / `PLATFORM_FALLBACKS`（wheel 不带 contracts）与 README×2 平台表，各有锁步测试。
   `install()` 走回退必须返回 `platform_fallback{requested, installed, mode}` + `warnings[runtime.platform_emulated]`（含版本短路那条

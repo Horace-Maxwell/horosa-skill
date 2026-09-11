@@ -111,7 +111,9 @@ def test_why_the_old_checks_could_not_catch_it() -> None:
     readers = [
         path
         for path in list(SCRIPTS.glob("verify_*.py")) + list((PKG_ROOT / "tests").glob("test_*.py"))
-        if path.name not in {"verify_client_configs.py", "test_verify_client_configs.py"}
+        # test_setup_command.py 读的是 tmp 里**自己写出的** .mcp.json（claude-code 项目级 scope，v0.38.0 B4），
+        # 不是仓里提交的那份 —— 本测试钉的前提是「没有别的检查读提交的 .mcp.json」，那条前提仍成立。
+        if path.name not in {"verify_client_configs.py", "test_verify_client_configs.py", "test_setup_command.py"}
         and ".mcp.json" in path.read_text(encoding="utf-8")
     ]
     assert readers == [], (

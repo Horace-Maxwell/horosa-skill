@@ -12,7 +12,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-106-1d4ed8?style=for-the-badge" alt="106 tools" />
-  <img src="https://img.shields.io/badge/测试-886_passed-16a34a?style=for-the-badge" alt="886 passed" />
+  <img src="https://img.shields.io/badge/测试-905_passed-16a34a?style=for-the-badge" alt="905 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
 
@@ -112,6 +112,7 @@ uv run horosa-skill serve        # 🚀 启动本地 MCP（默认 http://127.0.0
 WHL="https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.37.0/horosa_skill-0.37.0-py3-none-any.whl"
 uvx --from "$WHL" horosa-skill install                    # 📦 装离线 runtime（同上）
 uvx --from "$WHL" horosa-skill doctor                     # 🩺 体检
+uvx --from "$WHL" horosa-skill setup --client cursor       # 🪄 零安装一条命令接入（自动选 `--launcher uvx-wheel`，配置里写 wheel URL）
 uvx --from "$WHL" horosa-skill serve --transport stdio    # 🚀 给客户端直连；`client config --launcher uvx-wheel` 生成对应配置
 ```
 
@@ -147,12 +148,15 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # 🚀 给客户端直
 
 ## 🔌 接入 AI 客户端
 
-一条命令生成**带真实绝对路径**的即用配置，无需手填占位符；生成器还会按客户端的工具数上限
-自动选合适的工具面：
+`setup --client <客户端>` 一条命令走完接入（v0.38.0）：探网（5 s）→ 装 / 校验离线 runtime → 写配置（自动定位、
+只动 horosa 条目、写前备份 `.horosa-bak`、原子替换）→ doctor → 回读磁盘体检 → **用客户端将要执行的那条命令真起一次
+stdio server 并数工具** → 打印下一步。失败时 stderr 给出结构化失败包（`step` / `code` / `config_untouched` /
+`backup_path` / `retry_command`），退出码 2；写配置之前失败保证 `config_untouched: true`。只想看配置不落盘用 `client config`：
 
 ```bash
-uv run horosa-skill client config --format claude-code   # 输出 claude mcp add … 命令
-uv run horosa-skill client config --format cursor        # deep link + mcpServers 片段
+uv run horosa-skill setup --client cursor                # 🪄 一条命令接入（claude-code / claude-desktop / cursor / vscode / codex / gemini / windsurf / cline / zed）
+uv run horosa-skill setup --client cursor --dry-run      # 只看计划：零副作用
+uv run horosa-skill client config --format claude-code   # 只生成不落盘：输出 claude mcp add … 命令
 uv run horosa-skill client config --format codex         # config.toml 片段（含超时设置）
 uv run horosa-skill client check                         # 体检本机各客户端**实际写着什么**
 ```
@@ -161,16 +165,16 @@ uv run horosa-skill client check                         # 体检本机各客户
 
 | 客户端 | 传输 | 一行接入 | 默认工具面 | 注意 |
 | :-- | :-- | :-- | :-- | :-- |
-| 🟣 **Claude Code** | stdio | `claude mcp add horosa -- uv run --directory <abs> horosa-skill serve --transport stdio` | 全量 116 | 项目内直接用仓根 `.mcp.json`；[说明](./horosa-skill/examples/clients/claude-code.md) |
+| 🟣 **Claude Code** | stdio | `setup --client claude-code`（CWD 有 `.mcp.json` 写项目级，否则自动 `claude mcp add --scope user`） | 全量 116 | 项目内直接用仓根 `.mcp.json`；[说明](./horosa-skill/examples/clients/claude-code.md) |
 | 🧩 **Claude Code Plugin** | stdio | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` | 全量 116 | skill + MCP 一步到位；首次仍需跑 `install` 装离线 runtime |
-| 🟠 **Claude Desktop** | stdio | `client config --format claude-desktop`，或安装 `.mcpb` 一键包 | 全量 116 | `.mcpb` 在每个 release 的资产里 |
-| 🟡 **Cursor** | stdio | `client config --format cursor`（输出官方 deep link，点击即装） | 精简 11 | Cursor 全局约 40 工具上限，**超出静默丢弃** |
-| 🔷 **VS Code (Copilot)** | stdio | `client config --format vscode`（`vscode:mcp/install` 链接 / `code --add-mcp`） | 精简 11 | 跨所有 server 共 128 工具上限；仓内已带 `.vscode/mcp.json` |
-| 🔵 **Codex** | stdio | `client config --format codex` | 精简 11 | 必须调高 `startup_timeout_sec`（默认 10 s）与 `tool_timeout_sec`（默认 60 s） |
-| 🟤 **Gemini CLI** | stdio | `client config --format gemini` | 精简 11 | 工具名 ≤63 字符 + 严格 JSON Schema 2020-12（广告层已按它收敛） |
-| 🌊 **Windsurf** | stdio | `client config --format windsurf` | 精简 11 | 100 工具上限 |
-| 🧱 **Cline** | stdio | `client config --format cline` | 精简 11 | 无工具搜索，全量面偏重 |
-| ⚡ **Zed** | stdio | `client config --format zed` | 精简 11 | 配置根键是 `context_servers` |
+| 🟠 **Claude Desktop** | stdio | `setup --client claude-desktop`，或安装 `.mcpb` 一键包 | 全量 116 | `.mcpb` 在每个 release 的资产里 |
+| 🟡 **Cursor** | stdio | `setup --client cursor`（或 `client config --format cursor` 拿官方 deep link 点击即装） | 精简 11 | Cursor 全局约 40 工具上限，**超出静默丢弃** |
+| 🔷 **VS Code (Copilot)** | stdio | `setup --client vscode`（写用户级 `mcp.json`；或 `client config --format vscode` 拿 `vscode:mcp/install` 链接） | 精简 11 | 跨所有 server 共 128 工具上限；仓内已带 `.vscode/mcp.json` |
+| 🔵 **Codex** | stdio | `setup --client codex`（原位合并 `~/.codex/config.toml`，含超时） | 精简 11 | 必须调高 `startup_timeout_sec`（默认 10 s）与 `tool_timeout_sec`（默认 60 s） |
+| 🟤 **Gemini CLI** | stdio | `setup --client gemini` | 精简 11 | 工具名 ≤63 字符 + 严格 JSON Schema 2020-12（广告层已按它收敛） |
+| 🌊 **Windsurf** | stdio | `setup --client windsurf` | 精简 11 | 100 工具上限 |
+| 🧱 **Cline** | stdio | `setup --client cline` | 精简 11 | 无工具搜索，全量面偏重 |
+| ⚡ **Zed** | stdio | `setup --client zed` | 精简 11 | 配置根键是 `context_servers` |
 | ⚪ **OpenClaw / mcporter** | stdio | `client openclaw-setup --workspace ~/.openclaw/workspace` | 全量 116 | — |
 | 🟢 **Open WebUI · n8n · Dify** | streamable-http | `horosa-skill serve --host 0.0.0.0 --token <随机串>` | 全量 116 | [接入说明](./horosa-skill/examples/clients/openwebui-streamable-http.md)；跨机必须带令牌，且**没有 TLS**，请放反代后面 |
 | 🔶 **ChatGPT / claude.ai 远程连接器** | streamable-http | 同上，再套一层 HTTPS 反代 | 全量 116 | **没有托管端点** —— 需要你自己的公网 HTTPS URL + 令牌 |
@@ -486,7 +490,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 🧰 可调用工具 | 106 / 106 `ok=true` |
-| 🧪 工程测试 | **886 / 886 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 72 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 🧪 工程测试 | **905 / 905 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 72 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 🛡️ 未确认参数时强制追问 | 96 个技法工具触发 `must_ask_user=true` |
 | 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 103 个导出 technique；契约 v14 镜像桌面端 aiExport v56） |
 | 🧾 技法依据卡 | 每个技法响应附 `data.technique_card`；算源声明与运行实测不符时显式亮警 |
@@ -501,7 +505,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 886 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 905 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

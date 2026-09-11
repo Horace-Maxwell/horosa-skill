@@ -90,6 +90,10 @@ jobs:
           (cd horosa-skill && uv build --wheel --out-dir /tmp/horosa-whl)
           whl="$(ls /tmp/horosa-whl/horosa_skill-*-py3-none-any.whl)"
           HOME=$(mktemp -d) uvx --from "file://${whl}" horosa-skill --version
+          # v0.38.0 B4：wheel 装出来的包旁边没有 pyproject.toml —— `setup` 必须自动选 uvx-wheel 启动器（而不是 BadParameter），
+          # dry-run 走完七步、零副作用。
+          HOME=$(mktemp -d) uvx --from "file://${whl}" horosa-skill setup --client cursor --config /tmp/horosa-setup-smoke/mcp.json --dry-run --no-probe-network \
+            | python3 -c 'import json,sys; r=json.load(sys.stdin); assert r["ok"] and r["launcher"]["kind"] == "uvx-wheel", r["launcher"]; print("setup dry-run via wheel:", r["summary"])'
       - name: Verify JS tool→engine boundary contracts (the issue #15 dead-key shape)
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_js_boundary_contracts.py
@@ -185,3 +189,9 @@ jobs:
           $smoke = Get-Content -Raw -LiteralPath "$root\qimen-smoke.json" | ConvertFrom-Json
           if (-not $smoke.ok) { throw "qimen smoke returned ok=false: $($smoke.error | ConvertTo-Json -Compress)" }
           uv run horosa-skill memory query --tool qimen --limit 1
+          # v0.38.0 B4：`setup` 在 Windows 真机上写配置 → 回读体检 → 用客户端将要执行的命令真起一次 stdio server（cursor = 11 个工具）
+          uv run horosa-skill setup --client cursor --config "$root\cursor-mcp.json" --skip-install --no-probe-network > "$root\setup-cursor.json"
+          if (-not (Test-Path -LiteralPath "$root\cursor-mcp.json")) { throw "setup wrote no cursor config" }
+          $setupReport = Get-Content -Raw -LiteralPath "$root\setup-cursor.json" | ConvertFrom-Json
+          if (-not $setupReport.ok) { throw "setup returned ok=false: $($setupReport.summary)" }
+          if ($setupReport.steps.stdio_probe.tools -ne 11) { throw "stdio probe listed $($setupReport.steps.stdio_probe.tools) tools, expected 11" }

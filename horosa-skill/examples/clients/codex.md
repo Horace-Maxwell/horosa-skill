@@ -2,7 +2,15 @@
 
 前置：已完成 `uv sync` 与 `uv run horosa-skill install`（离线 runtime，~730MB，断点续传）。
 
-## 一条命令生成配置（推荐）
+## 一条命令接入（v0.38.0 起推荐）
+
+```bash
+uv run horosa-skill setup --client codex      # 探网 → 装 runtime → 原位合并 ~/.codex/config.toml（只动 [mcp_servers.horosa]，先备份）→ doctor → 回读体检 → 真起一次 stdio
+```
+
+回读体检就是 `client check --client codex`：超时缺失、cwd 不存在、命令不在 PATH 都会当场报出来而不是留给 Codex「一堆报错」。
+
+## 只生成配置片段（不落盘）
 
 ```bash
 uv run horosa-skill client config --format codex

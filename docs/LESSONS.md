@@ -16,7 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
-| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基；A2 Windows 半边从 darwin 种子派生；A3 发布契约（清单钉 tag + size、按契约逐平台判完整、平台表锁）；A4 安装侧平台策略（Windows ARM 公告式回退、`min_os`、平台键看芯片） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数；回退只许公告着做、载荷自带解释器所以平台键看芯片不看宿主 Python |
+| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基；A2 Windows 半边从 darwin 种子派生；A3 发布契约（清单钉 tag + size、按契约逐平台判完整、平台表锁）；A4 安装侧平台策略（Windows ARM 公告式回退、`min_os`、平台键看芯片）；B4 `setup --client` 一条命令接入（七步、失败包、真 stdio 探测） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数；回退只许公告着做、载荷自带解释器所以平台键看芯片不看宿主 Python；接入的终点是客户端那条命令真起了 server |
 | v0.37.0 (2026-09) | 任意 AI 客户端可调用：广告层只对一个客户端对过 / 自家 .mcp.json 从未连通 / 端口静默采用与误杀 / 回环走代理 | 按**别人的**约束测；改 golden 前先答「旧断言为何不会红」；负向对照跑不红就如实改口 |
 | v0.36.0 收尾 (2026-09) | 「Java 族 live 需 Mongo」十个版本的误定性 = vendored 脚本裸 `-jar`；演禽假闸门 | 贴「环境限制」前先读 `Result` 原文、用上游桌面起法起一遍；闸门问项以 live 翻转为准，不以转发为准 |
 | v0.36.0 (2026-09) | 止血/可用性/捞回能力 15 批（响应放大、静默降级、手抄表、死键、降级误杀、扁平面丢键、moira 误排除、闸门半盲、错误码……） | 每批四件套 + 全量门禁；台账正文按批见下 |
@@ -101,6 +101,30 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.38.0 / 2026-09-10 — B4 一条命令接入：接入曾是四条命令 + 手粘配置，而且没有任何一处验证「客户端将要执行的那条命令真能起 server」
+
+- **症状**：① README 的接入路径是 `install` → `client config` → 手动粘进客户端文件 → 重启客户端 → 在客户端里发现没有工具
+  → 再来 `client check`；issue #14 直说「安装说明对 AI agent 不够友好」，issue #18 的「一堆报错」是超时没写；② `client config`
+  只打印建议、`client check` 只看文件、进程内 MCP 测试绕开 spawn——绝对路径对不对、uvx 缓存能不能建、Windows 上 spawn 走不走得通，
+  三者都只有用户在客户端里失败时才知道；③ 零安装用户（wheel 装出来的包旁边没有 pyproject.toml）跑 `client config --launcher uvx-wheel`
+  直接 BadParameter：生成器不分启动器一律先 `_resolve_skill_root`；④ 网络不通的机器要等 120 s 下载超时才知道装不了。
+- **guard**：① `horosa-skill setup --client <target>`，七步固定并逐步记录 `steps.<name>`：`network_probe`（HEAD 清单 URL 走镜像，5 s，
+  失败立刻报 `setup.network_unreachable` 并给三条出路）→ `install`（版本短路即幂等）→ `config`（自动定位 + `_merge_client_config`
+  安全合并；claude-code 在 CWD 有 `.mcp.json` / `--scope project` 时写项目文件，否则 `claude` 在 PATH 就执行 `claude mcp add --scope user`
+  并记 `rollback`，不在 PATH 只打印命令）→ `doctor`（与 `doctor` 命令共用 `_doctor_report`；`--skip-install`/`--dry-run` 下只报不拦）→
+  `client_check`（回读**磁盘上**的条目，共用 `_client_check_report`）→ `stdio_probe`（用 `mcp` 客户端真 spawn 配置里那条命令 +
+  `--skip-runtime-start`，断言工具数 = 该客户端工具面；顺带焐热 uvx 缓存）→ `next_steps`（各客户端重启话术 + 一句试用提示 +
+  `selfcheck` + doctor 的 warnings）。② 失败包写 stderr、退出码 2：`step` / `code` / `config_untouched` / `backup_path` /
+  `retry_command`（探针失败时自动带 `--no-probe-network`）；`tests/test_setup_command.py` 锁「第 3 步之前失败用户配置一个字节不动」
+  （负向：装失败时预置文件逐字节相等）、dry-run 零副作用、幂等（第二次写出逐字节相同 + `.horosa-bak`）、Intel/mirror/uvx-wheel
+  启动器、claude-code 三种 scope（真调 `_claude_mcp_add` 的替身记录命令）、真 stdio 探测数出 11 个工具、stderr 尾巴随失败包。
+  ③ `_build_client_config_payload` 只在 `uv` 启动器与 mcporter/openclaw 形态下解析 checkout；`_default_setup_launcher`：checkout 内
+  `uv`，否则 `uvx-wheel`；ci.yml 的 wheel 步骤真跑 `uvx --from <wheel> horosa-skill setup --dry-run` 断言 `launcher.kind == uvx-wheel`，
+  windows-smoke 真跑 `setup --client cursor --skip-install`（写配置 → 回读 → Windows 上真 spawn → 11 个工具）。④ 输出契约冻结在
+  `tests/test_cli_output_contract.py::test_setup_public_keys`；doctor 多一个 `environment.probes.uv`（MCPB 的 `server.type: "uv"` 靠它）。
+- **法则**：**接入的终点是「客户端将要执行的那条命令真起了 server」，不是「配置文件写好了」**；每一步都要能单独失败、失败要说清
+  动了什么没动什么（`config_untouched` / `backup_path`）；进程内测试证明不了 spawn，真 spawn 才算。
 
 ### v0.38.0 / 2026-09-10 — A4 安装侧平台策略：Windows ARM 自动装 x64 载荷（公告、不静默），Intel Mac 照旧拒绝，`min_os` 真有人查
 

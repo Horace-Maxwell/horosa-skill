@@ -75,7 +75,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `106 / 106 ok=true` |
-| Engineering tests | `886 / 886 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 72 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `905 / 905 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 72 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `84` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `8` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`103` export techniques modeled; contract v14 mirrors desktop aiExport v56) |
@@ -338,6 +338,7 @@ straight from its URL; `HOROSA_RUNTIME_MIRROR` rewrites the wheel URL and the ru
 WHL="https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.37.0/horosa_skill-0.37.0-py3-none-any.whl"
 uvx --from "$WHL" horosa-skill install                    # install the offline runtime (same as above)
 uvx --from "$WHL" horosa-skill doctor                     # health check
+uvx --from "$WHL" horosa-skill setup --client cursor       # zero-install one-command onboarding (picks `--launcher uvx-wheel`, writes the wheel URL)
 uvx --from "$WHL" horosa-skill serve --transport stdio    # stdio for clients; `client config --launcher uvx-wheel` emits matching configs
 ```
 
@@ -379,12 +380,17 @@ uv run horosa-skill export registry
 
 ## Supported AI clients
 
-One command writes a ready-to-use config with real absolute paths, and picks the right tool
-surface for each client's tool-count limit:
+`setup --client <client>` does the whole onboarding in one command (v0.38.0): network probe (5 s) → install / verify the
+offline runtime → write the config (auto-located, only the horosa entry, `.horosa-bak` backup, atomic replace) → doctor →
+re-read the file from disk → **start the server once over stdio with the exact command the client will run and count
+the tools** → print next steps. On failure a structured envelope goes to stderr (`step` / `code` / `config_untouched` /
+`backup_path` / `retry_command`) with exit code 2; failing before the config step guarantees `config_untouched: true`.
+`client config` only prints a config without writing it:
 
 ```bash
-uv run horosa-skill client config --format claude-code   # prints the `claude mcp add …` command
-uv run horosa-skill client config --format cursor        # deep link + mcpServers snippet
+uv run horosa-skill setup --client cursor                # one-command onboarding (claude-code / claude-desktop / cursor / vscode / codex / gemini / windsurf / cline / zed)
+uv run horosa-skill setup --client cursor --dry-run      # plan only: zero side effects
+uv run horosa-skill client config --format claude-code   # print only: the `claude mcp add …` command
 uv run horosa-skill client config --format codex         # config.toml snippet (with timeouts)
 uv run horosa-skill client check                         # audit what each client ACTUALLY has
 ```
@@ -393,16 +399,16 @@ uv run horosa-skill client check                         # audit what each clien
 
 | Client | Transport | One-line setup | Default surface | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| **Claude Code** | stdio | `claude mcp add horosa -- uv run --directory <abs> horosa-skill serve --transport stdio` | full (116) | The repo ships a project `.mcp.json`; [guide](./horosa-skill/examples/clients/claude-code.md) |
+| **Claude Code** | stdio | `setup --client claude-code` (writes the project `.mcp.json` when the CWD has one, else runs `claude mcp add --scope user`) | full (116) | The repo ships a project `.mcp.json`; [guide](./horosa-skill/examples/clients/claude-code.md) |
 | **Claude Code Plugin** | stdio | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` | full (116) | Skill + MCP in one step; the offline runtime still needs a one-time `install` |
-| **Claude Desktop** | stdio | `client config --format claude-desktop`, or install the `.mcpb` bundle | full (116) | The `.mcpb` ships as a release asset |
-| **Cursor** | stdio | `client config --format cursor` (prints the official install deep link) | compact (11) | Cursor caps at ~40 tools globally and **drops the rest silently** |
-| **VS Code (Copilot)** | stdio | `client config --format vscode` (`vscode:mcp/install` link / `code --add-mcp`) | compact (11) | 128-tool cap across all servers; the repo ships `.vscode/mcp.json` |
-| **Codex** | stdio | `client config --format codex` | compact (11) | Raise `startup_timeout_sec` (default 10 s) and `tool_timeout_sec` (default 60 s) |
-| **Gemini CLI** | stdio | `client config --format gemini` | compact (11) | Tool names ≤63 chars + strict JSON Schema 2020-12 (the advertised layer already conforms) |
-| **Windsurf** | stdio | `client config --format windsurf` | compact (11) | 100-tool cap |
-| **Cline** | stdio | `client config --format cline` | compact (11) | No tool search; the full surface is heavy |
-| **Zed** | stdio | `client config --format zed` | compact (11) | Config root key is `context_servers` |
+| **Claude Desktop** | stdio | `setup --client claude-desktop`, or install the `.mcpb` bundle | full (116) | The `.mcpb` ships as a release asset |
+| **Cursor** | stdio | `setup --client cursor` (or `client config --format cursor` for the official install deep link) | compact (11) | Cursor caps at ~40 tools globally and **drops the rest silently** |
+| **VS Code (Copilot)** | stdio | `setup --client vscode` (writes the user-level `mcp.json`; or `client config --format vscode` for the `vscode:mcp/install` link) | compact (11) | 128-tool cap across all servers; the repo ships `.vscode/mcp.json` |
+| **Codex** | stdio | `setup --client codex` (merges into `~/.codex/config.toml` in place, timeouts included) | compact (11) | Raise `startup_timeout_sec` (default 10 s) and `tool_timeout_sec` (default 60 s) |
+| **Gemini CLI** | stdio | `setup --client gemini` | compact (11) | Tool names ≤63 chars + strict JSON Schema 2020-12 (the advertised layer already conforms) |
+| **Windsurf** | stdio | `setup --client windsurf` | compact (11) | 100-tool cap |
+| **Cline** | stdio | `setup --client cline` | compact (11) | No tool search; the full surface is heavy |
+| **Zed** | stdio | `setup --client zed` | compact (11) | Config root key is `context_servers` |
 | **OpenClaw / mcporter** | stdio | `client openclaw-setup --workspace ~/.openclaw/workspace` | full (116) | — |
 | **Open WebUI · n8n · Dify** | streamable-http | `horosa-skill serve --host 0.0.0.0 --token <random>` | full (116) | [Guide](./horosa-skill/examples/clients/openwebui-streamable-http.md); a token is required off-loopback, and there is **no TLS** — put it behind a reverse proxy |
 | **ChatGPT / claude.ai remote connectors** | streamable-http | As above, plus an HTTPS reverse proxy | full (116) | **No hosted endpoint** — you supply your own public HTTPS URL and token |
@@ -477,7 +483,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 886 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 905 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

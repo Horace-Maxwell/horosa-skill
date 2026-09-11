@@ -2,7 +2,17 @@
 
 前置：已完成 `uv sync` 与 `uv run horosa-skill install`（离线 runtime）。
 
-## 一条命令注册（推荐，stdio 直连）
+## 一条命令接入（v0.38.0 起推荐）
+
+```bash
+uv run horosa-skill setup --client claude-code                  # 探网 → 装 runtime → 注册 → doctor → 回读 → 真起一次 stdio
+uv run horosa-skill setup --client claude-code --scope project  # 只写当前项目的 .mcp.json（默认：CWD 有 .mcp.json 就写它，否则 claude mcp add --scope user）
+```
+
+`claude` 不在 PATH 时不会替你猜路径：注册命令原样打印在 `steps.config.command`，复制执行即可；
+失败包在 stderr（`step` / `code` / `config_untouched` / `retry_command`），退出码 2。
+
+## 只生成注册命令（不落盘，stdio 直连）
 
 让 CLI 生成带真实绝对路径的注册命令，复制执行即可：
 

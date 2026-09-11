@@ -18,7 +18,8 @@ runner = CliRunner()
 def _run_json(*args: str) -> dict:
     result = runner.invoke(app, list(args))
     assert result.exit_code == 0, result.output
-    return json.loads(result.output)
+    # 契约只关心 stdout（`setup` 等命令把进度行写到 stderr；`result.output` 会把两者交错）。
+    return json.loads(result.stdout)
 
 
 def test_doctor_public_keys() -> None:
@@ -29,11 +30,33 @@ def test_doctor_public_keys() -> None:
     missing = sorted(required - set(report))
     assert missing == [], f"doctor 公开键缺失（破坏脚本用户）：{missing}"
     assert {"path", "ok", "detail"} <= set(report["memory_db"])
+    assert {"node", "uv", "backend_port", "chart_port"} <= set(report["environment"]["probes"])  # uv 探针 v0.38.0 B4
     assert {"ok", "warnings", "set"} <= set(report["env_flags"])
     rows = report["settings_provenance"]
     assert rows and {"field", "value", "source"} == set(rows[0])
     sources = {row["source"].split(":")[0] for row in rows}
     assert sources <= {"env", "derived", "default"}
+
+
+def test_setup_public_keys(tmp_path, monkeypatch) -> None:
+    """`setup` 输出契约（v0.38.0 B4）：顶层键 + 七步顺序 + 每步 `ok`；失败包键集见 test_setup_command。"""
+    from horosa_skill.surfaces.cli import _SETUP_STEPS
+
+    monkeypatch.setenv("HOROSA_RUNTIME_ROOT", str(tmp_path / "rt"))
+    monkeypatch.setenv("HOROSA_SKILL_DATA_DIR", str(tmp_path / "data"))
+    report = _run_json("setup", "--client", "cursor", "--config", str(tmp_path / "mcp.json"), "--dry-run", "--no-probe-network")
+    required = {
+        "ok", "client", "launcher", "surface", "tools", "config_path", "config_mode", "dry_run",
+        "steps", "next_steps", "summary", "recheck_command",
+    }
+    missing = sorted(required - set(report))
+    assert missing == [], f"setup 公开键缺失（破坏脚本用户）：{missing}"
+    assert list(report["steps"]) == list(_SETUP_STEPS) == [
+        "network_probe", "install", "config", "doctor", "client_check", "stdio_probe", "next_steps",
+    ]
+    assert all("ok" in step for step in report["steps"].values())
+    assert {"kind"} <= set(report["launcher"])
+    assert isinstance(report["next_steps"], list) and report["next_steps"]
 
 
 def test_client_config_codex_public_keys() -> None:
