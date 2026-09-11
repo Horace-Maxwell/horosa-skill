@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import functools
 import hashlib
 import json
 import logging
@@ -36,6 +37,80 @@ from horosa_skill.tracing import TraceRecorder
 logger = logging.getLogger(__name__)
 
 
+_MACHINE_ALIASES = {
+    "amd64": "x64", "x86_64": "x64", "x64": "x64",
+    "arm64": "arm64", "aarch64": "arm64", "armv8l": "arm64",
+    "x86": "x86", "i386": "x86", "i686": "x86",
+}
+
+
+def _canonical_machine(name: Any) -> str:
+    text = str(name or "").strip().lower()
+    return _MACHINE_ALIASES.get(text, text)
+
+
+@functools.lru_cache(maxsize=1)
+def _darwin_translated() -> bool:
+    """True when this process runs under Rosetta 2 (`sysctl.proc_translated == 1`). Cached: the host does not change."""
+    if sys.platform != "darwin":
+        return False
+    try:
+        completed = subprocess.run(
+            ["/usr/sbin/sysctl", "-n", "sysctl.proc_translated"],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+    except Exception:  # noqa: BLE001 - detection must never break platform lookup
+        return False
+    return completed.returncode == 0 and completed.stdout.strip() == "1"
+
+
+def process_machine() -> str:
+    """Architecture of THIS interpreter (x64 / arm64 / x86) — what a WOW64 or Rosetta process believes it is."""
+    if os.name == "nt":
+        # PROCESSOR_ARCHITECTURE is the process view (AMD64 for an x64 Python under WOW64 on ARM64);
+        # platform.machine() on 3.12 asks WMI and already answers with the *native* CPU.
+        env_arch = os.environ.get("PROCESSOR_ARCHITECTURE")
+        if env_arch:
+            return _canonical_machine(env_arch)
+    return _canonical_machine(platform.machine())
+
+
+def native_machine() -> str:
+    """Architecture of the host CPU even when this interpreter runs under emulation (WOW64 / Rosetta).
+
+    v0.38.0 A4/B6: Windows on ARM installs the x64 payload; doctor must say which chip it is really on.
+    Windows: `IsWow64Process2` (Windows 10 1709+), falling back to PROCESSOR_ARCHITEW6432 (set only for
+    WOW64 processes). macOS: `sysctl.proc_translated`. Elsewhere: `platform.machine()`.
+    """
+    if os.name == "nt":
+        try:
+            import ctypes
+
+            kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+            process_arch = ctypes.c_ushort(0)
+            native_arch = ctypes.c_ushort(0)
+            if kernel32.IsWow64Process2(kernel32.GetCurrentProcess(), ctypes.byref(process_arch), ctypes.byref(native_arch)):
+                known = {0x8664: "x64", 0xAA64: "arm64", 0x014C: "x86"}.get(native_arch.value)
+                if known:
+                    return known
+        except Exception:  # noqa: BLE001 - older Windows / missing symbol → env fallback
+            pass
+        wow = os.environ.get("PROCESSOR_ARCHITEW6432")
+        if wow:
+            return _canonical_machine(wow)
+        return process_machine()
+    if sys.platform == "darwin" and _darwin_translated():
+        return "arm64"
+    return _canonical_machine(platform.machine())
+
+
+def arch_report() -> dict[str, Any]:
+    """`doctor.arch`: {process, native, emulated} — emulated means this *interpreter* is translated."""
+    process = process_machine()
+    native = native_machine()
+    return {"process": process, "native": native, "emulated": bool(process and native and process != native)}
+
+
 def _platform_key() -> str:
     # 架构精确匹配：只有确知的 64 位架构映射到发布键；其余（i386/i686/armv7l 等）保留原始
     # machine 名 —— 让 install 的 `runtime.install_missing_platform` 错误如实报出真实架构，
@@ -45,12 +120,20 @@ def _platform_key() -> str:
     x64 = {"x86_64", "amd64"}
     if sys_platform := platform.system().lower():
         if sys_platform == "darwin":
+            # An x86_64 Python under Rosetta reports x86_64, but the payload is self-contained (own JDK /
+            # Python / Node) — the arm64 payload is the right one on an Apple Silicon host (v0.38.0 A4).
+            if machine in x64 and _darwin_translated():
+                return "darwin-arm64"
             if machine in arm64:
                 return "darwin-arm64"
             if machine in x64:
                 return "darwin-x64"
             return f"darwin-{machine}"
         if sys_platform == "windows":
+            # x64 Python on an ARM64 host runs under emulation and platform.machine() may say AMD64;
+            # Windows exposes the native arch as PROCESSOR_ARCHITEW6432 (A0 runner-probe: "ARM64").
+            if os.environ.get("PROCESSOR_ARCHITEW6432", "").lower() in arm64:
+                return "win32-arm64"
             if machine in arm64:
                 return "win32-arm64"
             if machine in x64:
@@ -63,6 +146,56 @@ def _platform_key() -> str:
                 return "linux-x64"
             return f"linux-{machine}"
     return f"{sys_platform}-{machine}"
+
+
+# Which payloads a release ships and what other hosts do. Locked to contracts/release_platforms.json by
+# tests/test_runtime_platform_fallback.py (the wheel does not ship contracts/, hence the duplication).
+SUPPORTED_PAYLOAD_PLATFORMS = ("darwin-arm64", "win32-x64")
+# host platform -> (payload to install, mode). Windows on ARM runs the x64 payload under Windows 11's
+# x64 emulation (A0 runner-probe on windows-11-arm: x64 Temurin 17 / Node 22 / embedded CPython 3.12 run).
+# NEVER darwin-x64 -> darwin-arm64: Rosetta runs x86_64 on arm64, not the reverse.
+PLATFORM_FALLBACKS: dict[str, tuple[str, str]] = {"win32-arm64": ("win32-x64", "x64-emulation")}
+
+
+def host_os_version() -> str:
+    """Host OS version for `min_os` checks: Windows `major.minor.build`, macOS `platform.mac_ver()`, else ''."""
+    try:
+        if os.name == "nt":
+            win = sys.getwindowsversion()  # type: ignore[attr-defined]
+            return f"{win.major}.{win.minor}.{win.build}"
+        if sys.platform == "darwin":
+            return platform.mac_ver()[0] or ""
+    except Exception:  # noqa: BLE001 - a version we cannot read must never block an install
+        return ""
+    return ""
+
+
+def _version_tuple(text: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in re.findall(r"\d+", text or "")[:3])
+
+
+def _assert_min_os(min_os: Any, platform_name: str, *, host_version: str | None = None) -> None:
+    """A payload that declares `min_os` (derived payloads do, v0.38.0 A2) refuses hosts older than it."""
+    if not isinstance(min_os, str) or not min_os.strip():
+        return
+    host = host_os_version() if host_version is None else host_version
+    if not host or not _version_tuple(host):
+        return
+    if _version_tuple(host) < _version_tuple(min_os):
+        raise RuntimeInstallError(
+            f"This runtime payload needs OS version {min_os}+ but this host reports {host}.",
+            code="runtime.install_os_too_old",
+            details={
+                "platform": platform_name,
+                "min_os": min_os,
+                "host_os": host,
+                "next_action": "升级操作系统，或走网关模式（HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT 指向一台受支持的机器）。",
+                "agent_recovery": {
+                    "must_ask_user": False,
+                    "prompt_to_user": f"本机系统版本 {host} 低于离线 runtime 要求的 {min_os}，无法安装；可升级系统或走网关模式。",
+                },
+            },
+        )
 
 
 def _sha256_file(path: Path) -> str:
@@ -320,13 +453,16 @@ def _platform_dead_end_advice(platform_name: str) -> dict[str, Any]:
     )
     if platform_name.startswith("darwin-x64"):
         reason = (
-            "Intel Mac 没有原生离线载荷；arm64 那份**不能**在 Rosetta 下跑（内含的 JDK 与 Python "
-            "是原生 arm64 二进制）。"
+            "Intel Mac 没有原生离线载荷（本轮明确不做 x86_64 载荷）；arm64 那份**不能**在 Rosetta 下跑"
+            "（内含的 JDK 与 Python 是原生 arm64 二进制）。"
         )
     elif platform_name.startswith("linux"):
         reason = "Linux 没有发布载荷（实验性）；可自建载荷，或走网关模式。"
     elif platform_name.startswith("win32-arm64"):
-        reason = "Windows on ARM 没有原生载荷；x64 那份在模拟层下未经验证。"
+        reason = (
+            "Windows on ARM 会自动安装 x64 载荷走 Windows 11 的 x64 仿真——走到这里说明清单里连 win32-x64 "
+            "都没有（发布不完整），请稍后重试或换一个清单 URL。"
+        )
     else:
         reason = f"平台 `{platform_name}` 没有发布载荷。"
     return {
@@ -445,6 +581,8 @@ class HorosaRuntimeManager:
             expected_sha256: str | None = None
             asset_meta: dict[str, Any] | None = None
             manifest_data: dict[str, Any] | None = None
+            fallback_note: dict[str, Any] | None = None
+            install_warnings: list[dict[str, Any]] = []
 
             if source is None:
                 manifest_location = manifest_url or self.settings.runtime_manifest_url
@@ -453,6 +591,27 @@ class HorosaRuntimeManager:
                 manifest_data = self._read_json_location(manifest_location)
                 platforms = manifest_data.get("platforms", {})
                 asset_meta = platforms.get(platform_name)
+                if not isinstance(asset_meta, dict):
+                    # v0.38.0 A4: Windows on ARM installs the x64 payload under emulation — announced, never silent.
+                    fallback = PLATFORM_FALLBACKS.get(platform_name)
+                    if fallback and isinstance(platforms.get(fallback[0]), dict):
+                        fallback_note = {"requested": platform_name, "installed": fallback[0], "mode": fallback[1]}
+                        install_warnings.append(
+                            {
+                                "code": "runtime.platform_emulated",
+                                "message": (
+                                    f"本机是 {platform_name}，没有原生载荷；改装 {fallback[0]} 载荷走 {fallback[1]}"
+                                    "（Java / Python / Node 在 Windows 11 x64 仿真下可用，冷启动更慢）。"
+                                ),
+                                "requested": platform_name,
+                                "installed": fallback[0],
+                                "mode": fallback[1],
+                            }
+                        )
+                        # the caller sees this in the result's `warnings[]`; the log line is for launcher.log readers
+                        logger.log(logging.WARNING, "no %s payload; installing %s under %s", platform_name, fallback[0], fallback[1])
+                        platform_name = fallback[0]
+                        asset_meta = platforms[platform_name]
                 if not isinstance(asset_meta, dict):
                     raise RuntimeInstallError(
                         f"Runtime manifest does not include platform `{platform_name}`.",
@@ -464,6 +623,7 @@ class HorosaRuntimeManager:
                             **_platform_dead_end_advice(platform_name),
                         },
                     )
+                _assert_min_os(asset_meta.get("min_os"), platform_name)
                 source = str(asset_meta.get("url") or "").strip()
                 expected_sha256 = str(asset_meta.get("sha256") or "").strip() or None
                 if not source:
@@ -486,6 +646,8 @@ class HorosaRuntimeManager:
                             "skipped_download": True,
                             "version": installed_version,
                             "platform": platform_name,
+                            "platform_fallback": fallback_note,
+                            "warnings": install_warnings,
                             "runtime_root": str(self.runtime_root),
                             "current_dir": str(self.current_dir),
                             "manifest": installed_manifest,
@@ -532,6 +694,8 @@ class HorosaRuntimeManager:
                 self._extract_archive(archive_path, extract_dir)
                 payload_root = self._locate_payload_root(extract_dir)
                 manifest = self._validate_payload_root(payload_root)
+                # a derived payload states its own floor (platform_requirements.min_os); re-check after extraction
+                _assert_min_os((manifest.get("platform_requirements") or {}).get("min_os"), platform_name)
                 manifest = self._bind_service_urls(manifest)
                 (payload_root / "runtime-manifest.json").write_text(
                     json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
@@ -550,6 +714,8 @@ class HorosaRuntimeManager:
                                 "installed": True,
                                 "changed": False,
                                 "platform": platform_name,
+                                "platform_fallback": fallback_note,
+                                "warnings": install_warnings,
                                 "runtime_root": str(self.runtime_root),
                                 "current_dir": str(self.current_dir),
                                 "manifest": manifest,
@@ -591,6 +757,8 @@ class HorosaRuntimeManager:
                 "installed": True,
                 "changed": True,
                 "platform": platform_name,
+                "platform_fallback": fallback_note,
+                "warnings": install_warnings,
                 "runtime_root": str(self.runtime_root),
                 "current_dir": str(self.current_dir),
                 "manifest": manifest,
@@ -707,10 +875,22 @@ class HorosaRuntimeManager:
             trace["issues"] = issues
             manifest_version = manifest.get("version") if manifest else None
             runtime_payload_version = manifest.get("runtime_payload_version") if manifest else None
+            host_platform = self.settings.runtime_platform or _platform_key()
+            payload_platform = str(manifest.get("platform") or "") if manifest else None
             return {
                 "ok": not issues,
                 "installed": installed,
-                "platform": self.settings.runtime_platform or _platform_key(),
+                "platform": host_platform,
+                # v0.38.0 A4: host vs payload — Windows on ARM runs the win32-x64 payload under emulation.
+                "host_platform": host_platform,
+                "payload_platform": payload_platform,
+                "emulated": bool(
+                    payload_platform
+                    and payload_platform != host_platform
+                    and PLATFORM_FALLBACKS.get(host_platform, ("",))[0] == payload_platform
+                ),
+                "platform_requirements": (manifest.get("platform_requirements") if manifest else None),
+                "arch": arch_report(),
                 "runtime_root": str(self.runtime_root),
                 "current_dir": str(self.current_dir),
                 "manifest_version": manifest_version,
@@ -1455,6 +1635,11 @@ class HorosaRuntimeManager:
             "runtimes": {**defaults["runtimes"], **(manifest.get("runtimes") or {})},
             "artifacts": {**defaults["artifacts"], **(manifest.get("artifacts") or {})},
         }
+        # Optional blocks carried through unchanged (derived payloads, v0.38.0 A2): what the payload was
+        # built from and what host it needs — doctor shows them, install checks `min_os`.
+        for optional in ("platform_requirements", "derived_from"):
+            if isinstance(manifest.get(optional), dict):
+                normalized[optional] = dict(manifest[optional])
         for section_name in ("services", "runtimes", "artifacts"):
             section = normalized[section_name]
             if not isinstance(section, dict):

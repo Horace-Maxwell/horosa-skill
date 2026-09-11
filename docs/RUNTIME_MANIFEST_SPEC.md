@@ -33,6 +33,13 @@ Optional per-platform fields (v0.38.0):
 - `size` — byte count of the archive. Emitted by `generate_release_manifest.py`; the installer's disk precheck
   uses it (without it the check falls back to a flat 3 GiB), `verify_runtime_release.py` requires it to equal the
   real archive size, and `release-completeness.yml` compares it with the download's `Content-Length`.
+- `min_os` — minimum host OS version (`10.0.17763` for a derived Windows payload). The installer compares it with
+  `sys.getwindowsversion()` / `platform.mac_ver()` before downloading and refuses with `runtime.install_os_too_old`;
+  the same floor inside the payload (`platform_requirements.min_os`) is checked again after extraction.
+- Host fallback (v0.38.0 A4): a `win32-arm64` host installs the `win32-x64` entry under Windows 11 x64 emulation and the
+  install result carries `platform_fallback: {requested, installed, mode}` plus a `runtime.platform_emulated` warning;
+  `darwin-x64` never falls back (Rosetta does not run arm64 binaries). The table lives in `contracts/release_platforms.json`
+  (`aliases`) and is mirrored by `manager.PLATFORM_FALLBACKS` (lockstep test).
 - URLs are **tag-pinned** (`…/releases/download/v<version>/<asset>`, `--url-base`), so a manifest that points at
   another release's archive (the pin-forward failure) is visible from the manifest alone. The installer still
   fetches the manifest itself from `releases/latest/download/`.

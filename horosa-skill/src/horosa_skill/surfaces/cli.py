@@ -602,7 +602,8 @@ def _doctor_summary(report: dict[str, Any]) -> dict[str, Any]:
     ready_for_openclaw = installed and not issues and not conflicts and not unexpanded
     if unsupported:
         user_summary = (
-            "本机平台没有离线 runtime 载荷 —— 这不是发布疏漏，而是只发 darwin-arm64 与 win32-x64。"
+            "本机平台没有离线 runtime 载荷 —— 这不是发布疏漏，而是只发 darwin-arm64 与 win32-x64"
+            "（Windows on ARM 会自动装 x64 载荷走仿真；Intel Mac 本轮不做、Linux 无载荷）。"
         )
         next_action = (
             "走网关模式：在一台受支持的机器上跑 runtime，本机设 HOROSA_SERVER_ROOT 与 "
@@ -654,6 +655,12 @@ def _doctor_summary(report: dict[str, Any]) -> dict[str, Any]:
         # Cursor、VS Code、Codex、Gemini CLI…），把「去开 OpenClaw」当成唯一下一步，对其余客户端
         # 的用户既没用又误导。`ready_for_openclaw` 这个键名保留一版作兼容别名。
         user_summary = "Ready. The offline runtime is installed and the local Horosa endpoints are responding."
+        if report.get("emulated") is True:
+            # v0.38.0 A4: Windows on ARM runs the win32-x64 payload under emulation — worth saying once.
+            user_summary += (
+                f" This host is {report.get('host_platform')} and runs the {report.get('payload_platform')} payload"
+                " under emulation (works; cold start is slower)."
+            )
         next_action = (
             "Point your MCP client at Horosa: `uv run horosa-skill client config --format <client>` "
             "writes the right config (claude-code / claude-desktop / cursor / vscode / codex / gemini / "
@@ -693,9 +700,10 @@ def _platform_supported(report: dict[str, Any]) -> bool:
     """本机平台有没有离线载荷。已装 runtime 就是最好的证据。"""
     if report.get("installed") is True:
         return True
-    from horosa_skill.runtime.manager import _platform_key
+    from horosa_skill.runtime.manager import PLATFORM_FALLBACKS, SUPPORTED_PAYLOAD_PLATFORMS, _platform_key
 
-    return _platform_key() in {"darwin-arm64", "win32-x64"}
+    host = _platform_key()
+    return host in SUPPORTED_PAYLOAD_PLATFORMS or host in PLATFORM_FALLBACKS
 
 
 def _probe_executable(path: Path, args: list[str]) -> dict[str, Any]:

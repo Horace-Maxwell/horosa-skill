@@ -692,6 +692,9 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | Windows 首次启动弹防火墙 / `doctor` 报 `listener:not_loopback_only` | 旧模板起 Java 没钉 `--server.address=127.0.0.1`，绑在 0.0.0.0 | 升级 horosa-skill 后 `runtime restart` 重套模板（每次 start 都会重拷 `.ps1`）；`doctor.listener_scope` 应变为 `loopback_only: true` |
 | Windows 用户名带空格（`C:\Users\John Doe`）时 chart/Java 都起不来，`.horosa-local-logs` 里 python 报找不到文件 | 旧模板 `-ArgumentList` 路径元素没引号，被拆成两段 | 升级后 `runtime restart`；判据 = `tests/test_runtime_launcher_templates.py` 的引号断言（v0.38.0 B1） |
 | Codex 里 horosa 一堆报错 / 首轮看不到工具 | 多半是 `startup_timeout_sec`/`tool_timeout_sec` 没写（Codex 默认 10 s/60 s，冷启动与择日扫描都超） | `horosa-skill client check --client codex`（v0.38.0 起缺省也报 `codex_*_timeout_missing`）；重跑 `client config --format codex --write ~/.codex/config.toml` |
+| Windows ARM（骁龙本）上 `install` 成功但结果带 `runtime.platform_emulated`、`doctor` 报 `emulated: true` | 不是故障：本机没有原生载荷，自动装了 win32-x64 载荷走 Windows 11 x64 仿真（v0.38.0 A4） | 正常使用；冷启动更慢，矩阵里 `HOROSA_RUNTIME_START_TIMEOUT_SECONDS=900`；若报 `install_missing_platform` 说明清单连 win32-x64 都缺，先查发布完整性 |
+| Apple Silicon 上 `install` 报 `install_missing_platform`，`platform` 却是 `darwin-x64` | 宿主 Python 是 x86_64（Rosetta 下的旧 Homebrew / conda），旧 `_platform_key()` 照抄 `platform.machine()` | v0.38.0 起 `sysctl.proc_translated` 判出真芯片给 arm64 载荷（载荷自带解释器，宿主架构无关）；`doctor.arch.emulated: true` 只是提示 |
+| `install` 报 `runtime.install_os_too_old` | 载荷声明的 `min_os`（派生 Windows 载荷 = 10.0.17763，即 Windows 10 1809）高于本机 | 升级系统或网关模式；`details.host_os` / `min_os` 已给出两边版本 |
 | 终端里 `uvx …` 能跑，Claude Desktop / Cursor 里却起不来（file not found） | GUI 客户端在 Windows 上不继承 shell PATH，配置里写的是裸 `uvx` | 重跑 `client config`（v0.38.0 起写绝对路径）；`client check` 报 `command_not_on_path` 即此症 |
 | Windows smoke 绿，但 step 里某条命令其实失败了 | GitHub `pwsh` 多行 `run:` 只拿**最后一条**命令的退出码当结果（v0.38.0 前 `tool run --output` 这个不存在的参数在此安静失败了几十轮） | 每个 pwsh 多行块首行 `$PSNativeCommandUseErrorActionPreference = $true`（`tests/test_ci_workflow_shape.py` 守）；关键产物要 `Test-Path` + 断言 `.ok` |
 | 维护机上 `test_runtime_manager.py` 全绿、CI 上四条红在 `runtime.port_conflict_unknown_holder` | v0.37.0 起只 stub `_service_status` 的用例会拿那个 URL **真的**跑归属判定：维护机 9999/8899 上跑着真 runtime → ours；CI 上没人监听 → unknown | 本机复现要连**归属**一起伪装：autouse fixture 把 `identity.probe_identity` 打成返回 None、`listener_pids` 打成返回 `[]`，`pytest -p <plugin>` 挂上去。`_managed_mode` 已内置 classify_endpoint 桩 |
@@ -700,6 +703,12 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 A global stability pass hardened these; keep them true when you touch the relevant code:
 
+- **平台策略只有一处真值、两处镜像，回退只许公告着做（v0.38.0 A4）。** 真值 = `contracts/release_platforms.json`；镜像 =
+  `manager.SUPPORTED_PAYLOAD_PLATFORMS` / `PLATFORM_FALLBACKS`（wheel 不带 contracts）与 README×2 平台表，各有锁步测试。
+  `install()` 走回退必须返回 `platform_fallback{requested, installed, mode}` + `warnings[runtime.platform_emulated]`（含版本短路那条
+  返回），doctor 必须给 `host_platform / payload_platform / emulated / arch`；**darwin-x64 永不回退到 arm64**（Rosetta 反向不成立，
+  `test_intel_mac_is_refused_even_when_an_arm64_payload_exists` 是负向对照）；平台键看芯片不看宿主 Python（Rosetta 下的 x86_64
+  Python 仍拿 arm64 载荷）；载荷或清单声明的 `min_os` 必须在下载前、解压后各查一次（`runtime.install_os_too_old`）。
 - **导出段只存 body，引擎对象只在 `data.<key>` 存一份。** `export_snapshot.sections[*]` 形状固定为
   `{index, raw_title, title, included, body}`（envelope 0.8.0）；`_pick_section_data` 对未识别段返回
   `None`，绝不兜底整份 `response_data`（v0.36.0：qimen 5 MB / india_chart 101 MB 的来历）。守卫：

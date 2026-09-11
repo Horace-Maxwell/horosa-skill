@@ -75,7 +75,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `106 / 106 ok=true` |
-| Engineering tests | `859 / 859 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 72 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `886 / 886 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 72 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `84` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `8` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`103` export techniques modeled; contract v14 mirrors desktop aiExport v56) |
@@ -416,7 +416,7 @@ checkout-free command (`uvx --from "git+…#subdirectory=horosa-skill"`; the PyP
 | :-- | :-- | :-- |
 | macOS arm64 | ✅ published | Primary platform |
 | Windows x64 | ✅ published | See [Windows notes](./docs/OFFLINE_RUNTIME_RELEASES.md) |
-| Windows ARM (Snapdragon / Surface) | ✅ installs the x64 payload under emulation (since 0.38.0) | Java / Python / Node all run under Windows 11 x64 emulation (verified on GitHub's `windows-11-arm` runner); `install` reports `runtime.platform_emulated`, `doctor` reports `arch.emulated: true` |
+| Windows ARM (Snapdragon / Surface) | ✅ installs the x64 payload under emulation (since 0.38.0) | Java / Python / Node all run under Windows 11 x64 emulation (verified on GitHub's `windows-11-arm` runner); `install` reports `runtime.platform_emulated`, `doctor` reports `emulated: true` (`payload_platform: win32-x64`) |
 | Linux | ⚠️ no payload (experimental) | Use **gateway mode**: point `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` at a supported machine |
 | Intel Mac | ❌ unsupported | The arm64 payload **cannot** run under Rosetta (its JDK/Python are native arm64); no x86_64 payload this round — use gateway mode |
 
@@ -477,7 +477,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 859 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 886 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

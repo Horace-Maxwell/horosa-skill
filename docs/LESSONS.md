@@ -16,7 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
-| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基；A2 Windows 半边从 darwin 种子派生；A3 发布契约（清单钉 tag + size、按契约逐平台判完整、平台表锁） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数 |
+| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基；A2 Windows 半边从 darwin 种子派生；A3 发布契约（清单钉 tag + size、按契约逐平台判完整、平台表锁）；A4 安装侧平台策略（Windows ARM 公告式回退、`min_os`、平台键看芯片） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数；回退只许公告着做、载荷自带解释器所以平台键看芯片不看宿主 Python |
 | v0.37.0 (2026-09) | 任意 AI 客户端可调用：广告层只对一个客户端对过 / 自家 .mcp.json 从未连通 / 端口静默采用与误杀 / 回环走代理 | 按**别人的**约束测；改 golden 前先答「旧断言为何不会红」；负向对照跑不红就如实改口 |
 | v0.36.0 收尾 (2026-09) | 「Java 族 live 需 Mongo」十个版本的误定性 = vendored 脚本裸 `-jar`；演禽假闸门 | 贴「环境限制」前先读 `Result` 原文、用上游桌面起法起一遍；闸门问项以 live 翻转为准，不以转发为准 |
 | v0.36.0 (2026-09) | 止血/可用性/捞回能力 15 批（响应放大、静默降级、手抄表、死键、降级误杀、扁平面丢键、moira 误排除、闸门半盲、错误码……） | 每批四件套 + 全量门禁；台账正文按批见下 |
@@ -101,6 +101,29 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.38.0 / 2026-09-10 — A4 安装侧平台策略：Windows ARM 自动装 x64 载荷（公告、不静默），Intel Mac 照旧拒绝，`min_os` 真有人查
+
+- **症状**：① `install()` 只拿本机键去清单里查，查不到就 `runtime.install_missing_platform`——Windows on ARM 被判死刑，
+  而 A0 探针已证明 x64 Temurin 17 / Node 22 / 嵌入式 CPython 3.12 在 Windows 11 的 x64 仿真下全能跑；② A2 派生载荷写进
+  `platform_requirements{arch, min_os}` 与 `derived_from`，但 `_normalize_manifest_data` 只认识它列过的键，装完这两块就没了——
+  `min_os` 写了等于没写，doctor 也看不到载荷来历；③ `_platform_key()` 在 Rosetta 下的 x86_64 Python 报 `darwin-x64`，Apple Silicon
+  用户装了个 Intel 版 Python（旧 Homebrew / conda）就被送去「Intel Mac 走网关」——可载荷自带解释器，宿主 Python 是什么架构根本无关；
+  ④ `cli._platform_supported` 把 `{"darwin-arm64","win32-x64"}` 写死在第二处，契约改了它不会跟。
+- **guard**：① `manager.SUPPORTED_PAYLOAD_PLATFORMS` / `PLATFORM_FALLBACKS = {"win32-arm64": ("win32-x64", "x64-emulation")}`，
+  `tests/test_runtime_platform_fallback.py::test_installer_constants_match_the_release_platform_contract` 与
+  `contracts/release_platforms.json` 锁步（wheel 不带 contracts，所以必须复制一份并锁）；`install()` 目标键缺席而有回退 → 装回退，
+  结果带 `platform_fallback{requested, installed, mode}` + `warnings[{code: runtime.platform_emulated}]`，版本短路那条返回也带
+  （setup 重跑 install 时不能丢公告）；**darwin-x64 永不回退**（负向对照：清单里同时有 arm64 与 x64 包，Intel Mac 仍必须
+  `install_missing_platform` 且 `current/` 不存在）；② `_normalize_manifest_data` 原样带过 `platform_requirements` / `derived_from`；
+  `_assert_min_os` 在下载前查清单条目的 `min_os`、解压后再查载荷自己的 `platform_requirements.min_os`，低于则
+  `runtime.install_os_too_old`（读不到宿主版本不拦）；③ `_platform_key()`：darwin 下 x86_64 + `sysctl.proc_translated == 1` → `darwin-arm64`；
+  Windows 下 `PROCESSOR_ARCHITEW6432` 优先；新 `process_machine()` / `native_machine()`（`IsWow64Process2` → env → Rosetta）→ doctor
+  `arch{process, native, emulated}`，另有 `host_platform / payload_platform / emulated / platform_requirements` 四个顶层键；
+  ④ `_platform_supported` 改读常量；`_platform_dead_end_advice` 的 win32-arm64 文案改成「连 win32-x64 都缺 = 发布不完整」。
+  负向对照三组（清空回退表 / 剥掉透传 / 关掉 min_os 检查）各让 5 / 3 / 3 个用例变红后才算守卫成立。
+- **法则**：**回退只许公告着做**——结果与 doctor 都要说出「本机是什么、装的是什么、为什么能跑」；**载荷自带解释器，平台键看芯片不看宿主
+  Python**；**载荷说了要求就得有人在装之前查**，不然「有 min_os 字段」只是装饰。
 
 ### v0.38.0 / 2026-09-10 — A3 发布契约：清单钉 tag、带 size、按契约逐平台判完整，别再靠「两个键都在」
 
