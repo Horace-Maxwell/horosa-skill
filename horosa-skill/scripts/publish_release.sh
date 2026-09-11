@@ -153,7 +153,7 @@ if [ "${DISPATCH}" != "1" ]; then
 fi
 
 echo "=== dispatch release-runtime.yml（version=${VERSION} publish=false run_matrix=true）==="
-gh workflow run release-runtime.yml --repo "${REPO}" -f "version=${VERSION}" -f publish=false -f run_matrix=true -f arm_nonblocking=true -f dry_run=false
+gh workflow run release-runtime.yml --repo "${REPO}" -f "version=${VERSION}" -f publish=false -f run_matrix=true -f arm_nonblocking=false -f dry_run=false
 sleep 8
 RUN_ID="$(gh run list --repo "${REPO}" --workflow release-runtime.yml --limit 1 --json databaseId -q '.[0].databaseId')"
 echo "run ${RUN_ID}：gh run watch ${RUN_ID} --repo ${REPO} --exit-status"
