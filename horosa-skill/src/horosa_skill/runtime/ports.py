@@ -93,6 +93,87 @@ def _listener_pids_windows(port: int) -> list[int]:
     return sorted(set(pids))
 
 
+# --- listener scope: which interfaces a listener is bound to (v0.38.0 B1) ---------------------
+# The Windows launcher used to start Java without --server.address, i.e. on 0.0.0.0: a Firewall prompt
+# on first start and a backend reachable from the LAN. doctor reports the bound addresses so an
+# already-installed runtime that still runs the old template is visible instead of silent.
+
+_LOOPBACK_ADDRESSES = {"127.0.0.1", "::1", "localhost"}
+
+
+def listener_bindings(port: int) -> list[dict[str, Any]]:
+    """`[{"local_address": "0.0.0.0", "pid": 1234}, …]` for every LISTEN socket on `port`.
+
+    Empty means **could not tell** (tool missing / no permission), never "nothing listens" —
+    same discipline as `listener_pids`. Addresses are reported as printed by the OS tool with
+    brackets stripped (`0.0.0.0`, `127.0.0.1`, `::`, `::1`, `*`).
+    """
+    if os.name == "nt":
+        return _bindings_windows(port)
+    if _uname() == "darwin":
+        return _bindings_darwin(port)
+    return _bindings_linux(port)
+
+
+def loopback_only(bindings: list[dict[str, Any]]) -> bool | None:
+    """True = every binding is a loopback address; False = at least one wildcard/LAN address; None = unknown."""
+    if not bindings:
+        return None
+    return all(str(entry.get("local_address")) in _LOOPBACK_ADDRESSES for entry in bindings)
+
+
+def _bindings_windows(port: int) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    # `-p TCP` lists IPv4 only; a dual-stack Java listener shows up under TCPv6 as [::]:port.
+    for proto in ("TCP", "TCPv6"):
+        for line in _run(["netstat", "-ano", "-p", proto]).splitlines():
+            m = _WIN_LISTEN.match(line)
+            if not m:
+                continue
+            host, _, local_port = m.group("local").rpartition(":")
+            if local_port != str(port):
+                continue
+            out.append({"local_address": host.strip("[]"), "pid": int(m.group("pid"))})
+    return out
+
+
+def _bindings_darwin(port: int) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for line in _run(["netstat", "-anv", "-p", "tcp"]).splitlines():
+        if "LISTEN" not in line:
+            continue
+        fields = line.split()
+        if len(fields) < 4:
+            continue
+        host, _, local_port = fields[3].rpartition(".")
+        if local_port != str(port):
+            continue
+        pid = None
+        for field in fields:
+            m = _MAC_PROCESS_PID.match(field)
+            if m:
+                pid = int(m.group("pid"))
+                break
+        out.append({"local_address": host, "pid": pid})
+    return out
+
+
+def _bindings_linux(port: int) -> list[dict[str, Any]]:
+    text = _run(["ss", "-lntpH"]) or _run(["ss", "-lntp"])
+    out: list[dict[str, Any]] = []
+    for line in text.splitlines():
+        fields = line.split()
+        if len(fields) < 4:
+            continue
+        local = fields[3] if fields[0] in {"LISTEN", "tcp"} or ":" in fields[3] else fields[2]
+        host, _, local_port = local.rpartition(":")
+        if local_port != str(port):
+            continue
+        pids = [int(p) for p in _SS_PID.findall(line)]
+        out.append({"local_address": host.strip("[]"), "pid": pids[0] if pids else None})
+    return out
+
+
 def port_bindable(port: int, host: str = "127.0.0.1") -> bool:
     """这个端口现在还能绑吗。**不设 SO_REUSEADDR** —— 那会让已被监听的端口在某些平台上也报可绑。"""
     family = socket.AF_INET6 if ":" in host else socket.AF_INET

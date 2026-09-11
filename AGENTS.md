@@ -468,6 +468,11 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   **wheel 里的副本另守**：v0.36.0 起 `uvx horosa-skill` 用户的启动器来自 wheel 内 force-include 的副本
   （`horosa_skill/runtime/templates/windows/`），`scripts/verify_wheel_contents.py` 断言该副本前三字节仍是
   BOM——源码树的测试管不到 hatch 打包这一步。
+- **Windows 启动器的三条网络/路径不变量（v0.38.0 B1）**：① `Start-Process -ArgumentList` 不替你加引号——每个路径元素写成
+  `('"{0}"' -f $Var)`，`--key=value` 旗标保持裸；② Java 行必须带 `--server.address=127.0.0.1`（Spring Boot 默认 0.0.0.0 =
+  防火墙弹窗 + 局域网暴露；上游 mac 启动器已钉，守卫同时盯两端）；③ 写进 Python bootstrap 的路径用 `$(ConvertTo-Json $X -Compress)`
+  （JSON 字面量 ⊂ Python 字面量），不用 `r"$X"`。守卫 `scripts/verify_runtime_scripts.py::audit_windows_launcher`（`--self-test`
+  四种坏法必红）+ `tests/test_runtime_launcher_templates.py`（`C:\Users\张 三\…` 真渲染）。改模板先想「用户名带空格会怎样」。
 - **launcher「假失败」已收敛（issue #14 降级门之后）**：无 Mongo/Redis 机器上 Java 连库重试可超就绪窗——
   现在 chart 就绪即 exit 0（java 慢 = 降级 marker，之后自愈则 `doctor` 转绿）。launcher 仍 throw = chart
   半边真没起来，按真失败排查（看 astropy.stderr 日志），不再有「throw 但其实都起来了」的假阳。
@@ -670,6 +675,8 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | 某个客户端里 horosa 一个工具都没有 / 装了却不出现 | 配置写错（占位符未展开、缺 `--transport stdio`、目录搬了、`uvx horosa-skill` 指着未开通的 PyPI、Codex 默认 10/60 s 超时） | `uv run horosa-skill client check`（读它**实际写着什么**）→ 按 `fix_command` 重生成 |
 | 容器里连不上而宿主 curl 正常 / `421 Misdirected Request` | Host 头不在 DNS-rebinding 白名单 | `host.docker.internal` 已默认放行；自定义域名加 `HOROSA_MCP_ALLOWED_HOSTS` |
 | 维护机上 `test_error_paths_return_a_conformant_envelope` 红、CI 绿 | 默认端口上有活服务，只钉 `HOROSA_RUNTIME_ROOT` 拦不住，本该失败的路径成功了 | 同时把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指到不可达地址（§8 验证流程 4） |
+| Windows 首次启动弹防火墙 / `doctor` 报 `listener:not_loopback_only` | 旧模板起 Java 没钉 `--server.address=127.0.0.1`，绑在 0.0.0.0 | 升级 horosa-skill 后 `runtime restart` 重套模板（每次 start 都会重拷 `.ps1`）；`doctor.listener_scope` 应变为 `loopback_only: true` |
+| Windows 用户名带空格（`C:\Users\John Doe`）时 chart/Java 都起不来，`.horosa-local-logs` 里 python 报找不到文件 | 旧模板 `-ArgumentList` 路径元素没引号，被拆成两段 | 升级后 `runtime restart`；判据 = `tests/test_runtime_launcher_templates.py` 的引号断言（v0.38.0 B1） |
 | Windows smoke 绿，但 step 里某条命令其实失败了 | GitHub `pwsh` 多行 `run:` 只拿**最后一条**命令的退出码当结果（v0.38.0 前 `tool run --output` 这个不存在的参数在此安静失败了几十轮） | 每个 pwsh 多行块首行 `$PSNativeCommandUseErrorActionPreference = $true`（`tests/test_ci_workflow_shape.py` 守）；关键产物要 `Test-Path` + 断言 `.ok` |
 | 维护机上 `test_runtime_manager.py` 全绿、CI 上四条红在 `runtime.port_conflict_unknown_holder` | v0.37.0 起只 stub `_service_status` 的用例会拿那个 URL **真的**跑归属判定：维护机 9999/8899 上跑着真 runtime → ours；CI 上没人监听 → unknown | 本机复现要连**归属**一起伪装：autouse fixture 把 `identity.probe_identity` 打成返回 None、`listener_pids` 打成返回 `[]`，`pytest -p <plugin>` 挂上去。`_managed_mode` 已内置 classify_endpoint 桩 |
 

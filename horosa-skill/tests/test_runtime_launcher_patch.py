@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import tempfile
@@ -123,3 +124,49 @@ def test_the_upstream_comment_claim_is_the_bug(tmp_path: Path) -> None:
     assert "${ROOT}" not in body, (
         "上游已经自己加了 ROOT 守卫 —— 补丁器可以退休了，请同步删除并更新 LESSONS"
     )
+
+
+# --- v0.38.0 B1: the patch must survive a runtime root with spaces ----------------------------------
+
+_ROOT_MARK = re.compile(r'-Dhorosa\.runtime\.root="\$\{ROOT\}"')
+
+
+def test_root_marker_is_always_its_own_word(patched: str) -> None:
+    """`-Dhorosa.runtime.root="${ROOT}"` must sit between whitespace so a spaced ROOT stays ONE argv token."""
+    total = len(_ROOT_MARK.findall(patched))
+    assert total >= 1
+    delimited = len(re.findall(r'(?<=\s)-Dhorosa\.runtime\.root="\$\{ROOT\}"(?=\s|\\|$)', patched, re.M))
+    assert delimited == total, "a root marker glued to a neighbour would split or merge under a spaced ROOT"
+
+
+def test_root_marker_expands_to_one_token_with_a_spaced_root(tmp_path: Path) -> None:
+    script = tmp_path / "expand.sh"
+    script.write_text(
+        'ROOT="/tmp/a b"\n'
+        'args=( -Dhorosa.runtime.owner=x -Dhorosa.runtime.root="${ROOT}" )\n'
+        'printf "%s\\n" "${args[@]}"\n',
+        encoding="utf-8",
+    )
+    out = subprocess.run(["bash", str(script)], capture_output=True, text=True, check=True).stdout.splitlines()
+    assert out == ["-Dhorosa.runtime.owner=x", "-Dhorosa.runtime.root=/tmp/a b"]
+
+
+def test_owns_pid_helper_matches_a_spaced_root(patched: str, tmp_path: Path) -> None:
+    """The injected horosa_owns_pid must recognise our processes when ROOT contains a space."""
+    start = patched.index("horosa_owns_pid() {")
+    helper = patched[start : patched.index("\n}\n", start) + 3]
+    harness = tmp_path / "owns.sh"
+    harness.write_text(
+        'ROOT="/tmp/a b/runtime/current"\n'
+        'ps() { echo "${FAKE_CMD}"; }\n'
+        + helper
+        + '\nif horosa_owns_pid 4242; then echo OURS; else echo FOREIGN; fi\n',
+        encoding="utf-8",
+    )
+    def verdict(cmd: str) -> str:
+        return subprocess.run(["bash", str(harness)], capture_output=True, text=True, check=True,
+                              env={"FAKE_CMD": cmd, "PATH": "/usr/bin:/bin"}).stdout.strip()
+    assert verdict("java -Dhorosa.runtime.root=/tmp/a b/runtime/current -cp . JarLauncher") == "OURS"
+    assert verdict("python3 /tmp/a b/runtime/current/Horosa-Web/astropy/websrv/webchartsrv.py") == "OURS"
+    assert verdict("java -Dhorosa.runtime.root=/tmp/other/runtime/current -cp . JarLauncher") == "FOREIGN"
+    assert verdict("python3 -m http.server 8899") == "FOREIGN"

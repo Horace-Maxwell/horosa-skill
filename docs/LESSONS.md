@@ -16,7 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
-| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」（pwsh 退出码、计数守卫措辞、README 否认 Dockerfile） | CI 的绿由每条命令背书；守卫覆盖面是机器规则；仓里有的东西文档不能否认 |
+| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器（空格用户名、Java 绑 0.0.0.0、doctor 监听范围） | CI 的绿由每条命令背书；路径元素自己带引号、跨语言嵌入用字面量转义；两端启动器网络面一致；修复要让 doctor 说出来 |
 | v0.37.0 (2026-09) | 任意 AI 客户端可调用：广告层只对一个客户端对过 / 自家 .mcp.json 从未连通 / 端口静默采用与误杀 / 回环走代理 | 按**别人的**约束测；改 golden 前先答「旧断言为何不会红」；负向对照跑不红就如实改口 |
 | v0.36.0 收尾 (2026-09) | 「Java 族 live 需 Mongo」十个版本的误定性 = vendored 脚本裸 `-jar`；演禽假闸门 | 贴「环境限制」前先读 `Result` 原文、用上游桌面起法起一遍；闸门问项以 live 翻转为准，不以转发为准 |
 | v0.36.0 (2026-09) | 止血/可用性/捞回能力 15 批（响应放大、静默降级、手抄表、死键、降级误杀、扁平面丢键、moira 误排除、闸门半盲、错误码……） | 每批四件套 + 全量门禁；台账正文按批见下 |
@@ -101,6 +101,29 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.38.0 / 2026-09-10 — B1 Windows 启动器：用户名带空格就起不来、Java 绑 0.0.0.0、doctor 看不见监听范围
+
+- **症状**：① `start_horosa_local.ps1` 用 `Start-Process -ArgumentList @($PyBootstrapPath)` 与 `"-jar", $JarPath` 起两个服务。
+  PowerShell 5.1 把 `-ArgumentList` 的元素用空格拼成命令行**且不加引号**：runtime 根在 `C:\Users\John Doe\…` 时，
+  bootstrap 路径被拆成 `C:\Users\John` + `Doe\…`，python 找不到文件退出，java 的 `-jar` 同样断——chart 与 Java 都起不来，
+  而这类用户名在 Windows 上极常见。② Java 启动行没有 `--server.address=127.0.0.1`，Spring Boot 默认绑 0.0.0.0：首次启动
+  Windows 防火墙弹窗、后端暴露到局域网；mac 启动器（上游）早就钉了回环，只有 Windows 模板漏了。③ bootstrap here-string 用
+  `r"$FlatlibRoot"` 这种 raw 字符串嵌路径：尾反斜杠或引号即 SyntaxError（我们的变量目前不会撞上，但那是运气）。④ doctor 只报
+  端口通不通，从不报绑在哪个地址上——已装用户升级后模板重拷了，也没人告诉他们要 `runtime restart`。
+- **根因**：Windows 模板从没在带空格的 profile 路径上跑过；「路径含空格 / 中文」在测试面是零覆盖（v0.38.0 审计实锤）。
+- **guard**：① 路径元素一律 `('"{0}"' -f $Var)` 自带引号，`--key=value` 旗标无空格保持裸；② Java 行加 `"--server.address=127.0.0.1"`；
+  ③ here-string 里改 `$(ConvertTo-Json $X -Compress)`——JSON 字符串字面量 ⊂ Python 字符串字面量，任何路径都安全，字面量仍 ASCII-only
+  （BOM 那两条守卫不变）；④ `scripts/verify_runtime_scripts.py::audit_windows_launcher`（回环 / 引号 / 裸 `-ArgumentList @($` / raw 嵌入四条）
+  + `--self-test` 四种坏法必红（此前 self-test 只在有上游树时才跑，现在 Windows 部分无条件跑），并新增「上游 mac 启动器必须仍钉
+  `--server.address=127.0.0.1`」；`tests/test_runtime_launcher_templates.py` 用 `C:\Users\张 三\…` 真渲染 bootstrap → `ast.parse`
+  → 桩 `runpy.run_path` 逐字节回传，负向对照 = 旧 raw 写法遇尾反斜杠/引号必 `SyntaxError`；Windows 上再用真 `powershell` 渲染一遍；
+  ⑤ mac 侧 `test_runtime_launcher_patch.py`：`-Dhorosa.runtime.root="${ROOT}"` 必须是独立词、`ROOT="/tmp/a b"` 下展开为单个 argv、
+  注入的 `horosa_owns_pid` 在带空格 ROOT 下认得出自家进程；⑥ `runtime/ports.py::listener_bindings/loopback_only`（win `netstat -ano`
+  TCP+TCPv6、mac `netstat -anv`、linux `ss`），doctor 新增 `listener_scope` 与顶层 `warnings[]`，绑非回环 → `listener:not_loopback_only`
+  带 fix；查不到 = `None`，绝不当成干净。
+- **法则**：**给子进程传路径，每个路径元素自己带引号；写进另一种语言的源码，用那种语言的字面量转义（JSON），不用 raw 字符串赌运气**；
+  **两端启动器的网络面必须一致**（回环绑定），差异由守卫抓；**已装用户的修复要靠 doctor 告诉他们**，不是靠 CHANGELOG。
 
 ### v0.38.0 / 2026-09-10 — B0 卫生：三处「绿得不真」——pwsh step 吞退出码、计数守卫看措辞、README 否认仓里有的文件
 

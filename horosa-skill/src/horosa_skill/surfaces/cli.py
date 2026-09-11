@@ -506,6 +506,43 @@ def _doctor_port_holders(report: dict[str, Any]) -> list[dict[str, Any]]:
     return conflicts
 
 
+
+def _doctor_listener_scope(settings: Settings) -> dict[str, Any]:
+    """Which interfaces the two local services listen on (v0.38.0 B1).
+
+    A `loopback_only: False` entry means the service is bound to 0.0.0.0/:: — on Windows that is a
+    Firewall prompt on first start and a backend reachable from the LAN. The launcher templates now pin
+    `--server.address=127.0.0.1`; an installed runtime picks that up on the next `runtime restart`.
+    """
+    from horosa_skill.runtime import ports
+
+    scope: dict[str, Any] = {}
+    for label, port in (("java_backend", settings.local_backend_port), ("python_chart", settings.local_chart_port)):
+        bindings = ports.listener_bindings(port)
+        scope[label] = {"port": port, "bindings": bindings, "loopback_only": ports.loopback_only(bindings)}
+    return scope
+
+
+def _listener_scope_warnings(scope: dict[str, Any]) -> list[dict[str, str]]:
+    warnings: list[dict[str, str]] = []
+    for label, entry in scope.items():
+        if entry.get("loopback_only") is not False:
+            continue
+        addresses = sorted({str(b.get("local_address")) for b in entry.get("bindings") or []})
+        warnings.append({
+            "code": "listener:not_loopback_only",
+            "detail": (
+                f"{label} listens on {', '.join(addresses)} (port {entry.get('port')}), not only 127.0.0.1 — "
+                "Windows Firewall prompts on first start and the service is reachable from the LAN."
+            ),
+            "fix": (
+                "升级 horosa-skill 后 `horosa-skill runtime restart` 重新套用启动器模板（现在钉 --server.address=127.0.0.1）；"
+                "若这是你自己起的服务，请给它加回环绑定。"
+            ),
+        })
+    return warnings
+
+
 def _doctor_summary(report: dict[str, Any]) -> dict[str, Any]:
     issues = [str(issue) for issue in report.get("issues", [])]
     reachable_endpoints = [
@@ -1167,6 +1204,9 @@ def doctor() -> None:
         except Exception:  # noqa: BLE001 - 体检不能因为归属判定失败就整份报废
             pass
     report["port_conflicts"] = _doctor_port_holders(report)
+    # 监听范围（v0.38.0 B1）：绑 0.0.0.0 的服务不是"坏"，但 Windows 上会弹防火墙、暴露到局域网 —— 进 warnings 而非 issues。
+    report["listener_scope"] = _doctor_listener_scope(settings)
+    report["warnings"] = [*(report.get("warnings") or []), *_listener_scope_warnings(report["listener_scope"])]
     report["unexpanded_env_templates"] = _unexpanded()
     report["network_hints"] = _network_hints()
     report["registry_status"] = (manager.load_runtime_state() or {}).get("status")

@@ -1194,7 +1194,7 @@ def test_repo_windows_start_template_bootstraps_python_paths() -> None:
 
     assert "runpy.run_path" in content
     assert 'Set-Content -LiteralPath $PyBootstrapPath' in content
-    assert '-ArgumentList @($PyBootstrapPath)' in content
+    assert "-ArgumentList ('\"{0}\"' -f $PyBootstrapPath)" in content  # quoted: spaced user names (v0.38.0 B1)
     assert "$env:HOME" in content
     assert "$env:USERPROFILE" in content
     assert "PYTHONIOENCODING" in content

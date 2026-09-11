@@ -85,6 +85,45 @@ def audit_patched_launcher(text: str) -> list[str]:
     return errors
 
 
+_WIN_JAVA_START = re.compile(r"^\$JavaProc = Start-Process .*$", re.M)
+_WIN_PY_START = re.compile(r"^\$PyProc = Start-Process .*$", re.M)
+_WIN_RAW_EMBED = re.compile(r'r"\$[A-Za-z_]+"')
+_WIN_BARE_ARGLIST = re.compile(r"-ArgumentList @\(\$")
+
+
+def audit_windows_launcher(text: str) -> list[str]:
+    """Windows 启动器模板的不变量（v0.38.0 B1；纯函数，供 --self-test 注入坏样本）。
+
+    1. Java 必须钉 --server.address=127.0.0.1（Spring Boot 默认 0.0.0.0：防火墙弹窗 + 局域网暴露；mac 启动器早就钉了）。
+    2. Start-Process -ArgumentList 不会替你加引号：路径元素（bootstrap .py、jar）必须自己带引号，否则
+       `C:\\Users\\John Doe\\…` 断成两段，chart 与 Java 都起不来。
+    3. Python bootstrap 里的路径必须是 JSON 字面量（$(ConvertTo-Json … -Compress)），raw 字符串 r"$X"
+       遇尾反斜杠/引号即碎。
+    """
+    errors: list[str] = []
+    java = _WIN_JAVA_START.search(text)
+    if not java:
+        errors.append("Windows 启动器找不到 `$JavaProc = Start-Process` 行")
+    else:
+        if "--server.address=127.0.0.1" not in java.group(0):
+            errors.append("Windows 启动器起 Java 没钉 --server.address=127.0.0.1（默认 0.0.0.0：防火墙弹窗 + 局域网暴露）")
+        if "('\"{0}\"' -f $JarPath)" not in java.group(0):
+            errors.append("Windows 启动器的 -jar 路径没带引号（-ArgumentList 不会替你引号，用户名带空格即断成两段）")
+    py = _WIN_PY_START.search(text)
+    if not py:
+        errors.append("Windows 启动器找不到 `$PyProc = Start-Process` 行")
+    elif "('\"{0}\"' -f $PyBootstrapPath)" not in py.group(0):
+        errors.append("Windows 启动器的 Python bootstrap 路径没带引号（用户名带空格即断成两段）")
+    code = "\n".join(_noncomment_lines(text))  # comments may legitimately quote the bad forms
+    if _WIN_BARE_ARGLIST.search(code):
+        errors.append("Windows 启动器仍有裸的 `-ArgumentList @($…)` 路径元素")
+    raw = _WIN_RAW_EMBED.search(code)
+    if raw:
+        errors.append(f"bootstrap 用 raw 字符串嵌路径（{raw.group(0)}）：尾反斜杠/引号即碎，必须 $(ConvertTo-Json … -Compress)")
+    return errors
+
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--self-test", action="store_true", help="跑负向对照：每种坏法都必须被抓到")
@@ -113,6 +152,13 @@ def main() -> int:
         else:
             notes.append("mac 启动器：这版上游无 kill 路径（如 v0.36.0 随包那版），无需补丁")
 
+        upstream_text = UPSTREAM_START.read_text(encoding="utf-8")
+        if "--server.address=127.0.0.1" not in upstream_text:
+            errors.append(
+                "上游 mac 启动器起 Java 不再钉 --server.address=127.0.0.1 —— 两端启动器必须都绑回环，"
+                "否则 mac 也会暴露到局域网（v0.38.0 B1 起 Windows 模板已钉）"
+            )
+
         if UPSTREAM_STOP.is_file():
             stop_text = UPSTREAM_STOP.read_text(encoding="utf-8")
             if 'grep -Fq "${ROOT}"' not in stop_text:
@@ -126,11 +172,12 @@ def main() -> int:
         notes.append("上游树缺席（vendor/runtime-source 是本地构建输入），跳过启动器检查")
 
     if WINDOWS_START.is_file():
-        win = WINDOWS_START.read_text(encoding="utf-8")
+        win = WINDOWS_START.read_text(encoding="utf-8-sig")
         block = win[win.find("already in use") - 600 : win.find("already in use") + 200] if "already in use" in win else ""
         if block and "Stop-Process" in block:
             errors.append("Windows 启动器的端口冲突分支出现 Stop-Process —— 它的纪律是**拒绝**而非 kill")
-        notes.append("Windows 启动器：端口冲突分支仍是拒绝而非 kill")
+        errors.extend(audit_windows_launcher(win))
+        notes.append("Windows 启动器：端口冲突分支仍是拒绝而非 kill；Java 钉回环、路径参数带引号、bootstrap 路径 JSON 转义")
 
     if errors:
         print("runtime-scripts guard FAILED —— 误杀纪律被破坏：", file=sys.stderr)
@@ -141,10 +188,35 @@ def main() -> int:
     return 0
 
 
+def _windows_self_test_cases() -> tuple[str, dict[str, str]]:
+    good = WINDOWS_START.read_text(encoding="utf-8-sig")
+    cases = {
+        "Windows: Java 不钉回环": good.replace('"--server.address=127.0.0.1", ', "", 1),
+        "Windows: -jar 路径去引号": good.replace("('\"{0}\"' -f $JarPath)", "$JarPath", 1),
+        "Windows: bootstrap 路径去引号": good.replace("('\"{0}\"' -f $PyBootstrapPath)", "@($PyBootstrapPath)", 1),
+        "Windows: bootstrap 回到 raw 字符串": good.replace("$(ConvertTo-Json $ChartEntry -Compress)", 'r"$ChartEntry"', 1),
+    }
+    for name, text in cases.items():
+        assert text != good, f"self-test case did not change the template: {name}"
+    return good, cases
+
+
 def _self_test() -> int:
     """负向对照：守卫要抓的每一种坏法，都必须真的让它红。"""
+    failures: list[str] = []
+    win_good, win_cases = _windows_self_test_cases()
+    if audit_windows_launcher(win_good):
+        failures.append(f"Windows 基准样本本身就红：{audit_windows_launcher(win_good)}")
+    for name, text in win_cases.items():
+        if not audit_windows_launcher(text):
+            failures.append(f"负向对照未被抓到：{name}")
     if not UPSTREAM_START.is_file():
-        print("self-test 跳过：上游树缺席", file=sys.stderr)
+        if failures:
+            print("runtime-scripts self-test FAILED:", file=sys.stderr)
+            for f in failures:
+                print(f"  - {f}", file=sys.stderr)
+            return 1
+        print(f"runtime-scripts self-test OK（仅 Windows 模板，上游树缺席）: {len(win_cases)} 种坏法全部被抓到")
         return 0
     tmp = Path(tempfile.mkdtemp()) / "s.sh"
     shutil.copy2(UPSTREAM_START, tmp)
@@ -159,7 +231,6 @@ def _self_test() -> int:
         "少一个 root 标记": good.replace('-Dhorosa.runtime.root="${ROOT}"', "", 1),
         "改用 pkill": good.replace('kill -9 "${pid}"', 'pkill -9 -f "${tag}"', 1),
     }
-    failures = []
     if audit_patched_launcher(good):
         failures.append(f"基准样本本身就红：{audit_patched_launcher(good)}")
     for name, text in cases.items():
@@ -170,7 +241,7 @@ def _self_test() -> int:
         for f in failures:
             print(f"  - {f}", file=sys.stderr)
         return 1
-    print(f"runtime-scripts self-test OK: 基准绿，{len(cases)} 种坏法全部被抓到")
+    print(f"runtime-scripts self-test OK: 基准绿，{len(cases) + len(win_cases)} 种坏法全部被抓到")
     return 0
 
 

@@ -100,24 +100,31 @@ $env:PYTHONPATH = "{0};{1};{2}" -f $AstropyRoot, $FlatlibRoot, $VendorRoot
 $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
 
+# Paths are embedded as JSON string literals (a JSON string is a valid Python string literal): the old
+# r"$Var" form breaks on a trailing backslash or an embedded quote. Keep every literal here ASCII.
 $PyBootCode = @"
 import runpy
 import sys
 
-for path in [r"$FlatlibRoot", r"$AstropyRoot", r"$VendorRoot"]:
+for path in [$(ConvertTo-Json $FlatlibRoot -Compress), $(ConvertTo-Json $AstropyRoot -Compress), $(ConvertTo-Json $VendorRoot -Compress)]:
     if path not in sys.path:
         sys.path.insert(0, path)
 
-runpy.run_path(r"$ChartEntry", run_name="__main__")
+runpy.run_path($(ConvertTo-Json $ChartEntry -Compress), run_name="__main__")
 "@
 Set-Content -LiteralPath $PyBootstrapPath -Value $PyBootCode -Encoding utf8
 
-$PyProc = Start-Process -FilePath $PythonBin -ArgumentList @($PyBootstrapPath) -WorkingDirectory $Root -RedirectStandardOutput $PyOutLog -RedirectStandardError $PyErrLog -PassThru -WindowStyle Hidden
+# Start-Process joins -ArgumentList elements with spaces and does NOT quote them: a runtime root under
+# C:\Users\John Doe\... split the bootstrap path in two and neither service ever started (v0.38.0 B1).
+# Every path element is wrapped in its own double quotes; --key=value flags carry no spaces and stay bare.
+$PyProc = Start-Process -FilePath $PythonBin -ArgumentList ('"{0}"' -f $PyBootstrapPath) -WorkingDirectory $Root -RedirectStandardOutput $PyOutLog -RedirectStandardError $PyErrLog -PassThru -WindowStyle Hidden
 # -Dfile.encoding/-Dsun.jnu.encoding=UTF-8: the bundled Temurin 17 is pre-JEP-400 and defaults to the
 # OS code page (Cp1252/Cp936 on Windows), which cannot represent CJK; pin UTF-8 so any jar resource the
 # backend reads via a charset-defaulting API (star/格局/神煞 tables) is decoded correctly. No-op on a
 # healthy run; eliminates the whole JDK-17 codepage class of bug.
-$JavaProc = Start-Process -FilePath $JavaBin -ArgumentList "-Dfile.encoding=UTF-8", "-Dsun.jnu.encoding=UTF-8", "-jar", $JarPath, "--server.port=$BackendPort", "--astrosrv=http://127.0.0.1:$ChartPort", "--mongodb.ip=127.0.0.1", "--redis.ip=127.0.0.1" -WorkingDirectory $Root -RedirectStandardOutput $JavaOutLog -RedirectStandardError $JavaErrLog -PassThru -WindowStyle Hidden
+# --server.address=127.0.0.1: Spring Boot binds 0.0.0.0 by default, which on Windows means a Firewall
+# prompt on first start and a backend reachable from the LAN; the macOS launcher already pins loopback.
+$JavaProc = Start-Process -FilePath $JavaBin -ArgumentList "-Dfile.encoding=UTF-8", "-Dsun.jnu.encoding=UTF-8", "-jar", ('"{0}"' -f $JarPath), "--server.port=$BackendPort", "--server.address=127.0.0.1", "--astrosrv=http://127.0.0.1:$ChartPort", "--mongodb.ip=127.0.0.1", "--redis.ip=127.0.0.1" -WorkingDirectory $Root -RedirectStandardOutput $JavaOutLog -RedirectStandardError $JavaErrLog -PassThru -WindowStyle Hidden
 
 $PyProc.Id | Set-Content -Encoding utf8 $PyPidPath
 $JavaProc.Id | Set-Content -Encoding utf8 $JavaPidPath
