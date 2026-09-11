@@ -65,6 +65,7 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     "HOROSA_NODE_BIN": "stable",
     "HOROSA_CORE_JS_ROOT": "experimental",
     "HOROSA_UV_BIN": "internal",
+    "HOROSA_UVX_BIN": "internal",
     "HOROSA_MCPORTER_BIN": "internal",
     "HOROSA_SERVER_PORT": "internal",
     "HOROSA_CHART_PORT": "internal",

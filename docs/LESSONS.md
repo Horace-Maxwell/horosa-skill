@@ -16,7 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
-| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器（空格用户名、Java 绑 0.0.0.0、doctor 监听范围） | CI 的绿由每条命令背书；路径元素自己带引号、跨语言嵌入用字面量转义；两端启动器网络面一致；修复要让 doctor 说出来 |
+| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器（空格用户名、Java 绑 0.0.0.0、doctor 监听范围）；B2 客户端接入（`--write` 清空 settings、裸 `uvx`、Windows 配置路径、Codex 缺省超时） | CI 的绿由每条命令背书；路径元素自己带引号；两端启动器网络面一致；写用户文件只动自己的键 + 备份 + 原子；配置里的命令一律绝对路径；「没写」也是审计对象 |
 | v0.37.0 (2026-09) | 任意 AI 客户端可调用：广告层只对一个客户端对过 / 自家 .mcp.json 从未连通 / 端口静默采用与误杀 / 回环走代理 | 按**别人的**约束测；改 golden 前先答「旧断言为何不会红」；负向对照跑不红就如实改口 |
 | v0.36.0 收尾 (2026-09) | 「Java 族 live 需 Mongo」十个版本的误定性 = vendored 脚本裸 `-jar`；演禽假闸门 | 贴「环境限制」前先读 `Result` 原文、用上游桌面起法起一遍；闸门问项以 live 翻转为准，不以转发为准 |
 | v0.36.0 (2026-09) | 止血/可用性/捞回能力 15 批（响应放大、静默降级、手抄表、死键、降级误杀、扁平面丢键、moira 误排除、闸门半盲、错误码……） | 每批四件套 + 全量门禁；台账正文按批见下 |
@@ -101,6 +101,31 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.38.0 / 2026-09-10 — B2 客户端接入：`--write` 会清空 VS Code/Zed 的 settings、裸 `uvx` 在 GUI 客户端里找不到、Windows 上 `client check` 一家都找不到、Codex 缺省超时不报
+
+- **症状**：① `client config --write` 只认 `mcpServers` 根键——VS Code 产物没有可合并块、Zed 是 `context_servers`、claude-code
+  只有一条命令字符串，这三家 `--write <用户的 settings.json>` 走到「整文件写入」分支：用户的主题、别的 server 全没了，文件里
+  还多了 `note`/`tool_surface` 这些说明字段；JSON 目标不备份、`write_text` 非原子。② `--launcher uvx|uvx-git` 生成裸字符串
+  `"uvx"`：Claude Desktop / Cursor / VS Code 在 Windows 上 spawn 子进程时**不继承 shell PATH**，终端里能跑的 `uvx` 在客户端里就是
+  file not found，而 `uv` 那条早就走 `resolve_uv_command` 写绝对路径了。③ `_CLIENT_CONFIG_PATHS` 是一张 POSIX 路径表，Windows 上
+  cursor/vscode/gemini/windsurf/cline/zed 一个都找不到，`client check` 只会说「还没配」。④ Codex 审计只在 `startup_timeout_sec` /
+  `tool_timeout_sec` **写了且太短**时才报；没写（= 默认 10 s / 60 s）静默通过——issue #18「一堆报错」最像的成因。
+- **根因**：合并逻辑按「多数客户端」写死了根键；路径解析只做了 uv 一条；配置路径表按维护者的 mac 写；审计只覆盖了「写错」
+  没覆盖「没写」。四条都是「在维护者的 mac 上永远绿」的形状。
+- **guard**：① `_merge_client_config`：按产物根键（`mcpServers`/`servers`/`context_servers`）只合并 `<root>[<name>]`、写前
+  `.horosa-bak`、临时文件 + `os.replace` 原子替换、非对象/非法 JSON 拒写、没有 server 块的说明产物拒写；vscode 产物补 `servers`
+  块（`type: stdio`）、claude-code 产物补 `mcpServers` 块；`tests/test_client_config.py`：zed 的 `theme` 必须保留（旧代码即负向
+  对照）、`os.replace` 失败原文件完好且无临时文件、写出文件绝不含元键。② `client_tools.resolve_uvx_command`（`HOROSA_UVX_BIN`
+  → PATH `uvx.exe|uvx.cmd|uvx` → Windows 安装目录 → `uv` 同目录推导），三种 uvx 启动器都写绝对路径，找不到时保留裸名并在产物
+  `warnings` 里说明；`client check` 新码 `command_not_on_path`（裸名且 `which` 找不到；绝对路径不查）。不需要 `cmd /c`：uv 发的
+  是真 exe，只有 `.cmd` shim 才需要 shell。③ `_client_config_locations(client, os_name, env, home, cwd)` 纯函数：Windows 走
+  `%APPDATA%`（Claude/Code/Zed）、mac 走 `~/Library/Application Support`、linux 走 `~/.config`；`client config` 的 `config_path`
+  改为真实定位（第一个存在的候选，否则全局级候选）；跨平台形状测试用 `C:\Users\张 三`。④ Codex 审计补 `codex_startup_timeout_missing`
+  / `codex_tool_timeout_missing` / `codex_cwd_missing`；Zed 的 `context_servers` 形状按 zed.dev/docs/ai/mcp 核对（直接 `command/args/env`，
+  无需 `source` 键）。
+- **法则**：**写用户的文件 = 只动自己的那一个键、先备份、原子替换、认不出形状就拒绝**；**写进客户端配置的命令一律绝对路径**（GUI
+  客户端没有你的 shell PATH）；**「没写」和「写错」都是审计对象**——默认值不是安全值。
 
 ### v0.38.0 / 2026-09-10 — B1 Windows 启动器：用户名带空格就起不来、Java 绑 0.0.0.0、doctor 看不见监听范围
 

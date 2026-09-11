@@ -159,3 +159,50 @@ def test_extract_json_value_accepts_trailing_diagnostic_output() -> None:
 def test_extract_json_value_rejects_non_json_output() -> None:
     with pytest.raises(ValueError, match="No JSON content was found"):
         client_tools.extract_json_value("offline\nstill warming up\n")
+
+
+# ---- v0.38.0 B2: uvx must resolve to an absolute path (GUI clients on Windows have no shell PATH) ----
+
+
+def test_resolve_uvx_command_prefers_env_override(monkeypatch) -> None:
+    monkeypatch.setenv("HOROSA_UVX_BIN", "/opt/uv/bin/uvx")
+    assert client_tools.resolve_uvx_command() == ["/opt/uv/bin/uvx"]
+
+
+def test_resolve_uvx_command_uses_exe_on_windows(monkeypatch) -> None:
+    monkeypatch.delenv("HOROSA_UVX_BIN", raising=False)
+    monkeypatch.setattr(client_tools.os, "name", "nt", raising=False)
+    monkeypatch.setattr(client_tools.shutil, "which", lambda name: r"C:\Users\maxwe\.local\bin\uvx.exe" if name == "uvx.exe" else None)
+    assert client_tools.resolve_uvx_command() == [r"C:\Users\maxwe\.local\bin\uvx.exe"]
+
+
+def test_resolve_uvx_command_falls_back_to_windows_dirs(monkeypatch, tmp_path: Path) -> None:
+    programs = tmp_path / "Local" / "Programs" / "uv"
+    programs.mkdir(parents=True)
+    (programs / "uvx.exe").write_text("", encoding="utf-8")
+    monkeypatch.delenv("HOROSA_UVX_BIN", raising=False)
+    monkeypatch.delenv("HOROSA_UV_BIN", raising=False)
+    monkeypatch.setattr(client_tools.os, "name", "nt", raising=False)
+    monkeypatch.setattr(client_tools.shutil, "which", lambda name: None)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
+    monkeypatch.delenv("APPDATA", raising=False)
+    monkeypatch.delenv("USERPROFILE", raising=False)
+    assert client_tools.resolve_uvx_command() == [str(programs / "uvx.exe")]
+
+
+def test_resolve_uvx_command_derives_from_the_uv_sibling(monkeypatch, tmp_path: Path) -> None:
+    (tmp_path / "uv").write_text("", encoding="utf-8")
+    (tmp_path / "uvx").write_text("", encoding="utf-8")
+    monkeypatch.delenv("HOROSA_UVX_BIN", raising=False)
+    monkeypatch.setenv("HOROSA_UV_BIN", str(tmp_path / "uv"))
+    monkeypatch.setattr(client_tools.shutil, "which", lambda name: None)
+    assert client_tools.resolve_uvx_command() == [str(tmp_path / "uvx")]
+
+
+def test_resolve_uvx_command_raises_when_missing(monkeypatch) -> None:
+    monkeypatch.delenv("HOROSA_UVX_BIN", raising=False)
+    monkeypatch.delenv("HOROSA_UV_BIN", raising=False)
+    monkeypatch.setattr(client_tools.shutil, "which", lambda name: None)
+    monkeypatch.setattr(client_tools.os, "name", "posix", raising=False)
+    with pytest.raises(FileNotFoundError):
+        client_tools.resolve_uvx_command()

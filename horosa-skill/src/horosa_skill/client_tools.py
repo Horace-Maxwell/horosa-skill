@@ -50,6 +50,11 @@ def _windows_uv_fallbacks() -> list[str]:
     return candidates
 
 
+def _windows_uvx_fallbacks() -> list[str]:
+    """Same directories as uv: uv ships `uvx.exe` next to `uv.exe`."""
+    return [candidate[: -len("uv.exe")] + "uvx.exe" for candidate in _windows_uv_fallbacks() if candidate.endswith("uv.exe")]
+
+
 def _windows_mcporter_fallbacks() -> list[str]:
     appdata = os.environ.get("APPDATA", "").strip()
     if not appdata:
@@ -147,6 +152,46 @@ def resolve_uv_command() -> list[str]:
         error_message=(
             "uv was not found in PATH. Install uv, or set HOROSA_UV_BIN to an explicit executable path."
         ),
+    )
+
+
+def resolve_uvx_command() -> list[str]:
+    """Absolute path to `uvx` (v0.38.0 B2).
+
+    GUI clients on Windows (Claude Desktop, Cursor, VS Code…) spawn the server WITHOUT the user's shell
+    PATH, so a bare `"command": "uvx"` in their config fails with "file not found" while the same
+    command works in a terminal. Resolution: `HOROSA_UVX_BIN` → PATH (`uvx.exe`/`uvx.cmd`/`uvx` on
+    Windows) → the known Windows install dirs → the `uvx` sibling of whatever `resolve_uv_command`
+    found. No `cmd /c` wrapper is ever needed: uv ships real executables, only `.cmd` shims need a shell.
+    """
+    candidates = ["uvx"]
+    windows_fallbacks: list[str] | None = None
+    if os.name == "nt":
+        candidates = ["uvx.exe", "uvx.cmd", "uvx"]
+        windows_fallbacks = _windows_uvx_fallbacks()
+    try:
+        return _resolve_command(
+            override_env="HOROSA_UVX_BIN",
+            candidates=candidates,
+            windows_fallbacks=windows_fallbacks,
+            error_message="uvx not found",
+        )
+    except FileNotFoundError:
+        pass
+    try:
+        uv_path = resolve_uv_command()[0]
+    except FileNotFoundError:
+        uv_path = ""
+    if uv_path and os.path.isabs(uv_path):
+        stem = os.path.basename(uv_path)
+        sibling_name = "uvx.exe" if stem.lower().endswith(".exe") else "uvx"
+        sibling = os.path.join(os.path.dirname(uv_path), sibling_name)
+        if os.path.isfile(sibling):
+            return [sibling]
+    raise FileNotFoundError(
+        "uvx was not found in PATH (or next to uv). Install uv (https://docs.astral.sh/uv/), "
+        "or set HOROSA_UVX_BIN to an explicit executable path. GUI clients on Windows do not inherit "
+        "your shell PATH, so the config must carry an absolute path."
     )
 
 

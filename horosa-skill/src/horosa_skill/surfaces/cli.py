@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -9,7 +10,7 @@ import time
 from importlib.metadata import PackageNotFoundError, version as package_version
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Optional
+from typing import Mapping, Any, Optional
 
 import typer
 
@@ -24,6 +25,8 @@ from horosa_skill.client_tools import (
     isolated_runtime_root,
     resolve_mcporter_command,
     resolve_uv_command,
+
+    resolve_uvx_command,
 )
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.errors import RuntimeError, ToolValidationError
@@ -255,30 +258,68 @@ def _write_json_file(path: Path, payload: object) -> Path:
     return output_path
 
 
-def _client_config_write(path: Path, payload: object) -> Path:
-    """`client config --write` 落盘：目标文件已是 JSON 对象且本次产物含 `mcpServers` 时，
-    按 server 键合并（保留用户已有的其他 MCP server），其余情况整文件写入。
-    防止把用户真实的 claude_desktop_config.json / mcp.json 清空成只剩 horosa。
+_MERGEABLE_ROOT_KEYS = ("mcpServers", "servers", "context_servers")
 
-    codex（TOML）产物走 tomlkit 保注释合并（v0.33.0 批 III-1）：此前 codex payload 没有
-    `mcpServers` 键 → 落到整文件 JSON 写入，`--write ~/.codex/config.toml` 会把用户的
-    config.toml 整个覆盖成 JSON——毁文件雷。现在只动 `[mcp_servers.<name>]` 表，写前备份。
+
+def _merge_client_config(path: Path, payload: object) -> dict[str, Any]:
+    """`client config --write` / `setup` 落盘（v0.38.0 B2：根键感知、备份、原子替换、绝不写元键）。
+
+    v0.33.0 的合并只认 `mcpServers`：VS Code 的根键是 `servers`、Zed 是 `context_servers`、claude-code
+    产物只有一条命令字符串——这三家 `--write ~/.config/zed/settings.json` 会把用户整个 settings.json
+    覆盖成我们的 payload（连 `note`/`tool_surface` 一起写进去），且 JSON 目标不备份、非原子写。
+    现在：① 只动 `<root>[<server_name>]`，其余键（`theme`、别的 server…）逐字保留；② 目标存在则先
+    `.horosa-bak`；③ 临时文件 + `os.replace`，写到一半断电也不会留半个文件；④ 非对象 JSON 拒写；
+    ⑤ 没有可合并根键的格式（openclaw 之外的纯说明产物）拒写而不是把说明当配置。
     """
     target = path.expanduser().resolve()
     if isinstance(payload, dict) and isinstance(payload.get("toml_stdio"), str):
-        return _write_codex_toml_merge(target, payload["toml_stdio"])
-    if isinstance(payload, dict) and isinstance(payload.get("mcpServers"), dict) and target.exists():
+        written = _write_codex_toml_merge(target, payload["toml_stdio"])
+        backup = target.with_name(f"{target.name}.horosa-bak")
+        return {"path": str(written), "format": "toml", "root_key": "mcp_servers",
+                "backup": str(backup) if backup.exists() else None}
+    if not isinstance(payload, dict):
+        raise typer.BadParameter("这份产物不是对象，无法合并进客户端配置。")
+    root_key = next((key for key in _MERGEABLE_ROOT_KEYS if isinstance(payload.get(key), dict)), None)
+    if root_key is None:
+        raise typer.BadParameter(
+            "这个格式的产物没有可合并的 server 块（mcpServers / servers / context_servers），"
+            "拒绝把说明文字写成配置文件；请按 note 手动接入。"
+        )
+    servers = payload[root_key]
+    backup: Path | None = None
+    if target.exists():
+        raw = target.read_bytes()
         try:
-            existing = json.loads(target.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            existing = None
-        if isinstance(existing, dict):
-            merged = dict(existing)
-            servers = dict(merged.get("mcpServers") or {})
-            servers.update(payload["mcpServers"])
-            merged["mcpServers"] = servers
-            return _write_json_file(target, merged)
-    return _write_json_file(target, payload)
+            existing = json.loads(raw.decode("utf-8-sig")) if raw.strip() else {}
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise typer.BadParameter(
+                f"{target} 不是合法 JSON（{exc}），拒绝合并——请手动把 {root_key} 片段粘进去。"
+            ) from exc
+        if not isinstance(existing, dict):
+            raise typer.BadParameter(f"{target} 顶层不是 JSON 对象，拒绝合并。")
+        backup = target.with_name(f"{target.name}.horosa-bak")
+        backup.write_bytes(raw)
+        merged = dict(existing)
+        block = dict(merged.get(root_key) or {})
+        block.update(servers)
+        merged[root_key] = block
+    else:
+        merged = {root_key: dict(servers)}
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_name(f"{target.name}.horosa-tmp")
+    tmp.write_text(json.dumps(merged, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    try:
+        os.replace(tmp, target)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+    return {"path": str(target), "format": "json", "root_key": root_key,
+            "servers": sorted(servers), "backup": str(backup) if backup else None}
+
+
+def _client_config_write(path: Path, payload: object) -> Path:
+    """向后兼容的薄包装：返回写入路径（详情见 `_merge_client_config`）。"""
+    return Path(_merge_client_config(path, payload)["path"])
 
 
 def _write_codex_toml_merge(target: Path, toml_snippet: str) -> Path:
@@ -1802,24 +1843,58 @@ _CLIENT_COMPACT_REASON = {
 }
 
 
-# 各客户端配置文件在本机的位置（`client check` 用；找不到不是错误，只是「还没配」）。
-_CLIENT_CONFIG_PATHS: dict[str, list[str]] = {
-    "claude-code": ["~/.claude.json", "./.mcp.json"],
-    "claude-desktop": [
-        "~/Library/Application Support/Claude/claude_desktop_config.json",
-        "~/AppData/Roaming/Claude/claude_desktop_config.json",
-        "~/.config/Claude/claude_desktop_config.json",
-    ],
-    "cursor": ["~/.cursor/mcp.json", "./.cursor/mcp.json"],
-    "vscode": ["~/Library/Application Support/Code/User/mcp.json", "./.vscode/mcp.json"],
-    "codex": ["~/.codex/config.toml"],
-    "gemini": ["~/.gemini/settings.json"],
-    "windsurf": ["~/.codeium/windsurf/mcp_config.json"],
-    "cline": [
-        "~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
-    ],
-    "zed": ["~/.config/zed/settings.json"],
-}
+# 各客户端配置文件在本机的位置（`client check` 找、`client config` 报 `config_path`、`setup` 写）。
+# v0.38.0 B2 之前是一张 POSIX 路径表：Windows 上 cursor/vscode/gemini/windsurf/cline/zed 一个都找不到，
+# `client check` 在 Windows 只会说「还没配」。现在按 os 与环境变量算真实位置；找不到不是错误。
+_CLIENT_NAMES = ("claude-code", "claude-desktop", "cursor", "vscode", "codex", "gemini", "windsurf", "cline", "zed")
+
+
+def _client_config_locations(
+    client: str, *, os_name: str | None = None, env: Mapping[str, str] | None = None,
+    home: Path | None = None, cwd: Path | None = None,
+) -> list[Path]:
+    """候选配置文件（先全局后项目级；第一个存在的就是 `config_path`）。纯函数，便于跨平台测试。"""
+    # os_name ∈ {"nt", "darwin", "linux"}（默认按本机）；参数化是为了在任何平台上都能测别的平台的路径表。
+    if os_name is None:
+        os_name = "nt" if os.name == "nt" else ("darwin" if sys.platform == "darwin" else "linux")
+    env = os.environ if env is None else env
+    home = Path(home) if home is not None else Path.home()
+    cwd = Path(cwd) if cwd is not None else Path.cwd()
+    if os_name == "nt":
+        appdata = Path(env.get("APPDATA") or (home / "AppData" / "Roaming"))
+        claude_desktop = appdata / "Claude" / "claude_desktop_config.json"
+        code_user = appdata / "Code" / "User"
+        zed = appdata / "Zed" / "settings.json"
+    elif os_name == "darwin":
+        claude_desktop = home / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
+        code_user = home / "Library" / "Application Support" / "Code" / "User"
+        zed = home / ".config" / "zed" / "settings.json"
+    else:
+        claude_desktop = home / ".config" / "Claude" / "claude_desktop_config.json"
+        code_user = home / ".config" / "Code" / "User"
+        zed = home / ".config" / "zed" / "settings.json"
+    table: dict[str, list[Path]] = {
+        "claude-code": [home / ".claude.json", cwd / ".mcp.json"],
+        "claude-desktop": [claude_desktop],
+        "cursor": [home / ".cursor" / "mcp.json", cwd / ".cursor" / "mcp.json"],
+        "vscode": [code_user / "mcp.json", cwd / ".vscode" / "mcp.json"],
+        "codex": [home / ".codex" / "config.toml"],
+        "gemini": [home / ".gemini" / "settings.json"],
+        "windsurf": [home / ".codeium" / "windsurf" / "mcp_config.json"],
+        "cline": [code_user / "globalStorage" / "saoudrizwan.claude-dev" / "settings" / "cline_mcp_settings.json"],
+        "zed": [zed],
+    }
+    if client not in table:
+        raise typer.BadParameter(f"未知客户端 `{client}`。可选：{', '.join(_CLIENT_NAMES)}")
+    return table[client]
+
+
+def _preferred_config_path(client: str) -> Path:
+    """第一个已存在的候选；都不存在则第一个候选（全局级）。"""
+    candidates = _client_config_locations(client)
+    return next((c for c in candidates if c.is_file()), candidates[0])
+
+
 # 三种根键：mcpServers（多数）/ servers（VS Code）/ context_servers（Zed）。
 _SERVER_ROOT_KEYS = ("mcpServers", "servers", "context_servers", "mcp_servers")
 
@@ -1883,6 +1958,14 @@ def _audit_client_entry(
                     "detail": f"--directory 指向的目录里没有 pyproject.toml：{target}",
                     "fix": "指向 horosa-skill 包目录（含 pyproject.toml 的那一层）。",
                 })
+    # 裸命令名要靠 PATH；GUI 客户端（Claude Desktop / Cursor / VS Code…）在 Windows 上不继承 shell PATH，
+    # 终端里能跑的 `uvx` 在客户端里就是 file not found（v0.38.0 B2）。绝对路径不查 PATH。
+    if command and not any(sep in command for sep in ("/", "\\")) and shutil.which(command) is None:
+        problems.append({
+            "code": "command_not_on_path",
+            "detail": f"`{command}` 不在 PATH 上（本机 which 找不到）；GUI 客户端还不继承你的 shell PATH。",
+            "fix": "重跑 `horosa-skill client config --format <client>`（现在写绝对路径），或把 command 改成可执行文件的完整路径。",
+        })
     if command.endswith("uvx") and "--from" not in args:
         problems.append({
             "code": "pypi_not_published",
@@ -1891,19 +1974,40 @@ def _audit_client_entry(
                    "#subdirectory=horosa-skill\" horosa-skill`，或本地 checkout 走 `uv run --directory`。",
         })
     if client == "codex":
+        # 缺省 = Codex 默认 startup 10 s / tool 60 s：首次冷启动要解压 runtime、择日扫描本来就几分钟——
+        # 「一堆报错」（issue #18）最像的成因就是这两个没写。此前只在**写了且太短**时才报（v0.38.0 B2 补缺席分支）。
         startup = entry.get("startup_timeout_sec")
-        if startup is not None and float(startup) < 120:
+        if startup is None:
+            problems.append({
+                "code": "codex_startup_timeout_missing",
+                "detail": "没写 startup_timeout_sec（Codex 默认 10 秒，首次启动要解压 runtime）。",
+                "fix": "在 [mcp_servers.<name>] 里加 `startup_timeout_sec = 120`。",
+            })
+        elif float(startup) < 120:
             problems.append({
                 "code": "codex_startup_timeout_too_short",
                 "detail": f"startup_timeout_sec={startup}（默认 10 秒）。",
                 "fix": "设 120 以上：首次启动要解压 runtime。",
             })
         tool_timeout = entry.get("tool_timeout_sec")
-        if tool_timeout is not None and float(tool_timeout) < 600:
+        if tool_timeout is None:
+            problems.append({
+                "code": "codex_tool_timeout_missing",
+                "detail": "没写 tool_timeout_sec（Codex 默认 60 秒，择日类扫描本来就要几分钟）。",
+                "fix": "在 [mcp_servers.<name>] 里加 `tool_timeout_sec = 600`。",
+            })
+        elif float(tool_timeout) < 600:
             problems.append({
                 "code": "codex_tool_timeout_too_short",
                 "detail": f"tool_timeout_sec={tool_timeout}（默认 60 秒）。",
                 "fix": "设 600 以上：择日类扫描本来就要几分钟。",
+            })
+        cwd = entry.get("cwd")
+        if cwd and "${" not in str(cwd) and not Path(str(cwd)).expanduser().is_dir():
+            problems.append({
+                "code": "codex_cwd_missing",
+                "detail": f"cwd 指向的目录不存在：{cwd}（Codex 会 spawn 失败）。",
+                "fix": "删掉 cwd（uvx 形态不需要），或指向存在的 horosa-skill 包目录。",
             })
     return problems
 
@@ -1919,12 +2023,12 @@ def client_check(
     目录搬了、Codex 超时是默认的 10/60 秒、`uvx horosa-skill` 指着还没开通的 PyPI）唯一的症状是
     客户端里安静地少了这个 server —— 没有任何一处会告诉他们哪一步错了。
     """
-    targets = [client] if client else sorted(_CLIENT_CONFIG_PATHS)
+    targets = [client] if client else list(_CLIENT_NAMES)
     results: list[dict[str, Any]] = []
     for name in targets:
-        if name not in _CLIENT_CONFIG_PATHS:
-            raise typer.BadParameter(f"未知客户端 `{name}`。可选：{', '.join(sorted(_CLIENT_CONFIG_PATHS))}")
-        candidates = [config_path] if config_path else [Path(item) for item in _CLIENT_CONFIG_PATHS[name]]
+        if name not in _CLIENT_NAMES:
+            raise typer.BadParameter(f"未知客户端 `{name}`。可选：{', '.join(_CLIENT_NAMES)}")
+        candidates = [config_path] if config_path else _client_config_locations(name)
         found: list[dict[str, Any]] = []
         for candidate in candidates:
             path = candidate.expanduser()
@@ -1956,7 +2060,7 @@ def client_check(
                 })
         results.append({
             "client": name,
-            "searched": [str(Path(item).expanduser()) for item in (candidates if config_path else _CLIENT_CONFIG_PATHS[name])],
+            "searched": [str(Path(item).expanduser()) for item in candidates],
             "configured": bool([f for f in found if f.get("entry")]),
             "findings": found,
             "fix_command": f"uv run horosa-skill client config --format {name}",
@@ -2014,14 +2118,22 @@ def client_config(
     launcher_key = launcher.strip().lower()
     if launcher_key not in {"uv", "uvx", "uvx-git"}:
         raise typer.BadParameter("`--launcher` must be `uv`, `uvx` or `uvx-git`.")
+    warnings: list[str] = []
+    if launcher_key in {"uvx", "uvx-git"}:
+        # 🔴 写绝对路径（v0.38.0 B2）：GUI 客户端在 Windows 上不继承 shell PATH，裸 `uvx` = file not found。
+        try:
+            uvx_command = resolve_uvx_command()
+        except FileNotFoundError as exc:
+            uvx_command = ["uvx"]
+            warnings.append(f"uvx 未找到，配置里只能写裸 `uvx`（GUI 客户端可能起不来）：{exc}")
     if launcher_key == "uvx":
         # PyPI 分发（v0.36.0 C4）：不需要源码 checkout；离线 runtime 仍由 `uvx horosa-skill install` 装到默认目录。
-        stdio_command = ["uvx", "horosa-skill", "serve", "--transport", "stdio"]
+        stdio_command = [*uvx_command, "horosa-skill", "serve", "--transport", "stdio"]
     elif launcher_key == "uvx-git":
         # 🔴 PyPI 尚未开通（`pip install horosa-skill` 现在是 404），所以 `uvx` 那条今天还跑不通。
         # 直接从 Git 装是**当下唯一可用的零安装路径**；钉当前版本 tag 让配置可复现。
         stdio_command = [
-            "uvx", "--from",
+            *uvx_command, "--from",
             f"git+https://github.com/Horace-Maxwell/horosa-skill@v{__version__}#subdirectory=horosa-skill",
             "horosa-skill", "serve", "--transport", "stdio",
         ]
@@ -2062,8 +2174,16 @@ def client_config(
         )
     elif key == "claude-code":
         payload = {
-            "note": "运行下面这一条命令即可把 Horosa 注册进 Claude Code（stdio 直连，无需常驻 serve）。",
+            "note": "运行下面这一条命令即可把 Horosa 注册进 Claude Code（stdio 直连，无需常驻 serve）；或把 mcpServers 合并进项目的 .mcp.json / ~/.claude.json。",
             "command": "claude mcp add " + server_name + " -- " + " ".join(stdio_command),
+            "config_path": str(_preferred_config_path("claude-code")),
+            "mcpServers": {
+                server_name: {
+                    "command": stdio_command[0],
+                    "args": stdio_command[1:],
+                    **({"env": surface_env} if surface_env else {}),
+                }
+            },
             "tool_surface": tool_surface,
             **({"env_note": "精简面：给这条命令加 `-e HOROSA_MCP_COMPACT=1`"} if use_compact else {}),
             "alternative_http": {
@@ -2077,6 +2197,7 @@ def client_config(
     elif key == "claude-desktop":
         payload = {
             "note": "合并进 Claude Desktop 的 claude_desktop_config.json（mcpServers 键下）。",
+            "config_path": str(_preferred_config_path("claude-desktop")),
             "tool_surface": tool_surface,
             "mcpServers": {
                 server_name: {
@@ -2098,6 +2219,7 @@ def client_config(
                 "追加到 ~/.codex/config.toml（或用 --write 原位合并，只动 [mcp_servers." + server_name + "] 表并先备份）。"
                 "HTTP 变体需先 `uv run horosa-skill serve`。"
             ),
+            "config_path": str(_preferred_config_path("codex")),
             "toml_stdio": (
                 f"[mcp_servers.{server_name}]\n"
                 # command 必须与 args/cwd 一样走 json.dumps：JSON 转义 ⊂ TOML 基本字符串转义。
@@ -2143,6 +2265,7 @@ def client_config(
         encoded = base64.b64encode(cursor_config.encode("utf-8")).decode("ascii")
         payload = {
             "note": "点击 deep_link 一键安装进 Cursor；或把 mcpServers 合并进 ~/.cursor/mcp.json。",
+            "config_path": str(_preferred_config_path("cursor")),
             "deep_link": f"cursor://anysphere.cursor-deeplink/mcp/install?name={server_name}&config={encoded}",
             "mcpServers": {server_name: cursor_entry},
             "tool_surface": tool_surface,
@@ -2155,8 +2278,15 @@ def client_config(
         if surface_env:
             vscode_entry["env"] = surface_env
         vscode_config = json.dumps(vscode_entry, ensure_ascii=False)
+        # mcp.json 形状（`servers` 根键 + `type: stdio`）：让 --write / setup 能合并进用户级 mcp.json，
+        # 而不是把 install_link/cli_command 这些说明写成配置（v0.38.0 B2）。
+        vscode_file_entry: dict[str, Any] = {"type": "stdio", "command": stdio_command[0], "args": stdio_command[1:]}
+        if surface_env:
+            vscode_file_entry["env"] = surface_env
         payload = {
-            "note": "点击 install_link 一键安装进 VS Code；或运行 cli_command。",
+            "note": "点击 install_link 一键安装进 VS Code；或运行 cli_command；或把 servers 合并进用户级 mcp.json。",
+            "config_path": str(_preferred_config_path("vscode")),
+            "servers": {server_name: vscode_file_entry},
             "install_link": f"vscode:mcp/install?{quote(vscode_config, safe='')}",
             # 单引号只在 POSIX shell 里成立；cmd.exe / PowerShell 会把它当字面量 → JSON 解析失败。
             # 两条都给，让 Windows 用户不用自己猜转义。
@@ -2173,14 +2303,15 @@ def client_config(
             # Gemini CLI 的 per-server `timeout` 是毫秒；默认 600000（10 分钟）已够长盘扫描。
             # `trust: false` = 每次工具调用仍走确认，别替用户放开。
             entry.update({"timeout": 600000, "trust": False})
-            root_key, config_path = "mcpServers", "~/.gemini/settings.json"
+            root_key = "mcpServers"
         elif key == "windsurf":
-            root_key, config_path = "mcpServers", "~/.codeium/windsurf/mcp_config.json"
+            root_key = "mcpServers"
         elif key == "cline":
             entry["type"] = "stdio"
-            root_key, config_path = "mcpServers", "Cline 扩展的 cline_mcp_settings.json"
-        else:  # zed
-            root_key, config_path = "context_servers", "Zed settings.json"
+            root_key = "mcpServers"
+        else:  # zed：context_servers 下直接 command/args/env（zed.dev/docs/ai/mcp，2026-09 核对）
+            root_key = "context_servers"
+        config_path = str(_preferred_config_path(key))
         payload = {
             "note": f"合并进 {config_path}（{root_key} 键下）。",
             "config_path": config_path,
@@ -2192,8 +2323,10 @@ def client_config(
             "format must be one of: claude-code / claude-desktop / cursor / vscode / codex / "
             "gemini / windsurf / cline / zed / mcporter / openclaw"
         )
+    if warnings:
+        payload["warnings"] = warnings
     if write is not None:
-        _client_config_write(write, payload)
+        payload["written"] = _merge_client_config(write, payload)
     _print_json(payload)
 
 

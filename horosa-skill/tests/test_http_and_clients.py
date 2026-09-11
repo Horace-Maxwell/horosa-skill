@@ -11,6 +11,7 @@ import json
 import os
 
 import pytest
+from typer.testing import CliRunner
 import typer
 
 from horosa_skill.config import Settings
@@ -194,6 +195,48 @@ def test_client_check_catches_codex_default_timeouts() -> None:
     )
     assert "codex_startup_timeout_too_short" in codes
     assert "codex_tool_timeout_too_short" in codes
+
+
+def test_client_check_flags_missing_codex_timeouts() -> None:
+    """缺省 = Codex 默认 10 s / 60 s：此前只在写了且太短时才报（v0.38.0 B2）。"""
+    codes = _audit({"command": "uv", "args": ["run", "--directory", ".", "horosa-skill", "serve", "--transport", "stdio"]},
+                   client="codex")
+    assert "codex_startup_timeout_missing" in codes and "codex_tool_timeout_missing" in codes
+    good = _audit({"command": "uv", "args": ["run", "--directory", ".", "horosa-skill", "serve", "--transport", "stdio"],
+                   "startup_timeout_sec": 120, "tool_timeout_sec": 600}, client="codex")
+    assert not [c for c in good if c.startswith("codex_")]
+
+
+def test_client_check_flags_codex_cwd_missing(tmp_path) -> None:
+    entry = {"command": "uv", "args": ["run", "horosa-skill", "serve", "--transport", "stdio"],
+             "startup_timeout_sec": 120, "tool_timeout_sec": 600, "cwd": str(tmp_path / "gone")}
+    assert "codex_cwd_missing" in _audit(entry, client="codex")
+    entry["cwd"] = str(tmp_path)
+    assert "codex_cwd_missing" not in _audit(entry, client="codex")
+
+
+def test_client_check_catches_a_command_not_on_path(monkeypatch) -> None:
+    """裸命令名靠 PATH，而 GUI 客户端在 Windows 上不继承 shell PATH（v0.38.0 B2）。"""
+    monkeypatch.setattr(cli.shutil, "which", lambda name: None)
+    codes = _audit({"command": "uvx", "args": ["--from", "git+https://x", "horosa-skill", "serve", "--transport", "stdio"]})
+    assert "command_not_on_path" in codes
+    # 绝对路径不查 PATH（负向对照）
+    codes = _audit({"command": "/opt/uv/bin/uvx", "args": ["--from", "git+https://x", "horosa-skill", "serve", "--transport", "stdio"]})
+    assert "command_not_on_path" not in codes
+
+
+def test_client_check_searches_the_located_windows_paths(monkeypatch, tmp_path) -> None:
+    located = tmp_path / "Roaming" / "Code" / "User" / "mcp.json"
+    located.parent.mkdir(parents=True)
+    located.write_text(json.dumps({"servers": {"horosa": {"type": "stdio", "command": "/opt/uv/bin/uv",
+                                                          "args": ["run", "horosa-skill", "serve", "--transport", "stdio"]}}}),
+                       encoding="utf-8")
+    monkeypatch.setattr(cli, "_client_config_locations", lambda name, **kw: [located] if name == "vscode" else [tmp_path / "none.json"])
+    result = CliRunner().invoke(cli.app, ["client", "check", "--client", "vscode"])
+    assert result.exit_code == 0, result.output
+    report = json.loads(result.output)
+    assert report["configured_clients"] == ["vscode"]
+    assert report["clients"][0]["searched"] == [str(located)]
 
 
 def test_client_check_passes_a_good_entry(tmp_path) -> None:

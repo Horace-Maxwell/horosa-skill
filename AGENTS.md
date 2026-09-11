@@ -677,6 +677,8 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | 维护机上 `test_error_paths_return_a_conformant_envelope` 红、CI 绿 | 默认端口上有活服务，只钉 `HOROSA_RUNTIME_ROOT` 拦不住，本该失败的路径成功了 | 同时把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指到不可达地址（§8 验证流程 4） |
 | Windows 首次启动弹防火墙 / `doctor` 报 `listener:not_loopback_only` | 旧模板起 Java 没钉 `--server.address=127.0.0.1`，绑在 0.0.0.0 | 升级 horosa-skill 后 `runtime restart` 重套模板（每次 start 都会重拷 `.ps1`）；`doctor.listener_scope` 应变为 `loopback_only: true` |
 | Windows 用户名带空格（`C:\Users\John Doe`）时 chart/Java 都起不来，`.horosa-local-logs` 里 python 报找不到文件 | 旧模板 `-ArgumentList` 路径元素没引号，被拆成两段 | 升级后 `runtime restart`；判据 = `tests/test_runtime_launcher_templates.py` 的引号断言（v0.38.0 B1） |
+| Codex 里 horosa 一堆报错 / 首轮看不到工具 | 多半是 `startup_timeout_sec`/`tool_timeout_sec` 没写（Codex 默认 10 s/60 s，冷启动与择日扫描都超） | `horosa-skill client check --client codex`（v0.38.0 起缺省也报 `codex_*_timeout_missing`）；重跑 `client config --format codex --write ~/.codex/config.toml` |
+| 终端里 `uvx …` 能跑，Claude Desktop / Cursor 里却起不来（file not found） | GUI 客户端在 Windows 上不继承 shell PATH，配置里写的是裸 `uvx` | 重跑 `client config`（v0.38.0 起写绝对路径）；`client check` 报 `command_not_on_path` 即此症 |
 | Windows smoke 绿，但 step 里某条命令其实失败了 | GitHub `pwsh` 多行 `run:` 只拿**最后一条**命令的退出码当结果（v0.38.0 前 `tool run --output` 这个不存在的参数在此安静失败了几十轮） | 每个 pwsh 多行块首行 `$PSNativeCommandUseErrorActionPreference = $true`（`tests/test_ci_workflow_shape.py` 守）；关键产物要 `Test-Path` + 断言 `.ok` |
 | 维护机上 `test_runtime_manager.py` 全绿、CI 上四条红在 `runtime.port_conflict_unknown_holder` | v0.37.0 起只 stub `_service_status` 的用例会拿那个 URL **真的**跑归属判定：维护机 9999/8899 上跑着真 runtime → ours；CI 上没人监听 → unknown | 本机复现要连**归属**一起伪装：autouse fixture 把 `identity.probe_identity` 打成返回 None、`listener_pids` 打成返回 `[]`，`pytest -p <plugin>` 挂上去。`_managed_mode` 已内置 classify_endpoint 桩 |
 
@@ -760,6 +762,12 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **闸门问什么，以 live「改参数结果必变」为准，不以代码转发了什么为准。** 演禽（xianqin）转发了 lat/lon，引擎却不读
   （上海↔乌鲁木齐逐字节相同）——问地点就是假闸门。给工具挂结果敏感项前先翻转一次；不敏感的项用**反向** live
   断言钉住（`test_xianqin_ignores_place_so_its_gate_must_not_ask_for_it`），上游哪天读了它会先红（v0.36.0 收尾）。
+- **写用户的客户端配置 = 只动自己的键、先备份、原子替换、认不出形状就拒绝；命令一律绝对路径。** `_merge_client_config`
+  按产物根键（`mcpServers`/`servers`/`context_servers`；codex 走 tomlkit）只 upsert `<root>[<server_name>]`，写前 `.horosa-bak`，
+  临时文件 + `os.replace`，非对象/非法 JSON 或没有 server 块的说明产物一律拒写（v0.38.0 B2：此前 vscode/zed/claude-code 的
+  `--write` 会把用户整个 settings.json 覆盖成 payload）。`uv`/`uvx` 启动器都经 `client_tools.resolve_*_command` 写绝对路径——GUI
+  客户端在 Windows 上不继承 shell PATH；`client check` 的 `command_not_on_path` 守。配置路径用 `_client_config_locations`
+  （按 os 与 `%APPDATA%`/`~/Library`/`~/.config` 算），不写死 POSIX 表。Codex 审计「没写超时」与「写太短」都报。
 - **证据的形状不许由偶然决定。** ① CI 里 `shell: pwsh` 的多行 `run:` 块首行必须是 `$PSNativeCommandUseErrorActionPreference = $true`，
   否则只有最后一条命令算数（`tests/test_ci_workflow_shape.py`）；② 计数守卫的覆盖面是正则规则（`COUNT_PROSE_EN` 认 `real|local`），
   不是某句话恰好的措辞；③ 仓里有的文件文档不得否认（`verify_docs_sync.check_docker_claims`），Dockerfile 的 `COPY` 必须盖住
