@@ -63,6 +63,19 @@ jobs:
             exit 1
           fi
           echo "OK: ${NAME} present on ${TAG}."
+          # v0.38.0 A6 实踩：mcpb 打包不可复现（字节随打包时刻变），`publish_release.sh --draft` 重打了一份并上传，而
+          # server.json 里回填的还是上一次 no-upload 构建的 sha —— 注册表客户端装前校验 fileSha256 必失败。
+          # 这里把发布上的真实 sha 与 main 上 server.json 的 mcpb 条目对齐（仅 ≥ 0.37.0，更早的 release 没有 mcpb 条目）。
+          if [ "$(printf '%s\n0.37.0' "${VERSION}" | sort -V | head -n1)" = "0.37.0" ]; then
+            gh release download "${TAG}" --repo "${REPO}" -p "${NAME}" -D "${RUNNER_TEMP}/mcpb" --clobber
+            ACTUAL="$(sha256sum "${RUNNER_TEMP}/mcpb/${NAME}" | cut -d' ' -f1)"
+            DECLARED="$(python3 -c 'import json,sys; d=json.load(open("server.json")); print(next((p.get("fileSha256","") for p in d.get("packages",[]) if p.get("registryType")=="mcpb"), ""))')"
+            if [ "${ACTUAL}" != "${DECLARED}" ]; then
+              echo "::error::server.json mcpb fileSha256 (${DECLARED:-empty}) != sha256 of the published ${NAME} (${ACTUAL}) — commit the backfill from the SAME publish_release.sh --draft run that uploaded the bundle (mcpb packing is not byte-reproducible)."
+              exit 1
+            fi
+            echo "OK: server.json mcpb fileSha256 matches the published bundle."
+          fi
 
       # v0.38.0 B3：wheel 资产是免 git / 免 PyPI 的零安装通路（`uvx --from <wheel URL>`），README / SKILL /
       # server.json 里钉版本的命令直指它。资产要在场，而且那条命令要真的跑通——「文档写了」不算证据。

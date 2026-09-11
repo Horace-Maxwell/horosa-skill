@@ -561,7 +561,9 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   维护机半边一律走 `scripts/publish_release.sh`（步骤见上；无参数是安全默认，只构建校验）。资产契约由
   `release-completeness.yml` 断言（manifest 双平台 + 两包可达 + **SBOM 在场** + **`.mcpb` 在场**）。
   `.mcpb` 是 Claude Desktop 的一键安装包（`scripts/build_mcpb.sh`：validate → pack → sha256），
-  它的 sha 要回填进 `server.json` 的 mcpb package —— 那条 URL 必须指向**当前**版本的 tag，
+  它的 sha 要回填进 `server.json` 的 mcpb package —— 那条 URL 必须指向**当前**版本的 tag，且 sha 必须来自**真正上传的那一次**
+  `--draft` 构建（mcpb 打包不可复现；v0.38.0 首发漂过一次，`release-completeness.yml` 现在把发布上的 mcpb sha 与 main 的
+  server.json 对齐），
   否则升级后客户端装到的还是旧包（`verify_server_json.py` 逐个 package 查，不只查第一个）。
   Windows 半边由流水线派生；构建机 vendor 模式 `sync_windows_release.py --upload` 只是托管路径不可用时的后手，
   判据始终是 `--check` 的 `[GAP]`/`[OK]`。

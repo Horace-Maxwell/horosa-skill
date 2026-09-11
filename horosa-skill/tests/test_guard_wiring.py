@@ -121,6 +121,8 @@ def test_release_asset_contract_is_asserted_not_just_documented() -> None:
     assert "horosa-skill-sbom.json" in workflow, "completeness 必须断言 SBOM 资产在场"
     # v0.37.0：`.mcpb` 同理 —— server.json 的 mcpb package 直指这个资产 URL，缺了它注册表那条记录 404。
     assert ".mcpb" in workflow, "completeness 必须断言 MCPB 包在场"
+    # v0.38.0 A6：mcpb 打包不可复现，server.json 的 fileSha256 必须对得上**发布上**那份（本次首发就漂了一次）
+    assert "fileSha256" in workflow and "sha256sum" in workflow, "completeness 必须把 server.json 的 mcpb sha 与发布资产对齐"
     sync = (SCRIPTS / "sync_windows_release.py").read_text(encoding="utf-8")
     assert "has_mcpb" in sync, "双平台完整性判据必须把 .mcpb 算进去"
     publish = (SCRIPTS / "publish_release.sh").read_text(encoding="utf-8")

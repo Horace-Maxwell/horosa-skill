@@ -118,6 +118,10 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 - **新知 ②**：`publish=true` 那一跑会**再派生一次** Windows 半（zip 字节不同：723171512 → 723171643，时间戳所致），清单 / SHA256SUMS /
   attestation 在同一跑里同步重生成，所以自洽；但 draft 上的第一份 zip 被 --clobber 覆盖、第一次的 attestation 作废。可接受，
   但更好的形状是 publish 跑复用 draft 上已验证的资产（后续项，记在 memory）。
+- **新知 ③（发布后追到）**：`.mcpb` 打包**不可复现**——`--draft` 那一轮重打的包字节不同，上传的是它，而 `server.json` 里提交的
+  `fileSha256` 还是前一次 no-upload 构建回填的值（a06dbc1d… vs 发布上的 7bb5b63e…），注册表客户端装前校验必失败。修：把发布
+  上那份的 sha 提交回 main；守卫：`release-completeness.yml` 下载发布上的 mcpb 算 sha 与 main 的 `server.json` 对齐（≥ 0.37.0）。
+  规则：**sha 回填只能来自真正上传的那一次构建**，`--draft` 之后必须 `git diff server.json` 并提交。
 - **法则**：**公开的判据只有 `--check` 的 [OK]**（本次两次都 [OK]）；**下游 workflow 不要指望 release 事件，publish 侧显式 dispatch**。
 
 ### v0.38.0 / 2026-09-11 — 主干 CI 红了 19 个 commit 没人看：本机门禁全绿 ≠ CI 绿；Windows checkout 与 macOS runner 各有一套「本机不会红」
