@@ -1,0 +1,87 @@
+name: runner-probe
+
+# A0 (v0.38.0 adaptability): one-shot evidence about the hosted runners the release pipeline will use.
+# Nothing here ships; it answers questions the plan must not guess at: architecture/free disk per runner,
+# whether `windows-11-arm` can run the x64 Temurin JDK / x64 Node under emulation (the win32-arm64
+# fallback story), and whether Rosetta is present on the arm64 macOS image. Dispatch-only.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, windows-latest, windows-11-arm, macos-latest]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Probe (POSIX)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "runner=${{ matrix.runner }} os=$(uname -s) machine=$(uname -m)"
+          df -h . | tail -1
+          python3 -c "import platform,sys; print('python', sys.version.split()[0], platform.machine())"
+          uv --version
+          node -e "console.log('node', process.version, process.arch)"
+          if [ "$(uname -s)" = "Darwin" ]; then
+            sw_vers
+            if arch -x86_64 /usr/bin/true 2>/dev/null; then echo "rosetta=present"; else echo "rosetta=absent"; fi
+          fi
+      - name: Probe (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          Write-Output "runner=${{ matrix.runner }} PROCESSOR_ARCHITECTURE=$env:PROCESSOR_ARCHITECTURE PROCESSOR_ARCHITEW6432=$env:PROCESSOR_ARCHITEW6432"
+          Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, OSArchitecture | Format-List
+          Get-PSDrive -Name C | Select-Object Used, Free | Format-List
+          python -c "import platform,sys; print('python', sys.version.split()[0], platform.machine())"
+          uv --version
+          node -e "console.log('node', process.version, process.arch)"
+          $ps = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture
+          $os = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+          Write-Output "dotnet process_arch=$ps os_arch=$os"
+      - name: x64 Temurin JDK + x64 Node under emulation (Windows on ARM evidence)
+        if: matrix.runner == 'windows-11-arm'
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $work = Join-Path $env:RUNNER_TEMP 'x64probe'
+          New-Item -ItemType Directory -Path $work -Force | Out-Null
+          $jdkZip = Join-Path $work 'jdk-x64.zip'
+          Invoke-WebRequest -Uri 'https://api.adoptium.net/v3/binary/latest/17/ga/windows/x64/jdk/hotspot/normal/eclipse' -OutFile $jdkZip -MaximumRedirection 5
+          Expand-Archive -LiteralPath $jdkZip -DestinationPath (Join-Path $work 'jdk') -Force
+          $java = Get-ChildItem -Path (Join-Path $work 'jdk') -Recurse -Filter java.exe | Select-Object -First 1
+          $sw = [System.Diagnostics.Stopwatch]::StartNew()
+          & $java.FullName -version
+          Write-Output "java_x64_version_seconds=$([math]::Round($sw.Elapsed.TotalSeconds,2))"
+          $sw.Restart()
+          & $java.FullName -XshowSettings:properties -version 2>&1 | Select-String -Pattern 'os.arch|sun.arch.data.model'
+          Write-Output "java_x64_showsettings_seconds=$([math]::Round($sw.Elapsed.TotalSeconds,2))"
+          $nodeZip = Join-Path $work 'node-x64.zip'
+          $shas = (Invoke-WebRequest -Uri 'https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt').Content
+          $nodeName = ($shas -split "`n" | Where-Object { $_ -match 'node-v22\.[0-9.]+-win-x64\.zip' } | Select-Object -First 1) -replace '^\S+\s+', ''
+          $nodeName = $nodeName.Trim()
+          Invoke-WebRequest -Uri "https://nodejs.org/dist/latest-v22.x/$nodeName" -OutFile $nodeZip
+          Expand-Archive -LiteralPath $nodeZip -DestinationPath (Join-Path $work 'node') -Force
+          $node = Get-ChildItem -Path (Join-Path $work 'node') -Recurse -Filter node.exe | Select-Object -First 1
+          & $node.FullName -e "console.log('node_x64', process.version, process.arch)"
+          $pyZip = Join-Path $work 'py-x64.zip'
+          Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip' -OutFile $pyZip
+          Expand-Archive -LiteralPath $pyZip -DestinationPath (Join-Path $work 'py') -Force
+          & (Join-Path $work 'py\python.exe') -c "import platform,sys; print('python_x64_embed', sys.version.split()[0], platform.machine())"
