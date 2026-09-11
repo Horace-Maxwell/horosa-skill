@@ -16,7 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
-| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基；A2 Windows 半边从 darwin 种子派生；A3 发布契约（清单钉 tag + size、按契约逐平台判完整、平台表锁）；A4 安装侧平台策略（Windows ARM 公告式回退、`min_os`、平台键看芯片）；B4 `setup --client` 一条命令接入（七步、失败包、真 stdio 探测） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数；回退只许公告着做、载荷自带解释器所以平台键看芯片不看宿主 Python；接入的终点是客户端那条命令真起了 server |
+| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基；A2 Windows 半边从 darwin 种子派生；A3 发布契约（清单钉 tag + size、按契约逐平台判完整、平台表锁）；A4 安装侧平台策略（Windows ARM 公告式回退、`min_os`、平台键看芯片）；B4 `setup --client` 一条命令接入（七步、失败包、真 stdio 探测）；B5 agent 文档（shell-only 契约、四份薄镜像、命令守卫） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数；回退只许公告着做、载荷自带解释器所以平台键看芯片不看宿主 Python；接入的终点是客户端那条命令真起了 server；给 agent 抄的每条命令都要有守卫对到真实 CLI |
 | v0.37.0 (2026-09) | 任意 AI 客户端可调用：广告层只对一个客户端对过 / 自家 .mcp.json 从未连通 / 端口静默采用与误杀 / 回环走代理 | 按**别人的**约束测；改 golden 前先答「旧断言为何不会红」；负向对照跑不红就如实改口 |
 | v0.36.0 收尾 (2026-09) | 「Java 族 live 需 Mongo」十个版本的误定性 = vendored 脚本裸 `-jar`；演禽假闸门 | 贴「环境限制」前先读 `Result` 原文、用上游桌面起法起一遍；闸门问项以 live 翻转为准，不以转发为准 |
 | v0.36.0 (2026-09) | 止血/可用性/捞回能力 15 批（响应放大、静默降级、手抄表、死键、降级误杀、扁平面丢键、moira 误排除、闸门半盲、错误码……） | 每批四件套 + 全量门禁；台账正文按批见下 |
@@ -101,6 +101,27 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.38.0 / 2026-09-10 — B5 面向 agent 的文档：没有 MCP 的 agent 没有契约、四家客户端打开仓库第一眼看不到规则、SKILL 里抄的命令没人核对
+
+- **症状**：① SKILL.md 全篇按 MCP 工具名写，shell-only agent（CI bot、`codex exec` 无 MCP、只会跑命令的工具）不知道
+  `tool run --input/--output`、退出码、闸门在 stderr 里长什么样，Windows PowerShell 5.1 走管道还会把中文重编码；② Gemini CLI /
+  Copilot / Windsurf / Cline 各自先读自己的文件（`GEMINI.md`、`.github/copilot-instructions.md`、`.windsurf/rules/`、`.clinerules/`），
+  仓里一份都没有——这些 agent 在看到 SKILL.md 之前就已经开始「帮」用户手算；③ 文档里抄给 agent 的 `horosa-skill …` 命令与
+  `--flag` 没有任何守卫核对（B0 才发现 ci.yml 里调了三十几轮不存在的 `--output`），agent 拿到 Typer usage 报错会判定「工具坏了」
+  （issue #5 的模式）；④ Codex 排障表没有「先跑 `client check`」这一步，Windows 特有的反斜杠 TOML、绝对路径、无头 `codex exec`
+  的 `defaults_accepted` 边界都没写。
+- **guard**：① SKILL.md 新增「Shell-only agents (no MCP)」（命令表 + 载荷文件 + 退出码 0/2 语义 + 闸门流程 + 信封键）与
+  「First 3 commands on a fresh machine」（macOS zsh / Windows PowerShell / 源码 checkout 三块，各三条命令，钉版本 wheel URL 由
+  `check_pinned_install_commands` 锁）；`.agents` Codex 镜像同一契约。② 四份薄镜像各 ≤ 30 行：指向 SKILL.md + 禁手算 + 闸门
+  （`agent_guidance.required` → `agent_confirmed_settings`）+ 只读 `export_snapshot` + `setup --client <x>`；
+  `verify_docs_sync.check_agent_mirrors` 锁存在 / 行数 / 指针 / 四个关键词，四份也进 `COUNT_DOCS`（负向：105 必红、31 行必红、
+  缺关键词必红、缺文件必红）。③ `tests/test_skill_shell_contract.py`：两节里每条 `horosa-skill …` 逐 token 对到 Click 命令树
+  （子命令存在、`--flag` 在 `opts ∪ secondary_opts`）；负向 `--nope` / 未知子命令 / 只写到命令组必红；路径里的 `…/horosa-skill &&`
+  不算命令。④ `examples/clients/codex.md`：排障先跑 `client check --client codex`（五个问题码逐行对应）+ 新「Windows」节；
+  windows-smoke 新增 codex 形状 TOML 生成 → `client check` → tomllib 断言 120/600 与绝对路径 `uv.exe`。
+- **法则**：**文档里给 agent 抄的每条命令都要有守卫对到真实 CLI**；**每个客户端先读的那份文件里必须有闸门**，哪怕只有
+  十行——策略仍只在 SKILL.md 一处，镜像只许指针 + 三个关键词。
 
 ### v0.38.0 / 2026-09-10 — B4 一条命令接入：接入曾是四条命令 + 手粘配置，而且没有任何一处验证「客户端将要执行的那条命令真能起 server」
 

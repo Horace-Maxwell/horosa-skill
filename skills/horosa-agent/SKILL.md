@@ -247,6 +247,72 @@ Before telling the user a result is ready:
 Anything off → [`references/troubleshooting.md`](./references/troubleshooting.md) (symptom table,
 debug commands, stale-runtime signals like `source: null`).
 
+## Shell-only agents (no MCP)
+
+An agent that can run commands but cannot mount an MCP server (CI bots, `codex exec` without MCP, plain
+shell tools) gets the same contract through the CLI. **stdout is always exactly one JSON document**;
+progress lines and error envelopes go to stderr, so parse stdout only.
+
+| Need | Command |
+| --- | --- |
+| Tool names, `aka:` aliases, input fields | `horosa-skill tool list` |
+| What must be confirmed before a call | `horosa-skill agent guidance --tool qimen --intent "签约择时"` |
+| Run one technique | `horosa-skill tool run qimen --input payload.json --output result.json` |
+| Natural-language routing (several techniques) | `horosa-skill dispatch --input query.json --output result.json` |
+| Re-read a stored run | `horosa-skill memory show <run_id>` |
+| Health / live check | `horosa-skill doctor` · `horosa-skill selfcheck` |
+
+- Payload files are UTF-8 JSON objects (`{"date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13",
+  "lon": "121e28", …}`). `--stdin` also works on macOS/Linux; on **Windows PowerShell 5.1 use `--input` / `--output`
+  files** — the pipe re-encodes bytes through the console code page and mangles Chinese in both directions.
+- Exit code 0 = an envelope was written: check `ok`; a failed technique is `ok: false` + `error.code`, not an
+  exception and not "the technique has no such item". Exit code 2 = rejected before running (the clarification
+  gate, a malformed payload, a runtime error) — the stderr JSON carries `code` / `message` / `details`.
+- Gate flow: stderr `code: "agent_guidance.required"` → show `details.agent_recovery.prompt_to_user` to the user,
+  then rerun with `agent_confirmed_settings: true` + `clarification_notes` (or `defaults_accepted: true` only when
+  the user explicitly accepts defaults) added to the payload. Never set the flag without a real answer.
+- Envelope keys: `ok`, `tool`, `version`, `input_normalized`, `data` (`export_snapshot`, `technique_card`, the engine
+  object once under `data.<key>`), `summary`, `warnings` (non-empty = incomplete result), `memory_ref` (`run_id`),
+  `error`. `dispatch` wraps per-tool envelopes under `results.<tool>`.
+- Everything above still holds: never hand-calculate, explain only from `export_snapshot.export_text`, quote
+  `data.technique_card` after the answer.
+
+## First 3 commands on a fresh machine
+
+Each block: get `uv` → one-command onboarding (installs the offline runtime, writes the client config, then starts
+the server once over stdio with the exact command the client will run) → live check. Replace `cursor` with the
+client at hand (`claude-code` / `claude-desktop` / `vscode` / `codex` / `gemini` / `windsurf` / `cline` / `zed`).
+
+**macOS (zsh), no checkout**
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.37.0/horosa_skill-0.37.0-py3-none-any.whl" horosa-skill setup --client cursor
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.37.0/horosa_skill-0.37.0-py3-none-any.whl" horosa-skill selfcheck
+```
+
+**Windows (PowerShell)**
+
+```powershell
+irm https://astral.sh/uv/install.ps1 | iex
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.37.0/horosa_skill-0.37.0-py3-none-any.whl" horosa-skill setup --client cursor
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.37.0/horosa_skill-0.37.0-py3-none-any.whl" horosa-skill selfcheck
+```
+
+**Source checkout (any OS)**
+
+```bash
+git clone https://github.com/Horace-Maxwell/horosa-skill && cd horosa-skill/horosa-skill && uv sync
+uv run horosa-skill setup --client cursor
+uv run horosa-skill selfcheck
+```
+
+`setup` is idempotent (re-run after an upgrade), `--dry-run` prints the plan with zero side effects, and a failure
+is a stderr JSON with `step` / `code` / `config_untouched` / `retry_command` (exit 2). No github.com access:
+`HOROSA_RUNTIME_MIRROR=<mirror prefix>` in front of the same commands, or `setup --archive <local runtime archive>`
+— see `docs/INSTALL_RESTRICTED_NETWORK.md`. Windows on ARM installs the x64 payload under emulation automatically;
+Intel Macs and Linux have no payload (gateway mode via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`).
+
 ## Maintainer Pointer
 
 Modifying/building/releasing this repo is governed by [`AGENTS.md`](../../AGENTS.md) — routing (§0),

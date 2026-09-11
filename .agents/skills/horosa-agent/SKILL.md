@@ -43,3 +43,22 @@ Thin client-agnostic contract. The **single policy source** is
    absent → the server is not configured; point the user at `examples/clients/codex.md`.
 5. Errors carry structured recovery: on `details.agent_recovery`, relay `prompt_to_user` verbatim
    and stop. On transport errors, suggest `horosa-skill doctor` / `horosa-skill selfcheck`.
+
+## Shell-only agents (no MCP)
+
+`codex exec` without MCP, CI bots, plain shell tools: the CLI carries the same contract. Parse **stdout only**
+(exactly one JSON document; progress lines and error envelopes go to stderr). On Windows PowerShell 5.1 pass
+payloads as `--input` / `--output` files, never through the pipe (it re-encodes bytes and mangles Chinese).
+
+| Need | Command |
+| --- | --- |
+| Tool names + `aka:` aliases | `horosa-skill tool list` |
+| What to confirm before a call | `horosa-skill agent guidance --tool qimen` |
+| Run one technique | `horosa-skill tool run qimen --input payload.json --output result.json` |
+| Natural-language routing | `horosa-skill dispatch --input query.json --output result.json` |
+| One-command onboarding on a fresh machine | `horosa-skill setup --client codex` (`uv run horosa-skill setup --client codex` inside a checkout) |
+
+Exit 2 + stderr `code: "agent_guidance.required"` = ask the user with `details.agent_recovery.prompt_to_user`,
+then rerun with `agent_confirmed_settings: true` + `clarification_notes` (or `defaults_accepted: true` only when
+the user explicitly accepts defaults). Exit 0 with `ok: false` = a real engine error (`error.code`), not a missing
+technique. Read results only from `data.export_snapshot.export_text`; quote `data.technique_card` afterwards.

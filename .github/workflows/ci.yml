@@ -195,3 +195,9 @@ jobs:
           $setupReport = Get-Content -Raw -LiteralPath "$root\setup-cursor.json" | ConvertFrom-Json
           if (-not $setupReport.ok) { throw "setup returned ok=false: $($setupReport.summary)" }
           if ($setupReport.steps.stdio_probe.tools -ne 11) { throw "stdio probe listed $($setupReport.steps.stdio_probe.tools) tools, expected 11" }
+          # v0.38.0 B5：codex 形状 TOML 生成 → 回读体检（client check）→ tomllib 断言超时字段在场、command 是绝对路径
+          uv run horosa-skill client config --format codex --write "$root\codex-config.toml" > $null
+          uv run horosa-skill client check --client codex --config "$root\codex-config.toml" > "$root\codex-check.json"
+          $codexCheck = Get-Content -Raw -LiteralPath "$root\codex-check.json" | ConvertFrom-Json
+          if (-not $codexCheck.ok) { throw "codex client check found problems: $($codexCheck.summary)" }
+          uv run python -c 'import sys, tomllib; s = tomllib.load(open(sys.argv[1], "rb"))["mcp_servers"]["horosa"]; assert s["startup_timeout_sec"] == 120 and s["tool_timeout_sec"] == 600, s; assert ":" in s["command"] and s["command"].lower().endswith("uv.exe"), s["command"]; print("codex toml ok:", s["command"])' "$root\codex-config.toml"

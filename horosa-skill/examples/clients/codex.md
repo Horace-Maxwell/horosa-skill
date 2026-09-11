@@ -84,8 +84,15 @@ enabled_tools = [
 
 ## 排障
 
-| 症状 | 因 | 治 |
+**先跑一条**：`uv run horosa-skill client check --client codex`——它读的是磁盘上**真写着**的条目（Windows 上也能找到
+`%USERPROFILE%\.codex\config.toml`），每个问题码对应下表一行；`setup --client codex` 写完会自动跑这一步。
+
+| 症状 / `client check` 码 | 因 | 治 |
 | --- | --- | --- |
+| `codex_startup_timeout_missing` / `codex_tool_timeout_missing`（「一堆报错」，issue #18） | 超时没写，Codex 默认 10 s / 60 s | `setup --client codex` 或 `client config --format codex --write ~/.codex/config.toml` 原位补上 120 / 600 |
+| `codex_cwd_missing` | `cwd` 指向不存在的目录（配置是别的机器生成的） | 删掉 `cwd`（uvx 形态不需要）或指向存在的包目录 |
+| `command_not_on_path` | `command` 是裸 `uv`/`uvx`，Codex 不继承 shell PATH | 重跑生成器（v0.38.0 起写绝对路径） |
+| `launcher_version_drift` | 配置钉的 wheel / git tag 版本 ≠ 本机包版本 | 重跑 `setup` 让 URL 跟上版本 |
 | 首轮没有 horosa 工具，第二轮有 | 冷启动 > 1s grace（见上表） | 正常；或 `required = true` |
 | 启动报 server 超时 | 首次预热超 30s 默认 | 确认 `startup_timeout_sec = 120` 在场 |
 | `HOROSA_*` 设了没生效 | Codex env 白名单 | 写进 `[mcp_servers.horosa.env]` |
@@ -96,6 +103,19 @@ enabled_tools = [
 维护者真机清单（本机装有 codex CLI 时逐项过）：冷启动首轮/第二轮工具可见性；elicitation 表单
 弹出与提交；`codex exec` 下 `agent_guidance.required` 文本回落；`--write` 合并后 Codex 正常读取；
 `enabled_tools` 生效。
+
+## Windows
+
+- 用 `setup --client codex`（或 `client config --format codex --write`）生成：`command` 是绝对路径的 `uv.exe`
+  （Codex 不继承 shell PATH），`args` / `cwd` 里的反斜杠已按 TOML 基本字符串转义——裸插值会让整个 `config.toml`
+  解析失败（`Unescaped '\'`），这是 Windows 独有、mac 上永远绿的坑。
+- 首轮对话可能看不到 horosa（冷启动只等 1 s）：正常，第二轮即恢复；要首轮即见解开 `required = true`。
+- 配置在 `%USERPROFILE%\.codex\config.toml`；`client check --client codex` 在 Windows 也按这个位置找。
+- 第一次调用会起本机 Java / Python 服务（v0.38.0 起只绑 127.0.0.1，正常不再弹防火墙）；安全软件拦 JDK 回环见
+  `AGENTS.md` §8 症状表与 `doctor` 的 `java_diagnostics`。
+- `codex exec`（无头）：elicitation 一律被拒，工具回落 `agent_guidance.required`。agent 把 `prompt_to_user` 原样作为
+  最终输出；**只有用户明说接受默认时才带 `defaults_accepted: true`**，绝不自确认（`.agents/skills/horosa-agent/SKILL.md`
+  的「Shell-only agents」一节是 Codex 读到的契约）。
 
 ## HTTP 变体
 

@@ -43,6 +43,10 @@ no ken engine and stays a pure headless JS calculation.
 - `docs/` — maintainer-facing docs (see below).
 - `skills/horosa-agent/` — the published agent skill (SKILL.md + references/) — the single policy
   source for AI-client behaviour.
+- `.agents/skills/horosa-agent/SKILL.md` (Codex / agentskills.io), `GEMINI.md` (Gemini CLI),
+  `.github/copilot-instructions.md` (Copilot), `.windsurf/rules/horosa-skill.md`, `.clinerules/horosa-skill.md` —
+  thin per-client mirrors (≤30 lines, pointer + gate + reading contract + `setup --client …`); locked by
+  `verify_docs_sync.check_agent_mirrors` (v0.38.0 B5). Policy never lives here.
 - `vendor/` — local-only runtime packaging inputs (see below).
 - `horosa-skill/` — the actual Python package + bundled JS engine + scripts + tests.
 

@@ -245,3 +245,71 @@ def test_platform_table_row_missing_for_a_contracted_platform_is_caught(tmp_path
     without_arm = _ROWS.replace("| Windows ARM（骁龙本） | ✅ |  |\n", "")
     errors = _platform_table_errors(tmp_path, monkeypatch, without_arm)
     assert len(errors) == 2 and all("Windows ARM" in e for e in errors)
+
+
+# --- thin agent mirrors (v0.38.0 B5) -------------------------------------------------------------
+
+_GOOD_MIRROR = (
+    "# Horosa\n"
+    "Policy: [SKILL](./skills/horosa-agent/SKILL.md)\n"
+    "Gate: agent_guidance.required -> agent_confirmed_settings; read export_snapshot only.\n"
+    "Onboard: `horosa-skill setup --client gemini`\n"
+)
+
+
+def _mirror_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, files: dict[str, str], *, only: bool = True) -> list[str]:
+    for rel, text in files.items():
+        path = tmp_path / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    errors: list[str] = []
+    monkeypatch.setattr(docs, "ROOT", tmp_path)
+    monkeypatch.setattr(docs, "err", errors.append)
+    if only:
+        monkeypatch.setattr(docs, "AGENT_MIRRORS", {rel: docs.AGENT_MIRRORS[rel] for rel in files})
+    docs.check_agent_mirrors()
+    return errors
+
+
+def test_agent_mirror_that_meets_the_contract_passes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    assert _mirror_errors(tmp_path, monkeypatch, {"GEMINI.md": _GOOD_MIRROR}) == []
+
+
+def test_agent_mirror_that_grew_fat_is_caught(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    fat = _GOOD_MIRROR + "".join(f"rule {i}\n" for i in range(40))
+    errors = _mirror_errors(tmp_path, monkeypatch, {"GEMINI.md": fat})
+    assert any("lines >" in e for e in errors), errors
+
+
+@pytest.mark.parametrize("dropped", ["agent_confirmed_settings", "agent_guidance.required", "export_snapshot", "setup --client"])
+def test_agent_mirror_missing_a_contract_word_is_caught(dropped: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    errors = _mirror_errors(tmp_path, monkeypatch, {"GEMINI.md": _GOOD_MIRROR.replace(dropped, "…")})
+    assert any(dropped in e for e in errors), errors
+
+
+def test_agent_mirror_without_the_policy_pointer_is_caught(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    errors = _mirror_errors(tmp_path, monkeypatch, {"GEMINI.md": _GOOD_MIRROR.replace("./skills/horosa-agent/SKILL.md", "./README.md")})
+    assert any("policy source" in e for e in errors), errors
+
+
+def test_missing_agent_mirror_files_are_caught(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    errors = _mirror_errors(tmp_path, monkeypatch, {"GEMINI.md": _GOOD_MIRROR}, only=False)
+    missing = {e.split(":")[0] for e in errors if "missing (" in e}
+    assert missing == {".github/copilot-instructions.md", ".windsurf/rules/horosa-skill.md", ".clinerules/horosa-skill.md"}
+
+
+def test_agent_mirror_tool_count_is_locked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    assert _scan(f"Horosa ships {N} real techniques as a local MCP server.", tmp_path, monkeypatch, name="GEMINI.md") == []
+    stale = _scan(f"Horosa ships {N - 1} real techniques as a local MCP server.", tmp_path, monkeypatch, name="GEMINI.md")
+    assert stale, "a stale technique count in a mirror must be flagged"
+
+
+def test_real_agent_mirrors_pass() -> None:
+    errors: list[str] = []
+    original = docs.err
+    docs.err = errors.append
+    try:
+        docs.check_agent_mirrors()
+    finally:
+        docs.err = original
+    assert errors == []

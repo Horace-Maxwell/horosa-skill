@@ -75,7 +75,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `106 / 106 ok=true` |
-| Engineering tests | `905 / 905 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 72 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `919 / 919 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 72 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `84` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `8` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`103` export techniques modeled; contract v14 mirrors desktop aiExport v56) |
@@ -395,6 +395,11 @@ uv run horosa-skill client config --format codex         # config.toml snippet (
 uv run horosa-skill client check                         # audit what each client ACTUALLY has
 ```
 
+The repo root also carries four thin mirrors — `GEMINI.md` (Gemini CLI), `.github/copilot-instructions.md` (Copilot),
+`.windsurf/rules/`, `.clinerules/` — so those agents know the gate and the reading contract the moment they open the
+repo; the single policy source stays [SKILL.md](./skills/horosa-agent/SKILL.md), whose "Shell-only agents" section
+gives agents without MCP a pure-CLI contract (`tool run --input/--output`, exit codes, the gate flow).
+
 ### Works with
 
 | Client | Transport | One-line setup | Default surface | Notes |
@@ -483,7 +488,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 905 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 919 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

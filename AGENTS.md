@@ -85,6 +85,11 @@ you, it will bite the next agent：
 - **每次给出结论后附技法尾注**：把 `data.technique_card`（技法/口径/算源/段落健康度/版本链）原样转述，
   不得改写或省略口径行；`matches_declaration: false` 必须明说。要文件调 `horosa_technique_report`
   （`run_id` 单次 / `group_id` 整场，后者另检出跨技法口径冲突）。它与咨询报告是两种文档，不混。
+- **没有 MCP 的 agent 走同一契约**（v0.38.0 B5）：SKILL.md「Shell-only agents (no MCP)」——`tool run --input/--output`
+  文件（Windows PowerShell 5.1 管道会重编码）、退出码 0 = 信封已写（看 `ok`）/ 2 = 起跑前被拒（stderr JSON `code`），闸门
+  `agent_guidance.required` 在 stderr；两节里每条命令由 `tests/test_skill_shell_contract.py` 对到 Click 命令树。四家客户端
+  先读的薄镜像（`GEMINI.md` / `.github/copilot-instructions.md` / `.windsurf/rules/` / `.clinerules/`，各 ≤ 30 行）只许
+  指针 + 闸门 + 读盘 + `setup --client`，`verify_docs_sync.check_agent_mirrors` 锁；不加 Roo（不在 Works-with 矩阵）。
 - **引教义必带出处**（v0.28.0）：口径/流派/方法论先 `knowledge_read`（24 域，逐条 citation 落到
   上游组件文件），没有的按通则推理并明说无出处；多技法互证走 `horosa_hecan`——它产**模板**不产
   终稿，分歧必须披露不许平均（铁律在模板 instructions 里，不靠自觉）。

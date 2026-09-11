@@ -306,6 +306,11 @@ COUNT_DOCS = [
     "horosa-skill/examples/clients/codex-config.toml",
     "horosa-skill/examples/clients/claude-code.md",
     ".agents/skills/horosa-agent/SKILL.md",
+    # v0.38.0 B5：四份薄镜像也写工具数——它们是各家 agent 打开仓库第一眼看到的文件，数字不许陈旧。
+    "GEMINI.md",
+    ".github/copilot-instructions.md",
+    ".windsurf/rules/horosa-skill.md",
+    ".clinerules/horosa-skill.md",
 ]
 
 
@@ -422,6 +427,38 @@ def check_pinned_install_commands(version: str) -> None:
                             f"(add {IGNORE_VERSION} only for a frozen historical record)")
 
 
+# --- 3b2. thin agent mirrors (v0.38.0 B5) --------------------------------------------------------
+# Gemini CLI / GitHub Copilot / Windsurf / Cline each read a file of their own before they ever see SKILL.md.
+# Those files must exist, stay thin (policy lives in SKILL.md), point at the policy source, and name the
+# three contract words plus the one-command onboarding — otherwise an agent on that client starts with no gate.
+
+AGENT_MIRRORS = {
+    "GEMINI.md": "./skills/horosa-agent/SKILL.md",
+    ".github/copilot-instructions.md": "../skills/horosa-agent/SKILL.md",
+    ".windsurf/rules/horosa-skill.md": "../../skills/horosa-agent/SKILL.md",
+    ".clinerules/horosa-skill.md": "../skills/horosa-agent/SKILL.md",
+}
+AGENT_MIRROR_MAX_LINES = 30
+AGENT_MIRROR_KEYWORDS = ("agent_confirmed_settings", "agent_guidance.required", "export_snapshot", "setup --client")
+
+
+def check_agent_mirrors() -> None:
+    for rel, pointer in AGENT_MIRRORS.items():
+        path = ROOT / rel
+        if not path.exists():
+            err(f"{rel}: thin agent mirror missing (AGENTS.md §3 — every listed client gets one)")
+            continue
+        text = read(path)
+        lines = len(text.rstrip("\n").splitlines())
+        if lines > AGENT_MIRROR_MAX_LINES:
+            err(f"{rel}: {lines} lines > {AGENT_MIRROR_MAX_LINES} — mirrors stay thin; policy lives in skills/horosa-agent/SKILL.md")
+        if pointer not in text:
+            err(f"{rel}: must link to the policy source ({pointer})")
+        for keyword in AGENT_MIRROR_KEYWORDS:
+            if keyword not in text:
+                err(f"{rel}: missing `{keyword}` — the gate, the reading contract and the onboarding command must be named")
+
+
 # --- 3c. README platform table ↔ contracts/release_platforms.json ---------------------------------
 # The platform table is the first thing an Intel-Mac / Windows-on-ARM user reads. Its rows are locked to
 # the contract (v0.38.0 A3): every shipped platform, alias and unsupported host must have a row, so the
@@ -495,6 +532,7 @@ def check_links() -> None:
         ROOT / ".claude/skills/horosa-dev/SKILL.md",
         *sorted((ROOT / "docs").glob("*.md")),
         *sorted((ROOT / "skills").rglob("*.md")),
+        *[ROOT / rel for rel in AGENT_MIRRORS],
     ]
     for path in targets:
         if not path.exists():
@@ -631,6 +669,7 @@ def main() -> None:
     check_pinned_install_commands(version)
     check_platform_table()
     check_docker_claims()
+    check_agent_mirrors()
     check_links()
     check_conflict_markers()
     check_frontmatter()
