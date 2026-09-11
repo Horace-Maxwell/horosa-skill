@@ -521,7 +521,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   ② fetch 后 `HEAD..origin/main` 非空（另一台机器的工作会被本次发布落下；此闸首跑当天就抓到
   构建机推的一个 commit）→ 阻断，离线 fetch 失败只警告。`git branch -u origin/main` 保持配置。
 - **发布步骤只允许以脚本形态存在**（v0.27.0：SBOM 生成器一直在仓里、却因发布流程是手打清单而漏传）：
-  mac 半边一律走 `scripts/publish_darwin_release.sh`（payload → darwin manifest → **SBOM** →
+  mac 半边一律走 `scripts/publish_darwin_release.sh`（payload → darwin manifest → **SBOM** → MCPB → **wheel** →
   SHA256SUMS → verify → `--publish` 才上传；无 `--publish` 是安全默认）。资产契约由
   `release-completeness.yml` 断言（manifest 双平台 + 两包可达 + **SBOM 在场** + **`.mcpb` 在场**）。
   `.mcpb` 是 Claude Desktop 的一键安装包（`scripts/build_mcpb.sh`：validate → pack → sha256），
@@ -762,6 +762,12 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **闸门问什么，以 live「改参数结果必变」为准，不以代码转发了什么为准。** 演禽（xianqin）转发了 lat/lon，引擎却不读
   （上海↔乌鲁木齐逐字节相同）——问地点就是假闸门。给工具挂结果敏感项前先翻转一次；不敏感的项用**反向** live
   断言钉住（`test_xianqin_ignores_place_so_its_gate_must_not_ask_for_it`），上游哪天读了它会先红（v0.36.0 收尾）。
+- **零安装 = wheel 资产 + 镜像前缀 + 钉版本锁。** 每个 Release 附 `horosa_skill-<ver>-py3-none-any.whl`（发布脚本
+  [5/8] `uv build --wheel`；`release-completeness.yml` 对 ≥ 0.38.0 断言在场并真跑 `uvx --from <URL> horosa-skill --version`）；
+  `HOROSA_RUNTIME_MIRROR` 由 `runtime/mirrors.py` 统一改写清单/归档/wheel 三种 URL；`client config --launcher uvx-wheel`
+  是免 git、免 PyPI 的推荐零安装启动器（`uvx-git` 需要 git + github.com 直连）。文档/`server.json`/examples 里
+  钉版本的 `@v<x>#` / `/v<x>/…whl` / `/v<x>/…mcpb` 由 `verify_docs_sync.check_pinned_install_commands` 锁死；
+  受限网络的三条路成文于 `docs/INSTALL_RESTRICTED_NETWORK.md`（v0.38.0 B3）。
 - **写用户的客户端配置 = 只动自己的键、先备份、原子替换、认不出形状就拒绝；命令一律绝对路径。** `_merge_client_config`
   按产物根键（`mcpServers`/`servers`/`context_servers`；codex 走 tomlkit）只 upsert `<root>[<server_name>]`，写前 `.horosa-bak`，
   临时文件 + `os.replace`，非对象/非法 JSON 或没有 server 块的说明产物一律拒写（v0.38.0 B2：此前 vscode/zed/claude-code 的

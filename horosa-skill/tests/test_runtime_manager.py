@@ -1292,6 +1292,20 @@ def test_uninstall_dry_run_then_execute(tmp_path: Path) -> None:
     assert not settings.data_dir.exists()
 
 
+def test_mirror_candidates_module_function_matches_the_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """v0.38.0 B3：真身抽到 runtime/mirrors.py（客户端配置生成器给 wheel URL 用同一套改写）；manager 只委托。"""
+    from horosa_skill.runtime.mirrors import mirror_candidates, preferred_mirror_url
+
+    manager = HorosaRuntimeManager(Settings(runtime_root=tmp_path / "runtime-root", db_path=tmp_path / "memory.db", output_dir=tmp_path / "runs"))
+    url = "https://github.com/o/r/releases/download/v1/horosa_skill-1-py3-none-any.whl"
+    monkeypatch.setenv("HOROSA_RUNTIME_MIRROR", "https://mirror.example.com/github,https://m2.example.org")
+    assert manager._mirror_candidates(url) == mirror_candidates(url)
+    assert preferred_mirror_url(url) == "https://mirror.example.com/github/o/r/releases/download/v1/horosa_skill-1-py3-none-any.whl"
+    assert mirror_candidates("file:///tmp/x.whl") == ["file:///tmp/x.whl"]
+    monkeypatch.delenv("HOROSA_RUNTIME_MIRROR")
+    assert preferred_mirror_url(url) == url
+
+
 def test_mirror_candidates_rewrite_github_urls(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     settings = Settings(
         runtime_root=tmp_path / "runtime-root",

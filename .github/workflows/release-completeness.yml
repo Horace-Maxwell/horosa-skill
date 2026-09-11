@@ -61,6 +61,30 @@ jobs:
           fi
           echo "OK: ${NAME} present on ${TAG}."
 
+      # v0.38.0 B3：wheel 资产是免 git / 免 PyPI 的零安装通路（`uvx --from <wheel URL>`），README / SKILL /
+      # server.json 里钉版本的命令直指它。资产要在场，而且那条命令要真的跑通——「文档写了」不算证据。
+      # 只对 ≥ 0.38.0 的发布断言：更早的 release 本来就没有这件资产，不该让它们回头变红。
+      - uses: astral-sh/setup-uv@v6
+      - name: Assert the wheel asset is present and the zero-install command works
+        env:
+          TAG: ${{ steps.latest.outputs.tag }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          if [ "$(printf '%s\n%s\n' "0.38.0" "${VERSION}" | sort -V | head -n1)" != "0.38.0" ]; then
+            echo "skip: ${TAG} predates the wheel asset (since 0.38.0)"; exit 0
+          fi
+          NAME="horosa_skill-${VERSION}-py3-none-any.whl"
+          if ! gh api "repos/${REPO}/releases/tags/${TAG}" --jq '.assets[].name' | grep -qx "${NAME}"; then
+            echo "::error::latest release ${TAG} is missing ${NAME} — publish script step [5/8] builds it with \`uv build --wheel\`; the zero-install commands in README/SKILL/server.json point at this exact URL."
+            exit 1
+          fi
+          URL="https://github.com/${REPO}/releases/download/${TAG}/${NAME}"
+          got="$(HOME=$(mktemp -d) uvx --from "${URL}" horosa-skill --version)"
+          echo "${got}"
+          case "${got}" in *"${VERSION}"*) echo "OK: zero-install from ${NAME} reports ${VERSION}." ;;
+            *) echo "::error::uvx --from ${URL} reports '${got}', expected ${VERSION}"; exit 1 ;; esac
+
       - name: Assert the latest runtime-manifest.json is complete and dual-platform
         env:
           TAG: ${{ steps.latest.outputs.tag }}

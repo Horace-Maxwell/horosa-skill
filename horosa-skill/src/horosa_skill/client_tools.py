@@ -195,6 +195,23 @@ def resolve_uvx_command() -> list[str]:
     )
 
 
+def wheel_asset_name(version: str) -> str:
+    """hatchling normalises `horosa-skill` to `horosa_skill` in the wheel filename."""
+    return f"horosa_skill-{version}-py3-none-any.whl"
+
+
+def zero_install_wheel_url(version: str | None = None, repo: str | None = None) -> str:
+    """The pure-Python wheel attached to every GitHub Release (v0.38.0 B3): `uvx --from <this>` needs
+    neither git nor PyPI on the user's machine, and the URL goes through HOROSA_RUNTIME_MIRROR like the
+    runtime archives do."""
+    from horosa_skill import __version__
+    from horosa_skill.config import DEFAULT_RELEASE_REPO
+
+    version = version or __version__
+    repo = repo or DEFAULT_RELEASE_REPO
+    return f"https://github.com/{repo}/releases/download/v{version}/{wheel_asset_name(version)}"
+
+
 def isolated_runtime_root(home_dir: Path) -> Path:
     home = home_dir.expanduser().resolve()
     return home / ".horosa" / "runtime"

@@ -54,6 +54,8 @@ Do not treat these three locations as interchangeable.
 - Swiss Ephemeris data and any other local astronomical assets
 - `runtime-manifest.json`
 
+- `horosa_skill-<version>-py3-none-any.whl` — the pure-Python wheel; `uvx --from <its URL> horosa-skill …` is the git-free, PyPI-free zero-install path (v0.38.0). Mirror-aware via `HOROSA_RUNTIME_MIRROR`; asserted + executed by `release-completeness.yml`.
+
 ## Maintainer Workflow
 
 1. Refresh vendored runtime sources inside this repository when needed.

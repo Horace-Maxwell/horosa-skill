@@ -259,3 +259,38 @@ def test_codex_toml_round_trips_spaced_cjk_windows_paths(monkeypatch: pytest.Mon
     server = tomllib.loads(payload["toml_stdio"])["mcp_servers"]["horosa"]
     assert server["command"] == r"C:\Users\张 三\AppData\Local\Programs\uv\uv.exe"
     assert server["args"][2] == str(root.resolve())
+
+
+# ---- v0.38.0 B3：免 git / 免 PyPI 的零安装 → `--launcher uvx-wheel`（镜像感知、钉版本）----
+def test_launcher_uvx_wheel_emits_pinned_release_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    from horosa_skill import __version__
+    from horosa_skill.surfaces import cli
+
+    monkeypatch.delenv("HOROSA_RUNTIME_MIRROR", raising=False)
+    monkeypatch.setattr(cli, "resolve_uvx_command", lambda: ["/opt/uv/bin/uvx"])
+    payload = _payload("--format", "claude-desktop", "--launcher", "uvx-wheel")
+    server = payload["mcpServers"]["horosa"]
+    expected = f"https://github.com/Horace-Maxwell/horosa-skill/releases/download/v{__version__}/horosa_skill-{__version__}-py3-none-any.whl"
+    assert server["command"] == "/opt/uv/bin/uvx"
+    assert server["args"] == ["--from", expected, "horosa-skill", "serve", "--transport", "stdio"]
+    assert payload["launcher"]["kind"] == "uvx-wheel" and payload["launcher"]["pinned_version"] == __version__
+    assert payload["launcher"]["alternatives"] == [expected]
+    assert "uvx --from" in payload["launcher"]["install_hint"]
+
+
+def test_launcher_uvx_wheel_uses_the_first_mirror_when_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    from horosa_skill import __version__
+    from horosa_skill.surfaces import cli
+
+    monkeypatch.setenv("HOROSA_RUNTIME_MIRROR", "https://mirror.example/gh, https://m2.example.org/")
+    monkeypatch.setattr(cli, "resolve_uvx_command", lambda: ["/opt/uv/bin/uvx"])
+    payload = _payload("--format", "cursor", "--launcher", "uvx-wheel")
+    url = payload["mcpServers"]["horosa"]["args"][1]
+    assert url.startswith("https://mirror.example/gh/Horace-Maxwell/horosa-skill/releases/download/v")
+    alternatives = payload["launcher"]["alternatives"]
+    assert len(alternatives) == 3 and alternatives[-1].startswith("https://github.com/")
+    assert alternatives[1].startswith("https://m2.example.org/Horace-Maxwell/")
+    # 负向对照：没有镜像时 URL 就是原始 GitHub 地址
+    monkeypatch.delenv("HOROSA_RUNTIME_MIRROR")
+    payload = _payload("--format", "cursor", "--launcher", "uvx-wheel")
+    assert payload["mcpServers"]["horosa"]["args"][1].startswith("https://github.com/")

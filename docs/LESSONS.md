@@ -16,7 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
-| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器（空格用户名、Java 绑 0.0.0.0、doctor 监听范围）；B2 客户端接入（`--write` 清空 settings、裸 `uvx`、Windows 配置路径、Codex 缺省超时） | CI 的绿由每条命令背书；路径元素自己带引号；两端启动器网络面一致；写用户文件只动自己的键 + 备份 + 原子；配置里的命令一律绝对路径；「没写」也是审计对象 |
+| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装（免 git/PyPI、镜像、钉版本锁） | CI 的绿由每条命令背书；路径元素自己带引号；两端启动器网络面一致；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；钉版本字符串由 docs-sync 锁 |
 | v0.37.0 (2026-09) | 任意 AI 客户端可调用：广告层只对一个客户端对过 / 自家 .mcp.json 从未连通 / 端口静默采用与误杀 / 回环走代理 | 按**别人的**约束测；改 golden 前先答「旧断言为何不会红」；负向对照跑不红就如实改口 |
 | v0.36.0 收尾 (2026-09) | 「Java 族 live 需 Mongo」十个版本的误定性 = vendored 脚本裸 `-jar`；演禽假闸门 | 贴「环境限制」前先读 `Result` 原文、用上游桌面起法起一遍；闸门问项以 live 翻转为准，不以转发为准 |
 | v0.36.0 (2026-09) | 止血/可用性/捞回能力 15 批（响应放大、静默降级、手抄表、死键、降级误杀、扁平面丢键、moira 误排除、闸门半盲、错误码……） | 每批四件套 + 全量门禁；台账正文按批见下 |
@@ -101,6 +101,28 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.38.0 / 2026-09-10 — B3 零安装绑着 git 与 github.com:443；钉版本的安装命令没人锁
+
+- **症状**：PyPI 暂缓（用户决定）后，唯一的零安装命令是 `uvx --from "git+https://github.com/…@v<ver>#subdirectory=horosa-skill"`：
+  它要求用户机器**有 git**（README 从没写过这个前置）**并且**能直连 github.com 做 clone——issue #14 的机器正是
+  `github.com:443` 不通、`api.github.com` 通；把 repo 链接交给 Claude Code / Codex 自动安装的人在这一步就卡死。
+  另外 README / SKILL / server.json 里所有钉版本的 URL / git ref（`@v0.37.0`、`/v0.37.0/…mcpb`）只靠人手改，
+  `verify_docs_sync.check_versions` 只走 JSON 的 `version` 键，字符串里的版本没人看。
+- **根因**：分发只想过「源码 checkout」与「PyPI」两条路；镜像开关 `HOROSA_RUNTIME_MIRROR` 只给 runtime 归档用，
+  没延伸到「拿到 Python 包本身」这一步；受限网络的做法散落在 README 排障表一行里。
+- **guard**：① 发布脚本第 [5/8] 步 `uv build --wheel` 产出 `horosa_skill-<ver>-py3-none-any.whl` 并随资产上传、进
+  SHA256SUMS；`release-completeness.yml` 对 ≥ 0.38.0 的 latest 断言资产在场**并真跑** `uvx --from <URL> horosa-skill --version`；
+  `ci.yml` 用本 checkout 构建的 wheel 走 `file://` 跑同一条。② `runtime/mirrors.py::mirror_candidates / preferred_mirror_url`
+  （manager 委托）——同一个 `HOROSA_RUNTIME_MIRROR` 同时改写清单、归档与 wheel URL；`client config --launcher uvx-wheel`
+  生成镜像优先、钉版本的 `--from` URL，产物 `launcher{wheel_url, alternatives, pinned_version, install_hint, refresh_hint}`。
+  ③ `client check` 认 `--from …whl`（不再当成「PyPI 未开通」），钉的版本 ≠ 本包版本报 `launcher_version_drift`。
+  ④ `verify_docs_sync.check_pinned_install_commands`：README×2 / SKILL×2 / server.json / examples 里每个 `@v<x>#`、
+  `/v<x>/horosa_skill-<x>-py3-none-any.whl`、`/v<x>/horosa-skill-<x>.mcpb` 必须等于包版本（负向对照 `v0.0.1` 必红；
+  `<!-- docs-sync:ignore-version -->` 冻结历史行）。⑤ 新文档 `docs/INSTALL_RESTRICTED_NETWORK.md`（中英）：镜像前缀 /
+  API 直链 + `install --archive` / U 盘离线搬运 / 代理与企业证书 / 错误码表；README×2 首屏改「零安装（无需 git、无需 PyPI）」。
+- **法则**：**分发的每一条路都要在「没有 git、没有 github.com」的机器上成立一次**；**钉了版本的字符串就是版本号，
+  由 docs-sync 锁，不由人记**；**受限网络的做法要成文，不能只活在排障表的一行里**。
 
 ### v0.38.0 / 2026-09-10 — B2 客户端接入：`--write` 会清空 VS Code/Zed 的 settings、裸 `uvx` 在 GUI 客户端里找不到、Windows 上 `client check` 一家都找不到、Codex 缺省超时不报
 

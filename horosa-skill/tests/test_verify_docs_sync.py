@@ -187,3 +187,31 @@ def test_readme_denying_a_tracked_dockerfile_is_caught(tmp_path: Path, monkeypat
     assert honest == []
     # without a Dockerfile in the tree there is nothing to deny — the old sentence would be true
     assert _docker_errors(tmp_path, monkeypatch, "仓库暂不提供 Dockerfile。", "No Dockerfile is shipped yet.", dockerfile=False) == []
+
+
+# --- pinned zero-install commands (v0.38.0 B3) ----------------------------------------------------
+
+
+def _pinned_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, text: str) -> list[str]:
+    (tmp_path / "README.md").write_text(text + "\n", encoding="utf-8")
+    errors: list[str] = []
+    monkeypatch.setattr(docs, "ROOT", tmp_path)
+    monkeypatch.setattr(docs, "PINNED_DOCS", ["README.md"])
+    monkeypatch.setattr(docs, "err", errors.append)
+    docs.check_pinned_install_commands("0.38.0")
+    return errors
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        'uvx --from "git+https://github.com/o/horosa-skill@v{v}#subdirectory=horosa-skill" horosa-skill install',
+        'uvx --from "https://github.com/o/r/releases/download/v{v}/horosa_skill-{v}-py3-none-any.whl" horosa-skill serve',
+        '"identifier": "https://github.com/o/r/releases/download/v{v}/horosa-skill-{v}.mcpb"',
+    ],
+)
+def test_pinned_install_commands_drift_is_caught(template: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    assert _pinned_errors(tmp_path, monkeypatch, template.format(v="0.0.1")), template
+    assert _pinned_errors(tmp_path, monkeypatch, template.format(v="0.38.0")) == [], template
+    frozen = template.format(v="0.0.1") + " " + docs.IGNORE_VERSION
+    assert _pinned_errors(tmp_path, monkeypatch, frozen) == []

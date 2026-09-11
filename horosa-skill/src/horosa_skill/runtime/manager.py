@@ -1195,12 +1195,13 @@ class HorosaRuntimeManager:
         return local_path
 
     def _mirror_candidates(self, url: str) -> list[str]:
-        """HOROSA_RUNTIME_MIRROR（逗号分隔前缀）对 github.com URL 做前缀替换：镜像在前、原始 URL 兜底。"""
-        mirrors = [m.strip().rstrip("/") for m in (os.environ.get("HOROSA_RUNTIME_MIRROR") or "").split(",") if m.strip()]
-        if not mirrors or not url.startswith("https://github.com/"):
-            return [url]
-        suffix = url[len("https://github.com"):]
-        return [f"{mirror}{suffix}" for mirror in mirrors] + [url]
+        """HOROSA_RUNTIME_MIRROR（逗号分隔前缀）对 github.com URL 做前缀替换：镜像在前、原始 URL 兜底。
+
+        v0.38.0 B3 起真身在 `runtime/mirrors.py`（客户端配置生成器也要给 wheel URL 做同一套改写）。
+        """
+        from horosa_skill.runtime.mirrors import mirror_candidates
+
+        return mirror_candidates(url)
 
     def _download_with_resume(
         self,

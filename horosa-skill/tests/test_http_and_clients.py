@@ -239,6 +239,21 @@ def test_client_check_searches_the_located_windows_paths(monkeypatch, tmp_path) 
     assert report["clients"][0]["searched"] == [str(located)]
 
 
+def test_client_check_accepts_wheel_from_and_notes_version_drift() -> None:
+    """wheel 资产 URL 是免 git / 免 PyPI 的零安装源（v0.38.0 B3）：不得被当成「PyPI 未开通」；钉错版本要报。"""
+    from horosa_skill import __version__
+
+    good = f"https://github.com/o/r/releases/download/v{__version__}/horosa_skill-{__version__}-py3-none-any.whl"
+    codes = _audit({"command": "/opt/uv/bin/uvx", "args": ["--from", good, "horosa-skill", "serve", "--transport", "stdio"]})
+    assert "pypi_not_published" not in codes and "launcher_version_drift" not in codes
+    stale = "https://github.com/o/r/releases/download/v0.0.1/horosa_skill-0.0.1-py3-none-any.whl"
+    codes = _audit({"command": "/opt/uv/bin/uvx", "args": ["--from", stale, "horosa-skill", "serve", "--transport", "stdio"]})
+    assert "launcher_version_drift" in codes
+    git_stale = "git+https://github.com/o/horosa-skill@v0.0.1#subdirectory=horosa-skill"
+    codes = _audit({"command": "/opt/uv/bin/uvx", "args": ["--from", git_stale, "horosa-skill", "serve", "--transport", "stdio"]})
+    assert "launcher_version_drift" in codes
+
+
 def test_client_check_passes_a_good_entry(tmp_path) -> None:
     package_dir = tmp_path / "horosa-skill"
     package_dir.mkdir()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -27,6 +28,7 @@ from horosa_skill.client_tools import (
     resolve_uv_command,
 
     resolve_uvx_command,
+    zero_install_wheel_url,
 )
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.errors import RuntimeError, ToolValidationError
@@ -259,6 +261,8 @@ def _write_json_file(path: Path, payload: object) -> Path:
 
 
 _MERGEABLE_ROOT_KEYS = ("mcpServers", "servers", "context_servers")
+_PIN_WHEEL = re.compile(r"/v(\d+\.\d+\.\d+)/horosa_skill-\d+\.\d+\.\d+-py3-none-any\.whl")
+_PIN_GIT = re.compile(r"horosa-skill@v(\d+\.\d+\.\d+)#")
 
 
 def _merge_client_config(path: Path, payload: object) -> dict[str, Any]:
@@ -1966,6 +1970,16 @@ def _audit_client_entry(
             "detail": f"`{command}` 不在 PATH 上（本机 which 找不到）；GUI 客户端还不继承你的 shell PATH。",
             "fix": "重跑 `horosa-skill client config --format <client>`（现在写绝对路径），或把 command 改成可执行文件的完整路径。",
         })
+    # 钉版本的零安装源（wheel 资产 URL / git tag）与本包版本不一致 → 客户端跑的是别的版本（v0.38.0 B3）。
+    if "--from" in args:
+        source = args[args.index("--from") + 1] if args.index("--from") + 1 < len(args) else ""
+        pinned = _PIN_WHEEL.search(source) or _PIN_GIT.search(source)
+        if pinned and pinned.group(1) != __version__:
+            problems.append({
+                "code": "launcher_version_drift",
+                "detail": f"配置钉的是 v{pinned.group(1)}，本机 horosa-skill 是 v{__version__}。",
+                "fix": "重跑 `horosa-skill client config --format <client> --launcher uvx-wheel --write <配置>`（或 `setup`）让 URL 跟上版本。",
+            })
     if command.endswith("uvx") and "--from" not in args:
         problems.append({
             "code": "pypi_not_published",
@@ -2099,8 +2113,9 @@ def client_config(
         "uv",
         "--launcher",
         help=(
-            "How the client starts the server: `uv` (source checkout) / `uvx` (PyPI, not live yet) / "
-            "`uvx-git` (no checkout, installs from this repo — the working zero-install path today). "
+            "How the client starts the server: `uv` (source checkout) / `uvx-wheel` (zero-install from the "
+            "release wheel asset — no git, no PyPI; honours HOROSA_RUNTIME_MIRROR) / `uvx-git` (zero-install "
+            "from this repo; needs git + github.com) / `uvx` (PyPI, not live yet). "
             "mcporter/openclaw formats always use the checkout."
         ),
     ),
@@ -2116,17 +2131,34 @@ def client_config(
     """按客户端生成即用 MCP 配置（自动注入真实绝对路径，无手填占位符）。"""
     resolved_skill_root = _resolve_skill_root(skill_root)
     launcher_key = launcher.strip().lower()
-    if launcher_key not in {"uv", "uvx", "uvx-git"}:
-        raise typer.BadParameter("`--launcher` must be `uv`, `uvx` or `uvx-git`.")
+    if launcher_key not in {"uv", "uvx", "uvx-git", "uvx-wheel"}:
+        raise typer.BadParameter("`--launcher` must be `uv`, `uvx-wheel`, `uvx-git` or `uvx`.")
     warnings: list[str] = []
-    if launcher_key in {"uvx", "uvx-git"}:
+    launcher_info: dict[str, Any] = {"kind": launcher_key}
+    if launcher_key in {"uvx", "uvx-git", "uvx-wheel"}:
         # 🔴 写绝对路径（v0.38.0 B2）：GUI 客户端在 Windows 上不继承 shell PATH，裸 `uvx` = file not found。
         try:
             uvx_command = resolve_uvx_command()
         except FileNotFoundError as exc:
             uvx_command = ["uvx"]
             warnings.append(f"uvx 未找到，配置里只能写裸 `uvx`（GUI 客户端可能起不来）：{exc}")
-    if launcher_key == "uvx":
+    if launcher_key == "uvx-wheel":
+        # 🔴 免 git、免 PyPI 的零安装（v0.38.0 B3）：每个 Release 都附带纯 Python wheel，`uvx --from <URL>` 直接起；
+        # URL 走 HOROSA_RUNTIME_MIRROR 的前缀改写（github.com:443 不通的机器只需一个开关，issue #14）。
+        # uvx 按 `--from` 的 URL 缓存环境：钉版本的 URL 稳定，升级 = 换 URL（重跑 client config / setup）。
+        from horosa_skill.runtime.mirrors import mirror_candidates, preferred_mirror_url
+
+        wheel_url = zero_install_wheel_url()
+        stdio_command = [*uvx_command, "--from", preferred_mirror_url(wheel_url), "horosa-skill", "serve", "--transport", "stdio"]
+        launcher_info.update({
+            "wheel_url": preferred_mirror_url(wheel_url),
+            "alternatives": mirror_candidates(wheel_url),
+            "pinned_version": __version__,
+            "install_hint": f"uvx --from \"{preferred_mirror_url(wheel_url)}\" horosa-skill install",
+            "refresh_hint": f"uvx --refresh --from \"{preferred_mirror_url(wheel_url)}\" horosa-skill --version",
+            "docs": "docs/INSTALL_RESTRICTED_NETWORK.md（镜像 / API 直链 / 离线搬运）",
+        })
+    elif launcher_key == "uvx":
         # PyPI 分发（v0.36.0 C4）：不需要源码 checkout；离线 runtime 仍由 `uvx horosa-skill install` 装到默认目录。
         stdio_command = [*uvx_command, "horosa-skill", "serve", "--transport", "stdio"]
     elif launcher_key == "uvx-git":
@@ -2323,6 +2355,7 @@ def client_config(
             "format must be one of: claude-code / claude-desktop / cursor / vscode / codex / "
             "gemini / windsurf / cline / zed / mcporter / openclaw"
         )
+    payload["launcher"] = launcher_info
     if warnings:
         payload["warnings"] = warnings
     if write is not None:

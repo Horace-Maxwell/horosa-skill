@@ -75,7 +75,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `106 / 106 ok=true` |
-| Engineering tests | `821 / 821 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 72 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `828 / 828 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 72 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `84` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `8` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`103` export techniques modeled; contract v14 mirrors desktop aiExport v56) |
@@ -331,20 +331,25 @@ uv run horosa-skill selfcheck    # live check: cast one chart -> store -> read b
 uv run horosa-skill serve        # start local MCP (default http://127.0.0.1:8765/mcp)
 ```
 
-No checkout needed once PyPI is switched on — the `uvx horosa-skill …` channel is wired (workflow + wheel guard) but **not yet live** (it needs the maintainer's one-time Trusted Publisher setup; the commands below stay the same). Until then, use the source install above:
+No checkout needed: **zero-install (no git, no PyPI)** — every release ships a pure-Python wheel, and `uvx` starts
+straight from its URL; `HOROSA_RUNTIME_MIRROR` rewrites the wheel URL and the runtime URLs alike:
 
 ```bash
-uvx horosa-skill install         # install the offline runtime (same as above)
-uvx horosa-skill doctor          # health check
-uvx horosa-skill serve --transport stdio   # stdio for clients; `client config --launcher uvx` emits matching configs
+WHL="https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.37.0/horosa_skill-0.37.0-py3-none-any.whl"
+uvx --from "$WHL" horosa-skill install                    # install the offline runtime (same as above)
+uvx --from "$WHL" horosa-skill doctor                     # health check
+uvx --from "$WHL" horosa-skill serve --transport stdio    # stdio for clients; `client config --launcher uvx-wheel` emits matching configs
 ```
+
+> Restricted network (mirror prefix / assets API / offline USB / proxies & corporate CAs): see [docs/INSTALL_RESTRICTED_NETWORK.md](./docs/INSTALL_RESTRICTED_NETWORK.md).
+> The PyPI channel (`uvx horosa-skill …`) is wired but **not yet live** (it needs the maintainer's one-time Trusted Publisher setup); once on, the commands get shorter and behave the same.
 
 > [!NOTE]
 > 🐳 **Docker / Linux (experimental)**: the offline runtime is published for macOS (arm64) and Windows (x64) only — there is no Linux payload. What runs in a container is the **MCP gateway** (Python package + knowledge base + memory) pointed at a host or another machine that has the runtime via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`. An **experimental** `horosa-skill/Dockerfile` + `docker-compose.yml` ship with the repo (gateway image: no offline runtime inside the container, so those two variables are mandatory; binding 0.0.0.0 requires `HOROSA_MCP_TOKEN`); by hand, `pip install horosa-skill` then `horosa-skill serve --transport streamable-http` is the gateway.
 
 Troubleshooting install: `uv: command not found` -> install uv first (one-liner above); slow/broken network -> re-run `install` (resumes from the partial download) or set `HOROSA_RUNTIME_MIRROR=<mirror-prefix>`; low disk / busy ports -> `doctor` reports each check with a next_action; a Windows Firewall prompt on first start or `doctor` warning `listener:not_loopback_only` -> the old launcher bound Java to 0.0.0.0; after upgrading run `uv run horosa-skill runtime restart` to re-apply the template (pins 127.0.0.1); services not starting under a Windows user name with spaces/CJK -> fixed in v0.38.0 (every path argument is quoted), `runtime restart` after upgrading; Codex showing a pile of errors or no tools on the first turn -> usually the timeouts are unset (Codex defaults 10 s/60 s): `uv run horosa-skill client check --client codex` names the missing keys and `client config --format codex --write ~/.codex/config.toml` merges the fix in place; `uvx` works in a terminal but a GUI client cannot start it -> GUI clients do not inherit your shell PATH, rerun `client config` (it now writes absolute paths) and `client check` reports `command_not_on_path`; upgrade -> `uv run horosa-skill upgrade` (skips the download when already current); uninstall -> `uv run horosa-skill uninstall` (dry-run by default).
 
-More troubleshooting: if `github.com:443` is unreachable but `api.github.com` works, download the runtime via the assets API (`curl -s https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/latest` to find your platform archive's `assets[].id`, then `curl -L -H "Accept: application/octet-stream" -o runtime.zip https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/assets/<id>`) and run `uv run horosa-skill install --archive runtime.zip`. If the Java backend (:9999) will not come up — `doctor` reports `services:java_backend_not_running` — the runtime now degrades to **chart-only** instead of locking everything: 三式 ken (qimen/taiyi/jinkou), 神数, geomancy, tarot and the western chart family keep working while nongli/bazi/ziwei/liureng and time-cast flows error until it recovers; `doctor` attaches the captured Java boot error under `java_diagnostics` and `selfcheck` falls back to a chart-side probe. A known Windows cause is proxy/VPN/security software whose WFP filters block `java.exe` loopback (JDK 17's internal pipes prefer AF_UNIX with no TCP fallback on connect — see issue #14); stopping the service is usually not enough, disable it and reboot.
+More troubleshooting: if `github.com:443` is unreachable but `api.github.com` works (full recipe incl. mirrors and offline USB: [docs/INSTALL_RESTRICTED_NETWORK.md](./docs/INSTALL_RESTRICTED_NETWORK.md)), download the runtime via the assets API (`curl -s https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/latest` to find your platform archive's `assets[].id`, then `curl -L -H "Accept: application/octet-stream" -o runtime.zip https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/assets/<id>`) and run `uv run horosa-skill install --archive runtime.zip`. If the Java backend (:9999) will not come up — `doctor` reports `services:java_backend_not_running` — the runtime now degrades to **chart-only** instead of locking everything: 三式 ken (qimen/taiyi/jinkou), 神数, geomancy, tarot and the western chart family keep working while nongli/bazi/ziwei/liureng and time-cast flows error until it recovers; `doctor` attaches the captured Java boot error under `java_diagnostics` and `selfcheck` falls back to a chart-side probe. A known Windows cause is proxy/VPN/security software whose WFP filters block `java.exe` loopback (JDK 17's internal pipes prefer AF_UNIX with no TCP fallback on connect — see issue #14); stopping the service is usually not enough, disable it and reboot.
 
 For stdio clients like Claude Desktop: `uv run horosa-skill serve --transport stdio`. Context-constrained clients can set `HOROSA_MCP_COMPACT=1` to expose only the 11 facades, or `HOROSA_TOOLSETS=astro,cn` to flatten just those domains (domains astro/predict/chart/cn/shenshu/other, aliases western/chinese/all/none; unknown tokens are warned about and ignored, an empty result falls back to the full surface; any effective filter also registers `horosa_tool_run`; facades always register). The clarification gate still applies.
 
@@ -471,7 +476,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 821 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 828 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

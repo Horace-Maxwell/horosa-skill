@@ -76,10 +76,12 @@
         "streamable-http"
       ],
       "install": [
+        "uvx --from \"https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.37.0/horosa_skill-0.37.0-py3-none-any.whl\" horosa-skill install",
         "uvx --from \"git+https://github.com/Horace-Maxwell/horosa-skill@v0.37.0#subdirectory=horosa-skill\" horosa-skill install",
         "或源码：uv sync --dev && uv run horosa-skill install"
       ],
       "start": [
+        "uvx --from \"https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.37.0/horosa_skill-0.37.0-py3-none-any.whl\" horosa-skill serve --transport stdio",
         "uvx --from \"git+https://github.com/Horace-Maxwell/horosa-skill@v0.37.0#subdirectory=horosa-skill\" horosa-skill serve --transport stdio",
         "或源码：uv run horosa-skill serve --transport stdio"
       ],

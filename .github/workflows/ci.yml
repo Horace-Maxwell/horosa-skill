@@ -80,6 +80,16 @@ jobs:
         # （CI 实测：`failed to find default branch HEAD`）。钉 SHA 同时也更贴近用户拿到的
         # `@v<tag>` 形式 —— 那一条本来就带 rev。
         run: HOME=$(mktemp -d) uvx --from "git+file://$GITHUB_WORKSPACE@$GITHUB_SHA#subdirectory=horosa-skill" horosa-skill --version
+      - name: Zero-install path from the wheel works (uvx --from <wheel>)
+        # v0.38.0 B3：发布页附带的纯 Python wheel 是免 git / 免 PyPI 的零安装通路。这里用本 checkout 构建的
+        # wheel 走 file:// 把「uvx 能从一个 .whl URL 起 horosa-skill」这条真跑一遍；线上 URL 由
+        # release-completeness.yml 对已发布的 latest 断言。
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/horosa-whl && mkdir -p /tmp/horosa-whl
+          (cd horosa-skill && uv build --wheel --out-dir /tmp/horosa-whl)
+          whl="$(ls /tmp/horosa-whl/horosa_skill-*-py3-none-any.whl)"
+          HOME=$(mktemp -d) uvx --from "file://${whl}" horosa-skill --version
       - name: Verify JS tool→engine boundary contracts (the issue #15 dead-key shape)
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_js_boundary_contracts.py

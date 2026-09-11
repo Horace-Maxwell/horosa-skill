@@ -384,6 +384,44 @@ def check_stale_claims(version: str) -> None:
                 err(f"docs/{path.name}: stale 'current: `{got}`' claim (package is {version})")
 
 
+# --- 3a. pinned zero-install commands -------------------------------------------------------
+# README / SKILL / server.json / examples carry commands that pin a version inside a URL or a git ref:
+#   uvx --from "git+https://…/horosa-skill@v0.37.0#subdirectory=horosa-skill" …
+#   uvx --from "https://…/releases/download/v0.37.0/horosa_skill-0.37.0-py3-none-any.whl" …
+#   https://…/releases/download/v0.37.0/horosa-skill-0.37.0.mcpb
+# `check_versions` only walks JSON `version` keys, so these strings drifted silently once (v0.38.0 B3
+# audit). A pinned command that names an older version sends the user to a release that lacks this
+# code's contracts. `<!-- docs-sync:ignore-version -->` on the line freezes a deliberately historical one.
+
+PINNED_DOCS = [
+    "README.md", "README_EN.md", "docs/INSTALL_RESTRICTED_NETWORK.md",
+    "skills/horosa-agent/SKILL.md", ".agents/skills/horosa-agent/SKILL.md", "server.json",
+]
+PIN_PATTERNS = (
+    re.compile(r"horosa-skill@v(\d+\.\d+\.\d+)#"),
+    re.compile(r"/v(\d+\.\d+\.\d+)/horosa_skill-(\d+\.\d+\.\d+)-py3-none-any\.whl"),
+    re.compile(r"/v(\d+\.\d+\.\d+)/horosa-skill-(\d+\.\d+\.\d+)\.mcpb"),
+)
+IGNORE_VERSION = "<!-- docs-sync:ignore-version -->"
+
+
+def check_pinned_install_commands(version: str) -> None:
+    docs = [ROOT / rel for rel in PINNED_DOCS] + sorted((ROOT / "horosa-skill" / "examples" / "clients").glob("*.md"))
+    for path in docs:
+        if not path.exists():
+            continue
+        rel = path.relative_to(ROOT).as_posix()
+        for lineno, line in enumerate(read(path).splitlines(), 1):
+            if IGNORE_VERSION in line:
+                continue
+            for pattern in PIN_PATTERNS:
+                for match in pattern.finditer(line):
+                    stale = sorted({g for g in match.groups() if g and g != version})
+                    if stale:
+                        err(f"{rel}:{lineno}: pinned install command names v{stale[0]} but the package is {version} "
+                            f"(add {IGNORE_VERSION} only for a frozen historical record)")
+
+
 # --- 3b. shipped artifacts the prose denies ------------------------------------------------
 # horosa-skill/Dockerfile + docker-compose.yml have been tracked since v0.3x while both READMEs kept
 # saying "仓库暂不提供 Dockerfile / No Dockerfile is shipped yet" (v0.38.0 audit). A doc that denies a
@@ -556,6 +594,7 @@ def main() -> None:
     check_test_count_consistency()
     check_test_count_is_real()
     check_stale_claims(version)
+    check_pinned_install_commands(version)
     check_docker_claims()
     check_links()
     check_conflict_markers()

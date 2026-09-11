@@ -14,6 +14,7 @@ uv run horosa-skill selfcheck   # 活体验证：起一张盘 → 存 → 读回
 - Runtime not installed → `uv run horosa-skill install` (≈730MB download, resumable).
 - Backend cold start can take up to ~45s on the first call — retry once before reporting.
 - Behind a slow network? Set `HOROSA_RUNTIME_MIRROR=<mirror-prefix>` and re-run install.
+- github.com unreachable / offline machine → [docs/INSTALL_RESTRICTED_NETWORK.md](./docs/INSTALL_RESTRICTED_NETWORK.md)（镜像 / API 直链 / U 盘搬运）。
 
 ## Usage Questions
 

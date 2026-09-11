@@ -63,6 +63,8 @@ Runtime release 采用“轻仓库 + 重 release 资产”模式。
   - `runtime-manifest.json`
   - `SHA256SUMS.txt`
   - `horosa-skill-sbom.json`
+  - `horosa_skill-<version>-py3-none-any.whl`（零安装资产：`uvx --from <URL> horosa-skill …` 免 git、免 PyPI；发布脚本步骤 [5/8]
+    `uv build --wheel` 产出，`release-completeness.yml` 断言在场并真跑 `--version`；v0.38.0 起）
   - `horosa-skill-<version>.mcpb`（Claude Desktop 一键安装包；`horosa-skill/scripts/build_mcpb.sh`
     做 validate → pack → sha256。`server.json` 的 mcpb package 直指这个 URL，缺了它注册表那条记录 404。
     断言在 `release-completeness.yml`）

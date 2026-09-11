@@ -57,6 +57,7 @@ no ken engine and stays a pure headless JS calculation.
 - `DATA_CONTRACTS.md` — tool-envelope version, export-contract / record / manifest schema identifiers.
 - `EXPORT_AUDIT_GUIDE.md` — section-by-section audit method for predictive exports.
 - `OPERATIONS.md` — install / doctor / serve / run operational guide.
+- `INSTALL_RESTRICTED_NETWORK.md` — mirrors / assets API / offline USB / proxies for machines that cannot reach github.com.
 - `OFFLINE_RUNTIME_RELEASES.md` — what a runtime release must contain (incl. the ken engines + their
   Python deps) and the maintainer build/publish workflow.
 - `RUNTIME_MANIFEST_SPEC.md` + `runtime-manifest.example.json` + `runtime-payload-manifest.example.json` —
