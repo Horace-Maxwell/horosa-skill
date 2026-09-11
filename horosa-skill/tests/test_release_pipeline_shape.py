@@ -85,8 +85,11 @@ def test_runtime_matrix_never_runs_per_push_and_covers_three_real_machines() -> 
 
 
 def test_arm_lane_blocking_is_an_input_not_a_hardcode() -> None:
-    assert "continue-on-error: ${{ matrix.platform == 'win32-arm64' && inputs.arm_nonblocking != false }}" in MATRIX
-    assert "expect_payload: win32-x64" in MATRIX.split("windows-11-arm", 1)[1][:600], "the ARM lane installs the x64 payload"
+    assert "continue-on-error: ${{ matrix.platform == 'win32-arm64' && inputs.arm_nonblocking == true }}" in MATRIX
+    # blocking by default since dry run #4 went green on windows-11-arm (2026-09-11)
+    assert MATRIX.count("arm_nonblocking:\n        type: boolean\n        default: false") == 2
+    assert "default: true" not in RELEASE.split("arm_nonblocking:", 1)[1][:200]
+    assert "expect_payload: win32-x64" in MATRIX.split("runner: windows-11-arm", 1)[1][:600], "the ARM lane installs the x64 payload"
 
 
 def test_matrix_uploads_evidence_even_on_failure() -> None:

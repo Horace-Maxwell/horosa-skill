@@ -29,9 +29,9 @@ on:
         type: boolean
         default: true
       arm_nonblocking:
-        description: "Windows-on-ARM lane is advisory (continue-on-error)"
+        description: "Make the Windows-on-ARM lane advisory for this run (default: it blocks like the others)"
         type: boolean
-        default: true
+        default: false
       dry_run:
         description: "Seed from the public release assets of <version>; build + verify + matrix only, no upload, no publish"
         type: boolean

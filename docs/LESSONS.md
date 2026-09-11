@@ -186,6 +186,10 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   ④ macOS lane 的 `test_runtime_ports_identity` 两条红：满负载下 `netstat -anv` 超过 `_run` 的 5 s → 空串 → 「查不到持有者」
   （修：15 s + 用例耐心重试 + 失败信息带诊断）。另把 lane 的 runtime 端口改为非默认 19999/18899（维护者 live 配方同款；
   默认端口上跑真服务会让假定端口空闲的离线用例误红——AGENTS §8 早有这条）。
+- **dry run #4（run 34568103210，2026-09-11）全绿**：三 lane 各 install → doctor → start → chart/qimen/nongli_time/bazi_birth →
+  `setup` ×4（stdio 探测 116/11/11/116）→ live pytest **1025 passed / 0 failed / 14 skipped**（无闸门 skip）→ stop；
+  windows-11-arm 装的是 win32-x64（`platform_fallback.mode = x64-emulation`，doctor `emulated: true`），全程 19 min。ARM lane 随即
+  转阻断（`arm_nonblocking` 默认 false）。
 - **法则**：**清单只在两平台齐了才上 release**；**发布前的真机证据由流水线产出，不由「维护者机器上跑过」代替**；「CI 做不到 X」
   这类规则要写清时代前提，runner 变了就要重审。
 

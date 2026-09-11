@@ -9,8 +9,9 @@ name: runtime-matrix
 # Never on push / pull_request (a runtime boot per push would be minutes of hosted-runner time for nothing):
 # `workflow_call` from release-runtime.yml (installing from the assembled artifact, before anything is public),
 # manual dispatch against a published release, and a weekly run against the public latest.
-# The ARM lane is non-blocking (`continue-on-error`) until it has been green on a real release; flip
-# `arm_nonblocking` to false afterwards (AGENTS.md §7).
+# The ARM lane is BLOCKING by default since dry run #4 (2026-09-11, run 34568103210) proved windows-11-arm installs the
+# win32-x64 payload under emulation and passes the whole lane (live pytest 1025 passed); `arm_nonblocking=true` is the
+# escape hatch for a known-flaky day, never the default (AGENTS.md §7).
 
 on:
   workflow_call:
@@ -28,7 +29,7 @@ on:
         default: ""
       arm_nonblocking:
         type: boolean
-        default: true
+        default: false
       skip_pytest:
         type: boolean
         default: false
@@ -40,7 +41,7 @@ on:
         default: ""
       arm_nonblocking:
         type: boolean
-        default: true
+        default: false
       skip_pytest:
         type: boolean
         default: false
@@ -75,8 +76,8 @@ jobs:
             # way a user with an x64 Python does (PROCESSOR_ARCHITEW6432 → win32-arm64 → win32-x64 payload).
             python_arch: x64
     runs-on: ${{ matrix.runner }}
-    # non-blocking ARM lane while the emulation story is young (flip arm_nonblocking=false once it is green on a release)
-    continue-on-error: ${{ matrix.platform == 'win32-arm64' && inputs.arm_nonblocking != false }}
+    # the ARM lane blocks like the others; arm_nonblocking=true (explicit) makes it advisory for one run
+    continue-on-error: ${{ matrix.platform == 'win32-arm64' && inputs.arm_nonblocking == true }}
     timeout-minutes: 90
     env:
       GH_TOKEN: ${{ github.token }}
