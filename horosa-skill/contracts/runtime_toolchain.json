@@ -1,0 +1,64 @@
+{
+  "_comment": "Pinned third-party toolchain for hosted runtime derivation (v0.38.0 A1). Every URL/sha here was resolved on 2026-09-10 by scripts/gen_runtime_python_lock.py --check-index and the A0 runner-probe run; bump deliberately, never by resolving `latest` inside a build.",
+  "schema": 1,
+  "python": {
+    "minor": "3.12",
+    "embed_windows_x64": {
+      "version": "3.12.10",
+      "url": "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip",
+      "sha256": "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3",
+      "size": 11133606
+    }
+  },
+  "java": {
+    "major": 17,
+    "temurin_release": "jdk-17.0.20.1+1",
+    "adoptium_api": "https://api.adoptium.net/v3/binary/version/jdk-17.0.20.1%2B1/{os}/{arch}/{image_type}/hotspot/normal/eclipse",
+    "windows_x64_jdk": {
+      "name": "OpenJDK17U-jdk_x64_windows_hotspot_17.0.20.1_1.zip",
+      "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20.1%2B1/OpenJDK17U-jdk_x64_windows_hotspot_17.0.20.1_1.zip",
+      "sha256": "e53a79c3c3d86865bd7e787903884331068e71321714ffd44f145785affc7cb0",
+      "size": 190817615
+    },
+    "windows_x64_jre": {
+      "name": "OpenJDK17U-jre_x64_windows_hotspot_17.0.20.1_1.zip",
+      "sha256": "bc21a93923103cdaac93ee337b0ae4365e739fde36df823dd456bc67c8a9d352",
+      "size": 43780109
+    },
+    "jlink_modules": [
+      "java.base", "java.desktop", "java.instrument", "java.logging", "java.management", "java.naming",
+      "java.net.http", "java.prefs", "java.scripting", "java.security.jgss", "java.sql", "java.xml",
+      "jdk.charsets", "jdk.crypto.ec", "jdk.management", "jdk.unsupported", "jdk.zipfs"
+    ]
+  },
+  "node": {
+    "line": "22",
+    "version": "22.23.2",
+    "windows_x64": {
+      "name": "node-v22.23.2-win-x64.zip",
+      "url": "https://nodejs.org/dist/v22.23.2/node-v22.23.2-win-x64.zip",
+      "sha256": "1177b4137ba5adaa56354ae40f1080c7450e8ae09cecb47da459d1c52ac99f97"
+    },
+    "darwin_arm64": {
+      "name": "node-v22.23.2-darwin-arm64.tar.gz",
+      "sha256": "61130f394c1630d211dd50aecc4353d379480f36d3ac913cd85dbba1aed585c6"
+    }
+  },
+  "platforms": {
+    "win32-x64": {
+      "pip_platform_tags": ["win_amd64"],
+      "min_os": "10.0.17763",
+      "runtime_dir": "runtime/windows",
+      "launchers": "ps1"
+    }
+  },
+  "runners": {
+    "_comment": "A0 runner-probe (run 34555801257, 2026-09-10): free disk / native arch / emulation evidence.",
+    "ubuntu-latest": {"arch": "x86_64", "free_disk_gb": 86},
+    "windows-latest": {"arch": "x64", "os": "Windows Server 2025", "free_disk_gb": 32},
+    "windows-11-arm": {"arch": "arm64", "os": "Windows 11 Enterprise", "free_disk_gb": 121,
+                       "x64_emulation": {"temurin_17_x64_java_version_seconds": 1.39, "node_x64": true, "python_x64_embed": true,
+                                         "python_machine_under_x64_process": "ARM64"}},
+    "macos-latest": {"arch": "arm64", "os": "macOS 26.6.2", "free_disk_gb": 95, "rosetta": true}
+  }
+}

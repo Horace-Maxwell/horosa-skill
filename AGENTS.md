@@ -480,6 +480,13 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   别造假条文；粗 grep `條文待補充` 会假阳——验 `基础条文` 是真条文即可。`gen_shaozi_tiaowen.py` 必须
   `newline="\n"` 写 LF（保两平台构建字节可复现）。
 
+- **托管派生（seed + derive）的四条不变量（v0.38.0 A1）**：① 只从通过 `verify_runtime_release` 闸的 darwin-arm64 种子派生
+  （`runtime_seed.verify_seed` 复用 REQUIRED_ENTRIES + 内嵌清单检查）；② 依赖集 = `contracts/runtime_python_lock.json`——种子的
+  dist 集逐名逐版（pure 逐字节复制、native 同版本重拉或在目标 runner 从 sdist 编：pyswisseph / sxtwl 没有 cp312 Windows wheel），
+  不跑解析器、不加包，scipy/plotly 进锁即红（`verify_runtime_python_lock.py`）；③ 派生清单只继承种子的版本/注册表常量，绝不自己
+  stamp `export_registry_version`；④ 每个原生二进制（python/java/node/numpy）解包后过 `assert_binary_arch`——x64 载荷里出现种子的
+  arm64 二进制必红。第三方工具链只从 `contracts/runtime_toolchain.json` 取钉死的 URL + sha（jlink 模块表也在那里），构建里不解析
+  `latest`。
 - **Dockerfile 与 wheel 的输入清单必须同步。** pyproject `force-include` 每加一个源路径，`horosa-skill/Dockerfile` 就得多一条 `COPY`，
   否则镜像里 `uv pip install .` 直接失败（v0.38.0 B0 抓到 `scripts/runtime_templates/windows` 漏拷；守卫
   `tests/test_dockerfile_matches_wheel_includes.py`）。

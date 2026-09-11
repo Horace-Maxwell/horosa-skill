@@ -1,0 +1,28 @@
+# source: Horosa-Public scripts/requirements/mac-python.txt @ 0604fa416f95e330dbd798ba2ede0f2aa0cb1688 (app 3.10.0)
+# verbatim copy for provenance only — the derived payload's dep set is contracts/runtime_python_lock.json (seed-derived);
+# refreshed by scripts/sync_vendored_runtime_sources.sh; verify_runtime_python_lock.py checks every name here is classified.
+cherrypy>=18.10,<19
+jsonpickle>=3.0,<4
+pyswisseph>=2.10,<3
+joblib==1.5.3
+numpy==2.4.2
+scipy==1.17.1
+scikit-learn==1.8.0
+pendulum>=3.0,<4
+streamlit>=1.35,<2
+pandas>=2.2,<3
+plotly>=5,<7
+svgwrite>=1.4,<2
+fpdf2>=2.7,<3
+pytz>=2022
+opencc-python-reimplemented>=0.1.7,<0.2
+zhconv>=1.4,<2
+sxtwl>=2.0.6,<3
+ephem>=4.2,<5
+cn2an>=0.5.23,<1
+cnlunar>=0.1.1,<0.2
+bidict>=0.22,<1
+kinliuren>=0.1.2.9,<0.2
+drawsvg>=2.3,<3
+kerykeion>=5.6,<6
+astropy>=7,<8

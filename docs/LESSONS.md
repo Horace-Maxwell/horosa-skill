@@ -16,7 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
-| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装（免 git/PyPI、镜像、钉版本锁） | CI 的绿由每条命令背书；路径元素自己带引号；两端启动器网络面一致；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；钉版本字符串由 docs-sync 锁 |
+| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基（种子锁、工具链钉版本、pyswisseph/sxtwl 无 cp312 Windows wheel） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数 |
 | v0.37.0 (2026-09) | 任意 AI 客户端可调用：广告层只对一个客户端对过 / 自家 .mcp.json 从未连通 / 端口静默采用与误杀 / 回环走代理 | 按**别人的**约束测；改 golden 前先答「旧断言为何不会红」；负向对照跑不红就如实改口 |
 | v0.36.0 收尾 (2026-09) | 「Java 族 live 需 Mongo」十个版本的误定性 = vendored 脚本裸 `-jar`；演禽假闸门 | 贴「环境限制」前先读 `Result` 原文、用上游桌面起法起一遍；闸门问项以 live 翻转为准，不以转发为准 |
 | v0.36.0 (2026-09) | 止血/可用性/捞回能力 15 批（响应放大、静默降级、手抄表、死键、降级误杀、扁平面丢键、moira 误排除、闸门半盲、错误码……） | 每批四件套 + 全量门禁；台账正文按批见下 |
@@ -101,6 +101,35 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.38.0 / 2026-09-10 — A0/A1 托管派生的地基：种子即真值、依赖集是种子的纯函数；探针推翻了「靠版本号拉 wheel 就够」
+
+- **A0 探针（runner-probe 34555801257，四 runner 全绿）**：`windows-latest` x64 剩 32 GB；`windows-11-arm`（Windows 11 Enterprise，
+  ARM64，剩 121 GB）上 **x64 Temurin 17.0.20.1 `java -version` 1.39 s、x64 Node 22 与 x64 嵌入式 Python 3.12 都能跑**——win32-arm64
+  走 x64 仿真有了证据；`macos-latest` 是 macOS 26.6.2 arm64、Rosetta 在；`ubuntu-latest` 剩 86 GB。另一条要紧的：x64 Python 在
+  ARM64 Windows 上 `platform.machine()` 报 **ARM64**（读 `PROCESSOR_ARCHITEW6432`），所以 `_platform_key()` 天然得到
+  `win32-arm64`，回退逻辑可直接按这个键做（A4）。
+- **A0 wheel 探针（`gen_runtime_python_lock.py --check-index`）**：v0.36.0 种子的 site-packages = 76 纯 + 19 原生 dist（python 3.12）；
+  19 个里 17 个在 PyPI 有 `cp312 win_amd64` wheel，**`pyswisseph==2.10.3.2` 只到 cp311、`sxtwl==2.0.6` 只到 cp310**（两家都没有
+  cp312 的 Windows wheel，mac x86_64 亦然）——现在的 Windows 载荷（Python 3.11.9）之所以有 sxtwl，是构建机自己从 sdist 编的。
+  托管派生因此必须在 `windows-latest` 上用 MSVC 从 sdist 构建这两个包（`pip wheel --no-binary :all:`），锁里以 `wheel_sources[平台][包]
+  = "sdist"` 记明。第一次写 `pip download --dry-run` 全 MISS——pip 25 的 `download` 根本没有 `--dry-run`（只有 `install` 有）；改用
+  PyPI JSON API 看 wheel 文件名，零下载、零 pip 依赖。
+- **A1 落地**：`contracts/runtime_python_lock.json`（由种子生成：pure 逐字节复制、native 同版本重拉、`excluded` 带理由、`wheel_sources`、
+  `platform_overrides` 必须在本台账有记）、`contracts/upstream_python_requirements.txt`（Horosa-Public `scripts/requirements/mac-python.txt`
+  逐字副本 + pin sha 头，`sync_vendored_runtime_sources.sh` 同步刷新——注意上游是浮动版本号，种子里 numpy 2.4.6 对上游 `==2.4.2`，
+  所以**锁的真值是种子不是 requirements**）、`contracts/runtime_toolchain.json`（Temurin `jdk-17.0.20.1+1` x64 zip sha、Python 嵌入包
+  3.12.10 sha、Node 22.23.2 sha、jlink 模块表单一来源、各 runner 事实）、`contracts/release_platforms.json`（darwin-arm64 since 0.9.0、
+  win32-x64 since 0.9.1、别名 win32-arm64→win32-x64 x64-emulation、darwin-x64/linux 明确不支持 + 理由）、`scripts/runtime_seed.py`
+  （`verify_seed` 复用发布闸的 REQUIRED_ENTRIES / 内嵌清单检查；`materialize_seed` 按 sha 缓存解压；`derive_manifest` 只继承不 stamp；
+  `copy_platform_tree`；`copy_pure_site_packages` 按 RECORD 逐文件；`fetch_native_wheels` 有 wheel 就 `pip download`、`sdist` 就 `pip wheel`；
+  `assert_binary_arch` 认 Mach-O thin/fat、PE、ELF）、`scripts/verify_runtime_python_lock.py`（入 ci.yml）。
+- **guard**：`tests/test_runtime_seed.py`（负向：缺 `kin_year_domain.py` 的种子必拒、版本不符必拒、arm64 Mach-O / ARM64 PE 断言 x64 必红、
+  缺 `export_registry_version` 的种子清单不派生）；`tests/test_runtime_python_lock.py`（scipy/plotly 进锁必红、上游新名字未分类必红、
+  override 无台账必红、缺 wheel 判定必红）；`tests/test_release_platforms_contract.py`。
+- **法则**：**派生只从通过发布闸的种子开始；依赖集 = 种子的 dist 集（版本一致），不跑解析器、不新增任何包**；**「有 wheel」要逐包查
+  PyPI 证明，没有的就在目标 runner 上编，并把判定写进锁**；**`@dataclass` + `from __future__ import annotations` 的模块不能靠
+  `spec_from_file_location` 裸加载**（dataclasses 要在 `sys.modules` 里找到它）——被 importlib 加载的脚本用普通类。
 
 ### v0.38.0 / 2026-09-10 — B3 零安装绑着 git 与 github.com:443；钉版本的安装命令没人锁
 

@@ -100,6 +100,17 @@ rsync -a "${RSYNC_FILTERS[@]}" \
   --exclude='.streamlit' --exclude='.github' --exclude='.devcontainer' --exclude='.git' \
   "${SOURCE_ROOT}/Horosa-Web/vendor/kinastro" "${VENDOR_ROOT}/Horosa-Web/vendor/"
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/runtime/mac/python" "${VENDOR_ROOT}/runtime/mac/"
+# v0.38.0 A1: keep a provenance copy of upstream's Python requirements next to the seed-derived lock
+# (contracts/runtime_python_lock.json is the dep set; this file only proves where the names came from).
+if [ -f "${SOURCE_ROOT}/scripts/requirements/mac-python.txt" ]; then
+  UPSTREAM_SHA="$(git -C "${SOURCE_ROOT}" rev-parse HEAD 2>/dev/null || echo unknown)"
+  {
+    echo "# source: Horosa-Public scripts/requirements/mac-python.txt @ ${UPSTREAM_SHA}"
+    echo "# verbatim copy for provenance only — the derived payload's dep set is contracts/runtime_python_lock.json (seed-derived);"
+    echo "# refreshed by scripts/sync_vendored_runtime_sources.sh; verify_runtime_python_lock.py checks every name here is classified."
+    cat "${SOURCE_ROOT}/scripts/requirements/mac-python.txt"
+  } > "${SKILL_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}/contracts/upstream_python_requirements.txt"
+fi
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/runtime/mac/java" "${VENDOR_ROOT}/runtime/mac/"
 
 if [ -f "${SOURCE_ROOT}/Horosa-Web/astrostudysrv/astrostudyboot/target/astrostudyboot.jar" ]; then

@@ -117,6 +117,8 @@ def build_lock(archive: Path) -> dict[str, object]:
         # name -> version to fetch instead of the seed's, only when the seed's version ships no wheel for
         # that platform; every entry must be explained in docs/LESSONS.md (verify_runtime_python_lock.py).
         "platform_overrides": {"win32-x64": {}},
+        # filled by --check-index: per platform, name -> PyPI wheel filename or "sdist" (build on the runner)
+        "wheel_sources": {},
     }
 
 
@@ -179,14 +181,18 @@ def check_index(lock: dict[str, object], platforms: list[str]) -> int:
     """Ask PyPI which wheel exists for every native dist on each target platform; returns the count of misses.
 
     Uses the PyPI JSON API rather than `pip download` (whose `--dry-run` does not exist in pip 25) — no
-    downloads, no pip on the box, same answer: the wheel filename a derive step would fetch.
+    downloads, no pip on the box, same answer: the wheel filename a derive step would fetch. Records the
+    verdict in `lock["wheel_sources"][platform] = {name: "<wheel filename>" | "sdist"}` so the derive step
+    knows which dists it must BUILD on the target runner (pyswisseph / sxtwl ship no cp312 Windows wheels).
     """
     misses = 0
     python_minor = str(lock["python"])
+    sources: dict[str, dict[str, str]] = lock.setdefault("wheel_sources", {})  # type: ignore[assignment]
     for platform_key in platforms:
         tags = list(lock["platform_tags"][platform_key])
         overrides = (lock.get("platform_overrides") or {}).get(platform_key, {})
         print(f"== {platform_key}: tags={tags} python={python_minor}")
+        verdicts: dict[str, str] = {}
         for requirement in lock["native"]:
             name, _, version = requirement.partition("==")
             version = overrides.get(_normalize(name), version)
@@ -198,10 +204,13 @@ def check_index(lock: dict[str, object], platforms: list[str]) -> int:
                 continue
             wheel = matching_wheel(wheels, python_minor, tags)
             if wheel:
+                verdicts[_normalize(name)] = wheel
                 print(f"   ok   {name}=={version}  ->  {wheel}")
             else:
+                verdicts[_normalize(name)] = "sdist"
                 misses += 1
-                print(f"   MISS {name}=={version}  (no wheel for {tags} among {len(wheels)} wheels)")
+                print(f"   MISS {name}=={version}  (no wheel for {tags} among {len(wheels)} wheels) -> build from sdist on the target runner")
+        sources[platform_key] = verdicts
     return misses
 
 
@@ -221,14 +230,14 @@ def main() -> int:
           f" (excluded present: {lock['excluded_present_in_seed']})")
     for requirement in lock["native"]:
         print(f"   native: {requirement}")
+    misses = 0
+    if args.check_index:
+        misses = check_index(lock, [p.strip() for p in args.platforms.split(",") if p.strip()])
+        print(f"check-index: {misses} native dist(s) without a wheel (they are marked \"sdist\" and built on the target runner)")
     if args.write:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(lock, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(f"wrote {args.output}")
-    if args.check_index:
-        misses = check_index(lock, [p.strip() for p in args.platforms.split(",") if p.strip()])
-        print(f"check-index: {misses} miss(es)")
-        return 1 if misses else 0
     return 0
 
 
