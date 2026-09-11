@@ -25,6 +25,9 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
     steps:
+      # v0.38.0 A3: the expected platform set comes from horosa-skill/contracts/release_platforms.json
+      # (`since`-gated), so this guard needs the repo checked out.
+      - uses: actions/checkout@v4
       - name: Resolve the published `latest` release
         id: latest
         run: |
@@ -85,14 +88,12 @@ jobs:
           case "${got}" in *"${VERSION}"*) echo "OK: zero-install from ${NAME} reports ${VERSION}." ;;
             *) echo "::error::uvx --from ${URL} reports '${got}', expected ${VERSION}"; exit 1 ;; esac
 
-      - name: Assert the latest runtime-manifest.json is complete and dual-platform
+      - name: Assert the latest runtime-manifest.json is complete for every contracted platform
         env:
           TAG: ${{ steps.latest.outputs.tag }}
         run: |
           set -euo pipefail
-          base="https://github.com/${REPO}/releases/latest/download"
-
-          # 1) The default install manifest URL must resolve (this is what `horosa-skill install` fetches).
+          base="https://github.com/${REPO}/releases/download/${TAG}"
           manifest_url="${base}/runtime-manifest.json"
           echo "Fetching ${manifest_url}"
           if ! curl -fsSL "${manifest_url}" -o manifest.json; then
@@ -100,25 +101,36 @@ jobs:
             exit 1
           fi
           cat manifest.json
+          curl -fsSL "${base}/SHA256SUMS.txt" -o SHA256SUMS.txt || : > SHA256SUMS.txt
           python3 - "$TAG" <<'PY'
-          import json, sys, urllib.request
+          import json, re, sys, urllib.request
 
           tag = sys.argv[1]
+          version = tag.lstrip("v")
           with open("manifest.json", encoding="utf-8") as fh:
               manifest = json.load(fh)
+          with open("horosa-skill/contracts/release_platforms.json", encoding="utf-8") as fh:
+              contract = json.load(fh)
+          with open("SHA256SUMS.txt", encoding="utf-8") as fh:
+              sums = fh.read()
 
+          def vt(v):
+              return tuple(int(x) for x in re.findall(r"\d+", v)[:3])
+
+          expected = [k for k, e in contract["platforms"].items() if vt(e["since"]) <= vt(version)]
           errors = []
-          version = manifest.get("version")
-          if not version:
+          got_version = manifest.get("version")
+          if not got_version:
               errors.append("manifest has no `version`")
-          elif tag not in (version, f"v{version}"):
-              errors.append(f"manifest version {version!r} does not match latest tag {tag!r}")
+          elif tag not in (got_version, f"v{got_version}"):
+              errors.append(f"manifest version {got_version!r} does not match latest tag {tag!r}")
 
           platforms = manifest.get("platforms") or {}
-          for key in ("darwin-arm64", "win32-x64"):
+          for key in expected:
               entry = platforms.get(key)
+              asset = contract["platforms"][key]["asset"].format(version=version)
               if not isinstance(entry, dict):
-                  errors.append(f"manifest is missing the `{key}` platform (this is the v0.11.0/v0.12.0 Windows-broken-latest failure)")
+                  errors.append(f"manifest is missing the `{key}` platform (the v0.11.0/v0.12.0 half-release failure)")
                   continue
               for field in ("url", "sha256", "archive_type"):
                   val = entry.get(field)
@@ -126,18 +138,27 @@ jobs:
                       errors.append(f"{key}.{field} is missing or empty")
               url = entry.get("url")
               if isinstance(url, str) and url.strip():
+                  pinned = re.search(r"/releases/download/(v[^/]+)/", url)
+                  if pinned and pinned.group(1) != tag:
+                      errors.append(f"{key} manifest url is pinned to {pinned.group(1)}, not {tag} (pin-forward: users would install an older runtime): {url}")
                   req = urllib.request.Request(url, method="HEAD")
                   try:
                       with urllib.request.urlopen(req, timeout=30) as resp:
                           if resp.status != 200:
                               errors.append(f"{key} archive url returned HTTP {resp.status}: {url}")
+                          size = entry.get("size")
+                          length = resp.headers.get("Content-Length")
+                          if isinstance(size, int) and length and int(length) != size:
+                              errors.append(f"{key} manifest size {size} != Content-Length {length} for {url}")
                   except Exception as exc:  # noqa: BLE001 - any failure means the asset is not downloadable
                       errors.append(f"{key} archive url is not reachable ({exc}): {url}")
+              if asset not in sums:
+                  errors.append(f"SHA256SUMS.txt does not list {asset}")
 
           if errors:
               print("::error::latest release is INCOMPLETE:")
               for e in errors:
                   print(f"::error::  - {e}")
               sys.exit(1)
-          print(f"OK: latest release {tag} has a complete dual-platform manifest (darwin-arm64 + win32-x64), both archives reachable.")
+          print(f"OK: latest release {tag} carries every contracted platform {expected}, archives reachable, sizes/tags/checksums consistent.")
           PY

@@ -30,7 +30,9 @@ PY
 )"
 TAG="v${VERSION}"
 TAR="horosa-runtime-darwin-arm64-${TAG}.tar.gz"
-BASE_URL="https://github.com/${REPO}/releases/latest/download"
+# 资产 URL 钉 tag（v0.38.0 A3）：`releases/latest/download/...` 的 URL 让 pin-forward（清单指着上一版的包）从清单本身
+# 看不出来；钉了 tag，release-completeness / sync_windows_release --check 只读清单就能判。安装器仍从 latest 取清单。
+BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
 
 if [ "${PUBLISH}" = "1" ]; then
   # tag 必须已存在且指向远端——发布资产挂在 tag 上，没 tag 的「发布」是走不完的半程。

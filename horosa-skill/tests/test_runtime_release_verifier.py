@@ -138,3 +138,40 @@ def test_windows_launchers_with_a_bom_pass(tmp_path: Path) -> None:
     archive = tmp_path / "runtime.zip"
     _write_full_win_zip(archive, swefiles_empty=False)
     verify_runtime_release._assert_windows_launchers_are_bom_encoded(archive)  # must not raise
+
+
+# --- v0.38.0 A3: manifest `size` and an exact platform set ---------------------------------------
+
+
+def _release_manifest(tmp_path: Path, platforms: dict) -> Path:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    path = tmp_path / "runtime-manifest.json"
+    path.write_text(json.dumps({"version": "0.38.0", "platforms": platforms}), encoding="utf-8")
+    return path
+
+
+def test_manifest_size_must_be_a_positive_int_and_match_the_archive(tmp_path: Path) -> None:
+    archive = tmp_path / "horosa-runtime-darwin-arm64-v0.38.0.tar.gz"
+    _write_tar(archive, version="0.38.0", platform="darwin-arm64")
+    entry = {"url": "https://x/y.tar.gz", "sha256": "abc", "archive_type": "tar.gz"}
+    manifest = verify_runtime_release._validate_manifest(_release_manifest(tmp_path, {"darwin-arm64": {**entry, "size": archive.stat().st_size}}))
+    verify_runtime_release._assert_manifest_size(manifest, "darwin-arm64", archive)
+    with pytest.raises(SystemExit):
+        verify_runtime_release._assert_manifest_size({"platforms": {"darwin-arm64": {**entry, "size": archive.stat().st_size + 1}}}, "darwin-arm64", archive)
+    with pytest.raises(SystemExit):
+        verify_runtime_release._validate_manifest(_release_manifest(tmp_path, {"darwin-arm64": {**entry, "size": "big"}}))
+    with pytest.raises(SystemExit):
+        verify_runtime_release._validate_manifest(_release_manifest(tmp_path, {"darwin-arm64": {**entry, "size": 0}}))
+    # no `size` at all stays valid (pre-A3 manifests)
+    verify_runtime_release._assert_manifest_size(verify_runtime_release._validate_manifest(_release_manifest(tmp_path, {"darwin-arm64": entry})), "darwin-arm64", archive)
+
+
+def test_expect_platforms_demands_the_exact_set(tmp_path: Path) -> None:
+    entry = {"url": "https://x/y", "sha256": "abc", "archive_type": "tar.gz"}
+    path = _release_manifest(tmp_path, {"darwin-arm64": entry})
+    verify_runtime_release._validate_manifest(path, expect_platforms={"darwin-arm64"})
+    with pytest.raises(SystemExit):
+        verify_runtime_release._validate_manifest(path, expect_platforms={"darwin-arm64", "win32-x64"})
+    both = _release_manifest(tmp_path / "b", {"darwin-arm64": entry, "win32-x64": {**entry, "archive_type": "zip"}})
+    with pytest.raises(SystemExit):
+        verify_runtime_release._validate_manifest(both, expect_platforms={"darwin-arm64"})

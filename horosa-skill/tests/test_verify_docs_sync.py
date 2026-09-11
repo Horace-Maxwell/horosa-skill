@@ -12,6 +12,7 @@ The bug was never the number. It was that the guard's reach was decided by an ac
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -215,3 +216,32 @@ def test_pinned_install_commands_drift_is_caught(template: str, tmp_path: Path, 
     assert _pinned_errors(tmp_path, monkeypatch, template.format(v="0.38.0")) == [], template
     frozen = template.format(v="0.0.1") + " " + docs.IGNORE_VERSION
     assert _pinned_errors(tmp_path, monkeypatch, frozen) == []
+
+
+# --- README platform table ↔ contracts/release_platforms.json (v0.38.0 A3) ------------------------
+
+
+def _platform_table_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rows: str) -> list[str]:
+    (tmp_path / "horosa-skill" / "contracts").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "horosa-skill" / "contracts" / "release_platforms.json").write_text(json.dumps({
+        "platforms": {"darwin-arm64": {}, "win32-x64": {}}, "aliases": {"win32-arm64": {}}, "unsupported": {"darwin-x64": "", "linux-x64": ""}}), encoding="utf-8")
+    (tmp_path / "README.md").write_text(rows, encoding="utf-8")
+    (tmp_path / "README_EN.md").write_text(rows, encoding="utf-8")
+    errors: list[str] = []
+    monkeypatch.setattr(docs, "ROOT", tmp_path)
+    monkeypatch.setattr(docs, "PKG", tmp_path / "horosa-skill")
+    monkeypatch.setattr(docs, "err", errors.append)
+    docs.check_platform_table()
+    return errors
+
+
+_ROWS = "| 平台 | 离线 runtime | 说明 |\n| :-- | :-- | :-- |\n| macOS arm64 | ✅ |  |\n| Windows x64 | ✅ |  |\n| Windows ARM（骁龙本） | ✅ |  |\n| Linux | ⚠️ |  |\n| Intel Mac | ❌ |  |\n"
+
+
+def test_platform_table_row_missing_for_a_contracted_platform_is_caught(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import json  # noqa: F811 - local import keeps the helper self-contained
+
+    assert _platform_table_errors(tmp_path, monkeypatch, _ROWS) == []
+    without_arm = _ROWS.replace("| Windows ARM（骁龙本） | ✅ |  |\n", "")
+    errors = _platform_table_errors(tmp_path, monkeypatch, without_arm)
+    assert len(errors) == 2 and all("Windows ARM" in e for e in errors)

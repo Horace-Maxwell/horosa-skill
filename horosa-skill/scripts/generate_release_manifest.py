@@ -39,32 +39,36 @@ def main() -> None:
     parser.add_argument("--windows-url", help="GitHub Releases URL for the Windows runtime archive.")
     parser.add_argument("--linux-archive", help="Path to the Linux (linux-x64) runtime archive.")
     parser.add_argument("--linux-url", help="GitHub Releases URL for the Linux runtime archive.")
+    parser.add_argument(
+        "--url-base",
+        help=(
+            "Base URL for archives whose --*-url is not given, e.g. "
+            "https://github.com/<repo>/releases/download/v0.38.0 — tag-pinned so pin-forward is visible "
+            "from the manifest alone (v0.38.0 A3). `releases/latest/download` bases are accepted but not recommended."
+        ),
+    )
     parser.add_argument("--output", required=True, help="Output manifest JSON path.")
     args = parser.parse_args()
 
-    platforms: dict[str, dict[str, str]] = {}
+    platforms: dict[str, dict[str, object]] = {}
 
-    if args.darwin_archive and args.darwin_url:
-        archive = Path(args.darwin_archive).expanduser().resolve()
-        platforms["darwin-arm64"] = {
-            "url": args.darwin_url,
-            "sha256": sha256_file(archive),
-            "archive_type": _classify_archive_type(archive),
-        }
-    if args.windows_archive and args.windows_url:
-        archive = Path(args.windows_archive).expanduser().resolve()
-        platforms["win32-x64"] = {
-            "url": args.windows_url,
-            "sha256": sha256_file(archive),
-            "archive_type": _classify_archive_type(archive),
-        }
-    if args.linux_archive and args.linux_url:
-        archive = Path(args.linux_archive).expanduser().resolve()
-        platforms["linux-x64"] = {
-            "url": args.linux_url,
-            "sha256": sha256_file(archive),
-            "archive_type": _classify_archive_type(archive),
-        }
+    def entry(archive_arg: str, url_arg: str | None) -> dict[str, object]:
+        archive = Path(archive_arg).expanduser().resolve()
+        url = url_arg or (f"{args.url_base.rstrip('/')}/{archive.name}" if args.url_base else None)
+        if not url:
+            parser.error(f"{archive.name}: give its --*-url or --url-base")
+        # `size` (bytes) feeds the installer's disk precheck (manager._require_install_disk_space reads it;
+        # without it the check falls back to a flat 3 GiB) and lets release-completeness compare with
+        # Content-Length (v0.38.0 A3).
+        return {"url": url, "sha256": sha256_file(archive), "archive_type": _classify_archive_type(archive),
+                "size": archive.stat().st_size}
+
+    if args.darwin_archive and (args.darwin_url or args.url_base):
+        platforms["darwin-arm64"] = entry(args.darwin_archive, args.darwin_url)
+    if args.windows_archive and (args.windows_url or args.url_base):
+        platforms["win32-x64"] = entry(args.windows_archive, args.windows_url)
+    if args.linux_archive and (args.linux_url or args.url_base):
+        platforms["linux-x64"] = entry(args.linux_archive, args.linux_url)
 
     if not platforms:
         parser.error("At least one platform archive (darwin, windows, or linux) must be provided.")

@@ -28,11 +28,26 @@ Required shape:
 }
 ```
 
+Optional per-platform fields (v0.38.0):
+
+- `size` — byte count of the archive. Emitted by `generate_release_manifest.py`; the installer's disk precheck
+  uses it (without it the check falls back to a flat 3 GiB), `verify_runtime_release.py` requires it to equal the
+  real archive size, and `release-completeness.yml` compares it with the download's `Content-Length`.
+- URLs are **tag-pinned** (`…/releases/download/v<version>/<asset>`, `--url-base`), so a manifest that points at
+  another release's archive (the pin-forward failure) is visible from the manifest alone. The installer still
+  fetches the manifest itself from `releases/latest/download/`.
+- The platform key set of a release is `contracts/release_platforms.json` (`since`-gated); `verify_runtime_release.py
+  --expect-platforms a,b` asserts it exactly.
+
 See [`runtime-manifest.example.json`](./runtime-manifest.example.json).
 
 ## Runtime Payload Manifest
 
 Embedded inside each runtime archive as `runtime-manifest.json`.
+
+A payload derived from the darwin-arm64 seed (`build_runtime_release_windows.py --seed`, v0.38.0) additionally carries
+`derived_from: {platform, version}` and `platform_requirements: {arch, min_os}`; the installer compares `min_os` with the
+host and refuses with `runtime.install_os_too_old` when the host is older.
 
 Required and normalized fields:
 

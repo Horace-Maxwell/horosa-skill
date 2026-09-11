@@ -480,6 +480,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   别造假条文；粗 grep `條文待補充` 会假阳——验 `基础条文` 是真条文即可。`gen_shaozi_tiaowen.py` 必须
   `newline="\n"` 写 LF（保两平台构建字节可复现）。
 
+- **清单要自证：URL 钉 tag、带 size；平台集只写在 `contracts/release_platforms.json`（v0.38.0 A3）。** `generate_release_manifest.py
+  --url-base …/releases/download/v<ver>` 出的清单光靠自己就能判 pin-forward；`verify_runtime_release.py --expect-platforms` 断言键集恰好
+  相等、`size` 等于真实字节数；`release-completeness.yml` 与 `sync_windows_release.py --check`（可 `--tag vX --draft`）都按契约的
+  `since` 门逐平台判、缺项点名成 `[GAP: …]`（wheel 自 0.38.0 起必需）；README×2 平台表每个契约项一行，`verify_docs_sync.check_platform_table` 锁。
 - **Windows 半边 = 从 darwin 种子派生，不再有「构建机专属输入」（v0.38.0 A2）。** `build_runtime_release_windows.py --seed <darwin tar.gz>`
   在任何主机（含 GitHub `windows-latest`）产出 win32-x64 载荷；`vendor/runtime-source/runtime/windows` 与 `prepareruntime` 不再是
   发布输入（`verify_vendor_runtime_sources.py` 不再要求，preflight 那一闸回到硬闸）。vendor 模式保留为构建机回退。

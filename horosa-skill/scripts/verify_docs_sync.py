@@ -422,6 +422,40 @@ def check_pinned_install_commands(version: str) -> None:
                             f"(add {IGNORE_VERSION} only for a frozen historical record)")
 
 
+# --- 3c. README platform table ↔ contracts/release_platforms.json ---------------------------------
+# The platform table is the first thing an Intel-Mac / Windows-on-ARM user reads. Its rows are locked to
+# the contract (v0.38.0 A3): every shipped platform, alias and unsupported host must have a row, so the
+# table cannot promise a payload the contract does not ship, nor stay silent about one it does.
+
+PLATFORM_ROW_LABELS = {
+    "darwin-arm64": "macOS arm64",
+    "win32-x64": "Windows x64",
+    "win32-arm64": "Windows ARM",
+    "darwin-x64": "Intel Mac",
+    "linux-x64": "Linux",
+}
+
+
+def check_platform_table() -> None:
+    contract_path = PKG / "contracts" / "release_platforms.json"
+    if not contract_path.exists():
+        return
+    contract = json.loads(read(contract_path))
+    keys = list(contract.get("platforms", {})) + list(contract.get("aliases", {})) + list(contract.get("unsupported", {}))
+    for rel in ("README.md", "README_EN.md"):
+        path = ROOT / rel
+        if not path.exists():
+            continue
+        rows = [line for line in read(path).splitlines() if line.startswith("| ")]
+        for key in keys:
+            label = PLATFORM_ROW_LABELS.get(key)
+            if label is None:
+                err(f"{rel}: contract platform `{key}` has no README row label in PLATFORM_ROW_LABELS")
+                continue
+            if not any(line.split("|")[1].strip().startswith(label) for line in rows if line.count("|") >= 3):
+                err(f"{rel}: platform table has no row starting with `{label}` (contracts/release_platforms.json lists `{key}`)")
+
+
 # --- 3b. shipped artifacts the prose denies ------------------------------------------------
 # horosa-skill/Dockerfile + docker-compose.yml have been tracked since v0.3x while both READMEs kept
 # saying "仓库暂不提供 Dockerfile / No Dockerfile is shipped yet" (v0.38.0 audit). A doc that denies a
@@ -595,6 +629,7 @@ def main() -> None:
     check_test_count_is_real()
     check_stale_claims(version)
     check_pinned_install_commands(version)
+    check_platform_table()
     check_docker_claims()
     check_links()
     check_conflict_markers()

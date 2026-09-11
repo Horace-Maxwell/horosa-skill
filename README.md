@@ -12,7 +12,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-106-1d4ed8?style=for-the-badge" alt="106 tools" />
-  <img src="https://img.shields.io/badge/测试-849_passed-16a34a?style=for-the-badge" alt="849 passed" />
+  <img src="https://img.shields.io/badge/测试-859_passed-16a34a?style=for-the-badge" alt="859 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
 
@@ -184,8 +184,9 @@ uv run horosa-skill client check                         # 体检本机各客户
 | :-- | :-- | :-- |
 | macOS arm64 | ✅ 官方载荷 | 主力平台 |
 | Windows x64 | ✅ 官方载荷 | 见 [Windows 说明](./docs/OFFLINE_RUNTIME_RELEASES.md) |
+| Windows ARM（骁龙本 / Surface 等） | ✅ 自动装 x64 载荷走仿真（自 0.38.0） | Windows 11 的 x64 仿真下 Java / Python / Node 都能起（GitHub `windows-11-arm` 真机 lane 验证）；`install` 报 `runtime.platform_emulated`、`doctor` 报 `arch.emulated: true` |
 | Linux | ⚠️ 无载荷（实验） | 走**网关模式**：把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指向一台受支持的机器 |
-| Intel Mac | ❌ 不支持 | arm64 载荷**不能**在 Rosetta 下跑（内含 JDK/Python 是原生 arm64）；同样走网关模式 |
+| Intel Mac | ❌ 不支持 | arm64 载荷**不能**在 Rosetta 下跑（内含 JDK/Python 是原生 arm64）；本轮明确不做 x86_64 载荷，走网关模式 |
 
 > [!TIP]
 > 上下文预算受限的客户端可设 `HOROSA_MCP_COMPACT=1`，只暴露 11 个门面工具（含按名直调的 `horosa_tool_run`，106 个技法仍可按名到达），澄清闸照常生效。或用 `HOROSA_TOOLSETS=astro,cn` 按域裁剪平铺面（合法域 astro/predict/chart/cn/shenshu/other/export/knowledge，别名 western/chinese/all/none；拼错的 token 会告警并忽略、全空回落全量；只要裁剪生效就注册 `horosa_tool_run` 直呼通道；门面工具恒在）。根目录 `server.json` 为 MCP Registry 元数据，普通用户无需手改。
@@ -485,7 +486,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 🧰 可调用工具 | 106 / 106 `ok=true` |
-| 🧪 工程测试 | **849 / 849 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 72 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 🧪 工程测试 | **859 / 859 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 72 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 🛡️ 未确认参数时强制追问 | 96 个技法工具触发 `must_ask_user=true` |
 | 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 103 个导出 technique；契约 v14 镜像桌面端 aiExport v56） |
 | 🧾 技法依据卡 | 每个技法响应附 `data.technique_card`；算源声明与运行实测不符时显式亮警 |
@@ -500,7 +501,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 849 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 859 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

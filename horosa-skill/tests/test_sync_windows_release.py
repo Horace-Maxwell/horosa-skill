@@ -85,3 +85,59 @@ def test_build_and_verify_preflights_before_invoking_the_builder(monkeypatch: py
         )
 
     assert order == ["preflight", "build"]
+
+
+# --- v0.38.0 A3: contract-driven, per-platform completeness ------------------------------------------
+
+_CONTRACT = {
+    "platforms": {
+        "darwin-arm64": {"since": "0.9.0", "asset": "horosa-runtime-darwin-arm64-v{version}.tar.gz"},
+        "win32-x64": {"since": "0.9.1", "asset": "horosa-runtime-win32-x64-v{version}.zip"},
+    },
+    "aliases": {}, "unsupported": {},
+}
+
+
+def _full_assets(version: str) -> list[str]:
+    return [f"horosa-runtime-darwin-arm64-v{version}.tar.gz", f"horosa-runtime-win32-x64-v{version}.zip",
+            "runtime-manifest.json", "SHA256SUMS.txt", "horosa-skill-sbom.json", f"horosa-skill-{version}.mcpb",
+            f"horosa_skill-{version}-py3-none-any.whl"]
+
+
+def _manifest(tag: str, keys=("darwin-arm64", "win32-x64")) -> dict:
+    return {"version": tag.lstrip("v"), "platforms": {k: {"url": f"https://github.com/o/r/releases/download/{tag}/x-{k}", "sha256": "a", "archive_type": "zip"} for k in keys}}
+
+
+def test_expected_platforms_follow_the_contracts_since_gate() -> None:
+    assert sync_windows_release.expected_platforms("0.9.0", _CONTRACT) == ["darwin-arm64"]
+    assert sync_windows_release.expected_platforms("0.38.0", _CONTRACT) == ["darwin-arm64", "win32-x64"]
+
+
+def test_complete_release_has_no_gaps() -> None:
+    a = sync_windows_release.assess_from("v0.38.0", _full_assets("0.38.0"), _manifest("v0.38.0"), _CONTRACT)
+    assert sync_windows_release.gaps(a) == [] and sync_windows_release.is_complete(a)
+
+
+def test_missing_windows_half_and_wheel_are_named_gaps() -> None:
+    """The exact failure this script exists for: darwin-only latest. Plus the wheel (required since 0.38.0)."""
+    assets = [x for x in _full_assets("0.38.0") if "win32" not in x and not x.endswith(".whl")]
+    a = sync_windows_release.assess_from("v0.38.0", assets, _manifest("v0.38.0", ("darwin-arm64",)), _CONTRACT)
+    missing = sync_windows_release.gaps(a)
+    assert any("win32-x64 archive" in m for m in missing)
+    assert any("win32-x64 in manifest" in m for m in missing)
+    assert any(m.endswith(".whl") for m in missing)
+    assert not sync_windows_release.is_complete(a)
+
+
+def test_manifest_pinned_to_another_tag_is_the_pin_forward_gap() -> None:
+    manifest = _manifest("v0.37.0")  # URLs point at the previous release's archives
+    manifest["version"] = "0.38.0"
+    a = sync_windows_release.assess_from("v0.38.0", _full_assets("0.38.0"), manifest, _CONTRACT)
+    assert any("pinned to another tag" in m for m in sync_windows_release.gaps(a))
+
+
+def test_pre_a3_latest_download_urls_are_accepted_and_wheel_not_required_before_0_38() -> None:
+    manifest = {"version": "0.36.0", "platforms": {k: {"url": f"https://github.com/o/r/releases/latest/download/x-{k}", "sha256": "a", "archive_type": "zip"} for k in ("darwin-arm64", "win32-x64")}}
+    assets = [x for x in _full_assets("0.36.0") if not x.endswith(".whl")]
+    a = sync_windows_release.assess_from("v0.36.0", assets, manifest, _CONTRACT)
+    assert sync_windows_release.gaps(a) == []

@@ -16,7 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
-| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基；A2 Windows 半边从 darwin 种子派生（arch 断言、seed 模式、preflight 硬闸） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数 |
+| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基；A2 Windows 半边从 darwin 种子派生；A3 发布契约（清单钉 tag + size、按契约逐平台判完整、平台表锁） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数 |
 | v0.37.0 (2026-09) | 任意 AI 客户端可调用：广告层只对一个客户端对过 / 自家 .mcp.json 从未连通 / 端口静默采用与误杀 / 回环走代理 | 按**别人的**约束测；改 golden 前先答「旧断言为何不会红」；负向对照跑不红就如实改口 |
 | v0.36.0 收尾 (2026-09) | 「Java 族 live 需 Mongo」十个版本的误定性 = vendored 脚本裸 `-jar`；演禽假闸门 | 贴「环境限制」前先读 `Result` 原文、用上游桌面起法起一遍；闸门问项以 live 翻转为准，不以转发为准 |
 | v0.36.0 (2026-09) | 止血/可用性/捞回能力 15 批（响应放大、静默降级、手抄表、死键、降级误杀、扁平面丢键、moira 误排除、闸门半盲、错误码……） | 每批四件套 + 全量门禁；台账正文按批见下 |
@@ -101,6 +101,22 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.38.0 / 2026-09-10 — A3 发布契约：清单钉 tag、带 size、按契约逐平台判完整，别再靠「两个键都在」
+
+- **症状**：① 清单里的资产 URL 一直是 `releases/latest/download/...`——pin-forward（清单指着上一版的包）从清单本身看不出来，
+  只有 `sync_windows_release.py --check` 拿资产名去对才抓得到；② 清单没有 `size`，安装侧 `_require_install_disk_space` 早就读
+  `asset_meta["size"]`，读不到就退到写死的 3 GiB；③ `release-completeness.yml` 与 `sync_windows_release.py` 各自写死「darwin-arm64 +
+  win32-x64 两个键都在」，平台一变两处都要改；④ README 的平台表只有四行，Windows ARM 走仿真这件事没地方写、也没人锁。
+- **guard**：① `generate_release_manifest.py --url-base https://github.com/<repo>/releases/download/v<ver>`（钉 tag）+ 每条 `size`；
+  `publish_darwin_release.sh` 与 `sync_windows_release.py` 的构建路径都改用它；② `verify_runtime_release.py`：`size` 须为正整数且等于
+  归档真实字节数、`--expect-platforms` 断言键集**恰好**相等；③ `release-completeness.yml` 先 checkout，期望平台集 = `contracts/
+  release_platforms.json` 里 `since ≤ 版本` 的键，逐平台 HEAD 200、`size == Content-Length`、URL 钉的 tag == latest tag（`latest/download`
+  形式接受但不推荐）、`SHA256SUMS.txt` 列全每个归档；④ `sync_windows_release.py`：`assess_from(tag, assets, manifest)` 纯函数按契约逐平台
+  判（归档在场 / 在清单 / URL tag 一致），wheel 自 0.38.0 起必需，`gaps()` 把缺项点名成 `[GAP: …]`，新 `--tag vX --draft` 让流水线在
+  publish 前对 draft 判完整；⑤ `verify_docs_sync.check_platform_table`：README×2 平台表必须给契约里每个平台/别名/不支持项一行
+  （负向对照：删掉 Windows ARM 行必红）；README×2 加 Windows ARM 行、Intel Mac 行写明「本轮不做 x86_64 载荷」。
+- **法则**：**清单要自证**——URL 钉 tag、带 size，判完整不需要第二个信息源；**平台集只写一处（契约），守卫与文档都从它派生**。
 
 ### v0.38.0 / 2026-09-10 — A2 Windows 半边从「只有构建机能产」变成「从 darwin 种子派生」
 

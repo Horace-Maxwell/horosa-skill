@@ -286,13 +286,16 @@ def _assert_native_arch(path: Path, platform_key: str) -> None:
         raise SystemExit(f"{path.name}: native binaries are not {expected} as {platform_key} requires:\n- " + "\n- ".join(offenders))
 
 
-def _validate_manifest(path: Path) -> dict:
+RECOGNIZED_PLATFORMS = {"darwin-arm64", "win32-x64", "linux-x64"}
+
+
+def _validate_manifest(path: Path, *, expect_platforms: set[str] | None = None) -> dict:
     data = json.loads(path.read_text(encoding="utf-8"))
     platforms = data.get("platforms")
     if not isinstance(platforms, dict):
         raise SystemExit(f"manifest missing platforms object: {path}")
     # At least one platform must be present; any of darwin-arm64, win32-x64, linux-x64.
-    recognized = {"darwin-arm64", "win32-x64", "linux-x64"}
+    recognized = RECOGNIZED_PLATFORMS
     if not any(k in platforms for k in recognized):
         raise SystemExit(f"manifest must include at least one recognized platform ({', '.join(sorted(recognized))})")
     for key in list(platforms):
@@ -302,7 +305,28 @@ def _validate_manifest(path: Path) -> dict:
         for field in ("url", "sha256", "archive_type"):
             if not isinstance(item.get(field), str) or not item[field].strip():
                 raise SystemExit(f"manifest {key}.{field} is missing or empty")
+        # optional `size` (bytes, v0.38.0 A3) — when present it must be a positive int
+        if "size" in item and (not isinstance(item["size"], int) or isinstance(item["size"], bool) or item["size"] <= 0):
+            raise SystemExit(f"manifest {key}.size must be a positive integer byte count, got {item['size']!r}")
+    if expect_platforms is not None:
+        present = {k for k in platforms if k in recognized}
+        if present != set(expect_platforms):
+            raise SystemExit(
+                f"manifest platform set {sorted(present)} != expected {sorted(expect_platforms)} "
+                "(a release must carry every platform it promises — no partial manifests)"
+            )
     return data
+
+
+def _assert_manifest_size(manifest: dict, platform_key: str, archive: Path) -> None:
+    """When the manifest records `size`, it must be the archive's real byte count (v0.38.0 A3)."""
+    item = (manifest.get("platforms") or {}).get(platform_key) or {}
+    size = item.get("size")
+    if size is None:
+        return
+    actual = archive.stat().st_size
+    if size != actual:
+        raise SystemExit(f"manifest {platform_key}.size={size} but {archive.name} is {actual} bytes")
 
 
 def main() -> None:
@@ -311,10 +335,13 @@ def main() -> None:
     parser.add_argument("--windows-archive", default=None, help="Path to the Windows (win32-x64) runtime archive.")
     parser.add_argument("--linux-archive", default=None, help="Path to the Linux (linux-x64) runtime archive.")
     parser.add_argument("--manifest", required=True, help="Path to the release manifest JSON.")
+    parser.add_argument("--expect-platforms", default=None,
+                        help="Comma-separated platform keys the manifest must contain EXACTLY (e.g. darwin-arm64,win32-x64).")
     args = parser.parse_args()
 
     manifest_path = Path(args.manifest).expanduser().resolve()
-    manifest = _validate_manifest(manifest_path)
+    expected_set = {p.strip() for p in args.expect_platforms.split(",") if p.strip()} if args.expect_platforms else None
+    manifest = _validate_manifest(manifest_path, expect_platforms=expected_set)
     expected_version = str(manifest.get("version") or "")
     if not expected_version:
         raise SystemExit(f"manifest version is missing: {manifest_path}")
@@ -326,6 +353,7 @@ def main() -> None:
         _assert_entries(darwin_archive, "darwin-arm64")
         _assert_payload_manifest(darwin_archive, "darwin-arm64", expected_version)
         _assert_native_arch(darwin_archive, "darwin-arm64")
+        _assert_manifest_size(manifest, "darwin-arm64", darwin_archive)
         verified_archives["darwin"] = str(darwin_archive)
 
     if args.windows_archive:
@@ -334,12 +362,14 @@ def main() -> None:
         _assert_payload_manifest(windows_archive, "win32-x64", expected_version)
         _assert_windows_launchers_are_bom_encoded(windows_archive)
         _assert_native_arch(windows_archive, "win32-x64")
+        _assert_manifest_size(manifest, "win32-x64", windows_archive)
         verified_archives["windows"] = str(windows_archive)
 
     if args.linux_archive:
         linux_archive = Path(args.linux_archive).expanduser().resolve()
         _assert_entries(linux_archive, "linux-x64")
         _assert_payload_manifest(linux_archive, "linux-x64", expected_version)
+        _assert_manifest_size(manifest, "linux-x64", linux_archive)
         verified_archives["linux"] = str(linux_archive)
 
     if not verified_archives:
