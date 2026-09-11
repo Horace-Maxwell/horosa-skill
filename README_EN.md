@@ -75,7 +75,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `106 / 106 ok=true` |
-| Engineering tests | `770 / 770 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 71 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `784 / 784 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 71 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `84` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `8` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`103` export techniques modeled; contract v14 mirrors desktop aiExport v56) |
@@ -340,7 +340,7 @@ uvx horosa-skill serve --transport stdio   # stdio for clients; `client config -
 ```
 
 > [!NOTE]
-> 🐳 **Docker / Linux (experimental)**: the offline runtime is published for macOS (arm64) and Windows (x64) only — there is no Linux payload. What runs in a container is the **MCP gateway** (Python package + knowledge base + memory) pointed at a host or another machine that has the runtime via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`. No Dockerfile is shipped yet; `pip install horosa-skill` then `horosa-skill serve --transport streamable-http` is the gateway.
+> 🐳 **Docker / Linux (experimental)**: the offline runtime is published for macOS (arm64) and Windows (x64) only — there is no Linux payload. What runs in a container is the **MCP gateway** (Python package + knowledge base + memory) pointed at a host or another machine that has the runtime via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`. An **experimental** `horosa-skill/Dockerfile` + `docker-compose.yml` ship with the repo (gateway image: no offline runtime inside the container, so those two variables are mandatory; binding 0.0.0.0 requires `HOROSA_MCP_TOKEN`); by hand, `pip install horosa-skill` then `horosa-skill serve --transport streamable-http` is the gateway.
 
 Troubleshooting install: `uv: command not found` -> install uv first (one-liner above); slow/broken network -> re-run `install` (resumes from the partial download) or set `HOROSA_RUNTIME_MIRROR=<mirror-prefix>`; low disk / busy ports -> `doctor` reports each check with a next_action; upgrade -> `uv run horosa-skill upgrade` (skips the download when already current); uninstall -> `uv run horosa-skill uninstall` (dry-run by default).
 
@@ -471,7 +471,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 770 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 784 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

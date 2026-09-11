@@ -8,6 +8,9 @@ RUN pip install --no-cache-dir uv
 
 COPY pyproject.toml README.md ./
 COPY src ./src
+# pyproject force-includes scripts/runtime_templates/windows into the wheel; without this COPY hatchling
+# aborts the build inside the image (tests/test_dockerfile_matches_wheel_includes.py keeps the two in step).
+COPY scripts/runtime_templates ./scripts/runtime_templates
 
 RUN uv pip install --system .
 

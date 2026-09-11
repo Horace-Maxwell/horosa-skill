@@ -475,6 +475,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   别造假条文；粗 grep `條文待補充` 会假阳——验 `基础条文` 是真条文即可。`gen_shaozi_tiaowen.py` 必须
   `newline="\n"` 写 LF（保两平台构建字节可复现）。
 
+- **Dockerfile 与 wheel 的输入清单必须同步。** pyproject `force-include` 每加一个源路径，`horosa-skill/Dockerfile` 就得多一条 `COPY`，
+  否则镜像里 `uv pip install .` 直接失败（v0.38.0 B0 抓到 `scripts/runtime_templates/windows` 漏拷；守卫
+  `tests/test_dockerfile_matches_wheel_includes.py`）。
+
 ## 7. 发布协议（release law）
 
 - **版本 bump 全覆盖**：发 vX.Y.Z 同一 commit bump 全部——`pyproject.toml`、
@@ -666,6 +670,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | 某个客户端里 horosa 一个工具都没有 / 装了却不出现 | 配置写错（占位符未展开、缺 `--transport stdio`、目录搬了、`uvx horosa-skill` 指着未开通的 PyPI、Codex 默认 10/60 s 超时） | `uv run horosa-skill client check`（读它**实际写着什么**）→ 按 `fix_command` 重生成 |
 | 容器里连不上而宿主 curl 正常 / `421 Misdirected Request` | Host 头不在 DNS-rebinding 白名单 | `host.docker.internal` 已默认放行；自定义域名加 `HOROSA_MCP_ALLOWED_HOSTS` |
 | 维护机上 `test_error_paths_return_a_conformant_envelope` 红、CI 绿 | 默认端口上有活服务，只钉 `HOROSA_RUNTIME_ROOT` 拦不住，本该失败的路径成功了 | 同时把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指到不可达地址（§8 验证流程 4） |
+| Windows smoke 绿，但 step 里某条命令其实失败了 | GitHub `pwsh` 多行 `run:` 只拿**最后一条**命令的退出码当结果（v0.38.0 前 `tool run --output` 这个不存在的参数在此安静失败了几十轮） | 每个 pwsh 多行块首行 `$PSNativeCommandUseErrorActionPreference = $true`（`tests/test_ci_workflow_shape.py` 守）；关键产物要 `Test-Path` + 断言 `.ok` |
 | 维护机上 `test_runtime_manager.py` 全绿、CI 上四条红在 `runtime.port_conflict_unknown_holder` | v0.37.0 起只 stub `_service_status` 的用例会拿那个 URL **真的**跑归属判定：维护机 9999/8899 上跑着真 runtime → ours；CI 上没人监听 → unknown | 本机复现要连**归属**一起伪装：autouse fixture 把 `identity.probe_identity` 打成返回 None、`listener_pids` 打成返回 `[]`，`pytest -p <plugin>` 挂上去。`_managed_mode` 已内置 classify_endpoint 桩 |
 
 ## 9. Stability invariants（稳定性不变量 — don't regress these）
@@ -748,6 +753,11 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **闸门问什么，以 live「改参数结果必变」为准，不以代码转发了什么为准。** 演禽（xianqin）转发了 lat/lon，引擎却不读
   （上海↔乌鲁木齐逐字节相同）——问地点就是假闸门。给工具挂结果敏感项前先翻转一次；不敏感的项用**反向** live
   断言钉住（`test_xianqin_ignores_place_so_its_gate_must_not_ask_for_it`），上游哪天读了它会先红（v0.36.0 收尾）。
+- **证据的形状不许由偶然决定。** ① CI 里 `shell: pwsh` 的多行 `run:` 块首行必须是 `$PSNativeCommandUseErrorActionPreference = $true`，
+  否则只有最后一条命令算数（`tests/test_ci_workflow_shape.py`）；② 计数守卫的覆盖面是正则规则（`COUNT_PROSE_EN` 认 `real|local`），
+  不是某句话恰好的措辞；③ 仓里有的文件文档不得否认（`verify_docs_sync.check_docker_claims`），Dockerfile 的 `COPY` 必须盖住
+  pyproject force-include 的每个源路径（`tests/test_dockerfile_matches_wheel_includes.py`）。`tool run`/`dispatch`/`ask`/`hecan`
+  的 `--output` 是 stdout JSON 之外的**附加**文件出口（Windows 管道会按代码页重编码），stdout 契约不变（v0.38.0 B0）。
 - **`run_tool` always returns a `ToolEnvelope`, never lets an unexpected exception escape.** Tool
   execution + snapshot/summary/export post-processing run inside a try that catches `HorosaSkillError`
   **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`. Only invalid-payload

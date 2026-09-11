@@ -270,7 +270,10 @@ COUNT_ALT = re.compile(r'alt="(\d+)\s*tools?"')
 COUNT_PROSE = re.compile(r"(\d+)\s*(?:个)?\s*(技法|工具|tools\b|techniques\b)")
 # manifest.json phrases it as "83 real technique tools" / "83 real 术数/占星 techniques" — a bounded
 # lazy filler catches those without the tight form's false-positive risk.
-COUNT_PROSE_EN = re.compile(r"(\d+)\s+real\s+[^,.;]{0,30}?\b(tools?|techniques?)\b")
+# marketplace.json phrased it "97 local Horosa (星阙) technique tools" — `local` instead of `real`, and the
+# noun 20 chars later — and sat stale at 97 through 106 while this file listed it in COUNT_DOCS (v0.38.0).
+# The reach of a count guard must not depend on which adjective a sentence happens to use.
+COUNT_PROSE_EN = re.compile(r"(\d+)\s+(?:real|local)\s+[^,.;]{0,40}?\b(tools?|techniques?)\b")
 # 「N 个术数/占星技法」逐字出现在 CLAUDE.md / AGENTS.md / banner.svg 三处 —— 用精确短语而不是放宽
 # 通用正则，否则「约 9 个门面工具」这类真·小数字会被误报。
 COUNT_PHRASE_ZH = re.compile(r"(\d+)\s*个术数\s*/?\s*占星技法")
@@ -379,6 +382,30 @@ def check_stale_claims(version: str) -> None:
         for got in re.findall(r"current: `(\d+\.\d+\.\d+)`", read(path)):
             if got != version:
                 err(f"docs/{path.name}: stale 'current: `{got}`' claim (package is {version})")
+
+
+# --- 3b. shipped artifacts the prose denies ------------------------------------------------
+# horosa-skill/Dockerfile + docker-compose.yml have been tracked since v0.3x while both READMEs kept
+# saying "仓库暂不提供 Dockerfile / No Dockerfile is shipped yet" (v0.38.0 audit). A doc that denies a
+# tracked file is worse than silence: an agent trusts it and never looks.
+
+DOCKER_DENIALS = ("暂不提供 Dockerfile", "No Dockerfile is shipped")
+DOCKER_MENTION = "horosa-skill/Dockerfile"
+
+
+def check_docker_claims() -> None:
+    if not (ROOT / "horosa-skill" / "Dockerfile").exists():
+        return
+    for rel in ("README.md", "README_EN.md"):
+        path = ROOT / rel
+        if not path.exists():
+            continue
+        text = read(path)
+        for denial in DOCKER_DENIALS:
+            if denial in text:
+                err(f"{rel}: says '{denial}' but horosa-skill/Dockerfile is tracked")
+        if DOCKER_MENTION not in text:
+            err(f"{rel}: horosa-skill/Dockerfile is tracked but the README never names it")
 
 
 # --- 4. relative links ---------------------------------------------------------------------
@@ -529,6 +556,7 @@ def main() -> None:
     check_test_count_consistency()
     check_test_count_is_real()
     check_stale_claims(version)
+    check_docker_claims()
     check_links()
     check_conflict_markers()
     check_frontmatter()

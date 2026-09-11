@@ -73,6 +73,8 @@ def test_badge_contradicting_its_own_alt_on_one_line(tmp_path: Path, monkeypatch
         "<strong>{n}</strong> real techniques on your own machine",
         "| 🧰 可调用工具 | {n} / {n} `ok=true` |",
         "| Local memory | `{n} / {n}` writes |",
+        # .claude-plugin/marketplace.json sat at 97 through 106: `local` instead of `real`, noun 20 chars later
+        '"description": "{n} local Horosa (星阙) technique tools over MCP + the horosa-agent skill"',
     ],
 )
 def test_stale_count_forms_are_caught(template: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -154,3 +156,34 @@ def test_envelope_schema_version_lockstep_fires_on_drift(tmp_path: Path, monkeyp
     errors.clear()
     docs.check_envelope_schema_version()
     assert errors == []
+
+
+# --- shipped artifacts the prose denies (v0.38.0 B0) ---------------------------------------------
+
+
+def _docker_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, zh: str, en: str, dockerfile: bool) -> list[str]:
+    (tmp_path / "horosa-skill").mkdir(exist_ok=True)
+    dockerfile_path = tmp_path / "horosa-skill" / "Dockerfile"
+    if dockerfile:
+        dockerfile_path.write_text("FROM python:3.12-slim\n", encoding="utf-8")
+    elif dockerfile_path.exists():
+        dockerfile_path.unlink()
+    (tmp_path / "README.md").write_text(zh + "\n", encoding="utf-8")
+    (tmp_path / "README_EN.md").write_text(en + "\n", encoding="utf-8")
+    errors: list[str] = []
+    monkeypatch.setattr(docs, "ROOT", tmp_path)
+    monkeypatch.setattr(docs, "err", errors.append)
+    docs.check_docker_claims()
+    return errors
+
+
+def test_readme_denying_a_tracked_dockerfile_is_caught(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    denial = _docker_errors(tmp_path, monkeypatch, "仓库暂不提供 Dockerfile。", "No Dockerfile is shipped yet.", dockerfile=True)
+    assert len(denial) == 4, denial  # one denial + one missing mention per README
+    honest = _docker_errors(
+        tmp_path, monkeypatch,
+        "仓库附带实验性的 `horosa-skill/Dockerfile`。", "An experimental `horosa-skill/Dockerfile` ships.", dockerfile=True,
+    )
+    assert honest == []
+    # without a Dockerfile in the tree there is nothing to deny — the old sentence would be true
+    assert _docker_errors(tmp_path, monkeypatch, "仓库暂不提供 Dockerfile。", "No Dockerfile is shipped yet.", dockerfile=False) == []

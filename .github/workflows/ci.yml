@@ -150,6 +150,9 @@ jobs:
         timeout-minutes: 35
         working-directory: ./horosa-skill
         run: |
+          # pwsh 多行 step 只把**最后一条**命令的退出码当 step 结果；开了这个开关，任何原生命令非零即失败
+          # （tests/test_ci_workflow_shape.py 守；v0.38.0 前 `tool run --output` 这个不存在的参数在这里安静失败了 N 轮）。
+          $PSNativeCommandUseErrorActionPreference = $true
           $root = Join-Path $env:RUNNER_TEMP 'horosa-openclaw'
           if (Test-Path $root) { Remove-Item -LiteralPath $root -Recurse -Force }
           $workspace = Join-Path $root 'workspace'
@@ -165,4 +168,7 @@ jobs:
             Set-Item -Path "Env:$($entry.Name)" -Value ([string]$entry.Value)
           }
           '{"date":"2028-04-06","time":"09:33:00","zone":"+08:00","lat":"31n13","lon":"121e28","gpsLat":31.2167,"gpsLon":121.4667}' | uv run horosa-skill tool run qimen --stdin --output "$root\qimen-smoke.json"
+          if (-not (Test-Path -LiteralPath "$root\qimen-smoke.json")) { throw "qimen smoke wrote no --output file" }
+          $smoke = Get-Content -Raw -LiteralPath "$root\qimen-smoke.json" | ConvertFrom-Json
+          if (-not $smoke.ok) { throw "qimen smoke returned ok=false: $($smoke.error | ConvertTo-Json -Compress)" }
           uv run horosa-skill memory query --tool qimen --limit 1

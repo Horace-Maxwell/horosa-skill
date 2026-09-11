@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」（pwsh 退出码、计数守卫措辞、README 否认 Dockerfile） | CI 的绿由每条命令背书；守卫覆盖面是机器规则；仓里有的东西文档不能否认 |
 | v0.37.0 (2026-09) | 任意 AI 客户端可调用：广告层只对一个客户端对过 / 自家 .mcp.json 从未连通 / 端口静默采用与误杀 / 回环走代理 | 按**别人的**约束测；改 golden 前先答「旧断言为何不会红」；负向对照跑不红就如实改口 |
 | v0.36.0 收尾 (2026-09) | 「Java 族 live 需 Mongo」十个版本的误定性 = vendored 脚本裸 `-jar`；演禽假闸门 | 贴「环境限制」前先读 `Result` 原文、用上游桌面起法起一遍；闸门问项以 live 翻转为准，不以转发为准 |
 | v0.36.0 (2026-09) | 止血/可用性/捞回能力 15 批（响应放大、静默降级、手抄表、死键、降级误杀、扁平面丢键、moira 误排除、闸门半盲、错误码……） | 每批四件套 + 全量门禁；台账正文按批见下 |
@@ -101,6 +102,33 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.38.0 / 2026-09-10 — B0 卫生：三处「绿得不真」——pwsh step 吞退出码、计数守卫看措辞、README 否认仓里有的文件
+
+- **症状**：① `ci.yml` 的 Windows smoke 自 v0.30 起就在调 `horosa-skill tool run qimen --stdin --output …`，而 `--output`
+  这个参数直到本批才存在——那一行每次都以 usage error 失败，step 却一直绿：GitHub 的 `pwsh` 把多行 `run:` 当一个脚本跑，
+  只拿**最后一条**命令（`memory query`，回 `[]` 退出 0）的退出码当结果。② `.claude-plugin/marketplace.json` 写「97 local
+  Horosa (星阙) technique tools」从 97 陈旧到 106，文件明明在 `COUNT_DOCS` 里：`COUNT_PROSE_EN` 只认 `N real …`，`COUNT_PROSE`
+  要数字紧挨名词，「local … 20 字后才是 tools」两条都漏。③ README×2 写「仓库暂不提供 Dockerfile」，而
+  `horosa-skill/Dockerfile` + `docker-compose.yml` 早已入库；且 Dockerfile 只 `COPY pyproject.toml README.md src`，pyproject
+  force-include 的 `scripts/runtime_templates/windows` 没拷 → 镜像里 `uv pip install .` 直接失败（与 `.mcpbignore` 那课同型：
+  两张清单没人对）。
+- **根因**：三条都是「证据的形状由偶然决定」——退出码由 step 里最后一行决定、守卫的覆盖面由句子用了哪个形容词决定、
+  文档的真伪由没人去 `ls` 决定。
+- **guard**：① step 首行 `$PSNativeCommandUseErrorActionPreference = $true`（pwsh ≥ 7.3；GitHub 已前置
+  `$ErrorActionPreference='stop'`），并断言 `--output` 文件存在且 `.ok`；`tests/test_ci_workflow_shape.py` 扫所有 workflow 里
+  `shell: pwsh` job 的多行 `run:` 块首个有效行必须是它（负向对照：把那一行换成任何别的都红；bash job 不受管）。`tool run` /
+  `dispatch` / `ask` / `hecan` 真有了 `--output`（stdout 仍打印 JSON，`_emit_json`；`tests/test_cli_output_file.py`）。
+  ② `COUNT_PROSE_EN` 放宽到 `N (real|local) … tools|techniques`，`test_stale_count_forms_are_caught` 加原句模板。
+  ③ `verify_docs_sync.check_docker_claims`（仓里有 Dockerfile 则 README 不得写「暂不提供/No Dockerfile is shipped」且必须提到它）
+  + `tests/test_dockerfile_matches_wheel_includes.py`（force-include 的每个源路径都得在某条 `COPY` 之下；负向对照 = 旧 Dockerfile 必红）。
+- **法则**：**CI 的绿必须由「每一条命令」背书，不是最后一条**；**计数/真伪守卫的覆盖面写成机器规则，不写成措辞巧合**；
+  **仓里有的东西，文档只能描述，不能否认**。另记两条操作教训：改 README 计数不许整文件 `sed s/766/778/`——它把 `0f766e`
+  颜色码和 `37.7667` 经度一起改了，必须按行改并 `git diff` 复核；rebase 冲突用脚本重放改动时，脚本必须 `&&` 进 `git add`，
+  否则脚本半路断言失败、`rebase --continue` 照样把「只剩对方版本」的文件提交上去。同一轮还发现别的会话把本文件以 **CRLF**
+  提交了上来（`.gitattributes` 是 `eol=lf`），并把台账里的字面路径 `current\runtime` 写成了 `current` + **真回车字节** + `untime`——
+  用 `read_text()` 一读那行就被拆成两行。本批把文件归一成 LF、修回那条路径，并加 `tests/test_tracked_text_is_lf.py`
+  （任何被跟踪的文本文件里出现 `\r` 字节即红；负向对照内置）。
+
 ### v0.37.0+ / 2026-09-09 — DETACHED_PROCESS 让 Windows 启动器**从未运行过**；弱证据短路把自家 runtime 判成外人
 
 v0.37.0 把启动器从阻塞 `subprocess.run` 改成分离 `Popen`（为的是别让「首次调用」卡在一次 MCP 请求里，
@@ -131,7 +159,7 @@ v0.37.0 把启动器从阻塞 `subprocess.run` 改成分离 `Popen`（为的是�
   `classify_endpoint` 第 1 级：对面自报 `app: horosa-chart` 且**没报 nonce** 时直接返回
   `identity.app_marker`。可 `app_marker` 不在 `_STRONG_EVIDENCE` 里 → `started_by_us=False` →
   `stop` 报 `runtime.stop_refused_foreign`。实测：手动跑 payload 自带启动器起的 chart+java
-  （命令行明明在 `rt-verify\currentuntime\windows\...` 下）被拒停，用户只能按 PID 手杀，
+  （命令行明明在 `rt-verify\current\runtime\windows\...` 下）被拒停，用户只能按 PID 手杀，
   或用 `--force`（那把锤子连用户自己的桌面端一起砸）。
   fix = 只允许**升级**：app 标记先记成兜底，让第 2 级（命令行含 runtime 根）/第 3 级（注册表活 pid）
   先说话；**绝不降级为 foreign** —— 对面已自报星阙协议，判 foreign 会打掉「外部模式：用用户开着的

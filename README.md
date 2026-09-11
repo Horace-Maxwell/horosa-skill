@@ -12,7 +12,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-106-1d4ed8?style=for-the-badge" alt="106 tools" />
-  <img src="https://img.shields.io/badge/测试-770_passed-16a34a?style=for-the-badge" alt="770 passed" />
+  <img src="https://img.shields.io/badge/测试-784_passed-16a34a?style=for-the-badge" alt="784 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
 
@@ -116,8 +116,9 @@ uvx horosa-skill serve --transport stdio   # 🚀 给客户端直连；`client c
 > [!NOTE]
 > 🐳 **Docker / Linux（实验）**：离线 runtime 只发布 macOS(arm64) / Windows(x64) 两个 payload，没有 Linux payload；
 > 容器里能跑的是 **MCP 网关**（Python 包 + 知识库 + 记忆），把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`
-> 指向宿主机或另一台装了 runtime 的机器即可。仓库暂不提供 Dockerfile；`pip install horosa-skill` 后
-> `horosa-skill serve --transport streamable-http` 即为网关。
+> 指向宿主机或另一台装了 runtime 的机器即可。仓库附带**实验性**的 `horosa-skill/Dockerfile` + `docker-compose.yml`
+> （网关镜像：容器内没有离线 runtime，必须设上面两个变量；绑 0.0.0.0 必须给 `HOROSA_MCP_TOKEN`）；
+> 手工起也行：`pip install horosa-skill` 后 `horosa-skill serve --transport streamable-http` 即为网关。
 
 <details>
 <summary>🔧 <b>安装排障与升级 / 卸载</b></summary>
@@ -475,7 +476,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 🧰 可调用工具 | 106 / 106 `ok=true` |
-| 🧪 工程测试 | **770 / 770 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 71 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 🧪 工程测试 | **784 / 784 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 71 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 🛡️ 未确认参数时强制追问 | 96 个技法工具触发 `must_ask_user=true` |
 | 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 103 个导出 technique；契约 v14 镜像桌面端 aiExport v56） |
 | 🧾 技法依据卡 | 每个技法响应附 `data.technique_card`；算源声明与运行实测不符时显式亮警 |
@@ -490,7 +491,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 770 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 784 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

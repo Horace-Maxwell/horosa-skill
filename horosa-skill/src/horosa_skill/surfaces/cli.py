@@ -139,6 +139,19 @@ def _load_optional_payload(*, stdin: bool, input_file: Optional[Path]) -> dict:
     return _load_payload(stdin=stdin, input_file=input_file)
 
 
+def _emit_json(data: object, output: Optional[Path] = None) -> None:
+    """stdout 永远是那份 JSON（agent 契约不变）；`--output` 只是**多**落一份 UTF-8 文件。
+
+    为什么要有文件出口：Windows PowerShell 5.1 把管道里的字节按控制台代码页重编码，agent 用
+    `… | horosa-skill tool run --stdin` 再读 stdout 时中文会碎；写文件绕开管道。ci.yml 的 Windows
+    smoke 自 v0.30 起就在调 `tool run … --output`，而这个参数直到 v0.38.0 才存在——pwsh 多行 step 只看
+    最后一条命令的退出码，所以那一步失败了 N 轮没人看见（docs/LESSONS.md v0.38.0）。
+    """
+    if output is not None:
+        _write_json_file(output, data)
+    _print_json(data)
+
+
 def _print_json(data: object) -> None:
     text = json.dumps(data, ensure_ascii=False, indent=2)
     stream = getattr(sys.stdout, "buffer", None)
@@ -1518,6 +1531,7 @@ def tool_run(
     input_file: Optional[Path] = typer.Option(None, "--input", help="Read a JSON object from a file."),
     save_result: bool = typer.Option(True, help="Persist the result in local memory."),
     query_text: str | None = typer.Option(None, help="Optional original user question to store together with this run."),
+    output: Optional[Path] = typer.Option(None, "--output", help="Also write the JSON envelope to this UTF-8 file (stdout keeps printing it)."),
 ) -> None:
     payload = _load_payload(stdin=stdin, input_file=input_file)
     service = _service()
@@ -1527,7 +1541,7 @@ def tool_run(
     except ToolValidationError as exc:
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
-    _print_json(result.model_dump(mode="json"))
+    _emit_json(result.model_dump(mode="json"), output)
 
 
 @agent_app.command("guidance")
@@ -1617,6 +1631,7 @@ def knowledge_search(
 def dispatch(
     stdin: bool = typer.Option(False, "--stdin", help="Read a JSON object from stdin."),
     input_file: Optional[Path] = typer.Option(None, "--input", help="Read a JSON object from a file."),
+    output: Optional[Path] = typer.Option(None, "--output", help="Also write the JSON envelope to this UTF-8 file (stdout keeps printing it)."),
 ) -> None:
     payload = _load_payload(stdin=stdin, input_file=input_file)
     service = _service()
@@ -1626,15 +1641,16 @@ def dispatch(
     except ToolValidationError as exc:
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
-    _print_json(result.model_dump(mode="json"))
+    _emit_json(result.model_dump(mode="json"), output)
 
 
 @app.command(help="Friendly alias of `dispatch` for natural-language use.")
 def ask(
     stdin: bool = typer.Option(False, "--stdin", help="Read a JSON object from stdin."),
     input_file: Optional[Path] = typer.Option(None, "--input", help="Read a JSON object from a file."),
+    output: Optional[Path] = typer.Option(None, "--output", help="Also write the JSON envelope to this UTF-8 file (stdout keeps printing it)."),
 ) -> None:
-    dispatch(stdin=stdin, input_file=input_file)
+    dispatch(stdin=stdin, input_file=input_file, output=output)
 
 
 @benchmark_app.command("run")
@@ -1656,6 +1672,7 @@ def hecan(
     max_tools: int = typer.Option(5, "--max-tools", help="最多同时起几个技法。"),
     stdin: bool = typer.Option(False, "--stdin", help="Read birth/subject JSON from stdin."),
     input_file: Optional[Path] = typer.Option(None, "--input", help="Read birth/subject JSON from a file."),
+    output: Optional[Path] = typer.Option(None, "--output", help="Also write the JSON result to this UTF-8 file (stdout keeps printing it)."),
 ) -> None:
     payload = _load_optional_payload(stdin=stdin, input_file=input_file)
     payload.update({"query": query, "max_tools": max_tools})
@@ -1667,7 +1684,7 @@ def hecan(
     except ToolValidationError as exc:
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
-    _print_json(result)
+    _emit_json(result, output)
 
 
 @benchmark_app.command("faithfulness", help="盘面事实忠实性校验：AI 答案 vs 已存 run 的机读真值（supported/invented/contradicted）。Verify an AI answer against a stored run's computed chart facts.")
