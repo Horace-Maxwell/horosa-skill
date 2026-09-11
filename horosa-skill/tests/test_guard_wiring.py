@@ -15,6 +15,7 @@ runners for each script's filename — because anything cleverer would itself ne
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 PKG_ROOT = Path(__file__).resolve().parents[1]
@@ -198,3 +199,24 @@ def test_ci_gate_blocks_red_pending_and_missing_runs_but_only_warns_without_gh()
     assert "ci_gate_failures(" in (SCRIPTS / "preflight_release.py").read_text(encoding="utf-8").split("def main")[1], "闸必须接进 main"
     publish = (SCRIPTS / "publish_release.sh").read_text(encoding="utf-8")
     assert "gh run list" in publish and "--commit" in publish, "publish_release.sh --draft 也要先查 CI 结论"
+
+
+# --- v0.38.0：本机必须能跑 ci.yml 同款门禁（主干红了 19 个 commit 的另一半原因：本机只跑 pytest + docs-sync） ----
+
+
+def test_run_ci_gates_mirrors_the_ci_test_job() -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("run_ci_gates", SCRIPTS / "run_ci_gates.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    steps = module.ci_test_steps((REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    commands = [command for _name, command in steps]
+    assert any("uv run pytest" in c for c in commands), "pytest 必须在镜像里"
+    verify_in_ci = {c.split("scripts/")[1].split()[0] for c in commands if "scripts/verify_" in c}
+    assert len(verify_in_ci) >= 12, verify_in_ci
+    # every verify_* the CI test job runs as a single-line step is reachable locally through the mirror
+    ci = (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8").split("\n  windows-smoke:")[0]
+    single_line = set(re.findall(r"run: uv run python scripts/(verify_[a-z_]+\.py)", ci))
+    assert single_line <= verify_in_ci, single_line - verify_in_ci
+    assert "run_ci_gates.py" in (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8"), "AGENTS §8 必须指明 push 前跑它"

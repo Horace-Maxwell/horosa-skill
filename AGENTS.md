@@ -624,6 +624,9 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 **验证流程**：
 
+0. **push 前跑 `uv run python scripts/run_ci_gates.py`**——它解析 `.github/workflows/ci.yml` 的 `test` job，把同样的
+   `uv run …` 门禁（pytest + 全部 verify_* + knowledge index + benchmark smoke）按 CI 形状在本机跑一遍。只跑 pytest +
+   docs-sync 不算数（v0.38.0：主干红了 19 个 commit，本机每次都「全绿」）；push 之后再看 `gh run list` 的结论。
 1. venv 坏了先修（miniconda symlink 触 macOS library-validation on `pydantic_core`）：
    `uv venv --clear --python-preference only-managed --python 3.12 && uv sync`（uv-managed CPython 无
    library-validation）。

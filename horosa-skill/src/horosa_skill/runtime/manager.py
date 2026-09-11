@@ -27,7 +27,7 @@ import httpx
 
 from horosa_skill.config import Settings
 from horosa_skill.engine.client import HorosaApiClient, loopback_httpx_client
-from horosa_skill.errors import RuntimeInstallError, RuntimeValidationError
+from horosa_skill.errors import RuntimeInstallError, RuntimeValidationError, bilingual
 from horosa_skill.runtime import registry as runtime_registry
 from horosa_skill.runtime.identity import EndpointIdentity, classify_endpoint, trust_unknown_ports
 from horosa_skill.runtime.pidlock import describe_lock, release as release_lock, try_pid_lock
@@ -183,7 +183,10 @@ def _assert_min_os(min_os: Any, platform_name: str, *, host_version: str | None 
         return
     if _version_tuple(host) < _version_tuple(min_os):
         raise RuntimeInstallError(
-            f"This runtime payload needs OS version {min_os}+ but this host reports {host}.",
+            bilingual(
+                f"本机系统版本 {host} 低于离线 runtime 载荷要求的 {min_os}。",
+                f"This runtime payload needs OS version {min_os}+ but this host reports {host}.",
+            ),
             code="runtime.install_os_too_old",
             details={
                 "platform": platform_name,

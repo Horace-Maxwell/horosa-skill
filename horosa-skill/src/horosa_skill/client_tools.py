@@ -9,6 +9,8 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from horosa_skill.errors import bilingual
+
 
 def _split_command_override(raw: str) -> list[str]:
     if os.name != "nt":
@@ -189,9 +191,13 @@ def resolve_uvx_command() -> list[str]:
         if os.path.isfile(sibling):
             return [sibling]
     raise FileNotFoundError(
-        "uvx was not found in PATH (or next to uv). Install uv (https://docs.astral.sh/uv/), "
-        "or set HOROSA_UVX_BIN to an explicit executable path. GUI clients on Windows do not inherit "
-        "your shell PATH, so the config must carry an absolute path."
+        bilingual(
+            "找不到 uvx（PATH 上没有，uv 旁边也没有）：装 uv（https://docs.astral.sh/uv/）或设 HOROSA_UVX_BIN 指向可执行文件；"
+            "Windows 上的 GUI 客户端不继承 shell PATH，配置里必须写绝对路径。",
+            "uvx was not found in PATH (or next to uv). Install uv (https://docs.astral.sh/uv/), "
+            "or set HOROSA_UVX_BIN to an explicit executable path. GUI clients on Windows do not inherit "
+            "your shell PATH, so the config must carry an absolute path.",
+        )
     )
 
 

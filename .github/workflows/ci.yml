@@ -184,7 +184,9 @@ jobs:
           foreach ($entry in $serverEnv.PSObject.Properties) {
             Set-Item -Path "Env:$($entry.Name)" -Value ([string]$entry.Value)
           }
-          '{"date":"2028-04-06","time":"09:33:00","zone":"+08:00","lat":"31n13","lon":"121e28","gpsLat":31.2167,"gpsLon":121.4667}' | uv run horosa-skill tool run qimen --stdin --output "$root\qimen-smoke.json"
+          # 闸门字段必须带：没有 agent_confirmed_settings 的 qimen 调用会被 agent_guidance.required 拒（exit 2）——B0 让这一步诚实之前，
+          # 这条命令其实已经这样红了几十轮而没人看见。
+          '{"date":"2028-04-06","time":"09:33:00","zone":"+08:00","lat":"31n13","lon":"121e28","gpsLat":31.2167,"gpsLon":121.4667,"agent_confirmed_settings":true,"clarification_notes":"windows smoke: defaults accepted"}' | uv run horosa-skill tool run qimen --stdin --output "$root\qimen-smoke.json"
           if (-not (Test-Path -LiteralPath "$root\qimen-smoke.json")) { throw "qimen smoke wrote no --output file" }
           $smoke = Get-Content -Raw -LiteralPath "$root\qimen-smoke.json" | ConvertFrom-Json
           if (-not $smoke.ok) { throw "qimen smoke returned ok=false: $($smoke.error | ConvertTo-Json -Compress)" }
