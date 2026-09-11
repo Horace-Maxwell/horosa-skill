@@ -146,6 +146,11 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   `tests/test_release_pipeline_shape.py`（只手动触发 / 不 `gh release create` / publish 必 needs matrix 且先 [OK] / 矩阵不挂 push /
   三 runner / ARM 由输入控制 / 旧 release.yml 与 publish_darwin_release.sh 不复活）；`test_guard_wiring.RUNNERS` 收录两条新
   workflow 与 publish_release.sh（`verify_runtime_live.py` 由矩阵调用，不再是孤儿守卫）。
+- **首次 dry run（run 34562626963）抓到**：`build-windows` 死在 `.venv\Scripts\python.exe: No module named pip`——uv 的 venv
+  **没有 pip**，`fetch_native_wheels` 默认用 `sys.executable -m pip download`。修法：`runtime_seed.resolve_pip_python()` 依次试
+  显式 `--python` / 本解释器 / `sys.base_prefix` 的解释器（setup-python、uv-managed CPython 都带 pip）/ PATH 上的 python3|python，
+  以 `-m pip --version` 为准；workflow 显式传 `--python "$env:pythonLocation\python.exe"`；`test_resolve_pip_python_skips_interpreters_without_pip`。
+  另：job 级 `env:` 不能引用 `runner.temp`（dispatch 时解析即报错），只能在 step 里用 `$RUNNER_TEMP`。
 - **法则**：**清单只在两平台齐了才上 release**；**发布前的真机证据由流水线产出，不由「维护者机器上跑过」代替**；「CI 做不到 X」
   这类规则要写清时代前提，runner 变了就要重审。
 

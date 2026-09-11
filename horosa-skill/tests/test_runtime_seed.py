@@ -168,3 +168,34 @@ def test_find_jdk_home_handles_temurin_layouts(tmp_path: Path) -> None:
     assert seed.find_jdk_home(tmp_path / "mac") == mac
     with pytest.raises(SystemExit):
         seed.find_jdk_home(tmp_path / "nowhere")
+
+
+# ---------------------------------------------------------------- pip interpreter resolution (A5 dry run #1)
+
+
+def test_resolve_pip_python_skips_interpreters_without_pip(tmp_path, monkeypatch) -> None:
+    """uv 的 venv 没有 pip：`sys.executable -m pip` 会 "No module named pip"——解析器必须跳过它找到有 pip 的那个。"""
+    venv_python = tmp_path / "venv" / "python"
+    base_python = tmp_path / "base" / "python"
+    for path in (venv_python, base_python):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("", encoding="utf-8")
+
+    class Done:
+        def __init__(self, code):
+            self.returncode = code
+
+    def fake_run(cmd, **kwargs):
+        return Done(0 if cmd[0] == str(base_python) else 1)
+
+    monkeypatch.setattr(seed.subprocess, "run", fake_run)
+    monkeypatch.setattr(seed.sys, "executable", str(venv_python))
+    monkeypatch.setattr(seed.sys, "base_prefix", str(tmp_path / "nowhere"))
+    monkeypatch.setattr(seed.shutil, "which", lambda name: str(base_python) if name == "python3" else None)
+    assert seed.resolve_pip_python(None) == str(base_python)
+    assert seed.resolve_pip_python(str(base_python)) == str(base_python), "explicit --python wins"
+    assert seed._pip(None)[1:] == ["-m", "pip"]
+
+    monkeypatch.setattr(seed.shutil, "which", lambda name: None)
+    with pytest.raises(RuntimeError, match="no interpreter with pip"):
+        seed.resolve_pip_python(None)

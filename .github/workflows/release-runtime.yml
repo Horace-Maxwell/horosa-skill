@@ -90,6 +90,8 @@ jobs:
     needs: resolve
     runs-on: windows-latest
     timeout-minutes: 120
+    env:
+      PYTHONIOENCODING: utf-8
     defaults:
       run:
         shell: pwsh
@@ -118,7 +120,8 @@ jobs:
         working-directory: ./horosa-skill
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
-          uv run python scripts/build_runtime_release_windows.py --seed "dist\runtime\${{ needs.resolve.outputs.seed }}" --out-dir dist\runtime
+          # --python: the setup-python interpreter carries pip; the uv venv's does not (dry run #1 died on "No module named pip")
+          uv run python scripts/build_runtime_release_windows.py --seed "dist\runtime\${{ needs.resolve.outputs.seed }}" --out-dir dist\runtime --python "$env:pythonLocation\python.exe"
           if (-not (Test-Path -LiteralPath "dist\runtime\${{ needs.resolve.outputs.windows_zip }}")) { throw "derived archive missing: ${{ needs.resolve.outputs.windows_zip }}" }
       - name: Upload the derived Windows payload
         uses: actions/upload-artifact@v4

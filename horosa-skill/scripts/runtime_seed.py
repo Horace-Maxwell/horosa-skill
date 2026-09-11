@@ -240,8 +240,45 @@ def copy_pure_site_packages(seed: SeedTree, lock: dict, dest: Path) -> list[str]
     return copied
 
 
+def resolve_pip_python(explicit: str | None = None) -> str:
+    """The first interpreter that actually has `pip` (checked by running `-m pip --version`).
+
+    🔴 uv virtualenvs ship WITHOUT pip, so `sys.executable` inside `uv run` cannot `pip download` — the hosted
+    pipeline's first dry run (A5, windows-latest) died on exactly that. Candidates, in order: the explicit
+    `--python`, this interpreter, the interpreter this venv was created from (`sys.base_prefix`: setup-python /
+    uv-managed CPython — both carry pip), then `python3` / `python` on PATH.
+    """
+    candidates: list[str] = []
+    if explicit:
+        candidates.append(explicit)
+    candidates.append(sys.executable)
+    base = Path(sys.base_prefix)
+    candidates.append(str(base / ("python.exe" if os.name == "nt" else "bin/python3")))
+    for name in ("python3", "python"):
+        found = shutil.which(name)
+        if found:
+            candidates.append(found)
+    seen: list[str] = []
+    for candidate in candidates:
+        if not candidate or candidate in seen:
+            continue
+        seen.append(candidate)
+        if not Path(candidate).exists():
+            continue
+        try:
+            completed = subprocess.run([candidate, "-m", "pip", "--version"], capture_output=True, text=True, timeout=60)
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if completed.returncode == 0:
+            return candidate
+    raise RuntimeError(
+        "no interpreter with pip found (uv venvs have none); pass --python <interpreter that has pip>. tried: " + ", ".join(seen)
+    )
+
+
 def _pip(python: str | None) -> list[str]:
-    return [python or sys.executable, "-m", "pip"]
+    return [resolve_pip_python(python), "-m", "pip"]
+
 
 
 def fetch_native_wheels(lock: dict, platform_key: str, dest: Path, *, python: str | None = None,
