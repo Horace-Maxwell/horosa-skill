@@ -154,6 +154,15 @@ def test_matrix_work_dir_carries_a_space_and_cjk() -> None:
     """R10：带空格 + 中文的工作目录在三台真机上过一遍（A1 编码 / A4 引号）。"""
     assert MATRIX.count("horosa 测试 lane") >= 5
     assert "horosa-lane" not in MATRIX.split("Resolve the install source", 1)[1]
+    # v0.38.1：Windows 的 runtime 根必须能穿过 cp1252（随包 JDK 17 用 GetModuleFileNameA 找 java.dll）——空格 + é，不许带中文
+    windows_step = MATRIX[MATRIX.index("Live verification (Windows)"):MATRIX.index("Upload lane evidence")]
+    root_line = next(line for line in windows_step.splitlines() if line.strip().startswith("$runtimeRoot ="))
+    root_literal = root_line.split("'")[1]
+    assert " " in root_literal and not root_literal.isascii(), root_literal
+    root_literal.encode("cp1252")  # must not raise
+    assert '--runtime-root "$runtimeRoot"' in windows_step
+    verifier = (REPO_ROOT / "horosa-skill" / "scripts" / "verify_runtime_live.py").read_text(encoding="utf-8")
+    assert "def ansi_root_refusal" in verifier and "self.ansi_root_refusal() and self.install()" in verifier
 
 
 def test_publish_requires_the_matrix_and_the_same_bytes() -> None:

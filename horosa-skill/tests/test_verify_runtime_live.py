@@ -168,3 +168,45 @@ def test_attached_client_is_recognised_by_a_new_registry_entry_not_by_the_popen_
     assert {pid for pid in after if int(pid) == launcher_pid} == set(), "the old pid-equality lookup finds nothing"
     assert live.new_client_entries(before, after) == {"4242": {"transport": "stdio"}}
     assert live.new_client_entries(set(after), after) == {}
+
+
+def _lane(tmp_path: Path, work: str):
+    import argparse
+
+    args = argparse.Namespace(work_dir=str(tmp_path / work), runtime_root=None, data_dir=None, start_timeout=900,
+                              backend_port=19999, chart_port=18899, platform=None, archive=None, assets_dir=None,
+                              manifest_url=None, expect_payload_platform=None, expect_emulated=False, skip_pytest=True, pytest_args=[])
+    lane = live.Lane(args)
+    lane.ansi_encoding = "cp1252"
+    return lane
+
+
+def test_ansi_root_refusal_step_requires_the_refusal_code(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Windows 专属步骤：中文工作目录（cp1252 表示不了）下 install 必须以 runtime.path_not_ansi 拒绝；放行 = 红（负向对照）。"""
+    # Lane 先建（Path() 在 os.name 被改成 nt 时会选 WindowsPath 并在 POSIX 上报错），再伪装成 Windows 主机
+    lane = _lane(tmp_path, "horosa 测试 lane")
+    lenient = _lane(tmp_path / "again", "horosa 测试 lane")
+    seen: dict[str, object] = {}
+
+    def refused(*args, **kwargs):  # noqa: ANN002, ANN003
+        seen["args"], seen["env"] = args, kwargs.get("env") or {}
+        return 2, {"ok": False, "code": "runtime.path_not_ansi"}, ""
+
+    monkeypatch.setattr(lane, "cli_json", refused)
+    monkeypatch.setattr(lenient, "cli_json", lambda *a, **k: (0, {"ok": True}, ""))
+    monkeypatch.setattr(live.os, "name", "nt")
+    assert lane.ansi_root_refusal() is True and lane.report["steps"]["ansi_root_refusal"]["code"] == "runtime.path_not_ansi"
+    assert seen["args"][0] == "install" and "测试" in seen["env"]["HOROSA_RUNTIME_ROOT"]
+    assert lenient.ansi_root_refusal() is False, "an install that is NOT refused under a non-ANSI root must fail the lane"
+
+
+def test_ansi_root_refusal_step_is_skipped_where_it_cannot_apply(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ascii_lane = _lane(tmp_path, "horosa lane e")
+    nocodec = _lane(tmp_path / "nocodec", "horosa 测试 lane")
+    nocodec.ansi_encoding = "no-such-codec"
+    posix = _lane(tmp_path / "posix", "horosa 测试 lane")
+    monkeypatch.setattr(ascii_lane, "cli_json", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not run install")))
+    assert posix.ansi_root_refusal() is True and "ansi_root_refusal" not in posix.report["steps"], "POSIX: no step at all"
+    monkeypatch.setattr(live.os, "name", "nt")
+    assert ascii_lane.ansi_root_refusal() is True and ascii_lane.report["steps"]["ansi_root_refusal"]["skipped"] is True
+    assert nocodec.ansi_root_refusal() is True and "codec" in nocodec.report["steps"]["ansi_root_refusal"]["reason"]

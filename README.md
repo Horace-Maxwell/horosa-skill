@@ -12,7 +12,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-106-1d4ed8?style=for-the-badge" alt="106 tools" />
-  <img src="https://img.shields.io/badge/测试-1138_passed-16a34a?style=for-the-badge" alt="1138 passed" />
+  <img src="https://img.shields.io/badge/测试-1155_passed-16a34a?style=for-the-badge" alt="1155 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
 
@@ -139,6 +139,7 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # 🚀 给客户端直
 | 磁盘不足 / 端口被占 / 看不懂 doctor 的码 | `uv run horosa-skill doctor --explain`：stdout 仍是 JSON，stderr 多 6–10 行人话；报告里 `advice[]` 给每个 issue / warning 码一句 `user_summary` + `next_action`；`--probe-network` 逐个镜像探清单 URL（默认零外网请求） |
 | macOS 首次起 runtime 失败且无日志 / `doctor` 报 `quarantine:runtime_binaries` | 浏览器下载的归档解出来的 python / java / node 带 Gatekeeper 隔离属性：运行报告里 `quarantine.fix` 给出的 `xattr -dr com.apple.quarantine <runtime/current>` 后 `runtime restart` |
 | Windows 路径太长（`runtime.install_long_path`）| `doctor.windows.headroom_chars` 为负即会拒：设 `HOROSA_RUNTIME_ROOT=C:\horosa`，或开注册表 `LongPathsEnabled=1` 后重启（v0.38.0 起临时目录前缀缩短，多出约 20 字符余量） |
+| Windows 上 install 报 `runtime.path_not_ansi`，或 doctor 报 `windows:runtime_root_not_ansi`（Java 族技法失败、只剩 chart） | runtime 目录路径里有 Windows 系统代码页表示不了的字符（常见于英文系统上的中文用户名）；随包的 Java 17 用 ANSI API 找自己，在那里起不来。设纯英文路径：`setx HOROSA_RUNTIME_ROOT C:\horosa`，新开终端并重启 AI 客户端后重跑 `install` / `setup` |
 | 慢网 / 企业代理下载总超时 | `HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS`（默认 120）、`HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS`（默认 3，每个镜像各算一轮）；`doctor` 报 `arch.emulated: true` 只是提示进程在仿真下跑，不影响安装 |
 | Windows 首次启动弹防火墙 / `doctor` 报 `listener:not_loopback_only` | 旧版启动器把 Java 绑在 0.0.0.0；升级后 `uv run horosa-skill runtime restart` 重套模板即钉回 127.0.0.1（`doctor.listener_scope` 可核） |
 | Codex 里一堆报错 / 首轮看不到工具 | 多半是超时没写（Codex 默认 10 s/60 s）：`uv run horosa-skill client check --client codex` 会指出缺哪项，`client config --format codex --write ~/.codex/config.toml` 原位合并修好 |
@@ -497,7 +498,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 🧰 可调用工具 | 106 / 106 `ok=true` |
-| 🧪 工程测试 | **1138 / 1138 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 72 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 🧪 工程测试 | **1155 / 1155 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 72 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 🛡️ 未确认参数时强制追问 | 96 个技法工具触发 `must_ask_user=true` |
 | 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 103 个导出 technique；契约 v14 镜像桌面端 aiExport v56） |
 | 🧾 技法依据卡 | 每个技法响应附 `data.technique_card`；算源声明与运行实测不符时显式亮警 |
@@ -512,7 +513,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 1138 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 1155 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

@@ -305,6 +305,17 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "runtime_start_then_doctor",
     },
+    "runtime.path_not_ansi": {
+        "kind": "runtime",
+        "prompt_to_user": bilingual(
+            "runtime 目录路径里有 Windows 系统代码页表示不了的字符（常见于英文系统上的中文用户名），随包的 Java 17 在那里起不来。"
+            "请设 HOROSA_RUNTIME_ROOT 为纯英文路径（如 C:\\horosa）后重装。",
+            "The runtime directory path contains characters outside the Windows ANSI code page (common with a Chinese user "
+            "name on an English Windows), so the bundled Java 17 cannot start there. Set HOROSA_RUNTIME_ROOT to an ASCII-only "
+            "path (e.g. C:\\horosa) and reinstall.",
+        ),
+        "next_action": "set_ascii_runtime_root_then_reinstall",
+    },
     "runtime.platform_unsupported": {
         "kind": "runtime",
         "prompt_to_user": bilingual(

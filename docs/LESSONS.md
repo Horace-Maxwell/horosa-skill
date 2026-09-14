@@ -157,21 +157,25 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   （uvx：Failed to download …/v0.38.1/…whl），Linux 与 Windows 同红。修：CI 预置 C15 的本地缓存 `~/.horosa/wheels/<whl>`（Windows 取
   USERPROFILE），setup 写 `--from <本地 wheel>`，探针离线真起。教训：**「客户端将要执行的命令」在 CI 上必须先问「它指向的东西此刻存在吗」**。
   规则不变：**推送之后看 CI**，五条都是维护机（macOS、无 XDG、能上 github.com 取已发布 wheel）替测试补了前提。
-- **⑥ draft 真机矩阵抓到的产品缺陷（run 34880898270，两条 Windows lane 同红）**：R10 把 lane 工作目录改成「horosa 测试 lane」后，
-  Java 后端在 windows-latest 与 windows-11-arm 上都没起来，只剩 chart（chart-only 降级 = lane 失败）。Java 自己的 stderr：
-  `Error: Unable to access jarfile D:\a\_temp\horosa ?? lane\runtime\current\runtime\windows\bundle\astrostudyboot.jar`。
-  根因：JDK 17 的 Windows 启动器用 `GetCommandLineA` 读自己的命令行——Unicode 命令行先经**系统 ANSI 代码页**（runner 是 cp1252）转换，
-  代码页表示不了的字符变 `?`；而启动器模板传的是绝对 `-jar "<runtime 根>\…\astrostudyboot.jar"`。同一路径下 Python（Unicode argv）正常。
-  受影响的真实用户 = runtime 根里有系统代码页表示不了的字符：英文系统上的中文用户名、西文系统上的俄文用户名……（中文系统 cp936 下的
-  中文用户名不受影响——这正是维护者从来没见过它的原因）。修：Java 本来就以 `-WorkingDirectory $Root` 启动，jar 参数改为相对 $Root 的
-  纯 ASCII 单引号字面量 `$JarArg = '..\runtime\windows\bundle\astrostudyboot.jar'`（只走我们自己的载荷布局，装在哪都是 ASCII；JVM 内部
-  user.dir / 文件 IO 走 Unicode）。守卫：`verify_runtime_scripts.audit_windows_launcher` 第 4 条（self-test 9 种坏法，含「回到绝对 $JarPath」
-  「$JarArg 变插值绝对路径」）、`test_java_gets_a_code_page_safe_relative_jar_argument`（负向对照：绝对形状经 cp1252 往返得 `??`）；
-  真机证明 = 下一次 draft 跑的两条 Windows lane。因为模板进 wheel 与派生的 Windows 载荷，v0.38.1 的 draft 资产须从修复后的 commit 重建，
-  未公开的 tag v0.38.1 随之改指（原指 3cae1c6）。
-  教训：**只在「维护者自己的机器形状」上验过的路径，等于没验**——R10 加中文目录时预期抓 A1（PowerShell OEM 解码），真正抓到的是 JDK 启动器；
-  同一 draft 跑还抓到 lane 自己的 bug：Windows venv 的 python.exe 是 launcher，`serve` 登记的是子进程 pid，按 Popen pid 找客户端必然落空
-  （本机实跑 lane 前先修掉，未等到真机红）。
+- **⑥ draft 真机矩阵抓到的产品缺陷（两轮 draft，两条 Windows lane 各红两次）**：R10 把 lane 工作目录改成「horosa 测试 lane」后，
+  Java 后端在 windows-latest 与 windows-11-arm 上都没起来，只剩 chart（chart-only 降级 = lane 失败）。
+  · draft #1（run 34880898270）Java stderr：`Error: Unable to access jarfile D:\a\_temp\horosa ?? lane\…\astrostudyboot.jar`——
+    JDK 17 的 Windows java.exe 用 `GetCommandLineA` 读命令行，runner 的 ANSI 代码页 cp1252 表示不了的字符变 `?`。
+    第一版修法（b4a2f40）：jar 参数改为相对 `$Root` 的纯 ASCII `$JarArg`，并以为到此为止——**判断错了**。
+  · draft #2（run 34885945827）Java stderr：`Error: could not find java.dll` / `Could not find Java SE Runtime Environment.`——jar 参数过关了，
+    java.exe 在**找自己**时（`GetModuleFileNameA` → `java.dll`）同样经 ANSI 代码页丢字。参数怎么改都绕不开：**随包 JDK 17 根本无法从
+    ANSI 代码页表示不了的目录运行**。同一路径下 Python / Node / PowerShell（Unicode API）都正常。
+  受影响的真实用户 = runtime 根含系统代码页表示不了的字符：英文系统上的中文用户名、西文系统上的俄文用户名……（中文系统 cp936 下的中文
+  用户名能表示，不受影响——所以维护者从没见过）。定稿修法（与长路径同一套路：**先检测、早拒绝、给确切修法**）：
+  `manager.path_is_ansi_safe`（`mbcs` 严格编码 = WC_NO_BEST_FIT_CHARS，best-fit 悄悄换字也算不安全）→ install 在读清单 / 下载之前以
+  `runtime.path_not_ansi` 拒绝（修法 `setx HOROSA_RUNTIME_ROOT C:\horosa`），doctor 报 issue `windows:runtime_root_not_ansi`，
+  `doctor.windows` 带 `ansi_code_page` / `runtime_root_ansi_safe` / `ansi_fix`；相对 `$JarArg` 保留（少一处 ANSI 依赖，Java 能起的机器上照常工作）。
+  lane：Windows 的 runtime 根改为 cp1252 能表示的「horosa lane é」（空格 + 非 ASCII，仍覆盖 A1 映像路径与相对 jar 参数），中文留在工作目录
+  （数据目录 / 客户端配置 / 日志）；新增 Windows 专属步骤 `ansi_root_refusal` 在真 cp1252 主机上走一次真 CLI，断言中文根被拒。
+  没做的：自动把 runtime 挪到 ASCII 位置（ProgramData / junction）——那是新的 ACL / 安全面，留给用户决定。
+  教训：**只在「维护者自己的机器形状」上验过的路径，等于没验**；以及**修一层就宣布修好，要等真机把下一层也跑过**——第一版修法的 commit
+  写着「真机证明 = 下一次 draft」，下一次 draft 正是把它推翻的那一次。同一 draft 还抓到 lane 自己的 bug：Windows venv 的 python.exe 是
+  launcher，`serve` 登记的是子进程 pid，按 Popen pid 找客户端必然落空（本机实跑 lane 时先修掉）。
 - **守卫清单（本轮新增）**：`test_subprocess_encoding`、`test_runtime_procs_encoding`（OEM 负向对照）、`test_runtime_ports_cache`（netstat 1 vs 4）、
   `verify_runtime_release` 双向长度闸、`verify_wheel_contents` 主目录路径闸、`test_scripts_stdio`、`verify_client_configs` 覆盖 `.cursor/.vscode`
   （白名单与 cli 锁步）、docs-sync 五闸（PyPI 命令 / 连接器行 / 入口文档指针 / 镜像计数 / 示例配置无裸 uv）、`verify_matrix_digests`、

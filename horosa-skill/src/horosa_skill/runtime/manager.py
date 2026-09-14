@@ -464,6 +464,7 @@ DOCTOR_ISSUE_CODES = (
     "services:chart_not_running",
     "services:not_running",
     "quarantine:runtime_binaries",
+    "windows:runtime_root_not_ansi",
 )
 
 
@@ -498,14 +499,49 @@ def _rmtree_force(path: Path) -> None:
     shutil.rmtree(path, onexc=_onexc)
 
 
+def _host_is_windows() -> bool:
+    return os.name == "nt"
+
+
+def windows_ansi_code_page() -> int | None:
+    """Windows 的系统 ANSI 代码页（GetACP）；非 Windows 或查不到返回 None。"""
+    if not _host_is_windows():
+        return None
+    try:
+        import ctypes
+
+        return int(ctypes.windll.kernel32.GetACP())  # type: ignore[attr-defined]
+    except Exception:  # noqa: BLE001 - 只用于报告，查不到不影响判定
+        return None
+
+
+def path_is_ansi_safe(path: Path | str, *, encoding: str = "mbcs") -> bool:
+    """这个路径能否无损穿过 Windows ANSI 代码页（`mbcs` 严格编码 = WC_NO_BEST_FIT_CHARS）。
+
+    🔴 随包的 JDK 17 `java.exe` 用 ANSI API 找自己（GetModuleFileNameA → java.dll）、读命令行（GetCommandLineA）：
+    代码页表示不了的字符变 `?` → `could not find java.dll` / `Unable to access jarfile …??…`，Java 后端起不来、只剩 chart。
+    v0.38.1 draft 真机矩阵两条 Windows lane（en-US cp1252 runner，工作目录「horosa 测试 lane」）实证；Python / Node /
+    PowerShell 走 Unicode API，不受影响。中文系统（cp936）上的中文用户名能表示，所以不受影响。
+    """
+    try:
+        str(path).encode(encoding)
+        return True
+    except UnicodeEncodeError:
+        return False
+    except LookupError:  # 非 Windows 没有 mbcs 编解码器：本判定不适用
+        return True
+
+
 def windows_path_report(runtime_root: Path) -> dict[str, Any] | None:
-    """doctor.windows：长路径开关 + 按最深载荷条目估的余量（负数 = install 会以 runtime.install_long_path 拒绝）。"""
+    """doctor.windows：长路径开关 + 按最深载荷条目估的余量（负数 = install 会以 runtime.install_long_path 拒绝）
+    + runtime 根能否穿过 ANSI 代码页（否 = install 以 runtime.path_not_ansi 拒绝，doctor 报 windows:runtime_root_not_ansi）。"""
     if os.name != "nt":
         return None
     enabled = _windows_long_paths_enabled()
     root_length = len(str(runtime_root))
     projected = root_length + 1 + _INSTALL_TEMP_OVERHEAD + PAYLOAD_LONGEST_ENTRY_CHARS
     headroom = WINDOWS_PATH_LIMIT - projected
+    ansi_safe = path_is_ansi_safe(runtime_root)
     return {
         "long_paths_enabled": enabled,
         "runtime_root_length": root_length,
@@ -515,6 +551,11 @@ def windows_path_report(runtime_root: Path) -> dict[str, Any] | None:
         "ok": enabled or headroom >= 0,
         "fix": None if (enabled or headroom >= 0) else (
             "设 HOROSA_RUNTIME_ROOT=C:\\horosa（更短的路径），或开启注册表 LongPathsEnabled=1 后重启。"
+        ),
+        "ansi_code_page": windows_ansi_code_page(),
+        "runtime_root_ansi_safe": ansi_safe,
+        "ansi_fix": None if ansi_safe else (
+            "`setx HOROSA_RUNTIME_ROOT C:\\horosa`（纯英文路径），新开终端并重启 AI 客户端后重跑 install / setup。"
         ),
     }
 
@@ -682,6 +723,8 @@ class HorosaRuntimeManager:
         ) as trace:
             platform_name = platform_key or self.settings.runtime_platform or _platform_key()
             self._last_download = None
+            # 下载 730 MB 之前就拒：装进去 Java 也起不来（只剩 chart），而修法只是换个路径。
+            self._require_ansi_safe_runtime_root()
             source = archive
             expected_sha256: str | None = None
             asset_meta: dict[str, Any] | None = None
@@ -1150,6 +1193,9 @@ class HorosaRuntimeManager:
             quarantine = self._quarantine_report(manifest) if installed else {"checked": [], "flagged": [], "fix": None}
             if quarantine["flagged"]:
                 issues.append("quarantine:runtime_binaries")
+            # v0.38.1：随包 JDK 17 的 java.exe 在 ANSI 代码页表示不了的目录里起不来（见 path_is_ansi_safe）。
+            if _host_is_windows() and not path_is_ansi_safe(self.runtime_root):
+                issues.append("windows:runtime_root_not_ansi")
             degraded: str | None = None
             java_diagnostics: dict[str, Any] | None = None
             if installed and not self._all_services_reachable(endpoints):
@@ -1924,6 +1970,39 @@ class HorosaRuntimeManager:
         if report["flagged"]:
             report["fix"] = f'xattr -dr com.apple.quarantine "{self.current_dir}"'
         return report
+
+    def _require_ansi_safe_runtime_root(self) -> None:
+        """Windows：runtime 根必须能无损穿过系统 ANSI 代码页，否则随包的 java.exe 找不到 java.dll（v0.38.1）。"""
+        if not _host_is_windows() or path_is_ansi_safe(self.runtime_root):
+            return
+        acp = windows_ansi_code_page()
+        raise RuntimeInstallError(
+            bilingual(
+                f"随包的 Java 17 无法从含 Windows 系统代码页（cp{acp}）表示不了的字符的目录运行：{self.runtime_root}。",
+                f"The bundled Java 17 cannot run from a directory containing characters outside the Windows ANSI "
+                f"code page (cp{acp}): {self.runtime_root}.",
+            ),
+            code="runtime.path_not_ansi",
+            details={
+                "runtime_root": str(self.runtime_root),
+                "ansi_code_page": acp,
+                "next_action": bilingual(
+                    "换一个纯英文路径再装：`setx HOROSA_RUNTIME_ROOT C:\\horosa`，新开终端（并重启 AI 客户端）后重跑 install / setup。",
+                    "Install to an ASCII-only path: `setx HOROSA_RUNTIME_ROOT C:\\horosa`, open a new terminal (and restart "
+                    "your AI client), then rerun install / setup.",
+                ),
+                "agent_recovery": {
+                    "must_ask_user": True,
+                    "prompt_to_user": bilingual(
+                        "本机 runtime 目录路径里有 Windows 系统代码页表示不了的字符，随包的 Java 在那里起不来。"
+                        "请设 HOROSA_RUNTIME_ROOT 为纯英文路径（例如 C:\\horosa）后重装。",
+                        "The runtime directory path contains characters the Windows code page cannot represent, so the "
+                        "bundled Java cannot start there. Set HOROSA_RUNTIME_ROOT to an ASCII-only path (e.g. C:\\horosa) and reinstall.",
+                    ),
+                    "commands": ["setx HOROSA_RUNTIME_ROOT C:\\horosa"],
+                },
+            },
+        )
 
     def _guard_windows_long_paths(self, archive_path: Path, extract_dir: Path) -> None:
         r"""解包前先算最长目标路径，>259 且没开长路径支持就明说，别让 winerror 3/206 裸奔。

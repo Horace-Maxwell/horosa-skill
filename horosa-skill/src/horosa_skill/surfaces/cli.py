@@ -656,6 +656,11 @@ _DOCTOR_ADVICE: dict[str, dict[str, str]] = {
         "user_summary": "macOS Gatekeeper 给 runtime 里的可执行文件打了 com.apple.quarantine（浏览器下载的归档常见），首次执行会被拦。",
         "next_action": "运行报告里 quarantine.fix 给出的 `xattr -dr com.apple.quarantine <runtime/current>` 后重启 runtime。",
     },
+    "windows:runtime_root_not_ansi": {
+        "user_summary": "runtime 目录路径里有 Windows 系统代码页表示不了的字符（英文系统上的中文用户名等），随包的 Java 17 在那里起不来——"
+                        "Java 族技法（八字 / 紫微 / 六壬 / 农历…）会失败，只剩 chart 侧可用。",
+        "next_action": "`setx HOROSA_RUNTIME_ROOT C:\\horosa`（纯英文路径），新开终端并重启 AI 客户端后 `horosa-skill install`；旧目录可删。",
+    },
     "listener:not_loopback_only": {
         "user_summary": "本机服务绑在 0.0.0.0（局域网可达，Windows 会弹防火墙）。",
         "next_action": "升级后 `horosa-skill runtime restart` 重套启动器模板（钉 127.0.0.1）。",

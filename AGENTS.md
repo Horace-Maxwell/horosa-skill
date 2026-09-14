@@ -751,7 +751,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | `install` 报 `runtime.install_os_too_old` | 载荷声明的 `min_os`（派生 Windows 载荷 = 10.0.17763，即 Windows 10 1809）高于本机 | 升级系统或网关模式；`details.host_os` / `min_os` 已给出两边版本 |
 | 终端里 `uvx …` 能跑，Claude Desktop / Cursor 里却起不来（file not found） | GUI 客户端在 Windows 上不继承 shell PATH，配置里写的是裸 `uvx` | 重跑 `client config`（v0.38.0 起写绝对路径）；`client check` 报 `command_not_on_path` 即此症 |
 | Windows smoke 绿，但 step 里某条命令其实失败了 | GitHub `pwsh` 多行 `run:` 只拿**最后一条**命令的退出码当结果（v0.38.0 前 `tool run --output` 这个不存在的参数在此安静失败了几十轮） | 每个 pwsh 多行块首行 `$PSNativeCommandUseErrorActionPreference = $true`（`tests/test_ci_workflow_shape.py` 守）；关键产物要 `Test-Path` + 断言 `.ok` |
-| Windows 上 Java 后端起不来、只剩 chart；`java_diagnostics` 是 `Unable to access jarfile …\??…\astrostudyboot.jar` | runtime 根里有系统 ANSI 代码页表示不了的字符（英文系统上的中文用户名等）；JDK 17 的 Windows 启动器经 `GetCommandLineA` 读命令行，绝对 jar 路径里的这些字符变 `?` | 0.38.1 起启动器传相对 `$Root` 的纯 ASCII `$JarArg`；升级 horosa-skill 后 `runtime restart`（模板每次 start 重新拷贝）。旧版本临时绕过：`HOROSA_RUNTIME_ROOT=C:\horosa` |
+| Windows 上 Java 后端起不来、只剩 chart；`java_diagnostics` 是 `Unable to access jarfile …??…` 或 `could not find java.dll`；install 报 `runtime.path_not_ansi`；doctor 报 `windows:runtime_root_not_ansi` | runtime 根含系统 ANSI 代码页表示不了的字符（英文系统上的中文用户名等）；随包 JDK 17 的 java.exe 用 `GetCommandLineA` / `GetModuleFileNameA`，这些字符变 `?`——参数怎么改都绕不开（找 java.dll 时就丢字） | `setx HOROSA_RUNTIME_ROOT C:\horosa`（纯英文路径），新开终端并重启 AI 客户端后重装；0.38.1 起 install 在下载前就拒并给出这条修法 |
 | Windows 上用户名带中文 / 重音，健康机器却报 `port_conflict_foreign` / `stop_refused_foreign` | v0.38.1 前 PowerShell 的命令行输出按 UTF-8 解，而 Windows PowerShell 5.1 往管道写的是 OEM 代码页（cp437 / cp936），路径子串永不相等 | 升级到 0.38.1：映像路径（ctypes）是首选证据，PowerShell 只搬 base64 字节；`doctor.endpoints[].identity.evidence` 应见 `process.image_under_runtime_root` |
 | `doctor` / `runtime status` 在 Windows 上跑几十秒到几分钟，MCP 客户端直接掐掉 | 探针各自超时相加（两端口 × 两地址族 netstat + 每个持有者一次 PowerShell）没人管总量 | 0.38.1 起 doctor 25 s / status 15 s 硬顶，`report.budget.skipped` 列出被预算挡住的探针；仍慢看 `budget.timings` |
 | `install` / `upgrade` 报 `runtime.install_refused_running_foreign`，`--force` 也不行 | 端口上跑着不是本工具起的星阙服务（桌面端 / 另一实例 / 只有 app 标记的旧载荷）；升级不砍陌生人是不变量 | 关掉那个服务，或 `HOROSA_PORTS=auto` 换端口后再装；只是自家旧服务在跑时升级会自动停 → 换 → 起（结果 `stopped_before_swap` / `restarted`） |
@@ -928,9 +928,11 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **子进程文本一律显式解码（v0.38.1 A1/A19）。** `subprocess.run(..., text=True)` 必带 `encoding=`（UTF-8，或 tasklist 的 `oem`）
   + `errors="replace"`；归属证据优先走不经代码页的 ctypes 映像路径；PowerShell 只允许搬 base64 字节。`tests/test_subprocess_encoding.py`
   AST 扫描基线 0。
-- **Windows 上交给 JDK 17 启动器的参数一律纯 ASCII（v0.38.1）。** java.exe 用 `GetCommandLineA` 读命令行，系统 ANSI 代码页表示不了的
-  字符变 `?`；需要路径时传相对工作目录（`-WorkingDirectory $Root`）的字面量（`$JarArg`），绝不传含 runtime 根的绝对路径。
-  `verify_runtime_scripts.audit_windows_launcher` 守；真机证明是 runtime-matrix 的「horosa 测试 lane」工作目录。
+- **Windows 上 runtime 根必须能穿过系统 ANSI 代码页，交给 java.exe 的参数一律纯 ASCII（v0.38.1）。** 随包 JDK 17 的 java.exe 用
+  `GetModuleFileNameA` 找自己的 java.dll、用 `GetCommandLineA` 读参数：代码页表示不了的字符变 `?`。所以 ① install 在下载前用
+  `path_is_ansi_safe`（`mbcs` 严格编码）拒绝这种根（`runtime.path_not_ansi`），doctor 报 `windows:runtime_root_not_ansi`；② 启动器的 jar
+  参数是相对 `$Root` 的字面量 `$JarArg`（`verify_runtime_scripts.audit_windows_launcher` 守）。自动迁移到 ASCII 位置**没做**（ACL / 安全面，待定）。
+  真机证明：runtime-matrix Windows lane 的 `ansi_root_refusal` 步骤 + 「horosa lane é」runtime 根。
 - **`runtime stop` 不在别的 MCP 客户端脚下抽走服务（v0.38.1 R14）。** 登记表里仍存活的客户端 → `runtime.stop_refused_clients_attached`；
   `--force` 才停；`restart` / 升级换目录 / `uninstall` 走 `ignore_clients=True`（服务马上回来或本来就要删）。死掉的登记不拦。
 - **doctor 默认零外网请求，「最新版本」只读缓存（v0.38.1 R4）。** `latest_version` / `freshness` 来自 `<runtime_root>/.latest-manifest-cache.json`

@@ -213,6 +213,8 @@ def download_problems(source_args: list[str], download: dict[str, Any] | None) -
 
 
 class Lane:
+    ansi_encoding = "mbcs"  # the Windows ANSI code page (tests substitute a concrete code page)
+
     def __init__(self, args: argparse.Namespace) -> None:
         self.args = args
         self.work = Path(args.work_dir).resolve() if args.work_dir else Path(tempfile.mkdtemp(prefix="horosa-lane-"))
@@ -321,6 +323,33 @@ class Lane:
                          warnings=[w.get("code") for w in payload.get("warnings") or []], problems=problems,
                          version=(payload.get("manifest") or {}).get("version"), source=source_args, download=download,
                          installed_archive_sha256=self.report["installed_archive_sha256"])
+
+    def ansi_root_refusal(self) -> bool:
+        """v0.38.1（仅 Windows）：runtime 根含系统 ANSI 代码页表示不了的字符时，install 必须在下载前以 runtime.path_not_ansi 拒绝。
+
+        随包 JDK 17 的 java.exe 用 GetModuleFileNameA 找 java.dll，这种目录里 Java 必然起不来（draft 真机矩阵实证）。
+        工作目录本身带中文：拿它下面的一个子目录当 runtime 根，走一次真 CLI；代码页能表示时（中文系统）记 skipped。
+        """
+        if os.name != "nt":
+            return True
+        candidate = self.work / "runtime-non-ansi"
+        try:
+            str(candidate).encode(self.ansi_encoding)
+            return self.step("ansi_root_refusal", True, skipped=True, reason="work dir is representable in this code page")
+        except UnicodeEncodeError:
+            pass
+        except LookupError:
+            return self.step("ansi_root_refusal", True, skipped=True, reason=f"no {self.ansi_encoding} codec on this host")
+        code, payload, err = self.cli_json(
+            "install", "--archive", str(self.work / "never-read.zip"), timeout=120,
+            env=self.env(HOROSA_RUNTIME_ROOT=str(candidate)),
+        )
+        problems: list[str] = []
+        if code == 0 or (payload or {}).get("code") != "runtime.path_not_ansi":
+            problems.append(f"install under a non-ANSI root: exit {code} code={(payload or {}).get('code')!r} (expected runtime.path_not_ansi) {err[-300:]}")
+        if candidate.exists() and any(candidate.iterdir()):
+            problems.append(f"the refused install still wrote into {candidate}")
+        return self.step("ansi_root_refusal", not problems, problems=problems, code=(payload or {}).get("code"))
 
     def doctor(self, name: str = "doctor") -> tuple[bool, dict[str, Any]]:
         code, payload, err = self.cli_json("doctor", timeout=BUDGET["doctor"])
@@ -674,7 +703,7 @@ class Lane:
 
     def run(self) -> dict[str, Any]:
         started = time.perf_counter()
-        ok = self.install() and self.doctor_after_install() and self.start()
+        ok = self.ansi_root_refusal() and self.install() and self.doctor_after_install() and self.start()
         if ok:
             engines_ok = self.engines()
             clients_ok = self.client_setup()
