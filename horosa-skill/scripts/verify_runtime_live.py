@@ -194,6 +194,11 @@ def evaluate_http_probe(*, no_auth_status: int | None, bad_host_status: int | No
     return problems
 
 
+def new_client_entries(before: set[str], clients: dict[str, Any]) -> dict[str, Any]:
+    """挂接后新出现的客户端登记（按 pid 集合差认，不按 Popen 的 pid —— Windows venv launcher 的子进程才是真 serve）。"""
+    return {pid: info for pid, info in clients.items() if pid not in before}
+
+
 def download_problems(source_args: list[str], download: dict[str, Any] | None) -> list[str]:
     """R1：release / schedule 模式（http(s) 清单）必须记录到一次真实传输；file:// / --archive 不要求。"""
     manifest = source_args[1] if len(source_args) == 2 and source_args[0] == "--manifest-url" else ""
@@ -537,6 +542,10 @@ class Lane:
         """R14：第二个 stdio 客户端挂着时 `runtime stop` 必须 stop_refused_clients_attached；客户端退出后登记消失。"""
         started = time.perf_counter()
         problems: list[str] = []
+        # 🔴 按「新出现的登记」认客户端，不按 Popen 的 pid：Windows 上 venv 的 python.exe 是个 launcher，真解释器是它的
+        # 子进程，`serve` 登记的是子进程 pid（v0.37.0 CI 在监听者 pid 上踩过同一个坑）。先拍一张挂接前的快照。
+        _c, before_status, _e = self.cli_json("runtime", "status", timeout=60)
+        before = set(((before_status or {}).get("clients") or {}))
         client = subprocess.Popen(
             [*CLI, "serve", "--transport", "stdio", "--skip-runtime-start"], cwd=str(PKG_ROOT), env=self.env(),
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
@@ -546,7 +555,7 @@ class Lane:
             deadline = time.perf_counter() + 90
             while time.perf_counter() < deadline:
                 _c, status, _e = self.cli_json("runtime", "status", timeout=60)
-                attached = {pid: info for pid, info in ((status or {}).get("clients") or {}).items() if int(pid) == client.pid}
+                attached = new_client_entries(before, (status or {}).get("clients") or {})
                 if attached:
                     break
                 time.sleep(2)
@@ -569,7 +578,7 @@ class Lane:
         deadline = time.perf_counter() + 60
         while time.perf_counter() < deadline:
             _c, status, _e = self.cli_json("runtime", "status", timeout=60)
-            if str(client.pid) not in ((status or {}).get("clients") or {}):
+            if not attached or not set(attached) & set((status or {}).get("clients") or {}):
                 break
             time.sleep(2)
         else:

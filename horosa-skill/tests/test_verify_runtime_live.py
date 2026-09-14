@@ -158,3 +158,13 @@ def test_release_mode_install_must_record_a_real_download() -> None:
     assert live.download_problems(remote, {"bytes": 737084051, "url": "https://…", "mirror_used": False}) == []
     assert live.download_problems(["--manifest-url", "file:///tmp/lane-manifest.json"], None) == [], "artifact 模式（file://）不要求下载"
     assert live.download_problems(["--archive", "/x.tar.gz"], None) == []
+
+
+def test_attached_client_is_recognised_by_a_new_registry_entry_not_by_the_popen_pid() -> None:
+    """Windows 上 Popen 拿到的是 venv launcher 的 pid，登记表里是子进程 pid —— 按 pid 相等去找必然落空（负向对照）。"""
+    before = {"111"}
+    after = {"111": {"transport": "stdio"}, "4242": {"transport": "stdio"}}
+    launcher_pid = 4000  # the Popen pid on Windows: never what `serve` registers
+    assert {pid for pid in after if int(pid) == launcher_pid} == set(), "the old pid-equality lookup finds nothing"
+    assert live.new_client_entries(before, after) == {"4242": {"transport": "stdio"}}
+    assert live.new_client_entries(set(after), after) == {}
