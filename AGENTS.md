@@ -569,6 +569,12 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   GitHub `digest`（退路 SHA256SUMS.txt）逐一比对。release / dispatch / schedule 模式的 lane 一律通过**公开清单 URL** 安装（安装器自己的
   下载链），lane-report 必须带 `download.bytes > 0`——「lane 传了 file:// 就以为验过下载」是 v0.38.1 复审抓到的盲区。翻公开后
   publish job 再 dispatch 一次 release 模式矩阵。
+- **publish job 的每一步都要先在真 draft 上跑过（v0.38.1 发布期）。** draft 对 `GET releases/tags/<tag>` 返回 **404**——draft 期的一切
+  API 读取走列表端点（`releases?per_page=100` + `--paginate` + `select(.tag_name == …)`）；completeness 里仍用 `releases/tags` 是对的，它只读已公开的 latest。
+  job 级 `permissions:` **整块替换** workflow 级：publish job 翻公开后的 `gh workflow run`（completeness + release 模式矩阵）需要 `actions: write`
+  ——v0.38.0 公开时这两步还不存在，它们第一次真跑就是 v0.38.1（这次两条后续 run 的 triggering actor 都是 `github-actions[bot]`，路径已证）。
+  `test_release_pipeline_shape.py::test_publish_requires_the_matrix_and_the_same_bytes` 锁两条。**tag 只在 release 仍是 draft 时允许重指**
+  （draft 矩阵抓到产品缺陷 → 修 → 删 tag 重打 → seed / .mcpb / wheel 从新 commit 重建，`server.json` 的 mcpb sha 回填来自同一次 `--draft`）；公开后永不移动。
 - **schedule 首跑要观察（v0.38.1 R2）。** GitHub 的整点 cron 槽会延迟或丢弃（2026-09-14 的 03:00 槽 5.5 h 后才跑），矩阵 cron 放在
   `23 4 * * 1`，`release-completeness.yml`（6 小时一次、稳定）的 `weekly-matrix-kick` 在 6 天无矩阵运行时 dispatch 一次。README 平台表
   写「每周巡检」之前，先观察到一次 `schedule` 事件的 release 模式矩阵跑绿。
@@ -646,6 +652,8 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 0. **push 前跑 `uv run python scripts/run_ci_gates.py`**——它解析 `.github/workflows/ci.yml` 的 `test` job，把同样的
    `uv run …` 门禁（pytest + 全部 verify_* + knowledge index + benchmark smoke）按 CI 形状在本机跑一遍。只跑 pytest +
    docs-sync 不算数（v0.38.0：主干红了 19 个 commit，本机每次都「全绿」）；push 之后再看 `gh run list` 的结论。
+   🔴 **不要 `for g in scripts/verify_*.py` 裸跑全部脚本**（v0.38.1 发布后本机误跑过一次）：`verify_runtime_live.py` 是**真 lane**（下载 ~730 MB、
+   起服务），`verify_matrix_digests.py` 需要 publish job 的输入。门禁的本机镜像只有 `run_ci_gates.py`；本机跑 lane 要显式传参、自己决定。
 1. venv 坏了先修（miniconda symlink 触 macOS library-validation on `pydantic_core`）：
    `uv venv --clear --python-preference only-managed --python 3.12 && uv sync`（uv-managed CPython 无
    library-validation）。
@@ -760,6 +768,8 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | 终端里 doctor ready，Codex 里技法全报 `runtime.not_installed` | Codex 不转发 shell 环境，server 用另一套 runtime 根 | `client check --client codex` 报 `codex_env_roots_missing`；重跑 `client config --format codex --write`（env 表写两个绝对根）；`setup` 的 stdio 探针读 `horosa://runtime/status` 直接报 `setup.stdio_probe_runtime_mismatch` |
 | doctor warning `runtime:payload_outdated` | 已装载荷落后于最后一次看到的发布清单，或 `export_registry_version` 低于本包期望（本机 0.3.0 / 6 < 14 一直被报 ready） | 按 warning 的 `fix` 跑对应上下文的 `upgrade` 命令；`doctor --probe-network` 刷新版本缓存 |
 | 维护机上 `test_runtime_manager.py` 全绿、CI 上四条红在 `runtime.port_conflict_unknown_holder` | v0.37.0 起只 stub `_service_status` 的用例会拿那个 URL **真的**跑归属判定：维护机 9999/8899 上跑着真 runtime → ours；CI 上没人监听 → unknown | 本机复现要连**归属**一起伪装：autouse fixture 把 `identity.probe_identity` 打成返回 None、`listener_pids` 打成返回 `[]`，`pytest -p <plugin>` 挂上去。`_managed_mode` 已内置 classify_endpoint 桩 |
+| `client openclaw-setup` / `openclaw-check` 在 Linux / Intel Mac 上打出 `NameError: name 'details' is not defined` | v0.38.1 错误格式化的 `runtime.platform_unsupported` 分支读了未定义的名字（只在不发载荷的平台可达，没有测试走过） | main 已修（随下一版）；在那之前照网关模式配置 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`，`doctor --explain` 给同样的出路；`verify_undefined_names.py` 守住同类 |
+| OpenClaw smoke / `client openclaw-setup` 报 `client.command_timeout` | 看 `details`：`phase: npx_install` = npx 首次下载 mcporter 超时；`output_complete: true` = 结果已完整打印但进程没退出（进程树里有子进程拖住管道）；两者都不是 = 调用本身没回来 | `npm i -g mcporter`（或 `HOROSA_MCPORTER_BIN`）；`MCPORTER_DEBUG_HANG=1` 重跑看 mcporter 在等哪个句柄，清掉残留 `horosa-skill serve --transport stdio`；其余先 `doctor` |
 
 ## 9. Stability invariants（稳定性不变量 — don't regress these）
 
@@ -938,6 +948,16 @@ A global stability pass hardened these; keep them true when you touch the releva
   `--force` 才停；`restart` / 升级换目录 / `uninstall` 走 `ignore_clients=True`（服务马上回来或本来就要删）。死掉的登记不拦。
 - **doctor 默认零外网请求，「最新版本」只读缓存（v0.38.1 R4）。** `latest_version` / `freshness` 来自 `<runtime_root>/.latest-manifest-cache.json`
   （每次成功抓取发布清单顺手写）；没有缓存就老实 `null` 并提示 `--probe-network`。过期是 warning，不阻断。
+- **stdio server 在客户端关掉 stdin 后 15 s 内退出（v0.38.1 发布后）。** 退出路径上不留非 daemon 线程、不阻塞（runtime 预热线程是 daemon）；
+  孤儿 `serve` 会一直登记为 attached client，让 `runtime stop` / 升级拒绝，还会拖住调用方的 stderr 管道（TS SDK 以 inherit 起 server）。
+  `tests/test_stdio_server_exit.py`（真子进程、不带 `--skip-runtime-start`、真调一次工具）在 Linux 与 Windows CI 上都跑。
+- **未定义名字基线 0（v0.38.1 发布后）。** `scripts/verify_undefined_names.py`（`ruff==0.16.7` 钉死，只选 F821/F822/F823，src/scripts/tests）。
+  只在没人跑的平台上可达的分支就是没测过的代码——这类「运行时必崩」错误靠静态检查兜，不靠 pytest 走到。
+- **lane 永不碰调用者自己的客户端配置（v0.38.1 发布后）。** 九客户端步骤一律 `--config <work>/client-configs/…`；Claude Code user scope
+  步骤用 `Lane.claude_user_scope_env()`（`HOME` / `USERPROFILE` / `CLAUDE_CONFIG_DIR` 指向 `<work>/claude-user-home`）——旧实现继承真 HOME，维护机上
+  `claude mcp add --scope user` 写的是真 `~/.claude.json`，清理那句 `claude mcp remove --scope user horosa` 还会删掉维护者原有的条目（托管 runner 没有
+  `claude`，矩阵从没暴露）。本机用真 `claude` 验过隔离：add / get / remove 全落在隔离目录，真配置 sha 不变。守卫
+  `tests/test_verify_runtime_live.py::test_claude_user_scope_step_never_touches_the_invoking_users_claude_config`。
 - **Hand-made vendor stamps are line-ending independent.** `revendor_core_js._sha256_file` hashes the
   CRLF→LF-normalized UTF-8 text（raw bytes only for non-UTF-8）, so `upstream_sha256`/`derived_sha256`
   stamped on mac over LF sources still match on a Windows checkout（`core.autocrlf=true`）— a raw-bytes

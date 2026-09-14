@@ -456,8 +456,9 @@ class Lane:
         """R6：`setup --client claude-code --scope user`（不传 --config）。`claude` 不在 PATH 时必须打印可复制命令并 ok；
         在 PATH 时真跑 `claude mcp add --scope user` → `claude mcp get horosa` → 清理。"""
         started = time.perf_counter()
+        isolated = self.claude_user_scope_env()
         code, payload, err = self.cli_json("setup", "--client", "claude-code", "--scope", "user", "--skip-install",
-                                           "--no-probe-network", "--no-stdio-probe", timeout=BUDGET["setup"])
+                                           "--no-probe-network", "--no-stdio-probe", timeout=BUDGET["setup"], env=isolated)
         config = ((payload or {}).get("steps") or {}).get("config") or {}
         problems: list[str] = []
         if code != 0 or not payload or payload.get("ok") is not True:
@@ -470,17 +471,28 @@ class Lane:
         executed = bool(config.get("executed"))
         verified = None
         if executed:
-            got, out, _ = self.cli_wrap(["claude", "mcp", "get", "horosa"], timeout=60)
+            got, out, _ = self.cli_wrap(["claude", "mcp", "get", "horosa"], timeout=60, env=isolated)
             verified = got == 0 and "horosa" in out
             if not verified:
                 problems.append("`claude mcp add --scope user` ran but `claude mcp get horosa` does not show it")
-            self.cli_wrap(["claude", "mcp", "remove", "--scope", "user", "horosa"], timeout=60)
+            self.cli_wrap(["claude", "mcp", "remove", "--scope", "user", "horosa"], timeout=60, env=isolated)
         return self.step("claude_code_user_scope", not problems, seconds=round(time.perf_counter() - started, 1), mode=mode,
-                         executed=executed, verified=verified, command=config.get("command"), problems=problems)
+                         executed=executed, verified=verified, command=config.get("command"), problems=problems,
+                         claude_home=isolated["HOME"])
 
-    def cli_wrap(self, command: list[str], *, timeout: float) -> tuple[int, str, str]:
+    def claude_user_scope_env(self) -> dict[str, str]:
+        """The lane env with a throwaway home for Claude Code: the user-scope step must never read or write the invoking
+        user's real config. Hosted runners have no `claude`, so this was invisible there; on a maintainer machine the old
+        step ran `claude mcp add --scope user` against the real ~/.claude.json, and its cleanup
+        (`claude mcp remove --scope user horosa`) would delete a `horosa` entry the maintainer already had."""
+        home = self.work / "claude-user-home"
+        config_dir = home / ".claude"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        return self.env(HOME=str(home), USERPROFILE=str(home), CLAUDE_CONFIG_DIR=str(config_dir))
+
+    def cli_wrap(self, command: list[str], *, timeout: float, env: dict[str, str] | None = None) -> tuple[int, str, str]:
         try:
-            completed = subprocess.run(command, cwd=str(PKG_ROOT), env=self.env(), capture_output=True, text=True,
+            completed = subprocess.run(command, cwd=str(PKG_ROOT), env=env or self.env(), capture_output=True, text=True,
                                        encoding="utf-8", errors="replace", timeout=timeout)
         except (OSError, subprocess.SubprocessError) as exc:
             return 1, "", f"{type(exc).__name__}: {exc}"

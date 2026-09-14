@@ -120,6 +120,9 @@ jobs:
       - name: Verify error-code recovery (every code classifies; bilingual messages only increase)
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_error_recovery.py
+      - name: Verify no undefined names (F821/F822/F823 - a NameError parked in a branch no test runs)
+        working-directory: ./horosa-skill
+        run: uv run python scripts/verify_undefined_names.py --self-test && uv run python scripts/verify_undefined_names.py
       - name: Verify wheel contents (what `uvx horosa-skill` will actually install)
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_wheel_contents.py

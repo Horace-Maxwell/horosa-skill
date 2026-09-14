@@ -24,11 +24,14 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pytest>=8.3.0",
+  # scripts/verify_undefined_names.py (F821/F822/F823) — exact pin: the gate must not change under a lint upgrade
+  "ruff==0.16.7",
 ]
 
 [dependency-groups]
 dev = [
   "pytest>=8.3.0",
+  "ruff==0.16.7",
 ]
 
 [project.scripts]

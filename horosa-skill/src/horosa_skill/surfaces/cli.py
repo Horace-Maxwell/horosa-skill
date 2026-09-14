@@ -10,7 +10,7 @@ import threading
 import time
 from importlib.metadata import PackageNotFoundError, version as package_version
 from contextlib import contextmanager
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Mapping, Any, Optional
 
 import typer
@@ -31,7 +31,7 @@ from horosa_skill.client_tools import (
     wheel_asset_name, zero_install_wheel_url,
 )
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
-from horosa_skill.errors import RuntimeError, ToolValidationError
+from horosa_skill.errors import RuntimeError, ToolValidationError, bilingual
 from horosa_skill.runtime import HorosaRuntimeManager
 from horosa_skill.service import HorosaSkillService
 from horosa_skill.surfaces.mcp_server import COMPACT_SURFACE_TOOL_COUNT, FACADE_TOOL_COUNT
@@ -1128,7 +1128,8 @@ def _friendly_runtime_error_payload(
     next_action = "Review the error details below and rerun the command."
     user_summary = f"{action_label} did not finish successfully."
     code = exc.code or ""
-    command = [str(part) for part in exc.details.get("command", [])] if isinstance(exc.details, dict) else []
+    details = exc.details if isinstance(exc.details, dict) else {}
+    command = [str(part) for part in details.get("command", [])]
     command_text = " ".join(command).lower()
     if code == "client.command_not_found" and "mcporter" in command_text:
         user_summary = f"{action_label} could not find `mcporter` on this machine."
@@ -1141,7 +1142,7 @@ def _friendly_runtime_error_payload(
         next_action = "Install uv, or set `HOROSA_UV_BIN`, then rerun the command."
     elif code == "runtime.platform_unsupported":
         user_summary = f"{action_label} found no offline runtime payload for this platform."
-        next_action = str((details or {}).get("next_action") or "Use gateway mode: point HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT at a supported machine.")
+        next_action = str(details.get("next_action") or "Use gateway mode: point HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT at a supported machine.")
     elif code.startswith("runtime.install") or code == "runtime.not_installed":
         user_summary = f"{action_label} could not finish installing the offline runtime."
         next_action = "Check your network access to the Horosa runtime release and rerun the setup command."
@@ -1151,6 +1152,21 @@ def _friendly_runtime_error_payload(
     elif code in {"client.command_failed", "client.invalid_json"}:
         user_summary = f"{action_label} started the OpenClaw client command, but it did not return a clean JSON result."
         next_action = "Run `uv run horosa-skill doctor` and make sure mcporter can start Horosa, then retry the smoke check."
+    elif code == "client.command_timeout" and details.get("phase") == "npx_install":
+        user_summary = f"{action_label} could not fetch `mcporter` through npx in time (npx downloads it on first use)."
+        next_action = (
+            "Install it once with `npm i -g mcporter` (or set `HOROSA_MCPORTER_BIN`), "
+            + (f"then rerun `{retry_command}`." if retry_command else "then rerun the command.")
+        )
+    elif code == "client.command_timeout" and details.get("output_complete"):
+        user_summary = (
+            f"{action_label}: the OpenClaw client command printed its complete result, but its process did not exit in time."
+        )
+        next_action = (
+            "Something in the client's process tree (usually the stdio server it started) kept the pipes open. "
+            "Rerun with `MCPORTER_DEBUG_HANG=1` to list what mcporter was waiting on, stop leftover "
+            "`horosa-skill serve --transport stdio` / `mcporter` processes, then retry the smoke check."
+        )
     elif code == "client.command_timeout":
         user_summary = f"{action_label} started the OpenClaw client command, but the subprocess did not return in time."
         next_action = (
@@ -1192,6 +1208,73 @@ def _build_openclaw_config(
     raise typer.BadParameter("`--format` must be either `mcporter` or `openclaw`.")
 
 
+def _timeout_output_text(value: object) -> str:
+    """`TimeoutExpired.stdout/stderr` is bytes on POSIX even with text=True (str on Windows) — keep both."""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value if isinstance(value, str) else ""
+
+
+def _has_json_object(text: str) -> bool:
+    try:
+        return isinstance(extract_json_value(text or ""), dict)
+    except ValueError:
+        return False
+
+
+# v0.38.1 post-release: the first `npx mcporter …` also downloads mcporter (with a native bundler binding) — that
+# install used to run inside the 150 s budget of the first tool call. Fetch it once, on its own budget, first.
+NPX_MCPORTER_WARMUP_TIMEOUT_SECONDS = 300.0
+
+
+def _is_npx_mcporter(command: list[str]) -> bool:
+    # PureWindowsPath splits on both "/" and "\\", so the check reads the same on every host.
+    return len(command) == 2 and PureWindowsPath(command[0]).name.lower() in {"npx", "npx.cmd", "npx.exe"} and command[1] == "mcporter"
+
+
+def _warm_npx_mcporter(command: list[str], *, cwd: Path) -> float | None:
+    """When mcporter resolves through the npx fallback, run `npx mcporter --version` once so npx's first-run install
+    is not charged to a tool call's timeout. Returns seconds spent, or None when mcporter is a real executable."""
+    if not _is_npx_mcporter(command):
+        return None
+    warm_command = [*command, "--version"]
+    started = time.perf_counter()
+    try:
+        subprocess.run(
+            warm_command,
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=NPX_MCPORTER_WARMUP_TIMEOUT_SECONDS,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            str(exc), code="client.command_not_found", details={"command": warm_command, "cwd": str(cwd), "phase": "npx_install"}
+        ) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            bilingual(
+                f"npx 在 {NPX_MCPORTER_WARMUP_TIMEOUT_SECONDS:.0f} 秒内没下载完 mcporter（首次使用时 npx 会先下载它）。",
+                f"npx did not finish fetching mcporter within {NPX_MCPORTER_WARMUP_TIMEOUT_SECONDS:.0f} seconds (npx downloads it on first use).",
+            ),
+            code="client.command_timeout",
+            details={
+                "command": warm_command,
+                "cwd": str(cwd),
+                "phase": "npx_install",
+                "timeout_seconds": NPX_MCPORTER_WARMUP_TIMEOUT_SECONDS,
+                "output_complete": False,
+                "stderr": _timeout_output_text(exc.stderr)[-4000:],
+            },
+        ) from exc
+    # The exit code is deliberately ignored: this step only pays for the download. A broken install surfaces on the
+    # first real call with its own error.
+    return round(time.perf_counter() - started, 3)
+
+
 def _run_subprocess_json(command: list[str], *, cwd: Path, timeout_seconds: float = 180.0) -> dict[str, Any]:
     try:
         result = subprocess.run(
@@ -1207,6 +1290,8 @@ def _run_subprocess_json(command: list[str], *, cwd: Path, timeout_seconds: floa
     except FileNotFoundError as exc:
         raise RuntimeError(str(exc), code="client.command_not_found", details={"command": command, "cwd": str(cwd)}) from exc
     except subprocess.TimeoutExpired as exc:
+        stdout_text = _timeout_output_text(exc.stdout)
+        stderr_text = _timeout_output_text(exc.stderr)
         raise RuntimeError(
             f"Command timed out after {timeout_seconds} seconds: {' '.join(command)}",
             code="client.command_timeout",
@@ -1214,8 +1299,11 @@ def _run_subprocess_json(command: list[str], *, cwd: Path, timeout_seconds: floa
                 "command": command,
                 "cwd": str(cwd),
                 "timeout_seconds": timeout_seconds,
-                "stdout": (exc.stdout or "")[-4000:] if isinstance(exc.stdout, str) else "",
-                "stderr": (exc.stderr or "")[-4000:] if isinstance(exc.stderr, str) else "",
+                # True = the command had already printed a complete JSON result and then did not exit: something in its
+                # process tree (usually the stdio server it started) kept the pipes open. False = it never finished.
+                "output_complete": _has_json_object(stdout_text),
+                "stdout": stdout_text[-4000:],
+                "stderr": stderr_text[-4000:],
             },
         ) from exc
     parsed: dict[str, Any] | None = None
@@ -1263,10 +1351,12 @@ def _run_openclaw_smoke_check(
     include_list: bool = True,
 ) -> dict[str, Any]:
     call_timeout_ms = 120000
+    mcporter_command = resolve_mcporter_command()
+    npx_warmup_seconds = _warm_npx_mcporter(mcporter_command, cwd=workspace_root)
 
     def call_tool(tool_name: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         command = [
-            *resolve_mcporter_command(),
+            *mcporter_command,
             "call",
             f"horosa.{tool_name}",
         ]
@@ -1290,7 +1380,7 @@ def _run_openclaw_smoke_check(
     if include_list:
         list_result = _run_subprocess_json(
             [
-                *resolve_mcporter_command(),
+                *mcporter_command,
                 "list",
                 "horosa",
                 "--json",
@@ -1360,6 +1450,7 @@ def _run_openclaw_smoke_check(
         "workspace": str(workspace_root),
         "config": str(config_path),
         "list_checked": include_list,
+        "npx_warmup_seconds": npx_warmup_seconds,
         "server_visible": (list_result or {}).get("status") == "ok" if include_list else registry_result.get("ok") is True,
         "listed_tool_count": len((list_result or {}).get("tools", [])) if include_list else None,
         "knowledge_registry_ok": registry_result.get("ok") is True,

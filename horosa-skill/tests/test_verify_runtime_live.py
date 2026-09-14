@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -204,3 +205,32 @@ def test_non_ascii_root_refusal_step_does_nothing_off_windows(tmp_path: Path, mo
     # 显式伪装 POSIX：windows-smoke 上 os.name 本来就是 nt（d9e9aa5 的 CI 在那里真跑了一次中文根 install，拿到了拒绝码）
     monkeypatch.setattr(live.os, "name", "posix")
     assert posix.non_ascii_root_refusal() is True and "non_ascii_root_refusal" not in posix.report["steps"]
+
+
+def test_claude_user_scope_step_never_touches_the_invoking_users_claude_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """R6 的 user scope 步骤在维护机上（`claude` 在 PATH）会真跑 `claude mcp add --scope user`——旧实现继承真 HOME，写的是维护者自己的
+    ~/.claude.json，清理那句 `claude mcp remove --scope user horosa` 还会删掉维护者**原本就有**的 horosa 条目。托管 runner 上没有 claude，
+    所以矩阵从没暴露它（2026-09-14 一次本机误跑的 lane 在 install 步骤被中止，才顺着看到）。负向对照：旧代码传给 setup 的 HOME = 真 HOME。"""
+    lane = _lane(tmp_path, "horosa lane")
+    real_home = os.environ.get("HOME") or os.environ.get("USERPROFILE") or str(Path.home())
+    seen: list[tuple[str, dict[str, str]]] = []
+
+    def fake_cli_json(*args, timeout, env=None):  # noqa: ANN002
+        seen.append(("setup", dict(env or {})))
+        return 0, {"ok": True, "steps": {"config": {"mode": "claude-mcp-add", "executed": True, "command": "claude mcp add ..."}}}, ""
+
+    def fake_cli_wrap(command, *, timeout, env=None):  # noqa: ANN001
+        seen.append((" ".join(command[:3]), dict(env or {})))
+        return 0, "horosa: uv run ...", ""
+
+    monkeypatch.setattr(lane, "cli_json", fake_cli_json)
+    monkeypatch.setattr(lane, "cli_wrap", fake_cli_wrap)
+    assert lane.claude_code_user_scope() is True
+    assert [name for name, _env in seen] == ["setup", "claude mcp get", "claude mcp remove"]
+    work = lane.work.resolve()
+    for name, env in seen:
+        for key in ("HOME", "USERPROFILE", "CLAUDE_CONFIG_DIR"):
+            assert env.get(key), f"{name}: {key} must be set to an isolated location"
+            assert Path(env[key]).resolve().is_relative_to(work), f"{name}: {key}={env[key]!r} escapes the lane work dir"
+            assert Path(env[key]).resolve() != Path(real_home).resolve()
+        assert env.get("HOROSA_RUNTIME_ROOT") == str(lane.runtime_root), f"{name}: the isolated env must still be the lane env"

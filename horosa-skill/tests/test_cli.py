@@ -612,3 +612,129 @@ def test_run_subprocess_json_times_out_cleanly(monkeypatch, tmp_path: Path) -> N
 
     assert exc_info.value.code == "client.command_timeout"
     assert exc_info.value.details["timeout_seconds"] == 1
+
+
+def test_friendly_payload_for_platform_unsupported_carries_the_dead_end_advice(tmp_path: Path) -> None:
+    # v0.38.1 发布后抓到：这个分支读的是函数里不存在的名字 `details`（NameError）——Linux / Intel Mac 上
+    # `client openclaw-setup` / `openclaw-check` 撞到 runtime.platform_unsupported 时，本该打印网关出路，
+    # 实际是一段 traceback。守卫之二是 CI 的 verify_undefined_names（F821 基线 0）。
+    from horosa_skill.runtime.manager import _platform_dead_end_advice
+
+    advice = _platform_dead_end_advice("linux-x64")
+    exc = cli.RuntimeError("no payload for linux-x64", code="runtime.platform_unsupported", details=advice)
+    payload = cli._friendly_runtime_error_payload(
+        exc, action_label="OpenClaw setup", workspace_root=tmp_path / "ws", config_path=None
+    )
+    assert payload["code"] == "runtime.platform_unsupported"
+    assert payload["next_action"] == advice["next_action"]
+    assert "HOROSA_SERVER_ROOT" in payload["next_action"]
+    assert payload["retry_command"]
+
+    bare = cli.RuntimeError("no payload", code="runtime.platform_unsupported", details=None)
+    fallback = cli._friendly_runtime_error_payload(bare, action_label="OpenClaw check", workspace_root=None, config_path=None)
+    assert "HOROSA_SERVER_ROOT" in fallback["next_action"]
+
+
+def test_openclaw_smoke_fetches_npx_mcporter_before_the_first_timed_call(monkeypatch, tmp_path: Path) -> None:
+    # v0.38.1 发布后：Windows CI 的 OpenClaw smoke 第一跳 `npx mcporter call …` 在 150 s 处超时，stderr 里是
+    # 「npm warn exec … will be installed: mcporter@0.9.0」——npx 首次安装（含原生打包器绑定）算在了工具调用的预算里。
+    # 负向对照：旧实现第一条子进程就是计时的 call，且没有 `--version` 预热。
+    workspace = tmp_path / "workspace"
+    config_path = workspace / "config" / "mcporter.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text("{}", encoding="utf-8")
+    events: list[tuple[str, list[str], float | None]] = []
+
+    def fake_run(command, **kwargs):
+        events.append(("warmup", list(command), kwargs.get("timeout")))
+        return subprocess.CompletedProcess(args=command, returncode=0, stdout="0.9.0\n", stderr="")
+
+    def fake_run_subprocess_json(command: list[str], *, cwd: Path, timeout_seconds: float = 180.0) -> dict[str, object]:
+        events.append(("json", command, timeout_seconds))
+        if any("horosa_astro_chart" in item for item in command):
+            return {"ok": True, "memory_ref": {"run_id": "run-1", "artifact_path": str(tmp_path / "a.json")}}
+        return {"ok": True}
+
+    npx = str(tmp_path / "bin" / ("npx.cmd" if os.name == "nt" else "npx"))
+    monkeypatch.setattr(cli, "resolve_mcporter_command", lambda: [npx, "mcporter"])
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+    monkeypatch.setattr(cli, "_run_subprocess_json", fake_run_subprocess_json)
+
+    report = cli._run_openclaw_smoke_check(
+        workspace_root=workspace, config_path=config_path, output_path=tmp_path / "smoke.json", include_list=False
+    )
+
+    assert events[0] == ("warmup", [npx, "mcporter", "--version"], cli.NPX_MCPORTER_WARMUP_TIMEOUT_SECONDS)
+    assert cli.NPX_MCPORTER_WARMUP_TIMEOUT_SECONDS > 150
+    assert [kind for kind, _command, _timeout in events].count("warmup") == 1
+    assert all(kind == "json" for kind, _command, _timeout in events[1:])
+    assert events[1][1][:3] == [npx, "mcporter", "call"]
+    assert isinstance(report["npx_warmup_seconds"], float)
+
+
+def test_openclaw_smoke_skips_the_warmup_for_an_installed_mcporter(monkeypatch, tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    config_path = workspace / "config" / "mcporter.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text("{}", encoding="utf-8")
+
+    def forbidden_run(*args, **kwargs):
+        raise AssertionError("an installed mcporter needs no npx warm-up")
+
+    monkeypatch.setattr(cli, "resolve_mcporter_command", lambda: [str(tmp_path / "mcporter")])
+    monkeypatch.setattr(cli.subprocess, "run", forbidden_run)
+    monkeypatch.setattr(
+        cli,
+        "_run_subprocess_json",
+        lambda command, *, cwd, timeout_seconds=180.0: (
+            {"ok": True, "memory_ref": {"run_id": "r", "artifact_path": "a"}} if any("chart" in c for c in command) else {"ok": True}
+        ),
+    )
+    report = cli._run_openclaw_smoke_check(
+        workspace_root=workspace, config_path=config_path, output_path=tmp_path / "smoke.json", include_list=False
+    )
+    assert report["npx_warmup_seconds"] is None
+    assert cli._is_npx_mcporter(["npx", "mcporter"]) and cli._is_npx_mcporter(["C:\\node\\npx.cmd", "mcporter"])
+    assert not cli._is_npx_mcporter(["mcporter"]) and not cli._is_npx_mcporter(["npx", "other-package"])
+
+
+def test_npx_warmup_timeout_names_the_install_phase(monkeypatch, tmp_path: Path) -> None:
+    def slow_run(command, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=command, timeout=kwargs["timeout"], output=b"", stderr=b"npm warn exec ... will be installed")
+
+    monkeypatch.setattr(cli.subprocess, "run", slow_run)
+    with pytest.raises(cli.RuntimeError) as exc_info:
+        cli._warm_npx_mcporter(["npx", "mcporter"], cwd=tmp_path)
+    assert exc_info.value.code == "client.command_timeout"
+    assert exc_info.value.details["phase"] == "npx_install"
+    assert "will be installed" in exc_info.value.details["stderr"]
+    payload = cli._friendly_runtime_error_payload(exc_info.value, action_label="OpenClaw setup", workspace_root=tmp_path)
+    assert "npx" in payload["user_summary"] and "npm i -g mcporter" in payload["next_action"]
+
+
+def test_run_subprocess_json_timeout_reports_a_complete_result_that_did_not_exit(monkeypatch, tmp_path: Path) -> None:
+    # 失败那一跑：stdout 里已经是完整的工具结果，进程却没退出。POSIX 上 TimeoutExpired.stdout 是 bytes（即使 text=True），
+    # 旧实现 `isinstance(exc.stdout, str)` 直接丢成 ""——在 Linux/macOS 上连这份证据都留不下。
+    complete = b'{"ok": true, "trace_id": "t"}\n'
+
+    def hung_after_output(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=["mcporter"], timeout=1, output=complete, stderr=b"")
+
+    monkeypatch.setattr(cli.subprocess, "run", hung_after_output)
+    with pytest.raises(cli.RuntimeError) as exc_info:
+        cli._run_subprocess_json(["mcporter", "call", "horosa.horosa_knowledge_registry"], cwd=tmp_path, timeout_seconds=1)
+    details = exc_info.value.details
+    assert details["output_complete"] is True
+    assert details["stdout"] == complete.decode("utf-8")
+    payload = cli._friendly_runtime_error_payload(exc_info.value, action_label="OpenClaw setup", workspace_root=tmp_path)
+    assert "complete result" in payload["user_summary"]
+    assert "MCPORTER_DEBUG_HANG=1" in payload["next_action"]
+
+    def never_finished(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=["mcporter"], timeout=1, output=b'{"ok": tr', stderr=None)
+
+    monkeypatch.setattr(cli.subprocess, "run", never_finished)
+    with pytest.raises(cli.RuntimeError) as partial:
+        cli._run_subprocess_json(["mcporter", "call", "x"], cwd=tmp_path, timeout_seconds=1)
+    assert partial.value.details["output_complete"] is False
+    assert "did not return in time" in cli._friendly_runtime_error_payload(partial.value, action_label="OpenClaw setup")["user_summary"]

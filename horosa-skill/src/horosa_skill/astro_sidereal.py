@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 # ─── 47 恒星黄道 ayanāṃśa：key → 显示名（与 星阙 INDIA_AYANAMSA_MODES 一致）────────────
 SIDEREAL_AYANAMSA_LABELS: dict[str, str] = {
     "lahiri": "Lahiri / Chitrapaksha",

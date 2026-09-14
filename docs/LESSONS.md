@@ -16,7 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
-| v0.38.1 (2026-09) | 复审：自动化的盲区与 Windows 编码——B0 归属证据不经代码页 / doctor 预算 / 长路径闸 / 隔离前置；B1 升级就地不砍服务、doctor 报载荷过期、selfcheck 先起 runtime；B2 九客户端按各家真实规则（占位符白名单、JSONC 保注释、Cline/Zed timeout、Codex env 根、探针按客户端形状 + `horosa://runtime/status`、wheel 预下载、OAuth 网关改口、镜像指针）；B3 矩阵真下载、出厂预算、HTTP 握手、九客户端、挂着客户端不停、publish 与矩阵同字节、cron 离整点 + kick、min_os 进清单、mcpb 解包断言 | PowerShell 5.1 往管道写的是 OEM 代码页，Python 侧只许收字节（base64）或走 ctypes；「lane 传了 file:// 就以为验过下载」= 本机环境替测试补前提的第三例；换目录前必停自己的服务、但永不停陌生人的；每个客户端的占位符 / 超时 / 环境转发规则都要按**它的**文档写，并让 `client check` 对着真文件说话 |
+| v0.38.1 (2026-09) | 复审：自动化的盲区与 Windows 编码——B0 归属证据不经代码页 / doctor 预算 / 长路径闸 / 隔离前置；B1 升级就地不砍服务、doctor 报载荷过期、selfcheck 先起 runtime；B2 九客户端按各家真实规则（占位符白名单、JSONC 保注释、Cline/Zed timeout、Codex env 根、探针按客户端形状 + `horosa://runtime/status`、wheel 预下载、OAuth 网关改口、镜像指针）；B3 矩阵真下载、出厂预算、HTTP 握手、九客户端、挂着客户端不停、publish 与矩阵同字节、cron 离整点 + kick、min_os 进清单、mcpb 解包断言 | PowerShell 5.1 往管道写的是 OEM 代码页，Python 侧只许收字节（base64）或走 ctypes；「lane 传了 file:// 就以为验过下载」= 本机环境替测试补前提的第三例；换目录前必停自己的服务、但永不停陌生人的；每个客户端的占位符 / 超时 / 环境转发规则都要按**它的**文档写，并让 `client check` 对着真文件说话；发布期：publish job 的每一步先对真 draft 跑（draft 对 `releases/tags` 404、job 级 permissions 整块替换）；发布后：只在没人跑的平台可达的分支靠静态检查兜（F821 闸），带完整输出的超时要按阶段拆预算 |
 | v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基；A2 Windows 半边从 darwin 种子派生；A3 发布契约（清单钉 tag + size、按契约逐平台判完整、平台表锁）；A4 安装侧平台策略（Windows ARM 公告式回退、`min_os`、平台键看芯片）；B4 `setup --client` 一条命令接入（七步、失败包、真 stdio 探测）；B5 agent 文档（shell-only 契约、四份薄镜像、命令守卫）；B6 doctor 机器条件（码表人话、--explain、长路径余量、quarantine、仿真进程、下载旋钮、零外网）；A5 托管流水线（draft → 派生 → 三台真机矩阵 → [OK] 才公开；首跑抓到非默认端口下 stop 停不掉）；主干 CI 红了 19 个 commit 没人看（Windows CRLF checkout / 路径分隔符 / 宿主 OS 默认路径 / macOS runner netstat CLOSED）；A6 v0.38.0 首次托管双平台一次公开（GITHUB_TOKEN 的 release 事件不触发下游 workflow） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数；回退只许公告着做、载荷自带解释器所以平台键看芯片不看宿主 Python；接入的终点是客户端那条命令真起了 server；给 agent 抄的每条命令都要有守卫对到真实 CLI；每个诊断码都要有人话、doctor 只报不改且默认不碰外网；清单只在两平台齐了才上 release、真机证据由流水线产出 |
 | v0.37.0 (2026-09) | 任意 AI 客户端可调用：广告层只对一个客户端对过 / 自家 .mcp.json 从未连通 / 端口静默采用与误杀 / 回环走代理 | 按**别人的**约束测；改 golden 前先答「旧断言为何不会红」；负向对照跑不红就如实改口 |
 | v0.36.0 收尾 (2026-09) | 「Java 族 live 需 Mongo」十个版本的误定性 = vendored 脚本裸 `-jar`；演禽假闸门 | 贴「环境限制」前先读 `Result` 原文、用上游桌面起法起一遍；闸门问项以 live 翻转为准，不以转发为准 |
@@ -178,11 +178,59 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   教训：**只在「维护者自己的机器形状」上验过的路径，等于没验**；**修一层就宣布修好，要等真机把下一层也跑过**——第 1、2 轮的修法 commit
   都写着「真机证明 = 下一次 draft」，下一次正是推翻它的那一次；以及**「代码页能表示」不是安全判据，原生库各有各的字节约定**。
   同一批跑还抓到 lane 自己的 bug：Windows venv 的 python.exe 是 launcher，`serve` 登记的是子进程 pid，按 Popen pid 找客户端必然落空（本机实跑 lane 时先修掉）。
+- **⑦ 发布期（2026-09-14）：一次公开；publish job 里两条从没跑过的路径，先在真 draft 上修掉**：
+  · 过程：tag v0.38.1 在 draft 期间重指两次（draft 矩阵抓到 Windows 缺陷 → 修 → 删 tag 重打 → seed / .mcpb / wheel 从新 commit 重建；终版 tag → 4ac8a1b）
+    → dry run 34893385857（4ac8a1b，三 lane 绿，windows-latest live pytest 1210 passed、零 KeyError）→ `sync_windows_release.py --check --tag v0.38.1 --draft` [OK]
+    → `release-runtime.yml -f publish=true -f run_matrix=true`（run 34900145215，b23d49b）：派生 Windows 半 → assemble → 三 lane 绿 → publish job：
+    `verify_matrix_digests` 三条 lane 装的归档 = release 资产 digest（darwin b02592a6… / 两条 Windows 2c3b8cbf…）→ draft [OK] → 翻 latest（22:13:03Z）
+    → dispatch completeness（34902977795 绿：SBOM、`.mcpb` 解包且 server.json sha = ebdaff83、wheel 零安装报 0.38.1、清单带 min_os、digest 对 SHA256SUMS）
+    → 公开 latest [OK] → dispatch release 模式矩阵（34902982361 绿：三 lane 都经公开清单 URL 真 HTTPS 下载——darwin 737083959 B / 11.6 s、
+    windows-latest 723171811 B / 45.4 s、windows-11-arm 723171811 B / 19.0 s，均 1 次、未走镜像；已装归档 sha = 公开 digest；HTTP 探针 116 个工具；
+    两条 Windows lane 的 `non_ascii_root_refusal` 用真 CLI 拒掉中文根；ARM 仿真起 runtime 60.7 s）。
+  · 新知 ①：`GET repos/{owner}/{repo}/releases/tags/{tag}` 对 **draft 返回 404**。R5 字节一致性闸的第一版就用它——第一次真跑必红。
+    是在 dispatch publish 之前、拿真 lane 产物 + 真 draft 资产把闸预跑一遍才发现的（a2eedff：列表端点 + `--paginate` + 按 tag 选）。
+  · 新知 ②：job 级 `permissions:` **整块替换** workflow 级。publish job 只声明了 `contents: write`，而翻公开后的两条 `gh workflow run` 需要
+    `actions: write`——这两步是 v0.38.0 公开之后才加的，从没真跑过（0af3a60）。本次两条后续 run 的 triggering actor 都是 `github-actions[bot]`，路径已证。
+  · 顺带：同一 commit 的推送起了两条 CI（34893379906 / 34893381989），门禁读最新那条，它的 OpenClaw smoke 超时（见 ⑧）→ `gh run rerun --failed` 绿。
+    21:35Z 的 scheduled completeness 红在 mcpb sha（main 已回填 v0.38.1 的 ebdaff83，公开的仍是 v0.38.0 的 7bb5b63e）——「回填先于公开」窗口里的预期红，翻公开后自愈。
+  教训：**publish job 的每一步，在它第一次改变公开状态之前，都要先对真 draft 跑过一次**——shape 测试锁得住「写成了什么样」，锁不住「GitHub 对这个输入怎么回应」。
+- **⑧ 发布后自查抓到的三条（2026-09-14，公开之后）**：
+  · **一条随 v0.38.1 出货的 NameError**：`cli._friendly_runtime_error_payload` 的 `runtime.platform_unsupported` 分支（1aefdd2，B0 A9/A10）读
+    `(details or {})`，而函数里根本没有 `details` 这个名字——Linux / Intel Mac 上 `client openclaw-setup` / `openclaw-check` 本该打印网关出路，
+    实际是一段 traceback。没有任何测试、lane、维护机（darwin-arm64）走过那一行：它只在「我们不发载荷的平台」上可达。
+    抓法是对全树跑一遍 pyflakes 的 F821（顺带抓出 `astro_sidereal.py` 两处 `Any` 未导入——在 `from __future__ import annotations` 下运行时无害）。
+    修：分支读 `exc.details`；回归测试（负向对照：旧代码 `NameError: name 'details' is not defined`）；新闸 `scripts/verify_undefined_names.py`
+    （`ruff==0.16.7` 钉死为 dev 依赖，只选 F821/F822/F823 这三条「运行时必崩」规则、不选风格规则，src/scripts/tests 基线 0，`--self-test`
+    用同形状的合成模块证明能抓；对已出货源码跑出 3 条 = 负向对照），接 ci.yml test job（`run_ci_gates.py` 自动镜像）。修复在 main，要随下一版才到用户手里。
+  · **Windows CI 的 OpenClaw smoke 偶发超时**（run 34893381989 第 1 次尝试；同 commit 的另一条重复 CI 绿，`--failed` 重跑绿）：
+    `npx mcporter call horosa.horosa_knowledge_registry` 撞 150 s，而截获的 stdout **已经是完整的工具结果**，stderr 是
+    `npm warn exec … will be installed: mcporter@0.9.0`。正常形态：整个 setup 142 s（install 19 s / start 17.5 s / smoke 103 s 覆盖 ≥ 3 次调用）。
+    两个候选原因从日志里**分不开**：① npx 首次安装算进了这一次调用的预算（mcporter 依赖 rolldown，其 Windows 原生绑定 24 MB）；
+    ② 结果打印后进程没退出——mcporter 自己的 `docs/hang-debug.md` 描述的正是这个症状，并点名「子 MCP server 拖住 stdio」；TS SDK 起 server 时
+    stderr 是 inherit，而 SDK 的 `close()` 有界（stdin.end → 2 s → SIGTERM → 2 s → SIGKILL）、mcporter 之后强制 exit，所以真拖住调用方管道的只能是
+    server 的后代进程。本轮不下没证据的结论，只把两条路都变成可判：`_run_openclaw_smoke_check` 在 mcporter 走 npx 兜底时先 `npx mcporter --version`
+    （独立 300 s 预算）；超时详情新增 `output_complete`（并修掉 POSIX 上 `TimeoutExpired.stdout` 是 bytes 被旧代码丢成 "" 的问题），友好提示分
+    「npx 下载超时 / 结果完整但没退出（给 `MCPORTER_DEBUG_HANG=1`）/ 没回来」三种；新 `tests/test_stdio_server_exit.py` 用真子进程（不带
+    `--skip-runtime-start`，预热线程照跑）握手 + 真调一次工具 + 关 stdin，断言 15 s 内退出（负向对照：注入一个非 daemon 的 sleep 线程 →
+    「still running 45.0s」红）——Linux 与 Windows 的 CI 都跑。孤儿 `serve` 不是小事：它一直登记为 attached client，`runtime stop` / 升级会拒。
+    没做：CI 里设 `MCPORTER_DEBUG_HANG=1`——mcporter 0.9.0 的 debug 分支在 dump 后立刻 `process.exit(0)`，Windows 管道上可能截断 stdout，等于亲手造一个新 flake。
+    下一次再超时：预热之后 `output_complete: true` = 退出期挂起，`false` = 调用本身慢。
+  · **本机误跑 lane 暴露的隐患**：自查时按计划文件里的 `for g in scripts/verify_*.py` 把全部脚本裸跑了一遍——`verify_runtime_live.py` 于是在本机
+    以默认参数真起了一条 lane（临时目录、非默认端口，隔离本身没问题），在 install 下载到 689 MB 时被发现并中止、临时目录清掉；没走到 start 与客户端
+    步骤，`~/.claude.json` 与 Codex 配置的 mtime 都早于这次运行。顺着看代码发现真正的坑：Claude Code user scope 步骤**继承真 HOME**——维护机上
+    `claude` 在 PATH 时，`claude mcp add --scope user` 写维护者自己的 `~/.claude.json`，清理 `claude mcp remove --scope user horosa` 还会删掉维护者
+    **原有的** horosa 条目；托管 runner 没有 `claude`，矩阵永远只走「打印命令」分支。（此前本机跑 lane 靠「把 claude 从 PATH 拿掉」这条口头注意。）
+    修：该步骤的 setup / get / remove 全部用 `claude_user_scope_env()`（`HOME` / `USERPROFILE` / `CLAUDE_CONFIG_DIR` → `<work>/claude-user-home`）；
+    测试断言三次调用的这三个变量都落在 lane 工作目录内（负向对照：旧代码不传 env → 继承真 HOME）；并在本机用真 `claude` 以唯一名字的探针验过：
+    add / get / remove 全落在隔离目录，真 `~/.claude.json` 的 sha256 前后不变。`verify_matrix_digests.py` 裸跑 exit 2（需 publish job 的输入）是预期。
+  教训：**只在没人跑的平台上可达的分支，就是没测过的代码**——对「运行时必崩」这一类错误用静态检查兜底，别指望 pytest 走到；
+  **带着完整输出的超时是证据不是噪声**：先把证据留全（bytes 也要解码），再按阶段拆预算，让下一次失败自己说出是哪一段。
+  **靠口头注意维持的隔离不算隔离**（「本机跑 lane 先把 claude 拿出 PATH」）——写进代码并用真二进制验一次；门禁的本机镜像只有 `run_ci_gates.py`。
 - **守卫清单（本轮新增）**：`test_subprocess_encoding`、`test_runtime_procs_encoding`（OEM 负向对照）、`test_runtime_ports_cache`（netstat 1 vs 4）、
   `verify_runtime_release` 双向长度闸、`verify_wheel_contents` 主目录路径闸、`test_scripts_stdio`、`verify_client_configs` 覆盖 `.cursor/.vscode`
   （白名单与 cli 锁步）、docs-sync 五闸（PyPI 命令 / 连接器行 / 入口文档指针 / 镜像计数 / 示例配置无裸 uv）、`verify_matrix_digests`、
   `verify_mcpb_manifest --bundle`、`test_release_pipeline_shape` +6（旧写法 `--assets-dir "` / 整点 cron / skipped 放行 必红）、R7 本地 HTTP e2e、
-  R14 挂着客户端不停、R3 顺序 `["stop","swap","start"]`（旧 `["swap"]`）、R11 顺序 `["start","run_tool"]`（旧 `["run_tool"]`）。
+  R14 挂着客户端不停、R3 顺序 `["stop","swap","start"]`（旧 `["swap"]`）、R11 顺序 `["start","run_tool"]`（旧 `["run_tool"]`）；发布后：`verify_undefined_names`（F821 基线 0）、`test_stdio_server_exit`（关 stdin 15 s 内退出）、npx 预热与 `output_complete` 四条 cli 测试、lane 的 Claude Code user scope 隔离测试。
 
 ### v0.38.0 / 2026-09-11 — A6 首次托管发布：v0.38.0 双平台一次公开；两条发布期新知（GITHUB_TOKEN 的 release 事件不触发下游、publish 会再派生一次）
 
