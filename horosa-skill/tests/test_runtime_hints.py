@@ -19,7 +19,8 @@ def test_plugin_context_points_at_the_cached_plugin_checkout() -> None:
     root = "/Users/x y/.claude/plugins/cache/horosa-skill/horosa/0.38.1"
     hint = hints.install_command({"HOROSA_INSTALL_CONTEXT": "plugin", "HOROSA_PLUGIN_ROOT": root})
     assert hint["context"] == "plugin"
-    assert hint["install"] == f'uv run --directory "{root}/horosa-skill" horosa-skill install'
+    # 目录按宿主的分隔符拼（Windows 上是反斜杠）：命令是给这台机器的用户复制的
+    assert hint["install"] == f'uv run --directory "{Path(root) / "horosa-skill"}" horosa-skill install'
     assert hint["doctor"].endswith("horosa-skill doctor")
 
 
@@ -74,7 +75,7 @@ def test_not_installed_error_carries_context_specific_commands(tmp_path: Path, m
         _empty_manager(tmp_path, "darwin-arm64")._require_runtime()
     details = excinfo.value.details
     assert excinfo.value.code == "runtime.not_installed" and details["install_context"] == "plugin"
-    assert details["agent_recovery"]["commands"][0] == f'uv run --directory "{root}/horosa-skill" horosa-skill install'
+    assert details["agent_recovery"]["commands"][0] == f'uv run --directory "{Path(root) / "horosa-skill"}" horosa-skill install'
     assert "uv run --directory" in details["next_action"] and "Run `" in details["next_action"]
 
 

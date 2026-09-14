@@ -149,6 +149,11 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   **矩阵 lane 传了 file:// 就以为验过下载**、以及 **stop 的客户端登记只有 RECOVERY_TABLE 里的一条错误码而没有任何代码路径**（`runtime.stop_refused_clients_attached`
   在错误表里躺了一个版本，`stop_local_services` 从没读过登记表）。规则：**一条错误码 / 一个 lane 步骤存在，不等于那条路径被走过**——
   每个「我们验过」都要能指着一份产物（lane-report 的 `download.bytes`、`installed_archive_sha256`、`clients_attached_stop.attached`）。
+- **CI 首推抓到 4 条「本机不会红」（2026-09-14 run 34869125562）**：① Linux runner 设着 `XDG_CONFIG_HOME=/home/runner/.config`，C19 起它覆盖
+  合成 home → 路径表用例只在 Linux 红（用例改 `env={}`，先在本机 `XDG_CONFIG_HOME=… pytest` 复现出红再改）；② Linux 上 `run_tool` 的第一跳如今是
+  `runtime.platform_unsupported`（A9），其 agent_recovery 没提 doctor → `test_operational_errors_carry_agent_recovery` 红（死胡同建议补
+  `horosa-skill doctor --explain`）；③④ hints 测试把 `Path(root) / "horosa-skill"` 写死成 POSIX 斜杠，Windows 上是反斜杠（行为正确，断言按平台拼）。
+  规则不变：**推送之后看 CI**，四条都是维护机（macOS、无 XDG）替测试补了前提。
 - **守卫清单（本轮新增）**：`test_subprocess_encoding`、`test_runtime_procs_encoding`（OEM 负向对照）、`test_runtime_ports_cache`（netstat 1 vs 4）、
   `verify_runtime_release` 双向长度闸、`verify_wheel_contents` 主目录路径闸、`test_scripts_stdio`、`verify_client_configs` 覆盖 `.cursor/.vscode`
   （白名单与 cli 锁步）、docs-sync 五闸（PyPI 命令 / 连接器行 / 入口文档指针 / 镜像计数 / 示例配置无裸 uv）、`verify_matrix_digests`、

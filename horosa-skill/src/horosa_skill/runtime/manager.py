@@ -558,12 +558,17 @@ def _platform_dead_end_advice(platform_name: str) -> dict[str, Any]:
             f"平台 `{platform_name}` 没有发布载荷。",
             f"No payload is published for platform `{platform_name}`.",
         )
+    confirm = bilingual(
+        "`horosa-skill doctor --explain` 会给出本机的平台判定（platform_supported）与同样的出路。",
+        "`horosa-skill doctor --explain` prints this platform verdict (platform_supported) and the same way out.",
+    )
     return {
         "reason": reason,
-        "next_action": gateway,
+        "next_action": f"{gateway} {confirm}",
         "agent_recovery": {
             "must_ask_user": False,
-            "prompt_to_user": f"{reason} {gateway}",
+            "prompt_to_user": f"{reason} {gateway} {confirm}",
+            "commands": ["horosa-skill doctor --explain"],
         },
     }
 

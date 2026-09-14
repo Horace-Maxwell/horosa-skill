@@ -233,12 +233,13 @@ def test_client_config_locations_windows_shapes() -> None:
 def test_client_config_locations_darwin_and_linux_shapes(tmp_path: Path) -> None:
     from horosa_skill.surfaces import cli
 
-    mac = str(cli._client_config_locations("claude-desktop", os_name="darwin", home=tmp_path)[0])
+    # env={}：Linux runner 设了 XDG_CONFIG_HOME=/home/runner/.config（v0.38.1 C19 起会覆盖合成 home）；本机没设所以曾只在 CI 红
+    mac = str(cli._client_config_locations("claude-desktop", os_name="darwin", home=tmp_path, env={})[0])
     assert mac == str(tmp_path / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json")
-    linux = str(cli._client_config_locations("claude-desktop", os_name="linux", home=tmp_path)[0])
+    linux = str(cli._client_config_locations("claude-desktop", os_name="linux", home=tmp_path, env={})[0])
     assert linux == str(tmp_path / ".config" / "Claude" / "claude_desktop_config.json")
     # as_posix(): on a Windows host str(Path) uses backslashes and this assertion went red on every Windows run
-    assert cli._client_config_locations("zed", os_name="darwin", home=tmp_path)[0].as_posix().endswith(".config/zed/settings.json")
+    assert cli._client_config_locations("zed", os_name="darwin", home=tmp_path, env={})[0].as_posix().endswith(".config/zed/settings.json")
     with pytest.raises(Exception):
         cli._client_config_locations("roo", os_name="darwin", home=tmp_path)
 
