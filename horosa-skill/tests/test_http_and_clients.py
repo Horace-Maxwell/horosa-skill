@@ -202,8 +202,14 @@ def test_client_check_flags_missing_codex_timeouts() -> None:
     codes = _audit({"command": "uv", "args": ["run", "--directory", ".", "horosa-skill", "serve", "--transport", "stdio"]},
                    client="codex")
     assert "codex_startup_timeout_missing" in codes and "codex_tool_timeout_missing" in codes
+    # v0.38.1 C6：没有 env 根的 Codex 条目也是一条真发现（Codex 不转发 shell 环境 → server 用另一套目录），
+    # 所以「完好」的条目必须带两个绝对根；旧断言里的 good 条目没有 env，如今会正确地报 codex_env_roots_missing。
+    without_roots = _audit({"command": "uv", "args": ["run", "--directory", ".", "horosa-skill", "serve", "--transport", "stdio"],
+                            "startup_timeout_sec": 120, "tool_timeout_sec": 600}, client="codex")
+    assert [c for c in without_roots if c.startswith("codex_")] == ["codex_env_roots_missing"]
     good = _audit({"command": "uv", "args": ["run", "--directory", ".", "horosa-skill", "serve", "--transport", "stdio"],
-                   "startup_timeout_sec": 120, "tool_timeout_sec": 600}, client="codex")
+                   "startup_timeout_sec": 120, "tool_timeout_sec": 600,
+                   "env": {"HOROSA_RUNTIME_ROOT": "/r", "HOROSA_SKILL_DATA_DIR": "/d"}}, client="codex")
     assert not [c for c in good if c.startswith("codex_")]
 
 

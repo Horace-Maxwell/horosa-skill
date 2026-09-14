@@ -126,7 +126,7 @@ def _return_type(annotation: Any) -> Any:
 def _selected_toolsets() -> set[str] | None:
     """`HOROSA_TOOLSETS=astro,cn` → 只平铺这些 domain 的技法工具（门面工具永远注册）。
 
-    动机：Claude Code 已用工具搜索解决了 105 工具的上下文膨胀，但 Cursor 一类客户端仍有较紧的工具数
+    动机：Claude Code 已用工具搜索解决了全量技法工具的上下文膨胀，但 Cursor 一类客户端仍有较紧的工具数
     上限，全量平铺会被静默截断。分组白名单是注册期过滤，不触碰 service 层。
     `HOROSA_TOOLSETS=none` == 精简模式（等价 HOROSA_MCP_COMPACT=1 的技法面）。
     """
@@ -1266,6 +1266,37 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
     def export_registry_resource() -> str:
         return json.dumps(build_export_registry(), ensure_ascii=False, indent=2)
 
+    @mcp.resource(
+        "horosa://runtime/status",
+        name="horosa-runtime-status",
+        title="Horosa 本机 runtime 状态 / local runtime status",
+        description=(
+            "Where THIS server process looks for the offline runtime and local data (installed / runtime_root / "
+            "data_dir / mode / version). Read-only, never starts the runtime; `setup` compares it with the host."
+        ),
+        mime_type="application/json",
+    )
+    def runtime_status_resource() -> str:
+        # 🔴 只读文件系统，绝不 start_local_services：这是 setup 的 stdio 探针在「客户端形状的环境」里读的第一样东西，
+        # 用来抓「server 算出的 runtime 根 ≠ 终端里装的」（Codex 不转发 shell 环境 / GUI 客户端不读 shell 配置）。
+        from horosa_skill import __version__ as _pkg_version
+        from horosa_skill.runtime.manager import HorosaRuntimeManager as _Manager
+
+        manager = _Manager(settings)
+        return json.dumps(
+            {
+                "installed": settings.runtime_current_dir.exists(),
+                "runtime_root": str(settings.runtime_root),
+                "data_dir": str(settings.data_dir),
+                "mode": manager.runtime_mode(),
+                "package_version": _pkg_version,
+                "server_root": settings.server_root,
+                "chart_server_root": settings.chart_server_root,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+
     # ------------------------------------------------------------------
     # MCP prompts：高频工作流按钮化（Claude Code 里成为 /mcp__horosa__… 斜杠命令）。
     # ------------------------------------------------------------------
@@ -1316,7 +1347,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
     toolsets = _selected_toolsets()
     if settings.mcp_compact or toolsets is not None:
         # 精简模式（10 门面 + tool_run = COMPACT_SURFACE_TOOL_COUNT=11 工具）或 HOROSA_TOOLSETS 裁剪面：只要技法面被过滤就注册直呼通道。：技法工具不平铺，注册一个按名直呼的通用工具（dispatch 关键词路由只覆盖部分技法，
-        # 直呼通道保证 105 技法全部可达）；澄清闸照常生效。
+        # 直呼通道保证全部技法（len(TOOL_DEFINITIONS)）可达）；澄清闸照常生效。
         async def horosa_tool_run(**kwargs: Any) -> ToolEnvelope:
             # tool_name 必须在合并之前取走：它是 `request` 的**兄弟**参数，而 `_merge_mcp_arguments`
             # 在 request 存在时会整体改用 request 作为载荷（否则 `{tool_name, request}` 这种最常见的

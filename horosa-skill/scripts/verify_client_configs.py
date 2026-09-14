@@ -134,10 +134,62 @@ def check_plugin_config(errors: list[str]) -> None:
                 errors.append(f"{PLUGIN_CONFIG.name}:{name} 用了词表外的占位符 `${{{base}}}`")
 
 
+# v0.38.1 C3：仓内提交的 Cursor / VS Code 项目配置也要过守卫（此前只看 .mcp.json 与插件那份）。
+# 占位符必须 ⊆ 该客户端**真的会展开**的词表（与 cli.CLIENT_PLACEHOLDER_WHITELIST 锁步：tests/test_verify_client_configs.py）。
+EDITOR_PROJECT_CONFIGS = {
+    "cursor": REPO_ROOT / ".cursor" / "mcp.json",
+    "vscode": REPO_ROOT / ".vscode" / "mcp.json",
+}
+EDITOR_PLACEHOLDER_WHITELIST = {
+    "cursor": ("env:", "userHome", "workspaceFolder", "workspaceFolderBasename", "pathSeparator"),
+    "vscode": ("workspaceFolder", "workspaceFolderBasename", "env:", "userHome", "input:"),
+}
+
+
+def _allowed(var: str, whitelist: tuple[str, ...]) -> bool:
+    base = var.split(":-", 1)[0]
+    return any(base.startswith(item) if item.endswith(":") else base == item for item in whitelist)
+
+
+def _label(path: Path) -> str:
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def check_editor_project_configs(errors: list[str], configs: dict | None = None) -> None:
+    for client, path in (configs or EDITOR_PROJECT_CONFIGS).items():
+        if not path.is_file():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        except ValueError as exc:
+            errors.append(f"{_label(path)} 不是合法 JSON：{exc}")
+            continue
+        whitelist = EDITOR_PLACEHOLDER_WHITELIST[client]
+        for name, entry in _servers(payload).items():
+            args = [str(a) for a in entry.get("args", [])]
+            if "--transport" not in args or "stdio" not in args:
+                errors.append(f"{_label(path)}:{name} 的 args 缺 `--transport stdio`")
+            for var in _placeholders(json.dumps(entry, ensure_ascii=False)):
+                if not _allowed(var, whitelist):
+                    errors.append(
+                        f"{_label(path)}:{name} 用了 {client} 不会展开的占位符 `${{{var}}}`"
+                        f"（允许：{', '.join(whitelist)}）"
+                    )
+            directory = _directory_arg(args)
+            if directory:
+                expanded = directory.replace("${workspaceFolder}", str(REPO_ROOT))
+                if "${" not in expanded and not (Path(expanded) / "pyproject.toml").is_file():
+                    errors.append(f"{_label(path)}:{name} 的 --directory `{directory}` 展开后没有 pyproject.toml")
+
+
 def main() -> int:
     errors: list[str] = []
     check_project_config(errors)
     check_plugin_config(errors)
+    check_editor_project_configs(errors)
     if errors:
         print("client-config guard FAILED —— 提交的客户端配置连不上：", file=sys.stderr)
         for err in errors:
@@ -145,7 +197,7 @@ def main() -> int:
         return 1
     print(
         "client-config OK: 项目配置无插件占位符、占位符全带默认值、--directory 指向真实包；"
-        "插件配置占位符 ⊆ 插件词表且 user_config 键均已声明。"
+        "插件配置占位符 ⊆ 插件词表且 user_config 键均已声明；.cursor/.vscode 项目配置占位符 ⊆ 各自词表。"
     )
     return 0
 

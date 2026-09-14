@@ -470,7 +470,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   `tests/test_runtime_launcher_templates.py`（BOM + 非注释行纯 ASCII，全平台；Windows 上再用
   `[Parser]::ParseFile` 真解析，CI `windows-smoke` 跑）+ 发布闸
   `verify_runtime_release.py::_assert_windows_launchers_are_bom_encoded`（直接验 zip 里的前三字节）。
-  **wheel 里的副本另守**：v0.36.0 起 `uvx horosa-skill` 用户的启动器来自 wheel 内 force-include 的副本
+  **wheel 里的副本另守**：v0.36.0 起 wheel 用户（`uvx --from <wheel> horosa-skill`）的启动器来自 wheel 内 force-include 的副本
   （`horosa_skill/runtime/templates/windows/`），`scripts/verify_wheel_contents.py` 断言该副本前三字节仍是
   BOM——源码树的测试管不到 hatch 打包这一步。
 - **Windows 启动器的三条网络/路径不变量（v0.38.0 B1）**：① `Start-Process -ArgumentList` 不替你加引号——每个路径元素写成

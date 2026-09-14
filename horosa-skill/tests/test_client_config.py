@@ -338,3 +338,131 @@ def test_codex_merge_refuses_undecodable_bytes_without_a_traceback(tmp_path: Pat
     with pytest.raises(typer.BadParameter):
         _write_codex_toml_merge(target, '[mcp_servers.horosa]\ncommand = "uv"\n')
     assert target.read_bytes() == garbage, "拒绝合并时用户文件必须原封不动"
+
+
+# ---- v0.38.1 B2：C1 compose / C3 占位符白名单 / C5 超时 / C6 Codex env 根 / C10 项目根 / C19 路径表 / C15 本地 wheel ----
+def test_docker_compose_gateway_declares_both_roots_and_requires_a_token() -> None:
+    compose = (Path(__file__).resolve().parents[1] / "docker-compose.yml").read_text(encoding="utf-8")
+    env_block = compose.split("environment:", 1)[1].split("volumes:", 1)[0]
+    assert "HOROSA_SERVER_ROOT:" in env_block and "HOROSA_CHART_SERVER_ROOT:" in env_block, "少一个 ROOT，chart 族在容器里全部失败"
+    assert "host.docker.internal:8899" in env_block and "host.docker.internal:9999" in env_block
+    assert "HOROSA_MCP_TOKEN: ${HOROSA_MCP_TOKEN:?" in env_block, "绑 0.0.0.0 必须给令牌"
+
+
+def test_cline_and_zed_entries_carry_a_600_second_timeout() -> None:
+    cline = _payload("--format", "cline")["mcpServers"]["horosa"]
+    zed = _payload("--format", "zed")["context_servers"]["horosa"]
+    assert cline["timeout"] == 600 and cline["type"] == "stdio"
+    assert zed["timeout"] == 600 and "source" not in zed, "Zed 的 context_servers 条目没有 source 字段"
+
+
+@pytest.mark.parametrize("client", ["cline", "zed"])
+def test_client_check_flags_missing_or_short_timeouts_for_cline_and_zed(client: str) -> None:
+    from horosa_skill.surfaces.cli import _audit_client_entry
+
+    base = {"command": "/opt/uv/bin/uv", "args": ["run", "horosa-skill", "serve", "--transport", "stdio"]}
+    codes = [p["code"] for p in _audit_client_entry("horosa", base, client=client)]
+    assert f"{client}_tool_timeout_missing" in codes
+    codes = [p["code"] for p in _audit_client_entry("horosa", {**base, "timeout": 60}, client=client)]
+    assert f"{client}_tool_timeout_too_short" in codes
+    codes = [p["code"] for p in _audit_client_entry("horosa", {**base, "timeout": 600}, client=client)]
+    assert not any("timeout" in code for code in codes)
+
+
+def test_codex_toml_declares_absolute_runtime_and_data_roots(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("HOROSA_RUNTIME_ROOT", str(tmp_path / "rt"))
+    monkeypatch.setenv("HOROSA_SKILL_DATA_DIR", str(tmp_path / "data"))
+    doc = tomllib.loads(_payload("--format", "codex")["toml_stdio"])
+    env = doc["mcp_servers"]["horosa"]["env"]
+    assert Path(env["HOROSA_RUNTIME_ROOT"]) == (tmp_path / "rt").resolve()
+    assert Path(env["HOROSA_SKILL_DATA_DIR"]) == (tmp_path / "data").resolve()
+    assert "env_vars" not in doc["mcp_servers"]["horosa"], "老版本 Codex 对未知键 deny_unknown_fields"
+
+
+def test_client_check_flags_a_codex_entry_without_the_env_roots() -> None:
+    from horosa_skill.surfaces.cli import _audit_client_entry
+
+    entry = {"command": "/opt/uv/bin/uv", "args": ["run", "horosa-skill", "serve", "--transport", "stdio"],
+             "startup_timeout_sec": 120, "tool_timeout_sec": 600, "env": {"HOROSA_MCP_COMPACT": "1"}}
+    assert "codex_env_roots_missing" in [p["code"] for p in _audit_client_entry("horosa", entry, client="codex")]
+    entry["env"].update({"HOROSA_RUNTIME_ROOT": "/r", "HOROSA_SKILL_DATA_DIR": "/d"})
+    assert "codex_env_roots_missing" not in [p["code"] for p in _audit_client_entry("horosa", entry, client="codex")]
+
+
+def test_placeholders_are_judged_per_client(tmp_path: Path) -> None:
+    from horosa_skill.surfaces import cli
+
+    args = ["run", "--directory", "${workspaceFolder}/horosa-skill", "horosa-skill", "serve", "--transport", "stdio"]
+    project = tmp_path / "proj"
+    (project / "horosa-skill").mkdir(parents=True)
+    (project / "horosa-skill" / "pyproject.toml").write_text("[project]\nname='horosa-skill'\n", encoding="utf-8")
+    (project / ".vscode").mkdir()
+    ok = cli._audit_client_entry("horosa", {"command": "/opt/uv/bin/uv", "args": args}, client="vscode", config_dir=project / ".vscode")
+    assert [p["code"] for p in ok] == [], ok
+    # 负向对照：VS Code 不展开 Claude Code 的变量 —— 旧判定放行它（只要 blob 里有 ${CLAUDE_PROJECT_DIR）。
+    bad_args = ["run", "--directory", "${CLAUDE_PROJECT_DIR:-.}/horosa-skill", "horosa-skill", "serve", "--transport", "stdio"]
+    bad = cli._audit_client_entry("horosa", {"command": "/opt/uv/bin/uv", "args": bad_args}, client="vscode", config_dir=project / ".vscode")
+    assert "unexpanded_placeholder" in [p["code"] for p in bad]
+    # Cursor 认 ${env:…}；Claude Code 认 ${CLAUDE_PROJECT_DIR:-.}
+    env_args = ["run", "--directory", "${env:HOROSA_CHECKOUT:-" + str(project) + "}/horosa-skill", "horosa-skill", "serve", "--transport", "stdio"]
+    assert "unexpanded_placeholder" not in [p["code"] for p in cli._audit_client_entry("horosa", {"command": "/opt/uv/bin/uv", "args": env_args}, client="cursor", config_dir=project / ".cursor")]
+    assert "unexpanded_placeholder" not in [p["code"] for p in cli._audit_client_entry("horosa", {"command": "/opt/uv/bin/uv", "args": bad_args}, client="claude-code", config_dir=project)]
+    # 展开后目录不存在 → directory_missing（此前含占位符就跳过检查）
+    missing = cli._audit_client_entry("horosa", {"command": "/opt/uv/bin/uv", "args": ["run", "--directory", "${workspaceFolder}/elsewhere", "horosa-skill", "serve", "--transport", "stdio"]}, client="cursor", config_dir=project / ".cursor")
+    assert "directory_missing" in [p["code"] for p in missing]
+
+
+def test_project_root_walks_up_to_git_or_mcp_json(tmp_path: Path) -> None:
+    from horosa_skill.surfaces.cli import _project_root
+
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)
+    deep = repo / "horosa-skill" / "src"
+    deep.mkdir(parents=True)
+    assert _project_root(deep) == repo.resolve()
+    loose = tmp_path / "loose" / "dir"
+    loose.mkdir(parents=True)
+    assert _project_root(loose) == loose.resolve()
+    (tmp_path / "loose" / ".mcp.json").write_text("{}", encoding="utf-8")
+    assert _project_root(loose) == (tmp_path / "loose").resolve()
+
+
+def test_project_level_config_locations_follow_the_project_root(tmp_path: Path) -> None:
+    from horosa_skill.surfaces import cli
+
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)
+    sub = repo / "horosa-skill"
+    sub.mkdir()
+    paths = cli._client_config_locations("cursor", os_name="darwin", home=tmp_path / "home", cwd=cli._project_root(sub))
+    assert paths[-1] == repo / ".cursor" / "mcp.json"
+
+
+def test_config_locations_honour_codex_home_xdg_and_secondary_cline_hosts(tmp_path: Path) -> None:
+    from horosa_skill.surfaces import cli
+
+    env = {"CODEX_HOME": str(tmp_path / "codex-home"), "XDG_CONFIG_HOME": str(tmp_path / "xdg")}
+    assert cli._client_config_locations("codex", os_name="linux", env=env, home=tmp_path)[0] == tmp_path / "codex-home" / "config.toml"
+    assert cli._client_config_locations("zed", os_name="linux", env=env, home=tmp_path)[0] == tmp_path / "xdg" / "zed" / "settings.json"
+    assert cli._client_config_locations("claude-desktop", os_name="linux", env={}, home=tmp_path)[0] == tmp_path / ".config" / "Claude" / "claude_desktop_config.json"
+    gemini = cli._client_config_locations("gemini", os_name="darwin", home=tmp_path, cwd=tmp_path / "proj")
+    assert gemini[-1] == tmp_path / "proj" / ".gemini" / "settings.json"
+    cline = [p.as_posix() for p in cli._client_config_locations("cline", os_name="darwin", home=tmp_path)]
+    assert any("/Code/User/" in p for p in cline) and any("/Cursor/User/" in p for p in cline) and any("/Windsurf/User/" in p for p in cline)
+    assert all(p.endswith("saoudrizwan.claude-dev/settings/cline_mcp_settings.json") for p in cline)
+
+
+def test_client_check_understands_a_local_wheel_source(tmp_path: Path) -> None:
+    from horosa_skill import __version__
+    from horosa_skill.surfaces.cli import _audit_client_entry
+
+    wheel = tmp_path / f"horosa_skill-{__version__}-py3-none-any.whl"
+    entry = {"command": "/opt/uv/bin/uvx", "args": ["--from", str(wheel), "horosa-skill", "serve", "--transport", "stdio"]}
+    assert "wheel_cache_missing" in [p["code"] for p in _audit_client_entry("horosa", entry, client="cursor")]
+    wheel.write_bytes(b"PK")
+    codes = [p["code"] for p in _audit_client_entry("horosa", entry, client="cursor")]
+    assert "wheel_cache_missing" not in codes and "launcher_version_drift" not in codes
+    stale = tmp_path / "horosa_skill-0.1.0-py3-none-any.whl"
+    stale.write_bytes(b"PK")
+    entry["args"][1] = str(stale)
+    assert "launcher_version_drift" in [p["code"] for p in _audit_client_entry("horosa", entry, client="cursor")]

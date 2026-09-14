@@ -113,10 +113,47 @@ def test_why_the_old_checks_could_not_catch_it() -> None:
         for path in list(SCRIPTS.glob("verify_*.py")) + list((PKG_ROOT / "tests").glob("test_*.py"))
         # test_setup_command.py 读的是 tmp 里**自己写出的** .mcp.json（claude-code 项目级 scope，v0.38.0 B4），
         # 不是仓里提交的那份 —— 本测试钉的前提是「没有别的检查读提交的 .mcp.json」，那条前提仍成立。
-        if path.name not in {"verify_client_configs.py", "test_verify_client_configs.py", "test_setup_command.py"}
+        # test_client_config.py（v0.38.1 C10）在 tmp 里自建 `.mcp.json` 只为测 _project_root 的向上查找，同样不读提交的那份。
+        if path.name not in {"verify_client_configs.py", "test_verify_client_configs.py", "test_setup_command.py", "test_client_config.py"}
         and ".mcp.json" in path.read_text(encoding="utf-8")
     ]
     assert readers == [], (
         f"现在还有别的检查也读 .mcp.json（{[p.name for p in readers]}）——"
         "本测试的前提（此前无人读它）需要重新表述"
     )
+
+
+# ---------------------------------------------------------------- v0.38.1 C3：.cursor / .vscode 项目配置
+
+
+def test_editor_project_configs_pass_and_the_whitelist_is_locked_to_the_cli() -> None:
+    module = _load()
+    errors: list[str] = []
+    module.check_editor_project_configs(errors)
+    assert errors == []
+    from horosa_skill.surfaces.cli import CLIENT_PLACEHOLDER_WHITELIST
+
+    for client, allowed in module.EDITOR_PLACEHOLDER_WHITELIST.items():
+        assert tuple(allowed) == tuple(CLIENT_PLACEHOLDER_WHITELIST[client]), client
+
+
+def test_a_vscode_config_with_a_claude_code_placeholder_is_red(tmp_path: Path) -> None:
+    """负向对照：`${CLAUDE_PROJECT_DIR}` 在 VS Code 里不展开 → --directory 字面量 → CONNECTION_CLOSED。"""
+    module = _load()
+    broken = tmp_path / "mcp.json"
+    broken.write_text(json.dumps({"servers": {"horosa": {"type": "stdio", "command": "uv", "args": [
+        "run", "--directory", "${CLAUDE_PROJECT_DIR:-.}/horosa-skill", "horosa-skill", "serve", "--transport", "stdio"]}}}), encoding="utf-8")
+    errors: list[str] = []
+    module.check_editor_project_configs(errors, {"vscode": broken})
+    assert any("CLAUDE_PROJECT_DIR" in e for e in errors), errors
+    good = tmp_path / "good.json"
+    good.write_text(json.dumps({"servers": {"horosa": {"type": "stdio", "command": "uv", "args": [
+        "run", "--directory", "${workspaceFolder}/horosa-skill", "horosa-skill", "serve", "--transport", "stdio"]}}}), encoding="utf-8")
+    errors = []
+    module.check_editor_project_configs(errors, {"vscode": good})
+    assert errors == []
+    no_transport = tmp_path / "nt.json"
+    no_transport.write_text(json.dumps({"mcpServers": {"horosa": {"command": "uv", "args": ["run", "horosa-skill", "serve"]}}}), encoding="utf-8")
+    errors = []
+    module.check_editor_project_configs(errors, {"cursor": no_transport})
+    assert any("--transport stdio" in e for e in errors)

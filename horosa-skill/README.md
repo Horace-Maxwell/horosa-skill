@@ -19,7 +19,16 @@ This subproject is distributed under `GNU AGPL-3.0-only`. See [LICENSE](LICENSE)
 - provenance：知识库与导出协议都带来源字段
 - release metadata：`server.json`、SBOM、GitHub release workflow
 
-## 常用命令
+## 四条命令（v0.38.x）
+
+- `uv run horosa-skill setup --client <claude-code|claude-desktop|cursor|vscode|codex|gemini|windsurf|cline|zed>` —— 探网 → 装离线 runtime → 写该客户端配置 → doctor → 回读 → 真起一次 stdio
+- `uv run horosa-skill client config --format <client>` —— 只生成（不落盘）该客户端的配置块 / 注册命令
+- `uv run horosa-skill client check` —— 体检本机各客户端**实际写着什么**（占位符、超时、路径、版本漂移）
+- `uv run horosa-skill doctor --explain` —— 机器可读体检 + 6–10 行人话；`selfcheck` 起一张盘 → 存 → 读回
+
+零安装（无 checkout）把 `uv run horosa-skill` 换成 `uvx --from "<发布页 wheel URL>" horosa-skill`（见根 README「快速开始」）。
+
+## 其它常用命令
 
 - `uv run horosa-skill benchmark run`
 - `uv run horosa-skill benchmark run --skip-runtime`
@@ -148,10 +157,12 @@ This subproject is distributed under `GNU AGPL-3.0-only`. See [LICENSE](LICENSE)
 ```bash
 cd horosa-skill
 uv sync
-uv run horosa-skill install
-uv run horosa-skill doctor
-uv run horosa-skill serve
+uv run horosa-skill setup --client cursor   # 换成你的客户端；一条命令装 runtime + 写配置 + 体检 + 真起一次
+uv run horosa-skill selfcheck               # 活体：起一张盘 → 存 → 读回
+uv run horosa-skill client check            # 之后任何时候：看各客户端实际写着什么
 ```
+
+只想手动分步：`install` → `doctor` → `serve`（HTTP）或 `client config --format <client>`（stdio）。
 
 ## 最短工作流
 

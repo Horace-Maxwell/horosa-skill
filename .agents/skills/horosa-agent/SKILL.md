@@ -21,7 +21,7 @@ dependencies:
 # Horosa Agent Skill (Codex / agentskills.io entry)
 
 Thin client-agnostic contract. The **single policy source** is
-[`skills/horosa-agent/SKILL.md`](../../../horosa-skill/skills/horosa-agent/SKILL.md) — read it
+[`skills/horosa-agent/SKILL.md`](../../../skills/horosa-agent/SKILL.md) — read it
 (and its `references/`) before deep work. Maintainer/repo law: `AGENTS.md`.
 
 ## Non-negotiable rules
@@ -43,6 +43,9 @@ Thin client-agnostic contract. The **single policy source** is
    absent → the server is not configured; point the user at `examples/clients/codex.md`.
 5. Errors carry structured recovery: on `details.agent_recovery`, relay `prompt_to_user` verbatim
    and stop. On transport errors, suggest `horosa-skill doctor` / `horosa-skill selfcheck`.
+6. **Compact surface.** Codex gets the 11 facade tools by default (`HOROSA_MCP_COMPACT=1`); call any technique
+   by name via `horosa_tool_run(tool_name="qimen", …)` — the catalogue is the `horosa://catalog/techniques`
+   resource. A missing flat `horosa_*` name is not a missing technique.
 
 ## Shell-only agents (no MCP)
 

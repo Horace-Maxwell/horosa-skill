@@ -6,13 +6,16 @@
 command = "uv"
 args = ["run", "--directory", "/ABS/PATH/horosa-skill", "horosa-skill", "serve", "--transport", "stdio"]
 cwd = "/ABS/PATH/horosa-skill"
-# 首次冷启动（runtime 预热）常到 ~45s，Codex 默认 30s 不够；长盘可超默认工具 60s。
+# 首次冷启动（runtime 预热）常到 ~45s，Codex 默认 10 s 不够；长盘可超默认工具 60s。
 startup_timeout_sec = 120
 tool_timeout_sec = 600
 # 首轮即见工具（否则冷启动首轮目录可能缺 horosa，第二轮恢复）；代价：起不来时 Codex 启动报错。
 # required = true
 
 [mcp_servers.horosa.env]
-# Codex 只透传 11 个系统变量白名单——任何 HOROSA_* 必须在此显式声明，例如：
-# HOROSA_MCP_COMPACT = "1"        # 11 门面模式（Codex 无工具搜索，106 工具全量较重）
+# Codex 不把 shell 环境交给 server——任何 HOROSA_* 必须在此显式声明。runtime 根与数据目录写绝对路径
+# （否则 Codex 起的 server 会用另一套目录）；不要写 env_vars（老版本对未知键整段拒收）。
+HOROSA_RUNTIME_ROOT = "/ABS/HOME/.horosa/runtime"
+HOROSA_SKILL_DATA_DIR = "/ABS/HOME/.horosa-skill"
+# HOROSA_MCP_COMPACT = "1"        # 11 门面模式（Codex 无工具搜索，全量技法面较重）
 # HOROSA_TOOLSETS = "astro,cn"    # 或按域裁剪

@@ -12,7 +12,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-106-1d4ed8?style=for-the-badge" alt="106 tools" />
-  <img src="https://img.shields.io/badge/测试-1067_passed-16a34a?style=for-the-badge" alt="1067 passed" />
+  <img src="https://img.shields.io/badge/测试-1104_passed-16a34a?style=for-the-badge" alt="1104 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
 
@@ -93,7 +93,7 @@
 ## 🚀 快速开始
 
 > [!TIP]
-> 前置只需 [uv](https://docs.astral.sh/uv/)（`curl -LsSf https://astral.sh/uv/install.sh | sh`）；Python ≥ 3.12 由 uv 自动准备；磁盘预留约 5 GB（runtime 下载约 730 MB、解压后约 2 GB）。
+> 前置只需 [uv](https://docs.astral.sh/uv/)：macOS / Linux `curl -LsSf https://astral.sh/uv/install.sh | sh`；Windows（PowerShell）`powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`。装完 **重开终端**（或 `source $HOME/.local/bin/env`）让 `uv` 进 PATH；Python ≥ 3.12 由 uv 自动准备；磁盘预留约 5 GB（runtime 下载约 730 MB、解压后约 2 GB）。
 
 ```bash
 git clone https://github.com/Horace-Maxwell/horosa-skill.git
@@ -124,7 +124,7 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # 🚀 给客户端直
 > 容器里能跑的是 **MCP 网关**（Python 包 + 知识库 + 记忆），把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`
 > 指向宿主机或另一台装了 runtime 的机器即可。仓库附带**实验性**的 `horosa-skill/Dockerfile` + `docker-compose.yml`
 > （网关镜像：容器内没有离线 runtime，必须设上面两个变量；绑 0.0.0.0 必须给 `HOROSA_MCP_TOKEN`）；
-> 手工起也行：`pip install horosa-skill` 后 `horosa-skill serve --transport streamable-http` 即为网关。
+> 手工起也行：`pip install "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.38.0/horosa_skill-0.38.0-py3-none-any.whl"` 后 `horosa-skill serve --transport streamable-http` 即为网关（PyPI 尚未开通，装的是发布页的 wheel）。
 
 <details>
 <summary>🔧 <b>安装排障与升级 / 卸载</b></summary>
@@ -164,8 +164,8 @@ uv run horosa-skill client config --format codex         # config.toml 片段（
 uv run horosa-skill client check                         # 体检本机各客户端**实际写着什么**
 ```
 
-仓根另带四份薄镜像——`GEMINI.md`（Gemini CLI）、`.github/copilot-instructions.md`（Copilot）、`.windsurf/rules/`、
-`.clinerules/`——让这些 agent 打开仓库就知道闸门与读盘规则；策略唯一源仍是 [SKILL.md](./skills/horosa-agent/SKILL.md)，
+仓根另带 6 份薄镜像——`GEMINI.md`（Gemini CLI）、`.github/copilot-instructions.md`（Copilot）、`.windsurf/rules/`、
+`.clinerules/`、`.cursor/rules/`（Cursor）、`.agents/skills/horosa-agent/`（Codex / agentskills.io）——让这些 agent 打开仓库就知道闸门、读盘规则与精简面下的 `horosa_tool_run` 直呼；策略唯一源仍是 [SKILL.md](./skills/horosa-agent/SKILL.md)，
 其中「Shell-only agents」一节给没有 MCP 的 agent 一套纯 CLI 契约（`tool run --input/--output`、退出码、闸门流程）。
 
 ### Works with
@@ -173,7 +173,7 @@ uv run horosa-skill client check                         # 体检本机各客户
 | 客户端 | 传输 | 一行接入 | 默认工具面 | 注意 |
 | :-- | :-- | :-- | :-- | :-- |
 | 🟣 **Claude Code** | stdio | `setup --client claude-code`（CWD 有 `.mcp.json` 写项目级，否则自动 `claude mcp add --scope user`） | 全量 116 | 项目内直接用仓根 `.mcp.json`；[说明](./horosa-skill/examples/clients/claude-code.md) |
-| 🧩 **Claude Code Plugin** | stdio | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` | 全量 116 | skill + MCP 一步到位；首次仍需跑 `install` 装离线 runtime |
+| 🧩 **Claude Code Plugin** | stdio | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` | 全量 116 | skill + MCP 一步到位；插件装在 `~/.claude/plugins/cache/horosa-skill/horosa/<version>/horosa-skill`，首次运行 `uv run --directory "<那个目录>" horosa-skill install` 装离线 runtime（工具报 `runtime.not_installed` 时会给出带真实路径的这条命令） |
 | 🟠 **Claude Desktop** | stdio | `setup --client claude-desktop`，或安装 `.mcpb` 一键包 | 全量 116 | `.mcpb` 在每个 release 的资产里 |
 | 🟡 **Cursor** | stdio | `setup --client cursor`（或 `client config --format cursor` 拿官方 deep link 点击即装） | 精简 11 | Cursor 全局约 40 工具上限，**超出静默丢弃** |
 | 🔷 **VS Code (Copilot)** | stdio | `setup --client vscode`（写用户级 `mcp.json`；或 `client config --format vscode` 拿 `vscode:mcp/install` 链接） | 精简 11 | 跨所有 server 共 128 工具上限；仓内已带 `.vscode/mcp.json` |
@@ -184,7 +184,7 @@ uv run horosa-skill client check                         # 体检本机各客户
 | ⚡ **Zed** | stdio | `setup --client zed` | 精简 11 | 配置根键是 `context_servers` |
 | ⚪ **OpenClaw / mcporter** | stdio | `client openclaw-setup --workspace ~/.openclaw/workspace` | 全量 116 | — |
 | 🟢 **Open WebUI · n8n · Dify** | streamable-http | `horosa-skill serve --host 0.0.0.0 --token <随机串>` | 全量 116 | [接入说明](./horosa-skill/examples/clients/openwebui-streamable-http.md)；跨机必须带令牌，且**没有 TLS**，请放反代后面 |
-| 🔶 **ChatGPT / claude.ai 远程连接器** | streamable-http | 同上，再套一层 HTTPS 反代 | 全量 116 | **没有托管端点** —— 需要你自己的公网 HTTPS URL + 令牌 |
+| 🔶 **ChatGPT / claude.ai 远程连接器** | streamable-http | 同上，再套一层**终结 OAuth 的 HTTPS 网关**（Cloudflare Access / oauth2-proxy）——两家连接器只接 OAuth，本 server 只提供静态 Bearer，网关负责把 OAuth 换成注入 `Authorization: Bearer <HOROSA_MCP_TOKEN>` | 全量 116 | **没有托管端点**；配方见 [说明](./horosa-skill/examples/clients/remote-connectors-oauth-gateway.md) |
 
 `--surface full` / `--surface compact` 可覆盖默认；`--launcher uvx-git` 生成免 checkout 的
 零安装命令（`uvx --from "git+…#subdirectory=horosa-skill"`，PyPI 通道尚未开通）。
@@ -497,7 +497,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 🧰 可调用工具 | 106 / 106 `ok=true` |
-| 🧪 工程测试 | **1067 / 1067 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 72 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 🧪 工程测试 | **1104 / 1104 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 72 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 🛡️ 未确认参数时强制追问 | 96 个技法工具触发 `must_ask_user=true` |
 | 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 103 个导出 technique；契约 v14 镜像桌面端 aiExport v56） |
 | 🧾 技法依据卡 | 每个技法响应附 `data.technique_card`；算源声明与运行实测不符时显式亮警 |
@@ -512,7 +512,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 1067 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 1104 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

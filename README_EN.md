@@ -75,7 +75,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `106 / 106 ok=true` |
-| Engineering tests | `1067 / 1067 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 72 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `1104 / 1104 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 72 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `84` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `8` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`103` export techniques modeled; contract v14 mirrors desktop aiExport v56) |
@@ -319,7 +319,7 @@ This makes it not just a "tool layer" but a "tool layer + traceable knowledge ba
 
 ## Quick start
 
-Prerequisites: [uv](https://docs.astral.sh/uv/) (one-liner: `curl -LsSf https://astral.sh/uv/install.sh | sh`); Python ≥3.12 is provisioned by uv; keep ~5GB disk free (runtime download ~730MB, ~2GB unpacked).
+Prerequisites: [uv](https://docs.astral.sh/uv/) — macOS / Linux `curl -LsSf https://astral.sh/uv/install.sh | sh`; Windows (PowerShell) `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`. **Reopen the terminal** afterwards (or `source $HOME/.local/bin/env`) so `uv` is on PATH; Python ≥3.12 is provisioned by uv; keep ~5GB disk free (runtime download ~730MB, ~2GB unpacked).
 
 ```bash
 git clone https://github.com/Horace-Maxwell/horosa-skill.git
@@ -346,7 +346,7 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # stdio for clients; `
 > The PyPI channel (`uvx horosa-skill …`) is wired but **not yet live** (it needs the maintainer's one-time Trusted Publisher setup); once on, the commands get shorter and behave the same.
 
 > [!NOTE]
-> 🐳 **Docker / Linux (experimental)**: the offline runtime is published for macOS (arm64) and Windows (x64) only — there is no Linux payload. What runs in a container is the **MCP gateway** (Python package + knowledge base + memory) pointed at a host or another machine that has the runtime via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`. An **experimental** `horosa-skill/Dockerfile` + `docker-compose.yml` ship with the repo (gateway image: no offline runtime inside the container, so those two variables are mandatory; binding 0.0.0.0 requires `HOROSA_MCP_TOKEN`); by hand, `pip install horosa-skill` then `horosa-skill serve --transport streamable-http` is the gateway.
+> 🐳 **Docker / Linux (experimental)**: the offline runtime is published for macOS (arm64) and Windows (x64) only — there is no Linux payload. What runs in a container is the **MCP gateway** (Python package + knowledge base + memory) pointed at a host or another machine that has the runtime via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`. An **experimental** `horosa-skill/Dockerfile` + `docker-compose.yml` ship with the repo (gateway image: no offline runtime inside the container, so those two variables are mandatory; binding 0.0.0.0 requires `HOROSA_MCP_TOKEN`); by hand, `pip install "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.38.0/horosa_skill-0.38.0-py3-none-any.whl"` (the release wheel — PyPI is not open yet) then `horosa-skill serve --transport streamable-http` is the gateway.
 
 Troubleshooting install: `uv: command not found` -> install uv first (one-liner above); slow/broken network -> re-run `install` (resumes from the partial download) or set `HOROSA_RUNTIME_MIRROR=<mirror-prefix>`; low disk / busy ports / an unfamiliar doctor code -> `doctor --explain` adds 6–10 plain-language lines on stderr (stdout stays JSON) and `advice[]` gives every issue / warning code a `user_summary` + `next_action`, `--probe-network` checks the manifest URL through every mirror (the default makes no external request); macOS: the runtime will not start and leaves no log, or `doctor` reports `quarantine:runtime_binaries` -> the browser-downloaded archive carries Gatekeeper's quarantine attribute, run the `xattr -dr com.apple.quarantine <runtime/current>` command from `quarantine.fix`, then `runtime restart`; Windows `runtime.install_long_path` -> `doctor.windows.headroom_chars` below zero means install will refuse: set `HOROSA_RUNTIME_ROOT=C:\horosa` or enable `LongPathsEnabled` (v0.38.0 shortens the install temp prefix, ~20 characters more headroom); slow or proxied downloads -> `HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS` (default 120) and `HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS` (default 3, per mirror); a Windows Firewall prompt on first start or `doctor` warning `listener:not_loopback_only` -> the old launcher bound Java to 0.0.0.0; after upgrading run `uv run horosa-skill runtime restart` to re-apply the template (pins 127.0.0.1); services not starting under a Windows user name with spaces/CJK -> fixed in v0.38.0 (every path argument is quoted), `runtime restart` after upgrading; Codex showing a pile of errors or no tools on the first turn -> usually the timeouts are unset (Codex defaults 10 s/60 s): `uv run horosa-skill client check --client codex` names the missing keys and `client config --format codex --write ~/.codex/config.toml` merges the fix in place; `uvx` works in a terminal but a GUI client cannot start it -> GUI clients do not inherit your shell PATH, rerun `client config` (it now writes absolute paths) and `client check` reports `command_not_on_path`; upgrade -> `uv run horosa-skill upgrade` (skips the download when already current); uninstall -> `uv run horosa-skill uninstall` (dry-run by default).
 
@@ -395,8 +395,8 @@ uv run horosa-skill client config --format codex         # config.toml snippet (
 uv run horosa-skill client check                         # audit what each client ACTUALLY has
 ```
 
-The repo root also carries four thin mirrors — `GEMINI.md` (Gemini CLI), `.github/copilot-instructions.md` (Copilot),
-`.windsurf/rules/`, `.clinerules/` — so those agents know the gate and the reading contract the moment they open the
+The repo root also carries 6 thin mirrors — `GEMINI.md` (Gemini CLI), `.github/copilot-instructions.md` (Copilot),
+`.windsurf/rules/`, `.clinerules/`, `.cursor/rules/` (Cursor), `.agents/skills/horosa-agent/` (Codex / agentskills.io) — so those agents know the gate, the reading contract and the compact-surface `horosa_tool_run` call the moment they open the
 repo; the single policy source stays [SKILL.md](./skills/horosa-agent/SKILL.md), whose "Shell-only agents" section
 gives agents without MCP a pure-CLI contract (`tool run --input/--output`, exit codes, the gate flow).
 
@@ -405,7 +405,7 @@ gives agents without MCP a pure-CLI contract (`tool run --input/--output`, exit 
 | Client | Transport | One-line setup | Default surface | Notes |
 | :-- | :-- | :-- | :-- | :-- |
 | **Claude Code** | stdio | `setup --client claude-code` (writes the project `.mcp.json` when the CWD has one, else runs `claude mcp add --scope user`) | full (116) | The repo ships a project `.mcp.json`; [guide](./horosa-skill/examples/clients/claude-code.md) |
-| **Claude Code Plugin** | stdio | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` | full (116) | Skill + MCP in one step; the offline runtime still needs a one-time `install` |
+| **Claude Code Plugin** | stdio | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` | full (116) | Skill + MCP in one step; the plugin lives in `~/.claude/plugins/cache/horosa-skill/horosa/<version>/horosa-skill` — run `uv run --directory "<that dir>" horosa-skill install` once for the offline runtime (a `runtime.not_installed` error prints this command with the real path) |
 | **Claude Desktop** | stdio | `setup --client claude-desktop`, or install the `.mcpb` bundle | full (116) | The `.mcpb` ships as a release asset |
 | **Cursor** | stdio | `setup --client cursor` (or `client config --format cursor` for the official install deep link) | compact (11) | Cursor caps at ~40 tools globally and **drops the rest silently** |
 | **VS Code (Copilot)** | stdio | `setup --client vscode` (writes the user-level `mcp.json`; or `client config --format vscode` for the `vscode:mcp/install` link) | compact (11) | 128-tool cap across all servers; the repo ships `.vscode/mcp.json` |
@@ -416,7 +416,7 @@ gives agents without MCP a pure-CLI contract (`tool run --input/--output`, exit 
 | **Zed** | stdio | `setup --client zed` | compact (11) | Config root key is `context_servers` |
 | **OpenClaw / mcporter** | stdio | `client openclaw-setup --workspace ~/.openclaw/workspace` | full (116) | — |
 | **Open WebUI · n8n · Dify** | streamable-http | `horosa-skill serve --host 0.0.0.0 --token <random>` | full (116) | [Guide](./horosa-skill/examples/clients/openwebui-streamable-http.md); a token is required off-loopback, and there is **no TLS** — put it behind a reverse proxy |
-| **ChatGPT / claude.ai remote connectors** | streamable-http | As above, plus an HTTPS reverse proxy | full (116) | **No hosted endpoint** — you supply your own public HTTPS URL and token |
+| **ChatGPT / claude.ai remote connectors** | streamable-http | As above, plus an **OAuth-terminating HTTPS gateway** (Cloudflare Access / oauth2-proxy) — both connectors speak OAuth only, this server offers a static Bearer token only, so the gateway exchanges the OAuth session for an injected `Authorization: Bearer <HOROSA_MCP_TOKEN>` | full (116) | **No hosted endpoint**; recipe: [guide](./horosa-skill/examples/clients/remote-connectors-oauth-gateway.md) |
 
 `--surface full` / `--surface compact` overrides the default. `--launcher uvx-git` emits a
 checkout-free command (`uvx --from "git+…#subdirectory=horosa-skill"`; the PyPI channel is not open yet).
@@ -488,7 +488,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 1067 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 1104 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

@@ -28,7 +28,7 @@ from horosa_skill.client_tools import (
     resolve_uv_command,
 
     resolve_uvx_command,
-    zero_install_wheel_url,
+    wheel_asset_name, zero_install_wheel_url,
 )
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.errors import RuntimeError, ToolValidationError
@@ -263,6 +263,7 @@ def _write_json_file(path: Path, payload: object) -> Path:
 _MERGEABLE_ROOT_KEYS = ("mcpServers", "servers", "context_servers")
 _PIN_WHEEL = re.compile(r"/v(\d+\.\d+\.\d+)/horosa_skill-\d+\.\d+\.\d+-py3-none-any\.whl")
 _PIN_GIT = re.compile(r"horosa-skill@v(\d+\.\d+\.\d+)#")
+_PIN_LOCAL_WHEEL = re.compile(r"horosa_skill-(\d+\.\d+\.\d+)-py3-none-any\.whl$")
 
 
 def _merge_client_config(path: Path, payload: object) -> dict[str, Any]:
@@ -291,33 +292,58 @@ def _merge_client_config(path: Path, payload: object) -> dict[str, Any]:
         )
     servers = payload[root_key]
     backup: Path | None = None
+    written_format = "json"
     if target.exists():
         raw = target.read_bytes()
         try:
-            existing = json.loads(raw.decode("utf-8-sig")) if raw.strip() else {}
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise typer.BadParameter(
-                f"{target} 不是合法 JSON（{exc}），拒绝合并——请手动把 {root_key} 片段粘进去。"
-            ) from exc
-        if not isinstance(existing, dict):
-            raise typer.BadParameter(f"{target} 顶层不是 JSON 对象，拒绝合并。")
-        backup = target.with_name(f"{target.name}.horosa-bak")
-        backup.write_bytes(raw)
-        merged = dict(existing)
-        block = dict(merged.get(root_key) or {})
-        block.update(servers)
-        merged[root_key] = block
+            text = raw.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise typer.BadParameter(f"{target} 不是 UTF-8 文本（{exc}），拒绝合并——请手动把 {root_key} 片段粘进去。") from exc
+        from horosa_skill import jsonc as _jsonc
+
+        if _jsonc.is_jsonc_only(text):
+            # 🔴 v0.38.1 C4：Zed 出厂 settings.json / VS Code mcp.json 带注释与尾逗号，此前直接拒写。
+            # 文本级插入：只动 <root_key>.<server> 这一段，注释与其它键逐字节保留；写完回读验证。
+            existing = _jsonc.loads(text)
+            if not isinstance(existing, dict):
+                raise typer.BadParameter(f"{target} 顶层不是 JSON 对象，拒绝合并。")
+            new_text = text
+            for name, entry in servers.items():
+                new_text = _jsonc.upsert_server_entry(new_text, root_key, name, entry)
+            merged_check = _jsonc.loads(new_text)
+            if not all(name in (merged_check.get(root_key) or {}) for name in servers):
+                raise typer.BadParameter(f"{target} 含注释，文本级插入后回读不到 {root_key} 条目，拒绝写入。")
+            backup = target.with_name(f"{target.name}.horosa-bak")
+            backup.write_bytes(raw)
+            output_text = new_text if new_text.endswith("\n") else new_text + "\n"
+            written_format = "jsonc"
+        else:
+            try:
+                existing = json.loads(text) if raw.strip() else {}
+            except json.JSONDecodeError as exc:
+                raise typer.BadParameter(
+                    f"{target} 不是合法 JSON（{exc}），拒绝合并——请手动把 {root_key} 片段粘进去。"
+                ) from exc
+            if not isinstance(existing, dict):
+                raise typer.BadParameter(f"{target} 顶层不是 JSON 对象，拒绝合并。")
+            backup = target.with_name(f"{target.name}.horosa-bak")
+            backup.write_bytes(raw)
+            merged = dict(existing)
+            block = dict(merged.get(root_key) or {})
+            block.update(servers)
+            merged[root_key] = block
+            output_text = json.dumps(merged, ensure_ascii=False, indent=2) + "\n"
     else:
-        merged = {root_key: dict(servers)}
+        output_text = json.dumps({root_key: dict(servers)}, ensure_ascii=False, indent=2) + "\n"
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_name(f"{target.name}.horosa-tmp")
-    tmp.write_text(json.dumps(merged, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp.write_text(output_text, encoding="utf-8")
     try:
         os.replace(tmp, target)
     finally:
         if tmp.exists():
             tmp.unlink()
-    return {"path": str(target), "format": "json", "root_key": root_key,
+    return {"path": str(target), "format": written_format, "root_key": root_key,
             "servers": sorted(servers), "backup": str(backup) if backup else None}
 
 
@@ -1607,7 +1633,42 @@ def _probe_manifest_url(url: str, *, timeout: float = _SETUP_NETWORK_TIMEOUT_SEC
     return {"ok": bool(reachable), "url": reachable[0] if reachable else url, "attempts": attempts}
 
 
-def _stdio_probe(*, command: str, args: list[str], env: dict[str, str], timeout: float) -> dict[str, Any]:
+# Codex 只把这些系统变量交给 MCP server（其余一律不转发，HOROSA_* 得写进 env 表）。探针按同样的形状起 server，
+# 才抓得住「终端里 doctor ready、Codex 里全是 not_installed」（server 算出的 runtime 根和终端里装的不一样）。
+_CODEX_PASSTHROUGH_ENV = (
+    "PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "SystemRoot", "TEMP", "TMP", "LANG", "LC_ALL", "COMSPEC",
+    "PATHEXT", "APPDATA", "LOCALAPPDATA", "USERNAME", "USER", "SHELL", "TERM", "TZ",
+)
+
+
+def _client_probe_env(client_key: str, extra_env: dict[str, str]) -> dict[str, str]:
+    """stdio 探针用的环境：Codex 形状 = 最小系统变量 ∪ 配置里的 env 表；其余客户端继承整个环境。"""
+    if client_key == "codex":
+        base = {key: os.environ[key] for key in _CODEX_PASSTHROUGH_ENV if key in os.environ}
+        return {**base, **extra_env}
+    return {**os.environ, **extra_env}
+
+
+def _probe_runtime_mismatch(probe: dict[str, Any], settings: Settings) -> str | None:
+    """探针读到的 `horosa://runtime/status` 与宿主 settings 对不上 → 客户端起的 server 用的是另一套目录。"""
+    status = probe.get("runtime_status")
+    if not isinstance(status, dict) or not status.get("runtime_root"):
+        return None
+    try:
+        theirs = Path(str(status["runtime_root"])).expanduser().resolve()
+        ours = settings.runtime_root.expanduser().resolve()
+    except OSError:
+        return None
+    if theirs != ours:
+        return (
+            f"客户端将要起的 server 算出的 runtime 根是 {theirs}，而本机（终端）用的是 {ours}：环境变量没有传到客户端"
+            "（Codex 不转发 shell 环境；GUI 客户端不读 shell 配置）。请把 HOROSA_RUNTIME_ROOT / HOROSA_SKILL_DATA_DIR"
+            " 写进该客户端配置的 env 表，或统一用默认目录。"
+        )
+    return None
+
+
+def _stdio_probe(*, command: str, args: list[str], env: dict[str, str], timeout: float, cwd: str | None = None) -> dict[str, Any]:
     """用客户端**将要执行的那条命令**真起一次 MCP server（stdio），握手 + 列工具。
 
     进程内 `create_mcp_server()` 证明不了「客户端能起它」：绝对路径对不对、uvx 缓存能不能建、
@@ -1619,7 +1680,7 @@ def _stdio_probe(*, command: str, args: list[str], env: dict[str, str], timeout:
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
 
-    params = StdioServerParameters(command=command, args=args, env=env)
+    params = StdioServerParameters(command=command, args=args, env=env, cwd=cwd)
 
     with tempfile.TemporaryFile("w+", encoding="utf-8", errors="replace") as errlog:
 
@@ -1629,11 +1690,22 @@ def _stdio_probe(*, command: str, args: list[str], env: dict[str, str], timeout:
                     async with ClientSession(read, write) as session:
                         init = await session.initialize()
                         tools = await session.list_tools()
+                        runtime_status: dict[str, Any] | None = None
+                        try:
+                            from pydantic import AnyUrl
+
+                            resource = await session.read_resource(AnyUrl("horosa://runtime/status"))
+                            text = next((c.text for c in resource.contents if getattr(c, "text", None)), None)
+                            parsed = json.loads(text) if text else None
+                            runtime_status = parsed if isinstance(parsed, dict) else None
+                        except Exception:  # noqa: BLE001 - 老版本 server 没有这个资源；探针本身不因此失败
+                            runtime_status = None
                         return {
                             "ok": True,
                             "tools": len(tools.tools),
                             "server_name": init.serverInfo.name,
                             "server_version": init.serverInfo.version,
+                            "runtime_status": runtime_status,
                         }
 
         try:
@@ -1688,6 +1760,7 @@ def _run_setup(
     probe_network: bool,
     stdio_probe: bool,
     write: bool,
+    cache_wheel: bool = True,
 ) -> dict[str, Any]:
     from horosa_skill.runtime.manager import _platform_key
 
@@ -1771,16 +1844,28 @@ def _run_setup(
     # ---- 3 config
     announce(3, "config", f"生成 {client_key} 配置（launcher={launcher_key}）…")
     try:
+        wheel_source: str | None = None
+        wheel_cache_note: str | None = None
+        if launcher_key == "uvx-wheel" and cache_wheel and not dry_run:
+            # v0.38.1 C15：先把 wheel 落到 ~/.horosa/wheels/，配置里写本地路径 → 客户端冷启动零网络、离线可起。
+            from horosa_skill.runtime.mirrors import preferred_mirror_url
+
+            announce(3, "config", "预下载 wheel 到 ~/.horosa/wheels/（配置里写本地路径；--no-cache-wheel 可跳过）…")
+            cached, wheel_cache_note = _cache_wheel(preferred_mirror_url(zero_install_wheel_url()))
+            wheel_source = str(cached) if cached else None
         payload, stdio_command, surface_env = _build_client_config_payload(
             format_name=client_key, skill_root=root, server_name=server_name, launcher=launcher_key, surface=surface,
+            wheel_source=wheel_source,
         )
+        if wheel_cache_note:
+            payload.setdefault("warnings", []).append(wheel_cache_note)
     except typer.BadParameter as exc:
         fail("config", "setup.config_build_failed", str(exc), {"launcher": launcher_key, "skill_root": str(root)})
     target: Path | None = config.expanduser().resolve() if config is not None else None
     mode = "merge"
     add_command: list[str] | None = None
     if client_key == "claude-code" and target is None:
-        project_mcp = Path.cwd() / ".mcp.json"
+        project_mcp = _project_root() / ".mcp.json"
         if scope == "project" or (scope == "auto" and project_mcp.is_file()):
             target = project_mcp
         else:
@@ -1890,13 +1975,23 @@ def _run_setup(
         announce(6, "stdio_probe", "用客户端将要执行的命令真起一次 MCP server（stdio，不起离线 runtime）…")
         expected = int(payload["tool_surface"]["tools"])
         probe_args = [*stdio_command[1:], "--skip-runtime-start"]
+        # 🔴 v0.38.1 C14：按**客户端的形状**起——Codex 只给最小环境（∪ 配置里的 env 表），其余客户端继承整个环境；
+        # cwd = 项目根（uv 形态 = Codex 的 cwd）。再读 horosa://runtime/status，抓「server 算出的 runtime 根 ≠ 终端里的」。
+        configured_env = {**surface_env, **(_codex_env_roots() if client_key == "codex" else {})}
+        probe_env = _client_probe_env(client_key, configured_env)
+        probe_cwd = str(root) if (launcher_key == "uv" and root is not None) else str(_project_root())
         probe, seconds = _timed_call(
-            lambda: _stdio_probe(command=stdio_command[0], args=probe_args, env={**os.environ, **surface_env},
-                                 timeout=_SETUP_STDIO_TIMEOUT_SECONDS)
+            lambda: _stdio_probe(command=stdio_command[0], args=probe_args, env=probe_env,
+                                 timeout=_SETUP_STDIO_TIMEOUT_SECONDS, cwd=probe_cwd)
         )
-        probe_ok = probe.get("ok") is True and probe.get("tools") == expected
-        steps["stdio_probe"] = {"ok": probe_ok, "seconds": seconds, "expected_tools": expected,
-                                "command": _format_cli_command([stdio_command[0], *probe_args]), **probe}
+        mismatch = _probe_runtime_mismatch(probe, settings) if probe.get("ok") else None
+        probe_ok = probe.get("ok") is True and probe.get("tools") == expected and mismatch is None
+        steps["stdio_probe"] = {"ok": probe_ok, "seconds": seconds, "expected_tools": expected, "env_shape": client_key if client_key == "codex" else "inherit",
+                                "cwd": probe_cwd, "command": _format_cli_command([stdio_command[0], *probe_args]), **probe}
+        if mismatch:
+            steps["stdio_probe"]["runtime_mismatch"] = mismatch
+            fail("stdio_probe", "setup.stdio_probe_runtime_mismatch", mismatch,
+                 {**probe, "host_runtime_root": str(settings.runtime_root), "command": steps["stdio_probe"]["command"]})
         if not probe_ok:
             fail("stdio_probe", "setup.stdio_probe_failed",
                  "客户端将要执行的命令起不来 MCP server，或列出的工具数不对。",
@@ -1990,12 +2085,16 @@ def setup(
         help="Start the server once over stdio with the exact client command and count the tools.",
     ),
     write: bool = typer.Option(True, "--write/--no-write", help="Write the client config (default) or only print the block."),
+    cache_wheel: bool = typer.Option(
+        True, "--cache-wheel/--no-cache-wheel",
+        help="uvx-wheel launcher only: pre-download the wheel to ~/.horosa/wheels and write that local path (offline-capable cold start).",
+    ),
 ) -> None:
     try:
         report = _run_setup(
             client=client, launcher=launcher, surface=surface, config=config, scope=scope, server_name=server_name,
             skill_root=skill_root, dry_run=dry_run, skip_install=skip_install, archive=archive, manifest_url=manifest_url,
-            probe_network=probe_network, stdio_probe=stdio_probe, write=write,
+            probe_network=probe_network, stdio_probe=stdio_probe, write=write, cache_wheel=cache_wheel,
         )
     except _SetupFailure as failure:
         typer.echo(json.dumps(failure.payload, ensure_ascii=False, indent=2), err=True)
@@ -2620,39 +2719,68 @@ _CLIENT_COMPACT_REASON = {
 _CLIENT_NAMES = ("claude-code", "claude-desktop", "cursor", "vscode", "codex", "gemini", "windsurf", "cline", "zed")
 
 
+def _project_root(start: Path | None = None) -> Path:
+    """项目级配置该落在哪：从 `start`（默认 CWD）向上找最近的 `.git` 或已有 `.mcp.json` 的目录；都没有就是 CWD 本身。
+
+    🔴 v0.38.1 C10：此前项目级候选一律取 `Path.cwd()`。在子目录里跑 `setup` / `client check`（最常见：
+    `cd horosa-skill && uv run horosa-skill setup --client cursor`）会把 `.cursor/mcp.json` 写进子目录 ——
+    客户端按项目根找配置，根本看不到它；`client check` 也在错的地方找。
+    """
+    start = (start or Path.cwd()).resolve()
+    for candidate in (start, *start.parents):
+        if (candidate / ".git").exists() or (candidate / ".mcp.json").is_file():
+            return candidate
+    return start
+
+
 def _client_config_locations(
     client: str, *, os_name: str | None = None, env: Mapping[str, str] | None = None,
     home: Path | None = None, cwd: Path | None = None,
 ) -> list[Path]:
-    """候选配置文件（先全局后项目级；第一个存在的就是 `config_path`）。纯函数，便于跨平台测试。"""
+    """候选配置文件（先全局后项目级；第一个存在的就是 `config_path`）。纯函数，便于跨平台测试。
+
+    项目级候选按 `_project_root(cwd)`（`.git` / `.mcp.json` 所在的最近祖先），不是裸 CWD。
+    v0.38.1 C19 追加：`CODEX_HOME`（Codex 官方覆盖变量）、Linux 的 `XDG_CONFIG_HOME`、项目级
+    `.gemini/settings.json`、Cline 装在 Cursor / Windsurf 里时的 globalStorage 根。
+    """
     # os_name ∈ {"nt", "darwin", "linux"}（默认按本机）；参数化是为了在任何平台上都能测别的平台的路径表。
     if os_name is None:
         os_name = "nt" if os.name == "nt" else ("darwin" if sys.platform == "darwin" else "linux")
     env = os.environ if env is None else env
     home = Path(home) if home is not None else Path.home()
-    cwd = Path(cwd) if cwd is not None else Path.cwd()
+    project = Path(cwd) if cwd is not None else _project_root()
     if os_name == "nt":
         appdata = Path(env.get("APPDATA") or (home / "AppData" / "Roaming"))
         claude_desktop = appdata / "Claude" / "claude_desktop_config.json"
         code_user = appdata / "Code" / "User"
+        cursor_user = appdata / "Cursor" / "User"
+        windsurf_user = appdata / "Windsurf" / "User"
         zed = appdata / "Zed" / "settings.json"
     elif os_name == "darwin":
-        claude_desktop = home / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
-        code_user = home / "Library" / "Application Support" / "Code" / "User"
+        app_support = home / "Library" / "Application Support"
+        claude_desktop = app_support / "Claude" / "claude_desktop_config.json"
+        code_user = app_support / "Code" / "User"
+        cursor_user = app_support / "Cursor" / "User"
+        windsurf_user = app_support / "Windsurf" / "User"
         zed = home / ".config" / "zed" / "settings.json"
     else:
-        claude_desktop = home / ".config" / "Claude" / "claude_desktop_config.json"
-        code_user = home / ".config" / "Code" / "User"
-        zed = home / ".config" / "zed" / "settings.json"
+        xdg = Path(env.get("XDG_CONFIG_HOME") or (home / ".config"))
+        claude_desktop = xdg / "Claude" / "claude_desktop_config.json"
+        code_user = xdg / "Code" / "User"
+        cursor_user = xdg / "Cursor" / "User"
+        windsurf_user = xdg / "Windsurf" / "User"
+        zed = xdg / "zed" / "settings.json"
+    codex_home = Path(env["CODEX_HOME"]) if env.get("CODEX_HOME") else home / ".codex"
+    cline_tail = Path("globalStorage") / "saoudrizwan.claude-dev" / "settings" / "cline_mcp_settings.json"
     table: dict[str, list[Path]] = {
-        "claude-code": [home / ".claude.json", cwd / ".mcp.json"],
+        "claude-code": [home / ".claude.json", project / ".mcp.json"],
         "claude-desktop": [claude_desktop],
-        "cursor": [home / ".cursor" / "mcp.json", cwd / ".cursor" / "mcp.json"],
-        "vscode": [code_user / "mcp.json", cwd / ".vscode" / "mcp.json"],
-        "codex": [home / ".codex" / "config.toml"],
-        "gemini": [home / ".gemini" / "settings.json"],
+        "cursor": [home / ".cursor" / "mcp.json", project / ".cursor" / "mcp.json"],
+        "vscode": [code_user / "mcp.json", project / ".vscode" / "mcp.json"],
+        "codex": [codex_home / "config.toml"],
+        "gemini": [home / ".gemini" / "settings.json", project / ".gemini" / "settings.json"],
         "windsurf": [home / ".codeium" / "windsurf" / "mcp_config.json"],
-        "cline": [code_user / "globalStorage" / "saoudrizwan.claude-dev" / "settings" / "cline_mcp_settings.json"],
+        "cline": [code_user / cline_tail, cursor_user / cline_tail, windsurf_user / cline_tail],
         "zed": [zed],
     }
     if client not in table:
@@ -2687,6 +2815,60 @@ def _iter_client_entries(payload: Any) -> Any:
                 yield f"{project_path}::{name}", entry
 
 
+# 每个客户端**真的会展开**的 `${…}` 占位符（2026-09 按各家官方文档核对；前缀型以 `:` 结尾）。
+# 不在表里的占位符会被客户端原样传给 server → `--directory ${x}` 不存在、env 里留着字面量。
+CLIENT_PLACEHOLDER_WHITELIST: dict[str, tuple[str, ...]] = {
+    "cursor": ("env:", "userHome", "workspaceFolder", "workspaceFolderBasename", "pathSeparator"),
+    "vscode": ("workspaceFolder", "workspaceFolderBasename", "env:", "userHome", "input:"),
+    "claude-code": ("CLAUDE_PROJECT_DIR", "CLAUDE_PLUGIN_ROOT", "CLAUDE_PLUGIN_DATA"),
+    "claude-desktop": (),
+    "codex": (),
+    "gemini": (),
+    "windsurf": (),
+    "cline": (),
+    "zed": (),
+}
+_PLACEHOLDER_RE = re.compile(r"\$\{([^}]*)\}")
+
+
+def _placeholder_allowed(var: str, client: str) -> bool:
+    base = var.split(":-", 1)[0]
+    for allowed in CLIENT_PLACEHOLDER_WHITELIST.get(client, ()):
+        if allowed.endswith(":"):
+            if base.startswith(allowed):
+                return True
+        elif base == allowed:
+            return True
+    return False
+
+
+def _expand_client_placeholders(text: str, *, client: str, config_dir: Path | None) -> str:
+    """按客户端规则把占位符换成本机路径（只为了检查 `--directory` 指得对不对；不知道的原样保留）。
+
+    `${workspaceFolder}` / `${CLAUDE_PROJECT_DIR}` → 项目根（配置文件在 `.cursor/` / `.vscode/` 里时取上一层）。
+    """
+    project_root: Path | None = None
+    if config_dir is not None:
+        project_root = config_dir.parent if config_dir.name in {".cursor", ".vscode", ".gemini"} else config_dir
+
+    def repl(match: re.Match[str]) -> str:
+        var = match.group(1)
+        base, _, default = var.partition(":-")
+        if base in {"workspaceFolder", "CLAUDE_PROJECT_DIR"} and project_root is not None:
+            return str(project_root)
+        if base == "workspaceFolderBasename" and project_root is not None:
+            return project_root.name
+        if base == "userHome":
+            return str(Path.home())
+        if base == "pathSeparator":
+            return os.sep
+        if base.startswith("env:"):
+            return os.environ.get(base[4:], default)
+        return match.group(0)
+
+    return _PLACEHOLDER_RE.sub(repl, text)
+
+
 def _audit_client_entry(
     name: str, entry: dict[str, Any], *, client: str, config_dir: Path | None = None
 ) -> list[dict[str, str]]:
@@ -2696,12 +2878,17 @@ def _audit_client_entry(
     command = str(entry.get("command") or "")
     blob = " ".join([command, *args, json.dumps(entry.get("env") or {}, ensure_ascii=False)])
 
-    if "${" in blob and "${workspaceFolder}" not in blob and "${CLAUDE_PROJECT_DIR" not in blob:
-        problems.append({
-            "code": "unexpanded_placeholder",
-            "detail": f"配置里有客户端不会展开的占位符：{blob[blob.index('${'):][:60]}",
-            "fix": "换成真实路径，或用该客户端支持的变量（VS Code 用 ${workspaceFolder}）。",
-        })
+    # 🔴 按客户端白名单逐个判：此前只放行 `${workspaceFolder}` 与 `${CLAUDE_PROJECT_DIR`，于是 `.vscode/mcp.json`
+    # 里写 `${CLAUDE_PROJECT_DIR}`（VS Code 不认）是绿的，而 `${env:HOME}`（Cursor / VS Code 都认）是红的。
+    for var in _PLACEHOLDER_RE.findall(blob):
+        if not _placeholder_allowed(var, client):
+            allowed = ", ".join("${" + a + ("…}" if a.endswith(":") else "}") for a in CLIENT_PLACEHOLDER_WHITELIST.get(client, ())) or "（该客户端不展开任何占位符）"
+            problems.append({
+                "code": "unexpanded_placeholder",
+                "detail": f"`${{{var}}}` 不是 {client} 会展开的占位符，会原样传给 server。",
+                "fix": f"换成真实路径，或只用 {client} 支持的变量：{allowed}。",
+            })
+            break
     if args and "--transport" not in args:
         problems.append({
             "code": "missing_transport",
@@ -2720,13 +2907,15 @@ def _audit_client_entry(
             target = args[index + 1]
             # 🔴 相对路径要按**配置文件所在目录**解析，不是按跑 check 的那一刻的 CWD ——
             # 客户端启动 server 时的工作目录是项目根，而 `client check` 可能在任何地方被调用。
-            resolved = Path(target).expanduser()
+            expanded = _expand_client_placeholders(target, client=client, config_dir=config_dir)
+            resolved = Path(expanded).expanduser()
             if not resolved.is_absolute() and config_dir is not None:
                 resolved = (config_dir / resolved).resolve()
-            if "${" not in target and not (resolved / "pyproject.toml").is_file():
+            # 占位符按客户端规则展开后再查；展开不了的（插件作用域 / 未知）跳过而不是误报。
+            if "${" not in expanded and not (resolved / "pyproject.toml").is_file():
                 problems.append({
                     "code": "directory_missing",
-                    "detail": f"--directory 指向的目录里没有 pyproject.toml：{target}",
+                    "detail": f"--directory 指向的目录里没有 pyproject.toml：{target}" + (f"（展开后 {expanded}）" if expanded != target else ""),
                     "fix": "指向 horosa-skill 包目录（含 pyproject.toml 的那一层）。",
                 })
     # 裸命令名要靠 PATH；GUI 客户端（Claude Desktop / Cursor / VS Code…）在 Windows 上不继承 shell PATH，
@@ -2740,7 +2929,14 @@ def _audit_client_entry(
     # 钉版本的零安装源（wheel 资产 URL / git tag）与本包版本不一致 → 客户端跑的是别的版本（v0.38.0 B3）。
     if "--from" in args:
         source = args[args.index("--from") + 1] if args.index("--from") + 1 < len(args) else ""
-        pinned = _PIN_WHEEL.search(source) or _PIN_GIT.search(source)
+        # v0.38.1 C15：`--from` 可以是 setup 预下载的本地 wheel；文件没了（清过缓存 / 换了机器）客户端就起不来。
+        if source.endswith(".whl") and "://" not in source and not Path(source).expanduser().is_file():
+            problems.append({
+                "code": "wheel_cache_missing",
+                "detail": f"--from 指向的本地 wheel 不存在：{source}",
+                "fix": "重跑 `horosa-skill setup --client <client>`（会重新下载到 ~/.horosa/wheels/），或改回发布页的 wheel URL。",
+            })
+        pinned = _PIN_WHEEL.search(source) or _PIN_GIT.search(source) or _PIN_LOCAL_WHEEL.search(source)
         if pinned and pinned.group(1) != __version__:
             problems.append({
                 "code": "launcher_version_drift",
@@ -2790,6 +2986,36 @@ def _audit_client_entry(
                 "detail": f"cwd 指向的目录不存在：{cwd}（Codex 会 spawn 失败）。",
                 "fix": "删掉 cwd（uvx 形态不需要），或指向存在的 horosa-skill 包目录。",
             })
+        # v0.38.1 C6：Codex 不把你 shell 里的 HOROSA_* 交给 server。runtime 根 / 数据目录若只设在 shell 里，
+        # Codex 起的那份 server 会算出**另一个** runtime 根 → 终端里 doctor ready、Codex 里全是 not_installed。
+        env_table = entry.get("env") or {}
+        missing_roots = [key for key in ("HOROSA_RUNTIME_ROOT", "HOROSA_SKILL_DATA_DIR") if not str(env_table.get(key) or "").strip()]
+        if missing_roots:
+            problems.append({
+                "code": "codex_env_roots_missing",
+                "detail": f"[mcp_servers.<name>.env] 缺 {' / '.join(missing_roots)}：Codex 不转发 shell 环境，server 会用默认目录。",
+                "fix": "重跑 `horosa-skill client config --format codex --write ~/.codex/config.toml`（v0.38.1 起写入两个绝对路径）。",
+            })
+    if client in {"cline", "zed"}:
+        # v0.38.1 C5：两家的 per-server `timeout` 都是秒、默认 60 —— 择日扫描 / 冷启动都会超。
+        timeout = entry.get("timeout")
+        if timeout is None:
+            problems.append({
+                "code": f"{client}_tool_timeout_missing",
+                "detail": f"没写 timeout（{client} 默认 60 秒；择日类扫描与首次冷启动都可能超）。",
+                "fix": "在该 server 条目里加 `\"timeout\": 600`（秒）。",
+            })
+        else:
+            try:
+                too_short = float(timeout) < 600
+            except (TypeError, ValueError):
+                too_short = True
+            if too_short:
+                problems.append({
+                    "code": f"{client}_tool_timeout_too_short",
+                    "detail": f"timeout={timeout}（{client} 默认 60 秒）。",
+                    "fix": "设 600 以上（秒）。",
+                })
     return problems
 
 
@@ -2812,7 +3038,9 @@ def _client_check_report(targets: list[str], config_path: Path | None = None) ->
                     payload = tomllib.loads(path.read_text(encoding="utf-8"))
                     payload = {"mcpServers": (payload.get("mcp_servers") or {})}
                 else:
-                    payload = json.loads(path.read_text(encoding="utf-8"))
+                    from horosa_skill import jsonc as _jsonc
+
+                    payload = _jsonc.loads(path.read_text(encoding="utf-8-sig"))  # Zed / VS Code 允许注释与尾逗号
             except (OSError, ValueError) as exc:
                 found.append({"path": str(path), "ok": False, "error": f"{type(exc).__name__}: {exc}"})
                 continue
@@ -2864,8 +3092,74 @@ def client_check(
     _print_json(_client_check_report([client] if client else list(_CLIENT_NAMES), config_path))
 
 
+def _codex_env_roots() -> dict[str, str]:
+    """Codex env 表里显式写的两个根（解析后的绝对路径；`HOROSA_PORTS=auto` 等其它旋钮不在此列）。"""
+    settings = Settings.from_env()
+    return {
+        "HOROSA_RUNTIME_ROOT": str(settings.runtime_root.expanduser().resolve()),
+        "HOROSA_SKILL_DATA_DIR": str(settings.data_dir.expanduser().resolve()),
+    }
+
+
+def _wheel_cache_dir() -> Path:
+    return Path.home() / ".horosa" / "wheels"
+
+
+def _wheel_looks_valid(path: Path, version: str) -> bool:
+    import zipfile
+
+    try:
+        with zipfile.ZipFile(path) as archive:
+            names = set(archive.namelist())
+            metadata = f"horosa_skill-{version}.dist-info/METADATA"
+            if metadata not in names or "horosa_skill/__init__.py" not in names:
+                return False
+            return f"Version: {version}" in archive.read(metadata).decode("utf-8", errors="replace")
+    except (OSError, zipfile.BadZipFile):
+        return False
+
+
+def _cache_wheel(url: str, *, version: str | None = None, dest_dir: Path | None = None, fetch: Any | None = None) -> tuple[Path | None, str | None]:
+    """把发布页的 wheel 预下载到 ~/.horosa/wheels/（v0.38.1 C15），返回 (本地路径 | None, 警告 | None)。
+
+    🔴 为什么：`uvx --from <URL>` 按 URL 缓存环境，但 uv 对直链依赖「尊重 HTTP 缓存头」——每次客户端冷启动都可能
+    发一次再验证请求，离线时不保证能起。配置里写本地 wheel 路径 → 冷启动零网络、离线可用；升级 = 换文件名。
+    校验：zip 结构 + dist-info 的 Version 必须等于本包版本（wheel 没有单独签名；sha256 记在旁边的 .sha256）。
+    """
+    import hashlib
+
+    version = version or __version__
+    dest_dir = dest_dir or _wheel_cache_dir()
+    dest = dest_dir / wheel_asset_name(version)
+    if dest.is_file() and _wheel_looks_valid(dest, version):
+        return dest, None
+    try:
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        part = dest.with_name(dest.name + ".part")
+        if fetch is not None:
+            fetch(url, part)
+        else:
+            import httpx
+
+            with httpx.Client(timeout=120.0, follow_redirects=True) as http, http.stream("GET", url) as response:
+                response.raise_for_status()
+                with part.open("wb") as handle:
+                    for chunk in response.iter_bytes():
+                        handle.write(chunk)
+        if not _wheel_looks_valid(part, version):
+            part.unlink(missing_ok=True)
+            return None, f"下载到的文件不是 horosa_skill {version} 的 wheel（结构或版本不符），配置里保留 URL。"
+        digest = hashlib.sha256(part.read_bytes()).hexdigest()
+        part.replace(dest)
+        dest.with_name(dest.name + ".sha256").write_text(f"{digest}  {dest.name}\n", encoding="utf-8")
+        return dest, None
+    except Exception as exc:  # noqa: BLE001 - 预下载失败不阻断 setup：配置回退到 URL 形态
+        return None, f"wheel 预下载失败（{type(exc).__name__}: {exc}）；配置里保留 URL，客户端冷启动时再取。"
+
+
 def _build_client_config_payload(
     *, format_name: str, skill_root: Path, server_name: str, launcher: str, surface: str,
+    wheel_source: str | None = None,
 ) -> tuple[dict[str, Any], list[str], dict[str, str]]:
     """`client config` 的产物，也是 `setup` 第 3 步（v0.38.0 B4）。返回 (payload, stdio 命令, 工具面 env)。
 
@@ -2895,9 +3189,12 @@ def _build_client_config_payload(
         from horosa_skill.runtime.mirrors import mirror_candidates, preferred_mirror_url
 
         wheel_url = zero_install_wheel_url()
-        stdio_command = [*uvx_command, "--from", preferred_mirror_url(wheel_url), "horosa-skill", "serve", "--transport", "stdio"]
+        # `wheel_source`（setup 预下载到 ~/.horosa/wheels 的本地文件）优先：冷启动零网络、离线可用。
+        from_value = wheel_source or preferred_mirror_url(wheel_url)
+        stdio_command = [*uvx_command, "--from", from_value, "horosa-skill", "serve", "--transport", "stdio"]
         launcher_info.update({
             "wheel_url": preferred_mirror_url(wheel_url),
+            **({"wheel_cached_path": wheel_source} if wheel_source else {}),
             "alternatives": mirror_candidates(wheel_url),
             "pinned_version": __version__,
             "install_hint": f"uvx --from \"{preferred_mirror_url(wheel_url)}\" horosa-skill install",
@@ -2994,8 +3291,8 @@ def _build_client_config_payload(
         }
     elif key == "codex":
         # Codex 硬约束（examples/clients/codex.md 有全文）：RawMcpServerConfig deny_unknown_fields
-        # （字段写错=整段拒收）；env 只透传 11 个系统变量白名单 → HOROSA_* 必须显式写进 env 表；
-        # 启动超时默认 30s < 首次冷启动（runtime 预热 ~45s）→ 显式 120s；工具默认 60s < 长盘
+        # （字段写错=整段拒收）；env 不转发 shell 环境 → HOROSA_* 必须显式写进 env 表；
+        # 启动超时默认 10 s < 首次冷启动（runtime 预热 ~45s）→ 显式 120s；工具默认 60s < 长盘
         # （tianxing 跨月扫描）→ 600s。首轮工具目录只等 1s（mcp_optional_startup_grace_ms=1000）：
         # 冷启动时第一轮对话可能看不到 horosa 工具，第二轮即恢复——要首轮即见就解开 required 注释
         # （代价：server 起不来时 Codex 启动直接报错）。
@@ -3016,7 +3313,7 @@ def _build_client_config_payload(
                 # 写死本机路径 → 对方 Codex 起不来（cwd 不存在即 spawn 失败）。
                 + (f"cwd = {json.dumps(str(resolved_skill_root))}\n" if launcher_key == "uv" else "")
                 + (
-                "# 冷启动（首次装 runtime/预热）可超 Codex 默认 30s；长盘（择日扫描）可超默认工具 60s。\n"
+                "# 冷启动（首次装 runtime/预热）可超 Codex 默认 10 s；长盘（择日扫描）可超默认工具 60 s。\n"
                 "startup_timeout_sec = 120\n"
                 "tool_timeout_sec = 600\n"
                 "# 首轮即见工具（否则冷启动首轮目录里可能没有 horosa，第二轮恢复）；\n"
@@ -3025,7 +3322,12 @@ def _build_client_config_payload(
                 "\n"
                 f"[mcp_servers.{server_name}.env]\n"
                 + ("HOROSA_MCP_COMPACT = \"1\"          # " + tool_surface["reason"] + "\n" if use_compact else "")
-                + "# Codex 只透传 11 个系统变量白名单——任何 HOROSA_* 必须在这里显式声明才可见，例如：\n"
+                # 🔴 v0.38.1 C6：Codex 不转发你 shell 里的 HOROSA_*。runtime 根与数据目录显式写成绝对路径
+                # （与 MCPB / 插件的 user_config 一致），否则 Codex 起的 server 会算出另一个 runtime 根。
+                # 不写 `env_vars`：老版本 Codex 对未知键 deny_unknown_fields，会整块拒收这个 server。
+                + f"HOROSA_RUNTIME_ROOT = {json.dumps(str(_codex_env_roots()['HOROSA_RUNTIME_ROOT']))}\n"
+                + f"HOROSA_SKILL_DATA_DIR = {json.dumps(str(_codex_env_roots()['HOROSA_SKILL_DATA_DIR']))}\n"
+                + "# Codex 不把 shell 环境交给 server——任何 HOROSA_* 必须在这里显式声明才可见，例如：\n"
                 f"# HOROSA_MCP_COMPACT = \"1\"          # 11 门面模式（Codex 无工具搜索，{len(TOOL_DEFINITIONS)} 技法全量较重）\n"
                 "# HOROSA_TOOLSETS = \"astro,cn\"      # 或按域裁剪\n"
                 )
@@ -3092,9 +3394,12 @@ def _build_client_config_payload(
         elif key == "windsurf":
             root_key = "mcpServers"
         elif key == "cline":
-            entry["type"] = "stdio"
+            # Cline 的 per-server `timeout` 是**秒**（源码 sdk/packages/shared/src/mcp.ts：默认 60，范围 1–3600）。
+            entry.update({"type": "stdio", "timeout": 600})
             root_key = "mcpServers"
-        else:  # zed：context_servers 下直接 command/args/env（zed.dev/docs/ai/mcp，2026-09 核对）
+        else:  # zed：context_servers 下直接 command/args/env（zed.dev/docs/ai/mcp，2026-09 核对）；无 `source` 字段
+            # Zed 的 ContextServerCommand 也有 per-server `timeout`（秒，默认 60）——这才是 Zed 的真缺口。
+            entry["timeout"] = 600
             root_key = "context_servers"
         config_path = str(_preferred_config_path(key))
         payload = {

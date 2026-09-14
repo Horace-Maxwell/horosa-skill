@@ -1,18 +1,17 @@
 {
+  "_comment": "Generated shape of `uv run horosa-skill setup --client claude-desktop` (or `client config --format claude-desktop --write <this file>`). Claude Desktop does NOT inherit your shell PATH: `command` must be the absolute path of `uv` (`which uv` / `where uv`), and --directory the absolute horosa-skill package dir. Prefer running the generator; it writes both for you.",
   "mcpServers": {
     "horosa": {
-      "command": "uv",
+      "command": "<ABSOLUTE PATH TO uv>",
       "args": [
         "run",
         "--directory",
-        "<PATH_TO_REPO>/horosa-skill",
+        "<ABSOLUTE PATH TO horosa-skill>",
         "horosa-skill",
         "serve",
         "--transport",
         "stdio"
-      ],
-      "cwd": "<PATH_TO_REPO>/horosa-skill"
+      ]
     }
   }
 }
-

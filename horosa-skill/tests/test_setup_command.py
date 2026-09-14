@@ -328,14 +328,19 @@ def test_claude_code_without_claude_on_path_prints_the_command(tmp_path: Path, m
 # ---------------------------------------------------------------- the real stdio probe
 
 
-def test_stdio_probe_spawns_the_exact_client_command_and_counts_tools(tmp_path: Path) -> None:
-    """真 spawn：`<uv> run --directory <checkout> horosa-skill serve --transport stdio --skip-runtime-start`。"""
+def test_stdio_probe_spawns_the_client_shaped_command_and_counts_tools(tmp_path: Path) -> None:
+    """真 spawn：`<uv> run --directory <checkout> horosa-skill serve --transport stdio --skip-runtime-start`，
+    并读 horosa://runtime/status 与宿主比对（v0.38.1 C14）。"""
     config = tmp_path / "mcp.json"
     report = _stdout_json(_run("--client", "cursor", "--config", str(config), "--skip-install", "--no-probe-network"))
     probe = report["steps"]["stdio_probe"]
     assert probe["ok"] is True and probe["tools"] == 11 == probe["expected_tools"], probe
     assert probe["command"].endswith("serve --transport stdio --skip-runtime-start")
     assert probe["server_name"] == "Horosa Skill"
+    assert probe["env_shape"] == "inherit" and Path(probe["cwd"]).is_dir()
+    status = probe["runtime_status"]
+    assert isinstance(status, dict) and status["installed"] == report["steps"]["doctor"]["installed"], probe
+    assert "runtime_mismatch" not in probe
     assert report["ok"] is True
 
 
@@ -355,3 +360,82 @@ def test_manifest_probe_handles_file_urls_without_network(tmp_path: Path) -> Non
     assert cli_module._probe_manifest_url(manifest.resolve().as_uri())["ok"] is False
     manifest.write_text("{}", encoding="utf-8")
     assert cli_module._probe_manifest_url(manifest.resolve().as_uri())["ok"] is True
+
+
+# ---------------------------------------------------------------- v0.38.1 C14 / C15
+
+
+def test_codex_probe_env_is_minimal_and_carries_only_the_configured_horosa_vars(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HOROSA_RUNTIME_ROOT", "/from/shell")
+    monkeypatch.setenv("HOROSA_MCP_TOKEN", "secret")
+    codex = cli_module._client_probe_env("codex", {"HOROSA_RUNTIME_ROOT": "/from/config"})
+    assert codex["HOROSA_RUNTIME_ROOT"] == "/from/config" and "HOROSA_MCP_TOKEN" not in codex and "PATH" in codex
+    inherit = cli_module._client_probe_env("cursor", {"HOROSA_MCP_COMPACT": "1"})
+    assert inherit["HOROSA_MCP_TOKEN"] == "secret" and inherit["HOROSA_MCP_COMPACT"] == "1"
+
+
+def test_runtime_mismatch_is_detected_when_the_server_computes_another_root(tmp_path: Path) -> None:
+    """负向对照：Codex 形状的环境里没有 HOROSA_RUNTIME_ROOT，而宿主用了非默认根 → server 报默认根 → 不一致。"""
+    from horosa_skill.config import Settings
+
+    settings = Settings(runtime_root=tmp_path / "custom-root", db_path=tmp_path / "m.db", output_dir=tmp_path / "runs")
+    probe = {"ok": True, "runtime_status": {"installed": False, "runtime_root": str(tmp_path / "default-root")}}
+    detail = cli_module._probe_runtime_mismatch(probe, settings)
+    assert detail and "custom-root" in detail and "default-root" in detail
+    same = {"ok": True, "runtime_status": {"installed": False, "runtime_root": str(tmp_path / "custom-root")}}
+    assert cli_module._probe_runtime_mismatch(same, settings) is None
+    assert cli_module._probe_runtime_mismatch({"ok": True, "runtime_status": None}, settings) is None, "老 server 没有该资源 → 不判"
+
+
+def _fake_wheel_bytes(version: str, *, good: bool = True) -> bytes:
+    import io
+    import zipfile
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("horosa_skill/__init__.py", "")
+        archive.writestr(f"horosa_skill-{version}.dist-info/METADATA", f"Name: horosa-skill\nVersion: {version if good else '0.0.1'}\n")
+    return buffer.getvalue()
+
+
+def test_cache_wheel_downloads_validates_and_records_a_digest(tmp_path: Path) -> None:
+    from horosa_skill import __version__
+
+    calls: list[str] = []
+
+    def fetch(url: str, dest: Path) -> None:
+        calls.append(url)
+        dest.write_bytes(_fake_wheel_bytes(__version__))
+
+    path, warning = cli_module._cache_wheel("https://example.invalid/x.whl", dest_dir=tmp_path, fetch=fetch)
+    assert warning is None and path == tmp_path / f"horosa_skill-{__version__}-py3-none-any.whl" and path.is_file()
+    assert (tmp_path / f"{path.name}.sha256").read_text(encoding="utf-8").split()[1] == path.name
+    again, _ = cli_module._cache_wheel("https://example.invalid/x.whl", dest_dir=tmp_path, fetch=fetch)
+    assert again == path and calls == ["https://example.invalid/x.whl"], "已有合法缓存不再下载"
+
+
+def test_cache_wheel_rejects_a_wrong_version_and_falls_back_to_the_url(tmp_path: Path) -> None:
+    from horosa_skill import __version__
+
+    def fetch(url: str, dest: Path) -> None:
+        dest.write_bytes(_fake_wheel_bytes(__version__, good=False))
+
+    path, warning = cli_module._cache_wheel("https://example.invalid/x.whl", dest_dir=tmp_path, fetch=fetch)
+    assert path is None and warning and "URL" in warning
+    assert not list(tmp_path.glob("*.whl")), "坏文件不留在缓存目录"
+
+    def boom(url: str, dest: Path) -> None:
+        raise OSError("offline")
+
+    path, warning = cli_module._cache_wheel("https://example.invalid/x.whl", dest_dir=tmp_path, fetch=boom)
+    assert path is None and "offline" in (warning or "")
+
+
+def test_uvx_wheel_payload_uses_the_cached_wheel_when_given(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(cli_module, "resolve_uvx_command", lambda: ["/opt/uv/bin/uvx"])
+    wheel = tmp_path / "horosa_skill-x.whl"
+    payload, command, _ = cli_module._build_client_config_payload(
+        format_name="cursor", skill_root=Path.cwd(), server_name="horosa", launcher="uvx-wheel", surface="auto", wheel_source=str(wheel),
+    )
+    assert command[:3] == ["/opt/uv/bin/uvx", "--from", str(wheel)] and payload["launcher"]["wheel_cached_path"] == str(wheel)
+    assert payload["launcher"]["wheel_url"].startswith("https://")

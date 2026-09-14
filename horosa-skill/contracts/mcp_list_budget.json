@@ -2,10 +2,12 @@
   "_comment": "Ratchet baseline for the MCP tools/list byte size (full + compact surfaces, measured in-process). Hard caps: full ≤ 256 KB, compact ≤ 30 KB; regressions above 2% of the baseline fail CI. Refresh with `uv run python scripts/verify_mcp_list_budget.py --update-baseline`.",
   "hard_caps": {
     "full_bytes": 262144,
-    "compact_bytes": 30720
+    "compact_bytes": 30720,
+    "instructions_bytes": 2048
   },
-  "full_bytes": 239448,
+  "instructions_bytes": 2035,
+  "full_bytes": 240222,
   "full_tools": 116,
-  "compact_bytes": 14940,
+  "compact_bytes": 15035,
   "compact_tools": 11
 }

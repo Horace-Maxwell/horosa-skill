@@ -35,7 +35,9 @@ PKG_ROOT = SCRIPTS.parent
 BASELINE = PKG_ROOT / "contracts" / "mcp_list_budget.json"
 sys.path.insert(0, str(PKG_ROOT / "src"))
 
-HARD_CAPS = {"full_bytes": 256 * 1024, "compact_bytes": 30 * 1024}
+# instructions_bytes（v0.38.1 C20）：_SERVER_INSTRUCTIONS 发给每个客户端，2048 是自设预算（已 2035/2048）——
+# 棘轮 + 硬顶，防一字破限而无人知。
+HARD_CAPS = {"full_bytes": 256 * 1024, "compact_bytes": 30 * 1024, "instructions_bytes": 2048}
 TOLERANCE = 0.02
 
 
@@ -45,7 +47,9 @@ def measure() -> dict[str, int]:
     from horosa_skill.service import HorosaSkillService
     from horosa_skill.surfaces.mcp_server import create_mcp_server
 
-    sizes: dict[str, int] = {}
+    from horosa_skill.surfaces.mcp_server import _SERVER_INSTRUCTIONS
+
+    sizes: dict[str, int] = {"instructions_bytes": len(_SERVER_INSTRUCTIONS.encode("utf-8"))}
     with tempfile.TemporaryDirectory() as tmp:
         for key, compact in (("full_bytes", False), ("compact_bytes", True)):
             settings = Settings(db_path=Path(tmp) / f"{key}.db", output_dir=Path(tmp) / "runs", mcp_compact=compact)
@@ -81,7 +85,7 @@ def main() -> int:
             + "\n",
             encoding="utf-8",
         )
-        print(f"baseline updated: full {sizes['full_bytes']} B ({sizes['full_tools']} tools), compact {sizes['compact_bytes']} B ({sizes['compact_tools']} tools)")
+        print(f"baseline updated: full {sizes['full_bytes']} B ({sizes['full_tools']} tools), compact {sizes['compact_bytes']} B ({sizes['compact_tools']} tools), instructions {sizes['instructions_bytes']} B")
         return 0
 
     if not BASELINE.is_file():
@@ -111,7 +115,7 @@ def main() -> int:
     print(
         f"mcp tools/list budget OK: full {sizes['full_bytes']} B / {HARD_CAPS['full_bytes']} B "
         f"({sizes['full_tools']} tools), compact {sizes['compact_bytes']} B / {HARD_CAPS['compact_bytes']} B "
-        f"({sizes['compact_tools']} tools)"
+        f"({sizes['compact_tools']} tools), instructions {sizes['instructions_bytes']} B / {HARD_CAPS['instructions_bytes']} B"
     )
     return 0
 

@@ -439,7 +439,48 @@ AGENT_MIRRORS = {
     ".clinerules/horosa-skill.md": "../skills/horosa-agent/SKILL.md",
 }
 AGENT_MIRROR_MAX_LINES = 30
-AGENT_MIRROR_KEYWORDS = ("agent_confirmed_settings", "agent_guidance.required", "export_snapshot", "setup --client")
+# v0.38.1 C13：精简面下技法不平铺，agent 必须知道 `horosa_tool_run` 才不会把「平铺名不在」读成「技法不存在」。
+AGENT_MIRROR_KEYWORDS = ("agent_confirmed_settings", "agent_guidance.required", "export_snapshot", "setup --client", "horosa_tool_run")
+
+# v0.38.1 C12：另两份入口文档（Cursor 规则 / Codex-agentskills 入口）。没有行数上限（.agents 那份是 agentskills.io
+# 的完整入口，带 frontmatter），但同样必须指向策略源、指针必须**能解析**（它曾指向不存在的
+# `horosa-skill/skills/horosa-agent/SKILL.md`），且带全部契约词。
+AGENT_ENTRY_DOCS = {
+    ".cursor/rules/horosa-skill.mdc": "skills/horosa-agent/SKILL.md",
+    ".agents/skills/horosa-agent/SKILL.md": "../../../skills/horosa-agent/SKILL.md",
+}
+MIRROR_COUNT_CLAIMS = {"README.md": r"(\d+) 份薄镜像", "README_EN.md": r"(\d+) thin mirrors"}
+
+
+def check_agent_entry_docs() -> None:
+    for rel, pointer in AGENT_ENTRY_DOCS.items():
+        path = ROOT / rel
+        if not path.exists():
+            err(f"{rel}: agent entry doc missing")
+            continue
+        text = read(path)
+        if pointer not in text:
+            err(f"{rel}: must name the policy source ({pointer})")
+        elif not ((path.parent / pointer).exists() or (ROOT / pointer).exists()):
+            err(f"{rel}: policy pointer `{pointer}` does not resolve to a file")
+        for keyword in AGENT_MIRROR_KEYWORDS:
+            if keyword not in text:
+                err(f"{rel}: missing `{keyword}` — the gate, the reading contract, the onboarding command and the compact-surface call must be named")
+
+
+def check_mirror_count_claims() -> None:
+    """README 说「N 份薄镜像」，N 必须等于 AGENT_MIRRORS + AGENT_ENTRY_DOCS（曾写「四份」而实际有六份）。"""
+    expected = len(AGENT_MIRRORS) + len(AGENT_ENTRY_DOCS)
+    for rel, pattern in MIRROR_COUNT_CLAIMS.items():
+        path = ROOT / rel
+        if not path.exists():
+            continue
+        found = re.findall(pattern, read(path))
+        if not found:
+            err(f"{rel}: no thin-mirror count claim matching /{pattern}/ (write the digit, not a word)")
+        for got in found:
+            if int(got) != expected:
+                err(f"{rel}: claims {got} thin mirrors, the repo carries {expected} (AGENT_MIRRORS + AGENT_ENTRY_DOCS)")
 
 
 def check_agent_mirrors() -> None:
@@ -498,6 +539,78 @@ def check_platform_table() -> None:
 # saying "仓库暂不提供 Dockerfile / No Dockerfile is shipped yet" (v0.38.0 audit). A doc that denies a
 # tracked file is worse than silence: an agent trusts it and never looks.
 
+# --- 3d. PyPI is not open: no doc may hand the user `pip install horosa-skill` / bare `uvx horosa-skill` (v0.38.1 C2) ---
+# 「PyPI 通道尚未开通」是当前事实：README 曾教 `pip install horosa-skill`（404）。提到未来形态可以，但整行必须带
+# 「尚未开通 / not yet live」一类标记；命令形态一律要 wheel URL / git 直链 / `--from`。
+PYPI_NOT_LIVE_MARKERS = ("未开通", "not yet live", "not open yet", "not yet open", "not open", "尚未上线", "暂缓")
+PYPI_CLAIM_DOCS = (
+    "README.md", "README_EN.md", "horosa-skill/README.md", "skills/horosa-agent/SKILL.md",
+    ".agents/skills/horosa-agent/SKILL.md", "CLAUDE.md", "AGENTS.md",
+)
+_BARE_UVX = re.compile(r"(?:^|[`\s(])uvx horosa-skill(?=[\s`)]|$)")
+
+
+def pypi_claim_errors(rel: str, text: str) -> list[str]:
+    found: list[str] = []
+    for lineno, line in enumerate(text.splitlines(), 1):
+        if any(marker in line for marker in PYPI_NOT_LIVE_MARKERS):
+            continue
+        if "pip install horosa-skill" in line:
+            found.append(f"{rel}:{lineno}: `pip install horosa-skill` points at PyPI, which is not open — use the release wheel URL")
+        if _BARE_UVX.search(line) and "--from" not in line:
+            found.append(f"{rel}:{lineno}: bare `uvx horosa-skill` needs PyPI — write `uvx --from \"<wheel URL>\" horosa-skill …`")
+    return found
+
+
+def check_no_pypi_install_claims() -> None:
+    docs = [ROOT / rel for rel in PYPI_CLAIM_DOCS]
+    docs += sorted((ROOT / "docs").glob("*.md")) + sorted((ROOT / "horosa-skill" / "examples" / "clients").glob("*.md"))
+    for path in docs:
+        if not path.exists():
+            continue
+        for problem in pypi_claim_errors(path.relative_to(ROOT).as_posix(), read(path)):
+            err(problem)
+
+
+# --- 3e. remote-connector rows must describe the OAuth gateway, not promise a static token (v0.38.1 C11) ---
+CONNECTOR_ROWS = {"README.md": ("远程连接器", ("网关", "OAuth")), "README_EN.md": ("remote connectors", ("gateway", "OAuth"))}
+
+
+def check_client_matrix_connectors() -> None:
+    for rel, (marker, needles) in CONNECTOR_ROWS.items():
+        path = ROOT / rel
+        if not path.exists():
+            continue
+        rows = [line for line in read(path).splitlines() if line.startswith("|") and marker in line]
+        if not rows:
+            err(f"{rel}: client matrix has no `{marker}` row")
+        for row in rows:
+            for needle in needles:
+                if needle not in row:
+                    err(f"{rel}: the `{marker}` row must mention `{needle}` — claude.ai / ChatGPT connectors only speak OAuth; a static Bearer alone cannot connect")
+
+
+# --- 3f. shipped example configs must not carry a bare `uv` command (v0.38.1 C17) ---
+EXAMPLE_JSON_CONFIGS = ("horosa-skill/examples/clients/claude_desktop_config.json",)
+
+
+def check_client_example_configs() -> None:
+    for rel in EXAMPLE_JSON_CONFIGS:
+        path = ROOT / rel
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(read(path))
+        except ValueError as exc:
+            err(f"{rel}: not valid JSON ({exc})")
+            continue
+        for name, entry in (data.get("mcpServers") or {}).items():
+            if str(entry.get("command")) in {"uv", "uvx"}:
+                err(f"{rel}:{name}: bare `{entry.get('command')}` — GUI clients do not inherit the shell PATH; the example must show an absolute-path placeholder")
+        if "setup --client claude-desktop" not in str(data.get("_comment", "")):
+            err(f"{rel}: the example must point readers at `setup --client claude-desktop` (the generator writes real absolute paths)")
+
+
 DOCKER_DENIALS = ("暂不提供 Dockerfile", "No Dockerfile is shipped")
 DOCKER_MENTION = "horosa-skill/Dockerfile"
 
@@ -533,6 +646,7 @@ def check_links() -> None:
         *sorted((ROOT / "docs").glob("*.md")),
         *sorted((ROOT / "skills").rglob("*.md")),
         *[ROOT / rel for rel in AGENT_MIRRORS],
+        *[ROOT / rel for rel in AGENT_ENTRY_DOCS],
     ]
     for path in targets:
         if not path.exists():
@@ -670,6 +784,11 @@ def main() -> None:
     check_platform_table()
     check_docker_claims()
     check_agent_mirrors()
+    check_agent_entry_docs()
+    check_mirror_count_claims()
+    check_no_pypi_install_claims()
+    check_client_matrix_connectors()
+    check_client_example_configs()
     check_links()
     check_conflict_markers()
     check_frontmatter()

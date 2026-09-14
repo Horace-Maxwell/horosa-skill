@@ -254,6 +254,7 @@ _GOOD_MIRROR = (
     "Policy: [SKILL](./skills/horosa-agent/SKILL.md)\n"
     "Gate: agent_guidance.required -> agent_confirmed_settings; read export_snapshot only.\n"
     "Onboard: `horosa-skill setup --client gemini`\n"
+    "Compact surface: call techniques via horosa_tool_run(tool_name=…).\n"
 )
 
 
@@ -281,7 +282,7 @@ def test_agent_mirror_that_grew_fat_is_caught(tmp_path: Path, monkeypatch: pytes
     assert any("lines >" in e for e in errors), errors
 
 
-@pytest.mark.parametrize("dropped", ["agent_confirmed_settings", "agent_guidance.required", "export_snapshot", "setup --client"])
+@pytest.mark.parametrize("dropped", ["agent_confirmed_settings", "agent_guidance.required", "export_snapshot", "setup --client", "horosa_tool_run"])
 def test_agent_mirror_missing_a_contract_word_is_caught(dropped: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     errors = _mirror_errors(tmp_path, monkeypatch, {"GEMINI.md": _GOOD_MIRROR.replace(dropped, "…")})
     assert any(dropped in e for e in errors), errors
@@ -313,3 +314,94 @@ def test_real_agent_mirrors_pass() -> None:
     finally:
         docs.err = original
     assert errors == []
+
+
+# ---------------------------------------------------------------- v0.38.1 B2：C2 / C11 / C12 / C13 / C17 / C21
+
+
+def _errors_of(check, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, files: dict[str, str]) -> list[str]:
+    for rel, text in files.items():
+        path = tmp_path / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    errors: list[str] = []
+    monkeypatch.setattr(docs, "ROOT", tmp_path)
+    monkeypatch.setattr(docs, "err", errors.append)
+    check()
+    return errors
+
+
+def test_pypi_install_claims_are_caught_unless_marked_not_live() -> None:
+    assert docs.pypi_claim_errors("README.md", "手工起也行：`pip install horosa-skill` 后 serve") , "旧 README 的这行必须红"
+    assert docs.pypi_claim_errors("README.md", "```\nuvx horosa-skill serve --transport stdio\n```")
+    assert docs.pypi_claim_errors("README.md", 'uvx --from "https://x/horosa_skill-0.38.0-py3-none-any.whl" horosa-skill serve') == []
+    assert docs.pypi_claim_errors("README.md", 'pip install "https://x/horosa_skill-0.38.0-py3-none-any.whl"') == []
+    assert docs.pypi_claim_errors("README.md", "> PyPI 通道（`uvx horosa-skill …`）已就绪但暂未开通") == []
+    assert docs.pypi_claim_errors("README.md", "The PyPI channel (`uvx horosa-skill …`) is wired but not yet live") == []
+    assert docs.pypi_claim_errors("README.md", "run `uvx horosa-skill-other` or uvx horosa-skillet") == []
+
+
+def test_real_docs_carry_no_pypi_install_claims() -> None:
+    errors: list[str] = []
+    original = docs.err
+    docs.err = errors.append
+    try:
+        docs.check_no_pypi_install_claims()
+    finally:
+        docs.err = original
+    assert errors == []
+
+
+def test_connector_rows_must_name_the_oauth_gateway(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    old_row = "| 🔶 **ChatGPT / claude.ai 远程连接器** | streamable-http | 同上，再套一层 HTTPS 反代 | 全量 116 | 需要你自己的公网 HTTPS URL + 令牌 |\n"
+    errors = _errors_of(docs.check_client_matrix_connectors, tmp_path, monkeypatch, {"README.md": old_row})
+    assert any("网关" in e for e in errors) and any("OAuth" in e for e in errors), errors
+    good = "| 🔶 **ChatGPT / claude.ai 远程连接器** | streamable-http | 终结 OAuth 的 HTTPS 网关 | 全量 116 | 说明 |\n"
+    assert _errors_of(docs.check_client_matrix_connectors, tmp_path, monkeypatch, {"README.md": good}) == []
+    assert _errors_of(docs.check_client_matrix_connectors, tmp_path, monkeypatch, {"README.md": "no table\n"})
+
+
+def test_entry_docs_need_a_resolving_pointer_and_the_contract_words(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "skills" / "horosa-agent").mkdir(parents=True)
+    (tmp_path / "skills" / "horosa-agent" / "SKILL.md").write_text("policy", encoding="utf-8")
+    body = " ".join(docs.AGENT_MIRROR_KEYWORDS)
+    monkeypatch.setattr(docs, "AGENT_ENTRY_DOCS", {".agents/skills/horosa-agent/SKILL.md": "../../../skills/horosa-agent/SKILL.md"})
+    # 今天之前的指针：../../../horosa-skill/skills/… 不存在 → 必红
+    stale = f"[SKILL](../../../horosa-skill/skills/horosa-agent/SKILL.md) {body}"
+    errors = _errors_of(docs.check_agent_entry_docs, tmp_path, monkeypatch, {".agents/skills/horosa-agent/SKILL.md": stale})
+    assert any("policy source" in e for e in errors), errors
+    good = f"[SKILL](../../../skills/horosa-agent/SKILL.md) {body}"
+    assert _errors_of(docs.check_agent_entry_docs, tmp_path, monkeypatch, {".agents/skills/horosa-agent/SKILL.md": good}) == []
+    no_tool_run = good.replace("horosa_tool_run", "…")
+    errors = _errors_of(docs.check_agent_entry_docs, tmp_path, monkeypatch, {".agents/skills/horosa-agent/SKILL.md": no_tool_run})
+    assert any("horosa_tool_run" in e for e in errors)
+
+
+def test_real_entry_docs_pass() -> None:
+    errors: list[str] = []
+    original = docs.err
+    docs.err = errors.append
+    try:
+        docs.check_agent_entry_docs()
+        docs.check_mirror_count_claims()
+        docs.check_client_matrix_connectors()
+        docs.check_client_example_configs()
+    finally:
+        docs.err = original
+    assert errors == []
+
+
+def test_mirror_count_claim_is_locked_to_the_tables(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    expected = len(docs.AGENT_MIRRORS) + len(docs.AGENT_ENTRY_DOCS)
+    assert _errors_of(docs.check_mirror_count_claims, tmp_path, monkeypatch, {"README.md": f"仓根另带 {expected} 份薄镜像"}) == []
+    assert _errors_of(docs.check_mirror_count_claims, tmp_path, monkeypatch, {"README.md": "仓根另带四份薄镜像"}), "旧写法（汉字数词）必红"
+    assert _errors_of(docs.check_mirror_count_claims, tmp_path, monkeypatch, {"README_EN.md": f"carries {expected + 1} thin mirrors"})
+
+
+def test_client_example_config_must_not_carry_a_bare_uv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    rel = "horosa-skill/examples/clients/claude_desktop_config.json"
+    old = json.dumps({"mcpServers": {"horosa": {"command": "uv", "args": ["run"], "cwd": "<PATH_TO_REPO>/horosa-skill"}}})
+    errors = _errors_of(docs.check_client_example_configs, tmp_path, monkeypatch, {rel: old})
+    assert any("bare `uv`" in e for e in errors) and any("setup --client claude-desktop" in e for e in errors), errors
+    good = json.dumps({"_comment": "use setup --client claude-desktop", "mcpServers": {"horosa": {"command": "<ABSOLUTE PATH TO uv>", "args": []}}})
+    assert _errors_of(docs.check_client_example_configs, tmp_path, monkeypatch, {rel: good}) == []

@@ -5,9 +5,13 @@ alwaysApply: true
 
 # Horosa Skill MCP Rules (thin — policy source of truth: `skills/horosa-agent/SKILL.md`)
 
-- Any Horosa / 星阙 metaphysics output → call the Horosa MCP tools (`horosa_cn_qimen`,
-  `horosa_cn_liureng_gods`, `horosa_astro_chart`, …). **Never hand-calculate** with Exec/Python/JS/web
-  formulas — they bypass the runtime, Xingque defaults, export contract, memory, and reports.
+- Any Horosa / 星阙 metaphysics output → call the Horosa MCP tools. Cursor gets the **compact surface** by
+  default (11 facades): call techniques by name via `horosa_tool_run(tool_name="qimen", …)`; the flat
+  `horosa_cn_qimen` / `horosa_astro_chart` names only exist with `--surface full`, and the catalogue is the
+  `horosa://catalog/techniques` resource. **Never hand-calculate** with Exec/Python/JS/web formulas — they
+  bypass the runtime, Xingque defaults, export contract, memory, and reports.
+- No `horosa` tools in the list? `horosa-skill setup --client cursor` (`uv run horosa-skill setup --client cursor`
+  inside this checkout) registers everything; `horosa-skill doctor` is the health report.
 - **Clarify before calling**: if a result-changing setting is missing (time/place/timezone, gender,
   house system, 起局方式, 贵人体系, 六爻 lines, 地分, target year/date, report format), ask a short
   question with options first — or call `horosa_agent_guidance`. Defaults only when the user

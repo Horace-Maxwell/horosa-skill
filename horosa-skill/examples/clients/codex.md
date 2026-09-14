@@ -39,7 +39,9 @@ tool_timeout_sec = 600
 # required = true   # 见「首轮工具缺席」
 
 [mcp_servers.horosa.env]
-# HOROSA_MCP_COMPACT = "1"
+HOROSA_MCP_COMPACT = "1"
+HOROSA_RUNTIME_ROOT = "/Users/<you>/.horosa/runtime"        # 绝对路径；Windows 例 "C:\\Users\\<you>\\AppData\\Local\\Horosa\\runtime"
+HOROSA_SKILL_DATA_DIR = "/Users/<you>/.horosa-skill"
 # HOROSA_TOOLSETS = "astro,cn"
 ```
 
@@ -48,9 +50,9 @@ tool_timeout_sec = 600
 | 约束 | 事实 | 对策 |
 | --- | --- | --- |
 | 未知字段整段拒收 | `RawMcpServerConfig` 是 `deny_unknown_fields`：写错一个字段名，整个 server 配置被拒 | 只用生成器产出的字段；别手创字段 |
-| 启动超时默认 30s | 首次冷启动（runtime 预热）常到 ~45s | `startup_timeout_sec = 120` |
+| 启动超时默认 10 s | 首次冷启动（runtime 预热）常到 ~45s | `startup_timeout_sec = 120` |
 | 工具超时默认 60s | 长盘（天星择日跨月扫描、多重回归年表）可超 | `tool_timeout_sec = 600` |
-| env 白名单只有 11 个系统变量 | 你 shell 里的 `HOROSA_*` **不会**传给 server | 需要的 HOROSA_* 必须写进 `[mcp_servers.horosa.env]` |
+| env 不转发 shell 环境 | 你 shell 里的 `HOROSA_*` **不会**传给 server；runtime 根 / 数据目录若只设在 shell 里，Codex 起的 server 会用**另一套**目录 | 生成器把 `HOROSA_RUNTIME_ROOT` / `HOROSA_SKILL_DATA_DIR` 的绝对路径写进 `[mcp_servers.horosa.env]`（`client check` 码 `codex_env_roots_missing`）；其它 HOROSA_* 同样写这里。**不要**写 `env_vars`（老版本 Codex 对未知键整段拒收） |
 | 首轮工具目录只等 1s | `mcp_optional_startup_grace_ms` 默认 1000：冷启动时第一轮对话可能看不到 horosa 工具，第二轮恢复 | 要首轮即见就解开 `required = true`（代价：server 起不来时 Codex 启动直接报错） |
 
 ## 工具面建议
@@ -94,8 +96,8 @@ enabled_tools = [
 | `command_not_on_path` | `command` 是裸 `uv`/`uvx`，Codex 不继承 shell PATH | 重跑生成器（v0.38.0 起写绝对路径） |
 | `launcher_version_drift` | 配置钉的 wheel / git tag 版本 ≠ 本机包版本 | 重跑 `setup` 让 URL 跟上版本 |
 | 首轮没有 horosa 工具，第二轮有 | 冷启动 > 1s grace（见上表） | 正常；或 `required = true` |
-| 启动报 server 超时 | 首次预热超 30s 默认 | 确认 `startup_timeout_sec = 120` 在场 |
-| `HOROSA_*` 设了没生效 | Codex env 白名单 | 写进 `[mcp_servers.horosa.env]` |
+| 启动报 server 超时 | 首次预热超 10 s 默认 | 确认 `startup_timeout_sec = 120` 在场 |
+| `HOROSA_*` 设了没生效 | Codex 不转发 shell 环境 | 写进 `[mcp_servers.horosa.env]` |
 | 整段配置像没读到 | 字段名写错（deny_unknown_fields） | 与生成器输出逐字段对照 |
 | 工具报 `agent_guidance.required` | 澄清闸（设计如此） | 按 `agent_recovery.prompt_to_user` 问用户后重试 |
 | 长盘超时 | 默认 60s 工具超时 | 确认 `tool_timeout_sec = 600` 在场 |

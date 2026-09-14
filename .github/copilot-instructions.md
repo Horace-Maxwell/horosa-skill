@@ -18,3 +18,7 @@ pointer — do not add rules here.
 4. No `horosa` tools in the list? One command registers everything:
    `horosa-skill setup --client vscode` (`uv run horosa-skill setup --client vscode` inside this checkout),
    then `horosa-skill doctor` for the machine-readable health report.
+5. **Compact surface.** By default this client sees only the 11 facade tools (`HOROSA_MCP_COMPACT=1`); every
+   technique is still reachable by name through `horosa_tool_run(tool_name="qimen", …)` and the full list is the
+   `horosa://catalog/techniques` resource — a missing flat `horosa_*` name does not mean the technique is missing.
+   No `horosa` tools at all? `horosa-skill setup --client vscode` registers everything.

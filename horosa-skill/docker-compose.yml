@@ -5,6 +5,8 @@ services:
       - "8765:8765"
     environment:
       HOROSA_SERVER_ROOT: ${HOROSA_SERVER_ROOT:-http://host.docker.internal:9999}
+      # 🔴 两个 ROOT 都要给：只设 Java 后端那条时 chart 族（西占 chart / 三式 ken / 神数 …）会在容器里找 127.0.0.1:8899 → 全部失败。
+      HOROSA_CHART_SERVER_ROOT: ${HOROSA_CHART_SERVER_ROOT:-http://host.docker.internal:8899}
       HOROSA_SKILL_HOST: 0.0.0.0
       HOROSA_SKILL_PORT: 8765
       # 绑 0.0.0.0 必须给令牌（否则 serve 拒绝启动）。生成一个：
