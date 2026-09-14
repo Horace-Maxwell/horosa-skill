@@ -472,7 +472,8 @@ DOCTOR_ISSUE_CODES = (
 LATEST_MANIFEST_CACHE_NAME = ".latest-manifest-cache.json"
 
 
-def _version_tuple(text: str | None) -> tuple[int, ...] | None:
+def _release_version_tuple(text: str | None) -> tuple[int, ...] | None:
+    """发布版本号 → 数字段元组（不截断到三段，`+local` 后缀忽略）；解析不出返回 None。`_version_tuple` 是 OS 版本用的三段版。"""
     if not text:
         return None
     parts = re.findall(r"\d+", str(text).split("+", 1)[0])
@@ -481,7 +482,7 @@ def _version_tuple(text: str | None) -> tuple[int, ...] | None:
 
 def version_is_newer(latest: str | None, installed: str | None) -> bool | None:
     """`latest` 是否比 `installed` 新；任一边解析不出数字段返回 None（不知道 ≠ 最新）。"""
-    a, b = _version_tuple(latest), _version_tuple(installed)
+    a, b = _release_version_tuple(latest), _release_version_tuple(installed)
     if a is None or b is None:
         return None
     return a > b
@@ -675,6 +676,7 @@ class HorosaRuntimeManager:
             metadata={"entrypoint": "runtime.install", "archive": archive, "manifest_url": manifest_url, "force": force},
         ) as trace:
             platform_name = platform_key or self.settings.runtime_platform or _platform_key()
+            self._last_download = None
             source = archive
             expected_sha256: str | None = None
             asset_meta: dict[str, Any] | None = None
@@ -890,6 +892,7 @@ class HorosaRuntimeManager:
                 "manifest": manifest,
                 "stopped_before_swap": was_running,
                 "restarted": restarted,
+                "download": getattr(self, "_last_download", None),
                 "asset": asset_meta or {},
                 "release_manifest": manifest_data or {},
                 "next_action": "接下来：`uv run horosa-skill doctor` 确认体检，`uv run horosa-skill serve` 启动 MCP，或把本服务注册到你的 AI 客户端（见 README「接入 AI 客户端」）。",
@@ -929,7 +932,8 @@ class HorosaRuntimeManager:
                     ),
                 },
             )
-        stopped = self.stop_local_services()
+        # 挂着的客户端不拦升级：服务换完目录马上回来，它们下一次调用只见一次 runtime.starting。
+        stopped = self.stop_local_services(ignore_clients=True)
         if not (stopped.get("ok") or stopped.get("already_stopped")):
             raise RuntimeInstallError(
                 bilingual("升级前停止本工具自己的服务失败，未动 current/。", "Stopping our own services before the swap failed; current/ was left untouched."),
@@ -1072,7 +1076,7 @@ class HorosaRuntimeManager:
             }
 
         try:
-            self.stop_local_services()
+            self.stop_local_services(ignore_clients=True)
         except Exception:  # noqa: BLE001 - 卸载前停服务尽力而为，失败不阻断删除
             pass
         removed: list[str] = []
@@ -1535,8 +1539,11 @@ class HorosaRuntimeManager:
                     if not lock_released:
                         release_lock(lock_path)
 
-    def stop_local_services(self, *, force: bool = False) -> dict[str, Any]:
-        """停止本机 runtime。**只停我们自己起的那一份。**
+    def stop_local_services(self, *, force: bool = False, ignore_clients: bool = False) -> dict[str, Any]:
+        """停止本机 runtime。**只停我们自己起的那一份**，且默认不在别的 MCP 客户端还挂着时停（v0.38.1 R14）。
+
+        `ignore_clients=True`：install/upgrade 的换目录前置停止与 `runtime restart` 用——服务马上会回来，
+        挂着的客户端下一次调用只会看到一次 runtime.starting 然后自动重试。`force=True` 两条都绕过。
 
         🔴 停脚本按端口/pid 文件动手。如果那个端口上跑的其实是用户自己开着的星阙桌面端（同一个
         app 标记、同一个默认端口），一次 `runtime stop`（或旧代码里那些「先 stop 再重启」的反射）
@@ -1593,6 +1600,32 @@ class HorosaRuntimeManager:
                     "trace_id": trace["trace_id"],
                     "group_id": trace["group_id"],
                 }
+            if not force and not ignore_clients:
+                # 🔴 别的 MCP 客户端（另一个 Claude Code / Cursor 会话的 stdio server）还挂在这份 runtime 上：
+                # 在它脚下抽走服务 = 那边下一次排盘失败。登记表里只算**仍存活**的进程（崩溃的客户端不拦 stop）。
+                from horosa_skill.runtime.registry import live_clients
+
+                attached = live_clients(self.load_runtime_state(), exclude_pid=os.getpid())
+                if attached:
+                    return {
+                        "ok": False, "already_stopped": False, "refused": True,
+                        "reason": "clients_attached",
+                        "code": "runtime.stop_refused_clients_attached",
+                        "message": bilingual(
+                            f"还有 {len(attached)} 个 MCP 客户端挂在这份 runtime 上，已拒绝停止。",
+                            f"{len(attached)} MCP client(s) are still attached to this runtime; stop refused.",
+                        ),
+                        "next_action": bilingual(
+                            "关掉那些客户端会话（或等它们退出）后再停；确认要在它们脚下停就 `runtime stop --force`；"
+                            "只是想重启请用 `runtime restart`（服务马上回来，客户端自动重连）。",
+                            "Close those client sessions first (or let them exit); `runtime stop --force` stops anyway; "
+                            "use `runtime restart` if you only need a restart (clients reconnect automatically).",
+                        ),
+                        "clients": attached,
+                        "command": None, "stdout": "", "stderr": "", "returncode": 0,
+                        "endpoints": initial_status,
+                        "trace_id": trace["trace_id"], "group_id": trace["group_id"],
+                    }
             if not script.exists():
                 raise RuntimeValidationError(
                     f"Runtime stop script missing: {script}",
@@ -1760,6 +1793,7 @@ class HorosaRuntimeManager:
         read_timeout = float(getattr(self.settings, "runtime_download_timeout_seconds", 120.0) or 120.0)
         connect_timeout = min(60.0, read_timeout)
         failures: list[str] = []
+        download_started = time.monotonic()
         for candidate in candidates:
             for attempt in range(attempts):
                 try:
@@ -1785,6 +1819,11 @@ class HorosaRuntimeManager:
                                         progress(done, total)
                     target = temp_dir / filename
                     shutil.move(str(part_path), str(target))
+                    # v0.38.1 R1：真机矩阵要证明「真的下载过」——把这次传输的事实带回 install 结果。
+                    self._last_download = {
+                        "url": candidate, "mirror_used": candidate != source, "bytes": done, "resumed_from": offset,
+                        "seconds": round(time.monotonic() - download_started, 1), "attempts": len(failures) + 1,
+                    }
                     return target
                 except httpx.HTTPStatusError as exc:
                     failures.append(f"{candidate}: HTTP {exc.response.status_code}")

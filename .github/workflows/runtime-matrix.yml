@@ -2,9 +2,11 @@ name: runtime-matrix
 
 # v0.38.0 A5: real-machine proof that an installed runtime works — on the three hosts a release claims to
 # support: Apple Silicon (darwin-arm64), Windows x64, and Windows on ARM (which installs the win32-x64 payload
-# under emulation). Each lane installs → doctor → starts the runtime → calls chart / qimen / nongli_time /
-# bazi_birth → runs `setup --client …` for four clients (config → re-read → real stdio probe) → runs the live
-# pytest suite against the running endpoints → stops. A chart-only degrade (dead Java backend) fails the lane.
+# under emulation). Each lane installs (a REAL https download in release/schedule mode) → doctor → starts the runtime
+# under the FACTORY budget → calls chart / qimen / nongli_time / bazi_birth → runs `setup --client …` for all nine clients
+# (config → re-read → real stdio probe) → claude-code user scope → streamable-http handshake (Bearer / 401 / 421) →
+# stop refused while a second stdio client is attached → restart + HOROSA_PORTS=auto → the live pytest suite → stops.
+# A chart-only degrade (dead Java backend) fails the lane.
 #
 # Never on push / pull_request (a runtime boot per push would be minutes of hosted-runner time for nothing):
 # `workflow_call` from release-runtime.yml (installing from the assembled artifact, before anything is public),
@@ -46,7 +48,9 @@ on:
         type: boolean
         default: false
   schedule:
-    - cron: "0 3 * * 1" # weekly, Monday 03:00 UTC, against the public latest
+    # v0.38.1 R2: off the hour — GitHub delays/drops on-the-hour slots (the 03:00 slot fired 5.5 h late on 2026-09-14);
+    # release-completeness.yml's weekly-matrix-kick job dispatches this workflow when a week passes without a run.
+    - cron: "23 4 * * 1" # weekly, Monday 04:23 UTC, against the public latest (a REAL https download, R1)
 
 permissions:
   contents: read
@@ -109,20 +113,29 @@ jobs:
         with:
           name: ${{ inputs.artifact_name }}
           path: ${{ runner.temp }}/horosa-assets
-      - name: Download release assets (release mode / dispatch / schedule)
-        if: ${{ inputs.source != 'artifact' }}
+      # v0.38.1 R1: release / dispatch / schedule lanes install through the PUBLIC manifest URL — the installer's own
+      # `_download_with_resume` (mirror chain → resume → sha256 → unpack), i.e. exactly what a user runs. Before this the
+      # lane pre-downloaded with `gh release download` and localised the manifest to file://, so no lane had ever exercised
+      # the download path (the 2026-09-14 schedule run's lane-report still says `--manifest-url file://…lane-manifest.json`).
+      - name: Resolve the install source (artifact dir, or the release manifest URL)
+        id: source
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "${RUNNER_TEMP}/horosa-assets"
+          if [ "${{ inputs.source }}" = "artifact" ]; then
+            echo "mode=assets-dir" >> "${GITHUB_OUTPUT}"
+            echo "value=${RUNNER_TEMP}/horosa-assets" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
           TAG="${{ inputs.tag }}"
           if [ -z "${TAG}" ]; then
             TAG="$(gh release view --repo "${GITHUB_REPOSITORY}" --json tagName -q .tagName)"
           fi
-          echo "testing release ${TAG}"
-          gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" -D "${RUNNER_TEMP}/horosa-assets" \
-            -p 'runtime-manifest.json' -p 'horosa-runtime-*'
-          ls -la "${RUNNER_TEMP}/horosa-assets"
+          echo "testing release ${TAG} through its public manifest URL (real download)"
+          echo "mode=manifest-url" >> "${GITHUB_OUTPUT}"
+          echo "value=https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/runtime-manifest.json" >> "${GITHUB_OUTPUT}"
+      # v0.38.1 R10: the lane's work dir carries a space AND CJK on purpose — every quoted path argument, the launchers'
+      # UTF-8 console encoding (A1) and the `claude mcp add` command quoting (A4) are exercised on a real machine.
       - name: Live verification (POSIX)
         if: runner.os != 'Windows'
         working-directory: ./horosa-skill
@@ -130,12 +143,12 @@ jobs:
         run: |
           set -euo pipefail
           uv run python scripts/verify_runtime_live.py \
-            --assets-dir "${RUNNER_TEMP}/horosa-assets" \
-            --work-dir "${RUNNER_TEMP}/horosa-lane" \
+            "--${{ steps.source.outputs.mode }}" "${{ steps.source.outputs.value }}" \
+            --work-dir "${RUNNER_TEMP}/horosa 测试 lane" \
             --expect-payload-platform "${{ matrix.expect_payload }}" \
             ${{ matrix.emulated && '--expect-emulated' || '' }} \
             ${{ inputs.skip_pytest && '--skip-pytest' || '' }} \
-            --out "${RUNNER_TEMP}/horosa-lane/lane-report.json"
+            --out "${RUNNER_TEMP}/horosa 测试 lane/lane-report.json"
       - name: Live verification (Windows)
         if: runner.os == 'Windows'
         working-directory: ./horosa-skill
@@ -145,7 +158,8 @@ jobs:
           $extra = @()
           if ('${{ matrix.emulated }}' -eq 'true') { $extra += '--expect-emulated' }
           if ('${{ inputs.skip_pytest }}' -eq 'true') { $extra += '--skip-pytest' }
-          uv run python scripts/verify_runtime_live.py --assets-dir "$env:RUNNER_TEMP\horosa-assets" --work-dir "$env:RUNNER_TEMP\horosa-lane" --expect-payload-platform "${{ matrix.expect_payload }}" @extra --out "$env:RUNNER_TEMP\horosa-lane\lane-report.json"
+          $lane = Join-Path $env:RUNNER_TEMP 'horosa 测试 lane'
+          uv run python scripts/verify_runtime_live.py "--${{ steps.source.outputs.mode }}" "${{ steps.source.outputs.value }}" --work-dir "$lane" --expect-payload-platform "${{ matrix.expect_payload }}" @extra --out "$lane\lane-report.json"
       - name: Upload lane evidence (report, doctor snapshots, launcher + service logs)
         if: always()
         uses: actions/upload-artifact@v4
@@ -155,6 +169,7 @@ jobs:
           # one root only: mixing runner.temp with `~` made upload-artifact on Windows refuse the whole set
           # ("rootDirectory … is not a parent directory"); the verifier copies service logs into <lane>/logs itself.
           path: |
-            ${{ runner.temp }}/horosa-lane/*.json
-            ${{ runner.temp }}/horosa-lane/pytest.log
-            ${{ runner.temp }}/horosa-lane/logs/**
+            ${{ runner.temp }}/horosa 测试 lane/*.json
+            ${{ runner.temp }}/horosa 测试 lane/pytest.log
+            ${{ runner.temp }}/horosa 测试 lane/http-serve.log
+            ${{ runner.temp }}/horosa 测试 lane/logs/**

@@ -48,11 +48,21 @@ def main() -> None:
         ),
     )
     parser.add_argument("--output", required=True, help="Output manifest JSON path.")
+    parser.add_argument(
+        "--platforms-contract",
+        default=str(Path(__file__).resolve().parents[1] / "contracts" / "release_platforms.json"),
+        help="release_platforms.json; each platform's `min_os` is copied into its manifest entry (v0.38.1 R16).",
+    )
     args = parser.parse_args()
+
+    contract_platforms: dict[str, dict[str, object]] = {}
+    contract_path = Path(args.platforms_contract).expanduser()
+    if contract_path.is_file():
+        contract_platforms = json.loads(contract_path.read_text(encoding="utf-8")).get("platforms") or {}
 
     platforms: dict[str, dict[str, object]] = {}
 
-    def entry(archive_arg: str, url_arg: str | None) -> dict[str, object]:
+    def entry(platform_key: str, archive_arg: str, url_arg: str | None) -> dict[str, object]:
         archive = Path(archive_arg).expanduser().resolve()
         url = url_arg or (f"{args.url_base.rstrip('/')}/{archive.name}" if args.url_base else None)
         if not url:
@@ -60,15 +70,20 @@ def main() -> None:
         # `size` (bytes) feeds the installer's disk precheck (manager._require_install_disk_space reads it;
         # without it the check falls back to a flat 3 GiB) and lets release-completeness compare with
         # Content-Length (v0.38.0 A3).
-        return {"url": url, "sha256": sha256_file(archive), "archive_type": _classify_archive_type(archive),
-                "size": archive.stat().st_size}
+        result: dict[str, object] = {"url": url, "sha256": sha256_file(archive), "archive_type": _classify_archive_type(archive),
+                                     "size": archive.stat().st_size}
+        # `min_os` lets install refuse an old host before the download (manager._assert_min_os reads it).
+        min_os = (contract_platforms.get(platform_key) or {}).get("min_os")
+        if isinstance(min_os, str) and min_os.strip():
+            result["min_os"] = min_os.strip()
+        return result
 
     if args.darwin_archive and (args.darwin_url or args.url_base):
-        platforms["darwin-arm64"] = entry(args.darwin_archive, args.darwin_url)
+        platforms["darwin-arm64"] = entry("darwin-arm64", args.darwin_archive, args.darwin_url)
     if args.windows_archive and (args.windows_url or args.url_base):
-        platforms["win32-x64"] = entry(args.windows_archive, args.windows_url)
+        platforms["win32-x64"] = entry("win32-x64", args.windows_archive, args.windows_url)
     if args.linux_archive and (args.linux_url or args.url_base):
-        platforms["linux-x64"] = entry(args.linux_archive, args.linux_url)
+        platforms["linux-x64"] = entry("linux-x64", args.linux_archive, args.linux_url)
 
     if not platforms:
         parser.error("At least one platform archive (darwin, windows, or linux) must be provided.")

@@ -1919,7 +1919,7 @@ def test_install_over_a_running_runtime_stops_swaps_and_restarts(tmp_path: Path,
     manager = _manager_with_runtime(tmp_path)
     order: list[str] = []
     monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="ours"))
-    monkeypatch.setattr(manager, "stop_local_services", lambda force=False: (order.append("stop"), {"ok": True})[1])
+    monkeypatch.setattr(manager, "stop_local_services", lambda force=False, **kwargs: (order.append("stop"), {"ok": True})[1])
     real_apply = manager._apply_runtime_overrides
 
     def apply(manifest):  # noqa: ANN001
@@ -1978,7 +1978,7 @@ def test_install_stop_failure_leaves_current_untouched(tmp_path: Path, monkeypat
     marker = manager.current_dir / "MARKER"
     marker.write_text("keep", encoding="utf-8")
     monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="ours"))
-    monkeypatch.setattr(manager, "stop_local_services", lambda force=False: {"ok": False, "code": "runtime.stop_timeout", "survivors": []})
+    monkeypatch.setattr(manager, "stop_local_services", lambda force=False, **kwargs: {"ok": False, "code": "runtime.stop_timeout", "survivors": []})
     with pytest.raises(RuntimeInstallError) as excinfo:
         manager.install(archive=_archive_of(tmp_path), force=True)
     assert excinfo.value.code == "runtime.install_stop_failed"
@@ -2036,7 +2036,7 @@ def test_rmtree_force_clears_read_only_bits(tmp_path: Path) -> None:
 def test_restart_failure_after_a_successful_swap_is_a_warning(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     manager = _manager_with_runtime(tmp_path)
     monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="ours"))
-    monkeypatch.setattr(manager, "stop_local_services", lambda force=False: {"ok": True})
+    monkeypatch.setattr(manager, "stop_local_services", lambda force=False, **kwargs: {"ok": True})
 
     def failing_start(wait_seconds=None):  # noqa: ANN001
         raise RuntimeInstallError("port taken", code="runtime.port_conflict_foreign", details={})
@@ -2045,3 +2045,77 @@ def test_restart_failure_after_a_successful_swap_is_a_warning(tmp_path: Path, mo
     result = manager.install(archive=_archive_of(tmp_path), force=True)
     assert result["ok"] is True and result["restarted"]["ok"] is False and result["restarted"]["code"] == "runtime.port_conflict_foreign"
     assert [w["code"] for w in result["warnings"]] == ["runtime.restart_after_upgrade_failed"]
+
+
+# ---------------------------------------------------------------- v0.38.1 B3：R1 下载证据 / R14 挂着客户端不停
+
+
+def _serve_directory(directory: Path):
+    import http.server
+    import threading
+
+    handler = type("_Quiet", (http.server.SimpleHTTPRequestHandler,), {"log_message": lambda *a, **k: None})
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), lambda *a, **k: handler(*a, directory=str(directory), **k))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server
+
+
+def test_install_over_http_records_the_real_download(tmp_path: Path) -> None:
+    archive = create_runtime_archive(tmp_path)
+    server = _serve_directory(archive.parent)
+    try:
+        url = f"http://127.0.0.1:{server.server_address[1]}/{archive.name}"
+        manifest = tmp_path / "manifest.json"
+        manifest.write_text(json.dumps({"version": "1.2.3", "platforms": {"darwin-arm64": {"url": url, "sha256": "", "archive_type": "tar.gz"}}}), encoding="utf-8")
+        settings = Settings(runtime_root=tmp_path / "rt", db_path=tmp_path / "m.db", output_dir=tmp_path / "runs", runtime_platform="darwin-arm64")
+        result = HorosaRuntimeManager(settings).install(manifest_url=manifest.resolve().as_uri())
+    finally:
+        server.shutdown()
+    download = result["download"]
+    assert download["bytes"] == archive.stat().st_size and download["url"] == url
+    assert download["mirror_used"] is False and download["resumed_from"] == 0 and download["seconds"] >= 0
+    assert (result["asset"] or {}).get("url") == url
+
+
+def test_install_from_a_local_archive_records_no_download(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manager = _manager_with_runtime(tmp_path)
+    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="ours", reachable=False))
+    assert manager.install(archive=str(tmp_path / "runtime-payload.tar.gz"), force=True)["download"] is None
+
+
+def test_stop_is_refused_while_another_client_is_attached(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """R14：别的 MCP 客户端还挂着 → `runtime stop` 拒绝；`--force` / `ignore_clients`（restart、升级换目录）才停；死掉的登记不拦。"""
+    import sys
+
+    from horosa_skill.runtime import registry
+
+    manager = _manager_with_runtime(tmp_path)
+    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="ours"))
+    client = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
+    try:
+        registry.attach_client(manager.settings.runtime_state_path, pid=client.pid, transport="stdio")
+
+        def must_not_run(*args, **kwargs):  # noqa: ANN002, ANN003
+            raise AssertionError("the stop script must not run while a live client is attached")
+
+        monkeypatch.setattr(subprocess, "run", must_not_run)
+        refused = manager.stop_local_services()
+        assert refused["refused"] is True and refused["code"] == "runtime.stop_refused_clients_attached"
+        assert str(client.pid) in refused["clients"] and "--force" in refused["next_action"]
+
+        class _Done:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Done())
+        monkeypatch.setattr(manager, "_wait_for_service_state", lambda **kwargs: {"ready": True, "endpoints": []})
+        assert manager.stop_local_services(force=True)["ok"] is True
+        assert manager.stop_local_services(ignore_clients=True)["ok"] is True
+    finally:
+        client.kill()
+        client.wait(timeout=30)
+    # 客户端死了 → 登记不算数 → 不再拒绝
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Done())
+    assert manager.stop_local_services().get("refused") is not True

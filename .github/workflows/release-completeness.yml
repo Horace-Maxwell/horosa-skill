@@ -18,6 +18,31 @@ permissions:
   contents: read
 
 jobs:
+  # v0.38.1 R2: the weekly runtime-matrix cron is best-effort on GitHub's side (the 2026-09-14 slot fired 5.5 h late;
+  # a busy Monday can drop it). This 6-hourly job — which does fire reliably — dispatches the matrix when no run of it
+  # exists in the last 6 days, so a week never passes without the three-machine proof against the public latest.
+  weekly-matrix-kick:
+    if: github.event_name == 'schedule' && github.repository_owner == 'Horace-Maxwell'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Dispatch runtime-matrix.yml when the last run is older than 6 days
+        run: |
+          set -euo pipefail
+          SINCE="$(date -u -d '6 days ago' +%Y-%m-%dT%H:%M:%SZ)"
+          RECENT="$(gh run list --repo "${REPO}" --workflow runtime-matrix.yml --created ">=${SINCE}" --json databaseId --jq 'length')"
+          echo "runtime-matrix runs since ${SINCE}: ${RECENT}"
+          if [ "${RECENT}" = "0" ]; then
+            echo "no matrix run in 6 days — dispatching one against the public latest"
+            gh workflow run runtime-matrix.yml --repo "${REPO}"
+          fi
+
   check-latest-release-complete:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -68,6 +93,8 @@ jobs:
           # 这里把发布上的真实 sha 与 main 上 server.json 的 mcpb 条目对齐（仅 ≥ 0.37.0，更早的 release 没有 mcpb 条目）。
           if [ "$(printf '%s\n0.37.0' "${VERSION}" | sort -V | head -n1)" = "0.37.0" ]; then
             gh release download "${TAG}" --repo "${REPO}" -p "${NAME}" -D "${RUNNER_TEMP}/mcpb" --clobber
+            # v0.38.1 R8: unpack the published bundle and assert its contents (manifest + required paths, no vendor/)
+            python3 horosa-skill/scripts/verify_mcpb_manifest.py --bundle "${RUNNER_TEMP}/mcpb/${NAME}"
             ACTUAL="$(sha256sum "${RUNNER_TEMP}/mcpb/${NAME}" | cut -d' ' -f1)"
             DECLARED="$(python3 -c 'import json,sys; d=json.load(open("server.json")); print(next((p.get("fileSha256","") for p in d.get("packages",[]) if p.get("registryType")=="mcpb"), ""))')"
             if [ "${ACTUAL}" != "${DECLARED}" ]; then
@@ -132,6 +159,20 @@ jobs:
 
           expected = [k for k, e in contract["platforms"].items() if vt(e["since"]) <= vt(version)]
           errors = []
+          # v0.38.1 R15: GitHub computes a sha256 `digest` for every asset — it must equal the SHA256SUMS.txt line
+          # (no 700 MB downloads needed to prove the checksums file is honest).
+          import subprocess
+          api = subprocess.run(["gh", "api", f"repos/{__import__('os').environ['REPO']}/releases/tags/{tag}", "--jq",
+                                '.assets[] | "\\(.name) \\(.digest // \"\")"'], capture_output=True, text=True, check=False).stdout
+          digests = {line.split()[0]: line.split()[1].removeprefix("sha256:") for line in api.splitlines() if len(line.split()) == 2 and line.split()[1]}
+          for line in sums.splitlines():
+              parts = line.split()
+              if len(parts) != 2:
+                  continue
+              listed_sha, name = parts
+              if name in digests and digests[name] != listed_sha:
+                  errors.append(f"SHA256SUMS.txt says {name} = {listed_sha[:12]}… but the uploaded asset's digest is {digests[name][:12]}…")
+          require_min_os = vt(version) >= (0, 38, 1)
           got_version = manifest.get("version")
           if not got_version:
               errors.append("manifest has no `version`")
@@ -149,6 +190,9 @@ jobs:
                   val = entry.get(field)
                   if not isinstance(val, str) or not val.strip():
                       errors.append(f"{key}.{field} is missing or empty")
+              # v0.38.1 R16: the manifest carries the contract's min_os so install can refuse an old host before downloading
+              if require_min_os and entry.get("min_os") != contract["platforms"][key].get("min_os"):
+                  errors.append(f"{key}.min_os is {entry.get('min_os')!r}, contract says {contract['platforms'][key].get('min_os')!r}")
               url = entry.get("url")
               if isinstance(url, str) and url.strip():
                   pinned = re.search(r"/releases/download/(v[^/]+)/", url)

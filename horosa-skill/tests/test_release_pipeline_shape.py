@@ -43,8 +43,10 @@ def test_release_pipeline_never_creates_a_public_release_itself() -> None:
     # release events raised with GITHUB_TOKEN start no workflows: the guard must be dispatched by the publish job itself
     assert "gh workflow run release-completeness.yml" in publish
     assert publish.index("--draft=false --latest") < publish.index("gh workflow run release-completeness.yml")
-    # after flipping, the public latest is checked again
-    assert publish.rstrip().endswith("sync_windows_release.py --check")
+    # after flipping, the public latest is checked again; then (v0.38.1 R1/R5) the release-mode matrix is dispatched —
+    # a real https download of the public assets — so the check is no longer the last step, but it still follows the flip
+    recheck = publish.rindex("sync_windows_release.py --check\n")
+    assert publish.index("--draft=false --latest") < recheck < publish.index("gh workflow run runtime-matrix.yml")
 
 
 def test_windows_half_is_derived_from_the_seed_and_verified_before_upload() -> None:
@@ -97,7 +99,7 @@ def test_arm_lane_blocking_is_an_input_not_a_hardcode() -> None:
 
 def test_matrix_uploads_evidence_even_on_failure() -> None:
     tail = MATRIX[MATRIX.index("Upload lane evidence"):]
-    assert "if: always()" in tail and "horosa-lane/logs/**" in tail and "lane-report.json" in MATRIX
+    assert "if: always()" in tail and "horosa 测试 lane/logs/**" in tail and "lane-report.json" in MATRIX
     # one artifact root only (Windows upload-artifact refused runner.temp + `~`); the verifier copies launcher.log into logs/
     assert "~/" not in tail
     verifier = (REPO_ROOT / "horosa-skill" / "scripts" / "verify_runtime_live.py").read_text(encoding="utf-8")
@@ -118,3 +120,67 @@ def test_publish_script_only_ever_makes_drafts() -> None:
 def test_the_never_run_self_hosted_release_workflow_is_gone() -> None:
     assert not (WORKFLOWS / "release.yml").exists(), "release.yml (self-hosted, 20 cancelled tag runs) must not come back"
     assert not (REPO_ROOT / "horosa-skill" / "scripts" / "publish_darwin_release.sh").exists()
+
+
+# ---------------------------------------------------------------- v0.38.1 B3：矩阵与 CI 覆盖
+
+COMPLETENESS = (WORKFLOWS / "release-completeness.yml").read_text(encoding="utf-8")
+CI = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
+
+
+def test_release_and_schedule_lanes_install_through_the_public_manifest_url() -> None:
+    """R1：release / dispatch / schedule 模式必须走公开清单 URL（真下载）。旧写法两种模式都 `--assets-dir` → file://，
+    2026-09-14 的 schedule 跑的 lane-report 里 install.source 仍是 file://…lane-manifest.json —— 从没有 lane 下载过。"""
+    source = MATRIX[MATRIX.index("Resolve the install source"):MATRIX.index("Live verification (POSIX)")]
+    assert "mode=manifest-url" in source and "releases/download/${TAG}/runtime-manifest.json" in source
+    assert "gh release download" not in source, "release/schedule lanes must not pre-download and localise to file://"
+    assert "mode=assets-dir" in source, "artifact mode still installs the pipeline's assembled set"
+    assert '"--${{ steps.source.outputs.mode }}" "${{ steps.source.outputs.value }}"' in MATRIX
+    assert '--assets-dir "' not in MATRIX, "a hard-coded --assets-dir would silently skip the download path again"
+    verifier = (REPO_ROOT / "horosa-skill" / "scripts" / "verify_runtime_live.py").read_text(encoding="utf-8")
+    assert "download_problems(" in verifier and "installed_archive_sha256" in verifier
+
+
+def test_matrix_cron_is_off_the_hour_and_the_completeness_guard_kicks_it() -> None:
+    cron = re.search(r'cron: "(\d+) (\d+) \* \* 1"', MATRIX)
+    assert cron, "weekly cron missing"
+    assert cron.group(1) != "0", "on-the-hour slots are delayed/dropped by GitHub (the 03:00 slot fired 5.5 h late on 2026-09-14)"
+    kick = _job(COMPLETENESS, "weekly-matrix-kick")
+    assert "actions: write" in kick and "gh workflow run runtime-matrix.yml" in kick
+    assert "github.event_name == 'schedule'" in kick and "--created" in kick
+
+
+def test_matrix_work_dir_carries_a_space_and_cjk() -> None:
+    """R10：带空格 + 中文的工作目录在三台真机上过一遍（A1 编码 / A4 引号）。"""
+    assert MATRIX.count("horosa 测试 lane") >= 5
+    assert "horosa-lane" not in MATRIX.split("Resolve the install source", 1)[1]
+
+
+def test_publish_requires_the_matrix_and_the_same_bytes() -> None:
+    """R5：publish=true 没有 run_matrix=true 直接 fail；publish job 不再接受 skipped 的 matrix；翻公开前比对 lane 装的 sha 与 draft 资产。"""
+    resolve = _job(RELEASE, "resolve")
+    assert "publish=true requires run_matrix=true" in resolve
+    publish = _job(RELEASE, "publish")
+    condition = next(line for line in publish.splitlines() if line.strip().startswith("if:"))
+    assert "needs.matrix.result == 'success'" in condition and "skipped" not in condition
+    assert "verify_matrix_digests.py" in publish and "pattern: runtime-matrix-*" in publish and ".digest" in publish
+    assert publish.index("verify_matrix_digests.py") < publish.index("--draft=false --latest"), "digest gate before the flip"
+    assert "gh workflow run runtime-matrix.yml" in publish
+    assert publish.index("--draft=false --latest") < publish.index("gh workflow run runtime-matrix.yml"), "release-mode matrix after the flip"
+
+
+def test_completeness_checks_digests_min_os_and_the_mcpb_bundle() -> None:
+    check = _job(COMPLETENESS, "check-latest-release-complete")
+    assert "verify_mcpb_manifest.py --bundle" in check, "R8: unpack the published bundle"
+    assert ".digest" in check and "SHA256SUMS.txt says" in check, "R15: SHA256SUMS lines vs GitHub's asset digests"
+    assert "min_os" in check and "(0, 38, 1)" in check, "R16: min_os asserted from 0.38.1 on"
+
+
+def test_ci_wheel_path_runs_a_real_stdio_probe_on_both_os() -> None:
+    """R9/R18：wheel 装出来的包真起一次 stdio（116），Windows 上同样；全量面在 Windows 真机上也起一次。"""
+    test_job = _job(CI, "test")
+    assert "--no-write --no-probe-network --skip-install --no-cache-wheel" in test_job and 'probe["tools"] == 116' in test_job
+    assert "--dry-run --no-probe-network" not in test_job, "dry-run proves nothing about the wheel's data files"
+    smoke = _job(CI, "windows-smoke")
+    assert "--surface full" in smoke and "-ne 116" in smoke
+    assert "uvx --from $whl horosa-skill setup" in smoke and "uv build --wheel" in smoke

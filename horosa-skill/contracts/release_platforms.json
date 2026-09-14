@@ -1,13 +1,31 @@
 {
-  "_comment": "Which runtime payloads a release ships, since when, and what other hosts do (v0.38.0 A1). Consumers: release-completeness.yml, sync_windows_release.py, verify_docs_sync (platform table), the installer's SUPPORTED/FALLBACK constants (lockstep test).",
+  "_comment": "Which runtime payloads a release ships, since when, and what other hosts do (v0.38.0 A1). Consumers: release-completeness.yml, sync_windows_release.py, verify_docs_sync (platform table), the installer's SUPPORTED/FALLBACK constants (lockstep test). v0.38.1 R16: `min_os` per platform is copied into the release manifest by generate_release_manifest.py so install can refuse an old host BEFORE the 730 MB download.",
   "schema": 1,
   "platforms": {
-    "darwin-arm64": {"since": "0.9.0", "asset": "horosa-runtime-darwin-arm64-v{version}.tar.gz", "archive_type": "tar.gz", "label": "macOS (Apple Silicon)"},
-    "win32-x64": {"since": "0.9.1", "asset": "horosa-runtime-win32-x64-v{version}.zip", "archive_type": "zip", "label": "Windows (x64)"}
+    "darwin-arm64": {
+      "since": "0.9.0",
+      "asset": "horosa-runtime-darwin-arm64-v{version}.tar.gz",
+      "archive_type": "tar.gz",
+      "label": "macOS (Apple Silicon)",
+      "min_os": "11.0",
+      "min_os_note": "macOS 11 Big Sur is the first macOS on Apple Silicon; the embedded Node 22 / Temurin 17 need 11+ too"
+    },
+    "win32-x64": {
+      "since": "0.9.1",
+      "asset": "horosa-runtime-win32-x64-v{version}.zip",
+      "archive_type": "zip",
+      "label": "Windows (x64)",
+      "min_os": "10.0.17763",
+      "min_os_note": "Windows 10 1809 / Server 2019: the oldest host the embedded x64 JDK 17 + Node 22 + CPython 3.12 support"
+    }
   },
   "aliases": {
-    "win32-arm64": {"installs": "win32-x64", "mode": "x64-emulation", "since": "0.38.0",
-                    "evidence": "A0 runner-probe on windows-11-arm: x64 Temurin 17, x64 Node 22 and x64 embedded Python 3.12 all run under Windows 11 emulation"}
+    "win32-arm64": {
+      "installs": "win32-x64",
+      "mode": "x64-emulation",
+      "since": "0.38.0",
+      "evidence": "A0 runner-probe on windows-11-arm: x64 Temurin 17, x64 Node 22 and x64 embedded Python 3.12 all run under Windows 11 emulation"
+    }
   },
   "unsupported": {
     "darwin-x64": "Intel Mac: the arm64 payload cannot run under Rosetta (embedded JDK/Python are native arm64); deliberately not built this round (user decision 2026-09-10) — gateway mode via HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT",

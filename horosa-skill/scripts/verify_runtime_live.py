@@ -3,9 +3,13 @@
 
 Drives the `horosa-skill` CLI as subprocesses exactly the way a user would, on the machine it runs on:
 
-  install (manifest or archive) → doctor → runtime start (+ poll doctor until ready) → four engine calls
-  (chart / qimen / nongli_time / bazi_birth) → `setup --client …` for four clients (config → re-read →
-  real stdio probe) → the live pytest suite against the running endpoints → runtime stop.
+  install (manifest or archive; a real HTTPS download in release/schedule mode, v0.38.1 R1) → doctor →
+  runtime start with the FACTORY budget (no HOROSA_RUNTIME_START_TIMEOUT_SECONDS override; ready or `starting`
+  + poll, v0.38.1 R11) → four engine calls (chart / qimen / nongli_time / bazi_birth) → `setup --client …`
+  for all nine clients (config → re-read → real stdio probe, R17) → `setup --client claude-code --scope user`
+  (R6) → streamable-http handshake with Bearer / 401 / 421 (R7) → a second stdio client keeps `runtime stop`
+  refused until --force (R14) → `runtime restart` + HOROSA_PORTS=auto reuses the registry ports (R12/R13) →
+  the live pytest suite against the running endpoints → runtime stop.
 
 One JSON report on stdout (also `--out`), exit 0 only when every step passed. A chart-only degrade
 (Java backend dead) is a FAILURE in every lane — that is precisely the Windows condition (issue #14) the
@@ -54,7 +58,9 @@ ENGINE_CASES: dict[str, dict[str, Any]] = {
     # Java backend + core-js enrichment (八字)
     "bazi_birth": {"date": "1990-07-15", "time": "14:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gender": 1},
 }
-CLIENTS = ("claude-code", "codex", "cursor", "claude-desktop")
+# v0.38.1 R17：九个客户端全部走一遍 setup（配置 → 回读 → 真起一次 stdio）。
+CLIENTS = ("claude-code", "codex", "cursor", "claude-desktop", "vscode", "gemini", "windsurf", "cline", "zed")
+FACTORY_START_POLL_SECONDS = 600  # a `starting` answer under the factory budget must turn ready within this
 # A live pytest run that skips for one of these reasons did not test the runtime at all.
 FORBIDDEN_SKIP_REASONS = (
     "Horosa runtime unusable",
@@ -176,6 +182,28 @@ def localize_manifest(manifest: dict[str, Any], assets_dir: Path) -> dict[str, A
     return localized
 
 
+def evaluate_http_probe(*, no_auth_status: int | None, bad_host_status: int | None, tools: int | None, expected_tools: int) -> list[str]:
+    """R7：无令牌必须 401、错 Host 必须 421、带令牌的 initialize+tools/list 必须列出完整工具面。"""
+    problems: list[str] = []
+    if no_auth_status != 401:
+        problems.append(f"request without a token got {no_auth_status}, expected 401")
+    if bad_host_status != 421:
+        problems.append(f"request with a foreign Host header got {bad_host_status}, expected 421 (DNS-rebinding guard)")
+    if tools != expected_tools:
+        problems.append(f"tools/list over streamable-http returned {tools}, expected {expected_tools}")
+    return problems
+
+
+def download_problems(source_args: list[str], download: dict[str, Any] | None) -> list[str]:
+    """R1：release / schedule 模式（http(s) 清单）必须记录到一次真实传输；file:// / --archive 不要求。"""
+    manifest = source_args[1] if len(source_args) == 2 and source_args[0] == "--manifest-url" else ""
+    if not manifest.startswith(("http://", "https://")):
+        return []
+    if not isinstance(download, dict) or int(download.get("bytes") or 0) <= 0:
+        return ["release-mode install recorded no real download (download.bytes must be > 0)"]
+    return []
+
+
 # ---------------------------------------------------------------- subprocess driving
 
 
@@ -278,9 +306,16 @@ class Lane:
             problems.append("expected a platform fallback (x64 emulation) but install reported none")
         if not self.args.expect_emulated and fallback:
             problems.append(f"unexpected platform fallback {fallback}")
+        download = payload.get("download")
+        problems.extend(download_problems(source_args, download))
+        asset = payload.get("asset") or {}
+        self.report["installed_archive_sha256"] = asset.get("sha256") or None
+        self.report["installed_archive_name"] = Path(urlparse(str(asset.get("url") or "")).path).name or None
+        self.report["download"] = download
         return self.step("install", not problems, seconds=seconds, platform=payload.get("platform"), platform_fallback=fallback,
                          warnings=[w.get("code") for w in payload.get("warnings") or []], problems=problems,
-                         version=(payload.get("manifest") or {}).get("version"), source=source_args)
+                         version=(payload.get("manifest") or {}).get("version"), source=source_args, download=download,
+                         installed_archive_sha256=self.report["installed_archive_sha256"])
 
     def doctor(self, name: str = "doctor") -> tuple[bool, dict[str, Any]]:
         code, payload, err = self.cli_json("doctor", timeout=BUDGET["doctor"])
@@ -317,10 +352,19 @@ class Lane:
 
     def start(self) -> bool:
         started = time.perf_counter()
-        code, payload, err = self.cli_json("runtime", "start", timeout=BUDGET["start"] + 60)
+        # v0.38.1 R11：出厂预算 —— 不带 HOROSA_RUNTIME_START_TIMEOUT_SECONDS 覆盖。CLI 必须要么 ready、要么返回
+        # `starting`（启动器活着、预算用完），绝不能 start_timeout；`starting` 之后 doctor 轮询必须在限期内变 ready。
+        factory_env = self.env()
+        factory_env.pop("HOROSA_RUNTIME_START_TIMEOUT_SECONDS", None)
+        code, payload, err = self.cli_json("runtime", "start", timeout=BUDGET["start"] + 60, env=factory_env)
         if code != 0 or not payload or payload.get("ok") is not True:
-            return self.step("start", False, seconds=round(time.perf_counter() - started, 1), code=(payload or {}).get("code"), stderr=err)
-        deadline = started + BUDGET["start"]
+            return self.step("start", False, seconds=round(time.perf_counter() - started, 1), code=(payload or {}).get("code"), stderr=err,
+                             factory_budget=True)
+        self.report["factory_budget"] = {
+            "starting": bool(payload.get("starting")), "budget_seconds": payload.get("budget_seconds"),
+            "cap_seconds": payload.get("cap_seconds"), "elapsed_seconds": payload.get("elapsed_seconds"),
+        }
+        deadline = started + (FACTORY_START_POLL_SECONDS if payload.get("starting") else BUDGET["start"])
         last: list[str] = ["doctor not run"]
         while time.perf_counter() < deadline:
             ok, report = self.doctor("doctor-after-start")
@@ -330,7 +374,7 @@ class Lane:
                     for endpoint in report.get("endpoints") or []:
                         self.endpoints[str(endpoint.get("label"))] = str(endpoint.get("url"))
                     return self.step("start", True, seconds=round(time.perf_counter() - started, 1), endpoints=self.endpoints,
-                                     listener_scope=report.get("listener_scope"))
+                                     listener_scope=report.get("listener_scope"), factory_budget=self.report.get("factory_budget"))
                 if any("degraded=" in p for p in last) and time.perf_counter() - started > 120:
                     break  # a dead Java backend does not come back by waiting
             time.sleep(DOCTOR_POLL_SECONDS)
@@ -382,6 +426,190 @@ class Lane:
             }
             all_ok = all_ok and ok
         return self.step("client_setup", all_ok, results=results)
+
+    def claude_code_user_scope(self) -> bool:
+        """R6：`setup --client claude-code --scope user`（不传 --config）。`claude` 不在 PATH 时必须打印可复制命令并 ok；
+        在 PATH 时真跑 `claude mcp add --scope user` → `claude mcp get horosa` → 清理。"""
+        started = time.perf_counter()
+        code, payload, err = self.cli_json("setup", "--client", "claude-code", "--scope", "user", "--skip-install",
+                                           "--no-probe-network", "--no-stdio-probe", timeout=BUDGET["setup"])
+        config = ((payload or {}).get("steps") or {}).get("config") or {}
+        problems: list[str] = []
+        if code != 0 or not payload or payload.get("ok") is not True:
+            problems.append(f"setup --scope user failed: exit {code} code={(payload or {}).get('code')} {err[-300:]}")
+        mode = config.get("mode")
+        if mode not in {"printed", "claude-mcp-add"}:
+            problems.append(f"config.mode {mode!r}, expected printed / claude-mcp-add")
+        if mode == "printed" and not str(config.get("command") or "").startswith(("claude mcp add", '"claude" mcp add')):
+            problems.append(f"printed mode without a copy-pasteable `claude mcp add` command: {config.get('command')!r}")
+        executed = bool(config.get("executed"))
+        verified = None
+        if executed:
+            got, out, _ = self.cli_wrap(["claude", "mcp", "get", "horosa"], timeout=60)
+            verified = got == 0 and "horosa" in out
+            if not verified:
+                problems.append("`claude mcp add --scope user` ran but `claude mcp get horosa` does not show it")
+            self.cli_wrap(["claude", "mcp", "remove", "--scope", "user", "horosa"], timeout=60)
+        return self.step("claude_code_user_scope", not problems, seconds=round(time.perf_counter() - started, 1), mode=mode,
+                         executed=executed, verified=verified, command=config.get("command"), problems=problems)
+
+    def cli_wrap(self, command: list[str], *, timeout: float) -> tuple[int, str, str]:
+        try:
+            completed = subprocess.run(command, cwd=str(PKG_ROOT), env=self.env(), capture_output=True, text=True,
+                                       encoding="utf-8", errors="replace", timeout=timeout)
+        except (OSError, subprocess.SubprocessError) as exc:
+            return 1, "", f"{type(exc).__name__}: {exc}"
+        return completed.returncode, completed.stdout, completed.stderr
+
+    def http_probe(self) -> bool:
+        """R7：streamable-http 真握手 —— 无令牌 401、错 Host 421、带 Bearer 的 initialize + tools/list 列出完整工具面。"""
+        import secrets
+        import socket
+
+        started = time.perf_counter()
+        with socket.socket() as probe_socket:
+            probe_socket.bind(("127.0.0.1", 0))
+            port = probe_socket.getsockname()[1]
+        token = secrets.token_urlsafe(18)
+        url = f"http://127.0.0.1:{port}/mcp"
+        env = self.env()
+        env.pop("HOROSA_MCP_COMPACT", None)  # full surface
+        log_path = self.work / "http-serve.log"
+        with log_path.open("w", encoding="utf-8") as log:
+            proc = subprocess.Popen(
+                [*CLI, "serve", "--transport", "streamable-http", "--host", "127.0.0.1", "--port", str(port), "--token", token,
+                 "--skip-runtime-start"],
+                cwd=str(PKG_ROOT), env=env, stdout=log, stderr=subprocess.STDOUT,
+            )
+        result: dict[str, Any] = {"port": port}
+        try:
+            deadline = time.perf_counter() + 180
+            while time.perf_counter() < deadline:
+                try:
+                    with socket.create_connection(("127.0.0.1", port), timeout=1):
+                        break
+                except OSError:
+                    if proc.poll() is not None:
+                        break
+                    time.sleep(1)
+            import httpx
+
+            body = {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                    "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "lane", "version": "0"}}}
+            headers = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
+            with httpx.Client(timeout=30) as http:
+                result["no_auth_status"] = http.post(url, json=body, headers=headers).status_code
+                result["bad_host_status"] = http.post(url, json=body, headers={**headers, "Authorization": f"Bearer {token}", "Host": "evil.example"}).status_code
+            import anyio
+            from mcp import ClientSession
+            from mcp.client.streamable_http import streamablehttp_client
+
+            async def handshake() -> tuple[int, str]:
+                with anyio.fail_after(120):
+                    async with streamablehttp_client(url, headers={"Authorization": f"Bearer {token}"}) as (read, write, _sid):
+                        async with ClientSession(read, write) as session:
+                            init = await session.initialize()
+                            tools = await session.list_tools()
+                            return len(tools.tools), init.serverInfo.version
+
+            try:
+                result["tools"], result["server_version"] = anyio.run(handshake)
+            except Exception as exc:  # noqa: BLE001 - 失败要连日志尾巴一起报
+                result["tools"] = None
+                result["handshake_error"] = f"{type(exc).__name__}: {exc}"[:300]
+        finally:
+            proc.terminate()
+            try:
+                proc.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        from horosa_skill.engine.registry import TOOL_DEFINITIONS
+        from horosa_skill.surfaces.mcp_server import FACADE_TOOL_COUNT
+
+        expected = FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)
+        problems = evaluate_http_probe(no_auth_status=result.get("no_auth_status"), bad_host_status=result.get("bad_host_status"),
+                                       tools=result.get("tools"), expected_tools=expected)
+        tail = log_path.read_text(encoding="utf-8", errors="replace")[-1500:] if problems else None
+        return self.step("http_probe", not problems, seconds=round(time.perf_counter() - started, 1), expected_tools=expected,
+                         problems=problems, serve_log_tail=tail, **result)
+
+    def clients_attached_stop(self) -> bool:
+        """R14：第二个 stdio 客户端挂着时 `runtime stop` 必须 stop_refused_clients_attached；客户端退出后登记消失。"""
+        started = time.perf_counter()
+        problems: list[str] = []
+        client = subprocess.Popen(
+            [*CLI, "serve", "--transport", "stdio", "--skip-runtime-start"], cwd=str(PKG_ROOT), env=self.env(),
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        )
+        attached: dict[str, Any] = {}
+        try:
+            deadline = time.perf_counter() + 90
+            while time.perf_counter() < deadline:
+                _c, status, _e = self.cli_json("runtime", "status", timeout=60)
+                attached = {pid: info for pid, info in ((status or {}).get("clients") or {}).items() if int(pid) == client.pid}
+                if attached:
+                    break
+                time.sleep(2)
+            if not attached:
+                problems.append("the second stdio client never appeared in `runtime status`.clients")
+            code, payload, err = self.cli_json("runtime", "stop", timeout=BUDGET["stop"])
+            refused_code = (payload or {}).get("code")
+            if code == 0 or refused_code != "runtime.stop_refused_clients_attached":
+                problems.append(f"`runtime stop` with a client attached: exit {code} code={refused_code!r} (expected refusal) {err[-200:]}")
+            _c, status_after, _e = self.cli_json("runtime", "status", timeout=60)
+            still = [e.get("label") for e in (status_after or {}).get("endpoints") or [] if e.get("reachable") is True]
+            if len(still) < 2:
+                problems.append(f"services went down although the stop was refused: reachable={still}")
+        finally:
+            client.terminate()
+            try:
+                client.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                client.kill()
+        deadline = time.perf_counter() + 60
+        while time.perf_counter() < deadline:
+            _c, status, _e = self.cli_json("runtime", "status", timeout=60)
+            if str(client.pid) not in ((status or {}).get("clients") or {}):
+                break
+            time.sleep(2)
+        else:
+            problems.append("the dead client is still listed in `runtime status`.clients (live_clients must drop dead pids)")
+        return self.step("clients_attached_stop", not problems, seconds=round(time.perf_counter() - started, 1), problems=problems,
+                         attached=attached)
+
+    def restart_and_auto_ports(self) -> bool:
+        """R12/R13：`runtime restart` 必 ok 并回到 ready；随后 HOROSA_PORTS=auto 必须复用登记表里的端口（不另挑一对）。"""
+        started = time.perf_counter()
+        code, payload, err = self.cli_json("runtime", "restart", timeout=BUDGET["start"] + 60)
+        problems: list[str] = []
+        if code != 0 or not payload or payload.get("ok") is not True:
+            problems.append(f"runtime restart: exit {code} {(payload or {}).get('code')} {err[-300:]}")
+        deadline = time.perf_counter() + BUDGET["start"]
+        last: list[str] = ["doctor not run"]
+        while time.perf_counter() < deadline and not problems:
+            ok, report = self.doctor("doctor-after-restart")
+            if ok:
+                last = doctor_ready(report)
+                if not last:
+                    break
+            time.sleep(DOCTOR_POLL_SECONDS)
+        if last:
+            problems.append(f"not ready after restart: {last}")
+        auto_env = self.env(HOROSA_PORTS="auto")
+        for key in ("HOROSA_LOCAL_BACKEND_PORT", "HOROSA_LOCAL_CHART_PORT"):
+            auto_env.pop(key, None)
+        _c, auto_report, _e = self.cli_json("doctor", timeout=BUDGET["doctor"], env=auto_env)
+        provenance = {row.get("field"): row for row in (auto_report or {}).get("settings_provenance") or []}
+        backend = provenance.get("local_backend_port") or {}
+        if backend.get("source") != "auto:HOROSA_PORTS":
+            problems.append(f"HOROSA_PORTS=auto provenance is {backend.get('source')!r}, expected auto:HOROSA_PORTS")
+        if str(backend.get("value")) != str(self.args.backend_port):
+            problems.append(f"HOROSA_PORTS=auto picked backend port {backend.get('value')} instead of reusing the registry's {self.args.backend_port}")
+        reachable = [e.get("label") for e in (auto_report or {}).get("endpoints") or [] if e.get("reachable") is True]
+        if len(reachable) < 2:
+            problems.append(f"under HOROSA_PORTS=auto the running services are not both reachable: {reachable}")
+        return self.step("restart_and_auto_ports", not problems, seconds=round(time.perf_counter() - started, 1), problems=problems,
+                         auto_ports={"backend": backend.get("value"), "source": backend.get("source")})
 
     def live_pytest(self) -> bool:
         if self.args.skip_pytest:
@@ -441,8 +669,12 @@ class Lane:
         if ok:
             engines_ok = self.engines()
             clients_ok = self.client_setup()
+            user_scope_ok = self.claude_code_user_scope()
+            http_ok = self.http_probe()
+            attached_ok = self.clients_attached_stop()
+            restart_ok = self.restart_and_auto_ports()
             pytest_ok = self.live_pytest()
-            ok = engines_ok and clients_ok and pytest_ok
+            ok = engines_ok and clients_ok and user_scope_ok and http_ok and attached_ok and restart_ok and pytest_ok
         # always try to leave the machine clean; a failed stop is a failure of its own
         stop_ok = self.stop() if (self.report["steps"].get("start") or {}).get("ok") else True
         self.report["ok"] = bool(ok and stop_ok)

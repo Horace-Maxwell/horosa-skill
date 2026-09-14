@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 打一个 .mcpb 包（Claude Desktop 的一键安装格式）。
+# 打一个 .mcpb 包（Claude Desktop 的一键安装格式）。打包器钉 2.1.2（与 verify_mcpb_manifest.MCPB_PACKAGE 锁步）。
 #
 # bundle 根 = horosa-skill/：MCPB 的 `server.type: "uv"` 会在包根跑 `uv run --directory ${__dirname}`，
 # 所以那一层必须持有 pyproject.toml。排除项见 .mcpbignore。
@@ -14,14 +14,17 @@ BUNDLE="${OUT_DIR}/horosa-skill-${VERSION}.mcpb"
 mkdir -p "${OUT_DIR}"
 
 echo "[1/3] validate manifest"
-npx -y @anthropic-ai/mcpb@2 validate manifest.json
+npx -y @anthropic-ai/mcpb@2.1.2 validate manifest.json
 
 echo "[2/3] pack -> ${BUNDLE}"
-npx -y @anthropic-ai/mcpb@2 pack . "${BUNDLE}"
+npx -y @anthropic-ai/mcpb@2.1.2 pack . "${BUNDLE}"
 
-echo "[3/3] sha256"
+echo "[3/4] sha256"
 if command -v shasum >/dev/null 2>&1; then
   shasum -a 256 "${BUNDLE}"
 else
   sha256sum "${BUNDLE}"
 fi
+
+echo "[4/4] verify the bundle contents (manifest + required paths, no vendor/)"
+python3 "${HERE}/scripts/verify_mcpb_manifest.py" --bundle "${BUNDLE}"

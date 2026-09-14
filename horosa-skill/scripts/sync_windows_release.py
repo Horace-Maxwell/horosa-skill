@@ -28,6 +28,7 @@ import argparse
 import json
 import re
 import subprocess
+import tempfile
 import sys
 
 # Windows 控制台默认 cp1252/cp936：脚本自己 print 的中文会抛 UnicodeEncodeError 并让脚本 exit 1
@@ -223,6 +224,12 @@ def preflight_vendor_sources() -> None:
             )
 
 
+def merge_sha256sums(previous: str, fresh: list[str], rewritten: set[str]) -> list[str]:
+    """把重算过的归档行换进旧 SHA256SUMS（其余行 —— .mcpb / .whl —— 原样保留，v0.38.1 R15）。纯函数，可测。"""
+    kept = [line for line in previous.splitlines() if line.strip() and len(line.split()) == 2 and line.split()[1].lstrip("*") not in rewritten]
+    return kept + list(fresh)
+
+
 def build_and_verify(a: dict) -> tuple[Path, Path]:
     """Build the win zip, download darwin, regenerate dual manifest + SHA256SUMS, verify both. Returns paths."""
     version = a["version"]
@@ -248,12 +255,23 @@ def build_and_verify(a: dict) -> tuple[Path, Path]:
          "--windows-archive", f"dist/runtime/{a['win_zip']}",
          "--output", "dist/runtime/runtime-manifest.json"], cwd=SKILL_ROOT)
 
-    print("\n[checksums] writing SHA256SUMS.txt over both archives…")
+    print("\n[checksums] writing SHA256SUMS.txt over both archives (keeping the release's .mcpb / .whl lines)…")
     import hashlib
     lines = []
     for name in (a["darwin_tar"], a["win_zip"]):
         digest = hashlib.sha256((DIST / name).read_bytes()).hexdigest()
         lines.append(f"{digest}  {name}")
+    # v0.38.1 R15：流水线的 SHA256SUMS 还列着 .mcpb / .whl；这里只重算两个归档，其余行原样保留，
+    # 否则 release-completeness 的 `sha256sum -c` 会少掉两件资产的校验。
+    previous = ""
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            subprocess.run(["gh", "release", "download", a["tag"], "--repo", REPO, "--pattern", "SHA256SUMS.txt",
+                            "--dir", tmp, "--clobber"], check=True, capture_output=True)
+            previous = (Path(tmp) / "SHA256SUMS.txt").read_text(encoding="utf-8")
+    except (OSError, subprocess.CalledProcessError):
+        previous = ""
+    lines = merge_sha256sums(previous, lines, {a["darwin_tar"], a["win_zip"]})
     (DIST / "SHA256SUMS.txt").write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     print("\n".join("  " + ln for ln in lines))
 

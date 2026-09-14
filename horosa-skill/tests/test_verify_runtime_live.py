@@ -100,7 +100,8 @@ def test_localize_manifest_points_urls_at_local_archives_and_keeps_hashes(tmp_pa
 def test_engine_cases_carry_the_gate_confirmation_and_cover_three_engine_families() -> None:
     assert set(live.ENGINE_CASES) == {"chart", "qimen", "nongli_time", "bazi_birth"}
     assert live.CONFIRM["agent_confirmed_settings"] is True and live.CONFIRM["clarification_notes"]
-    assert set(live.CLIENTS) == {"claude-code", "codex", "cursor", "claude-desktop"}
+    # v0.38.1 R17：四家 → 九家（vscode / gemini / windsurf / cline / zed 此前没有任何真机 lane 跑过 setup）
+    assert {"claude-code", "codex", "cursor", "claude-desktop"} <= set(live.CLIENTS) and len(live.CLIENTS) == 9
 
 
 def test_origin_of_strips_the_probe_path() -> None:
@@ -131,3 +132,29 @@ def test_pytest_env_carries_origins_and_node_but_not_the_lane_port_overrides(tmp
     assert env["HOROSA_SERVER_ROOT"] == "http://127.0.0.1:19999" and env["HOROSA_CHART_SERVER_ROOT"] == "http://127.0.0.1:18899"
     assert env["HOROSA_NODE_BIN"] == "/x/node"
     assert "HOROSA_LOCAL_BACKEND_PORT" not in env and "HOROSA_LOCAL_CHART_PORT" not in env
+
+
+# ---------------------------------------------------------------- v0.38.1 B3
+
+
+def test_lane_covers_every_client_the_cli_knows() -> None:
+    from horosa_skill.surfaces.cli import _CLIENT_NAMES
+
+    assert set(live.CLIENTS) == set(_CLIENT_NAMES) and len(live.CLIENTS) == 9
+
+
+def test_http_probe_verdict_requires_401_421_and_the_full_surface() -> None:
+    assert live.evaluate_http_probe(no_auth_status=401, bad_host_status=421, tools=116, expected_tools=116) == []
+    assert live.evaluate_http_probe(no_auth_status=200, bad_host_status=421, tools=116, expected_tools=116), "无令牌放行 = 红"
+    assert live.evaluate_http_probe(no_auth_status=401, bad_host_status=200, tools=116, expected_tools=116), "错 Host 放行 = 红"
+    assert live.evaluate_http_probe(no_auth_status=401, bad_host_status=421, tools=11, expected_tools=116), "精简面冒充全量 = 红"
+    assert live.evaluate_http_probe(no_auth_status=None, bad_host_status=None, tools=None, expected_tools=116)
+
+
+def test_release_mode_install_must_record_a_real_download() -> None:
+    remote = ["--manifest-url", "https://github.com/x/y/releases/download/v1/runtime-manifest.json"]
+    assert live.download_problems(remote, None), "旧 lane 的空白必红"
+    assert live.download_problems(remote, {"bytes": 0})
+    assert live.download_problems(remote, {"bytes": 737084051, "url": "https://…", "mirror_used": False}) == []
+    assert live.download_problems(["--manifest-url", "file:///tmp/lane-manifest.json"], None) == [], "artifact 模式（file://）不要求下载"
+    assert live.download_problems(["--archive", "/x.tar.gz"], None) == []

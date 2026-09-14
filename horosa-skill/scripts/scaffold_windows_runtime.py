@@ -46,13 +46,20 @@ def main() -> None:
 
     payload_root = Path(args.output).expanduser().resolve() / "runtime-payload"
 
+    # v0.38.1 R19：脚手架启动器**绝不**「成功什么都不做」——那会让 install 通过、start 报 start_timeout 而没有任何线索。
+    # 明确退出 3 + 一句话：这是脚手架，不是可运行的载荷。
     write_text(
         payload_root / "Horosa-Web/start_horosa_local.ps1",
-        "$ErrorActionPreference = 'Stop'\nWrite-Host 'TODO: wire Windows runtime startup here.'\nexit 0\n",
+        "$ErrorActionPreference = 'Stop'\n"
+        "Write-Error 'horosa scaffold payload: no Windows runtime is wired into this scaffold (scaffold_windows_runtime.py). "
+        "Build a real payload with build_runtime_release_windows.py --seed <darwin seed>.'\n"
+        "exit 3\n",
     )
     write_text(
         payload_root / "Horosa-Web/stop_horosa_local.ps1",
-        "$ErrorActionPreference = 'Stop'\nWrite-Host 'TODO: wire Windows runtime shutdown here.'\nexit 0\n",
+        "$ErrorActionPreference = 'Stop'\n"
+        "Write-Error 'horosa scaffold payload: nothing to stop (scaffold_windows_runtime.py placeholder).'\n"
+        "exit 3\n",
     )
     write_text(
         payload_root / "runtime/windows/README.txt",

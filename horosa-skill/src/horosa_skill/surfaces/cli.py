@@ -2297,7 +2297,8 @@ def runtime_restart(
     settings = Settings.from_env()
     manager = _runtime_manager(settings)
     try:
-        stopped = manager.stop_local_services(force=force)
+        # restart = 服务马上回来：挂着的客户端不拦（它们下一次调用只见一次 runtime.starting 然后自动重试）。
+        stopped = manager.stop_local_services(force=force, ignore_clients=True)
         if stopped.get("refused"):
             _print_json({"ok": False, "phase": "stop", **stopped})
             raise typer.Exit(code=2)

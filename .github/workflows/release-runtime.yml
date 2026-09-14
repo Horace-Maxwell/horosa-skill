@@ -67,6 +67,10 @@ jobs:
           set -euo pipefail
           VERSION="${{ inputs.version }}"
           TAG="v${VERSION}"
+          # v0.38.1 R5: nothing goes public without the three-machine proof on the SAME bytes.
+          if [ "${{ inputs.publish }}" = "true" ] && [ "${{ inputs.run_matrix }}" != "true" ]; then
+            echo "::error::publish=true requires run_matrix=true — a release is never flipped public without the runtime matrix"; exit 1
+          fi
           PYPROJECT_VERSION="$(python3 -c 'import tomllib,pathlib; print(tomllib.loads(pathlib.Path("horosa-skill/pyproject.toml").read_text())["project"]["version"])')"
           if [ "${{ inputs.dry_run }}" != "true" ] && [ "${PYPROJECT_VERSION}" != "${VERSION}" ]; then
             echo "::error::pyproject is ${PYPROJECT_VERSION} but the pipeline was asked to release ${VERSION}"; exit 1
@@ -226,8 +230,9 @@ jobs:
 
   publish:
     needs: [resolve, assemble, matrix]
-    # runs only when asked, never on dry runs, and only after assemble succeeded and the matrix passed (or was skipped)
-    if: ${{ !cancelled() && inputs.publish && !inputs.dry_run && needs.assemble.result == 'success' && (needs.matrix.result == 'success' || needs.matrix.result == 'skipped') }}
+    # runs only when asked, never on dry runs, and only after assemble succeeded AND the matrix passed (v0.38.1 R5: a
+    # skipped matrix no longer publishes — resolve already refuses publish=true without run_matrix=true)
+    if: ${{ !cancelled() && inputs.publish && !inputs.dry_run && needs.assemble.result == 'success' && needs.matrix.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -239,6 +244,22 @@ jobs:
       - name: Install dependencies
         working-directory: ./horosa-skill
         run: uv sync --dev
+      # v0.38.1 R5: the bytes the three lanes installed must be the bytes on the draft. Each lane records the sha256 of the
+      # archive it installed (lane-report.json → installed_archive_sha256); the draft's assets expose GitHub's own
+      # `digest` (sha256:…), with SHA256SUMS.txt as the fallback. Any mismatch or missing lane evidence blocks the flip.
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: runtime-matrix-*
+          path: ${{ runner.temp }}/lanes
+      - name: Assert the archives the matrix installed are byte-identical to the draft assets
+        env:
+          TAG: ${{ needs.resolve.outputs.tag }}
+          LANES: ${{ runner.temp }}/lanes
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq '.assets[] | "\(.name) \(.digest // "")"' > "${RUNNER_TEMP}/digests.txt"
+          gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" -p SHA256SUMS.txt -D "${RUNNER_TEMP}" --clobber || : > "${RUNNER_TEMP}/SHA256SUMS.txt"
+          python3 horosa-skill/scripts/verify_matrix_digests.py --lanes "${LANES}" --digests "${RUNNER_TEMP}/digests.txt" --sums "${RUNNER_TEMP}/SHA256SUMS.txt" --expect-lanes 3
       - name: The draft must be complete before it goes public (the [GAP]/[OK] verdict is authoritative)
         working-directory: ./horosa-skill
         run: uv run python scripts/sync_windows_release.py --check --tag "${{ needs.resolve.outputs.tag }}" --draft
@@ -252,3 +273,7 @@ jobs:
       - name: Re-check the public latest
         working-directory: ./horosa-skill
         run: uv run python scripts/sync_windows_release.py --check
+      # v0.38.1 R1/R5: once public, run the matrix once more in release mode — the lanes now install through the public
+      # manifest URL, i.e. a real https download of what users will fetch (the artifact-mode run above installed from file://).
+      - name: Dispatch the release-mode matrix (real https download of the public assets)
+        run: gh workflow run runtime-matrix.yml --repo "${GITHUB_REPOSITORY}" -f tag="${{ needs.resolve.outputs.tag }}"

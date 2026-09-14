@@ -307,3 +307,67 @@ def test_committed_client_configs_are_clean() -> None:
         for entry_name, entry in entries:
             problems = cli._audit_client_entry(entry_name, entry, client=client, config_dir=path.parent)
             assert problems == [], f"{rel}: {[p['code'] for p in problems]}"
+
+
+# ---------------------------------------------------------------- v0.38.1 R7：streamable-http 真握手
+
+
+def test_streamable_http_handshake_end_to_end(tmp_path) -> None:
+    """真起一次 `serve --transport streamable-http`：无令牌 401、错 Host 421、带 Bearer 的 initialize + tools/list = 全量面。"""
+    import os
+    import socket
+    import subprocess
+    import sys
+    import time
+
+    import anyio
+    import httpx
+    from mcp import ClientSession
+    from mcp.client.streamable_http import streamablehttp_client
+
+    from horosa_skill.engine.registry import TOOL_DEFINITIONS
+    from horosa_skill.surfaces.mcp_server import FACADE_TOOL_COUNT
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    token = "lane-token-0123456789"
+    env = {**os.environ, "HOROSA_RUNTIME_ROOT": str(tmp_path / "rt"), "HOROSA_SKILL_DATA_DIR": str(tmp_path / "data"), "PYTHONIOENCODING": "utf-8"}
+    env.pop("HOROSA_MCP_COMPACT", None)
+    env.pop("HOROSA_TOOLSETS", None)
+    url = f"http://127.0.0.1:{port}/mcp"
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "horosa_skill.surfaces.cli", "serve", "--transport", "streamable-http", "--host", "127.0.0.1",
+         "--port", str(port), "--token", token, "--skip-runtime-start"],
+        env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+    )
+    try:
+        deadline = time.monotonic() + 90
+        while time.monotonic() < deadline:
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=1):
+                    break
+            except OSError:
+                assert proc.poll() is None, f"serve exited early: {proc.stderr.read()[-800:] if proc.stderr else ''}"
+                time.sleep(0.5)
+        body = {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}}
+        headers = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
+        with httpx.Client(timeout=30) as http:
+            assert http.post(url, json=body, headers=headers).status_code == 401
+            assert http.post(url, json=body, headers={**headers, "Authorization": f"Bearer {token}", "Host": "evil.example"}).status_code == 421
+
+        async def handshake() -> int:
+            with anyio.fail_after(60):
+                async with streamablehttp_client(url, headers={"Authorization": f"Bearer {token}"}) as (read, write, _sid):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        return len((await session.list_tools()).tools)
+
+        assert anyio.run(handshake) == FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            proc.kill()

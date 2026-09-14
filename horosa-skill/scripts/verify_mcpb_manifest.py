@@ -43,6 +43,12 @@ REQUIRED_IN_BUNDLE = [
 ]
 
 
+# 钉死打包器版本：build_mcpb.sh 与本守卫用同一个（tests/test_mcpb_bundle.py 锁步）。`@2` 浮动时打出的包字节会随
+# 工具版本漂移，而 server.json 里回填的是某一份包的 sha。
+MCPB_PACKAGE = "@anthropic-ai/mcpb@2.1.2"
+# 打好的 .mcpb 里**绝不能**出现的顶层目录（v0.37.0 第一版把 187 MB 的 vendor/ 打进去过）。
+FORBIDDEN_TOP_LEVEL_IN_BUNDLE = ("vendor/", "tests/", ".venv/", "build/", "dist/", "horosa-core-js/")
+
 # 这些**本来就该**在任意层级匹配：编译产物与本机残留，哪一层出现都不该进包。
 RECURSIVE_BY_DESIGN = frozenset({"__pycache__/", "*.egg-info/", "runs/", "*.pyc", ".coverage", "*.mcpb"})
 
@@ -164,7 +170,7 @@ def validate_with_npx() -> list[str]:
         return []
     try:
         result = subprocess.run(
-            ["npx", "-y", "@anthropic-ai/mcpb@2", "validate", str(MANIFEST)],
+            ["npx", "-y", MCPB_PACKAGE, "validate", str(MANIFEST)],
             capture_output=True, text=True, timeout=180, cwd=str(PKG_ROOT), check=False,
         )
     except (OSError, subprocess.SubprocessError) as exc:
@@ -175,8 +181,42 @@ def validate_with_npx() -> list[str]:
     return []
 
 
-def main() -> int:
+def bundle_archive_errors(bundle: Path) -> list[str]:
+    """解包一个真 .mcpb（zip）：manifest.json 在场、REQUIRED_IN_BUNDLE 全在、禁入目录不在（v0.38.1 R8）。
+
+    `mcpb validate` 只看 manifest schema，不看包里有什么；.mcpbignore 的规则再对，也要用打出来的包本身证明。
+    """
+    import zipfile
+
+    problems: list[str] = []
+    if not bundle.is_file():
+        return [f"bundle not found: {bundle}"]
+    try:
+        with zipfile.ZipFile(bundle) as archive:
+            names = archive.namelist()
+    except zipfile.BadZipFile as exc:
+        return [f"{bundle.name} is not a zip archive (mcpb bundles are zips): {exc}"]
+    if "manifest.json" not in names:
+        problems.append(f"{bundle.name}: manifest.json missing at the bundle root")
+    for required in REQUIRED_IN_BUNDLE:
+        if required in names or any(n.startswith(required.rstrip("/") + "/") for n in names):
+            continue
+        problems.append(f"{bundle.name}: required path missing inside the bundle: {required}")
+    for forbidden in FORBIDDEN_TOP_LEVEL_IN_BUNDLE:
+        if any(n.startswith(forbidden) for n in names):
+            problems.append(f"{bundle.name}: {forbidden} is inside the bundle (should be excluded by .mcpbignore)")
+    return problems
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--bundle", default=None, help="also unpack this built .mcpb and assert its contents (v0.38.1 R8)")
+    args = ap.parse_args(argv)
     problems = manifest_errors() + unanchored_pattern_errors() + bundle_content_errors()
+    if args.bundle:
+        problems += bundle_archive_errors(Path(args.bundle).expanduser())
     if not problems:
         problems = validate_with_npx()
     if problems:
@@ -184,7 +224,7 @@ def main() -> int:
         for item in problems:
             print(f"  - {item}")
         return 1
-    print(f"mcpb-manifest: ok (schema + {len(REQUIRED_IN_BUNDLE)} required bundle paths)")
+    print(f"mcpb-manifest: ok (schema + {len(REQUIRED_IN_BUNDLE)} required bundle paths" + (f" + bundle {Path(args.bundle).name}" if args.bundle else "") + ")")
     return 0
 
 
