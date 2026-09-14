@@ -206,6 +206,8 @@ def test_ansi_root_refusal_step_is_skipped_where_it_cannot_apply(tmp_path: Path,
     nocodec.ansi_encoding = "no-such-codec"
     posix = _lane(tmp_path / "posix", "horosa 测试 lane")
     monkeypatch.setattr(ascii_lane, "cli_json", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not run install")))
+    # 显式伪装 POSIX：windows-smoke 上 os.name 本来就是 nt（首推 CI 在那里真跑了一次中文根 install，拿到 runtime.path_not_ansi）
+    monkeypatch.setattr(live.os, "name", "posix")
     assert posix.ansi_root_refusal() is True and "ansi_root_refusal" not in posix.report["steps"], "POSIX: no step at all"
     monkeypatch.setattr(live.os, "name", "nt")
     assert ascii_lane.ansi_root_refusal() is True and ascii_lane.report["steps"]["ansi_root_refusal"]["skipped"] is True
