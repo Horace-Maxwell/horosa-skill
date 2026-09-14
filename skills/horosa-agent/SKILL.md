@@ -287,6 +287,7 @@ client at hand (`claude-code` / `claude-desktop` / `vscode` / `codex` / `gemini`
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
+source "$HOME/.local/bin/env"   # the installer only edits your shell profile; this puts uvx on PATH in THIS shell
 uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.38.1/horosa_skill-0.38.1-py3-none-any.whl" horosa-skill setup --client cursor
 uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.38.1/horosa_skill-0.38.1-py3-none-any.whl" horosa-skill selfcheck
 ```
@@ -295,6 +296,7 @@ uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.
 
 ```powershell
 irm https://astral.sh/uv/install.ps1 | iex
+$env:Path = "$env:USERPROFILE\.local\bin;$env:Path"   # the installer updates PATH for NEW shells only
 uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.38.1/horosa_skill-0.38.1-py3-none-any.whl" horosa-skill setup --client cursor
 uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.38.1/horosa_skill-0.38.1-py3-none-any.whl" horosa-skill selfcheck
 ```

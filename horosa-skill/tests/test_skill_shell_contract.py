@@ -100,3 +100,43 @@ def test_audit_ignores_paths_and_shell_glue() -> None:
     text = "git clone https://github.com/x/horosa-skill && cd horosa-skill/horosa-skill && uv sync\n<repo>/horosa-skill horosa-skill doctor"
     assert audit_commands(text) == []
     assert len(list(COMMAND.finditer(text))) == 1
+
+
+# ---------------------------------------------------------------- v0.38.1 C9：新机器上装完 uv，同一个 shell 里 uvx 还不在 PATH
+
+_FENCE = re.compile(r"```(?:bash|powershell|sh|zsh)?\n(.*?)```", re.S)
+_UV_INSTALLER = ("astral.sh/uv/install.sh", "astral.sh/uv/install.ps1")
+_PATH_REFRESH = (".local/bin/env", "$env:Path")
+
+
+def fresh_machine_path_problems(section: str) -> list[str]:
+    """每个装 uv 的代码块，必须在第一条 `uvx` 之前把 uv 的 bin 目录放进**当前** shell 的 PATH。
+
+    官方安装器只改 shell profile（macOS/Linux）或用户级 PATH（Windows），对正在运行的 shell 不生效：
+    照抄「装 uv → uvx …」两行，第二行在新机器上就是 `uvx: command not found`。
+    """
+    problems: list[str] = []
+    for block in _FENCE.findall(section):
+        if not any(marker in block for marker in _UV_INSTALLER):
+            continue
+        first_uvx = block.find("\nuvx ")
+        refresh = min((block.find(marker) for marker in _PATH_REFRESH if marker in block), default=-1)
+        if first_uvx >= 0 and (refresh < 0 or refresh > first_uvx):
+            problems.append(block.strip().splitlines()[0])
+    return problems
+
+
+def test_fresh_machine_blocks_put_uv_on_path_before_the_first_uvx() -> None:
+    section = _sections(SKILL.read_text(encoding="utf-8"), ("## First 3 commands on a fresh machine",))
+    assert section, "section missing"
+    assert fresh_machine_path_problems(next(iter(section.values()))) == []
+
+
+def test_path_guard_catches_the_old_two_line_shape() -> None:
+    """负向对照：v0.38.0 的原样两行（装 uv 后直接 uvx）必红；刷新行在 uvx 之后同样红。"""
+    old = "```bash\ncurl -LsSf https://astral.sh/uv/install.sh | sh\nuvx --from x horosa-skill setup --client cursor\n```\n"
+    assert fresh_machine_path_problems(old)
+    late = "```bash\ncurl -LsSf https://astral.sh/uv/install.sh | sh\nuvx --from x horosa-skill doctor\nsource \"$HOME/.local/bin/env\"\n```\n"
+    assert fresh_machine_path_problems(late)
+    good = "```powershell\nirm https://astral.sh/uv/install.ps1 | iex\n$env:Path = \"$env:USERPROFILE\\.local\\bin;$env:Path\"\nuvx --from x horosa-skill doctor\n```\n"
+    assert fresh_machine_path_problems(good) == []
