@@ -305,14 +305,14 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "runtime_start_then_doctor",
     },
-    "runtime.path_not_ansi": {
+    "runtime.path_not_ascii": {
         "kind": "runtime",
         "prompt_to_user": bilingual(
-            "runtime 目录路径里有 Windows 系统代码页表示不了的字符（常见于英文系统上的中文用户名），随包的 Java 17 在那里起不来。"
-            "请设 HOROSA_RUNTIME_ROOT 为纯英文路径（如 C:\\horosa）后重装。",
-            "The runtime directory path contains characters outside the Windows ANSI code page (common with a Chinese user "
-            "name on an English Windows), so the bundled Java 17 cannot start there. Set HOROSA_RUNTIME_ROOT to an ASCII-only "
-            "path (e.g. C:\\horosa) and reinstall.",
+            "Windows 上 Horosa 离线 runtime 必须装在纯英文路径下（当前路径含中文等非英文字符，常见于中文用户名）："
+            "随包的 Java 17 与 Swiss Ephemeris 用窄字符 API 访问文件，否则 Java 起不来、星历打不开。请设 HOROSA_RUNTIME_ROOT 为纯英文路径（如 C:\\horosa）后重装。",
+            "On Windows the Horosa offline runtime must live under an ASCII-only path (the current path contains non-ASCII "
+            "characters, typically from the user name): the bundled Java 17 and Swiss Ephemeris access files through "
+            "narrow-character APIs. Set HOROSA_RUNTIME_ROOT to an ASCII-only path (e.g. C:\\horosa) and reinstall.",
         ),
         "next_action": "set_ascii_runtime_root_then_reinstall",
     },

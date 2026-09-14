@@ -159,12 +159,13 @@ jobs:
           if ('${{ matrix.emulated }}' -eq 'true') { $extra += '--expect-emulated' }
           if ('${{ inputs.skip_pytest }}' -eq 'true') { $extra += '--skip-pytest' }
           $lane = Join-Path $env:RUNNER_TEMP 'horosa 测试 lane'
-          # v0.38.1: the RUNTIME ROOT must survive the Windows ANSI code page (cp1252 here). The bundled JDK 17's java.exe finds
-          # its own java.dll through GetModuleFileNameA, so under "horosa 测试 lane" it died with "could not find java.dll"
-          # (draft runs #1/#2) — install now refuses such a root (runtime.path_not_ansi; the lane's ansi_root_refusal step proves
-          # it on this host). CJK stays in the work dir (data dir, client configs, logs); the runtime root keeps a space and a
-          # non-ASCII-but-cp1252 'é', which still exercises the image-path identity (A1) and the relative -jar argument.
-          $runtimeRoot = Join-Path $env:RUNNER_TEMP 'horosa lane é\runtime'
+          # v0.38.1: on Windows the RUNTIME ROOT must be ASCII-only. Proven on these runners in three draft runs: under
+          # "horosa 测试 lane" the bundled JDK 17 java.exe failed ("Unable to access jarfile ...??..." then "could not find
+          # java.dll": GetCommandLineA / GetModuleFileNameA); under "horosa lane é" Java started but Swiss Ephemeris could not
+          # open its files (pyswisseph hands a UTF-8 path to C fopen, which Windows decodes as ANSI) -> KeyError 'Chiron'.
+          # install now refuses non-ASCII roots (runtime.path_not_ascii; the lane's non_ascii_root_refusal step proves it here).
+          # CJK stays in the work dir (data dir, client configs, logs); the runtime root keeps its spaces.
+          $runtimeRoot = Join-Path $env:RUNNER_TEMP 'horosa lane runtime'
           uv run python scripts/verify_runtime_live.py "--${{ steps.source.outputs.mode }}" "${{ steps.source.outputs.value }}" --work-dir "$lane" --runtime-root "$runtimeRoot" --expect-payload-platform "${{ matrix.expect_payload }}" @extra --out "$lane\lane-report.json"
       - name: Upload lane evidence (report, doctor snapshots, launcher + service logs)
         if: always()
