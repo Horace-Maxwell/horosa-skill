@@ -96,6 +96,7 @@ _WIN_JAVA_START = re.compile(r"^\$JavaProc = Start-Process .*$", re.M)
 _WIN_PY_START = re.compile(r"^\$PyProc = Start-Process .*$", re.M)
 _WIN_RAW_EMBED = re.compile(r'r"\$[A-Za-z_]+"')
 _WIN_BARE_ARGLIST = re.compile(r"-ArgumentList @\(\$")
+_WIN_JAR_ARG = re.compile(r"^\$JarArg = '(?P<value>[^']+)'\s*$", re.M)
 
 
 def audit_windows_launcher(text: str) -> list[str]:
@@ -106,6 +107,8 @@ def audit_windows_launcher(text: str) -> list[str]:
        `C:\\Users\\John Doe\\…` 断成两段，chart 与 Java 都起不来。
     3. Python bootstrap 里的路径必须是 JSON 字面量（$(ConvertTo-Json … -Compress)），raw 字符串 r"$X"
        遇尾反斜杠/引号即碎。
+    4. Java 的 -jar 参数必须是相对 $Root 的纯 ASCII 单引号字面量 `$JarArg`（v0.38.1）：JDK 17 的 Windows 启动器经 ANSI
+       代码页读命令行，绝对路径里代码页表示不了的字符（en-US 机器上的中文）变成 `?`，Java 后端起不来、只剩 chart。
     """
     errors: list[str] = []
     java = _WIN_JAVA_START.search(text)
@@ -114,14 +117,24 @@ def audit_windows_launcher(text: str) -> list[str]:
     else:
         if "--server.address=127.0.0.1" not in java.group(0):
             errors.append("Windows 启动器起 Java 没钉 --server.address=127.0.0.1（默认 0.0.0.0：防火墙弹窗 + 局域网暴露）")
-        if "('\"{0}\"' -f $JarPath)" not in java.group(0):
-            errors.append("Windows 启动器的 -jar 路径没带引号（-ArgumentList 不会替你引号，用户名带空格即断成两段）")
+        if "('\"{0}\"' -f $JarArg)" not in java.group(0):
+            errors.append(
+                "Windows 启动器的 -jar 参数必须是带引号的相对 $JarArg（-ArgumentList 不会替你引号，用户名带空格即断成两段；"
+                "绝对 $JarPath 经 JDK 17 启动器的 ANSI 代码页转换，中文目录名会变成 ? → Unable to access jarfile）"
+            )
     py = _WIN_PY_START.search(text)
     if not py:
         errors.append("Windows 启动器找不到 `$PyProc = Start-Process` 行")
     elif "('\"{0}\"' -f $PyBootstrapPath)" not in py.group(0):
         errors.append("Windows 启动器的 Python bootstrap 路径没带引号（用户名带空格即断成两段）")
     code = "\n".join(_noncomment_lines(text))  # comments may legitimately quote the bad forms
+    jar_arg = _WIN_JAR_ARG.search(code)
+    if not jar_arg:
+        errors.append("Windows 启动器没有单引号字面量 `$JarArg = '..\\runtime\\windows\\bundle\\astrostudyboot.jar'`（相对、纯 ASCII 的 jar 参数）")
+    else:
+        value = jar_arg.group("value")
+        if not value.isascii() or "$" in value or re.match(r"^(?:[A-Za-z]:|\\\\|/)", value) or not value.startswith(".."):
+            errors.append(f"Windows 启动器的 $JarArg 必须是相对 $Root、纯 ASCII、无插值的路径，实际是 {value!r}")
     if _WIN_BARE_ARGLIST.search(code):
         errors.append("Windows 启动器仍有裸的 `-ArgumentList @($…)` 路径元素")
     raw = _WIN_RAW_EMBED.search(code)
@@ -199,7 +212,10 @@ def _windows_self_test_cases() -> tuple[str, dict[str, str]]:
     good = WINDOWS_START.read_text(encoding="utf-8-sig")
     cases = {
         "Windows: Java 不钉回环": good.replace('"--server.address=127.0.0.1", ', "", 1),
-        "Windows: -jar 路径去引号": good.replace("('\"{0}\"' -f $JarPath)", "$JarPath", 1),
+        "Windows: -jar 路径去引号": good.replace("('\"{0}\"' -f $JarArg)", "$JarArg", 1),
+        "Windows: -jar 回到绝对 $JarPath（ANSI 代码页吞中文）": good.replace("('\"{0}\"' -f $JarArg)", "('\"{0}\"' -f $JarPath)", 1),
+        "Windows: $JarArg 变成插值的绝对路径": good.replace(
+            "$JarArg = '..\\runtime\\windows\\bundle\\astrostudyboot.jar'", '$JarArg = "$RuntimeRoot\\bundle\\astrostudyboot.jar"', 1),
         "Windows: bootstrap 路径去引号": good.replace("('\"{0}\"' -f $PyBootstrapPath)", "@($PyBootstrapPath)", 1),
         "Windows: bootstrap 回到 raw 字符串": good.replace("$(ConvertTo-Json $ChartEntry -Compress)", 'r"$ChartEntry"', 1),
     }

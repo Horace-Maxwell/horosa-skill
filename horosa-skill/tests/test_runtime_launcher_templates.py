@@ -125,7 +125,7 @@ def test_windows_launcher_quotes_every_path_argument() -> None:
     py_line = next(line for line in text.splitlines() if line.startswith("$PyProc = Start-Process"))
     java_line = next(line for line in text.splitlines() if line.startswith("$JavaProc = Start-Process"))
     assert "('\"{0}\"' -f $PyBootstrapPath)" in py_line
-    assert "('\"{0}\"' -f $JarPath)" in java_line
+    assert "('\"{0}\"' -f $JarArg)" in java_line
     code = "\n".join(l for l in text.splitlines() if not l.lstrip().startswith("#"))
     assert "-ArgumentList @($" not in code, "a bare path element is split on the first space by Start-Process"
 
@@ -135,7 +135,7 @@ def test_guard_catches_the_unquoted_and_unbound_forms() -> None:
     good = _start_text()
     legacy = (
         good.replace("('\"{0}\"' -f $PyBootstrapPath)", "@($PyBootstrapPath)")
-        .replace("('\"{0}\"' -f $JarPath)", "$JarPath")
+        .replace("('\"{0}\"' -f $JarArg)", "$JarPath")
         .replace('"--server.address=127.0.0.1", ', "")
         .replace("$(ConvertTo-Json $ChartEntry -Compress)", 'r"$ChartEntry"')
     )
@@ -200,3 +200,40 @@ def test_launcher_template_sets_utf8_output_encoding(name: str) -> None:
     assert "[Console]::OutputEncoding = [Text.Encoding]::UTF8" in first_code, first_code
     assert first_code.isascii(), "这一行必须在 BOM 之后第一行且纯 ASCII —— 它自己不能依赖任何编码"
     assert first_code.lstrip().startswith("try {") and "catch" in first_code, "老 PowerShell / 受限主机上失败也不能挡启动"
+
+
+def test_java_gets_a_code_page_safe_relative_jar_argument() -> None:
+    """v0.38.1：JDK 17 的 Windows 启动器用 GetCommandLineA 读命令行 —— 绝对 jar 路径里 ANSI 代码页表示不了的字符变成 `?`。
+
+    真机证据（runtime-matrix，工作目录「horosa 测试 lane」，en-US cp1252 runner）：
+    `Error: Unable to access jarfile D:\\a\\_temp\\horosa ?? lane\\runtime\\current\\runtime\\windows\\bundle\\astrostudyboot.jar`。
+    修法：Java 的工作目录是 $Root，jar 参数给相对 $Root 的纯 ASCII 路径；JVM 内部的 user.dir / 文件 IO 是 Unicode。
+    """
+    import ntpath
+    import re as _re
+
+    text = _start_text()
+    value = _re.search(r"^\$JarArg = '([^']+)'\s*$", text, _re.M).group(1)
+    assert value.isascii() and value.startswith("..") and "$" not in value
+    root = "D:\\a\\_temp\\horosa 测试 lane\\runtime\\current\\Horosa-Web"
+    assert ntpath.normpath(ntpath.join(root, value)) == ntpath.normpath(
+        ntpath.join(root, "..\\runtime\\windows", "bundle\\astrostudyboot.jar")
+    ), "the relative argument must name the same jar the absolute $JarPath check found"
+    # 负向对照：旧的绝对形状经 cp1252 往返就丢字；新的相对参数原样往返
+    absolute = ntpath.normpath(ntpath.join(root, "..\\runtime\\windows\\bundle\\astrostudyboot.jar"))
+    assert "??" in absolute.encode("cp1252", errors="replace").decode("cp1252")
+    assert value.encode("cp1252").decode("cp1252") == value
+    java_line = next(line for line in text.splitlines() if line.startswith("$JavaProc = Start-Process"))
+    assert "-WorkingDirectory $Root" in java_line, "the relative jar argument only works because Java's cwd is $Root"
+    assert "$JarPath" not in java_line
+
+
+def test_guard_catches_an_absolute_or_interpolated_jar_argument() -> None:
+    good = _start_text()
+    absolute = good.replace("('\"{0}\"' -f $JarArg)", "('\"{0}\"' -f $JarPath)", 1)
+    assert any("$JarArg" in e for e in _guard.audit_windows_launcher(absolute))
+    interpolated = good.replace(
+        "$JarArg = '..\\runtime\\windows\\bundle\\astrostudyboot.jar'", '$JarArg = "$RuntimeRoot\\bundle\\astrostudyboot.jar"', 1)
+    assert interpolated != good and _guard.audit_windows_launcher(interpolated)
+    drive = good.replace("$JarArg = '..\\runtime", "$JarArg = 'C:\\runtime", 1)
+    assert drive != good and _guard.audit_windows_launcher(drive)

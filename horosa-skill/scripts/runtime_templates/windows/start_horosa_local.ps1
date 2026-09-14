@@ -26,6 +26,13 @@ New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 if (-not (Test-Path $PythonBin)) { throw "python runtime not found: $PythonBin" }
 if (-not (Test-Path $JavaBin)) { throw "java runtime not found: $JavaBin" }
 if (-not (Test-Path $JarPath)) { throw "astrostudyboot.jar not found: $JarPath" }
+# JDK 17's Windows launcher reads its own command line through the ANSI code page (GetCommandLineA): any character the
+# active code page cannot represent (CJK or Cyrillic on an en-US cp1252 machine) reaches Java as '?', `-jar` fails with
+# "Unable to access jarfile ...\horosa ?? lane\..." and only the chart service comes up (v0.38.1 runtime-matrix lanes, work
+# dir with CJK). Java starts with -WorkingDirectory $Root, so hand it the jar RELATIVE to $Root: that path only walks our
+# own payload layout and is pure ASCII wherever the runtime is installed; user.dir and file IO inside the JVM are Unicode.
+$JarArg = '..\runtime\windows\bundle\astrostudyboot.jar'
+if (-not (Test-Path -LiteralPath (Join-Path $Root $JarArg))) { throw "astrostudyboot.jar not found relative to the launcher: $JarArg" }
 
 # Return the live process for a recorded PID ONLY if it still maps to our own runtime image.
 # Windows recycles PIDs aggressively, so a bare Stop-Process on a stale PID could hit an unrelated
@@ -125,7 +132,7 @@ $PyProc = Start-Process -FilePath $PythonBin -ArgumentList ('"{0}"' -f $PyBootst
 # healthy run; eliminates the whole JDK-17 codepage class of bug.
 # --server.address=127.0.0.1: Spring Boot binds 0.0.0.0 by default, which on Windows means a Firewall
 # prompt on first start and a backend reachable from the LAN; the macOS launcher already pins loopback.
-$JavaProc = Start-Process -FilePath $JavaBin -ArgumentList "-Dfile.encoding=UTF-8", "-Dsun.jnu.encoding=UTF-8", "-jar", ('"{0}"' -f $JarPath), "--server.port=$BackendPort", "--server.address=127.0.0.1", "--astrosrv=http://127.0.0.1:$ChartPort", "--mongodb.ip=127.0.0.1", "--redis.ip=127.0.0.1" -WorkingDirectory $Root -RedirectStandardOutput $JavaOutLog -RedirectStandardError $JavaErrLog -PassThru -WindowStyle Hidden
+$JavaProc = Start-Process -FilePath $JavaBin -ArgumentList "-Dfile.encoding=UTF-8", "-Dsun.jnu.encoding=UTF-8", "-jar", ('"{0}"' -f $JarArg), "--server.port=$BackendPort", "--server.address=127.0.0.1", "--astrosrv=http://127.0.0.1:$ChartPort", "--mongodb.ip=127.0.0.1", "--redis.ip=127.0.0.1" -WorkingDirectory $Root -RedirectStandardOutput $JavaOutLog -RedirectStandardError $JavaErrLog -PassThru -WindowStyle Hidden
 
 $PyProc.Id | Set-Content -Encoding utf8 $PyPidPath
 $JavaProc.Id | Set-Content -Encoding utf8 $JavaPidPath
