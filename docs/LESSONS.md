@@ -215,6 +215,9 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
     「still running 45.0s」红）——Linux 与 Windows 的 CI 都跑。孤儿 `serve` 不是小事：它一直登记为 attached client，`runtime stop` / 升级会拒。
     没做：CI 里设 `MCPORTER_DEBUG_HANG=1`——mcporter 0.9.0 的 debug 分支在 dump 后立刻 `process.exit(0)`，Windows 管道上可能截断 stdout，等于亲手造一个新 flake。
     下一次再超时：预热之后 `output_complete: true` = 退出期挂起，`false` = 调用本身慢。
+    **修后 CI 实测（de7d3c3，run 34905947666）**：windows-latest 上 `npx_warmup_seconds` = **127.8 s**——光是 npx 首次安装 mcporter 就逼近旧的
+    150 s 单次调用预算；预热之后几次工具调用合计约 13 s（smoke 共 141.2 s），随后 `openclaw-check` 的预热 1.1 s（已缓存）。原因 ① 足以单独解释
+    那次超时；② 没有被排除，但已不需要它来解释。所以「分不开」的那一跑，靠的是把阶段拆开后的下一跑来回答。
   · **本机误跑 lane 暴露的隐患**：自查时按计划文件里的 `for g in scripts/verify_*.py` 把全部脚本裸跑了一遍——`verify_runtime_live.py` 于是在本机
     以默认参数真起了一条 lane（临时目录、非默认端口，隔离本身没问题），在 install 下载到 689 MB 时被发现并中止、临时目录清掉；没走到 start 与客户端
     步骤，`~/.claude.json` 与 Codex 配置的 mtime 都早于这次运行。顺着看代码发现真正的坑：Claude Code user scope 步骤**继承真 HOME**——维护机上
