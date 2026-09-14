@@ -233,6 +233,12 @@ jobs:
     # runs only when asked, never on dry runs, and only after assemble succeeded AND the matrix passed (v0.38.1 R5: a
     # skipped matrix no longer publishes — resolve already refuses publish=true without run_matrix=true)
     if: ${{ !cancelled() && inputs.publish && !inputs.dry_run && needs.assemble.result == 'success' && needs.matrix.result == 'success' }}
+    # 🔴 job-level permissions replace the workflow-level set: `gh release edit` needs contents: write, and the two
+    # `gh workflow run` steps after the flip need actions: write (without it GITHUB_TOKEN gets 403 — those steps were added
+    # after v0.38.0's publish and had never executed).
+    permissions:
+      contents: write
+      actions: write
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

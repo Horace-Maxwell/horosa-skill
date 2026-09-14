@@ -176,6 +176,10 @@ def test_publish_requires_the_matrix_and_the_same_bytes() -> None:
     publish_code = "\n".join(line for line in publish.splitlines() if not line.lstrip().startswith("#"))
     assert "releases/tags/" not in publish_code, "the draft's asset digests must come from the list endpoint, not releases/tags/<tag>"
     assert 'select(.tag_name == \\"${TAG}\\")' in publish and "--paginate" in publish
+    # `gh workflow run` needs actions: write on GITHUB_TOKEN; job-level permissions replace the workflow's, so contents: write stays too
+    assert "gh workflow run" in publish_code
+    perms = publish.split("permissions:", 1)[1].split("runs-on:", 1)[0] if "permissions:" in publish else ""
+    assert "actions: write" in perms and "contents: write" in perms, "publish must be allowed to dispatch workflows and edit the release"
     assert publish.index("verify_matrix_digests.py") < publish.index("--draft=false --latest"), "digest gate before the flip"
     assert "gh workflow run runtime-matrix.yml" in publish
     assert publish.index("--draft=false --latest") < publish.index("gh workflow run runtime-matrix.yml"), "release-mode matrix after the flip"
