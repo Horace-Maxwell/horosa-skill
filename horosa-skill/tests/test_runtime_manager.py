@@ -1258,6 +1258,8 @@ def test_install_skips_download_when_version_matches(tmp_path: Path, monkeypatch
 
     # --force 恢复真实安装路径（会再次走 materialize）。
     monkeypatch.undo()
+    # v0.38.1 R3 起换目录前会探端口归属；这里钉成「不可达」让用例不依赖本机 9999/8899 上跑着什么。
+    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="ours", reachable=False))
     forced = manager.install(manifest_url=manifest.resolve().as_uri(), force=True)
     assert forced["ok"] is True and forced["changed"] is True
 
@@ -1902,3 +1904,144 @@ def test_launcher_patch_write_failure_is_a_structured_error(tmp_path: Path, monk
     assert script.read_text(encoding="utf-8") == original
     monkeypatch.undo()
     assert manager._patch_mac_launcher(script) is True, "同一脚本在可写时必须能打上补丁（证明合成脚本满足全部锚点）"
+
+
+# ---------------------------------------------------------------- v0.38.1 R3：升级就地
+
+
+def _archive_of(tmp_path: Path) -> str:
+    return str(tmp_path / "runtime-payload.tar.gz")
+
+
+def test_install_over_a_running_runtime_stops_swaps_and_restarts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """旧 install() 的顺序是 ["swap"]：直接 replace + rmtree —— Windows 上 WinError 32/5，macOS 上旧进程继续从
+    已删路径服务、新载荷永远不启动。新顺序必须是 stop → swap → start。"""
+    manager = _manager_with_runtime(tmp_path)
+    order: list[str] = []
+    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="ours"))
+    monkeypatch.setattr(manager, "stop_local_services", lambda force=False: (order.append("stop"), {"ok": True})[1])
+    real_apply = manager._apply_runtime_overrides
+
+    def apply(manifest):  # noqa: ANN001
+        order.append("swap")
+        return real_apply(manifest)
+
+    monkeypatch.setattr(manager, "_apply_runtime_overrides", apply)
+    monkeypatch.setattr(manager, "start_local_services", lambda wait_seconds=None: (order.append("start"), {"ok": True, "already_running": False})[1])
+    result = manager.install(archive=_archive_of(tmp_path), force=True)
+    assert order == ["stop", "swap", "start"]
+    assert result["ok"] and result["changed"] and result["stopped_before_swap"] is True
+    assert result["restarted"] == {"ok": True, "starting": False, "already_running": False}
+
+
+def test_install_over_a_stopped_runtime_neither_stops_nor_restarts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manager = _manager_with_runtime(tmp_path)
+    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="ours", reachable=False))
+
+    def must_not(*args, **kwargs):  # noqa: ANN002, ANN003
+        raise AssertionError("nothing was running; stop/start must not be called")
+
+    monkeypatch.setattr(manager, "stop_local_services", must_not)
+    monkeypatch.setattr(manager, "start_local_services", must_not)
+    result = manager.install(archive=_archive_of(tmp_path), force=True)
+    assert result["stopped_before_swap"] is False and result["restarted"] is None
+
+
+def test_install_refuses_to_replace_a_runtime_someone_else_is_running(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """可达但不是我们起的（用户的桌面端 / 另一实例 / 只有 app 标记）→ 拒绝；`--force` 不得覆盖。"""
+    manager = _manager_with_runtime(tmp_path)
+    marker = manager.current_dir / "MARKER"
+    marker.write_text("keep", encoding="utf-8")
+    # 让已装清单与归档清单不相等，否则 force=False 会在归属检查之前就以「未变化」返回。
+    manifest_path = manager.current_dir / "runtime-manifest.json"
+    installed = json.loads(manifest_path.read_text(encoding="utf-8"))
+    installed["version"] = "1.0.0"
+    manifest_path.write_text(json.dumps(installed), encoding="utf-8")
+    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="foreign"))
+
+    def must_not_stop(force=False):  # noqa: ANN001
+        raise AssertionError("must never stop a stranger")
+
+    monkeypatch.setattr(manager, "stop_local_services", must_not_stop)
+    for force in (False, True):
+        with pytest.raises(RuntimeInstallError) as excinfo:
+            manager.install(archive=_archive_of(tmp_path), force=force)
+        assert excinfo.value.code == "runtime.install_refused_running_foreign", force
+        assert excinfo.value.details["force_ignored"] is True
+        assert "HOROSA_PORTS=auto" in excinfo.value.details["next_action"]
+    assert marker.read_text(encoding="utf-8") == "keep", "current/ 必须一字不动"
+    assert not (manager.runtime_root / "previous").exists()
+
+
+def test_install_stop_failure_leaves_current_untouched(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manager = _manager_with_runtime(tmp_path)
+    marker = manager.current_dir / "MARKER"
+    marker.write_text("keep", encoding="utf-8")
+    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="ours"))
+    monkeypatch.setattr(manager, "stop_local_services", lambda force=False: {"ok": False, "code": "runtime.stop_timeout", "survivors": []})
+    with pytest.raises(RuntimeInstallError) as excinfo:
+        manager.install(archive=_archive_of(tmp_path), force=True)
+    assert excinfo.value.code == "runtime.install_stop_failed"
+    assert excinfo.value.details["stop"]["code"] == "runtime.stop_timeout"
+    assert marker.exists()
+
+
+def test_previous_dir_cleanup_failure_is_a_warning_not_a_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Windows 常见：句柄未释放时旧目录删不掉。新载荷已就位 → ok + warning，不回滚、不报错。"""
+    manager = _manager_with_runtime(tmp_path)
+    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="ours", reachable=False))
+
+    def locked_rmtree(path: Path) -> None:
+        raise PermissionError(32, "The process cannot access the file because it is being used by another process", str(path))
+
+    monkeypatch.setattr("horosa_skill.runtime.manager._rmtree_force", locked_rmtree)
+    result = manager.install(archive=_archive_of(tmp_path), force=True)
+    assert result["ok"] is True and result["changed"] is True
+    assert [w["code"] for w in result["warnings"]] == ["runtime.previous_cleanup_deferred"]
+    assert (manager.runtime_root / "previous").exists() and manager.current_dir.exists()
+    assert manager.doctor()["previous_dir"] == str(manager.runtime_root / "previous")
+
+
+def test_locked_previous_dir_aborts_before_touching_current(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manager = _manager_with_runtime(tmp_path)
+    stale = manager.runtime_root / "previous" / "stale.txt"
+    stale.parent.mkdir()
+    stale.write_text("old", encoding="utf-8")
+    marker = manager.current_dir / "MARKER"
+    marker.write_text("keep", encoding="utf-8")
+    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="ours", reachable=False))
+    monkeypatch.setattr("horosa_skill.runtime.manager._rmtree_force", lambda path: (_ for _ in ()).throw(PermissionError(5, "Access is denied", str(path))))
+    monkeypatch.setattr("horosa_skill.runtime.manager.port_holders", lambda port: [{"pid": 7, "command": "java"}])
+    with pytest.raises(RuntimeInstallError) as excinfo:
+        manager.install(archive=_archive_of(tmp_path), force=True)
+    assert excinfo.value.code == "runtime.install_previous_locked"
+    assert excinfo.value.details["holders"][0]["holders"][0]["pid"] == 7
+    assert marker.exists() and stale.exists()
+
+
+def test_rmtree_force_clears_read_only_bits(tmp_path: Path) -> None:
+    import stat
+
+    from horosa_skill.runtime.manager import _rmtree_force
+
+    victim = tmp_path / "ro"
+    victim.mkdir()
+    file = victim / "f.txt"
+    file.write_text("x", encoding="utf-8")
+    file.chmod(stat.S_IREAD)
+    _rmtree_force(victim)
+    assert not victim.exists()
+
+
+def test_restart_failure_after_a_successful_swap_is_a_warning(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manager = _manager_with_runtime(tmp_path)
+    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="ours"))
+    monkeypatch.setattr(manager, "stop_local_services", lambda force=False: {"ok": True})
+
+    def failing_start(wait_seconds=None):  # noqa: ANN001
+        raise RuntimeInstallError("port taken", code="runtime.port_conflict_foreign", details={})
+
+    monkeypatch.setattr(manager, "start_local_services", failing_start)
+    result = manager.install(archive=_archive_of(tmp_path), force=True)
+    assert result["ok"] is True and result["restarted"]["ok"] is False and result["restarted"]["code"] == "runtime.port_conflict_foreign"
+    assert [w["code"] for w in result["warnings"]] == ["runtime.restart_after_upgrade_failed"]

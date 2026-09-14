@@ -11,6 +11,7 @@ import re
 import secrets
 import sys
 import shutil
+import stat
 import subprocess
 import tarfile
 import tempfile
@@ -27,7 +28,7 @@ import httpx
 
 from horosa_skill.config import Settings
 from horosa_skill.engine.client import HorosaApiClient, loopback_httpx_client
-from horosa_skill.errors import RuntimeInstallError, RuntimeValidationError, bilingual
+from horosa_skill.errors import HorosaSkillError, RuntimeInstallError, RuntimeValidationError, bilingual
 from horosa_skill.runtime import registry as runtime_registry
 from horosa_skill.runtime.identity import EndpointIdentity, classify_endpoint, trust_unknown_ports
 from horosa_skill.runtime.pidlock import describe_lock, release as release_lock, try_pid_lock
@@ -466,6 +467,36 @@ DOCTOR_ISSUE_CODES = (
 )
 
 
+# v0.38.1 R4：每次成功抓到发布清单（install / upgrade / setup 探针 / doctor --probe-network）都把版本号顺手记在
+# runtime 根下；默认 doctor **只读这份缓存**（保住「零外网请求」不变量），没有缓存就老实报 latest_version: null。
+LATEST_MANIFEST_CACHE_NAME = ".latest-manifest-cache.json"
+
+
+def _version_tuple(text: str | None) -> tuple[int, ...] | None:
+    if not text:
+        return None
+    parts = re.findall(r"\d+", str(text).split("+", 1)[0])
+    return tuple(int(p) for p in parts) if parts else None
+
+
+def version_is_newer(latest: str | None, installed: str | None) -> bool | None:
+    """`latest` 是否比 `installed` 新；任一边解析不出数字段返回 None（不知道 ≠ 最新）。"""
+    a, b = _version_tuple(latest), _version_tuple(installed)
+    if a is None or b is None:
+        return None
+    return a > b
+
+
+def _rmtree_force(path: Path) -> None:
+    """rmtree，顺手清 Windows 只读位（嵌入式 JDK 的部分文件带 R 属性，裸 rmtree 会 PermissionError）。仍失败就抛。"""
+
+    def _onexc(func, failed_path, _exc):  # noqa: ANN001
+        os.chmod(failed_path, stat.S_IWRITE)
+        func(failed_path)
+
+    shutil.rmtree(path, onexc=_onexc)
+
+
 def windows_path_report(runtime_root: Path) -> dict[str, Any] | None:
     """doctor.windows：长路径开关 + 按最深载荷条目估的余量（负数 = install 会以 runtime.install_long_path 拒绝）。"""
     if os.name != "nt":
@@ -656,6 +687,7 @@ class HorosaRuntimeManager:
                 if not manifest_location:
                     manifest_location = self.settings.default_runtime_manifest_url
                 manifest_data = self._read_json_location(manifest_location)
+                self._remember_latest_manifest(manifest_data, manifest_location)
                 platforms = manifest_data.get("platforms", {})
                 asset_meta = platforms.get(platform_name)
                 if not isinstance(asset_meta, dict):
@@ -772,8 +804,7 @@ class HorosaRuntimeManager:
                 )
 
                 previous_dir = self.runtime_root / "previous"
-                if previous_dir.exists():
-                    shutil.rmtree(previous_dir)
+                was_running = False
                 if self.current_dir.exists():
                     if not force:
                         current_manifest = self.load_installed_manifest()
@@ -791,6 +822,13 @@ class HorosaRuntimeManager:
                                 "trace_id": trace["trace_id"],
                                 "group_id": trace["group_id"],
                             }
+                    # 🔴 v0.38.1 R3：换目录之前先停**自己起的**服务。此前直接 replace + rmtree：Windows 上正在跑的
+                    # java.exe / python.exe 锁着文件 → WinError 32/5；macOS 上旧进程继续从已删路径服务、新载荷永远
+                    # 不启动（本机就是活例：已装 0.3.0、doctor 说 ready、从不提示过期）。不是我们起的服务一律拒绝，
+                    # `--force` 也不例外 ——「不杀陌生人」是不变量。
+                    was_running = self._stop_own_services_before_swap(self.load_installed_manifest())
+                self._remove_previous_dir(previous_dir)
+                if self.current_dir.exists():
                     self.current_dir.replace(previous_dir)
 
                 target_parent = self.current_dir.parent
@@ -811,13 +849,32 @@ class HorosaRuntimeManager:
                         except Exception:  # noqa: BLE001 - best-effort restore; surface original error
                             logger.exception("runtime install rollback failed")
                     raise
-                if previous_dir.exists():
-                    shutil.rmtree(previous_dir)
+                cleanup_warning = self._remove_previous_dir_best_effort(previous_dir)
+                if cleanup_warning:
+                    install_warnings.append(cleanup_warning)
 
             # 安装成功后清理断点续传缓存（失败路径保留 .part 供下次续传）。
             downloads_dir = self.runtime_root / "downloads"
             if downloads_dir.exists():
                 shutil.rmtree(downloads_dir, ignore_errors=True)
+
+            # 升级前在跑 → 换完目录用全预算重新拉起；拉不起来不算安装失败（载荷已就位），记 warning 让人看得见。
+            restarted: dict[str, Any] | None = None
+            if was_running:
+                try:
+                    started = self.start_local_services()
+                    restarted = {
+                        "ok": bool(started.get("ok")),
+                        "starting": bool(started.get("starting")),
+                        "already_running": bool(started.get("already_running")),
+                    }
+                except (HorosaSkillError, RuntimeError) as exc:
+                    restarted = {"ok": False, "code": getattr(exc, "code", None), "message": str(exc)}
+                    install_warnings.append({
+                        "code": "runtime.restart_after_upgrade_failed",
+                        "message": f"新 runtime 已装好，但重新启动失败：{getattr(exc, 'code', '')} {exc}",
+                        "next_action": "跑 `horosa-skill runtime start`；仍失败看 `horosa-skill doctor`。",
+                    })
 
             trace["platform"] = platform_name
             trace["manifest_version"] = manifest.get("version")
@@ -831,12 +888,164 @@ class HorosaRuntimeManager:
                 "runtime_root": str(self.runtime_root),
                 "current_dir": str(self.current_dir),
                 "manifest": manifest,
+                "stopped_before_swap": was_running,
+                "restarted": restarted,
                 "asset": asset_meta or {},
                 "release_manifest": manifest_data or {},
                 "next_action": "接下来：`uv run horosa-skill doctor` 确认体检，`uv run horosa-skill serve` 启动 MCP，或把本服务注册到你的 AI 客户端（见 README「接入 AI 客户端」）。",
                 "trace_id": trace["trace_id"],
                 "group_id": trace["group_id"],
             }
+
+    # ---- v0.38.1 R3：升级就地（先停自己的服务，再换目录，再拉起） --------------------------------
+
+    def _stop_own_services_before_swap(self, installed_manifest: dict[str, Any] | None) -> bool:
+        """返回 True = 之前在跑且已由我们停下（换完目录要重新拉起）。
+
+        可达但**不是我们起的**（foreign / unknown / 只有 app 标记）→ 抛 runtime.install_refused_running_foreign；
+        `--force` 不覆盖这条。
+        """
+        endpoints = self.endpoint_identities(installed_manifest)
+        reachable = [item for item in endpoints if item.get("reachable")]
+        if not reachable:
+            return False
+        foreign = [item for item in reachable if not ((item.get("identity") or {}).get("started_by_us"))]
+        if foreign:
+            raise RuntimeInstallError(
+                bilingual(
+                    "端口上正在运行的服务不是本工具启动的，升级/重装拒绝替换一份正在被别人使用的 runtime。",
+                    "The services on the runtime ports were not started by this tool; install/upgrade refuses to "
+                    "replace a runtime someone else is running.",
+                ),
+                code="runtime.install_refused_running_foreign",
+                details={
+                    "conflicts": foreign,
+                    "force_ignored": True,
+                    "next_action": bilingual(
+                        "先关掉那些服务（可能是你自己开着的星阙桌面端），或用 HOROSA_PORTS=auto 换端口后再装；"
+                        "--force 不会覆盖这条。",
+                        "Close those services first (possibly your own Horosa desktop app), or move ports with "
+                        "HOROSA_PORTS=auto and retry; --force does not override this.",
+                    ),
+                },
+            )
+        stopped = self.stop_local_services()
+        if not (stopped.get("ok") or stopped.get("already_stopped")):
+            raise RuntimeInstallError(
+                bilingual("升级前停止本工具自己的服务失败，未动 current/。", "Stopping our own services before the swap failed; current/ was left untouched."),
+                code="runtime.install_stop_failed",
+                details={
+                    "stop": {key: stopped.get(key) for key in ("code", "message", "returncode", "stderr", "survivors", "endpoints")},
+                    "next_action": "看 details.stop；`horosa-skill runtime stop` 成功后重试 install/upgrade。",
+                },
+            )
+        return True
+
+    def _remove_previous_dir(self, previous_dir: Path) -> None:
+        if not previous_dir.exists():
+            return
+        try:
+            _rmtree_force(previous_dir)
+        except OSError as exc:
+            raise RuntimeInstallError(
+                bilingual(
+                    "上一版 runtime 目录（previous/）里还有文件被进程占用，无法清理，安装中止（current/ 未动）。",
+                    "The previous runtime directory (previous/) is still held by a process and cannot be removed; "
+                    "install aborted (current/ untouched).",
+                ),
+                code="runtime.install_previous_locked",
+                details={
+                    "path": str(previous_dir), "error": f"{type(exc).__name__}: {exc}",
+                    "holders": [
+                        {"port": port, "holders": port_holders(port)}
+                        for port in (self.settings.local_backend_port, self.settings.local_chart_port)
+                    ],
+                    "next_action": "关掉 details.holders 里的进程（或重启后）再试；也可手动删除 previous/。",
+                },
+            ) from exc
+
+    def _remove_previous_dir_best_effort(self, previous_dir: Path) -> dict[str, Any] | None:
+        if not previous_dir.exists():
+            return None
+        try:
+            _rmtree_force(previous_dir)
+        except OSError as exc:
+            return {
+                "code": "runtime.previous_cleanup_deferred",
+                "message": f"新 runtime 已就位；旧目录 {previous_dir} 暂时删不掉（{type(exc).__name__}: {exc}）。",
+                "path": str(previous_dir),
+                "next_action": "文件句柄释放后（通常重启后）手动删除 previous/，或下次 install 时自动清理。",
+            }
+        return None
+
+    # ---- v0.38.1 R4：最新清单缓存 + 载荷新鲜度 --------------------------------------------------------
+
+    @property
+    def latest_manifest_cache_path(self) -> Path:
+        return self.runtime_root / LATEST_MANIFEST_CACHE_NAME
+
+    def _remember_latest_manifest(self, manifest_data: dict[str, Any] | None, location: str) -> None:
+        """把刚抓到的发布清单版本记下来（尽力而为，绝不让写缓存失败影响安装）。"""
+        if not isinstance(manifest_data, dict) or not manifest_data.get("version"):
+            return
+        platforms = manifest_data.get("platforms") or {}
+        payload = {
+            "schema": 1,
+            "fetched_at": self._utc_now(),
+            "location": str(location),
+            "version": str(manifest_data.get("version")),
+            "platforms": sorted(k for k in platforms if isinstance(k, str)),
+        }
+        try:
+            self.runtime_root.mkdir(parents=True, exist_ok=True)
+            tmp = self.latest_manifest_cache_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            tmp.replace(self.latest_manifest_cache_path)
+        except OSError:
+            logger.debug("could not write %s", self.latest_manifest_cache_path, exc_info=True)
+
+    def latest_manifest_cache(self) -> dict[str, Any] | None:
+        path = self.latest_manifest_cache_path
+        if not path.is_file():
+            return None
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return data if isinstance(data, dict) and data.get("version") else None
+
+    def payload_freshness(self, manifest: dict[str, Any] | None) -> dict[str, Any]:
+        """已装载荷相对「最后一次看到的发布清单」与「本包期望的导出契约」新不新。
+
+        `outdated` 三态：True / False / None（没有缓存 = 不知道，doctor 提示 `--probe-network`）。
+        导出契约（export_registry_version）低于本包 exports.registry 的常量时无论版本号都算过期 ——
+        本机就是这样：已装 0.3.0 / 契约 6，而包期望 14，此前 doctor 一直说 ready。
+        """
+        from horosa_skill.exports.registry import AI_EXPORT_SETTINGS_VERSION
+
+        cache = self.latest_manifest_cache()
+        installed_version = str(manifest.get("version")) if manifest and manifest.get("version") else None
+        latest_version = str(cache.get("version")) if cache else None
+        outdated = version_is_newer(latest_version, installed_version) if (installed_version and latest_version) else None
+        erv_installed = manifest.get("export_registry_version") if manifest else None
+        try:
+            erv_installed_int = int(erv_installed) if erv_installed is not None else None
+        except (TypeError, ValueError):
+            erv_installed_int = None
+        erv_outdated = erv_installed_int is not None and erv_installed_int < int(AI_EXPORT_SETTINGS_VERSION)
+        return {
+            "installed_version": installed_version,
+            "latest_version": latest_version,
+            "latest_checked_at": cache.get("fetched_at") if cache else None,
+            "latest_source": cache.get("location") if cache else None,
+            "outdated": outdated,
+            "export_registry_version": {
+                "installed": erv_installed_int,
+                "expected": int(AI_EXPORT_SETTINGS_VERSION),
+                "outdated": erv_outdated,
+            },
+            "payload_outdated": bool(outdated) or erv_outdated,
+        }
 
     def uninstall(self, *, purge_data: bool = False, yes: bool = False) -> dict[str, Any]:
         """卸载离线 runtime：默认 dry-run 返回将删清单；yes=True 才执行（先停服务再删）。
@@ -947,6 +1156,8 @@ class HorosaRuntimeManager:
                     issues.append("services:not_running")
 
             trace["issues"] = issues
+            freshness = self.payload_freshness(manifest)
+            previous_dir = self.runtime_root / "previous"
             manifest_version = manifest.get("version") if manifest else None
             runtime_payload_version = manifest.get("runtime_payload_version") if manifest else None
             host_platform = self.settings.runtime_platform or _platform_key()
@@ -971,6 +1182,10 @@ class HorosaRuntimeManager:
                 "current_dir": str(self.current_dir),
                 "manifest_version": manifest_version,
                 "runtime_payload_version": runtime_payload_version,
+                # v0.38.1 R4：只读缓存，不碰网络；`doctor --probe-network` 会刷新它。
+                "latest_version": freshness["latest_version"],
+                "freshness": freshness,
+                "previous_dir": str(previous_dir) if previous_dir.exists() else None,
                 "manifest": manifest,
                 "manifest_issue": manifest_issue,
                 "runtime_state": runtime_state,

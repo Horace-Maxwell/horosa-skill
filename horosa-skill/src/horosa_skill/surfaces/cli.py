@@ -598,7 +598,9 @@ def _listener_scope_warnings(scope: dict[str, Any]) -> list[dict[str, str]]:
 # v0.38.0 B6：doctor 能报出的每个 issue / warning 码都要有人话（user_summary + next_action）。
 # 码集的真值：manager.DOCTOR_ISSUE_CODES（issues）+ _DOCTOR_WARNING_CODES（warnings）；
 # tests/test_doctor_machine_conditions.py::test_every_doctor_code_has_advice 锁步，并扫源码里新增的字面量。
-_DOCTOR_WARNING_CODES = ("listener:not_loopback_only", "platform:emulated_process", "env:internal_port_override")
+_DOCTOR_WARNING_CODES = (
+    "listener:not_loopback_only", "platform:emulated_process", "env:internal_port_override", "runtime:payload_outdated",
+)
 _DOCTOR_ADVICE: dict[str, dict[str, str]] = {
     "runtime.manifest_invalid": {
         "user_summary": "已装 runtime 的 runtime-manifest.json 缺失或损坏，doctor 无法信任这份安装。",
@@ -637,6 +639,11 @@ _DOCTOR_ADVICE: dict[str, dict[str, str]] = {
                         "v0.38.1 起启动器一律按本工具的端口起服务，这两个变量不再有效果。",
         "next_action": "改用 HOROSA_LOCAL_BACKEND_PORT / HOROSA_LOCAL_CHART_PORT（或 HOROSA_PORTS=auto）选端口，并把那两个内部变量从环境里删掉。",
     },
+    "runtime:payload_outdated": {
+        "user_summary": "已装的离线 runtime 比最后一次看到的发布清单旧，或其导出契约（export_registry_version）低于本包期望——"
+                        "能用，但新技法/新导出段可能缺失或对不上。",
+        "next_action": "跑 `horosa-skill upgrade`（wheel / 插件 / MCPB 形态的完整命令见 warnings[].fix）；只想核对最新版本号可 `doctor --probe-network`。",
+    },
     "platform:emulated_process": {
         "user_summary": "当前 Python 进程在仿真下跑（x64 Python 在 ARM 芯片 / Rosetta）——能用，只是慢一点；离线 runtime 按芯片选载荷，不受影响。",
         "next_action": "可选：换成原生架构的 uv / Python 会更快；不换也没问题。",
@@ -663,6 +670,57 @@ def _arch_warnings(report: dict[str, Any]) -> list[dict[str, str]]:
         "detail": f"process={arch.get('process')} native={arch.get('native')}：{advice['user_summary']}",
         "fix": advice["next_action"],
     }]
+
+
+def _payload_outdated_warnings(report: dict[str, Any]) -> list[dict[str, str]]:
+    """R4：已装载荷落后于最后一次看到的发布清单 / 导出契约 → warning（不是 issue：旧载荷仍能用）。"""
+    freshness = report.get("freshness") or {}
+    if not report.get("installed") or not freshness.get("payload_outdated"):
+        return []
+    from horosa_skill.runtime.hints import install_command
+
+    erv = freshness.get("export_registry_version") or {}
+    parts: list[str] = []
+    if freshness.get("outdated"):
+        parts.append(f"installed {freshness.get('installed_version')} < latest {freshness.get('latest_version')}")
+    if erv.get("outdated"):
+        parts.append(f"export_registry_version {erv.get('installed')} < expected {erv.get('expected')}")
+    advice = _advice_for("runtime:payload_outdated")
+    return [{
+        "code": "runtime:payload_outdated",
+        "detail": "; ".join(parts) + "：" + advice["user_summary"],
+        "fix": f"运行 `{install_command()['upgrade']}`（升级会先停自己起的服务、换目录、再拉起）。",
+    }]
+
+
+def _refresh_latest_manifest_cache(manager: HorosaRuntimeManager, probe: dict[str, Any] | None) -> dict[str, Any] | None:
+    """网络探针成功后顺手 GET 一次清单并写入 runtime 根下的版本缓存（尽力而为，永不抛）。"""
+    if not isinstance(probe, dict) or not probe.get("ok"):
+        return None
+    url = str(probe.get("url") or "")
+    if not url:
+        return None
+    try:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url)
+        if parsed.scheme == "file":
+            data = json.loads(manager._file_url_to_path(url).read_text(encoding="utf-8"))
+        elif parsed.scheme in {"http", "https"}:
+            import httpx
+
+            with httpx.Client(timeout=_SETUP_NETWORK_TIMEOUT_SECONDS, follow_redirects=True) as http:
+                response = http.get(url)
+                response.raise_for_status()
+                data = response.json()
+        else:
+            return None
+    except Exception:  # noqa: BLE001 - 缓存刷新失败不该让 doctor / setup 变红
+        return None
+    if not isinstance(data, dict):
+        return None
+    manager._remember_latest_manifest(data, url)
+    return data
 
 
 def _internal_port_env_warnings(settings: Settings) -> list[dict[str, str]]:
@@ -1436,21 +1494,26 @@ def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager,
     report["port_conflicts"] = _doctor_port_holders(report)
     # 监听范围（v0.38.0 B1）：绑 0.0.0.0 的服务不是"坏"，但 Windows 上会弹防火墙、暴露到局域网 —— 进 warnings 而非 issues。
     report["listener_scope"] = _doctor_listener_scope(settings)
+    report["network_probe"] = (
+        _probe_manifest_url(settings.runtime_manifest_url or settings.default_runtime_manifest_url, stop_at_first_success=False)
+        if probe_network else None
+    )
+    # R4：探针成功 → GET 清单刷新版本缓存 → 新鲜度按刷新后的缓存重算（默认路径零外网请求，只读缓存）。
+    if report["network_probe"] and _refresh_latest_manifest_cache(manager, report["network_probe"]):
+        report["freshness"] = manager.payload_freshness(report.get("manifest"))
+        report["latest_version"] = report["freshness"]["latest_version"]
     report["warnings"] = [
         *(report.get("warnings") or []),
         *_listener_scope_warnings(report["listener_scope"]),
         *_arch_warnings(report),
         *_internal_port_env_warnings(settings),
+        *_payload_outdated_warnings(report),
     ]
     # v0.38.0 B6：每个码一条人话（issues 与 warnings 都有），脚本用户与 agent 不用再猜码的意思。
     report["advice"] = [
         {"code": code, **_advice_for(code)}
         for code in [*(str(i) for i in report.get("issues") or []), *(w.get("code") for w in report["warnings"] if isinstance(w, dict))]
     ]
-    report["network_probe"] = (
-        _probe_manifest_url(settings.runtime_manifest_url or settings.default_runtime_manifest_url, stop_at_first_success=False)
-        if probe_network else None
-    )
     report["unexpanded_env_templates"] = _unexpanded()
     report["network_hints"] = _network_hints()
     report["registry_status"] = (manager.load_runtime_state() or {}).get("status")
@@ -1950,6 +2013,20 @@ def selfcheck() -> None:
     try:
         doctor_report = manager.doctor()
         report["steps"]["doctor"] = {"ok": not doctor_report.get("issues"), "issues": doctor_report.get("issues", [])}
+        # 🔴 v0.38.1 R11：工具路径只为「等 runtime 起来」阻塞 5 s（HOROSA_RUNTIME_CALL_WAIT_SECONDS），够覆盖
+        # 「已经起好、探针慢一拍」，不够一次冷启动。`setup` 之后紧跟 `selfcheck` 在每个平台上都会以
+        # runtime.starting 退出 1 —— 用户看到的是「刚装完就坏了」。selfcheck 是活体体检，先用**全预算**把
+        # runtime 拉起来（外部模式 / 已可达时跳过），再做探针。
+        endpoints = doctor_report.get("endpoints") or []
+        all_reachable = bool(endpoints) and all(item.get("reachable") for item in endpoints)
+        if doctor_report.get("installed") and manager.runtime_mode() != "external" and not all_reachable:
+            started = manager.start_local_services()
+            report["steps"]["start"] = {
+                "ok": bool(started.get("ok")),
+                "starting": bool(started.get("starting")),
+                "already_running": bool(started.get("already_running")),
+                "budget_seconds": settings.runtime_start_timeout_seconds,
+            }
         service = HorosaSkillService(settings, runtime_manager=manager)
         result = service.run_tool(
             "nongli_time",

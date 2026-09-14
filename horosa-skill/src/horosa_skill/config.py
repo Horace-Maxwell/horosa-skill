@@ -126,6 +126,28 @@ def _default_home_dir() -> Path:
     return Path.home() / ".horosa-skill"
 
 
+DEFAULT_START_TIMEOUT_SECONDS = 45.0
+# v0.38.1 R11：仿真宿主（Windows on ARM 跑 x64 载荷 / Rosetta 下的 x64 Python）冷启动实测 59.6 s（真机矩阵 ARM lane），
+# 45 s 的出厂预算会让 `selfcheck` / `runtime start` 在健康机器上以 starting 收场。仿真时缺省放大到 120 s；
+# 用户显式设 HOROSA_RUNTIME_START_TIMEOUT_SECONDS 时永远以用户为准。
+EMULATED_START_TIMEOUT_SECONDS = 120.0
+
+
+def _host_runs_emulated() -> bool:
+    try:
+        from horosa_skill.runtime import manager as _manager
+
+        if _manager.arch_report().get("emulated") is True:
+            return True
+        return _manager._platform_key() in _manager.PLATFORM_FALLBACKS
+    except Exception:  # noqa: BLE001 - 探测失败就按原生算，绝不让配置加载失败
+        return False
+
+
+def _default_start_timeout_seconds() -> float:
+    return EMULATED_START_TIMEOUT_SECONDS if _host_runs_emulated() else DEFAULT_START_TIMEOUT_SECONDS
+
+
 def _default_runtime_root() -> Path:
     if os.name == "nt":
         local_appdata = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
@@ -350,6 +372,9 @@ class Settings(BaseModel):
         db_path_env = _env_text("HOROSA_SKILL_DB_PATH")
         output_dir_env = _env_text("HOROSA_SKILL_OUTPUT_DIR")
         trace_dir_env = _env_text("HOROSA_TRACE_DIR")
+        start_timeout_default_source = (
+            "default:emulated_host" if _env_text("HOROSA_RUNTIME_START_TIMEOUT_SECONDS") is None and _host_runs_emulated() else None
+        )
         return cls(
             server_root=server_root_env or f"http://127.0.0.1:{backend_port}",
             chart_server_root=chart_root_env or f"http://127.0.0.1:{chart_port}",
@@ -362,7 +387,7 @@ class Settings(BaseModel):
             runtime_release_repo=_env_text("HOROSA_RUNTIME_RELEASE_REPO", DEFAULT_RELEASE_REPO) or DEFAULT_RELEASE_REPO,
             local_backend_port=backend_port,
             local_chart_port=chart_port,
-            runtime_start_timeout_seconds=_env_float("HOROSA_RUNTIME_START_TIMEOUT_SECONDS", 45.0, minimum=0.1),
+            runtime_start_timeout_seconds=_env_float("HOROSA_RUNTIME_START_TIMEOUT_SECONDS", _default_start_timeout_seconds(), minimum=0.1),
             runtime_download_timeout_seconds=_env_float("HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS", 120.0, minimum=1.0),
             runtime_download_attempts=_env_int("HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS", 3, minimum=1, maximum=20),
             runtime_java_retry_cooldown_seconds=_env_float("HOROSA_RUNTIME_JAVA_RETRY_COOLDOWN_SECONDS", 120.0, minimum=0.0),
@@ -389,7 +414,7 @@ class Settings(BaseModel):
                     else "default"
                 ))
                 for field, env_name in FIELD_ENV_MAP.items()
-            },
+            } | ({"runtime_start_timeout_seconds": start_timeout_default_source} if start_timeout_default_source else {}),
         )
 
     def ensure_dirs(self) -> None:

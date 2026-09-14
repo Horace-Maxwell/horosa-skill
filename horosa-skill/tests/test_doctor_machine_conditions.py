@@ -74,6 +74,7 @@ def test_warning_codes_in_source_are_all_registered() -> None:
         inspect.getsource(cli_module._listener_scope_warnings)
         + inspect.getsource(cli_module._arch_warnings)
         + inspect.getsource(cli_module._internal_port_env_warnings)
+        + inspect.getsource(cli_module._payload_outdated_warnings)
     )
     literal = set(re.findall(r'"code": "([^"]+)"', source))
     assert literal == set(cli_module._DOCTOR_WARNING_CODES)
@@ -419,3 +420,100 @@ def test_doctor_skips_subprocess_probes_once_the_budget_is_gone(tmp_path: Path, 
     assert report["budget"]["seconds"] == 0.0
     assert report["budget"]["skipped"], "listener_bindings 的 netstat/ss 必须被预算挡住并记录"
     ports.clear_run_cache()
+
+
+# ---------------------------------------------------------------- v0.38.1 R4：载荷新鲜度
+
+
+def _installed_manager(tmp_path: Path) -> HorosaRuntimeManager:
+    manager = HorosaRuntimeManager(_settings(tmp_path))
+    manager.install(archive=str(create_runtime_archive(tmp_path)))
+    return manager
+
+
+def test_version_is_newer_is_three_valued() -> None:
+    from horosa_skill.runtime.manager import version_is_newer
+
+    assert version_is_newer("0.38.1", "0.38.0") is True
+    assert version_is_newer("v0.40.0", "0.38.1") is True
+    assert version_is_newer("0.38.0", "0.38.0") is False
+    assert version_is_newer("0.38.0", "0.38.1") is False
+    assert version_is_newer("latest", "0.1") is None and version_is_newer(None, "1") is None
+
+
+def test_doctor_latest_version_comes_only_from_the_cache(tmp_path: Path) -> None:
+    manager = _installed_manager(tmp_path)
+    report = manager.doctor()
+    assert report["latest_version"] is None and report["freshness"]["outdated"] is None
+    assert report["freshness"]["installed_version"] == "1.2.3"
+    manager._remember_latest_manifest({"version": "9.9.9", "platforms": {"darwin-arm64": {}}}, "https://example.invalid/m.json")
+    report = manager.doctor()
+    assert report["latest_version"] == "9.9.9" and report["freshness"]["outdated"] is True and report["freshness"]["payload_outdated"] is True
+    assert report["freshness"]["latest_source"] == "https://example.invalid/m.json"
+    manager._remember_latest_manifest({"version": "1.2.3", "platforms": {}}, "x")
+    assert manager.doctor()["freshness"]["outdated"] is False
+
+
+def test_export_registry_drift_alone_marks_the_payload_outdated(tmp_path: Path) -> None:
+    """本机活例：已装 0.3.0 / 契约 6，本包期望 14，此前 doctor 一直说 ready。"""
+    from horosa_skill.exports.registry import AI_EXPORT_SETTINGS_VERSION
+
+    manager = _installed_manager(tmp_path)
+    manifest = manager.load_installed_manifest()
+    assert manifest["export_registry_version"] == 6, "夹具清单没写它 → 规范化缺省 6（老载荷的形状）"
+    fresh = manager.payload_freshness(manifest)
+    assert fresh["export_registry_version"] == {"installed": 6, "expected": AI_EXPORT_SETTINGS_VERSION, "outdated": True}
+    assert fresh["payload_outdated"] is True and fresh["outdated"] is None
+    current = {**manifest, "export_registry_version": AI_EXPORT_SETTINGS_VERSION}
+    assert manager.payload_freshness(current)["payload_outdated"] is False
+
+
+def test_payload_outdated_is_a_warning_with_a_context_specific_upgrade_command(tmp_path: Path) -> None:
+    manager = _installed_manager(tmp_path)
+    manager._remember_latest_manifest({"version": "9.9.9", "platforms": {}}, "x")
+    report = cli_module._doctor_report(_settings(tmp_path), manager)
+    warning = next(w for w in report["warnings"] if w["code"] == "runtime:payload_outdated")
+    assert "9.9.9" in warning["detail"] and "horosa-skill upgrade" in warning["fix"]
+    assert any(a["code"] == "runtime:payload_outdated" for a in report["advice"])
+    assert "runtime:payload_outdated" not in report["issues"], "过期是 warning，不阻断"
+
+
+def test_probe_network_success_refreshes_the_latest_manifest_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manager = _installed_manager(tmp_path)
+    remote = tmp_path / "remote-manifest.json"
+    remote.write_text(json.dumps({"version": "9.9.9", "platforms": {"darwin-arm64": {"url": "x", "sha256": ""}}}), encoding="utf-8")
+    canned = {"ok": True, "url": remote.resolve().as_uri(), "attempts": [{"url": remote.resolve().as_uri(), "ok": True}]}
+    monkeypatch.setattr(cli_module, "_probe_manifest_url", lambda url, **kwargs: canned)
+    report = cli_module._doctor_report(_settings(tmp_path), manager, probe_network=True)
+    assert report["latest_version"] == "9.9.9"
+    assert manager.latest_manifest_cache()["version"] == "9.9.9"
+    assert "runtime:payload_outdated" in [w["code"] for w in report["warnings"]]
+
+
+def test_default_doctor_never_touches_the_network_for_freshness(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(*args, **kwargs):  # noqa: ANN002, ANN003
+        raise AssertionError("default doctor must not refresh the manifest cache over the network")
+
+    manager = _installed_manager(tmp_path)
+    monkeypatch.setattr(cli_module, "_probe_manifest_url", boom)
+    monkeypatch.setattr(cli_module, "_refresh_latest_manifest_cache", boom)
+    report = cli_module._doctor_report(_settings(tmp_path), manager)
+    assert report["latest_version"] is None and report["network_probe"] is None
+
+
+def test_install_from_a_manifest_remembers_its_version(tmp_path: Path) -> None:
+    from test_runtime_manager import _manifest_file
+
+    archive = create_runtime_archive(tmp_path)
+    manifest = _manifest_file(tmp_path, archive)
+    manager = HorosaRuntimeManager(_settings(tmp_path))
+    manager.install(manifest_url=manifest.resolve().as_uri())
+    cache = manager.latest_manifest_cache()
+    assert cache["version"] == "1.2.3" and cache["location"] == manifest.resolve().as_uri()
+    assert manager.doctor()["freshness"]["outdated"] is False
+
+
+def test_corrupt_manifest_cache_reads_as_absent(tmp_path: Path) -> None:
+    manager = _installed_manager(tmp_path)
+    manager.latest_manifest_cache_path.write_text("{not json", encoding="utf-8")
+    assert manager.latest_manifest_cache() is None and manager.doctor()["latest_version"] is None

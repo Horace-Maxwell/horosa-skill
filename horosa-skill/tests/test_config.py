@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from horosa_skill import config as config_module
 from horosa_skill.config import Settings
 
 
@@ -19,6 +20,8 @@ def test_settings_from_env_uses_safe_fallbacks(monkeypatch, tmp_path: Path) -> N
     monkeypatch.setenv("HOROSA_TRACE_CAPTURE_PAYLOADS", "yes")
     monkeypatch.setenv("HOROSA_TRACE_CAPTURE_AI_ANSWERS", "1")
     monkeypatch.setenv("HOROSA_TRACE_OTLP_ENDPOINT", "https://example.com/trace")
+    # v0.38.1 R11：出厂预算按宿主是否仿真取 45 / 120；这里钉成原生，让断言与跑测试的机器无关。
+    monkeypatch.setattr(config_module, "_host_runs_emulated", lambda: False)
 
     settings = Settings.from_env()
 
@@ -106,3 +109,34 @@ def test_env_registry_covers_all_flags_code_reads() -> None:
     # 排除测试夹具/文档示例专用名（不是运行时读的旗标）
     unregistered = sorted(k for k in seen if k not in known and not k.startswith("HOROSA_TYPO"))
     assert unregistered == [], f"HOROSA_* 旗标未在 ENV_FLAG_REGISTRY 登记：{unregistered}"
+
+
+def test_default_start_timeout_grows_on_emulated_hosts(monkeypatch, tmp_path: Path) -> None:
+    """真机矩阵 ARM lane 实测冷启动 59.6 s；45 s 出厂预算让健康机器的 selfcheck / runtime start 以 starting 收场。"""
+    monkeypatch.setenv("HOROSA_RUNTIME_ROOT", str(tmp_path / "rt"))
+    monkeypatch.delenv("HOROSA_RUNTIME_START_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.setattr(config_module, "_host_runs_emulated", lambda: True)
+    settings = Settings.from_env()
+    assert settings.runtime_start_timeout_seconds == 120.0
+    assert settings.settings_provenance["runtime_start_timeout_seconds"] == "default:emulated_host"
+    monkeypatch.setenv("HOROSA_RUNTIME_START_TIMEOUT_SECONDS", "30")
+    settings = Settings.from_env()
+    assert settings.runtime_start_timeout_seconds == 30.0, "用户显式设置永远优先"
+    assert settings.settings_provenance["runtime_start_timeout_seconds"] == "env:HOROSA_RUNTIME_START_TIMEOUT_SECONDS"
+    monkeypatch.delenv("HOROSA_RUNTIME_START_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.setattr(config_module, "_host_runs_emulated", lambda: False)
+    settings = Settings.from_env()
+    assert settings.runtime_start_timeout_seconds == 45.0
+    assert settings.settings_provenance["runtime_start_timeout_seconds"] == "default"
+
+
+def test_host_runs_emulated_reads_the_arch_report_and_the_fallback_table(monkeypatch) -> None:
+    import horosa_skill.runtime.manager as manager_module
+
+    monkeypatch.setattr(manager_module, "arch_report", lambda: {"process": "x86_64", "native": "arm64", "emulated": True})
+    assert config_module._host_runs_emulated() is True
+    monkeypatch.setattr(manager_module, "arch_report", lambda: {"process": "arm64", "native": "arm64", "emulated": False})
+    monkeypatch.setattr(manager_module, "_platform_key", lambda: "win32-arm64")
+    assert config_module._host_runs_emulated() is True, "Windows on ARM 跑 x64 载荷 = 仿真"
+    monkeypatch.setattr(manager_module, "_platform_key", lambda: "darwin-arm64")
+    assert config_module._host_runs_emulated() is False

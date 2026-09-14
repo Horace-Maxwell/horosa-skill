@@ -49,23 +49,23 @@ def detect_context(env: dict[str, str] | None = None) -> tuple[Context, str | No
 
 
 def install_command(env: dict[str, str] | None = None) -> dict[str, Any]:
-    """`{"context", "install", "doctor", "cwd"}`：install/doctor 是完整可复制的命令行字符串。"""
+    """`{"context", "install", "upgrade", "doctor", "cwd"}`：三条都是完整可复制的命令行字符串。"""
     context, root = detect_context(env)
     if context == "plugin" and root:
         directory = str(Path(root) / "horosa-skill")
         prefix = f"uv run --directory {_quote(directory)} horosa-skill"
-        return {"context": context, "cwd": directory, "install": f"{prefix} install", "doctor": f"{prefix} doctor"}
+        return {"context": context, "cwd": directory, "install": f"{prefix} install", "upgrade": f"{prefix} upgrade", "doctor": f"{prefix} doctor"}
     if context == "mcpb" and root:
         prefix = f"uv run --directory {_quote(root)} horosa-skill"
-        return {"context": context, "cwd": root, "install": f"{prefix} install", "doctor": f"{prefix} doctor"}
+        return {"context": context, "cwd": root, "install": f"{prefix} install", "upgrade": f"{prefix} upgrade", "doctor": f"{prefix} doctor"}
     if context == "checkout" and root:
-        return {"context": context, "cwd": root, "install": "uv run horosa-skill install", "doctor": "uv run horosa-skill doctor"}
+        return {"context": context, "cwd": root, "install": "uv run horosa-skill install", "upgrade": "uv run horosa-skill upgrade", "doctor": "uv run horosa-skill doctor"}
     from horosa_skill.client_tools import zero_install_wheel_url
     from horosa_skill.runtime.mirrors import preferred_mirror_url
 
     wheel = preferred_mirror_url(zero_install_wheel_url())
     prefix = f"uvx --from {_quote(wheel)} horosa-skill"
-    return {"context": "wheel", "cwd": None, "install": f"{prefix} install", "doctor": f"{prefix} doctor"}
+    return {"context": "wheel", "cwd": None, "install": f"{prefix} install", "upgrade": f"{prefix} upgrade", "doctor": f"{prefix} doctor"}
 
 
 def install_commands_for_error() -> dict[str, Any]:

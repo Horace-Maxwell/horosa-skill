@@ -287,6 +287,24 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "none_retry_cleanup_later",
     },
+    "runtime.install_stop_failed": {
+        "kind": "runtime",
+        "prompt_to_user": bilingual(
+            "升级前停止本工具自己的服务失败，安装未动 current/。请看 details.stop，`horosa-skill runtime stop` 成功后重试。",
+            "Stopping our own services before the upgrade failed; current/ was left untouched. See details.stop, "
+            "get `horosa-skill runtime stop` to succeed, then retry.",
+        ),
+        "next_action": "stop_then_retry_install",
+    },
+    "runtime.restart_after_upgrade_failed": {
+        "kind": "runtime",
+        "prompt_to_user": bilingual(
+            "新 runtime 已装好，但重新启动失败。请跑 `horosa-skill runtime start`，仍失败看 `horosa-skill doctor`。",
+            "The new runtime is installed but did not restart. Run `horosa-skill runtime start`; if it still fails, "
+            "see `horosa-skill doctor`.",
+        ),
+        "next_action": "runtime_start_then_doctor",
+    },
     "runtime.platform_unsupported": {
         "kind": "runtime",
         "prompt_to_user": bilingual(

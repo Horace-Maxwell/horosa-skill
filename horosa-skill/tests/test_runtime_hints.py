@@ -119,3 +119,12 @@ def test_plugin_and_mcpb_manifests_declare_their_context() -> None:
     mcpb = json.loads((PKG_ROOT / "manifest.json").read_text(encoding="utf-8"))
     env = mcpb["server"]["mcp_config"]["env"]
     assert env["HOROSA_INSTALL_CONTEXT"] == "mcpb" and env["HOROSA_PLUGIN_ROOT"] == "${__dirname}"
+
+
+def test_every_context_offers_a_matching_upgrade_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    for env in ({}, {"HOROSA_INSTALL_CONTEXT": "plugin", "HOROSA_PLUGIN_ROOT": "/p"}, {"HOROSA_INSTALL_CONTEXT": "mcpb", "HOROSA_PLUGIN_ROOT": "/m"}):
+        hint = hints.install_command(env)
+        assert hint["upgrade"].endswith(" horosa-skill upgrade") or hint["upgrade"] == "uv run horosa-skill upgrade"
+        assert hint["upgrade"].rsplit(" ", 1)[0] == hint["install"].rsplit(" ", 1)[0], "同一前缀，只换子命令"
+    monkeypatch.setattr(hints, "_package_is_checkout", lambda: False)
+    assert hints.install_command({})["upgrade"].startswith('uvx --from "https://github.com/')
