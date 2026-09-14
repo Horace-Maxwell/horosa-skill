@@ -17,6 +17,7 @@ publish workflow (`uv build --wheel`) and checks the entries the runtime code re
 """
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 import tempfile
@@ -36,6 +37,29 @@ REQUIRED_ENTRIES = (
     "horosa_skill/surfaces/mcp_schema.py",
 )
 MIN_HELPDOC_PACKS = 18
+# v0.38.1 A16：知识包的 `source` 字段曾带着维护者机器的绝对路径（`/Users/<name>/Desktop/…`）进了 wheel ——
+# 泄露本机目录结构，也让「上游来源」在别的机器上不可解析。任何看起来像**真实用户**主目录的绝对路径都不许进 wheel；
+# 文档示例里的占位用户名（`/Users/<you>/`、`/Users/x/`、`C:\\Users\\张三\\`）放行。
+_HOME_PATH = re.compile(r"(?:/Users/|/home/|[A-Za-z]:\\{1,2}Users\\{1,2})(?P<user>[^/\\\s\"'`<>$*{}]+)[/\\]")
+_PLACEHOLDER_USERS = frozenset({"x", "you", "me", "user", "username", "name", "张三", "runner", "someone"})
+_TEXT_SUFFIXES = (".py", ".json", ".md", ".txt", ".toml", ".ps1", ".mjs", ".js", ".yaml", ".yml", ".csv", ".cfg", ".ini")
+
+
+def host_path_hits(entries: dict[str, bytes]) -> list[str]:
+    """`{entry_name: bytes}` → 含真实主目录路径的条目说明；纯函数，tests/test_wheel_host_paths.py 做负向对照。"""
+    hits: list[str] = []
+    for name, data in entries.items():
+        if not name.endswith(_TEXT_SUFFIXES):
+            continue
+        text = data.decode("utf-8", errors="replace")
+        for match in _HOME_PATH.finditer(text):
+            user = match.group("user")
+            if user in _PLACEHOLDER_USERS or user.startswith(("<", "$", "{")):
+                continue
+            line_no = text.count("\n", 0, match.start()) + 1
+            hits.append(f"{name}:{line_no} carries a host home path `{match.group(0)}…`")
+            break
+    return hits
 
 
 def main() -> int:
@@ -56,6 +80,7 @@ def main() -> int:
             entry_points = next((n for n in names if n.endswith("entry_points.txt")), None)
             entry_text = archive.read(entry_points).decode("utf-8") if entry_points else ""
             launcher_heads = {n: archive.read(n)[:3] for n in names if n.endswith(".ps1")}
+            text_entries = {n: archive.read(n) for n in names if n.endswith(_TEXT_SUFFIXES)}
         errors = [f"missing {entry}" for entry in REQUIRED_ENTRIES if entry not in names]
         # The .ps1 overrides must keep their UTF-8 BOM *inside the wheel*: Windows PowerShell 5.1
         # decodes a BOM-less file as ANSI, and one non-ASCII character then unparses the whole
@@ -69,6 +94,7 @@ def main() -> int:
             errors.append(f"only {len(packs)} helpdoc packs in the wheel (expected ≥ {MIN_HELPDOC_PACKS})")
         if "horosa-skill = horosa_skill.surfaces.cli:app" not in entry_text:
             errors.append("console script `horosa-skill` entry point missing from entry_points.txt")
+        errors.extend(host_path_hits(text_entries))
         if any("horosa-core-js" in n for n in names):
             errors.append("horosa-core-js must not be vendored into the wheel (it ships in the runtime payload)")
         if errors:

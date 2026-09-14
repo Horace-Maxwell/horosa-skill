@@ -83,6 +83,10 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     "HOROSA_RUNTIME_RELEASE_BASE_URL": "internal",
     "HOROSA_SKILL_PYPROJECT": "internal",
     "HOROSA_LAUNCH_NONCE": "internal",
+    # v0.38.1 C7：宿主（Claude Code 插件 / MCPB）告诉我们「你是从哪个目录被启动的」，
+    # runtime.not_installed 的修复命令据此写成 `uv run --directory <该目录> …`（用户能直接复制）。
+    "HOROSA_INSTALL_CONTEXT": "stable",
+    "HOROSA_PLUGIN_ROOT": "stable",
 }
 # removed 档：曾存在于历史版本、现已删除的旗标 → 接受并忽略 + 指路。删代码不删兼容。
 REMOVED_ENV_FLAGS: dict[str, str] = {}
@@ -131,7 +135,10 @@ def _default_runtime_root() -> Path:
 
 
 # 未展开的模板占位符：`${user_config.runtimeRoot}` / `${CLAUDE_PLUGIN_ROOT}` 这类。
-_UNEXPANDED_TEMPLATE = re.compile(r"^\$\{[^}]*\}$")
+# 🔴 不锚定：`${workspaceFolder}/horosa`、`${env:HOME}/.horosa` 这种**部分**模板（VS Code / Cline / Zed
+# 用户最常写的形状）此前会漏过 `^…$` 的判定，一路走到 ensure_dirs 在 CWD 里 mkdir 出一个名叫
+# `${workspaceFolder}` 的真目录。宿主没替换占位符 = 整个值都不能当路径用。
+_UNEXPANDED_TEMPLATE = re.compile(r"\$\{[^}]*\}")
 _warned_unexpanded: set[str] = set()
 # 本进程内见过的未展开占位符：{env 名: 字面量}。doctor 会把它读出来当面告诉用户
 # —— 这条通知发生在**任何工具调用之前**（Settings.from_env），没有 envelope 可挂，
@@ -151,7 +158,7 @@ def _env_text(name: str, default: str | None = None) -> str | None:
     stripped = value.strip()
     if not stripped:
         return default
-    if _UNEXPANDED_TEMPLATE.match(stripped):
+    if _UNEXPANDED_TEMPLATE.search(stripped):
         # 🔴 宿主没展开占位符时，值是**字面量**而不是路径。照单全收的后果实测过两次：
         # `HOROSA_RUNTIME_ROOT='${user_config.runtimeRoot}'` → 每个技法工具都回
         # `runtime.not_installed`，而 `Settings.ensure_dirs()` 还会在 CWD 里 mkdir 出一个
@@ -386,6 +393,22 @@ class Settings(BaseModel):
         )
 
     def ensure_dirs(self) -> None:
+        # 二次防御：任何一段路径里还留着 `${…}` 就拒绝 mkdir —— 宁可报错，也不在用户的工作目录里
+        # 造出字面量目录（v0.37.0 清理过三处 `${env:HOME…}`，同族）。
+        for label, path in (("data_dir", self.data_dir), ("runtime_root", self.runtime_root),
+                            ("output_dir", self.output_dir), ("trace_dir", self.trace_dir)):
+            if path is not None and "${" in str(path):
+                from horosa_skill.errors import ToolValidationError, bilingual
+
+                raise ToolValidationError(
+                    bilingual(
+                        f"{label} 里还留着未展开的占位符：{path}",
+                        f"{label} still contains an unexpanded placeholder: {path}",
+                    ),
+                    code="config.unexpanded_template",
+                    details={"field": label, "value": str(path),
+                             "next_action": "在客户端的扩展设置里填上真实路径，或删掉该环境变量用默认路径。"},
+                )
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.runtime_root.mkdir(parents=True, exist_ok=True)
         assert self.db_path is not None

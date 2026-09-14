@@ -9,7 +9,10 @@ import os
 import re
 import socket
 import subprocess
+import time
 from typing import Any
+
+from horosa_skill.runtime import budget
 
 # macOS `netstat -anv -p tcp` 的 process:pid 列，例如 `python3.12:6123`、`java:88104`。
 # 本地地址列用点分端口（`*.8899` / `127.0.0.1.8899` / `::1.8899`），不会误命中这条正则。
@@ -23,15 +26,38 @@ _WIN_LISTEN = re.compile(r"^\s*TCP\s+(?P<local>\S+)\s+\S+\s+LISTENING\s+(?P<pid>
 # 15 s，不是 5 s：托管 macOS runner 在全量 pytest 的负载下 `netstat -anv` 曾超过 5 s → 返回空串 → `listener_pids` 空 →
 # 「端口上明明有监听进程，却一个持有者都查不出来」（v0.38.0 A5 矩阵首跑）；同一教训 v0.37.0 在 Windows 的
 # `process_command`（PowerShell 冷启动 > 4 s）上踩过一次。
+# 🔴 同一条查询命令在几秒内的重复调用直接吃缓存。一次 doctor 会为两个端口 × 两个地址族问四次
+# `netstat -ano`（Windows 上每次 2–15 s），加上 `runtime status` / `endpoint_identities` 各自再问 ——
+# 最坏路径把 doctor 拖到分钟级，而客户端 60 s 就掐工具。监听表在 2 s 内不会变到影响判定。
+RUN_CACHE_TTL_SECONDS = 2.0
+_RUN_CACHE: dict[tuple[str, ...], tuple[float, str]] = {}
+
+
+def clear_run_cache() -> None:
+    _RUN_CACHE.clear()
+
+
 def _run(cmd: list[str], timeout: float = 15.0) -> str:
+    key = tuple(cmd)
+    now = time.monotonic()
+    cached = _RUN_CACHE.get(key)
+    if cached is not None and RUN_CACHE_TTL_SECONDS > 0 and now - cached[0] < RUN_CACHE_TTL_SECONDS:
+        return cached[1]
+    # 外层有诊断预算（doctor / runtime status）时把自己的超时压进剩余预算；预算耗尽就不起进程。
+    clamped = budget.clamp(timeout, " ".join(cmd[:2]))
+    if clamped is None:
+        return ""
     try:
         out = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout, check=False,
+            cmd, capture_output=True, text=True, timeout=clamped, check=False,
             encoding="utf-8", errors="replace",
         )
     except (OSError, subprocess.SubprocessError):
         return ""
-    return out.stdout or ""
+    text = out.stdout or ""
+    if text:
+        _RUN_CACHE[key] = (now, text)
+    return text
 
 
 def listener_pids(port: int) -> list[int]:
@@ -98,7 +124,10 @@ def _listener_pids_linux(port: int) -> list[int]:
 
 def _listener_pids_windows(port: int) -> list[int]:
     pids: list[int] = []
-    for line in _run(["netstat", "-ano", "-p", "TCP"]).splitlines():
+    # 🔴 不带 `-p TCP`：那样只列 IPv4，双栈的 Java 监听（`[::]:9999`）会被漏掉 → 判成「没人监听」。
+    # 裸 `netstat -ano` 一次给全（v4/v6 行的协议列都印作 TCP，靠 LISTENING 状态筛），且与
+    # `_bindings_windows` 共用同一条缓存命令 —— 一次 doctor 只跑一次 netstat。
+    for line in _run(["netstat", "-ano"]).splitlines():
         m = _WIN_LISTEN.match(line)
         if not m:
             continue
@@ -139,16 +168,15 @@ def loopback_only(bindings: list[dict[str, Any]]) -> bool | None:
 
 def _bindings_windows(port: int) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
-    # `-p TCP` lists IPv4 only; a dual-stack Java listener shows up under TCPv6 as [::]:port.
-    for proto in ("TCP", "TCPv6"):
-        for line in _run(["netstat", "-ano", "-p", proto]).splitlines():
-            m = _WIN_LISTEN.match(line)
-            if not m:
-                continue
-            host, _, local_port = m.group("local").rpartition(":")
-            if local_port != str(port):
-                continue
-            out.append({"local_address": host.strip("[]"), "pid": int(m.group("pid"))})
+    # 裸 `netstat -ano` 一次给全 IPv4 + IPv6（此前按 TCP / TCPv6 各跑一次 = 每端口两次子进程）。
+    for line in _run(["netstat", "-ano"]).splitlines():
+        m = _WIN_LISTEN.match(line)
+        if not m:
+            continue
+        host, _, local_port = m.group("local").rpartition(":")
+        if local_port != str(port):
+            continue
+        out.append({"local_address": host.strip("[]"), "pid": int(m.group("pid"))})
     return out
 
 
@@ -187,15 +215,38 @@ def _bindings_linux(port: int) -> list[dict[str, Any]]:
     return out
 
 
-def port_bindable(port: int, host: str = "127.0.0.1") -> bool:
-    """这个端口现在还能绑吗。**不设 SO_REUSEADDR** —— 那会让已被监听的端口在某些平台上也报可绑。"""
+def _bindable_on(host: str, port: int) -> bool | None:
+    """True 可绑 / False 被占 / None 本机没有这个地址族（不算证据）。**不设 SO_REUSEADDR**。"""
     family = socket.AF_INET6 if ":" in host else socket.AF_INET
     try:
-        with socket.socket(family, socket.SOCK_STREAM) as sock:
+        sock = socket.socket(family, socket.SOCK_STREAM)
+    except OSError:
+        return None  # 没有 IPv6 栈
+    try:
+        with sock:
             sock.bind((host, port))
         return True
-    except OSError:
+    except OSError as exc:
+        # EAFNOSUPPORT / EADDRNOTAVAIL：地址族不可用，不是「被占」
+        if getattr(exc, "errno", None) in {97, 99, 47, 49, 10047, 10049}:
+            return None
         return False
+
+
+def port_bindable(port: int, host: str = "127.0.0.1") -> bool:
+    """这个端口现在还能绑吗 —— **两个地址族都得空着**。
+
+    Windows 上 IPv6 socket 默认 `IPV6_V6ONLY`：一个只听 `[::]:9999` 的服务不占 `127.0.0.1:9999`，
+    只探 v4 会把它当空闲端口发给 `HOROSA_PORTS=auto` / `find_free_port`，随后启动器真去绑就撞车。
+    传回环地址时同时探 `::1`；没有 v6 栈的机器只按 v4 算。显式传别的 host 时只探那个 host。
+    """
+    verdicts = [_bindable_on(host, port)]
+    if host in {"127.0.0.1", "localhost"}:
+        verdicts.append(_bindable_on("::1", port))
+    elif host in {"::1"}:
+        verdicts.append(_bindable_on("127.0.0.1", port))
+    known = [v for v in verdicts if v is not None]
+    return bool(known) and all(known)
 
 
 def find_free_port(preferred: int, *, span: int = 100, host: str = "127.0.0.1") -> int:

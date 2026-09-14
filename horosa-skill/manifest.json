@@ -37,7 +37,9 @@
       ],
       "env": {
         "HOROSA_RUNTIME_ROOT": "${user_config.runtime_root}",
-        "HOROSA_SKILL_DATA_DIR": "${user_config.data_dir}"
+        "HOROSA_SKILL_DATA_DIR": "${user_config.data_dir}",
+        "HOROSA_INSTALL_CONTEXT": "mcpb",
+        "HOROSA_PLUGIN_ROOT": "${__dirname}"
       }
     }
   },

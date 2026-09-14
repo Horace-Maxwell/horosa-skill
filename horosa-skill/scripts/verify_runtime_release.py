@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import tarfile
 import zipfile
 from pathlib import Path
@@ -162,6 +163,51 @@ def _read_archive_text(path: Path, entry_name: str) -> str:
         with zipfile.ZipFile(path) as archive:
             return archive.read(entry_name).decode("utf-8")
     raise SystemExit(f"unsupported archive type: {path}")
+
+
+# v0.38.1 A3：doctor 的 Windows 长路径余量按 manager.PAYLOAD_LONGEST_ENTRY_CHARS 估算。该常量写 200 时
+# 比 v0.38.0 实测的 179 高出 21 —— 默认根 `C:\\Users\\<user>\\AppData\\Local\\Horosa\\runtime` 被误报「装不下」。
+# 这里双向锁：① 每个归档的最长条目 ≤ 常量（低估 = install 会撞 MAX_PATH 而 doctor 没预警）；
+# ② 常量 − darwin 归档实测 ≤ MAX_OVERESTIMATE_CHARS（高估 = doctor 把装得下的机器报成 ok:false）。
+# 常量按 darwin 载荷定义（Windows 树约短 7），所以 ② 只在给了 darwin 归档时执行；Windows 只做 ①。
+MAX_OVERESTIMATE_CHARS = 8
+_MANAGER_PY = Path(__file__).resolve().parents[1] / "src" / "horosa_skill" / "runtime" / "manager.py"
+
+
+def payload_longest_entry_limit(manager_py: Path = _MANAGER_PY) -> int:
+    """从源码正则读 PAYLOAD_LONGEST_ENTRY_CHARS（脚本可能在没装包的 python3 下跑：publish_release.sh / build_runtime_release.sh）。"""
+    match = re.search(r"^PAYLOAD_LONGEST_ENTRY_CHARS\s*=\s*(\d+)", manager_py.read_text(encoding="utf-8"), re.M)
+    if not match:
+        raise SystemExit(f"PAYLOAD_LONGEST_ENTRY_CHARS not found in {manager_py}")
+    return int(match.group(1))
+
+
+def longest_entry(entries: set[str]) -> tuple[int, str]:
+    if not entries:
+        return 0, ""
+    name = max(entries, key=len)
+    return len(name), name
+
+
+def check_entry_lengths(
+    measured: dict[str, tuple[int, str]], limit: int, *, max_overestimate: int = MAX_OVERESTIMATE_CHARS
+) -> list[str]:
+    """`measured` = {platform_key: (longest_len, entry)}；返回违规说明（空 = 通过）。纯函数，便于负向对照。"""
+    problems: list[str] = []
+    for platform_key, (length, name) in measured.items():
+        if length > limit:
+            problems.append(
+                f"{platform_key}: longest entry is {length} chars > PAYLOAD_LONGEST_ENTRY_CHARS={limit} "
+                f"(doctor would under-estimate the Windows path headroom): {name}"
+            )
+    darwin = measured.get("darwin-arm64")
+    if darwin is not None and limit - darwin[0] > max_overestimate:
+        problems.append(
+            f"darwin-arm64: PAYLOAD_LONGEST_ENTRY_CHARS={limit} over-estimates the measured {darwin[0]} by "
+            f"{limit - darwin[0]} chars (> {max_overestimate}); lower the constant in runtime/manager.py "
+            "so doctor stops reporting installable roots as too long"
+        )
+    return problems
 
 
 def _assert_entries(path: Path, platform_key: str) -> None:
@@ -347,10 +393,12 @@ def main() -> None:
         raise SystemExit(f"manifest version is missing: {manifest_path}")
 
     verified_archives: dict[str, str] = {}
+    measured_lengths: dict[str, tuple[int, str]] = {}
 
     if args.darwin_archive:
         darwin_archive = Path(args.darwin_archive).expanduser().resolve()
         _assert_entries(darwin_archive, "darwin-arm64")
+        measured_lengths["darwin-arm64"] = longest_entry(_archive_entries(darwin_archive))
         _assert_payload_manifest(darwin_archive, "darwin-arm64", expected_version)
         _assert_native_arch(darwin_archive, "darwin-arm64")
         _assert_manifest_size(manifest, "darwin-arm64", darwin_archive)
@@ -359,6 +407,7 @@ def main() -> None:
     if args.windows_archive:
         windows_archive = Path(args.windows_archive).expanduser().resolve()
         _assert_entries(windows_archive, "win32-x64")
+        measured_lengths["win32-x64"] = longest_entry(_archive_entries(windows_archive))
         _assert_payload_manifest(windows_archive, "win32-x64", expected_version)
         _assert_windows_launchers_are_bom_encoded(windows_archive)
         _assert_native_arch(windows_archive, "win32-x64")
@@ -368,12 +417,18 @@ def main() -> None:
     if args.linux_archive:
         linux_archive = Path(args.linux_archive).expanduser().resolve()
         _assert_entries(linux_archive, "linux-x64")
+        measured_lengths["linux-x64"] = longest_entry(_archive_entries(linux_archive))
         _assert_payload_manifest(linux_archive, "linux-x64", expected_version)
         _assert_manifest_size(manifest, "linux-x64", linux_archive)
         verified_archives["linux"] = str(linux_archive)
 
     if not verified_archives:
         parser.error("At least one archive (darwin, windows, or linux) must be provided.")
+
+    length_limit = payload_longest_entry_limit()
+    length_problems = check_entry_lengths(measured_lengths, length_limit)
+    if length_problems:
+        raise SystemExit("payload entry length gate failed:\n- " + "\n- ".join(length_problems))
 
     print(
         json.dumps(
@@ -382,6 +437,10 @@ def main() -> None:
                 "version": manifest.get("version"),
                 "verified_archives": verified_archives,
                 "manifest": str(manifest_path),
+                "payload_longest_entry_chars": {
+                    "limit": length_limit,
+                    "measured": {k: {"chars": v[0], "entry": v[1]} for k, v in measured_lengths.items()},
+                },
             },
             ensure_ascii=False,
             indent=2,

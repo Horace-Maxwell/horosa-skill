@@ -57,7 +57,7 @@ def _darwin_translated() -> bool:
     try:
         completed = subprocess.run(
             ["/usr/sbin/sysctl", "-n", "sysctl.proc_translated"],
-            capture_output=True, text=True, timeout=5, check=False,
+            capture_output=True, text=True, timeout=5, check=False, encoding="utf-8", errors="replace",
         )
     except Exception:  # noqa: BLE001 - detection must never break platform lookup
         return False
@@ -447,8 +447,12 @@ _INSTALL_TEMP_PREFIX = ".hi-"
 _INSTALL_EXTRACT_DIRNAME = "x"
 # `<root>/.hi-XXXXXXXX/x/` — tempfile 随机后缀 8 个字符
 _INSTALL_TEMP_OVERHEAD = len(_INSTALL_TEMP_PREFIX) + 8 + 1 + len(_INSTALL_EXTRACT_DIRNAME) + 1
-# 载荷里最深的条目（含 `runtime-payload/` 前缀；嵌入式 JDK 的 module 目录 + Horosa-Web 多层 vendor 树）实测接近 200。
-PAYLOAD_LONGEST_ENTRY_CHARS = 200
+# 载荷里最深的条目（含 `runtime-payload/` 前缀）。v0.38.0 darwin 载荷**实测** 179
+# （…/site-packages/streamlit/.agents/skills/developing-with-streamlit/assets/templates/apps/dashboard-seattle-weather/streamlit_app.py），
+# Windows 树还短约 7。此前写 200：默认根 `C:\Users\<user>\AppData\Local\Horosa\runtime`（38 + 用户名长度）
+# 在用户名 ≥ 6 字符时被 doctor 报成 headroom -1 / ok:false，让人去搬一个其实装得下的 runtime。
+# scripts/verify_runtime_release.py 双向锁它：真实最长条目 ≤ 本值，且本值 − 实测 ≤ 8（不许再高估）。
+PAYLOAD_LONGEST_ENTRY_CHARS = 180
 WINDOWS_PATH_LIMIT = 259
 # doctor 能报出的 issue 码（`missing:*` 是前缀族）；cli._DOCTOR_ADVICE 必须逐个给出人话（锁步测试）。
 DOCTOR_ISSUE_CODES = (
@@ -491,24 +495,37 @@ def _platform_dead_end_advice(platform_name: str) -> dict[str, Any]:
     离线载荷确实只发 darwin-arm64 与 win32-x64 —— 但**网关模式**在任何平台上都可用：Python 包
     本身跨平台，把 HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT 指向一台装了 runtime 的机器即可。
     """
-    gateway = (
+    gateway = bilingual(
         "网关模式：在一台受支持的机器（darwin-arm64 / win32-x64）上跑 runtime，本机只装 Python 包，"
-        "设 HOROSA_SERVER_ROOT 与 HOROSA_CHART_SERVER_ROOT 指过去即可（外部模式，本机不启动任何服务）。"
+        "设 HOROSA_SERVER_ROOT 与 HOROSA_CHART_SERVER_ROOT 指过去即可（外部模式，本机不启动任何服务）。",
+        "Gateway mode: run the runtime on a supported machine (darwin-arm64 / win32-x64), install only the "
+        "Python package here, and point HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT at it "
+        "(external mode: nothing is started locally).",
     )
     if platform_name.startswith("darwin-x64"):
-        reason = (
+        reason = bilingual(
             "Intel Mac 没有原生离线载荷（本轮明确不做 x86_64 载荷）；arm64 那份**不能**在 Rosetta 下跑"
-            "（内含的 JDK 与 Python 是原生 arm64 二进制）。"
+            "（内含的 JDK 与 Python 是原生 arm64 二进制）。",
+            "Intel Macs have no native offline payload (x86_64 is deliberately not built); the arm64 payload "
+            "cannot run under Rosetta (its embedded JDK and Python are native arm64 binaries).",
         )
     elif platform_name.startswith("linux"):
-        reason = "Linux 没有发布载荷（实验性）；可自建载荷，或走网关模式。"
+        reason = bilingual(
+            "Linux 没有发布载荷（实验性）；可自建载荷，或走网关模式。",
+            "No Linux payload is published (experimental); build your own payload or use gateway mode.",
+        )
     elif platform_name.startswith("win32-arm64"):
-        reason = (
+        reason = bilingual(
             "Windows on ARM 会自动安装 x64 载荷走 Windows 11 的 x64 仿真——走到这里说明清单里连 win32-x64 "
-            "都没有（发布不完整），请稍后重试或换一个清单 URL。"
+            "都没有（发布不完整），请稍后重试或换一个清单 URL。",
+            "Windows on ARM normally installs the x64 payload under Windows 11 x64 emulation; reaching this "
+            "error means the manifest lacks even win32-x64 (incomplete release) — retry later or use another manifest URL.",
         )
     else:
-        reason = f"平台 `{platform_name}` 没有发布载荷。"
+        reason = bilingual(
+            f"平台 `{platform_name}` 没有发布载荷。",
+            f"No payload is published for platform `{platform_name}`.",
+        )
     return {
         "reason": reason,
         "next_action": gateway,
@@ -517,6 +534,12 @@ def _platform_dead_end_advice(platform_name: str) -> dict[str, Any]:
             "prompt_to_user": f"{reason} {gateway}",
         },
     }
+
+
+def platform_has_payload(platform_name: str | None = None) -> bool:
+    """这个宿主平台能不能装到离线载荷（原生或经 PLATFORM_FALLBACKS 仿真）。"""
+    key = platform_name or _platform_key()
+    return key in SUPPORTED_PAYLOAD_PLATFORMS or key in PLATFORM_FALLBACKS
 
 
 def _hand_lock_to(lock_path: Path, pid: Any) -> None:
@@ -1009,6 +1032,21 @@ class HorosaRuntimeManager:
             with self.tracer.span(workflow_name="runtime.start", metadata={"entrypoint": "runtime.start"}) as trace:
                 self._require_runtime()
                 manifest = self.load_installed_manifest(strict=True)
+                # 🔴 macOS：带 com.apple.quarantine 的 python/java 一被启动器 exec 就被 Gatekeeper SIGKILL，
+                # 没有任何输出。此前只有 doctor 会查它；start 路径上用户要等满整个就绪预算，
+                # 然后拿到一个只有 command / timeout_seconds / endpoints 的 runtime.start_timeout ——
+                # 指不到任何地方。这里先查，flagged 就直接给带 xattr 命令的结构化错误。
+                if self._host_is_darwin():
+                    quarantine = self._quarantine_report(manifest)
+                    if quarantine.get("flagged"):
+                        raise RuntimeInstallError(
+                            "runtime 的可执行文件带 macOS 隔离属性（com.apple.quarantine），Gatekeeper 会在启动时直接终止它们。",
+                            code="runtime.start_blocked_quarantine",
+                            details={
+                                "quarantine": quarantine,
+                                "next_action": f"先执行 {quarantine.get('fix')} 再重试；这只影响手动下载归档后 `install --archive` 的安装方式。",
+                            },
+                        )
                 patched_files: list[str] = []
                 initial_status = self.endpoint_identities(manifest)
                 # 可达但不是我们的 → 报冲突并退出；绝不采用、绝不代为终止。
@@ -1222,6 +1260,7 @@ class HorosaRuntimeManager:
                                 "stdout": completed.stdout[-4000:],
                                 "stderr": completed.stderr[-4000:],
                                 "endpoints": readiness["endpoints"],
+                                **self._start_failure_context(manifest),
                             },
                         )
                     if not readiness["ready"]:
@@ -1232,6 +1271,7 @@ class HorosaRuntimeManager:
                                 "command": command,
                                 "timeout_seconds": self.settings.runtime_start_timeout_seconds,
                                 "endpoints": readiness["endpoints"],
+                                **self._start_failure_context(manifest),
                             },
                         )
                     if degraded:
@@ -1349,15 +1389,38 @@ class HorosaRuntimeManager:
             # HOROSA_SERVER_PORT / HOROSA_CHART_PORT —— 此前这里传的是裸 os.environ：端口一改（HOROSA_PORTS=auto、
             # HOROSA_LOCAL_BACKEND_PORT / HOROSA_LOCAL_CHART_PORT、矩阵 lane），停脚本找默认端口的 pid 文件 → "not running" → 服务永远停不掉，
             # 状态卡在 stop_requested（v0.38.0 A5 真机 lane 首跑抓到）。
-            completed = subprocess.run(
-                command,
-                cwd=str(script.parent),
-                env=self._launcher_env(),
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-            )
+            stop_budget = max(30.0, min(float(self.settings.runtime_start_timeout_seconds), 180.0))
+            try:
+                completed = subprocess.run(
+                    command,
+                    cwd=str(script.parent),
+                    env=self._launcher_env(),
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=stop_budget,
+                )
+            except subprocess.TimeoutExpired as exc:
+                # 🔴 此前没有 timeout：mac 的停脚本来自只读的上游树，它要是哪天多等一轮，`uninstall --yes`
+                # 与 `runtime stop` 就会无限期挂住。超时按「没停干净」处理，把还活着的持有者点出来。
+                self._write_runtime_state({
+                    "managed": True, "status": "stop_requested", "updated_at": self._utc_now(),
+                    "manifest_version": manifest.get("version") if manifest else None,
+                })
+                return {
+                    "ok": False, "already_stopped": False, "code": "runtime.stop_timeout",
+                    "message": f"停止脚本 {stop_budget:.0f} 秒内未返回。",
+                    "command": command,
+                    "stdout": ((exc.stdout or b"") if isinstance(exc.stdout, bytes) else (exc.stdout or "")).__str__()[-4000:],
+                    "stderr": "", "returncode": None,
+                    "survivors": [
+                        {"port": port, "holders": port_holders(port)}
+                        for port in (self.settings.local_backend_port, self.settings.local_chart_port)
+                    ],
+                    "endpoints": initial_status,
+                    "trace_id": trace["trace_id"], "group_id": trace["group_id"],
+                }
             shutdown = self._wait_for_service_state(
                 expected_reachable=False,
                 timeout_seconds=max(3.0, min(self.settings.runtime_start_timeout_seconds, 10.0)),
@@ -1391,8 +1454,11 @@ class HorosaRuntimeManager:
     def _launcher_env(self) -> dict[str, str]:
         """启动器与停脚本共用的环境：端口（pid 文件按端口命名）+ HOME 族。两边必须同源，否则停不掉自己起的服务。"""
         env = os.environ.copy()
-        env.setdefault("HOROSA_SERVER_PORT", str(self.settings.local_backend_port))
-        env.setdefault("HOROSA_CHART_PORT", str(self.settings.local_chart_port))
+        # 🔴 无条件赋值，不是 setdefault：这两个是 internal 变量，用户环境里若残留一份（名字与
+        # HOROSA_LOCAL_BACKEND_PORT 只差一个词），启动器就听旧端口而 manager 探新端口 → runtime.start_timeout
+        # 且没有任何提示。端口的权威是 settings（含 HOROSA_PORTS=auto 的结果），启动器只负责照办。
+        env["HOROSA_SERVER_PORT"] = str(self.settings.local_backend_port)
+        env["HOROSA_CHART_PORT"] = str(self.settings.local_chart_port)
         home_value = self._default_home_value()
         env.setdefault("HOME", home_value)
         if os.name == "nt":
@@ -1404,20 +1470,30 @@ class HorosaRuntimeManager:
         return env
 
     def _require_runtime(self) -> None:
-        if not self.current_dir.exists():
+        if self.current_dir.exists():
+            return
+        # 🔴 A9：Intel Mac / Linux 上此前第一次工具调用报的是 runtime.not_installed，把人打发去
+        # `install`，再由 install 报 install_missing_platform —— 两跳才知道「这台机器根本装不了」。
+        # 没有载荷的平台在第一跳就给出路（网关模式），且 code 与 RECOVERY_TABLE 的 kind 对得上。
+        platform_name = self.settings.runtime_platform or _platform_key()
+        if not platform_has_payload(platform_name):
+            advice = _platform_dead_end_advice(platform_name)
             raise RuntimeValidationError(
-                "Horosa 离线 runtime 尚未安装（runtime is not installed）。",
-                code="runtime.not_installed",
-                details={
-                    "current_dir": str(self.current_dir),
-                    "next_action": "运行 `uv run horosa-skill install` 安装离线 runtime（约 730MB 下载），随后 `uv run horosa-skill doctor` 确认。",
-                    "agent_recovery": {
-                        "kind": "install_required",
-                        "prompt_to_user": "本地 Horosa 运行时还没安装。请在仓库目录执行：uv run horosa-skill install（首次约需数分钟下载 730MB），装好后重试本次请求。",
-                        "commands": ["uv run horosa-skill install", "uv run horosa-skill doctor"],
-                    },
-                },
+                bilingual(
+                    f"本机平台 {platform_name} 没有离线 runtime 载荷。",
+                    f"No offline runtime payload exists for this platform ({platform_name}).",
+                ),
+                code="runtime.platform_unsupported",
+                details={"platform": platform_name, "supported": list(SUPPORTED_PAYLOAD_PLATFORMS),
+                         "fallbacks": {k: v[0] for k, v in PLATFORM_FALLBACKS.items()}, **advice},
             )
+        from horosa_skill.runtime.hints import install_commands_for_error
+
+        raise RuntimeValidationError(
+            "Horosa 离线 runtime 尚未安装（runtime is not installed）。",
+            code="runtime.not_installed",
+            details={"current_dir": str(self.current_dir), **install_commands_for_error()},
+        )
 
     def _materialize_archive(self, source: str, temp_dir: Path, *, progress: Any | None = None) -> Path:
         if _is_url(source):
@@ -1553,6 +1629,20 @@ class HorosaRuntimeManager:
             path_text = path_text[1:]
         return Path(path_text)
 
+    @staticmethod
+    def _host_is_darwin() -> bool:
+        return sys.platform == "darwin"
+
+    def _start_failure_context(self, manifest: dict[str, Any] | None) -> dict[str, Any]:
+        """启动失败/超时时随错误附上的现场：macOS 隔离属性 + 启动器日志路径 —— 让错误指得到地方。"""
+        context: dict[str, Any] = {"launcher_log": str(self._launcher_log_path())}
+        if self._host_is_darwin():
+            try:
+                context["quarantine"] = self._quarantine_report(manifest)
+            except Exception:  # noqa: BLE001 - 附加现场绝不能把原错误换成别的错误
+                pass
+        return context
+
     def _quarantine_report(self, manifest: dict[str, Any] | None) -> dict[str, Any]:
         """python / java / node 三个可执行文件是否带 com.apple.quarantine（仅 macOS；只查不改）。"""
         report: dict[str, Any] = {"checked": [], "flagged": [], "fix": None}
@@ -1566,7 +1656,7 @@ class HorosaRuntimeManager:
             try:
                 completed = subprocess.run(
                     ["/usr/bin/xattr", "-p", "com.apple.quarantine", str(path)],
-                    capture_output=True, text=True, timeout=5, check=False,
+                    capture_output=True, text=True, timeout=5, check=False, encoding="utf-8", errors="replace",
                 )
             except (OSError, subprocess.TimeoutExpired):
                 continue
@@ -1855,8 +1945,18 @@ horosa_owns_pid() {
         # AppCDS 训练 JVM 的硬编码端口改为可配（39997 与别的程序撞车时目前是静默降级）。
         patched = patched.replace("local train_port=39997", 'local train_port="${HOROSA_CDS_TRAIN_PORT:-39997}"')
 
-        script_path.write_text(patched, encoding="utf-8")
-        script_path.chmod(script_path.stat().st_mode | 0o111)
+        try:
+            script_path.write_text(patched, encoding="utf-8")
+            script_path.chmod(script_path.stat().st_mode | 0o111)
+        except OSError as exc:
+            raise RuntimeInstallError(
+                "写入 mac 启动器补丁失败（runtime 目录只读或属于别的用户）。",
+                code="runtime.launcher_patch_write_failed",
+                details={
+                    "path": str(script_path), "error": f"{type(exc).__name__}: {exc}",
+                    "next_action": "检查 runtime 目录权限；确需临时跳过设 HOROSA_RUNTIME_LAUNCHER_PATCH=0（会失去误杀保护）。",
+                },
+            ) from exc
         logger.info("patched macOS launcher with foreign-process kill guard: %s", script_path)
         return True
 

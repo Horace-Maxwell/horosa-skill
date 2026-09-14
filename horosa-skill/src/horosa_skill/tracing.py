@@ -72,7 +72,9 @@ class TraceRecorder:
         if not files:
             return []
         rows: list[dict[str, Any]] = []
-        for line in files[0].read_text(encoding="utf-8").splitlines():
+        # errors="replace"：Windows 上并发追加可能把一个多字节序列撕成两半（本模块顶部如实记着那条边界），
+        # 整文件 strict 解码会在那一行之前就抛 UnicodeDecodeError，让下面逐行的 JSONDecodeError 兜底永远轮不到。
+        for line in files[0].read_text(encoding="utf-8", errors="replace").splitlines():
             if not line.strip():
                 continue
             try:

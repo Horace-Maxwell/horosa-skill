@@ -30,7 +30,7 @@ SCAN_ROOTS = [REPO_ROOT, PKG_ROOT, REPO_ROOT / "vendor" / "runtime-source"]
 SKIP_DIRS = {".git", ".venv", "node_modules", "build", "dist", "__pycache__", ".horosa-cache"}
 
 # 目录名里出现这些片段 = 占位符没被展开
-STRAY_MARKERS = ("${env:HOME", "${sys:user.home}", "${env:USERPROFILE")
+STRAY_MARKERS = ("${env:HOME", "${sys:user.home}", "${env:USERPROFILE", "${workspaceFolder", "${user_config", "${CLAUDE_P")
 STRAY_DIR_NAMES = {".horosa-logs"}
 
 LAUNCHER = PKG_ROOT / "scripts" / "start_vendored_instance.sh"

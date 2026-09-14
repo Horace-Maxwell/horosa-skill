@@ -227,6 +227,87 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "enable_long_paths_or_shorten_runtime_root",
     },
+    "runtime.start_blocked_quarantine": {
+        "kind": "runtime",
+        "prompt_to_user": bilingual(
+            "runtime 的可执行文件带 macOS 隔离属性，Gatekeeper 会在启动时直接终止它们（这只发生在手动下载"
+            "归档后 `install --archive` 的安装方式）。请按错误里的 xattr 命令解除后重试。",
+            "The runtime binaries carry the macOS quarantine attribute, so Gatekeeper kills them on launch "
+            "(this happens only when the archive was downloaded by hand and installed with `install --archive`). "
+            "Run the xattr command from the error, then retry.",
+        ),
+        "next_action": "clear_quarantine_then_retry",
+    },
+    "runtime.stop_timeout": {
+        "kind": "runtime",
+        "prompt_to_user": bilingual(
+            "停止脚本超时未返回。请看 details.survivors 里还活着的进程，用 `horosa-skill runtime status` 复核；"
+            "确认是本工具起的服务后可 `runtime stop --force`。",
+            "The stop script did not return in time. Check details.survivors, re-check with "
+            "`horosa-skill runtime status`, and use `runtime stop --force` once you have confirmed the services are ours.",
+        ),
+        "next_action": "inspect_survivors_then_force_stop",
+    },
+    "runtime.launcher_patch_write_failed": {
+        "kind": "runtime",
+        "prompt_to_user": bilingual(
+            "写入启动器补丁失败（runtime 目录只读或属于别的用户）。请检查目录权限；确需临时跳过设 "
+            "HOROSA_RUNTIME_LAUNCHER_PATCH=0（会失去误杀保护）。",
+            "Writing the launcher patch failed (runtime directory read-only or owned by another user). Fix the "
+            "permissions; set HOROSA_RUNTIME_LAUNCHER_PATCH=0 to skip deliberately (you lose the kill guard).",
+        ),
+        "next_action": "fix_permissions_then_retry",
+    },
+    "runtime.install_refused_running_foreign": {
+        "kind": "runtime",
+        "prompt_to_user": bilingual(
+            "端口上正在运行的服务不是本工具启动的（可能是你自己开着的星阙桌面端），升级/重装不会去停它。"
+            "请先关掉它，或改用别的端口（HOROSA_PORTS=auto）后再装。",
+            "The services running on the ports were not started by this tool (possibly your own Horosa desktop "
+            "app); install/upgrade will not stop them. Close them first, or move ports (HOROSA_PORTS=auto).",
+        ),
+        "next_action": "close_foreign_service_or_change_ports",
+    },
+    "runtime.install_previous_locked": {
+        "kind": "runtime",
+        "prompt_to_user": bilingual(
+            "上一版 runtime 目录（previous/）里还有进程在用，无法清理。请看 details.holders，关掉后重试。",
+            "The previous runtime directory (previous/) is still held by a process and cannot be removed. "
+            "See details.holders, close them, and retry.",
+        ),
+        "next_action": "close_holders_then_retry",
+    },
+    "runtime.previous_cleanup_deferred": {
+        "kind": "runtime",
+        "prompt_to_user": bilingual(
+            "新 runtime 已装好并可用；旧目录 previous/ 暂时删不掉（Windows 常见：文件句柄未释放），"
+            "重启后再跑 `horosa-skill doctor` 会提示清理。",
+            "The new runtime is installed and usable; the old previous/ directory could not be removed yet "
+            "(common on Windows while handles are open). `horosa-skill doctor` will suggest the cleanup later.",
+        ),
+        "next_action": "none_retry_cleanup_later",
+    },
+    "runtime.platform_unsupported": {
+        "kind": "runtime",
+        "prompt_to_user": bilingual(
+            "本机平台没有离线 runtime 载荷（只发 macOS Apple Silicon 与 Windows x64）。可走网关模式：在一台"
+            "受支持的机器上跑 runtime，本机设 HOROSA_SERVER_ROOT 与 HOROSA_CHART_SERVER_ROOT 指过去。",
+            "There is no offline runtime payload for this platform (only macOS Apple Silicon and Windows x64 ship). "
+            "Use gateway mode: run the runtime on a supported machine and point HOROSA_SERVER_ROOT / "
+            "HOROSA_CHART_SERVER_ROOT at it.",
+        ),
+        "next_action": "use_gateway_mode",
+    },
+    "config.unexpanded_template": {
+        "kind": "environment",
+        "prompt_to_user": bilingual(
+            "某个路径设置里还留着未展开的 `${…}` 占位符（宿主没有替换它）。请在客户端的扩展设置里填上真实路径，"
+            "或删掉该环境变量用默认路径。",
+            "A path setting still contains an unexpanded `${…}` placeholder (the host did not substitute it). "
+            "Fill in a real path in the client's extension settings, or unset the variable to use the default.",
+        ),
+        "next_action": "fix_placeholder_or_unset",
+    },
     "runtime.starting": {
         "kind": "transport",
         "prompt_to_user": bilingual(

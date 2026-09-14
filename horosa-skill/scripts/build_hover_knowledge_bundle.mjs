@@ -3,7 +3,13 @@ import path from "node:path";
 import vm from "node:vm";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-const DEFAULT_APP_ROOT = path.resolve("/Users/horacedong/Desktop/Horosa-Primary Direction Trial/Horosa-Web/astrostudyui/src/components");
+// 上游源树根由 HOROSA_SOURCE_ROOT 指定（与 preflight_release.py 同一个变量）；不再写死维护者的本机路径。
+const SOURCE_ROOT = process.env.HOROSA_SOURCE_ROOT;
+if (!SOURCE_ROOT) {
+  console.error("set HOROSA_SOURCE_ROOT=<path to Horosa-Public checkout> (the upstream source tree)");
+  process.exit(2);
+}
+const DEFAULT_APP_ROOT = path.resolve(SOURCE_ROOT, "Horosa-Web/astrostudyui/src/components");
 const OUTPUT_DIR = path.join(ROOT, "src", "horosa_skill", "knowledge", "data");
 
 const ASTRO_CONST = {

@@ -189,3 +189,14 @@ def test_windows_bootstrap_renders_under_real_powershell(tmp_path: Path) -> None
     tree = ast.parse(rendered)
     strings = [node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str)]
     assert _SPACED_CJK["ChartEntry"] in strings
+
+
+@pytest.mark.parametrize("name", LAUNCHERS)
+def test_launcher_template_sets_utf8_output_encoding(name: str) -> None:
+    """v0.38.1 A1：Windows PowerShell 5.1 往管道写 OEM 代码页；启动器首行把 Console 编码改成 UTF-8，
+    `launcher.log` 与 `startup_warning.details.stdout` 才真是 UTF-8（manager 按 UTF-8 读它们）。"""
+    text = (TEMPLATE_ROOT / name).read_text(encoding="utf-8-sig")
+    first_code = next(line for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#"))
+    assert "[Console]::OutputEncoding = [Text.Encoding]::UTF8" in first_code, first_code
+    assert first_code.isascii(), "这一行必须在 BOM 之后第一行且纯 ASCII —— 它自己不能依赖任何编码"
+    assert first_code.lstrip().startswith("try {") and "catch" in first_code, "老 PowerShell / 受限主机上失败也不能挡启动"

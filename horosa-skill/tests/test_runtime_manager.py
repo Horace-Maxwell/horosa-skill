@@ -1811,3 +1811,94 @@ def test_windows_launcher_spawn_never_uses_detached_process(tmp_path: Path, monk
     assert not flags & 0x8, "DETACHED_PROCESS kills the PowerShell launcher outright"
     assert flags & 0x8000000, "CREATE_NO_WINDOW is what keeps it console-backed but silent"
     assert flags & 0x200, "keep the new process group (Ctrl+C isolation)"
+
+
+# ---------------------------------------------------------------- v0.38.1 A5 / A12
+
+
+def test_start_is_blocked_before_spawn_when_mac_binaries_are_quarantined(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """带 com.apple.quarantine 的 python/java 一被 exec 就被 Gatekeeper SIGKILL，没有任何输出；此前用户要等满整个
+    就绪预算才拿到一个指不到任何地方的 start_timeout。"""
+    manager = _manager_with_runtime(tmp_path)
+    monkeypatch.setattr(manager, "_host_is_darwin", lambda: True)
+    flagged = {"checked": ["/r/python3"], "flagged": ["/r/python3"], "fix": 'xattr -dr com.apple.quarantine "/r"'}
+    monkeypatch.setattr(manager, "_quarantine_report", lambda manifest: flagged)
+    seen: dict[str, object] = {}
+    _stub_popen(monkeypatch, seen=seen)
+    with pytest.raises(RuntimeInstallError) as excinfo:
+        manager.start_local_services()
+    assert excinfo.value.code == "runtime.start_blocked_quarantine"
+    assert excinfo.value.details["quarantine"] == flagged and "xattr -dr" in excinfo.value.details["next_action"]
+    assert "command" not in seen, "flagged 时绝不 spawn 启动器"
+
+
+def test_start_failure_context_attaches_quarantine_and_the_launcher_log(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manager = _manager_with_runtime(tmp_path)
+    manifest = manager.load_installed_manifest()
+    monkeypatch.setattr(manager, "_host_is_darwin", lambda: False)
+    off_mac = manager._start_failure_context(manifest)
+    assert "launcher_log" in off_mac and "quarantine" not in off_mac
+    monkeypatch.setattr(manager, "_host_is_darwin", lambda: True)
+    monkeypatch.setattr(manager, "_quarantine_report", lambda m: {"checked": [], "flagged": ["x"], "fix": "xattr -dr …"})
+    on_mac = manager._start_failure_context(manifest)
+    assert on_mac["quarantine"]["flagged"] == ["x"]
+
+    def boom(manifest):  # noqa: ANN001
+        raise OSError("xattr exploded")
+
+    monkeypatch.setattr(manager, "_quarantine_report", boom)
+    assert "quarantine" not in manager._start_failure_context(manifest), "附加现场绝不能把原错误换成别的错误"
+
+
+def test_stop_reports_a_timeout_with_the_survivors_instead_of_hanging(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """停脚本此前没有 timeout：它多等一轮，`uninstall --yes` / `runtime stop` 就无限期挂住。"""
+    manager = _manager_with_runtime(tmp_path)
+    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None: _endpoints(verdict="ours"))
+    seen: dict[str, object] = {}
+
+    def fake_run(command, **kwargs):  # noqa: ANN001
+        seen["timeout"] = kwargs.get("timeout")
+        raise subprocess.TimeoutExpired(command, kwargs.get("timeout") or 0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr("horosa_skill.runtime.manager.port_holders", lambda port: [{"pid": 4242, "command": "java -jar app.jar"}])
+    result = manager.stop_local_services()
+    assert seen["timeout"] == 30.0, "max(30, runtime_start_timeout) 且 ≤ 180"
+    assert result["ok"] is False and result["code"] == "runtime.stop_timeout"
+    assert [entry["port"] for entry in result["survivors"]] == [manager.settings.local_backend_port, manager.settings.local_chart_port]
+    assert result["survivors"][0]["holders"][0]["pid"] == 4242
+    assert manager.load_runtime_state()["status"] == "stop_requested"
+
+
+def test_launcher_patch_write_failure_is_a_structured_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """v0.38.1 A15：runtime 目录只读 / 属于别的用户时，补丁写入失败此前是裸 PermissionError traceback。"""
+    manager = _manager_with_runtime(tmp_path)
+    script = tmp_path / "start_horosa_local.sh"
+    script.write_text(
+        '#!/usr/bin/env bash\n'
+        'ROOT="$(cd "$(dirname "$0")" && pwd)"\n'
+        'reclaim_stale_port() {\n'
+        '  case "x" in\n'
+        '    y)\n'
+        '        kill -9 "${pid}" >/dev/null 2>&1 && killed=1 ;;\n'
+        '  esac\n'
+        '}\n'
+        'java -Dhorosa.runtime.owner=horosa-skill -jar app.jar\n',
+        encoding="utf-8",
+    )
+    original = script.read_text(encoding="utf-8")
+    real_write_text = Path.write_text
+
+    def failing_write_text(self, *args, **kwargs):  # noqa: ANN001, ANN002
+        if self == script:
+            raise PermissionError(13, "Permission denied", str(self))
+        return real_write_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", failing_write_text)
+    with pytest.raises(RuntimeInstallError) as excinfo:
+        manager._patch_mac_launcher(script)
+    assert excinfo.value.code == "runtime.launcher_patch_write_failed"
+    assert excinfo.value.details["path"] == str(script) and "PermissionError" in excinfo.value.details["error"]
+    assert script.read_text(encoding="utf-8") == original
+    monkeypatch.undo()
+    assert manager._patch_mac_launcher(script) is True, "同一脚本在可写时必须能打上补丁（证明合成脚本满足全部锚点）"

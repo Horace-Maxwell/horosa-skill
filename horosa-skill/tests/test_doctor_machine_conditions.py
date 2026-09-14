@@ -70,7 +70,11 @@ def test_issue_codes_in_source_are_all_registered() -> None:
 
 
 def test_warning_codes_in_source_are_all_registered() -> None:
-    source = inspect.getsource(cli_module._listener_scope_warnings) + inspect.getsource(cli_module._arch_warnings)
+    source = (
+        inspect.getsource(cli_module._listener_scope_warnings)
+        + inspect.getsource(cli_module._arch_warnings)
+        + inspect.getsource(cli_module._internal_port_env_warnings)
+    )
     literal = set(re.findall(r'"code": "([^"]+)"', source))
     assert literal == set(cli_module._DOCTOR_WARNING_CODES)
 
@@ -347,3 +351,71 @@ def test_download_loop_honours_attempts_and_timeout(tmp_path: Path, monkeypatch:
     assert excinfo.value.details["attempts_per_source"] == 2
     assert len(seen) == 2, "一个源 × 2 次"
     assert seen[0].read == 300.0 and seen[0].connect == 60.0
+
+
+# ---------------------------------------------------------------- v0.38.1 A2 / A6 / A11
+
+
+def test_internal_port_env_mismatch_is_a_doctor_warning(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """HOROSA_SERVER_PORT / HOROSA_CHART_PORT 是启动器内部变量；用户手设了别的值，此前启动器会起在 manager 不知道的端口上。"""
+    settings = _settings(tmp_path)
+    monkeypatch.delenv("HOROSA_SERVER_PORT", raising=False)
+    monkeypatch.delenv("HOROSA_CHART_PORT", raising=False)
+    assert cli_module._internal_port_env_warnings(settings) == []
+    monkeypatch.setenv("HOROSA_SERVER_PORT", str(settings.local_backend_port))
+    assert cli_module._internal_port_env_warnings(settings) == []
+    monkeypatch.setenv("HOROSA_CHART_PORT", "12345")
+    warnings = cli_module._internal_port_env_warnings(settings)
+    assert [w["code"] for w in warnings] == ["env:internal_port_override"]
+    assert "HOROSA_CHART_PORT=12345" in warnings[0]["detail"] and "HOROSA_LOCAL_CHART_PORT" in warnings[0]["fix"]
+
+
+def test_launcher_env_pins_the_manager_ports_even_when_the_user_set_them(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = _settings(tmp_path)
+    monkeypatch.setenv("HOROSA_SERVER_PORT", "12345")
+    monkeypatch.setenv("HOROSA_CHART_PORT", "12346")
+    env = HorosaRuntimeManager(settings)._launcher_env()
+    assert env["HOROSA_SERVER_PORT"] == str(settings.local_backend_port)
+    assert env["HOROSA_CHART_PORT"] == str(settings.local_chart_port)
+
+
+def test_environment_probe_takes_the_node_path_from_the_manifest_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A6：此前手写 `runtime/win/…`，载荷里是 `runtime/windows/…` → Windows 上 probes.node 永远 exists:false。"""
+    settings = _settings(tmp_path)
+    monkeypatch.setattr(HorosaRuntimeManager, "_platform_path", lambda self, mac, win, linux=None: Path(win))
+    node = settings.runtime_root / "current" / "runtime" / "windows" / "node" / "node.exe"
+    node.parent.mkdir(parents=True)
+    node.write_bytes(b"MZ")
+    probed: list[Path] = []
+
+    def fake_probe(path: Path, args: list[str]) -> dict[str, object]:
+        probed.append(path)
+        return {"exists": path.exists(), "runnable": True}
+
+    monkeypatch.setattr(cli_module, "_probe_executable", fake_probe)
+    monkeypatch.setattr(cli_module, "_probe_uv", lambda: {"exists": True, "runnable": True})
+    report = cli_module._doctor_environment_context(settings)
+    assert probed == [node] and report["probes"]["node"]["exists"] is True
+    assert "runtime/win/" not in str(node)
+
+
+def test_doctor_report_carries_its_time_budget(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    report = cli_module._doctor_report(settings, HorosaRuntimeManager(settings))
+    budget = report["budget"]
+    assert budget["seconds"] == cli_module.DOCTOR_BUDGET_SECONDS == 25.0
+    assert {"manager.doctor", "environment"} <= set(budget["timings"])
+    assert isinstance(budget["skipped"], list)
+
+
+def test_doctor_skips_subprocess_probes_once_the_budget_is_gone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """预算耗尽时不再起子进程（记进 skipped），而不是让 doctor 无限期挂在 netstat / PowerShell 上。"""
+    from horosa_skill.runtime import ports
+
+    ports.clear_run_cache()
+    monkeypatch.setattr(cli_module, "DOCTOR_BUDGET_SECONDS", 0.0)
+    settings = _settings(tmp_path)
+    report = cli_module._doctor_report(settings, HorosaRuntimeManager(settings))
+    assert report["budget"]["seconds"] == 0.0
+    assert report["budget"]["skipped"], "listener_bindings 的 netstat/ss 必须被预算挡住并记录"
+    ports.clear_run_cache()

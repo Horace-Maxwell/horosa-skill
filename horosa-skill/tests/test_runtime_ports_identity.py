@@ -37,6 +37,10 @@ def listening_server():
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline and port_bindable(port):
         time.sleep(0.1)
+    # v0.38.1：`ports._run` 有 2 s 结果缓存 —— 监听刚起来时别让上一条用例的 netstat 快照顶掉它。
+    from horosa_skill.runtime.ports import clear_run_cache
+
+    clear_run_cache()
     try:
         yield port, proc
     finally:

@@ -251,3 +251,31 @@ def test_threads_in_one_process_never_lose_a_trace_line(tmp_path, monkeypatch) -
             bad.append((index, line[:120]))
     assert not bad, f"{len(bad)}/{len(lines)} 行不是合法 JSON，前几条：{bad[:3]}"
     assert len(lines) == total, f"写了 {total} 次却只有 {len(lines)} 行"
+
+
+def test_partial_templates_count_as_unexpanded_too(monkeypatch) -> None:
+    """v0.38.1 A8：`${workspaceFolder}/.horosa` 这种**部分**模板此前漏过 `^…$` 锚定，一路走到 mkdir。"""
+    import importlib
+
+    import horosa_skill.config as config
+
+    monkeypatch.setenv("HOROSA_RUNTIME_ROOT", "${workspaceFolder}/.horosa/runtime")
+    importlib.reload(config)
+    assert config._env_text("HOROSA_RUNTIME_ROOT", "FALLBACK") == "FALLBACK"
+    assert config.unexpanded_env_templates()["HOROSA_RUNTIME_ROOT"] == "${workspaceFolder}/.horosa/runtime"
+    monkeypatch.delenv("HOROSA_RUNTIME_ROOT", raising=False)
+    importlib.reload(config)
+
+
+def test_ensure_dirs_refuses_to_mkdir_a_template_literal(tmp_path, monkeypatch) -> None:
+    from horosa_skill.config import Settings
+    from horosa_skill.errors import ToolValidationError
+
+    monkeypatch.chdir(tmp_path)
+    settings = Settings(runtime_root=Path("${user_config.runtimeRoot}"), data_dir=tmp_path / "data",
+                        db_path=tmp_path / "m.db", output_dir=tmp_path / "runs")
+    with pytest.raises(ToolValidationError) as excinfo:
+        settings.ensure_dirs()
+    assert excinfo.value.code == "config.unexpanded_template"
+    assert excinfo.value.details["field"] == "runtime_root"
+    assert not any("${" in p.name for p in tmp_path.iterdir()), "绝不在工作目录里造出字面量目录"

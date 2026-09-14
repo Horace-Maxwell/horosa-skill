@@ -48,7 +48,10 @@ def _canned(outputs: dict[str, str]):
 
 
 def test_windows_bindings_merge_ipv4_and_ipv6(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(ports, "_run", _canned({"TCPv6": _WIN_TCP6, "TCP": _WIN_TCP}))
+    # v0.38.1 A2：一条裸 `netstat -ano` 同时给出 IPv4 与 IPv6 行（此前 `-p TCP` / `-p TCPv6` 各跑一次）。
+    # 旧夹具按 `-p` 参数分发两段输出，只能证明「两次调用各解对了」；新实现一次调用，夹具随之合并 —— 断言的
+    # 性质（v4 + v6 绑定都被看见）不变。
+    monkeypatch.setattr(ports, "_run", _canned({"netstat -ano": _WIN_TCP + _WIN_TCP6}))
     java = ports._bindings_windows(9999)
     assert java == [{"local_address": "0.0.0.0", "pid": 4321}, {"local_address": "::", "pid": 4321}]
     assert ports.loopback_only(java) is False

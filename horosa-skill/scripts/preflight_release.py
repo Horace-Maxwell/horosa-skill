@@ -10,7 +10,7 @@ step is the honest version: it can actually run where the data is.
 
 Usage (mac maintenance box):
 
-    HOROSA_SOURCE_ROOT=/Users/horacedong/Desktop/Horosa-Public \
+    HOROSA_SOURCE_ROOT=/path/to/Horosa-Public \
         uv run python scripts/preflight_release.py
 
 Exits non-zero on the first failing gate. On success it rewrites
@@ -23,6 +23,13 @@ import json
 import os
 import subprocess
 import sys
+
+# Windows 控制台默认 cp1252/cp936：脚本自己 print 的中文会抛 UnicodeEncodeError 并让脚本 exit 1
+# （v0.38.0 的 repack 脚本在「打印成功信息」那一步失败过）。统一在入口把两条流改成 UTF-8。
+for _stream in (sys.stdout, sys.stderr):
+    _reconfigure = getattr(_stream, "reconfigure", None)
+    if _reconfigure is not None:
+        _reconfigure(encoding="utf-8", errors="replace")
 from pathlib import Path
 
 PKG_ROOT = Path(__file__).resolve().parents[1]

@@ -336,13 +336,20 @@ def _write_codex_toml_merge(target: Path, toml_snippet: str) -> Path:
     snippet_servers = snippet_doc.get("mcp_servers")
     if not snippet_servers:
         raise typer.BadParameter("codex 片段缺少 [mcp_servers.<name>] 表，拒绝写入。")
-    if target.exists() and target.read_text(encoding="utf-8").strip():
-        raw = target.read_text(encoding="utf-8")
+    raw_bytes = target.read_bytes() if target.exists() else b""
+    if raw_bytes.strip():
+        # 🔴 读取也在护栏内：Notepad / `Out-File` 存出来的 config.toml 可能是 UTF-16LE（BOM ff fe）
+        # 或 UTF-8-with-BOM。此前 read_text(utf-8) 在 try 之外，UTF-16 直接以 UnicodeDecodeError
+        # 的 traceback 逃出 `setup --client codex`。
         try:
+            if raw_bytes.startswith((b"\xff\xfe", b"\xfe\xff")):
+                raw = raw_bytes.decode("utf-16")
+            else:
+                raw = raw_bytes.decode("utf-8-sig")
             existing = tomlkit.parse(raw)
-        except Exception as exc:  # noqa: BLE001 - 解析失败=用户文件形状未知，绝不覆盖
+        except (UnicodeDecodeError, Exception) as exc:  # noqa: BLE001 - 解析失败=用户文件形状未知，绝不覆盖
             raise typer.BadParameter(
-                f"{target} 不是合法 TOML（{exc}），拒绝合并——请手动把生成片段粘进去。"
+                f"{target} 不是合法 TOML 或编码无法识别（{exc}），拒绝合并——请手动把生成片段粘进去。"
             ) from exc
         backup = target.with_name(f"{target.name}.horosa-bak")
         backup.write_text(raw, encoding="utf-8")
@@ -591,7 +598,7 @@ def _listener_scope_warnings(scope: dict[str, Any]) -> list[dict[str, str]]:
 # v0.38.0 B6：doctor 能报出的每个 issue / warning 码都要有人话（user_summary + next_action）。
 # 码集的真值：manager.DOCTOR_ISSUE_CODES（issues）+ _DOCTOR_WARNING_CODES（warnings）；
 # tests/test_doctor_machine_conditions.py::test_every_doctor_code_has_advice 锁步，并扫源码里新增的字面量。
-_DOCTOR_WARNING_CODES = ("listener:not_loopback_only", "platform:emulated_process")
+_DOCTOR_WARNING_CODES = ("listener:not_loopback_only", "platform:emulated_process", "env:internal_port_override")
 _DOCTOR_ADVICE: dict[str, dict[str, str]] = {
     "runtime.manifest_invalid": {
         "user_summary": "已装 runtime 的 runtime-manifest.json 缺失或损坏，doctor 无法信任这份安装。",
@@ -625,6 +632,11 @@ _DOCTOR_ADVICE: dict[str, dict[str, str]] = {
         "user_summary": "本机服务绑在 0.0.0.0（局域网可达，Windows 会弹防火墙）。",
         "next_action": "升级后 `horosa-skill runtime restart` 重套启动器模板（钉 127.0.0.1）。",
     },
+    "env:internal_port_override": {
+        "user_summary": "环境里有 HOROSA_SERVER_PORT / HOROSA_CHART_PORT（启动器内部变量）且与本工具算出的端口不一致；"
+                        "v0.38.1 起启动器一律按本工具的端口起服务，这两个变量不再有效果。",
+        "next_action": "改用 HOROSA_LOCAL_BACKEND_PORT / HOROSA_LOCAL_CHART_PORT（或 HOROSA_PORTS=auto）选端口，并把那两个内部变量从环境里删掉。",
+    },
     "platform:emulated_process": {
         "user_summary": "当前 Python 进程在仿真下跑（x64 Python 在 ARM 芯片 / Rosetta）——能用，只是慢一点；离线 runtime 按芯片选载荷，不受影响。",
         "next_action": "可选：换成原生架构的 uv / Python 会更快；不换也没问题。",
@@ -651,6 +663,21 @@ def _arch_warnings(report: dict[str, Any]) -> list[dict[str, str]]:
         "detail": f"process={arch.get('process')} native={arch.get('native')}：{advice['user_summary']}",
         "fix": advice["next_action"],
     }]
+
+
+def _internal_port_env_warnings(settings: Settings) -> list[dict[str, str]]:
+    """A11：`HOROSA_SERVER_PORT` / `HOROSA_CHART_PORT` 是启动器内部变量；用户若在环境里手设了别的值，
+    v0.38.1 前会让启动器起在一个 manager 不知道的端口上（manager 用 setdefault 让位），随后 doctor 报「没起来」。"""
+    mismatched: list[str] = []
+    for key, expected in (("HOROSA_SERVER_PORT", settings.local_backend_port), ("HOROSA_CHART_PORT", settings.local_chart_port)):
+        raw = os.environ.get(key, "").strip()
+        if raw and raw != str(expected):
+            mismatched.append(f"{key}={raw} (manager uses {expected})")
+    if not mismatched:
+        return []
+    advice = _advice_for("env:internal_port_override")
+    return [{"code": "env:internal_port_override", "detail": "; ".join(mismatched) + "：" + advice["user_summary"],
+             "fix": advice["next_action"]}]
 
 
 def _explain_lines(report: dict[str, Any]) -> list[str]:
@@ -800,12 +827,19 @@ def _platform_supported(report: dict[str, Any]) -> bool:
     return host in SUPPORTED_PAYLOAD_PLATFORMS or host in PLATFORM_FALLBACKS
 
 
+# 版本串探针 5 s 足够（node/uv --version 毫秒级）；此前 15 s × 2 个探针是 doctor 在慢机上卡死的一部分。
+_PROBE_TIMEOUT_SECONDS = 5.0
+
+
 def _probe_executable(path: Path, args: list[str]) -> dict[str, Any]:
     """实跑探针：不止「文件存在」，还验证真的能执行并回读版本串。"""
     if not path.is_file():
         return {"path": str(path), "exists": False, "runnable": False}
     try:
-        completed = subprocess.run([str(path), *args], capture_output=True, text=True, timeout=15)
+        completed = subprocess.run(
+            [str(path), *args], capture_output=True, text=True, timeout=_PROBE_TIMEOUT_SECONDS,
+            encoding="utf-8", errors="replace",
+        )
         output = (completed.stdout or completed.stderr or "").strip().splitlines()
         return {
             "path": str(path),
@@ -813,7 +847,7 @@ def _probe_executable(path: Path, args: list[str]) -> dict[str, Any]:
             "runnable": completed.returncode == 0,
             "version": output[0][:80] if output else "",
         }
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    except (OSError, subprocess.TimeoutExpired, UnicodeDecodeError) as exc:
         return {"path": str(path), "exists": True, "runnable": False, "error": str(exc)[:200]}
 
 
@@ -859,13 +893,22 @@ def _doctor_environment_context(settings: Settings) -> dict[str, Any]:
     except OSError:
         disk = {"free_gb": None, "total_gb": None, "sufficient_for_install": None}
     current = settings.runtime_root / "current"
-    node_bin = current / "runtime" / ("win" if os.name == "nt" else "mac") / "node" / ("node.exe" if os.name == "nt" else "bin/node")
-    probes = {
-        "node": _probe_executable(node_bin, ["--version"]),
-        "uv": _probe_uv(),
-        "backend_port": _probe_port(settings.local_backend_port),
-        "chart_port": _probe_port(settings.local_chart_port),
-    }
+    # 🔴 路径从 manager 的清单缺省取（单一真值）。此前这里手写 `runtime/win/…`，而载荷里是
+    # `runtime/windows/…` → Windows 上 `probes.node` 永远 exists:false，与旁边 files[] 的「在」自相矛盾。
+    from horosa_skill.runtime.manager import HorosaRuntimeManager as _Manager
+
+    node_bin = current / _Manager(settings)._manifest_defaults()["runtimes"]["node"]
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        node_future = pool.submit(_probe_executable, node_bin, ["--version"])
+        uv_future = pool.submit(_probe_uv)
+        probes = {
+            "node": node_future.result(),
+            "uv": uv_future.result(),
+            "backend_port": _probe_port(settings.local_backend_port),
+            "chart_port": _probe_port(settings.local_chart_port),
+        }
     return {
         "runtime_root": str(settings.runtime_root),
         "data_dir": str(settings.data_dir),
@@ -1007,6 +1050,9 @@ def _friendly_runtime_error_payload(
     elif code == "client.command_not_found" and "uv" in command_text:
         user_summary = f"{action_label} could not find `uv`."
         next_action = "Install uv, or set `HOROSA_UV_BIN`, then rerun the command."
+    elif code == "runtime.platform_unsupported":
+        user_summary = f"{action_label} found no offline runtime payload for this platform."
+        next_action = str((details or {}).get("next_action") or "Use gateway mode: point HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT at a supported machine.")
     elif code.startswith("runtime.install") or code == "runtime.not_installed":
         user_summary = f"{action_label} could not finish installing the offline runtime."
         next_action = "Check your network access to the Horosa runtime release and rerun the setup command."
@@ -1325,13 +1371,34 @@ def uninstall(
     _print_json(result)
 
 
+# doctor / runtime status 的整体时间预算（秒）。MCP 客户端 60 s 掐工具，agent 常把 doctor 当工具调；
+# 单个探针各 5–15 s 加起来在 Windows 上最坏 ~165 s（v0.38.1 审计实算），所以要有一个总闸。
+# 预算耗尽的探针按「查不到」处理并列进 report.budget.skipped —— 宁可少一项证据，不可让 doctor 本身挂掉。
+DOCTOR_BUDGET_SECONDS = 25.0
+STATUS_BUDGET_SECONDS = 15.0
+
+
 def _doctor_report(settings: Settings, manager: HorosaRuntimeManager, *, probe_network: bool = False) -> dict[str, Any]:
     """`doctor` 的完整报告；`setup` 第 4 步用的是同一份（v0.38.0 B4）——两边永远同一套判定。
 
     默认**零外网请求**（回环探测只打 127.0.0.1 且 trust_env=False）；`probe_network=True` 才逐个镜像 HEAD 清单 URL。
+    整份报告跑在 `budget.scope(DOCTOR_BUDGET_SECONDS)` 里，各子进程探针自动把超时压进剩余预算。
     """
-    report = manager.doctor()
-    report["environment"] = _doctor_environment_context(settings)
+    from horosa_skill.runtime import budget as _budget
+
+    with _budget.scope(DOCTOR_BUDGET_SECONDS) as budget_scope:
+        report = _doctor_report_unbudgeted(settings, manager, probe_network=probe_network)
+        report["budget"] = budget_scope.as_dict()
+    return report
+
+
+def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager, *, probe_network: bool = False) -> dict[str, Any]:
+    from horosa_skill.runtime import budget as _budget
+
+    with _budget.timed("manager.doctor"):
+        report = manager.doctor()
+    with _budget.timed("environment"):
+        report["environment"] = _doctor_environment_context(settings)
     # 记忆库完整性探针（v0.33.0 批 II-1）：PRAGMA quick_check + 损坏自愈痕迹；坏库在 MemoryStore
     # 构造时已分类恢复（隔离 .corrupt-<ts>.bak 并重建），这里如实呈现。
     try:
@@ -1362,7 +1429,8 @@ def _doctor_report(settings: Settings, manager: HorosaRuntimeManager, *, probe_n
     report["platform_supported"] = _platform_supported(report)
     if settings.runtime_current_dir.exists():
         try:
-            report["endpoints"] = manager.endpoint_identities(manager.load_installed_manifest())
+            with _budget.timed("endpoint_identities"):
+                report["endpoints"] = manager.endpoint_identities(manager.load_installed_manifest())
         except Exception:  # noqa: BLE001 - 体检不能因为归属判定失败就整份报废
             pass
     report["port_conflicts"] = _doctor_port_holders(report)
@@ -1372,6 +1440,7 @@ def _doctor_report(settings: Settings, manager: HorosaRuntimeManager, *, probe_n
         *(report.get("warnings") or []),
         *_listener_scope_warnings(report["listener_scope"]),
         *_arch_warnings(report),
+        *_internal_port_env_warnings(settings),
     ]
     # v0.38.0 B6：每个码一条人话（issues 与 warnings 都有），脚本用户与 agent 不用再猜码的意思。
     report["advice"] = [
@@ -1518,7 +1587,9 @@ def _stdio_probe(*, command: str, args: list[str], env: dict[str, str], timeout:
 
 def _claude_mcp_add(command: list[str]) -> subprocess.CompletedProcess[str]:
     """执行 `claude mcp add …`（单独成函数：测试用替身，不真调 claude）。"""
-    return subprocess.run(command, capture_output=True, text=True, timeout=60, check=False)
+    return subprocess.run(
+        command, capture_output=True, text=True, timeout=60, check=False, encoding="utf-8", errors="replace"
+    )
 
 
 def _default_setup_launcher(skill_root: Path | None) -> str:
@@ -1934,7 +2005,11 @@ def selfcheck() -> None:
             )
     except RuntimeError as exc:
         report["steps"]["error"] = {"code": exc.code, "message": str(exc), "details": exc.details}
-        report["next_action"] = "运行 `uv run horosa-skill install` 安装离线 runtime 后重试。" if exc.code == "runtime.not_installed" else "运行 `uv run horosa-skill doctor` 定位。"
+        if exc.code in {"runtime.not_installed", "runtime.platform_unsupported"}:
+            # 修复命令按安装上下文生成（checkout / wheel / 插件 / MCPB），平台死胡同直接给网关出路。
+            report["next_action"] = str((exc.details or {}).get("next_action") or "运行 `uv run horosa-skill install` 安装离线 runtime 后重试。")
+        else:
+            report["next_action"] = "运行 `uv run horosa-skill doctor` 定位。"
     _print_json(report)
     if not report["ok"]:
         raise typer.Exit(code=1)
@@ -1971,7 +2046,10 @@ def runtime_status() -> None:
     installed = settings.runtime_current_dir.exists()
     manifest = manager.load_installed_manifest() if installed else None
     state = manager.load_runtime_state() or {}
-    endpoints = manager.endpoint_identities(manifest) if installed else []
+    from horosa_skill.runtime import budget as _budget
+
+    with _budget.scope(STATUS_BUDGET_SECONDS) as status_budget:
+        endpoints = manager.endpoint_identities(manifest) if installed else []
     report: dict[str, Any] = {
         "ok": True,
         "installed": installed,
@@ -1990,6 +2068,7 @@ def runtime_status() -> None:
         "clients": live_clients(state),
         "start_lock": describe_lock(settings.runtime_root / ".runtime-start.lock"),
         "launcher_log": str(settings.runtime_root / manager.LAUNCHER_LOG_NAME),
+        "budget": status_budget.as_dict(),
     }
     reachable = [item for item in endpoints if item.get("reachable")]
     if not installed:
@@ -2797,7 +2876,14 @@ def _build_client_config_payload(
     elif key == "claude-code":
         payload = {
             "note": "运行下面这一条命令即可把 Horosa 注册进 Claude Code（stdio 直连，无需常驻 serve）；或把 mcpServers 合并进项目的 .mcp.json / ~/.claude.json。",
-            "command": "claude mcp add " + server_name + " -- " + " ".join(stdio_command),
+            # 🔴 必须走 _format_cli_command：checkout / uv 路径里有空格（`C:\Users\John Doe\…`、
+            # `/Users/x/My Projects`）时，裸 join 出来的命令会把路径拆成两个参数 —— README 教的
+            # 就是这条复制粘贴命令。精简面顺带带上 `-e HOROSA_MCP_COMPACT=1`，与 setup 的写法一致。
+            "command": _format_cli_command(
+                ["claude", "mcp", "add", server_name]
+                + [item for key, value in (surface_env or {}).items() for item in ("-e", f"{key}={value}")]
+                + ["--", *stdio_command]
+            ),
             "config_path": str(_preferred_config_path("claude-code")),
             "mcpServers": {
                 server_name: {
@@ -3279,7 +3365,9 @@ def client_openclaw_check(
             str(output_path),
         ]
         try:
-            result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=900)
+            result = subprocess.run(
+                command, capture_output=True, text=True, check=False, timeout=900, encoding="utf-8", errors="replace",
+            )
         except subprocess.TimeoutExpired:
             typer.echo(
                 json.dumps(

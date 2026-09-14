@@ -1,4 +1,5 @@
-﻿$ErrorActionPreference = "Stop"
+﻿try { [Console]::OutputEncoding = [Text.Encoding]::UTF8; [Console]::InputEncoding = [Text.Encoding]::UTF8 } catch { }
+$ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RuntimeRoot = Join-Path $Root "..\\runtime\\windows"

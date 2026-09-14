@@ -295,3 +295,46 @@ def test_launcher_uvx_wheel_uses_the_first_mirror_when_set(monkeypatch: pytest.M
     monkeypatch.delenv("HOROSA_RUNTIME_MIRROR")
     payload = _payload("--format", "cursor", "--launcher", "uvx-wheel")
     assert payload["mcpServers"]["horosa"]["args"][1].startswith("https://github.com/")
+
+
+# ---- v0.38.1 A4 / A7 ----
+def test_claude_code_command_keeps_a_spaced_checkout_path_as_one_argument(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """README 教的是复制粘贴这条命令：`/Users/x/My Projects/horosa-skill` 不带引号会被 shell 拆成两个参数。"""
+    import shlex
+
+    from horosa_skill.surfaces import cli
+
+    root = tmp_path / "My Projects" / "horosa-skill"
+    root.mkdir(parents=True)
+    (root / "pyproject.toml").write_text("[project]\nname = 'horosa-skill'\n", encoding="utf-8")
+    monkeypatch.setattr(cli, "resolve_uv_command", lambda: ["/opt/u v/bin/uv"])
+    payload = _payload("--format", "claude-code", "--skill-root", str(root), "--surface", "compact")
+    argv = shlex.split(payload["command"])
+    assert argv[:4] == ["claude", "mcp", "add", "horosa"]
+    assert "-e" in argv and "HOROSA_MCP_COMPACT=1" in argv
+    assert "/opt/u v/bin/uv" in argv and str(root.resolve()) in argv, argv
+    assert argv[argv.index("--") + 1] == "/opt/u v/bin/uv"
+
+
+def test_codex_merge_accepts_a_utf16_config(tmp_path: Path) -> None:
+    from horosa_skill.surfaces.cli import _write_codex_toml_merge
+
+    target = tmp_path / "config.toml"
+    target.write_bytes("[other]\nx = 1\n".encode("utf-16"))  # Notepad / Out-File 形状：BOM ff fe
+    assert target.read_bytes()[:2] in {b"\xff\xfe", b"\xfe\xff"}
+    _write_codex_toml_merge(target, '[mcp_servers.horosa]\ncommand = "uv"\n')
+    merged = tomllib.loads(target.read_text(encoding="utf-8"))
+    assert merged["other"]["x"] == 1 and merged["mcp_servers"]["horosa"]["command"] == "uv"
+
+
+def test_codex_merge_refuses_undecodable_bytes_without_a_traceback(tmp_path: Path) -> None:
+    import typer
+
+    from horosa_skill.surfaces.cli import _write_codex_toml_merge
+
+    target = tmp_path / "config.toml"
+    garbage = b"\xff\xfe" + b"\x00\xd8" * 4  # UTF-16 BOM + 孤立代理项 → UnicodeDecodeError
+    target.write_bytes(garbage)
+    with pytest.raises(typer.BadParameter):
+        _write_codex_toml_merge(target, '[mcp_servers.horosa]\ncommand = "uv"\n')
+    assert target.read_bytes() == garbage, "拒绝合并时用户文件必须原封不动"

@@ -1,4 +1,5 @@
-﻿$ErrorActionPreference = "SilentlyContinue"
+﻿try { [Console]::OutputEncoding = [Text.Encoding]::UTF8; [Console]::InputEncoding = [Text.Encoding]::UTF8 } catch { }
+$ErrorActionPreference = "SilentlyContinue"
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RuntimeRoot = Join-Path $Root "..\\runtime\\windows"

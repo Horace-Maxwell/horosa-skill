@@ -24,7 +24,7 @@ from urllib.parse import urlsplit
 
 from horosa_skill.engine.client import loopback_httpx_client
 from horosa_skill.runtime.ports import listener_pids
-from horosa_skill.runtime.procs import pid_alive, process_command
+from horosa_skill.runtime.procs import pid_alive, process_command, process_image_path
 
 Verdict = Literal["ours", "foreign", "unknown"]
 
@@ -49,6 +49,7 @@ class EndpointIdentity:
     # 把用户自己开着的星阙桌面端停掉。下面三条是「我们起的」这一档的证据。
     _STRONG_EVIDENCE = frozenset({
         "identity.nonce_match",
+        "process.image_under_runtime_root",
         "process.command_matches_runtime_root",
         "registry.service_pid_alive",
     })
@@ -117,6 +118,42 @@ def _command_says_ours(command: str | None, runtime_root: Path | str) -> bool:
     return f'-Dhorosa.runtime.root={root}' in command or f'-Dhorosa.runtime.root="{root}"' in command
 
 
+def _normalized(path: str) -> str:
+    """跨平台等价比较：分隔符统一、Windows 不分大小写、去尾分隔符。"""
+    text = os.path.normpath(str(path)).replace("\\", "/").rstrip("/")
+    return text.lower() if os.name == "nt" else text
+
+
+def _image_says_ours(image_path: str | None, runtime_root: Path | str) -> bool:
+    """可执行文件的映像路径是否在我方 runtime 根下。
+
+    载荷的 python.exe / java.exe 就住在 `<root>/current/runtime/<os>/…`，这条不经任何代码页
+    （ctypes 直接拿 Unicode），是 Windows 上最可靠的一级证据。
+    """
+    if not image_path:
+        return False
+    root = _normalized(runtime_root)
+    if not root:
+        return False
+    return _normalized(image_path).startswith(root + "/")
+
+
+def _holder_evidence(pid: int, runtime_root: Path | str, *, need_name: bool) -> tuple[str | None, str | None, str | None]:
+    """一个监听进程的归属证据：`(evidence, image, command)`。
+
+    先问映像路径（免费、免编码），命中就不再起 PowerShell；只有在**需要点名**一个不属于我们的
+    持有者时（`need_name`）才去取完整命令行 —— 那一步在 Windows 上要起 PowerShell（≤ 8 s）。
+    这既是 A1 的编码修复，也是 A2 的 doctor 提速：健康机器上 doctor 一次 PowerShell 都不起。
+    """
+    image = process_image_path(pid)
+    if _image_says_ours(image, runtime_root):
+        return "process.image_under_runtime_root", image, None
+    command = process_command(pid) if (image is None or need_name) else None
+    if _command_says_ours(command, runtime_root):
+        return "process.command_matches_runtime_root", image, command
+    return None, image, command
+
+
 def classify_endpoint(
     url: str,
     *,
@@ -152,9 +189,10 @@ def classify_endpoint(
             # 只允许**升级**（弱 ours → 强 ours），绝不降级为 foreign：app 标记已经证明对面说的是
             # 星阙协议，把它判成 foreign 会连「外部模式下用用户的桌面端当后端」一起打掉。
             for pid in listener_pids(port) if port is not None else []:
-                if _command_says_ours(process_command(pid), runtime_root):
-                    return EndpointIdentity("ours", "process.command_matches_runtime_root", url, port,
-                                            app, None)
+                # 只求升级为强证据，不为点名 → need_name=False：映像路径命中就不起 PowerShell。
+                evidence, _image, _command = _holder_evidence(pid, runtime_root, need_name=False)
+                if evidence:
+                    return EndpointIdentity("ours", evidence, url, port, app, None)
             for pid in service_pids:
                 if pid_alive(pid) == "alive":
                     return EndpointIdentity("ours", "registry.service_pid_alive", url, port, app, None)
@@ -162,16 +200,15 @@ def classify_endpoint(
         if app:
             return EndpointIdentity("foreign", "identity.other_app", url, port, app, None)
 
-    # 2) 监听进程的命令行
+    # 2) 监听进程：先看映像路径（免编码），再看命令行
     if port is not None:
         pids = listener_pids(port)
         for pid in pids:
-            command = process_command(pid)
-            holders.append({"pid": pid, "command": command})
-        for holder in holders:
-            if _command_says_ours(holder.get("command"), runtime_root):
-                return EndpointIdentity("ours", "process.command_matches_runtime_root", url, port,
-                                        holders=holders)
+            # 这里要能点名陌生持有者 → need_name=True（映像命中时仍然不起 PowerShell）。
+            evidence, image, command = _holder_evidence(pid, runtime_root, need_name=True)
+            holders.append({"pid": pid, "image": image, "command": command or image})
+            if evidence:
+                return EndpointIdentity("ours", evidence, url, port, holders=holders)
         if holders and any(h.get("command") for h in holders):
             return EndpointIdentity("foreign", "process.command_is_not_ours", url, port, holders=holders)
 
