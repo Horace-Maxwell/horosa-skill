@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.38.1 (2026-09) | 复审：自动化的盲区与 Windows 编码——B0 归属证据不经代码页 / doctor 预算 / 长路径闸 / 隔离前置；B1 升级就地不砍服务、doctor 报载荷过期、selfcheck 先起 runtime；B2 九客户端按各家真实规则（占位符白名单、JSONC 保注释、Cline/Zed timeout、Codex env 根、探针按客户端形状 + `horosa://runtime/status`、wheel 预下载、OAuth 网关改口、镜像指针）；B3 矩阵真下载、出厂预算、HTTP 握手、九客户端、挂着客户端不停、publish 与矩阵同字节、cron 离整点 + kick、min_os 进清单、mcpb 解包断言 | PowerShell 5.1 往管道写的是 OEM 代码页，Python 侧只许收字节（base64）或走 ctypes；「lane 传了 file:// 就以为验过下载」= 本机环境替测试补前提的第三例；换目录前必停自己的服务、但永不停陌生人的；每个客户端的占位符 / 超时 / 环境转发规则都要按**它的**文档写，并让 `client check` 对着真文件说话 |
 | v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基；A2 Windows 半边从 darwin 种子派生；A3 发布契约（清单钉 tag + size、按契约逐平台判完整、平台表锁）；A4 安装侧平台策略（Windows ARM 公告式回退、`min_os`、平台键看芯片）；B4 `setup --client` 一条命令接入（七步、失败包、真 stdio 探测）；B5 agent 文档（shell-only 契约、四份薄镜像、命令守卫）；B6 doctor 机器条件（码表人话、--explain、长路径余量、quarantine、仿真进程、下载旋钮、零外网）；A5 托管流水线（draft → 派生 → 三台真机矩阵 → [OK] 才公开；首跑抓到非默认端口下 stop 停不掉）；主干 CI 红了 19 个 commit 没人看（Windows CRLF checkout / 路径分隔符 / 宿主 OS 默认路径 / macOS runner netstat CLOSED）；A6 v0.38.0 首次托管双平台一次公开（GITHUB_TOKEN 的 release 事件不触发下游 workflow） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数；回退只许公告着做、载荷自带解释器所以平台键看芯片不看宿主 Python；接入的终点是客户端那条命令真起了 server；给 agent 抄的每条命令都要有守卫对到真实 CLI；每个诊断码都要有人话、doctor 只报不改且默认不碰外网；清单只在两平台齐了才上 release、真机证据由流水线产出 |
 | v0.37.0 (2026-09) | 任意 AI 客户端可调用：广告层只对一个客户端对过 / 自家 .mcp.json 从未连通 / 端口静默采用与误杀 / 回环走代理 | 按**别人的**约束测；改 golden 前先答「旧断言为何不会红」；负向对照跑不红就如实改口 |
 | v0.36.0 收尾 (2026-09) | 「Java 族 live 需 Mongo」十个版本的误定性 = vendored 脚本裸 `-jar`；演禽假闸门 | 贴「环境限制」前先读 `Result` 原文、用上游桌面起法起一遍；闸门问项以 live 翻转为准，不以转发为准 |
@@ -101,6 +102,58 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.38.1 / 2026-09-14 — 复审：自动化的盲区与 Windows 编码（B0 平台 / B1 升级与 doctor / B2 客户端 / B3 矩阵与 CI）
+
+- **起因**：v0.38.0 公开（CI / CodeQL / 三真机矩阵全绿）后再查一遍「任何平台、任何客户端是否顺滑」。三路只读审计 + 九处第三方官方文档核实 +
+  每条发现在源码里坐实。结论：主线成立，剩下 6 条 P0、~25 条 P1、~20 条 P2，全部一次做完（用户决定 2026-09-14）。
+- **① Windows 编码（P0）**：`procs.process_command` 让 PowerShell 吐文本再按 UTF-8 解，而 Windows PowerShell 5.1 往管道写的是 **OEM 代码页**
+  （en-US cp437 / zh-CN cp936）——`C:\Users\张三\…` 回来是 `????` 或 U+FFFD，与 Python 侧 Unicode 路径永不相等，用户名带中文/重音的
+  **健康**机器被判 `port_conflict_foreign` / `stop_refused_foreign`。修：归属证据按「不经代码页」排序——ctypes `QueryFullProcessImageNameW`
+  的映像路径（新强证据 `process.image_under_runtime_root`）→ PowerShell 只搬 UTF-8 字节的 base64 → tasklist 按 `oem` 解；两份 `.ps1`
+  模板首行 `[Console]::OutputEncoding = UTF8`。守卫：`tests/test_subprocess_encoding.py`（AST：`text=True` 无 `encoding=` 基线 0）、
+  base64 路径测试 + 旧解法对 OEM 字节得 U+FFFD 的负向对照、模板首行测试；真机证明 = 矩阵 lane 的带空格 + 中文工作目录（R10）。
+- **② doctor 最坏 165 s**：每个子进程探针各自 5–15 s，加起来没人管（两端口 × 两地址族的 netstat + 每个持有者一次 PowerShell + node/uv 探针），
+  而 MCP 客户端 60 s 掐工具——doctor 恰在最需要它的时候挂。修：`runtime/budget.py`（scope/clamp/timed）+ doctor 25 s / status 15 s 硬顶、
+  `ports._run` 2 s memo、Windows 一条裸 `netstat -ano` 同时解析 v4/v6、映像命中就不起 PowerShell、探针并发；`report.budget` 记 timings / skipped。
+  顺手：`port_bindable` 双栈（只听 `[::]:port` 的服务此前被当空闲端口发给 HOROSA_PORTS=auto）；`PAYLOAD_LONGEST_ENTRY_CHARS` 200→180
+  （darwin 实测 179，默认根在用户名 ≥ 6 字符时被误报「装不下」）→ `verify_runtime_release.py` 双向闸。
+- **③ 升级不停服务（P0）**：`install()` 直接 `replace` + `rmtree(previous)`——Windows WinError 32/5，macOS 旧进程继续从已删路径服务、新载荷
+  永远不启动。本机就是活例：已装 0.3.0、doctor 说 ready、从不提示过期。修：换目录前 `endpoint_identities`——全不可达直接换；全部
+  `started_by_us` → 先停、换完再起（`stopped_before_swap` / `restarted`）；任一可达但不是我们起的 → `runtime.install_refused_running_foreign`，
+  **`--force` 不覆盖**（不杀陌生人是不变量）；previous/ 清理失败分头部（`install_previous_locked`，current 不动）与尾部（warning
+  `previous_cleanup_deferred`）。doctor 新字段 `latest_version` / `freshness`（来源 `.latest-manifest-cache.json`，默认只读缓存，零外网不变量保住）
+  + warning `runtime:payload_outdated`（版本落后或 `export_registry_version` < `exports.registry` 常量——本机 6 < 14）。
+- **④ selfcheck 必红**：`setup` 之后紧跟 `selfcheck`，工具路径只为等 runtime 阻塞 5 s，每个平台都以 `runtime.starting` 退出 1（原审计表述
+  「runtime start 报 start_timeout」有误：`start` 早已返回 `starting`）。修：selfcheck 在 managed + 已装 + 不全可达时先全预算 `start_local_services()`；
+  仿真宿主（Windows on ARM / Rosetta 进程）的出厂预算 45 → 120 s（矩阵 ARM 实测 59.6 s），显式 env 永远优先。
+- **⑤ 客户端细节**：Docker 网关缺 `HOROSA_CHART_SERVER_ROOT`（chart 族全失败）；README 教裸包名的 `pip install horosa-skill`（PyPI 未开通，404）；Zed / VS Code 的
+  JSONC 配置让 `--write` 拒写（新 `jsonc.py` 文本级 upsert，注释与其它键逐字节保留）；Cline / Zed 各自 per-server `timeout`（秒，默认 60）
+  没写；Codex 不转发 shell 环境——runtime 根只设在 shell 里时 Codex 起的 server 用**另一套目录**（env 表写两个绝对根；**不写 `env_vars`**：
+  老版本 deny_unknown_fields 整块拒收）；`.vscode` 用 Claude Code 的占位符是绿的而 `${env:HOME}` 是红的（按客户端白名单，展开后再查
+  pyproject）；`runtime.not_installed` 的修复提示默认你有 checkout（`runtime/hints.py` 按 checkout / wheel URL / 插件目录 / MCPB 生成，
+  由 `HOROSA_INSTALL_CONTEXT` + `HOROSA_PLUGIN_ROOT` 注入）；ChatGPT / claude.ai 连接器只接 OAuth 而本 server 只有静态 Bearer——README 改口
+  「经终结 OAuth 的 HTTPS 网关」并给配方，不实现 OAuth 资源服务器（用户决定）；`.agents` 入口指针指向不存在的
+  `horosa-skill/skills/…`；精简面下 agent 会把「平铺名不在」读成「技法不存在」——六份镜像统一 `horosa_tool_run` 段落。
+  探针改按客户端形状起 server（Codex = 最小环境 ∪ env 表；cwd = 项目根）并读新资源 `horosa://runtime/status` 比对宿主 runtime 根。
+  `setup --launcher uvx-wheel` 把 wheel 预下载到 `~/.horosa/wheels/`（uv 对直链依赖会按 HTTP 缓存头再验证，离线不保证）。
+- **⑥ 自动化的盲区（P0）**：三台真机矩阵**从不走真下载**——两种模式都 `--assets-dir` → file://（2026-09-14 那次 schedule 跑的 lane-report
+  里 `install.source` 仍是 `file://…lane-manifest.json`）；每周 cron 的 03:00 槽晚了 5.5 h 才触发（GitHub 整点槽延迟/丢弃）；HTTP 传输、MCPB
+  解包、wheel 在 Windows 上、`claude mcp add --scope user`、带空格/中文的路径、升级就地、挂着客户端的 stop、出厂预算——没有任何 lane 跑过。
+  修：release/schedule 模式传公开 `--manifest-url`（安装器自己的下载链）+ 结果带 `download{bytes,…}`；cron 移到 04:23 + completeness 的
+  `weekly-matrix-kick`；lane 增九客户端 setup、claude-code user scope、streamable-http 握手（401/421/116）、第二个 stdio 客户端挂着时 stop 必拒、
+  restart + HOROSA_PORTS=auto 复用登记表端口、出厂预算启动、带空格 + 中文工作目录；publish job 用 `verify_matrix_digests.py` 比对三条 lane
+  装的 sha 与 draft 资产 digest（退路 SHA256SUMS），publish=true 必须 run_matrix=true、skipped 不再放行，翻公开后再 dispatch 一次 release
+  模式矩阵；completeness 用资产 digest 校 SHA256SUMS 每一行、断言 `min_os`、解包已发布的 `.mcpb`；`min_os` 由契约进清单，install 下载前拒老系统。
+- **横切教训（第三例）**：「本机环境替测试补了一个它没声明的前提」——v0.37.0 是归属判定（本机 9999 上跑着真 runtime），本轮是
+  **矩阵 lane 传了 file:// 就以为验过下载**、以及 **stop 的客户端登记只有 RECOVERY_TABLE 里的一条错误码而没有任何代码路径**（`runtime.stop_refused_clients_attached`
+  在错误表里躺了一个版本，`stop_local_services` 从没读过登记表）。规则：**一条错误码 / 一个 lane 步骤存在，不等于那条路径被走过**——
+  每个「我们验过」都要能指着一份产物（lane-report 的 `download.bytes`、`installed_archive_sha256`、`clients_attached_stop.attached`）。
+- **守卫清单（本轮新增）**：`test_subprocess_encoding`、`test_runtime_procs_encoding`（OEM 负向对照）、`test_runtime_ports_cache`（netstat 1 vs 4）、
+  `verify_runtime_release` 双向长度闸、`verify_wheel_contents` 主目录路径闸、`test_scripts_stdio`、`verify_client_configs` 覆盖 `.cursor/.vscode`
+  （白名单与 cli 锁步）、docs-sync 五闸（PyPI 命令 / 连接器行 / 入口文档指针 / 镜像计数 / 示例配置无裸 uv）、`verify_matrix_digests`、
+  `verify_mcpb_manifest --bundle`、`test_release_pipeline_shape` +6（旧写法 `--assets-dir "` / 整点 cron / skipped 放行 必红）、R7 本地 HTTP e2e、
+  R14 挂着客户端不停、R3 顺序 `["stop","swap","start"]`（旧 `["swap"]`）、R11 顺序 `["start","run_tool"]`（旧 `["run_tool"]`）。
 
 ### v0.38.0 / 2026-09-11 — A6 首次托管发布：v0.38.0 双平台一次公开；两条发布期新知（GITHUB_TOKEN 的 release 事件不触发下游、publish 会再派生一次）
 

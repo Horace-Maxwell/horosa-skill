@@ -53,7 +53,7 @@ License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICEN
 
 ## Current stable baseline
 
-**Current public version: `Horosa Skill 0.38.0` (106 callable tools).**
+**Current public version: `Horosa Skill 0.38.1` (106 callable tools).**
 
 This release line brings the capability surface roughly to parity with the desktop app — and adds a trust stack no other metaphysics tool ships:
 
@@ -296,7 +296,7 @@ Every tool call returns a uniform envelope:
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.38.0",
+  "ok": true, "tool": "qimen", "version": "0.38.1",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -335,7 +335,7 @@ No checkout needed: **zero-install (no git, no PyPI)** — every release ships a
 straight from its URL; `HOROSA_RUNTIME_MIRROR` rewrites the wheel URL and the runtime URLs alike:
 
 ```bash
-WHL="https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.38.0/horosa_skill-0.38.0-py3-none-any.whl"
+WHL="https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.38.1/horosa_skill-0.38.1-py3-none-any.whl"
 uvx --from "$WHL" horosa-skill install                    # install the offline runtime (same as above)
 uvx --from "$WHL" horosa-skill doctor                     # health check
 uvx --from "$WHL" horosa-skill setup --client cursor       # zero-install one-command onboarding (picks `--launcher uvx-wheel`, writes the wheel URL)
@@ -346,7 +346,7 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # stdio for clients; `
 > The PyPI channel (`uvx horosa-skill …`) is wired but **not yet live** (it needs the maintainer's one-time Trusted Publisher setup); once on, the commands get shorter and behave the same.
 
 > [!NOTE]
-> 🐳 **Docker / Linux (experimental)**: the offline runtime is published for macOS (arm64) and Windows (x64) only — there is no Linux payload. What runs in a container is the **MCP gateway** (Python package + knowledge base + memory) pointed at a host or another machine that has the runtime via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`. An **experimental** `horosa-skill/Dockerfile` + `docker-compose.yml` ship with the repo (gateway image: no offline runtime inside the container, so those two variables are mandatory; binding 0.0.0.0 requires `HOROSA_MCP_TOKEN`); by hand, `pip install "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.38.0/horosa_skill-0.38.0-py3-none-any.whl"` (the release wheel — PyPI is not open yet) then `horosa-skill serve --transport streamable-http` is the gateway.
+> 🐳 **Docker / Linux (experimental)**: the offline runtime is published for macOS (arm64) and Windows (x64) only — there is no Linux payload. What runs in a container is the **MCP gateway** (Python package + knowledge base + memory) pointed at a host or another machine that has the runtime via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`. An **experimental** `horosa-skill/Dockerfile` + `docker-compose.yml` ship with the repo (gateway image: no offline runtime inside the container, so those two variables are mandatory; binding 0.0.0.0 requires `HOROSA_MCP_TOKEN`); by hand, `pip install "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.38.1/horosa_skill-0.38.1-py3-none-any.whl"` (the release wheel — PyPI is not open yet) then `horosa-skill serve --transport streamable-http` is the gateway.
 
 Troubleshooting install: `uv: command not found` -> install uv first (one-liner above); slow/broken network -> re-run `install` (resumes from the partial download) or set `HOROSA_RUNTIME_MIRROR=<mirror-prefix>`; low disk / busy ports / an unfamiliar doctor code -> `doctor --explain` adds 6–10 plain-language lines on stderr (stdout stays JSON) and `advice[]` gives every issue / warning code a `user_summary` + `next_action`, `--probe-network` checks the manifest URL through every mirror (the default makes no external request); macOS: the runtime will not start and leaves no log, or `doctor` reports `quarantine:runtime_binaries` -> the browser-downloaded archive carries Gatekeeper's quarantine attribute, run the `xattr -dr com.apple.quarantine <runtime/current>` command from `quarantine.fix`, then `runtime restart`; Windows `runtime.install_long_path` -> `doctor.windows.headroom_chars` below zero means install will refuse: set `HOROSA_RUNTIME_ROOT=C:\horosa` or enable `LongPathsEnabled` (v0.38.0 shortens the install temp prefix, ~20 characters more headroom); slow or proxied downloads -> `HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS` (default 120) and `HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS` (default 3, per mirror); a Windows Firewall prompt on first start or `doctor` warning `listener:not_loopback_only` -> the old launcher bound Java to 0.0.0.0; after upgrading run `uv run horosa-skill runtime restart` to re-apply the template (pins 127.0.0.1); services not starting under a Windows user name with spaces/CJK -> fixed in v0.38.0 (every path argument is quoted), `runtime restart` after upgrading; Codex showing a pile of errors or no tools on the first turn -> usually the timeouts are unset (Codex defaults 10 s/60 s): `uv run horosa-skill client check --client codex` names the missing keys and `client config --format codex --write ~/.codex/config.toml` merges the fix in place; `uvx` works in a terminal but a GUI client cannot start it -> GUI clients do not inherit your shell PATH, rerun `client config` (it now writes absolute paths) and `client check` reports `command_not_on_path`; upgrade -> `uv run horosa-skill upgrade` (skips the download when already current); uninstall -> `uv run horosa-skill uninstall` (dry-run by default).
 

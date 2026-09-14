@@ -393,6 +393,13 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
     Works-with 矩阵（`verify_docs_sync.check_client_matrix` 锁），并在 `client check` 的
     `_CLIENT_CONFIG_PATHS` 里登记它的配置文件位置。
 
+16. **新客户端 = 三件套（v0.38.1 B2）**：① `CLIENT_PLACEHOLDER_WHITELIST` 里登记它**真的会展开**的 `${…}` 变量（按它的官方文档，
+    不按别家的），`client check` 只放行这一表；② `_client_config_locations` 的路径表（全局 + 项目级，按 `_project_root()` 而非裸 CWD；
+    Windows / macOS / Linux 三形状 + 它自己的覆盖变量如 `CODEX_HOME`）；③ 它的 per-server 超时 / 环境转发规则写进生成器**并**写进
+    `client check`（Codex `startup_timeout_sec`/`tool_timeout_sec` + env 表两个绝对根；Cline / Zed `timeout`（秒））；同时加进
+    `verify_runtime_live.CLIENTS`（九家全部在真机 lane 上 `setup` 一遍）与 README×2 矩阵行。配置文件允许注释的客户端（Zed / VS Code）
+    走 `jsonc.upsert_server_entry`，绝不整文件重排。
+
 **审计前置**（补「未同步技法」缺口前）：先 grep 仓内**明确排除项**（`fengshui`：canvas + 户型图上传 +
 交互点位驱动，无 birth/time 输入，无法 headless——是政策性排除不是缺口），再确认候选的
 `buildXxxSnapshotText` 是纯 `chart/data→text`（无 canvas/DOM/上传/点击依赖），过了 headless-readiness
@@ -557,6 +564,14 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   workflow，completeness / publish-pypi 都得由 publish job 显式 dispatch）→ 再 `--check` 公开 latest）。**清单只在两平台齐了才上到 release**——「缺半」
   窗口从根上消灭；`dry_run=true` 以公开资产为 seed 走完全程不上传（流水线自己的验收）。形状锁
   `tests/test_release_pipeline_shape.py`（只手动触发 / 不 `gh release create` / publish 必 needs matrix / draft 不带清单）。
+- **publish 必须与 matrix 同字节，且矩阵必须真下载（v0.38.1 R1/R5）。** `publish=true` 没有 `run_matrix=true` 在 resolve 直接 fail；
+  publish job 不接受 skipped 的 matrix；翻公开前 `verify_matrix_digests.py` 把三条 lane 的 `installed_archive_sha256` 与 draft 资产的
+  GitHub `digest`（退路 SHA256SUMS.txt）逐一比对。release / dispatch / schedule 模式的 lane 一律通过**公开清单 URL** 安装（安装器自己的
+  下载链），lane-report 必须带 `download.bytes > 0`——「lane 传了 file:// 就以为验过下载」是 v0.38.1 复审抓到的盲区。翻公开后
+  publish job 再 dispatch 一次 release 模式矩阵。
+- **schedule 首跑要观察（v0.38.1 R2）。** GitHub 的整点 cron 槽会延迟或丢弃（2026-09-14 的 03:00 槽 5.5 h 后才跑），矩阵 cron 放在
+  `23 4 * * 1`，`release-completeness.yml`（6 小时一次、稳定）的 `weekly-matrix-kick` 在 6 天无矩阵运行时 dispatch 一次。README 平台表
+  写「每周巡检」之前，先观察到一次 `schedule` 事件的 release 模式矩阵跑绿。
 - **发布步骤只允许以脚本形态存在**（v0.27.0：SBOM 生成器一直在仓里、却因发布流程是手打清单而漏传）：
   维护机半边一律走 `scripts/publish_release.sh`（步骤见上；无参数是安全默认，只构建校验）。资产契约由
   `release-completeness.yml` 断言（manifest 双平台 + 两包可达 + **SBOM 在场** + **`.mcpb` 在场**）。
@@ -736,6 +751,13 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | `install` 报 `runtime.install_os_too_old` | 载荷声明的 `min_os`（派生 Windows 载荷 = 10.0.17763，即 Windows 10 1809）高于本机 | 升级系统或网关模式；`details.host_os` / `min_os` 已给出两边版本 |
 | 终端里 `uvx …` 能跑，Claude Desktop / Cursor 里却起不来（file not found） | GUI 客户端在 Windows 上不继承 shell PATH，配置里写的是裸 `uvx` | 重跑 `client config`（v0.38.0 起写绝对路径）；`client check` 报 `command_not_on_path` 即此症 |
 | Windows smoke 绿，但 step 里某条命令其实失败了 | GitHub `pwsh` 多行 `run:` 只拿**最后一条**命令的退出码当结果（v0.38.0 前 `tool run --output` 这个不存在的参数在此安静失败了几十轮） | 每个 pwsh 多行块首行 `$PSNativeCommandUseErrorActionPreference = $true`（`tests/test_ci_workflow_shape.py` 守）；关键产物要 `Test-Path` + 断言 `.ok` |
+| Windows 上用户名带中文 / 重音，健康机器却报 `port_conflict_foreign` / `stop_refused_foreign` | v0.38.1 前 PowerShell 的命令行输出按 UTF-8 解，而 Windows PowerShell 5.1 往管道写的是 OEM 代码页（cp437 / cp936），路径子串永不相等 | 升级到 0.38.1：映像路径（ctypes）是首选证据，PowerShell 只搬 base64 字节；`doctor.endpoints[].identity.evidence` 应见 `process.image_under_runtime_root` |
+| `doctor` / `runtime status` 在 Windows 上跑几十秒到几分钟，MCP 客户端直接掐掉 | 探针各自超时相加（两端口 × 两地址族 netstat + 每个持有者一次 PowerShell）没人管总量 | 0.38.1 起 doctor 25 s / status 15 s 硬顶，`report.budget.skipped` 列出被预算挡住的探针；仍慢看 `budget.timings` |
+| `install` / `upgrade` 报 `runtime.install_refused_running_foreign`，`--force` 也不行 | 端口上跑着不是本工具起的星阙服务（桌面端 / 另一实例 / 只有 app 标记的旧载荷）；升级不砍陌生人是不变量 | 关掉那个服务，或 `HOROSA_PORTS=auto` 换端口后再装；只是自家旧服务在跑时升级会自动停 → 换 → 起（结果 `stopped_before_swap` / `restarted`） |
+| `runtime stop` 报 `runtime.stop_refused_clients_attached` | 另一个 MCP 客户端会话（Claude Code / Cursor 的 stdio server）仍挂在这份 runtime 上 | 关掉那些会话；确认要停就 `runtime stop --force`；只想重启用 `runtime restart`（客户端自动重连） |
+| Zed / VS Code 的 `setup` / `client config --write` 报「不是合法 JSON」 | 配置文件带注释 / 尾逗号（JSONC） | 0.38.1 起走 `jsonc.upsert_server_entry` 文本级插入（注释保留、只动 horosa 条目、写完回读）；仍红说明括号不配对 |
+| 终端里 doctor ready，Codex 里技法全报 `runtime.not_installed` | Codex 不转发 shell 环境，server 用另一套 runtime 根 | `client check --client codex` 报 `codex_env_roots_missing`；重跑 `client config --format codex --write`（env 表写两个绝对根）；`setup` 的 stdio 探针读 `horosa://runtime/status` 直接报 `setup.stdio_probe_runtime_mismatch` |
+| doctor warning `runtime:payload_outdated` | 已装载荷落后于最后一次看到的发布清单，或 `export_registry_version` 低于本包期望（本机 0.3.0 / 6 < 14 一直被报 ready） | 按 warning 的 `fix` 跑对应上下文的 `upgrade` 命令；`doctor --probe-network` 刷新版本缓存 |
 | 维护机上 `test_runtime_manager.py` 全绿、CI 上四条红在 `runtime.port_conflict_unknown_holder` | v0.37.0 起只 stub `_service_status` 的用例会拿那个 URL **真的**跑归属判定：维护机 9999/8899 上跑着真 runtime → ours；CI 上没人监听 → unknown | 本机复现要连**归属**一起伪装：autouse fixture 把 `identity.probe_identity` 打成返回 None、`listener_pids` 打成返回 `[]`，`pytest -p <plugin>` 挂上去。`_managed_mode` 已内置 classify_endpoint 桩 |
 
 ## 9. Stability invariants（稳定性不变量 — don't regress these）
@@ -898,6 +920,17 @@ A global stability pass hardened these; keep them true when you touch the releva
   keep it that way.
 - **Report rendering is atomic.** `render_report` renders to a temp sibling then `os.replace()`s —
   never write a report format directly to its final `output_path`（a mid-render failure would corrupt it）.
+- **install / upgrade 换目录前必停自己的服务，且永不停陌生人的（v0.38.1 R3）。** `install()` 在 `replace(previous)` 之前先
+  `endpoint_identities`：全不可达直接换；全部 `started_by_us` → `stop_local_services(ignore_clients=True)` → 换 → `start_local_services()`；
+  任一可达但不是我们起的 → `runtime.install_refused_running_foreign`，`--force` 不覆盖。`tests/test_runtime_manager.py` 锁顺序
+  `["stop", "swap", "start"]`。
+- **子进程文本一律显式解码（v0.38.1 A1/A19）。** `subprocess.run(..., text=True)` 必带 `encoding=`（UTF-8，或 tasklist 的 `oem`）
+  + `errors="replace"`；归属证据优先走不经代码页的 ctypes 映像路径；PowerShell 只允许搬 base64 字节。`tests/test_subprocess_encoding.py`
+  AST 扫描基线 0。
+- **`runtime stop` 不在别的 MCP 客户端脚下抽走服务（v0.38.1 R14）。** 登记表里仍存活的客户端 → `runtime.stop_refused_clients_attached`；
+  `--force` 才停；`restart` / 升级换目录 / `uninstall` 走 `ignore_clients=True`（服务马上回来或本来就要删）。死掉的登记不拦。
+- **doctor 默认零外网请求，「最新版本」只读缓存（v0.38.1 R4）。** `latest_version` / `freshness` 来自 `<runtime_root>/.latest-manifest-cache.json`
+  （每次成功抓取发布清单顺手写）；没有缓存就老实 `null` 并提示 `--probe-network`。过期是 warning，不阻断。
 - **Hand-made vendor stamps are line-ending independent.** `revendor_core_js._sha256_file` hashes the
   CRLF→LF-normalized UTF-8 text（raw bytes only for non-UTF-8）, so `upstream_sha256`/`derived_sha256`
   stamped on mac over LF sources still match on a Windows checkout（`core.autocrlf=true`）— a raw-bytes

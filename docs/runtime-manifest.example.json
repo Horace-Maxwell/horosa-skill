@@ -1,17 +1,19 @@
 {
-  "version": "0.38.0",
+  "version": "0.38.1",
   "platforms": {
     "darwin-arm64": {
-      "url": "https://github.com/example/horosa-skill-repo/releases/download/v0.38.0/horosa-runtime-darwin-arm64-v0.38.0.tar.gz",
+      "url": "https://github.com/example/horosa-skill-repo/releases/download/v0.38.1/horosa-runtime-darwin-arm64-v0.38.1.tar.gz",
       "sha256": "REPLACE_WITH_REAL_SHA256",
       "archive_type": "tar.gz",
-      "size": 737084194
+      "size": 737084194,
+      "min_os": "11.0"
     },
     "win32-x64": {
-      "url": "https://github.com/example/horosa-skill-repo/releases/download/v0.38.0/horosa-runtime-win32-x64-v0.38.0.zip",
+      "url": "https://github.com/example/horosa-skill-repo/releases/download/v0.38.1/horosa-runtime-win32-x64-v0.38.1.zip",
       "sha256": "REPLACE_WITH_REAL_SHA256",
       "archive_type": "zip",
-      "size": 713054877
+      "size": 713054877,
+      "min_os": "10.0.17763"
     }
   }
 }

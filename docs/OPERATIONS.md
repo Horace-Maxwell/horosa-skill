@@ -61,6 +61,13 @@ SBOM、provenance attestation、`runtime-matrix.yml` 三台真机验证 → `pyt
 --tag vX.Y.Z --draft` 报 `[OK]` → `gh workflow run release-runtime.yml -f version=X.Y.Z -f publish=true` 转公开 latest →
 `--check` 公开 latest。清单只在两平台齐了才上 release，「缺半」窗口不再存在。
 
+**v0.38.1 起的三道加固（B3）**：① `publish=true` 必须同时 `run_matrix=true`，publish job 不再接受被跳过的矩阵；翻公开前
+`scripts/verify_matrix_digests.py` 把三条 lane 装的归档 sha（lane-report `installed_archive_sha256`）与 draft 资产的 GitHub `digest`
+（退路 SHA256SUMS.txt）逐一比对——公开的字节 = 真机验过的字节。② release / dispatch / schedule 模式的矩阵通过**公开清单 URL** 安装
+（安装器自己的下载链，lane-report 带 `download.bytes`），翻公开后 publish job 再 dispatch 一次 release 模式矩阵。③ 每周矩阵 cron 在
+`23 4 * * 1`；`release-completeness.yml` 的 `weekly-matrix-kick` 在 6 天无矩阵运行时补一次。完整性守卫另用资产 digest 校 SHA256SUMS
+每一行、断言 `min_os`、解包已发布的 `.mcpb`。
+
 - 构建脚本（seed）：[`package_runtime_payload.sh`](./../horosa-skill/scripts/package_runtime_payload.sh)（经 `publish_release.sh`）；
   Windows 半：[`build_runtime_release_windows.py --seed`](./../horosa-skill/scripts/build_runtime_release_windows.py)（流水线）；
   旧的 [`build_runtime_release.sh`](./../horosa-skill/scripts/build_runtime_release.sh) 仍可本地双平台构建（vendor 模式后手）

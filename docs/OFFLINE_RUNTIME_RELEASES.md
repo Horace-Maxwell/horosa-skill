@@ -161,5 +161,6 @@ For the embedded payload manifest, see [`RUNTIME_MANIFEST_SPEC.md`](./RUNTIME_MA
   `HOROSA_CORE_JS_ROOT` 可覆盖；源码树回退只在 checkout 里有效。
 - 发布顺序（v0.38.0 A5）：tag → `publish_release.sh --draft --dispatch`（draft + 触发 `release-runtime.yml`：派生 Windows 半、
   双平台清单、真机矩阵）→ `sync_windows_release.py --check --tag vX --draft` [OK] → `gh workflow run release-runtime.yml
-  -f version=X -f publish=true`（转公开；publish-pypi 随 published 事件自动跑）→ `--check` 公开 latest →
-  `uvx --from <wheel URL> horosa-skill --version` 烟测。
+  -f version=X -f publish=true`（转公开；publish 前 `verify_matrix_digests.py` 比对三条 lane 装的 sha 与 draft 资产 digest（v0.38.1 R5）；
+  GITHUB_TOKEN 产生的 published 事件**不**触发下游 workflow，completeness 由 publish job 显式 dispatch，publish-pypi 开通后同理）→
+  `--check` 公开 latest → publish job 再 dispatch 一次 release 模式矩阵（真 https 下载）→ `uvx --from <wheel URL> horosa-skill --version` 烟测。
