@@ -153,7 +153,10 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   合成 home → 路径表用例只在 Linux 红（用例改 `env={}`，先在本机 `XDG_CONFIG_HOME=… pytest` 复现出红再改）；② Linux 上 `run_tool` 的第一跳如今是
   `runtime.platform_unsupported`（A9），其 agent_recovery 没提 doctor → `test_operational_errors_carry_agent_recovery` 红（死胡同建议补
   `horosa-skill doctor --explain`）；③④ hints 测试把 `Path(root) / "horosa-skill"` 写死成 POSIX 斜杠，Windows 上是反斜杠（行为正确，断言按平台拼）。
-  规则不变：**推送之后看 CI**，四条都是维护机（macOS、无 XDG）替测试补了前提。
+  ⑤（第二推）R9 让 wheel 路径的 `setup` 真起 stdio——探针跑的是配置里那条 `uvx --from <发布页 wheel URL>`，而 CI 上这个版本**还没发布**
+  （uvx：Failed to download …/v0.38.1/…whl），Linux 与 Windows 同红。修：CI 预置 C15 的本地缓存 `~/.horosa/wheels/<whl>`（Windows 取
+  USERPROFILE），setup 写 `--from <本地 wheel>`，探针离线真起。教训：**「客户端将要执行的命令」在 CI 上必须先问「它指向的东西此刻存在吗」**。
+  规则不变：**推送之后看 CI**，五条都是维护机（macOS、无 XDG、能上 github.com 取已发布 wheel）替测试补了前提。
 - **守卫清单（本轮新增）**：`test_subprocess_encoding`、`test_runtime_procs_encoding`（OEM 负向对照）、`test_runtime_ports_cache`（netstat 1 vs 4）、
   `verify_runtime_release` 双向长度闸、`verify_wheel_contents` 主目录路径闸、`test_scripts_stdio`、`verify_client_configs` 覆盖 `.cursor/.vscode`
   （白名单与 cli 锁步）、docs-sync 五闸（PyPI 命令 / 连接器行 / 入口文档指针 / 镜像计数 / 示例配置无裸 uv）、`verify_matrix_digests`、

@@ -93,8 +93,12 @@ jobs:
           # v0.38.0 B4：wheel 装出来的包旁边没有 pyproject.toml —— `setup` 必须自动选 uvx-wheel 启动器（而不是 BadParameter）。
           # v0.38.1 R9：不再 dry-run —— 用 wheel 里的包**真起一次 stdio server**（claude-code = 全量面 116 个工具）。
           # dry-run 只证明「计划能算出来」，证明不了 wheel 少了哪个数据文件会让 server 起不来。
-          HOME=$(mktemp -d) uvx --from "file://${whl}" horosa-skill setup --client claude-code --config /tmp/horosa-setup-smoke/mcp.json --no-write --no-probe-network --skip-install --no-cache-wheel \
-            | python3 -c 'import json,sys; r=json.load(sys.stdin); probe=r["steps"]["stdio_probe"]; assert r["ok"] and r["launcher"]["kind"] == "uvx-wheel", r["launcher"]; assert probe["tools"] == 116 == probe["expected_tools"], probe; print("setup via wheel, real stdio probe:", probe["tools"], "tools")'
+          # 🔴 探针跑的是**客户端将要执行的命令**：uvx-wheel 形态默认写发布页的 wheel URL —— 而 CI 上这个版本还没发布（首推 v0.38.1
+          # 时 uvx 对 …/v0.38.1/…whl 报 Failed to download）。走 C15 的本地缓存：把刚构建的 wheel 放进 ~/.horosa/wheels/，setup 便把
+          # `--from <本地 wheel>` 写进配置（离线可起），探针照样真起一次 stdio。
+          export HOME=$(mktemp -d); mkdir -p "$HOME/.horosa/wheels"; cp "${whl}" "$HOME/.horosa/wheels/"
+          uvx --from "file://${whl}" horosa-skill setup --client claude-code --config /tmp/horosa-setup-smoke/mcp.json --no-write --no-probe-network --skip-install \
+            | python3 -c 'import json,sys; r=json.load(sys.stdin); probe=r["steps"]["stdio_probe"]; assert r["ok"] and r["launcher"]["kind"] == "uvx-wheel", r["launcher"]; assert r["launcher"].get("wheel_cached_path"), r["launcher"]; assert probe["tools"] == 116 == probe["expected_tools"], probe; print("setup via cached wheel, real stdio probe:", probe["tools"], "tools")'
       - name: Verify JS tool→engine boundary contracts (the issue #15 dead-key shape)
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_js_boundary_contracts.py
@@ -208,12 +212,15 @@ jobs:
           $whlDir = Join-Path $root 'whl'
           uv build --wheel --out-dir $whlDir
           $whl = (Get-ChildItem $whlDir -Filter 'horosa_skill-*-py3-none-any.whl' | Select-Object -First 1).FullName
-          $env:HOME = Join-Path $root 'uvx-home'
-          uvx --from $whl horosa-skill setup --client claude-code --config "$root\wheel-cc.json" --no-write --no-probe-network --skip-install --no-cache-wheel > "$root\setup-wheel.json"
-          Remove-Item Env:HOME
+          # 同 test job：发布页的 wheel URL 在 CI 上还不存在 → 预置 C15 的本地缓存（Path.home() 在 Windows 取 USERPROFILE，runner 一次性）
+          $wheelCache = Join-Path $env:USERPROFILE '.horosa\wheels'
+          New-Item -ItemType Directory -Force -Path $wheelCache | Out-Null
+          Copy-Item -LiteralPath $whl -Destination $wheelCache -Force
+          uvx --from $whl horosa-skill setup --client claude-code --config "$root\wheel-cc.json" --no-write --no-probe-network --skip-install > "$root\setup-wheel.json"
           $wheelReport = Get-Content -Raw -LiteralPath "$root\setup-wheel.json" | ConvertFrom-Json -AsHashtable
           if (-not $wheelReport['ok']) { throw "setup via wheel returned ok=false: $($wheelReport['summary'])" }
           if ($wheelReport['launcher']['kind'] -ne 'uvx-wheel') { throw "wheel setup picked launcher $($wheelReport['launcher']['kind']), expected uvx-wheel" }
+          if (-not $wheelReport['launcher']['wheel_cached_path']) { throw "wheel setup did not use the cached wheel (would probe the unpublished release URL)" }
           if ($wheelReport['steps']['stdio_probe']['tools'] -ne 116) { throw "wheel stdio probe listed $($wheelReport['steps']['stdio_probe']['tools']) tools, expected 116" }
           # v0.38.0 B5：codex 形状 TOML 生成 → 回读体检（client check）→ tomllib 断言超时字段在场、command 是绝对路径
           uv run horosa-skill client config --format codex --write "$root\codex-config.toml" > $null
