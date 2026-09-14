@@ -257,7 +257,11 @@ jobs:
           LANES: ${{ runner.temp }}/lanes
         run: |
           set -euo pipefail
-          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq '.assets[] | "\(.name) \(.digest // "")"' > "${RUNNER_TEMP}/digests.txt"
+          # 🔴 not `releases/tags/<tag>`: that endpoint only returns PUBLISHED releases (404 for a draft — this job runs before
+          # the flip). The list endpoint includes drafts for an authorised token.
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"${TAG}\") | .assets[] | \"\(.name) \(.digest // \"\")\"" > "${RUNNER_TEMP}/digests.txt"
+          test -s "${RUNNER_TEMP}/digests.txt" || { echo "::error::no assets found for draft ${TAG}"; exit 1; }
           gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" -p SHA256SUMS.txt -D "${RUNNER_TEMP}" --clobber || : > "${RUNNER_TEMP}/SHA256SUMS.txt"
           python3 horosa-skill/scripts/verify_matrix_digests.py --lanes "${LANES}" --digests "${RUNNER_TEMP}/digests.txt" --sums "${RUNNER_TEMP}/SHA256SUMS.txt" --expect-lanes 3
       - name: The draft must be complete before it goes public (the [GAP]/[OK] verdict is authoritative)

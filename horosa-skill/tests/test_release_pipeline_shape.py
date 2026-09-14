@@ -172,6 +172,10 @@ def test_publish_requires_the_matrix_and_the_same_bytes() -> None:
     condition = next(line for line in publish.splitlines() if line.strip().startswith("if:"))
     assert "needs.matrix.result == 'success'" in condition and "skipped" not in condition
     assert "verify_matrix_digests.py" in publish and "pattern: runtime-matrix-*" in publish and ".digest" in publish
+    # 负向对照：`releases/tags/<tag>` 只返回已公开的 release——publish job 在翻公开之前跑，对 draft 必然 404（首次核对时实测）
+    publish_code = "\n".join(line for line in publish.splitlines() if not line.lstrip().startswith("#"))
+    assert "releases/tags/" not in publish_code, "the draft's asset digests must come from the list endpoint, not releases/tags/<tag>"
+    assert 'select(.tag_name == \\"${TAG}\\")' in publish and "--paginate" in publish
     assert publish.index("verify_matrix_digests.py") < publish.index("--draft=false --latest"), "digest gate before the flip"
     assert "gh workflow run runtime-matrix.yml" in publish
     assert publish.index("--draft=false --latest") < publish.index("gh workflow run runtime-matrix.yml"), "release-mode matrix after the flip"
