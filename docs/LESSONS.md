@@ -103,6 +103,36 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.38.1 / 2026-09-15 — install/upgrade 的换目录闸不认 root：别的根的实例占着旧清单的端口就拒装，提示还救不了（Windows 维护机原生复验抓到）
+
+- **症状**：本机按 v0.38.0 起的新角色跑 `verify_runtime_live.py` 复验 v0.38.1（独立 root `rt-verify` + lane 端口
+  18899/19999），第 2 步 `install` 就红：`runtime.install_refused_running_foreign`，`details.conflicts` 两端点
+  `identity.evidence = identity.app_marker`、`started_by_us = false`、`holders = []`，`force_ignored = true`。
+  rt-verify 的旧清单（上一轮按默认端口装的 0.38.0）baked `8899/9999`，而这两个端口被 `%LOCALAPPDATA%\Horosa\runtime\current`
+  根下的旧实例（v0.30.0，桌面端 / 早前 manager 起的，挂着客户端所以 `stop` 也拒）占着。
+- **根因**：`_stop_own_services_before_swap`（v0.38.1 R3「升级就地不砍正在跑的服务」）只看 `started_by_us`，
+  **不看持有者跑在哪个根**。可占着端口的两颗进程映像/命令行全在 `%LOCALAPPDATA%` 根——换 rt-verify 的 `current/`
+  动不到它们的任何文件，「替换别人在用的 runtime」这个前提根本不成立，它只是**端口被占**。而提示里的
+  `HOROSA_PORTS=auto` 对这形状无效：闸探的是**旧清单**钉的端口，改端口只影响新清单。真实用户形状 = 桌面端开着 +
+  之前按默认端口装过（人人如此）→ `install`/`upgrade` 永久拒绝、按提示做也不通。`holders: []` **不是** bug：
+  app_marker 路径按设计只「升级不点名」（v0.37.0 那条注释），`port_holders(8899)` 在本机实测能解析出两颗进程。
+- **修**：`identity.holders_outside_runtime_root(port, runtime_root)` —— 端口的监听者若**全部**可证明跑在本根之外
+  （映像路径 / 命令行都不在本根下，复用 `_holder_evidence`）返回它们，任一住在本根下 / 点不出名 / 没监听者 / 没端口
+  → `None`（**永远不把「查不到」当「在别处」**）。闸改成：不是我们起的端点若全部证明在别处 → **放行**、不停任何进程、
+  记 `runtime.install_ports_held_elsewhere` 警告（`held_by` 点名 + 正确的 next_action：关那份实例，或给本 runtime 换端口
+  再 `start`）；证明不了 → 仍 `install_refused_running_foreign`，`--force` 仍不覆盖。本根自己起的服务仍走停 → 换 → 起。
+- **守卫**：`tests/test_runtime_ports_identity.py::test_holders_outside_runtime_root_*`（在别处 / 本根下 / 命令行引用本根 /
+  点不出名 / 无监听者 / 无端口）；`tests/test_runtime_manager.py::test_install_proceeds_when_the_busy_ports_belong_to_another_runtime_root`
+  （放行 + 警告 + 绝不 stop + current 已换）、`::test_install_still_refuses_when_only_some_busy_ports_are_provably_elsewhere`
+  （一个端口证明不了就整体拒）；原 `::test_install_refuses_to_replace_a_runtime_someone_else_is_running` 改为钉住
+  「查不到持有者」这一分支。本机原生复现（`scratchpad/repro_swap_gate.py`）：`rt-repro` 根按默认端口装 v0.38.1 →
+  再 `--force` 装 → 放行 + `install_ports_held_elsewhere`（`held_by` 点名 pid 141964 / 41580 及其 %LOCALAPPDATA% 映像）、
+  `stopped_before_swap=False`、两颗占用进程 pid 前后不变。lane 侧运维解法 = 清掉 rt-verify 的旧 `current/` 与状态
+  再跑（无旧清单 → 无闸）。
+- **法则**：**「不是我们起的」≠「换目录会伤到它」——闸要问的是「它的文件在不在我要换的根下」**；任何按端口做的
+  拒绝，其提示给出的绕行路径必须对触发形状真的有效（这里 `HOROSA_PORTS=auto` 就不是）。
+
+
 ### v0.38.1 / 2026-09-14 — 复审：自动化的盲区与 Windows 编码（B0 平台 / B1 升级与 doctor / B2 客户端 / B3 矩阵与 CI）
 
 - **起因**：v0.38.0 公开（CI / CodeQL / 三真机矩阵全绿）后再查一遍「任何平台、任何客户端是否顺滑」。三路只读审计 + 九处第三方官方文档核实 +

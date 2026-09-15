@@ -154,6 +154,30 @@ def _holder_evidence(pid: int, runtime_root: Path | str, *, need_name: bool) -> 
     return None, image, command
 
 
+def holders_outside_runtime_root(port: int | None, runtime_root: Path | str) -> list[dict[str, Any]] | None:
+    """监听 `port` 的进程若**全部**可证明跑在 `runtime_root` 之外，返回它们的 `{pid, image, command}`；否则 None。
+
+    给 install/upgrade 的换目录闸用：一份从别的根跑的星阙（用户的桌面端、另一个 runtime root）文件不在这里，
+    换本根的 current/ 动不到它 —— 它只是「端口被占」，不是「正在被替换的 runtime 有人在用」。
+    None 表示**证明不了**（查不到监听者 / 有持有者住在本根下 / 拿不到映像也拿不到命令行），调用方按拒绝处理：
+    永远不把「查不到」当成「在别处」。绝不终止任何进程。
+    """
+    if port is None:
+        return None
+    pids = listener_pids(port)
+    if not pids:
+        return None
+    holders: list[dict[str, Any]] = []
+    for pid in pids:
+        evidence, image, command = _holder_evidence(pid, runtime_root, need_name=True)
+        if evidence:
+            return None  # 住在本根下 → 换目录会伤到它 → 交给调用方拒绝
+        if not (image or command):
+            return None  # 点不出名 → 证明不了在别处
+        holders.append({"pid": pid, "image": image, "command": command or image})
+    return holders
+
+
 def classify_endpoint(
     url: str,
     *,

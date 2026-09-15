@@ -30,7 +30,7 @@ from horosa_skill.config import Settings
 from horosa_skill.engine.client import HorosaApiClient, loopback_httpx_client
 from horosa_skill.errors import HorosaSkillError, RuntimeInstallError, RuntimeValidationError, bilingual
 from horosa_skill.runtime import registry as runtime_registry
-from horosa_skill.runtime.identity import EndpointIdentity, classify_endpoint, trust_unknown_ports
+from horosa_skill.runtime.identity import EndpointIdentity, classify_endpoint, holders_outside_runtime_root, trust_unknown_ports
 from horosa_skill.runtime.pidlock import describe_lock, release as release_lock, try_pid_lock
 from horosa_skill.runtime.ports import port_holders
 from horosa_skill.tracing import TraceRecorder
@@ -873,7 +873,7 @@ class HorosaRuntimeManager:
                     # java.exe / python.exe 锁着文件 → WinError 32/5；macOS 上旧进程继续从已删路径服务、新载荷永远
                     # 不启动（本机就是活例：已装 0.3.0、doctor 说 ready、从不提示过期）。不是我们起的服务一律拒绝，
                     # `--force` 也不例外 ——「不杀陌生人」是不变量。
-                    was_running = self._stop_own_services_before_swap(self.load_installed_manifest())
+                    was_running = self._stop_own_services_before_swap(self.load_installed_manifest(), warnings=install_warnings)
                 self._remove_previous_dir(previous_dir)
                 if self.current_dir.exists():
                     self.current_dir.replace(previous_dir)
@@ -947,17 +947,53 @@ class HorosaRuntimeManager:
 
     # ---- v0.38.1 R3：升级就地（先停自己的服务，再换目录，再拉起） --------------------------------
 
-    def _stop_own_services_before_swap(self, installed_manifest: dict[str, Any] | None) -> bool:
+    def _stop_own_services_before_swap(
+        self, installed_manifest: dict[str, Any] | None, *, warnings: list[dict[str, Any]] | None = None
+    ) -> bool:
         """返回 True = 之前在跑且已由我们停下（换完目录要重新拉起）。
 
         可达但**不是我们起的**（foreign / unknown / 只有 app 标记）→ 抛 runtime.install_refused_running_foreign；
-        `--force` 不覆盖这条。
+        `--force` 不覆盖这条。**例外**：占着已装清单端口的服务若能证明全部跑在**别的根**（用户的星阙桌面端、
+        另一个 runtime root），它的文件不在本根，换 current/ 动不到它 —— 那只是端口被占，不是「正在替换别人在用的
+        runtime」，放行并记 runtime.install_ports_held_elsewhere 警告。v0.38.1 复审在 Windows 维护机上撞到：
+        rt-verify 根的旧清单钉着 8899/9999，被 %LOCALAPPDATA% 根的实例占着 → 拒装；而提示里的 HOROSA_PORTS=auto
+        对「旧清单钉着被占端口」无效（探的是旧清单的端口），桌面端 + 默认端口这一最常见组合会原地卡死。
+        证明不了在别处 → 仍拒。
         """
         endpoints = self.endpoint_identities(installed_manifest)
         reachable = [item for item in endpoints if item.get("reachable")]
         if not reachable:
             return False
+        ours = [item for item in reachable if (item.get("identity") or {}).get("started_by_us")]
         foreign = [item for item in reachable if not ((item.get("identity") or {}).get("started_by_us"))]
+        if foreign:
+            elsewhere: list[dict[str, Any]] = []
+            for item in foreign:
+                port = (item.get("identity") or {}).get("port")
+                holders = holders_outside_runtime_root(port, self.runtime_root)
+                if not holders:
+                    break
+                elsewhere.append({"label": item.get("label"), "url": item.get("url"), "port": port, "holders": holders})
+            else:
+                if warnings is not None:
+                    warnings.append({
+                        "code": "runtime.install_ports_held_elsewhere",
+                        "message": bilingual(
+                            "已装清单里的端口正被另一份星阙实例占用（它的文件不在本 root 下，本次升级动不到它）；"
+                            "新 runtime 启动时会在这些端口上撞车。",
+                            "The ports in the installed manifest are held by another Horosa instance (its files are not "
+                            "under this runtime root, so this upgrade cannot affect it); the new runtime will collide on "
+                            "those ports at start.",
+                        ),
+                        "held_by": elsewhere,
+                        "next_action": bilingual(
+                            "关掉那份实例（可能是你自己开着的星阙桌面端），或用 HOROSA_PORTS=auto / "
+                            "HOROSA_LOCAL_BACKEND_PORT + HOROSA_LOCAL_CHART_PORT 给本 runtime 换端口后再 start。",
+                            "Close that instance (possibly your own Horosa desktop app), or move this runtime's ports with "
+                            "HOROSA_PORTS=auto / HOROSA_LOCAL_BACKEND_PORT + HOROSA_LOCAL_CHART_PORT before start.",
+                        ),
+                    })
+                foreign = []
         if foreign:
             raise RuntimeInstallError(
                 bilingual(
@@ -977,6 +1013,8 @@ class HorosaRuntimeManager:
                     ),
                 },
             )
+        if not ours:
+            return False  # 端口被别处占着、本根没有在跑的服务 → 不停任何东西，换完目录也不必重启
         # 挂着的客户端不拦升级：服务换完目录马上回来，它们下一次调用只见一次 runtime.starting。
         stopped = self.stop_local_services(ignore_clients=True)
         if not (stopped.get("ok") or stopped.get("already_stopped")):

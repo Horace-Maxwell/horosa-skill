@@ -365,3 +365,42 @@ def test_app_marker_with_a_stranger_command_stays_weak_not_foreign(monkeypatch, 
     assert verdict.verdict == "ours", "自报星阙协议的对面不该被判 foreign"
     assert verdict.evidence == "identity.app_marker"
     assert verdict.started_by_us is False, "不是我们起的，就不许停它"
+
+
+# ---- holders_outside_runtime_root：换目录闸用的「持有者是否全在别的根」判定 ------------------------------------
+
+
+def _fake_holders(monkeypatch: pytest.MonkeyPatch, pids: list[int], images: dict[int, str | None], commands: dict[int, str | None]) -> None:
+    monkeypatch.setattr("horosa_skill.runtime.identity.listener_pids", lambda port: list(pids))
+    monkeypatch.setattr("horosa_skill.runtime.identity.process_image_path", lambda pid: images.get(pid))
+    monkeypatch.setattr("horosa_skill.runtime.identity.process_command", lambda pid: commands.get(pid))
+
+
+def test_holders_outside_runtime_root_names_holders_that_live_elsewhere(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from horosa_skill.runtime.identity import holders_outside_runtime_root
+
+    root = tmp_path / "rt-verify"
+    other = tmp_path / "other-root" / "current" / "runtime" / "windows"
+    java_cmd = '"' + str(other / "java.exe") + '" -jar boot.jar'
+    _fake_holders(monkeypatch, [11, 22], {11: str(other / "python.exe"), 22: None}, {11: None, 22: java_cmd})
+    assert holders_outside_runtime_root(8899, root) == [
+        {"pid": 11, "image": str(other / "python.exe"), "command": str(other / "python.exe")},
+        {"pid": 22, "image": None, "command": java_cmd},
+    ]
+
+
+def test_holders_outside_runtime_root_refuses_to_guess(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """住在本根下 / 点不出名 / 没有监听者 / 没端口 → 一律 None（调用方按拒绝处理），绝不把「查不到」当「在别处」。"""
+    from horosa_skill.runtime.identity import holders_outside_runtime_root
+
+    root = tmp_path / "rt-verify"
+    ours = root / "current" / "runtime" / "windows" / "python.exe"
+    _fake_holders(monkeypatch, [11], {11: str(ours)}, {11: None})
+    assert holders_outside_runtime_root(8899, root) is None, "映像在本根下"
+    _fake_holders(monkeypatch, [11], {11: "C:/elsewhere/python.exe"}, {11: "C:/elsewhere/python.exe " + str(root / "current" / "srv.py")})
+    assert holders_outside_runtime_root(8899, root) is None, "命令行引用本根（别处的解释器跑本根的脚本）"
+    _fake_holders(monkeypatch, [11], {11: None}, {11: None})
+    assert holders_outside_runtime_root(8899, root) is None, "既无映像也无命令行"
+    _fake_holders(monkeypatch, [], {}, {})
+    assert holders_outside_runtime_root(8899, root) is None, "没有监听者"
+    assert holders_outside_runtime_root(None, root) is None, "没端口"

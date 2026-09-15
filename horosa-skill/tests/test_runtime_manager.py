@@ -1948,8 +1948,9 @@ def test_install_over_a_stopped_runtime_neither_stops_nor_restarts(tmp_path: Pat
 
 
 def test_install_refuses_to_replace_a_runtime_someone_else_is_running(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """可达但不是我们起的（用户的桌面端 / 另一实例 / 只有 app 标记）→ 拒绝；`--force` 不得覆盖。"""
+    """可达但不是我们起的，且证明不了持有者在别的根（查不到 / 住在本根下）→ 拒绝；`--force` 不得覆盖。"""
     manager = _manager_with_runtime(tmp_path)
+    monkeypatch.setattr("horosa_skill.runtime.manager.holders_outside_runtime_root", lambda port, root: None)
     marker = manager.current_dir / "MARKER"
     marker.write_text("keep", encoding="utf-8")
     # 让已装清单与归档清单不相等，否则 force=False 会在归属检查之前就以「未变化」返回。
@@ -1971,6 +1972,64 @@ def test_install_refuses_to_replace_a_runtime_someone_else_is_running(tmp_path: 
         assert "HOROSA_PORTS=auto" in excinfo.value.details["next_action"]
     assert marker.read_text(encoding="utf-8") == "keep", "current/ 必须一字不动"
     assert not (manager.runtime_root / "previous").exists()
+
+
+def test_install_proceeds_when_the_busy_ports_belong_to_another_runtime_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """v0.38.1 复审（Windows 维护机）：已装清单钉的端口被**别的根**的星阙实例占着（用户的桌面端 / %LOCALAPPDATA% 根）。
+    它的文件不在本根，换 current/ 动不到它 → 放行 + runtime.install_ports_held_elsewhere 警告；绝不去停它。
+    之前这里一律 install_refused_running_foreign，而提示的 HOROSA_PORTS=auto 对「旧清单钉着被占端口」无效，
+    桌面端 + 默认端口这一最常见组合会原地卡死。"""
+    manager = _manager_with_runtime(tmp_path)
+    marker = manager.current_dir / "MARKER"
+    marker.write_text("old", encoding="utf-8")
+    manifest_path = manager.current_dir / "runtime-manifest.json"
+    installed = json.loads(manifest_path.read_text(encoding="utf-8"))
+    installed["version"] = "1.0.0"
+    manifest_path.write_text(json.dumps(installed), encoding="utf-8")
+    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="foreign"))
+    other_root = tmp_path / "other-root" / "current"
+    monkeypatch.setattr(
+        "horosa_skill.runtime.manager.holders_outside_runtime_root",
+        lambda port, root: [{"pid": 4242, "image": str(other_root / "python.exe"), "command": f"{other_root / 'python.exe'} srv.py"}],
+    )
+
+    def must_not_stop(*args, **kwargs):  # noqa: ANN001, ANN002, ANN003
+        raise AssertionError("must never stop a service that lives in another runtime root")
+
+    monkeypatch.setattr(manager, "stop_local_services", must_not_stop)
+    result = manager.install(archive=_archive_of(tmp_path), force=False)
+    assert result["ok"] is True and result["changed"] is True
+    assert result["stopped_before_swap"] is False and result["restarted"] is None
+    assert [w["code"] for w in result["warnings"]] == ["runtime.install_ports_held_elsewhere"]
+    warning = result["warnings"][0]
+    assert warning["held_by"][0]["holders"][0]["pid"] == 4242
+    assert "HOROSA_PORTS=auto" in warning["next_action"]
+    assert not marker.exists(), "current/ 必须已被换成新载荷"
+
+
+def test_install_still_refuses_when_only_some_busy_ports_are_provably_elsewhere(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """一个端口能证明在别处、另一个证明不了 → 整体仍拒（永远不把「查不到」当成「在别处」）。"""
+    manager = _manager_with_runtime(tmp_path)
+    marker = manager.current_dir / "MARKER"
+    marker.write_text("keep", encoding="utf-8")
+    manifest_path = manager.current_dir / "runtime-manifest.json"
+    installed = json.loads(manifest_path.read_text(encoding="utf-8"))
+    installed["version"] = "1.0.0"
+    manifest_path.write_text(json.dumps(installed), encoding="utf-8")
+    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="foreign"))
+    monkeypatch.setattr(
+        "horosa_skill.runtime.manager.holders_outside_runtime_root",
+        lambda port, root: [{"pid": 1, "image": "C:/elsewhere/java.exe", "command": "java"}] if port == 9999 else None,
+    )
+
+    def must_not_stop(*args, **kwargs):  # noqa: ANN001, ANN002, ANN003
+        raise AssertionError("must not stop")
+
+    monkeypatch.setattr(manager, "stop_local_services", must_not_stop)
+    with pytest.raises(RuntimeInstallError) as excinfo:
+        manager.install(archive=_archive_of(tmp_path), force=True)
+    assert excinfo.value.code == "runtime.install_refused_running_foreign"
+    assert marker.read_text(encoding="utf-8") == "keep"
 
 
 def test_install_stop_failure_leaves_current_untouched(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

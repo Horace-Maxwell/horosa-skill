@@ -762,7 +762,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | Windows 上 Java 后端起不来（`java_diagnostics`：`Unable to access jarfile …??…` / `could not find java.dll`），或 chart 族大量报 `tool.backend_param_error` 而 chart 服务 stderr 是 `KeyError: 'Chiron'`；install 报 `runtime.path_not_ascii`；doctor 报 `windows:runtime_root_not_ascii` | runtime 根含非 ASCII 字符（中文用户名下的默认根即是）：随包 JDK 17 的 java.exe 用 `GetCommandLineA` / `GetModuleFileNameA`，pyswisseph 把 UTF-8 星历路径交给 C `fopen`（Windows 按 ANSI 解）——中文系统上的中文用户名同样中招 | `setx HOROSA_RUNTIME_ROOT C:\horosa`（纯英文路径），新开终端并重启 AI 客户端后重装；0.38.1 起 install 在下载前就拒并给出这条修法 |
 | Windows 上用户名带中文 / 重音，健康机器却报 `port_conflict_foreign` / `stop_refused_foreign` | v0.38.1 前 PowerShell 的命令行输出按 UTF-8 解，而 Windows PowerShell 5.1 往管道写的是 OEM 代码页（cp437 / cp936），路径子串永不相等 | 升级到 0.38.1：映像路径（ctypes）是首选证据，PowerShell 只搬 base64 字节；`doctor.endpoints[].identity.evidence` 应见 `process.image_under_runtime_root` |
 | `doctor` / `runtime status` 在 Windows 上跑几十秒到几分钟，MCP 客户端直接掐掉 | 探针各自超时相加（两端口 × 两地址族 netstat + 每个持有者一次 PowerShell）没人管总量 | 0.38.1 起 doctor 25 s / status 15 s 硬顶，`report.budget.skipped` 列出被预算挡住的探针；仍慢看 `budget.timings` |
-| `install` / `upgrade` 报 `runtime.install_refused_running_foreign`，`--force` 也不行 | 端口上跑着不是本工具起的星阙服务（桌面端 / 另一实例 / 只有 app 标记的旧载荷）；升级不砍陌生人是不变量 | 关掉那个服务，或 `HOROSA_PORTS=auto` 换端口后再装；只是自家旧服务在跑时升级会自动停 → 换 → 起（结果 `stopped_before_swap` / `restarted`） |
+| `install` / `upgrade` 报 `runtime.install_refused_running_foreign`，`--force` 也不行 | 端口上跑着不是本工具起的星阙服务，且**证明不了它的文件在别的根**（查不到持有者 / 持有者住在本根下 / 只有 app 标记的旧载荷）；升级不砍陌生人是不变量。持有者全在别的根（桌面端 / 另一 runtime root）时**不再拒**：放行 + `runtime.install_ports_held_elsewhere` 警告（v0.38.1 复审） | 关掉那个服务，或 `HOROSA_PORTS=auto` 换端口后再装；只是自家旧服务在跑时升级会自动停 → 换 → 起（结果 `stopped_before_swap` / `restarted`） |
 | `runtime stop` 报 `runtime.stop_refused_clients_attached` | 另一个 MCP 客户端会话（Claude Code / Cursor 的 stdio server）仍挂在这份 runtime 上 | 关掉那些会话；确认要停就 `runtime stop --force`；只想重启用 `runtime restart`（客户端自动重连） |
 | Zed / VS Code 的 `setup` / `client config --write` 报「不是合法 JSON」 | 配置文件带注释 / 尾逗号（JSONC） | 0.38.1 起走 `jsonc.upsert_server_entry` 文本级插入（注释保留、只动 horosa 条目、写完回读）；仍红说明括号不配对 |
 | 终端里 doctor ready，Codex 里技法全报 `runtime.not_installed` | Codex 不转发 shell 环境，server 用另一套 runtime 根 | `client check --client codex` 报 `codex_env_roots_missing`；重跑 `client config --format codex --write`（env 表写两个绝对根）；`setup` 的 stdio 探针读 `horosa://runtime/status` 直接报 `setup.stdio_probe_runtime_mismatch` |
@@ -941,8 +941,13 @@ A global stability pass hardened these; keep them true when you touch the releva
   never write a report format directly to its final `output_path`（a mid-render failure would corrupt it）.
 - **install / upgrade 换目录前必停自己的服务，且永不停陌生人的（v0.38.1 R3）。** `install()` 在 `replace(previous)` 之前先
   `endpoint_identities`：全不可达直接换；全部 `started_by_us` → `stop_local_services(ignore_clients=True)` → 换 → `start_local_services()`；
-  任一可达但不是我们起的 → `runtime.install_refused_running_foreign`，`--force` 不覆盖。`tests/test_runtime_manager.py` 锁顺序
-  `["stop", "swap", "start"]`。
+  可达但不是我们起的 → 先问 `identity.holders_outside_runtime_root(port, runtime_root)`：监听者**全部**证明跑在本根之外
+  （映像 / 命令行都不在本根下 —— 用户的桌面端、另一个 runtime root）→ 换目录动不到它们的文件，**放行**、不停任何进程、
+  记 `runtime.install_ports_held_elsewhere`（`held_by` 点名；next_action = 关那份实例或给本 runtime 换端口再 start）；
+  任一证明不了（查不到 / 住在本根下 / 点不出名）→ `runtime.install_refused_running_foreign`，`--force` 不覆盖
+  （**永远不把「查不到」当「在别处」**）。原因：旧清单钉着默认端口 + 桌面端占着它们是最常见形状，原来的
+  拒绝把用户卡死，且提示的 `HOROSA_PORTS=auto` 对它无效（闸探的是旧清单的端口）——见台账 v0.38.1 / 2026-09-15。
+  `tests/test_runtime_manager.py` 锁顺序 `["stop", "swap", "start"]`，并锁「别处 → 放行不 stop」与「部分证明不了 → 仍拒」。
 - **子进程文本一律显式解码（v0.38.1 A1/A19）。** `subprocess.run(..., text=True)` 必带 `encoding=`（UTF-8，或 tasklist 的 `oem`）
   + `errors="replace"`；归属证据优先走不经代码页的 ctypes 映像路径；PowerShell 只允许搬 base64 字节。`tests/test_subprocess_encoding.py`
   AST 扫描基线 0。
