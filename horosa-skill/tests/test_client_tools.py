@@ -196,6 +196,11 @@ def test_resolve_uvx_command_derives_from_the_uv_sibling(monkeypatch, tmp_path: 
     monkeypatch.delenv("HOROSA_UVX_BIN", raising=False)
     monkeypatch.setenv("HOROSA_UV_BIN", str(tmp_path / "uv"))
     monkeypatch.setattr(client_tools.shutil, "which", lambda name: None)
+    # On a real Windows box the known-install-dir scan finds a genuine user uvx.exe (in
+    # %LOCALAPPDATA%\Programs\uv, %APPDATA%\…\Scripts or %USERPROFILE%\.local\bin) and wins before
+    # the sibling logic ever runs — so this test only passed where no uvx happened to be installed
+    # (the ubuntu `test` job, os.name != "nt"). Neutralise the scan to actually exercise the sibling path.
+    monkeypatch.setattr(client_tools, "_windows_uvx_fallbacks", list)
     assert client_tools.resolve_uvx_command() == [str(tmp_path / "uvx")]
 
 

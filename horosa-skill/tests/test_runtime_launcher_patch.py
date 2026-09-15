@@ -26,9 +26,18 @@ from horosa_skill.runtime.manager import HorosaRuntimeManager
 PKG_ROOT = Path(__file__).resolve().parents[1]
 UPSTREAM = PKG_ROOT.parent / "vendor/runtime-source/Horosa-Web/start_horosa_local.sh"
 
+# Resolve bash to an ABSOLUTE path once, at import time (before the suite loads the box up). The three
+# tests below spawn bash to validate the patched launcher; spawning it as the bare name "bash" forces a
+# per-call PATH search, and on a saturated Windows box (this suite + a runtime lane + AV all churning
+# processes) that search transiently loses the race and CreateProcess raises WinError 2
+# (ERROR_FILE_NOT_FOUND) even though Git bash is right there on PATH — a flaky red during release
+# verification. An absolute path skips the search entirely. It also lets the module skip cleanly where
+# bash is genuinely absent instead of erroring mid-test.
+BASH = shutil.which("bash")
+
 pytestmark = pytest.mark.skipif(
-    not UPSTREAM.is_file(),
-    reason="vendor/runtime-source 是 gitignored 的本地构建输入；CI 上没有它（preflight 会跑这条）",
+    not UPSTREAM.is_file() or not BASH,
+    reason="vendor/runtime-source 是 gitignored 的本地构建输入；CI 上没有它（preflight 会跑这条）。另需 bash（mac/维护机有，纯 Windows runner 无）",
 )
 
 
@@ -66,7 +75,7 @@ def test_root_marker_covers_every_jvm_launch(patched: str) -> None:
 def test_patched_script_is_valid_bash(patched: str, tmp_path: Path) -> None:
     probe = tmp_path / "probe.sh"
     probe.write_text(patched, encoding="utf-8")
-    result = subprocess.run(["bash", "-n", str(probe)], capture_output=True, text=True)
+    result = subprocess.run([BASH, "-n", str(probe)], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
 
 
@@ -147,7 +156,7 @@ def test_root_marker_expands_to_one_token_with_a_spaced_root(tmp_path: Path) -> 
         'printf "%s\\n" "${args[@]}"\n',
         encoding="utf-8",
     )
-    out = subprocess.run(["bash", str(script)], capture_output=True, text=True, check=True).stdout.splitlines()
+    out = subprocess.run([BASH, str(script)], capture_output=True, text=True, check=True).stdout.splitlines()
     assert out == ["-Dhorosa.runtime.owner=x", "-Dhorosa.runtime.root=/tmp/a b"]
 
 
@@ -164,7 +173,7 @@ def test_owns_pid_helper_matches_a_spaced_root(patched: str, tmp_path: Path) -> 
         encoding="utf-8",
     )
     def verdict(cmd: str) -> str:
-        return subprocess.run(["bash", str(harness)], capture_output=True, text=True, check=True,
+        return subprocess.run([BASH, str(harness)], capture_output=True, text=True, check=True,
                               env={"FAKE_CMD": cmd, "PATH": "/usr/bin:/bin"}).stdout.strip()
     assert verdict("java -Dhorosa.runtime.root=/tmp/a b/runtime/current -cp . JarLauncher") == "OURS"
     assert verdict("python3 /tmp/a b/runtime/current/Horosa-Web/astropy/websrv/webchartsrv.py") == "OURS"

@@ -234,6 +234,30 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   （白名单与 cli 锁步）、docs-sync 五闸（PyPI 命令 / 连接器行 / 入口文档指针 / 镜像计数 / 示例配置无裸 uv）、`verify_matrix_digests`、
   `verify_mcpb_manifest --bundle`、`test_release_pipeline_shape` +6（旧写法 `--assets-dir "` / 整点 cron / skipped 放行 必红）、R7 本地 HTTP e2e、
   R14 挂着客户端不停、R3 顺序 `["stop","swap","start"]`（旧 `["swap"]`）、R11 顺序 `["start","run_tool"]`（旧 `["run_tool"]`）；发布后：`verify_undefined_names`（F821 基线 0）、`test_stdio_server_exit`（关 stdin 15 s 内退出）、npx 预热与 `output_complete` 四条 cli 测试、lane 的 Claude Code user scope 隔离测试。
+### v0.38.0 / 2026-09-14 — 反向的「本机绿≠CI绿」：Windows 维护机红、CI 绿——两条测试没声明对本机环境的暗含前提
+
+- **症状**：v0.38.0 公开后在本机复验，`scripts/run_ci_gates.py`（ci.yml `test` job 的本机镜像）与真机 lane 的
+  live pytest 各撞到同一批红，而 GitHub 的 `test`（ubuntu）/`windows-smoke` 全绿：
+  ① `test_resolve_uvx_command_derives_from_the_uv_sibling`——断言「无 uvx 时从 `uv` 兄弟推导出 `uvx`」，但只
+  monkeypatch 了 `shutil.which`，没挡住 `_windows_uvx_fallbacks()` 扫真实安装目录。本机三处目录
+  （`%LOCALAPPDATA%\Programs\uv`、`%APPDATA%\…\Scripts`、`%USERPROFILE%\.local\bin`）里真装着 uvx，fallback 先
+  命中，压根走不到兄弟推导那支 → 拿到真 `uvx.exe` 路径而非 tmp 桩。ubuntu `test` job 只因 `os.name != "nt"` 整条
+  fallback 被跳过才绿——**托管 windows-latest lane 同样会红，只要那台装了 uvx**。
+  ② `test_runtime_launcher_patch` 三条 spawn `bash` 校验补丁脚本的用例偶发 `WinError 2`（bash 找不到），而 bash
+  就在 PATH 上：本机同时跑着第二套 pytest + runtime lane（进程 churn + Defender 扫描）时，裸名 `"bash"` 的
+  `CreateProcess` PATH 搜索输给竞态。孤立跑一直绿、清场后整套也绿（`envsentinel` 全程 spawn 探针零失败）——是
+  **并发满载下的 flake**，不是有序污染；`test_setup_command::test_stdio_probe_*`（真 spawn `uv run … serve`）同族偶发。
+- **根因**：都是横切教训 #7「维护机的环境会替测试补上它没声明的前提」的**镜像**——这次是维护机环境**破坏**了测试
+  的暗含前提（本机装了 uvx / 本机被自己另一套跑满）。两台 CI runner 恰好满足前提（无 uvx 的 ubuntu / 空载）于是绿，
+  维护机不满足于是红；真机 lane 的 live pytest 是唯一同时踩到两者的地方。
+- **guard**：① uvx 测试 `monkeypatch.setattr(client_tools, "_windows_uvx_fallbacks", list)`——把已装目录扫描清零，
+  强制走它命名的兄弟推导路径（任何平台都对，posix 上本就不调该函数）；② 三条 bash 用例导入期
+  `BASH = shutil.which("bash")` 解析一次绝对路径再 spawn（跳过每次调用的 PATH 搜索 = 消掉竞态），bash 缺席即模块
+  skip。**`run_ci_gates.py` 本身是这批的 meta-guard**：它在本机按 ci.yml `test` job 形状把每条门禁原样跑一遍，正是
+  它把这两条从「只有真机 lane 才撞见」提前到本机每次可复现。
+- **法则**：**测试 spawn 系统工具（bash/uv/…）一律导入期解析成绝对路径，别用裸名**——满负载 Windows 的 PATH 搜索
+  会偶发 `WinError 2`；**扫真实安装目录的解析器，其测试必须把那层 monkeypatch 掉**，否则测的是「这台机器装没装该
+  工具」；**复验时一次只跑一套重活**，否则把自己制造的并发 flake 当成产品缺陷去追。
 
 ### v0.38.0 / 2026-09-11 — A6 首次托管发布：v0.38.0 双平台一次公开；两条发布期新知（GITHUB_TOKEN 的 release 事件不触发下游、publish 会再派生一次）
 

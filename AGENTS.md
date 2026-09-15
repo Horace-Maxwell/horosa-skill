@@ -784,6 +784,14 @@ A global stability pass hardened these; keep them true when you touch the releva
   都从它出。`tests/test_doctor_machine_conditions.py` 扫 `doctor()` 源码里新增的 `issues.append("…")` 字面量——不登记必红。
   默认 `doctor` 只打 127.0.0.1（`trust_env=False`），`--probe-network` 才逐镜像 HEAD 清单 URL（负向对照：默认路径上
   `_probe_manifest_url` 被替换成 raise 仍必须绿）。quarantine / 长路径余量 / 仿真进程都只**报**不改：修复命令交给用户。
+- **测试 spawn 系统工具用绝对路径；扫真实安装目录的解析器测试要把那层 monkeypatch 掉（v0.38.0 反向「本机绿≠CI绿」）。**
+  裸名 `subprocess.run(["bash"/"uv"…])` 在满负载 Windows 上偶发 `WinError 2`（PATH 搜索输给进程 churn + AV 扫描）——
+  导入期 `BASH = shutil.which("bash")` 解析一次绝对路径再 spawn，缺席即 `skip`（`tests/test_runtime_launcher_patch.py`）。
+  解析器测试（uvx/uv 的 `_windows_*_fallbacks()` 扫 `%LOCALAPPDATA%`/`%APPDATA%`/`%USERPROFILE%`）不 monkeypatch 掉那层，
+  测的就是「本机装没装该工具」——维护机装了就红、无 uvx 的 ubuntu `test` 才绿，**托管 windows-latest lane 同样会红**
+  （`test_resolve_uvx_command_derives_from_the_uv_sibling`）。这是横切教训 #7 的镜像；`scripts/run_ci_gates.py` 是把它
+  提前到本机的 meta-guard。**复验时一次只跑一套重活**（两套 pytest / lane 并发 = 自造 flake），且**别在本 session 的 MCP
+  server 还占着 `.venv\Scripts\horosa-skill.exe` 时跑真 `uv run` 用例**（`uv sync` 删不掉被占的 exe → `test_stdio_probe_*` 假红）。
 - **`setup` 的七步顺序与失败包是契约（v0.38.0 B4）。** `network_probe → install → config → doctor → client_check → stdio_probe →
   next_steps`，顺序冻结在 `tests/test_cli_output_contract.py::test_setup_public_keys`；失败包只走 stderr、退出码 2，键
   `step / code / config_untouched / backup_path / retry_command / steps`，**第 3 步之前失败保证 `config_untouched: true`**
