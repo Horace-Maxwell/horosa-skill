@@ -45,15 +45,15 @@ uv run horosa-skill install --archive runtime.zip
 
 在一台能上网的机器上下载两件东西，拷到目标机：
 
-1. wheel：`https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.38.1/horosa_skill-0.38.1-py3-none-any.whl`
+1. wheel：`https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.39.0/horosa_skill-0.39.0-py3-none-any.whl`
 2. 本平台的 runtime 归档（同一 release 页）。
 
 目标机（只需 uv；Python ≥ 3.12 由 uv 自动准备——uv 本身也可从镜像或离线安装包装）：
 
 ```bash
-uvx --from ./horosa_skill-0.38.1-py3-none-any.whl horosa-skill install --archive ./horosa-runtime-win32-x64-v0.38.1.zip
-uvx --from ./horosa_skill-0.38.1-py3-none-any.whl horosa-skill doctor
-uvx --from ./horosa_skill-0.38.1-py3-none-any.whl horosa-skill client config --format <client> --launcher uvx-wheel --write <配置文件>
+uvx --from ./horosa_skill-0.39.0-py3-none-any.whl horosa-skill install --archive ./horosa-runtime-win32-x64-v0.39.0.zip
+uvx --from ./horosa_skill-0.39.0-py3-none-any.whl horosa-skill doctor
+uvx --from ./horosa_skill-0.39.0-py3-none-any.whl horosa-skill client config --format <client> --launcher uvx-wheel --write <配置文件>
 ```
 
 生成的配置里 `--from` 会指向线上 wheel URL；离线机器把它改成本地 wheel 路径即可（`uvx --from <本地 .whl>` 同样成立）。
@@ -100,7 +100,7 @@ lists every candidate). The original URL is always the last fallback; downloads 
 `horosa-skill install --archive runtime.zip` (`file://` URLs work too).
 
 **3. Fully offline (USB)** — copy the wheel and the runtime archive from a connected machine, then
-`uvx --from ./horosa_skill-0.38.1-py3-none-any.whl horosa-skill install --archive ./<archive>`; a local
+`uvx --from ./horosa_skill-0.39.0-py3-none-any.whl horosa-skill install --archive ./<archive>`; a local
 `.whl` path works everywhere the release URL does.
 
 **Proxies & corporate CAs** — downloads honour `HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY`; loopback probes to the

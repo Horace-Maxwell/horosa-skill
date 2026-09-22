@@ -3,7 +3,7 @@
   "name": "io.github.horace-maxwell/horosa-skill",
   "title": "Horosa Skill",
   "description": "Local-first offline 术数/占星 (Horosa 星阙): 106 technique tools, all computed on your machine.",
-  "version": "0.38.1",
+  "version": "0.39.0",
   "websiteUrl": "https://github.com/Horace-Maxwell/horosa-skill",
   "repository": {
     "url": "https://github.com/Horace-Maxwell/horosa-skill",
@@ -13,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "horosa-skill",
-      "version": "0.38.1",
+      "version": "0.39.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
@@ -58,8 +58,8 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.38.1/horosa-skill-0.38.1.mcpb",
-      "version": "0.38.1",
+      "identifier": "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.39.0/horosa-skill-0.39.0.mcpb",
+      "version": "0.39.0",
       "fileSha256": "ebdaff8340939469dd43f4854233aa8c306fa5722494d1f7632616f5a0f32ea8",
       "transport": {
         "type": "stdio"
@@ -87,13 +87,13 @@
         "streamable-http"
       ],
       "install": [
-        "uvx --from \"https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.38.1/horosa_skill-0.38.1-py3-none-any.whl\" horosa-skill install",
-        "uvx --from \"git+https://github.com/Horace-Maxwell/horosa-skill@v0.38.1#subdirectory=horosa-skill\" horosa-skill install",
+        "uvx --from \"https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.39.0/horosa_skill-0.39.0-py3-none-any.whl\" horosa-skill install",
+        "uvx --from \"git+https://github.com/Horace-Maxwell/horosa-skill@v0.39.0#subdirectory=horosa-skill\" horosa-skill install",
         "或源码：uv sync --dev && uv run horosa-skill install"
       ],
       "start": [
-        "uvx --from \"https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.38.1/horosa_skill-0.38.1-py3-none-any.whl\" horosa-skill serve --transport stdio",
-        "uvx --from \"git+https://github.com/Horace-Maxwell/horosa-skill@v0.38.1#subdirectory=horosa-skill\" horosa-skill serve --transport stdio",
+        "uvx --from \"https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.39.0/horosa_skill-0.39.0-py3-none-any.whl\" horosa-skill serve --transport stdio",
+        "uvx --from \"git+https://github.com/Horace-Maxwell/horosa-skill@v0.39.0#subdirectory=horosa-skill\" horosa-skill serve --transport stdio",
         "或源码：uv run horosa-skill serve --transport stdio"
       ],
       "releaseManifest": "https://github.com/Horace-Maxwell/horosa-skill/releases/latest/download/runtime-manifest.json",
