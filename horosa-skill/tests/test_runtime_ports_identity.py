@@ -404,3 +404,27 @@ def test_holders_outside_runtime_root_refuses_to_guess(tmp_path: Path, monkeypat
     _fake_holders(monkeypatch, [], {}, {})
     assert holders_outside_runtime_root(8899, root) is None, "没有监听者"
     assert holders_outside_runtime_root(None, root) is None, "没端口"
+
+
+
+def test_handshake_decided_foreign_branches_name_their_holders_without_powershell(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """nonce 不符 / 别的 app 两个分支由握手下结论、提前返回——也要点名监听者（doctor 摘要靠它），且只用映像路径。"""
+    import horosa_skill.runtime.identity as identity
+
+    image = "C:/Users/u/AppData/Local/HorosaDesktop/embedded-runtime/x/rt/python/python.exe"
+    monkeypatch.setattr(identity, "listener_pids", lambda port: [19392])
+    monkeypatch.setattr(identity, "process_image_path", lambda pid: image)
+
+    def no_powershell(pid):  # noqa: ANN001, ANN202
+        raise AssertionError("映像路径已拿到，不许再取命令行（Windows 上那一步要起 PowerShell）")
+
+    monkeypatch.setattr(identity, "process_command", no_powershell)
+    monkeypatch.setattr(identity, "probe_identity", lambda url: {"app": "horosa-chart", "proto": 2, "nonce": "theirs"})
+    verdict = identity.classify_endpoint("http://127.0.0.1:8899", runtime_root=tmp_path / "rt", launch_nonce="ours")
+    assert (verdict.verdict, verdict.evidence, verdict.started_by_us) == ("foreign", "identity.nonce_mismatch", False)
+    assert verdict.holders == [{"pid": 19392, "image": image, "command": image}]
+
+    monkeypatch.setattr(identity, "probe_identity", lambda url: {"app": "grafana"})
+    other = identity.classify_endpoint("http://127.0.0.1:8899", runtime_root=tmp_path / "rt")
+    assert (other.verdict, other.evidence) == ("foreign", "identity.other_app")
+    assert other.holders and other.holders[0]["pid"] == 19392

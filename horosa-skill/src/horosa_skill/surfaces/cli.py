@@ -603,6 +603,8 @@ def _doctor_port_holders(report: dict[str, Any]) -> list[dict[str, Any]]:
             "url": endpoint.get("url"),
             "port": identity.get("port"),
             "verdict": identity.get("verdict"),
+            "evidence": identity.get("evidence"),
+            "app": identity.get("app"),
             "holders": identity.get("holders") or [],
             "will_not_kill": "本工具不会终止不属于自己的进程。",
         })
@@ -861,20 +863,32 @@ def _doctor_summary(report: dict[str, Any]) -> dict[str, Any]:
             "reachable_endpoints": reachable_endpoints,
         }
     if conflicts:
-        named = "；".join(
-            f"{c.get('label')} 端口 {c.get('port')} 被 "
-            + (", ".join(f"pid {h.get('pid')} {(h.get('command') or '')[:60]}" for h in c.get("holders") or [])
-               or "一个查不出身份的进程")
-            + " 占着"
-            for c in conflicts
-        )
+        from horosa_skill.runtime.identity import is_horosa_app
+
+        def holder_of(c: dict[str, Any]) -> str:
+            # 措辞按身份握手**实际证明了什么**来：星阙 app 标记 = 另一份星阙（常见即用户自己开着的桌面端），
+            # 别的 app 标记 = 一个自报身份的服务；只有两样都没有、也点不出进程时才说「查不出身份」。
+            listed = ", ".join(f"pid {h.get('pid')} {(h.get('command') or '')[:60]}" for h in c.get("holders") or [])
+            app = c.get("app")
+            if is_horosa_app(app):
+                return (f"另一份星阙实例（{app}" + (f"；{listed}" if listed else "")
+                        + "——很可能是你开着的星阙桌面端，或另一个 runtime 根下的服务）")
+            if app:
+                return f"一个自报为 {app} 的服务" + (f"（{listed}）" if listed else "")
+            return listed or "一个查不出身份的进程"
+
+        named = "；".join(f"{c.get('label')} 端口 {c.get('port')} 被 {holder_of(c)} 占着" for c in conflicts)
+        horosa_held = any(is_horosa_app(c.get("app")) for c in conflicts)
         return {
             "status": "needs_attention", "ready_for_openclaw": False,
             "user_summary": f"端口被非本工具的进程占用：{named}。本工具不会去终止它们。",
             "next_action": (
-                "关掉上面点名的进程，或换端口：设 HOROSA_PORTS=auto 自动挑空闲端口，"
-                "或显式设 HOROSA_LOCAL_BACKEND_PORT / HOROSA_LOCAL_CHART_PORT；"
-                "若那正是你想用的服务，设 HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT 指向它。"
+                ("占着端口的是星阙自己（多半是桌面端）：不想关它，就设 HOROSA_PORTS=auto 让本工具换到空闲端口；"
+                 "想直接用它的引擎，就设 HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT 指向它（外部模式）。"
+                 "也可以关掉它再重试。") if horosa_held else
+                ("关掉上面点名的进程，或换端口：设 HOROSA_PORTS=auto 自动挑空闲端口，"
+                 "或显式设 HOROSA_LOCAL_BACKEND_PORT / HOROSA_LOCAL_CHART_PORT；"
+                 "若那正是你想用的服务，设 HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT 指向它。")
             ),
             "reachable_endpoints": reachable_endpoints,
         }

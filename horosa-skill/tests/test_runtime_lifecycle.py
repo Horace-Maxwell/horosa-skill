@@ -176,6 +176,42 @@ def test_doctor_names_the_port_holder_and_promises_not_to_kill_it() -> None:
     assert "HOROSA_PORTS=auto" in summary["next_action"]
 
 
+
+def test_doctor_names_another_horosa_instance_instead_of_calling_it_unidentifiable() -> None:
+    """v0.39.0 Windows 维护机：星阙桌面端占着默认端口 → 握手答出 horosa-chart / horosa-backend、nonce 不是本工具这份
+    → foreign / identity.nonce_mismatch。旧摘要只看 holders（那个分支不收集）→「被一个查不出身份的进程占着」，
+    把用户自己的桌面端说成不明进程，next_action 还叫人「关掉上面点名的进程」。"""
+    from horosa_skill.surfaces.cli import _doctor_port_holders, _doctor_summary
+
+    desktop = "C:\\Users\\u\\AppData\\Local\\HorosaDesktop\\embedded-runtime\\x\\rt\\python\\python.exe"
+    report = {
+        "installed": True,
+        "issues": [],
+        "endpoints": [
+            {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": True,
+             "identity": {"verdict": "foreign", "evidence": "identity.nonce_mismatch", "app": "horosa-backend",
+                          "port": 9999, "holders": []}},
+            {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": True,
+             "identity": {"verdict": "foreign", "evidence": "identity.nonce_mismatch", "app": "horosa-chart", "port": 8899,
+                          "holders": [{"pid": 19392, "image": desktop, "command": desktop}]}},
+        ],
+    }
+    report["port_conflicts"] = _doctor_port_holders(report)
+    assert [c["app"] for c in report["port_conflicts"]] == ["horosa-backend", "horosa-chart"]
+    summary = _doctor_summary(report)
+    text = summary["user_summary"]
+    assert "查不出身份" not in text, text
+    assert text.count("另一份星阙实例") == 2 and "19392" in text and "horosa-backend" in text, text
+    assert "HOROSA_PORTS=auto" in summary["next_action"] and "HOROSA_SERVER_ROOT" in summary["next_action"]
+    assert "桌面端" in summary["next_action"], "认出是星阙时先给「不想关它」的路"
+
+    # 真的什么都没证明时，仍如实说查不出
+    report["endpoints"][0]["identity"] = {"verdict": "unknown", "evidence": "no_evidence", "port": 9999, "holders": []}
+    report["endpoints"] = report["endpoints"][:1]
+    report["port_conflicts"] = _doctor_port_holders(report)
+    assert "一个查不出身份的进程" in _doctor_summary(report)["user_summary"]
+
+
 def test_doctor_flags_unexpanded_placeholders_before_anything_else() -> None:
     """宿主没替换 user_config 时，症状是「装了却全是 not_installed」—— doctor 必须当面点破。"""
     from horosa_skill.surfaces.cli import _doctor_summary

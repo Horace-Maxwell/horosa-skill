@@ -30,6 +30,16 @@ Verdict = Literal["ours", "foreign", "unknown"]
 
 # 上游两侧 /horosaIdentity 会自报的 app 标记。
 _APP_MARKERS = frozenset({"horosa-chart", "horosa-backend", "horosa-web", "horosa"})
+
+
+def is_horosa_app(app: object) -> bool:
+    """`/horosaIdentity` 自报的 app 是否为星阙自己的服务标记——doctor 摘要据此说「另一份星阙实例」而不是「查不出身份」。
+
+    （不用 `HOROSA_*` 常量名：`src/` 里的 `HOROSA_*` 字面量按约定专属环境变量，`test_env_registry_covers_all_flags_code_reads` 锁着。）
+    """
+    return app in _APP_MARKERS
+
+
 _IDENTITY_PATH = "/horosaIdentity"
 _IDENTITY_TIMEOUT = 1.5
 
@@ -178,6 +188,26 @@ def holders_outside_runtime_root(port: int | None, runtime_root: Path | str) -> 
     return holders
 
 
+def _name_holders_cheaply(port: int | None) -> list[dict[str, Any]]:
+    """点名 `port` 的监听者，**不起 PowerShell**：Windows 只用 ctypes 映像路径，POSIX 的 `ps` 本来就便宜。
+
+    给「身份握手已经下了结论」的分支用（nonce 不符 / 别的 app）：判定本身不需要它，但 doctor / start / stop /
+    install 的报错要能点名是谁。v0.39.0 在 Windows 维护机上撞到：星阙桌面端占着默认端口 → 握手答出
+    horosa-chart 但 nonce 不是本工具这份 → 这里提前返回、holders 为空 → doctor 摘要写「被一个查不出身份的进程
+    占着」，把用户自己的桌面端说成不明进程。实测 8899/9999 两颗：listener_pids 首次 27 ms（随后命中缓存）、
+    映像 0.3 ms。
+    """
+    if port is None:
+        return []
+    named: list[dict[str, Any]] = []
+    for pid in listener_pids(port):
+        image = process_image_path(pid)
+        command = image if (image or os.name == "nt") else process_command(pid)
+        if image or command:
+            named.append({"pid": pid, "image": image, "command": command or image})
+    return named
+
+
 def classify_endpoint(
     url: str,
     *,
@@ -200,7 +230,8 @@ def classify_endpoint(
                     return EndpointIdentity("ours", "identity.nonce_match", url, port, app, True)
                 if reported and reported != launch_nonce:
                     # 是星阙，但**不是这次启动的那一份**（用户的桌面端 / 另一个实例）。
-                    return EndpointIdentity("foreign", "identity.nonce_mismatch", url, port, app, False)
+                    return EndpointIdentity("foreign", "identity.nonce_mismatch", url, port, app, False,
+                                            holders=_name_holders_cheaply(port))
             # app 标记只够「能当后端用」，不够「是我们起的」（`started_by_us` 要强证据）——两者的
             # /horosaIdentity 一模一样，分不清我方托管的 runtime 与用户自己开的桌面端。
             # 🔴 但**不能在这里 return**：那样监听进程的命令行（第 2 级强证据）永远没机会说话，
@@ -222,7 +253,7 @@ def classify_endpoint(
                     return EndpointIdentity("ours", "registry.service_pid_alive", url, port, app, None)
             return EndpointIdentity("ours", "identity.app_marker", url, port, app, None)
         if app:
-            return EndpointIdentity("foreign", "identity.other_app", url, port, app, None)
+            return EndpointIdentity("foreign", "identity.other_app", url, port, app, None, holders=_name_holders_cheaply(port))
 
     # 2) 监听进程：先看映像路径（免编码），再看命令行
     if port is not None:
