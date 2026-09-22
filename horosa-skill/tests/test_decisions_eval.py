@@ -135,3 +135,18 @@ def test_response_cache_replays_without_fetch(tmp_path: Path) -> None:
     assert calls["n"] == 1
     row = json.loads((tmp_path / "cache.jsonl").read_text(encoding="utf-8").splitlines()[0])
     assert row["surface"] == "zhancat" and "question" not in json.dumps(row), "缓存只有摘要 + 响应，不存原文"
+
+
+def test_dataset_sha256_is_line_ending_agnostic(tmp_path: Path) -> None:
+    """v0.39.0 Windows 维护机：锁里的数据集 sha 不能依赖工作区换行——Windows 上重生成（文本模式）或未被
+    `.gitattributes` 覆盖的 autocrlf 检出是 CRLF，按原始字节算会写进只在那台机器上成立的值。"""
+    import hashlib
+
+    rows = '{"group": "g1", "query": "问事业"}\n{"group": "g2", "query": "看流年"}\n'
+    lf, crlf = tmp_path / "lf", tmp_path / "crlf"
+    lf.mkdir()
+    crlf.mkdir()
+    (lf / "routing.jsonl").write_bytes(rows.encode("utf-8"))
+    (crlf / "routing.jsonl").write_bytes(rows.replace("\n", "\r\n").encode("utf-8"))
+    assert ev.dataset_sha256("routing", lf) == ev.dataset_sha256("routing", crlf)
+    assert ev.dataset_sha256("routing", lf) == hashlib.sha256(rows.encode("utf-8")).hexdigest(), "LF 内容 sha 不变 → 已提交的锁仍有效"

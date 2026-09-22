@@ -270,7 +270,7 @@ def _routing_cases() -> list[dict]:
 def _write(name: str, rows: list[dict]) -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     text = "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows)
-    (OUT_DIR / f"{name}.jsonl").write_text(text, encoding="utf-8")
+    (OUT_DIR / f"{name}.jsonl").write_text(text, encoding="utf-8", newline="\n")
     return len(rows)
 
 

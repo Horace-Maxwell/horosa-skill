@@ -439,3 +439,51 @@ def test_uvx_wheel_payload_uses_the_cached_wheel_when_given(monkeypatch: pytest.
     )
     assert command[:3] == ["/opt/uv/bin/uvx", "--from", str(wheel)] and payload["launcher"]["wheel_cached_path"] == str(wheel)
     assert payload["launcher"]["wheel_url"].startswith("https://")
+
+
+
+# ---------------------------------------------------------------- Windows: a running horosa session holds the venv exe
+
+_WINDOWS_FILE_LOCK_STDERR = (
+    "   Building horosa-skill @ file:///C:/Users/me/src/horosa-skill\n"
+    "      Built horosa-skill @ file:///C:/Users/me/src/horosa-skill\n"
+    "error: failed to remove file `C:\\Users\\me\\src\\horosa-skill\\.venv\\Lib\\site-packages\\../../Scripts/horosa-skill.exe`: "
+    "The process cannot access the file because it is being used by another process. (os error 32)\n"
+)
+
+
+def test_probe_stderr_diagnosis_recognises_the_windows_file_lock() -> None:
+    """v0.39.0 Windows 维护机：挂着的 horosa MCP 会话占着 venv 的 horosa-skill.exe，客户端的 `uv run` 同步 venv 删不掉它。"""
+    import re
+
+    diagnosis = cli_module._diagnose_probe_stderr(_WINDOWS_FILE_LOCK_STDERR)
+    assert diagnosis is not None and diagnosis["cause"] == "windows_file_in_use"
+    assert diagnosis["locked_file"] == "C:\\Users\\me\\src\\horosa-skill\\.venv\\Scripts\\horosa-skill.exe"
+    for text in (diagnosis["explanation"], diagnosis["next_action"]):
+        assert re.search(r"[\u4e00-\u9fff]", text) and re.search(r"[A-Za-z]{4}", text), f"必须中英双语：{text}"
+    localized = _WINDOWS_FILE_LOCK_STDERR.replace(
+        "The process cannot access the file because it is being used by another process.", "另一个程序正在使用此文件，进程无法访问。"
+    )
+    assert cli_module._diagnose_probe_stderr(localized)["cause"] == "windows_file_in_use", "中文 Windows：中间那句本地化，两头不变"
+    pyd = "error: failed to remove file `C:\\v\\Lib\\site-packages\\pydantic_core\\_core.pyd`: in use (os error 32)"
+    assert cli_module._diagnose_probe_stderr(pyd)["locked_file"].endswith("_core.pyd"), "已加载的扩展模块同理"
+    assert cli_module._diagnose_probe_stderr("boom: no such server\n") is None
+    assert cli_module._diagnose_probe_stderr("error: failed to remove file `C:\\x.exe`: Access is denied. (os error 5)") is None, "权限/杀软是另一类"
+    assert cli_module._diagnose_probe_stderr("") is None
+
+
+def test_setup_names_the_windows_file_lock_when_the_probe_dies_on_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config = tmp_path / "mcp.json"
+    monkeypatch.setattr(
+        cli_module,
+        "_stdio_probe",
+        lambda **kwargs: {"ok": False, "error": "ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)",
+                          "stderr_tail": _WINDOWS_FILE_LOCK_STDERR},
+    )
+    failure = _stderr_json(_run("--client", "cursor", "--config", str(config), "--skip-install", "--no-probe-network"))
+    assert failure["step"] == "stdio_probe" and failure["code"] == "setup.stdio_probe_failed"
+    diagnosis = failure["details"]["diagnosis"]
+    assert diagnosis["cause"] == "windows_file_in_use" and diagnosis["locked_file"].endswith("horosa-skill.exe")
+    assert failure["message"] == diagnosis["explanation"], "认出来就换成人话，而不是通用那句"
+    assert failure["steps"]["stdio_probe"]["diagnosis"] == diagnosis, "步骤记录里也带上（lane 报告读的是它）"
+    assert failure["details"]["stderr_tail"] == _WINDOWS_FILE_LOCK_STDERR, "原始 stderr 仍原样保留"

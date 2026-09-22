@@ -60,7 +60,15 @@ def load_cases(surface: str, eval_dir: Path = EVAL_DIR) -> list[dict[str, Any]]:
 
 
 def dataset_sha256(surface: str, eval_dir: Path = EVAL_DIR) -> str:
-    return hashlib.sha256((eval_dir / f"{surface}.jsonl").read_bytes()).hexdigest()
+    """数据集指纹，按 **LF 归一化后**的字节算。
+
+    数据集是 git 文本文件（`.gitattributes` 里 `eol=lf`），跨平台检出都是 LF；但在 Windows 上用
+    `gen_jev_eval_sets.py` 重生成（旧版文本模式写）或遇到未被属性覆盖的 autocrlf 检出时，工作区是 CRLF。
+    按原始字节算，`jev_eval.py compile` 会把一个只在那台机器上成立的 sha 写进锁，提交后（git 归一化回 LF）
+    所有平台的 `check` 都报 dataset changed。LF 内容归一化是空操作 → 已提交的锁不受影响。
+    """
+    raw = (eval_dir / f"{surface}.jsonl").read_bytes()
+    return hashlib.sha256(raw.replace(b"\r\n", b"\n")).hexdigest()
 
 
 def case_text(surface: str, case: Mapping[str, Any]) -> str:
@@ -349,7 +357,7 @@ class ResponseCache:
         row = {"digest": digest, "surface": surface, "model": response.get("model"), "latency_ms": latency_ms, "response": response}
         self._rows[digest] = row
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("a", encoding="utf-8") as handle:
+        with self.path.open("a", encoding="utf-8", newline="\n") as handle:
             handle.write(json.dumps(row, ensure_ascii=False, separators=(",", ":"), sort_keys=True) + "\n")
 
 

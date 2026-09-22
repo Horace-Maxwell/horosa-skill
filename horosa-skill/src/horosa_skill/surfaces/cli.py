@@ -1847,6 +1847,49 @@ def _stdio_probe(*, command: str, args: list[str], env: dict[str, str], timeout:
     return result
 
 
+# uv 自己的报错是英文且不本地化；Rust io::Error 的 `(os error 32)`（ERROR_SHARING_VIOLATION）也不本地化；
+# 夹在中间的系统描述随 Windows 显示语言变（"being used by another process" / 「另一个程序正在使用此文件」）——只锚两头。
+_WINDOWS_FILE_LOCK_RE = re.compile(
+    r"failed to remove file [`'\"](?P<path>[^`'\"\r\n]+)[`'\"]\s*:[^\r\n]*?\(os error 32\)",
+    re.IGNORECASE,
+)
+
+
+def _diagnose_probe_stderr(stderr_tail: str) -> dict[str, Any] | None:
+    """把 stdio 探针 stderr 里**可识别的环境性原因**翻成可操作的诊断；认不出返回 None（stderr_tail 原样保留）。
+
+    Windows 独有（v0.39.0 维护机复验撞到）：一个已挂着的 horosa MCP 会话（`uv run … serve`）占着 venv 里的
+    `Scripts\\horosa-skill.exe`（或已加载的 .pyd）；客户端这条 `uv run` 要先把 venv 同步到当前版本，删不掉被占文件
+    → uv 在 MCP server 启动前就退出，stderr 只剩一屏构建噪声。macOS / Linux 能替换运行中的文件，不会遇到。
+    """
+    match = _WINDOWS_FILE_LOCK_RE.search(stderr_tail or "")
+    if not match:
+        return None
+    import ntpath
+
+    locked = ntpath.normpath(match.group("path"))  # uv 打印的是 `…\\site-packages\\../../Scripts/x.exe` 混写
+    return {
+        "cause": "windows_file_in_use",
+        "locked_file": locked,
+        "explanation": bilingual(
+            f"Windows 文件锁：`{locked}` 正被另一个进程占用（通常是已挂着的 horosa MCP 会话——Claude Code / "
+            "Claude Desktop / Cursor 用 `uv run … serve` 起的那一份）。客户端这条命令要先把 venv 同步到当前版本，"
+            "而 Windows 不允许删除或覆盖运行中的文件，于是 MCP server 还没启动就失败了。",
+            f"Windows file lock: `{locked}` is held by another process (usually an already-running horosa MCP session "
+            "that Claude Code / Claude Desktop / Cursor started via `uv run … serve`). The client's command must first "
+            "sync the venv to the current version, and Windows does not allow deleting or overwriting a file in use, "
+            "so the MCP server failed before it started.",
+        ),
+        "next_action": bilingual(
+            "关掉（或重启）挂着 horosa 的 MCP 客户端会话，再重跑本命令；终端里直接 `uv run horosa-skill …` 撞到同一"
+            "错误时，可临时加 `UV_NO_SYNC=1`（依赖没变时安全）。macOS / Linux 不受影响。",
+            "Close (or restart) the MCP client sessions that have horosa attached, then re-run this command; for a "
+            "terminal `uv run horosa-skill …` hitting the same error, `UV_NO_SYNC=1` is a safe stopgap when "
+            "dependencies did not change. macOS / Linux are unaffected.",
+        ),
+    }
+
+
 def _claude_mcp_add(command: list[str]) -> subprocess.CompletedProcess[str]:
     """执行 `claude mcp add …`（单独成函数：测试用替身，不真调 claude）。"""
     return subprocess.run(
@@ -2120,9 +2163,14 @@ def _run_setup(
             fail("stdio_probe", "setup.stdio_probe_runtime_mismatch", mismatch,
                  {**probe, "host_runtime_root": str(settings.runtime_root), "command": steps["stdio_probe"]["command"]})
         if not probe_ok:
+            # 起不来时先认环境性原因（Windows 文件锁），认出来就给人话 + 可执行的下一步，而不是一屏 uv 构建噪声。
+            diagnosis = None if probe.get("ok") else _diagnose_probe_stderr(str(probe.get("stderr_tail") or ""))
+            if diagnosis:
+                steps["stdio_probe"]["diagnosis"] = diagnosis
             fail("stdio_probe", "setup.stdio_probe_failed",
-                 "客户端将要执行的命令起不来 MCP server，或列出的工具数不对。",
-                 {**probe, "expected_tools": expected, "command": steps["stdio_probe"]["command"]})
+                 diagnosis["explanation"] if diagnosis else "客户端将要执行的命令起不来 MCP server，或列出的工具数不对。",
+                 {**probe, "expected_tools": expected, "command": steps["stdio_probe"]["command"],
+                  **({"diagnosis": diagnosis} if diagnosis else {})})
 
     # ---- 7 next_steps
     prefix = "uv run horosa-skill" if launcher_key == "uv" else "horosa-skill"

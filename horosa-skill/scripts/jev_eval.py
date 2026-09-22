@@ -186,8 +186,8 @@ def cmd_compile(args: argparse.Namespace) -> int:
         print(f"{surface}: tau={tau:.2f} holdout n={holdout_metrics['n']} acc_decided={holdout_metrics.get('accuracy_decided')} "
               f"handled={holdout_metrics['handled']} ece={holdout_metrics['ece']} escalation={holdout_metrics['escalation']} → {status}"
               + (f" (failed: {', '.join(lock['surfaces'][ev.POLICY_SURFACE[surface]]['failed_gates'])})" if not promoted else ""))
-    ev.REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    ev.THRESHOLDS_PATH.write_text(json.dumps(lock, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    ev.REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
+    ev.THRESHOLDS_PATH.write_text(json.dumps(lock, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
     print(f"jev-eval compile: wrote {ev.REPORT_PATH.name} + {ev.THRESHOLDS_PATH.name}")
     return 0
 
