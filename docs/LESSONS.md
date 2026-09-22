@@ -105,6 +105,50 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.39.0 / 2026-09-22 — Windows 维护机复验 v0.39.0：星阙桌面端占着默认端口时 doctor 把它说成「查不出身份的进程」；setup 探针对「运行中会话占着 venv 文件」只给一屏 uv 噪声；Jev 数据集指纹按原始字节算
+
+- **背景**：v0.39.0（可选云端决策层）发布后五件齐、托管流水线与 windows-smoke 全绿，Windows 半边无需补。本机按
+  v0.38.0 起的「原生复验」角色做「门禁 → lane → 真机场景」，并第一次在**星阙桌面端开着**的状态下复验——8899/9999
+  由 `%LOCALAPPDATA%\HorosaDesktop\embedded-runtime\<sha>\rt\{python,java}` 占着（这是装了桌面端的用户的默认形状）。
+- **① doctor 误诊（用户可见）**。症状：用户默认根（`.mcp.json` 不设 `HOROSA_RUNTIME_ROOT`）的 doctor 报
+  `needs_attention`：「端口被非本工具的进程占用：java_backend 端口 9999 被 **一个查不出身份的进程** 占着…」，next_action
+  叫人「关掉上面点名的进程」。根因：`classify_endpoint` 的 `identity.nonce_mismatch`（与 `identity.other_app`）分支由
+  身份握手下结论后**提前返回、不收集 holders**；`_doctor_summary` 只看 holders，空就写「查不出身份」——可握手明明答出了
+  `horosa-chart` / `horosa-backend`（桌面端自己的 nonce），ctypes 也能直接拿到映像路径。最常见的真实形状（桌面端 + skill）
+  被说成「有不明进程占端口」，还被引导去关掉自己的桌面端。修：`identity._name_holders_cheaply` 在这两个分支点名监听者
+  （Windows 只用 ctypes 映像、不起 PowerShell；实测 listener_pids 27 ms 首次后缓存、映像 0.3 ms）；`_doctor_port_holders`
+  带上 `app` / `evidence`；`_doctor_summary` 按握手**实际证明了什么**措辞——星阙标记 →「另一份星阙实例（…很可能是你开着的
+  星阙桌面端，或另一个 runtime 根下的服务）」，next_action 先给「不想关它：HOROSA_PORTS=auto；想用它的引擎：
+  HOROSA_SERVER_ROOT/HOROSA_CHART_SERVER_ROOT（外部模式）」；只有什么都没证明时才说「查不出身份」。
+- **② setup 探针的 Windows 文件锁**。症状：lane 的 `client_setup` 里只有 codex 红（v0.38.1 复验起两次）：
+  `setup.stdio_probe_failed`，stderr 尾巴是 uv 的 `failed to remove file …\.venv\Lib\site-packages\../../Scripts/horosa-skill.exe
+  : … (os error 32)`。根因：本 session 的 horosa MCP 会话（`uv run … serve`）占着 venv 的 exe；codex 形状的探针不继承
+  `UV_NO_SYNC`，`uv run` 发现 venv 元数据落后（`git pull` 换了版本号）要同步，删不掉被占文件，server 未启动即退出——
+  macOS/Linux 能替换运行中的文件，所以只在 Windows。用户侧同形：客户端开着 horosa、终端里 `git pull` 后再 `setup`。
+  修：`cli._diagnose_probe_stderr` 只锚不本地化的两头（uv 的英文 `failed to remove file` + Rust 的 `(os error 32)`；
+  中间的系统描述随显示语言变），认出就换成中英双语原因 + 下一步，`details.diagnosis` 与 `steps.stdio_probe.diagnosis` 同带，
+  原始 stderr 保留、错误码不变。**本机复验法**：别在本 session 的 venv 上跑 lane / 门禁——`git worktree add --detach
+  C:\Users\maxwe\hs-lane <sha>` + 自有 venv（`uv sync --dev` + core-js `npm ci --omit=dev`），测的正好是要推送的那个提交。
+  （先试过把被占的 exe 改名再 `uv sync`：这颗 trampoline 打开时没给删除共享，NTFS 改名同样被拒——此路不通。）
+- **③ Jev 数据集指纹按原始字节算（隐患，非现行缺陷）**。`decisions/eval.py::dataset_sha256` = `sha256(read_bytes())`，
+  锁进 `contracts/jev_thresholds.json`。正常检出全平台 LF（`.gitattributes` `* text=auto eol=lf` 压过本机
+  `core.autocrlf=true`；本机实测 raw == LF 归一化 == 锁），但 `gen_jev_eval_sets.py` 用文本模式写——Windows 上重生成即
+  CRLF，随后 `compile` 会写进只在那台机器成立的 sha，提交后（git 归一化回 LF）全平台 `check` 报 dataset changed。
+  与 v0.35.0 vendor 戳恒红同型。修：哈希前 `\r\n → \n`（LF 内容空操作，已提交的锁仍有效，`jev_eval.py check` 实测 ok）；
+  三处提交物写入器改 `newline="\n"`；AGENTS §9 那条「vendor stamps are EOL independent」泛化为所有跨平台文本摘要，并修掉
+  该条里 `newline="` 与 `"` 之间误写入的真实换行符（渲染成 `newline=" "`）。
+  **自己在这条上的误判也记下**：先用 Git Bash 的 `grep -c $'\r'` 数 CRLF，得出「routing 213 行 CRLF」，其实那是文件总行数
+  （命令替换里的 `$'\r'` 没按预期生效）；`git ls-files --eol`（`w/lf`）与字节级 sha 比对才是可信判据。
+- **守卫**：`tests/test_runtime_lifecycle.py::test_doctor_names_another_horosa_instance_instead_of_calling_it_unidentifiable`；
+  `tests/test_runtime_ports_identity.py::test_handshake_decided_foreign_branches_name_their_holders_without_powershell`；
+  `tests/test_setup_command.py::test_probe_stderr_diagnosis_recognises_the_windows_file_lock`（英/中文 Windows、.pyd、os error 5
+  与无关 stderr 不误认）+ `::test_setup_names_the_windows_file_lock_when_the_probe_dies_on_it`；
+  `tests/test_decisions_eval.py::test_dataset_sha256_is_line_ending_agnostic`。
+- **本机原生证据**：门禁（`run_ci_gates.py`，worktree 形状）两次 24/24 全绿：修复前 `98ef9ec` 1227 passed、最终代码提交 1229 passed。lane（`verify_runtime_live.py`，公开 v0.39.0 真下载装进 `rt-verify`）install 83 s / start 20 s / 四引擎 / **九客户端全绿（含此前两轮环境性红的 codex）** / HTTP 握手 / 挂客户端不停 / 自动换端口 / live pytest 1297 passed / stop 全过——唯一红是**本轮自己引入的**回归（见下）。用户默认根（`.mcp.json` 用的那一个）v0.30.0 → v0.39.0 用真实命令 `horosa-skill upgrade` 升级，桌面端正占着旧清单钉的 8899/9999：`ok`、`stopped_before_swap=False`、`runtime.install_ports_held_elsewhere` 点名 pid 19392 / 7316 的 `HorosaDesktop\embedded-runtime\…` 映像，两颗进程 pid 与路径前后完全一致——v0.38.1 换目录闸修复（2e6db9c）在最真实形状下的首次原生验证（修前这里是 `install_refused_running_foreign`）。doctor 前后：「被 一个查不出身份的进程 占着」→「被 另一份星阙实例（horosa-backend；pid 7316 …\HorosaDesktop\embedded-runtime\——很可能是你开着的星阙桌面端…）占着」。
+- **本轮自己踩的两个坑**：（a）用 Git Bash 的 `grep -c $'\r'` 数 CRLF，得出「routing 213 行 CRLF」并据此断言现行缺陷——其实是文件总行数；`git ls-files --eol`（`w/lf`）与字节级 sha 才是可信判据。（b）给 doctor 摘要加的公开常量起名 `HOROSA_APP_MARKERS`，撞上约定「`src/` 里的 `HOROSA_*` 字面量专属环境变量」（`test_config.py::test_env_registry_covers_all_flags_code_reads` 锁着）；定向测试挑不到它，是 lane 的全量 live pytest 抓到的——改为函数 `identity.is_horosa_app()`，并 amend 未推送的提交。**法则**：动了 `src/` 就在最终提交上跑全量（门禁或 lane），定向测试只是加速，不是闸
+- **法则**：诊断文本要按证据**实际证明了什么**措辞，「没收集」≠「查不出」；Windows 上「运行中的文件不可替换」是一类
+  独有失败，遇到先认签名再给人话；跨平台比对的文本摘要一律先归一化换行，写 LF 提交物的脚本一律 `newline="\n"`。
+
 ### v0.39.0 / 2026-09-22 — 发布前 CI 红：错误信息双语棘轮抓到新包 28 处 raise；本机只跑了「顺手的守卫」而不是 run_ci_gates.py
 
 - **症状**：bump 0.39.0 推上 main，ci.yml `test` job 在 `verify_error_recovery.py` 一步红：`non-bilingual error messages rose 110 → 138`

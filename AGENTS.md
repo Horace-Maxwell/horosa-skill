@@ -760,6 +760,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | Clash / VPN 下「无法连接本地后端」而服务健康 | 回环探测走了用户代理 | 已内建绕代理（`loopback_httpx_client`）；自己 curl 排查时设 `NO_PROXY=127.0.0.1,localhost` |
 | 用户的星阙桌面端被本工具关掉 | 旧 stop 按端口动手，不问归属 | 已修：只停**强证据**属于自己的（nonce / 命令行含 runtime 根 / 我方 pid）；守卫 `verify_runtime_scripts.py` + `tests/test_runtime_ports_identity.py` |
 | `runtime.port_conflict_foreign` / `_unknown_holder` | 8899/9999 被别的进程占着，本工具**不会**代为终止 | 关掉报错里点名的进程，或 `HOROSA_PORTS=auto` 自动挑空闲口；确知是 Horosa 后端时 `HOROSA_RUNTIME_TRUST_PORTS=1` |
+| doctor 报「端口被 另一份星阙实例（horosa-chart / horosa-backend；pid … `…\HorosaDesktop\embedded-runtime\…`——很可能是你开着的星阙桌面端…）占着」（`identity.nonce_mismatch`） | 星阙桌面端（或另一个 runtime 根）占着默认 8899/9999：它说的是星阙协议，但 nonce 不是本工具这一份，所以本工具既不采用、也不代为终止。装了桌面端的用户的默认形状 | 不想关桌面端：`HOROSA_PORTS=auto` 让本工具换端口；想直接用桌面端的引擎：设 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指向它（外部模式）；或关掉它再重试。v0.39.0 前 doctor 把这种情况误报成「一个查不出身份的进程」并叫人关掉它（台账 v0.39.0） |
 | 某个客户端里 horosa 一个工具都没有 / 装了却不出现 | 配置写错（占位符未展开、缺 `--transport stdio`、目录搬了、`uvx horosa-skill` 指着未开通的 PyPI、Codex 默认 10/60 s 超时） | `uv run horosa-skill client check`（读它**实际写着什么**）→ 按 `fix_command` 重生成 |
 | 容器里连不上而宿主 curl 正常 / `421 Misdirected Request` | Host 头不在 DNS-rebinding 白名单 | `host.docker.internal` 已默认放行；自定义域名加 `HOROSA_MCP_ALLOWED_HOSTS` |
 | 维护机上 `test_error_paths_return_a_conformant_envelope` 红、CI 绿 | 默认端口上有活服务，只钉 `HOROSA_RUNTIME_ROOT` 拦不住，本该失败的路径成功了 | 同时把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指到不可达地址（§8 验证流程 4） |
@@ -774,6 +775,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | 慢网 / 企业代理下 `runtime.install_download_failed` | 每块 1 MiB 之间的读超时 120 s、每镜像 3 次 | `HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS` / `HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS`；`doctor --probe-network` 看哪个镜像通（默认 doctor 零外网请求） |
 | `setup` 在第 1 步 `network_probe` 就失败（5 s 内，`setup.network_unreachable`） | 清单 URL 经所有镜像都取不到（github.com:443 不通 / 代理拦 HEAD） | 失败包 `details.next_action` 给三条路：`HOROSA_RUNTIME_MIRROR=<前缀>`、`--archive <本地归档>`、`--no-probe-network` 跳过预检；`retry_command` 已带后者（v0.38.0 B4） |
 | `setup` 在 `stdio_probe` 失败（`setup.stdio_probe_failed`） | 客户端将要执行的那条命令起不来 server：命令路径不对、uvx 首跑下载失败、工具数与工具面不符 | 看失败包 `details.command` 与 `details.stderr_tail`；uvx 形态可先手跑 `uvx --refresh --from <wheel URL> horosa-skill --version`；checkout 内改 `--launcher uv`（v0.38.0 B4） |
+| Windows：`setup`（或 lane 的客户端步骤）在 `stdio_probe` 失败，失败包带 `details.diagnosis.cause = windows_file_in_use`（stderr 尾巴是 `failed to remove file …\Scripts\horosa-skill.exe … (os error 32)`） | 另一个已挂着的 horosa MCP 会话（`uv run … serve`）占着 venv 里的 exe / 已加载的 .pyd；客户端那条 `uv run` 要先把 venv 同步到当前版本（`git pull` 换过版本号就会触发），删不掉被占文件，server 未启动即退出。macOS/Linux 可替换运行中的文件，不会遇到 | 关掉（或重启）挂着 horosa 的会话再重跑；终端里的 `uv run` 可临时 `UV_NO_SYNC=1`（依赖未变时安全）；维护机复验一律在**独立 git worktree**（自有 venv）里跑门禁与 lane，别和本机开着的 MCP 会话抢同一个 venv（v0.39.0 台账） |
 | `setup --client claude-code` 只打印了命令没注册（`config_mode: printed`） | `claude` 不在 PATH（GUI 装的 Claude Code 没把 CLI 放进 shell PATH） | 复制 `steps.config.command` 到有 `claude` 的终端执行，或 `--scope project` 写当前项目的 `.mcp.json`（v0.38.0 B4） |
 | Windows ARM（骁龙本）上 `install` 成功但结果带 `runtime.platform_emulated`、`doctor` 报 `emulated: true` | 不是故障：本机没有原生载荷，自动装了 win32-x64 载荷走 Windows 11 x64 仿真（v0.38.0 A4） | 正常使用；冷启动更慢，矩阵里 `HOROSA_RUNTIME_START_TIMEOUT_SECONDS=900`；若报 `install_missing_platform` 说明清单连 win32-x64 都缺，先查发布完整性 |
 | Apple Silicon 上 `install` 报 `install_missing_platform`，`platform` 却是 `darwin-x64` | 宿主 Python 是 x86_64（Rosetta 下的旧 Homebrew / conda），旧 `_platform_key()` 照抄 `platform.machine()` | v0.38.0 起 `sysctl.proc_translated` 判出真芯片给 arm64 载荷（载荷自带解释器，宿主架构无关）；`doctor.arch.emulated: true` 只是提示 |
@@ -849,6 +851,9 @@ A global stability pass hardened these; keep them true when you touch the releva
   归属判定走 `runtime/identity.py` 的三级证据（`/horosaIdentity` 的 app 标记 + 启动 nonce → 监听
   进程命令行含 runtime 根 → 我方注册表 pid 存活）。`ours` 才用它，**强证据**才允许停/重启它
   （只有 app 标记 = 可能是用户自己开着的桌面端）。查不到持有者 ≠ 端口空着。
+  握手已下结论的 foreign 分支（nonce 不符 / 别的 app）同样要**点名**持有者（`identity._name_holders_cheaply`：Windows 只走 ctypes 映像，
+  不起 PowerShell），报错措辞按证据**实际证明了什么**来——星阙标记说「另一份星阙实例」，只有什么都没证明时才说「查不出身份」
+  （`_doctor_summary`；v0.39.0 台账）。
 - **状态文件原子写。** `runtime-state.json` 走 tmp + `os.replace`（`runtime/registry.py`）；
   一次 `write_text` 会让并发读者读到半个 JSON → 判成「没在跑」→ 再起一次。整份覆盖时保留
   别的进程写进来的长寿字段（`launch_nonce` / `clients` / `launcher` / `service_pids` / `ports`）。
@@ -992,12 +997,14 @@ A global stability pass hardened these; keep them true when you touch the releva
   `claude mcp add --scope user` 写的是真 `~/.claude.json`，清理那句 `claude mcp remove --scope user horosa` 还会删掉维护者原有的条目（托管 runner 没有
   `claude`，矩阵从没暴露）。本机用真 `claude` 验过隔离：add / get / remove 全落在隔离目录，真配置 sha 不变。守卫
   `tests/test_verify_runtime_live.py::test_claude_user_scope_step_never_touches_the_invoking_users_claude_config`。
-- **Hand-made vendor stamps are line-ending independent.** `revendor_core_js._sha256_file` hashes the
-  CRLF→LF-normalized UTF-8 text（raw bytes only for non-UTF-8）, so `upstream_sha256`/`derived_sha256`
-  stamped on mac over LF sources still match on a Windows checkout（`core.autocrlf=true`）— a raw-bytes
-  digest made the hand-made-drift guard permanently red on Windows（v0.35.0+ 台账）. Don't switch it
-  back to `read_bytes()`; and any script that *writes* LF source files must pass `newline="
-"`.
+- **Cross-platform text digests are line-ending independent.** Any sha stamped on one OS and compared on
+  another hashes CRLF→LF-normalized bytes: `revendor_core_js._sha256_file`（vendor stamps `upstream_sha256`/
+  `derived_sha256`; raw bytes only for non-UTF-8）and `decisions/eval.py::dataset_sha256`（the Jev dataset
+  fingerprints locked in `contracts/jev_thresholds.json`）. A raw-bytes digest made the hand-made-drift guard
+  permanently red on Windows（v0.35.0+ 台账）and would let a Windows regeneration write a lock no other platform
+  can satisfy（v0.39.0 台账）. Don't switch either back to `read_bytes()`; any script that *writes* LF artifacts
+  （sources, eval sets, locks, reports）must pass `newline="\n"`
+  （`tests/test_decisions_eval.py::test_dataset_sha256_is_line_ending_agnostic`）.
 
 ## 10. 上游镜像注记（upstream 星阙 — skill 必须镜像的行为）
 
