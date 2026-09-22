@@ -42,6 +42,17 @@
           "name": "HOROSA_SKILL_DATA_DIR",
           "description": "Local runs / reports / SQLite directory (default ~/.horosa-skill)",
           "isRequired": false
+        },
+        {
+          "name": "HOROSA_JEV",
+          "description": "Optional cloud decision layer (TypeSafe Jev): off (default, fully local) / shadow / enforce",
+          "isRequired": false
+        },
+        {
+          "name": "HOROSA_JEV_API_KEY",
+          "description": "TypeSafe Jev API key; only read when HOROSA_JEV is not off",
+          "isRequired": false,
+          "isSecret": true
         }
       ]
     },

@@ -45,6 +45,11 @@ from horosa_skill.knowledge import build_knowledge_registry, read_knowledge_entr
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.reports import ReportBuilder, render_report
 from horosa_skill.reports.technique_card import build_technique_card, build_technique_report
+from horosa_skill.decisions.layer import DecisionLayer, current_decision_records, decision_records
+from horosa_skill.decisions.redact import build_meta_state
+from horosa_skill.decisions.surfaces.extract import build_gender_question, gender_candidates, resolve_gender
+from horosa_skill.decisions.surfaces.routing import build_routing_questions, resolve_routing
+from horosa_skill.decisions.surfaces.zhancat import build_zhan_question, resolve_zhan
 
 HECAN_SCHEMA = "horosa.skill.hecan.v1"
 from horosa_skill.runtime import HorosaRuntimeManager
@@ -75,6 +80,17 @@ logger = logging.getLogger(__name__)
 # 出信封时并入 envelope.warnings；嵌套 run_tool（三式合一/合参）的说明冒泡到外层。守卫：
 # scripts/verify_silent_degrades.py（包内 `_degrade(` 计数棘轮，基线 0——降级点一律走 `_degrade`）。
 _DEGRADE_NOTES: contextvars.ContextVar[list[str] | None] = contextvars.ContextVar("horosa_degrade_notes", default=None)
+# 当前 run_tool 的自然语言原话（dispatch 传入的 query_text）：决策层的门类分类要读它，runner 签名不变。
+_RUN_QUERY_TEXT: contextvars.ContextVar[str | None] = contextvars.ContextVar("horosa_run_query_text", default=None)
+
+
+@contextlib.contextmanager
+def _run_query_scope(query_text: str | None) -> Iterator[None]:
+    token = _RUN_QUERY_TEXT.set(query_text)
+    try:
+        yield
+    finally:
+        _RUN_QUERY_TEXT.reset(token)
 
 
 def _degrade(fmt: str, *args: Any, note: str | None = None) -> str:
@@ -6528,6 +6544,7 @@ class HorosaSkillService:
         store: MemoryStore | None = None,
         js_client: HorosaJsEngineClient | None = None,
         runtime_manager: HorosaRuntimeManager | None = None,
+        decision_layer: DecisionLayer | None = None,
     ) -> None:
         self.settings = settings
         self.client = client or HorosaApiClient(settings.server_root)
@@ -6539,6 +6556,13 @@ class HorosaSkillService:
         self.report_builder = ReportBuilder()
         self._java_runtime_ready = False
         self._chart_runtime_ready = False
+        # 可选云端决策层（v0.39.0）：HOROSA_JEV=off（缺省）→ None，本进程零对象、零网络。
+        # 失败通过 _degrade 进 envelope.warnings（关闭式降级，禁静默）。测试注入桩走这个参数。
+        self.decision_layer = (
+            decision_layer
+            if decision_layer is not None
+            else DecisionLayer.from_settings(settings, degrade=lambda message: _degrade("%s", message, note=message))
+        )
 
     def _unwrap_result(self, payload: Any) -> Any:
         current = payload
@@ -8223,6 +8247,8 @@ class HorosaSkillService:
         except Exception as exc:
             chart_error = {"code": "liureng.chart_context_unavailable", "message": str(exc), "details": {}}
 
+        # 决策层 S3（可选，缺省关）：没给 zhanCategory 时按问题文本分门类，驱动 [占断向导] 段。
+        payload = self._decide_zhan_category(payload)
         js_result = self.js_client.run(
             "liureng",
             {
@@ -10877,6 +10903,11 @@ class HorosaSkillService:
         except Exception:  # noqa: BLE001 - 元数据失败绝不拖垮技法调用
             logger.debug("technique card build failed for %s", tool_name, exc_info=True)
             return response_data
+        # 决策层自陈（v0.39.0）：本次调用里每一条 Jev 决策（面 / 模型 / 选项 / 置信 / 是否采纳）。
+        # 只在有记录时挂键——缺省 off 时卡片逐字节不变。
+        decisions = current_decision_records()
+        if decisions:
+            card["decisions"] = decisions
         augmented = dict(response_data)
         augmented["technique_card"] = card
         return augmented
@@ -11275,7 +11306,7 @@ class HorosaSkillService:
                 "payload": payload,
                 "evaluation_case_id": evaluation_case_id,
             },
-        ) as trace, _degrade_collector() as degrade_notes:
+        ) as trace, _degrade_collector() as degrade_notes, decision_records(), _run_query_scope(query_text):
             try:
                 payload = normalize_request_payload(payload)
                 validated = definition.input_model.model_validate(payload)
@@ -12243,6 +12274,155 @@ class HorosaSkillService:
             trace["selected_tools"] = selected
             return template
 
+    # ---- 可选云端决策层（v0.39.0）：三个面的采纳逻辑都在这里，代码持有权限、模型只供证据 ----
+    def _decision_layer_view(self, records: list[dict[str, Any]]) -> dict[str, Any] | None:
+        layer = self.decision_layer
+        if layer is None:
+            return None
+        return {**layer.summary(), "records": list(records)}
+
+    @staticmethod
+    def _decision_guard(surface: str, fallback: Any, fn: Any) -> Any:
+        """决策层的任何异常（问题规格、解析、编排 bug）都不许拖垮技法/调度：降级可见，返回确定性结果。
+
+        `layer.ask` 只包住 provider；问题构造与采纳逻辑在它外面——v0.39.0 开发期一次 QuestionSpecError
+        曾把整个 liureng_gods 打成 tool.internal_error，正是这一层要堵的形状。
+        """
+        try:
+            return fn()
+        except Exception as exc:  # noqa: BLE001 - 决策层是可选增强，失败只能降级
+            logger.debug("decision surface %s failed", surface, exc_info=True)
+            _degrade("决策层（%s 面）内部错误 %s，已回落确定性路径。", surface, exc.__class__.__name__)
+            return fallback
+
+    def _decide_routing(
+        self,
+        request: DispatchInput,
+        deterministic: list[str],
+        error: DispatchResolutionError | None,
+    ) -> list[str]:
+        return self._decision_guard("dispatch", deterministic, lambda: self._decide_routing_inner(request, deterministic, error))
+
+    def _decide_routing_inner(
+        self,
+        request: DispatchInput,
+        deterministic: list[str],
+        error: DispatchResolutionError | None,
+    ) -> list[str]:
+        """S1：两级 Choice。确定性路由命中 → 只记一致性；无解且 enforce 且 conf≥τ → 采纳兜底；其余原样。"""
+        layer = self.decision_layer
+        if layer is None or not layer.policy.surface_enabled("dispatch"):
+            return deterministic
+        state, redaction = build_meta_state(request.query)
+        outcome = layer.ask(
+            "dispatch",
+            state=state,
+            questions=build_routing_questions(),
+            redaction=redaction,
+            intent="route a natural-language request to one technique tool",
+        )
+        if not outcome.ok or outcome.answers is None:
+            return deterministic
+        decision = resolve_routing(outcome.answers.answers, tau=outcome.tau)
+        info = {**decision.as_dict(), "deterministic": list(deterministic), "agree": bool(deterministic) and decision.tool in deterministic}
+        if error is None:
+            layer.finalize(outcome, adopted=False, reason="deterministic router matched; recorded for shadow comparison", decision=info)
+            return deterministic
+        if outcome.enforced and decision.tool:
+            layer.finalize(outcome, adopted=True, reason="deterministic router had no match; decision-layer fallback", decision=info)
+            return [decision.tool]
+        layer.finalize(outcome, adopted=False, reason=("shadow" if not outcome.enforced else decision.reason), decision=info)
+        return deterministic
+
+    @staticmethod
+    def _tool_asks_gender(tool_name: str) -> bool:
+        from horosa_skill.agent_guidance import TOOL_GUIDANCE
+
+        policy = TOOL_GUIDANCE.get(tool_name) or {}
+        for item in policy.get("ask_if_missing") or []:
+            fields = [part.strip() for part in str((item or {}).get("field") or "").split("/")]
+            if "gender" in fields:
+                return True
+        return False
+
+    def _decide_gender(
+        self,
+        request: DispatchInput,
+        tool_name: str,
+        payload: dict[str, Any],
+        shared: dict[str, Any],
+    ) -> None:
+        self._decision_guard("extract", None, lambda: self._decide_gender_inner(request, tool_name, payload, shared))
+
+    def _decide_gender_inner(
+        self,
+        request: DispatchInput,
+        tool_name: str,
+        payload: dict[str, Any],
+        shared: dict[str, Any],
+    ) -> None:
+        """S2：只在工具会问性别、载荷没给、原话有性别词表命中时才问一次（同一 dispatch 共享一次调用）。"""
+        layer = self.decision_layer
+        if layer is None or not layer.policy.surface_enabled("extract"):
+            return
+        if payload.get("gender") not in (None, "") or not self._tool_asks_gender(tool_name):
+            return
+        candidates = gender_candidates(request.query)
+        if not candidates.any:
+            return
+        if "gender" not in shared:
+            state, redaction = build_meta_state(request.query)
+            shared["gender"] = layer.ask(
+                "extract",
+                state=state,
+                questions={"subject_gender": build_gender_question()},
+                redaction=redaction,
+                intent="extract the chart subject's gender only when the request states it",
+            )
+        outcome = shared["gender"]
+        if not outcome.ok or outcome.answers is None:
+            return
+        decision = resolve_gender(outcome.answers.answers.get("subject_gender"), candidates, tau=outcome.tau)
+        info = {**decision.as_dict(), "tool": tool_name}
+        if decision.value is not None and outcome.enforced:
+            payload["gender"] = decision.value
+            note = f"gender={decision.value}（决策层自用户原话抽取：{'/'.join(decision.evidence)}；conf {decision.confidence:.2f}）"
+            existing = payload.get("clarification_notes")
+            payload["clarification_notes"] = f"{existing}；{note}" if existing else note
+            layer.finalize(outcome, adopted=True, reason="explicitly stated in the request (lexicon + Jev agree)", decision=info)
+            return
+        layer.finalize(outcome, adopted=False, reason=("shadow" if not outcome.enforced else decision.reason), decision=info)
+
+    def _decide_zhan_category(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._decision_guard("zhancat", payload, lambda: self._decide_zhan_category_inner(payload))
+
+    def _decide_zhan_category_inner(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """S3：六壬占断门类（闭集 + general）；分错只多一段向导、盘面不变，conf≥τ 即填。"""
+        layer = self.decision_layer
+        if layer is None or not layer.policy.surface_enabled("zhancat"):
+            return payload
+        if payload.get("zhanCategory"):
+            return payload
+        text = payload.get("question") or _RUN_QUERY_TEXT.get() or ""
+        if not str(text).strip():
+            return payload
+        state, redaction = build_meta_state(str(text))
+        outcome = layer.ask(
+            "zhancat",
+            state=state,
+            questions={"zhan_category": build_zhan_question()},
+            redaction=redaction,
+            intent="classify the topic of a 大六壬 question",
+        )
+        if not outcome.ok or outcome.answers is None:
+            return payload
+        decision = resolve_zhan(outcome.answers.answers.get("zhan_category"), tau=outcome.tau)
+        if decision.category is not None and outcome.enforced:
+            layer.finalize(outcome, adopted=True, reason="topic classified above tau", decision=decision.as_dict())
+            return {**payload, "zhanCategory": decision.category}
+        layer.finalize(outcome, adopted=False, reason=("shadow" if not outcome.enforced else decision.reason), decision=decision.as_dict())
+        return payload
+
     def dispatch(
         self,
         payload: dict[str, Any],
@@ -12267,10 +12447,23 @@ class HorosaSkillService:
                 },
             ) from exc
 
+        routing_error: DispatchResolutionError | None = None
+        decision_records_out: list[dict[str, Any]] = []
         try:
             # 合参等上层可显式点名技法（跳过关键词路由）；未知名照常走 run_tool 的 tool.unknown。
             selected_tools = list(preselected_tools) if preselected_tools else select_tools(request)
         except DispatchResolutionError as exc:
+            routing_error = exc
+            selected_tools = []
+        # 决策层 S1（可选，缺省关）：确定性路由是权威；只有它无解时才可能采纳 Jev 的兜底，命中时只记一致性。
+        if self.decision_layer is not None and not preselected_tools:
+            with decision_records() as routing_records:
+                selected_tools = self._decide_routing(request, selected_tools, routing_error)
+            decision_records_out.extend(routing_records)
+            if selected_tools:
+                routing_error = None
+        if routing_error is not None:
+            exc = routing_error
             return DispatchEnvelope(
                 ok=False,
                 version=__version__,
@@ -12284,12 +12477,14 @@ class HorosaSkillService:
                 code=exc.code,
                 message=str(exc),
                 details=exc.details,
+                decision_layer=self._decision_layer_view(decision_records_out),
             )
 
         normalized_inputs: dict[str, dict[str, Any]] = {}
         results: dict[str, ToolEnvelope] = {}
         result_export_contracts: dict[str, dict[str, Any]] = {}
         dispatch_warnings: list[str] = []
+        extraction_shared: dict[str, Any] = {}
 
         workflow_group_id = self.tracer.new_group_id()
         with self.tracer.span(
@@ -12367,6 +12562,11 @@ class HorosaSkillService:
                     payload_for_tool = dict(base_birth)
 
                 payload_for_tool.update(confirmation)
+                # 决策层 S2（可选，缺省关）：只把原话里**明说**的性别变成「已提供」（词表 + Jev 双钥）。
+                if self.decision_layer is not None:
+                    with decision_records() as extract_records:
+                        self._decide_gender(request, tool_name, payload_for_tool, extraction_shared)
+                    decision_records_out.extend(extract_records)
                 normalized_inputs[tool_name] = payload_for_tool
                 results[tool_name] = self.run_tool(
                     tool_name,
@@ -12402,6 +12602,7 @@ class HorosaSkillService:
                 error=None,
                 trace_id=trace["trace_id"],
                 group_id=trace["group_id"],
+                decision_layer=self._decision_layer_view(decision_records_out),
             )
 
             if request.save_result and run_id is not None:

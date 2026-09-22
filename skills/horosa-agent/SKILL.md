@@ -153,6 +153,24 @@ can rerun `doctor` / `openclaw-check`.” / “The export contract shows the ava
 invent missing data.” / “Please provide the missing birth/event time, location, timezone, gender, or
 question context.”
 
+## Optional Cloud Decision Layer (`HOROSA_JEV`)
+
+Horosa can optionally consult TypeSafe Jev — a cloud "System One" decision model — for three narrow
+decisions: routing a request nobody's keyword matched, extracting a setting the user **explicitly
+stated** (e.g. 「我老婆的八字」→ gender female), and classifying a 大六壬 question's topic. It is
+**off by default**; when off, nothing leaves the machine and no response carries any of the fields
+below. When the operator turns it on:
+
+- Every affected result self-reports it: `data.technique_card.decisions[]` (per technique run) and
+  `DispatchEnvelope.decision_layer` (dispatch). Tell the user, once per answer, that the cloud decision
+  layer was consulted, and quote what it decided and whether it was adopted (`adopted` / `reason`).
+- `mode: shadow` means it only recorded what it would have decided — behaviour is unchanged.
+- Jev never computes charts and never explains them. Its `confidence` is distribution concentration,
+  not correctness — do not present it as certainty about the user's life.
+- The clarification gate is unchanged: a value the user did not state is still asked for. If the user
+  disputes an extracted value (`decision.field` / `value` / `evidence`), re-run with the corrected input.
+- If a warning says the decision layer was unavailable, the deterministic path ran instead; no action needed.
+
 ## Tool Selection
 
 | User intent | Tool |

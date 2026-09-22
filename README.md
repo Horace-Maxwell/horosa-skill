@@ -12,7 +12,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-106-1d4ed8?style=for-the-badge" alt="106 tools" />
-  <img src="https://img.shields.io/badge/测试-1167_passed-16a34a?style=for-the-badge" alt="1167 passed" />
+  <img src="https://img.shields.io/badge/测试-1217_passed-16a34a?style=for-the-badge" alt="1217 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
 
@@ -468,6 +468,22 @@ uv run horosa-skill report technique --group-id <group_id> --format markdown
 
 `horosa_hecan`（CLI：`horosa-skill hecan`）：一问并行起多路技法（同 `group_id` 落库；默认 5 路、上限 8 路，可显式指定 `tools`），返回**合参模板**而非终稿——逐技法结论槽必须绑定该技法真实段落（响应里只有证据指针，全文用 `memory_show(run_id)` 取）；`convergence` 只在多技法独立同判时填；**`divergence` 逐条披露，不许平均、不许只挑一边**；口径冲突（`consistency.setting_conflicts`）必须先声明。
 
+### 5. 可选云端决策层（TypeSafe Jev · 默认关闭）
+
+上面所有承诺（不联网、不上传）在**默认状态下原样成立**。v0.39.0 起可以显式开启一个云端「决策层」——
+TypeSafe 的 Jev（System One 决策模型，只回类型化的选择/概率，不生成文本）——只做三件窄事：确定性关键词
+路由**无匹配**时兜底选技法；把用户原话里**明说**的设置（如「我老婆的八字」→ 性别女）变成「已提供」
+（词表证据 + 模型判定 + 置信阈值三钥齐才填，永不替用户选默认）；六壬问题的占断门类分类。它不算盘、不解盘。
+
+| 项 | 说明 |
+| --- | --- |
+| 开关 | `HOROSA_JEV=off`（默认）/ `shadow`（只记录它会怎么判，行为不变）/ `enforce`；密钥 `HOROSA_JEV_API_KEY`（Claude Desktop / 插件在设置里填，永不写进 Horosa 文件） |
+| 离机的数据 | 一档 `HOROSA_JEV_SCOPE=meta`（默认）：**本地脱敏**后的问题文本（日期 / 时刻 / 坐标 / 地名 / 号码 → 占位符）+ 技法名 + 设置键名；二档 `snapshot`：额外允许导出快照文本，仅供未来的忠实性/合参判定面 |
+| 不离机的数据 | 出生日期、时刻、坐标、地名原值；盘面与导出全文（一档）；密钥；本地记忆 |
+| 服务商事实 | 托管闭源模型，美国机房；「不用于训练」是合同承诺（非架构保证）；数据留存无公开数字，零留存仅企业版 |
+| 每次自陈 | `data.technique_card.decisions[]` / `horosa_dispatch` 的 `decision_layer`（模型 id、选项、置信、是否采纳）；`horosa-skill jev status` / `jev events`（本地账本） |
+| 权限边界 | 代码持有权限：确定性路径永远是权威；`enforce` 需在自家中文标注集上晋升过的阈值锁；任何失败关闭式回落并写进 `warnings` |
+
 ## 📂 本地记忆与报告
 
 本地数据默认写入 `~/.horosa-skill/`（Windows：`%APPDATA%/HorosaSkill/`）。每次 run 沉淀：run 元信息、tool call 记录、entity 索引、JSON artifact、run manifest、原始 `query_text`、用户问题、AI 最终回答与可选结构化回答。
@@ -498,7 +514,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 🧰 可调用工具 | 106 / 106 `ok=true` |
-| 🧪 工程测试 | **1167 / 1167 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 72 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 🧪 工程测试 | **1217 / 1217 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 73 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 🛡️ 未确认参数时强制追问 | 96 个技法工具触发 `must_ask_user=true` |
 | 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 103 个导出 technique；契约 v14 镜像桌面端 aiExport v56） |
 | 🧾 技法依据卡 | 每个技法响应附 `data.technique_card`；算源声明与运行实测不符时显式亮警 |
@@ -513,7 +529,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 1167 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 1217 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

@@ -254,6 +254,19 @@ idempotent=False——默认写一条本地 run 记录，必须如实标注，�
 归一化前被拒、且都绕过 `agent_recovery`。内联 `$defs` 时**绝不能残留 `$ref`**（模型自引用会让 pydantic
 构不出 arg model，服务器起不来）。
 
+**决策层法则（v0.39.0，`src/horosa_skill/decisions/`，可选云端 TypeSafe Jev）**：本仓唯一会把用户文本送出本机的路径，
+六条硬规则各有守卫：① `HOROSA_JEV=off`（缺省）= **零字节变化**——不建对象、不读 key、信封/卡片/instructions 逐字节等于
+今天（`tests/test_decisions_service.py` 影子不变性）；② **代码持有权限，模型只供证据**：确定性路由是权威（S1 只在
+`dispatch.no_matching_tool` 时可采纳兜底）、澄清门只接受「原话明说 + 词表证据 + conf≥τ」三钥齐的抽取（S2，永不替用户选
+默认，铁律 2 不动）、S3 门类分错只多一段向导；③ 失败一律**关闭式**回确定性路径并经 `_degrade` 进 `envelope.warnings`
+（三连败熔断 60 s，一窗一报）；④ 每次真调用自陈：`technique_card.decisions[]` / `DispatchEnvelope.decision_layer` /
+开启时 instructions 改口（两态 ≤2048 字节由测试锁）；⑤ 数据边界：一档 `meta` 只送**本地脱敏**后的问题文本（日期/时刻/
+坐标/地名/号码→占位符），二档 `snapshot` 才许导出快照且只给 S4/S5；出生数据永不以原值离机；key 只在调用时读、
+永不入日志/异常/信封/生成配置；⑥ 阈值只认自家中文标注集测出的数——`enforce` 需 `contracts/jev_thresholds.json`
+该面 `promoted` 且模型 id 一致，否则退 shadow；钉版 `jev-1.13.0`，`jev-latest` 只许影子，返回 id 不符本轮降影子。
+问题构造点唯一（`decisions/surfaces/*`：instructions 英文、选项键 ASCII、必带弃权项——去掉弃权项时第三方评测
+准确率 0.95→0.00）。评测/晋升协议见 `scripts/jev_eval.py`。
+
 **错误也必须是信封**：技法/dispatch/tool_run 的错误路径返回 `ToolEnvelope`（含顶层 `code/message/details`
 镜像），不是裸 dict——出参被 server+client 两侧校验，一旦声明 outputSchema，裸 dict 会被打成协议级
 ToolError，**澄清闸当场报废**。structured output 由 `HOROSA_OUTPUT_SCHEMA=1` **显式开启，默认关**

@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.39.0 (2026-09) | 决策层：问题构造在 `ask()` 之外抛错，把 liureng_gods 打成 internal_error | 可选增强的**每一行**都要在降级护栏里；「英文 instructions」改成占比规则 |
 | v0.38.1 (2026-09) | 复审：自动化的盲区与 Windows 编码——B0 归属证据不经代码页 / doctor 预算 / 长路径闸 / 隔离前置；B1 升级就地不砍服务、doctor 报载荷过期、selfcheck 先起 runtime；B2 九客户端按各家真实规则（占位符白名单、JSONC 保注释、Cline/Zed timeout、Codex env 根、探针按客户端形状 + `horosa://runtime/status`、wheel 预下载、OAuth 网关改口、镜像指针）；B3 矩阵真下载、出厂预算、HTTP 握手、九客户端、挂着客户端不停、publish 与矩阵同字节、cron 离整点 + kick、min_os 进清单、mcpb 解包断言 | PowerShell 5.1 往管道写的是 OEM 代码页，Python 侧只许收字节（base64）或走 ctypes；「lane 传了 file:// 就以为验过下载」= 本机环境替测试补前提的第三例；换目录前必停自己的服务、但永不停陌生人的；每个客户端的占位符 / 超时 / 环境转发规则都要按**它的**文档写，并让 `client check` 对着真文件说话；发布期：publish job 的每一步先对真 draft 跑（draft 对 `releases/tags` 404、job 级 permissions 整块替换）；发布后：只在没人跑的平台可达的分支靠静态检查兜（F821 闸），带完整输出的超时要按阶段拆预算 |
 | v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基；A2 Windows 半边从 darwin 种子派生；A3 发布契约（清单钉 tag + size、按契约逐平台判完整、平台表锁）；A4 安装侧平台策略（Windows ARM 公告式回退、`min_os`、平台键看芯片）；B4 `setup --client` 一条命令接入（七步、失败包、真 stdio 探测）；B5 agent 文档（shell-only 契约、四份薄镜像、命令守卫）；B6 doctor 机器条件（码表人话、--explain、长路径余量、quarantine、仿真进程、下载旋钮、零外网）；A5 托管流水线（draft → 派生 → 三台真机矩阵 → [OK] 才公开；首跑抓到非默认端口下 stop 停不掉）；主干 CI 红了 19 个 commit 没人看（Windows CRLF checkout / 路径分隔符 / 宿主 OS 默认路径 / macOS runner netstat CLOSED）；A6 v0.38.0 首次托管双平台一次公开（GITHUB_TOKEN 的 release 事件不触发下游 workflow） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数；回退只许公告着做、载荷自带解释器所以平台键看芯片不看宿主 Python；接入的终点是客户端那条命令真起了 server；给 agent 抄的每条命令都要有守卫对到真实 CLI；每个诊断码都要有人话、doctor 只报不改且默认不碰外网；清单只在两平台齐了才上 release、真机证据由流水线产出 |
 | v0.37.0 (2026-09) | 任意 AI 客户端可调用：广告层只对一个客户端对过 / 自家 .mcp.json 从未连通 / 端口静默采用与误杀 / 回环走代理 | 按**别人的**约束测；改 golden 前先答「旧断言为何不会红」；负向对照跑不红就如实改口 |
@@ -102,6 +103,22 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.39.0 / 2026-09-22 — 决策层（TypeSafe Jev）接入期：护栏只包住了 provider，问题构造漏在外面
+
+- **症状**：S3 门类面第一次跑离线用例，`liureng_gods` 整个变成 `tool.internal_error`——`QuestionSpecError:
+  instructions must be English`。决策层号称「失败一律关闭式降级」，可这条异常照样把一次真实起课打死。
+- **根因**：`DecisionLayer.ask()` 的 try/except 只包住 `provider.decide()`；问题构造（`build_zhan_question()`）
+  在调用 `ask()` 的**参数表达式**里执行，早于任何护栏。而问题规格校验又是我自己刚加的（instructions 禁 CJK），
+  自家 instructions 引用了「大六壬」「老婆/妻子」这类必要的中文线索词——规则写死成「零 CJK」是错的，
+  抽取面**必须**引用原话线索。
+- **guard**：`HorosaSkillService._decision_guard(surface, fallback, fn)` 把三个面的**整个**决策块（构造 + 调用 +
+  采纳）包进去，任何异常 → `_degrade` 进 `envelope.warnings` + 返回确定性结果；负向对照
+  `test_a_bug_in_the_decision_surface_degrades_instead_of_failing_the_technique`（monkeypatch 让构造函数抛
+  ValueError，技法必须 ok=True 且 warnings 里有「决策层」）。规则改成 `cjk_ratio ≤ 0.30`（英文为主、允许中文线索词），
+  `test_question_construction_points_follow_the_house_rules` 逐面锁。
+- **法则**：**可选增强的每一行代码都要在同一个降级护栏里**——「provider 失败会降级」不等于「这个面失败会降级」；
+  护栏的边界要画在**调用方看得见的最外层**（进入面 / 离开面），不是画在网络 I/O 周围。
 
 ### v0.38.1 / 2026-09-15 — install/upgrade 的换目录闸不认 root：别的根的实例占着旧清单的端口就拒装，提示还救不了（Windows 维护机原生复验抓到）
 

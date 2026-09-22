@@ -15,7 +15,9 @@
         "HOROSA_RUNTIME_ROOT": "${user_config.runtimeRoot}",
         "HOROSA_SKILL_DATA_DIR": "${user_config.dataDir}",
         "HOROSA_INSTALL_CONTEXT": "plugin",
-        "HOROSA_PLUGIN_ROOT": "${CLAUDE_PLUGIN_ROOT}"
+        "HOROSA_PLUGIN_ROOT": "${CLAUDE_PLUGIN_ROOT}",
+        "HOROSA_JEV": "${user_config.jevMode}",
+        "HOROSA_JEV_API_KEY": "${user_config.jevApiKey}"
       }
     }
   }

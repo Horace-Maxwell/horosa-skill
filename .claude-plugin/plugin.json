@@ -35,6 +35,20 @@
       "title": "本地记录目录 / Local run + report directory",
       "description": "运行记录、报告产物与 SQLite 索引的存放位置。留空用 ~/.horosa-skill。",
       "required": false
+    },
+    "jevMode": {
+      "type": "string",
+      "title": "云端决策层 / Cloud decision layer (TypeSafe Jev): off / shadow / enforce",
+      "description": "可选。留空或 off（默认）= 全程本机。shadow 只把脱敏后的问题文本发给 TypeSafe Jev 并记录它会怎么判；enforce 才允许它填入原话明说的设置、为无匹配的请求兜底路由。需要下面的 API key。",
+      "default": "off",
+      "required": false
+    },
+    "jevApiKey": {
+      "type": "string",
+      "title": "TypeSafe Jev API key（可选 / optional）",
+      "description": "只在决策层不是 off 时使用。由客户端保存，永不写入 Horosa 的文件、日志或结果。",
+      "sensitive": true,
+      "required": false
     }
   }
 }

@@ -39,11 +39,27 @@
         "HOROSA_RUNTIME_ROOT": "${user_config.runtime_root}",
         "HOROSA_SKILL_DATA_DIR": "${user_config.data_dir}",
         "HOROSA_INSTALL_CONTEXT": "mcpb",
-        "HOROSA_PLUGIN_ROOT": "${__dirname}"
+        "HOROSA_PLUGIN_ROOT": "${__dirname}",
+        "HOROSA_JEV": "${user_config.jev_mode}",
+        "HOROSA_JEV_API_KEY": "${user_config.jev_api_key}"
       }
     }
   },
   "user_config": {
+    "jev_mode": {
+      "type": "string",
+      "title": "Cloud decision layer (TypeSafe Jev) — off / shadow / enforce",
+      "description": "Optional. Leave 'off' (default) to keep everything on this machine. 'shadow' sends redacted request text to TypeSafe Jev and only records what it would decide; 'enforce' lets it fill explicitly stated settings and route otherwise-unmatched requests. Requires the API key below.",
+      "default": "off",
+      "required": false
+    },
+    "jev_api_key": {
+      "type": "string",
+      "title": "TypeSafe Jev API key (optional)",
+      "description": "Only used when the decision layer is not 'off'. Stored by the client, never written into Horosa files, logs, or results.",
+      "sensitive": true,
+      "required": false
+    },
     "runtime_root": {
       "type": "directory",
       "title": "Offline runtime directory",

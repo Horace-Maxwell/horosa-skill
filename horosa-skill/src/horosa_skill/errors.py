@@ -103,6 +103,16 @@ RECOVERY_KINDS: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "fix_environment_then_retry",
     },
+    # v0.39.0 可选云端决策层（jev.*）：这些码正常只出现在 envelope.warnings / 本地账本里——决策层失败一律关闭式
+    # 回落确定性路径，技法结果照常。若作为错误码浮出（CLI jev 命令、评测），处理办法是查配置与网络，不是重算盘。
+    "decision_layer": {
+        "prompt_to_user": bilingual(
+            "可选云端决策层（TypeSafe Jev）本次不可用，已回落确定性路径，技法结果不受影响。要排查：`horosa-skill jev status` 看模式/密钥/阈值锁，检查 HOROSA_JEV_API_KEY 与网络；不想用就设 HOROSA_JEV=off。",
+            "The optional cloud decision layer (TypeSafe Jev) was unavailable and the deterministic path ran instead; technique results are unaffected. To investigate: `horosa-skill jev status` (mode / key / thresholds lock), check HOROSA_JEV_API_KEY and connectivity; set HOROSA_JEV=off to disable.",
+        ),
+        "next_action": "check_decision_layer_config_or_disable",
+        "commands": ["uv run horosa-skill jev status"],
+    },
 }
 
 # 精确码表：语义明确、需要专门指路的码。
@@ -387,6 +397,7 @@ RECOVERY_PREFIX_KINDS: tuple[tuple[str, str], ...] = (
     ("js_engine.", "js_engine"),
     ("client.", "environment"),
     ("openclaw.", "environment"),
+    ("jev.", "decision_layer"),
 )
 _INPUT_SUFFIX = _re.compile(r"(missing|required|empty|invalid|unknown|bad_|unsupported|insufficient|traversal|mismatch|unsaved)")
 _RETRY_SUFFIX = _re.compile(r"(failed|unavailable|timeout|not_found|_error$|^error$)")

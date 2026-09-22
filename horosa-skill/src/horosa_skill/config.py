@@ -87,6 +87,16 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     # runtime.not_installed 的修复命令据此写成 `uv run --directory <该目录> …`（用户能直接复制）。
     "HOROSA_INSTALL_CONTEXT": "stable",
     "HOROSA_PLUGIN_ROOT": "stable",
+    # v0.39.0 可选云端决策层（TypeSafe Jev）：缺省 off = 零字节变化；语义见 decisions/policy.py。
+    "HOROSA_JEV": "experimental",
+    "HOROSA_JEV_API_KEY": "experimental",
+    "HOROSA_JEV_SCOPE": "experimental",
+    "HOROSA_JEV_SURFACES": "experimental",
+    "HOROSA_JEV_MODEL": "experimental",
+    "HOROSA_JEV_BASE_URL": "experimental",
+    "HOROSA_JEV_TIMEOUT_MS": "experimental",
+    "HOROSA_JEV_LEDGER": "experimental",
+    "HOROSA_JEV_LIVE": "internal",
 }
 # removed 档：曾存在于历史版本、现已删除的旗标 → 接受并忽略 + 指路。删代码不删兼容。
 REMOVED_ENV_FLAGS: dict[str, str] = {}

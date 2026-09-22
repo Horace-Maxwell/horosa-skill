@@ -58,6 +58,7 @@ client_app = typer.Typer(help="Default OpenClaw entry: `openclaw-setup`. Also ge
 report_app = typer.Typer(help="Generate structured Horosa reports as JSON, DOCX, or PDF artifacts.")
 agent_app = typer.Typer(help="Show agent-safe tool routing and clarification guidance before calculation.")
 runtime_app = typer.Typer(help="Inspect and control the local offline runtime: status / start / stop / restart。查看与控制本机 runtime。")
+jev_app = typer.Typer(help="Optional cloud decision layer (TypeSafe Jev, HOROSA_JEV): status / local decision ledger。可选云端决策层。")
 app.add_typer(tool_app, name="tool")
 app.add_typer(memory_app, name="memory")
 app.add_typer(export_app, name="export")
@@ -68,6 +69,30 @@ app.add_typer(client_app, name="client")
 app.add_typer(report_app, name="report")
 app.add_typer(agent_app, name="agent")
 app.add_typer(runtime_app, name="runtime")
+app.add_typer(jev_app, name="jev")
+
+
+@jev_app.command("status")
+def jev_status() -> None:
+    """Show the decision-layer policy (mode / scope / surfaces / model / thresholds lock). Never prints the key."""
+    from horosa_skill.decisions.policy import load_policy, load_thresholds
+
+    settings = Settings.from_env()
+    view = load_policy().doctor_view(load_thresholds())
+    view["ledger_path"] = str(settings.data_dir / "jev_events.jsonl")
+    _print_json(view)
+
+
+@jev_app.command("events")
+def jev_events(
+    limit: int = typer.Option(20, help="How many recent decision-ledger rows to print (newest last)."),
+) -> None:
+    """Tail the local decision ledger (redacted state digests, answers, adoption, latency)."""
+    from horosa_skill.decisions.ledger import DecisionLedger
+
+    settings = Settings.from_env()
+    ledger = DecisionLedger(settings.data_dir / "jev_events.jsonl")
+    _print_json({"path": str(ledger.path), "total": ledger.count(), "events": ledger.tail(max(1, limit))})
 
 
 def _version_callback(value: bool) -> None:
@@ -1598,6 +1623,12 @@ def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager,
     report["env_flags"]["set"] = {
         key: _ENV_REGISTRY.get(key, "unknown") for key in sorted(os.environ) if key.startswith("HOROSA_")
     }
+    # 可选云端决策层（v0.39.0）：模式 / 范围 / 面 / 模型 / 阈值锁 / 配置问题——**永不**含 key 的值；
+    # 缺省 off 时也如实报 data_leaves_machine=False。零外网请求。
+    from horosa_skill.decisions.policy import load_policy as _load_jev_policy
+    from horosa_skill.decisions.policy import load_thresholds as _load_jev_thresholds
+
+    report["decision_layer"] = _load_jev_policy().doctor_view(_load_jev_thresholds())
     # Settings provenance 三列（批 II-3）：字段 / 当前值 / 来源（env:<NAME> | derived:data_dir | default）。
     report["settings_provenance"] = [
         {"field": field, "value": str(getattr(settings, field, None)), "source": source}

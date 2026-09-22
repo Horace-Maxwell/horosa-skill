@@ -240,6 +240,32 @@ HOW TO USE IT
 HOROSA_MCP_COMPACT=1 exposes {COMPACT_SURFACE_TOOL_COUNT} facade tools instead of {FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} (horosa_tool_run reaches any technique
 by name); HOROSA_TOOLSETS=astro,cn limits which groups are exposed."""
 
+# HOROSA_JEV 开启时的 instructions（v0.39.0）：「nothing is sent to a remote service」这句在决策层开着时
+# 是假话，必须改口；预算仍是 2048 字节，所以同一变体里裁掉两句次要说明来换空间（两态都由测试锁 ≤2048）。
+_OFFLINE_CLAIM = "machine (offline); nothing is sent to a remote service."
+_JEV_CLAIM = (
+    "machine (offline). HOROSA_JEV is ON: redacted request text is sent to TypeSafe Jev (cloud)\n"
+    "for routing/clarification; results self-report it in technique_card.decisions."
+)
+_JEV_TRIMS = (
+    ("\nsuch a chart. Also 农历/节气/黄历 conversion and celebrity birth data.", "\nsuch a chart, 农历/节气/黄历 conversion, celebrity birth data."),
+    (
+        "· Western: natal + derived charts, 20+ predictive systems (returns, progressions, primary\n  directions, zodiacal releasing, firdaria), horary 卜卦, astrocartography, midpoints.",
+        "· Western: natal + derived charts, 20+ predictive systems, horary 卜卦, astrocartography, midpoints.",
+    ),
+    ("· 神数 ×14 + 神数正传 (5 schools), 天文地占, tarot.", "· 神数 ×14 + 神数正传, 天文地占, tarot."),
+    ("   question → cross-validation (divergence disclosed, never averaged).", "   question → cross-validation (divergence disclosed)."),
+)
+
+
+def _server_instructions(*, decision_layer_on: bool) -> str:
+    if not decision_layer_on:
+        return _SERVER_INSTRUCTIONS
+    text = _SERVER_INSTRUCTIONS.replace(_OFFLINE_CLAIM, _JEV_CLAIM)
+    for old, new in _JEV_TRIMS:
+        text = text.replace(old, new)
+    return text
+
 
 _TITLE_TAIL_PAREN = re.compile(r"[（(][^（()）]*[)）]\s*$")
 
@@ -963,7 +989,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
     token = (os.environ.get("HOROSA_MCP_TOKEN", "") or "").strip() or None
     mcp = FastMCP(
         "Horosa Skill",
-        instructions=_SERVER_INSTRUCTIONS,
+        instructions=_server_instructions(decision_layer_on=getattr(service, "decision_layer", None) is not None),
         website_url="https://github.com/Horace-Maxwell/horosa-skill",
         icons=[_SERVER_ICON],
         host=settings.host,

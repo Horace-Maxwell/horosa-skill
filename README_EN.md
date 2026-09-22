@@ -75,7 +75,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `106 / 106 ok=true` |
-| Engineering tests | `1167 / 1167 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 72 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `1217 / 1217 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 73 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `84` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `8` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`103` export techniques modeled; contract v14 mirrors desktop aiExport v56) |
@@ -290,6 +290,24 @@ The biggest risk in metaphysics output is not a miscalculation — it is the AI 
 - **Chart-fact faithfulness evaluation** — `horosa-skill benchmark faithfulness` runs a **deterministic verifier** (no LLM judge) over an AI reading: factual claims (pillar ganzhi, planet-in-sign, Zi Wei major-star palaces and body palace, Liu Ren three transmissions, Liu Yao hexagram names and moving lines, tarot card names and orientations, …) are checked one by one against machine-read chart truth and classified **supported / invented / contradicted**. Wrong-chart answers and sycophantic echoes ("my Moon is in Scorpio, right?" when it isn't) go red. HorosaBench: 106 benchmark cases generated from the tool registry and locked to it — a new tool without a case fails.
 - **Multi-technique synthesis (合参)** — `horosa_hecan` (CLI: `horosa-skill hecan`) casts several techniques in parallel on one question (same `group_id`; default 5, up to 8; `tools` may be explicit) and returns a synthesis **template**, not a verdict: per-technique conclusion slots must bind to that technique's real exported sections (responses carry evidence pointers; full text via `memory_show(run_id)`); `convergence` only when independently agreed; **`divergence` disclosed item by item — never averaged away, never one-sided**; setting conflicts (`consistency.setting_conflicts`) must be declared first.
 
+### Optional cloud decision layer (TypeSafe Jev · off by default)
+
+Every promise above (offline, nothing uploaded) holds **as shipped**. Since v0.39.0 an operator may explicitly
+enable a cloud "decision layer" — TypeSafe's Jev, a System One decision model that returns typed choices and
+probabilities, never text — for three narrow jobs: picking a technique when the deterministic keyword router
+finds **no match**; turning a setting the user **explicitly stated** (e.g. 「我老婆的八字」→ female) into a
+provided value (lexicon evidence + model verdict + confidence threshold must all agree; defaults are never
+chosen for the user); classifying the topic of a 大六壬 question. It never computes or explains a chart.
+
+| Item | Detail |
+| --- | --- |
+| Switch | `HOROSA_JEV=off` (default) / `shadow` (records what it would decide, behaviour unchanged) / `enforce`; key in `HOROSA_JEV_API_KEY` (Claude Desktop / plugin settings field; never written into Horosa files) |
+| What leaves the machine | tier `meta` (default): the request text **redacted locally** (dates / times / coordinates / place names / numbers → placeholders) + technique names + setting key names; tier `snapshot`: additionally export-snapshot text, only for the future faithfulness / synthesis judges |
+| What never leaves | birth date, time, coordinates and place names as given; the chart and export text (tier meta); the key; local memory |
+| Provider facts | hosted closed model in US data centres; "not used for training" is contractual, not architectural; no published retention window, zero-retention only on enterprise terms |
+| Self-reporting | `data.technique_card.decisions[]` / `decision_layer` on `horosa_dispatch` (model id, option, confidence, adopted or not); `horosa-skill jev status` / `jev events` (local ledger) |
+| Authority boundary | code owns authority — the deterministic path always wins; `enforce` needs a thresholds lock promoted on our own Chinese labelled sets; every failure degrades closed into `warnings` |
+
 ## Output protocol: the point is "stably consumable", not just "compute"
 
 Every tool call returns a uniform envelope:
@@ -488,7 +506,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 1167 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 1217 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```
