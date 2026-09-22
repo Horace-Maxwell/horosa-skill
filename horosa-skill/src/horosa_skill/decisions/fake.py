@@ -125,5 +125,5 @@ class RecordedJev(DecisionProvider):
         digest = request_digest(state, questions, self.model)
         response = self._cache.get(digest)
         if response is None:
-            raise JevUnavailable("no recorded response for this request (run `jev_eval measure` first)", code="jev.replay_missing")
+            raise JevUnavailable("本请求没有录制过的响应（先跑 `jev_eval measure`）/ no recorded response for this request (run `jev_eval measure` first)", code="jev.replay_missing")
         return parse_answers(questions, response, latency_ms=0)

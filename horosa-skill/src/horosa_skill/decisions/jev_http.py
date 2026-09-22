@@ -58,7 +58,7 @@ def validate_base_url(url: str) -> str:
         return str(url).strip().rstrip("/")
     if parsed.scheme == "http" and parsed.hostname in _LOOPBACK_HOSTS:
         return str(url).strip().rstrip("/")
-    raise JevConfigError(f"HOROSA_JEV_BASE_URL must be https (got scheme {parsed.scheme or 'none'!r})")
+    raise JevConfigError(f"HOROSA_JEV_BASE_URL 必须是 https（当前 scheme {parsed.scheme or 'none'!r}）/ HOROSA_JEV_BASE_URL must be https (got scheme {parsed.scheme or 'none'!r})")
 
 
 class JevHttpClient:
@@ -78,7 +78,7 @@ class JevHttpClient:
         rng: Callable[[], float] = random.random,
     ) -> None:
         if not isinstance(api_key, str) or not api_key.strip():
-            raise JevConfigError("TypeSafe API key missing (HOROSA_JEV_API_KEY)")
+            raise JevConfigError("缺少 TypeSafe API key（HOROSA_JEV_API_KEY）/ TypeSafe API key missing (HOROSA_JEV_API_KEY)")
         self._key = api_key.strip()
         self.base_url = validate_base_url(base_url)
         self.model = str(model or DEFAULT_MODEL)
@@ -136,12 +136,12 @@ class JevHttpClient:
         try:
             return parse_answers(questions, raw, latency_ms=latency_ms)
         except ValueError as exc:
-            raise JevResponseInvalid(f"TypeSafe Jev response invalid: {self._scrub(exc)}") from exc
+            raise JevResponseInvalid(f"TypeSafe Jev 响应不合规：{self._scrub(exc)} / TypeSafe Jev response invalid: {self._scrub(exc)}") from exc
 
     def decide_raw(self, *, state: Any, questions: Mapping[str, Question], surface: str = "") -> tuple[dict[str, Any], int]:
         """同 `decide`，但返回**未解析**的官方响应体 + 延迟（评测录制回放用：回放必须过同一套解析）。"""
         if not questions:
-            raise JevConfigError("no questions to ask")
+            raise JevConfigError("没有要问的问题 / no questions to ask")
         body = {
             "model": self.model,
             "state": state,
@@ -168,9 +168,9 @@ class JevHttpClient:
                     try:
                         payload = response.json()
                     except (ValueError, json.JSONDecodeError) as exc:
-                        raise JevResponseInvalid(f"TypeSafe Jev returned non-JSON: {self._scrub(response.text[:120])}") from exc
+                        raise JevResponseInvalid(f"TypeSafe Jev 返回的不是 JSON：{self._scrub(response.text[:120])} / TypeSafe Jev returned non-JSON: {self._scrub(response.text[:120])}") from exc
                     if not isinstance(payload, dict):
-                        raise JevResponseInvalid("TypeSafe Jev response is not a JSON object")
+                        raise JevResponseInvalid("TypeSafe Jev 响应不是 JSON 对象 / TypeSafe Jev response is not a JSON object")
                     return payload, latency_ms
                 error, retryable = self._map_status(response)
                 retry_after = self._retry_after(response)

@@ -267,6 +267,7 @@ idempotent=False——默认写一条本地 run 记录，必须如实标注，�
 问题构造点唯一（`decisions/surfaces/*`：instructions 英文为主（≤30% CJK，允许中文线索词）、选项键 ASCII、必带弃权项
 ——去掉弃权项时第三方评测准确率 0.95→0.00）。**每个面的整个决策块**（构造 + 调用 + 采纳）都在 `_decision_guard` 里，
 护栏画在面的边界而不是网络 I/O 周围（v0.39.0 台账）。
+新包的 raise 信息一律「中文 / English」字面双语：`verify_error_recovery.py` 棘轮按文件计数、`tests/test_decisions_governance.py` 对 `decisions/` 零容忍——v0.39.0 发布前 CI 因 28 处单语 raise 红过一次，本机全绿；push 前只认 `run_ci_gates.py`（§6 第 0 条）。
 **评测与晋升协议**（`decisions/eval.py` + `scripts/jev_eval.py`）：金标集 `contracts/jev_eval/*.jsonl` 由
 `scripts/gen_jev_eval_sets.py` 人工标注生成；真调用只在 `measure`，原始响应录进 `cache.jsonl`，`compile`/`check` 零调用回放；
 τ 在训练集扫、留出集过**预注册闸** `PROMOTION_GATES`（改数字 = 改代码 + 留痕），全过才在 `contracts/jev_thresholds.json`

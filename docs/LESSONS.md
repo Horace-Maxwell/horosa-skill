@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.39.0 (2026-09) | 发布前 CI 红：双语棘轮抓到新包 28 处单语 raise；本机跑的是「顺手的守卫」不是 run_ci_gates.py | 本机门禁 = `run_ci_gates.py`；按文件计数的棘轮是 API 契约，新包落地就按它写 |
 | v0.39.0 (2026-09) | 决策层：问题构造在 `ask()` 之外抛错，把 liureng_gods 打成 internal_error | 可选增强的**每一行**都要在降级护栏里；「英文 instructions」改成占比规则 |
 | v0.38.1 (2026-09) | 复审：自动化的盲区与 Windows 编码——B0 归属证据不经代码页 / doctor 预算 / 长路径闸 / 隔离前置；B1 升级就地不砍服务、doctor 报载荷过期、selfcheck 先起 runtime；B2 九客户端按各家真实规则（占位符白名单、JSONC 保注释、Cline/Zed timeout、Codex env 根、探针按客户端形状 + `horosa://runtime/status`、wheel 预下载、OAuth 网关改口、镜像指针）；B3 矩阵真下载、出厂预算、HTTP 握手、九客户端、挂着客户端不停、publish 与矩阵同字节、cron 离整点 + kick、min_os 进清单、mcpb 解包断言 | PowerShell 5.1 往管道写的是 OEM 代码页，Python 侧只许收字节（base64）或走 ctypes；「lane 传了 file:// 就以为验过下载」= 本机环境替测试补前提的第三例；换目录前必停自己的服务、但永不停陌生人的；每个客户端的占位符 / 超时 / 环境转发规则都要按**它的**文档写，并让 `client check` 对着真文件说话；发布期：publish job 的每一步先对真 draft 跑（draft 对 `releases/tags` 404、job 级 permissions 整块替换）；发布后：只在没人跑的平台可达的分支靠静态检查兜（F821 闸），带完整输出的超时要按阶段拆预算 |
 | v0.38.0 (2026-09) | 适配性：B0 三处「绿得不真」；B1 Windows 启动器；B2 客户端接入；B3 wheel 零安装；A0/A1 托管派生地基；A2 Windows 半边从 darwin 种子派生；A3 发布契约（清单钉 tag + size、按契约逐平台判完整、平台表锁）；A4 安装侧平台策略（Windows ARM 公告式回退、`min_os`、平台键看芯片）；B4 `setup --client` 一条命令接入（七步、失败包、真 stdio 探测）；B5 agent 文档（shell-only 契约、四份薄镜像、命令守卫）；B6 doctor 机器条件（码表人话、--explain、长路径余量、quarantine、仿真进程、下载旋钮、零外网）；A5 托管流水线（draft → 派生 → 三台真机矩阵 → [OK] 才公开；首跑抓到非默认端口下 stop 停不掉）；主干 CI 红了 19 个 commit 没人看（Windows CRLF checkout / 路径分隔符 / 宿主 OS 默认路径 / macOS runner netstat CLOSED）；A6 v0.38.0 首次托管双平台一次公开（GITHUB_TOKEN 的 release 事件不触发下游 workflow） | CI 的绿由每条命令背书；路径元素自己带引号；写用户文件只动自己的键；配置里的命令一律绝对路径；分发每条路要在没 git/没 github.com 的机器上成立；派生只从过闸的种子开始、依赖集是种子的纯函数；回退只许公告着做、载荷自带解释器所以平台键看芯片不看宿主 Python；接入的终点是客户端那条命令真起了 server；给 agent 抄的每条命令都要有守卫对到真实 CLI；每个诊断码都要有人话、doctor 只报不改且默认不碰外网；清单只在两平台齐了才上 release、真机证据由流水线产出 |
@@ -103,6 +104,21 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.39.0 / 2026-09-22 — 发布前 CI 红：错误信息双语棘轮抓到新包 28 处 raise；本机只跑了「顺手的守卫」而不是 run_ci_gates.py
+
+- **症状**：bump 0.39.0 推上 main，ci.yml `test` job 在 `verify_error_recovery.py` 一步红：`non-bilingual error messages rose 110 → 138`
+  （`decisions/questions.py` 22、`jev_http.py` 3、`eval.py` 2、`layer.py` 1）。推之前本机跑了 docs-sync、六把顺手的 `verify_*`、
+  全量 pytest（1234 绿）、npm、preflight——全绿。
+- **根因**：新包的 raise 信息全是英文单语。棘轮按「异常类名以 `Error` 结尾 + 字面 message 同时含 CJK 与拉丁」按文件计数，
+  没有任何 pytest 用例断言双语，所以本机测试不会红，只有 CI 那一步会。更根本的：AGENTS §6 第 0 条早写着「push 前跑
+  `scripts/run_ci_gates.py`」（它解析 ci.yml 的 `test` job 逐步执行），我跑的是自己记得的子集——正是 v0.38.0「本机绿 ≠ CI 绿」的重演。
+- **修**：32 处（含 4 处不以 `Error` 结尾、棘轮不计的 `JevResponseInvalid` / `JevUnavailable`）改成「中文 / English」字面双语，英文原句保留
+  （没有测试断言 message 文本）。新增包级零容忍守卫 `tests/test_decisions_governance.py::test_every_raise_in_the_decisions_package_is_bilingual`
+  （全局棘轮只挡总量上升，别处还债这里新欠也能过；负向对照 `test_bilingual_raise_guard_catches_a_single_language_message`）。
+  本次发布改为跑 `run_ci_gates.py` 再推。
+- **法则**：**本机门禁只有一个名字：`run_ci_gates.py`，不是「我记得的那几把」**；仓里每一条按文件计数的棘轮（双语信息、
+  静默降级、静默空返回、未定义名）都是新代码的 API 契约——新包落地时就按它写，不等 CI 来教。
 
 ### v0.39.0 / 2026-09-22 — 决策层（TypeSafe Jev）接入期：护栏只包住了 provider，问题构造漏在外面
 

@@ -141,7 +141,7 @@ class DecisionLayer:
 
                 key = read_api_key(env)
                 if not key:
-                    raise JevError("TypeSafe API key missing at call time", code="jev.config")
+                    raise JevError("调用时缺少 TypeSafe API key / TypeSafe API key missing at call time", code="jev.config")
                 return JevHttpClient(api_key=key, base_url=policy.base_url, model=policy.model, timeout_s=policy.timeout_s)
 
             provider_arg: DecisionProvider | Callable[[], DecisionProvider] = factory

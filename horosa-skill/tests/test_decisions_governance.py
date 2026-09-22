@@ -103,3 +103,44 @@ def test_question_spec_rejects_missing_abstain_and_chinese_instructions() -> Non
         Choice(instructions="请选择一个", criteria={"a": "A", "unknown": "none"}, abstain="unknown")
     with pytest.raises(QuestionSpecError):
         Choice(instructions="Pick.", criteria={f"o{i}": None for i in range(256)} | {"unknown": None}, abstain="unknown")
+
+
+# ---------------------------------------------------------------- 错误信息是接口（v0.39.0 发布前 CI 红过一次）
+# `verify_error_recovery.py` 的双语棘轮按文件计数、只挡**总量**上升（别处还了 5 处债、这里新欠 3 处也过）。decisions/ 是新包，
+# 这里零容忍：每个带字面 message 的 raise 都必须「中文 / English」。
+_CJK_RE = re.compile(r"[一-鿿]")
+_LATIN_RE = re.compile(r"[A-Za-z]{3,}")
+
+
+def single_language_raises(sources: dict[str, str]) -> list[str]:
+    import ast
+
+    offenders: list[str] = []
+    for name, text in sorted(sources.items()):
+        for node in ast.walk(ast.parse(text)):
+            if not (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call) and node.exc.args):
+                continue
+            first = node.exc.args[0]
+            if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                message = first.value
+            elif isinstance(first, ast.JoinedStr):
+                message = "".join(v.value for v in first.values if isinstance(v, ast.Constant) and isinstance(v.value, str))
+            else:
+                continue
+            if not (_CJK_RE.search(message) and _LATIN_RE.search(message)):
+                offenders.append(f"{name}:{node.lineno}")
+    return offenders
+
+
+def test_every_raise_in_the_decisions_package_is_bilingual() -> None:
+    pkg = REPO_ROOT / "horosa-skill" / "src" / "horosa_skill" / "decisions"
+    sources = {py.relative_to(pkg).as_posix(): py.read_text(encoding="utf-8") for py in pkg.rglob("*.py")}
+    assert sources, "decisions package not found"
+    assert single_language_raises(sources) == []
+
+
+def test_bilingual_raise_guard_catches_a_single_language_message() -> None:
+    bad = 'def f():\n    raise ValueError("response.model missing")\n'
+    good = 'def f():\n    raise ValueError(f"response.model 缺失 / response.model missing")\n'
+    dynamic = 'def f(msg):\n    raise ValueError(msg)\n'
+    assert single_language_raises({"bad.py": bad, "good.py": good, "dynamic.py": dynamic}) == ["bad.py:2"]

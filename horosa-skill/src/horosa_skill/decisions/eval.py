@@ -90,7 +90,7 @@ def build_request(surface: str, case: Mapping[str, Any]) -> tuple[dict[str, Any]
         return state, {"subject_gender": build_gender_question()}
     if surface == "zhancat":
         return state, {"zhan_category": build_zhan_question()}
-    raise ValueError(f"unknown surface {surface!r}")
+    raise ValueError(f"未知评测面 {surface!r} / unknown surface {surface!r}")
 
 
 @dataclass
@@ -155,7 +155,7 @@ def judge(surface: str, case: Mapping[str, Any], answers: Answers, *, tau: float
         decided = decision.category
         correct_decided = (decided == expect) if decided else None
         return Judged(case, raw_key, raw_conf, decided, correct_raw, correct_decided, latency_ms=answers.latency_ms, input_tokens=tokens)
-    raise ValueError(f"unknown surface {surface!r}")
+    raise ValueError(f"未知评测面 {surface!r} / unknown surface {surface!r}")
 
 
 def _has_definite_label(surface: str, case: Mapping[str, Any]) -> bool:
