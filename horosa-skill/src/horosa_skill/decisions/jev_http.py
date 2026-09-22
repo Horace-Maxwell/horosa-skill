@@ -132,6 +132,14 @@ class JevHttpClient:
 
     # ---- main ----------------------------------------------------------------------------------
     def decide(self, *, state: Any, questions: Mapping[str, Question], surface: str = "") -> Answers:
+        raw, latency_ms = self.decide_raw(state=state, questions=questions, surface=surface)
+        try:
+            return parse_answers(questions, raw, latency_ms=latency_ms)
+        except ValueError as exc:
+            raise JevResponseInvalid(f"TypeSafe Jev response invalid: {self._scrub(exc)}") from exc
+
+    def decide_raw(self, *, state: Any, questions: Mapping[str, Question], surface: str = "") -> tuple[dict[str, Any], int]:
+        """同 `decide`，但返回**未解析**的官方响应体 + 延迟（评测录制回放用：回放必须过同一套解析）。"""
         if not questions:
             raise JevConfigError("no questions to ask")
         body = {
@@ -161,10 +169,9 @@ class JevHttpClient:
                         payload = response.json()
                     except (ValueError, json.JSONDecodeError) as exc:
                         raise JevResponseInvalid(f"TypeSafe Jev returned non-JSON: {self._scrub(response.text[:120])}") from exc
-                    try:
-                        return parse_answers(questions, payload, latency_ms=latency_ms)
-                    except ValueError as exc:
-                        raise JevResponseInvalid(f"TypeSafe Jev response invalid: {self._scrub(exc)}") from exc
+                    if not isinstance(payload, dict):
+                        raise JevResponseInvalid("TypeSafe Jev response is not a JSON object")
+                    return payload, latency_ms
                 error, retryable = self._map_status(response)
                 retry_after = self._retry_after(response)
             if not retryable or attempt >= self.retry.max_retries:

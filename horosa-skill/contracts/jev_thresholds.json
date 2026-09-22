@@ -1,0 +1,44 @@
+{
+  "_comment": "决策层阈值锁：只由 scripts/jev_eval.py compile 在留出集全部预注册闸通过时写 promoted=true；enforce 只认它。",
+  "model": "jev-1.13.0",
+  "compiled_at": "2026-09-22T05:18:17+00:00",
+  "datasets": {
+    "routing": "495c28fc12e82644b10954d2a672bfebe2b7650e3f3516824a05ff6b513cd4ac",
+    "extract": "0e6092d4668346bac24f2ce53fac83a395fbd947c701742cb015c286cfe4f50c",
+    "zhancat": "051d72ced99e5ff2e7022fd18799d4130ed6c4801650ca1b838abd88c0877b46"
+  },
+  "surfaces": {
+    "dispatch": {
+      "tau": 0.54,
+      "promoted": true,
+      "holdout_n": 57,
+      "accuracy_decided": 1.0,
+      "handled": 0.7895,
+      "ece": 0.0872,
+      "escalation": 0.1176,
+      "failed_gates": []
+    },
+    "extract": {
+      "tau": 0.51,
+      "promoted": false,
+      "holdout_n": 47,
+      "accuracy_decided": 1.0,
+      "handled": 0.617,
+      "ece": 0.104,
+      "escalation": 0.0938,
+      "failed_gates": [
+        "max_ece"
+      ]
+    },
+    "zhancat": {
+      "tau": 0.86,
+      "promoted": true,
+      "holdout_n": 36,
+      "accuracy_decided": 1.0,
+      "handled": 0.9167,
+      "ece": 0.025,
+      "escalation": 0.0294,
+      "failed_gates": []
+    }
+  }
+}

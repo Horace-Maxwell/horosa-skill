@@ -1,0 +1,300 @@
+{
+  "schema": "horosa.skill.jev_eval_report.v1",
+  "model": "jev-1.13.0",
+  "compiled_at": "2026-09-22T05:18:17+00:00",
+  "gates": {
+    "min_holdout_n": 30,
+    "min_accuracy_decided": 0.95,
+    "max_ece": 0.1,
+    "max_escalation": 0.15,
+    "min_paraphrase_both_correct": 0.9,
+    "max_false_fill": 0.0
+  },
+  "surfaces": {
+    "routing": {
+      "tau": 0.54,
+      "train": {
+        "surface": "routing",
+        "tau": 0.54,
+        "n": 156,
+        "n_decided": 129,
+        "handled": 0.8269,
+        "accuracy_decided": 0.969,
+        "accuracy_raw": 0.9103,
+        "escalation": 0.1164,
+        "abstain_correct_rate": 1.0,
+        "ece": 0.0524,
+        "paraphrase": {
+          "pairs": 45,
+          "same_answer_rate": 0.6222,
+          "both_correct_rate": 0.9111
+        },
+        "latency_ms": {
+          "p50": 208,
+          "p95": 330
+        },
+        "input_tokens_total": 1054593,
+        "cost_usd": 0.044293,
+        "deterministic_accuracy": 0.9846,
+        "nomatch": {
+          "n": 26,
+          "handled": 0.4231,
+          "accuracy_decided": 1.0
+        },
+        "agreement_with_deterministic": 0.8615
+      },
+      "holdout": {
+        "surface": "routing",
+        "tau": 0.54,
+        "n": 57,
+        "n_decided": 45,
+        "handled": 0.7895,
+        "accuracy_decided": 0.9111,
+        "accuracy_raw": 0.8421,
+        "escalation": 0.1176,
+        "abstain_correct_rate": 1.0,
+        "ece": 0.0872,
+        "paraphrase": {
+          "pairs": 24,
+          "same_answer_rate": 0.9167,
+          "both_correct_rate": 0.9167
+        },
+        "latency_ms": {
+          "p50": 219,
+          "p95": 303
+        },
+        "input_tokens_total": 385320,
+        "cost_usd": 0.016183,
+        "deterministic_accuracy": 0.975,
+        "nomatch": {
+          "n": 17,
+          "handled": 0.5294,
+          "accuracy_decided": 1.0
+        },
+        "agreement_with_deterministic": 0.85
+      },
+      "consistency": {
+        "runs": 2,
+        "flip_rate": 0.0
+      },
+      "gates": {
+        "min_holdout_n": {
+          "value": 57,
+          "limit": 30,
+          "pass": true
+        },
+        "min_accuracy_decided": {
+          "value": 1.0,
+          "limit": 0.95,
+          "pass": true
+        },
+        "max_ece": {
+          "value": 0.0872,
+          "limit": 0.1,
+          "pass": true
+        },
+        "max_escalation": {
+          "value": 0.1176,
+          "limit": 0.15,
+          "pass": true
+        },
+        "min_paraphrase_both_correct": {
+          "value": 0.9167,
+          "limit": 0.9,
+          "pass": true
+        }
+      },
+      "promoted": true,
+      "model_returned": [
+        "jev-1.13.0"
+      ],
+      "coverage": {
+        "train": "156/156",
+        "holdout": "57/57"
+      }
+    },
+    "extract": {
+      "tau": 0.51,
+      "train": {
+        "surface": "extract",
+        "tau": 0.51,
+        "n": 122,
+        "n_decided": 76,
+        "handled": 0.623,
+        "accuracy_decided": 1.0,
+        "accuracy_raw": 0.9918,
+        "escalation": 0.1556,
+        "abstain_correct_rate": 1.0,
+        "ece": 0.1086,
+        "paraphrase": {
+          "pairs": 198,
+          "same_answer_rate": 0.8333,
+          "both_correct_rate": 0.9848
+        },
+        "latency_ms": {
+          "p50": 191,
+          "p95": 345
+        },
+        "input_tokens_total": 66566,
+        "cost_usd": 0.002796,
+        "false_fill": 0.0
+      },
+      "holdout": {
+        "surface": "extract",
+        "tau": 0.51,
+        "n": 47,
+        "n_decided": 29,
+        "handled": 0.617,
+        "accuracy_decided": 1.0,
+        "accuracy_raw": 1.0,
+        "escalation": 0.0938,
+        "abstain_correct_rate": 1.0,
+        "ece": 0.104,
+        "paraphrase": {
+          "pairs": 69,
+          "same_answer_rate": 1.0,
+          "both_correct_rate": 1.0
+        },
+        "latency_ms": {
+          "p50": 187,
+          "p95": 448
+        },
+        "input_tokens_total": 25672,
+        "cost_usd": 0.001078,
+        "false_fill": 0.0
+      },
+      "consistency": {
+        "runs": 2,
+        "flip_rate": 0.0
+      },
+      "gates": {
+        "min_holdout_n": {
+          "value": 47,
+          "limit": 30,
+          "pass": true
+        },
+        "min_accuracy_decided": {
+          "value": 1.0,
+          "limit": 0.95,
+          "pass": true
+        },
+        "max_ece": {
+          "value": 0.104,
+          "limit": 0.1,
+          "pass": false
+        },
+        "max_escalation": {
+          "value": 0.0938,
+          "limit": 0.15,
+          "pass": true
+        },
+        "min_paraphrase_both_correct": {
+          "value": 1.0,
+          "limit": 0.9,
+          "pass": true
+        },
+        "max_false_fill": {
+          "value": 0.0,
+          "limit": 0.0,
+          "pass": true
+        }
+      },
+      "promoted": false,
+      "model_returned": [
+        "jev-1.13.0"
+      ],
+      "coverage": {
+        "train": "122/122",
+        "holdout": "47/47"
+      }
+    },
+    "zhancat": {
+      "tau": 0.86,
+      "train": {
+        "surface": "zhancat",
+        "tau": 0.86,
+        "n": 88,
+        "n_decided": 76,
+        "handled": 0.8636,
+        "accuracy_decided": 0.9868,
+        "accuracy_raw": 0.9545,
+        "escalation": 0.038,
+        "abstain_correct_rate": 1.0,
+        "ece": 0.0348,
+        "paraphrase": {
+          "pairs": 0,
+          "same_answer_rate": 1.0,
+          "both_correct_rate": 1.0
+        },
+        "latency_ms": {
+          "p50": 179,
+          "p95": 277
+        },
+        "input_tokens_total": 57242,
+        "cost_usd": 0.002404
+      },
+      "holdout": {
+        "surface": "zhancat",
+        "tau": 0.86,
+        "n": 36,
+        "n_decided": 33,
+        "handled": 0.9167,
+        "accuracy_decided": 1.0,
+        "accuracy_raw": 0.9722,
+        "escalation": 0.0294,
+        "abstain_correct_rate": 1.0,
+        "ece": 0.025,
+        "paraphrase": {
+          "pairs": 0,
+          "same_answer_rate": 1.0,
+          "both_correct_rate": 1.0
+        },
+        "latency_ms": {
+          "p50": 170,
+          "p95": 216
+        },
+        "input_tokens_total": 23416,
+        "cost_usd": 0.000983
+      },
+      "consistency": {
+        "runs": 2,
+        "flip_rate": 0.0
+      },
+      "gates": {
+        "min_holdout_n": {
+          "value": 36,
+          "limit": 30,
+          "pass": true
+        },
+        "min_accuracy_decided": {
+          "value": 1.0,
+          "limit": 0.95,
+          "pass": true
+        },
+        "max_ece": {
+          "value": 0.025,
+          "limit": 0.1,
+          "pass": true
+        },
+        "max_escalation": {
+          "value": 0.0294,
+          "limit": 0.15,
+          "pass": true
+        },
+        "min_paraphrase_both_correct": {
+          "value": 1.0,
+          "limit": 0.9,
+          "pass": true
+        }
+      },
+      "promoted": true,
+      "model_returned": [
+        "jev-1.13.0"
+      ],
+      "coverage": {
+        "train": "88/88",
+        "holdout": "36/36"
+      }
+    }
+  }
+}

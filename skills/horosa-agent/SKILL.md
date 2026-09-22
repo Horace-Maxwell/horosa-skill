@@ -170,6 +170,9 @@ below. When the operator turns it on:
 - The clarification gate is unchanged: a value the user did not state is still asked for. If the user
   disputes an extracted value (`decision.field` / `value` / `evidence`), re-run with the corrected input.
 - If a warning says the decision layer was unavailable, the deterministic path ran instead; no action needed.
+- Which surfaces may actually change behaviour is decided by a measured thresholds lock
+  (`contracts/jev_thresholds.json`): as of v0.39.0 routing fallback and 六壬 topic classification are
+  promoted; gender extraction is still shadow-only (recorded, never filled).
 
 ## Tool Selection
 

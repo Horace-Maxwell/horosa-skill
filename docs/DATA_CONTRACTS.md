@@ -36,6 +36,9 @@
   （该面的结构化判定）、`latency_ms`。
 - `DispatchEnvelope.decision_layer`：`{provider, mode, scope, model, surfaces:{面: 生效模式}, records[]}`，
   路由（S1）与抽取（S2）的记录在这里；技法级（S3 门类）的记录在各 `results.<tool>.data.technique_card.decisions`。
+- `benchmark faithfulness` 报告的 `model_opinion`（仅 `HOROSA_JEV_SCOPE=snapshot`）：`{provider, model, mode, tau, latency_ms,
+  n, n_judged, agreement_rate, disagreements[], per_claim[{text, deterministic, model, supported_probability, agrees}], note}`；
+  确定性字段 `ok` / `claims` / `metrics` 不受影响。
 
 ## Export Snapshot
 

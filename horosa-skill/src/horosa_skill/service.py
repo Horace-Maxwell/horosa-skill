@@ -48,6 +48,7 @@ from horosa_skill.reports.technique_card import build_technique_card, build_tech
 from horosa_skill.decisions.layer import DecisionLayer, current_decision_records, decision_records
 from horosa_skill.decisions.redact import build_meta_state
 from horosa_skill.decisions.surfaces.extract import build_gender_question, gender_candidates, resolve_gender
+from horosa_skill.decisions.surfaces.faithfulness import build_opinion_questions, build_opinion_state, summarize_opinion
 from horosa_skill.decisions.surfaces.routing import build_routing_questions, resolve_routing
 from horosa_skill.decisions.surfaces.zhancat import build_zhan_question, resolve_zhan
 
@@ -12393,6 +12394,32 @@ class HorosaSkillService:
             return
         layer.finalize(outcome, adopted=False, reason=("shadow" if not outcome.enforced else decision.reason), decision=info)
 
+    def faithfulness_opinion(self, report: dict[str, Any], export_text: str | None) -> dict[str, Any] | None:
+        """S4（二档 snapshot 才开）：对确定性忠实性报告的每条 claim 追加只读的模型意见；不改 report 本身。"""
+        return self._decision_guard("faithfulness", None, lambda: self._faithfulness_opinion_inner(report, export_text))
+
+    def _faithfulness_opinion_inner(self, report: dict[str, Any], export_text: str | None) -> dict[str, Any] | None:
+        layer = self.decision_layer
+        if layer is None or not layer.policy.surface_enabled("faithfulness"):
+            return None
+        claims = [claim for claim in (report.get("claims") or []) if isinstance(claim, dict)]
+        if not claims or not str(export_text or "").strip():
+            return None
+        questions = build_opinion_questions(claims)
+        if not questions:
+            return None
+        outcome = layer.ask(
+            "faithfulness",
+            state=build_opinion_state(str(export_text)),
+            questions=questions,
+            intent="second opinion on whether each extracted claim is supported by the chart export",
+        )
+        if not outcome.ok or outcome.answers is None:
+            return None
+        summary = summarize_opinion(claims, outcome.answers.answers, tau=outcome.tau)
+        layer.finalize(outcome, adopted=False, reason="read-only second opinion (never affects report.ok)", decision={"agreement_rate": summary["agreement_rate"], "n_judged": summary["n_judged"]})
+        return {"provider": "typesafe_jev", "model": outcome.answers.model, "mode": outcome.mode, "tau": outcome.tau, "latency_ms": outcome.latency_ms, **summary}
+
     def _decide_zhan_category(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._decision_guard("zhancat", payload, lambda: self._decide_zhan_category_inner(payload))
 
@@ -12568,15 +12595,22 @@ class HorosaSkillService:
                         self._decide_gender(request, tool_name, payload_for_tool, extraction_shared)
                     decision_records_out.extend(extract_records)
                 normalized_inputs[tool_name] = payload_for_tool
-                results[tool_name] = self.run_tool(
-                    tool_name,
-                    payload_for_tool,
-                    save_result=request.save_result,
-                    run_id=run_id,
-                    query_text=request.query,
-                    group_id=trace["group_id"],
-                    evaluation_case_id=evaluation_case_id,
-                )
+                try:
+                    results[tool_name] = self.run_tool(
+                        tool_name,
+                        payload_for_tool,
+                        save_result=request.save_result,
+                        run_id=run_id,
+                        query_text=request.query,
+                        group_id=trace["group_id"],
+                        evaluation_case_id=evaluation_case_id,
+                    )
+                except ToolValidationError as exc:
+                    # 决策层兜底选中的工具随后因缺参被拒时，调用方必须能看到「这个工具是谁选的」——否则一个
+                    # 无匹配请求会以「huanglizeri 缺 startDate」的面目出现，而路由这一步的自陈全丢。
+                    if decision_records_out and isinstance(exc.details, dict) and "decision_layer" not in exc.details:
+                        exc.details["decision_layer"] = self._decision_layer_view(decision_records_out)
+                    raise
                 result_export_contracts[tool_name] = _build_dispatch_export_contract(results[tool_name])
             _progress_tick(total_tools, total_tools, "调度：汇总结果")
 

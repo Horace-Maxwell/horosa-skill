@@ -2791,10 +2791,16 @@ def benchmark_faithfulness(
     except ToolValidationError as exc:
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc)}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
-    facts = extract_facts(artifact.get("payload") or {})
+    payload = artifact.get("payload") or {}
+    facts = extract_facts(payload)
     report = verify_answer(answer, facts)
     report["run_id"] = run_id
     report["tool"] = artifact.get("tool_name")
+    # 可选云端决策层 S4（HOROSA_JEV 开且 HOROSA_JEV_SCOPE=snapshot 才有）：只读第二意见，永不改 ok/metrics。
+    export_text = (((payload.get("data") or {}).get("export_snapshot") or {}).get("export_text")) if isinstance(payload, dict) else None
+    opinion = service.faithfulness_opinion(report, export_text)
+    if opinion is not None:
+        report["model_opinion"] = opinion
     _print_json(report)
     if not report["ok"]:
         raise typer.Exit(code=1)

@@ -264,8 +264,15 @@ idempotent=False——默认写一条本地 run 记录，必须如实标注，�
 坐标/地名/号码→占位符），二档 `snapshot` 才许导出快照且只给 S4/S5；出生数据永不以原值离机；key 只在调用时读、
 永不入日志/异常/信封/生成配置；⑥ 阈值只认自家中文标注集测出的数——`enforce` 需 `contracts/jev_thresholds.json`
 该面 `promoted` 且模型 id 一致，否则退 shadow；钉版 `jev-1.13.0`，`jev-latest` 只许影子，返回 id 不符本轮降影子。
-问题构造点唯一（`decisions/surfaces/*`：instructions 英文、选项键 ASCII、必带弃权项——去掉弃权项时第三方评测
-准确率 0.95→0.00）。评测/晋升协议见 `scripts/jev_eval.py`。
+问题构造点唯一（`decisions/surfaces/*`：instructions 英文为主（≤30% CJK，允许中文线索词）、选项键 ASCII、必带弃权项
+——去掉弃权项时第三方评测准确率 0.95→0.00）。**每个面的整个决策块**（构造 + 调用 + 采纳）都在 `_decision_guard` 里，
+护栏画在面的边界而不是网络 I/O 周围（v0.39.0 台账）。
+**评测与晋升协议**（`decisions/eval.py` + `scripts/jev_eval.py`）：金标集 `contracts/jev_eval/*.jsonl` 由
+`scripts/gen_jev_eval_sets.py` 人工标注生成；真调用只在 `measure`，原始响应录进 `cache.jsonl`，`compile`/`check` 零调用回放；
+τ 在训练集扫、留出集过**预注册闸** `PROMOTION_GATES`（改数字 = 改代码 + 留痕），全过才在 `contracts/jev_thresholds.json`
+写 `promoted: true`；发版前 `jev_eval check`（数据集 sha / 模型 id / 回放闸）。首轮：dispatch τ 0.54 与 zhancat τ 0.86 晋升，
+extract 因 ECE 0.104 > 0.10 未晋升（精度 1.0、填错 0）——闸差一点也是不过，别调数字凑。二档 S4 只读意见走
+`service.faithfulness_opinion`，永不改 `report.ok`。
 
 **错误也必须是信封**：技法/dispatch/tool_run 的错误路径返回 `ToolEnvelope`（含顶层 `code/message/details`
 镜像），不是裸 dict——出参被 server+client 两侧校验，一旦声明 outputSchema，裸 dict 会被打成协议级
