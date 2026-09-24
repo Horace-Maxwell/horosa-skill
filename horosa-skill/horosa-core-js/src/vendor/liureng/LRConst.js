@@ -132,6 +132,26 @@ export const NightGuiDunJia = {
 	'癸': '卯'
 };
 
+// B 派(甲戊兼牛羊)——同正法 A,唯「庚」改与「辛」同用午/寅(《太白阴经》最早记载;储泳谓「庚/兼」形近之讹)。
+export const DayGuiBingShuo = {
+	'甲': '丑', '乙': '子', '丙': '亥', '丁': '亥', '戊': '丑',
+	'己': '子', '庚': '午', '辛': '午', '壬': '巳', '癸': '巳',
+};
+export const NightGuiBingShuo = {
+	'甲': '未', '乙': '申', '丙': '酉', '丁': '酉', '戊': '未',
+	'己': '申', '庚': '寅', '辛': '寅', '壬': '卯', '癸': '卯',
+};
+
+// C 派(干合阳阴贵)——清官修主流:阳贵甲起子顺、阴贵甲起申逆(辰戌为狱不居)。
+export const DayGuiHeGui = {
+	'甲': '未', '乙': '申', '丙': '酉', '丁': '亥', '戊': '未',
+	'己': '子', '庚': '丑', '辛': '寅', '壬': '卯', '癸': '巳',
+};
+export const NightGuiHeGui = {
+	'甲': '丑', '乙': '子', '丙': '亥', '丁': '酉', '戊': '丑',
+	'己': '申', '庚': '未', '辛': '午', '壬': '巳', '癸': '卯',
+};
+
 export const GuiRengs = [{
 	day: DayGuiLiuReng,
 	night: NightGuiLiuReng,
@@ -141,6 +161,12 @@ export const GuiRengs = [{
 },{
 	day: DayGui,
 	night: NightGui,
+},{
+	day: DayGuiBingShuo,
+	night: NightGuiBingShuo,
+},{
+	day: DayGuiHeGui,
+	night: NightGuiHeGui,
 }];
 
 export const GanZiRestrain = {
@@ -520,7 +546,7 @@ export function getSignZi(sign){
 	return SignZiList[idx];
 }
 
-export function getGuiZi(chartObj, guirengType, isDiurnalOverride){
+export function getGuiZi(chartObj, guirengType, isDiurnalOverride, yinyangSystem){
 	let guirengobj = GuiRengs[guirengType];
 	let dayGui = guirengobj.day;
 	let nightGui = guirengobj.night;
@@ -528,6 +554,10 @@ export function getGuiZi(chartObj, guirengType, isDiurnalOverride){
 	let gan = chartObj.nongli.dayGanZi.substr(0, 1);
 	// 昼夜默认取星历 isDiurnal；六壬「换日/分昼夜法」可显式覆盖（缺省=现状，零回归）。
 	let diurnal = (typeof isDiurnalOverride === 'boolean') ? isDiurnalOverride : chartObj.isDiurnal;
+	// 昼夜阳阴归属(§6.3④):星历考原阳阴系下,A正法(六壬法 guirengType=0)甲乙丙辛壬癸 昼夜支互换;旦暮系(默认)不换=零回归。
+	if(yinyangSystem === 'yinyang' && guirengType === 0 && '甲乙丙辛壬癸'.indexOf(gan) >= 0){
+		diurnal = !diurnal;
+	}
 	let guizi = null;
 	if(diurnal){
 		guizi = dayGui[gan];

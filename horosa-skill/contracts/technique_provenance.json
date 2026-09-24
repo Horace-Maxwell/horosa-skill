@@ -476,7 +476,8 @@
     "jinkou": {
       "compute_class": "ken_backed",
       "engines": [
-        "kinjinkou"
+        "kinjinkou",
+        "local_route_buildJinKouData"
       ],
       "endpoints": [
         "/jinkou/pan",
@@ -534,6 +535,7 @@
       ],
       "endpoints": [
         "/chart",
+        "/liureng/gods",
         "/liureng/runyear"
       ],
       "export_technique": "liureng",
@@ -694,7 +696,8 @@
     "qimen": {
       "compute_class": "ken_backed",
       "engines": [
-        "kinqimen"
+        "kinqimen",
+        "local_route_calcDunJia"
       ],
       "endpoints": [
         "/jieqi/year",

@@ -141,7 +141,7 @@ function pillarFromFourColumns(four, key){
 	return safeText((item && (item.ganzi || item.ganZhi || item.text)) || '');
 }
 
-function buildTaiyiBaziLocal(fields, options){
+export function buildTaiyiBaziLocal(fields, options){
 	if(!fields || !fields.date || !fields.time){
 		return null;
 	}

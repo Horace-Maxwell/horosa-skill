@@ -1256,10 +1256,9 @@
     },
     "liureng/LRConst.js": {
       "upstream": "components/liureng/LRConst.js",
-      "mode": "curated",
-      "why": "curated 常量文件（AGENTS §5 点名）：上游全文件 import 了 headless 不存在的路径，只追加新增纯常量，不整文件重 vendor。",
-      "extracts": [],
-      "upstream_sha256": "8180c68258d16f71dd1888b494043e98d98d730d8a00b337675e1126a155e6a9"
+      "mode": "verbatim",
+      "why": "曾是 curated（「上游全文件 import 了 headless 不存在的路径」）——该理由已过期：唯一 import `../../constants/AstroConst` 在 vendor 树里解析到 src/constants/ 共享 shim，整文件可载。curated 期间 sha 戳一直等于上游（restamp 过）而内容停在旧版：缺 B 派「甲戊兼牛羊」/C 派「干合阳阴贵」两张贵人表（GuiRengs[3]/[4] 为 undefined → 贵人 3/4 崩成 `guirengobj.day` TypeError）与 getGuiZi 的 yinyangSystem 昼夜互换（vendored LiuRengMain.buildLiuRengLayout 早已按 4 参调用，第 4 参被静默丢弃）。「sha 看守不比内容」同型事故（AGENTS §5），故改 verbatim，流水线逐字复现。",
+      "deviations": []
     },
     "liureng/LRJianChuanDoc.js": {
       "upstream": "components/liureng/LRJianChuanDoc.js",

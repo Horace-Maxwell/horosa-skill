@@ -531,6 +531,78 @@ FREE_TEXT_GATE_FIELDS: frozenset[str] = frozenset({
 })
 
 
+# ── 三式口径（sanshi chunk，上游 v3.11）──────────────────────────────────────────────────────
+# 「星阙默认」必须字面等于上游缺省：奇门起局法缺省 = DunJiaMain.js:128 DEFAULT_OPTIONS.qijuMethod 'zhirun'（置闰）。
+_QIMEN_QIJU_QUESTION: dict[str, Any] = {
+    "field": "qijuMethod",
+    "question": "起局方式？星阙默认为置闰（zhirun）。",
+    "options": ["置闰（星阙默认）", "拆补", "茅山", "无闰", "阴盘报数（需 shuziReportNumber）"],
+    "values": ["zhirun", "chaibu", "maoshan", "wurun", "shuzi"],
+}
+_QIMEN_SAFE_DEFAULTS: list[dict[str, Any]] = [
+    {"field": "qijuMethod", "value": "zhirun", "meaning": "星阙默认（DunJiaMain DEFAULT_OPTIONS）：置闰"},
+    {"field": "paiPanType", "value": 3, "meaning": "时家奇门（星阙默认）"},
+    {"field": "timeAlg", "value": 0, "meaning": "星阙默认：真太阳时（ken 按真太阳时分量起局，时柱与九宫同一时辰）"},
+    {"field": "sex", "value": 1, "meaning": "星阙默认；涉及命式时应先问"},
+    {"field": "after23NewDay", "value": None, "meaning": "不传即不发送：ken/农历前置按后端缺省 1（23 点换日）"},
+]
+# 大六壬起课法全 26 法（键序 = 上游 LiuRengMain.js:3860 QI_METHODS；tests/test_sync311_sanshi.py 对 vendored 表锚定）。
+LIURENG_CAST_METHODS: tuple[tuple[str, str], ...] = (
+    ("zheng", "正时正将"), ("bake2", "月建加太岁"), ("bake3", "太岁加月建"), ("bake4", "月建加日干"),
+    ("bake5", "岁干加正时"), ("bake6", "月将加日干"), ("bake7", "月将加太岁"), ("bake8", "太岁加月将"),
+    ("bake9", "月将加本命"), ("bake10", "月将加行年"), ("bake11", "太岁加本命"), ("bake12", "太岁加行年"),
+    ("tsjs", "太岁加时"), ("yjjs", "月建加时"), ("xnjs", "行年加时"), ("bmjs", "本命加时"),
+    ("cike1", "次客·一筹"), ("cike2", "次客·二筹"), ("cike3", "次客·三筹"),
+    ("alnr", "年日对齐"), ("alns", "年时对齐"), ("alyr", "月日对齐"), ("alys", "月时对齐"),
+    ("xuanshi", "选时"), ("yanshu", "演数"), ("baoshu", "报数"),
+)
+_LIURENG_OPTIONS_KEYS = (
+    "options（起课口径；缺省 = 上游 LIURENG_PAGE_SETTINGS 出厂值，认不出的值报 tool.liureng_invalid_option）："
+    "castMethod 起课法 " + " / ".join(f"{k}={v}" for k, v in LIURENG_CAST_METHODS) + "（缺省 zheng；"
+    "xuanshi 需 xuanShiZhi=事发时地支；yanshu/baoshu 需 yanShuNum=整数；bake9-12/xnjs/bmjs 用本命/行年支）；"
+    "yueJiangMethod zhongqi 中气过宫(缺省)/jieqi 节气换将/richan 日躔含岁差；"
+    "fenZhouYe chenhun 晨昏(缺省)/maoyou 卯酉/yinshen 寅申；"
+    "seHaiMethod app(缺省)/standard/mengzhongji；seHaiBoundary app(缺省)/both/neither；shiRuKe false(缺省)/true；"
+    "yearShenShaSort sanyuan(缺省)/suigui；yinyangSystem danmu 旦暮(缺省)/yinyang 阳阴系(六壬法贵人甲乙丙辛壬癸昼夜互换)；"
+    "tuWangShuai siji(缺省)/huotu；wuxing 十二长生五行(缺省=日干五行)；"
+    "timeAlg 0 真太阳时(缺省)/1 直接时间（只作用于 /liureng/gods 四柱与神煞，课盘占时同上游取星历农历）。"
+    "顶层 guirengType：0 六壬法 / 1 遁甲法 / 2 星占法(缺省) / 3 甲戊兼牛羊 / 4 干合阳阴贵。"
+)
+_SANSHI_OPTIONS_KEYS: dict[str, str] = {
+    "qimen": (
+        "options（盘面口径；缺省 = 上游 DunJiaMain DEFAULT_OPTIONS，认不出报 tool.qimen_invalid_option）："
+        "qijuMethod zhirun 置闰(缺省)/chaibu 拆补/maoshan 茅山/wurun 无闰/shuzi 阴盘报数(需 shuziReportNumber)；"
+        "paiPanType 3 时家(缺省)/0 年家/1 月家/2 日家/4 刻家/6 日家·金函；school 转盘(缺省)/飞盘/混合；"
+        "timeAlg 0 真太阳时(缺省)/1 直接时间；zhiShiType 0/1/2；zhirunLeapDays 9；godsPreset baihu_xuanwu；"
+        "jiGongMode kun；anGanMode off；kongMarkBoth；shiftPalace + shiftZhiFuMode follow/recalc；kongMode/yimaMode day/time 等。"
+        "路由同上游 isQimenLocalRoute：paiPanType∉{3,5}、飞盘/混合、shuzi，或 zhiShiType/zhirunLeapDays/godsPreset/"
+        "jiGongMode/anGanMode/kongMarkBoth/shiftZhiFuMode=recalc 任一非缺省 → 本地 calcDunJia（不打 ken，data.route.local=true，"
+        "compute_sources.pan=local_route_calcDunJia）；其余由 ken 算盘。"
+    ),
+    "qimenzeri": "options 同 qimen（扫描与展示盘吃同一份已校验口径，起局法缺省 zhirun）。",
+    "taiyi": (
+        "options：style 3 时计(缺省，0 年计/1 月计/2 日计/4 分计/5 命法)；tn 0 统宗(缺省)/1 金镜/2 淘金歌/3 太乙局；"
+        "timeBasis direct 直接时间=钟表时(缺省)/trueSolar 真太阳时（ken 按 nongli.birth 真太阳时起局，四柱随之）；"
+        "gameTheory 0/1；school 流派六轴对象 {jishen 逆/顺, wenchang 重留/无重留, keJianChen 加一/无加一, "
+        "sanji 淘金歌/金镜, youshen 顺/逆, shijiCoord 九宫/十六神}（缺省各轴 default=从盘；也认 options 里平铺六轴键）。"
+        "顶层 timeAlg 只影响农历前置显示，不改太乙起局。"
+    ),
+    "taiyizeri": "school：顶层流派六轴对象（同 taiyi options.school），扫描与展示盘同用；认不出的轴/值报错。",
+    "jinkou": (
+        "options：diFen auto=占时支(缺省)/地支；yueJiang、zhanShi auto(缺省)/地支；wuxing 十二长生五行(缺省日干五行)；"
+        "guirengType 0 六壬法(缺省)；流派五键 schoolYueJiang zhongqi(缺省)/jiaojie、schoolGuiTable shiwu(缺省)/liuren、"
+        "schoolGuiPan di(缺省)/tian、panShi yang(缺省)/yin、soilChangSheng shen(缺省)/yin；timeBasis direct(缺省)/trueSolar。"
+        "路由同上游：五键全缺省且两源日柱对齐 → ken(kinjinkou) 盘；任一非缺省 → 本地 buildJinKouData"
+        "（compute_sources.jinkou=local_route_buildJinKouData），此时 timeBasis 无效并进 warnings（上游置灰）。"
+    ),
+    "liureng_gods": _LIURENG_OPTIONS_KEYS,
+    "liureng_runyear": _LIURENG_OPTIONS_KEYS + "行年盘：date/time=问测人出生，guaDate/guaTime=起课时刻（课盘按起课时刻起）。",
+    "sanshiunited": (
+        "qimen_options 同 qimen options；taiyi_options 同 taiyi options（上游键 taiyiTimeBasis 亦可放顶层）；"
+        "liureng_options 同 liureng_gods options（castMethod 锁 zheng 正时正将，同上游；timeAlg 用顶层共享值）。"
+    ),
+}
+
 TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     "export_registry": _policy(
         intent="Inspect Xingque export registry.",
@@ -570,21 +642,18 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "date/time", "question": "奇门用当前时间还是指定时间？", "options": ["当前时间", "指定时间"]},
             {"field": "location", "question": "起盘地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
             {"field": "question", "question": "这局主要问什么事？"},
-            {"field": "qijuMethod", "question": "起局方式是否沿用星阙默认？", "options": ["星阙默认", "指定置闰/拆补/茅山等"]},
+            _QIMEN_QIJU_QUESTION,
             {"field": "sex", "question": "如果是命盘/人事局，请确认性别；纯事件局可沿用默认。", "options": ["男", "女", "事件局/不指定"]},
         ],
-        safe_defaults=[
-            {"field": "paiPanType", "value": 3, "meaning": "时家奇门"},
-            {"field": "sex", "value": 1, "meaning": "星阙默认；涉及命式时应先问"},
-            {"field": "after23NewDay", "value": False, "meaning": "星阙默认"},
-        ],
+        safe_defaults=_QIMEN_SAFE_DEFAULTS,
         do_not_assume=["question", "location", "non-default qijuMethod"],
     ),
     "qimenzeri": _policy(
         intent=(
             "奇门择日「找局」：在一段时间窗内扫出满足奇门条件树的时辰，并附命中首刻的完整奇门盘"
             "（17 段奇门 + [择日搜索配置]/[择日条件]/[命中时辰]）。"
-            "\n算权：**展示盘由 ken 后端计算**（/qimen/pan，与普通 qimen 工具同源）；"
+            "\n算权：**展示盘与普通 qimen 工具同源同路由**（缺省 ken /qimen/pan；本地路由口径时为本地 calcDunJia，"
+            "以 compute_sources.pan 为准），扫描与展示盘吃同一份已校验口径；"
             "**区间搜索用本地引擎**——ken 无区间扫描端点，一个月窗口走 HTTP 是约 44,000 次往返；"
             "上游对本地排盘与后端做过 42,731 点 0 差 parity 锚。结果里 compute_sources 逐项写明。"
             "\n条件树形状：组 {kind:'group', joiner:'all'|'any'|'xor', negate?, children:[…]}；"
@@ -599,15 +668,16 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "conditions", "question": "择日要满足什么条件？（如某吉格出现、某门某宫等）"},
             {"field": "location", "question": "起盘地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
             {"field": "topic", "question": "这次择日是为什么事？（搬家/开业/婚嫁…）"},
-            {"field": "qijuMethod", "question": "起局方式是否沿用星阙默认？", "options": ["星阙默认", "指定置闰/拆补/茅山等"]},
+            _QIMEN_QIJU_QUESTION,
         ],
         safe_defaults=[
-            {"field": "paiPanType", "value": 3, "meaning": "时家奇门"},
+            *_QIMEN_SAFE_DEFAULTS,
             {"field": "maxSpanDays", "value": 92, "meaning": "搜索窗上限；更长请分段，否则 JS 引擎会超时"},
         ],
         do_not_assume=["搜索时间窗", "择日条件", "location", "non-default qijuMethod"],
         output_contract=(
-            "intervals 为本地引擎扫出的命中时辰（含 pick/pickEnd 边界安全时刻）；pan 为 ken 计算的展示盘，"
+            "intervals 为本地引擎扫出的命中时辰（含 pick/pickEnd 边界安全时刻）；pan 为展示盘（算源见 "
+            "compute_sources.pan：kinqimen 或本地路由的 local_route_calcDunJia），"
             "起于 intervals[0].pick。零命中时 [命中时辰] 段仍会出现并写明「时间段内无满足条件的时辰」，"
             "不是缺段。切勿把本地搜索结果说成 ken 算出的。"
         ),
@@ -689,6 +759,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         safe_defaults=[
             {"field": "maxSpanDays", "value": 92, "meaning": "搜索窗上限；更长请分段"},
+            {"field": "school", "value": "六轴全 default", "meaning": "星阙默认：从盘；给了对象则扫描与展示盘同用"},
         ],
         do_not_assume=["搜索时间窗", "择日条件", "location"],
         output_contract=(
@@ -971,9 +1042,14 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ask_if_missing=[
             {"field": "date/time", "question": "太乙用当前时间还是指定时间？", "options": ["当前时间", "指定时间"]},
             {"field": "location", "question": "起盘地点用哪里？"},
-            {"field": "gender/options", "question": "是否需要指定性别或太乙参数？", "options": ["沿用星阙默认", "指定参数"]},
+            {"field": "gender/options", "question": "是否需要指定性别或太乙参数（盘式/积年/时间基准/流派）？", "options": ["沿用星阙默认", "指定参数"]},
         ],
-        safe_defaults=[{"field": "timeAlg", "value": 0, "meaning": "星阙默认"}],
+        safe_defaults=[
+            {"field": "options.timeBasis", "value": "direct", "meaning": "星阙默认：直接时间（钟表时起局；trueSolar 改按真太阳时）"},
+            {"field": "options.style", "value": 3, "meaning": "星阙默认：时计太乙"},
+            {"field": "options.tn", "value": 0, "meaning": "星阙默认：太乙统宗积年"},
+            {"field": "options.school", "value": "六轴全 default", "meaning": "星阙默认：从盘（kintaiyi 原盘，不覆盖）"},
+        ],
         do_not_assume=["location", "custom options"],
     ),
     "jinkou": _policy(
@@ -982,14 +1058,20 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ask_if_missing=[
             {
                 "field": "diFen",
-                "question": "金口诀地分/方位用哪一支？如不确定，请说明取数方式。",
-                "options": ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"],
-                "values": ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"],
+                "question": "金口诀地分/方位用哪一支？星阙默认「自动」= 取占时支。",
+                "options": ["自动（占时支，星阙默认）", "子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"],
+                "values": ["auto", "子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"],
             },
             {"field": "guirengType", "question": "贵人体系用哪一种？", "options": ["六壬法贵人（星阙金口诀默认）", "星占法贵人", "遁甲法贵人"]},
             {"field": "question", "question": "这课主要问什么事？"},
         ],
-        safe_defaults=[{"field": "guirengType", "value": 0, "meaning": "金口诀星阙默认"}],
+        safe_defaults=[
+            {"field": "guirengType", "value": 0, "meaning": "金口诀星阙默认（六壬法贵人）"},
+            {"field": "diFen", "value": "auto", "meaning": "星阙默认：自动取占时支"},
+            {"field": "options.wuxing", "value": "日干五行", "meaning": "星阙默认：十二长生五行随日干"},
+            {"field": "options.流派五键", "value": "全缺省", "meaning": "星阙默认：中气换将/实务贵人表/地盘起贵/阳盘/水土同宫 → ken 盘"},
+            {"field": "options.timeBasis", "value": "direct", "meaning": "星阙默认：直接时间（只在 ken 路径生效）"},
+        ],
         do_not_assume=["diFen"],
     ),
     "liureng_gods": _policy(
@@ -999,15 +1081,19 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "date/time", "question": "大六壬用当前时间还是指定时间？", "options": ["当前时间", "指定时间"]},
             {"field": "location", "question": "起课地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
             {"field": "question", "question": "这课主要问什么事？"},
-            {"field": "guirengType", "question": "贵人体系用哪一种？", "options": ["星占法贵人（星阙默认/推荐）", "六壬法贵人", "遁甲法贵人"]},
+            {"field": "guirengType", "question": "贵人体系用哪一种？", "options": ["星占法贵人（星阙默认/推荐）", "六壬法贵人", "遁甲法贵人", "甲戊兼牛羊", "干合阳阴贵"], "values": [2, 0, 1, 3, 4]},
             {"field": "isDiurnal", "question": "昼夜贵人是否由 Horosa 自动判定？", "options": ["自动判定", "指定昼贵", "指定夜贵"]},
+            {"field": "options", "question": "起课口径是否沿用星阙默认（正时正将 / 中气过宫 / 晨昏分昼夜 / 涉害仅下贼上）？", "options": ["沿用星阙默认", "指定起课法或换将等（见 options_keys）"]},
         ],
         safe_defaults=[
             {"field": "guirengType", "value": 2, "meaning": "星占法贵人 / Xingque default"},
             {"field": "isDiurnal", "value": None, "meaning": "由本地 runtime 根据时间判定"},
+            {"field": "options.castMethod", "value": "zheng", "meaning": "星阙默认：正时正将"},
+            {"field": "options.timeAlg", "value": 0, "meaning": "星阙默认：真太阳时（后端缺省，不传即此档）"},
+            {"field": "options.wuxing", "value": "日干五行", "meaning": "星阙默认：十二长生五行随日干"},
             {"field": "after23NewDay", "value": False, "meaning": "星阙默认"},
         ],
-        do_not_assume=["question", "location", "non-default guirengType"],
+        do_not_assume=["question", "location", "non-default guirengType", "non-default castMethod"],
     ),
     "liureng_runyear": _policy(
         intent="大六壬行年/年运。",
@@ -1015,9 +1101,12 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ask_if_missing=[
             {"field": "gender", "question": "行年需要性别，请选择。", "options": ["男", "女"]},
             {"field": "guaDate/guaYearGanZi", "question": "要看哪一年/哪一段行年？"},
-            {"field": "guirengType", "question": "贵人体系是否沿用星阙默认星占法贵人？", "options": ["星占法贵人", "六壬法贵人", "遁甲法贵人"]},
+            {"field": "guirengType", "question": "贵人体系是否沿用星阙默认星占法贵人？", "options": ["星占法贵人", "六壬法贵人", "遁甲法贵人", "甲戊兼牛羊", "干合阳阴贵"], "values": [2, 0, 1, 3, 4]},
         ],
-        safe_defaults=[{"field": "guirengType", "value": 2, "meaning": "星占法贵人"}],
+        safe_defaults=[
+            {"field": "guirengType", "value": 2, "meaning": "星占法贵人"},
+            {"field": "options.castMethod", "value": "zheng", "meaning": "星阙默认：正时正将（行年加时/本命加时等见 options_keys）"},
+        ],
         do_not_assume=["gender", "target year"],
     ),
     "sanshiunited": _policy(
@@ -1028,7 +1117,12 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "question", "question": "这次要三式合参判断什么事？"},
             {"field": "submethod settings", "question": "子技法设置是否沿用星阙默认？", "options": ["全部沿用默认", "指定奇门/太乙/六壬参数"]},
         ],
-        safe_defaults=[{"field": "liureng guirengType", "value": 2, "meaning": "通过六壬工具使用星阙默认"}],
+        safe_defaults=[
+            {"field": "liureng guirengType", "value": 2, "meaning": "通过六壬工具使用星阙默认"},
+            {"field": "qimen_options.qijuMethod", "value": "zhirun", "meaning": "星阙默认：置闰"},
+            {"field": "taiyi_options.timeBasis", "value": "direct", "meaning": "星阙默认：直接时间（不随顶层 timeAlg 串改，同上游）"},
+            {"field": "liureng_options.castMethod", "value": "zheng", "meaning": "三式合一锁正时正将（同上游）"},
+        ],
         do_not_assume=["question"],
     ),
     "sixyao": _policy(
@@ -1577,6 +1671,11 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         do_not_assume=["hexagram name"],
     ),
 }
+
+# 三式口径词表挂到各工具策略上（horosa_agent_guidance 按工具回报 `options_keys`）：tools/list 字节预算吃紧，
+# 长词表不进 schema 描述，住这里（sanshi chunk）。
+for _tool_name, _options_text in _SANSHI_OPTIONS_KEYS.items():
+    TOOL_GUIDANCE[_tool_name]["options_keys"] = _options_text
 
 
 REPORT_AND_MEMORY_GUIDANCE: dict[str, dict[str, Any]] = {
