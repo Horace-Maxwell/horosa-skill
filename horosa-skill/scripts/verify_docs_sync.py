@@ -738,6 +738,65 @@ def check_compact_surface_count() -> None:
 
 
 
+def knowledge_truth() -> dict[str, int]:
+    """知识库计数的唯一真值：store 实际加载的 bundle（域）+ helpdoc 条目（手册 = 除八字断语库外的 helpdoc 域）。"""
+    from horosa_skill.knowledge.store import load_knowledge_bundles
+
+    bundles = load_knowledge_bundles()
+    helpdoc = {k: b for k, b in bundles.items() if b.get("schema") == "horosa.knowledge.helpdoc.v1"}
+    manuals = {k: b for k, b in helpdoc.items() if k != "bazi_pithy"}
+
+    def entries(bundle: dict) -> int:
+        return sum(len(cat.get("entries") or []) for cat in bundle.get("categories") or [])
+
+    return {
+        "domains": len(bundles),
+        "manual_domains": len(manuals),
+        "manual_entries": sum(entries(b) for b in manuals.values()),
+        "total_entries": sum(entries(b) for b in helpdoc.values()),
+    }
+
+
+# (文件, 正则, 真值键…)：正则的每个捕获组按序对应一个真值键；每条正则至少命中一次（防措辞改了守卫就瞎）。
+KNOWLEDGE_CLAIMS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("README.md", r"(\d+) 域知识库", ("domains",)),
+    ("README.md", r"(\d+) 域方法论知识库", ("domains",)),
+    ("README.md", r"\| (\d+) 域（hover 知识", ("domains",)),
+    ("README.md", r"覆盖 (\d+) 域", ("domains",)),
+    ("README.md", r"(\d+) 份技法操作手册", ("manual_domains",)),
+    ("README.md", r"八字断语库[^共]{0,12}共 (\d+) 条", ("total_entries",)),
+    ("README.md", r"📚 知识库 \| (\d+) 域；技法操作手册 (\d+) 条", ("domains", "manual_entries")),
+    ("README_EN.md", r"(\d+) domains", ("domains",)),
+    ("README_EN.md", r"(\d+)-domain knowledge base\*\* \((\d+) cited entries", ("domains", "total_entries")),
+    ("README_EN.md", r"(\d+) manual entries", ("manual_entries",)),
+    ("README_EN.md", r"(\d+) technique operation manuals", ("manual_domains",)),
+    ("README_EN.md", r"bazi pithy corpus \((\d+) entries", ("total_entries",)),
+    ("AGENTS.md", r"`knowledge_read`（(\d+) 域", ("domains",)),
+    ("AGENTS.md", r"（(\d+) 域/(\d+) 条，逐条带出处", ("manual_domains", "manual_entries")),
+    ("skills/horosa-agent/SKILL.md", r"`knowledge_read`（(\d+) 域", ("domains",)),
+    ("skills/horosa-agent/SKILL.md", r"跨 (\d+) 域全文检索", ("domains",)),
+)
+
+
+def check_knowledge_counts() -> None:
+    """知识库的域数 / 手册数 / 条目数必须等于 store 实际加载的数。
+
+    v0.40.0 时同一件事在文档里有四个数：README 31 域与 30 域并存、SKILL.md 与 AGENTS.md 还写 24 域、条目数停在
+    上游补条之前（235/408）——工具数、测试数都有真值守卫，知识库计数没有。
+    """
+    truth = knowledge_truth()
+    for rel, pattern, keys in KNOWLEDGE_CLAIMS:
+        found = re.findall(pattern, read(ROOT / rel))
+        if not found:
+            err(f"{rel}: 知识库计数措辞没找到（改了措辞就同步改 KNOWLEDGE_CLAIMS）: /{pattern}/")
+            continue
+        for match in found:
+            values = match if isinstance(match, tuple) else (match,)
+            for key, got in zip(keys, values):
+                if int(got) != truth[key]:
+                    err(f"{rel}: 知识库 {key} 写 {got}，store 实际 {truth[key]}（/{pattern}/）")
+
+
 def check_root_manifest_version() -> None:
     """MCPB manifest 的 version 必须与包版本锁步（曾停在 0.32.0 两个版本无人察觉）。
 
@@ -794,6 +853,7 @@ def main() -> None:
     check_frontmatter()
     check_envelope_schema_version()
     check_compact_surface_count()
+    check_knowledge_counts()
     check_root_manifest_version()
     if ERRORS:
         raise SystemExit("docs-sync: FAIL\n- " + "\n- ".join(ERRORS))

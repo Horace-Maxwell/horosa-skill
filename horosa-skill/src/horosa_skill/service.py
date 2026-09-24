@@ -15235,7 +15235,7 @@ class HorosaSkillService:
         if definition.name == "knowledge_registry":
             return build_knowledge_registry(domain=payload.get("domain"))
         if definition.name == "knowledge_read":
-            # query 模式（v0.30.0）：跨 24 域全文检索；不给 query 走精读老路。
+            # query 模式（v0.30.0）：跨全部知识域全文检索；不给 query 走精读老路。
             if f"{payload.get('query') or ''}".strip():
                 return search_knowledge(payload)
             return read_knowledge_entry(payload)

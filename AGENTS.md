@@ -90,7 +90,7 @@ you, it will bite the next agent：
   `agent_guidance.required` 在 stderr；两节里每条命令由 `tests/test_skill_shell_contract.py` 对到 Click 命令树。四家客户端
   先读的薄镜像（`GEMINI.md` / `.github/copilot-instructions.md` / `.windsurf/rules/` / `.clinerules/`，各 ≤ 30 行）只许
   指针 + 闸门 + 读盘 + `setup --client`，`verify_docs_sync.check_agent_mirrors` 锁；不加 Roo（不在 Works-with 矩阵）。
-- **引教义必带出处**（v0.28.0）：口径/流派/方法论先 `knowledge_read`（24 域，逐条 citation 落到
+- **引教义必带出处**（v0.28.0）：口径/流派/方法论先 `knowledge_read`（31 域，逐条 citation 落到
   上游组件文件），没有的按通则推理并明说无出处；多技法互证走 `horosa_hecan`——它产**模板**不产
   终稿，分歧必须披露不许平均（铁律在模板 instructions 里，不靠自觉）。
 
@@ -165,7 +165,7 @@ you, it will bite the next agent：
 为准，与声明不符时标 `matches_declaration: false`——ken 端点失败也回 200，静默回退正是这个形状。
 
 **知识包（v0.28.0 起，v0.35.0 收紧）**：方法论手册域由 `scripts/gen_knowledge_packs.py` 从上游 HelpDoc 收割
-（27 域/235 条，逐条带出处；幂等 = generated_at 取上游 commit 时间；**正文读上游 HEAD blob、不读工作区**，
+（27 域/236 条，逐条带出处；幂等 = generated_at 取上游 commit 时间；**正文读上游 HEAD blob、不读工作区**，
 出处与正文同源）；store 按 schema `horosa.knowledge.helpdoc.v1` 自动发现，**新增域零代码**。
 **上游每一册 `*HelpDoc.js` 要么进 `HELPDOC_DOMAINS`、要么进 `EXCLUDED_HELPDOCS`（仅 fengshui，政策性排除），
 第三种状态生成器直接 FAIL**——同步新技法时把它的手册一并收进来（v0.35.0 之前六册已上架技法的手册三个版本

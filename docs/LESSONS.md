@@ -17,7 +17,7 @@
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
 | v0.40.0 (2026-09) | 并行同步实现者踩坑：stub 杀死纯逻辑（六壬择时恒零命中）/ worktree 子进程跑主 checkout / 算源生成器不幂等 / `_js_round` 负数截断 / 移植口径与测试替身 | stub 审计进 revendor；conftest 钉 PYTHONPATH；契约 == 生成器输出；桩按真实下发参数校验 |
-| v0.40.0 (2026-09) | 上游 v3.11.x 重同步：五处「同步了却没同步」——live 复验跑的是已装 runtime 的旧 JS / curated 件 restamp 不带内容 / 生成器修产物不修源 / 裸 `export default X` 漏剥 / vendored JSON 不在 manifest | 复验只认本仓引擎（conftest 钉根）；能 verbatim 的手工件一律 verbatim；修生成器不修产物 |
+| v0.40.0 (2026-09) | 上游 v3.11.x 重同步：六处「同步了却没同步」——live 复验跑的是已装 runtime 的旧 JS / curated 件 restamp 不带内容 / 生成器修产物不修源 / 裸 `export default X` 漏剥 / vendored JSON 不在 manifest / 知识库计数无真值守卫 | 复验只认本仓引擎（conftest 钉根）；能 verbatim 的手工件一律 verbatim；修生成器不修产物 |
 | v0.39.0 (2026-09) | 发布前 CI 红：双语棘轮抓到新包 28 处单语 raise；本机跑的是「顺手的守卫」不是 run_ci_gates.py | 本机门禁 = `run_ci_gates.py`；按文件计数的棘轮是 API 契约，新包落地就按它写 |
 | v0.39.0 (2026-09) | 决策层：问题构造在 `ask()` 之外抛错，把 liureng_gods 打成 internal_error | 可选增强的**每一行**都要在降级护栏里；「英文 instructions」改成占比规则 |
 | v0.38.1 (2026-09) | 复审：自动化的盲区与 Windows 编码——B0 归属证据不经代码页 / doctor 预算 / 长路径闸 / 隔离前置；B1 升级就地不砍服务、doctor 报载荷过期、selfcheck 先起 runtime；B2 九客户端按各家真实规则（占位符白名单、JSONC 保注释、Cline/Zed timeout、Codex env 根、探针按客户端形状 + `horosa://runtime/status`、wheel 预下载、OAuth 网关改口、镜像指针）；B3 矩阵真下载、出厂预算、HTTP 握手、九客户端、挂着客户端不停、publish 与矩阵同字节、cron 离整点 + kick、min_os 进清单、mcpb 解包断言 | PowerShell 5.1 往管道写的是 OEM 代码页，Python 侧只许收字节（base64）或走 ctypes；「lane 传了 file:// 就以为验过下载」= 本机环境替测试补前提的第三例；换目录前必停自己的服务、但永不停陌生人的；每个客户端的占位符 / 超时 / 环境转发规则都要按**它的**文档写，并让 `client check` 对着真文件说话；发布期：publish job 的每一步先对真 draft 跑（draft 对 `releases/tags` 404、job 级 permissions 整块替换）；发布后：只在没人跑的平台可达的分支靠静态检查兜（F821 闸），带完整输出的超时要按阶段拆预算 |
@@ -155,10 +155,10 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 8. **上游代码自己也会崩**：逐字 vendor 的 `jyotishSnapshot` 有暂时性死区（`scS`）与键名错（`index`/`month`），从没在真数据上跑过；
    世俗盘卡 builder 吞掉每张卡的异常，闭包坏了只表现为「卡不见了」——只有值级金标抓得到。
 
-### v0.40.0 / 2026-09-24 — 上游 v3.11.x 重同步：五处「同步了却没同步」
+### v0.40.0 / 2026-09-24 — 上游 v3.11.x 重同步：六处「同步了却没同步」
 
 背景：上游从 v3.10.0（0604fa41，aiExport v56）走到 v3.11.1 + 三个发布后修（HEAD 9b74714b，aiExport v58；后三个在上游
-本机未推送）。runtime-source 97 文件、core-js 89 文件、导出契约两版、四个新技法键一起漂移。同步过程中撞到五个「看起来同步了、
+本机未推送）。runtime-source 97 文件、core-js 89 文件、导出契约两版、四个新技法键一起漂移。同步过程中撞到六个「看起来同步了、
 其实没有」的形态：
 
 1. **live 复验跑的是已装 runtime 的旧 JS 引擎。**
@@ -197,6 +197,11 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
    - 守卫：31 份 JSON 全部登记为 verbatim（对 JSON 即逐字节比对上游，负向对照：换回旧文件 `--check` 即 FAIL）；
      `test_every_vendored_js_and_json_file_is_in_the_manifest` 锁「vendor 树 .js/.json 集合 == manifest 集合」（负向对照：旧
      manifest 下报 31 份未登记）；Python 手抄表 `predictive_text.PLANETARY_YEARS` 与 vendored JSON 互锚。
+6. **知识库计数没有真值守卫，文档里同一件事写着四个数。**
+   - 症状：重收割后手册条目 235 → 236；文档里 README「31 域」与「30 域」并存，SKILL.md 与 AGENTS.md 还写「24 域」，条目数停在 235/408。
+   - 根因：工具数、测试数、门面数都有 `verify_docs_sync` 的真值检查，知识库的域数 / 手册数 / 条目数只有人记得时才改。
+   - 守卫：`check_knowledge_counts`——真值取 store 实际加载的 bundle 与 helpdoc 条目，16 条措辞正则逐处比对（每条至少命中一次，
+     措辞改了守卫不会悄悄变瞎）；负向对照：修文档前报 13 处不符。
 
 ### v0.39.0 / 2026-09-22 — Windows 维护机复验 v0.39.0：星阙桌面端占着默认端口时 doctor 把它说成「查不出身份的进程」；setup 探针对「运行中会话占着 venv 文件」只给一屏 uv 噪声；Jev 数据集指纹按原始字节算
 
