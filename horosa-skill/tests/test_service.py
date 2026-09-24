@@ -883,13 +883,35 @@ class FakeJsClient(HorosaJsEngineClient):
                 "snapshot_text": "[起盘信息]\n日期：2026-04-04 21:18\n\n[太乙盘]\n主算：二十四局",
             }
         if tool_name == "liuyao":
-            # 六爻断卦结构 (analyzeLiuyao 引擎)：离线替身给结构化 [断卦结构] 段，供 sixyao 契约 round-trip。
+            # 六爻层（tools/liuyao.js = 上游 regenerateSixyaoSnapshot 无头路径）离线替身：内容取自 vendored 引擎
+            # 对本文件 FakeClient /nongli/time 桩的真实输出（以时起卦 = buildTimeGua → 泽天夬、三爻动；段行节选）。
+            # 未给 lines = 以时起卦 → 回卦线；给了 lines = 手动摇卦 → 原样回显。
+            time_cast = not payload.get("lines")
+            names = ["子水妻财", "寅木官鬼应", "辰土兄弟", "亥水妻财", "酉金子孙世", "未土兄弟"]
+            lines = (
+                [{"value": v, "change": i == 2, "god": None, "name": names[i]} for i, v in enumerate([1, 1, 1, 1, 1, 0])]
+                if time_cast else payload.get("lines")
+            )
             return {
-                "data": {},
+                "lines": lines,
+                "time_cast": time_cast,
+                "current_gua": {"index": 53, "name": "泽天夬"} if time_cast else None,
                 "snapshot_text": (
-                    "[断卦结构]\n流派：通用\n卦序：坎宫·三世(世3应6)\n"
-                    "逐爻(初→上)：六神│伏神│本爻│世应│旺衰│状态│神煞\n第1爻：勾陈 卯木子孙 旺"
+                    "[断卦结构]\n流派：通用（卜筮正宗口径）\n卦序：坤宫·五世(世5应2)\n"
+                    "占测：自身/综合运势　用神：世(5爻)\n"
+                    "| 爻 | 六神 | 地支 | 五行 | 六亲 | 世应 | 旺衰 | 状态 | 伏神 | 神煞 |\n"
+                    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+                    "| 第1爻 | 勾陈 | 子 | 水 | 妻财 | — | 休 | 岁破,入墓 | — | 将星 |"
                 ),
+                "duanjue_text": (
+                    "[断诀命中]\n三层环境：太岁午(岁破子)　月建卯(月破酉)　日建辰(日破戌)\n"
+                    "日辰纳音：大林木(木)\n应期·用神值日(得信/应事)：酉[时/日]"
+                ),
+                "zhanlei_text": (
+                    "[占类断语]\n历史占例：汉高祖欲拜韩信为将卜得,知有王佐之才也\n"
+                    "断语·总断门第一·孙膑：孙膑总断歌"
+                ),
+                "data": {"doctrine_loaded": True, "settings_ignored": [], "settings_invalid": [], "warnings": []},
             }
         if tool_name == "tarot":
             # 塔罗：离线替身给引擎直出的 [牌阵综览]/[逐牌详解]/[综合断语]/[定局]，供 tarot 契约 round-trip。
@@ -1833,30 +1855,42 @@ def test_phase2_tools_attach_export_contracts(tmp_path) -> None:
 
 
 def test_sixyao_time_based_gua_varies_with_time_and_is_deterministic() -> None:
-    # 回归 #12: lines 空时曾写死返回 既济(101010)→益(100011)，与起卦时间无关。修复后按四柱干支 +
-    # 时辰以时起卦 (梅花易数)：不同时间不同卦、恰一动爻、同输入确定一致、不再是写死的既济→益。
-    from horosa_skill.service import _time_based_gua_lines, _derive_gua_code, _derive_changed_gua_code
+    # 回归 #12: lines 空时曾写死返回 既济(101010)→益(100011)，与起卦时间无关。以时起卦 = vendored 上游
+    # buildTimeGua（GuaZhanMain.js:74-98，年支序 + 农历月数 + 农历日数 + 时柱支序）：不同时间不同卦、恰一动爻、
+    # 同输入确定一致、不再是写死的既济→益。（sync311 wave 3：Python 手写式 _time_based_gua_lines 已删——它取
+    # 月/日地支序 + 钟表时辰，与上游起出不同的卦；本条改钉 JS 真函数，值级对拍见 test_sync311_divination_w3.py。）
+    import subprocess
+
+    from horosa_skill.service import _derive_changed_gua_code, _derive_gua_code
 
     cases = [
-        ({"yearGanZi": "癸卯", "monthGanZi": "甲子", "dayGanZi": "甲子"}, "00:00:00"),
-        ({"yearGanZi": "甲辰", "monthGanZi": "庚午", "dayGanZi": "庚戌"}, "06:30:00"),
-        ({"yearGanZi": "乙巳", "monthGanZi": "己卯", "dayGanZi": "戊子"}, "18:45:00"),
-        ({"yearGanZi": "丙午", "monthGanZi": "甲午", "dayGanZi": "壬戌"}, "12:52:00"),
-        ({"yearGanZi": "丙午", "monthGanZi": "庚子", "dayGanZi": "庚辰"}, "23:59:00"),
+        {"year": "癸卯", "monthInt": 11, "dayInt": 1, "time": "甲子"},
+        {"year": "甲辰", "monthInt": 5, "dayInt": 20, "time": "丁卯"},
+        {"year": "乙巳", "monthInt": 2, "dayInt": 3, "time": "辛酉"},
+        {"year": "丙午", "monthInt": 5, "dayInt": 9, "time": "丙午"},
+        {"year": "丙午", "monthInt": 11, "dayInt": 23, "time": "丙子"},
     ]
+    module = Path(__file__).resolve().parents[1] / "horosa-core-js" / "src" / "vendor" / "guazhan" / "GuaZhanMain.js"
+    script = (
+        "import(process.argv[1]).then((m) => { const cs = JSON.parse(process.argv[2]);"
+        " process.stdout.write(JSON.stringify(cs.map((n) => m.buildTimeGua(n).yao.map((y) => ({ value: y.value, change: y.change }))))); });"
+    )
+
+    def cast(items: list[dict]) -> list[list[dict]]:
+        out = subprocess.run(["node", "--input-type=module", "-e", script, str(module), json.dumps(items, ensure_ascii=False)],
+                             check=True, capture_output=True, text=True)
+        return json.loads(out.stdout)
+
     combos = set()
-    for nongli, t in cases:
-        lines = _time_based_gua_lines(nongli, {"time": t})
+    for lines in cast(cases):
         assert len(lines) == 6
         assert all(line["value"] in (0, 1) for line in lines)
         assert sum(1 for line in lines if line["change"]) == 1  # 以时起卦恰一个动爻
         combos.add((_derive_gua_code(lines), _derive_changed_gua_code(lines)))
     assert len(combos) >= 4, combos  # 不再固定单一卦象 (修复前为 1)
     assert ("101010", "100011") not in combos  # 写死的 既济→益 不再出现
-    n = {"yearGanZi": "丙午", "monthGanZi": "甲午", "dayGanZi": "壬戌"}
-    assert _derive_gua_code(_time_based_gua_lines(n, {"time": "12:52:00"})) == _derive_gua_code(
-        _time_based_gua_lines(n, {"time": "12:52:00"})
-    )
+    again = cast([cases[3], cases[3]])
+    assert _derive_gua_code(again[0]) == _derive_gua_code(again[1])
 
 
 @pytest.mark.parametrize("tool_name", ["chart", "guolao_chart"])

@@ -423,21 +423,18 @@
     ],
     "liuyao.js": [
       {
-        "callee": "analyzeLiuyao",
-        "module": "../vendor/gua/liuyaoFacade.js",
-        "line": 113,
-        "arg": 2,
-        "via_local": "ctx",
+        "callee": "buildLocalBaziResult",
+        "module": "../vendor/bazi/baziLunarLocal.js",
+        "line": 98,
+        "arg": 0,
         "keys": [
-          "dayGan",
-          "dayZhi",
-          "hourZhi",
-          "jieqiName",
-          "monthGan",
-          "monthNum",
-          "monthZhi",
-          "yearGan",
-          "yearZhi"
+          "after23NewDay",
+          "date",
+          "lateZiHourUseNextDay",
+          "lon",
+          "time",
+          "timeAlg",
+          "zone"
         ]
       }
     ],
@@ -664,7 +661,7 @@
       {
         "callee": "buildLocalBaziResult",
         "module": "../vendor/bazi/baziLunarLocal.js",
-        "line": 108,
+        "line": 115,
         "arg": 0,
         "via_local": "baziParams",
         "keys": [
@@ -681,7 +678,7 @@
       {
         "callee": "buildYizhangjingModel",
         "module": "../vendor/yizhangjing/yizhangjingReport.js",
-        "line": 115,
+        "line": 122,
         "arg": 1,
         "via_local": "opts",
         "keys": [
@@ -707,7 +704,7 @@
       {
         "callee": "calcXinyi",
         "module": "../vendor/zhengchuan/zhengchuanXinyiLocal.js",
-        "line": 51,
+        "line": 32,
         "arg": 0,
         "keys": [
           "gender",
@@ -722,7 +719,7 @@
       {
         "callee": "calcTieban",
         "module": "../vendor/zhengchuan/zhengchuanTiebanLocal.js",
-        "line": 71,
+        "line": 52,
         "arg": 0,
         "keys": [
           "askGz",
@@ -739,7 +736,7 @@
       {
         "callee": "calcShaozi",
         "module": "../vendor/zhengchuan/zhengchuanShaoziLocal.js",
-        "line": 74,
+        "line": 55,
         "arg": 0,
         "keys": [
           "fatherAge",
@@ -755,7 +752,7 @@
       {
         "callee": "calcLiuqin",
         "module": "../vendor/zhengchuan/zhengchuanLiuqinLocal.js",
-        "line": 79,
+        "line": 60,
         "arg": 0,
         "keys": [
           "askHourZhi",
@@ -773,7 +770,7 @@
       {
         "callee": "buildLocalBaziResult",
         "module": "../vendor/bazi/baziLunarLocal.js",
-        "line": 94,
+        "line": 80,
         "arg": 0,
         "keys": [
           "after23NewDay",
@@ -789,7 +786,7 @@
       {
         "callee": "dadingDeathYear",
         "module": "../vendor/zhengchuan/zhengchuanDadingLocal.js",
-        "line": 105,
+        "line": 91,
         "arg": 0,
         "via_local": "dInput",
         "keys": [

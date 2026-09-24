@@ -73,8 +73,15 @@ export function runYizhangjing(payload) {
     dayunStartAge: input.dayunStartAge === 'age1' ? 'age1' : 'mi',
     xiaoxianStart: input.xiaoxianStart === 'yue' ? 'yue' : 'ri',
     xiaoxianDir: input.xiaoxianDir === 'always' ? 'always' : 'chart',
-    // 逐年法：页面出厂 'xiaoxian'（B10 明训：小限/流年只用一套）；引擎见 '' 才两套并列。
-    annualMethod: input.annualMethod === 'liunian' ? 'liunian' : 'xiaoxian',
+    // 逐年法：只认 xiaoxian / liunian，未设 = ''（引擎两套并列）。sync311 wave 3 镜像上游 **AI 挂载无头路径**：
+    //   挂载缺省（用户未拨齿轮）走 buildTechniqueContext → regenerateChartTechniqueSnapshot（aiAnalysisContext.js:4297-4314,
+    //   4217-4224）→ buildYizhangjingSnapshotForRecord(record, { annualMethod: record.annualMethod, … })（:3249-3259）——
+    //   命盘记录不带该键 → undefined → yizhangjingReport.js:248 归 '' → :477-479 小限与流年十二神同出。
+    //   齿轮拨「小限」也一样：它等于挂载 schema 缺省 'xiaoxian'（techniqueMountSettings.js:1944），被
+    //   pruneOptionsToNonDefault（:2508-2555）剪掉 → 走同一条缺省路；只有拨「流年十二神」才下发。
+    // ⚠ 页面与无头不一致：桌面页（及 AI 导出读的页面模块快照，aiExport.js:6710-6712）按 KINASTRO_PAGE_SETTINGS
+    //   yizhangjingAnnual 出厂 'xiaoxian'（KinAstroMain.js:1046,3357-3365）只出小限。此处按无头路径。
+    annualMethod: input.annualMethod === 'liunian' || input.annualMethod === 'xiaoxian' ? input.annualMethod : '',
     flowShenSet: input.flowShenSet || 'A',
     zaoZiAdjust: !!input.zaoZiAdjust,
     chongfanKou: input.chongfanKou === 'beta' ? 'beta' : 'alpha',

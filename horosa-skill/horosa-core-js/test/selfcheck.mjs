@@ -441,22 +441,56 @@ check('huangli 2000-01-01：干支/农历/生肖 = 万年历公开事实', () =>
   assert(prev.includes('丁巳日') && !prev.includes('戊午日'), 'previous day must be 丁巳');
 });
 
-check('liuyao 乾为天静卦：乾宫本宫世六应三、六冲、纳甲六亲六神 = 京房纳甲/六亲生克/六神起例', () => {
+check('liuyao 乾为天静卦：乾宫本宫世六应三、六冲、纳甲六亲六神 = 京房纳甲/六亲生克/六神起例', async () => {
   // 权威：京房纳甲（乾内卦 子寅辰）+ 六亲生克（乾宫属金：水=子孙、木=妻财、土=父母、火=官鬼、金=兄弟）
   // + 六神起例（甲乙日青龙起初爻）+ 八宫卦序（乾为天=乾宫本宫卦，世六应三，六冲）。
+  // wave 3：[断卦结构] = vendored 上游 liuyaoStructLines，逐爻为 GFM 表（GuaZhanMain.js:168-181）。
   const nongli = { dayGanZi: '甲子', monthGanZi: '丙寅', yearGanZi: '甲辰' };
-  const text = runLiuyao({ lines: [1, 1, 1, 1, 1, 1].map((v) => ({ value: v, change: false })), nongli }).snapshot_text;
+  const text = (await runLiuyao({ lines: [1, 1, 1, 1, 1, 1].map((v) => ({ value: v, change: false })), nongli })).snapshot_text;
   assert(text.includes('卦序：乾宫·本宫(世6应3)'), 'palace / shi-ying');
   assert(text.includes('卦象：六冲卦'), 'liuchong');
-  const line = (n) => text.split('\n').find((l) => l.startsWith(`第${n}爻：`)) || '';
-  assert(line(1).includes('青龙 子水子孙'), `line1: ${line(1)}`);
-  assert(line(2).includes('朱雀 寅木妻财'), `line2: ${line(2)}`);
-  assert(line(3).includes('勾陈 辰土父母(应)'), `line3: ${line(3)}`);
-  assert(line(4).includes('螣蛇 午火官鬼'), `line4: ${line(4)}`);
-  assert(line(5).includes('白虎 申金兄弟'), `line5: ${line(5)}`);
+  const row = (n) => text.split('\n').find((l) => l.startsWith(`| 第${n}爻 |`)) || '';
+  assert(row(1).startsWith('| 第1爻 | 青龙 | 子 | 水 | 子孙 |'), `row1: ${row(1)}`);
+  assert(row(2).startsWith('| 第2爻 | 朱雀 | 寅 | 木 | 妻财 |'), `row2: ${row(2)}`);
+  assert(row(3).startsWith('| 第3爻 | 勾陈 | 辰 | 土 | 父母 | 应 |'), `row3: ${row(3)}`);
+  assert(row(4).startsWith('| 第4爻 | 螣蛇 | 午 | 火 | 官鬼 |'), `row4: ${row(4)}`);
+  assert(row(5).startsWith('| 第5爻 | 白虎 | 申 | 金 | 兄弟 |'), `row5: ${row(5)}`);
   // 负向对照：初爻动 → 成局/动变段出现（静卦没有）
-  const moving = runLiuyao({ lines: [1, 1, 1, 1, 1, 1].map((v, i) => ({ value: v, change: i === 0 })), nongli }).snapshot_text;
+  const moving = (await runLiuyao({ lines: [1, 1, 1, 1, 1, 1].map((v, i) => ({ value: v, change: i === 0 })), nongli })).snapshot_text;
   assert(moving.includes('成局：') && !text.includes('成局：'), 'moving line changes the structure section');
+});
+
+// sync311 wave 3 值级金标：以时起卦 = vendored 上游 buildTimeGua（GuaZhanMain.js:74-98：上卦 (年支序+农历月数+农历日数)%8、
+// 下卦 +时柱支序、动爻 %6，Gua8 先天序）。权威：把上游文件里 buildTimeGua 的源码原样切出在 Node 里跑（2026-09-24）：
+// 丙午年 八月(8) 十四(14) 甲午时 → 风雷益、上爻动；同日癸巳时 → 风火家人、五爻动。负向对照：旧 Python 手写式
+// 取月/日**地支序** + 钟表时辰（年午7+月酉10+日丑2=19、巳6）→ 火天大有、初爻动。
+check('liuyao 以时起卦 = 上游 buildTimeGua（农历月日数 + 时柱支序）', async () => {
+  const base = { year: '丙午', yearJieqi: '丙午', monthGanZi: '丁酉', dayGanZi: '辛丑', monthInt: 8, dayInt: 14 };
+  const cast = async (time) => runLiuyao({ nongli: { ...base, time } });
+  const a = await cast('甲午');
+  assert(a.time_cast === true && a.current_gua.name === '风雷益', `甲午时: ${JSON.stringify(a.current_gua)}`);
+  assert(JSON.stringify(a.lines.map((y) => `${y.value}${y.change ? '*' : ''}`)) === JSON.stringify(['1', '0', '0', '0', '1', '1*']), `甲午 lines: ${JSON.stringify(a.lines)}`);
+  assert(a.lines[2].name === '辰土妻财世' && a.lines[0].god === null, '爻名取 Gua64.yaoname、无六神（上游无头卦无 god）');
+  const b = await cast('癸巳');
+  assert(b.current_gua.name === '风火家人' && b.lines.findIndex((y) => y.change) === 4, `癸巳时: ${JSON.stringify(b.current_gua)}`);
+});
+
+// [断诀命中]/[占类断语] = vendored liuyaoSnapshotEx（buildGuaSnapshotText:381-388）；[占类断语] 的「断语·占类门」行
+// 证明断语库先载入（ensureLiuyaoDoctrineLoaded :1735-1737）。权威：vendored 上游引擎对同一卦的输出（段首行逐字）。
+// 负向对照：旧 liuyao.js 不产这两段（duanjue_text/zhanlei_text 未定义）；不 await loadDoctrine 则断语行缺席。
+check('liuyao [断诀命中]/[占类断语] 由上游 liuyaoSnapshotEx 产出、断语库已载入', async () => {
+  const nongli = { year: '丙午', yearJieqi: '丙午', monthGanZi: '丁酉', dayGanZi: '辛丑', monthInt: 8, dayInt: 14, time: '甲午' };
+  const r = await runLiuyao({ nongli });
+  const dj = (r.duanjue_text || '').split('\n');
+  assert(dj[0] === '[断诀命中]' && dj[1] === '三层环境：太岁午(岁破子)　月建酉(月破卯)　日建丑(日破未)', `断诀首行: ${dj.slice(0, 2)}`);
+  assert(dj.includes('世应关系：世3(妻财辰)应克世应6(兄弟卯)·彼制我、受制难谋'), '世应关系行');
+  const zl = (r.zhanlei_text || '').split('\n');
+  assert(zl[0] === '[占类断语]' && zl[1] === '历史占例：冉伯牛有疾卜得,乃知谩师之过也', `占类首行: ${zl.slice(0, 2)}`);
+  assert(zl.includes('断语·总断门第一·孙膑：孙膑总断歌') && r.data.doctrine_loaded === true, '断语库未载入');
+  // 六键（旧版回执为 unsurfaced 死键）现改输出：世身 / 古法十六变。
+  const tuned = await runLiuyao({ nongli, liuyaoSettings: { shishen: 'standard', gufa: 1 } });
+  assert((tuned.duanjue_text || '').split('\n').some((l) => l.startsWith('世身：第')) && !dj.some((l) => l.startsWith('世身：')), 'shishen 未生效');
+  assert((tuned.zhanlei_text || '').split('\n').some((l) => l.startsWith('十六变：第')), 'gufa 未生效');
 });
 
 check('tarot 种子洗牌确定性：同种子同牌阵逐牌相同、换种子必变', () => {
@@ -535,6 +569,18 @@ check('zhengchuan 大定男女分行，性别不再被 NaN 吃掉', async () => 
     `男女须分行，实得同一行：${yunLine(male)}`);
   // 数字形式与中文形式必须等价（'女' 与 0 同盘）。
   assert(yunLine(await textOf(0)) === yunLine(female), '性别 0 应与 “女” 同盘');
+});
+
+// sync311 wave 3：大定推运表与四柱同一时间算法。上游一次 buildLocalBaziResult 同出四柱与推运表
+// （aiAnalysisContext.buildChartShusuanBazi:1948-1979；无头 timeAlg = record.timeAlg ?? 0，buildFieldObject:603）。
+// 1998-02-20 11:05 +08:00 121e28：真太阳时 10:57 → 时柱丁巳（后端 /nongli/time 缺省同为丁巳），2030 小运庚寅；
+// 钟表时 → 戊午、小运辛卯。负向对照：旧缺省 timeAlg=1 → 四柱丁巳而小运按戊午推 = 辛卯。
+check('zhengchuan 大定推运表缺省按真太阳时，与四柱同口径', async () => {
+  const base = { school: 'dading', pillars: ['戊寅', '甲寅', '戊戌', '丁巳'], date: '1998-02-20', time: '11:05:00',
+    zone: '+08:00', lon: '121e28', gender: 1, lunarMonth: 1, lunarDay: 24, dadingYear: 2030 };
+  const yun = async (extra) => ((await runZhengChuan({ ...base, ...extra })).snapshot_text || '').split('\n').find((l) => l.includes('大运／小运／岁君')) || '';
+  assert(await yun({}) === '| 大运／小运／岁君 | 丁巳 ／ 庚寅 ／ 庚戌 |', `缺省: ${await yun({})}`);
+  assert(await yun({ timeAlg: 1 }) === '| 大运／小运／岁君 | 丁巳 ／ 辛卯 ／ 庚戌 |', `钟表时: ${await yun({ timeAlg: 1 })}`);
 });
 
 check('baziGeju 分野口径真的进五行力量 + 缺柱不再无声', async () => {

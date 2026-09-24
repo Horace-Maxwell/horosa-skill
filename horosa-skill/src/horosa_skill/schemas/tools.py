@@ -827,7 +827,8 @@ class YizhangjingInput(FlexibleModel):
     # 排盘选项 = 上游 KinAstroMain.buildYizhangjingOpts 同键，缺省 = KINASTRO_PAGE_SETTINGS 出厂档
     # （「秘传口诀」预设，KinAstroMain.js:1039-1056）：定月法 lunar 农历月 / jieqi 节气月；顺逆 yangNanYinNv /
     # menShunNvNi；命宫 shiShang / shuZhiMao；大限一宫 7 或 10 年；大限起法 mi / age1；小限起宫 ri / yue；
-    # 小限顺逆 chart 随盘 / always 一律顺行；逐年法 xiaoxian 小限（出厂）/ liunian 流年十二神；流年十二神组
+    # 小限顺逆 chart 随盘 / always 一律顺行；逐年法 xiaoxian 小限 / liunian 流年十二神 / 未设=两法并列（上游 AI
+    # 挂载无头重算缺省，见 tools/yizhangjing.js 注；桌面页出厂为小限）；流年十二神组
     # A/B/C；早子时；重犯口诀组 alpha / beta；星名系统 A/B/C；六道术语 gui / edao；童限显示；
     # 神煞合参层（出厂关，开则多出 [神煞合参] 段）。
     dingYue: str | None = "lunar"
@@ -837,7 +838,7 @@ class YizhangjingInput(FlexibleModel):
     dayunStartAge: str | None = "mi"
     xiaoxianStart: str | None = "ri"
     xiaoxianDir: str | None = Field(default="chart", description="小限 chart随盘/always顺行")
-    annualMethod: str | None = Field(default="xiaoxian", description="逐年法 xiaoxian/liunian")
+    annualMethod: str | None = Field(default=None, description="逐年法 xiaoxian/liunian")
     flowShenSet: str | None = "A"
     zaoZiAdjust: bool | None = False
     chongfanKou: str | None = "alpha"

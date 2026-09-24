@@ -3976,58 +3976,23 @@ def _derive_changed_gua_code(lines: list[dict[str, Any]]) -> str:
     return "".join(chars) or "000000"
 
 
-# 以时起卦 (梅花易数): lines 未提供时按四柱干支 + 时辰确定性生成六爻，不同起卦时间 → 不同卦象。
+def _gua_code_lines(gua_code: Any, changed_code: Any) -> list[dict[str, Any]]:
+    """给了本卦码（/变卦码）却没给 lines：卦线即码（初→上，1=阳），动爻 = 两码相异之位（_derive_changed_gua_code 的逆）。
+    否则会落到以时起卦 —— [卦象] 写的是用户的本卦，[断卦结构]/[断诀命中] 判的却是另一卦。"""
+    code = str(gua_code or "")
+    if len(code) != 6 or set(code) - {"0", "1"}:
+        return []
+    changed = str(changed_code or "")
+    moving = [len(changed) == 6 and changed[i] != code[i] for i in range(6)]
+    return [{"value": int(code[i]), "change": moving[i], "god": None, "name": None} for i in range(6)]
+
+
+# 十二地支序（子1…亥12 取 index+1）：时支类技法共用。
+# 六爻「以时起卦」不在 Python 侧：上游无头路径是 buildTimeGua(nongli)（GuaZhanMain.js:74-98：nongli.year 年支序
+# ——后端该键是农历年干支，立春至正月初一之间与 yearJieqi 不同 —— + 农历月数 monthInt + 农历日数 dayInt + 时柱支序），
+# vendored 在 core-js，由 tools/liuyao.js 调用。此处曾手写一份「立春年支 + 月/日取地支序 + 钟表时辰」的变体，同一时刻
+# 与上游起出不同的卦（sync311 wave 3 删）。
 _SIXYAO_DIZHI = "子丑寅卯辰巳午未申酉戌亥"
-# 先天八卦数 → 自下而上三爻 (1=阳 0=阴): 乾1 兑2 离3 震4 巽5 坎6 艮7 坤8。
-_SIXYAO_TRIGRAM = {1: (1, 1, 1), 2: (1, 1, 0), 3: (1, 0, 1), 4: (1, 0, 0),
-                   5: (0, 1, 1), 6: (0, 1, 0), 7: (0, 0, 1), 8: (0, 0, 0)}
-_SIXYAO_GODS = ("青龙", "朱雀", "勾陈", "腾蛇", "白虎", "玄武")
-_SIXYAO_NAMES = ("初爻", "二爻", "三爻", "四爻", "五爻", "上爻")
-# 日干起六神: 甲乙→青龙起, 丙丁→朱雀, 戊→勾陈, 己→腾蛇, 庚辛→白虎, 壬癸→玄武 (从初爻起，循环)。
-_SIXYAO_GOD_START = {"甲": 0, "乙": 0, "丙": 1, "丁": 1, "戊": 2, "己": 3, "庚": 4, "辛": 4, "壬": 5, "癸": 5}
-
-
-def _gz_zhi_index(gz: Any) -> int:
-    """从干支字符串取地支序 (子1…亥12)；取不到返回 0。"""
-    for ch in reversed(str(gz or "")):
-        idx = _SIXYAO_DIZHI.find(ch)
-        if idx >= 0:
-            return idx + 1
-    return 0
-
-
-def _hour_zhi_index(time_str: Any) -> int:
-    """从 HH:MM 取时辰地支序 (子1…亥12)；23/0 点皆子时。"""
-    try:
-        hour = int(str(time_str or "0").split(":")[0]) % 24
-    except (ValueError, IndexError):
-        hour = 0
-    return ((hour + 1) // 2) % 12 + 1
-
-
-def _time_based_gua_lines(nongli: dict[str, Any], payload: dict[str, Any]) -> list[dict[str, Any]]:
-    """以时起卦: 上卦=(年支+月支+日支)%8，下卦=+时支后%8，动爻=同式%6 (余0取末)。
-    卦码 = 下卦三爻(初二三) + 上卦三爻(四五上)。六神按日干起。"""
-    base = (
-        _gz_zhi_index(nongli.get("yearGanZi") or nongli.get("yearJieqi") or nongli.get("year"))
-        + _gz_zhi_index(nongli.get("monthGanZi"))
-        + _gz_zhi_index(nongli.get("dayGanZi"))
-    )
-    hour_zhi = _hour_zhi_index(payload.get("time") or nongli.get("time"))
-    upper = base % 8 or 8
-    lower = (base + hour_zhi) % 8 or 8
-    moving = (base + hour_zhi) % 6 or 6
-    yao = list(_SIXYAO_TRIGRAM[lower]) + list(_SIXYAO_TRIGRAM[upper])
-    god0 = _SIXYAO_GOD_START.get(str(nongli.get("dayGanZi") or "")[:1], 0)
-    return [
-        {
-            "value": yao[idx],
-            "change": (idx + 1) == moving,
-            "god": _SIXYAO_GODS[(god0 + idx) % 6],
-            "name": _SIXYAO_NAMES[idx],
-        }
-        for idx in range(6)
-    ]
 
 
 def _extract_gua_detail(raw: Any, code: str) -> dict[str, Any]:
@@ -5704,9 +5669,13 @@ _GEOMANCY_OPTION_KEYS = (
     "housePlacement", "planetaryChart", "planetaryChartZodiac", "planetaryChartNodes", "planetaryChartExtras",
 )
 # 问类 = 后端 _QTYPES 十一类（webgeomancysrv.py:42-46）；其它值后端静默改回 custom（:379-381）→ 这里显式拒。
-_GEOMANCY_QUESTION_TYPES = (
-    "custom", "life", "health", "wealth", "marriage", "career", "children", "journey", "religion", "enemy", "death",
-)
+# 值 = 问类预设所问宫：上游 GeomancyMain.QUESTION_TYPE_HOUSE（:204-208，注「与引擎 question_house 表同源」，
+# 即内核 data/house_meanings.json question_house）；两边逐值对拍见 tests/test_sync311_divination_w3.py。
+_GEOMANCY_QUESTION_HOUSE = {
+    "custom": 1, "life": 1, "health": 6, "wealth": 2, "marriage": 7, "career": 10, "children": 5, "journey": 9,
+    "religion": 9, "enemy": 7, "death": 8,
+}
+_GEOMANCY_QUESTION_TYPES = tuple(_GEOMANCY_QUESTION_HOUSE)
 
 
 def _geomancy_time_seed(parts: dict[str, int]) -> int:
@@ -5920,7 +5889,7 @@ def _build_geomancy_snapshot_text(response: dict[str, Any]) -> str:
     return _render_snapshot_text(sections)
 
 
-def _build_sixyao_snapshot_text(payload: dict[str, Any], nongli: dict[str, Any], current_code: str, changed_code: str, lines: list[dict[str, Any]], descs: dict[str, Any], struct_text: str = "") -> str:
+def _build_sixyao_snapshot_text(payload: dict[str, Any], nongli: dict[str, Any], current_code: str, changed_code: str, lines: list[dict[str, Any]], descs: dict[str, Any], struct_text: str = "", tail_blocks: list[str] | None = None) -> str:
     question = payload.get("question")
     current_desc = _extract_gua_detail(descs, current_code)
     changed_desc = _extract_gua_detail(descs, changed_code)
@@ -5968,7 +5937,16 @@ def _build_sixyao_snapshot_text(payload: dict[str, Any], nongli: dict[str, Any],
     if struct_body:
         sections.append(("断卦结构", struct_body))
     sections.append(("卦辞与断语", "\n".join(judge_lines).strip() or "无"))
-    return _render_snapshot_text(sections)
+    text = _render_snapshot_text(sections)
+    # [断诀命中]/[占类断语]：vendored liuyaoSnapshotEx 产的整段（含段头）原样接在末尾 —— 上游
+    # buildGuaSnapshotText:381-388 同样置于 [卦辞与断语]（及默认关的 [判语库·参考诀表]）之后、段间一空行。
+    # 不经 _render_snapshot_text：它会给空正文补缺席说明，而上游段头下可以只有段头；也不 strip 行内空白
+    # （断语摘要行是 70 字截断，截点落在空格上时行尾那个空格就是上游字节）。
+    for block in tail_blocks or []:
+        body = (block or "").strip("\n")
+        if body.strip():
+            text = f"{text}\n\n{body}"
+    return text
 
 
 def _join_lines(lines: list[Any]) -> str:
@@ -11662,6 +11640,12 @@ class HorosaSkillService:
             request.update(_zhengchuan_xinyi_query(payload))
         else:
             _require_cast_geo(payload, tool="zhengchuan")
+            # 时间算法一处定、两处用：四柱（/nongli/time）与大定推运表（JS buildLocalBaziResult）必须同口径 ——
+            # 上游两路都是一次 buildLocalBaziResult 同出四柱与推运表（aiAnalysisContext.buildChartShusuanBazi:1948-1979，
+            # 无头缺省 timeAlg = record.timeAlg ?? 0 真太阳时，buildFieldObject:603）。此前四柱走后端缺省 0、推运表走
+            # JS 缺省 1，真太阳时跨时辰的生辰两边时柱不同（sync311 wave 3）。
+            time_alg = payload.get("timeAlg")
+            time_alg = 0 if time_alg is None else time_alg
             nongli = self._call_remote(
                 "/nongli/time",
                 {
@@ -11670,7 +11654,7 @@ class HorosaSkillService:
                     "zone": payload.get("zone"),
                     "lon": payload.get("lon"),
                     "lat": payload.get("lat"),
-                    "timeAlg": payload.get("timeAlg"),
+                    "timeAlg": time_alg,
                     **_day_boundary_switches(payload),
                 },
             )
@@ -11701,10 +11685,11 @@ class HorosaSkillService:
                 if payload.get(key) is not None:
                     request[key] = payload[key]
             if school == "dading":
-                # dading 的 JS 端需 birth params 建 bazi 推运表（小运/大运/岁君·年粒度）。
-                for key in ("date", "time", "zone", "lon", "timeAlg", "after23NewDay", "lateZiHourUseNextDay"):
+                # dading 的 JS 端需 birth params 建 bazi 推运表（小运/大运/岁君·年粒度）；timeAlg 与四柱同值。
+                for key in ("date", "time", "zone", "lon", "after23NewDay", "lateZiHourUseNextDay"):
                     if payload.get(key) is not None:
                         request[key] = payload[key]
+                request["timeAlg"] = time_alg
         js_result = self.js_client.run("zhengchuan", request)
         data = js_result.get("data", {})
         if isinstance(data, dict) and data.get("ok") is False:
@@ -15048,9 +15033,21 @@ class HorosaSkillService:
                 request[key] = payload[key]
         if payload.get("ad") == -1:
             request["ad"] = -1
-        for key in ("zodiacSystem", "readingScope", "quesitedHouse", "turnTo"):
-            if payload.get(key) is not None:
-                request[key] = payload[key]
+        # 🔴 sync311 wave 3：所问宫 / 读取范围 / 黄道体系**恒发**，与上游两路同形 —— 页面 clickCast
+        # （GeomancyMain.js:1150-1158）与 AI 挂载复算 buildGeomancySnapshotForFields（:808-817）都是
+        # quesitedHouse = Number(所问宫) || QUESTION_TYPE_HOUSE[问类] || 1、readingScope || 'L3'、zodiacSystem ||
+        # 'classical'，且换流派不动后两项（changeGeomancyOpt:1437-1444 只清 granular）。此前 skill 未给即不发 →
+        # 内核按流派 profile 回落（chart.py:120-121）：european_planetary 走行星黄道、arabic_raml 只读到 L2 ——
+        # 同一问占与上游起出两样的判读。
+        try:
+            quesited = int(payload.get("quesitedHouse") or 0)
+        except (TypeError, ValueError):
+            quesited = 0
+        request["quesitedHouse"] = quesited or _GEOMANCY_QUESTION_HOUSE.get(question_type, 1)
+        request["readingScope"] = payload.get("readingScope") or "L3"
+        request["zodiacSystem"] = payload.get("zodiacSystem") or "classical"
+        if payload.get("turnTo") is not None:
+            request["turnTo"] = payload["turnTo"]
         # 传本粒度覆盖 passthrough（白名单；chartMode='ifa' 已在上方拦下，此处不会透传）。
         for key in _GEOMANCY_OPTION_KEYS:
             if options.get(key) is not None:
@@ -15130,46 +15127,66 @@ class HorosaSkillService:
         # 日界/晚子时两开关与上游同带（genParams 带 defaultAfter23NewDay/defaultLateZiHourUseNextDay）：
         # 仅显式给定时发送，缺省走后端默认 1/1 = 星阙出厂全局默认，字节与此前相同。
         time_alg = payload.get("timeAlg")
-        nongli = self._call_remote(
-            "/nongli/time",
-            {
-                "date": payload["date"],
-                "time": payload["time"],
-                "zone": payload["zone"],
-                "lon": payload["lon"],
-                "lat": payload["lat"],
-                "gpsLat": payload.get("gpsLat"),
-                "gpsLon": payload.get("gpsLon"),
-                "timeAlg": time_alg if time_alg is not None else 0,
-                **_day_boundary_switches(payload),
-                "ad": payload.get("ad", 1),
-            },
-        )
-        lines = _normalize_gua_lines(payload.get("lines"))
-        if not lines:
-            # 未手动摇卦 (lines 空) → 以时起卦，按四柱干支 + 时辰确定性生成 (不同时间不同卦)。
-            lines = _time_based_gua_lines(nongli, payload)
-        current_code = payload.get("gua_code") or _derive_gua_code(lines)
-        changed_code = payload.get("changed_code") or _derive_changed_gua_code(lines)
-        descs = self._call_remote("/gua/desc", {"name": [current_code, changed_code]})
-        # 断卦结构（六爻全流派 analyzeLiuyao 引擎，core-js）：纳甲/世应/六亲/用神/旺衰/飞伏/六神/动变。
-        # 判读口径 liuyaoSettings = 上游挂载齿轮 24 键（扁平形），JS 侧按上游 mergeLiuyaoGearSettings
-        # 合并（选流派即套该派细项）。优雅降级：无 node / 引擎失败 → struct_text 空 → 快照不出
-        # [断卦结构] 段（列 optional，不误报 missing），但降级本身进 envelope.warnings，不静默。
-        struct_text = ""
-        struct_data: dict[str, Any] = {}
+        nongli_request = {
+            "date": payload["date"],
+            "time": payload["time"],
+            "zone": payload["zone"],
+            "lon": payload["lon"],
+            "lat": payload["lat"],
+            "gpsLat": payload.get("gpsLat"),
+            "gpsLon": payload.get("gpsLon"),
+            "timeAlg": time_alg if time_alg is not None else 0,
+            **_day_boundary_switches(payload),
+            "ad": payload.get("ad", 1),
+        }
+        nongli = self._call_remote("/nongli/time", nongli_request)
+        lines = _normalize_gua_lines(payload.get("lines")) or _gua_code_lines(payload.get("gua_code"), payload.get("changed_code"))
+        # 六爻层（core-js tools/liuyao.js）= 上游 AI 挂载无头路径 regenerateSixyaoSnapshot
+        # （aiAnalysisContext.js:1739-1760）：未手动摇卦（lines 空）→ vendored buildTimeGua(nongli) 以时起卦
+        # （年支序 + 农历月数 + 农历日数 + 时柱支序，时柱随 timeAlg）；齿轮 liuyaoSettings（上游 24 键扁平形）按
+        # mergeLiuyaoGearSettings 合并；先载《断易天机》断语库，再由 vendored liuyaoStructLines / liuyaoSnapshotEx
+        # 产 [断卦结构] / [断诀命中] / [占类断语]。nongliParams 供 JS 按上游 ensureYearGZByLunar 补正月初一口径年干支。
+        struct: dict[str, Any] = {}
         liuyao_settings = payload.get("liuyaoSettings")
-        js_request: dict[str, Any] = {"lines": lines, "nongli": nongli}
+        js_request: dict[str, Any] = {"nongli": nongli, "nongliParams": nongli_request}
+        if lines:
+            js_request["lines"] = lines
         if isinstance(liuyao_settings, dict):
             js_request["liuyaoSettings"] = liuyao_settings
         try:
             struct = self.js_client.run("liuyao", js_request)
-            struct_text = struct.get("snapshot_text") or ""
-            struct_data = struct.get("data") if isinstance(struct.get("data"), dict) else {}
         except ToolTransportError as exc:
+            if not lines:
+                # 以时起卦只在 vendored 上游函数里：引擎起不来就起不出卦。结构化报错，绝不回落一份自写的起卦式。
+                raise ToolTransportError(
+                    bilingual(
+                        "六爻以时起卦失败：起卦引擎（core-js buildTimeGua）不可用。可改为手动摇卦传 lines，或先体检 JS 运行时。",
+                        "sixyao time-cast failed: the core-js buildTimeGua engine is unavailable. Pass explicit lines, or check the JS runtime.",
+                    ),
+                    code="tool.sixyao_time_cast_failed",
+                    details={"reason": str(exc)},
+                ) from exc
+            # 手动摇卦：卦由 lines 定，判读三段优雅缺席（列 optional，不误报 missing），降级进 envelope.warnings。
             _degrade("liuyao struct engine failed: %s", exc)
-            struct_text = ""
-        snapshot_text = _build_sixyao_snapshot_text(payload, nongli, current_code, changed_code, lines, descs, struct_text)
+        struct_data = struct.get("data") if isinstance(struct.get("data"), dict) else {}
+        if not lines:
+            lines = _normalize_gua_lines(struct.get("lines"))
+            if len(lines) != 6:
+                raise ToolValidationError(
+                    bilingual(
+                        "六爻以时起卦失败：/nongli/time 缺年支/时柱/农历月日（buildTimeGua 取 year/time/monthInt/dayInt）。",
+                        "sixyao time-cast failed: /nongli/time lacks year/time/monthInt/dayInt needed by buildTimeGua.",
+                    ),
+                    code="tool.sixyao_time_cast_failed",
+                    details={"nongli_keys": sorted(nongli) if isinstance(nongli, dict) else []},
+                )
+        current_code = payload.get("gua_code") or _derive_gua_code(lines)
+        changed_code = payload.get("changed_code") or _derive_changed_gua_code(lines)
+        descs = self._call_remote("/gua/desc", {"name": [current_code, changed_code]})
+        snapshot_text = _build_sixyao_snapshot_text(
+            payload, nongli, current_code, changed_code, lines, descs, struct.get("snapshot_text") or "",
+            tail_blocks=[struct.get("duanjue_text") or "", struct.get("zhanlei_text") or ""],
+        )
         result = {
             "nongli": nongli,
             "current_code": current_code,
@@ -15191,11 +15208,10 @@ class HorosaSkillService:
             warnings.append(
                 f"liuyaoSettings 取值不在词表内，已按缺省处理：{struct_data['settings_invalid']}。"
             )
-        if struct_data.get("settings_unsurfaced"):
-            warnings.append(
-                f"liuyaoSettings 的 {struct_data['settings_unsurfaced']} 只改上游 [断诀命中]/[占类断语] 两段，"
-                "本工具尚不产这两段，故这些键不改变本次输出。"
-            )
+        # JS 层自报的缺损（断语库未载入 / 正月初一口径年干支补不出）：上游同样不阻断快照，这里如实回执。
+        for note in struct_data.get("warnings") or []:
+            if isinstance(note, str) and note and note not in warnings:
+                warnings.append(note)
         if warnings:
             result["_warnings"] = warnings
         result["export_snapshot"] = self._augment_export_payload(technique="sixyao", snapshot_text=snapshot_text)
