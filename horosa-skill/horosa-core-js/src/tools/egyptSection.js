@@ -1,6 +1,6 @@
 import { SIGNS } from '../vendor/divination/data/signs.js';
 import { TAROT_SUIT_CN, TAROT_SUIT_ELEMENT, SOTHIC_CYCLE_YEARS } from '../vendor/divination/data/egyptianData.js';
-import { deriveEgyptView, egyptSchoolFromFields, EGYPT_SCHOOL_AXES, EGYPT_RECORD_KEY_PREFIX } from '../vendor/divination/data/egyptianSchools.js';
+import { deriveEgyptView, egyptSchoolFromFields, EGYPT_SCHOOL_AXES, EGYPT_RECORD_KEY_PREFIX, EGYPT_DECAN_NAMINGS, EGYPT_DECAN_NAMING_DEFAULT } from '../vendor/divination/data/egyptianSchools.js';
 
 /**
  * [埃及历] 一段：各点落旬 / 上升旬详情 / 埃及民用历 + Sothic 周期。
@@ -30,12 +30,15 @@ export function buildEgyptSectionLines(chartObj, school){
 	if(!v.isDefault){
 		lines.push(`◆ 所用口径：${v.diff.map((d) => `${d.label}=${d.valueLabel}`).join('；')}`);
 	}
-	// ◆ 各行星落旬:逐点 旬序/旬位/埃及名/面主 + 旬星塔罗(与 renderDecanRing/renderTarot 本盘列同源同算)
+	// ◆ 各行星落旬:逐点 旬序/旬位/主显名/面主 + 旬星塔罗(与 renderDecanRing/renderTarot 本盘列同源同算)
+	// [Q-540/T-502] 主显名标签随「旬名传统」档:埃及本名/科普特-希腊名/赫尔墨斯名(此前恒标「埃及名」,选后两档时标签错)。
+	const namingLabel = ((EGYPT_DECAN_NAMINGS[v.school && v.school.decanNaming] || EGYPT_DECAN_NAMINGS[EGYPT_DECAN_NAMING_DEFAULT]) || {}).label || '埃及本名';
+	const nameTag = namingLabel === '埃及本名' ? '埃及名' : namingLabel;
 	lines.push('◆ 各行星落旬');
 	v.points.forEach((p) => {
 		const d = p.decan;
 		if(!d) return;
-		lines.push(`${POINT_CN[p.id] || p.id}：第${d.number}旬 ${sn(d.signId)}${d.decanInSign}(${d.range})·埃及名 ${d.primaryName}·面主${POINT_CN[d.ruler] || d.ruler}·塔罗${TAROT_SUIT_CN[d.tarotSuit]}${d.tarotPip}「${d.tarotTitle}」`);
+		lines.push(`${POINT_CN[p.id] || p.id}：第${d.number}旬 ${sn(d.signId)}${d.decanInSign}(${d.range})·${nameTag} ${d.primaryName}·面主${POINT_CN[d.ruler] || d.ruler}·塔罗${TAROT_SUIT_CN[d.tarotSuit]}${d.tarotPip}「${d.tarotTitle}」`);
 	});
 	// ◆ 上升旬详情:上升所落旬完整派生(跨流派旬名/原位序/星认定/塔罗含义/护符 melothesia),
 	// 与页首「当前上升旬」卡 + 名录/护符高亮行同源(deriveEgyptView 单一真值源)。

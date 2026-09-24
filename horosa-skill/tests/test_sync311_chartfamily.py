@@ -327,8 +327,9 @@ def test_exact_aspects_are_written_as_zhenghe_not_separating() -> None:
     """astroAiSnapshot.js:719-722：Exact 相态单列「正合」（此前与 Separative 同折「离相」）。基线夹具 日 Exact 木 120° orb 0.01。"""
     chart_obj = json.loads(FIXTURE.read_text(encoding="utf-8"))
     aspects = _sections(_build_astro_snapshot_text({}, chart_obj))["相位"]
-    exact = [line for line in aspects if line.startswith("120˚ 木") and "误差0.01" in line]
-    assert exact and all(" 正合 误差" in line for line in exact), exact
+    # v2 表化（astroAiSnapshot.js:707-727 ◆标准相位 GFM 表：主体|相位|对象|相态|误差）。
+    exact = [line for line in aspects if line.startswith("| ") and "| 120˚ | 木 " in line and line.endswith("| 0.01 |")]
+    assert exact and all("| 正合 | 0.01 |" in line for line in exact), exact
 
 
 # ─────────────────────────── 恒星轨（aiExport.js:6742）───────────────────────────
@@ -470,15 +471,16 @@ def test_relative_comp_mode_embeds_both_full_charts_headerless() -> None:
         for sub in ("· 星与虚点", "· 相位", "· 主宰星链", "· 分宫制宫神星表"):
             assert sub in body, (title, sub)
         assert not [line for line in body if re.fullmatch(r"\[.+\]", line)]   # 无整行段头（否则会被切成顶层段）
-    # 比较盘的 inner/outer 不再冒充「影响图盘」
-    assert secs["影响图盘-星盘A"][0].startswith("本次本地计算结果未返回")
+    # 比较盘的 inner/outer 不再冒充「影响图盘」；影响图盘只属影响盘/马克斯盘页签（AstroRelative.js:194-205），比较盘不出该段。
+    assert "影响图盘-星盘A" not in secs and "影响图盘-星盘B" not in secs
 
 
 def test_relative_synastry_mode_keeps_influence_charts_and_no_comp_sections() -> None:
     response = {"inner": _party_chart("2028-04-06 09:33:00"), "outer": _party_chart("1992-03-02 08:18:00")}
     secs = _sections(_build_relative_snapshot_text(_relative_payload(2), response))
     assert "比较盘-星盘A" not in secs and "比较盘-星盘B" not in secs
-    assert secs["影响图盘-星盘A"][0] == "起盘信息："
+    # 影响盘两盘 = buildAstroSnapshotContent(res.inner, null, {headerless:true}) 全口径（AstroRelative.js:199/204），不再是旧的缩略行式。
+    assert secs["影响图盘-星盘A"][0] == "· 起盘信息"
 
 
 class _RelativeCompClient(FakeClient):

@@ -183,5 +183,11 @@ def western_options_doc(tool_name: str) -> dict[str, str]:
         if tool_name == "chart":
             for name in _EMINENCE_KEYS:
                 doc[name] = str(BirthInput.model_fields[name].description)
+        # wave 3b：本命四盘的严格接纳缺省 0（BirthInput 字段不进 tools/list 广告层，说明只在这里出；日界两键是各家族模型的
+        # ADVERTISE_HIDDEN 字段，上面的隐藏旋钮循环已自动带出）。service 侧消费点：`_apply_chart_request_defaults` / `_chart_family_snapshot_fields`。
+        from horosa_skill.service import _STRONG_RECEPTION_DEFAULT_TOOLS
+
+        if tool_name in _STRONG_RECEPTION_DEFAULT_TOOLS:
+            doc["strongRecption"] = str(BirthInput.model_fields["strongRecption"].description)
     doc.update(_static_doc(tool_name))
     return doc

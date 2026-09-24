@@ -39,6 +39,10 @@ export const LIFEMASTERDEG74 = 'LifeMasterDeg74';
 // DEFAULT_OBJECTS（models/app.js:201 planetDisplay 缺省）与 isTraditionPlanet —— 逐值抽自上游
 // constants/AstroConst.js:41/80-82（id）与 :618-639（两张表 + 判定函数，函数体逐字）。
 export const PARS_FORTUNA = 'Pars Fortuna';
+// [古典·显赫计分]「四显赫点」（vendor/utils/astroClassicalDerived.js:381-386 EMINENCE_POINTS）按 AstroConst.PARS_SPIRIT 取精神点
+// ——shim 缺它时该项 id 为 undefined，lotObj 取不到 → 静默少一点（上游「福点/精神点/根基点/擢升点」只剩三点）。逐值抽自上游
+// constants/AstroConst.js:96。
+export const PARS_SPIRIT = 'Pars Spirit';
 export const DESC = 'Desc';
 export const MC = 'MC';
 export const IC = 'IC';
