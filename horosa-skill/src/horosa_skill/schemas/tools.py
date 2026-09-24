@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -1227,27 +1227,43 @@ class ExtraReturnsInput(BirthInput):
 
 
 class HoraryInput(BirthInput):
+    # 长尾旋钮：照常声明（校验 + MCP 扁平面收顶层键），不进 tools/list 广告层（mcp_schema.advertise_hidden_fields）。
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset(
+        {"sincerityConfirmed", "confirmYouthMatch", "isEventChart", "questionText", "castingCamp"}
+    )
     # 卜卦 (horary): the chart is cast at the QUESTION moment (date/time/place = when the question was asked).
-    # category picks the quesited house: general/wealth/family/property/pregnancy/health/marriage/lawsuit/
-    # theft/death/travel/career/hope/enemy (unknown → general).
+    # category picks the quesited house — 引擎词表 CATEGORY_DEF 20 类（general/wealth/family/property/father/mother/
+    # pregnancy/health/marriage/lawsuit/theft/death/travel/career/hope/enemy/message/lost/lost_animal/trade；
+    # unknown → general）。全表与中文名见 agent_guidance。
     category: str | None = "general"
-    # 流派档（horarySchools.js 的 HORARY_SCHOOLS）：classical(默认) / renaissance / medieval …
-    # 它决定两段的有无——[偶然尊贵满分表] 只在 accidentalMode=='lilly' 出、[阿拉伯点全集] 只在
-    # lotsSet=='core15' 出，二者都是 renaissance/medieval 档的口径。结果敏感 → 缺省不静默切换。
-    school: str | None = Field(default=None, description="卜卦流派档：classical / renaissance / medieval（默认 classical）。")
-    tradition: bool | None = True
+    # 流派档（horarySchools.js HORARY_SCHOOLS 七档）：classical(默认)/renaissance/strict/sequence/hellenistic/medieval/modern。
+    # 流派同时决定**起盘字段**（上游 horaryBackendFields：宫制/界系/三分集/福点反转/星群，页面 HoraryMain.js:543）与判读口径。
+    school: str | None = Field(default=None, description="卜卦流派七档（缺省 classical；定宫制界系与判读，见 guidance）。")
+    # 星群随流派（modern=0 含三王星，其余 1）；显式给值压过流派。
+    tradition: bool | None = None
     predictive: bool | None = False
     # 卜卦七档参数谱（星阙 v3.6.0，界表勘误 + 判读叠层二期）。上游 horarySchools.js 的 HORARY_PARAM_SPEC
-    # 中 hsys/termsVariant/geminiBoundEmended/tradition 标 sendToBackend，其余在判读层生效。
-    hsys: Any | None = Field(default=None, description="卜卦盘分宫制（Regiomontanus 等，随流派档）。")
-    termsVariant: Any | None = Field(default=None, description="界(terms)表流派：埃及 / 托勒密。")
+    # 中 hsys/termsVariant/geminiBoundEmended/tradition 标 sendToBackend：缺省随流派档，显式给值压过流派
+    # （与上游高级面板 horaryOverrides 同语义，同时进起盘与判读）。
+    hsys: Any | None = Field(default=None, description="宫制：缺省随流派（经典=2 Regiomontanus/希腊化=0/中世纪=1/现代=3）；显式值优先。")
+    termsVariant: Any | None = Field(default=None, description="界系 0–3（缺省随流派，见 guidance）。")
     geminiBoundEmended: Any | None = Field(default=None, description="双子界表勘误开关（v3.6.0 修订）。")
     considerationsMode: Any | None = Field(
         default=None, description="定盘考量(considerations before judgment)硬度：warn / strict / lenient / ignore。"
     )
     lotsSet: Any | None = Field(default=None, description="阿拉伯点集：minimal（默认）/ core15。")
-    # 判读层参数覆写（HORARY_PARAM_SPEC 里 sendToBackend=false 的 46 键全可覆写，压过流派档）。
+    # 定盘自评（上游卜卦左栏三勾选，HoraryMain.js:487-497 → runHorary opts）：影响 [定盘考量] 第 18 条（无诚意）与
+    # 命度早晚 / 事件盘两条的「已救济」判定。问句与阵营进 [定盘考量] 段首两行（buildHorarySnapshot 第 3 参）。
+    sincerityConfirmed: bool | None = Field(default=None, description="问题真诚自评：缺省 true（上游缺省勾选）；false→定盘考量第18条命中。")
+    confirmYouthMatch: bool | None = Field(default=None, description="年轻体貌合上升（救济命度过早）：缺省 false。")
+    isEventChart: bool | None = Field(default=None, description="事件盘（客观时刻，救济命度过晚）：缺省 false。")
+    questionText: str | None = Field(default=None, description="所问之事原文（进 [定盘考量] 段）。")
+    castingCamp: str | None = Field(default=None, description="起盘阵营：astrologer（缺省）/querent/midpoint；时地须已按阵营给。")
+    # 判读层参数覆写（HORARY_PARAM_SPEC 全部键，压过流派档；sendToBackend 四键 + tripSystem 同时改起盘）。
     # 键名以引擎自带词表为准；不认识的键会原样回执在 data.params_ignored，不静默吞。
+    # 顶层全局古典键（cazimiOrb/combustOrb/underBeamsOrb/vocMode/vocIncludeOuter/viaCombustaVariant/partileDef/
+    # antisciaOrb/starOrb/starOrbMode/combustMitigateSameSign/antiscia）进判读**全局层**（流派绑定之下，上游
+    # judgeLayerOverrides 同口径）；顶层 triplicity/lotReversal 不作用于卜卦盘（流派绑定，另有告警）。
     # 🔴 receptionMode / almutenScheme 两个字段已删：引擎词表里**根本没有这两个名字**（近邻是
     # receptionForHardAspects / receptionPerfection / accidentalMode，语义并不等同）。
     # 它们是凭空发明的旋钮，声称了三个版本、一次都没生效过。
@@ -1257,17 +1273,24 @@ class HoraryInput(BirthInput):
 
 
 class ElectionInput(BirthInput):
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset(
+        {"tradeSide", "talismanStar", "surgeryPart", "surgeryPartOpposite", "crisisBase"}
+    )
     # 择日 (electional): the chart is cast at a CANDIDATE moment (date/time/place = the time being evaluated).
     # topicId picks the rule pack + hard flags: marriage/business/move_in/buy_property/trade/buy_car/contract/
-    # surgery/travel/job_hunt/... (see TOPIC_MASTER; unknown → marriage).
+    # surgery/travel/job_hunt/... (TOPIC_MASTER 37 类；unknown → marriage；全表见 agent_guidance).
     topicId: str | None = "marriage"
     tradition: bool | None = True
     predictive: bool | None = False
+    # 宫制：缺省随流派档联动（westernSchools.js hsys：hellenistic/modern_revival=0、persian=1、renaissance=2；
+    # modern_main 不联动 → 页面缺省 0）；显式给值压过流派。
+    hsys: int | None = Field(default=None, description="宫制：缺省随流派（hellenistic=0/persian=1/renaissance=2，现代主流=0）；显式值优先。")
     # 择日口径（星阙 v3.6.0）：流派轴 + 13 个判读层参数，全部取自上游 electionParams.js。
     # 🔴 此前这里挂着 dignityScheme / starSet / medicalCritical / hourRuler / returnCharts /
     # primaryDirections / natalCompare / mundaneCompare / lotsSet / considerationsMode 十个字段，
     # 与 ELECTION_PARAM_SPEC 的 13 键**零重合**，且 skill 与上游全树都无人消费 —— 注释一边引着
     # 正确出处、字段一边写着发明的名字，声称了三个版本一次都没生效。诚实起见整批删除。
+    # 顶层全局古典键（cazimiOrb/vocMode/partileDef/antisciaOrb/starOrb… 同卜卦）进判读**全局层**（流派口径之下）。
     school: Any | None = Field(
         default=None,
         description="择日流派档：modern_main（默认）/ hellenistic / persian / renaissance / modern_revival。",
@@ -1287,6 +1310,13 @@ class ElectionInput(BirthInput):
         default=None,
         description="本命出生资料 {date,time,zone,lat,lon[,ad]}：加产 [本命合参] 与 [回归与主限]（日/月返 + 主限命中）。",
     )
+    # 用事专属输入（上游左栏按用事显示的控件，ElectionMain.js:376-440 → runElection opts）：只在对应用事的规则包里
+    # 生效，给了却不作用会进 warnings。值域锚定引擎词表（认不出的报错）。
+    tradeSide: str | None = Field(default=None, description="买卖方向（trade）：sell=强己方 / buy=强货主方；缺省不指定。")
+    talismanStar: str | None = Field(default=None, description="护符主星（talisman）：sun/moon/mercury/venus/mars/jupiter/saturn。")
+    surgeryPart: str | None = Field(default=None, description="手术部位星座（surgery）：aries…pisces（按星座主管身体部位）。")
+    surgeryPartOpposite: bool | None = Field(default=None, description="部位禁忌延及对宫（surgery）；缺省不延。")
+    crisisBase: Any | None = Field(default=None, description="病始日期 YYYY-MM-DD（surgery/medication）：产 [危象日参照]。")
 
 
 class GeomancyInput(BirthInput):

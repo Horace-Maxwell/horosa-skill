@@ -11341,17 +11341,77 @@ class HorosaSkillService:
         result["export_snapshot"] = self._augment_export_payload(technique=key, snapshot_text=snapshot_text)
         return result
 
+    # 卜卦 / 择日 JS 引擎的「请求顶层」转交：判读全局层（judgeLayerOverrides 同形）与页面覆盖都从这里取。
+    # 只收标量（dict/list 形的 orbs/customTerms*/natal 与判读无关，且会把 JS 管道撑大）。
+    _DIVINATION_PARAM_SKIP = frozenset({"options", "natal", "chart", "datetime", "dirZone", "dirLat", "dirLon"})
+
+    @classmethod
+    def _divination_params(cls, payload: dict[str, Any]) -> dict[str, Any]:
+        return {
+            k: v for k, v in payload.items()
+            if k not in cls._DIVINATION_PARAM_SKIP and not isinstance(v, (dict, list, tuple))
+        }
+
+    @staticmethod
+    def _raise_invalid_divination_inputs(tool: str, invalid: Any) -> None:
+        if not isinstance(invalid, list) or not invalid:
+            return
+        parts = [
+            f"{item.get('key')}={item.get('value')!r}（可选：{item.get('allowed')}）"
+            for item in invalid if isinstance(item, dict)
+        ]
+        raise ToolValidationError(
+            bilingual(
+                f"{tool} 设置取值无效：{'；'.join(parts)}。",
+                f"{tool} setting(s) invalid: {'; '.join(parts)}.",
+            ),
+            code=f"tool.{tool}_invalid_setting",
+            details={"invalid": invalid},
+        )
+
+    def _horary_backend_fields(self, payload: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+        """流派档 → /chart 字段补丁（JS horary action=backend_fields，即上游 horaryBackendFields(school, overrides)）。
+
+        上游页面 `{ zodiacal: 0, ...horaryBackendFields(school) }`（HoraryMain.js:543）、挂载再生 aiAnalysisContext.js:2264：
+        宫制 / 界系 / 星群 / 福点反转 / 三分集随流派下发；显式覆盖（options 或卜卦自己的 hsys/termsVariant/
+        geminiBoundEmended/tradition/tripSystem）压过流派。取不到就不能起盘——宫头、宫主、尊贵全随它变。"""
+        js = self.js_client.run(
+            "horary",
+            {"action": "backend_fields", "school": payload.get("school") or "classical", "options": payload.get("options"), "params": params},
+        )
+        data = js.get("data") if isinstance(js, dict) else None
+        fields = data.get("backendFields") if isinstance(data, dict) else None
+        if not isinstance(fields, dict) or fields.get("hsys") is None:
+            raise ToolTransportError(
+                "卜卦流派起盘字段取不到（JS horary backend_fields 返回形状异常）。",
+                code="tool.horary_backend_fields_failed",
+                details={"school": payload.get("school") or "classical", "response_keys": sorted(js) if isinstance(js, dict) else None},
+            )
+        return data
+
     def _run_horary_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 卜卦 (horary): cast the traditional chart at the question moment, then run the vendored 星阙
         # horary engine (runHorary + buildHorarySnapshot) over it. category drives the quesited house.
         category = f"{payload.get('category') or 'general'}".strip() or "general"
-        chart_payload = {**payload, "predictive": 0, "tradition": payload.get("tradition", 1)}
-        # HoraryInput 把 hsys 覆写成 None 默认（「随流派档」），归一化后 None 被剥掉——而后端
-        # /chart 的 params 回显块无守卫地读 data['hsys']（上游前端恒发 hsys，从他们视角没毛病），
-        # 缺键直接 KeyError→「param error」。补 PerChart 自身默认 0（整宫制），与 BirthInput 一致。
-        if chart_payload.get("hsys") is None:
-            chart_payload["hsys"] = 0
-        for stale in ("datetime", "dirZone", "dirLat", "dirLon", "category", "school", "options"):
+        params = self._divination_params(payload)
+        backend = self._horary_backend_fields(payload, params)
+        backend_fields: dict[str, Any] = dict(backend["backendFields"])
+        school = f"{backend.get('school') or payload.get('school') or 'classical'}"
+        # 流派学理绑定键（界系/双子界序/福点反转/宫制/星群/三分集）恒以流派为准（上游 HoraryMain.js:563 globalSyncKeys
+        # 注释）：顶层的 triplicity / lotReversal 是**全局**古典设置，卜卦盘不跟 —— 与流派不同就说出来，不静默吞。
+        for key in ("triplicity", "lotReversal"):
+            given = payload.get(key)
+            if given is not None and f"{given}" != f"{backend_fields.get(key)}":
+                _degrade(
+                    "horary: top-level %s=%r overridden by school %s (%r)", key, given, school, backend_fields.get(key),
+                    note=(
+                        f"卜卦盘的 {key} 随流派档（{school} → {backend_fields.get(key)}），顶层全局设置 {key}={given!r} 不作用于卜卦盘"
+                        "（上游同口径）；要改三分集请用 tripSystem（ptolemaic/dorothean）或换流派。"
+                    ),
+                )
+        chart_payload = {**payload, "predictive": 0, "zodiacal": payload.get("zodiacal", 0), **backend_fields}
+        for stale in ("datetime", "dirZone", "dirLat", "dirLon", "category", "school", "options",
+                      "sincerityConfirmed", "confirmYouthMatch", "isEventChart", "questionText", "castingCamp"):
             chart_payload.pop(stale, None)
         response = self._call_remote("/chart", chart_payload)
         snapshot_text, data, snapshot_error = "", {}, None
@@ -11361,24 +11421,33 @@ class HorosaSkillService:
                 {
                     "chart": response,
                     "category": category,
-                    "school": payload.get("school") or "classical",
-                    # 判读层覆写：JS 侧按引擎自带词表 HORARY_PARAM_BY_KEY 过滤，认不出的键
-                    # 原样回执在 data.params_ignored（不静默吞）。顶层写法与 options 都收。
+                    "school": school,
+                    # 判读层覆写（第 4 层）：JS 侧按引擎自带词表 HORARY_PARAM_BY_KEY 过滤，认不出的键
+                    # 原样回执在 data.params_ignored（不静默吞）。顶层古典键 → 全局层（第 2 层）。
                     "options": payload.get("options"),
-                    **{k: payload[k] for k in ("considerationsMode", "lotsSet") if payload.get(k) is not None},
+                    "params": params,
+                    # 定盘自评（上游页面左栏三勾选，HoraryMain.js:487-497）+ 问句/阵营（→ [定盘考量]）。
+                    **{k: payload[k] for k in ("sincerityConfirmed", "confirmYouthMatch", "isEventChart", "questionText", "castingCamp")
+                       if payload.get(k) is not None},
                 },
             )
             if isinstance(js, dict):
-                snapshot_text = f"{js.get('snapshot_text') or ''}".strip()
                 data = js.get("data") if isinstance(js.get("data"), dict) else {}
+                self._raise_invalid_divination_inputs("horary", data.get("invalid_inputs"))
+                snapshot_text = f"{js.get('snapshot_text') or ''}".strip()
                 # the JS engine resolves an unknown category back to 'general'; reflect that.
                 category = f"{js.get('category') or category}".strip() or category
+        except ToolValidationError:
+            raise
         except Exception as exc:  # don't fail the chart, but don't hide the empty snapshot either
             snapshot_error = str(exc)
             _degrade("horary JS engine failed (category=%s): %s", category, exc)
         result = {
             "chart": response.get("chart"),
             "category": category,
+            "school": school,
+            # 起盘口径回执：流派档实际下发给 /chart 的字段（宫制/界系/三分集/福点反转/星群）。
+            "backendFields": backend_fields,
             "judgment": data,
             "raw": response,
             "snapshot_text": snapshot_text,
@@ -11388,14 +11457,75 @@ class HorosaSkillService:
             result["snapshot_error"] = snapshot_error
         return result
 
+    _ELECTION_TOPIC_INPUTS = ("tradeSide", "talismanStar", "surgeryPart", "surgeryPartOpposite")
+
+    def _election_resolve(self, payload: dict[str, Any], params: dict[str, Any]) -> dict[str, Any] | None:
+        """JS election action=resolve_params：四层有效口径 eff（含 pdTimeKey）+ 流派宫制联动 schoolHsys。
+
+        引擎自己的 resolveElectionParams / westernSchools 给值，Python 不手抄流派表。取不到 → None（调用方降级并说出来）；
+        认不出的全局判读键值 → ToolValidationError（同判读路径）。"""
+        try:
+            js = self.js_client.run(
+                "election",
+                {"action": "resolve_params", "school": payload.get("school"), "options": payload.get("options"), "params": params},
+            )
+        except Exception as exc:  # noqa: BLE001
+            _degrade("election resolve_params failed: %s", exc)
+            return None
+        data = (js or {}).get("data") if isinstance(js, dict) else None
+        if not isinstance(data, dict):
+            _degrade("election resolve_params: JS 工具返回形状异常（缺 data）")
+            return None
+        self._raise_invalid_divination_inputs("election", data.get("invalid_inputs"))
+        return data
+
+    def _election_crisis(self, payload: dict[str, Any], js_payload: dict[str, Any]) -> None:
+        """危象日参照（WP-8）：病始日期 → 上游 fetchCrisisBase（ElectionMain.js:159-171）同口径——该日正午、择日地点与盘式
+        起盘，JS 侧 buildFacts 取月黄经成 crisisBase={date, moonLon}。也收上游存档形状 {date, moonLon} 直通。"""
+        raw = payload.get("crisisBase")
+        if raw is None or raw == "":
+            return
+        if isinstance(raw, dict):
+            js_payload["crisisBase"] = raw
+            return
+        date = f"{raw}".strip()
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
+            raise ToolValidationError(
+                bilingual(f"crisisBase（病始日期）须为 YYYY-MM-DD：{raw!r}", f"crisisBase (illness onset date) must be YYYY-MM-DD: {raw!r}"),
+                code="tool.election_invalid_setting",
+                details={"invalid": [{"key": "crisisBase", "value": raw, "allowed": "YYYY-MM-DD 或 {date, moonLon}"}]},
+            )
+        fields_like = {k: payload.get(k) for k in ("zone", "lon", "lat", "gpsLat", "gpsLon", "hsys", "zodiacal", "siderealAyanamsa", "tradition")}
+        try:
+            crisis_chart = self._chart_at_moment(f"{date} 12:00:00", fields_like)
+        except Exception as exc:  # noqa: BLE001 — 病始盘起不来：[危象日参照] 缺席并说出来
+            _degrade("election crisis chart failed: %s", exc, note=f"择日 [危象日参照] 未产出：病始日 {date} 正午起盘失败（{exc}）。")
+            return
+        if crisis_chart is None:
+            _degrade("election crisis chart empty", note=f"择日 [危象日参照] 未产出：病始日 {date} 正午起盘返回异常形状。")
+            return
+        js_payload["crisisChart"] = crisis_chart
+        js_payload["crisisDate"] = date
+
     def _run_election_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 择日 (electional): cast the traditional chart at a candidate moment, then run the vendored 星阙
         # election engine (runElection + buildElectionSnapshot). topicId drives the rule pack + hard flags.
         topic_id = f"{payload.get('topicId') or payload.get('topic') or 'marriage'}".strip() or "marriage"
         # natal（可选，本命出生资料）：先验全再起任何盘——缺字段是输入错，不许半途静默少段。
         natal_spec = self._election_natal_spec(payload)
+        params = self._divination_params(payload)
+        # 流派宫制联动（westernSchools.js hsys）：切档即 patchFields({hsys})（ElectionMain.js:348-353）、挂载再生
+        # chartRecord.hsys = sc.hsys（aiAnalysisContext.js:2316-2327）；现代主流档 hsys=null 不联动、页面缺省 0（:100）。
+        # 显式 hsys 压过流派（同卜卦）。只在有流派档或要拉主限（natal）时才问 JS，缺省路径零额外进程。
+        resolved = self._election_resolve(payload, params) if (payload.get("school") or natal_spec is not None) else None
+        if payload.get("hsys") is None:
+            school_hsys = (resolved or {}).get("schoolHsys")
+            if payload.get("school") and resolved is None:
+                _degrade("election school hsys unresolved", note="择日流派宫制联动未取到（JS 口径解析失败），本盘按整宫制 0 起。")
+            payload = {**payload, "hsys": school_hsys if school_hsys is not None else 0}
         chart_payload = {**payload, "predictive": 0, "tradition": payload.get("tradition", 1)}
-        for stale in ("datetime", "dirZone", "dirLat", "dirLon", "topicId", "topic", "school", "options", "natal"):
+        for stale in ("datetime", "dirZone", "dirLat", "dirLon", "topicId", "topic", "school", "options", "natal",
+                      "crisisBase", *self._ELECTION_TOPIC_INPUTS):
             chart_payload.pop(stale, None)
         response = self._call_remote("/chart", chart_payload)
         js_payload: dict[str, Any] = {
@@ -11404,16 +11534,22 @@ class HorosaSkillService:
             # 流派档 + 13 个判读层参数：JS 侧按 ELECTION_PARAM_BY_KEY 过滤并回执。
             "school": payload.get("school"),
             "options": payload.get("options"),
+            # 请求顶层 → 判读全局层（judgeLayerOverrides 同形，第 2 层）。
+            "params": params,
+            # 用事专属四键（上游左栏按用事显示：买卖方向 / 护符主星 / 手术部位 / 部位延及对宫）。
+            **{k: payload[k] for k in self._ELECTION_TOPIC_INPUTS if payload.get(k) is not None},
         }
+        self._election_crisis(payload, js_payload)
         natal_returns: dict[str, Any] | None = None
         if natal_spec is not None:
-            natal_returns = self._attach_election_natal(payload, natal_spec, js_payload)
+            natal_returns = self._attach_election_natal(payload, natal_spec, js_payload, resolved=resolved)
         snapshot_text, data, snapshot_error = "", {}, None
         try:
             js = self.js_client.run("election", js_payload)
             if isinstance(js, dict):
-                snapshot_text = f"{js.get('snapshot_text') or ''}".strip()
                 data = js.get("data") if isinstance(js.get("data"), dict) else {}
+                self._raise_invalid_divination_inputs("election", data.get("invalid_inputs"))
+                snapshot_text = f"{js.get('snapshot_text') or ''}".strip()
                 # the JS engine resolves an unknown topicId back to 'marriage'; reflect that.
                 topic_id = f"{js.get('topicId') or topic_id}".strip() or topic_id
                 natal_echo = data.get("natal") if isinstance(data.get("natal"), dict) else None
@@ -11422,6 +11558,15 @@ class HorosaSkillService:
                 returns_echo = data.get("returns") if isinstance(data.get("returns"), dict) else None
                 for err in (returns_echo or {}).get("errors") or []:
                     _degrade("election return chart facts failed: %s", err)
+                for err in data.get("extra_errors") or []:
+                    _degrade("election extra input failed: %s", err, note=f"择日：{err}")
+                for key in data.get("unused_inputs") or []:
+                    _degrade(
+                        "election: %s given but unused by topic %s", key, topic_id,
+                        note=f"择日：{key} 只作用于对应用事的规则包（买卖 trade / 护符 talisman / 手术 surgery；病始日 surgery·medication），本次用事 {topic_id} 不读它，未参与判读。",
+                    )
+        except ToolValidationError:
+            raise
         except Exception as exc:  # don't fail the chart, but don't hide the empty snapshot either
             snapshot_error = str(exc)
             _degrade("election JS engine failed (topicId=%s): %s", topic_id, exc)
@@ -11477,7 +11622,7 @@ class HorosaSkillService:
         return natal
 
     def _attach_election_natal(
-        self, payload: dict[str, Any], natal: dict[str, Any], js_payload: dict[str, Any]
+        self, payload: dict[str, Any], natal: dict[str, Any], js_payload: dict[str, Any], *, resolved: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         """起本命盘 + 求日/月返 + 取主限命中，挂到 js_payload（natalChart / extra）。返回回执（时刻与命中）。"""
         hsys = payload.get("hsys") if payload.get("hsys") is not None else 0
@@ -11525,7 +11670,7 @@ class HorosaSkillService:
                 lunar = ret
 
         # fetchPdHits（:218-240）：本命参数（日期用 /）+ 页面宫制/黄道 + tradition 1；时间钥匙 = 有效口径 eff.pdTimeKey。
-        pd_time_key = self._election_effective_pd_time_key(payload)
+        pd_time_key = self._election_effective_pd_time_key(payload, resolved=resolved)
         natal_params = _drop_none({
             "ad": natal_ad, "date": natal_date.replace("-", "/"), "time": natal_time,
             "zone": natal.get("zone"), "lat": natal.get("lat"), "lon": natal.get("lon"),
@@ -11541,17 +11686,13 @@ class HorosaSkillService:
             "pdHits": pd_hits,
         }
 
-    def _election_effective_pd_time_key(self, payload: dict[str, Any]) -> str | None:
+    def _election_effective_pd_time_key(self, payload: dict[str, Any], *, resolved: dict[str, Any] | None = None) -> str | None:
         """eff.pdTimeKey 由引擎自己的 resolveElectionParams 给（流派档 × 覆写四层合并），Python 不手抄默认表。"""
-        try:
-            js = self.js_client.run(
-                "election",
-                {"action": "resolve_params", "school": payload.get("school"), "options": payload.get("options")},
-            )
-        except Exception as exc:  # noqa: BLE001
-            _degrade("election resolve_params failed (主限时间钥匙回落 Ptolemy): %s", exc)
+        data = resolved if resolved is not None else self._election_resolve(payload, self._divination_params(payload))
+        if data is None:
+            _degrade("election resolve_params unavailable (主限时间钥匙回落 Ptolemy)")
             return None
-        effective = ((js or {}).get("data") or {}).get("effective") if isinstance(js, dict) else None
+        effective = data.get("effective")
         value = effective.get("pdTimeKey") if isinstance(effective, dict) else None
         return f"{value}" if value else None
 

@@ -1917,9 +1917,20 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "utils/divinationJudgeGlobals.js": {
+      "upstream": "utils/divinationJudgeGlobals.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "utils/ganzhiYearBase.js": {
       "upstream": "utils/ganzhiYearBase.js",
       "mode": "verbatim"
+    },
+    "utils/judgeLayerHeadless.js": {
+      "mode": "bespoke",
+      "why": "自上游 utils/judgeLayerOverrides.js 抽出（判读引擎「全局层」的唯一组装点，卜卦 horaryJudgeOpts / 择日 runElection 第 2 层）：上游从两个 localStorage 仓取「改过的键」，headless 无持久化偏好 → 以请求顶层古典键为仓，白名单 JUDGE_KEYS_FROM_CLASSICAL 逐字、归一 / 等于缺省不进 / vocIncludeOuter→bool 同上游；缺省表直接 import 已 vendored 的 classicalChartGlobals / divinationJudgeGlobals。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "derived_from": "utils/judgeLayerOverrides.js",
+      "derived_sha256": "dd38a67db43b569c95bb3658928fc80ad98528dba5881b04d2961b8708b3e566"
     },
     "utils/julianDayIndex.js": {
       "upstream": "utils/julianDayIndex.js",

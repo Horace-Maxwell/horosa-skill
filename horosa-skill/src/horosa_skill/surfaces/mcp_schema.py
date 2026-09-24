@@ -125,22 +125,35 @@ def _request_property(hidden: list[str], tool_name: str) -> dict[str, Any]:
     return {"type": ["object", "string"], "description": text}
 
 
+def advertise_hidden_fields(model: type[Any]) -> frozenset[str]:
+    """输入模型可声明 `ADVERTISE_HIDDEN: ClassVar[frozenset[str]]`：这些字段**照常声明**（校验层照收、MCP 扁平签名
+    照收顶层键——未声明的键会被 FastMCP 的 arg model 静默丢掉，见 test_mcp_flat_surface_keys），只是不进广告层，
+    计入 `request` 描述里的「另 N 个高级旋钮」、全表与词表见 horosa_agent_guidance。
+    为什么（v0.40.0 tools/list 预算）：长尾口径旋钮每个广告出去 ~100 B，一个技法补齐上游几十个就是几 KB，
+    而全量面硬顶 256 KB 已近满；声明而不广告 = 零字节、功能与类型校验全保留。"""
+    hidden: set[str] = set()
+    for cls in getattr(model, "__mro__", ()):
+        hidden |= set(vars(cls).get("ADVERTISE_HIDDEN", ()) or ())
+    return frozenset(hidden)
+
+
 def advertised_technique_schema(tool_name: str, full_schema: dict[str, Any]) -> dict[str, Any]:
     """技法工具的广告层 inputSchema（校验层不动）。"""
     definition = TOOL_DEFINITIONS[tool_name]
     model = definition.input_model
     props = dict(full_schema.get("properties") or {})
     required = {k for k, v in props.items() if isinstance(v, dict) and v.get("x-horosa-required")}
+    unadvertised = advertise_hidden_fields(model)
     keep: list[str] = []
     if issubclass(model, BirthInput):
         core = DOMAIN_CORE.get(definition.domain, ASTRO_CORE)
         targets = list(PREDICTIVE_INPUT_CONTRACTS.get(tool_name, {}).get("required_fields") or [])
-        own = [f for f in model.model_fields if f not in BirthInput.model_fields]
+        own = [f for f in model.model_fields if f not in BirthInput.model_fields and f not in unadvertised]
         for key in (*core, *targets, *own, *GATE_KEYS):
             if key in props and key not in keep:
                 keep.append(key)
     else:
-        keep = [f for f in model.model_fields if f in props]
+        keep = [f for f in model.model_fields if f in props and f not in unadvertised]
     hidden = sorted(set(props) - set(keep) - {"request"})
     out: dict[str, Any] = {}
     for key in keep:

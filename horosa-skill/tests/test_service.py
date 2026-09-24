@@ -1141,6 +1141,19 @@ class FakeJsClient(HorosaJsEngineClient):
             if technique in _PROGEXTRA_FAKE:
                 return {"tool": "progextra", "technique": technique, "data": {"ok": True}, "snapshot_text": _PROGEXTRA_FAKE[technique]}
             return {"tool": "progextra", "technique": technique, "data": {"ok": False}, "snapshot_text": ""}
+        if tool_name == "horary" and payload.get("action") == "backend_fields":
+            # 形状同真工具 tools/horary.js action=backend_fields；值 = 上游 horarySchools.js classical 档经
+            # horaryBackendFields（hsys 2 Regiomontanus / 托勒密界经典传本 / 七政 / 福点不反转 / Ptolemy 三分集）。
+            return {"tool": "horary", "school": "classical", "data": {
+                "ok": True, "school": "classical", "backend_overrides": [],
+                "backendFields": {"hsys": 2, "termsVariant": 2, "tradition": 1, "lotReversal": 0, "triplicity": "Ptolemaic"},
+            }}
+        if tool_name == "election" and payload.get("action") == "resolve_params":
+            # 形状同真工具 tools/election.js action=resolve_params（现代主流档：宫制不联动 schoolHsys=None）。
+            return {"tool": "election", "data": {
+                "ok": True, "effective": {"pdTimeKey": "Ptolemy"}, "school": payload.get("school") or "modern_main",
+                "schoolHsys": None, "params_applied": [], "params_global": [], "params_ignored": [], "invalid_inputs": [],
+            }}
         if tool_name == "horary":
             return {
                 "tool": "horary",
