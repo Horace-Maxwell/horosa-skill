@@ -1,6 +1,14 @@
 // progextra: run a vendored 星阙 progression builder (balbillus / triplicityrulers / keypoints /
 // lunationphase) on a chart object. These are pure frontend builders (read the chart, output the
 // single-section text); the skill passes the /chart response as payload.chart. Returns { snapshot_text }.
+//
+// payload.options → the builder's `opts` (上游 techniqueMountSettings.js:1237-1274 的挂载齿轮 =
+// aiAnalysisContext.js:2998-3013 regen 传给 builder 的同一组键)：
+//   balbillus        { startPlanet, yearType, mode }
+//   triplicityrulers { system, division, lifespan }
+//   keypoints        { mode }
+// 缺省（undefined）交给 builder 自己的 resolveOpts 回落缺省 = 与上游逐字一致。值域校验在 Python 侧先做
+// （service._run_progextra_js_tool），这里只透传。
 import { buildBalbillusSnapshotText } from '../vendor/astroextra/balbillus.js';
 import { buildTriplicityRulersSnapshotText } from '../vendor/astroextra/triplicityRulers.js';
 import { buildKeypointsSnapshotText } from '../vendor/astroextra/keypoints120.js';
@@ -17,15 +25,22 @@ export function runProgExtra(payload) {
   const input = payload && typeof payload === 'object' ? payload : {};
   const technique = `${input.technique || ''}`;
   const chartObj = input.chart && input.chart.chart ? input.chart : { chart: (input.chart || {}).chart || (input.chart || {}) };
+  const options = input.options && typeof input.options === 'object' ? input.options : {};
   const builder = BUILDERS[technique];
   if (!builder) {
     return { tool: 'progextra', technique, data: { ok: false, reason: 'unknown_technique' }, snapshot_text: '' };
   }
   let snapshot_text = '';
   try {
-    snapshot_text = builder(chartObj) || '';
+    snapshot_text = builder(chartObj, options) || '';
   } catch (error) {
-    snapshot_text = '';
+    // 不静默：builder 抛错如实回 ok:false + 原因，Python 侧据此进 envelope 警告。
+    return {
+      tool: 'progextra',
+      technique,
+      data: { ok: false, reason: 'builder_failed', error: `${(error && error.message) || error}` },
+      snapshot_text: '',
+    };
   }
-  return { tool: 'progextra', technique, data: { ok: true }, snapshot_text };
+  return { tool: 'progextra', technique, data: { ok: true, options }, snapshot_text };
 }

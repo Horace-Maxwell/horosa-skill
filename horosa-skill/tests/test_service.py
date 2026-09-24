@@ -250,6 +250,9 @@ class FakeClient(HorosaApiClient):
                     {"id": "North Node", "house": "House7", "sign": "Pisces", "signlon": 7.21, "lon": 337.21, "lonspeed": -0.053},
                     {"id": "South Node", "house": "House1", "sign": "Virgo", "signlon": 7.21, "lon": 157.21, "lonspeed": -0.053},
                     {"id": "Pars Fortuna", "house": "House8", "sign": "Aries", "signlon": 9.05, "lon": 9.05},
+                    # 真实 /chart 的 objects 里带四轴（上升/天顶…）——小限摘要起点、keypoints 命位等按它取；桩不许比真实窄。
+                    {"id": "Asc", "house": "House1", "sign": "Virgo", "signlon": 15.0, "lon": 165.0},
+                    {"id": "MC", "house": "House10", "sign": "Gemini", "signlon": 12.0, "lon": 72.0},
                 ],
                 "stars": [{"id": "Sun", "stars": [["Bih", "Aries", 14.66, None, "壁宿二"]]}],
                 "orientOccident": {"Sun": {"oriental": [{"id": "Saturn"}], "occidental": [{"id": "Venus"}]}},
@@ -2013,10 +2016,19 @@ def test_predictive_common_sections_appended_for_predictive_family(tmp_path) -> 
 
     assert result.ok is True
     snapshot = result.data["snapshot_text"]
-    assert "[当前时点]" in snapshot and "[方法说明]" in snapshot
-    assert "导出时刻：" in snapshot
-    assert "盘主当前年龄：" in snapshot
+    assert "[方法说明]" in snapshot
     assert "小限(年限)" in snapshot
+    # 上游 v3.11（aiExport.js:641-645 / predictiveAiSnapshot.js）：目标时刻型 5 法只出 [方法说明]、preset 无 [当前时点]。
+    assert "[当前时点]" not in snapshot
+    agepoint = service.run_tool(
+        "agepoint",
+        {"date": "1995-06-03", "time": "05:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "agent_confirmed_settings": True},
+        save_result=False,
+    )
+    agepoint_snapshot = agepoint.data["snapshot_text"]
+    assert "[当前时点]" in agepoint_snapshot and "[方法说明]" in agepoint_snapshot
+    assert "导出时刻：" in agepoint_snapshot
+    assert "盘主当前年龄：" in agepoint_snapshot
     # 非星运技法不受影响（零变化）。
     nongli = service.run_tool(
         "nongli_time",
@@ -2357,23 +2369,23 @@ def test_primary_direction_full_house_settings_surface(tmp_path) -> None:
 
 
 def test_primary_direction_core5_method_labels() -> None:
-    # 主限法 v12 核5：每个公开方位法都有专属标签；未核验旧键（placidus 等）不再有标签（后端会回退 core_alchabitius）。
+    # 上游 v3.11（primaryDirectionSync.js:57-115）：方位法 13 法、度数换算 26 项，标签取 PD_METHOD_LABELS /
+    # PD_TIME_KEY_LABELS。旧「核5 + placidus 未核验回退」注记已过期（placidus 等自 v3.6 起真算，后端 perchart.py:892 白名单）。
     from horosa_skill.service import _primary_direction_method_text, _primary_direction_time_key_text
 
-    assert _primary_direction_method_text("core_alchabitius") == "Alcabitius 半弧法"
+    assert _primary_direction_method_text("core_alchabitius") == "Alchabitius"
     assert _primary_direction_method_text("meridian") == "Meridian"
     assert _primary_direction_method_text("porphyry") == "Porphyry"
     assert _primary_direction_method_text("equal_ecliptic") == "Equal（黄道）"
     assert _primary_direction_method_text("equal_hour_circle") == "Equal（时圈）"
-    assert _primary_direction_method_text("horosa_legacy") == "传统赤经法"
-    # 移除的未核验方位法：params 回显是原样输入，标签如实标注引擎回退（行集等同 core，live 测试钉死）。
-    assert _primary_direction_method_text("placidus") == "placidus（未核验，引擎回退 Alcabitius 半弧法）"
-    # 时间钥匙 22 项全部有标签（上游下拉一致）。
+    assert _primary_direction_method_text("horosa_legacy") == "Horosa原方法"
+    assert _primary_direction_method_text("placidus") == "Placidus（半弧）"
+    # 时间钥匙 26 项全部有标签（上游下拉一致）。
     for key in (
         "Ptolemy", "Naibod", "TrueSolarArc", "SymbolicSolarArc", "Cardano", "Umar", "Wollner",
         "Plantiko", "Simmonite", "SynodicYear", "Kepler", "Brahe", "Kundig", "SymbolicDegree",
         "SymbolicYear", "SymbolicMoon", "SymbolicMonth", "Quarterly", "Quinary", "Duodenary",
-        "Novenary", "SelfMeasure",
+        "Novenary", "SelfMeasure", "NaibodRA", "AscendantArc", "VanDam", "User",
     ):
         label = _primary_direction_time_key_text(key)
         assert label and label != "无", key
@@ -2458,10 +2470,12 @@ def test_zodiacal_release_exports_timeline_rows(tmp_path) -> None:
 
     result = service.run_tool("zr", payloads["zr"], save_result=False)
     text = result.data["snapshot_text"]
-    assert "本命盘星与虚点" in text
-    assert "基于X点推运" in text
-    assert "L1：牡羊" in text
-    assert "L2：金牛" in text
+    # 上游 AstroZR.js buildZRAISnapshotBody（v3.11）：段头取基点中文名（缺省福点），L1 全列「座-起始日」。
+    assert "[基于福点推运]" in text
+    assert "AI输出模式：输出所有L1（星座+时间）" in text
+    assert "L1-1：牡羊-2028-04-06" in text
+    drill = service.run_tool("zr", {**payloads["zr"], "aiMode": "l2_in_l1"}, save_result=False)
+    assert "L2-1：金牛-2028-04-21" in drill.data["snapshot_text"]
 
 
 def test_all_callable_techniques_keep_clean_contracts_across_repeated_saved_runs(tmp_path) -> None:

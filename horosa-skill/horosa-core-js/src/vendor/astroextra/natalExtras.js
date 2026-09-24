@@ -135,24 +135,36 @@ function buildDispositor(chartObj) {
   return out;
 }
 
-// 寿命格局: Hyleg/Alcocoden, Ptolemy 取主法 (= 星阙 buildLifespanSection 的 runLifespan 调用).
-function buildLifespan(chartObj) {
+// 取主法三档（上游 components/astro/AstroLifespan.js:14-18 METHODS；缺省 ptolemy）。
+const LIFESPAN_METHODS = ['ptolemy', 'alcabitius', 'dorotheus'];
+
+// 寿命格局: Hyleg/Alcocoden (= 星阙 astroAiSnapshot.js:1123-1136 buildLifespanSection 的 runLifespan 调用)。
+// [SURF-3] 太阳三态阈值随设置：上游优先本盘回显 params.{cazimiOrb,combustOrb,underBeamsOrb}（缺则全局仓，其缺省
+// 17′/8.5°/17° 恰为引擎内建值 → 这里缺则不传、引擎用内建值，等价）；[D4] 取主法随用户选择（上游读 localStorage
+// horosa.lifespan.method，skill 由调用方 opts.lifespanMethod 传入），缺省 ptolemy。
+function buildLifespan(chartObj, opts) {
   try {
-    const facts = buildFacts(chartObjWithFactsMaps(chartObj));
-    return facts ? runLifespan(facts, { method: 'ptolemy' }) : null;
+    const params = (chartObj && chartObj.params) || {};
+    const pick = (k) => (params[k] !== undefined && params[k] !== null && params[k] !== '' ? Number(params[k]) : undefined);
+    const facts = buildFacts(chartObjWithFactsMaps(chartObj), {
+      cazimiOrb: pick('cazimiOrb'), combustOrb: pick('combustOrb'), underBeamsOrb: pick('underBeamsOrb'),
+    });
+    const wanted = opts && opts.lifespanMethod;
+    const method = LIFESPAN_METHODS.indexOf(wanted) >= 0 ? wanted : 'ptolemy';
+    return facts ? runLifespan(facts, { method }) : null;
   } catch (error) {
     return null;
   }
 }
 
-export function buildNatalExtras(chartObj) {
+export function buildNatalExtras(chartObj, opts) {
   if (!chartObj || !chartObj.chart) {
     return { dodeca: [], dispositor: [], lifespan: null };
   }
   return {
     dodeca: buildDodeca(chartObj),
     dispositor: buildDispositor(chartObj),
-    lifespan: buildLifespan(chartObj),
+    lifespan: buildLifespan(chartObj, opts),
   };
 }
 

@@ -87,9 +87,9 @@ PREDICTIVE_INPUT_CONTRACTS: dict[str, dict[str, Any]] = {
         "required_fields": ["date", "time", "zone", "lat", "lon", "datetime", "dirZone", "dirLat", "dirLon"],
         "must_ask": ["本命出生时间地点", "返照目标年份/日期", "返照地点与时区"],
         "target_fields": {
-            "datetime": "返照目标时间或目标年份中的参考时间，格式建议 YYYY-MM-DD HH:mm:ss。",
-            "dirZone": "返照盘地点时区；如 +08:00。",
-            "dirLat/dirLon": "返照盘地点经纬度；若用户没有指定返照地点，必须先询问是否用出生地/现居地。",
+            "datetime": "返照目标时间，YYYY-MM-DD HH:mm:ss；缺省=今年生日时刻（当年+出生月日+出生时分，上游同律）。",
+            "dirZone": "返照盘地点时区；缺省本命时区。",
+            "dirLat/dirLon": "返照盘地点经纬度；缺省=出生地（上游同律）——异地返照先问用户现居地。",
         },
         "output_contract": ["本命盘配置", "起盘信息", "时段盘配置", "相位"],
         "example_payload": {
@@ -105,9 +105,9 @@ PREDICTIVE_INPUT_CONTRACTS: dict[str, dict[str, Any]] = {
         "required_fields": ["date", "time", "zone", "lat", "lon", "datetime", "dirZone", "dirLat", "dirLon"],
         "must_ask": ["本命出生时间地点", "月返目标月份/日期", "月返地点与时区"],
         "target_fields": {
-            "datetime": "月返目标时间或目标月份中的参考时间，格式建议 YYYY-MM-DD HH:mm:ss。",
-            "dirZone": "月返盘地点时区。",
-            "dirLat/dirLon": "月返盘地点经纬度；不要静默假定等于出生地。",
+            "datetime": "月返目标时间，YYYY-MM-DD HH:mm:ss；缺省=今年生日时刻（上游同律）。",
+            "dirZone": "月返盘地点时区；缺省本命时区。",
+            "dirLat/dirLon": "月返盘地点经纬度；缺省=出生地（上游同律），异地月返先问用户。",
         },
         "output_contract": ["本命盘配置", "起盘信息", "时段盘配置", "相位"],
         "example_payload": {
@@ -123,9 +123,9 @@ PREDICTIVE_INPUT_CONTRACTS: dict[str, dict[str, Any]] = {
         "required_fields": ["date", "time", "zone", "lat", "lon", "datetime", "dirZone", "dirLat", "dirLon"],
         "must_ask": ["本命出生时间地点", "要看的年份/日期", "流年盘地点与时区"],
         "target_fields": {
-            "datetime": "指定年中的目标时间，格式建议 YYYY-MM-DD HH:mm:ss。",
-            "dirZone": "流年盘地点时区。",
-            "dirLat/dirLon": "流年盘地点经纬度。",
+            "datetime": "指定年中的目标时间，YYYY-MM-DD HH:mm:ss；缺省=今年生日时刻（上游同律）。",
+            "dirZone": "流年盘地点时区；缺省本命时区。",
+            "dirLat/dirLon": "流年盘地点经纬度；缺省=出生地（上游同律）。",
         },
         "output_contract": ["本命盘配置", "起盘信息", "时段盘配置", "相位"],
         "example_payload": {
@@ -141,8 +141,8 @@ PREDICTIVE_INPUT_CONTRACTS: dict[str, dict[str, Any]] = {
         "required_fields": ["date", "time", "zone", "lat", "lon", "datetime", "dirZone"],
         "must_ask": ["本命出生时间地点", "推运目标时间", "目标时区"],
         "target_fields": {
-            "datetime": "太阳弧推运目标时间，格式建议 YYYY-MM-DD HH:mm:ss。",
-            "dirZone": "推运盘目标时区。",
+            "datetime": "太阳弧推运目标时间，YYYY-MM-DD HH:mm:ss；缺省=此刻（上游 +08:00 钟面）。",
+            "dirZone": "推运盘目标时区；缺省本命时区。",
         },
         "output_contract": ["本命盘配置", "起盘信息", "时段盘配置", "相位"],
         "example_payload": {
@@ -156,10 +156,11 @@ PREDICTIVE_INPUT_CONTRACTS: dict[str, dict[str, Any]] = {
         "required_fields": ["date", "time", "zone", "lat", "lon", "datetime", "dirZone"],
         "must_ask": ["本命出生时间地点", "小限目标年份/时间", "目标时区"],
         "target_fields": {
-            "datetime": "小限目标时间，格式建议 YYYY-MM-DD HH:mm:ss。",
-            "dirZone": "目标时区。",
+            "datetime": "小限目标时间，YYYY-MM-DD HH:mm:ss；缺省=此刻（上游 +08:00 钟面）。",
+            "dirZone": "目标时区；缺省本命时区。",
+            "profGrain/profStart": "[小限摘要]粒度 y/m/d（缺省 y）与起点 asc/sect/fortune/moon/mc（缺省 asc）。",
         },
-        "output_contract": ["本命盘配置", "起盘信息", "时段盘配置", "相位"],
+        "output_contract": ["本命盘配置", "起盘信息", "小限摘要", "时段盘配置", "相位"],
         "example_payload": {
             **COMMON_ASTRO_PAYLOAD_EXAMPLE,
             "datetime": "2031-04-06 09:33:00",
@@ -172,8 +173,8 @@ PREDICTIVE_INPUT_CONTRACTS: dict[str, dict[str, Any]] = {
         "must_ask": ["本命出生时间地点", "主限方法", "时间钥匙", "相位列表"],
         "target_fields": {
             "pdtype": "坐标系：0=In Zodiaco（黄道，默认；宿命点 Vertex 应星行仅此坐标系核出），1=In Mundo（世俗/赤经空间）。",
-            "pdMethod": "方位法（核5，逐位核验）：core_alchabitius（Alcabitius 半弧，默认）/ meridian / porphyry / equal_ecliptic（Equal 黄道）/ equal_hour_circle（Equal 时圈）/ horosa_legacy（传统赤经）。未知值后端回退 core_alchabitius。",
-            "pdTimeKey": "时间钥匙（22 项）：Ptolemy（托勒密 1°/年，默认）/ Naibod / TrueSolarArc（真太阳弧）/ SymbolicSolarArc（太阳弧·黄经）/ Cardano / Umar / Wollner / Plantiko / Simmonite / SynodicYear / Kepler / Brahe / Kundig / SymbolicDegree / SymbolicYear / SymbolicMoon / SymbolicMonth / Quarterly / Quinary / Duodenary / Novenary / SelfMeasure（Simmonite/Kepler/Brahe 按本命太阳日速每盘真算）。",
+            "pdMethod": "方位法（上游 13 法）：core_alchabitius（默认）/ horosa_legacy / placidus / regiomontanus / campanus / topocentric / meridian / porphyry / equal_ecliptic / equal_hour_circle / morinus / in_zodiaco_lon / in_zodiaco_abs。",
+            "pdTimeKey": "度数换算（上游 26 项）：Ptolemy（默认）/ Naibod / TrueSolarArc / SymbolicSolarArc / Cardano / Umar / Wollner / Plantiko / Simmonite / SynodicYear / Kepler / Brahe / Kundig / SymbolicDegree / SymbolicYear / SymbolicMoon / SymbolicMonth / Quarterly / Quinary / Duodenary / Novenary / SelfMeasure / NaibodRA / AscendantArc / VanDam / User（配 pdTimeKeyCustom）。",
             "pdaspects": "纳入表格的相位角度，例如 [0, 60, 90, 120, 180]。",
             "pdDirect": "顺向开关（1 开/0 关，默认开）。",
             "pdConverse": "逆向开关（1 开/0 关，默认开；与顺向按年龄交错）。",
@@ -195,9 +196,9 @@ PREDICTIVE_INPUT_CONTRACTS: dict[str, dict[str, Any]] = {
         "required_fields": ["date", "time", "zone", "lat", "lon", "datetime", "dirZone", "pdtype", "pdMethod", "pdTimeKey"],
         "must_ask": ["本命出生时间地点", "主限盘目标时间", "主限方法", "时间钥匙"],
         "target_fields": {
-            "datetime": "主限法盘目标时间，格式建议 YYYY-MM-DD HH:mm:ss。",
-            "dirZone": "目标时区。",
-            "pdtype/pdMethod/pdTimeKey": "主限法盘算法设置（pdMethod 核5: core_alchabitius/meridian/porphyry/equal_ecliptic/equal_hour_circle，另有 horosa_legacy；pdTimeKey 同 pd 工具 22 项，常用 Ptolemy/Naibod/TrueSolarArc）。逆向用 direction='converse'。",
+            "datetime": "主限法盘目标时间，YYYY-MM-DD HH:mm:ss；缺省=主限表首条应期日期（UTC 墙钟、dirZone=+00:00），无则出生次日（上游同律）。",
+            "dirZone": "目标时区（给了 datetime 时生效；缺省本命时区）。",
+            "pdtype/pdMethod/pdTimeKey": "主限法盘算法设置（pdMethod/pdTimeKey 词表同 pd 工具：13 方位法、26 度数换算）。逆向用 direction='converse'。",
         },
         "output_contract": ["本命盘星与虚点", "主限法盘星体表格", "主限法盘相位"],
         "example_payload": {
@@ -215,10 +216,11 @@ PREDICTIVE_INPUT_CONTRACTS: dict[str, dict[str, Any]] = {
         "required_fields": ["date", "time", "zone", "lat", "lon"],
         "must_ask": ["本命出生时间地点", "是否指定释放起点/层级"],
         "target_fields": {
-            "startSign": "可选；指定释放起始星座，不给则按星阙默认。",
-            "stopLevelIdx": "可选；释放层级深度，不给则按星阙默认。",
+            "basePoint": "推运基点：Pars Fortuna 福点（缺省）/ Pars Spirit 等六希腊点 / Asc/Desc/MC/IC / 十二星座；取该点所在座起释。",
+            "aiMode": "输出层级：l1_all（缺省）/ l2_in_l1 / l3_in_l2 / l4_in_l3，配 aiL1Idx/aiL2Idx/aiL3Idx（0 起）逐层钻取。",
+            "startSign": "可选；直接指定起释星座（与 basePoint=星座同义）。",
         },
-        "output_contract": ["黄道释放设置", "黄道释放时间轴"],
+        "output_contract": ["起盘信息", "星盘信息", "基于X点推运", "当前时点", "方法说明"],
         "example_payload": {**COMMON_ASTRO_PAYLOAD_EXAMPLE},
     },
     "firdaria": {
@@ -418,9 +420,16 @@ EVENT_METHOD_POLICY = _policy(
 )
 
 
-def _progression_target_policy(*, intent: str, targets: list[dict[str, Any]], do_not_assume: list[str]) -> dict[str, Any]:
+def _progression_target_policy(
+    *,
+    intent: str,
+    targets: list[dict[str, Any]],
+    do_not_assume: list[str],
+    extra_defaults: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """推运族专属策略工厂（v0.36.0 B3）：此前 vedicprog/jaynesprog/planetaryarc/planetaryages/extrareturns
-    共用 ASTRO_BIRTH_POLICY——问宫制却从不问目标时刻/弧源，agent 只能静默默认。"""
+    共用 ASTRO_BIRTH_POLICY——问宫制却从不问目标时刻/弧源，agent 只能静默默认。
+    extra_defaults：该工具在上游的真实缺省（v3.11 同步：目标时刻/月长/速率等），如实写进 safe_defaults。"""
     return _policy(
         intent=intent,
         required_context=COMMON_BIRTH_FIELDS + [str(item.get("field")) for item in targets],
@@ -432,21 +441,30 @@ def _progression_target_policy(*, intent: str, targets: list[dict[str, Any]], do
         safe_defaults=[
             {"field": "hsys", "value": 0, "meaning": "Whole Sign / 整宫制"},
             {"field": "zodiacal", "value": 0, "meaning": "Tropical / 回归黄道"},
+            *(extra_defaults or []),
         ],
         do_not_assume=["birth time", "timezone", *do_not_assume],
     )
 
 
 _TARGET_DATE_QUESTION = {"field": "targetDate/targetTime", "question": "推到哪一天？（targetDate YYYY-MM-DD，可加 targetTime；缺省=今天）"}
+# F10（上游 AstroJaynesProgressions.js:37-39 / astroProgSnapshot.js:57-59）：目标日缺省今天（旧实现是出生日）。
+_PROG_TARGET_DEFAULTS = [
+    {"field": "targetDate", "value": "今天", "meaning": "缺省推到今日（本地日期，上游同律）"},
+    {"field": "targetTime", "value": "12:00:00", "meaning": "目标时刻缺省正午"},
+    {"field": "minorVariant", "value": "synodic", "meaning": "小推运月长=朔望月/年（上游 [Q-180] 缺省）"},
+]
 VEDICPROG_POLICY = _progression_target_policy(
     intent="恒星推运 / Vedic sidereal 二次推运：本命 + 目标日期。",
     targets=[_TARGET_DATE_QUESTION],
     do_not_assume=["target date"],
+    extra_defaults=_PROG_TARGET_DEFAULTS,
 )
 JAYNESPROG_POLICY = _progression_target_policy(
     intent="赤纬推运 / Jayne：二次推运 + 赤纬平行，本命 + 目标日期。",
     targets=[_TARGET_DATE_QUESTION],
     do_not_assume=["target date"],
+    extra_defaults=_PROG_TARGET_DEFAULTS,
 )
 PLANETARYARC_POLICY = _progression_target_policy(
     intent="行星弧向运：整盘按 arcSource 的二次推运弧推进，本命 + 弧源 + 目标时刻。",
@@ -460,6 +478,10 @@ PLANETARYARC_POLICY = _progression_target_policy(
         {"field": "datetime", "question": "推到哪个目标时刻？（datetime YYYY-MM-DD HH:mm:ss + dirZone）"},
     ],
     do_not_assume=["arcSource", "target datetime"],
+    extra_defaults=[
+        {"field": "datetime", "value": "明天此刻", "meaning": "缺省目标时刻=明天此刻（上游 AstroPlanetaryArc.js todayStr，与页面同律）"},
+        {"field": "arcSource", "value": "Moon", "meaning": "月亮弧（上游缺省）"},
+    ],
 )
 PLANETARYAGES_POLICY = _progression_target_policy(
     intent="行星年龄 / 托勒密人生七阶：本命 + 观察基准日。",
@@ -477,6 +499,97 @@ EXTRARETURNS_POLICY = _progression_target_policy(
     ],
     do_not_assume=["timeline range"],
 )
+
+PERSIANDIRECTED_POLICY = _progression_target_policy(
+    intent="波斯向运：黄经象征向运应期表（速率/方向/应期年数驱动主表与指定日期盘）。",
+    targets=[
+        {
+            "field": "rateKey",
+            "question": "向运速率？",
+            "options": ["波斯 1°/年（默认）", "Prophected 30°/年", "Naibod 59′08″/年"],
+            "values": ["persian", "prophected", "naibod"],
+        },
+        {"field": "direction", "question": "向运方向？", "options": ["顺向（默认）", "逆向 Converse"], "values": ["direct", "converse"]},
+    ],
+    do_not_assume=["rateKey", "direction"],
+    extra_defaults=[
+        {"field": "rateKey", "value": "persian", "meaning": "波斯 1°/年（上游缺省）"},
+        {"field": "direction", "value": "direct", "meaning": "顺向（上游缺省）"},
+        {"field": "maxYears", "value": 90, "meaning": "应期年数（上游齿轮 50/90/120/150/200）"},
+    ],
+)
+BALBILLUS_POLICY = _progression_target_policy(
+    intent="Balbillus 129 年系统（旺距削减主限）：起始星 / 年制 / 距离口径改主限铺排。",
+    targets=[{"field": "technique settings", "question": "起始星/年制/距离口径是否沿用星阙默认？", "options": ["沿用默认（太阳·回归年·最近角距）", "指定参数"]}],
+    do_not_assume=[],
+    extra_defaults=[
+        {"field": "startPlanet", "value": "Sun", "meaning": "自太阳起（上游缺省）"},
+        {"field": "yearType", "value": "solar", "meaning": "回归年 365.2422 日"},
+        {"field": "mode", "value": "nearest", "meaning": "最近角距"},
+    ],
+)
+TRIPLICITYRULERS_POLICY = _progression_target_policy(
+    intent="三分主星推运：当值光体三分主星分掌人生阶段（体系/划分法/寿命基准可调）。",
+    targets=[{"field": "technique settings", "question": "三分体系/划分法/寿命基准是否沿用星阙默认？", "options": ["沿用默认（随本盘三分体系·三分·75 岁）", "指定参数"]}],
+    do_not_assume=[],
+    extra_defaults=[
+        {"field": "system", "value": "随本盘 triplicity，否则 Dorothean", "meaning": "三分体系（上游 [Q-187/T-111] 同序）"},
+        {"field": "division", "value": "thirds", "meaning": "三分 0–25/25–50/50–75"},
+        {"field": "lifespan", "value": 75, "meaning": "寿命基准（30–120）"},
+    ],
+)
+KEYPOINTS_POLICY = _progression_target_policy(
+    intent="数字相位推运（120 关键点）：释放点（身=月亮 / 命=上升）改全部激活年。",
+    targets=[{"field": "mode", "question": "释放点？", "options": ["身·月亮起（默认）", "命·上升起"], "values": ["soul", "body"]}],
+    do_not_assume=["mode"],
+    extra_defaults=[{"field": "mode", "value": "soul", "meaning": "身（月亮起，上游缺省）"}],
+)
+
+
+def _predictive_policy_with_defaults(extra_defaults: list[dict[str, Any]]) -> dict[str, Any]:
+    """目标时刻型推运（返照/小限/太阳弧/主限/黄道释放）：共用 PREDICTIVE_POLICY 的问题，safe_defaults 写上游真实缺省。"""
+    policy = deepcopy(PREDICTIVE_POLICY)
+    policy["safe_defaults"] = [*policy["safe_defaults"], *extra_defaults]
+    return policy
+
+
+# F19（上游 aiAnalysisContext.js:2673-2760 / AstroPrimaryDirectionChart.js:454）。
+_RETURN_DEFAULTS = [
+    {"field": "datetime", "value": "今年生日时刻", "meaning": "当年+出生月日+出生时分（上游 [挂载自检 F-17]）"},
+    {"field": "dirLat/dirLon", "value": "出生地", "meaning": "返照地缺省=本命经纬（异地返照请显式给）"},
+    {"field": "dirZone", "value": "本命时区", "meaning": "返照地时区缺省=本命时区"},
+]
+_NOW_TARGET_DEFAULTS = [
+    {"field": "datetime", "value": "此刻", "meaning": "缺省=当前时刻（上游 new DateTime() 钟面 +08:00）"},
+    {"field": "dirZone", "value": "本命时区", "meaning": "目标时区缺省=本命时区"},
+]
+SOLARRETURN_POLICY = _predictive_policy_with_defaults(_RETURN_DEFAULTS)
+PROFECTION_POLICY = _predictive_policy_with_defaults([
+    *_NOW_TARGET_DEFAULTS,
+    {"field": "profGrain", "value": "y", "meaning": "[小限摘要] 年小限（上游缺省）"},
+    {"field": "profStart", "value": "asc", "meaning": "[小限摘要] 自上升起数（上游缺省）"},
+])
+SOLARARC_POLICY = _predictive_policy_with_defaults(_NOW_TARGET_DEFAULTS)
+PD_POLICY = _predictive_policy_with_defaults([
+    {"field": "pdMethod", "value": "core_alchabitius", "meaning": "上游缺省方位法（共 13 法）"},
+    {"field": "pdTimeKey", "value": "Ptolemy", "meaning": "上游缺省度数换算（共 26 项）"},
+])
+PDCHART_POLICY = _predictive_policy_with_defaults([
+    {"field": "datetime", "value": "主限表首条应期", "meaning": "过滤后首条主限行日期（UTC、dirZone=+00:00），无则出生次日"},
+    {"field": "pdMethod", "value": "core_alchabitius", "meaning": "上游缺省方位法"},
+    {"field": "pdTimeKey", "value": "Ptolemy", "meaning": "上游缺省度数换算"},
+])
+ZR_POLICY = _predictive_policy_with_defaults([
+    {"field": "basePoint", "value": "Pars Fortuna", "meaning": "自福点所在座起释（上游缺省）"},
+    {"field": "aiMode", "value": "l1_all", "meaning": "输出全部 L1 期（上游缺省）"},
+])
+# 盘面族（chart/chart13/chart12/hellen_chart/draconic）：[寿命格局] 取主法（F15，上游 AstroLifespan.js METHODS）。
+ASTRO_CHART_POLICY = deepcopy(ASTRO_BIRTH_POLICY)
+ASTRO_CHART_POLICY["safe_defaults"] = [
+    *ASTRO_CHART_POLICY["safe_defaults"],
+    {"field": "lifespanMethod", "value": "ptolemy", "meaning": "[寿命格局] 托勒密取主法（上游缺省；alcabitius/dorotheus 可选）"},
+]
+
 
 # 闸问题允许没有 options 的字段（自由文本/复合输入）；新问题要么带 options 要么在这里登记（tests/test_gate_policies.py 守）。
 FREE_TEXT_GATE_FIELDS: frozenset[str] = frozenset({
@@ -1107,7 +1220,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         safe_defaults=[{"field": "doubingSu28", "value": True, "meaning": "星阙默认"}],
     ),
-    "hellen_chart": ASTRO_BIRTH_POLICY,
+    "hellen_chart": ASTRO_CHART_POLICY,
     "guolao_chart": ASTRO_BIRTH_POLICY,
     "germany": ASTRO_BIRTH_POLICY,
     "agepoint": ASTRO_BIRTH_POLICY,
@@ -1116,11 +1229,11 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     "vedicprog": VEDICPROG_POLICY,
     "planetaryarc": PLANETARYARC_POLICY,
     "planetaryages": PLANETARYAGES_POLICY,
-    "balbillus": ASTRO_BIRTH_POLICY,
+    "balbillus": BALBILLUS_POLICY,
     "yearsystem129": ASTRO_BIRTH_POLICY,
-    "persiandirected": ASTRO_BIRTH_POLICY,
-    "triplicityrulers": ASTRO_BIRTH_POLICY,
-    "keypoints": ASTRO_BIRTH_POLICY,
+    "persiandirected": PERSIANDIRECTED_POLICY,
+    "triplicityrulers": TRIPLICITYRULERS_POLICY,
+    "keypoints": KEYPOINTS_POLICY,
     "lunationphase": ASTRO_BIRTH_POLICY,
     "extrareturns": EXTRARETURNS_POLICY,
     "horary": _policy(
@@ -1298,8 +1411,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         do_not_assume=["harmonic number"],
     ),
-    "chart": ASTRO_BIRTH_POLICY,
-    "chart13": ASTRO_BIRTH_POLICY,
+    "chart": ASTRO_CHART_POLICY,
+    "chart13": ASTRO_CHART_POLICY,
     "huangli": _policy(
         intent="老黄历日课：某一天的宜忌 / 值神值宿 / 彭祖百忌 / 吉神凶煞 / 冲煞胎神方位 / 时辰吉凶 / 物候 / 流年年神方位。",
         required_context=["date"],
@@ -1342,8 +1455,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         output_contract=["起盘信息", "七曜按宫", "分至天狼星", "位三法", "行星神性", "微黄道"],
     ),
     # 十二分盘/龙盘：与本命盘同一套出生资料，无额外结果敏感设置 → 沿用同一策略。
-    "chart12": ASTRO_BIRTH_POLICY,
-    "draconic": ASTRO_BIRTH_POLICY,
+    "chart12": ASTRO_CHART_POLICY,
+    "draconic": ASTRO_CHART_POLICY,
     "relocation": _policy(
         intent="重置盘(relocation)：保留出生时刻，按新居住地重算十二宫与上升/中天（行星黄经不变）。",
         required_context=COMMON_BIRTH_FIELDS + ["relocLat", "relocLon"],
@@ -1401,14 +1514,14 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         safe_defaults=[{"field": "relative", "value": 0, "meaning": "星阙默认"}],
         do_not_assume=["either party's birth time/place"],
     ),
-    "solarreturn": PREDICTIVE_POLICY,
-    "lunarreturn": PREDICTIVE_POLICY,
-    "solararc": PREDICTIVE_POLICY,
-    "givenyear": PREDICTIVE_POLICY,
-    "profection": PREDICTIVE_POLICY,
-    "pd": PREDICTIVE_POLICY,
-    "pdchart": PREDICTIVE_POLICY,
-    "zr": PREDICTIVE_POLICY,
+    "solarreturn": SOLARRETURN_POLICY,
+    "lunarreturn": SOLARRETURN_POLICY,
+    "solararc": SOLARARC_POLICY,
+    "givenyear": SOLARRETURN_POLICY,
+    "profection": PROFECTION_POLICY,
+    "pd": PD_POLICY,
+    "pdchart": PDCHART_POLICY,
+    "zr": ZR_POLICY,
     "firdaria": PREDICTIVE_POLICY,
     "decennials": _policy(
         intent="Decennials / 十年大运 timeline.",

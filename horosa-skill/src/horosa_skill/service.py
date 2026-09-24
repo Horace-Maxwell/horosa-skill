@@ -5,6 +5,7 @@ import contextvars
 import copy
 import gzip
 import logging
+import math
 import os
 import re
 import shutil
@@ -43,6 +44,7 @@ from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS, MIRRORED_UP
 from horosa_skill.input_normalization import normalize_request_payload
 from horosa_skill.knowledge import build_knowledge_registry, read_knowledge_entry, search_knowledge
 from horosa_skill.memory.store import MemoryStore
+from horosa_skill import predictive_text as _ptext
 from horosa_skill.reports import ReportBuilder, render_report
 from horosa_skill.reports.technique_card import build_technique_card, build_technique_report
 from horosa_skill.decisions.layer import DecisionLayer, current_decision_records, decision_records
@@ -1134,7 +1136,8 @@ _PREDICTIVE_METHOD_NOTES: dict[str, list[str]] = {
         "读法：表中每行=一次抵达事件;以应星宫职与迫星性质合断吉凶主题。",
     ],
     "zodialrelease": [
-        "黄道释放：自精神点(或幸运点)起,按行星大年逐层释放,划分人生篇章(一级期)与子期(二级期)。",
+        # 上游 astroAiSnapshot.js:2029-2033 [Q-363/T-344]：缺省基点=福点，期长=各座守护星小年（非行星大年）。
+        "黄道释放：自所选基点(默认幸运点,可改精神点等)所在星座起,按各星座守护星小年逐座、逐层释放,划分人生篇章(一级期)与子期(二级期)。",
         "读法：期主星及其本命状态定该段主题;跳宫(LB)为重大转折;与幸运点十度关系看顺逆。",
     ],
     "firdaria": [
@@ -1142,7 +1145,8 @@ _PREDICTIVE_METHOD_NOTES: dict[str, list[str]] = {
         "读法：主期星定大主题、子期星定阶段事项,两星本命状态与彼此关系定吉凶成色。",
     ],
     "distributions": [
-        "界推运(分配法)：上升(或选定释放点)按主限速率行经黄道各界,界主星即该段\"分配星\"。",
+        # 上游 astroAiSnapshot.js:2038-2042 [Q-170/T-109]：恒以上升为释放点，界表随全局界系。
+        "界推运(分配法)：上升按主限速率行经黄道各界,界主星即该段\"分配星\";界表用当前全局界系设置。",
         "读法：分配星与其间同行的本命星(参与星)共同定该段境遇;换界即换阶段。",
     ],
     "agepoint": [
@@ -1166,8 +1170,9 @@ _PREDICTIVE_METHOD_NOTES: dict[str, list[str]] = {
         "读法：与日返同理,颗粒度为月;月亮状态与四轴最要紧。",
     ],
     "givenyear": [
-        "指定年推运盘：按指定年份取推运时刻起盘,与本命对照。",
-        "读法：推运盘行星落本命宫位与两盘相位定该年主题。",
+        # 上游 astroAiSnapshot.js:2076-2080 [Q-170/T-109]：perpredict 给的是实时天象盘，不是二次推运盘。
+        "指定年天象盘：按所给年份的时刻与地点起一张实时天象盘,与本命对照。",
+        "读法：天象盘行星落本命宫位与两盘相位定该年主题。",
     ],
     "decennials": [
         "十年大运(Decennials)：希腊期法,诸星依序轮值主政各 129 个月(约 10.75 年),内按行星小年分子期。",
@@ -1195,38 +1200,64 @@ _PREDICTIVE_METHOD_NOTES: dict[str, list[str]] = {
         "指定日期：传 datetime=YYYY-MM-DD 可整铸该日向运盘(「指定日期向运盘」段:directed 点位+向运→本命命中);rateKey/direction 可换速率与顺逆。",
     ],
     "yearsystem129": [
-        "129 年系统：以行星大年合计 129 年为总周期,先按大年切主限,再按比例切子限。",
+        # 上游 astroAiSnapshot.js:2111-2115 [Q-170/T-109]：小年 Σ=129，子限=主限小年七等分。
+        "129 年系统：以七星小年合计 129 年为总周期,按小年切主限,主限内再七等分为子限。",
         "读法：主限星定大阶段,子限星定小阶段,起讫日期定应期窗口。",
     ],
     "balbillus": [
-        "主/子限期法(Balbillus)：罗马期法,行星大年定主限时长,主限内按诸星小年比例切子限。",
+        # 上游 astroAiSnapshot.js:2116-2121 [Q-170/T-109·T-110]：旺距削减主限 + 子限按削减年数×本层单位铺开。
+        "主/子限期法(Balbillus)：罗马期法,主限长度=该星小年 ×(1 − 离擢升度角距/360),七星按本命黄经序自起始星铺开;子限以「子星削减年数 × 本层时间单位(L2=月)」顺序铺开,末段填满父期。",
         "读法：主限星与子限星组合断该段主题;换限日期为节点。",
     ],
     "triplicityrulers": [
-        "三分主星推运：命度三分性的三位主星(日/夜/伴)依序主管人生前/中/后三段。",
+        # 上游 astroAiSnapshot.js:2122-2126 [Q-170/T-109]：取当值光体所在座的三分性，非命度。
+        "三分主星推运：当值光体(昼生取太阳、夜生取月亮)所在星座的三分性三主星(日/夜/伴)依序主管人生前/中/后三段。",
         "读法：各段主星的本命状态(庙旺陷落/宫位/受克)直接定该人生阶段的整体成色。",
     ],
     "keypoints": [
-        "数字相位推运(120 关键点)：以 120 的调和因数(2/3/4/5/6/8/10/12…)生成关键年龄激活序列。",
-        "读法：命中因数年龄=激活年;因数越小事件越重;结合被激活点的本命性质定主题。",
+        # 上游 astroAiSnapshot.js:2127-2132 [Q-170/T-109]：位置数 k=自释放点第几座 + 专用小年表倍数激活。
+        "数字相位推运(120 关键点)：每颗星取「自释放点起第几个星座」k(1–12),年龄为 k 的倍数时该星被激活;另按各星专用小年(3/8/18/5/7/9/13)的倍数激活一次。",
+        "读法：命中即激活年;k 越小复现越密;结合被激活点的本命性质定主题。",
     ],
     "lunationphase": [
         "月相推运：二次推运的日月相位约 30 年走完一轮朔望循环,分八相。",
         "读法：新月=起始、上弦=建设、满月=显化、下弦=释放;当前相定人生大节奏。",
     ],
     "extrareturns": [
-        "多重回归：木星/土星等回归本命位置的时刻表(含 1/4、1/2 周期)。",
-        "读法：整回归=大周期重启(如土星回归约 29.5 岁);半/四分之一回归为阶段检查点。",
+        # 上游 astroAiSnapshot.js:2137-2141 [Q-170/T-109]：后端只求整回归，不产 1/4、1/2 周期行。
+        "多重回归：木星/土星等回归本命位置的整回归时刻表。",
+        "读法：整回归=大周期重启(如土星回归约 29.5 岁);两次回归之间可自行取中点作阶段参照,表内不列。",
     ],
 }
 
 
-def _predictive_setup_section_text(technique: str | None, payload: dict[str, Any], response: dict[str, Any]) -> str:
-    """星运族的 [起盘信息] 段（上游 = buildBaseInfoLines(chartObj, fields)，位于段首）。
+def _predictive_birth_source(response: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    """[起盘信息]/[本命盘配置] 生辰行的取源：本命 /chart 响应（{params, chart}）。
 
-    这批技法的响应形态不一：balbillus/keypoints 等带 `chart`，agepoint 只有自家时间线。
-    `_build_base_info_lines` 对空 wrap 会退化成「只用载荷」的三行（日期/时区/经纬度），
-    正好是优雅降级——所以两种形态都能出段，不必逐工具分支。
+    优先 runner 挂上的 natalChart；其次响应本身就是 /chart（balbillus/persiandirected 等）；都没有时
+    降级为「只用载荷」（出生时间/经纬度/时区/黄道/宫制，**不猜昼夜**）。
+    """
+    def _is_chart_response(value: Any) -> bool:
+        return isinstance(value, dict) and isinstance(value.get("chart"), dict) and isinstance(value.get("params"), dict)
+
+    if isinstance(response, dict):
+        # runner 结果常把 /chart 原响应放在 raw 下（progextra/persiandirected/yearsystem129 …）。
+        for candidate in (response.get("natalHeader"), response.get("natalChart"), response, response.get("raw")):
+            if _is_chart_response(candidate):
+                return candidate
+        raw = response.get("raw")
+        if isinstance(raw, dict) and _is_chart_response(raw.get("natalChart")):
+            return raw["natalChart"]
+    return _ptext.payload_chart_wrap(payload)
+
+
+def _predictive_setup_section_text(technique: str | None, payload: dict[str, Any], response: dict[str, Any]) -> str:
+    """星运族的 [起盘信息] 段（上游 = buildPredictiveBirthHeaderLines(chartObj)，位于段首）。
+
+    上游 utils/astroAiSnapshot.js:1956-1998：A 组零盘境键（agepoint/distributions/extrareturns/
+    persiandirected/balbillus/…）用它自成段——出生时间(+星期)/真太阳时/经纬度/时区/黄道/宫制/盘型。
+    旧实现用 buildBaseInfoLines 口径，且对无盘响应（agepoint 等）按 isDiurnal 缺省一律写「夜生盘」——
+    日生盘也标夜生盘；现在 runner 补拉本命盘，拿不到盘时不出「盘型」行（不猜）。
     """
     # 门控按「该键的 preset 是否真列了 [起盘信息]」，而不是按「是不是星运键」——primarydirect /
     # primarydirchart / zodialrelease 同属星运族但上游段首是 [出生时间]，多塞一段会变成 unknown 段。
@@ -1235,14 +1266,15 @@ def _predictive_setup_section_text(technique: str | None, payload: dict[str, Any
         return ""
     if "起盘信息" not in (AI_EXPORT_PRESET_SECTIONS.get(technique or "") or []):
         return ""
-    wrap = _natal_chart_wrap(response) or _top_level_chart_wrap(response) or {}
-    lines = _build_base_info_lines(wrap, payload)
+    lines = _ptext.build_predictive_birth_lines(_predictive_birth_source(response, payload))
     if not lines:
         return ""
     return _render_snapshot_text([("起盘信息", "\n".join(lines))])
 
 
-def _predictive_common_sections_text(technique: str | None, payload: dict[str, Any]) -> str:
+def _predictive_common_sections_text(
+    technique: str | None, payload: dict[str, Any], extra_lines: list[str] | None = None
+) -> str:
     """星运族公共两段：[当前时点](导出时刻+盘主年龄) + [方法说明](机理与读法)。
 
     非星运键返回空串(零变化)。
@@ -1269,7 +1301,17 @@ def _predictive_common_sections_text(technique: str | None, payload: dict[str, A
         if birth_dt is not None:
             age = (now - birth_dt).total_seconds() / (365.2425 * 24 * 3600)
             if -1 < age < 200:
-                moment_lines.append(f"盘主当前年龄：{round(age * 100) / 100} 岁")
+                # 上游 `Math.round(age * 100) / 100`（半数向 +∞，整数不带 .0）。
+                moment_lines.append(f"盘主当前年龄：{_ptext.js_str(_ptext.js_round2(age))} 岁")
+    # 上游 buildCurrentMomentLines(chartObj, extraLines)（astroAiSnapshot.js:2002-2018）：各键 timeline 定位行
+    # （当前年龄点 / 当前分配星 / 当前向运年龄 / 当前所处…）由 builder 用自己的时间轴算好，追加在基线两行后。
+    for line in extra_lines or []:
+        if line:
+            moment_lines.append(f"{line}")
+    # [当前时点] 按该键 preset 门控（与 [起盘信息] 同理）：目标时刻型 5 法（profection/solararc/三返照）上游
+    # buildPredictiveSnapshotText 只出 [方法说明]、preset 也不列 [当前时点]（aiExport.js:641-645）。
+    if "当前时点" not in (AI_EXPORT_PRESET_SECTIONS.get(technique or "") or []):
+        return _render_snapshot_text([("方法说明", "\n".join(notes))])
     return _render_snapshot_text([("当前时点", "\n".join(moment_lines)), ("方法说明", "\n".join(notes))])
 
 
@@ -3946,38 +3988,157 @@ def _build_harmonic_snapshot_text(payload: dict[str, Any], response: dict[str, A
     )
 
 
+def _ap_name(value: Any) -> str:
+    """上游 AstroAgePoint.js:19 apName / AstroDistributions.js:21 distName：空 → '-'，否则 AstroTxtMsg。"""
+    if value is None or value == "":
+        return "-"
+    return _ptext.astro_txt(value)
+
+
+def _fmt_age(value: Any) -> str:
+    """上游 AstroAgePoint.js:37 fmtAge：整数原样，其余 toFixed(2) 去尾零。"""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return f"{value}"
+    if not math.isfinite(number):
+        return f"{value}"
+    if number == int(number):
+        return str(int(number))
+    return re.sub(r"\.?0+$", "", _ptext.js_to_fixed(number, 2))
+
+
+def _agepoint_row_aspects(point: dict[str, Any]) -> list[dict[str, Any]]:
+    """上游 AstroAgePoint.js:25 rowAspects：新后端 aspects=[{aspectTo,aspectAge}]；旧字段 aspectTo 兼容回退。"""
+    aspects = point.get("aspects")
+    if isinstance(aspects, list) and aspects:
+        return [a for a in aspects if isinstance(a, dict)]
+    if point.get("aspectTo"):
+        return [{"aspectTo": point.get("aspectTo"), "aspectAge": point.get("aspectAge")}]
+    return []
+
+
+def _finite_number(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _agepoint_aspect_text(point: dict[str, Any]) -> str:
+    parts = []
+    for asp in _agepoint_row_aspects(point):
+        age = _finite_number(asp.get("aspectAge"))
+        parts.append(f"{_ap_name(asp.get('aspectTo'))}{f'({_fmt_age(age)}岁)' if age is not None else ''}")
+    return "、".join(parts)
+
+
+def _agepoint_sign_text(point: dict[str, Any]) -> str:
+    signlon = point.get("signlon")
+    return f"{_ap_name(point.get('sign'))}{(' ' + _ptext.js_str(signlon) + '°') if signlon is not None else ''}"
+
+
 def _build_agepoint_snapshot_text(response: dict[str, Any]) -> str:
-    # Port of 星阙 AstroAgePoint.buildAgePointSnapshotText. response = {agepoint: {points: [...]}}.
+    # 逐字镜像上游 components/astro/AstroAgePoint.js:44-100 buildAgePointSnapshotText。
+    # [Q-184/T-103]：后端给连续穿越解 crossings（精确岁数）+ 每行 aspects 列表；旧后端无 crossings 时由行拼出。
     ap = response.get("agepoint") if isinstance(response.get("agepoint"), dict) else {}
-    points = ap.get("points") if isinstance(ap.get("points"), list) else []
+    points = [p for p in (ap.get("points") if isinstance(ap.get("points"), list) else []) if isinstance(p, dict)]
     if not points:
         # 无年龄推进点数据 = 该技法在本盘缺失（与 star阙 "挂载显示缺失" 一致）。
         return _render_snapshot_text([("年龄推进点（Age Point / Huber）", "（本盘无年龄推进点数据）")])
+    crossings = ap.get("crossings") if isinstance(ap.get("crossings"), list) else []
+    crossings = [c for c in crossings if isinstance(c, dict)]
+    if not crossings:
+        for point in points:
+            for asp in _agepoint_row_aspects(point):
+                age = _finite_number(asp.get("aspectAge"))
+                crossings.append({"age": age if age is not None else point.get("age"), "aspectTo": asp.get("aspectTo")})
     lines = ["年龄点自上升点起，沿 Koch 宫顺行，每宫 6 年、72 年回归上升；落于本命星处（合相）为人生关键节点。"]
-    key_ages = [p for p in points if isinstance(p, dict) and p.get("aspectTo")]
-    if key_ages:
+    if crossings:
         lines.append("")
-        lines.append("关键岁数（合本命）：" + "；".join(f"{p.get('age')}岁合{_astro_msg(p.get('aspectTo'))}" for p in key_ages))
+        lines.append(
+            "关键岁数（合本命，精确穿越岁数）："
+            + "；".join(f"{_fmt_age(c.get('age'))}岁合{_ap_name(c.get('aspectTo'))}" for c in crossings)
+        )
     lines.append("")
-    lines.append("| 年龄 | 落座 | 宫 | 合本命 |")
+    lines.append("| 年龄 | 落座 | 宫 | 合本命（穿越岁数） |")
     lines.append("| --- | --- | --- | --- |")
-    for p in points:
-        if not isinstance(p, dict):
-            continue
-        signlon = p.get("signlon")
-        sign = _astro_msg(p.get("sign")) + (f" {signlon}°" if signlon is not None else "")
-        aspect_to = _astro_msg(p.get("aspectTo")) if p.get("aspectTo") else "—"
-        lines.append(f"| {p.get('age')}岁 | {sign} | {p.get('house')}宫 | {aspect_to} |")
+    for point in points:
+        asp = _agepoint_aspect_text(point)
+        lines.append(f"| {_ptext.js_str(point.get('age'))}岁 | {_agepoint_sign_text(point)} | {_ptext.js_str(point.get('house'))}宫 | {asp or '—'} |")
     return _render_snapshot_text([("年龄推进点（Age Point / Huber）", "\n".join(lines))])
 
 
+def _js_date_parse(text: Any) -> datetime | None:
+    """浏览器 `Date.parse` 对后端日期串的两种形：纯日期 'YYYY-MM-DD' = UTC 零点；带时刻 = 本地墙钟。
+    返回 naive 本地时间（与 datetime.now() 同一参照系）；解析不了 → None。"""
+    raw = f"{text or ''}".strip().replace("/", "-")
+    if not raw:
+        return None
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
+        try:
+            utc = datetime.strptime(raw, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+        return utc.astimezone().replace(tzinfo=None)
+    raw = raw.replace("T", " ")
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        try:
+            return datetime.strptime(raw, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _agepoint_moment_line(response: dict[str, Any], birth: Any, now: datetime | None = None) -> str:
+    """上游 AstroAgePoint.js:81-92：定位行 = age ≤ 当前年龄的最大行（年长 365.2425 天）。"""
+    ap = response.get("agepoint") if isinstance(response.get("agepoint"), dict) else {}
+    points = [p for p in (ap.get("points") if isinstance(ap.get("points"), list) else []) if isinstance(p, dict)]
+    birth_dt = _js_date_parse(birth)
+    if birth_dt is None or not points:
+        return ""
+    cur_age = ((now or datetime.now()) - birth_dt).total_seconds() / (365.2425 * 24 * 3600)
+    current = None
+    for point in points:
+        age = _finite_number(point.get("age"))
+        if age is not None and age <= cur_age and (current is None or age > _finite_number(current.get("age"))):
+            current = point
+    if current is None:
+        return ""
+    asp = _agepoint_aspect_text(current)
+    return (
+        f"当前年龄点：{_ptext.js_str(current.get('age'))}岁 落{_agepoint_sign_text(current)}，"
+        f"第{_ptext.js_str(current.get('house'))}宫{f'，合本命{asp}' if asp else ''}"
+    )
+
+
+def _distributions_moment_line(response: dict[str, Any], now: datetime | None = None) -> str:
+    """上游 AstroDistributions.js:57-67：今日所在分配段（起止可解析且含今日才出）。"""
+    rows = response.get("dist") if isinstance(response.get("dist"), list) else []
+    moment = now or datetime.now()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        start, end = _js_date_parse(row.get("startDate")), _js_date_parse(row.get("endDate"))
+        if start is not None and end is not None and start <= moment <= end:
+            return (
+                f"当前分配星：{_ap_name(row.get('distributor'))}（{_ap_name(row.get('sign'))} 界，"
+                f"{row.get('startDate') or '-'} ~ {row.get('endDate') or '-'}）"
+            )
+    return ""
+
+
 def _build_distributions_snapshot_text(response: dict[str, Any]) -> str:
-    # Port of 星阙 AstroDistributions.buildDistributionsSnapshotText. response = {dist: [...]}.
+    # 逐字镜像上游 components/astro/AstroDistributions.js:27-56 buildDistributionsSnapshotText。
+    # [Q-176/T-116a] 界表随全局界系（后端 TermDirection 收 terms_variant），不是写死埃及界。
     rows = response.get("dist") if isinstance(response.get("dist"), list) else []
     if not rows:
         return _render_snapshot_text([("界推运（分配法 / Distributions）", "（本盘无界推运数据）")])
     lines = [
-        "上升点经主限运动穿越各埃及界；分配星=界主星，参与星=该期间内上升点触及的行星。",
+        "上升点经主限运动穿越黄道各界（界表用当前全局界系设置）；分配星=界主星，参与星=该期间内上升点触及的行星。",
         "",
         "| 分配星 | 界(座) | 参与星 | 起 | 止 |",
         "| --- | --- | --- | --- | --- |",
@@ -3986,9 +4147,9 @@ def _build_distributions_snapshot_text(response: dict[str, Any]) -> str:
         if not isinstance(row, dict):
             continue
         participants = row.get("participants") if isinstance(row.get("participants"), list) else []
-        part = "、".join(_astro_msg(x) for x in participants) if participants else "—"
+        part = "、".join(_ap_name(x) for x in participants) if participants else "—"
         lines.append(
-            f"| {_astro_msg(row.get('distributor'))} | {_astro_msg(row.get('sign'))} | {part} | {row.get('startDate') or '-'} | {row.get('endDate') or '-'} |"
+            f"| {_ap_name(row.get('distributor'))} | {_ap_name(row.get('sign'))} | {part} | {row.get('startDate') or '-'} | {row.get('endDate') or '-'} |"
         )
     return _render_snapshot_text([("界推运（分配法 / Distributions）", "\n".join(lines))])
 
@@ -4008,108 +4169,248 @@ def _fmt_num(value: Any, digits: int = 3) -> str:
 _PROGRESSION_EVENT_POINTS = ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Asc", "MC"]
 
 
-def _build_jaynesprog_snapshot_text(response: dict[str, Any]) -> str:
-    # Port of 星阙 AstroJaynesProgressions.buildJaynesProgSnapshotText. response = {methods:[{method,parallels}]}.
-    methods = response.get("methods") if isinstance(response.get("methods"), list) else []
-    sec = next((m for m in methods if isinstance(m, dict) and m.get("method") == "secondary"), methods[0] if methods else None)
+def _natal_birth_config_block(response: dict[str, Any], payload: dict[str, Any] | None) -> list[str]:
+    """上游 [本命盘配置] 头（jaynes/vedic/planetaryarc 同形）：生辰裸行 + 星与虚点 + 宫位宫头。
+
+    上游 AstroJaynesProgressions.js:59-66 / astroProgSnapshot.js:88-96 / AstroPlanetaryArc.js:62-72：
+    `if(natalStars.length || natalHouses.length || natalBirth.length)` 才出段；生辰行在前（[YB v42]）。
+    （星与虚点/宫位宫头两子块用本仓共享 line-builder——上游 v3.11 已把它们表化成 GFM 表，属西占公共件口径，
+    由盘面族统一切换，这里不私自分叉。）
+    """
+    natal_wrap = _natal_chart_wrap(response)
+    birth = _ptext.build_predictive_birth_lines(_predictive_birth_source(response, payload or {}))
+    stars = _build_star_and_lot_position_lines(natal_wrap) if natal_wrap else []
+    houses = _build_house_cusp_lines(natal_wrap) if natal_wrap else []
+    if not (stars or houses or birth):
+        return []
+    block = ["[本命盘配置]", *birth]
+    if stars:
+        block.extend(["星与虚点", *stars])
+    if houses:
+        block.extend(["宫位宫头", *houses])
+    return block
+
+
+def _prog_parallel_row(p: dict[str, Any]) -> str:
+    type_label = "反平行" if p.get("type") == "contraparallel" else "平行"
+    return f"| {_ptext.astro_txt(p.get('a'))} | {type_label} | {_ptext.astro_txt(p.get('b'))} | {_ptext.js_fmt_num(p.get('orb'), 3)} |"
+
+
+def _build_jaynesprog_snapshot_text(
+    response: dict[str, Any],
+    payload: dict[str, Any] | None = None,
+    *,
+    target_date: str = "",
+    target_time: str = "12:00:00",
+    minor_variant: str = _ptext.DEFAULT_MINOR_VARIANT,
+) -> str:
+    """逐字镜像上游 components/astro/AstroJaynesProgressions.js:33-117 buildJaynesProgSnapshotText。
+
+    [Q-176/T-116b] 首行写「推至所选目标日期」；目标日期行写明目标日期→各法推运时刻的映射；
+    [YB v42] 三法（二次/三次/小推运）全量各出 ◆ 小节 + 本命赤纬；[Q-180] 小推运写明月长档。
+    """
+    methods = [m for m in (response.get("methods") if isinstance(response.get("methods"), list) else []) if isinstance(m, dict)]
+    sec = next((m for m in methods if m.get("method") == "secondary"), methods[0] if methods else None)
     parallels = sec.get("parallels") if isinstance(sec, dict) and isinstance(sec.get("parallels"), list) else []
     if not parallels:
         return _render_snapshot_text([("赤纬推运（Declination）", "（本盘无赤纬推运数据）")])
-    type_label = {"parallel": "平行", "contraparallel": "反平行"}
-    table = ["| 推运点 | 类型 | 本命点 | 误差 |", "| --- | --- | --- | --- |"]
-    for p in parallels[:80]:
-        if not isinstance(p, dict):
-            continue
-        table.append(f"| {_astro_msg(p.get('a'))} | {type_label.get(p.get('type'), p.get('type'))} | {_astro_msg(p.get('b'))} | {_fmt_num(p.get('orb'), 3)} |")
-    return _render_snapshot_text([
-        ("赤纬推运（Declination）", "赤纬推运：推运后看赤纬平行/反平行（下表为二次推运，截至目标日）。"),
-        ("时段盘 赤纬平行/反平行", "\n".join(table)),
-    ])
-
-
-def _build_vedicprog_snapshot_text(response: dict[str, Any], payload: dict[str, Any] | None = None) -> str:
-    # Port of 星阙 AstroVedicProgressions.buildVedicProgSnapshotText. response = {methods:[{method,positions}]}.
-    methods = response.get("methods") if isinstance(response.get("methods"), list) else []
-    sec = next((m for m in methods if isinstance(m, dict) and m.get("method") == "secondary"), methods[0] if methods else None)
-    positions = sec.get("positions") if isinstance(sec, dict) and isinstance(sec.get("positions"), list) else []
-    rows = [p for p in positions if isinstance(p, dict) and p.get("id") in _PROGRESSION_EVENT_POINTS]
-    if not rows:
-        return _render_snapshot_text([("恒星推运（Vedic Sidereal）", "（本盘无恒星推运数据）")])
     lines = [
-        "二次/三次/小限推运在恒星黄道（sidereal）下计算；下表为二次推运（截至目标日）。",
-        "",
-        "| 点 | 恒星推运位置 |",
-        "| --- | --- |",
+        "[赤纬推运（Declination）]",
+        "赤纬推运：推运后看赤纬平行/反平行（下表为二次推运，推至所选目标日期）。",
+        f"目标日期：{target_date} {target_time}（各法推运时刻=按该法折算，见各小节）",
     ]
-    for p in rows:
-        deg, minute = _split_degree(p.get("signlon", p.get("lon")))
-        lines.append(f"| {_astro_msg(p.get('id'))} | {_astro_msg(p.get('sign'))} {deg}˚{minute}分 |")
-    # 上游 preset 除技法主段外还列 [本命盘配置] 与 [时段盘配置 二次推运位置]；本命盘由
-    # _attach_predictive_chart_context 补拉（/predict/vedicprog 只回 methods），时段盘就是 methods
-    # 里的二次推运位置表 —— 它与主段同源，故这里复用同一批行，不重算。
-    sections: list[tuple[str, str]] = [("恒星推运（Vedic Sidereal）", "\n".join(lines))]
-    natal_wrap = _natal_chart_wrap(response)
-    if natal_wrap:
-        natal_lines = _natal_config_lines(natal_wrap)
-        if natal_lines:
-            sections.append(("本命盘配置", "\n".join(natal_lines)))
-    directed = [f"{_astro_msg(p.get('id'))}：{_astro_msg(p.get('sign'))} "
-                f"{_split_degree(p.get('signlon', p.get('lon')))[0]}˚{_split_degree(p.get('signlon', p.get('lon')))[1]}分"
-                for p in rows]
-    if directed:
-        sections.append(("时段盘配置 二次推运位置", "\n".join(directed)))
-    return _render_snapshot_text(sections)
+    natal_block = _natal_birth_config_block(response, payload)
+    natal_decls = [d for d in (response.get("natalDeclinations") if isinstance(response.get("natalDeclinations"), list) else []) if isinstance(d, dict)]
+    if natal_block:
+        lines.append("")
+        lines.extend(natal_block)
+        # [YB v42] UI 赤纬图有本命赤纬列 → ◆ 子题段内纯增（平行/反平行的本命侧参照）。
+        if natal_decls:
+            lines.extend(["", "◆ 本命赤纬", "| 点 | 赤纬 |", "| --- | --- |"])
+            lines.extend(f"| {_ptext.astro_txt(d.get('id'))} | {_ptext.js_fmt_num(d.get('decl'), 2)}° |" for d in natal_decls)
+    lines.extend(["", "[时段盘 赤纬平行/反平行]", "| 推运点 | 类型 | 本命点 | 误差 |", "| --- | --- | --- | --- |"])
+    lines.extend(_prog_parallel_row(p) for p in parallels[:80] if isinstance(p, dict))
+
+    def push_method_blocks(method: dict[str, Any], with_parallels: bool) -> None:
+        label = _ptext.prog_method_tab(method)
+        progressed = method.get("progressedDate") if isinstance(method.get("progressedDate"), dict) else {}
+        when = progressed.get("datetime") or ""
+        decls = [d for d in (method.get("declinations") if isinstance(method.get("declinations"), list) else []) if isinstance(d, dict)]
+        if decls:
+            lines.extend(["", f"◆ {label} 推运赤纬"])
+            if when:
+                lines.append(f"推运时刻：{when}")
+            if method.get("method") == "minor":
+                lines.append(f"月长算法：{_ptext.MINOR_VARIANT_LABEL.get(minor_variant) or minor_variant}")
+            lines.extend(["| 点 | 赤纬 |", "| --- | --- |"])
+            lines.extend(f"| {_ptext.astro_txt(d.get('id'))} | {_ptext.js_fmt_num(d.get('decl'), 2)}° |" for d in decls)
+        rows = [p for p in (method.get("parallels") if isinstance(method.get("parallels"), list) else []) if isinstance(p, dict)]
+        if with_parallels and rows:
+            lines.extend(["", f"◆ {label} 赤纬平行/反平行", "| 推运点 | 类型 | 本命点 | 误差 |", "| --- | --- | --- | --- |"])
+            lines.extend(_prog_parallel_row(p) for p in rows[:80])
+
+    push_method_blocks(sec, False)
+    for method in methods:
+        if method is not sec:
+            push_method_blocks(method, True)
+    return "\n".join(lines).strip()
+
+
+# 上游 components/astro/astroProgSnapshot.js:36-49 PROG_SNAPSHOT_VARIANTS（恒星支 vedicprog / 回归支 prog 同一 builder）。
+_PROG_SNAPSHOT_VARIANTS: dict[str, dict[str, Any]] = {
+    "vedicprog": {
+        "zodiacal": 1,
+        "section": "恒星推运（Vedic Sidereal）",
+        # [Q-176/T-116b] 「截至今日」写死，而紧接的下一行就是非今日的「目标日期」→ 改成中性说法。
+        "intro": "二次/三次/小限推运在恒星黄道（sidereal）下计算；下表为二次推运，推至下方所列目标日期。",
+        "posCol": "恒星推运位置",
+    },
+    "prog": {
+        "zodiacal": None,
+        "section": "二次推运（回归黄道）",
+        "intro": "二次/三次/小限推运在回归黄道（tropical）下计算；下表为二次推运，推至下方所列目标日期。",
+        "posCol": "推运位置",
+    },
+}
+
+
+def _build_prog_snapshot_text(
+    response: dict[str, Any],
+    payload: dict[str, Any] | None,
+    variant_key: str,
+    *,
+    target_date: str = "",
+    target_time: str = "12:00:00",
+    minor_variant: str = _ptext.DEFAULT_MINOR_VARIANT,
+) -> str:
+    """逐字镜像上游 components/astro/astroProgSnapshot.js:53-140 buildProgSnapshotText(chartObj, opts, variantKey)。"""
+    variant = _PROG_SNAPSHOT_VARIANTS[variant_key]
+    methods = [m for m in (response.get("methods") if isinstance(response.get("methods"), list) else []) if isinstance(m, dict)]
+    secondary = next((m for m in methods if m.get("method") == "secondary"), methods[0] if methods else None)
+    positions = secondary.get("positions") if isinstance(secondary, dict) and isinstance(secondary.get("positions"), list) else []
+    if not positions:
+        return _render_snapshot_text([(variant["section"], "（本盘无推运数据）")])
+    pos_col = variant["posCol"]
+    lines = [
+        f"[{variant['section']}]",
+        variant["intro"],
+        f"目标日期：{target_date} {target_time}（各法推运时刻=按该法折算，见各小节）",
+    ]
+    natal_block = _natal_birth_config_block(response, payload)
+    if natal_block:
+        lines.append("")
+        lines.extend(natal_block)
+    lines.extend(["", "[时段盘配置 二次推运位置]", f"| 点 | {pos_col} |", "| --- | --- |"])
+    lines.extend(
+        f"| {_ptext.astro_txt(p.get('id'))} | {_ptext.fmt_degree(p)} |"
+        for p in positions
+        if isinstance(p, dict) and p.get("id") in _PROGRESSION_EVENT_POINTS
+    )
+
+    def asp_txt(value: Any) -> str:
+        key = _ptext.js_fmt_num(value, 0)
+        return _ptext.UPSTREAM_ASTRO_TXT_MSG.get(f"Asp{key}") or f"{key}°"
+
+    def push_method_blocks(method: dict[str, Any], with_positions: bool) -> None:
+        label = _ptext.prog_method_tab(method)
+        progressed = method.get("progressedDate") if isinstance(method.get("progressedDate"), dict) else {}
+        when = progressed.get("datetime") or ""
+        rows = [p for p in (method.get("positions") if isinstance(method.get("positions"), list) else []) if isinstance(p, dict)]
+        if with_positions and rows:
+            lines.extend(["", f"◆ {label} 推运位置"])
+            if when:
+                lines.append(f"推运时刻：{when}")
+            if method.get("method") == "minor":
+                lines.append(f"月长算法：{_ptext.MINOR_VARIANT_LABEL.get(minor_variant) or minor_variant}")
+            lines.extend([f"| 点 | {pos_col} | 速度 |", "| --- | --- | --- |"])
+            lines.extend(
+                f"| {_ptext.astro_txt(p.get('id'))} | {_ptext.fmt_degree(p)} | {_ptext.js_fmt_num(p.get('lonspeed'), 4)} |"
+                for p in rows
+                if p.get("id") in _PROGRESSION_EVENT_POINTS
+            )
+        aspects = [a for a in (method.get("aspectsToNatal") if isinstance(method.get("aspectsToNatal"), list) else []) if isinstance(a, dict)]
+        if aspects:
+            lines.extend(["", f"◆ {label} 与本命相位", "| 推运点 | 相位 | 本命点 | 误差 |", "| --- | --- | --- | --- |"])
+            lines.extend(
+                f"| {_ptext.astro_txt(a.get('a'))} | {asp_txt(a.get('aspect'))} | {_ptext.astro_txt(a.get('b'))} | {_ptext.js_fmt_num(a.get('orb'), 3)} |"
+                for a in aspects[:120]
+            )
+
+    push_method_blocks(secondary, False)
+    for method in methods:
+        if method is not secondary:
+            push_method_blocks(method, True)
+    return "\n".join(lines).strip()
+
+
+def _build_vedicprog_snapshot_text(
+    response: dict[str, Any],
+    payload: dict[str, Any] | None = None,
+    *,
+    target_date: str = "",
+    target_time: str = "12:00:00",
+    minor_variant: str = _ptext.DEFAULT_MINOR_VARIANT,
+) -> str:
+    """上游 astroProgSnapshot.js:142 buildVedicProgSnapshotText = buildProgSnapshotText(…, 'vedicprog')。"""
+    return _build_prog_snapshot_text(
+        response, payload, "vedicprog", target_date=target_date, target_time=target_time, minor_variant=minor_variant
+    )
+
+
+# 上游 components/astro/AstroPlanetaryArc.js:19 ARC_SOURCES（页面/挂载齿轮同值域）。
+_ARC_SOURCES = ("Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Sun")
+
+
+def _planetaryarc_default_datetime(now: datetime | None = None) -> str:
+    """上游 AstroPlanetaryArc.js:46 todayStr()：[Q-174/T-114] 缺省目标时刻 = 「明天此刻」（与页面构造期
+    dt.addDate(1) 同律；函数名叫 today 但取的是 now+24h）。"""
+    return ((now or datetime.now()) + timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _build_planetaryarc_snapshot_text(response: dict[str, Any], payload: dict[str, Any] | None = None) -> str:
-    # Port of 星阙 AstroPlanetaryArc.formatArcSnapshot. response = {chart:{aspects:[{directId,objects:[{aspect,natalId,delta}]}]}}.
+    """逐字镜像上游 components/astro/AstroPlanetaryArc.js:53-99 formatArcSnapshot。
+
+    段构成：[行星弧（Planetary Arc）]（仅引言）/ [本命盘配置]（生辰 + 星与虚点 + 宫位宫头）/
+    [时段盘配置]（向运盘 星与虚点 + 宫位宫头）/ [相位]（| 向运星 | 相位 | 本命星 | 误差 | 表，≤120 行）。
+    旧实现把相位表塞在主段、[相位] 段另写「行运X 与 本命Y」句式——两段都与上游不同形。
+    """
     chart = response.get("chart") if isinstance(response.get("chart"), dict) else {}
-    aspects = chart.get("aspects") if isinstance(chart.get("aspects"), list) else []
-    rows: list[str] = []
+    aspects = chart.get("aspects") if isinstance(chart.get("aspects"), list) else None
+    if aspects is None:
+        return _render_snapshot_text([("行星弧（Planetary Arc）", "（本盘无行星弧数据）")])
+    lines = [
+        "[行星弧（Planetary Arc）]",
+        "行星弧(默认月亮弧)：以所选天体的二次推运移动量为弧推进全盘，看向运星对本命的相位。",
+    ]
+    natal_block = _natal_birth_config_block(response, payload)
+    if natal_block:
+        lines.append("")
+        lines.extend(natal_block)
+    predictive_wrap = _predictive_chart_wrap(response)
+    arc_stars = _build_star_and_lot_position_lines(predictive_wrap)
+    arc_houses = _build_house_cusp_lines(predictive_wrap)
+    if arc_stars or arc_houses:
+        lines.extend(["", "[时段盘配置]"])
+        if arc_stars:
+            lines.extend(["星与虚点", *arc_stars])
+        if arc_houses:
+            lines.extend(["宫位宫头", *arc_houses])
+    lines.extend(["", "[相位]", "| 向运星 | 相位 | 本命星 | 误差 |", "| --- | --- | --- | --- |"])
+    count = 0
     for row in aspects:
         if not isinstance(row, dict):
             continue
-        for o in row.get("objects") or []:
-            if len(rows) >= 120 or not isinstance(o, dict):
+        for obj in row.get("objects") or []:
+            if count >= 120 or not isinstance(obj, dict):
                 continue
-            delta = o.get("delta")
-            delta_text = f"{round(float(delta) * 1000) / 1000}" if isinstance(delta, (int, float)) else ""
-            rows.append(f"| {_astro_msg(row.get('directId'))} | {_aspect_label(o.get('aspect'))} | {_astro_msg(o.get('natalId'))} | {delta_text} |")
-    if not rows:
-        arc_body = "（本盘无行星弧数据）"
-    else:
-        arc_body = "\n".join(
-            ["行星弧(默认月亮弧)：以所选天体的二次推运移动量为弧推进全盘，看向运星对本命的相位。", "", "| 向运星 | 相位 | 本命星 | 误差 |", "| --- | --- | --- | --- |"] + rows
-        )
-    # 上游 preset 除技法主段外还列 [本命盘配置]/[时段盘配置]/[相位]（与推运族同结构）——
-    # 本命盘由 _attach_predictive_chart_context 补拉，时段盘就是响应里的 chart。
-    sections: list[tuple[str, str]] = [("行星弧（Planetary Arc）", arc_body)]
-    fields = payload or {}
-    natal_wrap = _natal_chart_wrap(response)
-    predictive_wrap = _predictive_chart_wrap(response)
-    if natal_wrap:
-        natal_lines = _build_base_info_lines(natal_wrap, fields)
-        cusp_lines = _build_house_cusp_lines(natal_wrap)
-        if cusp_lines:
-            natal_lines.extend(["宫位宫头", *cusp_lines])
-        star_lines = _build_star_and_lot_position_lines(natal_wrap)
-        if star_lines:
-            natal_lines.extend(["星与虚点", *star_lines])
-        if natal_lines:
-            sections.append(("本命盘配置", "\n".join(natal_lines)))
-    directed_lines: list[str] = []
-    directed_stars = _build_star_and_lot_position_lines(predictive_wrap)
-    if directed_stars:
-        directed_lines.extend(["时段盘 星与虚点", *directed_stars])
-    directed_cusps = _build_house_cusp_lines(predictive_wrap)
-    if directed_cusps:
-        directed_lines.extend(["时段盘 宫位宫头", *directed_cusps])
-    if directed_lines:
-        sections.append(("时段盘配置", "\n".join(directed_lines)))
-    cross = _build_predictive_cross_aspect_lines(response, predictive_wrap, natal_wrap)
-    if cross:
-        sections.append(("相位", "\n".join(cross)))
-    return _render_snapshot_text(sections)
+            delta = obj.get("delta")
+            delta_text = _ptext.js_str(_ptext.js_round(float(delta) * 1000) / 1000) if isinstance(delta, (int, float)) else ""
+            lines.append(
+                f"| {_ptext.astro_txt(row.get('directId'))} | {_ptext.asp_txt(obj.get('aspect'))} | "
+                f"{_ptext.astro_txt(obj.get('natalId'))} | {delta_text} |"
+            )
+            count += 1
+    return "\n".join(lines).strip()
 
 
 # 托勒密人生七阶 (Ports of Man) — fixed age bands, each ruled by a classical planet (= 星阙 PLANETARY_AGES).
@@ -4219,76 +4520,161 @@ def _persian_lon_of(obj: dict[str, Any] | None) -> float | None:
     return None
 
 
-def _build_persiandirected_snapshot_text(response: dict[str, Any]) -> str:
-    # Port of 星阙 AstroPersianDirected.buildPersianHits + buildPersianDirectedSnapshotText (pure arithmetic):
-    # symbolic 1°/year direction — every planet/point advances +1° per year, natal cusps fixed; list the hits.
-    import datetime as _dt
+# 上游 components/astro/AstroPersianDirected.js:26-29 速率表 + 缺省（波斯速率 + 顺向 + 90 年）。
+_PERSIAN_RATE = {"persian": 1.0, "prophected": 30.0, "naibod": 0.9856473}
+_PERSIAN_RATE_LABEL = {"persian": "波斯 1°/年", "prophected": "Prophected 30°/年", "naibod": "Naibod 59′08″/年"}
+# 上游挂载齿轮（techniqueMountSettings.js:1315-1328）的应期年数五档；builder 本身收任意正数。
+_PERSIAN_MAX_YEARS_OPTIONS = (50, 90, 120, 150, 200)
+_PERSIAN_YEAR_DAYS = 365.2421904
 
-    chart = response.get("chart") if isinstance(response.get("chart"), dict) else {}
-    params = response.get("params") if isinstance(response.get("params"), dict) else {}
-    objects = chart.get("objects") if isinstance(chart.get("objects"), list) else []
-    houses = chart.get("houses") if isinstance(chart.get("houses"), list) else []
-    rate, cap = 1.0, 90  # persian rate 1°/年, direct, maxAge 90
 
-    by_id: dict[str, float] = {}
-    for o in objects:
-        if isinstance(o, dict):
-            lon = _persian_lon_of(o)
-            if lon is not None:
-                by_id[o.get("id")] = lon % 360
-    targets: list[tuple[str, float]] = [(oid, lon) for oid, lon in by_id.items()]
-    for i, h in enumerate(houses):
-        lon = _persian_lon_of(h)
-        if lon is not None:
-            targets.append((f"{i + 1}宫头", lon % 360))
+def _require_option(value: Any, allowed: Any, *, field: str, tool: str) -> None:
+    """推运族可选项的值域闸：认不出的值报结构化错误（不静默回落缺省——那会算出另一张盘而不自知）。"""
+    if value in allowed:
+        return
+    raise ToolValidationError(
+        f"{tool} 的 {field}={value!r} 不在上游值域内 / {tool}: {field}={value!r} is not a supported value.",
+        code="tool.predictive_invalid_option",
+        details={"tool": tool, "field": field, "value": value, "allowed": list(allowed)},
+    )
 
-    birth_raw = f"{params.get('birth', '')}".strip().replace("/", "-")
-    birth_dt = None
+
+def _persian_birth_date(birth: Any) -> datetime | None:
+    raw = f"{birth or ''}".strip().replace("/", "-")
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
         try:
-            birth_dt = _dt.datetime.strptime(birth_raw, fmt)
-            break
+            return datetime.strptime(raw, fmt)
         except ValueError:
             continue
+    return None
 
+
+def _build_persian_hits(chart_obj: dict[str, Any], rate_key: str, max_age: float, direction: str) -> list[dict[str, Any]]:
+    """逐字镜像上游 AstroPersianDirected.js:56-98 `buildPersianHits`。
+
+    [Q-168/T-102] 速率 >1°/年（Prophected 30°/年）一生可绕黄道多周：按 arc+360k 逐周取应期至 cap。
+    日期 = moment(birth).add(age·365.2421904, 'days')——moment 对小数天**四舍五入到整天**（2.12+ 语义，
+    node 实测 add(0.5,'days') 进一天），故这里按 JS Math.round 取整天后加到出生日上，与上游逐日一致。
+    """
+    chart = chart_obj.get("chart") if isinstance(chart_obj.get("chart"), dict) else {}
+    params = chart_obj.get("params") if isinstance(chart_obj.get("params"), dict) else {}
+    objects = chart.get("objects") if isinstance(chart.get("objects"), list) else []
+    rate = _PERSIAN_RATE.get(rate_key) or 1.0
+    cap = max_age or 90
+    converse = direction == "converse"
+    by_id: dict[str, float] = {}
+    for obj in objects:
+        if isinstance(obj, dict):
+            lon = _persian_lon_of(obj)
+            if lon is not None:
+                by_id[obj.get("id")] = lon
+    targets: list[tuple[str, float]] = list(by_id.items())
+    for index, house in enumerate(chart.get("houses") if isinstance(chart.get("houses"), list) else []):
+        lon = _persian_lon_of(house) if isinstance(house, dict) else None
+        if lon is not None:
+            targets.append((f"{index + 1}宫头", lon))
+    birth = _persian_birth_date(params.get("birth"))
     hits: list[dict[str, Any]] = []
-    for p in _PERSIAN_MOVERS:
-        pl = by_id.get(p)
-        if pl is None:
+    for mover in _PERSIAN_MOVERS:
+        mover_lon = by_id.get(mover)
+        if mover_lon is None:
             continue
-        for tid, tlon in targets:
-            if tid == p:
+        for target_id, target_lon in targets:
+            if target_id == mover:
                 continue
-            for a in _PERSIAN_ASPECTS:
-                for s in (1, -1):
-                    if a in (0, 180) and s == -1:
+            for aspect in _PERSIAN_ASPECTS:
+                for sign in (1, -1):
+                    if aspect in (0, 180) and sign == -1:
                         continue
-                    target = (tlon + s * a) % 360
-                    arc = (target - pl) % 360
-                    age = arc / rate
-                    if 0 < age <= cap:
-                        date = ""
-                        if birth_dt is not None:
-                            # NOTE: 星阙 dates this via moment `birth.add(age*365.2421904, 'days')`, which
-                            # TRUNCATES the fractional day; our full-precision timedelta + JS-vs-Python
-                            # floating-point in `arc` make the 应期 DATE differ from 星阙 by ≤1 day on
-                            # ~40% of rows (the ages/aspects/targets are byte-identical). For 应期 this is
-                            # astrologically negligible; see docs/v091-fidelity-spotcheck.md.
-                            date = (birth_dt + _dt.timedelta(days=age * 365.2421904)).strftime("%Y-%m-%d")
-                        hits.append({"age": round(age * 100) / 100, "promittor": p, "aspect": a, "significator": tid, "date": date})
-    hits.sort(key=lambda h: h["age"])
+                    target = (target_lon + sign * aspect) % 360
+                    arc = (mover_lon - target) % 360 if converse else (target - mover_lon) % 360
+                    for k in range(400):
+                        age = (arc + 360 * k) / rate
+                        if age > cap:
+                            break
+                        if age > 0:
+                            date = ""
+                            if birth is not None:
+                                date = (birth + timedelta(days=_ptext.js_round(age * _PERSIAN_YEAR_DAYS))).strftime("%Y-%m-%d")
+                            hits.append({
+                                "age": _ptext.js_round2(age), "promittor": mover, "aspect": aspect,
+                                "significator": target_id, "date": date,
+                            })
+                        if rate <= 1.0:
+                            break
+    hits.sort(key=lambda h: h["age"])  # 稳定排序（= V8 Array.prototype.sort）
+    return hits
+
+
+def _persian_directed_age_years(birth: Any, when: Any) -> float | None:
+    """上游 AstroPersianDirected.js:161 directedAgeYears：两个墙钟时刻之差（天）/ 365.2421904。"""
+    birth_dt = _persian_birth_date(birth)
+    when_dt = when if isinstance(when, datetime) else _persian_birth_date(when)
+    if birth_dt is None or when_dt is None:
+        return None
+    return (when_dt - birth_dt).total_seconds() / 86400.0 / _PERSIAN_YEAR_DAYS
+
+
+def _select_nearby_persian_hits(hits: list[dict[str, Any]], current_age: float | None, limit: int = 12) -> list[dict[str, Any]]:
+    """上游 AstroPersianDirected.js:175 selectNearbyPersianHits：按 |age−当前| 取最近 limit 条，再按 age 重排。"""
+    if current_age is None or not hits or not math.isfinite(current_age):
+        return []
+    near = sorted(hits, key=lambda h: abs(h["age"] - current_age))[:limit]
+    return sorted(near, key=lambda h: h["age"])
+
+
+def _persian_hit_row(hit: dict[str, Any]) -> str:
+    return (
+        f"| {_ptext.js_str(hit['age'])} | {hit['date'] or '-'} | {_ptext.astro_txt(hit['promittor'])} | "
+        f"{_ptext.asp_txt(hit['aspect'])} | {_ptext.astro_txt(hit['significator'])} |"
+    )
+
+
+def _build_persiandirected_snapshot_text(
+    response: dict[str, Any],
+    opts: dict[str, Any] | None = None,
+    *,
+    now: datetime | None = None,
+    moment_lines: list[str] | None = None,
+) -> str:
+    """逐字镜像上游 AstroPersianDirected.js:103-157 buildPersianDirectedSnapshotText(chartObj, opts)。
+
+    opts：rateKey（persian/prophected/naibod）/ direction（direct/converse）/ maxYears / datetime。
+    [Q-168/T-102] 首行按所选速率/方向写（此前写死 1°/年）；主表上限 max(200, maxYears×4)；
+    段尾 ◆ 近期命中（距今最近，12 条）。当前向运年龄：给 datetime 按推运时间，否则按导出时刻；
+    该定位行写进 moment_lines（由 [当前时点] 段追加，= 上游 extraLines）。
+    """
+    o = {"rateKey": "persian", "direction": "direct", **(opts or {})}
+    rate_key = o.get("rateKey") if o.get("rateKey") in _PERSIAN_RATE else "persian"
+    direction = "converse" if o.get("direction") == "converse" else "direct"
+    max_years = _finite_number(o.get("maxYears"))
+    max_years = max_years if max_years is not None and max_years > 0 else 90
+    hits = _build_persian_hits(response, rate_key, max_years, direction)
     if not hits:
         return _render_snapshot_text([("波斯向运（Persian Directed）", "（本盘无波斯向运应期）")])
     lines = [
-        "黄经象征向运(1°/年)：所有行星/点每年 +1°,本命宫头不动；下表为向运星触及本命的应期。",
+        f"黄经象征向运({_PERSIAN_RATE_LABEL.get(rate_key) or rate_key})：所有行星/点按此速率"
+        f"{'逆向(Converse)' if direction == 'converse' else '顺向'}推进,本命宫头不动；下表为向运星触及本命的应期。",
         "",
         "| 年龄 | 日期 | 向运星 | 相位 | 本命对象 |",
         "| --- | --- | --- | --- | --- |",
     ]
-    for h in hits[:120]:
-        sig = h["significator"]
-        sig_name = sig if "宫头" in f"{sig}" else _astro_msg(sig)
-        lines.append(f"| {h['age']} | {h['date'] or '-'} | {_astro_msg(h['promittor'])} | {_aspect_label(h['aspect'])} | {sig_name} |")
+    lines.extend(_persian_hit_row(hit) for hit in hits[: max(200, int(max_years * 4))])
+    params = response.get("params") if isinstance(response.get("params"), dict) else {}
+    birth = params.get("birth")
+    dt_str = f"{o.get('datetime') or ''}".strip()
+    current_age = _persian_directed_age_years(birth, dt_str) if dt_str else None
+    age_basis = f"按推运时间 {dt_str}"
+    if current_age is None:
+        # 上游 moment().format('YYYY-MM-DD HH:mm:ss') 截到秒再解析 → 这里同样去掉微秒。
+        current_age = _persian_directed_age_years(birth, (now or datetime.now()).replace(microsecond=0))
+        age_basis = "按导出时刻"
+    near = _select_nearby_persian_hits(hits, current_age, 12)
+    if near:
+        lines.extend(["", "◆ 近期命中（距今最近）", "| 年龄 | 日期 | 向运星 | 相位 | 本命对象 |", "| --- | --- | --- | --- | --- |"])
+        lines.extend(_persian_hit_row(hit) for hit in near)
+    if moment_lines is not None and current_age is not None and math.isfinite(current_age):
+        moment_lines.append(f"当前向运年龄：{_ptext.js_str(_ptext.js_round2(current_age))} 岁（{age_basis}）")
     return _render_snapshot_text([("波斯向运（Persian Directed）", "\n".join(lines))])
 
 
@@ -5911,50 +6297,204 @@ def _build_predictive_cross_aspect_lines(
             if not isinstance(target, dict):
                 continue
             natal_label = _astro_msg_with_house(target.get("natalId") or target.get("id"), natal_wrap or {}, short=True)
+            # 上游 predictiveAiSnapshot.js:199：AstroTxtMsg['Asp'+aspect] || aspect+'º'（º=U+00BA，非 ˚）。
+            aspect = _ptext.js_str(target.get("aspect"))
+            asp = _ptext.UPSTREAM_ASTRO_TXT_MSG.get(f"Asp{aspect}") or f"{aspect}º"
             lines.append(
                 f"行运{direct_label} 与 本命{natal_label}"
-                f" 成 {_aspect_text(target.get('aspect'))} 相位，误差{_round3(target.get('delta'))}"
+                f" 成 {asp} 相位，误差{_round3(target.get('delta'))}"
             )
     return lines
 
 
+# 上游 components/astro/AstroPrimaryDirectionChart.js:39-55 / 188-260：主限法盘缺省时刻 = 主限表首条（按方法/界限法
+# 过滤后）的「日期」列（UTC 墙钟，PD_DISPLAY_ZONE '+00:00'）；无行则出生次日（同一墙钟改挂 +00:00）。
+_PD_DISPLAY_ZONE = "+00:00"
+_PD_CORE_SUPPORTED_BASE_IDS = frozenset({
+    "Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto",
+    "North Node", "Pars Fortuna", "Asc", "MC",
+})
+
+
+def _pd_base_object_id(text: Any) -> str:
+    """AstroPrimaryDirectionChart.js:205 baseDirectionObjectId。"""
+    raw = f"{text or ''}"
+    parts = raw.split("_")
+    if len(parts) < 3:
+        if len(parts) == 2 and parts[0] in ("A", "C"):
+            return parts[1]
+        return raw.strip()
+    if parts[0] == "T":
+        return parts[1].strip()
+    return "_".join(parts[1:-1]).strip()
+
+
+def _pd_is_bound_row(row: list[Any]) -> bool:
+    return f"{row[1] if len(row) > 1 else ''}".startswith("T_") or f"{row[2] if len(row) > 2 else ''}".startswith("T_")
+
+
+def _pd_is_antiscia_row(row: list[Any]) -> bool:
+    prom = f"{row[1] if len(row) > 1 else ''}"
+    sig = f"{row[2] if len(row) > 2 else ''}"
+    return prom.startswith(("A_", "C_")) or sig.startswith(("A_", "C_"))
+
+
+def _pd_display_rows(rows: Any, pd_method: str, show_pd_bounds: Any) -> list[list[Any]]:
+    """AstroPrimaryDirectionChart.js:235 buildDisplayRows（只取过滤后的原始行）。"""
+    hide_bounds = show_pd_bounds in (0, False)
+    is_core = pd_method == "core_alchabitius"
+    out: list[list[Any]] = []
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, list) or not row:
+            continue
+        if is_core and (
+            _pd_is_bound_row(row)
+            or _pd_base_object_id(row[1] if len(row) > 1 else "") not in _PD_CORE_SUPPORTED_BASE_IDS
+            or _pd_base_object_id(row[2] if len(row) > 2 else "") not in _PD_CORE_SUPPORTED_BASE_IDS
+        ):
+            continue
+        if hide_bounds and _pd_is_bound_row(row):
+            continue
+        if is_core and _pd_is_antiscia_row(row):
+            continue
+        out.append(row)
+    return out
+
+
+def _upstream_now_wall_clock() -> datetime:
+    """上游 `new DateTime()` 的「此刻」：[Q-141] 缺省钟面 = 真实此刻换算到 +08:00（DateTime 缺省时区）。"""
+    return datetime.now(timezone(timedelta(hours=8))).replace(tzinfo=None)
+
+
+# 上游 predictiveAiSnapshot.js:106-139 pickInfoBlocks 的块标题白名单（[本命盘配置]「信息」子块）。
+_PREDICTIVE_INFO_BLOCK_TITLES = ("映点/反映点", "接纳", "互容", "光线围攻", "夹宫", "夹星", "纬照")
+
+
+def _pick_info_blocks(lines: list[str], titles: tuple[str, ...]) -> list[str]:
+    """上游 predictiveAiSnapshot.js:120 pickInfoBlocks：自首个命中标题起收全部非空行（互容→互融）。"""
+    out: list[str] = []
+    in_block = False
+    for line in lines:
+        text = f"{line or ''}".strip()
+        if not text:
+            continue
+        if text in titles:
+            in_block = True
+            out.append(text.replace("互容", "互融"))
+            continue
+        if in_block:
+            out.append(text.replace("互容", "互融"))
+    return out
+
+
+def _predictive_star_info_lines(natal_wrap: dict[str, Any]) -> list[str]:
+    """上游 predictiveAiSnapshot.js:51-104 buildStarInfoLines(natalChartObj)。"""
+    params = natal_wrap.get("params") if isinstance(natal_wrap.get("params"), dict) else {}
+    chart = natal_wrap.get("chart") if isinstance(natal_wrap.get("chart"), dict) else {}
+    lines: list[str] = []
+    lon, lat = params.get("lon"), params.get("lat")
+    if lon or lat:
+        lon_lat = f"{lon or ''} {lat or ''}".strip()
+        lines.append(f"经纬度：{lon_lat}")
+    if params.get("zone") is not None:
+        lines.append(f"时区：{params.get('zone')}")
+    zodiacal_raw = chart.get("zodiacal") or _ptext.ZODIACAL.get(_ptext.js_str(params.get("zodiacal")))
+    if zodiacal_raw:
+        ayan_key = params.get("siderealAyanamsa") or chart.get("siderealAyanamsa") or ""
+        lines.append(f"黄道：{_ptext.zodiacal_display_text(zodiacal_raw, ayan_key)}")
+    hsys = _ptext.HOUSE_SYS_LABELS.get(_ptext.js_str(params.get("hsys"))) or chart.get("hsys")
+    if hsys:
+        lines.append(f"宫制：{hsys}")
+    if chart.get("isDiurnal") is not None:
+        lines.append(f"盘型：{'日生盘' if chart.get('isDiurnal') else '夜生盘'}")
+    lines.append(PLANET_HOUSE_INFO_NOTE)
+    house_lines = _build_house_cusp_lines(natal_wrap)
+    if house_lines:
+        lines.extend(["宫位宫头", *house_lines])
+    star_lines = _build_star_and_lot_position_lines(natal_wrap)
+    if star_lines:
+        lines.extend(["星与虚点", *star_lines])
+    info_only = _pick_info_blocks(_build_info_section(natal_wrap, {}), _PREDICTIVE_INFO_BLOCK_TITLES)
+    if info_only:
+        lines.extend(["信息", *info_only])
+    return lines
+
+
+def _predictive_setup_lines(params: dict[str, Any]) -> list[str]:
+    """上游 predictiveAiSnapshot.js:143-176 buildSetupLines(params)（[起盘信息] = 推运时点口径）。"""
+    lines: list[str] = []
+    if params.get("datetime"):
+        lines.append(f"推运时间：{params['datetime']}")
+    if params.get("dirZone") is not None:
+        lines.append(f"推运时区：{params['dirZone']}")
+    lon = params.get("dirLon") or params.get("lon")
+    lat = params.get("dirLat") or params.get("lat")
+    if lon or lat:
+        lon_lat = f"{lon or ''} {lat or ''}".strip()
+        lines.append(f"推运经纬度：{lon_lat}")
+    if params.get("tmType"):
+        lines.append(f"时间步进：{params['tmType']}")
+    if params.get("asporb") is not None:
+        lines.append(f"相位容许度：{_ptext.js_str(params['asporb'])}")
+    if params.get("nodeRetrograde") is not None:
+        lines.append(f"月交点逆行：{'是' if params['nodeRetrograde'] else '否'}")
+    # 恒星黄道时标注具体 ayanāṃśa（仅恒星盘追加此行 → 回归盘输出逐字不变）。
+    if _ptext.js_str(params.get("zodiacal")) == "1":
+        lines.append(f"黄道：{_ptext.zodiacal_display_text(params.get('zodiacal'), params.get('siderealAyanamsa'))}")
+    return lines
+
+
+# 目标时刻型 5 法（上游 aiAnalysisContext.js:2673-2760 buildPredictivePeriodSnapshot）。
+_PERIOD_PREDICTIVE_TOOLS = ("profection", "solararc", "solarreturn", "lunarreturn", "givenyear")
+_RETURN_PREDICTIVE_TOOLS = ("solarreturn", "lunarreturn", "givenyear")
+
+
+def _predictive_text_params(tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """buildPredictivePeriodSnapshot 的请求体（= [起盘信息] 的文字源）：tmType 恒 'y'、asporb 缺省 1、
+    nodeRetrograde 缺省 false、dirZone 缺省本命时区；returns 型另带 dirLat/dirLon（缺省本命经纬）。"""
+    params: dict[str, Any] = {
+        "date": payload.get("date"),
+        "time": payload.get("time"),
+        "zone": payload.get("zone"),
+        "lon": payload.get("lon"),
+        "lat": payload.get("lat"),
+        "datetime": payload.get("datetime"),
+        "dirZone": payload.get("dirZone") or payload.get("zone"),
+        "tmType": "y",
+        "asporb": payload.get("asporb") if payload.get("asporb") is not None else 1,
+        "nodeRetrograde": bool(payload.get("nodeRetrograde")),
+        "zodiacal": payload.get("zodiacal"),
+        "siderealAyanamsa": payload.get("siderealAyanamsa"),
+    }
+    if tool_name in _RETURN_PREDICTIVE_TOOLS:
+        params["dirLat"] = payload.get("dirLat") or payload.get("lat")
+        params["dirLon"] = payload.get("dirLon") or payload.get("lon")
+    return params
+
+
 def _build_predictive_snapshot_text(tool_name: str, payload: dict[str, Any], response: dict[str, Any]) -> str:
+    """逐字镜像上游 utils/predictiveAiSnapshot.js:225-287 buildPredictiveSnapshotText(natal, params, result, key)。
+
+    段：[本命盘配置]（生辰裸行 + buildStarInfoLines）/ [起盘信息]（buildSetupLines 推运时点口径）/
+    [小限摘要]（仅 profection，[Q-105]）/ [时段盘配置] / [相位]；[方法说明] 由统一出口追加（这 5 键上游
+    preset 无 [当前时点]）。旧实现的 [起盘信息]「技法/目标时间/后台实际成盘时间/推运地点」是自拟文案。
+    """
     natal_wrap = _natal_chart_wrap(response)
     predictive_wrap = _predictive_chart_wrap(response)
-    chart_label = _predictive_chart_label(tool_name)
-    predictive_params = response.get("dirParams") if isinstance(response.get("dirParams"), dict) else {}
-    exact_datetime = response.get("date") or payload.get("datetime") or "无"
-    birth_lines = _build_base_info_lines(natal_wrap, payload) if natal_wrap else [
-        f"出生时间：{payload.get('date', '—')} {payload.get('time', '—')}",
-        f"出生时区：{payload.get('zone', '—')}",
-        f"出生地点：{payload.get('lon', '—')} {payload.get('lat', '—')}",
+    params = _predictive_text_params(tool_name, payload)
+    birth_lines = _ptext.build_predictive_birth_lines(_predictive_birth_source(response, payload))
+    star_lines = _predictive_star_info_lines(natal_wrap) if natal_wrap else []
+    natal_config = [*birth_lines, *star_lines]
+    sections: list[tuple[str, str]] = [
+        ("本命盘配置", _join_lines(natal_config) or "无"),
+        ("起盘信息", _join_lines(_predictive_setup_lines(params)) or "无"),
     ]
-    predictive_setup_lines = [
-        f"技法：{tool_name}",
-        f"目标时间：{payload.get('datetime', '无')}",
-        f"后台实际成盘时间：{exact_datetime}",
-        f"推运时区：{predictive_params.get('zone') or payload.get('dirZone') or payload.get('zone', '无')}",
-        f"推运地点：{predictive_params.get('lon') or payload.get('dirLon') or payload.get('lon', '—')} {predictive_params.get('lat') or payload.get('dirLat') or payload.get('lat', '—')}",
-    ]
-    # 段结构逐字对齐上游 predictiveAiSnapshot.js::buildPredictiveSnapshotText —— 四段：
-    # [本命盘配置]（生辰 + 口径 + 宫位宫头/星与虚点/信息 三个子块）/ [起盘信息]（推运时点口径）/
-    # [时段盘配置]（时段盘 星与虚点 + 时段盘 宫位宫头）/ [相位]（交叉相位）。
-    # 本仓旧段名（本命盘起盘信息 / 本命盘星与虚点 / X盘起盘信息 / X盘星与虚点 / X盘相位）走
-    # map_legacy_section_title 迁移，老用户自定义勾选不被静默丢弃。
-    natal_config_lines = list(birth_lines)
-    if natal_wrap:
-        cusp_lines = _build_house_cusp_lines(natal_wrap)
-        if cusp_lines:
-            natal_config_lines.extend(["宫位宫头", *cusp_lines])
-        star_lines = _build_star_and_lot_position_lines(natal_wrap)
-        if star_lines:
-            natal_config_lines.extend(["星与虚点", *star_lines])
-        # _build_info_section 的开头会重出一遍 base info（与 birth_lines 重复）→ 只取其后的子块。
-        info_lines = _build_info_section(natal_wrap, payload)
-        base_len = len(_build_base_info_lines(natal_wrap, payload))
-        info_only = info_lines[base_len:]
-        if info_only:
-            natal_config_lines.extend(["信息", *info_only])
+    if tool_name == "profection":
+        # [Q-105 裁决 2026-09-18] 年/月/日小限摘要（粒度 profGrain、起点 profStart；缺省 年/上升）。
+        summary = _ptext.build_profection_summary_lines(
+            natal_wrap, params, payload.get("profGrain"), payload.get("profStart")
+        )
+        sections.append(("小限摘要", _join_lines(summary) or "无"))
     directed_lines: list[str] = []
     directed_stars = _build_star_and_lot_position_lines(predictive_wrap)
     if directed_stars:
@@ -5962,70 +6502,75 @@ def _build_predictive_snapshot_text(tool_name: str, payload: dict[str, Any], res
     directed_cusps = _build_house_cusp_lines(predictive_wrap)
     if directed_cusps:
         directed_lines.extend(["时段盘 宫位宫头", *directed_cusps])
-    sections = [
-        ("本命盘配置", _join_lines(natal_config_lines) or "无"),
-        ("起盘信息", _join_lines(predictive_setup_lines)),
-        ("时段盘配置", _join_lines(directed_lines) or "无"),
-        # 交叉相位优先；后端未回数组形状时才退回本命盘形状的相位构建器（老响应 / 降级）。
+    sections.append(("时段盘配置", _join_lines(directed_lines) or "无"))
+    sections.append(
         (
             "相位",
-            _join_lines(_build_predictive_cross_aspect_lines(response, predictive_wrap, natal_wrap))
+            _join_lines(_build_predictive_cross_aspect_lines(response, _top_level_chart_wrap(response), natal_wrap))
             or _join_lines(_build_aspect_section(predictive_wrap))
             or "无",
-        ),
-    ]
+        )
+    )
     return _render_snapshot_text(sections)
 
 
+# 上游 utils/primaryDirectionSync.js:57-62 SUPPORTED_PD_METHODS（13 法，= 后端 perchart.py:892 白名单）+ :73-87 PD_METHOD_LABELS。
+_PD_METHOD_LABELS: dict[str, str] = {
+    "core_alchabitius": "Alchabitius",
+    "placidus": "Placidus（半弧）",
+    "regiomontanus": "Regiomontanus",
+    "campanus": "Campanus",
+    "topocentric": "Topocentric",
+    "meridian": "Meridian",
+    "porphyry": "Porphyry",
+    "equal_ecliptic": "Equal（黄道）",
+    "equal_hour_circle": "Equal（时圈）",
+    "morinus": "Morinus",
+    "in_zodiaco_lon": "Along Ecliptic",
+    "in_zodiaco_abs": "Edmund Jones",
+    "horosa_legacy": "Horosa原方法",
+}
+# 上游 primaryDirectionSync.js:64-70 SUPPORTED_PD_TIME_KEYS（26 项）+ :88-115 PD_TIME_KEY_LABELS。
+_PD_TIME_KEY_LABELS: dict[str, str] = {
+    "Ptolemy": "Ptolemy",
+    "Naibod": "Naibod",
+    "TrueSolarArc": "真太阳弧",
+    "SymbolicSolarArc": "太阳弧（黄经）",
+    "Kundig": "Kündig",
+    "Cardano": "Cardano",
+    "Umar": "Umar al-Tabari",
+    "Wollner": "Wöllner",
+    "Plantiko": "Plantiko",
+    "Simmonite": "Simmonite",
+    "SynodicYear": "Synodic Year",
+    "Kepler": "Kepler",
+    "Brahe": "Brahe",
+    "SymbolicDegree": "Symbolic Degree",
+    "SymbolicYear": "Symbolic Year",
+    "SymbolicMoon": "Symbolic Moon",
+    "SymbolicMonth": "Symbolic Month",
+    "Quarterly": "Quarterly",
+    "Quinary": "Quinary",
+    "Duodenary": "Duodenary",
+    "Novenary": "Novenary",
+    "SelfMeasure": "Self-Measure",
+    "NaibodRA": "Naibod-in-RA",
+    "AscendantArc": "Ascendant-arc（界行）",
+    "VanDam": "Van Dam（真弧）",
+    "User": "自定义（每年度数）",
+}
+
+
 def _primary_direction_method_text(value: Any) -> str:
-    # 主限法 v12 (星阙 v2.6.6)：仅保留逐位核验的核5方位法（In-Zodiaco 全走核 kernel）。
-    # core_alchabitius = 规范键；任何未知/未核验键经后端 fallback 至 core_alchabitius，同义。
-    mapping = {
-        "horosa_legacy": "传统赤经法",
-        "core_alchabitius": "Alcabitius 半弧法",
-        "meridian": "Meridian",
-        "porphyry": "Porphyry",
-        "equal_ecliptic": "Equal（黄道）",
-        "equal_hour_circle": "Equal（时圈）",
-    }
-    raw = _msg(value)
-    if raw in mapping:
-        return mapping[raw]
-    if not raw:
-        return "无"
-    # /predict/pd 的 params 回显是原样输入；白名单外的方位法（如旧 placidus）引擎内已按
-    # 核5白名单回退 core_alchabitius 计算（行集与显式 core 逐位一致，live 测试钉死），如实标注。
-    return f"{raw}（未核验，引擎回退 Alcabitius 半弧法）"
+    """上游 primaryDirectionSync.js:170 getPdMethodLabel：已知 → 标签；缺省/未知 → 缺省法标签（后端
+    perchart.py:892 同样把白名单外一律回退 core_alchabitius，标签与实算一致）。F20：旧实现只认「核5」，
+    把 placidus/regiomontanus 等 v3.6 起已真算的方位法写成「未核验，引擎回退 Alcabitius」——对实算结果撒谎。"""
+    return _PD_METHOD_LABELS.get(_msg(value)) or _PD_METHOD_LABELS["core_alchabitius"]
 
 
 def _primary_direction_time_key_text(value: Any) -> str:
-    # 时间钥匙 22 项 (星阙 v2.6.6)：静态常数 + 每盘真算 (Simmonite/Kepler/Brahe 取本命太阳日速)
-    # + 动态弧 (TrueSolarArc/SymbolicSolarArc 逐弧查星历)。标签与上游方法下拉一致。
-    mapping = {
-        "Ptolemy": "Ptolemy（托勒密 1°/年）",
-        "Naibod": "Naibod（奈博德平太阳速）",
-        "TrueSolarArc": "真太阳弧",
-        "SymbolicSolarArc": "太阳弧（黄经）",
-        "Cardano": "Cardano",
-        "Umar": "Umar al-Tabari",
-        "Wollner": "Wöllner",
-        "Plantiko": "Plantiko",
-        "Simmonite": "Simmonite",
-        "SynodicYear": "Synodic Year",
-        "Kepler": "Kepler",
-        "Brahe": "Brahe",
-        "Kundig": "Kündig",
-        "SymbolicDegree": "Symbolic Degree",
-        "SymbolicYear": "Symbolic Year",
-        "SymbolicMoon": "Symbolic Moon",
-        "SymbolicMonth": "Symbolic Month",
-        "Quarterly": "Quarterly",
-        "Quinary": "Quinary",
-        "Duodenary": "Duodenary",
-        "Novenary": "Novenary",
-        "SelfMeasure": "Self-Measure",
-    }
-    return mapping.get(_msg(value), _msg(value) or "无")
+    """上游 primaryDirectionSync.js:177 getPdTimeKeyLabel（26 项；缺省/未知 → Ptolemy）。"""
+    return _PD_TIME_KEY_LABELS.get(_msg(value)) or _PD_TIME_KEY_LABELS["Ptolemy"]
 
 
 def _primary_direction_dir_text(params: dict[str, Any]) -> str:
@@ -6150,45 +6695,244 @@ def _build_pdchart_snapshot_text(payload: dict[str, Any], response: dict[str, An
     )
 
 
-def _build_zr_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
-    params = response.get("params", {}) if isinstance(response, dict) and isinstance(response.get("params"), dict) else payload
+# 上游 components/astro/AstroZR.js:314-322 ZR_BASE_POINTS：福点/六希腊点/四轴 11 项 + 十二星座（[Q-174/T-114]）。
+_ZR_BASE_POINTS = (
+    "Pars Fortuna", "Pars Spirit", "Pars Mercury", "Pars Venus", "Pars Mars", "Pars Jupiter", "Pars Saturn",
+    "Asc", "Desc", "MC", "IC", *_ptext.LIST_SIGNS,
+)
+# 上游 AstroZR.js:26-46 AI_MODE_ITEMS（输出层级）。
+_ZR_AI_MODES = {
+    "l1_all": "输出所有L1（星座+时间）",
+    "l2_in_l1": "输出某个L1下全部L2",
+    "l3_in_l2": "输出某个L2下全部L3",
+    "l4_in_l3": "输出某个L3下全部L4",
+}
+
+
+def _zr_sign_name(sign: Any) -> str:
+    """AstroZR.js:63 signName：空 → '无'，否则 AstroTxtMsg。"""
+    return _ptext.astro_txt(sign) if sign else "无"
+
+
+def _zr_node_line(item: dict[str, Any] | None) -> str:
+    """AstroZR.js:70 nodeLine：座-日期[-LB][-截]（[Q-362/T-343] truncated=末段子期按父期截断）。"""
+    if not item:
+        return "无"
+    base = f"{_zr_sign_name(item.get('sign'))}-{item.get('date') or '无'}"
+    if item.get("isLB"):
+        base = f"{base}-LB"
+    return f"{base}-截" if item.get("truncated") else base
+
+
+def _zr_mark_special_flags(items: Any, parent_sign_idx: int) -> list[dict[str, Any]]:
+    """AstroZR.js:79 markZRSpecialFlags：同父下第二个「与父座对冲」的子期标 LB（跳宫）。"""
+    if not isinstance(items, list):
+        return []
+    opposite = 0
+    marked: list[dict[str, Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        sign = item.get("sign")
+        level = _finite_number(item.get("level")) or 0
+        sign_idx = _ptext.LIST_SIGNS.index(sign) if sign in _ptext.LIST_SIGNS else -1
+        is_lb = False
+        if level > 1 and parent_sign_idx >= 0 and sign_idx >= 0 and (sign_idx + 6) % 12 == parent_sign_idx:
+            opposite += 1
+            if opposite == 2:
+                is_lb = True
+        marked.append({**item, "isLB": is_lb, "sublevel": _zr_mark_special_flags(item.get("sublevel"), sign_idx)})
+    return marked
+
+
+def _zr_safe_idx(idx: Any, length: int) -> int:
+    """AstroZR.js:48 safeIdx。"""
+    if not length or length <= 0:
+        return 0
+    number = _finite_number(idx)
+    if number is None or number < 0:
+        return 0
+    return length - 1 if number >= length else int(number)
+
+
+def _zr_birth_and_chart_lines(chart_wrap: dict[str, Any], params: dict[str, Any]) -> list[str]:
+    """AstroZR.js:137-178 appendBirthAndChart：[起盘信息] + [星盘信息]（黄道行取 AstroTxtMsg，回归盘即写 Tropical）。"""
+    chart = chart_wrap.get("chart") if isinstance(chart_wrap.get("chart"), dict) else {}
+    lines = ["[起盘信息]"]
+    if params.get("birth"):
+        dayofweek = chart.get("dayofweek")
+        lines.append(f"出生时间：{params['birth']}{f' {dayofweek}' if dayofweek else ''}")
+    nongli = chart.get("nongli")
+    if isinstance(nongli, dict) and nongli.get("birth"):
+        lines.append(f"真太阳时：{nongli['birth']}")
+    if params.get("date") or params.get("time"):
+        when = f"{params.get('date') or ''} {params.get('time') or ''}".strip()
+        lines.append(f"起盘时间：{when}")
+    if params.get("lon") or params.get("lat"):
+        lon_lat = f"{params.get('lon') or ''} {params.get('lat') or ''}".strip()
+        lines.append(f"经纬度：{lon_lat}")
+    if params.get("zone") is not None:
+        lines.append(f"时区：{params['zone']}")
+    if params.get("tradition"):
+        lines.append(f"历法：{_ptext.js_str(params['tradition'])}")
+    lines.extend(["", "[星盘信息]"])
+    zodiacal_raw = chart.get("zodiacal") or _ptext.ZODIACAL.get(_ptext.js_str(params.get("zodiacal")))
+    if zodiacal_raw:
+        lines.append(f"黄道：{_ptext.UPSTREAM_ASTRO_TXT_MSG.get(zodiacal_raw) or zodiacal_raw}")
+    hsys = _ptext.HOUSE_SYS_LABELS.get(_ptext.js_str(params.get("hsys"))) or chart.get("hsys")
+    if hsys:
+        lines.append(f"宫制：{hsys}")
+    if chart.get("isDiurnal") is not None:
+        lines.append(f"盘型：{'日生盘' if chart.get('isDiurnal') else '夜生盘'}")
+    return lines
+
+
+def _zr_natal_params(chart_wrap: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    """AstroZR.js:329 zrNatalParamsStandalone 的文字源：date/time 取 params.date/time，缺则拆 params.birth。"""
+    params = chart_wrap.get("params") if isinstance(chart_wrap.get("params"), dict) else {}
+    birth = params.get("birth")
+    parts = f"{birth}".split(" ") if birth else []
+    return {
+        "date": params.get("date") or (parts[0] if parts else None),
+        "time": params.get("time") or (parts[1] if len(parts) > 1 else None),
+        "zone": params.get("zone"),
+        "lon": params.get("lon"),
+        "lat": params.get("lat"),
+        "hsys": params.get("hsys"),
+        "tradition": params.get("tradition"),
+        "birth": birth,
+        "zodiacal": params.get("zodiacal"),
+    }
+
+
+def _zr_body_lines(base_point: str, items: list[dict[str, Any]], ai_state: dict[str, Any]) -> list[str]:
+    """AstroZR.js:238-311 buildZRAISnapshotBody（[基于X推运] 段正文，按输出层级逐层钻取）。"""
+    lines = [f"[基于{_ptext.UPSTREAM_ASTRO_TXT_MSG.get(base_point) or base_point}推运]"]
+    ai_mode = ai_state.get("aiMode")
+    lines.append(f"AI输出模式：{_ZR_AI_MODES.get(ai_mode, _ZR_AI_MODES['l1_all'])}")
+    l1_list = _zr_mark_special_flags(items, -1)
+    if not l1_list:
+        lines.append("无推运数据")
+        return lines
+    if ai_mode == "l1_all":
+        lines.extend(f"L1-{i + 1}：{_zr_node_line(item)}" for i, item in enumerate(l1_list))
+        return lines
+    l1_idx = _zr_safe_idx(ai_state.get("aiL1Idx"), len(l1_list))
+    l1 = l1_list[l1_idx] if l1_list else None
+    l2_list = l1.get("sublevel") if l1 and isinstance(l1.get("sublevel"), list) else []
+    l2_idx = _zr_safe_idx(ai_state.get("aiL2Idx"), len(l2_list))
+    l2 = l2_list[l2_idx] if l2_list else None
+    l3_list = l2.get("sublevel") if l2 and isinstance(l2.get("sublevel"), list) else []
+    l3_idx = _zr_safe_idx(ai_state.get("aiL3Idx"), len(l3_list))
+    l3 = l3_list[l3_idx] if l3_list else None
+    if not l1:
+        lines.append("未找到L1数据")
+        return lines
+    lines.append(f"L1-{l1_idx + 1}：{_zr_node_line(l1)}")
+    if ai_mode == "l2_in_l1":
+        if not l2_list:
+            lines.append("无L2数据")
+        else:
+            lines.extend(f"L2-{i + 1}：{_zr_node_line(item)}" for i, item in enumerate(l2_list))
+        return lines
+    if not l2:
+        lines.append("未找到L2数据")
+        return lines
+    lines.append(f"L2-{l2_idx + 1}：{_zr_node_line(l2)}")
+    if ai_mode == "l3_in_l2":
+        if not l3_list:
+            lines.append("无L3数据")
+        else:
+            lines.extend(f"L3-{i + 1}：{_zr_node_line(item)}" for i, item in enumerate(l3_list))
+        return lines
+    if not l3:
+        lines.append("未找到L3数据")
+        return lines
+    lines.append(f"L3-{l3_idx + 1}：{_zr_node_line(l3)}")
+    l4_list = l3.get("sublevel") if isinstance(l3.get("sublevel"), list) else []
+    if not l4_list:
+        lines.append("无L4数据")
+    else:
+        lines.extend(f"L4-{i + 1}：{_zr_node_line(item)}" for i, item in enumerate(l4_list))
+    return lines
+
+
+def _zr_period_bounds(items: list[dict[str, Any]], now: datetime) -> dict[str, Any] | None:
+    """AstroZR.js:198-218 zrLocateCurrent：期起=date（Date.parse 纯日期 = UTC 零点），期讫=下一期起/末期 date+days。"""
+    now_utc = now.astimezone(timezone.utc) if now.tzinfo else now.replace(tzinfo=timezone.utc)
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            continue
+        start = _zr_parse_day_utc(item.get("date"))
+        if start is None:
+            continue
+        nxt = items[index + 1] if index + 1 < len(items) and isinstance(items[index + 1], dict) else None
+        next_start = _zr_parse_day_utc(nxt.get("date")) if nxt else None
+        days = _finite_number(item.get("days"))
+        end = next_start if next_start is not None else (start + timedelta(days=days) if days is not None else None)
+        if end is not None and start <= now_utc < end:
+            return {
+                "item": item,
+                "startText": f"{item.get('date')}",
+                "endText": f"{nxt.get('date')}" if next_start is not None and nxt else end.strftime("%Y-%m-%d"),
+            }
+    return None
+
+
+def _zr_parse_day_utc(text: Any) -> datetime | None:
+    raw = f"{text or ''}".strip().replace("/", "-")
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _zr_current_period_line(items: Any, now: datetime | None = None) -> str:
+    """AstroZR.js:221-231 zrCurrentPeriodLine：「当前所处：L1 X期（…至…）/ L2 Y期（…至…）」。"""
+    if not isinstance(items, list):
+        return ""
+    moment = now or datetime.now().astimezone()
+    l1 = _zr_period_bounds(items, moment)
+    if not l1:
+        return ""
+    text = f"当前所处：L1 {_zr_sign_name(l1['item'].get('sign'))}期（{l1['startText']} 至 {l1['endText']}）"
+    sub = l1["item"].get("sublevel")
+    l2 = _zr_period_bounds(sub, moment) if isinstance(sub, list) else None
+    if l2:
+        text += f" / L2 {_zr_sign_name(l2['item'].get('sign'))}期（{l2['startText']} 至 {l2['endText']}）"
+    return text
+
+
+def _zr_items(response: dict[str, Any]) -> list[dict[str, Any]]:
     predictives = response.get("predictives", {}) if isinstance(response, dict) else {}
-    zr_data = None
-    for key in ("zodialRelease", "zodiacalRelease", "zr", "zodialrelease"):
-        if response.get(key) is not None:
-            zr_data = response.get(key)
-            break
-        if isinstance(predictives, dict) and predictives.get(key) is not None:
-            zr_data = predictives.get(key)
-            break
-    lines = [f"出生时间：{params.get('birth', '无')}", f"经纬度：{params.get('lon', '—')} {params.get('lat', '—')}", f"时区：{params.get('zone', '—')}"]
-    natal_wrap = _natal_chart_wrap(response) or _top_level_chart_wrap(response)
-    base_point = payload.get("basePoint") or response.get("basePoint") or "X点"
-    zr_lines: list[str] = []
-    def push_zr(items: Any, *, level_limit: int = 3) -> None:
-        if not isinstance(items, list):
-            return
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            level = item.get("level", "")
-            sign = _astro_msg(item.get("sign"))
-            date = item.get("date", "无")
-            days = item.get("days", "无")
-            zr_lines.append(f"L{level}：{sign}；开始：{date}；时长：{days}日")
-            if level_limit > 1:
-                sublevel = item.get("sublevel")
-                if isinstance(sublevel, list):
-                    for sub in sublevel[:6]:
-                        if isinstance(sub, dict):
-                            zr_lines.append(
-                                f"  L{sub.get('level', '')}：{_astro_msg(sub.get('sign'))}；开始：{sub.get('date', '无')}；时长：{sub.get('days', '无')}日"
-                            )
-    if isinstance(zr_data, list):
-        push_zr(zr_data)
-    elif isinstance(zr_data, dict):
-        zr_lines.append(_stringify_export_body(zr_data))
-    return _render_snapshot_text([("起盘信息", _join_lines(lines)), ("星盘信息", _join_lines(_build_chart_info_lines(natal_wrap, payload)) or "无"), ("本命盘星与虚点", _join_lines(_build_star_and_lot_position_lines(natal_wrap)) or "无"), (f"基于{base_point}推运", _join_lines(zr_lines) or "无推运数据")])
+    for key in ("zr", "zodialRelease", "zodiacalRelease", "zodialrelease"):
+        if isinstance(response.get(key), list):
+            return response[key]
+        if isinstance(predictives, dict) and isinstance(predictives.get(key), list):
+            return predictives[key]
+    return []
+
+
+def _build_zr_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
+    """逐字镜像上游 components/astro/AstroZR.js:233-311 buildZRAISnapshot(Body)（[当前时点]/[方法说明] 由统一出口追加）。
+
+    F8：基点 basePoint（福点/六希腊点/四轴/十二星座）→ 段头 [基于<名>推运]（此前恒写「基于X点推运」字面占位）；
+    输出层级 aiMode（L1 全列 / 某 L1 下全部 L2 / 某 L2 下全部 L3 / 某 L3 下全部 L4）+ aiL1Idx/aiL2Idx/aiL3Idx 钻取。
+    旧实现另出 skill 自拟段 [本命盘星与虚点] 与「L1：座；开始：…；时长：…日」行式，均非上游。
+    """
+    natal_wrap = _natal_chart_wrap(response)
+    source = natal_wrap if isinstance(natal_wrap.get("params"), dict) else _ptext.payload_chart_wrap(payload)
+    base_point = payload.get("basePoint") or payload.get("startSign") or "Pars Fortuna"
+    ai_state = {
+        "aiMode": payload.get("aiMode") if payload.get("aiMode") in _ZR_AI_MODES else "l1_all",
+        "aiL1Idx": payload.get("aiL1Idx") or 0,
+        "aiL2Idx": payload.get("aiL2Idx") or 0,
+        "aiL3Idx": payload.get("aiL3Idx") or 0,
+    }
+    lines = _zr_birth_and_chart_lines(source, _zr_natal_params(source, payload))
+    lines.append("")
+    lines.extend(_zr_body_lines(base_point, _zr_items(response), ai_state))
+    return "\n".join(lines).strip()
 
 
 def _auto_snapshot_text_for_tool(tool_name: str, input_normalized: dict[str, Any], response_data: dict[str, Any]) -> str | None:
@@ -6391,7 +7135,14 @@ def _attach_export_contract(tool_name: str, input_normalized: dict[str, Any], re
         snapshot_text = f"{predictive_setup}\n\n{snapshot_text}"
         augmented["snapshot_text"] = snapshot_text
         parsed_snapshot = None
-    predictive_common = _predictive_common_sections_text(technique, input_normalized)
+    moment_extra = augmented.pop("_moment_lines", None)
+    if moment_extra is None and technique == "zodialrelease":
+        # 上游 AstroZR.js:236：[当前时点] 追加「当前所处：L1 …期 / L2 …期」定位行（远端工具在统一出口补算）。
+        zr_line = _zr_current_period_line(_zr_items(augmented))
+        moment_extra = [zr_line] if zr_line else []
+    predictive_common = _predictive_common_sections_text(
+        technique, input_normalized, moment_extra if isinstance(moment_extra, list) else None
+    )
     if snapshot_text and predictive_common and "[方法说明]" not in snapshot_text:
         snapshot_text = f"{snapshot_text}\n\n{predictive_common}"
         augmented["snapshot_text"] = snapshot_text
@@ -6749,10 +7500,135 @@ class HorosaSkillService:
         except ValueError:
             return None
 
+    def _apply_upstream_predictive_defaults(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """F19：远端星运工具缺目标时刻/返照地时按上游缺省补齐（写回 input_normalized，回显即实算口径）。
+
+        上游 utils/aiAnalysisContext.js:2673-2760 buildPredictivePeriodSnapshot：
+        - solarreturn/lunarreturn/givenyear：datetime 缺省 = 「今年生日时刻」（当年 + 出生月日 + 出生时分，
+          [挂载自检 F-17]）；dirLat/dirLon 缺省本命经纬（lunarreturn/givenyear 后端**必读** dirLat/dirLon，
+          缺了直接 param error）；
+        - profection/solararc：datetime 缺省 = 此刻（`new DateTime()` 钟面，+08:00）；
+        - 五法 dirZone 缺省本命时区。
+        pdchart（aiAnalysisContext.js:2515-2531 pdCurrentDateTime）：缺省 = 主限表首条应期日期（UTC 墙钟 +
+        dirZone '+00:00'），无行则出生次日。旧实现一概不补：solarreturn/profection/solararc 无 datetime 时后端回
+        90 年**列表**（skill 当 invalid_result_shape 报错），lunarreturn/givenyear/pdchart 直接 param error。
+        """
+        if tool_name == "zr":
+            return self._apply_zr_base_point(payload)
+        if tool_name in ("pd", "pdchart"):
+            # F20：词表 = 上游 SUPPORTED_PD_METHODS（13）/ SUPPORTED_PD_TIME_KEYS（26）。后端对白名单外静默回退
+            # core_alchabitius / Ptolemy——认不出就报错，不让「传了 X 实算 Alchabitius」无声发生。
+            if payload.get("pdMethod") is not None:
+                _require_option(payload["pdMethod"], tuple(_PD_METHOD_LABELS), field="pdMethod", tool=tool_name)
+            if payload.get("pdTimeKey") is not None:
+                _require_option(payload["pdTimeKey"], tuple(_PD_TIME_KEY_LABELS), field="pdTimeKey", tool=tool_name)
+            if tool_name == "pd":
+                return payload
+        if tool_name not in _PERIOD_PREDICTIVE_TOOLS and tool_name != "pdchart":
+            return payload
+        if tool_name == "profection":
+            # [Q-105] profGrain/profStart 只喂 [小限摘要] 文本（纯前端派生），值域 = profectionSummary.js:13-24。
+            if payload.get("profGrain") is not None:
+                _require_option(payload["profGrain"], tuple(_ptext.PROFECTION_GRAIN_CN), field="profGrain", tool="profection")
+            if payload.get("profStart") is not None:
+                _require_option(payload["profStart"], tuple(_ptext.PROFECTION_START_CN), field="profStart", tool="profection")
+        effective = dict(payload)
+        if tool_name in _PERIOD_PREDICTIVE_TOOLS:
+            if not effective.get("datetime"):
+                now = _upstream_now_wall_clock()
+                date_text = f"{payload.get('date') or ''}"
+                if tool_name in _RETURN_PREDICTIVE_TOOLS and len(date_text) >= 10:
+                    time_text = f"{payload.get('time') or '12:00:00'}"
+                    effective["datetime"] = f"{now.strftime('%Y')}{date_text[4:].replace('/', '-')} {time_text[:5]}"
+                else:
+                    effective["datetime"] = now.strftime("%Y-%m-%d %H:%M")
+            if not effective.get("dirZone"):
+                effective["dirZone"] = payload.get("zone")
+            if tool_name in _RETURN_PREDICTIVE_TOOLS:
+                if not effective.get("dirLat"):
+                    effective["dirLat"] = payload.get("lat")
+                if not effective.get("dirLon"):
+                    effective["dirLon"] = payload.get("lon")
+        elif not effective.get("datetime"):
+            effective["datetime"], effective["dirZone"] = self._pdchart_default_datetime(payload)
+        return effective
+
+    def _apply_zr_base_point(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """F8：黄道星释基点 → startSign（上游 AstroZR.js:354-385 buildZodialReleaseSnapshotText）。
+
+        福点 = 不传 startSign（后端按福点所在座起）；基点本身是星座 → 直接用；其余（六希腊点/四轴）取本命盘上
+        该点所在座。显式 startSign 优先（本仓旧参数，语义 = 以星座为基点）。认不出的 basePoint/aiMode 报结构化错误，
+        取不到基点位置也报错（上游此时静默回落福点而段头仍写所选基点 = 标签与算法不符）。
+        """
+        base_point = payload.get("basePoint")
+        ai_mode = payload.get("aiMode")
+        if base_point is not None:
+            _require_option(base_point, _ZR_BASE_POINTS, field="basePoint", tool="zr")
+        if ai_mode is not None:
+            _require_option(ai_mode, tuple(_ZR_AI_MODES), field="aiMode", tool="zr")
+        for field in ("aiL1Idx", "aiL2Idx", "aiL3Idx"):
+            value = payload.get(field)
+            if value is not None and (_finite_number(value) is None or _finite_number(value) < 0):
+                raise ToolValidationError(
+                    f"zr 的 {field}={value!r} 须为 ≥0 的整数 / {field} must be a non-negative integer.",
+                    code="tool.predictive_invalid_option",
+                    details={"tool": "zr", "field": field, "value": value},
+                )
+        if not base_point or base_point == "Pars Fortuna" or payload.get("startSign"):
+            return payload
+        effective = dict(payload)
+        if base_point in _ptext.LIST_SIGNS:
+            effective["startSign"] = base_point
+            return effective
+        natal_payload = {**payload, "predictive": 0}
+        for key in ("datetime", "dirZone", "dirLat", "dirLon", "startSign", "stopLevelIdx"):
+            natal_payload.pop(key, None)
+        natal = self._call_remote("/chart", natal_payload)
+        obj = _get_chart_object(natal, base_point) if isinstance(natal, dict) else None
+        sign = obj.get("sign") if isinstance(obj, dict) else None
+        if sign not in _ptext.LIST_SIGNS:
+            raise ToolValidationError(
+                f"zr 基点 {base_point} 在本命盘上取不到所在星座 / base point {base_point} not found on the natal chart.",
+                code="tool.zr_invalid_base_point",
+                details={"basePoint": base_point},
+            )
+        effective["startSign"] = sign
+        return effective
+
+    def _pdchart_default_datetime(self, payload: dict[str, Any]) -> tuple[str, str]:
+        """上游 AstroPrimaryDirectionChart.js:454 defaultPdChartDateTime：首条（过滤后）主限行的「日期」列，
+        按 UTC 墙钟解释（dirZone='+00:00'）；取不到行 → 出生次日同一墙钟挂 +00:00。"""
+        chart_payload = {**payload, "predictive": 1, "includePrimaryDirection": 1}
+        for key in ("datetime", "dirZone", "dirLat", "dirLon"):
+            chart_payload.pop(key, None)
+        rows: Any = []
+        params: dict[str, Any] = {}
+        try:
+            chart = self._call_remote("/chart", chart_payload)
+            predictives = chart.get("predictives") if isinstance(chart.get("predictives"), dict) else {}
+            rows = predictives.get("primaryDirection") or []
+            params = chart.get("params") if isinstance(chart.get("params"), dict) else {}
+        except HorosaSkillError as exc:
+            _degrade("pdchart default datetime: primary-direction table fetch failed, using birth+1d: %s", exc)
+        pd_method = f"{payload.get('pdMethod') or params.get('pdMethod') or 'core_alchabitius'}"
+        show_bounds = payload.get("showPdBounds") if payload.get("showPdBounds") is not None else params.get("showPdBounds")
+        for row in _pd_display_rows(rows, pd_method, show_bounds):
+            date_text = f"{row[4] if len(row) > 4 and row[4] else ''}".strip()
+            if date_text:
+                return date_text, _PD_DISPLAY_ZONE
+        birth = _persian_birth_date(f"{payload.get('date') or ''} {payload.get('time') or ''}".strip())
+        if birth is None:
+            raise ToolValidationError(
+                "pdchart 缺目标时刻且无法解析出生时刻 / pdchart needs a datetime (birth date/time unparseable).",
+                code="tool.pdchart_invalid_datetime",
+                details={"date": payload.get("date"), "time": payload.get("time")},
+            )
+        return (birth + timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S"), _PD_DISPLAY_ZONE
+
     def _attach_predictive_chart_context(self, tool_name: str, payload: dict[str, Any], response: dict[str, Any]) -> dict[str, Any]:
         # planetaryarc 同属「本命 ↔ 时段两盘对照」形态（上游 preset 也列 [本命盘配置]/[时段盘配置]/[相位]），
         # 但 /predict/planetaryarc 只回时段盘 → 同样需要补拉本命盘。
-        if tool_name not in {"solarreturn", "lunarreturn", "solararc", "givenyear", "profection", "pd", "pdchart", "zr", "planetaryarc", "vedicprog"}:
+        if tool_name not in {"solarreturn", "lunarreturn", "solararc", "givenyear", "profection", "pd", "pdchart", "zr", "planetaryarc", "vedicprog", "jaynesprog"}:
             return response
         enriched = dict(response)
         if "params" not in enriched:
@@ -6773,7 +7649,12 @@ class HorosaSkillService:
                 _degrade("predictive natal chart fetch failed (tool=%s): %s", tool_name, exc)
         return enriched
 
-    def _attach_natal_extras(self, tool_name: str, response_data: dict[str, Any]) -> dict[str, Any]:
+    # [寿命格局] 取主法（上游 AstroLifespan.js:14-18 METHODS）。
+    _LIFESPAN_METHODS = ("ptolemy", "alcabitius", "dorotheus")
+
+    def _attach_natal_extras(
+        self, tool_name: str, response_data: dict[str, Any], payload: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         # v2.4.0 西占: enrich the astrochart (and mundane) export with 12分度 / 主宰星链 / 寿命格局.
         # These are computed by the vendored JS astroextra formatter (Ptolemy hyleg engine) from the
         # chart object. Only `chart` (astrochart) and `mundane` carry them in 星阙; never fail the
@@ -6784,8 +7665,14 @@ class HorosaSkillService:
             return response_data
         if not isinstance(response_data, dict) or not _is_astro_chart_payload(response_data):
             return response_data
+        # F15：取主法随调用方（上游读 localStorage horosa.lifespan.method，缺省 ptolemy）；太阳三态阈值由 JS 侧从
+        # 本盘 params 回显读取（cazimiOrb/combustOrb/underBeamsOrb，上游 astroAiSnapshot.js:1127-1132 同源）。
+        lifespan_method = (payload or {}).get("lifespanMethod")
+        if lifespan_method is not None:
+            _require_option(lifespan_method, self._LIFESPAN_METHODS, field="lifespanMethod", tool=tool_name)
+        options = {"lifespanMethod": lifespan_method} if lifespan_method else {}
         try:
-            js = self.js_client.run("astroextra", {"chart": response_data})
+            js = self.js_client.run("astroextra", {"chart": response_data, "options": options})
             extras_data = js.get("data") if isinstance(js, dict) else None
             if isinstance(extras_data, dict):
                 sections = _build_natal_extra_sections(extras_data)
@@ -8388,7 +9275,7 @@ class HorosaSkillService:
             }
             chart_response = self._call_remote("/chart", {k: v for k, v in chart_payload.items() if v is not None})
             if _is_astro_chart_payload(chart_response):
-                chart_response = self._attach_natal_extras("chart", chart_response)
+                chart_response = self._attach_natal_extras("chart", chart_response, payload)
                 chart_response = self._attach_classical_analysis("chart", chart_payload, chart_response)
                 chart_body = _build_astro_snapshot_text(chart_payload, chart_response)
         except Exception as exc:  # noqa: BLE001 — 盘面富化失败不许带崩线表
@@ -9785,6 +10672,26 @@ class HorosaSkillService:
             "_derivedSelf": {"title": "重置盘", "lines": lines},
         }
 
+    # [起盘信息] 生辰行只要本命盘的这几项（上游 buildPredictiveBirthLines 读 params + chart.{dayofweek,nongli,
+    # zodiacal,hsys,isDiurnal,siderealAyanamsa}）——只留这些，不把 ~170 KB 的整盘塞进响应。
+    _NATAL_HEADER_CHART_KEYS = ("dayofweek", "nongli", "zodiacal", "hsys", "isDiurnal", "siderealAyanamsa")
+
+    def _natal_header(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+        """A 组星运键（agepoint/distributions/extrareturns：后端只回自家时间线、不带盘）补拉本命 /chart，
+        供 [起盘信息]（上游 fetchChartResultForRecord → buildPredictiveBirthHeaderLines 同源）。
+        拉取失败 → 降级为只用载荷的生辰行 + envelope 警告，不拖垮技法本身。"""
+        natal_payload = {**payload, "predictive": 0}
+        for key in ("datetime", "dirZone", "dirLat", "dirLon"):
+            natal_payload.pop(key, None)
+        try:
+            natal = self._call_remote("/chart", natal_payload)
+        except HorosaSkillError as exc:
+            _degrade("predictive natal header fetch failed (tool=%s): %s", tool_name, exc)
+            return None
+        chart = natal.get("chart") if isinstance(natal.get("chart"), dict) else {}
+        params = natal.get("params") if isinstance(natal.get("params"), dict) else {}
+        return {"params": params, "chart": {key: chart.get(key) for key in self._NATAL_HEADER_CHART_KEYS if key in chart}}
+
     def _run_agepoint_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 年龄推进点 (Age Point / Huber): backend /predict/agepoint computes the whole Koch-house cycle.
         remote_payload = {**payload, "predictive": payload.get("predictive", 1)}
@@ -9797,6 +10704,12 @@ class HorosaSkillService:
             "raw": response,
             "snapshot_text": snapshot_text,
         }
+        natal_header = self._natal_header("agepoint", payload)
+        if natal_header:
+            result["natalHeader"] = natal_header
+        birth = _predictive_birth_source(result, payload).get("params", {}).get("birth")
+        moment_line = _agepoint_moment_line(response, birth)
+        result["_moment_lines"] = [moment_line] if moment_line else []
         result["export_snapshot"] = self._augment_export_payload(technique="agepoint", snapshot_text=snapshot_text)
         return result
 
@@ -9810,25 +10723,45 @@ class HorosaSkillService:
             "raw": response,
             "snapshot_text": snapshot_text,
         }
+        natal_header = self._natal_header("distributions", payload)
+        if natal_header:
+            result["natalHeader"] = natal_header
+        moment_line = _distributions_moment_line(response)
+        result["_moment_lines"] = [moment_line] if moment_line else []
         result["export_snapshot"] = self._augment_export_payload(technique="distributions", snapshot_text=snapshot_text)
         return result
 
     def _progression_target(self, payload: dict[str, Any]) -> dict[str, Any]:
-        # These v2.5.0 progressions are "as of a target date". Default the target to the chart date if
-        # the agent didn't pass one (a valid, if trivial, request); the agent should pass targetDate for
-        # a meaningful analysis horizon.
+        """目标时刻型推运（vedicprog/jaynesprog）的请求三键，缺省与上游 builder 同律（F10）：
+
+        上游 AstroJaynesProgressions.js:37-39 / astroProgSnapshot.js:57-59：
+        targetDate 缺省 today()（本地日期）、targetTime 缺省 12:00:00、minorVariant 缺省 synodic（[Q-180]，
+        后端 progression_date 同缺省）。旧实现把 targetDate 缺省成**出生日**——推运零年、结果恒等本命，
+        与上游和本仓自己的 guidance（「缺省=今天」）都不一致。
+        """
+        minor_variant = payload.get("minorVariant")
+        if minor_variant is not None:
+            _require_option(minor_variant, tuple(_ptext.MINOR_VARIANT_LABEL), field="minorVariant", tool="progression")
         return {
-            "targetDate": payload.get("targetDate") or payload.get("date"),
-            "targetTime": payload.get("targetTime") or "12:00:00",
+            "targetDate": f"{payload.get('targetDate') or datetime.now().strftime('%Y-%m-%d')}".strip(),
+            "targetTime": f"{payload.get('targetTime') or '12:00:00'}".strip(),
+            "minorVariant": minor_variant or _ptext.DEFAULT_MINOR_VARIANT,
         }
 
     def _run_jaynesprog_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # Jayne 赤纬推运 (v2.5.0): /astroextra/jaynesprog — secondary progression + declination parallels.
-        remote_payload = {**payload, **self._progression_target(payload), "orb": payload.get("orb", 1.0)}
+        target = self._progression_target(payload)
+        remote_payload = {**payload, **target, "orb": payload.get("orb", 1.0)}
         response = self._call_remote("/astroextra/jaynesprog", remote_payload)
-        snapshot_text = _build_jaynesprog_snapshot_text(response)
+        # 上游 [本命盘配置]（生辰 + 星与虚点 + 宫位宫头 + ◆ 本命赤纬）要本命盘——/astroextra/jaynesprog 只回推运结果。
+        response = self._attach_predictive_chart_context("jaynesprog", payload, response)
+        snapshot_text = _build_jaynesprog_snapshot_text(
+            response, payload, target_date=target["targetDate"], target_time=target["targetTime"],
+            minor_variant=target["minorVariant"],
+        )
         return {
             "methods": response.get("methods", []),
+            "target": target,
             "raw": response,
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="jaynesprog", snapshot_text=snapshot_text),
@@ -9836,14 +10769,19 @@ class HorosaSkillService:
 
     def _run_vedicprog_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 恒星推运 Vedic (v2.5.0): /astroextra/progressions with zodiacal=1 (sidereal).
-        remote_payload = {**payload, **self._progression_target(payload), "zodiacal": 1, "orb": payload.get("orb", 1.5)}
+        target = self._progression_target(payload)
+        remote_payload = {**payload, **target, "zodiacal": 1, "orb": payload.get("orb", 1.5)}
         response = self._call_remote("/astroextra/progressions", remote_payload)
         # execution="local" 的工具不走统一出口的 _attach_predictive_chart_context（那一支只对
         # remote 工具生效），所以这里显式补拉本命盘 —— [本命盘配置] 段要它。
         response = self._attach_predictive_chart_context("vedicprog", payload, response)
-        snapshot_text = _build_vedicprog_snapshot_text(response, payload)
+        snapshot_text = _build_vedicprog_snapshot_text(
+            response, payload, target_date=target["targetDate"], target_time=target["targetTime"],
+            minor_variant=target["minorVariant"],
+        )
         return {
             "methods": response.get("methods", []),
+            "target": target,
             "raw": response,
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="vedicprog", snapshot_text=snapshot_text),
@@ -9851,16 +10789,31 @@ class HorosaSkillService:
 
     def _run_planetaryarc_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 行星弧 (v2.5.0): /predict/planetaryarc — directs the whole chart by the arc of arcSource (default Moon).
+        # F10：目标时刻缺省 = 上游 todayStr()（明天此刻，AstroPlanetaryArc.js:46）；旧实现缺省成**出生日**（零弧）。
+        arc_source = payload.get("arcSource", "Moon")
+        _require_option(arc_source, _ARC_SOURCES, field="arcSource", tool="planetaryarc")
         remote_payload = {
             **payload,
-            "datetime": payload.get("datetime") or payload.get("targetDate") or payload.get("date"),
+            "datetime": payload.get("datetime") or payload.get("targetDate") or _planetaryarc_default_datetime(),
             "asporb": payload.get("asporb", 1),
-            "arcSource": payload.get("arcSource", "Moon"),
+            "arcSource": arc_source,
         }
         response = self._call_remote("/predict/planetaryarc", remote_payload)
+        # 后端随回的 natalChart 只有 {hsys,houses,objects,isDiurnal}：无 params/星期/黄道，也无本命 lots——
+        # 旧实现经 _as_chart_wrap 的 fallback_lots 把顶层的**向运** lots 当本命 lots 印进 [本命盘配置]。
+        # 上游 formatArcSnapshot 的本命块读的是真本命 chartObj（buildPredictiveBirthLines + 星与虚点 + 宫位宫头），
+        # 故补拉本命 /chart 顶替之；拉取失败则退回后端那份（_degrade 已留警告）。
+        natal_payload = {**payload, "predictive": 0}
+        for key in ("datetime", "dirZone", "dirLat", "dirLon"):
+            natal_payload.pop(key, None)
+        try:
+            response = {**response, "natalChart": self._call_remote("/chart", natal_payload)}
+        except HorosaSkillError as exc:
+            _degrade("planetaryarc natal chart fetch failed: %s", exc)
         snapshot_text = _build_planetaryarc_snapshot_text(response, payload)
         return {
             "chart": response.get("chart"),
+            "target": {"datetime": remote_payload["datetime"], "arcSource": arc_source},
             "raw": response,
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="planetaryarc", snapshot_text=snapshot_text),
@@ -9879,10 +10832,51 @@ class HorosaSkillService:
             "export_snapshot": self._augment_export_payload(technique="planetaryages", snapshot_text=snapshot_text),
         }
 
+    # F7：上游挂载齿轮（techniqueMountSettings.js:1237-1274）→ builder opts 的键与值域（aiAnalysisContext.js:2998-3013
+    # regen 传的就是这几键）。值域抄 vendored builder 自己的常量表（balbillus.js BALBILLUS_YEAR_TYPES/MODES、
+    # triplicityRulers.js TRIPLICITY_SYSTEMS/DIVISIONS、keypoints120.js RELEASE_MODES）——认不出就报错，
+    # 不像 builder 那样静默回落缺省。
+    _PROGEXTRA_OPTION_DOMAINS: dict[str, dict[str, tuple[str, ...]]] = {
+        "balbillus": {
+            "startPlanet": ("Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn"),
+            "yearType": ("solar", "hellenistic"),
+            "mode": ("nearest", "forward"),
+        },
+        "triplicityrulers": {
+            "system": ("Dorothean", "Ptolemaic", "PtolemaicWaterVariant"),
+            "division": ("thirds", "halves"),
+        },
+        "keypoints": {"mode": ("soul", "body")},
+    }
+    # triplicityrulers.lifespan：上游齿轮 number 30–120（缺省 75）。
+    _TRIPLICITY_LIFESPAN_RANGE = (30, 120)
+
+    def _progextra_options(self, payload: dict[str, Any], technique: str) -> dict[str, Any]:
+        options: dict[str, Any] = {}
+        for field, allowed in self._PROGEXTRA_OPTION_DOMAINS.get(technique, {}).items():
+            value = payload.get(field)
+            if value is None:
+                continue
+            _require_option(value, allowed, field=field, tool=technique)
+            options[field] = value
+        if technique == "triplicityrulers" and payload.get("lifespan") is not None:
+            lifespan = _finite_number(payload.get("lifespan"))
+            low, high = self._TRIPLICITY_LIFESPAN_RANGE
+            if lifespan is None or not low <= lifespan <= high:
+                raise ToolValidationError(
+                    f"triplicityrulers 的 lifespan={payload.get('lifespan')!r} 须在 {low}–{high} 之间 / "
+                    f"lifespan must be a number within {low}-{high}.",
+                    code="tool.predictive_invalid_option",
+                    details={"tool": technique, "field": "lifespan", "value": payload.get("lifespan"), "allowed": [low, high]},
+                )
+            options["lifespan"] = lifespan
+        return options
+
     def _run_progextra_js_tool(self, payload: dict[str, Any], technique: str) -> dict[str, Any]:
         # v2.5.0 推运 builders that are too algorithm-heavy to re-port (balbillus 129年旺距削减 / persiandirected /
         # yearsystem129): cast the natal /chart, then run the vendored 星阙 frontend builder via horosa-core-js,
         # which emits the single-section snapshot text directly.
+        options = self._progextra_options(payload, technique)
         chart_payload = {**payload, "predictive": 0}
         chart_payload.pop("datetime", None)
         chart_payload.pop("dirZone", None)
@@ -9891,13 +10885,20 @@ class HorosaSkillService:
         response = self._call_remote("/chart", chart_payload)
         snapshot_text = ""
         try:
-            js = self.js_client.run("progextra", {"technique": technique, "chart": response})
+            js = self.js_client.run("progextra", {"technique": technique, "chart": response, "options": options})
             if isinstance(js, dict):
                 snapshot_text = f"{js.get('snapshot_text') or ''}".strip()
+                js_data = js.get("data") if isinstance(js.get("data"), dict) else {}
+                if js_data.get("ok") is False:
+                    _degrade(
+                        "progextra builder failed (technique=%s): %s %s",
+                        technique, js_data.get("reason"), js_data.get("error") or "",
+                    )
         except Exception as exc:
             _degrade("progextra JS engine failed (technique=%s): %s", technique, exc)
         return {
             "chart": response.get("chart"),
+            "options": options,
             "raw": response,
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique=technique, snapshot_text=snapshot_text),
@@ -9912,6 +10913,31 @@ class HorosaSkillService:
     # 再按上游同格式拼 [多重回归] 段。
     _EXTRARETURNS_BODIES = (("Saturn", "土星返照", "≈29.5 年"), ("Jupiter", "木星返照", "≈11.9 年"), ("Node", "月交返照", "≈18.6 年"))
 
+    # 上游 components/astro/AstroExtraReturns.js:40：导出取 5 回（与组件 state.count=5 对齐；此前 4 回是上游已修的 bug）。
+    _EXTRARETURNS_COUNT = 5
+
+    @staticmethod
+    def _extrareturns_body_line(cn: str, period: str, resp: dict[str, Any], rows: list[dict[str, Any]]) -> str:
+        """逐字镜像上游 AstroExtraReturns.js:43-53 的每体一行。
+
+        [Q-366/T-345] 后端同一回列全部逆行三过（passes，顺→逆→顺）：>1 过时写 `第N回 d1/d2(逆)/d3`，
+        单过仍是一个日期；行尾追加各回时刻 + 本命黄经（toFixed(1)，与 UI 同口径）。
+        """
+        def dates_cell(row: dict[str, Any]) -> str:
+            passes = row.get("passes")
+            if isinstance(passes, list) and len(passes) > 1:
+                joined = "/".join(
+                    f"{pp.get('date')}{'(逆)' if pp.get('retrograde') else ''}" for pp in passes if isinstance(pp, dict)
+                )
+                return f"第{_ptext.js_str(row.get('which'))}回 {joined}"
+            return f"第{_ptext.js_str(row.get('which'))}回 {row.get('date')}"
+
+        dates_txt = "，".join(dates_cell(row) for row in rows)
+        times_txt = "，".join(f"第{_ptext.js_str(row.get('which'))}回 {row.get('time') or '-'}" for row in rows)
+        natal_lon = resp.get("natalLon")
+        natal_lon_txt = f"；本命黄经 {_ptext.js_to_fixed(natal_lon, 1)}°" if natal_lon is not None else ""
+        return f"{cn}（{period}）：{dates_txt}；时刻：{times_txt}{natal_lon_txt}"
+
     def _run_extrareturns_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         remote_base = {**payload, "predictive": 0}
         for key in ("datetime", "dirZone", "dirLat", "dirLon"):
@@ -9919,18 +10945,23 @@ class HorosaSkillService:
         lines = ["[多重回归]"]
         for body_key, cn, period in self._EXTRARETURNS_BODIES:
             try:
-                resp = self._call_remote("/astroextra/planetreturn", {**remote_base, "body": body_key, "count": 4})
+                resp = self._call_remote(
+                    "/astroextra/planetreturn", {**remote_base, "body": body_key, "count": self._EXTRARETURNS_COUNT}
+                )
             except Exception as exc:
                 _degrade("extrareturns planetreturn failed (body=%s): %s", body_key, exc)
                 continue
             rows = resp.get("returns") if isinstance(resp, dict) else None
             if not isinstance(rows, list) or not rows:
                 continue
-            cells = [f"第{r.get('which')}回 {r.get('date')}" for r in rows if isinstance(r, dict) and r.get("date")]
-            if cells:
-                lines.append(f"{cn}（{period}）：" + "，".join(cells))
+            rows = [r for r in rows if isinstance(r, dict)]
+            if rows:
+                lines.append(self._extrareturns_body_line(cn, period, resp, rows))
         snapshot_text = "\n".join(lines) if len(lines) > 1 else ""
         result: dict[str, Any] = {}
+        natal_header = self._natal_header("extrareturns", payload)
+        if natal_header:
+            result["natalHeader"] = natal_header
         # [日月返照年表]（v0.33.0 批 I-3，/astroextra/returns）：逐年日返/月返精确时刻 + 返照上升。
         # 条件段：给 timelineStartYear/timelineCount 才产，零回归。
         if payload.get("timelineStartYear") is not None or payload.get("timelineCount") is not None:
@@ -10233,16 +11264,50 @@ class HorosaSkillService:
             "export_snapshot": self._augment_export_payload(technique="yearsystem129", snapshot_text=snapshot_text),
         }
 
+    @staticmethod
+    def _persian_target_datetime(payload: dict[str, Any]) -> str:
+        """datetime → 'YYYY-MM-DD HH:mm:ss'；只给日期补正午（与上游 predict 面板日期选择同义）。"""
+        target = str(payload.get("datetime") or "").strip().replace("/", "-").replace("T", " ")
+        if len(target) == 10:
+            target = f"{target} 12:00:00"
+        return target
+
     def _run_persiandirected_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
-        # 波斯向运 (Persian Directed): pure arithmetic off the natal chart objects/houses/birth (1°/year).
+        # 波斯向运 (Persian Directed)：纯算术读本命盘 objects/houses/birth（上游 AstroPersianDirected.js）。
+        # F6（上游 v3.11 [Q-168/T-102]）：主表此前写死 1°/年·顺向·90 年，声明的 rateKey/direction 只进了
+        # 可选的指定日期盘；现在 rateKey/direction/maxYears 同时驱动主表（= 上游 builder opts）。
+        rate_key = payload.get("rateKey")
+        direction = payload.get("direction")
+        max_years = payload.get("maxYears")
+        if rate_key is not None:
+            _require_option(rate_key, tuple(_PERSIAN_RATE), field="rateKey", tool="persiandirected")
+        if direction is not None:
+            _require_option(direction, ("direct", "converse"), field="direction", tool="persiandirected")
+        if max_years is not None:
+            number = _finite_number(max_years)
+            if number is None or number <= 0:
+                raise ToolValidationError(
+                    f"persiandirected 的 maxYears={max_years!r} 必须为正数 / maxYears must be a positive number "
+                    f"(上游齿轮五档 {list(_PERSIAN_MAX_YEARS_OPTIONS)})。",
+                    code="tool.predictive_invalid_option",
+                    details={"tool": "persiandirected", "field": "maxYears", "value": max_years,
+                             "allowed": list(_PERSIAN_MAX_YEARS_OPTIONS)},
+                )
         chart_payload = {**payload, "predictive": 0}
         chart_payload.pop("datetime", None)
         chart_payload.pop("dirZone", None)
         response = self._call_remote("/chart", chart_payload)
-        snapshot_text = _build_persiandirected_snapshot_text(response)
+        target = self._persian_target_datetime(payload) if payload.get("datetime") else ""
+        moment_lines: list[str] = []
+        snapshot_text = _build_persiandirected_snapshot_text(
+            response,
+            {"rateKey": rate_key, "direction": direction, "maxYears": max_years, "datetime": target},
+            moment_lines=moment_lines,
+        )
         result: dict[str, Any] = {
             "chart": response.get("chart"),
             "raw": response,
+            "_moment_lines": moment_lines,
         }
         # [指定日期向运盘]（v0.33.0 批 I-2）：datetime 时后端整铸该日向运盘（/predict/persianchart，
         # getPersianDirectedByDate）。条件段：缺省不产，零回归。
@@ -10259,12 +11324,11 @@ class HorosaSkillService:
         return result
 
     def _persianchart_by_date(self, payload: dict[str, Any]) -> dict[str, Any]:
-        target = str(payload.get("datetime") or "").strip().replace("-", "/")
-        if len(target) == 10:  # 只给日期 → 补正午（与上游 predict 面板日期选择同义）
-            target = f"{target} 12:00:00"
+        target = self._persian_target_datetime(payload).replace("-", "/")
         remote = {**payload, "datetime": target, "predictive": 0}
-        remote.pop("dirZone", None)
-        for key in ("rateKey", "direction", "nodeRetrograde"):
+        # 上游 v3.11 [Q-173]：/predict/persianchart 按 dirZone 解释目标时刻（空则本命时区）——dirZone 必须透传，
+        # 不能再剥（旧实现剥掉 = 撤销上游「按所选时区」修正）。
+        for key in ("rateKey", "direction", "nodeRetrograde", "dirZone"):
             if payload.get(key) is None:
                 remote.pop(key, None)
         return self._call_remote("/predict/persianchart", remote)
@@ -10506,7 +11570,7 @@ class HorosaSkillService:
             "predictive": 0,
         }
         chart_response = self._call_remote("/chart", chart_payload)
-        chart_response = self._attach_natal_extras("mundane", chart_response)
+        chart_response = self._attach_natal_extras("mundane", chart_response, payload)
         head = "\n".join(["[世俗入宫]", f"入宫节气：{term}", f"年份：{year or '-'}", f"入宫时刻：{ingress_time}"])
         # 世运卜卦（mundaneType='mundanehorary'）：上游对该盘型走的是「问事时刻的普通 /chart →
         # buildFacts → describeXQuestion」，机制同卜卦、问主=公众/国家、宫义按世运读。这里复用
@@ -11335,9 +12399,10 @@ class HorosaSkillService:
                     response_data = self._run_local_tool(definition, input_normalized)
                 else:
                     assert definition.endpoint is not None
+                    input_normalized = self._apply_upstream_predictive_defaults(tool_name, input_normalized)
                     response_data = self._call_remote(definition.endpoint, input_normalized)
                     response_data = self._attach_predictive_chart_context(tool_name, input_normalized, response_data)
-                response_data = self._attach_natal_extras(tool_name, response_data)
+                response_data = self._attach_natal_extras(tool_name, response_data, input_normalized)
                 response_data = self._attach_classical_derived(tool_name, response_data)
                 response_data = self._attach_classical_analysis(tool_name, input_normalized, response_data)
                 response_data = self._attach_jyotish_sections(tool_name, response_data)

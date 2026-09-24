@@ -30,8 +30,12 @@ def _golden(name: str) -> str:
 
 # --- golden equality (regression guard) -------------------------------------------------
 
+# 上游 v3.11 [Q-168/T-102]：段尾 ◆ 近期命中按「当前向运年龄」取最近 12 条 → golden 必须固定「此刻」。
+_FIXED_NOW = datetime(2026, 9, 24, 12, 0, 0)
+
+
 def test_persiandirected_matches_golden() -> None:
-    assert S._build_persiandirected_snapshot_text(_chart()) == _golden("persiandirected")
+    assert S._build_persiandirected_snapshot_text(_chart(), now=_FIXED_NOW) == _golden("persiandirected")
 
 
 def test_persianchart_section_renders_directed_positions_and_hits() -> None:
@@ -64,10 +68,12 @@ def test_planetaryages_matches_golden() -> None:
 # --- structural invariants (catch logic errors even if golden is regenerated) -----------
 
 def test_persiandirected_invariants() -> None:
-    text = S._build_persiandirected_snapshot_text(_chart())
+    text = S._build_persiandirected_snapshot_text(_chart(), now=_FIXED_NOW)
     assert text.startswith("[波斯向运（Persian Directed）]")
-    rows = [ln for ln in text.splitlines() if ln.startswith("| ") and "°" in ln]
-    assert 0 < len(rows) <= 120, "120-row cap (or empty) expected"
+    # 主表（◆ 近期命中之前）；上游 v3.11：相位名取 AstroTxtMsg（0º/60º…），行数上限 max(200, maxYears×4)=360。
+    main_table = text.split("◆")[0]
+    rows = [ln for ln in main_table.splitlines() if ln.startswith("| ") and "º" in ln]
+    assert 0 < len(rows) <= 360, "max(200, 90×4) row cap (or empty) expected"
     # Exact per-row dates are owned by the golden test; here we check structural invariants that a
     # deliberate golden regeneration would NOT mask: ascending ages, valid aspects, dates tracking ages.
     ages: list[float] = []
@@ -79,7 +85,7 @@ def test_persiandirected_invariants() -> None:
         ages.append(age)
         dates.append(datetime.strptime(date_str, "%Y-%m-%d"))
         assert 0 < age <= 90, f"age {age} out of (0,90]"
-        assert aspect in {"合相", "六合", "四分(刑)", "三合", "对分(冲)", "0°", "60°", "90°", "120°", "180°"}
+        assert aspect in {"0º", "60º", "90º", "120º", "180º"}
         # rate sanity (1°/年): the row's date must be ~age years after birth (±1 week tolerates the
         # 2-dp age rounding); this still catches a wrong rate, wrong epoch, or wrong day-per-year constant.
         approx = birth + timedelta(days=age * 365.2421904)

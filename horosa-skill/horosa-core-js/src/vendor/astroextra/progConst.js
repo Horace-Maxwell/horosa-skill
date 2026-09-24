@@ -16,11 +16,13 @@ export const LIST_SIGNS = [
 ];
 
 // = 星阙 AstroText.AstroTxtMsg (planet/sign/point subset the progression builders display).
+// 逐值对齐上游 constants/AstroText.js:366-415：行星是**单字**（日/月/水…），白羊座写「牡羊」。此前这里写成
+// 太阳/月亮…/白羊，balbillus 快照的主限/子限列因此与上游逐字不同（上游 balbillus.js planetTxt 读的就是这张表）。
 export const AstroTxtMsg = {
-  Sun: '太阳', Moon: '月亮', Mercury: '水星', Venus: '金星', Mars: '火星',
-  Jupiter: '木星', Saturn: '土星', Uranus: '天王星', Neptune: '海王星', Pluto: '冥王星',
+  Sun: '日', Moon: '月', Mercury: '水', Venus: '金', Mars: '火',
+  Jupiter: '木', Saturn: '土', Uranus: '天', Neptune: '海', Pluto: '冥',
   'North Node': '北交', 'South Node': '南交', 'Pars Fortuna': '福点', Chiron: '凯龙',
   Asc: '上升', Desc: '下降', MC: '中天', IC: '天底',
-  Aries: '白羊', Taurus: '金牛', Gemini: '双子', Cancer: '巨蟹', Leo: '狮子', Virgo: '室女',
+  Aries: '牡羊', Taurus: '金牛', Gemini: '双子', Cancer: '巨蟹', Leo: '狮子', Virgo: '室女',
   Libra: '天秤', Scorpio: '天蝎', Sagittarius: '射手', Capricorn: '摩羯', Aquarius: '宝瓶', Pisces: '双鱼',
 };

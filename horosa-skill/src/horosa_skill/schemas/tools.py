@@ -141,6 +141,16 @@ class BirthInput(FlexibleModel):
     stopLevelIdx: int | None = None
 
 
+# [寿命格局] 取主法（上游 AstroLifespan.js:14-18；上游是全局设置 horosa.lifespan.method，skill 按调用传）。
+_LIFESPAN_METHOD_DESC = "[寿命格局]取主法：ptolemy 托勒密（缺省）| alcabitius | dorotheus"
+
+
+class AstroChartInput(BirthInput):
+    """本命/盘面族（chart/chart13/chart12/hellen_chart）：在 BirthInput 上加 [寿命格局] 取主法。"""
+
+    lifespanMethod: str | None = Field(default=None, description=_LIFESPAN_METHOD_DESC)
+
+
 class IndiaChartInput(BirthInput):
     # 印度占星 (星阙 v2.6.4)：分宫制 4→全 24 制(indiaHsys 0–24)、黄道岁差 6→全 47(indiaAyanamsa)。
     # 印占恒星黄道引擎 pyswisseph，与西洋 siderealAyanamsa 共用 47 套岁差键。缺省 hsys=0(整宫)/lahiri。
@@ -210,6 +220,24 @@ class PredictiveInput(BirthInput):
     predictive: bool | None = False
     # pdchart 界限显示开关（service 读 params.showPdBounds；agent_guidance 一直在文档里写它，schema 此前未声明 → MCP 扁平面丢弃）。
     showPdBounds: int | bool | None = None
+
+
+class ProfectionInput(PredictiveInput):
+    # [Q-105] 小限页 G9 年/月/日小限 + 多起点（上游 utils/profectionSummary.js，挂载齿轮 techniqueMountSettings.js:1359-1362）。
+    profGrain: str | None = Field(default=None, description="[小限摘要]粒度：y 年（缺省）| m 月 | d 日")
+    profStart: str | None = Field(default=None, description="[小限摘要]起点：asc 上升（缺省）| sect 区分光 | fortune 福点 | moon | mc")
+
+
+class ZodiacalReleaseInput(PredictiveInput):
+    # 上游 AstroZR.js ZR_BASE_POINTS / AI_MODE_ITEMS（挂载齿轮 techniqueMountSettings.js:1277-1285）。
+    basePoint: str | None = Field(
+        default=None,
+        description="推运基点：Pars Fortuna（缺省）/Pars Spirit/Pars Mercury…Pars Saturn/Asc/Desc/MC/IC/十二星座英文名",
+    )
+    aiMode: str | None = Field(default=None, description="输出层级：l1_all（缺省）| l2_in_l1 | l3_in_l2 | l4_in_l3")
+    aiL1Idx: int | None = Field(default=None, description="钻取序号（0 起；aiL2Idx/aiL3Idx 同）")
+    aiL2Idx: int | None = None
+    aiL3Idx: int | None = None
 
 
 class RelativePartyInput(FlexibleModel):
@@ -1068,6 +1096,7 @@ class HarmonicInput(BirthInput):
     # 调波盘 (harmonic chart) is a backend chart-extra computation (POST /astroextra/harmonic on the
     # Python chart service). harmonic = the H-number (1–360, 星阙 default 9); orb = conjunction orb.
     predictive: bool | None = False
+    lifespanMethod: str | None = Field(default=None, description=_LIFESPAN_METHOD_DESC)
     harmonic: int | None = 9
     orb: float | None = 2.0
 
@@ -1089,6 +1118,7 @@ class DraconicInput(BirthInput):
     # 龙盘 (draconic chart)：把命盘各点黄经减去北交点黄经（POST /astroextra/draconic）。
     # 后端返回 {nodeLon, positions, conjunctions, chart}，chart 与 /chart 同形。
     predictive: bool | None = False
+    lifespanMethod: str | None = Field(default=None, description=_LIFESPAN_METHOD_DESC)
     orb: float | None = 2.0
 
 
@@ -1097,6 +1127,7 @@ class RelocationInput(BirthInput):
     # 行星黄经由 UT 决定故不变，宫位/角点随地点变 —— 迁居占星的标准做法。
     # relocLat/relocLon 缺省回退到出生地，等于本命盘（结果敏感：不给新地点就不是「重置」）。
     predictive: bool | None = False
+    lifespanMethod: str | None = Field(default=None, description=_LIFESPAN_METHOD_DESC)
     relocLat: Any | None = Field(default=None, description="重置地纬度（如 51n30）；缺省回退出生地。")
     relocLon: Any | None = Field(default=None, description="重置地经度（如 0w07）；缺省回退出生地。")
 
@@ -1113,28 +1144,34 @@ class DistributionsInput(BirthInput):
     predictive: bool | None = True
 
 
+_TARGET_DATE_DESC = "目标日期 YYYY-MM-DD（缺省=今天，上游同律）"
+_MINOR_VARIANT_DESC = "小推运月长：synodic 朔望月/年（缺省）| sidereal 恒星月/年 | engine 引擎历史值"
+
+
 class JaynesProgInput(BirthInput):
     # Jayne 赤纬推运 (v2.5.0): secondary progression to a target date, then declination parallels.
     predictive: bool | None = True
-    targetDate: str | None = None
+    targetDate: str | None = Field(default=None, description=_TARGET_DATE_DESC)
     targetTime: str | None = "12:00:00"
     orb: float | None = 1.0
+    minorVariant: str | None = Field(default=None, description=_MINOR_VARIANT_DESC)
 
 
 class VedicProgInput(BirthInput):
     # 恒星推运 Vedic (v2.5.0): progressions under the sidereal zodiac.
     predictive: bool | None = True
-    targetDate: str | None = None
+    targetDate: str | None = Field(default=None, description=_TARGET_DATE_DESC)
     targetTime: str | None = "12:00:00"
     orb: float | None = 1.5
+    minorVariant: str | None = Field(default=None, description=_MINOR_VARIANT_DESC)
 
 
 class PlanetaryArcInput(BirthInput):
     # 行星弧 (v2.5.0): directs the whole chart by the secondary-progressed arc of arcSource (default Moon).
     predictive: bool | None = True
-    datetime: str | None = None
+    datetime: str | None = Field(default=None, description="目标时刻（缺省=明天此刻，上游同律）")
     asporb: float | None = 1.0
-    arcSource: str | None = "Moon"
+    arcSource: str | None = Field(default="Moon", description="弧源：Moon（缺省）/Sun/Mercury/Venus/Mars/Jupiter/Saturn")
 
 
 class PlanetaryAgesInput(BirthInput):
@@ -1145,17 +1182,26 @@ class PlanetaryAgesInput(BirthInput):
 
 class BalbillusInput(BirthInput):
     # Balbillus 129年系统 (v2.5.0): 旺距削减主限 — reads the natal chart, splits life into recursive sub-periods.
+    # 可调项 = 上游挂载齿轮（techniqueMountSettings.js:1260-1266）→ vendored builder opts。
     predictive: bool | None = False
+    startPlanet: str | None = Field(default=None, description="起始星：Sun（缺省）/Moon/Mercury/Venus/Mars/Jupiter/Saturn")
+    yearType: str | None = Field(default=None, description="年制：solar 回归年（缺省）| hellenistic 360 日")
+    mode: str | None = Field(default=None, description="距离口径：nearest 最近角距（缺省）| forward 顺黄道距")
 
 
 class TriplicityRulersInput(BirthInput):
     # 三分主星推运 (星阙 v2.6.x): 区间光体所在座的三颗三分主星按昼夜换序，划分人生各阶段。纯前端切分本命盘。
+    # 可调项 = 上游挂载齿轮（techniqueMountSettings.js:1237-1248）。
     predictive: bool | None = False
+    system: str | None = Field(default=None, description="三分体系：Dorothean（缺省随本盘 triplicity）| Ptolemaic | PtolemaicWaterVariant")
+    division: str | None = Field(default=None, description="划分法：thirds 三分（缺省）| halves 两分")
+    lifespan: float | None = Field(default=None, description="寿命基准/年龄上限 30–120（缺省 75）")
 
 
 class KeypointsInput(BirthInput):
     # 数字相位推运 (星阙 v2.6.x): 七星小年数 + 自释放点起第 k 座挂钩，凡年龄为 k 或小年倍数即激活。纯前端切分本命盘。
     predictive: bool | None = False
+    mode: str | None = Field(default=None, description="释放点：soul 身·月亮起（缺省）| body 命·上升起")
 
 
 class LunationPhaseInput(BirthInput):
@@ -1368,8 +1414,9 @@ class PersianDirectedInput(BirthInput):
             "加产 [指定日期向运盘] 段。缺省只出 1°/年应期表。Cast the directed chart at this date."
         ),
     )
-    rateKey: str | None = Field(default=None, description="向运速率键（缺省 persian=1°/年；其余速率键与上游 rateKey 同名直通）")
-    direction: str | None = Field(default=None, description="向运方向：direct（缺省）|converse（逆向）")
+    rateKey: str | None = Field(default=None, description="速率：persian 1°/年（缺省）| prophected 30°/年 | naibod 59′08″/年；驱动应期表与指定日期盘")
+    direction: str | None = Field(default=None, description="方向：direct（缺省）| converse 逆向；驱动应期表与指定日期盘")
+    maxYears: float | None = Field(default=None, description="应期年数（缺省 90；上游五档 50/90/120/150/200）")
     nodeRetrograde: bool | None = Field(default=None, description="交点按逆行处理（缺省 false，上游同默认）")
 
 
@@ -1378,6 +1425,7 @@ class MundaneInput(FlexibleModel):
     # date/time are DERIVED from the ingress (jieqi) computation, so the inputs are year + 入宫节气 + place.
     year: int | str
     ingressTerm: str | None = "春分"  # 春分 / 夏至 / 秋分 / 冬至 (the four cardinal ingresses)
+    lifespanMethod: str | None = Field(default=None, description=_LIFESPAN_METHOD_DESC)
     zone: str | None = "+08:00"
     lat: str | None = None
     lon: str | None = None
