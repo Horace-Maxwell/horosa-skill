@@ -4,6 +4,7 @@ from typing import Any
 
 from horosa_skill.exports.registry import (
     AI_EXPORT_SETTINGS_VERSION,
+    JIEQI_SETTING_PRESETS,
     get_technique_info,
     map_legacy_section_title,
     normalize_astro_meaning_setting,
@@ -11,6 +12,9 @@ from horosa_skill.exports.registry import (
     normalize_section_title,
     unique_list,
 )
+
+# 上游 `exportKey === 'jieqi' || isJieQiSplitSettingKey(exportKey)`（aiExport.js:3552）。
+JIEQI_EXPORT_KEYS = frozenset({"jieqi", *JIEQI_SETTING_PRESETS})
 
 
 def parse_section_title_line(line: str | None) -> str:
@@ -116,15 +120,21 @@ def parse_export_content(
         )
 
     strict_filtered = render_sections_to_text([section for section in filtered_sections if section["included"]])
-    safe_export_text = strict_filtered or render_sections_to_text(
-        [
-            {
-                "content": section["content"],
-            }
-            for section in filtered_sections
-            if normalize_section_title(section["title"]) not in forbidden
-        ]
-    )
+    if not strict_filtered and selected_sections and technique in JIEQI_EXPORT_KEYS:
+        # [挂载自检 F-38]（上游 aiExport.js:3547-3552）：节气盘整键/分键——盘页签下的内容只含当前一盘，用户显式勾的段
+        # 本内容没有 → 真取消（''）而非回吐全文（否则「只要夏至星盘」被盖成「春分整份」）。其他技法段名与内容同源、
+        # 失配只会是命名漂移，保留下面「回退剥后文」兜底。
+        safe_export_text = ""
+    else:
+        safe_export_text = strict_filtered or render_sections_to_text(
+            [
+                {
+                    "content": section["content"],
+                }
+                for section in filtered_sections
+                if normalize_section_title(section["title"]) not in forbidden
+            ]
+        )
 
     optional_norm = {normalize_section_title(item) for item in technique_info.get("optional_sections", [])}
     unknown_detected = [title for title in detected_titles if normalize_section_title(title) not in {normalize_section_title(item) for item in preset_sections}]
