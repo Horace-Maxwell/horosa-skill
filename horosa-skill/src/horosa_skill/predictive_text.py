@@ -14,31 +14,18 @@ import math
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
-# ── 上游 constants/AstroText.js:355-470 `AstroTxtMsg`（98 键，逐条抽取）────────────────────────
-UPSTREAM_ASTRO_TXT_MSG: dict[str, str] = {
-    "Asp0": "0º", "Asp60": "60º", "Asp90": "90º", "Asp120": "120º", "Asp180": "180º",
-    "Asp45": "45º", "Asp135": "135º", "Asp30": "30º", "Asp150": "150º",
-    "Aries": "牡羊", "Taurus": "金牛", "Gemini": "双子", "Cancer": "巨蟹", "Leo": "狮子", "Virgo": "室女",
-    "Libra": "天秤", "Scorpio": "天蝎", "Sagittarius": "射手", "Capricorn": "摩羯", "Aquarius": "宝瓶", "Pisces": "双鱼",
-    "Sun": "日", "Moon": "月", "Mercury": "水", "Venus": "金", "Mars": "火", "Jupiter": "木", "Saturn": "土",
-    "Uranus": "天", "Neptune": "海", "Pluto": "冥", "North Node": "北交", "South Node": "南交",
-    "Dark Moon": "暗月", "Purple Clouds": "紫气", "Pars Fortuna": "福点", "Vertex": "宿命点", "Chiron": "凯龙",
-    "Syzygy": "月亮朔望点", "Intp_Apog": "月亮平均远地点", "Intp_Perg": "月亮平均近地点", "Pholus": "人龙星",
-    "Ceres": "谷神星", "Pallas": "智神星", "Juno": "婚神星", "Vesta": "灶神星", "Eris": "阋神星",
-    "MoonSun": "日月中点", "SaturnMars": "火土中点", "JupiterVenus": "金木中点", "LifeMasterDeg74": "七政命度点",
-    "Asc": "上升", "Desc": "下降", "MC": "中天", "IC": "天底", "Sidereal": "恒星黄道",
-    "Pars Spirit": "灵点", "Pars Faith": "信心点", "Pars Substance": "占有点",
-    "Pars Wedding [Male]": "婚姻点（男性）", "Pars Wedding [Female]": "婚姻点（女性）", "Pars Sons": "子女点",
-    "Pars Father": "父权点", "Pars Mother": "母爱点", "Pars Brothers": "友情点", "Pars Diseases": "灾厄点",
-    "Pars Death": "死亡点", "Pars Travel": "旅行点", "Pars Friends": "朋友点", "Pars Enemies": "宿敌点",
-    "Pars Saturn": "罪点", "Pars Jupiter": "赢点", "Pars Mars": "勇点", "Pars Venus": "爱点", "Pars Mercury": "弱点",
-    "Pars Horsemanship": "驾驭点", "Pars Life": "生命点", "Pars Radix": "光耀点", "Pars Eros": "爱欲点",
-    "Pars Necessity": "必然点", "Pars Courage": "勇气点", "Pars Victory": "胜利点", "Pars Nemesis": "报应点",
-    "Pars Basis": "根基点", "Pars Exaltation": "擢升点", "Pars Sons Valens": "儿子点", "Pars Daughters": "女儿点",
-    "Pars Praxis": "事业点", "Pars Wedding Dorothean": "婚姻点（通式）",
-    "Cupido": "丘比特", "Hades": "哈迪斯", "Zeus": "宙斯", "Kronos": "克洛诺斯", "Apollon": "阿波罗",
-    "Admetos": "阿德墨托斯", "Vulcanus": "伏尔甘", "Poseidon": "波塞冬", "AriesPoint": "白羊点",
-}
+from horosa_skill.engine import astroextra_snapshots as _shared
+
+# 上游名称表 / 宫制 / 岁差 / 小推运月长档：与星运新四键同源的那一份（engine/astroextra_snapshots，逐字抽自
+# constants/AstroText.js · AstroConst.js · AstroProgChart.js）。两路并行实现曾各抄一份（值一致），现只留一份。
+UPSTREAM_ASTRO_TXT_MSG: dict[str, str] = _shared.ASTRO_TXT_MSG
+LIST_SIGNS: tuple[str, ...] = _shared.LIST_SIGNS
+HOUSE_SYS_LABELS: dict[str, str] = _shared.HOUSE_SYS
+ZODIACAL: dict[str, str] = _shared.ZODIACAL
+AYANAMSA_LABELS: dict[str, str] = _shared.AYANAMSA_LABELS
+MINOR_VARIANT_OPTIONS: tuple[tuple[str, str], ...] = _shared.MINOR_VARIANT_OPTIONS
+MINOR_VARIANT_LABEL: dict[str, str] = _shared.MINOR_VARIANT_LABEL
+DEFAULT_MINOR_VARIANT: str = _shared.DEFAULT_MINOR_VARIANT
 
 # 上游 HEAD divination/data/hellenisticData.json planetary_years：行星年四档（planetaryAges.js:99-110 ◆ 行星年四档 子块）。
 # 与 vendored 副本 horosa-core-js/src/vendor/divination/data/hellenisticData.json 同值（测试互锚；该 JSON 由
@@ -52,46 +39,6 @@ PLANETARY_YEARS: dict[str, dict[str, float]] = {
     "Mercury": {"least": 20, "mean": 48, "greater": 76, "greatest": 480},
     "Moon": {"least": 25, "mean": 66.5, "greater": 108, "greatest": 520},
 }
-
-# 上游 constants/AstroConst.js LIST_SIGNS。
-LIST_SIGNS: tuple[str, ...] = (
-    "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
-    "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
-)
-
-# 上游 constants/AstroConst.js:1045-1076 HOUSE_SYSTEM_OPTIONS → HouseSys（value → label）。
-HOUSE_SYS_LABELS: dict[str, str] = {
-    "0": "整宫制", "1": "Alcabitus", "2": "Regiomontanus", "3": "Placidus", "4": "Koch", "5": "Vehlow Equal",
-    "6": "Polich Page", "7": "Sripati", "8": "天顶为10宫中点等宫制", "9": "Porphyry", "10": "Campanus",
-    "11": "Equal", "12": "Equal MC", "13": "Meridian", "14": "Horizontal", "15": "Morinus",
-    "16": "Carter Poli-Equatorial", "17": "Sunshine", "18": "Sunshine Alternate", "19": "Krusinski-Pisa-Goelzer",
-    "20": "Pullen SD", "21": "Pullen SR", "22": "APC Houses", "23": "Savard-A", "24": "福点整宫制",
-}
-
-# 上游 constants/AstroConst.js:86-89 ZODIACAL。
-ZODIACAL: dict[str, str] = {"0": "Tropical", "1": "Sidereal"}
-
-# 上游 constants/AstroConst.js:1079-1133 INDIA_AYANAMSA_OPTIONS（value → label；AI 快照「恒星黄道·<label>」用）。
-AYANAMSA_LABELS: dict[str, str] = {
-    "lahiri": "Lahiri / Chitrapaksha", "lahiri_icrc": "Lahiri ICRC（官定2022）", "lahiri_1940": "Lahiri 1940",
-    "lahiri_vp285": "Lahiri VP285", "raman": "Raman", "krishnamurti": "Krishnamurti / KP",
-    "krishnamurti_vp291": "KP-Senthilathiban (VP291)", "yukteshwar": "Yukteshwar", "jn_bhasin": "J.N. Bhasin",
-    "ushashashi": "Usha/Shashi", "deluce": "De Luce", "true_citra": "True Citra（角宿真星）",
-    "true_revati": "True Revati（娄宿真星）", "true_pushya": "True Pushya / 普舍亚", "true_mula": "True Mula（Chandra Hari）",
-    "true_sheoran": "Vedic / Sheoran", "ss_citra": "SS Citra", "ss_revati": "SS Revati",
-    "suryasiddhanta": "Surya Siddhanta", "suryasiddhanta_msun": "Surya Siddhanta（mean Sun）", "aryabhata": "Aryabhata",
-    "aryabhata_msun": "Aryabhata（mean Sun）", "aryabhata_522": "Aryabhata 522", "fagan_bradley": "Fagan/Bradley",
-    "djwhal_khul": "Djwhal Khul", "valens_moon": "Vettius Valens", "galcent_0sag": "Galactic Center 0°Sag（银心）",
-    "galcent_rgilbrand": "Galactic Center（Gil Brand）", "galcent_mula_wilhelm": "Galactic Center/Mula（Wilhelm）",
-    "galcent_cochrane": "Galactic Center（Cochrane）", "galequ_iau1958": "Galactic Equator（IAU1958）",
-    "galequ_true": "Galactic Equator（true）", "galequ_mula": "Galactic Equator（mid-Mula）",
-    "galequ_fiorenza": "Galactic Equator（Fiorenza）", "galalign_mardyks": "Skydram（Mardyks）",
-    "hipparchos": "Hipparchos", "sassanian": "Sassanian", "aldebaran_15tau": "Aldebaran 15°Tau",
-    "babyl_kugler1": "Babylonian/Kugler 1", "babyl_kugler2": "Babylonian/Kugler 2", "babyl_kugler3": "Babylonian/Kugler 3",
-    "babyl_huber": "Babylonian/Huber", "babyl_etpsc": "Babylonian/Eta Piscium", "babyl_britton": "Babylonian/Britton",
-    "j2000": "J2000", "j1900": "J1900", "b1950": "B1950",
-}
-
 
 # ── JS 语义小工具（字符串化 / 取整 / toFixed 必须与浏览器逐字同形）──────────────────────────────
 
@@ -156,15 +103,6 @@ def fmt_degree(item: dict[str, Any] | None) -> str:
             signlon = None
     return f"{sign_name(item.get('sign'))} {js_fmt_num(signlon, 2)}°"
 
-
-# 上游 components/astro/AstroProgChart.js:21-27 小推运月长档（vedicprog/jaynesprog/prog 共用）。
-MINOR_VARIANT_OPTIONS: tuple[tuple[str, str], ...] = (
-    ("synodic", "朔望月每年（标准·默认）"),
-    ("sidereal", "恒星月每年"),
-    ("engine", "引擎历史值（≈无推进）"),
-)
-MINOR_VARIANT_LABEL: dict[str, str] = dict(MINOR_VARIANT_OPTIONS)
-DEFAULT_MINOR_VARIANT = "synodic"
 
 
 def prog_method_tab(method: dict[str, Any]) -> str:
