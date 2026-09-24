@@ -9,6 +9,7 @@ import { dirname, join } from 'node:path';
 import { runHoraryTool } from '../src/tools/horary.js';
 import { runElectionTool } from '../src/tools/election.js';
 import { runProgExtra } from '../src/tools/progextra.js';
+import { runAstroExtra } from '../src/tools/astroextra.js';
 import { runLiureng, normalizeChart } from '../src/tools/liureng.js';
 import { buildLiuRengReferenceContext } from '../src/vendor/liureng/liurengRefContext.js';
 import { matchBiFa } from '../src/vendor/liureng/LRBiFaDoc.js';
@@ -113,6 +114,50 @@ check('progextra(balbillus) emits the 旺距削减 table', () => {
   assert(s.includes('旺距削减'), 'missing 旺距削减 description');
   assert(s.includes('| 主限 | 子限 |'), 'missing period table header');
   assert(s.split('\n').filter((l) => l.startsWith('|')).length >= 5, 'too few table rows');
+});
+
+// v3.11 同步（F7）：上游挂载齿轮 → builder opts（aiAnalysisContext.js:2998-3013）必须真的到达 vendored builder。
+// 权威：balbillus.js / keypoints120.js / triplicityRulers.js 是上游 utils/*.js 的 verbatim vendor（manifest 校验），
+// 这里钉的是「选项改变结果」的具体值：起始星名、年制/口径标签、释放点标签、两分段年龄段。
+check('progextra options reach the vendored builders (balbillus/keypoints/triplicityrulers)', () => {
+  const dflt = runProgExtra({ technique: 'balbillus', chart }).snapshot_text;
+  // 上游 AstroText.AstroTxtMsg 行星为单字（日/月…）：progConst shim 曾写成「太阳」，与上游逐字不符。
+  assert(dflt.includes('七星按本命黄经序从 日 起铺开'), 'balbillus default must start from 日 (upstream AstroTxtMsg)');
+  assert(!dflt.includes('太阳'), 'balbillus must print upstream single-char planet names');
+  const moon = runProgExtra({ technique: 'balbillus', chart, options: { startPlanet: 'Moon', yearType: 'hellenistic', mode: 'forward' } }).snapshot_text;
+  assert(moon.includes('七星按本命黄经序从 月 起铺开'), 'startPlanet=Moon must start from 月');
+  assert(moon.includes('年制=Egyptian/Hellenistic（360 日）、距离口径=顺黄道距（forward）'), 'yearType/mode must reach builder');
+  assert(moon.split('\n').some((l) => l.startsWith('| 月(')), 'first main period must be 月');
+  const body = runProgExtra({ technique: 'keypoints', chart, options: { mode: 'body' } }).snapshot_text;
+  assert(body.includes('释放点=命（上升起）'), 'keypoints mode=body must release from Asc');
+  const halves = runProgExtra({ technique: 'triplicityrulers', chart, options: { division: 'halves', lifespan: 90 } }).snapshot_text;
+  assert(halves.includes('两分（上半生 / 下半生 + 协作贯穿）'), 'division=halves must reach builder');
+  assert(halves.includes('| 次三分主星（下半生） | 水 | 45–90岁 |'), 'lifespan=90 must split at 45');
+});
+
+// 上游 buildCurrentMomentLines(chartObj, extraLines)：builder 自算的 [当前时点] 定位行经 stub 回传（不产段）。
+// fixture 出生 2026-06-02 → 此后 15 年内都处在首个主限「日」、三分主星首段「土」（0–25 岁）。
+check('progextra returns the builders\' current-moment locator lines', () => {
+  const bal = runProgExtra({ technique: 'balbillus', chart });
+  assert(bal.moment_lines.some((l) => l.startsWith('当前主限：日（起 2026-06-02，时长 15.35 年）')), `balbillus moment ${JSON.stringify(bal.moment_lines)}`);
+  assert(!bal.snapshot_text.includes('[当前时点]'), 'stub must not emit the section itself (Python owns it)');
+  const tri = runProgExtra({ technique: 'triplicityrulers', chart });
+  assert(tri.moment_lines[0] === '当前所处阶段：主三分主星·土（0–25岁）', `triplicity moment ${JSON.stringify(tri.moment_lines)}`);
+  assert(runProgExtra({ technique: 'keypoints', chart }).moment_lines.length === 0, 'keypoints passes no locator line upstream');
+});
+
+// F15：[寿命格局] 取主法 + 太阳三态阈值随调用方/本盘回显（上游 astroAiSnapshot.js:1123-1136）。
+check('astroextra lifespan honours method option and params solar orbs', () => {
+  const ptolemy = runAstroExtra({ chart }).data.lifespan;
+  const doro = runAstroExtra({ chart, options: { lifespanMethod: 'dorotheus' } }).data.lifespan;
+  assert(ptolemy.method === 'ptolemy' && doro.method === 'dorotheus', 'method must echo the requested 取主法');
+  // 同一盘：托勒密取日为生命主，多罗修斯取上升（引擎 = 上游 lifespanEngine.js verbatim）。
+  assert(ptolemy.hyleg.key === 'sun' && doro.hyleg.key === 'asc', `hyleg must differ by method (got ${ptolemy.hyleg.key}/${doro.hyleg.key})`);
+  const merc = (ls) => (ls.states.rows.find((r) => r.planet === 'mercury') || {}).sunState;
+  assert(merc(ptolemy) === null, 'mercury 19.5° from Sun is free under the 17° default');
+  const wide = JSON.parse(JSON.stringify(chart));
+  wide.params = { ...(wide.params || {}), underBeamsOrb: 20 };
+  assert(merc(runAstroExtra({ chart: wide }).data.lifespan) === 'under_beams', 'params.underBeamsOrb must reach buildFacts');
 });
 
 check('progextra unknown technique returns empty, not a crash', () => {
