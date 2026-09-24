@@ -529,3 +529,48 @@ def test_acg_event_feeds_ccg_with_zone_and_layers_reach_the_snapshot(tmp_path: P
     service.run_tool("acg", {**ACG_BIRTH, "clickLat": 39.9, "clickLon": 116.4}, save_result=False)
     point = client.bodies("/location/acgpoint")[0]
     assert point["hsys"] == "placidus" and point["mode"] == "mundo" and point["orb"] == 2
+
+
+# ─────────────────────────── F5 世运：规则集 / 页面级覆盖 / 吠陀三键 / 入宫盘口径 ───────────────────────────
+
+
+def test_mundane_ruleset_head_and_cards_follow_the_ruleset(tmp_path: Path) -> None:
+    """上游 buildAiSnapshot（MundaneMain.js:2852-2860）头行「规则集：」+ 入境主管制页面级覆盖行；buildMundaneCardSections
+    （:242-262）按 rulesetConfig(ex.mundaneRuleset) 与覆盖键算 [年盘概要] 的主管期。桩盘上升处女（变动座）：
+    托勒密古典 = quarterly → ingressGovernance 半年 + 须再起秋分盘；modern 缺省 = aries_annual 全年。入宫盘带页面口径键。
+    负向对照：旧 runner 不认 mundaneRuleset（头无「规则集」、卡恒 modern）、入宫盘请求只带 11 个固定键。"""
+    from test_sync311_mundane_election import MUNDANE, ScriptedClient
+
+    client = ScriptedClient()
+    service = _service(tmp_path, client)
+    env = service.run_tool("mundane", {**MUNDANE, "mundaneRuleset": "ptolemaic", "zodiacal": 1, "siderealAyanamsa": "lahiri",
+                                       "cazimiOrb": 1}, save_result=False)
+    assert env.ok, env.error
+    text = env.data["snapshot_text"]
+    assert _section(text, "世俗入宫").splitlines()[:3] == ["规则集：托勒密古典", "入宫节气：春分", "年份：2025"]
+    card = _section(text, "年盘概要").splitlines()
+    assert card[2] == "本盘上升 变动星座 · 托勒密古典 → 主管约 6 个月；季度递归 → 须再起 秋分·天秤 入境盘各管一季"
+    assert card[3] == "四轴变动座 → 白羊盘主管半年,须再起秋分(天秤)入境"
+    ingress_chart = next(p for e, p in client.calls if e == "/chart" and str(p.get("date")).replace("/", "-") == "2025-03-20")
+    assert (ingress_chart["zodiacal"], ingress_chart["siderealAyanamsa"], ingress_chart["cazimiOrb"]) == (1, "lahiri", 1)
+    assert "mundaneRuleset" not in ingress_chart
+
+    override = service.run_tool("mundane", {**MUNDANE, "mundaneIngressRule": "capricorn_year"}, save_result=False)
+    head = _section(override.data["snapshot_text"], "世俗入宫").splitlines()
+    assert head[0] == "规则集：现代(Carter–Campion)" and "入境主管制：摩羯优先(冬至为年首)（页面级覆盖）" in head
+    bad = service.run_tool("mundane", {**MUNDANE, "mundaneRuleset": "hellenistic"}, save_result=False)
+    assert bad.ok is False and bad.error.code == "tool.mundane_invalid_setting"
+
+
+def test_mundane_vedic_founding_inputs_reach_the_vedic_cards(tmp_path: Path) -> None:
+    """吠陀世运三键（MundaneMain.js:441-449）：建国年 + 建国上升 → Muntha 敏感点（munthaSign 每年顺进一座）；年长 360。
+    梅沙入境年 2025、建国 1947 → 盘龄 78 → 金牛起顺进 78 座 = 78 mod 12 = 6 → 天蝎。负向对照：旧代码不转交三键（无 Muntha 行、年长恒现代）。"""
+    from test_sync311_mundane_election import MUNDANE, ScriptedClient
+
+    service = _service(tmp_path, ScriptedClient(vedic=True))
+    env = service.run_tool("mundane", {**MUNDANE, "mundaneType": "vedicmundane", "vedicFoundingYear": 1947,
+                                       "vedicNatalAsc": "taurus", "vedicDashaYearLen": 360}, save_result=False)
+    assert env.ok, env.error
+    text = env.data["snapshot_text"]
+    assert "Muntha 敏感点：天蝎（建国上升每年顺进一座,盘龄 78）" in _section(text, "吠陀世运·年度盘")
+    assert _section(text, "世运大运").startswith("（Vimshottari · 年长口径 360（传统））")

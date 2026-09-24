@@ -12278,6 +12278,53 @@ class HorosaSkillService:
             _degrade("navanayaka raja syzygy failed: %s", exc)
         return None
 
+    # 世运口径（上游页面设置 MUNDANE_PAGE_SETTINGS，MundaneMain.js:519-526 + 吠陀世运输入 :1330-1340）：进每张卡的 extra
+    # （buildMundaneCardSections 读 ex.mundaneRuleset / mundaneOrbScheme / mundaneIngressRule / vedic*），规则集行进快照头。
+    _MUNDANE_SETTING_KEYS = (
+        "mundaneRuleset", "mundaneOrbScheme", "mundaneIngressRule", "vedicDashaYearLen", "vedicFoundingYear", "vedicNatalAsc",
+    )
+    # 世运专属输入：不进 /chart 请求体（其余键 = 页面 fields：黄道/岁差/宫制/古典全局键，与 astro 盘同一套）。
+    _MUNDANE_ONLY_KEYS = frozenset({
+        "year", "ingressTerm", "mundaneType", "mhKind", "solunarType", "solunarWeights", "solunarOrb", "vedicYear",
+        *_MUNDANE_SETTING_KEYS,
+    })
+
+    def _mundane_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """世运口径键（有值才收）；给了任一键就先让 JS 按引擎自带表校验值域（认不出的报错，不静默当缺省）。"""
+        settings = {k: payload[k] for k in self._MUNDANE_SETTING_KEYS if payload.get(k) not in (None, "")}
+        if "vedicDashaYearLen" in settings:
+            try:
+                settings["vedicDashaYearLen"] = float(settings["vedicDashaYearLen"])
+            except (TypeError, ValueError):
+                pass
+            if settings.get("vedicDashaYearLen") == 360.0:
+                settings["vedicDashaYearLen"] = 360
+        if "vedicFoundingYear" in settings:
+            try:
+                settings["vedicFoundingYear"] = int(f"{settings['vedicFoundingYear']}".strip())
+            except ValueError:
+                raise ToolValidationError(
+                    bilingual(f"世运 vedicFoundingYear（建国年）须为整数：{settings['vedicFoundingYear']!r}",
+                              f"mundane vedicFoundingYear must be an integer: {settings['vedicFoundingYear']!r}"),
+                    code="tool.mundane_invalid_setting",
+                    details={"invalid": [{"key": "vedicFoundingYear", "value": settings["vedicFoundingYear"], "allowed": "int"}]},
+                ) from None
+        if "vedicNatalAsc" in settings:
+            settings["vedicNatalAsc"] = f"{settings['vedicNatalAsc']}".strip().lower()
+        if not settings:
+            return settings
+        js = self.js_client.run("mundane_cards", {"action": "settings", "settings": settings})
+        data = js.get("data") if isinstance(js, dict) else None
+        invalid = data.get("invalid") if isinstance(data, dict) else None
+        if invalid:
+            parts = [f"{i.get('key')}={i.get('value')!r}（可选：{'/'.join(str(a) for a in (i.get('allowed') or []))}）" for i in invalid if isinstance(i, dict)]
+            raise ToolValidationError(
+                bilingual(f"世运盘设置取值无效：{'；'.join(parts)}。", f"mundane setting(s) invalid: {'; '.join(parts)}."),
+                code="tool.mundane_invalid_setting",
+                details={"invalid": invalid},
+            )
+        return settings
+
     def _run_mundane_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 世俗入宫盘 (mundane ingress): (1) get the precise solar-term ingress moment for the year via
         # /jieqi/year, (2) cast a /chart at that moment, (3) enrich with the v2.4.0 natal extras, then
@@ -12287,6 +12334,7 @@ class HorosaSkillService:
         zone = payload.get("zone") or "+08:00"
         lon = payload.get("lon")
         lat = payload.get("lat")
+        settings = self._mundane_settings(payload)
         seed_payload = {
             "year": year,
             "ad": payload.get("ad", 1),
@@ -12314,7 +12362,9 @@ class HorosaSkillService:
                 details={"year": year, "ingressTerm": term, "jieqi24_count": len(jieqi24) if isinstance(jieqi24, list) else 0},
             )
         date_part, _, time_part = ingress_time.partition(" ")
+        # 入宫盘 = 页面 fields（黄道/岁差/古典全局键随盘，上游 DivinationChartShell 与 astro 盘同一套构参）+ 入宫时刻。
         chart_payload = {
+            **{k: v for k, v in payload.items() if k not in self._MUNDANE_ONLY_KEYS and v is not None},
             "date": date_part,
             "time": time_part or "00:00:00",
             "zone": zone,
@@ -12329,7 +12379,7 @@ class HorosaSkillService:
         }
         chart_response = self._call_remote("/chart", chart_payload)
         chart_response = self._attach_natal_extras("mundane", chart_response)
-        head = "\n".join(["[世俗入宫]", f"入宫节气：{term}", f"年份：{year or '-'}", f"入宫时刻：{ingress_time}"])
+
         # 世运卜卦（mundaneType='mundanehorary'）：上游对该盘型走的是「问事时刻的普通 /chart →
         # buildFacts → describeXQuestion」，机制同卜卦、问主=公众/国家、宫义按世运读。这里复用
         # 已经算好的入宫盘作为问事盘面（headless 无「问事时刻」这个交互输入，故以本盘为准），
@@ -12426,6 +12476,7 @@ class HorosaSkillService:
         subcharts_text = _render_snapshot_text(subchart_sections) if subchart_sections else ""
         # 右栏卡片段（上游 v3.11 [Q-444/T-407]）：上游 buildAiSnapshot 的拼接序是
         # head / 判词 / 分析段 / **cardSecs** / 盘面正文（MundaneMain.js:2992-2995），卡片段紧贴正文之前。
+        cards_meta: dict[str, Any] = {}
         cards_text = self._build_mundane_card_text(
             payload=payload,
             mundane_type=mundane_type,
@@ -12437,7 +12488,21 @@ class HorosaSkillService:
             chart_response=chart_response,
             collected=collected,
             type_chart_ctx=type_chart_ctx,
+            settings=settings,
+            meta_out=cards_meta,
         )
+        # 快照头（上游 buildAiSnapshot MundaneMain.js:2852-2860）：盘名 / 规则集 / 入宫节气 / 年份 / 页面级覆盖行；
+        # 「入宫时刻」是本仓底盘恒为入宫盘的补注。日/月食盘型的「受冲容许度」覆盖行（:2863-2867）同附头内。
+        head_lines = ["[世俗入宫]"]
+        if cards_meta.get("rulesetLabel"):
+            head_lines.append(f"规则集：{cards_meta['rulesetLabel']}")
+        head_lines += [f"入宫节气：{term}", f"年份：{year or '-'}"]
+        if cards_meta.get("ingressRuleLabel"):
+            head_lines.append(f"入境主管制：{cards_meta['ingressRuleLabel']}（页面级覆盖）")
+        head_lines.append(f"入宫时刻：{ingress_time}")
+        if mundane_type in ("solecl", "lunecl") and cards_meta.get("orbSchemeLabel"):
+            head_lines.append(f"受冲容许度：{cards_meta['orbSchemeLabel']}（页面级覆盖）")
+        head = "\n".join(head_lines)
         body = _build_astro_snapshot_text(chart_payload, chart_response)
         snapshot_text = "\n\n".join(
             part for part in (head, solunar_text, vedic_text, horary_text, subcharts_text, cards_text, body) if part
@@ -12708,6 +12773,8 @@ class HorosaSkillService:
         chart_response: dict[str, Any],
         collected: dict[str, Any],
         type_chart_ctx: dict[str, tuple[str, dict[str, Any]]],
+        settings: dict[str, Any] | None = None,
+        meta_out: dict[str, Any] | None = None,
     ) -> str:
         try:
             year_num: int | None = int(str(year).strip())
@@ -12744,12 +12811,17 @@ class HorosaSkillService:
         )
         if type_job is not None:
             jobs.append(type_job)
+        # 世运口径随每张卡的 extra（上游页面 extra 是各盘型共享的一份；buildMundaneCardSections 按键读）。
+        for job in jobs:
+            job["extra"] = {**(settings or {}), **(job.get("extra") or {})}
         try:
-            js = self.js_client.run("mundane_cards", {"jobs": jobs})
+            js = self.js_client.run("mundane_cards", {"jobs": jobs, "settings": settings or {}})
         except Exception as exc:  # noqa: BLE001 — 卡片段失败不许带崩世俗盘主流程，但必须说出来
             _degrade("mundane card sections failed: %s", exc)
             return ""
         data = js.get("data") if isinstance(js, dict) else None
+        if meta_out is not None and isinstance(data, dict) and isinstance(data.get("meta"), dict):
+            meta_out.update(data["meta"])
         results = data.get("jobs") if isinstance(data, dict) else None
         if not isinstance(results, list):
             _degrade("mundane card sections: JS 工具返回形状异常（缺 data.jobs）")

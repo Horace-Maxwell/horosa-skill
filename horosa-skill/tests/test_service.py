@@ -1341,7 +1341,9 @@ class FakeJsClient(HorosaJsEngineClient):
                     "ok": True,
                     "cards": [{"title": t, "text": f"[{t}]\n{t}：离线桩判读行（逐字真值由 selfcheck 金标守）"} for t in titles],
                 })
-            return {"tool": "mundane_cards", "data": {"ok": True, "jobs": jobs_out}}
+            # meta 与真工具同形（tools/mundaneCards.js settingsCheck：rulesetConfig 缺省 modern 的查名）。
+            meta = {"ruleset": "modern", "rulesetLabel": "现代(Carter–Campion)", "orbSchemeLabel": None, "ingressRuleLabel": None}
+            return {"tool": "mundane_cards", "data": {"ok": True, "jobs": jobs_out, "meta": meta}}
         raise AssertionError(f"Unexpected local tool: {tool_name}")
 
 

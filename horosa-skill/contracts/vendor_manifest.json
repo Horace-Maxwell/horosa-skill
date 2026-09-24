@@ -1487,6 +1487,18 @@
           "specifier": "../../divination/mundane/describe.js",
           "to": "./describe.js",
           "why": "vendor 树里有两个 describe.js（mundane/ 与 divination/…），relocate 按 basename 无法消歧，钉死到世运那份。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "const MUNDANE_ORB_SCHEME_CN = {",
+          "to": "export const MUNDANE_ORB_SCHEME_CN = {",
+          "why": "页面级覆盖行「受冲容许度：…（页面级覆盖）」的查名表（上游只在类方法 buildAiSnapshot:2866 内用，模块私有）；headless 的快照头在 skill 侧拼，补具名导出供 tools/mundaneCards.js 取名与校验值域，不手抄。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "const MUNDANE_INGRESS_RULE_CN = {",
+          "to": "export const MUNDANE_INGRESS_RULE_CN = {",
+          "why": "同上：「入境主管制：…（页面级覆盖）」（buildAiSnapshot:2859）。"
         }
       ]
     },

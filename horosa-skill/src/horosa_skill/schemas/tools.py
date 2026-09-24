@@ -1565,6 +1565,20 @@ class MundaneInput(FlexibleModel):
     solunarWeights: str | None = Field(default=None, description="恒星派权重方案（scheme_a 默认）。")
     solunarOrb: float | None = Field(default=None, description="角化容许度（默认 3°）。")
     vedicYear: int | None = Field(default=None, description="吠陀世运年份（缺省取 year）。")
+    # 世运口径（上游页面设置 MundaneMain.js:519-526 + 吠陀世运 :1330-1340）与入宫盘的黄道口径：照常声明（校验 + MCP 扁平面
+    # 收顶层键），不进 tools/list 广告层（预算）；值域见 agent_guidance。古典全局键（cazimiOrb…）经 request 整包透传进 /chart。
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({
+        "mundaneRuleset", "mundaneOrbScheme", "mundaneIngressRule", "vedicDashaYearLen", "vedicFoundingYear",
+        "vedicNatalAsc", "zodiacal", "siderealAyanamsa",
+    })
+    mundaneRuleset: str | None = Field(default=None, description="规则集：ptolemaic / medieval / modern（缺省）/ barbault。")
+    mundaneOrbScheme: str | None = Field(default=None, description="受冲容许度覆盖：auto（缺省随规则集）/ moiety / by_aspect。")
+    mundaneIngressRule: str | None = Field(default=None, description="入境主管制覆盖：auto（缺省）/ quarterly / aries_annual / capricorn_year。")
+    vedicDashaYearLen: float | None = Field(default=None, description="世运大运年长：365.2425（缺省）/ 360。")
+    vedicFoundingYear: int | None = Field(default=None, description="建国年（Muntha 敏感点用，须配 vedicNatalAsc）。")
+    vedicNatalAsc: str | None = Field(default=None, description="建国盘上升星座键（aries…pisces）。")
+    zodiacal: int | None = Field(default=None, description="黄道：0 回归（缺省）/ 1 恒星（配 siderealAyanamsa）。")
+    siderealAyanamsa: str | None = Field(default=None, description="恒星黄道岁差制（zodiacal=1 时）。")
 
 
 class OtherBuInput(BirthInput):
