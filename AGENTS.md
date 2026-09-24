@@ -359,6 +359,8 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   restamp 在 0604fa41 却仍是上游早已改掉的「魏」）。所以**能表达成「上游全文件 + 声明式 deviation」的手工件一律改
   verbatim**（truncate_before / stub_import / replace_text / import_redirect，`_reexport_required` 自动补调用方要的
   export）——`suzhan/SZConst.js`、`tongshefa/TongSheFaCore.js` 即此例；curated/bespoke 只留给真正的子集与重写件。
+- **家族共享的隐藏旋钮放 mixin，不进 `BirthInput`**：广告层以「不在 BirthInput」判定子类自有字段，塞进 BirthInput 的键会把各子类
+  已广告的同名键静默踢出 tools/list（v0.40.0 `after23NewDay` 事故，见 LESSONS）；用 `_ChartDayBoundaryKnobs` 一类 mixin + `ADVERTISE_HIDDEN`。
 - **vendored JSON 数据与 `.js` 同等登记**：`horosa-core-js/src/vendor/**` 下每个 `.js` / `.json` 都必须在
   `vendor_manifest.json` 有条目（verbatim 对 JSON 即逐字节比对上游）；`test_every_vendored_js_and_json_file_is_in_the_manifest`
   守。v0.40.0 前 32 份 JSON 只登记 1 份，上游 v3.11.0 改 `hellenisticData.json` 日/月中年（39.5→69.5/66.5）零信号滞留。

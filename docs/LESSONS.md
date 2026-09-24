@@ -203,6 +203,11 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
      字面 1 从不触发——skill 多个版本按钟表时出数算盘（1998-02-20 11:05 上海：巳时 vs 旧 午时）。找缺省追字段种子。
    - vendored `baziLunarLocal` 判 `after23NewDay === 1`，`undefined` 即 24 点换日（与上游出厂 1 相反）；canping/heluo「缺键透传」
      于是把 23:30 生人的日柱算成前一天（戊戌 vs 己亥）。凡「不给就不传」的工具，下游若把缺键当 0，必须补上游缺省。
+16. **`BirthInput` 不是家族共享旋钮的安全落点；条件行要移植 helper 而不是移植「意图」。**（西占正文 agent）
+   - 广告层用「不在 BirthInput 里」判定子类自有字段：把 `after23NewDay` 声明进 BirthInput，紫微 / 八字 / 奇门原本广告着的同名键
+     被静默踢出 tools/list（症状只是预算缩了 564 B）。家族共享的隐藏旋钮放 mixin + `ADVERTISE_HIDDEN`（`_ChartDayBoundaryKnobs`）。
+   - 上游 `fieldValue` 从不返回 `undefined`（缺省 `null`），所以 `排盘规则：` 这类「看似条件」的行实际恒出——按条件移植就少一行。
+   - 离线 CaptureClient 记录的是**远端**路径（`/chart` 落成 `/`），断言端点要过 `_chart_server_endpoint`。
 
 ### v0.40.0 / 2026-09-24 — 上游 v3.11.x 重同步：六处「同步了却没同步」
 

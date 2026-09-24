@@ -167,7 +167,13 @@ class BirthInput(FlexibleModel):
     gpsLon: float | None = None
     includePrimaryDirection: bool | None = None
     simpleAsp: bool | None = None
-    strongRecption: bool | None = None
+    # wave 3b：本命 / 十三分 / 十二分 / 希腊分盘缺省随上游发 0（models/astro.js:105-108、aiAnalysisContext.js:567 buildFieldObject
+    # `record.strongRecption ?? 0`）；不发则 perchart.py:814 缺省严格 → [信息] 接纳/互容与上游缺省盘不同（service._apply_chart_request_defaults）。
+    strongRecption: bool | None = Field(
+        default=None,
+        description="严格接纳开关：false/0（缺省，随上游本命/十三分/十二分/希腊分盘请求）=五种尊贵任一即算接纳；true/1=只认本垣/擢升。"
+        "调波/龙盘/重置盘不带该键（后端缺省严格），显式传值永远优先。",
+    )
     virtualPointReceiveAsp: bool | None = None
     doubingSu28: bool | None = None
     nodeRetrograde: bool | None = None
@@ -184,7 +190,24 @@ class BirthInput(FlexibleModel):
 _LIFESPAN_METHOD_DESC = "[寿命格局]取主法：ptolemy 托勒密（缺省）| alcabitius | dorotheus"
 
 
-class AstroChartInput(BirthInput):
+class _ChartDayBoundaryKnobs(BaseModel):
+    """西占 chart 家族的日界两键（wave 3b）：只进 [起盘信息] 的时间基准行与排盘规则行（astroAiSnapshot.js:446-455；上游页面 /
+    AI 挂载 fields 恒带二键、缺省 dayBoundary 出厂 1/1，service._chart_family_snapshot_fields 同补），不进 /chart 请求（Python 盘
+    不算四柱）。声明而不广告（tools/list 预算；🔴 不能放进 BirthInput——`advertised_technique_schema` 以「不在 BirthInput 里」判
+    子类自有字段，放进去会把紫微/八字/奇门等中式工具**已广告**的同名键静默挤出广告层）。说明进 western_options_doc → guidance。"""
+
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({"after23NewDay", "lateZiHourUseNextDay"})
+    after23NewDay: int | bool | None = Field(
+        default=None,
+        description="日界开关（西占盘只进 [起盘信息] 时间基准/排盘规则两行，不改星位）：1=23 点换日（缺省，上游 dayBoundary 出厂值）0=24 点换日。",
+    )
+    lateZiHourUseNextDay: int | bool | None = Field(
+        default=None,
+        description="晚子时时柱开关（同上两行）：1=时干按次日日干起子时（缺省）0=按当日日干。",
+    )
+
+
+class AstroChartInput(BirthInput, _ChartDayBoundaryKnobs):
     """本命/盘面族（chart/chart13/chart12/hellen_chart）：在 BirthInput 上加 [寿命格局] 取主法。"""
 
     lifespanMethod: str | None = Field(default=None, description=_LIFESPAN_METHOD_DESC)
@@ -1350,7 +1373,7 @@ class GermanyInput(BirthInput):
     )
 
 
-class HarmonicInput(BirthInput):
+class HarmonicInput(BirthInput, _ChartDayBoundaryKnobs):
     # 调波盘 (harmonic chart) is a backend chart-extra computation (POST /astroextra/harmonic on the
     # Python chart service). harmonic = the H-number (1–360, 星阙 default 9); orb = conjunction orb.
     predictive: bool | None = False
@@ -1376,7 +1399,7 @@ class BabylonInput(BirthInput):
     ephemerisSource: str | None = Field(default=None, description="数理星历位置源：swiss（缺省）| systemA 阶梯 | systemB 锯齿（木星）；缺省跟派系档。")
 
 
-class DraconicInput(BirthInput):
+class DraconicInput(BirthInput, _ChartDayBoundaryKnobs):
     # 龙盘 (draconic chart)：把命盘各点黄经减去北交点黄经（POST /astroextra/draconic）。
     # 后端返回 {nodeLon, positions, conjunctions, chart}，chart 与 /chart 同形。
     predictive: bool | None = False
@@ -1384,7 +1407,7 @@ class DraconicInput(BirthInput):
     orb: float | None = 2.0
 
 
-class RelocationInput(BirthInput):
+class RelocationInput(BirthInput, _ChartDayBoundaryKnobs):
     # 重置盘 (relocation)：保留出生 UT，仅用新经纬重算十二宫与上升/中天（POST /astroextra/relocation）。
     # 行星黄经由 UT 决定故不变，宫位/角点随地点变 —— 迁居占星的标准做法。
     # relocLat/relocLon 缺省回退到出生地，等于本命盘（结果敏感：不给新地点就不是「重置」）。

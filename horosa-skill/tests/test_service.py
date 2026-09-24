@@ -1662,7 +1662,7 @@ def test_service_tool_call_persists_memory(tmp_path) -> None:
     assert result.data["export_snapshot"]["sections"][0]["title"] == "起盘信息"
     assert "宫位宫头" in result.data["export_snapshot"]["selected_sections"]
     assert "星与虚点" in result.data["export_snapshot"]["selected_sections"]
-    assert "第八宫 宫头" in result.data["export_snapshot"]["export_text"]
+    assert "| 第八宫 | " in result.data["export_snapshot"]["export_text"]   # [宫位宫头] 宫位|宫头 GFM 表（astroAiSnapshot.js:521-533）
     assert "日 (8th; 12R)" in result.data["export_snapshot"]["export_text"]
     assert "福点 (8th; -)" in result.data["export_snapshot"]["export_text"]
     queried = store.query_runs(tool="chart")

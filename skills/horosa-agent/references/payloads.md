@@ -53,7 +53,11 @@ Include as much as possible:
   Beijing time like 星阙 does (`cnUnifiedZone=false` opts out); the conversion is disclosed in warnings and on the
   technique card.
 - **Hour-23 inputs**: the two independent day-boundary switches change the pillars — canonical spec
-  and how to ask: [`late-zi.md`](./late-zi.md).
+  and how to ask: [`late-zi.md`](./late-zi.md). The Western chart family (`chart`/`chart13`/`chart12`/`hellen_chart`/
+  `harmonic`/`draconic`/`relocation`) accepts them too (hidden knobs; headless default 1/1) and prints the 排盘规则 line.
+- **Western chart family (v0.40.0)**: the export text now mirrors 星阙's `buildAstroSnapshotContent` byte-for-byte — GFM tables
+  for 宫位宫头 / 星与虚点 / 相位 / 行星 / 希腊点 / 12分度, the [起盘信息] 古典口径 / 命主星 / 日主星·时主星 lines, and
+  `strongRecption` defaults to `0` like 星阙 (explicit values win). `relative` and `jieqi_year` [X宿盘] follow the upstream builders.
 - **神数 (14 tools)**: inputs use `date` (YYYY-MM-DD) + `time` (HH:mm:ss) strings like every other
   technique (the skill splits them into engine y/m/d/h/m internally), plus 晚子时 switches and a **typed**
   `options` object: each tool accepts exactly the keys listed in

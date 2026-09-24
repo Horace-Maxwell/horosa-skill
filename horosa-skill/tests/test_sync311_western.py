@@ -624,8 +624,9 @@ def test_only_ruler_exalt_reception_also_filters_apriori_links(tmp_path: Path) -
     plain = service.run_tool("chart", base, save_result=False)
     only = service.run_tool("chart", {**base, "showOnlyRulExaltReception": True}, save_result=False)
     assert plain.ok and only.ok, (plain.error, only.error)
-    p = _section(plain.data["snapshot_text"], "古典格局").splitlines()
-    o = _section(only.data["snapshot_text"], "古典格局").splitlines()
+    # 格局速览是 [古典] 段的「古典格局」子块（上游 astroAiSnapshot.js:1486-1490 buildClassicalSection），不在 [古典格局] 段。
+    p = _section(plain.data["snapshot_text"], "古典").splitlines()
+    o = _section(only.data["snapshot_text"], "古典").splitlines()
     assert "先验权力：月互容木(8·1)·夜生·八杀朝天大贵" in p
     assert not any(line.startswith("先验权力") for line in o)
     assert [line for line in p if line not in o] == ["先验权力：月互容木(8·1)·夜生·八杀朝天大贵"]
