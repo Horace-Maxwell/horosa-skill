@@ -11,6 +11,14 @@
 //    ⚠ v0.36.0 之前这三段被当成「开源 astropy 无该路由」永久排除——实际 /qizheng/moira 是 **Java** 聚合层
 //    （astrostudycn QizhengMoiraController）的路由，当年拿 Python chart 服务测的 500（docs/LESSONS.md）。
 import { buildLocalMoiraPatternsForSnapshot } from '../vendor/guolao/guolaoMoira.js';
+import { buildGuolaoMoiraInfoFacts } from '../vendor/guolao/guolaoInfoFacts.js';
+import {
+  buildGuolaoAnchorLines,
+  buildGuolaoMastersSection,
+  buildGuolaoLimitCalcSection,
+  buildGuolaoLimitSection,
+} from '../vendor/guolao/guolaoSnapshotSections.js';
+import { buildLocalNongliLite } from '../vendor/bazi/baziLunarLocal.js';
 
 // 与上游 GuoLaoChartMain.js 逐字相同的三张参考表（十神序/天禄至天权年曜主项）。
 const MOIRA_TEN_GOD_ORG = ['天禄', '天暗', '天福', '天耗', '天荫', '天贵', '天嗣', '天刑', '天印', '天囚', '天权'];
@@ -81,6 +89,16 @@ export function buildGuolaoBirthStarsSection(moiraRules) {
       const items = safeList(row.items).length ? joinNames(row.items) : '';
       out.push(`${row.star}：化${row.changeTo || '-'}${items && items !== '无' ? `（同归：${items}）` : ''}`);
     });
+    // [Q-435]（上游 v3.11.0 GuoLaoChartMain.js:1870-1878）命曜表（右栏「宫位化曜·本命」列 =
+    // rules.natalYearStars：宫名/化曜/曜名/宫性）此前不进快照。无数据时段文逐字同旧。
+    const natalSignRows = safeList(safeMap(moiraRules).natalYearStars);
+    if (natalSignRows.length) {
+      out.push('◆ 命曜落宫');
+      natalSignRows.forEach((row) => {
+        const pos = [row.quality, row.zi, row.signName].filter(Boolean).join(' · ');
+        out.push(`${row.name}：${row.star || '-'}（${row.shortName || '-'}${pos ? `；${pos}` : ''}）`);
+      });
+    }
     out.push('◆ 十神序（参考）');
     out.push(`原十神序：${MOIRA_TEN_GOD_ORG.join('、')}`);
     out.push(`替代十神序：${MOIRA_TEN_GOD_ALT.join('、')}`);
@@ -134,11 +152,62 @@ export function buildGuolaoMoiraSections(moiraRules, transitYearGz) {
   };
 }
 
+// 同上游 GuoLaoChartMain.buildGuolaoInfoFactsForSnapshot（:1929-1945）：右栏同源事实层 buildGuolaoMoiraInfoFacts。
+// 流年时刻：上游 paramsWithMoiraTransit(fields, null)（= 页面 fields + 当前时刻，与 [流年流曜] 同口径）；headless 无
+// UI fields/DateTime，由 Python 按 [流年流曜] 同一流年时刻构好 transitParams 传入。月限所需流年月支：无头无后端
+// 流年盘 → 本地历法 buildLocalNongliLite(transitParams) 伪 root —— 与上游逐字同路。
+// 本命四柱（生年化曜/命宫配干/月限生月）：上游 root = Java /chart（含 chart.nongli.bazi）；skill 的 /chart 走 Python
+// 服务、无 nongli，由 Python 另取同一 Java OnlyFourColumns（/nongli/time）挂到 chart.nongli 上再传进来。
+function buildGuolaoInfoFactsForSnapshot(params, result, transitParams, display, fields, moiraRules, errors) {
+  let transitValue = null;
+  try {
+    const lite = buildLocalNongliLite(transitParams);
+    transitValue = lite && lite.bazi ? { nongli: { bazi: lite.bazi } } : null;
+  } catch (e) {
+    transitValue = null;
+    errors.push({ section: '限法实算', message: `流年月支（本地历法）不可用，月限行省略：${(e && e.message) || e}` });
+  }
+  try {
+    return buildGuolaoMoiraInfoFacts({
+      value: moiraRules || {}, rootValue: result || {}, transitValue, params, transitParams, display: display || {}, fields: fields || {},
+    });
+  } catch (e) {
+    errors.push({ section: '三主与化曜/限法实算', message: `${(e && e.message) || e}` });
+    return null;
+  }
+}
+
+// [起盘信息] 命度/身度/宿主行 + [大限] + [三主与化曜] + [限法实算]（上游 _buildGuolaoSnapshotTextV2Core:2046-2104 同序同源）。
+// payload: { chart: /chart 响应（chart.nongli 已挂本命四柱）, params: {date:'YYYY/MM/DD',time,…}, transitParams, display:
+//   {lifeMasterMode, minorLimitType, tongxianBase, limitChildBase, limitYearBoundary}, fields, moiraRules }
+export function buildGuolaoInfoSections(payload) {
+  const errors = [];
+  const src = payload || {};
+  const result = src.chart || {};
+  const chart = result && result.chart ? result.chart : {};
+  const params = src.params || {};
+  const fields = src.fields || {};
+  const display = src.display || {};
+  const info = buildGuolaoInfoFactsForSnapshot(params, result, src.transitParams || {}, display, fields, src.moiraRules || null, errors);
+  const limitSection = buildGuolaoLimitSection(chart, fields, params, display.minorLimitType || '', display.tongxianBase || 'tong10',
+    { limitYearBoundary: display.limitYearBoundary, limitChildBase: display.limitChildBase });
+  return {
+    anchorLines: buildGuolaoAnchorLines(info),
+    limitSection: limitSection || '',
+    masters: buildGuolaoMastersSection(info),
+    limitCalc: buildGuolaoLimitCalcSection(info),
+    errors,
+  };
+}
+
 export function runGuolaoMoira(payload) {
   if (payload && payload.action === 'rules_sections') {
     return {
       sections: buildGuolaoMoiraSections(payload.moiraRules || null, payload.transitYearGz || ''),
     };
+  }
+  if (payload && payload.action === 'info_sections') {
+    return buildGuolaoInfoSections(payload);
   }
   const result = payload && payload.chart ? payload.chart : payload;
   const fields = (payload && payload.fields) || {};

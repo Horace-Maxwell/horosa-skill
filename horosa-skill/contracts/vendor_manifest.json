@@ -824,6 +824,12 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "dunjia/QimenXiangDoc.js": {
+      "upstream": "components/dunjia/QimenXiangDoc.js",
+      "mode": "verbatim",
+      "why": "零 import 纯数据/格式化模块；liureng/LRXiangDoc.js 的 buildXiangContext 取十天干象意时依赖它（六壬 [取象] 段）。",
+      "deviations": []
+    },
     "dunjia/jinhanRiJia.js": {
       "upstream": "components/dunjia/jinhanRiJia.js",
       "mode": "verbatim",
@@ -1122,6 +1128,36 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "guolao/guolaoInfoFacts.js": {
+      "mode": "bespoke",
+      "why": "自上游 GuoLaoMoiraPanel.js 逐字抽出 buildGuolaoMoiraInfoFacts（右栏「命身与限度 / 三主·化曜 / 难仇恩用 / 五限 / 行运法」事实层，v3.11.0 [Q-231/Q-434/Q-435]）及其全部依赖闭包（deriveGuolaoMasters / anchorFromObject / suHostForLon / baziStemBranch …）；该文件其余是 React 表格组件（JSX），整份 vendor 不可行。上游页面与 AI 快照同取此函数。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "derived_from": "components/guolao/GuoLaoMoiraPanel.js",
+      "derived_sha256": "cc956732711b23cc69149dcebedd95d565944715d2e2b6a882dc47badb7a3363"
+    },
+    "guolao/guolaoMoiraWheelLimits.js": {
+      "mode": "bespoke",
+      "why": "自上游 GuoLaoMoiraWheel.js（2485 行 SVG 轮盘 React 组件）逐字抽出「命度 → 百六大限」算法闭包：buildGuolaoLimitTable / birthYearBasis（含立春/冬至年界本地节气精算）/ currentLimitIndex / lifeDegree 及依赖；上游 GuoLaoMoiraPanel 与 GuoLaoChartMain 即以 moira* 别名 import 这几个函数。GUOLAO_LIFE_MODE_* / normalizeGuolaoLifeMode 逐字取自 GuoLaoChartStyle.js（未单独看守：该文件其余为 localStorage 偏好读写），getStoredGuolaoLifeMode 为 headless 缺省 asc。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "derived_from": "components/guolao/GuoLaoMoiraWheel.js",
+      "derived_sha256": "346a84374e36851b7d63b6d19c82623c077677a3f60ead6ff321a22668aa4e53"
+    },
+    "guolao/guolaoMoiraTables.js": {
+      "upstream": "components/guolao/guolaoMoiraTables.js",
+      "mode": "verbatim",
+      "why": "零 import 纯函数（Moira 难仇恩用 / 虚实 / 飞限小限童限月限 / 限度查表）。[三主与化曜]/[限法实算] 事实层（guolaoInfoFacts.js）与百六大限（guolaoMoiraWheelLimits.js）依赖它。",
+      "deviations": []
+    },
+    "guolao/guolaoSnapshotSections.js": {
+      "mode": "bespoke",
+      "why": "自上游 GuoLaoChartMain.js 逐字抽出的 AI 快照段 builder：buildGuolaoAnchorLines（[起盘信息] 命度/身度/宿主行）/ buildGuolaoMastersSection（[三主与化曜]）/ buildGuolaoLimitCalcSection（[限法实算]）/ buildGuolaoLimitSection（[大限] GFM 表 + 所选行运法结构）。该文件 4350 行，其余是 React 组件与取数编排。与 guolaoMoira.js（同源的政余格局闭包）分文件：各自看守同一源 sha。源一动即红、复核后 --restamp。",
+      "derived_from": "components/guolao/GuoLaoChartMain.js",
+      "derived_sha256": "6d025655d699f9defa3e7fc8ed464aa2da23ef8c7cc45f4b08b3e24adce2f2f0"
+    },
+    "guolao/guolaoTransit.js": {
+      "upstream": "components/guolao/guolaoTransit.js",
+      "mode": "verbatim",
+      "why": "行运法（洞微大限 / 小限 / 月限 / 童限）纯前端 compute，只 import 同目录 guolaoData。[限法实算] 与 [大限] 的所选行运法结构依赖它。",
+      "deviations": []
+    },
     "guolao/guolaoMoira.js": {
       "mode": "bespoke",
       "why": "自上游 GuoLaoChartMain.js verbatim 抽出的政余格局 Moira DSL 闭包；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
@@ -1135,7 +1171,7 @@
     },
     "india/jyotishSnapshot.js": {
       "mode": "bespoke",
-      "why": "自上游 IndiaChart.js 逐字抽出的 Jyotish 快照段构造器（仅剥 React 外壳）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "why": "自上游 IndiaChart.js 逐字抽出的 Jyotish 快照段构造器（仅剥 React 外壳）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。 🔴 两处声明式偏离（均为上游 HEAD 9b74714b 的 bug，重抽时必须保留，直到上游修复）：① SIGN_CN_S/scS 上提到函数开头——上游三旗盘逐月净分块先于其 const 定义调用 scS（暂时性死区），jyotish.tripataki 一有数据整个 builder 抛出；② 三旗盘月序读 m.index ?? m.month——后端 month_rows 的键是 month，上游读 index 恒 undefined。",
       "derived_from": "components/astro/IndiaChart.js",
       "derived_sha256": "4fc22b6eb71cdd0a943bf8ef3cbea2d96ba4bead7e7363a7c845fbfe0f244097"
     },
@@ -1240,9 +1276,27 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "liureng/LRSanChuanRelationMini.js": {
+      "upstream": "components/liureng/LRSanChuanRelationMini.js",
+      "mode": "verbatim",
+      "why": "上游 v3.11.0 [Q-450/T-413] 把三传递生递克 + 逐传空/禄/马徽记抽成纯函数单源（buildSanChuanRelationFacts / sanChuanRelationSnapshotLines），与右栏 SVG 小图（React 组件，同文件尾部）同供大六壬与三式合一快照的 [三传]/[大六壬] 段。1–66 行是零依赖纯逻辑（只 import 同目录 LRConst），67 行起 `function LRSanChuanRelationMini(props)` 是 JSX 组件。LiuRengMain.js 的纯逻辑段（buildLiuRengSnapshotText）已在调用 sanChuanRelationSnapshotLines，此前被 stub 成空 → 一旦调用即 ReferenceError。",
+      "deviations": [
+        {
+          "kind": "truncate_before",
+          "anchor": "^function LRSanChuanRelationMini\\(",
+          "why": "剥掉 JSX 小图组件与其 `export default`（67 行起）。锚点是正则而非行号：上游编辑后锚点找不到会报错而不是悄悄剪错。"
+        }
+      ]
+    },
     "liureng/LRShenJiangDoc.js": {
       "upstream": "components/liureng/LRShenJiangDoc.js",
       "mode": "verbatim",
+      "deviations": []
+    },
+    "liureng/LRXiangDoc.js": {
+      "upstream": "components/liureng/LRXiangDoc.js",
+      "mode": "verbatim",
+      "why": "纯前端取象聚合（buildXiangContext）。LiuRengMain.js 纯逻辑段 buildLiuRengSnapshotText 的 [取象] 段在调用它，此前 import 被当作「仅 React 尾部使用」stub 成空 → 走到 [取象] 即 ReferenceError（v3.11.x 同步时真数据整链跑出来的第二个潜伏断点）。",
       "deviations": []
     },
     "liureng/LRShenShaDoc.js": {
@@ -1263,7 +1317,7 @@
     "liureng/LiuRengMain.js": {
       "upstream": "components/lrzhan/LiuRengMain.js",
       "mode": "verbatim",
-      "why": "上游把 20 个纯逻辑 export（DA_GE_META/XIAO_JU_META/matchDaGeReferences/matchXiaoJuReferences/buildLiuRengLayout/buildKeData/buildSanChuanData/buildLiuRengSnapshotText …）与 React 组件放在同一个 6436 行文件里。1–4553 行是纯逻辑，4554 起 `class LiuRengMain extends Component`。六壬择时/三式合一择时的条件层直接吃这 20 个 export —— 手抄它们会漂移（仓里 liurengRefContext.js 手抄的 buildSanChuanData 只有 3 参，上游早已是 4 参含 castOverride）。故整头 vendored，React 尾部由 truncate_before 机械剥离。 用 verbatim 而非 curated：截断由 truncate_before 机械完成，流水线输出逐字可复现，因此该受「输出必须与 vendored 文件逐字相同」这条约束 —— curated 是给手工子集用的，会豁免掉这层保护。",
+      "why": "上游把 20 个纯逻辑 export（DA_GE_META/XIAO_JU_META/matchDaGeReferences/matchXiaoJuReferences/buildLiuRengLayout/buildKeData/buildSanChuanData/buildLiuRengSnapshotText …）与 React 组件放在同一个 6436 行文件里。1–4553 行是纯逻辑，4554 起 `class LiuRengMain extends Component`。六壬择时/三式合一择时的条件层直接吃这 20 个 export —— 手抄它们会漂移（仓里 liurengRefContext.js 手抄的 buildSanChuanData 只有 3 参，上游早已是 4 参含 castOverride）。故整头 vendored，React 尾部由 truncate_before 机械剥离。 用 verbatim 而非 curated：截断由 truncate_before 机械完成，流水线输出逐字可复现，因此该受「输出必须与 vendored 文件逐字相同」这条约束 —— curated 是给手工子集用的，会豁免掉这层保护。 🔴 v3.11.x 同步：ChuangChart / LRXiangDoc / LRSanChuanRelationMini 三个 import 此前被当成「React 元素 / 仅 React 尾部使用」stub 成空，而纯逻辑段都在用 —— buildSanChuanData 里 `new ChuangChart` 抛 ReferenceError 被 try/catch 吞成 null，于是 liurengZeriScanEngine 每个时辰 computeLiurengScanPan 都返回 null，六壬择时 / 三式择时六壬腿对**任何**条件都零命中（形状合法的空结果）；buildLiuRengSnapshotText 走到 [三传] 递生递克 / [取象] 即炸。三者现均改真 import（ChuangChart 早已 headless vendored）。",
       "deviations": [
         {
           "kind": "truncate_before",
@@ -1289,22 +1343,10 @@
           "why": "图标库（同上）。"
         },
         {
-          "kind": "stub_import",
-          "specifier": "../liureng/ChuangChart.js",
-          "stub": "",
-          "why": "React 元素（同上）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../liureng/LRSanChuanRelationMini.js",
-          "stub": "",
-          "why": "React 元素（同上）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../liureng/LRXiangDoc.js",
-          "stub": "",
-          "why": "仅 React 尾部使用。"
+          "kind": "replace_text",
+          "find": "import LRSanChuanRelationMini, { sanChuanRelationSnapshotLines }",
+          "to": "import { sanChuanRelationSnapshotLines }",
+          "why": "同一行 import 既有 JSX 小图（默认导出，只在被剥掉的 React 尾部用）又有纯函数 sanChuanRelationSnapshotLines（纯逻辑段 buildLiuRengSnapshotText 的 [三传] 在用）。v3.11.0 之前整行 stub 成空，于是纯逻辑段一走到 [三传] 递生递克行就 ReferenceError。vendored 的 LRSanChuanRelationMini.js 已剥掉默认导出，故只保留具名那一半（孤儿 import 清理不认 `import X, { … }` 形态，须声明）。"
         },
         {
           "kind": "stub_import",
@@ -2074,6 +2116,12 @@
       "upstream": "components/ziwei/ziweiSchools.js",
       "mode": "verbatim",
       "deviations": []
+    },
+    "ziwei/ziweiSnapshotLayers.js": {
+      "mode": "bespoke",
+      "why": "自上游 ZiWeiMain.js 逐字抽出的紫微快照运限层 builder（[运限概览]/[运限]/[流派叠层] + formatLuckLayerLines/findDaxianForYear + 两张模块级常量）；该文件其余是 React 组件，整份 vendor 不可行。此前这些函数手抄在 tools/ziweiExtras.js 里、无源 sha 看守 → 上游 v3.11.0 的 [运限概览] 段与 [运限] 沈氏三限行静默缺了一版。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "derived_from": "components/ziwei/ZiWeiMain.js",
+      "derived_sha256": "d665c50225e9690dd4ec5e7ba5e888120ecfd34c5ba937cfb4e8b3b867b6f75d"
     },
     "ziwei/zwLuckItems.js": {
       "mode": "bespoke",

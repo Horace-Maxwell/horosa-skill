@@ -13,14 +13,14 @@ import * as LRConst from '../liureng/LRConst.js';
 import { ZSList, ZhangSheng, liurengWangXiang, judgeKongWang } from '../liureng/LRZhangSheng.js';
 import { resolveLiuRengTwelvePanStyle } from '../liureng/LRPanStyle.js';
 import { normalizeLiuRengJiangName } from '../liureng/LRShenJiangDoc.js';
-
-
+import ChuangChart from '../liureng/ChuangChart.js';
+import { buildXiangContext } from '../liureng/LRXiangDoc.js';
 import { computeFrontendShenSha, computeYearShenSha, computeMonthShenSha } from '../liureng/LRShenShaDoc.js';
 import { detectJianChuan } from '../liureng/LRJianChuanDoc.js';
 import { analyzeKongLocations, analyzeDunGan, analyzeNianMing } from '../liureng/LRKongDunNianDoc.js';
 import { ZHANDUAN_CATEGORIES, ZHANDUAN_DOC, RELATED_BIFA } from '../liureng/LRZhanDuanDoc.js';
 import { matchBiFa, BIFA_LIST } from '../liureng/LRBiFaDoc.js';
-
+import { sanChuanRelationSnapshotLines } from '../liureng/LRSanChuanRelationMini.js';   // [Q-450/T-413] 小图与快照共用同一纯函数
 
 
 

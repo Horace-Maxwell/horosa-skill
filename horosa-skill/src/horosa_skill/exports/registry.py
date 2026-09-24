@@ -256,7 +256,7 @@ AI_EXPORT_PRESET_SECTIONS = {
     # v14（上游 v3.9.2）：古典衍化四段插在 古典 与 古典格局 之间。上游 opt-in（仅本命 astro 快照
     # 路径传 classicalDerived）→ 条件段双登记；世界范式盘上游还是 default-off（∩DEFAULT_OFF 纪律）。
     "astrochart": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "12分度", "主宰星链", "分宫制宫神星表", "古典", "古典·派生宫转宫", "古典·气候带", "古典·显赫计分", "古典·世界范式盘", "古典格局", "埃及历", "寿命格局", "可能性"],
-    "indiachart": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "古典", "可能性", "大运Dasha", "星盘信息", "Panchanga 五要素", "卡拉卡（8 Chara Karakas）", "节点主照（Rasi Drishti）", "星曜状态", "分盘吉位 Vimśopaka", "八分点 SAV", "Sodhya Pinda 凝量", "Shadbala 六力", "Ishta/Kashta 吉凶果", "Vimśopaka 分盘 20 分力", "Hora 行星时", "Choghadia 民用择时", "择时 Panchaka/Abhijit", "Mūla 大运", "Sudarśana Chakra 大运", "Naisargika 自然大运", "补充上升（Supplementary Lagnas）", "Nāḍī · Bhrigu Bindu 福点", "Nāḍī · D150 纳地盘", "Āyurdāya 寿命基础", "特殊上升 Special Lagnas", "D60 六十分盘吉凶", "分盘变体对照", "功能吉凶（Functional Nature）", "宫位力（Bhava Bala）", "星曜战（Graha Yuddha）", "扩展大运（Conditional / Chara）", "Kartari 夹击格局", "Sudarshana 三盘（命/日/月起）", "KP 宫头次主星 CSL", "KP 意义者 Significators", "KP 六级细分 / 当令星", "敌友（复合五分）", "行运 Gochara（从月·八分点）", "化解（信息·非处方）", "Jaimini Argala 干涉", "Tajika Harsha Bala", "Tajika Pancha-Vargeeya", "Tajika Mudda 年运", "行运 Gochara（从命）", "座运·X", "瑜伽格局 Yogas", "副星 Upagraha", "敏感点 Sphuta", "全吉盘 SBC", "问事 Praśna", "Nāḍī · 行星组合(同座合)", "Nāḍī · 星座交换", "Nāḍī · 木星推进时间轴", "Jaimini 三对法寿命", "Tripataki 宿距三旗", "寿命判读"],
+    "indiachart": ["星盘信息", "起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "古典", "可能性", "大运Dasha", "附加分盘", "Panchanga 五要素", "卡拉卡（8 Chara Karakas）", "节点主照（Rasi Drishti）", "星曜状态", "分盘吉位 Vimśopaka", "八分点 SAV", "Sodhya Pinda 凝量", "Shadbala 六力", "Ishta/Kashta 吉凶果", "Vimśopaka 分盘 20 分力", "Hora 行星时", "Choghadia 民用择时", "择时 Panchaka/Abhijit", "Mūla 大运", "Sudarśana Chakra 大运", "Naisargika 自然大运", "补充上升（Supplementary Lagnas）", "Nāḍī · Bhrigu Bindu 福点", "Nāḍī · D150 纳地盘", "Āyurdāya 寿命基础", "特殊上升 Special Lagnas", "D60 六十分盘吉凶", "分盘变体对照", "功能吉凶（Functional Nature）", "宫位力（Bhava Bala）", "星曜战（Graha Yuddha）", "扩展大运（Conditional / Chara）", "Kartari 夹击格局", "Sudarshana 三盘（命/日/月起）", "KP 宫头次主星 CSL", "KP 意义者 Significators", "KP 六级细分 / 当令星", "敌友（复合五分）", "行运 Gochara（从月·八分点）", "化解（信息·非处方）", "Jaimini Argala 干涉", "Tajika Harsha Bala", "Tajika Pancha-Vargeeya", "Tajika Mudda 年运", "行运 Gochara（从命）", "座运·X", "瑜伽格局 Yogas", "副星 Upagraha", "敏感点 Sphuta", "全吉盘 SBC", "问事 Praśna", "Nāḍī · 行星组合(同座合)", "Nāḍī · 星座交换", "Nāḍī · 木星推进时间轴", "Jaimini 三对法寿命", "Tripataki 宿距三旗", "Tripataki 三旗盘逐月净分", "寿命判读"],
     # `占星地图` 是本仓第一次登记它：verify_export_section_baseline 的 SKILL_ONLY_KEYS 曾把整个
     # astrochart_like 跳过（而上游确有该 preset），于是这条缺失从未被任何一版欠账计入。
     # skill 侧该段由独立的 `acg` 工具产出、不进 chart 族快照，故 preset + optional 双登记。
@@ -307,7 +307,7 @@ AI_EXPORT_PRESET_SECTIONS = {
     # 这组开关。两者都属需新增显式入参的功能缺口，登记成 preset 会变死条目。
     # v14（上游 v3.9.2）：+身宫（house.isBody 恒有则出）/八字大运（chart.bazi.direct 缺省不产）；
     # 段序对齐上游 v56。两段皆条件段（引擎字段缺省整段不产）→ 双登记。
-    "ziwei": ["起盘信息", "宫位总览", "身宫", "来因宫", "八字大运", "命中格局", "运限", "流派叠层"],
+    "ziwei": ["起盘信息", "宫位总览", "身宫", "来因宫", "八字大运", "命中格局", "运限概览", "运限", "流派叠层"],
     "suzhan": ["起盘信息", "宿盘宫位与二十八宿星曜"],
     "sixyao": ["起盘信息", "卦象", "六爻与动爻", "断卦结构", "卦辞与断语", "断诀命中", "占类断语", "判语库·参考诀表"],
     # 上游 v50 的 9 段。此前本仓这支是自建端口、只产前 4 段，计算分析层整层没搬。
@@ -325,13 +325,13 @@ AI_EXPORT_PRESET_SECTIONS = {
     # 六壬断卦层 12 段（原名）、奇门派生 10 段（加「奇门」前缀）。缺段降级为简短占位仍算命中，故非 optional。
     # v13：+`奇门遁甲`（上游 v3.8.0 三式全量同步补的奇门腿汇总段；本仓 vendored 实例未观察到恒出，
     # 按条件段双登记）。
-    "sanshiunited": ["起盘信息", "概览", "太乙", "奇门遁甲", "太乙十六宫", "神煞", "大六壬", "六壬大格", "六壬小局", "六壬参考", "六壬概览", "八宫详解", "正北坎宫", "东北艮宫", "正东震宫", "东南巽宫", "正南离宫", "西南坤宫", "正西兑宫", "西北乾宫", "太乙主客定算", "太乙八门与宿曜", "太乙断法", "太乙七大兵法", "太乙博弈", "太乙命法", "太乙命宫行限", "十二盘式", "常用神煞", "年月神煞", "课体结构", "三传旺衰", "空亡真假", "旬空落点", "陷空", "遁干特殊", "年命上神", "毕法（已命中）", "占断向导", "奇门九宫方盘", "奇门旺相休囚死·月令能量", "奇门六害总览", "奇门化解方案", "奇门八门化气大阵", "奇门用神分论", "奇门财富七要", "奇门事业七要", "奇门恋爱姻缘", "奇门孤辰寡宿", "紫微四化"],
+    "sanshiunited": ["起盘信息", "概览", "太乙", "奇门遁甲", "太乙十六宫", "神煞", "大六壬", "六壬大格", "六壬小局", "六壬参考", "六壬概览", "七政", "八宫详解", "正北坎宫", "东北艮宫", "正东震宫", "东南巽宫", "正南离宫", "西南坤宫", "正西兑宫", "西北乾宫", "太乙主客定算", "太乙八门与宿曜", "太乙断法", "太乙七大兵法", "太乙博弈", "太乙命法", "太乙命宫行限", "十二盘式", "常用神煞", "年月神煞", "课体结构", "三传旺衰", "空亡真假", "旬空落点", "陷空", "遁干特殊", "年命上神", "毕法（已命中）", "占断向导", "奇门九宫方盘", "奇门旺相休囚死·月令能量", "奇门六害总览", "奇门化解方案", "奇门八门化气大阵", "奇门用神分论", "奇门财富七要", "奇门事业七要", "奇门恋爱姻缘", "奇门孤辰寡宿", "紫微四化"],
     # 上游同批还有 [虚实]/[本命化曜]/[流年流曜]，读 moiraRules.weakSolid / .yearStars —— 二者只来自
     # 后端 /qizheng/moira，开源 astropy 无该路由（vendored 实例实测 500），本地回退 buildLocalMoiraRules
     # 也只产 houses/patterns/godHits。故那三段在开源栈上不可得，属带理由的欠账，不登记为 preset。
-    "guolao": ["起盘信息", "七政四余宫位与二十八宿星曜", "星曜庙旺与星点动态（殿垣庙旺乐喜怒 · 顺逆留伏迟速）", "神煞", "大限", "虚实", "本命化曜", "流年流曜", "政余格局", "相位"],
     # v15（上游 v3.11 [Q-442/T-405]，aiExport.js:857）：+六宫框落宫（后端 houseFrames 缺省即带）/ 校时预览
     # （仅给了 rectifyEvents 才产）——两段都是上游 builder 的条件段（段内容为空不产段）→ 双登记。
+    "guolao": ["起盘信息", "七政四余宫位与二十八宿星曜", "星曜庙旺与星点动态（殿垣庙旺乐喜怒 · 顺逆留伏迟速）", "神煞", "大限", "三主与化曜", "限法实算", "虚实", "本命化曜", "流年流曜", "政余格局", "相位"],
     "germany": ["起盘信息", "宫位宫头", "行星", "中点", "TNP星体", "中点相位", "90°中点盘", "行星图", "映点", "中点列表", "六宫框落宫", "校时预览", "汉堡学派要素", "组合盘", "戴维森盘", "虚星参考"],
     "agepoint": ["起盘信息", "年龄推进点（Age Point / Huber）", "当前时点", "方法说明"],
     # 上游 v3.11 [Q-106/T-10] 星运三页（aiExport.js:635-637 逐字）。全段恒出：builder 在后端无数据时
@@ -574,7 +574,9 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     "draconic": ["月宿", "古典", "古典格局", "埃及历", "可能性", "龙盘"],
     "relocation": ["月宿", "古典", "古典格局", "埃及历", "可能性", "重置盘"],
     "harmonic": ["月宿", "古典", "古典格局", "埃及历", "可能性", "调波盘"],
-    "indiachart": ["月宿", "古典", "大运Dasha", "可能性", "星盘信息", "星曜战（Graha Yuddha）", "Kartari 夹击格局", "Tajika Mudda 年运", "问事 Praśna", "Nāḍī · 星座交换"],
+    # [附加分盘]（v3.11.0 #80）只在给了 indiaExtraVargas 时产；[Tripataki 三旗盘逐月净分]（[Q-127/T-35]）只在
+    # indiaTripataki=true（后端 opt-in 多建 12 盘）时产 —— 两段均缺省不产 → 条件段双登记。
+    "indiachart": ["月宿", "古典", "大运Dasha", "可能性", "星盘信息", "星曜战（Graha Yuddha）", "Kartari 夹击格局", "Tajika Mudda 年运", "问事 Praśna", "Nāḍī · 星座交换", "附加分盘", "Tripataki 三旗盘逐月净分"],
     # 世俗盘为非推运入宫盘（predictive=0），[可能性] 依赖 predict.PlanetSign 故恒不产出 → 可选段。
     # 世运卜卦两段仅 mundaneType=mundanehorary 时产（盘型互斥）。
     # v3.11 右栏卡（buildMundaneCardSections）：入宫底盘恒产 年盘概要/四季入境盘/天气占星/四轴特殊点/盘型格局
@@ -600,7 +602,9 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     "qimenzeri": ["日家占方（古籍金函系）"],
     "liureng": ["毕法（已命中）", "占断向导", "年月神煞", "课体结构", "三传旺衰", "空亡真假", "旬空落点", "陷空", "遁干特殊", "年命上神", "七政"],
     # 紫微 P2 (星阙 v2.6.x)：命中格局随 jar 返回的 patterns；本盘未命中所收录格局时为空 → 可选段。
-    "ziwei": ["命中格局", "来因宫", "运限", "流派叠层", "身宫", "八字大运"],
+    # [运限概览]（上游 v3.11.0 #80）上游是无条件段，但 skill 侧它由 core-js ziweiSnapshotLayers 从盘面大限派生：
+    # ziwei_rules（规则库、无盘）与 JS 引擎失败时缺席（后者进 warnings）→ 条件段双登记。
+    "ziwei": ["命中格局", "来因宫", "运限概览", "运限", "流派叠层", "身宫", "八字大运"],
     # 六爻 [断卦结构]（纳甲/世应/用神/旺衰/飞伏/六神/动变）由 core-js analyzeLiuyao 引擎派生，
     # 需 node 运行时；无 node/引擎失败则优雅降级不出该段 → 列可选段，缺失不误报。
     "sixyao": ["断卦结构", "断诀命中", "占类断语"],
@@ -657,7 +661,9 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     "election": ["用事专属", "应期", "危象日参照", "本命合参", "回归与主限", "时势合参"],
     # 七政四余: 政余格局 = Moira 格局 DSL 本地评估（失败 → '无'）；虚实/本命化曜/流年流曜 = Java /qizheng/moira
     # 规则层（v0.36.0 C1 接活）——Java 不可用（chart-only 降级）时三段缺席并进 warnings → 可选段。
-    "guolao": ["政余格局", "虚实", "本命化曜", "流年流曜"],
+    # [三主与化曜]/[限法实算]（上游 v3.11.0 [Q-435]）上游「有数据才产段」；skill 侧由 core-js 段 builder 从命度/四柱派生，
+    # JS 失败时缺席（进 warnings）→ 条件段双登记。
+    "guolao": ["政余格局", "虚实", "本命化曜", "流年流曜", "三主与化曜", "限法实算"],
     # 多重回归: 单段技法；某体若无返照数据则该体行不出，三体皆空时整段不出 → 列为可选段，避免误报 missing。
     # v0.33.0 批 I-3：+日月返照年表（timelineStartYear/Count 时才产）。⚠ 本字典禁止重复键——
     # 曾把同键写两处，后写者静默覆盖前者（test_registry_dicts_have_no_duplicate_keys 现在守着）。

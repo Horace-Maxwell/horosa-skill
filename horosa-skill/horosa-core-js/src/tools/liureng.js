@@ -6,6 +6,7 @@ import { detectJianChuan } from '../vendor/liureng/LRJianChuanDoc.js';
 import { analyzeKongLocations, analyzeDunGan, analyzeNianMing } from '../vendor/liureng/LRKongDunNianDoc.js';
 import { liurengWangXiang, judgeKongWang } from '../vendor/liureng/LRZhangSheng.js';
 import * as LRConst from '../vendor/liureng/LRConst.js';
+import { sanChuanRelationSnapshotLines } from '../vendor/liureng/LRSanChuanRelationMini.js';
 
 // 六壬常量表一律解构自 vendor LRConst（v0.36.0：此前 24 张手抄表与 vendor 双源——v0.35 修的 ZiLiuQin
 // 乙日巳/午 在手抄本里仍是旧值，消费点对 vendor 金标结构性失明）。守卫：test/handcopy.mjs。
@@ -522,6 +523,21 @@ function buildSnapshotText(payload, liureng, runyear, chartObj, data) {
   const lines = [];
   const nongli = liureng.nongli || chartObj.nongli || {};
   const cols = liureng.fourColumns || {};
+  // 六壬解读层 context（星阙 v2.5.x 六壬 Phase 4）：refCtx = buildLiuRengReferenceContext(~75 字段)，
+  // 星阙原样抽取的纯函数闭包；喂 [三传] 递生递克行、毕法(matchBiFa)、占断向导(ZHANDUAN_DOC)与断卦层。
+  // 提到段首求值：上游 buildLiuRengSnapshotText 的 [三传] 段已在用 refs.context（LiuRengMain.js:4436-4447）。
+  let refCtx = null;
+  try {
+    refCtx = buildLiuRengReferenceContext(
+      liureng || {},
+      chartObj,
+      payload?.guirengType != null ? payload.guirengType : 2,
+      runyear || null,
+      payload?.castOverride || null,
+    );
+  } catch (e) {
+    refCtx = null;
+  }
   lines.push('[起盘信息]');
   lines.push(`日期：${payload.date || '—'} ${payload.time || '—'}`);
   lines.push(`时区：${payload.zone || '—'}`);
@@ -568,6 +584,17 @@ function buildSnapshotText(payload, liureng, runyear, chartObj, data) {
     ['初传', '中传', '末传'].forEach((name, index) => {
       lines.push(`${name}：干支=${data.sanChuan.cuang[index] || '无'}；六亲=${data.sanChuan.liuQin[index] || '无'}；贵神=${data.sanChuan.tianJiang[index] || '无'}`);
     });
+    // [Q-450/T-413]（上游 v3.11.0 LiuRengMain.js:4436-4447）三传递生递克 + 逐传空/禄/马徽记：
+    // 与右栏取象小图同一纯函数（vendored LRSanChuanRelationMini.js），入参逐字同上游取自 refs.context。
+    if (refCtx && Array.isArray(refCtx.sanChuanBranches) && refCtx.sanChuanBranches.length >= 3) {
+      sanChuanRelationSnapshotLines({
+        branches: refCtx.sanChuanBranches,
+        gans: refCtx.sanChuanGans || [],
+        dayGan: refCtx.dayGan || '',
+        dayZhi: refCtx.dayZhi || '',
+        xunKong: refCtx.xunKongBranches || [],
+      }).forEach((l) => lines.push(l));
+    }
   } else {
     lines.push(missingDetailText('三传'));
   }
@@ -601,22 +628,10 @@ function buildSnapshotText(payload, liureng, runyear, chartObj, data) {
     lines.push('本次盘面材料不足，无法生成四课三传；请检查日期、时间、时区、经纬度和本地 runtime 状态。');
   }
   // 六壬解读层（星阙 v2.5.x 六壬 Phase 4）：常用神煞 + 毕法100法 + 占断向导。
-  // refCtx = buildLiuRengReferenceContext(~75 字段) 是 星阙 原样抽取的纯函数闭包；
-  // 喂 matchBiFa(毕法) / ZHANDUAN_DOC(占断)。失败时回退到旧的日干支解析 + 仅常用神煞。
+  // refCtx 已在段首求值（见 buildSnapshotText 开头）；喂 matchBiFa(毕法) / ZHANDUAN_DOC(占断)。
+  // 失败（refCtx=null）时回退到旧的日干支解析 + 仅常用神煞。
   const dayGanZi = chartObj?.nongli?.dayGanZi || '';
   const BRANCHES = '子丑寅卯辰巳午未申酉戌亥';
-  let refCtx = null;
-  try {
-    refCtx = buildLiuRengReferenceContext(
-      liureng || {},
-      chartObj,
-      payload?.guirengType != null ? payload.guirengType : 2,
-      runyear || null,
-      payload?.castOverride || null,
-    );
-  } catch (e) {
-    refCtx = null;
-  }
   let ssDayGan = refCtx ? refCtx.dayGan : stemOf(dayGanZi);
   let ssDayZhi = refCtx ? refCtx.dayZhi : branchOf(dayGanZi);
   let courseBranches = refCtx ? (refCtx.courseBranches || []) : [];

@@ -154,6 +154,15 @@ class IndiaChartInput(BirthInput):
     vargaVariant: Any | None = Field(default=None, description="分割盘(varga)流派：Parāśara / Jaimini 等口径。")
     karakaScheme: Any | None = Field(default=None, description="Chara Kāraka 取法（7/8 星制）。")
     yuddhaCriterion: Any | None = Field(default=None, description="行星战(graha yuddha)胜负判据。")
+    # 上游 v3.11.0 挂载齿轮（techniqueMountSettings.js:1030-1039）：
+    indiaExtraVargas: Any | None = Field(
+        default=None,
+        description="附加分盘（简表，最多 4 张）：如 [9, 7] 或 '9,7'。可选 2/3/4/7/9/10/12/16/20/24/27/30/40/45/60；每张只出宫头 + 星曜落宫 + 行星，进 [附加分盘] 段。缺省=只挂主盘。",
+    )
+    indiaTripataki: bool | None = Field(
+        default=None,
+        description="Tripataki 三旗盘（opt-in，后端多建 12 盘约 0.3–0.8s）：true 时产 [Tripataki 三旗盘逐月净分] 段（月心/土心逐月净分）。",
+    )
 
 
 class PlanetCyclesInput(FlexibleModel):
@@ -302,6 +311,11 @@ class BaZiBirthInput(FlexibleModel):
     # [多运限·指定时段]：上游由界面勾选驱动，headless 开成显式入参。语义同上游 ——
     # 流年 × 流月笛卡尔各一段；流日/流时锚定到所选的第一个上层；总段数封顶 50。
     period: dict[str, Any] | None = Field(default=None, description="多运限时段选择 {liunian:[公历年], liuyue:[月序1-12], liuri:[公历日], liushi:[时辰序0-11]}。")
+    # [Q-191/T-135]（上游 v3.11.0 BaZi.js:369-375，页面 baziOpt.zodiacBoundary）：生肖岁首。
+    zodiacBoundary: str | None = Field(
+        default=None,
+        description="生肖岁首：lichun=立春（缺省，同星阙页面缺省）| lunar=正月初一。只改 [起盘信息] 的「生肖：X（岁首=…）」行；正月初一与立春之间出生者两档差一个生肖。",
+    )
 
 
 class BaZiDirectInput(BaZiBirthInput):
@@ -720,6 +734,12 @@ class GuoLaoInput(BirthInput):
     moiraTransitDate: str | None = Field(default=None, description="流年盘日期 YYYY-MM-DD（[流年流曜] 段的流年时刻；缺省=今天）。")
     moiraTransitTime: str | None = Field(default=None, description="流年盘时间 HH:mm:ss（缺省 12:00:00）。")
     moiraRules: bool | None = Field(default=None, description="false=跳过 /qizheng/moira（不产 [虚实]/[本命化曜]/[流年流曜]，省一次流年铸盘）。")
+    # 显示层口径（上游 v3.11.0 挂载齿轮 techniqueMountSettings.js:1159-1175；缺省 = 上游全局缺省
+    # GuoLaoChartStyle.GUOLAO_DEFAULT_DISPLAY：gong / 古度限度法 / tong10 / 9）。四键逐字打印进快照并改段结构。
+    guolaoLifeMasterMode: str | None = Field(default=None, description="命主取法：gong=宫主（缺省）| du=度主 | dudegrade=贬宫主专度主（果老）。改 [三主与化曜] 的命主与难仇恩用「度」行。")
+    guolaoMinorLimitType: str | None = Field(default=None, description="行运法：''=古度限度法（缺省）| minor=小限 | month=月限 | tong=童限 | dongwei=洞微大限。改 [大限] 所附行运法结构与 [限法实算] 的实算行。")
+    guolaoTongxianBase: str | None = Field(default=None, description="童限基数（行运法=tong 时生效）：tong10=通行十年（缺省）| gu9=古九岁 | xu11=虚十一。")
+    guolaoLimitChildBase: int | None = Field(default=None, description="定童限：9=九年起（缺省）| 10=十年起。改 [大限] 首限年数与各限起讫岁、[限法实算] 的童限/限度。")
 
 
 class HeLuoInput(FlexibleModel):
