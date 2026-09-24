@@ -2508,8 +2508,121 @@ def _build_natal_extra_sections(extras: dict[str, Any]) -> dict[str, str]:
             if parts:
                 concordant = "（家主=盘主，格局相合）" if rulers.get("concordant") else ""
                 lines.append(f"盘主体系：{'；'.join(parts)}{concordant}")
-        out["寿命格局"] = "\n".join(lines)
+        lines += _lifespan_detail_lines(ls)
+        # 上游 buildSectionText：逐行 trim、去空行。
+        out["寿命格局"] = "\n".join(line.strip() for line in lines if line.strip())
     return out
+
+
+# 上游 utils/astroAiSnapshot.js:1187-1233 英文 token 中文化表（逐字；未收的 token 原样输出，如 viaDignity=exaltation）。
+_LIFESPAN_VIA_DIGNITY = {"ruler": "本垣", "exalt": "擢升", "triplicity": "三分", "term": "界", "face": "面 / 十度"}
+_LIFESPAN_ANGULARITY = {"angular": "角宫", "succedent": "续宫", "cadent": "果宫"}
+_LIFESPAN_BAND = {"greatest": "大限", "mean": "中限", "least": "小限", "max": "大限", "min": "小限"}
+_LIFESPAN_STATE_HAYYIZ = {"Hayyiz": "得时得地", "DemiHayyiz": "半得", "InWrongPos": "失位", "None": ""}
+_LIFESPAN_STATE_SUN = {"cazimi": "核心", "combust": "焦伤", "under_beams": "日光束下", "underBeams": "日光束下", "free": "自由光"}
+_LIFESPAN_STATE_ORIENT = {"oriental": "东出", "occidental": "西入"}
+_LIFESPAN_STATE_MOTION = {"retro": "逆行", "direct": "顺行", "stationary": "停滞"}
+
+
+def _lifespan_js_value(value: Any) -> str:
+    """JS `${v}`：null → 'null'（JSON 回传保留 null；undefined 键不回传）。"""
+    return "null" if value is None else _ptext.js_str(value)
+
+
+def _lifespan_detail_lines(res: dict[str, Any]) -> list[str]:
+    """逐字镜像上游 utils/astroAiSnapshot.js:1172-1245 buildLifespanSection 的 FIX-8/9/10 尾段：
+    取主法 + 朔/望月、生命主候选、寿主星细节/修正（FIX-8）；医疗危机（FIX-9）；行星状态盘（FIX-10，太阳三态
+    列随 params 的 cazimiOrb/combustOrb/underBeamsOrb [SURF-3]）。名称走本段既有的 _lifespan_name。"""
+    lines: list[str] = []
+    if res.get("method"):
+        lines.append(f"取主法：{res['method']}")
+    if res.get("birthType"):
+        lines.append(f"朔/望月：{'朔月(合)' if res['birthType'] == 'conjunctional' else '望月(冲)'}")
+    candidates = res.get("candidates")
+    if isinstance(candidates, list) and candidates:
+        lines.append("生命主候选：")
+        for c in candidates:
+            if not isinstance(c, dict) or not c.get("key"):
+                continue
+            aphetic = "投射" if c.get("aphetic") else "非投射"
+            rank = f"rank={_ptext.js_str(c['rank'])}" if c.get("rank") is not None else ""
+            reason = f"·{c['reason']}" if c.get("reason") else ""
+            house = f"第{_ptext.js_str(c['house'])}宫" if c.get("house") else ""
+            lines.append(f"{_lifespan_name(c.get('key'))} {house}·{aphetic}{'·' + rank if rank else ''}{reason}")
+    alc = res.get("alcocoden")
+    if isinstance(alc, dict) and alc:
+        detail = []
+        if alc.get("viaDignity"):
+            detail.append(f"经{_LIFESPAN_VIA_DIGNITY.get(alc['viaDignity']) or alc['viaDignity']}")
+        if alc.get("angularity"):
+            detail.append(_LIFESPAN_ANGULARITY.get(alc["angularity"]) or f"{alc['angularity']}")
+        if alc.get("band"):
+            detail.append(f"限 {_LIFESPAN_BAND.get(alc['band']) or alc['band']}")
+        if "baseYears" in alc:
+            detail.append(f"基础{_lifespan_js_value(alc['baseYears'])}年")
+        if detail:
+            lines.append(f"寿主星细节：{'；'.join(detail)}")
+        modifiers = alc.get("modifiers")
+        if isinstance(modifiers, list):
+            for m in modifiers:
+                if not isinstance(m, dict):  # JS `if(!m) return;`：对象（含 {}）恒为真
+                    continue
+                planet = _lifespan_name(m.get("planet")) if m.get("planet") else ""
+                aspect = f"·{m['aspect']}" if m.get("aspect") else ""
+                delta = f"(Δ{_ptext.js_str(m['delta'])})" if m.get("delta") is not None else ""
+                kind = f"·{m['kind']}" if m.get("kind") else ""
+                lines.append(f"修正：{planet}{aspect}{delta}{kind}")
+    medical = res.get("medical")
+    if isinstance(medical, dict) and medical:
+        parts = []
+        sixth_sign = medical.get("sixthSign")
+        if sixth_sign:
+            # HIGH-2：引擎 sixth.sign 小写 → 首字大写再 msg()。
+            cap = sixth_sign[:1].upper() + sixth_sign[1:] if isinstance(sixth_sign, str) else sixth_sign
+            parts.append(f"六宫{_astro_msg(cap)}")
+        if medical.get("sixthRuler"):
+            parts.append(f"六宫主 {_lifespan_name(medical['sixthRuler'])}")
+        if parts:
+            lines.append(f"医疗危机：{'；'.join(parts)}")
+        afflictions = medical.get("hylegAfflictions")
+        if isinstance(afflictions, list) and afflictions:
+            joined = "、".join(
+                f"{_lifespan_name(x.get('planet') or x.get('id'))}{'·' + x['aspect'] if x.get('aspect') else ''}"
+                for x in afflictions
+                if isinstance(x, dict)
+            )
+            lines.append(f"生命主受克：{joined}")
+        body = medical.get("bodyHyleg")
+        if isinstance(body, list) and body:
+            lines.append(f"生命主部位：{'、'.join(f'{b}' for b in body)}")
+        if medical.get("note"):
+            lines.append(f"备注：{medical['note']}")
+    states = res.get("states")
+    rows = states.get("rows") if isinstance(states, dict) else None
+    if isinstance(rows, list) and rows:
+        lines.append("行星状态盘：")
+        for row in rows:
+            if not isinstance(row, dict) or not row.get("planet"):
+                continue
+            parts = []
+            if row.get("hayyiz") and row["hayyiz"] != "None":
+                label = _LIFESPAN_STATE_HAYYIZ.get(row["hayyiz"])
+                if label:
+                    parts.append(label)
+            if row.get("sunState") and row["sunState"] != "None":
+                parts.append(_LIFESPAN_STATE_SUN.get(row["sunState"]) or f"{row['sunState']}")
+            if row.get("orient"):
+                parts.append(_LIFESPAN_STATE_ORIENT.get(row["orient"]) or f"{row['orient']}")
+            if row.get("motion"):
+                parts.append(_LIFESPAN_STATE_MOTION.get(row["motion"]) or f"{row['motion']}")
+            if row.get("inSect") is True:
+                parts.append("同宗派")
+            elif row.get("inSect") is False:
+                parts.append("异宗派")
+            if row.get("house"):
+                parts.append(f"第{_ptext.js_str(row['house'])}宫")
+            lines.append(f"{_lifespan_name(row.get('planet'))}：{'·'.join(parts)}")
+    return lines
 
 
 def _build_nakshatra_lines(response: dict[str, Any]) -> list[str]:

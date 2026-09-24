@@ -518,6 +518,42 @@ def test_lifespan_method_reaches_natal_extras(tmp_path) -> None:
     assert bad.ok is False and bad.error.code == "tool.predictive_invalid_option"
 
 
+def test_lifespan_section_prints_method_candidates_medical_and_states() -> None:
+    # 上游 utils/astroAiSnapshot.js:1172-1245 FIX-8/9/10：取主法/朔望月/候选/寿主星细节、医疗危机、行星状态盘。
+    # 输入 = vendored lifespanEngine 对 horosa-core-js/test/fixtures/chart_traditional.json 的真实回包节选
+    # （method 换成 dorotheus、水星 sunState 换成放宽 underBeamsOrb 后的 under_beams，二者都是引擎实产值）。
+    lifespan = {
+        "method": "dorotheus", "isDiurnal": True, "birthType": "preventional",
+        "hyleg": {"key": "sun", "lon": 71.75596328672046, "house": 9},
+        "candidates": [
+            {"key": "sun", "house": 9, "aphetic": True, "rank": 1, "reason": "选定为生命主"},
+            {"key": "moon", "house": 4, "aphetic": False, "rank": None, "reason": "第4宫非释放位"},
+        ],
+        "alcocoden": {"alcocoden": "north_node", "viaDignity": "exaltation", "aspectToHyleg": "刑", "house": 6, "angularity": "cadent"},
+        "medical": {"sixthSign": "pisces", "sixthRuler": "jupiter", "hylegAfflictions": [], "bodyHyleg": ["手臂", "肩", "肺"],
+                    "note": "医疗危机 v1：6 宫 + 生命主受凶星硬相位 + 身体部位提示；非宿命论判断，仅供研究参考。"},
+        "states": {"rows": [
+            {"planet": "sun", "hayyiz": "Hayyiz", "sunState": None, "orient": None, "motion": "direct", "inSect": True, "house": 9},
+            {"planet": "mercury", "hayyiz": "None", "sunState": "under_beams", "orient": "occidental", "motion": "direct", "inSect": False, "house": 10},
+        ]},
+    }
+    body = S._build_natal_extra_sections({"lifespan": lifespan})["寿命格局"].splitlines()
+    assert body[4:] == [
+        "取主法：dorotheus",
+        "朔/望月：望月(冲)",
+        "生命主候选：",
+        "太阳 第9宫·投射·rank=1·选定为生命主",
+        "月亮 第4宫·非投射·第4宫非释放位",
+        "寿主星细节：经exaltation；果宫",  # VIA_DIG 表无 exaltation 键 → 原样（上游同）
+        "医疗危机：六宫双鱼；六宫主 木星",
+        "生命主部位：手臂、肩、肺",
+        "备注：医疗危机 v1：6 宫 + 生命主受凶星硬相位 + 身体部位提示；非宿命论判断，仅供研究参考。",
+        "行星状态盘：",
+        "太阳：得时得地·顺行·同宗派·第9宫",
+        "水星：日光束下·西入·顺行·异宗派·第10宫",
+    ]
+
+
 # ── F20 主限法词表与标签（primaryDirectionSync.js:57-115）───────────────────────────────────────
 
 def test_primary_direction_labels_follow_upstream_vocabulary() -> None:
