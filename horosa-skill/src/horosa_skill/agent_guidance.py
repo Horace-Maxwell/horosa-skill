@@ -1313,13 +1313,14 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "yearBoundary lichun（缺省）/lunar；开关（1/0）guashen=1 sixGods=1 yuqi=0 yingqi=1 doctrine=1 gufa=0 "
             "yueLiushen=0 shenshaOn=1 shenshaExOn=0；guirenFa standard（缺省）/geng_ma_hu；shenshaBase day（缺省）/year；"
             "shenshaSet=神煞名数组（缺省 天乙贵人/禄神/羊刃/驿马/桃花/将星/华盖/劫煞/亡神）。"
-            "\n如实：shishen/tianshiSchool/yuqi/gufa/yueLiushen/shenshaExOn 只改上游 [断诀命中]/[占类断语] 两段，"
-            "本工具尚不产这两段 → 传了会在 warnings 里点名、不改输出；认不出的键/不在词表的值同样回执在 warnings。"
+            "\n[断卦结构]/[断诀命中]/[占类断语] 由 vendored 上游 liuyaoStructLines/liuyaoSnapshotEx 产出（含《断易天机》"
+            "断语摘要）；shishen/tianshiSchool/yuqi/gufa/yueLiushen/shenshaExOn 只改后两段。认不出的键/不在词表的值回执在 warnings。"
+            "\n不给 lines/gua_code = 以时起卦（上游 buildTimeGua：年支序 + 农历月数 + 农历日数 + 时柱支序，时柱随 timeAlg）。"
         ),
         required_context=COMMON_LOCATION_FIELDS + ["question", "lines or gua_code"],
         ask_if_missing=[
             {"field": "question", "question": "这卦要问什么事？"},
-            {"field": "lines/gua_code", "question": "卦怎么来？", "options": ["用户给六爻阴阳动静", "用户给本卦/变卦", "使用指定起卦法后再算"]},
+            {"field": "lines/gua_code", "question": "卦怎么来？", "options": ["用户给六爻阴阳动静", "用户给本卦/变卦", "以起卦时刻时间起卦（不给 lines，同星阙 AI 挂载）"]},
             {"field": "liuyaoSettings.askType", "question": "所问归哪一类？（决定用神取用）", "options": ["自身/综合 self", "求财 wealth", "功名/工作 career", "婚姻（男测 marriage_m / 女测 marriage_f）", "疾病 illness", "其他（见 intent 全表）"]},
             {"field": "liuyaoSettings.school", "question": "断卦流派沿用星阙默认吗？", "options": ["通用·卜筮正宗口径（默认）", "增删卜易 zengshan", "易隐 yiyin", "邵伟华新派 xinpai", "盲派 mangpai", "断易天机 tianji"]},
             {"field": "timeAlg", "question": "占时用真太阳时还是直接时间？", "options": ["真太阳时（星阙默认）", "直接时间（钟表时）"]},
@@ -1378,7 +1379,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "\n排盘选项 = 上游 KinAstroMain.buildYizhangjingOpts 同键，缺省 = 桌面出厂档（「秘传口诀」预设）："
             "shunniRule yangNanYinNv/menShunNvNi；mingGongMethod shiShang/shuZhiMao；dingYue lunar/jieqi；"
             "dayunLength 7/10；dayunStartAge mi/age1；xiaoxianStart ri/yue；xiaoxianDir chart/always；"
-            "annualMethod xiaoxian（小限，出厂）/liunian（流年十二神，同时出 [流年总论]）；flowShenSet A/B/C；"
+            "annualMethod xiaoxian（只出小限）/liunian（只出流年十二神，同时出 [流年总论]）/未设（两法并列 + [流年总论]，"
+            "同上游 AI 挂载无头重算缺省；桌面页出厂为小限）；flowShenSet A/B/C；"
             "leapRule half/midnight；zaoZiAdjust；starNaming A/B/C；daoTerm gui/edao；gradeSet standard/variant；"
             "chongfanKou alpha/beta；tongxianShow（童限，出厂开）；shenshaLayer（神煞合参层，出厂关）。"
         ),
@@ -1386,12 +1388,12 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ask_if_missing=[
             {"field": "date/time", "question": "请提供出生日期、时间和性别（一掌经按农历口径排盘）。"},
             {"field": "dingYue", "question": "定月用农历月还是节气月？", "options": ["农历月（默认，闰月十五折半）", "节气月（按八字月支序）"]},
-            {"field": "annualMethod", "question": "逐年看小限还是流年十二神？（两法只用一套）", "options": ["小限（星阙默认）", "流年十二神"]},
+            {"field": "annualMethod", "question": "逐年看小限还是流年十二神？（文献明训两法只用一套；不指定则两法并列）", "options": ["小限 xiaoxian", "流年十二神 liunian", "两法并列（不指定，同星阙 AI 挂载缺省）"]},
         ],
         safe_defaults=[
             {"field": "dingYue", "value": "lunar", "meaning": "农历月，闰月十五折半归属"},
             {"field": "dayunLength", "value": 7, "meaning": "大限一宫 7 年（通行口径）"},
-            {"field": "annualMethod", "value": "xiaoxian", "meaning": "逐年法用小限（星阙桌面出厂档 yizhangjingAnnual）"},
+            {"field": "annualMethod", "value": None, "meaning": "未设 = 小限与流年十二神两法并列（星阙 AI 挂载无头重算的缺省：record 不带该键；桌面页出厂档 yizhangjingAnnual 为小限）"},
             {"field": "shenshaLayer", "value": False, "meaning": "神煞合参层关（星阙桌面出厂档 yizhangjingShensha=false；开则多出 [神煞合参] 段）"},
             {"field": "after23NewDay", "value": 1, "meaning": "23 点后归次日（星阙出厂全局日界；影响 23 点档生人的日柱与农历日）"},
         ],
@@ -1541,7 +1543,13 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             # 后端不认、静默改回 custom。
             {"field": "questionType", "question": "问的是哪一类？", "options": ["综合/自定 custom", "命主/性格 life", "疾病 health", "财物 wealth", "婚姻/合伙 marriage", "事业/名誉 career", "子女/恋爱 children", "远行 journey", "宗教/学问 religion", "对手/暗敌 enemy", "死亡/遗产 death"]},
         ],
-        safe_defaults=[{"field": "questionType", "value": "custom", "meaning": "自定问类：按主问句判事项宫"}],
+        safe_defaults=[
+            {"field": "questionType", "value": "custom", "meaning": "自定问类：按主问句判事项宫"},
+            # 上游页面与 AI 挂载复算恒发这三项（GeomancyMain.js:1150-1158 / :808-817），换流派不改。
+            {"field": "quesitedHouse", "value": None, "meaning": "所问宫缺省 = 问类预设宫（custom/life 一宫、wealth 二宫、career 十宫…）"},
+            {"field": "readingScope", "value": "L3", "meaning": "读取范围 L3（不随流派回落；arabic_raml 内核默认 L2 也按 L3 发）"},
+            {"field": "zodiacSystem", "value": "classical", "meaning": "黄道体系 classical（不随流派回落；european_planetary 内核默认行星黄道也按 classical 发）"},
+        ],
         do_not_assume=["起卦时刻（须是真实起卦当下）", "所问内容"],
         output_contract=(
             "includeCatalog=true 附 [十六卦目录] 段（16 图形五行/主星/星座/性/象意总表，判读 grounding 用）。"

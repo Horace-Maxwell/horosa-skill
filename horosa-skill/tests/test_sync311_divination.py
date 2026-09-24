@@ -102,6 +102,13 @@ def _lines(text: str | None, pattern: str) -> list[str]:
     return [line for line in (text or "").splitlines() if re.search(pattern, line)]
 
 
+def _shensha_cells(text: str | None) -> list[str]:
+    """[断卦结构] 逐爻表（上游 liuyaoStructLines GFM 表，GuaZhanMain.js:168-181）的「神煞」列（末列，空 = —）。
+    wave 3 起 [断卦结构] 由 vendored 上游函数产出，旧行式「 神煞:…」不复存在 —— 断言改看表列，免得恒真。"""
+    rows = [line.strip("|").split("|") for line in _lines(text, r"^\| 第[1-6]爻 \|")]
+    return [cells[-1].strip() for cells in rows if len(cells) == 10]
+
+
 # ── F4 六爻：占时时间算法 / 日界 与 判读口径 liuyaoSettings ──────────────────────────────────────
 
 
@@ -134,7 +141,8 @@ def test_sixyao_liuyao_settings_reach_the_judging_engine(tmp_path) -> None:
     assert _lines(default, "^流派：") == ["流派：通用（卜筮正宗口径）"] and _lines(default, "^卦身：")
     assert _lines(text, "^流派：") == ["流派：增删卜易(野鹤)"]
     assert not _lines(text, "^卦身：")  # 增删卜易弃卦身
-    assert not _lines(text, "神煞:")  # 增删卜易几弃神煞（shensha.on=false）
+    assert any(cell != "—" for cell in _shensha_cells(default))  # 通用派逐爻带神煞（防下一条恒真）
+    assert _shensha_cells(text) == ["—"] * 6  # 增删卜易几弃神煞（shensha.on=false）
     assert _lines(text, "^占测：") == ["占测：求财/买卖/价格/雇员　用神：妻财(1爻)"]
     assert tuned.data["liuyao_settings"]["school"] == "zengshan" and tuned.warnings == []
 
@@ -147,11 +155,13 @@ def test_sixyao_flat_gear_keys_fold_and_bad_keys_are_reported(tmp_path) -> None:
     lines = [{"value": v, "change": i in (1, 5)} for i, v in enumerate([1, 1, 1, 1, 0, 0])]
     base = {"date": "2026-09-24", "time": "10:58:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "lines": lines}
     text = _run(service, "sixyao", {**base, "liuyaoSettings": {"shenshaOn": 0, "bianyaoScope": "blind"}}).data["snapshot_text"]
-    assert not _lines(text, "神煞:")
+    assert _shensha_cells(text) == ["—"] * 6
     assert _lines(text, "^盲派作用：") == ["盲派作用：第2爻→第1爻(妻财)克合、第2爻→第5爻(子孙)生、第6爻→第3爻(兄弟)生、第6爻→第5爻(子孙)克合"]
     env = _run(service, "sixyao", {**base, "liuyaoSettings": {"school": "nope", "gufa": 1, "bogus": True}})
     joined = " ".join(env.warnings)
-    assert "bogus" in joined and "school=nope" in joined and "gufa" in joined
+    assert "bogus" in joined and "school=nope" in joined
+    # wave 3：gufa 等六键只改 [断诀命中]/[占类断语]，两段现由 vendored liuyaoSnapshotEx 产出 → 不再回执为死键。
+    assert "gufa" not in joined
 
 
 def test_liuyao_gear_table_is_guidance_complete() -> None:
@@ -180,11 +190,13 @@ YZJ = {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13
 
 
 def test_yizhangjing_defaults_follow_desktop_factory_profile(tmp_path) -> None:
-    """KINASTRO_PAGE_SETTINGS 出厂：yizhangjingAnnual='xiaoxian'、yizhangjingShensha=false（KinAstroMain.js:1039-1056）。
-    负向对照：旧缺省 annualMethod 未设 → 小限与流年十二神并列 + [流年总论]；shenshaLayer 缺省 true → 出 [神煞合参]。"""
+    """KINASTRO_PAGE_SETTINGS 出厂：yizhangjingShensha=false（KinAstroMain.js:1039-1056）。
+    逐年法 wave 3 起改随上游 AI 挂载无头路径：未设 → 小限与流年十二神并列 + [流年总论]（证据链见
+    tools/yizhangjing.js 注与 test_sync311_divination_w3.py；桌面页出厂 'xiaoxian' 与无头不一致，按无头）。
+    负向对照：shenshaLayer 缺省 true → 出 [神煞合参]。"""
     text = _run(_service(tmp_path), "yizhangjing", YZJ).data["snapshot_text"]
     assert _lines(text, "^逐年法") == ["逐年法：小限·起日柱宫·随盘向　重犯口诀：常见组"]
-    assert not _lines(text, "^流年十二神（") and "[流年总论]" not in text
+    assert _lines(text, "^小限一宫一年") and _lines(text, "^流年十二神（") and "[流年总论]" in text
     assert "[神煞合参]" not in text
 
 
@@ -447,7 +459,7 @@ def test_guidance_safe_defaults_state_the_upstream_defaults() -> None:
     def defaults(tool: str) -> dict[str, Any]:
         return {d["field"]: d["value"] for d in TOOL_GUIDANCE[tool]["safe_defaults"]}
 
-    assert defaults("yizhangjing")["shenshaLayer"] is False and defaults("yizhangjing")["annualMethod"] == "xiaoxian"
+    assert defaults("yizhangjing")["shenshaLayer"] is False and defaults("yizhangjing")["annualMethod"] is None
     assert defaults("sixyao")["timeAlg"] == 0
     assert defaults("heluo")["quHuaGong"] == "tuWangKunGen" and defaults("heluo")["huangdiOffset"] == 2697
     assert defaults("xiaochengtu")["piKoujing"] == "zheng"

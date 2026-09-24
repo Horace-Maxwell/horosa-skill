@@ -140,30 +140,35 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 **只有测试、没有通用守卫的（照着做）**
 
-5. **移植口径**：两层两个缺省——奇门 Python 侧缺省发 `chaibu`、JS 本地层缺省 `zhirun`，盘按拆补算、标签写置闰（缺省必须一处
+5. **移植口径**：`/nongli/time` 的 `year` 是**正月初一**口径干支、`yearJieqi` 才是立春口径——六爻以时起卦旧移植取
+   `yearJieqi`，立春到正月初一之间年数就与上游 `buildTimeGua` 不同（连同月/日用了地支序而非农历月日数，三处合起来卦都不同）；
+   两层两个缺省——奇门 Python 侧缺省发 `chaibu`、JS 本地层缺省 `zhirun`，盘按拆补算、标签写置闰（缺省必须一处
    定义、两层同读）；上游 builder 读 `params.date` 是 `YYYY/MM/DD`，skill 归一成 `YYYY-MM-DD` → 七政 [大限] 出生年 0；moment
    `add(x,'days')` 把小数天四舍五入到整天，照搬成 `timedelta(days=float)` 让波斯向运日期差一天；上游 AstroTxtMsg 是单字名（日/月），
    skill 的 ASTRO_TEXT_MAP 是全名（太阳/月亮）——v56 宫神星表就这么印错而测试也断言错值；上游页面的**出厂缺省**≠引擎缺省
    （六爻贵人 页面 2、引擎 0），只送调用方选项会落到引擎缺省；种子与缺省照上游 headless 路径（`build*SnapshotForFields` /
    `aiAnalysisContext`），不照页面 state。
-6. **测试替身会说谎**：`/liureng/runyear` 的 fake 回的是真端点从不发的包装形态，离线全绿而 live 下 liureng_runyear 四课/
+6. **工具自身的盲区**：`_drop_orphaned_imports` 把注释里的提及也算「在用」（`LiuYaoReference` 出现在注释里 → 整个
+   `LiuYaoBoard` import 被留下、只能再手写 stub）；边界契约生成器按局部变量名跨函数配对（`const base = {…}` 被记到别的
+   函数调用名下 → 假死键）。已知局限，遇到就改名/显式 stub，并在报告里点名。
+7. **测试替身会说谎**：`/liureng/runyear` 的 fake 回的是真端点从不发的包装形态，离线全绿而 live 下 liureng_runyear 四课/
    三传/行年全空（三式实现者：改为按「端点 + 决定结果的请求字段」键控的**录制回放**夹具，回放与 live 逐字节一致才准裁剪——
    请求形状一错即 miss，天然负向对照）；离线 fake 收到的 `/chart` 端点是 `"/"`（按 `/chart` 做键会静默落到罐装盘）；FakeClient 回显斜杠日期；
    对所有端点同答一份的桩藏住了玄史 `id`/`slug` 映射错（改为逐端点校验真实下发参数）；导出解析器会去重段名，同一张卡出两次
    对 missing/unknown 检查不可见；择日快照段间无空行，按 `\n\n` 切段会漏段；上游自己的 jest 骰子盘夹具把 `aspects` 嵌错了层，
    真后端下那几段不可达而上游测试照绿（上游 bug，已如实上报，不写回上游）。
-7. **运行期语义**：合法的 JSON `null`（「查无」）被 `_call_remote` 当失败无限重试，且每轮都真打后端；输入归一化会把嵌套
+8. **运行期语义**：合法的 JSON `null`（「查无」）被 `_call_remote` 当失败无限重试，且每轮都真打后端；输入归一化会把嵌套
    `options.gender` 的 male/female 递归改成 1/0（五兆恰好只收字符串）；`/jieqi/year` Java 与 Python 两端都有、数据不同
    （Java 多 bazi.fourColumns 与 chart.nongli），`test_endpoint_registry.py` 那句「chart-only」注释已改正。
-8. **上游代码自己也会崩**：逐字 vendor 的 `jyotishSnapshot` 有暂时性死区（`scS`）与键名错（`index`/`month`），从没在真数据上跑过；
+9. **上游代码自己也会崩**：逐字 vendor 的 `jyotishSnapshot` 有暂时性死区（`scS`）与键名错（`index`/`month`），从没在真数据上跑过；
    世俗盘卡 builder 吞掉每张卡的异常，闭包坏了只表现为「卡不见了」——只有值级金标抓得到。
-9. **动态 `import('./x')` 没补 `.js`，懒加载路径静默返回空。**
+10. **动态 `import('./x')` 没补 `.js`，懒加载路径静默返回空。**
    - 症状：六爻实现者要接 [断诀命中]/[占类断语] 时发现 vendored `gua/data/liuyaoDoctrineCache.js` 的 `loadDoctrine()` 恒返回 null。
    - 根因：re-vendor 只给静态 `from './x'` 补扩展名；动态 `import('./tianjiDoctrine')` 在原生 Node ESM 下 ERR_MODULE_NOT_FOUND，
      被模块自己的 catch 吞成「断语库缺失」。模块照常加载，loadcheck 恒绿。
    - 守卫：transform 补动态相对 import 的 `.js`（`_DYNAMIC_RELATIVE_IMPORT`）+ `test_dynamic_relative_imports_get_the_js_suffix_too`；
      重渲染后同一调用返回 40 键断语库（修前 null）。
-10. **worktree 隔离的 agent 建在「当前目录所在的仓」——一次落进了只读上游。**
+11. **worktree 隔离的 agent 建在「当前目录所在的仓」——一次落进了只读上游。**
    - 症状：派发三式合一 agent 时 shell 恰好 `cd` 在 `Horosa-Public/…/src`（刚查完上游源码），worktree 被建成
      `Horosa-Public/.claude/worktrees/agent-*`（上游仓多出一个 worktree + 一个分支）。agent 按规则先跑 `git log`/`worktree list`
      察觉不对，只做了只读命令；约一分钟内被叫停。
@@ -171,14 +176,14 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
      手删它留下的空 `.claude/worktrees/` 目录。上游工作区里一处 `SELFCHECK_LOG.md` 修改早于本会话（9-22），未碰。
    - 守卫：派发前先 `cd` 回本仓并 `git rev-parse --show-toplevel` 核对；agent 规则第一条改为 LOCATION CHECK（toplevel 不在本仓
      `.claude/worktrees/` 下即停手、零写入、一行报告）。这是编排侧的流程守卫，无法在仓内代码里机器化。
-11. **类型收窄会吞掉上游缺省；未声明的键会被 MCP 扁平面丢掉。**
+12. **类型收窄会吞掉上游缺省；未声明的键会被 MCP 扁平面丢掉。**
    - 七政 `doubingSu28` 声明成 bool：`True` 被后端读成宿度制 1（斗柄定房法），上游缺省是 2（回归今宿），2–8 七档根本传不进来；
      宿占 / 节气年盘同病。上游是枚举就声明成枚举（int 0–8，缺省照上游），别用 bool「近似」。
    - 汉堡盘 `school/orb/strictFactors/frames/…` 未在 `GermanyInput` 声明：CLI 走整包能用，MCP 扁平签名把顶层键静默丢掉
      （A6 同类）。长尾旋钮用 `ADVERTISE_HIDDEN` / `x-horosa-hidden` 声明而不广告：校验照收、tools/list 零字节。
    - 日界开关的 schema 缺省 `False` + `model_dump` = 每次都发 0，Java 把 JSON `false` 读成 0，盖掉上游缺省 1；
      缺省改 `None`（不发即后端缺省），本地引擎路径显式传 1/1（lunar 本地引擎把「缺键」当「不换日」而非上游缺省）。
-12. **两路实现各发明一种「声明而不广告」，合并时一行赋值把另一种覆盖掉。**
+13. **两路实现各发明一种「声明而不广告」，合并时一行赋值把另一种覆盖掉。**
    - 症状：命理 chunk 合并后 tools/list 一次 +8 KB（253 → 262 KB，离 256 KiB 硬顶 18 B）；acg/india/guolao/mundane/germany…
      的长尾旋钮全部回到广告层。
    - 根因：西占用模型级 `ADVERTISE_HIDDEN`，命理用字段级 `x-horosa-hidden`；git 自动合并把两行 `unadvertised = …` 都留下，

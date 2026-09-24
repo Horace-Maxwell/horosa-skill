@@ -1070,6 +1070,108 @@
       "extracts": [],
       "upstream_sha256": "f183788c69f2a41b7275cc81e4de288804e0b07b33adc3d71de9a63db4373850"
     },
+    "guazhan/GuaZhanMain.js": {
+      "upstream": "components/guazhan/GuaZhanMain.js",
+      "mode": "verbatim",
+      "why": "上游把六爻快照的纯逻辑（buildTimeGua 以时起卦 / liuyaoStructLines [断卦结构] / buildGuaSnapshotText / GUAZHAN_PAGE_SETTINGS）与 React 页面放在同一个 2191 行文件里：1–400 行纯逻辑，401 起 `class GuaZhanMain extends Component`。AI 挂载无头路径（aiAnalysisContext.regenerateSixyaoSnapshot :1739-1760）正是 fetchPreciseNongli → buildTimeGua → buildGuaSnapshotText。skill 此前在 service.py 手写以时起卦（立春年支 + 月/日取地支序 + 钟表时辰；上游是 nongli.year 年支——后端该键为农历年干支 —— + monthInt/dayInt 数字 + 时柱支序，同一时刻起出不同的卦）并手抄 [断卦结构]（旧行式、缺次用神/取用说明/岁破日破）。整头 vendored、React 尾部由 truncate_before 机械剥离，tools/liuyao.js 直接调用。",
+      "deviations": [
+        {
+          "kind": "truncate_before",
+          "anchor": "^class GuaZhanMain extends Component",
+          "why": "剥掉 React 组件尾部（401–2191）。锚点是正则而非行号：上游一编辑行号就漂，锚点找不到会报错而不是悄悄剪错。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../xq-ui.js",
+          "stub": "",
+          "why": "UI 组件库；React 元素，只服务被 truncate_before 剥掉的组件尾部。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../common/QuickDockBar.js",
+          "stub": "",
+          "why": "React 元素，只服务被 truncate_before 剥掉的组件尾部。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "import {randomStr, randomNum, littleEndian,} from '../../utils/helper.js';",
+          "to": "import { littleEndian } from '../gua/littleEndian.js';",
+          "why": "纯逻辑段只用 helper 里的 littleEndian（guaFromYaoValues / buildTimeGua）；randomStr/randomNum 只在 React 尾部。三名同一行，孤儿 import 清理按「任一名在用即整行保留」不会拆行，import_redirect 到窄副本又缺另两名 → 加载即 SyntaxError，故声明式改写成只取 littleEndian 的窄副本 gua/littleEndian.js。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./GuaZhanInput.js",
+          "stub": "",
+          "why": "React 元素，只服务被 truncate_before 剥掉的组件尾部。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./GuaZhanChart.js",
+          "stub": "",
+          "why": "React 元素，只服务被 truncate_before 剥掉的组件尾部。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./GuaDesc.js",
+          "stub": "",
+          "why": "React 元素，只服务被 truncate_before 剥掉的组件尾部。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./LiuYaoDuanJueView.js",
+          "stub": "",
+          "why": "React 元素，只服务被 truncate_before 剥掉的组件尾部。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./LiuYaoZhanLeiView.js",
+          "stub": "",
+          "why": "React 元素，只服务被 truncate_before 剥掉的组件尾部。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./LiuYaoCastPad.js",
+          "stub": "",
+          "why": "React 元素，只服务被 truncate_before 剥掉的组件尾部。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./LiuYaoBoard.js",
+          "stub": "",
+          "why": "右栏卡片组件（JSX）。孤儿清理没删它，是因为纯逻辑段的一条注释提到了「LiuYaoReference」（按全文匹配）；代码里一次没用，stub 审计按去注释正文判定、不报。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../comp/DateTime.js",
+          "stub": "",
+          "why": "默认导出的日期组件（带网络 request 依赖，不 vendor）；纯逻辑段一次都没用到。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../xq-icons.js",
+          "stub": "",
+          "why": "图标库；React 元素，只服务被 truncate_before 剥掉的组件尾部。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "const {Option} = Select;\n",
+          "to": "",
+          "why": "模块级 UI 解构，只服务被剥离的 React 尾部（Option 在纯逻辑段一次都没用到）。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "const { TabPane } = Tabs;\n",
+          "to": "",
+          "why": "同上（TabPane 在纯逻辑段一次都没用到）。"
+        }
+      ]
+    },
+    "guazhan/liuyaoSnapshotEx.js": {
+      "upstream": "components/guazhan/liuyaoSnapshotEx.js",
+      "mode": "verbatim",
+      "why": "[断诀命中] / [占类断语] 两段的上游单源（buildSnapshotAnalysis + duanJueLines + zhanleiLines，GuaZhanMain.buildGuaSnapshotText:381-388 调用）。skill 此前从不产这两段，tools/liuyao.js 只在 [断卦结构] 里手写了一小截断诀行（段名/行式/取项都与上游不同）；六个只影响这两段的判读键（shishen/tianshiSchool/yuqi/gufa/yueLiushen/shenshaExOn）因此恒为死开关。只 import 已 vendored 的 gua/ 引擎与断语库访问层。",
+      "deviations": []
+    },
     "guice/core/guiceConst.js": {
       "upstream": "components/guice/core/guiceConst.js",
       "mode": "verbatim",

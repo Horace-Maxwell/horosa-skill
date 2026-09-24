@@ -983,12 +983,14 @@ def test_sixyao_carries_liuyao_struct(tmp_path) -> None:
     assert result.ok is True, result.error
     snap = result.data["snapshot_text"]
     assert "[断卦结构]" in snap
-    assert "卦序：" in snap and "逐爻(初→上)：" in snap
+    # wave 3：[断卦结构] 由 vendored 上游 liuyaoStructLines 产出 —— 逐爻是 GFM 表（GuaZhanMain.js:168-181），
+    # 不再是旧手抄行式「逐爻(初→上)：…/第N爻：…(世)」。
+    assert "卦序：" in snap and "| 爻 | 六神 | 地支 | 五行 | 六亲 | 世应 | 旺衰 | 状态 | 伏神 | 神煞 |" in snap
     import re as _re
 
     # 逐爻含纳甲六亲(子孙/妻财/官鬼/父母/兄弟 之一)，且标出世/应
     assert _re.search(r"第[1-6]爻：.*(子孙|妻财|官鬼|父母|兄弟)", snap)
-    assert "(世)" in snap and "(应)" in snap
+    assert _re.search(r"^\| 第[1-6]爻 \|.*\| 世 \|", snap, _re.M) and _re.search(r"^\| 第[1-6]爻 \|.*\| 应 \|", snap, _re.M)
     _assert_clean_export(result)
 
 

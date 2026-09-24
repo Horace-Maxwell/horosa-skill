@@ -6,30 +6,11 @@ import { calcTieban, loadTiebanVerses } from '../vendor/zhengchuan/zhengchuanTie
 import { calcShaozi, loadShaoziVerses } from '../vendor/zhengchuan/zhengchuanShaoziLocal.js';
 import { calcLiuqin } from '../vendor/zhengchuan/zhengchuanLiuqinLocal.js';
 import { calcXinyi } from '../vendor/zhengchuan/zhengchuanXinyiLocal.js';
-import { dadingDeathYear, dadingDeathMonth } from '../vendor/zhengchuan/zhengchuanDadingLocal.js';
+// deriveDadingYearPillars = 上游 utils/zhengchuanDadingLocal.js（[挂载自检 F-47] 页面与 AI 无头同源），vendored 直调；
+// 此前本文件留着一份自 ZhengChuanMain 抽出的手抄件（第二份真值源）。
+import { dadingDeathYear, dadingDeathMonth, deriveDadingYearPillars } from '../vendor/zhengchuan/zhengchuanDadingLocal.js';
 import { buildZhengChuanSnapshotText } from '../vendor/zhengchuan/zhengchuanSnapshot.js';
 import { buildLocalBaziResult } from '../vendor/bazi/baziLunarLocal.js';
-
-// 自 星阙 ZhengChuanMain.deriveDadingYearPillars 逐字提取（纯函数，仅读 bazi 推运表；闭包提取进 tool）：
-// 取所推流年在 smallDirection（虚岁/小运/岁君）+ mainDirection（大运·按年区间）的派生值；表外/未起运返空。
-function deriveDadingYearPillars(bazi, yearInput) {
-  const Y = parseInt(yearInput, 10);
-  if (!bazi || !Number.isFinite(Y) || Y <= 0) return {};
-  const sd = Array.isArray(bazi.smallDirection) ? bazi.smallDirection : [];
-  const md = Array.isArray(bazi.mainDirection) ? bazi.mainDirection : [];
-  const s = sd.find((x) => Number(x.year) === Y);
-  if (!s) return {};
-  const d = md.filter((x) => Number.isFinite(Number(x.startYear)) && Number(x.startYear) <= Y).pop();
-  const dayun = (d && `${d.ganzi || ''}`.trim()) || '';
-  return {
-    year: Y,
-    age: Number(s.age) || undefined,
-    xiaoyun: `${s.ganzi || ''}`.trim() || undefined,
-    suijun: `${(s.yearGanzi && s.yearGanzi.ganzi) || ''}`.trim() || undefined,
-    dayun: dayun || undefined,
-    beforeQiYun: !dayun,
-  };
-}
 
 function insufficient(normalized, reason, message) {
   return {
@@ -91,7 +72,12 @@ export async function runZhengChuan(payload) {
       // 而本文件上游收到的可能是 '女' —— Number('女') = NaN ≠ 0 → 判男 → 大运顺行方向错 →
       // deriveDadingYearPillars 取到错的 小运/岁君/大运 → 大定死限年错，且照常自信输出。
       // 本文件顶部已有 isFemale（:63）做同样的归一（genderBit 是 liuqin 分支的块内变量，此处不可见）。
-      const b = buildLocalBaziResult({ date: input.date, time: input.time, zone: input.zone, lon: input.lon, gender: isFemale ? 0 : 1, timeAlg: input.timeAlg == null ? 1 : input.timeAlg, after23NewDay: input.after23NewDay, lateZiHourUseNextDay: input.lateZiHourUseNextDay });
+      // 🔴 sync311 wave 3：推运表的时间算法必须与四柱同口径。上游页面与无头挂载都是**一次**
+      // buildLocalBaziResult 同出四柱 + 农历月日 + 推运表（ZhengChuanMain.getModel:145-189 /
+      // aiAnalysisContext.buildChartShusuanBazi:1948-1979），不可能两套 timeAlg；无头缺省 timeAlg =
+      // record.timeAlg ?? 0（buildFieldObject:603，真太阳时）。skill 的四柱来自 /nongli/time（Python 缺省
+      // 同为 0），此前这里缺省 1（钟表时）→ 真太阳时跨时辰的生辰，小运起点（时柱）与四柱时柱不是同一柱。
+      const b = buildLocalBaziResult({ date: input.date, time: input.time, zone: input.zone, lon: input.lon, gender: isFemale ? 0 : 1, timeAlg: input.timeAlg == null ? 0 : input.timeAlg, after23NewDay: input.after23NewDay, lateZiHourUseNextDay: input.lateZiHourUseNextDay });
       bazi = (b && b.bazi) || b;
     } catch (e) { bazi = null; }  // 无推运表 → deriveDadingYearPillars 回落月柱（古法「未行大运」）
     const derived = deriveDadingYearPillars(bazi, input.dadingYear);
