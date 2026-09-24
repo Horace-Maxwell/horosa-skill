@@ -8,7 +8,13 @@
  * 逐字同源。闭包极小：除下方 `gfmTable` 外零外部依赖（`PCN` 是块内局部常量），无需任何 shim。
  *
  * 同步须知：上游改这两段时，重跑 `scripts/verify_upstream_sync.py` 会按 basename 逐文件比对报红。
+ *
+ * 另自同一文件逐字抽出（v3.11 西占补段）：[大运Dasha] 的体系切换 builder（IndiaChart.js:298-494：
+ * DASHA_SYSTEM_SNAPSHOT_LABEL / snapshotBirthDate / buildExtendedDashaSnapshotLines / buildAntardashaTableLines /
+ * buildDashaSnapshotLines）与 [起盘信息] 流派/分盘头行（:149-170 resolveIndiaFractal/resolveIndiaLabel +
+ * buildIndiaSnapshotText:1154-1177 的内联行，收成 buildIndiaSchoolHeaderLines）。常量走 curated ./indiaConst.js。
  */
+import * as AstroConst from './indiaConst.js';
 
 // [v2 表化] GFM 表助手：表头词组 + 行单元格数组 → GFM 表行(表头/分隔/数据)；单元格值逐字同源仅以 | 分隔。
 // 置于函数前(模块层)：不占函数体内字符偏移，护段头 22k 源切片哨兵；散文行由调用方 spread 混排。
@@ -24,6 +30,13 @@ export function buildJyotishSnapshotLines(chartObj){
 	const fx = (x, d)=>(typeof x === 'number' && Number.isFinite(x)) ? x.toFixed(d) : (x !== undefined && x !== null ? `${x}` : '—');
 	const lordOf = (l)=>(l && (l.label || l.key)) || '—';
 	const out = {};
+	// 🔴 skill 偏离（v3.11.x 同步发现的**上游 bug**，上游 IndiaChart.js HEAD 9b74714b 仍在）：SIGN_CN_S / scS 两行在上游
+	// 定义于下方「印占 P0 接 UI 同步」块（IndiaChart.js:932-933），而 [Q-127/T-35] 三旗盘逐月净分块（:721-732）在它之前
+	// 就调用 scS → const 暂时性死区 ReferenceError：后端一带 jyotish.tripataki（opt-in indiaTripataki）整个
+	// buildJyotishSnapshotLines 抛出，上游 buildIndiaSnapshotText 无 try → 整份印度快照失败；skill 侧则全部 jyotish 段缺席。
+	// 两行原样上提（值逐字不变），其余逐字不动。重新从上游抽取本文件时必须保留此上提，直到上游修掉。
+	const SIGN_CN_S = { Aries: '白羊', Taurus: '金牛', Gemini: '双子', Cancer: '巨蟹', Leo: '狮子', Virgo: '处女', Libra: '天秤', Scorpio: '天蝎', Sagittarius: '射手', Capricorn: '摩羯', Aquarius: '水瓶', Pisces: '双鱼' };
+	const scS = (s)=>SIGN_CN_S[s] || s || '—';
 
 	const p = j.panchanga;
 	if(p){
@@ -51,9 +64,15 @@ export function buildJyotishSnapshotLines(chartObj){
 
 	const ck = j.jaimini && j.jaimini.charaKarakas;
 	if(Array.isArray(ck) && ck.length){
-		out['卡拉卡（8 Chara Karakas）'] = gfmTable(['卡拉卡', '星曜', '本命落座', '用度'], ck.map((k)=>[
+		// [Q-135/T-43 (b)] 段名是 aiExport 登记键(不改),但 7 卡拉卡档下仍称「8」并列 7 行会误导 →
+		// 段内首行写明所用方案(引擎回传 karakaScheme:'7' 古典不含 Rāhu / '8' 含 Rāhu)。
+		const _scheme = String((j.jaimini && j.jaimini.karakaScheme) || (ck.length === 7 ? '7' : '8'));
+		out['卡拉卡（8 Chara Karakas）'] = [
+			`方案：${_scheme === '7' ? '7 卡拉卡（古典，不含 Rāhu）' : '8 卡拉卡（含 Rāhu）'}，共 ${ck.length} 行`,
+			...gfmTable(['卡拉卡', '星曜', '本命落座', '用度'], ck.map((k)=>[
 			`${k.karakaLabel || ''} ${k.karaka || ''}`, `${k.label || k.planet}`, `${k.signLabel || k.sign} ${fx(k.signlon, 2)}°`, `用度 ${fx(k.karakaDegree, 2)}°`,
-		]));
+		])),
+		];
 	}
 
 	const nd = j.nodeRasiDrishti;
@@ -189,10 +208,15 @@ export function buildJyotishSnapshotLines(chartObj){
 
 	// P2 Nāḍī · Bhrigu Bindu（Rahu/Moon 短弧中点）。
 	const nadi = j.nadi;
+	// [Q-393① 裁决 2026-09-18] 所绘为分盘时注明口径:Nāḍī 一组恒取 D1(引擎 Q-393② 已恒取 d1_chart),
+	// 否则读者会以为它跟着所选分盘走。D1(缺省)不出此行 → 缺省快照字节不变。
+	const nadiVargaNote = Number((j.engine || {}).chartnum || 1) !== 1
+		? `Nāḍī 一组(BB / D150 / 同座合 / 木星推进)恒按 D1 本命盘绝对黄经计算,不随所绘分盘 D${Number((j.engine || {}).chartnum)} 漂移。`
+		: '';
 	if(nadi && nadi.available && nadi.bhriguBindu){
 		const bb = nadi.bhriguBindu;
 		const nk = bb.nakshatra || {};
-		out['Nāḍī · Bhrigu Bindu 福点'] = [`${bb.signLabel || bb.sign}${nk.name ? '·' + nk.name + (nk.pada ? 'P' + nk.pada : '') : ''}（黄经 ${(+bb.lon).toFixed(2)}°）`];
+		out['Nāḍī · Bhrigu Bindu 福点'] = [`${bb.signLabel || bb.sign}${nk.name ? '·' + nk.name + (nk.pada ? 'P' + nk.pada : '') : ''}（黄经 ${(+bb.lon).toFixed(2)}°）`].concat(nadiVargaNote ? [nadiVargaNote] : []);
 	}
 	if(nadi && nadi.available && nadi.d150 && nadi.d150.length){
 		const PCN = { Sun: '日', Moon: '月', Mars: '火', Mercury: '水', Jupiter: '木', Venus: '金', Saturn: '土', Rahu: '罗', Ketu: '计', 'North Node': '罗', 'South Node': '计' };
@@ -222,6 +246,21 @@ export function buildJyotishSnapshotLines(chartObj){
 		const PCN2 = { Sun: '日', Moon: '月', Mars: '火', Mercury: '水', Jupiter: '木', Venus: '金', Saturn: '土', 'North Node': '罗', 'South Node': '计' };
 		out['Tripataki 宿距三旗'] = gfmTable(['曜', '宿距', '旗', 'Tārā', '断'],
 			triNak.rows.map((r)=>[PCN2[r.planet] || r.planet, `${r.distance}`, `${r.flag}`, r.taraLabel, r.verdict]));
+	}
+	// [Q-127/T-35] 三旗盘(opt-in 齿轮 tripataki):后端 jyotish.tripataki 此前快照零读者 → 逐月净分(有效吉−凶)按月心/土心各一行;仅开启才产段(缺省字节不变)。
+	const triY = j.tripataki;
+	if(triY && triY.available && triY.byCenter){
+		const triRows = [];
+		[['moon', '月心'], ['saturn', '土心']].forEach(([ck, cl])=>{
+			const c = triY.byCenter[ck];
+			if(c && c.available && Array.isArray(c.months) && c.months.length){
+				// 🔴 skill 偏离（上游 bug 之二）：后端 tripataki.month_rows 的月序键是 `month`（astrostudy/india/tripataki.py:51），
+				// 上游此处读 `m.index`（只在后端**入参** months 上存在）→ 每格都是「undefined:净分」。优先读 index（上游修键后零变化）、
+				// 缺则读 month。
+				triRows.push([cl, c.centerSign ? scS(c.centerSign) : '—', c.months.map((m)=>`${m.index !== undefined ? m.index : m.month}:${m.score ? m.score.net : '-'}`).join(' ')]);
+			}
+		});
+		if(triRows.length){ out['Tripataki 三旗盘逐月净分'] = gfmTable(['中心', '座', '逐月净分(月序:有效吉−凶)'], triRows); }
 	}
 
 	// P2 Āyurdāya 寿命基础（Piṇḍāyu 度式贡献 + Nisargāyu;未施 haraṇa）。
@@ -422,8 +461,7 @@ export function buildJyotishSnapshotLines(chartObj){
 	}
 
 	// 印占 P0 接 UI 同步进 AI 挂载:Argala / 座运 Rasi Dashas / 年盘强度·年内大运 / Gochara 从命。
-	const SIGN_CN_S = { Aries: '白羊', Taurus: '金牛', Gemini: '双子', Cancer: '巨蟹', Leo: '狮子', Virgo: '处女', Libra: '天秤', Scorpio: '天蝎', Sagittarius: '射手', Capricorn: '摩羯', Aquarius: '水瓶', Pisces: '双鱼' };
-	const scS = (s)=>SIGN_CN_S[s] || s || '—';
+	// （SIGN_CN_S / scS 两行已上提到函数开头 —— 见该处 🔴 skill 偏离注释。）
 	const arg = j.arudha && j.arudha.argala;
 	if(arg && typeof arg === 'object'){
 		const argRows = Object.keys(arg).sort((a, b)=>(Number(a) - Number(b))).map((h)=>{
@@ -438,7 +476,10 @@ export function buildJyotishSnapshotLines(chartObj){
 		[['narayana', 'Narayana'], ['lagnaKendradi', 'Lagna-Kendradi'], ['sudasa', 'Sudasa'], ['drigdasa', 'Drig'], ['shoola', 'Shoola'], ['niryanaShoola', 'Niryana-Shoola'], ['kalachakra', 'Kalachakra'], ['taraLagna', 'Tara-Lagna'], ['sthira', 'Sthira-固定'], ['yogardha', 'Yogardha-平均'], ['manduka', 'Manduka-蛙跳']].forEach((pair)=>{
 			const d = rdj[pair[0]];
 			if(d && d.available !== false && Array.isArray(d.mahadashas) && d.mahadashas.length){
-				out[`座运·${pair[1]}`] = gfmTable(['座', '年数', '神'], d.mahadashas.slice(0, 12).map((m)=>[scS(m.rasi), `${fx(m.years, 1)}年`, `${m.deity || ''}`]));
+				const tbl = gfmTable(['座', '年数', '神'], d.mahadashas.slice(0, 12).map((m)=>[scS(m.rasi), `${fx(m.years, 1)}年`, `${m.deity || ''}`]));
+				// [Q-125/T-33] Kālachakra「适用条件」开关此前只挂 applicability 对象、页面/快照零读者 → 写明主用/备览
+				const ap = d.applicability;
+				out[`座运·${pair[1]}`] = ap ? [tbl, `适用性(${ap.mode === 'navamsa_stronger' ? '月亮 navamsa 座强于 rasi 座才主用' : ap.mode || '通用'})：${ap.applicable === true ? '主用' : (ap.applicable === false ? '备览(条件不成立)' : '判据不足')}`] : tbl;
 			}
 		});
 	}
@@ -572,7 +613,7 @@ export function buildJyotishSnapshotLines(chartObj){
 		const al = [];
 		const M_CN = { pindayu: 'Pindayu', nisargayu: 'Nisargayu', amsayu: 'Amsayu' };
 		const sel = af.methodSelection || {};
-		al.push(`选定方法：${M_CN[sel.selected] || sel.selected || '—'}${sel.override === 'auto' ? '（自动:最强定法）' : '（手动指定）'}`);
+		al.push(`选定方法：${M_CN[sel.selected] || sel.selected || '—'}${sel.override === 'auto' ? '（自动:最强定法;上升以其主代比,平局取上升）' : '（手动指定）'}`);   // [Q-393①/T-375] 注明代比与平局规则
 		if(af.selectedFinal && af.selectedFinal.solarYears != null){
 			al.push(`并入减算总值：${af.selectedFinal.solarYears} 太阳年（${af.selectedFinal.savanaYears} Savana）`);
 		}
@@ -597,3 +638,277 @@ export function buildJyotishSnapshotLines(chartObj){
 
 	return out;
 }
+
+// ── [大运Dasha] 体系切换：IndiaChart.js:298-494 逐字 ──
+// Vimshottari 大运（120 年周期）：后端 jyotish.dasha.vimshottari 已算好，挂载快照一并输出。
+// 字段形态与命盘 Dasha 面板(buildVimshottariDasha)一致;无数据则返回空(快照跳过该段)。
+const DASHA_SYSTEM_SNAPSHOT_LABEL = {
+	vimshottari: 'Vimshottari（120 年周期）',
+	yogini: 'Yogini（36 年 · 8 女神）',
+	ashtottari: 'Ashtottari（108 年 · Ardradi）',
+	tribhagi: 'Tribhāgī（Vimśottarī÷3 · 3 遍×40=120 年）',
+	shodashottari: 'Shodashottari（116 年 · 条件）',
+	dvadashottari: 'Dvadashottari（112 年 · 条件）',
+	panchottari: 'Panchottari（105 年 · 条件）',
+	shatabdika: 'Shatabdika（100 年 · 条件）',
+	chaturashitiSama: 'Chaturashiti-sama（84 年 · 条件）',
+	dwisaptatiSama: 'Dwisaptati-sama（72 年 · 条件）',
+	shashtihayani: 'Shashtihayani（60 年 · 条件）',
+	shattrimshaSama: 'Shattrimsha-sama（36 年 · 条件）',
+	chara: 'Chara 耆那星座大运（Jaimini · 按座推）',
+	taraDasha: 'Tāra 大运（kendra 强度序 · Vimshottari 年表）',
+	akkg: 'AKKG（Karaka Kendradi Graha · AK 播种）',
+};
+
+// 出生时刻(本地钟表时)轻量解析:仅供扩展大运快照推日期;BC(ad=0)或缺字段 → null(段退化为无日期序列)。
+function snapshotBirthDate(fields){
+	if(!fields || !fields.date || !fields.time || !fields.date.value || !fields.time.value){ return null; }
+	if(fields.ad && fields.ad.value !== undefined && Number(fields.ad.value) === 0){ return null; }
+	const d = fields.date.value, t = fields.time.value;
+	if(!d.format || !t.format){ return null; }
+	const dt = new Date(`${d.format('YYYY-MM-DD')}T${t.format('HH:mm:ss')}`);
+	return Number.isFinite(dt.getTime()) ? dt : null;
+}
+
+// Chara/8 条件宿系大运的快照段:后端只给年数序列(extendedDashas),日期与右栏组树同口径
+// (条件系 start = birth − firstElapsedYears;chara 自出生起逐段累加;年长同 vimshottari.yearLengthDays)。
+function buildExtendedDashaSnapshotLines(chartObj, sys, fields){
+	const j = chartObj && chartObj.jyotish;
+	const ed = j && j.extendedDashas;
+	if(!ed){ return []; }
+	const yearDays = (j.dasha && j.dasha.vimshottari && Number(j.dasha.vimshottari.yearLengthDays)) || 365.25;
+	const birth = snapshotBirthDate(fields);
+	const dayMs = 86400000;
+	// 本地切日(与解析同时区自洽,亦与右栏 moment 组树同口径);toISOString 的 UTC 切日会偏一天。
+	const fmt = (ms)=>{
+		const d = new Date(ms);
+		const p = (x)=>String(x).padStart(2, '0');
+		return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+	};
+	const nowMs = Date.now();
+	const out = [];
+	const pushSeq = (rows)=>{
+		out.push('大运序列：');
+		out.push('| 主 | 年数 | 起 | 讫 |');
+		out.push('| --- | --- | --- | --- |');
+		rows.forEach((r)=>out.push(`| ${r.name}${r.active ? '（当前）' : ''} | ${r.years} | ${r.start} | ${r.end} |`));
+	};
+	if(sys === 'chara'){
+		const c = ed.chara;
+		if(!c || !Array.isArray(c.mahadashas) || !c.mahadashas.length){ return []; }
+		out.push(`系统：${DASHA_SYSTEM_SNAPSHOT_LABEL.chara}`);
+		out.push(`起座：${c.seedLabel || c.seed || '—'}（${c.direction === 'reverse' ? '逆推' : '顺推'}）`);
+		let cur = birth ? birth.getTime() : null;
+		pushSeq(c.mahadashas.map((m)=>{
+			const years = m.years || 0;
+			let startS = '—', endS = '—', active = false;
+			if(cur !== null){
+				const end = cur + years * yearDays * dayMs;
+				active = nowMs >= cur && nowMs < end;
+				startS = fmt(cur); endS = fmt(end);
+				cur = end;
+			}
+			return { name: m.rasiLabel || m.rasi, years: `${years}`, start: startS, end: endS, active };
+		}));
+		return out;
+	}
+	const c = ed.conditional && ed.conditional[sys];
+	if(!c || !Array.isArray(c.mahadashas) || !c.mahadashas.length){ return []; }
+	out.push(`系统：${DASHA_SYSTEM_SNAPSHOT_LABEL[sys] || c.label || sys}`);
+	const nameOfLord = (lord)=>(lord && (lord.label || lord.key)) || '—';
+	out.push(`首运：${nameOfLord(c.firstLord)}（已历 ${(+c.firstElapsedYears || 0).toFixed(1)} 年、余 ${(+c.firstBalanceYears || 0).toFixed(1)} 年）`);
+	let cur = birth ? (birth.getTime() - (+c.firstElapsedYears || 0) * yearDays * dayMs) : null;
+	pushSeq(c.mahadashas.map((m, i)=>{
+		// 起点是 cycle_start(出生−已历),故每段(含首段)一律满期年;首段取余额会令整轴前移。
+		const years = (m.fullYears != null ? m.fullYears : m.years) || 0;
+		let startS = '—', endS = '—', active = false;
+		if(cur !== null){
+			const end = cur + years * yearDays * dayMs;
+			active = nowMs >= cur && nowMs < end;
+			startS = fmt(cur); endS = fmt(end);
+			cur = end;
+		}
+		const yearsS = (i === 0 && m.balance) ? `${years}（含出生前已历 ${(+c.firstElapsedYears || 0).toFixed(1)} 年）` : `${years}`;
+		return { name: nameOfLord(m.lord), years: yearsS, start: startS, end: endS, active };
+	}));
+	return out;
+}
+
+// [#80] 小运(Antardasha)全展:此前只在「当前大运」里挑出当下这一支,其余八个大运的小运
+// 后端本就随每个 mahadasha 一并返回(IndiaChartMain 逐条渲染在用),快照却整片不出 ——
+// AI 因此答「没有完整的 Dasha 表」。9×9=81 行 ≈4 千字,在挂载预算内;超上限则截断并明说截了。
+export const DASHA_ANTAR_ROW_MAX = 120;
+export function buildAntardashaTableLines(mahadashas, helpers){
+	const list = Array.isArray(mahadashas) ? mahadashas : [];
+	const { nameOf, fmtDate, n1 } = helpers || {};
+	if(!list.length || typeof nameOf !== 'function'){
+		return [];
+	}
+	const now = Date.now();
+	const rows = [];
+	let truncated = false;
+	list.forEach((m)=>{
+		if(!m || !Array.isArray(m.antardashas) || !m.antardashas.length){ return; }
+		m.antardashas.forEach((a)=>{
+			if(!a){ return; }
+			if(rows.length >= DASHA_ANTAR_ROW_MAX){ truncated = true; return; }
+			const st = a.start ? new Date(a.start).getTime() : NaN;
+			const en = a.end ? new Date(a.end).getTime() : NaN;
+			const live = Number.isFinite(st) && Number.isFinite(en) && st <= now && now < en;
+			rows.push(`| ${live ? '▶' : (m.active ? '·' : '')} | ${nameOf(m.lord)} | ${nameOf(a.lord)} | ${fmtDate(a.start)} | ${fmtDate(a.end)} | ${n1(a.years).toFixed(1)} 年 |`);
+		});
+	});
+	if(!rows.length){
+		return [];
+	}
+	const out = ['小运序列(Antardasha,全大运展开;▶=当下、·=当前大运内):',
+		'| 标记 | 大运主星 | 小运主星 | 起 | 止 | 年数 |',
+		'| --- | --- | --- | --- | --- | --- |',
+		...rows];
+	if(truncated){
+		out.push(`（小运行数超过 ${DASHA_ANTAR_ROW_MAX} 已截断;未列出的不代表不存在,勿臆补。）`);
+	}
+	return out;
+}
+
+function buildDashaSnapshotLines(chartObj, system, fields){
+	const sys = AstroConst.normalizeIndiaDashaSystem(system);
+	const j = chartObj && chartObj.jyotish;
+	const ed = j && j.extendedDashas;
+	// chara/条件系:树在 extendedDashas(引擎 4 树以外),快照与右栏所见同体系(账实一致)。
+	if(sys === 'chara' || (ed && ed.conditional && ed.conditional[sys])){
+		const extLines = buildExtendedDashaSnapshotLines(chartObj, sys, fields);
+		if(extLines.length){ return extLines; }
+	}
+	const dashaRoot = chartObj && chartObj.jyotish && chartObj.jyotish.dasha;
+	// AKKG:平铺形状(planetCN/years/cycle/start/end,无 lord 树)→ 专段(勿走 4 树表,否则全 '—')。
+	if(sys === 'akkg'){
+		const a = dashaRoot && dashaRoot.akkg;
+		if(a && a.available && Array.isArray(a.mahadashas) && a.mahadashas.length){
+			const out = [];
+			out.push(`系统：${DASHA_SYSTEM_SNAPSHOT_LABEL.akkg}`);
+			out.push(`Ātmakāraka：${a.atmakaraka || '—'}（座 ${a.seedSign || '—'}）`);
+			out.push('大运序列：');
+			out.push('| 主 | 轮 | 年数 | 起 | 讫 |');
+			out.push('| --- | --- | --- | --- | --- |');
+			a.mahadashas.forEach((m)=>{
+				out.push(`| ${m.planetCN || m.planet} | ${m.cycle} | ${m.years} | ${m.start || '—'} | ${m.end || '—'} |`);
+			});
+			return out;
+		}
+		return [];
+	}
+	const v = dashaRoot && (dashaRoot[sys] || dashaRoot.vimshottari);
+	if(!v || !v.available || !Array.isArray(v.mahadashas) || !v.mahadashas.length){
+		return [];
+	}
+	const nameOf = (lord)=>(lord && (lord.label || lord.key)) || '—';
+	const fmtDate = (d)=>{ const s = `${d || ''}`; const m = s.match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : (s || '—'); };
+	const n1 = (x)=>(Number.isFinite(+x) ? (+x) : 0);
+	const out = [];
+	const nak = v.moonNakshatra || {};
+	out.push(`系统：${DASHA_SYSTEM_SNAPSHOT_LABEL[sys] || DASHA_SYSTEM_SNAPSHOT_LABEL.vimshottari}`);
+	out.push(`月宿：${nak.label || nak.name || nak.key || '—'}（宿主星 ${nameOf(v.firstLord)}）`);
+	out.push(`首运：已历 ${n1(v.firstElapsedYears).toFixed(1)} 年、余 ${n1(v.firstBalanceYears).toFixed(1)} 年`);
+	const active = v.mahadashas.find((m)=>m && m.active);
+	if(active){
+		out.push(`当前大运（Mahadasha）：${nameOf(active.lord)}（${fmtDate(active.start)} → ${fmtDate(active.end)}，${n1(active.startAge).toFixed(0)}–${n1(active.endAge).toFixed(0)} 岁）`);
+		if(Array.isArray(active.antardashas) && active.antardashas.length){
+			const now = new Date();
+			const sub = active.antardashas.find((s)=>{
+				if(!s || !s.start || !s.end){ return false; }
+				const st = new Date(s.start); const en = new Date(s.end);
+				return st <= now && now < en;
+			});
+			if(sub){
+				out.push(`当前小运（Antardasha）：${nameOf(sub.lord)}（${fmtDate(sub.start)} → ${fmtDate(sub.end)}）`);
+			}
+		}
+	}
+	out.push('大运序列：');
+	// [v2 排版] 平铺大运时间表改 GFM 表(经归一器直通、docx/PDF 渲染真表)。
+	// 单元格值表达式逐字同源:nameOf/fmtDate/n1;标记列 ▶=当前、·=出生余量(原行首标记原义)。
+	out.push('| 标记 | 主星 | 起 | 止 | 年数 | 年龄段 |');
+	out.push('| --- | --- | --- | --- | --- | --- |');
+	v.mahadashas.forEach((m)=>{
+		const mark = m.active ? '▶' : (m.birthBalance ? '·' : '');
+		out.push(`| ${mark} | ${nameOf(m.lord)} | ${fmtDate(m.start)} | ${fmtDate(m.end)} | ${n1(m.years).toFixed(1)} 年 | ${n1(m.startAge).toFixed(0)}–${n1(m.endAge).toFixed(0)} 岁 |`);
+	});
+	out.push(...buildAntardashaTableLines(v.mahadashas, { nameOf, fmtDate, n1 }));
+	return out;
+}
+
+// ── [起盘信息] 流派 / 分盘头行：IndiaChart.js:149-170 逐字 ──
+function resolveIndiaFractal(chartnum, hook){
+	let fractal = parseInt(chartnum, 10);
+	if(Number.isNaN(fractal) || fractal <= 0){
+		if(hook && hook.fractal){
+			fractal = parseInt(hook.fractal, 10);
+		}
+	}
+	if(Number.isNaN(fractal) || fractal <= 0){
+		fractal = 1;
+	}
+	return fractal;
+}
+
+function resolveIndiaLabel(fractal, hook){
+	if(hook && hook.txt){
+		return hook.txt;
+	}
+	if(fractal === 1){
+		return '命盘';
+	}
+	return `${fractal}分盘`;
+}
+
+// buildIndiaSnapshotText（:1131-1194）起首的流派/分盘四行（:1154-1177 内联逐字；ensureSection 的第三参数组收成返回值）。
+export function buildIndiaSchoolHeaderLines(fields, chartnum, hook){
+	const fractal = resolveIndiaFractal(chartnum, hook);
+	const label = resolveIndiaLabel(fractal, hook);
+	const schoolVal = fields && fields.indiaSchool && fields.indiaSchool.value
+		? AstroConst.normalizeIndiaSchool(fields.indiaSchool.value) : AstroConst.INDIA_SCHOOL_DEFAULT;
+	const schoolDef = AstroConst.getIndiaSchoolDefaults(schoolVal) || {};
+	const schoolOpt = AstroConst.INDIA_SCHOOL_OPTIONS.find((o)=>o.value === schoolVal) || {};
+	const PARA_CN = { graha: '七政相映', rasi: '星座相位', tajika: 'Tajika 容许度', kp: 'significator 链', nadi: '同座/交换' };
+	const DF_CN = { vimshottari: 'Vimshottari', chara: 'Chara', mudda: 'Mudda(年内)', jupiterProgression: '木星推进' };
+	const variantMap = AstroConst.normalizeIndiaDashaVariants(
+		fields && fields.indiaDashaVariants ? fields.indiaDashaVariants.value : null);
+	const variantKeys = Object.keys(variantMap).sort();
+	const variantLine = variantKeys.length
+		? [`大运流派开关：已自定义 ${variantKeys.length} 项（${variantKeys.map((k)=>{
+			const spec = AstroConst.INDIA_DASHA_VARIANT_SPECS.find((it)=>it.key === k) || {};
+			const opt = (spec.options || []).find((o)=>o.value === variantMap[k]) || {};
+			return `${spec.label || k}=${(opt.label || variantMap[k]).replace(/（.*?）/g, '')}`;
+		}).join('、')}）`]
+		: [];
+	return [
+		`流派：${schoolOpt.label || schoolVal}（相位范式 ${PARA_CN[schoolDef.aspectParadigm] || schoolDef.aspectParadigm || '七政相映'} · 主运取向 ${DF_CN[schoolDef.dashaFocus] || 'Vimshottari'}）`,
+		...variantLine,
+		`当前分盘：${label}`,
+		`分盘：D${fractal}`,
+	];
+}
+
+// ── [起盘信息] 印占实际口径行：IndiaChart.js:1109-1129 逐字（v3.11 wave3b）──
+// [挂载自检 F-39·P0] 印占实际口径行:盘按恒星黄道(印占岁差)+ 印度分宫制算,但 buildAstroSnapshotContent 读的是
+// fields.zodiacal/hsys(印占 fields 恒 0/1)→ [起盘信息] 印「回归黄道，Alcabitus」与实算相反。与 fieldsToParams 同一派生。
+export function indiaCalibreLine(fields, overrides = {}){
+	const f = fields || {};
+	const hsysVal = overrides.indiaHsys !== undefined && overrides.indiaHsys !== null
+		? AstroConst.normalizeIndiaHouseSystem(overrides.indiaHsys)
+		: (f.indiaHsys ? AstroConst.normalizeIndiaHouseSystem(f.indiaHsys.value) : AstroConst.INDIA_HOUSE_SYSTEM_DEFAULT);
+	const ayan = overrides.indiaAyanamsa !== undefined && overrides.indiaAyanamsa !== null
+		? AstroConst.normalizeIndiaAyanamsa(overrides.indiaAyanamsa)
+		: (f.indiaAyanamsa ? AstroConst.normalizeIndiaAyanamsa(f.indiaAyanamsa.value) : AstroConst.INDIA_AYANAMSA_DEFAULT);
+	const hit = AstroConst.INDIA_HOUSE_SYSTEM_OPTIONS.find((o)=>`${o.value}` === `${hsysVal}`);
+	return `${AstroConst.zodiacalDisplayText(1, ayan)}，${hit ? hit.label : `分宫制 ${hsysVal}`}`;
+}
+export function replaceIndiaCalibreLine(baseInfoLines, calibreLine){
+	const lines = Array.isArray(baseInfoLines) ? baseInfoLines.slice() : [];
+	const idx = lines.findIndex((l)=>/^(回归黄道|恒星黄道)/.test(`${l}`.trim()));
+	if(idx >= 0){ lines[idx] = calibreLine; }else if(calibreLine){ lines.push(calibreLine); }
+	return lines;
+}
+
+export { buildDashaSnapshotLines };

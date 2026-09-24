@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import vm from "node:vm";
 
@@ -10,6 +11,24 @@ if (!SOURCE_ROOT) {
   process.exit(2);
 }
 const DEFAULT_APP_ROOT = path.resolve(SOURCE_ROOT, "Horosa-Web/astrostudyui/src/components");
+// 出处与时间戳都要可复现（同 gen_knowledge_packs.py 的纪律）：
+// · source 记「相对上游树根」的 posix 路径——绝对路径会把维护者的本机目录打进随 wheel 出货的知识包
+//   （v0.38.1 A16 只修了产物没修生成器，v0.40.0 重跑即复发；tests/test_scripts_stdio.py 锁产物）。
+// · generated_at 取上游 HEAD 的提交时间而非 now：同一上游 commit 重跑逐字节一致，index.json 不无谓漂移。
+function upstreamRelative(filePath) {
+  return path.relative(path.resolve(SOURCE_ROOT), filePath).split(path.sep).join("/");
+}
+function upstreamCommitTime() {
+  try {
+    const out = execFileSync("git", ["-C", SOURCE_ROOT, "log", "-1", "--format=%cI", "HEAD"], { encoding: "utf8" }).trim();
+    const when = new Date(out);
+    if (!Number.isNaN(when.getTime())) return when.toISOString();
+  } catch {
+    // 非 git 快照目录：退回当前时间（与 gen_knowledge_packs.py --worktree 同一退路）
+  }
+  return new Date().toISOString();
+}
+const GENERATED_AT = upstreamCommitTime();
 const OUTPUT_DIR = path.join(ROOT, "src", "horosa_skill", "knowledge", "data");
 
 const ASTRO_CONST = {
@@ -206,8 +225,8 @@ function buildAstroBundle(appRoot) {
     }
   }
   return {
-    source: astroFile,
-    generated_at: new Date().toISOString(),
+    source: upstreamRelative(astroFile),
+    generated_at: GENERATED_AT,
     labels: ASTRO_CN,
     categories,
   };
@@ -224,8 +243,8 @@ function buildLiuRengBundle(appRoot) {
     shenEntries[branch] = liureng.buildLiuRengShenTipObj(branch);
   }
   return {
-    source: filePath,
-    generated_at: new Date().toISOString(),
+    source: upstreamRelative(filePath),
+    generated_at: GENERATED_AT,
     shen_entries: shenEntries,
     shen_info: liureng.SHEN_INFO,
     jiang_info: liureng.JIANG_INFO,
@@ -248,8 +267,8 @@ function buildQimenBundle(appRoot) {
     }
   }
   return {
-    source: filePath,
-    generated_at: new Date().toISOString(),
+    source: upstreamRelative(filePath),
+    generated_at: GENERATED_AT,
     raw_text: qimen.QIMEN_DOC.rawText,
     categories,
   };

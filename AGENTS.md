@@ -15,7 +15,7 @@ Claude Code 的薄入口是根 [`CLAUDE.md`](./CLAUDE.md)（与本文 §0 路由
 
 ## 0. 30 秒定向与路由
 
-Horosa Skill 把星阙（Horosa）的 **106 个**术数/占星技法打包成 local-first 的 **MCP server + CLI**：
+Horosa Skill 把星阙（Horosa）的 **110 个**术数/占星技法打包成 local-first 的 **MCP server + CLI**：
 算法跑在本机离线 runtime（Java 聚合层 `:9999` + Python chart 服务 `:8899`（含 ken/kentang 引擎）+
 bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 envelope + 星阙式
 `export_snapshot`/`export_format`；仓库保持轻量，重 runtime 走 GitHub Releases 分发。
@@ -90,7 +90,7 @@ you, it will bite the next agent：
   `agent_guidance.required` 在 stderr；两节里每条命令由 `tests/test_skill_shell_contract.py` 对到 Click 命令树。四家客户端
   先读的薄镜像（`GEMINI.md` / `.github/copilot-instructions.md` / `.windsurf/rules/` / `.clinerules/`，各 ≤ 30 行）只许
   指针 + 闸门 + 读盘 + `setup --client`，`verify_docs_sync.check_agent_mirrors` 锁；不加 Roo（不在 Works-with 矩阵）。
-- **引教义必带出处**（v0.28.0）：口径/流派/方法论先 `knowledge_read`（24 域，逐条 citation 落到
+- **引教义必带出处**（v0.28.0）：口径/流派/方法论先 `knowledge_read`（31 域，逐条 citation 落到
   上游组件文件），没有的按通则推理并明说无出处；多技法互证走 `horosa_hecan`——它产**模板**不产
   终稿，分歧必须披露不许平均（铁律在模板 instructions 里，不靠自觉）。
 
@@ -104,6 +104,11 @@ you, it will bite the next agent：
 `normalizeKinqimenData` / `normalizeBackendPan` / `normalizeKinjinkouData` 把 ken 响应叠到本地脚手架，
 `build*SnapshotText` 产出 `export_snapshot` 段。JS 本地脚手架只在 `ken_response` 缺失/畸形时兜底
 （graceful，非正常路径）。健康结果带 `pan.source == "kinqimen"/"kintaiyi"`、`jinkou.source == "kinjinkou"`。
+**例外 = 上游同判据的本地路由（v0.40.0 起）**：上游 `isQimenLocalRoute`（非时家/转盘、飞盘/混合、报数、七组本地口径任一非缺省）
+走本地 `calcDunJia`，金口诀五项流派任一非缺省走本地 `buildJinKouData`——这是上游**本来的**算法选择，不是回退：
+runner 不打 ken、`data.route.local=true`、`compute_sources` 标 `local_route_calcDunJia` / `local_route_buildJinKouData`
+（`technique_provenance.json` 已声明）。Python 与 JS 路由判定不一致即 `tool.qimen_route_check_failed`；ken 失败被静默回退
+的老形态仍由 `_require_ken_pan` 抓（那条路径不带 local_route_* 标记）。
 
 **⚠️ ken 端点失败也回 HTTP 200 — 只认 `source`，永不信状态码。** chart 服务的 `web{qimen,taiyi,jinkou}srv.py`
 把一切异常包成 `{"ResultCode": -1/1, "Result": "<engine> ... failed"}`（字符串 `Result`）照样 200 返回；
@@ -133,11 +138,17 @@ you, it will bite the next agent：
 - **ken-fed**：qimen / taiyi / jinkou（+ sanshiunited 两腿）——ken 算，JS 排版。
 - **原生·非 ken 数算**：canping（邵子参评数）/ heluo（河洛理数）——在 `horosa-core-js` 进程内经 vendored
   bazi 链（`src/vendor/bazi/` → npm `lunar-javascript`）起四柱，再自行起数/起卦 + 条文查表；不打 chart 服务。
-  heluo 的 `timeAlg` 默认 **1**（钟表时，匹配星阙 `fieldVal(f,'timeAlg',1)`）；`timeAlg===0` 才是真太阳时
-  （唯一触发经度+均时差修正的值）。
+  canping / heluo / yizhangjing 的 `timeAlg` 缺省 **0**（真太阳时，经度+均时差；`1` = 钟表时）、日界缺省 1/1——v0.40.0 更正：
+  星阙页面的 `fieldVal(f,'timeAlg',1)` 读的是**恒被预置为 0** 的全局字段（models/astro.js:375-377、newChartSeeds.js:43），
+  字面 1 的兜底从不触发；无头路径 `record.timeAlg ?? 0`（aiAnalysisContext.js:603）与挂载齿轮缺省 0 同口径。
+  找缺省要追字段的**种子**，不是 getter 的兜底值（此前据兜底值写成缺省 1，钟表时出盘多个版本）。
 - **backend predict/astroextra 型**：harmonic / agepoint / distributions / jaynesprog / vedicprog /
   planetaryarc 等——Python `_call_remote` + Python snapshot builder。
-- **复合型**：mundane（`/jieqi/year` seedOnly 求入宫时刻 → 该时刻 `/chart`，输入是 年+入宫节气+地点）、
+- **三式合一（v0.40.0 起）**：Python 只取数（一份三式 nongli + 展示真太阳时 + `/chart` hsys 1 + 奇门/太乙 runner），
+  整段快照由 vendored 上游 `buildSanShiUnitedSnapshotText`（`tools/sanshiUnited.js` 按上游 `performRecalcByNongli` 装配）产出；
+  六壬层用 SanShiUnitedMain 自带三函数、占时取奇门盘时柱（随 `timeAlg`），不再另起 `/liureng/gods` 子盘。
+- **复合型**：mundane（`/jieqi/year` seedOnly 求入宫时刻 → 该时刻 `/chart`，输入是 年+入宫节气+地点；上游 v3.11
+  右栏 25 张卡由 Python 取数后喂 JS `tools/mundaneCards.js` 调 vendored 卡 builder，3 张需 UI 状态的登记为可选段）、
   sanshiunited、extrareturns（Python 循环逐体拉 `/astroextra/planetreturn` 拼段）。**请求型 builder 一律归
   Python——JS 层不发 HTTP。**
 - **纯 headless JS**：tongshefa（无 ken 引擎）。headless 对齐：卦的五行取**京房本宫**
@@ -149,8 +160,9 @@ you, it will bite the next agent：
   `math.ceil`；动周期数学必对星阙 `decennials.test.js` 金标（`tests/test_decennials.py`）。
 - **frontend-读数型 Python 移植**：planetaryages（读 `chart.objects`+`params.birth`）/ yearsystem129
   （`/chart` 需 `predictive` 真值才出 `predictives.yearsystem129`）/ persiandirected 等——读已算好的 chart
-  对象，Python 复用 `_astro_msg` / `_aspect_label` / `_split_degree`。已知可接受偏差：persiandirected 应期
-  日期与星阙 ≤1 天（JS 截断+浮点噪声，度数/相位逐位一致，见 `docs/v091-fidelity-spotcheck.md`）。
+  对象再排版。**镜像上游文字用 `predictive_text`（上游单字名表 AstroTxtMsg + AstroMsg 回落），不用 `_astro_msg`**
+  （后者是全名表，v0.40.0 前这几路因此印「太阳/子嗣点」）。persiandirected 应期日期原有的「≤1 天」偏差已消：
+  根因是 moment `add(x,'days')` 把小数天四舍五入到整天，移植成 `timedelta(days=float)`；现按 `js_round` 取整天。
 
 **恒星黄道/岁差标注**：`ASTRO_MSG` 不许硬编码岁差名——西占读 `chart.siderealAyanamsa`、印占读
 `chart.siderealModeKey`+`ayanamsaValue`（**字段名不同**）；`chart.zodiacal` 是本地化字符串（"恒星黄道"），
@@ -165,11 +177,13 @@ you, it will bite the next agent：
 为准，与声明不符时标 `matches_declaration: false`——ken 端点失败也回 200，静默回退正是这个形状。
 
 **知识包（v0.28.0 起，v0.35.0 收紧）**：方法论手册域由 `scripts/gen_knowledge_packs.py` 从上游 HelpDoc 收割
-（27 域/235 条，逐条带出处；幂等 = generated_at 取上游 commit 时间；**正文读上游 HEAD blob、不读工作区**，
+（27 域/236 条，逐条带出处；幂等 = generated_at 取上游 commit 时间；**正文读上游 HEAD blob、不读工作区**，
 出处与正文同源）；store 按 schema `horosa.knowledge.helpdoc.v1` 自动发现，**新增域零代码**。
 **上游每一册 `*HelpDoc.js` 要么进 `HELPDOC_DOMAINS`、要么进 `EXCLUDED_HELPDOCS`（仅 fengshui，政策性排除），
 第三种状态生成器直接 FAIL**——同步新技法时把它的手册一并收进来（v0.35.0 之前六册已上架技法的手册三个版本
 没收）。上游改 HelpDoc 后重跑生成器即同步；hover 三域（astro/liureng/qimen）保持专用渲染分支不动。
+**修生成的东西，就修生成器**：hover 三包的 `source` 曾在 v0.38.1 A16 手改产物成相对路径，生成器照写绝对路径，
+v0.40.0 重跑即复发；现在 `build_hover_knowledge_bundle.mjs` 写相对上游根的 posix 路径 + 上游提交时间（同 commit 重跑逐字节一致）。
 
 **同步守卫三层（缺一层就会静默漂）**：① `verify_upstream_sync.py` = vendored ↔ **上游 HEAD**
 （版本恒等 + 哨兵 sha256 + core-js 逐文件；无上游树时 skipped 而非绿，release 链用 `--require-upstream`）；
@@ -323,7 +337,8 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   （taiyi 13 段解读曾被 `sections: undefined` 整体丢掉）——排查法：抓 `js_client.run` 实收的
   `ken_response` grep 段名，再决定透传还是重 vendor builder；透传段按「条件段双登记」处理。
 - **数算 verbatim vendor**（canping/heluo）：整体照搬，仅两处改动 = 兄弟 import 指向 vendored 拷贝 +
-  JSON import attribute（漏了 raw Node 报 `needs an import attribute of type: json`）。
+  JSON import attribute（漏了 raw Node 报 `needs an import attribute of type: json`）。静态 / 动态相对 import 的 `.js` 与
+  JSON 属性都由 transform 机械补齐（动态形态 v0.40.0 起；懒加载路径漏补时 loadcheck 恒绿、调用才空）。
 - **闭包提取三陷阱**（六壬毕法/占断向导、政余格局这类纯模块级闭包，零 `this.`/React）：
   ① **常量引用与函数引用分开清点**——漏 `JiaZiList` / `ERFAN_SU_TO_BRANCH` 这类 module-level const →
   静默 `ReferenceError` 被 try/catch 吞掉 → 结果 null 无报错；② `SZConst.js` 在模块加载期读
@@ -332,10 +347,24 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   查到的每个 planet/node/point（含 `SignsProp` 这类表——v0.11/v0.13 两轮都栽在这）。draw-only import
   （GraphHelper/helper/LRShenJiangDoc）用 no-op stub 替换。vendor 后必须 `node -e "import('...')"`
   load-check **加**真数据整链跑（load 过 ≠ 真盘不崩；追 refCtx/三传是否真的非 null）。
+- **stub 审计**（v0.40.0）：`stub_import` 之后，被 stub 掉的 import 绑定若仍被保留代码引用、且 stub 自身没定义同名
+  绑定，`revendor --check` 即报 ⚠（`_stubbed_names_still_used`）——`LiuRengMain.js` 把 `ChuangChart` stub 成空，
+  `buildSanChuanData` 的 `new ChuangChart` 抛 ReferenceError 被 try/catch 吞成 null，六壬择时对任何条件零命中。
+  真不可达的引用（UI 草稿恢复链里的 `DateTime`）用「stub 定义同名、调到即抛明确错误」的类声明出来，不留空 stub。
 - **curated 常量文件**（如 `vendor/liureng/LRConst.js`）：上游全文件 import 了 headless 不存在的路径时，
   **只追加新增的纯常量**，不整文件重 vendor；条目必须带 `upstream_sha256`，上游改了该文件就把子集里的每个
   值重新对一遍再 `--restamp`。**bespoke 抽出件同理声明 `derived_from`**（抽自哪份上游文件）——不声明它就
   对上游漂移永远失明（`zwLuckItems.js` 的干支年基准修正曾靠人读 release note 才补上）。
+  **sha 看守不比内容**：`--restamp` 只证明「有人看过这一版上游」，不证明改动进了副本（v0.40.0：`SZConst.js`
+  restamp 在 0604fa41 却仍是上游早已改掉的「魏」）。所以**能表达成「上游全文件 + 声明式 deviation」的手工件一律改
+  verbatim**（truncate_before / stub_import / replace_text / import_redirect，`_reexport_required` 自动补调用方要的
+  export）——`suzhan/SZConst.js`、`tongshefa/TongSheFaCore.js` 即此例；curated/bespoke 只留给真正的子集与重写件。
+- **家族共享的隐藏旋钮放 mixin，不进 `BirthInput`**：广告层以「不在 BirthInput」判定子类自有字段，塞进 BirthInput 的键会把各子类
+  已广告的同名键静默踢出 tools/list（v0.40.0 `after23NewDay` 事故，见 LESSONS）；用 `_ChartDayBoundaryKnobs` 一类 mixin + `ADVERTISE_HIDDEN`。
+- **vendored JSON 数据与 `.js` 同等登记**：`horosa-core-js/src/vendor/**` 下每个 `.js` / `.json` 都必须在
+  `vendor_manifest.json` 有条目（verbatim 对 JSON 即逐字节比对上游）；`test_every_vendored_js_and_json_file_is_in_the_manifest`
+  守。v0.40.0 前 32 份 JSON 只登记 1 份，上游 v3.11.0 改 `hellenisticData.json` 日/月中年（39.5→69.5/66.5）零信号滞留。
+  Python 侧若手抄了同一张表（如 `predictive_text.PLANETARY_YEARS`），测试要与 vendored JSON 互锚。
 - **重同步 `vendor/runtime-source`**：`sync_vendored_runtime_sources.sh` + 显式 `HOROSA_SOURCE_ROOT`
   （对上游 READ-ONLY）。**顶层共享件必须显式补**：上游把子逻辑上提为 vendor 根级单文件时（如
   v3.5.0 全年份域的 `Horosa-Web/vendor/kin_year_domain.py`，被 16 个 ken/神数 引擎懒 import），逐引擎
@@ -371,9 +400,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 9. **勿静默回退**：解析失败一律 raise 结构化错误，不许换默认值蒙混；快照失败 log + `snapshot_error`，
    不许裸 `except: pass`。同族陷阱：`f"{response.get('x')}"` 键缺失时产出字面 `"None"`（6 字符真值串）——
    先判空再格式化，`f"{... or ''}"` 只有显式 `or ''` 才安全。
-10. **算源声明**：`contracts/technique_provenance.json` 加条目（可用 `scripts/gen_technique_provenance.py`
-    重生成，输出幂等），`verify_technique_provenance.py` 不声明即红；ken-backed 必须真调
-    `_require_ken_pan`。技法依据卡按它标注「这盘是谁算的」。
+10. **算源声明**：`contracts/technique_provenance.json` **只由** `scripts/gen_technique_provenance.py` 生成
+    （契约 == 生成器输出，`--check` + `test_technique_provenance_generator.py` 守；别手改契约——经 helper 间接调用的
+    证据写 `EXTRA_EVIDENCE`、逐工具说明写 `NOTE_OVERRIDES`，v0.40.0 前手改的条目重跑即丢）。
+    `verify_technique_provenance.py` 不声明即红；ken-backed 必须真调 `_require_ken_pan`。技法依据卡按它标注「这盘是谁算的」。
 11. **入 `TOOL_EXPORT_TECHNIQUE_MAP`**（v0.33.0 教训）：bench 的「新增技法自动获得用例」只覆盖这张表，
     runner 自己 `_augment_export_payload` 不经过它 → 功能全绿、bench 静默不覆盖。守卫
     `test_every_business_tool_is_in_export_technique_map`（工具 − 表 = 显式非业务清单）已锁死；
@@ -705,6 +735,11 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
    只有 CI（唯一无 runtime 的环境）才炸**——离线/线材契约测试**禁以「算成功」为判据**（那是
    `@requires_runtime` 的活）；`tests/test_mcp_contract.py` 已用 autouse fixture 把 `HOROSA_RUNTIME_ROOT`
    钉到空目录强制与 CI 同形，发版前另跑一遍 `HOROSA_RUNTIME_ROOT=<空目录> uv run pytest` 复现该形状。
+   **并行 agent（worktree 隔离）建在当前目录所在的仓**：派发前先 `cd` 回本仓（v0.40.0 一次因 cwd 在上游源码树里，worktree 被建进只读的
+   Horosa-Public）；agent 规则首条是 LOCATION CHECK（toplevel 不在本仓 `.claude/worktrees/` 下即停手）。
+   **live 复验同样要钉 JS 引擎**：只把两个后端 URL 指到 vendored 实例时，JS 技法走的是**已装 runtime 的旧 core-js**
+   （解析顺序 `HOROSA_CORE_JS_ROOT` → 已装 runtime → 本仓），测的根本不是本仓代码（v0.40.0 据此误报过 jinkou/qimen
+   缺段）。`tests/conftest.py` 已为 pytest 会话钉 `HOROSA_CORE_JS_ROOT=本仓`；手工脚本 / harness 自己钉（或 `HOROSA_RUNTIME_ROOT=<空目录>`）。
    **⚠️ 只钉 runtime root 不够**：默认端口上若有活服务，请求照样打通，本该失败的错误路径会成功
    （`test_error_paths_return_a_conformant_envelope` 实测在服务起着时红）——要真与 CI 同形，
    **必须同时把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指到不可达地址**。
@@ -896,8 +931,10 @@ A global stability pass hardened these; keep them true when you touch the releva
   （知识包/bench/闸表/Windows 启动模板/入口点；core-js 不进 wheel、随 runtime）；`server.json` 只登记 pypi 条目，
   与 pyproject name/version 锁步、禁 TBD（v0.36.0）。
 - **宫主/宫神星只从 `astro_rulers.py` 取。** 它是上游 `wholeSignRulers.js` 的移植（夹具与断言照抄上游 jest），
-  Python 面不许再各自算宫主（上游 #79 双实现漂移）；段内子块（如 [主宰星链] 的「◆ 宫神星(houseRows)」）段级
-  棘轮看不见，加子块要配逐字夹具测试。`MIRRORED_UPSTREAM_AIEXPORT_VERSION` 切 v57 时四件同动（v0.36.0 C6）。
+  Python 面不许再各自算宫主（上游 #79 双实现漂移）；段内子块（[主宰星链] 尾块「◆ 整宫制宫主表(wholeSignRulers)」）
+  段级棘轮看不见，加子块要配逐字夹具测试。上游 v57 把当前分宫制宫神星表迁出成独立段 [分宫制宫神星表]（行星力量/角续果
+  口径，非主宰依据；分宫制即整宫制时折叠为一句说明），v0.40.0 已随 v58 同步（`astro_rulers.build_house_system_ruler_section_lines`）；
+  名称一律上游单字表（日/月…），v56 旧移植印全名（月亮）而测试也断言错值。
 - **Java 实例只按上游桌面模式起，「live 需 Mongo」不再是合法理由。** jar 内 `conf/properties/cache/*.properties`
   把 Mongo 主机写死为 `mongodb.host`；裸 `java -jar` = 每个碰库请求 30s 超时后 9999，被当成环境限制记了十个版本。
   起法四件（`--mongodb.ip=127.0.0.1`、`HOROSA_DESKTOP_MONGO_OPTIONAL=1`、`HOROSA_MONGO_FALLBACK_DIR`、
@@ -1023,6 +1060,9 @@ A global stability pass hardened these; keep them true when you touch the releva
   `jinkou`、`sanshiunited`、`canping`、`heluo`、`nongli_time`、`jieqi_year`、Bazi-aware `chart`）两 flag
   一律 **verbatim 转发**到引擎；导出快照带 `排盘规则: 日柱开关【…】+ 时柱开关【…】` 行，tool formatter
   必须保留、报告/AI 解读必须引用回去（strip 掉 = 用户换过开关时静默错解）。
+- **缺省（v0.40.0 起）**：日界开关缺省**不发送**（schema 缺省 `None`，不再 `False`——Java 把 JSON `false` 读成 0，曾在
+  每次调用里盖掉星阙缺省 1）；走本地引擎的路径（八字 lunar 本地、紫微 ZiweiCalc）显式传 1/1；金口诀两开关都转发 ken；
+  `jieqi_year` 的 after23NewDay 上游 Java 写死不读。矩阵 (1,0) 行 = 壬寅 **戊子**（两开关完全独立，上游 dayBoundary.js:47-57）。
 - 真后端返回的四柱与矩阵不符 = runtime pre-v2.2.1（让用户重装 runtime），**不许**在 skill 侧打补丁掩盖。
 - 上游根因参考（替用户排障星阙侧数值时省几小时）：① Java `ChartController.getParams()` 是**白名单**，
   没 `params.put(...)` 的字段静默丢、默认接管——上游加 chart-flow 字段要审计所有 `getParams()` 型

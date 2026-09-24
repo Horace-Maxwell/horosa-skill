@@ -7,9 +7,10 @@
 // a one-month window is ~44k single-moment round-trips; upstream anchors the local排盘 against the backend
 // on a 42,731-point 0-diff parity grid (qimenScanEngine.js header), and this repo's own qimen tool already
 // computes `calcDunJia` on every call before overlaying ken onto it.
-import { scanQimen, QIMEN_MAX_TOTAL_HITS, QIMEN_MAX_SPAN_DAYS_TOTAL } from '../vendor/divination/zeri/qimenScanEngine.js';
+import { scanQimen, explainQimenAt, QIMEN_MAX_TOTAL_HITS, QIMEN_MAX_SPAN_DAYS_TOTAL } from '../vendor/divination/zeri/qimenScanEngine.js';
 import { compileQimenTree } from '../vendor/divination/zeri/qimenConditionTypes.js';
 import { buildQimenZeriSnapshotExtra } from '../vendor/divination/zeri/qimenZeriSnapshot.js';
+import { zeriRowOpts, withLeafKind } from './zeriSnapshotOpts.js';
 
 export async function runQimenZeri(payload) {
   const input = payload && typeof payload === 'object' ? payload : {};
@@ -21,15 +22,38 @@ export async function runQimenZeri(payload) {
 
   if (action === 'snapshot') {
     // Verbatim upstream builder — the three 段头 are 🔒 four-sync-locked against aiExport.js.
+    // [Q-452/Q-453] 清单上限 + 前 N 行附判读树：与上游 QimenZeriMain.explainRowSync（:344-352）同式同步直算
+    // ——编译树 + 扫描同一份 geo/options，t = row.pick || start+':00'（节气种子缺省按该时刻年份现建）。
+    const rows = zeriRowOpts(input);
+    const results = input.results || null;
+    let explainAt;
+    let explainError = null;
+    if (rows.explainRows > 0 && tree && Array.isArray(results) && results.length) {
+      let compiledForExplain = null;
+      try {
+        compiledForExplain = compileQimenTree(tree);
+      } catch (error) {
+        explainError = `invalid_conditions: ${(error && error.message) || error}`;
+      }
+      if (compiledForExplain) {
+        explainAt = (row) => explainQimenAt({ geoParams: geo, options, tree: compiledForExplain, t: row.pick || `${row.start}:00` });
+      }
+    }
     const snapshot_text = buildQimenZeriSnapshotExtra({
       cfg,
       geo,
       options,
-      tree,
-      results: input.results || null,
+      tree: withLeafKind(tree),
+      results,
       truncated: !!input.truncated,
+      ...rows,
+      explainAt,
     }) || '';
-    return { tool: 'qimenzeri', action, data: { ok: !!snapshot_text }, snapshot_text };
+    return {
+      tool: 'qimenzeri', action,
+      data: { ok: !!snapshot_text, ...(explainError ? { explain_error: explainError } : {}) },
+      snapshot_text,
+    };
   }
 
   // --- scan ---

@@ -2,7 +2,7 @@
 // 红线/警告系统（择日清单 §4）。布尔检查，命中进 hard_flags[]，按 severity 影响评分/分级。
 // 带 * 的规则参照当前 topic.must_avoid 决定触发/升降级。
 import { aspectsOf } from '../engine/aspectsEngine.js';
-import { moonReport } from '../engine/moon.js';
+import { resolveMoonVoc } from '../engine/moon.js';   // [Q-146] 月空单源(六口径)
 import { viaCombustaRange } from '../engine/radicality.js';
 import { PLANETS } from '../data/planets.js';
 import { SIGNS } from '../data/signs.js';
@@ -23,11 +23,14 @@ export function evalHardFlags(facts, topic, school){
 	const flags = [];
 	const mustAvoid = (topic && topic.must_avoid) || [];
 	const inAvoid = (id) => mustAvoid.indexOf(id) >= 0;
-	const modernAnnotate = !!(school && school.modernPlanets === 'annotate');
+	// [Q-295/T-282] 用星集=七曜为纲(facts.eff.bodySet==='classical7')时三王星红线同样降为注记(此前只看流派 modernPlanets,
+	// 现代主流档 + 页面选七曜时天王/海王红线仍全额扣分,与选项标签「三王星仅注记」不符)。
+	const sevenOnly = !!(facts && facts.eff && facts.eff.bodySet === 'classical7');
+	const modernAnnotate = !!(school && school.modernPlanets === 'annotate') || sevenOnly;
 	const MODERN = ['uranus', 'neptune', 'pluto'];
 	const add = (id, severity, message, factor) => {
 		if(modernAnnotate && MODERN.indexOf(factor) >= 0){
-			flags.push({ id, severity: 'info', message: message + '（现代因素·本流派仅注记不扣分）', factor });
+			flags.push({ id, severity: 'info', message: message + (sevenOnly && !(school && school.modernPlanets === 'annotate') ? '（现代因素·用星集七曜为纲仅注记不扣分）' : '（现代因素·本流派仅注记不扣分）'), factor });
 			return;
 		}
 		flags.push({ id, severity, message, factor });
@@ -38,9 +41,9 @@ export function evalHardFlags(facts, topic, school){
 	const eff = facts.eff || null;
 	const moon = facts.planets.moon;
 	if(moon){
-		const vocResolved = eff
-			? moonReport(facts, { vocMode: eff.vocMode, vocIncludeOuter: !!eff.vocIncludeOuter }).voc
-			: !!moon.isVOC;
+		// [Q-146/T-53] 缺省(无 eff)分支原直读后端 isVOC——那面旗按【全局】空亡口径算,
+		// 与 eff 分支不同源;改走单源 resolveMoonVoc(不传 vocMode 即 classic,前端按 1647 自算)。
+		const vocResolved = resolveMoonVoc(facts, eff ? { vocMode: eff.vocMode, vocIncludeOuter: !!eff.vocIncludeOuter } : {}).voc;
 		if(vocResolved) add('moon_void_of_course', 'critical', '月亮空亡：此刻起的行动通常无效应', 'moon');
 		const ma = filterAspects(aspectsOf(facts, 'moon'), 'moon', facts, eff && eff.orbProfile);
 		if(ma.some((a) => a.angle === 90)) add('moon_square', 'high', '月亮逢刑（90°）：不安定、缺生产力 → 应避', 'moon');

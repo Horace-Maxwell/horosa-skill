@@ -12,7 +12,7 @@ from horosa_skill.astro_sidereal import (
     nakshatra_lord_cn,
     sidereal_ayanamsa_label,
 )
-from horosa_skill.service import _build_astro_snapshot_text, _build_nakshatra_lines
+from horosa_skill.service import _build_astro_snapshot_text, _build_india_snapshot_text, _build_nakshatra_lines
 
 
 def _chart_response(*, sidereal: bool, ayan: str = "") -> dict:
@@ -53,16 +53,18 @@ def test_nakshatra_lines_sidereal_only() -> None:
 
 
 def test_astro_snapshot_sidereal_raman() -> None:
+    # 上游 astroAiSnapshot.js:457-467：黄道行 = zodiacalDisplayText(zodiacal, ayanKey) → 「恒星黄道·<岁差名>，<宫制>」一行
+    # （v3.11 起不再另起「恒星黄道岁差：」行）。
     snap = _build_astro_snapshot_text({"zodiacal": 1, "siderealAyanamsa": "raman"}, _chart_response(sidereal=True, ayan="raman"))
-    assert "恒星黄道岁差：Raman" in snap  # 真实岁差，非硬编码 Lahiri
-    assert "恒星黄道岁差：Lahiri" not in snap
+    assert "恒星黄道·Raman，整宫制" in snap  # 真实岁差，非硬编码 Lahiri
+    assert "Lahiri" not in snap
     assert "[月宿]" in snap
 
 
 def test_astro_snapshot_sidereal_default_lahiri() -> None:
-    # 后端解析后 chart.siderealAyanamsa='lahiri'（缺省）
+    # 后端解析后 chart.siderealAyanamsa='lahiri'（缺省）：fields 缺岁差键 → 回显兜底（ayanKey = fieldValue || chart.siderealAyanamsa）
     snap = _build_astro_snapshot_text({"zodiacal": 1}, _chart_response(sidereal=True, ayan="lahiri"))
-    assert "恒星黄道岁差：Lahiri / Chitrapaksha" in snap
+    assert "恒星黄道·Lahiri / Chitrapaksha，整宫制" in snap
     assert "[月宿]" in snap
 
 
@@ -96,9 +98,18 @@ def test_india_chart_guidance_enumerates() -> None:
     assert "24" in blob and "47" in blob
 
 
-def test_india_snapshot_surfaces_ayanamsa_from_fields() -> None:
-    # 印占盘响应可能不带 siderealAyanamsa/siderealModeKey；以 fields.indiaAyanamsa 回退标注岁差名。
+def test_india_snapshot_replaces_the_zodiac_line_with_the_calibre_line() -> None:
+    # 印占盘响应可能不带 siderealAyanamsa：岁差名由 runner 按上游 indiaCalibreLine（后端回显 → 请求 indiaAyanamsa 回退）
+    # 派生成 `_indiaCalibreLine`（见 test_sync311_w3b_gim 的 live 回放），整盘按 buildIndiaSnapshotText 把 [起盘信息] 首条黄道行换成它；
+    # 无口径行时保留 buildAstroSnapshotContent 自己的黄道行（不再有 skill 自拟的「恒星黄道岁差：」行）。
     chart = {"zodiacal": "Sidereal", "hsys": "KP / Placidus", "houses": [], "objects": [], "siderealAyanamsa": ""}
     resp = {"chart": chart, "params": {"birth": "1998-02-20 20:48"}}
-    snap = _build_astro_snapshot_text({"indiaHsys": 3, "indiaAyanamsa": "raman"}, resp)
-    assert "恒星黄道岁差：Raman" in snap
+    fields = {"indiaHsys": 3, "indiaAyanamsa": "raman"}
+    plain = _build_india_snapshot_text(fields, resp).split("\n\n")[0].split("\n")
+    assert plain[0] == "[起盘信息]"
+    zodiac = [line for line in plain if line.startswith(("恒星黄道", "回归黄道"))]
+    assert len(zodiac) == 1 and zodiac[0].endswith("，KP / Placidus"), zodiac
+    with_line = _build_india_snapshot_text(fields, {**resp, "_indiaCalibreLine": "恒星黄道·Raman，KP / Placidus"}).split("\n\n")[0].split("\n")
+    assert "恒星黄道·Raman，KP / Placidus" in with_line
+    assert [line for line in with_line if line.startswith(("恒星黄道", "回归黄道"))] == ["恒星黄道·Raman，KP / Placidus"]
+    assert not any("恒星黄道岁差：" in line for line in with_line)

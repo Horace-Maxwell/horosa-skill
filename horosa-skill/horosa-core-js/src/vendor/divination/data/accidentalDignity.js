@@ -48,7 +48,7 @@ function chartYearOf(facts){
 function starHit(facts, lon, starEn, opts){
 	const st = FIXED_STARS.find((s) => s.name_en === starEn);
 	if(!st || lon === null || lon === undefined) return false;
-	const orb = starOrbFor(st, opts);
+	const orb = (opts && Number.isFinite(opts.fixedOrbDeg)) ? opts.fixedOrbDeg : starOrbFor(st, opts);   // [Q-301] 满分表自带容许度时优先
 	return angularDist(lon, starLonAt(st.lon_1995, chartYearOf(facts))) <= orb;
 }
 
@@ -105,7 +105,7 @@ export function scoreAccidental(planetKey, facts, opts){
 		if(MALEFICS.indexOf(x.other) >= 0 && x.other !== planetKey){
 			if(x.angle === 0) add('partile_conj_malefic', -5, `与${x.other === 'saturn' ? '土星' : '火星'} partile 合（−5）`);
 			else if(x.angle === 180) add('partile_opp_malefic', -4, `与${x.other === 'saturn' ? '土星' : '火星'} partile 冲（−4）`);
-			else if(x.angle === 90) add('partile_square_malefic', -4, `与${x.other === 'saturn' ? '土星' : '火星'} partile 刑（−4）`);
+			else if(x.angle === 90) add('partile_square_malefic', -3, `与${x.other === 'saturn' ? '土星' : '火星'} partile 刑（−3）`);   // [Q-301] 1647 原页「Partill □ of ♄ or ♂ 3」(Skyscript 转录 4 为误)
 		}
 		if(x.other === 'north_node' && x.angle === 0) add('partile_conj_nnode', 4, '与北交点 partile 合（+4）');
 		if(x.other === 'south_node' && x.angle === 0) add('partile_conj_snode', -4, '与南交点 partile 合（−4）');
@@ -113,7 +113,9 @@ export function scoreAccidental(planetKey, facts, opts){
 	// 王者/凶恒星（只取合相）
 	if(starHit(facts, p.lon, 'Regulus', opts)) add('conj_regulus', 6, '合轩辕十四 Regulus（+6）');
 	if(starHit(facts, p.lon, 'Spica', opts)) add('conj_spica', 5, '合角宿一 Spica（+5）');
-	if(starHit(facts, p.lon, 'Algol', opts)) add('conj_algol', -5, '合大陵五 Algol（−5）');   // [H1c] 1647 传统 −5
+	// [Q-301/T-289 2026-09-18 原页核对] 1647 p.115:「In ☌ with Caput Algol in 20. ♉, or within five degrees — 5」:合相判据是
+	// 「距大陵五 5° 内」(固定 5°,不走恒星轨档),星位按岁差推到盘年(Lilly 当年 20°54′♉);此前用恒星轨档容许度。
+	if(starHit(facts, p.lon, 'Algol', { ...opts, fixedOrbDeg: 5 })) add('conj_algol', -5, '合大陵五 Algol（5° 内，−5）');   // [H1c] 1647 传统 −5
 	// 围攻
 	if(isBesieged(planetKey, facts)) add('besieged', -5, '被土火围攻 besieged（−5）');   // [H1c] 1647 传统 −5(旧 −4 系数值偏差;死链修复时一并校正)
 

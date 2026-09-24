@@ -85,7 +85,11 @@ def test_real_manifest_stamps_every_hand_made_entry() -> None:
         stamp = entry.get(field) or ""
         assert len(stamp) == 64 and all(c in "0123456789abcdef" for c in stamp), f"{vendor_rel}: {field} 未打戳"
     # 两个真事故的当事文件必须在受看守之列。
-    assert files["liureng/LRConst.js"]["mode"] == "curated"
+    # sanshi chunk（v3.11）：LRConst.js 由 curated 改 verbatim —— curated 期间戳一直等于上游而内容停在旧版
+    # （缺贵人 3/4 两张表与阳阴系互换），「sha 看守不比内容」；verbatim 由流水线逐字复现（--from-manifest --check），
+    # 看守更严。故这里钉 verbatim 且无蓄意偏离。
+    assert files["liureng/LRConst.js"]["mode"] == "verbatim"
+    assert not files["liureng/LRConst.js"].get("deviations")
     assert files["ziwei/zwLuckItems.js"].get("derived_from") == "components/ziwei/ZWLuckPanel.js"
 
 
@@ -102,3 +106,20 @@ def test_stamp_is_line_ending_independent(tmp_path: Path) -> None:
     assert b"\r\n" in source.read_bytes()
     entry = {"mode": "curated", "upstream": "a.js", "extracts": [], "upstream_sha256": _sha("export const X = 1;\n")}
     assert rv.hand_made_drift(tmp_path, "v/a.js", entry) is None
+
+
+def test_every_vendored_js_and_json_file_is_in_the_manifest() -> None:
+    """JSON 数据同样是上游产物，必须与 .js 一样逐文件登记、逐字节比对。
+
+    v3.11.0 把 `divination/data/hellenisticData.json` 的日/月中年从 39.5 改成 69.5/66.5；manifest 当时只登记
+    `.js`（32 份 JSON 里只有 1 份在册），`--check` 与 verify_upstream_sync 对另外 31 份零信号，vendored
+    副本滞留旧值——行星年四档表日、月两行整列错值。登记后 verbatim 模式对 JSON 即逐字节比对。
+    """
+    files = json.loads(rv.MANIFEST.read_text(encoding="utf-8"))["files"]
+    on_disk = {
+        path.relative_to(rv.VENDOR_ROOT).as_posix()
+        for pattern in ("*.js", "*.json")
+        for path in rv.VENDOR_ROOT.rglob(pattern)
+    }
+    assert sorted(on_disk - set(files)) == [], "vendored 文件未登记 contracts/vendor_manifest.json"
+    assert sorted(set(files) - on_disk) == [], "manifest 条目在 vendor 树里不存在"

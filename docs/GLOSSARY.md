@@ -30,7 +30,7 @@
 
 | 术语 | 键 | 含义 |
 | --- | --- | --- |
-| 5 独立神数 | wangji / wuzhao / taixuan / jingjue / shenyishu | 皇极经世（心易发微）、五兆、太玄筮法、undefined 靖爵、神仪数等，各自独立 Python 引擎。 |
+| 5 独立神数 | wangji / wuzhao / taixuan / jingjue / shenyishu | 皇极经世（心易发微）、五兆、太玄筮法、荆诀、神易数，各自独立 Python 引擎（显示名随上游 aiExport 技法表）。 |
 | 9 kinastro 神数 | shaozi / tieban / fendjing / beiji / nanji / chunzi / xianqin / cetian / qizhengkin | 邵子、铁板、分金、北极、南极、纯子、先秦、测天、七政等，共用 **kinastro** 引擎。 |
 | 邵子神数 | shaozi | 需从条文 CSV 生成 `shaozi_tiaowen_6144.json`（打包时生成 4608 条真条文，否则出占位条文）。 |
 | 一掌经 | yizhangjing | 十二支六道排盘 + 大限小限流年 + 神煞合参，JS 层实现（v0.17.0）。 |

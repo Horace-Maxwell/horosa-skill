@@ -76,6 +76,23 @@ def test_a_real_default_export_is_still_pruned_as_default() -> None:
     assert out.strip() == "export default { keep };"
 
 
+def test_a_bare_default_export_of_a_stripped_symbol_is_dropped() -> None:
+    """v3.11.0 returnCharts.js ends with `export default fetchReturnSet;` — a bare identifier, not an
+    aggregate object. Neither aggregate pattern matched it, so the stripped name stayed and the module
+    threw ReferenceError at load."""
+    src = "export function judge(){ return 1; }\nexport default fetchReturnSet;\n"
+    out, notes = rv._prune_default_export(src, ["fetchReturnSet"])
+    assert "export default" not in out, f"stale default export left behind: {out!r}"
+    assert "export function judge()" in out
+    assert notes == ["pruned bare default export fetchReturnSet"]
+
+
+def test_a_bare_default_export_that_was_not_stripped_is_kept() -> None:
+    src = "function keeper(){}\nexport default keeper;\n"
+    out, notes = rv._prune_default_export(src, ["fetchSomethingElse"])
+    assert out == src and notes == []
+
+
 # --- stub_import must not be treated as a regex replacement template ---------------------------
 
 
@@ -92,3 +109,56 @@ def test_stub_import_stub_is_inserted_literally() -> None:
 
 def test_dead_prune_helper_is_gone() -> None:
     assert not hasattr(rv, "_prune_default_export_unused"), "dead near-duplicate should stay deleted"
+
+
+# --- stub audit: a stubbed binding the kept code still uses ------------------------------------
+
+
+def _warnings(notes: list[str]) -> list[str]:
+    return [n for n in notes if n.startswith("⚠")]
+
+
+def test_stub_audit_flags_a_stubbed_binding_the_kept_code_still_uses() -> None:
+    """v0.40.0: LiuRengMain.js stubbed `ChuangChart` to '' while the kept `buildSanChuanData` does
+    `new ChuangChart(...)` → swallowed ReferenceError → 六壬择时 zero hits for every condition."""
+    src = "import ChuangChart from '../liureng/ChuangChart.js';\nexport function build(){ return new ChuangChart({}); }\n"
+    _out, notes = rv.apply_deviations(src, [{"kind": "stub_import", "specifier": "../liureng/ChuangChart.js", "stub": ""}])
+    assert _warnings(notes) and "ChuangChart" in _warnings(notes)[0]
+    named = "import { buildXiangContext as bx } from './LRXiangDoc.js';\nexport const f = () => bx();\n"
+    _out, notes = rv.apply_deviations(named, [{"kind": "stub_import", "specifier": "./LRXiangDoc.js", "stub": ""}])
+    assert _warnings(notes) and ": bx " in _warnings(notes)[0]
+
+
+def test_stub_audit_is_quiet_for_unused_defined_or_non_code_mentions() -> None:
+    unused = "import LiuRengChart from './LiuRengChart.js';\nexport const X = 1;\n"
+    _out, notes = rv.apply_deviations(unused, [{"kind": "stub_import", "specifier": "./LiuRengChart.js", "stub": ""}])
+    assert not _warnings(notes)
+    defined = "import { drawPath } from '../graph/GraphHelper.js';\nexport function f(){ drawPath(); }\n"
+    stub = "const drawPath = () => {};"
+    _out, notes = rv.apply_deviations(defined, [{"kind": "stub_import", "specifier": "../graph/GraphHelper.js", "stub": stub}])
+    assert not _warnings(notes)
+    mentions = (
+        "import DateTime from '../comp/DateTime.js';\n// DateTime is UI-only\n"
+        "export const s = 'DateTime'; export function g(o){ return o.DateTime; }\n"
+    )
+    _out, notes = rv.apply_deviations(mentions, [{"kind": "stub_import", "specifier": "../comp/DateTime.js", "stub": ""}])
+    assert not _warnings(notes)
+
+
+def test_imported_locals_covers_every_import_form() -> None:
+    assert rv._imported_locals("import A from 'x';") == {"A"}
+    assert rv._imported_locals("import A, { b, c as d } from 'x';") == {"A", "b", "d"}
+    assert rv._imported_locals("import * as ns from 'x';") == {"ns"}
+    assert rv._imported_locals("import A, * as ns from 'x';") == {"A", "ns"}
+    assert rv._imported_locals("import 'x';") == set()
+
+
+def test_dynamic_relative_imports_get_the_js_suffix_too() -> None:
+    """`import('./tianjiDoctrine')` loads under a bundler but not under native Node ESM (ERR_MODULE_NOT_FOUND);
+    it is lazy, so loadcheck stays green and only the first call explodes."""
+    src = "export function load(){ return import('./tianjiDoctrine').then((m)=>m); }\n"
+    out, notes = rv.transform(src)
+    assert "import('./tianjiDoctrine.js')" in out and any("dynamic relative" in n for n in notes)
+    kept = "export const a = () => import('./x.js'); export const b = () => import('lodash');\n"
+    out, _ = rv.transform(kept)
+    assert "import('./x.js')" in out and "import('lodash')" in out

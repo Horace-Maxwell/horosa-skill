@@ -180,8 +180,8 @@ export function classicalBackendOverrides(getVal){
 		if(s.options && !s.options.some((o) => o.value === val)){ return; }   // 值域外脏值不发
 		out[s.backendKey || s.key] = val;
 	});
-	// 伴发规则:vocIncludeOuter 仅随非默认 vocMode(后端 classic/lilly 口径忽略它)。
-	if(out.vocIncludeOuter !== undefined && out.vocMode === undefined){ delete out.vocIncludeOuter; }
+	// 伴发规则:vocIncludeOuter 仅随非默认 vocMode(后端 classic/lilly 口径忽略它);[Q-254/T-226 ③] exempt4 亦按 1647 基判,不发。
+	if(out.vocIncludeOuter !== undefined && (out.vocMode === undefined || out.vocMode === 'exempt4')){ delete out.vocIncludeOuter; }
 	// [WP-7] 自定义界表附表体:termsVariant=4 时随请求带 customTermsDay/Night(后端强校验+回落埃及);
 	// 本地无合法表 → 降级不发 4(等效埃及,防「选了自定义却无表」的静默怪盘)。
 	if(out.termsVariant === 4){
@@ -265,3 +265,15 @@ export function classicalSnapshotNeverSig(getVal){
 	return out;
 }
 
+// [Q-340/T-321] /astroextra/analysis(格局页 / AI 挂载 / 导出三处)的恒星轨参数:随盘优先(请求 params 里的
+// chart 级键 starOrb/starOrbMode,来自 chartObj.params 回显或 record 覆盖),缺则全局仓;档位一并下发,
+// Python fixed_star_hits 据 fixedStarOrbMode='byMagnitude' 逐星取星等表轨。
+export function fixedStarOrbParamsFor(params){
+	const p = params || {};
+	const pick = (a, b)=>((a !== undefined && a !== null && a !== '') ? a : b);
+	const orb = pick(p.starOrb, pick(p.fixedStarOrb, classicalGlobalValue('fixedStarOrb')));
+	const mode = pick(p.starOrbMode, pick(p.fixedStarOrbMode, classicalGlobalValue('fixedStarOrbMode')));
+	const out = { fixedStarOrb: orb };
+	if(mode === 'byMagnitude'){ out.fixedStarOrbMode = 'byMagnitude'; }
+	return out;
+}

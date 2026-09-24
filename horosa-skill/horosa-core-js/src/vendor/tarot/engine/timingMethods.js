@@ -140,7 +140,8 @@ export function computeTimingLines(reading, deckCards, method, opts){
 		if(m === 'major_number'){
 			const unit = o.unit === '天' || o.unit === '月' ? o.unit : '周';
 			if(major.number === 0){ return [`另取大牌=${major.name_cn}:此事难成于期内,不必以时相待。`]; }
-			return [`另取大牌=${major.name_cn}(${major.number}) → 约 ${major.number} ${unit}内`];
+			// [Q-223/T-189·FT-31] 单位「月」写「个月」:「约 N 月内」易读成月份
+			return [`另取大牌=${major.name_cn}(${major.number}) → 约 ${major.number} ${unit === '月' ? '个月' : unit}内`];
 		}
 		if(major.astro && SIGN_CN[major.astro]){
 			return [`另取大牌=${major.name_cn} → ${SIGN_CN[major.astro]}座区间 ${signDateRange(major.astro) || ''}内`];

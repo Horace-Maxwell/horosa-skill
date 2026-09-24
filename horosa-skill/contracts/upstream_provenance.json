@@ -1,10 +1,10 @@
 {
   "_comment": "vendored 树对到的上游状态。只由 verify_upstream_sync.py --write-state 在**全部检查通过**时写入——红着写等于把失败洗成一条持久的「已核对」声明。",
-  "upstream_git_sha": "0604fa416f95e330dbd798ba2ede0f2aa0cb1688",
-  "upstream_git_committed_at": "2026-09-01T13:48:43-04:00",
-  "upstream_app_version": "3.10.0",
-  "aiexport_settings_version": 56,
-  "skill_mirrored_version": 56,
+  "upstream_git_sha": "9b74714b96a3752f87bde35fe5eb349e23899a9f",
+  "upstream_git_committed_at": "2026-09-23T23:47:54-04:00",
+  "upstream_app_version": "3.11.1",
+  "aiexport_settings_version": 58,
+  "skill_mirrored_version": 58,
   "upstream_checked_at_package_version": "0.39.0",
   "upstream_preset_keys": [
     "agepoint",
@@ -24,6 +24,7 @@
     "draconic",
     "dwadasamsa",
     "election",
+    "ephemeris",
     "extrareturns",
     "feigong",
     "fendjing",
@@ -65,15 +66,18 @@
     "persiandirected",
     "planetaryages",
     "planetaryarc",
+    "prenatalsyzygy",
     "primarydirchart",
     "primarydirect",
     "profection",
+    "prog",
     "qimen",
     "qimenzeri",
     "qizhengkin",
     "qizhengzeri",
     "relative",
     "relocation",
+    "returntimeline",
     "sanshiunited",
     "sanshizeri",
     "shaozi",
@@ -104,9 +108,9 @@
     "zodialrelease"
   ],
   "core_js": {
-    "files_compared": 300,
-    "files_unmatched": 19,
-    "tree_sha256": "abbe0bc9659e5d8f28d9180e0bde314a233c3e1872c2fde656b73eae118a6604"
+    "files_compared": 364,
+    "files_unmatched": 27,
+    "tree_sha256": "1a5352c4df72ded52fab23676c0234a420d9357454a17783c7821af569cdc50a"
   },
   "runtime_source": {
     "sentinels_verified": 7

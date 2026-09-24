@@ -46,12 +46,29 @@ export function runYizhangjing(payload) {
   const input = payload && typeof payload === 'object' ? payload : {};
   const date = `${input.date ?? ''}`.trim().replace(/\//g, '-');
   const time = `${input.time ?? ''}`.trim() || '00:00:00';
-  // timeAlg 缺省 1（钟表时），与 canping/heluo 一致。
-  const timeAlg = input.timeAlg === undefined || input.timeAlg === null ? 1 : input.timeAlg;
-  const baziParams = { date, time, zone: input.zone, lon: input.lon, gender: input.gender, timeAlg };
+  // timeAlg 缺省 0（真太阳时；sync311 wave 3b，此前误为 1）：上游 AI 挂载无头路径 buildYizhangjingSnapshotForRecord →
+  // buildChartBaziParams 取 buildFieldObject 的 timeAlg = record.timeAlg ?? 0（aiAnalysisContext.js:603,1793,2198）；
+  // 挂载齿轮缺省亦 0（techniqueMountSettings.js:147,1908-1911）。页面 YiZhangJingMain.getModel 的
+  // `fieldVal(f, 'timeAlg', 1)`（:124）读全局 fields.timeAlg —— 该字段恒在、出厂种子 0（models/astro.js:375-377 +
+  // newChartSeeds.js:43），回退值 1 从不生效。页面与无头同为 0；canping/heluo 同改。
+  const timeAlg = input.timeAlg === undefined || input.timeAlg === null ? 0 : input.timeAlg;
+  // 日界 / 晚子时：上游 YiZhangJingMain.getModel 读盘面 fields，缺席回退全局出厂默认
+  // defaultAfter23NewDay()=1 / defaultLateZiHourUseNextDay()=1（YiZhangJingMain.js:124-128）。
+  // 此前两键都不传 → vendored baziLunarLocal 把 undefined 当「24 点换日」（after23=0），23 点档生人
+  // 日柱与农历日（lunarByDayBoundary 进位）都与桌面不同。晚子时只动时干，一掌经只用时支，上游挂载
+  // 已撤下该齿轮（techniqueMountSettings.js:1909），这里仍原样透传以与页面同形。
+  const after23NewDay = input.after23NewDay === undefined || input.after23NewDay === null ? 1 : input.after23NewDay;
+  const lateZiHourUseNextDay = input.lateZiHourUseNextDay === undefined || input.lateZiHourUseNextDay === null
+    ? 1 : input.lateZiHourUseNextDay;
+  const baziParams = {
+    date, time, zone: input.zone, lon: input.lon, gender: input.gender, timeAlg, after23NewDay, lateZiHourUseNextDay,
+  };
+  const off = (v) => v === false || v === 0 || v === '0' || v === 'false';
 
-  // 排盘选项：定月法（农历月/节气月）、顺逆规则、命宫定法、大限一宫年数、大限起法、小限起宫、
-  // 流年十二神组、早子时、重犯口诀组。神煞合参层无头导出默认开（预设全选即全量导出；关则不出该段）。
+  // 排盘选项 = 上游 KinAstroMain.buildYizhangjingOpts 同键（KinAstroMain.js:3357-3380），缺省 = 上游
+  // KINASTRO_PAGE_SETTINGS 出厂档（KinAstroMain.js:1039-1056，即「秘传口诀」预设）：定月法、顺逆规则、
+  // 命宫定法、大限一宫年数、大限起法、小限起宫/顺逆、逐年法、流年十二神组、早子时、重犯口诀组、
+  // 星名系统、六道术语、童限显示、神煞合参层（出厂关）。
   const opts = {
     dingYue: input.dingYue === 'jieqi' ? 'jieqi' : 'lunar',
     shunniRule: input.shunniRule === 'menShunNvNi' ? 'menShunNvNi' : 'yangNanYinNv',
@@ -59,10 +76,24 @@ export function runYizhangjing(payload) {
     dayunLength: input.dayunLength === 10 || input.dayunLength === '10' ? 10 : 7,
     dayunStartAge: input.dayunStartAge === 'age1' ? 'age1' : 'mi',
     xiaoxianStart: input.xiaoxianStart === 'yue' ? 'yue' : 'ri',
+    xiaoxianDir: input.xiaoxianDir === 'always' ? 'always' : 'chart',
+    // 逐年法：只认 xiaoxian / liunian，未设 = ''（引擎两套并列）。sync311 wave 3 镜像上游 **AI 挂载无头路径**：
+    //   挂载缺省（用户未拨齿轮）走 buildTechniqueContext → regenerateChartTechniqueSnapshot（aiAnalysisContext.js:4297-4314,
+    //   4217-4224）→ buildYizhangjingSnapshotForRecord(record, { annualMethod: record.annualMethod, … })（:3249-3259）——
+    //   命盘记录不带该键 → undefined → yizhangjingReport.js:248 归 '' → :477-479 小限与流年十二神同出。
+    //   齿轮拨「小限」也一样：它等于挂载 schema 缺省 'xiaoxian'（techniqueMountSettings.js:1944），被
+    //   pruneOptionsToNonDefault（:2508-2555）剪掉 → 走同一条缺省路；只有拨「流年十二神」才下发。
+    // ⚠ 页面与无头不一致：桌面页（及 AI 导出读的页面模块快照，aiExport.js:6710-6712）按 KINASTRO_PAGE_SETTINGS
+    //   yizhangjingAnnual 出厂 'xiaoxian'（KinAstroMain.js:1046,3357-3365）只出小限。此处按无头路径。
+    annualMethod: input.annualMethod === 'liunian' || input.annualMethod === 'xiaoxian' ? input.annualMethod : '',
     flowShenSet: input.flowShenSet || 'A',
     zaoZiAdjust: !!input.zaoZiAdjust,
     chongfanKou: input.chongfanKou === 'beta' ? 'beta' : 'alpha',
-    shenshaLayer: input.shenshaLayer === undefined || input.shenshaLayer === null ? true : !!input.shenshaLayer,
+    starNaming: input.starNaming === 'B' || input.starNaming === 'C' ? input.starNaming : 'A',
+    daoTerm: input.daoTerm === 'edao' ? 'edao' : 'gui',
+    tongxianShow: !off(input.tongxianShow),
+    // 神煞合参层：上游出厂关（yizhangjingShensha def false；挂载 schema default 0）。
+    shenshaLayer: input.shenshaLayer === undefined || input.shenshaLayer === null ? false : !off(input.shenshaLayer) && !!input.shenshaLayer,
     // 折半法（十五折半/夜半折半）与品级变体：只在显式给出时进 opts（缺省字节不变）
     ...(input.leapRule === 'midnight' ? { leapRule: 'midnight' } : {}),
     ...(input.gradeSet === 'variant' ? { gradeSet: 'variant' } : {}),
@@ -74,6 +105,8 @@ export function runYizhangjing(payload) {
     lon: input.lon ?? null,
     gender: input.gender ?? null,
     timeAlg,
+    after23NewDay,
+    lateZiHourUseNextDay,
     ...opts,
   };
 

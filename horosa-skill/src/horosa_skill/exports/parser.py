@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import re
+
 from typing import Any
 
 from horosa_skill.exports.registry import (
     AI_EXPORT_SETTINGS_VERSION,
+    JIEQI_SETTING_PRESETS,
     get_technique_info,
     map_legacy_section_title,
     normalize_astro_meaning_setting,
@@ -11,6 +14,9 @@ from horosa_skill.exports.registry import (
     normalize_section_title,
     unique_list,
 )
+
+# 上游 `exportKey === 'jieqi' || isJieQiSplitSettingKey(exportKey)`（aiExport.js:3552）。
+JIEQI_EXPORT_KEYS = frozenset({"jieqi", *JIEQI_SETTING_PRESETS})
 
 
 def parse_section_title_line(line: str | None) -> str:
@@ -70,6 +76,96 @@ def render_sections_to_text(sections: list[dict[str, Any]]) -> str:
     return "\n\n".join(blocks).strip()
 
 
+_ASCII_I = re.IGNORECASE | re.ASCII  # 上游 JS 正则的 \b / \d 是 ASCII 语义；Python str 正则默认 Unicode（汉字算 \w），须 re.ASCII 对齐
+
+
+def trim_planet_info_by_setting(content: str, setting: dict[str, Any] | None) -> str:
+    """上游 aiExport.js:1933-2036 trimPlanetInfoBySetting 逐字移植：「星曜后天信息」导出开关（showHouse 宫位 / showRuler 主宰宫）。
+    两者全开 → 原样返回（零回归）；否则把行内括号里**整段都是**后天信息（后天:… / Nth / - / NR… / 主…宫 / 宫位未知 / (第)X宫）的
+    部分按开关裁成 `(宫位; 主宰)` 之一或整个删除；非后天信息括号（[Q-316/T-302]：三式合一「日马：申（坤二宫）」）原样保留。
+    尾处理同上游：多空格并一、空括号删除、三连空行并二。"""
+    source = f"{content or ''}"
+    mode = normalize_planet_info_setting(setting)
+    show_house = mode["showHouse"] == 1
+    show_ruler = mode["showRuler"] == 1
+    if show_house and show_ruler:
+        return source
+
+    def split_segments(text: str) -> list[str]:
+        return [f"{item or ''}".strip() for item in re.split(r"[；;]", text) if f"{item or ''}".strip()]
+
+    def is_planet_info_inner(inner: str) -> bool:
+        txt = f"{inner or ''}".strip()
+        if not txt:
+            return False
+        if re.match(r"^后天[:：]", txt):
+            return True
+        segs = split_segments(txt)
+        if not segs:
+            return False
+        return all(
+            re.fullmatch(r"\d{1,2}th", seg, _ASCII_I) is not None
+            or seg == "-"
+            or re.fullmatch(r"\d{1,2}R(?:\d{1,2}R)*", seg, _ASCII_I) is not None
+            or re.fullmatch(r"主.+宫", seg) is not None
+            or re.fullmatch(r"(宫位未知|主宫未知)", seg) is not None
+            or re.fullmatch(r"第?[一二三四五六七八九十]+宫", seg) is not None
+            for seg in segs
+        )
+
+    def split_planet_info_parts(inner: str) -> tuple[str, str]:
+        txt = re.sub(r"^后天[:：]\s*", "", f"{inner or ''}").strip()
+        house_part = ""
+        ruler_part = ""
+        for seg in split_segments(txt):
+            if not house_part and re.fullmatch(r"\d{1,2}th|-", seg, _ASCII_I):
+                house_part = seg
+                continue
+            if not ruler_part and re.fullmatch(r"\d{1,2}R(?:\d{1,2}R)*", seg, _ASCII_I):
+                ruler_part = seg.upper()
+                continue
+            if not ruler_part and (re.match(r"^主", seg) or re.search(r"\b\d{1,2}R(?:\d{1,2}R)*\b", seg, _ASCII_I)):
+                ruler_part = seg
+                continue
+            if not house_part and re.search(r"宫", seg):
+                house_part = seg
+                continue
+            if not house_part:
+                house_part = seg
+                continue
+            if not ruler_part:
+                ruler_part = seg
+        if not house_part:
+            house_match = re.search(r"\b(\d{1,2}th|-)\b", txt, _ASCII_I)
+            if house_match and house_match.group(1):
+                house_part = house_match.group(1)
+        if not ruler_part:
+            ruler_match = re.search(r"\b(\d{1,2}R(?:\d{1,2}R)*)\b", txt, _ASCII_I)
+            if ruler_match and ruler_match.group(1):
+                ruler_part = ruler_match.group(1).upper()
+        return f"{house_part or ''}".strip(), f"{ruler_part or ''}".strip()
+
+    def replace_bracket(match: re.Match[str]) -> str:
+        left, inner, right = match.group(1), match.group(2), match.group(3)
+        if not is_planet_info_inner(inner):
+            return match.group(0)
+        house_part, ruler_part = split_planet_info_parts(inner)
+        pieces: list[str] = []
+        if show_house and house_part:
+            pieces.append(house_part)
+        if show_ruler and ruler_part:
+            pieces.append(ruler_part)
+        if not pieces:
+            return ""
+        return f"{left}{'; '.join(pieces)}{right}"
+
+    out = re.sub(r"([（(])([^（）()]*)([）)])", replace_bracket, source)
+    out = re.sub(r"[ \t]{2,}", " ", out)
+    out = re.sub(r"([（(])\s*([）)])", "", out)
+    out = re.sub(r"\n{3,}", "\n\n", out)
+    return out
+
+
 def parse_export_content(
     *,
     technique: str,
@@ -81,6 +177,11 @@ def parse_export_content(
     technique_info = get_technique_info(technique)
     if technique_info is None:
         raise ValueError(f"Unknown AI export technique: {technique}")
+
+    # 「星曜后天信息」开关（上游 aiExport.js:6840 applyPlanetInfoFilterByContext：仅 planetInfo 技法、且只在显式设置非全开时改文）：
+    # planet_info=None = 上游无用户设置 → 缺省全开 → 原样；给了对象才按 normalizePlanetInfoSetting 裁剪（缺键即 0，与上游同）。
+    if technique_info["supports_planet_info"] and isinstance(planet_info, dict):
+        content = trim_planet_info_by_setting(content, planet_info)
 
     raw_text = f"{content or ''}".strip()
     sections = split_content_sections(raw_text, technique)
@@ -116,15 +217,21 @@ def parse_export_content(
         )
 
     strict_filtered = render_sections_to_text([section for section in filtered_sections if section["included"]])
-    safe_export_text = strict_filtered or render_sections_to_text(
-        [
-            {
-                "content": section["content"],
-            }
-            for section in filtered_sections
-            if normalize_section_title(section["title"]) not in forbidden
-        ]
-    )
+    if not strict_filtered and selected_sections and technique in JIEQI_EXPORT_KEYS:
+        # [挂载自检 F-38]（上游 aiExport.js:3547-3552）：节气盘整键/分键——盘页签下的内容只含当前一盘，用户显式勾的段
+        # 本内容没有 → 真取消（''）而非回吐全文（否则「只要夏至星盘」被盖成「春分整份」）。其他技法段名与内容同源、
+        # 失配只会是命名漂移，保留下面「回退剥后文」兜底。
+        safe_export_text = ""
+    else:
+        safe_export_text = strict_filtered or render_sections_to_text(
+            [
+                {
+                    "content": section["content"],
+                }
+                for section in filtered_sections
+                if normalize_section_title(section["title"]) not in forbidden
+            ]
+        )
 
     optional_norm = {normalize_section_title(item) for item in technique_info.get("optional_sections", [])}
     unknown_detected = [title for title in detected_titles if normalize_section_title(title) not in {normalize_section_title(item) for item in preset_sections}]

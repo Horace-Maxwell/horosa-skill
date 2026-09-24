@@ -320,16 +320,18 @@ def test_sanshiunited_combines_ken_qimen_taiyi(tmp_path) -> None:
     service = make_service(tmp_path)
     result = service.run_tool(
         "sanshiunited",
-        {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "qimen_options": {"qijuMethod": "chaibu"}, "taiyi_options": {"style": 3}},
+        # gameTheory=1：【太乙博弈】只在 ken 回博弈段时产（上游挑段「有正文才出」；v3.11.x wave-3 前 skill 给缺段填占位）。
+        {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "qimen_options": {"qijuMethod": "chaibu"}, "taiyi_options": {"style": 3, "gameTheory": 1}},
         save_result=False,
     )
     assert result.ok is True
     assert result.data["qimen"].get("juText")
     assert result.data["taiyi"].get("kook")
     snap = result.data["snapshot_text"]
-    assert "[起盘信息]" in snap
+    # 快照 = vendored 上游 buildSanShiUnitedSnapshotText（appendSection 段头【】）。
+    assert "【起盘信息】" in snap
     # 对齐独立页：复用三独立技法富化段——太乙 pan.sections（加「太乙」前缀）、六壬断卦层、奇门派生。
-    for header in ("[太乙断法]", "[太乙博弈]", "[十二盘式]", "[课体结构]", "[奇门九宫方盘]", "[奇门用神分论]"):
+    for header in ("【太乙断法】", "【太乙博弈】", "【十二盘式】", "【课体结构】", "【奇门九宫方盘】", "【奇门用神分论】"):
         assert header in snap, header
     # 三家恒产段必须是真实引擎输出而非占位（占位文案=「本盘未产出」）。
     for always_on in ("主客定算", "十二盘式", "九宫方盘"):
@@ -559,7 +561,9 @@ def test_acg_lines_via_chart_service(tmp_path) -> None:
     assert "[起盘信息]" in snapshot
     # 上游 v50 起旧段名 [行星线经度] 已并入单段 [占星地图]（见 registry.map_legacy_section_title）。
     assert "[占星地图]" in snapshot
-    assert "MC线经度" in snapshot
+    # v0.40.0：段正文改 vendored 上游 [占星地图] builder（口径行 + 「主要行星角化线」逐星 MC/IC/ASC/DSC 经度），旧自拟「MC线经度」标签不再有。
+    assert "主要行星角化线" in snapshot
+    assert any(line.startswith("- 太阳:MC ") and " / IC " in line for line in snapshot.split("\n")), "太阳角化线行"
     # 线交点若产出，角色标签必须落地（源返回键 aAngle/bAngle；曾误读 av/aEvent 致标签恒空）。
     crossings = acg.get("crossings") or []
     if crossings and "[线交点]" in snapshot:
@@ -628,9 +632,11 @@ def test_yizhangjing_local_tool_runs_headless_engine(tmp_path) -> None:
     snapshot = result.data["snapshot_text"]
     for header in (
         "[起盘信息]", "[四柱四宫断语]", "[命宫与人事十二宫]", "[格局判定]",
-        "[大限]", "[小限与流年十二神]", "[神煞合参]",
+        "[大限]", "[小限与流年十二神]",
     ):
         assert header in snapshot, header
+    # 神煞合参层缺省随上游出厂档关（KinAstroMain.js yizhangjingShensha def false）→ 缺省不出该段。
+    assert "[神煞合参]" not in snapshot
     assert "生年支：寅(虎)" in snapshot
     # 确定性：同输入同快照。
     again = service.run_tool("yizhangjing", payload, save_result=False)
@@ -856,8 +862,10 @@ def test_ziwei_patterns_and_enriched_overview(tmp_path) -> None:
     )
     assert result.ok is True, result.error
     snap = result.data["snapshot_text"]
-    assert "命主：" in snap and "五行局：" in snap  # 起盘信息 enriched
-    assert "主星：" in snap and "杂曜：" in snap  # 宫位总览 structured (P0 杂曜补显)
+    # v0.40 F8：快照改由 vendored buildZiWeiSnapshotText 出（上游 ZiWeiMain.js）——起盘信息是「命局：阴男 土五局」
+    # （旧 Python port 写「五行局：」）；宫位总览是上游 GFM 表，主/辅/煞/杂曜同列（旧 port 分「主星：/杂曜：」行）。
+    assert "命主：" in snap and "命局：" in snap and "斗君：" in snap  # 起盘信息 enriched
+    assert "| 宫位 | 干支 | 大限 | 星曜（四化括注） |" in snap and "天德" in snap  # 宫位总览（杂曜天德补显）
     assert "[命中格局]" in snap
     # 至少一条命中格局带断语；该盘已知含「府相朝垣」
     assert "府相朝垣" in snap
@@ -929,8 +937,9 @@ def test_chart_carries_v267_classical(tmp_path) -> None:
     assert "逐题主星" in snapshot
     assert "偶然尊贵" in snapshot
     assert "Almuten 总主" in snapshot
-    # [古典格局] 尾「格局速览」(派生自活盘对象 + 主宰星链)：心性·智识·职业·行事·木星·后天凶星 对任一本命盘恒在。
-    assert "格局速览" in snapshot
+    # 格局速览行（心性·智识·职业·行事·木星·后天凶星，派生自活盘对象 + 主宰星链）对任一本命盘恒在；v0.40.0 起随上游
+    # buildClassicalSection 放在 [古典] 段的「古典格局」子块（子块标题行紧接首条「心性(月)：」行），不再有「格局速览」标题。
+    assert "\n古典格局\n心性(月)：" in snapshot
     for marker in ("心性(月)：", "智识(水)：", "职业(月第一西没)：", "行事(日第一西没)：", "木星：", "后天凶星："):
         assert marker in snapshot, marker
     detected = (result.data.get("export_snapshot") or {}).get("section_titles_detected") or []
@@ -979,12 +988,14 @@ def test_sixyao_carries_liuyao_struct(tmp_path) -> None:
     assert result.ok is True, result.error
     snap = result.data["snapshot_text"]
     assert "[断卦结构]" in snap
-    assert "卦序：" in snap and "逐爻(初→上)：" in snap
+    # wave 3：[断卦结构] 由 vendored 上游 liuyaoStructLines 产出 —— 逐爻是 GFM 表（GuaZhanMain.js:168-181），
+    # 不再是旧手抄行式「逐爻(初→上)：…/第N爻：…(世)」。
+    assert "卦序：" in snap and "| 爻 | 六神 | 地支 | 五行 | 六亲 | 世应 | 旺衰 | 状态 | 伏神 | 神煞 |" in snap
     import re as _re
 
     # 逐爻含纳甲六亲(子孙/妻财/官鬼/父母/兄弟 之一)，且标出世/应
     assert _re.search(r"第[1-6]爻：.*(子孙|妻财|官鬼|父母|兄弟)", snap)
-    assert "(世)" in snap and "(应)" in snap
+    assert _re.search(r"^\| 第[1-6]爻 \|.*\| 世 \|", snap, _re.M) and _re.search(r"^\| 第[1-6]爻 \|.*\| 应 \|", snap, _re.M)
     _assert_clean_export(result)
 
 
@@ -1002,11 +1013,14 @@ def test_bazi_carries_geju_sections(tmp_path) -> None:
     snap = result.data["snapshot_text"]
     for header in ("[五行力量]", "[格局·用神]", "[盲派结构]"):
         assert header in snap, header
-    assert "分布：" in snap and "宾主：" in snap
+    # v0.40 F9：[五行力量] 改由 vendored buildBaziSnapshotText 出（上游 BaZi.js GFM 表「| 五行 | 占比 |」，
+    # 旧 baziGeju 引擎的「分布：」行不再出现）。
+    assert "| 五行 | 占比 |" in snap and "宾主：" in snap
     export = result.data.get("export_snapshot") or {}
     assert export.get("unknown_detected_sections") == []
-    # 导出文本不因条件段回退而暴涨（_pick_section_data 兜底 dump 守卫）：合理上限
-    assert len((export.get("export_text") or "").splitlines()) < 200
+    # 导出文本不因条件段回退而暴涨（_pick_section_data 兜底 dump 守卫）：合理上限。
+    # v0.40 F9：上游 [大运] 含逐年小运/流年表（BaZi.js:537-569，约百行），本盘实出 217 行 → 上限放到 300。
+    assert len((export.get("export_text") or "").splitlines()) < 300
 
 
 @requires_chart
@@ -1080,23 +1094,25 @@ def test_chart_sidereal_ayanamsa_and_nakshatra(tmp_path) -> None:
     raman = service.run_tool("chart", {**base, "zodiacal": 1, "siderealAyanamsa": "raman"}, save_result=False)
     assert raman.ok is True, raman.error
     rsnap = raman.data["snapshot_text"]
-    assert "恒星黄道岁差：Raman" in rsnap  # 真实岁差，非硬编码 Lahiri
+    # v0.40.0：[起盘信息] 黄道行按上游 zodiacalDisplayText（astroAiSnapshot.js）「恒星黄道·<岁差名>，<宫制>」；宫制按请求 hsys=1（Alcabitus）。
+    assert "恒星黄道·Raman，Alcabitus" in rsnap  # 真实岁差，非硬编码 Lahiri
     assert "[月宿]" in rsnap and "宿主" in rsnap
     rexp = raman.data["export_snapshot"]
     assert rexp["unknown_detected_sections"] == []  # 月宿 已登记，不算 unknown
     assert "月宿" not in rexp["missing_selected_sections"]  # 已产出，不算 missing
     assert "月宿" in (rexp.get("section_titles_detected") or [])
 
-    # 缺省恒星黄道 → Lahiri（不是 Raman）
+    # 缺省恒星黄道：请求无 siderealAyanamsa、后端回显亦空 → 上游 zodiacalDisplayText 只写「恒星黄道」（岁差名只在显式给制时出现，
+    # 上一断言已证 Raman 真标注、非硬编码）；不再有 skill 旧自拟的「恒星黄道岁差：Lahiri」行。
     lahiri = service.run_tool("chart", {**base, "zodiacal": 1}, save_result=False)
     assert lahiri.ok is True, lahiri.error
-    assert "恒星黄道岁差：Lahiri / Chitrapaksha" in lahiri.data["snapshot_text"]
+    assert "恒星黄道，Alcabitus" in lahiri.data["snapshot_text"] and "恒星黄道·" not in lahiri.data["snapshot_text"]
 
     # 回归黄道 → 无岁差行、无月宿段
     trop = service.run_tool("chart", {**base}, save_result=False)
     assert trop.ok is True, trop.error
     tsnap = trop.data["snapshot_text"]
-    assert "恒星黄道岁差" not in tsnap
+    assert "回归黄道，Alcabitus" in tsnap and "恒星黄道" not in tsnap
     assert "[月宿]" not in tsnap
     assert "月宿" not in (trop.data["export_snapshot"].get("section_titles_detected") or [])
 
@@ -1124,9 +1140,10 @@ def test_india_chart_houses_and_ayanamsa(tmp_path) -> None:
     assert abs((_india_sun_lon(lahiri) - _india_sun_lon(fagan)) - 0.88) < 0.10
 
     # 岁差名按制标注（非硬编码 Lahiri）
-    assert "恒星黄道岁差：Raman" in raman.data["snapshot_text"]
-    assert "恒星黄道岁差：Fagan/Bradley" in fagan.data["snapshot_text"]
-    assert "恒星黄道岁差：Lahiri / Chitrapaksha" in lahiri.data["snapshot_text"]
+    # v0.40.0：印占 [起盘信息] 首条黄道行 = 上游 indiaCalibreLine（IndiaChart.js:1113-1123）「恒星黄道·<岁差名>，<印占分宫制名>」。
+    assert "恒星黄道·Raman，整宫制 Whole Sign" in raman.data["snapshot_text"]
+    assert "恒星黄道·Fagan/Bradley，整宫制 Whole Sign" in fagan.data["snapshot_text"]
+    assert "恒星黄道·Lahiri / Chitrapaksha，整宫制 Whole Sign" in lahiri.data["snapshot_text"]
 
     # 分宫制 24 制可选：不同 hsys → 不同宫头（整宫 vs KP/Placidus）
     whole = lahiri  # indiaHsys=0 整宫
@@ -1141,8 +1158,8 @@ def test_india_chart_houses_and_ayanamsa(tmp_path) -> None:
     # 象限宫制(KP/Campanus)的一宫宫头 ≠ 整宫制（整宫制宫头落星座 0°），且 KP≠Campanus
     assert _cusp1(kp) is not None and _cusp1(campanus) is not None
     assert abs(_cusp1(kp) - _cusp1(whole)) > 1.0 or abs(_cusp1(campanus) - _cusp1(whole)) > 1.0
-    assert "恒星黄道，KP / Placidus" in kp.data["snapshot_text"]
-    assert "恒星黄道，Campanus" in campanus.data["snapshot_text"]
+    assert "恒星黄道·Lahiri / Chitrapaksha，KP / Placidus" in kp.data["snapshot_text"]
+    assert "恒星黄道·Lahiri / Chitrapaksha，Campanus" in campanus.data["snapshot_text"]
     # 印占盘 export 干净（月宿在 optional，可能性数据相关）
     assert (raman.data.get("export_snapshot") or {}).get("unknown_detected_sections") == []
     # Vimshottari 大运 [大运Dasha]（后端 jyotish.dasha.vimshottari）：系统/月宿/首运/大运序列 由出生唯一确定，恒在。
@@ -1188,7 +1205,8 @@ def test_mundane_ingress_chart(tmp_path) -> None:
     assert "夏至入宫：" in snapshot
     # 地区盘按格林尼治（0°经线 51°29′N）定盘；定局段给出入宫图效力定则。
     assert "格林尼治" in snapshot
-    assert "定局：" in snapshot
+    # v0.40.0：定局段改由 vendored 上游 buildMundaneAiSnapshotParts 产出（[定局·年主/盘主] 首行「年主星：…；取点 …」），旧自拟「定局：」行不再有。
+    assert "年主星：" in snapshot and "；取点 太阳 / 月亮 / 上升 / 福点 / 产前朔望" in snapshot
     detected = (data.get("export_snapshot") or {}).get("section_titles_detected") or []
     assert "世俗入宫" in detected
     # 世俗盘为非推运入宫盘，[可能性] 恒缺属预期（可选段）→ 导出仍应干净。

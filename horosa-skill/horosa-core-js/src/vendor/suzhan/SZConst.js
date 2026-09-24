@@ -16,6 +16,8 @@ export const SZChart_FengYeChart = 6;
 export const SZChart_NiXiangChart = 7;
 
 const DefaultFillColor = 'var(--horosa-suzhan-fill, #fefeef)';
+// 分野 / 方位 / 八卦等表的 color 一律写成 getter(访问时读当前调色板):模块初始化期读 AstroConst.AstroColor 会把亮主题的墨色烘死进常量,
+// 切明暗后重画也换不掉(FL-20260922-3);合同测试 chartThemeFollow.contract 以 AST 锁「组件树零模块级 / 零实例字段调色板烘焙」。
 
 export const SZChart_Circle = 0;
 export const SZChart_Square = 1;
@@ -27,7 +29,7 @@ if(chartshape === undefined || chartshape === null){
 	chartshape = SZChart_Square;
 }else{
 	try{
-		chartshape = parseInt(chartshape, 10);
+		chartshape = parseInt(chartshape);
 	}catch(e){
 		chartshape = SZChart_Square;
 	}
@@ -65,7 +67,7 @@ export const SZFengYe = [
 	['燕', '·', '幽', '州', AstroText.AstroMsg[AstroConst.SAGITTARIUS]], 
 	['吴', '越·', '扬', '州', AstroText.AstroMsg[AstroConst.CAPRICORN]], 
 	['齐', '·', '青', '州', AstroText.AstroMsg[AstroConst.AQUARIUS]], 
-	['魏', '·', '并', '州', AstroText.AstroMsg[AstroConst.PISCES]]
+	['卫', '·', '并', '州', AstroText.AstroMsg[AstroConst.PISCES]]
 ];
 
 export const SZSigns = [
@@ -95,22 +97,23 @@ export const SZFengYeCircle = [
 	['燕', '幽', '州', AstroText.AstroMsg[AstroConst.SAGITTARIUS]], 
 	['吴越', '扬', '州', AstroText.AstroMsg[AstroConst.CAPRICORN]], 
 	['齐', '青', '州', AstroText.AstroMsg[AstroConst.AQUARIUS]], 
-	['魏', '并', '州', AstroText.AstroMsg[AstroConst.PISCES]]
+	['卫', '并', '州', AstroText.AstroMsg[AstroConst.PISCES]]
 ];
 
 export const SZFengYeBySu = {
-	'Aries': {name: ['鲁', '徐', '州'], su: ['奎', '娄'], next: '胃', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Taurus': {name: ['赵', '冀', '州'], su: ['胃', '昴', '毕'], next: '觜', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Gemini': {name: ['魏', '司', '州'], su: ['觜', '参'], next: '井', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Cancer': {name: ['秦', '雍', '州'], su: ['井', '鬼'], next: '柳', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Leo': {name: ['周', '三', '河'], su: ['柳', '星', '张'], next: '翼', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Virgo': {name: ['楚', '荆', '州'], su: ['翼', '轸'], next: '角', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Libra': {name: ['郑', '兖', '州'], su: ['角', '亢'], next: '氐', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Scorpio': {name: ['宋', '豫', '州'], su: ['氐', '房', '心'], next: '尾', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Sagittarius': {name: ['燕', '幽', '州'], su: ['尾', '箕'], next: '斗', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Capricorn': {name: ['吴', '越', '扬', '州'], su: ['斗', '牛'], next: '女', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Aquarius': {name: ['齐', '青', '州'], su: ['女', '虚', '危'], next: '室', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Pisces': {name: ['魏', '并', '州'], su: ['室', '壁'], next: '奎', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
+	'Aries': {name: ['鲁', '徐', '州'], su: ['奎', '娄'], next: '胃', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Taurus': {name: ['赵', '冀', '州'], su: ['胃', '昴', '毕'], next: '觜', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Gemini': {name: ['魏', '司', '州'], su: ['觜', '参'], next: '井', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Cancer': {name: ['秦', '雍', '州'], su: ['井', '鬼'], next: '柳', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Leo': {name: ['周', '三', '河'], su: ['柳', '星', '张'], next: '翼', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Virgo': {name: ['楚', '荆', '州'], su: ['翼', '轸'], next: '角', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Libra': {name: ['郑', '兖', '州'], su: ['角', '亢'], next: '氐', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Scorpio': {name: ['宋', '豫', '州'], su: ['氐', '房', '心'], next: '尾', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Sagittarius': {name: ['燕', '幽', '州'], su: ['尾', '箕'], next: '斗', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Capricorn': {name: ['吴', '越', '扬', '州'], su: ['斗', '牛'], next: '女', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Aquarius': {name: ['齐', '青', '州'], su: ['女', '虚', '危'], next: '室', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	// 娵訾(室壁/亥)分野为「卫」(汉书·地理志:卫地,营室东壁之分野;曾误植形近「魏」——魏属觜参实沉)
+	'Pisces': {name: ['卫', '并', '州'], su: ['室', '壁'], next: '奎', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
 };
 
 export const SZSignsCircle = [
@@ -159,90 +162,75 @@ export const SZInverseDirectCircle = [
 ];
 
 export const SZDirectBySu = {
-	'Aries': {name: ['西', '之', '北'], su: ['奎', '娄', '胃'], next: '昴', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Taurus': {name: ['西'], su: ['昴'], next: '毕', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Gemini': {name: ['西', '之', '南'], su: ['毕', '觜', '参'], next: '井', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Cancer': {name: ['南', '之', '西'], su: ['井', '鬼', '柳'], next: '星', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Leo': {name: ['南'], su: ['星'], next: '张', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Virgo': {name: ['南', '之', '东'], su: ['张', '翼', '轸'], next: '角', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Libra': {name: ['东', '之', '南'], su: ['角', '亢', '氐'], next: '房', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Scorpio': {name: ['东'], su: ['房'], next: '心', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Sagittarius': {name: ['东', '之', '北'], su: ['心', '尾', '箕'], next: '斗', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Capricorn': {name: ['北', '之', '东'], su: ['斗', '牛', '女'], next: '虚', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Aquarius': {name: ['北'], su: ['虚', '危'], next: '危', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Pisces': {name: ['北', '之', '西'], su: ['危', '室', '壁'], next: '奎', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
+	'Aries': {name: ['西', '之', '北'], su: ['奎', '娄', '胃'], next: '昴', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Taurus': {name: ['西'], su: ['昴'], next: '毕', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Gemini': {name: ['西', '之', '南'], su: ['毕', '觜', '参'], next: '井', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Cancer': {name: ['南', '之', '西'], su: ['井', '鬼', '柳'], next: '星', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Leo': {name: ['南'], su: ['星'], next: '张', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Virgo': {name: ['南', '之', '东'], su: ['张', '翼', '轸'], next: '角', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Libra': {name: ['东', '之', '南'], su: ['角', '亢', '氐'], next: '房', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Scorpio': {name: ['东'], su: ['房'], next: '心', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Sagittarius': {name: ['东', '之', '北'], su: ['心', '尾', '箕'], next: '斗', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Capricorn': {name: ['北', '之', '东'], su: ['斗', '牛', '女'], next: '虚', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Aquarius': {name: ['北'], su: ['虚', '危'], next: '危', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Pisces': {name: ['北', '之', '西'], su: ['危', '室', '壁'], next: '奎', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
 };
 
 export const SZInverseDirectBySu = {
-	'Aries': {name: ['东', '之', '南'], su: ['奎', '娄', '胃'], next: '昴', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Taurus': {name: ['东'], su: ['昴'], next: '毕', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Gemini': {name: ['东', '之', '北'], su: ['毕', '觜', '参'], next: '井', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Cancer': {name: ['北', '之', '东'], su: ['井', '鬼', '柳'], next: '星', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Leo': {name: ['北'], su: ['星'], next: '张', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Virgo': {name: ['北', '之', '西'], su: ['张', '翼', '轸'], next: '角', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Libra': {name: ['西', '之', '北'], su: ['角', '亢', '氐'], next: '房', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Scorpio': {name: ['西'], su: ['房'], next: '心', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Sagittarius': {name: ['西', '之', '南'], su: ['心', '尾', '箕'], next: '斗', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Capricorn': {name: ['南', '之', '西'], su: ['斗', '牛', '女'], next: '虚', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Aquarius': {name: ['南'], su: ['虚', '危'], next: '危', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'Pisces': {name: ['南', '之', '东'], su: ['危', '室', '壁'], next: '奎', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
+	'Aries': {name: ['东', '之', '南'], su: ['奎', '娄', '胃'], next: '昴', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Taurus': {name: ['东'], su: ['昴'], next: '毕', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Gemini': {name: ['东', '之', '北'], su: ['毕', '觜', '参'], next: '井', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Cancer': {name: ['北', '之', '东'], su: ['井', '鬼', '柳'], next: '星', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Leo': {name: ['北'], su: ['星'], next: '张', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Virgo': {name: ['北', '之', '西'], su: ['张', '翼', '轸'], next: '角', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Libra': {name: ['西', '之', '北'], su: ['角', '亢', '氐'], next: '房', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Scorpio': {name: ['西'], su: ['房'], next: '心', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Sagittarius': {name: ['西', '之', '南'], su: ['心', '尾', '箕'], next: '斗', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Capricorn': {name: ['南', '之', '西'], su: ['斗', '牛', '女'], next: '虚', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Aquarius': {name: ['南'], su: ['虚', '危'], next: '危', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'Pisces': {name: ['南', '之', '东'], su: ['危', '室', '壁'], next: '奎', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
 };
 
 export const SZBaGuaSu = {
-	'乾': {su: ['室', '壁', '奎', '娄'], next: '胃', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'兑': {su: ['胃', '昴', '毕'], next: '觜', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'坤': {su: ['觜', '参', '井', '鬼'], next: '柳', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'离': {su: ['柳', '星', '张'], next: '翼', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'巽': {su: ['翼', '轸', '角', '亢'], next: '氐', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'震': {su: ['氐', '房', '心'], next: '尾', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'艮': {su: ['尾', '箕', '斗', '牛'], next: '女', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'坎': {su: ['女', '虚', '危'], next: '室', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
+	'乾': {su: ['室', '壁', '奎', '娄'], next: '胃', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'兑': {su: ['胃', '昴', '毕'], next: '觜', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'坤': {su: ['觜', '参', '井', '鬼'], next: '柳', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'离': {su: ['柳', '星', '张'], next: '翼', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'巽': {su: ['翼', '轸', '角', '亢'], next: '氐', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'震': {su: ['氐', '房', '心'], next: '尾', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'艮': {su: ['尾', '箕', '斗', '牛'], next: '女', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'坎': {su: ['女', '虚', '危'], next: '室', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
 };
 
 export const SZDunJiaSu = {
-	'开': {su: ['室', '壁', '奎', '娄'], next: '胃', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'惊': {su: ['胃', '昴', '毕'], next: '觜', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'死': {su: ['觜', '参', '井', '鬼'], next: '柳', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'景': {su: ['柳', '星', '张'], next: '翼', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'杜': {su: ['翼', '轸', '角', '亢'], next: '氐', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'伤': {su: ['氐', '房', '心'], next: '尾', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'生': {su: ['尾', '箕', '斗', '牛'], next: '女', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'休': {su: ['女', '虚', '危'], next: '室', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
+	'开': {su: ['室', '壁', '奎', '娄'], next: '胃', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'惊': {su: ['胃', '昴', '毕'], next: '觜', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'死': {su: ['觜', '参', '井', '鬼'], next: '柳', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'景': {su: ['柳', '星', '张'], next: '翼', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'杜': {su: ['翼', '轸', '角', '亢'], next: '氐', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'伤': {su: ['氐', '房', '心'], next: '尾', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'生': {su: ['尾', '箕', '斗', '牛'], next: '女', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'休': {su: ['女', '虚', '危'], next: '室', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
 };
 
 export const SZTaiYiSu = {
-	'乾': {su: ['壁', '奎'], next: '娄', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'戌': {su: ['娄', '胃'], next: '昴', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'酉': {su: ['昴'], next: '毕', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'申': {su: ['毕', '觜'], next: '参', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'坤': {su: ['参', '井'], next: '鬼', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'未': {su: ['鬼', '柳'], next: '星', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'午': {su: ['星'], next: '张', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'巳': {su: ['张', '翼'], next: '轸', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'巽': {su: ['轸', '角'], next: '亢', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'辰': {su: ['亢', '氐'], next: '房', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'卯': {su: ['房'], next: '心', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'寅': {su: ['心', '尾'], next: '箕', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'艮': {su: ['箕', '斗'], next: '牛', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'丑': {su: ['牛', '女'], next: '虚', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'子': {su: ['虚'], next: '危', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
-	'亥': {su: ['危', '室'], next: '壁', color: AstroConst.AstroColor.Stroke, fillColor: DefaultFillColor},
+	'乾': {su: ['壁', '奎'], next: '娄', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'戌': {su: ['娄', '胃'], next: '昴', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'酉': {su: ['昴'], next: '毕', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'申': {su: ['毕', '觜'], next: '参', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'坤': {su: ['参', '井'], next: '鬼', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'未': {su: ['鬼', '柳'], next: '星', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'午': {su: ['星'], next: '张', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'巳': {su: ['张', '翼'], next: '轸', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'巽': {su: ['轸', '角'], next: '亢', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'辰': {su: ['亢', '氐'], next: '房', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'卯': {su: ['房'], next: '心', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'寅': {su: ['心', '尾'], next: '箕', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'艮': {su: ['箕', '斗'], next: '牛', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'丑': {su: ['牛', '女'], next: '虚', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'子': {su: ['虚'], next: '危', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
+	'亥': {su: ['危', '室'], next: '壁', get color(){ return AstroConst.AstroColor.Stroke; }, fillColor: DefaultFillColor},
 };
-
-export const SZSignsColor = [
-	AstroConst.AstroColor['Aries'],
-	AstroConst.AstroColor['Taurus'],
-	AstroConst.AstroColor['Gemini'],
-	AstroConst.AstroColor['Cancer'],
-	AstroConst.AstroColor['Leo'],
-	AstroConst.AstroColor['Virgo'],
-	AstroConst.AstroColor['Libra'],
-	AstroConst.AstroColor['Scorpio'],
-	AstroConst.AstroColor['Sagittarius'],
-	AstroConst.AstroColor['Capricorn'],
-	AstroConst.AstroColor['Aquarius'],
-	AstroConst.AstroColor['Pisces']
-];
 
 export const BaGua = [
 	['乾'], ['坎'], ['艮'], ['震'], 

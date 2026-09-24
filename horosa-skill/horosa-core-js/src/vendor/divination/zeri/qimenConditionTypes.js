@@ -30,6 +30,8 @@ import { buildQimenWangShuai } from '../../dunjia/DunJiaCalc.js';
 import { computePanType } from '../../dunjia/DunJiaFaCalc.js';
 
 const opt = (arr)=>arr.map((v)=>({ value: v, label: v }));
+// [Q-271/ZC-26] 旬首 → 遁仪(六甲遁六仪)
+const XUN_SHOU_YI = { 甲子: '戊', 甲戌: '己', 甲申: '庚', 甲午: '辛', 甲辰: '壬', 甲寅: '癸' };
 const PALACE_DIR = { 1: '东南', 2: '正南', 3: '西南', 4: '正东', 5: '中宫', 6: '正西', 7: '东北', 8: '正北', 9: '西北' };
 // 洛书 1..9 序 → grid 位序(坎1→8、坤2→3、震3→4、巽4→1、中5→5、乾6→9、兑7→6、艮8→7、离9→2)。
 const GRID_BY_LUOSHU_ORDER = [8, 3, 4, 1, 5, 9, 6, 7, 2];
@@ -58,12 +60,14 @@ const STAR_OPTIONS = [
 	{ value: '辅', label: '天辅' }, { value: '英', label: '天英' }, { value: '芮', label: '天芮(转盘显天内)' },
 	{ value: '柱', label: '天柱' }, { value: '心', label: '天心' }, { value: '禽', label: '天禽(转盘寄芮显天内)' },
 ];
-// 神值=单字;转盘已把 勾→虎/雀→玄 归一,勾/雀/常 仅飞盘·混合可命中(死开关裁剪:label 直标)。
+// 神值=单字。[Q-470/T-432] 旧注「转盘已把 勾→虎/雀→玄 归一,勾/雀/常 仅飞盘·混合可命中」只在
+// 「八神取神=两遁恒白虎玄武(缺省)」下成立:本页扫描参数含八神取神,选「两遁恒勾陈朱雀」时转盘恒出勾/雀
+// 而虎/玄反不中,选「按遁取神」则阳遁出勾/雀。故勾/雀改标「取神而定」;太常仍只有飞盘/混合才有。
 const GOD_OPTIONS = [
 	{ value: '符', label: '值符' }, { value: '蛇', label: '螣蛇' }, { value: '阴', label: '太阴' },
-	{ value: '合', label: '六合' }, { value: '虎', label: '白虎' }, { value: '玄', label: '玄武' },
+	{ value: '合', label: '六合' }, { value: '虎', label: '白虎(转盘按八神取神)' }, { value: '玄', label: '玄武(转盘按八神取神)' },
 	{ value: '地', label: '九地' }, { value: '天', label: '九天' },
-	{ value: '勾', label: '勾陈(仅飞盘/混合)' }, { value: '雀', label: '朱雀(仅飞盘/混合)' }, { value: '常', label: '太常(仅飞盘/混合)' },
+	{ value: '勾', label: '勾陈(转盘按八神取神)' }, { value: '雀', label: '朱雀(转盘按八神取神)' }, { value: '常', label: '太常(仅飞盘/混合)' },
 ];
 const FLAG_OPTIONS = [
 	{ value: 'kongWang', label: '空亡' }, { value: 'yima', label: '驿马' }, { value: 'gengHu', label: '庚/白虎' },
@@ -307,7 +311,7 @@ export const QIMEN_CONDITION_TYPES = {
 		defaults: { values: ['符'], palaces: [], matchMode: 'any' },
 		fields: [
 			{ key: 'values', kind: 'multiselect', label: '神', options: GOD_OPTIONS },
-			{ key: 'palaces', kind: 'multiselect', label: '宫位', options: QIMEN_PALACE_OPTIONS, hint: '空=任意宫;转盘勾/雀已归虎/玄' },
+			{ key: 'palaces', kind: 'multiselect', label: '宫位', options: QIMEN_PALACE_OPTIONS, hint: '空=任意宫;转盘的虎/玄↔勾/雀 随「八神取神」档互换(缺省=两遁恒白虎玄武)' },   // [Q-470/T-432]
 			MATCH_MODE_FIELD,
 		],
 		validate: needValues,
@@ -502,9 +506,13 @@ export const QIMEN_CONDITION_TYPES = {
 			if(!ws){ return { pass: false, actual: '旺衰:—' }; }
 			const KEY = { star: 'starWangShuai', door: 'doorWangShuai', tianGan: 'tianGanWangShuai', diGan: 'diGanWangShuai', gong: 'gongWangShuai' };
 			const k = KEY[p.road || 'door'];
-			const scope = (p.palaces && p.palaces.length) ? ws.palaces.filter((c)=>p.palaces.includes(`${c.palaceNum}`)) : ws.palaces;
+			// [Q-274/T-256] 宫位选项值为数字、此前按字符串 includes 比 → 限定宫位恒不命中;两侧统一字符串化。
+			const wantPalaces = (p.palaces || []).map((x)=>`${x}`);
+			const scope = wantPalaces.length ? ws.palaces.filter((c)=>wantPalaces.includes(`${c.palaceNum}`)) : ws.palaces;
 			const hits = scope.filter((c)=>(p.states || []).includes(c[k]));
-			const pass = p.matchMode === 'all' ? (scope.length > 0 && hits.length === scope.length) : hits.length > 0;
+			// [Q-466/T-428] 「全部在场」=所选旺衰值每个都至少出现在范围内一宫(与本表其它类共享字段语义同),此前按「每宫都命中」判 → 转盘中宫无门时门路「全部」恒假。
+			const allVals = (p.states || []).filter((v)=>scope.some((c)=>c[k] === v));
+			const pass = p.matchMode === 'all' ? ((p.states || []).length > 0 && allVals.length === (p.states || []).length) : hits.length > 0;
 			return { pass, actual: `月令${ws.monthElem}·${scope.map((c)=>`${c.palaceName}${c[k] || '—'}`).join(' ')}` };
 		},
 	},
@@ -575,14 +583,18 @@ export const QIMEN_CONDITION_TYPES = {
 		defaults: { dim: 'xunShou', values: ['甲子'] },
 		fields: [
 			{ key: 'dim', kind: 'select', label: '判面', options: [{ value: 'xunShou', label: '旬首' }, { value: 'fuTou', label: '符头' }] },
-			{ key: 'values', kind: 'multiselect', label: '取值(任一;含判)', options: opt(['甲子', '甲戌', '甲申', '甲午', '甲辰', '甲寅', '戊', '己', '庚', '辛', '壬', '癸']), hint: '旬首=六甲;符头文本可含六仪(按包含匹配)' },
+			// [Q-271/ZC-26] 旬首恒六甲、符头为「甲X / 己X」干支,文本从不含六仪 → 戊/庚/辛/壬/癸 此前恒假。
+			// 六仪档改按「旬首遁仪」判(甲子戊 / 甲戌己 / 甲申庚 / 甲午辛 / 甲辰壬 / 甲寅癸);符头面加「甲」(与「己」按首字含判)。
+			{ key: 'values', kind: 'multiselect', label: '取值(任一;含判)', options: opt(['甲子', '甲戌', '甲申', '甲午', '甲辰', '甲寅', '甲', '戊', '己', '庚', '辛', '壬', '癸']), hint: '旬首=六甲,六仪按旬首遁仪判(甲子戊…甲寅癸);符头=甲X/己X 干支,选「甲」「己」按首字含判' },
 		],
 		validate: needValues,
 		summary(p){ return `${p.dim === 'fuTou' ? '符头' : '旬首'}:${(p.values || []).join('/')}`; },
 		evaluate(pan, p){
-			const txt = `${pan[p.dim || 'xunShou'] || ''}`;
-			const pass = !!txt && (p.values || []).some((v)=>txt.indexOf(v) >= 0);
-			return { pass, actual: `旬首${pan.xunShou || '—'}·符头${pan.fuTou || '—'}` };
+			const dim = p.dim || 'xunShou';
+			const txt = `${pan[dim] || ''}`;
+			const yi = dim === 'xunShou' ? (XUN_SHOU_YI[txt.slice(0, 2)] || '') : '';
+			const pass = !!txt && (p.values || []).some((v)=>txt.indexOf(v) >= 0 || (!!yi && v === yi));
+			return { pass, actual: `旬首${pan.xunShou || '—'}${yi ? `(遁${yi})` : ''}·符头${pan.fuTou || '—'}` };
 		},
 	},
 	an_ganzhi: {
@@ -592,7 +604,7 @@ export const QIMEN_CONDITION_TYPES = {
 		defaults: { dim: 'anGan', values: ['甲'], palaces: [], matchMode: 'any' },
 		fields: [
 			{ key: 'dim', kind: 'select', label: '判面', options: [{ value: 'anGan', label: '暗干' }, { value: 'anZhi', label: '暗支' }] },
-			{ key: 'values', kind: 'multiselect', label: '取值(任一)', options: opt(['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸', '子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥']), hint: '暗干随 anGanMode 开关产出;未开启则各宫为空恒不命中' },
+			{ key: 'values', kind: 'multiselect', label: '取值(任一)', options: opt(['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸', '子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥']), hint: '暗干随 anGanMode 开关产出、暗支还需另开「暗支显示」(showAnZhi);未开启则各宫为空恒不命中(三式择日奇门家由三式合一页左栏同名开关驱动)' },
 			{ key: 'palaces', kind: 'multiselect', label: '宫位', options: QIMEN_PALACE_OPTIONS, hint: '空=任意宫' },
 			MATCH_MODE_FIELD,
 		],

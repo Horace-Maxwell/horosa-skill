@@ -45,6 +45,7 @@ import {
 } from '../vendor/divination/zeri/sanshiZeriScanEngine.js';
 import { compileSanshiTree } from '../vendor/divination/zeri/sanshiZeriConditionTypes.js';
 import { buildSanshiZeriSnapshotExtra } from '../vendor/divination/zeri/sanshiZeriSnapshot.js';
+import { splitSanshiOptions } from '../vendor/divination/zeri/sanshiOptionSplit.js';
 
 // 七政 / 印度择时：判定与区间搜索都在 astropy 后端（swisseph 直连分钟粒度），JS 侧只剩排版。
 // 所以它们只有 ConditionTypes（供 compile 校验，与后端求值器同源词表）+ Snapshot，没有 ScanEngine。
@@ -52,6 +53,7 @@ import { compileQizhengTree } from '../vendor/divination/zeri/qizhengZeriConditi
 import { buildQizhengZeriSnapshotExtra } from '../vendor/divination/zeri/qizhengZeriSnapshot.js';
 import { compileIndiaTree } from '../vendor/divination/zeri/indiaZeriConditionTypes.js';
 import { buildIndiaZeriSnapshotExtra } from '../vendor/divination/zeri/indiaZeriSnapshot.js';
+import { zeriRowOpts, withLeafKind, explainAtFromList } from './zeriSnapshotOpts.js';
 
 // 每个技法把它自己的四件套（编译 / 扫描 / 单点判读 / 快照）报到这里。`hourly` 标记区分
 // 黄历（日粒度，`scanHuangli({cfg, tree, …})`，不吃 geo/options）与其余五个（时辰粒度，
@@ -141,9 +143,12 @@ export async function runZeriScanRemote(payload) {
   const snapshot_text = spec.snapshot({
     cfg: input.cfg && typeof input.cfg === 'object' ? input.cfg : {},
     geo: input.geo && typeof input.geo === 'object' ? input.geo : {},
-    tree,
+    tree: withLeafKind(tree),
     results: input.results || null,
     truncated: !!input.truncated,
+    // [Q-452/Q-453] 清单上限 + 前 N 行判读树（判读由 Python 按上游 prefetchSnapshotExplains 预取、按行序交来）。
+    ...zeriRowOpts(input),
+    explainAt: explainAtFromList(input.explains),
   }) || '';
   return { tool: 'zeri_scan_remote', technique, action, data: { ok: !!snapshot_text }, snapshot_text };
 }
@@ -175,14 +180,36 @@ export async function runZeriScan(payload) {
 
   if (action === 'snapshot') {
     // 逐字上游 builder —— 段头与 aiExport.js 四方同锁，skill 侧不重排版。
+    // [Q-452/Q-453] 清单上限 + 前 N 行附判读树：与上游各宿主 explainRowSync 同式同步直算——编译树 +
+    // 扫描同一份 geo/options(+_natal)，t = row.pick（黄历 row.pick||row.start；时辰族 row.pick||start+':00'）。
+    const rows = zeriRowOpts(input);
+    const results = input.results || null;
+    let explainAt;
+    let explainError = null;
+    if (rows.explainRows > 0 && tree && Array.isArray(results) && results.length) {
+      let compiledForExplain = null;
+      try {
+        compiledForExplain = spec.compile(tree);
+      } catch (error) {
+        explainError = `invalid_conditions: ${(error && error.message) || error}`;
+      }
+      if (compiledForExplain) {
+        const explainOptions = natal ? { ...options, _natal: natal } : options;
+        explainAt = (row) => (spec.hourly
+          ? spec.explainAt({ geoParams: geo, options: explainOptions, tree: compiledForExplain, t: row.pick || `${row.start}:00` })
+          : spec.explainAt({ tree: compiledForExplain, t: row.pick || row.start }));
+      }
+    }
     const snapshot_text = spec.snapshot({
-      cfg, geo, natal, tree,
-      results: input.results || null,
+      cfg, geo, natal, tree: withLeafKind(tree),
+      results,
       truncated: !!input.truncated,
+      ...rows,
+      explainAt,
     }) || '';
     return {
       tool: 'zeri_scan', technique, action,
-      data: { ok: !!snapshot_text },
+      data: { ok: !!snapshot_text, ...(explainError ? { explain_error: explainError } : {}) },
       snapshot_text,
     };
   }
@@ -221,6 +248,10 @@ export async function runZeriScan(payload) {
         hit_count: intervals.length,
         compiled_tree: compiled,
         limits: spec.limits,
+        // 三式择时：扫描实际吃的三家口径（vendored splitSanshiOptions 单源拆分，六壬 / 奇门 / 太乙各一份）。
+        // Python 据此把展示盘写成扫描判定的那一盘（上游 SanshiZeriMain.applyWorkbenchCalibre「所见行=所判口径」），
+        // 不在 Python 侧手抄键表。
+        ...(technique === 'sanshizeri' ? { option_split: splitSanshiOptions(options) } : {}),
       },
       snapshot_text: '',
     };

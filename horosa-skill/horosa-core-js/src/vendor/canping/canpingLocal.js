@@ -254,8 +254,16 @@ export function buildSnapshotText(result, opts = {}) {
 	// 性别取层与大运法必须进快照:AI 此前看不出取的是上层洞门(男命)还是中层闺门(女命)、
 	// 也看不出大运用了哪一法(段头字串是导出锚点,一律不动,只在段内补行)。
 	lines.push(`性别取层：${result.kindMain === 'female' ? '女命（中层闺门）' : '男命（上层洞门）'}`);
+	// [Q-438/T-401] 右栏「四柱」「起数」卡此前不进快照:四柱行(年柱/月支/日支/时支,起数依据)与起数三值(顺数/逆数/子上轮)。
+	if (result.fourPillars) {
+		const fp = result.fourPillars;
+		lines.push(`四柱：年柱${fp.yearGz || '—'}　月支${fp.monthBranch || '—'}　日支${fp.dayBranch || '—'}　时支${fp.hourBranch || '—'}`);
+	}
 	lines.push('');
 	lines.push('[本命]');
+	if (bm.shun !== undefined || bm.ni !== undefined || bm.ziRound !== undefined) {
+		lines.push(`起数：顺数 ${bm.shun}　逆数 ${bm.ni}　子上轮 ${bm.ziRound}`);
+	}
 	lines.push(`顺 ${v.numShun}：${v.textShun}`);
 	lines.push(`逆 ${v.numNi}：${v.textNi}`);
 	lines.push('');

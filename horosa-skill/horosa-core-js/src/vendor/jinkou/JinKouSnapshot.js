@@ -77,7 +77,9 @@ function mapObjToRows(obj){
 export function buildJinKouSnapshotText(params, liureng, runyear, jinkouData, wuxing, guirengType, gender){
 	const lines = [];
 	const nongli = liureng && liureng.nongli ? liureng.nongli : {};
-	const xingbie = `${gender}` === '1' ? '男' : '女';
+	// [Q-427/T-393] 性别「未知」(-1)时计算按男排(行年 / 旬法皆以 gender≠0 取男表),快照却写「女」——
+	//   同一份快照里「行年:男」与「性别:女」并存。与八字页口径统一:未知写「未知(按男排)」。
+	const xingbie = `${gender}` === '1' ? '男' : (`${gender}` === '0' ? '女' : '未知(按男排)');
 	const guirenType = jinkouData && jinkouData.source === 'kinjinkou' ? 'kinjinkou 贵人歌诀' : (guirengType === 0 ? '六壬法贵人' : (guirengType === 1 ? '遁甲法贵人' : '星占法贵人'));
 	const briefKong = (txt)=>{
 		const val = `${txt || ''}`;

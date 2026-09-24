@@ -16,6 +16,8 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.40.0 (2026-09) | 并行同步实现者踩坑：stub 杀死纯逻辑（六壬择时恒零命中）/ worktree 子进程跑主 checkout / 算源生成器不幂等 / `_js_round` 负数截断 / 移植口径与测试替身 | stub 审计进 revendor；conftest 钉 PYTHONPATH；契约 == 生成器输出；桩按真实下发参数校验 |
+| v0.40.0 (2026-09) | 上游 v3.11.x 重同步：六处「同步了却没同步」——live 复验跑的是已装 runtime 的旧 JS / curated 件 restamp 不带内容 / 生成器修产物不修源 / 裸 `export default X` 漏剥 / vendored JSON 不在 manifest / 知识库计数无真值守卫 | 复验只认本仓引擎（conftest 钉根）；能 verbatim 的手工件一律 verbatim；修生成器不修产物 |
 | v0.39.0 (2026-09) | 发布前 CI 红：双语棘轮抓到新包 28 处单语 raise；本机跑的是「顺手的守卫」不是 run_ci_gates.py | 本机门禁 = `run_ci_gates.py`；按文件计数的棘轮是 API 契约，新包落地就按它写 |
 | v0.39.0 (2026-09) | 决策层：问题构造在 `ask()` 之外抛错，把 liureng_gods 打成 internal_error | 可选增强的**每一行**都要在降级护栏里；「英文 instructions」改成占比规则 |
 | v0.38.1 (2026-09) | 复审：自动化的盲区与 Windows 编码——B0 归属证据不经代码页 / doctor 预算 / 长路径闸 / 隔离前置；B1 升级就地不砍服务、doctor 报载荷过期、selfcheck 先起 runtime；B2 九客户端按各家真实规则（占位符白名单、JSONC 保注释、Cline/Zed timeout、Codex env 根、探针按客户端形状 + `horosa://runtime/status`、wheel 预下载、OAuth 网关改口、镜像指针）；B3 矩阵真下载、出厂预算、HTTP 握手、九客户端、挂着客户端不停、publish 与矩阵同字节、cron 离整点 + kick、min_os 进清单、mcpb 解包断言 | PowerShell 5.1 往管道写的是 OEM 代码页，Python 侧只许收字节（base64）或走 ctypes；「lane 传了 file:// 就以为验过下载」= 本机环境替测试补前提的第三例；换目录前必停自己的服务、但永不停陌生人的；每个客户端的占位符 / 超时 / 环境转发规则都要按**它的**文档写，并让 `client check` 对着真文件说话；发布期：publish job 的每一步先对真 draft 跑（draft 对 `releases/tags` 404、job 级 permissions 整块替换）；发布后：只在没人跑的平台可达的分支靠静态检查兜（F821 闸），带完整输出的超时要按阶段拆预算 |
@@ -104,6 +106,159 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.40.0 / 2026-09-24 — 并行同步各路实现者的踩坑：stub 杀死纯逻辑、移植口径、测试替身与 worktree
+
+背景：v3.11.x 同步拆成十路并行实现（隔离 worktree），各路交回的报告里有一批与技法无关、会再犯的形态。按「有没有机器守卫」分两类。
+
+**有守卫的**
+
+1. **stub 掉的 import，死的是纯逻辑、不是 UI。**
+   - 症状：六壬择时 / 三式择时的六壬条件对任何条件都 0 命中（形状合法的空结果，live 样例 元首课 修后 0 → 19）。
+   - 根因：`liureng/LiuRengMain.js` 的 manifest 把 `ChuangChart` / `LRXiangDoc` / `LRSanChuanRelationMini` 当「只有 React 尾部用」
+     stub 成空，而保留的纯逻辑（`buildSanChuanData` 里 `new ChuangChart`）也在用 → ReferenceError 被 try/catch 吞成 null。
+     selfcheck 当时只断言 `Number.isFinite(hit_count)`，看不见。
+   - 守卫：`revendor_core_js._stubbed_names_still_used`——stub 掉的绑定仍被保留代码引用、且 stub 没定义同名 → `--check` 报 ⚠
+     （负向对照：给 LiuRengMain 重加这两条历史 stub，分别报 ChuangChart / buildXiangContext）；首跑还揪出 `DateTime`（UI 草稿恢复链，
+     不可达）→ stub 改为定义同名、调到即抛明确错误的类。selfcheck 择日命中改锚独立算出的真值。
+2. **worktree 里的子进程测试跑的是主 checkout 的代码。**
+   - 症状：四路实现者各自在 worktree 里看到 stdio/http 测试报「116 个工具」，而本树已是 120。
+   - 根因：共享 venv 的 editable install 指向跑过 `uv sync` 的主 checkout；`python -m horosa_skill…` 子进程不经 pytest 的
+     `pythonpath=["src"]`。同形还有：同一秒内改回同长度代码会留下陈旧 `.pyc`（`PYTHONDONTWRITEBYTECODE=1`）。
+   - 守卫：`tests/conftest.py` 会话期把本 checkout 的 `src` 前置进 `PYTHONPATH`；`test_subprocess_children_import_this_checkout_not_the_editable_install`
+     （负向对照：worktree 里去掉 pin 即红，子进程解析到主 checkout）。
+3. **生成器不幂等：契约是手改的。**
+   - 症状：`gen_technique_provenance.py` 重跑，契约 26 个工具被改写（神数 14 路丢 `/wangji/xinyi` 与 `yanqin_yanfa`、bazi_inverse 被判成
+     python_chart_backend、guolao_chart 从 composite 变 headless_js……）；反过来契约也落后生成器 9 处（择日八键 `export_technique` 仍 null）。
+   - 根因：AST 只扫 runner 本体，helper 间接调用的证据与逐工具说明只能手改契约；`eps and not js` 一律判 chart 服务。
+   - 守卫：`EXTRA_EVIDENCE` / `NOTE_OVERRIDES` 进生成器，Java 端点判 java_backend；`--check` + `test_technique_provenance_generator.py`
+     锁「契约 == 生成器输出」（负向对照：改前契约下报 9 个工具不一致）。
+4. **`_js_round` 名为 JS Math.round，实为向零截断。**
+   - 症状：世俗盘实现者变异测试发现 `service._js_round(-1.7) == -1`（JS 为 -2）；AGENTS §4 一直写的是 `floor(x+0.5)`。
+   - 根因：`int(x+0.5)`，注释假设「age/span 恒正」，而调用点后来已不止这些。服务里另有一份正确的 `_js_math_round`。
+   - 守卫：改 `math.floor`（正数行为不变）；`test_js_round_mirrors_math_round_for_negative_values`（旧实现在 -0.7 / -1.7 / -2.5 三处红）。
+
+**只有测试、没有通用守卫的（照着做）**
+
+5. **移植口径**：`/nongli/time` 的 `year` 是**正月初一**口径干支、`yearJieqi` 才是立春口径——六爻以时起卦旧移植取
+   `yearJieqi`，立春到正月初一之间年数就与上游 `buildTimeGua` 不同（连同月/日用了地支序而非农历月日数，三处合起来卦都不同）；
+   两层两个缺省——奇门 Python 侧缺省发 `chaibu`、JS 本地层缺省 `zhirun`，盘按拆补算、标签写置闰（缺省必须一处
+   定义、两层同读）；上游 builder 读 `params.date` 是 `YYYY/MM/DD`，skill 归一成 `YYYY-MM-DD` → 七政 [大限] 出生年 0；moment
+   `add(x,'days')` 把小数天四舍五入到整天，照搬成 `timedelta(days=float)` 让波斯向运日期差一天；上游 AstroTxtMsg 是单字名（日/月），
+   skill 的 ASTRO_TEXT_MAP 是全名（太阳/月亮）——v56 宫神星表就这么印错而测试也断言错值；上游页面的**出厂缺省**≠引擎缺省
+   （六爻贵人 页面 2、引擎 0），只送调用方选项会落到引擎缺省；种子与缺省照上游 headless 路径（`build*SnapshotForFields` /
+   `aiAnalysisContext`），不照页面 state。
+6. **工具自身的盲区**：`_drop_orphaned_imports` 把注释里的提及也算「在用」（`LiuYaoReference` 出现在注释里 → 整个
+   `LiuYaoBoard` import 被留下、只能再手写 stub）；边界契约生成器按局部变量名跨函数配对（`const base = {…}` 被记到别的
+   函数调用名下 → 假死键）。已知局限，遇到就改名/显式 stub，并在报告里点名。
+7. **测试替身会说谎**：`/liureng/runyear` 的 fake 回的是真端点从不发的包装形态，离线全绿而 live 下 liureng_runyear 四课/
+   三传/行年全空（三式实现者：改为按「端点 + 决定结果的请求字段」键控的**录制回放**夹具，回放与 live 逐字节一致才准裁剪——
+   请求形状一错即 miss，天然负向对照）；离线 fake 收到的 `/chart` 端点是 `"/"`（按 `/chart` 做键会静默落到罐装盘）；FakeClient 回显斜杠日期；
+   对所有端点同答一份的桩藏住了玄史 `id`/`slug` 映射错（改为逐端点校验真实下发参数）；导出解析器会去重段名，同一张卡出两次
+   对 missing/unknown 检查不可见；择日快照段间无空行，按 `\n\n` 切段会漏段；上游自己的 jest 骰子盘夹具把 `aspects` 嵌错了层，
+   真后端下那几段不可达而上游测试照绿（上游 bug，已如实上报，不写回上游）。
+8. **运行期语义**：合法的 JSON `null`（「查无」）被 `_call_remote` 当失败无限重试，且每轮都真打后端；输入归一化会把嵌套
+   `options.gender` 的 male/female 递归改成 1/0（五兆恰好只收字符串）；`/jieqi/year` Java 与 Python 两端都有、数据不同
+   （Java 多 bazi.fourColumns 与 chart.nongli），`test_endpoint_registry.py` 那句「chart-only」注释已改正。
+9. **上游代码自己也会崩**：逐字 vendor 的 `jyotishSnapshot` 有暂时性死区（`scS`）与键名错（`index`/`month`），从没在真数据上跑过；
+   世俗盘卡 builder 吞掉每张卡的异常，闭包坏了只表现为「卡不见了」——只有值级金标抓得到。
+10. **动态 `import('./x')` 没补 `.js`，懒加载路径静默返回空。**
+   - 症状：六爻实现者要接 [断诀命中]/[占类断语] 时发现 vendored `gua/data/liuyaoDoctrineCache.js` 的 `loadDoctrine()` 恒返回 null。
+   - 根因：re-vendor 只给静态 `from './x'` 补扩展名；动态 `import('./tianjiDoctrine')` 在原生 Node ESM 下 ERR_MODULE_NOT_FOUND，
+     被模块自己的 catch 吞成「断语库缺失」。模块照常加载，loadcheck 恒绿。
+   - 守卫：transform 补动态相对 import 的 `.js`（`_DYNAMIC_RELATIVE_IMPORT`）+ `test_dynamic_relative_imports_get_the_js_suffix_too`；
+     重渲染后同一调用返回 40 键断语库（修前 null）。
+11. **worktree 隔离的 agent 建在「当前目录所在的仓」——一次落进了只读上游。**
+   - 症状：派发三式合一 agent 时 shell 恰好 `cd` 在 `Horosa-Public/…/src`（刚查完上游源码），worktree 被建成
+     `Horosa-Public/.claude/worktrees/agent-*`（上游仓多出一个 worktree + 一个分支）。agent 按规则先跑 `git log`/`worktree list`
+     察觉不对，只做了只读命令；约一分钟内被叫停。
+   - 处置：停 agent；harness 随之移除该 worktree 与分支（核对：上游 `.git/worktrees` 不存在、无 `worktree-agent-*` 分支与 reflog）；
+     手删它留下的空 `.claude/worktrees/` 目录。上游工作区里一处 `SELFCHECK_LOG.md` 修改早于本会话（9-22），未碰。
+   - 守卫：派发前先 `cd` 回本仓并 `git rev-parse --show-toplevel` 核对；agent 规则第一条改为 LOCATION CHECK（toplevel 不在本仓
+     `.claude/worktrees/` 下即停手、零写入、一行报告）。这是编排侧的流程守卫，无法在仓内代码里机器化。
+12. **类型收窄会吞掉上游缺省；未声明的键会被 MCP 扁平面丢掉。**
+   - 七政 `doubingSu28` 声明成 bool：`True` 被后端读成宿度制 1（斗柄定房法），上游缺省是 2（回归今宿），2–8 七档根本传不进来；
+     宿占 / 节气年盘同病。上游是枚举就声明成枚举（int 0–8，缺省照上游），别用 bool「近似」。
+   - 汉堡盘 `school/orb/strictFactors/frames/…` 未在 `GermanyInput` 声明：CLI 走整包能用，MCP 扁平签名把顶层键静默丢掉
+     （A6 同类）。长尾旋钮用 `ADVERTISE_HIDDEN` / `x-horosa-hidden` 声明而不广告：校验照收、tools/list 零字节。
+   - 日界开关的 schema 缺省 `False` + `model_dump` = 每次都发 0，Java 把 JSON `false` 读成 0，盖掉上游缺省 1；
+     缺省改 `None`（不发即后端缺省），本地引擎路径显式传 1/1（lunar 本地引擎把「缺键」当「不换日」而非上游缺省）。
+13. **两路实现各发明一种「声明而不广告」，合并时一行赋值把另一种覆盖掉。**
+   - 症状：命理 chunk 合并后 tools/list 一次 +8 KB（253 → 262 KB，离 256 KiB 硬顶 18 B）；acg/india/guolao/mundane/germany…
+     的长尾旋钮全部回到广告层。
+   - 根因：西占用模型级 `ADVERTISE_HIDDEN`，命理用字段级 `x-horosa-hidden`；git 自动合并把两行 `unadvertised = …` 都留下，
+     后一行覆盖前一行——语法、测试全绿，只有字节预算守卫抓到。
+   - 守卫：两者取并集；`tests/test_mcp_hidden_fields.py` 逐字段锁两种声明法都不进广告层（负向对照：合并版下模型级那条红）。
+     并行拆分时同一机制只许一处定义（后来者复用先行者的机制，别再发明第二种）。
+14. **自拼快照的「占位」藏住了条件段；截断会悄悄收窄导出。**（三式合一 agent）
+   - Python 自拼 sanshiunited 时给缺席段补「本盘未产出」占位，registry 于是从不需要 optional 登记；换成上游 builder 原样输出后
+     8 段立刻报 missing——占位等于在导出层替上游「编」段。守卫：条件段按上游双登记，skill 不补占位段。
+   - `truncate_before` 剪掉 React 尾部时连带剪掉了尾部的 `export { … }` 列表（LiuRengMain 的 `buildLiuRengReferenceBundle` 等 8 个
+     导出靠它），vendored 调用方链接失败。修：transform 保留「头部已定义名」的尾部 export 列表（+ 单测）。
+   - 录制回放夹具的键太窄（`/chart` 只按 date/time 键控）会让「请求错了 hsys」回放出看似正确的答案；键必须含所有改变结果的字段。
+   - 共享 shim 少一个常量（`constants/AstroConst.js` 缺 URANUS/NEPTUNE/PLUTO/MC…）→ 以它为键的表全变 `obj[undefined]` 互相覆盖、零报错；
+     三式合一改用对上游打戳的 curated 子集，七政侧另查。
+15. **页面 getter 的兜底值不是页面缺省；「缺键透传」会翻转缺省。**（数算 agent）
+   - AGENTS §4 曾据 `fieldVal(f,'timeAlg',1)` 把 canping/heluo/yizhangjing 缺省写成 1（钟表时）；可那个全局字段恒被预置为 0，
+     字面 1 从不触发——skill 多个版本按钟表时出数算盘（1998-02-20 11:05 上海：巳时 vs 旧 午时）。找缺省追字段种子。
+   - vendored `baziLunarLocal` 判 `after23NewDay === 1`，`undefined` 即 24 点换日（与上游出厂 1 相反）；canping/heluo「缺键透传」
+     于是把 23:30 生人的日柱算成前一天（戊戌 vs 己亥）。凡「不给就不传」的工具，下游若把缺键当 0，必须补上游缺省。
+16. **`BirthInput` 不是家族共享旋钮的安全落点；条件行要移植 helper 而不是移植「意图」。**（西占正文 agent）
+   - 广告层用「不在 BirthInput 里」判定子类自有字段：把 `after23NewDay` 声明进 BirthInput，紫微 / 八字 / 奇门原本广告着的同名键
+     被静默踢出 tools/list（症状只是预算缩了 564 B）。家族共享的隐藏旋钮放 mixin + `ADVERTISE_HIDDEN`（`_ChartDayBoundaryKnobs`）。
+   - 上游 `fieldValue` 从不返回 `undefined`（缺省 `null`），所以 `排盘规则：` 这类「看似条件」的行实际恒出——按条件移植就少一行。
+   - 离线 CaptureClient 记录的是**远端**路径（`/chart` 落成 `/`），断言端点要过 `_chart_server_endpoint`。
+
+### v0.40.0 / 2026-09-24 — 上游 v3.11.x 重同步：六处「同步了却没同步」
+
+背景：上游从 v3.10.0（0604fa41，aiExport v56）走到 v3.11.1 + 三个发布后修（HEAD 9b74714b，aiExport v58；后三个在上游
+本机未推送）。runtime-source 97 文件、core-js 89 文件、导出契约两版、四个新技法键一起漂移。同步过程中撞到六个「看起来同步了、
+其实没有」的形态：
+
+1. **live 复验跑的是已装 runtime 的旧 JS 引擎。**
+   - 症状：起好 vendored 新后端、只设 `HOROSA_SERVER_ROOT/HOROSA_CHART_SERVER_ROOT` 跑 live 套件与段级 harness，jinkou 缺 18 段、
+     qimen 缺 10 段、tongshefa 缺 5 段；拿提交前的旧代码对照也一样缺 → 差点记成「上游/后端问题」。
+   - 根因：`HorosaJsEngineClient._candidate_engine_roots` 的顺序是 `HOROSA_CORE_JS_ROOT` → **已装 runtime 的随包 core-js** →
+     本仓源码树。维护机装着一份旧载荷，于是所有 JS 技法跑的是它，与被测代码无关；两个「对照组」用的是同一个旧引擎。把
+     `HOROSA_RUNTIME_ROOT` 钉到空目录重跑，101/106 工具干净、剩余 5 个只差上游新段。CI 无 runtime，永远看不到。
+   - 守卫：`tests/conftest.py` 会话期 `setdefault HOROSA_CORE_JS_ROOT=<本仓 horosa-core-js>`；
+     `tests/test_conftest_engine_pin.py` 锁「本仓优先」+ 负向对照（去掉 pin 时已装副本胜出）。复验手工脚本同样要钉。
+2. **curated 件 restamp 了源 sha，却没把上游改动带进副本。**
+   - 症状：本轮复核 `suzhan/SZConst.js` 时发现它连 0604fa41 的上游都没跟上——双鱼分野上游早已把形近误植的「魏」改「卫」，
+     本仓仍是「魏」，而 manifest 里的 `upstream_sha256` 恰好等于 0604fa41 那份上游。
+   - 根因：curated / bespoke 只断言「上游源 sha == 记录的 sha」，**不比内容**；某轮有人 `--restamp` 了却没逐项落改动，看守就此失明。
+     （本件的 FengYe 表恰好没人消费，所以没伤到输出——下一次未必这么幸运。）
+   - 守卫：能表达成「上游全文件 + 声明式 deviation」的手工件一律改 **verbatim**：`suzhan/SZConst.js`（replace_text 注入 localStorage
+     空 shim）与 `tongshefa/TongSheFaCore.js`（truncate_before 类定义 + 4 个 UI import stub + 解构删除，`_reexport_required` 补 export）
+     已改；流水线输出逐字等于 vendored 文件，上游一动 `verify_upstream_sync` check 3 就红。
+   - **同一轮第三次**：三式实现者发现 `liureng/LRConst.js`（curated）sha 戳等于上游而内容停在旧版——缺 B 派「甲戊兼牛羊」/
+     C 派「干合阳阴贵」两张贵人表（贵人 3/4 直接 TypeError）与阴阳系昼夜互换（第 4 参被静默丢弃）。「上游全文件 import 了
+     headless 不存在的路径」这条 curated 理由早已过期（唯一 import 已解析到共享 shim），改 verbatim 后流水线逐字复现。
+3. **v0.38.1 A16 修了知识包产物，没修生成器。**
+   - 症状：重跑 `build_hover_knowledge_bundle.mjs`，`astro/liureng/qimen.json` 的 `source` 又变回维护者本机绝对路径，
+     `test_knowledge_pack_sources_are_relative_upstream_paths` 红；`generated_at` 还取 `now()`，每跑一次 index.json 漂一次。
+   - 根因：A16 当时手改了三份 JSON 产物，生成器照旧写 `path.resolve(...)` 的绝对路径。
+   - 守卫：生成器改写相对上游根的 posix 路径 + 上游 HEAD 提交时间（与 gen_knowledge_packs.py 同纪律，同 commit 重跑逐字节一致）；
+     产物测试仍在。法则：**修生成的东西，修生成器**。
+4. **re-vendor 变换漏了裸 `export default fetchReturnSet;`。**
+   - 症状：新 vendor 的 `divination/election/returnCharts.js` 网络函数被正确剥掉，末行 `export default fetchReturnSet;` 留着 →
+     模块加载期 ReferenceError。
+   - 根因：`_prune_default_export` 只认 `export default { … }` / `export { … }` 两种聚合形态。
+   - 守卫：补第三种形态（被剥的裸标识符整行删）+ `tests/test_revendor_transform.py` 两条（含「没被剥的默认导出原样保留」），
+     负向对照：去掉该段后旧函数留下陈旧导出。
+5. **vendored JSON 数据不在 manifest 里，上游改值零信号。**
+   - 症状：星运族 agent 移植 [行星年四档] 时发现 vendored `divination/data/hellenisticData.json` 的日/月中年仍是 39.5，
+     上游 v3.11.0（846756b5）早已改成 69.5 / 66.5；agent 只好在 Python 侧手抄上游值绕开。
+   - 根因：`vendor_manifest.json` 只由 `bootstrap_manifest` 按 `*.js` 生成，32 份 vendored JSON 仅 1 份（v0.27.0 手加）在册；
+     `revendor --check` 与 `verify_upstream_sync` check 3 都只看 manifest → 另 31 份 JSON 永远是绿的。
+   - 守卫：31 份 JSON 全部登记为 verbatim（对 JSON 即逐字节比对上游，负向对照：换回旧文件 `--check` 即 FAIL）；
+     `test_every_vendored_js_and_json_file_is_in_the_manifest` 锁「vendor 树 .js/.json 集合 == manifest 集合」（负向对照：旧
+     manifest 下报 31 份未登记）；Python 手抄表 `predictive_text.PLANETARY_YEARS` 与 vendored JSON 互锚。
+6. **知识库计数没有真值守卫，文档里同一件事写着四个数。**
+   - 症状：重收割后手册条目 235 → 236；文档里 README「31 域」与「30 域」并存，SKILL.md 与 AGENTS.md 还写「24 域」，条目数停在 235/408。
+   - 根因：工具数、测试数、门面数都有 `verify_docs_sync` 的真值检查，知识库的域数 / 手册数 / 条目数只有人记得时才改。
+   - 守卫：`check_knowledge_counts`——真值取 store 实际加载的 bundle 与 helpdoc 条目，16 条措辞正则逐处比对（每条至少命中一次，
+     措辞改了守卫不会悄悄变瞎）；负向对照：修文档前报 13 处不符。
 
 ### v0.39.0 / 2026-09-22 — Windows 维护机复验 v0.39.0：星阙桌面端占着默认端口时 doctor 把它说成「查不出身份的进程」；setup 探针对「运行中会话占着 venv 文件」只给一屏 uv 噪声；Jev 数据集指纹按原始字节算
 

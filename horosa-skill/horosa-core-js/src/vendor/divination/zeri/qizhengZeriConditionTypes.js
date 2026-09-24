@@ -78,9 +78,12 @@ export const QIZHENG_CONDITION_TYPES = {
 		defaults: { body: '水', state: 'retro' },
 		fields: [
 			{ key: 'body', kind: 'select', label: '曜', options: opt(['水', '金', '火', '木', '土', '月孛', '紫炁']) },
-			{ key: 'state', kind: 'select', label: '态', options: [{ value: 'retro', label: '逆行' }, { value: 'direct', label: '顺行' }, { value: 'stationary', label: '留' }, { value: 'slow', label: '迟(仅五星)' }, { value: 'fast', label: '速(仅五星)' }] },
+			// [Q-271/ZC-20] 「留」按主七政页逐曜留阈(金 .15/木 .07/水 .10/火 .20/土 .05°/日;月孛紫炁 0.02);
+			// 「迟」对木、土不可达(留阈 ≥ 迟阈,先判为留),标签明示。
+			{ key: 'state', kind: 'select', label: '态', options: [{ value: 'retro', label: '逆行' }, { value: 'direct', label: '顺行' }, { value: 'stationary', label: '留(逐曜留阈,同主七政页)' }, { value: 'slow', label: '迟(仅水金火;木土留阈≥迟阈恒不成立)' }, { value: 'fast', label: '速(仅五星)' }], hint: '迟/速按七政页速谱:非留态下 |v|<迟阈=迟、|v|>速阈=速;木、土的留阈不小于迟阈,「迟」永不成立' },
 		],
-		summary(p){ return `${p.body}${({ retro: '逆', direct: '顺', stationary: '留' })[p.state] || ''}`; },
+		validate: (p)=>((p.state === 'slow' && (p.body === '木' || p.body === '土')) ? '木、土无「迟」态(留阈≥迟阈),请改选留/逆/顺' : ''),
+		summary(p){ return `${p.body}${({ retro: '逆', direct: '顺', stationary: '留', slow: '迟', fast: '速' })[p.state] || ''}`; },
 	},
 	combust: {
 		category: '伏焦',
@@ -128,7 +131,7 @@ export const QIZHENG_CONDITION_TYPES = {
 		defaults: { where: 'gong', values: ['午'] },
 		fields: [
 			{ key: 'where', kind: 'select', label: '判面', options: [{ value: 'gong', label: '落宫' }, { value: 'xiu', label: '落宿' }] },
-			{ key: 'values', kind: 'multiselect', label: '值', options: opt([...QZ_GONG12, ...SU28]), hint: '候选年干(立春界)化曜诀取禄主曜,判其落处' },
+			{ key: 'values', kind: 'multiselect', label: '值', options: opt([...QZ_GONG12, ...SU28]), hint: '候选年干按真立春时刻(太阳黄经 315°)定界,化曜诀取禄主曜,判其落处(与主七政页年柱同界)' },
 		],
 		validate: needValues,
 		summary(p){ return `禄主${p.where === 'xiu' ? '宿' : '宫'}:${(p.values || []).slice(0, 4).join('/')}${(p.values || []).length > 4 ? '…' : ''}`; },

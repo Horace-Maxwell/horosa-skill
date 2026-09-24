@@ -24,6 +24,7 @@ import { immediateAspOf } from '../engine/resultShapes.js';
 import { keyOfChartId } from '../engine/utils.js';
 import { signedDelta } from '../engine/utils.js';
 import { receptionsOf } from '../engine/reception.js';
+import { resolveMoonVoc } from '../engine/moon.js';   // [Q-146] 月空单源(随流派口径)
 
 function cn(k){ return (PLANETS[k] || {}).cn || k; }
 function signCn(s){ return (SIGNS[s] || {}).cn || s; }
@@ -233,7 +234,7 @@ function buildQueries(facts, ctx){
 	q.goodEvil = { verdict: qc && qc.score > 0 ? 'good' : (qc && qc.score < 0 ? 'bad' : 'neutral'), text: qc ? `事项守护星 ${cn(quesitedKey)} 状态分 ${qc.score}` : '事项守护星未定。' };
 	// Query III 消息真假（月空按流派解算值，见 moonReport）
 	const m = facts.planets.moon;
-	const rVoc = ctx.moon ? !!ctx.moon.voc : (m && m.isVOC);
+	const rVoc = ctx.moon ? !!ctx.moon.voc : resolveMoonVoc(facts, ctx.opts || {}).voc;   // [Q-146] 兜底也随流派口径,不直读按全局算的后端旗
 	const moonAngular = m && m.angularity === 'angular';
 	q.reportTrue = { verdict: (moonAngular && !rVoc) ? 'true' : (m && (rVoc || m.combustion === 'combust') ? 'false' : 'uncertain'), text: m ? (rVoc ? '月空相 → 消息恐假/为时过早。' : (moonAngular ? '月在角宫且非空相 → 偏真。' : '月非角宫，参考其他。')) : '' };
 	// Query IV 何处/方向
@@ -314,6 +315,9 @@ function computeHorary(result, category, opts){
 		isDiurnal: facts.meta.isDiurnal,
 		termsVariant: opts.termsVariant !== undefined ? opts.termsVariant : 'ptolemaic',
 		tripSystem: opts.tripSystem, geminiEmended: !!opts.geminiEmended, weights: opts.almutenWeights,
+		// [Q-296/T-280 ①] Dorotheus 三主档共主同计(与择日 almutenModule 同口径;此前不传 → 共主永不计分,
+		// 与标签「三主(含共主)」及判读页 / 快照「三主制(含参与主)」不符)。
+		tripIncludeParticipating: opts.tripSystem === 'dorothean',
 	};
 	// [H5] 同主一星真执行:法E=以事项宫头 almuten 拆出另一象征星(此前仅注记「见 almuten 行」半死);
 	// 法C=真查共用星被谁容纳(此前仅口播判据不查)。缺省(未选法)零触发=现状。
@@ -355,9 +359,20 @@ function computeHorary(result, category, opts){
 		};
 		perfQuerent = 'moon';
 	}
-	const thirds = completionThirds(facts, [querentKey, 'moon', quesitedKey]);
+	// [Q-296/T-281] 燃烧豁免真执行:perf.combustExempt(合日即所求)的征象星在完成度三分里不因燃烧判不安全,
+	// 其「燃烧」证词转中性注记(不计扣分、状态分同步重算);此前开/关只换完成法一行文案,裁决恒同。
+	const exemptCombust = (perf && Array.isArray(perf.combustExempt)) ? perf.combustExempt : [];
+	const thirds = completionThirds(facts, [querentKey, 'moon', quesitedKey], exemptCombust.length ? { exemptCombust } : undefined);
 	const conds = {};
 	[querentKey, quesitedKey, sigs.natural, 'moon'].filter(Boolean).forEach((k) => { if(!conds[k]) conds[k] = planetCondition(k, facts, opts); });
+	exemptCombust.forEach((k) => {
+		const c = conds[k];
+		if(!c || !Array.isArray(c.findings)) return;
+		c.findings = c.findings.map((f) => (f.key === 'combust' && f.polarity === 'negative')
+			? { ...f, polarity: 'neutral', weight: 0, text_zh: `${f.text_zh}——合日即所求，燃烧豁免不计克` }
+			: f);
+		c.score = c.findings.reduce((s, x) => s + (x.polarity === 'positive' ? x.weight : (x.polarity === 'negative' ? -x.weight : 0)), 0);
+	});
 	// [H2 应期修复] 按完成法取真实「成事腿」:入相位完成用两征象星腿(现状);传递完成用
 	// T→target 腿、汇集用双腿较大 orb(perfection.timingLeg)——旧码这两类完成应期恒缺,
 	// 或(残留出相位时)误拿出相 orb 折算。落位/映点/互容完成无入相腿=不折算(Query V 如实说)。
@@ -380,7 +395,7 @@ function computeHorary(result, category, opts){
 		}
 	}
 	const moonFinal = moonFinalAspect(facts, !!opts.includeOuter);
-	const queries = buildQueries(facts, { quesitedKey, perf, moon, conds, timing, moonFinal });
+	const queries = buildQueries(facts, { quesitedKey, perf, moon, conds, timing, moonFinal, opts });
 	// [H7] v2 证词池的扩展源(恒星/时主/almuten/围攻)前移到裁决前;legacy 档不读它们=字节不变。
 	const fixedStarsV = buildFixedStars(facts, { querentKey, quesitedKey }, opts);
 	const hourAgreementV = buildHourAgreement(facts, { querentKey, quesitedKey }, opts);

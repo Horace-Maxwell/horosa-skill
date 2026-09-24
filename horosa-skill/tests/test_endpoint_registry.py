@@ -16,7 +16,9 @@ from horosa_skill.service import _PYTHON_CHART_ENDPOINTS, _SHENSHU_ENDPOINTS
 
 SERVICE_PATH = pathlib.Path(__file__).resolve().parents[1] / "src" / "horosa_skill" / "service.py"
 
-# chart 服务独有的路由前缀（Java 后端不挂载这些路径）。
+# 须经 chart 服务的路由前缀：Python 端点缺登记就会被静默发往 Java。⚠ 不等于「Java 不挂载」——`/jieqi/year`
+# 两端都有且数据不同（Java 聚合层给 jieqi24 逐节气补 bazi.fourColumns 与 chart.nongli，Python 端无），要 Java
+# 那份时用 `_call_remote(..., backend="java")` 显式指定（上游节气页的种子请求走的正是 Java）。
 CHART_ONLY_PREFIXES = (
     "/astroextra/",
     "/geomancy/",

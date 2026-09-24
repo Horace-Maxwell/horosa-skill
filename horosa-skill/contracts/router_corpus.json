@@ -1,6 +1,6 @@
 {
   "_comment": "Router corpus ratchet (v0.36.0 B2): natural-language queries (zh + en) → the technique tool(s) horosa_dispatch must pick, verified by scripts/verify_router_corpus.py. `min_pass` may only go up; refresh with --update-baseline after improving the router. Expected values are what a user would mean, not what the router happens to do.",
-  "min_pass": 102,
+  "min_pass": 111,
   "cases": [
     {
       "query": "帮我起一个奇门遁甲盘看出行",
@@ -612,6 +612,60 @@
       "query": "reverse bazi lookup for these four pillars",
       "expect": [
         "bazi_inverse"
+      ]
+    },
+    {
+      "query": "看看我接下来三个月的星历，有哪些行星入座",
+      "expect": [
+        "ephemeris"
+      ]
+    },
+    {
+      "query": "ephemeris for the next quarter",
+      "expect": [
+        "ephemeris"
+      ]
+    },
+    {
+      "query": "太阳返照时间轴排十年",
+      "expect": [
+        "returntimeline"
+      ]
+    },
+    {
+      "query": "日月返照年表",
+      "expect": [
+        "returntimeline"
+      ]
+    },
+    {
+      "query": "我的产前朔望取度是多少",
+      "expect": [
+        "prenatalsyzygy"
+      ]
+    },
+    {
+      "query": "prenatal syzygy of my chart",
+      "expect": [
+        "prenatalsyzygy"
+      ]
+    },
+    {
+      "query": "二次推运看明年",
+      "expect": [
+        "prog"
+      ]
+    },
+    {
+      "query": "secondary progression to 2030",
+      "expect": [
+        "prog"
+      ]
+    },
+    {
+      "query": "恒星黄道二次推运",
+      "expect": [
+        "vedicprog"
       ]
     }
   ]

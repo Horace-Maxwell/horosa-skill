@@ -2,7 +2,7 @@
   "schema_version": 1,
   "bundle_version": 1,
   "source": "xingque_hover_docs",
-  "build_timestamp": "2026-04-05T00:31:55Z",
+  "build_timestamp": "2026-09-24T03:47:54Z",
   "upstream_source_marker": "xingque_hover_docs",
   "domains": [
     {
@@ -198,13 +198,16 @@
         },
         {
           "name": "god",
-          "count": 8,
+          "count": 11,
           "keys_sample": [
             "九地",
             "九天",
             "值符",
             "六合",
+            "勾陈",
+            "太常",
             "太阴",
+            "朱雀",
             "玄武",
             "白虎",
             "螣蛇"

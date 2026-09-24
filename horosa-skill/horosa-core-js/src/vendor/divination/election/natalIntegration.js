@@ -25,7 +25,7 @@ function isHard(asp){ return asp && (asp.a === 90 || asp.a === 180); }
 function isSoft(asp){ return asp && (asp.a === 60 || asp.a === 120); }
 
 // 时主推运(WP-7→R2):年/月/日限 + 法达大运/子运(夜序两制) + ZR L1/L2(解结/峰期)。
-// 「时主有力的时刻尤佳」;opts(可选):firdariaNightOrder('nodes_after_mars'现行|'nodes_end')/zrLot('fortune'|'spirit')。
+// 「时主有力的时刻尤佳」;opts(可选):firdariaNightOrder('nodes_end' 原序=缺省|'nodes_after_mars' 拉丁传本;仅夜生盘)/zrLot('fortune'|'spirit')。
 function timeLordNotes(natalFacts, elecFacts, add, opts){
 	const cnOf = (k) => (PLANETS[k] || {}).cn || k;
 	const bp = natalFacts.result && natalFacts.result.params;
@@ -56,7 +56,7 @@ function timeLordNotes(natalFacts, elecFacts, add, opts){
 	if(yearLord) add('info', `小限（Profection）:${age} 岁行第 ${ph} 宫,年主星 ${cnOf(yearLord)}。`);
 	judge('年主星', yearLord);
 	// Firdaria 大运(子运于下方 R2 段展开)
-	const fd = firdariaAt(age, !!natalFacts.meta.isDiurnal);
+	const fd = firdariaAt(age, !!natalFacts.meta.isDiurnal, (opts || {}).firdariaNightOrder);   // [Q-276④] 大运与子运同一夜序
 	if(fd){
 		add('info', `法达（Firdaria）大运:${cnOf(fd.lord)}（${fd.from}–${fd.to} 岁;子运不展开）。`);
 		if(fd.lord !== 'north_node' && fd.lord !== 'south_node') judge('大运主', fd.lord);

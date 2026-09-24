@@ -25,7 +25,7 @@
 //              此集由 classicalSixthRoundParity.test.js 枚举冻结,扩张必须显式过审。
 //   hint       控件旁次级提示(可选)
 //
-// 🔴 铁律:新增古典键**必须**先在本表登记,再走合同链(准则见 docs/DATA_MANAGEMENT_PLAYBOOK)。
+// 🔴 铁律:新增古典键**必须**先在本表登记,再走合同链(准则见数据管理规范)。
 // 🔴 default 必须等于后端 perchart/flatlib 现硬编码值——「默认即现状」被违反=全站口径漂移。
 
 export const CLASSICAL_PARAM_SPEC = [
@@ -145,8 +145,8 @@ export const CLASSICAL_PARAM_SPEC = [
 			{ value: 'exempt4', label: '无入相＋四座豁免（中世纪）' },
 		] },
 	{ key: 'vocIncludeOuter', group: '月亮与空亡', label: '空亡计三王星', type: 'switch', valueType: 'int',
-		default: 0, send: 'nonDefault', seed: 'always', enabledWhen: (v) => v.vocMode !== undefined && v.vocMode !== 'classic',
-		hint: '仅非 1647 口径生效' },
+		default: 0, send: 'nonDefault', seed: 'always', enabledWhen: (v) => v.vocMode !== undefined && v.vocMode !== 'classic' && v.vocMode !== 'exempt4',
+		hint: '仅非 1647 口径生效（四座豁免档同按 1647 基判，亦不计）' },
 	{ key: 'westLilithType', group: '月亮与空亡', label: '黑月莉莉丝（真 / 平远地点）', type: 'segmented', valueType: 'str',
 		default: 'mean', send: 'nonDefault', seed: 'conditional',
 		options: [
@@ -169,7 +169,7 @@ export const CLASSICAL_PARAM_SPEC = [
 	{ key: 'lotsDocReverse', group: '希腊点', label: '四点文档序公式（婚·子·友·疾）', type: 'switch', valueType: 'int',
 		default: 0, send: 'nonDefault', seed: 'conditional' },
 	// ── [WP-3] 希腊点变体批(perchart._applyLotVariants 一体后处理;默认=历史现值零回归) ──
-	{ key: 'hermeticLotsReversal', group: '希腊点', label: '七星点按昼夜反转（关则恒同式）', type: 'switch', valueType: 'int',
+	{ key: 'hermeticLotsReversal', group: '希腊点', label: '六星点按昼夜反转（福点另设；关则恒同式）', type: 'switch', valueType: 'int',
 		default: 1, send: 'nonDefault', seed: 'conditional', hint: '批判本校勘' },
 	{ key: 'erosConstruction', group: '希腊点', label: '爱欲 · 必然构成', type: 'segmented', valueType: 'str',
 		default: 'paulus', send: 'nonDefault', seed: 'conditional',
@@ -202,7 +202,7 @@ export const CLASSICAL_PARAM_SPEC = [
 			{ value: 'wholeSign', label: '整星座位相' },
 			{ value: 'wholeSignMoiety', label: '整星座内 · 两轨半距和' },
 		] },
-	{ key: 'luminaryOrbBonus', group: '相位与容许度', label: '发光体 · 四轴轨加成', type: 'segmented', valueType: 'int',
+	{ key: 'luminaryOrbBonus', group: '相位与容许度', label: '发光体轨加成', type: 'segmented', valueType: 'int',
 		default: 0, send: 'nonDefault', seed: 'conditional',
 		options: [
 			{ value: 0, label: '0%' },
@@ -261,8 +261,8 @@ export const CLASSICAL_PARAM_SPEC = [
 			{ value: 'off', label: '关（仅逆行 R 标）' },
 			{ value: 'exactWindow', label: '距留点 ≤1 日' },
 			{ value: 'distance', label: '距留点黄经 ≤2′' },
-			{ value: 'absSpeed', label: '日速 <1′' },
-			{ value: 'relSpeed', label: '日速 <3% 均速' },
+			{ value: 'absSpeed', label: '日速 <1′（绝对阈；三王星均速本低于此,恒近留）' },   // [Q-299/T-288 ⑤] 据实标注:慢星请用相对速度/留点法
+			{ value: 'relSpeed', label: '日速 <3% 均速（相对阈,快慢星通用）' },
 		] },
 	{ key: 'eclipseTimeMode', group: '恒星与天象', label: '食时刻口径（星历食相表）', type: 'segmented', valueType: 'str',
 		default: 'max', send: 'never', seed: 'never',   // 走 /astroextra/ephemeris 独立构参,不进 /chart
@@ -305,7 +305,7 @@ export const CLASSICAL_PARAM_SPEC = [
 		options: [
 			{ value: 'off', label: '关' },
 			{ value: 'equal', label: '等权' },
-			{ value: 'weighted', label: '加权（发光体×3）' },
+			{ value: 'weighted', label: '加权（发光体×3 · 水金火×2 · 其余×1）' },   // [Q-299/T-288 ③] 与 RAY_WEIGHT 实现同文
 		] },
 	// polarMcMode 已删档(2026-08-18 用户拍板):'aboveHorizon' swap 分支实测不可达(极区兜底后 MC
 	// altitudeTrue 恒正,78N/89N×三季全天实证)=唯一非默认档死路;引擎恒走 equator 现状行为,零行为变化。

@@ -2,7 +2,7 @@
 // 37 用事专属规则包（择日清单 §6 + R2 六新分科）：把 topicMaster 的 must_have / must_avoid 代码逐项检验，
 // 命中=加分(正)，未满足/触犯=扣分(负)，并出可读文案。在通用 13 模块之上叠加。
 import { aspectBetween, aspectsOf, applyingAspects, separatingAspects } from '../engine/aspectsEngine.js';
-import { moonReport } from '../engine/moon.js';
+import { resolveMoonVoc } from '../engine/moon.js';   // [Q-146] 月空单源(六口径)
 import { SIGNS, SIGN_ORDER } from '../data/signs.js';
 import { PLANETS, motionRateOf } from '../data/planets.js';
 import { FERTILE_SET, BARREN_SET } from '../data/signFertility.js';
@@ -25,11 +25,10 @@ function aspBetweenEff(facts, a, b){
 function goodAspect(facts, a, b){ if(!a || !b) return false; const x = aspBetweenEff(facts, a, b); return !!(x && [0, 60, 120].indexOf(x.angle) >= 0); }
 function aspectAngle(facts, a, b){ const x = aspBetweenEff(facts, a, b); return x ? x.angle : null; }
 function dignified(facts, k, min){ const x = p(facts, k); return !!(x && x.dignityScore >= (min === undefined ? 2 : min)); }
-// 空亡随流派口径解算(缺省=后端 isVOC,零回归)。
+// 空亡随流派口径解算([Q-146/T-53] classic 档亦走单源自算,不再直读按全局口径算的后端 isVOC 旗)。
 function moonVocEff(facts){
 	const eff = facts.eff || null;
-	if(!eff || !eff.vocMode || eff.vocMode === 'classic') return !!(p(facts, 'moon') && p(facts, 'moon').isVOC);
-	return !!moonReport(facts, { vocMode: eff.vocMode, vocIncludeOuter: !!eff.vocIncludeOuter }).voc;
+	return !!resolveMoonVoc(facts, eff ? { vocMode: eff.vocMode, vocIncludeOuter: !!eff.vocIncludeOuter } : {}).voc;
 }
 
 // must_avoid 检验：pass=已避开（好）

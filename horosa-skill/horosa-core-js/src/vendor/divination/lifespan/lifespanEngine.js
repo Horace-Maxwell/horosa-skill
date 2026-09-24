@@ -10,8 +10,8 @@ import {
 	PLANETARY_YEARS, APHETIC_RULES, HYLEG_CANDIDATE_ORDER,
 	HARD_ASPECTS, SOFT_ASPECTS, yearsBandForAngularity,
 } from './lifespanData.js';
-import { classicalGlobalValue } from '../../utils/classicalChartGlobals.js';
 import { termRulerForVariant } from '../engine/almuten.js';
+import { classicalGlobalValue } from '../../utils/classicalChartGlobals.js';
 
 // ---- 几何/相位小工具（whole-sign beholding：古典 Hyleg/Alcocoden 标准用整宫相照）----
 const SIGN_ASPECT = { 0: 0, 2: 60, 3: 90, 4: 120, 6: 180 }; // 整宫间隔→相位角；1/5=不相照(aversion)
@@ -78,14 +78,45 @@ function dignityLordsAt(sign, lon, sect, variants){
 	const s = SIGNS[sign] || {};
 	const v = variants || {};
 	const trip = s.element ? triplicityRulers(s.element, v.triplicityVariant) : null;
+	// [Q-553/T-515] 界主:variants.termsVariant 为数字档(0-4,来自全局/随盘)或迦勒底/自定义时走 almuten.termRulerForVariant
+	// (昼夜表 + 随盘表体);字符串旧键('ptolemaic' 等)与缺省仍走 termRulerAt(零回归)。
+	let term = null;
+	if(typeof v.termsVariant === 'number' || v.termsVariant === 'chaldean' || v.termsVariant === 'custom'){
+		try{
+			term = termRulerForVariant(lon, { termsVariant: v.termsVariant, isDiurnal: sect === 'day', geminiEmended: !!v.geminiEmended, customTermsDay: v.customTermsDay, customTermsNight: v.customTermsNight });
+		}catch(e){ term = termRulerAt(lon, undefined); }
+	}else{
+		term = termRulerAt(lon, v.termsVariant);
+	}
 	return {
 		domicile: s.domicile || null,
 		exaltation: s.exaltation ? s.exaltation.planet : null,
 		triplicity: trip ? (sect === 'day' ? trip.day : trip.night) : null,
-		term: termRulerAt(lon, v.termsVariant),
+		term,
 		face: faceAt(lon).ruler,
 	};
 }
+
+// [Q-553/T-515] 寿命链尊贵主星的界系 / 三分体系单源:opts.variants 显式 > 随盘 echo(facts.result.params.termsVariant / triplicity)
+// > 全局古典设置(classicalGlobalValue);缺省(埃及界 + 多罗特三分)= 与旧表逐字相同(零回归)。帮助所称「随界系 / 三分体系设置实时更新」由此兑现。
+export function resolveLifespanVariants(facts, opts){
+	if(opts && opts.variants){ return opts.variants; }
+	let tv, trip, gemini, day, night;
+	const params = facts && facts.result && facts.result.params ? facts.result.params : null;
+	try{
+		tv = params && params.termsVariant !== undefined && params.termsVariant !== null ? Number(params.termsVariant) : Number(classicalGlobalValue('termsVariant'));
+		trip = params && params.triplicity ? params.triplicity : classicalGlobalValue('triplicity');
+		gemini = params && params.geminiBoundEmended !== undefined ? Number(params.geminiBoundEmended) === 1 : Number(classicalGlobalValue('geminiBoundEmended')) === 1;
+		day = params && params.customTermsDay; night = params && params.customTermsNight;
+	}catch(e){ tv = 0; trip = undefined; }
+	const out = {};
+	if(Number.isFinite(tv) && tv > 0){ out.termsVariant = tv; out.geminiEmended = gemini; if(day){ out.customTermsDay = day; } if(night){ out.customTermsNight = night; } }
+	if(trip && /^ptolemaic/i.test(`${trip}`)){ out.triplicityVariant = 'ptolemaic'; }
+	return out;
+}
+
+// [Q-552/T-514] 阳性象限的宫位(升点→天顶、降点→天底):10/11/12 与 4/5/6;其余阴性象限。
+const MASCULINE_QUADRANT_HOUSES = [10, 11, 12, 4, 5, 6];
 
 // 发光体的星座性别偏好（昼太阳喜阳性座、夜月亮喜阴性座）；其余点无性别约束。
 function genderPrefOf(key){
@@ -125,11 +156,19 @@ function isAphetic(cand, method, facts){
 			return { aphetic: false, house, rank: null, reason: `第${house}宫须${pref === 'masculine' ? '阳性' : '阴性'}星座` };
 		}
 	}
-	// 多罗修斯：阴阳匹配（太阳须阳性座、月亮须阴性座方为有效释放点；落反性别座=effeminatus 否决）
+	// 多罗修斯：阴阳星座 × 阴阳象限双合（太阳须阳性座且阳性象限、月亮须阴性座且阴性象限方为有效释放点；
+	// 任一不合 = effeminatus/反性否决）。[Q-552/T-514] 此前只核星座阴阳,象限一支未实现。
+	// 象限阴阳按托勒密:升点→天顶、降点→天底两象限为阳性(整宫序 10/11/12、4/5/6 宫),其余两象限阴性(1/2/3、7/8/9 宫)。
 	if(rule.useGenderQuadrant){
 		const pref = genderPrefOf(cand.key);
 		if(pref && g && g !== pref){
 			return { aphetic: false, house, rank: null, reason: `${cand.key === 'sun' ? '太阳落阴性座(effeminatus)' : '月亮落阳性座'}，多罗修斯否决` };
+		}
+		if(pref && house){
+			const quadGender = MASCULINE_QUADRANT_HOUSES.indexOf(house) >= 0 ? 'masculine' : 'feminine';
+			if(quadGender !== pref){
+				return { aphetic: false, house, rank: null, reason: `${cand.key === 'sun' ? '太阳落阴性象限' : '月亮落阳性象限'}(第${house}宫)，多罗修斯双合否决` };
+			}
 		}
 	}
 	return { aphetic: true, house, rank, reason: '释放位' };
@@ -143,9 +182,9 @@ function beholds(facts, planetKey, hyleg){
 }
 
 // ---- 寿主星 Alcocoden ----
-function findAlcocoden(facts, hyleg, sect){
+function findAlcocoden(facts, hyleg, sect, variants){
 	if(!hyleg) return { alcocoden: null, viaDignity: null };
-	const lords = dignityLordsAt(hyleg.sign, hyleg.lon, sect);
+	const lords = dignityLordsAt(hyleg.sign, hyleg.lon, sect, variants || resolveLifespanVariants(facts));
 	const order = ['domicile', 'exaltation', 'term', 'triplicity', 'face']; // Bonatti 优先序
 	for(let i = 0; i < order.length; i++){
 		const dig = order[i];
@@ -360,7 +399,7 @@ function selectHyleg(facts, method){
 		const row = {
 			key, lon: c.lon, sign: c.sign, signlon: c.signlon, house: test.house,
 			aphetic: test.aphetic, rank: test.rank, reason: test.reason,
-			dignityLords: dignityLordsAt(c.sign, c.lon, sect),
+			dignityLords: dignityLordsAt(c.sign, c.lon, sect, resolveLifespanVariants(facts)),
 		};
 		candidateRows.push(row);
 		if(test.aphetic && !chosen){
@@ -384,9 +423,10 @@ export function runLifespan(facts, opts){
 	if(!facts || !facts.meta) return null;
 	const sect = facts.meta.sect;
 	const hy = selectHyleg(facts, method);
-	const alcBase = findAlcocoden(facts, hy.hyleg, sect);
+	const variants = resolveLifespanVariants(facts, opts);   // [Q-553/T-515] 界系 / 三分体系随设置
+	const alcBase = findAlcocoden(facts, hy.hyleg, sect, variants);
 	const years = computeYears(facts, alcBase);
-	const almuten = computeAlmuten(facts);
+	const almuten = computeAlmuten(facts, variants);
 	const rulers = rulersOfLife(facts, hy.hyleg, almuten.winner);
 	const states = planetStates(facts);
 	const medical = medicalCrisis(facts, hy.hyleg, alcBase);

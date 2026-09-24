@@ -4,12 +4,12 @@
 > 何时读：输入时间落在 `[23:00, 24:00)`，或用户提到 晚子时/子时/23点/24点。
 > 维护者侧的线穿状态与上游根因：[`AGENTS.md`](../../../AGENTS.md) §10。
 
-> **✅ STATUS (as of skill v0.21.0): fully threaded.** `lateZiHourUseNextDay` now reaches
-> bazi / ziwei / liureng / qimen / taiyi / jinkou / nongli / sanshiunited（神数 earlier）；载荷捕获回归 +
-> 23:30 live 三象限矩阵钉死（(1,1)→壬寅庚子、(0,1)→辛丑庚子、(0,0)→辛丑戊子）。
-> Effective defaults（缺省不发送=后端默认）：bazi/ziwei/liureng 显式 after23=0 + lateZi 缺省=1；
-> qimen/taiyi/神数走引擎默认 (1,1)。已知边界：jinkou 的 after23NewDay 不向 ken 权威引擎发送
-> （继承六壬默认 False 会造成默认漂移），其 liureng 前置正常穿透。
+> **✅ STATUS (as of skill v0.40.0): fully threaded, defaults = 星阙 (1, 1).** Nothing hard-codes
+> `after23NewDay=0` any more: when a switch is absent it is **not sent**, so Java / ken / Python engines apply
+> their default 1 (= 星阙 default). Local-engine paths (bazi on the vendored lunar engine, ziwei on ZiweiCalc)
+> receive an explicit 1/1, because the local engine reads a missing key as "no shift". jinkou forwards both
+> switches to ken. `jieqi_year` ignores `after23NewDay` (upstream Java hard-codes it); `lateZiHourUseNextDay`
+> still reaches it.
 
 For ANY hour-23 input (`time` ∈ `23:00:00`–`23:59:59`), the four pillars depend on **two independent
 settings**. Treat them as separate flags — the user may have set one or both globally in 星阙 desktop,
@@ -28,9 +28,13 @@ ask about them unless the time is actually in that window.
 | `after23NewDay` | `lateZiHourUseNextDay` | 日柱 | 时柱 |
 |---|---|---|---|
 | 1 (default) | 1 (default) | 壬寅 | 庚子 |
-| 1 | 0 | 壬寅 | 庚子 *(day pillar already advanced, equivalent)* |
+| 1 | 0 | 壬寅 | **戊子** |
 | 0 | 1 | 辛丑 | 庚子 |
-| 0 | 0 | 辛丑 | **戊子** ← the only case where the hour-stem switch changes anything |
+| 0 | 0 | 辛丑 | **戊子** |
+
+The two switches are **fully independent** (upstream `utils/dayBoundary.js:47-57`, aligned 2026-09-18 across the
+local lunar engine, Java `BaZiHelper` and the Python engines): `lateZiHourUseNextDay=0` always starts the hour stem
+from the **clock day's** stem (辛 → 戊子), even when `after23NewDay=1` has already advanced the day pillar.
 
 If a tool returns four pillars that don't match this matrix for that fixture, the runtime is stale
 (predates upstream v2.2.1) — tell the user to re-install the runtime release; do not blame the

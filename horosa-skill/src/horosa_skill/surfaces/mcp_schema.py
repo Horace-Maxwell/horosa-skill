@@ -45,15 +45,15 @@ CORE_DOC: dict[str, str] = {
     "zone": "时区偏移，如 +08:00",
     "lat": "纬度 31n13 / 31.22",
     "lon": "经度 121e28 / 121.47",
-    "ad": "纪元 1=公元后（默认） -1=公元前",
+    "ad": "1=公元（默认） -1=公元前",
     "hsys": "宫制索引（见 enum；1=Alcabitus，3=Placidus）",
-    "zodiacal": "0=回归（默认） 1=恒星（配 siderealAyanamsa）",
+    "zodiacal": "0=回归（默认） 1=恒星",
     "siderealAyanamsa": "恒星黄道岁差制（zodiacal=1 时）",
     "name": "当事人姓名（透传盘头）",
     "pos": "地点显示名",
     "gender": "性别 1/男 0/女",
     "timeAlg": "0=真太阳时 1=钟表时",
-    "response_view": "响应裁剪：full|sections|titles（完整结果已存档）",
+    "response_view": "响应裁剪（完整结果已存档）",
     "agent_confirmed_settings": "用户已确认设置→true",
     "defaults_accepted": "用户接受默认→true",
     "clarification_notes": "确认摘要",
@@ -83,7 +83,7 @@ def _enum_for(field: str, tool_name: str) -> dict[str, Any]:
     if field == "siderealAyanamsa":
         # 47 制的 enum 每工具 600 B × 80 工具 = 48 KB，超预算；只给常用键，全表见 guidance。
         common = [k for k in ("lahiri", "raman", "krishnamurti", "fagan_bradley", "yukteshwar") if k in SIDEREAL_AYANAMSA_LABELS]
-        return {"description": f"恒星黄道岁差制（zodiacal=1 时）；共 {len(SIDEREAL_AYANAMSA_LABELS)} 制，常用 {'/'.join(common)}，全表见 guidance"}
+        return {"description": f"岁差制（zodiacal=1）：{'/'.join(common)}…共 {len(SIDEREAL_AYANAMSA_LABELS)} 制见 guidance"}
     return {}
 
 
@@ -125,6 +125,18 @@ def _request_property(hidden: list[str], tool_name: str) -> dict[str, Any]:
     return {"type": ["object", "string"], "description": text}
 
 
+def advertise_hidden_fields(model: type[Any]) -> frozenset[str]:
+    """输入模型可声明 `ADVERTISE_HIDDEN: ClassVar[frozenset[str]]`：这些字段**照常声明**（校验层照收、MCP 扁平签名
+    照收顶层键——未声明的键会被 FastMCP 的 arg model 静默丢掉，见 test_mcp_flat_surface_keys），只是不进广告层，
+    计入 `request` 描述里的「另 N 个高级旋钮」、全表与词表见 horosa_agent_guidance。
+    为什么（v0.40.0 tools/list 预算）：长尾口径旋钮每个广告出去 ~100 B，一个技法补齐上游几十个就是几 KB，
+    而全量面硬顶 256 KB 已近满；声明而不广告 = 零字节、功能与类型校验全保留。"""
+    hidden: set[str] = set()
+    for cls in getattr(model, "__mro__", ()):
+        hidden |= set(vars(cls).get("ADVERTISE_HIDDEN", ()) or ())
+    return frozenset(hidden)
+
+
 def advertised_technique_schema(tool_name: str, full_schema: dict[str, Any]) -> dict[str, Any]:
     """技法工具的广告层 inputSchema（校验层不动）。"""
     definition = TOOL_DEFINITIONS[tool_name]
@@ -132,15 +144,22 @@ def advertised_technique_schema(tool_name: str, full_schema: dict[str, Any]) -> 
     props = dict(full_schema.get("properties") or {})
     required = {k for k, v in props.items() if isinstance(v, dict) and v.get("x-horosa-required")}
     keep: list[str] = []
+    # 「已声明、不广告」两种声明法取并集：模型级 `ADVERTISE_HIDDEN`（西占长尾旋钮）与字段级 `x-horosa-hidden`
+    # （v0.40 mingli：紫微 22 传本键 / 八字盘法键等长词表）。校验层照收（MCP 顶层按名可传），只从广告层剔除、
+    # 计入隐藏旋钮数；键表与取值进 horosa_agent_guidance。🔴 曾合并成后者覆盖前者 → 西占旋钮全部回到广告层，
+    # tools/list 一次 +8 KB 逼近 256 KB 硬顶（verify_mcp_list_budget 抓到）。
+    unadvertised = set(advertise_hidden_fields(model)) | {
+        k for k, v in props.items() if isinstance(v, dict) and v.get("x-horosa-hidden")
+    }
     if issubclass(model, BirthInput):
         core = DOMAIN_CORE.get(definition.domain, ASTRO_CORE)
         targets = list(PREDICTIVE_INPUT_CONTRACTS.get(tool_name, {}).get("required_fields") or [])
-        own = [f for f in model.model_fields if f not in BirthInput.model_fields]
+        own = [f for f in model.model_fields if f not in BirthInput.model_fields and f not in unadvertised]
         for key in (*core, *targets, *own, *GATE_KEYS):
             if key in props and key not in keep:
                 keep.append(key)
     else:
-        keep = [f for f in model.model_fields if f in props]
+        keep = [f for f in model.model_fields if f in props and f not in unadvertised]
     hidden = sorted(set(props) - set(keep) - {"request"})
     out: dict[str, Any] = {}
     for key in keep:

@@ -9,19 +9,18 @@ import {
  * kinastro 后端出盘面与条文，这一层是上游前端按四柱本地推演的（刻分 / 三元 / 八卦滚等），
  * 与盘面互补。后端响应里的 `pillars` 就是它要的四柱。
  *
- * payload: { pillars: [{key,ganzhi}…] 或 fourPillars: {year,month,day,hour}, birthYear, gender, school, keSystem, minute }
+ * payload: { pillars: [{key,ganzhi}…] 或 fourPillars: {year,month,day,hour}, birthYear, gender,
+ *            tiebanSchool, tiebanKeSystem, tiebanKe }
  * return : { text }
+ *
+ * 口径与上游无头挂载逐项相同（KinAstroMain.buildKinAstroSnapshotForFields :329-346）：
+ *   school  = tiebanSchool   || 'south'
+ *   keSystem= tiebanKeSystem || 'qing8'
+ *   ke      = tiebanKe（空=1，即「初刻」）
+ *   gender  = gender（未给按 '1' 男）
+ * 🔴 考刻是占者按六亲佐证「考」出来后手定的刻位，**不由钟点换算**：此前本工具按时分折算清八刻、读的又是
+ * 上游不存在的 school/keSystem 键——十二刻·斗宫 9–12 刻永远到不了、流派/刻制旋钮一个都不生效（sync311 F8）。
  */
-// 时辰内第几刻：一时辰 120 分 = 8 刻 × 15′。时辰从**奇数**小时起（子 23、丑 1、寅 3…），
-// 所以奇数小时取时内分钟、偶数小时要加 60。落在 1..8。
-function keFromClock(hour, minute) {
-  const h = Number(hour);
-  const m = Number(minute);
-  if (!Number.isFinite(h) || !Number.isFinite(m)) { return 1; }
-  const offset = (((h % 2) + 2) % 2 === 1) ? m : 60 + m;
-  return Math.min(8, Math.max(1, Math.floor(offset / 15) + 1));
-}
-
 export function runTiebanFramework(payload) {
   const source = payload || {};
   let fourPillars = source.fourPillars;
@@ -33,15 +32,14 @@ export function runTiebanFramework(payload) {
       }
     }
   }
+  const rawKe = source.tiebanKe;
+  const ke = rawKe !== undefined && rawKe !== null && rawKe !== '' ? Number(rawKe) : 1;
   const framework = buildTiebanFramework(fourPillars, {
-    school: source.school,
-    keSystem: source.keSystem,
+    school: source.tiebanSchool || 'south',
+    keSystem: source.tiebanKeSystem || 'qing8',
+    ke,
+    gender: source.gender !== undefined && source.gender !== null ? source.gender : '1',
     birthYear: Number(source.birthYear) || 0,
-    gender: source.gender,
-    // 🔴 引擎读的是 `ke`（:253），从不读 `minute` —— 此前传 minute 等于没传：
-    // `opts.ke` 恒 undefined → 刻恒为 1 → eightKe.active 恒高亮初刻、96 局（12 时辰 × 8 刻）
-    // 塌缩成 12 个可达值，14:47 与 14:03 出同一局。刻分正是铁板神数的立身之本。
-    ke: keFromClock(source.hour, source.minute),
   });
   if (!framework) {
     return {
@@ -50,5 +48,8 @@ export function runTiebanFramework(payload) {
     };
   }
   const lines = buildTiebanFrameworkSnapshot(framework) || [];
-  return { text: Array.isArray(lines) ? lines.join('\n') : `${lines}` };
+  return {
+    text: Array.isArray(lines) ? lines.join('\n') : `${lines}`,
+    data: { ok: true, school: framework.school, keSystem: framework.keSystem, ke: framework.ke },
+  };
 }

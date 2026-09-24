@@ -2,6 +2,7 @@
 // 🔒 三个段头「择日搜索配置/择日条件/命中时辰」与 aiExport.AI_EXPORT_PRESET_SECTIONS.qimenzeri
 // 的追加段逐字成对(四同步纪律),改任一侧必同改另一侧(qimenZeriFourLedger.test.js 钉死)。
 import { JOINER_CN } from './conditionTypes.js';
+import { appendZeriHitRows, zeriRowDurationMin } from './zeriExplainText.js';
 import { qimenLeafSummary } from './qimenConditionTypes.js';
 import {
 	PAIPAN_OPTIONS, QIJU_METHOD_OPTIONS, SCHOOL_OPTIONS,
@@ -30,7 +31,7 @@ export function describeQimenTreeLines(node, depth, index, out){
 	return lines;
 }
 
-export function buildQimenZeriSnapshotExtra({ cfg, geo, options, tree, results, truncated }){
+export function buildQimenZeriSnapshotExtra({ cfg, geo, options, tree, results, truncated, explainAt, maxRows, explainRows }){
 	const lines = [];
 	lines.push('[择日搜索配置]');
 	lines.push(`时间段：${cfg ? `${cfg.startDate} ${cfg.startTime} → ${cfg.endDate} ${cfg.endTime}` : '未设'}`);
@@ -73,16 +74,13 @@ export function buildQimenZeriSnapshotExtra({ cfg, geo, options, tree, results, 
 	}else if(!rows.length){
 		lines.push('时间段内无满足条件的时辰。');
 	}else{
-		const MAX_ROWS = 60;
-		rows.slice(0, MAX_ROWS).forEach((row, i)=>{
-			lines.push(`${i + 1}. ${row.start} ~ ${row.end}　${row.juText || ''}`);
+		// [Q-452 裁决 A / Q-453 裁决 2026-09-18] 命中行补时长(分,由 start/end 相减);清单上限全局可配(缺省 60);前 N 行附判读树。
+		appendZeriHitRows(lines, rows, {
+			formatRow: (row, i)=>{ const dm = zeriRowDurationMin(row); return `${i + 1}. ${row.start} ~ ${row.end}${dm !== null ? `(${dm}分)` : ''}　${row.juText || ''}`; },
+			tail: (total, cap)=>`(其余 ${total - cap} 条略)`,
+			truncated, truncatedText: '(已达命中上限截断,请缩小时间段)',
+			maxRows, explainRows, explainAt, uiTree: tree, leafSummary: qimenLeafSummary,
 		});
-		if(rows.length > MAX_ROWS){
-			lines.push(`(其余 ${rows.length - MAX_ROWS} 条略)`);
-		}
-		if(truncated){
-			lines.push('(已达命中上限截断,请缩小时间段)');
-		}
 	}
 	return lines.join('\n');
 }

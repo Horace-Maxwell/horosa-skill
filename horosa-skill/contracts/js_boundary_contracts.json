@@ -11,6 +11,16 @@
         "tool": "babylon.js",
         "key": "schemeCn",
         "reason": "同上：babylonAiSnapshot.js:113 用它打派系显示名；buildHoroscope 不读。"
+      },
+      {
+        "tool": "babylon.js",
+        "key": "ephemerisSource",
+        "reason": "同上：同一 opts 包紧接着喂 buildBabylonSnapshotText，babylonAiSnapshot.js:120 用它选 [数理星历] 木星阶梯/锯齿函数（systemA/systemB）；buildHoroscope 不读。已逐行核实有消费方。"
+      },
+      {
+        "tool": "sanshiUnited.js",
+        "key": "nianMing",
+        "reason": "上游同构（SanShiUnitedMain.js:3805-3807）：同一个 liureng 对象既喂 LiuRengMain 的 buildLiuRengReferenceBundle / buildLiuRengSnapshotText（二者不读 nianMing），也喂 buildSanShiUnitedSnapshotText（:1461 读 liureng.nianMing 出【起盘信息】年命行）。已逐行核实有消费方。"
       }
     ]
   },
@@ -21,7 +31,7 @@
       {
         "callee": "buildNatalExtras",
         "module": "../vendor/astroextra/natalExtras.js",
-        "line": 10,
+        "line": 12,
         "arg": 0,
         "keys": [
           "chart"
@@ -32,10 +42,11 @@
       {
         "callee": "buildHoroscope",
         "module": "../vendor/babylon/horoscope.js",
-        "line": 58,
+        "line": 77,
         "arg": 2,
         "via_local": "opts",
         "keys": [
+          "ephemerisSource",
           "schemeCn",
           "solstice"
         ]
@@ -43,10 +54,11 @@
       {
         "callee": "buildBabylonSnapshotText",
         "module": "../vendor/utils/babylonAiSnapshot.js",
-        "line": 65,
+        "line": 86,
         "arg": 1,
         "keys": [
-          "ephemDigest"
+          "ephemDigest",
+          "lons"
         ]
       }
     ],
@@ -114,7 +126,7 @@
       {
         "callee": "buildTongshuSnapshotText",
         "module": "../vendor/calendar/tongshuSnapshot.js",
-        "line": 55,
+        "line": 63,
         "arg": 0,
         "via_local": "settings",
         "keys": [
@@ -124,7 +136,7 @@
       {
         "callee": "personBazi",
         "module": "../vendor/calendar/riziEngine.js",
-        "line": 78,
+        "line": 87,
         "arg": 0,
         "keys": [
           "date",
@@ -135,7 +147,7 @@
       {
         "callee": "buildPersonalizedDates",
         "module": "../vendor/calendar/riziEngine.js",
-        "line": 90,
+        "line": 99,
         "arg": 0,
         "keys": [
           "event",
@@ -147,7 +159,7 @@
       {
         "callee": "buildRiziSnapshotText",
         "module": "../vendor/calendar/riziSnapshot.js",
-        "line": 96,
+        "line": 105,
         "arg": 0,
         "keys": [
           "event",
@@ -161,7 +173,7 @@
       {
         "callee": "buildLocalBaziResult",
         "module": "../vendor/bazi/baziLunarLocal.js",
-        "line": 76,
+        "line": 85,
         "arg": 0,
         "via_local": "baziParams",
         "keys": [
@@ -178,7 +190,7 @@
       {
         "callee": "canpingCalculate",
         "module": "../vendor/canping/canpingLocal.js",
-        "line": 120,
+        "line": 129,
         "arg": 0,
         "via_local": "base",
         "keys": [
@@ -198,7 +210,7 @@
       {
         "callee": "liunianSeries",
         "module": "../vendor/canping/canpingLocal.js",
-        "line": 124,
+        "line": 133,
         "arg": 0,
         "keys": [
           "birthYear",
@@ -209,7 +221,7 @@
       {
         "callee": "buildSnapshotText",
         "module": "../vendor/canping/canpingLocal.js",
-        "line": 140,
+        "line": 149,
         "arg": 1,
         "keys": [
           "liunianRows"
@@ -220,11 +232,16 @@
       {
         "callee": "runElection",
         "module": "../vendor/divination/election/electionEngine.js",
-        "line": 37,
+        "line": 167,
         "arg": 4,
         "via_local": "opts",
         "keys": [
+          "crisisBase",
           "electionParams",
+          "surgeryPart",
+          "surgeryPartOpposite",
+          "talismanStar",
+          "tradeSide",
           "westSchool"
         ]
       }
@@ -306,11 +323,47 @@
         ]
       }
     ],
+    "guolaoMoira.js": [
+      {
+        "callee": "buildGuolaoMoiraInfoFacts",
+        "module": "../vendor/guolao/guolaoInfoFacts.js",
+        "line": 172,
+        "arg": 0,
+        "keys": [
+          "display",
+          "fields",
+          "params",
+          "rootValue",
+          "transitParams",
+          "transitValue",
+          "value"
+        ]
+      },
+      {
+        "callee": "buildGuolaoLimitSection",
+        "module": "../vendor/guolao/guolaoSnapshotSections.js",
+        "line": 194,
+        "arg": 5,
+        "keys": [
+          "limitChildBase",
+          "limitYearBoundary"
+        ]
+      }
+    ],
     "heluo.js": [
+      {
+        "callee": "solarTermHuagong",
+        "module": "../vendor/heluo/heluoLocal.js",
+        "line": 42,
+        "arg": 2,
+        "keys": [
+          "quHuaGong"
+        ]
+      },
       {
         "callee": "buildLocalBaziResult",
         "module": "../vendor/bazi/baziLunarLocal.js",
-        "line": 96,
+        "line": 106,
         "arg": 0,
         "via_local": "baziParams",
         "keys": [
@@ -327,7 +380,7 @@
       {
         "callee": "calc",
         "module": "../vendor/heluo/heluoLocal.js",
-        "line": 133,
+        "line": 148,
         "arg": 0,
         "keys": [
           "birthYear",
@@ -342,11 +395,12 @@
       {
         "callee": "calc",
         "module": "../vendor/heluo/heluoLocal.js",
-        "line": 133,
+        "line": 148,
         "arg": 0,
         "nested_under": "opts",
         "via_local": "hlOpts",
         "keys": [
+          "huangdiOffset",
           "jiGongMode",
           "liunianStep2",
           "pureGanKunVariant",
@@ -357,7 +411,7 @@
       {
         "callee": "judge",
         "module": "../vendor/heluo/heluoLocal.js",
-        "line": 143,
+        "line": 158,
         "arg": 1,
         "via_local": "fourPillars",
         "keys": [
@@ -370,7 +424,7 @@
       {
         "callee": "buildSnapshotText",
         "module": "../vendor/heluo/heluoLocal.js",
-        "line": 170,
+        "line": 186,
         "arg": 3,
         "keys": [
           "birthYear",
@@ -381,16 +435,42 @@
       {
         "callee": "buildSnapshotText",
         "module": "../vendor/heluo/heluoLocal.js",
-        "line": 170,
+        "line": 186,
         "arg": 3,
         "nested_under": "opts",
         "via_local": "hlOpts",
         "keys": [
+          "huangdiOffset",
           "jiGongMode",
           "liunianStep2",
           "pureGanKunVariant",
           "zhiZunEnabled",
           "ziShuMode"
+        ]
+      }
+    ],
+    "horary.js": [
+      {
+        "callee": "runHorary",
+        "module": "../vendor/divination/horary/horaryEngine.js",
+        "line": 102,
+        "arg": 2,
+        "via_local": "opts",
+        "keys": [
+          "confirmYouthMatch",
+          "isEventChart",
+          "sincerityConfirmed"
+        ]
+      },
+      {
+        "callee": "buildHorarySnapshot",
+        "module": "../vendor/divination/horary/horarySnapshot.js",
+        "line": 106,
+        "arg": 2,
+        "via_local": "opts3",
+        "keys": [
+          "castingCamp",
+          "questionText"
         ]
       }
     ],
@@ -410,20 +490,75 @@
         ]
       }
     ],
+    "liureng.js": [
+      {
+        "callee": "getSolarYearFromField",
+        "module": "../vendor/liureng/LiuRengMain.js",
+        "line": 206,
+        "arg": 0,
+        "keys": [
+          "value"
+        ]
+      },
+      {
+        "callee": "liurengBenmingXingnian",
+        "module": "../vendor/liureng/LiuRengMain.js",
+        "line": 210,
+        "arg": 0,
+        "keys": [
+          "date"
+        ]
+      },
+      {
+        "callee": "buildLiuRengCastOverride",
+        "module": "../vendor/liureng/LiuRengMain.js",
+        "line": 221,
+        "arg": 1,
+        "via_local": "fullCastOpts",
+        "keys": [
+          "benmingZhi",
+          "xingnianZhi",
+          "zhanCategory"
+        ]
+      },
+      {
+        "callee": "buildLiuRengSnapshotText",
+        "module": "../vendor/liureng/LiuRengMain.js",
+        "line": 239,
+        "arg": 0,
+        "via_local": "params",
+        "keys": [
+          "date",
+          "lat",
+          "lon",
+          "time",
+          "zone"
+        ]
+      },
+      {
+        "callee": "buildLiuRengSnapshotText",
+        "module": "../vendor/liureng/LiuRengMain.js",
+        "line": 239,
+        "arg": 7,
+        "keys": [
+          "castOverride"
+        ]
+      }
+    ],
     "liuyao.js": [
       {
-        "callee": "analyzeLiuyao",
-        "module": "../vendor/gua/liuyaoFacade.js",
-        "line": 33,
-        "arg": 2,
-        "via_local": "ctx",
+        "callee": "buildLocalBaziResult",
+        "module": "../vendor/bazi/baziLunarLocal.js",
+        "line": 103,
+        "arg": 0,
         "keys": [
-          "dayGan",
-          "dayZhi",
-          "monthGan",
-          "monthZhi",
-          "yearGan",
-          "yearZhi"
+          "after23NewDay",
+          "date",
+          "lateZiHourUseNextDay",
+          "lon",
+          "time",
+          "timeAlg",
+          "zone"
         ]
       }
     ],
@@ -431,7 +566,7 @@
       {
         "callee": "calcDunJia",
         "module": "../vendor/dunjia/DunJiaCalc.js",
-        "line": 32,
+        "line": 45,
         "arg": 3,
         "via_local": "context",
         "keys": [
@@ -443,12 +578,25 @@
     ],
     "qimenzeri.js": [
       {
+        "callee": "explainQimenAt",
+        "module": "../vendor/divination/zeri/qimenScanEngine.js",
+        "line": 39,
+        "arg": 0,
+        "keys": [
+          "geoParams",
+          "options",
+          "t",
+          "tree"
+        ]
+      },
+      {
         "callee": "buildQimenZeriSnapshotExtra",
         "module": "../vendor/divination/zeri/qimenZeriSnapshot.js",
-        "line": 24,
+        "line": 42,
         "arg": 0,
         "keys": [
           "cfg",
+          "explainAt",
           "geo",
           "options",
           "results",
@@ -459,7 +607,7 @@
       {
         "callee": "scanQimen",
         "module": "../vendor/divination/zeri/qimenScanEngine.js",
-        "line": 65,
+        "line": 89,
         "arg": 0,
         "keys": [
           "cfg",
@@ -470,11 +618,166 @@
         ]
       }
     ],
+    "sanshiUnited.js": [
+      {
+        "callee": "buildSanshiLiuRengCastOverride",
+        "module": "../vendor/sanshi/SanShiUnitedMain.js",
+        "line": 171,
+        "arg": 0,
+        "keys": [
+          "nongli"
+        ]
+      },
+      {
+        "callee": "buildLiuRengLayout",
+        "module": "../vendor/sanshi/SanShiUnitedMain.js",
+        "line": 190,
+        "arg": 0,
+        "via_local": "chartForLr",
+        "keys": [
+          "nongli"
+        ]
+      },
+      {
+        "callee": "buildKeData",
+        "module": "../vendor/sanshi/SanShiUnitedMain.js",
+        "line": 191,
+        "arg": 1,
+        "via_local": "chartForLr",
+        "keys": [
+          "nongli"
+        ]
+      },
+      {
+        "callee": "buildSanChuan",
+        "module": "../vendor/sanshi/SanShiUnitedMain.js",
+        "line": 192,
+        "arg": 2,
+        "via_local": "chartForLr",
+        "keys": [
+          "nongli"
+        ]
+      },
+      {
+        "callee": "buildLiuRengReferenceBundle",
+        "module": "../vendor/liureng/LiuRengMain.js",
+        "line": 225,
+        "arg": 0,
+        "via_local": "liureng",
+        "keys": [
+          "fourColumns",
+          "guizi",
+          "nianMing",
+          "nongli",
+          "timezi",
+          "yue"
+        ]
+      },
+      {
+        "callee": "buildLiuRengReferenceBundle",
+        "module": "../vendor/liureng/LiuRengMain.js",
+        "line": 225,
+        "arg": 1,
+        "via_local": "chartForLr",
+        "keys": [
+          "nongli"
+        ]
+      },
+      {
+        "callee": "buildLiuRengSnapshotText",
+        "module": "../vendor/liureng/LiuRengMain.js",
+        "line": 234,
+        "arg": 1,
+        "via_local": "liureng",
+        "keys": [
+          "fourColumns",
+          "guizi",
+          "nianMing",
+          "nongli",
+          "timezi",
+          "yue"
+        ]
+      },
+      {
+        "callee": "buildLiuRengSnapshotText",
+        "module": "../vendor/liureng/LiuRengMain.js",
+        "line": 234,
+        "arg": 3,
+        "via_local": "chartForLr",
+        "keys": [
+          "nongli"
+        ]
+      },
+      {
+        "callee": "buildLiuRengSnapshotText",
+        "module": "../vendor/liureng/LiuRengMain.js",
+        "line": 234,
+        "arg": 7,
+        "keys": [
+          "castOverride"
+        ]
+      },
+      {
+        "callee": "buildSanShiUnitedSnapshotText",
+        "module": "../vendor/sanshi/SanShiUnitedMain.js",
+        "line": 249,
+        "arg": 0,
+        "keys": [
+          "displaySolarTime",
+          "dunjia",
+          "fields",
+          "guirengType",
+          "keData",
+          "liureng",
+          "liurengChartForLr",
+          "liurengRefBundle",
+          "liurengRunYear",
+          "lrCastOpts",
+          "lrCastOverride",
+          "lrLayout",
+          "nongli",
+          "options",
+          "outerData",
+          "sanChuan",
+          "taiyi",
+          "ziweiSihua"
+        ]
+      },
+      {
+        "callee": "buildSanShiUnitedSnapshotText",
+        "module": "../vendor/sanshi/SanShiUnitedMain.js",
+        "line": 249,
+        "arg": 0,
+        "nested_under": "liurengChartForLr",
+        "via_local": "chartForLr",
+        "keys": [
+          "nongli"
+        ]
+      }
+    ],
+    "suzhan.js": [
+      {
+        "callee": "buildSuzhanSnapshotText",
+        "module": "../vendor/suzhan/suzhanSnapshot.js",
+        "line": 41,
+        "arg": 1,
+        "via_local": "fields",
+        "keys": [
+          "date",
+          "doubingSu28",
+          "houseStartMode",
+          "lat",
+          "lon",
+          "time",
+          "zone"
+        ]
+      }
+    ],
     "tarot.js": [
       {
         "callee": "buildReading",
         "module": "../vendor/tarot/engine/reading.js",
-        "line": 38,
+        "line": 106,
         "arg": 3,
         "via_local": "settings",
         "keys": [
@@ -482,11 +785,24 @@
         ]
       }
     ],
+    "tianxing.js": [
+      {
+        "callee": "buildTianxingSnapshot",
+        "module": "../vendor/divination/zeri/tianxingSnapshot.js",
+        "line": 120,
+        "arg": 3,
+        "via_local": "ctx",
+        "keys": [
+          "explainAt",
+          "tree"
+        ]
+      }
+    ],
     "tiebanFramework.js": [
       {
         "callee": "buildTiebanFramework",
         "module": "../vendor/tieban/tiebanFrameworkLocal.js",
-        "line": 36,
+        "line": 37,
         "arg": 1,
         "keys": [
           "birthYear",
@@ -516,7 +832,7 @@
       {
         "callee": "buildTongshuSnapshotText",
         "module": "../vendor/calendar/tongshuSnapshot.js",
-        "line": 32,
+        "line": 55,
         "arg": 0,
         "via_local": "settings",
         "keys": [
@@ -528,7 +844,7 @@
       {
         "callee": "qiGuaManual",
         "module": "../vendor/xiaochengtu/xiaochengtuQiGua.js",
-        "line": 29,
+        "line": 32,
         "arg": 0,
         "keys": [
           "dongYaos",
@@ -539,7 +855,7 @@
       {
         "callee": "qiGuaByNumbers",
         "module": "../vendor/xiaochengtu/xiaochengtuQiGua.js",
-        "line": 31,
+        "line": 34,
         "arg": 0,
         "keys": [
           "dongYaos",
@@ -551,7 +867,7 @@
       {
         "callee": "qiGuaByStock",
         "module": "../vendor/xiaochengtu/xiaochengtuQiGua.js",
-        "line": 34,
+        "line": 37,
         "arg": 0,
         "keys": [
           "close",
@@ -561,7 +877,7 @@
       {
         "callee": "qiGuaByDaYan",
         "module": "../vendor/xiaochengtu/xiaochengtuQiGua.js",
-        "line": 39,
+        "line": 42,
         "arg": 0,
         "keys": [
           "manualCounts",
@@ -571,11 +887,12 @@
       {
         "callee": "buildXiaoChengTuSnapshotText",
         "module": "../vendor/xiaochengtu/xiaochengtuSnapshot.js",
-        "line": 50,
+        "line": 53,
         "arg": 2,
         "keys": [
           "askEvent",
           "kline",
+          "piKoujing",
           "timeLines",
           "yongGong"
         ]
@@ -609,7 +926,7 @@
       {
         "callee": "buildYanqinYanfaSnapshot",
         "module": "../vendor/yanqin/yanqinSnapshot.js",
-        "line": 24,
+        "line": 60,
         "arg": 0,
         "keys": [
           "day",
@@ -623,12 +940,14 @@
       {
         "callee": "buildLocalBaziResult",
         "module": "../vendor/bazi/baziLunarLocal.js",
-        "line": 86,
+        "line": 119,
         "arg": 0,
         "via_local": "baziParams",
         "keys": [
+          "after23NewDay",
           "date",
           "gender",
+          "lateZiHourUseNextDay",
           "lon",
           "time",
           "timeAlg",
@@ -638,11 +957,13 @@
       {
         "callee": "buildYizhangjingModel",
         "module": "../vendor/yizhangjing/yizhangjingReport.js",
-        "line": 93,
+        "line": 126,
         "arg": 1,
         "via_local": "opts",
         "keys": [
+          "annualMethod",
           "chongfanKou",
+          "daoTerm",
           "dayunLength",
           "dayunStartAge",
           "dingYue",
@@ -650,6 +971,9 @@
           "mingGongMethod",
           "shenshaLayer",
           "shunniRule",
+          "starNaming",
+          "tongxianShow",
+          "xiaoxianDir",
           "xiaoxianStart",
           "zaoZiAdjust"
         ]
@@ -659,7 +983,7 @@
       {
         "callee": "calcXinyi",
         "module": "../vendor/zhengchuan/zhengchuanXinyiLocal.js",
-        "line": 51,
+        "line": 32,
         "arg": 0,
         "keys": [
           "gender",
@@ -674,7 +998,7 @@
       {
         "callee": "calcTieban",
         "module": "../vendor/zhengchuan/zhengchuanTiebanLocal.js",
-        "line": 71,
+        "line": 52,
         "arg": 0,
         "keys": [
           "askGz",
@@ -691,7 +1015,7 @@
       {
         "callee": "calcShaozi",
         "module": "../vendor/zhengchuan/zhengchuanShaoziLocal.js",
-        "line": 74,
+        "line": 55,
         "arg": 0,
         "keys": [
           "fatherAge",
@@ -707,7 +1031,7 @@
       {
         "callee": "calcLiuqin",
         "module": "../vendor/zhengchuan/zhengchuanLiuqinLocal.js",
-        "line": 79,
+        "line": 60,
         "arg": 0,
         "keys": [
           "askHourZhi",
@@ -725,7 +1049,7 @@
       {
         "callee": "buildLocalBaziResult",
         "module": "../vendor/bazi/baziLunarLocal.js",
-        "line": 94,
+        "line": 80,
         "arg": 0,
         "keys": [
           "after23NewDay",
@@ -741,7 +1065,7 @@
       {
         "callee": "dadingDeathYear",
         "module": "../vendor/zhengchuan/zhengchuanDadingLocal.js",
-        "line": 105,
+        "line": 91,
         "arg": 0,
         "via_local": "dInput",
         "keys": [
@@ -750,6 +1074,51 @@
           "pillars",
           "suijun",
           "xiaoyun"
+        ]
+      }
+    ],
+    "ziweiBirth.js": [
+      {
+        "callee": "calcZiwei",
+        "module": "../vendor/ziwei/ZiweiCalc.js",
+        "line": 218,
+        "arg": 0,
+        "via_local": "birth",
+        "keys": [
+          "ad",
+          "date",
+          "gender",
+          "gpsLat",
+          "gpsLon",
+          "lat",
+          "lon",
+          "time",
+          "zone"
+        ]
+      },
+      {
+        "callee": "calcZiwei",
+        "module": "../vendor/ziwei/ZiweiCalc.js",
+        "line": 218,
+        "arg": 1,
+        "via_local": "opts",
+        "keys": [
+          "after23NewDay",
+          "lateZi",
+          "lateZiHourUseNextDay",
+          "lifeMasterBy",
+          "timeAlg",
+          "yearBoundary"
+        ]
+      },
+      {
+        "callee": "buildZiWeiSnapshotText",
+        "module": "../vendor/ziwei/ziweiSnapshotText.js",
+        "line": 233,
+        "arg": 1,
+        "via_local": "result",
+        "keys": [
+          "chart"
         ]
       }
     ]

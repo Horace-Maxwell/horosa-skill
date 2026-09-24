@@ -6,9 +6,16 @@ import { TRIPLICITY } from '../divination/data/hellenisticData.js';
 // namespace import + typeof 守卫:测试环境可能部分 mock astroAiSnapshot(只留 buildAstroSnapshotContent 等),
 // 缺函数时回 [] 保底 → 输出与补厚前逐字节一致,不炸挂载。
 // headless stub：上游 [YB] 三段补厚用它产 [起盘信息]/[当前时点]/[方法说明]，但 skill 的 Python 层
-// 已经产这三段（契约 v10 的 _predictive_setup_section_text / _predictive_common_sections_text），
-// 再让 JS 产一遍会重段。上游每个调用点都写了 typeof …==='function' 守卫，缺失即回退 []，故空对象即正解。
-const astroAiSnapshot = {};
+// 已经产这三段（_predictive_setup_section_text / _predictive_common_sections_text），再让 JS 产一遍会重段。
+// 上游每个调用点都写了 typeof …==='function' 守卫：未定义的 helper 回退 []（不产段）。唯一例外是
+// buildCurrentMomentLines——它收下 builder 自算的 [当前时点] 定位行（extraLines，如「当前主限」），交给
+// tools/progextra.js 回传 Python 追加进 [当前时点]（= 上游 buildCurrentMomentLines(chartObj, extraLines)），自身仍返 []。
+const astroAiSnapshot = {
+	buildCurrentMomentLines: (chartObj, extraLines) => {
+		globalThis.__horosaProgMomentLines = Array.isArray(extraLines) ? extraLines.filter(Boolean).map((l) => `${l}`) : [];
+		return [];
+	},
+};
 
 const birthHeaderLines = (c) => (typeof astroAiSnapshot.buildPredictiveBirthHeaderLines === 'function' ? astroAiSnapshot.buildPredictiveBirthHeaderLines(c) : []);
 const currentMomentLines = (c, x) => (typeof astroAiSnapshot.buildCurrentMomentLines === 'function' ? astroAiSnapshot.buildCurrentMomentLines(c, x) : []);
@@ -188,17 +195,22 @@ function planetTxt(id){
 	return AstroText.AstroTxtMsg[id] || `${id}`;
 }
 
-function resolveOpts(opts){
+function resolveOpts(opts, chartObj){
 	const o = { ...TRIPLICITY_DEFAULT_OPTS, ...(opts || {}) };
 	if(!TRIPLICITY_DIVISIONS[o.division]){ o.division = 'thirds'; }
-	if(!TRIPLICITY_SYSTEMS[o.system]){ o.system = TRIPLICITY_SYSTEM_DEFAULT; }
+	if(!TRIPLICITY_SYSTEMS[opts && opts.system]){
+		// [Q-187/T-111] 未指定(或非法)体系时随本盘排盘三分集(chartObj.params.triplicity,与页面 AstroTriplicityRulers 初值同序),
+		// 再回内建默认 —— 挂载(record.system 缺席)与页面同盘同口径。(判 opts 原值:展开默认后 o.system 恒合法,判不到「未指定」)
+		const ct = chartObj && chartObj.params ? chartObj.params.triplicity : null;
+		o.system = TRIPLICITY_SYSTEMS[ct] ? ct : TRIPLICITY_SYSTEM_DEFAULT;
+	}
 	o.lifespan = Number(o.lifespan) > 0 ? Number(o.lifespan) : TRIPLICITY_LIFESPAN_DEFAULT;
 	return o;
 }
 
 // 主输出：区间光体的三分主星 → 人生各阶段。
 export function buildTriplicityPeriods(chartObj, opts){
-	const o = resolveOpts(opts);
+	const o = resolveOpts(opts, chartObj);
 	const chart = chartObj && chartObj.chart;
 	if(!chart){ return null; }
 	const isDiurnal = !!chart.isDiurnal;

@@ -1,3 +1,4 @@
+import { registerZwEngineOptionsForBrightness } from './data/ziweiTables.js';   // [Q-433/T-396] 亮度源单例登记(报告 GT 预装饰)
 // 紫微「传本/流派」排盘开关（可变单例，镜像 ZWConst.ZWSchool 模式；默认＝现状零回归）。
 // 任一项非默认 → ZiWeiMain.requestZiWei 走本地 ZiweiCalc 引擎(Java 不支持这些开关);全默认 → 仍走 Java(字节零回归)。
 export const ZWEngineOptions = {
@@ -8,7 +9,7 @@ export const ZWEngineOptions = {
 	shangShi: 'fixed',     // fixed=天伤交友/天使疾厄(默认) / yinyang=中州派阴阳互换(仅阴男阳女对调,古法§6)
 	leapMonth: 'mid_split',// 闰月归月:mid_split 十五分界(默认=现状) / next 整月归下月 / prev 整月归上月(§1.5)
 	lateZi: 'global',      // 晚子时:global 跟随全局设置(默认) / zi_chu 强制子初换日 / midnight_split 夜子折中 / zi_zheng 子正换日(§1.3)
-	yearBoundary: 'lichun',// 定年界线:lichun 立春(默认=现状) / lunar_1_1 正月初一(§1.6)
+	yearBoundary: 'lunar_1_1',// 定年界线:lunar_1_1 正月初一(默认=缺省 Java 盘同源,紫微正统;[Q-194] 起) / lichun 立春(八字口径)(§1.6)
 	huoling: 'sanhe',      // 火铃:sanhe 三合通行(默认=现状,年支+生时顺数) / nanpai 南派(忽略生时·固定子)(§1.6)
 	kongNaming: 'modern',  // 空劫命名:modern 地空地劫(默认) / book 时系逆行星作天空(古本《全书》,互斥去年支独立天空)(§5)
 	brightnessSource: 'zi_jian', // 亮度源:zi_jian 自建(默认=现状,=中州五档) / quanshu《全书》煞星改订 / quanshu_full《全书》七档全表(§4.5/A.7)
@@ -57,7 +58,7 @@ export function ziweiNeedsLocalEngine(){
 		|| ZWEngineOptions.shangShi !== 'fixed'
 		|| ZWEngineOptions.leapMonth !== 'mid_split'
 		|| ZWEngineOptions.lateZi !== 'global'
-		|| ZWEngineOptions.yearBoundary !== 'lichun'
+		|| ZWEngineOptions.yearBoundary !== 'lunar_1_1'
 		|| ZWEngineOptions.huoling !== 'sanhe'
 		|| ZWEngineOptions.kongNaming !== 'modern'
 		|| ZWEngineOptions.changshengStart !== 'shui_tu'
@@ -100,7 +101,7 @@ export const LEAP_MONTH_OPTIONS = [
 	{ value: 'prev', label: '整月归上月' },
 	{ value: 'split_days', label: '前后半分割(按实际天数取中点)' },
 	{ value: 'solar_term', label: '按节气分界(过节归下月)' },
-	{ value: 'split_star_month', label: '命身下月·月系上月' },
+	{ value: 'split_star_month', label: '命身下月·月系上月(存疑:仅见匿名转述)' },   // [Q-291] 典籍与主流实现皆命身与月系同移;此档保留为存疑变体
 ];
 export const LATE_ZI_OPTIONS = [
 	{ value: 'global', label: '跟随全局设置(默认)' },
@@ -111,10 +112,11 @@ export const LATE_ZI_OPTIONS = [
 ];
 // 定年界线:紫微斗数是五术里的例外——**正月初一换年是紫微正统**,立春换年是八字口径。
 // 生辰落在春节↔立春之间者两口径不同年,会连带改掉十二宫干(五虎遁)/生年四化/年干支系诸星/
-// 小限起宫/身主/旬空/大限顺逆。默认仍保 lichun 以守既有盘与前后端字节一致,按需自行切换。
+// 小限起宫/身主/旬空/大限顺逆。[Q-194/T-119] 缺省 Java 盘本就按正月初一换年(ZiWeiChart 取 nongli.year),此前左栏
+// 却标「立春(默认)」且本地引擎缺省 lichun → 拨任一无关引擎键即整盘翻年;现缺省=正月初一,与缺省盘同源,立春为可选档。
 export const YEAR_BOUNDARY_OPTIONS = [
-	{ value: 'lichun', label: '立春换年(默认·八字口径)' },
-	{ value: 'lunar_1_1', label: '正月初一换年(紫微正统)' },
+	{ value: 'lunar_1_1', label: '正月初一换年(默认·紫微正统)' },
+	{ value: 'lichun', label: '立春换年(八字口径)' },
 ];
 export const HUOLING_OPTIONS = [
 	{ value: 'sanhe', label: '三合通行(默认·年支+生时)' },
@@ -160,3 +162,6 @@ export const BRIGHTNESS_SOURCE_OPTIONS = [
 	{ value: 'quanshu_full', label: '《全书》七档全表(庙旺得利平不陷)' },
 	{ value: 'custom', label: '自定义(逐格编辑,32星×12支)' },
 ];
+
+// [Q-433/T-396] 把亮度源单例登记给 ziweiTables.decorateZiweiChartBrightness(报告 GT 预装饰读当前源)。
+registerZwEngineOptionsForBrightness(ZWEngineOptions);

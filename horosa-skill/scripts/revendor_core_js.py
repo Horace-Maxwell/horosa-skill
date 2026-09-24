@@ -53,6 +53,7 @@ _DROP_IMPORT_PATTERNS = (
     re.compile(r"^import\s+\{[^}]*\}\s+from\s+['\"][^'\"]*momentPipeline['\"];?\s*$", re.M),
 )
 _RELATIVE_IMPORT = re.compile(r"(from\s+['\"])(\.[^'\"]*?)(['\"])")
+_DYNAMIC_RELATIVE_IMPORT = re.compile(r"(import\(\s*(?:/\*.*?\*/\s*)?['\"])(\.[^'\"]*?)(['\"])", re.S)
 
 
 def _strip_fetch_helpers(text: str) -> tuple[str, list[str]]:
@@ -280,6 +281,16 @@ def _prune_default_export(text: str, removed: list[str]) -> tuple[str, list[str]
                 break  # 重新搜索：偏移量已失效
             else:
                 break
+    # 第三种形态：`export default fetchReturnSet;`（裸标识符，v3.11.0 returnCharts.js 首见）。
+    # 聚合对象的两条正则都不匹配它，被剥的函数名就留在默认导出里 → 模块**加载期** ReferenceError。
+    # 标识符已被剥 → 整行删掉（默认导出只服务上游 UI 的 `import X from`，vendored 调用方一律具名导入）。
+    bare = re.compile(r"^export default ([A-Za-z_$][\w$]*)\s*;?\s*$", re.M)
+    while True:
+        match = next((m for m in bare.finditer(text) if m.group(1) in removed_set), None)
+        if not match:
+            break
+        notes.append(f"pruned bare default export {match.group(1)}")
+        text = text[: match.start()] + text[match.end():]
     return text, notes
 
 
@@ -318,6 +329,12 @@ def transform(text: str) -> tuple[str, list[str]]:
     text, count = _RELATIVE_IMPORT.subn(add_suffix, text)
     if count:
         notes.append(f"suffixed {count} relative import(s)")
+    # 动态形态 `import('./x')` 同一条规则：bundler 解析无扩展名，原生 Node ESM 不解析 → ERR_MODULE_NOT_FOUND。
+    # 懒加载路径 loadcheck 抓不到（模块照样加载），只在调用时炸：`gua/data/liuyaoDoctrineCache.js` 的
+    # `import('./tianjiDoctrine')` 即此例（v0.40.0 前无人消费而潜伏）。
+    text, dyn_rel = _DYNAMIC_RELATIVE_IMPORT.subn(add_suffix, text)
+    if dyn_rel:
+        notes.append(f"suffixed {dyn_rel} dynamic relative import(s)")
 
     # 原生 Node ESM 要求 JSON import 显式带 `with { type: 'json' }`；bundler 不需要，所以上游没有。
     # 漏了它模块直接加载失败（"needs an import attribute of type: json"）——AGENTS §5 的老坑，机械化掉。
@@ -453,8 +470,94 @@ def load_manifest() -> dict:
     return json.loads(MANIFEST.read_text(encoding="utf-8"))["files"]
 
 
+_IMPORT_CLAUSE = re.compile(r"^import\s+(?P<clause>[^;\n]*?)\s+from\s+['\"]", re.M)
+
+
+def _imported_locals(statement: str) -> set[str]:
+    """Local binding names an `import … from '…'` statement introduces (default, named, namespace)."""
+    match = _IMPORT_CLAUSE.match(statement.strip())
+    if not match:
+        return set()  # side-effect import (`import 'x';`) binds nothing
+    clause = match.group("clause")
+    names: set[str] = set()
+    braces = re.search(r"\{([^}]*)\}", clause)
+    if braces:
+        for part in braces.group(1).split(","):
+            part = part.strip()
+            if part:
+                names.add(re.split(r"\s+as\s+", part)[-1].strip())
+        clause = clause[: braces.start()] + clause[braces.end():]
+    star = re.search(r"\*\s+as\s+([A-Za-z_$][\w$]*)", clause)
+    if star:
+        names.add(star.group(1))
+        clause = clause[: star.start()] + clause[star.end():]
+    default = re.match(r"\s*([A-Za-z_$][\w$]*)", clause)
+    if default:
+        names.add(default.group(1))
+    return {n for n in names if re.fullmatch(r"[A-Za-z_$][\w$]*", n)}
+
+
+def _code_only(text: str) -> str:
+    """Approximate JS text with comments and single-line string literals blanked (for reference scans)."""
+    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
+    text = re.sub(r"(?<![:\\])//[^\n]*", " ", text)
+    return re.sub(r"'(?:\\.|[^'\\\n])*'|\"(?:\\.|[^\"\\\n])*\"", "''", text)
+
+
+def _stubbed_names_still_used(text: str, stubbed: list[tuple[str, set[str], str]]) -> list[str]:
+    """⚠ notes for stubbed import bindings the kept code still references and the stub does not define.
+
+    v0.40.0: `liureng/LiuRengMain.js` stubbed `./ChuangChart.js` to '' because the React tail used it — but the
+    kept pure logic (`buildSanChuanData`) also does `new ChuangChart(...)`. The ReferenceError was swallowed by a
+    try/catch, so every 六壬择时 / 三式择时 六壬 condition scanned to zero hits with no error anywhere.
+    """
+    code = _code_only(text)
+    notes: list[str] = []
+    for spec, names, stub in stubbed:
+        stub_code = _code_only(stub)
+        live = sorted(
+            name for name in names
+            if not re.search(rf"\b(?:const|let|var|function|class)\s+[^;=]*?(?<![\w$]){re.escape(name)}(?![\w$])", stub_code)
+            and re.search(rf"(?<![\w$.]){re.escape(name)}(?![\w$])", code)
+        )
+        if live:
+            notes.append(
+                f"⚠ stub_import {spec}: stubbed binding(s) still used by the kept code and not defined by the stub: "
+                f"{', '.join(live)} (→ swallowed ReferenceError at run time; vendor the dependency instead)"
+            )
+    return notes
+
+
+def _tail_exports_defined_in_head(head: str, tail: str) -> list[str]:
+    """Names in the dropped tail's aggregate `export { … }` lists that the kept head declares.
+
+    Upstream often declares pure helpers above the React class and exports them *after* it — LiuRengMain.js ends
+    with `export { buildLiuRengReferenceBundle, buildReferenceDocumentText, … }`. Cutting the tail wholesale
+    silently narrows the module's export surface: the helpers are still defined but no longer exported, so a
+    vendored caller's named import fails to link (`does not provide an export named …`) — which is exactly how
+    SanShiUnitedMain.js (it imports four of them) first failed to load. Keep the entries whose local name is a
+    top-level declaration of the head; tail-only names would be a ReferenceError, so they stay dropped.
+    """
+    kept: list[str] = []
+    for block in re.findall(r"^export\s*\{([^}]*)\}\s*;?", tail, re.M):
+        for part in block.split(","):
+            entry = " ".join(part.split())
+            if not entry:
+                continue
+            local = re.split(r"\s+as\s+", entry)[0]
+            declared = re.search(
+                rf"^(?:export\s+)?(?:async\s+)?(?:function\s*\*?|const|let|var|class)\s+{re.escape(local)}(?![\w$])",
+                head,
+                re.M,
+            )
+            if declared and entry not in kept:
+                kept.append(entry)
+    return kept
+
+
 def apply_deviations(text: str, deviations: list[dict]) -> tuple[str, list[str]]:
     notes: list[str] = []
+    stubbed: list[tuple[str, set[str], str]] = []
     for dev in deviations or []:
         kind, spec = dev.get("kind"), dev.get("specifier", "")
         if kind == "import_redirect":
@@ -469,11 +572,15 @@ def apply_deviations(text: str, deviations: list[dict]) -> tuple[str, list[str]]
             # lambda 而非字符串模板：stub 是 JS，里面出现 `\1` 会被当分组回填、`\c` 直接抛
             # re.error 把整轮 re-vendor 打死。JS stub 里带正则字面量或转义引号是很正常的事。
             stub = dev["stub"].rstrip("\n")
+            names: set[str] = set()
+            for statement in pattern.finditer(text):
+                names |= _imported_locals(statement.group(0))
             text, n = pattern.subn(lambda _m: stub, text)
             if not n:
                 notes.append(f"⚠ stub_import specifier not found: {spec}")
             else:
                 notes.append(f"stubbed {spec}")
+                stubbed.append((spec, names, stub))
         elif kind == "replace_text":
             # 精确文本替换（可空 = 删除）。给的是「import 之外的残留」用的：例如 LiuRengMain 头部
             # `const {Option} = Select;` 这类模块级 UI 解构——它们只服务被剥离的 React 尾部，
@@ -497,10 +604,16 @@ def apply_deviations(text: str, deviations: list[dict]) -> tuple[str, list[str]]
                 notes.append(f"⚠ truncate_before anchor not found: {dev['anchor']}")
             else:
                 dropped = text[m.start():].count("\n") + 1
+                tail = text[m.start():]
                 text = text[: m.start()].rstrip() + "\n"
                 notes.append(f"truncated at /{dev['anchor']}/ (dropped {dropped} trailing line(s))")
+                kept = _tail_exports_defined_in_head(text, tail)
+                if kept:
+                    text += "\nexport {\n" + "".join(f"\t{name},\n" for name in kept) + "};\n"
+                    notes.append(f"kept tail export list ×{len(kept)} (head-defined names)")
         else:
             notes.append(f"⚠ unknown deviation kind: {kind}")
+    notes.extend(_stubbed_names_still_used(text, stubbed))
     return text, notes
 
 

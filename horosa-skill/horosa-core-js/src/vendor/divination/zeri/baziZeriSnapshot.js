@@ -2,6 +2,7 @@
 // 追加段逐字成对(preflight 对偶锁);基底=八字全文快照(BaZi 同链),此处只拼择时态。
 import { baziLeafSummary } from './baziZeriConditionTypes.js';
 import { JOINER_CN } from './conditionTypes.js';
+import { appendZeriHitRows } from './zeriExplainText.js';
 
 function treeLines(node, depth, index, out){
 	if(!node){
@@ -18,7 +19,7 @@ function treeLines(node, depth, index, out){
 	return out;
 }
 
-export function buildBaziZeriSnapshotExtra({ cfg, geo, natal, tree, results, truncated }){
+export function buildBaziZeriSnapshotExtra({ cfg, geo, natal, tree, results, truncated, explainAt, maxRows, explainRows }){
 	const lines = [];
 	lines.push('[择时搜索配置]');
 	lines.push(`时间范围:${(cfg && cfg.startDate) || '?'} ${(cfg && cfg.startTime) || ''} ~ ${(cfg && cfg.endDate) || '?'} ${(cfg && cfg.endTime) || ''}`);
@@ -36,15 +37,14 @@ export function buildBaziZeriSnapshotExtra({ cfg, geo, natal, tree, results, tru
 	lines.push('[命中时段]');
 	const rows = Array.isArray(results) ? results : [];
 	if(rows.length){
-		rows.slice(0, 60).forEach((r, i)=>{
-			lines.push(`${i + 1}. ${r.start} ~ ${r.end}(${r.durationMin}分)${r.pillarText ? ` ${r.pillarText}` : ''}`);
+		// [Q-452 裁决 A / Q-453 裁决 2026-09-18] 清单上限全局可配(设置弹窗,缺省 60)+ 前 N 行附判读树(设定 vs 实际)——共用 appendZeriHitRows,
+		// 行格式 / 尾句 / 截断句字节不变;explainAt 由宿主传入(同步引擎直算 / 异步预取缓存),缺则只列清单。
+		appendZeriHitRows(lines, rows, {
+			formatRow: (r, i)=>`${i + 1}. ${r.start} ~ ${r.end}(${r.durationMin}分)${r.pillarText ? ` ${r.pillarText}` : ''}`,
+			tail: (total, cap)=>`…共 ${total} 段(仅列前 ${cap})`,
+			truncated, truncatedText: '(扫描达上限截断,清单不完整)',
+			maxRows, explainRows, explainAt, uiTree: tree, leafSummary: baziLeafSummary,
 		});
-		if(rows.length > 60){
-			lines.push(`…共 ${rows.length} 段(仅列前 60)`);
-		}
-		if(truncated){
-			lines.push('(扫描达上限截断,清单不完整)');
-		}
 	}else{
 		lines.push('(尚未择时或无命中)');
 	}

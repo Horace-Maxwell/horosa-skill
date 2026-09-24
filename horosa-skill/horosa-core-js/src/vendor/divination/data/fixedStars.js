@@ -63,18 +63,22 @@ export function starLonAt(lon1995, year){
 //  'school'(默认零回归) = 按流派平轨 opts.fixedStarOrb（现行行为，缺省 1°）；
 //  'byMagnitude'(Robson) = 1等 7°30′ / 2等 5°30′ / 3等 3°40′ / 4等及以下 1°30′；
 //    王者之星(isRoyal)按传统实务封顶 5°。
+export const MAGNITUDE_ORB_TABLE = [[2, 7.5], [3, 5.5], [4, 3.5], [5, 1.5]];   // 同后端 FixedStar._ORBS;表尾 0.5°
+export function magnitudeOrbBackendTable(star){
+	const raw = (star && star.magnitude !== undefined && star.magnitude !== null) ? Number(star.magnitude) : NaN;
+	if(!Number.isFinite(raw)) return 0.5;
+	for(const [mag, orb] of MAGNITUDE_ORB_TABLE){ if(raw < mag) return orb; }
+	return 0.5;
+}
+
 export function starOrbFor(star, opts){
 	opts = opts || {};
 	const mode = opts.fixedStarOrbMode || 'school';
 	if(mode === 'byMagnitude'){
-		const m = (star && star.magnitude !== undefined) ? star.magnitude : 2.5;
-		let orb;
-		if(m <= 1.49) orb = 7.5;
-		else if(m <= 2.49) orb = 5.5;
-		else if(m <= 3.49) orb = 3 + 40 / 60;
-		else orb = 1.5;
-		if(star && star.isRoyal) orb = Math.min(orb, 5);
-		return orb;
+		// [Q-297/T-283 2026-09-18 用户裁决:单源] 与后端 flatlib FixedStar._ORBS(帮助所述同表)逐字同:
+		//   星等 <2 → 7.5° / <3 → 5.5° / <4 → 3.5° / <5 → 1.5° / 其余 0.5°,无王者封顶。此前前端另一张表(≤1.49/≤2.49/≤3.49 →
+		//   7.5/5.5/3°40′,余 1.5°,王者封顶 5°)→ 本命恒星合相与卜卦 / 择日判读口径不一(轩辕十四后端 7.5° / 前端 5°)。
+		return magnitudeOrbBackendTable(star);
 	}
 	return (typeof opts.fixedStarOrb === 'number' && opts.fixedStarOrb > 0) ? opts.fixedStarOrb : 1;
 }

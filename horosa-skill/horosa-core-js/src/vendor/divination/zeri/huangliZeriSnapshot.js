@@ -2,6 +2,7 @@
 // 的追加段逐字成对(preflight 对偶锁);基底=选中日黄历日课快照(HuangLiMain 同链),此处只拼择日态。
 import { HUANGLI_CONDITION_TYPES, huangliLeafSummary } from './huangliZeriConditionTypes.js';
 import { JOINER_CN } from './conditionTypes.js';
+import { appendZeriHitRows } from './zeriExplainText.js';
 
 function treeLines(node, depth, index, out){
 	if(!node){
@@ -18,7 +19,7 @@ function treeLines(node, depth, index, out){
 	return out;
 }
 
-export function buildHuangliZeriSnapshotExtra({ cfg, tree, results, truncated }){
+export function buildHuangliZeriSnapshotExtra({ cfg, tree, results, truncated, explainAt, maxRows, explainRows }){
 	const lines = [];
 	lines.push('[择吉搜索配置]');
 	lines.push(`时间范围:${(cfg && cfg.startDate) || '?'} ~ ${(cfg && cfg.endDate) || '?'}(日粒度;黄历日课与地点/时刻无关)`);
@@ -34,15 +35,14 @@ export function buildHuangliZeriSnapshotExtra({ cfg, tree, results, truncated })
 	lines.push('[命中日段]');
 	const rows = Array.isArray(results) ? results : [];
 	if(rows.length){
-		rows.slice(0, 60).forEach((r, i)=>{
-			lines.push(`${i + 1}. ${r.start}${r.days > 1 ? ` ~ ${r.end}` : ''}(${r.days}天)${r.badge ? ` ${r.badge}` : ''}`);
+		// [Q-452 裁决 A / Q-453 裁决 2026-09-18] 清单上限全局可配(设置弹窗,缺省 60)+ 前 N 行附判读树(设定 vs 实际)——共用 appendZeriHitRows,
+		// 行格式 / 尾句 / 截断句字节不变;explainAt 由宿主传入(同步引擎直算 / 异步预取缓存),缺则只列清单。
+		appendZeriHitRows(lines, rows, {
+			formatRow: (r, i)=>`${i + 1}. ${r.start}${r.days > 1 ? ` ~ ${r.end}` : ''}(${r.days}天)${r.badge ? ` ${r.badge}` : ''}`,
+			tail: (total, cap)=>`…共 ${total} 段(仅列前 ${cap})`,
+			truncated, truncatedText: '(扫描达上限截断,清单不完整)',
+			maxRows, explainRows, explainAt, uiTree: tree, leafSummary: huangliLeafSummary,
 		});
-		if(rows.length > 60){
-			lines.push(`…共 ${rows.length} 段(仅列前 60)`);
-		}
-		if(truncated){
-			lines.push('(扫描达上限截断,清单不完整)');
-		}
 	}else{
 		lines.push('(尚未择吉或无命中)');
 	}

@@ -30,6 +30,7 @@ export function personBazi(params) {
 	return {
 		yearGZ, yearZhi, shengxiao: ZHI_SHENGXIAO[yearZhi],
 		dayGZ: fc.day.ganZhi, dayGan, dayZhi, dayGanWx: GAN_WX[dayGan],
+		hourGZ: fc.time && fc.time.ganZhi ? fc.time.ganZhi : '',   // [Q-272] 时柱外露(供断言/展示;此前 time 传错形时柱恒子时无从察觉)
 		xi: Array.isArray(ys.xi) ? ys.xi : [],
 		ji: Array.isArray(ys.ji) ? ys.ji : [],
 		verdict: ys.verdict || '',
@@ -97,7 +98,7 @@ function scoreDayForPerson(day, p, opts = {}) {
 	return { score, reasons, hardBlock };
 }
 
-// 折线曲线专用薄包装(P1):单日 × 单命主评分——组装 buildHuangliDay 的 day 结构后
+// 单日 × 单命主评分的薄包装(P1)——组装 buildHuangliDay 的 day 结构后
 // 直转 scoreDayForPerson;不改任何既有逻辑,只暴露新入口(共享引擎「只 import 不改」的加法豁免)。
 export function scoreDateForPersonExport(dateStr, person, opts = {}) {
 	const parts = String(dateStr || '').split(/[-/]/).map(Number);

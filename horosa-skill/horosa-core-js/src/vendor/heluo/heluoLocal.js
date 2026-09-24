@@ -74,14 +74,21 @@ function reduceDi(d) {
 //  'legacy'(旧代码)——上下元按性别、中元按阳男阴女(自相不一致)。三元界按民国年(甲子起60年一元)。
 // 【存疑·不实现】古籍标此为全流程最未确定处:头号实证例(中元·阳女)实际寄落「震」,与三元表(寄坤)冲突,
 //   且底本未给可复原的通用规则。→ 两档并存、依所据底本择;不新增第三档、不硬编特例。
-function wuJiGong(minguoYear, yangGan, isMale, mode = 'manualSanYuan') {
+// [Q-267/T-248 ①] 判元改用与 jiNian 同一 180 年循环(1864 甲子起,每元 60 年):此前按民国年固定阈值(≤12 上元 / ≤72 中元)不循环,
+// 1804–1863、2044 年后判元与纪年互相矛盾(1850 纪年下元/寄宫上中元;2050 纪年上元/寄宫下元)。1864–2043 内结果逐字同旧。
+function sanYuanOf(birthYear) {
+	const cyc = (((birthYear || 0) - 1864) % 180 + 180) % 180;   // 0..179
+	return Math.floor(cyc / 60);                                   // 0 上元 / 1 中元 / 2 下元
+}
+function wuJiGong(birthYear, yangGan, isMale, mode = 'manualSanYuan') {
 	const ay = (yangGan && isMale) || (!yangGan && !isMale); // 阳男 or 阴女(=阳男阴女组)
+	const yuan = sanYuanOf(birthYear);
 	if (mode === 'legacy') {
-		if (minguoYear <= 12) return isMale ? '艮' : '坤';   // 上元 按性别
-		if (minguoYear <= 72) return ay ? '艮' : '坤';        // 中元 按阳男阴女
+		if (yuan === 0) return isMale ? '艮' : '坤';          // 上元 按性别
+		if (yuan === 1) return ay ? '艮' : '坤';              // 中元 按阳男阴女
 		return isMale ? '離' : '兌';                          // 下元 按性别
 	}
-	if (minguoYear <= 72) return ay ? '艮' : '坤';            // 上元+中元
+	if (yuan <= 1) return ay ? '艮' : '坤';                   // 上元+中元
 	return ay ? '離' : '兌';                                  // 下元
 }
 
@@ -151,12 +158,11 @@ export function calculate({ fourPillars, gender = '男', hourZhi, birthYear, mon
 		}
 	});
 	const isMale = !(gender === '女' || gender === 'F' || gender === 'female' || gender === 0);
-	const minguo = (birthYear || 0) - 1911;
 	const yangGan = GAN.indexOf(yG) % 2 === 0;          // 甲丙戊庚壬=阳
 	let tNum = reduceTian(tian);
 	let dNum = reduceDi(di);
-	const tGua = tNum === 5 ? wuJiGong(minguo, yangGan, isMale, jiGongMode) : LUOSHU_TRIGRAM[tNum];
-	const dGua = dNum === 5 ? wuJiGong(minguo, yangGan, isMale, jiGongMode) : LUOSHU_TRIGRAM[dNum];
+	const tGua = tNum === 5 ? wuJiGong(birthYear, yangGan, isMale, jiGongMode) : LUOSHU_TRIGRAM[tNum];
+	const dGua = dNum === 5 ? wuJiGong(birthYear, yangGan, isMale, jiGongMode) : LUOSHU_TRIGRAM[dNum];
 
 	// 相盪：阳命=子寅辰午申戌年；阳男阴女 天上地下，阴男阳女 天下地上
 	const yangMing = YANG_ZHI.has(yZ);
@@ -676,7 +682,7 @@ export function wangShuai(guaName2, season) {
 // huangdiOffset 默认 2697（公历=黄帝纪元−2697）；三元九运用玄空口径(1864 甲子起,180 年循环,每运20年)。
 export function jiNian(birthYear, opts = {}) {
 	if (!(birthYear > 0)) return null;
-	const offset = opts.huangdiOffset || 2697;
+	const offset = Number.isFinite(Number(opts.huangdiOffset)) && opts.huangdiOffset !== '' && opts.huangdiOffset !== null && opts.huangdiOffset !== undefined ? Number(opts.huangdiOffset) : 2697;   // [Q-265/SO-18] 0 可达
 	const cyc = (((birthYear - 1864) % 180) + 180) % 180;   // 0..179
 	const yuan = ['上元', '中元', '下元'][Math.floor(cyc / 60)];
 	const yunNo = Math.floor(cyc / 20) + 1;                  // 1..9
@@ -739,6 +745,38 @@ export function buildSnapshotText(chart, jg, dy, extra = {}) {
 		lines.push(`得势${jg.deSheng ? '有' : '无'}　得时${jg.deTime ? '有' : '无'}　得体 ${jg.deTi.gua}${jg.deTi.present ? '(有)' : '(无)'}`);
 		lines.push(`二数：天${jg.erShu.tian}(${jg.erShu.tianState}) 地${jg.erShu.di}(${jg.erShu.diState})`);
 		lines.push(`元堂：${jg.yuanTang.dangWei ? '当位' : '不当位'}　${jg.yuanTang.youYing ? '有应' : '无应'}　${jg.yuanTang.heLi ? '顺气' : '逆气'}`);
+		// [Q-436/T-399] 右栏「卦气」卡的反天元/反地元/反化工 与「得失·二数·元堂」卡的順逆/眾宗 此前不进快照(页面有、AI 没有)。
+		if (jg.fanYuan && jg.fanhua) {
+			lines.push(`反天元 ${jg.fanYuan.tian.gua}${jg.fanYuan.tian.present ? '(有)' : '(无)'}　反地元 ${jg.fanYuan.di.gua}${jg.fanYuan.di.present ? '(有)' : '(无)'}　反化工 ${(jg.fanhua.guas || []).join('/') || '—'}${jg.fanhua.present && jg.fanhua.present.length ? `(有:${jg.fanhua.present.join('')})` : '(无)'}`);
+		}
+		const sf = shunFanShu(chart.tian, chart.di, chart.yangLing);
+		const sft = season ? seasonFit(chart.tian, chart.di, season) : null;
+		lines.push(`顺逆：${sf.label}${sft ? `／${sft.season}宜·天${sft.tian}地${sft.di}` : ''}　众宗：${zhongZong(chart.xian.lines, chart.xian.yuan) || '—'}`);
+	}
+	// [Q-436/T-399] [起卦详情]:中栏「起卦详情」卡里此前不进快照的十项(紀年/元氣化工/十吉/卦氣旺衰 已在 [命运篇]/[断验],不重复)。
+	// 需 extra.detail={fourPillars, monthZhi, st?, nayin?, birthYear?, extras?}(页面传 getModel 的同名值;无头传 bazi 包),缺则整段省略。
+	const det = extra.detail;
+	if (jg && det && det.fourPillars && det.monthZhi) {
+		try {
+			const nayinChar = '金木水火土'.includes(`${det.nayin || ''}`.slice(-1)) ? `${det.nayin}`.slice(-1) : '';
+			const ex = det.extras || chartExtras(chart, det.fourPillars, det.monthZhi, jg, { sanhou: det.st && det.st.houLabel ? det.st.houLabel : '', nayin: nayinChar, season });
+			const eshu = classifyErShu(chart.tian, chart.di);
+			const mg = mingGe(chart, jg);
+			const xp = isXiongPair(chart.xian.lines, chart.hou.lines);
+			const YUAN_RANK = { 5: '上吉（五最尊）', 2: '次吉（二得中）', 3: '中平（三四）', 4: '中平（三四）', 1: '下（初上位卑）', 6: '下（初上位卑）' };
+			lines.push('');
+			lines.push('[起卦详情]');
+			lines.push(`簡斷：${ex.jianDuan || '—'}`);
+			lines.push(`數理：天數 ${chart.tian}·${ex.shuLi.tian}　地數 ${chart.di}·${ex.shuLi.di}`);
+			lines.push(`數名：${eshu.primary || '—'}${eshu.severity.length ? `（${eshu.severity.join('·')}）` : ''}`);
+			lines.push(`氣運：${ex.sanhou || '—'}`);
+			lines.push(`值月消息卦：${ex.xiaoxi && ex.xiaoxi.gua ? `${ex.xiaoxi.monthLabel}月建${det.monthZhi}·${ex.xiaoxi.gua}` : '—'}`);
+			lines.push(`先後天八卦變化：${ex.bianYi || '—'}`);
+			lines.push(`五命：${det.fourPillars.year}生人・${det.nayin || ''}${ex.benWei && ex.benWei.length ? `（${ex.benWei.join('、')}）` : ''}`);
+			lines.push(`元堂爻位：${yaoName(chart.xian.lines, chart.xian.yuan)}·${YUAN_RANK[chart.xian.yuan] || '—'}`);
+			lines.push(`命格：吉${mg.jiCount}/12 ${mg.jiGe || '—'}　凶${mg.xiongCount}/12 ${mg.xiongGe || '—'}`);
+			lines.push(`命局對體：${xp ? `先後天${xp}（凶·防災咎）` : '—'}`);
+		} catch (e) { /* 详情段任何异常不影响既有段 */ }
 	}
 	if (dy && dy.all) {
 		lines.push('');

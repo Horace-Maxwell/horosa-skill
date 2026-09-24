@@ -2,7 +2,8 @@
 //
 // 复用：日课 buildHuangliDay（含 lunar 通书宜忌 + 内部建除/黄黑道/28宿）；事项分类 EVENT_CATEGORIES。
 // 设计要点：以 lunar「宜」为权威闸门（lunar 宜忌本身已神煞择净），命中事项宜方入榜；
-// 建除吉位/黄道/吉神/值宿吉 为排名加分，关键大凶（四废/五墓/受死）为硬红线覆盖宜。
+// 建除吉位/黄道/吉神/值宿吉 为排名加分，关键大凶（四废/五墓/致死/阴阳击冲）为硬红线覆盖宜。
+// [Q-423/T-387] 此处原写「受死」,而库内实名「致死」—— 文件头与 HARD_EXCLUDE 就此对齐,勿再回潮。
 import { buildHuangliDay } from './huangliDay.js';
 import { EVENT_CATEGORIES, EVENT_KEY_TO_CATEGORY, KEY_JI_SHEN } from './tongshuData.js';
 import { Solar } from 'lunar-javascript';

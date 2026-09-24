@@ -1,7 +1,9 @@
 {
   "_comment": "Value-golden ratchet. `covered` tools have an assertion in selfcheck.mjs that pins a computed value (a 格局 name, a percentage, a 起运岁) — not a section header. `debt` is the uncovered remainder and may only shrink; a NEW tool must arrive with a golden. Expected values need an authority comment (upstream jest golden / desktop same-chart / astronomical fact), per docs/LESSONS.md. Refresh with `uv run python scripts/verify_value_goldens.py --update-baseline`.",
   "covered": [
+    "astroextra",
     "baziGeju",
+    "baziLocal",
     "calendarExtras",
     "canping",
     "election",
@@ -17,18 +19,21 @@
     "progextra",
     "qimenzeri",
     "qizhengElection",
+    "suzhan",
+    "sanshiUnited",
     "tarot",
     "tianxing",
     "tiebanFramework",
     "tongshefa",
     "xiaochengtu",
     "xiaoliuren",
+    "yanqinYanfa",
     "yizhangjing",
     "zeriScan",
-    "zhengchuan"
+    "zhengchuan",
+    "ziweiBirth"
   ],
   "debt": [
-    "astroextra",
     "babylon",
     "baziPeriod",
     "classicalDerived",
@@ -44,7 +49,6 @@
     "taiyi",
     "tongshu",
     "uranianExtra",
-    "yanqinYanfa",
     "ziweiExtras"
   ]
 }

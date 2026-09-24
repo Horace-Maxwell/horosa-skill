@@ -19,7 +19,9 @@ import { ganzhiYearBase } from '../vendor/utils/ganzhiYearBase.js';
 const LI_TERMS = ['立春', '立夏', '立秋', '立冬'];
 
 // Ported verbatim from 星阙 HeLuoMain.solarTerm: real 节气(化工/象限+土用) + 三候(节气内 5 日一候).
-function solarTerm(dateStr) {
+// quHuaGong 取化工法（上游 HeLuoMain.js:156 / aiAnalysisContext.heluoSolarTermForDate）：
+// 'tuWangKunGen' 土王寄坤艮（缺省，土用期补坤艮/反乾兑）| 'siFangBoOnly' 直取四方伯（土用期不补）。
+function solarTerm(dateStr, quHuaGong) {
   try {
     const [y, m, d] = `${dateStr}`.split('-').map((x) => parseInt(x, 10));
     const solar = Solar.fromYmd(y, m, d);
@@ -37,7 +39,7 @@ function solarTerm(dateStr) {
     const daysIn = Math.max(0, Math.floor(jd - prev.getSolar().getJulianDay()));
     const hou = Math.min(3, Math.floor(daysIn / 5) + 1);
     const houLabel = `${prevName}${['初候', '二候', '三候'][hou - 1]}·${prevName}後`;
-    return { ...solarTermHuagong(prevName, tuyong), term: prevName, hou, houLabel };
+    return { ...solarTermHuagong(prevName, tuyong, { quHuaGong: quHuaGong || 'tuWangKunGen' }), term: prevName, hou, houLabel };
   } catch (error) {
     return null;
   }
@@ -62,10 +64,18 @@ export function runHeluo(payload) {
   // parseDateTime (baziLunarLocal) splits the date on '-' only; coerce '/' so YYYY/MM/DD also works.
   const date = `${input.date ?? ''}`.trim().replace(/\//g, '-');
   const time = `${input.time ?? ''}`.trim() || '00:00:00';
-  // timeAlg: 0 → 真太阳时; any other value → clock time. Default 1 mirrors 星阙 HeLuoMain.js's
-  // `fieldVal(f, 'timeAlg', 1)`.
-  const timeAlg = input.timeAlg === undefined || input.timeAlg === null ? 1 : input.timeAlg;
-  // 晚子时双开关 verbatim 透传（缺省不传 → 上游默认 after23NewDay 缺省/lateZiHourUseNextDay=1，同 HeLuoMain）。
+  // timeAlg: 0 → 真太阳时; any other value → clock time.
+  // 缺省 0（sync311 wave 3b，此前误为 1）：上游 AI 挂载无头路径 buildHeluoSnapshotForRecord → buildChartShusuanBazi →
+  // buildChartBaziParams 取 buildFieldObject 的 timeAlg = record.timeAlg ?? 0（aiAnalysisContext.js:603,1793）；挂载齿轮
+  // 缺省亦 0（techniqueMountSettings.js:147,1882）。页面 HeLuoMain.getModel 的 `fieldVal(f, 'timeAlg', 1)`（:188）读全局
+  // fields.timeAlg —— 该字段恒在、出厂种子 0（models/astro.js:375-377 + newChartSeeds.js:43），回退值 1 从不生效。
+  const timeAlg = input.timeAlg === undefined || input.timeAlg === null ? 0 : input.timeAlg;
+  // 日界 / 晚子时：上游两路缺省同为全局出厂 1/1 —— 无头 buildFieldObject after23NewDay = record ?? defaultAfter23NewDay()
+  // （aiAnalysisContext.js:606）、页面 fieldVal(f,'after23NewDay',defaultAfter23NewDay())（HeLuoMain.js:191-192）。
+  // 此前不传 → vendored baziLunarLocal 把 undefined 当「24 点换日」（baziLunarLocal.js:1107），23 点档生人日柱与上游不同。
+  const after23NewDay = input.after23NewDay === undefined || input.after23NewDay === null ? 1 : input.after23NewDay;
+  const lateZiHourUseNextDay = input.lateZiHourUseNextDay === undefined || input.lateZiHourUseNextDay === null
+    ? 1 : input.lateZiHourUseNextDay;
   const baziParams = {
     date,
     time,
@@ -73,8 +83,8 @@ export function runHeluo(payload) {
     lon: input.lon,
     gender: input.gender,
     timeAlg,
-    after23NewDay: input.after23NewDay,
-    lateZiHourUseNextDay: input.lateZiHourUseNextDay,
+    after23NewDay,
+    lateZiHourUseNextDay,
   };
   const normalized = {
     date,
@@ -83,8 +93,8 @@ export function runHeluo(payload) {
     lon: input.lon ?? null,
     gender: input.gender ?? null,
     timeAlg,
-    after23NewDay: input.after23NewDay ?? null,
-    lateZiHourUseNextDay: input.lateZiHourUseNextDay ?? null,
+    after23NewDay,
+    lateZiHourUseNextDay,
   };
 
   if (!date) {
@@ -124,7 +134,12 @@ export function runHeluo(payload) {
     // 键名必须是 liunianStep2：buildSnapshotText 读 snapOpts.liunianStep2 再转成 liuNian 的 step2；
     // 此前发 step2 → 引擎永远走默认应爻法（同模块另一函数恰有 step2 参数，子串式边界契约看不见这条死键）。
     liunianStep2: input.liunianStep2 === 'sequential' ? 'sequential' : 'ying',
+    // 纪年基准（黄帝纪元差）：[断验]「纪年：黄帝N年」行 = 干支年 + huangdiOffset（heluoLocal.jiNian）。
+    // 缺省 2697；与上游 KinAstroMain.buildHeluoOpts 同式 parseInt、0 可达（[Q-265/SO-18]）。
+    huangdiOffset: Number.isFinite(parseInt(input.huangdiOffset, 10)) ? parseInt(input.huangdiOffset, 10) : 2697,
   };
+  // 取化工法（上游挂载 schema heluo.quHuaGong，techniqueMountSettings.js:1883-1886）：只认两档，余者回缺省。
+  const quHuaGong = input.quHuaGong === 'siFangBoOnly' ? 'siFangBoOnly' : 'tuWangKunGen';
   const monthYangLing = (input.monthYangLing === undefined || input.monthYangLing === null || input.monthYangLing === '')
     ? undefined
     : (input.monthYangLing === true || input.monthYangLing === 1 || input.monthYangLing === 'yang' || input.monthYangLing === '1' || input.monthYangLing === 'true');
@@ -139,7 +154,7 @@ export function runHeluo(payload) {
   }
 
   const dy = daYun(chart.xian, chart.hou, birthYear);
-  const st = solarTerm(date);
+  const st = solarTerm(date, quHuaGong);
   const jg = judge(chart, fourPillars, monthZhi, st);
 
   return {
@@ -153,6 +168,7 @@ export function runHeluo(payload) {
       monthZhi,
       hourZhi,
       ...hlOpts,
+      quHuaGong,
       ...(monthYangLing === undefined ? {} : { monthYangLing }),
     },
     data: {

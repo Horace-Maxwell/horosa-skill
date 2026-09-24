@@ -34,9 +34,14 @@ export const FIRDARIA_NIGHT = [
 	['south_node', 2], ['sun', 10], ['venus', 8], ['mercury', 13],
 ];
 
-export function firdariaAt(age, isDiurnal){
+// [Q-276④] 夜序单源:缺省(未传 / 'nodes_end')= 二交点缀于七曜之末(原序);'nodes_after_mars' = 交点承火星后(拉丁传本)。昼盘恒 FIRDARIA_DAY。
+export function firdariaSeq(isDiurnal, nightOrder){
+	if(isDiurnal){ return FIRDARIA_DAY; }
+	return nightOrder === 'nodes_after_mars' ? FIRDARIA_NIGHT : FIRDARIA_NIGHT_NODES_END;
+}
+export function firdariaAt(age, isDiurnal, nightOrder){
 	if(age === null || age === undefined || age < 0) return null;
-	const seq = isDiurnal ? FIRDARIA_DAY : FIRDARIA_NIGHT;
+	const seq = firdariaSeq(isDiurnal, nightOrder);
 	let t = age % 75;
 	for(let i = 0; i < seq.length; i++){
 		if(t < seq[i][1]){
@@ -111,7 +116,7 @@ export function profectionMD(birthStr, onStr){
 	return { annual, monthly, daily, monthsSinceBirthday: months };
 }
 
-// 法达夜序两制:现行表 FIRDARIA_NIGHT=交点承火星之后;另一制=二交点缀于七曜之末。
+// 法达夜序两制:FIRDARIA_NIGHT=交点承火星之后(拉丁传本);FIRDARIA_NIGHT_NODES_END=二交点缀于七曜之末(原序,[Q-276④] 起为缺省)。
 export const FIRDARIA_NIGHT_NODES_END = [
 	['moon', 9], ['saturn', 11], ['jupiter', 12], ['mars', 7], ['sun', 10],
 	['venus', 8], ['mercury', 13], ['north_node', 3], ['south_node', 2],
@@ -120,7 +125,7 @@ export const FIRDARIA_NIGHT_NODES_END = [
 const FIRDARIA_SUB_RING = ['sun', 'venus', 'mercury', 'moon', 'saturn', 'jupiter', 'mars'];
 export function firdariaSubAt(ageF, isDiurnal, nightOrder){
 	if(ageF === null || ageF === undefined || ageF < 0) return null;
-	const seq = isDiurnal ? FIRDARIA_DAY : (nightOrder === 'nodes_end' ? FIRDARIA_NIGHT_NODES_END : FIRDARIA_NIGHT);
+	const seq = firdariaSeq(isDiurnal, nightOrder);   // [Q-276④] 与 firdariaAt 同一序表(此前大运恒承火星后、子运随开关 → 同盘两序)
 	let t = ageF % 75;
 	let from = ageF - t;
 	for(let i = 0; i < seq.length; i++){

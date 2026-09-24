@@ -34,6 +34,7 @@ const ZHI12 = ZiList;
 const GAN10 = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
 // 五行生克(支):贼克判定用(下贼上=下克上)。
 const ZHI_WX = { 子: '水', 亥: '水', 寅: '木', 卯: '木', 巳: '火', 午: '火', 申: '金', 酉: '金', 辰: '土', 戌: '土', 丑: '土', 未: '土' };
+const GAN_WX = { 甲: '木', 乙: '木', 丙: '火', 丁: '火', 戊: '土', 己: '土', 庚: '金', 辛: '金', 壬: '水', 癸: '水' };
 const WX_KE = { 木: '土', 土: '水', 水: '火', 火: '金', 金: '木' };
 const ZHI_CHONG = (z)=>ZHI12[(ZHI12.indexOf(z) + 6) % 12];
 const SANHE = [['申', '子', '辰', '水'], ['亥', '卯', '未', '木'], ['寅', '午', '戌', '火'], ['巳', '酉', '丑', '金']];
@@ -549,12 +550,14 @@ export const LIURENG_CONDITION_TYPES = {
 		defaults: { mode: 'with', values: ['yinv'] },
 		fields: [
 			{ key: 'mode', kind: 'select', label: '判法', options: [{ value: 'with', label: '命中任一' }, { value: 'without', label: '全不命中(避局)' }] },
-			{ key: 'values', kind: 'multiselect', label: '小局(65 类)', options: Object.keys(XIAO_JU_META).map((k)=>({ value: k, label: XIAO_JU_META[k].name })), hint: '判定=主页右栏小局面同函数;涉日月宿位的局在扫描侧无星历供数不判(恒不命中)' },
+			{ key: 'values', kind: 'multiselect', label: '小局(65 类)', options: Object.keys(XIAO_JU_META).map((k)=>({ value: k, label: XIAO_JU_META[k].name })), hint: '判定=主页右栏小局面同函数(只认带真实局式依据的条目,主页「参考常驻」的刑德/物气/新故/迍福/始终/旺孕/德孕不作命中);涉日月宿位的局在扫描侧无星历供数不判(恒不命中)' },
 		],
 		validate: needValues,
 		summary(p){ return `${p.mode === 'without' ? '避' : ''}小局:${(p.values || []).map((v)=>(XIAO_JU_META[v] ? XIAO_JU_META[v].name : v)).join('/')}`; },
 		evaluate(pan, p, ctx){
-			const hits = ctx.refs().xiaoJu.map((r)=>r.key);
+			// [Q-469/T-431] 主页小局面对 刑德/物气/新故/迍福/始终/旺孕/德孕 七局「未命中也追加」一条 source='参考常驻' 的条目(常驻参考页签);
+			// 择日只认带真实局式依据的条目,否则这 7 局「命中任一」恒真、「全不命中」恒假。
+			const hits = ctx.refs().xiaoJu.filter((r)=>r && r.source !== '参考常驻').map((r)=>r.key);
 			const sel = new Set(p.values || []);
 			const got = hits.filter((k)=>sel.has(k));
 			const pass = p.mode === 'without' ? got.length === 0 : got.length > 0;
@@ -595,20 +598,19 @@ export const LIURENG_CONDITION_TYPES = {
 			const i = Math.max(0, Math.min(3, Number(p.pos || '1') - 1));
 			const k = raw[i] || [];
 			const up = stripKong(k[1]);
-			// 一课的「下」是日干(主页 keDown 同口径)——干→寄宫支再论五行(正锚实抓 ke1 下='乙');
-			// 寄宫单源=LRConst.GanJiZi(勿手抄表)。
+			// 一课的「下」是日干:[Q-273/T-253] 克贼按日干**本五行**判(主六壬页课传判定 LRConst.isRestrain 与同表「贼克数」同口径),
+			// 寄宫(GanJiZi)只用于位置标注;此前先换寄宫支再论五行(乙→辰土、丁→未土、戊→巳火、辛→戌土、癸→丑土)→ 五干日一课两处相反。
 			const rawDown = stripKong(k[2]);
-			const down = GanJiZi[rawDown] || rawDown;
 			const uw = ZHI_WX[up];
-			const dw = ZHI_WX[down];
-			if(!uw || !dw){ return { pass: false, actual: `${i + 1}课:${up || '?'}/${down || '?'}` }; }
+			const dw = GAN_WX[rawDown] || ZHI_WX[GanJiZi[rawDown] || rawDown];
+			if(!uw || !dw){ return { pass: false, actual: `${i + 1}课:${up || '?'}/${rawDown || '?'}` }; }
 			const SHENG = { 木: '火', 火: '土', 土: '金', 金: '水', 水: '木' };
 			let pass = false;
 			if(p.rel === 'shang_ke_xia'){ pass = WX_KE[uw] === dw; }
 			else if(p.rel === 'xia_zei_shang'){ pass = WX_KE[dw] === uw; }
 			else if(p.rel === 'sheng'){ pass = SHENG[uw] === dw || SHENG[dw] === uw; }
 			else{ pass = uw === dw; }
-			return { pass, actual: `${i + 1}课上${up}(${uw})下${rawDown}${GanJiZi[rawDown] ? `寄${down}` : ''}(${dw})` };
+			return { pass, actual: `${i + 1}课上${up}(${uw})下${rawDown}${GanJiZi[rawDown] ? `寄${GanJiZi[rawDown]}` : ''}(${dw})` };
 		},
 	},
 	zhu_wangshuai: {

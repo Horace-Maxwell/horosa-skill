@@ -2,11 +2,14 @@
 // 择日判断 → AI 快照文本，供 saveModuleAISnapshot('election', ...)。
 import { essentialMatrix, accidentalTable, receptionReport } from './dignityReport.js';
 import { PLANETS } from '../data/planets.js';
+import { judgeReturnFacts } from './returnCharts.js';   // [Q-445] 回归盘利钝(与右栏合参卡三同源)
 
 const cnP = (k) => (PLANETS[k] || {}).cn || k;
 
-export function buildElectionSnapshot(j){
+// extra(页面侧按需拉取物,无头链无):{ returnSet:{solar,lunar}, pdHits:[...] } → [回归与主限] 段(与右栏合参卡三同源)。
+export function buildElectionSnapshot(j, extra){
 	if(!j) return '';
+	const ex = extra || {};
 	const L = [];
 	L.push('[起盘信息]');
 	L.push(`用事类型：${j.topic.cn}`);
@@ -48,14 +51,29 @@ export function buildElectionSnapshot(j){
 			const acc = accidentalTable(j.facts, eff);
 			const accBy = {}; acc.forEach((r) => { accBy[r.key] = r.total; });
 			L.push('[尊贵强弱]');
-			L.push('| 星 | 落座 | 本质小计 | 偶然合计 |');
-			L.push('| --- | --- | --- | --- |');
+			// [Q-445/T-408] 五重矩阵逐项(庙/旺/三分/界/面/陷/弱/外来)由「本质小计」还原为明细,与右栏矩阵同列;偶然合计保留。
+			L.push('（庙5 旺4 三分3 界2 面1／陷−5 弱−4 外来−5；三分「共」=共治分）');
+			L.push('| 星 | 落座 | 庙 | 旺 | 三分 | 界 | 面 | 陷 | 弱 | 外来 | 本质小计 | 偶然合计 |');
+			L.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |');
+			const dot = (v) => (v ? '●' : '');
 			ess.forEach((r) => {
-				L.push(`| ${r.cn} | ${r.signCn} | ${r.score > 0 ? '+' : ''}${r.score} | ${accBy[r.key] !== undefined ? (accBy[r.key] > 0 ? '+' : '') + accBy[r.key] : '—'} |`);
+				L.push(`| ${r.cn} | ${r.signCn}${r.signlon !== undefined ? ' ' + Math.floor(r.signlon) + '°' : ''} | ${dot(r.domicile)} | ${dot(r.exaltation)} | ${r.triplicity ? '●' : (r.triplicityPart ? '共' : '')} | ${dot(r.term)} | ${dot(r.face)} | ${dot(r.detriment)} | ${dot(r.fall)} | ${dot(r.peregrine)} | ${r.score > 0 ? '+' : ''}${r.score} | ${accBy[r.key] !== undefined ? (accBy[r.key] > 0 ? '+' : '') + accBy[r.key] : '—'} |`);
 			});
 			const af = j.facts.almuten;
 			if(af && af.winners && af.winners.length){
-				L.push(`胜利星：${af.winners.map(cnP).join('、')}（${af.best} 分·${af.points.length === 5 ? '五' : '四'}命点）`);
+				// [Q-445/T-408] Almuten Figuris 逐点计分矩阵(命点×七曜 + 合计),此前只有胜利星一行。
+				const AF_SEVEN = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn'];
+				if(Array.isArray(af.points) && af.points.length){
+					L.push(`Almuten Figuris（${af.points.length === 5 ? '五' : '四'}命点逐点计分）：`);
+					L.push(`| 命点 | ${AF_SEVEN.map(cnP).join(' | ')} |`);
+					L.push(`| --- | ${AF_SEVEN.map(() => '---').join(' | ')} |`);
+					af.points.forEach((pt) => {
+						L.push(`| ${pt.label} | ${AF_SEVEN.map((k) => ((pt.scores || {})[k] || '')).join(' | ')} |`);
+					});
+					L.push(`| 合计 | ${AF_SEVEN.map((k) => ((af.totals || {})[k] || '')).join(' | ')} |`);
+				}
+				L.push(`胜利星：${af.winners.map(cnP).join('、')}（${af.best} 分·${af.points.length === 5 ? '五' : '四'}命点）${af.winners.length > 1 ? '——并列时以得派/近角/近区分光决胜' : ''}`);
+				(af.caveats || []).forEach((c) => L.push(`注：${c}`));
 			}
 			receptionReport(j.facts).forEach((r) => L.push(`- 接纳：${r.text}`));
 		}catch(e){ /* noop */ }
@@ -75,8 +93,11 @@ export function buildElectionSnapshot(j){
 		const c = j.considerations;
 		L.push('[择前考量]');
 		L.push(`可判性：${c.verdictCn}（命中 ${c.hitCount} 条）`);
+		// [Q-445/T-408] 未命中项(✓)与提示项(·)一并列出(与右栏三组清单同构),此前只列命中(✗)→ AI 不知哪些考量已过关。
 		c.lilly.concat(c.ramesey).concat(c.bonatti).forEach((it) => {
-			if(it.hit && it.severity !== 'info') L.push(`- ✗ ${it.title}${it.detail ? `（${it.detail}）` : ''}`);
+			const info = it.severity === 'info';
+			const mark = info ? '·' : (it.hit ? '✗' : '✓');
+			L.push(`- ${mark} ${it.title}${it.detail ? `（${it.detail}）` : ''}`);
 		});
 		if(c.astrologer7th.length) L.push('⚠ 第 7 宫＝占星师受扰：判读可靠性存疑（不计入择吉分）。');
 	}
@@ -96,6 +117,22 @@ export function buildElectionSnapshot(j){
 		L.push('[本命合参]');
 		j.natal.notes.forEach((n) => L.push(`- ${n.pol === 'positive' ? '✓' : (n.pol === 'negative' ? '✗' : '·')} ${n.text}`));
 	}
+	// [Q-445/T-408] 合参「回归盘与主限」卡(页面按需拉取物;有数据才产段)。
+	try{
+		const rs = ex.returnSet;
+		const pd = ex.pdHits;
+		const rows = [];
+		if(rs && rs.solar){ rows.push(...judgeReturnFacts('日返', rs.solar)); }
+		if(rs && rs.lunar){ rows.push(...judgeReturnFacts('月返', rs.lunar)); }
+		if(rows.length || (Array.isArray(pd) && pd.length)){
+			L.push('[回归与主限]');
+			rows.forEach((n) => L.push(`- ${n.pol === 'positive' ? '▲' : (n.pol === 'negative' ? '▼' : '·')} ${n.text}`));
+			if(Array.isArray(pd) && pd.length){
+				L.push(`择日日期前后主限命中（±240 日内最近 ${pd.length} 条）：`);
+				pd.forEach((h) => L.push(`- ${h.date}（${h.deltaDays >= 0 ? '+' : ''}${h.deltaDays} 日）：${h.significator} ← ${h.promissor}${h.method ? `（${h.method}）` : ''}`));
+			}
+		}
+	}catch(e){ /* noop */ }
 	if(j.mundane && j.mundane.available){
 		L.push('[时势合参]');
 		j.mundane.notes.forEach((n) => L.push(`- ${n.pol === 'positive' ? '✓' : (n.pol === 'negative' ? '✗' : '·')} ${n.text}`));

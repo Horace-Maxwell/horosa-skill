@@ -93,15 +93,29 @@ export const QIGUA_FA_INPUTS = {
 };
 export function qiguaFaInputs(fa) { return QIGUA_FA_INPUTS[fa] || []; }
 
-export function applyPreset(presetKey) {
+// [Q-204/T-165①·BG-25] 起卦法属逐问题输入(报数/物数/字占…),不属流派口径:不参与 sameAsPreset(选报数起卦
+//   不再把流派打成「自定义」),applyPreset(presetKey, current) 切派保留当前起卦法(此前打回年月日时)。
+export const GUICE_NON_SCHOOL_KEYS = ['qiguaFa'];
+
+export function applyPreset(presetKey, current) {
 	const p = GUICE_PRESETS[presetKey] || GUICE_PRESETS.default;
-	return { ...DEFAULT_GUICE_SETTINGS, ...(p.overrides || {}), school: presetKey };
+	const merged = { ...DEFAULT_GUICE_SETTINGS, ...(p.overrides || {}), school: presetKey };
+	if (current && typeof current === 'object') {
+		GUICE_NON_SCHOOL_KEYS.forEach((k) => { if (current[k] !== undefined) merged[k] = current[k]; });
+	}
+	return merged;
+}
+
+/** 流派下拉显示名(快照/概览用;custom → 自定义,未知键原样) */
+export function guiceSchoolLabel(school) {
+	if (school === 'custom') return '自定义';
+	return GUICE_PRESETS[school] ? GUICE_PRESETS[school].label : `${school || ''}`;
 }
 
 function sameAsPreset(settings, presetKey) {
 	const base = applyPreset(presetKey);
 	return Object.keys(DEFAULT_GUICE_SETTINGS)
-		.filter((k) => k !== 'school')
+		.filter((k) => k !== 'school' && GUICE_NON_SCHOOL_KEYS.indexOf(k) < 0)
 		.every((k) => base[k] === settings[k]);
 }
 

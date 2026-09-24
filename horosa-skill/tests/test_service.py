@@ -26,6 +26,18 @@ def test_liureng_tool_description_prevents_manual_agent_calculation() -> None:
     assert "Xingque-compatible" in description
 
 
+# 上游 v3.11 星运四键：/astroextra/{ephemeris,prenatal_syzygy,progressions} 回**真实**响应（vendored v3.11.1+ 实例实抓
+# 后裁剪，见 fixtures/sync311_newtools_live.json 的 _comment）。桩管形状；值级真相归 test_sync311_newtools.py 的上游 JS 金标。
+_SYNC311_SAMPLE = json.loads(
+    (Path(__file__).parent / "fixtures" / "sync311_newtools_live.json").read_text(encoding="utf-8")
+)["scenarios"]["sample"]
+_SYNC311_ASTROEXTRA_STUBS = {
+    "/astroextra/ephemeris": _SYNC311_SAMPLE["ephemeris"],
+    "/astroextra/prenatal_syzygy": _SYNC311_SAMPLE["prenatal_syzygy"],
+    "/astroextra/progressions": _SYNC311_SAMPLE["progressions"],
+}
+
+
 class FakeClient(HorosaApiClient):
     def __init__(self) -> None:
         super().__init__("http://fake")
@@ -34,6 +46,8 @@ class FakeClient(HorosaApiClient):
         return True
 
     def call(self, endpoint: str, payload: dict) -> dict:
+        if endpoint in _SYNC311_ASTROEXTRA_STUBS:
+            return json.loads(json.dumps(_SYNC311_ASTROEXTRA_STUBS[endpoint]))
         if endpoint == "/electionscan/scan":
             # 真实形状：每行必带 pick/pickEnd（ε 缓冲后的安全起盘时刻）与 startJd/endJd。缺 pick 时
             # runner 会退回按分钟截断的 start，恰落征象边界外侧 —— 桩里必须有。
@@ -250,6 +264,9 @@ class FakeClient(HorosaApiClient):
                     {"id": "North Node", "house": "House7", "sign": "Pisces", "signlon": 7.21, "lon": 337.21, "lonspeed": -0.053},
                     {"id": "South Node", "house": "House1", "sign": "Virgo", "signlon": 7.21, "lon": 157.21, "lonspeed": -0.053},
                     {"id": "Pars Fortuna", "house": "House8", "sign": "Aries", "signlon": 9.05, "lon": 9.05},
+                    # 真实 /chart 的 objects 里带四轴（上升/天顶…）——小限摘要起点、keypoints 命位等按它取；桩不许比真实窄。
+                    {"id": "Asc", "house": "House1", "sign": "Virgo", "signlon": 15.0, "lon": 165.0},
+                    {"id": "MC", "house": "House10", "sign": "Gemini", "signlon": 12.0, "lon": 72.0},
                 ],
                 "stars": [{"id": "Sun", "stars": [["Bih", "Aries", 14.66, None, "壁宿二"]]}],
                 "orientOccident": {"Sun": {"oriental": [{"id": "Saturn"}], "occidental": [{"id": "Venus"}]}},
@@ -717,6 +734,60 @@ def sample_final_ai_report(question: str, *, source_title: str = "起盘信息")
     }
 
 
+# ── v0.40 mingli：八字 / 紫微 / 宿占改走 vendored 上游 builder（tools/baziLocal.js / ziweiBirth.js / suzhan.js）。
+# 桩文本**逐字节选自真引擎输出**（不手编）：八字 = testing_payloads east_birth 同盘（2028-04-06 09:33 上海·性别未知）；
+# 紫微 = 1985-11-07 23:30 上海男命 live 实出；宿占 = 1990-05-15 10:30 上海 live 实出（Java /chart + 八字公式起盘）。
+# 段头即真 builder 段头；桩只管形状，值级真相归 tests/test_sync311_mingli.py 的真引擎金标（§5 规则 6）。
+_BAZI_LOCAL_STUB_TEXT = "\n".join([
+    "[起盘信息]", "日期：2028-04-06 09:33:00", "时区：+08:00", "经纬度：121e28 31n13", "性别：未知", "时间算法：真太阳时",
+    "时间基准：真太阳时(经度+均时差校正)；晚子时归次日：是；23 点换日：是", "节气修正：不调整节气", "命造：乾造",
+    "农历：二〇二八年三月十二", "生肖：猴（岁首=立春）", "直接时间：2028-04-06 09:33:00　真太阳时：2028-04-06 09:36:30",
+    "清明后第3天； 调候：无", "",
+    "[四柱与三元]", "| 柱 | 干支 | 藏干 | 十神 | 纳音 | 纳音长生 | 星运 | 自坐 | 空亡 |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    "| 年柱 | 戊申 | 庚劫、壬伤、戊印 | 印·劫 | 大驿土 | 长生 | 临官 | 病 | 寅卯 |",
+    "| 月柱 | 丙辰 | 戊印、乙才、癸食 | 官·印 | 沙中土 | 墓 | 养 | 冠带 | 子丑 |",
+    "| 日柱 | 辛酉 | 辛比 | 日元·比 | 石榴木 | 胎 | 帝旺 | 帝旺 | 子丑 |",
+    "| 时柱 | 癸巳 | 丙官、庚劫、戊印 | 食·官 | 长流水 | 绝 | 长生 | 绝 | 午未 |",
+    "胎元：丁未，干十神:杀，支十神:枭", "命宫：庚申，干十神:劫，支十神:劫（起法：通行版）", "身宫：壬戌，干十神:伤，支十神:印", "十二串宫：申", "",
+    "[神煞（四柱与三元）]", "年柱：整柱=文昌贵人、福星贵人、德秀贵人、月厌；天干=无；地支=无；太岁=无",
+    "日柱：整柱=词馆、禄神、红艳、桃花、德秀贵人、阴差阳错、八专、四废；天干=无；地支=无；太岁=无", "",
+    "[五行力量]", "（通行示例权重：天干100/本气100/中气60/余气30/月令×1.5）", "| 五行 | 占比 |", "| --- | --- |",
+    "| 木 | 7.7% |", "| 火 | 17.2% |", "| 土 | 26.6% |", "| 金 | 30.9% |", "| 水 | 17.6% |", "最旺：金　最弱：木",
+    "日主金：身强（同党印比 57.5% · 异党 42.5%）", "",
+    "[格局·用神]", "当前主用流派：传统综合（各派取用可异，下列多派对照）", "格局：正印格（月令印·本气透干）", "",
+    "[盲派结构]", "（象法·参考，与扶抑/格局体系不同）", "宾主：年宾(戊申) 月宾(丙辰) 日主(辛酉) 时宾(癸巳)", "",
+    "[月令司令（分野）]", "版本：通行版", "节后 1.8 日，当令：乙（余气）", "",
+    "[干支合冲]", "干合：丙（月） 辛（日）→丙辛合水；丁（胎） 壬（身）→丁壬合木；戊（年） 癸（时）→戊癸合火", "",
+    "[大运]", "起运：出生后9年7个月20天0小时起运", "| 步序 | 起运年 | 干支 |", "| --- | --- | --- |",
+    "| 第2步 | 2037 | 丁巳 |", "| 第3步 | 2047 | 戊午 |", "",
+    "[流年行运概略]", "| 板块 | 起始年 | 起始年龄 | 大运 | 流年 |", "| --- | --- | --- | --- | --- |",
+    "| 板块1 | 2037 | 10岁 | 丁巳 | 2037-丁巳 2038-戊午 2039-己未 2040-庚申 2041-辛酉 2042-壬戌 2043-癸亥 2044-甲子 2045-乙丑 2046-丙寅 |",
+])
+_ZIWEI_BIRTH_STUB_TEXT = "\n".join([
+    "[起盘信息]", "日期：1985-11-07 23:30:00", "时区：+08:00", "经纬度：121e28 31n13", "性别：男", "时间算法：真太阳时",
+    "真太阳时：1985-11-07 23:50:28", "四化流派：通用·飞星", "生年天干：乙", "命宫：命宫（丙戌）", "命宫天干：丙",
+    "四柱：乙丑 丁亥 辛亥 戊子", "命主：巨门", "身主：天相", "命局：阴男 土五局", "",
+    "[宫位总览]", "| 宫位 | 干支 | 大限 | 星曜（四化括注） |", "| --- | --- | --- | --- |",
+    "| 命宫·胎 | 丙戌 | 5~14 | 廉贞（命宫忌，自化忌）·旺、天府·庙、文昌（命宫科，自化科）·陷、铃星·庙 |",
+    "| 财帛宫·冠带 | 壬午 | 45~54 | 紫微（生年科，自化权）·庙、咸池、天厨 |", "",
+    "[身宫]", "身宫落命宫（丙戌）", "",
+    "[来因宫]", "兄弟宫（乙酉）", "",
+    "[八字大运]", "| 起运虚岁 | 起始年份 | 大运干支 |", "| --- | --- | --- |", "| 1 | 1985 | 丙戌 |", "",
+    "[命中格局]", "府相朝垣（富贵·破）：天府天相于三方来朝命垣，仓廪充盈，衣食丰足，一生平稳得贵。", "",
+    "[运限概览]", "全大限 × 流年一览(公历年与干支由代码算出,禁自行推算):", "| 虚岁 | 宫位 | 宫干支 | 该限流年（公历年-干支） |",
+    "| --- | --- | --- | --- |",
+    "| 5~14 | 命 | 丙戌 | 1989-己巳、1990-庚午、1991-辛未、1992-壬申、1993-癸酉、1994-甲戌、1995-乙亥、1996-丙子、1997-丁丑、1998-戊寅 |",
+    "要某一年/某月的完整流曜与四化落宫,请在「挂载设置 → 运限」里选定年月(或直接说出年份)。",
+])
+_SUZHAN_STUB_TEXT = "\n".join([
+    "[起盘信息]", "日期：1990-05-15 10:30:00", "时区：+08:00", "经纬度：121e28 31n14", "宿法：荀爽距星(19年测)", "人事十二宫起盘：八字公式起盘", "",
+    "[宿盘宫位与二十八宿星曜]", "| 宫位 | 二十八宿 | 星曜 |", "| --- | --- | --- |",
+    "| 戌—降娄—白羊座—第10宫 | 壁、奎 | 福点 5˚壁50分、金 0˚奎21分 |",
+    "| 酉—大梁—金牛座—第11宫 | 奎、娄、胃 | 中天 16˚奎3分、水 7˚娄58分、日 10˚胃54分 |",
+    "| 未—鹑首—巨蟹座—第1宫 | 井 | 木 4˚井43分 |",
+])
+
+
 class FakeJsClient(HorosaJsEngineClient):
     def __init__(self) -> None:
         self.settings = None
@@ -810,6 +881,16 @@ class FakeJsClient(HorosaJsEngineClient):
                     "hit_count": 2,
                     "compiled_tree": {"type": "all", "conditions": []},
                     "limits": {"max_hits": 1000, "max_span_days": 1830},
+                    # 三式择时回传 vendored splitSanshiOptions 的三家拆分（真拆分由 tests/test_sync311_sanshiunited.py
+                    # 跑真 JS 守）；桩按同形回：六壬 / 奇门各取所属键、太乙 taiyiAccum → tn。
+                    **({"option_split": {
+                        "liureng": {k: v for k, v in (payload.get("options") or {}).items()
+                                    if k in ("guirengType", "yueMode", "yinyangSystem", "after23NewDay", "lateZiHourUseNextDay")},
+                        "qimen": {k: v for k, v in (payload.get("options") or {}).items()
+                                  if k in ("paiPanType", "qijuMethod", "school", "timeAlg", "after23NewDay", "lateZiHourUseNextDay")},
+                        "taiyi": ({"tn": (payload.get("options") or {})["taiyiAccum"]}
+                                  if "taiyiAccum" in (payload.get("options") or {}) else {}),
+                    }} if technique == "sanshizeri" else {}),
                 }}
             sections = _PRESETS.get(technique, [])[-3:] or ["择时搜索配置", "择时条件", "命中时段"]
             results = payload.get("results") or []
@@ -866,13 +947,57 @@ class FakeJsClient(HorosaJsEngineClient):
                 "snapshot_text": "[起盘信息]\n日期：2026-04-04 21:18\n\n[太乙盘]\n主算：二十四局",
             }
         if tool_name == "liuyao":
-            # 六爻断卦结构 (analyzeLiuyao 引擎)：离线替身给结构化 [断卦结构] 段，供 sixyao 契约 round-trip。
-            return {
-                "data": {},
-                "snapshot_text": (
-                    "[断卦结构]\n流派：通用\n卦序：坎宫·三世(世3应6)\n"
-                    "逐爻(初→上)：六神│伏神│本爻│世应│旺衰│状态│神煞\n第1爻：勾陈 卯木子孙 旺"
+            # 六爻层（tools/liuyao.js = 上游 regenerateSixyaoSnapshot 无头路径；sync311 wave 3b 起整份快照 = vendored
+            # buildGuaSnapshotText）离线替身：各段正文取自 vendored 引擎对本文件 FakeClient /nongli/time 桩的真实输出
+            # （以时起卦 = buildTimeGua → 泽天夬、三爻动；段行节选）。段头取真 preset（漂移即红），段序 = builder 实际产段
+            # 顺序（GuaZhanMain.js:219-385：[卦辞与断语]/[判语库·参考诀表] 在 [断诀命中]/[占类断语] 之前）；
+            # 无头卦无 guaDesc → [卦辞与断语] 只有段头、紧接下一段头（上游同形）。
+            # 未给 lines = 以时起卦 → 回卦线；给了 lines = 手动摇卦 → 原样回显。
+            from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS as _PRESETS
+
+            time_cast = not payload.get("lines")
+            names = ["子水妻财", "寅木官鬼应", "辰土兄弟", "亥水妻财", "酉金子孙世", "未土兄弟"]
+            lines = (
+                [{"value": v, "change": i == 2, "god": None, "name": names[i]} for i, v in enumerate([1, 1, 1, 1, 1, 0])]
+                if time_cast else payload.get("lines")
+            )
+            rec = payload.get("record") or {}
+            bodies = {
+                "起盘信息": (
+                    f"日期：{rec.get('date')} {rec.get('time')}\n时区：{rec.get('zone')}\n经纬度：{rec.get('lon')} {rec.get('lat')}\n"
+                    "求测人性别：男\n起卦时间：2028-04-06 09:33:00 庚午时\n干支：年丙午 月辛卯 日戊辰 时庚午\n旬空：月空午未 日空戌亥"
                 ),
+                "卦象": (
+                    "本卦：泽天夬  坤宫土\n互卦：乾为天  乾宫金\n之卦(变卦)：兑为泽  兑宫金\n"
+                    "错卦(阴阳全变)：山地剥  乾宫金\n综卦(上下颠倒)：天风姤  乾宫金"
+                ),
+                "六爻与动爻": (
+                    "第1爻：阳爻（静），爻名:子水妻财\n第3爻：阳爻（动），爻名:辰土兄弟\n"
+                    "之卦(变卦)逐爻（初→上）：\n第1爻：阳爻，爻名:巳火父母"
+                ),
+                "断卦结构": (
+                    "流派：通用（卜筮正宗口径）\n卦序：坤宫·五世(世5应2)\n占测：自身/综合运势　用神：世(5爻)\n"
+                    "| 爻 | 六神 | 地支 | 五行 | 六亲 | 世应 | 旺衰 | 状态 | 伏神 | 神煞 |\n"
+                    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+                    "| 第1爻 | 勾陈 | 子 | 水 | 妻财 | — | 休 | 岁破,入墓 | — | 将星 |"
+                ),
+                "卦辞与断语": "",
+                "判语库·参考诀表": "◆ 诸爻持世诀\n父母持世：主身劳心累、利文书房产长辈;求子嗣、求财较费力",
+                "断诀命中": (
+                    "三层环境：太岁午(岁破子)　月建卯(月破酉)　日建辰(日破戌)\n"
+                    "日辰纳音：大林木(木)\n应期·用神值日(得信/应事)：酉[时/日]"
+                ),
+                "占类断语": "历史占例：汉高祖欲拜韩信为将卜得,知有王佐之才也\n断语·总断门第一·孙膑：孙膑总断歌",
+            }
+            assert set(bodies) == set(_PRESETS["sixyao"]), "sixyao preset drifted: refresh this fake from the vendored builder"
+            blocks = [f"[{title}]\n{body}" if body else f"[{title}]" for title, body in bodies.items()]
+            text = "\n\n".join(blocks).replace("[卦辞与断语]\n\n[判语库·参考诀表]", "[卦辞与断语]\n[判语库·参考诀表]")
+            return {
+                "lines": lines,
+                "time_cast": time_cast,
+                "current_gua": {"index": 53, "name": "泽天夬"} if time_cast else None,
+                "snapshot_text": text,
+                "data": {"doctrine_loaded": True, "settings_ignored": [], "settings_invalid": [], "warnings": []},
             }
         if tool_name == "tarot":
             # 塔罗：离线替身给引擎直出的 [牌阵综览]/[逐牌详解]/[综合断语]/[定局]，供 tarot 契约 round-trip。
@@ -903,6 +1028,34 @@ class FakeJsClient(HorosaJsEngineClient):
                     "[断诗]\n诗曰:春来花自开 / 何须苦相催"
                 ),
             }
+        if tool_name == "bazi_local":
+            # 八字本地优先（tools/baziLocal.js）：Java 回退路径（给了 java_result）标 local=False，同真工具。
+            return {
+                "snapshot_text": _BAZI_LOCAL_STUB_TEXT,
+                "data": {
+                    "ok": True,
+                    "local": not payload.get("java_result"),
+                    "gender": "Male",
+                    "bazi": {
+                        "gender": "Male",
+                        "fourColumns": {k: {"ganzi": gz} for k, gz in (("year", "戊申"), ("month", "丙辰"), ("day", "辛酉"), ("time", "癸巳"))},
+                        "nongli": {"year": "二〇二八", "month": "三月", "day": "十二", "birth": "2028-04-06 09:36:30"},
+                    },
+                },
+            }
+        if tool_name == "ziwei_birth":
+            # 紫微编排（tools/ziweiBirth.js）两段式：prepare 回流派四化表，finalize 回盘 + 快照。
+            if payload.get("action") == "prepare":
+                return {"data": {"ok": True, "sihua": None, "school": "beipai", "localEngine": False}, "warnings": []}
+            result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
+            return {
+                "data": {"ok": True, "chart": result.get("chart"), "patterns": result.get("patterns") or [],
+                         "school": "beipai", "localEngine": False, "localApplied": False, "localError": None},
+                "text": _ZIWEI_BIRTH_STUB_TEXT,
+                "warnings": [],
+            }
+        if tool_name == "suzhan":
+            return {"text": _SUZHAN_STUB_TEXT, "data": {"ok": True, "nongliHour": "巳"}}
         if tool_name == "bazi_geju":
             # 八字格局 (baziGeju 引擎)：离线替身给 [五行力量]/[格局·用神]/[盲派结构]，供 bazi 契约 round-trip。
             # 桩文本逐字取自真引擎（1989-09-04 00:30 男 = 己巳 壬申 丁卯 庚子，与
@@ -1127,6 +1280,29 @@ class FakeJsClient(HorosaJsEngineClient):
             if technique in _PROGEXTRA_FAKE:
                 return {"tool": "progextra", "technique": technique, "data": {"ok": True}, "snapshot_text": _PROGEXTRA_FAKE[technique]}
             return {"tool": "progextra", "technique": technique, "data": {"ok": False}, "snapshot_text": ""}
+        if tool_name == "acg_section":
+            # 形状同真工具 tools/acgSection.js（vendored acgSnapshot.buildAcgSectionText）；正文 = 真 builder 在本桩
+            # /location/acg 两星数据上的逐字输出（值级真相由 tests/test_sync311_western.py 的真 JS 用例守）。
+            planets = ((payload.get("acgData") or {}).get("planets") or {})
+            if not planets:
+                return {"text": ""}
+            return {"text": (
+                "【占星地图】\n口径 本体(in-mundo·真黄纬) · 坐标系 地心\n主要行星角化线(中天/天底=经线;上升/下降取赤道附近代表点):\n"
+                "- 太阳:MC 120.50°E / IC 59.50°W / ASC — / DSC —\n- 月亮:MC 30.00°E / IC 150.00°W / ASC — / DSC —"
+            )}
+        if tool_name == "horary" and payload.get("action") == "backend_fields":
+            # 形状同真工具 tools/horary.js action=backend_fields；值 = 上游 horarySchools.js classical 档经
+            # horaryBackendFields（hsys 2 Regiomontanus / 托勒密界经典传本 / 七政 / 福点不反转 / Ptolemy 三分集）。
+            return {"tool": "horary", "school": "classical", "data": {
+                "ok": True, "school": "classical", "backend_overrides": [],
+                "backendFields": {"hsys": 2, "termsVariant": 2, "tradition": 1, "lotReversal": 0, "triplicity": "Ptolemaic"},
+            }}
+        if tool_name == "election" and payload.get("action") == "resolve_params":
+            # 形状同真工具 tools/election.js action=resolve_params（现代主流档：宫制不联动 schoolHsys=None）。
+            return {"tool": "election", "data": {
+                "ok": True, "effective": {"pdTimeKey": "Ptolemy"}, "school": payload.get("school") or "modern_main",
+                "schoolHsys": None, "params_applied": [], "params_global": [], "params_ignored": [], "invalid_inputs": [],
+            }}
         if tool_name == "horary":
             return {
                 "tool": "horary",
@@ -1159,6 +1335,69 @@ class FakeJsClient(HorosaJsEngineClient):
                     "[建议]\n- 另择月相吉、月无刑冲的时段。"
                 ),
             }
+        if tool_name == "sanshiunited":
+            # 三式合一（v3.11.x sanshi 同步）：快照由 vendored 上游 buildSanShiUnitedSnapshotText 产出（段头【】、builder 段序）。
+            # 段体节选自真引擎在 2026-09-24 10:57 上海盘上的 live 输出；段名逐个对真 preset 断言（不许漂）。
+            # live builder 的条件段（挂载重算顶段「奇门遁甲」、给了 ziweiSihua 才出的「紫微四化」、本盘未命中的
+            # 太乙博弈/命法/命宫行限与空亡真假…占断向导）桩也不产。逐字真值由 tests/test_sync311_sanshiunited.py 的 live 回放守。
+            from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS as _PS3
+
+            blocks = [
+                ('起盘信息', '农历：丙午年八月十四\n直接时间：2026-09-24 10:57'),
+                ('概览', '局数：阴遁一局中元\n旬首：甲午'),
+                ('太乙', '盘式：時計太乙\n古法公式：太乙統宗'),
+                ('太乙主客定算', '主算：3；無天，二曜虛蝕、五緯失度、慧孛飛流、霜雹為害；無地，有崩地震、川竭蝗蝻之象；純陽\n主将：艮宫（3）'),
+                ('太乙八门与宿曜', '金函玉镜：門：巽休、震生、艮傷、坎杜、乾景、兌死、坤驚、離開；星：坎太乙、離攝提、艮軒轅、兌招搖、乾天符、中青龍、巽咸池、震太陰、坤天乙\n值日宿：軫'),
+                ('太乙断法', '三门：三門不具。\n五将：掩。五將不發。'),
+                ('太乙七大兵法', '雷公入水：巽\n临津问道：坤'),
+                ('太乙十六宫', '子：始击、客大、飞鸟、三风、八风\n丑：民基'),
+                ('大六壬', '一课：辛申天空\n二课：申午勾陈'),
+                ('六壬大格', '1. 重审\n重审下凌上，子逆臣不恭。'),
+                ('六壬小局', '1. 三奇\n三奇用旬行，两处共一名。'),
+                ('六壬参考', '1. 旺孕\n行年旺相神，夫妇三合群。'),
+                ('六壬概览', '1. 元武决\n元武亥子辰，临卯酉盗伤。加午未迁官，推详莫妄陈。'),
+                ('十二盘式', '盘式：退间传式\n月将：辰；占时：午；位序：前十'),
+                ('常用神煞', '日德：巳（避凶中正、逢凶化吉）\n日禄：酉（入课传）（食禄、身体、力量）'),
+                ('年月神煞', '（年神＝四利三元序）\n月建：酉（入课传）'),
+                ('课体结构', '时遁（间传·逆间）：不得出而潜藏'),
+                ('三传旺衰', '初传亥水相、中传酉金旺、末传未土休'),
+                ('遁干特殊', '中传酉遁丁（遁鬼、遁丁）：暗鬼——藏于支下之官鬼,防暗中之险、隐忧；丁马——遁出丁,主动、信息、奔走'),
+                ('毕法（已命中）', '（以下为机械命中之断诀，烈度须合时令旺衰、年命制化，非定数）\n68. 制鬼之位乃良医：制鬼之位乃良医'),
+                ('七政', '| 七政 | 临支 | 五行 | 度数 | 逆行 | 备注 |\n| --- | --- | --- | --- | --- | --- |'),
+                ('正北坎宫', '遁甲：天盘干：戊；八神：地；九星：蓬；地盘干：戊\n「子-水瓶座」'),
+                ('东北艮宫', '遁甲：天盘干：庚；八神：玄；九星：任；地盘干：庚\n「丑-摩羯座」'),
+                ('正东震宫', '遁甲：天盘干：丙；八神：虎；九星：冲；地盘干：丙\n「卯-天蝎座」'),
+                ('东南巽宫', '遁甲：天盘干：丁；八神：合；九星：辅；地盘干：丁\n「辰-天秤座」'),
+                ('正南离宫', '遁甲：天盘干：己；八神：阴；九星：英；地盘干：己\n「午-狮子座」'),
+                ('西南坤宫', '遁甲：天盘干：乙；八神：蛇；九星：内；地盘干：乙\n「未-巨蟹座」'),
+                ('正西兑宫', '遁甲：天盘干：辛；八神：符；九星：柱；地盘干：辛\n「酉-金牛座」'),
+                ('西北乾宫', '遁甲：天盘干：壬；八神：天；九星：心；地盘干：壬\n「戌-白羊座」'),
+                ('神煞', '日禄：酉\n日德：巳'),
+                ('八宫详解', '乾宫：\n奇门吉格：'),
+                ('奇门九宫方盘', '| 宫 | 天干 | 神 | 门 | 天星 | 地干 |\n| --- | --- | --- | --- | --- | --- |'),
+                ('奇门旺相休囚死·月令能量', '月令：酉（金令）。当令者旺、我生者相、生我者休、克我者囚、我克者死；旺相有力，休囚死无力。\n| 宫 | 星 | 星五行 | 星旺衰 | 门 | 门五行 | 门旺衰 | 宫五行 | 宫旺衰 |'),
+                ('奇门六害总览', '危害递减：击刑＞入墓＞庚＞白虎＞门迫＞空亡；天干＞一切，先解击刑天干。\n| 危害 | 宫位 | 符号 |'),
+                ('奇门化解方案', '| 宫位 | 危害 | 天盘干 | 化解 |\n| --- | --- | --- | --- |'),
+                ('奇门八门化气大阵', '| 门 | 落宫 | 状态 |\n| --- | --- | --- |'),
+                ('奇门用神分论', '用神＝日干「辛」（阴·实质），落 兑7宫；时干为平台（事之表象）。\n日干:辛(兑7宫)\u3000时干:甲(兑7宫)\u3000干合/配偶:丙(震3宫)'),
+                ('奇门财富七要', '| 用神 | 落宫 | 危害 |\n| --- | --- | --- |'),
+                ('奇门事业七要', '| 用神 | 落宫 | 危害 |\n| --- | --- | --- |'),
+                ('奇门恋爱姻缘', '干合·正缘（配偶/理想型）:丙震3宫\n六合·人缘（月老）:合巽4宫'),
+                ('奇门孤辰寡宿', '孤辰(申):于 坤·西南 用「巳（蛇）」六合住；寡宿(辰):于 巽·东南 用「酉（鸡）」六合住'),
+            ]
+            for title, _body in blocks:
+                assert title in _PS3["sanshiunited"], title
+            return {
+                "tool": "sanshiunited",
+                "data": {
+                    "ok": True,
+                    "liureng": {"yue": "辰", "timezi": "午", "guizi": "寅", "nianMing": "午",
+                                "keText": ["一课 辛申天空", "二课 申午勾陈", "三课 丑亥玄武", "四课 亥酉白虎"],
+                                "sanChuan": {"cuang": ["己亥", "丁酉", "乙未"], "tianJiang": ["玄武", "白虎", "青龙"]}},
+                    "warnings": [],
+                },
+                "snapshot_text": "\n\n".join(f"【{title}】\n{body}" for title, body in blocks),
+            }
         if tool_name == "liureng":
             return {
                 "data": {
@@ -1187,6 +1426,55 @@ class FakeJsClient(HorosaJsEngineClient):
                 "birthStars": "本命年柱：丙午\n◆ 本命化曜\n木：化天贵（同归：岁星）",
                 "transitStars": f"流年干支：{payload.get('transitYearGz') or '—'}\n◆ 流年化曜\n火：化天刑",
             }}
+        if tool_name == "guolao_moira" and payload.get("action") == "info_sections":
+            # v3.11.x [Q-231/Q-434/Q-435]：[起盘信息] 命度/身度/宿主行 + [大限] + [三主与化曜] + [限法实算]。
+            # 段体取自真 builder 在上游 guolaoInfoFactsSnapshot.test.js 夹具上的输出（真值由
+            # tests/test_sync311_chinese.py 的真 node 用例守；这里只回形状 + 真内容）。
+            return {
+                "anchorLines": [
+                    "命度：射手 10度42分（寅 · 七政命度点 · 1宫 - 命宫）",
+                    "身度：金牛 12度0分（酉 · 月亮 · 7宫 - 夫妻宫）",
+                    "命度宿主：房 10度42分；身度宿主：亢 12度0分",
+                ],
+                "limitSection": (
+                    "古度限度法（命度十二宫大限）：\n| 限 | 宫 | 起讫岁 | 起讫年 | 年数 |\n| --- | --- | --- | --- | --- |\n"
+                    "| 第1限 | 命宫 | 1-13岁 | 1990-2002年 | 约12.6年 |"
+                ),
+                "masters": (
+                    "◆ 三主 · 命宫配干 · 化曜（主宫主）\n命主(宫主)：木\n命宫宫主：木\n命度度主(宿主曜)：日\n"
+                    "身主(身宫宫主)：金\n命宫配干(五虎遁)：戊寅\n生年化曜(A诀)：水"
+                ),
+                "limitCalc": "◆ 飞限 · 童限 · 小限 · 月限 · 限度（37 岁 · 丙午年）\n飞限：亥；小限：寅；月限：未；限度：25巳08；至：23巳08",
+                # wave3b：[七政四余宫位与二十八宿星曜] / [神煞] / [相位] 三段（真 builder 在 live 夹具
+                # sync311_w3b_guolao_live.json 上的输出节选；真值由 tests/test_sync311_w3b_gim.py 的真 node 用例守）。
+                "houseSu": (
+                    "| 宫位 | 二十八宿 | 星曜 |\n| --- | --- | --- |\n"
+                    "| 戌—降娄—白羊座—第11宫 | 壁 | 水 0˚壁7分；火 2˚壁53分；日 6˚壁18分 |\n| 酉—大梁—金牛座—第12宫 | 无 | 无 |"
+                ),
+                "gods": "申：长生、文昌、伏尸、剑锋、孤虚、卦气、月符、披头、岁驾、福贵、太岁、地杀、指背",
+                "aspects": "| 主体 | 相位 | 对象 | 状态 | 误差 |\n| --- | --- | --- | --- | --- |\n| 日 | 六合 (60°) | 天 | 离相 | 9.668 |",
+                "errors": [],
+            }
+        if tool_name == "ziwei_extras":
+            # 紫微 [运限概览]（v3.11.0 #80，有盘就出）/ [运限]（给了 period 才出）/ [流派叠层]（开了流派开关才出）。
+            # 段体取自真引擎在 2028-04-06 09:33 上海盘上的输出；段头按真 preset 取（不手抄）。
+            from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS as _PZ
+
+            def _zw(title: str) -> str:
+                assert title in _PZ["ziwei"], title
+                return f"[{title}]"
+
+            blocks = [
+                f"{_zw('运限概览')}\n全大限 × 流年一览(公历年与干支由代码算出,禁自行推算):\n"
+                "| 虚岁 | 宫位 | 宫干支 | 该限流年（公历年-干支） |\n| --- | --- | --- | --- |\n"
+                "| 2~11 | 命 | 癸亥 | 2029-己酉、2030-庚戌、2031-辛亥、2032-壬子、2033-癸丑、2034-甲寅、2035-乙卯、2036-丙辰、2037-丁巳、2038-戊午 |\n"
+                "要某一年/某月的完整流曜与四化落宫,请在「挂载设置 → 运限」里选定年月(或直接说出年份)。"
+            ]
+            if payload.get("period"):
+                blocks.append(f"{_zw('运限')}\n◆ 大限：甲子（12~21岁），命宫【父母】·对宫【疾厄】")
+            if payload.get("schools"):
+                blocks.append(f"{_zw('流派叠层')}\n· 童限\n  1岁·命宫")
+            return {"text": "\n\n".join(blocks), "errors": []}
         if tool_name == "guolao_moira":
             # 七政四余 政余格局：headless buildLocalMoiraPatterns 的离线替身（喜/忌格各一）。
             return {
@@ -1242,6 +1530,30 @@ class FakeJsClient(HorosaJsEngineClient):
             # 假盘面不带真实黄经，vendored builder 会算出无意义结果 → 返回空文本，
             # 走与「/astroextra/analysis 失败」同一条优雅降级路径（该段不出）。
             return {"text": ""}
+        if tool_name == "mundane_cards":
+            # 世运右栏卡片段（v3.11）：真渲染由 npm selfcheck 金标（vendored buildMundaneCardSections）与
+            # tests/test_sync311_mundane_election.py 的真 JS 用例守；桩只管形状。段头取自真 preset / 真表（不手抄）：
+            # 入宫底盘一轮回 preset 里「年盘概要…起盘信息」之间**非 optional** 的卡（必出卡），盘型轮回该盘型的
+            # 专属卡（service._MUNDANE_TYPE_CARDS；service 侧再按同表过滤）。
+            from horosa_skill.exports.registry import AI_EXPORT_OPTIONAL_SECTIONS as _OPT
+            from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS as _PRE
+            from horosa_skill.service import HorosaSkillService as _Svc
+
+            preset = _PRE["mundane"]
+            cards = preset[preset.index("年盘概要"): preset.index("起盘信息")]
+            optional = set(_OPT["mundane"])
+            jobs_out = []
+            for job in payload.get("jobs") or []:
+                job_id = str(job.get("id"))
+                titles = [t for t in cards if t not in optional] if job_id == "ingress" else list(_Svc._MUNDANE_TYPE_CARDS.get(job_id, ()))
+                jobs_out.append({
+                    "id": job_id,
+                    "ok": True,
+                    "cards": [{"title": t, "text": f"[{t}]\n{t}：离线桩判读行（逐字真值由 selfcheck 金标守）"} for t in titles],
+                })
+            # meta 与真工具同形（tools/mundaneCards.js settingsCheck：rulesetConfig 缺省 modern 的查名）。
+            meta = {"ruleset": "modern", "rulesetLabel": "现代(Carter–Campion)", "orbSchemeLabel": None, "ingressRuleLabel": None}
+            return {"tool": "mundane_cards", "data": {"ok": True, "jobs": jobs_out, "meta": meta}}
         raise AssertionError(f"Unexpected local tool: {tool_name}")
 
 
@@ -1358,7 +1670,7 @@ def test_service_tool_call_persists_memory(tmp_path) -> None:
     assert result.data["export_snapshot"]["sections"][0]["title"] == "起盘信息"
     assert "宫位宫头" in result.data["export_snapshot"]["selected_sections"]
     assert "星与虚点" in result.data["export_snapshot"]["selected_sections"]
-    assert "第八宫 宫头" in result.data["export_snapshot"]["export_text"]
+    assert "| 第八宫 | " in result.data["export_snapshot"]["export_text"]   # [宫位宫头] 宫位|宫头 GFM 表（astroAiSnapshot.js:521-533）
     assert "日 (8th; 12R)" in result.data["export_snapshot"]["export_text"]
     assert "福点 (8th; -)" in result.data["export_snapshot"]["export_text"]
     queried = store.query_runs(tool="chart")
@@ -1753,30 +2065,42 @@ def test_phase2_tools_attach_export_contracts(tmp_path) -> None:
 
 
 def test_sixyao_time_based_gua_varies_with_time_and_is_deterministic() -> None:
-    # 回归 #12: lines 空时曾写死返回 既济(101010)→益(100011)，与起卦时间无关。修复后按四柱干支 +
-    # 时辰以时起卦 (梅花易数)：不同时间不同卦、恰一动爻、同输入确定一致、不再是写死的既济→益。
-    from horosa_skill.service import _time_based_gua_lines, _derive_gua_code, _derive_changed_gua_code
+    # 回归 #12: lines 空时曾写死返回 既济(101010)→益(100011)，与起卦时间无关。以时起卦 = vendored 上游
+    # buildTimeGua（GuaZhanMain.js:74-98，年支序 + 农历月数 + 农历日数 + 时柱支序）：不同时间不同卦、恰一动爻、
+    # 同输入确定一致、不再是写死的既济→益。（sync311 wave 3：Python 手写式 _time_based_gua_lines 已删——它取
+    # 月/日地支序 + 钟表时辰，与上游起出不同的卦；本条改钉 JS 真函数，值级对拍见 test_sync311_divination_w3.py。）
+    import subprocess
+
+    from horosa_skill.service import _derive_changed_gua_code, _derive_gua_code
 
     cases = [
-        ({"yearGanZi": "癸卯", "monthGanZi": "甲子", "dayGanZi": "甲子"}, "00:00:00"),
-        ({"yearGanZi": "甲辰", "monthGanZi": "庚午", "dayGanZi": "庚戌"}, "06:30:00"),
-        ({"yearGanZi": "乙巳", "monthGanZi": "己卯", "dayGanZi": "戊子"}, "18:45:00"),
-        ({"yearGanZi": "丙午", "monthGanZi": "甲午", "dayGanZi": "壬戌"}, "12:52:00"),
-        ({"yearGanZi": "丙午", "monthGanZi": "庚子", "dayGanZi": "庚辰"}, "23:59:00"),
+        {"year": "癸卯", "monthInt": 11, "dayInt": 1, "time": "甲子"},
+        {"year": "甲辰", "monthInt": 5, "dayInt": 20, "time": "丁卯"},
+        {"year": "乙巳", "monthInt": 2, "dayInt": 3, "time": "辛酉"},
+        {"year": "丙午", "monthInt": 5, "dayInt": 9, "time": "丙午"},
+        {"year": "丙午", "monthInt": 11, "dayInt": 23, "time": "丙子"},
     ]
+    module = Path(__file__).resolve().parents[1] / "horosa-core-js" / "src" / "vendor" / "guazhan" / "GuaZhanMain.js"
+    script = (
+        "import(process.argv[1]).then((m) => { const cs = JSON.parse(process.argv[2]);"
+        " process.stdout.write(JSON.stringify(cs.map((n) => m.buildTimeGua(n).yao.map((y) => ({ value: y.value, change: y.change }))))); });"
+    )
+
+    def cast(items: list[dict]) -> list[list[dict]]:
+        out = subprocess.run(["node", "--input-type=module", "-e", script, str(module), json.dumps(items, ensure_ascii=False)],
+                             check=True, capture_output=True, text=True)
+        return json.loads(out.stdout)
+
     combos = set()
-    for nongli, t in cases:
-        lines = _time_based_gua_lines(nongli, {"time": t})
+    for lines in cast(cases):
         assert len(lines) == 6
         assert all(line["value"] in (0, 1) for line in lines)
         assert sum(1 for line in lines if line["change"]) == 1  # 以时起卦恰一个动爻
         combos.add((_derive_gua_code(lines), _derive_changed_gua_code(lines)))
     assert len(combos) >= 4, combos  # 不再固定单一卦象 (修复前为 1)
     assert ("101010", "100011") not in combos  # 写死的 既济→益 不再出现
-    n = {"yearGanZi": "丙午", "monthGanZi": "甲午", "dayGanZi": "壬戌"}
-    assert _derive_gua_code(_time_based_gua_lines(n, {"time": "12:52:00"})) == _derive_gua_code(
-        _time_based_gua_lines(n, {"time": "12:52:00"})
-    )
+    again = cast([cases[3], cases[3]])
+    assert _derive_gua_code(again[0]) == _derive_gua_code(again[1])
 
 
 @pytest.mark.parametrize("tool_name", ["chart", "guolao_chart"])
@@ -2013,10 +2337,19 @@ def test_predictive_common_sections_appended_for_predictive_family(tmp_path) -> 
 
     assert result.ok is True
     snapshot = result.data["snapshot_text"]
-    assert "[当前时点]" in snapshot and "[方法说明]" in snapshot
-    assert "导出时刻：" in snapshot
-    assert "盘主当前年龄：" in snapshot
+    assert "[方法说明]" in snapshot
     assert "小限(年限)" in snapshot
+    # 上游 v3.11（aiExport.js:641-645 / predictiveAiSnapshot.js）：目标时刻型 5 法只出 [方法说明]、preset 无 [当前时点]。
+    assert "[当前时点]" not in snapshot
+    agepoint = service.run_tool(
+        "agepoint",
+        {"date": "1995-06-03", "time": "05:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "agent_confirmed_settings": True},
+        save_result=False,
+    )
+    agepoint_snapshot = agepoint.data["snapshot_text"]
+    assert "[当前时点]" in agepoint_snapshot and "[方法说明]" in agepoint_snapshot
+    assert "导出时刻：" in agepoint_snapshot
+    assert "盘主当前年龄：" in agepoint_snapshot
     # 非星运技法不受影响（零变化）。
     nongli = service.run_tool(
         "nongli_time",
@@ -2170,7 +2503,8 @@ def test_sanshiunited_subresults_use_compact_export_contracts(tmp_path) -> None:
 
     assert result.ok is True
     subresults = result.data["subresults"]
-    assert sorted(subresults) == ["liureng_gods", "qimen", "taiyi"]
+    # v3.11.x wave-3：六壬层不再另起 liureng_gods 子盘（上游三式合一用三式农历 + 奇门盘干支就地起课）。
+    assert sorted(subresults) == ["qimen", "taiyi"]
     for subresult in subresults.values():
         assert "data" not in subresult
         assert "export_snapshot" not in subresult
@@ -2315,10 +2649,10 @@ def test_primary_direction_exports_tables_and_pdchart_positions(tmp_path) -> Non
     pd_result = service.run_tool("pd", payloads["pd"], save_result=False)
     pd_text = pd_result.data["snapshot_text"]
     assert "主限法表格" in pd_text  # 上游 v48 段名对齐（旧名 主/界限法表格 → 主限法表格）
-    assert "| Arc | 迫星 | 应星 | 类型 | 日期 |" in pd_text
-    assert "推运月" in pd_text
-    assert "本命土" in pd_text
-    assert "2031-04-06" in pd_text
+    # 上游 v3.11 AstroDirectMain.js buildPrimaryDirectSnapshotText：4 列「日期(UTC)」、弧写「X度Y分」、
+    # 迫星/应星走 directionObjText（D_Moon_120 → 月…的120度右相位处）。
+    assert "| Arc | 迫星 | 应星 | 日期(UTC) |" in pd_text
+    assert "| 0度15分 | 月 (3th; 11R)的120度右相位处 | 土 (8th; 5R6R) | 2031-04-06 09:33:00 |" in pd_text
 
     pdchart_result = service.run_tool("pdchart", payloads["pdchart"], save_result=False)
     pdchart_text = pdchart_result.data["snapshot_text"]
@@ -2348,32 +2682,34 @@ def test_primary_direction_full_house_settings_surface(tmp_path) -> None:
         "pdTimeKey": "Kundig",
     }
     text = service.run_tool("pd", payload, save_result=False).data["snapshot_text"]
-    assert "Meridian" in text
-    assert "In Mundo（世俗）" in text
-    assert "仅逆向 (converse)" in text
-    assert "Kündig" in text
-    assert "映点(antiscia)作迫星：是" in text
-    assert "界(terms)作迫星：是" in text
+    # 上游 v3.11 [主限法设置] 行口径（AstroDirectMain.js:337-386）。
+    assert "推运方法：Meridian" in text
+    assert "方向类型：世俗（In Mundo）" in text
+    assert "向运方向：逆向 Converse" in text
+    assert "度数换算：Kündig" in text
+    assert "映点迫星：是" in text
+    assert "界迫星：是" in text
+    assert "弧算法（投影）：Ptolemy（半弧）（世界主限下走核内基线）" in text
 
 
 def test_primary_direction_core5_method_labels() -> None:
-    # 主限法 v12 核5：每个公开方位法都有专属标签；未核验旧键（placidus 等）不再有标签（后端会回退 core_alchabitius）。
+    # 上游 v3.11（primaryDirectionSync.js:57-115）：方位法 13 法、度数换算 26 项，标签取 PD_METHOD_LABELS /
+    # PD_TIME_KEY_LABELS。旧「核5 + placidus 未核验回退」注记已过期（placidus 等自 v3.6 起真算，后端 perchart.py:892 白名单）。
     from horosa_skill.service import _primary_direction_method_text, _primary_direction_time_key_text
 
-    assert _primary_direction_method_text("core_alchabitius") == "Alcabitius 半弧法"
+    assert _primary_direction_method_text("core_alchabitius") == "Alchabitius"
     assert _primary_direction_method_text("meridian") == "Meridian"
     assert _primary_direction_method_text("porphyry") == "Porphyry"
     assert _primary_direction_method_text("equal_ecliptic") == "Equal（黄道）"
     assert _primary_direction_method_text("equal_hour_circle") == "Equal（时圈）"
-    assert _primary_direction_method_text("horosa_legacy") == "传统赤经法"
-    # 移除的未核验方位法：params 回显是原样输入，标签如实标注引擎回退（行集等同 core，live 测试钉死）。
-    assert _primary_direction_method_text("placidus") == "placidus（未核验，引擎回退 Alcabitius 半弧法）"
-    # 时间钥匙 22 项全部有标签（上游下拉一致）。
+    assert _primary_direction_method_text("horosa_legacy") == "Horosa原方法"
+    assert _primary_direction_method_text("placidus") == "Placidus（半弧）"
+    # 时间钥匙 26 项全部有标签（上游下拉一致）。
     for key in (
         "Ptolemy", "Naibod", "TrueSolarArc", "SymbolicSolarArc", "Cardano", "Umar", "Wollner",
         "Plantiko", "Simmonite", "SynodicYear", "Kepler", "Brahe", "Kundig", "SymbolicDegree",
         "SymbolicYear", "SymbolicMoon", "SymbolicMonth", "Quarterly", "Quinary", "Duodenary",
-        "Novenary", "SelfMeasure",
+        "Novenary", "SelfMeasure", "NaibodRA", "AscendantArc", "VanDam", "User",
     ):
         label = _primary_direction_time_key_text(key)
         assert label and label != "无", key
@@ -2443,7 +2779,9 @@ def test_guolao_snapshot_has_limit_and_aspect_sections(tmp_path) -> None:
     )
     text = result.data["snapshot_text"]
     assert "大限" in text
-    assert "第1限 命宫" in text
+    # v3.11.x：[大限] 由 vendored 上游 buildGuolaoLimitSection 出（GFM 表，GuoLaoChartMain.js:2191-2201），
+    # 不再是 skill 旧行式「第1限 命宫：…」。
+    assert "| 第1限 | 命宫 |" in text
     assert "相位" in text
 
 
@@ -2458,10 +2796,12 @@ def test_zodiacal_release_exports_timeline_rows(tmp_path) -> None:
 
     result = service.run_tool("zr", payloads["zr"], save_result=False)
     text = result.data["snapshot_text"]
-    assert "本命盘星与虚点" in text
-    assert "基于X点推运" in text
-    assert "L1：牡羊" in text
-    assert "L2：金牛" in text
+    # 上游 AstroZR.js buildZRAISnapshotBody（v3.11）：段头取基点中文名（缺省福点），L1 全列「座-起始日」。
+    assert "[基于福点推运]" in text
+    assert "AI输出模式：输出所有L1（星座+时间）" in text
+    assert "L1-1：牡羊-2028-04-06" in text
+    drill = service.run_tool("zr", {**payloads["zr"], "aiMode": "l2_in_l1"}, save_result=False)
+    assert "L2-1：金牛-2028-04-21" in drill.data["snapshot_text"]
 
 
 def test_all_callable_techniques_keep_clean_contracts_across_repeated_saved_runs(tmp_path) -> None:
@@ -2755,12 +3095,35 @@ def test_bazi_report_promotes_liunian_output_into_human_reading(tmp_path) -> Non
                 }
             }
 
+    class BaziFlowJs(FakeJsClient):
+        # v0.40 F9：八字改本地引擎优先（tools/baziLocal.js，上游页面主路径），Java 桩不再被调；
+        # 流年行运数据改由 JS 快照给 —— 节选自真引擎同盘实出（1995-06-03 05:30 上海男命，
+        # vendored buildBaziSnapshotText；[流年行运概略] 为 BaZi.js:575-599 的 GFM 表）。
+        def run(self, tool_name: str, payload: dict[str, object]) -> dict:
+            if tool_name != "bazi_local":
+                return super().run(tool_name, payload)
+            out = super().run(tool_name, payload)
+            out["snapshot_text"] = "\n".join([
+                "[起盘信息]", "日期：1995-06-03 05:30:00", "性别：男", "命造：乾造",
+                "直接时间：1995-06-03 05:30:00　真太阳时：1995-06-03 05:37:55", "",
+                "[四柱与三元]", "| 柱 | 干支 | 藏干 | 十神 | 纳音 | 纳音长生 | 星运 | 自坐 | 空亡 |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                "| 年柱 | 乙亥 | 壬印、甲劫 | 比·印 | 山头火 | 绝 | 长生 | 长生 | 申酉 |",
+                "| 月柱 | 辛巳 | 丙伤、庚官、戊财 | 杀·伤 | 白蜡金 | 长生 | 病 | 长生 | 申酉 |",
+                "| 日柱 | 乙丑 | 己才、癸枭、辛杀 | 日元·才 | 海中金 | 墓 | 冠带 | 冠带 | 戌亥 |",
+                "| 时柱 | 己卯 | 乙比 | 才·比 | 城头土 | 死 | 帝旺 | 沐浴 | 申酉 |", "",
+                "[神煞（四柱与三元）]", "胎元：整柱=无；天干=无；地支=无；太岁=无", "",
+                "[流年行运概略]", "| 板块 | 起始年 | 起始年龄 | 大运 | 流年 |", "| --- | --- | --- | --- | --- |",
+                "| 板块3 | 2024 | 30岁 | 戊寅 | 2024-甲辰 2025-乙巳 2026-丙午 2027-丁未 2028-戊申 2029-己酉 2030-庚戌 2031-辛亥 2032-壬子 2033-癸丑 |",
+            ])
+            return out
+
     settings = Settings(
         server_root="http://127.0.0.1:9999",
         db_path=tmp_path / "memory.db",
         output_dir=tmp_path / "runs",
     )
-    service = HorosaSkillService(settings, client=BaziFlowClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    service = HorosaSkillService(settings, client=BaziFlowClient(), store=MemoryStore(settings), js_client=BaziFlowJs())
     result = service.run_tool(
         "bazi_birth",
         {
@@ -3541,8 +3904,9 @@ def test_late_zi_switch_threads_through_all_chart_flows(tmp_path) -> None:
     service = HorosaSkillService(settings, client=client, store=MemoryStore(settings), js_client=FakeJsClient())
     base = {"date": "2026-05-27", "time": "23:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "agent_confirmed_settings": True}
 
+    # v0.40：bazi_birth 改本地引擎优先（不打 /bazi/birth），其两开关穿透本地引擎由
+    # test_sync311_mingli.py::test_bazi_day_boundary_defaults_reach_local_engine 看守。
     cases = [
-        ("bazi_birth", "/bazi/birth"),
         ("ziwei_birth", "/ziwei/birth"),
         ("liureng_gods", "/liureng/gods"),
         ("nongli_time", "/nongli/time"),
@@ -3568,10 +3932,10 @@ def test_late_zi_switch_threads_through_all_chart_flows(tmp_path) -> None:
     ken = [payload for ep, payload in client.calls if ep == "/qimen/pan"]
     assert ken and ken[0].get("after23NewDay") == 0
 
-    # sanshiunited 显式开关透传三式子工具。
+    # sanshiunited 显式开关透传三式子工具（六壬层随三式农历就地起课，不再打 /liureng/gods —— wave-3）。
     client.calls.clear()
     service.run_tool("sanshiunited", {**base, "lateZiHourUseNextDay": 0}, save_result=False)
-    for endpoint in ("/qimen/pan", "/taiyi/pan", "/liureng/gods"):
+    for endpoint in ("/qimen/pan", "/taiyi/pan", "/nongli/time"):
         captured = [payload for ep, payload in client.calls if ep == endpoint]
         assert captured and captured[0].get("lateZiHourUseNextDay") == 0, f"sanshiunited 未透传到 {endpoint}"
 
@@ -3922,8 +4286,10 @@ def test_tianxing_explain_at_appends_section_and_tree(tmp_path) -> None:
     payload = {**build_sample_payloads()["tianxing"], "explainAt": "2028-04-01 00:01"}
     result = service.run_tool("tianxing", payload, save_result=False)
     assert result.ok is True, result.error
-    assert seen and seen[0]["t"] == "2028/04/01 00:01:00", "t 必须照上游 explainInterval 归一"
-    assert seen[0].get("conditions"), "explain 必须带编译后的条件树"
+    # [Q-453] 缺省另为命中清单前 3 行预取判读树（t = row.pick），用户 explainAt 那一次要按 t 找。
+    user_calls = [p for p in seen if p["t"] == "2028/04/01 00:01:00"]
+    assert user_calls, "t 必须照上游 explainInterval 归一"
+    assert user_calls[0].get("conditions"), "explain 必须带编译后的条件树"
     explain = result.data["explain"]
     assert explain["tree"]["kind"] == "group" and explain["tree"]["children"], "判读树必须原样带回"
     text = result.data["snapshot_text"]
@@ -3944,7 +4310,9 @@ def test_tianxing_without_explain_at_emits_no_explain_key(tmp_path) -> None:
     assert result.ok is True, result.error
     assert "explain" not in result.data
     assert "[单时判读]" not in (result.data["snapshot_text"] or "")
-    assert "/electionscan/explain" not in calls
+    # [Q-453] 缺省仍会为命中清单前 3 行预取判读树（上游 prefetchSnapshotExplains，进 [命中区间] 行内，
+    # 不是 [单时判读]）→ 恰 min(3, 命中数) 次。zeriSnapshotExplainRows=0 时一次不打（见 test_sync311_divination）。
+    assert calls.count("/electionscan/explain") == min(3, result.data["hit_count"])
     assert "单时判读" not in result.data["export_snapshot"]["missing_selected_sections"]
 
 
@@ -3989,7 +4357,8 @@ def test_cetian_text_key_appends_classics(tmp_path) -> None:
 
 
 def test_wangji_xinyi_casting_methods(tmp_path) -> None:
-    """批 I-5：xinyiMethod=number 独立起卦产 [心易起卦]；缺省零回归。"""
+    """批 I-5 → sync311 F15：所选心易法的卦面按上游进 [心易发微]（buildHuangJiSnapshotForFields），
+    不再另起 skill 自造的 [心易起卦] 段（该段名上游 preset 里没有）。"""
     service = _zeri_service(tmp_path)
     base = {"date": "1998-02-20", "time": "20:48"}
     plain = service.run_tool("wangji", base, save_result=False)
@@ -3998,7 +4367,7 @@ def test_wangji_xinyi_casting_methods(tmp_path) -> None:
     cast = service.run_tool("wangji", {**base, "xinyiMethod": "number", "upperNum": 7, "lowerNum": 12}, save_result=False)
     assert cast.ok is True, cast.error
     text = cast.data["snapshot_text"]
-    assert "[心易起卦]" in text and "起法：报数" in text and "本卦：頤" in text
+    assert "[心易起卦]" not in text and "[心易发微]\n本卦：頤" in text
     assert cast.data["xinyi"]["result"]["本卦"] == "頤" and cast.data["xinyi"]["method"] == "number"
     export = cast.data["export_snapshot"]
     assert export["missing_selected_sections"] == [] and export["unknown_detected_sections"] == []
@@ -4503,7 +4872,7 @@ def test_technique_card_rides_every_technique_response_and_survives_response_vie
     assert card["schema"] == "horosa.skill.technique_card.v1"
     assert card["tool"] == "tarot"
     assert card["technique"]["key"] == "tarot"
-    assert card["versions"]["skill"] and card["versions"]["export_settings"] == 14
+    assert card["versions"]["skill"] and card["versions"]["export_settings"] == 15
     assert card["refs"]["run_id"] == result.memory_ref.run_id
 
     slim = service.run_tool("tarot", {**payload, "response_view": "titles"}, save_result=False)
@@ -4557,32 +4926,17 @@ def test_technique_report_rejects_an_unknown_format(tmp_path) -> None:
 # --- v0.28.0（上游 v3.9.2）：干支合冲 / 选中时刻星盘 ---------------------------------------------
 
 
-def test_bazi_hechong_lines_mirror_the_upstream_relline_format() -> None:
-    """[干支合冲] 行格式金标——逐字镜像上游 BaZi.js relLine：`{cell}（{zhu}） …→{key}`，分号连接，
-    全空不产段。字段来自后端 fourColumns（纯排版，零新计算）。"""
-    from horosa_skill.service import _build_bazi_hechong_lines
-
-    four = {
-        "ganHe": {"甲己合土": [{"cell": "甲", "zhu": "年干"}, {"cell": "己", "zhu": "时干"}]},
-        "ziCong": {"子午冲": [{"cell": "子", "zhu": "年支"}, {"cell": "午", "zhu": "日支"}]},
-        "ziXing": {},
-    }
-    lines = _build_bazi_hechong_lines(four)
-    assert lines == [
-        "干合：甲（年干） 己（时干）→甲己合土",
-        "支冲：子（年支） 午（日支）→子午冲",
-    ]
-    assert _build_bazi_hechong_lines({}) == [], "全空不产段（上游 heCongLines.length 同判）"
-
-
+# v0.40 F9：[干支合冲] 不再是 Python 手写 port（_build_bazi_hechong_lines 已删）—— 行由 vendored 上游
+# buildBaziSnapshotText 的 relLine 逐字产出（BaZi.js:515-534），真引擎值级金标见 test_sync311_mingli.py。
 def test_bazi_snapshot_carries_hechong_between_fenye_and_dayun(tmp_path) -> None:
     service = _service(tmp_path)
     result = service.run_tool("bazi_birth", build_sample_payloads()["bazi_birth"], save_result=False)
     assert result.ok is True
     titles = [s["title"] for s in result.data["export_snapshot"]["sections"]]
     assert "干支合冲" in titles
+    assert titles.index("月令司令（分野）") < titles.index("干支合冲") < titles.index("大运")
     body = next(s["body"] for s in result.data["export_snapshot"]["sections"] if s["title"] == "干支合冲")
-    assert "干合：甲（年干） 己（时干）→甲己合土" in body
+    assert "干合：丙（月） 辛（日）→丙辛合水" in body
 
 
 def test_tianxing_selected_moment_chart_is_conditional_on_hits(tmp_path) -> None:
@@ -4701,7 +5055,8 @@ def test_java_endpoint_fails_fast_during_cooldown_and_chart_tool_stays_up(tmp_pa
     service, java_client = _java_cooldown_service(tmp_path, runtime_manager)
     payloads = build_sample_payloads()
 
-    bazi = service.run_tool("bazi_birth", payloads["bazi_birth"], save_result=False)
+    # v0.40：bazi_birth 改本地引擎优先（不再是 Java 工具），Java 端点示例换成 nongli_time（/nongli/time 纯 Java）。
+    bazi = service.run_tool("nongli_time", payloads["nongli_time"], save_result=False)
     assert bazi.ok is False
     assert bazi.error is not None and bazi.error.code == "runtime.java_backend_unavailable"
     assert bazi.error.details["retry_after_seconds"] == 90.0
@@ -4719,7 +5074,7 @@ def test_java_endpoint_starts_once_and_does_not_restart_again_when_start_comes_b
 
     runtime_manager = FakeRuntimeManager(degraded=True, cooldown=0.0)
     service, _java_client = _java_cooldown_service(tmp_path, runtime_manager)
-    bazi = service.run_tool("bazi_birth", build_sample_payloads()["bazi_birth"], save_result=False)
+    bazi = service.run_tool("nongli_time", build_sample_payloads()["nongli_time"], save_result=False)  # v0.40：bazi 已本地优先
     assert bazi.ok is False
     assert bazi.error is not None and bazi.error.code == "runtime.java_backend_unavailable"
     # 此前：start(degraded) → 调用连不上 → connection_retry 再 start 一次（又杀一次 chart）。现在只起一次。
@@ -4750,7 +5105,14 @@ def test_guolao_moira_sections_land_between_limit_and_patterns(tmp_path) -> None
     assert moira_calls[0]["params"]["guolaoLifeMode"] == "yumao" and moira_calls[0]["params"]["guolaoBodyMode"] == "taiyin"
     assert moira_calls[0]["transitParams"]["date"] == "2026-09-04" and moira_calls[0]["transitParams"]["predictive"] is True
     chart_calls = [payload for endpoint, payload in client.calls if endpoint in {"/chart", "/"}]  # chart 服务把 /chart 映射为 /
-    assert len(chart_calls) == 2 and str(chart_calls[1]["date"]).replace("/", "-") == "2026-09-04"  # chart 服务载荷用斜杠日期
+    # v0.40.0（sync311 w3b）：命度法非「占星上升」时 runner 会再向 Java /chart 取一次命度点 LifeMasterDeg74（上游 ChartController
+    # 在 Python 排盘之上追加的对象）；夹具的 Java 盘没有它 → 命度落回上升并告警。所以 /chart 是三次：本命（chart 服务）、
+    # 本命（Java，取命度点）、流年（chart 服务）；顺序不入契约。chart 服务载荷用斜杠日期。
+    assert len(chart_calls) == 3
+    natal_calls = [p for p in chart_calls if str(p["date"]).replace("/", "-") == "1985-03-21"]
+    transit_calls = [p for p in chart_calls if str(p["date"]).replace("/", "-") == "2026-09-04"]
+    assert len(natal_calls) == 2 and len(transit_calls) == 1
+    assert any("LifeMasterDeg74" in f"{w}" for w in result.warnings), result.warnings
     assert result.data["guolaoMoiraRules"]["weakSolid"]["houses"][0]["house"] == "命宫"
     # 夹具 JS 客户端不产 [星曜庙旺…]（另一条 optional）；只断言三段 moira 段不再缺席
     assert not ({"虚实", "本命化曜", "流年流曜"} & set(result.data["export_snapshot"]["missing_selected_sections"]))

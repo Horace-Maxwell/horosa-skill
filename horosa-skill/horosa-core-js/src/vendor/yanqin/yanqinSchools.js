@@ -84,7 +84,7 @@ export const YANQIN_OPTION_META = [
 	{ key: 'huoYaoVariant', label: '活曜传本', options: [
 		{ value: 'off', label: '不立活曜' }, { value: 'fanqin', label: '番禽系(土→翼)' }, { value: 'fanqin2', label: '翻禽系(土→箕)' },
 	] },
-	{ key: 'sansuo', label: '占卜重心', options: [
+	{ key: 'sansuo', label: '占卜提示侧重', options: [   // [Q-265/T-250·SO-16①] 只改占卜页提示句与子页签初始选中,不改判语 → 标签如实
 		{ value: 'both', label: '三传+翻禽并用' }, { value: 'suobo', label: '重三传锁泊(粤)' }, { value: 'fanqin', label: '重翻禽倒将(赣)' },
 	] },
 	{ key: 'qinWuxing', label: '二十八禽五行', options: [

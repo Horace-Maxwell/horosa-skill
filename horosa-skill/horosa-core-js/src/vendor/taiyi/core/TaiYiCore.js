@@ -573,6 +573,8 @@ export function calcTaiyiPanFromKintaiyi(fields, nongli, options){
 		ganzhi: gz,
 		accNum,
 		jiyuan: calcJiyuan(styleForPan, accNum),
+		// [Q-269/T-258] 三元(纪元推)是年计概念:时计/日计/月计盘 jiyuan 为空 → 择日「三元」判面恒不命中;按同盘年计积年另给一份纪元供其取用。
+		jiyuanByYear: styleForPan === 0 ? calcJiyuan(0, accNum) : calcJiyuan(0, getAccNum(0, tnForPan, dateParts, nongli || {})),
 		kook,
 		taishui,
 		hegod,

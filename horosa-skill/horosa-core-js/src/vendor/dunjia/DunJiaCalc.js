@@ -7,6 +7,8 @@ import { LUOSHU_NUM } from './DunJiaFaDoc.js';
 
 
 
+import { buildLocalJieqiYearSeed } from '../../shared/localNongliAdapter.js';
+import { parseDateParts } from '../bazi/dateStrSafe.js';
 
 export const SEX_OPTIONS = [
 	{ value: 1, label: '男' },
@@ -104,6 +106,31 @@ export const QIJU_METHOD_OPTIONS = [
 	{ value: 'wurun', label: '无闰' },
 	{ value: 'shuzi', label: '阴盘' },   // 阴盘奇门:报数各位和%9(余0作9)定局(数字起局);原「阴盘」盘式归此(取数定局),与盘式正交
 ];
+
+// 起局下拉(非时家非刻家):年/月/日家有各自「本家默认」定局(三元/年符头/节气三元),节气四法(置闰/拆补/
+// 茅山/无闰)与它们无关。故只给两项「本家默认 / 阴盘(报数)」——阴盘报数与排盘正交、可叠加任意家;
+// 避免「选了阴盘后节气四法被禁→无法切回本家默认」的死锁。
+export const QIJU_METHOD_NONSHI_OPTIONS = [
+	{ value: 'zhirun', label: '本家默认' },   // 非时家忽略具体节气法→等同本家原生定局(zhirun 仅占位)
+	{ value: 'shuzi', label: '阴盘' },
+];
+
+// [Q-161/T-79] 起局下拉的**单一真值源**:独立奇门页与三式合一页此前各写各的(合一页恒 5 档 + 非时家整个禁用
+// → 年/月/日/刻家选不了阴盘,且在时家选了阴盘再切家就锁死在阴盘出不来)。现两页同走此二函数。
+// 刻家(4)初局沿时家定局链(resolvePaiPanMeta 以 paiPanType:3 求初局),节气四法**真的生效** ——
+// 故刻家与时家同给完整 5 档;此前刻家只显「本家默认」,而底下沿用着上次在时家选的拆补/茅山/无闰,看不见也改不掉。
+export function qijuMethodUsesJieqiFa(paiPanType){
+	const t = Number(paiPanType);
+	return t === 3 || t === 4;
+}
+export function qijuMethodOptionsFor(paiPanType){
+	return qijuMethodUsesJieqiFa(paiPanType) ? QIJU_METHOD_OPTIONS : QIJU_METHOD_NONSHI_OPTIONS;
+}
+// 下拉回显值:非时家/非刻家时,除「阴盘」外一律显示为「本家默认」(zhirun 占位)。
+export function qijuMethodSelectValue(paiPanType, qijuMethod){
+	if(qijuMethodUsesJieqiFa(paiPanType)){ return qijuMethod; }
+	return qijuMethod === 'shuzi' ? 'shuzi' : 'zhirun';
+}
 
 // 置闰天数(传本差异·设置面板可调):超神累计阈值,至点超神距(dgap=二至日−其前最近上元符头)
 //   ≥该值即置闰。默认9=主流口径(满9天即闰)。修(2026-08-02 置闰事故复盘):旧实现三处检查点在
@@ -767,14 +794,16 @@ function parseDateTime(fields){
 	}
 	const dateStr = fields.date.value.format('YYYY-MM-DD');
 	const timeStr = fields.time.value.format('HH:mm:ss');
-	const dparts = dateStr.split('-');
+	// [Q-389/T-370] 带符号年安全解析(单源 parseDateParts):公元前 '-500-06-15' 此前按 '-' 切成 ['', '500', '06', '15'] →
+	// 年 0/月 500/日 6 → 年家恒中元阴四、置闰/无闰种子查不到退拆补、日家半年键非法。
+	const dp = parseDateParts(dateStr);
 	const tparts = timeStr.split(':');
-	if(dparts.length < 3 || tparts.length < 2){
+	if(!dp || tparts.length < 2){
 		return null;
 	}
-	const year = normalizeNum(dparts[0], 0);
-	const month = normalizeNum(dparts[1], 1);
-	const day = normalizeNum(dparts[2], 1);
+	const year = dp.year;
+	const month = dp.month;
+	const day = dp.day;
 	const hour = normalizeNum(tparts[0], 0);
 	const minute = normalizeNum(tparts[1], 0);
 	const second = normalizeNum(tparts[2], 0);
@@ -922,6 +951,55 @@ function getCurrentJieqi(nongli){
 		return normalizeJieqi(delta.substring(0, idxBefore));
 	}
 	return '';
+}
+
+// 「≤ 此刻的最晚节气」(扫 y-1/y/y+1 三年种子,含中气;时刻感知)。种子 time 为 'YYYY-MM-DD HH:mm:ss'(后端 /jieqi/year 与本地
+// buildLocalJieqiYearSeed 同形),与 dateParts 同按本机墙钟解析比较(茅山链原有口径,抽为共用)。无种子/无命中 → null。
+function latestSeedTermAt(dateParts, yearSeeds){
+	if(!yearSeeds || !dateParts || !Number.isFinite(Number(dateParts.year))){ return null; }
+	const now = new Date(dateParts.year, normalizeNum(dateParts.month, 1) - 1, normalizeNum(dateParts.day, 1), normalizeNum(dateParts.hour, 0), normalizeNum(dateParts.minute, 0)).getTime();
+	if(!Number.isFinite(now)){ return null; }
+	let bestJq = null;
+	let bestTime = null;
+	[dateParts.year - 1, dateParts.year, dateParts.year + 1].forEach((y)=>{
+		const ys = yearSeeds[y];
+		if(!ys){ return; }
+		Object.keys(ys).forEach((term)=>{
+			const s = ys[term];
+			if(s && s.time){
+				const t = new Date(`${s.time}`.replace(/-/g, '/')).getTime();
+				if(Number.isFinite(t) && t <= now && (bestTime === null || t > bestTime)){
+					bestTime = t;
+					bestJq = term;
+				}
+			}
+		});
+	});
+	return (bestJq !== null && bestTime !== null) ? { term: bestJq, time: bestTime } : null;
+}
+
+// [T-548] 当前节气(二十四节气·含中气)解析单源。后端 /nongli/time 的 nongli.jieqi 只在「当日交节」那天有值(NongliHelper
+// byDate),其余日子为 null;jiedelta「立夏后第19天」只给节令(节),不含中气 → 旧 getCurrentJieqi 在每个节的后半(过中气后)
+// 把节当节气用,拆补/报数/无种子回退的局与阴阳遁整段错(如 2026-05-24 出「立夏上元」实为「小满上元」)。此前转盘恒走后端
+// 被遮蔽,飞盘/混合/刻家与三式本地路由一直受影响。解析序:上下文种子(后端精算)→ 本地种子(lunar-javascript,确定性)→
+// nongli.jieqi(当日交节)→ jiedelta 节令(最末兜底,仅在种子不可得时)。
+function resolveCurrentJieqi(nongli, dateParts, context, zone){
+	const seeds = context && context.jieqiYearSeeds ? context.jieqiYearSeeds : null;
+	let hit = latestSeedTermAt(dateParts, seeds);
+	if(!hit && dateParts && Number.isFinite(Number(dateParts.year))){
+		const local = {};
+		[dateParts.year - 1, dateParts.year, dateParts.year + 1].forEach((y)=>{
+			let one = null;
+			try{ one = buildLocalJieqiYearSeed(y, zone); }catch(e){ one = null; }
+			if(one){ local[y] = one; }
+		});
+		hit = latestSeedTermAt(dateParts, local);
+	}
+	if(hit && hit.term){
+		const term = normalizeJieqi(hit.term);
+		if(JIEQI_CODE[term]){ return term; }
+	}
+	return getCurrentJieqi(nongli || {});
 }
 
 function resolveFuTouByBacktrack(dayGanZhi){
@@ -1120,6 +1198,61 @@ export function isKinqimenMode(paiPanType){
 	return type === 3 || type === 5;
 }
 
+// [Q-154/T-71] 后端 /qimen/pan 只收 排盘家/起局法/盘式(及日界两开关);下列七组口径只在本地 calcDunJia 生效,合并阶段
+//   (normalizeKinqimenData 重建 cells)也不再施加 → 任一非缺省时转盘若仍走后端:页面恒按缺省出盘、快照[盘型]却标所选、
+//   AI 无头重算又按所选全算(三套口径),后端离线又翻回本地按所选。判据单源:非缺省 → 路由切本地(与飞盘/混合/报数同一旁路);
+//   全缺省 → 历来后端路由,字节不变。返回非缺省键名列表(空=可走后端)。缺省值与 DunJiaMain/三式 QIMEN_OPTIONS 同值。
+export function qimenLocalOnlyOverrides(options){
+	const o = options || {};
+	const out = [];
+	if(normalizeNum(o.zhiShiType, 0) !== 0){ out.push('zhiShiType'); }                                           // 值使取法(后端固定 天禽值符-死门)
+	if(normalizeQijuMethod(o.qijuMethod) === 'zhirun' && normalizeNum(o.zhirunLeapDays, 9) !== 9){ out.push('zhirunLeapDays'); }   // 置闰天数
+	if(o.godsPreset && o.godsPreset !== 'baihu_xuanwu'){ out.push('godsPreset'); }                               // 八神取神
+	if(o.jiGongMode && o.jiGongMode !== 'kun'){ out.push('jiGongMode'); }                                        // 中宫寄宫
+	if(o.anGanMode && o.anGanMode !== 'off'){ out.push('anGanMode'); }                                           // 暗干(暗支随暗干)
+	if(o.kongMarkBoth){ out.push('kongMarkBoth'); }                                                              // 空亡并标(宫位高亮两组)
+	if(normalizeShiftPalace(o.shiftPalace) && o.shiftZhiFuMode === 'recalc'){ out.push('shiftZhiFuMode'); }      // 移星值符重定
+	return out;
+}
+
+// 奇门盘路由单源(独立页 getResolvedPan / 三式 getKinqimenDunJia / 择日弹窗 / 步进预取 同判据):
+//   true=本地 calcDunJia:年/月/日/刻/金函家、飞盘/混合、阴盘报数、或上述本地口径任一非缺省;
+//   false=后端 fetchQimenPan+normalizeKinqimenData(时家/综合·转盘·全缺省口径=转盘字节护栏)。
+export function isQimenLocalRoute(options){
+	const o = options || {};
+	if(!isKinqimenMode(o.paiPanType)){ return true; }
+	if(o.school === '飞盘' || o.school === '混合' || o.qijuMethod === 'shuzi'){ return true; }
+	return qimenLocalOnlyOverrides(o).length > 0;
+}
+
+// [Q-155/T-72] 节气种子取数判据(独立页/三式/择日共用单源;此前两页各写一份:三式只认「时家+置闰」,独立页刻家落到恒 false):
+//   置闰/无闰=超神接气、茅山=按交节时刻足60时辰 → 本地链须精确交节种子;日家(2)=节气三元60日块、金函(6)=至日定阴阳 →
+//   任何起局法都要至日种子(含 y+1 供腊月过冬至);刻家(4)初局=本时辰时家局(沿置闰/无闰/茅山链)→ 与时家本地路由同需;
+//   年家/月家不吃种子;后端路由由后端自处理节气,本地种子无关。
+export function needJieqiYearSeed(options){
+	const opt = options || {};
+	const type = normalizeNum(opt.paiPanType, 3);
+	const usesShenJie = opt.qijuMethod === 'zhirun' || opt.qijuMethod === 'wurun' || opt.qijuMethod === 'maoshan';
+	if(type === 2 || type === 6){ return true; }
+	if(type === 0 || type === 1){ return false; }
+	if(type === 4){ return usesShenJie; }
+	return isQimenLocalRoute(opt) && usesShenJie;
+}
+
+// 种子年份集(与 needJieqiYearSeed 同源):日家/金函 腊月过冬至需次年至日 → y-1,y,y+1;其余 y-1,y。
+export function jieqiSeedYears(options, year){
+	const y = Number(year);
+	if(!y || !Number.isFinite(y)){ return []; }   // 与各页 `if(!year || Number.isNaN(year))` 同口径(null/''/0 皆无种子年)
+	const type = normalizeNum((options || {}).paiPanType, 3);
+	return (type === 2 || type === 6) ? [y - 1, y, y + 1] : [y - 1, y];
+}
+
+// 缓存键/重算签名用的种子签名:已到达种子年份升序拼接;种子异步到达后签名变 → 不再命中缺种子时算出的退化盘。
+export function jieqiSeedSignature(seeds){
+	const s = seeds || {};
+	return 'seed:' + Object.keys(s).filter((y)=>!!s[y]).sort().join(',');
+}
+
 function getKinqimenMode(paiPanType){
 	const type = normalizeNum(paiPanType, 3);
 	if(type === 0){
@@ -1278,8 +1411,8 @@ export function normalizeKinqimenData(backendPan, fallbackPan, options, nongli){
 	const juText = normalizeText(getRawValue(raw, ['排局', '局'], fallbackPan.juText));
 	let ganzhi = parseKinqimenGanzhi(getRawValue(raw, ['干支'], ''), fallbackPan.ganzhi);
 	// v2.2.1: 本地 buildGanzhiForQimen 是 lateZi 语义的唯一可信来源(覆盖 4 case 矩阵)。
-	// 后端 kinqimen 引擎对 (after23=1 + lateZi=0 + hour==23) 不返回 戊子,而是仍按 shifted day 的壬给出 庚子;
-	// 这里以本地 fallback 的时柱为准,保证用户看到的 4 柱与设置一致。
+	// [Q-312/T-293 2026-09-18] 后端 kinqimen(kinwangji jieqi)已对齐同一口径:(after23=1 + lateZi=0 + hour==23) 亦返回 戊子,
+	// 页头与九宫 / 值符 / 旬空不再两套时辰;这里保留「以本地时柱为准」只作兜底(两边现应逐字相同)。
 	if(fallbackPan && fallbackPan.ganzhi && fallbackPan.ganzhi.time && ganzhi.time !== fallbackPan.ganzhi.time){
 		ganzhi = { ...ganzhi, time: fallbackPan.ganzhi.time };
 	}
@@ -1342,18 +1475,29 @@ export function normalizeKinqimenData(backendPan, fallbackPan, options, nongli){
 //   分遁 keJiaFenDun:zihou(默认)=子后阳午后阴(时支子~巳阳/午~亥阴,与节气无关)/jieqi=沿时家节气分遁。
 //   keZiZhengHuanShi=子正换时:开=时辰界取偶数整点(子时 00:00 起),关(默认)=奇数整点(子时 23:00 起)。
 function calcKeJiaMeta(opts, ganzhi, jieqi, dateParts, context){
-	// 初局基准=时家局(拆掉刻家键后按当前 qijuMethod 走时家链)
-	const base = resolvePaiPanMeta({ ...opts, paiPanType: 3 }, ganzhi, jieqi, dateParts, context);
 	const zhengShift = (opts && opts.keZiZhengHuanShi) ? 0 : 1;
 	const hour = dateParts && Number.isFinite(dateParts.hour) ? dateParts.hour : 0;
 	const minute = dateParts && Number.isFinite(dateParts.minute) ? dateParts.minute : 0;
+	// [Q-298/T-285] 子正换时开 → 时辰界取偶数整点的不只是刻序:初局(时家局基准)、刻柱锚、子后午后分遁 同用这一套时辰。
+	//   此前三处仍取奇数整点界的 ganzhi.time / ganzhi.day → 01:30 刻序按子时、初局刻柱按丑时,两套时辰并存。
+	//   规则:00:xx–01:xx 属当日子时(当日日干起子);23:xx 属当日亥时(after23NewDay 的日柱进位在此撤回)。关档逐字不变。
+	let gz = ganzhi;
+	if(zhengShift === 0){
+		let dayGz = ganzhi.day;
+		if(hour === 23 && opts && opts.after23NewDay && String(opts.after23NewDay) !== '0'){ dayGz = prevGanZhi(dayGz); }
+		const evenHour = Math.floor(hour / 2) * 2;   // 0,2,…,22:经 getHourGanZhi 的奇数整点映射恰落 子,丑,…,亥
+		const timeGz = getHourGanZhi(dayGz, evenHour) || ganzhi.time;
+		gz = { ...ganzhi, day: dayGz, time: timeGz };
+	}
+	// 初局基准=时家局(拆掉刻家键后按当前 qijuMethod 走时家链)
+	const base = resolvePaiPanMeta({ ...opts, paiPanType: 3 }, gz, jieqi, dateParts, context);
 	const sinceStart = ((hour + zhengShift) % 2) * 60 + minute;      // 时辰内分钟数(0..119)
 	const keIndex = Math.min(9, Math.floor(sinceStart / 12));        // 第 1..10 刻(0 基)
 	let yang;
 	if((opts && opts.keJiaFenDun) === 'jieqi'){
 		yang = `${base.yinYangDun || ''}`.indexOf('阳') >= 0;
 	}else{
-		const zhi = `${ganzhi.time || ''}`.charAt(1);
+		const zhi = `${gz.time || ''}`.charAt(1);
 		yang = '子丑寅卯辰巳'.indexOf(zhi) >= 0;
 	}
 	const baseJu = base.juShu || 1;
@@ -1362,7 +1506,7 @@ function calcKeJiaMeta(opts, ganzhi, jieqi, dateParts, context){
 	// (刻为时之细分,首刻同时柱,与「初局=时家局」同构;口径于帮助文档如实说明)。
 	let keGanZhi = '';
 	{
-		const ti = getGanzhiIndex(ganzhi.time || '');
+		const ti = getGanzhiIndex(gz.time || '');
 		if(ti >= 0){
 			const idx = ((ti + keIndex) % 60 + 60) % 60;
 			keGanZhi = GAN[idx % 10] + ZHI[idx % 12];
@@ -1376,6 +1520,7 @@ function calcKeJiaMeta(opts, ganzhi, jieqi, dateParts, context){
 		dingjuJieqi: base.dingjuJieqi,
 		keIndex: keIndex + 1,
 		keGanZhi,
+		keTimeGanZhi: gz.time || '',   // [Q-298/T-285] 刻家所用时柱(子正换时开=偶数整点界;关=四柱时柱)
 	};
 }
 
@@ -1458,7 +1603,7 @@ function buildGanzhiForQimen(nongli, dateParts, opts, context){
 	//   after23NewDay=0「24点算第二天」→ hour==23 时 day 守今(辛丑)。
 	// v2.2.1 第二全局开关 lateZiHourUseNextDay:
 	//   lateZi=1(默认):时柱永远按"次日日干"起子时(同 lunar.js Exact)
-	//   lateZi=0:时柱跟随日柱所在 cdate 的日干起子时(== 跟日柱一致)
+	//   lateZi=0:时柱按钟面当天(今日)的日干起子时(与日柱开关独立;after23=1 时日柱已次日、时干仍按今日 —— 口径 B)
 	// 仅 hour==23 时影响时柱;其它 22 小时一律 NO-OP。
 	const preciseTime = normalizeGanZhi(
 		(bazi && bazi.time && bazi.time.ganzi)
@@ -2229,22 +2374,9 @@ function qimenJuNameWurun(dateParts, dayGanzhi, yearSeeds, fallbackJieqi, after2
 function qimenJuNameMaoshan(dateParts, jieqi, yearSeeds, dayGanzhi){
 	if(yearSeeds && dateParts){
 		const now = new Date(dateParts.year, normalizeNum(dateParts.month, 1) - 1, normalizeNum(dateParts.day, 1), normalizeNum(dateParts.hour, 0), normalizeNum(dateParts.minute, 0)).getTime();
-		let bestJq = null;
-		let bestTime = null;
-		[dateParts.year - 1, dateParts.year, dateParts.year + 1].forEach((y)=>{
-			const ys = yearSeeds[y];
-			if(!ys){ return; }
-			Object.keys(ys).forEach((term)=>{
-				const s = ys[term];
-				if(s && s.time){
-					const t = new Date(`${s.time}`.replace(/-/g, '/')).getTime();
-					if(Number.isFinite(t) && t <= now && (bestTime === null || t > bestTime)){
-						bestTime = t;
-						bestJq = term;
-					}
-				}
-			});
-		});
+		const hit = latestSeedTermAt(dateParts, yearSeeds);   // 抽为共用 helper(与 T-548 节气解析同源),逐字同义
+		const bestJq = hit ? hit.term : null;
+		const bestTime = hit ? hit.time : null;
 		if(bestJq !== null && bestTime !== null){
 			const shichen = Math.floor((now - bestTime) / (2 * 60 * 60 * 1000));
 			if(shichen >= 0){
@@ -2388,7 +2520,7 @@ export function buildJinhanRiJiaPan(fields, nongli, opts, context){
 	const dayGz = ganzhi.day;
 	const rec = JINHAN_TABLE[dayGz];
 	if(!rec){ return null; }
-	const jieqi = normalizeText(nongli && nongli.jieqi ? nongli.jieqi : '');
+	const jieqi = resolveCurrentJieqi(nongli || {}, dateParts, context || {}, fields && fields.zone ? fields.zone.value : undefined);
 	const seeds = context && context.jieqiYearSeeds ? context.jieqiYearSeeds : null;
 	const half = dayJiaHalfYear(seeds, dateParts);
 	const yang = half ? half.yang : isYangDunJieqi(jieqi);
@@ -2482,7 +2614,8 @@ export function calcDunJia(fields, nongli, options, context){
 	const shiftPalace = normalizeShiftPalace(opts.shiftPalace);
 
 	const ganzhi = buildGanzhiForQimen(nongli || {}, dateParts, opts, context || {});
-	const jieqi = getCurrentJieqi(nongli || {});
+	// [T-548] 节气含中气、时刻感知(种子优先;此前只取节令 → 每个节的后半整段错局)。
+	const jieqi = resolveCurrentJieqi(nongli || {}, dateParts, context || {}, fields && fields.zone ? fields.zone.value : undefined);
 	const paiPanMeta = resolvePaiPanMeta(opts, ganzhi, jieqi, dateParts, context || {});
 	let qmju = paiPanMeta.qmju || buildQmjuByMeta(paiPanMeta.yinYangDun, paiPanMeta.juShu, paiPanMeta.sanYuan);
 	// 数字起盘(起局=数字·报数,§5.5 通则):报数各位求和除9(余0作9)定局数;阴阳遁仍按节气;元沿用节气符头元。
@@ -2512,7 +2645,9 @@ export function calcDunJia(fields, nongli, options, context){
 	const isHuohe = opts.school === '混合';                          // 飞转混合:星转·门飞·九神(专题§4.2)
 	const fei = (isFeipan || isHuohe) ? panFeipan(panGanzhi, qmju, {
 		feiXingShun: !!opts.feiXingShun, feiMenShun: !!opts.feiMenShun, feiShenShun: !!opts.feiShenShun,
-		feiMenZhongCan: opts.feiMenZhongCan !== false, feiMenZhongShow: !!opts.feiMenZhongShow,
+		// [挂载自检 F-50] 中门参与:页面传布尔 false,挂载 schema(select)传 0/'0' → 曾只认 false ⇒ 挂载「不参与(跳中)」恒死(中宫门位显示随之恒死)。
+		feiMenZhongCan: !(opts.feiMenZhongCan === false || opts.feiMenZhongCan === 0 || opts.feiMenZhongCan === '0'),
+		feiMenZhongShow: (opts.feiMenZhongShow === true || opts.feiMenZhongShow === 1 || opts.feiMenZhongShow === '1'),
 	}) : null;
 	// 转盘/混合 都需转盘值符值使(混合的值符星宫走转盘);飞盘走飞盘 zfzs。
 	// 🔴 值符值使解算上下文:此前只有这一处传了 ext,而下面排八门的 panDoor 没传 →
@@ -2657,6 +2792,7 @@ export function calcDunJia(fields, nongli, options, context){
 		xunKong: xunkong,  // [H-E] {日空,时空}恒暴露(kongMarkBoth 显示层拆分消费)
 		keIndex: paiPanMeta.keIndex || null,   // [H-F] 刻家第几刻(1..10;非刻家=null)
 		keGanZhi: paiPanMeta.keGanZhi || '',   // [H-F] 刻柱干支(时柱锚法:首刻=时柱逐刻进一;非刻家='')
+		keTimeGanZhi: paiPanMeta.keTimeGanZhi || '',   // [Q-298/T-285] 刻家所用时柱(子正换时开时可≠四柱时柱)
 		dateStr: dateParts.dateStr,
 		timeStr: dateParts.timeStr,
 		realSunTime: (context && context.displaySolarTime) || (nongli ? (nongli.birth || '') : ''),
@@ -2706,6 +2842,9 @@ export function calcDunJia(fields, nongli, options, context){
 		xunkong,
 		options: {
 			sexLabel: getOptionLabel(SEX_OPTIONS, opts.sex),
+			// [挂载自检 F-51] 盘类(命局/事局)随 opts 进 pan.options:页面 calc 后手写同键(DunJiaMain),无头/三式重算路径此前缺此
+			// ⇒ 挂载「盘类=命局」齿轮恒死(全局速览段恒按事局)。未传则不写键(向后兼容:缺 chartCategory=事局)。
+			...(opts.chartCategory !== undefined && opts.chartCategory !== null && opts.chartCategory !== '' ? { chartCategory: opts.chartCategory } : {}),
 			dateTypeLabel: getOptionLabel(DATE_TYPE_OPTIONS, opts.dateType),
 			leapLabel: getOptionLabel(LEAP_MONTH_OPTIONS, opts.leapMonthType),
 			xuShiLabel: getOptionLabel(XUSHI_OPTIONS, opts.xuShiSuiType),
@@ -2727,7 +2866,7 @@ export function calcDunJia(fields, nongli, options, context){
 			feiXingShun: !!opts.feiXingShun,
 			feiMenShun: !!opts.feiMenShun,
 			feiShenShun: !!opts.feiShenShun,
-			feiMenZhongCan: opts.feiMenZhongCan !== false,
+			feiMenZhongCan: !(opts.feiMenZhongCan === false || opts.feiMenZhongCan === 0 || opts.feiMenZhongCan === '0'),
 			feiMenZhongShow: !!opts.feiMenZhongShow,
 			mixTian: (opts.mixTian === 'fei' || opts.mixTian === 'zhuan') ? opts.mixTian : '',
 			mixXing: (opts.mixXing === 'fei' || opts.mixXing === 'zhuan') ? opts.mixXing : '',
@@ -2870,7 +3009,7 @@ export function buildDunJiaSnapshotText(pan){
 		lines.push(`四柱空亡：年空${pan.allKong.年空}、月空${pan.allKong.月空}、日空${pan.allKong.日空}、时空${pan.allKong.时空}`);
 	}
 	if(pan.keIndex){
-		lines.push(`刻序：本时辰第${pan.keIndex}刻${pan.keGanZhi ? `（刻柱${pan.keGanZhi}）` : ''}（十二分钟一局，${pan.options.keJiaFenDunLabel || '子后阳·午后阴'}）`);
+		lines.push(`刻序：本时辰第${pan.keIndex}刻${pan.keGanZhi ? `（刻柱${pan.keGanZhi}）` : ''}（十二分钟一局，${pan.options.keJiaFenDunLabel || '子后阳·午后阴'}${pan.options.keZiZhengHuanShi ? `，子正换时·时辰${pan.keTimeGanZhi || ''}` : ''}）`);   // [Q-298/T-285] 子正换时开时注明所用时辰
 	}
 	if(pan.anGan){
 		lines.push(`暗干：${pan.options.anGanModeLabel || ''}`);

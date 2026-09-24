@@ -15,7 +15,9 @@
   "tools": {
     "acg": {
       "compute_class": "python_chart_backend",
-      "engines": [],
+      "engines": [
+        "acg_section"
+      ],
       "endpoints": [
         "/chart",
         "/location/acg",
@@ -23,7 +25,7 @@
         "/location/acgpoint"
       ],
       "export_technique": "acg",
-      "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
+      "notes": "chart 服务 /location/acg*（ACGraph）算行星线、落点与世运事件；vendored JS acgSnapshot 只排 [占星地图] 段"
     },
     "agepoint": {
       "compute_class": "python_chart_backend",
@@ -61,28 +63,43 @@
       "notes": "读已算好的 chart 对象再排版的 Python 移植"
     },
     "bazi_birth": {
-      "compute_class": "java_backend",
-      "engines": [],
+      "compute_class": "composite",
+      "engines": [
+        "lunar-local",
+        "java"
+      ],
       "endpoints": [
         "/bazi/birth"
       ],
       "export_technique": "bazi",
-      "notes": "Java 聚合层（:9999）计算，Python 只转发与排版"
+      "notes": "本地 vendored lunar.js 引擎优先（同星阙八字页 BaZi.js:716-755 fetchBaziCached），公元前等域外日期或 byLon/adjustJieqi 回退 Java /bazi/*；两路都由 vendored buildBaziSnapshotText 出快照（compute_sources.bazi = lunar-local | java）"
     },
     "bazi_direct": {
-      "compute_class": "java_backend",
-      "engines": [],
+      "compute_class": "composite",
+      "engines": [
+        "lunar-local",
+        "java"
+      ],
       "endpoints": [
         "/bazi/direct"
       ],
       "export_technique": "bazi",
-      "notes": "Java 聚合层（:9999）计算，Python 只转发与排版"
+      "notes": "本地 vendored lunar.js 引擎优先（同星阙八字页 BaZi.js:716-755 fetchBaziCached），公元前等域外日期或 byLon/adjustJieqi 回退 Java /bazi/*；两路都由 vendored buildBaziSnapshotText 出快照（compute_sources.bazi = lunar-local | java）"
+    },
+    "bazi_inverse": {
+      "compute_class": "java_backend",
+      "engines": [],
+      "endpoints": [
+        "/common/inversebazi"
+      ],
+      "export_technique": "bazi_inverse",
+      "notes": "Java BaZiHelper.getBirthes 逐年回推；Python 只校验四柱干支、转发与排版"
     },
     "bazizeri": {
       "compute_class": "composite",
       "engines": [],
       "endpoints": [],
-      "export_technique": null,
+      "export_technique": "bazizeri",
       "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
     "beiji": {
@@ -209,6 +226,16 @@
       ],
       "export_technique": "election",
       "notes": "纯 headless JS，无后端引擎"
+    },
+    "ephemeris": {
+      "compute_class": "python_chart_backend",
+      "engines": [],
+      "endpoints": [
+        "/astroextra/ephemeris",
+        "/chart"
+      ],
+      "export_technique": "ephemeris",
+      "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
     },
     "export_parse": {
       "compute_class": "local_data",
@@ -392,7 +419,7 @@
       "compute_class": "composite",
       "engines": [],
       "endpoints": [],
-      "export_technique": null,
+      "export_technique": "huanglizeri",
       "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
     "india_chart": {
@@ -419,7 +446,7 @@
       "endpoints": [
         "/indiaelectionscan/scan"
       ],
-      "export_technique": null,
+      "export_technique": "indiazeri",
       "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
     "jaynesprog": {
@@ -466,7 +493,8 @@
     "jinkou": {
       "compute_class": "ken_backed",
       "engines": [
-        "kinjinkou"
+        "kinjinkou",
+        "local_route_buildJinKouData"
       ],
       "endpoints": [
         "/jinkou/pan",
@@ -512,7 +540,8 @@
       ],
       "endpoints": [
         "/chart",
-        "/liureng/gods"
+        "/liureng/gods",
+        "/liureng/runyear"
       ],
       "export_technique": "liureng",
       "notes": "纯 headless JS，无后端引擎"
@@ -524,6 +553,7 @@
       ],
       "endpoints": [
         "/chart",
+        "/liureng/gods",
         "/liureng/runyear"
       ],
       "export_technique": "liureng",
@@ -533,7 +563,7 @@
       "compute_class": "composite",
       "engines": [],
       "endpoints": [],
-      "export_technique": null,
+      "export_technique": "liurengzeri",
       "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
     "lunarreturn": {
@@ -555,6 +585,7 @@
     "mundane": {
       "compute_class": "composite",
       "engines": [
+        "mundane_cards",
         "mundane_horary",
         "mundane_solunar"
       ],
@@ -646,9 +677,20 @@
       "compute_class": "python_chart_backend",
       "engines": [],
       "endpoints": [
+        "/chart",
         "/predict/planetaryarc"
       ],
       "export_technique": "planetaryarc",
+      "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
+    },
+    "prenatalsyzygy": {
+      "compute_class": "python_chart_backend",
+      "engines": [],
+      "endpoints": [
+        "/astroextra/prenatal_syzygy",
+        "/chart"
+      ],
+      "export_technique": "prenatalsyzygy",
       "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
     },
     "profection": {
@@ -660,10 +702,21 @@
       "export_technique": "profection",
       "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
     },
+    "prog": {
+      "compute_class": "python_chart_backend",
+      "engines": [],
+      "endpoints": [
+        "/astroextra/progressions",
+        "/chart"
+      ],
+      "export_technique": "prog",
+      "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
+    },
     "qimen": {
       "compute_class": "ken_backed",
       "engines": [
-        "kinqimen"
+        "kinqimen",
+        "local_route_calcDunJia"
       ],
       "endpoints": [
         "/jieqi/year",
@@ -709,7 +762,7 @@
       "endpoints": [
         "/qizhengelectionscan/scan"
       ],
-      "export_technique": null,
+      "export_technique": "qizhengzeri",
       "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
     "relative": {
@@ -731,12 +784,24 @@
       "export_technique": "relocation",
       "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
     },
+    "returntimeline": {
+      "compute_class": "python_chart_backend",
+      "engines": [],
+      "endpoints": [
+        "/astroextra/returns",
+        "/chart"
+      ],
+      "export_technique": "returntimeline",
+      "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
+    },
     "sanshiunited": {
       "compute_class": "composite",
       "engines": [
-        "sanshi_ziwei_sihua"
+        "sanshiunited"
       ],
       "endpoints": [
+        "/chart",
+        "/nongli/time",
         "/ziwei/birth"
       ],
       "export_technique": "sanshiunited",
@@ -746,7 +811,7 @@
       "compute_class": "composite",
       "engines": [],
       "endpoints": [],
-      "export_technique": null,
+      "export_technique": "sanshizeri",
       "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
     "shaozi": {
@@ -808,13 +873,16 @@
       "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
     },
     "suzhan": {
-      "compute_class": "python_chart_backend",
-      "engines": [],
+      "compute_class": "composite",
+      "engines": [
+        "java",
+        "chart_service"
+      ],
       "endpoints": [
         "/chart"
       ],
       "export_technique": "suzhan",
-      "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
+      "notes": "人事十二宫八字公式起盘（缺省）走 Java /chart（ChartController 附农历四柱，时支定宫序）；ASC 档或 Java 不可用走 chart 服务；vendored buildSuzhanSnapshotText 出快照（compute_sources.chart = java | chart_service）"
     },
     "taixuan": {
       "compute_class": "chart_service_shenshu",
@@ -846,7 +914,7 @@
       "compute_class": "composite",
       "engines": [],
       "endpoints": [],
-      "export_technique": null,
+      "export_technique": "taiyizeri",
       "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
     "tarot": {
@@ -1019,13 +1087,16 @@
       "notes": "纯 headless JS，无后端引擎"
     },
     "ziwei_birth": {
-      "compute_class": "java_backend",
-      "engines": [],
+      "compute_class": "composite",
+      "engines": [
+        "java",
+        "ZiweiCalc"
+      ],
       "endpoints": [
         "/ziwei/birth"
       ],
       "export_technique": "ziwei",
-      "notes": "Java 聚合层（:9999）计算，Python 只转发与排版"
+      "notes": "Java /ziwei/birth 起盘（流派非通用时附四化表）；22 个传本开关任一非缺省 → 本地 vendored ZiweiCalc 重排盘核心 + 重算格局（同星阙 buildZiweiSnapshotForParams，ZiWeiMain.js:716-822）；vendored buildZiWeiSnapshotText 出快照（compute_sources.chart = java | ZiweiCalc）"
     },
     "ziwei_rules": {
       "compute_class": "java_backend",
@@ -1040,7 +1111,7 @@
       "compute_class": "composite",
       "engines": [],
       "endpoints": [],
-      "export_technique": null,
+      "export_technique": "ziweizeri",
       "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
     "zr": {
@@ -1051,15 +1122,6 @@
       ],
       "export_technique": "zodialrelease",
       "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
-    },
-    "bazi_inverse": {
-      "compute_class": "java_backend",
-      "engines": [],
-      "endpoints": [
-        "/common/inversebazi"
-      ],
-      "export_technique": "bazi_inverse",
-      "notes": "Java BaZiHelper.getBirthes 逐年回推；Python 只校验四柱干支、转发与排版"
     }
   }
 }

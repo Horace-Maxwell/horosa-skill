@@ -1,5 +1,7 @@
 // 皇极轨策 · AI 快照（v2 呈现层：[段头] + GFM 表）。
 // 🔴 段头须与 aiExport 之段表逐字一致，否则严格切片零命中 → 整盘兜底（名实不符）。
+import { guiceSchoolLabel } from './guiceSchools.js';
+
 const T = (head, rows) => (rows && rows.length ? `${head}\n${rows.join('\n')}` : '');
 const tbl = (cols, rows) => [
 	`| ${cols.join(' | ')} |`,
@@ -21,7 +23,7 @@ export function buildGuiceSnapshotText(pan, opts) {
 		['变卦', pan.bianName || '—'],
 		['体用', duan && duan.tiYong ? `体 ${duan.tiYong.tiGua}／用 ${duan.tiYong.yongGua} —— ${duan.tiYong.key}：${duan.tiYong.duan}` : '—'],
 		['演数', `${settings.yanshuFa === 'gui' ? '轨数' : '策数'} ${yan.value}`],
-		['流派', settings.school],
+		['流派', guiceSchoolLabel(settings.school)],	// [Q-204/T-165②] 出显示名(曾直出 default/meihua/custom 键名)
 	])));
 
 	if (gua.steps && gua.steps.length) {
