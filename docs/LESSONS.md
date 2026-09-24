@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.40.0 (2026-09) | 上游 v3.11.x 重同步：四处「同步了却没同步」——live 复验跑的是已装 runtime 的旧 JS / curated 件 restamp 不带内容 / 生成器修产物不修源 / 裸 `export default X` 漏剥 | 复验只认本仓引擎（conftest 钉根）；能 verbatim 的手工件一律 verbatim；修生成器不修产物 |
 | v0.39.0 (2026-09) | 发布前 CI 红：双语棘轮抓到新包 28 处单语 raise；本机跑的是「顺手的守卫」不是 run_ci_gates.py | 本机门禁 = `run_ci_gates.py`；按文件计数的棘轮是 API 契约，新包落地就按它写 |
 | v0.39.0 (2026-09) | 决策层：问题构造在 `ask()` 之外抛错，把 liureng_gods 打成 internal_error | 可选增强的**每一行**都要在降级护栏里；「英文 instructions」改成占比规则 |
 | v0.38.1 (2026-09) | 复审：自动化的盲区与 Windows 编码——B0 归属证据不经代码页 / doctor 预算 / 长路径闸 / 隔离前置；B1 升级就地不砍服务、doctor 报载荷过期、selfcheck 先起 runtime；B2 九客户端按各家真实规则（占位符白名单、JSONC 保注释、Cline/Zed timeout、Codex env 根、探针按客户端形状 + `horosa://runtime/status`、wheel 预下载、OAuth 网关改口、镜像指针）；B3 矩阵真下载、出厂预算、HTTP 握手、九客户端、挂着客户端不停、publish 与矩阵同字节、cron 离整点 + kick、min_os 进清单、mcpb 解包断言 | PowerShell 5.1 往管道写的是 OEM 代码页，Python 侧只许收字节（base64）或走 ctypes；「lane 传了 file:// 就以为验过下载」= 本机环境替测试补前提的第三例；换目录前必停自己的服务、但永不停陌生人的；每个客户端的占位符 / 超时 / 环境转发规则都要按**它的**文档写，并让 `client check` 对着真文件说话；发布期：publish job 的每一步先对真 draft 跑（draft 对 `releases/tags` 404、job 级 permissions 整块替换）；发布后：只在没人跑的平台可达的分支靠静态检查兜（F821 闸），带完整输出的超时要按阶段拆预算 |
@@ -104,6 +105,41 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.40.0 / 2026-09-24 — 上游 v3.11.x 重同步：四处「同步了却没同步」
+
+背景：上游从 v3.10.0（0604fa41，aiExport v56）走到 v3.11.1 + 三个发布后修（HEAD 9b74714b，aiExport v58；后三个在上游
+本机未推送）。runtime-source 97 文件、core-js 89 文件、导出契约两版、四个新技法键一起漂移。同步过程中撞到四个「看起来同步了、
+其实没有」的形态：
+
+1. **live 复验跑的是已装 runtime 的旧 JS 引擎。**
+   - 症状：起好 vendored 新后端、只设 `HOROSA_SERVER_ROOT/HOROSA_CHART_SERVER_ROOT` 跑 live 套件与段级 harness，jinkou 缺 18 段、
+     qimen 缺 10 段、tongshefa 缺 5 段；拿提交前的旧代码对照也一样缺 → 差点记成「上游/后端问题」。
+   - 根因：`HorosaJsEngineClient._candidate_engine_roots` 的顺序是 `HOROSA_CORE_JS_ROOT` → **已装 runtime 的随包 core-js** →
+     本仓源码树。维护机装着一份旧载荷，于是所有 JS 技法跑的是它，与被测代码无关；两个「对照组」用的是同一个旧引擎。把
+     `HOROSA_RUNTIME_ROOT` 钉到空目录重跑，101/106 工具干净、剩余 5 个只差上游新段。CI 无 runtime，永远看不到。
+   - 守卫：`tests/conftest.py` 会话期 `setdefault HOROSA_CORE_JS_ROOT=<本仓 horosa-core-js>`；
+     `tests/test_conftest_engine_pin.py` 锁「本仓优先」+ 负向对照（去掉 pin 时已装副本胜出）。复验手工脚本同样要钉。
+2. **curated 件 restamp 了源 sha，却没把上游改动带进副本。**
+   - 症状：本轮复核 `suzhan/SZConst.js` 时发现它连 0604fa41 的上游都没跟上——双鱼分野上游早已把形近误植的「魏」改「卫」，
+     本仓仍是「魏」，而 manifest 里的 `upstream_sha256` 恰好等于 0604fa41 那份上游。
+   - 根因：curated / bespoke 只断言「上游源 sha == 记录的 sha」，**不比内容**；某轮有人 `--restamp` 了却没逐项落改动，看守就此失明。
+     （本件的 FengYe 表恰好没人消费，所以没伤到输出——下一次未必这么幸运。）
+   - 守卫：能表达成「上游全文件 + 声明式 deviation」的手工件一律改 **verbatim**：`suzhan/SZConst.js`（replace_text 注入 localStorage
+     空 shim）与 `tongshefa/TongSheFaCore.js`（truncate_before 类定义 + 4 个 UI import stub + 解构删除，`_reexport_required` 补 export）
+     已改；流水线输出逐字等于 vendored 文件，上游一动 `verify_upstream_sync` check 3 就红。
+3. **v0.38.1 A16 修了知识包产物，没修生成器。**
+   - 症状：重跑 `build_hover_knowledge_bundle.mjs`，`astro/liureng/qimen.json` 的 `source` 又变回维护者本机绝对路径，
+     `test_knowledge_pack_sources_are_relative_upstream_paths` 红；`generated_at` 还取 `now()`，每跑一次 index.json 漂一次。
+   - 根因：A16 当时手改了三份 JSON 产物，生成器照旧写 `path.resolve(...)` 的绝对路径。
+   - 守卫：生成器改写相对上游根的 posix 路径 + 上游 HEAD 提交时间（与 gen_knowledge_packs.py 同纪律，同 commit 重跑逐字节一致）；
+     产物测试仍在。法则：**修生成的东西，修生成器**。
+4. **re-vendor 变换漏了裸 `export default fetchReturnSet;`。**
+   - 症状：新 vendor 的 `divination/election/returnCharts.js` 网络函数被正确剥掉，末行 `export default fetchReturnSet;` 留着 →
+     模块加载期 ReferenceError。
+   - 根因：`_prune_default_export` 只认 `export default { … }` / `export { … }` 两种聚合形态。
+   - 守卫：补第三种形态（被剥的裸标识符整行删）+ `tests/test_revendor_transform.py` 两条（含「没被剥的默认导出原样保留」），
+     负向对照：去掉该段后旧函数留下陈旧导出。
 
 ### v0.39.0 / 2026-09-22 — Windows 维护机复验 v0.39.0：星阙桌面端占着默认端口时 doctor 把它说成「查不出身份的进程」；setup 探针对「运行中会话占着 venv 文件」只给一屏 uv 噪声；Jev 数据集指纹按原始字节算
 

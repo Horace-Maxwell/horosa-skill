@@ -170,6 +170,8 @@ you, it will bite the next agent：
 **上游每一册 `*HelpDoc.js` 要么进 `HELPDOC_DOMAINS`、要么进 `EXCLUDED_HELPDOCS`（仅 fengshui，政策性排除），
 第三种状态生成器直接 FAIL**——同步新技法时把它的手册一并收进来（v0.35.0 之前六册已上架技法的手册三个版本
 没收）。上游改 HelpDoc 后重跑生成器即同步；hover 三域（astro/liureng/qimen）保持专用渲染分支不动。
+**修生成的东西，就修生成器**：hover 三包的 `source` 曾在 v0.38.1 A16 手改产物成相对路径，生成器照写绝对路径，
+v0.40.0 重跑即复发；现在 `build_hover_knowledge_bundle.mjs` 写相对上游根的 posix 路径 + 上游提交时间（同 commit 重跑逐字节一致）。
 
 **同步守卫三层（缺一层就会静默漂）**：① `verify_upstream_sync.py` = vendored ↔ **上游 HEAD**
 （版本恒等 + 哨兵 sha256 + core-js 逐文件；无上游树时 skipped 而非绿，release 链用 `--require-upstream`）；
@@ -336,6 +338,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   **只追加新增的纯常量**，不整文件重 vendor；条目必须带 `upstream_sha256`，上游改了该文件就把子集里的每个
   值重新对一遍再 `--restamp`。**bespoke 抽出件同理声明 `derived_from`**（抽自哪份上游文件）——不声明它就
   对上游漂移永远失明（`zwLuckItems.js` 的干支年基准修正曾靠人读 release note 才补上）。
+  **sha 看守不比内容**：`--restamp` 只证明「有人看过这一版上游」，不证明改动进了副本（v0.40.0：`SZConst.js`
+  restamp 在 0604fa41 却仍是上游早已改掉的「魏」）。所以**能表达成「上游全文件 + 声明式 deviation」的手工件一律改
+  verbatim**（truncate_before / stub_import / replace_text / import_redirect，`_reexport_required` 自动补调用方要的
+  export）——`suzhan/SZConst.js`、`tongshefa/TongSheFaCore.js` 即此例；curated/bespoke 只留给真正的子集与重写件。
 - **重同步 `vendor/runtime-source`**：`sync_vendored_runtime_sources.sh` + 显式 `HOROSA_SOURCE_ROOT`
   （对上游 READ-ONLY）。**顶层共享件必须显式补**：上游把子逻辑上提为 vendor 根级单文件时（如
   v3.5.0 全年份域的 `Horosa-Web/vendor/kin_year_domain.py`，被 16 个 ken/神数 引擎懒 import），逐引擎
@@ -705,6 +711,9 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
    只有 CI（唯一无 runtime 的环境）才炸**——离线/线材契约测试**禁以「算成功」为判据**（那是
    `@requires_runtime` 的活）；`tests/test_mcp_contract.py` 已用 autouse fixture 把 `HOROSA_RUNTIME_ROOT`
    钉到空目录强制与 CI 同形，发版前另跑一遍 `HOROSA_RUNTIME_ROOT=<空目录> uv run pytest` 复现该形状。
+   **live 复验同样要钉 JS 引擎**：只把两个后端 URL 指到 vendored 实例时，JS 技法走的是**已装 runtime 的旧 core-js**
+   （解析顺序 `HOROSA_CORE_JS_ROOT` → 已装 runtime → 本仓），测的根本不是本仓代码（v0.40.0 据此误报过 jinkou/qimen
+   缺段）。`tests/conftest.py` 已为 pytest 会话钉 `HOROSA_CORE_JS_ROOT=本仓`；手工脚本 / harness 自己钉（或 `HOROSA_RUNTIME_ROOT=<空目录>`）。
    **⚠️ 只钉 runtime root 不够**：默认端口上若有活服务，请求照样打通，本该失败的错误路径会成功
    （`test_error_paths_return_a_conformant_envelope` 实测在服务起着时红）——要真与 CI 同形，
    **必须同时把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指到不可达地址**。
