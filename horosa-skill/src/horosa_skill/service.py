@@ -4687,12 +4687,14 @@ def _dice_chart_object_lines(chart_obj: Any) -> list[str]:
 def _dice_chart_aspect_lines(chart_obj: Any) -> list[str]:
     """DiceMain.js:102 buildChartAspectLines（[Q-455/T-418]）：两盘 normalAsp 四态各成行，无数据 → []（不产段）。
 
-    ⚠ 逐字镜像上游的取数路径 `chartObj.chart.aspects.normalAsp`。后端 /predict/dice 的 diceChart/chart 是
-    getChartObj 形（aspects 在 chartObj **顶层**，AstroChartCircle 画相位线读的也是顶层），故真实响应下上游这两段
-    恒不产出——本仓照上游口径（条件段双登记），不擅自改路径；详见 tests/test_sync311_chartfamily.py。
+    ⚠ 声明式 deviation（v0.40.0，用户拍板）：上游只读 `chartObj.chart.aspects.normalAsp`（DiceMain.js:102），而后端
+    /predict/dice 的 diceChart/chart 是 getChartObj 形——aspects 在 chartObj **顶层**（AstroChartCircle 画相位线读的也是顶层），
+    上游 jest 夹具把 aspects 嵌错了层所以照样绿，真实响应下这两段恒不产出。本仓先读顶层（真实形状），再退回上游路径
+    （夹具形状），两段因此在真数据下可达；详见 tests/test_sync311_chartfamily.py。
     """
     chart = chart_obj.get("chart") if isinstance(chart_obj, dict) else None
-    aspects = chart.get("aspects") if isinstance(chart, dict) else None
+    top_aspects = chart_obj.get("aspects") if isinstance(chart_obj, dict) else None
+    aspects = top_aspects if isinstance(top_aspects, dict) else (chart.get("aspects") if isinstance(chart, dict) else None)
     normal = aspects.get("normalAsp") if isinstance(aspects, dict) else None
     if not isinstance(normal, dict) or not normal:
         return []
@@ -9131,7 +9133,7 @@ class HorosaSkillService:
                 {
                     "inner": inner,
                     "outer": outer,
-                    "hsys": input_normalized.get("hsys", 0),
+                    "hsys": input_normalized.get("hsys", 1),  # 缺省随 RelativeInput（无头 aiAnalysisContext.js:1228 ?? 1）
                     "zodiacal": input_normalized.get("zodiacal", 0),
                 },
             )
@@ -17016,6 +17018,41 @@ class HorosaSkillService:
             trace["tool_name"] = template.get("tool_name")
             return template
 
+    def _report_output_roots(self) -> list[Path]:
+        """报告可写的根：输出目录 + `HOROSA_REPORT_OUTPUT_ROOTS`（os.pathsep 分隔）白名单。"""
+        roots: list[Path] = []
+        if self.settings.output_dir is not None:
+            roots.append(Path(self.settings.output_dir).expanduser().resolve())
+        for extra in getattr(self.settings, "report_output_roots", None) or []:
+            roots.append(Path(extra).expanduser().resolve())
+        return roots
+
+    def _report_output_path(self, requested: str | None, *, default: Path) -> Path:
+        """报告类工具的 `output_path` 闸（v0.40.0 P0）：MCP 工具可被提示注入调用，此前 `Path(output_path).resolve()` 后
+        直接 `os.replace` —— 一次被注入的调用就能覆盖用户任意文件。现在：缺省 → 存储层的缺省产物路径；给了 →
+        相对路径按输出目录解析，绝对路径必须落在输出目录或 `HOROSA_REPORT_OUTPUT_ROOTS` 白名单根之内，否则
+        `report.output_path_not_allowed`（不写任何文件）。"""
+        if requested is None or f"{requested}".strip() == "":
+            return default
+        roots = self._report_output_roots()
+        candidate = Path(f"{requested}".strip()).expanduser()
+        if not candidate.is_absolute():
+            base = roots[0] if roots else Path(default).parent
+            candidate = base / candidate
+        resolved = candidate.resolve()
+        if not any(resolved == root or root in resolved.parents for root in roots):
+            raise ToolValidationError(
+                bilingual(
+                    f"output_path 只能落在报告输出目录内（{'、'.join(str(r) for r in roots) or '（未配置）'}）；"
+                    f"给的是 {resolved}。用相对路径，或把目标目录加进 HOROSA_REPORT_OUTPUT_ROOTS。",
+                    f"output_path must stay inside the report output directory ({', '.join(str(r) for r in roots) or 'none configured'}); "
+                    f"got {resolved}. Use a relative path, or add the directory to HOROSA_REPORT_OUTPUT_ROOTS.",
+                ),
+                code="report.output_path_not_allowed",
+                details={"requested": f"{requested}", "resolved": str(resolved), "allowed_roots": [str(r) for r in roots]},
+            )
+        return resolved
+
     def report_render(self, payload: dict[str, Any]) -> dict[str, Any]:
         with self.tracer.span(
             workflow_name="report.render",
@@ -17065,14 +17102,13 @@ class HorosaSkillService:
                     include_raw_json=request.include_raw_json,
                 )
                 tool_name = str(document["source"]["tool_name"])
-                output_path = (
-                    Path(request.output_path).expanduser().resolve()
-                    if request.output_path
-                    else self.store.default_report_path(
+                output_path = self._report_output_path(
+                    request.output_path,
+                    default=self.store.default_report_path(
                         run_id=request.run_id,
                         tool_name=tool_name,
                         format_name=normalized_format,
-                    )
+                    ),
                 )
                 rendered = render_report(document, output_path=output_path, format_name=normalized_format)
                 artifact = self.store.record_report_artifact(
@@ -17416,14 +17452,9 @@ class HorosaSkillService:
                     (card.get("sections") or {}).pop("titles", None)
 
             scope_id = document["scope_id"] or "latest"
-            if request.output_path:
-                output_path = Path(request.output_path).expanduser().resolve()
-            else:
-                suffix = "md" if normalized_format == "markdown" else normalized_format
-                base = self.store.default_report_path(
-                    run_id=str(scope_id), tool_name="technique", format_name="json"
-                )
-                output_path = base.with_suffix(f".{suffix}")
+            suffix = "md" if normalized_format == "markdown" else normalized_format
+            base = self.store.default_report_path(run_id=str(scope_id), tool_name="technique", format_name="json")
+            output_path = self._report_output_path(request.output_path, default=base.with_suffix(f".{suffix}"))
             try:
                 rendered = render_report(document, output_path=output_path, format_name=normalized_format)
             except ValueError as exc:
@@ -17957,7 +17988,7 @@ class HorosaSkillService:
                     payload_for_tool = {
                         "inner": request.subject.inner.model_dump(exclude_none=True) if request.subject and request.subject.inner else {},
                         "outer": request.subject.outer.model_dump(exclude_none=True) if request.subject and request.subject.outer else {},
-                        "hsys": request.preferences.get("hsys", 0),
+                        "hsys": request.preferences.get("hsys", 1),  # 缺省随 RelativeInput（星阙 DefaultHouseSystem 1）
                         "zodiacal": request.preferences.get("zodiacal", 0),
                         "relative": request.preferences.get("relative", 0),
                     }

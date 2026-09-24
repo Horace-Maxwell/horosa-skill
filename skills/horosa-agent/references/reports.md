@@ -82,3 +82,10 @@ uv run horosa-skill report from-tool liureng_gods \
   textbook filler.
 - State limitations honestly (e.g. a conditional section absent, a switch not threaded) without
   hiding behind them.
+
+## 输出路径（v0.40.0）
+
+三个报告工具的 `output_path` 只许落在报告输出目录（`HOROSA_SKILL_OUTPUT_DIR`，缺省 `<数据目录>/runs`）内：省略 = 存储层缺省产物路径；
+相对路径按输出目录解析；绝对路径必须在输出目录或 `HOROSA_REPORT_OUTPUT_ROOTS`（`os.pathsep` 分隔的白名单根，由用户在环境里配）之内，
+否则 `report.output_path_not_allowed`（`details.allowed_roots` 列出可写根，不写任何文件）。这三个工具的 MCP annotations 标 `destructiveHint=true`
+（会覆盖同名文件），客户端可能要求确认。

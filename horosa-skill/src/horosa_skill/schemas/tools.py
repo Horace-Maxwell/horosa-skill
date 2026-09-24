@@ -51,10 +51,13 @@ class BirthInput(FlexibleModel):
     )
     # 全表 0–24 由 astro_rulers.HOUSE_SYSTEM_LABELS（上游 AstroConst.HOUSE_SYSTEM_OPTIONS 镜像）生成——校验层描述，
     # 不进 tools/list（广告层 hsys 走 mcp_schema.CORE_DOC + 0–8 enum，预算所限）。
+    # 缺省 1 = 星阙 DefaultHouseSystem（models/astro.js:29；无头挂载 aiAnalysisContext.js:494 `record.hsys ?? 1`、
+    # techniqueMountSettings.js:828 default 1）。v0.40.0 起随上游（此前 skill 缺省 0 整宫，与上游分叉）；
+    # 上游页面硬钉 0 的技法（七政 / 节气 / 择日 / 世运 / 印占）在各自模型显式覆盖回 0。
     hsys: int | None = Field(
-        default=0,
+        default=1,
         description=(
-            "宫制索引 0–24（上游 AstroConst.HOUSE_SYSTEM_OPTIONS）："
+            "宫制索引 0–24（缺省 1 Alcabitus = 星阙 DefaultHouseSystem；上游 AstroConst.HOUSE_SYSTEM_OPTIONS）："
             + " ".join(f"{k}={v}" for k, v in HOUSE_SYSTEM_LABELS.items())
             + "。缺省 0=整宫 Whole Sign（上游页面缺省 1 Alcabitus）。注意 1 不是 Placidus（Placidus=3）。"
         ),
@@ -214,6 +217,7 @@ class AstroChartInput(BirthInput, _ChartDayBoundaryKnobs):
 
 
 class IndiaChartInput(BirthInput):
+    hsys: int | None = 0  # 印占宫制走 indiaHsys；本键只作 indiaHsys 缺席时的回退 = INDIA_HOUSE_SYSTEM_DEFAULT 0（整宫/Rashi）
     # 印度占星 (星阙 v2.6.4)：分宫制 4→全 24 制(indiaHsys 0–24)、黄道岁差 6→全 47(indiaAyanamsa)。
     # 印占恒星黄道引擎 pyswisseph，与西洋 siderealAyanamsa 共用 47 套岁差键。缺省 hsys=0(整宫)/lahiri。
     # 后端 webindiasrv 读 indiaHsys/indiaAyanamsa（亦兼容 hsys/ayanamsa/siderealMode）。
@@ -273,6 +277,7 @@ class PlanetCyclesInput(FlexibleModel):
 
 class JieQiBirthInput(BirthInput):
     """出生节气窗：定位出生时刻前后的节气精确时刻（八字起运窗的同源数据）。"""
+    hsys: int | None = 0  # 上游 JieQiChartsMain.js:1014 页面初始 hsys 0（节气盘家族与 JieQiYearInput 同）
 
     useLocalMao: int | None = Field(default=None, description="真太阳时卯时口径开关（0/1，缺省 0，上游同默认）")
     byLon: int | None = Field(default=None, description="按经度修正开关（0/1，缺省 0，上游同默认）")
@@ -285,6 +290,7 @@ class IndiaRectifyInput(BirthInput):
     边界（gandanta 甘丹塔预警）+ 可选事件评分（rectifyEvents 录入后才参评）。
     输出证据与排序，是否采用由用户决定（上游免责声明原样带回）。
     """
+    hsys: int | None = 0  # 同 IndiaChartInput：印占家族整宫缺省
 
     rectifyWindowMinutes: float | None = Field(default=None, description="扫描半窗（分钟），缺省 30，上限 240（锚点前后各半窗）")
     rectifyStepSeconds: int | None = Field(default=None, description="扫描步长（秒），缺省 60，上限 600；过粗会整段跳过 KP 子主（响应带步长诊断）")
@@ -346,7 +352,8 @@ class RelativePartyInput(FlexibleModel):
 class RelativeInput(FlexibleModel):
     inner: RelativePartyInput
     outer: RelativePartyInput
-    hsys: int | None = 0
+    # 无头挂载 aiAnalysisContext.js:1228 `recordA.hsys ?? 1`（页面 AstroRelative.js:534 硬钉 0；缺省冲突跟无头路径）。
+    hsys: int | None = 1
     zodiacal: int | None = 0
     siderealAyanamsa: Any | None = None
     relative: int | None = 0
@@ -635,6 +642,7 @@ class ZeriScanInput(BirthInput):
     compile 都不同，在这里重写一遍等于造第二份真值源，上游一加条件类就烂。vendored 的
     `compile<X>Tree` 会跑各叶子自己的 validate 抛本地化错误；条件类键与参数走 agent_guidance 暴露。
     """
+    hsys: int | None = 0  # 上游择日条件树 ConditionBuilderModal.js:421 `cfg.hsys || 0`；扫描载荷转发本键
 
     startDate: str | None = Field(default=None, description="搜索窗起始日（YYYY-MM-DD）")
     startTime: str | None = Field(default="00:00", description="搜索窗起始时刻（HH:mm）")
@@ -782,6 +790,7 @@ class TianxingInput(BirthInput):
     lat/lon/zone/hsys/zodiacal 复用 BirthInput —— 它们就是**搜索盘**的坐标与口径，不另起一套词汇。
     date/time 是 [起盘信息] 展示的锚点时刻，缺省取窗口起点。
     """
+    hsys: int | None = 0  # 上游 TianxingElectionMain.js:66/81 出厂种子 hsys 0
 
     # 后端 ScanContext 实读 partileDef（election_scan.py:367），白名单也一直带着它，
     # 唯独 schema 没声明 —— 能用、agent 看不见。
@@ -822,6 +831,7 @@ class QizhengElectionInput(BirthInput):
     三个动作共用一套入参：pan 用全部；eclipses 只用 date/zone(+kind/count)；
     azimuthsearch 用 date/time/zone/坐标(+body/targetAz/days)。
     """
+    hsys: int | None = 0  # 七政择时展示盘随七政盘：恒整宫（同 GuoLaoInput）
 
     action: str | None = Field(
         default="pan",
@@ -909,6 +919,7 @@ class CanPingInput(FlexibleModel):
 
 
 class GuoLaoInput(BirthInput):
+    hsys: int | None = 0  # 上游 GuoLaoChartMain.js:2345 genParams 恒 hsys 0（七政按地支宫域，不随 DefaultHouseSystem）
     # 七政起盘口径长尾键：照常声明（校验 + MCP 扁平面收顶层），不进 tools/list 广告层（词表见 agent_guidance）。
     ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({
         "guolaoNodeMode", "guolaoTrueSolarTime", "guolaoNodeType", "guolaoLilithType",
@@ -1583,6 +1594,7 @@ class HoraryInput(BirthInput):
 
 
 class ElectionInput(BirthInput):
+    hsys: int | None = 0  # 上游 ElectionMain.js:100 出厂种子 { tradition: 1, zodiacal: 0, hsys: 0 }（:121 回退亦 0）
     ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset(
         {"tradeSide", "talismanStar", "surgeryPart", "surgeryPartOpposite", "crisisBase"}
     )
@@ -1688,7 +1700,7 @@ class TechniqueReportInput(FlexibleModel):
     group_id: str | None = None
     format: str = "markdown"
     title: str | None = None
-    output_path: str | None = None
+    output_path: str | None = Field(default=None, description="须在报告输出目录内（相对路径按它解析）")
     # 是否把每个技法的产出段目录写进报告（默认写；关掉可得到极短的一页）。
     include_sections: bool | None = True
 
@@ -2032,7 +2044,7 @@ class ReportRenderInput(FlexibleModel):
     ai_report: dict[str, Any] = Field(default_factory=dict)
     ai_answer_text: str | None = None
     include_raw_json: bool = False
-    output_path: str | None = None
+    output_path: str | None = Field(default=None, description="须在报告输出目录内（相对路径按它解析）")
 
 
 class ReportFromToolInput(FlexibleModel):
@@ -2045,4 +2057,4 @@ class ReportFromToolInput(FlexibleModel):
     ai_report: dict[str, Any] = Field(default_factory=dict)
     ai_answer_text: str | None = None
     include_raw_json: bool = False
-    output_path: str | None = None
+    output_path: str | None = Field(default=None, description="须在报告输出目录内（相对路径按它解析）")

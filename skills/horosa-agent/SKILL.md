@@ -42,6 +42,9 @@ horosa_cn_qimen {date, time, zone:"+08:00", lat:"31n13", lon:"121e28", agent_con
 horosa_report_render {run_id, tool_name:"qimen", format:"docx", ai_report:{executive_summary, answer_text, analysis_sections, recommendations, limitations}}
 ```
 
+报告 `output_path` 可省（写到报告输出目录的缺省产物路径）；给了则相对路径按输出目录解析，绝对路径必须在输出目录或
+`HOROSA_REPORT_OUTPUT_ROOTS` 白名单目录内，越界返回 `report.output_path_not_allowed` 且不写文件——别替用户猜别的目录。
+
 七政四余 `guolao_chart` 可传 `guolaoLifeMode`（asc/yumao/cotrans）、`guolaoBodyMode`、`moiraTransitDate`（[流年流曜]
 的流年时刻，缺省今天）；[虚实]/[本命化曜]/[流年流曜] 三段来自 Java 规则层，Java 不可用时缺席并进 `warnings`。
 河洛 `heluo` 可传 `liunianStep2`（ying/sequential）、`ziShuMode`、`jiGongMode` 等取法旋钮（全表见 guidance）。

@@ -54,6 +54,10 @@ include = [
 # manager._runtime_template_root 先找包内副本再回退源码树（v0.36.0 C4；scripts/verify_wheel_contents.py 守）。
 [tool.hatch.build.targets.wheel.force-include]
 "scripts/runtime_templates/windows" = "horosa_skill/runtime/templates/windows"
+# v0.40.0 P1：运行期契约（Jev 阈值锁 / 技法算源）此前不在 wheel 里 → uvx 安装下 enforce 永不生效、算源恒「未标注」。
+# 消费方经 horosa_skill/contracts_locator.py 先找源码树再找这份包内副本；scripts/verify_wheel_contents.py 守。
+"contracts/jev_thresholds.json" = "horosa_skill/contracts/jev_thresholds.json"
+"contracts/technique_provenance.json" = "horosa_skill/contracts/technique_provenance.json"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

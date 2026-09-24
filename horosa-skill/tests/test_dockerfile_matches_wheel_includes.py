@@ -53,6 +53,16 @@ def test_guard_fires_when_the_template_copy_is_missing() -> None:
     """Negative control: the Dockerfile as tracked before v0.38.0 must be red."""
     legacy = "FROM python:3.12-slim\nCOPY pyproject.toml README.md ./\nCOPY src ./src\nRUN uv pip install --system .\n"
     sources = force_include_sources((PKG_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    assert uncovered(sources, copy_sources(legacy)) == ["scripts/runtime_templates/windows"]
-    fixed = legacy.replace("COPY src ./src\n", "COPY src ./src\nCOPY scripts/runtime_templates ./scripts/runtime_templates\n")
+    # v0.40.0 P1 起 force-include 还带两份运行期契约：旧 Dockerfile 对它们同样是漏 COPY。
+    assert uncovered(sources, copy_sources(legacy)) == [
+        "contracts/jev_thresholds.json", "contracts/technique_provenance.json", "scripts/runtime_templates/windows",
+    ]
+    fixed = legacy.replace(
+        "COPY src ./src\n",
+        "COPY src ./src\nCOPY scripts/runtime_templates ./scripts/runtime_templates\n"
+        "COPY contracts/jev_thresholds.json contracts/technique_provenance.json ./contracts/\n",
+    )
     assert uncovered(sources, copy_sources(fixed)) == []
+    # 只修模板、漏契约 → 守卫仍红（负向对照的负向对照）。
+    half = legacy.replace("COPY src ./src\n", "COPY src ./src\nCOPY scripts/runtime_templates ./scripts/runtime_templates\n")
+    assert uncovered(sources, copy_sources(half)) == ["contracts/jev_thresholds.json", "contracts/technique_provenance.json"]

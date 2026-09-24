@@ -531,33 +531,40 @@ def test_dice_object_table_marks_retrograde_per_upstream_jest() -> None:
 
 
 def test_dice_aspect_lines_per_upstream_jest() -> None:
-    """diceChartObjectsTable.test.js「相位段」：normalAsp 四态各成行（Exact/Separative 同折离相）；无 aspects → []（不产段）。"""
-    chart_obj = {"chart": {"objects": [{"id": "Sun"}, {"id": "Moon"}], "aspects": {"normalAsp": {
-        "Sun": {"Applicative": [{"id": "Moon", "asp": 120, "orb": 2.5347}], "Exact": [], "Separative": [{"id": "Mars", "asp": 90, "orb": 0}], "None": [{"id": "Venus", "asp": 60}]},
-    }}}}
-    lines = _dice_chart_aspect_lines(chart_obj)
-    assert lines[0] == "| 主体 | 相位 | 对象 | 相态 | 误差 |"
-    assert "| 日 | 120˚ | 月 | 入相 | 2.535 |" in lines
-    assert "| 日 | 90˚ | 火 | 离相 | 0 |" in lines
-    assert "| 日 | 60˚ | 金 | — |  |" in lines
+    """diceChartObjectsTable.test.js「相位段」：normalAsp 四态各成行（Exact/Separative 同折离相）；无 aspects → []（不产段）。
+    声明式 deviation（v0.40.0，用户拍板）：aspects 先读 chartObj **顶层**（后端 /predict/dice 真实 getChartObj 形状），再退回
+    上游读的 chart.aspects（上游 jest 夹具嵌错层）——两种形状产同一张表；负向对照：只认嵌套路径的旧版对真实形状返回 []。"""
+    normal = {"Sun": {"Applicative": [{"id": "Moon", "asp": 120, "orb": 2.5347}], "Exact": [], "Separative": [{"id": "Mars", "asp": 90, "orb": 0}], "None": [{"id": "Venus", "asp": 60}]}}
+    fixture_shaped = {"chart": {"objects": [{"id": "Sun"}, {"id": "Moon"}], "aspects": {"normalAsp": normal}}}
+    real_shaped = {"chart": {"objects": [{"id": "Sun"}, {"id": "Moon"}]}, "aspects": {"normalAsp": normal}}
+    for chart_obj in (fixture_shaped, real_shaped):
+        lines = _dice_chart_aspect_lines(chart_obj)
+        assert lines[0] == "| 主体 | 相位 | 对象 | 相态 | 误差 |"
+        assert "| 日 | 120˚ | 月 | 入相 | 2.535 |" in lines
+        assert "| 日 | 90˚ | 火 | 离相 | 0 |" in lines
+        assert "| 日 | 60˚ | 金 | — |  |" in lines
+    assert _dice_chart_aspect_lines(fixture_shaped) == _dice_chart_aspect_lines(real_shaped)
     assert _dice_chart_aspect_lines({"chart": {"objects": []}}) == []
+    assert _dice_chart_aspect_lines({"chart": {"objects": []}, "aspects": {"normalAsp": {}}}) == []
 
 
 def test_dice_snapshot_pool_line_result_labels_and_aspect_sections() -> None:
-    """buildDiceSnapshotText：[Q-145/T-52] 掷星星池行；骰子结果译名；有 normalAsp 才出两盘相位段（逐字镜像上游取数路径）。"""
+    """buildDiceSnapshotText：[Q-145/T-52] 掷星星池行；骰子结果译名；有 normalAsp 才出两盘相位段。
+    骰子盘给上游夹具形状（嵌套）、天象盘给后端真实形状（顶层）：两段都要产（v0.40.0 deviation 前天象盘那段真数据下恒缺）。"""
     chart_obj = {"chart": {"houses": [{"id": "House1"}], "objects": [{"id": "Sun", "house": "House1", "signlon": 3, "sign": "Aries"}]}}
-    upstream_shaped = {**chart_obj, "chart": {**chart_obj["chart"], "aspects": {"normalAsp": {"Sun": {"Applicative": [{"id": "Moon", "asp": 60, "orb": 1}]}}}}}
-    text = _build_otherbu_snapshot_text(
-        {"date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "lon": "121e28", "lat": "31n13", "tradition": True, "question": "问"},
-        {"planet": "Venus", "sign": "Libra", "house": 6, "diceChart": upstream_shaped, "chart": chart_obj},
-    )
+    normal = {"Sun": {"Applicative": [{"id": "Moon", "asp": 60, "orb": 1}]}}
+    upstream_shaped = {**chart_obj, "chart": {**chart_obj["chart"], "aspects": {"normalAsp": normal}}}
+    real_shaped = {**chart_obj, "aspects": {"normalAsp": normal}}
+    payload = {"date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "lon": "121e28", "lat": "31n13", "tradition": True, "question": "问"}
+    text = _build_otherbu_snapshot_text(payload, {"planet": "Venus", "sign": "Libra", "house": 6, "diceChart": upstream_shaped, "chart": real_shaped})
     secs = _sections(text)
     assert "掷星星池：传统七政 + 交点 / 虚点(不含三王星)(背景盘面仍按完整星集绘制)" in secs["起盘信息"]
     assert secs["骰子结果"] == ["行星：金", "星座：天秤", "宫位：第七宫"]
-    assert "骰子盘相位" in secs and "天象盘相位" not in secs
-    live_shaped = {**chart_obj, "aspects": {"normalAsp": {"Sun": {"Applicative": [{"id": "Moon", "asp": 60, "orb": 1}]}}}}
-    # 后端 /predict/dice 把 aspects 放在 chartObj 顶层（getChartObj）；上游 builder 读 chartObj.chart.aspects → 不产段。照镜像。
-    assert _dice_chart_aspect_lines(live_shaped) == []
+    assert "骰子盘相位" in secs and "天象盘相位" in secs
+    assert secs["骰子盘相位"] == secs["天象盘相位"]
+    # 两盘都无相位数据 → 两段都不产（既有输出逐字不变）。
+    bare = _sections(_build_otherbu_snapshot_text(payload, {"planet": "Venus", "sign": "Libra", "house": 6, "diceChart": chart_obj, "chart": chart_obj}))
+    assert "骰子盘相位" not in bare and "天象盘相位" not in bare
     assert "掷星星池：含三王星的完整星集(背景盘面仍按完整星集绘制)" in _sections(_build_otherbu_snapshot_text({"tradition": False}, {"house": 0}))["起盘信息"]
 
 
@@ -805,14 +812,21 @@ def test_live_germany_house_frames_mirror_backend_placements(tmp_path) -> None:
 
 
 @requires_chart
-def test_live_dice_tables_and_mirrored_aspect_path(tmp_path) -> None:
-    """骰子两盘表带逆行列；后端把 aspects 放在 chartObj 顶层，上游 builder 读 chartObj.chart.aspects → 两盘相位段不产（照镜像）。"""
+def test_live_dice_tables_and_top_level_aspects_reach_the_sections(tmp_path) -> None:
+    """骰子两盘表带逆行列；后端把 aspects 放在 chartObj 顶层（chart 里没有）——v0.40.0 声明式 deviation 后两盘相位段从顶层取数产出
+    （上游只读 chartObj.chart.aspects，真数据下恒缺）。行数 = 顶层 normalAsp 四态里的相位条数，证明取的就是这份数据。"""
     result = _live_service(tmp_path).run_tool("otherbu", build_sample_payloads()["otherbu"], save_result=False)
     assert result.ok is True, result.error
     secs = _sections(result.data["snapshot_text"])
     assert secs["骰子盘宫位与星体"][0] == "| 宫位 | 星体 | 度 | 座 | 分 | 逆行 |"
-    assert isinstance(result.data["diceChart"].get("aspects"), dict) and "aspects" not in result.data["diceChart"]["chart"]
-    assert "骰子盘相位" not in secs and "天象盘相位" not in secs
+    dice = result.data["diceChart"]
+    assert isinstance(dice.get("aspects"), dict) and "aspects" not in dice["chart"]
+    normal = dice["aspects"].get("normalAsp") or {}
+    expected_rows = sum(len(one.get(k) or []) for one in normal.values() if isinstance(one, dict) for k in ("Applicative", "Exact", "Separative", "None"))
+    assert expected_rows > 0
+    assert secs["骰子盘相位"][:2] == ["| 主体 | 相位 | 对象 | 相态 | 误差 |", "| --- | --- | --- | --- | --- |"]
+    assert len(secs["骰子盘相位"]) == 2 + expected_rows
+    assert secs["天象盘相位"][0] == "| 主体 | 相位 | 对象 | 相态 | 误差 |"
 
 
 @requires_runtime

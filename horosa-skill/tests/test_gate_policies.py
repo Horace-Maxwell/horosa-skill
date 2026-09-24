@@ -74,8 +74,11 @@ def test_shenshu_gender_and_place_policies() -> None:
 def test_house_system_options_carry_upstream_indexes() -> None:
     hsys = _asked("chart", BIRTH)["hsys"]
     pairs = dict(zip(hsys["options"], hsys["values"]))
-    assert pairs["3 Placidus"] == 3 and pairs["1 Alcabitus"] == 1
+    assert pairs["3 Placidus"] == 3
+    assert next(v for o, v in pairs.items() if o.startswith("1 Alcabitus")) == 1
     assert next(v for o, v in pairs.items() if o.startswith("0 整宫")) == 0
+    # v0.40.0：缺省随星阙 DefaultHouseSystem = 1（Alcabitus），列在首位并注明缺省；整宫制仍可选。
+    assert hsys["values"][0] == 1 and "缺省" in hsys["options"][0] and hsys["options"][0].startswith("1 Alcabitus")
 
 
 def test_table_selftests_include_b3_cases() -> None:

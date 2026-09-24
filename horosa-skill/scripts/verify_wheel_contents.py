@@ -35,6 +35,9 @@ REQUIRED_ENTRIES = (
     "horosa_skill/runtime/templates/windows/stop_horosa_local.ps1",
     "horosa_skill/surfaces/mcp_server.py",
     "horosa_skill/surfaces/mcp_schema.py",
+    # v0.40.0 P1：运行期契约的包内副本（Jev 阈值锁 / 技法算源）——缺了就是 v0.39.0 那个「enforce 永不生效」的 bug。
+    "horosa_skill/contracts/jev_thresholds.json",
+    "horosa_skill/contracts/technique_provenance.json",
 )
 MIN_HELPDOC_PACKS = 18
 # v0.38.1 A16：知识包的 `source` 字段曾带着维护者机器的绝对路径（`/Users/<name>/Desktop/…`）进了 wheel ——

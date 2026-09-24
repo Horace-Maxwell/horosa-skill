@@ -16,6 +16,8 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.40.0 (2026-09) | 审计 P0：报告类 MCP 工具 `output_path` 可写任意路径（提示注入 = 覆盖用户任意文件） | 落盘路径闸：相对路径按输出目录解析、绝对路径须在输出目录 / `HOROSA_REPORT_OUTPUT_ROOTS` 内，越界 `report.output_path_not_allowed` 不写文件；三工具 destructiveHint=True |
+| v0.40.0 (2026-09) | 审计 P1：`contracts/` 不在 wheel / MCPB 里——Jev enforce 永不生效、技法算源恒「未标注」（v0.39.0 已出货） | 运行期契约经 `contracts_locator`（源码树 → 包内副本）；pyproject force-include + `.mcpbignore` 反选 + wheel 守卫锁条目 |
 | v0.40.0 (2026-09) | 并行同步实现者踩坑：stub 杀死纯逻辑（六壬择时恒零命中）/ worktree 子进程跑主 checkout / 算源生成器不幂等 / `_js_round` 负数截断 / 移植口径与测试替身 | stub 审计进 revendor；conftest 钉 PYTHONPATH；契约 == 生成器输出；桩按真实下发参数校验 |
 | v0.40.0 (2026-09) | 上游 v3.11.x 重同步：六处「同步了却没同步」——live 复验跑的是已装 runtime 的旧 JS / curated 件 restamp 不带内容 / 生成器修产物不修源 / 裸 `export default X` 漏剥 / vendored JSON 不在 manifest / 知识库计数无真值守卫 | 复验只认本仓引擎（conftest 钉根）；能 verbatim 的手工件一律 verbatim；修生成器不修产物 |
 | v0.39.0 (2026-09) | 发布前 CI 红：双语棘轮抓到新包 28 处单语 raise；本机跑的是「顺手的守卫」不是 run_ci_gates.py | 本机门禁 = `run_ci_gates.py`；按文件计数的棘轮是 API 契约，新包落地就按它写 |
@@ -106,6 +108,35 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.40.0 / 2026-09-24 — 审计 P0：报告类 MCP 工具的 `output_path` 是任意路径写；P1：运行期契约不在安装包里
+
+两条都是 v0.40.0 同步收尾时的接口 / 分发审计结论（交接文档 §6.1），用户拍板后与同步一起修。
+
+1. **P0 安全：`horosa_report_render` / `horosa_report_from_tool` / `horosa_technique_report` 的 `output_path`。**
+   - 症状：三个工具接受 `output_path`，经 `Path(...).expanduser().resolve()` 后 `renderers.render_report` 用 `os.replace` 直接覆盖目标；
+     没有「只能写到输出目录」的约束；annotations 还标着 `destructiveHint=False`。MCP 工具的调用方是模型——一次被提示注入的
+     `horosa_report_render(output_path="~/.zshrc")` 就把用户的 shell 配置换成一份 JSON 报告，而客户端因为「非破坏性」不问一句。
+   - 根因：报告类工具从 CLI 时代继承了「路径是用户给的」假设；搬到 MCP 面后调用方变成了不可信的模型输出，路径语义没跟着变。
+     annotations 的口径只看了「会不会删」，没看「会不会覆盖别的文件」。
+   - 守卫：`HorosaSkillService._report_output_path`——缺省仍是存储层缺省产物路径；相对路径按输出目录解析；绝对路径必须落在
+     输出目录或 `HOROSA_REPORT_OUTPUT_ROOTS`（`os.pathsep` 分隔的白名单根，`Settings.report_output_roots`）之内，否则
+     `report.output_path_not_allowed`（带 `allowed_roots`，**不写任何文件**；`..` 逃逸同样拦）。三个工具 `destructiveHint=True`
+     （report_from_tool 还非幂等）。`tests/test_report_output_path_guard.py`（负向对照：把闸换回「resolve 即用」的旧写法，越界写入
+     真的发生）+ `test_mcp_robustness` 注解断言。
+2. **P1 打包：`contracts/` 不在 wheel / MCPB 里。**
+   - 症状：`decisions/policy.py`（Jev 阈值锁）/ `decisions/eval.py` / `reports/technique_card.py`（算源契约）用
+     `Path(__file__).resolve().parents[3] / "contracts"` 找文件——源码树成立，wheel 安装后 `parents[3]` 是 site-packages 的父目录。
+     后果：uvx / wheel 安装下 Jev `enforce` 永不生效，技法依据卡的算源一律「未标注」。这是 v0.39.0 **已经出货**的 bug；
+     源码树运行不受影响，所以本机全绿、live 全绿、CI 全绿。MCPB bundle 的 `.mcpbignore` 也整个排掉了 `/contracts/`。
+   - 根因：又一个「构建期 include 列表与运行期路径假设各写各的」（同形：v0.38.0 B0 的 Dockerfile 漏 COPY force-include）。
+     `verify_wheel_contents.py` 只锁了当时知道的条目，新加的运行期数据文件没人登记。
+   - 守卫：`horosa_skill/contracts_locator.py`（源码树 `<pkg-root>/contracts/` → 包内 `horosa_skill/contracts/`，都缺回源码树路径）；
+     pyproject force-include 两份运行期契约；`.mcpbignore` 改 `/contracts/*` + 反选两份文件（父目录整体忽略时反选无效，只能这么写）；
+     Dockerfile COPY 两份；`verify_wheel_contents.REQUIRED_ENTRIES` 锁两条；`tests/test_contracts_packaged.py`（负向对照：旧的
+     `parents[3]` 表达式在模拟的 site-packages 布局下指向不存在的路径）。
+   - 规则：**代码里任何 `Path(__file__)…parents[n]` 找数据文件的写法，都要问一句「安装成 wheel 之后这条路还在吗」**；运行期要读的
+     仓内数据文件一律走 force-include + 定位器 + wheel 守卫三件套。
 
 ### v0.40.0 / 2026-09-24 — 并行同步各路实现者的踩坑：stub 杀死纯逻辑、移植口径、测试替身与 worktree
 

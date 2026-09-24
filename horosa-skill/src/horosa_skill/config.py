@@ -34,6 +34,8 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     "HOROSA_SKILL_DATA_DIR": "stable",
     "HOROSA_SKILL_DB_PATH": "stable",
     "HOROSA_SKILL_OUTPUT_DIR": "stable",
+    # v0.40.0 P0：报告类工具 output_path 只许落在输出目录内；本变量（os.pathsep 分隔）加白名单根。
+    "HOROSA_REPORT_OUTPUT_ROOTS": "stable",
     "HOROSA_RUNTIME_ROOT": "stable",
     "HOROSA_RUNTIME_MANIFEST_URL": "stable",
     "HOROSA_RUNTIME_PLATFORM": "stable",
@@ -305,6 +307,7 @@ FIELD_ENV_MAP = {
     "data_dir": "HOROSA_SKILL_DATA_DIR",
     "db_path": "HOROSA_SKILL_DB_PATH",
     "output_dir": "HOROSA_SKILL_OUTPUT_DIR",
+    "report_output_roots": "HOROSA_REPORT_OUTPUT_ROOTS",
     "runtime_root": "HOROSA_RUNTIME_ROOT",
     "runtime_manifest_url": "HOROSA_RUNTIME_MANIFEST_URL",
     "runtime_platform": "HOROSA_RUNTIME_PLATFORM",
@@ -335,6 +338,8 @@ class Settings(BaseModel):
     runtime_root: Path = Field(default_factory=_default_runtime_root)
     db_path: Path | None = None
     output_dir: Path | None = None
+    # 报告类工具 output_path 的额外白名单根（v0.40.0 P0；输出目录恒在白名单内）。
+    report_output_roots: list[Path] = Field(default_factory=list)
     runtime_manifest_url: str | None = None
     runtime_platform: str | None = None
     runtime_release_repo: str = DEFAULT_RELEASE_REPO
@@ -391,6 +396,7 @@ class Settings(BaseModel):
             data_dir=data_dir,
             db_path=Path(db_path_env).expanduser() if db_path_env else data_dir / "memory.db",
             output_dir=Path(output_dir_env).expanduser() if output_dir_env else data_dir / "runs",
+            report_output_roots=[Path(p.strip()).expanduser() for p in (_env_text("HOROSA_REPORT_OUTPUT_ROOTS", "") or "").split(os.pathsep) if p.strip()],
             runtime_root=runtime_root,
             runtime_manifest_url=_env_text("HOROSA_RUNTIME_MANIFEST_URL"),
             runtime_platform=_env_text("HOROSA_RUNTIME_PLATFORM"),

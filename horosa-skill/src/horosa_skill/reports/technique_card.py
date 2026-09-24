@@ -18,11 +18,12 @@ import json
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
+from horosa_skill.contracts_locator import contract_path
 from typing import Any
 
 TECHNIQUE_CARD_SCHEMA = "horosa.skill.technique_card.v1"
 
-_PROVENANCE_PATH = Path(__file__).resolve().parents[3] / "contracts" / "technique_provenance.json"
+_PROVENANCE_PATH = contract_path("technique_provenance.json")  # 源码树 / wheel 内副本（contracts_locator，v0.40.0 P1）
 
 # 结果敏感设置：改了它们结论就变，所以必须逐条回显给用户看。
 # 键 → (标签, 适用的工具 domain)。`None` = 所有 domain 都适用。

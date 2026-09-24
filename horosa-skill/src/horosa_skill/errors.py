@@ -368,6 +368,15 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "query_memory_for_run_id",
     },
+    "report.output_path_not_allowed": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "报告只能写进报告输出目录（或 HOROSA_REPORT_OUTPUT_ROOTS 白名单目录）。改用相对路径，或让用户把目标目录加进白名单。",
+            "Reports may only be written inside the report output directory (or a HOROSA_REPORT_OUTPUT_ROOTS allow-listed directory). "
+            "Use a relative path, or ask the user to allow-list the target directory.",
+        ),
+        "next_action": "use_relative_output_path_or_allowlist_root",
+    },
     "report.source_not_found": {"kind": "input", "next_action": "query_memory_for_run_id"},
     "report.from_tool.unsaved_result": {"kind": "input", "next_action": "rerun_with_save_result_true"},
     "report.technique.no_cards": {

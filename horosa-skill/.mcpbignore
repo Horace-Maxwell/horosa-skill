@@ -17,7 +17,11 @@
 /scripts/*.sh
 /scripts/preflight_release.py
 /scripts/sync_windows_release.py
-/contracts/
+# v0.40.0 P1：两份运行期契约必须进 bundle（bundle 根 = horosa-skill/ → contracts_locator 的源码树候选）；
+# 「父目录被整体忽略时反选无效」，所以写 `/contracts/*` 再反选两份文件。
+/contracts/*
+!/contracts/jev_thresholds.json
+!/contracts/technique_provenance.json
 /benchmarks/
 /docs/
 /examples/

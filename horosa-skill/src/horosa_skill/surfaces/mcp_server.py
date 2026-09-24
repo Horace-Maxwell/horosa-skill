@@ -70,6 +70,8 @@ _SERVER_ICON = mcp_types.Icon(
 #   destructiveHint=False（只追加、不改不删）、idempotentHint=False（重复调用会追加新 run 行）。
 # - 报告渲染 readOnly=False + idempotent=True（同 run_id+format 原子覆盖同一产物）；
 #   report_from_tool 会重新起盘+新 run → idempotent=False。
+# - v0.40.0 P0：三个报告类工具会按 output_path **覆盖**磁盘文件（虽已限定在输出目录 / 白名单根内）→ destructiveHint=True，
+#   如实标注让客户端对它们保留确认摩擦；memory_record_answer 只追加记录，仍非 destructive。
 _ANN_QUERY = mcp_types.ToolAnnotations(
     readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False
 )
@@ -78,6 +80,12 @@ _ANN_CALC = mcp_types.ToolAnnotations(
 )
 _ANN_RENDER = mcp_types.ToolAnnotations(
     readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False
+)
+_ANN_REPORT_WRITE = mcp_types.ToolAnnotations(
+    readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False
+)
+_ANN_REPORT_FROM_TOOL = mcp_types.ToolAnnotations(
+    readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False
 )
 
 _READONLY_TOOL_NAMES = {
@@ -1180,7 +1188,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
     mcp.tool(
         name="horosa_report_render",
         title="渲染报告 / render report",
-        annotations=_ANN_RENDER,
+        annotations=_ANN_REPORT_WRITE,
     )(horosa_report_render)
 
     async def horosa_hecan(**kwargs: Any) -> dict[str, Any]:
@@ -1228,7 +1236,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
         # 🔴 readOnlyHint=False：`format = docx | pdf` 时它**往磁盘写文件**。标 readOnly 的后果不是
         # 目录审核不过，而是自动放行只读工具的客户端（Claude Code 白名单、Cline auto-approve、
         # VS Code）会在不问用户的情况下落盘。idempotent 仍为真（同参数同产物），openWorld 恒 False。
-        annotations=_ANN_RENDER,
+        annotations=_ANN_REPORT_WRITE,
     )(horosa_technique_report)
 
     # horosa_report_from_run 已下线：与 horosa_report_render 逐行同义（同一 ReportRenderInput
@@ -1265,7 +1273,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
     mcp.tool(
         name="horosa_report_from_tool",
         title="起盘并出报告 / cast + report",
-        annotations=_ANN_CALC,
+        annotations=_ANN_REPORT_FROM_TOOL,
     )(horosa_report_from_tool)
 
     # ------------------------------------------------------------------

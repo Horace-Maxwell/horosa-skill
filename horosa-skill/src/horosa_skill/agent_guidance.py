@@ -387,8 +387,8 @@ ASTRO_BIRTH_POLICY = _policy(
         {
             "field": "hsys",
             "question": "宫制要用哪一种？（索引见上游表：1 是 Alcabitus，不是 Placidus）",
-            "options": ["0 整宫制/Whole Sign（默认推荐）", "3 Placidus", "1 Alcabitus", "2 Regiomontanus", "4 Koch", "其他指定宫制（5–24：Vehlow/Polich Page/Sripati/MC等宫/Porphyry/Campanus/Equal/…/福点整宫制，全表见 options_keys.hsys）"],
-            "values": [0, 3, 1, 2, 4, None],
+            "options": ["1 Alcabitus（缺省 = 星阙 DefaultHouseSystem）", "0 整宫制/Whole Sign", "3 Placidus", "2 Regiomontanus", "4 Koch", "其他指定宫制（5–24：Vehlow/Polich Page/Sripati/MC等宫/Porphyry/Campanus/Equal/…/福点整宫制，全表见 options_keys.hsys）"],
+            "values": [1, 0, 3, 2, 4, None],
         },
         {"field": "zodiacal", "question": "黄道体系要用哪一种？", "options": ["回归黄道（默认推荐）", "恒星黄道（需配 siderealAyanamsa）"], "values": [0, 1]},
         {
@@ -406,7 +406,7 @@ ASTRO_BIRTH_POLICY = _policy(
         {"field": "tradition", "question": "是否需要传统占星扩展项？", "options": ["需要", "不需要/默认"]},
     ],
     safe_defaults=[
-        {"field": "hsys", "value": 0, "meaning": "Whole Sign / 整宫制"},
+        {"field": "hsys", "value": 1, "meaning": "Alcabitus（星阙 DefaultHouseSystem；0 = 整宫制）"},
         {"field": "zodiacal", "value": 0, "meaning": "Tropical / 回归黄道"},
         {"field": "siderealAyanamsa", "value": "lahiri", "meaning": "恒星黄道缺省 Lahiri（仅 zodiacal=1 生效）"},
         {"field": "ad", "value": 1, "meaning": "公历纪年"},
@@ -423,7 +423,7 @@ PREDICTIVE_POLICY = _policy(
         {"field": "technique settings", "question": "是否沿用星阙默认推运设置？", "options": ["沿用默认", "指定主限/释放/返照等参数"]},
     ],
     safe_defaults=[
-        {"field": "hsys", "value": 0, "meaning": "Whole Sign / 整宫制"},
+        {"field": "hsys", "value": 1, "meaning": "Alcabitus（星阙 DefaultHouseSystem；0 = 整宫制）"},
         {"field": "zodiacal", "value": 0, "meaning": "Tropical / 回归黄道"},
     ],
     do_not_assume=["target date/year", "birth time", "timezone"],
@@ -466,7 +466,7 @@ def _progression_target_policy(
             {"field": "technique settings", "question": "是否沿用星阙默认推运设置？", "options": ["沿用默认", "指定参数"]},
         ],
         safe_defaults=[
-            {"field": "hsys", "value": 0, "meaning": "Whole Sign / 整宫制"},
+            {"field": "hsys", "value": 1, "meaning": "Alcabitus（星阙 DefaultHouseSystem；0 = 整宫制）"},
             {"field": "zodiacal", "value": 0, "meaning": "Tropical / 回归黄道"},
             *(extra_defaults or []),
         ],

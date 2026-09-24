@@ -400,3 +400,11 @@ def test_technique_report_is_not_advertised_read_only(tmp_path) -> None:
     ann = tools["horosa_technique_report"].annotations
     assert ann is not None and ann.readOnlyHint is False
     assert ann.openWorldHint is False
+    # v0.40.0 P0：三个报告类工具按 output_path 覆盖磁盘文件（已限定在输出目录 / 白名单根内）→ 如实标 destructive，
+    # 客户端对它们保留确认摩擦；report_from_tool 还会重新起盘 + 新 run → 非幂等。memory_record_answer 只追加，仍非 destructive。
+    for name in ("horosa_report_render", "horosa_technique_report", "horosa_report_from_tool"):
+        a = tools[name].annotations
+        assert a is not None and a.destructiveHint is True and a.readOnlyHint is False, name
+    assert tools["horosa_report_render"].annotations.idempotentHint is True
+    assert tools["horosa_report_from_tool"].annotations.idempotentHint is False
+    assert tools["horosa_memory_record_answer"].annotations.destructiveHint is False

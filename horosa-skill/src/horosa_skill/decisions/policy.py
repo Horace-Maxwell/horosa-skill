@@ -21,6 +21,7 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from horosa_skill.contracts_locator import contract_path
 from typing import Any
 
 MODES = ("off", "shadow", "enforce")
@@ -40,7 +41,7 @@ SURFACE_TAU_DEFAULTS: dict[str, float] = {
     "hecan": 0.70,
     "memory": 0.70,
 }
-THRESHOLDS_PATH = Path(__file__).resolve().parents[3] / "contracts" / "jev_thresholds.json"
+THRESHOLDS_PATH = contract_path("jev_thresholds.json")  # 源码树 / wheel 内副本（contracts_locator，v0.40.0 P1）
 KEY_ENV = "HOROSA_JEV_API_KEY"
 KEY_ENV_FALLBACK = "TYPESAFE_API_KEY"
 

@@ -458,6 +458,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 ## 6. 打包不变量（offline runtime packaging — 每条都咬过人）
 
+- **运行期要读的仓内数据文件必须随 wheel / MCPB 走，代码不许假定源码树布局（v0.40.0 审计 P1）**：`parents[3] / "contracts"` 在 wheel 安装后指向 site-packages 的父目录，Jev enforce 因此在 v0.39.0 出货版里永不生效、技法算源恒「未标注」。三件套：pyproject `force-include` 进包内副本（`horosa_skill/contracts/`）、`horosa_skill/contracts_locator.py` 先源码树后包内副本、`scripts/verify_wheel_contents.REQUIRED_ENTRIES` 锁条目；MCPB 的 `.mcpbignore` 写 `/contracts/*` 再反选文件（父目录整体忽略时反选无效）；Dockerfile 要 COPY force-include 的源路径（`tests/test_dockerfile_matches_wheel_includes.py` 守）。
 - **排除集四处同加，SQLite 日志侧车不是源文件**（v0.35.0）：`*.sqlite-wal/-shm/-journal` 是上游进程打开库
   留下的运行期文件，git 不跟踪、磁盘上有；sync 脚本 RSYNC_FILTERS、`verify_upstream_sync` TREE_EXCLUDE_SUFFIXES、
   `package_runtime_payload.sh` 与 windows/linux builder 的 `rsync_copy` 排除集**必须同时**列出它们——只在
@@ -833,6 +834,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 A global stability pass hardened these; keep them true when you touch the relevant code:
 
+- **报告类工具的 `output_path` 是不可信输入（v0.40.0 审计 P0）。** MCP 工具的调用方是模型，`output_path` 可能来自提示注入。落盘一律经 `HorosaSkillService._report_output_path`：相对路径按输出目录解析，绝对路径必须在输出目录或 `HOROSA_REPORT_OUTPUT_ROOTS` 白名单根内，越界 `report.output_path_not_allowed` 且不写文件；三个报告工具 `destructiveHint=True`。新加任何「按调用方给的路径写文件」的工具，都走这个闸（守卫 `tests/test_report_output_path_guard.py`）。
 - **起与停同源同环境（v0.38.0 A5 真机 lane 首跑抓到）。** 启动器与停脚本的 env 只从 `manager._launcher_env()` 出
   （`HOROSA_SERVER_PORT` / `HOROSA_CHART_PORT` / HOME 族）——上游停脚本按端口命名的 pid 文件找进程，端口不一致 =
   永远停不掉、状态卡 `stop_requested`。守卫 `test_stop_passes_the_same_ports_as_start_to_the_stop_script`；

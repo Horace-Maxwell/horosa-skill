@@ -17,6 +17,7 @@ import statistics
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from horosa_skill.contracts_locator import contract_path
 from typing import Any
 
 from horosa_skill.decisions.questions import Answers, Choice, ChoiceAnswer, Question, parse_answers
@@ -28,7 +29,7 @@ from horosa_skill.decisions.surfaces.zhancat import GENERAL, build_zhan_question
 EVAL_DIR = Path(__file__).resolve().parents[3] / "contracts" / "jev_eval"
 CACHE_PATH = EVAL_DIR / "cache.jsonl"
 REPORT_PATH = EVAL_DIR / "report.json"
-THRESHOLDS_PATH = Path(__file__).resolve().parents[3] / "contracts" / "jev_thresholds.json"
+THRESHOLDS_PATH = contract_path("jev_thresholds.json")  # 源码树 / wheel 内副本（contracts_locator，v0.40.0 P1）
 SURFACES = ("routing", "extract", "zhancat")
 # 面名 → 线上 policy 面名（routing 面在 policy 里叫 dispatch）。
 POLICY_SURFACE = {"routing": "dispatch", "extract": "extract", "zhancat": "zhancat"}
