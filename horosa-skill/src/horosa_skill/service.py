@@ -9141,10 +9141,33 @@ class HorosaSkillService:
             "export_snapshot": self._augment_export_payload(technique="heluo", snapshot_text=snapshot_text),
         }
 
-    def _run_acg_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
-        # 占星地图（AstroCartoGraphy）：行星地理投影线。地图渲染属 UI，无头输出为结构化线表 ——
-        # 每星 MC/IC 恒定经度、天顶点（星正当头顶的地表点）、超界标记，另附偕升纬度带与线交点摘要。
-        remote_payload = {
+    # ── 占星地图（AstroCartoGraphy）请求口径：上游 AstroAcg.genParams（AstroAcg.js:348-372）逐键 ──────────────
+    # 引擎口径键（ACGraph.__init__ 按名读，ACGraph.py:239-340）：缺省即后端默认、零回归；给了才下发。
+    _ACG_ENGINE_KEYS = (
+        "mode", "lsMode", "geodetic", "geodeticVar", "geodeticZero", "cuspLines", "coord", "posType", "horizon",
+        "nodeType", "lilithType", "draconic", "harmonic", "vibration", "midpointMode", "lotsCustom", "asteroids",
+        "ayanamsa", "stars",
+    )
+    # 上游这几键以字符串 '1'/'0' 下发（genParams 里 `x ? '1' : '0'`）；后端按字符串集合判真。
+    _ACG_FLAG_KEYS = ("cuspLines", "vibration", "asteroids", "stars")
+    # CCG 时间地图（只在给了 ccgDate 才下发，:356-360）与关系盘（relMode + relDate 都有才下发，:361-368）。
+    _ACG_CCG_KEYS = ("ccgDate", "ccgTime", "ccgMix")
+    _ACG_REL_KEYS = ("relMode", "relDate", "relTime", "relZone", "relLat", "relLon")
+    # 快照图层开关（纯渲染；进 uiState 决定 [占星地图] 的 ◆ 子块，AstroAcg.js:277-287）。
+    _ACG_LAYER_KEYS = ("paranMode", "showLS", "showGeodetic", "showStarParans")
+    # 后端回显 meta 的有效值：请求值与之不符 = 后端不认、按缺省算了（ACGraph 静默归一）→ 说出来。
+    _ACG_META_ECHO = ("mode", "lsMode", "geodetic", "geodeticVar", "coord", "posType", "horizon", "nodeType", "lilithType", "midpointMode", "relMode")
+    _ACG_ONLY_KEYS = frozenset({
+        *_ACG_ENGINE_KEYS, *_ACG_CCG_KEYS, *_ACG_REL_KEYS, *_ACG_LAYER_KEYS,
+        "clickLat", "clickLon", "pointOrb", "pointHsys", "eventKind", "eventDirection", "eventFromDate",
+    })
+
+    @staticmethod
+    def _acg_flag(value: Any) -> str:
+        return "1" if value in (True, 1, "1", "true", "True", "yes", "on") else "0"
+
+    def _acg_remote_params(self, payload: dict[str, Any], ccg: dict[str, Any] | None) -> dict[str, Any]:
+        remote: dict[str, Any] = {
             "date": payload["date"],
             "time": payload["time"],
             "zone": payload["zone"],
@@ -9155,9 +9178,30 @@ class HorosaSkillService:
             "lsMode": payload.get("lsMode", "great"),
             "geodetic": payload.get("geodetic", "sepharial"),
             "geodeticVar": payload.get("geodeticVar", "longitude"),
+            # 上游 genParams 恒带 hsys = 页面「落点宫制」（缺省 placidus，AstroAcg.js:130/184）：宫尖线与落点报告同用。
+            "hsys": payload.get("pointHsys") or "placidus",
         }
-        response = self._call_remote("/location/acg", remote_payload)
+        for key in self._ACG_ENGINE_KEYS:
+            value = payload.get(key)
+            if value is None or value == "" or key in remote:
+                continue
+            remote[key] = self._acg_flag(value) if key in self._ACG_FLAG_KEYS else (f"{value}" if key == "harmonic" else value)
+        if ccg:
+            remote.update(ccg)
+        if payload.get("relMode") and payload.get("relDate"):
+            remote["relMode"] = payload.get("relMode")
+            remote["relDate"] = f"{payload.get('relDate')}".replace("-", "/")
+            remote["relTime"] = payload.get("relTime") or "12:00:00"
+            for key in ("relZone", "relLat", "relLon"):
+                if payload.get(key) not in (None, ""):
+                    remote[key] = payload.get(key)
+        elif payload.get("relMode") or payload.get("relDate"):
+            _degrade("acg: relMode/relDate given alone", note="占星地图关系盘须同时给 relMode（davison/composite/synastry）与 relDate（B 盘出生日期），缺一不下发（上游同口径）。")
+        return remote
 
+    def _run_acg_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 占星地图（AstroCartoGraphy）：行星地理投影线。地图渲染属 UI，无头输出为上游 [占星地图] 段（vendored
+        # acgSnapshot.buildAcgSectionText）+ 本仓明细段（偕升纬度带/线交点/落点分析/事件时刻）。
         def geo_lon(value: Any) -> str:
             try:
                 lon = ((float(value) + 180.0) % 360.0) - 180.0
@@ -9166,63 +9210,104 @@ class HorosaSkillService:
             hemi = "E" if lon >= 0 else "W"
             return f"{abs(lon):.2f}°{hemi}"
 
+        # [事件时刻]（/location/acgevent）先求：上游「世运事件快捷」（AstroAcg.pickMundane :386-404）把事件精确时刻填进
+        # CCG 全行运通道重请求地图（事件时刻角化线）；zone 随本命时区下发（T-49：回本命时区钟面，不带则回 UT）。
+        event: dict[str, Any] | None = None
+        if payload.get("eventKind"):
+            event_remote = {
+                "kind": payload.get("eventKind"),
+                "direction": payload.get("eventDirection") or "next",
+                "fromDate": (payload.get("eventFromDate") or payload.get("date") or "").replace("-", "/"),
+                "zone": payload.get("zone"),
+            }
+            event = self._call_remote("/location/acgevent", event_remote)
+            if not isinstance(event, dict) or not event.get("date"):
+                raise ToolTransportError(
+                    "世运事件端点未找到该事件。",
+                    code="tool.acg_event_failed",
+                    details={"endpoint": "/location/acgevent", "kind": payload.get("eventKind"), "response": event if isinstance(event, dict) else None},
+                )
+        ccg: dict[str, Any] | None = None
+        if payload.get("ccgDate"):
+            ccg = {
+                "ccgDate": f"{payload.get('ccgDate')}".replace("-", "/"),
+                "ccgTime": payload.get("ccgTime") or "12:00:00",
+                "ccgMix": payload.get("ccgMix") or "mixed",
+            }
+        elif event is not None:
+            ccg = {"ccgDate": event.get("date"), "ccgTime": event.get("time") or "12:00:00", "ccgMix": payload.get("ccgMix") or "transit"}
+        remote_payload = self._acg_remote_params(payload, ccg)
+        response = self._call_remote("/location/acg", remote_payload)
         meta = response.get("meta") if isinstance(response.get("meta"), dict) else {}
-        planets = response.get("planets") if isinstance(response.get("planets"), dict) else {}
-        info_lines = [
-            f"出生：{payload.get('date')} {payload.get('time')}（{payload.get('zone')}）　经度 {payload.get('lon')} 纬度 {payload.get('lat')}",
-            f"口径：mode={meta.get('mode', remote_payload['mode'])}（mundo=真黄纬本体/zodiac=黄道度）　"
-            f"lsMode={meta.get('lsMode', remote_payload['lsMode'])}（great=大圆/rhumb=等角航线）　"
-            f"geodetic={meta.get('geodetic', remote_payload['geodetic'])}·{meta.get('geodeticVar', remote_payload['geodeticVar'])}",
-            "说明：MC/IC 线为恒定地理经度的南北直线；ASC/DESC 为曲线（此处给天顶点与直线经度，曲线逐点属地图渲染层）。",
-        ]
-        line_rows = ["| 星体 | MC线经度 | IC线经度 | 天顶点(纬,经) | 超界 |", "| --- | --- | --- | --- | --- |"]
-        # 直接遍历后端返回的行星（保序=源 objlists：七政+外三+北南交+凯龙+暗月+紫炁，共 15），
-        # 不硬编码列表 → 自动含全部天体且随后端增减免漂移。
-        for pid, pd in planets.items():
-            if not isinstance(pd, dict):
+        for key in self._ACG_META_ECHO:
+            asked = payload.get(key)
+            if asked in (None, "") or key not in meta:
                 continue
-            lines = pd.get("lines") if isinstance(pd.get("lines"), dict) else {}
-            mc = lines.get("mc") if isinstance(lines.get("mc"), dict) else {}
-            ic = lines.get("ic") if isinstance(lines.get("ic"), dict) else {}
-            zen = pd.get("zenith") if isinstance(pd.get("zenith"), dict) else {}
-            zen_txt = "—"
-            if zen.get("lat") is not None and zen.get("lon") is not None:
-                try:
-                    zen_txt = f"{float(zen['lat']):.2f}°, {geo_lon(zen['lon'])}"
-                except (TypeError, ValueError):
-                    zen_txt = "—"
-            line_rows.append(
-                f"| {_astro_msg(pid, short=True)} | {geo_lon(mc.get('lon'))} | {geo_lon(ic.get('lon'))} | {zen_txt} | {'是' if pd.get('oob') else '—'} |"
-            )
+            effective = meta.get(key)
+            if f"{asked}".lower() != f"{effective}".lower():
+                _degrade(
+                    "acg: %s=%r not accepted by engine (effective %r)", key, asked, effective,
+                    note=f"占星地图 {key}={asked!r} 引擎不认，已按 {effective!r} 计算（ACGraph 值域见 horosa_agent_guidance）。",
+                )
+        planets = response.get("planets") if isinstance(response.get("planets"), dict) else {}
         # 上游 locastro 是**辅盘 tab**：导出走 extractAstroContent（与 astrochart 逐字同一套本命盘段），
-        # 再把地图段拼在尾巴上。此前本仓只出线表 4 段，13 个盘段整体缺席。这里补拉一次 /chart 并复用
-        # 通用盘面渲染器；失败只是盘段不出，线表照常。
+        # 再把地图段拼在尾巴上。这里补拉一次 /chart 并复用通用盘面渲染器；失败只是盘段不出，地图段照常。
+        # 本命盘的口径 = 页面同一套 fields（黄道/岁差/宫制/古典全局键），不是只有经纬时区（此前只传 7 键）。
         chart_body = ""
         try:
-            chart_payload = {
-                "date": payload["date"],
-                "time": payload["time"],
-                "zone": payload["zone"],
-                "lat": payload["lat"],
-                "lon": payload["lon"],
-                "gpsLat": payload.get("gpsLat"),
-                "gpsLon": payload.get("gpsLon"),
-                "ad": payload.get("ad", 1),
-                "hsys": payload.get("hsys"),
-                "predictive": 0,
-            }
+            chart_payload = {k: v for k, v in payload.items() if k not in self._ACG_ONLY_KEYS}
+            chart_payload["predictive"] = 0
             chart_response = self._call_remote("/chart", {k: v for k, v in chart_payload.items() if v is not None})
             if _is_astro_chart_payload(chart_response):
                 chart_response = self._attach_natal_extras("chart", chart_response)
                 chart_response = self._attach_classical_analysis("chart", chart_payload, chart_response)
                 chart_body = _build_astro_snapshot_text(chart_payload, chart_response)
-        except Exception as exc:  # noqa: BLE001 — 盘面富化失败不许带崩线表
+        except Exception as exc:  # noqa: BLE001 — 盘面富化失败不许带崩地图段
             _degrade("acg natal chart fetch failed: %s", exc)
-        # 上游把地图内容收在单段 [占星地图]（口径 + 线表）；偕升纬度带/线交点是本仓相对上游的 extra。
-        sections: list[tuple[str, str]] = [
-            ("占星地图", "\n".join(info_lines + [""] + line_rows) if len(line_rows) > 2 else "\n".join(info_lines)),
-        ]
-        parans = response.get("parans") if isinstance(response.get("parans"), list) else []
+        acg_data: dict[str, Any] = {
+            "meta": meta,
+            "planets": planets,
+            "parans": response.get("parans") if isinstance(response.get("parans"), list) else [],
+            "crossings": response.get("crossings") if isinstance(response.get("crossings"), list) else [],
+        }
+        # [落点分析]（/location/acgpoint）：上游 onMapClick = { ...genParams(), clickLat, clickLon, orb, hsys }（:337）。
+        point: dict[str, Any] | None = None
+        if payload.get("clickLat") is not None and payload.get("clickLon") is not None:
+            point_remote = {
+                **remote_payload,
+                "clickLat": payload.get("clickLat"),
+                "clickLon": payload.get("clickLon"),
+                "orb": payload.get("pointOrb") if payload.get("pointOrb") is not None else 2,
+            }
+            point = self._call_remote("/location/acgpoint", point_remote)
+            if not isinstance(point, dict) or not isinstance(point.get("relocAngles"), dict):
+                raise ToolTransportError(
+                    "落点分析端点返回了意外形状。",
+                    code="tool.acg_point_failed",
+                    details={"endpoint": "/location/acgpoint"},
+                )
+            acg_data["point"] = point
+        # [占星地图]：上游 buildAcgSectionText（vendored 逐字；JS acg_section）。uiState 与页面 snapshotUiState 同形。
+        ui_state = {
+            "pointReport": point,
+            "paranMode": payload.get("paranMode") or "off",
+            "showStarParans": self._acg_flag(payload.get("stars")) == "1" and self._acg_flag(payload.get("showStarParans")) == "1",
+            "showLS": self._acg_flag(payload.get("showLS")) == "1",
+            "showGeodetic": self._acg_flag(payload.get("showGeodetic")) == "1",
+            "geodeticZero": f"{payload.get('geodeticZero') if payload.get('geodeticZero') is not None else ''}",
+        }
+        map_text = ""
+        try:
+            js = self.js_client.run("acg_section", {"acgData": response, "uiState": ui_state})
+            map_text = f"{(js or {}).get('text') or ''}".strip()
+        except Exception as exc:  # noqa: BLE001 — 段 builder 失败：地图段缺席并说出来
+            _degrade("acg section build failed: %s", exc, note=f"占星地图 [占星地图] 段本次未产出（JS 段 builder 失败：{exc}），其余段不受影响。")
+        # 上游段头是全角 `【占星地图】`（aiExport 的段名解析两种括号等价）；本仓统一以 `[X]` 渲染，正文逐字。
+        map_body = map_text.split("\n", 1)[1] if map_text.startswith("【占星地图】\n") else map_text
+        sections: list[tuple[str, str]] = []
+        if map_body.strip():
+            sections.append(("占星地图", map_body.strip()))
+        parans = acg_data["parans"]
         if parans:
             rows = [f"偕升纬度带（同纬度两星同时临角，前 {min(len(parans), 40)}/{len(parans)} 条）："]
             for item in parans[:40]:
@@ -9232,7 +9317,7 @@ class HorosaSkillService:
                         f"{_astro_msg(item.get('b'), short=True)}·{item.get('bEvent')}（{item.get('type')}）"
                     )
             sections.append(("偕升纬度带", "\n".join(rows)))
-        crossings = response.get("crossings") if isinstance(response.get("crossings"), list) else []
+        crossings = acg_data["crossings"]
         if crossings:
             rows = [f"线交点（一星临 MC/IC 直线 × 一星临 ASC/DESC 曲线，前 {min(len(crossings), 40)}/{len(crossings)} 处）："]
             for item in crossings[:40]:
@@ -9246,31 +9331,7 @@ class HorosaSkillService:
                     lat_txt = f"{float(lat_v):.2f}°" if isinstance(lat_v, (int, float)) else "—"
                     rows.append(f"{a}·{a_ang} × {b}·{b_ang}：纬 {lat_txt}，经 {geo_lon(lon_v)}")
             sections.append(("线交点", "\n".join(rows)))
-        acg_data: dict[str, Any] = {
-            "meta": meta,
-            "planets": planets,
-            "parans": parans,
-            "crossings": crossings,
-        }
-        # [落点分析]（v0.33.0 批 I-4，/location/acgpoint）：给 clickLat/clickLon 才产（条件段）。
-        if payload.get("clickLat") is not None and payload.get("clickLon") is not None:
-            point_remote = {
-                **{k: payload.get(k) for k in ("date", "time", "zone", "lat", "lon", "gpsLat", "gpsLon", "ad", "mode", "lsMode") if payload.get(k) is not None},
-                "clickLat": payload.get("clickLat"),
-                "clickLon": payload.get("clickLon"),
-            }
-            if payload.get("pointOrb") is not None:
-                point_remote["orb"] = payload.get("pointOrb")
-            if payload.get("pointHsys") is not None:
-                point_remote["hsys"] = payload.get("pointHsys")
-            point = self._call_remote("/location/acgpoint", point_remote)
-            if not isinstance(point, dict) or not isinstance(point.get("relocAngles"), dict):
-                raise ToolTransportError(
-                    "落点分析端点返回了意外形状。",
-                    code="tool.acg_point_failed",
-                    details={"endpoint": "/location/acgpoint"},
-                )
-            acg_data["point"] = point
+        if point is not None:
             point_lines = [
                 f"落点：纬 {point.get('lat')}°，经 {geo_lon(point.get('lon'))}　容许度 {_round3(point.get('orb'))}°　"
                 f"重置盘分宫制 {point.get('hsys')}",
@@ -9302,29 +9363,20 @@ class HorosaSkillService:
                     )
                 )
             sections.append(("落点分析", "\n".join(point_lines)))
-        # [事件时刻]（/location/acgevent）：给 eventKind 才产（CCG 事件线的 UTC 时刻）。
-        if payload.get("eventKind"):
-            event_remote = {
-                "kind": payload.get("eventKind"),
-                "direction": payload.get("eventDirection") or "next",
-                "fromDate": (payload.get("eventFromDate") or payload.get("date") or "").replace("-", "/"),
-            }
-            event = self._call_remote("/location/acgevent", event_remote)
-            if not isinstance(event, dict) or not event.get("date"):
-                raise ToolTransportError(
-                    "世运事件端点未找到该事件。",
-                    code="tool.acg_event_failed",
-                    details={"endpoint": "/location/acgevent", "kind": payload.get("eventKind"), "response": event if isinstance(event, dict) else None},
-                )
+        if event is not None:
             acg_data["event"] = event
             kind_cn = {
                 "solar_eclipse": "日食", "lunar_eclipse": "月食", "newmoon": "新月", "fullmoon": "满月",
                 "aries_ingress": "白羊入境（春分）", "cancer_ingress": "巨蟹入境（夏至）",
                 "libra_ingress": "天秤入境（秋分）", "capricorn_ingress": "摩羯入境（冬至）",
             }.get(str(event.get("kind")), str(event.get("kind")))
+            zone_text = event.get("zone") or "+00:00"
+            # 时刻按请求时区的钟面回（后端带回 zone；没带 zone 的旧后端 = UT）。
+            zone_label = "UTC" if zone_text in ("+00:00", "0", 0) else f"{zone_text}"
+            ccg_note = "；已填入 CCG 全行运通道（事件时刻角化线见 [占星地图]）" if ccg and not payload.get("ccgDate") else ""
             sections.append((
                 "事件时刻",
-                f"{kind_cn}（{payload.get('eventDirection') or 'next'}）：{event.get('date')} {event.get('time')} UTC",
+                f"{kind_cn}（{payload.get('eventDirection') or 'next'}）：{event.get('date')} {event.get('time')} {zone_label}{ccg_note}",
             ))
         # 段序对齐上游：本命盘段在前、[占星地图] 及其明细在后。
         snapshot_text = _render_snapshot_text(sections)

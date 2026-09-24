@@ -1017,7 +1017,7 @@ class ACGInput(BirthInput):
     clickLat: float | None = Field(default=None, description="落点纬度（十进制；给了 clickLat+clickLon 才产 [落点分析] 段：该地命中线/重置四角/敏感点）")
     clickLon: float | None = Field(default=None, description="落点经度（十进制，西经为负）")
     pointOrb: float | None = Field(default=None, description="落点命中容许度（度，缺省 2.0）")
-    pointHsys: str | None = Field(default=None, description="落点重置盘分宫制（缺省 whole）")
+    pointHsys: str | None = Field(default=None, description="落点/宫尖线宫制（缺省 placidus）")
     # 事件时刻（/location/acgevent）：给 eventKind 时加产 [事件时刻] 段（CCG 事件线时刻）。
     eventKind: str | None = Field(
         default=None,
@@ -1028,6 +1028,42 @@ class ACGInput(BirthInput):
     )
     eventDirection: str | None = Field(default=None, description="事件查找方向：next（缺省）|prev")
     eventFromDate: str | None = Field(default=None, description="事件查找起点日期 YYYY-MM-DD（缺省取盘面日期）")
+    # 上游 AstroAcg.genParams（AstroAcg.js:348-372）的其余引擎口径 + CCG + 关系盘 + 快照图层：照常声明（校验 + MCP
+    # 扁平面收顶层键），不进 tools/list 广告层（预算）；值域见 agent_guidance，后端认不出的值经 meta 回显比对后告警。
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({
+        "geodeticZero", "cuspLines", "coord", "posType", "horizon", "nodeType", "lilithType", "draconic", "harmonic",
+        "vibration", "midpointMode", "lotsCustom", "asteroids", "ayanamsa", "stars", "ccgDate", "ccgTime", "ccgMix",
+        "relMode", "relDate", "relTime", "relZone", "relLat", "relLon", "paranMode", "showLS", "showGeodetic",
+        "showStarParans",
+    })
+    geodeticZero: float | None = Field(default=None, description="地理等价 0°♈ 子午线（东经度；缺省流派默认）。")
+    cuspLines: bool | None = Field(default=None, description="十二宫尖线（opt-in，按 pointHsys 宫制）。")
+    coord: str | None = Field(default=None, description="坐标系：geo（缺省）| helio | topo。")
+    posType: str | None = Field(default=None, description="位置类型：apparent（缺省）| true | j2000。")
+    horizon: str | None = Field(default=None, description="地平：geometric（缺省）| apparent（折射）。")
+    nodeType: str | None = Field(default=None, description="交点：mean（缺省）| true。")
+    lilithType: str | None = Field(default=None, description="Lilith：mean（缺省）| true | intp | body。")
+    draconic: str | None = Field(default=None, description="龙黄道：off（缺省）| mean | true。")
+    harmonic: int | None = Field(default=None, description="谐波 H（1=关，缺省）。")
+    vibration: bool | None = Field(default=None, description="Cochrane 5/7/9 振动线。")
+    midpointMode: str | None = Field(default=None, description="中点线：zodiac（缺省）| mundo。")
+    lotsCustom: str | None = Field(default=None, description="自定义阿拉伯点 'A,B,C[,sect]'。")
+    asteroids: bool | None = Field(default=None, description="含小行星（Ceres/Pallas/Juno/Vesta/Eris）。")
+    ayanamsa: str | None = Field(default=None, description="恒星黄道读数（47 制键；缺省回归）。")
+    stars: bool | None = Field(default=None, description="固定星线（opt-in）。")
+    ccgDate: str | None = Field(default=None, description="CCG 时间地图日期 YYYY-MM-DD（给了才画）。")
+    ccgTime: str | None = Field(default=None, description="CCG 时刻（缺省 12:00:00）。")
+    ccgMix: str | None = Field(default=None, description="CCG 口径：mixed（缺省）| transit | progressed。")
+    relMode: str | None = Field(default=None, description="关系盘：davison | composite | synastry（须配 relDate）。")
+    relDate: str | None = Field(default=None, description="B 盘出生日期 YYYY-MM-DD。")
+    relTime: str | None = Field(default=None, description="B 盘出生时间（缺省 12:00:00）。")
+    relZone: str | None = Field(default=None, description="B 盘时区（缺省随 A 盘）。")
+    relLat: str | None = Field(default=None, description="B 盘纬度（缺省同 A 地）。")
+    relLon: str | None = Field(default=None, description="B 盘经度（缺省同 A 地）。")
+    paranMode: str | None = Field(default=None, description="快照交映子块：off（缺省）| lum | all。")
+    showLS: bool | None = Field(default=None, description="快照含本地空间线子块。")
+    showGeodetic: bool | None = Field(default=None, description="快照含地理等价线子块。")
+    showStarParans: bool | None = Field(default=None, description="快照含固定星交映（须 stars）。")
 
 
 class BaziInverseInput(FlexibleModel):

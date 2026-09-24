@@ -437,3 +437,95 @@ def test_india_school_presets_mirror_the_vendored_table() -> None:
     )
     out = subprocess.run(["node", "-e", script], cwd=core, capture_output=True, text=True, check=True).stdout
     assert {k: tuple(v) for k, v in json.loads(out).items()} == _INDIA_SCHOOL_PRESETS
+
+
+# ─────────────────────────── F4 占星地图：引擎口径 / CCG / 图层 / 事件时区 ───────────────────────────
+
+ACG_BIRTH = {"date": "1990-06-15", "time": "08:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28",
+             "agent_confirmed_settings": True}
+
+
+def _acg_response(payload: dict) -> dict:
+    """后端 ACGraph.compute 的形状：meta 回显**归一后的**有效口径（ACGraph.py:239-340 值域外回缺省），两星角化线 + 本地空间
+    方位（lines.lsAz）+ 一条日月交映；给了 ccgDate 才有 ccg 块（:354-360）。"""
+    def norm(key, allowed, default):
+        v = f"{payload.get(key, default)}".lower()
+        return v if v in allowed else default
+
+    def planet(mc, az, alt):
+        return {"lines": {"mc": {"lon": mc}, "ic": {"lon": mc - 180}, "asc": [], "desc": [], "lsAz": {"az": az, "alt": alt}},
+                "zenith": {"lat": 1.0, "lon": mc}, "oob": False}
+
+    harmonic = int(float(payload.get("harmonic") or 1))
+    draconic = norm("draconic", ("off", "mean", "true"), "off")
+    resp = {
+        "meta": {
+            "mode": norm("mode", ("mundo", "zodiac"), "mundo"), "lsMode": norm("lsMode", ("great", "rhumb"), "great"),
+            "geodetic": "sepharial", "geodeticVar": "longitude", "coord": norm("coord", ("geo", "helio", "topo"), "geo"),
+            "posType": "apparent", "horizon": "geometric", "nodeType": "mean", "lilithType": "mean", "asteroids": False,
+            "draconic": None if draconic == "off" else draconic, "harmonic": harmonic if harmonic > 1 else None,
+            "vibration": None, "ayanamsa": None, "ayanLabel": None, "ayanVal": None, "relMode": None, "davison": None,
+        },
+        "planets": {"Sun": planet(120.5, 247.2, 6.9), "Moon": planet(30.0, 63.3, -18.8)},
+        "parans": [{"lat": 42.5, "a": "Sun", "aEvent": "mc", "b": "Moon", "bEvent": "rise", "type": "RSCA"}],
+        "crossings": [],
+    }
+    if payload.get("ccgDate"):
+        resp["ccg"] = {"date": payload["ccgDate"], "time": payload.get("ccgTime"), "mix": payload.get("ccgMix"),
+                       "planets": {"Sun": {"kind": "transit", "lon": 119.0718, "lines": {"mc": {"lon": -149.32}}}}}
+    return resp
+
+
+def _acg_client() -> RecordingClient:
+    return RecordingClient(routes={
+        "/location/acg": _acg_response,
+        # T-49：带 zone 则回该时区钟面并回显 zone（webacgsrv.acgevent）。
+        "/location/acgevent": lambda p: {"kind": p.get("kind"), "jd": 2448094.625, "date": "1990/07/22",
+                                         "time": "11:02:12", "zone": p.get("zone") or "+00:00"},
+    })
+
+
+def test_acg_forwards_engine_keys_and_uses_the_upstream_map_section(tmp_path: Path) -> None:
+    """上游 AstroAcg.genParams（AstroAcg.js:348-372）逐键下发；落点宫制缺省 placidus（:130/184，此前后端缺省 whole）；
+    [占星地图] = vendored buildAcgSectionText（acgSnapshot.js:77-190，口径头行读后端 meta）。本命盘带页面同一套
+    fields（黄道/岁差/古典键）。负向对照：旧 runner 只白名单 4 个地图键、本命盘只传 7 键、[占星地图] 是本仓自拟表。"""
+    client = _acg_client()
+    service = _service(tmp_path, client)
+    result = service.run_tool("acg", {**ACG_BIRTH, "coord": "topo", "draconic": "true", "harmonic": 5, "cuspLines": True,
+                                      "stars": False, "zodiacal": 1, "siderealAyanamsa": "raman", "cazimiOrb": 1},
+                              save_result=False)
+    assert result.ok, result.error
+    sent = client.bodies("/location/acg")[0]
+    assert (sent["coord"], sent["draconic"], sent["harmonic"], sent["cuspLines"], sent["stars"], sent["hsys"]) == (
+        "topo", "true", "5", "1", "0", "placidus")
+    natal = client.bodies("/chart")[0]
+    assert (natal["zodiacal"], natal["siderealAyanamsa"], natal["cazimiOrb"]) == (1, "raman", 1)
+    assert "coord" not in natal and "harmonic" not in natal
+    body = _section(result.data["snapshot_text"], "占星地图")
+    assert body.startswith("口径 本体(in-mundo·真黄纬) · 坐标系 站心 · 龙黄道 真交点 · 谐波 H5\n主要行星角化线")
+    assert "- 太阳:MC 120.50°E / IC 59.50°W / ASC — / DSC —" in body
+
+
+def test_acg_event_feeds_ccg_with_zone_and_layers_reach_the_snapshot(tmp_path: Path) -> None:
+    """世运事件 → CCG 全行运（pickMundane AstroAcg.js:386-404，zone 随本命时区 T-49）；快照图层 paranMode / showLS
+    （snapshotUiState :277-287 → acgSnapshot.js ◆ 子块）；后端不认的口径值经 meta 回显比对告警（不静默）。"""
+    client = _acg_client()
+    service = _service(tmp_path, client)
+    result = service.run_tool("acg", {**ACG_BIRTH, "eventKind": "solar_eclipse", "paranMode": "lum", "showLS": True,
+                                      "coord": "bogus"}, save_result=False)
+    assert result.ok, result.error
+    assert client.bodies("/location/acgevent")[0]["zone"] == "+08:00"
+    sent = client.bodies("/location/acg")[0]
+    assert (sent["ccgDate"], sent["ccgTime"], sent["ccgMix"]) == ("1990/07/22", "11:02:12", "transit")
+    text = result.data["snapshot_text"]
+    body = _section(text, "占星地图")
+    assert "CCG 时间地图(1990/07/22 11:02:12 · 全行运):\n- 行运太阳:MC 149.32°W(黄经 119.0718°)" in body
+    assert "◆ 本地空间线(画法 大圆;" in body and "| 太阳 | 247.2° | 6.9° |" in body
+    assert "◆ 行星交映(仅日月对,同图 1° 去重,共 1 条纬线):" in body and "| 太阳 | 中天 | 月亮 | 升 | 42.50°N |" in body
+    assert _section(text, "事件时刻").startswith("日食（next）：1990/07/22 11:02:12 +08:00；已填入 CCG 全行运通道")
+    assert any("coord='bogus'" in w for w in result.warnings), result.warnings
+
+    client.calls.clear()
+    service.run_tool("acg", {**ACG_BIRTH, "clickLat": 39.9, "clickLon": 116.4}, save_result=False)
+    point = client.bodies("/location/acgpoint")[0]
+    assert point["hsys"] == "placidus" and point["mode"] == "mundo" and point["orb"] == 2

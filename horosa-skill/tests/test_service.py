@@ -1141,6 +1141,16 @@ class FakeJsClient(HorosaJsEngineClient):
             if technique in _PROGEXTRA_FAKE:
                 return {"tool": "progextra", "technique": technique, "data": {"ok": True}, "snapshot_text": _PROGEXTRA_FAKE[technique]}
             return {"tool": "progextra", "technique": technique, "data": {"ok": False}, "snapshot_text": ""}
+        if tool_name == "acg_section":
+            # 形状同真工具 tools/acgSection.js（vendored acgSnapshot.buildAcgSectionText）；正文 = 真 builder 在本桩
+            # /location/acg 两星数据上的逐字输出（值级真相由 tests/test_sync311_western.py 的真 JS 用例守）。
+            planets = ((payload.get("acgData") or {}).get("planets") or {})
+            if not planets:
+                return {"text": ""}
+            return {"text": (
+                "【占星地图】\n口径 本体(in-mundo·真黄纬) · 坐标系 地心\n主要行星角化线(中天/天底=经线;上升/下降取赤道附近代表点):\n"
+                "- 太阳:MC 120.50°E / IC 59.50°W / ASC — / DSC —\n- 月亮:MC 30.00°E / IC 150.00°W / ASC — / DSC —"
+            )}
         if tool_name == "horary" and payload.get("action") == "backend_fields":
             # 形状同真工具 tools/horary.js action=backend_fields；值 = 上游 horarySchools.js classical 档经
             # horaryBackendFields（hsys 2 Regiomontanus / 托勒密界经典传本 / 七政 / 福点不反转 / Ptolemy 三分集）。

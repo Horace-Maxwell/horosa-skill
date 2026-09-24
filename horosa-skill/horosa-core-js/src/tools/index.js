@@ -42,6 +42,7 @@ import { runQimenZeri } from './qimenzeri.js';
 import { runZeriScan, runZeriScanRemote } from './zeriScan.js';
 import { runTianxing } from './tianxing.js';
 import { runQizhengElection } from './qizhengElection.js';
+import { runAcgSection } from './acgSection.js';
 
 const TOOL_RUNNERS = {
   uranian_extra: runUranianExtra,
@@ -68,6 +69,7 @@ const TOOL_RUNNERS = {
   tianxing: runTianxing,
   qizhengelection: runQizhengElection,
   india_jyotish: runIndiaJyotish,
+  acg_section: runAcgSection,
   qimen: runQimen,
   taiyi: runTaiyi,
   jinkou: runJinkou,
