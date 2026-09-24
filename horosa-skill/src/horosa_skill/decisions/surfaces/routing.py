@@ -24,7 +24,7 @@ FAMILIES: dict[str, tuple[str, tuple[str, ...]]] = {
     ),
     "western_predictive": (
         "Western predictive techniques：返照、次限/太阳弧/主限法、黄道释放、法达、小限、年限、推运释放点、行星年龄等",
-        ("agepoint", "balbillus", "decennials", "distributions", "extrareturns", "firdaria", "givenyear", "jaynesprog", "keypoints", "lunarreturn", "lunationphase", "pd", "pdchart", "persiandirected", "planetaryages", "planetaryarc", "profection", "solararc", "solarreturn", "triplicityrulers", "vedicprog", "yearsystem129", "zr"),
+        ("agepoint", "balbillus", "decennials", "distributions", "ephemeris", "extrareturns", "firdaria", "givenyear", "jaynesprog", "keypoints", "lunarreturn", "lunationphase", "pd", "pdchart", "persiandirected", "planetaryages", "planetaryarc", "prenatalsyzygy", "profection", "prog", "returntimeline", "solararc", "solarreturn", "triplicityrulers", "vedicprog", "yearsystem129", "zr"),
     ),
     "horary_election_western": (
         "Western horary and electional astrology：卜卦占星问事、择日评估、天星征象搜索、七政择日动盘",

@@ -34,6 +34,16 @@ from horosa_skill.engine.decennials import (
     DECENNIAL_START_MODE_SECT_LIGHT,
     build_decennial_timeline,
 )
+from horosa_skill.engine.astroextra_snapshots import (
+    DEFAULT_MINOR_VARIANT,
+    MINOR_VARIANT_LABEL,
+    PROG_SNAPSHOT_VARIANTS,
+    build_ephemeris_snapshot_text,
+    build_prenatal_syzygy_snapshot_text,
+    build_prog_snapshot_text,
+    build_return_timeline_snapshot_text,
+    split_syzygy_datetime,
+)
 from horosa_skill.engine.js_client import HorosaJsEngineClient
 from horosa_skill.engine.registry import TOOL_DEFINITIONS, ToolDefinition
 from horosa_skill.engine.router import select_tools
@@ -249,6 +259,11 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "distributions": "distributions",
     "jaynesprog": "jaynesprog",
     "vedicprog": "vedicprog",
+    # 上游 v3.11 星运四键（[Q-106/T-10] 三页 + [#80] 回归黄道二次推运）：工具名与导出技法键同名。
+    "ephemeris": "ephemeris",
+    "returntimeline": "returntimeline",
+    "prenatalsyzygy": "prenatalsyzygy",
+    "prog": "prog",
     "planetaryarc": "planetaryarc",
     "planetaryages": "planetaryages",
     "balbillus": "balbillus",
@@ -1149,6 +1164,19 @@ _PREDICTIVE_METHOD_NOTES: dict[str, list[str]] = {
         "年龄推进点：心理占星年龄点每宫约 6 年匀速推进,逐宫走完十二宫。",
         "读法：落宫定人生课题场域,与本命星的合相/相位标记该年龄的关键事件与心理主题。",
     ],
+    # [Q-106/T-10] 星运三页上线（上游 astroAiSnapshot.js:2045-2057 逐字；ASCII 逗号/分号亦照抄）
+    "ephemeris": [
+        "星历：以本命盘地点与时区列出区间内行星入座、留与顺逆转向、朔望弦与食相,并按容许度筛出行运触发本命点的时刻。",
+        "读法：入座换宫定阶段主题,留点前后事件易停滞反复,食相落宫标重大转折;行运触发行只列精确时刻,结合本命点性质判吉凶。",
+    ],
+    "returntimeline": [
+        "回归轴：逐年列太阳返照(太阳回本命度)与该年首个月亮返照时刻及两盘上升点。",
+        "读法：返照上升落座定该年/该月主色,上升与本命宫位的对应指示焦点领域;多年并列可见上升轮转的节律。",
+    ],
+    "prenatalsyzygy": [
+        "产前朔望：自出生时刻回溯最近的朔(日月合)或望(日月冲),取更晚者为产前朔望,以该时刻、出生地排盘。",
+        "读法：朔取合相度、望取地平之上发光体度为「取度」;该度及其主星为古典寿主/命主判定的重要候选,产前盘星体位置为本命的先天背景。",
+    ],
     "profection": [
         "小限(年限)：每满一岁命宫顺推一宫,该宫为当年小限宫,其宫主星为年主星。",
         "读法：年主星本命状态与流年动态定当年吉凶;小限宫宫职指示当年主战场。",
@@ -1176,6 +1204,11 @@ _PREDICTIVE_METHOD_NOTES: dict[str, list[str]] = {
     "planetaryages": [
         "行星年龄段：人生依序由月亮/水星/金星/太阳/火星/木星/土星主政固定年岁段(4/10/8/19/15/12/30 年制式)。",
         "读法：当前年龄所处主政星定人生阶段基调;主政星本命状态定该阶段顺逆。",
+    ],
+    # [#80] 回归黄道二次推运（上游 astroAiSnapshot.js:2087-2090 逐字）
+    "prog": [
+        "二次推运:回归黄道下的推运(二次推运一日抵一年、三次推运与小推运同族),叠加本命对照。",
+        "读法：推运位与本命位的星座宫位迁移及相位,合冲刑三分为主,应期看推运点行至本命点。",
     ],
     "vedicprog": [
         "恒星推运：以恒星黄道计的推运(含二次推运一日抵一年),叠加本命对照。",
@@ -9849,6 +9882,300 @@ class HorosaSkillService:
             "export_snapshot": self._augment_export_payload(technique="vedicprog", snapshot_text=snapshot_text),
         }
 
+    # ── 星运四键（上游 v3.11：[Q-106/T-10] 星历/回归轴/产前朔望三页 + [#80] 回归黄道二次推运）──────────────
+    # 与上游无头路径 aiAnalysisContext.regenerateChartTechniqueSnapshot（:2956-2983）同形：先取本命盘
+    # （chartObj——[起盘信息] 与 prog 的 [本命盘配置] 由它出），再以页面同一请求体（AstroExtraCommon.chartParams：
+    # tradition / predictive 恒 false）打 /astroextra/*，最后交给 engine/astroextra_snapshots.py 的逐字移植 builder。
+    # 上游 builder 求不得数据时返回 ''（挂载面显示「缺失」）；skill 侧空快照会落 generated_template 假导出，
+    # 故一律抛结构化错误（AGENTS §5.9 勿静默回退）。本命盘 fetch 失败同样直接抛（没有它就没有 [起盘信息]）。
+    _ASTROEXTRA_OPTION_KEYS = frozenset({
+        "startDate", "endDate", "includeTransits", "eclipseTimeMode", "startYear", "count",
+        "targetDate", "targetTime", "minorVariant",
+    })
+
+    def _astroextra_natal_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        natal = {key: value for key, value in payload.items() if key not in self._ASTROEXTRA_OPTION_KEYS}
+        natal["predictive"] = 0
+        for key in ("datetime", "dirZone", "dirLat", "dirLon"):
+            natal.pop(key, None)
+        return natal
+
+    @staticmethod
+    def _astroextra_chart_params(natal_payload: dict[str, Any]) -> dict[str, Any]:
+        # AstroExtraCommon.chartParams（:126-150）：随本命盘透传，tradition / predictive 恒 false。
+        return {**natal_payload, "tradition": False, "predictive": False}
+
+    @staticmethod
+    def _astroextra_date(payload: dict[str, Any], key: str, *, code: str) -> str | None:
+        """YYYY-MM-DD（亦收 YYYY/MM/DD、单位数月日）→ 规范 YYYY-MM-DD；缺省/空 → None（走上游缺省）。"""
+        raw = payload.get(key)
+        text = f"{raw if raw is not None else ''}".strip()
+        if not text:
+            return None
+        match = re.fullmatch(r"(\d{4})[-/](\d{1,2})[-/](\d{1,2})", text)
+        try:
+            if not match:
+                raise ValueError(text)
+            value = datetime(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+        except ValueError:
+            raise ToolValidationError(
+                f"{key} 不是合法日期（要 YYYY-MM-DD）：{text!r} / {key} is not a valid date (expected YYYY-MM-DD): {text!r}",
+                code=code,
+                details={"field": key, "value": raw},
+            ) from None
+        return value.strftime("%Y-%m-%d")
+
+    def _run_ephemeris_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """星历（AstroEphemeris.buildEphemerisSnapshotText）：区间内入座/留逆/朔望弦/食相 + 行运触发本命。
+
+        缺省窗 = 上游 defaultEphemerisWindow：今日起 90 天、含行运触发（startDate/endDate 各自缺省，与页面
+        `{...defaults, ...opts}` 同语义）；eclipseTimeMode 是上游全局口径（缺省 max=食甚，非 max 才下发）。
+        """
+        natal_payload = self._astroextra_natal_payload(payload)
+        natal = self._call_remote("/chart", natal_payload)
+        today = datetime.now()
+        start_date = self._astroextra_date(payload, "startDate", code="tool.ephemeris_invalid_window") or today.strftime("%Y-%m-%d")
+        end_date = self._astroextra_date(payload, "endDate", code="tool.ephemeris_invalid_window") or (
+            today + timedelta(days=90)
+        ).strftime("%Y-%m-%d")
+        if end_date < start_date:
+            raise ToolValidationError(
+                f"星历结束日早于开始日：{start_date} → {end_date}（只给 startDate 时 endDate 仍按上游缺省=今日+90天）"
+                f" / ephemeris endDate precedes startDate: {start_date} → {end_date} (pass endDate too)",
+                code="tool.ephemeris_invalid_window",
+                details={"startDate": start_date, "endDate": end_date},
+            )
+        include_transits = payload.get("includeTransits") is not False
+        eclipse_mode = f"{payload.get('eclipseTimeMode') or ''}".strip() or "max"
+        if eclipse_mode not in {"max", "syzygy"}:
+            raise ToolValidationError(
+                f"eclipseTimeMode 只能是 max（食甚时刻）或 syzygy（精确朔望）：{eclipse_mode!r}"
+                f" / eclipseTimeMode must be 'max' or 'syzygy': {eclipse_mode!r}",
+                code="tool.ephemeris_invalid_option",
+                details={"field": "eclipseTimeMode", "value": eclipse_mode, "allowed": ["max", "syzygy"]},
+            )
+        body = {
+            **self._astroextra_chart_params(natal_payload),
+            "startDate": start_date,
+            "endDate": end_date,
+            "includeTransits": include_transits,
+        }
+        if eclipse_mode != "max":
+            body["eclipseTimeMode"] = eclipse_mode
+        response = self._call_remote("/astroextra/ephemeris", body)
+        snapshot_text = build_ephemeris_snapshot_text(
+            natal,
+            response,
+            start_date=start_date,
+            end_date=end_date,
+            include_transits=include_transits,
+            now=datetime.now(),
+            method_notes=_PREDICTIVE_METHOD_NOTES["ephemeris"],
+        )
+        if not snapshot_text:
+            raise ToolValidationError(
+                f"星历区间 {start_date} 至 {end_date} 内没有任何可列事件（入座/留逆/朔望弦/食相/行运触发皆空；上游此时显示「缺失」）"
+                f" / no ephemeris events in {start_date}..{end_date} — widen the window",
+                code="tool.ephemeris_empty",
+                details={"startDate": start_date, "endDate": end_date, "endpoint": "/astroextra/ephemeris"},
+            )
+        # data 只带 builder 实际消费的事件表（每日位置/升落现象是页面专属 tab，不进上游 AI 导出；整份 ~0.4 MB）。
+        return {
+            "window": {
+                "startDate": start_date,
+                "endDate": end_date,
+                "includeTransits": include_transits,
+                "eclipseTimeMode": eclipse_mode,
+            },
+            "ephemeris": {
+                key: response.get(key)
+                for key in ("params", "ingresses", "stations", "lunarPhases", "eclipses", "transitAspects")
+            },
+            "natal_params": natal.get("params"),
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="ephemeris", snapshot_text=snapshot_text),
+        }
+
+    def _run_returntimeline_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """回归轴（AstroReturnTimeline.buildReturnTimelineSnapshotText）：逐年太阳返照 + 该年首个月亮返照 + 两盘上升。
+
+        缺省 = 上游 `{startYear: 今年, count: 12}`；后端把 count 夹到 1–40，页面输入框同界——越界直接报错，
+        免得段头写「50 年」而表里只有 40 行。
+        """
+        natal_payload = self._astroextra_natal_payload(payload)
+        natal = self._call_remote("/chart", natal_payload)
+        start_year = payload.get("startYear")
+        if start_year in (None, "", 0):
+            start_year = datetime.now().year
+        count = payload.get("count")
+        if count in (None, "", 0):
+            count = 12
+        try:
+            start_year = int(start_year)
+            count = int(count)
+        except (TypeError, ValueError):
+            raise ToolValidationError(
+                f"startYear / count 必须是整数：{start_year!r} / {count!r} / startYear and count must be integers",
+                code="tool.returntimeline_invalid_range",
+                details={"startYear": start_year, "count": count},
+            ) from None
+        if not 1 <= count <= 40:
+            raise ToolValidationError(
+                f"回归轴年数 count 须在 1–40 之间（后端上限 40）：{count} / count must be within 1–40 (backend clamp): {count}",
+                code="tool.returntimeline_invalid_range",
+                details={"count": count, "min": 1, "max": 40},
+            )
+        body = {**self._astroextra_chart_params(natal_payload), "startYear": start_year, "count": count}
+        response = self._call_remote("/astroextra/returns", body)
+        rows = response.get("rows")
+        if not isinstance(rows, list):
+            raise ToolTransportError(
+                "回归轴端点返回了意外形状（缺 rows 数组） / /astroextra/returns returned an unexpected shape (no rows list)",
+                code="transport.invalid_result_shape",
+                details={"endpoint": "/astroextra/returns", "keys": sorted(response)},
+            )
+        snapshot_text = build_return_timeline_snapshot_text(
+            natal,
+            rows,
+            start_year=start_year,
+            count=count,
+            now=datetime.now(),
+            method_notes=_PREDICTIVE_METHOD_NOTES["returntimeline"],
+        )
+        if not snapshot_text:
+            raise ToolValidationError(
+                f"回归轴没有返回任何年份行（startYear={start_year}, count={count}） / the return timeline returned no rows",
+                code="tool.returntimeline_empty",
+                details={"startYear": start_year, "count": count, "endpoint": "/astroextra/returns"},
+            )
+        return {
+            "range": {"startYear": start_year, "count": count},
+            "rows": rows,
+            "natal_params": natal.get("params"),
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="returntimeline", snapshot_text=snapshot_text),
+        }
+
+    def _run_prenatalsyzygy_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """产前朔望（AstroPrenatalSyzygy.buildPrenatalSyzygySnapshotText）：回溯最近朔/望 + 以该时刻、出生地起盘。
+
+        第二张盘（朔望时刻 /chart）取不到时上游照出段并写「暂缺」行——同样照写，另经 _degrade 进 envelope.warnings。
+        """
+        natal_payload = self._astroextra_natal_payload(payload)
+        natal = self._call_remote("/chart", natal_payload)
+        base = self._astroextra_chart_params(natal_payload)
+        syzygy = self._call_remote("/astroextra/prenatal_syzygy", base)
+        if not syzygy.get("type"):
+            raise ToolValidationError(
+                "未能求得产前朔望（极区或星历不可用；上游此时显示「缺失」） / prenatal syzygy could not be solved "
+                "(polar latitude or ephemeris unavailable)",
+                code="tool.prenatalsyzygy_unavailable",
+                details={"endpoint": "/astroextra/prenatal_syzygy", "result": syzygy},
+            )
+        syzygy_chart: dict[str, Any] | None = None
+        moment = split_syzygy_datetime(syzygy.get("datetime"))
+        if moment is None:
+            _degrade("prenatalsyzygy: 朔望结果缺 datetime，无法以朔望时刻排盘（[产前朔望盘·星体位置] 写「暂缺」行）")
+        else:
+            try:
+                syzygy_chart = self._call_remote("/chart", {**base, "date": moment["date"], "time": moment["time"]})
+            except HorosaSkillError as exc:
+                _degrade("prenatalsyzygy: 以朔望时刻排盘失败（[产前朔望盘·星体位置] 写「暂缺」行）: %s", exc)
+        snapshot_text = build_prenatal_syzygy_snapshot_text(
+            natal,
+            syzygy,
+            syzygy_chart,
+            now=datetime.now(),
+            method_notes=_PREDICTIVE_METHOD_NOTES["prenatalsyzygy"],
+        )
+        syzygy_objects = []
+        chart_body = syzygy_chart.get("chart") if isinstance(syzygy_chart, dict) else None
+        for obj in (chart_body.get("objects") if isinstance(chart_body, dict) else None) or []:
+            if isinstance(obj, dict) and obj.get("id"):
+                syzygy_objects.append({key: obj.get(key) for key in ("id", "sign", "signlon", "lon") if key in obj})
+        return {
+            "syzygy": syzygy,
+            "syzygy_chart": {
+                "params": syzygy_chart.get("params") if isinstance(syzygy_chart, dict) else None,
+                "objects": syzygy_objects,
+            },
+            "natal_params": natal.get("params"),
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="prenatalsyzygy", snapshot_text=snapshot_text),
+        }
+
+    def _run_prog_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """二次推运·回归黄道（astroProgSnapshot.buildProgSnapshotText variant 'prog'）。
+
+        与 vedicprog 同一后端 /astroextra/progressions、同一 builder 族；本支**不下发 zodiacal 覆写**（随盘自身黄道，
+        上游 PROG_SNAPSHOT_VARIANTS.prog.zodiacal = null）。缺省 = 上游 targetDate 今天 / targetTime 12:00:00 /
+        minorVariant synodic；orb 上游写死 1.5。`datetime`（YYYY-MM-DD HH:MM:SS）只在没给 targetDate 时作目标时刻用
+        （后端 build_progressions 的同一回退顺序），目标日期行照实写出，不静默吞。
+        """
+        natal_payload = self._astroextra_natal_payload(payload)
+        natal = self._call_remote("/chart", natal_payload)
+        target_date = self._astroextra_date(payload, "targetDate", code="tool.prog_invalid_option")
+        target_time_raw = f"{payload.get('targetTime') or ''}".strip()
+        if target_date is None and payload.get("datetime"):
+            parts = f"{payload['datetime']}".strip().replace("T", " ").split(" ")
+            target_date = self._astroextra_date({"datetime": parts[0]}, "datetime", code="tool.prog_invalid_option")
+            if not target_time_raw and len(parts) > 1:
+                target_time_raw = parts[1]
+        target_date = target_date or datetime.now().strftime("%Y-%m-%d")
+        target_time = "12:00:00"
+        if target_time_raw:
+            time_match = re.fullmatch(r"(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?", target_time_raw)
+            if not time_match or int(time_match.group(1)) > 23 or int(time_match.group(2)) > 59 or int(time_match.group(3) or 0) > 59:
+                raise ToolValidationError(
+                    f"targetTime 不是合法时刻（要 HH:MM[:SS]）：{target_time_raw!r} / targetTime must be HH:MM[:SS]: {target_time_raw!r}",
+                    code="tool.prog_invalid_option",
+                    details={"field": "targetTime", "value": target_time_raw},
+                )
+            target_time = f"{int(time_match.group(1)):02d}:{int(time_match.group(2)):02d}:{int(time_match.group(3) or 0):02d}"
+        minor_variant = f"{payload.get('minorVariant') or ''}".strip() or DEFAULT_MINOR_VARIANT
+        if minor_variant not in MINOR_VARIANT_LABEL:
+            raise ToolValidationError(
+                f"minorVariant 只能是 {'/'.join(MINOR_VARIANT_LABEL)}：{minor_variant!r}"
+                f" / minorVariant must be one of {', '.join(MINOR_VARIANT_LABEL)}: {minor_variant!r}",
+                code="tool.prog_invalid_option",
+                details={"field": "minorVariant", "value": minor_variant, "allowed": list(MINOR_VARIANT_LABEL)},
+            )
+        body = {
+            **self._astroextra_chart_params(natal_payload),
+            "targetDate": target_date,
+            "targetTime": target_time,
+            "minorVariant": minor_variant,
+            "orb": 1.5,
+        }
+        variant_zodiacal = PROG_SNAPSHOT_VARIANTS["prog"]["zodiacal"]
+        if variant_zodiacal:
+            body["zodiacal"] = variant_zodiacal
+        response = self._call_remote("/astroextra/progressions", body)
+        snapshot_text = build_prog_snapshot_text(
+            natal,
+            response,
+            "prog",
+            target_date=target_date,
+            target_time=target_time,
+            minor_variant=minor_variant,
+            now=datetime.now(),
+            method_notes=_PREDICTIVE_METHOD_NOTES["prog"],
+        )
+        if not snapshot_text:
+            raise ToolValidationError(
+                "推运端点没有返回二次推运位置（上游此时显示「缺失」） / /astroextra/progressions returned no secondary positions",
+                code="tool.prog_empty",
+                details={"endpoint": "/astroextra/progressions", "targetDate": target_date, "targetTime": target_time},
+            )
+        return {
+            "target": {"targetDate": target_date, "targetTime": target_time, "minorVariant": minor_variant},
+            "methods": response.get("methods", []),
+            "ageDays": response.get("ageDays"),
+            "natal_params": natal.get("params"),
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="prog", snapshot_text=snapshot_text),
+        }
+
     def _run_planetaryarc_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 行星弧 (v2.5.0): /predict/planetaryarc — directs the whole chart by the arc of arcSource (default Moon).
         remote_payload = {
@@ -11246,6 +11573,14 @@ class HorosaSkillService:
             return self._run_jaynesprog_tool(payload)
         if definition.name == "vedicprog":
             return self._run_vedicprog_tool(payload)
+        if definition.name == "ephemeris":
+            return self._run_ephemeris_tool(payload)
+        if definition.name == "returntimeline":
+            return self._run_returntimeline_tool(payload)
+        if definition.name == "prenatalsyzygy":
+            return self._run_prenatalsyzygy_tool(payload)
+        if definition.name == "prog":
+            return self._run_prog_tool(payload)
         if definition.name == "planetaryarc":
             return self._run_planetaryarc_tool(payload)
         if definition.name == "planetaryages":

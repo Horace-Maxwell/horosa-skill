@@ -1129,6 +1129,33 @@ class VedicProgInput(BirthInput):
     orb: float | None = 1.5
 
 
+# ── 上游 v3.11 星运四键（[Q-106/T-10] 星历/回归轴/产前朔望 + [#80] 回归黄道二次推运）──
+# date/time/zone/lat/lon 恒是**本命盘**；上游请求体（AstroExtraCommon.chartParams）tradition/predictive 恒 false。
+class EphemerisInput(BirthInput):
+    predictive: bool | None = False
+    startDate: str | None = Field(default=None, description="区间起 YYYY-MM-DD（缺省今天）")
+    endDate: str | None = Field(default=None, description="区间止（缺省今天+90天）")
+    includeTransits: bool | None = Field(default=None, description="列行运触发（缺省 true）")
+    eclipseTimeMode: str | None = Field(default=None, description="食相时刻 max（缺省）|syzygy")
+
+
+class ReturnTimelineInput(BirthInput):
+    predictive: bool | None = False
+    startYear: int | None = Field(default=None, description="起始年（缺省今年）")
+    count: int | None = Field(default=None, description="年数 1–40（缺省 12）")
+
+
+class PrenatalSyzygyInput(BirthInput):
+    predictive: bool | None = False
+
+
+class ProgInput(BirthInput):
+    predictive: bool | None = False
+    targetDate: str | None = Field(default=None, description="目标日 YYYY-MM-DD（缺省今天）")
+    targetTime: str | None = Field(default=None, description="目标时刻（缺省 12:00:00）")
+    minorVariant: str | None = Field(default=None, description="小推运月长 synodic|sidereal|engine")
+
+
 class PlanetaryArcInput(BirthInput):
     # 行星弧 (v2.5.0): directs the whole chart by the secondary-progressed arc of arcSource (default Moon).
     predictive: bool | None = True

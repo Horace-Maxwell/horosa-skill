@@ -70,6 +70,8 @@ AI_EXPORT_SECTION_MIGRATION_KEYS = [
     # v15 上游 v3.11.x（aiExport v57/v58）补段键
     "babylon", "dwadasamsa", "hellenastro", "election", "germany", "guolao", "huangli", "indiachart",
     "jieqi", "otherbu", "tongshefa", "tongshu",
+    # 上游 v3.11 星运四键（aiExport.js:309-311,374 在迁移键表内；新技法键老用户无存档，迁移对其为 no-op，照登记）
+    "ephemeris", "returntimeline", "prenatalsyzygy", "prog",
 ]
 MODULE_SNAPSHOT_PREFIX = "horosa.ai.snapshot.module.v1."
 AI_EXPORT_PLANET_INFO_DEFAULT = {"showHouse": 1, "showRuler": 1}
@@ -99,6 +101,7 @@ AI_EXPORT_PLANET_INFO_TECHNIQUES = {
     "givenyear",
     "decennials",
     "planetaryages",
+    "prog",
     "vedicprog",
     "jaynesprog",
     "planetaryarc",
@@ -173,8 +176,12 @@ AI_EXPORT_TECHNIQUES = [
     {"key": "guolao", "label": "七政四余"},
     {"key": "germany", "label": "量化盘"},
     {"key": "agepoint", "label": "星运-年龄推进点"},
+    {"key": "ephemeris", "label": "星运-星历"},
+    {"key": "returntimeline", "label": "星运-回归轴"},
+    {"key": "prenatalsyzygy", "label": "星运-产前朔望"},
     {"key": "distributions", "label": "星运-界推运"},
     {"key": "jaynesprog", "label": "星运-赤纬推运"},
+    {"key": "prog", "label": "星运-二次推运"},
     {"key": "vedicprog", "label": "星运-恒星推运"},
     {"key": "planetaryarc", "label": "星运-行星弧"},
     {"key": "planetaryages", "label": "星运-行星年龄"},
@@ -323,7 +330,15 @@ AI_EXPORT_PRESET_SECTIONS = {
     "guolao": ["起盘信息", "七政四余宫位与二十八宿星曜", "星曜庙旺与星点动态（殿垣庙旺乐喜怒 · 顺逆留伏迟速）", "神煞", "大限", "虚实", "本命化曜", "流年流曜", "政余格局", "相位"],
     "germany": ["起盘信息", "宫位宫头", "行星", "中点", "TNP星体", "中点相位", "90°中点盘", "行星图", "映点", "中点列表", "汉堡学派要素", "组合盘", "戴维森盘", "虚星参考"],
     "agepoint": ["起盘信息", "年龄推进点（Age Point / Huber）", "当前时点", "方法说明"],
+    # 上游 v3.11 [Q-106/T-10] 星运三页（aiExport.js:635-637 逐字）。全段恒出：builder 在后端无数据时
+    # 整体返回空（skill 侧改抛结构化错误），不存在「部分段缺席」的形态 → 无 optional。
+    "ephemeris": ["起盘信息", "星历事件（入座 · 留逆 · 朔望弦 · 食相）", "行运触发本命", "当前时点", "方法说明"],
+    "returntimeline": ["起盘信息", "太阳/月亮返照时间轴", "当前时点", "方法说明"],
+    "prenatalsyzygy": ["起盘信息", "产前朔望", "产前朔望盘·星体位置", "当前时点", "方法说明"],
     "distributions": ["起盘信息", "界推运（分配法 / Distributions）", "当前时点", "方法说明"],
+    # [#80] 回归黄道二次推运（aiExport.js:648 逐字；与 vedicprog 同一 builder 的 'prog' 支，无 [起盘信息] ——
+    # 生辰行并入 [本命盘配置] 段头部）。
+    "prog": ["二次推运（回归黄道）", "本命盘配置", "时段盘配置 二次推运位置", "当前时点", "方法说明"],
     "jaynesprog": ["赤纬推运（Declination）", "本命盘配置", "时段盘 赤纬平行/反平行", "当前时点", "方法说明"],
     "vedicprog": ["起盘信息", "恒星推运（Vedic Sidereal）", "本命盘配置", "时段盘配置 二次推运位置", "当前时点", "方法说明"],
     "planetaryarc": ["行星弧（Planetary Arc）", "本命盘配置", "时段盘配置", "相位", "当前时点", "方法说明"],

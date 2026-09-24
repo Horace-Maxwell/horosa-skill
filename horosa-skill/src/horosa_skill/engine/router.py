@@ -23,6 +23,18 @@ _ZERI_PHRASES: dict[str, list[str]] = {
 }
 _ALL_ZERI_WORDS: list[str] = [word for words in _ZERI_PHRASES.values() for word in words]
 
+# 上游 v3.11 星运四键的分派词。互斥要点：回归轴是**逐年时间轴**——「太阳返照时间轴」含「太阳返照」、
+# 「日月返照年表」含「月返」，不排除就一句话同时点亮 solarreturn/lunarreturn；产前朔望 ≠ 星历的「朔望弦」；
+# 二次推运按词面会与恒星/赤纬/月相三支推运撞车（各有工具），故排除这些限定词。星历排除巴比伦的「数理星历」段名。
+_EPHEMERIS_WORDS = ["星历", "行星入座", "入座时间", "留逆", "朔望弦", "ephemeris"]
+_RETURNTIMELINE_WORDS = ["回归轴", "返照时间轴", "返照年表", "返照轴", "return timeline", "returntimeline"]
+_PRENATAL_SYZYGY_WORDS = ["产前朔望", "产前新月", "产前满月", "prenatal syzygy", "prenatal lunation", "prenatalsyzygy"]
+_PROG_WORDS = [
+    "二次推运", "三次推运", "小推运", "回归黄道推运",
+    "secondary progression", "tertiary progression", "minor progression", "progressed chart",
+]
+_PROG_EXCLUDE = ["恒星", "印度", "vedic", "sidereal", "赤纬", "jayne", "declination", "月相", "lunation"]
+
 
 def select_tools(request: DispatchInput) -> list[str]:
     text = request.query.lower()
@@ -126,9 +138,10 @@ def select_tools(request: DispatchInput) -> list[str]:
             add("gua_desc")
     if _contains_any(text, ["合盘", "关系盘", "relative", "synastry", "composite", "配对盘"]):
         add("relative")
-    if _contains_any(text, ["solar return", "solarreturn", "太阳返照"]):
+    is_return_timeline = _contains_any(text, _RETURNTIMELINE_WORDS)
+    if _contains_any(text, ["solar return", "solarreturn", "太阳返照"]) and not is_return_timeline:
         add("solarreturn")
-    if _contains_any(text, ["lunar return", "lunarreturn", "月返"]):
+    if _contains_any(text, ["lunar return", "lunarreturn", "月返"]) and not is_return_timeline:
         add("lunarreturn")
     if _contains_any(text, ["solar arc", "solararc", "太阳弧"]):
         add("solararc")
@@ -169,8 +182,17 @@ def select_tools(request: DispatchInput) -> list[str]:
     if _contains_any(text, ["赤纬推运", "jayne", "jaynesprog"]):
         add("jaynesprog")
     # vedic 单独出现是印度本命盘（india_chart）；只有带推运语义才是 vedicprog（v0.36.0 修 vedic→vedicprog 误路由）。
-    if _contains_any(text, ["恒星推运", "印度推运", "vedicprog", "vedic progression", "sidereal progression"]):
+    # 「恒星黄道二次推运」不含「恒星推运」四连字，却明确是恒星支——二次推运规则排除了「恒星」，这里接住。
+    if _contains_any(text, ["恒星推运", "印度推运", "vedicprog", "vedic progression", "sidereal progression", "恒星黄道二次推运", "恒星二次推运"]):
         add("vedicprog")
+    if _contains_any(text, _PROG_WORDS) and not _contains_any(text, _PROG_EXCLUDE):
+        add("prog")
+    if _contains_any(text, _EPHEMERIS_WORDS) and not _contains_any(text, ["数理星历"]):
+        add("ephemeris")
+    if is_return_timeline:
+        add("returntimeline")
+    if _contains_any(text, _PRENATAL_SYZYGY_WORDS):
+        add("prenatalsyzygy")
     if _contains_any(text, ["行星弧", "planetary arc", "planetaryarc", "月亮弧"]):
         add("planetaryarc")
     if _contains_any(text, ["行星年龄", "人生七阶", "ages of man", "planetaryages"]):

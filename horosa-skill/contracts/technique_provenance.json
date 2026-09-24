@@ -210,6 +210,16 @@
       "export_technique": "election",
       "notes": "纯 headless JS，无后端引擎"
     },
+    "ephemeris": {
+      "compute_class": "python_chart_backend",
+      "engines": [],
+      "endpoints": [
+        "/astroextra/ephemeris",
+        "/chart"
+      ],
+      "export_technique": "ephemeris",
+      "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
+    },
     "export_parse": {
       "compute_class": "local_data",
       "engines": [],
@@ -651,6 +661,16 @@
       "export_technique": "planetaryarc",
       "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
     },
+    "prenatalsyzygy": {
+      "compute_class": "python_chart_backend",
+      "engines": [],
+      "endpoints": [
+        "/astroextra/prenatal_syzygy",
+        "/chart"
+      ],
+      "export_technique": "prenatalsyzygy",
+      "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
+    },
     "profection": {
       "compute_class": "python_chart_backend",
       "engines": [],
@@ -658,6 +678,16 @@
         "/predict/profection"
       ],
       "export_technique": "profection",
+      "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
+    },
+    "prog": {
+      "compute_class": "python_chart_backend",
+      "engines": [],
+      "endpoints": [
+        "/astroextra/progressions",
+        "/chart"
+      ],
+      "export_technique": "prog",
       "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
     },
     "qimen": {
@@ -729,6 +759,16 @@
         "/chart"
       ],
       "export_technique": "relocation",
+      "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
+    },
+    "returntimeline": {
+      "compute_class": "python_chart_backend",
+      "engines": [],
+      "endpoints": [
+        "/astroextra/returns",
+        "/chart"
+      ],
+      "export_technique": "returntimeline",
       "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
     },
     "sanshiunited": {

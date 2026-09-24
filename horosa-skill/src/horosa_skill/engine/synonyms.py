@@ -63,6 +63,11 @@ TOOL_SYNONYMS: dict[str, tuple[str, ...]] = {
     "distributions": ("界推运", "分配法", "distributions", "distribution through the bounds"),
     "jaynesprog": ("赤纬推运", "jayne", "declination progression", "jaynesprog"),
     "vedicprog": ("恒星推运", "印度推运", "vedic progression", "sidereal progression", "vedicprog"),
+    # 上游 v3.11 星运四键。
+    "ephemeris": ("星历", "行星入座", "留逆", "ephemeris"),
+    "returntimeline": ("回归轴", "返照时间轴", "return timeline"),
+    "prenatalsyzygy": ("产前朔望", "产前新月", "prenatal syzygy"),
+    "prog": ("二次推运", "三次推运", "secondary progression"),
     "planetaryarc": ("行星弧", "月亮弧", "planetary arc", "planetaryarc"),
     "planetaryages": ("行星年龄", "人生七阶", "ages of man", "planetary ages"),
     "balbillus": ("巴比留斯", "旺距削减", "balbillus"),

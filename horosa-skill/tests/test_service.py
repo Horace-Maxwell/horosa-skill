@@ -26,6 +26,18 @@ def test_liureng_tool_description_prevents_manual_agent_calculation() -> None:
     assert "Xingque-compatible" in description
 
 
+# 上游 v3.11 星运四键：/astroextra/{ephemeris,prenatal_syzygy,progressions} 回**真实**响应（vendored v3.11.1+ 实例实抓
+# 后裁剪，见 fixtures/sync311_newtools_live.json 的 _comment）。桩管形状；值级真相归 test_sync311_newtools.py 的上游 JS 金标。
+_SYNC311_SAMPLE = json.loads(
+    (Path(__file__).parent / "fixtures" / "sync311_newtools_live.json").read_text(encoding="utf-8")
+)["scenarios"]["sample"]
+_SYNC311_ASTROEXTRA_STUBS = {
+    "/astroextra/ephemeris": _SYNC311_SAMPLE["ephemeris"],
+    "/astroextra/prenatal_syzygy": _SYNC311_SAMPLE["prenatal_syzygy"],
+    "/astroextra/progressions": _SYNC311_SAMPLE["progressions"],
+}
+
+
 class FakeClient(HorosaApiClient):
     def __init__(self) -> None:
         super().__init__("http://fake")
@@ -34,6 +46,8 @@ class FakeClient(HorosaApiClient):
         return True
 
     def call(self, endpoint: str, payload: dict) -> dict:
+        if endpoint in _SYNC311_ASTROEXTRA_STUBS:
+            return json.loads(json.dumps(_SYNC311_ASTROEXTRA_STUBS[endpoint]))
         if endpoint == "/electionscan/scan":
             # 真实形状：每行必带 pick/pickEnd（ε 缓冲后的安全起盘时刻）与 startJd/endJd。缺 pick 时
             # runner 会退回按分钟截断的 start，恰落征象边界外侧 —— 桩里必须有。

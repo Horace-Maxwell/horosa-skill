@@ -477,6 +477,49 @@ EXTRARETURNS_POLICY = _progression_target_policy(
     ],
     do_not_assume=["timeline range"],
 )
+# 上游 v3.11 星运四键：区间 / 起始年与年数 / 目标日 都会改结果（缺省取「今天」，不同日子调用结果不同）→ 必问或记录接受默认。
+EPHEMERIS_POLICY = _progression_target_policy(
+    intent="星历：本命盘地点与时区下，区间内行星入座/留逆/朔望弦/食相 + 行运触发本命点（上游缺省今日起 90 天）。",
+    targets=[
+        {"field": "startDate/endDate", "question": "查哪段区间？（startDate/endDate YYYY-MM-DD；缺省=今天起 90 天，上限 732 天）"},
+        {
+            "field": "includeTransits",
+            "question": "是否列出行运触发本命点的时刻？",
+            "options": ["列出（默认）", "不列"],
+            "values": [True, False],
+        },
+    ],
+    do_not_assume=["date window"],
+)
+RETURNTIMELINE_POLICY = _progression_target_policy(
+    intent="回归轴：逐年太阳返照 + 该年首个月亮返照时刻与两盘上升（上游缺省今年起 12 年，年数上限 40）。",
+    targets=[
+        {
+            "field": "startYear/count",
+            "question": "从哪一年起、列几年？",
+            "options": ["缺省（今年起 12 年）", "指定起始年与年数（1–40）"],
+        }
+    ],
+    do_not_assume=["year range"],
+)
+PRENATALSYZYGY_POLICY = _progression_target_policy(
+    intent="产前朔望：自出生时刻回溯最近的朔/望，取度 + 以该时刻、出生地排盘（只需本命数据；出生时刻决定取哪一次朔望）。",
+    targets=[],
+    do_not_assume=["birth date/time"],
+)
+PROG_POLICY = _progression_target_policy(
+    intent="二次推运（回归黄道）：二次/三次/小推运位置 + 与本命相位，本命 + 目标日期（上游缺省今天 12:00）。",
+    targets=[
+        _TARGET_DATE_QUESTION,
+        {
+            "field": "minorVariant",
+            "question": "小推运月长按哪种算？",
+            "options": ["synodic 朔望月每年（默认）", "sidereal 恒星月每年", "engine 引擎历史值（≈无推进）"],
+            "values": ["synodic", "sidereal", "engine"],
+        },
+    ],
+    do_not_assume=["target date"],
+)
 
 # 闸问题允许没有 options 的字段（自由文本/复合输入）；新问题要么带 options 要么在这里登记（tests/test_gate_policies.py 守）。
 FREE_TEXT_GATE_FIELDS: frozenset[str] = frozenset({
@@ -1114,6 +1157,10 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     "distributions": ASTRO_BIRTH_POLICY,
     "jaynesprog": JAYNESPROG_POLICY,
     "vedicprog": VEDICPROG_POLICY,
+    "ephemeris": EPHEMERIS_POLICY,
+    "returntimeline": RETURNTIMELINE_POLICY,
+    "prenatalsyzygy": PRENATALSYZYGY_POLICY,
+    "prog": PROG_POLICY,
     "planetaryarc": PLANETARYARC_POLICY,
     "planetaryages": PLANETARYAGES_POLICY,
     "balbillus": ASTRO_BIRTH_POLICY,
