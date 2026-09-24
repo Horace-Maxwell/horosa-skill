@@ -54,7 +54,7 @@ export function runBabylon(payload) {
     }
   });
   if (invalid.length) {
-    return { text: '', invalid };
+    return { text: '', error: 'invalid_setting', invalid };
   }
   // 🔴 流派档必须**解析成参数**，不能只当标签传：judge 层的 dodecaVariant/cubitDeg 决定
   // 十二分变体（horoscope.js:43 与快照 :167）与肘度换算（units.js:80），此前一个都没传 ——

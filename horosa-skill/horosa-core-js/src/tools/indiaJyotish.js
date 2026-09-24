@@ -57,7 +57,7 @@ export function runIndiaJyotish(payload) {
     }
   });
   if (invalid.length) {
-    return { sections: {}, dashaLines: [], schoolLines: [], invalid };
+    return { sections: {}, dashaLines: [], schoolLines: [], error: 'invalid_setting', invalid };
   }
   const fields = fieldsFromParams(params);
   const sections = buildJyotishSnapshotLines(chartObj) || {};
