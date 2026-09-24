@@ -1313,8 +1313,11 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "yearBoundary lichun（缺省）/lunar；开关（1/0）guashen=1 sixGods=1 yuqi=0 yingqi=1 doctrine=1 gufa=0 "
             "yueLiushen=0 shenshaOn=1 shenshaExOn=0；guirenFa standard（缺省）/geng_ma_hu；shenshaBase day（缺省）/year；"
             "shenshaSet=神煞名数组（缺省 天乙贵人/禄神/羊刃/驿马/桃花/将星/华盖/劫煞/亡神）。"
-            "\n[断卦结构]/[断诀命中]/[占类断语] 由 vendored 上游 liuyaoStructLines/liuyaoSnapshotEx 产出（含《断易天机》"
-            "断语摘要）；shishen/tianshiSchool/yuqi/gufa/yueLiushen/shenshaExOn 只改后两段。认不出的键/不在词表的值回执在 warnings。"
+            "\n整份快照 = vendored 上游 buildGuaSnapshotText（同 AI 挂载无头路径 regenerateSixyaoSnapshot）：[起盘信息]（含旬空、"
+            "求测人性别）/[卦象]（本/互/之/错/综）/[六爻与动爻]（含关联卦逐爻）/[断卦结构]/[卦辞与断语]/[判语库·参考诀表]"
+            "（默认关段）/[断诀命中]/[占类断语]（含《断易天机》断语摘要）；shishen/tianshiSchool/yuqi/gufa/yueLiushen/shenshaExOn "
+            "只改后两段。无头卦不带卦辞 → [卦辞与断语] 只有段头（上游同形），卦辞原文在 data.descriptions。"
+            "认不出的键/不在词表的值回执在 warnings。"
             "\n不给 lines/gua_code = 以时起卦（上游 buildTimeGua：年支序 + 农历月数 + 农历日数 + 时柱支序，时柱随 timeAlg）。"
         ),
         required_context=COMMON_LOCATION_FIELDS + ["question", "lines or gua_code"],
@@ -1331,6 +1334,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "lateZiHourUseNextDay", "value": 1, "meaning": "晚子时时干按次日日干起（不发送 = 后端默认 = 星阙出厂全局默认）"},
             {"field": "liuyaoSettings.school", "value": "default", "meaning": "通用（卜筮正宗口径），上游 DEFAULT_LIUYAO_SETTINGS"},
             {"field": "liuyaoSettings.askType", "value": "self", "meaning": "自身/综合运势；问事明确时应按所问改"},
+            {"field": "gender", "value": 1, "meaning": "求测人性别：只印进 [起盘信息]「求测人性别」行、不改取用神（婚占男女看 askType）；缺省 1=男 = 上游 buildCaseSnapshotFields gender ?? 1"},
         ],
         do_not_assume=["lines", "gua_code", "question"],
     ),
@@ -1350,11 +1354,12 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ask_if_missing=[
             {"field": "date/time/place", "question": "请提供出生日期、时间、经度（真太阳时用）和性别。"},
             {"field": "method", "question": "取法用明法还是古法？", "options": ["明法（月支反向取日宫·默认）", "古法（八字日支为日宫）"]},
-            {"field": "timeAlg", "question": "用真太阳时还是钟表时？", "options": ["钟表时（星阙参评数默认）", "真太阳时（按经度+均时差校正）"]},
+            {"field": "timeAlg", "question": "用真太阳时还是钟表时？", "options": ["真太阳时（星阙默认，按经度+均时差校正）", "钟表时 timeAlg=1"]},
         ],
         safe_defaults=[
             {"field": "method", "value": "ming", "meaning": "明法·月支反向取日宫（星阙默认）"},
-            {"field": "timeAlg", "value": 1, "meaning": "钟表时，对应 CanPingMain.js 的默认"},
+            {"field": "timeAlg", "value": 0, "meaning": "真太阳时：上游 AI 挂载无头 buildFieldObject timeAlg ?? 0；页面全局字段出厂亦 0（CanPingMain 的 fieldVal 回退 1 从不生效）"},
+            {"field": "after23NewDay", "value": 1, "meaning": "23 点后归次日（星阙出厂全局日界；影响 23 点档生人的日柱/日支）"},
         ],
         do_not_assume=["gender", "method"],
     ),
@@ -1363,11 +1368,12 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         required_context=["birth date", "birth time", "longitude (真太阳时可选)", "gender"],
         ask_if_missing=[
             {"field": "date/time/place", "question": "请提供出生日期、时间、经度（真太阳时用）和性别。"},
-            {"field": "timeAlg", "question": "用真太阳时还是钟表时？", "options": ["钟表时（星阙河洛默认）", "真太阳时（按经度+均时差校正）"]},
+            {"field": "timeAlg", "question": "用真太阳时还是钟表时？", "options": ["真太阳时（星阙默认，按经度+均时差校正）", "钟表时 timeAlg=1"]},
             {"field": "quHuaGong", "question": "取化工法用哪一档？（只在四立前十八日土用期生人有差）", "options": ["土王寄坤艮（星阙默认）", "直取四方伯 siFangBoOnly"]},
         ],
         safe_defaults=[
-            {"field": "timeAlg", "value": 1, "meaning": "钟表时，对应 HeLuoMain.js 的默认"},
+            {"field": "timeAlg", "value": 0, "meaning": "真太阳时：上游 AI 挂载无头 buildFieldObject timeAlg ?? 0；页面全局字段出厂亦 0（HeLuoMain 的 fieldVal 回退 1 从不生效）"},
+            {"field": "after23NewDay", "value": 1, "meaning": "23 点后归次日（星阙出厂全局日界；影响 23 点档生人的日柱）"},
             {"field": "quHuaGong", "value": "tuWangKunGen", "meaning": "土王寄坤艮：土用期补坤艮/反乾兑（上游挂载 schema 缺省）；改 siFangBoOnly 只动 [命运篇] 化工/反化工行"},
             {"field": "huangdiOffset", "value": 2697, "meaning": "纪年基准（公历=黄帝纪元−2697，上游缺省）；只动 [断验] 纪年行"},
         ],
@@ -1396,6 +1402,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "annualMethod", "value": None, "meaning": "未设 = 小限与流年十二神两法并列（星阙 AI 挂载无头重算的缺省：record 不带该键；桌面页出厂档 yizhangjingAnnual 为小限）"},
             {"field": "shenshaLayer", "value": False, "meaning": "神煞合参层关（星阙桌面出厂档 yizhangjingShensha=false；开则多出 [神煞合参] 段）"},
             {"field": "after23NewDay", "value": 1, "meaning": "23 点后归次日（星阙出厂全局日界；影响 23 点档生人的日柱与农历日）"},
+            {"field": "timeAlg", "value": 0, "meaning": "真太阳时：上游 AI 挂载无头 buildFieldObject timeAlg ?? 0；页面全局字段出厂亦 0（YiZhangJingMain 的 fieldVal 回退 1 从不生效）；改它会改生时支"},
         ],
         do_not_assume=["gender"],
     ),

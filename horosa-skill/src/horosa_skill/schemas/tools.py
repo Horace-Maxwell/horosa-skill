@@ -869,11 +869,12 @@ class CanPingInput(FlexibleModel):
     zone: str | None = None
     lon: str | None = None
     gender: str | int | None = None
-    # timeAlg=0 → 真太阳时 (longitude + equation-of-time); any other value → clock time. Default 1
-    # (clock time) mirrors 星阙 CanPingMain.js's `fieldVal(f, 'timeAlg', 1)`.
-    timeAlg: int | None = 1
+    # timeAlg=0 → 真太阳时 (longitude + equation-of-time); any other value → clock time. 缺省 0（sync311 wave 3b，
+    # 此前误为 1）：上游无头 buildFieldObject timeAlg = record.timeAlg ?? 0（aiAnalysisContext.js:603）；页面
+    # CanPingMain `fieldVal(f,'timeAlg',1)` 读的全局字段恒在、出厂种子 0，回退 1 不生效（详 tools/canping.js 注）。
+    timeAlg: int | None = 0
     # 晚子时双开关（仅 hour==23 生效，见 references/late-zi.md）：after23NewDay=1 日柱进次日；
-    # lateZiHourUseNextDay=1(默认) 时干用次日日干起子时、=0 用今日。缺省不传 → 上游默认口径。
+    # lateZiHourUseNextDay=1(默认) 时干用次日日干起子时、=0 用今日。None → JS 取上游出厂 1/1（tools/canping.js）。
     after23NewDay: int | None = None
     lateZiHourUseNextDay: int | None = None
     # method: 'ming' (明法·月支反向取日宫) or 'gu' (古法·八字日支为日宫).
@@ -924,9 +925,10 @@ class HeLuoInput(FlexibleModel):
     zone: str | None = None
     lon: str | None = None
     gender: str | int | None = None
-    # timeAlg=0 → 真太阳时; any other value → clock time. Default 1 mirrors 星阙 HeLuoMain.js.
-    timeAlg: int | None = 1
-    # 晚子时双开关（仅 hour==23 生效，见 references/late-zi.md）：缺省不传 → 上游默认口径。
+    # timeAlg=0 → 真太阳时; any other value → clock time. 缺省 0（sync311 wave 3b，此前误为 1；上游无头
+    # buildFieldObject timeAlg = record.timeAlg ?? 0，aiAnalysisContext.js:603；页面全局字段出厂种子 0，详 tools/heluo.js 注）。
+    timeAlg: int | None = 0
+    # 晚子时双开关（仅 hour==23 生效，见 references/late-zi.md）：None → JS 取上游出厂 1/1（tools/heluo.js）。
     after23NewDay: int | None = None
     lateZiHourUseNextDay: int | None = None
     # 取法分歧四轴 + 流年法 + 阳令手定（缺省 = 引擎内建默认，逐字零回归；口径见 vendor/heluo/heluoLocal.js
@@ -951,7 +953,9 @@ class YizhangjingInput(FlexibleModel):
     zone: str | None = None
     lon: str | None = None
     gender: str | int | None = None
-    timeAlg: int | None = 1
+    # 时间算法：0 真太阳时（缺省，sync311 wave 3b 起；此前误为 1）| 1 钟表时。上游无头 buildFieldObject
+    # timeAlg = record.timeAlg ?? 0（aiAnalysisContext.js:603）；页面全局字段出厂种子 0（详 tools/yizhangjing.js 注）。
+    timeAlg: int | None = 0
     # 日界/晚子时：None → JS 侧按上游 YiZhangJingMain 缺席回退全局出厂默认 1/1（23 点算次日）。
     after23NewDay: int | None = Field(default=None, description="日界 1=23点换日(缺省)")
     lateZiHourUseNextDay: int | None = Field(default=None, description="晚子时干 1=次日(缺省)")
@@ -1828,6 +1832,9 @@ class SixYaoInput(FlexibleModel):
     gpsLon: float | None = None
     ad: int | None = 1
     question: str | None = None
+    # 求测人性别：只进 [起盘信息]「求测人性别」行（上游 GuaZhanMain.buildGuaSnapshotText:232-236，引擎不据此取用神）；
+    # None = 上游 buildCaseSnapshotFields 缺省 gender ?? 1（男）。
+    gender: int | None = Field(default=None, description="求测人性别 1男(缺省)/0女，仅随盘记录")
     gua_code: str | None = None
     changed_code: str | None = None
     lines: list[SixYaoLineInput] = Field(default_factory=list)

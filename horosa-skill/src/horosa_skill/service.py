@@ -4408,17 +4408,6 @@ def _gua_code_lines(gua_code: Any, changed_code: Any) -> list[dict[str, Any]]:
 _SIXYAO_DIZHI = "子丑寅卯辰巳午未申酉戌亥"
 
 
-def _extract_gua_detail(raw: Any, code: str) -> dict[str, Any]:
-    if isinstance(raw, dict):
-        if isinstance(raw.get(code), dict):
-            return raw[code]
-        if isinstance(raw.get("data"), dict) and isinstance(raw["data"].get(code), dict):
-            return raw["data"][code]
-        if isinstance(raw.get("result"), dict) and isinstance(raw["result"].get(code), dict):
-            return raw["result"][code]
-    return {}
-
-
 # ── 汉堡学派 (Uranian) 中点盘核心：星阙 utils/uranianDial.js 的 Python 移植（纯函数）──
 # 90° 盘：行星/三王/角点/TNP 折叠到 0–90°；行星图 A+B−C=D；映点 Spiegelpunkt；中点列表。
 _DIAL_IDS = (
@@ -6259,66 +6248,6 @@ def _build_geomancy_snapshot_text(response: dict[str, Any]) -> str:
     if fig_body:
         sections.append(("十六图形", fig_body))
     return _render_snapshot_text(sections)
-
-
-def _build_sixyao_snapshot_text(payload: dict[str, Any], nongli: dict[str, Any], current_code: str, changed_code: str, lines: list[dict[str, Any]], descs: dict[str, Any], struct_text: str = "", tail_blocks: list[str] | None = None) -> str:
-    question = payload.get("question")
-    current_desc = _extract_gua_detail(descs, current_code)
-    changed_desc = _extract_gua_detail(descs, changed_code)
-    line_texts: list[str] = []
-    for index, line in enumerate(lines, start=1):
-        yao_type = "阳爻" if int(line.get("value", 0)) == 1 else "阴爻"
-        moving = "（动）" if line.get("change") else "（静）"
-        extras = []
-        if line.get("god"):
-            extras.append(f"六神:{line['god']}")
-        if line.get("name"):
-            extras.append(f"爻名:{line['name']}")
-        suffix = f"，{'，'.join(extras)}" if extras else ""
-        line_texts.append(f"第{index}爻：{yao_type}{moving}{suffix}")
-    judge_lines = []
-    if question:
-        judge_lines.append(f"问题：{question}")
-    judge_lines.append(f"本卦：{current_desc.get('name', current_code)}")
-    if current_desc.get("卦辞"):
-        judge_lines.append(f"卦辞：{current_desc['卦辞']}")
-    judge_lines.append(f"之卦：{changed_desc.get('name', changed_code)}")
-    if changed_desc.get("卦辞"):
-        judge_lines.append(f"之卦卦辞：{changed_desc['卦辞']}")
-    sections: list[tuple[str, str]] = [
-        (
-            "起盘信息",
-            "\n".join(
-                [
-                    f"日期：{payload.get('date', '—')} {payload.get('time', '—')}",
-                    f"时区：{payload.get('zone', '—')}",
-                    f"经纬度：{payload.get('lon', '—')} {payload.get('lat', '—')}",
-                    f"起卦时间：{nongli.get('birth', '无')}",
-                    f"干支：年{nongli.get('yearJieqi') or nongli.get('year') or nongli.get('yearGanZi') or '无'} 月{nongli.get('monthGanZi', '无')} 日{nongli.get('dayGanZi', '无')} 时{nongli.get('time', '无')}",
-                ]
-            ),
-        ),
-        ("卦象", "\n".join([f"本卦：{current_desc.get('name', current_code)}", f"之卦：{changed_desc.get('name', changed_code)}"]).strip()),
-        ("六爻与动爻", "\n".join(line_texts).strip() or "暂无爻线数据"),
-    ]
-    # 断卦结构（六爻全流派）：由 core-js analyzeLiuyao 引擎派生（纳甲/世应/六亲/用神/旺衰/飞伏/六神/动变）。
-    # struct_text 以 "[断卦结构]" 段头开头 → 去头留正文（_render_snapshot_text 会补回 [标题]）；失败/无 node 时为空则不出该段。
-    struct_body = (struct_text or "").strip()
-    if struct_body.startswith("[断卦结构]"):
-        struct_body = struct_body[len("[断卦结构]"):].lstrip("\n")
-    if struct_body:
-        sections.append(("断卦结构", struct_body))
-    sections.append(("卦辞与断语", "\n".join(judge_lines).strip() or "无"))
-    text = _render_snapshot_text(sections)
-    # [断诀命中]/[占类断语]：vendored liuyaoSnapshotEx 产的整段（含段头）原样接在末尾 —— 上游
-    # buildGuaSnapshotText:381-388 同样置于 [卦辞与断语]（及默认关的 [判语库·参考诀表]）之后、段间一空行。
-    # 不经 _render_snapshot_text：它会给空正文补缺席说明，而上游段头下可以只有段头；也不 strip 行内空白
-    # （断语摘要行是 70 字截断，截点落在空格上时行尾那个空格就是上游字节）。
-    for block in tail_blocks or []:
-        body = (block or "").strip("\n")
-        if body.strip():
-            text = f"{text}\n\n{body}"
-    return text
 
 
 def _join_lines(lines: list[Any]) -> str:
@@ -12301,6 +12230,10 @@ class HorosaSkillService:
                 )
             request["pillars"] = pillars
             request["lunarMonth"] = nongli.get("monthInt")
+            # 农历日 = 后端 dayInt（钟面农历日：23 点档随日柱进位时它不进位，live 实测 after23NewDay 0/1 同值）。
+            # 这正是上游 AI 挂载无头口径 —— buildChartShusuanBazi 取 bazi.nongli.dayNum（aiAnalysisContext.js:1971-1972，
+            # 钟面日；进位值只在 ziwei* 键）；页面 ZhengChuanMain.getModel 另走 lunarByDayBoundary 进位（:193-196），两路
+            # 不一致按无头（sync311 wave 3b 核定，tests/test_sync311_divination_w3b.py 钉值 + 上游源绊线）。
             request["lunarDay"] = nongli.get("dayInt")
             request["isLeapMonth"] = bool(nongli.get("leap"))
             request["gender"] = payload.get("gender")
@@ -16238,16 +16171,28 @@ class HorosaSkillService:
             **_day_boundary_switches(payload),
             "ad": payload.get("ad", 1),
         }
+        gender = payload.get("gender")
+        if gender is not None and gender not in (0, 1):
+            # 上游 buildGuaSnapshotText 只认 0/1（GuaZhanMain.js:234 `=== 0 || === 1`），别的值整行静默不出 —— 这里报错不吞。
+            raise ToolValidationError(
+                bilingual("六爻 gender 只认 1（男）/ 0（女）。", "sixyao gender must be 1 (male) or 0 (female)."),
+                code="tool.sixyao_invalid_gender",
+                details={"gender": gender},
+            )
         nongli = self._call_remote("/nongli/time", nongli_request)
         lines = _normalize_gua_lines(payload.get("lines")) or _gua_code_lines(payload.get("gua_code"), payload.get("changed_code"))
         # 六爻层（core-js tools/liuyao.js）= 上游 AI 挂载无头路径 regenerateSixyaoSnapshot
         # （aiAnalysisContext.js:1739-1760）：未手动摇卦（lines 空）→ vendored buildTimeGua(nongli) 以时起卦
         # （年支序 + 农历月数 + 农历日数 + 时柱支序，时柱随 timeAlg）；齿轮 liuyaoSettings（上游 24 键扁平形）按
-        # mergeLiuyaoGearSettings 合并；先载《断易天机》断语库，再由 vendored liuyaoStructLines / liuyaoSnapshotEx
-        # 产 [断卦结构] / [断诀命中] / [占类断语]。nongliParams 供 JS 按上游 ensureYearGZByLunar 补正月初一口径年干支。
-        struct: dict[str, Any] = {}
+        # mergeLiuyaoGearSettings 合并；先载《断易天机》断语库，再由 vendored buildGuaSnapshotText(fields, st) 出**整份**
+        # 快照（[起盘信息]…[占类断语] 八段，段序行式即上游；sync311 wave 3b 起不再有 Python 自写段）。
+        # record = 上游 buildCaseSnapshotFields(record) 的入参（占时 + 时区 + 经纬度 + 求测人性别，:780-797）；
+        # nongliParams 供 JS 按上游 ensureYearGZByLunar 补正月初一口径年干支。
         liuyao_settings = payload.get("liuyaoSettings")
-        js_request: dict[str, Any] = {"nongli": nongli, "nongliParams": nongli_request}
+        record: dict[str, Any] = {key: payload.get(key) for key in ("date", "time", "zone", "lon", "lat")}
+        if gender is not None:
+            record["gender"] = gender
+        js_request: dict[str, Any] = {"nongli": nongli, "nongliParams": nongli_request, "record": record}
         if lines:
             js_request["lines"] = lines
         if isinstance(liuyao_settings, dict):
@@ -16255,19 +16200,35 @@ class HorosaSkillService:
         try:
             struct = self.js_client.run("liuyao", js_request)
         except ToolTransportError as exc:
+            # 起卦（以时）与整份快照都只在 vendored 上游函数里：引擎起不来就既起不出卦、也出不了上游快照。
+            # 结构化报错，绝不回落一份自写的起卦式或自写段。
             if not lines:
-                # 以时起卦只在 vendored 上游函数里：引擎起不来就起不出卦。结构化报错，绝不回落一份自写的起卦式。
                 raise ToolTransportError(
                     bilingual(
-                        "六爻以时起卦失败：起卦引擎（core-js buildTimeGua）不可用。可改为手动摇卦传 lines，或先体检 JS 运行时。",
-                        "sixyao time-cast failed: the core-js buildTimeGua engine is unavailable. Pass explicit lines, or check the JS runtime.",
+                        "六爻以时起卦失败：起卦引擎（core-js buildTimeGua）不可用。请先体检 JS 运行时（horosa-skill doctor）。",
+                        "sixyao time-cast failed: the core-js buildTimeGua engine is unavailable. Check the JS runtime (horosa-skill doctor).",
                     ),
                     code="tool.sixyao_time_cast_failed",
                     details={"reason": str(exc)},
                 ) from exc
-            # 手动摇卦：卦由 lines 定，判读三段优雅缺席（列 optional，不误报 missing），降级进 envelope.warnings。
-            _degrade("liuyao struct engine failed: %s", exc)
+            raise ToolTransportError(
+                bilingual(
+                    "六爻快照引擎（core-js buildGuaSnapshotText）不可用：卦已由 lines 定，但出不了上游快照。请先体检 JS 运行时。",
+                    "sixyao snapshot engine (core-js buildGuaSnapshotText) is unavailable: the lines fix the hexagram but the upstream snapshot cannot be built. Check the JS runtime.",
+                ),
+                code="tool.sixyao_engine_failed",
+                details={"reason": str(exc)},
+            ) from exc
         struct_data = struct.get("data") if isinstance(struct.get("data"), dict) else {}
+        if struct_data.get("lines_invalid"):
+            raise ToolValidationError(
+                bilingual(
+                    "六爻 lines 须六爻俱全（初→上），每爻 value 为 1 阳 / 0 阴。",
+                    "sixyao lines must list all six lines (bottom to top), each with value 1 (yang) or 0 (yin).",
+                ),
+                code="tool.sixyao_invalid_lines",
+                details={"lines": len(lines)},
+            )
         if not lines:
             lines = _normalize_gua_lines(struct.get("lines"))
             if len(lines) != 6:
@@ -16279,13 +16240,24 @@ class HorosaSkillService:
                     code="tool.sixyao_time_cast_failed",
                     details={"nongli_keys": sorted(nongli) if isinstance(nongli, dict) else []},
                 )
+        else:
+            # 手动摇卦：回显 JS 实际装卦的逐爻（缺省爻名已按 setupYao 取该卦 yaoname）。
+            lines = _normalize_gua_lines(struct.get("lines")) or lines
         current_code = payload.get("gua_code") or _derive_gua_code(lines)
         changed_code = payload.get("changed_code") or _derive_changed_gua_code(lines)
+        # 卦辞原文：上游无头卦不带 guaDesc，[卦辞与断语] 只有段头（GuaZhanMain.js:338-363 + :62-63）；
+        # /gua/desc 照旧取来放 data.descriptions（结构化数据面，不进快照）。
         descs = self._call_remote("/gua/desc", {"name": [current_code, changed_code]})
-        snapshot_text = _build_sixyao_snapshot_text(
-            payload, nongli, current_code, changed_code, lines, descs, struct.get("snapshot_text") or "",
-            tail_blocks=[struct.get("duanjue_text") or "", struct.get("zhanlei_text") or ""],
-        )
+        snapshot_text = struct.get("snapshot_text") or ""
+        if not snapshot_text.strip():
+            raise ToolTransportError(
+                bilingual(
+                    "六爻快照引擎返回空快照（buildGuaSnapshotText）。",
+                    "sixyao snapshot engine returned an empty snapshot (buildGuaSnapshotText).",
+                ),
+                code="tool.sixyao_engine_failed",
+                details={"time_cast": bool(struct.get("time_cast"))},
+            )
         result = {
             "nongli": nongli,
             "current_code": current_code,

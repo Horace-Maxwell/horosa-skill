@@ -168,7 +168,7 @@
       {
         "callee": "buildLocalBaziResult",
         "module": "../vendor/bazi/baziLunarLocal.js",
-        "line": 76,
+        "line": 85,
         "arg": 0,
         "via_local": "baziParams",
         "keys": [
@@ -185,7 +185,7 @@
       {
         "callee": "canpingCalculate",
         "module": "../vendor/canping/canpingLocal.js",
-        "line": 120,
+        "line": 129,
         "arg": 0,
         "via_local": "base",
         "keys": [
@@ -205,7 +205,7 @@
       {
         "callee": "liunianSeries",
         "module": "../vendor/canping/canpingLocal.js",
-        "line": 124,
+        "line": 133,
         "arg": 0,
         "keys": [
           "birthYear",
@@ -216,7 +216,7 @@
       {
         "callee": "buildSnapshotText",
         "module": "../vendor/canping/canpingLocal.js",
-        "line": 140,
+        "line": 149,
         "arg": 1,
         "keys": [
           "liunianRows"
@@ -358,7 +358,7 @@
       {
         "callee": "buildLocalBaziResult",
         "module": "../vendor/bazi/baziLunarLocal.js",
-        "line": 98,
+        "line": 106,
         "arg": 0,
         "via_local": "baziParams",
         "keys": [
@@ -375,7 +375,7 @@
       {
         "callee": "calc",
         "module": "../vendor/heluo/heluoLocal.js",
-        "line": 140,
+        "line": 148,
         "arg": 0,
         "keys": [
           "birthYear",
@@ -390,7 +390,7 @@
       {
         "callee": "calc",
         "module": "../vendor/heluo/heluoLocal.js",
-        "line": 140,
+        "line": 148,
         "arg": 0,
         "nested_under": "opts",
         "via_local": "hlOpts",
@@ -406,7 +406,7 @@
       {
         "callee": "judge",
         "module": "../vendor/heluo/heluoLocal.js",
-        "line": 150,
+        "line": 158,
         "arg": 1,
         "via_local": "fourPillars",
         "keys": [
@@ -419,7 +419,7 @@
       {
         "callee": "buildSnapshotText",
         "module": "../vendor/heluo/heluoLocal.js",
-        "line": 178,
+        "line": 186,
         "arg": 3,
         "keys": [
           "birthYear",
@@ -430,7 +430,7 @@
       {
         "callee": "buildSnapshotText",
         "module": "../vendor/heluo/heluoLocal.js",
-        "line": 178,
+        "line": 186,
         "arg": 3,
         "nested_under": "opts",
         "via_local": "hlOpts",
@@ -544,7 +544,7 @@
       {
         "callee": "buildLocalBaziResult",
         "module": "../vendor/bazi/baziLunarLocal.js",
-        "line": 98,
+        "line": 103,
         "arg": 0,
         "keys": [
           "after23NewDay",
@@ -798,7 +798,7 @@
       {
         "callee": "buildLocalBaziResult",
         "module": "../vendor/bazi/baziLunarLocal.js",
-        "line": 115,
+        "line": 119,
         "arg": 0,
         "via_local": "baziParams",
         "keys": [
@@ -815,7 +815,7 @@
       {
         "callee": "buildYizhangjingModel",
         "module": "../vendor/yizhangjing/yizhangjingReport.js",
-        "line": 122,
+        "line": 126,
         "arg": 1,
         "via_local": "opts",
         "keys": [
