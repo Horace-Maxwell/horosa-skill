@@ -31,3 +31,22 @@ def test_without_the_pin_the_installed_runtime_copy_would_win(tmp_path: Path, mo
     monkeypatch.delenv("HOROSA_CORE_JS_ROOT", raising=False)
     client = _client_with_installed_runtime(tmp_path)
     assert client._resolve_engine_root().resolve() == (client.settings.runtime_current_dir / "horosa-core-js").resolve()
+
+
+def test_subprocess_children_import_this_checkout_not_the_editable_install() -> None:
+    """Children spawned by the stdio/http tests must import the package under test.
+
+    Without the conftest PYTHONPATH pin a child resolves `horosa_skill` through the venv's editable install,
+    i.e. the checkout that ran `uv sync` — from a git worktree that is the main checkout (negative control,
+    run by hand from a worktree: no pin → `<main>/horosa-skill/src/horosa_skill/__init__.py`).
+    """
+    import subprocess
+    import sys
+
+    from conftest import REPO_SRC
+
+    out = subprocess.run(
+        [sys.executable, "-c", "import horosa_skill, pathlib; print(pathlib.Path(horosa_skill.__file__).resolve())"],
+        capture_output=True, text=True, check=True, timeout=60,
+    ).stdout.strip()
+    assert Path(out).is_relative_to(REPO_SRC.resolve()), out
