@@ -2327,10 +2327,10 @@ def test_primary_direction_exports_tables_and_pdchart_positions(tmp_path) -> Non
     pd_result = service.run_tool("pd", payloads["pd"], save_result=False)
     pd_text = pd_result.data["snapshot_text"]
     assert "主限法表格" in pd_text  # 上游 v48 段名对齐（旧名 主/界限法表格 → 主限法表格）
-    assert "| Arc | 迫星 | 应星 | 类型 | 日期 |" in pd_text
-    assert "推运月" in pd_text
-    assert "本命土" in pd_text
-    assert "2031-04-06" in pd_text
+    # 上游 v3.11 AstroDirectMain.js buildPrimaryDirectSnapshotText：4 列「日期(UTC)」、弧写「X度Y分」、
+    # 迫星/应星走 directionObjText（D_Moon_120 → 月…的120度右相位处）。
+    assert "| Arc | 迫星 | 应星 | 日期(UTC) |" in pd_text
+    assert "| 0度15分 | 月 (3th; 11R)的120度右相位处 | 土 (8th; 5R6R) | 2031-04-06 09:33:00 |" in pd_text
 
     pdchart_result = service.run_tool("pdchart", payloads["pdchart"], save_result=False)
     pdchart_text = pdchart_result.data["snapshot_text"]
@@ -2360,12 +2360,14 @@ def test_primary_direction_full_house_settings_surface(tmp_path) -> None:
         "pdTimeKey": "Kundig",
     }
     text = service.run_tool("pd", payload, save_result=False).data["snapshot_text"]
-    assert "Meridian" in text
-    assert "In Mundo（世俗）" in text
-    assert "仅逆向 (converse)" in text
-    assert "Kündig" in text
-    assert "映点(antiscia)作迫星：是" in text
-    assert "界(terms)作迫星：是" in text
+    # 上游 v3.11 [主限法设置] 行口径（AstroDirectMain.js:337-386）。
+    assert "推运方法：Meridian" in text
+    assert "方向类型：世俗（In Mundo）" in text
+    assert "向运方向：逆向 Converse" in text
+    assert "度数换算：Kündig" in text
+    assert "映点迫星：是" in text
+    assert "界迫星：是" in text
+    assert "弧算法（投影）：Ptolemy（半弧）（世界主限下走核内基线）" in text
 
 
 def test_primary_direction_core5_method_labels() -> None:

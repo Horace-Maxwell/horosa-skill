@@ -132,6 +132,17 @@ check('progextra options reach the vendored builders (balbillus/keypoints/tripli
   assert(halves.includes('| 次三分主星（下半生） | 水 | 45–90岁 |'), 'lifespan=90 must split at 45');
 });
 
+// 上游 buildCurrentMomentLines(chartObj, extraLines)：builder 自算的 [当前时点] 定位行经 stub 回传（不产段）。
+// fixture 出生 2026-06-02 → 此后 15 年内都处在首个主限「日」、三分主星首段「土」（0–25 岁）。
+check('progextra returns the builders\' current-moment locator lines', () => {
+  const bal = runProgExtra({ technique: 'balbillus', chart });
+  assert(bal.moment_lines.some((l) => l.startsWith('当前主限：日（起 2026-06-02，时长 15.35 年）')), `balbillus moment ${JSON.stringify(bal.moment_lines)}`);
+  assert(!bal.snapshot_text.includes('[当前时点]'), 'stub must not emit the section itself (Python owns it)');
+  const tri = runProgExtra({ technique: 'triplicityrulers', chart });
+  assert(tri.moment_lines[0] === '当前所处阶段：主三分主星·土（0–25岁）', `triplicity moment ${JSON.stringify(tri.moment_lines)}`);
+  assert(runProgExtra({ technique: 'keypoints', chart }).moment_lines.length === 0, 'keypoints passes no locator line upstream');
+});
+
 // F15：[寿命格局] 取主法 + 太阳三态阈值随调用方/本盘回显（上游 astroAiSnapshot.js:1123-1136）。
 check('astroextra lifespan honours method option and params solar orbs', () => {
   const ptolemy = runAstroExtra({ chart }).data.lifespan;

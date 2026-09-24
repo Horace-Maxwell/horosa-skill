@@ -116,8 +116,11 @@ def test_planetaryages_invariants() -> None:
     assert text.count("●") == 1, "exactly one current band should be marked"
 
 
-def test_planetaryages_no_current_band_without_as_of() -> None:
-    # with no as_of the current age is unknown → no band marked, no crash
-    text = S._build_planetaryages_snapshot_text(_chart(), None)
+def test_planetaryages_no_current_band_without_birth() -> None:
+    # 上游 v3.11（planetaryAges.js buildPlanetaryAges）：无 asOf 时按「此刻」算当前带；只有出生时刻缺失/不可解析
+    # 时当前年龄才未知 → 不标带、不崩（原测试「无 as_of 不标带」的前提随上游缺省改为此刻而不再成立）。
+    chart = _chart()
+    chart["params"] = {**chart.get("params", {}), "birth": ""}
+    text = S._build_planetaryages_snapshot_text(chart, None)
     assert "●" not in text
     assert text.startswith("[行星年龄（Ages of Man）]")

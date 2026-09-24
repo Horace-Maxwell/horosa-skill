@@ -31,6 +31,9 @@ export function runProgExtra(payload) {
     return { tool: 'progextra', technique, data: { ok: false, reason: 'unknown_technique' }, snapshot_text: '' };
   }
   let snapshot_text = '';
+  // [当前时点] 定位行（上游 buildCurrentMomentLines(chartObj, extraLines) 的 extraLines）：vendored builder 的
+  // astroAiSnapshot stub 把它写进这个全局槽（见 vendor_manifest stub_import），这里每次调用前清空、调用后取走。
+  globalThis.__horosaProgMomentLines = [];
   try {
     snapshot_text = builder(chartObj, options) || '';
   } catch (error) {
@@ -42,5 +45,7 @@ export function runProgExtra(payload) {
       snapshot_text: '',
     };
   }
-  return { tool: 'progextra', technique, data: { ok: true, options }, snapshot_text };
+  const moment_lines = Array.isArray(globalThis.__horosaProgMomentLines) ? globalThis.__horosaProgMomentLines : [];
+  globalThis.__horosaProgMomentLines = [];
+  return { tool: 'progextra', technique, data: { ok: true, options }, snapshot_text, moment_lines };
 }

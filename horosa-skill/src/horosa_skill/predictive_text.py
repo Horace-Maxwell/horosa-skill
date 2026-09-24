@@ -40,6 +40,19 @@ UPSTREAM_ASTRO_TXT_MSG: dict[str, str] = {
     "Admetos": "阿德墨托斯", "Vulcanus": "伏尔甘", "Poseidon": "波塞冬", "AriesPoint": "白羊点",
 }
 
+# 上游 HEAD divination/data/hellenisticData.json planetary_years：行星年四档（planetaryAges.js:99-110 ◆ 行星年四档 子块）。
+# ⚠ vendored 副本 horosa-core-js/src/vendor/divination/data/hellenisticData.json 此键仍是旧值（日/月中年 39.5）——
+# revendor --check 只管 manifest 里的 .js，不比 .json；本表按上游 HEAD 取值（日中年 69.5、月中年 66.5），测试锚定上游值。
+PLANETARY_YEARS: dict[str, dict[str, float]] = {
+    "Saturn": {"least": 30, "mean": 43.5, "greater": 57, "greatest": 465},
+    "Jupiter": {"least": 12, "mean": 45.5, "greater": 79, "greatest": 427},
+    "Mars": {"least": 15, "mean": 40.5, "greater": 66, "greatest": 284},
+    "Sun": {"least": 19, "mean": 69.5, "greater": 120, "greatest": 1461},
+    "Venus": {"least": 8, "mean": 45, "greater": 82, "greatest": 1151},
+    "Mercury": {"least": 20, "mean": 48, "greater": 76, "greatest": 480},
+    "Moon": {"least": 25, "mean": 66.5, "greater": 108, "greatest": 520},
+}
+
 # 上游 constants/AstroConst.js LIST_SIGNS。
 LIST_SIGNS: tuple[str, ...] = (
     "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
@@ -164,6 +177,45 @@ def astro_txt(value: Any) -> str:
     """`AstroText.AstroTxtMsg[id] || \\`${id}\\``（上游推运 builder 的通用名称函数）。"""
     key = js_str(value)
     return UPSTREAM_ASTRO_TXT_MSG.get(key) or key
+
+
+# 上游 constants/AstroText.js:139-339 AstroMsg 里 AstroTxtMsg 未收的条目（:149-150 Retrograde/Unknown 字形、
+# :240-255 尊贵/日光态字串键、:257-339 宫位/月相象限/恒星/黄道/宫制文字条目；其余 AstroMsg 键 AstroTxtMsg 都有，
+# 走不到这张表）。主限法 msg() 先 AstroTxtMsg 后 AstroMsg——恒星迫星 FS_Algol 因此落「大陵五」而不是 Algol。
+UPSTREAM_ASTRO_MSG_FALLBACK: dict[str, str] = {
+    "Retrograde": "Z", "Unknown": "{",
+    "ruler": "本垣", "exalt": "擢升", "dayTrip": "日三分", "nightTrip": "夜三分", "partTrip": "共管三分",
+    "term": "界", "face": "十度", "exile": "陷", "fall": "落", "Hayyiz": "得时得地", "DemiHayyiz": "得时不得地",
+    "InWrongPos": "失时", "Cazimi": "日熔", "Combust": "灼伤", "Sunbeams": "日光蔽匿",
+    "House1": "第一宫", "House2": "第二宫", "House3": "第三宫", "House4": "第四宫", "House5": "第五宫",
+    "House6": "第六宫", "House7": "第七宫", "House8": "第八宫", "House9": "第九宫", "House10": "第十宫",
+    "House11": "第十一宫", "House12": "第十二宫",
+    "First Quarter": "第一象限", "Second Quarter": "第二象限", "Third Quarter": "第三象限", "Last Quarter": "第四象限",
+    "Algenib": "壁宿一", "Alpheratz": "壁宿二", "Zaur": "天苑一", "Algol": "大陵五", "Alcyone": "昴宿六",
+    "Aldebaran": "毕宿五", "Rigel": "参宿七", "Capella": "五车二", "Betelgeuse": "参宿四", "Sirius": "天狼星",
+    "Canopus": "老人星", "Castor": "北河二", "Pollux": "北河三", "Procyon": "南河三", "Asellus Borealis": "鬼宿三",
+    "Asellus Australis": "鬼宿四", "Alphard": "星宿一", "Regulus": "狮心轩辕十四", "Denebola": "五帝座一",
+    "Algorab": "轸宿三", "Spica": "角宿一", "Arcturus": "大角", "Alphecca": "贯索四", "Zuben Elgenubi": "氐宿一",
+    "Zuben Eshamali": "氐宿四", "Unukalhai": "天市右垣七", "Agena": "马腹一", "Rigel Kentaurus": "南門二",
+    "Antares": "蝎心心宿二", "Lesath": "尾宿九", "Vega": "织女星", "Altair": "牛郎星", "Deneb Algedi": "垒壁阵四",
+    "Fomalhaut": "北落师门", "Deneb": "天津四", "Achernar": "水委一",
+    "Tropical": "回归黄道",
+    "Whole Sign": "整宫制", "Alcabitus": "Alcabitus", "Regiomontanus": "Regiomontanus", "Placidus": "Placidus",
+    "Koch": "Koch", "Vehlow Equal": "Vehlow Equal", "Polich Page": "Polich Page", "Sripati": "Sripati",
+    "Porphyrius": "Porphyry", "Campanus": "Campanus", "Equal": "Equal", "Equal MC": "Equal MC", "Meridian": "Meridian",
+    "Azimuthal": "Horizontal", "Morinus": "Morinus", "Carter Poli-Equatorial": "Carter Poli-Equatorial",
+    "Sunshine": "Sunshine", "Sunshine Alternate": "Sunshine Alternate", "Krusinski-Pisa-Goelzer": "Krusinski-Pisa-Goelzer",
+    "Pullen SD": "Pullen SD", "Pullen SR": "Pullen SR", "APC Houses": "APC Houses", "Savard-A": "Savard-A",
+    "Fortuna_Whole": "福点整宫制",
+}
+
+
+def astro_msg(value: Any) -> str:
+    """AstroDirectMain.js:100-111 `msg(id)`：null → ''；AstroTxtMsg[id] → AstroMsg[id] → `${id}`。"""
+    if value is None:
+        return ""
+    key = js_str(value)
+    return UPSTREAM_ASTRO_TXT_MSG.get(key) or UPSTREAM_ASTRO_MSG_FALLBACK.get(key) or key
 
 
 def asp_txt(deg: Any) -> str:

@@ -323,6 +323,30 @@ def test_planetaryarc_defaults_to_tomorrow_now_and_puts_table_under_aspects(tmp_
     assert _section(text, "相位").splitlines() == ["| 向运星 | 相位 | 本命星 | 误差 |", "| --- | --- | --- | --- |", "| 金 | 135º | 火 | 0.404 |"]
 
 
+# ── 行星年龄 / 129 年系统（planetaryAges.js:79-127 / AstroYearSystem129.js:20-50）──────────────────
+
+def test_planetaryages_defaults_to_now_and_adds_year_bands() -> None:
+    chart = json.loads((_FIXTURES / "chart_1998_predictive.json").read_text(encoding="utf-8"))
+    moment: list[str] = []
+    # 出生 1998-02-20 20:48；「此刻」2026-09-24 → 周岁 28 → 太阳带（上游无 asOf 即按 moment()，旧实现不标带）。
+    text = S._build_planetaryages_snapshot_text(chart, None, now=datetime(2026, 9, 24, 12, 0, 0), moment_lines=moment)
+    assert "当前年龄：约 28 岁" in text and "| 22-41岁 | 日 | 双鱼 1° | ● |" in text
+    assert moment == ["当前主政：日（22-41岁）"]
+    # moment diff 的锚 = 生日 + 整月数（月末钳位）：2/29 生人平年 2/28 当天即满岁；前一刻未满。
+    assert S._full_years_between("2024-02-29 05:30:00", datetime(2027, 2, 28, 12, 0, 0)) == 3
+    assert S._full_years_between("2024-02-29 05:30:00", datetime(2027, 2, 28, 5, 0, 0)) == 2
+    assert S._full_years_between("1998-02-20 20:48:00", datetime(2026, 2, 20, 20, 47, 59)) == 27
+    assert "◆ 行星年四档（小年/中年/大年/极大年）" in text and "土：小年 30 · 中年 43.5 · 大年 57 · 极大年 465" in text
+    # 四档常量 = 上游 HEAD divination/data/hellenisticData.json planetary_years（日中年 69.5、月中年 66.5）。
+    # ⚠ vendored 副本（horosa-core-js/src/vendor/divination/data/hellenisticData.json）此键仍是旧值 39.5/39.5，
+    # 本仓无消费方；已报 lead 走 re-vendor，不在此手改 vendored 数据。
+    assert P.PLANETARY_YEARS["Sun"] == {"least": 19, "mean": 69.5, "greater": 120, "greatest": 1461}
+    assert P.PLANETARY_YEARS["Moon"] == {"least": 25, "mean": 66.5, "greater": 108, "greatest": 520}
+    assert sum(y["least"] for y in P.PLANETARY_YEARS.values()) == 129
+    ys = S._build_yearsystem129_snapshot_text(chart)
+    assert "| 月 | 月 | 1998-02-20 |" in ys  # 上游 cn = AstroTxtMsg[id]（单字），旧实现印「月亮」
+
+
 # ── B [小限摘要]（profectionSummary.js:73-156，[Q-105]）─────────────────────────────────────────
 
 def test_profection_summary_values_follow_upstream_arithmetic() -> None:
@@ -469,6 +493,19 @@ def test_progextra_options_are_validated_and_forwarded(tmp_path) -> None:
     assert bad.ok is False and bad.error.code == "tool.predictive_invalid_option"
 
 
+def test_progextra_locator_lines_land_in_current_moment(tmp_path) -> None:
+    # 上游 balbillus.js:255-270 extraLines → buildCurrentMomentLines；JS stub 截获后经 moment_lines 回传。
+    class LocatorJs(RecordingJsClient):
+        def run(self, tool_name: str, payload: dict) -> dict:
+            result = super().run(tool_name, payload)
+            if tool_name == "progextra":
+                result = {**result, "moment_lines": ["当前主限：日（起 2026-06-02，时长 15.35 年）"]}
+            return result
+
+    text = _service(tmp_path, RecordingClient(), LocatorJs()).run_tool("balbillus", dict(BIRTH), save_result=False).data["snapshot_text"]
+    assert _section(text, "当前时点").splitlines()[-1] == "当前主限：日（起 2026-06-02，时长 15.35 年）"
+
+
 # ── F15 [寿命格局] 取主法 ─────────────────────────────────────────────────────────────────────
 
 def test_lifespan_method_reaches_natal_extras(tmp_path) -> None:
@@ -490,6 +527,34 @@ def test_primary_direction_labels_follow_upstream_vocabulary() -> None:
     assert S._primary_direction_time_key_text("VanDam") == "Van Dam（真弧）"
     assert S._primary_direction_time_key_text("User") == "自定义（每年度数）"
     assert len(S._PD_METHOD_LABELS) == 13 and len(S._PD_TIME_KEY_LABELS) == 26
+
+
+def test_primary_direction_table_mirrors_upstream_builder(tmp_path) -> None:
+    # 上游 components/direction/AstroDirectMain.js:168-223 directionObjText / :122 degreeText / :337-431 段结构。
+    wrap = {"chart": {"objects": [{"id": "Moon", "house": "House3", "ruleHouses": ["House11"]}]}}
+    assert S._pd_direction_obj_text("D_Moon_120", wrap) == "月 (3th; 11R)的120度右相位处"
+    assert S._pd_direction_obj_text("S_Sun_90", wrap) == "日的90度左相位处"
+    assert S._pd_direction_obj_text("N_Vertex_0", wrap) == "宿命点"
+    assert S._pd_direction_obj_text("T_Mars_Aries", wrap) == "牡羊的火界"
+    assert S._pd_direction_obj_text("C_Cusp3_0", wrap) == "第3宫头的反映点"
+    assert S._pd_direction_obj_text("MP_Jupiter_90", wrap) == "木的世界平行·ASC"
+    assert S._pd_direction_obj_text("LT_Pars Spirit_0", wrap) == "Spirit点"
+    # msg() 先 AstroTxtMsg 后 AstroMsg（constants/AstroText.js:278 AstroMsg[STAR_ALGOL]='大陵五'）：恒星迫星落中文星名。
+    assert S._pd_direction_obj_text("FS_Algol_0", wrap) == "恒星 大陵五"
+    assert S._pd_direction_obj_text("N_Regulus_0", wrap) == "狮心轩辕十四"
+    assert S._pd_degree_text(-0.124066360236327, "core_alchabitius") == "-0度7分"
+    assert S._pd_split_degree_text(36.37) == "36度22分"
+    service = _service(tmp_path)
+    text = service.run_tool(
+        "pd", {**BIRTH, "pdMethod": "placidus", "pdTimeKey": "VanDam", "pdConverse": 0}, save_result=False
+    ).data["snapshot_text"]
+    setting = _section(text, "主限法设置").splitlines()
+    assert setting[:4] == ["推运方法：Placidus（半弧）", "度数换算：Van Dam（真弧）", "方向类型：黄道（In Zodiaco）", "向运方向：顺向 Direct"]
+    assert "弧算法（投影）：Placidus（半弧严密）" in setting and "盘面宫制（分宫）：Placidus" in setting
+    assert _section(text, "主限法表格").splitlines()[0] == "| Arc | 迫星 | 应星 | 日期(UTC) |"
+    assert "表中距今最近行：" in _section(text, "当前时点")
+    chart_text = service.run_tool("pdchart", {**BIRTH, "datetime": "2031-04-06 09:33:00", "direction": "converse"}, save_result=False).data["snapshot_text"]
+    assert _section(chart_text, "主限法盘设置").splitlines()[-2:] == ["向运方向：逆向 Converse", "当前Arc：3度0分"]
 
 
 def test_guidance_states_upstream_defaults() -> None:
