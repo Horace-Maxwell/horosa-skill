@@ -4906,107 +4906,6 @@ def _build_jaynesprog_snapshot_text(
     return "\n".join(lines).strip()
 
 
-# 上游 components/astro/astroProgSnapshot.js:36-49 PROG_SNAPSHOT_VARIANTS（恒星支 vedicprog / 回归支 prog 同一 builder）。
-_PROG_SNAPSHOT_VARIANTS: dict[str, dict[str, Any]] = {
-    "vedicprog": {
-        "zodiacal": 1,
-        "section": "恒星推运（Vedic Sidereal）",
-        # [Q-176/T-116b] 「截至今日」写死，而紧接的下一行就是非今日的「目标日期」→ 改成中性说法。
-        "intro": "二次/三次/小限推运在恒星黄道（sidereal）下计算；下表为二次推运，推至下方所列目标日期。",
-        "posCol": "恒星推运位置",
-    },
-    "prog": {
-        "zodiacal": None,
-        "section": "二次推运（回归黄道）",
-        "intro": "二次/三次/小限推运在回归黄道（tropical）下计算；下表为二次推运，推至下方所列目标日期。",
-        "posCol": "推运位置",
-    },
-}
-
-
-def _build_prog_snapshot_text(
-    response: dict[str, Any],
-    payload: dict[str, Any] | None,
-    variant_key: str,
-    *,
-    target_date: str = "",
-    target_time: str = "12:00:00",
-    minor_variant: str = _ptext.DEFAULT_MINOR_VARIANT,
-) -> str:
-    """逐字镜像上游 components/astro/astroProgSnapshot.js:53-140 buildProgSnapshotText(chartObj, opts, variantKey)。"""
-    variant = _PROG_SNAPSHOT_VARIANTS[variant_key]
-    methods = [m for m in (response.get("methods") if isinstance(response.get("methods"), list) else []) if isinstance(m, dict)]
-    secondary = next((m for m in methods if m.get("method") == "secondary"), methods[0] if methods else None)
-    positions = secondary.get("positions") if isinstance(secondary, dict) and isinstance(secondary.get("positions"), list) else []
-    if not positions:
-        return _render_snapshot_text([(variant["section"], "（本盘无推运数据）")])
-    pos_col = variant["posCol"]
-    lines = [
-        f"[{variant['section']}]",
-        variant["intro"],
-        f"目标日期：{target_date} {target_time}（各法推运时刻=按该法折算，见各小节）",
-    ]
-    natal_block = _natal_birth_config_block(response, payload)
-    if natal_block:
-        lines.append("")
-        lines.extend(natal_block)
-    lines.extend(["", "[时段盘配置 二次推运位置]", f"| 点 | {pos_col} |", "| --- | --- |"])
-    lines.extend(
-        f"| {_ptext.astro_txt(p.get('id'))} | {_ptext.fmt_degree(p)} |"
-        for p in positions
-        if isinstance(p, dict) and p.get("id") in _PROGRESSION_EVENT_POINTS
-    )
-
-    def asp_txt(value: Any) -> str:
-        key = _ptext.js_fmt_num(value, 0)
-        return _ptext.UPSTREAM_ASTRO_TXT_MSG.get(f"Asp{key}") or f"{key}°"
-
-    def push_method_blocks(method: dict[str, Any], with_positions: bool) -> None:
-        label = _ptext.prog_method_tab(method)
-        progressed = method.get("progressedDate") if isinstance(method.get("progressedDate"), dict) else {}
-        when = progressed.get("datetime") or ""
-        rows = [p for p in (method.get("positions") if isinstance(method.get("positions"), list) else []) if isinstance(p, dict)]
-        if with_positions and rows:
-            lines.extend(["", f"◆ {label} 推运位置"])
-            if when:
-                lines.append(f"推运时刻：{when}")
-            if method.get("method") == "minor":
-                lines.append(f"月长算法：{_ptext.MINOR_VARIANT_LABEL.get(minor_variant) or minor_variant}")
-            lines.extend([f"| 点 | {pos_col} | 速度 |", "| --- | --- | --- |"])
-            lines.extend(
-                f"| {_ptext.astro_txt(p.get('id'))} | {_ptext.fmt_degree(p)} | {_ptext.js_fmt_num(p.get('lonspeed'), 4)} |"
-                for p in rows
-                if p.get("id") in _PROGRESSION_EVENT_POINTS
-            )
-        aspects = [a for a in (method.get("aspectsToNatal") if isinstance(method.get("aspectsToNatal"), list) else []) if isinstance(a, dict)]
-        if aspects:
-            lines.extend(["", f"◆ {label} 与本命相位", "| 推运点 | 相位 | 本命点 | 误差 |", "| --- | --- | --- | --- |"])
-            lines.extend(
-                f"| {_ptext.astro_txt(a.get('a'))} | {asp_txt(a.get('aspect'))} | {_ptext.astro_txt(a.get('b'))} | {_ptext.js_fmt_num(a.get('orb'), 3)} |"
-                for a in aspects[:120]
-            )
-
-    push_method_blocks(secondary, False)
-    for method in methods:
-        if method is not secondary:
-            push_method_blocks(method, True)
-    return "\n".join(lines).strip()
-
-
-def _build_vedicprog_snapshot_text(
-    response: dict[str, Any],
-    payload: dict[str, Any] | None = None,
-    *,
-    target_date: str = "",
-    target_time: str = "12:00:00",
-    minor_variant: str = _ptext.DEFAULT_MINOR_VARIANT,
-) -> str:
-    """上游 astroProgSnapshot.js:142 buildVedicProgSnapshotText = buildProgSnapshotText(…, 'vedicprog')。"""
-    return _build_prog_snapshot_text(
-        response, payload, "vedicprog", target_date=target_date, target_time=target_time, minor_variant=minor_variant
-    )
-
-
 # 上游 components/astro/AstroPlanetaryArc.js:19 ARC_SOURCES（页面/挂载齿轮同值域）。
 _ARC_SOURCES = ("Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Sun")
 
@@ -12577,10 +12476,25 @@ class HorosaSkillService:
         # execution="local" 的工具不走统一出口的 _attach_predictive_chart_context（那一支只对
         # remote 工具生效），所以这里显式补拉本命盘 —— [本命盘配置] 段要它。
         response = self._attach_predictive_chart_context("vedicprog", payload, response)
-        snapshot_text = _build_vedicprog_snapshot_text(
-            response, payload, target_date=target["targetDate"], target_time=target["targetTime"],
+        # 与 prog 共用 engine/astroextra_snapshots.py 的逐字移植 builder（已对上游 astroProgSnapshot.js 逐字节核过；
+        # 此前本仓有第二份 service 内移植，[本命盘配置] 还是 v3.11 前的逐行旧形——合并时去重）。
+        natal = response.get("natalChart") if isinstance(response, dict) else None
+        snapshot_text = build_prog_snapshot_text(
+            natal if isinstance(natal, dict) else {},
+            response,
+            "vedicprog",
+            target_date=target["targetDate"],
+            target_time=target["targetTime"],
             minor_variant=target["minorVariant"],
+            now=datetime.now(),
+            method_notes=_PREDICTIVE_METHOD_NOTES["vedicprog"],
         )
+        if not snapshot_text:
+            raise ToolValidationError(
+                "推运端点没有返回二次推运位置（上游此时显示「缺失」） / /astroextra/progressions returned no secondary positions",
+                code="tool.vedicprog_empty",
+                details={"tool": "vedicprog", "targetDate": target["targetDate"]},
+            )
         return {
             "methods": response.get("methods", []),
             "target": target,
