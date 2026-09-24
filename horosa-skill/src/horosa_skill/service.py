@@ -10737,10 +10737,11 @@ class HorosaSkillService:
                                  "clarification_notes": f"{tool_name} selected-moment sub-chart"})
             if tool_name == "qizhengzeri":
                 # 展示盘跟随扫描口径（上游 QizhengZeriMain.buildFields :365-402 [挂载自检 F-37]）：罗计交点 / 月孛
-                # 走 guolao 键名（perchart.applyGuolaoSiyu 读 guolaoNodeType/guolaoLilithType）。宿度制
-                # （su28Mode→doubingSu28）尚不能跟随：GuoLaoInput.doubingSu28 仍是 bool，2/3 过不了校验。
+                # 走 guolao 键名（perchart.applyGuolaoSiyu 读 guolaoNodeType/guolaoLilithType）；宿度制
+                # su28Mode → doubingSu28（:390 `doubingSu28: Number(o.su28Mode)`，缺省 2 回归今宿）。
                 base_payload["guolaoNodeType"] = scan_opts.get("nodeType", "mean")
                 base_payload["guolaoLilithType"] = scan_opts.get("lilithType", "mean")
+                base_payload["doubingSu28"] = int(scan_opts.get("su28Mode", 2))
             base_env = self.run_tool(spec["base_tool"], base_payload, save_result=False)
             if base_env.ok and isinstance(base_env.data, dict):
                 base = base_env.data

@@ -418,6 +418,8 @@ def test_qizhengzeri_scan_sends_the_keys_the_backend_reads(tmp_path) -> None:
     scan = client.endpoints("/qizhengelectionscan/scan")[-1]
     assert (scan["su28Mode"], scan["nodeType"], scan["lilithType"]) == (3, "true", "true")
     assert (seen[-1][1]["guolaoNodeType"], seen[-1][1]["guolaoLilithType"]) == ("true", "true")
+    # 宿度制同跟（QizhengZeriMain.js:390）：扫描 3 → 展示盘 doubingSu28=3；缺省扫描 2 → 展示盘 2（不是 guolao 自身缺省）。
+    assert seen[-1][1]["doubingSu28"] == 3 and seen[-2][1]["doubingSu28"] == 2
     env = service.run_tool("qizhengzeri", {**_zeri("qizhengzeri", su28Mode=5), "agent_confirmed_settings": True}, save_result=False)
     assert env.ok is False and env.error.code == "tool.qizhengzeri_bad_su28mode"
 
