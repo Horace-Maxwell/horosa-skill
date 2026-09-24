@@ -1229,6 +1229,12 @@ class ElectionInput(BirthInput):
             "firdariaNightOrder / zrLot / pdTimeKey。不认识的键原样回执在 data.params_ignored。"
         ),
     )
+    # 本命合参（上游「选本命盘」）：给了才产 [本命合参] 与 [回归与主限]（择日前最近日返/月返 + 择日日期 ±240 日
+    # 主限命中，主限时间钥匙随 options.pdTimeKey）。缺 date/time/zone/lat/lon 任一 → tool.election_natal_missing_fields。
+    natal: dict[str, Any] | None = Field(
+        default=None,
+        description="本命出生资料 {date,time,zone,lat,lon[,ad]}：加产 [本命合参] 与 [回归与主限]（日/月返 + 主限命中）。",
+    )
 
 
 class GeomancyInput(BirthInput):
@@ -1386,9 +1392,13 @@ class MundaneInput(FlexibleModel):
     ad: int | None = 1
     hsys: int | None = 0
     tradition: bool | None = False
-    # 盘型分派（上游 MundaneMain 的 TITLE 映射）：当前 headless 支持 ingress（默认）与
-    # mundanehorary；后者按 mhKind 出 [世运卜卦]/[世运问判] 两段。
-    mundaneType: str | None = Field(default=None, description="盘型：ingress（默认）/ mundanehorary。")
+    # 盘型分派（上游 MundaneMain 的 MUNDANE_TYPES）：底盘恒为入宫盘；盘型只决定加产哪组专属段/卡
+    # （mundanehorary → [世运卜卦]/[世运问判]；solunar/vedicmundane → 各自求根盘；newmoon/fullmoon/
+    # solecl/lunecl/cycles → 对应子盘的判读卡）。region 需 UI 选建置盘，headless 不支持（降级告警）。
+    mundaneType: str | None = Field(
+        default=None,
+        description="盘型：ingress（默认）/ newmoon / fullmoon / solecl / lunecl / cycles / solunar / vedicmundane / mundanehorary。",
+    )
     mhKind: str | None = Field(default=None, description="世运卜卦问类：war 战争（默认）/ weather 天候 / price 物价。")
     solunarType: str | None = Field(default=None, description="恒星派入境盘型：capsolar（默认）/arisolar/cansolar/libsolar/caplunar/arilunar/canlunar/liblunar。")
     solunarWeights: str | None = Field(default=None, description="恒星派权重方案（scheme_a 默认）。")

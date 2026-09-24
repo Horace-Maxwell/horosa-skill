@@ -36,6 +36,7 @@ import { runHuangli } from '../src/tools/huangli.js';
 import { runLiuyao } from '../src/tools/liuyao.js';
 import { personBazi } from '../src/vendor/calendar/riziEngine.js';
 import { runZeriScan, ZERI_TECHNIQUES } from '../src/tools/zeriScan.js';
+import { runMundaneCards } from '../src/tools/mundaneCards.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const chart = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_traditional.json'), 'utf8'));
@@ -795,6 +796,127 @@ check('baziGeju 值级金标：时柱入算 + 取格/成败/盲派逐字', () =>
   // 盲派宾主四位齐全 —— 时柱缺席时这里是 `时宾()`。
   assert(s.includes('宾主：年宾(己巳) 月宾(壬申) 日主(丁卯) 时宾(庚子)'), `mangpai wrong: ${s.split('\n').find((l) => l.startsWith('宾主：'))}`);
   assert(!/时宾\(\)/.test(s), '时柱 dropped out of 盲派 (fourColumns key must be `time`, not `hour`)');
+});
+
+// ── 世运右栏卡片段（上游 v3.11 [Q-444/T-407]，vendored buildMundaneCardSections）───────────────────────
+// 期望值一律**独立算出**，不抄 builder 的输出：上升座主星（古典宫主表）、赤道上升点（坐标公式）、元素计数
+// （三分表）、KP 宿主/副主与 Vimshottari 余额（KP 定义：27 宿等分 13°20′、副主按 120 年大运比例细分）。
+// 这组金标守的是「vendored 闭包真的活着」：截断/桩/改写任何一步出错（例如 ingressGovernance 没接回来），
+// builder 的逐卡 try/catch 会把 ReferenceError 吞成「该卡不产」—— 只有值级断言能把它抓出来。
+check('mundaneCards 值级金标：入宫底盘卡 + 吠陀/周期/食卡（vendored buildMundaneCardSections）', () => {
+  const objs = Object.fromEntries(chart.chart.objects.map((o) => [o.id, o]));
+  const jobs = [
+    {
+      id: 'ingress', chart,
+      extra: { mundaneType: 'ingress', ingressTerm: '春分', ingressYear: 2025, ingressMoment: '2025-03-20 17:01:21' },
+      state: { seasonSeed: { 春分: { time: '2025-03-20 17:01:21' }, 夏至: { time: '2025-06-21 10:42:00' } }, seasonSeedYear: 2025,
+        patData: [{ type: 't_square', apex: 'Mars', points: ['Mars', 'Sun', 'Moon'] }] },
+    },
+    { id: 'vedic', chart, extra: { mundaneType: 'vedicmundane', vedicYear: 2025 }, state: { vedicMoment: '2025-04-14 05:53:45' } },
+    { id: 'cycles', chart, extra: { mundaneType: 'cycles' }, state: {
+      gcResults: [{ year: 2000, month: 5, sign: 1, lon: 52.7 }, { year: 2020, month: 12, sign: 10, lon: 300.5 }],
+      gcPair: 'jupiter-saturn', gcAspect: 0, gcMode: 'ages', gcStart: 1300, gcEnd: 2200,
+      bbData: { points: [{ year: 1990, month: 7, index: 512.4 }, { year: 1983, month: 1, index: 300.2 }, { year: 1901, month: 1, index: 1080 }] },
+      bbSet: 'slow5', bbStart: 1900, bbEnd: 2050 } },
+    { id: 'solecl', chart, extra: { mundaneType: 'solecl', selectedMoment: '2025-03-29 18:47:26', eclipseTypeText: 'partial', scanYear: 2025 },
+      state: { eclipseDetail: { kind: 'solar', durationHours: 3.88, influence: 3.9, influenceUnit: '年' } } },
+  ];
+  const out = runMundaneCards({ jobs });
+  assert(out.data.ok === true, 'every card job should be ok');
+  const card = (id, title) => {
+    const job = out.data.jobs.find((j) => j.id === id);
+    const hit = job && job.cards.find((c) => c.title === title);
+    assert(hit, `${id}: missing card [${title}]`);
+    return hit.text.split('\n');
+  };
+  // [年盘概要]：上升天秤（fixture Asc 196.98°）→ 年主星=天秤宫主金星（古典宫主表）。modern 规则集 aries_annual → 12 个月。
+  const ann = card('ingress', '年盘概要');
+  assert(ann[1] === '2025 年 · 春分 · 白羊入宫 · 入宫时刻 2025-03-20 17:01:21', `年盘概要 head: ${ann[1]}`);
+  assert(ann[2] === '上升 天秤 → 年主星(命主) 金星', `年盘概要 ruler: ${ann[2]}`);
+  assert(ann[3] === '本盘上升 基本星座 · 现代(Carter–Campion) → 主管约 12 个月', `年盘概要 governance: ${ann[3]}`);
+  // [四季入境盘]：时刻截到分（hit.time.slice(0,16)），缺的季写 —，当前节气标（当前）。
+  const four = card('ingress', '四季入境盘');
+  assert(JSON.stringify(four.slice(2)) === JSON.stringify(['- 春分·白羊：2025-03-20 17:01（当前）', '- 夏至·巨蟹：2025-06-21 10:42', '- 秋分·天秤：—', '- 冬至·摩羯：—']), `四季入境盘: ${four.slice(2)}`);
+  // [四轴特殊点] 赤道上升点：λ_EQ = atan2(cos RAMC, −sin RAMC·cos ε)，RAMC 由 λ_MC 反推，ε 取 23.4367°。
+  const D = Math.PI / 180; const eps = 23.4367 * D; const lm = objs.MC.lon * D;
+  const ramc = Math.atan2(Math.sin(lm) * Math.cos(eps), Math.cos(lm));
+  const ep = ((Math.atan2(Math.cos(ramc), -Math.sin(ramc) * Math.cos(eps)) / D) % 360 + 360) % 360;
+  const SIGN_CN = ['白羊', '金牛', '双子', '巨蟹', '狮子', '处女', '天秤', '天蝎', '射手', '摩羯', '水瓶', '双鱼'];
+  const axes = card('ingress', '四轴特殊点');
+  assert(axes[1] === `赤道上升点：${SIGN_CN[Math.floor(ep / 30)]} ${(ep % 30).toFixed(2)}°`, `east point: ${axes[1]} vs ${ep}`);
+  // [盘型格局] 元素计数：十体（七曜+三王星）按三分表计 —— fixture：日双子/月摩羯/水巨蟹/金巨蟹/火金牛/木巨蟹/土白羊/天双子/海白羊/冥水瓶。
+  const EL = { aries: '火', leo: '火', sagittarius: '火', taurus: '土', virgo: '土', capricorn: '土', gemini: '风', libra: '风', aquarius: '风', cancer: '水', scorpio: '水', pisces: '水' };
+  const tally = { 火: 0, 土: 0, 风: 0, 水: 0 };
+  ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto'].forEach((id) => { tally[EL[objs[id].sign.toLowerCase()]] += 1; });
+  const pattern = card('ingress', '盘型格局');
+  assert(pattern.some((l) => l.includes(`（火${tally.火}·土${tally.土}·风${tally.风}·水${tally.水}）`)), `element tally: ${pattern[2]}`);
+  // 相位格局行只在 patData 属于本盘时出（st.patKey === chartRequestKey(chart)，headless 恒等键）：T 三角顶点火星。
+  assert(pattern.includes('相位格局：'), 'patData must reach [盘型格局] (patKey pairing with the AstroExtraCommon stub)');
+  assert(pattern.some((l) => l.startsWith('- T 三角（顶点 火星）：')), `T-square line: ${pattern.join(' | ')}`);
+  // KP / Vimshottari：月黄经 → 第 floor(λ/13°20′)+1 宿；宿主按 Vimshottari 序；副主按 120 年比例细分。
+  const NAK_LEN = 40 / 3; const SEQ = ['ketu', 'venus', 'sun', 'moon', 'mars', 'rahu', 'jupiter', 'saturn', 'mercury'];
+  const YEARS = { ketu: 7, venus: 20, sun: 6, moon: 10, mars: 7, rahu: 18, jupiter: 16, saturn: 19, mercury: 17 };
+  const CN_V = { sun: '日', moon: '月', mars: '火', mercury: '水', jupiter: '木', venus: '金', saturn: '土', rahu: '罗睺', ketu: '计都' };
+  const moonLon = objs.Moon.lon; const nak = Math.floor(moonLon / NAK_LEN); const frac = (moonLon - nak * NAK_LEN) / NAK_LEN;
+  const starLord = SEQ[nak % 9];
+  let acc = 0; let subLord = null;
+  for (let k = 0; k < 9 && !subLord; k += 1) { const lord = SEQ[(nak + k) % 9]; acc += YEARS[lord] / 120; if (frac < acc) subLord = lord; }
+  const kp = card('vedic', 'KP 副主链');
+  assert(kp.some((l) => l.startsWith(`| 月 | `) && l.endsWith(` | ${CN_V[starLord]} | ${CN_V[subLord]} |`)), `KP moon row: ${kp.find((l) => l.startsWith('| 月'))}`);
+  const dasha = card('vedic', '世运大运');
+  assert(dasha[1] === `（Vimshottari · 年长口径 365.2425（现代））起运主 ${CN_V[starLord]}（月在第 ${nak + 1} 宿,余额 ${((1 - frac) * 100).toFixed(1)}%）`, `dasha head: ${dasha[1]}`);
+  const vedic = card('vedic', '吠陀世运·年度盘');
+  assert(vedic[1] === '当前入境时刻：2025-04-14 05:53:45', `vedic moment: ${vedic[1]}`);
+  // [木土纪元]：木土合相 · 地心 · 1300–2200（页面缺省，同 builder 的 clampYear 回落）· 共 2 次。
+  const eras = card('cycles', '木土纪元');
+  assert(eras[1] === '（木 ✕ 土（时代纪元）合相 · 地心 · 1300–2200 · 共 2 次）', `木土纪元 head: ${eras[1]}`);
+  // [Barbault 聚散指数]：最深谷 = index 最小点（1983-01, 300.2→300°），最高峰 = 最大点（1901-01, 1080°）。
+  const bb = card('cycles', 'Barbault 聚散指数');
+  assert(bb[2] === '最深谷（聚集）1983-01（300°）；最高峰（四散）1901-01（1080°）', `barbault extrema: ${bb[2]}`);
+  // [日食图判读] 食时长定则：日食 3.88 小时 → 3.9 年（state.eclipseDetail 原样入段）。
+  const ecl = card('solecl', '日食图判读');
+  assert(ecl[1] === '时刻 2025-03-29 18:47:26 · partial', `eclipse head: ${ecl[1]}`);
+  assert(ecl.includes('时长：约 3.88 小时 → 影响约 3.9 年（食时长定则）'), 'eclipse duration rule line');
+  card('solecl', '食族 Saros');
+  card('solecl', '天象占参考');
+});
+
+// 择日 [回归与主限]（上游 v3.11 [Q-445]）：extra 由 Python 求根/取数后传入；JS 只 buildFacts + 上游排版。
+// 期望：fixture 盘上升天秤；角宫（1/4/7/10）吉星木金、凶星土 → ▲▲▼；主限行照
+// electionSnapshot.js:130-133 的「日期（±N 日）：应星 ← 迫星（法）」，method 为空时不带括号。
+check('election [回归与主限] 值级金标：回归盘利钝 + 主限命中排版', () => {
+  const r = runElectionTool({
+    chart, topicId: 'marriage', natalChart: chart,
+    extra: {
+      returnSet: { solar: { momentStr: '2027-06-15 07:03:11', chart }, lunar: null },
+      pdHits: [
+        { promissor: 'N_Mars_180', significator: 'N_Pluto_0', method: 'Z', date: '2028-02-18', deltaDays: -48 },
+        { promissor: 'S_Mars_60', significator: 'N_Jupiter_0', method: '', date: '2028-07-01', deltaDays: 86 },
+      ],
+    },
+  });
+  const s = r.snapshot_text || '';
+  const start = s.indexOf('[回归与主限]');
+  assert(start >= 0, 'missing [回归与主限]');
+  const body = s.slice(start, s.indexOf('\n[', start + 1)).split('\n');
+  assert(JSON.stringify(body) === JSON.stringify([
+    '[回归与主限]',
+    '- · 日返时刻 2027-06-15 07:03:11，上升 天秤。',
+    '- ▲ 日返盘吉星 木星 临角宫（本期得助）。',
+    '- ▲ 日返盘吉星 金星 临角宫（本期得助）。',
+    '- ▼ 日返盘凶星 土星 临角宫（本期承压）。',
+    '择日日期前后主限命中（±240 日内最近 2 条）：',
+    '- 2028-02-18（-48 日）：N_Pluto_0 ← N_Mars_180（Z）',
+    '- 2028-07-01（+86 日）：N_Jupiter_0 ← S_Mars_60',
+  ]), `回归与主限 body: ${JSON.stringify(body)}`);
+  assert(s.includes('[本命合参]'), 'natalChart must reach runElection (本命合参)');
+  assert(r.data.natal.integrated === true && r.data.returns.returnCharts === 1, `receipts: ${JSON.stringify(r.data)}`);
+  // 缺省路径（无本命/无 extra）：段不出、data 不多键。
+  const plain = runElectionTool({ chart, topicId: 'marriage' });
+  assert(!(plain.snapshot_text || '').includes('[回归与主限]') && !('natal' in plain.data) && !('returns' in plain.data), 'default path must stay byte-identical');
+  // 有效主限时间钥匙由引擎解析器给（流派档 × 覆写），Python 不手抄。
+  assert(runElectionTool({ chart, action: 'resolve_params', options: { pdTimeKey: 'Naibod' } }).data.effective.pdTimeKey === 'Naibod', 'override pdTimeKey');
+  assert(runElectionTool({ chart, action: 'resolve_params' }).data.effective.pdTimeKey === 'Ptolemy', 'default pdTimeKey');
 });
 
 await Promise.all(pending);

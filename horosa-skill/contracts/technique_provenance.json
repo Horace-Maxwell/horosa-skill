@@ -555,6 +555,7 @@
     "mundane": {
       "compute_class": "composite",
       "engines": [
+        "mundane_cards",
         "mundane_horary",
         "mundane_solunar"
       ],

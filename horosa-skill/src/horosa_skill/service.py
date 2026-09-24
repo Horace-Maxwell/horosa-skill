@@ -5,6 +5,7 @@ import contextvars
 import copy
 import gzip
 import logging
+import math
 import os
 import re
 import shutil
@@ -4962,6 +4963,41 @@ def _shift_moment(moment: str, days: float) -> str:
     """把 'YYYY-MM-DD HH:MM:SS' 平移若干天（可为负），同上游 shiftMoment。"""
     base = datetime.strptime(moment, "%Y-%m-%d %H:%M:%S")
     return (base + timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _chart_body_lon_speed(chart_response: Any, body: str) -> tuple[float | None, Any]:
+    """(黄经, 速度)：同上游 chartFacts.getObj（先 objectMap[id]、再 chart.objects）→ planets[k].lon / .speed(=lonspeed)。"""
+    if not isinstance(chart_response, dict):
+        return None, None
+    wanted = "Sun" if body == "sun" else "Moon"
+    obj: Any = None
+    object_map = chart_response.get("objectMap")
+    if isinstance(object_map, dict) and isinstance(object_map.get(wanted), dict):
+        obj = object_map.get(wanted)
+    else:
+        chart = chart_response.get("chart") if isinstance(chart_response.get("chart"), dict) else {}
+        obj = next((o for o in chart.get("objects") or [] if isinstance(o, dict) and o.get("id") == wanted), None)
+    if not isinstance(obj, dict):
+        return None, None
+    lon = obj.get("lon")
+    if isinstance(lon, bool) or not isinstance(lon, (int, float)):
+        return None, obj.get("lonspeed")
+    return float(lon), obj.get("lonspeed")
+
+
+def _fmt_moment(value: datetime) -> str:
+    """moment.format('YYYY-MM-DD HH:mm:ss')：年份补足四位（strftime 的 %Y 对 <1000 年不补零）。"""
+    return f"{value.year:04d}-{value.month:02d}-{value.day:02d} {value.hour:02d}:{value.minute:02d}:{value.second:02d}"
+
+
+def _js_math_round(value: float) -> int:
+    """JS Math.round：half 一律向 +∞（负数也对；service 里另一个 _js_round 用 int(x+0.5)，只对非负值成立）。"""
+    return math.floor(value + 0.5)
+
+
+def _drop_none(mapping: dict[str, Any]) -> dict[str, Any]:
+    """JSON.stringify 丢 undefined 键：请求体里 None 值的键不发（上游对象字面量里缺席的字段即此形）。"""
+    return {k: v for k, v in mapping.items() if v is not None}
 
 
 # 玄史条目的展示键序（存在才渲染；覆盖 事件/天象/人物/朝代/术数/名词/故事 各族的常见字段）。
@@ -10182,27 +10218,36 @@ class HorosaSkillService:
         # 择日 (electional): cast the traditional chart at a candidate moment, then run the vendored 星阙
         # election engine (runElection + buildElectionSnapshot). topicId drives the rule pack + hard flags.
         topic_id = f"{payload.get('topicId') or payload.get('topic') or 'marriage'}".strip() or "marriage"
+        # natal（可选，本命出生资料）：先验全再起任何盘——缺字段是输入错，不许半途静默少段。
+        natal_spec = self._election_natal_spec(payload)
         chart_payload = {**payload, "predictive": 0, "tradition": payload.get("tradition", 1)}
-        for stale in ("datetime", "dirZone", "dirLat", "dirLon", "topicId", "topic", "school", "options"):
+        for stale in ("datetime", "dirZone", "dirLat", "dirLon", "topicId", "topic", "school", "options", "natal"):
             chart_payload.pop(stale, None)
         response = self._call_remote("/chart", chart_payload)
+        js_payload: dict[str, Any] = {
+            "chart": response,
+            "topicId": topic_id,
+            # 流派档 + 13 个判读层参数：JS 侧按 ELECTION_PARAM_BY_KEY 过滤并回执。
+            "school": payload.get("school"),
+            "options": payload.get("options"),
+        }
+        natal_returns: dict[str, Any] | None = None
+        if natal_spec is not None:
+            natal_returns = self._attach_election_natal(payload, natal_spec, js_payload)
         snapshot_text, data, snapshot_error = "", {}, None
         try:
-            js = self.js_client.run(
-                "election",
-                {
-                    "chart": response,
-                    "topicId": topic_id,
-                    # 流派档 + 13 个判读层参数：JS 侧按 ELECTION_PARAM_BY_KEY 过滤并回执。
-                    "school": payload.get("school"),
-                    "options": payload.get("options"),
-                },
-            )
+            js = self.js_client.run("election", js_payload)
             if isinstance(js, dict):
                 snapshot_text = f"{js.get('snapshot_text') or ''}".strip()
                 data = js.get("data") if isinstance(js.get("data"), dict) else {}
                 # the JS engine resolves an unknown topicId back to 'marriage'; reflect that.
                 topic_id = f"{js.get('topicId') or topic_id}".strip() or topic_id
+                natal_echo = data.get("natal") if isinstance(data.get("natal"), dict) else None
+                if natal_spec is not None and natal_echo is not None and not natal_echo.get("integrated"):
+                    _degrade("election natal chart not integrated: %s", natal_echo.get("error"))
+                returns_echo = data.get("returns") if isinstance(data.get("returns"), dict) else None
+                for err in (returns_echo or {}).get("errors") or []:
+                    _degrade("election return chart facts failed: %s", err)
         except Exception as exc:  # don't fail the chart, but don't hide the empty snapshot either
             snapshot_error = str(exc)
             _degrade("election JS engine failed (topicId=%s): %s", topic_id, exc)
@@ -10214,9 +10259,243 @@ class HorosaSkillService:
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="election", snapshot_text=snapshot_text),
         }
+        if natal_returns is not None:
+            result["natalReturns"] = natal_returns
         if snapshot_error:
             result["snapshot_error"] = snapshot_error
         return result
+
+    # ── 择日·本命合参 + 回归与主限（上游 v3.11 [Q-445]）─────────────────────────────────────────
+    # 上游页面：左栏「选本命盘」（ElectionMain.js:173 selectNatal）→ natalFacts 进 runElection（[本命合参]）；
+    # 其下两颗按钮「拉日/月返盘」（:204 fetchReturns → returnCharts.fetchReturnSet）与「拉主限命中」
+    # （:218 fetchPdHits → returnCharts.fetchPdHitsNearElection）的结果经 extra 进快照 [回归与主限]
+    # （ElectionJudgment.js:289 → electionSnapshot.js:120-135）。三者全是 HTTP 编排，按 AGENTS §5 归 Python；
+    # JS 只做 buildFacts + 上游 builder 排版（tools/election.js）。
+    _ELECTION_NATAL_REQUIRED = ("date", "time", "zone", "lat", "lon")
+    # 上游 divination/engine/timeLords.js:209-210（returnCharts.js 的回归周期与平均速率 RATE 都取它）。
+    _SOLAR_RETURN_DAYS = 365.25
+    _LUNAR_RETURN_DAYS = 27.321661
+    # fetchPdHitsNearElection（returnCharts.js:98）：±windowDays（缺省 240）、按 |Δ日| 升序取前 limit（缺省 8）。
+    _ELECTION_PD_WINDOW_DAYS = 240
+    _ELECTION_PD_LIMIT = 8
+    _ELECTION_PD_TIME_KEY_COMPAT = {"Cardan": "Cardano", "Placidus": "Ptolemy"}  # returnCharts.js:106 旧存档值兼容
+
+    def _election_natal_spec(self, payload: dict[str, Any]) -> dict[str, Any] | None:
+        natal = payload.get("natal")
+        if natal is None:
+            return None
+        if not isinstance(natal, dict):
+            raise ToolValidationError(
+                bilingual("natal 必须是本命出生资料对象 {date,time,zone,lat,lon}", "natal must be an object {date,time,zone,lat,lon}"),
+                code="tool.election_natal_invalid",
+                details={"natal_type": type(natal).__name__},
+            )
+        missing = [k for k in self._ELECTION_NATAL_REQUIRED if not f"{natal.get(k) or ''}".strip()]
+        if missing:
+            raise ToolValidationError(
+                bilingual(
+                    f"本命出生资料不全，缺 {'/'.join(missing)}（本命合参与回归/主限都要完整的出生时刻与地点）",
+                    f"natal birth data incomplete: missing {', '.join(missing)}",
+                ),
+                code="tool.election_natal_missing_fields",
+                details={"missing": missing},
+            )
+        return natal
+
+    def _attach_election_natal(
+        self, payload: dict[str, Any], natal: dict[str, Any], js_payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """起本命盘 + 求日/月返 + 取主限命中，挂到 js_payload（natalChart / extra）。返回回执（时刻与命中）。"""
+        hsys = payload.get("hsys") if payload.get("hsys") is not None else 0
+        zodiacal = payload.get("zodiacal") if payload.get("zodiacal") is not None else 0
+        ayanamsa = payload.get("siderealAyanamsa") or ""
+        natal_ad = natal.get("ad") if natal.get("ad") is not None else 1
+        natal_date = f"{natal.get('date')}".strip()
+        natal_time = f"{natal.get('time')}".strip() or "12:00:00"
+        # selectNatal（:173-181）：本命参数 + 页面宫制/黄道 + tradition 1 / predictive 0 / pdaspects。
+        natal_chart_payload = _drop_none({
+            "ad": natal_ad, "date": natal_date, "time": natal_time,
+            "zone": natal.get("zone"), "lat": natal.get("lat"), "lon": natal.get("lon"),
+            "gpsLat": natal.get("gpsLat"), "gpsLon": natal.get("gpsLon"),
+            "hsys": hsys, "zodiacal": zodiacal, "siderealAyanamsa": ayanamsa,
+            "tradition": 1, "predictive": 0, "pdaspects": [0, 60, 90, 120, 180],
+        })
+        try:
+            natal_chart = self._call_remote("/chart", natal_chart_payload)
+        except Exception as exc:  # noqa: BLE001 — 本命盘起不来：择日盘照出，合参两段缺席并说出来
+            _degrade("election natal chart failed: %s", exc)
+            return {"solarReturn": None, "lunarReturn": None, "pdTimeKey": None, "pdHits": [], "error": str(exc)}
+        js_payload["natalChart"] = natal_chart
+
+        # fetchReturns（:204）：fieldsLike = 电盘页的地点与盘式（geoFromFields :113）。
+        fields_like = {
+            "zone": payload.get("zone"), "lon": payload.get("lon"), "lat": payload.get("lat"),
+            "gpsLat": payload.get("gpsLat"), "gpsLon": payload.get("gpsLon"),
+            "hsys": hsys, "zodiacal": zodiacal, "siderealAyanamsa": ayanamsa,
+            "tradition": payload.get("tradition") if payload.get("tradition") is not None else 1,
+        }
+        election_moment = f"{payload.get('date')} {payload.get('time') or '12:00:00'}"
+        solar = lunar = None
+        for kind in ("sun", "moon"):
+            natal_lon, _ = _chart_body_lon_speed(natal_chart, kind)
+            try:
+                ret = self._solve_return_before(kind, natal_lon, election_moment, fields_like)
+                if ret is None:
+                    _degrade("election %s return: 未求得（本命黄经缺失或回归起盘失败）", kind)
+            except Exception as exc:  # noqa: BLE001 — 上游 solveReturnBefore 失败 = 该返为 null；这里说出来
+                _degrade("election %s return solve failed: %s", kind, exc)
+                ret = None
+            if kind == "sun":
+                solar = ret
+            else:
+                lunar = ret
+
+        # fetchPdHits（:218-240）：本命参数（日期用 /）+ 页面宫制/黄道 + tradition 1；时间钥匙 = 有效口径 eff.pdTimeKey。
+        pd_time_key = self._election_effective_pd_time_key(payload)
+        natal_params = _drop_none({
+            "ad": natal_ad, "date": natal_date.replace("-", "/"), "time": natal_time,
+            "zone": natal.get("zone"), "lat": natal.get("lat"), "lon": natal.get("lon"),
+            "gpsLat": natal.get("gpsLat"), "gpsLon": natal.get("gpsLon"),
+            "hsys": hsys, "zodiacal": zodiacal, "siderealAyanamsa": ayanamsa, "tradition": 1,
+        })
+        pd_hits = self._election_pd_hits(natal_params, f"{payload.get('date')}", pd_time_key)
+        js_payload["extra"] = {"returnSet": {"solar": solar, "lunar": lunar}, "pdHits": pd_hits}
+        return {
+            "solarReturn": solar.get("momentStr") if solar else None,
+            "lunarReturn": lunar.get("momentStr") if lunar else None,
+            "pdTimeKey": pd_time_key,
+            "pdHits": pd_hits,
+        }
+
+    def _election_effective_pd_time_key(self, payload: dict[str, Any]) -> str | None:
+        """eff.pdTimeKey 由引擎自己的 resolveElectionParams 给（流派档 × 覆写四层合并），Python 不手抄默认表。"""
+        try:
+            js = self.js_client.run(
+                "election",
+                {"action": "resolve_params", "school": payload.get("school"), "options": payload.get("options")},
+            )
+        except Exception as exc:  # noqa: BLE001
+            _degrade("election resolve_params failed (主限时间钥匙回落 Ptolemy): %s", exc)
+            return None
+        effective = ((js or {}).get("data") or {}).get("effective") if isinstance(js, dict) else None
+        value = effective.get("pdTimeKey") if isinstance(effective, dict) else None
+        return f"{value}" if value else None
+
+    def _chart_at_moment(self, moment: str, fields_like: dict[str, Any]) -> dict[str, Any] | None:
+        """上游 divination/mundane/momentPipeline.chartAtMoment（:157）的 Python 端口：任意时刻 + 给定地点独立起盘。"""
+        date_part, _, time_part = moment.partition(" ")
+        params = {
+            "ad": 1,
+            "date": date_part.replace("-", "/"),
+            "time": time_part or "00:00:00",
+            "zone": fields_like.get("zone") or "+08:00",
+            "lat": fields_like.get("lat") or "0n00",
+            "lon": fields_like.get("lon") or "0e00",
+            "gpsLat": fields_like.get("gpsLat") if fields_like.get("gpsLat") is not None else 0,
+            "gpsLon": fields_like.get("gpsLon") if fields_like.get("gpsLon") is not None else 0,
+            "hsys": fields_like.get("hsys") if fields_like.get("hsys") is not None else 0,
+            "zodiacal": fields_like.get("zodiacal") if fields_like.get("zodiacal") is not None else 0,
+            "siderealAyanamsa": fields_like.get("siderealAyanamsa") if fields_like.get("siderealAyanamsa") is not None else "",
+            "tradition": fields_like.get("tradition") if fields_like.get("tradition") is not None else 1,
+            "predictive": 0,
+            "pdaspects": [0, 60, 90, 120, 180],
+        }
+        rsp = self._call_remote("/chart", params)
+        return rsp if isinstance(rsp, dict) and isinstance(rsp.get("chart"), dict) else None
+
+    def _solve_return_before(
+        self, kind: str, natal_lon: float | None, election_moment: str, fields_like: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """上游 returnCharts.solveReturnBefore（:23-58）的逐步端口：择日时刻之前最近一次精确日返/月返。
+
+        逐条照搬：种子 = 电盘时刻按「该体已行过的角距 / 平均速率」回推；牛顿迭代 ≤6 次，|Δ| < 0.005° 停；
+        速率取该时刻盘的 lonspeed（|v| > 0.05 才用，否则平均速率）；**时间一律换算成整秒**（上游 daysToSec =
+        Math.round(d·86400)，Math.round 是 half-up → _js_math_round）；收敛点落在电盘之后则回退一整周期、
+        只重起一次盘（上游不再精化）。返回 {momentStr, chart}：chart 是**产出 facts 的那张盘**——上游循环
+        未 break 时 t 在最后一次 facts 之后又前推了一步，momentStr 与 facts 来源盘因此可以不同刻，照搬。
+        时刻算术为墙钟（无 DST）：等同上游在无夏令时的机器时区（如 Asia/Shanghai）下 moment.js 的行为。
+        """
+        if natal_lon is None:
+            return None
+        cycle = self._SOLAR_RETURN_DAYS if kind == "sun" else self._LUNAR_RETURN_DAYS
+        rate = 360 / cycle
+        try:
+            elec = datetime.strptime(election_moment, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return None
+        r0 = self._chart_at_moment(election_moment, fields_like)
+        if r0 is None:
+            return None
+        lon0, _ = _chart_body_lon_speed(r0, kind)
+        if lon0 is None:
+            return None
+        elapsed = ((lon0 - natal_lon) % 360 + 360) % 360
+        t = elec - timedelta(seconds=_js_math_round(elapsed / rate * 86400))
+        facts_chart: dict[str, Any] | None = None
+        for _ in range(6):
+            chart = self._chart_at_moment(_fmt_moment(t), fields_like)
+            if chart is None:
+                return None
+            facts_chart = chart
+            lon, speed = _chart_body_lon_speed(chart, kind)
+            if lon is None:
+                return None
+            d = ((natal_lon - lon + 540) % 360) - 180
+            if abs(d) < 0.005:
+                break
+            v = abs(speed) if isinstance(speed, (int, float)) and not isinstance(speed, bool) and abs(speed) > 0.05 else rate
+            t = t + timedelta(seconds=_js_math_round(d / v * 86400))
+        if t > elec:
+            t = t - timedelta(seconds=_js_math_round(cycle * 86400))
+            chart = self._chart_at_moment(_fmt_moment(t), fields_like)
+            if chart is not None:
+                facts_chart = chart
+        return {"momentStr": _fmt_moment(t), "chart": facts_chart} if facts_chart is not None else None
+
+    def _election_pd_hits(self, natal_params: dict[str, Any], election_date: str, pd_time_key: str | None) -> list[dict[str, Any]]:
+        """上游 returnCharts.fetchPdHitsNearElection（:98-128）端口：本命带主限法补拉一盘，取
+        predictives.primaryDirection，过滤择日日期 ±240 日，按 |Δ日| 升序取前 8。行 = [弧, 迫星, 应星, 法, 日期]。
+        上游失败回 []（静默）；这里同样回 [] 但记降级。"""
+        params = {
+            **natal_params,
+            "predictive": 1,
+            "includePrimaryDirection": True,
+            "pdtype": 0,
+            "showPdBounds": 0,
+            "pdMethod": "core_alchabitius",
+            "pdTimeKey": self._ELECTION_PD_TIME_KEY_COMPAT.get(pd_time_key or "") or pd_time_key or "Ptolemy",
+            "pdDirect": 1,
+            "pdConverse": 0,
+            "pdAntiscia": 0,
+            "pdTerms": 0,
+            "pdaspects": [0, 60, 90, 120, 180],
+        }
+        try:
+            rsp = self._call_remote("/chart", params)
+        except Exception as exc:  # noqa: BLE001
+            _degrade("election primary-direction hits failed: %s", exc)
+            return []
+        predictives = rsp.get("predictives") if isinstance(rsp, dict) else None
+        rows = predictives.get("primaryDirection") if isinstance(predictives, dict) else None
+        try:
+            elec = datetime.strptime(f"{election_date}"[:10], "%Y-%m-%d").date()
+        except ValueError:
+            return []
+        out: list[dict[str, Any]] = []
+        for row in rows if isinstance(rows, list) else []:
+            if not isinstance(row, list) or len(row) < 5 or not row[4]:
+                continue
+            day = f"{row[4]}"[:10]
+            try:
+                hit = datetime.strptime(day, "%Y-%m-%d").date()
+            except ValueError:
+                continue
+            delta = (hit - elec).days
+            if abs(delta) > self._ELECTION_PD_WINDOW_DAYS:
+                continue
+            out.append({"promissor": row[1], "significator": row[2], "method": row[3], "date": day, "deltaDays": delta})
+        out.sort(key=lambda h: abs(h["deltaDays"]))  # 稳定排序，同上游 Array.prototype.sort
+        return out[: self._ELECTION_PD_LIMIT]
 
     def _run_yearsystem129_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 129年系统: data is computed server-side and carried in response.predictives.yearsystem129
@@ -10514,14 +10793,26 @@ class HorosaSkillService:
         # 由 vendored 的三个纯函数出 [世运卜卦]/[世运问判] 两段。失败只是这两段不出。
         # 恒星派入境（solunar）：入境时刻由 Python 迭代 /chart 求根（上游那支走 HTTP，按 §5 归 Python），
         # 段文本由 vendored 的 describeSolunar / computeAngularity / rulerDeathSignature 纯函数出。
+        mundane_type = f"{payload.get('mundaneType') or ''}".strip()
+        if mundane_type not in self._MUNDANE_SUPPORTED_TYPES:
+            # 上游 MUNDANE_TYPES 另有 region（地区盘：须从 regionCharts 预置/自定义里**选**一张建置盘，
+            # headless 无此输入）。认不出的盘型不许静默当入宫盘——说出来。
+            _degrade(
+                "mundane: 不支持的盘型 mundaneType=%s（支持 %s），按入宫盘出段",
+                mundane_type,
+                "/".join(sorted(t for t in self._MUNDANE_SUPPORTED_TYPES if t)),
+            )
+        # 盘型专属卡要在该盘型自己的盘上算（上游页面盘 = 该盘型的盘）：求根得到的 (时刻, 盘) 记在这里。
+        type_chart_ctx: dict[str, tuple[str, dict[str, Any]]] = {}
         solunar_text = ""
-        if f"{payload.get('mundaneType') or ''}" == "solunar":
+        if mundane_type == "solunar":
             try:
                 solved = self._solve_sidereal_ingress(
                     f"{payload.get('solunarType') or 'capsolar'}", year, payload
                 )
                 if solved:
                     moment, solunar_chart = solved
+                    type_chart_ctx["solunar"] = (moment, solunar_chart)
                     js_s = self.js_client.run(
                         "mundane_solunar",
                         {
@@ -10533,19 +10824,25 @@ class HorosaSkillService:
                         },
                     )
                     solunar_text = f"{(js_s or {}).get('text') or ''}".strip()
+                else:
+                    # 求根器回 None（盘型键不认识 / 盘里取不到日月黄经）：盘型段与 [恒星派入境·概览] 都不会出，说出来。
+                    _degrade("mundane solunar ingress unsolved (solunarType=%s)", payload.get("solunarType") or "capsolar")
             except Exception as exc:  # noqa: BLE001 — 求根/富化失败不许带崩入宫盘
                 _degrade("mundane solunar build failed: %s", exc)
-        # 吠陀世运（vedicmundane）：恒星黄道 Lahiri 的梅沙（白羊）入境盘 —— 同一个求根器，只换
-        # ayanamsa 与目标度。盘型头之外的判读段（[年之九主]）另需九职求根 + 王职的月相搜索，未做。
+        # 吠陀世运（vedicmundane）：恒星黄道 Lahiri 的梅沙（白羊）入境盘。
+        # 上游 castVedicIngress（MundaneMain.js:1282）用 vedicMundane.solveVedicSolarIngress('ingress_0') 求根，
+        # 再把页面盘改成 恒星黄道 Lahiri · hsys 0 · tradition 0 在该时刻起盘；[吠陀世运·年度盘]/[世运大运]/
+        # [KP 副主链] 读的正是这张盘，st.vedicMoment = 求根时刻。求根走同一个忠实端口 _solve_vedic_ingress
+        # （九主各职也用它）——此前这里借用恒星派的 _solve_sidereal_ingress（步速 0.9856、首步规则不同），
+        # 收敛点可差到分钟级，会让盘头与卡片印出两个不同的「入境时刻」。
         vedic_text = ""
-        if f"{payload.get('mundaneType') or ''}" == "vedicmundane":
+        if mundane_type == "vedicmundane":
             try:
                 vedic_year = f"{payload.get('vedicYear') or year}".strip()
-                solved_v = self._solve_sidereal_ingress(
-                    "arisolar", vedic_year, payload, ayanamsa="lahiri"
-                )
-                if solved_v:
-                    v_moment, _v_chart = solved_v
+                v_moment = self._solve_vedic_ingress("ingress_0", int(vedic_year), payload)
+                if v_moment:
+                    v_chart = self._call_remote("/chart", self._vedic_chart_payload(v_moment, payload))
+                    type_chart_ctx["vedicmundane"] = (v_moment, v_chart)
                     vedic_text = "\n".join(
                         [
                             "[吠陀世运]",
@@ -10557,10 +10854,12 @@ class HorosaSkillService:
                     nav = self._build_navanayaka_section(int(vedic_year), v_moment, payload)
                     if nav:
                         vedic_text = f"{vedic_text}\n\n{nav}"
+                else:
+                    _degrade("mundane vedic mesha ingress unsolved (year=%s)", vedic_year)
             except Exception as exc:  # noqa: BLE001
                 _degrade("mundane vedic ingress failed: %s", exc)
         horary_text = ""
-        if f"{payload.get('mundaneType') or ''}" == "mundanehorary":
+        if mundane_type == "mundanehorary":
             try:
                 js = self.js_client.run(
                     "mundane_horary",
@@ -10570,6 +10869,8 @@ class HorosaSkillService:
             except Exception as exc:  # noqa: BLE001 — 富化失败不许带崩入宫盘
                 _degrade("mundane horary build failed: %s", exc)
         # 子盘群：新月/满月/日月食/地区盘/行星周期 + 世俗宫义/定局·年主·盘主/入境骨架/地理分野/地区盘推运。
+        # collected 顺手收下子盘群已经取到的物料（朔望子盘、四季入境时刻），卡片段复用，不重复请求。
+        collected: dict[str, Any] = {}
         subchart_sections = self._build_mundane_subchart_sections(
             base_chart_payload=chart_payload,
             seed_payload=seed_payload,
@@ -10577,10 +10878,27 @@ class HorosaSkillService:
             ingress_time=ingress_time,
             year=year,
             zone=zone,
+            collect=collected,
         )
         subcharts_text = _render_snapshot_text(subchart_sections) if subchart_sections else ""
+        # 右栏卡片段（上游 v3.11 [Q-444/T-407]）：上游 buildAiSnapshot 的拼接序是
+        # head / 判词 / 分析段 / **cardSecs** / 盘面正文（MundaneMain.js:2992-2995），卡片段紧贴正文之前。
+        cards_text = self._build_mundane_card_text(
+            payload=payload,
+            mundane_type=mundane_type,
+            year=year,
+            term=term,
+            ingress_time=ingress_time,
+            zone=zone,
+            chart_payload=chart_payload,
+            chart_response=chart_response,
+            collected=collected,
+            type_chart_ctx=type_chart_ctx,
+        )
         body = _build_astro_snapshot_text(chart_payload, chart_response)
-        snapshot_text = "\n\n".join(part for part in (head, solunar_text, vedic_text, horary_text, subcharts_text, body) if part).strip()
+        snapshot_text = "\n\n".join(
+            part for part in (head, solunar_text, vedic_text, horary_text, subcharts_text, cards_text, body) if part
+        ).strip()
         result = {
             "ingressTerm": term,
             "ingressYear": year,
@@ -10601,8 +10919,11 @@ class HorosaSkillService:
         ingress_time: str,
         year: str,
         zone: str,
+        collect: dict[str, Any] | None = None,
     ) -> list[tuple[str, str]]:
         # 每个子盘独立 try/except：任一端点失败只降级该段为说明文本，绝不破坏世俗盘主流程。
+        # collect（可选）：把已取到的朔望子盘 {'syzygy': {'new'|'full': {'moment', 'chart'}}} 与四季入境时刻
+        # {'season': {节气: 时刻}} 交还调用方，供右栏卡片段复用（不为同一份物料再打一遍后端）。
         ing_date = base_chart_payload.get("date")
         ing_time = base_chart_payload.get("time")
         lat = base_chart_payload.get("lat")
@@ -10650,6 +10971,8 @@ class HorosaSkillService:
             ]
             try:
                 sub_chart = self._call_remote("/chart", {**base_chart_payload, "date": syz.get("date"), "time": syz.get("time")})
+                if collect is not None and isinstance(sub_chart, dict):
+                    collect.setdefault("syzygy", {})[syz_type] = {"moment": moment, "chart": sub_chart}
                 digest = _mundane_chart_digest(sub_chart)
                 if digest:
                     lines.append("子盘四轴/日月：" + "；".join(digest))
@@ -10763,6 +11086,8 @@ class HorosaSkillService:
                 for t in want:
                     if t in by_term:
                         prog_rows.append(f"  {t}入宫：{by_term[t]}")
+                if collect is not None and by_term:
+                    collect["season"] = {t: by_term[t] for t in want if t in by_term}
         except Exception as exc:  # noqa: BLE001
             _degrade("mundane seasonal ingress failed: %s", exc)
         prog_body = ["年度四季入宫定盘序列（地区盘随每季太阳入基本宫逐季推移）："]
@@ -10770,6 +11095,377 @@ class HorosaSkillService:
         sections.append(("地区盘推运", "\n".join(prog_body)))
 
         return sections
+
+    # ── 世运右栏卡片段（上游 v3.11 [Q-444/T-407]）─────────────────────────────────────────────
+    # 产段函数 = 上游 components/mundane/MundaneMain.js:232 `buildMundaneCardSections(chart, extra, state, facts)`，
+    # vendored 逐字（horosa-core-js/src/vendor/mundane/MundaneMain.js，manifest truncate_before 剥 UI 尾部），
+    # 经 JS 工具 `mundane_cards` 调用。上游页面的「按需拉取物」在 React state 里；这里由 Python 取数后原样喂入
+    # （请求型编排归 Python，AGENTS §5）。无数据即不成段，与上游「算过才成段」同形。
+    #
+    # 支持的盘型（上游 MUNDANE_TYPES，MundaneMain.js:43）。region（地区盘）不在内：它要从 regionCharts
+    # 预置/自定义里**选**一张建置盘（UI 选择），headless 无此输入。
+    _MUNDANE_SUPPORTED_TYPES = frozenset(
+        {"", "ingress", "newmoon", "fullmoon", "solecl", "lunecl", "cycles", "solunar", "vedicmundane", "mundanehorary"}
+    )
+    # 盘型专属卡（上游按 extra.mundaneType 分支产出，行号为 MundaneMain.js）。其余「本命式」卡
+    # （天气占星/四轴特殊点/会合指示星/盘型格局/世运恒星命中/赤纬平行）对任何非 cycles 盘型都会产——
+    # skill 的世俗盘恒以入宫盘为底（正文段即入宫盘），故本命式卡只取入宫底盘那一轮；盘型轮只保留本表的
+    # 专属卡，免得同名段在一份快照里出现两次、且归属到错的盘。天气与农业（:457）需页面手填的「受孕日」
+    # st.garbhaDate，headless 无来源 → 永不产，仍留在表里以便将来有输入时自动放行。
+    _MUNDANE_TYPE_CARDS: dict[str, tuple[str, ...]] = {
+        "newmoon": ("新月图判读",),  # :269
+        "fullmoon": ("满月图判读",),  # :269
+        "solecl": ("日食图判读", "食族 Saros", "天象占参考"),  # :278-310
+        "lunecl": ("月食图判读", "食族 Saros", "天象占参考"),  # :278-310
+        "solunar": ("恒星派入境·概览",),  # :428
+        "vedicmundane": ("吠陀世运·年度盘", "世运大运", "KP 副主链", "天气与农业"),  # :435-458
+        "mundanehorary": ("世运问判·得力明细",),  # :460
+        "cycles": ("木土纪元", "大年时代", "Barbault 聚散指数"),  # :471-502
+    }
+    # 行星周期卡的页面物料（type==='cycles'）：
+    #   木土会合表 = 页面挂载即自动算的 computeGreatConj（:576 componentDidMount → :753），state 缺省
+    #   gcStart 1300 / gcEnd 2200 / gcPair 'jupiter-saturn' / gcAspect 0（:554），木土合相走 /astroextra/greatconj、
+    #   gcMode 置 'ages'（:769）。builder 自己的显示回落 clampYear(st.gcStart, 1300)（:476）与之同值。
+    #   Barbault 指数 = 「绘制」按钮 computeBarbault（:787）：缺省 bbStart 1900 / bbEnd 2050 / bbSet 'slow5'（:557），
+    #   行星取 BARBAULT_SETS[0]（:101，五慢星），stepMonths = 跨度>160 年 12、>80 年 6、否则 3（:793）。
+    _MUNDANE_GC_DEFAULT_STATE = {"gcStart": 1300, "gcEnd": 2200, "gcPair": "jupiter-saturn", "gcAspect": 0, "gcMode": "ages"}
+    _MUNDANE_BB_DEFAULT_STATE = {"bbStart": 1900, "bbEnd": 2050, "bbSet": "slow5"}
+    _MUNDANE_BB_DEFAULT_PLANETS = ("Jupiter", "Saturn", "Uranus", "Neptune", "Pluto")
+
+    @staticmethod
+    def _vedic_chart_payload(moment: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """梅沙入境盘：上游 castVedicIngress 把页面盘改成 zodiacal 1 · lahiri · hsys 0 · tradition 0（:1290）。"""
+        date_part, _, time_part = moment.partition(" ")
+        return {
+            "date": date_part.replace("-", "/"),
+            "time": time_part or "12:00:00",
+            "zone": payload.get("zone") or "+08:00",
+            "lat": payload.get("lat") or "31n13",
+            "lon": payload.get("lon") or "121e28",
+            "gpsLat": payload.get("gpsLat"),
+            "gpsLon": payload.get("gpsLon"),
+            "ad": payload.get("ad", 1),
+            "zodiacal": 1,
+            "siderealAyanamsa": "lahiri",
+            "hsys": 0,
+            "tradition": 0,
+            "predictive": 0,
+        }
+
+    def _build_mundane_card_text(
+        self,
+        *,
+        payload: dict[str, Any],
+        mundane_type: str,
+        year: str,
+        term: str,
+        ingress_time: str,
+        zone: str,
+        chart_payload: dict[str, Any],
+        chart_response: dict[str, Any],
+        collected: dict[str, Any],
+        type_chart_ctx: dict[str, tuple[str, dict[str, Any]]],
+    ) -> str:
+        try:
+            year_num: int | None = int(str(year).strip())
+        except (TypeError, ValueError):
+            year_num = None
+        # ── 入宫底盘一轮：上游 castIngress 落的 extra 就是这四键（:629）。
+        base_state: dict[str, Any] = {}
+        season = collected.get("season")
+        if isinstance(season, dict) and season and year_num is not None:
+            # 上游「起四季盘」按钮（:638 scanSeasonalIngresses）= fetchPreciseJieqiSeed 四枢轴 → {节气: {time…}}；
+            # skill 的 [地区盘推运] 已为同一年取过这四个时刻（同一 /jieqi/year seedOnly 请求），直接复用。
+            base_state["seasonSeed"] = {t: {"term": t, "time": v} for t, v in season.items()}
+            base_state["seasonSeedYear"] = year_num
+        patterns = self._mundane_pattern_data(chart_payload)
+        if patterns is not None:
+            base_state["patData"] = patterns
+        jobs: list[dict[str, Any]] = [
+            {
+                "id": "ingress",
+                "chart": chart_response,
+                "extra": {"mundaneType": "ingress", "ingressTerm": term, "ingressYear": year_num, "ingressMoment": ingress_time},
+                "state": base_state,
+            }
+        ]
+        type_job = self._mundane_type_card_job(
+            mundane_type=mundane_type,
+            payload=payload,
+            ingress_time=ingress_time,
+            zone=zone,
+            chart_payload=chart_payload,
+            chart_response=chart_response,
+            collected=collected,
+            type_chart_ctx=type_chart_ctx,
+        )
+        if type_job is not None:
+            jobs.append(type_job)
+        try:
+            js = self.js_client.run("mundane_cards", {"jobs": jobs})
+        except Exception as exc:  # noqa: BLE001 — 卡片段失败不许带崩世俗盘主流程，但必须说出来
+            _degrade("mundane card sections failed: %s", exc)
+            return ""
+        data = js.get("data") if isinstance(js, dict) else None
+        results = data.get("jobs") if isinstance(data, dict) else None
+        if not isinstance(results, list):
+            _degrade("mundane card sections: JS 工具返回形状异常（缺 data.jobs）")
+            return ""
+        blocks: list[str] = []
+        for res in results:
+            if not isinstance(res, dict):
+                continue
+            job_id = f"{res.get('id') or ''}"
+            if not res.get("ok"):
+                err = res.get("error") if isinstance(res.get("error"), dict) else {}
+                _degrade("mundane card job %s failed: %s", job_id, err.get("message") or err.get("code") or "unknown")
+                continue
+            keep = None if job_id == "ingress" else set(self._MUNDANE_TYPE_CARDS.get(job_id, ()))
+            for card in res.get("cards") or []:
+                if not isinstance(card, dict):
+                    continue
+                if keep is not None and card.get("title") not in keep:
+                    continue
+                text = f"{card.get('text') or ''}".strip()
+                if text:
+                    blocks.append(text)
+        return "\n\n".join(blocks)
+
+    def _mundane_pattern_data(self, chart_payload: dict[str, Any]) -> list[Any] | None:
+        """[盘型格局] 的「相位格局」行：上游「查格局」按钮（MundaneMain.js:825 computeMundanePatterns）以
+        chartParams(chart) 打 /astroextra/analysis、取 `patterns`（后端 detect_patterns）。
+
+        请求体照 AstroExtraCommon.chartParams 的键：盘面时刻/地点/宫制/黄道 + tradition=false·predictive=false。
+        失败返回 None（该几行不出）并记降级——**不**像上游那样把错误信封读成「本盘无显著相位格局」。
+        """
+        body = {
+            "date": chart_payload.get("date"),
+            "time": chart_payload.get("time"),
+            "ad": chart_payload.get("ad", 1),
+            "zone": chart_payload.get("zone"),
+            "lat": chart_payload.get("lat"),
+            "lon": chart_payload.get("lon"),
+            "hsys": chart_payload.get("hsys", 0),
+            "zodiacal": chart_payload.get("zodiacal", 0),
+            "siderealAyanamsa": chart_payload.get("siderealAyanamsa") or "",
+            "tradition": False,
+            "predictive": False,
+        }
+        try:
+            rsp = self._call_remote("/astroextra/analysis", body)
+        except Exception as exc:  # noqa: BLE001
+            _degrade("mundane aspect patterns (/astroextra/analysis) failed: %s", exc)
+            return None
+        if not isinstance(rsp, dict):
+            _degrade("mundane aspect patterns: /astroextra/analysis 返回非对象")
+            return None
+        pats = rsp.get("patterns")
+        # 上游：`(r && r.patterns) ? r.patterns : []` —— 成功但无格局 = 空表（卡内写「本盘无显著相位格局」）。
+        return pats if isinstance(pats, list) else []
+
+    def _mundane_type_card_job(
+        self,
+        *,
+        mundane_type: str,
+        payload: dict[str, Any],
+        ingress_time: str,
+        zone: str,
+        chart_payload: dict[str, Any],
+        chart_response: dict[str, Any],
+        collected: dict[str, Any],
+        type_chart_ctx: dict[str, tuple[str, dict[str, Any]]],
+    ) -> dict[str, Any] | None:
+        if mundane_type in ("newmoon", "fullmoon"):
+            # 上游 useMoment（:688）：选中的朔/望行 → extra.selectedMoment = 该行 localTime，页面盘改排到该时刻。
+            # skill 的新月/满月子盘 = 入宫前最近一次朔/望（[新月图]/[满月图] 段同一张盘）。
+            syz = (collected.get("syzygy") or {}).get("new" if mundane_type == "newmoon" else "full")
+            if not isinstance(syz, dict) or not isinstance(syz.get("chart"), dict):
+                _degrade("mundane %s card: 未取得朔望子盘", mundane_type)
+                return None
+            return {
+                "id": mundane_type,
+                "chart": syz["chart"],
+                "extra": {"mundaneType": mundane_type, "selectedMoment": syz.get("moment")},
+                "state": {},
+            }
+        if mundane_type in ("solecl", "lunecl"):
+            return self._mundane_eclipse_job(mundane_type, chart_payload=chart_payload, ingress_time=ingress_time, zone=zone)
+        if mundane_type == "solunar":
+            ctx = type_chart_ctx.get("solunar")
+            if not ctx:
+                return None  # 求根失败已在求根处记过降级
+            return {
+                "id": "solunar",
+                "chart": ctx[1],
+                "extra": {
+                    "mundaneType": "solunar",
+                    "solunarType": payload.get("solunarType"),
+                    "solunarWeights": payload.get("solunarWeights"),
+                    "solunarOrb": payload.get("solunarOrb"),
+                },
+                "state": {},
+            }
+        if mundane_type == "vedicmundane":
+            ctx = type_chart_ctx.get("vedicmundane")
+            if not ctx:
+                return None
+            try:
+                vedic_year: int | None = int(f"{payload.get('vedicYear') or payload.get('year')}".strip())
+            except (TypeError, ValueError):
+                vedic_year = None
+            return {
+                "id": "vedicmundane",
+                "chart": ctx[1],
+                "extra": {"mundaneType": "vedicmundane", "vedicYear": vedic_year},
+                "state": {"vedicMoment": ctx[0]},
+            }
+        if mundane_type == "mundanehorary":
+            # 问事盘 = 入宫盘（同 [世运卜卦]/[世运问判] 的既有口径：headless 无「问事时刻」这个交互输入）。
+            return {
+                "id": "mundanehorary",
+                "chart": chart_response,
+                "extra": {"mundaneType": "mundanehorary", "mhKind": payload.get("mhKind") or "war"},
+                "state": {},
+            }
+        if mundane_type == "cycles":
+            return {
+                "id": "cycles",
+                "chart": chart_response,  # cycles 分支不读盘面（isNatalLike=false），builder 只要求 chart 非空
+                "extra": {"mundaneType": "cycles"},
+                "state": self._mundane_cycles_state(),
+            }
+        return None
+
+    def _mundane_cycles_state(self) -> dict[str, Any]:
+        state: dict[str, Any] = {}
+        try:
+            gc = self._call_remote(
+                "/astroextra/greatconj",
+                {"startYear": self._MUNDANE_GC_DEFAULT_STATE["gcStart"], "endYear": self._MUNDANE_GC_DEFAULT_STATE["gcEnd"]},
+            )
+            # 上游 :768：`(r && r.conjunctions) ? r.conjunctions : (Array.isArray(r) ? r : [])`。
+            conjs = gc.get("conjunctions") if isinstance(gc, dict) else (gc if isinstance(gc, list) else None)
+            state.update(self._MUNDANE_GC_DEFAULT_STATE)
+            state["gcResults"] = conjs if isinstance(conjs, list) else []
+        except Exception as exc:  # noqa: BLE001
+            _degrade("mundane cycles greatconj failed: %s", exc)
+        start, end = self._MUNDANE_BB_DEFAULT_STATE["bbStart"], self._MUNDANE_BB_DEFAULT_STATE["bbEnd"]
+        span = end - start
+        step_months = 12 if span > 160 else (6 if span > 80 else 3)
+        try:
+            bb = self._call_remote(
+                "/astroextra/barbault",
+                {"startYear": start, "endYear": end, "stepMonths": step_months, "planets": list(self._MUNDANE_BB_DEFAULT_PLANETS)},
+            )
+            # 上游 :801：`bbData: (r && r.points) ? r : null`。
+            if isinstance(bb, dict) and bb.get("points"):
+                state.update(self._MUNDANE_BB_DEFAULT_STATE)
+                state["bbData"] = bb
+            else:
+                _degrade("mundane cycles barbault: 响应无 points")
+        except Exception as exc:  # noqa: BLE001
+            _degrade("mundane cycles barbault failed: %s", exc)
+        return state
+
+    def _mundane_eclipse_job(
+        self, mundane_type: str, *, chart_payload: dict[str, Any], ingress_time: str, zone: str
+    ) -> dict[str, Any] | None:
+        """日/月食判读卡的食盘。
+
+        上游（MundaneMain.js:669 scanEvents → :688 useMoment）：/astroextra/ephemeris 扫出食表，用户点选一行 →
+        extra.selectedMoment = 该行 localTime、eclipseTypeText = 该行 eclipseType，页面盘改排到食时刻，
+        并以该时刻打 /astroextra/eclipsedetail 取食时长（:703 fetchEclipseDetail → state.eclipseDetail）。
+        headless 选行口径：与 skill 既有 [日食图]/[月食图] 段同一次食——eclipsedetail 自「入宫时刻 − 2 日」向后
+        搜到的第一次（astroextra.compute_eclipse_detail：jd_search = jd − 2），在 ephemeris 食表里取
+        localTime ≥ 入宫 − 2 日的第一行。scanYear 取该食所在年（上游 scanYear 即扫出这次食的那一年）。
+        """
+        kind = "lunar" if mundane_type == "lunecl" else "solar"
+        try:
+            ingress_dt = datetime.strptime(ingress_time, "%Y-%m-%d %H:%M:%S")
+        except (TypeError, ValueError):
+            _degrade("mundane %s card: 入宫时刻格式异常 %s", mundane_type, ingress_time)
+            return None
+        floor_dt = ingress_dt - timedelta(days=2)
+        end_dt = floor_dt + timedelta(days=400)  # 两个以上食季：日食 ≥2、月食 ≥1
+        try:
+            eph = self._call_remote(
+                "/astroextra/ephemeris",
+                {
+                    # 请求体照上游 momentPipeline.fetchMundaneEvents（:79）。
+                    "date": floor_dt.strftime("%Y-%m-%d"),
+                    "time": "00:00:00",
+                    "startDate": floor_dt.strftime("%Y-%m-%d"),
+                    "endDate": end_dt.strftime("%Y-%m-%d"),
+                    "startTime": "00:00:00",
+                    "endTime": "23:59:59",
+                    "zone": zone,
+                    "lat": chart_payload.get("lat") or "0n00",
+                    "lon": chart_payload.get("lon") or "0e00",
+                    "gpsLat": chart_payload.get("gpsLat") if chart_payload.get("gpsLat") is not None else 0,
+                    "gpsLon": chart_payload.get("gpsLon") if chart_payload.get("gpsLon") is not None else 0,
+                    "includeTransits": False,
+                },
+            )
+        except Exception as exc:  # noqa: BLE001
+            _degrade("mundane %s card: /astroextra/ephemeris failed: %s", mundane_type, exc)
+            return None
+        rows = eph.get("eclipses") if isinstance(eph, dict) else None
+        picked: tuple[str, dict[str, Any]] | None = None
+        for ev in rows if isinstance(rows, list) else []:
+            if not isinstance(ev, dict):
+                continue
+            # 上游 fetchMundaneEvents：kind = type==='lunar_eclipse' ? 'lunar' : 'solar'；localTime = datetime || date+time。
+            ev_kind = "lunar" if ev.get("type") == "lunar_eclipse" else "solar"
+            if ev_kind != kind:
+                continue
+            local_time = ev.get("datetime") or (f"{ev.get('date')} {ev.get('time')}" if ev.get("date") and ev.get("time") else ev.get("date"))
+            try:
+                ev_dt = datetime.strptime(f"{local_time}", "%Y-%m-%d %H:%M:%S")
+            except (TypeError, ValueError):
+                continue
+            if ev_dt >= floor_dt:
+                picked = (f"{local_time}", ev)
+                break
+        if picked is None:
+            _degrade("mundane %s card: 入宫后 400 日内未检索到%s食", mundane_type, "月" if kind == "lunar" else "日")
+            return None
+        local_time, ev = picked
+        date_part, _, time_part = local_time.partition(" ")
+        try:
+            chart = self._call_remote("/chart", {**chart_payload, "date": date_part, "time": time_part})
+        except Exception as exc:  # noqa: BLE001
+            _degrade("mundane %s card: eclipse chart failed: %s", mundane_type, exc)
+            return None
+        state: dict[str, Any] = {}
+        try:
+            detail = self._call_remote(
+                "/astroextra/eclipsedetail",
+                {
+                    "date": date_part,
+                    "time": time_part or "00:00:00",
+                    "zone": zone,
+                    "lat": chart_payload.get("lat"),
+                    "lon": chart_payload.get("lon"),
+                    "eclipseKind": kind,
+                },
+            )
+            # 上游 :710：`eclipseDetail: (r && !r.err) ? r : null`。
+            if isinstance(detail, dict) and not detail.get("err"):
+                state["eclipseDetail"] = detail
+        except Exception as exc:  # noqa: BLE001
+            _degrade("mundane %s card: eclipsedetail failed: %s", mundane_type, exc)
+        return {
+            "id": mundane_type,
+            "chart": chart,
+            "extra": {
+                "mundaneType": mundane_type,
+                "selectedMoment": local_time,
+                "eclipseKind": kind,
+                "eclipseTypeText": ev.get("eclipseType"),
+                "scanYear": int(local_time[:4]) if local_time[:4].isdigit() else None,
+            },
+            "state": state,
+        }
 
     def _run_otherbu_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         remote_payload = {
