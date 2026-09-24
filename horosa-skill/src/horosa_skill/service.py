@@ -3323,77 +3323,6 @@ def _pattern_overview_lines(response: dict[str, Any]) -> list[str]:
     return lines
 
 
-# ── 印度律盘 Vimshottari 大运（120 年周期）：后端 jyotish.dasha.vimshottari 已算好，挂载 [大运Dasha] 段 ──
-_DASHA_SYS_LABEL = {
-    "vimshottari": "Vimshottari（120 年周期）",
-    "yogini": "Yogini（36 年 · 8 女神）",
-    "ashtottari": "Ashtottari（108 年 · Ardradi）",
-    "tribhagi": "Tribhāgī（Vimśottarī÷3 · 3 遍×40=120 年）",
-}
-
-
-def _dasha_lord_name(lord: Any) -> str:
-    return (lord.get("label") or lord.get("key") or "—") if isinstance(lord, dict) else "—"
-
-
-def _dasha_fmt_date(d: Any) -> str:
-    s = f"{d if d is not None else ''}"
-    m = re.match(r"^(\d{4}-\d{2}-\d{2})", s)
-    return m.group(1) if m else (s or "—")
-
-
-def _dasha_n1(x: Any) -> float:
-    try:
-        return float(x)
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def _dasha_date_only(s: Any) -> Any:
-    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", f"{s if s is not None else ''}")
-    if not m:
-        return None
-    try:
-        return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3))).date()
-    except ValueError:
-        return None
-
-
-def _build_vimshottari_dasha_lines(response: dict[str, Any]) -> list[str]:
-    jy = response.get("jyotish")
-    dasha_root = jy.get("dasha") if isinstance(jy, dict) else None
-    v = dasha_root.get("vimshottari") if isinstance(dasha_root, dict) else None
-    mahadashas = v.get("mahadashas") if isinstance(v, dict) else None
-    if not isinstance(v, dict) or not v.get("available") or not isinstance(mahadashas, list) or not mahadashas:
-        return []
-    out: list[str] = []
-    nak = v.get("moonNakshatra") or {}
-    out.append(f"系统：{_DASHA_SYS_LABEL['vimshottari']}")
-    out.append(f"月宿：{nak.get('label') or nak.get('name') or nak.get('key') or '—'}（宿主星 {_dasha_lord_name(v.get('firstLord'))}）")
-    out.append(f"首运：已历 {_dasha_n1(v.get('firstElapsedYears')):.1f} 年、余 {_dasha_n1(v.get('firstBalanceYears')):.1f} 年")
-    active = next((m for m in mahadashas if isinstance(m, dict) and m.get("active")), None)
-    if active:
-        out.append(f"当前大运（Mahadasha）：{_dasha_lord_name(active.get('lord'))}（{_dasha_fmt_date(active.get('start'))} → {_dasha_fmt_date(active.get('end'))}，{_dasha_n1(active.get('startAge')):.0f}–{_dasha_n1(active.get('endAge')):.0f} 岁）")
-        antars = active.get("antardashas")
-        if isinstance(antars, list) and antars:
-            today = datetime.now().date()
-            for srow in antars:
-                if not isinstance(srow, dict):
-                    continue
-                st = _dasha_date_only(srow.get("start"))
-                en = _dasha_date_only(srow.get("end"))
-                if st and en and st <= today < en:
-                    out.append(f"当前小运（Antardasha）：{_dasha_lord_name(srow.get('lord'))}（{_dasha_fmt_date(srow.get('start'))} → {_dasha_fmt_date(srow.get('end'))}）")
-                    break
-    out.append("大运序列：")
-    for m in mahadashas:
-        if not isinstance(m, dict):
-            continue
-        mark = "▶ " if m.get("active") else ("· " if m.get("birthBalance") else "  ")
-        out.append(f"{mark}{_dasha_lord_name(m.get('lord'))} {_dasha_fmt_date(m.get('start'))} → {_dasha_fmt_date(m.get('end'))}（{_dasha_n1(m.get('years')):.1f} 年，{_dasha_n1(m.get('startAge')):.0f}–{_dasha_n1(m.get('endAge')):.0f} 岁）")
-    return out
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # 世俗盘子盘群：年度入宫盘之外，围绕定盘展开的新月/满月/日月食/地区盘/行星周期等子盘。
 # 子盘时刻均由后端精算端点求得（prenatal_syzygy 朔望、eclipsedetail 食时长、greatconj/barbault
@@ -3552,7 +3481,12 @@ def _fixed_star_orb_params(params: dict[str, Any]) -> dict[str, Any]:
 def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
     sections = [
         # 上游 buildAstroSnapshotContent 的 [起盘信息] 带时间基准行（astroAiSnapshot.js:1696 withTimeBasis）。
-        ("起盘信息", _build_base_info_lines(response, payload, with_time_basis=True)),
+        # 印占：上游 buildIndiaSnapshotText（IndiaChart.js:1170-1175）在 [起盘信息] 起首加流派 / 大运流派开关 / 当前分盘 /
+        # 分盘四行（vendored buildIndiaSchoolHeaderLines，由 _attach_jyotish_sections 挂 `_indiaSchoolLines`）。
+        ("起盘信息", [
+            *[f"{line}" for line in (response.get("_indiaSchoolLines") or []) if f"{line}".strip()],
+            *_build_base_info_lines(response, payload, with_time_basis=True),
+        ]),
         ("宫位宫头", _build_house_cusp_lines(response)),
         ("星与虚点", _build_star_and_lot_position_lines(response)),
         ("信息", _build_info_section(response, payload)),
@@ -3616,10 +3550,12 @@ def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
     possibility = _build_possibility_section(response)
     if possibility:
         rendered.append(("可能性", "\n".join(possibility).strip()))
-    # 印度律盘专属：Vimshottari 大运（仅 india_chart 响应带 jyotish.dasha → 其余盘自然跳过）。
-    dasha_lines = _build_vimshottari_dasha_lines(response)
-    if dasha_lines:
-        rendered.append(("大运Dasha", "\n".join(dasha_lines).strip()))
+    # 印度律盘专属 [大运Dasha]：vendored 上游 buildDashaSnapshotLines（IndiaChart.js:429-494）按所选大运体系出段
+    # （Vimshottari / Yogini / Ashtottari / 条件宿系 / Chara / AKKG …，含小运全表），由 _attach_jyotish_sections 挂
+    # `_indiaDashaLines`；无数据 = 上游 `if(dashaLines.length)` 同判不产段。此前这里是只认 Vimshottari 的旧版 Python 移植。
+    dasha_lines = response.get("_indiaDashaLines")
+    if isinstance(dasha_lines, list) and dasha_lines:
+        rendered.append(("大运Dasha", "\n".join(f"{line}" for line in dasha_lines).strip()))
     # 印占 Jyotish 派生段（星阙 v3.6.0）：由 vendored `buildJyotishSnapshotLines` 逐字产出，
     # 段名与顺序均由上游 builder 决定（此处不重排、不改名），已出现过的段不重复追加。
     jyotish_sections = response.get("_jyotishSections")
@@ -3697,14 +3633,68 @@ def _india_mount_varga_label(chartnum: int) -> str:
     return f"D{chartnum}"
 
 
+# 上游 AstroConst.INDIA_DASHA_DISPLAY_ONLY_SYSTEMS（:1819）：前端展示体系，数据恒在响应 dasha 块，不下发 dashaSystem。
+_INDIA_DASHA_DISPLAY_ONLY = ("taraDasha", "akkg")
+# 上游 AstroConst.INDIA_SCHOOL_DEFAULTS（:1650-1676）的 ayanamsa / hsys 两列：无头复算「给了 indiaSchool 但未显式给
+# 岁差/宫制时按该派预设补默认」（IndiaChart.resolveIndiaHeadlessParams :1197-1213）。只取这两列；流派行文字走 JS 同源表。
+_INDIA_SCHOOL_PRESETS: dict[str, tuple[str, int]] = {
+    "parashari": ("lahiri", 0), "jaimini": ("lahiri", 0), "tajika": ("lahiri", 0),
+    "kp": ("krishnamurti", 3), "nadi": ("lahiri", 0), "western_sidereal": ("fagan_bradley", 3),
+}
+_INDIA_PRASHNA_KEYS = ("prashnaNumber", "prashnaMatter", "prashnaSchools", "prashnaCuspMode", "prashnaPrimaryHouse")
+# 直通键（webindiasrv 按名读：dashaSystem :408 / dashaSeed :404 / sthiraStart :405 / transitDate :590 / tajakaYear :686 /
+# annualChartType :1178）。上游只在给了值时下发（fieldsToParams「缺省 undefined → 不入请求体」），空串一律剔掉。
+_INDIA_VERBATIM_KEYS = ("dashaSystem", "dashaSeed", "sthiraStart", "transitDate", "tajakaYear", "annualChartType")
+
+
+def _india_apply_school_presets(payload: dict[str, Any]) -> dict[str, Any]:
+    """流派预设补默认（resolveIndiaHeadlessParams :1197-1213）：给了 indiaSchool 而未显式给岁差/宫制 → 按该派预设补。
+    幂等；run_tool 在取盘**之前**对规范化输入套用一次 —— 快照 [起盘信息] 的岁差/宫制行与请求同一口径。"""
+    school = f"{payload.get('indiaSchool') or ''}".strip()
+    if school not in _INDIA_SCHOOL_PRESETS:
+        return payload
+    ayan, hsys = _INDIA_SCHOOL_PRESETS[school]
+    out = dict(payload)
+    if out.get("indiaAyanamsa") in (None, ""):
+        out["indiaAyanamsa"] = ayan
+        out["siderealMode"] = ayan
+    if out.get("indiaHsys") in (None, ""):
+        out["indiaHsys"] = hsys
+        out["hsys"] = hsys
+    return out
+
+
 def _india_chart_remote_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """india_chart 的后端请求体：skill 侧开关 → 后端键（上游 IndiaChart.fieldsToParams 同一翻译）。
 
     `indiaTripataki`（上游挂载齿轮名）→ 后端 `tripataki=1`（IndiaChart.js:123-124；webindiasrv 读 data.get('tripataki')，
-    12 次建盘 ≈0.3-0.8s 故 opt-in）。`indiaExtraVargas` 不下发主盘请求（附加分盘逐张另取）。"""
-    remote = {k: v for k, v in payload.items() if k not in ("indiaExtraVargas", "indiaTripataki")}
+    12 次建盘 ≈0.3-0.8s 故 opt-in）。`indiaExtraVargas` 不下发主盘请求（附加分盘逐张另取）。
+    其余条件透传逐条对齐 fieldsToParams（IndiaChart.js:79-143）与 resolveIndiaHeadlessParams（:1197-1213）：
+    dashaSystem 展示体系不下发；indiaSchool 只补预设岁差/宫制（本身不下发）；问事族只在起了卦（prashnaTime）时下发，
+    且问时数缺/非法 → 1（[Q-126/T-34]：缺它后端 KP 问事整段空）；年盘异地须经纬齐备。"""
+    payload = _india_apply_school_presets(payload)
+    remote = {k: v for k, v in payload.items() if k not in ("indiaExtraVargas", "indiaTripataki", "indiaSchool")}
     if payload.get("indiaTripataki") in (True, 1, "1"):
         remote["tripataki"] = 1
+    for key in _INDIA_VERBATIM_KEYS:
+        if remote.get(key) == "":
+            remote.pop(key)
+    if payload.get("dashaSystem") in _INDIA_DASHA_DISPLAY_ONLY:
+        remote.pop("dashaSystem", None)
+    if payload.get("prashnaTime"):
+        try:
+            number = int(f"{payload.get('prashnaNumber')}")
+        except (TypeError, ValueError):
+            number = 0
+        remote["prashnaNumber"] = number if 1 <= number <= 249 else 1
+        if payload.get("prashnaCuspMode") == "asc_driven_placidus":
+            remote.pop("prashnaCuspMode", None)
+    else:
+        for key in _INDIA_PRASHNA_KEYS:
+            remote.pop(key, None)
+    if payload.get("varshaLat") in (None, "") or payload.get("varshaLon") in (None, ""):
+        remote.pop("varshaLat", None)
+        remote.pop("varshaLon", None)
     return remote
 
 
@@ -7486,7 +7476,9 @@ class HorosaSkillService:
             pass
         return response_data
 
-    def _attach_jyotish_sections(self, tool_name: str, response_data: dict[str, Any]) -> dict[str, Any]:
+    def _attach_jyotish_sections(
+        self, tool_name: str, response_data: dict[str, Any], payload: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """印占 Jyotish 派生段 (星阙 v3.6.0 印占大扩容)。
 
         后端 `/india/chart` 本就返回整棵 `jyotish` 树（panchanga / jaimini / kp / shadbala / dasha /
@@ -7499,16 +7491,45 @@ class HorosaSkillService:
             return response_data
         if not isinstance(response_data, dict) or not response_data.get("jyotish"):
             return response_data
+        src = payload or {}
+        # [大运Dasha] 体系 + [起盘信息] 流派头行的页面口径（上游 fields：indiaDashaSystem / indiaSchool /
+        # indiaDashaVariants + 出生时刻供扩展大运推日期）。
+        params = {
+            "dashaSystem": src.get("dashaSystem"),
+            "indiaSchool": src.get("indiaSchool"),
+            "dashaVariants": src.get("dashaVariants"),
+            "date": src.get("date"),
+            "time": src.get("time"),
+            "ad": src.get("ad", 1),
+        }
         try:
             # js_client 已解包 envelope 的 data，返回的就是 runner 的结果对象。
-            js = self.js_client.run("india_jyotish", {"chart": response_data})
-            sections = js.get("sections") if isinstance(js, dict) else None
-            if isinstance(sections, dict) and sections:
+            js = self.js_client.run("india_jyotish", {"chart": response_data, "params": params})
+            invalid = js.get("invalid") if isinstance(js, dict) else None
+            if invalid:
+                parts = [f"{i.get('key')}={i.get('value')!r}（可选：{'/'.join(i.get('allowed') or [])}）" for i in invalid if isinstance(i, dict)]
+                raise ToolValidationError(
+                    bilingual(f"印度律盘设置取值无效：{'；'.join(parts)}。", f"india_chart setting(s) invalid: {'; '.join(parts)}."),
+                    code="tool.india_chart_invalid_setting",
+                    details={"invalid": invalid},
+                )
+            if isinstance(js, dict):
                 enriched = dict(response_data)
-                enriched["_jyotishSections"] = sections
+                sections = js.get("sections")
+                if isinstance(sections, dict) and sections:
+                    enriched["_jyotishSections"] = sections
+                if isinstance(js.get("dashaLines"), list):
+                    enriched["_indiaDashaLines"] = js.get("dashaLines")
+                if isinstance(js.get("schoolLines"), list):
+                    enriched["_indiaSchoolLines"] = js.get("schoolLines")
                 return enriched
+        except ToolValidationError:
+            raise
         except Exception as exc:  # noqa: BLE001 — 富化失败不许影响主盘
-            _degrade("jyotish section build failed: %s", exc)
+            _degrade(
+                "jyotish section build failed: %s", exc,
+                note="印度律盘 Jyotish 派生段、[大运Dasha] 与 [起盘信息] 流派行本次未产出（JS 段 builder 失败），其余段不受影响。",
+            )
         return response_data
 
     def _attach_india_extra_vargas(
@@ -13509,6 +13530,10 @@ class HorosaSkillService:
                     response_data = self._run_local_tool(definition, input_normalized)
                 else:
                     assert definition.endpoint is not None
+                    if tool_name == "india_chart":
+                        # 流派预设（岁差/宫制）先落进规范化输入：请求体与快照口径行同源（否则盘按 KP 岁差算、
+                        # [起盘信息] 却按缺省写 Lahiri）。
+                        input_normalized = _india_apply_school_presets(input_normalized)
                     remote_input = (
                         _india_chart_remote_payload(input_normalized) if tool_name == "india_chart" else input_normalized
                     )
@@ -13517,7 +13542,7 @@ class HorosaSkillService:
                 response_data = self._attach_natal_extras(tool_name, response_data)
                 response_data = self._attach_classical_derived(tool_name, response_data)
                 response_data = self._attach_classical_analysis(tool_name, input_normalized, response_data)
-                response_data = self._attach_jyotish_sections(tool_name, response_data)
+                response_data = self._attach_jyotish_sections(tool_name, response_data, input_normalized)
                 response_data = self._attach_india_extra_vargas(tool_name, input_normalized, response_data)
                 response_data = self._attach_calendar_extras(tool_name, input_normalized, response_data)
                 response_data = self._attach_bazi_geju(tool_name, response_data, input_normalized)

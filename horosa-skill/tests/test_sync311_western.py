@@ -28,12 +28,13 @@ BIRTH = {"date": "2026-03-10", "time": "14:20:00", "zone": "+08:00", "lat": "31n
 
 
 class RecordingClient(FakeClient):
-    """FakeClient + 记账；/chart 可换成指定的盘（live 实抓夹具按请求宫制取）。"""
+    """FakeClient + 记账；/chart 可换成指定的盘（live 实抓夹具按请求宫制取），其它端点可按 routes 换响应。"""
 
-    def __init__(self, chart_for=None) -> None:
+    def __init__(self, chart_for=None, routes=None) -> None:
         super().__init__()
         self.calls: list[tuple[str, dict]] = []
         self.chart_for = chart_for
+        self.routes = routes or {}
 
     def call(self, endpoint: str, payload: dict) -> dict:
         # chart 服务上 /chart 的真实路由是 "/"（service._chart_server_endpoint），记账时归一回 /chart。
@@ -41,6 +42,8 @@ class RecordingClient(FakeClient):
         self.calls.append((endpoint, copy.deepcopy(payload)))
         if endpoint == "/chart" and self.chart_for is not None:
             return copy.deepcopy(self.chart_for(payload))
+        if endpoint in self.routes:
+            return copy.deepcopy(self.routes[endpoint](payload))
         return super().call(endpoint, payload)
 
     def bodies(self, endpoint: str) -> list[dict]:
@@ -338,3 +341,99 @@ def test_babylon_era_and_ephemeris_source_reach_the_snapshot(tmp_path: Path) -> 
     assert "木星按 System B 锯齿函数" in _section(alt_text, "数理星历")
     bad = service.run_tool("babylon", {**BABYLON_BIRTH, "era": "julian"}, save_result=False)
     assert bad.ok is False and bad.error.code == "tool.babylon_invalid_setting"
+
+
+# ─────────────────────────── F14 印度律盘：大运体系 / 流派 / 问事·年盘 ───────────────────────────
+
+INDIA_BIRTH = {"date": "1990-06-15", "time": "08:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28",
+               "zodiacal": 1, "agent_confirmed_settings": True}
+
+
+def _md(lord: str, start: str, end: str, years: float, a0: int, a1: int, **extra) -> dict:
+    return {"lord": {"label": lord}, "start": start, "end": end, "years": years, "startAge": a0, "endAge": a1, **extra}
+
+
+# 后端 jyotish.dasha 的真实形状（webindiasrv 同字段；年份取 1990-06-15 上海 live 实抓的前两运）。
+_JYOTISH = {"dasha": {
+    "vimshottari": {"available": True, "moonNakshatra": {"label": "危"}, "firstLord": {"label": "罗睺"},
+                    "firstElapsedYears": 11.6, "firstBalanceYears": 6.4,
+                    "mahadashas": [_md("罗睺", "1978-11-03", "1996-11-03", 18, -12, 6, birthBalance=True),
+                                   _md("木星", "1996-11-03", "2012-11-03", 16, 6, 22)]},
+    "yogini": {"available": True, "moonNakshatra": {"label": "危"}, "firstLord": {"label": "木星"},
+               "firstElapsedYears": 2.0, "firstBalanceYears": 1.0,
+               "mahadashas": [_md("木星", "1988-06-30", "1991-07-01", 3, -2, 1, birthBalance=True),
+                              _md("火星", "1991-07-01", "1995-07-01", 4, 1, 5)]},
+}}
+
+
+def _india_client() -> RecordingClient:
+    def india(payload: dict) -> dict:
+        base = copy.deepcopy(FakeClient().call("/chart", payload))
+        base["jyotish"] = copy.deepcopy(_JYOTISH)
+        return base
+    return RecordingClient(routes={"/india/chart": india})
+
+
+def test_india_dasha_system_selects_the_dasha_section(tmp_path: Path) -> None:
+    """上游 buildIndiaSnapshotText:1183-1187 → buildDashaSnapshotLines(chartObj, indiaDashaSystem)（IndiaChart.js:429-494，
+    vendored 逐字）：体系行 + 该体系树的 GFM 大运表。负向对照：旧 Python 移植只认 Vimshottari（dashaSystem 透传也恒出它），
+    且是旧版平铺格式。"""
+    service = _service(tmp_path, _india_client())
+    text = service.run_tool("india_chart", {**INDIA_BIRTH, "dashaSystem": "yogini"}, save_result=False).data["snapshot_text"]
+    assert _section(text, "大运Dasha").strip() == "\n".join([
+        "系统：Yogini（36 年 · 8 女神）",
+        "月宿：危（宿主星 木星）",
+        "首运：已历 2.0 年、余 1.0 年",
+        "大运序列：",
+        "| 标记 | 主星 | 起 | 止 | 年数 | 年龄段 |",
+        "| --- | --- | --- | --- | --- | --- |",
+        "| · | 木星 | 1988-06-30 | 1991-07-01 | 3.0 年 | -2–1 岁 |",
+        "|  | 火星 | 1991-07-01 | 1995-07-01 | 4.0 年 | 1–5 岁 |",
+    ])
+    default = service.run_tool("india_chart", INDIA_BIRTH, save_result=False).data["snapshot_text"]
+    assert _section(default, "大运Dasha").startswith("系统：Vimshottari（120 年周期）\n月宿：危（宿主星 罗睺）")
+    bad = service.run_tool("india_chart", {**INDIA_BIRTH, "dashaSystem": "decennial"}, save_result=False)
+    assert bad.ok is False and bad.error.code == "tool.india_chart_invalid_setting"
+
+
+def test_india_school_line_presets_and_prashna_fields(tmp_path: Path) -> None:
+    """流派行（buildIndiaSnapshotText:1170-1174）+ 无头预设（resolveIndiaHeadlessParams:1197-1213：未给岁差/宫制按派补）；
+    问事族只在 prashnaTime 在场时下发且问时数缺省 1（fieldsToParams:125-142，[Q-126/T-34]）；年盘异地须经纬齐备（:106-112）；
+    展示体系 akkg 不下发 dashaSystem（:81）。负向对照：旧代码无流派行、不补预设、问时数缺 → 后端 KP 问事整段空。"""
+    client = _india_client()
+    service = _service(tmp_path, client)
+    result = service.run_tool(
+        "india_chart",
+        {**INDIA_BIRTH, "indiaSchool": "kp", "dashaSystem": "akkg", "prashnaTime": "2026/09/01 10:00:00",
+         "prashnaMatter": "career", "varshaLat": "39n54"},
+        save_result=False,
+    )
+    assert result.ok, result.error
+    sent = client.bodies("/india/chart")[0]
+    assert (sent["indiaAyanamsa"], sent["indiaHsys"], sent["hsys"]) == ("krishnamurti", 3, 3)
+    assert sent["prashnaNumber"] == 1 and sent["prashnaMatter"] == "career"
+    assert "dashaSystem" not in sent and "varshaLat" not in sent and "indiaSchool" not in sent
+    info = _section(result.data["snapshot_text"], "起盘信息")
+    assert info.startswith("流派：KP 系统（相位范式 significator 链 · 主运取向 Vimshottari）\n当前分盘：命盘\n分盘：D1\n")
+    assert "恒星黄道岁差：Krishnamurti" in info  # 预设岁差同时落进快照口径行（请求与快照同源）
+    # 没起卦 → 问事族一个都不下发。
+    client.calls.clear()
+    service.run_tool("india_chart", {**INDIA_BIRTH, "prashnaMatter": "career"}, save_result=False)
+    assert "prashnaMatter" not in client.bodies("/india/chart")[0]
+
+
+def test_india_school_presets_mirror_the_vendored_table() -> None:
+    """Python 侧只镜像 INDIA_SCHOOL_DEFAULTS 的 ayanamsa/hsys 两列（取盘前要用、JS 在取盘后才跑）；镜像必须与
+    vendored india/indiaConst.js（curated，upstream_sha256 看守 AstroConst.js）逐值一致 —— 上游改表这里先红。"""
+    import subprocess
+
+    from horosa_skill.service import _INDIA_SCHOOL_PRESETS
+
+    core = Path(__file__).resolve().parents[1] / "horosa-core-js"
+    script = (
+        "import('./src/vendor/india/indiaConst.js').then((m)=>{const o={};"
+        "Object.keys(m.INDIA_SCHOOL_DEFAULTS).forEach((k)=>{o[k]=[m.INDIA_SCHOOL_DEFAULTS[k].ayanamsa,m.INDIA_SCHOOL_DEFAULTS[k].hsys];});"
+        "console.log(JSON.stringify(o));});"
+    )
+    out = subprocess.run(["node", "-e", script], cwd=core, capture_output=True, text=True, check=True).stdout
+    assert {k: tuple(v) for k, v in json.loads(out).items()} == _INDIA_SCHOOL_PRESETS

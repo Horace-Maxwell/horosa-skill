@@ -163,6 +163,28 @@ class IndiaChartInput(BirthInput):
         default=None,
         description="Tripataki 三旗盘（opt-in，后端多建 12 盘约 0.3–0.8s）：true 时产 [Tripataki 三旗盘逐月净分] 段（月心/土心逐月净分）。",
     )
+    # 上游印度盘页 / 挂载齿轮（techniqueMountSettings.js:1000-1051 → IndiaChart.fieldsToParams :79-143）的其余口径：
+    # 照常声明（校验 + MCP 扁平面收顶层键），不进 tools/list 广告层（预算）；值域词表见 agent_guidance。
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({
+        "dashaSystem", "indiaSchool", "dashaSeed", "sthiraStart", "transitDate", "tajakaYear", "annualChartType",
+        "varshaLat", "varshaLon", "prashnaTime", "prashnaNumber", "prashnaMatter", "prashnaSchools",
+        "prashnaCuspMode", "prashnaPrimaryHouse",
+    })
+    dashaSystem: str | None = Field(default=None, description="大运体系（15 档，缺省 vimshottari）：决定 [大运Dasha] 段所列体系。")
+    indiaSchool: str | None = Field(default=None, description="流派：parashari（缺省）/jaimini/tajika/kp/nadi/western_sidereal；未给岁差/宫制时按派补预设。")
+    dashaSeed: str | None = Field(default=None, description="大运起点：moon（缺省）/七政/节点/上升/特殊上升/副星。")
+    sthiraStart: str | None = Field(default=None, description="Sthira 座运起座：lagna（缺省）| brahma。")
+    transitDate: str | None = Field(default=None, description="过运日期 YYYY/MM/DD（缺省今日）。")
+    tajakaYear: int | None = Field(default=None, description="年度盘年份（缺省当前年）。")
+    annualChartType: str | None = Field(default=None, description="年盘口径：varsha（缺省）| tithi。")
+    varshaLat: Any | None = Field(default=None, description="年盘异地纬度（须与 varshaLon 同给）。")
+    varshaLon: Any | None = Field(default=None, description="年盘异地经度（须与 varshaLat 同给）。")
+    prashnaTime: str | None = Field(default=None, description="问事起卦时刻 YYYY/MM/DD HH:mm:ss（给了才产 [问事 Praśna]）。")
+    prashnaNumber: int | None = Field(default=None, description="KP 问时数 1–249（缺省 1）。")
+    prashnaMatter: str | None = Field(default=None, description="所问事项（career/marriage/…）。")
+    prashnaSchools: Any | None = Field(default=None, description="问事流派（缺省 ['kp']）。")
+    prashnaCuspMode: str | None = Field(default=None, description="问事宫始定法（缺省 asc_driven_placidus）。")
+    prashnaPrimaryHouse: int | None = Field(default=None, description="问事主宫 1–12（缺省按事项）。")
 
 
 class PlanetCyclesInput(FlexibleModel):

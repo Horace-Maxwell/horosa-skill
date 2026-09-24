@@ -1169,6 +1169,28 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "india/indiaConst.js": {
+      "upstream": "constants/AstroConst.js",
+      "mode": "curated",
+      "why": "印占流派（五支+西方恒星）/ 大运流派开关 22 键 / 大运体系 15 档常量与归一函数，逐块抽取（上游全文件 import 了 headless 不存在的色板/主题模块）。消费方 india/jyotishSnapshot.js：[起盘信息] 流派行与 [大运Dasha] 体系切换。",
+      "extracts": [
+        "INDIA_SCHOOL_DEFAULT",
+        "INDIA_SCHOOL_OPTIONS",
+        "INDIA_SCHOOL_DEFAULTS",
+        "normalizeIndiaSchool",
+        "INDIA_DASHA_VARIANT_GROUPS",
+        "INDIA_DASHA_VARIANT_SPECS",
+        "INDIA_DASHA_VARIANT_DEFAULTS",
+        "normalizeIndiaDashaVariants",
+        "serializeIndiaDashaVariants",
+        "getIndiaSchoolDefaults",
+        "INDIA_DASHA_SYSTEM_DEFAULT",
+        "INDIA_DASHA_SYSTEM_OPTIONS",
+        "INDIA_DASHA_DISPLAY_ONLY_SYSTEMS",
+        "normalizeIndiaDashaSystem"
+      ],
+      "upstream_sha256": "d960a5ea4b9bc9b485bd271a72eda30ad74a54423ec2369d6fa828e10f825d88"
+    },
     "india/jyotishSnapshot.js": {
       "mode": "bespoke",
       "why": "自上游 IndiaChart.js 逐字抽出的 Jyotish 快照段构造器（仅剥 React 外壳）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。 🔴 两处声明式偏离（均为上游 HEAD 9b74714b 的 bug，重抽时必须保留，直到上游修复）：① SIGN_CN_S/scS 上提到函数开头——上游三旗盘逐月净分块先于其 const 定义调用 scS（暂时性死区），jyotish.tripataki 一有数据整个 builder 抛出；② 三旗盘月序读 m.index ?? m.month——后端 month_rows 的键是 month，上游读 index 恒 undefined。",
