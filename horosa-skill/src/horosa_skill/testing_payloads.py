@@ -126,6 +126,11 @@ def build_sample_payloads() -> dict[str, dict]:
         "distributions": {**chart_birth, "predictive": 1},
         "jaynesprog": {**chart_birth, "predictive": 1, "targetDate": "2028-04-06"},
         "vedicprog": {**chart_birth, "predictive": 1, "targetDate": "2028-04-06"},
+        # 上游 v3.11 星运四键：区间/年份/目标日写死，样例与 live fixture（tests/fixtures/sync311_newtools_live.json）同参。
+        "ephemeris": {**chart_birth, "predictive": 0, "startDate": "2026-01-01", "endDate": "2026-03-31"},
+        "returntimeline": {**chart_birth, "predictive": 0, "startYear": 2026, "count": 3},
+        "prenatalsyzygy": {**chart_birth, "predictive": 0},
+        "prog": {**chart_birth, "predictive": 0, "targetDate": "2031-04-06", "targetTime": "12:00:00"},
         "planetaryarc": {**chart_birth, "predictive": 1, "datetime": "2028-04-06"},
         "planetaryages": {**chart_birth, "asOf": "2028-04-06"},
         "balbillus": {**chart_birth, "predictive": 0},
