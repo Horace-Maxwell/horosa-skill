@@ -53,6 +53,7 @@ _DROP_IMPORT_PATTERNS = (
     re.compile(r"^import\s+\{[^}]*\}\s+from\s+['\"][^'\"]*momentPipeline['\"];?\s*$", re.M),
 )
 _RELATIVE_IMPORT = re.compile(r"(from\s+['\"])(\.[^'\"]*?)(['\"])")
+_DYNAMIC_RELATIVE_IMPORT = re.compile(r"(import\(\s*(?:/\*.*?\*/\s*)?['\"])(\.[^'\"]*?)(['\"])", re.S)
 
 
 def _strip_fetch_helpers(text: str) -> tuple[str, list[str]]:
@@ -328,6 +329,12 @@ def transform(text: str) -> tuple[str, list[str]]:
     text, count = _RELATIVE_IMPORT.subn(add_suffix, text)
     if count:
         notes.append(f"suffixed {count} relative import(s)")
+    # 动态形态 `import('./x')` 同一条规则：bundler 解析无扩展名，原生 Node ESM 不解析 → ERR_MODULE_NOT_FOUND。
+    # 懒加载路径 loadcheck 抓不到（模块照样加载），只在调用时炸：`gua/data/liuyaoDoctrineCache.js` 的
+    # `import('./tianjiDoctrine')` 即此例（v0.40.0 前无人消费而潜伏）。
+    text, dyn_rel = _DYNAMIC_RELATIVE_IMPORT.subn(add_suffix, text)
+    if dyn_rel:
+        notes.append(f"suffixed {dyn_rel} dynamic relative import(s)")
 
     # 原生 Node ESM 要求 JSON import 显式带 `with { type: 'json' }`；bundler 不需要，所以上游没有。
     # 漏了它模块直接加载失败（"needs an import attribute of type: json"）——AGENTS §5 的老坑，机械化掉。

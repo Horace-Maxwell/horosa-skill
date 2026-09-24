@@ -151,3 +151,14 @@ def test_imported_locals_covers_every_import_form() -> None:
     assert rv._imported_locals("import * as ns from 'x';") == {"ns"}
     assert rv._imported_locals("import A, * as ns from 'x';") == {"A", "ns"}
     assert rv._imported_locals("import 'x';") == set()
+
+
+def test_dynamic_relative_imports_get_the_js_suffix_too() -> None:
+    """`import('./tianjiDoctrine')` loads under a bundler but not under native Node ESM (ERR_MODULE_NOT_FOUND);
+    it is lazy, so loadcheck stays green and only the first call explodes."""
+    src = "export function load(){ return import('./tianjiDoctrine').then((m)=>m); }\n"
+    out, notes = rv.transform(src)
+    assert "import('./tianjiDoctrine.js')" in out and any("dynamic relative" in n for n in notes)
+    kept = "export const a = () => import('./x.js'); export const b = () => import('lodash');\n"
+    out, _ = rv.transform(kept)
+    assert "import('./x.js')" in out and "import('lodash')" in out

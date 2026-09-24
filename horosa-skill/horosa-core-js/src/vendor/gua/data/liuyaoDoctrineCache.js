@@ -19,7 +19,7 @@ let _loading = null;    // 在途 promise(并发合流)
 export function loadDoctrine(){
 	if(_doctrine){ return Promise.resolve(_doctrine); }
 	if(_loading){ return _loading; }
-	_loading = import('./tianjiDoctrine')
+	_loading = import('./tianjiDoctrine.js')
 		.then((m) => { _doctrine = m.DOCTRINE || null; _loading = null; return _doctrine; })
 		.catch(() => { _loading = null; return null; });
 	return _loading;

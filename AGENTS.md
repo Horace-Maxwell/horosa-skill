@@ -327,7 +327,8 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   （taiyi 13 段解读曾被 `sections: undefined` 整体丢掉）——排查法：抓 `js_client.run` 实收的
   `ken_response` grep 段名，再决定透传还是重 vendor builder；透传段按「条件段双登记」处理。
 - **数算 verbatim vendor**（canping/heluo）：整体照搬，仅两处改动 = 兄弟 import 指向 vendored 拷贝 +
-  JSON import attribute（漏了 raw Node 报 `needs an import attribute of type: json`）。
+  JSON import attribute（漏了 raw Node 报 `needs an import attribute of type: json`）。静态 / 动态相对 import 的 `.js` 与
+  JSON 属性都由 transform 机械补齐（动态形态 v0.40.0 起；懒加载路径漏补时 loadcheck 恒绿、调用才空）。
 - **闭包提取三陷阱**（六壬毕法/占断向导、政余格局这类纯模块级闭包，零 `this.`/React）：
   ① **常量引用与函数引用分开清点**——漏 `JiaZiList` / `ERFAN_SU_TO_BRANCH` 这类 module-level const →
   静默 `ReferenceError` 被 try/catch 吞掉 → 结果 null 无报错；② `SZConst.js` 在模块加载期读

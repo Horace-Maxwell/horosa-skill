@@ -154,6 +154,12 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
    （Java 多 bazi.fourColumns 与 chart.nongli），`test_endpoint_registry.py` 那句「chart-only」注释已改正。
 8. **上游代码自己也会崩**：逐字 vendor 的 `jyotishSnapshot` 有暂时性死区（`scS`）与键名错（`index`/`month`），从没在真数据上跑过；
    世俗盘卡 builder 吞掉每张卡的异常，闭包坏了只表现为「卡不见了」——只有值级金标抓得到。
+9. **动态 `import('./x')` 没补 `.js`，懒加载路径静默返回空。**
+   - 症状：六爻实现者要接 [断诀命中]/[占类断语] 时发现 vendored `gua/data/liuyaoDoctrineCache.js` 的 `loadDoctrine()` 恒返回 null。
+   - 根因：re-vendor 只给静态 `from './x'` 补扩展名；动态 `import('./tianjiDoctrine')` 在原生 Node ESM 下 ERR_MODULE_NOT_FOUND，
+     被模块自己的 catch 吞成「断语库缺失」。模块照常加载，loadcheck 恒绿。
+   - 守卫：transform 补动态相对 import 的 `.js`（`_DYNAMIC_RELATIVE_IMPORT`）+ `test_dynamic_relative_imports_get_the_js_suffix_too`；
+     重渲染后同一调用返回 40 键断语库（修前 null）。
 
 ### v0.40.0 / 2026-09-24 — 上游 v3.11.x 重同步：六处「同步了却没同步」
 
