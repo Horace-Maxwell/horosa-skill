@@ -342,6 +342,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   restamp 在 0604fa41 却仍是上游早已改掉的「魏」）。所以**能表达成「上游全文件 + 声明式 deviation」的手工件一律改
   verbatim**（truncate_before / stub_import / replace_text / import_redirect，`_reexport_required` 自动补调用方要的
   export）——`suzhan/SZConst.js`、`tongshefa/TongSheFaCore.js` 即此例；curated/bespoke 只留给真正的子集与重写件。
+- **vendored JSON 数据与 `.js` 同等登记**：`horosa-core-js/src/vendor/**` 下每个 `.js` / `.json` 都必须在
+  `vendor_manifest.json` 有条目（verbatim 对 JSON 即逐字节比对上游）；`test_every_vendored_js_and_json_file_is_in_the_manifest`
+  守。v0.40.0 前 32 份 JSON 只登记 1 份，上游 v3.11.0 改 `hellenisticData.json` 日/月中年（39.5→69.5/66.5）零信号滞留。
+  Python 侧若手抄了同一张表（如 `predictive_text.PLANETARY_YEARS`），测试要与 vendored JSON 互锚。
 - **重同步 `vendor/runtime-source`**：`sync_vendored_runtime_sources.sh` + 显式 `HOROSA_SOURCE_ROOT`
   （对上游 READ-ONLY）。**顶层共享件必须显式补**：上游把子逻辑上提为 vendor 根级单文件时（如
   v3.5.0 全年份域的 `Horosa-Web/vendor/kin_year_domain.py`，被 16 个 ken/神数 引擎懒 import），逐引擎

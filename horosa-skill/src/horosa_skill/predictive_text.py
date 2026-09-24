@@ -41,8 +41,8 @@ UPSTREAM_ASTRO_TXT_MSG: dict[str, str] = {
 }
 
 # 上游 HEAD divination/data/hellenisticData.json planetary_years：行星年四档（planetaryAges.js:99-110 ◆ 行星年四档 子块）。
-# ⚠ vendored 副本 horosa-core-js/src/vendor/divination/data/hellenisticData.json 此键仍是旧值（日/月中年 39.5）——
-# revendor --check 只管 manifest 里的 .js，不比 .json；本表按上游 HEAD 取值（日中年 69.5、月中年 66.5），测试锚定上游值。
+# 与 vendored 副本 horosa-core-js/src/vendor/divination/data/hellenisticData.json 同值（测试互锚；该 JSON 由
+# vendor manifest 逐字节对上游看守——v3.11.0 改日/月中年 39.5→69.5/66.5 时它曾因 manifest 只登记 .js 而滞留）。
 PLANETARY_YEARS: dict[str, dict[str, float]] = {
     "Saturn": {"least": 30, "mean": 43.5, "greater": 57, "greatest": 465},
     "Jupiter": {"least": 12, "mean": 45.5, "greater": 79, "greatest": 427},

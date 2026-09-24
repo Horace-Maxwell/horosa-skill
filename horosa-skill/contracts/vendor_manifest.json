@@ -2130,6 +2130,161 @@
       "why": "自上游 ZWLuckPanel.js 精确抽出的运限项构建闭包（其余是 React 组件，整份 vendor 不可行）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
       "derived_from": "components/ziwei/ZWLuckPanel.js",
       "derived_sha256": "d2a9bbd4d09abe8db45b6d109e25719b2f68eacf3e35e9b89803608c99ecacfe"
+    },
+    "canping/data/canpingTiaowen.json": {
+      "upstream": "utils/data/canpingTiaowen.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/babylonianData.json": {
+      "upstream": "divination/data/babylonianData.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/hellenisticData.json": {
+      "upstream": "divination/data/hellenisticData.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/hellenisticDataExt.json": {
+      "upstream": "divination/data/hellenisticDataExt.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "heluo/data/heluoTiaowen.json": {
+      "upstream": "utils/data/heluoTiaowen.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "yizhangjing/data/yizhangjingData.json": {
+      "upstream": "utils/data/yizhangjingData.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "yizhangjing/data/yizhangjingLore.json": {
+      "upstream": "utils/data/yizhangjingLore.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "yizhangjing/data/yizhangjingShensha.json": {
+      "upstream": "utils/data/yizhangjingShensha.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "zhengchuan/data/zhengchuanLiuqinTables.json": {
+      "upstream": "utils/data/zhengchuanLiuqinTables.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "zhengchuan/data/zhengchuanShaoziTables.json": {
+      "upstream": "utils/data/zhengchuanShaoziTables.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "zhengchuan/data/zhengchuanShaoziVerses.json": {
+      "upstream": "utils/data/zhengchuanShaoziVerses.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "zhengchuan/data/zhengchuanTiebanTables.json": {
+      "upstream": "utils/data/zhengchuanTiebanTables.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "zhengchuan/data/zhengchuanTiebanVerses.json": {
+      "upstream": "utils/data/zhengchuanTiebanVerses.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "zhengchuan/data/zhengchuanXinyiTables.json": {
+      "upstream": "utils/data/zhengchuanXinyiTables.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/data/tables/ziweiStarMeaning.json": {
+      "upstream": "components/ziwei/data/tables/ziweiStarMeaning.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/data/tables/ziweidou.json": {
+      "upstream": "components/ziwei/data/tables/ziweidou.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/data/tables/ziweige.json": {
+      "upstream": "components/ziwei/data/tables/ziweige.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/data/tables/ziweihuolin.json": {
+      "upstream": "components/ziwei/data/tables/ziweihuolin.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/data/tables/ziweijiang.json": {
+      "upstream": "components/ziwei/data/tables/ziweijiang.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/data/tables/ziweiliuchangqu.json": {
+      "upstream": "components/ziwei/data/tables/ziweiliuchangqu.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/data/tables/ziweimonth.json": {
+      "upstream": "components/ziwei/data/tables/ziweimonth.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/data/tables/ziweisihua.json": {
+      "upstream": "components/ziwei/data/tables/ziweisihua.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/data/tables/ziweismallstars.json": {
+      "upstream": "components/ziwei/data/tables/ziweismallstars.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/data/tables/ziweistarlight.json": {
+      "upstream": "components/ziwei/data/tables/ziweistarlight.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/data/tables/ziweistarlight_quanshu.json": {
+      "upstream": "components/ziwei/data/tables/ziweistarlight_quanshu.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/data/tables/ziweistarsmain.json": {
+      "upstream": "components/ziwei/data/tables/ziweistarsmain.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/data/tables/ziweitimezi.json": {
+      "upstream": "components/ziwei/data/tables/ziweitimezi.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/data/tables/ziweixiaoxian.json": {
+      "upstream": "components/ziwei/data/tables/ziweixiaoxian.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/data/tables/ziweiyeargan.json": {
+      "upstream": "components/ziwei/data/tables/ziweiyeargan.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/data/tables/ziweiyearzi.json": {
+      "upstream": "components/ziwei/data/tables/ziweiyearzi.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "ziwei/data/tables/ziweizu.json": {
+      "upstream": "components/ziwei/data/tables/ziweizu.json",
+      "mode": "verbatim",
+      "deviations": []
     }
   }
 }

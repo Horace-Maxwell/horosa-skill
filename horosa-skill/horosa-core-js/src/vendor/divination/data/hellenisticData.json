@@ -89,10 +89,10 @@
     "Saturn": {"least":30,"mean":43.5,"greater":57,"greatest":465},
     "Jupiter":{"least":12,"mean":45.5,"greater":79,"greatest":427},
     "Mars":   {"least":15,"mean":40.5,"greater":66,"greatest":284},
-    "Sun":    {"least":19,"mean":39.5,"greater":120,"greatest":1461},
+    "Sun":    {"least":19,"mean":69.5,"greater":120,"greatest":1461},
     "Venus":  {"least":8, "mean":45,  "greater":82,"greatest":1151},
     "Mercury":{"least":20,"mean":48,  "greater":76,"greatest":480},
-    "Moon":   {"least":25,"mean":39.5,"greater":108,"greatest":520}
+    "Moon":   {"least":25,"mean":66.5,"greater":108,"greatest":520}
   },
 
   "zr_periods_by_sign": {

@@ -338,11 +338,15 @@ def test_planetaryages_defaults_to_now_and_adds_year_bands() -> None:
     assert S._full_years_between("1998-02-20 20:48:00", datetime(2026, 2, 20, 20, 47, 59)) == 27
     assert "◆ 行星年四档（小年/中年/大年/极大年）" in text and "土：小年 30 · 中年 43.5 · 大年 57 · 极大年 465" in text
     # 四档常量 = 上游 HEAD divination/data/hellenisticData.json planetary_years（日中年 69.5、月中年 66.5）。
-    # ⚠ vendored 副本（horosa-core-js/src/vendor/divination/data/hellenisticData.json）此键仍是旧值 39.5/39.5，
-    # 本仓无消费方；已报 lead 走 re-vendor，不在此手改 vendored 数据。
     assert P.PLANETARY_YEARS["Sun"] == {"least": 19, "mean": 69.5, "greater": 120, "greatest": 1461}
     assert P.PLANETARY_YEARS["Moon"] == {"least": 25, "mean": 66.5, "greater": 108, "greatest": 520}
     assert sum(y["least"] for y in P.PLANETARY_YEARS.values()) == 129
+    # Python 表是 vendored JSON 的手抄件：两份必须同值（JSON 由 vendor manifest 逐字节对上游看守）。
+    vendored = json.loads(
+        (Path(__file__).resolve().parents[1] / "horosa-core-js/src/vendor/divination/data/hellenisticData.json")
+        .read_text(encoding="utf-8")
+    )["planetary_years"]
+    assert P.PLANETARY_YEARS == vendored
     ys = S._build_yearsystem129_snapshot_text(chart)
     assert "| 月 | 月 | 1998-02-20 |" in ys  # 上游 cn = AstroTxtMsg[id]（单字），旧实现印「月亮」
 
