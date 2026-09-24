@@ -14,7 +14,6 @@ from pathlib import Path
 from horosa_skill.astro_rulers import (
     HOUSE_SYSTEM_RULERS_HEADERS,
     WHOLE_SIGN_RULERS_HEADERS,
-    build_house_ruler_lines,
     build_house_system_ruler_rows,
     build_whole_sign_ruler_rows,
     resolve_asc_sign,
@@ -22,7 +21,6 @@ from horosa_skill.astro_rulers import (
     sign_of_lon,
     whole_sign_house_of,
 )
-from horosa_skill.service import _astro_msg
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "astro_v2_baseline_chartobj.json"
 
@@ -77,12 +75,7 @@ def test_whole_sign_rows_round_trip_backend_rule_houses() -> None:
         assert nums == sorted(expected), obj["id"]
 
 
-def test_house_ruler_lines_render_the_v56_sub_block() -> None:
-    lines = build_house_ruler_lines(_chart_obj(), _astro_msg)
-    assert lines[0] == "◆ 宫神星(houseRows)"
-    assert lines[1] == "| 宫 | 宫头座 | 宫主 | 宫主落宫 | 宫主落座 |"
-    assert lines[2] == "| --- | --- | --- | --- | --- |"
-    assert lines[3].startswith("| 1宫 | 巨蟹 | 月亮 | ") and "天蝎" in lines[3]
-    assert len(lines) == 3 + 12
+# v56 的 `build_house_ruler_lines`（[主宰星链] 段末「◆ 宫神星(houseRows)」子块）已随上游 v57（#79）拆除：
+# 该表迁成独立段 [分宫制宫神星表]、[主宰星链] 改挂整宫制宫主表——新形态的逐字断言见 tests/test_sync311_chartfamily.py。
+def test_headers_constants_verbatim() -> None:
     assert WHOLE_SIGN_RULERS_HEADERS[3] == "宫主落宫(整宫)" and HOUSE_SYSTEM_RULERS_HEADERS[3] == "宫主落宫"
-    assert build_house_ruler_lines({"chart": {"houses": []}}, _astro_msg) == []

@@ -5,6 +5,7 @@ import contextvars
 import copy
 import gzip
 import logging
+import math
 import os
 import re
 import shutil
@@ -20,8 +21,15 @@ from pydantic import ValidationError
 
 from horosa_skill import __version__
 from horosa_skill.agent_guidance import build_tool_input_contract, build_validation_recovery
-from horosa_skill.astro_rulers import build_house_ruler_lines
-from horosa_skill.astro_sidereal import nakshatra_lord_cn, sidereal_ayanamsa_label
+from horosa_skill.astro_rulers import (
+    HOUSE_SYSTEM_LABELS,
+    build_dispositor_ruler_tail_lines,
+    build_house_system_ruler_section_lines,
+    derived_whole_sign_label_of,
+)
+from horosa_skill.astro_rulers import js_template_str as _js_template_str
+from horosa_skill.astro_sidereal import nakshatra_lord_cn, sidereal_ayanamsa_label, zodiacal_display_text
+from horosa_skill.time_basis import build_time_basis_line
 from horosa_skill.config import Settings
 from horosa_skill.engine.client import HorosaApiClient, HorosaPlainJsonClient
 from horosa_skill.engine.decennials import (
@@ -1951,7 +1959,7 @@ def _format_star_lines(stars: list[Any] | None) -> list[str]:
     return lines
 
 
-def _build_base_info_lines(chart_wrap: dict[str, Any], fields: dict[str, Any]) -> list[str]:
+def _build_base_info_lines(chart_wrap: dict[str, Any], fields: dict[str, Any], *, with_time_basis: bool = False) -> list[str]:
     chart = chart_wrap.get("chart", {}) if isinstance(chart_wrap, dict) else {}
     params = chart_wrap.get("params", {}) if isinstance(chart_wrap, dict) else {}
     lines: list[str] = []
@@ -1969,8 +1977,25 @@ def _build_base_info_lines(chart_wrap: dict[str, Any], fields: dict[str, Any]) -
     nongli = chart.get("nongli", {})
     if isinstance(nongli, dict) and nongli.get("birth"):
         lines.append(f"真太阳时：{nongli['birth']}")
+    # 跨技法时间基准自声明（上游 astroAiSnapshot.js:442-445，v3.11）：星盘按输入钟面时刻与时区换算世界时起盘，
+    # 只在整盘快照的 [起盘信息] 出（buildAstroSnapshotContent 传 withTimeBasis；[信息] 段复用本函数但不带）。
+    if with_time_basis:
+        lines.append(
+            build_time_basis_line(
+                time_alg=1,
+                late_zi_hour_use_next_day=fields.get("lateZiHourUseNextDay"),
+                after23_new_day=fields.get("after23NewDay"),
+            )
+        )
     zodiacal = chart.get("zodiacal") or ASTRO_HOUSE_SYSTEM_TEXT.get(str(fields.get("zodiacal")), fields.get("zodiacal"))
-    hsys = chart.get("hsys") or ASTRO_HOUSE_SYSTEM_TEXT.get(str(fields.get("hsys")), fields.get("hsys"))
+    # [Q-148/T-55]（上游 astroAiSnapshot.js:461-463）：派生盘（十三分/十二分/调波/龙盘）宫位被后端强制为
+    # 「变换后上升整宫」、每宫打 houses[].hsysDerived='wholeFromAsc' —— 请求里的分宫制不是这张盘实际用的，
+    # 标注必须说真话（数值不动）。非派生盘沿用本仓既有口径（后端回显优先）。
+    hsys = (
+        derived_whole_sign_label_of(chart)
+        or chart.get("hsys")
+        or ASTRO_HOUSE_SYSTEM_TEXT.get(str(fields.get("hsys")), fields.get("hsys"))
+    )
     zodiacal_text = _astro_msg(zodiacal)
     hsys_text = _astro_msg(hsys)
     if zodiacal_text or hsys_text:
@@ -2258,7 +2283,9 @@ def _build_aspect_section(chart_wrap: dict[str, Any]) -> list[str]:
         if not isinstance(one, dict):
             continue
         lines.append(_astro_msg_with_house(object_id, chart_wrap, short=True))
-        for key, state in (("Applicative", "入相"), ("Exact", "离相"), ("Separative", "离相"), ("None", "")):
+        # [Q-254/T-227]（上游 astroAiSnapshot.js:719-722）：正合（|orbDir|<0.3，不分入离）相态写「正合」，
+        # 不再与 Separative 同折为「离相」。四态序 入相/正合/离相/None 与上游同。
+        for key, state in (("Applicative", "入相"), ("Exact", "正合"), ("Separative", "离相"), ("None", "")):
             for asp in one.get(key, []) or []:
                 if not isinstance(asp, dict):
                     continue
@@ -2433,7 +2460,13 @@ def _build_natal_extra_sections(extras: dict[str, Any]) -> dict[str, str]:
         out["12分度"] = "\n".join(lines)
     dispositor = extras.get("dispositor") if isinstance(extras.get("dispositor"), list) else []
     if dispositor:
-        lines = [f"{_astro_msg(d.get('id'))}：{' → '.join(_astro_msg(k) for k in (d.get('chain') or []))}" for d in dispositor if isinstance(d, dict)]
+        # 链行逐字同上游 astroAiSnapshot.js:1037 `${msg(id)}：${chain.map(msg).join(' → ')}`——msg 走 AstroTxtMsg，
+        # 行星是单字（日/月/火…），与同段尾部整宫制宫主表的「宫主」列同一译名（此前本仓用长名「太阳/火星」）。
+        lines = [
+            f"{_astro_msg(d.get('id'), short=True)}：{' → '.join(_astro_msg(k, short=True) for k in (d.get('chain') or []))}"
+            for d in dispositor
+            if isinstance(d, dict)
+        ]
         out["主宰星链"] = "\n".join(lines)
     ls = extras.get("lifespan") if isinstance(extras.get("lifespan"), dict) else None
     if ls:
@@ -3405,9 +3438,37 @@ def _mundane_skeleton_lines(ingress_response: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _astro_msg_short(value: Any) -> str:
+    """上游 astroAiSnapshot `msg()` 的等价：AstroTxtMsg 优先（行星单字 日/月/火…，星座 牡羊…，宫 id 第一宫…）。"""
+    return _astro_msg(value, short=True)
+
+
+# classicalParamSpec.js:249-256 的全局仓缺省（headless 无本机仓 = 缺省档）：恒星平轨 1°、轨档 school。
+_FIXED_STAR_ORB_DEFAULT = 1
+_FIXED_STAR_ORB_MODE_DEFAULT = "school"
+
+
+def _fixed_star_orb_params(params: dict[str, Any]) -> dict[str, Any]:
+    """上游 classicalChartGlobals.js:271 fixedStarOrbParamsFor：/astroextra/analysis 的恒星轨参数。
+
+    随盘优先（chart 级键 starOrb/starOrbMode，缺则前端名 fixedStarOrb/fixedStarOrbMode），再缺取全局缺省；
+    档位仅 byMagnitude 时下发（Python fixed_star_hits 据此逐星取星等表轨）。
+    """
+    def pick(first: Any, second: Any) -> Any:
+        return first if first is not None and first != "" else second
+
+    orb = pick(params.get("starOrb"), pick(params.get("fixedStarOrb"), _FIXED_STAR_ORB_DEFAULT))
+    mode = pick(params.get("starOrbMode"), pick(params.get("fixedStarOrbMode"), _FIXED_STAR_ORB_MODE_DEFAULT))
+    out: dict[str, Any] = {"fixedStarOrb": orb}
+    if mode == "byMagnitude":
+        out["fixedStarOrbMode"] = "byMagnitude"
+    return out
+
+
 def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
     sections = [
-        ("起盘信息", _build_base_info_lines(response, payload)),
+        # 上游 buildAstroSnapshotContent 的 [起盘信息] 带时间基准行（astroAiSnapshot.js:1696 withTimeBasis）。
+        ("起盘信息", _build_base_info_lines(response, payload, with_time_basis=True)),
         ("宫位宫头", _build_house_cusp_lines(response)),
         ("星与虚点", _build_star_and_lot_position_lines(response)),
         ("信息", _build_info_section(response, payload)),
@@ -3418,13 +3479,25 @@ def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
     ]
     rendered = [(title, "\n".join(lines).strip()) for title, lines in sections if lines]
     # v2.4.0 本命增补: 12分度 / 主宰星链 / 寿命格局; v2.6.7 古典占星: 古典 / 古典格局.
-    # 星阙顺序: …主宰星链, 古典, 古典格局, 寿命格局, 可能性 → 古典两段插在 主宰星链 与 寿命格局 之间.
+    # 星阙顺序: …主宰星链, 分宫制宫神星表, 古典, 古典格局, 寿命格局, 可能性.
+    # `_natalExtras` 由 `_attach_natal_extras` 挂（西占 chart 家族 + 嵌入整盘）：JS 失败时也挂空 dict，
+    # 让下面两块纯 Python 的宫主表照出（JS 只供链行 / 12分度 / 寿命格局）。
     extras = response.get("_natalExtras") if isinstance(response.get("_natalExtras"), dict) else None
-    if extras:
-        for title in ("12分度", "主宰星链"):
-            body = extras.get(title)
-            if body and f"{body}".strip():
-                rendered.append((title, f"{body}".strip()))
+    if extras is not None:
+        body = extras.get("12分度")
+        if body and f"{body}".strip():
+            rendered.append(("12分度", f"{body}".strip()))
+        # v57（上游 #79，astroAiSnapshot.js:1039-1048）：[主宰星链] = 链行 + 判读口径行 + ◆ 整宫制宫主表
+        # （宫主/主宰口径 = 整宫制 = [起盘信息] 的 nR 标记）。v56 挂在这里的「当前分宫制宫神星表」迁出成下一段。
+        chain = f"{extras.get('主宰星链') or ''}".strip()
+        dispositor = "\n".join(line for line in [chain, *build_dispositor_ruler_tail_lines(response, _astro_msg_short)] if line).strip()
+        if dispositor:
+            rendered.append(("主宰星链", dispositor))
+        # [分宫制宫神星表]（astroAiSnapshot.js:1063-1077，preset 九键紧随 [主宰星链]）：当前分宫制宫头星座的宫主表
+        # （行星力量/角续果/实际落宫口径），上升整宫制盘折叠成一行说明。
+        house_system = build_house_system_ruler_section_lines(response, payload, _astro_msg_short)
+        if house_system:
+            rendered.append(("分宫制宫神星表", "\n".join(house_system).strip()))
     classical = _build_classical_section(response)
     if classical:
         rendered.append(("古典", "\n".join(classical).strip()))
@@ -3482,6 +3555,19 @@ def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
         if body:
             rendered.append((str(derived_self["title"]), body))
     return _render_snapshot_text(rendered)
+
+
+_HEADERLESS_SECTION_TITLE = re.compile(r"^\[(.+?)\]$", re.M)
+
+
+def _headerless_astro_snapshot_text(fields: dict[str, Any], chart_wrap: dict[str, Any]) -> str:
+    """上游 buildAstroSnapshotContent(chartObj, fields, {headerless: true})（astroAiSnapshot.js:1740-1742）。
+
+    嵌入父段（relative 比较盘 A/B、jieqi 分至盘）的整盘：整行段头 `[X]` 转 `· X` 标签，否则按段切分会把
+    子段当顶层段拆出、按父段名过滤会把盘体删净。富化（12分度/主宰星链链行/寿命格局/埃及历）由调用方先挂上。
+    """
+    text = _build_astro_snapshot_text(fields, chart_wrap)
+    return _HEADERLESS_SECTION_TITLE.sub(lambda match: f"· {match.group(1)}", text)
 
 
 def _is_astro_chart_payload(response_data: dict[str, Any]) -> bool:
@@ -3755,7 +3841,162 @@ def _dial_spiegel(points: list[dict[str, Any]], base: float = 90.0, orb: float =
     return out
 
 
-def _build_germany_snapshot_text(payload: dict[str, Any], chart_response: dict[str, Any], germany_result: dict[str, Any]) -> str:
+# 上游 AstroText.AstroTxtMsg 的 8 颗汉堡虚星 + 白羊点（AstroText.js:458-467）；其余点走 `_astro_msg_short`。
+_URANIAN_TXT_MSG: dict[str, str] = {
+    "Cupido": "丘比特", "Hades": "哈迪斯", "Zeus": "宙斯", "Kronos": "克洛诺斯",
+    "Apollon": "阿波罗", "Admetos": "阿德墨托斯", "Vulcanus": "伏尔甘", "Poseidon": "波塞冬",
+    "AriesPoint": "白羊点",
+}
+
+
+def _uranian_msg(point_id: Any) -> str:
+    """AstroMidpoint.js msg()：AstroTxtMsg 优先（虚星/白羊点中文名、行星单字、交点/四轴）。"""
+    return _URANIAN_TXT_MSG.get(f"{point_id}", "") or _astro_msg_short(point_id)
+
+
+# AstroMidpoint.js:405-407 六框中性命名（定局法），与 UranianHouseFrames 同表、同序。
+_HOUSE_FRAMES = (
+    ("meridian", "子午局"), ("ascendant", "上升局"), ("sun", "太阳局"),
+    ("moon", "月亮局"), ("node", "交点局"), ("earth", "地球局"),
+)
+
+
+def _dial_planet_house(lon: float, cusps: list[Any]) -> int:
+    """uranianDial.js:132 planetHouse：按弧长口径判点落宫（跨 0° 安全，不等距同样适用）。"""
+    position = _dial_norm360(lon)
+    for index in range(12):
+        start, end = float(cusps[index]), float(cusps[(index + 1) % 12])
+        if _dial_norm360(position - start) < _dial_norm360(end - start):
+            return index + 1
+    return 12
+
+
+def _germany_house_frames_lines(germany_result: Any, dial_points: list[dict[str, Any]]) -> list[str]:
+    """[六宫框落宫]（上游 AstroMidpoint.js:408-428 buildHouseFramesSection，[Q-442/T-405]）：六宫框全框 × 全点落宫表。
+
+    页签「六宫框」缺省开（UranianDialStyle showHouseFrames=true，headless 无本机显示仓 = 缺省）→ 后端给了
+    houseFrames 即出，不受汉堡门控。落宫取后端 frames[key].placements[id]，缺则按 cusps 定宫，再缺 '—'。
+    """
+    house_frames = germany_result.get("houseFrames") if isinstance(germany_result, dict) else None
+    frames = house_frames.get("frames") if isinstance(house_frames, dict) else None
+    if not isinstance(frames, dict):
+        return []
+    keys = [
+        (key, label)
+        for key, label in _HOUSE_FRAMES
+        if isinstance(frames.get(key), dict) and (frames[key].get("placements") or isinstance(frames[key].get("cusps"), list))
+    ]
+    if not keys or not dial_points:
+        return []
+
+    def house_of(frame: dict[str, Any], point: dict[str, Any]) -> str:
+        placements = frame.get("placements")
+        if isinstance(placements, dict) and placements.get(point["id"]):
+            return _js_template_str(placements[point["id"]])
+        cusps = frame.get("cusps")
+        if isinstance(cusps, list) and len(cusps) == 12:
+            return f"{_dial_planet_house(point['lon'], cusps)}"
+        return "—"
+
+    lines = [
+        "（子午局=东点 1 宫头·天顶 10 宫头赤道分宫；上升/太阳/月亮/交点/地球局=等宫；太阳局太阳落 4 宫、月亮局太阴落 10 宫、地球局 1 宫头恒 180°）",
+        f"| 点 | {' | '.join(label for _, label in keys)} |",
+        f"| --- | {' | '.join('---' for _ in keys)} |",
+    ]
+    for point in dial_points:
+        lines.append(f"| {_uranian_msg(point['id'])} | {' | '.join(house_of(frames[key], point) for key, _ in keys)} |")
+    return lines
+
+
+# uranianDial.js:289 太阳弧速率；AstroMidpoint.js:432 校时事件类型中文。
+_SOLAR_ARC_RATE = {"naibod": 0.9856473, "oneDeg": 1.0, "cardan": 0.9866667}
+_SOLAR_ARC_LABEL = {"oneDeg": "1°/年", "cardan": "Cardan", "naibod": "Naibod"}
+_RECTIFY_TYPE_CN = {"marriage": "婚姻", "children": "生育", "career": "事业", "move": "迁居", "loss": "丧亲", "accident": "意外", "other": "其他"}
+_RECTIFY_DATE_FORMATS = ("%Y-%m-%d", "%Y/%m/%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y/%m/%d %H:%M:%S", "%Y/%m/%d %H:%M")
+
+
+def _parse_local_moment(text: Any) -> datetime | None:
+    """moment(<ISO/斜杠日期>) 的本地时刻（naive；上游两端同一浏览器时区，差值与时区无关）。无效 → None。"""
+    raw = f"{text or ''}".strip()
+    if not raw:
+        return None
+    raw = raw[:-1] if raw.endswith("Z") else raw
+    for fmt in _RECTIFY_DATE_FORMATS:
+        try:
+            return datetime.strptime(raw, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _germany_rectify_lines(payload: dict[str, Any], rectify_events: Any, dial_points: list[dict[str, Any]]) -> list[str]:
+    """[校时预览]（上游 AstroMidpoint.js:433-468 buildRectifySection + uranianDial.js:389 rectificationHits，[Q-442/T-405]）。
+
+    有待校事件（带 date）才产段。盘基/容许度/太阳弧取上游显示仓缺省（90° / 1° / Naibod；headless 无显示仓），
+    容许度随请求 `orb`（上游 disp.orb）。Asc 微调滑块是即时预览态，不进快照（命中表按 0 微调）。
+    """
+    events = [event for event in (rectify_events or []) if isinstance(event, dict) and event.get("date")] if isinstance(rectify_events, list) else []
+    if not events:
+        return []
+    birth = _parse_local_moment(f"{payload.get('date') or ''} {payload.get('time') or '00:00:00'}") if payload.get("date") else None
+    if birth is None:
+        return []
+
+    def lon_of(point_id: str) -> float | None:
+        for point in dial_points:
+            if point.get("id") == point_id:
+                return float(point["lon"])
+        return None
+
+    axes = [(name, lon) for name, lon in (("MC", lon_of("MC")), ("Asc", lon_of("Asc"))) if lon is not None]
+    base = 90.0
+    try:
+        orb = float(payload.get("orb"))
+    except (TypeError, ValueError):
+        orb = 1.0
+    if not (math.isfinite(orb) and orb > 0):
+        orb = 1.0
+    sa_key = "naibod"
+    rate = _SOLAR_ARC_RATE[sa_key]
+    rows: list[str] = []
+    total = 0
+    for index, event in enumerate(events):
+        label = f"{event['label']}" if event.get("label") and f"{event['label']}".strip() else f"事件{index + 1}"
+        when = _parse_local_moment(event.get("date"))
+        years = (when - birth).total_seconds() * 1000 / (86400000 * 365.2422) if when is not None else None
+        hits: list[tuple[str, str, float]] = []
+        arc: float | None = None
+        if years is not None:
+            arc = years * rate
+            for angle_name, angle_lon in axes:
+                directed = _dial_norm360(angle_lon + arc)
+                for point in dial_points:
+                    separation = _dial_sep(directed, point["lon"], base)
+                    if separation <= orb:
+                        hits.append((point["id"], angle_name, separation))
+            hits.sort(key=lambda hit: hit[2])
+        total += len(hits)
+        hit_text = "，".join(f"{angle}→{_uranian_msg(factor)}·{separation:.2f}°" for factor, angle, separation in hits[:8]) or "无命中"
+        date_text = when.strftime("%Y-%m-%d") if when is not None else ""
+        arc_text = f"{arc:.2f}" if arc is not None and math.isfinite(arc) else "—"
+        type_text = _RECTIFY_TYPE_CN.get(str(event.get("type")), "其他")
+        rows.append(f"| {label} | {type_text} | {date_text or '—'} | {arc_text} | {hit_text} |")
+    return [
+        f"（已录事件推进 MC/Asc 看是否触动本命因子，只预览不改盘；盘基 {_js_template_str(base)}°·容许 {_js_template_str(orb)}°·太阳弧 {_SOLAR_ARC_LABEL.get(sa_key) or 'Naibod'}；1°MC≈4 分钟出生时间）",
+        "| 事件 | 类型 | 日期 | 弧° | 命中(轴→本命因子·角距) |",
+        "| --- | --- | --- | --- | --- |",
+        *rows,
+        f"命中合计：{total}",
+    ]
+
+
+def _build_germany_snapshot_text(
+    payload: dict[str, Any],
+    chart_response: dict[str, Any],
+    germany_result: dict[str, Any],
+    *,
+    rectify_events: Any = None,
+) -> str:
     chart = chart_response.get("chart", {}) if isinstance(chart_response, dict) else {}
     houses = chart.get("houses") if isinstance(chart, dict) else []
     objects = chart.get("objects") if isinstance(chart, dict) else []
@@ -3830,6 +4071,15 @@ def _build_germany_snapshot_text(payload: dict[str, Any], chart_response: dict[s
     ]
     spiegel_lines = [f"{_planet_label(p['a'])} ⟷ {_planet_label(p['b'])}（误差{p['sep']:.2f}°）" for p in _dial_spiegel(dial_points)]
     mplist_lines = [f"{_planet_label(p['a'])} / {_planet_label(p['b'])} = {p['lon']:.2f}°" for p in _dial_midpoint_list(dial_points)[:120]]
+    # [Q-442/T-405]（上游 AstroMidpoint.js:561-570）：六宫框全表（页签开着即进，不受汉堡门控）与校时预览（有待校事件才进）；
+    # 段序紧随 [中点列表]、在 [汉堡学派要素]/[戴维森盘]/[虚星参考] 之前（同 aiExport.js:857 preset）。
+    tail_sections: list[tuple[str, str]] = []
+    frames_lines = _germany_house_frames_lines(germany_result, dial_points)
+    if frames_lines:
+        tail_sections.append(("六宫框落宫", "\n".join(frames_lines)))
+    rectify_lines = _germany_rectify_lines(payload, rectify_events, dial_points)
+    if rectify_lines:
+        tail_sections.append(("校时预览", "\n".join(rectify_lines)))
     return _render_snapshot_text(
         [
             (
@@ -3851,57 +4101,137 @@ def _build_germany_snapshot_text(payload: dict[str, Any], chart_response: dict[s
             ("行星图", "\n".join(picture_lines).strip() or "暂无行星图"),
             ("映点", "\n".join(spiegel_lines).strip() or "暂无映点接触"),
             ("中点列表", "\n".join(mplist_lines).strip() or "暂无中点"),
+            *tail_sections,
         ]
     )
+
+
+def _js_round3(value: Any) -> str:
+    """JS `round3`（`${Math.round(Number(v) * 1000) / 1000}`）：半入向 +∞（非 Python 银行家舍入），整值去 .0。"""
+    if value is None or isinstance(value, bool):
+        return ""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if number != number or number in (float("inf"), float("-inf")):
+        return ""
+    rounded = math.floor(number * 1000 + 0.5) / 1000
+    return _js_template_str(rounded) if rounded.is_integer() else repr(rounded)
+
+
+def _dice_split_degree(degree: Any) -> tuple[int, int]:
+    """DiceMain.js:57 splitDegree：Number(degree) 非数 → [0,0]；负数先 +360；座内度/分向下取整。"""
+    try:
+        number = float(degree)
+    except (TypeError, ValueError):
+        return 0, 0
+    if number != number:
+        return 0, 0
+    if number < 0:
+        number += 360
+    deg = math.floor(number % 30)
+    return deg, math.floor(((number % 30) - deg) * 60)
+
+
+def _dice_chart_object_lines(chart_obj: Any) -> list[str]:
+    """DiceMain.js:72 buildChartObjectLines：逐宫星体 GFM 表（[Q-455/T-418] 逆行列：lonspeed<0 标「逆」，无速度字段为 —）。"""
+    chart = chart_obj.get("chart") if isinstance(chart_obj, dict) else None
+    if not isinstance(chart, dict):
+        return []
+    houses = chart.get("houses") if isinstance(chart.get("houses"), list) else []
+    objects = chart.get("objects") if isinstance(chart.get("objects"), list) else []
+    if not houses:
+        return []
+    lines = ["| 宫位 | 星体 | 度 | 座 | 分 | 逆行 |", "| --- | --- | --- | --- | --- | --- |"]
+    for house in houses:
+        house_id = house.get("id") if isinstance(house, dict) else None
+        in_house = [obj for obj in objects if isinstance(obj, dict) and obj.get("house") == house_id]
+        if not in_house:
+            lines.append(f"| {_astro_msg_short(house_id)} | 无 | — | — | — | — |")
+            continue
+        for index, obj in enumerate(in_house):
+            deg, minute = _dice_split_degree(obj.get("signlon"))
+            speed = obj.get("lonspeed")
+            retro = "逆" if isinstance(speed, (int, float)) and not isinstance(speed, bool) and math.isfinite(speed) and speed < 0 else "—"
+            lines.append(
+                f"| {_astro_msg_short(house_id) if index == 0 else '—'} | {_astro_msg_short(obj.get('id'))} | {deg} | "
+                f"{_astro_msg_short(obj.get('sign'))} | {minute} | {retro} |"
+            )
+    return lines
+
+
+def _dice_chart_aspect_lines(chart_obj: Any) -> list[str]:
+    """DiceMain.js:102 buildChartAspectLines（[Q-455/T-418]）：两盘 normalAsp 四态各成行，无数据 → []（不产段）。
+
+    ⚠ 逐字镜像上游的取数路径 `chartObj.chart.aspects.normalAsp`。后端 /predict/dice 的 diceChart/chart 是
+    getChartObj 形（aspects 在 chartObj **顶层**，AstroChartCircle 画相位线读的也是顶层），故真实响应下上游这两段
+    恒不产出——本仓照上游口径（条件段双登记），不擅自改路径；详见 tests/test_sync311_chartfamily.py。
+    """
+    chart = chart_obj.get("chart") if isinstance(chart_obj, dict) else None
+    aspects = chart.get("aspects") if isinstance(chart, dict) else None
+    normal = aspects.get("normalAsp") if isinstance(aspects, dict) else None
+    if not isinstance(normal, dict) or not normal:
+        return []
+    ids = [obj.get("id") for obj in (chart.get("objects") or []) if isinstance(obj, dict) and normal.get(obj.get("id"))]
+    ids.extend(key for key in normal if key not in ids)
+    rows: list[str] = []
+    for object_id in ids:
+        one = normal.get(object_id)
+        if not isinstance(one, dict) or not one:
+            continue
+        subject = _astro_msg_short(object_id)
+        # 上游 Exact 与 Separative 同折「离相」（DiceMain.js:113-118；与星盘 [相位] 段的「正合」不同，照抄不统一）。
+        for key, state in (("Applicative", "入相"), ("Exact", "离相"), ("Separative", "离相"), ("None", "—")):
+            for asp in one.get(key) or []:
+                if isinstance(asp, dict):
+                    rows.append(
+                        f"| {subject} | {_js_template_str(asp.get('asp'))}˚ | {_astro_msg_short(asp.get('id'))} | {state} | {_js_round3(asp.get('orb'))} |"
+                    )
+    if not rows:
+        return []
+    return ["| 主体 | 相位 | 对象 | 相态 | 误差 |", "| --- | --- | --- | --- | --- |", *rows]
 
 
 def _build_otherbu_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
-    def chart_lines(chart_obj: dict[str, Any] | None) -> list[str]:
-        chart = chart_obj.get("chart", {}) if isinstance(chart_obj, dict) else {}
-        houses = chart.get("houses") if isinstance(chart, dict) else []
-        objects = chart.get("objects") if isinstance(chart, dict) else []
-        lines: list[str] = []
-        for house in houses or []:
-            if not isinstance(house, dict):
-                continue
-            lines.append(f"{house.get('id', 'House')}")
-            in_house = [obj for obj in objects or [] if isinstance(obj, dict) and obj.get("house") == house.get("id")]
-            if not in_house:
-                lines.append("星体：无")
-                continue
-            for obj in in_house:
-                deg, minute = _split_degree(obj.get("signlon", obj.get("lon")))
-                lines.append(f"星体：{_planet_label(obj.get('id'))} {deg}˚{_msg(obj.get('sign'))}{minute}分")
-        return lines
-
-    return _render_snapshot_text(
-        [
-            (
-                "起盘信息",
-                "\n".join(
-                    [
-                        f"日期：{payload.get('date', '—')} {payload.get('time', '—')}",
-                        f"时区：{payload.get('zone', '—')}",
-                        f"经纬度：{payload.get('lon', '—')} {payload.get('lat', '—')}",
-                        f"传统模式：{'无三王星' if payload.get('tradition') else '含三王星'}",
-                        f"问题：{payload.get('question') or '未填写'}",
-                    ]
-                ),
+    """上游 DiceMain.js:127-170 buildDiceSnapshotText（v3.11：逆行列 / 掷星星池 / 两盘相位段）。"""
+    house = response.get("house")
+    # [Q-145/T-52] 说清作用域：tradition 只决定**掷出的那颗星**从哪个池里抽；背景盘面恒按完整星集绘制。
+    pool = "传统七政 + 交点 / 虚点(不含三王星)" if payload.get("tradition") else "含三王星的完整星集"
+    sections: list[tuple[str, str]] = [
+        (
+            "起盘信息",
+            "\n".join(
+                [
+                    f"日期：{payload.get('date', '—')} {payload.get('time', '—')}",
+                    f"时区：{payload.get('zone', '—')}",
+                    f"经纬度：{payload.get('lon', '—')} {payload.get('lat', '—')}",
+                    f"掷星星池：{pool}(背景盘面仍按完整星集绘制)",
+                    f"问题：{payload.get('question') or '未填写'}",
+                ]
             ),
-            (
-                "骰子结果",
-                "\n".join(
-                    [
-                        f"行星：{_planet_label(response.get('planet'))}",
-                        f"星座：{_msg(response.get('sign')) or '无'}",
-                        f"宫位：House{int(response.get('house', 0)) + 1 if response.get('house') is not None else '无'}",
-                    ]
-                ),
+        ),
+        (
+            "骰子结果",
+            "\n".join(
+                [
+                    f"行星：{_astro_msg_short(response.get('planet'))}",
+                    f"星座：{_astro_msg_short(response.get('sign'))}",
+                    f"宫位：{_astro_msg_short('House' + (_js_template_str(int(house) + 1) if isinstance(house, (int, float)) and not isinstance(house, bool) else ''))}",
+                ]
             ),
-            ("骰子盘宫位与星体", "\n".join(chart_lines(response.get("diceChart"))).strip() or "无"),
-            ("天象盘宫位与星体", "\n".join(chart_lines(response.get("chart"))).strip() or "无"),
-        ]
-    )
+        ),
+        ("骰子盘宫位与星体", "\n".join(_dice_chart_object_lines(response.get("diceChart")))),
+        ("天象盘宫位与星体", "\n".join(_dice_chart_object_lines(response.get("chart")))),
+    ]
+    # 两盘相位段：有相位数据才产段（缺数据时既有输出逐字不变，上游同）。
+    dice_aspects = _dice_chart_aspect_lines(response.get("diceChart"))
+    if dice_aspects:
+        sections.append(("骰子盘相位", "\n".join(dice_aspects)))
+    sky_aspects = _dice_chart_aspect_lines(response.get("chart"))
+    if sky_aspects:
+        sections.append(("天象盘相位", "\n".join(sky_aspects)))
+    return _render_snapshot_text(sections)
 
 
 def _build_harmonic_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
@@ -5098,8 +5428,20 @@ def _build_relative_snapshot_text(payload: dict[str, Any], response: dict[str, A
     if outer:
         lines.append(f"星盘B：{outer.get('name') or 'B'} {outer.get('date', '')} {outer.get('time', '')}".strip())
         lines.append(f"星盘B经纬度：{outer.get('lon', '—')} {outer.get('lat', '—')}")
-    lines.append(f"宫制：{payload.get('hsys', '—')}")
-    lines.append(f"黄道：{payload.get('zodiacal', '—')}")
+    # [Q-255/T-238·AS-22⑪]（上游 AstroRelative.js:151-159）：出人话标签（此前直出数字「宫制：1」「黄道：0」），
+    # 与主命盘快照同源表：宫制 = HouseSys 选项标签；黄道 = zodiacalDisplayText（恒星黄道带岁差名）。
+    hsys_raw = payload.get("hsys")
+    zodiacal_raw = payload.get("zodiacal")
+    zodiacal_key = {"0": "Tropical", "1": "Sidereal"}.get(_js_template_str(zodiacal_raw)) if zodiacal_raw is not None else None
+    hsys_text = (HOUSE_SYSTEM_LABELS.get(_js_template_str(hsys_raw)) or hsys_raw) if hsys_raw is not None else "—"
+    if zodiacal_raw is None:
+        zodiacal_text: Any = "—"
+    elif zodiacal_key:
+        zodiacal_text = zodiacal_display_text(zodiacal_key, payload.get("siderealAyanamsa") or "")
+    else:
+        zodiacal_text = zodiacal_raw
+    lines.append(f"宫制：{hsys_text}")
+    lines.append(f"黄道：{zodiacal_text}")
 
     sections = [
         ("A对B相位", _relative_aspect_lines(response.get("inToOutAsp"))),
@@ -5122,6 +5464,15 @@ def _build_relative_snapshot_text(payload: dict[str, Any], response: dict[str, A
     rendered: list[tuple[str, str]] = [("关系起盘信息", _join_lines(lines[1:]))]
     for title, body_lines in sections:
         rendered.append((title, _join_lines(body_lines) or _missing_detail_text(title)))
+    # [Q-441/T-404]（上游 AstroRelative.js:168-181）：比较盘页签此前只出互摄相位/中点/映点，无 A/B 两盘盘体 →
+    # 响应自带 inner(=A)/outer(=B) 两盘，仿影响盘**无头**嵌整盘（buildAstroSnapshotContent headerless，
+    # 喂工作台宫制数字位 {hsys}）。段名独立（比较盘-星盘A/B），只在比较盘（relative=0）出。
+    if _rel_mode == "0":
+        comp_fields = {"hsys": payload.get("hsys")} if payload.get("hsys") is not None else {}
+        for comp_title, comp_key in (("比较盘-星盘A", "inner"), ("比较盘-星盘B", "outer")):
+            comp_chart = response.get(comp_key)
+            if isinstance(comp_chart, dict) and isinstance(comp_chart.get("chart"), dict):
+                rendered.append((comp_title, _headerless_astro_snapshot_text(comp_fields, comp_chart)))
     rendered.append(
         (
             _composite_title,
@@ -5130,11 +5481,14 @@ def _build_relative_snapshot_text(payload: dict[str, Any], response: dict[str, A
             else "无",
         )
     )
+    # 影响盘 A/B 只属影响盘/马克斯盘（relative=2/4，上游 AstroRelative.js:194-205 的页签门控）——比较盘的
+    # inner/outer 此前被错贴成「影响图盘-星盘A/B」，现归上面的 比较盘-星盘A/B。
+    _synastry_mode = _rel_mode in {"2", "4"}
     rendered.append(
         (
             _inner_title,
             embedded_chart_text(response["inner"])
-            if isinstance(response.get("inner"), dict) and isinstance(response["inner"].get("chart"), dict)
+            if _synastry_mode and isinstance(response.get("inner"), dict) and isinstance(response["inner"].get("chart"), dict)
             else _missing_detail_text(_inner_title),
         )
     )
@@ -5142,7 +5496,7 @@ def _build_relative_snapshot_text(payload: dict[str, Any], response: dict[str, A
         (
             _outer_title,
             embedded_chart_text(response["outer"])
-            if isinstance(response.get("outer"), dict) and isinstance(response["outer"].get("chart"), dict)
+            if _synastry_mode and isinstance(response.get("outer"), dict) and isinstance(response["outer"].get("chart"), dict)
             else _missing_detail_text(_outer_title),
         )
     )
@@ -5617,36 +5971,116 @@ def _build_jieqi_compact_suzhan_text(payload: dict[str, Any], response: dict[str
     return _join_lines(lines) or "无数据"
 
 
+def _normalize_ganzi(text: Any) -> str:
+    """JieQiChartsMain.js:349 normalizeGanZi：取前两字。"""
+    raw = f"{text or ''}".strip()
+    return raw[:2] if len(raw) >= 2 else raw
+
+
+def _simple_four_columns(nongli: Any) -> dict[str, dict[str, str]] | None:
+    """JieQiChartsMain.js:354 toSimpleFourColumns：农历字段 → 四柱 ganzi（无纳音）。"""
+    if not isinstance(nongli, dict) or not nongli:
+        return None
+    return {
+        "year": {"ganzi": _normalize_ganzi(nongli.get("yearGanZi") or nongli.get("yearJieqi") or nongli.get("year")), "naying": ""},
+        "month": {"ganzi": _normalize_ganzi(nongli.get("monthGanZi")), "naying": ""},
+        "day": {"ganzi": _normalize_ganzi(nongli.get("dayGanZi")), "naying": ""},
+        "time": {"ganzi": _normalize_ganzi(nongli.get("time") or nongli.get("timeGanZi")), "naying": ""},
+    }
+
+
+def _jieqi_four_columns(item: Any) -> dict[str, Any] | None:
+    """JieQiChartsMain.js:378 getJieqiFourColumns：bazi.fourColumns → fourColumns → bazi(农历形) → nongli。"""
+    if not isinstance(item, dict):
+        return None
+    bazi = item.get("bazi")
+    if isinstance(bazi, dict) and bazi.get("fourColumns"):
+        return bazi["fourColumns"]
+    if item.get("fourColumns"):
+        return item["fourColumns"]
+    if bazi:
+        from_bazi = _simple_four_columns(bazi)
+        if from_bazi:
+            return from_bazi
+    if item.get("nongli"):
+        return _simple_four_columns(item["nongli"])
+    return None
+
+
+def _compact_jieqi_seed_row(item: dict[str, Any]) -> dict[str, Any]:
+    """JieQiChartsMain.js:420 compactJieqiSeedResult 的逐行形状：四柱只留 ganzi/naying（Java 四柱对象带神煞/卦等，体量大）。"""
+    four = _jieqi_four_columns(item)
+
+    def part(value: Any) -> dict[str, str]:
+        src = value if isinstance(value, dict) else {}
+        return {"ganzi": f"{src.get('ganzi') or ''}", "naying": f"{src.get('naying') or ''}"}
+
+    return {
+        "ord": item.get("ord"),
+        "jieqi": f"{item.get('jieqi') or ''}",
+        "jie": item.get("jie"),
+        "time": f"{item.get('time') or ''}",
+        "ad": item.get("ad"),
+        "bazi": {"fourColumns": {key: part(four.get(key)) for key in ("year", "month", "day", "time")}} if isinstance(four, dict) else None,
+    }
+
+
+def _build_jieqi24_table_lines(rows: Any) -> list[str]:
+    """[二十四节气]（上游 JieQiChartsMain.js:893-906 [Q-224/T-180]）：交节时刻 + 四柱，与页面「二十四节气」页签同源。"""
+    if not isinstance(rows, list) or not rows:
+        return []
+    out = ["| 节气 | 交节时刻 | 年柱 | 月柱 | 日柱 | 时柱 |", "| --- | --- | --- | --- | --- | --- |"]
+    for item in rows:
+        item = item if isinstance(item, dict) else {}
+        four = _jieqi_four_columns(item) or {}
+
+        def gz(key: str) -> str:
+            column = four.get(key) if isinstance(four, dict) else None
+            return f"{column.get('ganzi')}" if isinstance(column, dict) and column.get("ganzi") else ""
+
+        out.append(f"| {item.get('jieqi') or ''} | {item.get('time') or ''} | {gz('year')} | {gz('month')} | {gz('day')} | {gz('time')} |")
+    return out
+
+
 def _build_jieqi_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
+    """上游 JieQiChartsMain.js:880-933 buildJieQiSnapshotText（整年快照）。
+
+    [节气盘参数] → [二十四节气]（全年交节时刻+四柱；种子行由 `_attach_jieqi_year_extras` 取自 Java /jieqi/year）
+    → 未拉取分至盘的说明行 → 逐节气 [X星盘]（buildAstroSnapshotContent 全口径无头整盘，Q-446/T-409）/ [X宿盘] /
+    [X3D盘]（与 [X星盘] 同一盘数据的三维视图 → 一行指引，不整盘重复）。
+    """
     charts = response.get("charts") if isinstance(response, dict) else {}
+    charts = charts if isinstance(charts, dict) else {}
     jieqis = payload.get("jieqis") or ["春分", "夏至", "秋分", "冬至"]
-    sections: list[tuple[str, str]] = [
-        (
-            "节气盘参数",
-            _join_lines(
-                [
-                    f"年份：{payload.get('year', '—')}",
-                    f"时区：{payload.get('zone', '—')}",
-                    f"经纬度：{payload.get('lon', '—')} {payload.get('lat', '—')}",
-                    "说明：以下包含二分二至（春分、夏至、秋分、冬至）的星盘与宿盘专用导出。",
-                ]
-            ),
-        )
+    meta_lines = [
+        f"年份：{payload.get('year', '—')}",
+        f"时区：{payload.get('zone', '—')}",
+        f"经纬度：{payload.get('lon', '—')} {payload.get('lat', '—')}",
+        "说明：以下包含二分二至（春分、夏至、秋分、冬至）的星盘与宿盘专用导出。",
     ]
-    if isinstance(charts, dict):
-        for title in jieqis:
-            one = charts.get(title)
-            if not isinstance(one, dict):
-                continue
-            chart_body = _build_jieqi_compact_chart_text(one.get("params", payload), one)
-            sections.append((f"{title}星盘", chart_body))
-            su_body = _build_jieqi_compact_suzhan_text(one.get("params", payload), one)
-            sections.append((f"{title}宿盘", su_body))
-            # [X3D盘]：上游不是 3D 渲染产物 —— JieQiChartsMain.js 对 astro3d 页签走的同样是
-            # `buildAstroSnapshotContent(one, flds, {headerless:true})`，与 [X星盘] 逐字同一份盘面
-            # 文本，只是挂在 3D 页签名下。上游 preset 两段都列，故这里照样两段都出。
-            sections.append((f"{title}3D盘", chart_body))
-    return _render_snapshot_text(sections)
+    sections: list[tuple[str, list[str]]] = [("节气盘参数", meta_lines)]
+    rows24 = _build_jieqi24_table_lines(response.get("_jieqi24Seed") if isinstance(response, dict) else None)
+    if rows24:
+        sections.append(("二十四节气", rows24))
+    # [Q-224/T-180] 分至盘未拉到时明示未纳入（上游句式逐字；行落在当时的末段——有 [二十四节气] 则随它，否则随参数段）。
+    missing = [title for title in jieqis if not charts.get(title)]
+    if missing:
+        sections[-1][1].append(f"说明：{'、'.join(missing)}的星盘 / 宿盘尚未拉取（打开对应页签后再导出即纳入）。")
+    rendered: list[tuple[str, str]] = [(title, _join_lines(lines)) for title, lines in sections]
+    for title in jieqis:
+        one = charts.get(title)
+        if not isinstance(one, dict):
+            continue
+        fields = one.get("params") if isinstance(one.get("params"), dict) else payload
+        chart_body = (
+            (_headerless_astro_snapshot_text(fields, one) if _is_astro_chart_payload(one) else "")
+            or _build_jieqi_compact_chart_text(fields, one)
+            or "无数据"
+        )
+        rendered.append((f"{title}星盘", chart_body))
+        rendered.append((f"{title}宿盘", _build_jieqi_compact_suzhan_text(fields, one) or "无数据"))
+        rendered.append((f"{title}3D盘", f"3D 盘为「{title}星盘」同一节气盘的三维视图(星位/宫位/相位同上 [{title}星盘] 段,无独立数据)。"))
+    return _render_snapshot_text(rendered)
 
 
 def _build_nongli_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
@@ -6642,8 +7076,12 @@ class HorosaSkillService:
             },
         )
 
-    def _call_remote(self, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
-        use_chart_server = endpoint in _PYTHON_CHART_ENDPOINTS
+    def _call_remote(self, endpoint: str, payload: dict[str, Any], *, backend: str | None = None) -> dict[str, Any]:
+        # backend="java"：同名路由两端都有、而本次要的是 Java 聚合层的附加字段时显式指定（例：/jieqi/year 的
+        # Java 层给 jieqi24 逐节气补 bazi.fourColumns，Python 端无此字段——上游页面的种子请求走的就是 Java）。
+        if backend not in (None, "java"):
+            raise ValueError(bilingual(f"未知的后端覆写：{backend!r}", f"unknown backend override: {backend!r}"))
+        use_chart_server = endpoint in _PYTHON_CHART_ENDPOINTS and backend != "java"
         client = self.chart_client if use_chart_server else self.client
         # /healthz（批 I-6）：chart 服务的真就绪探针（ok/warm）；老 runtime 无此路由时 404 仍算「服务在」。
         probe_endpoint = "/healthz" if use_chart_server else "/common/time"
@@ -6784,24 +7222,19 @@ class HorosaSkillService:
             return response_data
         if not isinstance(response_data, dict) or not _is_astro_chart_payload(response_data):
             return response_data
+        sections: dict[str, str] = {}
         try:
             js = self.js_client.run("astroextra", {"chart": response_data})
             extras_data = js.get("data") if isinstance(js, dict) else None
             if isinstance(extras_data, dict):
                 sections = _build_natal_extra_sections(extras_data)
-                # v0.36.0 C6：上游 v56 [主宰星链] 段末的「◆ 宫神星(houseRows)」子块（宫|宫头座|宫主|宫主落宫|宫主落座）——
-                # 此前 skill 只出链行，子块缺席而段级棘轮看不见。派生走 astro_rulers.py（Python 单一真值源）。
-                house_lines = build_house_ruler_lines(response_data, _astro_msg)
-                if house_lines:
-                    chain = sections.get("主宰星链") or ""
-                    sections["主宰星链"] = "\n".join([chain, *house_lines]).strip()
-                if sections:
-                    enriched = dict(response_data)
-                    enriched["_natalExtras"] = sections
-                    return enriched
         except Exception as exc:  # noqa: BLE001 — 富化失败不许影响主盘；此前裸 pass 连日志都没有
             _degrade("astro natal extras (12分度/主宰星链/寿命格局) build failed: %s", exc)
-        return response_data
+        # 恒挂（JS 失败时为空 dict）：它同时是「本盘属西占 chart 家族」的标记——[主宰星链] 尾部的整宫制宫主表与
+        # [分宫制宫神星表]（v57，astro_rulers.py 纯 Python 单源）在快照构建时据此照出，不随 JS 富化成败丢失。
+        enriched = dict(response_data)
+        enriched["_natalExtras"] = sections
+        return enriched
 
     def _attach_classical_derived(self, tool_name: str, response_data: dict[str, Any]) -> dict[str, Any]:
         """古典衍化四段（上游 v3.9.2）：仅本命 astrochart 挂载。
@@ -6893,7 +7326,9 @@ class HorosaSkillService:
                     "hsys": payload.get("hsys"),
                     "zodiacal": payload.get("zodiacal"),
                     "siderealAyanamsa": payload.get("siderealAyanamsa"),
-                    "fixedStarOrb": 1,
+                    # [M-1][Q-340/T-321]（上游 aiExport.js:6742 fixedStarOrbParamsFor）：恒星轨随盘（此前硬编 1°，
+                    # 用户给了 starOrb/starOrbMode 时 [古典格局] 的恒星命中与主盘口径分叉）。
+                    **_fixed_star_orb_params(payload),
                 },
             )
             if isinstance(analysis, dict) and analysis:
@@ -6964,6 +7399,70 @@ class HorosaSkillService:
             }
             return enriched
         return response_data
+
+    def _enrich_embedded_astro_chart(self, chart_wrap: dict[str, Any]) -> dict[str, Any]:
+        """嵌入整盘（relative 比较盘 A/B、jieqi 分至盘）的富化 = 上游 buildAstroSnapshotContent 对任意盘本地算的几段：
+        12分度 / 主宰星链链行 / 寿命格局（JS astroextra）+ 埃及历（JS egypt_section；无 /astroextra/analysis 的
+        天狼偕日升，与上游嵌入盘同——那一行只在主盘拉了 analysis 时才有）。失败只是对应段不出（`_degrade` 进 warnings），
+        [主宰星链] 尾部整宫制宫主表与 [分宫制宫神星表] 是纯 Python，照出。
+        """
+        if not isinstance(chart_wrap, dict) or not _is_astro_chart_payload(chart_wrap):
+            return chart_wrap
+        enriched = self._attach_natal_extras("chart", chart_wrap)
+        egypt = self._build_egypt_section(enriched, {})
+        if egypt:
+            enriched = dict(enriched)
+            enriched["_egyptSection"] = egypt
+        return enriched
+
+    def _attach_relative_comp_charts(self, tool_name: str, input_normalized: dict[str, Any], response_data: dict[str, Any]) -> dict[str, Any]:
+        """比较盘（relative=0）的 inner/outer 两盘富化，供 [比较盘-星盘A]/[比较盘-星盘B] 无头整盘（上游 Q-441/T-404）。"""
+        if tool_name != "relative" or not isinstance(response_data, dict):
+            return response_data
+        if f"{input_normalized.get('relative', 0)}" != "0":
+            return response_data
+        enriched = response_data
+        for key in ("inner", "outer"):
+            chart = response_data.get(key)
+            if isinstance(chart, dict) and _is_astro_chart_payload(chart):
+                if enriched is response_data:
+                    enriched = dict(response_data)
+                enriched[key] = self._enrich_embedded_astro_chart(chart)
+        return enriched
+
+    # 上游页面种子请求的参数面（JieQiChartsMain.genParams(false) → Java JieQiController.getYearParams 白名单）：
+    # 不带 jieqis（= 全年 24 节气）、不带 seedOnly（= 走 setupBazi 逐节气补四柱）。
+    _JIEQI_SEED_DROP_KEYS = frozenset({"jieqis", "seedOnly"})
+
+    def _attach_jieqi_year_extras(self, tool_name: str, input_normalized: dict[str, Any], response_data: dict[str, Any]) -> dict[str, Any]:
+        """jieqi_year 的两项富化（上游 v3.11 整年快照）：
+
+        ① [二十四节气]：全年 24 节气交节时刻 + 四柱。上游页面的种子请求打的是 **Java** `/jieqi/year`（无 jieqis），
+           Java 层 `JieQiController.setupBazi` 给每个节气补 `bazi.fourColumns`；本仓工具主调用走 Python 同名路由
+           （只回所请求的分至四项、无四柱），故另发一次 Java 种子请求。Java 不可用 → 本段不出 + warnings（条件段双登记）。
+        ② 分至盘嵌入整盘的 JS 富化（12分度/主宰星链链行/寿命格局/埃及历，见 `_enrich_embedded_astro_chart`）。
+        """
+        if tool_name != "jieqi_year" or not isinstance(response_data, dict):
+            return response_data
+        enriched = dict(response_data)
+        seed_payload = {key: value for key, value in input_normalized.items() if key not in self._JIEQI_SEED_DROP_KEYS and value is not None}
+        seed_payload.setdefault("timeAlg", 0)   # preciseCalcBridge.normalizeJieqiParams：timeAlg 缺省 0（真太阳时）
+        try:
+            seed = self._call_remote("/jieqi/year", seed_payload, backend="java")
+            rows = seed.get("jieqi24") if isinstance(seed, dict) else None
+            if isinstance(rows, list) and rows:
+                enriched["_jieqi24Seed"] = [_compact_jieqi_seed_row(row) for row in rows if isinstance(row, dict)]
+            else:
+                _degrade("jieqi_year [二十四节气] seed (Java /jieqi/year) returned no jieqi24 rows")
+        except Exception as exc:  # noqa: BLE001 — 种子段失败不许带崩分至四盘
+            _degrade("jieqi_year [二十四节气] seed (Java /jieqi/year) failed: %s", exc)
+        charts = response_data.get("charts")
+        if isinstance(charts, dict):
+            enriched["charts"] = {
+                title: self._enrich_embedded_astro_chart(chart) if isinstance(chart, dict) else chart
+                for title, chart in charts.items()
+            }
+        return enriched
 
     def _attach_ziwei_extras(self, tool_name: str, payload: dict[str, Any], response_data: dict[str, Any]) -> dict[str, Any]:
         """紫微 [运限] / [流派叠层]：仅在调用方显式给了 period / schools 时产出。
@@ -9532,10 +10031,12 @@ class HorosaSkillService:
         }
 
     def _run_germany_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
-        chart_payload = {**payload, "predictive": 0}
+        # rectifyEvents 只喂 [校时预览]（前端纯函数 rectificationHits），不下发后端。
+        rectify_events = payload.get("rectifyEvents")
+        chart_payload = {**{key: value for key, value in payload.items() if key != "rectifyEvents"}, "predictive": 0}
         chart_response = self._call_remote("/chart", chart_payload)
         germany_result = self._call_remote("/germany/midpoint", chart_payload)
-        snapshot_text = _build_germany_snapshot_text(chart_payload, chart_response, germany_result)
+        snapshot_text = _build_germany_snapshot_text(chart_payload, chart_response, germany_result, rectify_events=rectify_events)
         # [戴维森盘]（后端 davison 字段，仅在请求带 davison 第二人时返回）+ [虚星参考]（静态口径表）。
         # 两段由 vendored 上游排版逐字产出；失败只是这两段不出，不影响主盘。
         try:
@@ -11345,6 +11846,8 @@ class HorosaSkillService:
                 response_data = self._attach_bazi_geju(tool_name, response_data, input_normalized)
                 response_data = self._attach_ziwei_extras(tool_name, input_normalized, response_data)
                 response_data = self._attach_relative_score(tool_name, input_normalized, response_data)
+                response_data = self._attach_relative_comp_charts(tool_name, input_normalized, response_data)
+                response_data = self._attach_jieqi_year_extras(tool_name, input_normalized, response_data)
                 response_data = _attach_export_contract(tool_name, input_normalized, response_data)
                 # 技法依据卡：必须在 save_result **之前**挂，memory 才存到全量卡；
                 # `_apply_response_view` 在存档之后裁剪，且显式豁免这个键（见那里的说明）。

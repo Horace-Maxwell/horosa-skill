@@ -1062,6 +1062,11 @@ class SuZhanInput(BirthInput):
 
 class GermanyInput(BirthInput):
     predictive: bool | None = False
+    # 上游 v3.11 [Q-442/T-405]「校时」页签（只读预览）：待校事件 → 太阳弧（Naibod）推进 MC/Asc 看是否触动本命因子。
+    rectifyEvents: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="校时预览事件（可选）：[{date:'YYYY-MM-DD', type:marriage|children|career|move|loss|accident|other, label}]；给了才产 [校时预览]（推进 MC/Asc 看是否触动本命因子，只预览不改盘）。",
+    )
 
 
 class HarmonicInput(BirthInput):
