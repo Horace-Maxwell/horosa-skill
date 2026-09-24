@@ -104,6 +104,11 @@ you, it will bite the next agent：
 `normalizeKinqimenData` / `normalizeBackendPan` / `normalizeKinjinkouData` 把 ken 响应叠到本地脚手架，
 `build*SnapshotText` 产出 `export_snapshot` 段。JS 本地脚手架只在 `ken_response` 缺失/畸形时兜底
 （graceful，非正常路径）。健康结果带 `pan.source == "kinqimen"/"kintaiyi"`、`jinkou.source == "kinjinkou"`。
+**例外 = 上游同判据的本地路由（v0.40.0 起）**：上游 `isQimenLocalRoute`（非时家/转盘、飞盘/混合、报数、七组本地口径任一非缺省）
+走本地 `calcDunJia`，金口诀五项流派任一非缺省走本地 `buildJinKouData`——这是上游**本来的**算法选择，不是回退：
+runner 不打 ken、`data.route.local=true`、`compute_sources` 标 `local_route_calcDunJia` / `local_route_buildJinKouData`
+（`technique_provenance.json` 已声明）。Python 与 JS 路由判定不一致即 `tool.qimen_route_check_failed`；ken 失败被静默回退
+的老形态仍由 `_require_ken_pan` 抓（那条路径不带 local_route_* 标记）。
 
 **⚠️ ken 端点失败也回 HTTP 200 — 只认 `source`，永不信状态码。** chart 服务的 `web{qimen,taiyi,jinkou}srv.py`
 把一切异常包成 `{"ResultCode": -1/1, "Result": "<engine> ... failed"}`（字符串 `Result`）照样 200 返回；

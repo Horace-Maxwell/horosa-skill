@@ -258,7 +258,9 @@ def test_liureng_sanchuan_relation_lines_value_golden(tmp_path) -> None:
     out = _real_js(tmp_path).run("liureng", fixture)
     lines = _section(out["snapshot_text"], "三传").splitlines()
     assert lines[0] == "课式：元首课"
-    assert lines[4:] == ["三传递生递克：初传→中传 比和；中传→末传 克", "逐传徽记：初传卯(空)；中传寅(空·马)"]
+    # sanshi chunk：tools/liureng.js 改走 vendored 上游 buildLiuRengSnapshotText，[三传] 三行变上游 GFM 表
+    # （表头两行 + 三行）——两行关系行仍紧随其后收尾，故按段尾断言（原 lines[4:] 钉的是旧手写行式）。
+    assert lines[-2:] == ["三传递生递克：初传→中传 比和；中传→末传 克", "逐传徽记：初传卯(空)；中传寅(空·马)"]
 
 
 @requires_node

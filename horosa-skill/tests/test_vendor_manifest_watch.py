@@ -85,7 +85,11 @@ def test_real_manifest_stamps_every_hand_made_entry() -> None:
         stamp = entry.get(field) or ""
         assert len(stamp) == 64 and all(c in "0123456789abcdef" for c in stamp), f"{vendor_rel}: {field} 未打戳"
     # 两个真事故的当事文件必须在受看守之列。
-    assert files["liureng/LRConst.js"]["mode"] == "curated"
+    # sanshi chunk（v3.11）：LRConst.js 由 curated 改 verbatim —— curated 期间戳一直等于上游而内容停在旧版
+    # （缺贵人 3/4 两张表与阳阴系互换），「sha 看守不比内容」；verbatim 由流水线逐字复现（--from-manifest --check），
+    # 看守更严。故这里钉 verbatim 且无蓄意偏离。
+    assert files["liureng/LRConst.js"]["mode"] == "verbatim"
+    assert not files["liureng/LRConst.js"].get("deviations")
     assert files["ziwei/zwLuckItems.js"].get("derived_from") == "components/ziwei/ZWLuckPanel.js"
 
 

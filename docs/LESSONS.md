@@ -140,12 +140,15 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 **只有测试、没有通用守卫的（照着做）**
 
-5. **移植口径**：上游 builder 读 `params.date` 是 `YYYY/MM/DD`，skill 归一成 `YYYY-MM-DD` → 七政 [大限] 出生年 0；moment
+5. **移植口径**：两层两个缺省——奇门 Python 侧缺省发 `chaibu`、JS 本地层缺省 `zhirun`，盘按拆补算、标签写置闰（缺省必须一处
+   定义、两层同读）；上游 builder 读 `params.date` 是 `YYYY/MM/DD`，skill 归一成 `YYYY-MM-DD` → 七政 [大限] 出生年 0；moment
    `add(x,'days')` 把小数天四舍五入到整天，照搬成 `timedelta(days=float)` 让波斯向运日期差一天；上游 AstroTxtMsg 是单字名（日/月），
    skill 的 ASTRO_TEXT_MAP 是全名（太阳/月亮）——v56 宫神星表就这么印错而测试也断言错值；上游页面的**出厂缺省**≠引擎缺省
    （六爻贵人 页面 2、引擎 0），只送调用方选项会落到引擎缺省；种子与缺省照上游 headless 路径（`build*SnapshotForFields` /
    `aiAnalysisContext`），不照页面 state。
-6. **测试替身会说谎**：离线 fake 收到的 `/chart` 端点是 `"/"`（按 `/chart` 做键会静默落到罐装盘）；FakeClient 回显斜杠日期；
+6. **测试替身会说谎**：`/liureng/runyear` 的 fake 回的是真端点从不发的包装形态，离线全绿而 live 下 liureng_runyear 四课/
+   三传/行年全空（三式实现者：改为按「端点 + 决定结果的请求字段」键控的**录制回放**夹具，回放与 live 逐字节一致才准裁剪——
+   请求形状一错即 miss，天然负向对照）；离线 fake 收到的 `/chart` 端点是 `"/"`（按 `/chart` 做键会静默落到罐装盘）；FakeClient 回显斜杠日期；
    对所有端点同答一份的桩藏住了玄史 `id`/`slug` 映射错（改为逐端点校验真实下发参数）；导出解析器会去重段名，同一张卡出两次
    对 missing/unknown 检查不可见；择日快照段间无空行，按 `\n\n` 切段会漏段；上游自己的 jest 骰子盘夹具把 `aspects` 嵌错了层，
    真后端下那几段不可达而上游测试照绿（上游 bug，已如实上报，不写回上游）。
@@ -183,6 +186,9 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
    - 守卫：能表达成「上游全文件 + 声明式 deviation」的手工件一律改 **verbatim**：`suzhan/SZConst.js`（replace_text 注入 localStorage
      空 shim）与 `tongshefa/TongSheFaCore.js`（truncate_before 类定义 + 4 个 UI import stub + 解构删除，`_reexport_required` 补 export）
      已改；流水线输出逐字等于 vendored 文件，上游一动 `verify_upstream_sync` check 3 就红。
+   - **同一轮第三次**：三式实现者发现 `liureng/LRConst.js`（curated）sha 戳等于上游而内容停在旧版——缺 B 派「甲戊兼牛羊」/
+     C 派「干合阳阴贵」两张贵人表（贵人 3/4 直接 TypeError）与阴阳系昼夜互换（第 4 参被静默丢弃）。「上游全文件 import 了
+     headless 不存在的路径」这条 curated 理由早已过期（唯一 import 已解析到共享 shim），改 verbatim 后流水线逐字复现。
 3. **v0.38.1 A16 修了知识包产物，没修生成器。**
    - 症状：重跑 `build_hover_knowledge_bundle.mjs`，`astro/liureng/qimen.json` 的 `source` 又变回维护者本机绝对路径，
      `test_knowledge_pack_sources_are_relative_upstream_paths` 红；`generated_at` 还取 `now()`，每跑一次 index.json 漂一次。

@@ -1,96 +1,44 @@
-import { computeFrontendShenSha, computeYearShenSha, computeMonthShenSha } from '../vendor/liureng/LRShenShaDoc.js';
-import { buildLiuRengReferenceContext } from '../vendor/liureng/liurengRefContext.js';
-import { matchBiFa } from '../vendor/liureng/LRBiFaDoc.js';
-import { ZHANDUAN_DOC } from '../vendor/liureng/LRZhanDuanDoc.js';
-import { detectJianChuan } from '../vendor/liureng/LRJianChuanDoc.js';
-import { analyzeKongLocations, analyzeDunGan, analyzeNianMing } from '../vendor/liureng/LRKongDunNianDoc.js';
-import { liurengWangXiang, judgeKongWang } from '../vendor/liureng/LRZhangSheng.js';
+// 大六壬 headless 工具 —— 起课核（天地盘 / 四课 / 三传）与 AI 快照全部走 vendored 上游
+// vendor/liureng/LiuRengMain.js（buildLiuRengCastOverride / buildLiuRengLayout / buildKeData /
+// buildSanChuanData / buildLiuRengSnapshotText），与主六壬页、六壬择时扫描（liurengZeriScanEngine）
+// 同一函数族：主排盘一修，这里自动跟，零第二实现。
+//
+// v3.11.x 同步（sanshi chunk F5）之前，本文件自带一份手写起课核（SanChuanBuilder）+ 手写快照 builder：
+// 行格式停在老版（上游早已 GFM 表化）、[十二长生]/[大格]/[小局]/[参考]/[概览] 恒为占位，
+// 起课法 26 法 / 换将 / 分昼夜 / 涉害取舍 / 阴阳系 / 十二长生五行 / 贵人 3·4 统统无入口；
+// 断卦层 refCtx 还走另一份手抄的 liurengRefContext（三参 buildSanChuanData，不认涉害口径）——
+// 同一张课两套三传。现在一律交给上游：口径参数只在这里做**词表校验**（锚到上游自带的
+// LIURENG_PAGE_SETTINGS / QI_METHODS，不手抄），认不出的值报结构化错误而不静默回落缺省。
 import * as LRConst from '../vendor/liureng/LRConst.js';
-import { sanChuanRelationSnapshotLines } from '../vendor/liureng/LRSanChuanRelationMini.js';
+import {
+  QI_METHODS,
+  LIURENG_PAGE_SETTINGS,
+  buildLiuRengCastOverride,
+  computeQiXY,
+  buildLiuRengLayout,
+  buildKeData,
+  buildSanChuanData,
+  buildLiuRengSnapshotText,
+  liurengBenmingXingnian,
+  getSolarYearFromField,
+} from '../vendor/liureng/LiuRengMain.js';
+import { validateSettingValue } from '../vendor/utils/pageSettingsStore.js';
 
-// 六壬常量表一律解构自 vendor LRConst（v0.36.0：此前 24 张手抄表与 vendor 双源——v0.35 修的 ZiLiuQin
-// 乙日巳/午 在手抄本里仍是旧值，消费点对 vendor 金标结构性失明）。守卫：test/handcopy.mjs。
-const {
-  ZiList: ZI_LIST,
-  GanList: GAN_LIST,
-  SummerZiList: SUMMER_ZI_LIST,
-  YangZi: YANG_ZI,
-  YingZi: YING_ZI,
-  YangGan: YANG_GAN,
-  TianJiang: TIAN_JIANG,
-  GanJiZi: GAN_JI_ZI,
-  ZiHanGan: ZI_HAN_GAN,
-  DayGui: DAY_GUI,
-  NightGui: NIGHT_GUI,
-  DayGuiLiuReng: DAY_GUI_LIURENG,
-  NightGuiLiuReng: NIGHT_GUI_LIURENG,
-  DayGuiDunJia: DAY_GUI_DUNJIA,
-  NightGuiDunJia: NIGHT_GUI_DUNJIA,
-  GanHe: GAN_HE,
-  ZiMeng: ZI_MENG,
-  ZiZong: ZI_ZONG,
-  ZiXing: ZI_XING,
-  ZiCong: ZI_CONG,
-  ZiYiMa: ZI_YI_MA,
-  ZiSangHe: ZI_SANG_HE,
-  GanZiRestrain: GAN_ZI_RESTRAIN,
-  ZiLiuQin: ZI_LIU_QIN,
-} = LRConst;
-
-const SIGN_TO_YUE = {
-  Aries: '戌',
-  Taurus: '酉',
-  Gemini: '申',
-  Cancer: '未',
-  Leo: '午',
-  Virgo: '巳',
-  Libra: '辰',
-  Scorpio: '卯',
-  Sagittarius: '寅',
-  Capricorn: '丑',
-  Aquarius: '子',
-  Pisces: '亥',
-  牡羊: '戌',
-  白羊: '戌',
-  金牛: '酉',
-  双子: '申',
-  巨蟹: '未',
-  狮子: '午',
-  室女: '巳',
-  处女: '巳',
-  天秤: '辰',
-  天蝎: '卯',
-  射手: '寅',
-  摩羯: '丑',
-  宝瓶: '子',
-  水瓶: '子',
-  双鱼: '亥',
-};
-
-const GUI_RENG_SYSTEMS = [
-  { key: 0, label: '六壬法贵人', day: DAY_GUI_LIURENG, night: NIGHT_GUI_LIURENG },
-  { key: 1, label: '遁甲法贵人', day: DAY_GUI_DUNJIA, night: NIGHT_GUI_DUNJIA },
-  { key: 2, label: '星占法贵人', day: DAY_GUI, night: NIGHT_GUI },
-];
-
-function valueText(value) {
-  if (value === undefined || value === null || value === '') {
-    return '无';
-  }
-  if (Array.isArray(value)) {
-    return value.join('、') || '无';
-  }
-  if (typeof value === 'object') {
-    if (value.ganzi) {
-      return `${value.ganzi}`;
-    }
-    if (value.cell) {
-      return `${value.cell}`;
-    }
-    return JSON.stringify(value);
-  }
-  return `${value}`;
-}
+// 贵人体系显示名：与上游 buildLiuRengSnapshotText 的 [起盘信息]「贵人体系」行同序同字
+// （LiuRengMain.js:4391，GuiRengs 下标 0–4）。只用于 data.layout 的回显字段，快照行由上游 builder 自产。
+const GUIREN_LABELS = ['六壬法贵人', '遁甲法贵人', '星占法贵人', '甲戊兼牛羊', '干合阳阴贵'];
+// 十二长生五行合法值 = vendored LRConst.WuXing 的五行（不手抄，test/handcopy.mjs 守）。
+const WUXING = LRConst.WuXing.map((w) => w.elem);
+// 需逐课输入的三法（上游 LiuRengMain.js:3900 QI_METHODS_NEEDING_INPUT）：缺输入时上游 computeQiXY 静默回落正时，
+// headless 没有「先选法再填数」的交互，缺输入即报错。
+const NEEDS_ZHI = ['xuanshi'];
+const NEEDS_NUM = ['yanshu', 'baoshu'];
+// 起课口径键：上游 LIURENG_PAGE_SETTINGS 的 schema 键（castMethod 另按 QI_METHODS 全 26 法校验——
+// 页面设置只存不需逐课输入的 23 法，选时/演数/报数同样合法）。
+const CAST_KEYS = ['castMethod', 'yueJiangMethod', 'fenZhouYe', 'seHaiMethod', 'seHaiBoundary', 'shiRuKe',
+  'yearShenShaSort', 'yinyangSystem', 'tuWangShuai'];
+// timeAlg 由 Python 侧校验并随 /liureng/gods 请求下发（起课时柱）；此处只放行，不参与 JS 计算。
+const INPUT_KEYS = ['xuanShiZhi', 'yanShuNum', 'wuxing', 'timeAlg'];
 
 function branchOf(value) {
   const match = `${value || ''}`.match(/[子丑寅卯辰巳午未申酉戌亥]/);
@@ -100,6 +48,16 @@ function branchOf(value) {
 function stemOf(value) {
   const match = `${value || ''}`.match(/[甲乙丙丁戊己庚辛壬癸]/);
   return match ? match[0] : '';
+}
+
+function valueText(value) {
+  if (value === undefined || value === null || value === '') {
+    return '';
+  }
+  if (typeof value === 'object') {
+    return `${value.ganzi || value.cell || ''}`;
+  }
+  return `${value}`;
 }
 
 export function normalizeChart(payload) {
@@ -122,727 +80,181 @@ export function normalizeChart(payload) {
   return chartObj;
 }
 
-function getChartYue(chartObj, explicitYue) {
-  if (branchOf(explicitYue)) {
-    return branchOf(explicitYue);
-  }
-  const objects = Array.isArray(chartObj.objects) ? chartObj.objects : [];
-  const sun = objects.find((item) => item && (item.id === 'Sun' || item.id === '日' || item.name === 'Sun' || item.name === '日'));
-  return sun ? (SIGN_TO_YUE[sun.sign] || branchOf(sun.sign)) : '';
-}
-
-function getGuiZi(chartObj, guirengType) {
-  const dayGan = stemOf(chartObj?.nongli?.dayGanZi);
-  if (!dayGan) {
-    return '';
-  }
-  const parsedType = Number.parseInt(`${guirengType}`, 10);
-  const normalizedType = Number.isInteger(parsedType) ? parsedType : 2;
-  const system = GUI_RENG_SYSTEMS.find((item) => item.key === normalizedType) || GUI_RENG_SYSTEMS[2];
-  return (chartObj.isDiurnal ? system.day : system.night)[dayGan] || '';
-}
-
-function getGuiRengLabel(guirengType) {
-  const parsedType = Number.parseInt(`${guirengType}`, 10);
-  const normalizedType = Number.isInteger(parsedType) ? parsedType : 2;
-  const system = GUI_RENG_SYSTEMS.find((item) => item.key === normalizedType) || GUI_RENG_SYSTEMS[2];
-  return system.label;
-}
-
-function buildLayout(payload, chartObj) {
-  if (!chartObj?.nongli?.dayGanZi || !chartObj?.nongli?.time) {
-    return null;
-  }
-  const yue = getChartYue(chartObj, payload.yue);
-  const timezi = branchOf(chartObj.nongli.time);
-  if (!yue || !timezi) {
-    return null;
-  }
-  const yueIdx = ZI_LIST.indexOf(yue);
-  const timeIdx = ZI_LIST.indexOf(timezi);
-  if (yueIdx < 0 || timeIdx < 0) {
-    return null;
-  }
-  const downZi = ZI_LIST.slice();
-  const upZi = ZI_LIST.slice();
-  const yueIndexs = [];
-  const delta = yueIdx - timeIdx;
-  for (let i = 0; i < 12; i += 1) {
-    const idx = (i + delta + 12) % 12;
-    yueIndexs[i] = idx;
-    upZi[i] = ZI_LIST[idx];
-  }
-  const houseTianJiang = TIAN_JIANG.slice();
-  const guirengType = payload.guirengType ?? 2;
-  const guizi = getGuiZi(chartObj, guirengType);
-  let houseidx = 0;
-  for (let i = 0; i < 12; i += 1) {
-    if (ZI_LIST[yueIndexs[i]] === guizi) {
-      houseidx = i;
-      break;
-    }
-  }
-  const housezi = ZI_LIST[houseidx];
-  if (SUMMER_ZI_LIST.includes(housezi)) {
-    for (let i = 0; i < 12; i += 1) {
-      houseTianJiang[i] = TIAN_JIANG[(houseidx - i + 12) % 12];
-    }
-  } else {
-    for (let i = 0; i < 12; i += 1) {
-      houseTianJiang[i] = TIAN_JIANG[(i - houseidx + 12) % 12];
-    }
-  }
-  return { yue, timezi, guizi, guirengType, guirengLabel: getGuiRengLabel(guirengType), downZi, upZi, houseTianJiang };
-}
-
-function buildKe(layout, chartObj) {
-  const result = { raw: [], lines: [] };
-  const dayGanZi = chartObj?.nongli?.dayGanZi || '';
-  const daygan = stemOf(dayGanZi);
-  const dayzi = branchOf(dayGanZi);
-  if (!layout || !daygan || !dayzi || !GAN_JI_ZI[daygan]) {
-    return result;
-  }
-  const make = (down) => {
-    const idx = layout.downZi.indexOf(down);
-    return idx >= 0 ? [layout.houseTianJiang[idx], layout.upZi[idx], down] : ['', '', down];
+function invalid(field, value, allowed, message) {
+  return {
+    ok: false,
+    error: {
+      code: 'invalid_option',
+      field,
+      value,
+      allowed,
+      message: message || `大六壬 ${field} 取值无效：${JSON.stringify(value)}（可选：${(allowed || []).join(' / ')}）`,
+    },
   };
-  const ke1 = make(GAN_JI_ZI[daygan]);
-  const ke2 = make(ke1[1]);
-  const ke3 = make(dayzi);
-  const ke4 = make(ke3[1]);
-  result.raw = [
-    [ke1[0], ke1[1], daygan],
-    ke2,
-    ke3,
-    ke4,
-  ];
-  ['一课', '二课', '三课', '四课'].forEach((name, index) => {
-    const item = result.raw[index];
-    result.lines.push(`${name}：地盘=${item[2] || '无'}，天盘=${item[1] || '无'}，贵神=${item[0] || '无'}`);
-  });
-  return result;
 }
 
-function uniqueZiList(items) {
-  return [...new Set((items || []).filter(Boolean))];
+function toBool(value) {
+  if (value === true || value === 1 || value === '1' || value === 'true') return true;
+  if (value === false || value === 0 || value === '0' || value === 'false') return false;
+  return undefined;
 }
 
-function isRestrain(left, right) {
-  return (GAN_ZI_RESTRAIN[left] || []).includes(right);
+// 起课口径：payload.options（MCP 声明入口）与顶层同名键（三式合一子盘 / 历史调用）双读，options 优先。
+// 返回 {ok, castOpts, guirengType, wuxing}；认不出的值 → {ok:false, error}（Python 侧转 ToolValidationError）。
+export function resolveLiurengOptions(payload) {
+  const src = payload && typeof payload === 'object' ? payload : {};
+  const opts = src.options && typeof src.options === 'object' ? src.options : {};
+  const pick = (key) => (opts[key] !== undefined && opts[key] !== null && opts[key] !== '' ? opts[key]
+    : (src[key] !== undefined && src[key] !== null && src[key] !== '' ? src[key] : undefined));
+  const schema = LIURENG_PAGE_SETTINGS.schema;
+  const castOpts = {};
+  for (const key of CAST_KEYS) {
+    let value = pick(key);
+    if (value === undefined) continue;
+    if (key === 'castMethod') {
+      const allowed = QI_METHODS.map((m) => m.key);
+      if (allowed.indexOf(value) < 0) return invalid(key, value, allowed);
+    } else if (key === 'shiRuKe') {
+      const b = toBool(value);
+      if (b === undefined) return invalid(key, value, ['true', 'false']);
+      value = b;
+    } else if (!validateSettingValue(schema[key], value).ok) {
+      return invalid(key, value, schema[key].oneOf);
+    }
+    castOpts[key] = value;
+  }
+  const method = castOpts.castMethod || 'zheng';
+  if (NEEDS_ZHI.indexOf(method) >= 0) {
+    const zhi = pick('xuanShiZhi');
+    if (LRConst.ZiList.indexOf(zhi) < 0) {
+      return invalid('xuanShiZhi', zhi, LRConst.ZiList, '起课法「选时·事发之时」需要 xuanShiZhi（事发之时地支，子…亥）。');
+    }
+    castOpts.xuanShiZhi = zhi;
+  }
+  if (NEEDS_NUM.indexOf(method) >= 0) {
+    const num = pick('yanShuNum');
+    if (!/^-?\d+$/.test(`${num === undefined ? '' : num}`.trim())) {
+      return invalid('yanShuNum', num, ['整数'], `起课法「${method === 'baoshu' ? '报数/端法' : '演数'}」需要 yanShuNum（整数）。`);
+    }
+    castOpts.yanShuNum = `${num}`.trim();
+  }
+  const guirengRaw = pick('guirengType');
+  const guirengType = guirengRaw === undefined ? schema.guireng.def : Number(guirengRaw);
+  if (!validateSettingValue(schema.guireng, guirengType).ok) {
+    return invalid('guirengType', guirengRaw, schema.guireng.oneOf);
+  }
+  const wuxing = pick('wuxing');
+  if (wuxing !== undefined && WUXING.indexOf(wuxing) < 0) {
+    return invalid('wuxing', wuxing, WUXING);
+  }
+  for (const key of Object.keys(opts)) {
+    if (CAST_KEYS.indexOf(key) < 0 && INPUT_KEYS.indexOf(key) < 0 && key !== 'guirengType' && key !== 'zhanCategory') {
+      return invalid(key, opts[key], [...CAST_KEYS, ...INPUT_KEYS, 'guirengType', 'zhanCategory'], `大六壬 options 含未知键「${key}」（可用键：${[...CAST_KEYS, ...INPUT_KEYS, 'guirengType', 'zhanCategory'].join(' / ')}）。`);
+    }
+  }
+  return { ok: true, castOpts, guirengType, wuxing };
 }
 
-function sameYingYang(gan, ziAry) {
-  const target = YANG_GAN.includes(gan) ? YANG_ZI : YING_ZI;
-  const data = (ziAry || []).filter((item) => target.includes(item));
-  if (data.length) {
-    return { cnt: data.length, data };
-  }
-  return { cnt: 0, data: ziAry || [] };
+function parseYearAd(dateText, adValue) {
+  const m = `${dateText || ''}`.trim().match(/^(-?\d{1,6})-\d{1,2}-\d{1,2}/);
+  if (!m) return null;
+  const raw = parseInt(m[1], 10);
+  const ad = Number(adValue) === -1 || raw < 0 ? -1 : 1;
+  return { year: Math.abs(raw), ad };
 }
 
-function getXun(gan, zi) {
-  const ganIdx = GAN_LIST.indexOf(gan);
-  const ziIdx = ZI_LIST.indexOf(zi);
-  const firstZiIdx = (ziIdx - ganIdx + 12) % 12;
-  const lastZiIdx = (ziIdx + 9 - ganIdx) % 12;
-  if (firstZiIdx === 0) {
-    return ZI_LIST.slice(0, 10);
-  }
-  const delta = 12 - firstZiIdx;
-  if (delta >= 10) {
-    return ZI_LIST.slice(firstZiIdx, lastZiIdx + 1);
-  }
-  return ZI_LIST.slice(firstZiIdx, 12).concat(ZI_LIST.slice(0, lastZiIdx + 1));
+function genderValue(value) {
+  if (value === true || value === 1 || value === '1' || value === '男') return 1;
+  if (value === false || value === 0 || value === '0' || value === '女') return 0;
+  return undefined;
 }
 
-class SanChuanBuilder {
-  constructor(layout, ke, chartObj) {
-    this.layout = layout;
-    this.ke = ke;
-    this.nongli = chartObj.nongli || {};
-    this.upZi = layout.upZi;
-    this.downZi = layout.downZi;
-    this.tianJiang = layout.houseTianJiang;
-  }
-
-  getCuang(cuang0) {
-    const idx1 = this.downZi.indexOf(cuang0);
-    const cuang1 = idx1 >= 0 ? this.upZi[idx1] : '';
-    const idx2 = this.downZi.indexOf(cuang1);
-    const cuang2 = idx2 >= 0 ? this.upZi[idx2] : '';
-    return [cuang0, cuang1, cuang2];
-  }
-
-  getSeHaiCount(cuang) {
-    let count = 0;
-    let upidx = this.upZi.indexOf(cuang);
-    let downidx = this.downZi.indexOf(cuang);
-    if (upidx < 0 || downidx < 0) {
-      return count;
-    }
-    downidx = downidx >= upidx ? downidx : downidx + 12;
-    for (let i = upidx; i < downidx; i += 1) {
-      const zi = this.downZi[i % 12];
-      if (isRestrain(zi, cuang)) {
-        count += 1;
-      }
-      const hidden = ZI_HAN_GAN[zi];
-      if (hidden) {
-        for (const gan of hidden.split('')) {
-          if (isRestrain(gan, cuang)) {
-            count += 1;
-          }
-        }
-      }
-    }
-    return count;
-  }
-
-  getSeHais(cuangs) {
-    const ziList = uniqueZiList(cuangs);
-    if (!ziList.length) {
-      return null;
-    }
-    let max = 0;
-    let stack = [];
-    for (const zi of ziList) {
-      const count = this.getSeHaiCount(zi);
-      if (count > max) {
-        max = count;
-        stack = [zi];
-      } else if (count === max) {
-        stack.push(zi);
-      }
-    }
-    if (stack.length === 1) {
-      return { cuang: this.getCuang(stack[0]), name: '涉害课' };
-    }
-    let selected = stack.filter((zi) => ZI_MENG.includes(this.downZi[this.upZi.indexOf(zi)]));
-    if (selected.length === 1) {
-      return { cuang: this.getCuang(selected[0]), name: '见机课' };
-    }
-    selected = stack.filter((zi) => ZI_ZONG.includes(this.downZi[this.upZi.indexOf(zi)]));
-    if (selected.length === 1) {
-      return { cuang: this.getCuang(selected[0]), name: '察微课' };
-    }
-    const daygan = stemOf(this.nongli.dayGanZi);
-    const ke = YANG_GAN.includes(daygan) ? this.ke[0] : this.ke[2];
-    return { cuang: this.getCuang(ke[1]), name: '缀瑕课' };
-  }
-
-  isJinKe0() {
-    const stack = uniqueZiList(this.ke.filter((item) => isRestrain(item[2], item[1])).map((item) => item[1]));
-    if (stack.length === 1) {
-      return { cuang: this.getCuang(stack[0]), name: '重审课' };
-    }
-    if (stack.length > 1) {
-      const yinyang = sameYingYang(stemOf(this.nongli.dayGanZi), stack);
-      const data = uniqueZiList(yinyang.data);
-      return yinyang.cnt === 1 ? { cuang: this.getCuang(data[0]), name: '比用课' } : this.getSeHais(data);
-    }
-    return null;
-  }
-
-  isJinKe1() {
-    const stack = uniqueZiList(this.ke.filter((item) => isRestrain(item[1], item[2])).map((item) => item[1]));
-    if (stack.length === 1) {
-      return { cuang: this.getCuang(stack[0]), name: '元首课' };
-    }
-    if (stack.length > 1) {
-      const yinyang = sameYingYang(stemOf(this.nongli.dayGanZi), stack);
-      const data = uniqueZiList(yinyang.data);
-      return yinyang.cnt === 1 ? { cuang: this.getCuang(data[0]), name: '知一课' } : this.getSeHais(data);
-    }
-    return null;
-  }
-
-  isYaoKe0() {
-    const gan = this.ke[0][2];
-    const stack = uniqueZiList(this.ke.slice(1).filter((item) => isRestrain(item[1], gan)).map((item) => item[1]));
-    if (stack.length === 1) {
-      return { cuang: this.getCuang(stack[0]), name: '蒿矢课' };
-    }
-    if (stack.length > 1) {
-      const yinyang = sameYingYang(gan, stack);
-      const data = uniqueZiList(yinyang.data);
-      return yinyang.cnt === 1 ? { cuang: this.getCuang(data[0]), name: '蒿矢课' } : this.getSeHais(data);
-    }
-    return null;
-  }
-
-  isYaoKe1() {
-    const gan = this.ke[0][2];
-    const stack = uniqueZiList(this.ke.slice(1).filter((item) => isRestrain(gan, item[1])).map((item) => item[1]));
-    if (stack.length === 1) {
-      return { cuang: this.getCuang(stack[0]), name: '弹射课' };
-    }
-    if (stack.length > 1) {
-      const yinyang = sameYingYang(gan, stack);
-      const data = uniqueZiList(yinyang.data);
-      return yinyang.cnt === 1 ? { cuang: this.getCuang(data[0]), name: '弹射课' } : this.getSeHais(data);
-    }
-    return null;
-  }
-
-  isMaoXing() {
-    const gan = this.ke[0][2];
-    if (YANG_GAN.includes(gan)) {
-      return { cuang: [this.upZi[this.downZi.indexOf('酉')], this.ke[2][1], this.ke[0][1]], name: '虎视课' };
-    }
-    return { cuang: [this.downZi[this.upZi.indexOf('酉')], this.ke[0][1], this.ke[2][1]], name: '掩目课' };
-  }
-
-  isFuYin() {
-    if (this.downZi[0] !== this.upZi[0]) {
-      return null;
-    }
-    const jin = this.isJinKe0() || this.isJinKe1();
-    if (jin) {
-      const cuang0 = this.ke[0][1];
-      const cuang1 = ZI_XING[cuang0] === cuang0 ? this.ke[2][1] : ZI_XING[cuang0];
-      const cuang2 = ZI_XING[cuang1] === cuang1 ? ZI_CONG[cuang1] : ZI_XING[cuang1];
-      return { cuang: [cuang0, cuang1, cuang2], name: '不虞课' };
-    }
-    const gan = this.ke[0][2];
-    const cuang0 = YANG_GAN.includes(gan) ? this.ke[0][1] : this.ke[2][1];
-    const cuang1 = ZI_XING[cuang0] === cuang0 ? (YANG_GAN.includes(gan) ? this.ke[2][1] : this.ke[0][1]) : ZI_XING[cuang0];
-    const cuang2 = ZI_XING[cuang1] === cuang1 ? ZI_CONG[cuang1] : ZI_XING[cuang1];
-    return { cuang: [cuang0, cuang1, cuang2], name: YANG_GAN.includes(gan) ? '自任课' : '杜传课' };
-  }
-
-  isFangYin() {
-    if (this.downZi[0] !== ZI_CONG[this.upZi[0]]) {
-      return null;
-    }
-    const jin = this.isJinKe0() || this.isJinKe1();
-    if (jin) {
-      return { ...jin, name: '无依课' };
-    }
-    const dayzi = branchOf(this.nongli.dayGanZi);
-    return { cuang: [ZI_YI_MA[dayzi], this.ke[2][1], this.ke[0][1]], name: '无亲课' };
-  }
-
-  isBieZe() {
-    const repeated = this.ke[0][1] === this.ke[1][1] || this.ke[0][1] === this.ke[3][1]
-      || this.ke[1][1] === this.ke[2][1] || this.ke[1][1] === this.ke[3][1]
-      || this.ke[2][1] === this.ke[3][1];
-    if (!repeated) {
-      return null;
-    }
-    const direct = this.isJinKe0() || this.isJinKe1() || this.isYaoKe0() || this.isYaoKe1();
-    if (direct) {
-      return direct;
-    }
-    const gan = this.ke[0][2];
-    const dayzi = branchOf(this.nongli.dayGanZi);
-    const cuang0 = YANG_GAN.includes(gan)
-      ? this.upZi[this.downZi.indexOf(GAN_JI_ZI[GAN_HE[gan]])]
-      : (ZI_SANG_HE[dayzi] || [])[1];
-    return { cuang: [cuang0, this.ke[0][1], this.ke[0][1]], name: '芜淫课' };
-  }
-
-  isBaZhuang() {
-    if (this.ke[0][1] !== this.ke[2][1]) {
-      return null;
-    }
-    const direct = this.isJinKe0() || this.isJinKe1();
-    if (direct) {
-      return direct;
-    }
-    const gan = this.ke[0][2];
-    const idx = YANG_GAN.includes(gan)
-      ? (this.upZi.indexOf(this.ke[0][1]) + 2) % 12
-      : (this.upZi.indexOf(this.ke[3][1]) + 10) % 12;
-    return { cuang: [this.upZi[idx], this.ke[0][1], this.ke[0][1]], name: '八专课' };
-  }
-
-  getSangCuang() {
-    return this.isFuYin()
-      || this.isFangYin()
-      || this.isJinKe0()
-      || this.isJinKe1()
-      || this.isBaZhuang()
-      || this.isYaoKe0()
-      || this.isYaoKe1()
-      || this.isBieZe()
-      || this.isMaoXing();
-  }
-
-  build() {
-    const base = this.getSangCuang();
-    if (!base || !Array.isArray(base.cuang)) {
-      return null;
-    }
-    const daygan = stemOf(this.nongli.dayGanZi);
-    const dayzi = branchOf(this.nongli.dayGanZi);
-    const xun = getXun(daygan, dayzi);
-    const xunGanMap = {};
-    xun.slice(0, GAN_LIST.length).forEach((zi, index) => {
-      xunGanMap[zi] = GAN_LIST[index];
-    });
-    const gz = [];
-    const tianJiang = [];
-    const liuQin = [];
-    for (let i = 0; i < 3; i += 1) {
-      const zi = base.cuang[i];
-      const idx = this.upZi.indexOf(zi);
-      tianJiang[i] = idx >= 0 ? this.tianJiang[idx] : '无';
-      liuQin[i] = (ZI_LIU_QIN[zi] || {})[daygan] || '无';
-      gz[i] = xunGanMap[zi] ? `${xunGanMap[zi]}${zi}` : `空${zi}`;
-    }
-    return { ...base, cuang: gz, tianJiang, liuQin };
-  }
-}
-
-function buildSanChuan(layout, keRaw, chartObj) {
-  if (!layout || !Array.isArray(keRaw) || keRaw.length !== 4 || !chartObj?.nongli?.dayGanZi) {
-    return null;
-  }
-  return new SanChuanBuilder(layout, keRaw, chartObj).build();
-}
-
-function missingDetailText(title) {
-  return `本次本地计算结果未返回「${title}」细项；报告只能基于已返回盘面判断，不能臆造外部依赖、桌面端服务或不存在的数据。`;
-}
-
-function mapSectionLines(title, obj) {
-  const lines = [`[${title}]`];
-  if (!obj || typeof obj !== 'object' || !Object.keys(obj).length) {
-    lines.push(missingDetailText(title), '');
-    return lines;
-  }
-  Object.keys(obj).forEach((key) => {
-    lines.push(`${key.split('(')[0]}：${valueText(obj[key])}`);
-  });
-  lines.push('');
-  return lines;
-}
-
-function buildSnapshotText(payload, liureng, runyear, chartObj, data) {
-  const lines = [];
-  const nongli = liureng.nongli || chartObj.nongli || {};
-  const cols = liureng.fourColumns || {};
-  // 六壬解读层 context（星阙 v2.5.x 六壬 Phase 4）：refCtx = buildLiuRengReferenceContext(~75 字段)，
-  // 星阙原样抽取的纯函数闭包；喂 [三传] 递生递克行、毕法(matchBiFa)、占断向导(ZHANDUAN_DOC)与断卦层。
-  // 提到段首求值：上游 buildLiuRengSnapshotText 的 [三传] 段已在用 refs.context（LiuRengMain.js:4436-4447）。
-  let refCtx = null;
-  try {
-    refCtx = buildLiuRengReferenceContext(
-      liureng || {},
-      chartObj,
-      payload?.guirengType != null ? payload.guirengType : 2,
-      runyear || null,
-      payload?.castOverride || null,
-    );
-  } catch (e) {
-    refCtx = null;
-  }
-  lines.push('[起盘信息]');
-  lines.push(`日期：${payload.date || '—'} ${payload.time || '—'}`);
-  lines.push(`时区：${payload.zone || '—'}`);
-  lines.push(`经纬度：${payload.lon || '—'} ${payload.lat || '—'}`);
-  if (nongli.birth) {
-    lines.push(`真太阳时：${nongli.birth}`);
-  }
-  if (cols.year || cols.month || cols.day || cols.time) {
-    lines.push(`四柱：${valueText(cols.year)}年 ${valueText(cols.month)}月 ${valueText(cols.day)}日 ${valueText(cols.time)}时`);
-  }
-  lines.push(`贵人体系：${data.layout ? data.layout.guirengLabel : getGuiRengLabel(payload.guirengType ?? 2)}`);
-  lines.push(`十二盘式：${data.panStyleName || '本次本地结果未定'}`);
-  lines.push('');
-
-  lines.push('[十二盘式]');
-  if (data.layout) {
-    lines.push(`月将：${data.layout.yue}；占时：${data.layout.timezi}；贵人：${data.layout.guizi}`);
-  } else {
-    lines.push(missingDetailText('十二盘式'));
-  }
-  lines.push('');
-
-  lines.push('[十二地盘/十二天盘/十二贵神对应]');
-  if (data.layout) {
-    for (let i = 0; i < 12; i += 1) {
-      lines.push(`${i + 1}. 地盘${data.layout.downZi[i]} -> 天盘${data.layout.upZi[i]} -> 贵神${data.layout.houseTianJiang[i]}`);
-    }
-  } else {
-    lines.push(missingDetailText('十二地盘/十二天盘/十二贵神对应'));
-  }
-  lines.push('');
-
-  lines.push('[四课]');
-  if (data.ke && data.ke.lines.length) {
-    lines.push(...data.ke.lines);
-  } else {
-    lines.push(missingDetailText('四课'));
-  }
-  lines.push('');
-
-  lines.push('[三传]');
-  if (data.sanChuan) {
-    lines.push(`课式：${valueText(data.sanChuan.name)}`);
-    ['初传', '中传', '末传'].forEach((name, index) => {
-      lines.push(`${name}：干支=${data.sanChuan.cuang[index] || '无'}；六亲=${data.sanChuan.liuQin[index] || '无'}；贵神=${data.sanChuan.tianJiang[index] || '无'}`);
-    });
-    // [Q-450/T-413]（上游 v3.11.0 LiuRengMain.js:4436-4447）三传递生递克 + 逐传空/禄/马徽记：
-    // 与右栏取象小图同一纯函数（vendored LRSanChuanRelationMini.js），入参逐字同上游取自 refs.context。
-    if (refCtx && Array.isArray(refCtx.sanChuanBranches) && refCtx.sanChuanBranches.length >= 3) {
-      sanChuanRelationSnapshotLines({
-        branches: refCtx.sanChuanBranches,
-        gans: refCtx.sanChuanGans || [],
-        dayGan: refCtx.dayGan || '',
-        dayZhi: refCtx.dayZhi || '',
-        xunKong: refCtx.xunKongBranches || [],
-      }).forEach((l) => lines.push(l));
-    }
-  } else {
-    lines.push(missingDetailText('三传'));
-  }
-  lines.push('');
-
-  lines.push('[行年]');
-  if (runyear) {
-    lines.push(`行年干支：${valueText(runyear.year)}`);
-    lines.push(`年龄：${valueText(runyear.age)}岁`);
-  } else {
-    lines.push(missingDetailText('行年'));
-  }
-  lines.push('');
-
-  lines.push(...mapSectionLines('旬日', liureng.xun));
-  lines.push(...mapSectionLines('旺衰', liureng.season));
-  lines.push(...mapSectionLines('基础神煞', liureng.gods));
-  lines.push(...mapSectionLines('干煞', liureng.godsGan));
-  lines.push(...mapSectionLines('月煞', liureng.godsMonth));
-  lines.push(...mapSectionLines('支煞', liureng.godsZi));
-  lines.push(...mapSectionLines('岁煞', liureng.godsYear && liureng.godsYear.taisui1 ? liureng.godsYear.taisui1 : liureng.godsYear));
-  lines.push('[十二长生]', missingDetailText('十二长生'), '');
-  lines.push('[大格]', data.sanChuan ? `课式：${data.sanChuan.name}` : missingDetailText('大格'), '');
-  lines.push('[小局]', missingDetailText('小局'), '');
-  lines.push('[参考]', missingDetailText('参考'), '');
-  lines.push('[概览]');
-  if (data.sanChuan) {
-    lines.push(`四课、三传已由本地 headless 六壬引擎根据离线盘面生成。`);
-    lines.push(`三传：${data.sanChuan.cuang.join(' -> ')}；贵神：${data.sanChuan.tianJiang.join(' -> ')}`);
-  } else {
-    lines.push('本次盘面材料不足，无法生成四课三传；请检查日期、时间、时区、经纬度和本地 runtime 状态。');
-  }
-  // 六壬解读层（星阙 v2.5.x 六壬 Phase 4）：常用神煞 + 毕法100法 + 占断向导。
-  // refCtx 已在段首求值（见 buildSnapshotText 开头）；喂 matchBiFa(毕法) / ZHANDUAN_DOC(占断)。
-  // 失败（refCtx=null）时回退到旧的日干支解析 + 仅常用神煞。
-  const dayGanZi = chartObj?.nongli?.dayGanZi || '';
-  const BRANCHES = '子丑寅卯辰巳午未申酉戌亥';
-  let ssDayGan = refCtx ? refCtx.dayGan : stemOf(dayGanZi);
-  let ssDayZhi = refCtx ? refCtx.dayZhi : branchOf(dayGanZi);
-  let courseBranches = refCtx ? (refCtx.courseBranches || []) : [];
-  if (!courseBranches.length) {
-    (data?.ke?.raw || []).forEach((row) => {
-      (row || []).forEach((b) => {
-        if (b && BRANCHES.includes(b) && !courseBranches.includes(b)) courseBranches.push(b);
-      });
-    });
-  }
-  const shensha = computeFrontendShenSha(ssDayGan, ssDayZhi, courseBranches);
-  lines.push('');
-  lines.push('[常用神煞]');
-  if (shensha.length) {
-    shensha.forEach((s) => lines.push(`${s.name}：${s.branch}${s.inCourse ? '（入课传）' : ''}（${s.brief}）`));
-  } else {
-    lines.push('无');
-  }
-
-  // 毕法100法：matchBiFa 机械命中之断诀（烈度须合时令旺衰、年命制化，非定数）。
-  if (refCtx) {
-    // 断卦层（六壬全流派）：年月神煞/课体结构/三传旺衰/空亡真假/旬空落点/陷空/遁干特殊/年命上神。纯派生，缺数据则该段跳过。
-    const castOpts = payload?.castOverride || {};
-    const gzWx = (z) => LRConst.GanZiWuXing[`${z || ''}`.trim().substring(0, 1)] || '';
-    try {
-      const yearSS = computeYearShenSha(refCtx.yearBranch, castOpts.yearShenShaSort || 'sanyuan', refCtx.courseBranches) || [];
-      const monthSS = computeMonthShenSha(refCtx.monthBranch, refCtx.courseBranches) || [];
-      if (yearSS.length || monthSS.length) {
-        lines.push('');
-        lines.push('[年月神煞]');
-        lines.push(`（年神＝${castOpts.yearShenShaSort === 'suigui' ? '太岁排轮' : '四利三元序'}）`);
-        yearSS.concat(monthSS).forEach((s) => lines.push(`${s.name}：${s.branch}${s.inCourse ? '（入课传）' : ''}`));
-      }
-      const jcS = detectJianChuan(refCtx.sanChuanBranches);
-      if (jcS) {
-        lines.push('');
-        lines.push('[课体结构]');
-        lines.push(`${jcS.name}（${jcS.kind}${jcS.wuxing ? '·' + jcS.wuxing : ''}${jcS.dir ? '·' + jcS.dir + '间' : ''}）：${jcS.text}`);
-      }
-      const wsLines = (refCtx.sanChuanBranches || []).map((z, i) => {
-        const wxx = gzWx(z);
-        const w = liurengWangXiang(wxx, refCtx.monthBranch, castOpts.tuWangShuai);
-        return w ? `${['初', '中', '末'][i]}传${z}${wxx}${w}` : '';
-      }).filter(Boolean);
-      if (wsLines.length) {
-        lines.push('');
-        lines.push('[三传旺衰]');
-        lines.push(`${wsLines.join('、')}`);
-      }
-      const kwLines = (refCtx.xunKongBranches || []).map((z) => {
-        const wxx = gzWx(z);
-        const j = judgeKongWang(wxx, refCtx.monthBranch, castOpts.tuWangShuai);
-        return j ? `${z}${wxx}${j.kind}(${j.ws})` : '';
-      }).filter(Boolean);
-      if (kwLines.length) {
-        lines.push('');
-        lines.push('[空亡真假]');
-        lines.push(`${kwLines.join('、')}`);
-      }
-      const kloc = analyzeKongLocations(refCtx);
-      if (kloc && kloc.hits && kloc.hits.length) {
-        lines.push('');
-        lines.push('[旬空落点]');
-        lines.push(`${kloc.hits.map((h) => `${h.pos}${h.branch}空（${h.note}）`).join('；')}${kloc.allSanChuanKong ? '；三传全空，守干上旺禄勿动' : ''}`);
-      }
-      if (kloc && kloc.xianKong && kloc.xianKong.length) {
-        lines.push('');
-        lines.push('[陷空]');
-        lines.push(`${kloc.xianKong.map((x) => `${x.god}临地盘${x.seat}`).join('、')}（落于空地、虚而不实）`);
-      }
-      const dun = analyzeDunGan(refCtx) || [];
-      if (dun.length) {
-        lines.push('');
-        lines.push('[遁干特殊]');
-        lines.push(`${dun.map((d) => `${d.pos}${d.branch}${d.gan ? '遁' + d.gan : ''}${d.flags && d.flags.length ? '（' + d.flags.join('、') + '）' : ''}：${d.note}`).join('；')}`);
-      }
-      const nm = analyzeNianMing(refCtx) || [];
-      if (nm.length) {
-        lines.push('');
-        lines.push('[年命上神]');
-        lines.push(`${nm.map((n) => `${n.label}${n.branch}——${n.note}`).join('；')}`);
-      }
-    } catch (e) {
-      // 断卦层任一 helper 失败绝不连累既有段（毕法/占断向导），静默降级。
-    }
-
-    let bifaHits = [];
-    try { bifaHits = matchBiFa(refCtx) || []; } catch (e) { bifaHits = []; }
-    lines.push('');
-    lines.push('[毕法（已命中）]');
-    lines.push('（以下为机械命中之断诀，烈度须合时令旺衰、年命制化，非定数）');
-    if (bifaHits.length) {
-      bifaHits.forEach((b) => {
-        lines.push(`${b.no}. ${b.name}：${b.verse}`);
-        if (b.explain) lines.push(`释：${b.explain}`);
-        if (b.evidence && b.evidence.length) lines.push(`依据：${b.evidence.join('；')}`);
-      });
-    } else {
-      lines.push('无（本盘未机械命中可判定之毕法）');
-    }
-
-    // 占断向导：仅当指定占类(payload.zhanCategory != general)时输出该占类的用神/神将/宜忌/三传提示。
-    const zhanKey = payload?.zhanCategory || 'general';
-    if (zhanKey && zhanKey !== 'general' && ZHANDUAN_DOC[zhanKey]) {
-      const zd = ZHANDUAN_DOC[zhanKey];
-      lines.push('');
-      lines.push('[占断向导]');
-      lines.push(`占事：${zd.name}`);
-      lines.push(`主用神：${(zd.mainYong || []).map((y) => `${y.role}=${y.mean}`).join('；')}`);
-      const yongLuo = [];
-      if (refCtx.ke1Up) yongLuo.push(`日干上神=${refCtx.ke1Up}`);
-      if (refCtx.ke3Up) yongLuo.push(`日支上神=${refCtx.ke3Up}`);
-      if (refCtx.runYearBranch) yongLuo.push(`年命上神位=${refCtx.runYearBranch}`);
-      if (yongLuo.length) lines.push(`用神落点：${yongLuo.join('；')}`);
-      const godValues = refCtx.branchGodMap ? Object.keys(refCtx.branchGodMap).map((k) => refCtx.branchGodMap[k]) : [];
-      const present = (zd.keyJiang || []).filter((j) => godValues.indexOf(j) >= 0);
-      const absent = (zd.keyJiang || []).filter((j) => present.indexOf(j) < 0);
-      lines.push(`关键神将：现=${present.join('、') || '—'}；缺=${absent.join('、') || '—'}`);
-      lines.push(`宜：${(zd.favor || []).join('；')}`);
-      lines.push(`忌：${(zd.avoid || []).join('；')}`);
-      if (zd.sanChuanTip) lines.push(`三传提示：${zd.sanChuanTip}`);
-    }
-  }
-
-  // [七政] 段：日月五星临支/五行/度/逆行/月将，是大六壬七政四余合参的独立断法层。
-  // 值取自随盘星历对象；无星历数据不产段（零字节变化）。
-  const qizhengItems = buildQiZhengItems(chartObj);
-  if (qizhengItems.length) {
-    lines.push('');
-    lines.push('[七政]');
-    lines.push('| 七政 | 临支 | 五行 | 度数 | 逆行 | 备注 |');
-    lines.push('| --- | --- | --- | --- | --- | --- |');
-    qizhengItems.forEach((item) => {
-      const deg = item.deg != null ? `${item.deg.toFixed(0)}°` : '—';
-      lines.push(`| ${item.name} | ${item.branch || '—'} | ${item.wx || '—'} | ${deg} | ${item.retro ? '逆' : '—'} | ${item.isYue ? '月将(太阳过宫)' : '—'} |`);
-    });
-  }
-  return lines.join('\n').trim();
-}
-
-const QIZHENG_DEFS = [
-  { id: 'Sun', name: '日' },
-  { id: 'Moon', name: '月' },
-  { id: 'Mercury', name: '水' },
-  { id: 'Venus', name: '金' },
-  { id: 'Mars', name: '火' },
-  { id: 'Jupiter', name: '木' },
-  { id: 'Saturn', name: '土' },
-];
-
-function getQiZhengPlanetObject(chartObj, planetId) {
-  if (!chartObj || !Array.isArray(chartObj.objects) || !planetId) {
-    return null;
-  }
-  for (let i = 0; i < chartObj.objects.length; i++) {
-    const obj = chartObj.objects[i];
-    if (obj && obj.id === planetId) {
-      return obj;
-    }
-  }
-  return null;
-}
-
-// 七政：临支按星座换地支；顺逆按 lonspeed<0；月将=与太阳同支（太阳过宫）。
-function buildQiZhengItems(chartObj) {
-  if (!chartObj || !chartObj.objects) {
-    return [];
-  }
-  const sunObj = getQiZhengPlanetObject(chartObj, 'Sun');
-  const sunBranch = sunObj ? (LRConst.getSignZi(sunObj.sign) || '') : '';
-  const items = [];
-  for (let i = 0; i < QIZHENG_DEFS.length; i++) {
-    const def = QIZHENG_DEFS[i];
-    const obj = getQiZhengPlanetObject(chartObj, def.id);
-    if (!obj) {
-      continue;
-    }
-    const branch = LRConst.getSignZi(obj.sign) || '';
-    let deg = null;
-    if (typeof obj.lon === 'number' && isFinite(obj.lon)) {
-      deg = ((obj.lon % 30) + 30) % 30;
-    }
-    items.push({
-      key: def.id,
-      name: def.name,
-      branch,
-      wx: branch ? (LRConst.GanZiWuXing[branch] || '') : '',
-      deg,
-      retro: typeof obj.lonspeed === 'number' && obj.lonspeed < 0,
-      isYue: !!branch && branch === sunBranch,
-    });
-  }
-  return items;
+// skill 扩展（上游无此入口：LiuRengMain.js 里 `params.yue = yue` 早已注释掉）：显式 yue = 月将，替代星历月将；
+// 起课法照常作用于它（X/Y 同 computeQiXY），其余覆盖口径（分昼夜 / 涉害 / 阴阳系）沿用 castOverride。
+function applyExplicitYue(chartObj, castOpts, castOverride, explicitYue) {
+  const castMethod = castOpts.castMethod || 'zheng';
+  const xy = computeQiXY(castMethod, chartObj, explicitYue, castOpts);
+  const tFallback = chartObj.nongli && chartObj.nongli.time ? chartObj.nongli.time.substr(1) : '';
+  const base = castOverride || {};
+  return {
+    yue: LRConst.ZiList.indexOf(xy.X) >= 0 ? xy.X : explicitYue,
+    timeZhi: LRConst.ZiList.indexOf(xy.Y) >= 0 ? xy.Y : tFallback,
+    isDiurnal: base.isDiurnal,
+    actualYue: explicitYue,
+    seHaiOpts: base.seHaiOpts || {
+      method: castOpts.seHaiMethod || 'app',
+      boundary: castOpts.seHaiBoundary || 'app',
+      shiRuKe: !!castOpts.shiRuKe,
+    },
+    yinyangSystem: base.yinyangSystem || (castOpts.yinyangSystem === 'yinyang' ? 'yinyang' : 'danmu'),
+  };
 }
 
 export function runLiureng(payload) {
+  const resolved = resolveLiurengOptions(payload);
+  if (!resolved.ok) {
+    return { data: { ok: false, error: resolved.error }, snapshot_text: '' };
+  }
+  const { castOpts, guirengType } = resolved;
   const liureng = payload.liureng || {};
   const runyear = payload.runyear || null;
   const chartObj = normalizeChart(payload);
-  const layout = buildLayout(payload, chartObj);
-  const ke = buildKe(layout, chartObj);
-  const sanChuan = buildSanChuan(layout, ke.raw, chartObj);
+  // 起课时刻（行年盘 = guaDate/guaTime；正盘 = date/time）：月将换将的岁差年与快照 [起盘信息] 的「日期」行都按它取。
+  const keDate = payload.guaDate || payload.date || '';
+  const keTime = `${payload.guaTime || payload.time || ''}`.slice(0, 5);
+  const keYear = parseYearAd(keDate, payload.guaAd ?? payload.ad);
+  const solarYear = keYear ? getSolarYearFromField({ value: keYear }) : NaN;
+  // 本命支 / 行年支（第九~十二客、本命 / 行年加时）：上游 liurengBenmingXingnian 按问测人出生公历年 + 行年干支取。
+  // 正盘无单独出生档时同上游缺省「问测人 = 起课档」取起课年（buildBirthFields(this.props.fields)）。
+  const birthYear = parseYearAd(payload.date, payload.ad);
+  const bx = liurengBenmingXingnian(birthYear ? { date: { value: birthYear } } : null, runyear);
+  const fullCastOpts = {
+    ...castOpts,
+    ...(Number.isFinite(solarYear) ? { solarYear } : {}),
+    benmingZhi: bx.benmingZhi,
+    xingnianZhi: bx.xingnianZhi,
+    zhanCategory: payload.zhanCategory || (payload.options && payload.options.zhanCategory) || undefined,
+  };
+  // 调用方已算好的 castOverride（三式合一六壬层同款 P0 入口，上游 buildLiuRengSnapshotText 第 8 参）直接用。
+  let castOverride = payload.castOverride && typeof payload.castOverride === 'object'
+    ? payload.castOverride
+    : buildLiuRengCastOverride(chartObj, fullCastOpts);
+  const explicitYue = branchOf(payload.yue);
+  if (explicitYue && chartObj.nongli) {
+    castOverride = applyExplicitYue(chartObj, fullCastOpts, castOverride, explicitYue);
+  }
+  const layout = buildLiuRengLayout(chartObj, guirengType, castOverride);
+  const ke = buildKeData(layout, chartObj);
+  const sanChuan = buildSanChuanData(layout, ke.raw, chartObj, castOverride);
+  // 十二长生五行：上游缺省 = 日干五行（LiuRengMain 起课回包按日干重置，wuxingUserSet 才保留手选）。
+  const dayGan = stemOf(chartObj.nongli && chartObj.nongli.dayGanZi);
+  const wuxing = resolved.wuxing || LRConst.GanZiWuXing[dayGan] || '';
+  const params = {
+    date: keDate,
+    time: keTime,
+    zone: payload.guaZone || payload.zone || '',
+    lon: payload.guaLon || payload.lon || '',
+    lat: payload.guaLat || payload.lat || '',
+  };
+  const snapshot_text = buildLiuRengSnapshotText(
+    params,
+    liureng,
+    runyear,
+    chartObj,
+    guirengType,
+    wuxing,
+    genderValue(payload.gender),
+    { ...fullCastOpts, castOverride: castOverride || undefined },
+  );
   const data = {
-    layout,
+    layout: layout ? { ...layout, guirengType, guirengLabel: GUIREN_LABELS[guirengType] || '' } : null,
     ke,
     sanChuan,
     panStyleName: layout ? `${layout.yue}将加${layout.timezi}时` : '',
+    castOptions: fullCastOpts,
+    castOverride: castOverride || null,
+    zhangshengElem: wuxing,
     runtime_note: 'local_headless_liureng',
   };
-  return {
-    data,
-    snapshot_text: buildSnapshotText(payload, liureng, runyear, chartObj, data),
-  };
+  return { data, snapshot_text };
 }

@@ -834,6 +834,190 @@ def _liureng_chart_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _liureng_time_alg(payload: dict[str, Any]) -> int | None:
+    """大六壬起课时间算法（上游 v3.11 [Q-386/T-367]：LiuRengController 改读 timeAlg，缺省 RealSun=0）。
+
+    `options.timeAlg` 优先、顶层 `timeAlg` 次之（三式合一子盘把共享 timeAlg 放顶层）；缺省返回 None =
+    不发送（后端缺省真太阳时，与上游 LIURENG_PAGE_SETTINGS.timeAlg def 0 同值）。上游页面只给两档
+    （LiuRengMain.js:3916 oneOf [0, 1]），认不出的值报错而不静默回落。
+    """
+    options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+    raw = options.get("timeAlg")
+    if raw is None:
+        raw = payload.get("timeAlg")
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, bool) or str(raw).strip() not in {"0", "1"}:
+        raise ToolValidationError(
+            bilingual(
+                f"大六壬 timeAlg 取值无效：{raw!r}（可选：0=真太阳时 / 1=直接时间）。",
+                f"liureng timeAlg is invalid: {raw!r} (allowed: 0=true solar time / 1=clock time).",
+            ),
+            code="tool.liureng_invalid_option",
+            details={"field": "timeAlg", "value": raw, "allowed": [0, 1]},
+        )
+    return int(str(raw).strip())
+
+
+def _liureng_gods_payload(tool_name: str, payload: dict[str, Any], time_alg: int | None) -> dict[str, Any]:
+    """`/liureng/gods` 起课请求 —— 行年盘按**起课时刻**（gua*）起课，同上游 genGodsParams(calcFields)。
+
+    此前 liureng_runyear 只打 `/liureng/runyear`，而该端点只回 {age, ageCycle, year}（LiuRengHelper.runYear），
+    没有 liureng 盘 → 四课 / 三传 / 行年整段落空（live 实测）；上游页面是 gods（起课）+ runyear（行年）两请求。
+    """
+    base = _liureng_remote_payload("liureng_gods", payload)
+    if tool_name == "liureng_runyear":
+        for key, gua_key in (("date", "guaDate"), ("time", "guaTime"), ("zone", "guaZone"),
+                             ("lat", "guaLat"), ("lon", "guaLon"), ("ad", "guaAd"),
+                             ("after23NewDay", "guaAfter23NewDay")):
+            if payload.get(gua_key) is not None and payload.get(gua_key) != "":
+                base[key] = payload[gua_key]
+    if time_alg is not None:
+        base["timeAlg"] = time_alg
+    return base
+
+
+def _liureng_runyear_from(response: Any) -> dict[str, Any] | None:
+    """`/liureng/runyear` 真实回包是裸 {age, ageCycle, year}（LiuRengHelper.runYear）；兼容包了一层的旧形状。"""
+    if not isinstance(response, dict):
+        return None
+    wrapped = response.get("runyear") or response.get("runYear")
+    if isinstance(wrapped, dict):
+        return wrapped
+    return response if response.get("year") else None
+
+
+def _gua_year_ganzi(liureng: Any) -> str:
+    """上游 resolveGuaYearGanZi（LiuRengMain.js:183）：起课盘年柱 → 行年所用的卦年干支。"""
+    if not isinstance(liureng, dict):
+        return ""
+    four = liureng.get("fourColumns") if isinstance(liureng.get("fourColumns"), dict) else {}
+    year = four.get("year")
+    candidates = [year.get("ganzi") if isinstance(year, dict) else year]
+    nongli = liureng.get("nongli") if isinstance(liureng.get("nongli"), dict) else {}
+    candidates += [nongli.get("yearGanZi"), nongli.get("yearJieqi"), nongli.get("year")]
+    for text in candidates:
+        match = re.search(r"[甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥]", str(text or ""))
+        if match:
+            return match.group(0)
+    return ""
+
+
+# 金口诀排盘流派五键 + 时间基准的词表与缺省（上游 JinKouMain.js:857-864 JINKOU_PAGE_SETTINGS，首项 = 缺省）。
+# 上游本地引擎对认不出的值静默归缺省（buildJinKouData `=== 'jiaojie' ? … : 'zhongqi'`），headless 改为报错。
+_JINKOU_SCHOOL_VOCAB: dict[str, tuple[str, ...]] = {
+    "schoolYueJiang": ("zhongqi", "jiaojie"),
+    "schoolGuiTable": ("shiwu", "liuren"),
+    "schoolGuiPan": ("di", "tian"),
+    "panShi": ("yang", "yin"),
+    "soilChangSheng": ("shen", "yin"),
+    "timeBasis": ("direct", "trueSolar"),
+}
+
+
+def _jinkou_option_error(field: str, value: Any, allowed: list[Any]) -> ToolValidationError:
+    return ToolValidationError(
+        bilingual(
+            f"金口诀 {field} 取值无效：{value!r}（可选：{' / '.join(str(a) for a in allowed)}）。",
+            f"jinkou {field} is invalid: {value!r} (allowed: {', '.join(str(a) for a in allowed)}).",
+        ),
+        code="tool.jinkou_invalid_option",
+        details={"field": field, "value": value, "allowed": allowed},
+    )
+
+
+def _jinkou_validate_options(options: dict[str, Any]) -> None:
+    for key, allowed in _JINKOU_SCHOOL_VOCAB.items():
+        value = options.get(key)
+        if value not in (None, "") and value not in allowed:
+            raise _jinkou_option_error(key, value, list(allowed))
+    for key in ("yueJiang", "zhanShi"):
+        value = options.get(key)
+        if value not in (None, "", "auto") and (len(str(value)) != 1 or str(value) not in _GANZHI_BRANCHES):
+            raise _jinkou_option_error(key, value, ["auto", *_GANZHI_BRANCHES])
+    wuxing = options.get("wuxing")
+    if wuxing not in (None, "") and wuxing not in ("木", "火", "土", "金", "水"):
+        raise _jinkou_option_error("wuxing", wuxing, ["木", "火", "土", "金", "水"])
+
+
+def _jinkou_school_overrides(options: dict[str, Any]) -> list[str]:
+    """上游 schoolsAllDefault（JinKouMain.js:1288-1294）的镜像：返回非缺省的流派/盘法键（空 = 全缺省 → ken 路径）。"""
+    return [
+        key for key, allowed in _JINKOU_SCHOOL_VOCAB.items()
+        if key != "timeBasis" and (options.get(key) or allowed[0]) != allowed[0]
+    ]
+
+
+def _jinkou_resolve_difen(raw: Any, time_text: Any) -> str:
+    """上游 resolveJinKouDiFen(diFen, diFenAuto, timeZi, hasExistingPan=false)（JinKouState.js:14）的首次起课口径：
+    未指定 / 'auto' → 占时支（liureng.nongli.time 的地支），取不到才落「子」；显式给定须是单个地支。"""
+    text = str(raw or "").strip()
+    if text in ("", "auto"):
+        match = re.search(f"[{_GANZHI_BRANCHES}]", str(time_text or ""))
+        return match.group(0) if match else "子"
+    if len(text) != 1 or text not in _GANZHI_BRANCHES:
+        raise _jinkou_option_error("diFen", raw, ["auto", *_GANZHI_BRANCHES])
+    return text
+
+
+def _jinkou_manual_branch(value: Any) -> str:
+    """月将/占时手选（上游 fetchJinKouPan：`opt.yueJiang && opt.yueJiang !== 'auto' ? … : ''`）。"""
+    text = str(value or "").strip()
+    return "" if text in ("", "auto") else text
+
+
+def _sanshi_liureng_options(payload: dict[str, Any]) -> dict[str, Any]:
+    """三式合一六壬层口径（liureng_options → liureng_gods 子盘 options）。
+
+    上游三式合一只支持正时正将起课法（pickSanshiLiurengCastOpts 锁 castMethod:'zheng'，SanShiUnitedMain.js:957），
+    其余六壬层口径（换将/分昼夜/涉害/阴阳系/年神序/土旺衰/贵人）同独立六壬页词表；时间算法是三盘共享的顶层 timeAlg。
+    """
+    raw = payload.get("liureng_options")
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ToolValidationError(
+            bilingual("liureng_options 须为对象。", "liureng_options must be an object."),
+            code="tool.sanshiunited_invalid_option",
+            details={"field": "liureng_options", "value": raw},
+        )
+    if raw.get("castMethod") not in (None, "", "zheng"):
+        raise ToolValidationError(
+            bilingual(
+                f"三式合一只支持正时正将起课法（castMethod=zheng），收到 {raw.get('castMethod')!r}；其余起课法请单独调 liureng_gods。",
+                f"sanshiunited only supports castMethod=zheng (got {raw.get('castMethod')!r}); use liureng_gods for other methods.",
+            ),
+            code="tool.sanshiunited_invalid_option",
+            details={"field": "liureng_options.castMethod", "value": raw.get("castMethod"), "allowed": ["zheng"]},
+        )
+    if "timeAlg" in raw:
+        raise ToolValidationError(
+            bilingual(
+                "三式合一的时间算法是三盘共享的顶层 timeAlg，liureng_options 里不接受 timeAlg。",
+                "sanshiunited timeAlg is the shared top-level field; liureng_options.timeAlg is not accepted.",
+            ),
+            code="tool.sanshiunited_invalid_option",
+            details={"field": "liureng_options.timeAlg", "value": raw.get("timeAlg")},
+        )
+    return dict(raw)
+
+
+def _raise_js_option_error(tool: str, js_result: Any) -> None:
+    """JS 工具按上游词表校验口径参数，认不出的值回 data.ok=false + error{field,value,allowed}（不静默回落缺省）。"""
+    data = js_result.get("data") if isinstance(js_result, dict) else None
+    if not isinstance(data, dict) or data.get("ok") is not False:
+        return
+    error = data.get("error") if isinstance(data.get("error"), dict) else {}
+    raise ToolValidationError(
+        bilingual(
+            str(error.get("message") or f"{tool} 参数无效。"),
+            f"{tool}: invalid option {error.get('field')!r}={error.get('value')!r} (allowed: {error.get('allowed')}).",
+        ),
+        code=f"tool.{tool}_invalid_option",
+        details={k: error.get(k) for k in ("field", "value", "allowed") if k in error},
+    )
+
+
 def _chart_server_endpoint(endpoint: str) -> str:
     return "/" if endpoint == "/chart" else endpoint
 
@@ -1464,6 +1648,177 @@ def _ken_datetime_parts(payload: dict[str, Any]) -> dict[str, int]:
         "hour": time_bits[0],
         "minute": time_bits[1],
         "second": time_bits[2],
+    }
+
+
+# 奇门起局法 / 盘式 / 排盘家词表（上游 DunJiaCalc.js QIJU_METHOD_OPTIONS / SCHOOL_OPTIONS / PAIPAN_OPTIONS；
+# 5=综合 为引擎保留分支）。缺省起局法 = 上游 DunJiaMain.js:128 DEFAULT_OPTIONS.qijuMethod 'zhirun'（置闰）——
+# 此前 skill 缺省发 chaibu（且把 maoshan/wurun 也压成 chaibu），而本地脚手架 calcDunJia 缺省 zhirun：
+# ken 按拆补算盘、[盘型]「定局法」却标置闰，同一张盘两套口径（live 实测局数文本「阴遁一局中」vs「中元」）。
+_QIMEN_QIJU_METHODS = ("zhirun", "chaibu", "maoshan", "wurun", "shuzi")
+_QIMEN_SCHOOLS = ("转盘", "飞盘", "混合")
+_QIMEN_PAIPAN_TYPES = (0, 1, 2, 3, 4, 5, 6)
+
+
+def _js_parse_int(value: Any) -> int | None:
+    """JS `parseInt(v, 10)` 口径（DunJiaCalc normalizeNum）：前导整数前缀；bool/None/非数 → NaN(None)。"""
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value) if math.isfinite(value) else None
+    match = re.match(r"\s*([+-]?\d+)", str(value))
+    return int(match.group(1)) if match else None
+
+
+def _qimen_option_error(field: str, value: Any, allowed: list[Any]) -> ToolValidationError:
+    return ToolValidationError(
+        bilingual(
+            f"奇门 {field} 取值无效：{value!r}（可选：{' / '.join(str(a) for a in allowed)}）。",
+            f"qimen {field} is invalid: {value!r} (allowed: {', '.join(str(a) for a in allowed)}).",
+        ),
+        code="tool.qimen_invalid_option",
+        details={"field": field, "value": value, "allowed": allowed},
+    )
+
+
+def _qimen_effective_options(payload: dict[str, Any]) -> dict[str, Any]:
+    """奇门盘面口径单源：顶层起局三开关（QimenInput 声明的 timeAlg/after23NewDay/lateZiHourUseNextDay）∪
+    `options`，options 优先（与 qimenzeri 扫描同一合并）。本地脚手架、路由判据、ken 请求、择日扫描全吃这一份。
+
+    此前本地脚手架只看 `options`（顶层 after23NewDay/timeAlg 在 JS 侧被丢，[盘型]「换日/时间算法」标签与 ken 不一），
+    且起局法缺省与上游不同（见 _QIMEN_QIJU_METHODS 注）。认不出的起局法/盘式/排盘家/时间算法报错，不静默归一。
+    """
+    # 顶层 qijuMethod/paiPanType/school 也认：澄清闸 elicitation 表单按 `values` 把答案落在顶层同名键。
+    options: dict[str, Any] = {
+        key: payload[key]
+        for key in ("timeAlg", "after23NewDay", "lateZiHourUseNextDay", "qijuMethod", "paiPanType", "school")
+        if payload.get(key) is not None
+    }
+    raw = payload.get("options")
+    if isinstance(raw, dict):
+        options.update(raw)
+    method = options.get("qijuMethod")
+    if method in (None, ""):
+        options["qijuMethod"] = "zhirun"
+    elif method not in _QIMEN_QIJU_METHODS:
+        raise _qimen_option_error("qijuMethod", method, list(_QIMEN_QIJU_METHODS))
+    if options["qijuMethod"] == "shuzi" and not re.sub(r"[^0-9]", "", str(options.get("shuziReportNumber") or "")):
+        # 上游 calcDunJia：报数空 → 静默退节气拆补（「占位不崩」，页面上有输入框可见）；headless 没有那个框，直接报错。
+        raise ToolValidationError(
+            bilingual(
+                "阴盘报数起局（qijuMethod=shuzi）需要 options.shuziReportNumber（报数，如 258）。",
+                "qijuMethod=shuzi needs options.shuziReportNumber (the reported number, e.g. 258).",
+            ),
+            code="tool.qimen_invalid_option",
+            details={"field": "shuziReportNumber", "value": options.get("shuziReportNumber")},
+        )
+    school = options.get("school")
+    if school not in (None, "") and school not in _QIMEN_SCHOOLS:
+        raise _qimen_option_error("school", school, list(_QIMEN_SCHOOLS))
+    if options.get("paiPanType") not in (None, ""):
+        pai_pan = _js_parse_int(options.get("paiPanType"))
+        if pai_pan not in _QIMEN_PAIPAN_TYPES:
+            raise _qimen_option_error("paiPanType", options.get("paiPanType"), list(_QIMEN_PAIPAN_TYPES))
+        options["paiPanType"] = pai_pan
+    if options.get("timeAlg") not in (None, ""):
+        # 上游奇门只两档（DunJiaCalc.js TIME_ALG_OPTIONS）；JS normalizeTimeAlg 只认数字 1（`=== 1`），
+        # 字符串 "1" 会被当真太阳时 —— 故此处统一收成 int，不让两层对同一个值各读一套。
+        time_alg = options.get("timeAlg")
+        if isinstance(time_alg, bool) or str(time_alg).strip() not in {"0", "1"}:
+            raise _qimen_option_error("timeAlg", time_alg, [0, 1])
+        options["timeAlg"] = int(str(time_alg).strip())
+    return options
+
+
+def _qimen_local_route_reasons(options: dict[str, Any]) -> list[str]:
+    """上游路由单源 isQimenLocalRoute / qimenLocalOnlyOverrides（DunJiaCalc.js:1195-1226）的 Python 镜像。
+
+    非空 = 走本地 calcDunJia（年/月/日/刻/金函家、飞盘/混合、阴盘报数、七组本地口径任一非缺省）——ken `/qimen/pan`
+    只收排盘家/起局法/盘式，这些口径后端不认、合并阶段也不施加，照打 ken 会得到「按缺省出盘、[盘型]却标所选」。
+    Python 先判（决定打不打 ken），JS 用 vendored isQimenLocalRoute 再判一次并回报 `route`，两边不一致即报错
+    （tool.qimen_route_check_failed）——上游改了判据，这里当场红，而不是静默分叉。
+    """
+    reasons: list[str] = []
+    pai_pan = _js_parse_int(options.get("paiPanType"))
+    if (3 if pai_pan is None else pai_pan) not in (3, 5):
+        reasons.append("paiPanType")
+    if options.get("school") in ("飞盘", "混合"):
+        reasons.append("school")
+    if options.get("qijuMethod") == "shuzi":
+        reasons.append("qijuMethod")
+    zhi_shi = _js_parse_int(options.get("zhiShiType"))
+    if (0 if zhi_shi is None else zhi_shi) != 0:
+        reasons.append("zhiShiType")
+    leap_days = _js_parse_int(options.get("zhirunLeapDays"))
+    if options.get("qijuMethod") == "zhirun" and (9 if leap_days is None else leap_days) != 9:
+        reasons.append("zhirunLeapDays")
+    for key, default in (("godsPreset", "baihu_xuanwu"), ("jiGongMode", "kun"), ("anGanMode", "off")):
+        if options.get(key) and options.get(key) != default:
+            reasons.append(key)
+    if options.get("kongMarkBoth"):
+        reasons.append("kongMarkBoth")
+    shift = _js_parse_int(options.get("shiftPalace")) or 0
+    shift = 0 if shift < 0 else (shift % 8 if shift > 7 else shift)
+    if shift and options.get("shiftZhiFuMode") == "recalc":
+        reasons.append("shiftZhiFuMode")
+    return reasons
+
+
+def _parse_solar_datetime_text(text: Any) -> dict[str, int] | None:
+    """上游 DunJiaCalc.js parseDateTimeText：从 nongli.birth（真太阳时串）取年月日时分秒。"""
+    normalized = str(text or "").strip().replace("T", " ", 1).replace("Z", " ", 1).strip()
+    match = re.search(r"([-+]?\d{1,6})[/-](\d{1,2})[/-](\d{1,2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?", normalized)
+    if not match:
+        return None
+    year, month, day, hour, minute, second = match.groups()
+    return {
+        "year": int(year), "month": int(month), "day": int(day),
+        "hour": int(hour), "minute": int(minute), "second": int(second or 0),
+    }
+
+
+def _parse_taiyi_datetime_text(text: Any) -> dict[str, int] | None:
+    """上游 TaiYiCalc.js / JinKouCalc.js parseDateTimeText（行首锚定、分可单位数）：nongli.birth → 年月日时分秒。"""
+    match = re.match(r"^(-?\d{1,6})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?", str(text or "").strip())
+    if not match:
+        return None
+    year, month, day, hour, minute, second = match.groups()
+    return {
+        "year": int(year), "month": int(month), "day": int(day),
+        "hour": int(hour), "minute": int(minute), "second": int(second or 0),
+    }
+
+
+def _qimen_ken_payload(payload: dict[str, Any], options: dict[str, Any], nongli: Any) -> dict[str, Any]:
+    """`/qimen/pan` 请求体，逐键对齐上游 fetchQimenPan（DunJiaCalc.js:1473-1495）。
+
+    时间：timeAlg=0（缺省）用 nongli.birth 校正后的真太阳时分量（上游 resolveCalcDateTime）——此前 skill 恒发钟表时，
+    ken 只把 realSunTime 当回显，于是九宫按钟表时起、时柱按真太阳时标，两套时辰。
+    """
+    nongli = nongli if isinstance(nongli, dict) else {}
+    context = payload.get("context") if isinstance(payload.get("context"), dict) else {}
+    display_solar = context.get("displaySolarTime") or nongli.get("birth", "")
+    parts: dict[str, int] = _ken_datetime_parts(payload)
+    if options.get("timeAlg") != 1:
+        solar = _parse_solar_datetime_text(nongli.get("birth") or context.get("displaySolarTime"))
+        if solar:
+            parts = {**parts, **solar}
+    method = options.get("qijuMethod") or "zhirun"
+    return {
+        **parts,
+        "zone": payload.get("zone"),
+        "qimenMode": _ken_qimen_mode(options),
+        "qijuMethod": method,
+        "option": 2 if method == "zhirun" else 1,
+        "school": options.get("school") or "转盘",
+        "date": payload.get("date"),
+        "time": payload.get("time"),
+        "realSunTime": display_solar,
+        "jiedelta": nongli.get("jiedelta", ""),
+        # 显式日界/晚子时开关直达权威引擎（缺省不发→引擎默认 1/1）。
+        **_day_boundary_switches(options),
     }
 
 
@@ -9368,6 +9723,8 @@ class HorosaSkillService:
 
     def _run_qimen_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         year = int(str(payload["date"])[:4])
+        options = _qimen_effective_options(payload)
+        time_alg = options.get("timeAlg", 0)
         nongli = payload.get("nongli")
         if not isinstance(nongli, dict):
             nongli = self._call_remote(
@@ -9381,61 +9738,72 @@ class HorosaSkillService:
                     "gpsLat": payload.get("gpsLat"),
                     "gpsLon": payload.get("gpsLon"),
                     # 日界/晚子时开关与 ken 权威引擎同口径：仅显式给定时发送，缺省沿用后端默认(1/1)。
-                    **_day_boundary_switches(payload),
-                    "timeAlg": payload.get("timeAlg", 0),
+                    **_day_boundary_switches(options),
+                    "timeAlg": time_alg,
                     "ad": payload.get("ad", 1),
                 },
             )
+
+        def _jieqi_year(target_year: int) -> Any:
+            return self._call_remote(
+                "/jieqi/year",
+                {"year": target_year, "zone": payload["zone"], "lat": payload["lat"], "lon": payload["lon"], "time": payload["time"], "gpsLat": payload.get("gpsLat"), "gpsLon": payload.get("gpsLon"), "ad": payload.get("ad", 1), "timeAlg": time_alg},
+            )
+
         prev_year = payload.get("jieqi_year_prev")
         if not isinstance(prev_year, dict):
-            prev_year = self._call_remote(
-                "/jieqi/year",
-                {"year": year - 1, "zone": payload["zone"], "lat": payload["lat"], "lon": payload["lon"], "time": payload["time"], "gpsLat": payload.get("gpsLat"), "gpsLon": payload.get("gpsLon"), "ad": payload.get("ad", 1), "timeAlg": payload.get("timeAlg", 0)},
-            )
+            prev_year = _jieqi_year(year - 1)
         current_year = payload.get("jieqi_year_current")
         if not isinstance(current_year, dict):
-            current_year = self._call_remote(
-                "/jieqi/year",
-                {"year": year, "zone": payload["zone"], "lat": payload["lat"], "lon": payload["lon"], "time": payload["time"], "gpsLat": payload.get("gpsLat"), "gpsLon": payload.get("gpsLon"), "ad": payload.get("ad", 1), "timeAlg": payload.get("timeAlg", 0)},
-            )
-        options = payload.get("options") or {}
-        qiju_method = "zhirun" if str(options.get("qijuMethod") or "").strip() == "zhirun" else "chaibu"
-        # ken is the compute authority; the JS layer only reformats this into aiExport.js sections.
-        ken_response = self._call_remote(
-            "/qimen/pan",
-            {
-                **_ken_datetime_parts(payload),
-                "zone": payload.get("zone"),
-                "qimenMode": _ken_qimen_mode(options),
-                "qijuMethod": qiju_method,
-                "option": 2 if qiju_method == "zhirun" else 1,
-                "date": payload.get("date"),
-                "time": payload.get("time"),
-                "realSunTime": (nongli or {}).get("birth", ""),
-                "jiedelta": (nongli or {}).get("jiedelta", ""),
-                # 显式日界/晚子时开关直达权威引擎（缺省不发→引擎默认 1/1）。
-                **_day_boundary_switches(payload),
-            },
-        )
-        self._require_ken_pan(ken_response, engine="kinqimen", endpoint="/qimen/pan")
+            current_year = _jieqi_year(year)
+        # 日家(2)/金函(6) 腊月过冬至需次年至日 → 种子年 y-1,y,y+1（上游 jieqiSeedYears，DunJiaCalc.js:1243）。
+        next_year = None
+        if _js_parse_int(options.get("paiPanType")) in (2, 6):
+            next_year = payload.get("jieqi_year_next")
+            if not isinstance(next_year, dict):
+                next_year = _jieqi_year(year + 1)
+        # 路由与上游 DunJiaMain.getResolvedPan 同判据（isQimenLocalRoute）：本地家/飞盘/混合/报数/七组本地口径 →
+        # 本地 calcDunJia，**不打** ken（后端不认这些口径）；其余（时家/综合·转盘·全缺省口径）ken 是唯一算权。
+        route_reasons = _qimen_local_route_reasons(options)
+        ken_response = None
+        if not route_reasons:
+            ken_response = self._call_remote("/qimen/pan", _qimen_ken_payload(payload, options, nongli))
+            self._require_ken_pan(ken_response, engine="kinqimen", endpoint="/qimen/pan")
         js_payload = {
-            **payload,
+            **{k: v for k, v in payload.items() if k not in ("ken_response", "kenResponse")},
+            "options": options,
             "nongli": nongli,
             "jieqi_year_prev": prev_year,
             "jieqi_year_current": current_year,
-            "ken_response": ken_response,
+            **({"jieqi_year_next": next_year} if isinstance(next_year, dict) else {}),
+            **({"ken_response": ken_response} if ken_response is not None else {}),
         }
         fa_related_people = self._normalize_fa_related_people(payload)
         if fa_related_people is not None:
             js_payload["faRelatedPeople"] = fa_related_people
         js_result = self.js_client.run("qimen", js_payload)
+        js_route = js_result.get("route") if isinstance(js_result, dict) else None
+        if isinstance(js_route, dict) and bool(js_route.get("local")) != bool(route_reasons):
+            raise ToolTransportError(
+                "奇门路由判据漂移：Python 镜像与 vendored isQimenLocalRoute 结论不一致。",
+                code="tool.qimen_route_check_failed",
+                details={"python_local_reasons": route_reasons, "js_route": js_route, "options": options},
+            )
         snapshot_text = js_result.get("snapshot_text")
-        return {
+        result: dict[str, Any] = {
             "pan": js_result.get("data", {}),
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="qimen", snapshot_text=snapshot_text),
-            "prerequisites": {"nongli": nongli, "jieqi_year_prev": prev_year, "jieqi_year_current": current_year},
+            "prerequisites": {
+                "nongli": nongli, "jieqi_year_prev": prev_year, "jieqi_year_current": current_year,
+                **({"jieqi_year_next": next_year} if isinstance(next_year, dict) else {}),
+            },
+            "route": {"local": bool(route_reasons), "reasons": route_reasons},
         }
+        if route_reasons:
+            # 算源如实：本地路由的盘不带 pan.source，依据卡按 compute_sources 标注（technique_provenance 已声明该引擎）。
+            result["compute_sources"] = {"pan": "local_route_calcDunJia"}
+        return result
 
     # --- 天星择日 / 奇门择日（上游 v3.7.0 / v3.7.1）------------------------------------------
 
@@ -10010,11 +10378,10 @@ class HorosaSkillService:
         # 命中区间用默认起局算、而同一次调用里的**展示盘**走 _run_qimen_tool 是honor 顶层的，
         # 于是两者不同局；[奇门择日配置] 段还会打出一个根本没用上的设置标签。
         # 与 tianxing 同款双读合并（见上方 _electionscan_options 两连击），options 优先。
-        options = {
-            **{k: payload[k] for k in ("timeAlg", "after23NewDay", "lateZiHourUseNextDay")
-               if payload.get(k) is not None},
-            **(payload.get("options") or {}),
-        }
+        # sanshi chunk F1/F3：扫描与展示盘吃**同一份**已校验口径（_qimen_effective_options：同款双读合并 +
+        # 起局法缺省 zhirun 显式填入 + 认不出的值报错）。此前展示盘缺省拆补、扫描的 calcDunJia 缺省置闰，
+        # 同一次调用里命中判定与所见盘不同局。
+        options = _qimen_effective_options(payload)
         _progress_tick(0, 2, "奇门择日：本地区间扫描")
         scan = self.js_client.run(
             "qimenzeri",
@@ -10046,7 +10413,7 @@ class HorosaSkillService:
         # 沿用按原 date 预取的那份 → realSunTime/jiedelta 对不上 → 时柱/局错；窗口跨年时
         # jieqi_year_current 更是整年都错。本工具自己返回 prerequisites，正诱使 agent 回传它们。
         qimen_payload = {k: v for k, v in payload.items()
-                         if k not in ("nongli", "jieqi_year_prev", "jieqi_year_current",
+                         if k not in ("nongli", "jieqi_year_prev", "jieqi_year_current", "jieqi_year_next",
                                       "zeriSnapshotMaxRows", "zeriSnapshotExplainRows")}
         # 展示盘跟随扫描口径：上游 QimenZeriMain.onPickInterval（:309-322）把冻结的扫描 options 整包回写
         # 主盘。_run_qimen_tool 的起局三开关读**顶层**，此前 options 里给的 timeAlg/日界 只进了扫描 →
@@ -10083,9 +10450,14 @@ class HorosaSkillService:
             "truncated": bool(scan_data.get("truncated")),
             "stats": scan_data.get("stats"),
             "compiled_conditions": scan_data.get("compiled_tree"),
-            # Honest算权 disclosure: the pan is ken-computed, the interval search is not. Upstream
-            # anchors the local排盘 against the backend on a 42,731-point 0-diff parity grid.
-            "compute_sources": {"scan": "local_calcDunJia", "pan": "kinqimen"},
+            # Honest算权 disclosure: the pan is ken-computed (or local calcDunJia when the options take
+            # upstream's isQimenLocalRoute path), the interval search is not. Upstream anchors the local
+            # 排盘 against the backend on a 42,731-point 0-diff parity grid.
+            "compute_sources": {
+                "scan": "local_calcDunJia",
+                "pan": ((qimen.get("compute_sources") or {}).get("pan")) or "kinqimen",
+            },
+            "route": qimen.get("route"),
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="qimenzeri", snapshot_text=snapshot_text),
             "prerequisites": qimen.get("prerequisites"),
@@ -10589,6 +10961,22 @@ class HorosaSkillService:
         }
 
     def _run_taiyi_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 口径单源：顶层日界两开关（0/1 整数，JS buildOptions 按 `=== 1` 标「换日」）∪ options，options 优先。
+        options = {**_day_boundary_switches(payload), **(payload.get("options") or {})}
+        # 时间基准（上游 TaiYiMain TAIYI_PAGE_SETTINGS.timeBasis def 'direct'，TIME_BASIS_OPTIONS 两档）：
+        # trueSolar 时 ken 按 nongli.birth 的真太阳时分量起局（上游 resolveCalculationDateTime，TaiYiCalc.js:254）。
+        # 此前该档既不发也不施加，快照却标「真太阳时」—— ken 恒按钟表时起局。
+        time_basis = options.get("timeBasis") or "direct"
+        if time_basis not in ("direct", "trueSolar"):
+            raise ToolValidationError(
+                bilingual(
+                    f"太乙 timeBasis 取值无效：{time_basis!r}（可选：direct=直接时间 / trueSolar=真太阳时）。",
+                    f"taiyi timeBasis is invalid: {time_basis!r} (allowed: direct / trueSolar).",
+                ),
+                code="tool.taiyi_invalid_option",
+                details={"field": "timeBasis", "value": time_basis, "allowed": ["direct", "trueSolar"]},
+            )
+        options["timeBasis"] = time_basis
         nongli = payload.get("nongli")
         if not isinstance(nongli, dict):
             nongli = self._call_remote(
@@ -10603,24 +10991,30 @@ class HorosaSkillService:
                     "gpsLon": payload.get("gpsLon"),
                     # 日界/晚子时开关与 ken 权威引擎同口径：仅显式给定时发送，缺省沿用后端默认(1/1)。
                     **_day_boundary_switches(payload),
-                    "timeAlg": payload.get("timeAlg", 0),
+                    # 真太阳时基准要的是 nongli.birth = 真太阳时（上游太乙取农历不带 timeAlg = 后端缺省真太阳时）。
+                    "timeAlg": 0 if time_basis == "trueSolar" else payload.get("timeAlg", 0),
                     "ad": payload.get("ad", 1),
                 },
             )
-        options = payload.get("options") or {}
         # taiyi ken 期望 sex 为 '男'/'女' 字符串；gender 经 input_normalization 已归一为 0(女)/1(男)，
         # 故此处显式映射（不能靠 `or gender` —— int 0 为 falsy 会误落默认「男」）。
         _g = payload.get("gender")
         _sex_from_gender = "女" if _g in (0, "0", False, "女", "female", "f") else "男"
         sex = options.get("sex") or _sex_from_gender
+        ken_parts: dict[str, Any] = _ken_datetime_parts(payload)
+        if time_basis == "trueSolar":
+            solar = _parse_taiyi_datetime_text((nongli or {}).get("birth"))
+            if solar:
+                ken_parts = {**ken_parts, **solar}
         ken_response = self._call_remote(
             "/taiyi/pan",
             {
-                **_ken_datetime_parts(payload),
+                **ken_parts,
                 "zone": payload.get("zone"),
                 "style": options.get("style", 3),
                 "tn": options.get("tn", 0),
                 "sex": sex,
+                "timeBasis": time_basis,
                 "enableGameTheory": bool(options.get("gameTheory") in (1, True, "1")),
                 "date": payload.get("date"),
                 "time": payload.get("time"),
@@ -10631,7 +11025,11 @@ class HorosaSkillService:
             },
         )
         self._require_ken_pan(ken_response, engine="kintaiyi", endpoint="/taiyi/pan")
-        js_result = self.js_client.run("taiyi", {**payload, "nongli": nongli, "ken_response": ken_response})
+        js_result = self.js_client.run(
+            "taiyi", {**payload, "options": options, "nongli": nongli, "ken_response": ken_response}
+        )
+        # 流派六轴（options.school / 平铺键 / 顶层 school）由 JS 按上游 TAIYI_SCHOOL_OPTIONS 校验。
+        _raise_js_option_error("taiyi", js_result)
         snapshot_text = js_result.get("snapshot_text")
         return {
             "pan": js_result.get("data", {}),
@@ -10648,37 +11046,102 @@ class HorosaSkillService:
                 _liureng_remote_payload("liureng_gods", payload),
             )
             liureng = remote.get("liureng", remote)
-        options = payload.get("options") or {}
-        difen = payload.get("diFen") or options.get("diFen") or "子"
-        ken_response = self._call_remote(
-            "/jinkou/pan",
-            {
-                **_ken_datetime_parts(payload),
-                "zone": payload.get("zone"),
-                "difen": difen,
-                "yuejiang": options.get("yueJiang") or options.get("yuejiang") or "",
-                "zhanshi": options.get("zhanShi") or options.get("zhanshi") or "",
-                "date": payload.get("date"),
-                "time": payload.get("time"),
-                # 仅晚子时开关（after23 继承自六壬默认 False，为零漂移不向 ken 新发送——既有边界）。
-                **_day_boundary_switches(payload, keys=("lateZiHourUseNextDay",)),
-            },
+        options = dict(payload.get("options") or {})
+        _jinkou_validate_options(options)
+        nongli = liureng.get("nongli") if isinstance(liureng, dict) and isinstance(liureng.get("nongli"), dict) else {}
+        # 地分缺省 = 自动取占时支（上游 JinKouMain.js:907 diFenAuto:true → resolveJinKouDiFen 首次起课取
+        # 占时支）。此前缺省发「子」给 ken（本地脚手架却取占时支），默认盘恒按子地分起。
+        difen = _jinkou_resolve_difen(payload.get("diFen") or options.get("diFen"), nongli.get("time"))
+        options["diFen"] = difen
+        time_basis = options.get("timeBasis") or "direct"
+        # 路由（上游 JinKouMain.assembleJinKouData:1255-1270 + schoolsAllDefault:1288）：五项流派/盘法全缺省才用
+        # ken /jinkou/pan（再由 JS 判两源日柱是否对齐），任一非缺省即本地 buildJinKouData —— ken 不认这五项，照打会
+        # 得到「按缺省流派出盘、快照却按所选解读」。此前 skill 恒用 ken 行覆盖本地脚手架，五项流派全是死开关。
+        school_overrides = _jinkou_school_overrides(options)
+        warnings: list[str] = []
+        ken_response = None
+        if not school_overrides:
+            ken_parts: dict[str, Any] = _ken_datetime_parts(payload)
+            if time_basis == "trueSolar":
+                # 上游 fetchJinKouPan → resolveCalculationDateTime（JinKouCalc.js:2707）：真太阳时 = liureng.nongli.birth。
+                solar = _parse_taiyi_datetime_text(nongli.get("birth"))
+                if solar:
+                    ken_parts = {**ken_parts, **solar}
+            ken_response = self._call_remote(
+                "/jinkou/pan",
+                {
+                    **ken_parts,
+                    "zone": payload.get("zone"),
+                    "difen": difen,
+                    "yuejiang": _jinkou_manual_branch(options.get("yueJiang") or options.get("yuejiang")),
+                    "zhanshi": _jinkou_manual_branch(options.get("zhanShi") or options.get("zhanshi")),
+                    "timeBasis": time_basis,
+                    "realSunTime": nongli.get("birth", ""),
+                    "jiedelta": nongli.get("jiedelta", ""),
+                    "date": payload.get("date"),
+                    "time": payload.get("time"),
+                    # 仅晚子时开关（after23 继承自六壬默认 False，为零漂移不向 ken 新发送——既有边界）。
+                    **_day_boundary_switches(payload, keys=("lateZiHourUseNextDay",)),
+                },
+            )
+            self._require_ken_pan(ken_response, engine="kinjinkou", endpoint="/jinkou/pan")
+        elif time_basis != "direct":
+            # 上游本地引擎不读时间基准（占时与日柱恒随 /liureng/gods 真太阳时口径），页面把该控件置灰（JinKouMain.js:1972）。
+            warnings.append(
+                f"金口诀 timeBasis={time_basis} 本次未生效：流派/盘法 {'/'.join(school_overrides)} 非缺省，"
+                "改由本地引擎出课，占时与日柱恒按真太阳时（上游同样置灰该选项）。"
+            )
+        js_result = self.js_client.run(
+            "jinkou",
+            {**payload, "options": options, "liureng": liureng, "ken_response": ken_response},
         )
-        self._require_ken_pan(ken_response, engine="kinjinkou", endpoint="/jinkou/pan")
-        js_result = self.js_client.run("jinkou", {**payload, "liureng": liureng, "ken_response": ken_response})
+        _raise_js_option_error("jinkou", js_result)
+        js_route = js_result.get("route") if isinstance(js_result, dict) else None
+        if isinstance(js_route, dict) and bool(js_route.get("schoolsDefault")) != (not school_overrides):
+            raise ToolTransportError(
+                "金口诀路由判据漂移：Python 与 JS 对「五项流派是否全缺省」结论不一致。",
+                code="tool.jinkou_route_check_failed",
+                details={"python_overrides": school_overrides, "js_route": js_route},
+            )
+        data = js_result.get("data", {}) if isinstance(js_result.get("data"), dict) else {}
+        if isinstance(data.get("daySourceNote"), str) and data["daySourceNote"]:
+            # 上游只在页面上显示这条（不进快照）；headless 必须说出来：盘由本地引擎重出，不是 ken 盘。
+            warnings.append(data["daySourceNote"])
+        route_reason = js_route.get("reason") if isinstance(js_route, dict) else None
+        if ken_response is not None and route_reason == "no_ken":
+            warnings.append("金口诀 ken 盘未带四位行（rows），本次由本地引擎出课 —— 与星阙 ken 盘可能不一致。")
         snapshot_text = js_result.get("snapshot_text")
-        return {
-            "jinkou": js_result.get("data", {}),
+        result: dict[str, Any] = {
+            "jinkou": data,
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="jinkou", snapshot_text=snapshot_text),
             "prerequisites": {"liureng": liureng},
+            "route": js_route if isinstance(js_route, dict) else {"schoolOverrides": school_overrides},
         }
+        # 只给**上游同判据**的本地路由（五项流派非缺省 / 两源日柱不齐）标声明过的本地算源；ken 畸形被迫回退本地
+        # 不标 —— 依据卡照旧把它显示成「与声明不一致」（AGENTS §4 静默回退形状）。
+        if data.get("source") != "kinjinkou" and route_reason in ("school", "day_misaligned"):
+            result["compute_sources"] = {"jinkou": "local_route_buildJinKouData"}
+        if warnings:
+            result["_warnings"] = warnings
+        return result
 
     def _run_liureng_tool(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
-        endpoint = "/liureng/runyear" if tool_name == "liureng_runyear" else "/liureng/gods"
-        remote = self._call_remote(endpoint, _liureng_remote_payload(tool_name, payload))
+        time_alg = _liureng_time_alg(payload)
+        gods_payload = _liureng_gods_payload(tool_name, payload, time_alg)
+        remote = self._call_remote("/liureng/gods", gods_payload)
         liureng = remote.get("liureng", remote)
-        runyear = remote.get("runyear") or remote.get("runYear")
+        runyear = None
+        remote_payloads: dict[str, Any] = {"/liureng/gods": gods_payload}
+        if tool_name == "liureng_runyear":
+            # 上游 genRunYearParams（LiuRengMain.js:5090）：出生档 + 起课档，卦年干支取起课盘年柱。
+            runyear_payload = _liureng_remote_payload("liureng_runyear", payload)
+            if not runyear_payload.get("guaYearGanZi"):
+                gua_year = _gua_year_ganzi(liureng)
+                if gua_year:
+                    runyear_payload["guaYearGanZi"] = gua_year
+            remote_payloads["/liureng/runyear"] = runyear_payload
+            runyear = _liureng_runyear_from(self._call_remote("/liureng/runyear", runyear_payload))
         chart: dict[str, Any] = {}
         chart_error: dict[str, Any] | None = None
         try:
@@ -10700,6 +11163,9 @@ class HorosaSkillService:
                 "guirengType": payload.get("guirengType", 2),
             },
         )
+        # 起课口径（castMethod / 换将 / 分昼夜 / 涉害 / 阴阳系 / 十二长生五行 / 贵人 0–4）由 JS 按上游
+        # LIURENG_PAGE_SETTINGS / QI_METHODS 词表校验；认不出的值 → 结构化报错（不回落缺省盘）。
+        _raise_js_option_error("liureng", js_result)
         snapshot_text = js_result.get("snapshot_text")
         data = js_result.get("data", {}) if isinstance(js_result.get("data"), dict) else {}
         result = {
@@ -10715,7 +11181,8 @@ class HorosaSkillService:
             "headless_liureng": data,
             "snapshot_text": snapshot_text,
             "prerequisites": {
-                "remote_payload": _liureng_remote_payload(tool_name, payload),
+                "remote_payload": gods_payload,
+                **({"runyear_payload": remote_payloads["/liureng/runyear"]} if "/liureng/runyear" in remote_payloads else {}),
                 "chart_available": bool(chart),
                 "chart_error": chart_error,
             },
@@ -11735,6 +12202,12 @@ class HorosaSkillService:
             **_day_boundary_switches(payload),
             "timeAlg": payload.get("timeAlg", 0),
         }
+        liureng_options = _sanshi_liureng_options(payload)
+        taiyi_options = dict(payload.get("taiyi_options") or {})
+        # 上游三式合一太乙区的时间基准键名是 taiyiTimeBasis（SanShiUnitedMain.js:446 / :2326，缺省 direct，
+        # 不随盘 timeAlg 串改）；skill 的 taiyi_options 用 taiyi 工具原名 timeBasis —— 两种写法都认，taiyi_options 优先。
+        if payload.get("taiyiTimeBasis") not in (None, "") and taiyi_options.get("timeBasis") in (None, ""):
+            taiyi_options["timeBasis"] = payload["taiyiTimeBasis"]
         qimen_result = self.run_tool(
             "qimen",
             {**shared, "options": payload.get("qimen_options", {})},
@@ -11742,7 +12215,7 @@ class HorosaSkillService:
         )
         taiyi_result = self.run_tool(
             "taiyi",
-            {**shared, "options": payload.get("taiyi_options", {})},
+            {**shared, "options": taiyi_options},
             save_result=False,
         )
         liureng_result = self.run_tool(
@@ -11751,10 +12224,21 @@ class HorosaSkillService:
                 **shared,
                 "yue": payload.get("liureng_yue"),
                 "isDiurnal": payload.get("liureng_isDiurnal"),
+                # 六壬层口径（上游 SANSHI_PAGE_SETTINGS 六壬层 + guireng：换将/分昼夜/涉害/阴阳系/年神序/土旺衰）。
+                "options": liureng_options,
             },
             save_result=False,
         )
 
+        # 口径参数认不出（*_invalid_option）是调用方输入错误，不是引擎故障：直接报错，不出「占位 + warning」的残盘。
+        for _res in (qimen_result, taiyi_result, liureng_result):
+            _err_info = _res.error
+            if not _res.ok and _err_info is not None and str(getattr(_err_info, "code", "")).endswith("_invalid_option"):
+                raise ToolValidationError(
+                    str(getattr(_err_info, "message", "")),
+                    code=str(getattr(_err_info, "code", "")),
+                    details=dict(getattr(_err_info, "details", None) or {}),
+                )
         # 子技法失败不崩整盘（对应段落为占位），但必须在 envelope.warnings 里点名，不得静默。
         sub_warnings: list[str] = []
         for _label, _res in (("奇门", qimen_result), ("太乙", taiyi_result), ("大六壬", liureng_result)):

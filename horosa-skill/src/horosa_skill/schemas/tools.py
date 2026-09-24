@@ -378,6 +378,10 @@ class LiuRengGodsInput(FlexibleModel):
         default=None,
         description="占断门类（hunyin 婚姻 / taichan 胎产 / jibing 疾病 / caiyun 财运 …）：驱动 [占断向导] 段。",
     )
+    # 起课口径（上游 LIURENG_PAGE_SETTINGS：castMethod 26 法 + xuanShiZhi/yanShuNum、yueJiangMethod、fenZhouYe、
+    # seHaiMethod、seHaiBoundary、shiRuKe、yearShenShaSort、yinyangSystem、tuWangShuai、wuxing、timeAlg）。
+    # tools/list 字节预算吃紧：描述 ≤20 字，词表住 agent_guidance 的 options_keys；JS 按上游词表校验、认不出即报错。
+    options: dict[str, Any] | None = Field(default=None, description="起课口径，见 guidance")
 
 
 class LiuRengRunYearInput(LiuRengGodsInput):
@@ -542,7 +546,9 @@ class BaziZeriInput(ZeriScanInput):
 class TaiyiZeriInput(ZeriScanInput):
     """太乙择时：时辰粒度。太乙时基是**钟表时**（上游口径，与后端 kentang 太乙一致）。"""
 
-    school: str | None = Field(default=None, description="太乙流派档，与 taiyi 工具同词表。")
+    # 引擎按对象展开（taiyiZeriScanEngine：applyTaiyiSchool(pan, o.school || {})）——此前声明成 str，任何字符串都被静默
+    # 忽略、对象又过不了校验。展示盘（taiyi runner）读同一顶层 school，扫描与所见同一套流派。
+    school: dict[str, Any] | None = Field(default=None, description="流派六轴对象，同 taiyi options.school。")
 
 
 class ZiweiZeriInput(ZeriScanInput):
@@ -719,13 +725,8 @@ class TaiyiInput(BirthInput):
     lateZiHourUseNextDay: int | bool | None = None
     timeAlg: int | None = 0
     gender: str | int | None = None
-    options: dict[str, Any] = Field(
-        default_factory=dict,
-        description=(
-            "引擎参数直通（style/tn/局式…）。太乙流派六轴（jishen/wenchang/keJianChen/sanji/youshen/"
-            "shijiCoord）也放这里——上游 v3.6.0 已把它们接活为真产段的开关。"
-        ),
-    )
+    # 键：style / tn / timeBasis(direct|trueSolar) / gameTheory / sex / school{六轴}；词表住 agent_guidance options_keys。
+    options: dict[str, Any] = Field(default_factory=dict, description="太乙口径（style/tn/timeBasis/school…）")
     nongli: dict[str, Any] | None = None
 
 
@@ -1132,6 +1133,8 @@ class SanShiUnitedInput(FlexibleModel):
     timeAlg: int | None = 0
     qimen_options: dict[str, Any] = Field(default_factory=dict)
     taiyi_options: dict[str, Any] = Field(default_factory=dict)
+    # 六壬层口径（同 liureng_gods options；castMethod 锁 zheng、timeAlg 走顶层共享）。tools/list 预算：描述 ≤20 字。
+    liureng_options: dict[str, Any] | None = Field(default=None, description="六壬层口径，见 guidance")
     liureng_yue: str | None = None
     liureng_isDiurnal: bool | None = None
     # [紫微四化]：上游由紫微子页签的 UI 状态驱动，headless 开成显式入参（下标越界回退末项，同上游钳制）。

@@ -101,7 +101,15 @@ EXTRA_EVIDENCE: dict[str, dict[str, list[str]]] = {
     "indiazeri": {"endpoints": ["/indiaelectionscan/scan"]},
     "qizhengzeri": {"endpoints": ["/qizhengelectionscan/scan"]},
     "mundane": {"engines": ["mundane_cards"]},  # 世俗盘右栏卡（tools/mundaneCards.js）
+    # ken 族里「上游同判据路由到本地引擎」的合法算源（v3.11 sanshi chunk）：qimen 按 isQimenLocalRoute（本地家/飞盘/
+    # 混合/报数/七组本地口径）走 calcDunJia、jinkou 按 schoolsAllDefault（五项流派任一非缺省）走 buildJinKouData ——
+    # 两者都不打 ken，runner 回 compute_sources = 下列名字。不声明的话依据卡会把合法路由误标「与声明不一致」；
+    # 反过来 ken 失败被静默回退本地（§4）仍然抓得到：那条路径不会带这些 compute_sources。
+    "qimen": {"engines": ["local_route_calcDunJia"]},
+    "jinkou": {"engines": ["local_route_buildJinKouData"]},
 }
+
+
 
 
 def evidence(fn: ast.FunctionDef | None) -> tuple[list[str], list[str], list[str]]:

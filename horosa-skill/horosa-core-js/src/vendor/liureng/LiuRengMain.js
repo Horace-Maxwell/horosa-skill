@@ -268,7 +268,7 @@ function calcRunYearLocal(birthGanZi, guaGanZi, gender, birthYear, guaYear){
 	};
 }
 
-function getSolarYearFromField(field){
+export function getSolarYearFromField(field){
 	if(!field || !field.value){
 		return NaN;
 	}
@@ -4189,7 +4189,7 @@ export function liurengCaseGender(birth, fields){
 }
 
 // 六壬 本命支(命主出生年支,按公历年取年支) + 行年支 —— 第九~十二客 / 本命·行年加时 用;缺则空串(computeQiXY 退回默认)。
-function liurengBenmingXingnian(birth, runyear){
+export function liurengBenmingXingnian(birth, runyear){
 	const by = getSolarYearFromField(birth && birth.date ? birth.date : null);
 	const benmingZhi = Number.isFinite(by) ? (LRConst.ZiList[(((by - 4) % 12) + 12) % 12] || '') : '';
 	const xingnianZhi = extractSingleBranch(runyear && runyear.year ? runyear.year : '');
