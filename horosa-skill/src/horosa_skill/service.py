@@ -967,10 +967,11 @@ def _jinkou_manual_branch(value: Any) -> str:
 
 
 def _sanshi_liureng_options(payload: dict[str, Any]) -> dict[str, Any]:
-    """三式合一六壬层口径（liureng_options → liureng_gods 子盘 options）。
+    """三式合一六壬层口径（liureng_options → JS 工具 sanshiunited 的 options.liureng）。
 
     上游三式合一只支持正时正将起课法（pickSanshiLiurengCastOpts 锁 castMethod:'zheng'，SanShiUnitedMain.js:957），
-    其余六壬层口径（换将/分昼夜/涉害/阴阳系/年神序/土旺衰/贵人）同独立六壬页词表；时间算法是三盘共享的顶层 timeAlg。
+    其余六壬层口径（换将/分昼夜/涉害/阴阳系/年神序/土旺衰/贵人）的词表由 JS 按 vendored SANSHI_PAGE_SETTINGS 校验；
+    时间算法是三盘共享的顶层 timeAlg。这里只挡「形状错 / 上游锁死的键」。
     """
     raw = payload.get("liureng_options")
     if raw is None:
@@ -1337,36 +1338,6 @@ def _missing_detail_text(title: str) -> str:
         f"本次本地计算结果未返回「{title}」细项；"
         "报告只能基于已返回盘面判断，不能臆造外部依赖、桌面端服务或不存在的数据。"
     )
-
-
-def _section_map_from_export(export_snapshot: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
-    if not isinstance(export_snapshot, dict):
-        return {}
-    sections = export_snapshot.get("sections")
-    if not isinstance(sections, list):
-        return {}
-    result: dict[str, dict[str, Any]] = {}
-    for section in sections:
-        if isinstance(section, dict) and isinstance(section.get("title"), str):
-            result[section["title"]] = section
-    return result
-
-
-def _section_body(export_snapshot: dict[str, Any] | None, title: str, default: str = "无") -> str:
-    fallback = _missing_detail_text(title) if default == "无" else default
-    section = _section_map_from_export(export_snapshot).get(title)
-    if not section:
-        return fallback
-    body = section.get("body")
-    if isinstance(body, str) and body.strip():
-        return body.strip()
-    content = section.get("content")
-    if isinstance(content, str) and content.strip():
-        content_lines = [line for line in content.splitlines() if not line.startswith("[")]
-        text = "\n".join(content_lines).strip()
-        if text:
-            return text
-    return fallback
 
 
 def _render_snapshot_text(sections: list[tuple[str, str]]) -> str:
@@ -1850,43 +1821,6 @@ def _build_export_provenance(technique: str, snapshot_text: str | None) -> dict[
         "build_timestamp": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "snapshot_text_present": bool(snapshot_text),
     }
-
-
-def _render_qimen_palace_sections(qimen_pan: dict[str, Any]) -> list[tuple[str, str]]:
-    palace_map = {
-        8: "正北坎宫",
-        7: "东北艮宫",
-        4: "正东震宫",
-        1: "东南巽宫",
-        2: "正南离宫",
-        3: "西南坤宫",
-        6: "正西兑宫",
-        9: "西北乾宫",
-    }
-    cells = qimen_pan.get("cells")
-    if not isinstance(cells, list):
-        return [(title, _missing_detail_text(title)) for title in palace_map.values()]
-
-    by_num = {
-        cell.get("palaceNum"): cell
-        for cell in cells
-        if isinstance(cell, dict) and cell.get("palaceNum") in palace_map
-    }
-    sections: list[tuple[str, str]] = []
-    for palace_num, title in palace_map.items():
-        cell = by_num.get(palace_num, {})
-        body = "\n".join(
-            [
-                f"宫数：{palace_num}",
-                f"天盘干：{cell.get('tianGan', '—')}",
-                f"地盘干：{cell.get('diGan', '—')}",
-                f"八神：{cell.get('god', '—')}",
-                f"九星：{cell.get('tianXing', '—')}",
-                f"八门：{cell.get('door', '—')}",
-            ]
-        )
-        sections.append((title, body))
-    return sections
 
 
 # ── 七政四余·大限（命度→十二宫）+ 相位：星阙 GuoLaoMoiraWheel/GuoLaoChartMain 的 Python 移植 ──
@@ -10505,12 +10439,16 @@ class HorosaSkillService:
     }
 
     @staticmethod
-    def _zeri_display_overrides(tool_name: str, options: dict[str, Any]) -> dict[str, Any]:
+    def _zeri_display_overrides(
+        tool_name: str, options: dict[str, Any], option_split: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """展示盘跟随扫描口径（上游 v3.11 [挂载自检 F-37]「所见行=所判口径」）。
 
         按各宿主 buildFields / applyWorkbenchCalibre 的键映射，把**扫描实际生效**的口径（页面出厂档 ⊕ 顶层
-        ⊕ options；键缺席时取扫描引擎自身缺省）写进基底工具的入参。只映射基底工具真能吃的键 —— 六壬的
-        yueMode(节气换将)与三式的六壬贵人，基底工具（liureng_gods / sanshiunited）尚无对应入参，未能跟随。
+        ⊕ options；键缺席时取扫描引擎自身缺省）写进基底工具的入参。六壬择时的 yueMode(节气换将) / 阴阳系、
+        三式择时的六壬层（贵人 / 换将 / 阴阳系）与奇门播种键，自 liureng_gods options / sanshiunited liureng_options
+        可达（v3.11.x sanshi chunk）起一并回写。三式的三家拆分取 JS 扫描回传的 vendored splitSanshiOptions 结果
+        （option_split），不在这里手抄键表。
         """
         def eff(key: str, engine_default: Any) -> Any:
             value = options.get(key)
@@ -10529,9 +10467,18 @@ class HorosaSkillService:
             # （computeZiweiScanPan：timeAlg 缺省钟表时、gender 缺省男）。
             return {"timeAlg": eff("timeAlg", 1), "gender": eff("gender", 1)}
         if tool_name == "liurengzeri":
-            # LiurengZeriMain.requestChartAndPlot（:146-148 日界/晚子时）+ applyWorkbenchCalibre（:306-313 贵人）。
-            return {"guirengType": eff("guirengType", 0), "after23NewDay": eff("after23NewDay", 1),
-                    "lateZiHourUseNextDay": eff("lateZiHourUseNextDay", 1)}
+            # LiurengZeriMain.requestChartAndPlot（:146-148 日界/晚子时）+ applyWorkbenchCalibre（:306-313：
+            # guirengType→guireng、yueMode→yueJiangMethod（'jieqi' 否则 'zhongqi'）、yinyangSystem 原名）。
+            out = {"guirengType": eff("guirengType", 0), "after23NewDay": eff("after23NewDay", 1),
+                   "lateZiHourUseNextDay": eff("lateZiHourUseNextDay", 1)}
+            cast: dict[str, Any] = {}
+            if options.get("yueMode") is not None:
+                cast["yueJiangMethod"] = "jieqi" if options["yueMode"] == "jieqi" else "zhongqi"
+            if options.get("yinyangSystem") not in (None, ""):
+                cast["yinyangSystem"] = options["yinyangSystem"]
+            if cast:
+                out["options"] = cast
+            return out
         if tool_name == "taiyizeri":
             # TaiyiZeriMain.buildFields（:309-327：性别←options.sex、日界缺省 0、晚子时缺省 1，与
             # computeTaiyiScanPan 同缺省）+ applyWorkbenchCalibre（:255-261：tn 进太乙页 options）。
@@ -10544,15 +10491,36 @@ class HorosaSkillService:
             return {"after23NewDay": eff("after23NewDay", 0), "lateZiHourUseNextDay": eff("lateZiHourUseNextDay", 1),
                     "options": taiyi_options}
         if tool_name == "sanshizeri":
-            # SanshiZeriMain.applyWorkbenchCalibre（:326-335）：奇门盘式键 / 太乙 taiyiAccum / 共享时间键 进三式页。
-            out: dict[str, Any] = {"timeAlg": eff("timeAlg", 0), "after23NewDay": eff("after23NewDay", 1),
-                                   "lateZiHourUseNextDay": eff("lateZiHourUseNextDay", 1)}
-            qimen = {k: options[k] for k in ("paiPanType", "qijuMethod", "school", "zhiShiType", "kongMode", "yimaMode")
-                     if options.get(k) is not None}
+            # SanshiZeriMain.onPickInterval → applyWorkbenchCalibre（:319-335）：工作台 13 键回写三式页 options
+            # （guirengType→guireng、yueMode→yueJiangMethod、其余原名）；奇门播种键（QM_SEED_KEYS，startScan
+            # 取自内嵌三式页）本就是三式页的值。扫描实际吃的三家口径 = vendored splitSanshiOptions 的拆分
+            # （JS 扫描回传 option_split）——逐家原样写进 sanshiunited 的三个子口径。
+            if not isinstance(option_split, dict):
+                raise ToolTransportError(
+                    bilingual("三式择时扫描未回传口径拆分（option_split），无法让展示盘跟随扫描口径。",
+                              "sanshizeri: the scan returned no option_split, so the display chart cannot follow the scan settings."),
+                    code="tool.sanshizeri_option_split_missing",
+                    details={"hint": "tools/zeriScan.js 的 sanshizeri scan 应回 data.option_split（splitSanshiOptions）。"},
+                )
+            out = {"timeAlg": eff("timeAlg", 0), "after23NewDay": eff("after23NewDay", 1),
+                   "lateZiHourUseNextDay": eff("lateZiHourUseNextDay", 1)}
+            time_keys = ("timeAlg", "after23NewDay", "lateZiHourUseNextDay")   # 三式共享时间键走顶层
+            qimen = {k: v for k, v in (option_split.get("qimen") or {}).items() if k not in time_keys and v is not None}
             if qimen:
                 out["qimen_options"] = qimen
-            if options.get("taiyiAccum") is not None:
-                out["taiyi_options"] = {"tn": options["taiyiAccum"]}
+            split_lr = option_split.get("liureng") or {}
+            liureng: dict[str, Any] = {}
+            if split_lr.get("guirengType") not in (None, ""):
+                liureng["guirengType"] = split_lr["guirengType"]
+            if split_lr.get("yueMode") is not None:
+                liureng["yueJiangMethod"] = "jieqi" if split_lr["yueMode"] == "jieqi" else "zhongqi"
+            if split_lr.get("yinyangSystem") not in (None, ""):
+                liureng["yinyangSystem"] = split_lr["yinyangSystem"]
+            if liureng:
+                out["liureng_options"] = liureng
+            split_ty = option_split.get("taiyi") or {}
+            if split_ty.get("tn") is not None:
+                out["taiyi_options"] = {"tn": split_ty["tn"]}
             return out
         return {}
 
@@ -10661,7 +10629,7 @@ class HorosaSkillService:
         # 把冻结的扫描 options 回写进 pick 后的显示盘）。此前 base_payload 丢掉 options、只剩顶层 →
         # options 里给的时间算法/贵人/日界对展示盘全无效，且缺省时展示盘走基底工具自己的缺省
         # （紫微扫描恒钟表时、展示盘却按 ziwei_birth 的真太阳时出），同一次结果里两套口径。
-        base_payload.update(self._zeri_display_overrides(tool_name, options))
+        base_payload.update(self._zeri_display_overrides(tool_name, options, scan_data.get("option_split")))
         # 走公共 run_tool 而非各自的私有 runner：六个基底技法的内部调用形状并不统一
         # （qimen 是 _run_qimen_tool(payload)、liureng 是 _run_liureng_tool(name, payload)、
         # bazi/ziwei 干脆没有私有 runner 而走通用远端路径）。run_tool 对四种都一致，
@@ -12189,6 +12157,37 @@ class HorosaSkillService:
         }
 
     def _run_sanshiunited_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """三式合一 —— 快照正文交给 vendored 上游 buildSanShiUnitedSnapshotText（JS 工具 sanshiunited）。
+
+        数据链逐步对齐上游 components/sanshi/SanShiUnitedMain.js（v3.11.x）：
+        ① 三式农历 = genParams → fetchPreciseNongli（:3235-3265 / :3984）：timeAlg 与日界两键随三式 options，
+           出厂 0 / 1 / 1（构造器 :2037-2047，日界两键 = 全局出厂值），上游恒显式发送；
+        ② 真太阳时显示值 = resolveDisplaySolarTime（:2226-2248）：timeAlg=0 即该农历 birth，否则另取一份真太阳时农历；
+        ③ 星盘 = props.chartObj（主页全局盘，三式与之共享 hsys / zodiacal，出厂 1 / 0 —— utils/newChartSeeds.js:38-41）；
+        ④ 奇门盘 = getKinqimenDunJia（:2281-2308）：同一份三式农历，context = {displaySolarTime, isDiurnal=星盘昼夜}
+           （calcDunJia 的神煞贵人按它分昼夜，normalizeKinqimenData 沿用这层）；getQimenOptions（:3297-3346）显式带日界两键；
+        ⑤ 太乙盘 = getKintaiyiPan（:2319-2340）：同一份三式农历（trueSolar 基准取它的 birth）；
+        ⑥ 六壬层**不另起盘**（此前另打 /liureng/gods，占时取真太阳时农历、不随三式 timeAlg）：JS 侧按 performRecalcByNongli
+           （:3677-3876）用 ①④③ 起课 —— 占日 / 占时 = 奇门盘干支（buildLrNongli），月将 / 昼夜 = 星盘。
+        """
+        time_alg_raw = payload.get("timeAlg", 0)
+        if time_alg_raw in (None, ""):
+            time_alg_raw = 0
+        if isinstance(time_alg_raw, bool) or str(time_alg_raw).strip() not in {"0", "1"}:
+            raise ToolValidationError(
+                bilingual(
+                    f"三式合一 timeAlg 取值无效：{time_alg_raw!r}（可选：0=真太阳时 / 1=直接时间）。",
+                    f"sanshiunited timeAlg is invalid: {time_alg_raw!r} (allowed: 0=true solar time / 1=clock time).",
+                ),
+                code="tool.sanshiunited_invalid_option",
+                details={"field": "timeAlg", "value": time_alg_raw, "allowed": [0, 1]},
+            )
+        time_alg = int(str(time_alg_raw).strip())
+        # 上游三式 options 的日界两键出厂 1 / 1（全局出厂「23 点算第二天」「晚子时用次日」），genParams / getQimenOptions /
+        # getKintaiyiPan 都显式发送；显式给定则随之。
+        day_switches = {"after23NewDay": 1, "lateZiHourUseNextDay": 1, **_day_boundary_switches(payload)}
+        gender = payload.get("gender")
+        sex = 0 if gender in (0, "0", False, "女", "female", "f") else 1
         shared = {
             "date": payload["date"],
             "time": payload["time"],
@@ -12198,9 +12197,8 @@ class HorosaSkillService:
             "gpsLat": payload.get("gpsLat"),
             "gpsLon": payload.get("gpsLon"),
             "ad": payload.get("ad", 1),
-            # 日界/晚子时开关仅显式给定时透传三式子工具（缺省沿用各子工具/引擎默认）。
-            **_day_boundary_switches(payload),
-            "timeAlg": payload.get("timeAlg", 0),
+            **day_switches,
+            "timeAlg": time_alg,
         }
         liureng_options = _sanshi_liureng_options(payload)
         taiyi_options = dict(payload.get("taiyi_options") or {})
@@ -12208,30 +12206,78 @@ class HorosaSkillService:
         # 不随盘 timeAlg 串改）；skill 的 taiyi_options 用 taiyi 工具原名 timeBasis —— 两种写法都认，taiyi_options 优先。
         if payload.get("taiyiTimeBasis") not in (None, "") and taiyi_options.get("timeBasis") in (None, ""):
             taiyi_options["timeBasis"] = payload["taiyiTimeBasis"]
+        if gender is not None and taiyi_options.get("sex") in (None, ""):
+            taiyi_options["sex"] = "女" if sex == 0 else "男"   # getKintaiyiPan：sex = options.sex === 0 ? '女' : '男'
+        qimen_options = dict(payload.get("qimen_options") or {})
+        if gender is not None and qimen_options.get("sex") in (None, ""):
+            qimen_options["sex"] = sex
+
+        nongli_request = {k: v for k, v in shared.items() if v is not None}
+        nongli = self._call_remote("/nongli/time", nongli_request)
+        if not isinstance(nongli, dict) or not nongli.get("dayGanZi"):
+            raise ToolTransportError(
+                bilingual("三式合一取三式农历失败（/nongli/time 未回日柱）。",
+                          "sanshiunited could not get the 三式 nongli (/nongli/time returned no day pillar)."),
+                code="tool.sanshiunited_nongli_unavailable",
+                details={"request": nongli_request},
+            )
+        display_solar = str(nongli.get("birth") or "")
+        if time_alg != 0:
+            solar = self._call_remote("/nongli/time", {**nongli_request, "timeAlg": 0})
+            solar_birth = solar.get("birth") if isinstance(solar, dict) else None
+            if solar_birth:
+                display_solar = str(solar_birth)
+            else:
+                # 上游 resolveDisplaySolarTime 同样回退到当前农历 birth（此时是钟表时）；headless 把回退说出来。
+                _degrade("三式合一真太阳时显示值不可得（/nongli/time timeAlg=0 未回 birth），【起盘信息】真太阳时行按直接时间显示")
+        chart_request = {
+            key: value
+            for key, value in {
+                "date": payload["date"],
+                "time": payload["time"],
+                "zone": payload["zone"],
+                "lat": payload["lat"],
+                "lon": payload["lon"],
+                "gpsLat": payload.get("gpsLat"),
+                "gpsLon": payload.get("gpsLon"),
+                "ad": payload.get("ad", 1),
+                "hsys": payload.get("hsys", 1),
+                "zodiacal": payload.get("zodiacal", 0),
+                "siderealAyanamsa": payload.get("siderealAyanamsa"),
+                "tradition": 0,
+                "predictive": 0,
+            }.items()
+            if value is not None
+        }
+        chart = self._call_remote("/chart", chart_request)
+        astro_chart = chart.get("chart") if isinstance(chart, dict) else None
+        if not isinstance(astro_chart, dict) or not astro_chart.get("objects"):
+            raise ToolTransportError(
+                bilingual("三式合一取星盘失败（/chart 未回 chart.objects）——六壬层月将 / 昼夜与外圈星盘都取自它。",
+                          "sanshiunited could not get the astro chart (/chart returned no chart.objects); the 六壬 "
+                          "layer's 月将 / day-night and the outer ring are read from it."),
+                code="tool.sanshiunited_chart_unavailable",
+                details={"request": chart_request},
+            )
+        is_diurnal = astro_chart.get("isDiurnal")
+
         qimen_result = self.run_tool(
             "qimen",
-            {**shared, "options": payload.get("qimen_options", {})},
+            {
+                **shared,
+                "options": qimen_options,
+                "nongli": nongli,
+                "context": {"displaySolarTime": display_solar, "isDiurnal": is_diurnal},
+            },
             save_result=False,
         )
         taiyi_result = self.run_tool(
             "taiyi",
-            {**shared, "options": taiyi_options},
+            {**shared, "options": taiyi_options, "nongli": nongli},
             save_result=False,
         )
-        liureng_result = self.run_tool(
-            "liureng_gods",
-            {
-                **shared,
-                "yue": payload.get("liureng_yue"),
-                "isDiurnal": payload.get("liureng_isDiurnal"),
-                # 六壬层口径（上游 SANSHI_PAGE_SETTINGS 六壬层 + guireng：换将/分昼夜/涉害/阴阳系/年神序/土旺衰）。
-                "options": liureng_options,
-            },
-            save_result=False,
-        )
-
-        # 口径参数认不出（*_invalid_option）是调用方输入错误，不是引擎故障：直接报错，不出「占位 + warning」的残盘。
-        for _res in (qimen_result, taiyi_result, liureng_result):
+        # 口径参数认不出（*_invalid_option）是调用方输入错误，不是引擎故障：直接报错，不出残盘。
+        for _res in (qimen_result, taiyi_result):
             _err_info = _res.error
             if not _res.ok and _err_info is not None and str(getattr(_err_info, "code", "")).endswith("_invalid_option"):
                 raise ToolValidationError(
@@ -12239,88 +12285,28 @@ class HorosaSkillService:
                     code=str(getattr(_err_info, "code", "")),
                     details=dict(getattr(_err_info, "details", None) or {}),
                 )
-        # 子技法失败不崩整盘（对应段落为占位），但必须在 envelope.warnings 里点名，不得静默。
+        if not qimen_result.ok:
+            # 上游 builder 缺奇门盘即回空串（buildSanShiUnitedSnapshotText:1447）——没有「占位」形态可出。
+            _err = qimen_result.error
+            raise ToolTransportError(
+                bilingual(f"三式合一子技法「奇门」计算失败，无法成盘：{(_err.message if _err else '') or '未知错误'}",
+                          "sanshiunited: the 奇门 sub-chart failed, so no united chart can be built."),
+                code="tool.sanshiunited_qimen_failed",
+                details={"qimen_error": _err.model_dump(mode="json") if _err else None},
+            )
         sub_warnings: list[str] = []
-        for _label, _res in (("奇门", qimen_result), ("太乙", taiyi_result), ("大六壬", liureng_result)):
-            if not _res.ok:
-                _err = (_res.error or {}).get("message") if isinstance(_res.error, dict) else _res.error
-                sub_warnings.append(f"三式合一子技法「{_label}」计算失败，相关段落以占位输出：{_err or '未知错误'}")
-        qimen_export = qimen_result.data.get("export_snapshot")
-        taiyi_export = taiyi_result.data.get("export_snapshot")
-        liureng_export = liureng_result.data.get("export_snapshot")
-        sections: list[tuple[str, str]] = [
-                ("起盘信息", _section_body(qimen_export, "起盘信息")),
-                (
-                    "概览",
-                    "\n".join(
-                        [
-                            _section_body(qimen_export, "盘型"),
-                            _section_body(qimen_export, "盘面要素"),
-                        ]
-                    ).strip(),
-                ),
-                ("太乙", _section_body(taiyi_export, "太乙盘")),
-                ("太乙十六宫", _section_body(taiyi_export, "十六宫标记")),
-                (
-                    "神煞",
-                    "\n".join(
-                        [
-                            _section_body(liureng_export, "基础神煞", ""),
-                            _section_body(liureng_export, "干煞", ""),
-                            _section_body(liureng_export, "月煞", ""),
-                            _section_body(liureng_export, "支煞", ""),
-                            _section_body(liureng_export, "岁煞", ""),
-                        ]
-                    ).strip()
-                    or "无",
-                ),
-                ("大六壬", _section_body(liureng_export, "四课")),
-                ("六壬大格", _section_body(liureng_export, "大格")),
-                ("六壬小局", _section_body(liureng_export, "小局")),
-                ("六壬参考", _section_body(liureng_export, "参考")),
-                ("六壬概览", _section_body(liureng_export, "概览")),
-                ("八宫详解", _section_body(qimen_export, "八宫详解")),
-                *_render_qimen_palace_sections(qimen_result.data.get("pan", {})),
-        ]
-        # 三式合一对齐独立页：复用三个独立技法（奇门/太乙/六壬）builder 已产出的富化段，
-        # 按前缀规则拼入（太乙 pan.sections 加「太乙」前缀避叠词、六壬断卦层保留原名、奇门派生加「奇门」
-        # 前缀避与六壬「概览」等碰撞），单一真值源不重复实现；缺段优雅降级为简短占位，不臆造。
-        for _out, _src in (
-            ("太乙主客定算", "主客定算"),
-            ("太乙八门与宿曜", "八门与宿曜"),
-            ("太乙断法", "断法"),
-            ("太乙七大兵法", "七大兵法"),
-            ("太乙博弈", "博弈"),
-            ("太乙命法", "命法"),
-            ("太乙命宫行限", "命宫行限"),
-        ):
-            sections.append((_out, _section_body(taiyi_export, _src, f"（本盘未产出「{_src}」）")))
-        # 段单逐字同上游 sanshiSnapshotSections.js SANSHI_LIURENG_DUANGUA_SECTIONS（v3.11.0 [Q-451/T-414]
-        # 补「七政」:44-45 行 —— 独立六壬快照有 [七政]、三式合一页也有「七政」页签，此前挑段单漏它）。
-        for _t in (
-            "十二盘式", "常用神煞", "年月神煞", "课体结构", "三传旺衰",
-            "空亡真假", "旬空落点", "陷空", "遁干特殊", "年命上神",
-            "毕法（已命中）", "占断向导", "七政",
-        ):
-            sections.append((_t, _section_body(liureng_export, _t, f"（本盘未产出「{_t}」）")))
-        for _out, _src in (
-            ("奇门九宫方盘", "九宫方盘"),
-            ("奇门旺相休囚死·月令能量", "旺相休囚死·月令能量"),
-            ("奇门六害总览", "六害总览"),
-            ("奇门化解方案", "化解方案"),
-            ("奇门八门化气大阵", "八门化气大阵"),
-            ("奇门用神分论", "用神分论"),
-            ("奇门财富七要", "财富七要"),
-            ("奇门事业七要", "事业七要"),
-            ("奇门恋爱姻缘", "恋爱姻缘"),
-            ("奇门孤辰寡宿", "孤辰寡宿"),
-        ):
-            sections.append((_out, _section_body(qimen_export, _src, f"（本盘未产出「{_src}」）")))
-        snapshot_text = _render_snapshot_text(sections)
-        # [紫微四化]：上游由紫微子页签上报的 UI 状态驱动（盘 + 选中的大运/流年下标），tab 未打开过
-        # 就整段不产。headless 把同一份选择开成 ziweiSihua 入参；紫微盘按**起课时间**另取一张
-        # （同上游「为三式起课时间取一张紫微盘」）。不给该入参就不产该段。
+        taiyi_pan = taiyi_result.data.get("pan") if taiyi_result.ok and isinstance(taiyi_result.data, dict) else None
+        if not taiyi_result.ok:
+            _err = taiyi_result.error
+            sub_warnings.append(
+                f"三式合一子技法「太乙」计算失败，【太乙】【太乙十六宫】及太乙派生段缺席：{(_err.message if _err else '') or '未知错误'}"
+            )
+
+        # [紫微四化]：上游由紫微子页签上报的 UI 状态驱动（盘 + 选中的大运/流年下标），tab 未打开过就整段不产。
+        # headless 把同一份选择开成 ziweiSihua 入参；紫微盘按**起课时间**另取一张（同上游 SanShiZiWeiSihua
+        # buildZiweiParams：共享时间算法 + 性别）。不给该入参就不产该段。
         sihua_opts = payload.get("ziweiSihua") if isinstance(payload.get("ziweiSihua"), dict) else None
+        ziwei_sihua: dict[str, Any] | None = None
         if sihua_opts is not None:
             try:
                 zw = self._call_remote(
@@ -12329,30 +12315,71 @@ class HorosaSkillService:
                 )
                 zw_chart = zw.get("chart") if isinstance(zw, dict) else None
                 if isinstance(zw_chart, dict):
-                    js_s = self.js_client.run(
-                        "sanshi_ziwei_sihua",
-                        {
-                            "chart": zw_chart,
-                            "daxianIdx": sihua_opts.get("daxianIdx") or 0,
-                            "liunianIdx": sihua_opts.get("liunianIdx") or 0,
-                        },
-                    )
-                    sihua_text = f"{(js_s or {}).get('text') or ''}".strip()
-                    if sihua_text:
-                        snapshot_text = f"{snapshot_text}\n\n{sihua_text}"
+                    ziwei_sihua = {
+                        "chart": zw_chart,
+                        "daxianIdx": sihua_opts.get("daxianIdx") or 0,
+                        "liunianIdx": sihua_opts.get("liunianIdx") or 0,
+                    }
+                else:
+                    _degrade("sanshi ziwei sihua: /ziwei/birth returned no chart")
             except Exception as exc:  # noqa: BLE001 — 富化失败不许带崩三式主盘
-                _degrade("sanshi ziwei sihua build failed: %s", exc)
+                _degrade("sanshi ziwei sihua fetch failed: %s", exc)
+
+        js_result = self.js_client.run(
+            "sanshiunited",
+            {
+                "date": payload["date"],
+                "time": payload["time"],
+                "zone": payload["zone"],
+                "lat": payload["lat"],
+                "lon": payload["lon"],
+                "gpsLat": payload.get("gpsLat"),
+                "gpsLon": payload.get("gpsLon"),
+                "ad": payload.get("ad", 1),
+                "options": {"timeAlg": time_alg, **day_switches, "sex": sex, "liureng": liureng_options},
+                "nongli": nongli,
+                "displaySolarTime": display_solar,
+                "dunjia": qimen_result.data.get("pan", {}),
+                "taiyi": taiyi_pan,
+                "chart": chart,
+                "ziweiSihua": ziwei_sihua,
+                "liurengYue": payload.get("liureng_yue"),
+                "liurengIsDiurnal": payload.get("liureng_isDiurnal"),
+            },
+        )
+        data = js_result.get("data") if isinstance(js_result.get("data"), dict) else {}
+        # 六壬层口径（贵人 / 换将 / 分昼夜 / 涉害 / 阴阳系 / 年神序 / 土旺衰）由 JS 按上游 SANSHI_PAGE_SETTINGS 词表校验；
+        # 其余失败（缺输入 / 三传起不出 / 快照空）是构建失败，不是参数错。
+        if isinstance(data.get("error"), dict) and data["error"].get("code") == "invalid_option":
+            _raise_js_option_error("sanshiunited", js_result)
+        snapshot_text = js_result.get("snapshot_text")
+        if not data.get("ok") or not isinstance(snapshot_text, str) or not snapshot_text.strip():
+            error = data.get("error") if isinstance(data.get("error"), dict) else {}
+            raise ToolTransportError(
+                bilingual(f"三式合一快照构建失败：{error.get('message') or '未知错误'}",
+                          "sanshiunited: building the united snapshot failed (see details.error)."),
+                code=f"tool.sanshiunited_{error.get('code') or 'snapshot_failed'}",
+                details={"error": error},
+            )
+        for note in data.get("warnings") or []:
+            sub_warnings.append(str(note))
+        subresults = {
+            "qimen": _build_compact_subresult_contract(qimen_result),
+            "taiyi": _build_compact_subresult_contract(taiyi_result),
+        }
         return {
             "qimen": qimen_result.data.get("pan", {}),
-            "taiyi": taiyi_result.data.get("pan", {}),
-            "liureng": liureng_result.data.get("liureng", {}),
-            "subresults": {
-                "qimen": _build_compact_subresult_contract(qimen_result),
-                "taiyi": _build_compact_subresult_contract(taiyi_result),
-                "liureng_gods": _build_compact_subresult_contract(liureng_result),
-            },
+            "taiyi": taiyi_pan or {},
+            "liureng": data.get("liureng") or {},
+            "subresults": subresults,
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="sanshiunited", snapshot_text=snapshot_text),
+            "prerequisites": {
+                "nongli_request": nongli_request,
+                "displaySolarTime": display_solar,
+                "chart_request": chart_request,
+                "isDiurnal": is_diurnal,
+            },
             **({"_warnings": sub_warnings} if sub_warnings else {}),
         }
 

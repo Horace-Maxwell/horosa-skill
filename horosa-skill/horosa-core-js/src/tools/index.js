@@ -38,6 +38,7 @@ import { runMundaneCards } from './mundaneCards.js';
 import { runBaziPeriod } from './baziPeriod.js';
 import { runZiweiExtras } from './ziweiExtras.js';
 import { runSanshiZiweiSihua } from './sanshiZiweiSihua.js';
+import { runSanshiUnited } from './sanshiUnited.js';
 import { runQimenZeri } from './qimenzeri.js';
 import { runZeriScan, runZeriScanRemote } from './zeriScan.js';
 import { runTianxing } from './tianxing.js';
@@ -60,6 +61,7 @@ const TOOL_RUNNERS = {
   bazi_period: runBaziPeriod,
   ziwei_extras: runZiweiExtras,
   sanshi_ziwei_sihua: runSanshiZiweiSihua,
+  sanshiunited: runSanshiUnited,
   qimenzeri: runQimenZeri,
   // 择日十技法（上游 v3.10.0）：六个本地扫描成员共用一个入口（technique 选路），
   // 七政/印度两个后端扫描成员共用另一个（只做 compile 校验 + 排版）。

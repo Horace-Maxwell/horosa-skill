@@ -138,6 +138,15 @@ def _section(text: str, title: str) -> str:
     return (body if nxt < 0 else body[:nxt]).strip()
 
 
+def _ss_section(text: str, title: str) -> str:
+    """三式合一快照段（v3.11.x wave-3 起由上游 buildSanShiUnitedSnapshotText 产出，段头是【】）。"""
+    head = f"【{title}】\n"
+    assert head in text, f"missing 【{title}】 in:\n{text[:1500]}"
+    body = text.split(head, 1)[1]
+    nxt = body.find("\n【")
+    return (body if nxt < 0 else body[:nxt]).strip()
+
+
 def _node(script: str) -> Any:
     proc = subprocess.run(
         ["node", "--input-type=module", "-e", script],
@@ -610,13 +619,13 @@ def test_sanshiunited_forwards_the_liureng_layer_options(tmp_path) -> None:
     缺省星占法 一课贵神天空；六壬法（0）→ 太阴；六壬法+阳阴系 → 昼夜互换回天空。
     旧代码：liureng_options 无入口（被静默忽略）→ 三次都是天空 → 红。"""
     service, _client = _replay_service(tmp_path)
-    first = lambda env: _section(env.data["snapshot_text"], "大六壬").splitlines()[0]  # noqa: E731
-    assert first(_run(service, "sanshi_default")) == "一课：地盘=辛，天盘=申，贵神=天空"
+    first = lambda env: _ss_section(env.data["snapshot_text"], "大六壬").splitlines()[0]  # noqa: E731
+    assert first(_run(service, "sanshi_default")) == "一课：辛申天空"
     liuren = _run(service, "sanshi_default", liureng_options={"guirengType": 0})
     assert liuren.ok, liuren.error
-    assert first(liuren) == "一课：地盘=辛，天盘=申，贵神=太阴"
+    assert first(liuren) == "一课：辛申太阴"
     swapped = _run(service, "sanshi_default", liureng_options={"guirengType": 0, "yinyangSystem": "yinyang"})
-    assert first(swapped) == "一课：地盘=辛，天盘=申，贵神=天空"
+    assert first(swapped) == "一课：辛申天空"
 
 
 def test_sanshiunited_rejects_what_upstream_locks(tmp_path) -> None:
@@ -640,12 +649,12 @@ def test_sanshiunited_taiyi_time_basis(tmp_path) -> None:
     env = _run(service, "sanshi_taiyi_true_solar")
     assert env.ok, env.error
     assert _calls(client, "/taiyi/pan")[-1]["timeBasis"] == "trueSolar"
-    board = _section(env.data["snapshot_text"], "太乙").splitlines()
+    board = _ss_section(env.data["snapshot_text"], "太乙").splitlines()
     assert "局式：陰遁十九局（理天）" in board and "主算：14 客算：16 定算：16" in board
-    default = _section(_run(service, "sanshi_default").data["snapshot_text"], "太乙").splitlines()
+    default = _ss_section(_run(service, "sanshi_default").data["snapshot_text"], "太乙").splitlines()
     assert "局式：陰遁十八局（理人）" in default
     # 同一张三式盘里奇门层按缺省置闰 + 真太阳时分量出盘（与独立 qimen 同源）。
-    assert "局数：阴遁一局中元" in _section(_run(service, "sanshi_default").data["snapshot_text"], "概览")
+    assert "局数：阴遁一局中元" in _ss_section(_run(service, "sanshi_default").data["snapshot_text"], "概览")
 
 
 def test_sanshi_chunk_guidance_publishes_option_vocabularies() -> None:

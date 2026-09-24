@@ -40,6 +40,11 @@ import { personBazi } from '../src/vendor/calendar/riziEngine.js';
 import { runZeriScan, ZERI_TECHNIQUES } from '../src/tools/zeriScan.js';
 import { runMundaneCards } from '../src/tools/mundaneCards.js';
 import { zeriRowOpts, withLeafKind } from '../src/tools/zeriSnapshotOpts.js';
+import { runSanshiUnited } from '../src/tools/sanshiUnited.js';
+import { calcDunJia } from '../src/vendor/dunjia/DunJiaCalc.js';
+import { buildLocalJieqiYearSeed } from '../src/shared/localNongliAdapter.js';
+import { makeFields } from '../src/shared/fields.js';
+import { buildLiuRengLayout as lrmLayout, buildKeData as lrmKe, buildSanChuanData as lrmSanChuan } from '../src/vendor/liureng/LiuRengMain.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const chart = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_traditional.json'), 'utf8'));
@@ -1040,6 +1045,41 @@ check('election [回归与主限] 值级金标：回归盘利钝 + 主限命中�
   // 有效主限时间钥匙由引擎解析器给（流派档 × 覆写），Python 不手抄。
   assert(runElectionTool({ chart, action: 'resolve_params', options: { pdTimeKey: 'Naibod' } }).data.effective.pdTimeKey === 'Naibod', 'override pdTimeKey');
   assert(runElectionTool({ chart, action: 'resolve_params' }).data.effective.pdTimeKey === 'Ptolemy', 'default pdTimeKey');
+});
+
+// 🔴 wave-3 值级金标：三式合一快照由 vendored 上游 buildSanShiUnitedSnapshotText 产出（tools/sanshiUnited.js 按上游
+// performRecalcByNongli 装配）。六壬层用 SanShiUnitedMain 自带的 buildLiuRengLayout/buildKeData/buildSanChuan、占时取奇门盘
+// 时柱（buildLrNongli）；这里拿独立六壬页的同名三函数（vendored LiuRengMain）在同盘同时柱上再起一遍课 —— 两份上游实现
+// 逐课逐传一致即权威。盘：chart_liureng.json（2026-04-04 21:18 上海，戊申日癸亥时，月将戌，星占法贵人，夜占）。
+// 【大六壬】行格式 = SanShiUnitedMain.js:1534-1544（日干/上神/天将连写、空行、三传带天将、递生递克 + 徽记）。
+// 负向对照：【大六壬】改回旧的 [四课] 体（「一课：地盘=戊，天盘=辰…」）或占时不取奇门盘时柱，本条即红。
+check('sanshiUnited 值级金标：【大六壬】= 两份上游六壬实现同盘互证 + 上游行格式', () => {
+  const nongli = liurengFix.liureng.nongli;
+  const base = { date: '2026-04-04', time: '21:18:00', zone: '+08:00', lat: '31n13', lon: '121e28' };
+  const dunjia = calcDunJia(makeFields(base), nongli,
+    { paiPanType: 3, qijuMethod: 'zhirun', school: '转盘', timeAlg: 0, after23NewDay: 1, lateZiHourUseNextDay: 1 },
+    { year: 2026, jieqiYearSeeds: { 2025: buildLocalJieqiYearSeed(2025, '+08:00'), 2026: buildLocalJieqiYearSeed(2026, '+08:00') },
+      isDiurnal: liurengFix.chart.chart.isDiurnal, displaySolarTime: nongli.birth });
+  const r = runSanshiUnited({ ...base, options: {}, nongli, displaySolarTime: nongli.birth, dunjia, chart: liurengFix.chart });
+  assert(r.data.ok === true && r.data.warnings.length === 0, `sanshiUnited failed: ${JSON.stringify(r.data.error || r.data.warnings)}`);
+  const text = r.snapshot_text;
+  const block = (t) => ((text.split(`【${t}】\n`)[1] || '').split('\n【')[0].trim().split('\n'));
+  const chartObj = { ...liurengFix.chart.chart, nongli: { ...nongli, dayGanZi: dunjia.ganzhi.day, time: dunjia.ganzhi.time } };
+  const lay = lrmLayout(chartObj, 2, null);
+  const ke = lrmKe(lay, chartObj);
+  const sc = lrmSanChuan(lay, ke.raw, chartObj, null);
+  const fromLrm = [
+    ...ke.raw.map((k, i) => `${'一二三四'[i]}课：${k[2]}${k[1]}${k[0]}`), '',
+    ...sc.cuang.map((gz, i) => `${'初中末'[i]}传：${gz}（${sc.tianJiang[i]}）`),
+  ];
+  const dalr = block('大六壬');
+  assert(JSON.stringify(dalr.slice(0, 8)) === JSON.stringify(fromLrm), `三式六壬层 ≠ 独立六壬引擎：${JSON.stringify(dalr)} vs ${JSON.stringify(fromLrm)}`);
+  assert(JSON.stringify(dalr) === JSON.stringify([
+    '一课：戊辰朱雀', '二课：辰卯螣蛇', '三课：申未青龙', '四课：未午勾陈', '',
+    '初传：空卯（螣蛇）', '中传：空寅（贵人）', '末传：癸丑（天后）',
+    '三传递生递克：初传→中传 比和；中传→末传 克', '逐传徽记：中传寅(马)',
+  ]), `【大六壬】${JSON.stringify(dalr)}`);
+  assert(block('起盘信息').includes('月将：戌') && block('起盘信息').includes('四柱：丙午年/辛卯月/戊申日/癸亥时'), `【起盘信息】${JSON.stringify(block('起盘信息'))}`);
 });
 
 await Promise.all(pending);

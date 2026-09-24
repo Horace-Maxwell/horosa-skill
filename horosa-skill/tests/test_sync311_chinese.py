@@ -313,39 +313,19 @@ console.log(JSON.stringify({ pan: pan ? { name: pan.sanChuan.name, cuang: pan.sa
 
 # ────────────────────────────── 三式合一 ──────────────────────────────
 
-_QIZHENG_BLOCK = "\n".join([
-    "[七政]",
-    "| 七政 | 临支 | 五行 | 度数 | 逆行 | 备注 |",
-    "| --- | --- | --- | --- | --- | --- |",
-    "| 日 | 戌 | 火 | 14° | — | 月将(太阳过宫) |",
-    "| 月 | 巳 | 水 | 5° | — | — |",
-])
-
-
-class _SanshiJs(FakeJsClient):
-    """六壬子技法桩带真形状的 [七政] 段（与 tools/liureng.js buildQiZhengItems 同表头）。"""
-
-    def run(self, tool_name: str, payload: dict[str, object]) -> dict:
-        out = super().run(tool_name, payload)
-        if tool_name == "liureng":
-            out = {**out, "snapshot_text": f"{out['snapshot_text']}\n\n{_QIZHENG_BLOCK}"}
-        return out
-
-
-def test_sanshiunited_picks_liureng_qizheng_section(tmp_path) -> None:
-    """[Q-451/T-414]（sanshiSnapshotSections.js:44-45）三式合一挑段单补「七政」。旧挑段单漏它 → 红。"""
-    settings = _settings(tmp_path)
-    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=_SanshiJs())
-    env = service.run_tool(
-        "sanshiunited",
-        {"date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28",
-         "agent_confirmed_settings": True},
-        save_result=False,
+@requires_node
+def test_sanshiunited_picks_liureng_qizheng_section() -> None:
+    """[Q-451/T-414]（sanshiSnapshotSections.js:44-45）三式合一挑段单补「七政」。旧挑段单漏它 → 红。
+    v3.11.x wave-3 起三式快照由 vendored 上游 buildSanShiUnitedSnapshotText 产出、挑段单即 vendored
+    sanshiSnapshotSections.js（不再经 liureng 子工具桩注入），故直接断言单源段单；真盘产段由
+    tests/test_sync311_sanshiunited.py 的 live 回放金标（含【七政】）守。"""
+    res = _node(
+        """
+import { SANSHI_LIURENG_DUANGUA_SECTIONS } from './src/vendor/sanshi/sanshiSnapshotSections.js';
+console.log(JSON.stringify({ picks: SANSHI_LIURENG_DUANGUA_SECTIONS }));
+"""
     )
-    assert env.ok, env.error
-    assert _section(env.data["snapshot_text"], "七政") == _QIZHENG_BLOCK.split("\n", 1)[1]
-    export = env.data["export_snapshot"]
-    assert "七政" in export["section_titles_detected"] and export["unknown_detected_sections"] == []
+    assert res["picks"][-1] == "七政" and res["picks"].index("占断向导") == len(res["picks"]) - 2
 
 
 # ────────────────────────────── 七政四余 ──────────────────────────────

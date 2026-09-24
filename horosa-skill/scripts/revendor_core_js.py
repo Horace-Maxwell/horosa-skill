@@ -528,6 +528,33 @@ def _stubbed_names_still_used(text: str, stubbed: list[tuple[str, set[str], str]
     return notes
 
 
+def _tail_exports_defined_in_head(head: str, tail: str) -> list[str]:
+    """Names in the dropped tail's aggregate `export { … }` lists that the kept head declares.
+
+    Upstream often declares pure helpers above the React class and exports them *after* it — LiuRengMain.js ends
+    with `export { buildLiuRengReferenceBundle, buildReferenceDocumentText, … }`. Cutting the tail wholesale
+    silently narrows the module's export surface: the helpers are still defined but no longer exported, so a
+    vendored caller's named import fails to link (`does not provide an export named …`) — which is exactly how
+    SanShiUnitedMain.js (it imports four of them) first failed to load. Keep the entries whose local name is a
+    top-level declaration of the head; tail-only names would be a ReferenceError, so they stay dropped.
+    """
+    kept: list[str] = []
+    for block in re.findall(r"^export\s*\{([^}]*)\}\s*;?", tail, re.M):
+        for part in block.split(","):
+            entry = " ".join(part.split())
+            if not entry:
+                continue
+            local = re.split(r"\s+as\s+", entry)[0]
+            declared = re.search(
+                rf"^(?:export\s+)?(?:async\s+)?(?:function\s*\*?|const|let|var|class)\s+{re.escape(local)}(?![\w$])",
+                head,
+                re.M,
+            )
+            if declared and entry not in kept:
+                kept.append(entry)
+    return kept
+
+
 def apply_deviations(text: str, deviations: list[dict]) -> tuple[str, list[str]]:
     notes: list[str] = []
     stubbed: list[tuple[str, set[str], str]] = []
@@ -577,8 +604,13 @@ def apply_deviations(text: str, deviations: list[dict]) -> tuple[str, list[str]]
                 notes.append(f"⚠ truncate_before anchor not found: {dev['anchor']}")
             else:
                 dropped = text[m.start():].count("\n") + 1
+                tail = text[m.start():]
                 text = text[: m.start()].rstrip() + "\n"
                 notes.append(f"truncated at /{dev['anchor']}/ (dropped {dropped} trailing line(s))")
+                kept = _tail_exports_defined_in_head(text, tail)
+                if kept:
+                    text += "\nexport {\n" + "".join(f"\t{name},\n" for name in kept) + "};\n"
+                    notes.append(f"kept tail export list ×{len(kept)} (head-defined names)")
         else:
             notes.append(f"⚠ unknown deviation kind: {kind}")
     notes.extend(_stubbed_names_still_used(text, stubbed))

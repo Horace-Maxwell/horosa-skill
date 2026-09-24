@@ -4624,3 +4624,14 @@ export function buildLiuRengSnapshotText(params, liureng, runyear, chartObj, gui
 
 	return lines.join('\n').trim();
 }
+
+export {
+	buildLiuRengReferenceBundle,
+	buildReferenceDocumentText,
+	buildOverviewReferenceText,
+	XIAO_JU_REFERENCE_TAB_KEYS,
+	liurengChouBranch,
+	buildQiZhengItems,
+	QIZHENG_PLANET_COLOR,
+	QIZHENG_WUXING_COLOR,
+};

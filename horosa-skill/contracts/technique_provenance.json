@@ -789,9 +789,11 @@
     "sanshiunited": {
       "compute_class": "composite",
       "engines": [
-        "sanshi_ziwei_sihua"
+        "sanshiunited"
       ],
       "endpoints": [
+        "/chart",
+        "/nongli/time",
         "/ziwei/birth"
       ],
       "export_technique": "sanshiunited",

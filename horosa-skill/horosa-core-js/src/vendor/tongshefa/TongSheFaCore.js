@@ -665,7 +665,7 @@ function uniqBagua(list){
 	return out;
 }
 
-export function buildTongSheFaModel(selection){
+function buildTongSheFaModel(selection){
 	const selected = normalizeSelection(selection);
 	const taiyin = getBagua(selected.taiyin);
 	const taiyang = getBagua(selected.taiyang);
@@ -798,7 +798,7 @@ function buildYaoWeiSection(model){
 	return lines;
 }
 
-export function buildTongSheFaSnapshot(model){
+function buildTongSheFaSnapshot(model){
 	const parts = [];
 	parts.push(...buildHexSnapshotSection('本卦', model.baseLeft, model.baseRight));
 	parts.push('');
@@ -1073,3 +1073,8 @@ function buildBigPatternChangeSection(model){
 	}
 	return parts;
 }
+
+export {
+	buildTongSheFaModel,
+	buildTongSheFaSnapshot,
+};
