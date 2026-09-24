@@ -36,6 +36,7 @@ import { runHuangli } from '../src/tools/huangli.js';
 import { runLiuyao } from '../src/tools/liuyao.js';
 import { personBazi } from '../src/vendor/calendar/riziEngine.js';
 import { runZeriScan, ZERI_TECHNIQUES } from '../src/tools/zeriScan.js';
+import { zeriRowOpts, withLeafKind } from '../src/tools/zeriSnapshotOpts.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const chart = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_traditional.json'), 'utf8'));
@@ -321,8 +322,10 @@ check('yizhangjing gradeSet/leapRule 走到引擎：天驛 中品→下品；闰
   assert(half.data.input.leap === true && half.data.input.day === 15 && half.data.input.month === 2, `half: ${JSON.stringify(half.data.input)}`);
   // 上游 v3.11.0 [Q-265/SO-20⑧ 术语校正]：钟面 00:xx 是夜半后的「早子」，全局「晚子时」专指 23 时档 → 注记改「(早子)」，判定不变。
   assert(midnight.data.input.month === 3 && midnight.data.input.monthNote === '闰月·十五夜半(早子)作下月', `midnight: ${JSON.stringify(midnight.data.input)}`);
-  // 负向对照：23:30 不满足引擎的 00:xx 条件，夜半折半不得作下月
-  const notLate = runYizhangjing({ ...leap, time: '23:30:00', leapRule: 'midnight' });
+  // 负向对照：23:30 不满足引擎的 00:xx 条件，夜半折半不得作下月。
+  // 显式 after23NewDay:0 —— 一掌经日界缺省已随上游改为 1（23 点算次日，YiZhangJingMain.js:127），
+  // 那样 23:30 的农历日先进位成十六、按「十五后作下月」走的是另一条分支；本对照只考 00:xx 条件本身。
+  const notLate = runYizhangjing({ ...leap, time: '23:30:00', leapRule: 'midnight', after23NewDay: 0 });
   assert(notLate.data.input.month === 2, `23:30 must stay month 2: ${JSON.stringify(notLate.data.input)}`);
 });
 
@@ -545,6 +548,42 @@ check('zeriScan 择日六技法：命中区间锚定到独立算出的真值', a
   assert(bogus.data.ok === false && bogus.data.error.code === 'invalid_conditions',
     `未知条件类应结构化报错，实得 ${JSON.stringify(bogus.data)}`);
   assert(Object.keys(ZERI_TECHNIQUES).length === 6, '本地扫描成员应为 6 个');
+});
+
+check('liurengzeri 六壬择时真的起课：三传引擎 ChuangChart 接线 + 贵人流派改命中集', async () => {
+  // 回归锚：vendored LiuRengMain.js 曾把 ChuangChart（三传引擎类）当 React 元素桩掉 → buildSanChuanData 抛
+  // ReferenceError 被吞成 null → 每个时刻都「起盘失败」→ 六壬择时恒零命中（上面那条探针只断言 hit_count 有限，看不见）。
+  // 真值：2028-04-01 福州，贵人流派 2（星阙默认）贵人临寅于 01:07–03:07、05:55–07:07；流派 0 只在 05:07–05:55。
+  // 权威：同刻 live 后端 liureng_gods（guirengType 2，01:02 起盘）二课「地盘寅→天盘亥→贵神贵人」= 贵人临寅
+  // （2026-09-24 vendored v3.11.1+ 实例实测）；两流派贵人歌诀不同故命中集不同。
+  const geo = { zone: '+08:00', lon: '119e18', lat: '26n05', gpsLon: 119.3, gpsLat: 26.08 };
+  const cfg = { startDate: '2028-04-01', startTime: '00:00', endDate: '2028-04-01', endTime: '23:59' };
+  const tree = { kind: 'group', joiner: 'all', children: [{ kind: 'leaf', type: 'guiren_pos', params: { values: ['寅'], dir: 'any' } }] };
+  const rows = async (guirengType) => (await runZeriScan({ technique: 'liurengzeri', action: 'scan', cfg, geo, options: { guirengType }, tree }))
+    .data.intervals.map((r) => `${r.start}~${r.end}`);
+  assert(JSON.stringify(await rows(2)) === JSON.stringify(['2028-04-01 01:07~2028-04-01 03:07', '2028-04-01 05:55~2028-04-01 07:07']),
+    `流派 2 应在两段临寅，实得 ${JSON.stringify(await rows(2))}`);
+  assert(JSON.stringify(await rows(0)) === JSON.stringify(['2028-04-01 05:07~2028-04-01 05:55']),
+    `流派 0 应只在一段临寅，实得 ${JSON.stringify(await rows(0))}`);
+});
+
+check('zeriSnapshotOpts 命中清单两旋钮 + 前 N 行判读树（紫微择时木三局）', async () => {
+  // 权威：vendored utils/zeriSnapshotPrefs.js（上游 [Q-452 裁决 A / Q-453]）：maxRows 夹到 10–500（缺省 60），
+  // explainRows 0–20（缺省 3）；判读树 = 工作台「详情▼」同源 explainAt，设定文本按 UI 叶 DFS 配对（zeriExplainText）。
+  assert(JSON.stringify(zeriRowOpts({ maxRows: 1 })) === JSON.stringify({ maxRows: 10, explainRows: 3 }), 'maxRows 下限 10、判读缺省 3');
+  assert(withLeafKind({ kind: 'group', children: [{ type: 'x' }] }).children[0].kind === 'leaf', '裸叶补 kind:leaf');
+  const geo = { zone: '+08:00', lon: '119e18', lat: '26n05', gpsLon: 119.3, gpsLat: 26.08 };
+  const cfg = { startDate: '2028-04-01', startTime: '00:00', endDate: '2028-04-02', endTime: '23:59' };
+  const tree = { kind: 'group', joiner: 'all', children: [{ kind: 'leaf', type: 'wuxing_ju', params: { values: ['3'] } }] };
+  const scan = await runZeriScan({ technique: 'ziweizeri', action: 'scan', cfg, geo, options: {}, tree });
+  assert(scan.data.hit_count === 4, `两天窗木三局应 4 段，实得 ${scan.data.hit_count}`);
+  const snap = await runZeriScan({ technique: 'ziweizeri', action: 'snapshot', cfg, geo, options: {}, tree, results: scan.data.intervals });
+  const text = snap.snapshot_text;
+  assert(text.split('   判读:').length - 1 === 3, `缺省前 3 行附判读树，实得 ${text.split('   判读:').length - 1}`);
+  assert(text.includes('1. 2028-04-01 13:00 ~ 2028-04-01 15:00(120分) 命宫酉·空宫·木三局\n   判读:\n     · 设定 五行局·五行局:3 → 实际 木三局 ✓'),
+    '首行判读树：设定配到 UI 叶、实际来自同源求值');
+  const none = await runZeriScan({ technique: 'ziweizeri', action: 'snapshot', cfg, geo, options: {}, tree, results: scan.data.intervals, explainRows: 0 });
+  assert(none.snapshot_text.split('判读:').length - 1 === 0, 'explainRows=0 不附判读树');
 });
 
 check('xiaoliuren(dao) 三数起三传 + 生克/化解，determinism', () => {

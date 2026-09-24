@@ -488,6 +488,13 @@ FREE_TEXT_GATE_FIELDS: frozenset[str] = frozenset({
 })
 
 
+# [Q-452 裁决 A / Q-453] 择日十技法 + 天星的快照「命中清单」两旋钮（上游 utils/zeriSnapshotPrefs.js 缺省）。
+ZERI_SNAPSHOT_SAFE_DEFAULTS: list[dict[str, Any]] = [
+    {"field": "zeriSnapshotMaxRows", "value": 60, "meaning": "快照命中清单最多列 60 行（可调 10–500；上游全局缺省）"},
+    {"field": "zeriSnapshotExplainRows", "value": 3, "meaning": "清单前 3 行各附一棵判读树（设定 vs 实际 ✓✗，与扫描同源；可调 0–20，0=不附；上游全局缺省）"},
+]
+
+
 TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     "export_registry": _policy(
         intent="Inspect Xingque export registry.",
@@ -561,6 +568,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         safe_defaults=[
             {"field": "paiPanType", "value": 3, "meaning": "时家奇门"},
             {"field": "maxSpanDays", "value": 92, "meaning": "搜索窗上限；更长请分段，否则 JS 引擎会超时"},
+            {"field": "options", "value": "扫描口径", "meaning": "展示盘跟随扫描口径：顶层与 options 合并（options 优先）后整包回写展示盘（上游 QimenZeriMain.onPickInterval）"},
+            *ZERI_SNAPSHOT_SAFE_DEFAULTS,
         ],
         do_not_assume=["搜索时间窗", "择日条件", "location", "non-default qijuMethod"],
         output_contract=(
@@ -590,6 +599,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         safe_defaults=[
             {"field": "maxSpanDays", "value": 366, "meaning": "搜索窗上限；更长请分段"},
+            *ZERI_SNAPSHOT_SAFE_DEFAULTS,
         ],
         do_not_assume=["搜索时间窗", "择日条件", "location"],
         output_contract=(
@@ -618,6 +628,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         safe_defaults=[
             {"field": "maxSpanDays", "value": 92, "meaning": "搜索窗上限；更长请分段"},
+            {"field": "options", "value": {"timeAlg": 0, "after23NewDay": 1, "lateZiHourUseNextDay": 1, "godKeyPos": "年", "phaseType": 0}, "meaning": "八字择时页出厂扫描口径（BaziZeriMain.js:80），调用方未给的键以此打底；展示盘（bazi_birth）同跟这五键"},
+            *ZERI_SNAPSHOT_SAFE_DEFAULTS,
         ],
         do_not_assume=["搜索时间窗", "择日条件", "location"],
         output_contract=(
@@ -646,6 +658,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         safe_defaults=[
             {"field": "maxSpanDays", "value": 92, "meaning": "搜索窗上限；更长请分段"},
+            {"field": "options", "value": {"tn": 0}, "meaning": "太乙择时页出厂扫描口径（TaiyiZeriMain.js:47）；展示盘同跟 tn/sex 与日界（缺省 0 = 扫描引擎缺省）"},
+            *ZERI_SNAPSHOT_SAFE_DEFAULTS,
         ],
         do_not_assume=["搜索时间窗", "择日条件", "location"],
         output_contract=(
@@ -671,9 +685,12 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "conditions", "question": "择日要满足什么条件？"},
             {"field": "location", "question": "起盘地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
             {"field": "topic", "question": "这次择日是为什么事？（搬家/开业/婚嫁…）"},
+            {"field": "gender", "question": "紫微择时按男命还是女命起盘？（扫描按性别起命盘，影响阴阳局与宫位条件）", "options": ["男（星阙默认）", "女"]},
         ],
         safe_defaults=[
             {"field": "maxSpanDays", "value": 92, "meaning": "搜索窗上限；更长请分段"},
+            {"field": "options", "value": {"timeAlg": 1, "gender": 1}, "meaning": "紫微择时页出厂扫描口径（ZiweiZeriMain.js:72：钟表时、男）；顶层 gender/timeAlg 与 options 双读，展示盘（ziwei_birth）同跟"},
+            *ZERI_SNAPSHOT_SAFE_DEFAULTS,
         ],
         do_not_assume=["搜索时间窗", "择日条件", "location"],
         output_contract=(
@@ -702,6 +719,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         safe_defaults=[
             {"field": "maxSpanDays", "value": 92, "meaning": "搜索窗上限；更长请分段"},
+            {"field": "options", "value": {"guirengType": 2, "yueMode": "zhongqi", "after23NewDay": 1, "lateZiHourUseNextDay": 1}, "meaning": "六壬择时页出厂扫描口径（LiurengZeriMain.js:79；贵人 2 = 星阙默认取法，扫描引擎自身缺省是 0）；展示盘（liureng_gods）同跟贵人与日界，节气换将 yueMode=jieqi 尚不能随到展示盘"},
+            *ZERI_SNAPSHOT_SAFE_DEFAULTS,
         ],
         do_not_assume=["搜索时间窗", "择日条件", "location"],
         output_contract=(
@@ -730,6 +749,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         safe_defaults=[
             {"field": "maxSpanDays", "value": 92, "meaning": "搜索窗上限；更长请分段"},
+            {"field": "options", "value": {"guirengType": 2, "yueMode": "zhongqi", "taiyiAccum": 0, "after23NewDay": 1, "lateZiHourUseNextDay": 1, "timeAlg": 0}, "meaning": "三式择时页出厂扫描口径（SanshiZeriMain.js:80）；展示盘同跟时间三键/奇门盘式键/taiyiAccum，六壬贵人与节气换将尚不能随到 sanshiunited 展示盘"},
+            *ZERI_SNAPSHOT_SAFE_DEFAULTS,
         ],
         do_not_assume=["搜索时间窗", "择日条件", "location"],
         output_contract=(
@@ -758,6 +779,10 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         safe_defaults=[
             {"field": "maxSpanDays", "value": 731, "meaning": "搜索窗上限；更长请分段"},
+            {"field": "su28Mode", "value": 2, "meaning": "宿度制回归今宿（七政择时页出厂，QizhengZeriMain.js:56）；扫描只支持 2/3（3=开禧宿度）"},
+            {"field": "nodeType", "value": "mean", "meaning": "罗计平交点（页面出厂）；true=真交点，展示盘同跟（guolaoNodeType）"},
+            {"field": "lilithType", "value": "mean", "meaning": "月孛平远地点（页面出厂）；true=真远地点，展示盘同跟（guolaoLilithType）；宿度制尚不能随到展示盘"},
+            *ZERI_SNAPSHOT_SAFE_DEFAULTS,
         ],
         do_not_assume=["搜索时间窗", "择日条件", "location"],
         output_contract=(
@@ -786,6 +811,9 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         safe_defaults=[
             {"field": "maxSpanDays", "value": 731, "meaning": "搜索窗上限；更长请分段"},
+            {"field": "indiaAyanamsa", "value": "lahiri", "meaning": "扫描岁差制（IndiaScanContext 读 ayanamsa，缺省 lahiri；indiaAyanamsa 为同词表别名，显式 ayanamsa 优先）"},
+            {"field": "nodeType", "value": "mean", "meaning": "罗睺计都平交点（印度择时页出厂，IndiaZeriMain.js:57）；true=真交点"},
+            *ZERI_SNAPSHOT_SAFE_DEFAULTS,
         ],
         do_not_assume=["搜索时间窗", "择日条件", "location"],
         output_contract=(
@@ -819,7 +847,14 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "topic", "question": "这次择日是为什么事？"},
             {"field": "hsys", "question": "宫制是否沿用默认？", "options": ["默认", "指定宫制"]},
         ],
-        safe_defaults=[{"field": "precision", "value": "minute", "meaning": "扫描到分钟"}],
+        safe_defaults=[
+            {"field": "precision", "value": "minute", "meaning": "扫描到分钟"},
+            {"field": "lotReversal/lotFortuneVariant/hermeticLotsReversal", "value": "1/standard/1",
+             "meaning": "希腊点口径与主排盘同式（上游缺省：福点昼夜反转、标准福点式、七星点反转）；顶层或 options 传入即进扫描与 [选中时刻星盘]"},
+            {"field": "userAyanT0/userAyanDeg", "value": None,
+             "meaning": "siderealAyanamsa='user' 档的历元 JD 与该历元岁差度（缺参按 Lahiri）；进扫描与 [选中时刻星盘]"},
+            *ZERI_SNAPSHOT_SAFE_DEFAULTS,
+        ],
         do_not_assume=["搜索时间窗", "征象条件", "location"],
         output_contract=(
             "intervals 为命中时段（含 pick/pickEnd 边界安全时刻）。零命中时 [命中区间] 段仍会出现并写明"
@@ -989,11 +1024,36 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         do_not_assume=["question"],
     ),
     "sixyao": _policy(
-        intent="六爻/易卦。",
+        intent=(
+            "六爻/易卦。"
+            "\n判读口径 liuyaoSettings = 上游六爻挂载齿轮 24 键（扁平形；选 school 即按上游 mergeLiuyaoGearSettings "
+            "套该派细项，其余键再叠上）：school=default 通用·卜筮正宗口径（缺省）/zengshan 增删卜易/yiyin 易隐/"
+            "xinpai 邵伟华新派/mangpai 盲派/tianji 断易天机；askType 占测事项(定用神)=self（缺省）、opponent、wealth、"
+            "career、marriage_m、marriage_f、illness、parents、children、doctor、sibling、thief、weather_rain、weather_sun、"
+            "lost、travel、lawsuit、home、guishen、study、guochao；yongOverride ''(跟占测事项)/父母/兄弟/子孙/妻财/官鬼/世/应；"
+            "benming ''(不用)/子…亥；tuChangsheng water（缺省）/fire/off；bianyaoScope traditional（缺省）/blind；"
+            "fushen missing（缺省）/all；yuepoMode inMonth（缺省）/always；shishen off（缺省）/standard/lichunfeng；"
+            "jinTuiTu chain（缺省）/break（考据声明项，两档输出恒同）；tianshiSchool fumu（缺省）/ancient；"
+            "yearBoundary lichun（缺省）/lunar；开关（1/0）guashen=1 sixGods=1 yuqi=0 yingqi=1 doctrine=1 gufa=0 "
+            "yueLiushen=0 shenshaOn=1 shenshaExOn=0；guirenFa standard（缺省）/geng_ma_hu；shenshaBase day（缺省）/year；"
+            "shenshaSet=神煞名数组（缺省 天乙贵人/禄神/羊刃/驿马/桃花/将星/华盖/劫煞/亡神）。"
+            "\n如实：shishen/tianshiSchool/yuqi/gufa/yueLiushen/shenshaExOn 只改上游 [断诀命中]/[占类断语] 两段，"
+            "本工具尚不产这两段 → 传了会在 warnings 里点名、不改输出；认不出的键/不在词表的值同样回执在 warnings。"
+        ),
         required_context=COMMON_LOCATION_FIELDS + ["question", "lines or gua_code"],
         ask_if_missing=[
             {"field": "question", "question": "这卦要问什么事？"},
             {"field": "lines/gua_code", "question": "卦怎么来？", "options": ["用户给六爻阴阳动静", "用户给本卦/变卦", "使用指定起卦法后再算"]},
+            {"field": "liuyaoSettings.askType", "question": "所问归哪一类？（决定用神取用）", "options": ["自身/综合 self", "求财 wealth", "功名/工作 career", "婚姻（男测 marriage_m / 女测 marriage_f）", "疾病 illness", "其他（见 intent 全表）"]},
+            {"field": "liuyaoSettings.school", "question": "断卦流派沿用星阙默认吗？", "options": ["通用·卜筮正宗口径（默认）", "增删卜易 zengshan", "易隐 yiyin", "邵伟华新派 xinpai", "盲派 mangpai", "断易天机 tianji"]},
+            {"field": "timeAlg", "question": "占时用真太阳时还是直接时间？", "options": ["真太阳时（星阙默认）", "直接时间（钟表时）"]},
+        ],
+        safe_defaults=[
+            {"field": "timeAlg", "value": 0, "meaning": "真太阳时（上游 [Q-390/T-372]：页面 > 全局 > 缺省真太阳时）"},
+            {"field": "after23NewDay", "value": 1, "meaning": "23 点后归次日（不发送 = 后端默认 = 星阙出厂全局默认）"},
+            {"field": "lateZiHourUseNextDay", "value": 1, "meaning": "晚子时时干按次日日干起（不发送 = 后端默认 = 星阙出厂全局默认）"},
+            {"field": "liuyaoSettings.school", "value": "default", "meaning": "通用（卜筮正宗口径），上游 DEFAULT_LIUYAO_SETTINGS"},
+            {"field": "liuyaoSettings.askType", "value": "self", "meaning": "自身/综合运势；问事明确时应按所问改"},
         ],
         do_not_assume=["lines", "gua_code", "question"],
     ),
@@ -1027,23 +1087,37 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ask_if_missing=[
             {"field": "date/time/place", "question": "请提供出生日期、时间、经度（真太阳时用）和性别。"},
             {"field": "timeAlg", "question": "用真太阳时还是钟表时？", "options": ["钟表时（星阙河洛默认）", "真太阳时（按经度+均时差校正）"]},
+            {"field": "quHuaGong", "question": "取化工法用哪一档？（只在四立前十八日土用期生人有差）", "options": ["土王寄坤艮（星阙默认）", "直取四方伯 siFangBoOnly"]},
         ],
         safe_defaults=[
             {"field": "timeAlg", "value": 1, "meaning": "钟表时，对应 HeLuoMain.js 的默认"},
+            {"field": "quHuaGong", "value": "tuWangKunGen", "meaning": "土王寄坤艮：土用期补坤艮/反乾兑（上游挂载 schema 缺省）；改 siFangBoOnly 只动 [命运篇] 化工/反化工行"},
+            {"field": "huangdiOffset", "value": 2697, "meaning": "纪年基准（公历=黄帝纪元−2697，上游缺省）；只动 [断验] 纪年行"},
         ],
         do_not_assume=["gender"],
     ),
     "yizhangjing": _policy(
-        intent="一掌经：农历生辰四宫十二星（六道），排命宫/人事十二宫/格局/重犯/大限/小限流年十二神，可叠神煞合参层。",
+        intent=(
+            "一掌经：农历生辰四宫十二星（六道），排命宫/人事十二宫/格局/重犯/大限/小限流年十二神，可叠神煞合参层。"
+            "\n排盘选项 = 上游 KinAstroMain.buildYizhangjingOpts 同键，缺省 = 桌面出厂档（「秘传口诀」预设）："
+            "shunniRule yangNanYinNv/menShunNvNi；mingGongMethod shiShang/shuZhiMao；dingYue lunar/jieqi；"
+            "dayunLength 7/10；dayunStartAge mi/age1；xiaoxianStart ri/yue；xiaoxianDir chart/always；"
+            "annualMethod xiaoxian（小限，出厂）/liunian（流年十二神，同时出 [流年总论]）；flowShenSet A/B/C；"
+            "leapRule half/midnight；zaoZiAdjust；starNaming A/B/C；daoTerm gui/edao；gradeSet standard/variant；"
+            "chongfanKou alpha/beta；tongxianShow（童限，出厂开）；shenshaLayer（神煞合参层，出厂关）。"
+        ),
         required_context=["birth date", "birth time", "gender"],
         ask_if_missing=[
             {"field": "date/time", "question": "请提供出生日期、时间和性别（一掌经按农历口径排盘）。"},
             {"field": "dingYue", "question": "定月用农历月还是节气月？", "options": ["农历月（默认，闰月十五折半）", "节气月（按八字月支序）"]},
+            {"field": "annualMethod", "question": "逐年看小限还是流年十二神？（两法只用一套）", "options": ["小限（星阙默认）", "流年十二神"]},
         ],
         safe_defaults=[
             {"field": "dingYue", "value": "lunar", "meaning": "农历月，闰月十五折半归属"},
             {"field": "dayunLength", "value": 7, "meaning": "大限一宫 7 年（通行口径）"},
-            {"field": "shenshaLayer", "value": True, "meaning": "神煞合参层开（无头导出全量）"},
+            {"field": "annualMethod", "value": "xiaoxian", "meaning": "逐年法用小限（星阙桌面出厂档 yizhangjingAnnual）"},
+            {"field": "shenshaLayer", "value": False, "meaning": "神煞合参层关（星阙桌面出厂档 yizhangjingShensha=false；开则多出 [神煞合参] 段）"},
+            {"field": "after23NewDay", "value": 1, "meaning": "23 点后归次日（星阙出厂全局日界；影响 23 点档生人的日柱与农历日）"},
         ],
         do_not_assume=["gender"],
     ),
@@ -1228,6 +1302,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         safe_defaults=[
             {"field": "yongGong", "value": 1, "meaning": "默认用宫 1（坎宫）"},
             {"field": "qiguaShu", "value": "tiandi", "meaning": "两数模式默认天地数"},
+            {"field": "piKoujing", "value": "zheng", "meaning": "闢卦细判口径=正传（得配害·失配利，上游缺省）；yiwen=异文（得配利·失配害），只改 [四象] 的闢卦判读"},
         ],
         do_not_assume=["起卦法与起卦输入（决定卦，须真实；大衍禁静默随机）", "所问内容"],
     ),

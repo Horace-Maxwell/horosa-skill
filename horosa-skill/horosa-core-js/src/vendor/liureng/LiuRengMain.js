@@ -13,7 +13,7 @@ import * as LRConst from '../liureng/LRConst.js';
 import { ZSList, ZhangSheng, liurengWangXiang, judgeKongWang } from '../liureng/LRZhangSheng.js';
 import { resolveLiuRengTwelvePanStyle } from '../liureng/LRPanStyle.js';
 import { normalizeLiuRengJiangName } from '../liureng/LRShenJiangDoc.js';
-
+import ChuangChart from '../liureng/ChuangChart.js';
 
 import { computeFrontendShenSha, computeYearShenSha, computeMonthShenSha } from '../liureng/LRShenShaDoc.js';
 import { detectJianChuan } from '../liureng/LRJianChuanDoc.js';

@@ -1263,7 +1263,7 @@
     "liureng/LiuRengMain.js": {
       "upstream": "components/lrzhan/LiuRengMain.js",
       "mode": "verbatim",
-      "why": "上游把 20 个纯逻辑 export（DA_GE_META/XIAO_JU_META/matchDaGeReferences/matchXiaoJuReferences/buildLiuRengLayout/buildKeData/buildSanChuanData/buildLiuRengSnapshotText …）与 React 组件放在同一个 6436 行文件里。1–4553 行是纯逻辑，4554 起 `class LiuRengMain extends Component`。六壬择时/三式合一择时的条件层直接吃这 20 个 export —— 手抄它们会漂移（仓里 liurengRefContext.js 手抄的 buildSanChuanData 只有 3 参，上游早已是 4 参含 castOverride）。故整头 vendored，React 尾部由 truncate_before 机械剥离。 用 verbatim 而非 curated：截断由 truncate_before 机械完成，流水线输出逐字可复现，因此该受「输出必须与 vendored 文件逐字相同」这条约束 —— curated 是给手工子集用的，会豁免掉这层保护。",
+      "why": "上游把 20 个纯逻辑 export（DA_GE_META/XIAO_JU_META/matchDaGeReferences/matchXiaoJuReferences/buildLiuRengLayout/buildKeData/buildSanChuanData/buildLiuRengSnapshotText …）与 React 组件放在同一个 6436 行文件里。1–4553 行是纯逻辑，4554 起 `class LiuRengMain extends Component`。六壬择时/三式合一择时的条件层直接吃这 20 个 export —— 手抄它们会漂移（仓里 liurengRefContext.js 手抄的 buildSanChuanData 只有 3 参，上游早已是 4 参含 castOverride）。故整头 vendored，React 尾部由 truncate_before 机械剥离。 用 verbatim 而非 curated：截断由 truncate_before 机械完成，流水线输出逐字可复现，因此该受「输出必须与 vendored 文件逐字相同」这条约束 —— curated 是给手工子集用的，会豁免掉这层保护。 ChuangChart 不桩：它不是 React 元素而是三传引擎类（buildSanChuanData 在纯逻辑段 new ChuangChart(...).genCuangs()），vendored liureng/ChuangChart.js 可无头加载；曾被当 React 元素桩掉 → buildSanChuanData 抛 ReferenceError 被 try 吞成 null → 六壬择时恒零命中、三式择时六壬家条件恒判否（v0.40.0 divination chunk 实抓）。",
       "deviations": [
         {
           "kind": "truncate_before",
@@ -1287,12 +1287,6 @@
           "specifier": "../xq-icons.js",
           "stub": "",
           "why": "图标库（同上）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../liureng/ChuangChart.js",
-          "stub": "",
-          "why": "React 元素（同上）。"
         },
         {
           "kind": "stub_import",
@@ -1814,7 +1808,9 @@
     },
     "xiaochengtu/xiaochengtuSnapshot.js": {
       "mode": "bespoke",
-      "why": "no upstream file of this name (skill-authored)"
+      "why": "自上游 XiaoChengTuMain.js 逐字抽出 buildXiaoChengTuSnapshotText（函数体逐字同，剥 React 外壳 + LUOSHU_ROWS 常量）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "derived_from": "components/xiaochengtu/XiaoChengTuMain.js",
+      "derived_sha256": "b310ed359ad25e933ef0b9b821940d627e3b31f263783d1eef72fccea46bcf25"
     },
     "xiaoliuren/xiaoliurenConst.js": {
       "upstream": "components/xiaoliuren/core/xiaoliurenConst.js",

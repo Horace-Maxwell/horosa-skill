@@ -3922,8 +3922,10 @@ def test_tianxing_explain_at_appends_section_and_tree(tmp_path) -> None:
     payload = {**build_sample_payloads()["tianxing"], "explainAt": "2028-04-01 00:01"}
     result = service.run_tool("tianxing", payload, save_result=False)
     assert result.ok is True, result.error
-    assert seen and seen[0]["t"] == "2028/04/01 00:01:00", "t 必须照上游 explainInterval 归一"
-    assert seen[0].get("conditions"), "explain 必须带编译后的条件树"
+    # [Q-453] 缺省另为命中清单前 3 行预取判读树（t = row.pick），用户 explainAt 那一次要按 t 找。
+    user_calls = [p for p in seen if p["t"] == "2028/04/01 00:01:00"]
+    assert user_calls, "t 必须照上游 explainInterval 归一"
+    assert user_calls[0].get("conditions"), "explain 必须带编译后的条件树"
     explain = result.data["explain"]
     assert explain["tree"]["kind"] == "group" and explain["tree"]["children"], "判读树必须原样带回"
     text = result.data["snapshot_text"]
@@ -3944,7 +3946,9 @@ def test_tianxing_without_explain_at_emits_no_explain_key(tmp_path) -> None:
     assert result.ok is True, result.error
     assert "explain" not in result.data
     assert "[单时判读]" not in (result.data["snapshot_text"] or "")
-    assert "/electionscan/explain" not in calls
+    # [Q-453] 缺省仍会为命中清单前 3 行预取判读树（上游 prefetchSnapshotExplains，进 [命中区间] 行内，
+    # 不是 [单时判读]）→ 恰 min(3, 命中数) 次。zeriSnapshotExplainRows=0 时一次不打（见 test_sync311_divination）。
+    assert calls.count("/electionscan/explain") == min(3, result.data["hit_count"])
     assert "单时判读" not in result.data["export_snapshot"]["missing_selected_sections"]
 
 

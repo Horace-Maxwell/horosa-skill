@@ -19,7 +19,9 @@ import { ganzhiYearBase } from '../vendor/utils/ganzhiYearBase.js';
 const LI_TERMS = ['立春', '立夏', '立秋', '立冬'];
 
 // Ported verbatim from 星阙 HeLuoMain.solarTerm: real 节气(化工/象限+土用) + 三候(节气内 5 日一候).
-function solarTerm(dateStr) {
+// quHuaGong 取化工法（上游 HeLuoMain.js:156 / aiAnalysisContext.heluoSolarTermForDate）：
+// 'tuWangKunGen' 土王寄坤艮（缺省，土用期补坤艮/反乾兑）| 'siFangBoOnly' 直取四方伯（土用期不补）。
+function solarTerm(dateStr, quHuaGong) {
   try {
     const [y, m, d] = `${dateStr}`.split('-').map((x) => parseInt(x, 10));
     const solar = Solar.fromYmd(y, m, d);
@@ -37,7 +39,7 @@ function solarTerm(dateStr) {
     const daysIn = Math.max(0, Math.floor(jd - prev.getSolar().getJulianDay()));
     const hou = Math.min(3, Math.floor(daysIn / 5) + 1);
     const houLabel = `${prevName}${['初候', '二候', '三候'][hou - 1]}·${prevName}後`;
-    return { ...solarTermHuagong(prevName, tuyong), term: prevName, hou, houLabel };
+    return { ...solarTermHuagong(prevName, tuyong, { quHuaGong: quHuaGong || 'tuWangKunGen' }), term: prevName, hou, houLabel };
   } catch (error) {
     return null;
   }
@@ -124,7 +126,12 @@ export function runHeluo(payload) {
     // 键名必须是 liunianStep2：buildSnapshotText 读 snapOpts.liunianStep2 再转成 liuNian 的 step2；
     // 此前发 step2 → 引擎永远走默认应爻法（同模块另一函数恰有 step2 参数，子串式边界契约看不见这条死键）。
     liunianStep2: input.liunianStep2 === 'sequential' ? 'sequential' : 'ying',
+    // 纪年基准（黄帝纪元差）：[断验]「纪年：黄帝N年」行 = 干支年 + huangdiOffset（heluoLocal.jiNian）。
+    // 缺省 2697；与上游 KinAstroMain.buildHeluoOpts 同式 parseInt、0 可达（[Q-265/SO-18]）。
+    huangdiOffset: Number.isFinite(parseInt(input.huangdiOffset, 10)) ? parseInt(input.huangdiOffset, 10) : 2697,
   };
+  // 取化工法（上游挂载 schema heluo.quHuaGong，techniqueMountSettings.js:1883-1886）：只认两档，余者回缺省。
+  const quHuaGong = input.quHuaGong === 'siFangBoOnly' ? 'siFangBoOnly' : 'tuWangKunGen';
   const monthYangLing = (input.monthYangLing === undefined || input.monthYangLing === null || input.monthYangLing === '')
     ? undefined
     : (input.monthYangLing === true || input.monthYangLing === 1 || input.monthYangLing === 'yang' || input.monthYangLing === '1' || input.monthYangLing === 'true');
@@ -139,7 +146,7 @@ export function runHeluo(payload) {
   }
 
   const dy = daYun(chart.xian, chart.hou, birthYear);
-  const st = solarTerm(date);
+  const st = solarTerm(date, quHuaGong);
   const jg = judge(chart, fourPillars, monthZhi, st);
 
   return {
@@ -153,6 +160,7 @@ export function runHeluo(payload) {
       monthZhi,
       hourZhi,
       ...hlOpts,
+      quHuaGong,
       ...(monthYangLing === undefined ? {} : { monthYangLing }),
     },
     data: {
