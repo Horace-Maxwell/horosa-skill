@@ -179,3 +179,27 @@ def test_guard_catches_a_pwsh_block_without_the_switch() -> None:
     assert offending_blocks(good) == []
     # bash jobs — and bash steps inside a pwsh job — are never held to the pwsh rule
     assert [job for job, _ in pwsh_run_blocks(good)] == ["win", "mixed"]
+
+
+# --------------------------------------------------------------------------------------
+# v0.40.0：stdio 探针的工具数不许写死（首推时 116 已过时 → 两个 job 红）
+# --------------------------------------------------------------------------------------
+
+_CI_YML_PATH = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
+_PROBE_LITERAL = re.compile(r"\['tools'\] -ne \d+|probe\[\"tools\"\] == \d+")
+
+
+def literal_probe_counts(workflow_text: str) -> list[str]:
+    return [m.group(0) for m in _PROBE_LITERAL.finditer(workflow_text)]
+
+
+def test_stdio_probes_read_the_tool_count_from_the_budget_contract() -> None:
+    text = _CI_YML_PATH.read_text(encoding="utf-8")
+    assert literal_probe_counts(text) == []
+    assert "mcp_list_budget.json" in text and "full_tools" in text and "compact_tools" in text
+
+
+def test_guard_catches_a_literal_probe_count() -> None:
+    assert literal_probe_counts("if ($r['steps']['stdio_probe']['tools'] -ne 116) { throw 'x' }") == ["['tools'] -ne 116"]
+    assert literal_probe_counts('assert probe["tools"] == 116 == probe["expected_tools"]') == ['probe["tools"] == 116']
+

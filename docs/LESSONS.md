@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.40.0 (2026-09) | 首推 CI 红：ci.yml 两个 stdio 探针把全量面工具数写死 116，四个新工具把它变成 120 | 数字只许一个源：探针从 contracts/mcp_list_budget.json 读 full_tools/compact_tools；docs-sync 扫 README 全量行 + ci.yml 字面数 |
 | v0.40.0 (2026-09) | 审计 P0：报告类 MCP 工具 `output_path` 可写任意路径（提示注入 = 覆盖用户任意文件） | 落盘路径闸：相对路径按输出目录解析、绝对路径须在输出目录 / `HOROSA_REPORT_OUTPUT_ROOTS` 内，越界 `report.output_path_not_allowed` 不写文件；三工具 destructiveHint=True |
 | v0.40.0 (2026-09) | 审计 P1：`contracts/` 不在 wheel / MCPB 里——Jev enforce 永不生效、技法算源恒「未标注」（v0.39.0 已出货） | 运行期契约经 `contracts_locator`（源码树 → 包内副本）；pyproject force-include + `.mcpbignore` 反选 + wheel 守卫锁条目 |
 | v0.40.0 (2026-09) | 并行同步实现者踩坑：stub 杀死纯逻辑（六壬择时恒零命中）/ worktree 子进程跑主 checkout / 算源生成器不幂等 / `_js_round` 负数截断 / 移植口径与测试替身 | stub 审计进 revendor；conftest 钉 PYTHONPATH；契约 == 生成器输出；桩按真实下发参数校验 |
@@ -108,6 +109,19 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.40.0 / 2026-09-24 — 首推 CI 红：stdio 探针把全量面工具数写死在 ci.yml 里
+
+- 症状：v0.40.0 候选第一次推上 main，CI `test` job 在「Zero-install path from the wheel works」这一步红：`assert probe["tools"] == 116 == probe["expected_tools"]`，
+  而探针报 `expected_tools: 120`；windows-smoke 的两处 pwsh `-ne 116` 同样会红。本机 24 步门禁全绿——`run_ci_gates.py` 不跑这两步（它们要
+  `uvx --from <wheel>` 真起 server），而工作流文本里的数字没有任何守卫。
+- 根因：v0.38.1 R9/R18 把「全量面 = 116 个工具」写成字面量塞进 ci.yml（三处）和 README 客户端表（每份 6 行），四个新工具（ephemeris /
+  returntimeline / prenatalsyzygy / prog）让真值变成 120，docs-sync 的工具计数只盯「110 技法」措辞，看不见「全量 116」。又一个「计数写在文档里、
+  真值在别处」（同形：v0.38.0 B0 marketplace.json 97 工具）。
+- 守卫：ci.yml 两个探针改从 `contracts/mcp_list_budget.json` 读 `full_tools` / `compact_tools`（这份契约本身由 `verify_mcp_list_budget.py` 对真
+  server 核过）；`verify_docs_sync.check_full_surface_counts` 扫 README×2 的「全量 N / full (N)」行对 `full_tools`，并禁止 ci.yml 出现
+  `-ne <数字>` / `== <数字>` 形式的工具数断言；`tests/test_ci_workflow_shape.py` 同一正则的负向对照。
+- 规则：**任何写进工作流 / 文档的计数都要能指出它的真值文件；指不出就不许写数字。** 本机门禁不覆盖的 CI 步骤，推之前至少把它的断言值核一遍。
 
 ### v0.40.0 / 2026-09-24 — 审计 P0：报告类 MCP 工具的 `output_path` 是任意路径写；P1：运行期契约不在安装包里
 

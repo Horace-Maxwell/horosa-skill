@@ -91,14 +91,14 @@ jobs:
           whl="$(ls /tmp/horosa-whl/horosa_skill-*-py3-none-any.whl)"
           HOME=$(mktemp -d) uvx --from "file://${whl}" horosa-skill --version
           # v0.38.0 B4：wheel 装出来的包旁边没有 pyproject.toml —— `setup` 必须自动选 uvx-wheel 启动器（而不是 BadParameter）。
-          # v0.38.1 R9：不再 dry-run —— 用 wheel 里的包**真起一次 stdio server**（claude-code = 全量面 116 个工具）。
+          # v0.38.1 R9：不再 dry-run —— 用 wheel 里的包**真起一次 stdio server**（claude-code = 全量面，工具数从 contracts/mcp_list_budget.json 的 full_tools 读，别再写死）。
           # dry-run 只证明「计划能算出来」，证明不了 wheel 少了哪个数据文件会让 server 起不来。
           # 🔴 探针跑的是**客户端将要执行的命令**：uvx-wheel 形态默认写发布页的 wheel URL —— 而 CI 上这个版本还没发布（首推 v0.38.1
           # 时 uvx 对 …/v0.38.1/…whl 报 Failed to download）。走 C15 的本地缓存：把刚构建的 wheel 放进 ~/.horosa/wheels/，setup 便把
           # `--from <本地 wheel>` 写进配置（离线可起），探针照样真起一次 stdio。
           export HOME=$(mktemp -d); mkdir -p "$HOME/.horosa/wheels"; cp "${whl}" "$HOME/.horosa/wheels/"
           uvx --from "file://${whl}" horosa-skill setup --client claude-code --config /tmp/horosa-setup-smoke/mcp.json --no-write --no-probe-network --skip-install \
-            | python3 -c 'import json,sys; r=json.load(sys.stdin); probe=r["steps"]["stdio_probe"]; assert r["ok"] and r["launcher"]["kind"] == "uvx-wheel", r["launcher"]; assert r["launcher"].get("wheel_cached_path"), r["launcher"]; assert probe["tools"] == 116 == probe["expected_tools"], probe; print("setup via cached wheel, real stdio probe:", probe["tools"], "tools")'
+            | python3 -c 'import json,sys; r=json.load(sys.stdin); probe=r["steps"]["stdio_probe"]; assert r["ok"] and r["launcher"]["kind"] == "uvx-wheel", r["launcher"]; assert r["launcher"].get("wheel_cached_path"), r["launcher"]; full=json.load(open("horosa-skill/contracts/mcp_list_budget.json"))["full_tools"]; assert probe["tools"] == full == probe["expected_tools"], (probe, full); print("setup via cached wheel, real stdio probe:", probe["tools"], "tools")'
       - name: Verify JS tool→engine boundary contracts (the issue #15 dead-key shape)
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_js_boundary_contracts.py
@@ -200,18 +200,21 @@ jobs:
           $smoke = Get-Content -Raw -LiteralPath "$root\qimen-smoke.json" | ConvertFrom-Json -AsHashtable
           if (-not $smoke['ok']) { throw "qimen smoke returned ok=false: $($smoke['error'] | ConvertTo-Json -Compress -Depth 5)" }
           uv run horosa-skill memory query --tool qimen --limit 1
-          # v0.38.0 B4：`setup` 在 Windows 真机上写配置 → 回读体检 → 用客户端将要执行的命令真起一次 stdio server（cursor = 11 个工具）
+          # v0.38.0 B4：`setup` 在 Windows 真机上写配置 → 回读体检 → 用客户端将要执行的命令真起一次 stdio server（cursor = 精简面，工具数从 contracts/mcp_list_budget.json 的 compact_tools 读）
           uv run horosa-skill setup --client cursor --config "$root\cursor-mcp.json" --skip-install --no-probe-network > "$root\setup-cursor.json"
           if (-not (Test-Path -LiteralPath "$root\cursor-mcp.json")) { throw "setup wrote no cursor config" }
           $setupReport = Get-Content -Raw -LiteralPath "$root\setup-cursor.json" | ConvertFrom-Json -AsHashtable
           if (-not $setupReport['ok']) { throw "setup returned ok=false: $($setupReport['summary'])" }
-          if ($setupReport['steps']['stdio_probe']['tools'] -ne 11) { throw "stdio probe listed $($setupReport['steps']['stdio_probe']['tools']) tools, expected 11" }
-          # v0.38.1 R18：全量面（--surface full → 116 个工具）在 Windows 上也真起一次
+          $compactTools = [int](Get-Content -Raw -LiteralPath 'contracts\mcp_list_budget.json' | ConvertFrom-Json -AsHashtable)['compact_tools']
+          if ($setupReport['steps']['stdio_probe']['tools'] -ne $compactTools) { throw "stdio probe listed $($setupReport['steps']['stdio_probe']['tools']) tools, expected $compactTools" }
+          # v0.38.1 R18：全量面（--surface full）在 Windows 上也真起一次；工具数从 contracts/mcp_list_budget.json 读（v0.40.0 首推时写死的 116 已过时 → 红）
+          $budget = Get-Content -Raw -LiteralPath 'contracts\mcp_list_budget.json' | ConvertFrom-Json -AsHashtable
+          $fullTools = [int]$budget['full_tools']
           uv run horosa-skill setup --client claude-code --config "$root\cc-full.json" --skip-install --no-probe-network --surface full > "$root\setup-full.json"
           $fullReport = Get-Content -Raw -LiteralPath "$root\setup-full.json" | ConvertFrom-Json -AsHashtable
           if (-not $fullReport['ok']) { throw "setup --surface full returned ok=false: $($fullReport['summary'])" }
-          if ($fullReport['steps']['stdio_probe']['tools'] -ne 116) { throw "full-surface stdio probe listed $($fullReport['steps']['stdio_probe']['tools']) tools, expected 116" }
-          # v0.38.1 R9：wheel 在 Windows 上也走一遍 —— uvx 从本地 .whl 起 server，真 stdio 探针 116
+          if ($fullReport['steps']['stdio_probe']['tools'] -ne $fullTools) { throw "full-surface stdio probe listed $($fullReport['steps']['stdio_probe']['tools']) tools, expected $fullTools" }
+          # v0.38.1 R9：wheel 在 Windows 上也走一遍 —— uvx 从本地 .whl 起 server，真 stdio 探针（全量面工具数同上）
           $whlDir = Join-Path $root 'whl'
           uv build --wheel --out-dir $whlDir
           $whl = (Get-ChildItem $whlDir -Filter 'horosa_skill-*-py3-none-any.whl' | Select-Object -First 1).FullName
@@ -224,7 +227,7 @@ jobs:
           if (-not $wheelReport['ok']) { throw "setup via wheel returned ok=false: $($wheelReport['summary'])" }
           if ($wheelReport['launcher']['kind'] -ne 'uvx-wheel') { throw "wheel setup picked launcher $($wheelReport['launcher']['kind']), expected uvx-wheel" }
           if (-not $wheelReport['launcher']['wheel_cached_path']) { throw "wheel setup did not use the cached wheel (would probe the unpublished release URL)" }
-          if ($wheelReport['steps']['stdio_probe']['tools'] -ne 116) { throw "wheel stdio probe listed $($wheelReport['steps']['stdio_probe']['tools']) tools, expected 116" }
+          if ($wheelReport['steps']['stdio_probe']['tools'] -ne $fullTools) { throw "wheel stdio probe listed $($wheelReport['steps']['stdio_probe']['tools']) tools, expected $fullTools" }
           # v0.38.0 B5：codex 形状 TOML 生成 → 回读体检（client check）→ tomllib 断言超时字段在场、command 是绝对路径
           uv run horosa-skill client config --format codex --write "$root\codex-config.toml" > $null
           uv run horosa-skill client check --client codex --config "$root\codex-config.toml" > "$root\codex-check.json"

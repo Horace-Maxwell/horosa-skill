@@ -356,6 +356,37 @@ def check_tool_counts() -> None:
                         f"(add {IGNORE_COUNT} if this line is a frozen historical record)"
                     )
     check_server_instructions()
+    check_full_surface_counts()
+
+
+FULL_SURFACE_ROW = re.compile(r"(?:全量 |full \()(\d+)")
+_PROBE_LITERAL = re.compile(r"\['tools'\] -ne \d+|probe\[\"tools\"\] == \d+")
+
+
+def check_full_surface_counts() -> None:
+    """README×2 客户端表的「全量 N / full (N)」与 ci.yml 的 stdio 探针都必须以 contracts/mcp_list_budget.json 的 full_tools 为准。
+
+    v0.40.0 首推：四个新工具让全量面 116 → 120，README 表与 ci.yml 里写死的 116 谁都没改 —— CI 两个 job 在「wheel 真起 stdio」
+    这一步红。数字只许有一个源；ci.yml 里不许再出现 `-ne <数字>` / `== <数字>` 形式的工具数断言。"""
+    budget_path = PKG / "contracts" / "mcp_list_budget.json"
+    try:
+        full = int(json.loads(read(budget_path))["full_tools"])
+    except Exception as exc:  # noqa: BLE001
+        err(f"contracts/mcp_list_budget.json unreadable: {exc}")
+        return
+    for rel in ("README.md", "README_EN.md"):
+        for lineno, line in enumerate(read(ROOT / rel).splitlines(), 1):
+            for got in FULL_SURFACE_ROW.findall(line):
+                if int(got) != full:
+                    err(f"{rel}:{lineno}: full-surface row says {got} tools, contracts/mcp_list_budget.json full_tools is {full}")
+    workflow = ROOT / ".github" / "workflows" / "ci.yml"
+    if workflow.exists():
+        text = read(workflow)
+        for match in _PROBE_LITERAL.finditer(text):
+            lineno = text.count("\n", 0, match.start()) + 1
+            err(f".github/workflows/ci.yml:{lineno}: stdio probe asserts a literal tool count `{match.group(0)}` — read full_tools/compact_tools from contracts/mcp_list_budget.json instead")
+        if "mcp_list_budget.json" not in text:
+            err(".github/workflows/ci.yml: stdio probes no longer read contracts/mcp_list_budget.json")
 
 
 def expected_gated() -> int:

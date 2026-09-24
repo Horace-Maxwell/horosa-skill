@@ -75,7 +75,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `110 / 110 ok=true` |
-| Engineering tests | `1644 / 1644 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 115 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `1646 / 1646 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 115 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `84` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `8` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`107` export techniques modeled; contract v14 mirrors desktop aiExport v56) |
@@ -426,9 +426,9 @@ gives agents without MCP a pure-CLI contract (`tool run --input/--output`, exit 
 
 | Client | Transport | One-line setup | Default surface | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| **Claude Code** | stdio | `setup --client claude-code` (writes the project `.mcp.json` when the CWD has one, else runs `claude mcp add --scope user`) | full (116) | The repo ships a project `.mcp.json`; [guide](./horosa-skill/examples/clients/claude-code.md) |
-| **Claude Code Plugin** | stdio | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` | full (116) | Skill + MCP in one step; the plugin lives in `~/.claude/plugins/cache/horosa-skill/horosa/<version>/horosa-skill` — run `uv run --directory "<that dir>" horosa-skill install` once for the offline runtime (a `runtime.not_installed` error prints this command with the real path) |
-| **Claude Desktop** | stdio | `setup --client claude-desktop`, or install the `.mcpb` bundle | full (116) | The `.mcpb` ships as a release asset |
+| **Claude Code** | stdio | `setup --client claude-code` (writes the project `.mcp.json` when the CWD has one, else runs `claude mcp add --scope user`) | full (120) | The repo ships a project `.mcp.json`; [guide](./horosa-skill/examples/clients/claude-code.md) |
+| **Claude Code Plugin** | stdio | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` | full (120) | Skill + MCP in one step; the plugin lives in `~/.claude/plugins/cache/horosa-skill/horosa/<version>/horosa-skill` — run `uv run --directory "<that dir>" horosa-skill install` once for the offline runtime (a `runtime.not_installed` error prints this command with the real path) |
+| **Claude Desktop** | stdio | `setup --client claude-desktop`, or install the `.mcpb` bundle | full (120) | The `.mcpb` ships as a release asset |
 | **Cursor** | stdio | `setup --client cursor` (or `client config --format cursor` for the official install deep link) | compact (11) | Cursor caps at ~40 tools globally and **drops the rest silently** |
 | **VS Code (Copilot)** | stdio | `setup --client vscode` (writes the user-level `mcp.json`; or `client config --format vscode` for the `vscode:mcp/install` link) | compact (11) | 128-tool cap across all servers; the repo ships `.vscode/mcp.json` |
 | **Codex** | stdio | `setup --client codex` (merges into `~/.codex/config.toml` in place, timeouts included) | compact (11) | Raise `startup_timeout_sec` (default 10 s) and `tool_timeout_sec` (default 60 s) |
@@ -436,9 +436,9 @@ gives agents without MCP a pure-CLI contract (`tool run --input/--output`, exit 
 | **Windsurf** | stdio | `setup --client windsurf` | compact (11) | 100-tool cap |
 | **Cline** | stdio | `setup --client cline` | compact (11) | No tool search; the full surface is heavy |
 | **Zed** | stdio | `setup --client zed` | compact (11) | Config root key is `context_servers` |
-| **OpenClaw / mcporter** | stdio | `client openclaw-setup --workspace ~/.openclaw/workspace` | full (116) | — |
-| **Open WebUI · n8n · Dify** | streamable-http | `horosa-skill serve --host 0.0.0.0 --token <random>` | full (116) | [Guide](./horosa-skill/examples/clients/openwebui-streamable-http.md); a token is required off-loopback, and there is **no TLS** — put it behind a reverse proxy |
-| **ChatGPT / claude.ai remote connectors** | streamable-http | As above, plus an **OAuth-terminating HTTPS gateway** (Cloudflare Access / oauth2-proxy) — both connectors speak OAuth only, this server offers a static Bearer token only, so the gateway exchanges the OAuth session for an injected `Authorization: Bearer <HOROSA_MCP_TOKEN>` | full (116) | **No hosted endpoint**; recipe: [guide](./horosa-skill/examples/clients/remote-connectors-oauth-gateway.md) |
+| **OpenClaw / mcporter** | stdio | `client openclaw-setup --workspace ~/.openclaw/workspace` | full (120) | — |
+| **Open WebUI · n8n · Dify** | streamable-http | `horosa-skill serve --host 0.0.0.0 --token <random>` | full (120) | [Guide](./horosa-skill/examples/clients/openwebui-streamable-http.md); a token is required off-loopback, and there is **no TLS** — put it behind a reverse proxy |
+| **ChatGPT / claude.ai remote connectors** | streamable-http | As above, plus an **OAuth-terminating HTTPS gateway** (Cloudflare Access / oauth2-proxy) — both connectors speak OAuth only, this server offers a static Bearer token only, so the gateway exchanges the OAuth session for an injected `Authorization: Bearer <HOROSA_MCP_TOKEN>` | full (120) | **No hosted endpoint**; recipe: [guide](./horosa-skill/examples/clients/remote-connectors-oauth-gateway.md) |
 
 `--surface full` / `--surface compact` overrides the default. `--launcher uvx-git` emits a
 checkout-free command (`uvx --from "git+…#subdirectory=horosa-skill"`; the PyPI channel is not open yet).
@@ -510,7 +510,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 1644 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 1646 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

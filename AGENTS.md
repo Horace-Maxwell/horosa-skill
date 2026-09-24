@@ -699,6 +699,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 ## 8. 本地验证与排障
 
+- **工作流 / 文档里的计数必须有真值文件（v0.40.0 首推 CI 红）**：ci.yml 的 stdio 探针工具数从 `contracts/mcp_list_budget.json` 读（`full_tools` / `compact_tools`），README 客户端表的「全量 N」由 `verify_docs_sync.check_full_surface_counts` 对同一契约锁；`run_ci_gates.py` 不跑「wheel 真起 stdio」两步，推之前核它们的断言值。
 **验证流程**：
 
 0. **push 前跑 `uv run python scripts/run_ci_gates.py`**——它解析 `.github/workflows/ci.yml` 的 `test` job，把同样的
