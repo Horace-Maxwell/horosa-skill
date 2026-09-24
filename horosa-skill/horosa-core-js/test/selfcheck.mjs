@@ -32,6 +32,7 @@ import { runHeluo } from '../src/tools/heluo.js';
 import { runYizhangjing } from '../src/tools/yizhangjing.js';
 import { runTongSheFa } from '../src/tools/tongshefa.js';
 import { runTarot } from '../src/tools/tarot.js';
+import { runYanqinYanfa } from '../src/tools/yanqinYanfa.js';
 import { runHuangli } from '../src/tools/huangli.js';
 import { runLiuyao } from '../src/tools/liuyao.js';
 import { personBazi } from '../src/vendor/calendar/riziEngine.js';
@@ -249,26 +250,29 @@ check('tianxing 搜索盘面口径与实际搜索一致（恒星黄道不再被�
   assert(line({ startDate: '2029-03-01', endDate: '2029-03-10', hsys: 3 }).includes('回归黄道'), 'bug 形状复现失败');
 });
 
-// 🔴 v0.33.1 值级金标：铁板「考刻」。引擎读 opts.ke（tiebanFrameworkLocal.js:253），从不读
-// opts.minute —— 工具此前传的正是 minute，于是 ke 恒为 1：eightKe.active 恒高亮初刻，
-// 96 局（12 时辰 × 8 刻）塌缩成 12 个可达值，14:47 与 14:03 出同一局。刻分是铁板的立身之本。
-// 换算口径：一时辰 120 分 = 8 刻 × 15′，时辰自**奇数**小时起（子 23、丑 1…），故偶数小时要 +60。
-// 负向对照：把 ke 换回 minute 传入，下面 ju.ke 全变 1。
-check('tiebanFramework 考刻由时分换算，96 局不再塌缩', () => {
+// 🔴 v0.33.1 值级金标：铁板「考刻」。引擎读 opts.ke（tiebanFrameworkLocal.js:253）。
+// sync311 F8 改口径：考刻是占者按六亲佐证「考」定后手填的刻位，上游无头挂载 ke = ov.tiebanKe（空=1 初刻），
+// 刻制/流派读 tiebanKeSystem / tiebanSchool（KinAstroMain.buildKinAstroSnapshotForFields :329-346）——
+// 钟点不参与考刻。v0.33.1 那版「按时分折算清八刻」是 skill 自创口径（且十二刻·斗宫 9–12 刻永远到不了），
+// 原断言「同时辰不同分钟须落不同刻」随之作废，改钉上游口径。
+// 负向对照：把工具改回 keFromClock(hour, minute)，下面「20:47 仍初刻」即红；改回读 school/keSystem，dou12 那条即红。
+check('tiebanFramework 考刻取 tiebanKe（上游缺省初刻），刻制上限随 tiebanKeSystem', () => {
   const fp = { year: '己巳', month: '壬申', day: '丁卯', hour: '庚子' };
   const ju = (ke) => buildTiebanFramework(fp, { birthYear: 1989, gender: 1, ke }).ju;
   assert(ju(1).label === '子时初刻＝全日第1刻', `ke=1 → ${ju(1).label}`);
   assert(ju(8).label === '子时八刻＝全日第8刻', `ke=8 → ${ju(8).label}`);
-  // 端到端：同一时辰内的不同分钟必须落到不同刻（这正是修复前做不到的）
-  const keOf = (hour, minute) => {
-    const r = runTiebanFramework({ pillars: [
-      { key: 'year', ganzhi: '己巳' }, { key: 'month', ganzhi: '壬申' },
-      { key: 'day', ganzhi: '丁卯' }, { key: 'hour', ganzhi: '庚子' }], birthYear: 1989, gender: 1, hour, minute });
-    return /全日第(\d+)刻/.exec(r.text || '');
-  };
-  const a = keOf(19, 3);   // 戌初，第 1 刻
-  const b = keOf(20, 47);  // 戌末，第 8 刻
-  assert(a && b && a[1] !== b[1], `同时辰不同分钟须落不同刻，实得 ${a && a[1]} vs ${b && b[1]}`);
+  const run = (extra) => runTiebanFramework({ pillars: [
+    { key: 'year', ganzhi: '己巳' }, { key: 'month', ganzhi: '壬申' },
+    { key: 'day', ganzhi: '丁卯' }, { key: 'hour', ganzhi: '庚子' }], birthYear: 1989, gender: 1, ...extra });
+  const keOf = (extra) => { const m = /全日第(\d+)刻/.exec(run(extra).text || ''); return m && m[1]; };
+  assert(keOf({ hour: 20, minute: 47 }) === '1', `未给 tiebanKe 应为初刻（钟点不参与），实得 ${keOf({ hour: 20, minute: 47 })}`);
+  assert(keOf({ tiebanKe: 8 }) === '8', `tiebanKe=8 → ${keOf({ tiebanKe: 8 })}`);
+  // 十二刻·斗宫收 1–12（清八刻超 8 按初刻）：刻位上限随 tiebanKeSystem。
+  const dou = run({ tiebanKeSystem: 'dou12', tiebanKe: 11 });
+  assert(dou.data && dou.data.keSystem === 'dou12' && dou.data.ke === 11, `dou12/11 → ${JSON.stringify(dou.data)}`);
+  assert(run({ tiebanKe: 11 }).data.ke === 1, 'qing8 下 11 刻应按初刻');
+  assert(/北派/.test(run({ tiebanSchool: 'north' }).text || ''), 'tiebanSchool=north 应出北派');
+  assert(run({ school: 'north', keSystem: 'dou12' }).data.keSystem === 'qing8', '旧键 school/keSystem 不该生效（上游名 tiebanSchool/tiebanKeSystem）');
 });
 
 check('calendarExtras 当事人时辰真的进盘（time 只喂时刻）', () => {
@@ -421,6 +425,41 @@ check('tarot 种子洗牌确定性：同种子同牌阵逐牌相同、换种子�
   assert(a[2].includes('宝剑四') && a[2].includes('| 逆位 |'), `pos3: ${a[2]}`);
   assert(JSON.stringify(rows('horosa-golden-1')) === JSON.stringify(a), 'same seed → identical reading');
   assert(JSON.stringify(rows('horosa-golden-2')) !== JSON.stringify(a), 'different seed → different reading');
+});
+
+// sync311 F9/F11 值级金标：引擎设置经 options 送达（键集锚 resolveSettings），verdictMode 八法全开，
+// 牌阵/牌组锚引擎词表（SPREADS / deck caps.spreads）。权威：vendored 上游 engine/reading.js resolveSettings、
+// verdict.js YESNO_MODES、timingMethods.js TIMING_METHODS、deckRegistry.js caps。
+// 负向对照：把 tarot.js 退回只透传 5 键的旧形状，「计时(大牌数字)」与「答案锚位」两条即红；退回静默回落，报错三条即红。
+check('tarot 引擎设置/定局八法/牌阵词表经 runTarot 送达引擎', () => {
+  const base = { spread: 'three', deck: 'rws', seed: 'horosa-golden-1', question: '测试' };
+  const text = (extra) => runTarot({ ...base, ...extra }).snapshot_text || '';
+  const timingLine = (t) => t.split('\n').find((l) => l.startsWith('计时(')) || '';
+  assert(timingLine(text({})).startsWith('计时(花色单位)'), `缺省计时法：${timingLine(text({}))}`);
+  const major = timingLine(text({ options: { timingMethod: 'major_number', timingUnit: '月' } }));
+  assert(major.startsWith('计时(大牌数字)') && major.includes('个月'), `timingMethod/timingUnit 未达引擎：${major}`);
+  assert(text({ verdictMode: 'anchor' }).includes('答案锚位'), 'verdictMode=anchor 应走 YESNO_MODES 第七法');
+  const err = (extra) => ((runTarot({ ...base, ...extra }).data || {}).error || {}).code;
+  assert(err({ options: { timingUnit: '年' } }) === 'invalid_setting', '引擎不认的值须报错，不许回落');
+  assert(err({ spread: 'one' }) === 'unknown_spread', '不存在的牌阵须报错（旧形状静默换 three）');
+  assert(err({ deck: 'lenormand', spread: 'celtic' }) === 'unsupported_spread_for_deck', '牌组允许表外的牌阵须报错');
+  assert(runTarot({ ...base, deck: 'lenormand', spread: undefined }).spread === 'single', '缺省牌阵不开放 → 允许表首项');
+  assert(JSON.stringify(runTarot({ ...base, options: { nope: 1 } }).data.params_ignored) === '["nope"]', '未识别键回执 params_ignored');
+});
+
+// sync311 F7 值级金标：演法流派/六开关逐次传入（上游 yanqinSchools YANQIN_PRESETS / YANQIN_OPTION_META），
+// 快照首段按上游 yanqinSnapshot 口径出流派名与我彼口诀。负向对照：退回不调 setYanqinSchool，fenghuang 那条即红。
+check('yanqinYanfa 流派/开关经 payload 送达引擎（headless 无 localStorage）', () => {
+  const run = (extra) => runYanqinYanfa({ year: 1998, month: 2, day: 20, hour: 20, ...extra });
+  const school = (extra) => ((run(extra).text || '').split('\n')[1] || '');
+  assert(school({}).startsWith('池本理《禽星易见》;翻禽=我/倒将=彼'), `缺省流派：${school({})}`);
+  assert(school({ school: 'fenghuang' }).startsWith('凤凰演禽(现代占课);时禽=我/翻禽=彼'), `fenghuang：${school({ school: 'fenghuang' })}`);
+  const custom = school({ woBi: 'shi', monthVerse: 'B' });
+  assert(custom.startsWith('custom;时禽=我') && custom.includes('月禽口诀B版'), `偏离预设应标 custom：${custom}`);
+  // 同一进程再跑缺省：前一调用的开关不许串味（每次先 applyPreset）。
+  assert(school({}).startsWith('池本理《禽星易见》'), '开关串味：缺省调用须回到池本理');
+  const bad = run({ huoYaoVariant: 'nope' }).data;
+  assert(bad.ok === false && bad.error.code === 'invalid_setting', '词表外取值须报错');
 });
 
 check('canping 起运岁走农历真源，不再恒 1 岁', async () => {

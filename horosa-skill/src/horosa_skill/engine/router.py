@@ -232,9 +232,9 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("wuzhao")
     if _contains_any(text, ["太玄", "揲蓍", "taixuan"]):
         add("taixuan")
-    if _contains_any(text, ["京氏易", "靖瞶", "jingjue"]):
+    if _contains_any(text, ["荆诀", "jingjue", "京氏易", "靖瞶"]):
         add("jingjue")
-    if _contains_any(text, ["神乙数", "神乙", "shenyishu"]):
+    if _contains_any(text, ["神易数", "shenyishu", "神乙数", "神乙"]):
         add("shenyishu")
     # 神数正传（五流派合一）：含「铁板/邵子」流派名 → 需与独立 tieban/shaozi/canping 神数互斥（键名分叉）。
     if _contains_any(text, ["神数正传", "正传", "zhengchuan"]):
@@ -243,13 +243,13 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("shaozi")
     if _contains_any(text, ["铁板神数", "铁板", "tieban", "tie ban"]) and not _contains_any(text, ["正传", "zhengchuan"]):
         add("tieban")
-    if _contains_any(text, ["分经神数", "两头钳", "fendjing", "fenjing"]):
+    if _contains_any(text, ["鬼谷分定经", "分定经", "两头钳", "fendjing", "fenjing", "分经神数"]):
         add("fendjing")
     if _contains_any(text, ["北极神数", "北极经", "beiji"]):
         add("beiji")
     if _contains_any(text, ["南极神数", "南极经", "nanji"]):
         add("nanji")
-    if _contains_any(text, ["淳子神数", "淳子", "chunzi"]):
+    if _contains_any(text, ["蠢子数", "蠢子", "chunzi", "淳子神数", "淳子"]):
         add("chunzi")
     if _contains_any(text, ["演禽", "禽星", "xianqin", "七政演禽"]):
         add("xianqin")

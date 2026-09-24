@@ -4072,7 +4072,8 @@ def test_cetian_text_key_appends_classics(tmp_path) -> None:
 
 
 def test_wangji_xinyi_casting_methods(tmp_path) -> None:
-    """批 I-5：xinyiMethod=number 独立起卦产 [心易起卦]；缺省零回归。"""
+    """批 I-5 → sync311 F15：所选心易法的卦面按上游进 [心易发微]（buildHuangJiSnapshotForFields），
+    不再另起 skill 自造的 [心易起卦] 段（该段名上游 preset 里没有）。"""
     service = _zeri_service(tmp_path)
     base = {"date": "1998-02-20", "time": "20:48"}
     plain = service.run_tool("wangji", base, save_result=False)
@@ -4081,7 +4082,7 @@ def test_wangji_xinyi_casting_methods(tmp_path) -> None:
     cast = service.run_tool("wangji", {**base, "xinyiMethod": "number", "upperNum": 7, "lowerNum": 12}, save_result=False)
     assert cast.ok is True, cast.error
     text = cast.data["snapshot_text"]
-    assert "[心易起卦]" in text and "起法：报数" in text and "本卦：頤" in text
+    assert "[心易起卦]" not in text and "[心易发微]\n本卦：頤" in text
     assert cast.data["xinyi"]["result"]["本卦"] == "頤" and cast.data["xinyi"]["method"] == "number"
     export = cast.data["export_snapshot"]
     assert export["missing_selected_sections"] == [] and export["unknown_detected_sections"] == []
