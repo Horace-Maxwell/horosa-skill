@@ -114,7 +114,7 @@
       {
         "callee": "buildTongshuSnapshotText",
         "module": "../vendor/calendar/tongshuSnapshot.js",
-        "line": 55,
+        "line": 56,
         "arg": 0,
         "via_local": "settings",
         "keys": [
@@ -124,7 +124,7 @@
       {
         "callee": "personBazi",
         "module": "../vendor/calendar/riziEngine.js",
-        "line": 78,
+        "line": 79,
         "arg": 0,
         "keys": [
           "date",
@@ -135,7 +135,7 @@
       {
         "callee": "buildPersonalizedDates",
         "module": "../vendor/calendar/riziEngine.js",
-        "line": 90,
+        "line": 91,
         "arg": 0,
         "keys": [
           "event",
@@ -147,7 +147,7 @@
       {
         "callee": "buildRiziSnapshotText",
         "module": "../vendor/calendar/riziSnapshot.js",
-        "line": 96,
+        "line": 97,
         "arg": 0,
         "keys": [
           "event",
@@ -308,9 +308,18 @@
     ],
     "heluo.js": [
       {
+        "callee": "solarTermHuagong",
+        "module": "../vendor/heluo/heluoLocal.js",
+        "line": 42,
+        "arg": 2,
+        "keys": [
+          "quHuaGong"
+        ]
+      },
+      {
         "callee": "buildLocalBaziResult",
         "module": "../vendor/bazi/baziLunarLocal.js",
-        "line": 96,
+        "line": 98,
         "arg": 0,
         "via_local": "baziParams",
         "keys": [
@@ -327,7 +336,7 @@
       {
         "callee": "calc",
         "module": "../vendor/heluo/heluoLocal.js",
-        "line": 133,
+        "line": 140,
         "arg": 0,
         "keys": [
           "birthYear",
@@ -342,11 +351,12 @@
       {
         "callee": "calc",
         "module": "../vendor/heluo/heluoLocal.js",
-        "line": 133,
+        "line": 140,
         "arg": 0,
         "nested_under": "opts",
         "via_local": "hlOpts",
         "keys": [
+          "huangdiOffset",
           "jiGongMode",
           "liunianStep2",
           "pureGanKunVariant",
@@ -357,7 +367,7 @@
       {
         "callee": "judge",
         "module": "../vendor/heluo/heluoLocal.js",
-        "line": 143,
+        "line": 150,
         "arg": 1,
         "via_local": "fourPillars",
         "keys": [
@@ -370,7 +380,7 @@
       {
         "callee": "buildSnapshotText",
         "module": "../vendor/heluo/heluoLocal.js",
-        "line": 170,
+        "line": 178,
         "arg": 3,
         "keys": [
           "birthYear",
@@ -381,11 +391,12 @@
       {
         "callee": "buildSnapshotText",
         "module": "../vendor/heluo/heluoLocal.js",
-        "line": 170,
+        "line": 178,
         "arg": 3,
         "nested_under": "opts",
         "via_local": "hlOpts",
         "keys": [
+          "huangdiOffset",
           "jiGongMode",
           "liunianStep2",
           "pureGanKunVariant",
@@ -414,13 +425,16 @@
       {
         "callee": "analyzeLiuyao",
         "module": "../vendor/gua/liuyaoFacade.js",
-        "line": 33,
+        "line": 113,
         "arg": 2,
         "via_local": "ctx",
         "keys": [
           "dayGan",
           "dayZhi",
+          "hourZhi",
+          "jieqiName",
           "monthGan",
+          "monthNum",
           "monthZhi",
           "yearGan",
           "yearZhi"
@@ -443,12 +457,25 @@
     ],
     "qimenzeri.js": [
       {
+        "callee": "explainQimenAt",
+        "module": "../vendor/divination/zeri/qimenScanEngine.js",
+        "line": 39,
+        "arg": 0,
+        "keys": [
+          "geoParams",
+          "options",
+          "t",
+          "tree"
+        ]
+      },
+      {
         "callee": "buildQimenZeriSnapshotExtra",
         "module": "../vendor/divination/zeri/qimenZeriSnapshot.js",
-        "line": 24,
+        "line": 42,
         "arg": 0,
         "keys": [
           "cfg",
+          "explainAt",
           "geo",
           "options",
           "results",
@@ -459,7 +486,7 @@
       {
         "callee": "scanQimen",
         "module": "../vendor/divination/zeri/qimenScanEngine.js",
-        "line": 65,
+        "line": 89,
         "arg": 0,
         "keys": [
           "cfg",
@@ -479,6 +506,19 @@
         "via_local": "settings",
         "keys": [
           "question"
+        ]
+      }
+    ],
+    "tianxing.js": [
+      {
+        "callee": "buildTianxingSnapshot",
+        "module": "../vendor/divination/zeri/tianxingSnapshot.js",
+        "line": 120,
+        "arg": 3,
+        "via_local": "ctx",
+        "keys": [
+          "explainAt",
+          "tree"
         ]
       }
     ],
@@ -528,7 +568,7 @@
       {
         "callee": "qiGuaManual",
         "module": "../vendor/xiaochengtu/xiaochengtuQiGua.js",
-        "line": 29,
+        "line": 32,
         "arg": 0,
         "keys": [
           "dongYaos",
@@ -539,7 +579,7 @@
       {
         "callee": "qiGuaByNumbers",
         "module": "../vendor/xiaochengtu/xiaochengtuQiGua.js",
-        "line": 31,
+        "line": 34,
         "arg": 0,
         "keys": [
           "dongYaos",
@@ -551,7 +591,7 @@
       {
         "callee": "qiGuaByStock",
         "module": "../vendor/xiaochengtu/xiaochengtuQiGua.js",
-        "line": 34,
+        "line": 37,
         "arg": 0,
         "keys": [
           "close",
@@ -561,7 +601,7 @@
       {
         "callee": "qiGuaByDaYan",
         "module": "../vendor/xiaochengtu/xiaochengtuQiGua.js",
-        "line": 39,
+        "line": 42,
         "arg": 0,
         "keys": [
           "manualCounts",
@@ -571,11 +611,12 @@
       {
         "callee": "buildXiaoChengTuSnapshotText",
         "module": "../vendor/xiaochengtu/xiaochengtuSnapshot.js",
-        "line": 50,
+        "line": 53,
         "arg": 2,
         "keys": [
           "askEvent",
           "kline",
+          "piKoujing",
           "timeLines",
           "yongGong"
         ]
@@ -623,12 +664,14 @@
       {
         "callee": "buildLocalBaziResult",
         "module": "../vendor/bazi/baziLunarLocal.js",
-        "line": 86,
+        "line": 108,
         "arg": 0,
         "via_local": "baziParams",
         "keys": [
+          "after23NewDay",
           "date",
           "gender",
+          "lateZiHourUseNextDay",
           "lon",
           "time",
           "timeAlg",
@@ -638,11 +681,13 @@
       {
         "callee": "buildYizhangjingModel",
         "module": "../vendor/yizhangjing/yizhangjingReport.js",
-        "line": 93,
+        "line": 115,
         "arg": 1,
         "via_local": "opts",
         "keys": [
+          "annualMethod",
           "chongfanKou",
+          "daoTerm",
           "dayunLength",
           "dayunStartAge",
           "dingYue",
@@ -650,6 +695,9 @@
           "mingGongMethod",
           "shenshaLayer",
           "shunniRule",
+          "starNaming",
+          "tongxianShow",
+          "xiaoxianDir",
           "xiaoxianStart",
           "zaoZiAdjust"
         ]

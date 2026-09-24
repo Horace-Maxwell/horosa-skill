@@ -23,7 +23,10 @@ export function runXiaoChengTu(payload) {
   const askEvent = `${input.askEvent ?? ''}`.trim();
   const timeLines = Array.isArray(input.timeLines) ? input.timeLines : [];
   const kline = input.kline && typeof input.kline === 'object' ? input.kline : null;
-  const normalized = { qiguaFa: fa, yongGong, askEvent: askEvent || null };
+  // 「闢(离心)」一象之辞两传本相反：zheng 正传(乙本原文:得配害/失配利，缺省) / yiwen 异文
+  // （上游 XiaoChengTuMain DEFAULT_SETTINGS.piKoujing + 挂载 schema xiaochengtu.piKoujing）。
+  const piKoujing = input.piKoujing === 'yiwen' ? 'yiwen' : 'zheng';
+  const normalized = { qiguaFa: fa, yongGong, askEvent: askEvent || null, piKoujing };
   let qi = null;
   if (fa === 'manual') {
     qi = qiGuaManual({ up: input.up, lo: input.lo, dongYaos: Array.isArray(input.dongYaos) ? input.dongYaos : [] });
@@ -47,7 +50,7 @@ export function runXiaoChengTu(payload) {
   if (!pan) {
     return insufficient(normalized, 'buildpan_failed', 'xiaochengtu could not build the 九宫 layout.');
   }
-  const snapshot_text = buildXiaoChengTuSnapshotText(pan, qi, { yongGong, askEvent, kline, timeLines });
+  const snapshot_text = buildXiaoChengTuSnapshotText(pan, qi, { yongGong, askEvent, kline, timeLines, piKoujing });
   return {
     tool: 'xiaochengtu',
     technique: 'xiaochengtu',

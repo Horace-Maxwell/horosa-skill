@@ -492,6 +492,9 @@ class ZeriScanInput(BirthInput):
         default=None,
         description="搜索窗天数上限，只能**调低**：给的值超过本工具的硬上限时按硬上限执行，不会放宽。",
     )
+    # [Q-452/Q-453] 快照「命中清单」两旋钮（上游 zeriSnapshotPrefs：60 行·10–500；判读树 3 行·0–20）。
+    zeriSnapshotMaxRows: int | None = Field(default=None, description="清单行数10-500(缺省60)")
+    zeriSnapshotExplainRows: int | None = Field(default=None, description="判读树行数0-20(缺省3)")
 
 
 class HuangliZeriInput(ZeriScanInput):
@@ -520,6 +523,8 @@ class ZiweiZeriInput(ZeriScanInput):
     timeAlg: int | None = None
     after23NewDay: int | None = None
     lateZiHourUseNextDay: int | None = None
+    # 扫描按 options.gender 起盘（上游工作台常驻键，出厂 1）；顶层写法与 options 双读合并，展示盘同跟。
+    gender: int | str | None = None
 
 
 class LiurengZeriInput(ZeriScanInput):
@@ -552,14 +557,20 @@ class QizhengZeriInput(ZeriBackendScanInput):
     """七政择时：判定与区间搜索都在 astropy 后端（swisseph 直连分钟粒度），非本地重算。"""
 
     height: float | None = Field(default=None, description="海拔（米），缺省 0")
-    ayanamsaDeg: float | None = Field(default=None, description="恒星制岁差回加度")
+    # 扫描上下文实读三键（QizhengScanContext；上游页出厂 2/mean/mean）。ayanamsaDeg 已删：两个扫描都不读它
+    # （它只属七政择日动盘 qizhengelection），声明着等于广告一个死开关。
+    su28Mode: int | None = Field(default=None, description="宿度制：2=回归今宿（缺省）3=开禧宿度")
+    nodeType: str | None = Field(default=None, description="罗计：mean（缺省）|true")
+    lilithType: str | None = Field(default=None, description="月孛：mean（缺省）|true")
 
 
 class IndiaZeriInput(ZeriBackendScanInput):
     """印度择时（Muhurta）：后端扫描。段自足 —— 印度盘全文见 india_chart 本身，本工具只出择时三段。"""
 
-    indiaAyanamsa: Any | None = Field(default=None, description="印度岁差档，与 india_chart 同词表。")
-    indiaHsys: Any | None = Field(default=None, description="印度分宫制，与 india_chart 同词表。")
+    # 扫描上下文读 ayanamsa（IndiaScanContext）；indiaAyanamsa 是与 india_chart 同词表的别名（显式 ayanamsa 优先）。
+    # indiaHsys 已删：Muhurta 扫描不读分宫制、本工具也不铸印度盘，声明着等于广告一个死开关。
+    indiaAyanamsa: Any | None = Field(default=None, description="扫描岁差制（缺省 lahiri），与 india_chart 同词表")
+    nodeType: str | None = Field(default=None, description="罗睺计都：mean（缺省）|true")
 
 
 class QimenZeriInput(QimenInput):
@@ -591,6 +602,8 @@ class QimenZeriInput(QimenInput):
         description="搜索窗跨度上限（天），缺省即本工具硬上限；只能**调低**，给更大的值不会放宽。",
     )
     maxHits: int | None = Field(default=None, description="命中区间数上限，缺省 1000")
+    zeriSnapshotMaxRows: int | None = Field(default=None, description="清单行数10-500(缺省60)")
+    zeriSnapshotExplainRows: int | None = Field(default=None, description="判读树行数0-20(缺省3)")
 
 
 class TianxingInput(BirthInput):
@@ -628,6 +641,8 @@ class TianxingInput(BirthInput):
         default_factory=dict,
         description="古典口径直通（cazimiOrb/combustOrb/vocMode/termsVariant/triplicity…）。",
     )
+    zeriSnapshotMaxRows: int | None = Field(default=None, description="清单行数10-500(缺省60)")
+    zeriSnapshotExplainRows: int | None = Field(default=None, description="判读树行数0-20(缺省3)")
 
 
 class QizhengElectionInput(BirthInput):
@@ -763,6 +778,11 @@ class HeLuoInput(FlexibleModel):
     pureGanKunVariant: str | None = None  # 'current'★ | 'alt' 纯卦乾坤落爻反向（抄本异·待核）
     liunianStep2: str | None = None  # 'ying'★ 应爻法 | 'sequential' 逐爻上行
     monthYangLing: bool | int | str | None = None  # 阳令手定；缺省按月支推
+    # 上游挂载 schema heluo 另两键（techniqueMountSettings.js:1883-1904）：
+    # 'tuWangKunGen'★ 土王寄坤艮 | 'siFangBoOnly' 直取四方伯（土用期不补坤艮）→ [命运篇] 化工行
+    quHuaGong: str | None = Field(default=None, description="取化工 tuWangKunGen/siFangBoOnly")
+    # 纪年基准（黄帝纪元差，缺省 2697，0 可达）→ [断验] 纪年行
+    huangdiOffset: int | None = Field(default=None, description="黄帝纪元差(缺省2697)")
 
 
 class YizhangjingInput(FlexibleModel):
@@ -773,20 +793,30 @@ class YizhangjingInput(FlexibleModel):
     lon: str | None = None
     gender: str | int | None = None
     timeAlg: int | None = 1
-    # 排盘选项（默认即通行口径）：定月法 lunar 农历月 / jieqi 节气月；顺逆 yangNanYinNv 阳男阴女顺 /
-    # menShunNvNi 男顺女逆；命宫 shiShang 时上起命 / shuZhiMao 数至卯；大限一宫 7 或 10 年；
-    # 大限起法 mi 月宫起 / age1 一岁起；小限起宫 ri 日柱宫 / yue 月柱宫；流年十二神组；早子时归前日；
-    # 重犯口诀组 alpha 常见 / beta 异传；神煞合参层（无头导出默认开，关则不出该段）。
+    # 日界/晚子时：None → JS 侧按上游 YiZhangJingMain 缺席回退全局出厂默认 1/1（23 点算次日）。
+    after23NewDay: int | None = Field(default=None, description="日界 1=23点换日(缺省)")
+    lateZiHourUseNextDay: int | None = Field(default=None, description="晚子时干 1=次日(缺省)")
+    # 排盘选项 = 上游 KinAstroMain.buildYizhangjingOpts 同键，缺省 = KINASTRO_PAGE_SETTINGS 出厂档
+    # （「秘传口诀」预设，KinAstroMain.js:1039-1056）：定月法 lunar 农历月 / jieqi 节气月；顺逆 yangNanYinNv /
+    # menShunNvNi；命宫 shiShang / shuZhiMao；大限一宫 7 或 10 年；大限起法 mi / age1；小限起宫 ri / yue；
+    # 小限顺逆 chart 随盘 / always 一律顺行；逐年法 xiaoxian 小限（出厂）/ liunian 流年十二神；流年十二神组
+    # A/B/C；早子时；重犯口诀组 alpha / beta；星名系统 A/B/C；六道术语 gui / edao；童限显示；
+    # 神煞合参层（出厂关，开则多出 [神煞合参] 段）。
     dingYue: str | None = "lunar"
     shunniRule: str | None = "yangNanYinNv"
     mingGongMethod: str | None = "shiShang"
     dayunLength: int | None = 7
     dayunStartAge: str | None = "mi"
     xiaoxianStart: str | None = "ri"
+    xiaoxianDir: str | None = Field(default="chart", description="小限 chart随盘/always顺行")
+    annualMethod: str | None = Field(default="xiaoxian", description="逐年法 xiaoxian/liunian")
     flowShenSet: str | None = "A"
     zaoZiAdjust: bool | None = False
     chongfanKou: str | None = "alpha"
-    shenshaLayer: bool | None = True
+    starNaming: str | None = Field(default="A", description="星名 A/B/C")
+    daoTerm: str | None = Field(default="gui", description="六道术语 gui/edao")
+    tongxianShow: bool | None = Field(default=True, description="童限(缺省开)")
+    shenshaLayer: bool | None = False
     # 折半法与品级变体（缺省字节不变；vendor/yizhangjing/yizhangjingReport.js）：
     leapRule: str | None = None  # 'half'★ 十五折半 | 'midnight' 夜半折半（十五日晚子时作下月）
     gradeSet: str | None = None  # 'standard'★ | 'variant' 品级变体表
@@ -861,6 +891,8 @@ class XiaoChengTuInput(FlexibleModel):
     seed: int | None = None
     manualCounts: list[int] | None = None
     yongGong: int | None = 1
+    # 闢卦细判口径（上游挂载 schema xiaochengtu.piKoujing）：'zheng'★ 正传 得配害·失配利 | 'yiwen' 异文 → [四象]
+    piKoujing: str | None = Field(default=None, description="闢卦口径 zheng/yiwen")
     kline: dict[str, Any] | None = None
     askEvent: str | None = None
     question: str | None = None
@@ -1486,6 +1518,21 @@ class SixYaoInput(FlexibleModel):
     gua_code: str | None = None
     changed_code: str | None = None
     lines: list[SixYaoLineInput] = Field(default_factory=list)
+    # 占时时间算法（上游 [Q-390/T-372]：页面 > 全局 > 缺省真太阳时 0）；None = 按 0 发送。
+    timeAlg: int | None = Field(default=None, description="占时时间算法：0=真太阳时（缺省）1=直接时间")
+    # 日界/晚子时：None = 不发送（后端 1/1 = 星阙出厂全局默认）；显式 0/1 直达 /nongli/time。
+    after23NewDay: int | None = Field(default=None, description="日界 1=23点换日(缺省)")
+    lateZiHourUseNextDay: int | None = Field(default=None, description="晚子时干 1=次日(缺省)")
+    # 判读口径 = 上游六爻挂载齿轮 SIXYAO_FIELDS 24 键（扁平形，JS 侧按上游 mergeLiuyaoGearSettings 合并）。
+    liuyaoSettings: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "判读口径（上游六爻齿轮 24 键）：school 流派预设 / askType 占测事项(用神) / yongOverride / benming / "
+            "tuChangsheng / bianyaoScope / fushen / yuepoMode / shishen / jinTuiTu / tianshiSchool / yearBoundary / "
+            "guashen / sixGods / yuqi / yingqi / doctrine / gufa / yueLiushen / guirenFa / shenshaOn / shenshaBase / "
+            "shenshaSet / shenshaExOn；取值见 horosa_agent_guidance。"
+        ),
+    )
 
 
 class FirdariaInput(BirthInput):

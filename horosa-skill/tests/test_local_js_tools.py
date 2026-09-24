@@ -628,9 +628,11 @@ def test_yizhangjing_local_tool_runs_headless_engine(tmp_path) -> None:
     snapshot = result.data["snapshot_text"]
     for header in (
         "[起盘信息]", "[四柱四宫断语]", "[命宫与人事十二宫]", "[格局判定]",
-        "[大限]", "[小限与流年十二神]", "[神煞合参]",
+        "[大限]", "[小限与流年十二神]",
     ):
         assert header in snapshot, header
+    # 神煞合参层缺省随上游出厂档关（KinAstroMain.js yizhangjingShensha def false）→ 缺省不出该段。
+    assert "[神煞合参]" not in snapshot
     assert "生年支：寅(虎)" in snapshot
     # 确定性：同输入同快照。
     again = service.run_tool("yizhangjing", payload, save_result=False)

@@ -586,6 +586,11 @@ _ELECTIONSCAN_OPTION_KEYS = (
     # push_classical_request 实读、此前被滤掉的七键：
     "nodeExaltation", "dignityDebilities", "lotsDocReverse", "orbSystem", "luminaryOrbBonus",
     "customTermsDay", "customTermsNight",
+    # 上游 v3.11 起 ScanContext 实读的五键（election_scan.py:361-374）：[Q-418/T-381] 希腊点口径与主排盘
+    # perchart._applyLotVariants 同式（福点反转 / 福点变体 / 赫尔墨斯六点反转）；[Q-268/T-254] 自定义恒星黄道
+    # 'user' 档的历元 JD 与该历元岁差度。BirthInput 早已声明它们、chart 工具照常生效，唯独天星择日搜索被
+    # 本白名单滤掉 —— 夜间点类判定与所见主盘相反、'user' 档扫描静默回落 Lahiri。
+    "lotReversal", "lotFortuneVariant", "hermeticLotsReversal", "userAyanT0", "userAyanDeg",
 )
 
 
@@ -693,6 +698,37 @@ def _electionscan_options(options: Any) -> dict[str, Any]:
     if not isinstance(options, dict):
         return {}
     return {k: options[k] for k in _ELECTIONSCAN_OPTION_KEYS if options.get(k) is not None}
+
+
+# [Q-452 裁决 A / Q-453 裁决] 择日十宿主 + 天星 AI 快照的「命中清单」两旋钮（上游 utils/zeriSnapshotPrefs.js）：
+# 清单上限缺省 60 行（10–500）、前 N 行附判读树缺省 3（0–20，0=不附）。归一由 JS 侧 vendored 同名
+# normalize* 完成，Python 原样透传 builder 自己的键名 maxRows/explainRows（跨边界不改键）。
+def _zeri_snapshot_row_opts(payload: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    if payload.get("zeriSnapshotMaxRows") is not None:
+        out["maxRows"] = payload["zeriSnapshotMaxRows"]
+    if payload.get("zeriSnapshotExplainRows") is not None:
+        out["explainRows"] = payload["zeriSnapshotExplainRows"]
+    return out
+
+
+# 后端扫描家族（天星/七政/印度）的判读树要由宿主**预取**（上游 prefetchSnapshotExplains），Python 得先知道
+# 要打几次 /explain —— 这里与 zeriSnapshotPrefs.normalizeZeriSnapshotExplainRows 的 clampInt 同式
+# （缺省 3、夹到 [0, 20]、向下取整、非数回缺省）；与 JS 归一的逐值一致由 test_sync311_divination 对拍锚定。
+_ZERI_EXPLAIN_ROWS_DEFAULT, _ZERI_EXPLAIN_ROWS_MIN, _ZERI_EXPLAIN_ROWS_MAX = 3, 0, 20
+
+
+def _zeri_explain_rows(payload: dict[str, Any]) -> int:
+    raw = payload.get("zeriSnapshotExplainRows")
+    if raw is None or str(raw).strip() == "":
+        return _ZERI_EXPLAIN_ROWS_DEFAULT
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return _ZERI_EXPLAIN_ROWS_DEFAULT
+    if not math.isfinite(value):
+        return _ZERI_EXPLAIN_ROWS_DEFAULT
+    return max(_ZERI_EXPLAIN_ROWS_MIN, min(_ZERI_EXPLAIN_ROWS_MAX, math.floor(value)))
 
 
 def _electionscan_zone(zone: Any) -> str:
@@ -8169,8 +8205,13 @@ class HorosaSkillService:
             "results": intervals,
             "truncated": truncated,
         }
+        # [Q-453] 命中清单前 N 行附判读树：判读是服务端的，上游宿主扫描后预取（prefetchSnapshotExplains），
+        # builder 经 ctx.explainAt 按行序读缓存。函数过不了 JSON 边界 → 预取结果按行序交 JS，由 JS 装 explainAt。
+        explains = self._zeri_prefetch_explains("/electionscan/explain", base, intervals, payload, "天星择日")
         js_result = self._tianxing_js(
-            {"action": "snapshot", "chart": payload.get("chart"), "fields": fields, "ctx": ctx}, stage="snapshot"
+            {"action": "snapshot", "chart": payload.get("chart"), "fields": fields, "ctx": ctx,
+             "explains": explains, **_zeri_snapshot_row_opts(payload)},
+            stage="snapshot",
         )
         raw_snapshot = js_result.get("snapshot_text")
         snapshot_text = raw_snapshot if isinstance(raw_snapshot, str) and raw_snapshot.strip() else None
@@ -8494,6 +8535,11 @@ class HorosaSkillService:
                 "hsys": payload.get("hsys"),
                 "zodiacal": payload.get("zodiacal"),
                 "siderealAyanamsa": payload.get("siderealAyanamsa"),
+                # [Q-419/T-382][Q-268/T-254] 选中时刻盘与扫描同源构参（上游 previewChartParams 带全局古典口径 +
+                # 'user' 档历元两键，TianxingElectionMain.js:393-395）：否则非缺省口径下命中判定与所见盘不同形。
+                # 与扫描同一次双读合并（顶层 → options 覆盖）。
+                **_electionscan_options(payload),
+                **_electionscan_options(payload.get("options")),
                 # 择时盘沿用调用方已确认的设置；这里是同一次请求的内部子盘，不再过闸。
                 "agent_confirmed_settings": True,
                 "clarification_notes": "tianxing selected-moment sub-chart (same confirmed settings)",
@@ -8592,7 +8638,15 @@ class HorosaSkillService:
         # 沿用按原 date 预取的那份 → realSunTime/jiedelta 对不上 → 时柱/局错；窗口跨年时
         # jieqi_year_current 更是整年都错。本工具自己返回 prerequisites，正诱使 agent 回传它们。
         qimen_payload = {k: v for k, v in payload.items()
-                         if k not in ("nongli", "jieqi_year_prev", "jieqi_year_current")}
+                         if k not in ("nongli", "jieqi_year_prev", "jieqi_year_current",
+                                      "zeriSnapshotMaxRows", "zeriSnapshotExplainRows")}
+        # 展示盘跟随扫描口径：上游 QimenZeriMain.onPickInterval（:309-322）把冻结的扫描 options 整包回写
+        # 主盘。_run_qimen_tool 的起局三开关读**顶层**，此前 options 里给的 timeAlg/日界 只进了扫描 →
+        # 命中区间与展示盘不同局。这里用同一份合并后的 options（options 优先）回填顶层，整包 options 同传。
+        for key in ("timeAlg", "after23NewDay", "lateZiHourUseNextDay"):
+            if options.get(key) is not None:
+                qimen_payload[key] = options[key]
+        qimen_payload["options"] = options
         qimen = self._run_qimen_tool({
             **qimen_payload,
             "date": pan_date or start_date,
@@ -8603,8 +8657,13 @@ class HorosaSkillService:
             {
                 "action": "snapshot", "cfg": cfg, "geo": geo, "options": options, "tree": conditions,
                 "results": intervals, "truncated": bool(scan_data.get("truncated")),
+                # [Q-452/Q-453] 命中清单上限 + 前 N 行附判读树（JS 侧同步引擎直算，与扫描同源）。
+                **_zeri_snapshot_row_opts(payload),
             },
         )
+        extra_data = extra.get("data") if isinstance(extra.get("data"), dict) else {}
+        if extra_data.get("explain_error"):
+            _degrade("qimenzeri 命中行判读树不可得：%s", extra_data.get("explain_error"))
         base_text = qimen.get("snapshot_text")
         extra_text = extra.get("snapshot_text")
         snapshot_text = "\n\n".join(part.strip() for part in (base_text, extra_text) if isinstance(part, str) and part.strip()) or None
@@ -8649,6 +8708,99 @@ class HorosaSkillService:
     _ZERI_MAX_SPAN_DAYS = {"huanglizeri": 366}
     _ZERI_DEFAULT_MAX_SPAN_DAYS = 92
 
+    # 上游各择时宿主页的**出厂扫描口径**（组件 state.options 初值；日界两键=全局出厂值 1/1）。
+    # skill 此前只把调用方显式给的键交给引擎，余下落到引擎内建缺省 —— 而引擎缺省与页面出厂档并不
+    # 处处相同：六壬/三式扫描的贵人 guirengType 引擎缺省 0、页面出厂 2（liureng_gods 展示盘也是 2），
+    # 同一窗口因此扫出与桌面不同的命中集。现以此表打底，顶层与 options 依次覆盖。
+    _ZERI_PAGE_DEFAULT_OPTIONS: dict[str, dict[str, Any]] = {
+        "huanglizeri": {},                                                        # HuangliZeriMain：无扫描口径
+        "bazizeri": {"timeAlg": 0, "after23NewDay": 1, "lateZiHourUseNextDay": 1,
+                     "godKeyPos": "年", "phaseType": 0},                           # BaziZeriMain.js:80
+        "taiyizeri": {"tn": 0},                                                   # TaiyiZeriMain.js:47
+        "ziweizeri": {"timeAlg": 1, "gender": 1},                                 # ZiweiZeriMain.js:72
+        "liurengzeri": {"guirengType": 2, "yueMode": "zhongqi",
+                        "after23NewDay": 1, "lateZiHourUseNextDay": 1},            # LiurengZeriMain.js:79
+        "sanshizeri": {"guirengType": 2, "yueMode": "zhongqi", "taiyiAccum": 0,
+                       "after23NewDay": 1, "lateZiHourUseNextDay": 1, "timeAlg": 0},  # SanshiZeriMain.js:80
+    }
+
+    @staticmethod
+    def _zeri_display_overrides(tool_name: str, options: dict[str, Any]) -> dict[str, Any]:
+        """展示盘跟随扫描口径（上游 v3.11 [挂载自检 F-37]「所见行=所判口径」）。
+
+        按各宿主 buildFields / applyWorkbenchCalibre 的键映射，把**扫描实际生效**的口径（页面出厂档 ⊕ 顶层
+        ⊕ options；键缺席时取扫描引擎自身缺省）写进基底工具的入参。只映射基底工具真能吃的键 —— 六壬的
+        yueMode(节气换将)与三式的六壬贵人，基底工具（liureng_gods / sanshiunited）尚无对应入参，未能跟随。
+        """
+        def eff(key: str, engine_default: Any) -> Any:
+            value = options.get(key)
+            return engine_default if value is None else value
+
+        if tool_name == "bazizeri":
+            # BaziZeriMain.buildFields（:323-345）：timeAlg/phaseType/godKeyPos/日界/晚子时 取冻结扫描 options。
+            out = {"timeAlg": eff("timeAlg", 0), "after23NewDay": eff("after23NewDay", 1),
+                   "lateZiHourUseNextDay": eff("lateZiHourUseNextDay", 1)}
+            for key in ("godKeyPos", "phaseType"):
+                if options.get(key) is not None:
+                    out[key] = options[key]
+            return out
+        if tool_name == "ziweizeri":
+            # ZiweiZeriMain.buildFields（:318-332）：gender/timeAlg 取扫描 options，缺省 1/1 = 扫描引擎缺省
+            # （computeZiweiScanPan：timeAlg 缺省钟表时、gender 缺省男）。
+            return {"timeAlg": eff("timeAlg", 1), "gender": eff("gender", 1)}
+        if tool_name == "liurengzeri":
+            # LiurengZeriMain.requestChartAndPlot（:146-148 日界/晚子时）+ applyWorkbenchCalibre（:306-313 贵人）。
+            return {"guirengType": eff("guirengType", 0), "after23NewDay": eff("after23NewDay", 1),
+                    "lateZiHourUseNextDay": eff("lateZiHourUseNextDay", 1)}
+        if tool_name == "taiyizeri":
+            # TaiyiZeriMain.buildFields（:309-327：性别←options.sex、日界缺省 0、晚子时缺省 1，与
+            # computeTaiyiScanPan 同缺省）+ applyWorkbenchCalibre（:255-261：tn 进太乙页 options）。
+            taiyi_options = {"tn": eff("tn", 0)}
+            if options.get("sex") is not None:
+                taiyi_options["sex"] = options["sex"]
+            if isinstance(options.get("school"), dict):
+                # 流派六轴对象（扫描引擎 applyTaiyiSchool(pan, o.school) 按对象展开；字符串档在扫描侧即无效）。
+                taiyi_options["school"] = options["school"]
+            return {"after23NewDay": eff("after23NewDay", 0), "lateZiHourUseNextDay": eff("lateZiHourUseNextDay", 1),
+                    "options": taiyi_options}
+        if tool_name == "sanshizeri":
+            # SanshiZeriMain.applyWorkbenchCalibre（:326-335）：奇门盘式键 / 太乙 taiyiAccum / 共享时间键 进三式页。
+            out: dict[str, Any] = {"timeAlg": eff("timeAlg", 0), "after23NewDay": eff("after23NewDay", 1),
+                                   "lateZiHourUseNextDay": eff("lateZiHourUseNextDay", 1)}
+            qimen = {k: options[k] for k in ("paiPanType", "qijuMethod", "school", "zhiShiType", "kongMode", "yimaMode")
+                     if options.get(k) is not None}
+            if qimen:
+                out["qimen_options"] = qimen
+            if options.get("taiyiAccum") is not None:
+                out["taiyi_options"] = {"tn": options["taiyiAccum"]}
+            return out
+        return {}
+
+    def _zeri_prefetch_explains(
+        self, endpoint: str, base: dict[str, Any], intervals: list[dict[str, Any]], payload: dict[str, Any], label: str
+    ) -> list[Any]:
+        """[Q-453] 后端扫描家族（天星/七政/印度）命中清单前 N 行的判读树。
+
+        与上游宿主 prefetchSnapshotExplains（TianxingElectionMain.js:358-374 等三处）同式：扫描完成后对前
+        N 行（zeriSnapshotExplainRows，缺省 3）逐行打 /explain，t = row.pick 或 start+':00'、'-'→'/'；结果按
+        行序交给 builder 的 explainAt。单行失败按上游置 null（该行只列清单、不附判读），但失败本身进
+        envelope.warnings，不静默。
+        """
+        count = min(_zeri_explain_rows(payload), len(intervals))
+        explains: list[Any] = []
+        for index in range(count):
+            row = intervals[index] if isinstance(intervals[index], dict) else {}
+            t = str(row.get("pick") or f"{row.get('start')}:00").replace("-", "/")
+            try:
+                raw = self._call_remote(endpoint, {**base, "t": t})
+                data = self._require_electionscan_ok(raw, endpoint=endpoint)
+            except HorosaSkillError as exc:
+                _degrade("%s 第 %d 行判读树预取失败（%s）：%s", label, index + 1, endpoint, exc)
+                explains.append(None)
+                continue
+            explains.append(data if isinstance(data, dict) else None)
+        return explains
+
     def _run_zeri_scan_tool(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
         spec = self._ZERI_SCAN_TOOLS[tool_name]
         label = spec["label"]
@@ -8677,12 +8829,21 @@ class HorosaSkillService:
         # 起局开关既可走顶层（schema 逐个带描述，agent 照传是正确用法）也可走 options，options 优先
         # —— 与 tianxing / qimenzeri 同款双读合并。只读 options 会让顶层写法被静默丢弃，
         # 于是命中区间与展示盘不同局，而配置段还打出一个没用上的设置（v0.33.1 教训）。
+        # 底层先铺**上游宿主页出厂扫描口径**（_ZERI_PAGE_DEFAULT_OPTIONS）：只把调用方给的键交给
+        # 引擎时，余下落到引擎内建缺省，而它与桌面页出厂档并不处处相同。
+        top_keys = ("timeAlg", "after23NewDay", "lateZiHourUseNextDay", "godKeyPos", "phaseType", "guirengType", "school")
+        if tool_name == "ziweizeri":
+            # 紫微扫描按 options.gender 起盘（ziweiZeriScanEngine.computeZiweiScanPan），上游工作台常驻该键；
+            # 此前 skill 既不声明也不合并顶层 gender → 女命恒按男命扫描，展示盘却按顶层性别出。
+            top_keys = (*top_keys, "gender")
         options = {
-            **{k: payload[k] for k in ("timeAlg", "after23NewDay", "lateZiHourUseNextDay",
-                                       "godKeyPos", "phaseType", "guirengType", "school")
-               if payload.get(k) is not None},
+            **self._ZERI_PAGE_DEFAULT_OPTIONS.get(tool_name, {}),
+            **{k: payload[k] for k in top_keys if payload.get(k) is not None},
             **(payload.get("options") or {}),
         }
+        if tool_name == "ziweizeri" and options.get("gender") is not None:
+            # 上游 ZiweiZeriMain.buildGeoParams 同把工作台性别放进 geoParams（:193）。
+            geo["gender"] = options["gender"]
         natal = payload.get("natal") if isinstance(payload.get("natal"), dict) else None
 
         request = {"technique": tool_name, "action": "scan", "cfg": cfg, "geo": geo,
@@ -8712,9 +8873,15 @@ class HorosaSkillService:
         base_payload = {k: v for k, v in payload.items()
                         if k not in ("conditions", "options", "natal", "maxHits", "maxSpanDays",
                                      "startDate", "startTime", "endDate", "endTime",
+                                     "zeriSnapshotMaxRows", "zeriSnapshotExplainRows",
                                      "nongli", "jieqi_year_prev", "jieqi_year_current")}
         base_payload["date"] = pan_date or start_date
         base_payload["time"] = pan_time or start_time or "00:00:00"
+        # 展示盘跟随**扫描口径**（上游 v3.11「所见行=所判口径」：各宿主 buildFields/applyWorkbenchCalibre
+        # 把冻结的扫描 options 回写进 pick 后的显示盘）。此前 base_payload 丢掉 options、只剩顶层 →
+        # options 里给的时间算法/贵人/日界对展示盘全无效，且缺省时展示盘走基底工具自己的缺省
+        # （紫微扫描恒钟表时、展示盘却按 ziwei_birth 的真太阳时出），同一次结果里两套口径。
+        base_payload.update(self._zeri_display_overrides(tool_name, options))
         # 走公共 run_tool 而非各自的私有 runner：六个基底技法的内部调用形状并不统一
         # （qimen 是 _run_qimen_tool(payload)、liureng 是 _run_liureng_tool(name, payload)、
         # bazi/ziwei 干脆没有私有 runner 而走通用远端路径）。run_tool 对四种都一致，
@@ -8745,8 +8912,13 @@ class HorosaSkillService:
             "zeri_scan",
             {"technique": tool_name, "action": "snapshot", "cfg": cfg, "geo": geo, "options": options,
              **({"natal": natal} if natal else {}),
-             "tree": conditions, "results": intervals, "truncated": bool(scan_data.get("truncated"))},
+             "tree": conditions, "results": intervals, "truncated": bool(scan_data.get("truncated")),
+             # [Q-452/Q-453] 命中清单上限 + 前 N 行附判读树（JS 侧同步引擎直算 explainAt，与扫描同源）。
+             **_zeri_snapshot_row_opts(payload)},
         )
+        extra_data = extra.get("data") if isinstance(extra.get("data"), dict) else {}
+        if extra_data.get("explain_error"):
+            _degrade("%s 命中行判读树不可得：%s", tool_name, extra_data.get("explain_error"))
         base_text = base.get("snapshot_text") if isinstance(base, dict) else None
         extra_text = extra.get("snapshot_text")
         snapshot_text = "\n\n".join(
@@ -8793,6 +8965,63 @@ class HorosaSkillService:
     }
     # 后端单请求硬上限 93 天（election_scan 家族共用），上游用按月分段绕开。
     _ZERI_BACKEND_MAX_SPAN_DAYS = 731
+
+    # 后端扫描上下文**实读**的口径键 + 上游宿主页出厂档（buildScanPayload 同键同缺省）：
+    #   七政 QizhengScanContext（qizheng_election_scan.py:72-81）读 su28Mode（仅 2 回归今宿 / 3 开禧宿度，其余
+    #     ValueError）、nodeType、lilithType（mean|true）、fuOrb；页面出厂 {su28Mode:2, nodeType:'mean',
+    #     lilithType:'mean'}（QizhengZeriMain.js:56,201-219）。
+    #   印度 IndiaScanContext（india_election_scan.py:71-72）读 ayanamsa（缺省 lahiri）、nodeType；页面出厂
+    #     {ayanamsa:'lahiri', nodeType:'mean'}（IndiaZeriMain.js:57,170-193）。
+    _ZERI_BACKEND_SCAN_KEYS: dict[str, tuple[str, ...]] = {
+        "qizhengzeri": ("su28Mode", "nodeType", "lilithType", "fuOrb"),
+        "indiazeri": ("ayanamsa", "nodeType"),
+    }
+    _ZERI_BACKEND_SCAN_DEFAULTS: dict[str, dict[str, Any]] = {
+        "qizhengzeri": {"su28Mode": 2, "nodeType": "mean", "lilithType": "mean"},
+        "indiazeri": {"ayanamsa": "lahiri", "nodeType": "mean"},
+    }
+
+    def _zeri_backend_scan_options(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """后端扫描口径：页面出厂档 → 顶层 → options 依次覆盖（与 tianxing 同款双读，options 优先）。
+
+        取值越界一律结构化报错，不交后端去静默回落（nodeType 写错会被后端当 mean、su28Mode 越界会 500）。
+        """
+        keys = self._ZERI_BACKEND_SCAN_KEYS.get(tool_name, ())
+        options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+        merged: dict[str, Any] = dict(self._ZERI_BACKEND_SCAN_DEFAULTS.get(tool_name, {}))
+        if tool_name == "indiazeri" and payload.get("indiaAyanamsa") is not None:
+            # 与 india_chart 同词表的 indiaAyanamsa 作 ayanamsa 的别名（上游印度择时页把扫描岁差回写
+            # 显示盘的 indiaAyanamsa 字段，IndiaZeriMain.js:350 —— 两名同一值）；显式 ayanamsa 优先。
+            merged["ayanamsa"] = payload["indiaAyanamsa"]
+        for source in (payload, options):
+            for key in keys:
+                if source.get(key) is not None:
+                    merged[key] = source[key]
+        if tool_name == "qizhengzeri":
+            try:
+                su28 = int(merged.get("su28Mode"))
+            except (TypeError, ValueError):
+                su28 = None
+            if su28 not in (2, 3):
+                raise ToolValidationError(
+                    "七政择时的宿度制只支持 su28Mode=2（回归今宿，缺省）或 3（开禧宿度）。",
+                    code="tool.qizhengzeri_bad_su28mode",
+                    details={"su28Mode": merged.get("su28Mode"), "allowed": [2, 3],
+                             "why": "后端 QizhengScanContext 只实现这两档（qizheng_election_scan.py:74-76）。"},
+                )
+            merged["su28Mode"] = su28
+        for key in ("nodeType", "lilithType"):
+            if key not in merged:
+                continue
+            value = str(merged[key]).strip().lower()
+            if value not in ("mean", "true"):
+                raise ToolValidationError(
+                    f"{tool_name} 的 {key} 只接受 mean（平，缺省）或 true（真）。",
+                    code=f"tool.{tool_name}_bad_{key.lower()}",
+                    details={key: merged[key], "allowed": ["mean", "true"]},
+                )
+            merged[key] = value
+        return merged
 
     def _run_zeri_backend_tool(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
         spec = self._ZERI_BACKEND_TOOLS[tool_name]
@@ -8847,11 +9076,16 @@ class HorosaSkillService:
             "conditions": compiled,
         }
         for key in ("lat", "lon", "gpsLat", "gpsLon", "pos", "hsys", "zodiacal", "siderealAyanamsa",
-                    "height", "ayanamsaDeg", "indiaAyanamsa", "indiaHsys", "natal"):
+                    "height", "natal"):
             if payload.get(key) is not None:
                 base_request[key] = payload[key]
         base_request.update(_electionscan_options(payload))
         base_request.update(_electionscan_options(payload.get("options")))
+        # 后端扫描上下文**实读**的口径键（与上游宿主 buildScanPayload 同键同缺省）。此前 skill 发的是
+        # indiaAyanamsa（IndiaScanContext 不读 → 印度择时恒按 Lahiri）与 ayanamsaDeg/indiaHsys（两个扫描都不读），
+        # 七政三键一个不发、options 白名单也滤掉了它们 —— 口径看似可调，搜索结果从不变。
+        scan_opts = self._zeri_backend_scan_options(tool_name, payload)
+        base_request.update(scan_opts)
 
         # 按月分段：后端单请求 93 天硬顶，上游在 UI 里分段绕开。§5「请求型 builder 归 Python」→
         # 循环写在这里；分段/缝合的算术仍走 vendored 那份，边界才与星阙逐字一致。
@@ -8869,6 +9103,9 @@ class HorosaSkillService:
         stitched = self._tianxing_js({"action": "stitch", "lists": lists}, stage="stitch")
         intervals = stitched.get("intervals") or []
 
+        # [Q-453] 命中清单前 N 行附判读树：服务端判读，上游宿主扫描后预取（QizhengZeriMain.js:327-340 /
+        # IndiaZeriMain.js:295-308），builder 经 explainAt 按行序读缓存。
+        explains = self._zeri_prefetch_explains(spec["explain"], base_request, intervals, payload, label)
         extra = self.js_client.run(
             "zeri_scan_remote",
             {"technique": tool_name, "action": "snapshot",
@@ -8876,7 +9113,8 @@ class HorosaSkillService:
                                                            "gpsLon", "gpsLat") if payload.get(k) is not None}},
              "geo": {k: payload.get(k) for k in ("zone", "lat", "lon", "gpsLat", "gpsLon", "pos")
                      if payload.get(k) is not None},
-             "tree": conditions, "results": intervals, "truncated": truncated},
+             "tree": conditions, "results": intervals, "truncated": truncated,
+             "explains": explains, **_zeri_snapshot_row_opts(payload)},
         )
         extra_text = extra.get("snapshot_text")
 
@@ -8887,15 +9125,28 @@ class HorosaSkillService:
             pan_date, _, pan_time = str(pan_moment).partition(" ")
             base_payload = {k: v for k, v in payload.items()
                             if k not in ("conditions", "options", "natal", "maxHits", "maxSpanDays",
-                                         "startDate", "startTime", "endDate", "endTime")}
+                                         "startDate", "startTime", "endDate", "endTime",
+                                         "zeriSnapshotMaxRows", "zeriSnapshotExplainRows",
+                                         "su28Mode", "nodeType", "lilithType", "fuOrb")}
             base_payload.update({"date": pan_date or start_date,
                                  "time": pan_time or start_time or "00:00:00",
                                  "agent_confirmed_settings": True,
                                  "clarification_notes": f"{tool_name} selected-moment sub-chart"})
+            if tool_name == "qizhengzeri":
+                # 展示盘跟随扫描口径（上游 QizhengZeriMain.buildFields :365-402 [挂载自检 F-37]）：罗计交点 / 月孛
+                # 走 guolao 键名（perchart.applyGuolaoSiyu 读 guolaoNodeType/guolaoLilithType）。宿度制
+                # （su28Mode→doubingSu28）尚不能跟随：GuoLaoInput.doubingSu28 仍是 bool，2/3 过不了校验。
+                base_payload["guolaoNodeType"] = scan_opts.get("nodeType", "mean")
+                base_payload["guolaoLilithType"] = scan_opts.get("lilithType", "mean")
             base_env = self.run_tool(spec["base_tool"], base_payload, save_result=False)
             if base_env.ok and isinstance(base_env.data, dict):
                 base = base_env.data
                 base_text = base.get("snapshot_text")
+            else:
+                # 命中区间照常交付，但展示盘缺席必须可见（此前静默吞掉 → 基底段整段消失而无任何说明）。
+                base_err = base_env.error
+                _degrade("%s 展示盘（%s）铸盘失败：%s", tool_name, spec["base_tool"],
+                         (base_err.message if base_err else "") or "未知错误")
         else:
             pan_moment = intervals[0].get("pick") if intervals else f"{start_date} {start_time}"
 
@@ -9843,6 +10094,8 @@ class HorosaSkillService:
             "yongGong": payload.get("yongGong", 1),
             "kline": payload.get("kline"),
             "askEvent": payload.get("askEvent") or payload.get("question") or "",
+            # 闢卦细判口径（上游挂载 schema xiaochengtu.piKoujing：zheng 正传缺省 / yiwen 异文）→ [四象]。
+            "piKoujing": payload.get("piKoujing"),
             "timeLines": [],
         }
         if fa == "time":
@@ -12949,6 +13202,11 @@ class HorosaSkillService:
         return result
 
     def _run_sixyao_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # [Q-390/T-372] 占时时间算法：页面 > 全局 > 缺省真太阳时(0)（上游 GuaZhanMain.genParams，
+        # GuaZhanMain.js:666-669）。此前根本不发 timeAlg → 桥恒按真太阳时，用户选「直接时间」静默无效。
+        # 日界/晚子时两开关与上游同带（genParams 带 defaultAfter23NewDay/defaultLateZiHourUseNextDay）：
+        # 仅显式给定时发送，缺省走后端默认 1/1 = 星阙出厂全局默认，字节与此前相同。
+        time_alg = payload.get("timeAlg")
         nongli = self._call_remote(
             "/nongli/time",
             {
@@ -12959,6 +13217,8 @@ class HorosaSkillService:
                 "lat": payload["lat"],
                 "gpsLat": payload.get("gpsLat"),
                 "gpsLon": payload.get("gpsLon"),
+                "timeAlg": time_alg if time_alg is not None else 0,
+                **_day_boundary_switches(payload),
                 "ad": payload.get("ad", 1),
             },
         )
@@ -12970,12 +13230,21 @@ class HorosaSkillService:
         changed_code = payload.get("changed_code") or _derive_changed_gua_code(lines)
         descs = self._call_remote("/gua/desc", {"name": [current_code, changed_code]})
         # 断卦结构（六爻全流派 analyzeLiuyao 引擎，core-js）：纳甲/世应/六亲/用神/旺衰/飞伏/六神/动变。
-        # 优雅降级：无 node / 引擎失败 → struct_text 空 → 快照不出 [断卦结构] 段（列 optional，不误报 missing）。
+        # 判读口径 liuyaoSettings = 上游挂载齿轮 24 键（扁平形），JS 侧按上游 mergeLiuyaoGearSettings
+        # 合并（选流派即套该派细项）。优雅降级：无 node / 引擎失败 → struct_text 空 → 快照不出
+        # [断卦结构] 段（列 optional，不误报 missing），但降级本身进 envelope.warnings，不静默。
         struct_text = ""
+        struct_data: dict[str, Any] = {}
+        liuyao_settings = payload.get("liuyaoSettings")
+        js_request: dict[str, Any] = {"lines": lines, "nongli": nongli}
+        if isinstance(liuyao_settings, dict):
+            js_request["liuyaoSettings"] = liuyao_settings
         try:
-            struct = self.js_client.run("liuyao", {"lines": lines, "nongli": nongli})
+            struct = self.js_client.run("liuyao", js_request)
             struct_text = struct.get("snapshot_text") or ""
-        except ToolTransportError:
+            struct_data = struct.get("data") if isinstance(struct.get("data"), dict) else {}
+        except ToolTransportError as exc:
+            _degrade("liuyao struct engine failed: %s", exc)
             struct_text = ""
         snapshot_text = _build_sixyao_snapshot_text(payload, nongli, current_code, changed_code, lines, descs, struct_text)
         result = {
@@ -12987,6 +13256,25 @@ class HorosaSkillService:
             "descriptions": descs,
             "snapshot_text": snapshot_text,
         }
+        if struct_data.get("settings"):
+            result["liuyao_settings"] = struct_data["settings"]
+        warnings: list[str] = []
+        if struct_data.get("settings_ignored"):
+            warnings.append(
+                f"liuyaoSettings 中这些键不是六爻判读口径，已忽略：{struct_data['settings_ignored']}"
+                "（可用键见 horosa_agent_guidance(tool_name=\"sixyao\")）。"
+            )
+        if struct_data.get("settings_invalid"):
+            warnings.append(
+                f"liuyaoSettings 取值不在词表内，已按缺省处理：{struct_data['settings_invalid']}。"
+            )
+        if struct_data.get("settings_unsurfaced"):
+            warnings.append(
+                f"liuyaoSettings 的 {struct_data['settings_unsurfaced']} 只改上游 [断诀命中]/[占类断语] 两段，"
+                "本工具尚不产这两段，故这些键不改变本次输出。"
+            )
+        if warnings:
+            result["_warnings"] = warnings
         result["export_snapshot"] = self._augment_export_payload(technique="sixyao", snapshot_text=snapshot_text)
         return result
 

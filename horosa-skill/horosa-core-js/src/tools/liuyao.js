@@ -2,10 +2,80 @@
 // 输出 [断卦结构] 段（流派/卦序·世应/卦象/成局/用神·原忌仇/卦身/逐爻纳甲六神旺衰状态神煞/动变）。
 // 单一真值源 = analyzeLiuyao；任一步失败回空（不连累既有 sixyao 段）。
 import { analyzeLiuyao, guaFromLines } from '../vendor/gua/liuyaoFacade.js';
-import { normalizeLiuyaoSettings, LIUYAO_PRESETS } from '../vendor/gua/liuyaoSchools.js';
+import { normalizeLiuyaoSettings, applyPreset, LIUYAO_PRESETS } from '../vendor/gua/liuyaoSchools.js';
+import { YONGSHEN_CATEGORIES } from '../vendor/gua/liuyaoYongShen.js';
 
 function gz(v) {
   return `${v || ''}`.trim();
+}
+
+// ── 六爻判读口径（liuyaoSettings）────────────────────────────────────────────────────
+// 键表 = 上游 AI 挂载齿轮 SIXYAO_FIELDS 的 24 个 name 与控件类型（techniqueMountSettings.js:614-676，
+// 上游 HEAD 9b74714b），逐键移植。上游 mergeLiuyaoGearSettings 就是按这张 schema 机械求白名单的；
+// skill 不 vendor 那份 2798 行的 schema 文件（它 import 了半棵 UI 常量树），故只移植「键名 + 是否开关」——
+// 值域与缺省仍由 vendored liuyaoSchools / 各判读引擎自己的词表决定。键表漂移由
+// tests/test_sync311_divination.py 在有上游 checkout 时对拍上游源看守。
+export const LIUYAO_GEAR_FIELDS = Object.freeze({
+  school: 'select', askType: 'select', yongOverride: 'select', benming: 'select',
+  tuChangsheng: 'select', bianyaoScope: 'select', fushen: 'select', yuepoMode: 'select',
+  shishen: 'select', jinTuiTu: 'select', tianshiSchool: 'select', yearBoundary: 'select',
+  guashen: 'switch', sixGods: 'switch', yuqi: 'switch', yingqi: 'switch', doctrine: 'switch',
+  gufa: 'switch', yueLiushen: 'switch', guirenFa: 'select',
+  shenshaOn: 'switch', shenshaBase: 'select', shenshaSet: 'multiselect', shenshaExOn: 'switch',
+});
+// 这六键只改上游 [断诀命中]/[占类断语] 两段的内容（liuyaoSnapshotEx.duanJueLines/zhanleiLines 读
+// a.shiShen/a.shenShaEx/a.yueLiuShenAnn/a.gufa/a.tianshi/yuqiStrong）；skill 的 sixyao 快照尚不产这两段，
+// 所以它们虽进判读引擎、却不改本工具的任何输出行 —— 如实回执为 unsurfaced，不装作生效。
+const LIUYAO_UNSURFACED_KEYS = ['shishen', 'tianshiSchool', 'yuqi', 'gufa', 'yueLiushen', 'shenshaExOn'];
+const LY_STRUCTURAL = ['shenshaOn', 'shenshaBase', 'shenshaSet', 'shenshaExOn'];
+const lyBool = (v) => v === true || v === 1 || v === '1';
+
+// 上游 mergeLiuyaoGearSettings（aiAnalysisContext.js:1684-1731）逐行同构。saved = 存档卦的
+// liuyaoSettings；skill 每次现起卦、无存档层，恒传 {}。
+export function mergeLiuyaoGearSettings(saved, flat) {
+  const f = flat && typeof flat === 'object' ? flat : {};
+  let base = saved && typeof saved === 'object' ? { ...saved } : {};
+  // [Q-206/T-151] 选中的预设与存档流派不同 → 以 applyPreset(该派) 为底，其余齿轮键再叠上。
+  if (f.school && f.school !== base.school && LIUYAO_PRESETS[f.school]) {
+    base = applyPreset(f.school, base);
+  }
+  Object.keys(LIUYAO_GEAR_FIELDS).forEach((k) => {
+    if (LY_STRUCTURAL.indexOf(k) >= 0 || f[k] === undefined) {
+      return;
+    }
+    base[k] = LIUYAO_GEAR_FIELDS[k] === 'switch' ? lyBool(f[k]) : f[k];
+  });
+  if (f.shenshaOn !== undefined || f.shenshaBase !== undefined || f.shenshaSet !== undefined) {
+    const prev = (saved && saved.shensha && typeof saved.shensha === 'object') ? saved.shensha : {};
+    base.shensha = {
+      ...prev,
+      ...(f.shenshaOn !== undefined ? { on: lyBool(f.shenshaOn) } : {}),
+      ...(f.shenshaBase !== undefined ? { base: f.shenshaBase } : {}),
+      ...(f.shenshaSet !== undefined && Array.isArray(f.shenshaSet) ? { set: f.shenshaSet.slice() } : {}),
+    };
+  }
+  if (f.shenshaExOn !== undefined) {
+    base.shenshaEx = {
+      ...((saved && saved.shenshaEx && typeof saved.shenshaEx === 'object') ? saved.shenshaEx : { set: null }),
+      on: lyBool(f.shenshaExOn),
+    };
+  }
+  return base;
+}
+
+// 回执：认不出的键 / 值不在 vendored 词表里的键 / 只改 skill 尚不产之段的键，三类各自如实列出。
+function liuyaoSettingsReport(flat) {
+  const f = flat && typeof flat === 'object' ? flat : {};
+  const ignored = Object.keys(f).filter((k) => !Object.prototype.hasOwnProperty.call(LIUYAO_GEAR_FIELDS, k)).sort();
+  const invalid = [];
+  if (f.school !== undefined && !LIUYAO_PRESETS[f.school] && f.school !== 'custom') {
+    invalid.push(`school=${f.school}`);
+  }
+  if (f.askType !== undefined && !YONGSHEN_CATEGORIES.some((c) => c.key === f.askType)) {
+    invalid.push(`askType=${f.askType}`);
+  }
+  const unsurfaced = LIUYAO_UNSURFACED_KEYS.filter((k) => f[k] !== undefined);
+  return { ignored, invalid, unsurfaced };
 }
 
 export function runLiuyao(payload) {
@@ -19,17 +89,27 @@ export function runLiuyao(payload) {
       return { snapshot_text: '' };
     }
     const nongli = payload?.nongli || {};
-    const yearGz = gz(nongli.yearJieqi || nongli.yearGanZi || nongli.year);
+    const gear = payload?.liuyaoSettings && typeof payload.liuyaoSettings === 'object' ? payload.liuyaoSettings : null;
+    const settings = normalizeLiuyaoSettings(gear ? mergeLiuyaoGearSettings({}, gear) : null);
+    // ctx 与上游 liuyaoStructLines / liuyaoSnapshotEx.buildSnapshotAnalysis 三处同口径
+    // （GuaZhanMain.js:118-144）：年界线吃 settings.yearBoundary（正月初一派取 yearGZByLunar），
+    // 并补 monthNum/hourZhi/jieqiName —— 缺则月建六神/扩展神煞/八节卦气在判读层空转。
+    const yearGz = gz((settings.yearBoundary === 'lunar'
+      ? (nongli.yearGZByLunar || nongli.yearGanZi || nongli.yearJieqi)
+      : (nongli.yearJieqi || nongli.yearGanZi || nongli.yearGZByLunar)) || nongli.year);
     const monthGz = gz(nongli.monthGanZi);
     const dayGz = gz(nongli.dayGanZi);
+    const hourGz = gz(nongli.timeGanZi || nongli.hourGanZi);
     const ctx = {
       dayGan: dayGz.length >= 2 ? dayGz[0] : null, dayZhi: dayGz.length >= 2 ? dayGz[1] : null,
       monthGan: monthGz.length >= 2 ? monthGz[0] : null, monthZhi: monthGz.length >= 2 ? monthGz[1] : null,
+      monthNum: (['寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥', '子', '丑'].indexOf(monthGz.length >= 2 ? monthGz[1] : '') + 1) || null,
       yearGan: yearGz.length >= 2 ? yearGz[0] : null, yearZhi: yearGz.length >= 2 ? yearGz[1] : null,
+      hourZhi: hourGz.length >= 2 ? hourGz[1] : null,
+      jieqiName: gz(nongli.jieqi || nongli.jieqiName) || null,
     };
     const moving = [];
     lines.forEach((y, i) => { if (y.change) { moving.push(i + 1); } });
-    const settings = normalizeLiuyaoSettings(payload?.liuyaoSettings);
     const a = analyzeLiuyao(gua, moving, ctx, settings);
     if (!a) {
       return { snapshot_text: '' };
@@ -74,6 +154,11 @@ export function runLiuyao(payload) {
         ].filter(Boolean).join('·');
         out.push(`第${m.pos}爻动：${m.ben.liuqin}${m.ben.zhi}${m.ben.wuxing} → ${m.bian.liuqin}${m.bian.zhi}${m.bian.wuxing}${tags ? ' ' + tags : ''}`);
       });
+      // [Q-201/T-144] 变爻范围=盲派(作用他爻)：上游 liuyaoStructLines 在动变之后出这一行
+      // （GuaZhanMain.js:188-190，行文逐字同）；缺省 traditional 不出行，字节不变。
+      if (Array.isArray(a.dongBian.blindEffects) && a.dongBian.blindEffects.length) {
+        out.push(`盲派作用：${a.dongBian.blindEffects.map((e) => `第${e.from}爻→第${e.to}爻(${e.toLiuqin || ''})${e.rel}`).join('、')}`);
+      }
     }
     // 断诀命中（v3.5.1 六爻扩充 liuyaoDuanJue）：本盘命中的经典口诀（暗动/随官入墓/金锁玉关十例…）。
     const dj = a.duanJue;
@@ -104,7 +189,24 @@ export function runLiuyao(payload) {
         out.push(`  ${r.rule}${r.targets && r.targets.length ? '→' + r.targets.join('/') : ''}${r.scope ? '(' + r.scope + ')' : ''}`);
       });
     }
-    return { snapshot_text: out.join('\n') };
+    const report = liuyaoSettingsReport(gear);
+    return {
+      snapshot_text: out.join('\n'),
+      data: {
+        // 实际生效的判读口径（归一后），供 Python 如实回执；settings_* 三类回执见 liuyaoSettingsReport。
+        settings: {
+          school: settings.school, askType: settings.askType, yongOverride: settings.yongOverride,
+          benming: settings.benming, tuChangsheng: settings.tuChangsheng, bianyaoScope: settings.bianyaoScope,
+          fushen: settings.fushen, yuepoMode: settings.yuepoMode, jinTuiTu: settings.jinTuiTu,
+          yearBoundary: settings.yearBoundary, guashen: settings.guashen, sixGods: settings.sixGods,
+          yingqi: settings.yingqi, doctrine: settings.doctrine, guirenFa: settings.guirenFa,
+          shensha: settings.shensha,
+        },
+        settings_ignored: report.ignored,
+        settings_invalid: report.invalid,
+        settings_unsurfaced: report.unsurfaced,
+      },
+    };
   } catch (e) {
     return { snapshot_text: '' };
   }

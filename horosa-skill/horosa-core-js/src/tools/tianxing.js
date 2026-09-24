@@ -9,6 +9,7 @@ import { compileTree } from '../vendor/divination/zeri/conditionTypes.js';
 import { buildTianxingSnapshot } from '../vendor/divination/zeri/tianxingSnapshot.js';
 import { splitByMonth, stitchIntervals } from '../vendor/divination/zeri/intervalOps.js';
 import { conditionSummaryText } from '../vendor/divination/zeri/conditionGlyph.js';
+import { zeriRowOpts, withLeafKind, explainAtFromList } from './zeriSnapshotOpts.js';
 
 // ── [单时判读]（/electionscan/explain 的文本化）────────────────────────────────
 // 语汇与配对规则逐字取自上游 ConditionBuilderModal.js:139-181（renderExplainNode）：
@@ -105,7 +106,15 @@ export function runTianxing(payload) {
   }
 
   // --- snapshot ---
-  const ctx = input.ctx && typeof input.ctx === 'object' ? input.ctx : {};
+  const rawCtx = input.ctx && typeof input.ctx === 'object' ? input.ctx : {};
+  // [Q-452/Q-453] 命中清单上限 + 前 N 行附判读树：判读是服务端的，Python 按上游 prefetchSnapshotExplains
+  // 预取、按行序交来（input.explains），这里装成 builder 读的 ctx.explainAt（TianxingElectionMain.js:425）。
+  const ctx = {
+    ...rawCtx,
+    tree: withLeafKind(rawCtx.tree || null),
+    ...zeriRowOpts(input),
+    explainAt: explainAtFromList(input.explains),
+  };
   let snapshot_text = '';
   try {
     snapshot_text = buildTianxingSnapshot(input.chart || null, input.fields || null, input.extra || null, ctx) || '';

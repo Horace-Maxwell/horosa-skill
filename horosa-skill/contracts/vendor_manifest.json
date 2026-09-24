@@ -1971,7 +1971,9 @@
     },
     "xiaochengtu/xiaochengtuSnapshot.js": {
       "mode": "bespoke",
-      "why": "no upstream file of this name (skill-authored)"
+      "why": "自上游 XiaoChengTuMain.js 逐字抽出 buildXiaoChengTuSnapshotText（函数体逐字同，剥 React 外壳 + LUOSHU_ROWS 常量）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "derived_from": "components/xiaochengtu/XiaoChengTuMain.js",
+      "derived_sha256": "b310ed359ad25e933ef0b9b821940d627e3b31f263783d1eef72fccea46bcf25"
     },
     "xiaoliuren/xiaoliurenConst.js": {
       "upstream": "components/xiaoliuren/core/xiaoliurenConst.js",

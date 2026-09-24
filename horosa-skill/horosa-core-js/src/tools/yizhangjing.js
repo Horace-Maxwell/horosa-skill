@@ -48,10 +48,23 @@ export function runYizhangjing(payload) {
   const time = `${input.time ?? ''}`.trim() || '00:00:00';
   // timeAlg 缺省 1（钟表时），与 canping/heluo 一致。
   const timeAlg = input.timeAlg === undefined || input.timeAlg === null ? 1 : input.timeAlg;
-  const baziParams = { date, time, zone: input.zone, lon: input.lon, gender: input.gender, timeAlg };
+  // 日界 / 晚子时：上游 YiZhangJingMain.getModel 读盘面 fields，缺席回退全局出厂默认
+  // defaultAfter23NewDay()=1 / defaultLateZiHourUseNextDay()=1（YiZhangJingMain.js:124-128）。
+  // 此前两键都不传 → vendored baziLunarLocal 把 undefined 当「24 点换日」（after23=0），23 点档生人
+  // 日柱与农历日（lunarByDayBoundary 进位）都与桌面不同。晚子时只动时干，一掌经只用时支，上游挂载
+  // 已撤下该齿轮（techniqueMountSettings.js:1909），这里仍原样透传以与页面同形。
+  const after23NewDay = input.after23NewDay === undefined || input.after23NewDay === null ? 1 : input.after23NewDay;
+  const lateZiHourUseNextDay = input.lateZiHourUseNextDay === undefined || input.lateZiHourUseNextDay === null
+    ? 1 : input.lateZiHourUseNextDay;
+  const baziParams = {
+    date, time, zone: input.zone, lon: input.lon, gender: input.gender, timeAlg, after23NewDay, lateZiHourUseNextDay,
+  };
+  const off = (v) => v === false || v === 0 || v === '0' || v === 'false';
 
-  // 排盘选项：定月法（农历月/节气月）、顺逆规则、命宫定法、大限一宫年数、大限起法、小限起宫、
-  // 流年十二神组、早子时、重犯口诀组。神煞合参层无头导出默认开（预设全选即全量导出；关则不出该段）。
+  // 排盘选项 = 上游 KinAstroMain.buildYizhangjingOpts 同键（KinAstroMain.js:3357-3380），缺省 = 上游
+  // KINASTRO_PAGE_SETTINGS 出厂档（KinAstroMain.js:1039-1056，即「秘传口诀」预设）：定月法、顺逆规则、
+  // 命宫定法、大限一宫年数、大限起法、小限起宫/顺逆、逐年法、流年十二神组、早子时、重犯口诀组、
+  // 星名系统、六道术语、童限显示、神煞合参层（出厂关）。
   const opts = {
     dingYue: input.dingYue === 'jieqi' ? 'jieqi' : 'lunar',
     shunniRule: input.shunniRule === 'menShunNvNi' ? 'menShunNvNi' : 'yangNanYinNv',
@@ -59,10 +72,17 @@ export function runYizhangjing(payload) {
     dayunLength: input.dayunLength === 10 || input.dayunLength === '10' ? 10 : 7,
     dayunStartAge: input.dayunStartAge === 'age1' ? 'age1' : 'mi',
     xiaoxianStart: input.xiaoxianStart === 'yue' ? 'yue' : 'ri',
+    xiaoxianDir: input.xiaoxianDir === 'always' ? 'always' : 'chart',
+    // 逐年法：页面出厂 'xiaoxian'（B10 明训：小限/流年只用一套）；引擎见 '' 才两套并列。
+    annualMethod: input.annualMethod === 'liunian' ? 'liunian' : 'xiaoxian',
     flowShenSet: input.flowShenSet || 'A',
     zaoZiAdjust: !!input.zaoZiAdjust,
     chongfanKou: input.chongfanKou === 'beta' ? 'beta' : 'alpha',
-    shenshaLayer: input.shenshaLayer === undefined || input.shenshaLayer === null ? true : !!input.shenshaLayer,
+    starNaming: input.starNaming === 'B' || input.starNaming === 'C' ? input.starNaming : 'A',
+    daoTerm: input.daoTerm === 'edao' ? 'edao' : 'gui',
+    tongxianShow: !off(input.tongxianShow),
+    // 神煞合参层：上游出厂关（yizhangjingShensha def false；挂载 schema default 0）。
+    shenshaLayer: input.shenshaLayer === undefined || input.shenshaLayer === null ? false : !off(input.shenshaLayer) && !!input.shenshaLayer,
     // 折半法（十五折半/夜半折半）与品级变体：只在显式给出时进 opts（缺省字节不变）
     ...(input.leapRule === 'midnight' ? { leapRule: 'midnight' } : {}),
     ...(input.gradeSet === 'variant' ? { gradeSet: 'variant' } : {}),
@@ -74,6 +94,8 @@ export function runYizhangjing(payload) {
     lon: input.lon ?? null,
     gender: input.gender ?? null,
     timeAlg,
+    after23NewDay,
+    lateZiHourUseNextDay,
     ...opts,
   };
 
