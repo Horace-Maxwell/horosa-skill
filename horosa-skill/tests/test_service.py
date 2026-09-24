@@ -5009,7 +5009,14 @@ def test_guolao_moira_sections_land_between_limit_and_patterns(tmp_path) -> None
     assert moira_calls[0]["params"]["guolaoLifeMode"] == "yumao" and moira_calls[0]["params"]["guolaoBodyMode"] == "taiyin"
     assert moira_calls[0]["transitParams"]["date"] == "2026-09-04" and moira_calls[0]["transitParams"]["predictive"] is True
     chart_calls = [payload for endpoint, payload in client.calls if endpoint in {"/chart", "/"}]  # chart 服务把 /chart 映射为 /
-    assert len(chart_calls) == 2 and str(chart_calls[1]["date"]).replace("/", "-") == "2026-09-04"  # chart 服务载荷用斜杠日期
+    # v0.40.0（sync311 w3b）：命度法非「占星上升」时 runner 会再向 Java /chart 取一次命度点 LifeMasterDeg74（上游 ChartController
+    # 在 Python 排盘之上追加的对象）；夹具的 Java 盘没有它 → 命度落回上升并告警。所以 /chart 是三次：本命（chart 服务）、
+    # 本命（Java，取命度点）、流年（chart 服务）；顺序不入契约。chart 服务载荷用斜杠日期。
+    assert len(chart_calls) == 3
+    natal_calls = [p for p in chart_calls if str(p["date"]).replace("/", "-") == "1985-03-21"]
+    transit_calls = [p for p in chart_calls if str(p["date"]).replace("/", "-") == "2026-09-04"]
+    assert len(natal_calls) == 2 and len(transit_calls) == 1
+    assert any("LifeMasterDeg74" in f"{w}" for w in result.warnings), result.warnings
     assert result.data["guolaoMoiraRules"]["weakSolid"]["houses"][0]["house"] == "命宫"
     # 夹具 JS 客户端不产 [星曜庙旺…]（另一条 optional）；只断言三段 moira 段不再缺席
     assert not ({"虚实", "本命化曜", "流年流曜"} & set(result.data["export_snapshot"]["missing_selected_sections"]))

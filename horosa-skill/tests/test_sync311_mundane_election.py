@@ -340,9 +340,12 @@ def test_mundane_vedic_head_and_card_share_the_faithful_mesha_ingress(tmp_path) 
 
 
 def test_mundane_unsupported_type_is_reported_not_silently_ingress(tmp_path) -> None:
-    env = _service(tmp_path, ScriptedClient()).run_tool("mundane", {**MUNDANE, "mundaneType": "region"}, save_result=False)
+    """认不出的盘型不许静默当入宫盘：出段照旧、warnings 说出来。上游 MUNDANE_TYPES 十种自 v0.40.0（wave 3b）起全部可达
+    （region 走建置盘流程，见 test_sync311_w3b_gim），所以对照用一个上游没有的盘型。"""
+    env = _service(tmp_path, ScriptedClient()).run_tool("mundane", {**MUNDANE, "mundaneType": "cometchart"}, save_result=False)
     assert env.ok
-    assert any("不支持的盘型 mundaneType=region" in w for w in env.warnings), env.warnings
+    assert any("不支持的盘型 mundaneType=cometchart" in w for w in env.warnings), env.warnings
+    assert "region" in HorosaSkillService._MUNDANE_SUPPORTED_TYPES
 
 
 # ────────────────────────────── 择日：本命合参 + 回归与主限 ──────────────────────────────

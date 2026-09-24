@@ -489,3 +489,284 @@ def test_india_dasha_section_lists_every_antardasha_row(tmp_path) -> None:
     assert got == expected
     assert not any("已截断" in line for line in got)
     assert sum(1 for line in got if line.startswith("| ▶ |")) == 2  # 当前大运一行 + 当下小运一行（夹具日期跨 2025–2152，当下恒落在表内）
+
+
+# ─────────────────────────────── 世俗盘 mundane：地区盘 / 规则集段 / F17 隐藏键 ───────────────────────────────
+
+MUNDANE_FIX = json.loads((FIXTURES / "sync311_w3b_mundane_live.json").read_text(encoding="utf-8"))
+# 页面地点故意给上海：地区盘的时刻/地点必须被 regionCharts.js 的建置记录覆盖（上游 applyRegion patchFields 同键）。
+REGION_LONDON = {
+    "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gpsLat": 31.2167, "gpsLon": 121.4667, "hsys": 1,
+    "mundaneType": "region", "regionKey": "london_1066", "year": 2026, "agent_confirmed_settings": True,
+}
+
+
+class MundaneReplayClient(FakeClient):
+    """回放 live 录制：1066-12-25 的 /chart = london_1066 首候选建置盘，2025-03-20 = 入宫盘；其余端点走 FakeClient 形状桩。"""
+
+    def __init__(self, *, chart_patch=None) -> None:
+        super().__init__()
+        self.chart_patch = chart_patch
+        self.calls: list[tuple[str, dict]] = []
+
+    def call(self, endpoint: str, payload: dict) -> dict:
+        endpoint = "/chart" if endpoint == "/" else endpoint
+        self.calls.append((endpoint, copy.deepcopy(payload)))
+        if endpoint == "/chart":
+            date = str(payload.get("date")).replace("/", "-")
+            if date == "1066-12-25":
+                chart = copy.deepcopy(MUNDANE_FIX["region_london_1066"]["chart"])
+                return self.chart_patch(chart) if self.chart_patch else chart
+            if date == "2025-03-20":
+                return copy.deepcopy(MUNDANE_FIX["ingress"]["chart"])
+        return super().call(endpoint, payload)
+
+
+def _region_run(tmp_path, extra: dict | None = None, *, chart_patch=None):
+    client = MundaneReplayClient(chart_patch=chart_patch)
+    env = _service(tmp_path, client).run_tool("mundane", {**REGION_LONDON, **(extra or {})}, save_result=False)
+    return env, client
+
+
+def _head(text: str) -> list[str]:
+    return text.split("\n\n", 1)[0].split("\n")
+
+
+def _bracket_titles(text: str) -> list[str]:
+    """段名（含右栏卡那种 `[地区盘·12世俗宫]（伦敦 …）` 带括注的头行：解析器只认方括号内的段名）。"""
+    return [m.group(1) for m in re.finditer(r"^\[([^\]]+)\]", text, re.M)]
+
+
+@requires_node
+def test_mundane_region_chart_is_cast_at_the_preset_founding_moment(tmp_path) -> None:
+    """上游 MundaneMain.applyRegion（:715-733）：regionKey → regionCharts.js 建置记录的 日期/时刻/时区/经纬度/地名 打进页面 fields
+    起普通 /chart（不求入宫时刻 → 无 /jieqi/year）；extra = {mundaneType:'region', regionKey, regionCn, regionFoundingYear}；
+    快照 = buildAiSnapshot（:2849-2997）头行 [地区盘]/规则集/地区 → [世俗宫义] → [定局·年主/盘主] → [地理分野] → [地区盘推运]
+    （region 不出 ingress 专属的 [入境骨架]）→ 右栏卡（[地区盘·12世俗宫]/[时刻校正]）→ 正文。世运专属键不进 /chart 请求体。
+    负向对照：旧 runner 不认 mundaneType=region（照入宫流程求 2026 春分并起上海盘）。"""
+    env, client = _region_run(tmp_path)
+    assert env.ok, env.error
+    charts = [p for e, p in client.calls if e == "/chart"]
+    assert len(charts) == 1 and not any(e == "/jieqi/year" for e, _ in client.calls)
+    req = charts[0]
+    assert str(req["date"]).replace("/", "-") == "1066-12-25"
+    assert (req["time"], req["zone"], req["lat"], req["lon"], req["gpsLat"], req["gpsLon"]) == ("12:00:00", "+00:00", "51n30", "0w07", 51.5, -0.12)
+    assert (req["pos"], req["hsys"], req["predictive"]) == ("伦敦 · 加冕建置（历史示例）", 1, 0)
+    assert not {"mundaneType", "regionKey", "regionCandidate", "year", "mundaneRuleset"} & set(req)
+    data = env.data
+    assert {k: data[k] for k in ("mundaneType", "regionKey", "regionCn", "regionFoundingYear", "regionCandidate", "regionMoment", "progTargetYear")} == {
+        "mundaneType": "region", "regionKey": "london_1066", "regionCn": "伦敦 · 加冕建置（历史示例） · 正午加冕 12:00",
+        "regionFoundingYear": 1066, "regionCandidate": "a", "regionMoment": "1066-12-25 12:00:00 +00:00", "progTargetYear": 2026,
+    }
+    text = data["snapshot_text"]
+    assert _head(text) == ["[地区盘]", "规则集：现代(Carter–Campion)", "地区：伦敦 · 加冕建置（历史示例） · 正午加冕 12:00"]
+    titles = _bracket_titles(text)
+    assert titles[:5] == ["地区盘", "世俗宫义", "定局·年主/盘主", "地理分野", "地区盘推运"], titles[:6]
+    assert {"地区盘·12世俗宫", "时刻校正", "起盘信息", "信息", "埃及历"} <= set(titles)
+    assert not {"入境骨架", "世俗入宫", "新月图", "四季入境盘"} & set(titles)
+    assert len(titles) == len(set(titles)), sorted(t for t in titles if titles.count(t) > 1)
+    judge = _section(text, "世俗宫义").split("\n")
+    assert judge[:2] == ["| 星 | 宫 | 宫义 | 星座 | 判读 |", "| --- | --- | --- | --- | --- |"]
+    assert judge[2].startswith("| 太阳 | 第10宫 | ")  # 正午盘：日在 10 宫（fixture objects Sun house 10）
+    lines = text.split("\n")
+    card_at = lines.index("[地区盘·12世俗宫]（伦敦 · 加冕建置（历史示例） · 正午加冕 12:00）")  # 上游 renderRegionCard 头行带地区括注
+    assert lines[card_at + 1:card_at + 3] == ["| 宫 | 宫义 | 宫头座 | 宫内星 |", "| --- | --- | --- | --- |"]
+    exp = data["export_snapshot"]
+    assert exp["missing_selected_sections"] == [] and exp["unknown_detected_sections"] == [], exp
+    assert env.warnings == []
+
+
+# 上游 progressions.js 的常量表（小限 SIGN_CN 用 室女/宝瓶；逐月行改用 SIGNS[].cn = 处女/水瓶——两表并存是上游原样）。
+_PROG_SIGNS = ["aries", "taurus", "gemini", "cancer", "leo", "virgo", "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces"]
+_PROG_SIGN_CN = dict(zip(_PROG_SIGNS, ["白羊", "金牛", "双子", "巨蟹", "狮子", "室女", "天秤", "天蝎", "射手", "摩羯", "宝瓶", "双鱼"]))
+_CONST_SIGN_CN = dict(zip(_PROG_SIGNS, ["白羊", "金牛", "双子", "巨蟹", "狮子", "处女", "天秤", "天蝎", "射手", "摩羯", "水瓶", "双鱼"]))
+_SIGN_LORD = dict(zip(_PROG_SIGNS, ["mars", "venus", "mercury", "moon", "sun", "mercury", "venus", "mars", "jupiter", "saturn", "saturn", "jupiter"]))
+_PLANET_CN = {"sun": "太阳", "moon": "月亮", "mercury": "水星", "venus": "金星", "mars": "火星", "jupiter": "木星", "saturn": "土星", "northnode": "北交", "southnode": "南交"}
+_HOUSE_THEME = {1: "民众/局势总貌", 2: "财政/经济/货币", 3: "通讯/交通/邻国", 4: "辖境/在野派/收成", 5: "生育/文体/投机", 6: "公共卫生/劳工/军需",
+                7: "外交/战和/公敌", 8: "死亡率/债务/危机", 9: "宗教/司法/外贸", 10: "政府/当局/运势", 11: "立法/盟友/改革", 12: "监狱/暗敌/隐患"}
+_FIRDARIA_DAY = [("sun", 10), ("venus", 8), ("mercury", 13), ("moon", 9), ("saturn", 11), ("jupiter", 12), ("mars", 7), ("northnode", 3), ("southnode", 2)]
+
+
+def _expected_region_progression(asc_sign: str, founding: int, target: int) -> list[str]:
+    """[地区盘推运] 前五行按上游 mundaneProfection / mundaneFirdaria（progressions.js:20-77，昼生序）独立算出。"""
+    age = max(0, target - founding)
+    step = age % 12
+    idx = (_PROG_SIGNS.index(asc_sign) + step) % 12
+    sign = _PROG_SIGNS[idx]
+    months = "、".join(f"{m + 1}月 {_CONST_SIGN_CN[_PROG_SIGNS[(idx + m) % 12]]}" for m in range(12))
+    a = age % 75
+    acc = 0
+    for i, (planet, years) in enumerate(_FIRDARIA_DAY):
+        if a < acc + years or i == len(_FIRDARIA_DAY) - 1:
+            major, start = (planet, years), acc
+            break
+        acc += years
+    if major[0] in ("northnode", "southnode"):
+        sub = " · 交点期不分子期"
+    else:
+        seq = [p for p, _ in _FIRDARIA_DAY if p not in ("northnode", "southnode")]
+        pos = min(6, math.floor((a - start) / (major[1] / 7)))
+        sub = f" · 子期 {_PLANET_CN[seq[(seq.index(major[0]) + pos) % 7]]}"
+    return [
+        f"盘龄 {age} 年（建置 {founding} → 目标 {target}）",
+        f"小限：年小限 {_PROG_SIGN_CN[sign]} · 激活第 {step + 1} 宫({_HOUSE_THEME[step + 1]}) · 年主 {_PLANET_CN[_SIGN_LORD[sign]]}",
+        f"逐月小限：{months}",
+        f"法达(昼生)：大期 {_PLANET_CN[major[0]]}（盘龄 {start}–{start + major[1]}）{sub}",
+        "法达序：太阳10 · 金星8 · 水星13 · 月亮9 · 土星11 · 木星12 · 火星7 · 北交3 · 南交2（七政 70+南北交 5 = 75 年一轮）",
+    ]
+
+
+@requires_node
+@pytest.mark.parametrize("year", [2026, 2027, 2038])
+def test_mundane_region_progression_follows_the_target_year(tmp_path, year: int) -> None:
+    """[地区盘推运]（MundaneMain.js buildAiSnapshot region 分支）：盘龄 = progTargetYear − regionFoundingYear，headless 的目标年 =
+    请求 year（页面缺省今年）。夹具建置盘上升白羊、昼生（chart.isDiurnal）：2026 → 盘龄 960（12 的倍数 → 小限回到上升座、第 1 宫；
+    法达 960 mod 75 = 60 → 木星大期 51–63 第 6 子期 = 月亮）；2027 → 金牛/第 2 宫/年主金星；2038 → 972 mod 75 = 72 → 北交交点期不分子期。
+    负向对照：目标年恒取今年（改 year 不改 [地区盘推运]）本用例三档不可能同时过。"""
+    asc = next(o for o in MUNDANE_FIX["region_london_1066"]["chart"]["chart"]["objects"] if o["id"] == "Asc")
+    assert asc["sign"] == "Aries" and MUNDANE_FIX["region_london_1066"]["chart"]["chart"]["isDiurnal"] is True
+    env, _ = _region_run(tmp_path, {"year": year})
+    assert env.ok, env.error
+    assert env.data["progTargetYear"] == year
+    got = _section(env.data["snapshot_text"], "地区盘推运").split("\n")
+    assert got[:5] == _expected_region_progression("aries", 1066, year)
+    assert len(got) == 5  # 返照/次限是页面按需拉取物（state.srData/secData），headless 不出行
+
+
+@requires_node
+def test_mundane_region_analysis_sections_follow_the_ruleset(tmp_path) -> None:
+    """[定局·年主/盘主]（describeMundaneVictor：按 rulesetConfig 的 terms/triplicity 变体算 almuten）与 [地理分野]（describeChorography：
+    按 rulesetConfig.chorographyDataset）随 mundaneRuleset 变。ruleset.js CONFIGS：modern = egyptian 界 + dorothean 三分 + 数据集 modern
+    （ptolemaic 层 + modern 层并列、取前 4）；ptolemaic = egyptian 界 + **ptolemaic 三分** + 数据集 classical（只列 ptolemaic 层）。
+    夹具（上升白羊 / 下降天秤）：天秤 ptolemaic 层只有 3 条 → modern 档补上 modern 层首条「中国(现代常引)」；三分表换档后
+    年主由 金星 转为 火星（累分同 30）。规则集键只进快照头行与分析段，不进 /chart 请求体；认不出的规则集报错不静默当缺省。
+    负向对照：旧 runner 不把 settings 交给 analysis（两档段文本相同）。"""
+    modern, client_m = _region_run(tmp_path / "modern")
+    ptole, client_p = _region_run(tmp_path / "ptolemaic", {"mundaneRuleset": "ptolemaic"})
+    assert modern.ok and ptole.ok, (modern.error, ptole.error)
+    assert _head(ptole.data["snapshot_text"])[1] == "规则集：托勒密古典"
+    assert _head(modern.data["snapshot_text"])[1] == "规则集：现代(Carter–Campion)"
+    geo_m = _section(modern.data["snapshot_text"], "地理分野").split("\n")
+    geo_p = _section(ptole.data["snapshot_text"], "地理分野").split("\n")
+    assert geo_m[0] == "数据集：现代综合" and geo_p[0] == "数据集：托勒密古典"
+    assert geo_m[1:3] == geo_p[1:3] == ["| 星座 | 分野 |", "| --- | --- |"]
+    libra_ptolemaic = ["奥地利", "西藏", "(埃及 Thebaid)"]
+    libra_modern = ["中国(现代常引)", "阿根廷"]
+    assert geo_p[5] == f"| 下降(外邦) | {'、'.join(libra_ptolemaic[:4])} |"
+    assert geo_m[5] == f"| 下降(外邦) | {'、'.join((libra_ptolemaic + libra_modern)[:4])} |"
+    assert geo_m[3] == geo_p[3] == "| 上升(国民) | 英格兰、法国(高卢)、德国、叙利亚 |"  # 白羊 ptolemaic 层已满 4 条 → 两档同
+    assert geo_m[-1] == geo_p[-1] == "（多源综合·传统占星学术参考,非现实地缘断言）"
+    victor_m = _section(modern.data["snapshot_text"], "定局·年主/盘主").split("\n")[0]
+    victor_p = _section(ptole.data["snapshot_text"], "定局·年主/盘主").split("\n")[0]
+    assert victor_m.startswith("年主星：金星（累分 30）") and victor_p.startswith("年主星：火星（累分 30）")
+    assert victor_m.endswith("；取点 太阳 / 月亮 / 上升 / 福点 / 产前朔望") and victor_p.endswith("；取点 太阳 / 月亮 / 上升 / 福点 / 产前朔望")
+    for client in (client_m, client_p):
+        assert "mundaneRuleset" not in next(p for e, p in client.calls if e == "/chart")
+    bad, client_b = _region_run(tmp_path / "bad", {"mundaneRuleset": "hellenistic"})
+    assert bad.ok is False and bad.error.code == "tool.mundane_invalid_setting"
+    assert not any(e == "/chart" for e, _ in client_b.calls)
+
+
+@requires_node
+def test_mundane_region_candidate_picks_the_founding_moment(tmp_path) -> None:
+    """多候选建置时刻（regionCharts.js REGION_CANDIDATES）：regionCandidate 选时刻，缺省首候选（最通行者）；regionCn = 记录名 + ' · ' +
+    候选 label；regionMoment / 请求 time 随候选。paris_1792 候选 c = 15:00、时区 +00:09（巴黎地方时）、建置年 1792 → 盘龄 234。"""
+    london_b, client = _region_run(tmp_path / "b", {"regionCandidate": "b"})
+    assert london_b.ok, london_b.error
+    assert next(p for e, p in client.calls if e == "/chart")["time"] == "13:30:00"
+    assert london_b.data["regionCandidate"] == "b" and london_b.data["regionMoment"] == "1066-12-25 13:30:00 +00:00"
+    assert _head(london_b.data["snapshot_text"])[2] == "地区：伦敦 · 加冕建置（历史示例） · 午后 13:30"
+
+    paris, client = _region_run(tmp_path / "paris", {"regionKey": "paris_1792", "regionCandidate": "c"})
+    assert paris.ok, paris.error
+    req = next(p for e, p in client.calls if e == "/chart")
+    assert str(req["date"]).replace("/", "-") == "1792-09-22"
+    assert (req["time"], req["zone"], req["lat"], req["lon"], req["pos"]) == ("15:00:00", "+00:09", "48n51", "2e21", "巴黎 · 共和建置（历史示例）")
+    assert (paris.data["regionFoundingYear"], paris.data["regionCandidate"], paris.data["regionMoment"]) == (1792, "c", "1792-09-22 15:00:00 +00:09")
+    assert _head(paris.data["snapshot_text"])[2] == "地区：巴黎 · 共和建置（历史示例） · 午后盘 15:00"
+    assert _section(paris.data["snapshot_text"], "地区盘推运").split("\n")[0] == "盘龄 234 年（建置 1792 → 目标 2026）"
+
+
+@requires_node
+def test_mundane_region_rejects_unknown_region_candidate_and_year(tmp_path) -> None:
+    """负向对照：认不出的 regionKey / 候选键 → tool.mundane_unknown_region（列出可选键；不起盘）；region 缺 regionKey 同罪；
+    推运目标年非整数 → tool.mundane_invalid_setting。"""
+    unknown, client = _region_run(tmp_path / "unknown", {"regionKey": "atlantis"})
+    assert unknown.ok is False and unknown.error.code == "tool.mundane_unknown_region", unknown.error
+    assert unknown.error.details["allowed"] == ["london_1066", "philadelphia_1776", "paris_1792"]
+    assert unknown.error.details["reason"] == "unknown_region" and unknown.error.details["regionKey"] == "atlantis"
+    assert not any(e == "/chart" for e, _ in client.calls)
+
+    missing, _ = _region_run(tmp_path / "missing", {"regionKey": None})
+    assert missing.ok is False and missing.error.code == "tool.mundane_unknown_region"
+
+    cand, _ = _region_run(tmp_path / "cand", {"regionCandidate": "z"})
+    assert cand.ok is False and cand.error.code == "tool.mundane_unknown_region"
+    assert cand.error.details["reason"] == "unknown_region_candidate"
+    assert cand.error.details["candidates"] == {"london_1066": ["a", "b"]}
+
+    year, client = _region_run(tmp_path / "year", {"year": "abc"})
+    assert year.ok is False and year.error.code == "tool.mundane_invalid_setting", year.error
+    assert year.error.details["invalid"] == [{"key": "year", "value": "abc", "allowed": "int"}]
+    assert not any(e == "/chart" for e, _ in client.calls)
+
+
+def test_mundane_f17_and_region_keys_are_declared_but_not_advertised() -> None:
+    """F17 快照口径键（showOnlyRulExaltReception / egypt_* 七轴）与地区盘键在 MundaneInput 上声明（MCP 扁平面按广告签名丢未声明键，
+    见 test_mcp_flat_surface_keys）、但走 ADVERTISE_HIDDEN 不进 tools/list（预算）。负向对照：旧模型未声明 F17 键 → 扁平面静默丢弃。"""
+    from horosa_skill.engine.registry import TOOL_DEFINITIONS
+    from horosa_skill.surfaces.mcp_schema import advertise_hidden_fields, advertised_technique_schema
+
+    model = TOOL_DEFINITIONS["mundane"].input_model
+    keys = {"showOnlyRulExaltReception", "regionKey", "regionCandidate",
+            "egypt_decanRuler", "egypt_decanAnchor", "egypt_decanNaming", "egypt_starClock", "egypt_calendarAnchor", "egypt_petosirisMod", "egypt_godEdition"}
+    assert keys <= set(model.model_fields)
+    assert keys <= advertise_hidden_fields(model)
+    schema = advertised_technique_schema("mundane", model.model_json_schema())
+    assert not keys & set(schema["properties"]), sorted(keys & set(schema["properties"]))
+    assert {"mundaneType", "year"} <= set(schema["properties"])  # 盘型与目标年仍在广告层
+    assert schema["x-horosa-hidden-knobs"] >= len(keys)
+
+
+@requires_node
+def test_mundane_f17_keys_reach_the_region_snapshot(tmp_path) -> None:
+    """世俗盘正文是本命段 builder 同一套：egypt_* 七轴进 [埃及历]（_mundane_attach_egypt → 上游 astroAiSnapshot.js:1733 按 fields 出段；
+    夹具日在摩羯第一旬：迦勒底面主 木 → 三分性旬星制 = 摩羯庙主 土；旬名录 egypt → coptic 名随之），showOnlyRulExaltReception 进
+    [信息] 接纳过滤（astroAiSnapshot.js:222-235 keepReceptionLine：正接纳须供给方本垣/擢升）。live 夹具的正接纳供给方恰好全是
+    本垣/擢升（开关是空操作），故对照盘在 receptions.normal 追加一条「供给方只有界」的接纳：开关关 → 该行在（(界)），开 → 被滤。
+    值域校验与本命盘同：egypt_starClock 取值错 → tool.egypt_invalid_setting。"""
+    plain, _ = _region_run(tmp_path / "plain")
+    school, _ = _region_run(tmp_path / "school", {"egypt_decanRuler": "triplicity", "egypt_decanNaming": "coptic"})
+    assert plain.ok and school.ok, (plain.error, school.error)
+    p = _section(plain.data["snapshot_text"], "埃及历").split("\n")
+    s = _section(school.data["snapshot_text"], "埃及历").split("\n")
+    assert p[0] == "◆ 各行星落旬" and not any(line.startswith("◆ 所用口径") for line in p)
+    assert s[0] == "◆ 所用口径：旬主星制=三分性旬星；旬名录传统=科普特-希腊名"
+    p_sun = next(line for line in p if line.startswith("日："))
+    s_sun = next(line for line in s if line.startswith("日："))
+    assert p_sun.startswith("日：第28旬 摩羯1(270–280°)") and s_sun.startswith("日：第28旬 摩羯1(270–280°)")
+    assert "·面主木·" in p_sun and "·面主土·" in s_sun
+    assert p_sun.split("·")[1] != s_sun.split("·")[1]  # 旬名随名录传统换（埃及本名 → 科普特-希腊名）
+
+    def add_term_only_reception(chart: dict) -> dict:
+        chart["receptions"]["normal"].append({"beneficiary": "Mars", "supplier": "Jupiter", "beneficiaryDignity": [], "supplierRulerShip": ["term"]})
+        return chart
+
+    def normal_block(env) -> list[str]:
+        lines = _section(env.data["snapshot_text"], "信息").split("\n")
+        at = lines.index("正接纳：")
+        return lines[at + 1:lines.index("邪接纳：", at)]
+
+    live_suppliers = [set(r["supplierRulerShip"]) for r in MUNDANE_FIX["region_london_1066"]["chart"]["receptions"]["normal"]]
+    assert live_suppliers and all(s & {"ruler", "exalt"} for s in live_suppliers)  # 夹具本身滤不掉任何一行——对照盘要补一条
+    off, _ = _region_run(tmp_path / "off", chart_patch=add_term_only_reception)
+    on, _ = _region_run(tmp_path / "on", {"showOnlyRulExaltReception": 1}, chart_patch=add_term_only_reception)
+    assert off.ok and on.ok, (off.error, on.error)
+    off_lines, on_lines = normal_block(off), normal_block(on)
+    assert len(off_lines) == len(live_suppliers) + 1 and len(on_lines) == len(live_suppliers)
+    dropped = [line for line in off_lines if line not in on_lines]
+    assert len(dropped) == 1 and dropped[0].startswith("火 ") and dropped[0].endswith("接纳 (界)"), dropped
+    assert all(("本垣" in line or "擢升" in line) for line in on_lines)
+
+    bad, _ = _region_run(tmp_path / "bad", {"egypt_starClock": "sundial"})
+    assert bad.ok is False and bad.error.code == "tool.egypt_invalid_setting"
