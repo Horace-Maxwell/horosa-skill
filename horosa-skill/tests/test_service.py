@@ -1445,6 +1445,14 @@ class FakeJsClient(HorosaJsEngineClient):
                     "身主(身宫宫主)：金\n命宫配干(五虎遁)：戊寅\n生年化曜(A诀)：水"
                 ),
                 "limitCalc": "◆ 飞限 · 童限 · 小限 · 月限 · 限度（37 岁 · 丙午年）\n飞限：亥；小限：寅；月限：未；限度：25巳08；至：23巳08",
+                # wave3b：[七政四余宫位与二十八宿星曜] / [神煞] / [相位] 三段（真 builder 在 live 夹具
+                # sync311_w3b_guolao_live.json 上的输出节选；真值由 tests/test_sync311_w3b_gim.py 的真 node 用例守）。
+                "houseSu": (
+                    "| 宫位 | 二十八宿 | 星曜 |\n| --- | --- | --- |\n"
+                    "| 戌—降娄—白羊座—第11宫 | 壁 | 水 0˚壁7分；火 2˚壁53分；日 6˚壁18分 |\n| 酉—大梁—金牛座—第12宫 | 无 | 无 |"
+                ),
+                "gods": "申：长生、文昌、伏尸、剑锋、孤虚、卦气、月符、披头、岁驾、福贵、太岁、地杀、指背",
+                "aspects": "| 主体 | 相位 | 对象 | 状态 | 误差 |\n| --- | --- | --- | --- | --- |\n| 日 | 六合 (60°) | 天 | 离相 | 9.668 |",
                 "errors": [],
             }
         if tool_name == "ziwei_extras":
@@ -5097,7 +5105,14 @@ def test_guolao_moira_sections_land_between_limit_and_patterns(tmp_path) -> None
     assert moira_calls[0]["params"]["guolaoLifeMode"] == "yumao" and moira_calls[0]["params"]["guolaoBodyMode"] == "taiyin"
     assert moira_calls[0]["transitParams"]["date"] == "2026-09-04" and moira_calls[0]["transitParams"]["predictive"] is True
     chart_calls = [payload for endpoint, payload in client.calls if endpoint in {"/chart", "/"}]  # chart 服务把 /chart 映射为 /
-    assert len(chart_calls) == 2 and str(chart_calls[1]["date"]).replace("/", "-") == "2026-09-04"  # chart 服务载荷用斜杠日期
+    # v0.40.0（sync311 w3b）：命度法非「占星上升」时 runner 会再向 Java /chart 取一次命度点 LifeMasterDeg74（上游 ChartController
+    # 在 Python 排盘之上追加的对象）；夹具的 Java 盘没有它 → 命度落回上升并告警。所以 /chart 是三次：本命（chart 服务）、
+    # 本命（Java，取命度点）、流年（chart 服务）；顺序不入契约。chart 服务载荷用斜杠日期。
+    assert len(chart_calls) == 3
+    natal_calls = [p for p in chart_calls if str(p["date"]).replace("/", "-") == "1985-03-21"]
+    transit_calls = [p for p in chart_calls if str(p["date"]).replace("/", "-") == "2026-09-04"]
+    assert len(natal_calls) == 2 and len(transit_calls) == 1
+    assert any("LifeMasterDeg74" in f"{w}" for w in result.warnings), result.warnings
     assert result.data["guolaoMoiraRules"]["weakSolid"]["houses"][0]["house"] == "命宫"
     # 夹具 JS 客户端不产 [星曜庙旺…]（另一条 optional）；只断言三段 moira 段不再缺席
     assert not ({"虚实", "本命化曜", "流年流曜"} & set(result.data["export_snapshot"]["missing_selected_sections"]))

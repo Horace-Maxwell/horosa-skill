@@ -913,6 +913,7 @@ class GuoLaoInput(BirthInput):
     ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({
         "guolaoNodeMode", "guolaoTrueSolarTime", "guolaoNodeType", "guolaoLilithType",
         "guolaoAyanamsa", "guolaoTuibianMethod", "guolaoGufaPrecess", "guolaoEqTropicalAnchor",
+        "guolaoLimitYearBoundary",
     })
     # 宿度制（上游 GuoLaoChartStyle.js:10 缺省 2 回归今宿；值域 guolaoData.SU28_MODE_LABEL 0–8）。BirthInput 那个是 bool
     # （宿占用），这里放宽成 int —— 2–8 此前被 pydantic 拒；旧 true/false 照后端 parseSu28Mode 解释为 1/0。
@@ -929,6 +930,9 @@ class GuoLaoInput(BirthInput):
     guolaoMinorLimitType: str | None = Field(default=None, description="行运法：''=古度限度法（缺省）| minor=小限 | month=月限 | tong=童限 | dongwei=洞微大限。改 [大限] 所附行运法结构与 [限法实算] 的实算行。")
     guolaoTongxianBase: str | None = Field(default=None, description="童限基数（行运法=tong 时生效）：tong10=通行十年（缺省）| gu9=古九岁 | xu11=虚十一。")
     guolaoLimitChildBase: int | None = Field(default=None, description="定童限：9=九年起（缺省）| 10=十年起。改 [大限] 首限年数与各限起讫岁、[限法实算] 的童限/限度。")
+    # 上游页面显示偏好 horosaGuolaoDisplay.limitYearBoundary（GuoLaoInput.js:850；GuoLaoChartStyle.GUOLAO_LIMIT_YEAR_BOUNDARIES），
+    # 无头复算读同一份全局偏好（_buildGuolaoSnapshotTextV2Core:2058 getStoredGuolaoDisplay）。
+    guolaoLimitYearBoundary: str | None = Field(default=None, description="大限年界：gregorian 公历元旦（缺省，Moira）| lichun 立春 | dongzhi 冬至（本地节气表精算）。改 [大限] 首限起点与各限起讫年（立春前生人岁次上一年、冬至后生人下一年）。")
     # 起盘口径（上游页面左栏 / 挂载齿轮 techniqueMountSettings.js:1123-1181；缺省 = GuoLaoChartStyle.js getStored* 缺省）。
     guolaoNodeMode: str | None = Field(default=None, description="罗计命名：northKetuSouthRahu 北计南罗（缺省）| northRahuSouthKetu 北罗南计（整盘换位）。")
     guolaoTrueSolarTime: str | None = Field(default=None, description="报时星太阳时：true 真太阳时（缺省）| mean 平太阳时 | off 钟表时。")
@@ -1788,10 +1792,19 @@ class PersianDirectedInput(BirthInput):
     nodeRetrograde: bool | None = Field(default=None, description="交点按逆行处理（缺省 false，上游同默认）")
 
 
+# 世俗盘也吃的 F17 快照口径键（BirthInput 上「send:'never'——不进 /chart，只改导出段」的那组里，世俗盘正文真消费的部分：
+# [信息] 互容接纳过滤 + [埃及历] 七轴；[古典·显赫计分] 四键不列——该段上游只在本命 astro 快照路径产，世俗盘无）。
+MUNDANE_SNAPSHOT_KEYS: tuple[str, ...] = (
+    "showOnlyRulExaltReception",
+    "egypt_decanRuler", "egypt_decanAnchor", "egypt_decanNaming", "egypt_starClock",
+    "egypt_calendarAnchor", "egypt_petosirisMod", "egypt_godEdition",
+)
+
+
 class MundaneInput(FlexibleModel):
     # 世俗入宫盘 (mundane ingress chart): cast at the precise solar-term ingress moment of a given year.
     # date/time are DERIVED from the ingress (jieqi) computation, so the inputs are year + 入宫节气 + place.
-    year: int | str
+    year: int | str = Field(description="年份：入宫盘的入宫年；mundaneType=region（地区盘）时为推运目标年（[地区盘推运] 盘龄 = year − 建置年）。")
     ingressTerm: str | None = "春分"  # 春分 / 夏至 / 秋分 / 冬至 (the four cardinal ingresses)
     lifespanMethod: str | None = Field(default=None, description=_LIFESPAN_METHOD_DESC)
     zone: str | None = "+08:00"
@@ -1804,10 +1817,10 @@ class MundaneInput(FlexibleModel):
     tradition: bool | None = False
     # 盘型分派（上游 MundaneMain 的 MUNDANE_TYPES）：底盘恒为入宫盘；盘型只决定加产哪组专属段/卡
     # （mundanehorary → [世运卜卦]/[世运问判]；solunar/vedicmundane → 各自求根盘；newmoon/fullmoon/
-    # solecl/lunecl/cycles → 对应子盘的判读卡）。region 需 UI 选建置盘，headless 不支持（降级告警）。
+    # solecl/lunecl/cycles → 对应子盘的判读卡）。region（地区盘）底盘换成 regionKey 指定的预置建置盘（不求入宫）。
     mundaneType: str | None = Field(
         default=None,
-        description="盘型：ingress（默认）/ newmoon / fullmoon / solecl / lunecl / cycles / solunar / vedicmundane / mundanehorary。",
+        description="盘型：ingress（默认）/ newmoon / fullmoon / solecl / lunecl / cycles / solunar / vedicmundane / mundanehorary / region（地区盘，配 regionKey）。",
     )
     mhKind: str | None = Field(default=None, description="世运卜卦问类：war 战争（默认）/ weather 天候 / price 物价。")
     solunarType: str | None = Field(default=None, description="恒星派入境盘型：capsolar（默认）/arisolar/cansolar/libsolar/caplunar/arilunar/canlunar/liblunar。")
@@ -1818,9 +1831,9 @@ class MundaneInput(FlexibleModel):
     # 收顶层键），不进 tools/list 广告层（预算）；值域见 agent_guidance。古典全局键（cazimiOrb…）经 request 整包透传进 /chart。
     ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({
         "mundaneRuleset", "mundaneOrbScheme", "mundaneIngressRule", "vedicDashaYearLen", "vedicFoundingYear",
-        "vedicNatalAsc", "zodiacal", "siderealAyanamsa",
+        "vedicNatalAsc", "zodiacal", "siderealAyanamsa", "regionKey", "regionCandidate", *MUNDANE_SNAPSHOT_KEYS,
     })
-    mundaneRuleset: str | None = Field(default=None, description="规则集：ptolemaic / medieval / modern（缺省）/ barbault。")
+    mundaneRuleset: str | None = Field(default=None, description="规则集：ptolemaic / medieval / modern（缺省）/ barbault；[定局·年主/盘主]（界/三分变体定年主）与 [地理分野]（数据集）随之。")
     mundaneOrbScheme: str | None = Field(default=None, description="受冲容许度覆盖：auto（缺省随规则集）/ moiety / by_aspect。")
     mundaneIngressRule: str | None = Field(default=None, description="入境主管制覆盖：auto（缺省）/ quarterly / aries_annual / capricorn_year。")
     vedicDashaYearLen: float | None = Field(default=None, description="世运大运年长：365.2425（缺省）/ 360。")
@@ -1828,6 +1841,25 @@ class MundaneInput(FlexibleModel):
     vedicNatalAsc: str | None = Field(default=None, description="建国盘上升星座键（aries…pisces）。")
     zodiacal: int | None = Field(default=None, description="黄道：0 回归（缺省）/ 1 恒星（配 siderealAyanamsa）。")
     siderealAyanamsa: str | None = Field(default=None, description="恒星黄道岁差制（zodiacal=1 时）。")
+    # 地区盘（上游 MUNDANE_TYPES 'region' + divination/data/regionCharts.js 预置建置盘；MundaneMain.applyRegion :715-733）。
+    regionKey: str | None = Field(
+        default=None,
+        description="地区盘建置盘键（mundaneType=region 必填）：vendored regionCharts.js 预置 london_1066 / philadelphia_1776 / paris_1792；认不出的键报错并列出可选键。",
+    )
+    regionCandidate: str | None = Field(
+        default=None,
+        description="地区盘候选建置时刻键（a/b/c；缺省首候选 = 最通行者。philadelphia_1776：a 17:10 / b 02:13 / c 12:00；paris_1792：a 12:00 / b 09:00 / c 15:00；london_1066：a 12:00 / b 13:30）。",
+    )
+    # F17 快照口径键（与 BirthInput 同名同义、描述单源）：[信息] 互容接纳过滤 + [埃及历] 七轴。世俗盘正文是同一套本命段 builder，
+    # 这些键此前未在本模型声明 → MCP 扁平面按广告签名静默丢弃（CLI / tool_run / request 整包不丢），见 test_mcp_flat_surface_keys。
+    showOnlyRulExaltReception: Any | None = Field(default=None, description=BirthInput.model_fields["showOnlyRulExaltReception"].description)
+    egypt_decanRuler: str | None = Field(default=None, description=BirthInput.model_fields["egypt_decanRuler"].description)
+    egypt_decanAnchor: str | None = Field(default=None, description=BirthInput.model_fields["egypt_decanAnchor"].description)
+    egypt_decanNaming: str | None = Field(default=None, description=BirthInput.model_fields["egypt_decanNaming"].description)
+    egypt_starClock: str | None = Field(default=None, description=BirthInput.model_fields["egypt_starClock"].description)
+    egypt_calendarAnchor: str | None = Field(default=None, description=BirthInput.model_fields["egypt_calendarAnchor"].description)
+    egypt_petosirisMod: int | None = Field(default=None, description=BirthInput.model_fields["egypt_petosirisMod"].description)
+    egypt_godEdition: str | None = Field(default=None, description=BirthInput.model_fields["egypt_godEdition"].description)
 
 
 class OtherBuInput(BirthInput):

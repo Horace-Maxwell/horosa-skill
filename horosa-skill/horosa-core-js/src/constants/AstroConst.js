@@ -35,6 +35,65 @@ export const DARKMOON = 'Dark Moon';
 export const PURPLE_CLOUDS = 'Purple Clouds';
 export const ASC = 'Asc';
 export const LIFEMASTERDEG74 = 'LifeMasterDeg74';
+// 盘面对象 / 希腊点 / 宫 id —— 逐值抽自上游 constants/AstroConst.js:22-57（行星·小行星·虚点·中点）、:92-122（PARS_*）、
+// :62-73（HOUSE1..12）、:84-86（黄道）。AstroText.js 的 AstroTxtMsg/AstroMsgCN 名表以这些常量为键：shim 缺它们时
+// 键塌成字面 "undefined"，msg('Uranus') 就落回英文 id（七政 [相位]、三分主星/关键点等表曾因此印 Uranus/Chiron）。
+export const URANUS = 'Uranus';
+export const NEPTUNE = 'Neptune';
+export const PLUTO = 'Pluto';
+export const CHIRON = 'Chiron';
+export const SYZYGY = 'Syzygy';
+export const PHOLUS = 'Pholus';
+export const CERES = 'Ceres';
+export const PALLAS = 'Pallas';
+export const JUNO = 'Juno';
+export const VESTA = 'Vesta';
+export const INTP_APOG = 'Intp_Apog';
+export const INTP_PERG = 'Intp_Perg';
+export const MOONSUN = 'MoonSun';
+export const SATURNMARS = 'SaturnMars';
+export const JUPITERVENUS = 'JupiterVenus';
+export const HOUSE1 = 'House1';
+export const HOUSE2 = 'House2';
+export const HOUSE3 = 'House3';
+export const HOUSE4 = 'House4';
+export const HOUSE5 = 'House5';
+export const HOUSE6 = 'House6';
+export const HOUSE7 = 'House7';
+export const HOUSE8 = 'House8';
+export const HOUSE9 = 'House9';
+export const HOUSE10 = 'House10';
+export const HOUSE11 = 'House11';
+export const HOUSE12 = 'House12';
+export const TROPICAL = 'Tropical';
+export const SIDEREAL = 'Sidereal';
+export const PARS_SPIRIT = 'Pars Spirit';
+export const PARS_FAITH = 'Pars Faith';
+export const PARS_SUBSTANCE = 'Pars Substance';
+export const PARS_WEDDING_MALE = 'Pars Wedding [Male]';
+export const PARS_WEDDING_FEMALE = 'Pars Wedding [Female]';
+export const PARS_SONS = 'Pars Sons';
+export const PARS_FATHER = 'Pars Father';
+export const PARS_MOTHER = 'Pars Mother';
+export const PARS_BROTHERS = 'Pars Brothers';
+export const PARS_DISEASES = 'Pars Diseases';
+export const PARS_DEATH = 'Pars Death';
+export const PARS_TRAVEL = 'Pars Travel';
+export const PARS_FRIENDS = 'Pars Friends';
+export const PARS_ENEMIES = 'Pars Enemies';
+export const PARS_SATURN = 'Pars Saturn';
+export const PARS_JUPITER = 'Pars Jupiter';
+export const PARS_MARS = 'Pars Mars';
+export const PARS_VENUS = 'Pars Venus';
+export const PARS_MERCURY = 'Pars Mercury';
+export const PARS_HORSEMANSHIP = 'Pars Horsemanship';
+export const PARS_LIFE = 'Pars Life';
+export const PARS_RADIX = 'Pars Radix';
+export const PARS_EROS = 'Pars Eros';
+export const PARS_NECESSITY = 'Pars Necessity';
+export const PARS_COURAGE = 'Pars Courage';
+export const PARS_VICTORY = 'Pars Victory';
+export const PARS_NEMESIS = 'Pars Nemesis';
 // 宿占快照（vendor/suzhan/suzhanSnapshot.js，v0.40 mingli F11）另需：四角 id / 福点 id、页面缺省星表
 // DEFAULT_OBJECTS（models/app.js:201 planetDisplay 缺省）与 isTraditionPlanet —— 逐值抽自上游
 // constants/AstroConst.js:41/80-82（id）与 :618-639（两张表 + 判定函数，函数体逐字）。
@@ -42,7 +101,6 @@ export const PARS_FORTUNA = 'Pars Fortuna';
 // [古典·显赫计分]「四显赫点」（vendor/utils/astroClassicalDerived.js:381-386 EMINENCE_POINTS）按 AstroConst.PARS_SPIRIT 取精神点
 // ——shim 缺它时该项 id 为 undefined，lotObj 取不到 → 静默少一点（上游「福点/精神点/根基点/擢升点」只剩三点）。逐值抽自上游
 // constants/AstroConst.js:96。
-export const PARS_SPIRIT = 'Pars Spirit';
 export const DESC = 'Desc';
 export const MC = 'MC';
 export const IC = 'IC';

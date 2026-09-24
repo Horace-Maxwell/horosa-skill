@@ -342,7 +342,7 @@
       {
         "callee": "buildGuolaoLimitSection",
         "module": "../vendor/guolao/guolaoSnapshotSections.js",
-        "line": 193,
+        "line": 194,
         "arg": 5,
         "keys": [
           "limitChildBase",

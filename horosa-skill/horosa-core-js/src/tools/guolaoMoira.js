@@ -10,7 +10,7 @@
 //    buildGuolaoBirthStarsSection / buildGuolaoTransitStarsSection，v44 硬缺修）；无数据回空串不产段。
 //    ⚠ v0.36.0 之前这三段被当成「开源 astropy 无该路由」永久排除——实际 /qizheng/moira 是 **Java** 聚合层
 //    （astrostudycn QizhengMoiraController）的路由，当年拿 Python chart 服务测的 500（docs/LESSONS.md）。
-import { buildLocalMoiraPatternsForSnapshot } from '../vendor/guolao/guolaoMoira.js';
+import { buildLocalMoiraPatternsForSnapshot, buildGuolaoSnapshotTablesForSnapshot } from '../vendor/guolao/guolaoMoira.js';
 import { buildGuolaoMoiraInfoFacts } from '../vendor/guolao/guolaoInfoFacts.js';
 import {
   buildGuolaoAnchorLines,
@@ -178,7 +178,8 @@ function buildGuolaoInfoFactsForSnapshot(params, result, transitParams, display,
   }
 }
 
-// [起盘信息] 口径六行 + 命度/身度/宿主行 + [大限] + [三主与化曜] + [限法实算]（上游 _buildGuolaoSnapshotTextV2Core:2046-2104 同序同源）。
+// [起盘信息] 口径六行 + 命度/身度/宿主行 + [大限] + [三主与化曜] + [限法实算]（上游 _buildGuolaoSnapshotTextV2Core:2046-2104 同序同源）
+// + [七政四余宫位与二十八宿星曜] / [神煞] / [相位] 三段（:2079 / :2086 / :2138，vendored 同一黄仪窗口桥接）。
 // payload: { chart: /chart 响应（chart.nongli 已挂本命四柱）, params: {date:'YYYY/MM/DD',time,…}, transitParams, display:
 //   {lifeMasterMode, minorLimitType, tongxianBase, limitChildBase, limitYearBoundary}, fields, moiraRules }
 export function buildGuolaoInfoSections(payload) {
@@ -192,6 +193,13 @@ export function buildGuolaoInfoSections(payload) {
   const info = buildGuolaoInfoFactsForSnapshot(params, result, src.transitParams || {}, display, fields, src.moiraRules || null, errors);
   const limitSection = buildGuolaoLimitSection(chart, fields, params, display.minorLimitType || '', display.tongxianBase || 'tong10',
     { limitYearBoundary: display.limitYearBoundary, limitChildBase: display.limitChildBase });
+  // 上游三段各自带 `|| '无'` 兜底（builder 内部 try/catch 降级「无」）；整桥失败才进 errors（Python 回退旧行式 + 告警）。
+  let tables = null;
+  try {
+    tables = buildGuolaoSnapshotTablesForSnapshot(result, fields, src.moiraRules || null);
+  } catch (e) {
+    errors.push({ section: '七政四余宫位与二十八宿星曜/神煞/相位', message: `${(e && e.message) || e}` });
+  }
   return {
     // [起盘信息] 口径六行（七政命度/罗计/报时星太阳时/罗计取法/宿度制·身宫法/命主取法·行运法），上游在命度行之前。
     setupLines: buildGuolaoSetupLines(fields, display),
@@ -199,6 +207,9 @@ export function buildGuolaoInfoSections(payload) {
     limitSection: limitSection || '',
     masters: buildGuolaoMastersSection(info),
     limitCalc: buildGuolaoLimitCalcSection(info),
+    houseSu: tables ? tables.houseSu : '',
+    gods: tables ? tables.gods : '',
+    aspects: tables ? tables.aspects : '',
     errors,
   };
 }

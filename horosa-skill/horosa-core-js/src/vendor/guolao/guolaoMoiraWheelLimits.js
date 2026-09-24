@@ -5,8 +5,10 @@
 // 与 guolaoSnapshotSections.js（[大限] 段）—— 与上游 GuoLaoMoiraPanel / GuoLaoChartMain 的 import 同源。
 // 下方 GUOLAO_LIFE_MODE_* / GUOLAO_DIZHI / normalizeGuolaoLifeMode 逐字取自上游 GuoLaoChartStyle.js；
 // getStoredGuolaoLifeMode 是 headless 缺省（上游读 localStorage 偏好，缺省 = 占星上升 asc）。
+// v3.11 wave3b 另抽（GuoLaoMoiraWheel.js:291-306 / 1313-1339 逐字）：cleanText / formatGodName / godsFromRuleHits /
+// longLifeCharFor —— [神煞] 段 buildRulesGodsSection（GuoLaoChartMain.js:1759-1776）以 moira* 别名 import 这两个函数。
 import * as AstroConst from '../../constants/AstroConst.js';
-import { childYearsSpan } from './guolaoMoiraTables.js';
+import { childYearsSpan, longLifeMapForYear } from './guolaoMoiraTables.js';
 import { buildLocalJieqiYearSeed } from '../../shared/localNongliAdapter.js';
 
 export const GUOLAO_LIFE_MODE_ASC = 'asc';
@@ -250,9 +252,59 @@ function currentLimitIndex(rows, age){
 	return -1;
 }
 
+// ── GuoLaoMoiraWheel.js:291-306（逐字）──
+function cleanText(text){
+	return `${text || ''}`.replace(/\s+/g, '');
+}
+
+function formatGodName(name){
+	let val = cleanText(name);
+	if(!val){
+		return '';
+	}
+	val = val.split(/[\/／]/)[0];
+	const aliases = {
+		天乙贵人: '天贵',
+		玉堂贵人: '玉贵',
+	};
+	return aliases[val] || val;
+}
+
+// ── GuoLaoMoiraWheel.js:1311-1339（逐字）──
+// 神煞数据源=rules 引擎(godHits/transitGodHits,Moira prop 规则本尊,与筛选清单一一对应);
+// 返回 null 表示 rules 未到(调用方回退历法 ziGods,渐进不空盘)。
+function godsFromRuleHits(rules, zi, kind){
+	const hits = rules ? (kind === 'transit' ? rules.transitGodHits : rules.godHits) : null;
+	if(!hits || !hits.length){
+		return null;
+	}
+	const one = hits.find((h)=>h && h.zi === zi) || {};
+	const raw = [].concat(one.gods || [], one.goodGods || [], one.neutralGods || [], one.badGods || [], one.taisuiGods || []);
+	const seen = new Set();
+	const names = [];
+	raw.forEach((item)=>{
+		const val = formatGodName(item);
+		if(val && !seen.has(val)){
+			seen.add(val);
+			names.push(val);
+		}
+	});
+	return names;
+}
+
+// 十二长生字(照 Moira getStarSigns:本命/流年各按自家年柱纳音起)。
+function longLifeCharFor(rules, zi, kind){
+	const ys = (rules && rules.yearStars) || {};
+	const ctx = kind === 'transit' ? ys.transit : ys.birth;
+	const map = longLifeMapForYear(ctx && ctx.yearPole);
+	return map ? (map[zi] || '') : '';
+}
+
 export {
 	buildGuolaoLimitTable as moiraBuildLimitTable,
 	birthYearBasis as moiraBirthYearBasis,
 	currentLimitIndex as moiraCurrentLimitIndex,
 	lifeDegree as moiraLifeDegree,
+	godsFromRuleHits as moiraGodsFromRuleHits,
+	longLifeCharFor as moiraLongLifeCharFor,
 };

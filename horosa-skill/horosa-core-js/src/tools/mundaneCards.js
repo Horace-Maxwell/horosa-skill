@@ -1,6 +1,8 @@
 import { buildMundaneCardSections, MUNDANE_ORB_SCHEME_CN, MUNDANE_INGRESS_RULE_CN } from '../vendor/mundane/MundaneMain.js';
 import { MUNDANE_HORARY_KINDS } from '../vendor/mundane/mundaneHorary.js';
 import { MUNDANE_RULESETS, rulesetConfig } from '../vendor/mundane/ruleset.js';
+import { buildMundaneAiSnapshotParts } from '../vendor/mundane/mundaneAiSnapshot.js';
+import { allRegions, regionCandidates } from '../vendor/divination/data/regionCharts.js';
 import { SIGN_ORDER } from '../vendor/divination/data/signs.js';
 
 /**
@@ -62,10 +64,67 @@ function settingsCheck(settings) {
   };
 }
 
+// 地区盘（上游 MundaneMain.applyRegion :715-733）：按 regionKey 从 allRegions()（预置 REGION_CHARTS；headless 无 localStorage →
+// 用户自定义盘恒空）取建置记录，多候选盘取 regionCandidate（缺省首候选 = 最通行者），返回上游 patchFields 的同一组盘面字段与
+// setExtra 的同一组 extra（regionCn = rec.cn + ' · ' + cand.label；regionFoundingYear = 日期前四位）。认不出的键回执 keys 供报错。
+function resolveRegion(source) {
+  const regions = allRegions();
+  const keys = Object.keys(regions);
+  const key = source.regionKey !== undefined && source.regionKey !== null ? `${source.regionKey}` : '';
+  const rec = regions[key];
+  if (!rec) {
+    return { ok: false, error: { code: 'unknown_region', message: `未知地区盘 regionKey=${key || '(空)'}` }, keys, candidates: {} };
+  }
+  const cands = regionCandidates(key);
+  const wanted = source.regionCandidate !== undefined && source.regionCandidate !== null && `${source.regionCandidate}` !== '' ? `${source.regionCandidate}` : null;
+  let cand = null;
+  if (cands) {
+    cand = wanted ? cands.find((c) => c.key === wanted) || null : cands[0];   // 多候选盘:默认首候选(最通行者)
+    if (wanted && !cand) {
+      return { ok: false, error: { code: 'unknown_region_candidate', message: `地区盘 ${key} 无候选时刻 ${wanted}` }, keys, candidates: { [key]: cands.map((c) => c.key) } };
+    }
+  } else if (wanted) {
+    return { ok: false, error: { code: 'unknown_region_candidate', message: `地区盘 ${key} 只有一个建置时刻，不接受 regionCandidate` }, keys, candidates: {} };
+  }
+  const useTime = (cand && cand.time) ? cand.time : (rec.time || '12:00:00');
+  return {
+    ok: true,
+    keys,
+    region: { key, cn: rec.cn, note: rec.note || '', candidate: cand ? { key: cand.key, label: cand.label, note: cand.note || '' } : null },
+    fields: { date: rec.date, time: useTime, zone: rec.zone || '+00:00', lon: rec.lon, lat: rec.lat, gpsLon: rec.gpsLon, gpsLat: rec.gpsLat, pos: rec.cn },
+    extra: {
+      mundaneType: 'region', regionKey: key, regionCn: rec.cn + (cand ? ` · ${cand.label}` : ''),
+      regionFoundingYear: parseInt(String(rec.date || '').slice(0, 4), 10) || null,
+    },
+  };
+}
+
 export function runMundaneCards(payload) {
   const source = payload && typeof payload === 'object' ? payload : {};
   if (source.action === 'settings') {
     return { tool: 'mundane_cards', data: { ok: true, ...settingsCheck(source.settings) } };
+  }
+  if (source.action === 'region') {
+    return { tool: 'mundane_cards', data: resolveRegion(source) };
+  }
+  if (source.action === 'analysis') {
+    // 上游 buildAiSnapshot 的头行 / 判词 / 分析段 / 右栏卡（vendored 逐字抽出件）：chart = 该盘型自己的盘，extra 与 state
+    // 由 Python 原样给（不改键、不补默认值）。整函数级失败上报，不静默成空段。
+    const chart = source.chart && typeof source.chart === 'object' ? source.chart : null;
+    if (!chart) {
+      return { tool: 'mundane_cards', data: { ok: false, error: { code: 'missing_chart', message: '缺少盘面（chart）。' } } };
+    }
+    const extra = source.extra && typeof source.extra === 'object' ? source.extra : {};
+    const state = { ...(source.state && typeof source.state === 'object' ? source.state : {}) };
+    if (Array.isArray(state.patData)) {
+      state.patKey = HEADLESS_PAT_KEY;
+    }
+    try {
+      const parts = buildMundaneAiSnapshotParts(chart, extra, state);
+      return { tool: 'mundane_cards', data: { ok: true, ...parts, cards: (parts.cardSecs || []).map(splitCard) } };
+    } catch (error) {
+      return { tool: 'mundane_cards', data: { ok: false, error: { code: 'analysis_builder_failed', message: `${(error && error.message) || error}` } } };
+    }
   }
   const jobs = Array.isArray(source.jobs) ? source.jobs : [];
   const results = jobs.map((job, index) => {

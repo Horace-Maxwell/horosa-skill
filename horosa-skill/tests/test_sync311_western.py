@@ -415,7 +415,7 @@ def test_india_school_line_presets_and_prashna_fields(tmp_path: Path) -> None:
     assert "dashaSystem" not in sent and "varshaLat" not in sent and "indiaSchool" not in sent
     info = _section(result.data["snapshot_text"], "起盘信息")
     assert info.startswith("流派：KP 系统（相位范式 significator 链 · 主运取向 Vimshottari）\n当前分盘：命盘\n分盘：D1\n")
-    assert "恒星黄道岁差：Krishnamurti" in info  # 预设岁差同时落进快照口径行（请求与快照同源）
+    assert "恒星黄道·Krishnamurti / KP，KP / Placidus" in info  # 预设岁差/宫制落进上游 indiaCalibreLine（请求与快照同源）
     # 没起卦 → 问事族一个都不下发。
     client.calls.clear()
     service.run_tool("india_chart", {**INDIA_BIRTH, "prashnaMatter": "career"}, save_result=False)

@@ -2,8 +2,14 @@ import {
   buildJyotishSnapshotLines,
   buildDashaSnapshotLines,
   buildIndiaSchoolHeaderLines,
+  indiaCalibreLine,
 } from '../vendor/india/jyotishSnapshot.js';
-import { INDIA_DASHA_SYSTEM_OPTIONS, INDIA_SCHOOL_OPTIONS } from '../vendor/india/indiaConst.js';
+import {
+  INDIA_DASHA_SYSTEM_OPTIONS,
+  INDIA_SCHOOL_OPTIONS,
+  normalizeIndiaAyanamsa,
+  normalizeIndiaHouseSystem,
+} from '../vendor/india/indiaConst.js';
 
 /**
  * 把后端 `/india/chart` 响应里的 `jyotish` 树格式化成星阙的具名段。
@@ -13,12 +19,15 @@ import { INDIA_DASHA_SYSTEM_OPTIONS, INDIA_SCHOOL_OPTIONS } from '../vendor/indi
  *
  * payload: {
  *   chart: <整个 /india/chart 响应>,
- *   params?: { dashaSystem, indiaSchool, dashaVariants, date: 'YYYY-MM-DD', time: 'HH:mm:ss', ad, chartnum }
+ *   params?: { dashaSystem, indiaSchool, dashaVariants, date: 'YYYY-MM-DD', time: 'HH:mm:ss', ad, chartnum,
+ *              calibreOverrides?: { indiaHsys, indiaAyanamsa } }
  * }
  * return : {
  *   sections:   { '段名': ['行', …], … },          // buildJyotishSnapshotLines
  *   dashaLines: ['行', …],                          // [大运Dasha]：buildDashaSnapshotLines(chartObj, dashaSystem, fields)
  *   schoolLines:['行', …],                          // [起盘信息] 起首四行：流派 / 大运流派开关 / 当前分盘 / 分盘
+ *   calibreLine:'恒星黄道·…，…',                     // [起盘信息] 口径行：indiaCalibreLine(fields, overrides)（IndiaChart.js:1113-1124）
+ *   calibre:    { indiaHsys, indiaAyanamsa },       // 口径行实际用的（上游 normalize* 之后的）值，供 Python 对照后端口径
  * }
  */
 
@@ -64,5 +73,14 @@ export function runIndiaJyotish(payload) {
   // 上游 buildIndiaSnapshotText:1183-1187：dashaSystem 取页面/齿轮值（normalizeIndiaDashaSystem 兜 vimshottari）。
   const dashaLines = buildDashaSnapshotLines(chartObj, params.dashaSystem, fields) || [];
   const schoolLines = buildIndiaSchoolHeaderLines(fields, params.chartnum, null) || [];
-  return { sections, dashaLines, schoolLines };
+  // [起盘信息] 口径行（上游 buildIndiaSnapshotText:1139 replaceIndiaCalibreLine(baseInfo, indiaCalibreLine(fields))）：
+  // headless 的分宫制/岁差不在 fields 里而是请求体的实际口径（Python 按后端 webindiasrv 同一取值序给 overrides）；
+  // indiaCalibreLine 的 overrides 分支就是上游给 props 口径留的同一入口。
+  const overrides = params.calibreOverrides && typeof params.calibreOverrides === 'object' ? params.calibreOverrides : {};
+  const calibreLine = indiaCalibreLine(fields, overrides);
+  const calibre = {
+    indiaHsys: normalizeIndiaHouseSystem(overrides.indiaHsys),
+    indiaAyanamsa: normalizeIndiaAyanamsa(overrides.indiaAyanamsa),
+  };
+  return { sections, dashaLines, schoolLines, calibreLine, calibre };
 }
