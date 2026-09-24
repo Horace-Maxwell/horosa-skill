@@ -45,15 +45,15 @@ CORE_DOC: dict[str, str] = {
     "zone": "时区偏移，如 +08:00",
     "lat": "纬度 31n13 / 31.22",
     "lon": "经度 121e28 / 121.47",
-    "ad": "纪元 1=公元后（默认） -1=公元前",
+    "ad": "1=公元（默认） -1=公元前",
     "hsys": "宫制索引（见 enum；1=Alcabitus，3=Placidus）",
-    "zodiacal": "0=回归（默认） 1=恒星（配 siderealAyanamsa）",
+    "zodiacal": "0=回归（默认） 1=恒星",
     "siderealAyanamsa": "恒星黄道岁差制（zodiacal=1 时）",
     "name": "当事人姓名（透传盘头）",
     "pos": "地点显示名",
     "gender": "性别 1/男 0/女",
     "timeAlg": "0=真太阳时 1=钟表时",
-    "response_view": "响应裁剪：full|sections|titles（完整结果已存档）",
+    "response_view": "响应裁剪（完整结果已存档）",
     "agent_confirmed_settings": "用户已确认设置→true",
     "defaults_accepted": "用户接受默认→true",
     "clarification_notes": "确认摘要",
@@ -83,7 +83,7 @@ def _enum_for(field: str, tool_name: str) -> dict[str, Any]:
     if field == "siderealAyanamsa":
         # 47 制的 enum 每工具 600 B × 80 工具 = 48 KB，超预算；只给常用键，全表见 guidance。
         common = [k for k in ("lahiri", "raman", "krishnamurti", "fagan_bradley", "yukteshwar") if k in SIDEREAL_AYANAMSA_LABELS]
-        return {"description": f"恒星黄道岁差制（zodiacal=1 时）；共 {len(SIDEREAL_AYANAMSA_LABELS)} 制，常用 {'/'.join(common)}，全表见 guidance"}
+        return {"description": f"岁差制（zodiacal=1）：{'/'.join(common)}…共 {len(SIDEREAL_AYANAMSA_LABELS)} 制见 guidance"}
     return {}
 
 
