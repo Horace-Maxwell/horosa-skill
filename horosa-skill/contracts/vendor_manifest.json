@@ -1354,8 +1354,85 @@
       "mode": "bespoke",
       "why": "no upstream file of this name (skill-authored)"
     },
+    "mundane/MundaneMain.js": {
+      "upstream": "components/mundane/MundaneMain.js",
+      "mode": "verbatim",
+      "why": "上游 v3.11 [Q-444/T-407] 把右栏 25 张卡折进 AI 快照，产段函数 buildMundaneCardSections 是 React 文件里的模块级纯函数（MundaneMain.js:232，与 render*Card 同源同参）。手抄 270 行卡片排版必漂移，故整头 vendored，`const CARD` 起的 UI 常量与 React 组件由 truncate_before 机械剥离；页面按需拉取物（四季种子/相位格局/木土会合/Barbault/食时长…）由 Python 取数后经 state/extra 传入（请求型编排归 Python，AGENTS §5）。用 verbatim：截断/桩/改写全部机械可复现，流水线输出必须与 vendored 文件逐字相同。",
+      "deviations": [
+        {
+          "kind": "truncate_before",
+          "anchor": "^const CARD = \\{",
+          "why": "剥掉 `const CARD` 起的卡片样式常量、页面设置与 `class MundaneMain extends Component`（UI 尾部）。锚点是正则而非行号。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../xq-ui.js",
+          "stub": "// headless stub：模块顶层 `const Option = XQSelect.Option; const TabPane = XQTabs.TabPane;` 只服务已截断的 UI；空对象令其求值为 undefined 而不抛。\nconst XQSelect = {}; const XQTabs = {};",
+          "why": "UI 组件库；两行模块级解构仍在截断点之前，故给空对象而不是删 import。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../divination/DivinationChartShell.js",
+          "stub": "",
+          "why": "React 壳（默认导入，孤儿清理不覆盖默认导入）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../astro/PlusMinusTime.js",
+          "stub": "",
+          "why": "React 组件（同上）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../comp/QuickTimeField.js",
+          "stub": "",
+          "why": "React 组件（同上）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../comp/DateTime.js",
+          "stub": "",
+          "why": "只服务已截断的类方法（同上）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../astro/AstroExtraCommon.js",
+          "stub": "// headless stub：AstroExtraCommon 是 React/AstroMeaning 依赖的前端文件，不 vendor。\n// astroSymbol 只被 pGlyph/sGlyph（UI 字形，快照不调）引用；chartRequestKey 只用于 [盘型格局] 的\n// `st.patKey === chartRequestKey(chart)` 缓存一致性判定——headless 的相位格局就是对**同一张盘**现取的，\n// 故恒等键即正解：调用方（tools/mundaneCards.js）传 patKey 时用同一常量 HEADLESS_PAT_KEY。\nconst astroSymbol = (id) => id; const chartRequestKey = () => 'headless';",
+          "why": "前端 UI 文件；两个符号的 headless 语义见 stub 注释。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "rulerDeathSignature, solveSiderealIngress, describeSolunar",
+          "to": "rulerDeathSignature, describeSolunar",
+          "why": "solveSiderealIngress 是网络求根器，vendored solunar.js 已被流水线剥掉（Python 端口 _solve_sidereal_ingress）；ESM 具名导入缺失导出会在链接期整模块失败。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "NAVANAYAKA_OFFICES, computeNavanayaka, solveVedicSolarIngress, vimshottariFromMoon",
+          "to": "NAVANAYAKA_OFFICES, vimshottariFromMoon",
+          "why": "同上：两者是网络编排，vendored vedicMundane.js 已剥（Python 端口 _solve_navanayaka / _solve_vedic_ingress）。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "import { SIGNS } from '../../divination/data/signs.js';",
+          "to": "import { SIGNS } from '../../divination/data/signs.js';\nimport { ingressGovernance } from './momentPipeline.js';",
+          "why": "流水线按规则丢掉整条 momentPipeline 具名导入（网络编排模块），但 [年盘概要] 要其中的纯函数 ingressGovernance；改指向截断后只剩纯函数的 vendored momentPipeline.js。"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../../divination/mundane/describe.js",
+          "to": "./describe.js",
+          "why": "vendor 树里有两个 describe.js（mundane/ 与 divination/…），relocate 按 basename 无法消歧，钉死到世运那份。"
+        }
+      ]
+    },
     "mundane/chorography.js": {
       "upstream": "divination/mundane/chorography.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "mundane/conjunctionEras.js": {
+      "upstream": "divination/mundane/conjunctionEras.js",
       "mode": "verbatim",
       "deviations": []
     },
@@ -1364,13 +1441,51 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "mundane/greatYear.js": {
+      "upstream": "divination/mundane/greatYear.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "mundane/momentPipeline.js": {
+      "upstream": "divination/mundane/momentPipeline.js",
+      "mode": "verbatim",
+      "why": "上游把「纯函数」(signKeyFromLon / nodeDistance / ingressDurationMonths / ingressGovernance) 与「网络编排」(fetchMundaneEvents / fetchLunations / momentToDateTime / chartAtMoment) 放在同一文件。世运卡片快照 [年盘概要] 要 ingressGovernance（上游 MundaneMain.js:250）——手抄它的规则表会漂移，故整头 vendored、网络尾部由 truncate_before 机械剥离（请求型编排归 Python，AGENTS §5）。",
+      "deviations": [
+        {
+          "kind": "truncate_before",
+          "anchor": "^// 扫描一段时间内的世俗事件|^export async function fetchMundaneEvents\\b",
+          "why": "剥掉 fetchMundaneEvents 起的网络编排尾部（HTTP 归 Python）。锚点先认注释行、缺则认函数头，找不到即报错。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../../components/comp/DateTime.js",
+          "stub": "",
+          "why": "DateTime 只服务已截断的 momentToDateTime / chartAtMoment；默认导入不走孤儿清理，须显式去掉。"
+        }
+      ]
+    },
     "mundane/mundaneHorary.js": {
       "upstream": "divination/mundane/mundaneHorary.js",
       "mode": "verbatim",
       "deviations": []
     },
+    "mundane/omenology.js": {
+      "upstream": "divination/mundane/omenology.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "mundane/patterns.js": {
+      "upstream": "divination/mundane/patterns.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "mundane/ruleset.js": {
       "upstream": "divination/mundane/ruleset.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "mundane/saros.js": {
+      "upstream": "divination/mundane/saros.js",
       "mode": "verbatim",
       "deviations": []
     },

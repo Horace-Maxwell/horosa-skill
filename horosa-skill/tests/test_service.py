@@ -1242,6 +1242,28 @@ class FakeJsClient(HorosaJsEngineClient):
             # 假盘面不带真实黄经，vendored builder 会算出无意义结果 → 返回空文本，
             # 走与「/astroextra/analysis 失败」同一条优雅降级路径（该段不出）。
             return {"text": ""}
+        if tool_name == "mundane_cards":
+            # 世运右栏卡片段（v3.11）：真渲染由 npm selfcheck 金标（vendored buildMundaneCardSections）与
+            # tests/test_sync311_mundane_election.py 的真 JS 用例守；桩只管形状。段头取自真 preset / 真表（不手抄）：
+            # 入宫底盘一轮回 preset 里「年盘概要…起盘信息」之间**非 optional** 的卡（必出卡），盘型轮回该盘型的
+            # 专属卡（service._MUNDANE_TYPE_CARDS；service 侧再按同表过滤）。
+            from horosa_skill.exports.registry import AI_EXPORT_OPTIONAL_SECTIONS as _OPT
+            from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS as _PRE
+            from horosa_skill.service import HorosaSkillService as _Svc
+
+            preset = _PRE["mundane"]
+            cards = preset[preset.index("年盘概要"): preset.index("起盘信息")]
+            optional = set(_OPT["mundane"])
+            jobs_out = []
+            for job in payload.get("jobs") or []:
+                job_id = str(job.get("id"))
+                titles = [t for t in cards if t not in optional] if job_id == "ingress" else list(_Svc._MUNDANE_TYPE_CARDS.get(job_id, ()))
+                jobs_out.append({
+                    "id": job_id,
+                    "ok": True,
+                    "cards": [{"title": t, "text": f"[{t}]\n{t}：离线桩判读行（逐字真值由 selfcheck 金标守）"} for t in titles],
+                })
+            return {"tool": "mundane_cards", "data": {"ok": True, "jobs": jobs_out}}
         raise AssertionError(f"Unexpected local tool: {tool_name}")
 
 

@@ -1141,7 +1141,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "topicId", "question": "做什么事（用事类型）？", "options": ["结婚 marriage", "开业/创业 business", "入宅/迁居 move_in", "购屋 buy_property", "买卖交易 trade", "购车 buy_car", "签约 contract", "手术 surgery", "出行 travel", "求职 job_hunt", "其它（见 TOPIC_MASTER）"]},
         ],
         safe_defaults=[{"field": "topicId", "value": "marriage", "meaning": "默认按结婚用事规则包评估"}],
-        do_not_assume=["候选时刻", "用事类型"],
+        # natal 可选：给了才加产 [本命合参] 与 [回归与主限]（择日前最近日/月返 + ±240 日主限命中）。
+        do_not_assume=["候选时刻", "用事类型", "本命出生资料 natal（只在用户给出时传，不可编造）"],
     ),
     "geomancy": _policy(
         intent="天文地占 / astronomical geomancy：以「起卦时刻」确定性起卦（castMethod='time'，由 date/time 派生 timeSeed，同刻可复现），由 4 母卦推 16 图形入十二宫，取判官/见证/解读技法断吉凶。",
@@ -1282,7 +1283,14 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "ingressTerm", "question": "用哪个入宫节气？", "options": ["春分（白羊入宫·年盘默认）", "夏至", "秋分", "冬至"]},
             {"field": "location", "question": "观测地点的经纬度与时区？（通常用首都/关切地）"},
         ],
-        safe_defaults=[{"field": "ingressTerm", "value": "春分", "meaning": "白羊入宫，世俗年盘的标准起点"}],
+        safe_defaults=[
+            {"field": "ingressTerm", "value": "春分", "meaning": "白羊入宫，世俗年盘的标准起点"},
+            {
+                "field": "mundaneType",
+                "value": "ingress",
+                "meaning": "入宫底盘；newmoon/fullmoon/solecl/lunecl/cycles/solunar/vedicmundane/mundanehorary 另加该盘型专属段",
+            },
+        ],
         do_not_assume=["year", "location"],
     ),
     "harmonic": _policy(
