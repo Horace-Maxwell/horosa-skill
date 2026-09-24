@@ -679,11 +679,11 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     "otherbu": ["骰子盘相位", "天象盘相位"],
     # 二十四节气：种子行来自 Java /jieqi/year（上游页面种子请求同路）；Java 不可用时不产 + warnings。
     "jieqi": ["二十四节气"],
-    # 八字: 大运段仅在 direction 计算成功(起运/性别齐备)时出 → 可选；多运限·指定时段是前端「指定时间窗」
-    # 功能，后端 /bazi 响应不带该数据、skill 无该输入入口 → 未接入，列可选段(如实标出，不伪造)。
-    # 八字格局（五行力量/格局·用神/盲派结构）由 core-js baziGeju 引擎从 fourColumns 派生，需 node → 可选段；
-    # 月令司令（分野）另需 fenYe 数据(后端未带) → 未接入，不进 preset/optional（如实不伪造）。
-    "bazi": ["大运", "多运限·指定时段", "五行力量", "格局·用神", "盲派结构", "月令司令（分野）"],
+    # 八字（v0.40 F9 起与上游页面同源：本地 lunar.js 引擎 + vendored buildBaziSnapshotText，BaZi.js:267-610）：
+    # builder 自身就是条件段 —— [五行力量]/[格局·用神]/[盲派结构]/[月令司令（分野）] 只有本地引擎结果带
+    # （公元前等回退 Java /bazi/* 时缺席，上游同）；[干支合冲] heCongLines 全空不产；[大运]/[流年行运概略]
+    # 要 mainDirection/smallDirection/direction（Java /bazi/birth 回退不带 direction）；[多运限·指定时段] 只在给了 period 时产。
+    "bazi": ["大运", "多运限·指定时段", "五行力量", "格局·用神", "盲派结构", "月令司令（分野）", "干支合冲", "流年行运概略"],
     # 太乙 (星阙 v2.6.x): kintaiyi 后端返回的 太乙解读段（起盘信息/太乙盘/十六宫标记为 builder 恒出，
     # 进 preset）。其余按起局式/选项条件出（命法/博弈/某些式不出）→ 列为可选段，避免随式误报 missing。
     "taiyi": ["太乙诸神", "风游", "主客定算", "八门与宿曜", "十二神", "断法", "七大兵法", "博弈", "命法", "命宫行限"],

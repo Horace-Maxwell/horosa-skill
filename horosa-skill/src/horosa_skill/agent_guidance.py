@@ -30,6 +30,9 @@ GLOBAL_AGENT_RULES: list[str] = [
 
 COMMON_LOCATION_FIELDS = ["date", "time", "zone/timezone", "lat/lon or gpsLat/gpsLon/location"]
 COMMON_BIRTH_FIELDS = ["birth date", "birth time", "birth timezone", "birth place / longitude / latitude"]
+# 日界缺省（F2）：上游出厂缺省 1=「23 点算第二天」（utils/dayBoundary.js:39-45 defaultAfter23NewDay、models/astro.js:395-398）。
+# v0.40 前这里写「False=星阙默认」且 schema 硬塞 False 下发 → bazi/ziwei/liureng/nongli 静默按 24 点换日。
+_AFTER23_DEFAULT_MEANING = "星阙默认：23 点换日（缺省不传=引擎默认 1）；0=24 点换日"
 CONFIRMATION_FIELDS: list[str] = list(SENSITIVE_SETTINGS["confirmation_fields"])
 PREFLIGHT_EXEMPT_TOOLS: set[str] = set(SENSITIVE_SETTINGS["exempt_tools"])
 GATE_FAILURE_CODE: str = str(SENSITIVE_SETTINGS["failure_code"])
@@ -412,7 +415,7 @@ EVENT_METHOD_POLICY = _policy(
     ],
     safe_defaults=[
         {"field": "ad", "value": 1, "meaning": "公历"},
-        {"field": "after23NewDay", "value": False, "meaning": "星阙默认，除非用户指定"},
+        {"field": "after23NewDay", "value": 1, "meaning": _AFTER23_DEFAULT_MEANING},
     ],
     do_not_assume=["location for location-sensitive methods", "question context"],
 )
@@ -576,7 +579,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         safe_defaults=[
             {"field": "paiPanType", "value": 3, "meaning": "时家奇门"},
             {"field": "sex", "value": 1, "meaning": "星阙默认；涉及命式时应先问"},
-            {"field": "after23NewDay", "value": False, "meaning": "星阙默认"},
+            {"field": "after23NewDay", "value": 1, "meaning": _AFTER23_DEFAULT_MEANING},
         ],
         do_not_assume=["question", "location", "non-default qijuMethod"],
     ),
@@ -1005,7 +1008,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         safe_defaults=[
             {"field": "guirengType", "value": 2, "meaning": "星占法贵人 / Xingque default"},
             {"field": "isDiurnal", "value": None, "meaning": "由本地 runtime 根据时间判定"},
-            {"field": "after23NewDay", "value": False, "meaning": "星阙默认"},
+            {"field": "after23NewDay", "value": 1, "meaning": _AFTER23_DEFAULT_MEANING},
         ],
         do_not_assume=["question", "location", "non-default guirengType"],
     ),
@@ -1142,13 +1145,22 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
     ),
     "suzhan": _policy(
-        intent="宿占/宿盘。",
+        intent="宿占/宿盘（人事十二宫缺省按八字公式起盘，读 Java /chart 农历时支；ASC 档不需要）。",
         required_context=COMMON_BIRTH_FIELDS,
         ask_if_missing=[
             {"field": "date/time/place", "question": "请提供出生/事件日期、时间、时区和地点。"},
-            {"field": "szchart/szshape/houseStartMode", "question": "宿占盘式和形制是否沿用星阙默认？", "options": ["沿用默认", "指定盘式/形制"]},
+            {
+                "field": "doubingSu28/houseStartMode",
+                "question": "宿法与人事十二宫起法是否沿用星阙默认？（宿法改二十八宿度数，起法改宫序）",
+                "options": ["沿用默认（宿法 0 荀爽距星 · 八字公式起盘）", "指定宿法 0–8 / ASC 起盘"],
+            },
         ],
-        safe_defaults=[{"field": "doubingSu28", "value": True, "meaning": "星阙默认"}],
+        # 上游 models/astro.js:117-119（doubingSu28 新盘种子缺省 0）/ :312-316（houseStartMode 0）/ :81-83（hsys=DefaultHouseSystem 1）。
+        safe_defaults=[
+            {"field": "doubingSu28", "value": 0, "meaning": "星阙默认：宿法 0（荀爽距星）；0–8 九档见 options_keys"},
+            {"field": "houseStartMode", "value": 0, "meaning": "星阙默认：八字公式起盘（1=ASC 起盘）"},
+            {"field": "hsys", "value": 1, "meaning": "星阙页面缺省宫制 1（Alcabitus）"},
+        ],
     ),
     "hellen_chart": ASTRO_BIRTH_POLICY,
     "guolao_chart": ASTRO_BIRTH_POLICY,
@@ -1369,15 +1381,18 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ask_if_missing=[
             {"field": "date", "question": "要择的是哪一天？（公历 YYYY-MM-DD）"},
             {
+                # 键 = 引擎词表 tongshuSchools.js TONGSHU_SCHOOLS（上游 techniqueMountSettings.js:2086-2095）：
+                # sanyuan 是「三元玄空大卦」、三垣列宿是 sanyuanliexiu（v0.40 前这里写反，照传 xuankong 得空结论）。
                 "field": "school",
                 "question": "用哪一派通书？（同一天在不同流派下结论可以完全相反，必须指定）",
                 "options": [
-                    "donggong 董公择日",
+                    "donggong 董公择日（星阙默认）",
                     "qimen 奇门叠数",
-                    "sanyuan 三垣列宿",
+                    "sanyuanliexiu 三垣列宿",
                     "wutu 天元乌兔",
-                    "xuankong 三元玄空大卦",
+                    "sanyuan 三元玄空大卦",
                 ],
+                "values": ["donggong", "qimen", "sanyuanliexiu", "wutu", "sanyuan"],
             },
             {"field": "event", "question": "要择的用事是什么？（嫁娶 / 开市 / 安葬 / 动土 …）"},
         ],
@@ -1492,15 +1507,23 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         do_not_assume=["random dice result"],
     ),
     "ziwei_birth": _policy(
-        intent="紫微斗数命盘。",
+        intent="紫微斗数命盘（四化流派 + 22 个传本/排盘开关 + 流派叠层，键表见 options_keys；任一传本开关非缺省即走本地 ZiweiCalc 重排，同星阙）。",
         required_context=COMMON_BIRTH_FIELDS + ["gender"],
         ask_if_missing=[
             {"field": "birth data", "question": "请提供出生日期、时间、时区和地点。"},
             {"field": "gender", "question": "紫微需要性别，请选择。", "options": ["男", "女"]},
             {"field": "after23NewDay/lateZiHourUseNextDay/timeAlg", "question": "子时换日、晚子时时柱和时间算法是否沿用星阙默认？", "options": ["沿用默认", "指定"]},
+            {
+                "field": "sihuaSchool/传本",
+                "question": "四化流派与传本设置（大限跨度/天马/星集/三盘/闰月/晚子时/定年界线/火铃/亮度…）是否沿用星阙默认？",
+                "options": ["沿用默认（通用·飞星 + 全缺省传本）", "指定流派或传本（键见 options_keys）"],
+            },
         ],
-        safe_defaults=[{"field": "after23NewDay", "value": False, "meaning": "星阙默认"}],
-        do_not_assume=["gender", "birth time"],
+        safe_defaults=[
+            {"field": "after23NewDay", "value": 1, "meaning": _AFTER23_DEFAULT_MEANING},
+            {"field": "sihuaSchool", "value": "beipai", "meaning": "星阙默认：通用·飞星四化"},
+        ],
+        do_not_assume=["gender", "birth time", "non-default sihuaSchool / 传本"],
     ),
     "ziwei_rules": _policy(
         intent="Fetch Ziwei rule metadata.",
@@ -1509,28 +1532,39 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         safe_defaults=[{"field": "request", "value": {}, "meaning": "rules have no required input"}],
     ),
     "bazi_birth": _policy(
-        intent="八字命盘。",
+        intent="八字命盘（同星阙八字页：本地 lunar.js 引擎起盘，公元前等域外日期与 byLon/adjustJieqi 走 Java；盘法/流派键见 options_keys）。",
         required_context=COMMON_BIRTH_FIELDS,
         ask_if_missing=[
             {"field": "birth data", "question": "请提供出生日期、时间、时区和地点。"},
-            {"field": "timeAlg/byLon/after23NewDay/lateZiHourUseNextDay", "question": "真太阳时、经度校正、子时换日、晚子时时柱是否沿用星阙默认？", "options": ["沿用默认", "指定设置"]},
+            {"field": "timeAlg/after23NewDay/lateZiHourUseNextDay", "question": "真太阳时、子时换日、晚子时时柱是否沿用星阙默认？", "options": ["沿用默认", "指定设置"]},
+            {
+                "field": "godKeyPos/minggongMethod/school",
+                "question": "神煞主位、命宫起法、断命流派是否沿用星阙默认？",
+                "options": ["沿用默认（神煞按年柱 · 命宫通行版 · 传统综合）", "指定（键见 options_keys）"],
+            },
         ],
+        # 上游 BaZi.js:961-985 genParams + techniqueMountSettings.js:1692-1740 缺省。
         safe_defaults=[
-            {"field": "timeAlg", "value": 0, "meaning": "星阙默认"},
-            {"field": "byLon", "value": False, "meaning": "星阙默认"},
-            {"field": "after23NewDay", "value": False, "meaning": "星阙默认"},
+            {"field": "timeAlg", "value": 0, "meaning": "星阙默认：真太阳时"},
+            {"field": "after23NewDay", "value": 1, "meaning": _AFTER23_DEFAULT_MEANING},
+            {"field": "godKeyPos", "value": "年", "meaning": "星阙默认：按年柱查神煞"},
+            {"field": "minggongMethod", "value": "tongxing", "meaning": "星阙默认：命宫通行版"},
+            {"field": "byLon", "value": False, "meaning": "星阙默认（给 true 则整盘走 Java，本地引擎无此算法）"},
         ],
         do_not_assume=["birth time", "timezone", "birthplace"],
     ),
     "bazi_direct": _policy(
-        intent="八字大运/流年/direct flow.",
+        intent="八字大运/流年/direct flow（与 bazi_birth 同源本地引擎，盘法/流派键见 options_keys）。",
         required_context=COMMON_BIRTH_FIELDS + ["gender"],
         ask_if_missing=[
             {"field": "birth data", "question": "请提供出生日期、时间、时区和地点。"},
             {"field": "gender", "question": "排大运需要性别，请选择。", "options": ["男", "女"]},
-            {"field": "adjustJieqi", "question": "节气校正是否沿用星阙默认？", "options": ["沿用默认", "指定校正"]},
+            {"field": "adjustJieqi", "question": "节气校正是否沿用星阙默认？（星阙八字页已隐藏此项：本地引擎未实现；选校正则整盘走 Java）", "options": ["沿用默认", "指定校正"]},
         ],
-        safe_defaults=[{"field": "adjustJieqi", "value": False, "meaning": "星阙默认"}],
+        safe_defaults=[
+            {"field": "adjustJieqi", "value": False, "meaning": "星阙默认（不调整节气）"},
+            {"field": "after23NewDay", "value": 1, "meaning": _AFTER23_DEFAULT_MEANING},
+        ],
         do_not_assume=["gender"],
     ),
     "jieqi_year": _policy(
@@ -1577,6 +1611,78 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         do_not_assume=["hexagram name"],
     ),
 }
+
+
+# ── 命理盘法/流派键表（v0.40 mingli）──────────────────────────────────────────────────────────
+# 这些键已在输入模型里声明（MCP 顶层按名直传），但**不进 tools/list 广告层**（x-horosa-hidden，预算见
+# verify_mcp_list_budget）——键表与取值只在这里给。取值的唯一真值是引擎自带词表（紫微 = vendored
+# ziweiOptions.js 各 *_OPTIONS；八字 = BaZi.js genParams + techniqueMountSettings.js:1692-1740；宿法 = guolaoData
+# SU28_MODE_LABEL），认不出的值按缺省起盘并进 warnings；这里的文字只是说明，漂移不影响校验。
+_CN_ZONE_KEY = "cnUnifiedZone: 缺省 true=Asia/Urumqi 且日期≥1949-10-01 按北京时间（Asia/Shanghai）折算；false=保留新疆地理时区（或直接给 +06:00）"
+_MINGLI_OPTIONS_KEYS: dict[str, dict[str, str]] = {
+    "ziwei_birth": {
+        "sihuaSchool": "beipai 通用·飞星（缺省）| zhongzhou 中州派 | quanshu 全书系 | beixiang 北派(天相忌) | custom（配 sihuaCustomTable）",
+        "sihuaCustomTable": '{"甲":["廉贞","破军","武曲","太阳"],…} 每干 [禄,权,科,忌]；旧入参 sihua 等同 custom',
+        "daxianSpan": "10（缺省）| ju 局数年(钦天)",
+        "tianmaBasis": "month（缺省）| year 年支三合马",
+        "starSet": "full（缺省）| north18 精简18星(河洛)",
+        "sanPan": "tian（缺省）| di 地盘(身宫起) | ren 人盘(福德起)",
+        "shangShi": "fixed（缺省）| yinyang 中州阴阳互换",
+        "leapMonth": "mid_split（缺省）| next | prev | split_days | solar_term | split_star_month",
+        "lateZi": "global（缺省=跟随 after23NewDay/lateZiHourUseNextDay）| zi_chu | midnight_split | zi_zheng | dual",
+        "yearBoundary": "lunar_1_1 正月初一（缺省）| lichun 立春",
+        "huoling": "sanhe（缺省）| nanpai",
+        "kongNaming": "modern 地空地劫（缺省）| book 天空地劫",
+        "brightnessSource": "zi_jian（缺省）| quanshu | quanshu_full | custom（配 brightnessCustomTable {星:{支:档}}）",
+        "lifeMasterBy": "year_branch（缺省）| ming_branch",
+        "changshengStart": "shui_tu（缺省）| huo_tu",
+        "changshengDirection": "yinyang（缺省）| always_forward",
+        "kongwangStyle": "double（缺省）| single",
+        "kuiYue": "jia_wu_geng（缺省）| geng_ma_hu | liu_xin_hu_ma | geng_xin_hu_ma",
+        "liuYueBasis": "doujun（缺省）| taisui（只影响 [运限] 流月）",
+        "liunianSihuaGan": "year_gan（缺省）| ming_gong_gan（只影响 [运限] 流年）",
+        "xiaoxianMode": "'0' 男顺女逆（缺省）| '1' 阳男阴女顺（= ziweiXiaoxianYinyang；只影响流年段小限行）",
+        "开关(0/1，缺省 0)": "childLimit, zhongxian, huoPan, qishuWei, borrowPalace, taiSuiRuGua, flowLuanXi, flowHuoLing, flowShenshaOnChart",
+        "taiSuiRelatives": "「午:母:female 子」或 [{branch,role,sex}]（配 taiSuiRuGua=1）",
+        "period": "{daxian:[宫序0–11], liunian:[公历年], liuyue:[1–12], liuri:[1–31], liushi:[0–11]} → [运限] 段",
+        "规则": "任一传本开关非缺省（亮度/命主/流月/流年四化/小限/叠层开关除外）即本地 ZiweiCalc 重排盘并重算格局（同星阙）；旧入参 schools{…} 仍收，平铺键优先",
+        "cnUnifiedZone": _CN_ZONE_KEY,
+    },
+    "bazi_birth": {
+        "godKeyPos": "年（缺省）| 日 | 年日",
+        "minggongMethod": "tongxing 通行版（缺省）| shufa 子平数法",
+        "dayunPrecision": "precise 精确（缺省）| integer 取整岁（[大运] 起运行）",
+        "school": "zonghe 传统综合（缺省）| fuyi | geju | tiaohou | bingyao | tongguan | mangpai | nayin（只切 [格局·用神] 主用流派标注）",
+        "ageStyle": "nominal 虚岁（缺省）| real 周岁（[大运] 小运表年龄列）",
+        "zodiacBoundary": "lichun 立春（缺省）| lunar 正月初一（[起盘信息] 生肖行）",
+        "cangVersion/fenyeVersion": "common（缺省）| fenye 分野加权 / fajue 法诀版",
+        "phaseType": "0 长生火土同（缺省）| 1 水土同 | 2 阳顺阴逆",
+        "timeAlg": "0 真太阳时（缺省）| 1 直接时间 | 3 平太阳时（2 春分定卯时上游未实现，报错）",
+        "byLon/adjustJieqi": "true → 整盘走 Java /bazi/*（本地引擎不实现；五行力量等本地派生段随之不出）",
+        "period": "{liunian:[公历年], liuyue:[1–12], liuri:[公历日], liushi:[0–11]} → [多运限·指定时段]",
+        "cnUnifiedZone": _CN_ZONE_KEY,
+    },
+    "suzhan": {
+        "doubingSu28": "0 荀爽距星（缺省）| 1 斗柄定房法 | 2 回归今宿 | 3 回归古制开禧 | 4 恒星制 | 5 恒星制·现代天赤 | 6 授时历古法 | 7 赤道回归(元明) | 8 赤道回归(实时)",
+        "houseStartMode": "0 八字公式起盘（缺省，读 Java /chart 农历时支）| 1 ASC 起盘",
+        "nongliTimeAlg": "0 真太阳时（缺省）| 1 直接时间 | 3 平太阳时（只作用于八字公式所读的农历时支）",
+        "szchart/szshape": "外盘 0–7 / 盘型 0 圆 1 方：只进 [起盘信息] 标签行（缺省不出该行，同星阙）",
+        "hsys": "缺省 1（星阙页面缺省宫制）",
+        "cnUnifiedZone": _CN_ZONE_KEY,
+    },
+    "jieqi_year": {
+        "doubingSu28": "0–8（缺省 0；同 suzhan）",
+        "siderealAyanamsa": "zodiacal=1 时生效：逐节气 /chart 重排分至盘（Python /jieqi/year 不读此键）",
+        "after23NewDay": "不适用：[二十四节气] 四柱由 Java 以 after23NewDay=false 硬编码起算（上游同）",
+    },
+    "nongli_time": {
+        "timeAlg": "0 真太阳时（缺省）| 1 直接时间（/nongli/time 只认这两档，其余夹回 0）",
+        "cnUnifiedZone": _CN_ZONE_KEY,
+    },
+}
+_MINGLI_OPTIONS_KEYS["bazi_direct"] = _MINGLI_OPTIONS_KEYS["bazi_birth"]
+for _tool, _keys in _MINGLI_OPTIONS_KEYS.items():
+    TOOL_GUIDANCE[_tool]["options_keys"] = _keys
 
 
 REPORT_AND_MEMORY_GUIDANCE: dict[str, dict[str, Any]] = {

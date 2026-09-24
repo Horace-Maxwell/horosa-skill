@@ -114,7 +114,7 @@
       {
         "callee": "buildTongshuSnapshotText",
         "module": "../vendor/calendar/tongshuSnapshot.js",
-        "line": 55,
+        "line": 63,
         "arg": 0,
         "via_local": "settings",
         "keys": [
@@ -124,7 +124,7 @@
       {
         "callee": "personBazi",
         "module": "../vendor/calendar/riziEngine.js",
-        "line": 78,
+        "line": 87,
         "arg": 0,
         "keys": [
           "date",
@@ -135,7 +135,7 @@
       {
         "callee": "buildPersonalizedDates",
         "module": "../vendor/calendar/riziEngine.js",
-        "line": 90,
+        "line": 99,
         "arg": 0,
         "keys": [
           "event",
@@ -147,7 +147,7 @@
       {
         "callee": "buildRiziSnapshotText",
         "module": "../vendor/calendar/riziSnapshot.js",
-        "line": 96,
+        "line": 105,
         "arg": 0,
         "keys": [
           "event",
@@ -220,7 +220,7 @@
       {
         "callee": "runElection",
         "module": "../vendor/divination/election/electionEngine.js",
-        "line": 37,
+        "line": 96,
         "arg": 4,
         "via_local": "opts",
         "keys": [
@@ -303,6 +303,33 @@
         "arg": 1,
         "keys": [
           "timeLines"
+        ]
+      }
+    ],
+    "guolaoMoira.js": [
+      {
+        "callee": "buildGuolaoMoiraInfoFacts",
+        "module": "../vendor/guolao/guolaoInfoFacts.js",
+        "line": 171,
+        "arg": 0,
+        "keys": [
+          "display",
+          "fields",
+          "params",
+          "rootValue",
+          "transitParams",
+          "transitValue",
+          "value"
+        ]
+      },
+      {
+        "callee": "buildGuolaoLimitSection",
+        "module": "../vendor/guolao/guolaoSnapshotSections.js",
+        "line": 192,
+        "arg": 5,
+        "keys": [
+          "limitChildBase",
+          "limitYearBoundary"
         ]
       }
     ],
@@ -410,6 +437,21 @@
         ]
       }
     ],
+    "liureng.js": [
+      {
+        "callee": "sanChuanRelationSnapshotLines",
+        "module": "../vendor/liureng/LRSanChuanRelationMini.js",
+        "line": 590,
+        "arg": 0,
+        "keys": [
+          "branches",
+          "dayGan",
+          "dayZhi",
+          "gans",
+          "xunKong"
+        ]
+      }
+    ],
     "liuyao.js": [
       {
         "callee": "analyzeLiuyao",
@@ -470,6 +512,24 @@
         ]
       }
     ],
+    "suzhan.js": [
+      {
+        "callee": "buildSuzhanSnapshotText",
+        "module": "../vendor/suzhan/suzhanSnapshot.js",
+        "line": 41,
+        "arg": 1,
+        "via_local": "fields",
+        "keys": [
+          "date",
+          "doubingSu28",
+          "houseStartMode",
+          "lat",
+          "lon",
+          "time",
+          "zone"
+        ]
+      }
+    ],
     "tarot.js": [
       {
         "callee": "buildReading",
@@ -516,7 +576,7 @@
       {
         "callee": "buildTongshuSnapshotText",
         "module": "../vendor/calendar/tongshuSnapshot.js",
-        "line": 32,
+        "line": 55,
         "arg": 0,
         "via_local": "settings",
         "keys": [
@@ -750,6 +810,51 @@
           "pillars",
           "suijun",
           "xiaoyun"
+        ]
+      }
+    ],
+    "ziweiBirth.js": [
+      {
+        "callee": "calcZiwei",
+        "module": "../vendor/ziwei/ZiweiCalc.js",
+        "line": 218,
+        "arg": 0,
+        "via_local": "birth",
+        "keys": [
+          "ad",
+          "date",
+          "gender",
+          "gpsLat",
+          "gpsLon",
+          "lat",
+          "lon",
+          "time",
+          "zone"
+        ]
+      },
+      {
+        "callee": "calcZiwei",
+        "module": "../vendor/ziwei/ZiweiCalc.js",
+        "line": 218,
+        "arg": 1,
+        "via_local": "opts",
+        "keys": [
+          "after23NewDay",
+          "lateZi",
+          "lateZiHourUseNextDay",
+          "lifeMasterBy",
+          "timeAlg",
+          "yearBoundary"
+        ]
+      },
+      {
+        "callee": "buildZiWeiSnapshotText",
+        "module": "../vendor/ziwei/ziweiSnapshotText.js",
+        "line": 233,
+        "arg": 1,
+        "via_local": "result",
+        "keys": [
+          "chart"
         ]
       }
     ]

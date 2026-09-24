@@ -727,6 +727,17 @@ def _day_span(start_date: str, end_date: str) -> int | None:
     return None if a is None or b is None else (b - a).days
 
 
+def _cn_unified_zone_note(input_normalized: dict[str, Any]) -> str | None:
+    """F17：输入层把 Asia/Urumqi 归并成北京时间时，warnings 里说清楚（上游 advisory 'cn-unified' 同义）。"""
+    if input_normalized.get("zoneAdvisory") != "cn-unified":
+        return None
+    geo = input_normalized.get("geoZone") or "Asia/Urumqi"
+    return (
+        f"时区按中国大陆统一北京时间口径起盘：{geo} → Asia/Shanghai（{input_normalized.get('zone')}，"
+        f"1949-10-01 起法定时间）；如需新疆当地惯用时间，传 cnUnifiedZone=false 或直接给偏移 +06:00。"
+    )
+
+
 def _day_boundary_switches(payload: dict[str, Any], keys: tuple[str, ...] = ("after23NewDay", "lateZiHourUseNextDay")) -> dict[str, int]:
     """日界(after23NewDay)/晚子时时柱(lateZiHourUseNextDay)开关：仅显式给定时发送。
 
@@ -3793,47 +3804,6 @@ def _extract_gua_detail(raw: Any, code: str) -> dict[str, Any]:
     return {}
 
 
-def _build_suzhan_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
-    chart = response.get("chart", {})
-    houses = chart.get("houses") if isinstance(chart, dict) else []
-    objects = chart.get("objects") if isinstance(chart, dict) else []
-    house_lines: list[str] = []
-    if isinstance(houses, list):
-        for house in houses:
-            if not isinstance(house, dict):
-                continue
-            house_id = house.get("id", "House")
-            house_lines.append(f"宫位：{house_id}")
-            in_house = [obj for obj in (objects or []) if isinstance(obj, dict) and obj.get("house") == house_id]
-            if not in_house:
-                house_lines.append("星曜：无")
-                house_lines.append("")
-                continue
-            for obj in in_house:
-                deg, minute = _split_degree(obj.get("signlon", obj.get("lon")))
-                su28 = _msg(obj.get("su28"))
-                su_text = f"{deg}˚{su28}{minute}分" if su28 else f"{deg}˚{minute}分"
-                house_lines.append(f"星曜：{_planet_label(obj.get('id'))} {su_text}".strip())
-            house_lines.append("")
-    return _render_snapshot_text(
-        [
-            (
-                "起盘信息",
-                "\n".join(
-                    [
-                        f"日期：{payload.get('date', '—')} {payload.get('time', '—')}",
-                        f"时区：{payload.get('zone', '—')}",
-                        f"经纬度：{payload.get('lon', '—')} {payload.get('lat', '—')}",
-                        f"外盘：{payload.get('szchart', 0)}",
-                        f"盘型：{payload.get('szshape', 0)}",
-                    ]
-                ),
-            ),
-            ("宿盘宫位与二十八宿星曜", "\n".join(house_lines).strip() or "无"),
-        ]
-    )
-
-
 # ── 汉堡学派 (Uranian) 中点盘核心：星阙 utils/uranianDial.js 的 Python 移植（纯函数）──
 # 90° 盘：行星/三王/角点/TNP 折叠到 0–90°；行星图 A+B−C=D；映点 Spiegelpunkt；中点列表。
 _DIAL_IDS = (
@@ -5691,18 +5661,6 @@ def _gz_text(item: Any) -> str:
     return _msg(item)
 
 
-def _collect_god_names(node: Any) -> list[str]:
-    if not isinstance(node, dict):
-        return []
-    values: list[str] = []
-    for key in ("goodGods", "neutralGods", "badGods", "allGods", "taisuiGods"):
-        for item in node.get(key) or []:
-            text = _msg(item)
-            if text:
-                values.append(text)
-    return values
-
-
 def _derived_position_lines(positions: Any, label: str) -> list[str]:
     """派生盘位置行——镜像 AuxLab：`{id}：本命黄经 X° → {label} {sign}{signlon}°`。"""
     out: list[str] = []
@@ -5741,171 +5699,6 @@ def _angle_text(obj: dict[str, Any] | None) -> str:
     signlon = f"{float(obj['signlon']):.2f}°" if obj.get("signlon") is not None else ""
     return f"{obj.get('sign') or ''}{signlon}" or "—"
 
-
-def _build_bazi_hechong_lines(four: dict[str, Any]) -> list[str]:
-    """[干支合冲] 行——镜像上游 BaZi.js relLine：`{label}：{cell}（{zhu}） …→{key}；…`，全空回 []。"""
-    def rel_line(label: str, rec: Any) -> str:
-        parts: list[str] = []
-        if isinstance(rec, dict):
-            for key, ary in rec.items():
-                if isinstance(ary, list) and ary:
-                    cells = " ".join(
-                        f"{(item or {}).get('cell', '')}（{(item or {}).get('zhu', '')}）"
-                        for item in ary
-                        if isinstance(item, dict)
-                    )
-                    parts.append(f"{cells}→{key}")
-        return f"{label}：{'；'.join(parts)}" if parts else ""
-
-    pairs = [
-        ("干合", four.get("ganHe")), ("干冲", four.get("ganCong")),
-        ("支合", four.get("ziHe6")), ("支拱", four.get("ziHe3")), ("支会", four.get("ziHui")),
-        ("支刑", four.get("ziXing")), ("支冲", four.get("ziCong")), ("支穿", four.get("ziCuan")),
-        ("支破", four.get("ziPo")),
-    ]
-    return [line for line in (rel_line(label, rec) for label, rec in pairs) if line]
-
-
-# 「时间基准」行：单源在 horosa_skill.time_basis（逐字移植上游 utils/timeBasisLine.js）。
-
-
-# 生肖（地支 → 属相）：与 lunar-javascript getYearShengXiao / getYearShengXiaoByLiChun 同表。
-_BRANCH_SHENGXIAO = dict(zip("子丑寅卯辰巳午未申酉戌亥", "鼠牛虎兔龙蛇马羊猴鸡狗猪"))
-
-
-def _bazi_shengxiao(nongli: Any, zodiac_boundary: Any) -> tuple[str, bool]:
-    """(生肖, 是否正月初一岁首)。上游本地引擎直接给 nongli.shengXiaoLichun / shengXiaoLunar（lunar.js）；
-    skill 的八字走 Java /bazi/birth，没有这两个字段，但同一 nongli 里有两种岁首的年干支：
-    `yearJieqi`（节气年＝立春岁首）与 `year`（农历年＝正月初一岁首）——取其地支查表即同一口径，
-    且与 [四柱与三元] 的年柱同源（不另起第二套历算）。实测 2028-01-30：year=戊申、yearJieqi=丁未。"""
-    if not isinstance(nongli, dict):
-        return "", False
-    if zodiac_boundary not in (None, "", "lichun", "lunar"):
-        # 上游页面只有两档（缺档 = 立春）；认不出的值不静默吞：按立春出并进 warnings。
-        _degrade(
-            "bazi zodiacBoundary %r unrecognised, using lichun", zodiac_boundary,
-            note=f"八字 zodiacBoundary={zodiac_boundary!r} 无法识别（可选 lichun / lunar），生肖行已按立春岁首给出。",
-        )
-    by_lunar = f"{zodiac_boundary or ''}" == "lunar"
-    if not by_lunar and nongli.get("shengXiaoLichun"):
-        return f"{nongli['shengXiaoLichun']}", False
-    if by_lunar and nongli.get("shengXiaoLunar"):
-        return f"{nongli['shengXiaoLunar']}", True
-    year_gz = f"{nongli.get('year' if by_lunar else 'yearJieqi') or ''}"
-    return (_BRANCH_SHENGXIAO.get(year_gz[1:2], ""), by_lunar)
-
-
-def _build_bazi_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
-    bazi = response.get("bazi", response if isinstance(response, dict) else {})
-    four = bazi.get("fourColumns", {}) if isinstance(bazi, dict) else {}
-    nongli = bazi.get("nongli", {}) if isinstance(bazi, dict) else {}
-    time_alg_map = {"0": "真太阳时", "1": "直接时间", "2": "春分定卯时", "3": "平太阳时(仅经度)"}  # 逐字同上游 cntradition/BaZi.js labelMap.timeAlg（v3.11.0 起 3=平太阳时）
-    adjust_map = {"0": "不调整节气", "1": "节气按纬度调整"}
-    # adjustJieqi 在 schema 里是 bool：str(False) = 'False' 查不到表，旧版直接把「节气修正：False」印进快照。
-    _adjust_raw = payload.get("adjustJieqi", 0)
-    _adjust_key = f"{int(_adjust_raw)}" if isinstance(_adjust_raw, bool) else f"{_adjust_raw}"
-    # [Q-191/T-135]（BaZi.js:369-375）生肖行：缺档按页面缺省（立春岁首）。
-    shengxiao, shengxiao_by_lunar = _bazi_shengxiao(nongli, payload.get("zodiacBoundary"))
-
-    def gz_gods(item: Any) -> str:
-        if not isinstance(item, dict):
-            return "无"
-        stem = "、".join(_collect_god_names(item.get("stem"))) or "无"
-        branch = "、".join(_collect_god_names(item.get("branch"))) or "无"
-        whole = "、".join(_collect_god_names(item)) or "无"
-        return f"整柱={whole}；天干={stem}；地支={branch}"
-
-    base_lines = [
-        f"日期：{payload.get('date', '—')} {payload.get('time', '—')}",
-        f"时区：{payload.get('zone', '—')}",
-        f"经纬度：{payload.get('lon', '—')} {payload.get('lat', '—')}",
-        f"性别：{_gender_label(payload.get('gender'))}",
-        f"时间算法：{time_alg_map.get(str(payload.get('timeAlg', 0)), payload.get('timeAlg', 0))}",
-        # [Q-191/T-134]（上游 BaZi.js:361）时间基准行紧跟时间算法。标签必须是**后端实际生效**的口径：
-        # 调用方没给晚子时 / 23 点换日开关时，skill 不下发、Java /bazi/birth 取缺省 1
-        # （BaZiBirthController.java:95-99），故缺省按 1 标，而不是 buildTimeBasisLine 的缺位回退「否」。
-        build_time_basis_line(
-            time_alg=payload.get("timeAlg", 0),
-            late_zi_hour_use_next_day=1 if payload.get("lateZiHourUseNextDay") is None else payload.get("lateZiHourUseNextDay"),
-            after23_new_day=1 if payload.get("after23NewDay") is None else payload.get("after23NewDay"),
-        ),
-        f"节气修正：{adjust_map.get(_adjust_key, _adjust_raw)}",
-        f"农历：{nongli.get('year', '')}年{'闰' if nongli.get('leap') else ''}{nongli.get('month', '')}{nongli.get('day', '')}".strip() or "农历：未知",
-    ]
-    if shengxiao:
-        base_lines.append(f"生肖：{shengxiao}（岁首={'正月初一' if shengxiao_by_lunar else '立春'}）")
-    base_lines.append(
-        f"真太阳时：{nongli.get('birth') or (str(payload.get('date', '')) + ' ' + str(payload.get('time', ''))).strip()}"
-    )
-    four_lines = [
-        f"年柱：{_gz_text(four.get('year'))}",
-        f"月柱：{_gz_text(four.get('month'))}",
-        f"日柱：{_gz_text(four.get('day'))}",
-        f"时柱：{_gz_text(four.get('time'))}",
-        f"胎元：{_gz_text(four.get('tai'))}",
-        f"命宫：{_gz_text(four.get('ming'))}",
-        f"身宫：{_gz_text(four.get('shen'))}",
-    ]
-    god_lines = [
-        f"年柱：{gz_gods(four.get('year'))}",
-        f"月柱：{gz_gods(four.get('month'))}",
-        f"日柱：{gz_gods(four.get('day'))}",
-        f"时柱：{gz_gods(four.get('time'))}",
-        f"胎元：{gz_gods(four.get('tai'))}",
-        f"命宫：{gz_gods(four.get('ming'))}",
-        f"身宫：{gz_gods(four.get('shen'))}",
-    ]
-    # 星阙 v2.6.x aiExport splits 大运 (the luck-period steps) from 流年行运概略 (the per-大运 年运 detail);
-    # the skill mirrors that split (起运/性别 缺失时 direction 为空 → 大运段不出, 故列为可选段).
-    dayun_lines: list[str] = []
-    liunian_lines: list[str] = []
-    for idx, item in enumerate(bazi.get("mainDirection") or [], start=1):
-        if isinstance(item, dict):
-            dayun_lines.append(f"第{idx}步：{item.get('year', '—')} {_gz_text(item)}")
-    for block in bazi.get("direction") or []:
-        if not isinstance(block, dict):
-            continue
-        main_gz = _gz_text(block.get("mainDirect"))
-        dayun_lines.append(f"大运：{main_gz} 起于{block.get('startYear', '—')}年")
-        subs = []
-        for sub in block.get("subDirect") or []:
-            if isinstance(sub, dict):
-                subs.append(f"{sub.get('date', '—')} {_gz_text(sub)}")
-        if subs:
-            liunian_lines.append(f"{main_gz}大运 流年：" + "；".join(subs))
-    sections: list[tuple[str, str]] = [
-        ("起盘信息", _join_lines(base_lines)),
-        ("四柱与三元", _join_lines(four_lines)),
-        ("神煞（四柱与三元）", _join_lines(god_lines)),
-    ]
-    # 八字格局（五行力量/格局·用神/盲派结构/月令司令）：core-js baziGeju 引擎（_attach_bazi_geju 挂载）
-    # 从后端 fourColumns 派生，插于 神煞 与 大运 之间；无 node/引擎失败则 _baziGeju 缺 → 该批段不出。
-    geju_text = response.get("_baziGeju") if isinstance(response.get("_baziGeju"), str) else ""
-    for block in (geju_text or "").split("\n\n"):
-        block = block.strip()
-        if not block.startswith("["):
-            continue
-        blk_lines = block.splitlines()
-        geju_title = blk_lines[0].strip().lstrip("[").rstrip("]")
-        geju_body = "\n".join(blk_lines[1:]).strip()
-        if geju_title and geju_body:
-            sections.append((geju_title, geju_body))
-    # [干支合冲]（上游 v3.9.2）：legacy 天干/地支两 tab 的刑冲合害全表——**后端已带字段的纯排版**
-    # （four.ganHe/ganCong + ziHe6/ziHe3/ziHui/ziXing/ziCong/ziCuan/ziPo），行格式逐字镜像
-    # BaZi.js:496-514 的 relLine（`cell（zhu） … →key`；全空不产段）。段序按上游 v56：分野 之后、大运 之前。
-    hechong_lines = _build_bazi_hechong_lines(four)
-    if hechong_lines:
-        sections.append(("干支合冲", _join_lines(hechong_lines)))
-    if dayun_lines:
-        sections.append(("大运", _join_lines(dayun_lines)))
-    sections.append(
-        (
-            "流年行运概略",
-            _join_lines(liunian_lines)
-            or "本次八字结果未返回大运/流年明细；如问题涉及阶段走势，请优先使用 bazi_direct 或补齐性别、起运与节气设置后重算，不能臆造外部依赖。",
-        )
-    )
-    return _render_snapshot_text(sections)
 
 
 def _collect_house_stars(house: Any) -> list[str]:
@@ -6848,9 +6641,8 @@ def _auto_snapshot_text_for_tool(tool_name: str, input_normalized: dict[str, Any
         return _build_zr_snapshot_text(input_normalized, response_data)
     if tool_name == "relative":
         return _build_relative_snapshot_text(input_normalized, response_data)
-    if tool_name in {"bazi_birth", "bazi_direct"}:
-        return _build_bazi_snapshot_text(input_normalized, response_data)
-    if tool_name in {"ziwei_birth", "ziwei_rules"}:
+    if tool_name == "ziwei_rules":
+        # ziwei_birth 由 _run_ziwei_tool 出 vendored 上游快照；这里只剩规则库（无盘）一支。
         return _build_ziwei_snapshot_text(input_normalized, response_data)
     if tool_name in {"liureng_gods", "liureng_runyear"}:
         return _build_liureng_snapshot_text(input_normalized, response_data)
@@ -7631,10 +7423,6 @@ class HorosaSkillService:
             _degrade("egypt section build failed: %s", exc)
             return ""
 
-    # 八字格局（v3.0.x 本地化）：五行力量/格局·用神/盲派结构 由 core-js baziGeju 引擎从后端 fourColumns 派生，
-    # 与 [四柱与三元] 同源。按需调用、优雅降级（无 node/引擎失败→不挂载→该批段不出，列 optional）。
-    _BAZI_GEJU_TOOLS = {"bazi_birth", "bazi_direct"}
-
     def _attach_relative_score(
         self, tool_name: str, input_normalized: dict[str, Any], response_data: dict[str, Any]
     ) -> dict[str, Any]:
@@ -7729,119 +7517,58 @@ class HorosaSkillService:
             _degrade("jieqi_year [二十四节气] seed (Java /jieqi/year) failed: %s", exc)
         charts = response_data.get("charts")
         if isinstance(charts, dict):
+            charts = self._jieqi_sidereal_recharts(input_normalized, charts)
             enriched["charts"] = {
                 title: self._enrich_embedded_astro_chart(chart) if isinstance(chart, dict) else chart
                 for title, chart in charts.items()
             }
         return enriched
 
-    def _attach_ziwei_extras(self, tool_name: str, payload: dict[str, Any], response_data: dict[str, Any]) -> dict[str, Any]:
-        """紫微 [运限概览] / [运限] / [流派叠层]（vendored ziweiSnapshotLayers.js，段序同上游）。
+    def _jieqi_sidereal_recharts(self, input_normalized: dict[str, Any], charts: dict[str, Any]) -> dict[str, Any]:
+        """F16：恒星黄道岁差逐节气重排（上游 JieQiChartsMain.js:524-553 loadJieqiChart → buildChartRequestParams）。
 
-        [运限概览]（上游 v3.11.0 #80，ZiWeiMain.js:597-599）是**无条件段**：有盘就出（全大限 × 各限
-        10 流年的公历年-干支），故这里对每张紫微盘都调 JS。[运限] / [流派叠层] 上游由界面勾选与流派开关
-        驱动（无勾选整段不产）；headless 把同一份选择开成入参 period / schools，不给就不产（optional）。
-        JS 单段失败回 `errors` —— 逐条进 envelope.warnings，不静默。
+        上游的分至盘是逐节气一次 `/chart`（带 siderealAyanamsa）；本仓主调用走 Python `/jieqi/year`，它按
+        YearJieQi.params（zone/lat/lon/hsys/zodiacal/doubingSu28）起 PerChart —— **不带岁差键**，于是恒星黄道盘
+        一律是 swisseph 缺省岁差。所以给了 siderealAyanamsa（且 zodiacal=1，PerChart 只在恒星黄道下读它）时，
+        按交节时刻（charts[x].params.birth）逐盘重发 `/chart`。重排失败 → 该节气盘不出 + warnings
+        （留着缺省岁差的盘冒充所选岁差，比缺段更糟）。
         """
-        if tool_name not in {"ziwei_birth", "ziwei_rules"} or not isinstance(response_data, dict):
-            return response_data
-        chart = response_data.get("chart")
-        if not isinstance(chart, dict):
-            return response_data
-        period = payload.get("period") if isinstance(payload.get("period"), dict) else None
-        schools = payload.get("schools") if isinstance(payload.get("schools"), dict) else None
-        try:
-            js = self.js_client.run("ziwei_extras", {"chart": chart, "period": period, "schools": schools})
-        except Exception as exc:  # noqa: BLE001 — 富化失败不许影响命盘
-            _degrade(
-                "ziwei extras build failed: %s", exc,
-                note="紫微 [运限概览]/[运限]/[流派叠层] 本次未能产出（JS 引擎失败），命盘其余段不受影响。",
-            )
-            return response_data
-        js = js if isinstance(js, dict) else {}
-        for err in js.get("errors") or []:
-            if isinstance(err, dict):
-                _degrade(
-                    "ziwei extras section %s failed: %s", err.get("section"), err.get("message"),
-                    note=f"紫微 [{err.get('section') or '?'}] 段本次未能产出（{err.get('message') or '未知错误'}），其余段不受影响。",
-                )
-        text = f"{js.get('text') or ''}".strip()
-        if text:
-            enriched = dict(response_data)
-            enriched["_ziweiExtras"] = text
-            return enriched
-        return response_data
-
-    def _attach_bazi_geju(self, tool_name: str, response_data: dict[str, Any], payload: dict[str, Any] | None = None) -> dict[str, Any]:
-        if tool_name not in self._BAZI_GEJU_TOOLS or not isinstance(response_data, dict):
-            return response_data
-        bazi = response_data.get("bazi")
-        fc = bazi.get("fourColumns") if isinstance(bazi, dict) else None
-        if not isinstance(fc, dict):
-            return response_data
-        try:
-            # 传 birth 让 JS 侧用 vendored 本地引擎补算 fenYe（[月令司令（分野）] 要节后日数，
-            # 后端 fourColumns 里没有）。给不出出生资料时该段自然缺席。
-            birth = None
-            fields = payload or {}
-            if fields.get("date"):
-                birth = {
-                    "date": fields.get("date"),
-                    "time": fields.get("time"),
-                    "gender": fields.get("gender"),
-                    "after23NewDay": fields.get("after23NewDay"),
-                    "lateZiHourUseNextDay": fields.get("lateZiHourUseNextDay"),
-                }
-            geju = self.js_client.run(
-                "bazi_geju",
-                {
-                    "fourColumns": fc,
-                    "birth": birth,
-                    # 五行力量的藏干口径必须跟着走，否则 [月令司令（分野）] 段报着司令干、
-                    # [五行力量] 段却按通行版加权，同一份输出里两段自相矛盾。
-                    "cangVersion": fields.get("cangVersion"),
-                    "fenyeVersion": fields.get("fenyeVersion"),
-                },
-            )
-            # 🔴 JS 侧的结构化失败必须捞出来：只读 snapshot_text 时，四柱不全（issue #15 修的那类）
-            # 会让这四段整体消失且零信号——同一个「静默降级」形状沿调用链上移了一层。
-            geju_data = geju.get("data") if isinstance(geju, dict) else None
-            if isinstance(geju_data, dict) and geju_data.get("ok") is False:
-                degraded = dict(response_data)
-                degraded.setdefault("_warnings", []).append(
-                    "八字格局引擎未能出段（原因："
-                    f"{geju_data.get('reason') or 'unknown'}）：{geju_data.get('message') or ''}".strip()
-                )
-                return degraded
-            # [多运限·指定时段]：仅在调用方显式给了 period 选择时产出（上游由界面勾选驱动，
-            # 无勾选整段不产 —— headless 把同一份选择开成入参，语义一致）。
-            period = fields.get("period") if isinstance(fields.get("period"), dict) else None
-            period_text = ""
-            if period and birth:
-                try:
-                    js_p = self.js_client.run("bazi_period", {"birth": birth, "period": period})
-                    period_text = f"{(js_p or {}).get('text') or ''}".strip()
-                except Exception as exc:  # noqa: BLE001
-                    # 调用方显式点了 period 却拿不到段——只写日志等于对调用方静默。
-                    _degrade(
-                        "bazi period build failed: %s", exc,
-                        note="多运限[指定时段]本次未能产出（period 引擎失败），其余段不受影响。",
-                    )
-            text = geju.get("snapshot_text") if isinstance(geju, dict) else None
-            if period_text:
-                text = f"{text}\n\n{period_text}" if isinstance(text, str) and text.strip() else period_text
-            if isinstance(text, str) and text.strip():
-                enriched = dict(response_data)
-                enriched["_baziGeju"] = text
-                return enriched
-        except ToolTransportError as exc:
-            # 不静默：降级说明进 envelope.warnings（结果仍可用，但格局段缺席要让调用方知道）。
-            _degrade(
-                "bazi geju engine failed (tool=%s): %s", tool_name, exc,
-                note="八字格局引擎（五行力量/格局·用神/盲派结构）本次不可用，已降级为基础四柱输出。",
-            )
-            return response_data
-        return response_data
+        ayan = f"{input_normalized.get('siderealAyanamsa') or ''}".strip()
+        if not ayan or f"{input_normalized.get('zodiacal', 0)}" not in ("1", "Sidereal"):
+            return charts
+        out: dict[str, Any] = {}
+        for title, one in charts.items():
+            params = one.get("params") if isinstance(one, dict) else None
+            birth = f"{(params or {}).get('birth') or ''}".strip()
+            date_text, _, time_text = birth.partition(" ")
+            if not date_text or not time_text:
+                _degrade("jieqi_year sidereal re-chart: %s has no birth time", title,
+                         note=f"{title}盘缺交节时刻，无法按所选岁差 {ayan} 重排，该盘不出。")
+                continue
+            request = {
+                "ad": input_normalized.get("ad", 1),
+                "date": date_text, "time": time_text,
+                "zone": input_normalized.get("zone"), "lat": input_normalized.get("lat"), "lon": input_normalized.get("lon"),
+                "gpsLat": input_normalized.get("gpsLat"), "gpsLon": input_normalized.get("gpsLon"),
+                "hsys": input_normalized.get("hsys", 0), "southchart": False,
+                "zodiacal": 1, "siderealAyanamsa": ayan, "tradition": 0,
+                "doubingSu28": input_normalized.get("doubingSu28", 0),
+                "strongRecption": 0, "simpleAsp": 0, "virtualPointReceiveAsp": 0, "predictive": 0,
+                "pdaspects": [0, 60, 90, 120, 180],
+                **{k: input_normalized[k] for k in ("userAyanT0", "userAyanDeg") if input_normalized.get(k) is not None},
+            }
+            try:
+                chart = self._call_remote("/chart", {k: v for k, v in request.items() if v is not None})
+            except Exception as exc:  # noqa: BLE001 — 单盘失败不带崩其余节气
+                _degrade("jieqi_year sidereal re-chart %s failed: %s", title, exc,
+                         note=f"{title}盘按所选岁差 {ayan} 重排失败（{exc}），该盘不出，其余段不受影响。")
+                continue
+            if isinstance(chart, dict) and _is_astro_chart_payload(chart):
+                out[title] = chart
+            else:
+                _degrade("jieqi_year sidereal re-chart %s returned no chart", title,
+                         note=f"{title}盘按所选岁差 {ayan} 重排未返回盘面，该盘不出。")
+        return out
 
     def _require_ken_pan(self, ken_response: Any, *, engine: str, endpoint: str) -> None:
         """Fail loudly when the ken backend did not actually compute a pan.
@@ -8718,7 +8445,7 @@ class HorosaSkillService:
         # 走公共 run_tool 而非各自的私有 runner：六个基底技法的内部调用形状并不统一
         # （qimen 是 _run_qimen_tool(payload)、liureng 是 _run_liureng_tool(name, payload)、
         # bazi/ziwei 干脆没有私有 runner 而走通用远端路径）。run_tool 对四种都一致，
-        # 且顺带跑完富化层（_attach_bazi_geju 等），展示盘因此与直接调该技法**逐字同段**。
+        # 且顺带跑完各自 runner 的富化，展示盘因此与直接调该技法**逐字同段**。
         # agent_confirmed_settings：这是同一次请求内部的子盘，设置已在外层过闸，
         # 不再重复拦（与 _tianxing_selected_moment_section 同款）。
         base_payload["agent_confirmed_settings"] = True
@@ -9001,8 +8728,10 @@ class HorosaSkillService:
                 "zhanshi": options.get("zhanShi") or options.get("zhanshi") or "",
                 "date": payload.get("date"),
                 "time": payload.get("time"),
-                # 仅晚子时开关（after23 继承自六壬默认 False，为零漂移不向 ken 新发送——既有边界）。
-                **_day_boundary_switches(payload, keys=("lateZiHourUseNextDay",)),
+                # 日界 + 晚子时两开关（上游 JinKouCalc.js:2823-2825 fetchJinKouPan 两键齐发，缺省=defaultAfter23NewDay()=1）：
+                # 显式给定才发送，缺省不发 → ken 缺省 1/1（webjinkousrv.py:244-245）= 上游出厂缺省，且与六壬前置同口径
+                # （LiuRengGodsInput.after23NewDay 缺省不再硬塞 False）。此前只发晚子时键，显式 after23NewDay=0 到不了 ken。
+                **_day_boundary_switches(payload),
             },
         )
         self._require_ken_pan(ken_response, engine="kinjinkou", endpoint="/jinkou/pan")
@@ -9063,6 +8792,262 @@ class HorosaSkillService:
         }
         result["export_snapshot"] = self._augment_export_payload(technique="liureng", snapshot_text=snapshot_text)
         return result
+
+    # ── 八字（F9）──────────────────────────────────────────────────────────────────────────────
+    # 上游八字页主路径是**本地** lunar.js 引擎：BaZi.js:716-755 fetchBaziCached（bazi_direct 同形 :757-795）
+    # `buildLocalBaziResult(params)` 成功即用，抛错（lunar-js 不可靠域：公元前 / 万年后 / 不可解析日期）才回退
+    # Java /bazi/birth；两条路都经 normalizeBaziResult → buildBaziSnapshotText（BaZi.js:1000-1046）。
+    # v0.40 前本仓整盘走 Java：godKeyPos 缺省「年日」（页面「年」，techniqueMountSettings.js:1699）、命宫缺省
+    # 子平数法（页面通行版，:1705）、晚子时 (1,0) 档 Java /bazi/birth 直接 500（timegan.error，live 实测），
+    # 快照是 Python 手写 port（缺纳音长生列 / 命宫起法标注 / 起运行 / 小运年龄口径 / 三维分列）。
+    # 现与页面同源：本地引擎 + vendored builder（vendor/bazi/baziSnapshot.js，逐字抽自 BaZi.js）。
+    _BAZI_OPTION_VOCAB: dict[str, tuple[Any, ...]] = {
+        # 取值表逐条对照 techniqueMountSettings.js:1692-1740（八字挂载设置）；缺省 = BaZi.js:961-985 genParams。
+        # timeAlg 2（春分定卯时）上游置灰「尚无独立换算」（CnTraditionInput.js:517），不收。
+        "godKeyPos": ("年", "日", "年日"),
+        "phaseType": (0, 1, 2),
+        "timeAlg": (0, 1, 3),
+        "minggongMethod": ("tongxing", "shufa"),
+        "fenyeVersion": ("common", "fajue"),
+        "cangVersion": ("common", "fenye"),
+        "dayunPrecision": ("precise", "integer"),
+        "school": ("zonghe", "fuyi", "geju", "tiaohou", "bingyao", "tongguan", "mangpai", "nayin"),
+        "ageStyle": ("nominal", "real"),
+        "zodiacBoundary": ("lichun", "lunar"),
+    }
+    _BAZI_OPTION_DEFAULTS: dict[str, Any] = {
+        "godKeyPos": "年", "phaseType": 0, "timeAlg": 0, "minggongMethod": "tongxing",
+        "fenyeVersion": "common", "cangVersion": "common", "dayunPrecision": "precise",
+    }
+
+    def _bazi_option(self, payload: dict[str, Any], key: str) -> Any:
+        """取一个八字口径键：缺省 → 上游缺省；认不出 → 按缺省出并进 warnings（同 zodiacBoundary 先例，不静默吞）。"""
+        raw = payload.get(key)
+        if raw is None or f"{raw}" == "":
+            return self._BAZI_OPTION_DEFAULTS.get(key)
+        vocab = self._BAZI_OPTION_VOCAB[key]
+        value = int(raw) if isinstance(vocab[0], int) and f"{raw}".lstrip("-").isdigit() else raw
+        if value in vocab:
+            return value
+        if key == "timeAlg":
+            raise ToolValidationError(
+                f"八字 timeAlg={raw!r} 不受支持 / unsupported bazi timeAlg {raw!r}: 0=真太阳时 1=直接时间 3=平太阳时"
+                "（2 春分定卯时上游尚未实现）",
+                code="tool.bazi_timealg_unsupported",
+                details={"field": "timeAlg", "value": raw, "valid": list(vocab)},
+            )
+        fallback = self._BAZI_OPTION_DEFAULTS.get(key)
+        _degrade(
+            "bazi %s %r unrecognised", key, raw,
+            note=f"八字 {key}={raw!r} 无法识别（可选 {' / '.join(str(v) for v in vocab)}），已按缺省"
+                 f"{f' {fallback}' if fallback is not None else ''}起盘。",
+        )
+        return fallback
+
+    def _bazi_params(self, payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+        """上游 genParams（BaZi.js:961-985）同形同序的起盘参数 + 只进快照的附加项（:1029 snapshotParams / 挂载 period）。"""
+        gender = payload.get("gender")
+        # 性别缺省 = 上游「未知(按男排)」档 -1（CnTraditionInput.js:506-509）：引擎按男排、快照印「性别：未知」。
+        gender = 1 if gender in (1, True, "1") else (0 if gender in (0, False, "0") else -1)
+
+        def bit(value: Any) -> int:
+            return 0 if value in (0, False, "0", "false", "False") else 1
+
+        # 公元前：上游 DateTime.format('YYYY-MM-DD') 出带负号的年（'-0100-05-15'，dateStrSafe.js 头注），本地引擎按带符号
+        # 年判可靠域（lunarDomainGuard：AD1–9999）→ 域外抛错走 Java。本仓约定是正号日期 + ad=-1，照上游补负号
+        # （Java BaZiBirthController.java:110-114 自己也补，已带负号不重复）；不补则公元前 100 年被当成公元 100 年本地起盘。
+        date = f"{payload.get('date') or ''}"
+        if payload.get("ad") in (-1, "-1") and date and not date.startswith("-"):
+            date = f"-{date}"
+        params = {
+            "date": date,
+            "time": payload.get("time"),
+            "ad": payload.get("ad", 1),
+            "zone": payload.get("zone"),
+            "lon": payload.get("lon"),
+            "lat": payload.get("lat"),
+            "gpsLat": payload.get("gpsLat"),
+            "gpsLon": payload.get("gpsLon"),
+            "gender": gender,
+            "timeAlg": self._bazi_option(payload, "timeAlg"),
+            "phaseType": self._bazi_option(payload, "phaseType"),
+            "godKeyPos": self._bazi_option(payload, "godKeyPos"),
+            # 日界/晚子时：缺省 = 上游出厂缺省 1/1（dayBoundary.js:39-45 / :91-93）；本地引擎缺键 = 不进位，必须显式补。
+            "after23NewDay": 1 if payload.get("after23NewDay") is None else bit(payload.get("after23NewDay")),
+            "lateZiHourUseNextDay": 1 if payload.get("lateZiHourUseNextDay") is None else bit(payload.get("lateZiHourUseNextDay")),
+            "adjustJieqi": 1 if payload.get("adjustJieqi") in (1, True, "1", "true") else 0,
+            "minggongMethod": self._bazi_option(payload, "minggongMethod"),
+            "fenyeVersion": self._bazi_option(payload, "fenyeVersion"),
+            "cangVersion": self._bazi_option(payload, "cangVersion"),
+            "dayunPrecision": self._bazi_option(payload, "dayunPrecision"),
+        }
+        snapshot: dict[str, Any] = {}
+        for key in ("school", "ageStyle", "zodiacBoundary"):
+            if payload.get(key) not in (None, ""):
+                value = self._bazi_option(payload, key)
+                if value is not None:
+                    snapshot[key] = value
+        if isinstance(payload.get("period"), dict):
+            snapshot["period"] = payload["period"]
+        return params, snapshot
+
+    def _run_bazi_tool(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+        params, snapshot = self._bazi_params(payload)
+        endpoint = "/bazi/direct" if tool_name == "bazi_direct" else "/bazi/birth"
+        # byLon / adjustJieqi：本地引擎不实现（上游 CnTraditionInput.js:564 已把节气微调控件隐藏「选了不生效」），
+        # 给了真值只有 Java 算得出 → 整盘走 Java 并如实告知（命宫起法随之标「子平数法(本域回退)」）。
+        java_only = [key for key in ("byLon", "adjustJieqi") if payload.get(key) in (1, True, "1", "true")]
+        js: dict[str, Any] = {}
+        reason = ""
+        if not java_only:
+            js = self.js_client.run("bazi_local", {"params": params, "snapshot": snapshot}) or {}
+            data = js.get("data") if isinstance(js.get("data"), dict) else {}
+            if data.get("ok") is False:
+                if data.get("reason") != "local_engine_unavailable":
+                    raise ToolTransportError(
+                        f"八字本地引擎未出盘 / bazi local engine produced no chart: {data.get('message') or data.get('reason')}",
+                        code="tool.bazi_local_failed",
+                        details={"reason": data.get("reason"), "message": data.get("message")},
+                    )
+                reason = f"本地历法引擎不可用（{data.get('message') or '域外日期'}）"
+        else:
+            reason = f"{'/'.join(java_only)} 只有 Java 引擎实现（上游页面本地引擎不支持）"
+        if reason:
+            java_payload = {k: v for k, v in params.items() if v is not None and not (k == "gender" and v == -1)}
+            if payload.get("byLon") in (1, True, "1", "true"):
+                java_payload["byLon"] = True
+            java_result = self._call_remote(endpoint, java_payload)
+            js = self.js_client.run("bazi_local", {"params": params, "snapshot": snapshot, "java_result": java_result}) or {}
+            _degrade(
+                "bazi computed by Java %s: %s", endpoint, reason,
+                note=f"八字由 Java {endpoint} 起盘（{reason}）：命宫起法按 Java 口径（快照命宫行已标注），"
+                     "五行力量/格局·用神/盲派/分野等本地派生段不出（与上游回退路径同）。",
+            )
+        data = js.get("data") if isinstance(js.get("data"), dict) else {}
+        text = f"{js.get('snapshot_text') or ''}".strip()
+        if not data.get("ok") or not text:
+            raise ToolTransportError(
+                "八字快照未产出 / bazi snapshot was not produced.",
+                code="tool.bazi_local_failed",
+                details={"reason": data.get("reason"), "message": data.get("message"), "java_fallback": bool(reason)},
+            )
+        local = bool(data.get("local"))
+        return {
+            "bazi": data.get("bazi"),
+            "gender": data.get("gender"),
+            "local": local,
+            "compute_sources": {"bazi": "lunar-local" if local else "java"},
+            "snapshot_text": text,
+            "export_snapshot": self._augment_export_payload(technique="bazi", snapshot_text=text),
+        }
+
+    # ── 紫微（F8）──────────────────────────────────────────────────────────────────────────────
+    # 上游 AI 无头复算 buildZiweiSnapshotForParams（ZiWeiMain.js:716-822）：Java /ziwei/birth 起盘，四化流派非通用
+    # 时附 sihua 表（后端格局随流派）；22 个传本/排盘开关任一非缺省 → 本地 ZiweiCalc 重排盘核心 + 重算格局
+    # （Java 不支持大限跨度/天马/星集/三盘…）；快照 = vendored buildZiWeiSnapshotText（[起盘信息] 四化流派/传本设置行、
+    # [宫位总览] 四化括注与庙旺档）。编排在 tools/ziweiBirth.js（单例覆盖/还原同上游），JS 不发 HTTP → 两段式。
+    # v0.40 前：sihuaSchool/传本键 Java 一概不读、Python 快照是手写 port —— 这些键全是死开关。
+    _ZIWEI_OPTION_KEYS: tuple[str, ...] = (
+        # 上游 ZW_ENGINE_SWITCH_KEYS（ZiWeiMain.js:752-754）+ 挂载键 ziweiXiaoxianYinyang（aiAnalysisContext.js:1904）
+        "daxianSpan", "tianmaBasis", "starSet", "sanPan", "shangShi", "leapMonth", "lateZi", "yearBoundary", "huoling",
+        "kongNaming", "brightnessSource", "lifeMasterBy", "liuYueBasis", "liunianSihuaGan", "changshengStart",
+        "changshengDirection", "kuiYue", "kongwangStyle", "flowLuanXi", "flowHuoLing", "flowShenshaOnChart", "childLimit",
+        "zhongxian", "huoPan", "qishuWei", "borrowPalace", "taiSuiRuGua", "taiSuiRelatives", "xiaoxianMode",
+        "ziweiXiaoxianYinyang", "sihuaSchool", "sihuaCustomTable", "brightnessCustomTable",
+    )
+
+    def _ziwei_params(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """上游 buildChartZiweiParams（aiAnalysisContext.js:1879-1944）同形：起盘字段 + 显式给了的流派/传本键 + period。"""
+        gender = payload.get("gender")
+        gender = 1 if gender in (1, True, "1") else (0 if gender in (0, False, "0") else None)
+
+        def bit(value: Any) -> int:
+            return 0 if value in (0, False, "0", "false", "False") else 1
+
+        params: dict[str, Any] = {
+            "date": payload.get("date"),
+            "time": payload.get("time"),
+            "zone": payload.get("zone"),
+            "lon": payload.get("lon"),
+            "lat": payload.get("lat"),
+            "gpsLat": payload.get("gpsLat"),
+            "gpsLon": payload.get("gpsLon"),
+            "gender": gender,
+            "timeAlg": 1 if payload.get("timeAlg") in (1, "1") else 0,   # 紫微页只两档（:1890）
+            # 本地引擎档要已解析的日界缺省（calcZiwei 'global' 分支直读，缺键 = 不进位）：上游出厂缺省 1/1。
+            "after23NewDay": 1 if payload.get("after23NewDay") is None else bit(payload.get("after23NewDay")),
+            "lateZiHourUseNextDay": 1 if payload.get("lateZiHourUseNextDay") is None else bit(payload.get("lateZiHourUseNextDay")),
+        }
+        # 旧入参 schools {childLimit, zhongxian, …} 仍收：与上游平铺键同义，平铺键优先。
+        schools = payload.get("schools") if isinstance(payload.get("schools"), dict) else {}
+        for key in self._ZIWEI_OPTION_KEYS:
+            value = payload.get(key)
+            if value is None:
+                value = schools.get(key)
+            if value is not None:
+                params[key] = value
+        # 旧入参 sihua（原样四化表）≡ 上游 custom 档随盘自定义表（sihuaCustomTable，techniqueMountSettings.js:1760-1763）。
+        if isinstance(payload.get("sihua"), dict) and "sihuaSchool" not in params:
+            params["sihuaSchool"] = "custom"
+            params["sihuaCustomTable"] = payload["sihua"]
+        if isinstance(payload.get("period"), dict):
+            params["period"] = payload["period"]
+        return params
+
+    def _ziwei_warn(self, items: Any) -> None:
+        for item in items if isinstance(items, list) else []:
+            if not isinstance(item, dict):
+                continue
+            valid = item.get("valid") if isinstance(item.get("valid"), list) else []
+            _degrade(
+                "ziwei option %s=%r unrecognised", item.get("key"), item.get("value"),
+                note=f"紫微 {item.get('key')}={item.get('value')!r} 无法识别（可选 {' / '.join(str(v) for v in valid)}），"
+                     "该项按缺省排盘。",
+            )
+
+    def _run_ziwei_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        params = self._ziwei_params(payload)
+        java_payload: dict[str, Any] = {
+            key: params[key] for key in ("date", "time", "zone", "lat", "lon", "gpsLat", "gpsLon", "timeAlg")
+            if params.get(key) is not None
+        }
+        java_payload["ad"] = payload.get("ad", 1)
+        if params.get("gender") is not None:
+            java_payload["gender"] = params["gender"]
+        # 日界/晚子时：只发显式给定的（缺省 → Java 缺省 1/1 = 上游出厂缺省；ZiWeiController.java:87-90）。
+        java_payload.update(_day_boundary_switches(payload))
+        school = f"{params.get('sihuaSchool') or ''}".strip()
+        prep_warnings: list[Any] = []
+        if school and school != "beipai":
+            prep = self.js_client.run("ziwei_birth", {"action": "prepare", "params": params}) or {}
+            prep_data = prep.get("data") if isinstance(prep.get("data"), dict) else {}
+            if isinstance(prep_data.get("sihua"), dict):
+                java_payload["sihua"] = prep_data["sihua"]
+            prep_warnings = prep.get("warnings") or []
+        java_result = self._call_remote("/ziwei/birth", java_payload)
+        fin = self.js_client.run("ziwei_birth", {"action": "finalize", "params": params, "result": java_result}) or {}
+        data = fin.get("data") if isinstance(fin.get("data"), dict) else {}
+        self._ziwei_warn(fin.get("warnings") or prep_warnings)
+        text = f"{fin.get('text') or ''}".strip()
+        if not data.get("ok") or not text:
+            raise ToolTransportError(
+                "紫微快照未产出 / ziwei snapshot was not produced.",
+                code="tool.ziwei_snapshot_failed",
+                details={"reason": data.get("reason")},
+            )
+        if data.get("localEngine") and not data.get("localApplied"):
+            _degrade(
+                "ziwei local engine failed, Java chart kept: %s", data.get("localError"),
+                note=f"紫微传本开关需本地引擎重排，但本地引擎失败（{data.get('localError') or '未产出12宫'}），"
+                     "已保留 Java 盘（上游同）——盘面未按所选传本设置变化。",
+            )
+        return {
+            "chart": data.get("chart"),
+            "patterns": data.get("patterns"),
+            "compute_sources": {"chart": "ZiweiCalc" if data.get("localApplied") else "java"},
+            "snapshot_text": text,
+            "export_snapshot": self._augment_export_payload(technique="ziwei", snapshot_text=text),
+        }
 
     def _run_tongshefa_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         js_result = self.js_client.run("tongshefa", payload)
@@ -10435,12 +10420,84 @@ class HorosaSkillService:
         response["export_snapshot"] = self._augment_export_payload(technique="guolao", snapshot_text=snapshot_text)
         return response
 
+    # 宿度制九档（perchart.py:54-62 SU28_MODE_* / parseSu28Mode :731-748；上游 newChartSeeds.js:48 check 0–8）。
+    _SU28_MODES = frozenset(range(9))
+
     def _run_suzhan_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
-        remote_payload = {**payload, "predictive": False, "doubingSu28": payload.get("doubingSu28", True)}
-        response = self._call_remote("/chart", remote_payload)
-        snapshot_text = _build_suzhan_snapshot_text(remote_payload, response)
+        """宿占（F11）：与上游页面同源 —— 盘 = Java /chart（ChartController 附农历四柱 chart.nongli），
+        快照 = vendored buildSuzhanSnapshotText（SuZhanMain.js:396-428）。
+
+        v0.40 前：doubingSu28 当 bool（缺省 True=斗柄定房，上游缺省 0 且有九档）、houseStartMode 缺省 1（上游 0=八字公式）
+        且快照是手写 port 根本不读它、hsys 缺省 0（上游页面 1）、宫位只印 House1…。人事十二宫「八字公式起盘」要
+        农历时支 → 只有 Java /chart 带 nongli（Python chart 服务不带），所以缺省档走 Java；ASC 档不需要农历，照走 chart 服务。
+        """
+        raw_su28 = payload.get("doubingSu28", 0)
+        su28 = int(raw_su28) if isinstance(raw_su28, (bool, int)) or f"{raw_su28}".lstrip("-").isdigit() else raw_su28
+        if su28 not in self._SU28_MODES:
+            raise ToolValidationError(
+                f"宿度制 doubingSu28={raw_su28!r} 不在 0–8 / doubingSu28 must be one of 0-8",
+                code="tool.suzhan_su28_invalid",
+                details={"field": "doubingSu28", "value": raw_su28, "valid": sorted(self._SU28_MODES)},
+            )
+        house_start = 1 if payload.get("houseStartMode") in (1, True, "1") else 0
+        remote_payload = {**payload, "predictive": False, "doubingSu28": su28}
+        nongli_alg = payload.get("nongliTimeAlg")
+        if nongli_alg is not None:
+            # ChartController.java:84-88 [Q-419/T-383]：农历四柱时间算法 0 真太阳时（缺省）/1 直接时间/3 平太阳时。
+            if f"{nongli_alg}" not in ("0", "1", "3"):
+                raise ToolValidationError(
+                    f"nongliTimeAlg={nongli_alg!r} 只收 0/1/3 / nongliTimeAlg must be 0, 1 or 3",
+                    code="tool.suzhan_nongli_timealg_invalid",
+                    details={"field": "nongliTimeAlg", "value": nongli_alg, "valid": [0, 1, 3]},
+                )
+            remote_payload["nongliTimeAlg"] = int(nongli_alg)
+        java_failed = False
+        if house_start == 0:
+            try:
+                response = self._call_remote("/chart", remote_payload, backend="java")
+            except HorosaSkillError as exc:
+                java_failed = True
+                _degrade(
+                    "suzhan Java /chart unavailable, falling back to chart service: %s", exc,
+                    note="宿占「八字公式起盘」要 Java /chart 的农历四柱，本次 Java 不可用 → 改由 chart 服务起盘，"
+                         f"人事十二宫按 ASC 起（上游缺农历时同）。原因：{exc}",
+                )
+                response = self._call_remote("/chart", remote_payload)
+        else:
+            response = self._call_remote("/chart", remote_payload)
+        js = self.js_client.run(
+            "suzhan",
+            {
+                "chart": response,
+                "params": {
+                    "date": payload.get("date"),
+                    "time": payload.get("time"),
+                    "zone": payload.get("zone"),
+                    "lon": payload.get("lon"),
+                    "lat": payload.get("lat"),
+                    "szchart": payload.get("szchart"),
+                    "szshape": payload.get("szshape"),
+                    "doubingSu28": su28,
+                    "houseStartMode": house_start,
+                },
+            },
+        ) or {}
+        data = js.get("data") if isinstance(js.get("data"), dict) else {}
+        snapshot_text = f"{js.get('text') or ''}".strip()
+        if not snapshot_text:
+            raise ToolTransportError(
+                "宿占快照未产出 / suzhan snapshot was not produced.",
+                code="tool.suzhan_snapshot_failed",
+                details={"data": data},
+            )
+        if house_start == 0 and not java_failed and not data.get("nongliHour"):
+            _degrade(
+                "suzhan chart carries no nongli hour; house start fell back to ASC",
+                note="宿占人事十二宫缺省按八字公式起盘，但本盘没有农历时支（Java /chart 未附 nongli）→ 已按 ASC 起（上游同）。",
+            )
         return {
             **response,
+            "compute_sources": {"chart": "java" if house_start == 0 and not java_failed else "chart_service"},
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="suzhan", snapshot_text=snapshot_text),
         }
@@ -10534,6 +10591,10 @@ class HorosaSkillService:
             year, month, day = int(parts[0]), int(parts[1]), int(parts[2][:2])
         except (IndexError, ValueError):
             return response_data
+        tongshu = dict(payload["tongshu"]) if isinstance(payload.get("tongshu"), dict) else None
+        if tongshu and tongshu.get("school"):
+            tongshu["school"] = self._tongshu_school(tongshu.get("school"))
+        js: Any = None
         try:
             js = self.js_client.run(
                 "calendar_extras",
@@ -10542,17 +10603,23 @@ class HorosaSkillService:
                     "month": month,
                     "day": day,
                     "hour": payload.get("hour"),
-                    "tongshu": payload.get("tongshu") if isinstance(payload.get("tongshu"), dict) else None,
+                    "tongshu": tongshu,
                     "rizi": payload.get("rizi") if isinstance(payload.get("rizi"), dict) else None,
                 },
             )
-            text = f"{(js or {}).get('text') or ''}".strip()
-            if text:
-                enriched = dict(response_data)
-                enriched["_calendarExtras"] = text
-                return enriched
         except Exception as exc:  # noqa: BLE001 — 子模块失败不许影响月历本体
             _degrade("calendar extras build failed: %s", exc)
+            return response_data
+        js = js if isinstance(js, dict) else {}
+        # 显式给了认不出的通书流派键：结构化报错（此前照印「（该流派待实现）」冒充一段结论）。
+        for err in js.get("errors") or []:
+            if isinstance(err, dict) and err.get("reason") == "unknown_school":
+                self._raise_tongshu_unknown_school(err, field="tongshu.school")
+        text = f"{js.get('text') or ''}".strip()
+        if text:
+            enriched = dict(response_data)
+            enriched["_calendarExtras"] = text
+            return enriched
         return response_data
 
     def _run_huangli_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -10571,10 +10638,38 @@ class HorosaSkillService:
             "export_snapshot": self._augment_export_payload(technique="huangli", snapshot_text=snapshot_text),
         }
 
+    # 通书流派键的唯一真值是引擎词表（vendored tongshuSchools.js TONGSHU_SCHOOLS：donggong / qimen /
+    # sanyuanliexiu=三垣列宿 / wutu / sanyuan=三元玄空大卦），JS 侧核验、认不出回 unknown_school。
+    # 唯一别名 xuankong：v0.40 前本仓 schema/guidance 把玄空写成 xuankong、把 sanyuan 写成三垣（与引擎相反），
+    # 照旧文档传 xuankong 的调用方拿到的是「（该流派待实现）」——按引擎键 sanyuan 起并在 warnings 说明。
+    _TONGSHU_SCHOOL_ALIASES = {"xuankong": "sanyuan"}
+
+    def _tongshu_school(self, school: Any) -> Any:
+        key = f"{school or ''}".strip()
+        target = self._TONGSHU_SCHOOL_ALIASES.get(key)
+        if target is None:
+            return school
+        _degrade(
+            "tongshu school alias %s -> %s", key, target,
+            note=f"通书流派 {key!r} 是旧文档写法，已按引擎键 {target!r}（三元玄空大卦）起盘；三垣列宿的引擎键是 'sanyuanliexiu'。",
+        )
+        return target
+
+    @staticmethod
+    def _raise_tongshu_unknown_school(bad: dict[str, Any], *, field: str) -> None:
+        valid = bad.get("valid") if isinstance(bad.get("valid"), list) else []
+        raise ToolValidationError(
+            f"通书流派 {bad.get('school')!r} 不在引擎词表内 / unknown tongshu school "
+            f"{bad.get('school')!r}; valid keys: {', '.join(str(v.get('key')) for v in valid if isinstance(v, dict))}",
+            code="tool.tongshu_unknown_school",
+            details={"field": field, "school": bad.get("school"), "valid": valid},
+        )
+
     def _run_tongshu_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 通书择日：同样纯本地。school 是结果敏感项（五流派断语可以完全相反），由闸门在调用前问清；
         # 这里只做透传，不替用户挑。
         self._split_ymd(payload.get("date"), tool="tongshu")  # 仅校验格式，JS 侧吃 'YYYY-MM-DD' 原串
+        school = self._tongshu_school(payload.get("school"))
         js = self.js_client.run(
             "tongshu",
             {
@@ -10582,13 +10677,17 @@ class HorosaSkillService:
                 # zuoShan 不在此列：上游 techniqueMountSettings.js:1938 已把它删掉并记明理由
                 # ——「双重幽灵：无任何流派声明 needs.zuoShan，快照 builder 全文不消费，齿轮选它
                 # 100% 无效果」。继续转发只会白白打散下游 memo 缓存。
-                **{k: payload.get(k) for k in ("school", "event", "liexiuUse", "mingYear") if payload.get(k)},
+                **{k: payload.get(k) for k in ("event", "liexiuUse", "mingYear") if payload.get(k)},
+                **({"school": school} if school else {}),
             },
         )
+        js_data = (js or {}).get("data") if isinstance(js, dict) else None
+        if isinstance(js_data, dict) and js_data.get("ok") is False and js_data.get("reason") == "unknown_school":
+            self._raise_tongshu_unknown_school(js_data, field="school")
         snapshot_text = f"{(js or {}).get('text') or ''}".strip()
         return {
             "date": payload.get("date"),
-            "school": payload.get("school"),
+            "school": school,
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="tongshu", snapshot_text=snapshot_text),
         }
@@ -13052,6 +13151,10 @@ class HorosaSkillService:
             return self._run_jinkou_tool(payload)
         if definition.name in {"liureng_gods", "liureng_runyear"}:
             return self._run_liureng_tool(definition.name, payload)
+        if definition.name in {"bazi_birth", "bazi_direct"}:
+            return self._run_bazi_tool(definition.name, payload)
+        if definition.name == "ziwei_birth":
+            return self._run_ziwei_tool(payload)
         if definition.name == "suzhan":
             return self._run_suzhan_tool(payload)
         if definition.name == "sixyao":
@@ -13224,8 +13327,6 @@ class HorosaSkillService:
                 response_data = self._attach_jyotish_sections(tool_name, response_data)
                 response_data = self._attach_india_extra_vargas(tool_name, input_normalized, response_data)
                 response_data = self._attach_calendar_extras(tool_name, input_normalized, response_data)
-                response_data = self._attach_bazi_geju(tool_name, response_data, input_normalized)
-                response_data = self._attach_ziwei_extras(tool_name, input_normalized, response_data)
                 response_data = self._attach_relative_score(tool_name, input_normalized, response_data)
                 response_data = self._attach_relative_comp_charts(tool_name, input_normalized, response_data)
                 response_data = self._attach_jieqi_year_extras(tool_name, input_normalized, response_data)
@@ -13242,6 +13343,9 @@ class HorosaSkillService:
                     if isinstance(raised, list):
                         warnings.extend(str(item) for item in raised if f"{item}".strip())
                 warnings.extend(note for note in degrade_notes if note not in warnings)
+                zone_note = _cn_unified_zone_note(input_normalized)
+                if zone_note and zone_note not in warnings:
+                    warnings.append(zone_note)
                 # 预设段缺席 → warnings + summary 各一条：agent 不翻 export_snapshot 也知道结果不完整。
                 missing_note = _missing_sections_warning(response_data)
                 if missing_note:

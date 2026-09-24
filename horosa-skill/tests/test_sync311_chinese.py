@@ -95,41 +95,51 @@ def _bazi_payload(**extra):
             "timeAlg": 0, "after23NewDay": False, "adjustJieqi": False, **extra}
 
 
-def test_bazi_info_gains_time_basis_and_shengxiao_lines() -> None:
-    """上游 BaZi.js:361（时间基准）/ :369-375（生肖）。旧 builder 两行都没有 → 红。"""
-    text = svc._build_bazi_snapshot_text(_bazi_payload(), {"bazi": {"nongli": _BAZI_NONGLI_0130, "fourColumns": {}}})
-    info = _section(text, "起盘信息").splitlines()
-    # 缺省：Java /bazi/birth 晚子时开关缺省 1（BaZiBirthController.java:98），after23NewDay 由 schema 缺省 False 下发。
+# v0.40 mingli F9：八字快照改由 vendored 上游 buildBaziSnapshotText 产出（Python 手写 port
+# _build_bazi_snapshot_text 已删）。下面两条用例改走生产同一路径：service._bazi_params（上游 genParams 同形）
+# → 真 node `bazi_local`；断言的行与原意不变（生肖行此后取本地引擎 nongli.shengXiaoLichun/Lunar，上游同源）。
+def _bazi_local_text(tmp_path, payload: dict, *, java_result: dict | None = None) -> str:
+    settings = _settings(tmp_path)
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    params, snapshot = service._bazi_params(payload)
+    body = {"params": params, "snapshot": snapshot, **({"java_result": java_result} if java_result else {})}
+    return _real_js(tmp_path).run("bazi_local", body)["snapshot_text"]
+
+
+@requires_node
+def test_bazi_info_gains_time_basis_and_shengxiao_lines(tmp_path) -> None:
+    """上游 BaZi.js:361（时间基准）/ :369-375（生肖）。"""
+    info = _section(_bazi_local_text(tmp_path, _bazi_payload()), "起盘信息").splitlines()
+    # after23NewDay 显式 False → 0；晚子时缺省 → 上游出厂缺省 1（dayBoundary.js:91-93）。
     assert "时间基准：真太阳时(经度+均时差校正)；晚子时归次日：是；23 点换日：否" in info
     assert info.index("时间算法：真太阳时") + 1 == info.index("时间基准：真太阳时(经度+均时差校正)；晚子时归次日：是；23 点换日：否")
-    # 立春岁首（缺省）：yearJieqi 丁未 → 羊；正月初一岁首：year 戊申 → 猴（两档正好差一个生肖）。
+    # 2028-01-30 在正月初一（2028-01-26）之后、立春（2028-02-04）之前：立春岁首 = 丁未年 → 羊；
+    # 正月初一岁首 = 戊申年 → 猴（两档正好差一个生肖；公开历法事实）。
     assert "生肖：羊（岁首=立春）" in info
-    assert info.index("农历：戊申年正月初五") < info.index("生肖：羊（岁首=立春）") < info.index("真太阳时：2028-01-30 09:24:01")
-    lunar = _section(
-        svc._build_bazi_snapshot_text(_bazi_payload(zodiacBoundary="lunar"), {"bazi": {"nongli": _BAZI_NONGLI_0130}}),
-        "起盘信息",
+    assert info.index("农历：二〇二八年正月初五") < info.index("生肖：羊（岁首=立春）") < next(
+        i for i, line in enumerate(info) if line.startswith("直接时间：2028-01-30 09:33:00")
     )
+    lunar = _section(_bazi_local_text(tmp_path, _bazi_payload(zodiacBoundary="lunar")), "起盘信息")
     assert "生肖：猴（岁首=正月初一）" in lunar
-    flipped = _section(
-        svc._build_bazi_snapshot_text(_bazi_payload(lateZiHourUseNextDay=0, after23NewDay=True), {"bazi": {"nongli": _BAZI_NONGLI_0130}}),
-        "起盘信息",
-    )
+    flipped = _section(_bazi_local_text(tmp_path, _bazi_payload(lateZiHourUseNextDay=0, after23NewDay=True)), "起盘信息")
     assert "时间基准：真太阳时(经度+均时差校正)；晚子时归次日：否；23 点换日：是" in flipped
     # 认不出的岁首档不静默：按立春出、进 warnings（改这个参数结果必须变 / 变不了就得说）。
     with svc._degrade_collector() as notes:
-        bogus = _section(
-            svc._build_bazi_snapshot_text(_bazi_payload(zodiacBoundary="spring"), {"bazi": {"nongli": _BAZI_NONGLI_0130}}),
-            "起盘信息",
-        )
+        bogus = _section(_bazi_local_text(tmp_path, _bazi_payload(zodiacBoundary="spring")), "起盘信息")
     assert "生肖：羊（岁首=立春）" in bogus
     assert any("zodiacBoundary='spring'" in note for note in notes), notes
 
 
-def test_bazi_adjust_jieqi_bool_is_labelled_not_printed_raw() -> None:
-    """schema 里 adjustJieqi 是 bool：旧版 str(False)='False' 查表落空 →「节气修正：False」原样进快照。"""
-    info = _section(svc._build_bazi_snapshot_text(_bazi_payload(), {"bazi": {"nongli": _BAZI_NONGLI_0130}}), "起盘信息")
+@requires_node
+def test_bazi_adjust_jieqi_bool_is_labelled_not_printed_raw(tmp_path) -> None:
+    """schema 里 adjustJieqi 是 bool：旧版 str(False)='False' 查表落空 →「节气修正：False」原样进快照。
+    adjustJieqi=true 只有 Java 实现（本地引擎不支持）→ 走回退路径，这里用 Java 形 java_result 喂同一 builder。"""
+    info = _section(_bazi_local_text(tmp_path, _bazi_payload()), "起盘信息")
     assert "节气修正：不调整节气" in info and "节气修正：False" not in info
-    on = _section(svc._build_bazi_snapshot_text(_bazi_payload(adjustJieqi=True), {"bazi": {"nongli": _BAZI_NONGLI_0130}}), "起盘信息")
+    on = _section(
+        _bazi_local_text(tmp_path, _bazi_payload(adjustJieqi=True), java_result={"bazi": {"nongli": _BAZI_NONGLI_0130, "fourColumns": {}}}),
+        "起盘信息",
+    )
     assert "节气修正：节气按纬度调整" in on
 
 
@@ -225,7 +235,9 @@ def test_ziwei_birth_export_carries_overview_without_period(tmp_path) -> None:
     settings = _settings(tmp_path)
     service = HorosaSkillService(
         settings, client=_ZiweiClient(), store=MemoryStore(settings),
-        js_client=_HybridJs(_real_js(tmp_path), {"ziwei_extras"}),
+        # v0.40 mingli F8：紫微整份快照改由 vendored 上游 buildZiWeiSnapshotText（tools/ziweiBirth.js）出，
+        # [运限概览] 随之由同一 builder 产 —— 真引擎走 ziwei_birth（ziwei_extras 不再被服务层调用）。
+        js_client=_HybridJs(_real_js(tmp_path), {"ziwei_birth"}),
     )
     env = service.run_tool(
         "ziwei_birth",
@@ -237,9 +249,9 @@ def test_ziwei_birth_export_carries_overview_without_period(tmp_path) -> None:
     export = env.data["export_snapshot"]
     assert "运限概览" in export["section_titles_detected"]
     assert export["unknown_detected_sections"] == [] and export["missing_selected_sections"] == []
-    # 段序同上游：命中格局 → 运限概览。
+    # 段序同上游：宫位总览 → …（命中格局有才出，本桩盘无 patterns）→ 运限概览。
     snap = env.data["snapshot_text"]
-    assert snap.index("[命中格局]") < snap.index("[运限概览]")
+    assert snap.index("[宫位总览]") < snap.index("[运限概览]")
 
 
 # ────────────────────────────── 大六壬 ──────────────────────────────

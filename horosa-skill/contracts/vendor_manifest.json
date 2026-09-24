@@ -123,10 +123,22 @@
     },
     "bazi/ZWConst.js": {
       "upstream": "constants/ZWConst.js",
-      "mode": "curated",
-      "why": "skill 侧**多于**上游：四化多流派表（beipai/zhongzhou/beixiang/custom）是本仓自加的已发布能力，整文件重 vendor 会把它删掉。上游 import 的 ziweiSchools 不进 headless 树。",
-      "extracts": [],
-      "upstream_sha256": "5363df320401a6ff4f7ed24b66e9b22bb24ecb6580b108689cc0aff1465c7a6e"
+      "mode": "verbatim",
+      "why": "v0.40 mingli F8 由 curated 改 verbatim：上游已把四化多流派表收归 ziweiSchools 单源（SIHUA_BASE+sihuaTable，四表与旧 curated 手抄值逐干核对全等），并新增挂载侧 ZWSihuaCustom / normalizeSihuaCustomTable（紫微 sihuaSchool=custom 随盘自定义四化表，buildZiweiSnapshotForParams 用）；curated 手抄件缺这两个导出、且对上游漂移只看 sha 不看内容。",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../components/ziwei/ziweiSchools.js",
+          "to": "../ziwei/ziweiSchools.js",
+          "why": "vendor 树里 ziweiSchools 在 vendor/ziwei/（上游 components/ziwei/）"
+        }
+      ]
+    },
+    "bazi/baziSnapshot.js": {
+      "mode": "bespoke",
+      "why": "v0.40 mingli F9：自上游 BaZi.js 逐字抽出的八字快照闭包（gzText/gzCells/buildBaziPeriodLines/buildBaziSnapshotText/normalizeBaziResult 及其常量，:34-43/:79-265/:267-610/:658-687）；该文件其余是 React 组件，整份 vendor 不可行。此前八字快照是 Python 手写 port（缺纳音长生列/命宫起法标注/起运行/小运年龄口径/三维分列…）。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "derived_from": "components/cntradition/BaZi.js",
+      "derived_sha256": "f7b3dbbb38bb30ed2d4b94598b96f8403e9f24f2bcbb832c250580f5d6caba41"
     },
     "bazi/baziFenYe.js": {
       "upstream": "utils/baziFenYe.js",
@@ -234,6 +246,11 @@
       "why": "Uranian 虚星表所需子集，**逐值抽取**。块界=下一个顶层 `export const`（上游多数常量不带结尾分号，按分号切会卷进后续声明）；且必须保持上游原序——LIST_URANIAN 引用了排在其后的符号，重排即 ReferenceError before initialization。",
       "extracts": [],
       "upstream_sha256": "d960a5ea4b9bc9b485bd271a72eda30ad74a54423ec2369d6fa828e10f825d88"
+    },
+    "constants/ZWText.js": {
+      "upstream": "constants/ZWText.js",
+      "mode": "verbatim",
+      "deviations": []
     },
     "divination/data/accidentalDignity.js": {
       "upstream": "divination/data/accidentalDignity.js",
@@ -1554,6 +1571,17 @@
         }
       ]
     },
+    "su28/Su28Helper.js": {
+      "upstream": "components/su28/Su28Helper.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "suzhan/suzhanSnapshot.js": {
+      "mode": "bespoke",
+      "why": "v0.40 mingli F11：自上游 SuZhanMain.js 逐字抽出的宿占快照闭包（SIMPLE_TOKEN_MAP…houseFullLabel :27-192 + buildHouseSuLines/foldHouseSuLinesToTable/buildSuzhanSnapshotText :275-428）；该文件其余是 React 组件。此前宿占快照是 Python 手写 port（宫位只印 House1…、不读 houseStartMode、宿法不入快照）。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "derived_from": "components/suzhan/SuZhanMain.js",
+      "derived_sha256": "ef5e4c9bf9f7886257641521df58d74a0704e33307d4a4e9a72badac86137c51"
+    },
     "taiyi/TaiYiCalc.js": {
       "upstream": "components/taiyi/TaiYiCalc.js",
       "mode": "verbatim",
@@ -1942,6 +1970,11 @@
       "upstream": "utils/pageSettingsStore.js",
       "mode": "verbatim"
     },
+    "utils/timeBasisLine.js": {
+      "upstream": "utils/timeBasisLine.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "utils/zeriSnapshotPrefs.js": {
       "upstream": "utils/zeriSnapshotPrefs.js",
       "mode": "verbatim",
@@ -2116,6 +2149,12 @@
       "upstream": "components/ziwei/ziweiSchools.js",
       "mode": "verbatim",
       "deviations": []
+    },
+    "ziwei/ziweiSnapshotText.js": {
+      "mode": "bespoke",
+      "why": "v0.40 mingli F8：自上游 ZiWeiMain.js 逐字抽出的紫微快照主 builder（normalizeGan…getLifeHouse :55-169 + buildZiWeiSnapshotText :407-614），与 ziweiSnapshotLayers.js 同源互补；此前紫微快照是 Python 手写 port（无四化流派/传本设置行、宫位总览无四化括注与庙旺档），22 个传本开关与 sihuaSchool 都进不了快照。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "derived_from": "components/ziwei/ZiWeiMain.js",
+      "derived_sha256": "d665c50225e9690dd4ec5e7ba5e888120ecfd34c5ba937cfb4e8b3b867b6f75d"
     },
     "ziwei/ziweiSnapshotLayers.js": {
       "mode": "bespoke",

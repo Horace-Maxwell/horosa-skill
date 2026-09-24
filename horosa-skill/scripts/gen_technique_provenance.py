@@ -54,7 +54,11 @@ CLASS = {
     # 那是**不诚实**的：它们确实铸盘，只是盘不是搜索算的。
     "composite": {"sanshiunited", "mundane", "extrareturns", "qimenzeri", "tianxing",
                   "huanglizeri", "bazizeri", "taiyizeri", "ziweizeri", "liurengzeri", "sanshizeri",
-                  "qizhengzeri", "indiazeri"},
+                  "qizhengzeri", "indiazeri",
+                  # v0.40 mingli：八字 = 本地 lunar.js 引擎优先、域外/byLon/adjustJieqi 回退 Java（上游 BaZi.js:716-755）；
+                  # 紫微 = Java 起盘 + 传本非缺省时本地 ZiweiCalc 重排（ZiWeiMain.js:786-804）；
+                  # 宿占 = 八字公式起盘档走 Java /chart（带农历时支），ASC 档走 chart 服务。三者都是 vendored builder 出快照。
+                  "bazi_birth", "bazi_direct", "ziwei_birth", "suzhan"},
     # Python port：星阙前端算法的 Python 移植。
     "python_port": {"decennials"},
     # frontend 读数型 Python 移植：读已算好的 chart 对象再排版。
@@ -78,6 +82,16 @@ NOTES = {
     "local_data": "不起盘：读本地离线库 / 内置注册表",
     "python_chart_backend": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder",
     "java_backend": "Java 聚合层（:9999）计算，Python 只转发与排版",
+}
+
+
+# 运行期 compute_sources 的取值全集（技法依据卡据此判 matches_declaration）：这几个 runner 按上游规则在两个算源间
+# 切换，声明必须覆盖两边 —— 只写其一，合法的回退/切换路径会被卡片误标「与声明不一致」。
+ENGINES: dict[str, list[str]] = {
+    "bazi_birth": ["lunar-local", "java"],
+    "bazi_direct": ["lunar-local", "java"],
+    "ziwei_birth": ["java", "ZiweiCalc"],
+    "suzhan": ["java", "chart_service"],
 }
 
 
@@ -128,7 +142,7 @@ for name, definition in sorted(TOOL_DEFINITIONS.items()):
     klass = classify(name, definition, js, eps)
     out[name] = {
         "compute_class": klass,
-        "engines": ken or js,
+        "engines": ENGINES.get(name) or ken or js,
         "endpoints": eps,
         "export_technique": TOOL_EXPORT_TECHNIQUE_MAP.get(name),
         "notes": NOTES[klass],

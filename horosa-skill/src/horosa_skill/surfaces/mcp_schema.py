@@ -132,15 +132,18 @@ def advertised_technique_schema(tool_name: str, full_schema: dict[str, Any]) -> 
     props = dict(full_schema.get("properties") or {})
     required = {k for k, v in props.items() if isinstance(v, dict) and v.get("x-horosa-required")}
     keep: list[str] = []
+    # 字段级「已声明、不广告」（v0.40 mingli：紫微 22 传本键 / 八字盘法键等长词表）：校验层照收（MCP 顶层按名可传），
+    # 只从广告层剔除、计入隐藏旋钮数；键表与取值进 horosa_agent_guidance。tools/list 预算见 verify_mcp_list_budget。
+    unadvertised = {k for k, v in props.items() if isinstance(v, dict) and v.get("x-horosa-hidden")}
     if issubclass(model, BirthInput):
         core = DOMAIN_CORE.get(definition.domain, ASTRO_CORE)
         targets = list(PREDICTIVE_INPUT_CONTRACTS.get(tool_name, {}).get("required_fields") or [])
-        own = [f for f in model.model_fields if f not in BirthInput.model_fields]
+        own = [f for f in model.model_fields if f not in BirthInput.model_fields and f not in unadvertised]
         for key in (*core, *targets, *own, *GATE_KEYS):
             if key in props and key not in keep:
                 keep.append(key)
     else:
-        keep = [f for f in model.model_fields if f in props]
+        keep = [f for f in model.model_fields if f in props and f not in unadvertised]
     hidden = sorted(set(props) - set(keep) - {"request"})
     out: dict[str, Any] = {}
     for key in keep:

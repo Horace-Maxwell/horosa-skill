@@ -22,7 +22,6 @@
     "IndiaRectifyInput.tajakaYear",
     "IndiaRectifyInput.annualChartType",
     "IndiaRectifyInput.varshaLat",
-    "IndiaRectifyInput.varshaLon",
-    "ZiWeiBirthInput.sihuaSchool"
+    "IndiaRectifyInput.varshaLon"
   ]
 }

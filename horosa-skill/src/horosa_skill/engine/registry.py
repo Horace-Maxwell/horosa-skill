@@ -211,10 +211,10 @@ TOOL_DEFINITIONS: dict[str, ToolDefinition] = {
     "india_rectify": ToolDefinition("india_rectify", "astro", "india_rectify", None, IndiaRectifyInput, "印度 KP 法出生时间校正：锚点±半窗扫描候选，按 RP/Pranapada/边界(+事件)判据打分排序（候选榜 / Lagna 子主区段 / 步长诊断）。KP birth-time rectification: scan a window around the anchor time and rank candidates by RP / Pranapada / gandanta-boundary (+ optional life events).", execution="local"),
     "planet_cycles": ToolDefinition("planet_cycles", "astro", "planet_cycles", None, PlanetCyclesInput, "行星周期：任意两星（木土/土冥/天海…）在给定年区间内的合/冲精确时间轴（世运周期骨架；支持地心/日心/站心）。Planet cycles: exact conjunction/opposition timeline for any planet pair over a year range (geo/helio/topo).", execution="local"),
     "jieqi_birth": ToolDefinition("jieqi_birth", "cn", "jieqi_birth", None, JieQiBirthInput, "出生节气窗：定位出生时刻前后的节气精确时刻并标出所落区间（八字起运窗同源数据）。Locate the solar terms bracketing a birth moment (the same window BaZi luck-period counting uses).", execution="local"),
-    "ziwei_birth": ToolDefinition("ziwei_birth", "cn", "ziwei_birth", "/ziwei/birth", ZiWeiBirthInput, "生成紫微斗数命盘。Generate Zi Wei birth chart."),
+    "ziwei_birth": ToolDefinition("ziwei_birth", "cn", "ziwei_birth", "/ziwei/birth", ZiWeiBirthInput, "生成紫微斗数命盘。Generate Zi Wei birth chart.", execution="local"),
     "ziwei_rules": ToolDefinition("ziwei_rules", "cn", "ziwei_rules", "/ziwei/rules", ZiWeiRulesInput, "获取紫微斗数规则库。Fetch Zi Wei rules."),
-    "bazi_birth": ToolDefinition("bazi_birth", "cn", "bazi_birth", "/bazi/birth", BaZiBirthInput, "生成八字命盘（四柱 / 大运 / 神煞 / 五行力量 / 格局）。Generate BaZi birth output."),
-    "bazi_direct": ToolDefinition("bazi_direct", "cn", "bazi_direct", "/bazi/direct", BaZiDirectInput, "生成八字直断。Generate BaZi direct output."),
+    "bazi_birth": ToolDefinition("bazi_birth", "cn", "bazi_birth", "/bazi/birth", BaZiBirthInput, "生成八字命盘（四柱 / 大运 / 神煞 / 五行力量 / 格局）。Generate BaZi birth output.", execution="local"),
+    "bazi_direct": ToolDefinition("bazi_direct", "cn", "bazi_direct", "/bazi/direct", BaZiDirectInput, "生成八字直断。Generate BaZi direct output.", execution="local"),
     "liureng_gods": ToolDefinition(
         "liureng_gods",
         "cn",
