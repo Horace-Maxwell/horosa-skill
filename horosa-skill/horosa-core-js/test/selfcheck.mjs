@@ -41,6 +41,9 @@ import { runZeriScan, ZERI_TECHNIQUES } from '../src/tools/zeriScan.js';
 import { runMundaneCards } from '../src/tools/mundaneCards.js';
 import { zeriRowOpts, withLeafKind } from '../src/tools/zeriSnapshotOpts.js';
 import { runAcgSection } from '../src/tools/acgSection.js';
+import { runBaziLocal } from '../src/tools/baziLocal.js';
+import { runZiweiBirth } from '../src/tools/ziweiBirth.js';
+import { runSuzhan } from '../src/tools/suzhan.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const chart = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_traditional.json'), 'utf8'));
@@ -1082,6 +1085,83 @@ check('acgSection 值级金标：角化线取点 + 交映去重 + 口径头行�
   assert(all.includes('共 2 条纬线') && all.includes('| 火星 | 升 | 木星 | 中天 | 12.25°S |'), `paran all: ${all}`);
   // 模块级「最近一次地图状态」每次调用前后清空：无 planets 的响应不许串出上一张图。
   assert(runAcgSection({ acgData: { meta: {} } }).text === '', 'stale acg snapshot leaked across calls');
+});
+
+// ── v0.40 mingli：八字 / 紫微 / 宿占 改由 vendored 上游 builder 出快照 ────────────────────────────
+// 八字本地优先（tools/baziLocal.js = 上游 BaZi.js:716-755 fetchBaziCached 主路径）。
+check('baziLocal 值级金标：晚子时四象限 + 命宫起法 + Java 回退形状', () => {
+  const genParams = (extra) => ({
+    date: '2026-05-27', time: '23:30:00', ad: 1, zone: '+08:00', lon: '121e28', lat: '31n13', gender: 1,
+    timeAlg: 1, phaseType: 0, godKeyPos: '年', adjustJieqi: 0, minggongMethod: 'tongxing',
+    fenyeVersion: 'common', cangVersion: 'common', dayunPrecision: 'precise', ...extra,
+  });
+  const pillar = (text, label) => (text.split('\n').find((l) => l.startsWith(`| ${label} |`)) || '').split(' | ')[1];
+  // 权威：上游 utils/dayBoundary.js:49-57 矩阵（2026-05-27 23:30 直接时间；jest baziLunarLocal.dayBoundary
+  // + Java BaZiHelper + 七路 Python 同口径 2026-09-18）：(1,1) 壬寅庚子 · (1,0) 壬寅戊子 · (0,1) 辛丑庚子 · (0,0) 辛丑戊子。
+  const want = { '1,1': ['壬寅', '庚子'], '1,0': ['壬寅', '戊子'], '0,1': ['辛丑', '庚子'], '0,0': ['辛丑', '戊子'] };
+  for (const [key, [day, hour]] of Object.entries(want)) {
+    const [a23, lz] = key.split(',').map(Number);
+    const out = runBaziLocal({ params: genParams({ after23NewDay: a23, lateZiHourUseNextDay: lz }) });
+    assert(out.data.ok === true && out.data.local === true, `local engine must compute (${key})`);
+    assert(pillar(out.snapshot_text, '日柱') === day && pillar(out.snapshot_text, '时柱') === hour,
+      `${key}: ${pillar(out.snapshot_text, '日柱')} ${pillar(out.snapshot_text, '时柱')}`);
+  }
+  // 命宫起法（techniqueMountSettings.js:1705）：1990-05-15 10:30 上海真太阳时，通行版=癸未；子平数法=辛巳
+  // （与 Java /bazi/birth 缺省 shufa 同盘实测一致 —— 跨引擎权威）。快照命宫行标起法（BaZi.js:397）。
+  const mg = (m) => runBaziLocal({ params: genParams({ date: '1990-05-15', time: '10:30:00', lat: '31n14', timeAlg: 0, after23NewDay: 1, lateZiHourUseNextDay: 1, minggongMethod: m }) }).snapshot_text
+    .split('\n').find((l) => l.startsWith('命宫：'));
+  assert(mg('tongxing') === '命宫：癸未，干十神:伤，支十神:印（起法：通行版）', `tongxing: ${mg('tongxing')}`);
+  assert(mg('shufa') === '命宫：辛巳，干十神:劫，支十神:杀（起法：子平数法）', `shufa: ${mg('shufa')}`);
+  // 域外（公元前）本地抛错 → 回报 local_engine_unavailable（Python 据此回退 Java，上游同）。
+  const bc = runBaziLocal({ params: genParams({ date: '-0100-05-15', ad: -1 }) });
+  assert(bc.data.ok === false && bc.data.reason === 'local_engine_unavailable' && bc.snapshot_text === '', `BC: ${JSON.stringify(bc.data)}`);
+  // Java 回退形状：命宫行按回退口径标「子平数法(本域回退)」，本地派生段（五行力量）不出。
+  const jv = runBaziLocal({ params: genParams({}), java_result: { bazi: { nongli: { year: '丙午', month: '四月', day: '十一' }, fourColumns: { ming: { stem: { cell: '甲' }, branch: { cell: '子' } } } }, gender: 'Male' } });
+  assert(jv.data.local === false && jv.snapshot_text.includes('命宫：甲子（起法：子平数法(本域回退)）') && !jv.snapshot_text.includes('[五行力量]'),
+    `java fallback: ${jv.snapshot_text.slice(0, 400)}`);
+});
+
+// 紫微（tools/ziweiBirth.js = 上游 buildZiweiSnapshotForParams，ZiWeiMain.js:716-822）：传本开关非缺省 → 本地 ZiweiCalc；
+// 流派切四化表；单例用毕还原。
+check('ziweiBirth 值级金标：钦天局数年大限 + 中州派四化 + 单例还原', () => {
+  const base = { date: '1985-11-07', time: '23:30:00', zone: '+08:00', lon: '121e28', lat: '31n13', gender: 1, timeAlg: 0, after23NewDay: 1, lateZiHourUseNextDay: 1 };
+  const row = (text, name) => text.split('\n').find((l) => l.startsWith(`| ${name}`)) || '';
+  const ju = runZiweiBirth({ action: 'finalize', params: { ...base, daxianSpan: 'ju' }, result: { chart: {} } });
+  assert(ju.data.localEngine === true && ju.data.localApplied === true, `local engine: ${JSON.stringify(ju.data.localError)}`);
+  // 土五局 + 钦天「大限跨度=局数年」→ 每限 5 年、命宫 5~9 起（ziweiCore.daxianRanges span=ju；三合缺省是 10 年 5~14）。
+  assert(row(ju.text, '命宫·胎').includes('| 丙戌 | 5~9 |'), `命宫 row: ${row(ju.text, '命宫·胎')}`);
+  assert(ju.text.includes('传本设置：大限跨度=局数年(钦天)') && ju.text.includes('四化流派：通用·飞星'), 'ju notes');
+  // 戊干化科：通用·飞星 = 右弼，中州派 = 太阳（ziweiSchools SIHUA_OVERRIDES.zhongzhou 戊科 → 太阳）。官禄宫干戊 → 右弼自化科只在通用表。
+  assert(row(ju.text, '官禄宫').includes('右弼（自化科）·旺'), `beipai 官禄: ${row(ju.text, '官禄宫')}`);
+  const zz = runZiweiBirth({ action: 'finalize', params: { ...base, daxianSpan: 'ju', sihuaSchool: 'zhongzhou' }, result: { chart: {} } });
+  assert(zz.text.includes('四化流派：中州派') && row(zz.text, '官禄宫').includes('、右弼·旺、'), `zhongzhou 官禄: ${row(zz.text, '官禄宫')}`);
+  // prepare：中州派戊干四化表 = 贪狼/太阴/太阳/天机（发 Java 的 sihua）；认不出的值回报不静默。
+  const prep = runZiweiBirth({ action: 'prepare', params: { sihuaSchool: 'zhongzhou', kuiYue: 'nope' } });
+  assert(JSON.stringify(prep.data.sihua['戊']) === JSON.stringify(['贪狼', '太阴', '太阳', '天机']), `sihua 戊: ${JSON.stringify(prep.data.sihua && prep.data.sihua['戊'])}`);
+  assert(prep.warnings.length === 1 && prep.warnings[0].key === 'kuiYue', `warnings: ${JSON.stringify(prep.warnings)}`);
+  // 可变单例必须还原（同进程下一次缺省调用不得串味）。
+  const plain = runZiweiBirth({ action: 'prepare', params: {} });
+  assert(plain.data.school === 'beipai' && plain.data.localEngine === false && plain.data.sihua === null, `leak: ${JSON.stringify(plain.data)}`);
+});
+
+// 宿占（tools/suzhan.js = 上游 buildSuzhanSnapshotText，SuZhanMain.js:396-428）：人事十二宫起法 + 宿法标签。
+check('suzhan 值级金标：八字公式/ASC 起宫 + 宿法九档标签 + 缺农历回落', () => {
+  // fixture 盘（2026-06-02 14:30）上升赤经 201.3° → 天秤(6)；太阳赤经 70.2° → 双子(2)。
+  // 八字公式（computeAscSignIndex :148-173）：(日座 − 时支座 − 5 + 24) % 12。时支取申（ZiSign 申=双子(2)）→ 7；ASC → 6。
+  // 白羊宫头（signIdx 0）的宫序 = (0 − 起宫 + 12) % 12 + 1：八字公式 6、ASC 7。
+  const params = { date: '2026-06-02', time: '14:30:00', zone: '+08:00', lon: '121e28', lat: '31n13', doubingSu28: 3 };
+  const withShen = { ...chart, chart: { ...chart.chart, nongli: { bazi: { time: { branch: { cell: '申' } } } } } };
+  const aries = (text) => text.split('\n').find((l) => l.startsWith('| 戌—降娄—白羊座—')) || '';
+  const bazi = runSuzhan({ chart: withShen, params: { ...params, houseStartMode: 0 } });
+  assert(aries(bazi.text).startsWith('| 戌—降娄—白羊座—第6宫 |') && bazi.data.nongliHour === '申', `bazi mode: ${aries(bazi.text)}`);
+  assert(bazi.text.includes('宿法：回归古制开禧') && bazi.text.includes('人事十二宫起盘：八字公式起盘'), 'su28 label (guolaoData SU28_MODE_LABEL[3])');
+  const asc = runSuzhan({ chart: withShen, params: { ...params, houseStartMode: 1 } });
+  assert(aries(asc.text).startsWith('| 戌—降娄—白羊座—第7宫 |') && asc.text.includes('人事十二宫起盘：ASC起盘'), `asc mode: ${aries(asc.text)}`);
+  // 缺 nongli（chart 服务的盘）→ 八字公式回落 ASC（上游同），并把「没拿到时支」回报给 Python。
+  const bare = runSuzhan({ chart, params: { ...params, houseStartMode: 0 } });
+  assert(aries(bare.text).startsWith('| 戌—降娄—白羊座—第7宫 |') && bare.data.nongliHour === null, `no nongli: ${aries(bare.text)}`);
+  // 外盘/盘型两行只在显式给了才出（上游模型缺省不带这两键）。
+  assert(!bazi.text.includes('外盘：') && runSuzhan({ chart, params: { ...params, szchart: 1 } }).text.includes('外盘：星座外盘'), 'szchart line gating');
 });
 
 await Promise.all(pending);

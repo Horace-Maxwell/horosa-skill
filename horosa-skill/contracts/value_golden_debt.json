@@ -3,6 +3,7 @@
   "covered": [
     "astroextra",
     "baziGeju",
+    "baziLocal",
     "calendarExtras",
     "canping",
     "election",
@@ -18,6 +19,7 @@
     "progextra",
     "qimenzeri",
     "qizhengElection",
+    "suzhan",
     "tarot",
     "tianxing",
     "tiebanFramework",
@@ -27,7 +29,8 @@
     "yanqinYanfa",
     "yizhangjing",
     "zeriScan",
-    "zhengchuan"
+    "zhengchuan",
+    "ziweiBirth"
   ],
   "debt": [
     "babylon",

@@ -36,7 +36,10 @@ import { runMundaneSolunar } from './mundaneSolunar.js';
 import { runMundaneNavanayaka } from './mundaneNavanayaka.js';
 import { runMundaneCards } from './mundaneCards.js';
 import { runBaziPeriod } from './baziPeriod.js';
+import { runBaziLocal } from './baziLocal.js';
 import { runZiweiExtras } from './ziweiExtras.js';
+import { runZiweiBirth } from './ziweiBirth.js';
+import { runSuzhan } from './suzhan.js';
 import { runSanshiZiweiSihua } from './sanshiZiweiSihua.js';
 import { runQimenZeri } from './qimenzeri.js';
 import { runZeriScan, runZeriScanRemote } from './zeriScan.js';
@@ -59,7 +62,10 @@ const TOOL_RUNNERS = {
   mundane_navanayaka: runMundaneNavanayaka,
   mundane_cards: runMundaneCards,
   bazi_period: runBaziPeriod,
+  bazi_local: runBaziLocal,
   ziwei_extras: runZiweiExtras,
+  ziwei_birth: runZiweiBirth,
+  suzhan: runSuzhan,
   sanshi_ziwei_sihua: runSanshiZiweiSihua,
   qimenzeri: runQimenZeri,
   // 择日十技法（上游 v3.10.0）：六个本地扫描成员共用一个入口（technique 选路），

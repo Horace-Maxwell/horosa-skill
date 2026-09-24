@@ -734,6 +734,60 @@ def sample_final_ai_report(question: str, *, source_title: str = "起盘信息")
     }
 
 
+# ── v0.40 mingli：八字 / 紫微 / 宿占改走 vendored 上游 builder（tools/baziLocal.js / ziweiBirth.js / suzhan.js）。
+# 桩文本**逐字节选自真引擎输出**（不手编）：八字 = testing_payloads east_birth 同盘（2028-04-06 09:33 上海·性别未知）；
+# 紫微 = 1985-11-07 23:30 上海男命 live 实出；宿占 = 1990-05-15 10:30 上海 live 实出（Java /chart + 八字公式起盘）。
+# 段头即真 builder 段头；桩只管形状，值级真相归 tests/test_sync311_mingli.py 的真引擎金标（§5 规则 6）。
+_BAZI_LOCAL_STUB_TEXT = "\n".join([
+    "[起盘信息]", "日期：2028-04-06 09:33:00", "时区：+08:00", "经纬度：121e28 31n13", "性别：未知", "时间算法：真太阳时",
+    "时间基准：真太阳时(经度+均时差校正)；晚子时归次日：是；23 点换日：是", "节气修正：不调整节气", "命造：乾造",
+    "农历：二〇二八年三月十二", "生肖：猴（岁首=立春）", "直接时间：2028-04-06 09:33:00　真太阳时：2028-04-06 09:36:30",
+    "清明后第3天； 调候：无", "",
+    "[四柱与三元]", "| 柱 | 干支 | 藏干 | 十神 | 纳音 | 纳音长生 | 星运 | 自坐 | 空亡 |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    "| 年柱 | 戊申 | 庚劫、壬伤、戊印 | 印·劫 | 大驿土 | 长生 | 临官 | 病 | 寅卯 |",
+    "| 月柱 | 丙辰 | 戊印、乙才、癸食 | 官·印 | 沙中土 | 墓 | 养 | 冠带 | 子丑 |",
+    "| 日柱 | 辛酉 | 辛比 | 日元·比 | 石榴木 | 胎 | 帝旺 | 帝旺 | 子丑 |",
+    "| 时柱 | 癸巳 | 丙官、庚劫、戊印 | 食·官 | 长流水 | 绝 | 长生 | 绝 | 午未 |",
+    "胎元：丁未，干十神:杀，支十神:枭", "命宫：庚申，干十神:劫，支十神:劫（起法：通行版）", "身宫：壬戌，干十神:伤，支十神:印", "十二串宫：申", "",
+    "[神煞（四柱与三元）]", "年柱：整柱=文昌贵人、福星贵人、德秀贵人、月厌；天干=无；地支=无；太岁=无",
+    "日柱：整柱=词馆、禄神、红艳、桃花、德秀贵人、阴差阳错、八专、四废；天干=无；地支=无；太岁=无", "",
+    "[五行力量]", "（通行示例权重：天干100/本气100/中气60/余气30/月令×1.5）", "| 五行 | 占比 |", "| --- | --- |",
+    "| 木 | 7.7% |", "| 火 | 17.2% |", "| 土 | 26.6% |", "| 金 | 30.9% |", "| 水 | 17.6% |", "最旺：金　最弱：木",
+    "日主金：身强（同党印比 57.5% · 异党 42.5%）", "",
+    "[格局·用神]", "当前主用流派：传统综合（各派取用可异，下列多派对照）", "格局：正印格（月令印·本气透干）", "",
+    "[盲派结构]", "（象法·参考，与扶抑/格局体系不同）", "宾主：年宾(戊申) 月宾(丙辰) 日主(辛酉) 时宾(癸巳)", "",
+    "[月令司令（分野）]", "版本：通行版", "节后 1.8 日，当令：乙（余气）", "",
+    "[干支合冲]", "干合：丙（月） 辛（日）→丙辛合水；丁（胎） 壬（身）→丁壬合木；戊（年） 癸（时）→戊癸合火", "",
+    "[大运]", "起运：出生后9年7个月20天0小时起运", "| 步序 | 起运年 | 干支 |", "| --- | --- | --- |",
+    "| 第2步 | 2037 | 丁巳 |", "| 第3步 | 2047 | 戊午 |", "",
+    "[流年行运概略]", "| 板块 | 起始年 | 起始年龄 | 大运 | 流年 |", "| --- | --- | --- | --- | --- |",
+    "| 板块1 | 2037 | 10岁 | 丁巳 | 2037-丁巳 2038-戊午 2039-己未 2040-庚申 2041-辛酉 2042-壬戌 2043-癸亥 2044-甲子 2045-乙丑 2046-丙寅 |",
+])
+_ZIWEI_BIRTH_STUB_TEXT = "\n".join([
+    "[起盘信息]", "日期：1985-11-07 23:30:00", "时区：+08:00", "经纬度：121e28 31n13", "性别：男", "时间算法：真太阳时",
+    "真太阳时：1985-11-07 23:50:28", "四化流派：通用·飞星", "生年天干：乙", "命宫：命宫（丙戌）", "命宫天干：丙",
+    "四柱：乙丑 丁亥 辛亥 戊子", "命主：巨门", "身主：天相", "命局：阴男 土五局", "",
+    "[宫位总览]", "| 宫位 | 干支 | 大限 | 星曜（四化括注） |", "| --- | --- | --- | --- |",
+    "| 命宫·胎 | 丙戌 | 5~14 | 廉贞（命宫忌，自化忌）·旺、天府·庙、文昌（命宫科，自化科）·陷、铃星·庙 |",
+    "| 财帛宫·冠带 | 壬午 | 45~54 | 紫微（生年科，自化权）·庙、咸池、天厨 |", "",
+    "[身宫]", "身宫落命宫（丙戌）", "",
+    "[来因宫]", "兄弟宫（乙酉）", "",
+    "[八字大运]", "| 起运虚岁 | 起始年份 | 大运干支 |", "| --- | --- | --- |", "| 1 | 1985 | 丙戌 |", "",
+    "[命中格局]", "府相朝垣（富贵·破）：天府天相于三方来朝命垣，仓廪充盈，衣食丰足，一生平稳得贵。", "",
+    "[运限概览]", "全大限 × 流年一览(公历年与干支由代码算出,禁自行推算):", "| 虚岁 | 宫位 | 宫干支 | 该限流年（公历年-干支） |",
+    "| --- | --- | --- | --- |",
+    "| 5~14 | 命 | 丙戌 | 1989-己巳、1990-庚午、1991-辛未、1992-壬申、1993-癸酉、1994-甲戌、1995-乙亥、1996-丙子、1997-丁丑、1998-戊寅 |",
+    "要某一年/某月的完整流曜与四化落宫,请在「挂载设置 → 运限」里选定年月(或直接说出年份)。",
+])
+_SUZHAN_STUB_TEXT = "\n".join([
+    "[起盘信息]", "日期：1990-05-15 10:30:00", "时区：+08:00", "经纬度：121e28 31n14", "宿法：荀爽距星(19年测)", "人事十二宫起盘：八字公式起盘", "",
+    "[宿盘宫位与二十八宿星曜]", "| 宫位 | 二十八宿 | 星曜 |", "| --- | --- | --- |",
+    "| 戌—降娄—白羊座—第10宫 | 壁、奎 | 福点 5˚壁50分、金 0˚奎21分 |",
+    "| 酉—大梁—金牛座—第11宫 | 奎、娄、胃 | 中天 16˚奎3分、水 7˚娄58分、日 10˚胃54分 |",
+    "| 未—鹑首—巨蟹座—第1宫 | 井 | 木 4˚井43分 |",
+])
+
+
 class FakeJsClient(HorosaJsEngineClient):
     def __init__(self) -> None:
         self.settings = None
@@ -920,6 +974,34 @@ class FakeJsClient(HorosaJsEngineClient):
                     "[断诗]\n诗曰:春来花自开 / 何须苦相催"
                 ),
             }
+        if tool_name == "bazi_local":
+            # 八字本地优先（tools/baziLocal.js）：Java 回退路径（给了 java_result）标 local=False，同真工具。
+            return {
+                "snapshot_text": _BAZI_LOCAL_STUB_TEXT,
+                "data": {
+                    "ok": True,
+                    "local": not payload.get("java_result"),
+                    "gender": "Male",
+                    "bazi": {
+                        "gender": "Male",
+                        "fourColumns": {k: {"ganzi": gz} for k, gz in (("year", "戊申"), ("month", "丙辰"), ("day", "辛酉"), ("time", "癸巳"))},
+                        "nongli": {"year": "二〇二八", "month": "三月", "day": "十二", "birth": "2028-04-06 09:36:30"},
+                    },
+                },
+            }
+        if tool_name == "ziwei_birth":
+            # 紫微编排（tools/ziweiBirth.js）两段式：prepare 回流派四化表，finalize 回盘 + 快照。
+            if payload.get("action") == "prepare":
+                return {"data": {"ok": True, "sihua": None, "school": "beipai", "localEngine": False}, "warnings": []}
+            result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
+            return {
+                "data": {"ok": True, "chart": result.get("chart"), "patterns": result.get("patterns") or [],
+                         "school": "beipai", "localEngine": False, "localApplied": False, "localError": None},
+                "text": _ZIWEI_BIRTH_STUB_TEXT,
+                "warnings": [],
+            }
+        if tool_name == "suzhan":
+            return {"text": _SUZHAN_STUB_TEXT, "data": {"ok": True, "nongliHour": "巳"}}
         if tool_name == "bazi_geju":
             # 八字格局 (baziGeju 引擎)：离线替身给 [五行力量]/[格局·用神]/[盲派结构]，供 bazi 契约 round-trip。
             # 桩文本逐字取自真引擎（1989-09-04 00:30 男 = 己巳 壬申 丁卯 庚子，与
@@ -2875,12 +2957,35 @@ def test_bazi_report_promotes_liunian_output_into_human_reading(tmp_path) -> Non
                 }
             }
 
+    class BaziFlowJs(FakeJsClient):
+        # v0.40 F9：八字改本地引擎优先（tools/baziLocal.js，上游页面主路径），Java 桩不再被调；
+        # 流年行运数据改由 JS 快照给 —— 节选自真引擎同盘实出（1995-06-03 05:30 上海男命，
+        # vendored buildBaziSnapshotText；[流年行运概略] 为 BaZi.js:575-599 的 GFM 表）。
+        def run(self, tool_name: str, payload: dict[str, object]) -> dict:
+            if tool_name != "bazi_local":
+                return super().run(tool_name, payload)
+            out = super().run(tool_name, payload)
+            out["snapshot_text"] = "\n".join([
+                "[起盘信息]", "日期：1995-06-03 05:30:00", "性别：男", "命造：乾造",
+                "直接时间：1995-06-03 05:30:00　真太阳时：1995-06-03 05:37:55", "",
+                "[四柱与三元]", "| 柱 | 干支 | 藏干 | 十神 | 纳音 | 纳音长生 | 星运 | 自坐 | 空亡 |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                "| 年柱 | 乙亥 | 壬印、甲劫 | 比·印 | 山头火 | 绝 | 长生 | 长生 | 申酉 |",
+                "| 月柱 | 辛巳 | 丙伤、庚官、戊财 | 杀·伤 | 白蜡金 | 长生 | 病 | 长生 | 申酉 |",
+                "| 日柱 | 乙丑 | 己才、癸枭、辛杀 | 日元·才 | 海中金 | 墓 | 冠带 | 冠带 | 戌亥 |",
+                "| 时柱 | 己卯 | 乙比 | 才·比 | 城头土 | 死 | 帝旺 | 沐浴 | 申酉 |", "",
+                "[神煞（四柱与三元）]", "胎元：整柱=无；天干=无；地支=无；太岁=无", "",
+                "[流年行运概略]", "| 板块 | 起始年 | 起始年龄 | 大运 | 流年 |", "| --- | --- | --- | --- | --- |",
+                "| 板块3 | 2024 | 30岁 | 戊寅 | 2024-甲辰 2025-乙巳 2026-丙午 2027-丁未 2028-戊申 2029-己酉 2030-庚戌 2031-辛亥 2032-壬子 2033-癸丑 |",
+            ])
+            return out
+
     settings = Settings(
         server_root="http://127.0.0.1:9999",
         db_path=tmp_path / "memory.db",
         output_dir=tmp_path / "runs",
     )
-    service = HorosaSkillService(settings, client=BaziFlowClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    service = HorosaSkillService(settings, client=BaziFlowClient(), store=MemoryStore(settings), js_client=BaziFlowJs())
     result = service.run_tool(
         "bazi_birth",
         {
@@ -3661,8 +3766,9 @@ def test_late_zi_switch_threads_through_all_chart_flows(tmp_path) -> None:
     service = HorosaSkillService(settings, client=client, store=MemoryStore(settings), js_client=FakeJsClient())
     base = {"date": "2026-05-27", "time": "23:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "agent_confirmed_settings": True}
 
+    # v0.40：bazi_birth 改本地引擎优先（不打 /bazi/birth），其两开关穿透本地引擎由
+    # test_sync311_mingli.py::test_bazi_day_boundary_defaults_reach_local_engine 看守。
     cases = [
-        ("bazi_birth", "/bazi/birth"),
         ("ziwei_birth", "/ziwei/birth"),
         ("liureng_gods", "/liureng/gods"),
         ("nongli_time", "/nongli/time"),
@@ -4682,32 +4788,17 @@ def test_technique_report_rejects_an_unknown_format(tmp_path) -> None:
 # --- v0.28.0（上游 v3.9.2）：干支合冲 / 选中时刻星盘 ---------------------------------------------
 
 
-def test_bazi_hechong_lines_mirror_the_upstream_relline_format() -> None:
-    """[干支合冲] 行格式金标——逐字镜像上游 BaZi.js relLine：`{cell}（{zhu}） …→{key}`，分号连接，
-    全空不产段。字段来自后端 fourColumns（纯排版，零新计算）。"""
-    from horosa_skill.service import _build_bazi_hechong_lines
-
-    four = {
-        "ganHe": {"甲己合土": [{"cell": "甲", "zhu": "年干"}, {"cell": "己", "zhu": "时干"}]},
-        "ziCong": {"子午冲": [{"cell": "子", "zhu": "年支"}, {"cell": "午", "zhu": "日支"}]},
-        "ziXing": {},
-    }
-    lines = _build_bazi_hechong_lines(four)
-    assert lines == [
-        "干合：甲（年干） 己（时干）→甲己合土",
-        "支冲：子（年支） 午（日支）→子午冲",
-    ]
-    assert _build_bazi_hechong_lines({}) == [], "全空不产段（上游 heCongLines.length 同判）"
-
-
+# v0.40 F9：[干支合冲] 不再是 Python 手写 port（_build_bazi_hechong_lines 已删）—— 行由 vendored 上游
+# buildBaziSnapshotText 的 relLine 逐字产出（BaZi.js:515-534），真引擎值级金标见 test_sync311_mingli.py。
 def test_bazi_snapshot_carries_hechong_between_fenye_and_dayun(tmp_path) -> None:
     service = _service(tmp_path)
     result = service.run_tool("bazi_birth", build_sample_payloads()["bazi_birth"], save_result=False)
     assert result.ok is True
     titles = [s["title"] for s in result.data["export_snapshot"]["sections"]]
     assert "干支合冲" in titles
+    assert titles.index("月令司令（分野）") < titles.index("干支合冲") < titles.index("大运")
     body = next(s["body"] for s in result.data["export_snapshot"]["sections"] if s["title"] == "干支合冲")
-    assert "干合：甲（年干） 己（时干）→甲己合土" in body
+    assert "干合：丙（月） 辛（日）→丙辛合水" in body
 
 
 def test_tianxing_selected_moment_chart_is_conditional_on_hits(tmp_path) -> None:
@@ -4826,7 +4917,8 @@ def test_java_endpoint_fails_fast_during_cooldown_and_chart_tool_stays_up(tmp_pa
     service, java_client = _java_cooldown_service(tmp_path, runtime_manager)
     payloads = build_sample_payloads()
 
-    bazi = service.run_tool("bazi_birth", payloads["bazi_birth"], save_result=False)
+    # v0.40：bazi_birth 改本地引擎优先（不再是 Java 工具），Java 端点示例换成 nongli_time（/nongli/time 纯 Java）。
+    bazi = service.run_tool("nongli_time", payloads["nongli_time"], save_result=False)
     assert bazi.ok is False
     assert bazi.error is not None and bazi.error.code == "runtime.java_backend_unavailable"
     assert bazi.error.details["retry_after_seconds"] == 90.0
@@ -4844,7 +4936,7 @@ def test_java_endpoint_starts_once_and_does_not_restart_again_when_start_comes_b
 
     runtime_manager = FakeRuntimeManager(degraded=True, cooldown=0.0)
     service, _java_client = _java_cooldown_service(tmp_path, runtime_manager)
-    bazi = service.run_tool("bazi_birth", build_sample_payloads()["bazi_birth"], save_result=False)
+    bazi = service.run_tool("nongli_time", build_sample_payloads()["nongli_time"], save_result=False)  # v0.40：bazi 已本地优先
     assert bazi.ok is False
     assert bazi.error is not None and bazi.error.code == "runtime.java_backend_unavailable"
     # 此前：start(degraded) → 调用连不上 → connection_retry 再 start 一次（又杀一次 chart）。现在只起一次。

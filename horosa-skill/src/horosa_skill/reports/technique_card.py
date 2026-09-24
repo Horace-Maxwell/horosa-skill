@@ -50,6 +50,15 @@ _RESULT_SENSITIVE_FIELDS: tuple[tuple[str, str, frozenset[str] | None], ...] = (
     ("school", "流派", None),
     ("profile", "传本", None),
 )
+# 日界/晚子时两开关缺省不下发（v0.40 F2：上游出厂缺省 1/1，引擎侧同缺省）——这些工具的引擎在缺键时
+# 按 1 起算，卡片照样回显「缺省=1」，否则缺省调用的卡片里这一行凭空消失（AGENTS §10：用户换过开关时
+# 报告里没有这一行 = 把「两次结果为何不同」藏起来）。只列真读这两键、且缺省确为 1 的工具。
+# ⚠ jieqi_year 不在此列：[二十四节气] 四柱由 Java JieQiController.setupBazi 以 after23NewDay=false 硬编码起算
+# （上游同，JieQiController.java:98），印「缺省=1」就是替没参与计算的口径作证。
+_DAY_BOUNDARY_DEFAULT_TOOLS = frozenset({
+    "bazi_birth", "bazi_direct", "ziwei_birth", "liureng_gods", "liureng_runyear", "jinkou",
+    "nongli_time", "qimen", "taiyi", "sanshiunited",
+})
 # 闸门状态：调用方声称「设置已与用户确认」还是「接受默认」，是报告里最该留痕的一项。
 _GATE_FIELDS: tuple[tuple[str, str], ...] = (
     ("agent_confirmed_settings", "已与用户确认设置"),
@@ -85,7 +94,7 @@ def _measured_compute(response_data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _settings_used(
-    input_normalized: dict[str, Any], response_data: dict[str, Any], domain: str | None
+    input_normalized: dict[str, Any], response_data: dict[str, Any], domain: str | None, tool_name: str | None = None
 ) -> dict[str, Any]:
     used: dict[str, Any] = {}
     for field, label, domains in _RESULT_SENSITIVE_FIELDS:
@@ -93,6 +102,15 @@ def _settings_used(
             continue
         if field in input_normalized and input_normalized[field] is not None:
             used[field] = {"label": label, "value": input_normalized[field]}
+        elif field in ("after23NewDay", "lateZiHourUseNextDay") and tool_name in _DAY_BOUNDARY_DEFAULT_TOOLS:
+            used[field] = {"label": f"{label}（缺省）", "value": 1}
+    # 时区口径（v0.40 F17，上游 utils/timezone.js unifyCnZone）：Asia/Urumqi 归并北京时间时回显，
+    # 否则读者看到 +08:00 不知道这是法定北京时间口径、不是新疆当地惯用的 +06:00。
+    if input_normalized.get("zoneAdvisory") == "cn-unified":
+        used["zoneAdvisory"] = {
+            "label": "时区口径",
+            "value": f"北京时间统一（{input_normalized.get('geoZone') or 'Asia/Urumqi'}→Asia/Shanghai）",
+        }
     # 岁差/恒星黄道：西占与印占**字段名不同**（AGENTS §4），必须分别读，且不许硬编码岁差名。
     chart = response_data.get("chart") if isinstance(response_data.get("chart"), dict) else {}
     if isinstance(chart.get("siderealAyanamsa"), (str, int, float)):
@@ -181,7 +199,7 @@ def build_technique_card(
             "matches_declaration": matches,
             "notes": declared.get("notes"),
         },
-        "settings": _settings_used(input_normalized, response_data, domain),
+        "settings": _settings_used(input_normalized, response_data, domain, tool_name),
         "gate": _gate_state(input_normalized),
         "sections": _sections_health(export_snapshot),
         "versions": {

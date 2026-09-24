@@ -1317,6 +1317,8 @@ class ReportBuilder:
         result: dict[str, str] = {}
         for label in ["年柱", "月柱", "日柱", "时柱", "胎元", "命宫", "身宫"]:
             match = re.search(rf"{label}\s*[：:]\s*([{stems}][{branches}])", export_text)
+            # v0.40 起 [四柱与三元] 是上游 GFM 表（BaZi.js:389-394「| 年柱 | 戊申 | 藏干 | …」），四主柱只有表格行。
+            match = match or re.search(rf"\|\s*{label}\s*\|\s*([{stems}][{branches}])\s*\|", export_text)
             if match:
                 result[label] = match.group(1)
         return result

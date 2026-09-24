@@ -58,7 +58,11 @@ CLASS = {
     # 那是**不诚实**的：它们确实铸盘，只是盘不是搜索算的。
     "composite": {"sanshiunited", "mundane", "extrareturns", "qimenzeri", "tianxing",
                   "huanglizeri", "bazizeri", "taiyizeri", "ziweizeri", "liurengzeri", "sanshizeri",
-                  "qizhengzeri", "indiazeri", "guolao_chart"},
+                  "qizhengzeri", "indiazeri", "guolao_chart",
+                  # v0.40 mingli：八字 = 本地 lunar.js 引擎优先、域外/byLon/adjustJieqi 回退 Java（上游 BaZi.js:716-755）；
+                  # 紫微 = Java 起盘 + 传本非缺省时本地 ZiweiCalc 重排（ZiWeiMain.js:786-804）；
+                  # 宿占 = 八字公式起盘档走 Java /chart（带农历时支），ASC 档走 chart 服务。三者都是 vendored builder 出快照。
+                  "bazi_birth", "bazi_direct", "ziwei_birth", "suzhan"},
     # Python port：星阙前端算法的 Python 移植。
     "python_port": {"decennials"},
     # frontend 读数型 Python 移植：读已算好的 chart 对象再排版。
@@ -87,6 +91,10 @@ NOTES = {
 }
 # 逐工具说明（覆盖族级 NOTES）。
 NOTE_OVERRIDES = {
+    "bazi_birth": "本地 vendored lunar.js 引擎优先（同星阙八字页 BaZi.js:716-755 fetchBaziCached），公元前等域外日期或 byLon/adjustJieqi 回退 Java /bazi/*；两路都由 vendored buildBaziSnapshotText 出快照（compute_sources.bazi = lunar-local | java）",
+    "bazi_direct": "本地 vendored lunar.js 引擎优先（同星阙八字页 BaZi.js:716-755 fetchBaziCached），公元前等域外日期或 byLon/adjustJieqi 回退 Java /bazi/*；两路都由 vendored buildBaziSnapshotText 出快照（compute_sources.bazi = lunar-local | java）",
+    "suzhan": "人事十二宫八字公式起盘（缺省）走 Java /chart（ChartController 附农历四柱，时支定宫序）；ASC 档或 Java 不可用走 chart 服务；vendored buildSuzhanSnapshotText 出快照（compute_sources.chart = java | chart_service）",
+    "ziwei_birth": "Java /ziwei/birth 起盘（流派非通用时附四化表）；22 个传本开关任一非缺省 → 本地 vendored ZiweiCalc 重排盘核心 + 重算格局（同星阙 buildZiweiSnapshotForParams，ZiWeiMain.js:716-822）；vendored buildZiWeiSnapshotText 出快照（compute_sources.chart = java | ZiweiCalc）",
     "acg": "chart 服务 /location/acg*（ACGraph）算行星线、落点与世运事件；vendored JS acgSnapshot 只排 [占星地图] 段",
     "bazi_inverse": "Java BaZiHelper.getBirthes 逐年回推；Python 只校验四柱干支、转发与排版",
     "guolao_chart": (
@@ -113,6 +121,17 @@ EXTRA_EVIDENCE: dict[str, dict[str, list[str]]] = {
 }
 
 
+
+
+# 运行期 compute_sources 的取值全集（技法依据卡据此判 matches_declaration）：这几个 runner 按上游规则在两个算源间
+# 切换，声明必须覆盖两边 —— 只写其一，合法的回退/切换路径会被卡片误标「与声明不一致」。
+# 运行期 compute_sources 的取值集（有序：主路在前）——算源不是某个 JS 工具名而是「哪条路径」时整条覆盖证据。
+ENGINE_OVERRIDES: dict[str, list[str]] = {
+    "bazi_birth": ["lunar-local", "java"],
+    "bazi_direct": ["lunar-local", "java"],
+    "ziwei_birth": ["java", "ZiweiCalc"],
+    "suzhan": ["java", "chart_service"],
+}
 
 
 def evidence(fn: ast.FunctionDef | None) -> tuple[list[str], list[str], list[str]]:
@@ -165,7 +184,7 @@ for name, definition in sorted(TOOL_DEFINITIONS.items()):
     extra = EXTRA_EVIDENCE.get(name, {})
     out[name] = {
         "compute_class": klass,
-        "engines": sorted(set(ken or js) | set(extra.get("engines", []))),
+        "engines": ENGINE_OVERRIDES.get(name) or sorted(set(ken or js) | set(extra.get("engines", []))),
         "endpoints": sorted(set(eps) | set(extra.get("endpoints", []))),
         "export_technique": TOOL_EXPORT_TECHNIQUE_MAP.get(name),
         "notes": NOTE_OVERRIDES.get(name, NOTES[klass]),

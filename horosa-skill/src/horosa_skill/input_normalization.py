@@ -179,17 +179,49 @@ def _normalize_zone_value(value: Any, *, payload: dict[str, Any] | None = None, 
     return _format_zone_offset(total_hours)
 
 
+# 中国大陆统一北京时间口径（上游 utils/timezone.js:124-151 unifyCnZone，horosa_tz_cn_unified_v1）：IANA 把新疆
+# 划为 Asia/Urumqi（+06:00，民间「新疆时间」），而出生证/户籍/医院记录一律按法定北京时间。统一时间起点
+# （1949-10-01）之后 Asia/Urumqi → Asia/Shanghai，**只做 IANA 名归并、不写死偏移**（1986–1991 夏令时照常
+# 得 +09:00；统一前的新疆出生仍按 +06:00）。归并时在载荷里留 geoZone（原地理时区）+ zoneAdvisory='cn-unified'，
+# 技法卡与 warnings 据此回显。退出口：cnUnifiedZone=false（上游 kill-switch 是 localStorage 'horosa.tz.cnUnified'='0'），
+# 或直接给偏移 "+06:00"（偏移不归并）。
+CN_UNIFIED_ZONE_SINCE = "1949-10-01"
+_CN_UNIFIED_SINCE_YMD = (1949, 10, 1)
+_CN_UNIFY = {"Asia/Urumqi": "Asia/Shanghai"}
+_OPT_OUT_VALUES = (False, 0, "0", "false", "False", "no", "off")
+
+
+def _cn_unified_enabled(payload: dict[str, Any]) -> bool:
+    return payload.get("cnUnifiedZone") not in _OPT_OUT_VALUES
+
+
 def _normalize_iana_zone_value(text: str, *, payload: dict[str, Any] | None, key: str) -> str | None:
     if "/" not in text:
         return None
+    reference = _reference_datetime_for_zone(payload or {}, key)
+    unified_from: str | None = None
+    target = _CN_UNIFY.get(text)
+    # 上游：只有能解析出 YYYY-MM-DD 且早于起点才不归并（日期缺失照样归并——但缺日期本仓也算不出偏移，
+    # 下面 reference 为 None 时原样返回 None，不改 zone）。按 (年, 月, 日) 比较：strftime('%Y') 对四位以下的年
+    # 不补零（平台相关），字符串比较会把公元 100 年判成「晚于 1949」。
+    if (
+        target
+        and payload is not None
+        and _cn_unified_enabled(payload)
+        and reference is not None
+        and (reference.year, reference.month, reference.day) >= _CN_UNIFIED_SINCE_YMD
+    ):
+        unified_from, text = text, target
     try:
         zone = ZoneInfo(text)
     except (ZoneInfoNotFoundError, ValueError):
         return None
 
-    reference = _reference_datetime_for_zone(payload or {}, key)
     if reference is None:
         return None
+    if unified_from is not None and payload is not None:
+        payload.setdefault("geoZone", unified_from)
+        payload["zoneAdvisory"] = "cn-unified"
     offset = reference.replace(tzinfo=zone).utcoffset()
     if offset is None:
         return None

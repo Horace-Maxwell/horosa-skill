@@ -178,6 +178,13 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
      （A6 同类）。长尾旋钮用 `ADVERTISE_HIDDEN` / `x-horosa-hidden` 声明而不广告：校验照收、tools/list 零字节。
    - 日界开关的 schema 缺省 `False` + `model_dump` = 每次都发 0，Java 把 JSON `false` 读成 0，盖掉上游缺省 1；
      缺省改 `None`（不发即后端缺省），本地引擎路径显式传 1/1（lunar 本地引擎把「缺键」当「不换日」而非上游缺省）。
+12. **两路实现各发明一种「声明而不广告」，合并时一行赋值把另一种覆盖掉。**
+   - 症状：命理 chunk 合并后 tools/list 一次 +8 KB（253 → 262 KB，离 256 KiB 硬顶 18 B）；acg/india/guolao/mundane/germany…
+     的长尾旋钮全部回到广告层。
+   - 根因：西占用模型级 `ADVERTISE_HIDDEN`，命理用字段级 `x-horosa-hidden`；git 自动合并把两行 `unadvertised = …` 都留下，
+     后一行覆盖前一行——语法、测试全绿，只有字节预算守卫抓到。
+   - 守卫：两者取并集；`tests/test_mcp_hidden_fields.py` 逐字段锁两种声明法都不进广告层（负向对照：合并版下模型级那条红）。
+     并行拆分时同一机制只许一处定义（后来者复用先行者的机制，别再发明第二种）。
 
 ### v0.40.0 / 2026-09-24 — 上游 v3.11.x 重同步：六处「同步了却没同步」
 

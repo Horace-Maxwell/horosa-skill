@@ -143,8 +143,14 @@ def advertised_technique_schema(tool_name: str, full_schema: dict[str, Any]) -> 
     model = definition.input_model
     props = dict(full_schema.get("properties") or {})
     required = {k for k, v in props.items() if isinstance(v, dict) and v.get("x-horosa-required")}
-    unadvertised = advertise_hidden_fields(model)
     keep: list[str] = []
+    # 「已声明、不广告」两种声明法取并集：模型级 `ADVERTISE_HIDDEN`（西占长尾旋钮）与字段级 `x-horosa-hidden`
+    # （v0.40 mingli：紫微 22 传本键 / 八字盘法键等长词表）。校验层照收（MCP 顶层按名可传），只从广告层剔除、
+    # 计入隐藏旋钮数；键表与取值进 horosa_agent_guidance。🔴 曾合并成后者覆盖前者 → 西占旋钮全部回到广告层，
+    # tools/list 一次 +8 KB 逼近 256 KB 硬顶（verify_mcp_list_budget 抓到）。
+    unadvertised = set(advertise_hidden_fields(model)) | {
+        k for k, v in props.items() if isinstance(v, dict) and v.get("x-horosa-hidden")
+    }
     if issubclass(model, BirthInput):
         core = DOMAIN_CORE.get(definition.domain, ASTRO_CORE)
         targets = list(PREDICTIVE_INPUT_CONTRACTS.get(tool_name, {}).get("required_fields") or [])

@@ -858,8 +858,10 @@ def test_ziwei_patterns_and_enriched_overview(tmp_path) -> None:
     )
     assert result.ok is True, result.error
     snap = result.data["snapshot_text"]
-    assert "命主：" in snap and "五行局：" in snap  # 起盘信息 enriched
-    assert "主星：" in snap and "杂曜：" in snap  # 宫位总览 structured (P0 杂曜补显)
+    # v0.40 F8：快照改由 vendored buildZiWeiSnapshotText 出（上游 ZiWeiMain.js）——起盘信息是「命局：阴男 土五局」
+    # （旧 Python port 写「五行局：」）；宫位总览是上游 GFM 表，主/辅/煞/杂曜同列（旧 port 分「主星：/杂曜：」行）。
+    assert "命主：" in snap and "命局：" in snap and "斗君：" in snap  # 起盘信息 enriched
+    assert "| 宫位 | 干支 | 大限 | 星曜（四化括注） |" in snap and "天德" in snap  # 宫位总览（杂曜天德补显）
     assert "[命中格局]" in snap
     # 至少一条命中格局带断语；该盘已知含「府相朝垣」
     assert "府相朝垣" in snap
@@ -1004,11 +1006,14 @@ def test_bazi_carries_geju_sections(tmp_path) -> None:
     snap = result.data["snapshot_text"]
     for header in ("[五行力量]", "[格局·用神]", "[盲派结构]"):
         assert header in snap, header
-    assert "分布：" in snap and "宾主：" in snap
+    # v0.40 F9：[五行力量] 改由 vendored buildBaziSnapshotText 出（上游 BaZi.js GFM 表「| 五行 | 占比 |」，
+    # 旧 baziGeju 引擎的「分布：」行不再出现）。
+    assert "| 五行 | 占比 |" in snap and "宾主：" in snap
     export = result.data.get("export_snapshot") or {}
     assert export.get("unknown_detected_sections") == []
-    # 导出文本不因条件段回退而暴涨（_pick_section_data 兜底 dump 守卫）：合理上限
-    assert len((export.get("export_text") or "").splitlines()) < 200
+    # 导出文本不因条件段回退而暴涨（_pick_section_data 兜底 dump 守卫）：合理上限。
+    # v0.40 F9：上游 [大运] 含逐年小运/流年表（BaZi.js:537-569，约百行），本盘实出 217 行 → 上限放到 300。
+    assert len((export.get("export_text") or "").splitlines()) < 300
 
 
 @requires_chart

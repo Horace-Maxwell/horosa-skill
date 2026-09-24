@@ -2,6 +2,7 @@ import { buildHuangliSnapshotText } from '../vendor/calendar/huangliSnapshot.js'
 import { buildHuangliDay } from '../vendor/calendar/huangliDay.js';
 import { buildTongshuSnapshotText } from '../vendor/calendar/tongshuSnapshot.js';
 import { DEFAULT_TONGSHU_SETTINGS } from '../vendor/calendar/tongshuSchools.js';
+import { tongshuSchoolCheck } from './tongshu.js';
 import { buildRiziSnapshotText } from '../vendor/calendar/riziSnapshot.js';
 import { personBazi, buildPersonalizedDates } from '../vendor/calendar/riziEngine.js';
 
@@ -22,7 +23,7 @@ import { personBazi, buildPersonalizedDates } from '../vendor/calendar/riziEngin
  *   tongshu?: {school, event, liexiuUse, mingYear},
  *   rizi?: {event, year, topN?, persons:[{name, date, time, gender, role}]}
  * }
- * return : { text }   // 已按上游段序拼好，段间空行分隔
+ * return : { text, errors? }   // 已按上游段序拼好，段间空行分隔；errors = 显式入参认不出（如通书流派键）
  */
 export function runCalendarExtras(payload) {
   const source = payload && typeof payload === 'object' ? payload : {};
@@ -33,6 +34,7 @@ export function runCalendarExtras(payload) {
     return { text: '' };
   }
   const blocks = [];
+  const errors = [];
 
   // —— 老黄历八段（去掉首尾两段，它们与 NongLi 的同名段重复）
   try {
@@ -53,10 +55,16 @@ export function runCalendarExtras(payload) {
     const ts = source.tongshu && typeof source.tongshu === 'object' ? source.tongshu : {};
     const ymd = `${year}-${`${month}`.padStart(2, '0')}-${`${day}`.padStart(2, '0')}`;
     const settings = { ...DEFAULT_TONGSHU_SETTINGS, ...ts, date: ymd };
-    const raw = buildTongshuSnapshotText(settings, ymd) || '';
-    const kept = raw.split(/\n(?=\[)/).filter((block) => block.startsWith('[通书择日]') || block.startsWith('[本月逐日表]'));
-    if (kept.length) {
-      blocks.push(kept.join('\n').trim());
+    // 显式给了认不出的流派键 → 回报（Python 抛结构化错误），不印「（该流派待实现）」冒充结论。
+    const bad = tongshuSchoolCheck(ts.school);
+    if (bad) {
+      errors.push({ section: '通书择日', ...bad });
+    } else {
+      const raw = buildTongshuSnapshotText(settings, ymd) || '';
+      const kept = raw.split(/\n(?=\[)/).filter((block) => block.startsWith('[通书择日]') || block.startsWith('[本月逐日表]'));
+      if (kept.length) {
+        blocks.push(kept.join('\n').trim());
+      }
     }
   } catch (error) {
     /* 同上 */
@@ -113,7 +121,7 @@ export function runCalendarExtras(payload) {
     /* 同上 */
   }
 
-  return { text: blocks.join('\n\n') };
+  return errors.length ? { text: blocks.join('\n\n'), errors } : { text: blocks.join('\n\n') };
 }
 
 export default runCalendarExtras;

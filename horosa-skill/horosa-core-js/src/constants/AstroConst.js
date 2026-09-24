@@ -35,6 +35,36 @@ export const DARKMOON = 'Dark Moon';
 export const PURPLE_CLOUDS = 'Purple Clouds';
 export const ASC = 'Asc';
 export const LIFEMASTERDEG74 = 'LifeMasterDeg74';
+// 宿占快照（vendor/suzhan/suzhanSnapshot.js，v0.40 mingli F11）另需：四角 id / 福点 id、页面缺省星表
+// DEFAULT_OBJECTS（models/app.js:201 planetDisplay 缺省）与 isTraditionPlanet —— 逐值抽自上游
+// constants/AstroConst.js:41/80-82（id）与 :618-639（两张表 + 判定函数，函数体逐字）。
+export const PARS_FORTUNA = 'Pars Fortuna';
+export const DESC = 'Desc';
+export const MC = 'MC';
+export const IC = 'IC';
+
+export const DEFAULT_OBJECTS = [
+    SUN, MOON, MERCURY, VENUS, MARS, JUPITER, SATURN,
+    NORTH_NODE, SOUTH_NODE, PARS_FORTUNA,
+    ASC, MC
+]
+
+export const TRADITION_OBJECTS = [
+    SUN, MOON, MERCURY, VENUS, MARS, JUPITER, SATURN,
+    NORTH_NODE, SOUTH_NODE, DARKMOON, PURPLE_CLOUDS,
+    ASC, DESC, MC, IC
+]
+
+let TraditionPlanets = new Set();
+
+export function isTraditionPlanet(id){
+    if(TraditionPlanets.size === 0){
+        for(let i=0; i<TRADITION_OBJECTS.length; i++){
+            TraditionPlanets.add(TRADITION_OBJECTS[i]);
+        }
+    }
+    return TraditionPlanets.has(id);
+}
 
 // UI 配色 stub（headless 不渲染）；SignFill / 按星座取色被调用时返回 undefined。
 export const AstroColor = { SignFill: {} };
