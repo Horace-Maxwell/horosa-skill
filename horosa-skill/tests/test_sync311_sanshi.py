@@ -312,7 +312,7 @@ def test_qimen_guidance_default_is_literally_the_upstream_default() -> None:
     question = next(q for q in policy["ask_if_missing"] if q["field"] == "qijuMethod")
     assert question["values"][0] == "zhirun" and "星阙默认" in question["options"][0]
     assert not any(d["field"] == "after23NewDay" and d["value"] is False for d in policy["safe_defaults"])
-    assert "isQimenLocalRoute" in policy["options_keys"]
+    assert "isQimenLocalRoute" in policy["options_keys"]["options"]
 
 
 # ═══════════════════════════════ 太乙（F6）═══════════════════════════════
@@ -597,7 +597,7 @@ def test_liureng_cast_methods_in_guidance_are_anchored_to_vendored_QI_METHODS() 
         "console.log(JSON.stringify(QI_METHODS.map((m) => m.key)));"
     )
     assert [k for k, _ in LIURENG_CAST_METHODS] == keys and len(keys) == 26
-    text = build_agent_guidance(tool_name="liureng_gods")["tools"]["liureng_gods"]["options_keys"]
+    text = build_agent_guidance(tool_name="liureng_gods")["tools"]["liureng_gods"]["options_keys"]["options"]
     assert all(f"{k}=" in text for k in keys)
 
 

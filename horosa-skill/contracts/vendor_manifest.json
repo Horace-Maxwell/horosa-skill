@@ -1169,6 +1169,28 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "india/indiaConst.js": {
+      "upstream": "constants/AstroConst.js",
+      "mode": "curated",
+      "why": "印占流派（五支+西方恒星）/ 大运流派开关 22 键 / 大运体系 15 档常量与归一函数，逐块抽取（上游全文件 import 了 headless 不存在的色板/主题模块）。消费方 india/jyotishSnapshot.js：[起盘信息] 流派行与 [大运Dasha] 体系切换。",
+      "extracts": [
+        "INDIA_SCHOOL_DEFAULT",
+        "INDIA_SCHOOL_OPTIONS",
+        "INDIA_SCHOOL_DEFAULTS",
+        "normalizeIndiaSchool",
+        "INDIA_DASHA_VARIANT_GROUPS",
+        "INDIA_DASHA_VARIANT_SPECS",
+        "INDIA_DASHA_VARIANT_DEFAULTS",
+        "normalizeIndiaDashaVariants",
+        "serializeIndiaDashaVariants",
+        "getIndiaSchoolDefaults",
+        "INDIA_DASHA_SYSTEM_DEFAULT",
+        "INDIA_DASHA_SYSTEM_OPTIONS",
+        "INDIA_DASHA_DISPLAY_ONLY_SYSTEMS",
+        "normalizeIndiaDashaSystem"
+      ],
+      "upstream_sha256": "d960a5ea4b9bc9b485bd271a72eda30ad74a54423ec2369d6fa828e10f825d88"
+    },
     "india/jyotishSnapshot.js": {
       "mode": "bespoke",
       "why": "自上游 IndiaChart.js 逐字抽出的 Jyotish 快照段构造器（仅剥 React 外壳）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。 🔴 两处声明式偏离（均为上游 HEAD 9b74714b 的 bug，重抽时必须保留，直到上游修复）：① SIGN_CN_S/scS 上提到函数开头——上游三旗盘逐月净分块先于其 const 定义调用 scS（暂时性死区），jyotish.tripataki 一有数据整个 builder 抛出；② 三旗盘月序读 m.index ?? m.month——后端 month_rows 的键是 month，上游读 index 恒 undefined。",
@@ -1464,6 +1486,18 @@
           "specifier": "../../divination/mundane/describe.js",
           "to": "./describe.js",
           "why": "vendor 树里有两个 describe.js（mundane/ 与 divination/…），relocate 按 basename 无法消歧，钉死到世运那份。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "const MUNDANE_ORB_SCHEME_CN = {",
+          "to": "export const MUNDANE_ORB_SCHEME_CN = {",
+          "why": "页面级覆盖行「受冲容许度：…（页面级覆盖）」的查名表（上游只在类方法 buildAiSnapshot:2866 内用，模块私有）；headless 的快照头在 skill 侧拼，补具名导出供 tools/mundaneCards.js 取名与校验值域，不手抄。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "const MUNDANE_INGRESS_RULE_CN = {",
+          "to": "export const MUNDANE_INGRESS_RULE_CN = {",
+          "why": "同上：「入境主管制：…（页面级覆盖）」（buildAiSnapshot:2859）。"
         }
       ]
     },
@@ -1881,6 +1915,11 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "utils/acgSnapshot.js": {
+      "upstream": "utils/acgSnapshot.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "utils/astroClassicalDerived.js": {
       "upstream": "utils/astroClassicalDerived.js",
       "mode": "verbatim",
@@ -1916,9 +1955,20 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "utils/divinationJudgeGlobals.js": {
+      "upstream": "utils/divinationJudgeGlobals.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "utils/ganzhiYearBase.js": {
       "upstream": "utils/ganzhiYearBase.js",
       "mode": "verbatim"
+    },
+    "utils/judgeLayerHeadless.js": {
+      "mode": "bespoke",
+      "why": "自上游 utils/judgeLayerOverrides.js 抽出（判读引擎「全局层」的唯一组装点，卜卦 horaryJudgeOpts / 择日 runElection 第 2 层）：上游从两个 localStorage 仓取「改过的键」，headless 无持久化偏好 → 以请求顶层古典键为仓，白名单 JUDGE_KEYS_FROM_CLASSICAL 逐字、归一 / 等于缺省不进 / vocIncludeOuter→bool 同上游；缺省表直接 import 已 vendored 的 classicalChartGlobals / divinationJudgeGlobals。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "derived_from": "utils/judgeLayerOverrides.js",
+      "derived_sha256": "dd38a67db43b569c95bb3658928fc80ad98528dba5881b04d2961b8708b3e566"
     },
     "utils/julianDayIndex.js": {
       "upstream": "utils/julianDayIndex.js",

@@ -171,6 +171,13 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
      手删它留下的空 `.claude/worktrees/` 目录。上游工作区里一处 `SELFCHECK_LOG.md` 修改早于本会话（9-22），未碰。
    - 守卫：派发前先 `cd` 回本仓并 `git rev-parse --show-toplevel` 核对；agent 规则第一条改为 LOCATION CHECK（toplevel 不在本仓
      `.claude/worktrees/` 下即停手、零写入、一行报告）。这是编排侧的流程守卫，无法在仓内代码里机器化。
+11. **类型收窄会吞掉上游缺省；未声明的键会被 MCP 扁平面丢掉。**
+   - 七政 `doubingSu28` 声明成 bool：`True` 被后端读成宿度制 1（斗柄定房法），上游缺省是 2（回归今宿），2–8 七档根本传不进来；
+     宿占 / 节气年盘同病。上游是枚举就声明成枚举（int 0–8，缺省照上游），别用 bool「近似」。
+   - 汉堡盘 `school/orb/strictFactors/frames/…` 未在 `GermanyInput` 声明：CLI 走整包能用，MCP 扁平签名把顶层键静默丢掉
+     （A6 同类）。长尾旋钮用 `ADVERTISE_HIDDEN` / `x-horosa-hidden` 声明而不广告：校验照收、tools/list 零字节。
+   - 日界开关的 schema 缺省 `False` + `model_dump` = 每次都发 0，Java 把 JSON `false` 读成 0，盖掉上游缺省 1；
+     缺省改 `None`（不发即后端缺省），本地引擎路径显式传 1/1（lunar 本地引擎把「缺键」当「不换日」而非上游缺省）。
 
 ### v0.40.0 / 2026-09-24 — 上游 v3.11.x 重同步：六处「同步了却没同步」
 

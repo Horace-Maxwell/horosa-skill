@@ -1,5 +1,7 @@
-import { buildMundaneCardSections } from '../vendor/mundane/MundaneMain.js';
+import { buildMundaneCardSections, MUNDANE_ORB_SCHEME_CN, MUNDANE_INGRESS_RULE_CN } from '../vendor/mundane/MundaneMain.js';
 import { MUNDANE_HORARY_KINDS } from '../vendor/mundane/mundaneHorary.js';
+import { MUNDANE_RULESETS, rulesetConfig } from '../vendor/mundane/ruleset.js';
+import { SIGN_ORDER } from '../vendor/divination/data/signs.js';
 
 /**
  * 世运右栏卡片段（上游 v3.11 [Q-444/T-407]）：`buildMundaneCardSections(chart, extra, state, facts)`
@@ -33,8 +35,38 @@ function splitCard(block) {
   return { title: m ? m[1] : null, text };
 }
 
+// 世运口径（上游页面设置 MUNDANE_PAGE_SETTINGS，MundaneMain.js:519-526）：规则集四派 + 两个页面级覆盖 + 吠陀世运三键。
+// 值域锚定引擎自带表（MUNDANE_RULESETS / MUNDANE_ORB_SCHEME_CN / MUNDANE_INGRESS_RULE_CN / SIGN_ORDER），认不出的回执 invalid。
+function settingsCheck(settings) {
+  const s = settings && typeof settings === 'object' ? settings : {};
+  const invalid = [];
+  const oneOf = (key, allowed) => {
+    const v = s[key];
+    if (v !== undefined && v !== null && v !== '' && allowed.indexOf(v) < 0) invalid.push({ key, value: v, allowed });
+  };
+  oneOf('mundaneRuleset', MUNDANE_RULESETS.map((r) => r.key));
+  oneOf('mundaneOrbScheme', ['auto', ...Object.keys(MUNDANE_ORB_SCHEME_CN)]);
+  oneOf('mundaneIngressRule', ['auto', ...Object.keys(MUNDANE_INGRESS_RULE_CN)]);
+  oneOf('vedicDashaYearLen', [365.2425, 360]);
+  oneOf('vedicNatalAsc', SIGN_ORDER);
+  const cfg = rulesetConfig(s.mundaneRuleset);
+  return {
+    invalid,
+    // 快照头三行的查名（上游 buildAiSnapshot:2852-2866：规则集行恒出；两条页面级覆盖行只在非 auto 时出）。
+    meta: {
+      ruleset: cfg.key,
+      rulesetLabel: cfg.label,
+      orbSchemeLabel: s.mundaneOrbScheme && s.mundaneOrbScheme !== 'auto' ? (MUNDANE_ORB_SCHEME_CN[s.mundaneOrbScheme] || s.mundaneOrbScheme) : null,
+      ingressRuleLabel: s.mundaneIngressRule && s.mundaneIngressRule !== 'auto' ? (MUNDANE_INGRESS_RULE_CN[s.mundaneIngressRule] || s.mundaneIngressRule) : null,
+    },
+  };
+}
+
 export function runMundaneCards(payload) {
   const source = payload && typeof payload === 'object' ? payload : {};
+  if (source.action === 'settings') {
+    return { tool: 'mundane_cards', data: { ok: true, ...settingsCheck(source.settings) } };
+  }
   const jobs = Array.isArray(source.jobs) ? source.jobs : [];
   const results = jobs.map((job, index) => {
     const j = job && typeof job === 'object' ? job : {};
@@ -67,7 +99,7 @@ export function runMundaneCards(payload) {
       };
     }
   });
-  return { tool: 'mundane_cards', data: { ok: results.every((r) => r.ok), jobs: results } };
+  return { tool: 'mundane_cards', data: { ok: results.every((r) => r.ok), jobs: results, meta: settingsCheck(source.settings).meta } };
 }
 
 export default runMundaneCards;

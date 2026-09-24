@@ -1144,6 +1144,29 @@ class FakeJsClient(HorosaJsEngineClient):
             if technique in _PROGEXTRA_FAKE:
                 return {"tool": "progextra", "technique": technique, "data": {"ok": True}, "snapshot_text": _PROGEXTRA_FAKE[technique]}
             return {"tool": "progextra", "technique": technique, "data": {"ok": False}, "snapshot_text": ""}
+        if tool_name == "acg_section":
+            # 形状同真工具 tools/acgSection.js（vendored acgSnapshot.buildAcgSectionText）；正文 = 真 builder 在本桩
+            # /location/acg 两星数据上的逐字输出（值级真相由 tests/test_sync311_western.py 的真 JS 用例守）。
+            planets = ((payload.get("acgData") or {}).get("planets") or {})
+            if not planets:
+                return {"text": ""}
+            return {"text": (
+                "【占星地图】\n口径 本体(in-mundo·真黄纬) · 坐标系 地心\n主要行星角化线(中天/天底=经线;上升/下降取赤道附近代表点):\n"
+                "- 太阳:MC 120.50°E / IC 59.50°W / ASC — / DSC —\n- 月亮:MC 30.00°E / IC 150.00°W / ASC — / DSC —"
+            )}
+        if tool_name == "horary" and payload.get("action") == "backend_fields":
+            # 形状同真工具 tools/horary.js action=backend_fields；值 = 上游 horarySchools.js classical 档经
+            # horaryBackendFields（hsys 2 Regiomontanus / 托勒密界经典传本 / 七政 / 福点不反转 / Ptolemy 三分集）。
+            return {"tool": "horary", "school": "classical", "data": {
+                "ok": True, "school": "classical", "backend_overrides": [],
+                "backendFields": {"hsys": 2, "termsVariant": 2, "tradition": 1, "lotReversal": 0, "triplicity": "Ptolemaic"},
+            }}
+        if tool_name == "election" and payload.get("action") == "resolve_params":
+            # 形状同真工具 tools/election.js action=resolve_params（现代主流档：宫制不联动 schoolHsys=None）。
+            return {"tool": "election", "data": {
+                "ok": True, "effective": {"pdTimeKey": "Ptolemy"}, "school": payload.get("school") or "modern_main",
+                "schoolHsys": None, "params_applied": [], "params_global": [], "params_ignored": [], "invalid_inputs": [],
+            }}
         if tool_name == "horary":
             return {
                 "tool": "horary",
@@ -1321,7 +1344,9 @@ class FakeJsClient(HorosaJsEngineClient):
                     "ok": True,
                     "cards": [{"title": t, "text": f"[{t}]\n{t}：离线桩判读行（逐字真值由 selfcheck 金标守）"} for t in titles],
                 })
-            return {"tool": "mundane_cards", "data": {"ok": True, "jobs": jobs_out}}
+            # meta 与真工具同形（tools/mundaneCards.js settingsCheck：rulesetConfig 缺省 modern 的查名）。
+            meta = {"ruleset": "modern", "rulesetLabel": "现代(Carter–Campion)", "orbSchemeLabel": None, "ingressRuleLabel": None}
+            return {"tool": "mundane_cards", "data": {"ok": True, "jobs": jobs_out, "meta": meta}}
         raise AssertionError(f"Unexpected local tool: {tool_name}")
 
 

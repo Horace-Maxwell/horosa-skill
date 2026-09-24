@@ -70,6 +70,8 @@ CLASS = {
                                                    "knowledge_registry", "knowledge_read"},
     # 本地数据检索：不算盘，只读本地库/注册表。
     "local_data": {"astrodata", "export_registry", "export_parse", "knowledge_registry", "knowledge_read"},
+    # 后端算、JS 只排版：runner 同时有端点与 JS 调用时启发式会误判 headless_js，这里显式点名。
+    "python_chart_backend": {"acg"},
 }
 NOTES = {
     "ken_backed": "ken 后端算、JS 只格式化；健康结果带 pan.source/jinkou.source == 引擎名，runner 必须调 _require_ken_pan",
@@ -85,6 +87,7 @@ NOTES = {
 }
 # 逐工具说明（覆盖族级 NOTES）。
 NOTE_OVERRIDES = {
+    "acg": "chart 服务 /location/acg*（ACGraph）算行星线、落点与世运事件；vendored JS acgSnapshot 只排 [占星地图] 段",
     "bazi_inverse": "Java BaZiHelper.getBirthes 逐年回推；Python 只校验四柱干支、转发与排版",
     "guolao_chart": (
         "盘面 /chart（Python chart 服务）+ 政余格局/庙旺 headless JS + [虚实]/[本命化曜]/[流年流曜] 走 Java "

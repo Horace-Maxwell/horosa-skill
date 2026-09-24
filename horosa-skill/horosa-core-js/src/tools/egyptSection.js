@@ -1,6 +1,6 @@
 import { SIGNS } from '../vendor/divination/data/signs.js';
 import { TAROT_SUIT_CN, TAROT_SUIT_ELEMENT, SOTHIC_CYCLE_YEARS } from '../vendor/divination/data/egyptianData.js';
-import { deriveEgyptView } from '../vendor/divination/data/egyptianSchools.js';
+import { deriveEgyptView, egyptSchoolFromFields, EGYPT_SCHOOL_AXES, EGYPT_RECORD_KEY_PREFIX } from '../vendor/divination/data/egyptianSchools.js';
 
 /**
  * [埃及历] 一段：各点落旬 / 上升旬详情 / 埃及民用历 + Sothic 周期。
@@ -64,13 +64,33 @@ export function buildEgyptSectionLines(chartObj, school){
 	return lines;
 }
 
+// 七轴值域锚定引擎表 EGYPT_SCHOOL_AXES（上游 normalizeEgyptSchool 会把认不出的值静默回默认档；headless 调用方传错要说出来）。
+function invalidEgyptFields(fields) {
+  const out = [];
+  EGYPT_SCHOOL_AXES.forEach((ax) => {
+    const f = fields && fields[EGYPT_RECORD_KEY_PREFIX + ax.key];
+    if (!f || f.value === undefined || f.value === null || f.value === '') return;
+    const allowed = ax.options.map((o) => o.value);
+    const v = ax.key === 'petosirisMod' ? Number(f.value) : f.value;
+    if (allowed.indexOf(v) < 0) out.push({ key: EGYPT_RECORD_KEY_PREFIX + ax.key, value: f.value, allowed });
+  });
+  return out;
+}
+
 export function runEgyptSection(payload) {
   const source = payload || {};
   const chart = source.chart && typeof source.chart === 'object' ? source.chart : null;
   if (!chart) {
     return { text: '' };
   }
-  const lines = buildEgyptSectionLines(chart, source.school) || [];
+  // 流派口径：上游 buildAstroSnapshotContent:1733 `egyptSchoolFromFields(fields) || currentEgyptSchool()`——随盘键优先，
+  // 缺键回全局（headless 无全局偏好 = 默认档）。
+  const invalid = invalidEgyptFields(source.fields);
+  if (invalid.length) {
+    return { text: '', error: 'invalid_setting', invalid };
+  }
+  const school = source.school || egyptSchoolFromFields(source.fields) || undefined;
+  const lines = buildEgyptSectionLines(chart, school) || [];
   if (!lines.length) {
     return { text: '' };
   }

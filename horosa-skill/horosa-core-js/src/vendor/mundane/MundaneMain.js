@@ -79,8 +79,8 @@ const ELEMENT_SHORT = { fire: '火', earth: '土', air: '风', water: '水' };
 const MODALITY_CN = { cardinal: '基本', fixed: '固定', mutable: '变动' };
 const SEASON_INGRESS_CN = { aries: '春分·白羊', cancer: '夏至·巨蟹', libra: '秋分·天秤', capricorn: '冬至·摩羯' };
 // [Q-150/T-60] 两个页面级覆盖的中文名(左栏下拉与 AI 快照同源,改文案只改这一处)。
-const MUNDANE_ORB_SCHEME_CN = { moiety: '受冲容许 ≤2°(古典收紧)', by_aspect: '按相位(现代 ≤3°)' };
-const MUNDANE_INGRESS_RULE_CN = { quarterly: '季度制(按四轴模式递归)', aries_annual: '全年制(白羊盘主全年)', capricorn_year: '摩羯优先(冬至为年首)' };
+export const MUNDANE_ORB_SCHEME_CN = { moiety: '受冲容许 ≤2°(古典收紧)', by_aspect: '按相位(现代 ≤3°)' };
+export const MUNDANE_INGRESS_RULE_CN = { quarterly: '季度制(按四轴模式递归)', aries_annual: '全年制(白羊盘主全年)', capricorn_year: '摩羯优先(冬至为年首)' };
 
 // 复用 App 自带的占星字体 glyph（AstroFont），不用 unicode 符号。
 const PLANET_ASTRO_ID = { sun: 'Sun', moon: 'Moon', mercury: 'Mercury', venus: 'Venus', mars: 'Mars', jupiter: 'Jupiter', saturn: 'Saturn', uranus: 'Uranus', neptune: 'Neptune', pluto: 'Pluto' };

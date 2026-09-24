@@ -40,6 +40,7 @@ import { personBazi } from '../src/vendor/calendar/riziEngine.js';
 import { runZeriScan, ZERI_TECHNIQUES } from '../src/tools/zeriScan.js';
 import { runMundaneCards } from '../src/tools/mundaneCards.js';
 import { zeriRowOpts, withLeafKind } from '../src/tools/zeriSnapshotOpts.js';
+import { runAcgSection } from '../src/tools/acgSection.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const chart = JSON.parse(readFileSync(join(HERE, 'fixtures', 'chart_traditional.json'), 'utf8'));
@@ -1040,6 +1041,47 @@ check('election [回归与主限] 值级金标：回归盘利钝 + 主限命中�
   // 有效主限时间钥匙由引擎解析器给（流派档 × 覆写），Python 不手抄。
   assert(runElectionTool({ chart, action: 'resolve_params', options: { pdTimeKey: 'Naibod' } }).data.effective.pdTimeKey === 'Naibod', 'override pdTimeKey');
   assert(runElectionTool({ chart, action: 'resolve_params' }).data.effective.pdTimeKey === 'Ptolemy', 'default pdTimeKey');
+});
+
+// [占星地图]（上游 utils/acgSnapshot.js 逐字 vendored）：数字全来自后端 ACGraph 响应，builder 只做取点/去重/格式化。
+// 期望值按上游规则手推（acgSnapshot.js）：fmtLon 东经正 → MC 120.5 = 120.50°E、IC −59.5 = 59.50°W；ascAnchor 取 |纬| 最小点
+// （lat −2 那点，lon 48.25）；交映 lum 档滤掉无日月的对（火–木），Math.round(42.5)=43 与 Math.round(42.9)=43 同纬线去重只留首条
+// → 共 1 条；口径头行读 meta（topo=站心、draconic 'true'=真交点、harmonic 5）；uiState 缺省（无图层）时不出 ◆ 子块。
+check('acgSection 值级金标：角化线取点 + 交映去重 + 口径头行（vendored buildAcgSectionText）', () => {
+  const acgData = {
+    meta: { mode: 'mundo', coord: 'topo', draconic: 'true', harmonic: 5, lsMode: 'great' },
+    planets: {
+      Sun: { lines: { mc: { lon: 120.5 }, ic: { lon: -59.5 }, lsAz: { az: 247.2, alt: 6.9 },
+        asc: [{ lat: 10, lon: 50 }, { lat: -2, lon: 48.25 }, { lat: 30, lon: 60 }], desc: [] } },
+      Moon: { lines: { mc: { lon: 30 }, ic: { lon: -150 }, asc: [], desc: [] }, oob: true },
+    },
+    parans: [
+      { lat: 42.5, a: 'Sun', aEvent: 'mc', b: 'Moon', bEvent: 'rise' },
+      { lat: 42.9, a: 'Moon', aEvent: 'set', b: 'Sun', bEvent: 'ic' },
+      { lat: -12.25, a: 'Mars', aEvent: 'rise', b: 'Jupiter', bEvent: 'mc' },
+    ],
+  };
+  const lines = runAcgSection({ acgData, uiState: { paranMode: 'lum', showLS: true } }).text.split('\n');
+  assert(JSON.stringify(lines) === JSON.stringify([
+    '【占星地图】',
+    '口径 本体(in-mundo·真黄纬) · 坐标系 站心 · 龙黄道 真交点 · 谐波 H5',
+    '主要行星角化线(中天/天底=经线;上升/下降取赤道附近代表点):',
+    '- 太阳:MC 120.50°E / IC 59.50°W / ASC 48.25°E / DSC —',
+    '- 月亮:MC 30.00°E / IC 150.00°W / ASC — / DSC — · 超界OOB',
+    '◆ 本地空间线(画法 大圆;自出生地沿各星罗盘方位角延伸,方位角=正北起顺时针,高度角=出生时刻该星地平高度):',
+    '| 星 | 方位角 | 高度角 |',
+    '| --- | --- | --- |',
+    '| 太阳 | 247.2° | 6.9° |',
+    '◆ 行星交映(仅日月对,同图 1° 去重,共 1 条纬线):',
+    '| 星A | 事件 | 星B | 事件 | 纬度 |',
+    '| --- | --- | --- | --- | --- |',
+    '| 太阳 | 中天 | 月亮 | 升 | 42.50°N |',
+  ]), `acg lines: ${JSON.stringify(lines)}`);
+  // 全部行星对：火–木那条纬线（−12.25 → 12.25°S）也进，共 2 条。
+  const all = runAcgSection({ acgData, uiState: { paranMode: 'all' } }).text;
+  assert(all.includes('共 2 条纬线') && all.includes('| 火星 | 升 | 木星 | 中天 | 12.25°S |'), `paran all: ${all}`);
+  // 模块级「最近一次地图状态」每次调用前后清空：无 planets 的响应不许串出上一张图。
+  assert(runAcgSection({ acgData: { meta: {} } }).text === '', 'stale acg snapshot leaked across calls');
 });
 
 await Promise.all(pending);

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from horosa_skill.astro_rulers import HOUSE_SYSTEM_LABELS
 
 
 class FlexibleModel(BaseModel):
@@ -34,7 +36,16 @@ class BirthInput(FlexibleModel):
         default=None,
         description="响应精简视图：缺省=完整；'sections'=段标题+正文；'titles'=只留段标题索引（完整结果已存档，memory_show 可取回）。",
     )
-    hsys: int | None = Field(default=0, description="宫制索引（上游 perchart 表）：0=整宫 Whole Sign（默认）、1=Alcabitus、2=Regiomontanus、3=Placidus、4=Koch、5=Vehlow Equal、6=Polich Page、7=Sripati、8=天顶为10宫中点等宫制。注意 1 不是 Placidus（Placidus=3）。")
+    # 全表 0–24 由 astro_rulers.HOUSE_SYSTEM_LABELS（上游 AstroConst.HOUSE_SYSTEM_OPTIONS 镜像）生成——校验层描述，
+    # 不进 tools/list（广告层 hsys 走 mcp_schema.CORE_DOC + 0–8 enum，预算所限）。
+    hsys: int | None = Field(
+        default=0,
+        description=(
+            "宫制索引 0–24（上游 AstroConst.HOUSE_SYSTEM_OPTIONS）："
+            + " ".join(f"{k}={v}" for k, v in HOUSE_SYSTEM_LABELS.items())
+            + "。缺省 0=整宫 Whole Sign（上游页面缺省 1 Alcabitus）。注意 1 不是 Placidus（Placidus=3）。"
+        ),
+    )
     # 地点显示名：进 [起盘信息]/配置段与搜索请求（样例载荷一直带它，此前 MCP 扁平面静默丢弃）。
     pos: str | None = None
     # 当事人显示名：随请求透传到后端并进盘头（样例载荷一直带它，此前 MCP 扁平面静默丢弃）。
@@ -124,6 +135,21 @@ class BirthInput(FlexibleModel):
     customTermsNight: Any | None = Field(default=None, description="自定义界表·夜表（可缺=昼夜同表）。")
     userAyanT0: float | None = Field(default=None, description="自定义恒星黄道参考历元 JD（siderealAyanamsa='user' 配套）。")
     userAyanDeg: float | None = Field(default=None, description="自定义恒星黄道在 T0 历元的岁差度（'user' 配套）。")
+    # 快照口径键（send:'never'——不进 /chart，只改导出段；BirthInput 字段不进 tools/list 广告层）：
+    # [古典·显赫计分] 主宰光体判定四键（classicalParamSpec.js）+ [信息]/[古典格局] 互容接纳过滤 + [埃及历] 七轴（egypt_*）。
+    busyPlaces: str | None = Field(default=None, description="有利宫位集：'1,4,5,7,10,11'（缺省）| '1,4,7,10' | '1,2,4,5,7,9,10,11' | '1,3,4,5,7,9,10,11'。")
+    dynamicalDivisions: Any | None = Field(default=None, description="动力学区分（象限强度分区）：0（缺省）/1。")
+    domicileMasterMethod: str | None = Field(default=None, description="主宰主星判法：domicile 庙主派（缺省）| bound 界主派。")
+    rayWeighting: str | None = Field(default=None, description="七射线权重：off（缺省）| equal | weighted。")
+    showOnlyRulExaltReception: Any | None = Field(default=None, description="仅按本垣/擢升计算互容接纳（[信息] 接纳互容行与 [古典格局] 格局速览·先验权力同口径）：0（缺省）/1。")
+    # 埃及历七轴取值 = egyptianSchools.EGYPT_SCHOOL_AXES（首项默认档；认不出的值报 tool.egypt_invalid_setting）。
+    egypt_decanRuler: str | None = Field(default=None, description="埃及历·旬主星制：chaldean 迦勒底外貌（缺省）| triplicity 三分性旬星。")
+    egypt_decanAnchor: str | None = Field(default=None, description="埃及历·旬序锚定：greek 希腊化回归（缺省）| ancient 古代恒星。")
+    egypt_decanNaming: str | None = Field(default=None, description="埃及历·旬名录传统：egypt 埃及本名（缺省）| coptic 科普特-希腊名 | hermes 赫尔墨斯名。")
+    egypt_starClock: str | None = Field(default=None, description="埃及历·星钟法：diagonal 对角星钟·升起法（缺省）| transit 过中天星钟。")
+    egypt_calendarAnchor: str | None = Field(default=None, description="埃及历·历法锚点：ce139 公元 139 年重合点（缺省）| nabonassar 那波那萨尔纪元 | philip 腓力纪元。")
+    egypt_petosirisMod: int | None = Field(default=None, description="埃及历·Petosiris 模数：29（缺省）| 30。")
+    egypt_godEdition: str | None = Field(default=None, description="埃及历·众神版本：seamless 无缺口自洽版（缺省）| variant 通行变体。")
     gpsLat: float | None = None
     gpsLon: float | None = None
     includePrimaryDirection: bool | None = None
@@ -173,6 +199,28 @@ class IndiaChartInput(BirthInput):
         default=None,
         description="Tripataki 三旗盘（opt-in，后端多建 12 盘约 0.3–0.8s）：true 时产 [Tripataki 三旗盘逐月净分] 段（月心/土心逐月净分）。",
     )
+    # 上游印度盘页 / 挂载齿轮（techniqueMountSettings.js:1000-1051 → IndiaChart.fieldsToParams :79-143）的其余口径：
+    # 照常声明（校验 + MCP 扁平面收顶层键），不进 tools/list 广告层（预算）；值域词表见 agent_guidance。
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({
+        "dashaSystem", "indiaSchool", "dashaSeed", "sthiraStart", "transitDate", "tajakaYear", "annualChartType",
+        "varshaLat", "varshaLon", "prashnaTime", "prashnaNumber", "prashnaMatter", "prashnaSchools",
+        "prashnaCuspMode", "prashnaPrimaryHouse",
+    })
+    dashaSystem: str | None = Field(default=None, description="大运体系（15 档，缺省 vimshottari）：决定 [大运Dasha] 段所列体系。")
+    indiaSchool: str | None = Field(default=None, description="流派：parashari（缺省）/jaimini/tajika/kp/nadi/western_sidereal；未给岁差/宫制时按派补预设。")
+    dashaSeed: str | None = Field(default=None, description="大运起点：moon（缺省）/七政/节点/上升/特殊上升/副星。")
+    sthiraStart: str | None = Field(default=None, description="Sthira 座运起座：lagna（缺省）| brahma。")
+    transitDate: str | None = Field(default=None, description="过运日期 YYYY/MM/DD（缺省今日）。")
+    tajakaYear: int | None = Field(default=None, description="年度盘年份（缺省当前年）。")
+    annualChartType: str | None = Field(default=None, description="年盘口径：varsha（缺省）| tithi。")
+    varshaLat: Any | None = Field(default=None, description="年盘异地纬度（须与 varshaLon 同给）。")
+    varshaLon: Any | None = Field(default=None, description="年盘异地经度（须与 varshaLat 同给）。")
+    prashnaTime: str | None = Field(default=None, description="问事起卦时刻 YYYY/MM/DD HH:mm:ss（给了才产 [问事 Praśna]）。")
+    prashnaNumber: int | None = Field(default=None, description="KP 问时数 1–249（缺省 1）。")
+    prashnaMatter: str | None = Field(default=None, description="所问事项（career/marriage/…）。")
+    prashnaSchools: Any | None = Field(default=None, description="问事流派（缺省 ['kp']）。")
+    prashnaCuspMode: str | None = Field(default=None, description="问事宫始定法（缺省 asc_driven_placidus）。")
+    prashnaPrimaryHouse: int | None = Field(default=None, description="问事主宫 1–12（缺省按事项）。")
 
 
 class PlanetCyclesInput(FlexibleModel):
@@ -772,8 +820,16 @@ class CanPingInput(FlexibleModel):
 
 
 class GuoLaoInput(BirthInput):
+    # 七政起盘口径长尾键：照常声明（校验 + MCP 扁平面收顶层），不进 tools/list 广告层（词表见 agent_guidance）。
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({
+        "guolaoNodeMode", "guolaoTrueSolarTime", "guolaoNodeType", "guolaoLilithType",
+        "guolaoAyanamsa", "guolaoTuibianMethod", "guolaoGufaPrecess", "guolaoEqTropicalAnchor",
+    })
+    # 宿度制（上游 GuoLaoChartStyle.js:10 缺省 2 回归今宿；值域 guolaoData.SU28_MODE_LABEL 0–8）。BirthInput 那个是 bool
+    # （宿占用），这里放宽成 int —— 2–8 此前被 pydantic 拒；旧 true/false 照后端 parseSu28Mode 解释为 1/0。
+    doubingSu28: int | bool | None = Field(default=None, description="宿度制 0–8（缺省 2 回归今宿；4 恒星制；全表见 guidance）。")
     # 七政四余（v0.36.0 C1）：Java /qizheng/moira 规则层入参 + 流年盘时刻。缺省与上游 UI 默认一致。
-    guolaoLifeMode: str | None = Field(default=None, description="七政命度取法：asc（上升，默认）| yumao（余毛）| cotrans（同躔）。")
+    guolaoLifeMode: str | None = Field(default=None, description="命度法：asc 上升（缺省）| yumao 日出 | gumao 遇卯 | cotrans 赤黄 | 子–亥自定。")
     guolaoBodyMode: str | None = Field(default=None, description="身宫法：taiyin（太阴落宫，默认）| youjin（逢酉·琴堂）| 指定地支。")
     moiraTransitDate: str | None = Field(default=None, description="流年盘日期 YYYY-MM-DD（[流年流曜] 段的流年时刻；缺省=今天）。")
     moiraTransitTime: str | None = Field(default=None, description="流年盘时间 HH:mm:ss（缺省 12:00:00）。")
@@ -784,6 +840,15 @@ class GuoLaoInput(BirthInput):
     guolaoMinorLimitType: str | None = Field(default=None, description="行运法：''=古度限度法（缺省）| minor=小限 | month=月限 | tong=童限 | dongwei=洞微大限。改 [大限] 所附行运法结构与 [限法实算] 的实算行。")
     guolaoTongxianBase: str | None = Field(default=None, description="童限基数（行运法=tong 时生效）：tong10=通行十年（缺省）| gu9=古九岁 | xu11=虚十一。")
     guolaoLimitChildBase: int | None = Field(default=None, description="定童限：9=九年起（缺省）| 10=十年起。改 [大限] 首限年数与各限起讫岁、[限法实算] 的童限/限度。")
+    # 起盘口径（上游页面左栏 / 挂载齿轮 techniqueMountSettings.js:1123-1181；缺省 = GuoLaoChartStyle.js getStored* 缺省）。
+    guolaoNodeMode: str | None = Field(default=None, description="罗计命名：northKetuSouthRahu 北计南罗（缺省）| northRahuSouthKetu 北罗南计（整盘换位）。")
+    guolaoTrueSolarTime: str | None = Field(default=None, description="报时星太阳时：true 真太阳时（缺省）| mean 平太阳时 | off 钟表时。")
+    guolaoNodeType: str | None = Field(default=None, description="罗计取法：mean 平交点（缺省）| true 真交点。")
+    guolaoLilithType: str | None = Field(default=None, description="月孛取法：mean 平远地点（缺省）| true 真远地点。")
+    guolaoAyanamsa: str | None = Field(default=None, description="恒星制岁差（仅宿度制 4）：47 制键，缺省郑氏。")
+    guolaoTuibianMethod: str | None = Field(default=None, description="推变黄道术（仅宿度制 6）：jiyuan 纪元（缺省）| jintui 进退 | huiyuan 会圆。")
+    guolaoGufaPrecess: int | bool | None = Field(default=None, description="古宿随岁差（仅宿度制 6）：0 钉死元时（缺省）| 1 东移。")
+    guolaoEqTropicalAnchor: str | None = Field(default=None, description="赤道回归锚点（仅宿度制 7/8）：dongzhi 牛前冬至（缺省）| chunfen 春分。")
 
 
 class HeLuoInput(FlexibleModel):
@@ -1041,7 +1106,7 @@ class ACGInput(BirthInput):
     clickLat: float | None = Field(default=None, description="落点纬度（十进制；给了 clickLat+clickLon 才产 [落点分析] 段：该地命中线/重置四角/敏感点）")
     clickLon: float | None = Field(default=None, description="落点经度（十进制，西经为负）")
     pointOrb: float | None = Field(default=None, description="落点命中容许度（度，缺省 2.0）")
-    pointHsys: str | None = Field(default=None, description="落点重置盘分宫制（缺省 whole）")
+    pointHsys: str | None = Field(default=None, description="落点/宫尖线宫制（缺省 placidus）")
     # 事件时刻（/location/acgevent）：给 eventKind 时加产 [事件时刻] 段（CCG 事件线时刻）。
     eventKind: str | None = Field(
         default=None,
@@ -1052,6 +1117,42 @@ class ACGInput(BirthInput):
     )
     eventDirection: str | None = Field(default=None, description="事件查找方向：next（缺省）|prev")
     eventFromDate: str | None = Field(default=None, description="事件查找起点日期 YYYY-MM-DD（缺省取盘面日期）")
+    # 上游 AstroAcg.genParams（AstroAcg.js:348-372）的其余引擎口径 + CCG + 关系盘 + 快照图层：照常声明（校验 + MCP
+    # 扁平面收顶层键），不进 tools/list 广告层（预算）；值域见 agent_guidance，后端认不出的值经 meta 回显比对后告警。
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({
+        "geodeticZero", "cuspLines", "coord", "posType", "horizon", "nodeType", "lilithType", "draconic", "harmonic",
+        "vibration", "midpointMode", "lotsCustom", "asteroids", "ayanamsa", "stars", "ccgDate", "ccgTime", "ccgMix",
+        "relMode", "relDate", "relTime", "relZone", "relLat", "relLon", "paranMode", "showLS", "showGeodetic",
+        "showStarParans",
+    })
+    geodeticZero: float | None = Field(default=None, description="地理等价 0°♈ 子午线（东经度；缺省流派默认）。")
+    cuspLines: bool | None = Field(default=None, description="十二宫尖线（opt-in，按 pointHsys 宫制）。")
+    coord: str | None = Field(default=None, description="坐标系：geo（缺省）| helio | topo。")
+    posType: str | None = Field(default=None, description="位置类型：apparent（缺省）| true | j2000。")
+    horizon: str | None = Field(default=None, description="地平：geometric（缺省）| apparent（折射）。")
+    nodeType: str | None = Field(default=None, description="交点：mean（缺省）| true。")
+    lilithType: str | None = Field(default=None, description="Lilith：mean（缺省）| true | intp | body。")
+    draconic: str | None = Field(default=None, description="龙黄道：off（缺省）| mean | true。")
+    harmonic: int | None = Field(default=None, description="谐波 H（1=关，缺省）。")
+    vibration: bool | None = Field(default=None, description="Cochrane 5/7/9 振动线。")
+    midpointMode: str | None = Field(default=None, description="中点线：zodiac（缺省）| mundo。")
+    lotsCustom: str | None = Field(default=None, description="自定义阿拉伯点 'A,B,C[,sect]'。")
+    asteroids: bool | None = Field(default=None, description="含小行星（Ceres/Pallas/Juno/Vesta/Eris）。")
+    ayanamsa: str | None = Field(default=None, description="恒星黄道读数（47 制键；缺省回归）。")
+    stars: bool | None = Field(default=None, description="固定星线（opt-in）。")
+    ccgDate: str | None = Field(default=None, description="CCG 时间地图日期 YYYY-MM-DD（给了才画）。")
+    ccgTime: str | None = Field(default=None, description="CCG 时刻（缺省 12:00:00）。")
+    ccgMix: str | None = Field(default=None, description="CCG 口径：mixed（缺省）| transit | progressed。")
+    relMode: str | None = Field(default=None, description="关系盘：davison | composite | synastry（须配 relDate）。")
+    relDate: str | None = Field(default=None, description="B 盘出生日期 YYYY-MM-DD。")
+    relTime: str | None = Field(default=None, description="B 盘出生时间（缺省 12:00:00）。")
+    relZone: str | None = Field(default=None, description="B 盘时区（缺省随 A 盘）。")
+    relLat: str | None = Field(default=None, description="B 盘纬度（缺省同 A 地）。")
+    relLon: str | None = Field(default=None, description="B 盘经度（缺省同 A 地）。")
+    paranMode: str | None = Field(default=None, description="快照交映子块：off（缺省）| lum | all。")
+    showLS: bool | None = Field(default=None, description="快照含本地空间线子块。")
+    showGeodetic: bool | None = Field(default=None, description="快照含地理等价线子块。")
+    showStarParans: bool | None = Field(default=None, description="快照含固定星交映（须 stars）。")
 
 
 class BaziInverseInput(FlexibleModel):
@@ -1150,6 +1251,21 @@ class SuZhanInput(BirthInput):
 
 class GermanyInput(BirthInput):
     predictive: bool | None = False
+    # 汉堡中点盘口径（上游挂载齿轮 techniqueMountSettings.js:1213-1238 → AstroMidpoint.js:301-307 下发 /germany/midpoint；
+    # 后端 webgermanysrv.midpoint 读这些键）。此前未声明：CLI 经 extra 透传得到，MCP 扁平面却静默丢弃、流派写错也不报。
+    # 照常声明（校验 + MCP 扁平面收顶层键），不进 tools/list 广告层（预算）；说明见 agent_guidance options_keys。
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset(
+        {"school", "orb", "personalOrb", "strictFactors", "frames", "declination", "davison"}
+    )
+    school: Literal["classic", "pure", "uranian", "cosmo"] | None = Field(
+        default=None, description="汉堡流派：classic 原始汉堡（缺省）| pure 纯净派 | uranian 美国对称 | cosmo 宇宙生物学（不用虚星，缺省容许度 1.5°）。"
+    )
+    orb: float | None = Field(default=None, gt=0, le=10, description="中点容许度（°；缺省 1，cosmo 缺省 1.5）。")
+    personalOrb: float | None = Field(default=None, gt=0, le=10, description="个人点（Basic Five）容许度（°）；缺省不分叉。")
+    strictFactors: bool | None = Field(default=None, description="严格汉堡因子集：true 剔黑月/紫气（缺省 false）。")
+    frames: bool | None = Field(default=None, description="六宫框（[六宫框落宫] 段）：缺省 true。")
+    declination: bool | None = Field(default=None, description="赤纬平行/反平行接触：缺省 true。")
+    davison: dict[str, Any] | None = Field(default=None, description="戴维森盘第二人 {date,time,zone,lat,lon[,ad]}：产 [戴维森盘] 段。")
     # 上游 v3.11 [Q-442/T-405]「校时」页签（只读预览）：待校事件 → 太阳弧（Naibod）推进 MC/Asc 看是否触动本命因子。
     rectifyEvents: list[dict[str, Any]] | None = Field(
         default=None,
@@ -1173,10 +1289,14 @@ class BabylonInput(BirthInput):
     predictive: bool | None = False
     scheme: str | None = Field(default=None, description="实位派系：swissA10（默认）/ systemA / systemB。")
     solstice: str | None = Field(default=None, description="分至规范：A10（春分白羊 10°）/ B8（春分白羊 8°）；缺省跟派系档。")
-    # era 已删：整棵 vendored 巴比伦树无人消费它（只是 BABYLON_SCHEMES 档内的元数据字段），
-    # 传了永远无效果。真正的判读参数是下面两个，此前一个都没接。
+    # 真正的判读参数（此前一个都没接）：
     dodecaVariant: str | None = Field(default=None, description="十二分变体：A（加于宫起点）/ B（加于点本身·楔文）；缺省跟派系档。")
     cubitDeg: float | None = Field(default=None, description="肘度（1 cubit 折合黄经度数），缺省跟派系档（2.2）。")
+    # v3.11：era 进 [起盘信息] 纪元行（babylonAiSnapshot.js:219-221）；ephemerisSource 选 [数理星历] 木星阶梯/锯齿函数（:120）。
+    # 不进 tools/list 广告层（预算），词表见 agent_guidance。
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({"era", "ephemerisSource"})
+    era: str | None = Field(default=None, description="纪元显示：seleucid 塞琉古 S.E.（缺省）| arsacid 安息（= S.E.−64）。")
+    ephemerisSource: str | None = Field(default=None, description="数理星历位置源：swiss（缺省）| systemA 阶梯 | systemB 锯齿（木星）；缺省跟派系档。")
 
 
 class DraconicInput(BirthInput):
@@ -1313,27 +1433,43 @@ class ExtraReturnsInput(BirthInput):
 
 
 class HoraryInput(BirthInput):
+    # 长尾旋钮：照常声明（校验 + MCP 扁平面收顶层键），不进 tools/list 广告层（mcp_schema.advertise_hidden_fields）。
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset(
+        {"sincerityConfirmed", "confirmYouthMatch", "isEventChart", "questionText", "castingCamp"}
+    )
     # 卜卦 (horary): the chart is cast at the QUESTION moment (date/time/place = when the question was asked).
-    # category picks the quesited house: general/wealth/family/property/pregnancy/health/marriage/lawsuit/
-    # theft/death/travel/career/hope/enemy (unknown → general).
+    # category picks the quesited house — 引擎词表 CATEGORY_DEF 20 类（general/wealth/family/property/father/mother/
+    # pregnancy/health/marriage/lawsuit/theft/death/travel/career/hope/enemy/message/lost/lost_animal/trade；
+    # unknown → general）。全表与中文名见 agent_guidance。
     category: str | None = "general"
-    # 流派档（horarySchools.js 的 HORARY_SCHOOLS）：classical(默认) / renaissance / medieval …
-    # 它决定两段的有无——[偶然尊贵满分表] 只在 accidentalMode=='lilly' 出、[阿拉伯点全集] 只在
-    # lotsSet=='core15' 出，二者都是 renaissance/medieval 档的口径。结果敏感 → 缺省不静默切换。
-    school: str | None = Field(default=None, description="卜卦流派档：classical / renaissance / medieval（默认 classical）。")
-    tradition: bool | None = True
+    # 流派档（horarySchools.js HORARY_SCHOOLS 七档）：classical(默认)/renaissance/strict/sequence/hellenistic/medieval/modern。
+    # 流派同时决定**起盘字段**（上游 horaryBackendFields：宫制/界系/三分集/福点反转/星群，页面 HoraryMain.js:543）与判读口径。
+    school: str | None = Field(default=None, description="卜卦流派七档（缺省 classical；定宫制界系与判读，见 guidance）。")
+    # 星群随流派（modern=0 含三王星，其余 1）；显式给值压过流派。
+    tradition: bool | None = None
     predictive: bool | None = False
     # 卜卦七档参数谱（星阙 v3.6.0，界表勘误 + 判读叠层二期）。上游 horarySchools.js 的 HORARY_PARAM_SPEC
-    # 中 hsys/termsVariant/geminiBoundEmended/tradition 标 sendToBackend，其余在判读层生效。
-    hsys: Any | None = Field(default=None, description="卜卦盘分宫制（Regiomontanus 等，随流派档）。")
-    termsVariant: Any | None = Field(default=None, description="界(terms)表流派：埃及 / 托勒密。")
+    # 中 hsys/termsVariant/geminiBoundEmended/tradition 标 sendToBackend：缺省随流派档，显式给值压过流派
+    # （与上游高级面板 horaryOverrides 同语义，同时进起盘与判读）。
+    hsys: Any | None = Field(default=None, description="宫制：缺省随流派（经典=2 Regiomontanus/希腊化=0/中世纪=1/现代=3）；显式值优先。")
+    termsVariant: Any | None = Field(default=None, description="界系 0–3（缺省随流派，见 guidance）。")
     geminiBoundEmended: Any | None = Field(default=None, description="双子界表勘误开关（v3.6.0 修订）。")
     considerationsMode: Any | None = Field(
         default=None, description="定盘考量(considerations before judgment)硬度：warn / strict / lenient / ignore。"
     )
     lotsSet: Any | None = Field(default=None, description="阿拉伯点集：minimal（默认）/ core15。")
-    # 判读层参数覆写（HORARY_PARAM_SPEC 里 sendToBackend=false 的 46 键全可覆写，压过流派档）。
+    # 定盘自评（上游卜卦左栏三勾选，HoraryMain.js:487-497 → runHorary opts）：影响 [定盘考量] 第 18 条（无诚意）与
+    # 命度早晚 / 事件盘两条的「已救济」判定。问句与阵营进 [定盘考量] 段首两行（buildHorarySnapshot 第 3 参）。
+    sincerityConfirmed: bool | None = Field(default=None, description="问题真诚自评：缺省 true（上游缺省勾选）；false→定盘考量第18条命中。")
+    confirmYouthMatch: bool | None = Field(default=None, description="年轻体貌合上升（救济命度过早）：缺省 false。")
+    isEventChart: bool | None = Field(default=None, description="事件盘（客观时刻，救济命度过晚）：缺省 false。")
+    questionText: str | None = Field(default=None, description="所问之事原文（进 [定盘考量] 段）。")
+    castingCamp: str | None = Field(default=None, description="起盘阵营：astrologer（缺省）/querent/midpoint；时地须已按阵营给。")
+    # 判读层参数覆写（HORARY_PARAM_SPEC 全部键，压过流派档；sendToBackend 四键 + tripSystem 同时改起盘）。
     # 键名以引擎自带词表为准；不认识的键会原样回执在 data.params_ignored，不静默吞。
+    # 顶层全局古典键（cazimiOrb/combustOrb/underBeamsOrb/vocMode/vocIncludeOuter/viaCombustaVariant/partileDef/
+    # antisciaOrb/starOrb/starOrbMode/combustMitigateSameSign/antiscia）进判读**全局层**（流派绑定之下，上游
+    # judgeLayerOverrides 同口径）；顶层 triplicity/lotReversal 不作用于卜卦盘（流派绑定，另有告警）。
     # 🔴 receptionMode / almutenScheme 两个字段已删：引擎词表里**根本没有这两个名字**（近邻是
     # receptionForHardAspects / receptionPerfection / accidentalMode，语义并不等同）。
     # 它们是凭空发明的旋钮，声称了三个版本、一次都没生效过。
@@ -1343,17 +1479,24 @@ class HoraryInput(BirthInput):
 
 
 class ElectionInput(BirthInput):
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset(
+        {"tradeSide", "talismanStar", "surgeryPart", "surgeryPartOpposite", "crisisBase"}
+    )
     # 择日 (electional): the chart is cast at a CANDIDATE moment (date/time/place = the time being evaluated).
     # topicId picks the rule pack + hard flags: marriage/business/move_in/buy_property/trade/buy_car/contract/
-    # surgery/travel/job_hunt/... (see TOPIC_MASTER; unknown → marriage).
+    # surgery/travel/job_hunt/... (TOPIC_MASTER 37 类；unknown → marriage；全表见 agent_guidance).
     topicId: str | None = "marriage"
     tradition: bool | None = True
     predictive: bool | None = False
+    # 宫制：缺省随流派档联动（westernSchools.js hsys：hellenistic/modern_revival=0、persian=1、renaissance=2；
+    # modern_main 不联动 → 页面缺省 0）；显式给值压过流派。
+    hsys: int | None = Field(default=None, description="宫制：缺省随流派（hellenistic=0/persian=1/renaissance=2，现代主流=0）；显式值优先。")
     # 择日口径（星阙 v3.6.0）：流派轴 + 13 个判读层参数，全部取自上游 electionParams.js。
     # 🔴 此前这里挂着 dignityScheme / starSet / medicalCritical / hourRuler / returnCharts /
     # primaryDirections / natalCompare / mundaneCompare / lotsSet / considerationsMode 十个字段，
     # 与 ELECTION_PARAM_SPEC 的 13 键**零重合**，且 skill 与上游全树都无人消费 —— 注释一边引着
     # 正确出处、字段一边写着发明的名字，声称了三个版本一次都没生效。诚实起见整批删除。
+    # 顶层全局古典键（cazimiOrb/vocMode/partileDef/antisciaOrb/starOrb… 同卜卦）进判读**全局层**（流派口径之下）。
     school: Any | None = Field(
         default=None,
         description="择日流派档：modern_main（默认）/ hellenistic / persian / renaissance / modern_revival。",
@@ -1373,6 +1516,13 @@ class ElectionInput(BirthInput):
         default=None,
         description="本命出生资料 {date,time,zone,lat,lon[,ad]}：加产 [本命合参] 与 [回归与主限]（日/月返 + 主限命中）。",
     )
+    # 用事专属输入（上游左栏按用事显示的控件，ElectionMain.js:376-440 → runElection opts）：只在对应用事的规则包里
+    # 生效，给了却不作用会进 warnings。值域锚定引擎词表（认不出的报错）。
+    tradeSide: str | None = Field(default=None, description="买卖方向（trade）：sell=强己方 / buy=强货主方；缺省不指定。")
+    talismanStar: str | None = Field(default=None, description="护符主星（talisman）：sun/moon/mercury/venus/mars/jupiter/saturn。")
+    surgeryPart: str | None = Field(default=None, description="手术部位星座（surgery）：aries…pisces（按星座主管身体部位）。")
+    surgeryPartOpposite: bool | None = Field(default=None, description="部位禁忌延及对宫（surgery）；缺省不延。")
+    crisisBase: Any | None = Field(default=None, description="病始日期 YYYY-MM-DD（surgery/medication）：产 [危象日参照]。")
 
 
 class GeomancyInput(BirthInput):
@@ -1564,6 +1714,20 @@ class MundaneInput(FlexibleModel):
     solunarWeights: str | None = Field(default=None, description="恒星派权重方案（scheme_a 默认）。")
     solunarOrb: float | None = Field(default=None, description="角化容许度（默认 3°）。")
     vedicYear: int | None = Field(default=None, description="吠陀世运年份（缺省取 year）。")
+    # 世运口径（上游页面设置 MundaneMain.js:519-526 + 吠陀世运 :1330-1340）与入宫盘的黄道口径：照常声明（校验 + MCP 扁平面
+    # 收顶层键），不进 tools/list 广告层（预算）；值域见 agent_guidance。古典全局键（cazimiOrb…）经 request 整包透传进 /chart。
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({
+        "mundaneRuleset", "mundaneOrbScheme", "mundaneIngressRule", "vedicDashaYearLen", "vedicFoundingYear",
+        "vedicNatalAsc", "zodiacal", "siderealAyanamsa",
+    })
+    mundaneRuleset: str | None = Field(default=None, description="规则集：ptolemaic / medieval / modern（缺省）/ barbault。")
+    mundaneOrbScheme: str | None = Field(default=None, description="受冲容许度覆盖：auto（缺省随规则集）/ moiety / by_aspect。")
+    mundaneIngressRule: str | None = Field(default=None, description="入境主管制覆盖：auto（缺省）/ quarterly / aries_annual / capricorn_year。")
+    vedicDashaYearLen: float | None = Field(default=None, description="世运大运年长：365.2425（缺省）/ 360。")
+    vedicFoundingYear: int | None = Field(default=None, description="建国年（Muntha 敏感点用，须配 vedicNatalAsc）。")
+    vedicNatalAsc: str | None = Field(default=None, description="建国盘上升星座键（aries…pisces）。")
+    zodiacal: int | None = Field(default=None, description="黄道：0 回归（缺省）/ 1 恒星（配 siderealAyanamsa）。")
+    siderealAyanamsa: str | None = Field(default=None, description="恒星黄道岁差制（zodiacal=1 时）。")
 
 
 class OtherBuInput(BirthInput):

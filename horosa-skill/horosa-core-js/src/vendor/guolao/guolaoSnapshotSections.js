@@ -4,11 +4,93 @@
 //   · buildGuolaoMastersSection —— [三主与化曜]（v3.11.0 [Q-435]）
 //   · buildGuolaoLimitCalcSection —— [限法实算]（v3.11.0 [Q-435]）
 //   · buildGuolaoLimitSection —— [大限]（GFM 表 + 所选行运法结构；[Q-188/T-125] 年界 / 定童限）
+//   · buildGuolaoSetupLines —— [起盘信息] 口径六行（七政命度 / 罗计 / 报时星太阳时 / 罗计取法·月孛取法 /
+//     宿度制·身宫法 / 命主取法·行运法；_buildGuolaoSnapshotTextV2Core:2047-2073 的内联行收成函数，行文逐字）
+//     及其查名助手 guolaoLifeModeName / guolaoNodeModeName / guolaoSu28ModeFromFields / guolaoFieldValue（逐字）。
 // 上游该文件 4350 行，其余是 React 组件与取数编排；政余格局闭包另在 guolaoMoira.js（同源不同段）。
 // 只有下方 import 按 vendor 树改了路径（上游 import 名：moiraLifeDegree as lifeDegree 等，逐字保留别名）。
 import * as AstroConst from '../../constants/AstroConst.js';
 import { moiraBuildLimitTable as buildLimitTable, moiraLifeDegree as lifeDegree, moiraBirthYearBasis } from './guolaoMoiraWheelLimits.js';
 import { computeDongwei as glDongwei, computeTongxian as glTongxian } from './guolaoTransit.js';
+import { normalizeGuolaoLifeMode, GUOLAO_LIFE_MODE_ASC, GUOLAO_LIFE_MODE_YUMAO, GUOLAO_LIFE_MODE_COTRANS } from './guolaoMoiraWheelLimits.js';
+import { SU28_MODE_LABEL } from './guolaoData.js';
+
+// ── GuoLaoChartStyle.js 的罗计口径（逐字）与 getStored* 的 headless 缺省（上游读不到 localStorage 键时的返回值）──
+export const GUOLAO_NODE_MODE_NORTH_KETU = 'northKetuSouthRahu';
+export const GUOLAO_NODE_MODE_NORTH_RAHU = 'northRahuSouthKetu';
+export const GUOLAO_DEFAULT_SU28_MODE = 2;
+export function normalizeGuolaoNodeMode(val){
+	if(val === GUOLAO_NODE_MODE_NORTH_RAHU){
+		return GUOLAO_NODE_MODE_NORTH_RAHU;
+	}
+	return GUOLAO_NODE_MODE_NORTH_KETU;
+}
+const getStoredGuolaoLifeMode = ()=>GUOLAO_LIFE_MODE_ASC;
+const getStoredGuolaoNodeMode = ()=>GUOLAO_NODE_MODE_NORTH_KETU;
+const getStoredGuolaoSu28Mode = ()=>GUOLAO_DEFAULT_SU28_MODE;
+const getStoredGuolaoTrueSolarTime = ()=>'true';
+const getStoredGuolaoNodeType = ()=>'mean';
+const getStoredGuolaoLilithType = ()=>'mean';
+const getStoredGuolaoBodyMode = ()=>'taiyin';
+
+// GuoLaoChartMain.js:1190-1200（逐字）。
+function guolaoNodeModeFromFields(fields){
+	if(fields && fields.guolaoNodeMode && fields.guolaoNodeMode.value !== undefined && fields.guolaoNodeMode.value !== null){
+		return normalizeGuolaoNodeMode(fields.guolaoNodeMode.value);
+	}
+	return getStoredGuolaoNodeMode();
+}
+
+function guolaoNodeModeName(mode){
+	const normalized = normalizeGuolaoNodeMode(mode);
+	return normalized === GUOLAO_NODE_MODE_NORTH_RAHU ? '北罗南计' : '北计南罗';
+}
+
+// GuoLaoChartMain.js:1531-1566（逐字）。
+function guolaoLifeModeFromFields(fields){
+	if(fields && fields.guolaoLifeMode && fields.guolaoLifeMode.value !== undefined && fields.guolaoLifeMode.value !== null){
+		return normalizeGuolaoLifeMode(fields.guolaoLifeMode.value);
+	}
+	return getStoredGuolaoLifeMode();
+}
+
+// 七政宿度制(su28Mode 0-4)：优先 fields.doubingSu28（页面选/存盘值，数据丢失修复后保真），
+// 缺省回退 getStoredGuolaoSu28Mode（AI 挂载抽屉「宿度制」/全局默认 2）。与 命度/罗计 同口径。
+export function guolaoSu28ModeFromFields(fields){
+	if(fields && fields.doubingSu28 && fields.doubingSu28.value !== undefined && fields.doubingSu28.value !== null){
+		const v = Number(fields.doubingSu28.value);
+		// [挂载自检 F-16] 值域单源 SU28_MODE_LABEL(含 8=赤道回归实时);此前手抄 [0..7] 漏 8 → 存 8 的盘回退全局档。
+		if(Number.isFinite(v) && Object.prototype.hasOwnProperty.call(SU28_MODE_LABEL, v)){
+			return v;
+		}
+	}
+	return getStoredGuolaoSu28Mode();
+}
+
+function guolaoLifeModeName(mode){
+	const normalized = normalizeGuolaoLifeMode(mode);
+	if(normalized === GUOLAO_LIFE_MODE_YUMAO){
+		return '日出安命';
+	}
+	if(normalized === GUOLAO_LIFE_MODE_COTRANS){
+		return '赤黄转换';
+	}
+	if(normalized === 'gumao'){
+		return '遇卯安命(古法)';
+	}
+	if('子丑寅卯辰巳午未申酉戌亥'.indexOf(normalized) >= 0){
+		return `自定命宫·${normalized}`;
+	}
+	return '占星上升';
+}
+
+// GuoLaoChartMain.js:2403-2408（逐字）。
+function guolaoFieldValue(fields, key, fallbackGetter){
+	if(fields && fields[key] && fields[key].value !== undefined && fields[key].value !== null && `${fields[key].value}` !== ''){
+		return `${fields[key].value}`;
+	}
+	return fallbackGetter ? fallbackGetter() : '';
+}
 
 function safeList(val){
 	return Array.isArray(val) ? val : [];
@@ -143,6 +225,30 @@ export function buildGuolaoLimitSection(chart, fields, params, minorLimitType, t
 	}catch(e){
 		return '';
 	}
+}
+
+// [起盘信息] 口径六行：_buildGuolaoSnapshotTextV2Core（GuoLaoChartMain.js:2047-2073）内联的 lines.push 逐字收成函数。
+// _gDisp = 页面显示偏好（命主取法/行运法），headless 由调用方按挂载齿轮四键给（Python _guolao_display_settings）。
+export function buildGuolaoSetupLines(fields, _gDisp){
+	const lines = [];
+	lines.push(`七政命度：${guolaoLifeModeName(guolaoLifeModeFromFields(fields))}`);
+	lines.push(`罗计：${guolaoNodeModeName(guolaoNodeModeFromFields(fields))}`);
+	// G6/G10/G11 起盘设置注入快照(AI 据此解读报时星/四余取法)。
+	const _gTs = guolaoFieldValue(fields, 'guolaoTrueSolarTime', getStoredGuolaoTrueSolarTime);
+	const _gNt = guolaoFieldValue(fields, 'guolaoNodeType', getStoredGuolaoNodeType);
+	const _gLt = guolaoFieldValue(fields, 'guolaoLilithType', getStoredGuolaoLilithType);
+	lines.push(`报时星太阳时：${_gTs === 'off' ? '钟表时' : (_gTs === 'mean' ? '平太阳时(仅经度)' : '真太阳时(经度+均时差)')}`);
+	lines.push(`罗计取法：${_gNt === 'true' ? '真交点' : '平交点'}；月孛取法：${_gLt === 'true' ? '真远地点' : '平远地点'}`);
+	// G20/G22/G31/G3 身宫法/命主取法/行运法/宿度制 注入快照。身宫法读 fields(类A);命主取法/行运法读全局显示偏好(类B)。
+	const _gBody = guolaoFieldValue(fields, 'guolaoBodyMode', getStoredGuolaoBodyMode);
+	const _gDispSafe = _gDisp || {};
+	const _su28Name = SU28_MODE_LABEL[guolaoSu28ModeFromFields(fields)] || '回归今宿';   // 单源 SU28_MODE_LABEL(WP-A,消第三套漂移)
+	const _lmName = { gong: '宫主', du: '度主', dudegrade: '贬宫主专度主' }[_gDispSafe.lifeMasterMode || 'gong'] || '宫主';
+	const _mlName = { '': '古度限度法', dongwei: '洞微大限', minor: '小限', month: '月限', tong: '童限' }[_gDispSafe.minorLimitType || ''] || '古度限度法';
+	const _gBodyName = _gBody === 'youjin' ? '逢酉(琴堂)' : ('子丑寅卯辰巳午未申酉戌亥'.indexOf(_gBody) >= 0 ? `自定身宫·${_gBody}` : '太阴落宫(果老)');
+	lines.push(`宿度制：${_su28Name}；身宫法：${_gBodyName}`);
+	lines.push(`命主取法：${_lmName}；行运法：${_mlName}`);
+	return lines;
 }
 
 // 上游 buildGuolaoAnchorLines 是模块私有（快照拼装内部用）；headless 快照在 skill 侧拼装，故补具名导出。

@@ -15,7 +15,9 @@
   "tools": {
     "acg": {
       "compute_class": "python_chart_backend",
-      "engines": [],
+      "engines": [
+        "acg_section"
+      ],
       "endpoints": [
         "/chart",
         "/location/acg",
@@ -23,7 +25,7 @@
         "/location/acgpoint"
       ],
       "export_technique": "acg",
-      "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
+      "notes": "chart 服务 /location/acg*（ACGraph）算行星线、落点与世运事件；vendored JS acgSnapshot 只排 [占星地图] 段"
     },
     "agepoint": {
       "compute_class": "python_chart_backend",
