@@ -2192,16 +2192,37 @@ def _chart_position_table_lines(chart_wrap: dict[str, Any], *, limit: int | None
     return rows
 
 
-def _keep_reception_line(item: dict[str, Any] | None, *, abnormal: bool = False) -> bool:
+def _only_ruler_exalt_reception(fields: dict[str, Any] | None) -> bool:
+    """上游 resolveOnlyRulerExaltReception（astroAiSnapshot.js:190-207）：全局设置 showOnlyRulExaltReception（1/true）=
+    「仅按本垣擢升计算互容接纳」。headless 无 localStorage，请求顶层同名键即该全局设置；缺省关。"""
+    value = (fields or {}).get("showOnlyRulExaltReception") if isinstance(fields, dict) else None
+    return value in (1, True, "1", "true", "True")
+
+
+def _has_ruler_or_exalt(ary: Any) -> bool:
+    return isinstance(ary, list) and any(value in ("ruler", "exalt") for value in ary)
+
+
+def _keep_reception_line(item: dict[str, Any] | None, *, abnormal: bool = False, only_ruler_exalt: bool = False) -> bool:
+    """上游 keepReceptionLine（astroAiSnapshot.js:222-235）：开关关 → 全留；开 → 正接纳须供给方为本垣/擢升，
+    邪接纳供给方或受益方任一为本垣/擢升即留。"""
+    if not only_ruler_exalt:
+        return True
     if not isinstance(item, dict):
         return False
-    supplier = item.get("supplierRulerShip") or []
-    supplier_ok = any(value in {"ruler", "exalt"} for value in supplier)
+    supplier_ok = _has_ruler_or_exalt(item.get("supplierRulerShip"))
     if not abnormal:
-        return True if not supplier else supplier_ok or True
-    beneficiary = item.get("beneficiaryDignity") or []
-    beneficiary_ok = any(value in {"ruler", "exalt"} for value in beneficiary)
-    return True if not supplier and not beneficiary else supplier_ok or beneficiary_ok or True
+        return supplier_ok
+    return supplier_ok or _has_ruler_or_exalt(item.get("beneficiaryDignity"))
+
+
+def _keep_mutual_line(item: dict[str, Any] | None, *, only_ruler_exalt: bool = False) -> bool:
+    """上游 keepMutualLine（astroAiSnapshot.js:237-245）：开 → 互容两方都须为本垣/擢升。"""
+    if not only_ruler_exalt:
+        return True
+    if not isinstance(item, dict) or not isinstance(item.get("planetA"), dict) or not isinstance(item.get("planetB"), dict):
+        return False
+    return _has_ruler_or_exalt(item["planetA"].get("rulerShip")) and _has_ruler_or_exalt(item["planetB"].get("rulerShip"))
 
 
 def _reception_reject_mark(item: dict[str, Any] | None) -> str:
@@ -2230,9 +2251,15 @@ def _build_info_section(chart_wrap: dict[str, Any], fields: dict[str, Any]) -> l
         lines.append("映点/反映点")
         lines.extend(anti_lines)
 
+    only_rul_exalt = _only_ruler_exalt_reception(fields)
     receptions = chart_data.get("receptions", {}) if isinstance(chart_data, dict) else {}
-    normal_receptions = [item for item in receptions.get("normal", []) or [] if _keep_reception_line(item)]
-    abnormal_receptions = [item for item in receptions.get("abnormal", []) or [] if _keep_reception_line(item, abnormal=True)]
+    normal_receptions = [
+        item for item in receptions.get("normal", []) or [] if _keep_reception_line(item, only_ruler_exalt=only_rul_exalt)
+    ]
+    abnormal_receptions = [
+        item for item in receptions.get("abnormal", []) or []
+        if _keep_reception_line(item, abnormal=True, only_ruler_exalt=only_rul_exalt)
+    ]
     if normal_receptions or abnormal_receptions:
         lines.append("接纳")
         lines.append("正接纳：")
@@ -2252,8 +2279,8 @@ def _build_info_section(chart_wrap: dict[str, Any], fields: dict[str, Any]) -> l
             )
 
     mutuals = chart_data.get("mutuals", {}) if isinstance(chart_data, dict) else {}
-    normal_mutuals = mutuals.get("normal", []) or []
-    abnormal_mutuals = mutuals.get("abnormal", []) or []
+    normal_mutuals = [item for item in mutuals.get("normal", []) or [] if _keep_mutual_line(item, only_ruler_exalt=only_rul_exalt)]
+    abnormal_mutuals = [item for item in mutuals.get("abnormal", []) or [] if _keep_mutual_line(item, only_ruler_exalt=only_rul_exalt)]
     if normal_mutuals or abnormal_mutuals:
         lines.append("互容")
         lines.append("正互容：")
@@ -3096,7 +3123,7 @@ def _po_pair_linked(id_a: Any, id_b: Any, response: dict[str, Any], by_id: dict[
     return False
 
 
-def _pattern_overview(response: dict[str, Any]) -> dict[str, Any]:
+def _pattern_overview(response: dict[str, Any], *, only_ruler_exalt: bool = False) -> dict[str, Any]:
     perchart = response.get("chart") if isinstance(response.get("chart"), dict) else {}
     objects = perchart.get("objects") if isinstance(perchart.get("objects"), list) else []
     if not objects:
@@ -3243,8 +3270,15 @@ def _pattern_overview(response: dict[str, Any]) -> dict[str, Any]:
         if w:
             apriori["has"] = True
             apriori["links"].append({"a": a_id, "b": b_id, "which": w, "kind": kind})
-    m = response.get("mutuals") or {}
-    r = response.get("receptions") or {}
+    # 「仅按本垣擢升计算互容接纳」开时先滤互容/接纳（上游 astroPatternOverview.js:197-207 keepRec/keepMut），
+    # 先验权力的联结与 [信息] 段详细行同口径。
+    m_raw = response.get("mutuals") or {}
+    r_raw = response.get("receptions") or {}
+    m = {k: [it for it in (m_raw.get(k) or []) if _keep_mutual_line(it, only_ruler_exalt=only_ruler_exalt)] for k in ("normal", "abnormal")}
+    r = {
+        "normal": [it for it in (r_raw.get("normal") or []) if _keep_reception_line(it, only_ruler_exalt=only_ruler_exalt)],
+        "abnormal": [it for it in (r_raw.get("abnormal") or []) if _keep_reception_line(it, abnormal=True, only_ruler_exalt=only_ruler_exalt)],
+    }
     for it in list(m.get("normal") or []) + list(m.get("abnormal") or []):
         if isinstance(it, dict):
             pa = it["planetA"].get("id") if isinstance(it.get("planetA"), dict) else None
@@ -3264,9 +3298,9 @@ def _pattern_overview(response: dict[str, Any]) -> dict[str, Any]:
             "vocation": vocation, "jupiter": jupiter, "afflictedRulers": afflicted, "apriori": apriori}
 
 
-def _pattern_overview_lines(response: dict[str, Any]) -> list[str]:
+def _pattern_overview_lines(response: dict[str, Any], *, only_ruler_exalt: bool = False) -> list[str]:
     try:
-        data = _pattern_overview(response)
+        data = _pattern_overview(response, only_ruler_exalt=only_ruler_exalt)
     except Exception:  # noqa: BLE001 — 格局速览失败绝不连累整段，回空降级
         return []
     if not data:
@@ -3532,7 +3566,7 @@ def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
     # 格局速览 (龙脉/孤月独明/先验权力/…) 仅随 [古典格局] 段一并出 —— 即仅 _classicalAnalysis 已挂载的
     # chart 家族(astrochart/astrochart_like)；india/mundane 等无 [古典格局] preset 的盘不挂，避免 unknown 段。
     if response.get("_classicalAnalysis") is not None:
-        pov = _pattern_overview_lines(response)
+        pov = _pattern_overview_lines(response, only_ruler_exalt=_only_ruler_exalt_reception(payload))
         if pov:
             classical_analysis = (classical_analysis or []) + ["格局速览"] + pov
     if classical_analysis:
@@ -7447,7 +7481,16 @@ class HorosaSkillService:
         enriched["_natalExtras"] = sections
         return enriched
 
-    def _attach_classical_derived(self, tool_name: str, response_data: dict[str, Any]) -> dict[str, Any]:
+    # [古典·显赫计分] 主宰光体判定项（上游 astroAiSnapshot.js:1716-1726 predOpts）：四键读全局仓（headless = 请求顶层），
+    # 界系/双子界序/自定义界表随盘 fields。
+    _EMINENCE_KEYS = (
+        "busyPlaces", "dynamicalDivisions", "domicileMasterMethod", "rayWeighting",
+        "termsVariant", "geminiBoundEmended", "customTermsDay", "customTermsNight",
+    )
+
+    def _attach_classical_derived(
+        self, tool_name: str, response_data: dict[str, Any], payload: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """古典衍化四段（上游 v3.9.2）：仅本命 astrochart 挂载。
 
         上游 opt-in 语义（astroAiSnapshot.js:1550）：只有本命 astro 快照路径传 classicalDerived，
@@ -7459,8 +7502,17 @@ class HorosaSkillService:
             return response_data
         if not isinstance(response_data, dict) or not _is_astro_chart_payload(response_data):
             return response_data
+        eminence = {k: (payload or {})[k] for k in self._EMINENCE_KEYS if (payload or {}).get(k) not in (None, "")}
         try:
-            js = self.js_client.run("classical_derived", {"chart": response_data})
+            js = self.js_client.run("classical_derived", {"chart": response_data, "eminence": eminence})
+            invalid = js.get("invalid") if isinstance(js, dict) else None
+            if invalid:
+                parts = [f"{i.get('key')}={i.get('value')!r}（可选：{'/'.join(str(a) for a in (i.get('allowed') or []))}）" for i in invalid if isinstance(i, dict)]
+                raise ToolValidationError(
+                    bilingual(f"显赫计分口径取值无效：{'；'.join(parts)}。", f"eminence setting(s) invalid: {'; '.join(parts)}."),
+                    code="tool.chart_invalid_setting",
+                    details={"invalid": invalid},
+                )
             text = js.get("snapshot_text") if isinstance(js, dict) else ""
             if isinstance(text, str) and text.strip():
                 sections: dict[str, str] = {}
@@ -7472,8 +7524,10 @@ class HorosaSkillService:
                     enriched = dict(response_data)
                     enriched["_classicalDerived"] = sections
                     return enriched
-        except Exception:  # noqa: BLE001 - enrichment must never fail the chart
-            pass
+        except ToolValidationError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - enrichment must never fail the chart, but say so
+            _degrade("classical derived sections failed: %s", exc)
         return response_data
 
     def _attach_jyotish_sections(
@@ -7649,13 +7703,21 @@ class HorosaSkillService:
             if isinstance(analysis, dict) and analysis:
                 enriched = dict(response_data)
                 enriched["_classicalAnalysis"] = analysis
-                enriched["_egyptSection"] = self._build_egypt_section(enriched, analysis)
+                enriched["_egyptSection"] = self._build_egypt_section(enriched, analysis, payload)
                 return enriched
+        except ToolValidationError:
+            raise
         except Exception as exc:
             _degrade("classical /astroextra/analysis failed (tool=%s): %s", tool_name, exc)
         return response_data
 
-    def _build_egypt_section(self, chart: dict[str, Any], analysis: dict[str, Any]) -> str:
+    # 埃及历七轴（上游随盘键 egypt_<axis>，egyptianSchools.EGYPT_RECORD_KEYS；挂载齿轮 techniqueMountSettings.js:965-980）。
+    _EGYPT_AXIS_KEYS = (
+        "egypt_decanRuler", "egypt_decanAnchor", "egypt_decanNaming", "egypt_starClock",
+        "egypt_calendarAnchor", "egypt_petosirisMod", "egypt_godEdition",
+    )
+
+    def _build_egypt_section(self, chart: dict[str, Any], analysis: dict[str, Any], payload: dict[str, Any] | None = None) -> str:
         """[埃及历] 独立段：各点落旬 / 上升旬详情 / 埃及民用历 + Sothic。
 
         上游把埃及历**同时**写在两处：`古典格局` 段里一行摘要（天狼偕日升/岁年/上升旬），以及这个
@@ -7668,9 +7730,21 @@ class HorosaSkillService:
         try:
             chart_obj = dict(chart)
             chart_obj["egyptianCalendar"] = analysis.get("egyptianCalendar")
-            js = self.js_client.run("egypt_section", {"chart": chart_obj})
+            # 流派口径：随盘键 egypt_* → egyptSchoolFromFields（上游 astroAiSnapshot.js:1733 优先读 fields，缺键回全局=默认档）。
+            egypt_fields = {k: {"value": (payload or {})[k]} for k in self._EGYPT_AXIS_KEYS if (payload or {}).get(k) not in (None, "")}
+            js = self.js_client.run("egypt_section", {"chart": chart_obj, "fields": egypt_fields})
+            invalid = js.get("invalid") if isinstance(js, dict) else None
+            if invalid:
+                parts = [f"{i.get('key')}={i.get('value')!r}（可选：{'/'.join(str(a) for a in (i.get('allowed') or []))}）" for i in invalid if isinstance(i, dict)]
+                raise ToolValidationError(
+                    bilingual(f"埃及历流派口径取值无效：{'；'.join(parts)}。", f"egypt school setting(s) invalid: {'; '.join(parts)}."),
+                    code="tool.egypt_invalid_setting",
+                    details={"invalid": invalid},
+                )
             text = js.get("text") if isinstance(js, dict) else None
             return f"{text}".strip() if text else ""
+        except ToolValidationError:
+            raise
         except Exception as exc:  # noqa: BLE001 — 富化失败不许影响主盘
             _degrade("egypt section build failed: %s", exc)
             return ""
@@ -13664,7 +13738,7 @@ class HorosaSkillService:
                     response_data = self._call_remote(definition.endpoint, remote_input)
                     response_data = self._attach_predictive_chart_context(tool_name, input_normalized, response_data)
                 response_data = self._attach_natal_extras(tool_name, response_data)
-                response_data = self._attach_classical_derived(tool_name, response_data)
+                response_data = self._attach_classical_derived(tool_name, response_data, input_normalized)
                 response_data = self._attach_classical_analysis(tool_name, input_normalized, response_data)
                 response_data = self._attach_jyotish_sections(tool_name, response_data, input_normalized)
                 response_data = self._attach_india_extra_vargas(tool_name, input_normalized, response_data)

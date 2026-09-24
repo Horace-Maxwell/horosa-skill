@@ -10,19 +10,10 @@
     "BirthInput.pdParallel",
     "BirthInput.pdRaptParallel",
     "BirthInput.orbScale",
-    "IndiaChartInput.dashaVariants",
+    "GermanyInput.personalOrb",
+    "GermanyInput.strictFactors",
     "IndiaChartInput.dashaYearLength",
     "IndiaChartInput.yuddhaCriterion",
-    "IndiaRectifyInput.prashnaTime",
-    "IndiaRectifyInput.prashnaSchools",
-    "IndiaRectifyInput.prashnaMatter",
-    "IndiaRectifyInput.prashnaNumber",
-    "IndiaRectifyInput.prashnaCuspMode",
-    "IndiaRectifyInput.prashnaPrimaryHouse",
-    "IndiaRectifyInput.tajakaYear",
-    "IndiaRectifyInput.annualChartType",
-    "IndiaRectifyInput.varshaLat",
-    "IndiaRectifyInput.varshaLon",
     "ZiWeiBirthInput.sihuaSchool"
   ]
 }

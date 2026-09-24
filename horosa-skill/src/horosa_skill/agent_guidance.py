@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
+from horosa_skill.western_options_doc import western_options_doc
 
 
 GUIDANCE_SCHEMA = "horosa.skill.agent_guidance.v1"
@@ -358,7 +359,7 @@ ASTRO_BIRTH_POLICY = _policy(
         {
             "field": "hsys",
             "question": "宫制要用哪一种？（索引见上游表：1 是 Alcabitus，不是 Placidus）",
-            "options": ["0 整宫制/Whole Sign（默认推荐）", "3 Placidus", "1 Alcabitus", "2 Regiomontanus", "4 Koch", "其他指定宫制（5 Vehlow/6 Polich Page/7 Sripati/8 MC等宫）"],
+            "options": ["0 整宫制/Whole Sign（默认推荐）", "3 Placidus", "1 Alcabitus", "2 Regiomontanus", "4 Koch", "其他指定宫制（5–24：Vehlow/Polich Page/Sripati/MC等宫/Porphyry/Campanus/Equal/…/福点整宫制，全表见 options_keys.hsys）"],
             "values": [0, 3, 1, 2, 4, None],
         },
         {"field": "zodiacal", "question": "黄道体系要用哪一种？", "options": ["回归黄道（默认推荐）", "恒星黄道（需配 siderealAyanamsa）"], "values": [0, 1]},
@@ -1175,9 +1176,33 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         required_context=["提问时刻 date/time/zone", "提问地点 lon/lat", "问题类别 category"],
         ask_if_missing=[
             {"field": "date/time/place", "question": "请提供「提问当下」的日期、时间、时区和地点（卜卦以提问时刻起盘，不是出生时间）。"},
-            {"field": "category", "question": "问的是哪一类事？", "options": ["综合 general", "财物 wealth", "婚姻/对象 marriage", "事业/职位 career", "疾病 health", "官非/对手 lawsuit", "失物/盗贼 theft", "子嗣 pregnancy", "房产 property", "旅行 travel", "愿望 hope", "死亡/遗产 death", "私敌 enemy", "兄弟/亲属 family"]},
+            # 上游 CATEGORY_DEF 20 类（此前只列 14）；中文名/事项宫全表见 options_keys.category。
+            {
+                "field": "category",
+                "question": "问的是哪一类事？",
+                "options": [
+                    "综合 general", "财物 wealth", "兄弟/亲属 family", "房产/田宅 property", "父亲 father", "母亲 mother",
+                    "子嗣 pregnancy", "疾病 health", "婚姻/对象 marriage", "官非/对手 lawsuit", "盗窃/失物 theft",
+                    "死亡/遗产 death", "旅行 travel", "事业/职位 career", "愿望 hope", "私敌 enemy", "消息/书信 message",
+                    "失物(非盗) lost", "走失活物 lost_animal", "买卖 trade",
+                ],
+                "values": [
+                    "general", "wealth", "family", "property", "father", "mother", "pregnancy", "health", "marriage",
+                    "lawsuit", "theft", "death", "travel", "career", "hope", "enemy", "message", "lost", "lost_animal", "trade",
+                ],
+            },
+            # 流派同时定起盘字段（宫制/界系/三分集/福点反转/星群，上游 horaryBackendFields）→ 结果敏感，缺省不静默。
+            {
+                "field": "school",
+                "question": "卜卦按哪一派判？（流派同时决定宫制、界系、三分集等起盘口径）",
+                "options": ["经典主流 classical（默认）", "文艺复兴 renaissance", "当代严谨 strict", "序列判读 sequence", "希腊化 hellenistic", "中世纪 medieval", "现代心理 modern"],
+                "values": ["classical", "renaissance", "strict", "sequence", "hellenistic", "medieval", "modern"],
+            },
         ],
-        safe_defaults=[{"field": "category", "value": "general", "meaning": "综合判断：事项守护星取月亮下一个入相的星 / 相关宫主"}],
+        safe_defaults=[
+            {"field": "category", "value": "general", "meaning": "综合判断：事项守护星取月亮下一个入相的星 / 相关宫主"},
+            {"field": "school", "value": "classical", "meaning": "经典主流：Regiomontanus（hsys 2）· 托勒密界经典传本 · 托勒密三分 · 七政"},
+        ],
         do_not_assume=["提问时刻（绝不可编造，必须是占者真实收到问题的时刻）", "问题类别"],
     ),
     "election": _policy(
@@ -1185,7 +1210,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         required_context=["候选时刻 date/time/zone", "举事地点 lon/lat", "用事类型 topicId"],
         ask_if_missing=[
             {"field": "date/time/place", "question": "请提供要评估的候选日期、时间、时区和举事地点。"},
-            {"field": "topicId", "question": "做什么事（用事类型）？", "options": ["结婚 marriage", "开业/创业 business", "入宅/迁居 move_in", "购屋 buy_property", "买卖交易 trade", "购车 buy_car", "签约 contract", "手术 surgery", "出行 travel", "求职 job_hunt", "其它（见 TOPIC_MASTER）"]},
+            {"field": "topicId", "question": "做什么事（用事类型）？", "options": ["结婚 marriage", "开业/创业 business", "入宅/迁居 move_in", "购屋 buy_property", "买卖交易 trade", "购车 buy_car", "签约 contract", "手术 surgery", "出行 travel", "求职 job_hunt", "其它（37 类全表见 options_keys.topicId）"]},
         ],
         safe_defaults=[{"field": "topicId", "value": "marriage", "meaning": "默认按结婚用事规则包评估"}],
         # natal 可选：给了才加产 [本命合参] 与 [回归与主限]（择日前最近日/月返 + ±240 日主限命中）。
@@ -1451,9 +1476,15 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         required_context=["inner person birth data", "outer person birth data"],
         ask_if_missing=[
             {"field": "inner/outer", "question": "请分别提供双方出生日期、时间、时区和地点。"},
-            {"field": "relative", "question": "关系盘类型用哪一种？", "options": ["星阙默认", "指定关系盘参数"]},
+            # 上游 AstroRelative.js hook 表 relative 0–4（此前只写「星阙默认」）。
+            {
+                "field": "relative",
+                "question": "关系盘类型用哪一种？",
+                "options": ["比较盘（默认）", "组合盘", "影响盘", "时空中点盘", "马克斯盘"],
+                "values": [0, 1, 2, 3, 4],
+            },
         ],
-        safe_defaults=[{"field": "relative", "value": 0, "meaning": "星阙默认"}],
+        safe_defaults=[{"field": "relative", "value": 0, "meaning": "比较盘（星阙默认）"}],
         do_not_assume=["either party's birth time/place"],
     ),
     "solarreturn": PREDICTIVE_POLICY,
@@ -1621,6 +1652,11 @@ def _with_common_fields(tool_name: str, policy: dict[str, Any]) -> dict[str, Any
         result["accepted_fields"] = sorted(fields)
         result["description"] = definition.description
         result["input_contract"] = build_tool_input_contract(tool_name)
+    # 西占口径词表（sync311 western）：隐藏旋钮说明 + 引擎长词表（宫制 0–24 / 卜卦类别流派 / 择日用事 / 宿度制 …），
+    # tools/list 不背这些字节，按工具在这里回报。
+    western_doc = western_options_doc(tool_name)
+    if western_doc:
+        result["options_keys"] = {**result.get("options_keys", {}), **western_doc}
     result["hard_gate"] = {
         "enabled": tool_name not in PREFLIGHT_EXEMPT_TOOLS,
         "pass_condition": "Provide `agent_confirmed_settings: true` after asking the user, or `defaults_accepted: true` when the user explicitly accepts Xingque/default settings.",

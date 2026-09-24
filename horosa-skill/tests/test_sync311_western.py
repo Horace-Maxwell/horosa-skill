@@ -574,3 +574,198 @@ def test_mundane_vedic_founding_inputs_reach_the_vedic_cards(tmp_path: Path) -> 
     text = env.data["snapshot_text"]
     assert "Muntha 敏感点：天蝎（建国上升每年顺进一座,盘龄 78）" in _section(text, "吠陀世运·年度盘")
     assert _section(text, "世运大运").startswith("（Vimshottari · 年长口径 360（传统））")
+
+
+# ─────────────────────────── F17 古典导出子选项：互容接纳过滤 / 埃及历七轴 / 显赫计分判定项 ───────────────────────────
+
+RECEPTION_FIX = json.loads((FIXTURES / "sync311_western_reception_charts.json").read_text(encoding="utf-8"))
+
+
+def _info_block(text: str, head: str, stop: str) -> list[str]:
+    lines = _section(text, "信息").splitlines()
+    at = lines.index(head)
+    end = lines.index(stop, at + 1) if stop in lines[at + 1:] else len(lines)
+    return lines[at + 1:end]
+
+
+def test_only_ruler_exalt_reception_filters_info_lines(tmp_path: Path) -> None:
+    """上游 astroAiSnapshot.js:221-245 keepReceptionLine/keepMutualLine + :558 resolveOnlyRulerExaltReception（全局
+    showOnlyRulExaltReception=1）。live 夹具（strongRecption=0 缺省档）：正接纳 6 条里 3 条供给方只有次级尊贵
+    （夜三分/界/面），正互容 4 对里 水–火 一对两方都无本垣/擢升。负向对照：旧 _keep_reception_line 恒 True、互容不滤。"""
+    fix = RECEPTION_FIX["info"]
+    client = RecordingClient(chart_for=lambda payload: fix["chart"])
+    service = _service(tmp_path, client)
+    base = {**fix["request"], "date": fix["request"]["date"].replace("/", "-"), "agent_confirmed_settings": True}
+    plain = service.run_tool("chart", base, save_result=False)
+    only = service.run_tool("chart", {**base, "showOnlyRulExaltReception": 1}, save_result=False)
+    assert plain.ok and only.ok, (plain.error, only.error)
+    p_normal = _info_block(plain.data["snapshot_text"], "正接纳：", "邪接纳：")
+    o_normal = _info_block(only.data["snapshot_text"], "正接纳：", "邪接纳：")
+    assert len(p_normal) == 6 and len(o_normal) == 3
+    assert all("(本垣" in line for line in o_normal), o_normal  # 留下的三条供给方皆本垣（ruler）
+    assert [line for line in p_normal if line not in o_normal] == [
+        line for line in p_normal if "本垣" not in line and "擢升" not in line
+    ]
+    p_mut = _info_block(plain.data["snapshot_text"], "正互容：", "邪互容：")
+    o_mut = _info_block(only.data["snapshot_text"], "正互容：", "邪互容：")
+    assert len(p_mut) == 4 and len(o_mut) == 3
+    dropped = [line for line in p_mut if line not in o_mut]
+    assert len(dropped) == 1 and dropped[0].startswith("水") and "火" in dropped[0]
+
+
+def test_only_ruler_exalt_reception_also_filters_apriori_links(tmp_path: Path) -> None:
+    """上游 astroPatternOverview.js:197-207：格局速览「先验权力」的联结取自滤后的互容/接纳（与 [信息] 详细行同口径）。
+    live 夹具（整宫，上升射手）：夜生，月（擢升+夜三分）与 木（共管三分+面）互容，月主 8 宫（巨蟹）、木主 1 宫（射手）
+    → 先验权力(8·1)；木方无本垣/擢升 →
+    开关开时该互容被滤，先验权力行随之消失。负向对照：旧 _pattern_overview 读未滤的 m/r。"""
+    fix = RECEPTION_FIX["apriori"]
+    service = _service(tmp_path, RecordingClient(chart_for=lambda payload: fix["chart"]))
+    base = {**fix["request"], "date": fix["request"]["date"].replace("/", "-"), "agent_confirmed_settings": True}
+    plain = service.run_tool("chart", base, save_result=False)
+    only = service.run_tool("chart", {**base, "showOnlyRulExaltReception": True}, save_result=False)
+    assert plain.ok and only.ok, (plain.error, only.error)
+    p = _section(plain.data["snapshot_text"], "古典格局").splitlines()
+    o = _section(only.data["snapshot_text"], "古典格局").splitlines()
+    assert "先验权力：月互容木(8·1)·夜生·八杀朝天大贵" in p
+    assert not any(line.startswith("先验权力") for line in o)
+    assert [line for line in p if line not in o] == ["先验权力：月互容木(8·1)·夜生·八杀朝天大贵"]
+
+
+def test_egypt_school_axes_reach_the_egypt_section(tmp_path: Path) -> None:
+    """上游 astroAiSnapshot.js:1733 `egyptSchoolFromFields(fields) || currentEgyptSchool()`；七轴取值锚 egyptianSchools.EGYPT_SCHOOL_AXES。
+    盘 = core-js chart_traditional（日 双子 11°45′ → 双子第二旬）。迦勒底面主序 双子 I 木 / II 火 / III 日；三分性旬星制取同三分性
+    三座（双子/天秤/水瓶）庙主 → II = 天秤之主 金（egyptianData.js:140 triplicityDecanRuler）。负向对照：旧 runner 不转交 egypt_*，
+    段恒为默认档（无「所用口径」行、日面主恒火）。"""
+    client = RecordingClient(chart_for=lambda payload: CHART_TRADITIONAL)
+    service = _service(tmp_path, client)
+    plain = service.run_tool("chart", BIRTH, save_result=False)
+    school = service.run_tool("chart", {**BIRTH, "egypt_decanRuler": "triplicity", "egypt_decanNaming": "coptic"}, save_result=False)
+    assert plain.ok and school.ok, (plain.error, school.error)
+    p = _section(plain.data["snapshot_text"], "埃及历").splitlines()
+    s = _section(school.data["snapshot_text"], "埃及历").splitlines()
+    assert p[0] == "◆ 各行星落旬" and not any(line.startswith("◆ 所用口径") for line in p)
+    assert s[0] == "◆ 所用口径：旬主星制=三分性旬星；旬名录传统=科普特-希腊名"
+    p_sun = next(line for line in p if line.startswith("日："))
+    s_sun = next(line for line in s if line.startswith("日："))
+    assert "·面主火·" in p_sun and "·面主金·" in s_sun
+    bad = service.run_tool("chart", {**BIRTH, "egypt_starClock": "sundial"}, save_result=False)
+    assert bad.ok is False and bad.error.code == "tool.egypt_invalid_setting"
+
+
+def test_eminence_predominator_options_reach_the_eminence_section(tmp_path: Path) -> None:
+    """上游 astroAiSnapshot.js:1716-1726 predOpts → astroClassicalDerived.computePredominator（:488-547）+ 七射线（:595-601）。
+    盘 = chart_traditional：昼生，日在 9 宫、月在 4 宫。缺省有利宫集 1·4·5·7·10·11 不含 9；宽集 1·2·4·5·7·9·10·11 含 9 →
+    太阳多一判据「有利宫(9)」。负向对照：旧 classical_derived 不收 predOpts（恒缺省集、恒庙主派、七射线恒关）。"""
+    client = RecordingClient(chart_for=lambda payload: CHART_TRADITIONAL)
+    service = _service(tmp_path, client)
+    plain = service.run_tool("chart", BIRTH, save_result=False)
+    tuned = service.run_tool("chart", {**BIRTH, "busyPlaces": "1,2,4,5,7,9,10,11", "domicileMasterMethod": "bound",
+                                       "dynamicalDivisions": 1, "rayWeighting": "weighted"}, save_result=False)
+    assert plain.ok and tuned.ok, (plain.error, tuned.error)
+    p = _section(plain.data["snapshot_text"], "古典·显赫计分")
+    t = _section(tuned.data["snapshot_text"], "古典·显赫计分")
+    p_pred = next(line for line in p.splitlines() if line.startswith("主宰光体"))
+    t_pred = next(line for line in t.splitlines() if line.startswith("主宰光体"))
+    assert "有利宫(9)" not in p_pred and "当前判法=庙主派" in p_pred and "动力学分区加权" not in p_pred
+    assert "有利宫(9)" in t_pred and "当前判法=界主派" in t_pred and ";动力学分区加权" in t_pred
+    assert "七射线分布" not in p and "七射线分布(加权 · 灵学体系推算)" in t
+    bad = service.run_tool("chart", {**BIRTH, "busyPlaces": "1,2,3"}, save_result=False)
+    assert bad.ok is False and bad.error.code == "tool.chart_invalid_setting"
+
+
+# ─────────────────────────── F16/F20 文档：宫制 0–24 / 词表进 guidance / 汉堡中点盘键 ───────────────────────────
+
+
+def test_guidance_vocab_matches_the_vendored_engine_tables() -> None:
+    """options_keys 的手写词表（western_options_doc）逐键逐名对 vendored 引擎模块导出（node 直接 import）——上游改表这里先红。
+    负向对照：旧代码无 western_options_doc 模块（导入即红）。"""
+    import subprocess
+
+    from horosa_skill import western_options_doc as W
+
+    core = Path(__file__).resolve().parents[1] / "horosa-core-js"
+    script = """
+    const [sig, hs, tm, ws, gd, ic, mr] = await Promise.all([
+      import('./src/vendor/divination/horary/significators.js'), import('./src/vendor/divination/horary/horarySchools.js'),
+      import('./src/vendor/divination/data/topicMaster.js'), import('./src/vendor/divination/election/westernSchools.js'),
+      import('./src/vendor/guolao/guolaoData.js'), import('./src/vendor/india/indiaConst.js'), import('./src/vendor/mundane/ruleset.js')]);
+    console.log(JSON.stringify({
+      categories: Object.entries(sig.CATEGORY_DEF).map(([k, v]) => [k, v.quesitedLabel, v.quesitedHouse]),
+      schools: hs.HORARY_SCHOOL_ORDER.map((k) => [k, hs.HORARY_SCHOOLS[k].cn, hs.HORARY_SCHOOLS[k].backend]),
+      params: hs.HORARY_PARAM_SPEC.map((s) => s.key),
+      topics: Object.entries(tm.TOPIC_MASTER).map(([k, v]) => [k, v.cn]),
+      electionSchools: ws.WEST_SCHOOL_ORDER.map((k) => [k, ws.WEST_SCHOOLS[k].cn]),
+      su28: Object.entries(gd.SU28_MODE_LABEL).map(([k, v]) => [Number(k), v]),
+      dasha: ic.INDIA_DASHA_SYSTEM_OPTIONS.map((o) => [o.value, o.label]),
+      indiaSchools: ic.INDIA_SCHOOL_OPTIONS.map((o) => [o.value, o.label, ic.INDIA_SCHOOL_DEFAULTS[o.value].ayanamsa,
+                                                        ic.INDIA_SCHOOL_DEFAULTS[o.value].hsys]),
+      rulesets: mr.MUNDANE_RULESETS.map((r) => [r.key, r.label]),
+    }));
+    """
+    out = subprocess.run(["node", "--input-type=module", "-e", script], cwd=core, capture_output=True, text=True, check=True)
+    eng = json.loads(out.stdout)
+    assert [tuple(x) for x in eng["categories"]] == list(W.HORARY_CATEGORIES)
+    assert [tuple(x) for x in eng["topics"]] == list(W.ELECTION_TOPICS)
+    assert [tuple(x) for x in eng["electionSchools"]] == list(W.ELECTION_SCHOOLS)
+    assert tuple(eng["params"]) == W.HORARY_PARAM_KEYS
+    assert [tuple(x) for x in eng["su28"]] == list(W.GUOLAO_SU28_MODES)
+    assert [tuple(x) for x in eng["dasha"]] == list(W.INDIA_DASHA_SYSTEMS)
+    assert [tuple(x) for x in eng["indiaSchools"]] == list(W.INDIA_SCHOOLS)
+    assert [tuple(x) for x in eng["rulesets"]] == list(W.MUNDANE_RULESETS)
+
+    def fields_text(b: dict) -> str:  # 流派起盘字段摘要的生成规则（horaryBackendFields 同键）
+        trip = "托勒密" if b["tripSystem"] == "ptolemaic" else "多罗修斯"
+        bodies = "七政" if b["tradition"] == 1 else "含三王星"
+        lot = "福点夜反转" if b["lotReversal"] == 1 else "福点不反转"
+        return f"hsys {b['hsys']} · 界系 {b['termsVariant']} · {trip}三分 · {bodies} · {lot}"
+
+    assert [(k, cn, fields_text(b)) for k, cn, b in eng["schools"]] == list(W.HORARY_SCHOOLS)
+
+
+def test_guidance_documents_house_systems_hidden_knobs_and_gate_vocab() -> None:
+    """F16：宫制 0–24 全表进 guidance（options_keys.hsys）与校验层描述，广告层仍只背 0–8（预算）；F20：卜卦 20 类 / 7 流派、
+    关系盘 0–4 进闸门问题的 options/values；schema 里写「见 guidance」的隐藏旋钮在 options_keys 里都查得到。
+    负向对照：旧 guidance 无 options_keys、BirthInput.hsys 描述只列 0–8、卜卦类别只 14 个且不问流派、关系盘只「星阙默认」。"""
+    from horosa_skill.agent_guidance import TOOL_GUIDANCE, build_agent_guidance
+    from horosa_skill.astro_rulers import HOUSE_SYSTEM_LABELS
+    from horosa_skill.engine.registry import TOOL_DEFINITIONS
+    from horosa_skill.schemas.tools import BirthInput
+    from horosa_skill.surfaces.mcp_schema import advertise_hidden_fields
+
+    assert len(HOUSE_SYSTEM_LABELS) == 25
+    chart_keys = build_agent_guidance(tool_name="chart")["tools"]["chart"]["options_keys"]
+    for index, label in HOUSE_SYSTEM_LABELS.items():
+        assert f"{index}={label}" in chart_keys["hsys"]
+        assert f"{index}={label}" in (BirthInput.model_fields["hsys"].description or "")
+    assert {"showOnlyRulExaltReception", "egypt_decanRuler", "busyPlaces", "rayWeighting"} <= set(chart_keys)
+    for tool_name, definition in TOOL_DEFINITIONS.items():
+        hidden = advertise_hidden_fields(definition.input_model)
+        if hidden:
+            keys = build_agent_guidance(tool_name=tool_name)["tools"][tool_name].get("options_keys") or {}
+            assert hidden <= set(keys), (tool_name, sorted(hidden - set(keys)))
+    horary = {item["field"]: item for item in TOOL_GUIDANCE["horary"]["ask_if_missing"]}
+    assert len(horary["category"]["values"]) == 20 and "lost_animal" in horary["category"]["values"]
+    assert horary["school"]["values"] == ["classical", "renaissance", "strict", "sequence", "hellenistic", "medieval", "modern"]
+    relative = {item["field"]: item for item in TOOL_GUIDANCE["relative"]["ask_if_missing"]}
+    assert relative["relative"]["values"] == [0, 1, 2, 3, 4] and relative["relative"]["options"][4] == "马克斯盘"
+
+
+def test_germany_uranian_keys_are_declared_validated_and_forwarded(tmp_path: Path) -> None:
+    """F20：上游挂载齿轮 techniqueMountSettings.js:1213-1238 → AstroMidpoint.js:301-307 下发 /germany/midpoint 的七键
+    （school/orb/personalOrb/strictFactors/frames/declination/davison；后端 webgermanysrv.midpoint 读）。声明后 MCP 扁平面
+    顶层照收、流派写错报错。负向对照：旧 GermanyInput 未声明 → 扁平面签名无这些键、school 写错静默当 classic。"""
+    from horosa_skill.schemas.tools import GermanyInput
+    from horosa_skill.surfaces.mcp_server import _signature_for_input_model
+
+    keys = {"school", "orb", "personalOrb", "strictFactors", "frames", "declination", "davison"}
+    assert keys <= set(_signature_for_input_model(GermanyInput).parameters)
+    client = RecordingClient()
+    service = _service(tmp_path, client)
+    with pytest.raises(ToolValidationError) as bad:
+        service.run_tool("germany", {**BIRTH, "school": "sideways"}, save_result=False)
+    assert bad.value.code == "tool.invalid_payload"
+    env = service.run_tool("germany", {**BIRTH, "school": "cosmo", "orb": 1.2, "strictFactors": True, "declination": False},
+                           save_result=False)
+    assert env.ok, env.error
+    sent = client.bodies("/germany/midpoint")[-1]
+    assert (sent["school"], sent["orb"], sent["strictFactors"], sent["declination"]) == ("cosmo", 1.2, True, False)
