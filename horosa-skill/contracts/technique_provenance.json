@@ -78,11 +78,20 @@
       "export_technique": "bazi",
       "notes": "Java 聚合层（:9999）计算，Python 只转发与排版"
     },
+    "bazi_inverse": {
+      "compute_class": "java_backend",
+      "engines": [],
+      "endpoints": [
+        "/common/inversebazi"
+      ],
+      "export_technique": "bazi_inverse",
+      "notes": "Java BaZiHelper.getBirthes 逐年回推；Python 只校验四柱干支、转发与排版"
+    },
     "bazizeri": {
       "compute_class": "composite",
       "engines": [],
       "endpoints": [],
-      "export_technique": null,
+      "export_technique": "bazizeri",
       "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
     "beiji": {
@@ -402,7 +411,7 @@
       "compute_class": "composite",
       "engines": [],
       "endpoints": [],
-      "export_technique": null,
+      "export_technique": "huanglizeri",
       "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
     "india_chart": {
@@ -429,7 +438,7 @@
       "endpoints": [
         "/indiaelectionscan/scan"
       ],
-      "export_technique": null,
+      "export_technique": "indiazeri",
       "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
     "jaynesprog": {
@@ -543,7 +552,7 @@
       "compute_class": "composite",
       "engines": [],
       "endpoints": [],
-      "export_technique": null,
+      "export_technique": "liurengzeri",
       "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
     "lunarreturn": {
@@ -657,6 +666,7 @@
       "compute_class": "python_chart_backend",
       "engines": [],
       "endpoints": [
+        "/chart",
         "/predict/planetaryarc"
       ],
       "export_technique": "planetaryarc",
@@ -740,7 +750,7 @@
       "endpoints": [
         "/qizhengelectionscan/scan"
       ],
-      "export_technique": null,
+      "export_technique": "qizhengzeri",
       "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
     "relative": {
@@ -787,7 +797,7 @@
       "compute_class": "composite",
       "engines": [],
       "endpoints": [],
-      "export_technique": null,
+      "export_technique": "sanshizeri",
       "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
     "shaozi": {
@@ -887,7 +897,7 @@
       "compute_class": "composite",
       "engines": [],
       "endpoints": [],
-      "export_technique": null,
+      "export_technique": "taiyizeri",
       "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
     "tarot": {
@@ -1081,7 +1091,7 @@
       "compute_class": "composite",
       "engines": [],
       "endpoints": [],
-      "export_technique": null,
+      "export_technique": "ziweizeri",
       "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
     },
     "zr": {
@@ -1092,15 +1102,6 @@
       ],
       "export_technique": "zodialrelease",
       "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
-    },
-    "bazi_inverse": {
-      "compute_class": "java_backend",
-      "engines": [],
-      "endpoints": [
-        "/common/inversebazi"
-      ],
-      "export_technique": "bazi_inverse",
-      "notes": "Java BaZiHelper.getBirthes 逐年回推；Python 只校验四柱干支、转发与排版"
     }
   }
 }

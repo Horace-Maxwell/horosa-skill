@@ -1545,9 +1545,10 @@ _GUOLAO_ASP_STATES = (("Applicative", "入相"), ("Exact", "精确"), ("Separati
 
 
 def _js_round(value: Any) -> int:
-    # JS Math.round（half-up）；age/span 恒正，int(x+0.5) 等价（含 0.5 进位与 星阙 一致）。
+    # JS Math.round = floor(x+0.5)：half 一律向 +∞。曾写 int(x+0.5)——int 向零截断，负数全错
+    # （-1.7 → -1，JS 为 -2）；AGENTS §4 一直写的是 floor，实现没跟上。
     try:
-        return int(float(value) + 0.5)
+        return math.floor(float(value) + 0.5)
     except (TypeError, ValueError):
         return 0
 
@@ -6091,7 +6092,7 @@ def _fmt_moment(value: datetime) -> str:
 
 
 def _js_math_round(value: float) -> int:
-    """JS Math.round：half 一律向 +∞（负数也对；service 里另一个 _js_round 用 int(x+0.5)，只对非负值成立）。"""
+    """JS Math.round：half 一律向 +∞（与 _js_round 同口径，此处不吞非数值）。"""
     return math.floor(value + 0.5)
 
 

@@ -556,3 +556,10 @@ def test_live_election_returns_satisfy_the_return_definition(tmp_path) -> None:
         # 回归定义：返照时刻该体回到本命黄经（returnCharts.js 收敛判据 |Δ|<0.005°）。
         assert abs(_short_delta(natal_lon, lon)) < 0.005, (key, natal_lon, lon)
     _clean(env)
+
+
+def test_js_round_mirrors_math_round_for_negative_values() -> None:
+    """JS Math.round(x) = floor(x + 0.5)。旧 `_js_round` 用 int(x+0.5)（向零截断）：-1.7 → -1、-0.7 → 0，JS 为 -2 / -1。"""
+    from horosa_skill.service import _js_round
+
+    assert [_js_round(v) for v in (2.5, 1.4999, -0.5, -0.7, -1.5, -1.7, -2.5)] == [3, 1, 0, -1, -1, -2, -2]

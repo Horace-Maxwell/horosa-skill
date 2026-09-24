@@ -334,6 +334,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   查到的每个 planet/node/point（含 `SignsProp` 这类表——v0.11/v0.13 两轮都栽在这）。draw-only import
   （GraphHelper/helper/LRShenJiangDoc）用 no-op stub 替换。vendor 后必须 `node -e "import('...')"`
   load-check **加**真数据整链跑（load 过 ≠ 真盘不崩；追 refCtx/三传是否真的非 null）。
+- **stub 审计**（v0.40.0）：`stub_import` 之后，被 stub 掉的 import 绑定若仍被保留代码引用、且 stub 自身没定义同名
+  绑定，`revendor --check` 即报 ⚠（`_stubbed_names_still_used`）——`LiuRengMain.js` 把 `ChuangChart` stub 成空，
+  `buildSanChuanData` 的 `new ChuangChart` 抛 ReferenceError 被 try/catch 吞成 null，六壬择时对任何条件零命中。
+  真不可达的引用（UI 草稿恢复链里的 `DateTime`）用「stub 定义同名、调到即抛明确错误」的类声明出来，不留空 stub。
 - **curated 常量文件**（如 `vendor/liureng/LRConst.js`）：上游全文件 import 了 headless 不存在的路径时，
   **只追加新增的纯常量**，不整文件重 vendor；条目必须带 `upstream_sha256`，上游改了该文件就把子集里的每个
   值重新对一遍再 `--restamp`。**bespoke 抽出件同理声明 `derived_from`**（抽自哪份上游文件）——不声明它就
@@ -381,9 +385,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 9. **勿静默回退**：解析失败一律 raise 结构化错误，不许换默认值蒙混；快照失败 log + `snapshot_error`，
    不许裸 `except: pass`。同族陷阱：`f"{response.get('x')}"` 键缺失时产出字面 `"None"`（6 字符真值串）——
    先判空再格式化，`f"{... or ''}"` 只有显式 `or ''` 才安全。
-10. **算源声明**：`contracts/technique_provenance.json` 加条目（可用 `scripts/gen_technique_provenance.py`
-    重生成，输出幂等），`verify_technique_provenance.py` 不声明即红；ken-backed 必须真调
-    `_require_ken_pan`。技法依据卡按它标注「这盘是谁算的」。
+10. **算源声明**：`contracts/technique_provenance.json` **只由** `scripts/gen_technique_provenance.py` 生成
+    （契约 == 生成器输出，`--check` + `test_technique_provenance_generator.py` 守；别手改契约——经 helper 间接调用的
+    证据写 `EXTRA_EVIDENCE`、逐工具说明写 `NOTE_OVERRIDES`，v0.40.0 前手改的条目重跑即丢）。
+    `verify_technique_provenance.py` 不声明即红；ken-backed 必须真调 `_require_ken_pan`。技法依据卡按它标注「这盘是谁算的」。
 11. **入 `TOOL_EXPORT_TECHNIQUE_MAP`**（v0.33.0 教训）：bench 的「新增技法自动获得用例」只覆盖这张表，
     runner 自己 `_augment_export_payload` 不经过它 → 功能全绿、bench 静默不覆盖。守卫
     `test_every_business_tool_is_in_export_technique_map`（工具 − 表 = 显式非业务清单）已锁死；

@@ -109,3 +109,45 @@ def test_stub_import_stub_is_inserted_literally() -> None:
 
 def test_dead_prune_helper_is_gone() -> None:
     assert not hasattr(rv, "_prune_default_export_unused"), "dead near-duplicate should stay deleted"
+
+
+# --- stub audit: a stubbed binding the kept code still uses ------------------------------------
+
+
+def _warnings(notes: list[str]) -> list[str]:
+    return [n for n in notes if n.startswith("⚠")]
+
+
+def test_stub_audit_flags_a_stubbed_binding_the_kept_code_still_uses() -> None:
+    """v0.40.0: LiuRengMain.js stubbed `ChuangChart` to '' while the kept `buildSanChuanData` does
+    `new ChuangChart(...)` → swallowed ReferenceError → 六壬择时 zero hits for every condition."""
+    src = "import ChuangChart from '../liureng/ChuangChart.js';\nexport function build(){ return new ChuangChart({}); }\n"
+    _out, notes = rv.apply_deviations(src, [{"kind": "stub_import", "specifier": "../liureng/ChuangChart.js", "stub": ""}])
+    assert _warnings(notes) and "ChuangChart" in _warnings(notes)[0]
+    named = "import { buildXiangContext as bx } from './LRXiangDoc.js';\nexport const f = () => bx();\n"
+    _out, notes = rv.apply_deviations(named, [{"kind": "stub_import", "specifier": "./LRXiangDoc.js", "stub": ""}])
+    assert _warnings(notes) and ": bx " in _warnings(notes)[0]
+
+
+def test_stub_audit_is_quiet_for_unused_defined_or_non_code_mentions() -> None:
+    unused = "import LiuRengChart from './LiuRengChart.js';\nexport const X = 1;\n"
+    _out, notes = rv.apply_deviations(unused, [{"kind": "stub_import", "specifier": "./LiuRengChart.js", "stub": ""}])
+    assert not _warnings(notes)
+    defined = "import { drawPath } from '../graph/GraphHelper.js';\nexport function f(){ drawPath(); }\n"
+    stub = "const drawPath = () => {};"
+    _out, notes = rv.apply_deviations(defined, [{"kind": "stub_import", "specifier": "../graph/GraphHelper.js", "stub": stub}])
+    assert not _warnings(notes)
+    mentions = (
+        "import DateTime from '../comp/DateTime.js';\n// DateTime is UI-only\n"
+        "export const s = 'DateTime'; export function g(o){ return o.DateTime; }\n"
+    )
+    _out, notes = rv.apply_deviations(mentions, [{"kind": "stub_import", "specifier": "../comp/DateTime.js", "stub": ""}])
+    assert not _warnings(notes)
+
+
+def test_imported_locals_covers_every_import_form() -> None:
+    assert rv._imported_locals("import A from 'x';") == {"A"}
+    assert rv._imported_locals("import A, { b, c as d } from 'x';") == {"A", "b", "d"}
+    assert rv._imported_locals("import * as ns from 'x';") == {"ns"}
+    assert rv._imported_locals("import A, * as ns from 'x';") == {"A", "ns"}
+    assert rv._imported_locals("import 'x';") == set()

@@ -5,6 +5,10 @@
 
 证据来自源码本身（AST 扫 `_run_*` runner 里的 `js_client.run` / `_call_remote` / `_require_ken_pan`），
 分类来自 §4 的七分法 + 共享 runner 的族属。生成后由 scripts/verify_technique_provenance.py 守。
+
+**输出幂等、契约 == 生成器输出**（`--check` 只比不写；`tests/test_technique_provenance_generator.py` 守）。
+AST 只看 runner 本体，经 helper 间接调用的证据与逐工具的说明写进下方 EXTRA_EVIDENCE / NOTE_OVERRIDES——
+v0.40.0 前这些只手改在契约里，重跑生成器即被抹掉（newtools 实现者撞到：生成器与契约三十处不一致）。
 """
 from __future__ import annotations
 
@@ -54,7 +58,7 @@ CLASS = {
     # 那是**不诚实**的：它们确实铸盘，只是盘不是搜索算的。
     "composite": {"sanshiunited", "mundane", "extrareturns", "qimenzeri", "tianxing",
                   "huanglizeri", "bazizeri", "taiyizeri", "ziweizeri", "liurengzeri", "sanshizeri",
-                  "qizhengzeri", "indiazeri"},
+                  "qizhengzeri", "indiazeri", "guolao_chart"},
     # Python port：星阙前端算法的 Python 移植。
     "python_port": {"decennials"},
     # frontend 读数型 Python 移植：读已算好的 chart 对象再排版。
@@ -78,6 +82,25 @@ NOTES = {
     "local_data": "不起盘：读本地离线库 / 内置注册表",
     "python_chart_backend": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder",
     "java_backend": "Java 聚合层（:9999）计算，Python 只转发与排版",
+}
+# 逐工具说明（覆盖族级 NOTES）。
+NOTE_OVERRIDES = {
+    "bazi_inverse": "Java BaZiHelper.getBirthes 逐年回推；Python 只校验四柱干支、转发与排版",
+    "guolao_chart": (
+        "盘面 /chart（Python chart 服务）+ 政余格局/庙旺 headless JS + [虚实]/[本命化曜]/[流年流曜] 走 Java "
+        "/qizheng/moira 规则层（流年盘二次铸盘；Java 不可用时三段缺席进 warnings）"
+    ),
+}
+# runner 经 helper 间接调用、AST 扫 runner 本体看不到的证据。
+EXTRA_EVIDENCE: dict[str, dict[str, list[str]]] = {
+    # 神数族：_shenshu_xinyi_lines（正传心易 → /wangji/xinyi）与演禽演法 JS（yanqin_yanfa）。
+    **{k: {"engines": ["yanqin_yanfa"], "endpoints": ["/wangji/xinyi"]} for k in (
+        "wangji", "wuzhao", "taixuan", "jingjue", "shenyishu", "shaozi", "tieban", "fendjing",
+        "beiji", "nanji", "chunzi", "xianqin", "cetian", "qizhengkin",
+    )},
+    "indiazeri": {"endpoints": ["/indiaelectionscan/scan"]},
+    "qizhengzeri": {"endpoints": ["/qizhengelectionscan/scan"]},
+    "mundane": {"engines": ["mundane_cards"]},  # 世俗盘右栏卡（tools/mundaneCards.js）
 }
 
 
@@ -111,7 +134,9 @@ def classify(name: str, definition, js, eps) -> str:
         from horosa_skill.service import _PYTHON_CHART_ENDPOINTS
         return "python_chart_backend" if definition.endpoint in _PYTHON_CHART_ENDPOINTS else "java_backend"
     if eps and not js:
-        return "python_chart_backend"
+        # 本地 runner 只打 Java 端点（如 bazi_inverse → /common/inversebazi）就是 Java 算的。
+        from horosa_skill.service import _PYTHON_CHART_ENDPOINTS
+        return "python_chart_backend" if set(eps) & _PYTHON_CHART_ENDPOINTS else "java_backend"
     if js:
         return "headless_js"
     return "local_data"
@@ -126,12 +151,13 @@ for name, definition in sorted(TOOL_DEFINITIONS.items()):
     if name in CLASS["chart_service_shenshu"]:
         eps = sorted(set(eps) | {f"/{name}/pan"})
     klass = classify(name, definition, js, eps)
+    extra = EXTRA_EVIDENCE.get(name, {})
     out[name] = {
         "compute_class": klass,
-        "engines": ken or js,
-        "endpoints": eps,
+        "engines": sorted(set(ken or js) | set(extra.get("engines", []))),
+        "endpoints": sorted(set(eps) | set(extra.get("endpoints", []))),
         "export_technique": TOOL_EXPORT_TECHNIQUE_MAP.get(name),
-        "notes": NOTES[klass],
+        "notes": NOTE_OVERRIDES.get(name, NOTES[klass]),
     }
 
 payload = {
@@ -144,9 +170,19 @@ payload = {
     "_classes": {k: NOTES[k] for k in sorted(NOTES)},
     "tools": out,
 }
-(REPO / "contracts/technique_provenance.json").write_text(
-    json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-)
+CONTRACT = REPO / "contracts/technique_provenance.json"
+rendered = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+if "--check" in sys.argv[1:]:
+    current = CONTRACT.read_text(encoding="utf-8") if CONTRACT.is_file() else ""
+    if current != rendered:
+        committed = json.loads(current or "{}").get("tools", {})
+        stale = sorted(k for k in set(committed) | set(out) if committed.get(k) != out.get(k))
+        print(f"technique_provenance.json != generator output ({len(stale)} tool(s)): {', '.join(stale)}")
+        print("fix the generator (EXTRA_EVIDENCE / NOTE_OVERRIDES / CLASS), then rerun without --check")
+        raise SystemExit(1)
+    print(f"technique_provenance.json == generator output ({len(out)} tools)")
+    raise SystemExit(0)
+CONTRACT.write_text(rendered, encoding="utf-8")
 counts: dict[str, int] = {}
 for entry in out.values():
     counts[entry["compute_class"]] = counts.get(entry["compute_class"], 0) + 1

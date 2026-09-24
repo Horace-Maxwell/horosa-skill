@@ -463,8 +463,67 @@ def load_manifest() -> dict:
     return json.loads(MANIFEST.read_text(encoding="utf-8"))["files"]
 
 
+_IMPORT_CLAUSE = re.compile(r"^import\s+(?P<clause>[^;\n]*?)\s+from\s+['\"]", re.M)
+
+
+def _imported_locals(statement: str) -> set[str]:
+    """Local binding names an `import … from '…'` statement introduces (default, named, namespace)."""
+    match = _IMPORT_CLAUSE.match(statement.strip())
+    if not match:
+        return set()  # side-effect import (`import 'x';`) binds nothing
+    clause = match.group("clause")
+    names: set[str] = set()
+    braces = re.search(r"\{([^}]*)\}", clause)
+    if braces:
+        for part in braces.group(1).split(","):
+            part = part.strip()
+            if part:
+                names.add(re.split(r"\s+as\s+", part)[-1].strip())
+        clause = clause[: braces.start()] + clause[braces.end():]
+    star = re.search(r"\*\s+as\s+([A-Za-z_$][\w$]*)", clause)
+    if star:
+        names.add(star.group(1))
+        clause = clause[: star.start()] + clause[star.end():]
+    default = re.match(r"\s*([A-Za-z_$][\w$]*)", clause)
+    if default:
+        names.add(default.group(1))
+    return {n for n in names if re.fullmatch(r"[A-Za-z_$][\w$]*", n)}
+
+
+def _code_only(text: str) -> str:
+    """Approximate JS text with comments and single-line string literals blanked (for reference scans)."""
+    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
+    text = re.sub(r"(?<![:\\])//[^\n]*", " ", text)
+    return re.sub(r"'(?:\\.|[^'\\\n])*'|\"(?:\\.|[^\"\\\n])*\"", "''", text)
+
+
+def _stubbed_names_still_used(text: str, stubbed: list[tuple[str, set[str], str]]) -> list[str]:
+    """⚠ notes for stubbed import bindings the kept code still references and the stub does not define.
+
+    v0.40.0: `liureng/LiuRengMain.js` stubbed `./ChuangChart.js` to '' because the React tail used it — but the
+    kept pure logic (`buildSanChuanData`) also does `new ChuangChart(...)`. The ReferenceError was swallowed by a
+    try/catch, so every 六壬择时 / 三式择时 六壬 condition scanned to zero hits with no error anywhere.
+    """
+    code = _code_only(text)
+    notes: list[str] = []
+    for spec, names, stub in stubbed:
+        stub_code = _code_only(stub)
+        live = sorted(
+            name for name in names
+            if not re.search(rf"\b(?:const|let|var|function|class)\s+[^;=]*?(?<![\w$]){re.escape(name)}(?![\w$])", stub_code)
+            and re.search(rf"(?<![\w$.]){re.escape(name)}(?![\w$])", code)
+        )
+        if live:
+            notes.append(
+                f"⚠ stub_import {spec}: stubbed binding(s) still used by the kept code and not defined by the stub: "
+                f"{', '.join(live)} (→ swallowed ReferenceError at run time; vendor the dependency instead)"
+            )
+    return notes
+
+
 def apply_deviations(text: str, deviations: list[dict]) -> tuple[str, list[str]]:
     notes: list[str] = []
+    stubbed: list[tuple[str, set[str], str]] = []
     for dev in deviations or []:
         kind, spec = dev.get("kind"), dev.get("specifier", "")
         if kind == "import_redirect":
@@ -479,11 +538,15 @@ def apply_deviations(text: str, deviations: list[dict]) -> tuple[str, list[str]]
             # lambda 而非字符串模板：stub 是 JS，里面出现 `\1` 会被当分组回填、`\c` 直接抛
             # re.error 把整轮 re-vendor 打死。JS stub 里带正则字面量或转义引号是很正常的事。
             stub = dev["stub"].rstrip("\n")
+            names: set[str] = set()
+            for statement in pattern.finditer(text):
+                names |= _imported_locals(statement.group(0))
             text, n = pattern.subn(lambda _m: stub, text)
             if not n:
                 notes.append(f"⚠ stub_import specifier not found: {spec}")
             else:
                 notes.append(f"stubbed {spec}")
+                stubbed.append((spec, names, stub))
         elif kind == "replace_text":
             # 精确文本替换（可空 = 删除）。给的是「import 之外的残留」用的：例如 LiuRengMain 头部
             # `const {Option} = Select;` 这类模块级 UI 解构——它们只服务被剥离的 React 尾部，
@@ -511,6 +574,7 @@ def apply_deviations(text: str, deviations: list[dict]) -> tuple[str, list[str]]
                 notes.append(f"truncated at /{dev['anchor']}/ (dropped {dropped} trailing line(s))")
         else:
             notes.append(f"⚠ unknown deviation kind: {kind}")
+    notes.extend(_stubbed_names_still_used(text, stubbed))
     return text, notes
 
 

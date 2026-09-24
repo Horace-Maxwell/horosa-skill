@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.40.0 (2026-09) | 并行同步实现者踩坑：stub 杀死纯逻辑（六壬择时恒零命中）/ worktree 子进程跑主 checkout / 算源生成器不幂等 / `_js_round` 负数截断 / 移植口径与测试替身 | stub 审计进 revendor；conftest 钉 PYTHONPATH；契约 == 生成器输出；桩按真实下发参数校验 |
 | v0.40.0 (2026-09) | 上游 v3.11.x 重同步：五处「同步了却没同步」——live 复验跑的是已装 runtime 的旧 JS / curated 件 restamp 不带内容 / 生成器修产物不修源 / 裸 `export default X` 漏剥 / vendored JSON 不在 manifest | 复验只认本仓引擎（conftest 钉根）；能 verbatim 的手工件一律 verbatim；修生成器不修产物 |
 | v0.39.0 (2026-09) | 发布前 CI 红：双语棘轮抓到新包 28 处单语 raise；本机跑的是「顺手的守卫」不是 run_ci_gates.py | 本机门禁 = `run_ci_gates.py`；按文件计数的棘轮是 API 契约，新包落地就按它写 |
 | v0.39.0 (2026-09) | 决策层：问题构造在 `ask()` 之外抛错，把 liureng_gods 打成 internal_error | 可选增强的**每一行**都要在降级护栏里；「英文 instructions」改成占比规则 |
@@ -105,6 +106,54 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.40.0 / 2026-09-24 — 并行同步各路实现者的踩坑：stub 杀死纯逻辑、移植口径、测试替身与 worktree
+
+背景：v3.11.x 同步拆成十路并行实现（隔离 worktree），各路交回的报告里有一批与技法无关、会再犯的形态。按「有没有机器守卫」分两类。
+
+**有守卫的**
+
+1. **stub 掉的 import，死的是纯逻辑、不是 UI。**
+   - 症状：六壬择时 / 三式择时的六壬条件对任何条件都 0 命中（形状合法的空结果，live 样例 元首课 修后 0 → 19）。
+   - 根因：`liureng/LiuRengMain.js` 的 manifest 把 `ChuangChart` / `LRXiangDoc` / `LRSanChuanRelationMini` 当「只有 React 尾部用」
+     stub 成空，而保留的纯逻辑（`buildSanChuanData` 里 `new ChuangChart`）也在用 → ReferenceError 被 try/catch 吞成 null。
+     selfcheck 当时只断言 `Number.isFinite(hit_count)`，看不见。
+   - 守卫：`revendor_core_js._stubbed_names_still_used`——stub 掉的绑定仍被保留代码引用、且 stub 没定义同名 → `--check` 报 ⚠
+     （负向对照：给 LiuRengMain 重加这两条历史 stub，分别报 ChuangChart / buildXiangContext）；首跑还揪出 `DateTime`（UI 草稿恢复链，
+     不可达）→ stub 改为定义同名、调到即抛明确错误的类。selfcheck 择日命中改锚独立算出的真值。
+2. **worktree 里的子进程测试跑的是主 checkout 的代码。**
+   - 症状：四路实现者各自在 worktree 里看到 stdio/http 测试报「116 个工具」，而本树已是 120。
+   - 根因：共享 venv 的 editable install 指向跑过 `uv sync` 的主 checkout；`python -m horosa_skill…` 子进程不经 pytest 的
+     `pythonpath=["src"]`。同形还有：同一秒内改回同长度代码会留下陈旧 `.pyc`（`PYTHONDONTWRITEBYTECODE=1`）。
+   - 守卫：`tests/conftest.py` 会话期把本 checkout 的 `src` 前置进 `PYTHONPATH`；`test_subprocess_children_import_this_checkout_not_the_editable_install`
+     （负向对照：worktree 里去掉 pin 即红，子进程解析到主 checkout）。
+3. **生成器不幂等：契约是手改的。**
+   - 症状：`gen_technique_provenance.py` 重跑，契约 26 个工具被改写（神数 14 路丢 `/wangji/xinyi` 与 `yanqin_yanfa`、bazi_inverse 被判成
+     python_chart_backend、guolao_chart 从 composite 变 headless_js……）；反过来契约也落后生成器 9 处（择日八键 `export_technique` 仍 null）。
+   - 根因：AST 只扫 runner 本体，helper 间接调用的证据与逐工具说明只能手改契约；`eps and not js` 一律判 chart 服务。
+   - 守卫：`EXTRA_EVIDENCE` / `NOTE_OVERRIDES` 进生成器，Java 端点判 java_backend；`--check` + `test_technique_provenance_generator.py`
+     锁「契约 == 生成器输出」（负向对照：改前契约下报 9 个工具不一致）。
+4. **`_js_round` 名为 JS Math.round，实为向零截断。**
+   - 症状：世俗盘实现者变异测试发现 `service._js_round(-1.7) == -1`（JS 为 -2）；AGENTS §4 一直写的是 `floor(x+0.5)`。
+   - 根因：`int(x+0.5)`，注释假设「age/span 恒正」，而调用点后来已不止这些。服务里另有一份正确的 `_js_math_round`。
+   - 守卫：改 `math.floor`（正数行为不变）；`test_js_round_mirrors_math_round_for_negative_values`（旧实现在 -0.7 / -1.7 / -2.5 三处红）。
+
+**只有测试、没有通用守卫的（照着做）**
+
+5. **移植口径**：上游 builder 读 `params.date` 是 `YYYY/MM/DD`，skill 归一成 `YYYY-MM-DD` → 七政 [大限] 出生年 0；moment
+   `add(x,'days')` 把小数天四舍五入到整天，照搬成 `timedelta(days=float)` 让波斯向运日期差一天；上游 AstroTxtMsg 是单字名（日/月），
+   skill 的 ASTRO_TEXT_MAP 是全名（太阳/月亮）——v56 宫神星表就这么印错而测试也断言错值；上游页面的**出厂缺省**≠引擎缺省
+   （六爻贵人 页面 2、引擎 0），只送调用方选项会落到引擎缺省；种子与缺省照上游 headless 路径（`build*SnapshotForFields` /
+   `aiAnalysisContext`），不照页面 state。
+6. **测试替身会说谎**：离线 fake 收到的 `/chart` 端点是 `"/"`（按 `/chart` 做键会静默落到罐装盘）；FakeClient 回显斜杠日期；
+   对所有端点同答一份的桩藏住了玄史 `id`/`slug` 映射错（改为逐端点校验真实下发参数）；导出解析器会去重段名，同一张卡出两次
+   对 missing/unknown 检查不可见；择日快照段间无空行，按 `\n\n` 切段会漏段；上游自己的 jest 骰子盘夹具把 `aspects` 嵌错了层，
+   真后端下那几段不可达而上游测试照绿（上游 bug，已如实上报，不写回上游）。
+7. **运行期语义**：合法的 JSON `null`（「查无」）被 `_call_remote` 当失败无限重试，且每轮都真打后端；输入归一化会把嵌套
+   `options.gender` 的 male/female 递归改成 1/0（五兆恰好只收字符串）；`/jieqi/year` Java 与 Python 两端都有、数据不同
+   （Java 多 bazi.fourColumns 与 chart.nongli），`test_endpoint_registry.py` 那句「chart-only」注释已改正。
+8. **上游代码自己也会崩**：逐字 vendor 的 `jyotishSnapshot` 有暂时性死区（`scS`）与键名错（`index`/`month`），从没在真数据上跑过；
+   世俗盘卡 builder 吞掉每张卡的异常，闭包坏了只表现为「卡不见了」——只有值级金标抓得到。
 
 ### v0.40.0 / 2026-09-24 — 上游 v3.11.x 重同步：五处「同步了却没同步」
 

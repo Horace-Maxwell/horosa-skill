@@ -26,7 +26,9 @@ import { sanChuanRelationSnapshotLines } from '../liureng/LRSanChuanRelationMini
 
 
 
-
+// headless stub：DateTime 只在 UI 草稿恢复链（deserializeBirthDraft → buildBirthFields → cloneDateTimeSafe）里用，
+// 该链不被任何 headless 导出调用；真被调到时构造即抛明确错误，而不是被 try/catch 吞掉的 ReferenceError。
+class DateTime { constructor(){ throw new Error('headless stub: components/comp/DateTime is not vendored'); } }
 
 
 
