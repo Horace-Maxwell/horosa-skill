@@ -101,6 +101,13 @@ def _settings_used(
         used["siderealModeKey"] = {"label": "岁差模式（印占）", "value": chart["siderealModeKey"]}
         if chart.get("ayanamsaValue") is not None:
             used["ayanamsaValue"] = {"label": "岁差值（印占）", "value": chart["ayanamsaValue"]}
+    # runner 实际钉住的口径（sync311 F16）：调用方没给、却由 skill 按上游缺省**替它定下**的值——
+    # 起筮种子（时刻派生）、「今年」流年/大运年、演法农历月……不回显就无从解释「同样输入明年结果为何变」。
+    applied = response_data.get("settings_applied")
+    if isinstance(applied, dict):
+        for field, item in applied.items():
+            if isinstance(item, dict) and "value" in item:
+                used[str(field)] = {"label": str(item.get("label") or field), "value": item["value"]}
     return used
 
 

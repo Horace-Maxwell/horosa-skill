@@ -202,14 +202,14 @@ AI_EXPORT_TECHNIQUES = [
     {"key": "wangji", "label": "皇极经世"},
     {"key": "wuzhao", "label": "五兆"},
     {"key": "taixuan", "label": "太玄"},
-    {"key": "jingjue", "label": "京氏易"},
-    {"key": "shenyishu", "label": "神乙数"},
+    {"key": "jingjue", "label": "荆诀"},
+    {"key": "shenyishu", "label": "神易数"},
     {"key": "shaozi", "label": "邵子神数"},
     {"key": "tieban", "label": "铁板神数"},
-    {"key": "fendjing", "label": "分经神数"},
+    {"key": "fendjing", "label": "鬼谷分定经"},
     {"key": "beiji", "label": "北极神数"},
     {"key": "nanji", "label": "南极神数"},
-    {"key": "chunzi", "label": "淳子神数"},
+    {"key": "chunzi", "label": "蠢子数"},
     {"key": "xianqin", "label": "演禽"},
     {"key": "cetian", "label": "策天飞星"},
     {"key": "qizhengkin", "label": "七政四余·张果"},
@@ -349,8 +349,9 @@ AI_EXPORT_PRESET_SECTIONS = {
     # v0.33.0：+单时判读（explainAt 时 /electionscan/explain 逐叶判读；条件段双登记）。
     "tianxing": ["起盘信息", "征象搜索配置", "征象条件", "命中区间", "选中时刻星盘", "单时判读"],
     "election": ["起盘信息", "流派口径", "总评", "红线", "分项", "尊贵强弱", "阿拉伯点", "择前考量", "用事专属", "危象日参照", "应期", "本命合参", "时势合参", "建议"],
-    # v0.33.0 批 I-5：+心易起卦（xinyiMethod 三法独立起卦时产；条件段双登记）。
-    "wangji": ["起盘", "元会运世", "天道卦", "人事卦", "历史年表", "心易发微", "经典原文", "心易起卦"],
+    # 上游 huangji preset 逐字逐序（aiExport.js:669）。sync311 F15：撤 skill 自造的 [心易起卦]——所选心易法的
+    # 卦面按上游 buildHuangJiSnapshotForFields 进 [心易发微]（xinyiMethod=none 时该段不出 → 条件段双登记）。
+    "wangji": ["起盘", "元会运世", "天道卦", "人事卦", "心易发微", "经典原文", "历史年表"],
     # v13（上游 v3.9.0 五兆依古籍全量补齐）：+6 段，由新 vendored 的 websrv/wuzhao_{classics,duanci,
     # leizhan}.py 产出，vendored 实例实测恒出（非条件段）。
     "wuzhao": ["起盘", "揲筮", "兆", "木乡", "火乡", "土乡", "金乡", "水乡", "特殊标记", "断辞", "君子小人", "纳甲", "神煞", "行神", "类占"],
@@ -603,8 +604,8 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     "qizhengelection": ["择日动盘", "天象要素", "日月食搜索", "方位搜索"],
     # 波斯向运条件段：[指定日期向运盘] 仅给 datetime 时产（/predict/persianchart 整铸）。
     "persiandirected": ["指定日期向运盘"],
-    # 皇极经世条件段：[心易起卦] 仅给 xinyiMethod（数/方位/字画三法）时产。
-    "wangji": ["心易起卦"],
+    # 皇极经世条件段：[心易发微] 缺省（datetime）恒出，xinyiMethod=none 不出（上游挂载「不算心易」档）。
+    "wangji": ["心易发微"],
     # 卜卦专题深化（诉讼/买房/怀孕）：仅在起卦命中 3 类专题之一时产出 [专题深化·<title>]（归一为专题深化·X）。
     # 专题深化·X 仅特定 category 出；后两段仅 renaissance/medieval 档（accidentalMode=lilly /
     # lotsSet=core15）出 —— 默认 classical 档不产，属口径差异不是缺陷。

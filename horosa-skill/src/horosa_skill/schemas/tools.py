@@ -937,9 +937,11 @@ class ZhengChuanInput(FlexibleModel):
     suijun: str | None = None
     age: int | None = None
     # xinyi 查询层（铁算心易·条文秘数/性情项查询，任一即可）：
+    # sync311 F14：上游挂载缺省（aiAnalysisContext.js:3240-3243，F-53）父母/日/一刻/乾/子；ke 收 1–8 或 一刻…八刻
+    # （查表键是「一刻…八刻」，此前 int 直送 → 八刻分命恒空）；简体项目/宫/声音归一到表内繁体。
     item: str | None = None
     sound: str | None = None
-    ke: int | None = None
+    ke: int | str | None = None
     gong: str | None = None
     xqZhi: str | None = None
     xqYushu: int | None = None
@@ -1011,13 +1013,13 @@ class XuanshiInput(FlexibleModel):
     #   events_meta = 编年细化 / 十年灾异 / 分面计数 / 列表页元数据。
     action: str | None = "search"
     q: str | None = Field(default=None, description="全文检索词（事件/人物/术数名皆可）。")
-    id: str | None = Field(default=None, description="详情类 action 的条目 id（如事件 XTS-027）。")
+    id: str | None = Field(default=None, description="详情键：事件 id（XTS-027）/ 编辑层 slug（fig-laozi）。")
     tradition: str | None = Field(default=None, description="传统过滤：正史 / 野载。")
     dynasty: str | None = Field(default=None, description="朝代过滤（如 唐 / 南北朝 / 志怪笔记）。")
     technique: str | None = Field(default=None, description="术数门类过滤（如 占星 / 相术 / 卜筮）。")
     history: str | None = Field(default=None, description="史书过滤（如 新唐书 / 晋书）。")
     evidence: str | None = Field(default=None, description="证据等级过滤。")
-    omen: str | None = Field(default=None, description="天象类别过滤（如 彗星 / 日食，celestial 用）。")
+    omen: str | None = Field(default=None, description="天象类（日食/彗孛/流星…）：celestial/term_profile/microchronology。")
     source: str | None = Field(default=None, description="天象出处过滤（celestial 用）。")
     year_from: int | None = Field(default=None, description="天象起始公历年（可负=公元前）。")
     year_to: int | None = Field(default=None, description="天象结束公历年。")
@@ -1026,7 +1028,10 @@ class XuanshiInput(FlexibleModel):
     date_key: str | None = Field(default=None, description="daily 的日期键（YYYY-MM-DD，缺省今日）。")
     page: int | None = Field(default=None, description="列表页码（1 起）。")
     page_size: int | None = Field(default=None, description="每页条数（默认 30）。")
-    limit: int | None = Field(default=None, description="search/timeline 下钻的条数上限。")
+    limit: int | None = Field(default=None, description="条数上限。")
+    decade: int | None = Field(default=None, description="microchronology 十年期。")
+    has_crosswalk: bool | None = Field(default=None, description="celestial：有无交叉对照。")
+    in_chapter: bool | None = Field(default=None, description="celestial：in_chapter。")
     top_n: int | None = Field(default=None, description="graph 节点上限（默认 70）。")
     min_weight: int | None = Field(default=None, description="graph 边最小权重（默认 2）。")
 
@@ -1236,6 +1241,8 @@ class GeomancyInput(BirthInput):
     # 后端由 4 母卦推 16 图形 + 十二宫图形入宫 + 判官/见证/解读技法 + 转宫派生 + 定局落星。question 为所问，
     # questionType 择 11 类问类。
     question: str | None = None
+    # 问类（后端 _QTYPES 十一类，webgeomancysrv.py:42-46）：custom/life/health/wealth/marriage/career/children/
+    # journey/religion/enemy/death；其它值结构化报错（此前 lawsuit/theft/… 被后端静默改回 custom）。
     questionType: str | None = "custom"
     # 十六卦目录（v0.33.0 批 I-5，/geomancy/catalog）：includeCatalog=true 加产 [十六卦目录] 段（16 图形属性总表）。
     includeCatalog: bool | None = Field(default=None, description="附十六图形属性总表（五行/主星/星座/性/象意，agent grounding 用）")
@@ -1251,26 +1258,33 @@ class GeomancyInput(BirthInput):
     quesitedHouse: int | None = None
     turnTo: int | None = None
     # 传本粒度覆盖 passthrough（markStyle/direction/houseProjection/wrapHouses/reconciler/reconcilerMode/
-    # haltEnabled/compoundMode/numberSystem/chartMode/houseSystem/ascSource/namesSystem/parityScope）；
-    # 未传=None → 内核回落 profile 默认，旧盘字节零变。
+    # haltEnabled/compoundMode/numberSystem/chartMode/houseSystem/ascSource/namesSystem/parityScope +
+    # sync311 F12：housePlacement 图形入宫 / castNumbers 报数起卦十六数 / planetaryChart* 行星地占盘四键）；
+    # 未传=None → 内核回落 profile 默认，旧盘字节零变；认不出的键回执 data.params_ignored。
     options: dict[str, Any] | None = None
 
 
 class TarotInput(BirthInput):
-    # 塔罗：以起卦时刻确定性抽牌（date/time 派生种子，同刻同盘可复现；lat/lon/zone 仅为一致复用，不参与抽牌）。
-    # spread 牌阵(默认 three 三张·过去现在未来)，deck 牌系(默认 rws 韦特)，question 所问。seed 显式种子(可选，覆盖时间种子)。
+    # 塔罗：确定性抽牌。种子 = 上游「生辰」种子来源 seedFromFields（TarotMain.js:97-108）：
+    # name|date|time|lat|lon（空项跳过）——同人同刻同地同牌；seed 显式种子覆盖。
+    # spread 牌阵（缺省 three；须在该牌组 caps.spreads 允许表内，键名见 guidance：single/relation/celtic…），
+    # deck 牌系（默认 rws 韦特），question 所问。
     question: str | None = None
-    spread: str | None = "three"
+    spread: str | None = None
     deck: str | None = "rws"
     seed: str | None = None
-    usesReversals: bool | None = True
-    # dignities 元素尊位强弱、variant 占象变体（A/B），影响逐牌详解与综合断语。
+    # 缺省随牌组（deck.usesReversals）；显式 true/false 一律下发（此前 true 从不下发，马赛系开不了逆位）。
+    usesReversals: bool | None = None
+    # dignities 元素尊位强弱、variant 对应体系（A/B/C），影响逐牌详解与综合断语。
     dignities: bool | None = None
     variant: str | None = None
-    # 定局法：majority(多数) / orientation(正逆) / single(单张) / numeric(数字) / polarity(极性)。
+    # 定局法（引擎 YESNO_MODES 八法）：majority/orientation/single/numeric/polarity/weighted_center/anchor/single3。
     verdictMode: str | None = "majority"
     # 生命牌：给出生年月日（+可选 refYear 流年）才产出[生命牌]段；不传则该段自然不出。
     birth: dict[str, Any] | None = None
+    # 引擎其余判读设置（sync311 F9，锚引擎 resolveSettings 键集）：meaningSystem/reversalMode/timingMethod/
+    # timingUnit/majorsOverlay/sig/includeBlank/…；认不出的键回执 data.params_ignored，值不被引擎接受即报错。
+    options: dict[str, Any] | None = Field(default=None, description="引擎判读设置（键表见 guidance）")
 
 
 class TechniqueReportInput(FlexibleModel):
@@ -1302,9 +1316,11 @@ class LingqiInput(BirthInput):
 
 
 class ShenShuInput(FlexibleModel):
-    # 神数 family (wangji 皇极经世 / wuzhao 五兆 / taixuan 太玄 / jingjue 京房易/靖瞶 / shenyishu 神乙数):
-    # ganzhi-based, so only date (+ optional time) + the 晚子时 switches are needed; lat/lon/zone are not used.
-    # `options` passes any technique-specific override straight to the engine (e.g. wuzhao mode/number, seed).
+    # 神数 family (wangji 皇极经世 / wuzhao 五兆 / taixuan 太玄筮法 / jingjue 荆诀 / shenyishu 神易数 + 9 kinastro):
+    # ganzhi-based, so date (+ time) + the 晚子时 switches drive the cast; kinastro 族另读 gender/zone（四柱按时区
+    # 定气/立春界）。`options` = 技法旋钮，**逐技法键表**在 shenshu_options.SHENSHU_OPTION_KNOBS（类型校验；
+    # horosa_agent_guidance(tool_name=…).options_keys 可查）；认不出的键不转发、回执 data.params_ignored。
+    # 不在 tools/list 写键表：14 个工具共享本模型，逐工具描述会把广告层撑爆（预算见 verify_mcp_list_budget）。
     date: str
     # v0.36.0：神数五支的性别/地点此前未声明——`_run_shenshu_tool` 原样转发，CLI 有效而 MCP 扁平面静默丢弃
     # （PR #17 同型）。gender 五支皆用；zone/lat/lon（或 gpsLat/gpsLon）xianqin/qizhengkin/cetian 起盘需要。
@@ -1334,19 +1350,28 @@ class CetianInput(ShenShuInput):
     lon: str | None = None
     gpsLat: float | None = None
     gpsLon: float | None = None
+    # 地点显示名（sync311 F16）：上游 kinastro 挂载恒带 fields.pos（kinAstroFieldsSync.js:81），策天 [起盘]
+    # 「地点」行只认它（webcetiansrv.py:398，缺名不出该行）；此前扁平面未声明 → 静默丢弃。
+    pos: str | None = None
+
+
+class QizhengKinInput(ShenShuInput):
+    # 七政四余·张果星宗：地点显示名进 [起盘]（webqizhengkinsrv.py:484；缺名后端落占位「星阙地点」）。
+    pos: str | None = None
 
 
 class WangjiInput(ShenShuInput):
     # 皇极经世（v0.33.0 批 I-5）：+心易三法独立起卦（/wangji/xinyi；时刻法已内嵌于盘面 [心易发微]）。
+    # sync311 F15：所选之法的卦面进 [心易发微]（上游 HuangJiMain.buildSnapshotText），缺省 datetime（上游挂载缺省）。
     xinyiMethod: str | None = Field(
         default=None,
-        description="心易起卦法：number=报数（upperNum/lowerNum）| direction=方位（objectGua/xinyiDirection/xinyiHour）| character=字画（upperStrokes/lowerStrokes）。给了才产 [心易起卦] 段。",
+        description="心易起卦法：datetime（缺省）/number/direction/character/none。结果进 [心易发微]。",
     )
     upperNum: int | None = Field(default=None, description="报数法上卦数")
     lowerNum: int | None = Field(default=None, description="报数法下卦数")
-    objectGua: str | None = Field(default=None, description="方位法物象卦（乾坤震巽坎离艮兑）")
-    xinyiDirection: str | None = Field(default=None, description="方位法方位（北/东北/东/东南/南/西南/西/西北）")
-    xinyiHour: int | None = Field(default=None, description="方位法时辰小时 0-23（动爻用）")
+    objectGua: str | None = Field(default=None, description="方位法物象卦（缺省離，简繁皆可）")
+    xinyiDirection: str | None = Field(default=None, description="方位法方位（缺省南，简繁皆可）")
+    xinyiHour: int | None = Field(default=None, description="方位法时辰 0-23（缺省盘面时辰）")
     upperStrokes: int | None = Field(default=None, description="字画法上字笔画数")
     lowerStrokes: int | None = Field(default=None, description="字画法下字笔画数")
 

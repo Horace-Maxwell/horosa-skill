@@ -61,16 +61,22 @@ from horosa_skill.schemas.common import (
     ToolEnvelope,
 )
 from horosa_skill.schemas.tools import (
+    BaZiBirthInput,
+    BirthInput,
     DispatchInput,
+    LiuRengGodsInput,
     MemoryAnswerInput,
     MemoryQueryInput,
     MemoryShowInput,
+    NongliTimeInput,
     ReportFromToolInput,
     ReportRenderInput,
     HecanInput,
     ReportTemplateInput,
     TechniqueReportInput,
+    ZiWeiBirthInput,
 )
+from horosa_skill.shenshu_options import SHENSHU_OPTION_KNOBS, resolve_shenshu_options
 from horosa_skill.tracing import TraceRecorder
 
 logger = logging.getLogger(__name__)
@@ -1271,6 +1277,57 @@ def _predictive_common_sections_text(technique: str | None, payload: dict[str, A
             if -1 < age < 200:
                 moment_lines.append(f"盘主当前年龄：{round(age * 100) / 100} 岁")
     return _render_snapshot_text([("当前时点", "\n".join(moment_lines)), ("方法说明", "\n".join(notes))])
+
+
+# 神数正传·铁算心易查询层（sync311 F14）。表键即 vendored zhengchuanXinyiLocal.js 的 XINYI_* 常量（繁体）。
+_ZC_XINYI_ITEMS = ("父母", "兄弟", "姻緣", "子孫", "官祿", "疾病")
+_ZC_XINYI_SOUNDS = ("日", "月", "星", "辰", "水", "火", "土", "石", "平", "上", "去", "入", "開", "發", "收", "閉")
+_ZC_XINYI_KE = ("一刻", "二刻", "三刻", "四刻", "五刻", "六刻", "七刻", "八刻")
+_ZC_XINYI_GONG = ("乾", "兌", "離", "震", "巽", "坎", "艮", "坤")
+_ZC_XINYI_ZHI = tuple("子丑寅卯辰巳午未申酉戌亥")
+_ZC_SIMPLIFIED = {"姻缘": "姻緣", "子孙": "子孫", "官禄": "官祿", "开": "開", "发": "發", "闭": "閉", "兑": "兌", "离": "離"}
+# 上游挂载缺省（aiAnalysisContext.js:3240-3243，挂载自检 F-53）：父母·日·一刻·乾·子（与页面缺省同）；
+# 此前 skill 只透传显式键 → 缺省心易查询 [条文秘数查询]/[八刻分命] 整段不产。
+_ZC_XINYI_DEFAULTS = {"item": "父母", "sound": "日", "ke": "一刻", "gong": "乾", "xqZhi": "子"}
+
+
+def _zhengchuan_xinyi_query(payload: dict[str, Any]) -> dict[str, Any]:
+    query: dict[str, Any] = {}
+    for key, default in _ZC_XINYI_DEFAULTS.items():
+        value = payload.get(key)
+        query[key] = default if value is None or f"{value}".strip() == "" else value
+    ke = query["ke"]
+    # 八刻分命表键是「一刻…八刻」：数字 1–8（含 "3"）按序映射；此前 ke 被 schema 限成 int 直送，查表恒空。
+    ke_text = f"{ke}".strip()
+    if ke_text.isdigit() and 1 <= int(ke_text) <= 8:
+        ke_text = _ZC_XINYI_KE[int(ke_text) - 1]
+    if ke_text not in _ZC_XINYI_KE:
+        raise ToolValidationError(
+            bilingual(
+                f"铁算心易 ke={ke!r} 不合法：应为 1–8 或 {'/'.join(_ZC_XINYI_KE)}。",
+                f"zhengchuan xinyi ke={ke!r} is invalid: use 1-8 or {'/'.join(_ZC_XINYI_KE)}.",
+            ),
+            code="tool.zhengchuan_invalid_xinyi_ke",
+            details={"ke": ke, "allowed": list(_ZC_XINYI_KE)},
+        )
+    query["ke"] = ke_text
+    unknown: list[str] = []
+    for key, allowed in (("item", _ZC_XINYI_ITEMS), ("sound", _ZC_XINYI_SOUNDS), ("gong", _ZC_XINYI_GONG), ("xqZhi", _ZC_XINYI_ZHI)):
+        text = f"{query[key]}".strip()
+        text = _ZC_SIMPLIFIED.get(text, text)
+        query[key] = text
+        if text not in allowed:
+            unknown.append(f"{key}={text}")
+    if unknown:
+        # 上游对表外值同样是「查不到 → 该段不出」；这里照走，但不静默（warnings 点名 + 列表内可选值）。
+        _degrade(
+            "铁算心易查询项不在古籍表内（%s）：对应查询段不出", "、".join(unknown),
+            note=f"铁算心易：{'、'.join(unknown)} 不在表内（项目 {'/'.join(_ZC_XINYI_ITEMS)}；宫 {'/'.join(_ZC_XINYI_GONG)}），对应查询段不出。",
+        )
+    for key in ("xqYushu", "gender"):
+        if payload.get(key) is not None:
+            query[key] = payload[key]
+    return query
 
 
 def _ken_datetime_parts(payload: dict[str, Any]) -> dict[str, int]:
@@ -4430,6 +4487,106 @@ _SHENSHU_ENDPOINTS = {
 }
 
 
+# 跨技法通用的已知顶层键：dispatch/hecan 把整份出生资料（BirthInput 族全字段）原样灌给每个技法，
+# 它们不是「写错的神数旋钮」→ 不回执 params_ignored（否则每次合参都刷一屏噪声警告）。
+_SHENSHU_GENERIC_KEYS: frozenset[str] = frozenset(
+    set(BirthInput.model_fields)
+    | set(ZiWeiBirthInput.model_fields)
+    | set(BaZiBirthInput.model_fields)
+    | set(LiuRengGodsInput.model_fields)
+    | set(NongliTimeInput.model_fields)
+    | {"request", "save_result", "response_view", "question", "name", "pos", "ad"}
+)
+
+
+# 写在 options 里也照收的核心键（它们是请求体的一级字段，不是技法旋钮；见 _run_shenshu_tool）。
+_SHENSHU_PROMOTABLE_OPTION_KEYS = frozenset(
+    {"gender", "zone", "lat", "lon", "gpsLat", "gpsLon", "pos", "after23NewDay", "lateZiHourUseNextDay"}
+)
+
+
+def _upstream_cast_time_seed(parts: dict[str, int]) -> int:
+    """上游无头起课种子（TaiXuanMain.js:141-152 / JingJueMain.js:105-117 同式）：
+
+    (年·月·日)·时·分 拼成 yyyyMMddHHmm 再 mod 1e9；BC 年把年位平移 |年|+5（同数 BC/AD 必异种子，
+    AD 逐位不变）。同一起课时刻反复挂载得同一卦——「以时起卦」语义。
+    """
+    year = int(parts["year"])
+    year_part = year if year >= 0 else abs(year) + 5
+    stamp = ((year_part * 10000 + parts["month"] * 100 + parts["day"]) * 10000) + parts["hour"] * 100 + parts["minute"]
+    return stamp % 1_000_000_000
+
+
+# 五兆计算键缺省（上游 WuZhaoMain DEFAULT_OPTIONS :109-121 + DEFAULT_SPLITS/QIAN_THROWS/ZHAO_NUMS :87-89）。
+# 上游页面与挂载都**全量**下发这 11 键（buildPanPayload / normalizeCalcOptions），缺哪键后端就回落
+# 它自己的缺省——以钱代筮关自动掷而不带六掷时后端会逐掷走 RNG（webwuzhaosrv._qian_shifa），所以必须全发。
+_WUZHAO_CALC_DEFAULTS: dict[str, Any] = {
+    "mode": "ganzhi", "number": 0, "manual": False, "manualSplits": [18, 8, 5, 2, 1, 1],
+    "shifaVariant": "guayi", "qianThrows": [2, 2, 2, 2, 2, 2], "qianAuto": True,
+    "zhaoNums": [3, 3, 3, 3, 3, 3], "xingshenMonth": "lunar", "mingZhi": "", "gender": "",
+}
+_WUZHAO_MODE_LABELS = {
+    "ganzhi": "干支起盘", "day": "日干起盘", "hour": "时干起盘", "minute": "分干起盘",
+    "tang": "唐代正法揲筮", "dunhuang": "敦煌校录揲筮", "qian": "以钱代筮", "zhushu": "直输五兆数",
+}
+
+
+def _append_replay_note(text: str, section_title: str, note: str) -> str:
+    """上游 WuZhaoMain.appendReplayNote（:360-366）逐字移植：复现说明并入既有段，不新增段头。"""
+    blocks = f"{text or ''}".split("\n\n")
+    for index, block in enumerate(blocks):
+        if block.startswith(f"[{section_title}]"):
+            blocks[index] = f"{block}\n复现说明：{note}"
+            return "\n\n".join(blocks)
+    return f"{text}\n复现说明：{note}"
+
+
+_SNAPSHOT_HEADER_LINE_RE = re.compile(r"^\[[^\]\n]+\]$")
+
+
+def _replace_snapshot_section(text: str, title: str, body: list[str] | None) -> str:
+    """把快照里 `[title]` 整段换成 body（None=删段；段不存在则追加到末尾）。段间空行照旧。"""
+    lines = f"{text or ''}".split("\n")
+    header = f"[{title}]"
+    if header not in lines:
+        if body is None:
+            return text
+        block = "\n".join([header, *body])
+        return f"{text.rstrip()}\n\n{block}" if f"{text or ''}".strip() else block
+    start = lines.index(header)
+    end = start + 1
+    while end < len(lines) and not _SNAPSHOT_HEADER_LINE_RE.match(lines[end]):
+        end += 1
+    new_block = [] if body is None else [header, *body]
+    if body is not None and end < len(lines):
+        new_block.append("")
+    merged = "\n".join(lines[:start] + new_block + lines[end:])
+    return re.sub(r"\n{3,}", "\n\n", merged).strip()
+
+
+def _human_scalar(value: Any) -> str:
+    """上游 humanReadableFields.formatHumanValue 的标量/数组子集（心易卦面只有这两形）。"""
+    if value is None or value == "":
+        return "—"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, list):
+        text = "、".join(item for item in (_human_scalar(v) for v in value) if item and item != "—")
+        return text or "—"
+    if isinstance(value, dict):
+        text = "；\n".join(f"{k}：{_human_scalar(v)}" for k, v in value.items() if _human_scalar(v) != "—")
+        return text or "—"
+    return f"{value}".strip()
+
+
+# 皇极经世·心易发微（kinwangji/xinyi.py:42-72 只收**繁体**卦名/方位，简体直送即 ValueError → 500）。
+_WANGJI_XINYI_METHODS = ("none", "datetime", "number", "character", "direction")
+_WANGJI_TRIGRAMS = ("乾", "兌", "離", "震", "巽", "坎", "艮", "坤")
+_WANGJI_TRIGRAM_ALIASES = {"兑": "兌", "离": "離"}
+_WANGJI_DIRECTIONS = ("北", "西南", "東", "東南", "南", "中", "西北", "西", "東北")
+_WANGJI_DIRECTION_ALIASES = {"东": "東", "东南": "東南", "东北": "東北"}
+
+
 def _split_birth_ymdhm(payload: dict[str, Any]) -> dict[str, int]:
     # 神数 engines take split year/month/day/hour/minute (ganzhi-based). Derive from date "YYYY-MM-DD"/
     # "YYYY/MM/DD" (+ optional time "HH:MM[:SS]"). Raises ToolValidationError on an unparseable date
@@ -4609,8 +4766,23 @@ _GEO_PZH = {"Sun": "日", "Moon": "月", "Mercury": "水", "Venus": "金", "Mars
 _GEO_TRI = {1: "火", 5: "火", 9: "火", 2: "地", 6: "地", 10: "地", 3: "风", 7: "风", 11: "风", 4: "水", 8: "水", 12: "水"}
 # ifa（西非同族）为结构对照模式：不产地占判读。skill 暴露的 8 家占断传本白名单（明确排除 ifa）。
 _GEOMANCY_PROFILES = ("european_classical", "european_planetary", "european_modern", "arabic_raml", "india_ramal", "sikidy", "hakata", "greek")
-# 传本粒度覆盖 passthrough 白名单（未传即不发 → 内核回落 profile 默认，旧盘字节零变）。
-_GEOMANCY_OPTION_KEYS = ("markStyle", "direction", "houseProjection", "wrapHouses", "reconciler", "reconcilerMode", "haltEnabled", "compoundMode", "numberSystem", "chartMode", "houseSystem", "ascSource", "namesSystem", "parityScope")
+# 传本粒度覆盖 passthrough 白名单（未传即不发 → 内核回落 profile 默认，旧盘字节零变）。键名 = webgeomancysrv.reading
+# 的 `_opt/_optb(...)` 读键（:443-465）；sync311 F12 补 housePlacement / 行星地占盘四键（castNumbers 另行处理）。
+_GEOMANCY_OPTION_KEYS = (
+    "markStyle", "direction", "houseProjection", "wrapHouses", "reconciler", "reconcilerMode", "haltEnabled",
+    "compoundMode", "numberSystem", "chartMode", "houseSystem", "ascSource", "namesSystem", "parityScope",
+    "housePlacement", "planetaryChart", "planetaryChartZodiac", "planetaryChartNodes", "planetaryChartExtras",
+)
+# 问类 = 后端 _QTYPES 十一类（webgeomancysrv.py:42-46）；其它值后端静默改回 custom（:379-381）→ 这里显式拒。
+_GEOMANCY_QUESTION_TYPES = (
+    "custom", "life", "health", "wealth", "marriage", "career", "children", "journey", "religion", "enemy", "death",
+)
+
+
+def _geomancy_time_seed(parts: dict[str, int]) -> int:
+    """上游 GeomancyMain.computeTimeSeed（:229-246）：(YY)MMDDHHmm 折进 int32 正区间（mod 2^31−1）。"""
+    value = (parts["year"] % 100) * 100000000 + parts["month"] * 1000000 + parts["day"] * 10000 + parts["hour"] * 100 + parts["minute"]
+    return value % 2147483647
 
 
 def _geo_figure_line(fig: Any, role: str) -> str:
@@ -4966,7 +5138,7 @@ def _shift_moment(moment: str, days: float) -> str:
 
 # 玄史条目的展示键序（存在才渲染；覆盖 事件/天象/人物/朝代/术数/名词/故事 各族的常见字段）。
 _XUANSHI_FIELD_ORDER: tuple[tuple[str, str], ...] = (
-    ("title", "标题"), ("name", "名称"), ("event_id", "编号"), ("id", "编号"),
+    ("title", "标题"), ("name", "名称"), ("event_id", "编号"), ("slug", "slug"), ("id", "编号"),
     ("tradition", "传统"), ("dynasty", "朝代"), ("period", "时期"), ("year", "公历年"),
     ("history", "史书"), ("volume_no", "卷次"), ("citation", "引证"),
     ("region", "地域"), ("operators", "施术者"), ("targets", "对象"), ("techniques", "术数"),
@@ -6668,9 +6840,14 @@ class HorosaSkillService:
         while True:
             candidate_payloads = _java_chart_payload_candidates(endpoint, payload)
             param_errors: list[tuple[dict[str, Any], ToolTransportError]] = []
+            # 🔴 「调用成功」必须单独记：后端合法地回 JSON `null`（玄史 get_figure 等查无此 slug 即回 null）时
+            # data 仍是 None——旧循环拿 `data is not None` 当成功判据，于是对 null 无限重发、每轮新建 TLS 上下文，
+            # 进程 100% CPU 挂死并持续打后端（sync311 F13 实测：旧映射下 figure 恒发错键 → 恒 null → 恒挂）。
+            call_succeeded = False
             for remote_payload in candidate_payloads:
                 try:
                     data = client.call(remote_endpoint, remote_payload)
+                    call_succeeded = True
                     break
                 except ToolTransportError as exc:
                     body = str(exc.details.get("body", ""))
@@ -6721,7 +6898,7 @@ class HorosaSkillService:
                         ),
                     },
                 ) from exc
-            if data is not None:
+            if call_succeeded:
                 break
             continue
         if use_chart_server:
@@ -6734,6 +6911,9 @@ class HorosaSkillService:
             # 对这族端点数组是合法形状，包一层交给调用方；其余端点维持 dict 硬约束（形状漂移要炸出来）。
             if endpoint.startswith("/xuanshi/") and isinstance(unwrapped, list):
                 return {"items": unwrapped}
+            # 详情端点查无此条（slug/id 不存在）回 JSON null：是合法的「零命中」，不是形状漂移。
+            if endpoint.startswith("/xuanshi/") and unwrapped is None:
+                return {"items": [], "total": 0}
             raise ToolTransportError(
                 "Horosa endpoint returned a non-object result payload.",
                 code="transport.invalid_result_shape",
@@ -8600,34 +8780,41 @@ class HorosaSkillService:
         except sqlite3.Error:
             return False
 
-    # 玄史 action → 端点全路径（存字面量：端点登记守卫按字面调用点核对）与该端点认识的参数名。
+    # 玄史 action → 端点全路径（存字面量：端点登记守卫按字面调用点核对）与该端点**真读**的参数名。
+    # 🔴 sync311 F13：参数名逐端点对齐 webxuanshisrv.py 的 `_str/_int/_bool(d, "<键>")`——此前 figure/technique/
+    # term/dynasty/story 发 `id` 而后端只读 `slug`（恒 null）、term_profile 要 `omen`、microchronology 发
+    # dynasty/年段而后端读 history/omen_type/decade、figures/stories 发 page/page_size 而后端读 limit/offset、
+    # celestial 丢了 q/has_crosswalk/in_chapter。离线桩当时对每个端点回同一份数据，所以一条都红不了。
+    #   * slug 族：payload.slug（逃生舱）> id > q（名称/slug 皆可由 q 兜）；
+    #   * term_profile：omen > q > id（后端读 omen/label）；
+    #   * figures/stories 的 page/page_size 折算成 limit/offset（显式 limit/offset 优先）。
     _XUANSHI_ACTIONS: dict[str, tuple[str, tuple[str, ...]]] = {
-        "search": ("/xuanshi/search", ("q", "limit", "tradition")),
-        "events": ("/xuanshi/events", ("q", "tradition", "dynasty", "technique", "history", "evidence", "page", "page_size")),
-        "event": ("/xuanshi/event", ("id",)),
-        "celestial": ("/xuanshi/celestial", ("dynasty", "omen", "history", "source", "year_from", "year_to", "page", "page_size")),
-        "celestial_event": ("/xuanshi/celestial_event", ("id",)),
-        "figures": ("/xuanshi/figures", ("q", "page", "page_size")),
-        "figure": ("/xuanshi/figure", ("id", "q")),
+        "search": ("/xuanshi/search", ("q", "limit", "tradition")),  # :514-516
+        "events": ("/xuanshi/events", ("q", "tradition", "dynasty", "technique", "history", "evidence", "page", "page_size")),  # :114-124
+        "event": ("/xuanshi/event", ("id",)),  # :138（event_id / id 双认）
+        "celestial": ("/xuanshi/celestial", ("dynasty", "omen", "history", "source", "year_from", "year_to", "has_crosswalk", "in_chapter", "q", "page", "page_size")),  # :155-165（q→keyword）
+        "celestial_event": ("/xuanshi/celestial_event", ("id",)),  # :179
+        "figures": ("/xuanshi/figures", ("q", "dynasty", "limit", "offset")),  # :241-244
+        "figure": ("/xuanshi/figure", ("slug",)),  # :268
         "dynasties": ("/xuanshi/dynasties", ()),
-        "dynasty": ("/xuanshi/dynasty", ("id", "q")),
+        "dynasty": ("/xuanshi/dynasty", ("slug",)),  # :358
         "techniques": ("/xuanshi/techniques", ()),
-        "technique": ("/xuanshi/technique", ("id", "q")),
+        "technique": ("/xuanshi/technique", ("slug",)),  # :300
         "terms": ("/xuanshi/celestial_terms", ()),
-        "term": ("/xuanshi/celestial_term", ("id", "q")),
-        "term_profile": ("/xuanshi/celestial_term_profile", ("id", "q")),
-        "timeline": ("/xuanshi/timeline", ("macro", "limit")),
-        "map": ("/xuanshi/map", ("period",)),
-        "graph": ("/xuanshi/persons_graph", ("top_n", "min_weight")),
-        "stories": ("/xuanshi/stories", ("page", "page_size")),
-        "story": ("/xuanshi/story", ("id",)),
+        "term": ("/xuanshi/celestial_term", ("slug",)),  # :329
+        "term_profile": ("/xuanshi/celestial_term_profile", ("omen",)),  # :222
+        "timeline": ("/xuanshi/timeline", ("macro", "limit")),  # :456-458
+        "map": ("/xuanshi/map", ("period",)),  # :426
+        "graph": ("/xuanshi/persons_graph", ("top_n", "min_weight")),  # :441-442
+        "stories": ("/xuanshi/stories", ("q", "dynasty", "limit", "offset")),  # :375-382（q→search_text）
+        "story": ("/xuanshi/story", ("slug",)),  # :396
         "channels": ("/xuanshi/channels", ()),
-        "daily": ("/xuanshi/daily", ("date_key",)),
+        "daily": ("/xuanshi/daily", ("date_key",)),  # :530
         "summary": ("/xuanshi/summary", ()),
-        "microchronology": ("/xuanshi/microchronology", ("dynasty", "year_from", "year_to")),
-        "decade_omens": ("/xuanshi/decade_omens", ("year_from", "year_to")),
-        "facets": ("/xuanshi/facets", ("tradition", "q", "dynasty", "technique", "history", "evidence")),
-        "events_meta": ("/xuanshi/events_meta", ("tradition",)),
+        "microchronology": ("/xuanshi/microchronology", ("history", "omen", "decade")),  # :193-195（omen→omen_type）
+        "decade_omens": ("/xuanshi/decade_omens", ()),  # :204-210 无参
+        "facets": ("/xuanshi/facets", ("tradition", "q", "dynasty", "technique", "history", "evidence")),  # :491-496
+        "events_meta": ("/xuanshi/events_meta", ("tradition",)),  # :477
     }
 
     def _run_xuanshi_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -8646,10 +8833,17 @@ class HorosaSkillService:
                 details={"allowed_actions": sorted(self._XUANSHI_ACTIONS)},
             )
         path, keys = spec
-        body = {k: payload.get(k) for k in keys if payload.get(k) is not None}
-        # 详情端点服务侧参名为 event_id/id 双认；figure/dynasty 等以 id 或名称查——q 兜到 id 位。
-        if "id" in keys and body.get("id") is None and payload.get("q") is not None:
-            body["id"] = payload.get("q")
+        source = dict(payload)
+        if "slug" in keys and source.get("slug") is None:
+            source["slug"] = source.get("id") if source.get("id") is not None else source.get("q")
+        if action == "term_profile" and source.get("omen") is None:
+            source["omen"] = source.get("q") if source.get("q") is not None else source.get("id")
+        if "offset" in keys and source.get("limit") is None and source.get("page_size") is not None:
+            source["limit"] = source.get("page_size")
+        if "offset" in keys and source.get("offset") is None and source.get("page") is not None:
+            size = source.get("limit") if source.get("limit") is not None else 30
+            source["offset"] = max(0, (int(source["page"]) - 1) * int(size))
+        body = {k: source.get(k) for k in keys if source.get(k) is not None}
         response = self._call_remote(path, body)
         snapshot_text = _build_xuanshi_snapshot_text(action, body, response)
         return {
@@ -9203,9 +9397,7 @@ class HorosaSkillService:
         school = payload.get("school", "tieban")
         request: dict[str, Any] = {"school": school}
         if school == "xinyi":
-            for key in ("item", "sound", "ke", "gong", "xqZhi", "xqYushu", "gender"):
-                if payload.get(key) is not None:
-                    request[key] = payload[key]
+            request.update(_zhengchuan_xinyi_query(payload))
         else:
             _require_cast_geo(payload, tool="zhengchuan")
             nongli = self._call_remote(
@@ -9971,26 +10163,75 @@ class HorosaSkillService:
         return result
 
     def _run_shenshu_tool(self, payload: dict[str, Any], key: str) -> dict[str, Any]:
-        # 神数 family (wangji / wuzhao / taixuan / jingjue / shenyishu): each is a kentang engine mounted on
-        # the chart service (:8899) that returns a backend-built `snapshot` text whose [小节] headers already
-        # match 星阙's aiExport preset. The skill splits date/time into year/month/day/hour/minute, forwards
-        # the晚子时 switches + any technique-specific overrides (payload.options), and exports the snapshot.
+        # 神数 family (wangji / wuzhao / taixuan / jingjue / shenyishu + 9 kinastro-*): each is a kentang engine
+        # mounted on the chart service that returns a backend-built `snapshot` text whose [小节] headers already
+        # match 星阙's aiExport preset. The skill splits date/time into year/month/day/hour/minute, forwards the
+        # 晚子时 switches + gender/place, and routes technique knobs through the shenshu_options key table
+        # (typed, per tool; unknown keys are receipted in data.params_ignored instead of silently dropped).
         endpoint = _SHENSHU_ENDPOINTS[key]
+        parts = _split_birth_ymdhm(payload)
+        # 旧 options 是整包 update 进请求体，有人把 gender/zone 之类核心键写在 options 里——这类键不是技法旋钮，
+        # 但也不该因为换了键表就被当成「未识别」丢掉：顶层没给时提升为顶层键（顶层已给则以顶层为准）。
+        raw_options = payload.get("options") if isinstance(payload.get("options"), dict) else None
+        promoted: dict[str, Any] = {}
+        if raw_options:
+            technique_knobs = SHENSHU_OPTION_KNOBS.get(key, {})
+            promoted = {
+                k: v for k, v in raw_options.items()
+                if k in _SHENSHU_PROMOTABLE_OPTION_KEYS and k not in technique_knobs and payload.get(k) is None and v is not None
+            }
+            if promoted:
+                payload = {**payload, **promoted, "options": {k: v for k, v in raw_options.items() if k not in promoted}}
+        knobs = resolve_shenshu_options(
+            key, payload, set(TOOL_DEFINITIONS[key].input_model.model_fields), set(_SHENSHU_GENERIC_KEYS)
+        )
+        if promoted:
+            knobs.applied = sorted(set(knobs.applied) | set(promoted))
         remote_payload: dict[str, Any] = {
-            **_split_birth_ymdhm(payload),
+            **parts,
             "date": payload.get("date"),
             "time": payload.get("time"),
             "after23NewDay": payload.get("after23NewDay", 1),
             "lateZiHourUseNextDay": payload.get("lateZiHourUseNextDay", 1),
         }
-        # cetian / qizhengkin read gender + place; xianqin reads gender only (live: place/timeAlg never change its
-        # output). Forward the keys when present — the backend ignores what it does not read.
-        for extra in ("gender", "lat", "lon", "gpsLat", "gpsLon", "zone"):
+        # kinastro 族读 gender + zone（四柱权威口径按时区定气/立春界）+ 经纬；策天/七政另读地名 pos
+        # （上游 kinAstroFieldsSync.parseFieldsDateTime 同集下发，:56-83）。后端不读的键无害。
+        for extra in ("gender", "lat", "lon", "gpsLat", "gpsLon", "zone", "pos"):
             if payload.get(extra) is not None:
                 remote_payload[extra] = payload.get(extra)
-        options = payload.get("options")
-        if isinstance(options, dict):
-            remote_payload.update(options)
+        remote_payload.update(knobs.backend)
+        settings_applied: dict[str, dict[str, Any]] = {}
+        replay_note = ""
+        result_extra: dict[str, Any] = {}
+        if key in {"jingjue", "taixuan"}:
+            # 🔴 起筮种子（sync311 F1/F2）：上游无头挂载按起课时刻 yyyyMMddHHmm mod 1e9 派生（同刻同卦），
+            # 显式 seed 覆盖（0 合法，挂载自检 F-23）。此前 skill 不发 seed：荆诀后端 random.randint 真随机、
+            # 太玄后端缺省只到小时（yyyyMMddHH）——同一时刻两次调用得不同卦 / 同一小时内恒同卦。
+            explicit = knobs.backend.get("seed")
+            seed = int(explicit) % 1_000_000_000 if explicit is not None else _upstream_cast_time_seed(parts)
+            remote_payload["seed"] = seed
+            result_extra["seed"] = seed
+            settings_applied["seed"] = {
+                "label": "起筮种子" + ("（显式）" if explicit is not None else "（起课时刻 yyyyMMddHHmm mod 1e9 派生）"),
+                "value": seed,
+            }
+        elif key == "wuzhao":
+            remote_payload, replay_note = self._wuzhao_calc_payload(payload, parts, knobs.backend, remote_payload, settings_applied, result_extra)
+        elif key == "cetian":
+            # 流年年份缺省=「今年」（webcetiansrv.py:496-500 datetime.now()）：同一盘明年再算结果就变。
+            # 书法（默认）下显式钉住当年并记进技法卡，读者看得到这份结果是按哪一年起的流年。
+            if remote_payload.get("method", "book") == "book" and "liunianYear" not in remote_payload:
+                remote_payload["liunianYear"] = datetime.now().year
+                settings_applied["liunianYear"] = {"label": "流年年份（未指定→取今年）", "value": remote_payload["liunianYear"]}
+        elif key == "qizhengkin":
+            # 大运所在年缺省=「今年」（webqizhengkinsrv.py:546 datetime.now()）：同 cetian，钉住并入卡。
+            if "qizhengKinCurrentYear" not in remote_payload and "currentYear" not in remote_payload:
+                remote_payload["qizhengKinCurrentYear"] = datetime.now().year
+                settings_applied["qizhengKinCurrentYear"] = {
+                    "label": "大运所在年（未指定→取今年）", "value": remote_payload["qizhengKinCurrentYear"],
+                }
+            if remote_payload.get("qizhengKinTransitMode") == "now" or remote_payload.get("transitMode") == "now":
+                settings_applied["qizhengKinTransitMode"] = {"label": "过运（此刻：随调用时刻变化）", "value": "now"}
         response = self._call_remote(endpoint, remote_payload)
         if isinstance(response, dict) and response.get("ResultCode") not in (None, 0):
             raise ToolValidationError(
@@ -10011,58 +10252,42 @@ class HorosaSkillService:
                 code="transport.shenshu_snapshot_unavailable",
                 details={"technique": key, "endpoint": endpoint, "engine": response.get("engine") if isinstance(response, dict) else None},
             )
+        if replay_note:
+            # 上游 buildWuZhaoSnapshotForFields：回落干支起例后复现说明并入 [揲筮] 段（:394）。
+            snapshot_text = _append_replay_note(snapshot_text, "揲筮", replay_note)
         # 铁板「框架推演层」五段：kinastro 后端出盘面与条文，刻分/三元/八卦滚这层是上游前端按四柱
         # 本地推演的。后端响应里的 pillars 即入参，失败只是这几段不出。
         if key == "tieban":
             try:
-                parts = _split_birth_ymdhm(payload)
                 framework = self.js_client.run(
                     "tieban_framework",
                     {
                         "pillars": (response or {}).get("pillars") if isinstance(response, dict) else None,
                         "birthYear": parts.get("year"),
-                        # 刻要按**时辰内**分钟算（一时辰 = 8 刻 × 15′ = 120 分），所以 hour 必须一起送：
-                        # 单看时内分钟无法区分 19:47（戌初四刻）与 20:47（戌末八刻）。JS 侧换算成 ke。
-                        "hour": parts.get("hour", 0),
-                        "minute": parts.get("minute", 0),
                         "gender": payload.get("gender"),
-                        "school": (payload.get("options") or {}).get("school"),
-                        "keSystem": (payload.get("options") or {}).get("keSystem"),
+                        # 上游 KinAstroMain.buildKinAstroSnapshotForFields（:329-346）读 tiebanSchool /
+                        # tiebanKeSystem / tiebanKe，缺省 south / qing8 / 1（初刻）——考刻是占者核六亲后手定，
+                        # 不由钟点换算（sync311 F8：此前读 options.school/keSystem、刻按时分自算，皆非上游口径）。
+                        **{k: v for k, v in knobs.skill.items() if k in {"tiebanSchool", "tiebanKeSystem", "tiebanKe"}},
                     },
                 )
                 extra = f"{(framework or {}).get('text') or ''}".strip()
+                fw_data = (framework or {}).get("data") if isinstance(framework, dict) else None
+                if isinstance(fw_data, dict) and fw_data.get("ok") is False:
+                    _degrade("tieban framework snapshot not produced: %s", (fw_data.get("error") or {}).get("message"))
                 if extra:
-                    snapshot_text = f"{snapshot_text}\n{extra}".strip()
+                    # 上游 `${text}\n\n${suffix}`（KinAstroMain.js:346）：框架段与盘面之间空一行。
+                    snapshot_text = f"{snapshot_text}\n\n{extra}".strip()
             except Exception as exc:  # noqa: BLE001 — 富化失败不影响盘面
                 _degrade("tieban framework snapshot failed: %s", exc)
         # 演禽「演法」五段（流派/起禽/择日/占卜/投胎）：kinastro 后端不产，它们是上游前端按出生四数
-        # 本地推演的（yanqin/yanqinSnapshot.js），与盘面互补。追加在后端快照之后，失败只是这几段不出。
+        # 本地推演的（yanqin/yanqinSnapshot.js），与盘面互补。追加在后端快照之后。
         if key == "xianqin":
-            try:
-                parts = _split_birth_ymdhm(payload)
-                # 域外年份（公元前 / 万年后）lunar-js 会静默算错农历月，引擎因此只认调用方注入的
-                # lunarMonth（yanqinSnapshot.js:20）；不注入就退公历月兜底，而月禽/投胎照常自信输出。
-                lunar_month = (payload.get("options") or {}).get("lunarMonth") if isinstance(payload.get("options"), dict) else None
-                if lunar_month is None:
-                    lunar_month = payload.get("lunarMonth")
-                yanfa = self.js_client.run(
-                    "yanqin_yanfa",
-                    {
-                        "year": parts.get("year"),
-                        "month": parts.get("month"),
-                        "day": parts.get("day"),
-                        "hour": parts.get("hour", 0),
-                        **({"lunarMonth": lunar_month} if lunar_month is not None else {}),
-                    },
-                )
-                extra = f"{(yanfa or {}).get('text') or ''}".strip()
-                if extra:
-                    snapshot_text = f"{snapshot_text}\n{extra}".strip()
-            except Exception as exc:  # noqa: BLE001 — 富化失败不影响盘面
-                _degrade("yanqin 演法 snapshot failed: %s", exc)
+            snapshot_text = self._append_yanqin_yanfa(payload, parts, knobs, snapshot_text, settings_applied)
         result: dict[str, Any] = {
             "engine": response.get("engine") if isinstance(response, dict) else key,
             "raw": response,
+            **result_extra,
         }
         # [判词原文]（v0.33.0 批 I-5，/cetian/texts）：textKey=list 出目录 / all 全库 / <键> 单篇。条件段。
         if key == "cetian" and payload.get("textKey"):
@@ -10100,36 +10325,235 @@ class HorosaSkillService:
                             text_lines.append(f"{s.get('body') or ''}".strip())
             if snapshot_text and text_lines:
                 snapshot_text = f"{snapshot_text}\n\n[判词原文]\n" + "\n".join(text_lines)
-        # [心易起卦]（v0.33.0 批 I-5，/wangji/xinyi）：数/方位/字画三法独立起卦（datetime 法已内嵌
-        # 于 /wangji/pan 的 [心易发微]，不重复）。条件段：给 xinyiMethod 才产。
-        if key == "wangji" and payload.get("xinyiMethod"):
-            method = str(payload.get("xinyiMethod")).strip()
-            xinyi_remote: dict[str, Any] = {"method": method}
-            for src_key, dst_key in (
-                ("upperNum", "upperNum"), ("lowerNum", "lowerNum"), ("objectGua", "objectGua"),
-                ("xinyiDirection", "direction"), ("upperStrokes", "upperStrokes"),
-                ("lowerStrokes", "lowerStrokes"), ("xinyiHour", "hour"),
-            ):
-                if payload.get(src_key) is not None:
-                    xinyi_remote[dst_key] = payload.get(src_key)
+        if key == "wangji":
+            snapshot_text = self._apply_wangji_xinyi(payload, parts, snapshot_text, result)
+        result["params_applied"] = knobs.applied
+        result["params_ignored"] = knobs.ignored
+        if knobs.ignored:
+            # 口径回执（AGENTS §5.12）：认不出的键不转发、原样回执，并在 envelope.warnings 说一声。
+            result["_warnings"] = [
+                f"{key} 未识别的旋钮已忽略（未转发后端）：{'、'.join(knobs.ignored)}；键表见 "
+                f"horosa_agent_guidance(tool_name=\"{key}\").options_keys。"
+            ]
+        if settings_applied:
+            result["settings_applied"] = settings_applied
+        result["snapshot_text"] = snapshot_text
+        result["export_snapshot"] = self._augment_export_payload(technique=key, snapshot_text=snapshot_text)
+        return result
+
+    def _wuzhao_calc_payload(
+        self,
+        payload: dict[str, Any],
+        parts: dict[str, int],
+        backend_knobs: dict[str, Any],
+        remote_payload: dict[str, Any],
+        settings_applied: dict[str, dict[str, Any]],
+        result_extra: dict[str, Any],
+    ) -> tuple[dict[str, Any], str]:
+        """五兆计算键（sync311 F3/F4）：镜像上游 buildWuZhaoSnapshotForFields（WuZhaoMain.js:368-396）。
+
+        * 11 个计算键全量下发（缺省同上游 DEFAULT_OPTIONS）；
+        * 性别：五兆后端只认 'male'/'female'（webwuzhaosrv.py:497-499）——顶层 gender 1/0 与 options.gender
+          （输入归一化会把嵌套 'male' 改成 1）一律归回 'male'/'female'，此前恒被后端清成「未指定」；
+        * 随机诸式：敦煌揲筮 / 以钱代筮（自动掷）后端按 castSeed 定兆（v3.11「按存档兆数复现」同一枚种子）——
+          缺省由起课时刻派生（同刻同兆，与灵棋经/太玄/荆诀同一「以时起卦」语义），显式 castSeed 覆盖；
+        * 折竹（日/时/分干起盘）与唐法揲筮的随机分爻后端不吃种子，无头不可复现：未开 manual 手动分爻复现时
+          照上游挂载回落干支起例，并把上游原句「复现说明」并入 [揲筮] 段 + envelope 警告（不静默）。
+        """
+        calc = {**_WUZHAO_CALC_DEFAULTS}
+        calc.update({k: v for k, v in backend_knobs.items() if k in _WUZHAO_CALC_DEFAULTS})
+        if "gender" not in backend_knobs:
+            gender = payload.get("gender")
+            calc["gender"] = {1: "male", 0: "female", "1": "male", "0": "female"}.get(gender, "") if gender is not None else ""
+        mode = calc["mode"]
+        replay_note = ""
+        if mode in {"day", "hour", "minute", "tang"} and not calc["manual"]:
+            replay_note = (
+                f"挂载无法复现随机起兆(所选「{_WUZHAO_MODE_LABELS[mode]}」需开启「手动分爻复现」并填分爻数;存档亦无兆数)"
+                "→ 已按干支起例"
+            )
+            calc["mode"] = "ganzhi"
+            _degrade(
+                "五兆 %s 在无头起课下不可复现（后端随机分爻不吃种子）：已按上游挂载口径回落干支起例；"
+                "要该法请传 options.manual=true + manualSplits（六数）", mode,
+                note=f"五兆「{_WUZHAO_MODE_LABELS[mode]}」无 manual 手动分爻时不可复现，已回落干支起例（见 [揲筮] 复现说明）。",
+            )
+        out = {k: v for k, v in remote_payload.items() if k != "castSeed"}
+        out.update(calc)
+        random_cast = calc["mode"] == "dunhuang" or (calc["mode"] == "qian" and bool(calc["qianAuto"]))
+        if random_cast:
+            explicit = backend_knobs.get("castSeed")
+            cast_seed = int(explicit) if explicit is not None else _upstream_cast_time_seed(parts)
+            out["castSeed"] = cast_seed
+            result_extra["castSeed"] = cast_seed
+            settings_applied["castSeed"] = {
+                "label": "起兆种子" + ("（显式）" if explicit is not None else "（起课时刻 yyyyMMddHHmm mod 1e9 派生）"),
+                "value": cast_seed,
+            }
+        settings_applied["mode"] = {"label": "五兆起例", "value": calc["mode"]}
+        return out, replay_note
+
+    def _append_yanqin_yanfa(
+        self,
+        payload: dict[str, Any],
+        parts: dict[str, int],
+        knobs: Any,
+        snapshot_text: str,
+        settings_applied: dict[str, dict[str, Any]],
+    ) -> str:
+        """演禽「演法」五段（sync311 F7/F17）。
+
+        * 流派 + 六开关（school/woBi/xunOffset/monthVerse/huoYaoVariant/sansuo/qinWuxing）逐次调用传入
+          （上游经 yanqinStore 全局单例；headless 无 localStorage，此前恒池本理默认、六开关不可设）；
+        * 农历月：上游无头路径经 deriveLocalNongliAsync 取权威 monthInt 注入（KinAstroMain.js:351-359）——
+          这里同样走 /nongli/time（钟表时，演禽不吃真太阳时），调用方显式 lunarMonth 优先；取数失败
+          只降级为引擎内置农历换算并在 warnings 说明（域外年份会退公历月）。
+        """
+        lunar_month = knobs.backend.get("lunarMonth")
+        if lunar_month is None:
+            lunar_month = self._xianqin_lunar_month(payload)
+        yanfa_payload: dict[str, Any] = {
+            "year": parts.get("year"),
+            "month": parts.get("month"),
+            "day": parts.get("day"),
+            "hour": parts.get("hour", 0),
+            **({"lunarMonth": lunar_month} if lunar_month is not None else {}),
+            **knobs.skill,
+        }
+        try:
+            yanfa = self.js_client.run("yanqin_yanfa", yanfa_payload)
+        except Exception as exc:  # noqa: BLE001 — 富化失败不影响盘面
+            _degrade("yanqin 演法 snapshot failed: %s", exc)
+            return snapshot_text
+        data = (yanfa or {}).get("data") if isinstance(yanfa, dict) else None
+        if isinstance(data, dict) and data.get("ok") is False:
+            error = data.get("error") or {}
+            if error.get("code") != "invalid_setting":
+                _degrade("yanqin 演法 snapshot failed: %s", error.get("message") or error)
+                return snapshot_text
+            raise ToolValidationError(
+                bilingual(
+                    f"演禽演法设置不被引擎接受：{error.get('message') or '未知'}",
+                    f"yanqin yanfa setting rejected by the engine: {error.get('message') or 'unknown'}",
+                ),
+                code="tool.yanqin_invalid_setting",
+                details={"error": error},
+            )
+        if isinstance(data, dict) and isinstance(data.get("settings"), dict):
+            settings_applied["yanqinSchool"] = {"label": "演法流派", "value": data["settings"].get("school")}
+        if lunar_month is not None:
+            settings_applied["yanqinLunarMonth"] = {"label": "演法农历月", "value": lunar_month}
+        extra = f"{(yanfa or {}).get('text') or ''}".strip()
+        # 上游 `text + '\n\n' + yanfa`（KinAstroMain.js:359）：演法段与盘面之间空一行。
+        return f"{snapshot_text}\n\n{extra}".strip() if extra else snapshot_text
+
+    def _xianqin_lunar_month(self, payload: dict[str, Any]) -> int | None:
+        try:
+            nongli = self._call_remote(
+                "/nongli/time",
+                {
+                    "date": payload.get("date"),
+                    "time": payload.get("time") or "00:00:00",
+                    # 上游域外农历远程桥缺时地时的兜底（divinationTimeDraft.deriveNongliRemote :306-307）。
+                    "zone": payload.get("zone") or "+08:00",
+                    "lat": payload.get("lat") or "0n00",
+                    "lon": payload.get("lon") or "0e00",
+                    # 演禽只取生辰原始钟表时刻（techniqueMountSettings xianqin 注：ken 引擎不消费真太阳时）：
+                    # 缺经纬时若按真太阳时，0e00 会把钟点整体拨 8 小时、跨日换月。
+                    "timeAlg": 1,
+                    **_day_boundary_switches(payload),
+                },
+            )
+        except HorosaSkillError as exc:
+            _degrade("演禽演法农历月经 /nongli/time 取数失败（%s）：月禽/投胎改按引擎内置农历换算", exc)
+            return None
+        month = nongli.get("monthInt") if isinstance(nongli, dict) else None
+        if isinstance(month, int) and 1 <= month <= 12:
+            return month
+        _degrade("演禽演法农历月：/nongli/time 未返回 monthInt（%r），月禽/投胎改按引擎内置农历换算", month)
+        return None
+
+    def _apply_wangji_xinyi(
+        self, payload: dict[str, Any], parts: dict[str, int], snapshot_text: str, result: dict[str, Any]
+    ) -> str:
+        """皇极经世 [心易发微]（sync311 F15）：镜像上游 buildHuangJiSnapshotForFields（HuangJiMain.js:161-198）。
+
+        上游挂载缺省起心易 = datetime（techniqueMountSettings huangji.xinyiMethod default 'datetime'），
+        所选之法经 /wangji/xinyi 起卦后**就放进 [心易发微]**（buildSnapshotText :117-122，逐键 `键：值`）；
+        'none' = 不算心易、整段不出。后端 /pan 自带的 [心易发微] 是把 {method,result,sections} 包装整体
+        str() 出来的（「method：datetime / result：本卦：…」），上游前端从不采用它——这里整段替换。
+        入参全量照上游：upperNum 5 / lowerNum 10 / upperStrokes 5 / lowerStrokes 8 / objectGua 離 / direction 南，
+        时辰=盘面时辰（xinyiHour 可覆写）；卦名/方位收简体并归一到后端唯一认得的繁体。
+        """
+        method = f"{payload.get('xinyiMethod') or 'datetime'}".strip() or "datetime"
+        if method not in _WANGJI_XINYI_METHODS:
+            raise ToolValidationError(
+                bilingual(
+                    f"心易起卦法 {method!r} 不存在（可选：{'/'.join(_WANGJI_XINYI_METHODS)}）。",
+                    f"Unknown xinyiMethod {method!r} (choose one of {'/'.join(_WANGJI_XINYI_METHODS)}).",
+                ),
+                code="tool.wangji_invalid_xinyi_method",
+                details={"xinyiMethod": method, "allowed": list(_WANGJI_XINYI_METHODS)},
+            )
+        if method == "none":
+            return _replace_snapshot_section(snapshot_text, "心易发微", None)
+        object_gua = f"{payload.get('objectGua') or '離'}".strip()
+        object_gua = _WANGJI_TRIGRAM_ALIASES.get(object_gua, object_gua)
+        direction = f"{payload.get('xinyiDirection') or '南'}".strip()
+        direction = _WANGJI_DIRECTION_ALIASES.get(direction, direction)
+        if object_gua not in _WANGJI_TRIGRAMS or direction not in _WANGJI_DIRECTIONS:
+            raise ToolValidationError(
+                bilingual(
+                    f"心易方位法入参不合法：objectGua={object_gua!r}（可选 {'/'.join(_WANGJI_TRIGRAMS)}），"
+                    f"xinyiDirection={direction!r}（可选 {'/'.join(_WANGJI_DIRECTIONS)}；简体亦可）。",
+                    "Invalid xinyi direction-method input (objectGua / xinyiDirection; simplified forms are accepted).",
+                ),
+                code="tool.wangji_invalid_xinyi_direction",
+                details={"objectGua": object_gua, "xinyiDirection": direction,
+                         "allowed_objectGua": list(_WANGJI_TRIGRAMS), "allowed_direction": list(_WANGJI_DIRECTIONS)},
+            )
+
+        def _num(field: str, default: int) -> Any:
+            value = payload.get(field)
+            return default if value is None else value
+
+        xinyi_remote: dict[str, Any] = {
+            **parts,
+            "date": payload.get("date"),
+            "time": payload.get("time"),
+            "method": method,
+            "upperNum": _num("upperNum", 5),
+            "lowerNum": _num("lowerNum", 10),
+            "upperStrokes": _num("upperStrokes", 5),
+            "lowerStrokes": _num("lowerStrokes", 8),
+            "objectGua": object_gua,
+            "direction": direction,
+        }
+        if payload.get("xinyiHour") is not None:
+            xinyi_remote["hour"] = payload.get("xinyiHour")
+        try:
             # ⚠ _unwrap_result 会连剥 {Result:{…}} 与内层小写 {result:{…}} 两层 —— 这里拿到的
             # 直接就是卦面 dict（本卦/變卦/動爻/體用…），外层的 method/sections 已被剥掉。
             xinyi = self._call_remote("/wangji/xinyi", xinyi_remote)
-            if not isinstance(xinyi, dict) or not xinyi or "本卦" not in xinyi:
+        except HorosaSkillError as exc:
+            if payload.get("xinyiMethod"):
+                raise
+            # 缺省（datetime）心易失败不拖主盘（上游 :195 同律），但不静默：段撤掉 + warnings 说明。
+            _degrade("皇极经世缺省心易（datetime）起卦失败：%s", exc)
+            return _replace_snapshot_section(snapshot_text, "心易发微", None)
+        if not isinstance(xinyi, dict) or not xinyi or "本卦" not in xinyi:
+            if payload.get("xinyiMethod"):
                 raise ToolTransportError(
                     "心易起卦端点返回了意外形状。",
                     code="tool.wangji_xinyi_failed",
                     details={"endpoint": "/wangji/xinyi", "method": method,
                              "keys": sorted(xinyi.keys()) if isinstance(xinyi, dict) else type(xinyi).__name__},
                 )
-            result["xinyi"] = {"method": method, "result": xinyi}
-            method_cn = {"number": "报数", "direction": "方位", "character": "字画", "datetime": "时刻"}.get(method, method)
-            xy_lines = [f"起法：{method_cn}"] + [f"{k}：{v}" for k, v in xinyi.items()]
-            if snapshot_text and len(xy_lines) > 1:
-                snapshot_text = f"{snapshot_text}\n\n[心易起卦]\n" + "\n".join(xy_lines)
-        result["snapshot_text"] = snapshot_text
-        result["export_snapshot"] = self._augment_export_payload(technique=key, snapshot_text=snapshot_text)
-        return result
+            _degrade("皇极经世缺省心易（datetime）起卦返回意外形状（%s）", type(xinyi).__name__)
+            return _replace_snapshot_section(snapshot_text, "心易发微", None)
+        result["xinyi"] = {"method": method, "result": xinyi}
+        body = [f"{k}：{_human_scalar(v)}" for k, v in xinyi.items()]
+        return _replace_snapshot_section(snapshot_text, "心易发微", body)
 
     def _run_horary_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 卜卦 (horary): cast the traditional chart at the question moment, then run the vendored 星阙
@@ -10842,40 +11266,65 @@ class HorosaSkillService:
         return result
 
     def _run_tarot_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
-        # 塔罗：以起卦时刻确定性抽牌（seed 由 年月日时分 派生，或用户显式 seed），core-js tarot 引擎 SHA-256种子洗牌+解读。
+        # 塔罗：core-js tarot 引擎 SHA-256 种子洗牌 + 解读。种子 = 上游「生辰」种子来源 seedFromFields
+        # （TarotMain.js:97-108）：name|date|time|lat|lon 取非空项以 | 相连（全空 → 'horosa-tarot-default'）；
+        # 显式 seed 覆盖。此前 skill 用 yyyyMMddHHmm，与上游同一盘抽出不同的牌（sync311 F10）。
         seed = payload.get("seed")
-        if not seed:
-            parts = _ken_datetime_parts(payload)
-            seed = f"{parts['year']:04d}{parts['month']:02d}{parts['day']:02d}{parts['hour']:02d}{parts['minute']:02d}"
+        if seed is None or f"{seed}".strip() == "":
+            parts = [f"{payload.get(k)}".strip() for k in ("name", "date", "time", "lat", "lon") if payload.get(k) not in (None, "")]
+            seed = "|".join(p for p in parts if p) or "horosa-tarot-default"
         js_payload: dict[str, Any] = {
             "seed": str(seed),
             "question": payload.get("question") or "",
-            "spread": payload.get("spread") or "three",
             "deck": payload.get("deck") or "rws",
         }
-        if payload.get("usesReversals") is False:
-            js_payload["usesReversals"] = False
-        # 透传 v3.3.1 塔罗设置：尊位/变体/定局法/生命牌生日 —— [综合断语]/[定局]/[生命牌] 段依赖之。
-        if payload.get("dignities") is not None:
-            js_payload["dignities"] = bool(payload.get("dignities"))
-        if payload.get("variant"):
-            js_payload["variant"] = payload.get("variant")
-        if payload.get("verdictMode"):
-            js_payload["verdictMode"] = payload.get("verdictMode")
-        if isinstance(payload.get("birth"), dict):
-            js_payload["birth"] = payload.get("birth")
+        # 牌阵缺省交给 JS 按牌组允许表定（rws 等 = three）；给了就原样送，由引擎词表裁决。
+        if payload.get("spread"):
+            js_payload["spread"] = payload.get("spread")
+        # 逆位：缺省随牌组；显式 true/false 都下发（此前只发 false，马赛系等默认无逆位的牌组开不了逆位）。
+        if payload.get("usesReversals") is not None:
+            js_payload["usesReversals"] = bool(payload.get("usesReversals"))
+        for key in ("dignities", "variant", "verdictMode", "birth"):
+            if payload.get(key) is not None:
+                js_payload[key] = payload.get(key)
+        # 其余 19 个引擎判读设置（timingMethod/timingUnit/meaningSystem/reversalMode/…）：键集锚引擎 resolveSettings。
+        if isinstance(payload.get("options"), dict):
+            js_payload["options"] = payload.get("options")
         try:
             result = self.js_client.run("tarot", js_payload)
-        except ToolTransportError:
+        except ToolTransportError as exc:
+            _degrade("tarot JS engine failed: %s", exc)
             result = {}
+        data = result.get("data") if isinstance(result, dict) and isinstance(result.get("data"), dict) else {}
+        if data.get("ok") is False:
+            error = data.get("error") if isinstance(data.get("error"), dict) else {}
+            code = {
+                "unknown_deck": "tool.tarot_unknown_deck",
+                "unknown_spread": "tool.tarot_unknown_spread",
+                "unsupported_spread_for_deck": "tool.tarot_unsupported_spread_for_deck",
+                "invalid_setting": "tool.tarot_invalid_setting",
+            }.get(str(error.get("code") or ""))
+            if code:
+                raise ToolValidationError(
+                    bilingual(f"塔罗入参不被引擎接受：{error.get('message')}", f"tarot input rejected by the engine: {error.get('message')}"),
+                    code=code,
+                    details={**(error.get("details") or {}), "engine_error": error.get("code")},
+                )
+            _degrade("tarot JS engine produced no reading: %s", error.get("message") or error)
         snapshot_text = result.get("snapshot_text") if isinstance(result, dict) else ""
-        return {
+        ignored = list(data.get("params_ignored") or [])
+        out: dict[str, Any] = {
             "deck": (isinstance(result, dict) and result.get("deck")) or js_payload["deck"],
-            "spread": (isinstance(result, dict) and result.get("spread")) or js_payload["spread"],
+            "spread": (isinstance(result, dict) and result.get("spread")) or js_payload.get("spread"),
             "seed": str(seed),
+            "params_applied": list(data.get("params_applied") or []),
+            "params_ignored": ignored,
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="tarot", snapshot_text=snapshot_text),
         }
+        if ignored:
+            out["_warnings"] = [f"tarot 未识别的 options 键已忽略：{'、'.join(ignored)}（键集锚引擎 resolveSettings）。"]
+        return out
 
     def _attach_technique_card(
         self, tool_name: str, input_normalized: dict[str, Any], response_data: dict[str, Any]
@@ -11021,15 +11470,35 @@ class HorosaSkillService:
             )
         if profile not in _GEOMANCY_PROFILES:
             profile = "european_classical"
+        question_type = f"{payload.get('questionType') or 'custom'}".strip() or "custom"
+        if question_type not in _GEOMANCY_QUESTION_TYPES:
+            raise ToolValidationError(
+                bilingual(
+                    f"地占问类 {question_type!r} 不存在（后端只认 {'/'.join(_GEOMANCY_QUESTION_TYPES)}；其余会被静默改回 custom）。",
+                    f"Unknown geomancy questionType {question_type!r}; the backend knows {'/'.join(_GEOMANCY_QUESTION_TYPES)}.",
+                ),
+                code="tool.geomancy_invalid_question_type",
+                details={"questionType": question_type, "allowed": list(_GEOMANCY_QUESTION_TYPES)},
+            )
         parts = _ken_datetime_parts(payload)
-        time_seed = int(f"{parts['year']:04d}{parts['month']:02d}{parts['day']:02d}{parts['hour']:02d}{parts['minute']:02d}")
+        # 🔴 sync311 F10：时间起卦种子 = 上游 computeTimeSeed（YY 两位年 … mod 2^31−1）；此前 skill 用
+        # YYYYMMDDHHmm 整数，与上游同一时刻起出不同的母图。
+        time_seed = _geomancy_time_seed(parts)
         request: dict[str, Any] = {
             "question": payload.get("question") or "",
-            "questionType": payload.get("questionType") or "custom",
+            "questionType": question_type,
             "castMethod": "time",
             "timeSeed": time_seed,
             "profile": profile,
         }
+        # 🔴 sync311 F12：所问之时地同发（上游 GeomancyMain.clickCast :1161-1167）——后端只在
+        # ascSource=real_chart / houseProjection=real_ephemeris 时用它起真实上升/真实星历（webgeomancysrv
+        # _parse_time_place），此前不发 → 两档静默回落图形取法。纪元前才发 ad（公元后请求体逐字节不变）。
+        for key in ("date", "time", "zone", "lat", "lon"):
+            if payload.get(key) not in (None, ""):
+                request[key] = payload[key]
+        if payload.get("ad") == -1:
+            request["ad"] = -1
         for key in ("zodiacSystem", "readingScope", "quesitedHouse", "turnTo"):
             if payload.get(key) is not None:
                 request[key] = payload[key]
@@ -11037,12 +11506,40 @@ class HorosaSkillService:
         for key in _GEOMANCY_OPTION_KEYS:
             if options.get(key) is not None:
                 request[key] = options[key]
+        # 报数起卦（上游 clickCast :1175-1187）：十六个正整数，奇=单点/偶=双点，母一至母四之火风水土序；
+        # castMethod=numbers + 种子（盾牌由数定，辅助随机仍须确定：缺省用本刻时间种子，options.seed 覆盖）。
+        cast_numbers = options.get("castNumbers")
+        if cast_numbers is not None:
+            raw_numbers = cast_numbers.replace("，", ",").replace(",", " ").split() if isinstance(cast_numbers, str) else cast_numbers
+            try:
+                numbers = [int(x) for x in raw_numbers] if isinstance(raw_numbers, (list, tuple)) else []
+            except (TypeError, ValueError):
+                numbers = []
+            if len(numbers) != 16 or any(n < 1 for n in numbers):
+                raise ToolValidationError(
+                    bilingual(
+                        "报数起卦须自报十六个正整数（奇=单点、偶=双点；序为母一至母四之火风水土）。",
+                        "castNumbers must be sixteen positive integers (odd = single dot, even = double dot).",
+                    ),
+                    code="tool.geomancy_invalid_cast_numbers",
+                    details={"castNumbers": cast_numbers},
+                )
+            request.update({"castMethod": "numbers", "castNumbers": numbers, "seedMode": "manual"})
+            request.pop("timeSeed", None)
+            request["seed"] = int(options["seed"]) if options.get("seed") is not None else time_seed
+        # seed 只在报数起卦里有用（时间起卦恒用 timeSeed）：单给 seed 也照实回执为未用。
+        known = set(_GEOMANCY_OPTION_KEYS) | {"castNumbers"} | ({"seed"} if cast_numbers is not None else set())
+        geo_ignored = sorted(k for k in options if k not in known)
         response = self._call_remote("/geomancy/reading", request)
         snapshot_text = _build_geomancy_snapshot_text(response if isinstance(response, dict) else {})
         result: dict[str, Any] = {
             "reading": response.get("reading") if isinstance(response, dict) else None,
             "figures": response.get("figures") if isinstance(response, dict) else None,
+            "time_seed": request.get("timeSeed"),
+            "params_ignored": geo_ignored,
         }
+        if geo_ignored:
+            result["_warnings"] = [f"geomancy 未识别的 options 键已忽略（未转发后端）：{'、'.join(geo_ignored)}。"]
         # [十六卦目录]（v0.33.0 批 I-5，/geomancy/catalog）：16 图形属性总表（agent grounding 用）。
         # 条件段：includeCatalog=true 才产。
         if payload.get("includeCatalog"):

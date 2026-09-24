@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
+from horosa_skill.shenshu_options import options_doc
 
 
 GUIDANCE_SCHEMA = "horosa.skill.agent_guidance.v1"
@@ -312,7 +313,7 @@ def _policy(
 
 
 SHENSHU_POLICY = _policy(
-    intent="神数 (皇极经世/五兆/太玄/京氏易/神乙数)：以干支起数，只需日期(可含时间)即可起盘，不需经纬度。",
+    intent="神数 (皇极经世/五兆/荆诀/神易数/鬼谷分定经)：以干支起数，只需日期(可含时间)即可起盘，不需经纬度。技法旋钮走 options（键表见 options_keys）。",
     required_context=["date (公历日期)", "time (可选，影响时柱)"],
     ask_if_missing=[
         {"field": "date", "question": "请提供起盘的公历日期（年月日）。"},
@@ -335,11 +336,33 @@ _PLACE_QUESTION = {
     "options": ["当前位置/客户端位置", "指定城市或经纬度"],
 }
 SHENSHU_GENDER_POLICY = _policy(
-    intent="神数 (铁板/邵子)：以干支起数并按性别取条文；需日期(含时间更准)与性别。",
+    intent="神数 (演禽/北极/南极)：以干支起数并按性别取条文/定大运顺逆；需日期(含时间更准)与性别。",
     required_context=["date (公历日期)", "time (可选，影响时柱)", "gender (性别)"],
     ask_if_missing=[*SHENSHU_POLICY["ask_if_missing"], _GENDER_QUESTION],
     safe_defaults=SHENSHU_POLICY["safe_defaults"],
     do_not_assume=["date", "gender"],
+)
+# sync311 F16：年/月柱走 kin_year_domain 权威四柱（立春界 + 定气月，按**时区**折算，kinastro_common
+# authoritative_pillars / webtaixuansrv _zone_to_hours）——live 实测 1990-02-04 10:00 +08:00 与 -05:00 年柱
+# 己巳↔庚午、月柱丁丑↔戊寅。时区缺省 +08:00 是后端兜底，不是用户的口径 → 要问。
+_ZONE_QUESTION = {
+    "field": "zone",
+    "question": "出生/起盘地的时区？（年柱月柱按时区定立春与节气）",
+    "options": ["+08:00 北京时间", "其它时区（如 -05:00 / Asia/Tokyo）"],
+}
+SHENSHU_ZONE_POLICY = _policy(
+    intent="神数 (太玄筮法)：以起课时刻起筮（种子=起课时刻派生，同刻同卦），四柱按时区定立春/节气；需日期、时间与时区。",
+    required_context=["date (公历日期)", "time", "zone (时区)"],
+    ask_if_missing=[*SHENSHU_POLICY["ask_if_missing"], _ZONE_QUESTION],
+    safe_defaults=SHENSHU_POLICY["safe_defaults"],
+    do_not_assume=["date", "timezone"],
+)
+SHENSHU_GENDER_ZONE_POLICY = _policy(
+    intent="神数 (铁板/邵子/蠢子数)：以权威四柱起数并按性别取条文；四柱按时区定立春/节气，需日期、时间、时区与性别。",
+    required_context=["date (公历日期)", "time", "zone (时区)", "gender (性别)"],
+    ask_if_missing=[*SHENSHU_POLICY["ask_if_missing"], _GENDER_QUESTION, _ZONE_QUESTION],
+    safe_defaults=SHENSHU_POLICY["safe_defaults"],
+    do_not_assume=["date", "gender", "timezone"],
 )
 SHENSHU_PLACE_POLICY = _policy(
     intent="神数 (策天飞星/张果星宗)：按出生时刻+地点起盘并按性别取用；需日期、时间、时区、地点与性别。",
@@ -1149,7 +1172,9 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ask_if_missing=[
             {"field": "date/time/place", "question": "请提供起卦的日期、时间、时区和地点（地占以起卦时刻确定性起卦）。"},
             {"field": "question", "question": "所问何事？请给出具体问题。"},
-            {"field": "questionType", "question": "问的是哪一类？", "options": ["综合/自定 custom", "财物 wealth", "婚姻 marriage", "事业 career", "疾病 health", "官非 lawsuit", "失物 theft", "子嗣 pregnancy", "房产 property", "旅行 travel", "愿望 hope", "私敌 enemy"]},
+            # 后端 _QTYPES 十一类（webgeomancysrv.py:42-46）；此前给的 lawsuit/theft/pregnancy/property/travel/hope
+            # 后端不认、静默改回 custom。
+            {"field": "questionType", "question": "问的是哪一类？", "options": ["综合/自定 custom", "命主/性格 life", "疾病 health", "财物 wealth", "婚姻/合伙 marriage", "事业/名誉 career", "子女/恋爱 children", "远行 journey", "宗教/学问 religion", "对手/暗敌 enemy", "死亡/遗产 death"]},
         ],
         safe_defaults=[{"field": "questionType", "value": "custom", "meaning": "自定问类：按主问句判事项宫"}],
         do_not_assume=["起卦时刻（须是真实起卦当下）", "所问内容"],
@@ -1163,7 +1188,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ask_if_missing=[
             {"field": "date/time", "question": "请提供起卦的日期与时间（塔罗以起卦时刻确定性抽牌）。也可直接给 seed。"},
             {"field": "question", "question": "想问什么？请给出具体问题。"},
-            {"field": "spread", "question": "用哪种牌阵？", "options": ["三张·过去现在未来 three", "凯尔特十字 celtic", "单张 one", "关系 relationship", "其它（见 SPREADS）"]},
+            # 键名 = 引擎 SPREADS 真键（spreads.js）；此前给的 one / relationship 不存在，被静默换成 three。
+            {"field": "spread", "question": "用哪种牌阵？", "options": ["三张·过去现在未来 three", "凯尔特十字 celtic", "单张 single", "关系 relation", "马蹄 horseshoe", "其它（见 guidance options_keys.spread）"]},
         ],
         safe_defaults=[
             {"field": "spread", "value": "three", "meaning": "默认三张牌阵（过去·现在·未来）"},
@@ -1260,15 +1286,17 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     # wangji/cetian 沿用神数家族策略；三法心易起卦与判词库见各自 schema 字段描述（xinyiMethod/textKey）。
     "wangji": SHENSHU_POLICY,
     "wuzhao": SHENSHU_POLICY,
-    "taixuan": SHENSHU_POLICY,
+    "taixuan": SHENSHU_ZONE_POLICY,
     "jingjue": SHENSHU_POLICY,
     "shenyishu": SHENSHU_POLICY,
-    "shaozi": SHENSHU_GENDER_POLICY,
-    "tieban": SHENSHU_GENDER_POLICY,
+    "shaozi": SHENSHU_GENDER_ZONE_POLICY,
+    "tieban": SHENSHU_GENDER_ZONE_POLICY,
+    # 鬼谷分定经：性别/时区只改 [起盘] 展示行（live 实测条文与四柱不变）→ 不问，免假闸门。
     "fendjing": SHENSHU_POLICY,
-    "beiji": SHENSHU_POLICY,
-    "nanji": SHENSHU_POLICY,
-    "chunzi": SHENSHU_POLICY,
+    # sync311 F5：北极（大运顺逆）/南极（大运干支）/蠢子数（乾/坤码）按性别出不同盘（live 实测），此前从不问。
+    "beiji": SHENSHU_GENDER_POLICY,
+    "nanji": SHENSHU_GENDER_POLICY,
+    "chunzi": SHENSHU_GENDER_ZONE_POLICY,
     # 演禽 live 实测（v0.36.0 收尾）：输出无时区/经纬度行，上海↔乌鲁木齐、timeAlg 翻转全部逐字节相同——
     # 它只按钟表时间换农历 + 性别取用，问地点就是假闸门（§5.12「改参数结果必变」的反例）。
     "xianqin": SHENSHU_GENDER_POLICY,
@@ -1555,6 +1583,28 @@ REPORT_AND_MEMORY_GUIDANCE: dict[str, dict[str, Any]] = {
 }
 
 
+# 非神数工具的 options 键说明（键集锚引擎；此处只是给 agent 看的索引，取值裁决在引擎侧）。
+_EXTRA_OPTIONS_DOC: dict[str, dict[str, str]] = {
+    "tarot": {
+        "spread": "牌阵键（引擎 SPREADS）：single/three/three_sit/three_mbs/three_pcs/three_choice/horseshoe/celtic/relation/croix/tree_of_life/zodiac/annual…；须在该牌组 caps.spreads 允许表内",
+        "verdictMode": "定局法（YESNO_MODES）：majority/orientation/single/numeric/polarity/weighted_center/anchor/single3",
+        "options.meaningSystem": "manual/waite/degrees", "options.reversalMode": "stored/blocked/internal/opposite/reduced/excess/delayed/projection/misuse/negation/breakthrough/re_words/retreat",
+        "options.timingMethod": "suit_unit/major_number/major_zodiac/decan_full/ace_hunt", "options.timingUnit": "天/周/月",
+        "options.<其余>": "showCorrespondences/sig/suitElementSwap/ookTable/reversalGen/crossingUpright/quintMode/showBottomCard/edVersion/astroModern/majorsOverlay/showCutCard/includeBlank/courtElementSystem/courtZodiacSystem（引擎 resolveSettings 键集；值不被接受即报错）",
+        "seed": "显式种子；缺省 = name|date|time|lat|lon（上游「生辰」种子）",
+    },
+    "geomancy": {
+        "options.housePlacement": "图形入宫：sequential/angular/golden_dawn",
+        "options.castNumbers": "报数起卦：十六个正整数（奇=单点/偶=双点，母一至母四火风水土序）；options.seed 定辅助随机（缺省=时间种子）",
+        "options.planetaryChart": "行星地占盘开关（+planetaryChartZodiac classical/… · planetaryChartNodes · planetaryChartExtras）",
+        "options.ascSource / houseProjection": "real_chart / real_ephemeris 按所问时地起真实上升/真实星历（date/time/zone/lat/lon 已随请求下发）",
+    },
+    "wuzhao": {
+        "随机诸式": "dunhuang / qian(qianAuto=true) 按 castSeed 定兆（缺省=起课时刻 yyyyMMddHHmm mod 1e9，同刻同兆）；day/hour/minute/tang 须 manual=true(+manualSplits) 方可复现，否则照上游回落干支起例并在 [揲筮] 写复现说明；存档复现：mode=zhushu + zhaoNums=存档六位兆数",
+    },
+}
+
+
 def _with_common_fields(tool_name: str, policy: dict[str, Any]) -> dict[str, Any]:
     definition = TOOL_DEFINITIONS.get(tool_name)
     result = deepcopy(policy)
@@ -1566,6 +1616,13 @@ def _with_common_fields(tool_name: str, policy: dict[str, Any]) -> dict[str, Any
         result["accepted_fields"] = sorted(fields)
         result["description"] = definition.description
         result["input_contract"] = build_tool_input_contract(tool_name)
+    knob_doc = options_doc(tool_name)
+    if knob_doc:
+        # sync311 F6：神数 options 逐技法键表（类型/取值域；认不出的键不转发、回执 data.params_ignored）。
+        result["options_keys"] = knob_doc
+    extra_doc = _EXTRA_OPTIONS_DOC.get(tool_name)
+    if extra_doc:
+        result["options_keys"] = {**result.get("options_keys", {}), **extra_doc}
     result["hard_gate"] = {
         "enabled": tool_name not in PREFLIGHT_EXEMPT_TOOLS,
         "pass_condition": "Provide `agent_confirmed_settings: true` after asking the user, or `defaults_accepted: true` when the user explicitly accepts Xingque/default settings.",
