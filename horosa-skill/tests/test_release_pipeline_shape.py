@@ -193,14 +193,15 @@ def test_completeness_checks_digests_min_os_and_the_mcpb_bundle() -> None:
 
 
 def test_ci_wheel_path_runs_a_real_stdio_probe_on_both_os() -> None:
-    """R9/R18：wheel 装出来的包真起一次 stdio（116），Windows 上同样；全量面在 Windows 真机上也起一次。"""
+    """R9/R18：wheel 装出来的包真起一次 stdio（全量面工具数从 contracts/mcp_list_budget.json 读，v0.40.0 起不再写死），Windows 上同样。"""
     test_job = _job(CI, "test")
-    assert "--no-write --no-probe-network --skip-install" in test_job and 'probe["tools"] == 116' in test_job
+    assert "--no-write --no-probe-network --skip-install" in test_job
+    assert 'probe["tools"] == full == probe["expected_tools"]' in test_job and "mcp_list_budget.json" in test_job
     # 探针跑的是配置里那条命令：uvx-wheel 形态默认写发布页 URL，CI 上该版本尚未发布 → 必须预置 C15 的本地 wheel 缓存
     assert ".horosa/wheels" in test_job and "--no-cache-wheel" not in test_job, "the probe must run from the cached local wheel, not the unpublished URL"
     assert 'wheel_cached_path' in test_job
     assert "--dry-run --no-probe-network" not in test_job, "dry-run proves nothing about the wheel's data files"
     smoke = _job(CI, "windows-smoke")
-    assert "--surface full" in smoke and "-ne 116" in smoke
+    assert "--surface full" in smoke and "-ne $fullTools" in smoke and "full_tools" in smoke and "-ne 116" not in smoke
     assert "uvx --from $whl horosa-skill setup" in smoke and "uv build --wheel" in smoke
     assert ".horosa\\wheels" in smoke and "--no-cache-wheel" not in smoke and "wheel_cached_path" in smoke

@@ -405,3 +405,23 @@ def test_client_example_config_must_not_carry_a_bare_uv(tmp_path: Path, monkeypa
     assert any("bare `uv`" in e for e in errors) and any("setup --client claude-desktop" in e for e in errors), errors
     good = json.dumps({"_comment": "use setup --client claude-desktop", "mcpServers": {"horosa": {"command": "<ABSOLUTE PATH TO uv>", "args": []}}})
     assert _errors_of(docs.check_client_example_configs, tmp_path, monkeypatch, {rel: good}) == []
+
+
+def test_full_surface_rows_and_workflow_probe_literals_are_checked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """v0.40.0：README 客户端表「全量 N / full (N)」对 contracts/mcp_list_budget.json 的 full_tools；ci.yml 不许写死探针工具数。
+    临时根里只放 README.md（README_EN.md 缺席要跳过，不许炸）。"""
+    errors: list[str] = []
+    monkeypatch.setattr(docs, "ROOT", tmp_path)
+    monkeypatch.setattr(docs, "err", errors.append)
+    (tmp_path / "README.md").write_text("| Claude Code | stdio | x | 全量 99 | y |\n", encoding="utf-8")
+    wf = tmp_path / ".github" / "workflows"; wf.mkdir(parents=True)
+    (wf / "ci.yml").write_text("if ($r['steps']['stdio_probe']['tools'] -ne 116) { throw 'x' }\n", encoding="utf-8")
+    docs.check_full_surface_counts()
+    assert any("full-surface row says 99" in e for e in errors), errors
+    assert any("literal tool count" in e for e in errors) and any("no longer read contracts/mcp_list_budget.json" in e for e in errors), errors
+    errors.clear()
+    (tmp_path / "README.md").write_text("| Claude Code | stdio | x | 全量 120 | y |\n", encoding="utf-8")
+    (wf / "ci.yml").write_text("$full = (ConvertFrom-Json (Get-Content contracts/mcp_list_budget.json)).full_tools\n", encoding="utf-8")
+    docs.check_full_surface_counts()
+    assert errors == []
+

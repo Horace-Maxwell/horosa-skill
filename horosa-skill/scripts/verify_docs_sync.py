@@ -356,7 +356,6 @@ def check_tool_counts() -> None:
                         f"(add {IGNORE_COUNT} if this line is a frozen historical record)"
                     )
     check_server_instructions()
-    check_full_surface_counts()
 
 
 FULL_SURFACE_ROW = re.compile(r"(?:全量 |full \()(\d+)")
@@ -375,6 +374,8 @@ def check_full_surface_counts() -> None:
         err(f"contracts/mcp_list_budget.json unreadable: {exc}")
         return
     for rel in ("README.md", "README_EN.md"):
+        if not (ROOT / rel).exists():
+            continue
         for lineno, line in enumerate(read(ROOT / rel).splitlines(), 1):
             for got in FULL_SURFACE_ROW.findall(line):
                 if int(got) != full:
@@ -884,6 +885,7 @@ def main() -> None:
     check_frontmatter()
     check_envelope_schema_version()
     check_compact_surface_count()
+    check_full_surface_counts()
     check_knowledge_counts()
     check_root_manifest_version()
     if ERRORS:
