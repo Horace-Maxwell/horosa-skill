@@ -17,6 +17,7 @@ import {
   buildGuolaoMastersSection,
   buildGuolaoLimitCalcSection,
   buildGuolaoLimitSection,
+  buildGuolaoSetupLines,
 } from '../vendor/guolao/guolaoSnapshotSections.js';
 import { buildLocalNongliLite } from '../vendor/bazi/baziLunarLocal.js';
 
@@ -177,7 +178,7 @@ function buildGuolaoInfoFactsForSnapshot(params, result, transitParams, display,
   }
 }
 
-// [起盘信息] 命度/身度/宿主行 + [大限] + [三主与化曜] + [限法实算]（上游 _buildGuolaoSnapshotTextV2Core:2046-2104 同序同源）。
+// [起盘信息] 口径六行 + 命度/身度/宿主行 + [大限] + [三主与化曜] + [限法实算]（上游 _buildGuolaoSnapshotTextV2Core:2046-2104 同序同源）。
 // payload: { chart: /chart 响应（chart.nongli 已挂本命四柱）, params: {date:'YYYY/MM/DD',time,…}, transitParams, display:
 //   {lifeMasterMode, minorLimitType, tongxianBase, limitChildBase, limitYearBoundary}, fields, moiraRules }
 export function buildGuolaoInfoSections(payload) {
@@ -192,6 +193,8 @@ export function buildGuolaoInfoSections(payload) {
   const limitSection = buildGuolaoLimitSection(chart, fields, params, display.minorLimitType || '', display.tongxianBase || 'tong10',
     { limitYearBoundary: display.limitYearBoundary, limitChildBase: display.limitChildBase });
   return {
+    // [起盘信息] 口径六行（七政命度/罗计/报时星太阳时/罗计取法/宿度制·身宫法/命主取法·行运法），上游在命度行之前。
+    setupLines: buildGuolaoSetupLines(fields, display),
     anchorLines: buildGuolaoAnchorLines(info),
     limitSection: limitSection || '',
     masters: buildGuolaoMastersSection(info),

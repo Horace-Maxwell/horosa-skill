@@ -728,8 +728,16 @@ class CanPingInput(FlexibleModel):
 
 
 class GuoLaoInput(BirthInput):
+    # 七政起盘口径长尾键：照常声明（校验 + MCP 扁平面收顶层），不进 tools/list 广告层（词表见 agent_guidance）。
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({
+        "guolaoNodeMode", "guolaoTrueSolarTime", "guolaoNodeType", "guolaoLilithType",
+        "guolaoAyanamsa", "guolaoTuibianMethod", "guolaoGufaPrecess", "guolaoEqTropicalAnchor",
+    })
+    # 宿度制（上游 GuoLaoChartStyle.js:10 缺省 2 回归今宿；值域 guolaoData.SU28_MODE_LABEL 0–8）。BirthInput 那个是 bool
+    # （宿占用），这里放宽成 int —— 2–8 此前被 pydantic 拒；旧 true/false 照后端 parseSu28Mode 解释为 1/0。
+    doubingSu28: int | bool | None = Field(default=None, description="宿度制 0–8（缺省 2 回归今宿；4 恒星制；全表见 guidance）。")
     # 七政四余（v0.36.0 C1）：Java /qizheng/moira 规则层入参 + 流年盘时刻。缺省与上游 UI 默认一致。
-    guolaoLifeMode: str | None = Field(default=None, description="七政命度取法：asc（上升，默认）| yumao（余毛）| cotrans（同躔）。")
+    guolaoLifeMode: str | None = Field(default=None, description="命度法：asc 上升（缺省）| yumao 日出 | gumao 遇卯 | cotrans 赤黄 | 子–亥自定。")
     guolaoBodyMode: str | None = Field(default=None, description="身宫法：taiyin（太阴落宫，默认）| youjin（逢酉·琴堂）| 指定地支。")
     moiraTransitDate: str | None = Field(default=None, description="流年盘日期 YYYY-MM-DD（[流年流曜] 段的流年时刻；缺省=今天）。")
     moiraTransitTime: str | None = Field(default=None, description="流年盘时间 HH:mm:ss（缺省 12:00:00）。")
@@ -740,6 +748,15 @@ class GuoLaoInput(BirthInput):
     guolaoMinorLimitType: str | None = Field(default=None, description="行运法：''=古度限度法（缺省）| minor=小限 | month=月限 | tong=童限 | dongwei=洞微大限。改 [大限] 所附行运法结构与 [限法实算] 的实算行。")
     guolaoTongxianBase: str | None = Field(default=None, description="童限基数（行运法=tong 时生效）：tong10=通行十年（缺省）| gu9=古九岁 | xu11=虚十一。")
     guolaoLimitChildBase: int | None = Field(default=None, description="定童限：9=九年起（缺省）| 10=十年起。改 [大限] 首限年数与各限起讫岁、[限法实算] 的童限/限度。")
+    # 起盘口径（上游页面左栏 / 挂载齿轮 techniqueMountSettings.js:1123-1181；缺省 = GuoLaoChartStyle.js getStored* 缺省）。
+    guolaoNodeMode: str | None = Field(default=None, description="罗计命名：northKetuSouthRahu 北计南罗（缺省）| northRahuSouthKetu 北罗南计（整盘换位）。")
+    guolaoTrueSolarTime: str | None = Field(default=None, description="报时星太阳时：true 真太阳时（缺省）| mean 平太阳时 | off 钟表时。")
+    guolaoNodeType: str | None = Field(default=None, description="罗计取法：mean 平交点（缺省）| true 真交点。")
+    guolaoLilithType: str | None = Field(default=None, description="月孛取法：mean 平远地点（缺省）| true 真远地点。")
+    guolaoAyanamsa: str | None = Field(default=None, description="恒星制岁差（仅宿度制 4）：47 制键，缺省郑氏。")
+    guolaoTuibianMethod: str | None = Field(default=None, description="推变黄道术（仅宿度制 6）：jiyuan 纪元（缺省）| jintui 进退 | huiyuan 会圆。")
+    guolaoGufaPrecess: int | bool | None = Field(default=None, description="古宿随岁差（仅宿度制 6）：0 钉死元时（缺省）| 1 东移。")
+    guolaoEqTropicalAnchor: str | None = Field(default=None, description="赤道回归锚点（仅宿度制 7/8）：dongzhi 牛前冬至（缺省）| chunfen 春分。")
 
 
 class HeLuoInput(FlexibleModel):
@@ -1104,10 +1121,14 @@ class BabylonInput(BirthInput):
     predictive: bool | None = False
     scheme: str | None = Field(default=None, description="实位派系：swissA10（默认）/ systemA / systemB。")
     solstice: str | None = Field(default=None, description="分至规范：A10（春分白羊 10°）/ B8（春分白羊 8°）；缺省跟派系档。")
-    # era 已删：整棵 vendored 巴比伦树无人消费它（只是 BABYLON_SCHEMES 档内的元数据字段），
-    # 传了永远无效果。真正的判读参数是下面两个，此前一个都没接。
+    # 真正的判读参数（此前一个都没接）：
     dodecaVariant: str | None = Field(default=None, description="十二分变体：A（加于宫起点）/ B（加于点本身·楔文）；缺省跟派系档。")
     cubitDeg: float | None = Field(default=None, description="肘度（1 cubit 折合黄经度数），缺省跟派系档（2.2）。")
+    # v3.11：era 进 [起盘信息] 纪元行（babylonAiSnapshot.js:219-221）；ephemerisSource 选 [数理星历] 木星阶梯/锯齿函数（:120）。
+    # 不进 tools/list 广告层（预算），词表见 agent_guidance。
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({"era", "ephemerisSource"})
+    era: str | None = Field(default=None, description="纪元显示：seleucid 塞琉古 S.E.（缺省）| arsacid 安息（= S.E.−64）。")
+    ephemerisSource: str | None = Field(default=None, description="数理星历位置源：swiss（缺省）| systemA 阶梯 | systemB 锯齿（木星）；缺省跟派系档。")
 
 
 class DraconicInput(BirthInput):

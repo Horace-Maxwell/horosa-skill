@@ -232,3 +232,109 @@ def test_election_global_judge_layer_and_school_house_link(tmp_path: Path) -> No
     assert client.bodies("/chart")[-1]["hsys"] == 3
     service.run_tool("election", BIRTH, save_result=False)
     assert client.bodies("/chart")[-1]["hsys"] == 0  # 现代主流档不联动 → 页面缺省 0（ElectionMain.js:100）
+
+
+# ─────────────────────────── F2/F3 七政四余：宿度制 + 起盘口径 ───────────────────────────
+
+CHART_GUOLAO = json.loads(
+    (Path(__file__).resolve().parents[1] / "horosa-core-js" / "test" / "fixtures" / "chart_guolao.json").read_text(encoding="utf-8")
+)["chart"]
+GUOLAO_BIRTH = {"date": "1985-03-21", "time": "10:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28",
+                "moiraTransitDate": "2026-09-01", "agent_confirmed_settings": True}
+
+
+def _first_chart(client: RecordingClient) -> dict:
+    return client.bodies("/chart")[0]
+
+
+def test_guolao_default_mansion_system_is_upstream_mode_2(tmp_path: Path) -> None:
+    """上游 GuoLaoChartStyle.js:10 GUOLAO_DEFAULT_SU28_MODE = 2（回归今宿）；fieldsToParams（GuoLaoChartMain.js:2339-2357）
+    把它作 doubingSu28 下发。负向对照：旧 runner 发 doubingSu28=True —— perchart.parseSu28Mode 解释成 1（斗柄定房法·赤仪），
+    快照也没有「宿度制：」行。"""
+    client = RecordingClient()
+    result = _service(tmp_path, client).run_tool("guolao_chart", GUOLAO_BIRTH, save_result=False)
+    sent = _first_chart(client)
+    assert sent["doubingSu28"] == 2 and sent["zodiacal"] == 0 and sent["guolaoZhengSidereal"] == 0
+    info = _section(result.data["snapshot_text"], "起盘信息")
+    # 上游 _buildGuolaoSnapshotTextV2Core:2047-2073 六行（缺省口径）。
+    for line in ("七政命度：占星上升", "罗计：北计南罗", "报时星太阳时：真太阳时(经度+均时差)",
+                 "罗计取法：平交点；月孛取法：平远地点", "宿度制：回归今宿；身宫法：太阴落宫(果老)",
+                 "命主取法：宫主；行运法：古度限度法"):
+        assert f"\n{line}\n" in f"\n{info}\n", line
+
+
+def test_guolao_mode_sub_options_follow_upstream_gates(tmp_path: Path) -> None:
+    """fieldsToParams 的条件透传（GuoLaoChartMain.js:2360-2399）：恒星制(4) → 恒星黄道 + guolaoZhengSidereal + 岁差复用
+    siderealAyanamsa；授时历古法(6) → 推变黄道术/古宿随岁差；报时星/四余取法仅非缺省才发。门控外的子选项不下发并告警。
+    负向对照：旧 schema 把 doubingSu28 定为 bool（4/6 直接校验失败），子选项无人翻译。"""
+    client = RecordingClient()
+    service = _service(tmp_path, client)
+    r4 = service.run_tool("guolao_chart", {**GUOLAO_BIRTH, "doubingSu28": 4, "guolaoAyanamsa": "raman",
+                                            "guolaoTrueSolarTime": "mean", "guolaoNodeType": "true"}, save_result=False)
+    assert r4.ok, r4.error
+    sent = _first_chart(client)
+    assert (sent["doubingSu28"], sent["zodiacal"], sent["guolaoZhengSidereal"], sent["siderealAyanamsa"]) == (4, 1, 1, "raman")
+    assert (sent["trueSolarTime"], sent["guolaoNodeType"]) == ("mean", "true")
+    info = _section(r4.data["snapshot_text"], "起盘信息")
+    assert "宿度制：恒星制；身宫法：太阴落宫(果老)" in info
+    assert "报时星太阳时：平太阳时(仅经度)" in info and "罗计取法：真交点；月孛取法：平远地点" in info
+
+    client.calls.clear()
+    service.run_tool("guolao_chart", {**GUOLAO_BIRTH, "doubingSu28": 6, "guolaoTuibianMethod": "jintui", "guolaoGufaPrecess": 1}, save_result=False)
+    sent = _first_chart(client)
+    assert (sent["guolaoTuibianMethod"], sent["guolaoGufaPrecess"]) == ("jintui", 1)
+
+    client.calls.clear()
+    gated = service.run_tool("guolao_chart", {**GUOLAO_BIRTH, "guolaoTuibianMethod": "jintui"}, save_result=False)
+    assert "guolaoTuibianMethod" not in _first_chart(client)
+    assert any("guolaoTuibianMethod" in w and "宿度制 6" in w for w in gated.warnings), gated.warnings
+
+    bad = service.run_tool("guolao_chart", {**GUOLAO_BIRTH, "doubingSu28": 9}, save_result=False)
+    assert bad.ok is False and bad.error.code == "tool.guolao_invalid_display_setting"
+    bad_mode = service.run_tool("guolao_chart", {**GUOLAO_BIRTH, "guolaoNodeMode": "sideways"}, save_result=False)
+    assert bad_mode.ok is False and bad_mode.error.code == "tool.guolao_invalid_display_setting"
+
+
+def test_guolao_node_mode_and_life_mode_change_the_reading(tmp_path: Path) -> None:
+    """罗计「北罗南计」= applyGuolaoNodeMode 整盘深换北/南交 id（GuoLaoChartMain.js:1202-1211，页面与无头同吃换位后的盘）；
+    命度法 gumao（normalizeGuolaoLifeMode 值域）进 [起盘信息] 与格局求值的 fields。
+    负向对照：旧代码不认 guolaoNodeMode（盘不换位、无「罗计：」行）。"""
+    service = _service(tmp_path, RecordingClient(chart_for=lambda p: CHART_GUOLAO))
+    plain = service.run_tool("guolao_chart", GUOLAO_BIRTH, save_result=False)
+    swapped = service.run_tool(
+        "guolao_chart", {**GUOLAO_BIRTH, "guolaoNodeMode": "northRahuSouthKetu", "guolaoLifeMode": "gumao"}, save_result=False
+    )
+    objs = {o["id"]: o for o in plain.data["chart"]["objects"]}
+    objs_sw = {o["id"]: o for o in swapped.data["chart"]["objects"]}
+    assert objs_sw["North Node"]["lon"] == objs["South Node"]["lon"]
+    assert objs_sw["South Node"]["lon"] == objs["North Node"]["lon"]
+    info = _section(swapped.data["snapshot_text"], "起盘信息")
+    assert "罗计：北罗南计" in info and "七政命度：遇卯安命(古法)" in info
+    # 值级：[星曜庙旺与星点动态] 的罗/计两行随换位对调（上游 buildStarDignityMotionSection：罗=NORTH_NODE、计=SOUTH_NODE）。
+    dignity_title = "星曜庙旺与星点动态（殿垣庙旺乐喜怒 · 顺逆留伏迟速）"
+    assert "| 罗 | 酉 | - | 逆 |" in _section(plain.data["snapshot_text"], dignity_title)
+    assert "| 罗 | 卯 | 旺 | 逆 |" in _section(swapped.data["snapshot_text"], dignity_title)
+
+
+# ─────────────────────────── F18 巴比伦：纪元 / 数理星历位置源 ───────────────────────────
+
+BABYLON_BIRTH = {"date": "1990-06-15", "time": "08:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "agent_confirmed_settings": True}
+
+
+def test_babylon_era_and_ephemeris_source_reach_the_snapshot(tmp_path: Path) -> None:
+    """上游 babylonAiSnapshot.js:219-221 纪元行（seleucid S.E. / arsacid = S.E.−64）与 :120 [数理星历] 木星函数
+    （ephemerisSource systemB → 锯齿）；两键 = 上游挂载 babylonEra 齿轮 / 页面 effectiveOpts（BabylonMain.js:170-177）。
+    [数理星历] 的五星锚取本盘恒星黄经 lons（:373 同传）。1990-06-15 的算术历年 = S.E.2301（纪元行两制同一年相差 64）。
+    负向对照：旧 runner 注释「era 无人消费」而不下发、JS 不传 lons（五星行缺席），ephemerisSource 无入口。"""
+    service = _service(tmp_path, RecordingClient())
+    base = service.run_tool("babylon", BABYLON_BIRTH, save_result=False)
+    text = base.data["snapshot_text"]
+    assert "纪元:塞琉古纪元 S.E.2301 年" in _section(text, "起盘信息")
+    assert "◆ 木星（System A）" in _section(text, "数理星历")
+    alt = service.run_tool("babylon", {**BABYLON_BIRTH, "era": "arsacid", "ephemerisSource": "systemB"}, save_result=False)
+    alt_text = alt.data["snapshot_text"]
+    assert "纪元:安息纪元 2237 年" in _section(alt_text, "起盘信息")
+    assert "◆ 木星（System B）" in _section(alt_text, "数理星历")
+    assert "木星按 System B 锯齿函数" in _section(alt_text, "数理星历")
+    bad = service.run_tool("babylon", {**BABYLON_BIRTH, "era": "julian"}, save_result=False)
+    assert bad.ok is False and bad.error.code == "tool.babylon_invalid_setting"
