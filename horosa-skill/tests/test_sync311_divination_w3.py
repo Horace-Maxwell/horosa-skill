@@ -287,7 +287,7 @@ def test_sixyao_js_side_notes_become_envelope_warnings(tmp_path) -> None:
 
 def test_sixyao_time_cast_needs_the_js_engine_and_says_so(tmp_path) -> None:
     """以时起卦只在 vendored 上游函数里：JS 引擎起不来 → 结构化错误 tool.sixyao_time_cast_failed，绝不回落自写起卦式；
-    手动摇卦则卦由 lines 定，判读三段优雅缺席 + 降级进 warnings。
+    手动摇卦亦然（wave 3b 起整份快照 = vendored buildGuaSnapshotText，Python 不再自写段）→ tool.sixyao_engine_failed。
     负向对照：旧 runner 在 Python 里按手写式起卦，引擎失败照样 ok=True。"""
     class DeadJs(FakeJsClient):
         def run(self, tool_name: str, payload: dict) -> dict:
@@ -297,9 +297,8 @@ def test_sixyao_time_cast_needs_the_js_engine_and_says_so(tmp_path) -> None:
     env = _run(service, "sixyao", SIX)
     assert env.ok is False and env.error.code == "tool.sixyao_time_cast_failed"
     lines = [{"value": v, "change": i == 0} for i, v in enumerate([1, 1, 1, 1, 1, 1])]
-    manual = _ok(service, "sixyao", {**SIX, "lines": lines})
-    assert manual.data["current_code"] == "111111" and "[断诀命中]" not in manual.data["snapshot_text"]
-    assert any("liuyao struct engine failed" in note for note in manual.warnings)
+    manual = _run(service, "sixyao", {**SIX, "lines": lines})
+    assert manual.ok is False and manual.error.code == "tool.sixyao_engine_failed"
 
 
 # ── 3. 一掌经逐年法缺省 = 上游 AI 挂载无头路径（未设 → 两法并列） ────────────────────────────────

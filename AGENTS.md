@@ -138,8 +138,10 @@ runner 不打 ken、`data.route.local=true`、`compute_sources` 标 `local_route
 - **ken-fed**：qimen / taiyi / jinkou（+ sanshiunited 两腿）——ken 算，JS 排版。
 - **原生·非 ken 数算**：canping（邵子参评数）/ heluo（河洛理数）——在 `horosa-core-js` 进程内经 vendored
   bazi 链（`src/vendor/bazi/` → npm `lunar-javascript`）起四柱，再自行起数/起卦 + 条文查表；不打 chart 服务。
-  heluo 的 `timeAlg` 默认 **1**（钟表时，匹配星阙 `fieldVal(f,'timeAlg',1)`）；`timeAlg===0` 才是真太阳时
-  （唯一触发经度+均时差修正的值）。
+  canping / heluo / yizhangjing 的 `timeAlg` 缺省 **0**（真太阳时，经度+均时差；`1` = 钟表时）、日界缺省 1/1——v0.40.0 更正：
+  星阙页面的 `fieldVal(f,'timeAlg',1)` 读的是**恒被预置为 0** 的全局字段（models/astro.js:375-377、newChartSeeds.js:43），
+  字面 1 的兜底从不触发；无头路径 `record.timeAlg ?? 0`（aiAnalysisContext.js:603）与挂载齿轮缺省 0 同口径。
+  找缺省要追字段的**种子**，不是 getter 的兜底值（此前据兜底值写成缺省 1，钟表时出盘多个版本）。
 - **backend predict/astroextra 型**：harmonic / agepoint / distributions / jaynesprog / vedicprog /
   planetaryarc 等——Python `_call_remote` + Python snapshot builder。
 - **三式合一（v0.40.0 起）**：Python 只取数（一份三式 nongli + 展示真太阳时 + `/chart` hsys 1 + 奇门/太乙 runner），

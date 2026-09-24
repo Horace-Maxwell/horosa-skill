@@ -46,8 +46,12 @@ export function runYizhangjing(payload) {
   const input = payload && typeof payload === 'object' ? payload : {};
   const date = `${input.date ?? ''}`.trim().replace(/\//g, '-');
   const time = `${input.time ?? ''}`.trim() || '00:00:00';
-  // timeAlg 缺省 1（钟表时），与 canping/heluo 一致。
-  const timeAlg = input.timeAlg === undefined || input.timeAlg === null ? 1 : input.timeAlg;
+  // timeAlg 缺省 0（真太阳时；sync311 wave 3b，此前误为 1）：上游 AI 挂载无头路径 buildYizhangjingSnapshotForRecord →
+  // buildChartBaziParams 取 buildFieldObject 的 timeAlg = record.timeAlg ?? 0（aiAnalysisContext.js:603,1793,2198）；
+  // 挂载齿轮缺省亦 0（techniqueMountSettings.js:147,1908-1911）。页面 YiZhangJingMain.getModel 的
+  // `fieldVal(f, 'timeAlg', 1)`（:124）读全局 fields.timeAlg —— 该字段恒在、出厂种子 0（models/astro.js:375-377 +
+  // newChartSeeds.js:43），回退值 1 从不生效。页面与无头同为 0；canping/heluo 同改。
+  const timeAlg = input.timeAlg === undefined || input.timeAlg === null ? 0 : input.timeAlg;
   // 日界 / 晚子时：上游 YiZhangJingMain.getModel 读盘面 fields，缺席回退全局出厂默认
   // defaultAfter23NewDay()=1 / defaultLateZiHourUseNextDay()=1（YiZhangJingMain.js:124-128）。
   // 此前两键都不传 → vendored baziLunarLocal 把 undefined 当「24 点换日」（after23=0），23 点档生人

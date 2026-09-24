@@ -64,10 +64,18 @@ export function runHeluo(payload) {
   // parseDateTime (baziLunarLocal) splits the date on '-' only; coerce '/' so YYYY/MM/DD also works.
   const date = `${input.date ?? ''}`.trim().replace(/\//g, '-');
   const time = `${input.time ?? ''}`.trim() || '00:00:00';
-  // timeAlg: 0 → 真太阳时; any other value → clock time. Default 1 mirrors 星阙 HeLuoMain.js's
-  // `fieldVal(f, 'timeAlg', 1)`.
-  const timeAlg = input.timeAlg === undefined || input.timeAlg === null ? 1 : input.timeAlg;
-  // 晚子时双开关 verbatim 透传（缺省不传 → 上游默认 after23NewDay 缺省/lateZiHourUseNextDay=1，同 HeLuoMain）。
+  // timeAlg: 0 → 真太阳时; any other value → clock time.
+  // 缺省 0（sync311 wave 3b，此前误为 1）：上游 AI 挂载无头路径 buildHeluoSnapshotForRecord → buildChartShusuanBazi →
+  // buildChartBaziParams 取 buildFieldObject 的 timeAlg = record.timeAlg ?? 0（aiAnalysisContext.js:603,1793）；挂载齿轮
+  // 缺省亦 0（techniqueMountSettings.js:147,1882）。页面 HeLuoMain.getModel 的 `fieldVal(f, 'timeAlg', 1)`（:188）读全局
+  // fields.timeAlg —— 该字段恒在、出厂种子 0（models/astro.js:375-377 + newChartSeeds.js:43），回退值 1 从不生效。
+  const timeAlg = input.timeAlg === undefined || input.timeAlg === null ? 0 : input.timeAlg;
+  // 日界 / 晚子时：上游两路缺省同为全局出厂 1/1 —— 无头 buildFieldObject after23NewDay = record ?? defaultAfter23NewDay()
+  // （aiAnalysisContext.js:606）、页面 fieldVal(f,'after23NewDay',defaultAfter23NewDay())（HeLuoMain.js:191-192）。
+  // 此前不传 → vendored baziLunarLocal 把 undefined 当「24 点换日」（baziLunarLocal.js:1107），23 点档生人日柱与上游不同。
+  const after23NewDay = input.after23NewDay === undefined || input.after23NewDay === null ? 1 : input.after23NewDay;
+  const lateZiHourUseNextDay = input.lateZiHourUseNextDay === undefined || input.lateZiHourUseNextDay === null
+    ? 1 : input.lateZiHourUseNextDay;
   const baziParams = {
     date,
     time,
@@ -75,8 +83,8 @@ export function runHeluo(payload) {
     lon: input.lon,
     gender: input.gender,
     timeAlg,
-    after23NewDay: input.after23NewDay,
-    lateZiHourUseNextDay: input.lateZiHourUseNextDay,
+    after23NewDay,
+    lateZiHourUseNextDay,
   };
   const normalized = {
     date,
@@ -85,8 +93,8 @@ export function runHeluo(payload) {
     lon: input.lon ?? null,
     gender: input.gender ?? null,
     timeAlg,
-    after23NewDay: input.after23NewDay ?? null,
-    lateZiHourUseNextDay: input.lateZiHourUseNextDay ?? null,
+    after23NewDay,
+    lateZiHourUseNextDay,
   };
 
   if (!date) {

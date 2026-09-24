@@ -486,20 +486,47 @@ check('liuyao 以时起卦 = 上游 buildTimeGua（农历月日数 + 时柱支�
 
 // [断诀命中]/[占类断语] = vendored liuyaoSnapshotEx（buildGuaSnapshotText:381-388）；[占类断语] 的「断语·占类门」行
 // 证明断语库先载入（ensureLiuyaoDoctrineLoaded :1735-1737）。权威：vendored 上游引擎对同一卦的输出（段首行逐字）。
-// 负向对照：旧 liuyao.js 不产这两段（duanjue_text/zhanlei_text 未定义）；不 await loadDoctrine 则断语行缺席。
+// 负向对照：旧 liuyao.js 不产这两段；不 await loadDoctrine 则断语行缺席。
+// （wave 3b：两段随整份 buildGuaSnapshotText 快照回在 snapshot_text，不再另出 duanjue_text/zhanlei_text 键。）
 check('liuyao [断诀命中]/[占类断语] 由上游 liuyaoSnapshotEx 产出、断语库已载入', async () => {
   const nongli = { year: '丙午', yearJieqi: '丙午', monthGanZi: '丁酉', dayGanZi: '辛丑', monthInt: 8, dayInt: 14, time: '甲午' };
+  const block = (text, title) => {
+    const all = (text || '').split('\n');
+    const at = all.indexOf(`[${title}]`);
+    if (at < 0) { return []; }
+    const end = all.findIndex((l, i) => i > at && /^\[.+\]$/.test(l));
+    return all.slice(at, end < 0 ? all.length : end).filter((l, i, arr) => !(i === arr.length - 1 && l === ''));
+  };
   const r = await runLiuyao({ nongli });
-  const dj = (r.duanjue_text || '').split('\n');
+  const dj = block(r.snapshot_text, '断诀命中');
   assert(dj[0] === '[断诀命中]' && dj[1] === '三层环境：太岁午(岁破子)　月建酉(月破卯)　日建丑(日破未)', `断诀首行: ${dj.slice(0, 2)}`);
   assert(dj.includes('世应关系：世3(妻财辰)应克世应6(兄弟卯)·彼制我、受制难谋'), '世应关系行');
-  const zl = (r.zhanlei_text || '').split('\n');
+  const zl = block(r.snapshot_text, '占类断语');
   assert(zl[0] === '[占类断语]' && zl[1] === '历史占例：冉伯牛有疾卜得,乃知谩师之过也', `占类首行: ${zl.slice(0, 2)}`);
   assert(zl.includes('断语·总断门第一·孙膑：孙膑总断歌') && r.data.doctrine_loaded === true, '断语库未载入');
   // 六键（旧版回执为 unsurfaced 死键）现改输出：世身 / 古法十六变。
   const tuned = await runLiuyao({ nongli, liuyaoSettings: { shishen: 'standard', gufa: 1 } });
-  assert((tuned.duanjue_text || '').split('\n').some((l) => l.startsWith('世身：第')) && !dj.some((l) => l.startsWith('世身：')), 'shishen 未生效');
-  assert((tuned.zhanlei_text || '').split('\n').some((l) => l.startsWith('十六变：第')), 'gufa 未生效');
+  assert(block(tuned.snapshot_text, '断诀命中').some((l) => l.startsWith('世身：第')) && !dj.some((l) => l.startsWith('世身：')), 'shishen 未生效');
+  assert(block(tuned.snapshot_text, '占类断语').some((l) => l.startsWith('十六变：第')), 'gufa 未生效');
+});
+
+// sync311 wave 3b 值级金标：整份快照 = 上游 buildGuaSnapshotText(buildCaseSnapshotFields(record), st)（GuaZhanMain.js:201-391，
+// regenerateSixyaoSnapshot:1756）。权威：旬空按六十甲子旬手核（丁酉/辛丑同属甲午旬 → 辰巳）；互/错/综按爻值变换手核
+// （风雷益 100011 → 互 000001 山地剥、错 011100 雷风恒、综 110001 山泽损）；伏神卦 = 本宫首卦巽为风（初爻丑土妻财）；
+// 求测人性别缺省 = buildCaseSnapshotFields gender ?? 1（aiAnalysisContext.js:791）。
+// 负向对照：旧 liuyao.js 的 snapshot_text 只有 [断卦结构] 一段（其余段由 Python 自写）→ 以下各行全缺。
+check('liuyao 整份快照 = 上游 buildGuaSnapshotText：旬空 / X时 / 互错综 / 关联卦逐爻 / 求测人性别', async () => {
+  const nongli = { birth: '2026-09-24 11:09:58', year: '丙午', yearJieqi: '丙午', monthGanZi: '丁酉', dayGanZi: '辛丑', monthInt: 8, dayInt: 14, time: '甲午' };
+  const record = { date: '2026-09-24', time: '10:58:00', zone: '+08:00', lon: '121e28', lat: '31n13' };
+  const t = (await runLiuyao({ nongli, record })).snapshot_text.split('\n');
+  assert(t[0] === '[起盘信息]' && t.includes('日期：2026-09-24 10:58:00') && t.includes('求测人性别：男'), `起盘信息: ${t.slice(0, 8)}`);
+  assert(t.includes('起卦时间：2026-09-24 11:09:58 甲午时') && t.includes('旬空：月空辰巳 日空辰巳'), '起卦时间「X时」/ 旬空');
+  assert(t.includes('互卦：山地剥  乾宫金') && t.includes('错卦(阴阳全变)：雷风恒  震宫木') && t.includes('综卦(上下颠倒)：山泽损  艮宫土'), '互错综');
+  const fu = t.indexOf('伏神卦(本宫首卦)逐爻（初→上）：');
+  assert(fu > 0 && t[fu + 1] === '第1爻：阴爻，爻名:丑土妻财', `伏神卦: ${t[fu + 1]}`);
+  assert(t.indexOf('[卦辞与断语]') + 1 === t.indexOf('[判语库·参考诀表]'), '无头卦无 guaDesc：[卦辞与断语] 只有段头');
+  const female = (await runLiuyao({ nongli, record: { ...record, gender: 0 } })).snapshot_text;
+  assert(female.includes('求测人性别：女'), 'gender=0 → 女');
 });
 
 check('tarot 种子洗牌确定性：同种子同牌阵逐牌相同、换种子必变', () => {
@@ -561,6 +588,23 @@ check('canping 起运岁走农历真源，不再恒 1 岁', async () => {
   assert(await qiyunOf(undefined) === 3, `默认档起运岁应为 3，实得 ${await qiyunOf(undefined)}`);
   assert(await qiyunOf('baziStyle') === firstDayunAge,
     `baziStyle 档须与八字盘同源（${firstDayunAge}），实得 ${await qiyunOf('baziStyle')}`);
+});
+
+// sync311 wave 3b 值级金标：数算三技法 timeAlg 缺省 0（真太阳时）、参评/河洛日界缺省 1 —— 上游 AI 挂载无头 buildFieldObject
+// timeAlg ?? 0 / after23NewDay ?? 出厂 1（aiAnalysisContext.js:603,606），页面全局字段出厂种子同值。权威（独立源）：live 9977
+// /nongli/time 1998-02-20 上海 —— 11:05 真太阳时 10:55:19 时柱丁巳、钟表戊午；23:30 钟表 日柱己亥（23 点换日）/戊戌（24 点）。
+// 负向对照：旧缺省 timeAlg=1 → 缺省即午时；旧 canping/heluo 不传日界 → undefined 当 24 点换日 → 戊戌。
+check('数算 timeAlg 缺省真太阳时 / 日界缺省 23 点换日（参评·河洛·一掌经随上游无头挂载）', async () => {
+  const base = { date: '1998-02-20', time: '11:05:00', zone: '+08:00', lon: '121e28', gender: 1 };
+  const cp = await runCanping(base);
+  assert(cp.input_normalized.timeAlg === 0 && cp.input_normalized.fourPillars.hourBranch === '巳', `canping: ${JSON.stringify(cp.input_normalized.fourPillars)}`);
+  assert(runHeluo(base).data.fourPillars.hour === '丁巳', 'heluo 缺省时柱应为丁巳');
+  assert(runYizhangjing(base).data.input.hourBranch === '巳', 'yizhangjing 缺省生时支应为巳');
+  assert((await runCanping({ ...base, timeAlg: 1 })).input_normalized.fourPillars.hourBranch === '午', '钟表时对照应为午');
+  assert(runHeluo({ ...base, timeAlg: 1 }).data.fourPillars.hour === '戊午', 'heluo 钟表时对照应为戊午');
+  const late = { ...base, time: '23:30:00', timeAlg: 1 };
+  assert((await runCanping(late)).input_normalized.fourPillars.dayBranch === '亥', 'canping 23:30 缺省日支应为亥');
+  assert(runHeluo(late).data.fourPillars.day === '己亥' && runHeluo({ ...late, after23NewDay: 0 }).data.fourPillars.day === '戊戌', 'heluo 日界');
 });
 
 check('zhengchuan 大定男女分行，性别不再被 NaN 吃掉', async () => {

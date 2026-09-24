@@ -947,34 +947,56 @@ class FakeJsClient(HorosaJsEngineClient):
                 "snapshot_text": "[起盘信息]\n日期：2026-04-04 21:18\n\n[太乙盘]\n主算：二十四局",
             }
         if tool_name == "liuyao":
-            # 六爻层（tools/liuyao.js = 上游 regenerateSixyaoSnapshot 无头路径）离线替身：内容取自 vendored 引擎
-            # 对本文件 FakeClient /nongli/time 桩的真实输出（以时起卦 = buildTimeGua → 泽天夬、三爻动；段行节选）。
+            # 六爻层（tools/liuyao.js = 上游 regenerateSixyaoSnapshot 无头路径；sync311 wave 3b 起整份快照 = vendored
+            # buildGuaSnapshotText）离线替身：各段正文取自 vendored 引擎对本文件 FakeClient /nongli/time 桩的真实输出
+            # （以时起卦 = buildTimeGua → 泽天夬、三爻动；段行节选）。段头取真 preset（漂移即红），段序 = builder 实际产段
+            # 顺序（GuaZhanMain.js:219-385：[卦辞与断语]/[判语库·参考诀表] 在 [断诀命中]/[占类断语] 之前）；
+            # 无头卦无 guaDesc → [卦辞与断语] 只有段头、紧接下一段头（上游同形）。
             # 未给 lines = 以时起卦 → 回卦线；给了 lines = 手动摇卦 → 原样回显。
+            from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS as _PRESETS
+
             time_cast = not payload.get("lines")
             names = ["子水妻财", "寅木官鬼应", "辰土兄弟", "亥水妻财", "酉金子孙世", "未土兄弟"]
             lines = (
                 [{"value": v, "change": i == 2, "god": None, "name": names[i]} for i, v in enumerate([1, 1, 1, 1, 1, 0])]
                 if time_cast else payload.get("lines")
             )
-            return {
-                "lines": lines,
-                "time_cast": time_cast,
-                "current_gua": {"index": 53, "name": "泽天夬"} if time_cast else None,
-                "snapshot_text": (
-                    "[断卦结构]\n流派：通用（卜筮正宗口径）\n卦序：坤宫·五世(世5应2)\n"
-                    "占测：自身/综合运势　用神：世(5爻)\n"
+            rec = payload.get("record") or {}
+            bodies = {
+                "起盘信息": (
+                    f"日期：{rec.get('date')} {rec.get('time')}\n时区：{rec.get('zone')}\n经纬度：{rec.get('lon')} {rec.get('lat')}\n"
+                    "求测人性别：男\n起卦时间：2028-04-06 09:33:00 庚午时\n干支：年丙午 月辛卯 日戊辰 时庚午\n旬空：月空午未 日空戌亥"
+                ),
+                "卦象": (
+                    "本卦：泽天夬  坤宫土\n互卦：乾为天  乾宫金\n之卦(变卦)：兑为泽  兑宫金\n"
+                    "错卦(阴阳全变)：山地剥  乾宫金\n综卦(上下颠倒)：天风姤  乾宫金"
+                ),
+                "六爻与动爻": (
+                    "第1爻：阳爻（静），爻名:子水妻财\n第3爻：阳爻（动），爻名:辰土兄弟\n"
+                    "之卦(变卦)逐爻（初→上）：\n第1爻：阳爻，爻名:巳火父母"
+                ),
+                "断卦结构": (
+                    "流派：通用（卜筮正宗口径）\n卦序：坤宫·五世(世5应2)\n占测：自身/综合运势　用神：世(5爻)\n"
                     "| 爻 | 六神 | 地支 | 五行 | 六亲 | 世应 | 旺衰 | 状态 | 伏神 | 神煞 |\n"
                     "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
                     "| 第1爻 | 勾陈 | 子 | 水 | 妻财 | — | 休 | 岁破,入墓 | — | 将星 |"
                 ),
-                "duanjue_text": (
-                    "[断诀命中]\n三层环境：太岁午(岁破子)　月建卯(月破酉)　日建辰(日破戌)\n"
+                "卦辞与断语": "",
+                "判语库·参考诀表": "◆ 诸爻持世诀\n父母持世：主身劳心累、利文书房产长辈;求子嗣、求财较费力",
+                "断诀命中": (
+                    "三层环境：太岁午(岁破子)　月建卯(月破酉)　日建辰(日破戌)\n"
                     "日辰纳音：大林木(木)\n应期·用神值日(得信/应事)：酉[时/日]"
                 ),
-                "zhanlei_text": (
-                    "[占类断语]\n历史占例：汉高祖欲拜韩信为将卜得,知有王佐之才也\n"
-                    "断语·总断门第一·孙膑：孙膑总断歌"
-                ),
+                "占类断语": "历史占例：汉高祖欲拜韩信为将卜得,知有王佐之才也\n断语·总断门第一·孙膑：孙膑总断歌",
+            }
+            assert set(bodies) == set(_PRESETS["sixyao"]), "sixyao preset drifted: refresh this fake from the vendored builder"
+            blocks = [f"[{title}]\n{body}" if body else f"[{title}]" for title, body in bodies.items()]
+            text = "\n\n".join(blocks).replace("[卦辞与断语]\n\n[判语库·参考诀表]", "[卦辞与断语]\n[判语库·参考诀表]")
+            return {
+                "lines": lines,
+                "time_cast": time_cast,
+                "current_gua": {"index": 53, "name": "泽天夬"} if time_cast else None,
+                "snapshot_text": text,
                 "data": {"doctrine_loaded": True, "settings_ignored": [], "settings_invalid": [], "warnings": []},
             }
         if tool_name == "tarot":

@@ -198,6 +198,11 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
    - 录制回放夹具的键太窄（`/chart` 只按 date/time 键控）会让「请求错了 hsys」回放出看似正确的答案；键必须含所有改变结果的字段。
    - 共享 shim 少一个常量（`constants/AstroConst.js` 缺 URANUS/NEPTUNE/PLUTO/MC…）→ 以它为键的表全变 `obj[undefined]` 互相覆盖、零报错；
      三式合一改用对上游打戳的 curated 子集，七政侧另查。
+15. **页面 getter 的兜底值不是页面缺省；「缺键透传」会翻转缺省。**（数算 agent）
+   - AGENTS §4 曾据 `fieldVal(f,'timeAlg',1)` 把 canping/heluo/yizhangjing 缺省写成 1（钟表时）；可那个全局字段恒被预置为 0，
+     字面 1 从不触发——skill 多个版本按钟表时出数算盘（1998-02-20 11:05 上海：巳时 vs 旧 午时）。找缺省追字段种子。
+   - vendored `baziLunarLocal` 判 `after23NewDay === 1`，`undefined` 即 24 点换日（与上游出厂 1 相反）；canping/heluo「缺键透传」
+     于是把 23:30 生人的日柱算成前一天（戊戌 vs 己亥）。凡「不给就不传」的工具，下游若把缺键当 0，必须补上游缺省。
 
 ### v0.40.0 / 2026-09-24 — 上游 v3.11.x 重同步：六处「同步了却没同步」
 

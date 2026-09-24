@@ -61,7 +61,8 @@ normalized `勾→虎 / 雀→玄`.
 ## 数算 (canping / heluo)
 
 - Computed fully in-process (vendored bazi chain + `lunar-javascript`) — no chart-service round trip.
-- `timeAlg` default `1` (clock time); `0` = 真太阳时 (triggers longitude + EoT correction).
+- `timeAlg` default `0` = 真太阳时 (longitude + EoT correction, 星阙 default); `1` = clock time. Day-boundary switches
+  default to 1/1 like every other 中式 tool (v0.40.0; the skill previously defaulted these three 数算 tools to clock time).
 - 邵子 canping: `基础条文` is a real verse; `完整条文` may show the engine's `【条文待補充】`
   fallback — that is upstream-faithful (the id scheme isn't covered by the 6144-verse CSV), identical
   on macOS/Windows. Don't call it a bug and don't invent verses; the accurate 流年 table lives in
