@@ -144,7 +144,7 @@ def test_classical_param_spec_mirror_matches_vendored_js() -> None:
         "m.CLASSICAL_PARAM_SPEC.filter((s)=>s.send==='nonDefault').map((s)=>[s.key,s.backendKey||null,s.valueType,s.default,"
         "s.defaultAliases||[],s.options?s.options.map((o)=>o.value):null])));});"
     )
-    vendored = json.loads(subprocess.run(["node", "-e", script], cwd=CORE_JS, capture_output=True, text=True, check=True).stdout)
+    vendored = json.loads(subprocess.run(["node", "-e", script], cwd=CORE_JS, capture_output=True, text=True, encoding="utf-8", check=True).stdout)
     mine = [
         [key, backend, vtype, default, list(aliases), list(options) if options is not None else None]
         for key, backend, vtype, default, aliases, options in snap.CLASSICAL_PARAM_SPEC_NON_DEFAULT
@@ -195,7 +195,7 @@ def test_jieqi_su_tables_mirror_vendored_js() -> None:
         "area:sz.SZSigns.map((x)=>`${x[0]}${x[1]}`),su:su.Su28,asc:sz.SZHouseStart_ASC,bazi:sz.SZHouseStart_Bazi,"
         "def:ac.DEFAULT_OBJECTS,trad:ac.TRADITION_OBJECTS}));});"
     )
-    vendored = json.loads(subprocess.run(["node", "-e", script], cwd=CORE_JS, capture_output=True, text=True, check=True).stdout)
+    vendored = json.loads(subprocess.run(["node", "-e", script], cwd=CORE_JS, capture_output=True, text=True, encoding="utf-8", check=True).stdout)
     assert vendored["zi"] == snap.SZ_ZI_SIGN
     assert tuple(vendored["area"]) == snap.SZ_SIGN_AREA
     assert tuple(vendored["su"]) == snap.SU28_ORDER

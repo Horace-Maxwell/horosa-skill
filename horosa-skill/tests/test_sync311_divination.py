@@ -93,7 +93,7 @@ def _node_json(expr_module: str, expr: str) -> Any:
     script = f"import(process.argv[1]).then((m) => {{ process.stdout.write(JSON.stringify({expr})); }});"
     out = subprocess.run(
         ["node", "--input-type=module", "-e", script, str(CORE_JS_SRC / expr_module)],
-        check=True, capture_output=True, text=True,
+        check=True, capture_output=True, text=True, encoding="utf-8",
     )
     return json.loads(out.stdout)
 

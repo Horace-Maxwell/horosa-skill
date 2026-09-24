@@ -435,7 +435,7 @@ def test_india_school_presets_mirror_the_vendored_table() -> None:
         "Object.keys(m.INDIA_SCHOOL_DEFAULTS).forEach((k)=>{o[k]=[m.INDIA_SCHOOL_DEFAULTS[k].ayanamsa,m.INDIA_SCHOOL_DEFAULTS[k].hsys];});"
         "console.log(JSON.stringify(o));});"
     )
-    out = subprocess.run(["node", "-e", script], cwd=core, capture_output=True, text=True, check=True).stdout
+    out = subprocess.run(["node", "-e", script], cwd=core, capture_output=True, text=True, encoding="utf-8", check=True).stdout
     assert {k: tuple(v) for k, v in json.loads(out).items()} == _INDIA_SCHOOL_PRESETS
 
 
@@ -703,7 +703,7 @@ def test_guidance_vocab_matches_the_vendored_engine_tables() -> None:
       rulesets: mr.MUNDANE_RULESETS.map((r) => [r.key, r.label]),
     }));
     """
-    out = subprocess.run(["node", "--input-type=module", "-e", script], cwd=core, capture_output=True, text=True, check=True)
+    out = subprocess.run(["node", "--input-type=module", "-e", script], cwd=core, capture_output=True, text=True, encoding="utf-8", check=True)
     eng = json.loads(out.stdout)
     assert [tuple(x) for x in eng["categories"]] == list(W.HORARY_CATEGORIES)
     assert [tuple(x) for x in eng["topics"]] == list(W.ELECTION_TOPICS)

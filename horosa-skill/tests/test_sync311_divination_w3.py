@@ -112,7 +112,7 @@ def _sections(text: str | None) -> dict[str, list[str]]:
 
 
 def _node(script: str, *args: str) -> str:
-    out = subprocess.run(["node", "--input-type=module", "-e", script, *args], check=True, capture_output=True, text=True)
+    out = subprocess.run(["node", "--input-type=module", "-e", script, *args], check=True, capture_output=True, text=True, encoding="utf-8")
     return out.stdout
 
 

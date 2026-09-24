@@ -699,6 +699,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 ## 8. 本地验证与排障
 
+- **tests/ 里起 node 的子进程必须 `encoding="utf-8"`（v0.40.0 首推 windows-smoke 红）**：`text=True` 在 Windows 按控制台代码页解，CJK 金标 JSON 直接 UnicodeDecodeError；`tests/test_subprocess_encoding.py` 的 node 扫描守着（负向对照），本机 macOS 复现不了，只有 Windows job 抓得到。
 - **工作流 / 文档里的计数必须有真值文件（v0.40.0 首推 CI 红）**：ci.yml 的 stdio 探针工具数从 `contracts/mcp_list_budget.json` 读（`full_tools` / `compact_tools`），README 客户端表的「全量 N」由 `verify_docs_sync.check_full_surface_counts` 对同一契约锁；`run_ci_gates.py` 不跑「wheel 真起 stdio」两步，推之前核它们的断言值。
 **验证流程**：
 

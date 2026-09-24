@@ -2088,7 +2088,7 @@ def test_sixyao_time_based_gua_varies_with_time_and_is_deterministic() -> None:
 
     def cast(items: list[dict]) -> list[list[dict]]:
         out = subprocess.run(["node", "--input-type=module", "-e", script, str(module), json.dumps(items, ensure_ascii=False)],
-                             check=True, capture_output=True, text=True)
+                             check=True, capture_output=True, text=True, encoding="utf-8")
         return json.loads(out.stdout)
 
     combos = set()

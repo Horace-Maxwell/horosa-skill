@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.40.0 (2026-09) | 首推 windows-smoke 红：tests/ 里 7 处起 node 复算金标的 `subprocess.run(…, text=True)` 没给 encoding，CJK 输出按 cp1252 解炸 | node 调用一律 `encoding="utf-8"`；`test_subprocess_encoding` 扩到 tests/ 的 node 调用（负向对照） |
 | v0.40.0 (2026-09) | 首推 CI 红：ci.yml 两个 stdio 探针把全量面工具数写死 116，四个新工具把它变成 120 | 数字只许一个源：探针从 contracts/mcp_list_budget.json 读 full_tools/compact_tools；docs-sync 扫 README 全量行 + ci.yml 字面数 |
 | v0.40.0 (2026-09) | 审计 P0：报告类 MCP 工具 `output_path` 可写任意路径（提示注入 = 覆盖用户任意文件） | 落盘路径闸：相对路径按输出目录解析、绝对路径须在输出目录 / `HOROSA_REPORT_OUTPUT_ROOTS` 内，越界 `report.output_path_not_allowed` 不写文件；三工具 destructiveHint=True |
 | v0.40.0 (2026-09) | 审计 P1：`contracts/` 不在 wheel / MCPB 里——Jev enforce 永不生效、技法算源恒「未标注」（v0.39.0 已出货） | 运行期契约经 `contracts_locator`（源码树 → 包内副本）；pyproject force-include + `.mcpbignore` 反选 + wheel 守卫锁条目 |
@@ -109,6 +110,19 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.40.0 / 2026-09-24 — 首推 windows-smoke 红：测试里起 node 复算金标的子进程按 cp1252 解 CJK
+
+- 症状：v0.40.0 候选第一次上 Windows runner，`windows-smoke` 的 pytest 红 11 条（六爻 / 正传 / 节气宿盘 / guidance 词表 / 择日判读…），
+  全是 `UnicodeDecodeError: 'charmap' codec can't decode byte 0x8d`（读线程里炸 → `stdout=None` → `json.loads(None)` 再炸一层）。
+  本机（macOS）与 ubuntu job 全绿。
+- 根因：同步各波新增了一种主要测试形态——测试自己 `subprocess.run(["node", "-e", …], text=True)` 跑 vendored 上游 JS 算金标；
+  7 处都没给 `encoding=`，Windows 上 `text=True` 按控制台代码页解。`tests/test_subprocess_encoding.py` 的守卫只扫 `src/`
+  （v0.37.0 那次是产品代码踩的同一坑），tests/ 是盲区。
+- 守卫：7 处补 `encoding="utf-8"`（node 恒 UTF-8 输出）；`test_subprocess_encoding.py` 新增对 tests/ 的 node 调用扫描 +
+  负向对照（旧形状必红、非 node 子进程不误报）。
+- 规则：**在 tests/ 里起子进程读文本，与 src/ 同一条纪律——`encoding="utf-8"` 显式给。** Windows job 是唯一能抓到它的地方，
+  推之前本机没法复现（macOS 默认 UTF-8），所以守卫必须是静态扫描。
 
 ### v0.40.0 / 2026-09-24 — 首推 CI 红：stdio 探针把全量面工具数写死在 ci.yml 里
 
