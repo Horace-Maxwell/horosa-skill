@@ -1255,7 +1255,7 @@
     },
     "guolao/guolaoMoiraWheelLimits.js": {
       "mode": "bespoke",
-      "why": "自上游 GuoLaoMoiraWheel.js（2485 行 SVG 轮盘 React 组件）逐字抽出「命度 → 百六大限」算法闭包：buildGuolaoLimitTable / birthYearBasis（含立春/冬至年界本地节气精算）/ currentLimitIndex / lifeDegree 及依赖；上游 GuoLaoMoiraPanel 与 GuoLaoChartMain 即以 moira* 别名 import 这几个函数。GUOLAO_LIFE_MODE_* / normalizeGuolaoLifeMode 逐字取自 GuoLaoChartStyle.js（未单独看守：该文件其余为 localStorage 偏好读写），getStoredGuolaoLifeMode 为 headless 缺省 asc。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "why": "自上游 GuoLaoMoiraWheel.js（2485 行 SVG 轮盘 React 组件）逐字抽出「命度 → 百六大限」算法闭包：buildGuolaoLimitTable / birthYearBasis（含立春/冬至年界本地节气精算）/ currentLimitIndex / lifeDegree 及依赖，另 wave3b 抽 cleanText / formatGodName / godsFromRuleHits / longLifeCharFor（[神煞] 段 buildRulesGodsSection 的 moira* 依赖）；上游 GuoLaoMoiraPanel 与 GuoLaoChartMain 即以 moira* 别名 import 这几个函数。GUOLAO_LIFE_MODE_* / normalizeGuolaoLifeMode 逐字取自 GuoLaoChartStyle.js（未单独看守：该文件其余为 localStorage 偏好读写；guolaoMoira.js 亦从这里取同一份），getStoredGuolaoLifeMode 为 headless 缺省 asc。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
       "derived_from": "components/guolao/GuoLaoMoiraWheel.js",
       "derived_sha256": "346a84374e36851b7d63b6d19c82623c077677a3f60ead6ff321a22668aa4e53"
     },
@@ -1279,7 +1279,7 @@
     },
     "guolao/guolaoMoira.js": {
       "mode": "bespoke",
-      "why": "自上游 GuoLaoChartMain.js verbatim 抽出的政余格局 Moira DSL 闭包；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "why": "自上游 GuoLaoChartMain.js verbatim 抽出的政余格局 Moira DSL 闭包，外加 wave3b 同源快照段（与格局闭包共用 msg/objectLon/houseFullLabel/computeAscSignIndex/orderGods 与同一 SNAPSHOT_PREFER_LON 黄仪窗口）：[七政四余宫位与二十八宿星曜] buildHouseSuAndGodsSection、[神煞] buildRulesGodsSection → buildHouseGodsSection、[相位] buildGuolaoAspectSection（含 GUOLAO_ASPECT_LABEL_CN/aspectName/buildAspectRows）与 splitDegree，逐字；buildGuolaoSnapshotTablesForSnapshot 为 skill 桥接（同 buildLocalMoiraPatternsForSnapshot）。normalizeGuolaoLifeMode 取 guolaoMoiraWheelLimits.js 的 GuoLaoChartStyle 逐字版（此前本文件留着只认 yumao/cotrans 的旧平移件）。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
       "derived_from": "components/guolao/GuoLaoChartMain.js",
       "derived_sha256": "6d025655d699f9defa3e7fc8ed464aa2da23ef8c7cc45f4b08b3e24adce2f2f0"
     },

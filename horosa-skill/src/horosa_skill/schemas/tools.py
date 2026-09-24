@@ -889,6 +889,7 @@ class GuoLaoInput(BirthInput):
     ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({
         "guolaoNodeMode", "guolaoTrueSolarTime", "guolaoNodeType", "guolaoLilithType",
         "guolaoAyanamsa", "guolaoTuibianMethod", "guolaoGufaPrecess", "guolaoEqTropicalAnchor",
+        "guolaoLimitYearBoundary",
     })
     # 宿度制（上游 GuoLaoChartStyle.js:10 缺省 2 回归今宿；值域 guolaoData.SU28_MODE_LABEL 0–8）。BirthInput 那个是 bool
     # （宿占用），这里放宽成 int —— 2–8 此前被 pydantic 拒；旧 true/false 照后端 parseSu28Mode 解释为 1/0。
@@ -905,6 +906,9 @@ class GuoLaoInput(BirthInput):
     guolaoMinorLimitType: str | None = Field(default=None, description="行运法：''=古度限度法（缺省）| minor=小限 | month=月限 | tong=童限 | dongwei=洞微大限。改 [大限] 所附行运法结构与 [限法实算] 的实算行。")
     guolaoTongxianBase: str | None = Field(default=None, description="童限基数（行运法=tong 时生效）：tong10=通行十年（缺省）| gu9=古九岁 | xu11=虚十一。")
     guolaoLimitChildBase: int | None = Field(default=None, description="定童限：9=九年起（缺省）| 10=十年起。改 [大限] 首限年数与各限起讫岁、[限法实算] 的童限/限度。")
+    # 上游页面显示偏好 horosaGuolaoDisplay.limitYearBoundary（GuoLaoInput.js:850；GuoLaoChartStyle.GUOLAO_LIMIT_YEAR_BOUNDARIES），
+    # 无头复算读同一份全局偏好（_buildGuolaoSnapshotTextV2Core:2058 getStoredGuolaoDisplay）。
+    guolaoLimitYearBoundary: str | None = Field(default=None, description="大限年界：gregorian 公历元旦（缺省，Moira）| lichun 立春 | dongzhi 冬至（本地节气表精算）。改 [大限] 首限起点与各限起讫年（立春前生人岁次上一年、冬至后生人下一年）。")
     # 起盘口径（上游页面左栏 / 挂载齿轮 techniqueMountSettings.js:1123-1181；缺省 = GuoLaoChartStyle.js getStored* 缺省）。
     guolaoNodeMode: str | None = Field(default=None, description="罗计命名：northKetuSouthRahu 北计南罗（缺省）| northRahuSouthKetu 北罗南计（整盘换位）。")
     guolaoTrueSolarTime: str | None = Field(default=None, description="报时星太阳时：true 真太阳时（缺省）| mean 平太阳时 | off 钟表时。")

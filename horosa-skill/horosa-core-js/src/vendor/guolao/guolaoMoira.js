@@ -1,21 +1,24 @@
 // 七政四余 政余格局（Moira DSL，星阙 v2.6.x；verbatim 抽取自 GuoLaoChartMain.js）。
 // buildLocalMoiraPatterns(chartObj, fields, params, godRows) → [{name,level:'good'|'bad',detail,dsl},...]
 // + buildGodRowsFromChart(chartObj, fields)。纯函数闭包(34 fns + consts)，零 React/this。
+// v3.11 wave3b 同源追加（与格局闭包共用 msg / objectLon / houseFullLabel / computeAscSignIndex / orderGods，
+// 及同一个 SNAPSHOT_PREFER_LON 黄仪窗口）：[七政四余宫位与二十八宿星曜] buildHouseSuAndGodsSection（:1602-1671）、
+// [神煞] buildRulesGodsSection（:1757-1776）→ buildHouseGodsSection（:1694-1720）回退、[相位] buildGuolaoAspectSection
+// （:2160-2179，含 GUOLAO_ASPECT_LABEL_CN / aspectName / buildAspectRows :1088-1137）与 splitDegree（:290-300），逐字。
 import * as AstroConst from '../../constants/AstroConst.js';
 import * as AstroText from '../../constants/AstroText.js';
 import * as SZConst from '../suzhan/SZConst.js';
+import * as Su28Helper from '../su28/Su28Helper.js';
+import {
+	GUOLAO_LIFE_MODE_ASC, GUOLAO_LIFE_MODE_COTRANS, GUOLAO_LIFE_MODE_YUMAO, normalizeGuolaoLifeMode,
+	moiraGodsFromRuleHits, moiraLongLifeCharFor,
+} from './guolaoMoiraWheelLimits.js';
 
 // 七政四余 命主取法 / 宿度制（上游 GuoLaoChartStyle.js，localStorage 偏好）。headless 无持久化 →
-// getStored* 回退 星阙 缺省（命主=ASC 命度、宿度制=2 张果今制）；normalizeGuolaoLifeMode 平移原逻辑。
-// 仅当 fields.guolaoLifeMode 显式传入时改用羽士/同度命主，否则全走缺省（与 星阙 无偏好态一致）。
-const GUOLAO_LIFE_MODE_YUMAO = 'yumao';
-const GUOLAO_LIFE_MODE_COTRANS = 'cotrans';
-const GUOLAO_LIFE_MODE_ASC = 'asc';
-function normalizeGuolaoLifeMode(val) {
-  if (val === GUOLAO_LIFE_MODE_YUMAO) return GUOLAO_LIFE_MODE_YUMAO;
-  if (val === GUOLAO_LIFE_MODE_COTRANS) return GUOLAO_LIFE_MODE_COTRANS;
-  return GUOLAO_LIFE_MODE_ASC;
-}
+// getStored* 回退 星阙 缺省（命主=ASC 命度、宿度制=2 张果今制）。
+// 🔴 normalizeGuolaoLifeMode 取上游 GuoLaoChartStyle 现行逐字版（guolaoMoiraWheelLimits.js 同一份）：此前这里是只认
+// yumao/cotrans 的旧平移件，gumao（遇卯安命）与地支（自定命宫）被归一成 asc —— computeAscSignIndex/lifeDegree
+// 于是不取命度点 LifeMasterDeg74，与上游 GuoLaoMoiraWheel.lifeDegree 分叉。
 const getStoredGuolaoLifeMode = () => GUOLAO_LIFE_MODE_ASC;
 const getStoredGuolaoSu28Mode = () => 2;
 
@@ -654,4 +657,262 @@ function buildLocalMoiraPatternsForSnapshot(result, fields, params){
 	}
 }
 
-export { buildLocalMoiraPatterns, buildGodRowsFromChart, buildLocalMoiraPatternsForSnapshot };
+
+// ── 以下逐字取自上游 GuoLaoChartMain.js（v3.11 wave3b）──
+
+// :290-300
+function splitDegree(degree){
+	let d = Number(degree);
+	if(Number.isNaN(d)){
+		return [0, 0];
+	}
+	if(d < 0){
+		d += 360;
+	}
+	const deg = Math.floor(d % 30);
+	const min = Math.floor(((d % 30) - deg) * 60);
+	return [deg, min];
+}
+
+// :1088-1137
+// 🆕 中文相位名(含度数)用于 AI 挂载快照 + AI 导出 — 避免输出占星字体字形码(R/W/P/M 等)给 LLM 看成乱码。
+// UI 内部渲染走 AstroMsg 字形码 + 占星字体不受影响(各自管线分离)。
+const GUOLAO_ASPECT_LABEL_CN = {
+	Asp0: '合 (0°)',
+	Asp30: '半六合 (30°)',
+	Asp45: '半方 (45°)',
+	Asp60: '六合 (60°)',
+	Asp90: '方 (90°)',
+	Asp120: '三合 (120°)',
+	Asp135: '补半方 (135°)',
+	Asp150: '梅花 (150°)',
+	Asp180: '冲 (180°)',
+};
+function aspectName(deg){
+	if(GUOLAO_ASPECT_LABEL_CN[`Asp${deg}`]){ return GUOLAO_ASPECT_LABEL_CN[`Asp${deg}`]; }
+	if(AstroText.AstroTxtMsg && AstroText.AstroTxtMsg[`Asp${deg}`]){ return AstroText.AstroTxtMsg[`Asp${deg}`]; }
+	return Number.isFinite(Number(deg)) ? `${deg}°` : '';
+}
+
+function buildAspectRows(aspects){
+	const normal = aspects && aspects.normalAsp ? aspects.normalAsp : aspects;
+	const rows = [];
+	if(!normal || typeof normal !== 'object'){
+		return rows;
+	}
+	Object.keys(normal).forEach((key)=>{
+		const bucket = normal[key] || {};
+		[
+			['Applicative', '入相'],
+			['Exact', '精确'],
+			['Separative', '离相'],
+			['None', '容许'],
+		].forEach(([field, state])=>{
+			safeList(bucket[field]).forEach((asp, idx)=>{
+				if(!asp || !asp.id){
+					return;
+				}
+				rows.push({
+					key: `${key}-${asp.id}-${field}-${idx}`,
+					from: msg(key),
+					to: msg(asp.id),
+					aspect: aspectName(asp.asp),
+					state,
+					orb: Number.isFinite(Number(asp.orb)) ? `${Math.round(Number(asp.orb) * 1000) / 1000}` : '',
+				});
+			});
+		});
+	});
+	return rows;
+}
+
+// :1600-1671
+// GFM 表化(段内排版,值零变化):行=宫×宿(空宫一行 无/无),宫内星列表一 cell 内联「；」相接,
+// 星字串(曜 d˚宿m分)与旧「星曜：」行逐字同。(宫位,宿,星)元组集合证明见 guolaoSnapshotTables.test.js。
+export function buildHouseSuAndGodsSection(result, planetDisplay, fields){
+	const chart = result && result.chart ? result.chart : {};
+	const houses = chart && chart.houses ? chart.houses : [];
+	const objects = chart && chart.objects ? chart.objects : [];
+	const ascSignIndex = computeAscSignIndex(result, chart, fields);
+	let visibleSet = null;
+	if(planetDisplay && planetDisplay.length){
+		visibleSet = new Set(planetDisplay);
+	}
+	const lines = [];
+
+	houses.forEach((house, idx)=>{
+		const label = houseFullLabel(house, idx, ascSignIndex);
+		let inHouse = objects.filter((obj)=>{
+			if(obj.house !== house.id){
+				return false;
+			}
+			if(visibleSet){
+				return visibleSet.has(obj.id);
+			}
+			return AstroConst.isTraditionPlanet(obj.id);
+		});
+		inHouse = inHouse.sort((a, b)=>{
+			if(a.ra > 300 && b.ra < 30){
+				return -1;
+			}
+			// 环形序须对称全序:跨 0°RA 两向都判,单侧判 = 非对称比较器,sort 行为未定义。
+			if(b.ra > 300 && a.ra < 30){
+				return 1;
+			}
+			return a.ra - b.ra;
+		});
+
+		if(inHouse.length === 0){
+			lines.push(`| ${label} | 无 | 无 |`);
+			return;
+		}
+		const suMap = new Map();
+		inHouse.forEach((obj)=>{
+			const su = obj.su28 || '未知宿';
+			if(!suMap.has(su)){
+				suMap.set(su, []);
+			}
+			suMap.get(su).push(obj);
+		});
+
+		const suKeys = Array.from(suMap.keys()).sort((a, b)=>{
+			const ia = Su28Helper.Su28.indexOf(a);
+			const ib = Su28Helper.Su28.indexOf(b);
+			if(ia < 0 && ib < 0){
+				return `${a}`.localeCompare(`${b}`);
+			}
+			if(ia < 0){
+				return 1;
+			}
+			if(ib < 0){
+				return -1;
+			}
+			return ia - ib;
+		});
+
+		suKeys.forEach((su)=>{
+			const list = suMap.get(su) || [];
+			const stars = list.map((obj)=>{
+				let radeg = Number(objectLon(obj));
+				if(!Number.isNaN(radeg)){
+					const suRef = (chart.fixedStarSu28 || []).find((it)=>it.name === su);
+					if(suRef && suRef.ra !== undefined && suRef.ra !== null){
+						radeg = Number(objectLon(obj)) - Number(suRef.ra);
+						if(radeg < 0){
+							radeg += 360;
+						}
+					}else{
+						radeg = Number(obj.signlon);
+					}
+				}else{
+					radeg = Number(obj.signlon);
+				}
+				const sd = splitDegree(radeg);
+				return `${msg(obj.id)} ${sd[0]}˚${su}${sd[1]}分`;
+			});
+			lines.push(`| ${label} | ${su} | ${stars.join('；') || '无'} |`);
+		});
+	});
+	if(!lines.length){
+		return '';
+	}
+	return ['| 宫位 | 二十八宿 | 星曜 |', '| --- | --- | --- |'].concat(lines).join('\n').trim();
+}
+
+// :1694-1720
+function buildHouseGodsSection(result, fields){
+	const chart = result && result.chart ? result.chart : {};
+	const houses = chart && chart.houses ? chart.houses : [];
+	const ascSignIndex = computeAscSignIndex(result, chart, fields);
+	const rootZiGods = result && result.nongli && result.nongli.bazi && result.nongli.bazi.guolaoGods
+		? result.nongli.bazi.guolaoGods.ziGods : null;
+	const chartZiGods = chart && chart.nongli && chart.nongli.bazi && chart.nongli.bazi.guolaoGods
+		? chart.nongli.bazi.guolaoGods.ziGods : null;
+	const ziGods = chartZiGods || rootZiGods || null;
+	const lines = [];
+
+	houses.forEach((house, idx)=>{
+		lines.push(`宫位：${houseFullLabel(house, idx, ascSignIndex)}`);
+		const sign = signFromLon(house.lon);
+		const zi = sign ? SZConst.SignZi[sign] : null;
+		const gz = ziGods && zi ? ziGods[zi] : null;
+		const allGods = orderGods(gz ? []
+			.concat(gz.goodGods || [])
+			.concat(gz.neutralGods || [])
+			.concat(gz.badGods || []) : [], MOIRA_BIRTH_GOD_ORDER);
+		const taiGods = orderGods(gz ? (gz.taisuiGods || []) : [], MOIRA_TRANSIT_GOD_ORDER);
+		lines.push(`神煞：${allGods.join('、') || '无'}`);
+		lines.push(`太岁神：${taiGods.join('、') || '无'}`);
+		lines.push('');
+	});
+
+	return lines.join('\n').trim();
+}
+
+// :1757-1776
+// AI 快照·神煞段与盘面同源(rules 引擎 godHits+十二长生;rules 未到回退历法 ziGods)——
+// 「显示什么就导出什么」:盘面/右栏已切 rules 源,快照必须同步,防 AI 拿到另一套神煞。
+function buildRulesGodsSection(moiraRules){
+	const hits = moiraRules && moiraRules.godHits;
+	if(!hits || !hits.length){
+		return '';
+	}
+	const ZHI12 = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
+	const out = [];
+	ZHI12.forEach((zi)=>{
+		const gods = moiraGodsFromRuleHits(moiraRules, zi, 'birth') || [];
+		const ll = moiraLongLifeCharFor(moiraRules, zi, 'birth');
+		const all = (ll ? [ll] : []).concat(gods);
+		if(all.length){
+			out.push(`${zi}：${all.join('、')}`);
+		}
+	});
+	return out.join('\n');
+}
+
+// :2158-2179
+// AI 快照·相位段（右栏「相位」面板已显示但此前未导出）：复用 buildAspectRows，与盘面的相位表同源；异常降级「无」。
+export function buildGuolaoAspectSection(result){
+	try{
+		const chart = getChart(result);
+		const aspects = (chart && chart.aspects) || (result && result.aspects) || null;
+		const rows = buildAspectRows(aspects);
+		if(!rows || !rows.length){
+			return '无';
+		}
+		// GFM 表化(段内排版,值零变化):五元组(主体/相位/对象/状态/误差)与旧行一一对应,
+		// 无误差值 cell='—'(旧行该情形整个省略「，误差X」)。元组集合证明见 guolaoSnapshotTables.test.js。
+		const out = [];
+		out.push('| 主体 | 相位 | 对象 | 状态 | 误差 |');
+		out.push('| --- | --- | --- | --- | --- |');
+		rows.forEach((row)=>{
+			out.push(`| ${row.from} | ${row.aspect} | ${row.to} | ${row.state} | ${row.orb || '—'} |`);
+		});
+		return out.join('\n');
+	}catch(e){
+		return '无';
+	}
+}
+
+// skill 侧桥接（同 buildLocalMoiraPatternsForSnapshot）：上游 _buildGuolaoSnapshotTextV2Core（:2031-2140）在一次
+// SNAPSHOT_PREFER_LON 黄仪窗口内依次产 [七政四余宫位与二十八宿星曜]（:2079 buildHouseSuAndGodsSection(result,
+// planetDisplay, fields)——无头 buildGuolaoSnapshotForFields 传 null）、[神煞]（:2086 rules 源 → 历法 ziGods 回退）
+// 与 [相位]（:2138）。三段取值表达式与各自 `|| '无'` 兜底逐字照搬。
+function buildGuolaoSnapshotTablesForSnapshot(result, fields, moiraRules){
+	const _snapChart = result && result.chart ? result.chart : result;
+	SNAPSHOT_PREFER_LON = !!(_snapChart && _snapChart.displayCoord === 'ecliptic');
+	try{
+		return {
+			houseSu: buildHouseSuAndGodsSection(result, null, fields) || '无',
+			gods: buildRulesGodsSection(moiraRules) || buildHouseGodsSection(result, fields) || '无',
+			aspects: buildGuolaoAspectSection(result) || '无',
+		};
+	}finally{
+		SNAPSHOT_PREFER_LON = false;
+	}
+}
+
+export {
+	buildLocalMoiraPatterns, buildGodRowsFromChart, buildLocalMoiraPatternsForSnapshot,
+	buildGuolaoSnapshotTablesForSnapshot, buildHouseGodsSection, buildRulesGodsSection,
+};

@@ -1901,10 +1901,9 @@ def _render_qimen_palace_sections(qimen_pan: dict[str, Any]) -> list[tuple[str, 
 
 
 # ── 七政四余·大限（命度→十二宫）+ 相位：星阙 GuoLaoMoiraWheel/GuoLaoChartMain 的 Python 移植 ──
-# 默认 lifeMode=ASC（headless 无 UI 偏好；不支持 per-盘命主显示偏好——见 README/AGENTS）。
-# 政余格局（buildLocalMoiraPatterns Moira DSL）v0.11.0 起 JS vendor（guolaoMoira.js）评估：盘面物象
-# 格局（孛犯太阳/金水相涵/命坐两歧 等）可出；依赖 七政神煞(官福疾) 的格局受限于 guolaoGods 未随
-# /chart 返回（kinastro qizheng 另路，如实标出）。见 _run_guolao_chart_tool 的 js_client 调用。
+# 仅作 JS 段 builder（vendored buildGuolaoLimitSection / buildGuolaoAspectSection）整体失败时的兜底（已进 warnings）。
+# 政余格局（buildLocalMoiraPatterns Moira DSL）v0.11.0 起 JS vendor（guolaoMoira.js）评估；神煞行所需的
+# chart.nongli.bazi.guolaoGods 由 runner 以 Java /nongli/time 挂上（上游 Java /chart 同形）。见 _run_guolao_chart_tool。
 _GUOLAO_LIMIT_SEQ = [11.0, 10.0, 11.0, 15.0, 8.0, 7.0, 11.0, 4.5, 4.5, 4.5, 5.0, 5.0]
 _GUOLAO_HOUSE_BRANCH = ("命宫", "财帛", "兄弟", "田宅", "男女", "奴仆", "夫妻", "疾厄", "迁移", "官禄", "福德", "相貌")
 _GUOLAO_ASP_STATES = (("Applicative", "入相"), ("Exact", "精确"), ("Separative", "离相"), ("None", "容许"))
@@ -2055,6 +2054,39 @@ def _apply_guolao_node_mode(chart_obj: Any, settings: dict[str, Any]) -> Any:
     return _swap_guolao_node_ids_deep(copy.deepcopy(chart_obj))
 
 
+def _guolao_slash_date(date_text: Any) -> str:
+    """上游 GuoLaoChartMain.fieldsToParams:2337 `fields.date.value.format('YYYY/MM/DD')`——params.date 恒斜杠；skill 归一后是
+    YYYY-MM-DD。[起盘信息] 日期行与 JS 段 builder 的 params.date（出生年取 split('/')[0]）都要斜杠形。"""
+    text = f"{date_text or ''}"
+    return text.replace("-", "/", 2) if re.match(r"^\d{4}-\d{2}-\d{2}", text) else text
+
+
+_GUOLAO_LIFE_MODE_NAMES = {"yumao": "日出安命", "cotrans": "赤黄转换", "gumao": "遇卯安命(古法)"}
+
+
+def _guolao_warn_missing_life_master(response: Any, life_mode: str) -> None:
+    """命度法非「占星上升」时，上游命度 = Java BaZi.genLifeMasterDeg 算出的命度点 LifeMasterDeg74（ChartController.java:96，
+    日出安命/遇卯/赤黄转换/自定命宫各有专算法）。本仓 /chart 走 Python 排盘服务，响应里没有这个点 —— 上游消费方
+    （lifeDegree / localLifeObject / QizhengMoiraRuleService.firstPresent）对缺点的回退序是「命度点 → 上升 → 太阳」，
+    于是命度静默落回上升点。结果照出（与上游缺点时同形），但必须说出来：[起盘信息] 印的是所选命度法，数是上升的。"""
+    mode = f"{life_mode or 'asc'}".strip() or "asc"
+    if mode == "asc":
+        return
+    chart = response.get("chart") if isinstance(response, dict) else None
+    objects = chart.get("objects") if isinstance(chart, dict) else None
+    if any(isinstance(obj, dict) and obj.get("id") == "LifeMasterDeg74" for obj in objects or []):
+        return
+    name = _GUOLAO_LIFE_MODE_NAMES.get(mode) or f"自定命宫·{mode}"
+    _degrade(
+        "guolao LifeMasterDeg74 missing for lifeMode=%s (python chart service has no 七政命度点)", mode,
+        note=(
+            f"七政命度「{name}」要 Java 排盘层算出的命度点 LifeMasterDeg74（上游 /chart 走 Java ChartController → "
+            "BaZi.genLifeMasterDeg）；本仓 /chart 走 Python 排盘服务、无此点 → 命度按上游同一回退序落回上升点："
+            "[起盘信息] 命度行、[七政四余宫位与二十八宿星曜] 宫序、[大限]、[三主与化曜]/[限法实算] 与 Moira 规则层均按上升计（架构限制）。"
+        ),
+    )
+
+
 def _build_guolao_snapshot_text(
     payload: dict[str, Any],
     response: dict[str, Any],
@@ -2063,43 +2095,34 @@ def _build_guolao_snapshot_text(
     info_sections: dict[str, Any] | None = None,
 ) -> str:
     """七政四余快照。`info_sections` = JS `guolao_moira` 的 info_sections 动作结果（vendored 上游段 builder）：
-    anchorLines（[起盘信息] 命度/身度/宿主行）/ limitSection（[大限]）/ masters（[三主与化曜]）/ limitCalc（[限法实算]）。
-    段序同上游 _buildGuolaoSnapshotTextV2Core（GuoLaoChartMain.js:2040-2140）：大限 → 三主与化曜 → 限法实算 →
-    （虚实/本命化曜/流年流曜 由 runner 插在 [政余格局] 之前）。"""
+    setupLines/anchorLines（[起盘信息] 口径六行 + 命度/身度/宿主行）/ houseSu（[七政四余宫位与二十八宿星曜] GFM 表）/
+    gods（[神煞]：rules 源 → 历法 ziGods 回退）/ limitSection（[大限]）/ masters（[三主与化曜]）/ limitCalc（[限法实算]）/
+    aspects（[相位] GFM 表）。段序同上游 _buildGuolaoSnapshotTextV2Core（GuoLaoChartMain.js:2031-2140）：大限 → 三主与化曜 →
+    限法实算 →（虚实/本命化曜/流年流曜 由 runner 插在 [政余格局] 之前）。info_sections 为空（JS 段 builder 整体失败，已进
+    warnings）时宫位表 / 相位回退 Python 旧行式、[神煞] 为「无」。"""
     info = info_sections if isinstance(info_sections, dict) else {}
     chart = response.get("chart", {})
     houses = chart.get("houses") if isinstance(chart, dict) else []
     objects = chart.get("objects") if isinstance(chart, dict) else []
-    zi_gods = (
-        response.get("nongli", {})
-        .get("bazi", {})
-        .get("guolaoGods", {})
-        .get("ziGods", {})
-        if isinstance(response.get("nongli"), dict)
-        else {}
-    )
 
-    house_lines: list[str] = []
-    for index, house in enumerate(houses or [], start=1):
-        house_id = house.get("id", f"House{index}") if isinstance(house, dict) else f"House{index}"
-        house_lines.append(f"宫位：{house_id}")
-        in_house = [obj for obj in (objects or []) if isinstance(obj, dict) and obj.get("house") == house_id]
-        if not in_house:
-            house_lines.append("星曜：无")
-        else:
-            for obj in in_house:
-                house_lines.append(f"星曜：{obj.get('id', '—')} {obj.get('su28', '')}".strip())
-        house_lines.append("")
-    gods_lines: list[str] = []
-    if isinstance(zi_gods, dict) and zi_gods:
-        for branch, god_info in zi_gods.items():
-            if not isinstance(god_info, dict):
-                continue
-            gods_lines.append(
-                f"{branch}：神煞={'、'.join(god_info.get('allGods', []) or []) or '无'}；太岁神={'、'.join(god_info.get('taisuiGods', []) or []) or '无'}"
-            )
+    house_text = f"{info.get('houseSu') or ''}".strip()
+    if not house_text:
+        house_lines: list[str] = []
+        for index, house in enumerate(houses or [], start=1):
+            house_id = house.get("id", f"House{index}") if isinstance(house, dict) else f"House{index}"
+            house_lines.append(f"宫位：{house_id}")
+            in_house = [obj for obj in (objects or []) if isinstance(obj, dict) and obj.get("house") == house_id]
+            if not in_house:
+                house_lines.append("星曜：无")
+            else:
+                for obj in in_house:
+                    house_lines.append(f"星曜：{obj.get('id', '—')} {obj.get('su28', '')}".strip())
+            house_lines.append("")
+        house_text = "\n".join(house_lines).strip()
+    aspect_text = f"{info.get('aspects') or ''}".strip() or "\n".join(_build_guolao_aspect_lines(chart, response)).strip()
     info_lines = [
-        f"日期：{payload.get('date', '—')} {payload.get('time', '—')}",
+        # 上游 params.date = fields.date.value.format('YYYY/MM/DD')（GuoLaoChartMain.js:2337/2043）。
+        f"日期：{_guolao_slash_date(payload.get('date', '—'))} {payload.get('time', '—')}",
         f"时区：{payload.get('zone', '—')}",
         f"经纬度：{payload.get('lon', '—')} {payload.get('lat', '—')}",
         # [Q-191/T-134]（上游 GuoLaoChartMain.js:2046）时间基准 + 七政两套时标补注。上游 fieldsToParams 不带
@@ -2120,8 +2143,10 @@ def _build_guolao_snapshot_text(
     limit_text = f"{info.get('limitSection') or ''}".strip() or "\n".join(_build_guolao_limit_lines(chart, payload)).strip()
     sections: list[tuple[str, str]] = [
         ("起盘信息", "\n".join(info_lines)),
-        ("七政四余宫位与二十八宿星曜", "\n".join(house_lines).strip() or "无"),
-        ("神煞", "\n".join(gods_lines).strip() or "无"),
+        # 上游 :2079 buildHouseSuAndGodsSection(result, planetDisplay, fields) || '无'（无头 planetDisplay=null → 传统星曜）。
+        ("七政四余宫位与二十八宿星曜", house_text or "无"),
+        # 上游 :2086 buildRulesGodsSection(moiraRules) || buildHouseGodsSection(result, fields) || '无'。
+        ("神煞", f"{info.get('gods') or ''}".strip() or "无"),
         ("大限", limit_text or "无"),
     ]
     # [Q-435]（上游 GuoLaoChartMain.js:2092-2104）三主化曜 / 难仇恩用 与 五限实算 / 行运法实算：有数据才产段。
@@ -2132,11 +2157,11 @@ def _build_guolao_snapshot_text(
     if limit_calc_text:
         sections.append(("限法实算", limit_calc_text))
     sections += [
-        # 政余格局 (星阙 v2.6.x Moira DSL)：由 vendored guolaoMoira.js (buildLocalMoiraPatterns) 评估，
-        # 经 js_client 注入。盘面物象格局（孛犯太阳/金水相涵/命坐两歧 等）可出；依赖 七政神煞(官福疾)
-        # 的格局受限于上游 guolaoGods 未随 /chart 返回（kinastro qizheng 另路，如实标出，见 AGENTS）。
+        # 政余格局 (星阙 v2.6.x Moira DSL)：由 vendored guolaoMoira.js (buildLocalMoiraPatterns) 评估，经 js_client 注入。
+        # 神煞行（天贵/玉贵/岁驾…）读 chart.nongli.bazi.guolaoGods —— runner 已把本命四柱挂上（同上游 Java /chart 形）。
         ("政余格局", (pattern_text or "").strip() or "无"),
-        ("相位", "\n".join(_build_guolao_aspect_lines(chart, response)).strip() or "无"),
+        # 上游 :2138 buildGuolaoAspectSection(result)（GFM 五列表，无相位 → '无'）。
+        ("相位", aspect_text or "无"),
     ]
     return _render_snapshot_text(sections)
 
@@ -12505,15 +12530,19 @@ class HorosaSkillService:
     # 七政显示层四键（上游 techniqueMountSettings.js:1159-1175 挂载齿轮；缺省 = GuoLaoChartStyle.GUOLAO_DEFAULT_DISPLAY）。
     # 值域逐字同上游 normLifeMasterMode / normMinorLimitType / normTongxianBase / normLimitChildBase。
     # 认不出的值**报错**（不静默归一成缺省）：改这个参数，结果必须变 —— 拼错的值悄悄当缺省用就违背了这一条。
+    # 第五键「大限年界」（上游页面左栏 GuoLaoInput.js:850 显示偏好 horosaGuolaoDisplay.limitYearBoundary，值域
+    # GuoLaoChartStyle.GUOLAO_LIMIT_YEAR_BOUNDARIES，缺省 gregorian 公历元旦 = Moira；lichun/dongzhi 走本地节气表精算年界）：
+    # 不在挂载齿轮里，但上游无头复算读的就是同一份全局显示偏好（getStoredGuolaoDisplay），改它 [大限] 起讫年与首限起点即变。
     _GUOLAO_DISPLAY_KEYS: dict[str, tuple[str, tuple[Any, ...], Any]] = {
         "guolaoLifeMasterMode": ("lifeMasterMode", ("gong", "du", "dudegrade"), "gong"),
         "guolaoMinorLimitType": ("minorLimitType", ("", "minor", "month", "tong", "dongwei"), ""),
         "guolaoTongxianBase": ("tongxianBase", ("tong10", "gu9", "xu11"), "tong10"),
         "guolaoLimitChildBase": ("limitChildBase", (9, 10), 9),
+        "guolaoLimitYearBoundary": ("limitYearBoundary", ("gregorian", "lichun", "dongzhi"), "gregorian"),
     }
 
     def _guolao_display_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
-        display: dict[str, Any] = {"limitYearBoundary": "gregorian"}
+        display: dict[str, Any] = {}
         for key, (disp_key, allowed, default) in self._GUOLAO_DISPLAY_KEYS.items():
             raw = payload.get(key)
             if raw is None or (raw == "" and disp_key != "minorLimitType"):
@@ -12657,29 +12686,16 @@ class HorosaSkillService:
                 fields[key] = {"value": settings[key]}
         return fields
 
-    def _guolao_info_sections(
-        self,
-        payload: dict[str, Any],
-        response: dict[str, Any],
-        display: dict[str, Any],
-        moira_rules: dict[str, Any] | None,
-        guolao_fields: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """[起盘信息] 命度/身度/宿主行 + [大限] + [三主与化曜] + [限法实算]（vendored 上游 builder，JS `info_sections`）。
-
-        本命四柱：上游 root 是 Java /chart（Java 把 OnlyFourColumns.getNongli() 挂在 chart.nongli，ChartController.java:84-98）；
-        skill 的 /chart 走 Python 服务、没有 nongli → 另取同一 Java OnlyFourColumns（/nongli/time，同默认 timeAlg=0 真太阳时、
-        日界两键缺省 1/1）挂上去。取不到时事实层照上游回退（年柱按公历年干支、月限行省略）并进 warnings。
-        """
-        date_text = f"{payload.get('date') or ''}"
-        slash_date = date_text.replace("-", "/", 2) if re.match(r"^\d{4}-\d{2}-\d{2}", date_text) else date_text
-        natal_nongli: dict[str, Any] | None = None
+    def _guolao_fetch_nongli(self, payload: dict[str, Any], date: Any, time_text: Any, *, role: str) -> dict[str, Any] | None:
+        """某时刻的四柱对象 = 上游 Java /chart 挂在 chart.nongli 的同一个 OnlyFourColumns.getNongli()（ChartController.java:78-99：
+        缺省 nongliTimeAlg=0 真太阳时、日界两键缺省 1/1）。skill 的 /chart 走 Python 排盘服务、响应里没有 nongli →
+        另取 Java /nongli/time（NongliController.java:26-60 同一构造）。取不到返回 None 并进 warnings（`role` = 本命/流年）。"""
         try:
-            natal_nongli = self._call_remote(
+            nongli = self._call_remote(
                 "/nongli/time",
                 {
-                    "date": payload.get("date"),
-                    "time": payload.get("time"),
+                    "date": date,
+                    "time": time_text,
                     "zone": payload.get("zone"),
                     "lon": payload.get("lon"),
                     "lat": payload.get("lat"),
@@ -12690,15 +12706,43 @@ class HorosaSkillService:
                     "ad": payload.get("ad", 1),
                 },
             )
-        except Exception as exc:  # noqa: BLE001 — 本命四柱只影响三主/化曜/月限的取值来源，不许带崩整盘
-            _degrade(
-                "guolao natal nongli (/nongli/time) unavailable: %s", exc,
-                note="七政四余 [三主与化曜] 的生年化曜/命宫配干按公历年干支回退、[限法实算] 月限行省略（本命四柱 /nongli/time 不可用）。",
-            )
-        chart_obj = response.get("chart") if isinstance(response.get("chart"), dict) else {}
-        root = dict(response)
-        if isinstance(natal_nongli, dict) and natal_nongli:
-            root["chart"] = {**chart_obj, "nongli": natal_nongli}
+        except Exception as exc:  # noqa: BLE001 — 四柱只影响神煞/虚实/化曜/月限的取值来源，不许带崩整盘
+            if role == "本命":
+                note = (
+                    "七政四余 本命四柱（/nongli/time）不可用：Moira 规则层按公历年干支单柱起（[神煞]/[虚实]/[本命化曜] 缺月日时三柱）、"
+                    "[三主与化曜] 生年化曜/命宫配干按公历年干支回退、[限法实算] 月限行省略。"
+                )
+            else:
+                note = f"七政四余 {role}盘四柱（/nongli/time）不可用：[流年流曜] 的流年年柱按公历年干支回退、缺月日时三柱。"
+            _degrade("guolao %s nongli (/nongli/time) unavailable: %s", role, exc, note=note)
+            return None
+        return nongli if isinstance(nongli, dict) and nongli else None
+
+    @staticmethod
+    def _guolao_attach_nongli(chart_response: Any, nongli: dict[str, Any] | None) -> Any:
+        """把四柱挂到 chart.nongli（上游 Java /chart 的响应形：ChartController.java:98 chart.put("nongli", map)）。浅拷贝，不改入参。"""
+        if not isinstance(chart_response, dict) or not isinstance(nongli, dict) or not nongli:
+            return chart_response
+        chart_obj = chart_response.get("chart") if isinstance(chart_response.get("chart"), dict) else {}
+        return {**chart_response, "chart": {**chart_obj, "nongli": nongli}}
+
+    def _guolao_info_sections(
+        self,
+        payload: dict[str, Any],
+        response: dict[str, Any],
+        display: dict[str, Any],
+        moira_rules: dict[str, Any] | None,
+        guolao_fields: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """[起盘信息] 命度/身度/宿主行 + [大限] + [三主与化曜] + [限法实算] + [七政四余宫位与二十八宿星曜] / [神煞] / [相位]
+        （vendored 上游 builder，JS `info_sections`）。
+
+        `response` 已由 runner 挂好本命四柱（chart.nongli，见 _guolao_fetch_nongli）——上游 root 是 Java /chart，四柱本就在
+        chart.nongli 上；取不到时事实层照上游回退（年柱按公历年干支、月限行省略、[神煞] 只剩 rules 源），说明已进 warnings。
+        """
+        date_text = f"{payload.get('date') or ''}"
+        slash_date = _guolao_slash_date(date_text)
+        root = response
         transit_date, transit_time = _moira_transit_moment(payload)
         guolao_params = {
             "date": slash_date,
@@ -12730,10 +12774,13 @@ class HorosaSkillService:
                     "moiraRules": moira_rules or {},
                 },
             )
-        except Exception as exc:  # noqa: BLE001 — 四段来自 JS；失败 → [大限] 回退 Python 兜底、其余三段缺席，进 warnings
+        except Exception as exc:  # noqa: BLE001 — 七段来自 JS；失败 → [大限]/宫位表/相位回退 Python 旧行式、其余缺席，进 warnings
             _degrade(
                 "guolao info sections build failed: %s", exc,
-                note="七政四余 [大限] 回退内置旧算法（首限四舍童限、元旦年界），[三主与化曜]/[限法实算] 与命度/身度行本次未产出（JS 段 builder 失败）。",
+                note=(
+                    "七政四余 [大限] 回退内置旧算法（首限四舍童限、元旦年界）、[七政四余宫位与二十八宿星曜]/[相位] 回退旧行式、"
+                    "[神煞] 本次为「无」，[三主与化曜]/[限法实算] 与命度/身度行本次未产出（JS 段 builder 失败）。"
+                ),
             )
             return {}
         js = js if isinstance(js, dict) else {}
@@ -12754,6 +12801,14 @@ class HorosaSkillService:
         remote_payload = self._guolao_remote_payload(payload, su28, guolao_settings)
         guolao_fields = self._guolao_fields(su28, guolao_settings)
         response = _apply_guolao_node_mode(self._call_remote("/chart", remote_payload), guolao_settings)
+        # 本命四柱挂到 chart.nongli —— 上游的盘是 Java /chart（四柱本就在 chart.nongli），下游一切都吃它：政余格局的神煞行
+        # （buildGodRowsFromChart 读 chart.nongli.bazi.guolaoGods）、Moira 规则层四柱（MoiraPropRuleEngine.readPoles 读
+        # chartObj.chart.nongli.bazi，缺则只剩公历年干支单柱 → [神煞]/[虚实]/[本命化曜] 全按一柱算）、[三主与化曜]/[限法实算]。
+        # 此前只在 [三主与化曜] 一处现挂，规则层与格局拿的都是无四柱盘。
+        response = self._guolao_attach_nongli(
+            response, self._guolao_fetch_nongli(payload, payload.get("date"), payload.get("time"), role="本命")
+        )
+        _guolao_warn_missing_life_master(response, guolao_settings.get("guolaoLifeMode", "asc"))
         # 政余格局 (星阙 v2.6.x Moira DSL)：vendored JS buildLocalMoiraPatterns 评估盘面物象格局。
         # 失败不阻塞既有段（→ '无'），与 星阙 buildGuolaoPatternSection 的 try/catch 一致。
         pattern_text: str | None = None
@@ -12807,6 +12862,10 @@ class HorosaSkillService:
                 transit_chart = _apply_guolao_node_mode(
                     self._call_remote("/chart", {k: v for k, v in transit_params.items() if v is not None}), guolao_settings
                 )
+                # 流年盘同样挂流年时刻的四柱（上游流年盘也是 Java /chart；规则层 transitPoles 读 transitChartObj.chart.nongli）。
+                transit_chart = self._guolao_attach_nongli(
+                    transit_chart, self._guolao_fetch_nongli(payload, transit_date, transit_time, role="流年")
+                )
                 rules = self._call_remote(
                     "/qizheng/moira",
                     {"params": moira_params, "chartObj": response, "transitParams": transit_params, "transitChartObj": transit_chart},
@@ -12820,11 +12879,16 @@ class HorosaSkillService:
                     moira_sections = {k: f"{v or ''}".strip() for k, v in sections.items()}
                 if isinstance(rules, dict):
                     moira_rules_full = rules
-                    moira_rules_slim = {k: rules.get(k) for k in ("weakSolid", "yearStars", "transitYearStars", "natalYearStars") if k in rules}
+                    moira_rules_slim = {
+                        k: rules.get(k) for k in ("weakSolid", "yearStars", "transitYearStars", "natalYearStars", "godHits") if k in rules
+                    }
             except Exception as exc:  # noqa: BLE001 — 三段为 optional；说明进 warnings
                 _degrade(
                     "guolao moira rules (/qizheng/moira) unavailable: %s", exc,
-                    note="七政四余 [虚实]/[本命化曜]/[流年流曜] 本次未产出（Java /qizheng/moira 不可用或流年盘失败），其余段不受影响。",
+                    note=(
+                        "七政四余 [虚实]/[本命化曜]/[流年流曜] 本次未产出（Java /qizheng/moira 不可用或流年盘失败），"
+                        "[神煞] 回退历法四柱神煞（上游 buildHouseGodsSection 同一回退），其余段不受影响。"
+                    ),
                 )
         info_sections = self._guolao_info_sections(payload, response, display, moira_rules_full, guolao_fields)
         snapshot_text = _build_guolao_snapshot_text(
