@@ -728,6 +728,8 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
    只有 CI（唯一无 runtime 的环境）才炸**——离线/线材契约测试**禁以「算成功」为判据**（那是
    `@requires_runtime` 的活）；`tests/test_mcp_contract.py` 已用 autouse fixture 把 `HOROSA_RUNTIME_ROOT`
    钉到空目录强制与 CI 同形，发版前另跑一遍 `HOROSA_RUNTIME_ROOT=<空目录> uv run pytest` 复现该形状。
+   **并行 agent（worktree 隔离）建在当前目录所在的仓**：派发前先 `cd` 回本仓（v0.40.0 一次因 cwd 在上游源码树里，worktree 被建进只读的
+   Horosa-Public）；agent 规则首条是 LOCATION CHECK（toplevel 不在本仓 `.claude/worktrees/` 下即停手）。
    **live 复验同样要钉 JS 引擎**：只把两个后端 URL 指到 vendored 实例时，JS 技法走的是**已装 runtime 的旧 core-js**
    （解析顺序 `HOROSA_CORE_JS_ROOT` → 已装 runtime → 本仓），测的根本不是本仓代码（v0.40.0 据此误报过 jinkou/qimen
    缺段）。`tests/conftest.py` 已为 pytest 会话钉 `HOROSA_CORE_JS_ROOT=本仓`；手工脚本 / harness 自己钉（或 `HOROSA_RUNTIME_ROOT=<空目录>`）。

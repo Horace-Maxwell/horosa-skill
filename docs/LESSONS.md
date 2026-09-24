@@ -163,6 +163,14 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
      被模块自己的 catch 吞成「断语库缺失」。模块照常加载，loadcheck 恒绿。
    - 守卫：transform 补动态相对 import 的 `.js`（`_DYNAMIC_RELATIVE_IMPORT`）+ `test_dynamic_relative_imports_get_the_js_suffix_too`；
      重渲染后同一调用返回 40 键断语库（修前 null）。
+10. **worktree 隔离的 agent 建在「当前目录所在的仓」——一次落进了只读上游。**
+   - 症状：派发三式合一 agent 时 shell 恰好 `cd` 在 `Horosa-Public/…/src`（刚查完上游源码），worktree 被建成
+     `Horosa-Public/.claude/worktrees/agent-*`（上游仓多出一个 worktree + 一个分支）。agent 按规则先跑 `git log`/`worktree list`
+     察觉不对，只做了只读命令；约一分钟内被叫停。
+   - 处置：停 agent；harness 随之移除该 worktree 与分支（核对：上游 `.git/worktrees` 不存在、无 `worktree-agent-*` 分支与 reflog）；
+     手删它留下的空 `.claude/worktrees/` 目录。上游工作区里一处 `SELFCHECK_LOG.md` 修改早于本会话（9-22），未碰。
+   - 守卫：派发前先 `cd` 回本仓并 `git rev-parse --show-toplevel` 核对；agent 规则第一条改为 LOCATION CHECK（toplevel 不在本仓
+     `.claude/worktrees/` 下即停手、零写入、一行报告）。这是编排侧的流程守卫，无法在仓内代码里机器化。
 
 ### v0.40.0 / 2026-09-24 — 上游 v3.11.x 重同步：六处「同步了却没同步」
 
