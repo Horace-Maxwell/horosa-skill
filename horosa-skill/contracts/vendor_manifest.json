@@ -1386,10 +1386,16 @@
     },
     "suzhan/SZConst.js": {
       "upstream": "components/suzhan/SZConst.js",
-      "mode": "curated",
-      "why": "模块加载期读 localStorage → 硬编码 no-op shim（Node 实验性全局 localStorage 无 flag 会 throw，故不探测 globalThis）。",
-      "extracts": [],
-      "upstream_sha256": "b0b1738f66765a60ecc338cce9017c811ba35d0ccc264dc563ff2dce9e740795"
+      "mode": "verbatim",
+      "why": "整文件 vendor + 一处 headless 守卫。v0.40.0 前是 curated（手工整文件拷贝）：v3.10 上游已把双鱼分野「魏」改「卫」，本仓 restamp 了 sha 却没带上改动——curated 只比源 sha、不比内容，手工件静默落后。改 verbatim 后流水线逐字可复现，漂移即红。",
+      "deviations": [
+        {
+          "kind": "replace_text",
+          "find": "export const SZChart_NoExternChart = 0;",
+          "to": "// headless 守卫：SZConst 在模块加载时读 localStorage 取「盘形/起宫制」偏好。skill 的 JS 恒在 headless\n// node 跑（无浏览器持久化），且 node 实验性全局 localStorage 无 --localstorage-file 会抛 → 一律用空\n// shim 回退默认（方盘 / 八字起宫）。仅影响 UI 偏好，不影响政余格局闭包用到的纯数据表。\nconst localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };\n\nexport const SZChart_NoExternChart = 0;",
+          "why": "模块加载期就读 localStorage（盘形/起宫制偏好）；headless 无浏览器存储，Node ≥25 的实验性全局还会告警/抛 → 注入空 shim，偏好回落缺省（AGENTS §5 闭包提取陷阱 ②）。"
+        }
+      ]
     },
     "taiyi/TaiYiCalc.js": {
       "upstream": "components/taiyi/TaiYiCalc.js",
@@ -1611,10 +1617,58 @@
       "deviations": []
     },
     "tongshefa/TongSheFaCore.js": {
-      "mode": "bespoke",
-      "why": "自上游 TongSheFaMain.js 逐字抽出的统摄法纯计算层（React 类之前的常量与 40 个函数）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
-      "derived_from": "components/tongshefa/TongSheFaMain.js",
-      "derived_sha256": "b185738c1e2b8d9f4493c88ba3d19b1ab64dede668434434def1bf6f1fa3d8a2"
+      "upstream": "components/tongshefa/TongSheFaMain.js",
+      "mode": "verbatim",
+      "why": "统摄法纯计算层：React 类之前的全部常量与函数。v0.40.0 前是 bespoke（手工截取）：上游 v3.11 新增 [爻位] 段时要人读 diff 才补上。改 truncate_before 机械截断后流水线逐字可复现（AGENTS §5 re-vendor 抽壳纪律：剥壳用锚点不手抄）。",
+      "deviations": [
+        {
+          "kind": "truncate_before",
+          "anchor": "^class TongSheFaMain extends Component",
+          "why": "剥掉 React 组件尾部；锚点是正则，找不到会报错而非悄悄剪错。"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../../utils/helper.js",
+          "to": "../gua/littleEndian.js",
+          "why": "纯逻辑段只用 helper 里的 littleEndian；本仓的窄副本是 gua/littleEndian.js（helper 其余是 DOM/tooltip）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "react",
+          "stub": "",
+          "why": "`import React, { Component }` 的默认+具名混合形态不在孤儿 import 清理的覆盖面内；纯逻辑段不用 React。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "import {\n\tXQButton as Button,\n\tXQCard as Card,\n\tXQSelect as Select,\n\tXQTabs as Tabs,\n\tXQSideSection,\n} from '../xq-ui.js';\n",
+          "to": "",
+          "why": "UI 组件库（多行 import，stub_import 的单行形态匹配不到）；只服务 React 尾部。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../comp/SpaceTimePanel.js",
+          "stub": "",
+          "why": "时空面板组件（默认+具名混合 import），只服务 React 尾部。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../../css/styles.less.js",
+          "stub": "",
+          "why": "样式表，headless 无意义。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "const { Option } = Select;\n",
+          "to": "",
+          "why": "模块级 UI 解构，只服务 React 尾部。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "const { TabPane } = Tabs;\n",
+          "to": "",
+          "why": "同上。"
+        }
+      ]
     },
     "tongshu/donggong.js": {
       "upstream": "components/calendar/tongshu/donggong.js",

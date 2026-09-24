@@ -1,10 +1,16 @@
-// Vendored from 星阙 TongSheFaMain.js —— 统摄法（纳甲筮法）纯计算层：React 类之前的全部常量与
-// 40 个函数，逐字取自上游，只剥掉 React/antd/网络/样式的 import 与随组件走的 UI 解构。
-// 此前本仓这一支是**自建端口**（自己维护 BAGUA / 卦名表），只产 4 段；上游的计算分析层
-// （世应 / 左右五行 / 五友 / 大局升降爻变 / 三十二观）整层没有搬。换成逐字 vendor 后 9 段齐全，
-// 以后跟上游只需重跑 revendor。
+
+
+
 import { littleEndian } from '../gua/littleEndian.js';
 import { Gua8, Gua64, getGua64 } from '../gua/GuaConst.js';
+
+
+
+
+
+
+
+
 
 const BAGUA_SYMBOL = {
 	乾: '☰',
@@ -659,7 +665,7 @@ function uniqBagua(list){
 	return out;
 }
 
-function buildTongSheFaModel(selection){
+export function buildTongSheFaModel(selection){
 	const selected = normalizeSelection(selection);
 	const taiyin = getBagua(selected.taiyin);
 	const taiyang = getBagua(selected.taiyang);
@@ -792,7 +798,7 @@ function buildYaoWeiSection(model){
 	return lines;
 }
 
-function buildTongSheFaSnapshot(model){
+export function buildTongSheFaSnapshot(model){
 	const parts = [];
 	parts.push(...buildHexSnapshotSection('本卦', model.baseLeft, model.baseRight));
 	parts.push('');
@@ -1067,5 +1073,3 @@ function buildBigPatternChangeSection(model){
 	}
 	return parts;
 }
-
-export { buildTongSheFaModel, buildTongSheFaSnapshot };
