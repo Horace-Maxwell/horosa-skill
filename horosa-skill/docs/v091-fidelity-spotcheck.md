@@ -16,13 +16,19 @@
 
 | 技法 | 算法/结构 | 数字 | 备注 |
 |---|---|---|---|
-| **persiandirected**（波斯向运） | ✅ 字节一致 | ⚠️ **应期日期 ≤1 天偏差**（~40% 行） | 见下 |
+| **persiandirected**（波斯向运） | ✅ 字节一致 | ✅ v0.40.0 起应期日期也逐字一致（原 ≤1 天偏差已消） | 见下 |
 | **yearsystem129**（129年系统） | ✅ 保真 | ✅ | 日期来自服务端 `predictives`，逐字输出；只在客户端做名称映射 |
 | **planetaryages**（行星年龄） | ✅ 保真 | ✅ | 只列年龄带 + 标当前带，无逐行日期 |
 | **balbillus** | ✅ 保真 | ✅ | 逐字 vendor 星阙 `balbillus.js`（progextra），构造即一致 |
 | **horary / election** | ✅ 保真 | ✅ | 逐字 vendor 整棵 `divination/`，构造即一致 |
 
-### persiandirected 的 ≤1 天日期偏差（已知、可接受）
+### persiandirected 的 ≤1 天日期偏差（v0.40.0 已消，下文为历史记录）
+
+> **更正（v0.40.0）**：下文把根因 1 写成「moment 截断小数日」——不对。moment `add(x, 'days')` 经 `absRound`
+> 把小数天**四舍五入**到整天（远离零）；按这个口径取整后，570 条命中与上游 JS 实跑逐条一致
+> （`tests/test_sync311_predictive.py::test_persian_hits_match_upstream_js_execution`，按 摘要锚定）。
+> 当年「改成截断反而更差（44→55）」正是因为方向取错了。根因 2 的浮点差在整天取整后不再放大。
+
 
 diff 结果：**年龄列、相位列、向运星列、本命对象列全部字节一致**（120 行 0 差异），唯独**应期日期列**
 有 ~44–55 行差 **正好 1 天**。根因有二：

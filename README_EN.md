@@ -208,16 +208,16 @@ Local end-to-end signals:
 | --- | --- | --- |
 | `wangji` ⓟ | Huang Ji Jing Shi · Xin Yi Fa Wei | standalone |
 | `wuzhao` ⓟ | Wu Zhao | standalone |
-| `taixuan` ⓟ | Tai Xuan · milfoil | standalone |
-| `jingjue` ⓟ | Jing Fang Yi · Jing Jue | standalone |
-| `shenyishu` ⓟ | Shen Yi Shu | standalone |
+| `taixuan` ⓟ | Tai Xuan Shi Fa (太玄筮法) · milfoil | standalone |
+| `jingjue` ⓟ | Jing Jue (荆诀) | standalone |
+| `shenyishu` ⓟ | Shen Yi Shu (神易数) | standalone |
 | `shaozi` ⓟ | Shao Zi Shen Shu | kinastro |
 | `tieban` ⓟ | Tie Ban Shen Shu | kinastro |
-| `fendjing` ⓟ | Fen Jing Shen Shu · Liang Tou Qian | kinastro |
+| `fendjing` ⓟ | Guigu Fen Ding Jing (鬼谷分定经) · Liang Tou Qian | kinastro |
 | `beiji` ⓟ | Bei Ji Shen Shu | kinastro |
 | `nanji` ⓟ | Nan Ji Shen Shu | kinastro |
-| `chunzi` ⓟ | Chun Zi Shen Shu | kinastro |
-| `xianqin` ⓟ | Yan Qin | kinastro |
+| `chunzi` ⓟ | Chun Zi Shu (蠢子数) | kinastro |
+| `xianqin` ⓟ | Wan Hua Xian Qin (万化仙禽) · Yan Qin | kinastro |
 | `cetian` ⓟ | Ce Tian Fei Xing · Zi Wei | kinastro |
 | `qizhengkin` ⓟ | Seven Governors · Zhang Guo | kinastro |
 

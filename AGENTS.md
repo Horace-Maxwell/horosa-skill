@@ -137,7 +137,8 @@ you, it will bite the next agent：
   （唯一触发经度+均时差修正的值）。
 - **backend predict/astroextra 型**：harmonic / agepoint / distributions / jaynesprog / vedicprog /
   planetaryarc 等——Python `_call_remote` + Python snapshot builder。
-- **复合型**：mundane（`/jieqi/year` seedOnly 求入宫时刻 → 该时刻 `/chart`，输入是 年+入宫节气+地点）、
+- **复合型**：mundane（`/jieqi/year` seedOnly 求入宫时刻 → 该时刻 `/chart`，输入是 年+入宫节气+地点；上游 v3.11
+  右栏 25 张卡由 Python 取数后喂 JS `tools/mundaneCards.js` 调 vendored 卡 builder，3 张需 UI 状态的登记为可选段）、
   sanshiunited、extrareturns（Python 循环逐体拉 `/astroextra/planetreturn` 拼段）。**请求型 builder 一律归
   Python——JS 层不发 HTTP。**
 - **纯 headless JS**：tongshefa（无 ken 引擎）。headless 对齐：卦的五行取**京房本宫**
@@ -149,8 +150,9 @@ you, it will bite the next agent：
   `math.ceil`；动周期数学必对星阙 `decennials.test.js` 金标（`tests/test_decennials.py`）。
 - **frontend-读数型 Python 移植**：planetaryages（读 `chart.objects`+`params.birth`）/ yearsystem129
   （`/chart` 需 `predictive` 真值才出 `predictives.yearsystem129`）/ persiandirected 等——读已算好的 chart
-  对象，Python 复用 `_astro_msg` / `_aspect_label` / `_split_degree`。已知可接受偏差：persiandirected 应期
-  日期与星阙 ≤1 天（JS 截断+浮点噪声，度数/相位逐位一致，见 `docs/v091-fidelity-spotcheck.md`）。
+  对象再排版。**镜像上游文字用 `predictive_text`（上游单字名表 AstroTxtMsg + AstroMsg 回落），不用 `_astro_msg`**
+  （后者是全名表，v0.40.0 前这几路因此印「太阳/子嗣点」）。persiandirected 应期日期原有的「≤1 天」偏差已消：
+  根因是 moment `add(x,'days')` 把小数天四舍五入到整天，移植成 `timedelta(days=float)`；现按 `js_round` 取整天。
 
 **恒星黄道/岁差标注**：`ASTRO_MSG` 不许硬编码岁差名——西占读 `chart.siderealAyanamsa`、印占读
 `chart.siderealModeKey`+`ayanamsaValue`（**字段名不同**）；`chart.zodiacal` 是本地化字符串（"恒星黄道"），
@@ -914,8 +916,10 @@ A global stability pass hardened these; keep them true when you touch the releva
   （知识包/bench/闸表/Windows 启动模板/入口点；core-js 不进 wheel、随 runtime）；`server.json` 只登记 pypi 条目，
   与 pyproject name/version 锁步、禁 TBD（v0.36.0）。
 - **宫主/宫神星只从 `astro_rulers.py` 取。** 它是上游 `wholeSignRulers.js` 的移植（夹具与断言照抄上游 jest），
-  Python 面不许再各自算宫主（上游 #79 双实现漂移）；段内子块（如 [主宰星链] 的「◆ 宫神星(houseRows)」）段级
-  棘轮看不见，加子块要配逐字夹具测试。`MIRRORED_UPSTREAM_AIEXPORT_VERSION` 切 v57 时四件同动（v0.36.0 C6）。
+  Python 面不许再各自算宫主（上游 #79 双实现漂移）；段内子块（[主宰星链] 尾块「◆ 整宫制宫主表(wholeSignRulers)」）
+  段级棘轮看不见，加子块要配逐字夹具测试。上游 v57 把当前分宫制宫神星表迁出成独立段 [分宫制宫神星表]（行星力量/角续果
+  口径，非主宰依据；分宫制即整宫制时折叠为一句说明），v0.40.0 已随 v58 同步（`astro_rulers.build_house_system_ruler_section_lines`）；
+  名称一律上游单字表（日/月…），v56 旧移植印全名（月亮）而测试也断言错值。
 - **Java 实例只按上游桌面模式起，「live 需 Mongo」不再是合法理由。** jar 内 `conf/properties/cache/*.properties`
   把 Mongo 主机写死为 `mongodb.host`；裸 `java -jar` = 每个碰库请求 30s 超时后 9999，被当成环境限制记了十个版本。
   起法四件（`--mongodb.ip=127.0.0.1`、`HOROSA_DESKTOP_MONGO_OPTIONAL=1`、`HOROSA_MONGO_FALLBACK_DIR`、

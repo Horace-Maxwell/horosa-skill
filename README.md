@@ -357,12 +357,12 @@ uv run horosa-skill client check                         # 体检本机各客户
 | 工具 ID | 名称 | 引擎 | 工具 ID | 名称 | 引擎 |
 | --- | --- | --- | --- | --- | --- |
 | `wangji` ⓟ | 皇极经世 | 标准 | `tieban` ⓟ | 铁板神数 | kinastro |
-| `wuzhao` ⓟ | 五兆 | 标准 | `fendjing` ⓟ | 分经神数 | kinastro |
-| `taixuan` ⓟ | 太玄 | 标准 | `beiji` ⓟ | 北极神数 | kinastro |
-| `jingjue` ⓟ | 京氏易 | 标准 | `nanji` ⓟ | 南极神数 | kinastro |
-| `shenyishu` ⓟ | 神乙数 | 标准 | `chunzi` ⓟ | 淳子神数 | kinastro |
-| `shaozi` ⓟ | 邵子神数 | kinastro | `xianqin` ⓟ | 演禽 | kinastro |
-| `cetian` ⓟ | 策天飞星 | kinastro | `qizhengkin` ⓟ | 七政四余·张果 | kinastro |
+| `wuzhao` ⓟ | 五兆 | 标准 | `fendjing` ⓟ | 鬼谷分定经 | kinastro |
+| `taixuan` ⓟ | 太玄筮法 | 标准 | `beiji` ⓟ | 北极神数 | kinastro |
+| `jingjue` ⓟ | 荆诀 | 标准 | `nanji` ⓟ | 南极神数 | kinastro |
+| `shenyishu` ⓟ | 神易数 | 标准 | `chunzi` ⓟ | 蠢子数 | kinastro |
+| `shaozi` ⓟ | 邵子神数 | kinastro | `xianqin` ⓟ | 万化仙禽（演禽） | kinastro |
+| `cetian` ⓟ | 策天飞星 | kinastro | `qizhengkin` ⓟ | 七政四余（七政·张果） | kinastro |
 
 </details>
 
