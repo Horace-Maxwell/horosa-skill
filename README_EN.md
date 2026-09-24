@@ -3,14 +3,14 @@
 <div align="center">
   <h1>Horosa Skill</h1>
   <p><strong>Turn Xingque / Horosa into an offline metaphysics capability layer any AI can call locally.</strong></p>
-  <p>Clone the repo, install the offline runtime once, and let Claude, Codex, Open WebUI, OpenClaw, etc. call <strong>106</strong> real techniques on your own machine — Western natal / predictive / horary / electional, BaZi / Zi Wei / Da Liu Ren / the Three Styles, and all <strong>14 Shen Shu</strong> systems — read the full Xingque AI-export protocol, return stable structured output, and persist every analysis as a retrievable local record. Every answer ships with a deterministic provenance card, a cited methodology knowledge base, a chart-fact faithfulness evaluator, and a multi-technique synthesis contract. Works offline, value-for-value identical to the Xingque desktop app.</p>
+  <p>Clone the repo, install the offline runtime once, and let Claude, Codex, Open WebUI, OpenClaw, etc. call <strong>110</strong> real techniques on your own machine — Western natal / predictive / horary / electional, BaZi / Zi Wei / Da Liu Ren / the Three Styles, and all <strong>14 Shen Shu</strong> systems — read the full Xingque AI-export protocol, return stable structured output, and persist every analysis as a retrievable local record. Every answer ships with a deterministic provenance card, a cited methodology knowledge base, a chart-fact faithfulness evaluator, and a multi-technique synthesis contract. Works offline, value-for-value identical to the Xingque desktop app.</p>
 
   <p><a href="https://github.com/Horace-Maxwell/horosa-skill"><img src="https://img.shields.io/badge/GitHub-Repository-111827?style=for-the-badge&logo=github" alt="Repository" /></a>&nbsp;<a href="https://github.com/Horace-Maxwell/horosa-skill/releases"><img src="https://img.shields.io/badge/GitHub-Releases-1d4ed8?style=for-the-badge&logo=github" alt="Releases" /></a>&nbsp;<a href="./README.md"><img src="https://img.shields.io/badge/阅读-简体中文-0f766e?style=for-the-badge" alt="Read in Chinese" /></a></p>
 
   <p>
     <img src="https://img.shields.io/github/stars/Horace-Maxwell/horosa-skill?style=flat-square" alt="GitHub stars" />
     <img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square" alt="Release" />
-    <img src="https://img.shields.io/badge/tools-106-1d4ed8?style=flat-square" alt="106 tools" />
+    <img src="https://img.shields.io/badge/tools-110-1d4ed8?style=flat-square" alt="110 tools" />
     <img src="https://img.shields.io/badge/platform-macOS%20(arm64)%20%7C%20Windows%20(x64)-0f766e?style=flat-square" alt="Platforms" />
     <img src="https://img.shields.io/badge/runtime-offline%20first-111827?style=flat-square" alt="Offline runtime" />
     <img src="https://img.shields.io/badge/MCP-ready-111827?style=flat-square" alt="MCP ready" />
@@ -53,7 +53,7 @@ License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICEN
 
 ## Current stable baseline
 
-**Current public version: `Horosa Skill 0.39.0` (106 callable tools).**
+**Current public version: `Horosa Skill 0.39.0` (110 callable tools).**
 
 This release line brings the capability surface roughly to parity with the desktop app — and adds a trust stack no other metaphysics tool ships:
 
@@ -74,11 +74,11 @@ Local end-to-end signals:
 
 | Check | Result |
 | --- | --- |
-| Callable tools | `106 / 106 ok=true` |
+| Callable tools | `110 / 110 ok=true` |
 | Engineering tests | `1241 / 1241 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 73 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `84` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `8` registry / knowledge / parser tools are directly readable |
-| Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`103` export techniques modeled; contract v14 mirrors desktop aiExport v56) |
+| Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`107` export techniques modeled; contract v14 mirrors desktop aiExport v56) |
 | Technique provenance | every technique response carries `data.technique_card`; a declared-vs-measured compute mismatch is flagged explicitly |
 | Knowledge base | 30 domains; 235 manual entries, each returned with a file-and-version citation |
 | HorosaBench | 106 registry-locked benchmark cases + chart-fact faithfulness evaluation (wrong-chart and sycophancy adversarial cases go red) |
@@ -90,7 +90,7 @@ Local end-to-end signals:
 
 > About `solarreturn` / `lunarreturn` / `solararc` / `givenyear` / `profection` / `pd` / `pdchart` / `zr`: these predictive tools are verified working in this version and should not be flagged by an agent as "Java `/predict/*` unavailable". If a client still says so, check whether it is on an old runtime, bypassing MCP to hand-compute, or hasn't run `doctor` / `openclaw-check --full`.
 
-## Capability map (106 tools)
+## Capability map (110 tools)
 
 > Every business technique returns a uniform envelope plus a Xingque-style `export_snapshot` / `export_format` and a `data.technique_card` provenance card. Tools marked ⓟ are setting-sensitive and require parameter confirmation before calling.
 
@@ -129,6 +129,10 @@ Local end-to-end signals:
 | `mundane` ⓟ | Mundane astrology | yearly ingress chart + sub-charts (lunations / eclipses / world chart / planetary cycles / chart validity / rulership geography) |
 | `jaynesprog` ⓟ | Jayne declination | secondary progression + declination parallels |
 | `vedicprog` ⓟ | Vedic sidereal progression | progressions under the sidereal zodiac |
+| `prog` ⓟ | Secondary progression (tropical) | secondary / tertiary / minor progressions (minorVariant: synodic default / sidereal / engine); new upstream v3.11 export key |
+| `ephemeris` ⓟ | Ephemeris | ingresses · stations · lunations · eclipses in a date window, plus transits to natal (default: today + 90 days) |
+| `returntimeline` ⓟ | Return timeline | yearly solar / lunar return moments (start year + count 1–40) |
+| `prenatalsyzygy` ⓟ | Prenatal syzygy | the last new / full moon before birth, its degree and chart |
 | `planetaryarc` ⓟ | Planetary Arc | whole chart directed by arcSource's secondary arc |
 | `planetaryages` ⓟ | Ages of Man | Ptolemy seven ages + current band |
 | `yearsystem129` ⓟ | 129-year system | seven-planet succession, 129-year cycle |
@@ -241,7 +245,7 @@ Beyond the calculation tools, the MCP surface adds 11 facades (`HOROSA_MCP_COMPA
 | --- | --- |
 | `horosa_dispatch` | routes natural-language intent to the right technique; the aggregation layer carries each sub-result's export contract |
 | `horosa_hecan` | multi-technique synthesis: casts several techniques in parallel on one question (default 5, up to 8) and returns a synthesis template with evidence pointers and conclusion slots |
-| `horosa_tool_run` | call any of the 106 tools by name + payload |
+| `horosa_tool_run` | call any of the 110 tools by name + payload |
 | `horosa_agent_guidance` | which fields must be asked first, which Xingque defaults may be used after the user accepts |
 | `horosa_technique_report` | the deterministic "which techniques, which settings, computed by what" methods report (per run or per conversation) |
 | `horosa_report_template` / `horosa_report_render` / `horosa_report_from_tool` | consulting reports: AI final text → JSON / DOCX / PDF, auto-written back to memory |

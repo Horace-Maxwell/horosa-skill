@@ -1,6 +1,6 @@
 # Horosa Skill — rules for Gemini CLI
 
-This repo ships Horosa (星阙): 106 real techniques (Western astrology, 八字, 紫微, 六壬, 奇门, 太乙, 六爻, 神数 …)
+This repo ships Horosa (星阙): 110 real techniques (Western astrology, 八字, 紫微, 六壬, 奇门, 太乙, 六爻, 神数 …)
 as a local-first MCP server + CLI. The **single policy source** is [skills/horosa-agent/SKILL.md](./skills/horosa-agent/SKILL.md);
 maintainer law is [AGENTS.md](./AGENTS.md). This file is a thin
 pointer — do not add rules here.
