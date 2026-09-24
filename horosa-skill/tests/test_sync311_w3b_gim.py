@@ -13,6 +13,7 @@ import math
 import re
 import shutil
 from pathlib import Path
+from typing import Any
 
 import pytest
 from test_service import FakeClient
@@ -281,6 +282,23 @@ def test_shared_astroconst_shim_defines_every_id_its_consumers_reference() -> No
     assert not missing, missing
 
 
+@requires_node
+def test_eminence_four_points_row_counts_pars_spirit(tmp_path) -> None:
+    """同一 shim 缺口的另一处消费方：[古典·显赫计分]（vendor/utils/astroClassicalDerived.js computeEminence）「四显赫点」=
+    福点/精神点/根基点/擢升点。shim 缺 PARS_SPIRIT → 精神点 id 为 undefined → lotObj 恒查不到 → 该点整个不参与计分
+    （上游 AstroConst.PARS_SPIRIT = 'Pars Spirit'）。用 live 夹具里的真 lots 验：精神点按其落宫出现在「满足要素」里。"""
+    from horosa_skill.engine.js_client import HorosaJsEngineClient
+
+    settings = Settings(runtime_root=tmp_path / "runtime", db_path=tmp_path / "m.db", output_dir=tmp_path / "runs")
+    chart = copy.deepcopy(GUOLAO_FIX["chart_natal"])
+    js = HorosaJsEngineClient(settings).run("classical_derived", {"chart": chart, "lat": "31n13"})
+    text = js.get("snapshot_text") or ""
+    row = next(line for line in text.split("\n") if line.startswith("| 四显赫点 |"))
+    spirit = next(lot for lot in chart["lots"] if lot["id"] == "Pars Spirit")
+    house = int(re.sub(r"\D", "", spirit["house"]))
+    assert f"精神点{house}宫" in row, row
+
+
 UPSTREAM_ASTROCONST = Path("/Users/horacedong/Desktop/Horosa-Public/Horosa-Web/astrostudyui/src/constants/AstroConst.js")
 
 
@@ -315,3 +333,159 @@ def test_guolao_gumao_life_mode_counts_houses_from_the_life_master_point(tmp_pat
     assert any(r.startswith("| 午—鹑火—狮子座—第1宫 |") for r in rows), rows[:6]
     assert any(r.startswith("| 申—实沉—双子座—第11宫 |") for r in rows)
     assert not any("LifeMasterDeg74" in w for w in env.warnings)  # 盘里有命度点 → 不告警
+
+
+# ─────────────────────────────── 印度律盘 india_chart ───────────────────────────────
+
+INDIA_FIX = json.loads((FIXTURES / "sync311_w3b_india_live.json").read_text(encoding="utf-8"))
+
+
+class IndiaReplayClient(FakeClient):
+    def __init__(self, chart: dict) -> None:
+        super().__init__()
+        self.chart = chart
+        self.calls: list[tuple[str, dict]] = []
+
+    def call(self, endpoint: str, payload: dict) -> dict:
+        self.calls.append((endpoint, copy.deepcopy(payload)))
+        if endpoint == "/india/chart":
+            return copy.deepcopy(self.chart)
+        return super().call(endpoint, payload)
+
+
+def _india_run(tmp_path, *, chart: dict | None = None, extra: dict | None = None):
+    client = IndiaReplayClient(chart or INDIA_FIX["india_chart"])
+    env = _service(tmp_path, client).run_tool("india_chart", {**INDIA_FIX["payload"], **(extra or {})}, save_result=False)
+    return env, client
+
+
+def _titles(text: str) -> list[str]:
+    return [m.group(1) for m in re.finditer(r"^\[(.+)\]$", text, re.M)]
+
+
+@requires_node
+def test_india_setup_section_carries_the_upstream_calibre_line(tmp_path) -> None:
+    """[起盘信息] = 流派头行 + 本命起盘行，首条黄道行换成 indiaCalibreLine（IndiaChart.js:1113-1130）：
+    `${zodiacalDisplayText(1, ayan)}，${INDIA_HOUSE_SYSTEM_OPTIONS[hsys].label}`。indiaSchool=kp → 预设 krishnamurti / hsys 3
+    （INDIA_SCHOOL_DEFAULTS），后端回显同值 → 「恒星黄道·Krishnamurti / KP，KP / Placidus」（岁差表 label 'Krishnamurti / KP'、
+    分宫制表 3 → 'KP / Placidus'）。旧版只有本命行「恒星黄道，KP / Placidus」（无岁差名）。"""
+    env, _ = _india_run(tmp_path)
+    assert env.ok, env.error
+    assert INDIA_FIX["india_chart"]["params"]["hsys"] == 3 and INDIA_FIX["india_chart"]["params"]["ayanamsa"] == "krishnamurti"
+    setup = _section(env.data["snapshot_text"], "起盘信息").split("\n")
+    assert setup[0].startswith("流派：KP 系统（")
+    assert "恒星黄道·Krishnamurti / KP，KP / Placidus" in setup
+    assert "恒星黄道，KP / Placidus" not in setup  # 首条黄道行已被口径行替换（replaceIndiaCalibreLine 只换第一条）
+    # [信息] 段是本命 buildInfoSection 原样（上游不替换那里）。
+    assert "恒星黄道，KP / Placidus" in _section(env.data["snapshot_text"], "信息").split("\n")
+
+
+@requires_node
+def test_india_section_composition_mirrors_build_india_snapshot_text(tmp_path) -> None:
+    """段组成 = 上游 buildIndiaSnapshotText（:1131-1194）：[星盘信息] = 本命 [宫位宫头]+[星与虚点]+[信息] 三段正文拼接、
+    不单列 [宫位宫头]/[星与虚点]、不挑 [月宿]/[古典]；[信息]/[相位]/[行星]/[希腊点]/[可能性] 恒出（ensureSection 空段写
+    「无数据」）。旧版照本命盘出 [宫位宫头]/[星与虚点]/[月宿]/[古典]，[星盘信息] 缺席（由导出层拿通用起盘行兜底）。"""
+    from horosa_skill.service import (
+        _build_house_cusp_lines,
+        _build_info_section,
+        _build_star_and_lot_position_lines,
+    )
+
+    env, _ = _india_run(tmp_path)
+    text = env.data["snapshot_text"]
+    titles = _titles(text)
+    assert titles[:7] == ["起盘信息", "星盘信息", "信息", "相位", "行星", "希腊点", "可能性"], titles[:8]
+    assert not {"宫位宫头", "星与虚点", "月宿", "古典"} & set(titles)
+    chart = INDIA_FIX["india_chart"]
+    norm = env.input_normalized
+    expected = [
+        line.rstrip()
+        for block in (_build_house_cusp_lines(chart), _build_star_and_lot_position_lines(chart), _build_info_section(chart, norm))
+        for line in "\n".join(f"{x}" for x in block).split("\n")
+        if line.strip()
+    ]
+    assert _section(text, "星盘信息").split("\n") == expected
+    assert _section(text, "可能性") == "无数据"
+    exp = env.data["export_snapshot"]
+    # 夹具的 jyotish 只留 panchanga → Jyotish 派生段缺席是夹具裁剪所致；段组成七段一段不缺、无未登记段。
+    assert not {"起盘信息", "星盘信息", "信息", "相位", "行星", "希腊点", "可能性"} & set(exp["missing_selected_sections"])
+    assert exp["unknown_detected_sections"] == []
+
+
+@requires_node
+def test_india_calibre_line_mismatch_with_backend_is_warned(tmp_path) -> None:
+    """口径行的岁差/分宫制经上游 normalize*（认不出 → Lahiri / 整宫）；后端实算值不在上游表内时两者会静默分叉 → 必须告警。"""
+    chart = copy.deepcopy(INDIA_FIX["india_chart"])
+    chart["params"]["ayanamsa"] = "user"  # 后端自定义历元档；上游印占岁差表无 'user'
+    env, _ = _india_run(tmp_path, chart=chart)
+    assert env.ok, env.error
+    assert "恒星黄道·Lahiri / Chitrapaksha，KP / Placidus" in _section(env.data["snapshot_text"], "起盘信息").split("\n")
+    assert any("口径行按上游词表归一" in w and "岁差 user" in w for w in env.warnings), env.warnings
+    clean, _ = _india_run(tmp_path / "clean")
+    assert not any("口径行" in w for w in clean.warnings)
+
+
+def _js_to_fixed(value: Any, digits: int) -> str:
+    """JS Number.prototype.toFixed：规范 21.1.3.3 先取 -x，再对**二进制精确值**取最近的 n/10^f（平局取大 = 绝对值 HALF_UP），再补符号。
+    必须 Decimal(float) 精确转换而非 Decimal(repr(x))：0.85 的双精度是 0.8499999…，JS 给 "0.8"，按十进制字面量会得 "0.9"。"""
+    from decimal import ROUND_HALF_UP, Decimal
+
+    number = float(value)
+    quant = Decimal(1).scaleb(-digits)
+    text = f"{Decimal(abs(number)).quantize(quant, rounding=ROUND_HALF_UP):f}"
+    return f"-{text}" if number < 0 else text
+
+
+@requires_node
+def test_india_dasha_section_lists_every_antardasha_row(tmp_path) -> None:
+    """[大运Dasha] = 上游 buildDashaSnapshotLines（IndiaChart.js:429-494）+ buildAntardashaTableLines（:395-428，[#80] 小运全展）。
+    期望整段按上游公式从夹具 jyotish.dasha.vimshottari 独立算出：nameOf = lord.label||lord.key；fmtDate = 前 10 位；
+    n1(x).toFixed(1)；大运行标记 ▶=active、·=birthBalance；小运行标记 ▶=当下（Date.now() 落在 [start,end)）、·=当前大运内；
+    9 大运×9 小运 = 90 行 < DASHA_ANTAR_ROW_MAX 120 → 无截断行。负向对照：把 vendored builder 里 `out.push(...buildAntardashaTableLines(`
+    一行去掉（旧版「只挑当下一支」形态）→ 小运序列整片消失，本用例红。"""
+    from datetime import datetime, timezone
+
+    vim = INDIA_FIX["india_chart"]["jyotish"]["dasha"]["vimshottari"]
+    env, _ = _india_run(tmp_path)
+    assert env.ok, env.error
+    name_of = lambda lord: (lord or {}).get("label") or (lord or {}).get("key") or "—"  # noqa: E731
+    fmt_date = lambda d: (re.match(r"^(\d{4}-\d{2}-\d{2})", f"{d or ''}") or [None, f"{d or ''}" or "—"])[1]  # noqa: E731
+    n1 = lambda x: float(x) if isinstance(x, (int, float)) and math.isfinite(float(x)) else 0.0  # noqa: E731
+    now = datetime.now(timezone.utc)
+    ts = lambda s: datetime.strptime(f"{s}"[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)  # noqa: E731（JS new Date('YYYY-MM-DD') = UTC 零点）
+    nak = vim.get("moonNakshatra") or {}
+    expected = [
+        "系统：Vimshottari（120 年周期）",
+        f"月宿：{nak.get('label') or nak.get('name') or nak.get('key') or '—'}（宿主星 {name_of(vim.get('firstLord'))}）",
+        f"首运：已历 {_js_to_fixed(n1(vim.get('firstElapsedYears')), 1)} 年、余 {_js_to_fixed(n1(vim.get('firstBalanceYears')), 1)} 年",
+    ]
+    active = next((m for m in vim["mahadashas"] if m.get("active")), None)
+    assert active is not None  # 夹具：首运 birthBalance 且 active
+    expected.append(
+        f"当前大运（Mahadasha）：{name_of(active['lord'])}（{fmt_date(active['start'])} → {fmt_date(active['end'])}，"
+        f"{_js_to_fixed(n1(active.get('startAge')), 0)}–{_js_to_fixed(n1(active.get('endAge')), 0)} 岁）"
+    )
+    sub = next((s for s in active.get("antardashas") or [] if s.get("start") and s.get("end") and ts(s["start"]) <= now < ts(s["end"])), None)
+    if sub:
+        expected.append(f"当前小运（Antardasha）：{name_of(sub['lord'])}（{fmt_date(sub['start'])} → {fmt_date(sub['end'])}）")
+    expected += ["大运序列：", "| 标记 | 主星 | 起 | 止 | 年数 | 年龄段 |", "| --- | --- | --- | --- | --- | --- |"]
+    for m in vim["mahadashas"]:
+        mark = "▶" if m.get("active") else ("·" if m.get("birthBalance") else "")
+        expected.append(
+            f"| {mark} | {name_of(m['lord'])} | {fmt_date(m['start'])} | {fmt_date(m['end'])} | {_js_to_fixed(n1(m.get('years')), 1)} 年 | "
+            f"{_js_to_fixed(n1(m.get('startAge')), 0)}–{_js_to_fixed(n1(m.get('endAge')), 0)} 岁 |"
+        )
+    antar_rows = []
+    for m in vim["mahadashas"]:
+        for a in m.get("antardashas") or []:
+            live = bool(a.get("start") and a.get("end")) and ts(a["start"]) <= now < ts(a["end"])
+            antar_rows.append(
+                f"| {'▶' if live else ('·' if m.get('active') else '')} | {name_of(m['lord'])} | {name_of(a['lord'])} | "
+                f"{fmt_date(a['start'])} | {fmt_date(a['end'])} | {_js_to_fixed(n1(a.get('years')), 1)} 年 |"
+            )
+    assert len(antar_rows) == 90
+    expected += ["小运序列(Antardasha,全大运展开;▶=当下、·=当前大运内):", "| 标记 | 大运主星 | 小运主星 | 起 | 止 | 年数 |", "| --- | --- | --- | --- | --- | --- |", *antar_rows]
+    got = _section(env.data["snapshot_text"], "大运Dasha").split("\n")
+    assert got == expected
+    assert not any("已截断" in line for line in got)
+    assert sum(1 for line in got if line.startswith("| ▶ |")) == 2  # 当前大运一行 + 当下小运一行（夹具日期跨 2025–2152，当下恒落在表内）

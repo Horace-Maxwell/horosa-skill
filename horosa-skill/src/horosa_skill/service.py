@@ -2066,9 +2066,10 @@ _GUOLAO_LIFE_MODE_NAMES = {"yumao": "日出安命", "cotrans": "赤黄转换", "
 
 def _guolao_warn_missing_life_master(response: Any, life_mode: str) -> None:
     """命度法非「占星上升」时，上游命度 = Java BaZi.genLifeMasterDeg 算出的命度点 LifeMasterDeg74（ChartController.java:96，
-    日出安命/遇卯/赤黄转换/自定命宫各有专算法）。本仓 /chart 走 Python 排盘服务，响应里没有这个点 —— 上游消费方
-    （lifeDegree / localLifeObject / QizhengMoiraRuleService.firstPresent）对缺点的回退序是「命度点 → 上升 → 太阳」，
-    于是命度静默落回上升点。结果照出（与上游缺点时同形），但必须说出来：[起盘信息] 印的是所选命度法，数是上升的。"""
+    日出安命/遇卯/赤黄转换/自定命宫各有专算法）。本仓 /chart 走 Python 排盘服务，响应里没有这个点，runner 先向 Java /chart 取点
+    （_guolao_attach_life_master）；仍缺（Java 不可用 / 两端盘面不一致）时上游消费方（lifeDegree / localLifeObject /
+    QizhengMoiraRuleService.firstPresent）对缺点的回退序是「命度点 → 上升 → 太阳」，于是命度落回上升点。结果照出（与上游缺点时同形），
+    但必须说出来：[起盘信息] 印的是所选命度法，数是上升的。"""
     mode = f"{life_mode or 'asc'}".strip() or "asc"
     if mode == "asc":
         return
@@ -2081,8 +2082,9 @@ def _guolao_warn_missing_life_master(response: Any, life_mode: str) -> None:
         "guolao LifeMasterDeg74 missing for lifeMode=%s (python chart service has no 七政命度点)", mode,
         note=(
             f"七政命度「{name}」要 Java 排盘层算出的命度点 LifeMasterDeg74（上游 /chart 走 Java ChartController → "
-            "BaZi.genLifeMasterDeg）；本仓 /chart 走 Python 排盘服务、无此点 → 命度按上游同一回退序落回上升点："
-            "[起盘信息] 命度行、[七政四余宫位与二十八宿星曜] 宫序、[大限]、[三主与化曜]/[限法实算] 与 Moira 规则层均按上升计（架构限制）。"
+            "BaZi.genLifeMasterDeg）；本仓 /chart 走 Python 排盘服务、无此点，本次向 Java /chart 取点也未取到（Java 不可用或两端盘面"
+            "不一致，见前一条）→ 命度按上游同一回退序落回上升点：[起盘信息] 命度行、[七政四余宫位与二十八宿星曜] 宫序、[大限]、"
+            "[三主与化曜]/[限法实算] 与 Moira 规则层均按上升计。"
         ),
     )
 
@@ -3999,39 +4001,28 @@ def _pattern_overview_lines(response: dict[str, Any], *, only_ruler_exalt: bool 
 # ─────────────────────────────────────────────────────────────────────────────
 # 世俗盘子盘群：年度入宫盘之外，围绕定盘展开的新月/满月/日月食/地区盘/行星周期等子盘。
 # 子盘时刻均由后端精算端点求得（prenatal_syzygy 朔望、eclipsedetail 食时长、greatconj/barbault
-# 慢星周期、jieqi/year 四季入宫），再以入宫盘同制起 /chart；纯确定性、无 UI 依赖。静态释义块
-# （世俗宫义/地理分野）采占星通行定则。食端点仅回全球食时长（食时长定则的关键量）不回极大时刻，
-# 故日/月食段呈影响时长判词而非整轮盘，如实标注。
-_MUNDANE_HOUSE_MEANINGS = [
-    "1宫：国家整体、国民、国运气象与当年基调",
-    "2宫：国库财政、货币、贸易收入、国家资产",
-    "3宫：交通通讯、媒体舆论、邻国往来、基础教育",
-    "4宫：土地农业、矿产、反对党、国土与气候",
-    "5宫：出生率与青年、文体娱乐、股市投机、外交使节",
-    "6宫：公共卫生、劳工军警、公务体系、疫病",
-    "7宫：外交与盟约、对外战争、公开对手、国际关系",
-    "8宫：国债与死亡率、税收、外资、危机与转型",
-    "9宫：司法宗教、高等教育、长途外贸、国际法",
-    "10宫：政府元首、执政威望、国家声誉与权力",
-    "11宫：立法议会、执政盟友、国家愿景与社团",
-    "12宫：隐患与敌谍、监狱医院、幕后势力、集体潜困",
-]
-_MUNDANE_PTOLEMAIC_ALLOCATION = [
-    "白羊：不列颠、法兰西、日耳曼、叙利亚",
-    "金牛：波斯、爱尔兰、塞浦路斯、小亚细亚",
-    "双子：亚美尼亚、下埃及、比利时、北美西北",
-    "巨蟹：北非、荷兰、苏格兰、东亚沿海",
-    "狮子：意大利、法国南部、罗马、阿尔卑斯",
-    "处女：希腊、两河、加勒比、瑞士",
-    "天秤：奥地利、上埃及、里海、中亚",
-    "天蝎：马格里布、挪威、巴伐利亚、摩洛哥",
-    "射手：西班牙、匈牙利、阿拉伯、澳洲",
-    "摩羯：印度、马其顿、墨西哥、阿富汗",
-    "水瓶：俄罗斯、瑞典、阿拉伯半岛、低地欧洲",
-    "双鱼：葡萄牙、埃及、诺曼底、地中海诸岛",
-]
+# 慢星周期、jieqi/year 四季入宫），再以入宫盘同制起 /chart；纯确定性、无 UI 依赖。判词与分析段
+# （世俗宫义/定局·年主/盘主/入境骨架/地理分野）由 vendored 上游 buildAiSnapshot 抽出件产出（见 _mundane_analysis_sections）。
+# 食端点仅回全球食时长（食时长定则的关键量）不回极大时刻，故日/月食段呈影响时长判词而非整轮盘，如实标注。
 
 
+def _mundane_analysis_sections(analysis: dict[str, Any] | None, titles: tuple[str, ...]) -> list[tuple[str, str]]:
+    """把 JS `mundane_cards` action=analysis 的 judge（'[世俗宫义]\n…'）与 extraSecs（各 '[标题]\n正文'）按 titles 序转成
+    (标题, 正文) 段；缺的段不补（上游 try/catch 同形：算不出即不出段）。"""
+    if not isinstance(analysis, dict):
+        return []
+    blocks: list[str] = []
+    judge = analysis.get("judge")
+    if isinstance(judge, str) and judge.strip():
+        blocks.append(judge)
+    blocks.extend(b for b in (analysis.get("extraSecs") or []) if isinstance(b, str) and b.strip())
+    by_title: dict[str, str] = {}
+    for block in blocks:
+        head, _, body = block.strip().partition("\n")
+        m = re.match(r"^\[(.+)\]$", head.strip())
+        if m and m.group(1) not in by_title:
+            by_title[m.group(1)] = body.strip()
+    return [(title, by_title[title]) for title in titles if title in by_title]
 def _mundane_chart_digest(
     chart_response: dict[str, Any], *, points: tuple[str, ...] = ("Sun", "Moon", "Asc", "MC")
 ) -> list[str]:
@@ -4047,80 +4038,6 @@ def _mundane_chart_digest(
                 f"{_format_sign_degree(obj.get('sign'), obj.get('signlon'))}"
                 f"{_format_retrograde_text(obj)}"
             )
-    return lines
-
-
-def _mundane_year_lord_lines(ingress_response: dict[str, Any]) -> list[str]:
-    """定局·年主/盘主：上升座主（命主星）落点 + 二分二至发光体宫位定当年基调。"""
-    wrap = _top_level_chart_wrap(ingress_response)
-    om = _get_objects_map(wrap)
-    asc = om.get("Asc")
-    asc_sign = _po_sign_key(asc.get("sign")) if isinstance(asc, dict) else None
-    if not asc_sign:
-        return ["本盘缺上升信息，无法定盘主。"]
-    modality_key = _PO_SIGN_MODALITY.get(asc_sign, "")
-    modality = _PO_MODALITY_CN.get(modality_key, "")
-    lines = [f"上升星座：{_astro_msg(asc.get('sign'))}{('（' + modality + '）') if modality else ''}"]
-    # 定局定则（入宫图效力时长随上升宫性而定）：定宫全年一图；二体宫半年、秋分补图；转宫一季、逐季另起。
-    validity = {
-        "fixed": "定局：上升落定宫（固定宫）→ 本图效力全年。",
-        "mutable": "定局：上升落二体宫（变动宫）→ 本图效力半年，需秋分补图。",
-        "cardinal": "定局：上升落转宫（基本宫）→ 本图效力一季，逐季另起入宫图（参见[地区盘推运]四季序列）。",
-    }.get(modality_key)
-    if validity:
-        lines.append(validity)
-    ruler_key = _PO_SIGN_DOMICILE.get(asc_sign)
-    ruler_id = _PO_KEY_TO_ID.get(ruler_key) if ruler_key else None
-    if ruler_id:
-        r = om.get(ruler_id)
-        if isinstance(r, dict) and r.get("sign") is not None:
-            house = _po_house_num(r.get("house"))
-            house_txt = f"，落第 {house} 宫" if house else ""
-            lines.append(
-                f"盘主（命主星／年主）：{_astro_msg(ruler_id, short=True)} —— "
-                f"{_format_sign_degree(r.get('sign'), r.get('signlon'))}{house_txt}"
-            )
-        else:
-            lines.append(f"盘主（命主星／年主）：{_astro_msg(ruler_id, short=True)}")
-    for lum in ("Sun", "Moon"):
-        obj = om.get(lum)
-        if isinstance(obj, dict) and obj.get("sign") is not None:
-            house = _po_house_num(obj.get("house"))
-            house_txt = f"（第 {house} 宫）" if house else ""
-            lines.append(
-                f"{_astro_msg(lum, short=True)}："
-                f"{_format_sign_degree(obj.get('sign'), obj.get('signlon'))}{house_txt}"
-            )
-    return lines
-
-
-def _mundane_skeleton_lines(ingress_response: dict[str, Any]) -> list[str]:
-    """入境骨架：四轴星座 + 临角行星（±3°），入宫盘的结构应力点。"""
-    wrap = _top_level_chart_wrap(ingress_response)
-    om = _get_objects_map(wrap)
-    lines: list[str] = []
-    angle_lons: dict[str, float] = {}
-    for pid in ("Asc", "MC", "Desc", "IC"):
-        obj = om.get(pid)
-        if isinstance(obj, dict) and obj.get("sign") is not None and obj.get("signlon") is not None:
-            lines.append(f"{_astro_msg(pid, short=True)}：{_format_sign_degree(obj.get('sign'), obj.get('signlon'))}")
-        if isinstance(obj, dict) and obj.get("lon") is not None:
-            angle_lons[pid] = _po_norm360(obj.get("lon"))
-    on_angle: list[str] = []
-    for pkey in _PO_TRAD_KEYS:
-        oid = _PO_KEY_TO_ID.get(pkey)
-        obj = om.get(oid) if oid else None
-        if not isinstance(obj, dict) or obj.get("lon") is None:
-            continue
-        plon = _po_norm360(obj.get("lon"))
-        for ang, alon in angle_lons.items():
-            diff = abs(plon - alon)
-            diff = min(diff, 360.0 - diff)
-            if diff <= 3.0:
-                on_angle.append(f"{_astro_msg(oid, short=True)} 合 {_astro_msg(ang, short=True)}（{diff:.1f}°）")
-                break
-    if on_angle:
-        lines.append("临角行星：" + "、".join(on_angle))
     return lines
 
 
@@ -4151,15 +4068,88 @@ def _fixed_star_orb_params(params: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _india_lines(block: Any) -> list[str]:
+    """上游 splitSections 的逐行口径：段体是「行」数组；skill 的行 builder 偶有一项多行，先摊平成单行。"""
+    if block is None:
+        return []
+    items = block if isinstance(block, (list, tuple)) else [block]
+    return "\n".join(f"{item if item is not None else ''}" for item in items).split("\n") if items else []
+
+
+def _india_ensure_section(lines: list[str], title: str, body: Any) -> None:
+    """上游 IndiaChart.ensureSection（:287-296）：逐行 trimEnd、滤空行；空段写「无数据」；段尾空一行。"""
+    clean = [line.rstrip() for line in _india_lines(body)]
+    clean = [line for line in clean if line.strip()]
+    lines.append(f"[{title}]")
+    lines.extend(clean or ["无数据"])
+    lines.append("")
+
+
+def _india_replace_calibre_line(base_info: list[str], calibre_line: str | None) -> list[str]:
+    """上游 replaceIndiaCalibreLine（IndiaChart.js:1125-1130）：替换第一条「回归黄道|恒星黄道」起首的行，无则追加。"""
+    lines = list(base_info)
+    if not calibre_line:
+        return lines
+    for index, line in enumerate(lines):
+        if re.match(r"^(回归黄道|恒星黄道)", f"{line}".strip()):
+            lines[index] = calibre_line
+            return lines
+    lines.append(calibre_line)
+    return lines
+
+
+def _build_india_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
+    """印度律盘快照 = 上游 buildIndiaSnapshotText（IndiaChart.js:1131-1194）的段组成，逐段同序：
+
+    [起盘信息] = 流派 / 大运流派开关 / 当前分盘 / 分盘四行（vendored buildIndiaSchoolHeaderLines）+ 本命 [起盘信息] 各行，
+      其中首条黄道行换成印占实际口径行（indiaCalibreLine：恒星黄道·<岁差>，<印占分宫制>）；
+    [星盘信息] = 本命 [宫位宫头] + [星与虚点] + [信息] 三段正文拼接（上游不单列宫位宫头/星与虚点）；
+    [信息] / [相位] / [行星] / [希腊点] / [可能性] 各一段（ensureSection：空段写「无数据」）；
+    [大运Dasha]（有行才出）→ Jyotish 派生段（buildJyotishSnapshotLines 的键序）；附加分盘接在全文末尾（:1325-1332）。
+    上游 buildIndiaSnapshotText 不挑 [月宿]/[古典]（aiExport.js:596 [MU] 注：印度盘 [古典] 是死复选框），skill 此前照本命盘
+    整套出段并另起 [宫位宫头]/[星与虚点]，[星盘信息] 则由导出层拿通用起盘行兜底。各段行本身仍是 skill 共享的本命行 builder
+    （与上游同一 buildAstroSnapshotContent 的段）。
+    """
+    base_info = _india_replace_calibre_line(
+        _india_lines(_build_base_info_lines(response, payload, with_time_basis=True)), response.get("_indiaCalibreLine")
+    )
+    info = _india_lines(_build_info_section(response, payload))
+    lines: list[str] = []
+    _india_ensure_section(lines, "起盘信息", [*_india_lines(response.get("_indiaSchoolLines")), *base_info])
+    _india_ensure_section(
+        lines, "星盘信息",
+        [*_india_lines(_build_house_cusp_lines(response)), *_india_lines(_build_star_and_lot_position_lines(response)), *info],
+    )
+    _india_ensure_section(lines, "信息", info)
+    _india_ensure_section(lines, "相位", _build_aspect_section(response))
+    _india_ensure_section(lines, "行星", _build_planet_section(response))
+    _india_ensure_section(lines, "希腊点", _build_lots_section(response))
+    _india_ensure_section(lines, "可能性", _build_possibility_section(response))
+    # [大运Dasha]：vendored 上游 buildDashaSnapshotLines（IndiaChart.js:429-494）按所选大运体系出段（含小运全表），由
+    # _attach_jyotish_sections 挂 `_indiaDashaLines`；无数据 = 上游 `if(dashaLines.length)` 同判不产段。
+    dasha_lines = response.get("_indiaDashaLines")
+    if isinstance(dasha_lines, list) and dasha_lines:
+        _india_ensure_section(lines, "大运Dasha", dasha_lines)
+    # Jyotish 派生段（星阙 v3.6.0）：vendored buildJyotishSnapshotLines 逐字产出，段名与顺序由上游 builder 决定。
+    jyotish_sections = response.get("_jyotishSections")
+    if isinstance(jyotish_sections, dict):
+        for title, body in jyotish_sections.items():
+            _india_ensure_section(lines, str(title), body)
+    text = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+    # [附加分盘]（上游 buildIndiaSnapshotForFields:1325-1332）：`${text}\n\n${ensureSection 附加分盘}`；缺省不选 = 不产段。
+    extra_vargas = response.get("_indiaExtraVargas")
+    if isinstance(extra_vargas, str) and extra_vargas.strip():
+        block: list[str] = []
+        _india_ensure_section(block, "附加分盘", extra_vargas.split("\n"))
+        text = re.sub(r"\n{3,}", "\n\n", f"{text}\n\n" + "\n".join(block)).strip()
+    return text
+
+
 def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
     sections = [
         # 上游 buildAstroSnapshotContent 的 [起盘信息] 带时间基准行（astroAiSnapshot.js:1696 withTimeBasis）。
-        # 印占：上游 buildIndiaSnapshotText（IndiaChart.js:1170-1175）在 [起盘信息] 起首加流派 / 大运流派开关 / 当前分盘 /
-        # 分盘四行（vendored buildIndiaSchoolHeaderLines，由 _attach_jyotish_sections 挂 `_indiaSchoolLines`）。
-        ("起盘信息", [
-            *[f"{line}" for line in (response.get("_indiaSchoolLines") or []) if f"{line}".strip()],
-            *_build_base_info_lines(response, payload, with_time_basis=True),
-        ]),
+        # （印度律盘另走 _build_india_snapshot_text：上游 buildIndiaSnapshotText 自有段组成。）
+        ("起盘信息", _build_base_info_lines(response, payload, with_time_basis=True)),
         ("宫位宫头", _build_house_cusp_lines(response)),
         ("星与虚点", _build_star_and_lot_position_lines(response)),
         ("信息", _build_info_section(response, payload)),
@@ -4223,23 +4213,6 @@ def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
     possibility = _build_possibility_section(response)
     if possibility:
         rendered.append(("可能性", "\n".join(possibility).strip()))
-    # 印度律盘专属 [大运Dasha]：vendored 上游 buildDashaSnapshotLines（IndiaChart.js:429-494）按所选大运体系出段
-    # （Vimshottari / Yogini / Ashtottari / 条件宿系 / Chara / AKKG …，含小运全表），由 _attach_jyotish_sections 挂
-    # `_indiaDashaLines`；无数据 = 上游 `if(dashaLines.length)` 同判不产段。此前这里是只认 Vimshottari 的旧版 Python 移植。
-    dasha_lines = response.get("_indiaDashaLines")
-    if isinstance(dasha_lines, list) and dasha_lines:
-        rendered.append(("大运Dasha", "\n".join(f"{line}" for line in dasha_lines).strip()))
-    # 印占 Jyotish 派生段（星阙 v3.6.0）：由 vendored `buildJyotishSnapshotLines` 逐字产出，
-    # 段名与顺序均由上游 builder 决定（此处不重排、不改名），已出现过的段不重复追加。
-    jyotish_sections = response.get("_jyotishSections")
-    if isinstance(jyotish_sections, dict):
-        seen_titles = {title for title, _ in rendered}
-        for title, lines in jyotish_sections.items():
-            if title in seen_titles:
-                continue
-            body = "\n".join(str(line) for line in lines).strip() if isinstance(lines, list) else f"{lines}".strip()
-            if body:
-                rendered.append((str(title), body))
     # 派生盘专属段（v3.9.2「快照重定源」）：[龙盘]/[调波盘]/[重置盘]，由各 runner 按上游 AuxLab
     # builder 逐字排出并挂 `_derivedSelf`；段序按上游 v56 preset 居末。空 lines 不产段（上游同形）。
     derived_self = response.get("_derivedSelf")
@@ -4247,11 +4220,6 @@ def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
         body = "\n".join(str(line) for line in derived_self["lines"]).strip()
         if body:
             rendered.append((str(derived_self["title"]), body))
-    # [附加分盘]（上游 v3.11.0 #80，IndiaChart.js:1298-1333）：印度盘之外另挂的分盘简表，上游把它接在整份主盘快照
-    # **末尾**（`${text}\n\n${附加分盘段}`）—— 由 `_attach_india_extra_vargas` 挂 `_indiaExtraVargas`；缺省不选 = 不产段。
-    extra_vargas = response.get("_indiaExtraVargas")
-    if isinstance(extra_vargas, str) and extra_vargas.strip():
-        rendered.append(("附加分盘", extra_vargas.strip()))
     return _render_snapshot_text(rendered)
 
 
@@ -8308,7 +8276,9 @@ def _build_zr_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -
 
 
 def _auto_snapshot_text_for_tool(tool_name: str, input_normalized: dict[str, Any], response_data: dict[str, Any]) -> str | None:
-    if tool_name in {"chart", "chart13", "chart12", "hellen_chart", "india_chart", "draconic", "relocation"} and _is_astro_chart_payload(response_data):
+    if tool_name == "india_chart" and _is_astro_chart_payload(response_data):
+        return _build_india_snapshot_text(input_normalized, response_data)
+    if tool_name in {"chart", "chart13", "chart12", "hellen_chart", "draconic", "relocation"} and _is_astro_chart_payload(response_data):
         return _build_astro_snapshot_text(input_normalized, response_data)
     # 调波盘：上游 v50 的 `harmonic` 键要求整套本命盘段 + 调波专属段。盘面本就在响应里（已在
     # `_run_harmonic_tool` 摊平到顶层），所以走通用盘面渲染器，再把 [调波位置]/[同频合相] 接在后面。
@@ -9140,6 +9110,16 @@ class HorosaSkillService:
         if not isinstance(response_data, dict) or not response_data.get("jyotish"):
             return response_data
         src = payload or {}
+        # [起盘信息] 口径行（上游 indiaCalibreLine(fields)，IndiaChart.js:1113-1124）的分宫制/岁差：取后端**实际用的**口径
+        # （响应 params.hsys / params.ayanamsa = webindiasrv 按 indiaHsys→hsys、indiaAyanamsa→ayanamsa→siderealMode 解析后的值），
+        # 与上游页面「请求即已归一」同一结果；缺回显时按同一取值序落请求值。
+        echo = response_data.get("params") if isinstance(response_data.get("params"), dict) else {}
+        req_hsys = src.get("indiaHsys") if src.get("indiaHsys") not in (None, "") else src.get("hsys", 0)
+        req_ayan = src.get("indiaAyanamsa") or src.get("ayanamsa") or src.get("siderealMode") or "lahiri"
+        calibre_overrides = {
+            "indiaHsys": echo.get("hsys") if echo.get("hsys") not in (None, "") else req_hsys,
+            "indiaAyanamsa": echo.get("ayanamsa") or req_ayan,
+        }
         # [大运Dasha] 体系 + [起盘信息] 流派头行的页面口径（上游 fields：indiaDashaSystem / indiaSchool /
         # indiaDashaVariants + 出生时刻供扩展大运推日期）。
         params = {
@@ -9149,6 +9129,7 @@ class HorosaSkillService:
             "date": src.get("date"),
             "time": src.get("time"),
             "ad": src.get("ad", 1),
+            "calibreOverrides": calibre_overrides,
         }
         try:
             # js_client 已解包 envelope 的 data，返回的就是 runner 的结果对象。
@@ -9170,13 +9151,26 @@ class HorosaSkillService:
                     enriched["_indiaDashaLines"] = js.get("dashaLines")
                 if isinstance(js.get("schoolLines"), list):
                     enriched["_indiaSchoolLines"] = js.get("schoolLines")
+                calibre_line = f"{js.get('calibreLine') or ''}".strip()
+                if calibre_line:
+                    enriched["_indiaCalibreLine"] = calibre_line
+                    used = js.get("calibre") if isinstance(js.get("calibre"), dict) else {}
+                    if f"{used.get('indiaHsys')}" != f"{calibre_overrides['indiaHsys']}" or f"{used.get('indiaAyanamsa')}" != f"{calibre_overrides['indiaAyanamsa']}":
+                        # 上游 normalize* 认不出 → 口径行按缺省（整宫 / Lahiri）写，而后端按原值算：说出来，不让标注与实算静默分叉。
+                        _degrade(
+                            "india calibre line normalized %s -> %s", calibre_overrides, used,
+                            note=(
+                                f"印度律盘 [起盘信息] 口径行按上游词表归一为 分宫制 {used.get('indiaHsys')} / 岁差 {used.get('indiaAyanamsa')}，"
+                                f"与后端实算口径 分宫制 {calibre_overrides['indiaHsys']} / 岁差 {calibre_overrides['indiaAyanamsa']} 不一致（该值不在上游可选表内）。"
+                            ),
+                        )
                 return enriched
         except ToolValidationError:
             raise
         except Exception as exc:  # noqa: BLE001 — 富化失败不许影响主盘
             _degrade(
                 "jyotish section build failed: %s", exc,
-                note="印度律盘 Jyotish 派生段、[大运Dasha] 与 [起盘信息] 流派行本次未产出（JS 段 builder 失败），其余段不受影响。",
+                note="印度律盘 Jyotish 派生段、[大运Dasha] 与 [起盘信息] 流派行 / 口径行本次未产出（JS 段 builder 失败），其余段不受影响。",
             )
         return response_data
 
@@ -12792,6 +12786,57 @@ class HorosaSkillService:
                 )
         return js
 
+    def _guolao_attach_life_master(
+        self, response: dict[str, Any], remote_payload: dict[str, Any], settings: dict[str, Any]
+    ) -> dict[str, Any]:
+        """七政命度点（LifeMasterDeg74）：上游的 /chart 是 Java ChartController（ChartController.java:96 → BaZi.genLifeMasterDeg，
+        按 guolaoLifeMode 日出安命/赤黄转换/遇卯/自定命宫各有专算法）在 Python 排盘之上**追加**的一个盘面对象；本仓 /chart 走
+        Python 排盘服务，响应里没有它。命度法非「占星上升」时向 Java /chart（backend="java"，同一请求体）取该点挂进 chart.objects，
+        下游（vendored lifeDegree / 宫位表宫序 / [大限] / [三主与化曜] / Moira 规则层 firstPresent）即按上游同一回退序拿到命度点。
+        守卫：Java 盘与 Python 盘必须是同一张（太阳/上升黄经逐值相等，Java 只是聚合层）；不一致不采用（说出来），Java 不可用
+        → 留给 _guolao_warn_missing_life_master 告警、命度按上游同一回退序落回上升。"""
+        mode = f"{settings.get('guolaoLifeMode') or 'asc'}".strip() or "asc"
+        chart = response.get("chart") if isinstance(response, dict) else None
+        objects = chart.get("objects") if isinstance(chart, dict) else None
+        if mode == "asc" or not isinstance(objects, list):
+            return response
+        if any(isinstance(obj, dict) and obj.get("id") == "LifeMasterDeg74" for obj in objects):
+            return response
+        try:
+            java = self._call_remote("/chart", remote_payload, backend="java")
+        except Exception as exc:  # noqa: BLE001 — Java 不可用：命度回落上升，由 _guolao_warn_missing_life_master 说出来
+            _degrade("guolao LifeMasterDeg74 via Java /chart failed: %s", exc)
+            return response
+        java_chart = java.get("chart") if isinstance(java, dict) else None
+        java_objects = java_chart.get("objects") if isinstance(java_chart, dict) else None
+        by_id_java = {obj.get("id"): obj for obj in (java_objects or []) if isinstance(obj, dict)}
+        life = by_id_java.get("LifeMasterDeg74")
+        if not isinstance(life, dict):
+            _degrade("guolao: Java /chart returned no LifeMasterDeg74 for lifeMode=%s", mode)
+            return response
+        by_id = {obj.get("id"): obj for obj in objects if isinstance(obj, dict)}
+        for anchor in ("Sun", "Asc"):
+            mine, theirs = by_id.get(anchor), by_id_java.get(anchor)
+            try:
+                same = abs(float(mine.get("lon")) - float(theirs.get("lon"))) < 1e-6
+            except (AttributeError, TypeError, ValueError):
+                same = False
+            if not same:
+                _degrade(
+                    "guolao: Java /chart %s lon differs from python chart; LifeMasterDeg74 not adopted", anchor,
+                    note=f"七政命度点：Java /chart 与本盘的 {anchor} 黄经不一致，命度点不采用（两端盘面不是同一张），命度按上升计。",
+                )
+                return response
+        enriched = dict(response)
+        enriched_chart = dict(chart)
+        enriched_chart["objects"] = [*objects, copy.deepcopy(life)]
+        enriched["chart"] = enriched_chart
+        enriched["lifeMasterPoint"] = {
+            "source": "java:/chart", "lifeMode": mode, "lon": life.get("lon"), "sign": life.get("sign"),
+            "signlon": life.get("signlon"), "house": life.get("house"),
+        }
+        return enriched
+
     def _run_guolao_chart_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 显示层四键 + 起盘口径先校验（非法值在任何后端往返之前就报错）。
         display = self._guolao_display_settings(payload)
@@ -12808,6 +12853,9 @@ class HorosaSkillService:
         response = self._guolao_attach_nongli(
             response, self._guolao_fetch_nongli(payload, payload.get("date"), payload.get("time"), role="本命")
         )
+        # 命度法非「占星上升」→ 命度点 LifeMasterDeg74 由 Java /chart（上游 ChartController → BaZi.genLifeMasterDeg）算，Python
+        # 排盘服务不出；向 Java 取同一张盘的该点挂进 objects（盘面一致性有守卫），取不到才落回上升并告警。
+        response = self._guolao_attach_life_master(response, remote_payload, guolao_settings)
         _guolao_warn_missing_life_master(response, guolao_settings.get("guolaoLifeMode", "asc"))
         # 政余格局 (星阙 v2.6.x Moira DSL)：vendored JS buildLocalMoiraPatterns 评估盘面物象格局。
         # 失败不阻塞既有段（→ '无'），与 星阙 buildGuolaoPatternSection 的 try/catch 一致。
@@ -15096,6 +15144,7 @@ class HorosaSkillService:
     # 世运专属输入：不进 /chart 请求体（其余键 = 页面 fields：黄道/岁差/宫制/古典全局键，与 astro 盘同一套）。
     _MUNDANE_ONLY_KEYS = frozenset({
         "year", "ingressTerm", "mundaneType", "mhKind", "solunarType", "solunarWeights", "solunarOrb", "vedicYear",
+        "regionKey", "regionCandidate",
         *_MUNDANE_SETTING_KEYS,
     })
 
@@ -15145,6 +15194,9 @@ class HorosaSkillService:
         lon = payload.get("lon")
         lat = payload.get("lat")
         settings = self._mundane_settings(payload)
+        # 地区盘（上游 MUNDANE_TYPES 'region'）：底盘 = 预置建置盘（regionKey），不求入宫时刻——另走一条流程。
+        if f"{payload.get('mundaneType') or ''}".strip() == "region":
+            return self._run_mundane_region_chart(payload, settings)
         seed_payload = {
             "year": year,
             "ad": payload.get("ad", 1),
@@ -15189,6 +15241,7 @@ class HorosaSkillService:
         }
         chart_response = self._call_remote("/chart", chart_payload)
         chart_response = self._attach_natal_extras("mundane", chart_response, payload)
+        chart_response = self._mundane_attach_egypt(chart_response, payload)
 
         # 世运卜卦（mundaneType='mundanehorary'）：上游对该盘型走的是「问事时刻的普通 /chart →
         # buildFacts → describeXQuestion」，机制同卜卦、问主=公众/国家、宫义按世运读。这里复用
@@ -15198,8 +15251,7 @@ class HorosaSkillService:
         # 段文本由 vendored 的 describeSolunar / computeAngularity / rulerDeathSignature 纯函数出。
         mundane_type = f"{payload.get('mundaneType') or ''}".strip()
         if mundane_type not in self._MUNDANE_SUPPORTED_TYPES:
-            # 上游 MUNDANE_TYPES 另有 region（地区盘：须从 regionCharts 预置/自定义里**选**一张建置盘，
-            # headless 无此输入）。认不出的盘型不许静默当入宫盘——说出来。
+            # 认不出的盘型不许静默当入宫盘——说出来（region 已在上方分支走建置盘流程）。
             _degrade(
                 "mundane: 不支持的盘型 mundaneType=%s（支持 %s），按入宫盘出段",
                 mundane_type,
@@ -15274,6 +15326,17 @@ class HorosaSkillService:
         # 子盘群：新月/满月/日月食/地区盘/行星周期 + 世俗宫义/定局·年主·盘主/入境骨架/地理分野/地区盘推运。
         # collected 顺手收下子盘群已经取到的物料（朔望子盘、四季入境时刻），卡片段复用，不重复请求。
         collected: dict[str, Any] = {}
+        # 判词 + 分析段（上游 buildAiSnapshot:2882-2915，vendored 抽出件）：skill 的世俗盘恒以入宫盘为底，故按 ingress 盘型在
+        # 入宫盘上产 [世俗宫义]/[定局·年主/盘主]/[入境骨架]/[地理分野]（各盘型专属的 [世运问判]/[角化] 另由各自 JS 工具出）。
+        try:
+            year_num_for_extra: int | None = int(str(year).strip())
+        except (TypeError, ValueError):
+            year_num_for_extra = None
+        analysis = self._mundane_analysis(
+            chart_response,
+            {**settings, "mundaneType": "ingress", "ingressTerm": term, "ingressYear": year_num_for_extra, "ingressMoment": ingress_time},
+            {},
+        )
         subchart_sections = self._build_mundane_subchart_sections(
             base_chart_payload=chart_payload,
             seed_payload=seed_payload,
@@ -15282,6 +15345,7 @@ class HorosaSkillService:
             year=year,
             zone=zone,
             collect=collected,
+            analysis=analysis,
         )
         subcharts_text = _render_snapshot_text(subchart_sections) if subchart_sections else ""
         # 右栏卡片段（上游 v3.11 [Q-444/T-407]）：上游 buildAiSnapshot 的拼接序是
@@ -15328,6 +15392,145 @@ class HorosaSkillService:
         result["export_snapshot"] = self._augment_export_payload(technique="mundane", snapshot_text=snapshot_text)
         return result
 
+    def _mundane_analysis(
+        self, chart_response: dict[str, Any], extra: dict[str, Any], state: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """上游 buildAiSnapshot（MundaneMain.js:2849-2997）的 headLines / judge / extraSecs / cardSecs：vendored 抽出件
+        buildMundaneAiSnapshotParts（经 JS 工具 mundane_cards action=analysis）。chart = 该盘型自己的盘；extra = 页面 extra
+        （盘型键 + 世运口径 mundaneRuleset…）；state = 页面按需拉取物（progTargetYear / patData…）。失败 → warnings + None（不出段）。"""
+        try:
+            js = self.js_client.run("mundane_cards", {"action": "analysis", "chart": chart_response, "extra": extra, "state": state})
+        except Exception as exc:  # noqa: BLE001 — 分析段失败不许带崩世俗盘，但必须说出来
+            _degrade("mundane analysis sections failed: %s", exc)
+            return None
+        data = js.get("data") if isinstance(js, dict) else None
+        if not isinstance(data, dict) or not data.get("ok"):
+            err = data.get("error") if isinstance(data, dict) and isinstance(data.get("error"), dict) else {}
+            _degrade("mundane analysis sections failed: %s", err.get("message") or err.get("code") or "unknown")
+            return None
+        return data
+
+    def _mundane_attach_egypt(self, chart_response: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+        """[埃及历]（上游 mundane preset 含该段；buildAstroSnapshotContent 对任意盘按 fields 的 egypt_* 七轴产出，astroAiSnapshot.js:1733）。
+        与嵌入盘同：无 /astroextra/analysis 的天狼偕日升行。失败只是该段不出（_degrade 进 warnings）。"""
+        try:
+            egypt = self._build_egypt_section(chart_response, {}, payload)
+        except ToolValidationError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            _degrade("mundane egypt section failed: %s", exc)
+            return chart_response
+        if not egypt:
+            return chart_response
+        enriched = dict(chart_response)
+        enriched["_egyptSection"] = egypt
+        return enriched
+
+    def _run_mundane_region_chart(self, payload: dict[str, Any], settings: dict[str, Any]) -> dict[str, Any]:
+        """地区盘（上游 MUNDANE_TYPES 'region'）：MundaneMain.applyRegion（:715-733）按 regionKey 取 regionCharts.js 预置建置记录
+        （多候选时刻取 regionCandidate，缺省首候选 = 最通行者），把 日期/时刻/时区/经纬度 打进页面 fields 起普通 /chart，extra =
+        {mundaneType:'region', regionKey, regionCn, regionFoundingYear}；快照 = buildAiSnapshot（:2849-2997）：
+        头行 [地区盘] / 规则集 / 地区 → [世俗宫义] → [定局·年主/盘主] → [地理分野] → [地区盘推运]（盘龄 = 目标年 − 建置年，小限 + 法达；
+        返照/次限是页面按需拉取，headless 不出）→ 右栏卡（[地区盘·12世俗宫]/[时刻校正] + 本命式各卡）→ 盘面正文。
+        目标年 = 请求的 year（上游 progTargetYear，页面缺省今年——headless 由调用方给，改它 [地区盘推运] 必变）。"""
+        resolved = self.js_client.run(
+            "mundane_cards",
+            {"action": "region", "regionKey": payload.get("regionKey"), "regionCandidate": payload.get("regionCandidate")},
+        )
+        data = resolved.get("data") if isinstance(resolved, dict) else None
+        if not isinstance(data, dict) or not data.get("ok"):
+            err = data.get("error") if isinstance(data, dict) and isinstance(data.get("error"), dict) else {}
+            keys = list((data or {}).get("keys") or []) if isinstance(data, dict) else []
+            raise ToolValidationError(
+                bilingual(
+                    f"地区盘 {err.get('message') or '取盘失败'}；可选 regionKey：{'/'.join(keys) or '（无）'}。",
+                    f"mundane region chart: {err.get('message') or 'lookup failed'}; regionKey must be one of {keys}.",
+                ),
+                code="tool.mundane_unknown_region",
+                details={
+                    "regionKey": payload.get("regionKey"), "regionCandidate": payload.get("regionCandidate"),
+                    "allowed": keys, "candidates": (data or {}).get("candidates") if isinstance(data, dict) else None,
+                    "reason": err.get("code"),
+                },
+            )
+        fields = data.get("fields") or {}
+        extra = data.get("extra") or {}
+        region = data.get("region") or {}
+        try:
+            target_year = int(f"{payload.get('year')}".strip())
+        except (TypeError, ValueError):
+            raise ToolValidationError(
+                bilingual(f"地区盘的 year（推运目标年）须为整数：{payload.get('year')!r}", f"mundane region: year (progression target year) must be an integer: {payload.get('year')!r}"),
+                code="tool.mundane_invalid_setting",
+                details={"invalid": [{"key": "year", "value": payload.get("year"), "allowed": "int"}]},
+            ) from None
+        # 建置盘 = 页面 fields（黄道/岁差/宫制/古典全局键随盘）+ 建置记录的时刻与地点（applyRegion 的 patchFields 同键）。
+        chart_payload = {
+            **{k: v for k, v in payload.items() if k not in self._MUNDANE_ONLY_KEYS and v is not None},
+            "date": fields.get("date"),
+            "time": fields.get("time") or "12:00:00",
+            "zone": fields.get("zone") or "+00:00",
+            "lat": fields.get("lat"),
+            "lon": fields.get("lon"),
+            "gpsLat": fields.get("gpsLat"),
+            "gpsLon": fields.get("gpsLon"),
+            "pos": fields.get("pos"),
+            "ad": 1,
+            "hsys": payload.get("hsys", 0),
+            "tradition": payload.get("tradition", False),
+            "predictive": 0,
+        }
+        chart_response = self._call_remote("/chart", chart_payload)
+        chart_response = self._attach_natal_extras("mundane", chart_response, payload)
+        chart_response = self._mundane_attach_egypt(chart_response, payload)
+        region_extra = {**settings, **extra}
+        state: dict[str, Any] = {"progTargetYear": target_year}
+        patterns = self._mundane_pattern_data(chart_payload)
+        if patterns is not None:
+            state["patData"] = patterns
+        analysis = self._mundane_analysis(chart_response, region_extra, state)
+        if analysis is not None:
+            head_lines = [f"{line}" for line in (analysis.get("headLines") or [])]
+            judge = f"{analysis.get('judge') or ''}".strip()
+            extra_secs = [f"{b}".strip() for b in (analysis.get("extraSecs") or []) if f"{b}".strip()]
+            card_texts = [f"{c.get('text') or ''}".strip() for c in (analysis.get("cards") or []) if isinstance(c, dict) and f"{c.get('text') or ''}".strip()]
+        else:
+            # 抽出件失败（已进 warnings）：头行按上游 :2852-2853/2868 最小复现（规则集查名走 JS 设置面），分析段/卡片缺席。
+            meta = self._mundane_settings_meta(settings)
+            head_lines = ["[地区盘]"]
+            if meta.get("rulesetLabel"):
+                head_lines.append(f"规则集：{meta['rulesetLabel']}")
+            head_lines.append(f"地区：{extra.get('regionCn') or '-'}")
+            judge, extra_secs, card_texts = "", [], []
+        body = _build_astro_snapshot_text(chart_payload, chart_response)
+        # 拼接序 = 上游 :2996 [head, judge, ...extraSecs, ...cardSecs, body].filter(Boolean).join('\n\n')。
+        snapshot_text = "\n\n".join(part for part in ("\n".join(head_lines), judge, *extra_secs, *card_texts, body) if part).strip()
+        result = {
+            "mundaneType": "region",
+            "regionKey": extra.get("regionKey"),
+            "regionCn": extra.get("regionCn"),
+            "regionFoundingYear": extra.get("regionFoundingYear"),
+            "regionCandidate": (region.get("candidate") or {}).get("key") if isinstance(region.get("candidate"), dict) else None,
+            "regionMoment": f"{fields.get('date')} {fields.get('time') or '12:00:00'} {fields.get('zone') or '+00:00'}",
+            "progTargetYear": target_year,
+            "chart": chart_response.get("chart"),
+            "raw": chart_response,
+            "snapshot_text": snapshot_text,
+        }
+        result["export_snapshot"] = self._augment_export_payload(technique="mundane", snapshot_text=snapshot_text)
+        return result
+
+    def _mundane_settings_meta(self, settings: dict[str, Any]) -> dict[str, Any]:
+        """快照头的查名（规则集 label / 两条页面级覆盖行）：JS mundane_cards action=settings 的 meta；失败回 {}（已 _degrade）。"""
+        try:
+            js = self.js_client.run("mundane_cards", {"action": "settings", "settings": settings or {}})
+            data = js.get("data") if isinstance(js, dict) else None
+            meta = data.get("meta") if isinstance(data, dict) else None
+            return dict(meta) if isinstance(meta, dict) else {}
+        except Exception as exc:  # noqa: BLE001
+            _degrade("mundane settings meta failed: %s", exc)
+            return {}
+
     def _build_mundane_subchart_sections(
         self,
         *,
@@ -15338,6 +15541,7 @@ class HorosaSkillService:
         year: str,
         zone: str,
         collect: dict[str, Any] | None = None,
+        analysis: dict[str, Any] | None = None,
     ) -> list[tuple[str, str]]:
         # 每个子盘独立 try/except：任一端点失败只降级该段为说明文本，绝不破坏世俗盘主流程。
         # collect（可选）：把已取到的朔望子盘 {'syzygy': {'new'|'full': {'moment', 'chart'}}} 与四季入境时刻
@@ -15469,22 +15673,13 @@ class HorosaSkillService:
                 _degrade("mundane barbault failed: %s", exc)
         sections.append(("行星周期", "\n".join(cycle_lines) if cycle_lines else "未能取得慢星周期数据（需有效年份）。"))
 
-        # ── 世俗宫义（通行定则静态释义）──
-        sections.append(("世俗宫义", "\n".join(_MUNDANE_HOUSE_MEANINGS)))
-
-        # ── 定局·年主/盘主：上升座主落点 + 二分二至发光体宫位 ──
-        sections.append(("定局·年主/盘主", "\n".join(_mundane_year_lord_lines(ingress_response))))
-
-        # ── 入境骨架：四轴星座 + 临角行星 ──
-        skel = _mundane_skeleton_lines(ingress_response)
-        sections.append(("入境骨架", "\n".join(skel) if skel else "本盘缺四轴信息。"))
-
-        # ── 地理分野（托勒密星座—地域配当静态表）+ 上升所属 ──
-        alloc_lines = list(_MUNDANE_PTOLEMAIC_ALLOCATION)
-        asc_obj = _get_objects_map(_top_level_chart_wrap(ingress_response)).get("Asc")
-        if isinstance(asc_obj, dict) and asc_obj.get("sign") is not None:
-            alloc_lines.append(f"——本盘上升为 {_astro_msg(asc_obj.get('sign'))}，当年天象着重投射于其对应地域。")
-        sections.append(("地理分野", "\n".join(alloc_lines)))
+        # ── [世俗宫义] / [定局·年主/盘主] / [入境骨架] / [地理分野]：上游 buildAiSnapshot（MundaneMain.js:2882-2915）的判词与
+        # 分析段，由 vendored 抽出件 buildMundaneAiSnapshotParts 在入宫盘上产出：describeMundaneChart → formatMundaneHouseTable（GFM 表）/
+        # describeMundaneVictor(facts, mundaneRuleset)（年主星累分 + 逐星得分与偶然项）/ describeIngressSkeleton + describeMundaneSyzygy /
+        # describeChorography(facts, rulesetConfig(mundaneRuleset).chorographyDataset)（数据集随规则集：托勒密古典 / 古典+中世纪 / 现代综合）。
+        # 此前四段是 skill 自拟 Python 行（静态宫义表、上升座主落点、托勒密静态配当），[定局·年主/盘主]/[地理分野] 不随规则集。
+        # analysis=None（JS builder 失败，已进 warnings）→ 四段缺席（导出层报 missing，不回落自拟行）。
+        sections.extend(_mundane_analysis_sections(analysis, ("世俗宫义", "定局·年主/盘主", "入境骨架", "地理分野")))
 
         # ── 地区盘推运：年度四季入宫时刻序列（地区盘随每季太阳入基本宫推移）──
         prog_rows: list[str] = []
@@ -15520,10 +15715,10 @@ class HorosaSkillService:
     # 经 JS 工具 `mundane_cards` 调用。上游页面的「按需拉取物」在 React state 里；这里由 Python 取数后原样喂入
     # （请求型编排归 Python，AGENTS §5）。无数据即不成段，与上游「算过才成段」同形。
     #
-    # 支持的盘型（上游 MUNDANE_TYPES，MundaneMain.js:43）。region（地区盘）不在内：它要从 regionCharts
-    # 预置/自定义里**选**一张建置盘（UI 选择），headless 无此输入。
+    # 支持的盘型（上游 MUNDANE_TYPES，MundaneMain.js:43）。region（地区盘）走 _run_mundane_region_chart：按 regionKey 取
+    # vendored regionCharts.js 的预置建置盘（上游 applyRegion 同一取值），底盘即该建置盘、不求入宫。
     _MUNDANE_SUPPORTED_TYPES = frozenset(
-        {"", "ingress", "newmoon", "fullmoon", "solecl", "lunecl", "cycles", "solunar", "vedicmundane", "mundanehorary"}
+        {"", "ingress", "newmoon", "fullmoon", "solecl", "lunecl", "cycles", "solunar", "vedicmundane", "mundanehorary", "region"}
     )
     # 盘型专属卡（上游按 extra.mundaneType 分支产出，行号为 MundaneMain.js）。其余「本命式」卡
     # （天气占星/四轴特殊点/会合指示星/盘型格局/世运恒星命中/赤纬平行）对任何非 cycles 盘型都会产——

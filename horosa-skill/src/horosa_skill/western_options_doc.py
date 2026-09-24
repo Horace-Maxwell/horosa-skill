@@ -145,7 +145,11 @@ def _static_doc(tool_name: str) -> dict[str, str]:
     if tool_name == "mundane":
         return {
             "mundaneRuleset": "规则集 4 档（缺省 modern）：" + " ".join(f"{k}={label}" for k, label in MUNDANE_RULESETS)
-            + "；进 [世俗入宫] 首行，右栏卡片段（年盘概要等）按该规则集判读；[定局·年主/盘主]、[地理分野] 两段尚未随规则集（已知缺口）。",
+            + "；进快照首段的「规则集」行，右栏卡片段（年盘概要等）、[定局·年主/盘主]（界/三分变体定年主累分）与 [地理分野]"
+            + "（数据集：托勒密古典 / 古典+中世纪 / 现代综合）均随该规则集（上游 describeMundaneVictor / describeChorography）。",
+            "mundaneType=region": "地区盘：底盘换成 regionKey 指定的预置建置盘（vendored regionCharts.js：london_1066 / philadelphia_1776 / "
+            "paris_1792，多候选时刻用 regionCandidate），快照 = [地区盘] 头 → [世俗宫义] → [定局·年主/盘主] → [地理分野] → "
+            "[地区盘推运]（盘龄 = year − 建置年：小限 + 法达）→ [地区盘·12世俗宫]/[时刻校正] 等卡 → 盘面正文；不出入宫盘诸段。",
         }
     if tool_name == "relative":
         return {

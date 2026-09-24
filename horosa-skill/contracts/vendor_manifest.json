@@ -1291,8 +1291,17 @@
     "india/indiaConst.js": {
       "upstream": "constants/AstroConst.js",
       "mode": "curated",
-      "why": "印占流派（五支+西方恒星）/ 大运流派开关 22 键 / 大运体系 15 档常量与归一函数，逐块抽取（上游全文件 import 了 headless 不存在的色板/主题模块）。消费方 india/jyotishSnapshot.js：[起盘信息] 流派行与 [大运Dasha] 体系切换。",
+      "why": "印占流派（五支+西方恒星）/ 大运流派开关 22 键 / 大运体系 15 档常量与归一函数，逐块抽取（上游全文件 import 了 headless 不存在的色板/主题模块）；wave3b 另抽印占岁差 47 制表 / 分宫制表及其归一、ayanamsaLabel / zodiacalDisplayText（[起盘信息] 口径行 indiaCalibreLine 的依赖）。消费方 india/jyotishSnapshot.js：[起盘信息] 流派行与口径行、[大运Dasha] 体系切换。",
       "extracts": [
+        "SIDEREAL",
+        "INDIA_AYANAMSA_DEFAULT",
+        "INDIA_AYANAMSA_OPTIONS",
+        "normalizeIndiaAyanamsa",
+        "INDIA_HOUSE_SYSTEM_DEFAULT",
+        "INDIA_HOUSE_SYSTEM_OPTIONS",
+        "normalizeIndiaHouseSystem",
+        "ayanamsaLabel",
+        "zodiacalDisplayText",
         "INDIA_SCHOOL_DEFAULT",
         "INDIA_SCHOOL_OPTIONS",
         "INDIA_SCHOOL_DEFAULTS",
@@ -1617,6 +1626,18 @@
           "find": "const MUNDANE_INGRESS_RULE_CN = {",
           "to": "export const MUNDANE_INGRESS_RULE_CN = {",
           "why": "同上：「入境主管制：…（页面级覆盖）」（buildAiSnapshot:2859）。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "const PLANET_CN = { sun: '太阳', moon: '月亮', mercury: '水星', venus: '金星', mars: '火星', jupiter: '木星', saturn: '土星' };",
+          "to": "export const PLANET_CN = { sun: '太阳', moon: '月亮', mercury: '水星', venus: '金星', mars: '火星', jupiter: '木星', saturn: '土星' };",
+          "why": "上游 buildAiSnapshot:2913 [地理分野] 托勒密四象限主星查名用本文件私有 PLANET_CN（七曜表，与 describe.js 的 MUN_PLANET_CN 不是同一张）；bespoke 抽出件 mundane/mundaneAiSnapshot.js 逐字保留该引用，故补具名导出而不手抄。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "function currentYear(){",
+          "to": "export function currentYear(){",
+          "why": "同上：buildAiSnapshot 的 [年之九主] 年份 / [地区盘推运] 目标年缺省（:2919/:2951）读本文件私有 currentYear()，抽出件逐字保留。"
         }
       ]
     },
@@ -1672,6 +1693,18 @@
       "upstream": "divination/mundane/patterns.js",
       "mode": "verbatim",
       "deviations": []
+    },
+    "mundane/progressions.js": {
+      "upstream": "divination/mundane/progressions.js",
+      "mode": "verbatim",
+      "why": "[地区盘推运]（buildAiSnapshot:2947-2960）的小限 Profections + 法达 Firdaria 纯函数（WP-6 §11.2）；纯常量表 + 两个导出函数、无 import。消费方 mundane/mundaneAiSnapshot.js。",
+      "deviations": []
+    },
+    "mundane/mundaneAiSnapshot.js": {
+      "mode": "bespoke",
+      "why": "自上游 MundaneMain.js 类方法 buildAiSnapshot（:2849-2997）逐字抽出的世俗盘 AI 快照四件（headLines / judge=[世俗宫义] / extraSecs=[定局·年主/盘主]·[入境骨架]·[地理分野]·[年之九主]·[世运问判]·[角化]·[地区盘推运] / cardSecs）：this.state → 参数 state、盘面正文与拼接归 Python（同一 buildAstroSnapshotContent 的段）。此前 [世俗宫义]/[定局·年主/盘主]/[入境骨架]/[地理分野] 是 skill 自拟 Python 行（不随 mundaneRuleset），[地区盘] 类型 headless 不支持。与 mundane/MundaneMain.js（verbatim，只到 `const CARD` 截断，类方法在截断之后）看守同一源 sha。源一动即红、复核后 --restamp。",
+      "derived_from": "components/mundane/MundaneMain.js",
+      "derived_sha256": "7759875fb5044ad48584ce161620848d31fcddfe027339bf855ea0cc049a604d"
     },
     "mundane/ruleset.js": {
       "upstream": "divination/mundane/ruleset.js",

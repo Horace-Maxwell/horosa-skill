@@ -1689,7 +1689,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {
                 "field": "mundaneType",
                 "value": "ingress",
-                "meaning": "入宫底盘；newmoon/fullmoon/solecl/lunecl/cycles/solunar/vedicmundane/mundanehorary 另加该盘型专属段",
+                "meaning": "入宫底盘；newmoon/fullmoon/solecl/lunecl/cycles/solunar/vedicmundane/mundanehorary 另加该盘型专属段；region（地区盘）改以 regionKey 指定的预置建置盘为底盘、year 为推运目标年",
             },
         ],
         do_not_assume=["year", "location"],

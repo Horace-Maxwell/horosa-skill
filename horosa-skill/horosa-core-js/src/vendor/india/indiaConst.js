@@ -1,7 +1,8 @@
 // 印占流派 / 大运体系常量 —— **逐块抽自上游** `constants/AstroConst.js`（curated：上游全文件 1900+ 行、import 了
 // headless 不存在的色板/主题模块，整文件 vendor 不可行）。manifest 的 upstream_sha256 看守源文件、extracts 断言
 // 每个名字仍是上游顶层 export：源一动即红，逐块对过再 --restamp。消费方：india/jyotishSnapshot.js 的
-// [起盘信息] 流派行（buildIndiaSnapshotText:1154-1178）与 [大运Dasha]（buildDashaSnapshotLines:429-494）。
+// [起盘信息] 流派行（buildIndiaSnapshotText:1154-1178）与 [大运Dasha]（buildDashaSnapshotLines:429-494），
+// 以及 v3.11 wave3b 的 [起盘信息] 口径行 indiaCalibreLine（IndiaChart.js:1111-1124：岁差表 / 分宫制表 / zodiacalDisplayText）。
 // 块与块之间的上游代码（年长档 / 色板等）不在此文件；块内逐字（含注释）。
 
 // ── AstroConst.js:1459-1470 ──
@@ -197,4 +198,125 @@ export const INDIA_DASHA_DISPLAY_ONLY_SYSTEMS = ['taraDasha', 'akkg'];
 export function normalizeIndiaDashaSystem(value){
     const found = INDIA_DASHA_SYSTEM_OPTIONS.find((item)=>item.value === value);
     return found ? found.value : INDIA_DASHA_SYSTEM_DEFAULT;
+}
+
+// ── AstroConst.js:84 ──（zodiacalDisplayText 判恒星黄道的常量）
+
+export const SIDEREAL = 'Sidereal'
+
+// ── AstroConst.js:1078-1137 ──（v3.11 wave3b：印占 [起盘信息] 口径行 indiaCalibreLine 的岁差表与归一）
+
+export const INDIA_AYANAMSA_DEFAULT = 'lahiri';
+export const INDIA_AYANAMSA_OPTIONS = [
+    // A. 印度主流（Lahiri 族 + 现代）
+    { value: 'lahiri', label: 'Lahiri / Chitrapaksha', group: '印度主流' },
+    { value: 'lahiri_icrc', label: 'Lahiri ICRC（官定2022）', group: '印度主流' },
+    { value: 'lahiri_1940', label: 'Lahiri 1940', group: '印度主流' },
+    { value: 'lahiri_vp285', label: 'Lahiri VP285', group: '印度主流' },
+    { value: 'raman', label: 'Raman', group: '印度主流' },
+    { value: 'krishnamurti', label: 'Krishnamurti / KP', group: '印度主流' },
+    { value: 'krishnamurti_vp291', label: 'KP-Senthilathiban (VP291)', group: '印度主流' },
+    { value: 'yukteshwar', label: 'Yukteshwar', group: '印度主流' },
+    { value: 'jn_bhasin', label: 'J.N. Bhasin', group: '印度主流' },
+    { value: 'ushashashi', label: 'Usha/Shashi', group: '印度主流' },
+    { value: 'deluce', label: 'De Luce', group: '印度主流' },
+    // B. 真星定标 + 古典
+    { value: 'true_citra', label: 'True Citra（角宿真星）', group: '真星·古典' },
+    { value: 'true_revati', label: 'True Revati（娄宿真星）', group: '真星·古典' },
+    { value: 'true_pushya', label: 'True Pushya / 普舍亚', group: '真星·古典' },
+    { value: 'true_mula', label: 'True Mula（Chandra Hari）', group: '真星·古典' },
+    { value: 'true_sheoran', label: 'Vedic / Sheoran', group: '真星·古典' },
+    { value: 'ss_citra', label: 'SS Citra', group: '真星·古典' },
+    { value: 'ss_revati', label: 'SS Revati', group: '真星·古典' },
+    { value: 'suryasiddhanta', label: 'Surya Siddhanta', group: '真星·古典' },
+    { value: 'suryasiddhanta_msun', label: 'Surya Siddhanta（mean Sun）', group: '真星·古典' },
+    { value: 'aryabhata', label: 'Aryabhata', group: '真星·古典' },
+    { value: 'aryabhata_msun', label: 'Aryabhata（mean Sun）', group: '真星·古典' },
+    { value: 'aryabhata_522', label: 'Aryabhata 522', group: '真星·古典' },
+    // C. 西占恒星黄道
+    { value: 'fagan_bradley', label: 'Fagan/Bradley', group: '西占恒星' },
+    { value: 'djwhal_khul', label: 'Djwhal Khul', group: '西占恒星' },
+    { value: 'valens_moon', label: 'Vettius Valens', group: '西占恒星' },
+    // D. 银道/银心
+    { value: 'galcent_0sag', label: 'Galactic Center 0°Sag（银心）', group: '银道/银心' },
+    { value: 'galcent_rgilbrand', label: 'Galactic Center（Gil Brand）', group: '银道/银心' },
+    { value: 'galcent_mula_wilhelm', label: 'Galactic Center/Mula（Wilhelm）', group: '银道/银心' },
+    { value: 'galcent_cochrane', label: 'Galactic Center（Cochrane）', group: '银道/银心' },
+    { value: 'galequ_iau1958', label: 'Galactic Equator（IAU1958）', group: '银道/银心' },
+    { value: 'galequ_true', label: 'Galactic Equator（true）', group: '银道/银心' },
+    { value: 'galequ_mula', label: 'Galactic Equator（mid-Mula）', group: '银道/银心' },
+    { value: 'galequ_fiorenza', label: 'Galactic Equator（Fiorenza）', group: '银道/银心' },
+    { value: 'galalign_mardyks', label: 'Skydram（Mardyks）', group: '银道/银心' },
+    // E. 历史/巴比伦 + 历元
+    { value: 'hipparchos', label: 'Hipparchos', group: '历史/历元' },
+    { value: 'sassanian', label: 'Sassanian', group: '历史/历元' },
+    { value: 'aldebaran_15tau', label: 'Aldebaran 15°Tau', group: '历史/历元' },
+    { value: 'babyl_kugler1', label: 'Babylonian/Kugler 1', group: '历史/历元' },
+    { value: 'babyl_kugler2', label: 'Babylonian/Kugler 2', group: '历史/历元' },
+    { value: 'babyl_kugler3', label: 'Babylonian/Kugler 3', group: '历史/历元' },
+    { value: 'babyl_huber', label: 'Babylonian/Huber', group: '历史/历元' },
+    { value: 'babyl_etpsc', label: 'Babylonian/Eta Piscium', group: '历史/历元' },
+    { value: 'babyl_britton', label: 'Babylonian/Britton', group: '历史/历元' },
+    { value: 'j2000', label: 'J2000', group: '历史/历元' },
+    { value: 'j1900', label: 'J1900', group: '历史/历元' },
+    { value: 'b1950', label: 'B1950', group: '历史/历元' },
+];
+
+export function normalizeIndiaAyanamsa(value){
+    const found = INDIA_AYANAMSA_OPTIONS.find((item)=>item.value === value);
+    return found ? found.value : INDIA_AYANAMSA_DEFAULT;
+}
+
+// ── AstroConst.js:1139-1173 ──（同上：印占分宫制表与归一）
+
+export const INDIA_HOUSE_SYSTEM_DEFAULT = 0;
+export const INDIA_HOUSE_SYSTEM_OPTIONS = [
+    // Vedic 常用
+    { value: 0, label: '整宫制 Whole Sign', group: 'Vedic 常用' },
+    { value: 5, label: '等宫·命起宫 Equal', group: 'Vedic 常用' },
+    { value: 6, label: 'Vehlow 等宫·命居宫中', group: 'Vedic 常用' },
+    { value: 7, label: 'Sripati（Bhāva Chalit）', group: 'Vedic 常用' },
+    { value: 9, label: 'Porphyry 波菲', group: 'Vedic 常用' },
+    { value: 3, label: 'KP / Placidus', group: 'Vedic 常用' },
+    // 其他象限/等分制
+    { value: 4, label: 'Koch', group: '其他象限/等分制' },
+    { value: 10, label: 'Campanus', group: '其他象限/等分制' },
+    { value: 2, label: 'Regiomontanus', group: '其他象限/等分制' },
+    { value: 8, label: 'Alcabitus', group: '其他象限/等分制' },
+    { value: 11, label: 'Morinus', group: '其他象限/等分制' },
+    { value: 12, label: 'Meridian / Axial', group: '其他象限/等分制' },
+    { value: 13, label: 'Polich-Page / Topocentric', group: '其他象限/等分制' },
+    { value: 14, label: 'Equal MC', group: '其他象限/等分制' },
+    { value: 15, label: 'Azimuthal / Horizon', group: '其他象限/等分制' },
+    { value: 16, label: 'Carter Poli-Equatorial', group: '其他象限/等分制' },
+    { value: 17, label: 'Sunshine', group: '其他象限/等分制' },
+    { value: 18, label: 'Sunshine Alt', group: '其他象限/等分制' },
+    { value: 19, label: 'Krusinski', group: '其他象限/等分制' },
+    { value: 20, label: 'Pullen SD', group: '其他象限/等分制' },
+    { value: 21, label: 'Pullen SR', group: '其他象限/等分制' },
+    { value: 22, label: 'APC Houses', group: '其他象限/等分制' },
+    { value: 23, label: 'Savard-A', group: '其他象限/等分制' },
+    { value: 24, label: 'Equal 2', group: '其他象限/等分制' },
+];
+
+export function normalizeIndiaHouseSystem(value){
+    const numeric = Number(value);
+    const found = INDIA_HOUSE_SYSTEM_OPTIONS.find((item)=>item.value === numeric);
+    return found ? found.value : INDIA_HOUSE_SYSTEM_DEFAULT;
+}
+
+// ── AstroConst.js:1219-1232 ──（同上：岁差短标签 + 黄道显示文案）
+// 由 ayanāṃśa key 取短标签(复用黄道下拉同款 INDIA_AYANAMSA_OPTIONS label)。无 key/未知返回原值。
+export function ayanamsaLabel(key){
+    if(!key){ return ''; }
+    if(key === 'user'){ return '自定义（历元槽位）'; }   // [R5-P3] AI 快照/显示层词条(否则出「恒星黄道·user」原始键)
+    const hit = INDIA_AYANAMSA_OPTIONS.find((o)=>o.value === key);
+    return hit ? hit.label : key;
+}
+// 黄道显示文案:回归黄道 / 恒星黄道·<ayan> / 恒星黄道(无具体岁差时)。统一显示+AI 快照口径,避免硬编码 Lahiri。
+export function zodiacalDisplayText(zodiacalRaw, ayanKey){
+    const isSid = zodiacalRaw === SIDEREAL || `${zodiacalRaw}` === '1' || zodiacalRaw === '恒星黄道';
+    if(!isSid){ return '回归黄道'; }
+    const lab = ayanamsaLabel(ayanKey);
+    return lab ? `恒星黄道·${lab}` : '恒星黄道';
 }

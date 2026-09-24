@@ -256,7 +256,7 @@ AI_EXPORT_PRESET_SECTIONS = {
     # v14（上游 v3.9.2）：古典衍化四段插在 古典 与 古典格局 之间。上游 opt-in（仅本命 astro 快照
     # 路径传 classicalDerived）→ 条件段双登记；世界范式盘上游还是 default-off（∩DEFAULT_OFF 纪律）。
     "astrochart": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "12分度", "主宰星链", "分宫制宫神星表", "古典", "古典·派生宫转宫", "古典·气候带", "古典·显赫计分", "古典·世界范式盘", "古典格局", "埃及历", "寿命格局", "可能性"],
-    "indiachart": ["星盘信息", "起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "古典", "可能性", "大运Dasha", "附加分盘", "Panchanga 五要素", "卡拉卡（8 Chara Karakas）", "节点主照（Rasi Drishti）", "星曜状态", "分盘吉位 Vimśopaka", "八分点 SAV", "Sodhya Pinda 凝量", "Shadbala 六力", "Ishta/Kashta 吉凶果", "Vimśopaka 分盘 20 分力", "Hora 行星时", "Choghadia 民用择时", "择时 Panchaka/Abhijit", "Mūla 大运", "Sudarśana Chakra 大运", "Naisargika 自然大运", "补充上升（Supplementary Lagnas）", "Nāḍī · Bhrigu Bindu 福点", "Nāḍī · D150 纳地盘", "Āyurdāya 寿命基础", "特殊上升 Special Lagnas", "D60 六十分盘吉凶", "分盘变体对照", "功能吉凶（Functional Nature）", "宫位力（Bhava Bala）", "星曜战（Graha Yuddha）", "扩展大运（Conditional / Chara）", "Kartari 夹击格局", "Sudarshana 三盘（命/日/月起）", "KP 宫头次主星 CSL", "KP 意义者 Significators", "KP 六级细分 / 当令星", "敌友（复合五分）", "行运 Gochara（从月·八分点）", "化解（信息·非处方）", "Jaimini Argala 干涉", "Tajika Harsha Bala", "Tajika Pancha-Vargeeya", "Tajika Mudda 年运", "行运 Gochara（从命）", "座运·X", "瑜伽格局 Yogas", "副星 Upagraha", "敏感点 Sphuta", "全吉盘 SBC", "问事 Praśna", "Nāḍī · 行星组合(同座合)", "Nāḍī · 星座交换", "Nāḍī · 木星推进时间轴", "Jaimini 三对法寿命", "Tripataki 宿距三旗", "Tripataki 三旗盘逐月净分", "寿命判读"],
+    "indiachart": ["星盘信息", "起盘信息", "信息", "相位", "行星", "希腊点", "古典", "可能性", "大运Dasha", "附加分盘", "Panchanga 五要素", "卡拉卡（8 Chara Karakas）", "节点主照（Rasi Drishti）", "星曜状态", "分盘吉位 Vimśopaka", "八分点 SAV", "Sodhya Pinda 凝量", "Shadbala 六力", "Ishta/Kashta 吉凶果", "Vimśopaka 分盘 20 分力", "Hora 行星时", "Choghadia 民用择时", "择时 Panchaka/Abhijit", "Mūla 大运", "Sudarśana Chakra 大运", "Naisargika 自然大运", "补充上升（Supplementary Lagnas）", "Nāḍī · Bhrigu Bindu 福点", "Nāḍī · D150 纳地盘", "Āyurdāya 寿命基础", "特殊上升 Special Lagnas", "D60 六十分盘吉凶", "分盘变体对照", "功能吉凶（Functional Nature）", "宫位力（Bhava Bala）", "星曜战（Graha Yuddha）", "扩展大运（Conditional / Chara）", "Kartari 夹击格局", "Sudarshana 三盘（命/日/月起）", "KP 宫头次主星 CSL", "KP 意义者 Significators", "KP 六级细分 / 当令星", "敌友（复合五分）", "行运 Gochara（从月·八分点）", "化解（信息·非处方）", "Jaimini Argala 干涉", "Tajika Harsha Bala", "Tajika Pancha-Vargeeya", "Tajika Mudda 年运", "行运 Gochara（从命）", "座运·X", "瑜伽格局 Yogas", "副星 Upagraha", "敏感点 Sphuta", "全吉盘 SBC", "问事 Praśna", "Nāḍī · 行星组合(同座合)", "Nāḍī · 星座交换", "Nāḍī · 木星推进时间轴", "Jaimini 三对法寿命", "Tripataki 宿距三旗", "Tripataki 三旗盘逐月净分", "寿命判读"],
     # `占星地图` 是本仓第一次登记它：verify_export_section_baseline 的 SKILL_ONLY_KEYS 曾把整个
     # astrochart_like 跳过（而上游确有该 preset），于是这条缺失从未被任何一版欠账计入。
     # skill 侧该段由独立的 `acg` 工具产出、不进 chart 族快照，故 preset + optional 双登记。
@@ -582,7 +582,9 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     "harmonic": ["月宿", "古典", "古典格局", "埃及历", "可能性", "调波盘"],
     # [附加分盘]（v3.11.0 #80）只在给了 indiaExtraVargas 时产；[Tripataki 三旗盘逐月净分]（[Q-127/T-35]）只在
     # indiaTripataki=true（后端 opt-in 多建 12 盘）时产 —— 两段均缺省不产 → 条件段双登记。
-    "indiachart": ["月宿", "古典", "大运Dasha", "可能性", "星盘信息", "星曜战（Graha Yuddha）", "Kartari 夹击格局", "Tajika Mudda 年运", "问事 Praśna", "Nāḍī · 星座交换", "附加分盘", "Tripataki 三旗盘逐月净分"],
+    # [古典]：上游 buildIndiaSnapshotText 从不产该段（aiExport.js:596 [MU] 注「死复选框」），skill 同形 → 恒缺席、只登记。
+    # [星盘信息]/[可能性] 经 ensureSection 恒产（空段写「无数据」），不再可选。
+    "indiachart": ["古典", "大运Dasha", "星曜战（Graha Yuddha）", "Kartari 夹击格局", "Tajika Mudda 年运", "问事 Praśna", "Nāḍī · 星座交换", "附加分盘", "Tripataki 三旗盘逐月净分"],
     # 世俗盘为非推运入宫盘（predictive=0），[可能性] 依赖 predict.PlanetSign 故恒不产出 → 可选段。
     # 世运卜卦两段仅 mundaneType=mundanehorary 时产（盘型互斥）。
     # v3.11 右栏卡（buildMundaneCardSections）：入宫底盘恒产 年盘概要/四季入境盘/天气占星/四轴特殊点/盘型格局
@@ -590,7 +592,12 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     # 赤纬平行（有平行组）按盘面数据；新月图判读…Barbault 聚散指数 按 mundaneType 盘型；地区盘·12世俗宫/
     # 时刻校正（须 region 盘型 = UI 选建置盘）与天气与农业（须页面手填受孕日）headless 无输入 → 恒不产，
     # 登记只为识别外部导出。分宫制宫神星表 = chart 族共享段（由星盘族产段逻辑决定），此处不作必出要求。
-    "mundane": ["古典", "埃及历", "可能性", "世运卜卦", "世运问判", "恒星派入境", "吠陀世运", "角化", "年之九主",
+    # 盘型互斥段（上游 buildAiSnapshot 按 mundaneType 只出一个盘型头 + 该盘型的分析段）：skill 的入宫底盘流程恒产
+    # 世俗入宫/新月图/满月图/日食图/月食图/行星周期/入境骨架/年盘概要/四季入境盘，地区盘（mundaneType=region）底盘是建置盘、不求入宫
+    # → 这些段缺席 → 条件段双登记（preset 里照留，出现时不算 unknown）。
+    # [天气占星] 卡只在 ingress/newmoon/fullmoon 盘型产（buildMundaneCardSections :352-357），地区盘无 → 同为条件段。
+    "mundane": ["世俗入宫", "新月图", "满月图", "日食图", "月食图", "行星周期", "入境骨架", "年盘概要", "四季入境盘", "天气占星",
+                "古典", "埃及历", "可能性", "世运卜卦", "世运问判", "恒星派入境", "吠陀世运", "角化", "年之九主",
                 "新月图判读", "满月图判读", "日食图判读", "月食图判读", "食族 Saros", "天象占参考", "地区盘·12世俗宫", "时刻校正", "会合指示星", "世运恒星命中", "赤纬平行", "恒星派入境·概览", "吠陀世运·年度盘", "世运大运", "KP 副主链", "天气与农业", "世运问判·得力明细", "木土纪元", "大年时代", "Barbault 聚散指数", "分宫制宫神星表"],
     # 六壬 Phase4 (星阙 v2.5.x)：毕法（已命中）只在 refContext 成功且有命中时出；占断向导只在指定占类
     # (zhanCategory ≠ general) 时出。断卦层（年月神煞/课体结构/三传旺衰/空亡真假/旬空落点/陷空/遁干特殊/年命上神）

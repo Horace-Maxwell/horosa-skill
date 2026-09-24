@@ -890,4 +890,25 @@ export function buildIndiaSchoolHeaderLines(fields, chartnum, hook){
 	];
 }
 
+// ── [起盘信息] 印占实际口径行：IndiaChart.js:1109-1129 逐字（v3.11 wave3b）──
+// [挂载自检 F-39·P0] 印占实际口径行:盘按恒星黄道(印占岁差)+ 印度分宫制算,但 buildAstroSnapshotContent 读的是
+// fields.zodiacal/hsys(印占 fields 恒 0/1)→ [起盘信息] 印「回归黄道，Alcabitus」与实算相反。与 fieldsToParams 同一派生。
+export function indiaCalibreLine(fields, overrides = {}){
+	const f = fields || {};
+	const hsysVal = overrides.indiaHsys !== undefined && overrides.indiaHsys !== null
+		? AstroConst.normalizeIndiaHouseSystem(overrides.indiaHsys)
+		: (f.indiaHsys ? AstroConst.normalizeIndiaHouseSystem(f.indiaHsys.value) : AstroConst.INDIA_HOUSE_SYSTEM_DEFAULT);
+	const ayan = overrides.indiaAyanamsa !== undefined && overrides.indiaAyanamsa !== null
+		? AstroConst.normalizeIndiaAyanamsa(overrides.indiaAyanamsa)
+		: (f.indiaAyanamsa ? AstroConst.normalizeIndiaAyanamsa(f.indiaAyanamsa.value) : AstroConst.INDIA_AYANAMSA_DEFAULT);
+	const hit = AstroConst.INDIA_HOUSE_SYSTEM_OPTIONS.find((o)=>`${o.value}` === `${hsysVal}`);
+	return `${AstroConst.zodiacalDisplayText(1, ayan)}，${hit ? hit.label : `分宫制 ${hsysVal}`}`;
+}
+export function replaceIndiaCalibreLine(baseInfoLines, calibreLine){
+	const lines = Array.isArray(baseInfoLines) ? baseInfoLines.slice() : [];
+	const idx = lines.findIndex((l)=>/^(回归黄道|恒星黄道)/.test(`${l}`.trim()));
+	if(idx >= 0){ lines[idx] = calibreLine; }else if(calibreLine){ lines.push(calibreLine); }
+	return lines;
+}
+
 export { buildDashaSnapshotLines };
