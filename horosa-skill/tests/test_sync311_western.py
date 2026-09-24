@@ -703,8 +703,9 @@ def test_guidance_vocab_matches_the_vendored_engine_tables() -> None:
       rulesets: mr.MUNDANE_RULESETS.map((r) => [r.key, r.label]),
     }));
     """
-    out = subprocess.run(["node", "--input-type=module", "-e", script], cwd=core, capture_output=True, text=True, encoding="utf-8", check=True)
-    eng = json.loads(out.stdout)
+    from node_esm import run_node_esm  # 统一入口（Windows ESM 路径口径）
+
+    eng = json.loads(run_node_esm(script, cwd=core))
     assert [tuple(x) for x in eng["categories"]] == list(W.HORARY_CATEGORIES)
     assert [tuple(x) for x in eng["topics"]] == list(W.ELECTION_TOPICS)
     assert [tuple(x) for x in eng["electionSchools"]] == list(W.ELECTION_SCHOOLS)

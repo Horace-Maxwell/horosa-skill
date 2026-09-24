@@ -63,8 +63,8 @@ process.stdout.write(gz.buildGuaSnapshotText(fields, st));
 def _upstream_whole(date: str, payload: dict, gear: dict | None = None, manual: list[dict] | None = None) -> str:
     rec = {key: payload.get(key) for key in ("date", "time", "zone", "lon", "lat", "gender")}
     return _node(
-        _UPSTREAM_WHOLE, str(GUAZHAN), str(DOCTRINE_CACHE), str(CORE_JS_SRC / "vendor" / "gua" / "GuaConst.js"),
-        str(CORE_JS_SRC / "vendor" / "gua" / "littleEndian.js"), json.dumps(NONGLI[(date, 0)], ensure_ascii=False),
+        _UPSTREAM_WHOLE, GUAZHAN, DOCTRINE_CACHE, CORE_JS_SRC / "vendor" / "gua" / "GuaConst.js",
+        CORE_JS_SRC / "vendor" / "gua" / "littleEndian.js", json.dumps(NONGLI[(date, 0)], ensure_ascii=False),
         json.dumps(rec, ensure_ascii=False), json.dumps(gear or {}, ensure_ascii=False),
         json.dumps(manual or [], ensure_ascii=False),
     )
@@ -74,7 +74,7 @@ def _tianji_gear() -> dict:
     # 上游 mergeLiuyaoGearSettings({}, {school}) = applyPreset(school, {})（aiAnalysisContext.js:1684-1731）。
     return json.loads(_node(
         "import(process.argv[1]).then((m) => process.stdout.write(JSON.stringify(m.applyPreset('tianji', {}))));",
-        str(CORE_JS_SRC / "vendor" / "gua" / "liuyaoSchools.js")))
+        CORE_JS_SRC / "vendor" / "gua" / "liuyaoSchools.js"))
 
 
 @pytest.mark.parametrize("date,time,settings", [
@@ -302,9 +302,9 @@ const m = await import(process.argv[1]);
 const r = await m.runZhengChuan({ school: 'tieban', pillars: ['戊寅', '甲寅', '己亥', '甲子'], gender: 1, lunarMonth: 1, lunarDay: Number(process.argv[2]), isLeapMonth: false });
 process.stdout.write(r.snapshot_text || '');
 """
-    page = _node(script, str(CORE_JS_SRC / "tools" / "zhengchuan.js"), "25").split("\n")
+    page = _node(script, CORE_JS_SRC / "tools" / "zhengchuan.js", "25").split("\n")
     assert "| 农历 | 1月25日 |" in page and "| 本命数 | 205 | 公式② |" in page
-    assert _node(script, str(CORE_JS_SRC / "tools" / "zhengchuan.js"), "24") == text
+    assert _node(script, CORE_JS_SRC / "tools" / "zhengchuan.js", "24") == text
 
 
 @requires_upstream

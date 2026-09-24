@@ -111,9 +111,11 @@ def _sections(text: str | None) -> dict[str, list[str]]:
     return {title: "\n".join(body).strip("\n").split("\n") for title, body in out.items()}
 
 
-def _node(script: str, *args: str) -> str:
-    out = subprocess.run(["node", "--input-type=module", "-e", script, *args], check=True, capture_output=True, text=True, encoding="utf-8")
-    return out.stdout
+def _node(script: str, *args) -> str:
+    """模块路径传 Path（helper 转 file:// URL；Windows ESM loader 不认裸盘符路径），其余参数传字符串。"""
+    from node_esm import run_node_esm
+
+    return run_node_esm(script, *args)
 
 
 SIX = {"date": "2026-09-24", "time": "10:58:00", **SH, "question": "求财"}
@@ -169,8 +171,8 @@ for (const y of ['甲子', '丙午', '乙巳']) for (const m of [1, 8, 12]) for 
 }
 process.stdout.write(JSON.stringify(out));
 """
-    same = json.loads(_node(script, str(CORE_JS_SRC / "vendor" / "gua" / "GuaConst.js"),
-                            str(CORE_JS_SRC / "vendor" / "gua" / "littleEndian.js"), str(GUAZHAN), body))
+    same = json.loads(_node(script, CORE_JS_SRC / "vendor" / "gua" / "GuaConst.js",
+                            CORE_JS_SRC / "vendor" / "gua" / "littleEndian.js", GUAZHAN, body))
     assert len(same) == 3 * 3 * 3 * 12 and all(same)
 
 
@@ -211,8 +213,8 @@ def test_sixyao_judging_sections_are_the_upstream_builder_bytes(tmp_path, date: 
     if gear:
         gear = json.loads(_node(
             "import(process.argv[1]).then((m) => process.stdout.write(JSON.stringify(m.applyPreset('tianji', {}))));",
-            str(CORE_JS_SRC / "vendor" / "gua" / "liuyaoSchools.js")))
-    upstream = _sections(_node(_UPSTREAM_HEADLESS, str(GUAZHAN), str(DOCTRINE_CACHE),
+            CORE_JS_SRC / "vendor" / "gua" / "liuyaoSchools.js"))
+    upstream = _sections(_node(_UPSTREAM_HEADLESS, GUAZHAN, DOCTRINE_CACHE,
                                json.dumps(NONGLI[(date, 0)], ensure_ascii=False), json.dumps(gear, ensure_ascii=False)))
     for title in ("断卦结构", "断诀命中", "占类断语"):
         assert ours[title] == upstream[title], title

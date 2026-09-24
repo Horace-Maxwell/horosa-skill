@@ -148,10 +148,9 @@ def _ss_section(text: str, title: str) -> str:
 
 
 def _node(script: str) -> Any:
-    proc = subprocess.run(
-        ["node", "--input-type=module", "-e", script],
-        cwd=CORE_JS, capture_output=True, text=True, encoding="utf-8", timeout=120,
-    )
+    from node_esm import node_esm_process  # 统一入口（Windows ESM 路径口径）
+
+    proc = node_esm_process(script, cwd=CORE_JS, timeout=120)
     assert proc.returncode == 0, proc.stderr[-2000:]
     return json.loads(proc.stdout.strip().splitlines()[-1])
 

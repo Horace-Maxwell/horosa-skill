@@ -90,12 +90,10 @@ def _run(service: HorosaSkillService, tool: str, payload: dict) -> Any:
 
 def _node_json(expr_module: str, expr: str) -> Any:
     """跑一段 node：import 仓内 core-js 模块，打印 JSON。"""
+    from node_esm import run_node_esm  # Path → file:// URL（Windows ESM loader 不认裸盘符路径）
+
     script = f"import(process.argv[1]).then((m) => {{ process.stdout.write(JSON.stringify({expr})); }});"
-    out = subprocess.run(
-        ["node", "--input-type=module", "-e", script, str(CORE_JS_SRC / expr_module)],
-        check=True, capture_output=True, text=True, encoding="utf-8",
-    )
-    return json.loads(out.stdout)
+    return json.loads(run_node_esm(script, CORE_JS_SRC / expr_module))
 
 
 def _lines(text: str | None, pattern: str) -> list[str]:

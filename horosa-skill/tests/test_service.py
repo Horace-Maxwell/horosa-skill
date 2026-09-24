@@ -2087,9 +2087,9 @@ def test_sixyao_time_based_gua_varies_with_time_and_is_deterministic() -> None:
     )
 
     def cast(items: list[dict]) -> list[list[dict]]:
-        out = subprocess.run(["node", "--input-type=module", "-e", script, str(module), json.dumps(items, ensure_ascii=False)],
-                             check=True, capture_output=True, text=True, encoding="utf-8")
-        return json.loads(out.stdout)
+        from node_esm import run_node_esm  # Path → file:// URL（Windows ESM loader 不认裸盘符路径）
+
+        return json.loads(run_node_esm(script, module, json.dumps(items, ensure_ascii=False)))
 
     combos = set()
     for lines in cast(cases):

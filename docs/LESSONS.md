@@ -123,6 +123,11 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   负向对照（旧形状必红、非 node 子进程不误报）。
 - 规则：**在 tests/ 里起子进程读文本，与 src/ 同一条纪律——`encoding="utf-8"` 显式给。** Windows job 是唯一能抓到它的地方，
   推之前本机没法复现（macOS 默认 UTF-8），所以守卫必须是静态扫描。
+- 第二轮（同一推送修完编码后再红 9 条）：`node --input-type=module -e "import(process.argv[1])"` 在 Windows 上不接受裸盘符
+  绝对路径（`ERR_UNSUPPORTED_ESM_URL_SCHEME` ×18），只认 `file://` URL；macOS / Linux 的 `/abs/x.js` 恰好能过。守卫：tests/node_esm.py
+  是起 node ESM 的唯一入口（Path 参数转 `as_uri()`，字符串形式的绝对 `.js` 路径直接拒绝），`test_subprocess_encoding` 禁止别处再写
+  `--input-type=module`（负向对照两条）。规则：**测试里给 node 的模块路径一律传 Path、经 helper 转 URL；本机绿不等于 Windows 绿的
+  又一个实例，静态守卫先行。**
 
 ### v0.40.0 / 2026-09-24 — 首推 CI 红：stdio 探针把全量面工具数写死在 ci.yml 里
 
