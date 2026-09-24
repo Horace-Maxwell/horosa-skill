@@ -487,4 +487,5 @@ def test_live_mingli_tools(tmp_path) -> None:
     assert sz.ok and sz.data["compute_sources"] == {"chart": "java"} and not sz.warnings
     jq = service.run_tool("jieqi_year", {"year": 2024, **_SH, "jieqis": ["春分"], "zodiacal": 1, "siderealAyanamsa": "raman"},
                           save_result=False)
-    assert jq.ok and "恒星黄道岁差：Raman" in _section(jq.data["snapshot_text"], "春分星盘")
+    # v0.40.0：嵌入盘黄道行按上游 zodiacalDisplayText「恒星黄道·<岁差名>，<宫制>」（jieqi_year 缺省整宫）。
+    assert jq.ok and "恒星黄道·Raman，整宫制" in _section(jq.data["snapshot_text"], "春分星盘")
