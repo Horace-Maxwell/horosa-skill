@@ -1053,6 +1053,9 @@ A global stability pass hardened these; keep them true when you touch the releva
   `jinkou`、`sanshiunited`、`canping`、`heluo`、`nongli_time`、`jieqi_year`、Bazi-aware `chart`）两 flag
   一律 **verbatim 转发**到引擎；导出快照带 `排盘规则: 日柱开关【…】+ 时柱开关【…】` 行，tool formatter
   必须保留、报告/AI 解读必须引用回去（strip 掉 = 用户换过开关时静默错解）。
+- **缺省（v0.40.0 起）**：日界开关缺省**不发送**（schema 缺省 `None`，不再 `False`——Java 把 JSON `false` 读成 0，曾在
+  每次调用里盖掉星阙缺省 1）；走本地引擎的路径（八字 lunar 本地、紫微 ZiweiCalc）显式传 1/1；金口诀两开关都转发 ken；
+  `jieqi_year` 的 after23NewDay 上游 Java 写死不读。矩阵 (1,0) 行 = 壬寅 **戊子**（两开关完全独立，上游 dayBoundary.js:47-57）。
 - 真后端返回的四柱与矩阵不符 = runtime pre-v2.2.1（让用户重装 runtime），**不许**在 skill 侧打补丁掩盖。
 - 上游根因参考（替用户排障星阙侧数值时省几小时）：① Java `ChartController.getParams()` 是**白名单**，
   没 `params.put(...)` 的字段静默丢、默认接管——上游加 chart-flow 字段要审计所有 `getParams()` 型

@@ -13,6 +13,24 @@
 | `pdchart` | `datetime` + `dirZone` + PD method settings | primary-direction chart table + aspects |
 | `zr` / `firdaria` / `decennials` | confirmed/default timeline settings | timeline rows |
 | `agepoint` / `distributions` / `triplicityrulers` / `keypoints` / `lunationphase` / `extrareturns` and the v2.5.0 progressions | confirmed/default method settings (ask when result-changing) | technique table/sections |
+| `ephemeris` (星历) | `startDate` + `endDate` (window ≤ 732 days; longer windows are truncated and say so) | ingress / station / lunation / eclipse tables + transits to natal (`includeTransits`, `eclipseTimeMode`) |
+| `returntimeline` (回归轴) | `startYear` + `count` (1–40) | yearly solar/lunar return table |
+| `prenatalsyzygy` (产前朔望) | birth data only | the prenatal new/full moon, its degree and chart |
+| `prog` (回归黄道二次推运) | `targetDate` (default = today, like 星阙) + optional `targetTime` / `minorVariant` | secondary / tertiary / minor progression tables; sidereal → use `vedicprog` |
+
+**Upstream defaults the tools mirror (v0.40.0)** — ask only if the user cares, otherwise say the default was used:
+
+- `jaynesprog` / `vedicprog` / `prog`: `targetDate` = today; `minorVariant` = `synodic` (朔望月/年; `sidereal` / `engine` also).
+- `planetaryarc`: `datetime` = tomorrow at this time; `arcSource` = Moon.
+- `persiandirected`: `rateKey` = persian (1°/年; `prophected` / `naibod`), `direction` = direct, `maxYears` = 90.
+- `zr`: `basePoint` = Pars Fortuna; output depth `aiMode` (`l1_all` default … `l4_in_l3`, with `aiL1Idx`–`aiL3Idx`).
+- `profection`: [小限摘要] grain `profGrain` y/m/d, start `profStart` asc/sect/fortune/moon/mc.
+- `balbillus`: `startPlanet` Sun, `yearType` solar, `mode` nearest. `keypoints`: `mode` soul (Moon) / body (Asc).
+- `triplicityrulers`: `system` follows the chart's triplicity, `division` thirds, `lifespan` 75.
+- `solarreturn` / `lunarreturn`: default target = this year's birthday.
+- chart family: `lifespanMethod` (ptolemy default / alcabitius / dorotheus) for [寿命格局].
+- 星阙's AI mount can also scan a datetime *range* (`datetimeEnd` / `scanStep`, one segment per point); the skill does
+  not implement that yet — call the tool once per target date.
 
 The same contracts are exposed through `uv run horosa-skill tool list`,
 `uv run horosa-skill agent guidance --tool <tool>`, MCP `horosa_agent_guidance`, and tool docstrings.

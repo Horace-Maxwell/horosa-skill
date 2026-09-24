@@ -179,29 +179,29 @@ below. When the operator turns it on:
 | User intent | Tool |
 | --- | --- |
 | Natal chart 标准星盘 | `chart` (13-house: `chart13`; 12th-harmonic/Dwadasamsa: `chart12`; Hellenistic: `hellen_chart`) |
-| 老黄历 / 通书择日 | `huangli` (day almanac) · `tongshu` (needs `school` — the five schools can disagree outright on the same day) |
+| 老黄历 / 通书择日 | `huangli` (day almanac) · `tongshu` (needs `school` — the five schools can disagree outright on the same day; keys follow the engine: `sanyuanliexiu` 三垣列宿 / `sanyuan` 三元玄空大卦, unknown keys are an error) |
 | 巴比伦占星 Babylonian | `babylon` (no houses/aspects/Asc by design — the reading device is the bīt niṣirti triplicity + planetary numina) |
 | Draconic / Relocation 衍生盘 | `draconic` (node-zeroed) · `relocation` (needs `relocLat`/`relocLon` — without them it degenerates to the natal chart) |
 | 古典占星 dignities reading (v2.6.7) | no separate tool — `chart`/`chart13`/`hellen_chart` exports carry `[古典]` + `[古典格局]` automatically; `india_chart`/`mundane` carry `[古典]` only |
 | Qizheng Siyi / 七政四余 | `guolao_chart` |
 | Indian chart 印度盘 | `india_chart` |
-| Relationship 合盘 | `relative` |
-| Midpoint/Uranian 中点盘 | `germany` |
+| Relationship 合盘 | `relative` (`relative` 0–4 picks the comparison; the export carries 比较盘 A/B) |
+| Midpoint/Uranian 中点盘 | `germany` (`rectifyEvents` = dated life events → [校时预览]; Uranian `school` / `orb` / `strictFactors` / `frames` / `declination` via `options_keys`) |
 | Solar/lunar return 返照 | `solarreturn` / `lunarreturn` |
 | Solar arc / given year / profection | `solararc` / `givenyear` / `profection` |
 | Primary directions 主限法 | `pd`, `pdchart` (see `references/predictive.md` for the v12 engine surface) |
 | Zodiacal releasing / Firdaria / Decennials | `zr` / `firdaria` / `decennials` |
-| Age point / distributions / mundane ingress | `agepoint` / `distributions` / `mundane` (year + 入宫节气 + place) |
+| Age point / distributions / mundane ingress | `agepoint` / `distributions` / `mundane` (year + 入宫节气 + place; `mundaneType` ingress / newmoon / fullmoon / solecl / lunecl / cycles / solunar / vedicmundane / mundanehorary; `mundaneRuleset` ptolemaic / medieval / modern / barbault) |
 | Triplicity rulers / keypoints / lunation phase / extra returns | `triplicityrulers` / `keypoints` / `lunationphase` / `extrareturns` |
 | More progressions (v2.5.0) | `jaynesprog` / `vedicprog` / `planetaryarc` / `planetaryages` / `balbillus` / `yearsystem129` / `persiandirected` |
 | 星历 / 回归轴 / 产前朔望 / 回归黄道二次推运（上游 v3.11） | `ephemeris`（日期窗事件 + 行运触发本命：startDate/endDate/includeTransits/eclipseTimeMode）/ `returntimeline`（startYear/count 1–40）/ `prenatalsyzygy` / `prog`（targetDate/targetTime/minorVariant；恒星黄道走 `vedicprog`） |
-| Horary 卜卦 / Election 择日 | `horary` / `election` |
+| Horary 卜卦 / Election 择日 | `horary` (the chart is cast with the chosen `school`'s house system / terms / triplicity, as in 星阙) / `election` (pass `natal` to add [本命合参] + [回归与主限]; topic-specific inputs such as `surgeryPart`, `tradeSide`, `talismanStar`, `crisisBase`) |
 | 择日「找日子」——要在一段时间里搜时刻，而不是评一个候选时刻 | 西占征象 → `tianxing`（`explainAt` 可对单时刻逐叶判读）；奇门 → `qimenzeri`；另有择日十技法的其余八支：黄历 `huanglizeri`（日粒度）/ 八字 `bazizeri` / 太乙 `taiyizeri` / 紫微 `ziweizeri` / 六壬 `liurengzeri` / 三式合一 `sanshizeri`（条件可跨三式）/ 七政 `qizhengzeri` / 印度 Muhurta `indiazeri`。全部要 startDate/endDate + conditions 条件树；条件类键见各工具 agent_guidance（引擎自带词表，别自己编）；单点评估仍用 `election` |
 | 七政择日动盘（十一曜山位 / 日月食 / 方位到达） | `qizhengelection`（action: pan / eclipses / azimuthsearch；date/time 是候选时刻非出生盘） |
 | 生时校正（出生时间不确定） | `india_rectify`（KP 法锚点±半窗扫描；输出证据与排序，采用与否由用户决定） |
 | Harmonic 调波盘 | `harmonic` |
-| 八字 | `bazi_birth` / `bazi_direct` / `bazi_inverse`（四柱干支反查候选出生时刻，free of the confirmation gate） |
-| 紫微斗数 | `ziwei_birth` (`ziwei_rules` returns the rules library) |
+| 八字 | `bazi_birth` / `bazi_direct`（本地 lunar 引擎优先，同星阙八字页；公元前 / byLon / adjustJieqi 回退 Java 并告警）/ `bazi_inverse`（四柱干支反查候选出生时刻，free of the confirmation gate） |
+| 紫微斗数 | `ziwei_birth` (22 传本 keys + `sihuaSchool`; any non-default 传本 key re-casts on 星阙's local ZiweiCalc; `ziwei_rules` returns the rules library) |
 | 大六壬 / 行年 | `liureng_gods` / `liureng_runyear` |
 | 奇门遁甲 / 太乙 / 金口诀 / 三式合一 | `qimen` / `taiyi` / `jinkou` / `sanshiunited` |
 | 统摄法 | `tongshefa` |
@@ -216,12 +216,12 @@ below. When the operator turns it on:
 | 小成图 | `xiaochengtu`（手动/两数/股价/大衍/占时，大衍须显式 seed，卦为冻结值） |
 | 皇极轨策 | `guice`（十二法起卦，冻结值；十开关流派只重排断法） |
 | 天文地占 geomancy | `geomancy` |
-| 塔罗 tarot | `tarot` |
+| 塔罗 tarot | `tarot` (spread keys are the engine's: `single` / `three` / `relation` / `celtic` / …, and must be allowed for the chosen deck; the seed follows 星阙 so the same question + moment re-draws the same cards) |
 | 灵棋经 lingqi | `lingqi`（以起卦时刻确定性掷十二棋；给了 counts 就复排，绝不重掷） |
 | 占星地图 ACG | `acg`（clickLat/clickLon 加落点分析段；eventKind 加世运事件时刻段） |
 | 行星周期（木土合 / 土冥…任意两星合冲时间轴） | `planet_cycles`（无出生盘概念；星对与年区间仍需确认） |
 | 名人库 celebrity data | `astrodata` (read-only, no confirmation gate) |
-| 玄史知识库 Esoteric-history KB | `xuanshi` (action: search / events / event / celestial / figures / dynasty / timeline / graph …; read-only, no result-sensitive settings) |
+| 玄史知识库 Esoteric-history KB | `xuanshi` (action: search / events / event / celestial / figures / dynasty / timeline / graph …; detail actions take the editorial `id`/slug such as `fig-laozi`; read-only, no result-sensitive settings) |
 | Astrology dice 西占游戏 | `otherbu` |
 | 14 神数 | `wangji` / `wuzhao` / `taixuan` / `jingjue` / `shenyishu` / `shaozi` / `tieban` / `fendjing` / `beiji` / `nanji` / `chunzi` / `xianqin` / `cetian` / `qizhengkin` |
 | 节气 / 农历 | `jieqi_year` / `nongli_time` |
@@ -239,6 +239,10 @@ Fengshui is intentionally excluded from this public skill surface (not headless-
 不知道条目在哪个域时，先 `knowledge_read {"query": "晚子时"}` 跨 31 域全文检索（v0.32.0）——
 命中自带 citation 与可直接回读的 (domain, category, key) 坐标，再精读引用；
 `knowledge_read` 没有的内容按通则推理并**明说无出处**。不许把通则包装成「古籍说」「星阙口径」。
+
+**长词表不在 tools/list**：西占宫制 0–24、卜卦 20 类 / 7 流派、择日 37 用事、七政宿度制 0–8、印占大运 15 体系 / 6 流派、
+世运规则集、紫微传本键、八字盘法键、三式起局 / 起课法、神数逐技法 options——查 `horosa_agent_guidance(tool_name=…)` 的
+`options_keys`；隐藏旋钮照样在顶层按名传（或走 `request` 整包）。
 
 Payload shapes and defaults: [`references/payloads.md`](./references/payloads.md). 中式技法 specifics
 (大六壬 guirengType, current-time casting, 法奇门 sections):

@@ -171,10 +171,10 @@ Local end-to-end signals:
 | Tool ID | Name | Notes |
 | --- | --- | --- |
 | `bazi_birth` ⓟ / `bazi_direct` ⓟ / `bazi_inverse` | BaZi chart / direct reading / reverse lookup | Four Pillars + major periods + shen-sha + stem/branch combination-clash lines + strength / patterns / blind-school structures; reverse lookup = four ganzhi pillars → candidate birth moments (Java year-by-year search, no confirmation gate) |
-| `ziwei_birth` ⓟ | Zi Wei Dou Shu | custom si-hua / schools / body palace / BaZi major periods / matched patterns |
+| `ziwei_birth` ⓟ | Zi Wei Dou Shu | custom si-hua / schools / body palace / BaZi major periods / matched patterns; 22 lineage switches (non-default → re-cast on Xingque's local ZiweiCalc) |
 | `ziwei_rules` | Zi Wei rule base | returns the full Zi Wei pattern rule base (readable without confirmation) |
-| `liureng_gods` ⓟ / `liureng_runyear` ⓟ | Da Liu Ren / yearly | four lessons & three transmissions / 100 Bi-Fa rules / divination guide / runyear |
-| `qimen` ⓟ | Qi Men Dun Jia | cast by ken (`kinqimen`), palace detail + Fa Qi Men overlay + gua |
+| `liureng_gods` ⓟ / `liureng_runyear` ⓟ | Da Liu Ren / yearly | 26 casting methods / four lessons & three transmissions / 100 Bi-Fa rules / divination guide / runyear |
+| `qimen` ⓟ | Qi Men Dun Jia | cast by ken (`kinqimen`; default 置闰, non-hourly / flying-plate settings route to the local engine exactly as Xingque does), palace detail + Fa Qi Men overlay + gua |
 | `taiyi` ⓟ | Tai Yi Shen Shu | cast by ken (`kintaiyi`), 16-palace marks |
 | `jinkou` ⓟ | Jin Kou Jue | cast by ken (`kinjinkou`), 20-section reading layer |
 | `sanshiunited` ⓟ | Three Styles unified | aggregates ken Qi Men + Tai Yi with Da Liu Ren (incl. all three engines' enriched sections) |
@@ -194,7 +194,7 @@ Local end-to-end signals:
 | `guice` ⓟ | Huang Ji Gui Ce | 12 casting methods + 演数四位 + gua-change judgment + 三要十应 + 元会运世 + 大定 |
 | `harmonic` ⓟ | Harmonic chart | natal longitude × harmonic number, same-frequency conjunctions + an H-number dedicated section |
 | `suzhan` ⓟ | Su Zhan | mansion-divination structure |
-| `sixyao` ⓟ | Liu Yao / I Ching | hexagram, changing lines, question-oriented output |
+| `sixyao` ⓟ | Liu Yao / I Ching | hexagram, changing lines, question-oriented output + judging sections (Xingque's time cast and doctrine library) |
 | `geomancy` ⓟ | Astronomical geomancy | 4 mothers → 16 figures, figures into 12 houses + judge/witnesses, deterministic cast from the query moment |
 | `tarot` ⓟ | Tarot | Waite 78-card deck, deterministic seeded shuffle from the query moment + spread verdict / detail / synthesis |
 | `lingqi` ⓟ | 灵棋经 / Numinous Chess | Twelve pieces cast at once (4 upper / 4 middle / 4 lower) → one of 64 figures, with 三才 layer reading, oracle verse, commentator notes, verdict and poem |
