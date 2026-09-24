@@ -51,9 +51,15 @@ export function buildJyotishSnapshotLines(chartObj){
 
 	const ck = j.jaimini && j.jaimini.charaKarakas;
 	if(Array.isArray(ck) && ck.length){
-		out['卡拉卡（8 Chara Karakas）'] = gfmTable(['卡拉卡', '星曜', '本命落座', '用度'], ck.map((k)=>[
+		// [Q-135/T-43 (b)] 段名是 aiExport 登记键(不改),但 7 卡拉卡档下仍称「8」并列 7 行会误导 →
+		// 段内首行写明所用方案(引擎回传 karakaScheme:'7' 古典不含 Rāhu / '8' 含 Rāhu)。
+		const _scheme = String((j.jaimini && j.jaimini.karakaScheme) || (ck.length === 7 ? '7' : '8'));
+		out['卡拉卡（8 Chara Karakas）'] = [
+			`方案：${_scheme === '7' ? '7 卡拉卡（古典，不含 Rāhu）' : '8 卡拉卡（含 Rāhu）'}，共 ${ck.length} 行`,
+			...gfmTable(['卡拉卡', '星曜', '本命落座', '用度'], ck.map((k)=>[
 			`${k.karakaLabel || ''} ${k.karaka || ''}`, `${k.label || k.planet}`, `${k.signLabel || k.sign} ${fx(k.signlon, 2)}°`, `用度 ${fx(k.karakaDegree, 2)}°`,
-		]));
+		])),
+		];
 	}
 
 	const nd = j.nodeRasiDrishti;
@@ -189,10 +195,15 @@ export function buildJyotishSnapshotLines(chartObj){
 
 	// P2 Nāḍī · Bhrigu Bindu（Rahu/Moon 短弧中点）。
 	const nadi = j.nadi;
+	// [Q-393① 裁决 2026-09-18] 所绘为分盘时注明口径:Nāḍī 一组恒取 D1(引擎 Q-393② 已恒取 d1_chart),
+	// 否则读者会以为它跟着所选分盘走。D1(缺省)不出此行 → 缺省快照字节不变。
+	const nadiVargaNote = Number((j.engine || {}).chartnum || 1) !== 1
+		? `Nāḍī 一组(BB / D150 / 同座合 / 木星推进)恒按 D1 本命盘绝对黄经计算,不随所绘分盘 D${Number((j.engine || {}).chartnum)} 漂移。`
+		: '';
 	if(nadi && nadi.available && nadi.bhriguBindu){
 		const bb = nadi.bhriguBindu;
 		const nk = bb.nakshatra || {};
-		out['Nāḍī · Bhrigu Bindu 福点'] = [`${bb.signLabel || bb.sign}${nk.name ? '·' + nk.name + (nk.pada ? 'P' + nk.pada : '') : ''}（黄经 ${(+bb.lon).toFixed(2)}°）`];
+		out['Nāḍī · Bhrigu Bindu 福点'] = [`${bb.signLabel || bb.sign}${nk.name ? '·' + nk.name + (nk.pada ? 'P' + nk.pada : '') : ''}（黄经 ${(+bb.lon).toFixed(2)}°）`].concat(nadiVargaNote ? [nadiVargaNote] : []);
 	}
 	if(nadi && nadi.available && nadi.d150 && nadi.d150.length){
 		const PCN = { Sun: '日', Moon: '月', Mars: '火', Mercury: '水', Jupiter: '木', Venus: '金', Saturn: '土', Rahu: '罗', Ketu: '计', 'North Node': '罗', 'South Node': '计' };
@@ -222,6 +233,18 @@ export function buildJyotishSnapshotLines(chartObj){
 		const PCN2 = { Sun: '日', Moon: '月', Mars: '火', Mercury: '水', Jupiter: '木', Venus: '金', Saturn: '土', 'North Node': '罗', 'South Node': '计' };
 		out['Tripataki 宿距三旗'] = gfmTable(['曜', '宿距', '旗', 'Tārā', '断'],
 			triNak.rows.map((r)=>[PCN2[r.planet] || r.planet, `${r.distance}`, `${r.flag}`, r.taraLabel, r.verdict]));
+	}
+	// [Q-127/T-35] 三旗盘(opt-in 齿轮 tripataki):后端 jyotish.tripataki 此前快照零读者 → 逐月净分(有效吉−凶)按月心/土心各一行;仅开启才产段(缺省字节不变)。
+	const triY = j.tripataki;
+	if(triY && triY.available && triY.byCenter){
+		const triRows = [];
+		[['moon', '月心'], ['saturn', '土心']].forEach(([ck, cl])=>{
+			const c = triY.byCenter[ck];
+			if(c && c.available && Array.isArray(c.months) && c.months.length){
+				triRows.push([cl, c.centerSign ? scS(c.centerSign) : '—', c.months.map((m)=>`${m.index}:${m.score ? m.score.net : '-'}`).join(' ')]);
+			}
+		});
+		if(triRows.length){ out['Tripataki 三旗盘逐月净分'] = gfmTable(['中心', '座', '逐月净分(月序:有效吉−凶)'], triRows); }
 	}
 
 	// P2 Āyurdāya 寿命基础（Piṇḍāyu 度式贡献 + Nisargāyu;未施 haraṇa）。
@@ -438,7 +461,10 @@ export function buildJyotishSnapshotLines(chartObj){
 		[['narayana', 'Narayana'], ['lagnaKendradi', 'Lagna-Kendradi'], ['sudasa', 'Sudasa'], ['drigdasa', 'Drig'], ['shoola', 'Shoola'], ['niryanaShoola', 'Niryana-Shoola'], ['kalachakra', 'Kalachakra'], ['taraLagna', 'Tara-Lagna'], ['sthira', 'Sthira-固定'], ['yogardha', 'Yogardha-平均'], ['manduka', 'Manduka-蛙跳']].forEach((pair)=>{
 			const d = rdj[pair[0]];
 			if(d && d.available !== false && Array.isArray(d.mahadashas) && d.mahadashas.length){
-				out[`座运·${pair[1]}`] = gfmTable(['座', '年数', '神'], d.mahadashas.slice(0, 12).map((m)=>[scS(m.rasi), `${fx(m.years, 1)}年`, `${m.deity || ''}`]));
+				const tbl = gfmTable(['座', '年数', '神'], d.mahadashas.slice(0, 12).map((m)=>[scS(m.rasi), `${fx(m.years, 1)}年`, `${m.deity || ''}`]));
+				// [Q-125/T-33] Kālachakra「适用条件」开关此前只挂 applicability 对象、页面/快照零读者 → 写明主用/备览
+				const ap = d.applicability;
+				out[`座运·${pair[1]}`] = ap ? [tbl, `适用性(${ap.mode === 'navamsa_stronger' ? '月亮 navamsa 座强于 rasi 座才主用' : ap.mode || '通用'})：${ap.applicable === true ? '主用' : (ap.applicable === false ? '备览(条件不成立)' : '判据不足')}`] : tbl;
 			}
 		});
 	}
@@ -572,7 +598,7 @@ export function buildJyotishSnapshotLines(chartObj){
 		const al = [];
 		const M_CN = { pindayu: 'Pindayu', nisargayu: 'Nisargayu', amsayu: 'Amsayu' };
 		const sel = af.methodSelection || {};
-		al.push(`选定方法：${M_CN[sel.selected] || sel.selected || '—'}${sel.override === 'auto' ? '（自动:最强定法）' : '（手动指定）'}`);
+		al.push(`选定方法：${M_CN[sel.selected] || sel.selected || '—'}${sel.override === 'auto' ? '（自动:最强定法;上升以其主代比,平局取上升）' : '（手动指定）'}`);   // [Q-393①/T-375] 注明代比与平局规则
 		if(af.selectedFinal && af.selectedFinal.solarYears != null){
 			al.push(`并入减算总值：${af.selectedFinal.solarYears} 太阳年（${af.selectedFinal.savanaYears} Savana）`);
 		}

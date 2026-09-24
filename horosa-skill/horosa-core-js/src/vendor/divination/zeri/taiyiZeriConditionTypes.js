@@ -23,7 +23,7 @@ export const TAIYI_GEJU_KINDS = [
 	{ value: 'dui', label: '对(始击相对)' },
 	{ value: 'ti', label: '提(二目提太乙)' },
 	{ value: 'xie', label: '挟(二目夹太乙)' },
-	{ value: 'ji', label: '击(击太乙)' },
+	{ value: 'ji', label: '击(始击犯主/客大将)' },   // [Q-471/T-433] 档名勘误:computeGeju 的 ji 判的是「始击与主/客大将同宫或对宫」,与太乙无关
 ];
 
 const opt = (arr)=>arr.map((v)=>({ value: v, label: v }));
@@ -305,10 +305,12 @@ export const TAIYI_CONDITION_TYPES = {
 	},
 	sanji_men: {
 		category: '门户',
-		label: '太乙所临(门/绝气)',
+		// [Q-471/T-433] 类名勘误:本类没有「绝气」判面(绝气在「九宫属性」类的值域里);
+		// 且太乙恒落八正宫(四维 + 四正),原「临间神宫(其余)」档恒假,一并撤掉。
+		label: '太乙所临(门户/正宫)',
 		defaults: { mode: 'men', values: [] },
 		fields: [
-			{ key: 'mode', kind: 'select', label: '判面', options: [{ value: 'men', label: '临门户宫(艮巽坤乾)' }, { value: 'zheng', label: '临正宫(子卯午酉)' }, { value: 'jian', label: '临间神宫(其余)' }] },
+			{ key: 'mode', kind: 'select', label: '判面', options: [{ value: 'men', label: '临门户宫(艮巽坤乾)' }, { value: 'zheng', label: '临正宫(子卯午酉)' }] },
 			{ key: 'values', kind: 'multiselect', label: '限定宫(空=该类任意)', options: opt(GONG16) },
 		],
 		summary(p){ return `太乙临${({ men: '门户', zheng: '正宫', jian: '间神' })[p.mode] || p.mode}${(p.values && p.values.length) ? `(${p.values.join('/')})` : ''}`; },
@@ -331,7 +333,7 @@ export const TAIYI_CONDITION_TYPES = {
 		defaults: { who: 'skyeyes', rel: 'same' },
 		fields: [
 			{ key: 'who', kind: 'select', label: '谁', options: [{ value: 'skyeyes', label: '文昌' }, { value: 'sf', label: '始击' }] },
-			{ key: 'rel', kind: 'select', label: '关系', options: [{ value: 'same', label: '同宫' }, { value: 'opposite', label: '对宫(环对冲)' }, { value: 'adjacent', label: '邻宫(掩迫象)' }] },
+			{ key: 'rel', kind: 'select', label: '关系', options: [{ value: 'same', label: '同宫' }, { value: 'opposite', label: '对宫(环对冲)' }, { value: 'adjacent', label: '邻宫(迫象)' }   /* [Q-471/T-433] 掩=同宫、迫=前后一位:邻宫只对应迫 */] },
 		],
 		summary(p){ return `${p.who === 'sf' ? '始击' : '文昌'}${({ same: '同', opposite: '对', adjacent: '邻' })[p.rel] || ''}太乙`; },
 		evaluate(pan, p){
@@ -350,11 +352,13 @@ export const TAIYI_CONDITION_TYPES = {
 	},
 	shuli_kind: {
 		category: '算数',
+		// [Q-271/ZC-31] 「平」档不可达(shuliLabel 任一 n≥1 皆有标签:1–9 无天、10 倍无人、≥11 长数),两处选项删除;
+		// 旧方案含「平」的叶子经值域审计提示(auditTreeAgainstRegistry)。
 		label: '数理类(重阳重阴和数无门…)',
 		defaults: { suan: 'home', kinds: ['重阳数'] },
 		fields: [
 			{ key: 'suan', kind: 'select', label: '算', options: [{ value: 'home', label: '主算' }, { value: 'away', label: '客算' }, { value: 'set', label: '定算' }] },
-			{ key: 'kinds', kind: 'multiselect', label: '数理类(任一命中)', options: opt(['重阳数', '重阴数', '上和数', '次和数', '下和数', '无门', '无天', '长数', '无人', '无地', '阴中重阳', '阳中重阴', '不和', '平']), hint: '判定=太乙页断法面 computeTaiyiShuli 同函数;前缀匹配(「重阳数」不误中「阴中重阳」)' },
+			{ key: 'kinds', kind: 'multiselect', label: '数理类(任一命中)', options: opt(['重阳数', '重阴数', '上和数', '次和数', '下和数', '无门', '无天', '长数', '无人', '无地', '阴中重阳', '阳中重阴', '不和']), hint: '判定=太乙页断法面 computeTaiyiShuli 同函数;前缀匹配(「重阳数」不误中「阴中重阳」)' },
 		],
 		validate: (p)=>(!p.kinds || !p.kinds.length) ? '至少选择一项' : '',
 		summary(p){ return `${({ home: '主算', away: '客算', set: '定算' })[p.suan] || '主算'}:${(p.kinds || []).join('/')}`; },
@@ -410,7 +414,7 @@ export const TAIYI_CONDITION_TYPES = {
 		defaults: { who: '君基算', kinds: ['上和数'] },
 		fields: [
 			{ key: 'who', kind: 'select', label: '算', options: opt(['君基算', '臣基算', '民基算', '五福算', '始击算']) },
-			{ key: 'kinds', kind: 'multiselect', label: '数理类(任一命中)', options: opt(['重阳数', '重阴数', '上和数', '次和数', '下和数', '无门', '无天', '长数', '无人', '无地', '阴中重阳', '阳中重阴', '不和', '平']) },
+			{ key: 'kinds', kind: 'multiselect', label: '数理类(任一命中)', options: opt(['重阳数', '重阴数', '上和数', '次和数', '下和数', '无门', '无天', '长数', '无人', '无地', '阴中重阳', '阳中重阴', '不和']) },
 		],
 		validate: (p)=>(!p.kinds || !p.kinds.length) ? '至少选择一项' : '',
 		summary(p){ return `${p.who || '君基算'}:${(p.kinds || []).join('/')}`; },

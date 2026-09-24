@@ -30,15 +30,17 @@ export function buildYanqinYanfaSnapshot(payload) {
 	const r = resolveWoBi(s);
 	const ent = { shi: cast.hourQin, fan: cast.fanQin, dao: cast.daoJiang ? cast.daoJiang.zhuJiang : null };
 	const me = ent[r.me]; const they = ent[r.they];
-	const ke = (me && they) ? KE_TEXT[qinKeByWuxing(wuxingOfMansion(me), wuxingOfMansion(they))] : '—';
+	// [挂载自检 F-40③] 我彼胜负按当前流派的禽星五行口径(std 七政 / wangfu 汪绂重配)判——与页面
+	// YanQinBranchPanel 同传 s.qinWuxing;此前无头恒按七政,汪绂派页面与快照胜负可分叉。
+	const ke = (me && they) ? KE_TEXT[qinKeByWuxing(wuxingOfMansion(me, s.qinWuxing), wuxingOfMansion(they, s.qinWuxing))] : '—';
 	const bird = toutaiDu(lunarMonth, hourBranch);
 	const school = (YANQIN_PRESETS[s.school] || {}).label || s.school;
 	const lines = [
-		`[演法·流派] ${school};${r.note};月禽口诀${s.monthVerse}版、旬头位移${s.xunOffset ? '加' : '不加'}、活曜${s.huoYaoVariant}`,
-		`[演法·起禽] ${cast.ganzhi}日 · ${cast.yuan}元${cast.jiang}将 · ${cast.weekday}曜;年禽${cast.yearQin.name}、月禽${mq.name}、日禽${cast.dayQin.name}、时禽${cast.hourQin.name}、翻禽${cast.fanQin.name}${cast.daoJiang ? '、倒将' + cast.daoJiang.zhuJiang.name : ''}${cast.huoYao ? '、活曜' + cast.huoYao.name : ''}`,
-		`[演法·择日] 值日宿 ${cast.dayQin.name}(${di.nature || '—'});宜${di.yi || '—'}/忌${di.ji || '—'}`,
-		`[演法·占卜] 三传:日${cast.dayQin.name}/时${cast.hourQin.name}/翻${cast.fanQin.name};我${me ? me.name : '—'}/彼${they ? they.name : '—'} → ${ke}`,
-		`[演法·投胎] 农历${lunarMonth}月${DIZHI[hourBranch]}时 → ${bird}`,
+		`[演法·流派]\n${school};${r.note};月禽口诀${s.monthVerse}版、旬头位移${s.xunOffset ? '加' : '不加'}、活曜${s.huoYaoVariant}、禽星五行${s.qinWuxing === 'wangfu' ? '汪绂重配' : '七政'}`,
+		`[演法·起禽]\n${cast.ganzhi}日 · ${cast.yuan}元${cast.jiang}将 · ${cast.weekday}曜;年禽${cast.yearQin.name}、月禽${mq.name}、日禽${cast.dayQin.name}、时禽${cast.hourQin.name}、翻禽${cast.fanQin.name}${cast.daoJiang ? '、倒将' + cast.daoJiang.zhuJiang.name : ''}${cast.huoYao ? '、活曜' + cast.huoYao.name : ''}`,
+		`[演法·择日]\n值日宿 ${cast.dayQin.name}(${di.nature || '—'});宜${di.yi || '—'}/忌${di.ji || '—'}`,
+		`[演法·占卜]\n三传:日${cast.dayQin.name}/时${cast.hourQin.name}/翻${cast.fanQin.name};我${me ? me.name : '—'}/彼${they ? they.name : '—'} → ${ke}`,
+		`[演法·投胎]\n农历${lunarMonth}月${DIZHI[hourBranch]}时 → ${bird}`,
 	];
 	return lines.join('\n');
 }

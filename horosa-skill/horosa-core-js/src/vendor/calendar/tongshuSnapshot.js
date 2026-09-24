@@ -42,13 +42,53 @@ function donggongSection(settings, ymd) {
 
 // [审计修] 第三参 ui(可选):页面把当前选中时辰传入({hour});挂载/无头缺省 → 玄空档自动优选
 // (与页面无选中时的默认口径一致)。此前玄空段写死午时,与页面所选时辰口径分叉。
+// [Q-459/T-422] 本月逐日表(候选段):只有确有月表的两派产段(董公=建除+金神七煞/三吉星+用事宜忌;
+// 天元乌兔=逐日值星 + 太阳/太阴日),其余派返回空数组 → 不产段。与页面中栏同源同函数。
+function monthTableSection(settings, ymd) {
+	const { y, m, d } = parseYmd(ymd);
+	if (!y || !m || !d) { return []; }
+	const out = [];
+	try{
+		if (settings.school === 'donggong') {
+			const days = new Date(y, m, 0).getDate();
+			const rows = [];
+			for (let d = 1; d <= days; d++) {
+				const r = donggongDay({ y, m, d });
+				const yv = settings.event ? yongshiVerdict(buildHuangliDay(y, m, d), settings.event) : null;
+				const tag = yv ? (yv.level === 'yi' ? '宜' : (yv.level === 'ji' ? '忌' : (yv.level === 'conflict' ? '冲' : '—'))) : '';
+				rows.push(`${String(d).padStart(2, ' ')}日 ${r.dayGZ} ${r.jianchu}${r.zhi}`
+					+ `${r.jinshen && r.jinshen.hit ? '·金神七煞' : ''}${r.sanxing ? '·' + r.sanxing : ''}`
+					+ `${tag ? '·用事' + tag : ''}`);
+			}
+			if (rows.length) {
+				out.push('[本月逐日表]');
+				out.push(`口径：董公 · ${y}年${m}月（建除 + 金神七煞/三吉星${settings.event ? ' + 用事「' + settings.event + '」宜忌' : ''}）`);
+				rows.forEach((l)=> out.push(l));
+			}
+		}else if (settings.school === 'wutu') {
+			// 🔴 与页面同参:wutuMonth 走的是「含该日的农历月」(自朔日起),传 d=1 会在朔日前的日子取到上一个农历月。
+			const M = wutuMonth({ y, m, d }) || {};
+			const rows = (M.rows || []).map((r)=>(
+				`${r.ymd || ''} ${r.dayGZ || ''} ${r.star}（${r.jx === 'good' ? '吉' : '凶'}${r.isSun ? '·太阳日' : (r.isMoon ? '·太阴日' : '')}）`
+			));
+			if (rows.length) {
+				out.push('[本月逐日表]');
+				out.push(`口径：天元乌兔 · 含 ${ymd} 的农历月逐日值星（自朔日起）`);
+				rows.forEach((l)=> out.push(l));
+			}
+		}
+	}catch(e){ return []; }
+	return out;
+}
+
 export function buildTongshuSnapshotText(settings, ymd, ui) {
 	if (!settings || !ymd) { return ''; }
 	const school = TONGSHU_SCHOOL_MAP[settings.school] || {};
 	const lines = [];
 	lines.push('[通书择日]');
 	lines.push(`流派：${school.label || settings.school}`);
-	lines.push(`用事：${settings.event || '—'}`);
+	// [Q-271/ZC-28] 只有声明 needs.event 的流派(董公)左栏才有「用事」;其余四派此前仍写出厂缺省「嫁娶」进 AI 真值。
+	if (school.needs && school.needs.event) { lines.push(`用事：${settings.event || '—'}`); }
 	lines.push(`用事日期：${ymd}`);
 
 	lines.push('');
@@ -57,6 +97,15 @@ export function buildTongshuSnapshotText(settings, ymd, ui) {
 	} else {
 		const fn = SECTION_BUILDERS[settings.school];
 		lines.push(...(fn ? fn(settings, ymd, ui || {}) : ['（该流派待实现）']));
+	}
+
+	// [Q-459/T-422] 各流派「本月逐日表」候选段:董公中栏有「本月逐日值日」(建除 + 金神七煞/三吉星 +
+	// 所选用事宜忌)、天元乌兔有「本月逐日值星」,快照此前只写所选那一日 —— AI 看不到同月其它日的优劣,
+	// 也就无法据快照回答「这个月还有哪天更合适」。按裁决作**默认关候选段**(段名已登记 preset 与 DEFAULT_OFF)。
+	const monthLines = monthTableSection(settings, ymd);
+	if (monthLines.length) {
+		lines.push('');
+		lines.push(...monthLines);
 	}
 
 	lines.push('');

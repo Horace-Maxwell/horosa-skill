@@ -8,6 +8,7 @@ import { mutualReceptionBetween } from '../engine/reception.js';
 import { DIR_BY_ELEMENT } from '../data/directions.js';
 import { signOfLon } from '../data/signs.js';
 import { lotDispositor } from '../data/lots.js';
+import { resolveMoonVoc } from '../engine/moon.js';   // [Q-146] 月空单源(随流派口径)
 
 function cn(k){ return (PLANETS[k] || {}).cn || k || '—'; }
 const ANG_BONUS = { angular: 2, succedent: 0, cadent: -1.5 };
@@ -90,7 +91,9 @@ export function buildTopicDeepening(facts, category, opts){
 		const l3 = lordOf(facts, 3);
 		const merc = facts.planets.mercury;
 		const mercBad = merc && (merc.retro || merc.combustion === 'combust' || merc.dignityScore <= -4);
-		const moonVoc = facts.planets.moon && facts.planets.moon.isVOC;
+		// [Q-146/T-53] 原直读后端 isVOC(按【全局】空亡口径算,不随流派);改走判读侧单源,
+		// opts 即 horaryJudgeOpts(含流派绑定 vocMode / vocIncludeOuter)。
+		const moonVoc = resolveMoonVoc(facts, opts || {}).voc;
 		const lines = [
 			{ polarity: (strengthOf(facts, l3) >= 0 ? 'positive' : 'negative'), text: `消息＝3宫主 ${cn(l3)}（${stateWord(facts, l3)}）＋水星（信息自然象征）。` },
 			{ polarity: mercBad ? 'negative' : 'positive', text: mercBad ? `水星受损（${stateWord(facts, 'mercury')}）→ 消息恐假/坏/迟。` : '水星状态尚可 → 消息偏真/可达。' },

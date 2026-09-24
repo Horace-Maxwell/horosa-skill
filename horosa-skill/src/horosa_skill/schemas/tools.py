@@ -244,7 +244,7 @@ class ZiWeiBirthInput(FlexibleModel):
     after23NewDay: bool | None = Field(default=False, description="日界开关：23 点后是否按次日日柱（星阙默认按当日=false；后端神数/三式默认为 1）。")
     # 晚子时时柱开关：None=不发送（沿用后端默认 1=时干按次日日干起子时）；显式 0/1 全链穿透。
     lateZiHourUseNextDay: int | bool | None = None
-    timeAlg: int | None = Field(default=0, description="时间算法：0=平太阳时（默认），1=真太阳时。")
+    timeAlg: int | None = Field(default=0, description="时间算法（星阙 TimeZiAlg）：0=真太阳时（经度+均时差，默认），1=直接时间（按输入钟面时刻）。紫微页只提供这两档；后端另认 2=春分定卯时、3=平太阳时（仅经度）。")
     sihua: dict[str, list[str]] | None = None
     ad: int | None = 1
     # 紫微流派叠层（星阙 v3.6.0「死开关接活」批）：这些开关在上游驱动 [流派叠层] / [运限] 段。

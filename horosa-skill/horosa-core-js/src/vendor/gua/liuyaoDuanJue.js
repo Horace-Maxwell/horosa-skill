@@ -31,8 +31,15 @@ export function sanCengEnv(ctx){
 // ── 日月生克:5.4「月建、日辰对爻的作用(最重要的外力)」逐爻明细 ──
 // 月日为卦外之天/君,单方面作用于爻:生扶/克制/冲(暗动·冲散·月破)/合/刑/值临/入墓。
 // 铁律:爻不反作用于月日(故「爻克月日」不记为对月日之克)。墓库:金墓丑·木墓未·水土墓辰·火墓戌。
+// [Q-205/T-148] 土墓随「土长生」档:水土同宫(默认)=辰,火土同宫=戌,不标长生=不判入墓。
+// 此前写死水土表 → 选「火土同宫」的用户,装卦表「入日墓/入月墓」与断诀/应期各按一套。
 const RIYUE_MU = { 金: '丑', 木: '未', 水: '辰', 土: '辰', 火: '戌' };
-function riYueRelOne(yaoZhi, yaoWx, srcZhi, isMonth){
+const RIYUE_MU_FIRE = { ...RIYUE_MU, 土: '戌' };
+function riYueMuOf(yaoWx, tuMode){
+	if(tuMode === 'off'){ return ''; }
+	return (tuMode === 'fire' ? RIYUE_MU_FIRE : RIYUE_MU)[yaoWx] || '';
+}
+function riYueRelOne(yaoZhi, yaoWx, srcZhi, isMonth, tuMode){
 	const tags = [];
 	if(!srcZhi || !yaoZhi){ return { tags }; }
 	const srcWx = ZHI_WUXING[srcZhi];
@@ -51,7 +58,8 @@ function riYueRelOne(yaoZhi, yaoWx, srcZhi, isMonth){
 	}
 	if(LIUHE[srcZhi] === yaoZhi){ tags.push({ t: '合', tone: 'good', why: (isMonth ? '月' : '日') + '合起(绊住/助起)' }); }
 	if(isXing(srcZhi, yaoZhi) && srcZhi !== yaoZhi){ tags.push({ t: '刑', tone: 'bad', why: (isMonth ? '月' : '日') + '刑爻' }); }
-	if(RIYUE_MU[yaoWx] === srcZhi){ tags.push({ t: isMonth ? '入月墓' : '入日墓', tone: 'bad', why: '爻逢墓库入墓(暂无力,待冲开而应)' }); }
+	const muZ = riYueMuOf(yaoWx, tuMode);
+	if(muZ && muZ === srcZhi){ tags.push({ t: isMonth ? '入月墓' : '入日墓', tone: 'bad', why: '爻逢墓库入墓(暂无力,待冲开而应)' }); }
 	return { tags };
 }
 // yaos: base.yaos(含 zhi/wuxing/liuqin);gans: 逐爻天干;ctx: { dayGan, dayZhi, monthGan, monthZhi }
@@ -60,8 +68,8 @@ export function riYueYinDong(yaos, gans, ctx){
 	const dayZhi = c.dayZhi || '', monthZhi = c.monthZhi || '';
 	const perYao = (yaos || []).map((y, i) => ({
 		pos: y.pos, gan: (gans && gans[i]) || '', zhi: y.zhi, wuxing: y.wuxing, liuqin: y.liuqin,
-		day: riYueRelOne(y.zhi, y.wuxing, dayZhi, false),
-		month: riYueRelOne(y.zhi, y.wuxing, monthZhi, true),
+		day: riYueRelOne(y.zhi, y.wuxing, dayZhi, false, c.tuMode),
+		month: riYueRelOne(y.zhi, y.wuxing, monthZhi, true, c.tuMode),
 	}));
 	return { dayGan: c.dayGan || '', dayZhi, monthGan: c.monthGan || '', monthZhi, perYao };
 }

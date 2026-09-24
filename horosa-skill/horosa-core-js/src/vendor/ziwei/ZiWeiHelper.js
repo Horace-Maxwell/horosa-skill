@@ -478,7 +478,7 @@ export function collectAllStars(house){
 
 // 运限三合两宫 (运财帛宫 + 运官禄宫): 返回 [{runName, palaceName, ganZhi, stars}, ...]
 // runName 是该宫在当前运限下的身份(运财帛/运官禄), palaceName 是它在原命盘上的本名(如疾厄宫/兄弟宫)
-// 用于运限快照写入 + UI 渲染 + AI 报告 prompt
+// 用于运限快照写入 + UI 渲染 + AI 分析 prompt
 export function collectSanhePalaces(chart, mingIdx){
 	if(!chart || !chart.houses || typeof mingIdx !== 'number') return [];
 	const [caiboIdx, guanluIdx] = getSanheIndices(mingIdx);

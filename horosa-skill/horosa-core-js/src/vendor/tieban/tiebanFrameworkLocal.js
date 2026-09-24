@@ -250,7 +250,9 @@ export function buildTiebanFramework(fourPillars, opts = {}) {
 	const isMale = !(opts.gender === 0 || opts.gender === '0' || opts.gender === '女' || opts.gender === 'Female');
 	const isYangManYinNv = (isYang && isMale) || (!isYang && !isMale);
 	const hourZhi = `${fourPillars.hour}`.charAt(1);
-	const ke = opts.ke && opts.ke >= 1 && opts.ke <= 8 ? opts.ke : 1;
+	// [Q-265/T-250·SO-17] 刻位上限随刻制:十二刻·斗宫收 1–12(此前恒 1–8,挂载 tiebanKe 9–12 被静默当初刻);清八刻仍 1–8
+	const keMax = (KE_SYSTEMS[keSystem] && KE_SYSTEMS[keSystem].keCount) || 8;
+	const ke = opts.ke && opts.ke >= 1 && opts.ke <= keMax ? opts.ke : 1;
 
 	const baseGua = baseGuaFromPillars(fourPillars);
 	const fwNum = frameworkNumber(fourPillars);

@@ -77,7 +77,11 @@ export function assembleNatalChart(ctx){
 
 	// (2) 命身宫 + 五行局 + 长生 + 宫名 + 大限
 	// 闰月归月(古法§1.5):默认 mid_split(十五分界,16+归下月)=现 Java 口径;next=整月归下月;prev=整月归上月。
-	// 命身/五行局所用月(§1.5)。月系星恒用 monthInt(下方 line~155,不受闰月归月影响=现状口径)。
+	// 命身/五行局所用月(§1.5)。
+	// [Q-291 裁决 2026-09-18] 月系星(生月系 + 斗君)随所选归月规则与命身同移(《全书》「闰月作下月」/《宣微》十五分界,
+	// 与内核 resolveLeapMonth 同口径:palaceMonth===starMonth);仅「命身下月·月系上月」(split_star_month)月系留本月。
+	// 此前月系星恒用 monthInt → 「整月归下月」等各档对月系星恒同、闰月十六日后生者布星与命身分叉(T-277)。
+	// 非闰月 month===monthInt,逐字不变;闰月且归本月(prev / 十五分界前半)亦不变。
 	let month = monthInt;
 	if(leap){
 		const lm = ctx.leapMonth || 'mid_split';
@@ -181,7 +185,7 @@ export function assembleNatalChart(ctx){
 
 	// (7) 生月系（左辅右弼/天马/天刑天姚/解神天巫天月/阴煞）。天马依据可切：默认现状(月马)/年支(三合马)。
 	const tianmaBasis = tianmaBasisEarly;   // 与 (6) 同源,防两处各读 ctx 而分叉
-	const monthCn = monthCnOf(monthInt);
+	const monthCn = monthCnOf((ctx.leapMonth || 'mid_split') === 'split_star_month' ? monthInt : month);   // [Q-291] 月系随归月规则
 	Object.keys(STARS_MONTH).forEach((name)=>{
 		if(name === '天马' && tianmaBasis === 'year'){ return; }   // 年支起马：跳过月马，下面另置
 		const def = STARS_MONTH[name];
@@ -424,7 +428,9 @@ function buildChartFromBazi(r, birth, options){
 	// ziweiMonthNum/ziweiDayNum/ziweiLeap 由 baziLunarLocal 按日柱口径派生,默认==monthNum/dayNum/leap(零回归)。
 	// ziweiLunarBasis='calendar':安命/安紫微改用【日历口径】农历日(23:30 不进日)——Java 同源
 	// (ZiWeiChart 的 nongli.day 即日历日,八字四柱仍进日,属「柱进盘不进」混合口径);对拍 Java 兼容档用。
-	const calBasis = options.ziweiLunarBasis === 'calendar';
+	// [Q-194/T-120] 缺省「跟随全局」= 缺省 Java 盘口径「柱进盘不进」(日柱随全局日界进位,安命/安紫微取日历农历日);
+	// 此前 global 档按日柱进位取次日 → 23 点生辰拨任一无关引擎键紫微整体移宫,且与「子初换日(强制)」(柱与安星皆进)同盘。
+	const calBasis = options.ziweiLunarBasis === 'calendar' || !options.lateZi || options.lateZi === 'global';
 	const zwMonth = (!calBasis && nl.ziweiMonthNum != null) ? nl.ziweiMonthNum : nl.monthNum;
 	const zwDay = (!calBasis && nl.ziweiDayNum != null) ? nl.ziweiDayNum : nl.dayNum;
 	const zwLeap = (!calBasis && nl.ziweiLeap != null) ? nl.ziweiLeap : nl.leap;

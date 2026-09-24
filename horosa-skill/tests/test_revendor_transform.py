@@ -76,6 +76,23 @@ def test_a_real_default_export_is_still_pruned_as_default() -> None:
     assert out.strip() == "export default { keep };"
 
 
+def test_a_bare_default_export_of_a_stripped_symbol_is_dropped() -> None:
+    """v3.11.0 returnCharts.js ends with `export default fetchReturnSet;` — a bare identifier, not an
+    aggregate object. Neither aggregate pattern matched it, so the stripped name stayed and the module
+    threw ReferenceError at load."""
+    src = "export function judge(){ return 1; }\nexport default fetchReturnSet;\n"
+    out, notes = rv._prune_default_export(src, ["fetchReturnSet"])
+    assert "export default" not in out, f"stale default export left behind: {out!r}"
+    assert "export function judge()" in out
+    assert notes == ["pruned bare default export fetchReturnSet"]
+
+
+def test_a_bare_default_export_that_was_not_stripped_is_kept() -> None:
+    src = "function keeper(){}\nexport default keeper;\n"
+    out, notes = rv._prune_default_export(src, ["fetchSomethingElse"])
+    assert out == src and notes == []
+
+
 # --- stub_import must not be treated as a regex replacement template ---------------------------
 
 

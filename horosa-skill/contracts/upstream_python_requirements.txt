@@ -1,4 +1,4 @@
-# source: Horosa-Public scripts/requirements/mac-python.txt @ 0604fa416f95e330dbd798ba2ede0f2aa0cb1688 (app 3.10.0)
+# source: Horosa-Public scripts/requirements/mac-python.txt @ 9b74714b96a3752f87bde35fe5eb349e23899a9f
 # verbatim copy for provenance only — the derived payload's dep set is contracts/runtime_python_lock.json (seed-derived);
 # refreshed by scripts/sync_vendored_runtime_sources.sh; verify_runtime_python_lock.py checks every name here is classified.
 cherrypy>=18.10,<19

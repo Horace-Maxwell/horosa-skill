@@ -45,16 +45,18 @@ export const DEFAULT_LIUYAO_SETTINGS = {
 };
 
 export const LIUYAO_PRESETS = {
-	default: { label: '通用', overrides: {} },
+	// [Q-110/T-17 2026-09-18 用户裁决 A=①] 「卜筮正宗」预设覆盖集与缺省逐项相同(60/60 样本 0 差异)→ 通用即卜筮正宗口径,
+	// 标签写明;bushi 档保留键(旧记录 / 快照 school=bushi 仍解析、结果与通用逐字同)但不再单列在选择器里(hidden)。
+	default: { label: '通用（卜筮正宗口径）', overrides: {} },
 	zengshan: { label: '增删卜易(野鹤)', overrides: { guashen: false, fushen: 'missing', shensha: { on: false }, changshengUse: 'four' }, note: '重用神旺衰、删繁就简、弃卦身、几弃神煞;长生只取生旺墓绝' },
-	bushi: { label: '卜筮正宗', overrides: { guashen: true, shensha: { on: true, set: DEFAULT_SHENSHA_SET.slice() } }, note: '重卦身、用神生克、神煞中等' },
+	bushi: { label: '卜筮正宗（＝通用）', hidden: true, overrides: { guashen: true, shensha: { on: true, set: DEFAULT_SHENSHA_SET.slice() } }, note: '重卦身、用神生克、神煞中等(与通用缺省逐项相同)' },
 	yiyin: { label: '易隐', overrides: { guashen: true, fushen: 'all', shensha: { on: true, set: DEFAULT_SHENSHA_SET.concat(['文昌']) }, shenshaEx: { on: true, set: null } }, note: '重卦身、逐爻全标飞伏、神煞极繁' },
 	xinpai: { label: '邵伟华新派', overrides: { guashen: false, shensha: { on: false }, askType: 'self', changshengUse: 'four' }, note: '先世爻旺衰再定喜忌、弱化神煞、不用卦身;附旺衰量化' },
 	mangpai: { label: '盲派', overrides: { bianyaoScope: 'blind', guashen: false, shensha: { on: false } }, note: '重象、扩大变爻作用范围(变爻可作用本卦他爻)' },
 	tianji: { label: '断易天机(古法)', overrides: { guashen: true, shishen: 'standard', fushen: 'all', shensha: { on: true, set: DEFAULT_SHENSHA_SET.slice() }, shenshaEx: { on: true, set: null }, yueLiushen: true, changshengUse: 'full12', tianshiSchool: 'ancient', gufa: true, doctrine: true }, note: '火珠林古法:全神煞+飞伏生克+卦身世身并用+月建六神+十六变升降三限' },
 };
 
-export const LIUYAO_SCHOOL_OPTIONS = Object.keys(LIUYAO_PRESETS).map((k) => ({ value: k, label: LIUYAO_PRESETS[k].label }));
+export const LIUYAO_SCHOOL_OPTIONS = Object.keys(LIUYAO_PRESETS).filter((k) => !LIUYAO_PRESETS[k].hidden).map((k) => ({ value: k, label: LIUYAO_PRESETS[k].label }));
 
 function deepMergeShensha(base, ov){
 	if(!ov){ return { ...base }; }
@@ -65,12 +67,27 @@ function deepMergeShenshaEx(base, ov){
 	return { on: ov.on != null ? ov.on : base.on, set: ov.set === undefined ? (base.set ? base.set.slice() : null) : (ov.set ? ov.set.slice() : null) };
 }
 
-export function applyPreset(presetKey){
+// [Q-204/T-147·BG-07] 不属「流派口径」的键:输入键(逐问题输入:占测事项/用神手选/本命年支)与显示、起卦体验键。
+//   ① sameAsPreset 不比对它们 —— 增删卜易下选「求财」或拨书写方向,流派不再被打成「自定义」;
+//   ② applyPreset(presetKey, current) 切派时保留其当前值(此前以出厂缺省为底一并重置)。
+//   缺省流派 + 未改这些键时输出逐字节不变。
+export const LIUYAO_NON_SCHOOL_KEYS = [
+	'askType', 'yongOverride', 'benming',
+	'coinFace', 'randomAlgo', 'randomConfirm', 'defaultYaoState', 'bianguaSimplify', 'relatedCards',
+	'wangShuaiCol', 'showTips', 'yaoHotkeys', 'titleAlign', 'writeDir',
+];
+
+export function applyPreset(presetKey, current){
 	const p = LIUYAO_PRESETS[presetKey] || LIUYAO_PRESETS.default;
 	const ov = p.overrides || {};
 	const merged = { ...DEFAULT_LIUYAO_SETTINGS, ...ov, school: presetKey };
 	merged.shensha = deepMergeShensha(DEFAULT_LIUYAO_SETTINGS.shensha, ov.shensha);
 	merged.shenshaEx = deepMergeShenshaEx(DEFAULT_LIUYAO_SETTINGS.shenshaEx, ov.shenshaEx);
+	if(current && typeof current === 'object'){
+		LIUYAO_NON_SCHOOL_KEYS.forEach((k)=>{
+			if(current[k] !== undefined){ merged[k] = current[k]; }
+		});
+	}
 	return merged;
 }
 
@@ -86,7 +103,7 @@ export function setOption(settings, key, value){
 
 function sameAsPreset(settings, presetKey){
 	const base = applyPreset(presetKey);
-	const keys = Object.keys(DEFAULT_LIUYAO_SETTINGS).filter((k) => k !== 'school' && k !== 'benming'); // 本命属输入非流派
+	const keys = Object.keys(DEFAULT_LIUYAO_SETTINGS).filter((k) => k !== 'school' && LIUYAO_NON_SCHOOL_KEYS.indexOf(k) < 0); // 输入/体验键非流派口径
 	return keys.every((k) => {
 		if(k === 'shensha'){
 			return base.shensha.on === settings.shensha.on && base.shensha.base === settings.shensha.base

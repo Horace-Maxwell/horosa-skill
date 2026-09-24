@@ -12,6 +12,10 @@ export { GROUP_TYPES, JOINER_CN };
 
 const GAN10 = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
 const ZHI12 = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
+// [Q-475/T-437] 六十甲子:`tai_ming_shen` 的取值本就支持整柱(求值 `v.length >= 2 → gz === v`),
+// 但选项表里只有单字干支与五行 → 缺省 ['甲子'] 在下拉里选不到,载入含缺省叶的方案还会被值域审计
+// 误报「含已失效选项:甲子(该行将恒不命中)」(其实能判)。把整柱补进选项,审计与能力对齐。
+const JIAZI60 = Array.from({ length: 60 }, (_, i)=>`${GAN10[i % 10]}${ZHI12[i % 12]}`);
 const WUXING5 = ['金', '木', '水', '火', '土'];
 const GAN_WX = { 甲: '木', 乙: '木', 丙: '火', 丁: '火', 戊: '土', 己: '土', 庚: '金', 辛: '金', 壬: '水', 癸: '水' };
 const ZHI_WX = { 子: '水', 丑: '土', 寅: '木', 卯: '木', 辰: '土', 巳: '火', 午: '火', 未: '土', 申: '金', 酉: '金', 戌: '土', 亥: '水' };
@@ -225,7 +229,9 @@ export const BAZI_CONDITION_TYPES = {
 	},
 	nayin_wuxing: {
 		category: '纳音长生',
-		keyDeps: (p)=>_pils(p && p.pillars),
+		// [Q-420/T-384] 本类字段是单选 pillar(非 pillars):此前读 p.pillars 恒 undefined → 回落四柱全位,plateKey 含时柱,
+		// 同一命中日每换时辰切一行(≈12 行/日),徽章显「日X时Y」,行数到 1000 即截断。
+		keyDeps: (p)=>_pils([(p && p.pillar) || 'day']),
 		label: '柱纳音五行',
 		defaults: { pillar: 'day', values: ['金'] },
 		fields: [
@@ -265,7 +271,9 @@ export const BAZI_CONDITION_TYPES = {
 		label: '旬空',
 		defaults: { pillar: 'time', mode: 'not' },
 		fields: [
-			{ key: 'pillar', kind: 'select', label: '柱', options: [{ value: 'time', label: '时支' }, { value: 'day', label: '日支' }] },
+			// [Q-472/T-434] 「日支」档撤掉:本类以日柱起旬,日柱自身之支必在本旬内 →「日支+落旬空」恒假、
+			// 「日支+不落空」恒真,两档都不是判据。要判日柱所在旬的空亡支,用下面的「逐柱旬空」。
+			{ key: 'pillar', kind: 'select', label: '柱', options: [{ value: 'time', label: '时支' }] },
 			{ key: 'mode', kind: 'select', label: '判法', options: [{ value: 'not', label: '不落空(实)' }, { value: 'is', label: '落旬空' }] },
 		],
 		summary(p){ return `${p.pillar === 'day' ? '日' : '时'}支${p.mode === 'is' ? '落空' : '不空'}`; },
@@ -445,7 +453,9 @@ export const BAZI_CONDITION_TYPES = {
 				return { k, set, hit: (p.gods || []).some((g)=>set.includes(FULL2SHORT[g] || g)) };
 			});
 			const hits = per.filter((x)=>x.hit);
-			const pass = p.matchMode === 'all' ? (per.length > 0 && hits.length === per.length) : hits.length > 0;
+			// [Q-466/T-428] 「全部命中」=共享字段语义「所选值每个都要出现」(在限定柱范围内各至少一柱命中),此前按「每柱都命中」判 → 不限柱时日柱十神为「日元」恒假。
+			const allVals = (p.gods || []).filter((g)=>per.some((x)=>x.set.includes(FULL2SHORT[g] || g)));
+			const pass = p.matchMode === 'all' ? ((p.gods || []).length > 0 && allVals.length === (p.gods || []).length) : hits.length > 0;
 			return { pass, actual: per.map((x)=>`${({ year: '年', month: '月', day: '日', time: '时' })[x.k]}${x.set.join(',') || '—'}`).join(' ') };
 		},
 	},
@@ -457,7 +467,7 @@ export const BAZI_CONDITION_TYPES = {
 		fields: [
 			{ key: 'who', kind: 'select', label: '柱', options: [{ value: 'tai', label: '胎元' }, { value: 'ming', label: '命宫' }, { value: 'shen', label: '身宫' }] },
 			{ key: 'dim', kind: 'select', label: '判面', options: [{ value: 'ganzhi', label: '干支(单字=干或支)' }, { value: 'nayin', label: '纳音五行' }] },
-			{ key: 'values', kind: 'multiselect', label: '取值(任一)', options: [...GAN10.map((g)=>({ value: g, label: `${g}(干)` })), ...ZHI12.map((z)=>({ value: z, label: `${z}(支)` })), ...opt(['金', '木', '水', '火', '土'])], hint: '三柱=makePillar 全套派生(主页同源);纳音判尾字五行' },
+			{ key: 'values', kind: 'multiselect', label: '取值(任一)', options: [...JIAZI60.map((gz)=>({ value: gz, label: `${gz}(整柱)` })), ...GAN10.map((g)=>({ value: g, label: `${g}(干)` })), ...ZHI12.map((z)=>({ value: z, label: `${z}(支)` })), ...opt(['金', '木', '水', '火', '土'])], hint: '三柱=makePillar 全套派生(主页同源);整柱=干支全等,单字=干或支任一位命中;纳音判尾字五行' },
 		],
 		validate: needValues,
 		summary(p){ return `${({ tai: '胎元', ming: '命宫', shen: '身宫' })[p.who] || '命宫'}·${p.dim === 'nayin' ? '纳音' : '干支'}:${(p.values || []).join('/')}`; },
@@ -492,7 +502,9 @@ export const BAZI_CONDITION_TYPES = {
 				return { k, ny, hit: (p.values || []).some((v)=>ny.indexOf(v) >= 0) };
 			});
 			const hits = per.filter((x)=>x.hit);
-			const pass = p.matchMode === 'all' ? (per.length > 0 && hits.length === per.length) : hits.length > 0;
+			// [Q-466/T-428] 「全部命中」=所选纳音每个都至少出现在一柱(共享字段语义),此前按「每柱都命中」判。
+			const allVals = (p.values || []).filter((v)=>per.some((x)=>x.ny.indexOf(v) >= 0));
+			const pass = p.matchMode === 'all' ? ((p.values || []).length > 0 && allVals.length === (p.values || []).length) : hits.length > 0;
 			return { pass, actual: per.map((x)=>`${({ year: '年', month: '月', day: '日', time: '时' })[x.k]}${x.ny || '—'}`).join(' ') };
 		},
 	},
@@ -520,7 +532,9 @@ export const BAZI_CONDITION_TYPES = {
 				return { k, ph, hit: !!ph && (p.phases || []).includes(ph) };
 			});
 			const hits = per.filter((x)=>x.hit);
-			const pass = p.matchMode === 'all' ? (per.length > 0 && hits.length === per.length) : hits.length > 0;
+			// [Q-466/T-428] 「全部命中」=所选星运每个都至少出现在一柱(共享字段语义),此前按「每柱都命中」判。
+			const allVals = (p.phases || []).filter((v)=>per.some((x)=>x.ph === v));
+			const pass = p.matchMode === 'all' ? ((p.phases || []).length > 0 && allVals.length === (p.phases || []).length) : hits.length > 0;
 			return { pass, actual: per.map((x)=>`${({ year: '年', month: '月', day: '日', time: '时' })[x.k]}${x.ph || '—'}`).join(' ') };
 		},
 	},
@@ -528,12 +542,19 @@ export const BAZI_CONDITION_TYPES = {
 		category: '纳音长生',
 		keyDeps: (p)=>_pils(p && p.pillars),
 		label: '逐柱旬空(各柱自起旬)',
-		defaults: { pillars: ['day'], zhis: [] },
+		defaults: { pillars: ['day'], zhis: ['子'] },   // [Q-472/T-434] 缺省不再是恒真组合
 		fields: [
-			{ key: 'pillars', kind: 'multiselect', label: '柱(任一柱空亡即中)', options: [{ value: 'year', label: '年柱' }, { value: 'month', label: '月柱' }, { value: 'day', label: '日柱' }, { value: 'time', label: '时柱' }] },
-			{ key: 'zhis', kind: 'multiselect', label: '限定空亡支(空=任意)', options: opt(ZHI12), hint: '各柱按自身干支起旬的旬空(four[k].xunEmpty);既有 xunkong 类恒按日柱起旬' },
+			// [Q-472/T-434] 标签勘误:判的是「该柱所在旬的两个空亡支里,有没有你要的那个支」,
+			// 不是「该柱本身落空亡」(任一柱都不会落在自己那一旬的空亡里)。
+			{ key: 'pillars', kind: 'multiselect', label: '柱(看其所在旬的空亡支)', options: [{ value: 'year', label: '年柱' }, { value: 'month', label: '月柱' }, { value: 'day', label: '日柱' }, { value: 'time', label: '时柱' }] },
+			// 限定支留空时「任一柱都有两个空亡支」→ 恒真,不是条件。改为必选。
+			{ key: 'zhis', kind: 'multiselect', label: '空亡支(必选)', options: opt(ZHI12), hint: '各柱按自身干支起旬的旬空(four[k].xunEmpty);既有「旬空」类恒按日柱起旬' },
 		],
-		validate: (p)=>(!p.pillars || !p.pillars.length) ? '至少选择一项' : '',
+		validate: (p)=>{
+			if(!p.pillars || !p.pillars.length){ return '至少选择一项'; }
+			if(!p.zhis || !p.zhis.length){ return '需至少选一个空亡支(留空则任一柱都有空亡支,条件恒真)'; }
+			return '';
+		},
 		summary(p){ return `柱旬空:${(p.pillars || []).map((x)=>({ year: '年', month: '月', day: '日', time: '时' })[x] || x).join('/')}${(p.zhis && p.zhis.length) ? `含${p.zhis.join('/')}` : ''}`; },
 		evaluate(pan, p){
 			const per = (p.pillars || []).map((k)=>{
@@ -593,14 +614,17 @@ export const BAZI_CONDITION_TYPES = {
 	jie_delta: {
 		category: '历法',
 		keyDeps: ['dayGz', 'monthGz'],
-		label: '节后天数',
-		defaults: { min: 0, max: 5 },
+		// [Q-473/T-435] 标签与值域勘误:供数 jiedelta 取的是「上一个节气(二十四节气全算,含中气)」,
+		// 且 Math.max(1, 差+1) → 值域 1–17 天。旧标只写「节后」易读成月首的节,上限 40 有 18–40 恒不可达,
+		// 下限 0 与 1 等义。
+		label: '节气后第 N 天(含中气,1 起)',
+		defaults: { min: 1, max: 5 },
 		fields: [
-			{ key: 'min', kind: 'number', label: '≥天', min: 0, max: 40, step: 1 },
-			{ key: 'max', kind: 'number', label: '≤天', min: 0, max: 40, step: 1 },
+			{ key: 'min', kind: 'number', label: '≥第几天', min: 1, max: 17, step: 1 },
+			{ key: 'max', kind: 'number', label: '≤第几天', min: 1, max: 17, step: 1 },
 		],
 		validate: (p)=>((Number(p.min) > Number(p.max)) ? '下限不可大于上限' : ''),
-		summary(p){ return `节后${p.min}-${p.max}天`; },
+		summary(p){ return `节气后第 ${p.min}-${p.max} 天`; },
 		evaluate(pan, p){
 			const m = `${(pan.nongli && pan.nongli.jiedelta) || ''}`.match(/(\d+)/);
 			const d = m ? Number(m[1]) : null;

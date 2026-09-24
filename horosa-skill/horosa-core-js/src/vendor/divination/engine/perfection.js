@@ -137,13 +137,15 @@ export function sequenceFuturePerfect(facts, a, b){
 }
 
 // 完成度三分（3 大征象：上升星/月亮/事件守护星，免受 凶/逆/燃/陷 的数量）
-export function completionThirds(facts, sigKeys){
+// opts.exemptCombust(可选):燃烧豁免的征象星键([Q-296/T-281] 合日即所求时不因燃烧判不安全);缺省=现状。
+export function completionThirds(facts, sigKeys, opts){
 	const safe = [];
 	const unsafe = [];
+	const exempt = (opts && Array.isArray(opts.exemptCombust)) ? opts.exemptCombust : [];
 	sigKeys.filter(Boolean).forEach((k) => {
 		const p = facts.planets[k];
 		if(!p) return;
-		const ok = !p.retro && p.combustion !== 'combust' && p.dignityScore > -4;
+		const ok = !p.retro && (p.combustion !== 'combust' || exempt.indexOf(k) >= 0) && p.dignityScore > -4;
 		(ok ? safe : unsafe).push(k);
 	});
 	const n = safe.length;
@@ -348,7 +350,12 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 	const conjIsAnswer = !!(opts.combustExemptConjAnswer && result.perfects && result.method === 'application'
 		&& result.aspect && result.aspect.angle === 0 && (sigA === 'sun' || sigB === 'sun'));
 	if(pA.combustion === 'combust' || pB.combustion === 'combust'){
-		if(conjIsAnswer){ detail.push('征象星虽入燃烧范围，但「与太阳合相」正是所问之答案 → 燃烧豁免，不作破坏。'); }
+		if(conjIsAnswer){
+			detail.push('征象星虽入燃烧范围，但「与太阳合相」正是所问之答案 → 燃烧豁免，不作破坏、不计燃烧扣分。');
+			// [Q-296/T-281] 豁免落成可消费事实:被豁免的征象星键(horaryEngine 据此把该星燃烧证词转中性、完成度三分同免;
+			// 此前豁免只换本行文案——完成时燃烧本就只加注记,开/关裁决恒同=死开关)。
+			result.combustExempt = [sigA, sigB].filter((k) => (k === sigA ? pA : pB).combustion === 'combust');
+		}
 		else if(result.perfects){ detail.push(`注意：${pA.combustion === 'combust' ? cn(sigA) : cn(sigB)} 燃烧，完成受严重削弱。`); }
 		else { result.destroyed = true; result.destruction = 'combustion'; detail.push('征象星燃烧 → 最严重破坏。'); }
 	}

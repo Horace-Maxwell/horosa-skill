@@ -4,7 +4,7 @@
 // 计神合神恒空+阴阳遁误判,适配后五锚判定面对齐) + calcTaiyi(太乙页同一本地引擎,
 // TaiYiCore 706 行纯 JS;与后端 kentang 的 parity 由 taiyiLocalParity 五锚金标看守)。
 // 🔴 style 恒 3(时计太乙):命法档(5)按生辰非候选时刻,不是择日扫描对象(定谳);
-//   tn(古法公式)/tenching/rotation/晚子时档全参数可调(与太乙页同枚举)。
+//   tn(古法公式)/晚子时档全参数可调(与太乙页同枚举;tenching/rotation 两死键已随 Q-101 剔除)。
 // plateKey=白名单(Z0 裁定:applyNongliDisplay 挂 clockTime/realSunTime 逐分钟回显字段,
 // hash 整 pan=逐分钟成行爆炸)——只取 16 宫布局+局+三算+诸神落宫。
 import { buildLocalNongliLite } from '../../bazi/baziLunarLocal.js';
@@ -65,8 +65,6 @@ export function computeTaiyiScanPan(geoParams, options, dateStr, timeStr){
 		style: 3,	// 恒时计(定谳)
 		tn: o.tn !== undefined ? o.tn : 0,
 		sex: '男',
-		tenching: o.tenching !== undefined ? o.tenching : 0,
-		rotation: o.rotation || '固定',
 		timeBasis: 'direct',	// 扫描恒钟表时(真太阳时档=后端星历,本地无;pick 起盘后页面按其设置显示)
 		after23NewDay: o.after23NewDay !== undefined ? o.after23NewDay : 0,
 		lateZiHourUseNextDay: o.lateZiHourUseNextDay !== undefined ? o.lateZiHourUseNextDay : 1,
@@ -94,7 +92,12 @@ export function computeTaiyiScanPan(geoParams, options, dateStr, timeStr){
 			const GONG16_RING = ['子', '丑', '艮', '寅', '卯', '辰', '巽', '巳', '午', '未', '坤', '申', '酉', '戌', '乾', '亥'];
 			const i = GONG16_RING.indexOf(out.taiyiPalace);
 			if(i >= 0){
-				out = { ...out, taiyiPalace: GONG16_RING[(i + 8) % 16] };
+				const flipped = GONG16_RING[(i + 8) % 16];
+				// [Q-467/T-429 2026-09-18 复核定谳] 只翻 taiyiPalace、**不动 taiyiNum**:后端(用户 pick 后所见)阴遁本就是
+				// 「数 8 ↔ 午 / 数 2 ↔ 子」(taiyiLocalParity 三阴遁锚实采),数是后端口径的数;条件面「同太乙 / 囚象」只拿数与
+				// 主 / 客将数相比,「落宫 / 门户 / 文昌始击关系 / 宫内布神」只看翻后宫与重建的布神表——全仓无「数→宫」二次换算,
+				// 不存在「两个太乙位置」。曾按本地正宫表把数反查成 2 → 与后端数分叉(主将 8 同太乙被误判),parity 锚咬住,已撤。
+				out = { ...out, taiyiPalace: flipped };
 				// 🔴 翻宫后必须重建布神三表(buildPalaceMarks 同源重跑,键名照 TaiYiCore 挂法):
 				// 曾只翻 taiyiPalace 一键,布神表仍标旧宫 → gong16_has「午含太乙」与
 				// taiyi_gong「太乙落午」同引擎互斥,且与 pick 后太乙页所见相反(审查实抓)。

@@ -17,7 +17,9 @@ export function dunOfKook(pan){
 
 const DIZHI = '子丑寅卯辰巳午未申酉戌亥'.split('');
 const RING16 = '子丑艮寅卯辰巽巳午未坤申酉戌乾亥'.split(''); // 十六神环落点序(=POS2INDEX)
-const EPOCH = { 0: 10153917, 1: 1936557, 3: 10153917 }; // tn→积年常数(统宗/金镜/太乙局≈统宗)
+// tn→积年常数(0 统宗 / 1 金镜 / 2 淘金歌 / 3 太乙局≈统宗),与后端太乙引擎 accnum 的 tndict 同值。
+// [Q-157/T-74] 此前缺 2(淘金歌)→ 回落统宗 10153917(差 276 年)→ 古法公式=淘金歌 时三基起宫/游神方向覆盖错位。
+const EPOCH = { 0: 10153917, 1: 1936557, 2: 10154193, 3: 10153917 };
 
 // 默认流派选项(全 = kintaiyi 现行,覆盖为空操作)
 export const DEFAULT_TAIYI_SCHOOL = { jishen: 'default', wenchang: 'default', keJianChen: 'default', sanji: 'default', youshen: 'default', shijiCoord: 'default' };
@@ -41,10 +43,22 @@ export function isDefaultSchool(s){
 }
 
 // —— 移植 taiyi.py 公式 ——
-function jishenZhi(yearZhi, dir){
-	const z = DIZHI.indexOf(yearZhi); if(z < 0){ return null; }
-	const idx = dir === '顺' ? (z + 2) % 12 : ((2 - z) % 12 + 12) % 12;
+// [Q-298/T-284 裁决 2026-09-18] 计神覆盖「沿用底盘计式基准只改方向」:底盘按计式取太岁支(年計=年支 / 月計=月支 / 日計=日支 /
+// 時計(缺省)=时支 / 分計=分支),阳遁起寅、阴遁起申;此前覆盖层恒以年支起寅 → 选「逆行·古法」同时换了基准与起点。
+// start=寅(阳)|申(阴);顺:start+支序;逆:start-支序。
+function jishenZhi(baseZhi, dir, dun){
+	const z = DIZHI.indexOf(baseZhi); if(z < 0){ return null; }
+	const start = dun === '阴' ? 8 : 2;
+	const idx = dir === '顺' ? (start + z) % 12 : ((start - z) % 12 + 12) % 12;
 	return DIZHI[idx];
+}
+// 底盘计式对应的太岁支:pan.options.style(0 年 / 1 月 / 2 日 / 3 时 / 4 分;缺省时计);该柱缺失时回落年支(旧行为)。
+export function jishenBaseZhi(pan){
+	const gz = (pan && pan.ganzhi) || {};
+	const st = pan && pan.options && pan.options.style !== undefined && pan.options.style !== null ? Number(pan.options.style) : 3;
+	const pillar = st === 0 ? gz.year : st === 1 ? gz.month : st === 2 ? gz.day : st === 4 ? (gz.minute || gz.time) : gz.time;
+	const pick = pillar ? String(pillar).charAt(1) : '';
+	return (pick && DIZHI.indexOf(pick) >= 0) ? pick : (gz.year ? String(gz.year).charAt(1) : '');
 }
 function shijiIndex(wcIdx, jishenChar){
 	const jp = RING16.indexOf(jishenChar), gp = RING16.indexOf('艮');
@@ -96,8 +110,9 @@ export function applyTaiyiSchool(basePan, school){
 		if(wcIdx >= 0){ pan.skyeyes = RING16[wcIdx]; overrides.add('skyeyes'); }
 	}
 	// 2) 计神方向 → 计神 + 始击(始击随计神/文昌)
-	if(s.jishen !== 'default' && yearZhi){
-		const js = jishenZhi(yearZhi, s.jishen);
+	const jishenBase = jishenBaseZhi(pan);   // [Q-298/T-284] 按底盘计式取基准支(缺柱回落年支)
+	if(s.jishen !== 'default' && jishenBase){
+		const js = jishenZhi(jishenBase, s.jishen, dun);
 		if(js){ pan.jigod = js; overrides.add('jigod'); }
 		const wcIdx = RING16.indexOf(pan.skyeyes);
 		const sjIdx = shijiIndex(wcIdx, js);

@@ -5266,7 +5266,7 @@ def _build_bazi_snapshot_text(payload: dict[str, Any], response: dict[str, Any])
     bazi = response.get("bazi", response if isinstance(response, dict) else {})
     four = bazi.get("fourColumns", {}) if isinstance(bazi, dict) else {}
     nongli = bazi.get("nongli", {}) if isinstance(bazi, dict) else {}
-    time_alg_map = {"0": "真太阳时", "1": "直接时间", "2": "春分定卯时"}
+    time_alg_map = {"0": "真太阳时", "1": "直接时间", "2": "春分定卯时", "3": "平太阳时(仅经度)"}  # 逐字同上游 cntradition/BaZi.js labelMap.timeAlg（v3.11.0 起 3=平太阳时）
     adjust_map = {"0": "不调整节气", "1": "节气按纬度调整"}
 
     def gz_gods(item: Any) -> str:

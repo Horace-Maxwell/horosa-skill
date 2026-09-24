@@ -30,6 +30,12 @@ export function buildTiebanSnapshot(r, verses = {}) {
 	});
 	out.push(T('[本命条文]', tbl(['项目', '条文号', '条文'], items)));
 	if (r.liunian && r.liunian.rows.length) {
+		// [Q-439/T-402] 页面「流年总纲」卡(天四声 12 年序列 / 后天命数 / 覆盖年数)此前不进快照。
+		out.push(T('[流年总纲]', tbl(['项', '值'], [
+			['天四声（12 年一循环）', (r.liunian.seq || []).join(' ')],
+			['后天命数', r.liunian.houTian],
+			['覆盖', `${r.liunian.rows.length} 年（1~${r.liunian.rows.length}）`],
+		])));
 		out.push(T('[流年条文]', tbl(['虚岁', '干支', '天四声', '标记', '字母', '条文号', '条文'],
 			r.liunian.rows.map((x) => [x.age, x.gz, x.tianSiSheng, x.mark, x.letter,
 				x.missing ? '古籍原缺' : x.num, x.missing ? '' : (verses[String(x.num)] || '')]))));
@@ -91,6 +97,11 @@ export function buildDadingSnapshot(r) {
 	out.push(T('[起数]', tbl(['步骤', '算式', '得数'], r.year.steps.map((s) => [s.label, s.detail, s.value]))));
 	if (r.month && r.month.hit) {
 		out.push(T('[死月]', tbl(['步骤', '算式', '得数'], r.month.hit.steps.map((s) => [s.label, s.detail, s.value]))));
+		// [Q-439/T-402] 页面「死月扫描」全表(逐月 策积×倍数→余45→三因→余12,至尽为止)此前不进快照;与页面 renderDading 同一 r.month.scan。
+		if (Array.isArray(r.month.scan) && r.month.scan.length) {
+			out.push(T('[死月扫描]', tbl(['月', '干支', '算式', '余45', '三因', '余12', '尽'],
+				r.month.scan.map((x) => [`${x.monthNo}月`, x.gz, `${x.sum}×${x.mul}=${x.prod}`, x.r45, x.tripled, x.r12, x.exhausted ? '尽' : '']))));
+		}
 	}
 	return out.filter(Boolean).join('\n\n');
 }
@@ -101,7 +112,7 @@ export function buildLiuqinSnapshot(r) {
 	const out = [];
 	out.push(T('[起盘信息]', tbl(['项', '值'], [
 		['流派', '六亲属相姓氏断'], ['四柱', (r.input.pillars || []).join(' ')],
-		['性别', Number(r.input.gender) === 1 ? '乾造' : '坤造'],
+		['性别', Number(r.input.gender) === 0 ? '坤造' : '乾造'],   // [Q-284/T-276] 0=女,其余=男(未知档按男排,与八字/六亲/铁板同口径)
 		['农历', `${r.input.lunarMonth}月${r.input.lunarDay}日${r.input.isLeapMonth ? '（闰）' : ''}`],
 	])));
 	const sx = r.shengxiao;

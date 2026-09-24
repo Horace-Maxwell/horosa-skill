@@ -560,11 +560,16 @@ export function calcFourPillarShenSha(four, godKeyPos){
   //   · godKeyPos='日' → 仅 D+M。
   // 旧版 aug(基,zhi) 整块（[金舆,灾煞,天医,月德合,天德合]）在每柱末尾，这里将其拆回各自 base 并保持「在该柱末」
   // 的相对位置（金舆/灾煞按年/日基拆，天医/月德合/天德合归月令），故 '年日' 档 token 序与旧版完全一致。
+  // [Q-197 裁决 2026-09-18] base 'A' = 日干恒查(BAZI_DAY_STEMS:羊刃 / 禄神 / 学堂 / 词馆 / 红艳 / 暗禄 / 八专):这一集在 Java
+  //   GodsHelper 里恒按日干查(keyZhu=日 集),不随「神煞主位」档;此前挂在 'D' 下 → 缺省「按年柱查」的盘四柱永不出羊刃 / 禄神,
+  //   与 Java 同名档不同构。'A' 不在 allowedBases 里 ⇒ allow['A'] === undefined ⇒ 恒保留。
   const flat = (tokens)=>dedupe(tokens.filter((t)=>allow[t[0]] !== false).reduce((arr, t)=>arr.concat(t.slice(1)), []));
   const acc = {
     year: flat([
       ['Y', ...fm(BAZI_DAY_YEAR_STEMS, Yg + Yz)],
-      ['D', ...fm(BAZI_DAY_STEMS, Dg + Yz)],
+      // [Q-196/T-122] 年柱此前漏「日干+年支」查 DAY_YEAR_STEMS(日干之天乙/太极/文昌/国印/福星不上年柱),与月/日柱不对称;补齐。
+      ['D', ...fm(BAZI_DAY_YEAR_STEMS, Dg + Yz)],
+      ['A', ...fm(BAZI_DAY_STEMS, Dg + Yz)],
       ['D', ...fm(BAZI_YEAR_DAY_BRANCH, Dz + Yz)],
       ['D', ...fm(BAZI_DAY_BRANCH, Dz + Yg)],
       ['M', ...fm(BAZI_MONTH_STEMS, Mz + Yg)],
@@ -575,7 +580,7 @@ export function calcFourPillarShenSha(four, godKeyPos){
     ]),
     month: flat([
       ['Y', ...fm(BAZI_DAY_YEAR_STEMS, Yg + Mz)],
-      ['D', ...fm(BAZI_DAY_YEAR_STEMS, Dg + Mz)], ['D', ...fm(BAZI_DAY_STEMS, Dg + Mz)],
+      ['D', ...fm(BAZI_DAY_YEAR_STEMS, Dg + Mz)], ['A', ...fm(BAZI_DAY_STEMS, Dg + Mz)],
       ['Y', ...fm(BAZI_YEAR_DAY_BRANCH, Yz + Mz)], ['Y', ...fm(BAZI_YEAR_BRANCH, Yz + Mz)],
       ['D', ...fm(BAZI_YEAR_DAY_BRANCH, Dz + Mz)], ['D', ...fm(BAZI_DAY_BRANCH, Dz + Mz)],
       ['M', ...fm(BAZI_MONTH_STEMS, Mz + Mg)],
@@ -585,7 +590,7 @@ export function calcFourPillarShenSha(four, godKeyPos){
     ]),
     day: flat([
       ['Y', ...fm(BAZI_DAY_YEAR_STEMS, Yg + Dz)], ['Y', ...fm(BAZI_YEAR_BRANCH, Yg + Dz)],
-      ['D', ...fm(BAZI_DAY_YEAR_STEMS, Dg + Dz)], ['D', ...fm(BAZI_DAY_STEMS, Dg + Dz)],
+      ['D', ...fm(BAZI_DAY_YEAR_STEMS, Dg + Dz)], ['A', ...fm(BAZI_DAY_STEMS, Dg + Dz)],
       ['Y', ...fm(BAZI_YEAR_DAY_BRANCH, Yz + Dz)], ['Y', ...fm(BAZI_YEAR_BRANCH, Yz + Dz)],
       ['M', ...fm(BAZI_MONTH_STEMS, Mz + Dg)], ['M', ...fm(BAZI_MONTH_BRANCH, Mz + Dz)],
       ['Y', augJinyuYear(Dz)], ['D', augJinyuDay(Dz)],
@@ -594,6 +599,8 @@ export function calcFourPillarShenSha(four, godKeyPos){
     ]),
     time: flat([
       ['Y', ...fm(BAZI_DAY_YEAR_STEMS, Yg + Tz)], ['D', ...fm(BAZI_DAY_YEAR_STEMS, Dg + Tz)],
+      // [Q-196/T-122] 时柱此前漏「日干+时支」查 DAY_STEMS(禄神/羊刃/学堂/词馆/暗禄/沐浴/红艳/流霞在时柱永不出,「日禄归时」查不到);补齐。
+      ['A', ...fm(BAZI_DAY_STEMS, Dg + Tz)],
       ['D', ...fm(BAZI_DAY_BRANCH, Dz + Tz)],
       ['Y', ...fm(BAZI_YEAR_DAY_BRANCH, Yz + Tz)], ['Y', ...fm(BAZI_YEAR_BRANCH, Yz + Tz)],
       ['D', ...fm(BAZI_YEAR_DAY_BRANCH, Dz + Tz)], ['D', ...fm(BAZI_DAY_BRANCH, Dz + Tz)],
@@ -647,6 +654,8 @@ export function calcFlowShenSha(four, gan, zhi){
   return dedupe([
     ...fm(BAZI_DAY_YEAR_STEMS, Yg + zhi),
     ...fm(BAZI_DAY_YEAR_STEMS, Dg + zhi),
+    // [Q-196/T-122] 流运此前不查日干系 DAY_STEMS(流年逢刃逢禄不标);帮助文「恒并用年柱与日柱两基准」,补齐。
+    ...fm(BAZI_DAY_STEMS, Dg + zhi),
     ...fm(BAZI_DAY_BRANCH, Dz + zhi),
     ...fm(BAZI_YEAR_DAY_BRANCH, Yz + zhi),
     ...fm(BAZI_YEAR_BRANCH, Yz + zhi),

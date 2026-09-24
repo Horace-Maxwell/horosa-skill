@@ -148,3 +148,40 @@ export function dadingDeathHour(birthHourGz, deathDayGan) {
 }
 
 export default { dadingCe, dadingDeathYear, dadingPairChain, dadingDeathMonth, dadingDeathHour };
+
+// [挂载自检 F-47] 所推流年 → 虚岁/大运/小运/岁君派生(自 ZhengChuanMain 迁入,页面与 AI 无头共用同一份推法):
+/**
+ * 按所推之【流年】，自八字既有之推运表派生大定所需的四样:虚岁 / 小运 / 岁君 / 大运。
+ *
+ * 🔴 一律取自 buildLocalBaziResult 已算之表，【绝不另造一份推法】——
+ *    另造必与八字盘漂移，同一人两页所见之大运不同，是为大忌。
+ *    · smallDirection:逐年一项，{ year, age(虚岁), ganzi(小运), yearGanzi.ganzi(当年太岁) };
+ *    · mainDirection :大运表，按 startYear 取所属之运;起运前其 ganzi 为空 ——
+ *      此非缺漏,乃古法「未行大运」之实,由调用方自然回落月柱。
+ *
+ * @param {object} bazi 八字之果(buildLocalBaziResult().bazi)
+ * @param {number|string} yearInput 所推之公历年;空/不合法 → 返空对象(调用方回落本命四柱)
+ * @returns {{ age?:number, xiaoyun?:string, suijun?:string, dayun?:string, year?:number, beforeQiYun?:boolean }}
+ */
+export function deriveDadingYearPillars(bazi, yearInput) {
+	const Y = parseInt(yearInput, 10);
+	// 0 亦须挡:挂载 schema 以 0 为「未择」之默认(其表单只出数,无空可言)。
+	// 眼下纵不挡,0 也会因落在推运表之外而返空 —— 然那是【碰巧】对，非设计对:
+	// 表一改口径(如补上生年之前诸年)，公元 0 年便会被当真。故显式挡之。
+	if (!bazi || !Number.isFinite(Y) || Y <= 0) return {};
+	const sd = Array.isArray(bazi.smallDirection) ? bazi.smallDirection : [];
+	const md = Array.isArray(bazi.mainDirection) ? bazi.mainDirection : [];
+	const s = sd.find((x) => Number(x.year) === Y);
+	if (!s) return {};   // 所推之年在表外(如生年之前/百岁之外) → 不臆造
+	// 大运:取 startYear 不晚于所推之年者中最后一个
+	const d = md.filter((x) => Number.isFinite(Number(x.startYear)) && Number(x.startYear) <= Y).pop();
+	const dayun = (d && `${d.ganzi || ''}`.trim()) || '';
+	return {
+		year: Y,
+		age: Number(s.age) || undefined,
+		xiaoyun: `${s.ganzi || ''}`.trim() || undefined,
+		suijun: `${(s.yearGanzi && s.yearGanzi.ganzi) || ''}`.trim() || undefined,
+		dayun: dayun || undefined,
+		beforeQiYun: !dayun,   // 未起运 —— 其时只行小运，无大运可言
+	};
+}

@@ -32,7 +32,7 @@ export const ELECTION_PARAM_SPEC = [
 		options: [
 			{ value: 'classic', label: '无入相即空（1647·现行）' }, { value: 'by_orb', label: '容许度 12°30′' },
 			{ value: 'by_sign_perfect', label: '本座内须完成（现代）' }, { value: 'by_sign_orb', label: '本座内入容许度（16c）' },
-			{ value: 'kenodromia', label: '30° 法（希腊化）' }, { value: 'exempt4', label: '按座＋四座豁免（中世纪）' },
+			{ value: 'kenodromia', label: '30° 法（希腊化）' }, { value: 'exempt4', label: '无入相＋四座豁免（中世纪）' },
 		] },
 	{ key: 'bodySet', group: '用星', label: '用星集', type: 'select', default: 'modern10',
 		options: [
@@ -65,17 +65,22 @@ export const ELECTION_PARAM_SPEC = [
 		],
 		hint: '仅作用于爱欲/必然/勇气/胜利/报应五点的外层星；内嵌福/精神点恒随区分。' },
 	// ── 合参（时主/回归/主限;WP-H）────────────────────────────────────
-	{ key: 'firdariaNightOrder', group: '合参', label: '法达夜生交点位', type: 'select', default: 'nodes_after_mars',
+	// [Q-276④ 裁决 2026-09-18] 缺省改「交点缀七曜末」:波斯—阿拉伯原典夜生盘序为 月→土→木→火→日→金→水→北交→南交(二交点缀于七曜之末,与昼生盘同构);
+	//   「交点承火星后」是中世纪拉丁传本的读法,保留为变体。本项只作用于夜生盘;昼生盘二交点恒在七曜之末,不受此项影响。
+	{ key: 'firdariaNightOrder', group: '合参', label: '法达夜生交点位', type: 'select', default: 'nodes_end',
 		options: [
-			{ value: 'nodes_after_mars', label: '交点承火星后（现行）' },
-			{ value: 'nodes_end', label: '交点缀七曜末' },
-		] },
+			{ value: 'nodes_end', label: '交点缀七曜末（原序;默认）' },
+			{ value: 'nodes_after_mars', label: '交点承火星后（拉丁传本）' },
+		],
+		hint: '仅作用于夜生盘;昼生盘二交点恒在七曜之末。' },
 	{ key: 'zrLot', group: '合参', label: 'ZR 释放点', type: 'select', default: 'fortune',
 		options: [ { value: 'fortune', label: '幸运点（身体/境遇）' }, { value: 'spirit', label: '精神点（事业/行动）' } ] },
 	{ key: 'pdTimeKey', group: '合参', label: '主限时间钥匙', type: 'select', default: 'Ptolemy',
 		options: [
+			// [Q-295/T-279] 值须在后端 STATIC_TIME_KEY_SCALES / 前端 SUPPORTED_PD_TIME_KEYS 白名单内:此前 'Cardan'(表键为 Cardano)与
+			// 'Placidus'(方位法名,非时间钥匙)两档回落 Ptolemy 1°=1 年,命中日期与标签不符。改 Cardano(0.98667°/年≈0°59′12″)与 TrueSolarArc(真太阳弧)。
 			{ value: 'Ptolemy', label: '1°=1年' }, { value: 'Naibod', label: '0°59′08″（日均行）' },
-			{ value: 'Cardan', label: '0°59′12″' }, { value: 'Placidus', label: '半弧三分框架' },
+			{ value: 'Cardano', label: '0°59′12″（Cardano）' }, { value: 'TrueSolarArc', label: '真太阳弧（逐年实弧）' },
 		],
 		hint: '仅作用于「合参」页主限命中列表的补拉请求;主限引擎与默认路径只读不碰。' },
 ];

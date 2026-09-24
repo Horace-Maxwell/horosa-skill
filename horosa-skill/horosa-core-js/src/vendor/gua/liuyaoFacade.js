@@ -32,7 +32,7 @@ function analyzeGuaFull(g, engCtx, s, benGongElem, c){
 		: null;
 	// 关联卦亦配逐爻天干 + 日辰月建引动(装卦表「日·月」列同源填充,不再空列)。
 	const gans = ganForYaos(g);
-	const riYue = riYueYinDong(base.yaos, gans, c);
+	const riYue = riYueYinDong(base.yaos, gans, { ...c, tuMode: s.tuChangsheng });   // [Q-205/T-148] 入日/月墓随土长生档
 	return {
 		name: g.name, index: g.index, settings: s,
 		palaceType: base.palaceType, yaos: base.yaos, gans, riYue,
@@ -109,7 +109,7 @@ export function analyzeLiuyao(gua, movingPositions, ctx, settings){
 		if(y.yuePo){ y.yuepoDetail = { tianShi: y.zhi, fengHe: LIUHE[y.zhi], note: s.yuepoMode === 'always' ? '长期标破' : '当月为破,出月不破;逢填实/逢合之日应' }; }
 	});
 	const gans = ganForYaos(gua); // 逐爻天干(纳甲干)
-	const riYue = riYueYinDong(base.yaos, gans, c); // 日月生克逐爻引动(5.4 最重要外力),恒算轻量
+	const riYue = riYueYinDong(base.yaos, gans, { ...c, tuMode: s.tuChangsheng }); // 日月生克逐爻引动(5.4 最重要外力),恒算轻量;[Q-205/T-148] 入墓随土长生档
 	const nayinDay = (c.dayGan && c.dayZhi) ? nayinOf(c.dayGan, c.dayZhi) : null;
 	const shiShen = shiShenOf(gua, s.shishen);
 	const yueLiuShenAnn = s.yueLiushen && c.monthNum ? yueLiuShenOnYaos(base.yaos, c.monthNum) : null;
@@ -133,7 +133,9 @@ export function analyzeLiuyao(gua, movingPositions, ctx, settings){
 			jueSheng: jueChuFengSheng(base.yaos, movingSet, engCtx, s.tuChangsheng),
 			heChong: heChuFengChong(base.yaos, engCtx),
 			suiGuan: suiGuanRuMu(base.yaos, { dayGan: c.dayGan, dayZhi: c.dayZhi, tuMode: s.tuChangsheng, shiPos, shiShenPos: shiShen ? shiShen.pos : 0, benmingZhi: s.benming }),
-			zhuGui: zhuGuiShangShen(base.yaos, movingSet, shiPos, base.guaShen ? base.guaShen.body : ''),
+			// [Q-205/T-149] 「卦身」关(增删卜易/新派/盲派不用卦身)时,助鬼伤身不得再拿卦身支参与判读 ——
+			// 此前开关只闸住输出字段,判读层照算,等于关了个寂寞。
+			zhuGui: zhuGuiShangShen(base.yaos, movingSet, shiPos, (s.guashen && base.guaShen) ? base.guaShen.body : ''),
 			wuGui: wuGuiOf(base.yaos),
 			suiJinFu: suiJinFuChain(base.yaos, movingSet, yongLiuqin, engCtx),
 			chengGang: chengGangOf(base.yaos),
@@ -158,8 +160,10 @@ export function analyzeLiuyao(gua, movingPositions, ctx, settings){
 		gufa = {
 			shengJiang: zq ? shengJiangOf(gua, zq, movingSet, shiPos) : null,
 			sixteen: seq16, sixteenPos: sixteenPositionOf(gua, fuPure),
-			guaSheng: guaShengZhangOf(gua, base.yaos, liushen),
-			pastFuture: pastFutureOf(gua, base.yaos),
+			// [Q-205/T-149] 古法两章(卦生章 / 过去未来章)全靠月卦身立论:卦身关时不产这两卡,
+			// 否则「不用卦身」的流派里照样冒出卦身推的结论。
+			guaSheng: s.guashen ? guaShengZhangOf(gua, base.yaos, liushen) : null,
+			pastFuture: s.guashen ? pastFutureOf(gua, base.yaos) : null,
 			sanXian: sanXianOf(gua, bian, movingSet),
 			baJie: bj ? { jie: bj, map: baJieGuaQi(bj, 'home'), neiTai: neiTaiOf(bj, TRIGRAM_NAME(gua.value.slice(0, 3))) } : null,
 			zhiFu: zhiFuOf(base.yaos, c),
@@ -174,11 +178,11 @@ export function analyzeLiuyao(gua, movingPositions, ctx, settings){
 		const ziSun = base.yaos.find((x) => x.liuqin === '子孙');
 		const gui = base.yaos.find((x) => x.liuqin === '官鬼');
 		yingqi = {
-			rules: computeYingQi(yy, dm, { dayZhi: c.dayZhi, monthZhi: c.monthZhi, tuMode: s.tuChangsheng }),
+			rules: computeYingQi(yy, dm, { dayZhi: c.dayZhi, monthZhi: c.monthZhi, tuMode: s.tuChangsheng, yuepoMode: s.yuepoMode }),   // [Q-205/T-153] 月破档进应期
 			byAsk: qiRiByAsk(s.askType, {
 				yongZhi: yy.zhi, yongWx: yy.wuxing, ziSunZhi: ziSun ? ziSun.zhi : '',
 				guiWx: gui ? gui.wuxing : '', shiZhi: shiPos ? base.yaos[shiPos - 1].zhi : '',
-				guaShenBody: base.guaShen ? base.guaShen.body : '', tuMode: s.tuChangsheng,
+				guaShenBody: (s.guashen && base.guaShen) ? base.guaShen.body : '', tuMode: s.tuChangsheng,   // [Q-205/T-149] 卦身关 → 婚姻「月卦身之月」不再出
 			}),
 			yongPos: yy.pos,
 		};

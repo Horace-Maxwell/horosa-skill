@@ -8,10 +8,14 @@ const idx = (z) => DIZHI.indexOf(z);
 export function muZhiOf(wx, tuMode){
 	if(wx === '金'){ return '丑'; } if(wx === '木'){ return '未'; } if(wx === '火'){ return '戌'; }
 	if(wx === '水'){ return '辰'; }
-	if(wx === '土'){ return tuMode === 'fire' ? '戌' : '辰'; }
+	// [Q-205/T-148] 不标长生档下不判土墓(与 changShengZhiOf 同律);金木水火墓库不依长生说,照旧。
+	if(wx === '土'){ return tuMode === 'off' ? '' : (tuMode === 'fire' ? '戌' : '辰'); }
 	return '';
 }
+// [Q-205/T-148] 「不标长生」(tuMode='off')档下不给长生支:此前 off 落到水土表,应期照出
+// 「用神长生之月」、求财照给长生→帝旺链 —— 用户明明关了长生标注,判读里却还在用它。
 export function changShengZhiOf(wx, tuMode){
+	if(tuMode === 'off'){ return ''; }
 	const m = tuMode === 'fire' ? CHANGSHENG_START_ALT : CHANGSHENG_START;
 	return m[wx] || '';
 }
@@ -48,7 +52,13 @@ export function computeYingQi(yong, dong, ctx){
 		push('旬空:冲空(激活,应事急巧)', [LIUCHONG[yong.zhi]], '日/月/年', '出空填实冲空三法', '冲空不稳,所诱之事激烈突然');
 	}
 	if(yong.yuePo){
-		push('月破:出月后逢填实或逢合', [yong.zhi, LIUHE[yong.zhi]], '日(出月后)', '通行应期法', '当月为破,出月不破');
+		// [Q-205/T-153] 月破档:'inMonth'(默认)=当月为破、出月不破;'always'=不论出月长期标破。
+		// 此前应期恒按「出月不破」写,与选了「不论出月」的用户所见相反(那档只改了装卦表标签)。
+		if(c.yuepoMode === 'always'){
+			push('月破(不论出月):逢填实或逢合方应,破象长期不解', [yong.zhi, LIUHE[yong.zhi]], '日/月', '通行应期法', '本档不以出月解破,须待填实/逢合');
+		}else{
+			push('月破:出月后逢填实或逢合', [yong.zhi, LIUHE[yong.zhi]], '日(出月后)', '通行应期法', '当月为破,出月不破');
+		}
 	}
 	if(yong.ruMu){
 		const mu = muZhiOf(yong.wuxing, c.tuMode);

@@ -7,6 +7,8 @@
 
 export const GROUP_TYPES = ['all', 'any', 'not', 'xor'];
 
+// [Q-478/T-440] 空数字框校验已独立成 divination/zeri/conditionFieldCheck.js(十处共用,避免把本表拖进别的分包)。
+
 // 连接门中文单一真值源:工作台行首徽标/连接门四钮/AI 快照树文本三处共用。
 export const JOINER_CN = { all: '且', any: '或', xor: '异或' };
 
@@ -18,6 +20,16 @@ export const SCAN_BODIES = [
 export const SEVEN_BODIES = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'];
 
 const SEVEN_CN = { Sun: '太阳', Moon: '月亮', Mercury: '水星', Venus: '金星', Mars: '火星', Jupiter: '木星', Saturn: '土星' };
+// [Q-477/T-439] 条件表单里几处 multiselect/select 直接把英文键当 label 显示(Sun / Moon / Venus…),
+// 与同表 body 型字段(经 AstroMsgCN 出中文)不一致。中文名在此单源,select 与 multiselect 共用。
+const BODY_CN = {
+	...SEVEN_CN,
+	Uranus: '天王星', Neptune: '海王星', Pluto: '冥王星',
+	'North Node': '北交点', 'South Node': '南交点', Chiron: '凯龙星',
+};
+export function scanBodyLabel(key){ return BODY_CN[key] || key; }
+// 相位格局的顶点星只可能落在后端 _PATTERN_POOL(七政 + 三王)里 —— 交点与凯龙选了恒不命中。
+export const PATTERN_POOL_BODIES = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto'];
 export const SEVEN_OPTIONS = SEVEN_BODIES.map((v) => ({ value: v, label: SEVEN_CN[v] }));
 export const SEVEN_ANY_OPTIONS = [{ value: 'any', label: '任意' }].concat(SEVEN_OPTIONS);
 
@@ -196,7 +208,8 @@ export const NUMERIC_FIELD_OPTIONS = [
 
 export const POINT_KIND_OPTIONS = [
 	{ value: 'angle', label: '四轴点' }, { value: 'planet', label: '星体' },
-	{ value: 'lot', label: '福点' }, { value: 'fixedLon', label: '固定黄经' },
+	{ value: 'lot', label: '希腊点(福/灵/基/跃升)' },   // [Q-477/T-439] 旧标「福点」与下一字段可选四点不符
+	{ value: 'fixedLon', label: '固定黄经' },
 ];
 export const ANGLE_ID_OPTIONS = [
 	{ value: 'ASC', label: '上升 ASC' }, { value: 'MC', label: '天顶 MC' },
@@ -332,7 +345,7 @@ export const CONDITION_TYPES = {
 			{ key: 'orbLeft', kind: 'number', label: '前侧 orb', min: 0.5, max: 30, step: 0.5 },
 			{ key: 'orbRight', kind: 'number', label: '后侧 orb', min: 0.5, max: 30, step: 0.5 },
 			{ key: 'rescueEnabled', kind: 'toggle', label: '计救援' },
-			{ key: 'rescuers', kind: 'multiselect', label: '救星', options: SEVEN_BODIES.map((b) => ({ value: b, label: b })) },
+			{ key: 'rescuers', kind: 'multiselect', label: '救星(全不选=无救星)', options: SEVEN_BODIES.map((b) => ({ value: b, label: scanBodyLabel(b) })) },   // [Q-477/T-439] 中文名;[Q-423/T-388] 空=无救星(后端不再回落金木)
 			{ key: 'rescueByBody', kind: 'toggle', label: '实体救援' },
 			{ key: 'rescueByRay', kind: 'toggle', label: '光线救援' },
 			{ key: 'mitigationReception', kind: 'toggle', label: '接纳缓解视为解围' },
@@ -389,7 +402,9 @@ export const CONDITION_TYPES = {
 		defaults: { pattern: 't_square', apex: 'any', members: 'any', orb: 6 },
 		fields: [
 			{ key: 'pattern', kind: 'select', label: '格局', options: PATTERN_OPTIONS },
-			{ key: 'apex', kind: 'select', label: '顶点星', options: [{ value: 'any', label: '任意' }, ...SCAN_BODIES.map((b) => ({ value: b, label: b }))], showIf: (p) => p.pattern === 't_square' || p.pattern === 'yod' },
+			// [Q-476/T-438] 选项从 SCAN_BODIES 收窄到 PATTERN_POOL_BODIES:后端格局池只有七政 + 三王,
+			// 旧表里的北交/南交/凯龙三档选了恒不命中(组合里不可能出现)。[Q-477/T-439] 同时改中文名。
+			{ key: 'apex', kind: 'select', label: '顶点星', options: [{ value: 'any', label: '任意' }, ...PATTERN_POOL_BODIES.map((b) => ({ value: b, label: scanBodyLabel(b) }))], showIf: (p) => p.pattern === 't_square' || p.pattern === 'yod' },
 			{ key: 'orb', kind: 'number', label: 'orb', min: 1, max: 12, step: 0.5 },
 		],
 		validate(p){
@@ -404,7 +419,9 @@ export const CONDITION_TYPES = {
 		defaults: { planet: 'Moon', pointKind: 'angle', pointId: 'ASC', lotId: 'fortuna', pointLon: 0, relation: 'any', angles: [0], orb: 3 },
 		fields: [
 			{ key: 'planet', kind: 'body', label: '星体' },
-			{ key: 'pointKind', kind: 'select', label: '点类型', options: POINT_KIND_OPTIONS },
+			// [Q-465/T-427] pointId 同理(四轴 ↔ 目标星共用一键)。
+			{ key: 'pointKind', kind: 'select', label: '点类型', options: POINT_KIND_OPTIONS,
+				resetsByValue: { angle: { pointId: 'ASC' }, planet: { pointId: 'Venus' } } },
 			{ key: 'pointId', kind: 'select', label: '四轴', options: ANGLE_ID_OPTIONS, showIf: (p) => p.pointKind === 'angle' },
 			{ key: 'lotId', kind: 'select', label: '希腊点', options: [{ value: 'fortuna', label: '福点 Fortuna' }, { value: 'spirit', label: '灵点 Spirit' }, { value: 'basis', label: '基点 Basis' }, { value: 'exaltation', label: '跃升点 Exaltation' }], showIf: (p) => p.pointKind === 'lot' },
 			{ key: 'pointId', kind: 'body', label: '目标星', showIf: (p) => p.pointKind === 'planet' },
@@ -416,6 +433,8 @@ export const CONDITION_TYPES = {
 		validate(p){
 			if(!isBody(p.planet)){ return '需选择星体'; }
 			if(p.pointKind === 'planet' && !isBody(p.pointId)){ return '需选择目标星'; }
+			// [Q-465/T-427] pointId 同样两形态共用:选过星体再切回四轴点时旧校验不拦,整次搜索报错。
+			if(p.pointKind === 'angle' && ANGLE_ID_OPTIONS.every((o) => o.value !== p.pointId)){ return '请重新选择四轴点(点类型由星体切来时仍是星名)'; }
 			if(p.relation === 'angles' && !nonEmptyArr(p.angles)){ return '至少选一个相位角'; }
 			return '';
 		},
@@ -473,7 +492,9 @@ export const CONDITION_TYPES = {
 		fields: [
 			{ key: 'a', kind: 'body', label: 'A星', pair: 'ab' },
 			{ key: 'b', kind: 'body', label: 'B星', hint: '选与 A 相同的星=单星退化(直接用该星黄经)', pair: 'ab' },
-			{ key: 'targetKind', kind: 'select', label: '目标', options: [{ value: 'planet', label: '星体' }, { value: 'midpoint', label: '另一中点' }, { value: 'angle', label: '四轴点' }, { value: 'fixedLon', label: '固定黄经' }] },
+			// [Q-465/T-427] targetId 两形态共用一个键 → 切形态时同步重置成新形态的合法值(表单读 resetsByValue)。
+			{ key: 'targetKind', kind: 'select', label: '目标', options: [{ value: 'planet', label: '星体' }, { value: 'midpoint', label: '另一中点' }, { value: 'angle', label: '四轴点' }, { value: 'fixedLon', label: '固定黄经' }],
+				resetsByValue: { angle: { targetId: 'ASC' }, planet: { targetId: 'Venus' } } },
 			{ key: 'targetId', kind: 'body', label: '目标星', showIf: (p) => p.targetKind === 'planet' },
 			{ key: 'targetId', kind: 'select', label: '四轴', options: ANGLE_ID_OPTIONS, showIf: (p) => p.targetKind === 'angle' },
 			{ key: 'targetPairA', kind: 'body', label: '中点甲', pair: 'tp', showIf: (p) => p.targetKind === 'midpoint' },
@@ -485,6 +506,10 @@ export const CONDITION_TYPES = {
 		validate(p){
 			if(!isBody(p.a) || !isBody(p.b)){ return '需选择 A/B 星'; }
 			if(p.targetKind === 'planet' && !isBody(p.targetId)){ return '需选择目标星'; }
+			// [Q-465/T-427] targetId 被「目标星」与「四轴」两形态共用:把目标从星体切到四轴点后,
+			// 四轴框显示的仍是星名(如 Venus),compile 发 {kind:'angle', id:'Venus'} → 后端判非法、
+			// 整次搜索报 invalid_conditions(方案载入审计还会误报成「该行恒不命中」)。此处按形态校验值域。
+			if(p.targetKind === 'angle' && ANGLE_ID_OPTIONS.every((o) => o.value !== p.targetId)){ return '请重新选择四轴点(目标由星体切来时仍是星名)'; }
 			if(p.targetKind === 'midpoint' && (!isBody(p.targetPairA) || !isBody(p.targetPairB))){ return '需选择目标中点两星'; }
 			if(!(Number(p.orb) > 0 && Number(p.orb) < Number(p.modulus) / 2)){ return 'orb 需小于 modulus 的一半'; }
 			return '';

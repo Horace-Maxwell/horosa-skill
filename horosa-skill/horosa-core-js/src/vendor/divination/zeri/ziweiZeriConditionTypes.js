@@ -292,7 +292,7 @@ export const ZIWEI_CONDITION_TYPES = {
 		label: '星曜亮度',
 		defaults: { star: '紫微', values: ['庙', '旺'] },
 		fields: [
-			{ key: 'star', kind: 'select', label: '星', options: opt([...ZW_MAIN14, '左辅', '右弼', '文昌', '文曲', '天魁', '天钺', '禄存', '天马', '擎羊', '陀罗', '火星', '铃星', '地空', '地劫']), hint2: '' },	// [W5] 扩六吉六煞禄马空劫(亮度基表有值面)
+			{ key: 'star', kind: 'select', label: '星', options: opt([...ZW_MAIN14, '左辅', '右弼', '文昌', '文曲', '天魁', '天钺', '禄存', '天马', '擎羊', '陀罗', '火星', '铃星', '地空', '地劫']), hint: '[Q-468] 工作台「空劫名=全书天空」时盘上为「天空」,此处「地空」在该档无值;「星集=精简18星」时六吉六煞禄马空劫不上盘' },	// [W5] 扩六吉六煞禄马空劫(亮度基表有值面)
 			{ key: 'values', kind: 'multiselect', label: '亮度(庙旺地平闲陷)', options: opt(BRIGHT_LEVELS), hint: '基础亮度(中州基表口径,主页默认盘同源;《全书》亮度源为显示层覆盖,不入扫描)' },
 		],
 		validate: needValues,
@@ -353,7 +353,7 @@ export const ZIWEI_CONDITION_TYPES = {
 		defaults: { gong: '命宫', stars: ['左辅', '右弼'], mode: 'all' },
 		fields: [
 			{ key: 'gong', kind: 'select', label: '本宫', options: opt(ZW_HOUSE_NAMES) },
-			{ key: 'stars', kind: 'multiselect', label: '星集', options: opt(ZW_ALL_STARS) },
+			{ key: 'stars', kind: 'multiselect', label: '星集', options: opt(ZW_ALL_STARS), hint: '[Q-468] 随工作台参数:「星集=精简18星」时只有十四正曜+四化四星上盘(其余 41 个星名恒不命中);「空劫名=全书天空」时盘上为「天空」而非「地空」' },
 			{ key: 'mode', kind: 'select', label: '判法', options: [{ value: 'all', label: '会齐全部' }, { value: 'any', label: '会任一' }, { value: 'none', label: '全不会(避)' }] },
 		],
 		validate: (p)=>((!p.stars || !p.stars.length) ? '至少选择一星' : ''),
@@ -395,14 +395,17 @@ export const ZIWEI_CONDITION_TYPES = {
 		defaults: { gong: '命宫', max: 1 },
 		fields: [
 			{ key: 'gong', kind: 'select', label: '本宫', options: opt(ZW_HOUSE_NAMES) },
-			{ key: 'max', kind: 'number', label: '≤颗', min: 0, max: 6 },
+			{ key: 'max', kind: 'number', label: '≤颗', min: 0, max: 6, hint: '[Q-468] 六煞=羊陀火铃+空(地空/全书天空随工作台「空劫名」自动对应)+劫;「星集=精简18星」时煞星不上盘,恒 0 颗' },
 		],
 		summary(p){ return `${p.gong}三方六煞≤${p.max}`; },
 		evaluate(pan, p, ctx){
 			const base = ctx.gongIdx(p.gong);
 			if(base < 0){ return { pass: false, actual: `${p.gong}未定位` }; }
 			const zone = new Set(ctx.sanfang(base));
-			const hit = ZW_LIUSHA.filter((st)=>starIdxList(ctx, st).some((i)=>zone.has(i)));
+			// [Q-468/T-430] 工作台「空劫名=全书天空」时盘上时系空星叫「天空」(无「地空」):六煞第五颗随盘自动切换(与 kong_jie_ming 同法),
+			// 此前写死 ZW_LIUSHA(含地空)→ 该档只能数到五颗,「≤颗」系判偏松。
+			const liusha = starIdxList(ctx, '地空').length ? ZW_LIUSHA : ZW_LIUSHA.map((st)=>(st === '地空' ? '天空' : st));
+			const hit = liusha.filter((st)=>starIdxList(ctx, st).some((i)=>zone.has(i)));
 			return { pass: hit.length <= (Number(p.max) === 0 ? 0 : (Number(p.max) || 6)), actual: `${p.gong}三方六煞:${hit.join('、') || '无'}(${hit.length}颗)` };
 		},
 	},

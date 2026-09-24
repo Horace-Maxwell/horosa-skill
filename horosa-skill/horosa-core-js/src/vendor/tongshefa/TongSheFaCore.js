@@ -6,8 +6,6 @@
 import { littleEndian } from '../gua/littleEndian.js';
 import { Gua8, Gua64, getGua64 } from '../gua/GuaConst.js';
 
-
-
 const BAGUA_SYMBOL = {
 	乾: '☰',
 	兑: '☱',
@@ -759,6 +757,41 @@ function buildSixYaoMainSection(title, leftLines, rightLines, mainElem){
 	return lines;
 }
 
+// [Q-449/T-412] 「爻位」页签的逐爻取纳判语与「取舍总览」两块此前完全不进快照:页面逐爻写
+// 「N爻(角色)为阳/阴(纳/拒)。我看重/蔑视【对象】」(左卦思想、右卦实践),末附取舍两栏。
+// 与 UI 严格同源(同 LEFT/RIGHT_YAO_META + linePolarity/lineAdmit/lineVerb),并按裁决作**默认关候选段**
+// (段名已登记 AI_EXPORT_PRESET_SECTIONS.tongshefa 与 DEFAULT_OFF;未自定义用户缺省不纳入=字节零回归)。
+function buildYaoWeiSection(model){
+	if(!model || !model.baseLeft || !model.baseRight
+		|| !Array.isArray(model.baseLeft.lines) || !Array.isArray(model.baseRight.lines)){ return []; }
+	const sideLines = (hex, meta)=>hex.lines.map((value, idx)=>{
+		const m = meta[idx] || {};
+		return `${idx + 1}爻（${m.role || ''}）为${linePolarity(value)}（${lineAdmit(value)}）。我${lineVerb(value)}【${m.target || ''}】。`;
+	}).reverse();
+	const pick = (value)=>model.baseLeft.lines.map((line, idx)=>(
+		line === value && LEFT_YAO_META[idx] ? `思想·${LEFT_YAO_META[idx].role}：${LEFT_YAO_META[idx].target}` : null
+	)).filter(Boolean).concat(model.baseRight.lines.map((line, idx)=>(
+		line === value && RIGHT_YAO_META[idx] ? `实践·${RIGHT_YAO_META[idx].role}：${RIGHT_YAO_META[idx].target}` : null
+	)).filter(Boolean));
+	const lines = [];
+	lines.push('【爻位】');
+	lines.push('');
+	lines.push(`左卦（${shortGuaName(model.baseLeft.gua ? model.baseLeft.gua.name : '左卦')}）· 思想上：`);
+	sideLines(model.baseLeft, LEFT_YAO_META).forEach((t)=>lines.push(t));
+	lines.push('');
+	lines.push(`右卦（${shortGuaName(model.baseRight.gua ? model.baseRight.gua.name : '右卦')}）· 实践上：`);
+	sideLines(model.baseRight, RIGHT_YAO_META).forEach((t)=>lines.push(t));
+	const zhong = pick(0);
+	const mie = pick(1);
+	if(zhong.length || mie.length){
+		lines.push('');
+		lines.push('取舍总览：');
+		lines.push(`我看重：${zhong.length ? zhong.join('；') : '—'}`);
+		lines.push(`我蔑视：${mie.length ? mie.join('；') : '—'}`);
+	}
+	return lines;
+}
+
 function buildTongSheFaSnapshot(model){
 	const parts = [];
 	parts.push(...buildHexSnapshotSection('本卦', model.baseLeft, model.baseRight));
@@ -786,6 +819,7 @@ function buildTongSheFaSnapshot(model){
 	// UI 已显示(renderNaJiaTab 系列卡片)却此前不入快照。段名已登记 AI_EXPORT_PRESET_SECTIONS.tongshefa;
 	// 取数与 UI 严格同源(同 model 派生、同 relationByElem/groupFiveFriendItems/fmtRise 等函数);空数据不产段。
 	[
+		buildYaoWeiSection(model),
 		buildObserve32Section(model),
 		buildShiYingSection(model),
 		buildWuXingRelationSection(model),

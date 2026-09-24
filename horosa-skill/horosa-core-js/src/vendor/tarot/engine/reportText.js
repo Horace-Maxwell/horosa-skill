@@ -3,7 +3,8 @@
 import { getDeck, getDeckCards } from './deckRegistry.js';
 import { displayName, astroLine, cardMeaning } from './cardSchema.js';
 import { orientationLabel } from './spreads.js';
-import { synthesizeText, yesNo, quintessence, theosophicalGroups, birthCards, yearCard, majorByNumber, countingChain } from './verdict.js';
+import { synthesizeText, yesNo, quintessence, theosophicalGroups, birthCards, yearCard, majorByNumber, countingChain, pairings, clarifier, YESNO_MODE_LABEL } from './verdict.js';
+import { REVERSAL_TEMPLATES } from './reversalModes.js';
 import { comboHints, COMBO_GUARD_NOTES } from '../decks/comboThemes.js';
 import { computeTimingLines, TIMING_METHOD_LABEL } from './timingMethods.js';
 import { courtSignDetect } from '../decks/courtSystems.js';
@@ -13,8 +14,28 @@ function meaningOf(card, isReversed, system, reversalMode){
 	return cardMeaning(card, isReversed, system, reversalMode);
 }
 
+// [Q-223/T-189·FT-31] 设置行补非缺省口径(与页面「读法体系」节同源标签;缺省档不写,零回归)。
+const MEANING_LABEL = { manual: '逐牌义', waite: 'Waite 1911', degrees: '数字度' };
+const REVERSAL_GEN_LABEL = { fingers3: '三指定牌', all: '全逆' };
+function nonDefaultCalibre(eff, deck, caps){
+	const out = [];
+	const isTarot = (caps.readingMethod || 'tarot') === 'tarot';
+	if(!isTarot){ return out; }
+	const mDefault = (deck && deck.meaningDefault) || 'manual';
+	if(eff.meaningSystem && eff.meaningSystem !== mDefault && MEANING_LABEL[eff.meaningSystem]){ out.push(`牌义 ${MEANING_LABEL[eff.meaningSystem]}`); }
+	if(eff.reversals){
+		if(eff.reversalMode && eff.reversalMode !== 'stored'){ out.push(`逆位读法 ${(REVERSAL_TEMPLATES[eff.reversalMode] && REVERSAL_TEMPLATES[eff.reversalMode].label) || eff.reversalMode}`); }
+		if(eff.reversalGen && eff.reversalGen !== 'shuffle'){ out.push(`逆位产生 ${REVERSAL_GEN_LABEL[eff.reversalGen] || eff.reversalGen}`); }
+		if(eff.crossingUpright === false){ out.push('交叉牌不横置'); }
+	}
+	if(eff.courtElementSystem === 'alt'){ out.push('宫廷元素 位阶制'); }
+	if(eff.courtZodiacSystem === 'simple'){ out.push('宫廷星座 单座制'); }
+	return out;
+}
+
 // reading 来自 engine/reading.buildReading。question 可单独传(优先于 reading.question)。
-export function buildReadingText(reading, question){
+// opts.clarifier=true → [定局] 段附澄清牌(页面点「抽一张澄清牌」后才显示,快照同步;默认不写)。
+export function buildReadingText(reading, question, opts){
 	if(!reading || !Array.isArray(reading.draws) || !reading.draws.length){
 		return '【塔罗】尚未抽牌,请先在塔罗页抽牌后再导出。';
 	}
@@ -26,9 +47,13 @@ export function buildReadingText(reading, question){
 	const lines = [];
 	lines.push('[牌阵综览]');
 	lines.push(`【${reading.deckTitle || (deck && deck.title) || '塔罗'}】${reading.spreadTitle || ''}(种子:${reading.seed})`);
+	// [Q-222/T-185] 设置行与 [定局] 按 deck.caps 门控(与页面同源):无变体能力的牌组(雷诺曼/基帕/西比拉/扑克)不写「变体 A」,
+	// 雷诺曼读法不出「定局」页,快照亦不写 Yes/No(此前 AI 拿到页面不承认的定局结论)。
+	const caps = (deck && deck.caps) || {};
 	const meta = [eff.reversals ? '逆位 ON' : '逆位 OFF'];
 	if(eff.dignities){ meta.push('元素尊位 ON'); }
-	if(eff.variant){ meta.push(`变体 ${eff.variant}`); }
+	if(eff.variant && caps.variant !== false){ meta.push(`变体 ${eff.variant}`); }
+	nonDefaultCalibre(eff, deck, caps).forEach((x)=>meta.push(x));   // [FT-31] 非缺省读法口径
 	lines.push(`设置:${meta.join(' · ')}`);
 	if(q){ lines.push(`所问:${q}`); }
 	if(reading.significator && reading.significator.card){
@@ -74,12 +99,27 @@ export function buildReadingText(reading, question){
 	});
 	if(reading.summary){ lines.push('[综合断语]'); lines.push(synthesizeText(reading.summary)); }
 	// 定局摘要(Yes/No + 精华牌;TP2 精华牌按 quintMode 口径,fool22 时另出三张分组加法)
-	try{
+	// [Q-222/T-185] 雷诺曼读法(lenormand/kipper)页面不出「定局」页 → 快照同样不出该段(与 TarotMain 定局 TabPane 同门控)。
+	if(caps.readingMethod !== 'lenormand') try{
 		const cards = getDeckCards(reading.deckId);
 		const v = yesNo(reading.draws, eff.verdictMode || 'majority');
 		const quint = quintessence(reading.draws, cards, undefined, eff.quintMode);
 		lines.push('[定局]');
-		lines.push(`Yes/No=${v.verdict}(${eff.verdictMode || 'majority'},score ${v.score})${quint ? ` · 精华牌 ${displayName(quint, deck)}${eff.quintMode === 'fool22' ? '(愚人廿二口径)' : ''}` : ''}`);
+		// [Q-223/T-189·FT-31] 定局口径写中文标签(页面同 YESNO_MODE_LABEL;此前直出英文键 weighted_center)
+		const vm = eff.verdictMode || 'majority';
+		lines.push(`Yes/No=${v.verdict}(${YESNO_MODE_LABEL[vm] || vm},score ${v.score})${quint ? ` · 精华牌 ${displayName(quint, deck)}${eff.quintMode === 'fool22' ? '(愚人廿二口径)' : ''}` : ''}`);
+		// [Q-223/T-189·FT-33③] 牌间关系(相邻/镜像/桥接)与澄清牌:页面定局页有、快照曾缺。
+		try{
+			const pr = pairings(reading.draws);
+			const pairName = (pp)=>`${displayName(pp.a, deck)}×${displayName(pp.b, deck)}`;
+			if(pr.adjacent.length){ lines.push(`相邻串:${pr.adjacent.map(pairName).join('　')}`); }
+			if(pr.mirror.length){ lines.push(`镜像对:${pr.mirror.map(pairName).join('　')}`); }
+			if(pr.bridge){ lines.push(`桥接(首尾):${pairName(pr.bridge)}`); }
+			if(opts && opts.clarifier){
+				const cl = clarifier(reading.draws, cards);
+				if(cl){ lines.push(`澄清牌:${displayName(cl, deck)} — ${meaningOf(cl, false, eff.meaningSystem, eff.reversalMode)}`); }
+			}
+		}catch(_e){ /* 牌间关系失败不阻断快照 */ }
 		if(eff.quintMode === 'fool22'){
 			const groups = theosophicalGroups(reading.draws, cards);
 			if(groups && groups.total){

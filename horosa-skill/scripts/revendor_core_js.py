@@ -280,6 +280,16 @@ def _prune_default_export(text: str, removed: list[str]) -> tuple[str, list[str]
                 break  # 重新搜索：偏移量已失效
             else:
                 break
+    # 第三种形态：`export default fetchReturnSet;`（裸标识符，v3.11.0 returnCharts.js 首见）。
+    # 聚合对象的两条正则都不匹配它，被剥的函数名就留在默认导出里 → 模块**加载期** ReferenceError。
+    # 标识符已被剥 → 整行删掉（默认导出只服务上游 UI 的 `import X from`，vendored 调用方一律具名导入）。
+    bare = re.compile(r"^export default ([A-Za-z_$][\w$]*)\s*;?\s*$", re.M)
+    while True:
+        match = next((m for m in bare.finditer(text) if m.group(1) in removed_set), None)
+        if not match:
+            break
+        notes.append(f"pruned bare default export {match.group(1)}")
+        text = text[: match.start()] + text[match.end():]
     return text, notes
 
 

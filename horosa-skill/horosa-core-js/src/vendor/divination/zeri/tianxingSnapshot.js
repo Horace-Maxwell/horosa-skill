@@ -2,6 +2,7 @@
 // 🔒 段头与 aiExport.js AI_EXPORT_PRESET_SECTIONS.tianxing 逐字成对(改一处必同步另一处,
 //    否则该段在「AI导出设置」永远选不到——四同步铁律)。
 import { conditionSummaryText } from './conditionGlyph.js';
+import { appendZeriHitRows } from './zeriExplainText.js';
 import { JOINER_CN } from './conditionTypes.js';
 import { HOUSE_SYSTEM_OPTIONS } from '../../../constants/AstroConst.js';
 // [审计修] 选中时刻整张星盘的判读正文(右栏=占星主页同款七页签,快照曾只有搜索条件与命中区间——
@@ -90,19 +91,20 @@ export function buildTianxingSnapshot(chart, fields, extra, ctx){
 	lines.push('[命中区间]');
 	if(results && results.length){
 		lines.push(`共 ${results.length} 个区间${ctx && ctx.truncated ? '(已达上限截断)' : ''}：`);
-		results.slice(0, 60).forEach((row, i) => {
-			lines.push(`${i + 1}. ${row.start} ~ ${row.end}（${row.durationMin >= 90 ? `${(row.durationMin / 60).toFixed(1)}小时` : `${Math.round(row.durationMin)}分`}）`);
+		// [Q-452 裁决 A / Q-453 裁决 2026-09-18] 上限全局可配(缺省 60)+ 前 N 行附判读树(服务端判读由宿主预取进 ctx.explainAt)。
+		appendZeriHitRows(lines, results, {
+			formatRow: (row, i)=>`${i + 1}. ${row.start} ~ ${row.end}（${row.durationMin >= 90 ? `${(row.durationMin / 60).toFixed(1)}小时` : `${Math.round(row.durationMin)}分`}）`,
+			tail: (total, cap)=>`……(其余 ${total - cap} 条略)`,
+			maxRows: ctx && ctx.maxRows, explainRows: ctx && ctx.explainRows, explainAt: ctx && ctx.explainAt, uiTree: ctx && ctx.tree, leafSummary: conditionSummaryText,
 		});
-		if(results.length > 60){
-			lines.push(`……(其余 ${results.length - 60} 条略)`);
-		}
 	}else{
 		lines.push(results ? '时间段内无满足全部条件的时刻。' : '(尚未执行搜索)');
 	}
 	// [选中时刻星盘] 右栏七页签的判读底盘(整张盘 headerless 并入本段;无盘不产段,零回归)。
 	if(chart){
 		try{
-			const body = `${buildAstroSnapshotContent(chart, fields, { headerless: true }) || ''}`.trim();
+			// [挂载自检 择日 P1] 右栏「衍化」页签(世界范式盘/衍生宫/显赫/气候带)页面有、快照无 → 与本命盘同款 opt-in。
+			const body = `${buildAstroSnapshotContent(chart, fields, { headerless: true, classicalDerived: true }) || ''}`.trim();
 			if(body){
 				lines.push('');
 				lines.push('[选中时刻星盘]');

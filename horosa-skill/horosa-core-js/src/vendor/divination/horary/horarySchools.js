@@ -25,7 +25,9 @@ export const HORARY_SCHOOL_ORDER = ['classical', 'renaissance', 'strict', 'seque
 export const HORARY_PARAM_SPEC = [
 	// —— 起盘（scope:school/global —— 卜卦页不渲染;流派绑定或全局设置管辖）——
 	{ key: 'hsys', group: '起盘', scope: 'school', label: '宫制', type: 'select', sendToBackend: true, default: 2,
-		options: [ { value: 0, label: '整宫制' }, { value: 1, label: 'Alcabitius' }, { value: 2, label: 'Regiomontanus' }, { value: 3, label: 'Placidus' }, { value: 4, label: 'Campanus' }, { value: 5, label: 'Koch' }, { value: 7, label: 'Porphyry' } ] },
+		// [Q-299/T-288 ①] 数值=后端 perchart.hsys[] 索引(与 AstroConst.HOUSE_SYSTEM_OPTIONS 同表):4=Koch / 9=Porphyry / 10=Campanus;
+		// 此前 4/5/7 标 Campanus/Koch/Porphyry,而后端 4/5/7 实为 Koch/Vehlow Equal/Sripati(流派只绑 0–3,页面不可达,但表须说真话)。
+		options: [ { value: 0, label: '整宫制' }, { value: 1, label: 'Alcabitius' }, { value: 2, label: 'Regiomontanus' }, { value: 3, label: 'Placidus' }, { value: 4, label: 'Koch' }, { value: 9, label: 'Porphyry' }, { value: 10, label: 'Campanus' } ] },
 	{ key: 'termsVariant', group: '起盘', scope: 'global', label: '界系', type: 'select', sendToBackend: true, default: 2,
 		options: [ { value: 0, label: '埃及界' }, { value: 1, label: '托勒密界·校勘本' }, { value: 2, label: '托勒密界·经典传本' }, { value: 3, label: '迦勒底界（推演）' } ] },
 	{ key: 'geminiBoundEmended', group: '起盘', scope: 'global', label: '双子界序（经典传本）', type: 'select', sendToBackend: true, default: 0,
@@ -61,7 +63,10 @@ export const HORARY_PARAM_SPEC = [
 		options: [ { value: 8.5, label: '8°30′（1647）' }, { value: 8, label: '8°（中世纪）' } ] },
 	{ key: 'underBeamsOrb', group: '太阳', scope: 'global', label: '日光束外界', type: 'select', default: 17,
 		options: [ { value: 17, label: '17°（1647）' }, { value: 15, label: '15°（较古）' } ] },
-	{ key: 'combustMitigateSameSign', group: '太阳', scope: 'global', label: '燃烧限同座', type: 'switch', default: true },
+	// [Q-144/T-51 2026-09-18] 缺省改 false:择日只下发 ≠ 缺省的键、判读门要求 === true → 旧缺省 true 时「显示开、引擎关、拨关仍关」=死开关;
+	// 卜卦七档流派各自绑定本键(全局值到不了卜卦),故本键实际只作用于择日判读层。缺省关 = 与引擎缺省逐字一致,拨开即真生效。
+	{ key: 'combustMitigateSameSign', group: '太阳', scope: 'global', label: '燃烧限同座（择日判读层；卜卦按流派）', type: 'switch', default: false,
+	  hint: '开启后异座近日星只算日光束下、不算燃烧(1647 主流口径)。卜卦盘由所选流派决定,不受此项。' },
 	{ key: 'combustExemptConjAnswer', group: '太阳', scope: 'horary', label: '合日即所求时豁免', type: 'switch', default: false },
 	// —— 月亮（空亡口径/计三王星 → 全局;豁免注记与燃烧之路为卜卦考量专属）——
 	{ key: 'vocMode', group: '月亮', scope: 'global', label: '空亡口径', type: 'select', default: 'classic',
@@ -69,7 +74,7 @@ export const HORARY_PARAM_SPEC = [
 		options: [
 			{ value: 'classic', label: '无入相即空（1647 · 现行）' }, { value: 'by_orb', label: '容许度 12°30′' },
 			{ value: 'by_sign_perfect', label: '本座内须完成（现代）' }, { value: 'by_sign_orb', label: '本座内入容许度（16c）' },
-			{ value: 'kenodromia', label: '30° 法（希腊化）' }, { value: 'exempt4', label: '按座＋四座豁免（中世纪）' },
+			{ value: 'kenodromia', label: '30° 法（希腊化）' }, { value: 'exempt4', label: '无入相＋四座豁免（中世纪）' },
 		] },
 	{ key: 'vocIncludeOuter', group: '月亮', scope: 'global', label: '空亡计三王星', type: 'switch', default: false },
 	{ key: 'vocMitigateSigns', group: '月亮', scope: 'horary', label: '四座豁免注记', type: 'switch', default: false },
@@ -275,8 +280,13 @@ export function schoolOf(id){
 	return HORARY_SCHOOLS[id] || HORARY_SCHOOLS.classical;
 }
 
-// 取某档下发 /chart 的字段补丁（仅含非 null 后端字段；tripSystem 仅前端消费不下发）。
-// overrides（可选）：高级面板逐项覆盖（仅收编 spec 内 sendToBackend 的键）。
+// [Q-296/T-280 ②] 判读三分制 → /chart 三分集字段值(盘面尊贵/接纳/互容与前端 almuten 同一口径)。
+export function horaryTriplicityOf(tripSystem){
+	return tripSystem === 'dorothean' ? 'Dorothean' : 'Ptolemaic';
+}
+
+// 取某档下发 /chart 的字段补丁（仅含非 null 后端字段;tripSystem 本身不下发,但映射为 triplicity 随档下发）。
+// overrides（可选）：高级面板逐项覆盖（收编 spec 内 sendToBackend 的键 + tripSystem→triplicity 映射）。
 export function horaryBackendFields(id, overrides){
 	const b = schoolOf(id).backend || {};
 	const out = {};
@@ -287,6 +297,9 @@ export function horaryBackendFields(id, overrides){
 	if(b.geminiBoundEmended) out.geminiBoundEmended = b.geminiBoundEmended;
 	// 福点反转随档下发（0=恒昼式,与判读 pofReversal 对齐;买通盘面与判读的福点口径）。
 	if(b.lotReversal !== null && b.lotReversal !== undefined) out.lotReversal = b.lotReversal;
+	// [Q-296/T-280 ②] 三分集随档下发:此前 tripSystem 只被前端 almuten 消费,盘面尊贵分/接纳/互容按全局
+	// triplicity(缺省 Dorothean)算 → 经典主流档(ptolemaic)的力量与接纳实为 Dorotheus 口径。
+	out.triplicity = horaryTriplicityOf((overrides && overrides.tripSystem) || b.tripSystem);
 	if(overrides){
 		BACKEND_KEYS.forEach((k) => {
 			if(overrides[k] !== undefined && overrides[k] !== null){ out[k] = overrides[k]; }

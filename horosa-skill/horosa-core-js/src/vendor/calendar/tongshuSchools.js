@@ -1,5 +1,5 @@
 // 通书择日多流派注册表 + 设置默认/持久（模型照 gua/liuyaoSchools）。
-// needs 声明各法所需参数，控件按需显隐：event=用事、zuoShan=坐山向、mingYear=主事仙命年。
+// needs 声明各法所需参数，控件按需显隐：event=用事、liexiuUse=三垣用事类、mingYear=主事仙命年。([Q-271/ZC-28] zuoShan 幽灵键已删)
 export const TONGSHU_SCHOOLS = [
 	{ key: 'donggong', label: '董公择日', needs: { event: true }, note: '金神七煞·煞贡直星人专·十二月建除逐日宜忌断语' },
 	{ key: 'qimen', label: '奇门叠数（裴晋公·唐）', needs: {}, note: '天干地支配数叠加 13~27 吉凶，出行择时' },
@@ -22,18 +22,17 @@ export const LIEXIU_USE_OPTIONS = [
 	{ value: '造命', label: '造命·择时立命' },
 ];
 
-// 用事默认（董公/三垣断语高亮用）；坐山（24 山）；仙命年（玄空用，干支年）。
+// 用事默认（董公/三垣断语高亮用）；仙命年（玄空用，干支年）。
 export const DEFAULT_TONGSHU_SETTINGS = {
 	school: 'donggong',
 	event: '嫁娶',
 	liexiuUse: '建宅',     // 三垣列宿用事类（断语高亮）
-	zuoShan: '子',
 	mingYear: '甲子',
 	date: null,          // 'YYYY-MM-DD'（null=今日，由 Main 填当天）
 };
 
 export function getTongshuOptionsKey(s) {
-	return [s.school, s.event, s.liexiuUse, s.zuoShan, s.mingYear, s.date].join('|');
+	return [s.school, s.event, s.liexiuUse, s.mingYear, s.date].join('|');
 }
 
 export function schoolNeeds(schoolKey) {

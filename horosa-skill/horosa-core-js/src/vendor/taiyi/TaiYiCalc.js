@@ -79,7 +79,7 @@ function normalizePalaces(palace16){
 	}));
 }
 
-function buildOptions(opt, pan){
+function buildOptions(opt, pan, nongli){
 	const options = opt || {};
 	const style = options.style !== undefined ? options.style : (pan ? pan.style : 3);
 	const isLifeStyle = style === 5;
@@ -91,12 +91,20 @@ function buildOptions(opt, pan){
 		methodLabel,
 		methodSource,
 		accumLabel: methodLabel,
-		tenchingLabel: options.tenching === 1 ? '有' : '无',
+		// [Q-101/T-01] tenching / rotation 两键已剔除:后端全仓零读取、前端零消费者的纯标签死键
+		// (硬造默认值随请求发出;标签 tenchingLabel / rotationLabel 亦无人读)。
 		sexLabel: options.sex || (pan && pan.sex) || '男',
-		rotationLabel: options.rotation || '固定',
-		timeBasisLabel: options.timeBasis === 'trueSolar' ? '真太阳时' : '直接时间',
+		// [Q-163/T-84·SS-16] 真太阳时档在历法服务超时(nongli 为空)时 resolveCalculationDateTime 已按直接时间立局,
+		//   标签曾恒写「真太阳时」→ 概览/快照如实标注本次按直接时间(计算路径不变,只改文案)。
+		timeBasisLabel: options.timeBasis === 'trueSolar'
+			? (nongli && nongli.birth ? '真太阳时' : '真太阳时（历法服务未回，本次按直接时间立局）')
+			: '直接时间',
 		daySwitchLabel: options.after23NewDay === 1 ? '23点算第二天' : '24点算第二天',
-		gameTheoryLabel: options.gameTheory === 1 ? '开启' : '关闭',
+		// [挂载自检 F-57] 后端因随包运行时缺 scipy 未算博弈时回传 gameTheoryUnavailable → 如实标注「本次未算」(不撒谎);
+		// 依赖齐全或关闭时逐字不变。
+		gameTheoryLabel: options.gameTheory === 1
+			? (pan && pan.gameTheoryUnavailable ? `开启（运行时缺 ${pan.gameTheoryUnavailable}，本次未算）` : '开启')
+			: '关闭',
 	};
 }
 
@@ -195,9 +203,7 @@ export function calcTaiyi(fields, nongli, options){
 	return applyNongliDisplay({
 		...pan,
 		clockTime: pan.clockTime || clockFallback,
-		tenching: opt.tenching !== undefined ? opt.tenching : 0,
-		rotation: opt.rotation || '固定',
-		options: buildOptions(opt, pan),
+		options: buildOptions(opt, pan, nongli),
 		palaces: normalizePalaces(pan.palace16),
 	}, nongli, baziLocal);
 }
@@ -260,9 +266,7 @@ export function normalizeBackendPan(pan, options, nongli, baziLocal){
 	const opt = options || {};
 	return applyNongliDisplay({
 		...pan,
-		tenching: opt.tenching !== undefined ? opt.tenching : 0,
-		rotation: opt.rotation || '固定',
-		options: buildOptions(opt, pan),
+		options: buildOptions(opt, pan, nongli),
 		palaces: normalizePalaces(pan.palace16),
 	}, nongli, baziLocal);
 }

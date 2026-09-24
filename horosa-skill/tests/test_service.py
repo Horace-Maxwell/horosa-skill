@@ -4503,7 +4503,7 @@ def test_technique_card_rides_every_technique_response_and_survives_response_vie
     assert card["schema"] == "horosa.skill.technique_card.v1"
     assert card["tool"] == "tarot"
     assert card["technique"]["key"] == "tarot"
-    assert card["versions"]["skill"] and card["versions"]["export_settings"] == 14
+    assert card["versions"]["skill"] and card["versions"]["export_settings"] == 15
     assert card["refs"]["run_id"] == result.memory_ref.run_id
 
     slim = service.run_tool("tarot", {**payload, "response_view": "titles"}, save_result=False)

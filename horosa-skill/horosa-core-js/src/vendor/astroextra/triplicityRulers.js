@@ -188,17 +188,22 @@ function planetTxt(id){
 	return AstroText.AstroTxtMsg[id] || `${id}`;
 }
 
-function resolveOpts(opts){
+function resolveOpts(opts, chartObj){
 	const o = { ...TRIPLICITY_DEFAULT_OPTS, ...(opts || {}) };
 	if(!TRIPLICITY_DIVISIONS[o.division]){ o.division = 'thirds'; }
-	if(!TRIPLICITY_SYSTEMS[o.system]){ o.system = TRIPLICITY_SYSTEM_DEFAULT; }
+	if(!TRIPLICITY_SYSTEMS[opts && opts.system]){
+		// [Q-187/T-111] 未指定(或非法)体系时随本盘排盘三分集(chartObj.params.triplicity,与页面 AstroTriplicityRulers 初值同序),
+		// 再回内建默认 —— 挂载(record.system 缺席)与页面同盘同口径。(判 opts 原值:展开默认后 o.system 恒合法,判不到「未指定」)
+		const ct = chartObj && chartObj.params ? chartObj.params.triplicity : null;
+		o.system = TRIPLICITY_SYSTEMS[ct] ? ct : TRIPLICITY_SYSTEM_DEFAULT;
+	}
 	o.lifespan = Number(o.lifespan) > 0 ? Number(o.lifespan) : TRIPLICITY_LIFESPAN_DEFAULT;
 	return o;
 }
 
 // 主输出：区间光体的三分主星 → 人生各阶段。
 export function buildTriplicityPeriods(chartObj, opts){
-	const o = resolveOpts(opts);
+	const o = resolveOpts(opts, chartObj);
 	const chart = chartObj && chartObj.chart;
 	if(!chart){ return null; }
 	const isDiurnal = !!chart.isDiurnal;

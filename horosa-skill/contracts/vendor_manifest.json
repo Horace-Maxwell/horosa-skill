@@ -107,6 +107,10 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "babylon/mathAstro.js": {
+      "upstream": "divination/babylon/mathAstro.js",
+      "mode": "verbatim"
+    },
     "babylon/microzodiac.js": {
       "upstream": "divination/babylon/microzodiac.js",
       "mode": "verbatim",
@@ -229,7 +233,7 @@
       "mode": "curated",
       "why": "Uranian 虚星表所需子集，**逐值抽取**。块界=下一个顶层 `export const`（上游多数常量不带结尾分号，按分号切会卷进后续声明）；且必须保持上游原序——LIST_URANIAN 引用了排在其后的符号，重排即 ReferenceError before initialization。",
       "extracts": [],
-      "upstream_sha256": "53aa78f226d316c30fee680f6ed48aa11f5d5c5cda4191fc3d91c49b00866fe8"
+      "upstream_sha256": "d960a5ea4b9bc9b485bd271a72eda30ad74a54423ec2369d6fa828e10f825d88"
     },
     "divination/data/accidentalDignity.js": {
       "upstream": "divination/data/accidentalDignity.js",
@@ -445,6 +449,10 @@
       "upstream": "divination/election/orbPolicy.js",
       "mode": "verbatim",
       "deviations": []
+    },
+    "divination/election/returnCharts.js": {
+      "upstream": "divination/election/returnCharts.js",
+      "mode": "verbatim"
     },
     "divination/election/rulePacks.js": {
       "upstream": "divination/election/rulePacks.js",
@@ -770,6 +778,10 @@
         }
       ]
     },
+    "divination/zeri/zeriExplainText.js": {
+      "upstream": "divination/zeri/zeriExplainText.js",
+      "mode": "verbatim"
+    },
     "divination/zeri/ziweiZeriConditionTypes.js": {
       "upstream": "divination/zeri/ziweiZeriConditionTypes.js",
       "mode": "verbatim",
@@ -931,13 +943,13 @@
       "mode": "bespoke",
       "why": "自上游 utils/helper.js 抽出 littleEndian / randomNum（供 gua 引擎装卦用）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
       "derived_from": "utils/helper.js",
-      "derived_sha256": "dc69320105d82b4361e5096f88f038308e286726218779705e72b7b70b999625"
+      "derived_sha256": "749b69dc200951af210da54bf2b7d180cbbbf158abe5278ca9ca29a9d1e61552"
     },
     "gua/littleEndian.js": {
       "mode": "bespoke",
       "why": "自上游 utils/helper.js 逐字取出的单个纯函数；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
       "derived_from": "utils/helper.js",
-      "derived_sha256": "dc69320105d82b4361e5096f88f038308e286726218779705e72b7b70b999625"
+      "derived_sha256": "749b69dc200951af210da54bf2b7d180cbbbf158abe5278ca9ca29a9d1e61552"
     },
     "gua/liuyaoDongBian.js": {
       "upstream": "components/gua/liuyaoDongBian.js",
@@ -1033,7 +1045,7 @@
       "mode": "curated",
       "why": "headless no-op localStorage shim（上游 117 行是 WKWebView QuotaExceeded 包装；skill 从不持久化六爻设置，逐调用显式传参）。",
       "extracts": [],
-      "upstream_sha256": "51209365767ecb09d8a726cd776f2223e7b1142ca5be611d734230cefb07b0a7"
+      "upstream_sha256": "f183788c69f2a41b7275cc81e4de288804e0b07b33adc3d71de9a63db4373850"
     },
     "guice/core/guiceConst.js": {
       "upstream": "components/guice/core/guiceConst.js",
@@ -1114,7 +1126,7 @@
       "mode": "bespoke",
       "why": "自上游 GuoLaoChartMain.js verbatim 抽出的政余格局 Moira DSL 闭包；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
       "derived_from": "components/guolao/GuoLaoChartMain.js",
-      "derived_sha256": "54762bd17a55ab64a97f65ebc6a432227cc43f363e849bd4471101567b8d3375"
+      "derived_sha256": "6d025655d699f9defa3e7fc8ed464aa2da23ef8c7cc45f4b08b3e24adce2f2f0"
     },
     "heluo/heluoLocal.js": {
       "upstream": "utils/heluoLocal.js",
@@ -1125,7 +1137,7 @@
       "mode": "bespoke",
       "why": "自上游 IndiaChart.js 逐字抽出的 Jyotish 快照段构造器（仅剥 React 外壳）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
       "derived_from": "components/astro/IndiaChart.js",
-      "derived_sha256": "0483875542dba7a0be148b31da53f959c4373c2e206f3a2cfa4a8cc461ccce4e"
+      "derived_sha256": "4fc22b6eb71cdd0a943bf8ef3cbea2d96ba4bead7e7363a7c845fbfe0f244097"
     },
     "jinkou/JinKouCalc.js": {
       "upstream": "components/jinkou/JinKouCalc.js",
@@ -1141,7 +1153,7 @@
       "mode": "bespoke",
       "why": "自上游 JinKouMain.js 抽出的金口诀 AI 快照格式化层（网络/React 不取）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
       "derived_from": "components/jinkou/JinKouMain.js",
-      "derived_sha256": "bd908c9e4f5716ccd3686662efb0de8aad98a75a179b424cb0547987b58db09d"
+      "derived_sha256": "f2c84c521e56d290290c8ee8a61c32a0737e66ac5ac25ab78f4d0d146a6da25d"
     },
     "jinkou/JinKouState.js": {
       "upstream": "components/jinkou/JinKouState.js",
@@ -1377,7 +1389,7 @@
       "mode": "curated",
       "why": "模块加载期读 localStorage → 硬编码 no-op shim（Node 实验性全局 localStorage 无 flag 会 throw，故不探测 globalThis）。",
       "extracts": [],
-      "upstream_sha256": "e634abfda895c88afa773e1156193240177c96ac2062e79fb6262f3f6ab99a58"
+      "upstream_sha256": "b0b1738f66765a60ecc338cce9017c811ba35d0ccc264dc563ff2dce9e740795"
     },
     "taiyi/TaiYiCalc.js": {
       "upstream": "components/taiyi/TaiYiCalc.js",
@@ -1602,7 +1614,7 @@
       "mode": "bespoke",
       "why": "自上游 TongSheFaMain.js 逐字抽出的统摄法纯计算层（React 类之前的常量与 40 个函数）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
       "derived_from": "components/tongshefa/TongSheFaMain.js",
-      "derived_sha256": "aa6fad4af6b01afdb3de9706431e86efd315129aac3aef49fda4e39928020ec9"
+      "derived_sha256": "b185738c1e2b8d9f4493c88ba3d19b1ab64dede668434434def1bf6f1fa3d8a2"
     },
     "tongshu/donggong.js": {
       "upstream": "components/calendar/tongshu/donggong.js",
@@ -1702,6 +1714,34 @@
       "upstream": "utils/julianDayIndex.js",
       "mode": "verbatim",
       "deviations": []
+    },
+    "utils/kentangCaseSave.js": {
+      "upstream": "utils/kentangCaseSave.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "stub_import",
+          "specifier": "./storageutil.js",
+          "stub": "// headless stub：上游 getStore() 取 dva 全局 store（读「当前载入的事盘」）。headless 无 store、也没有「载入的旧案」——\n// 设置一律由每次调用显式传入，故恒 null → getKentangSavedCasePayload 回 null（与上游「未载入事盘」同一分支）。\nconst getStore = () => null;",
+          "why": "LiuRengMain.js（truncate 后仍在的模块级函数）只用 caseFieldSnapshot / caseGenderValue / getKentangSavedCasePayload；后者在 headless 恒走「未载入事盘」分支"
+        }
+      ]
+    },
+    "utils/pageSettingsStore.js": {
+      "upstream": "utils/pageSettingsStore.js",
+      "mode": "verbatim"
+    },
+    "utils/zeriSnapshotPrefs.js": {
+      "upstream": "utils/zeriSnapshotPrefs.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "replace_text",
+          "find": "if(typeof localStorage !== 'undefined'){",
+          "to": "if(false){   // headless：不探测全局 localStorage（Node ≥25 实验性全局无 --localstorage-file 会告警/抛），恒走缺省；调用方可经 opts 显式覆盖",
+          "why": "AGENTS §5 闭包提取陷阱 ②：headless 恒无浏览器持久化，别探测 globalThis.localStorage；缺省（60 行 / 3 行判读树）与上游无全局设置时一致"
+        }
+      ]
     },
     "xiaochengtu/xiaochengtuConst.js": {
       "upstream": "components/xiaochengtu/core/xiaochengtuConst.js",

@@ -10,7 +10,7 @@
 //    buildGuolaoBirthStarsSection / buildGuolaoTransitStarsSection，v44 硬缺修）；无数据回空串不产段。
 //    ⚠ v0.36.0 之前这三段被当成「开源 astropy 无该路由」永久排除——实际 /qizheng/moira 是 **Java** 聚合层
 //    （astrostudycn QizhengMoiraController）的路由，当年拿 Python chart 服务测的 500（docs/LESSONS.md）。
-import { buildLocalMoiraPatterns, buildGodRowsFromChart } from '../vendor/guolao/guolaoMoira.js';
+import { buildLocalMoiraPatternsForSnapshot } from '../vendor/guolao/guolaoMoira.js';
 
 // 与上游 GuoLaoChartMain.js 逐字相同的三张参考表（十神序/天禄至天权年曜主项）。
 const MOIRA_TEN_GOD_ORG = ['天禄', '天暗', '天福', '天耗', '天荫', '天贵', '天嗣', '天刑', '天印', '天囚', '天权'];
@@ -144,8 +144,8 @@ export function runGuolaoMoira(payload) {
   const fields = (payload && payload.fields) || {};
   const params = (payload && payload.params) || {};
   try {
-    const godRows = buildGodRowsFromChart(result, fields);
-    const patterns = buildLocalMoiraPatterns(result, fields, params, godRows) || [];
+    // 快照语义（同上游 buildGuolaoSnapshotTextV2）：黄仪盘（displayCoord==='ecliptic'）整段按黄经求值。
+    const { patterns } = buildLocalMoiraPatternsForSnapshot(result, fields, params);
     if (!patterns.length) {
       return { snapshot_text: '无', data: { patterns: [] } };
     }

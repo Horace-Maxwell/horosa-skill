@@ -242,29 +242,14 @@ function buildLocalMoiraPatterns(chartObj, fields, params, godRows){
 
 function computeAscSignIndex(result, chart, fields){
 	const objects = chart && chart.objects ? chart.objects : [];
-	const asc = objects.find((obj)=>obj.id === AstroConst.ASC);
-	const sun = objects.find((obj)=>obj.id === AstroConst.SUN);
-	if(!asc){
+	if(!objects.length){
 		return -1;
 	}
-	const ascIdx = Math.floor(Number(asc.ra) / 30);
-	const mode = resolveHouseStartMode(fields);
-	if(mode === SZConst.SZHouseStart_ASC){
-		return ascIdx;
+	const life = Number(lifeDegree(chart, fields, true));
+	if(!Number.isFinite(life)){
+		return -1;
 	}
-	const bazi = (chart && chart.nongli && chart.nongli.bazi)
-		|| (result && result.nongli && result.nongli.bazi);
-	if(!bazi || !sun){
-		return ascIdx;
-	}
-	const timezi = bazi.time && bazi.time.branch ? bazi.time.branch.cell : null;
-	const timesig = timezi ? SZConst.ZiSign[timezi] : null;
-	const tmsigidx = timesig ? AstroConst.LIST_SIGNS.indexOf(timesig) : -1;
-	if(tmsigidx < 0){
-		return ascIdx;
-	}
-	const sunidx = Math.floor(Number(sun.ra) / 30);
-	return (sunidx - tmsigidx - 5 + 24) % 12;
+	return Math.floor((((life % 360) + 360) % 360) / 30);
 }
 
 
@@ -530,8 +515,9 @@ function normDegree(val){
 }
 
 
+let SNAPSHOT_PREFER_LON = false;
 function objectLon(obj){
-	const raw = obj && (obj.ra !== undefined ? obj.ra : obj.lon);
+	const raw = obj && (SNAPSHOT_PREFER_LON && obj.lon !== undefined ? obj.lon : (obj.ra !== undefined ? obj.ra : obj.lon));
 	const lon = normDegree(raw);
 	if(lon !== null){
 		return lon;
@@ -572,13 +558,6 @@ function orderGods(list, order){
 }
 
 
-function resolveHouseStartMode(fields){
-	if(fields && fields.houseStartMode && fields.houseStartMode.value !== undefined && fields.houseStartMode.value !== null){
-		return parseInt(fields.houseStartMode.value, 10) === SZConst.SZHouseStart_ASC
-			? SZConst.SZHouseStart_ASC : SZConst.SZHouseStart_Bazi;
-	}
-	return SZConst.SZHouseStart_Bazi;
-}
 
 
 function safeList(val){
@@ -610,4 +589,69 @@ function signIndexFromLon(lon){
 }
 
 
-export { buildLocalMoiraPatterns, buildGodRowsFromChart };
+
+
+// ── 以下逐字取自上游 GuoLaoMoiraWheel.js：computeAscSignIndex（v3.11.0 Q-200/T-127「第 N 宫以七政自身命宫为第 1 宫」）
+// 改读命度 lifeDegree（命主取法 asc/日出/赤黄/古法遇卯/自定），不再读宿占页「人事十二宫起盘」键。依赖闭包 = 下列 6 个声明
+// + 本文件既有的 normalizeGuolaoLifeMode / getStoredGuolaoLifeMode / GUOLAO_LIFE_MODE_ASC + AstroConst.LIFEMASTERDEG74/ASC/SUN。
+
+function findObject(chart, id){
+	const objects = chart && chart.objects ? chart.objects : [];
+	return objects.find((obj)=>obj.id === id);
+}
+
+function objectRa(obj, preferLon = false){
+	const num = Number(obj && (preferLon && obj.lon !== undefined ? obj.lon : (obj.ra !== undefined ? obj.ra : obj.lon)));
+	return Number.isFinite(num) ? num : null;
+}
+
+function isZhengSiderealChart(chart){
+	const params = chart && chart.params ? chart.params : {};
+	return Number(params.doubingSu28) === 4 || Number(params.guolaoZhengSidereal) === 1;
+}
+
+function isEclipticDisplayChart(chart){
+	const coord = chart && chart.displayCoord;
+	if(coord === 'ecliptic'){ return true; }
+	if(coord === 'equatorial'){ return false; }
+	return isZhengSiderealChart(chart);
+}
+
+function lifeModeFromFields(fields){
+	if(fields && fields.guolaoLifeMode && fields.guolaoLifeMode.value !== undefined && fields.guolaoLifeMode.value !== null){
+		return normalizeGuolaoLifeMode(fields.guolaoLifeMode.value);
+	}
+	return getStoredGuolaoLifeMode();
+}
+
+function lifeDegree(chart, fields, forceLon){
+	const life = findObject(chart, AstroConst.LIFEMASTERDEG74);
+	const asc = findObject(chart, AstroConst.ASC);
+	const sun = findObject(chart, AstroConst.SUN);
+	const lifeMode = lifeModeFromFields(fields);
+	// R: 除「占星上升」外(asc 直接用上升点),日出/赤黄/古法遇卯/自定命宫(地支)均以 BaZi 算出的 LifeMasterDeg74 为命度起宫。
+	const useLifeMaster = lifeMode !== GUOLAO_LIFE_MODE_ASC;
+	// forceLon=true:恒取黄经命度(供 12 宫/地支/小限飞限用,宫位系黄道划分,不随宿度制显示坐标变)。
+	const preferLon = forceLon === true ? true : isEclipticDisplayChart(chart);
+	const primary = useLifeMaster ? objectRa(life, preferLon) : objectRa(asc, preferLon);
+	const secondary = useLifeMaster ? objectRa(asc, preferLon) : objectRa(life, preferLon);
+	const val = primary !== null ? primary : (secondary !== null ? secondary : objectRa(sun, preferLon));
+	return val === null ? 0 : val;
+}
+
+
+// skill 侧桥接：上游模块级 SNAPSHOT_PREFER_LON 只在 buildGuolaoSnapshotTextV2 生命周期内为真（黄仪盘
+// displayCoord==='ecliptic' 时快照整段走黄经），盘面 UI 路径恒 false；skill 只产快照 → 以同一判据置位、finally 复位。
+// godRows 与格局都在该窗口内求值，与上游 buildGuolaoPatternSection 同序。
+function buildLocalMoiraPatternsForSnapshot(result, fields, params){
+	const _snapChart = result && result.chart ? result.chart : result;
+	SNAPSHOT_PREFER_LON = !!(_snapChart && _snapChart.displayCoord === 'ecliptic');
+	try{
+		const godRows = buildGodRowsFromChart(result, fields);
+		return { godRows, patterns: buildLocalMoiraPatterns(result, fields, params, godRows) || [] };
+	}finally{
+		SNAPSHOT_PREFER_LON = false;
+	}
+}
+
+export { buildLocalMoiraPatterns, buildGodRowsFromChart, buildLocalMoiraPatternsForSnapshot };

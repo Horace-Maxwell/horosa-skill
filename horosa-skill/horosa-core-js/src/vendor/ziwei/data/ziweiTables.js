@@ -131,6 +131,36 @@ export function starLightOf(star, zhi, source){
 	const b = STAR_LIGHT[star];
 	return b ? b[zhi] : undefined;
 }
+// [Q-433/T-396] 按当前亮度源预装饰整张紫微 chart(深拷贝):每宫各星组的 starlight 经 starLightOf 覆盖(源表命中用其值、
+// 缺格回落原值),与快照 builder(ZiWeiMain 亮度传导)/渲染层(ZWCommHouse.effStarLight)同口径。缺省源 zi_jian 或非法输入 → 原对象
+// 原样返回(零回归)。供深度报告 GT 提取边界(ReportPane → reportPipeline)使用:此前 GT 按裸 starlight 取档,非缺省源下与快照两路不同形。
+const ZW_STAR_GROUP_KEYS = ['starsMain', 'starsAssist', 'starsEvil', 'starsOthersGood', 'starsOthersBad', 'starsSmall', 'stars'];
+export function decorateZiweiChartBrightness(chart, source){
+	if(!chart || !Array.isArray(chart.houses)){ return chart; }
+	const src = source || (ZWEngineOptionsRef && ZWEngineOptionsRef.brightnessSource) || 'zi_jian';
+	if(!src || src === 'zi_jian'){ return chart; }
+	const houses = chart.houses.map((house)=>{
+		if(!house || typeof house !== 'object'){ return house; }
+		const zhi = (((house.ganzi) || '') + '').charAt(1);
+		if(!zhi){ return house; }
+		const next = { ...house };
+		ZW_STAR_GROUP_KEYS.forEach((key)=>{
+			const arr = house[key];
+			if(!Array.isArray(arr)){ return; }
+			next[key] = arr.map((item)=>{
+				if(!item || typeof item !== 'object' || !item.name){ return item; }
+				const base = `${item.name}`.charAt(0) === '副' ? `${item.name}`.slice(1) : `${item.name}`;
+				const v = starLightOf(base, zhi, src);
+				return (v != null && v !== item.starlight) ? { ...item, starlight: v } : item;
+			});
+		});
+		return next;
+	});
+	return { ...chart, houses };
+}
+// 亮度源单例引用由 ziweiOptions 注册(避免本表反向 import 引擎选项造成循环)。
+let ZWEngineOptionsRef = null;
+export function registerZwEngineOptionsForBrightness(ref){ ZWEngineOptionsRef = ref; }
 // 流昌/流曲位置表(运限流曜用,{流昌:{干:支},流曲:{干:支}})
 export const STARS_LIU_CHANGQU = liuChangQuJson;
 // 格局库（WP-G 用）

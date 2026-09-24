@@ -14,7 +14,13 @@ export const SANSHI_TAIYI_RENAME_BACK = { taiyiStyle: 'style', taiyiAccum: 'tn' 
 // 六壬家扫描消费键(liurengZeriScanEngine/buildLrChartLite 读):
 const LR_KEYS = ['guirengType', 'yueMode', 'yinyangSystem', 'after23NewDay', 'lateZiHourUseNextDay'];
 // 奇门家扫描消费键(QimenZeriWorkbench PARAM_FIELDS 同子集;「综合(5)」等后端专属模式不入):
-const QM_KEYS = ['paiPanType', 'qijuMethod', 'zhirunLeapDays', 'shuziReportNumber', 'school', 'zhiShiType', 'yueJiaQiJuType', 'kongMode', 'yimaMode', 'shiftPalace', 'timeAlg', 'after23NewDay', 'lateZiHourUseNextDay'];
+// [Q-271/ZC-14] 此前只取 13 键 → 暗干/暗支/八神取神/中宫寄宫/移星值符等三式合一页左栏也有的档不进扫描,
+// 「暗干/暗支」类在三式择日恒空而奇门择日(取遁甲页全部 options)能命中。补齐为 QIMEN_FIELDS 全消费键;
+// 值由宿主(SanshiZeriMain.startScan)从内嵌三式页 hook.getQimenOptions() 播种,工作台 13 键覆盖其上。
+export const QM_SEED_KEYS = ['godsPreset', 'anGanMode', 'showAnZhi', 'jiGongMode', 'shiftZhiFuMode', 'kongMarkBoth', 'showAllKong',
+	'feiXingShun', 'feiMenShun', 'feiShenShun', 'feiMenZhongCan', 'feiMenZhongShow', 'mixTian', 'mixXing', 'mixMen', 'mixShen',
+	'yearJiaJu', 'dayJiaJu', 'keJiaFenDun', 'keZiZhengHuanShi', 'jinhanMenPai', 'chartCategory', 'fengJu'];
+const QM_KEYS = ['paiPanType', 'qijuMethod', 'zhirunLeapDays', 'shuziReportNumber', 'school', 'zhiShiType', 'yueJiaQiJuType', 'kongMode', 'yimaMode', 'shiftPalace', 'timeAlg', 'after23NewDay', 'lateZiHourUseNextDay', ...QM_SEED_KEYS];
 // 太乙家扫描消费键(Z3 定谳仅 tn 有判别;style 恒 3 引擎内钉):
 const TY_MERGED_KEYS = ['taiyiAccum'];
 

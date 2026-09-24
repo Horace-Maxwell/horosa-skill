@@ -13,8 +13,9 @@ import { personBazi, buildPersonalizedDates } from '../vendor/calendar/riziEngin
  *
  * 段的取舍（避免与 NongLi 段重复）：
  * - huangli：只取中间 8 段，丢掉它自带的 [起盘信息] 与 [方法说明]（calendar 已由 NongLi 提供）；
- * - tongshu：只取 [通书择日]，同样丢掉它的 [方法说明]；
- * - rizi：[日子馆·个性化择日] + [当事人八字]，**只有传了 persons 才产**（无当事人就没有个性化可言）。
+ * - tongshu：取 [通书择日] 与 [本月逐日表]（v58 候选段，只有董公/天元乌兔两派产），丢掉它的 [方法说明]；
+ * - rizi：[日子馆·个性化择日] + [当事人八字] + [个性化吉日榜 …] + [所选吉日·完整日课]，**只有传了 persons 才产**
+ *   （无当事人就没有个性化可言）；它自带的 [方法说明] 丢掉。
  *
  * payload: {
  *   year, month, day, hour?,                       // 选中日
@@ -53,7 +54,7 @@ export function runCalendarExtras(payload) {
     const ymd = `${year}-${`${month}`.padStart(2, '0')}-${`${day}`.padStart(2, '0')}`;
     const settings = { ...DEFAULT_TONGSHU_SETTINGS, ...ts, date: ymd };
     const raw = buildTongshuSnapshotText(settings, ymd) || '';
-    const kept = raw.split(/\n(?=\[)/).filter((block) => block.startsWith('[通书择日]'));
+    const kept = raw.split(/\n(?=\[)/).filter((block) => block.startsWith('[通书择日]') || block.startsWith('[本月逐日表]'));
     if (kept.length) {
       blocks.push(kept.join('\n').trim());
     }
@@ -95,16 +96,14 @@ export function runCalendarExtras(payload) {
       });
       const raw = buildRiziSnapshotText({ event, year: rzYear, persons, result }) || '';
       if (raw.trim()) {
-        // 两处段头收拾：
-        // (a) `[个性化吉日榜 Top N／全年候选 M]` 是**动态段头**，上游 preset 里也没有它 —— 写进
-        //     preset 会因 N/M 随输入变化而永远对不上，不写又会被判 unknown。去掉该行让它的表格
-        //     并入前一段 [日子馆·个性化择日]，内容一行不丢。
-        // (b) rizi 自带的 [方法说明] 与 calendar 由 NongLi 提供的同名段重复，丢掉。
+        // rizi 自带的 [方法说明] 与 calendar 由 NongLi 提供的同名段重复，丢掉。
+        // `[个性化吉日榜 Top N／全年候选 M]` 是动态段头：上游 v58 把它登记成 calendar 的独立段并在
+        // mapLegacySectionTitle 里折叠成静态名 [Q-271/ZC-17]——skill 的 map_legacy_section_title 同式折叠，
+        // 段头原样保留（此前是删掉段头、把榜单并进上一段）。
         const cleaned = raw
           .split(/\n(?=\[)/)
           .filter((block) => !block.startsWith('[方法说明]'))
-          .join('\n')
-          .replace(/^\[个性化吉日榜[^\]]*\]\n?/gm, '');
+          .join('\n');
         if (cleaned.trim()) {
           blocks.push(cleaned.trim());
         }

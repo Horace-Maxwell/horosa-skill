@@ -51,7 +51,8 @@ export function defaultAfter23NewDay(){
 //     - after23=1 (日柱壬寅) + lateZi=1 → 壬寅 庚子
 //     - after23=0 (日柱辛丑) + lateZi=1 → 辛丑 庚子 (按 28日壬干起子时)
 //   'today': 时干用今日日干起子时
-//     - after23=1 (日柱壬寅) + lateZi=0 → 壬寅 庚子 (日柱已次日, 当日干即次日, 等价)
+//     - after23=1 (日柱壬寅) + lateZi=0 → 壬寅 戊子 (日柱进位、时干仍按钟面当天辛干起;两开关完全独立 —— 用户拍板,
+//       jest baziLunarLocal.dayBoundary 矩阵 + Java BaZiHelper + 七路 Python 权威 2026-09-18 已对齐同一口径)
 //     - after23=0 (日柱辛丑) + lateZi=0 → 辛丑 戊子 (按 27日辛干起子时, 新行为)
 // 时柱开关只在 hour∈[23:00,24:00) 时影响时干; 其他时辰无差别。
 export const LATE_ZI_HOUR_NEXT_DAY = 'nextDay';
@@ -89,4 +90,23 @@ export function readGlobalLateZiHourMode(){
 
 export function defaultLateZiHourUseNextDay(){
 	return lateZiHourModeToBit(readGlobalLateZiHourMode());
+}
+
+// ============================================================================
+// [Q-358·续 2026-09-18] 日界口径的农历月 / 日 / 闰(单一入口)。
+// after23NewDay=1(23 点算第二天)且本命落 23 点子时段时,日柱已进位次日,baziLunarLocal.buildNongli
+// 同步给出进位后的农历(ziweiMonthNum / ziweiDayNum / ziweiLeap,紫微首用);而 monthNum / dayNum
+// 恒为钟面历日的农历。凡按「农历月 / 日」起数的技法(一掌经四宫、参评起运、正传铁板月命数等)
+// 一律经此取值,与日柱、紫微同一口径;此前四页直读 dayNum → 同一屏上日柱已是次日、农历日仍是当日,
+// 且日界开关对这些页面是死开关(三方案结果完全相同)。
+// 不进位场景 / 远程农历桥(无 ziwei* 键)逐字回退 monthNum / dayNum / leap → 缺省与非 23 点档零回归。
+export function lunarByDayBoundary(nl){
+	const n = nl || {};
+	const rolled = n.ziweiDayNum != null && n.ziweiMonthNum != null;
+	const civilMonth = Number(n.monthNum || n.month) || 0;
+	const civilDay = Number(n.dayNum || n.day) || 0;
+	const monthNum = rolled ? (Number(n.ziweiMonthNum) || civilMonth) : civilMonth;
+	const dayNum = rolled ? (Number(n.ziweiDayNum) || civilDay) : civilDay;
+	const leap = rolled ? !!n.ziweiLeap : !!(n.isLeap || n.leap);
+	return { monthNum, dayNum, leap, shifted: rolled && (monthNum !== civilMonth || dayNum !== civilDay) };
 }

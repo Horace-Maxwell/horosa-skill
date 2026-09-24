@@ -5,7 +5,7 @@
 // summary,evaluate(day,params,ctx)→{pass,actual}};ctx=makeHuangliZeriEvalCtx(day)。
 // 一键一行 Tab 缩进(preflight 键集契约)。
 import { LunarUtil } from 'lunar-javascript';
-import { TONGSHU_TERMS, yongshiVerdict } from '../../calendar/tongshuData.js';
+import { TONGSHU_TERMS, YONGSHI_YIJI_SYN, yongshiVerdict } from '../../calendar/tongshuData.js';
 // [W6 全谱轮] 通书五流派判定=通书页同函数(直调,主表修正择日自动跟);玄空 mingYear 缺省=天地判。
 import donggongDay from '../../tongshu/donggong.js';
 import { wutuForDate } from '../../tongshu/wutu.js';
@@ -19,10 +19,21 @@ export { GROUP_TYPES, JOINER_CN };
 // ── 同源值域 ──
 const uniq = (arr)=>[...new Set(arr.filter(Boolean))];
 // 用事词表:TONGSHU_TERMS 分类展开(婚姻/营建/…);lunar 宜忌词与其高度重合,另留自由输入。
-export const HUANGLI_TERM_OPTIONS = Object.keys(TONGSHU_TERMS).reduce((acc, cat)=>{
-	(TONGSHU_TERMS[cat] || []).forEach((t)=>{ if(t && t.name){ acc.push({ value: t.name, label: `${t.name}(${cat})` }); } });
-	return acc;
-}, []);
+// [Q-480/T-442] 同一用事名可跨两类出现(如「启钻」既在营建又在丧葬):按 value 去重并把类名合并进 label,
+// 否则下拉里会并存两个同 value 的选项(antd 按 value 作 key → 选一项两项同亮),四类条件全中招。
+export const HUANGLI_TERM_OPTIONS = (()=>{
+	const order = [];
+	const byName = new Map();
+	Object.keys(TONGSHU_TERMS).forEach((cat)=>{
+		(TONGSHU_TERMS[cat] || []).forEach((t)=>{
+			if(!t || !t.name){ return; }
+			if(!byName.has(t.name)){ byName.set(t.name, []); order.push(t.name); }
+			const cats = byName.get(t.name);
+			if(cats.indexOf(cat) < 0){ cats.push(cat); }
+		});
+	});
+	return order.map((name)=>({ value: name, label: `${name}(${byName.get(name).join('·')})` }));
+})();
 export const JIANCHU_NAMES = uniq(LunarUtil.ZHI_XING || []);            // 建除十二神
 export const TIANSHEN_NAMES = uniq(LunarUtil.TIAN_SHEN || []);          // 黄黑道十二值神
 // 廿八宿=千年不变常量(LunarUtil.XIU 是「支+周」映射表,值域含 56 组合项不适取);硬编码合法。
@@ -45,6 +56,16 @@ const listHit = (list, values, mode)=>{
 	const hit = vals.filter((v)=>set.has(v));
 	return { pass: mode === 'all' ? hit.length === vals.length && vals.length > 0 : hit.length > 0, hit };
 };
+// [Q-271/ZC-18] 用事词命中经同义展开(与通书「用事裁决」yongshiVerdict 同一张 YONGSHI_YIJI_SYN):通书用事词表里
+// 开山 / 平整 / 立向 / 立契 / 造舟船 / 设醮 / 剃头 / 迁徙 在日宜忌表以异名出现(动土·起基 / 平治道涂 / 竖柱·上梁 / 立券 /
+// 造船 / 斋醮 / 理发 / 移徙),此前按字面命中 → 宜含恒假、忌不含恒真。酝酿在日宜忌表无同义条目(仍按字面)。
+const expandTerm = (v)=>uniq([v].concat(YONGSHI_YIJI_SYN[v] || []));
+const termListHit = (list, values, mode)=>{
+	const set = new Set(list || []);
+	const vals = values || [];
+	const hit = vals.filter((v)=>expandTerm(v).some((w)=>set.has(w)));
+	return { pass: mode === 'all' ? hit.length === vals.length && vals.length > 0 : hit.length > 0, hit };
+};
 const modeText = (p)=>(p.matchMode === 'all' ? '(全部)' : '');
 
 // 惰性求值上下文(签名同构 makeQimenEvalCtx;day 为 buildHuangliDay 全算好的纯对象,直挂即可)。
@@ -58,13 +79,13 @@ export const HUANGLI_CONDITION_TYPES = {
 		label: '宜含事项',
 		defaults: { values: ['嫁娶'], matchMode: 'any' },
 		fields: [
-			{ key: 'values', kind: 'multiselect', label: '事项', options: HUANGLI_TERM_OPTIONS, hint: '通书用事词表(同源);当日「宜」列表须含所选' },
+			{ key: 'values', kind: 'multiselect', label: '事项', options: HUANGLI_TERM_OPTIONS, hint: '通书用事词表(同源);当日「宜」列表须含所选(异名按同义表展开:开山→动土/起基、立向→竖柱/上梁、立契→立券、剃头→理发、迁徙→移徙…)' },
 			MATCH_MODE_FIELD,
 		],
 		validate: needValues,
 		summary(p){ return `宜:${(p.values || []).join('/')}${modeText(p)}`; },
 		evaluate(day, p){
-			const { pass, hit } = listHit(day.yi, p.values, p.matchMode);
+			const { pass, hit } = termListHit(day.yi, p.values, p.matchMode);
 			return { pass, actual: `宜:${(day.yi || []).join('、') || '无'}${hit.length ? `(中:${hit.join('/')})` : ''}` };
 		},
 	},
@@ -79,7 +100,7 @@ export const HUANGLI_CONDITION_TYPES = {
 		validate: needValues,
 		summary(p){ return `${p.mode === 'with' ? '忌含' : '忌不含'}:${(p.values || []).join('/')}`; },
 		evaluate(day, p){
-			const { hit } = listHit(day.ji, p.values, 'any');
+			const { hit } = termListHit(day.ji, p.values, 'any');
 			const pass = p.mode === 'with' ? hit.length > 0 : hit.length === 0;
 			return { pass, actual: `忌:${(day.ji || []).join('、') || '无'}` };
 		},
@@ -150,9 +171,10 @@ export const HUANGLI_CONDITION_TYPES = {
 	xiongsha_not: {
 		category: '神煞',
 		label: '凶煞回避',
-		defaults: { values: ['月破', '受死', '四废'], mode: 'without' },
+		// [Q-271/ZC-19] 库内实名「致死」(lunar 神煞词表无「受死」;yearAuspicious 已同名对齐):缺省与选项同改,否则该项恒不命中。
+		defaults: { values: ['月破', '致死', '四废'], mode: 'without' },
 		fields: [
-			{ key: 'values', kind: 'multiselect', label: '凶煞', options: opt(uniq(['月破', '大耗', '受死', '四废', '五墓', '灾煞', '天火', '月煞', '月虚', '月刑', '月害', '劫煞', '天罡', '死神', '往亡', '归忌', '血支', '血忌', '五离', '八专', '触水龙', '天贼', '五虚', '土符', '大时', '大败', '咸池', '小耗', '四击', '四耗', '四忌', '四穷', '九坎', '九焦', '重日', '复日'])), hint: '当日凶煞列表' },
+			{ key: 'values', kind: 'multiselect', label: '凶煞', options: opt(uniq(['月破', '大耗', '致死', '四废', '五墓', '灾煞', '天火', '月煞', '月虚', '月刑', '月害', '劫煞', '天罡', '死神', '往亡', '归忌', '血支', '血忌', '五离', '八专', '触水龙', '天贼', '五虚', '土符', '大时', '大败', '咸池', '小耗', '四击', '四耗', '四忌', '四穷', '九坎', '九焦', '重日', '复日'])), hint: '当日凶煞列表' },
 			{ key: 'mode', kind: 'select', label: '判法', options: [{ value: 'without', label: '全不出现(净日)' }, { value: 'with', label: '出现任一(排查日)' }] },
 		],
 		validate: needValues,
@@ -272,7 +294,8 @@ export const HUANGLI_CONDITION_TYPES = {
 		defaults: { mode: 'is', values: [] },
 		fields: [
 			{ key: 'mode', kind: 'select', label: '判法', options: [{ value: 'is', label: '当日交节' }, { value: 'not', label: '非交节日' }] },
-			{ key: 'values', kind: 'multiselect', label: '限定节气', options: opt(JIEQI_24), hint: '空=任意节气' },
+			// [Q-271/ZC-25] 非交节日判法只看「无交节」,限定节气不参与 → 仅当日交节时显示
+			{ key: 'values', kind: 'multiselect', label: '限定节气', options: opt(JIEQI_24), hint: '空=任意节气', showIf: (p)=>p.mode !== 'not' },
 		],
 		summary(p){ return p.mode === 'not' ? '非节气日' : `节气日${(p.values || []).length ? `:${p.values.join('/')}` : ''}`; },
 		evaluate(day, p){
@@ -302,7 +325,8 @@ export const HUANGLI_CONDITION_TYPES = {
 		defaults: { zhis: [], minCount: 1 },
 		fields: [
 			{ key: 'zhis', kind: 'multiselect', label: '限定时支', options: opt(ZHI12), hint: '空=任意时辰;选支=该时辰须为黄道吉时' },
-			{ key: 'minCount', kind: 'number', label: '吉时数≥', min: 1, max: 13, hint: '当日黄道吉时总数下限(限定时支时=命中支数下限)' },
+			// [Q-271/ZC-25] 每日 13 条时辰(子时早晚各一)中黄道吉时恒 6 或 7 条:上限 7(8–13 恒假);子时双计已注明。
+			{ key: 'minCount', kind: 'number', label: '吉时数≥', min: 1, max: 7, hint: '当日黄道吉时总数下限(每日恒 6 或 7 条,早晚子时各计一条;限定时支时=命中支数下限)' },
 		],
 		summary(p){ return (p.zhis && p.zhis.length) ? `吉时含:${p.zhis.join('/')}` : `吉时≥${p.minCount || 1}`; },
 		evaluate(day, p){
@@ -326,12 +350,14 @@ export const HUANGLI_CONDITION_TYPES = {
 		label: '时辰宜忌(逐时)',
 		defaults: { mode: 'yi', terms: ['祭祀'], hours: [] },
 		fields: [
-			{ key: 'mode', kind: 'select', label: '判面', options: [{ value: 'yi', label: '时宜含' }, { value: 'ji', label: '时忌避(命中即判否面)' }] },
-			{ key: 'terms', kind: 'multiselect', label: '事项(任一)', options: HUANGLI_TERM_OPTIONS, hint: 'times[].yi/ji 逐时辰宜忌(黄历页时辰卡同源);限定时辰空=任一时辰' },
+			// [Q-479/T-441 2026-09-18] 两面都是「出现即命中(判真)」:此前括注「命中即判否面」按同表词法(判否=判假)会读成反义;
+			//   要表达「无时辰犯忌」请对本条件取反,与日级「忌中含(避开日)」同一写法。
+			{ key: 'mode', kind: 'select', label: '判面', options: [{ value: 'yi', label: '时宜含(某时辰宜中含该事项即命中)' }, { value: 'ji', label: '时忌含(某时辰忌中含该事项即命中;要「无忌」请取反)' }] },
+			{ key: 'terms', kind: 'multiselect', label: '事项(任一)', options: HUANGLI_TERM_OPTIONS, hint: 'times[].yi/ji 逐时辰宜忌(黄历页时辰卡同源);限定时辰空=任一时辰;两面均为「出现即命中」' },
 			{ key: 'hours', kind: 'multiselect', label: '限定时辰(空=任一)', options: ZHI12.map((z)=>({ value: z, label: `${z}时` })) },
 		],
 		validate: (p)=>(!p.terms || !p.terms.length) ? '至少选择一项' : '',
-		summary(p){ return `时${p.mode === 'ji' ? '忌避' : '宜'}:${(p.terms || []).slice(0, 3).join('/')}${(p.hours && p.hours.length) ? `@${p.hours.join('')}` : ''}`; },
+		summary(p){ return `时${p.mode === 'ji' ? '忌含' : '宜含'}:${(p.terms || []).slice(0, 3).join('/')}${(p.hours && p.hours.length) ? `@${p.hours.join('')}` : ''}`; },
 		evaluate(day, p){
 			const times = day.times || [];
 			const zhiOf = (t)=>`${t.ganzhi || ''}`.slice(-1);
@@ -359,10 +385,16 @@ export const HUANGLI_CONDITION_TYPES = {
 			const zhiOf = (t)=>`${t.ganzhi || ''}`.slice(-1);
 			const scope = (p.hours && p.hours.length) ? times.filter((t)=>p.hours.includes(zhiOf(t))) : times;
 			const dim = p.dim || 'tianshen';
+			// [Q-269/T-257] 时冲判面:选项是生肖,数据 times[].chong 是地支(dump 实抓「子」)→ 生肖映射到地支后再含判;
+			// 值本身已是地支/含地支的旧存档照旧;sha 值无「煞」前缀(dump 实抓「西」)——统一含判+煞前缀剥离。
+			const SX2ZHI = { 鼠: '子', 牛: '丑', 虎: '寅', 兔: '卯', 龙: '辰', 蛇: '巳', 马: '午', 羊: '未', 猴: '申', 鸡: '酉', 狗: '戌', 猪: '亥' };
 			const hit = scope.filter((t)=>{
 				const v = `${t[dim] || ''}`;
-				// chong 值为生肖或支单字、sha 值无「煞」前缀(dump 实抓「西」)——统一含判+煞前缀剥离
-				return !!v && (p.values || []).some((x)=>v.indexOf(`${x}`.replace('煞', '')) >= 0);
+				return !!v && (p.values || []).some((x)=>{
+					const raw = `${x}`.replace('煞', '');
+					if(dim === 'chong'){ const z = SX2ZHI[raw]; return v.indexOf(raw) >= 0 || (!!z && v.indexOf(z) >= 0); }
+					return v.indexOf(raw) >= 0;
+				});
 			});
 			return { pass: hit.length > 0, actual: hit.length ? hit.map((t)=>`${zhiOf(t)}时${t[dim]}`).join(' ') : `无命中(${dim})` };
 		},
@@ -400,9 +432,10 @@ export const HUANGLI_CONDITION_TYPES = {
 		defaults: { school: 'donggong', names: ['煞贡'] },
 		fields: [
 			{ key: 'school', kind: 'select', label: '流派', options: [{ value: 'donggong', label: '董公三吉星' }, { value: 'sanyuan', label: '三垣列宿加临' }] },
-			{ key: 'names', kind: 'multiselect', label: '星名(任一;三垣=命中任一列宿即可留空全判)', options: opt(['煞贡', '直星', '人专', '任意']), hint: '董公=煞贡/直星/人专;三垣=当日 hitStars 非空(选「任意」)' },
+			// [Q-271/ZC-25] 三垣派只有「任意」有意义(煞贡/直星/人专是董公三吉星名,三垣下恒假);留空=全判(与 validate 同口径)。
+			{ key: 'names', kind: 'multiselect', label: '星名(任一;三垣派选「任意」或留空=有列宿加临即命中)', options: opt(['煞贡', '直星', '人专', '任意']), hint: '董公=煞贡/直星/人专(或「任意」);三垣=当日有列宿加临即命中,只认「任意」或留空' },
 		],
-		validate: (p)=>(!p.names || !p.names.length) ? '至少选择一项' : '',
+		validate: (p)=>((p.school !== 'sanyuan' && (!p.names || !p.names.length)) ? '至少选择一项' : ''),
 		summary(p){ return `${p.school === 'sanyuan' ? '三垣列宿' : '董公吉星'}:${(p.names || []).join('/')}`; },
 		evaluate(day, p){
 			const ymd = `${(day.solar && day.solar.ymd) || ''}`.split('-').map(Number);
@@ -412,7 +445,7 @@ export const HUANGLI_CONDITION_TYPES = {
 				if(p.school === 'sanyuan'){
 					const r = sanyuanLiexiuDay(args);
 					const names = (r.hitStars || []).map((x)=>x.name);
-					const pass = names.length > 0 && ((p.names || []).includes('任意') || (p.names || []).some((n)=>names.includes(n)));
+					const pass = names.length > 0 && (!(p.names || []).length || (p.names || []).includes('任意') || (p.names || []).some((n)=>names.includes(n)));
 					return { pass, actual: `列宿加临:${names.join('/') || '无'}` };
 				}
 				const r = donggongDay(args);
@@ -426,9 +459,15 @@ export const HUANGLI_CONDITION_TYPES = {
 	tongshu_hours: {
 		category: '通书',
 		label: '通书吉时在(叠数/玄空)',
-		defaults: { school: 'dieshu' },
+		defaults: { school: 'xuankong' },   // [Q-474/T-436] 缺省换成真能判别的玄空档
 		fields: [
-			{ key: 'school', kind: 'select', label: '流派', options: [{ value: 'dieshu', label: '奇门叠数(有吉时)' }, { value: 'xuankong', label: '玄空大卦(有上吉时)' }], hint: '当日 bestHours 非空;玄空天人判需本命,择日按天地判(通书页同缺省)' },
+			// [Q-474/T-436] 叠数吉时只由日干、日支、时支决定,六十甲子每一天都有 6/8/10 个吉时 →
+			// 「有吉时」逐日恒真,不是条件。档留着(旧方案不破),但置灰不许再选,并在档名里说清;
+			// 玄空档有 541/4383 天为空,能判别,保持可选。
+			{ key: 'school', kind: 'select', label: '流派', options: [
+				{ value: 'dieshu', label: '奇门叠数(每日恒有吉时·不判别)', disabled: true, hint: '叠数吉时由日干/日支/时支决定,每日恒有 6/8/10 个 → 该档逐日恒真;要判具体时辰请用「时辰」组条件' },
+				{ value: 'xuankong', label: '玄空大卦(有上吉时)' },
+			], hint: '当日 bestHours 非空;玄空天人判需本命,择日按天地判(通书页同缺省)' },
 		],
 		validate: ()=>'',
 		summary(p){ return `${p.school === 'xuankong' ? '玄空' : '叠数'}有吉时`; },
@@ -484,7 +523,8 @@ export const HUANGLI_CONDITION_TYPES = {
 	xiu_detail: {
 		category: '神煞',
 		label: '值宿细面(四象/七政/禽)',
-		defaults: { dim: 'xiang', values: ['东方青龙'] },
+		// [Q-271/ZC-19] 四象实值/选项皆「东青龙」等三字形,缺省曾写「东方青龙」→ 含判双向皆不成立、新加即恒假。
+		defaults: { dim: 'xiang', values: ['东青龙'] },
 		fields: [
 			{ key: 'dim', kind: 'select', label: '判面', options: [{ value: 'xiang', label: '四象方' }, { value: 'zheng', label: '七政值日' }, { value: 'animal', label: '值禽' }] },
 			{ key: 'values', kind: 'multiselect', label: '取值(任一;含判)', options: [...opt(['东青龙', '北玄武', '西白虎', '南朱雀']), ...opt(['日', '月', '火', '水', '木', '金', '土']), ...opt(['蛟', '龙', '貉', '兔', '狐', '虎', '豹', '獬', '牛', '蝠', '鼠', '燕', '猪', '獝', '狼', '狗', '彘', '鸡', '乌', '猴', '猿', '犴', '羊', '獐', '马', '鹿', '蛇', '蚓'])], hint: 'xiu.xiang/zheng/animal(黄历页宿卡同源;四象实值形「南朱雀」dump 实抓);跨面选值不命中即判否' },

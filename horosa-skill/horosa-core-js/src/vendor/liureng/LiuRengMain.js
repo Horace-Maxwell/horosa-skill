@@ -2,6 +2,7 @@
 
 
 
+import { definePageSettings } from '../utils/pageSettingsStore.js';
 
 
 
@@ -29,7 +30,7 @@ import { matchBiFa, BIFA_LIST } from '../liureng/LRBiFaDoc.js';
 
 
 
-
+import { getKentangSavedCasePayload, caseFieldSnapshot, caseGenderValue } from '../utils/kentangCaseSave.js';
 
 import { defaultAfter23NewDay, defaultLateZiHourUseNextDay } from '../bazi/dayBoundary.js';
 
@@ -3894,6 +3895,28 @@ const FEN_ZHOU_YE_METHODS = [
 	{ key: 'maoyou', name: '卯酉分昼夜' },
 	{ key: 'yinshen', name: '寅申分昼夜' },
 ];
+// 排盘设置跨会话保留(用户实报:改了之后每次重开软件都要重设)。只收「口径」——
+// 选时时辰 / 演数数字 / 占事类型是每一课的输入,十二长生五行缺省随日干(保留了就再也回不到「随日干」),都不进。
+// 只在用户亲手改控件时落盘:载入事盘回灌、择日工作台下发口径(applyCastFields)都走 setState,不经落盘入口。
+// 🔴 只有**独立六壬页**读写这份保存值;六壬择日里内嵌的那份既不读也不写(见 usesSavedSettings):
+// 择日的扫描引擎把时基 / 起课法 / 分昼夜 / 涉害口径钉死在缺省档、工作台只下发贵人 / 月将 / 阴阳系三键,
+// 内嵌盘若继承了独立页保存的别的口径,点选命中行看到的课就不是扫描判定的那一课(所见 ≠ 所判)。
+// 起课法里「选时 / 演数 / 报数」三法离不开逐课输入(时辰 / 数字,不保留):只留法不留数,重开后数字是空的,
+// 盘面按正时起、起课法一栏却写着演数 —— 所以这三法不进候选(选了照常用,只是不记;库里仍是上一次选的独立起课法)。
+const QI_METHODS_NEEDING_INPUT = ['xuanshi', 'yanshu', 'baoshu'];
+export const LIURENG_PAGE_SETTINGS = definePageSettings('horosa.liureng.settings.v1', {
+	timeAlg: { def: 0, oneOf: [0, 1] },
+	guireng: { def: 2, oneOf: [0, 1, 2, 3, 4] },
+	castMethod: { def: 'zheng', oneOf: QI_METHODS.map((m)=>m.key).filter((k)=>QI_METHODS_NEEDING_INPUT.indexOf(k) < 0) },
+	yueJiangMethod: { def: 'zhongqi', oneOf: YUE_JIANG_METHODS.map((m)=>m.key) },
+	fenZhouYe: { def: 'chenhun', oneOf: FEN_ZHOU_YE_METHODS.map((m)=>m.key) },
+	seHaiMethod: { def: 'app', oneOf: ['app', 'standard', 'mengzhongji'] },
+	seHaiBoundary: { def: 'app', oneOf: ['app', 'both', 'neither'] },
+	shiRuKe: { def: false },
+	yearShenShaSort: { def: 'sanyuan', oneOf: ['sanyuan', 'suigui'] },
+	yinyangSystem: { def: 'danmu', oneOf: ['danmu', 'yinyang'] },
+	tuWangShuai: { def: 'siji', oneOf: ['siji', 'huotu'] },
+});
 const MAOYOU_DAY_BRANCHES = ['卯', '辰', '巳', '午', '未', '申'];
 const YINSHEN_DAY_BRANCHES = ['寅', '卯', '辰', '巳', '午', '未'];
 
@@ -4117,11 +4140,50 @@ export function buildLiuRengLayout(chartObj, guirengType, castOverride){
 	};
 }
 
+// [Q-159/T-76] 出生档序列化(存案 payload 用):date/time 取 'YYYY-MM-DD HH:mm:ss' 字符串,其余标量原样。
+function serializeBirthDraft(birth){
+	if(!birth || !birth.date || !birth.date.value || typeof birth.date.value.format !== 'function'){ return null; }
+	const v = (k)=>(birth[k] && birth[k].value !== undefined ? birth[k].value : undefined);
+	const timeVal = birth.time && birth.time.value && typeof birth.time.value.format === 'function' ? birth.time.value : birth.date.value;
+	return {
+		date: birth.date.value.format('YYYY-MM-DD'),
+		time: timeVal.format('HH:mm:ss'),
+		ad: v('ad'), zone: v('zone'), lat: v('lat'), lon: v('lon'), gpsLat: v('gpsLat'), gpsLon: v('gpsLon'),
+		gender: v('gender'), after23NewDay: v('after23NewDay'), lateZiHourUseNextDay: v('lateZiHourUseNextDay'),
+	};
+}
+function deserializeBirthDraft(raw){
+	if(!raw || typeof raw !== 'object' || !raw.date){ return null; }
+	try{
+		const dt = new DateTime();
+		dt.parse(`${raw.date} ${raw.time || '00:00:00'}`, 'YYYY-MM-DD HH:mm:ss');
+		if(raw.zone){ dt.setZone(raw.zone); }
+		if(raw.ad !== undefined && raw.ad !== null){ dt.ad = Number(raw.ad) === -1 ? -1 : 1; }
+		const f = (val)=>({ value: val });
+		return buildBirthFields({
+			date: f(dt.clone()), time: f(dt.clone()),
+			ad: raw.ad !== undefined ? f(raw.ad) : undefined, zone: raw.zone ? f(raw.zone) : undefined,
+			lat: raw.lat ? f(raw.lat) : undefined, lon: raw.lon ? f(raw.lon) : undefined,
+			gpsLat: raw.gpsLat !== undefined ? f(raw.gpsLat) : undefined, gpsLon: raw.gpsLon !== undefined ? f(raw.gpsLon) : undefined,
+			gender: raw.gender !== undefined ? f(raw.gender) : undefined,
+			after23NewDay: raw.after23NewDay !== undefined ? f(raw.after23NewDay) : undefined,
+			lateZiHourUseNextDay: raw.lateZiHourUseNextDay !== undefined ? f(raw.lateZiHourUseNextDay) : undefined,
+		}, new DateTime());
+	}catch(e){ return null; }
+}
+
 function getAppliedBirth(state){
 	if(state && state.calcBirth){
 		return state.calcBirth;
 	}
 	return state ? state.birth : null;
+}
+
+// [Q-163/T-82·SS-14] 事盘 record.gender 单源=卜卦人性别(与盘面/行年/快照同一来源);卜卦人未填(未知/-1)才回落起课区全局值。
+export function liurengCaseGender(birth, fields){
+	const g = birth && birth.gender ? birth.gender.value : null;
+	if(g === 0 || g === 1 || g === '0' || g === '1'){ return Number(g); }
+	return caseGenderValue(fields);
 }
 
 // 六壬 本命支(命主出生年支,按公历年取年支) + 行年支 —— 第九~十二客 / 本命·行年加时 用;缺则空串(computeQiXY 退回默认)。
@@ -4291,13 +4353,19 @@ export function buildLiuRengSnapshotText(params, liureng, runyear, chartObj, gui
 	const lines = [];
 	const _castOpts = castOpts || {};
 	const nongli = liureng && liureng.nongli ? liureng.nongli : (chartObj && chartObj.nongli ? chartObj.nongli : {});
-	const castOverride = buildLiuRengCastOverride(chartObj, _castOpts);
+	// [挂载自检 三式 P0] 调用方(三式合一)已按自家口径算好 castOverride 时直接用,不再按 castOpts 重算——
+	// 此前三式把 override 对象当 castOpts 传进来,键名不匹配 → 断卦层按全默认盘重算,与同一快照 [大六壬] 四课三传两套盘。
+	const castOverride = (_castOpts.castOverride && typeof _castOpts.castOverride === 'object')
+		? _castOpts.castOverride
+		: buildLiuRengCastOverride(chartObj, _castOpts);
 	const refs = buildLiuRengReferenceBundle(liureng, chartObj, guirengType, runyear, castOverride, { benMingBranch: _castOpts.benmingZhi });
 	const layout = refs.layout;
 	const panStyle = refs && refs.context ? refs.context.panStyle : null;
 	const keData = refs.keData;
 	const sanChuan = refs.sanChuan;
-	const xingbie = `${gender}` === '1' ? '男' : '女';
+	// [Q-427/T-393] 性别「未知」(-1)时计算按男排(行年 / 旬法皆以 gender≠0 取男表),快照却写「女」——
+	//   同一份快照里「行年:男」与「性别:女」并存。与八字页口径统一:未知写「未知(按男排)」。
+	const xingbie = `${gender}` === '1' ? '男' : (`${gender}` === '0' ? '女' : '未知(按男排)');
 
 	lines.push('[起盘信息]');
 	if(params){
@@ -4357,6 +4425,18 @@ export function buildLiuRengSnapshotText(params, liureng, runyear, chartObj, gui
 	if(sanChuan){
 		lines.push(`课式：${fmtValue(sanChuan.name)}`);
 		buildLiuRengSanChuanRows(sanChuan).forEach((l)=>lines.push(l));
+		// [Q-450/T-413] 三传递生递克 + 逐传空/禄/马徽记:右栏取象页签的小图早已画出,快照此前一个字都不带
+		// (空亡可由 [旬空落点]、禄马可由 [常用神煞] 间接推得,但传间生克与逐传徽记无处可推)。与小图同一纯函数。
+		const _scCtx = refs && refs.context ? refs.context : null;
+		if(_scCtx && Array.isArray(_scCtx.sanChuanBranches) && _scCtx.sanChuanBranches.length >= 3){
+			sanChuanRelationSnapshotLines({
+				branches: _scCtx.sanChuanBranches,
+				gans: _scCtx.sanChuanGans || [],
+				dayGan: _scCtx.dayGan || '',
+				dayZhi: _scCtx.dayZhi || '',
+				xunKong: _scCtx.xunKongBranches || [],
+			}).forEach((l)=>lines.push(l));
+		}
 	}else{
 		lines.push('无');
 	}

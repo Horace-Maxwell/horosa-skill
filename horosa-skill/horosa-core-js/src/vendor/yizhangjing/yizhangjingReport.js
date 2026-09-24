@@ -8,6 +8,7 @@ import {
 import DATA from './data/yizhangjingData.json' with { type: 'json' };
 import SHENSHA from './data/yizhangjingShensha.json' with { type: 'json' };
 import LORE from './data/yizhangjingLore.json' with { type: 'json' };
+import { lunarByDayBoundary } from '../bazi/dayBoundary.js';
 
 // 农历月序 → 文献层月诗键（与 YiZhangJingMain 的 MONTH_LABELS 同表；1 起）。
 const LORE_MONTH_LABELS = ['', '正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
@@ -20,6 +21,8 @@ ZODIAC.forEach((z, i) => { ZODIAC_TO_BRANCH[z] = BRANCHES[i]; });
 export function resolveLunarInput(bazi, opts) {
 	if (!bazi) return null;
 	const nl = bazi.nongli || {};
+	// [Q-358·续] 农历月 / 日 / 闰按日界口径取(23 点档「子初换日」随日柱进位次日,与紫微同源;其余逐字同 monthNum/dayNum)
+	const lb = lunarByDayBoundary(nl);
 	const fc = bazi.fourColumns || {};
 	const gz = (p) => (p && (p.ganzi || p.ganZhi)) || '';
 	// 年支：正月初一口径
@@ -30,8 +33,8 @@ export function resolveLunarInput(bazi, opts) {
 	const hourBranch = gz(fc.time).charAt(1);
 	const gender = bazi.gender === 'Female' || bazi.gender === 0 || bazi.gender === '女' ? '女' : '男';
 	// 月：默认农历月(monthNum)；节气月取八字月支序(寅=1…丑=12)
-	let month = parseInt(nl.monthNum, 10) || 0;
-	const lunarMonth = parseInt(nl.monthNum, 10) || 0; // 真实农历月序（不随定月法/闰月折算变动，供显示层标注生辰）
+	let month = lb.monthNum || 0;
+	const lunarMonth = lb.monthNum || 0; // 真实农历月序（不随定月法/闰月折算变动，供显示层标注生辰）
 	let monthNote = '农历月';
 	if (opts && opts.dingYue === 'jieqi') {
 		const mZhi = gz(fc.month).charAt(1);
@@ -40,25 +43,25 @@ export function resolveLunarInput(bazi, opts) {
 			month = ((mi - BRANCHES.indexOf('寅') + 12) % 12) + 1;
 			monthNote = '节气月';
 		}
-	} else if (nl.leap) {
+	} else if (lb.leap) {
 		// 闰月归属：默认十五折半（十五含前作本月、后作下月）；
-		// 夜半折半（leapRule='midnight'）：十五当日且生时=子且属晚子(00:xx)→作下月，余同十五折半。
-		const day = parseInt(nl.dayNum, 10) || 0;
+		// 夜半折半（leapRule='midnight'）：十五当日且生时=子且钟面 00:xx(夜半后的早子;非全局「晚子时」所指 23 时)→作下月，余同十五折半。[Q-265/SO-20⑧ 术语校正]
+		const day = lb.dayNum || 0;
 		const leapRule = opts && opts.leapRule === 'midnight' ? 'midnight' : 'half';
 		let toNext = day > 15;
 		let note = day > 15 ? '闰月·十五后作下月' : '闰月·十五前作本月';
 		if (leapRule === 'midnight' && day === 15) {
 			const hb15 = gz(fc.time).charAt(1);
 			const hm = /(\d{1,2}):/.exec(`${nl.clockTime || ''}`);
-			const lateZi = hb15 === '子' && hm && parseInt(hm[1], 10) === 0; // 晚子=00:xx
-			if (lateZi) { toNext = true; note = '闰月·十五夜半(晚子)作下月'; }
+			const afterMidnightZi = hb15 === '子' && hm && parseInt(hm[1], 10) === 0; // 夜半后 00:xx 的子时(早子)
+			if (afterMidnightZi) { toNext = true; note = '闰月·十五夜半(早子)作下月'; }
 		}
 		if (toNext) { month = month + 1; if (month > 12) month -= 12; }
 		monthNote = note;
 	}
-	const day = parseInt(nl.dayNum, 10) || 0;
+	const day = lb.dayNum || 0;
 	if (!yearBranch || !hourBranch || !month || !day) return null;
-	return { yearBranch, month, lunarMonth, day, hourBranch, gender, monthNote, leap: !!nl.leap };
+	return { yearBranch, month, lunarMonth, day, hourBranch, gender, monthNote, leap: lb.leap };
 }
 
 function starData(star) {
@@ -411,6 +414,29 @@ export function buildYizhangjingSnapshotText(model) {
 		L.push('');
 		L.push('【位置速断】');
 		model.posQuick.forEach((p) => { if (p.text) L.push(`${p.label}柱${p.star}：${p.text}`); });
+	}
+	// [Q-437/T-400] 页面「各柱逢星速断」「六道分布」「主星象义/星性」三卡此前不进快照(模型早已派生,只是 builder 没写)。
+	if (model.pillarQuickHits && model.pillarQuickHits.length) {
+		L.push('');
+		L.push('【各柱逢星速断】');
+		model.pillarQuickHits.forEach((r) => { L.push(`${r.pillar}柱（${(r.stars || []).join('/')}）：${r.text}`); });
+	}
+	if (model.daoRows && model.daoRows.length) {
+		L.push('');
+		L.push('【六道分布】');
+		L.push('（四柱各道计数·共通特质／前世身份）');
+		model.daoRows.forEach((d) => {
+			L.push(`${d.term || d.dao}×${d.count}：${d.traits || '—'}${(d.prevLife || []).length ? `　前世：${d.prevLife.join('；')}` : ''}`);
+		});
+	}
+	if (model.pillars && model.pillars.some((p) => p.xiangyi || p.xingxing)) {
+		L.push('');
+		L.push('【主星象义与星性】');
+		L.push('（时柱主星为本命主星；各柱按其星列象义／星性）');
+		model.pillars.forEach((p) => {
+			if (!p.xiangyi && !p.xingxing) return;
+			L.push(`${p.label}柱 ${p.star}：象义：${p.xiangyi || '—'}　星性：${p.xingxing || '—'}`);
+		});
 	}
 	if (model.repeats.length) {
 		L.push('');

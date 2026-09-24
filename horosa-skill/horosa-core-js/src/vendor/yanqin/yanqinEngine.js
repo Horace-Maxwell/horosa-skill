@@ -269,7 +269,9 @@ export function castQinChart(year, month, day, hourBranch, opts) {
 		? mansionByIdx(hourZiStartIdx(year, month, day, useXun)) : null;
 	return {
 		ganzhi, yuan, jiang, ziStart,
-		weekday: WEEKDAY_TO_YAO[ (function(){ const d = new Date(Date.UTC(year, month - 1, day)); return d.getUTCDay(); })() ],
+		// [Q-359/T-340] 星期改由同文件 JDN 求:(JDN+1) mod 7 → 0=周日;此前 Date.UTC 对 1582-10-15 前(儒略民用日期)按公历推、
+		// 公元 0–99 年被当 1900–1999。1582-10-15 后两式恒等(现代日期字节零变)。
+		weekday: WEEKDAY_TO_YAO[ mod(dayNumber(year, month, day) + 1, 7) ],
 		yearQin: yearQin(year),
 		dayQin: dayMansion,
 		hourQin: hour,

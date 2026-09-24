@@ -27,7 +27,8 @@ export function shenMeaning(luodian){ return SHEN_MEANING[luodian] || ''; }
 
 // —— 三元(§3.1):太乙五元六纪之纪 → 上/中/下元(一四纪上、二五纪中、三六纪下) ——
 export function computeSanyuan(pan){
-	const s = pan && pan.jiyuan ? String(pan.jiyuan) : '';
+	// [Q-269/T-258] 时计/日计/月计盘 jiyuan 为空(纪元只在年计给)→ 回落同盘年计积年的纪元(jiyuanByYear),否则择日「三元」恒不命中。
+	const s = pan && (pan.jiyuan || pan.jiyuanByYear) ? String(pan.jiyuan || pan.jiyuanByYear) : '';
 	const m = s.match(/第\s*([一二三四五六1-6])\s*[纪紀]/);
 	if(!m){ return ''; }
 	const map = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6 };

@@ -319,7 +319,8 @@ check('yizhangjing gradeSet/leapRule 走到引擎：天驛 中品→下品；闰
   const half = runYizhangjing(leap);
   const midnight = runYizhangjing({ ...leap, leapRule: 'midnight' });
   assert(half.data.input.leap === true && half.data.input.day === 15 && half.data.input.month === 2, `half: ${JSON.stringify(half.data.input)}`);
-  assert(midnight.data.input.month === 3 && midnight.data.input.monthNote === '闰月·十五夜半(晚子)作下月', `midnight: ${JSON.stringify(midnight.data.input)}`);
+  // 上游 v3.11.0 [Q-265/SO-20⑧ 术语校正]：钟面 00:xx 是夜半后的「早子」，全局「晚子时」专指 23 时档 → 注记改「(早子)」，判定不变。
+  assert(midnight.data.input.month === 3 && midnight.data.input.monthNote === '闰月·十五夜半(早子)作下月', `midnight: ${JSON.stringify(midnight.data.input)}`);
   // 负向对照：23:30 不满足引擎的 00:xx 条件，夜半折半不得作下月
   const notLate = runYizhangjing({ ...leap, time: '23:30:00', leapRule: 'midnight' });
   assert(notLate.data.input.month === 2, `23:30 must stay month 2: ${JSON.stringify(notLate.data.input)}`);
