@@ -45,6 +45,7 @@ import {
 } from '../vendor/divination/zeri/sanshiZeriScanEngine.js';
 import { compileSanshiTree } from '../vendor/divination/zeri/sanshiZeriConditionTypes.js';
 import { buildSanshiZeriSnapshotExtra } from '../vendor/divination/zeri/sanshiZeriSnapshot.js';
+import { splitSanshiOptions } from '../vendor/divination/zeri/sanshiOptionSplit.js';
 
 // 七政 / 印度择时：判定与区间搜索都在 astropy 后端（swisseph 直连分钟粒度），JS 侧只剩排版。
 // 所以它们只有 ConditionTypes（供 compile 校验，与后端求值器同源词表）+ Snapshot，没有 ScanEngine。
@@ -247,6 +248,10 @@ export async function runZeriScan(payload) {
         hit_count: intervals.length,
         compiled_tree: compiled,
         limits: spec.limits,
+        // 三式择时：扫描实际吃的三家口径（vendored splitSanshiOptions 单源拆分，六壬 / 奇门 / 太乙各一份）。
+        // Python 据此把展示盘写成扫描判定的那一盘（上游 SanshiZeriMain.applyWorkbenchCalibre「所见行=所判口径」），
+        // 不在 Python 侧手抄键表。
+        ...(technique === 'sanshizeri' ? { option_split: splitSanshiOptions(options) } : {}),
       },
       snapshot_text: '',
     };

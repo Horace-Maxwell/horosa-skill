@@ -320,16 +320,18 @@ def test_sanshiunited_combines_ken_qimen_taiyi(tmp_path) -> None:
     service = make_service(tmp_path)
     result = service.run_tool(
         "sanshiunited",
-        {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "qimen_options": {"qijuMethod": "chaibu"}, "taiyi_options": {"style": 3}},
+        # gameTheory=1：【太乙博弈】只在 ken 回博弈段时产（上游挑段「有正文才出」；v3.11.x wave-3 前 skill 给缺段填占位）。
+        {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "qimen_options": {"qijuMethod": "chaibu"}, "taiyi_options": {"style": 3, "gameTheory": 1}},
         save_result=False,
     )
     assert result.ok is True
     assert result.data["qimen"].get("juText")
     assert result.data["taiyi"].get("kook")
     snap = result.data["snapshot_text"]
-    assert "[起盘信息]" in snap
+    # 快照 = vendored 上游 buildSanShiUnitedSnapshotText（appendSection 段头【】）。
+    assert "【起盘信息】" in snap
     # 对齐独立页：复用三独立技法富化段——太乙 pan.sections（加「太乙」前缀）、六壬断卦层、奇门派生。
-    for header in ("[太乙断法]", "[太乙博弈]", "[十二盘式]", "[课体结构]", "[奇门九宫方盘]", "[奇门用神分论]"):
+    for header in ("【太乙断法】", "【太乙博弈】", "【十二盘式】", "【课体结构】", "【奇门九宫方盘】", "【奇门用神分论】"):
         assert header in snap, header
     # 三家恒产段必须是真实引擎输出而非占位（占位文案=「本盘未产出」）。
     for always_on in ("主客定算", "十二盘式", "九宫方盘"):

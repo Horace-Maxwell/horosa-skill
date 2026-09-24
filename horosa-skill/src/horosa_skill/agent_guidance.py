@@ -745,7 +745,11 @@ _SANSHI_OPTIONS_KEYS: dict[str, str] = {
     "liureng_runyear": _LIURENG_OPTIONS_KEYS + "行年盘：date/time=问测人出生，guaDate/guaTime=起课时刻（课盘按起课时刻起）。",
     "sanshiunited": (
         "qimen_options 同 qimen options；taiyi_options 同 taiyi options（上游键 taiyiTimeBasis 亦可放顶层）；"
-        "liureng_options 同 liureng_gods options（castMethod 锁 zheng 正时正将，同上游；timeAlg 用顶层共享值）。"
+        "liureng_options = 上游 SANSHI_PAGE_SETTINGS 六壬层：guirengType(或 guireng) 0-4（缺省 2 星占法）/ yueJiangMethod / "
+        "fenZhouYe / seHaiMethod / seHaiBoundary / shiRuKe / yearShenShaSort / yinyangSystem / tuWangShuai（词表同 liureng_gods）"
+        "+ zhanCategory；castMethod 锁 zheng（同上游），timeAlg 用顶层共享值，其余键（wuxing 等上游三式没有的）报错。"
+        "六壬层不另起盘：占日/占时取奇门盘干支（随顶层 timeAlg），月将/昼夜取星盘（顶层 hsys 缺省 1、zodiacal 缺省 0，"
+        "同上游共享字段）；gender 0/1 同时作用于奇门/太乙/六壬层（缺省男）。快照正文 = 上游 buildSanShiUnitedSnapshotText（段头【】）。"
     ),
 }
 
@@ -972,7 +976,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         safe_defaults=[
             {"field": "maxSpanDays", "value": 92, "meaning": "搜索窗上限；更长请分段"},
-            {"field": "options", "value": {"guirengType": 2, "yueMode": "zhongqi", "after23NewDay": 1, "lateZiHourUseNextDay": 1}, "meaning": "六壬择时页出厂扫描口径（LiurengZeriMain.js:79；贵人 2 = 星阙默认取法，扫描引擎自身缺省是 0）；展示盘（liureng_gods）同跟贵人与日界，节气换将 yueMode=jieqi 尚不能随到展示盘"},
+            {"field": "options", "value": {"guirengType": 2, "yueMode": "zhongqi", "after23NewDay": 1, "lateZiHourUseNextDay": 1}, "meaning": "六壬择时页出厂扫描口径（LiurengZeriMain.js:79；贵人 2 = 星阙默认取法，扫描引擎自身缺省是 0）；展示盘（liureng_gods）同跟贵人、日界、yueMode（→ yueJiangMethod，jieqi=节气换将）与 yinyangSystem（上游 applyWorkbenchCalibre）"},
             *ZERI_SNAPSHOT_SAFE_DEFAULTS,
         ],
         do_not_assume=["搜索时间窗", "择日条件", "location"],
@@ -1002,7 +1006,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         safe_defaults=[
             {"field": "maxSpanDays", "value": 92, "meaning": "搜索窗上限；更长请分段"},
-            {"field": "options", "value": {"guirengType": 2, "yueMode": "zhongqi", "taiyiAccum": 0, "after23NewDay": 1, "lateZiHourUseNextDay": 1, "timeAlg": 0}, "meaning": "三式择时页出厂扫描口径（SanshiZeriMain.js:80）；展示盘同跟时间三键/奇门盘式键/taiyiAccum，六壬贵人与节气换将尚不能随到 sanshiunited 展示盘"},
+            {"field": "options", "value": {"guirengType": 2, "yueMode": "zhongqi", "taiyiAccum": 0, "after23NewDay": 1, "lateZiHourUseNextDay": 1, "timeAlg": 0}, "meaning": "三式择时页出厂扫描口径（SanshiZeriMain.js:80）；展示盘（sanshiunited）同跟扫描实际吃的三家口径（vendored splitSanshiOptions）：时间三键、奇门键、taiyiAccum→tn、六壬 guirengType / yueMode（→ yueJiangMethod）/ yinyangSystem"},
             *ZERI_SNAPSHOT_SAFE_DEFAULTS,
         ],
         do_not_assume=["搜索时间窗", "择日条件", "location"],
@@ -1292,7 +1296,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "submethod settings", "question": "子技法设置是否沿用星阙默认？", "options": ["全部沿用默认", "指定奇门/太乙/六壬参数"]},
         ],
         safe_defaults=[
-            {"field": "liureng guirengType", "value": 2, "meaning": "通过六壬工具使用星阙默认"},
+            {"field": "liureng_options.guirengType", "value": 2, "meaning": "星阙默认：星占法贵人（上游三式 SANSHI_PAGE_SETTINGS.guireng 出厂 2）"},
             {"field": "qimen_options.qijuMethod", "value": "zhirun", "meaning": "星阙默认：置闰"},
             {"field": "taiyi_options.timeBasis", "value": "direct", "meaning": "星阙默认：直接时间（不随顶层 timeAlg 串改，同上游）"},
             {"field": "liureng_options.castMethod", "value": "zheng", "meaning": "三式合一锁正时正将（同上游）"},

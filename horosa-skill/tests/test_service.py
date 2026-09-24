@@ -881,6 +881,16 @@ class FakeJsClient(HorosaJsEngineClient):
                     "hit_count": 2,
                     "compiled_tree": {"type": "all", "conditions": []},
                     "limits": {"max_hits": 1000, "max_span_days": 1830},
+                    # 三式择时回传 vendored splitSanshiOptions 的三家拆分（真拆分由 tests/test_sync311_sanshiunited.py
+                    # 跑真 JS 守）；桩按同形回：六壬 / 奇门各取所属键、太乙 taiyiAccum → tn。
+                    **({"option_split": {
+                        "liureng": {k: v for k, v in (payload.get("options") or {}).items()
+                                    if k in ("guirengType", "yueMode", "yinyangSystem", "after23NewDay", "lateZiHourUseNextDay")},
+                        "qimen": {k: v for k, v in (payload.get("options") or {}).items()
+                                  if k in ("paiPanType", "qijuMethod", "school", "timeAlg", "after23NewDay", "lateZiHourUseNextDay")},
+                        "taiyi": ({"tn": (payload.get("options") or {})["taiyiAccum"]}
+                                  if "taiyiAccum" in (payload.get("options") or {}) else {}),
+                    }} if technique == "sanshizeri" else {}),
                 }}
             sections = _PRESETS.get(technique, [])[-3:] or ["择时搜索配置", "择时条件", "命中时段"]
             results = payload.get("results") or []
@@ -1302,6 +1312,69 @@ class FakeJsClient(HorosaJsEngineClient):
                     "[用事专属]（满足 1/3）\n- ✓ 宜：金星有力\n- ✗ 忌：水逆\n"
                     "[建议]\n- 另择月相吉、月无刑冲的时段。"
                 ),
+            }
+        if tool_name == "sanshiunited":
+            # 三式合一（v3.11.x sanshi 同步）：快照由 vendored 上游 buildSanShiUnitedSnapshotText 产出（段头【】、builder 段序）。
+            # 段体节选自真引擎在 2026-09-24 10:57 上海盘上的 live 输出；段名逐个对真 preset 断言（不许漂）。
+            # live builder 的条件段（挂载重算顶段「奇门遁甲」、给了 ziweiSihua 才出的「紫微四化」、本盘未命中的
+            # 太乙博弈/命法/命宫行限与空亡真假…占断向导）桩也不产。逐字真值由 tests/test_sync311_sanshiunited.py 的 live 回放守。
+            from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS as _PS3
+
+            blocks = [
+                ('起盘信息', '农历：丙午年八月十四\n直接时间：2026-09-24 10:57'),
+                ('概览', '局数：阴遁一局中元\n旬首：甲午'),
+                ('太乙', '盘式：時計太乙\n古法公式：太乙統宗'),
+                ('太乙主客定算', '主算：3；無天，二曜虛蝕、五緯失度、慧孛飛流、霜雹為害；無地，有崩地震、川竭蝗蝻之象；純陽\n主将：艮宫（3）'),
+                ('太乙八门与宿曜', '金函玉镜：門：巽休、震生、艮傷、坎杜、乾景、兌死、坤驚、離開；星：坎太乙、離攝提、艮軒轅、兌招搖、乾天符、中青龍、巽咸池、震太陰、坤天乙\n值日宿：軫'),
+                ('太乙断法', '三门：三門不具。\n五将：掩。五將不發。'),
+                ('太乙七大兵法', '雷公入水：巽\n临津问道：坤'),
+                ('太乙十六宫', '子：始击、客大、飞鸟、三风、八风\n丑：民基'),
+                ('大六壬', '一课：辛申天空\n二课：申午勾陈'),
+                ('六壬大格', '1. 重审\n重审下凌上，子逆臣不恭。'),
+                ('六壬小局', '1. 三奇\n三奇用旬行，两处共一名。'),
+                ('六壬参考', '1. 旺孕\n行年旺相神，夫妇三合群。'),
+                ('六壬概览', '1. 元武决\n元武亥子辰，临卯酉盗伤。加午未迁官，推详莫妄陈。'),
+                ('十二盘式', '盘式：退间传式\n月将：辰；占时：午；位序：前十'),
+                ('常用神煞', '日德：巳（避凶中正、逢凶化吉）\n日禄：酉（入课传）（食禄、身体、力量）'),
+                ('年月神煞', '（年神＝四利三元序）\n月建：酉（入课传）'),
+                ('课体结构', '时遁（间传·逆间）：不得出而潜藏'),
+                ('三传旺衰', '初传亥水相、中传酉金旺、末传未土休'),
+                ('遁干特殊', '中传酉遁丁（遁鬼、遁丁）：暗鬼——藏于支下之官鬼,防暗中之险、隐忧；丁马——遁出丁,主动、信息、奔走'),
+                ('毕法（已命中）', '（以下为机械命中之断诀，烈度须合时令旺衰、年命制化，非定数）\n68. 制鬼之位乃良医：制鬼之位乃良医'),
+                ('七政', '| 七政 | 临支 | 五行 | 度数 | 逆行 | 备注 |\n| --- | --- | --- | --- | --- | --- |'),
+                ('正北坎宫', '遁甲：天盘干：戊；八神：地；九星：蓬；地盘干：戊\n「子-水瓶座」'),
+                ('东北艮宫', '遁甲：天盘干：庚；八神：玄；九星：任；地盘干：庚\n「丑-摩羯座」'),
+                ('正东震宫', '遁甲：天盘干：丙；八神：虎；九星：冲；地盘干：丙\n「卯-天蝎座」'),
+                ('东南巽宫', '遁甲：天盘干：丁；八神：合；九星：辅；地盘干：丁\n「辰-天秤座」'),
+                ('正南离宫', '遁甲：天盘干：己；八神：阴；九星：英；地盘干：己\n「午-狮子座」'),
+                ('西南坤宫', '遁甲：天盘干：乙；八神：蛇；九星：内；地盘干：乙\n「未-巨蟹座」'),
+                ('正西兑宫', '遁甲：天盘干：辛；八神：符；九星：柱；地盘干：辛\n「酉-金牛座」'),
+                ('西北乾宫', '遁甲：天盘干：壬；八神：天；九星：心；地盘干：壬\n「戌-白羊座」'),
+                ('神煞', '日禄：酉\n日德：巳'),
+                ('八宫详解', '乾宫：\n奇门吉格：'),
+                ('奇门九宫方盘', '| 宫 | 天干 | 神 | 门 | 天星 | 地干 |\n| --- | --- | --- | --- | --- | --- |'),
+                ('奇门旺相休囚死·月令能量', '月令：酉（金令）。当令者旺、我生者相、生我者休、克我者囚、我克者死；旺相有力，休囚死无力。\n| 宫 | 星 | 星五行 | 星旺衰 | 门 | 门五行 | 门旺衰 | 宫五行 | 宫旺衰 |'),
+                ('奇门六害总览', '危害递减：击刑＞入墓＞庚＞白虎＞门迫＞空亡；天干＞一切，先解击刑天干。\n| 危害 | 宫位 | 符号 |'),
+                ('奇门化解方案', '| 宫位 | 危害 | 天盘干 | 化解 |\n| --- | --- | --- | --- |'),
+                ('奇门八门化气大阵', '| 门 | 落宫 | 状态 |\n| --- | --- | --- |'),
+                ('奇门用神分论', '用神＝日干「辛」（阴·实质），落 兑7宫；时干为平台（事之表象）。\n日干:辛(兑7宫)\u3000时干:甲(兑7宫)\u3000干合/配偶:丙(震3宫)'),
+                ('奇门财富七要', '| 用神 | 落宫 | 危害 |\n| --- | --- | --- |'),
+                ('奇门事业七要', '| 用神 | 落宫 | 危害 |\n| --- | --- | --- |'),
+                ('奇门恋爱姻缘', '干合·正缘（配偶/理想型）:丙震3宫\n六合·人缘（月老）:合巽4宫'),
+                ('奇门孤辰寡宿', '孤辰(申):于 坤·西南 用「巳（蛇）」六合住；寡宿(辰):于 巽·东南 用「酉（鸡）」六合住'),
+            ]
+            for title, _body in blocks:
+                assert title in _PS3["sanshiunited"], title
+            return {
+                "tool": "sanshiunited",
+                "data": {
+                    "ok": True,
+                    "liureng": {"yue": "辰", "timezi": "午", "guizi": "寅", "nianMing": "午",
+                                "keText": ["一课 辛申天空", "二课 申午勾陈", "三课 丑亥玄武", "四课 亥酉白虎"],
+                                "sanChuan": {"cuang": ["己亥", "丁酉", "乙未"], "tianJiang": ["玄武", "白虎", "青龙"]}},
+                    "warnings": [],
+                },
+                "snapshot_text": "\n\n".join(f"【{title}】\n{body}" for title, body in blocks),
             }
         if tool_name == "liureng":
             return {
@@ -2400,7 +2473,8 @@ def test_sanshiunited_subresults_use_compact_export_contracts(tmp_path) -> None:
 
     assert result.ok is True
     subresults = result.data["subresults"]
-    assert sorted(subresults) == ["liureng_gods", "qimen", "taiyi"]
+    # v3.11.x wave-3：六壬层不再另起 liureng_gods 子盘（上游三式合一用三式农历 + 奇门盘干支就地起课）。
+    assert sorted(subresults) == ["qimen", "taiyi"]
     for subresult in subresults.values():
         assert "data" not in subresult
         assert "export_snapshot" not in subresult
@@ -3828,10 +3902,10 @@ def test_late_zi_switch_threads_through_all_chart_flows(tmp_path) -> None:
     ken = [payload for ep, payload in client.calls if ep == "/qimen/pan"]
     assert ken and ken[0].get("after23NewDay") == 0
 
-    # sanshiunited 显式开关透传三式子工具。
+    # sanshiunited 显式开关透传三式子工具（六壬层随三式农历就地起课，不再打 /liureng/gods —— wave-3）。
     client.calls.clear()
     service.run_tool("sanshiunited", {**base, "lateZiHourUseNextDay": 0}, save_result=False)
-    for endpoint in ("/qimen/pan", "/taiyi/pan", "/liureng/gods"):
+    for endpoint in ("/qimen/pan", "/taiyi/pan", "/nongli/time"):
         captured = [payload for ep, payload in client.calls if ep == endpoint]
         assert captured and captured[0].get("lateZiHourUseNextDay") == 0, f"sanshiunited 未透传到 {endpoint}"
 

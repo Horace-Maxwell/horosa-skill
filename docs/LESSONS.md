@@ -190,6 +190,14 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
      后一行覆盖前一行——语法、测试全绿，只有字节预算守卫抓到。
    - 守卫：两者取并集；`tests/test_mcp_hidden_fields.py` 逐字段锁两种声明法都不进广告层（负向对照：合并版下模型级那条红）。
      并行拆分时同一机制只许一处定义（后来者复用先行者的机制，别再发明第二种）。
+14. **自拼快照的「占位」藏住了条件段；截断会悄悄收窄导出。**（三式合一 agent）
+   - Python 自拼 sanshiunited 时给缺席段补「本盘未产出」占位，registry 于是从不需要 optional 登记；换成上游 builder 原样输出后
+     8 段立刻报 missing——占位等于在导出层替上游「编」段。守卫：条件段按上游双登记，skill 不补占位段。
+   - `truncate_before` 剪掉 React 尾部时连带剪掉了尾部的 `export { … }` 列表（LiuRengMain 的 `buildLiuRengReferenceBundle` 等 8 个
+     导出靠它），vendored 调用方链接失败。修：transform 保留「头部已定义名」的尾部 export 列表（+ 单测）。
+   - 录制回放夹具的键太窄（`/chart` 只按 date/time 键控）会让「请求错了 hsys」回放出看似正确的答案；键必须含所有改变结果的字段。
+   - 共享 shim 少一个常量（`constants/AstroConst.js` 缺 URANUS/NEPTUNE/PLUTO/MC…）→ 以它为键的表全变 `obj[undefined]` 互相覆盖、零报错；
+     三式合一改用对上游打戳的 curated 子集，七政侧另查。
 
 ### v0.40.0 / 2026-09-24 — 上游 v3.11.x 重同步：六处「同步了却没同步」
 

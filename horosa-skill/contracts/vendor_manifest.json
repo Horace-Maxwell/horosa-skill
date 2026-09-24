@@ -2475,6 +2475,220 @@
       "upstream": "components/ziwei/data/tables/ziweizu.json",
       "mode": "verbatim",
       "deviations": []
+    },
+    "sanshi/SanShiUnitedMain.js": {
+      "upstream": "components/sanshi/SanShiUnitedMain.js",
+      "mode": "verbatim",
+      "why": "三式合一 AI 快照单源 buildSanShiUnitedSnapshotText（:1424）及其同文件纯逻辑前件（buildLrNongli / buildSanshiLiuRengCastOverride / buildLiuRengLayout / buildKeData / buildSanChuan / pickSanshiLiurengCastOpts / buildOuterData / computeSanshiXun / buildSanshiWeakSolid …）与 React 组件同在一个 5267 行文件里。v3.11.x 同步前 skill 在 service.py 里拿三个子技法导出的段自己拼三式快照：段名同、正文与段序全不同（[大六壬] 只有六壬的 [四课] 体、缺三传与递生递克徽记、【】段头写成 []、八宫/太乙派生段错序）。改为整头 vendored，由 tools/sanshiUnited.js 按上游 performRecalcByNongli 同链喂数据后直接调它 —— 手抄必漂移。",
+      "deviations": [
+        {
+          "kind": "truncate_before",
+          "anchor": "^export function getOuterLabelLayout\\(",
+          "why": "剥掉 :1691 起的外圈排版 / 悬浮释义 helper（getOuterLabelLayout … buildOuterStarMeaningTip，依赖 AstroMeaningData / QimenXiangDoc 等 UI 数据）与 :2008 起的 React 组件。buildSanShiUnitedSnapshotText 止于 :1689，锚点之前即纯逻辑全集；锚点是正则，上游一改名就报错而不是悄悄剪错。"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../../constants/AstroConst.js",
+          "to": "./sanshiAstroConst.js",
+          "why": "vendor 树里该相对路径落到 src/constants/AstroConst.js 共享 shim，它没有 URANUS/NEPTUNE/PLUTO/MC —— MAIN_STAR_IDS 会静默收进 undefined，外圈「星盘」行少四颗。钉到逐值抽出的 curated 子集。"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../../constants/AstroText.js",
+          "to": "./sanshiAstroText.js",
+          "why": "msg() 读 AstroMsgCN；共享 AstroText shim 以缺四颗的共享 AstroConst 为键，天王/海王/冥王/天顶会回显英文 id。"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../astro/AstroHelper.js",
+          "to": "./sanshiAstroHelper.js",
+          "why": "只用 splitDegree（外圈宫内度分）；上游 AstroHelper 顶层 import d3 + DOM helper，headless 不可整份载入，用逐字抽出的三函数子集。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../../utils/shellZoom.js",
+          "stub": "// headless stub：shellZoom 直接量 fixed 铺满元素的布局高（DOM），只服务组件构造期的 getViewportHeight；headless 无视口。\n// 定义同名函数让 stub 审计看到「已知且不可达」，真被调到时抛明确错误而不是 ReferenceError。\nfunction getLayoutViewportHeight(){ throw new Error('headless stub: utils/shellZoom is not vendored'); }",
+          "why": "模块私有 getViewportHeight 引用它，但只在 React 构造器里被调。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../xq-ui.js",
+          "stub": "",
+          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../xq-icons.js",
+          "stub": "",
+          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../amap/GeoCoordModal.js",
+          "stub": "",
+          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "import SanShiZiWeiSihua, { buildSanShiZiweiSihuaSnapshotLines }",
+          "to": "import { buildSanShiZiweiSihuaSnapshotLines }",
+          "why": "同一行既有紫微四化 tab 组件（默认导出，只在 React 尾部用）又有纯函数 buildSanShiZiweiSihuaSnapshotLines（快照 [紫微四化] 段在用）；vendored 的 SanShiZiWeiSihua.js 已剥掉默认导出，只保留具名那一半（孤儿 import 清理不认 `import X, { … }` 形态，须声明）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../astro/PlusMinusTime.js",
+          "stub": "",
+          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../comp/DateTime.js",
+          "stub": "",
+          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../common/QuickDockBar.js",
+          "stub": "",
+          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../comp/SpaceTimePanel.js",
+          "stub": "",
+          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./SanshiUnitedBoard.js",
+          "stub": "",
+          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./SanShiUnitedMain.less.js",
+          "stub": "",
+          "why": "样式表，headless 无意义。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "\tfetchQimenPan,\n",
+          "to": "",
+          "why": "vendored DunJiaCalc.js 已按 §5 剥掉网络 helper fetchQimenPan（Python 发请求）；它只在 React 尾部被调，留在多行 import 里即链接失败。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "import { fetchTaiyiPan, buildTaiyiSnapshotText,",
+          "to": "import { buildTaiyiSnapshotText,",
+          "why": "同上：vendored TaiYiCalc.js 无 fetchTaiyiPan（网络 helper），只在 React 尾部被调。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "const { Option, OptGroup } = Select;\n",
+          "to": "",
+          "why": "模块级 UI 解构，只服务 React 尾部（纯逻辑段一次都没用到）。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "const TabPane = Tabs.TabPane;\n",
+          "to": "",
+          "why": "同上。"
+        }
+      ]
+    },
+    "sanshi/sanshiSnapshotSections.js": {
+      "upstream": "components/sanshi/sanshiSnapshotSections.js",
+      "mode": "verbatim",
+      "why": "三式合一挑段单源（太乙 / 奇门 / 六壬断卦段名 + parseSnapshotSections），零依赖；SanShiUnitedMain.js 纯逻辑段直接消费。",
+      "deviations": []
+    },
+    "sanshi/SanShiZiWeiSihua.js": {
+      "upstream": "components/sanshi/SanShiZiWeiSihua.js",
+      "mode": "verbatim",
+      "why": "三式合一 [紫微四化] 段的纯函数 buildSanShiZiweiSihuaSnapshotLines（与该 tab 同源计算）。此前 tools/sanshiZiweiSihua.js 里手抄了一份函数体；现在 SanShiUnitedMain.js 与该 JS 工具都 import 这份逐字 vendored 的。",
+      "deviations": [
+        {
+          "kind": "truncate_before",
+          "anchor": "^export default class SanShiZiWeiSihua extends Component",
+          "why": "剥掉紫微四化 tab 的 React 组件（默认导出）；锚点是正则。"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../ziwei/ZWLuckPanel.js",
+          "to": "../ziwei/zwLuckItems.js",
+          "why": "上游 ZWLuckPanel.js 是 React 组件文件；本仓的 zwLuckItems.js 是它的运限项闭包（bespoke，derived_from 看守），导出同名三函数。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../xq-ui.js",
+          "stub": "",
+          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "const { Option } = Select;\n",
+          "to": "",
+          "why": "模块级 UI 解构，只服务 React 尾部。"
+        }
+      ]
+    },
+    "utils/planetHouseInfo.js": {
+      "upstream": "utils/planetHouseInfo.js",
+      "mode": "verbatim",
+      "why": "外圈「星盘」行的星名后缀（落宫 / 宫主，SanShiUnitedMain.buildOuterData 的 appendPlanetHouseInfo，AI 导出口径 showHouse+showRuler）；零依赖纯函数。",
+      "deviations": []
+    },
+    "sanshi/sanshiAstroHelper.js": {
+      "upstream": "components/astro/AstroHelper.js",
+      "mode": "curated",
+      "why": "逐字抽出 splitDegree / convertLatToStr / convertLonToStr（:34-87）。上游全文件顶层 import d3 + utils/helper 并在加载期调 detectOS()，headless 不可整份 vendor；SanShiUnitedMain.js 纯逻辑段只用 splitDegree。",
+      "extracts": [
+        "splitDegree",
+        "convertLatToStr",
+        "convertLonToStr"
+      ],
+      "upstream_sha256": "45a9dfa08e73039c828711dcbfbe713428848066be3a69d522d0f1761d977a85"
+    },
+    "sanshi/sanshiAstroConst.js": {
+      "upstream": "constants/AstroConst.js",
+      "mode": "curated",
+      "why": "SanShiUnitedMain.js 纯逻辑段读到的 24 个常量（十行星 / 十二星座 / ASC / MC）逐值抽出。共享 src/constants/AstroConst.js 缺 URANUS/NEPTUNE/PLUTO/MC（外圈「星盘」行会静默少四颗），而它另有七政 / 卜卦 / 天星消费方，故不在此改它。",
+      "extracts": [
+        "SUN",
+        "MOON",
+        "MERCURY",
+        "VENUS",
+        "MARS",
+        "JUPITER",
+        "SATURN",
+        "URANUS",
+        "NEPTUNE",
+        "PLUTO",
+        "ARIES",
+        "TAURUS",
+        "GEMINI",
+        "CANCER",
+        "LEO",
+        "VIRGO",
+        "LIBRA",
+        "SCORPIO",
+        "SAGITTARIUS",
+        "CAPRICORN",
+        "AQUARIUS",
+        "PISCES",
+        "ASC",
+        "MC"
+      ],
+      "upstream_sha256": "d960a5ea4b9bc9b485bd271a72eda30ad74a54423ec2369d6fa828e10f825d88"
+    },
+    "sanshi/sanshiAstroText.js": {
+      "upstream": "constants/AstroText.js",
+      "mode": "curated",
+      "why": "SanShiUnitedMain.js 的 msg() 只查 MAIN_STAR_IDS 十二体的 AstroMsgCN 中文名；逐行抽出（:92-101/:128/:130），键取 sanshiAstroConst.js。",
+      "extracts": [
+        "AstroMsgCN"
+      ],
+      "upstream_sha256": "c6721d8b18a9cc4fba40e1079df999b6c264bb249406d684443871f9c8943d39"
     }
   }
 }

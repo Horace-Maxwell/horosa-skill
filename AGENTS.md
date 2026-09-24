@@ -142,6 +142,9 @@ runner 不打 ken、`data.route.local=true`、`compute_sources` 标 `local_route
   （唯一触发经度+均时差修正的值）。
 - **backend predict/astroextra 型**：harmonic / agepoint / distributions / jaynesprog / vedicprog /
   planetaryarc 等——Python `_call_remote` + Python snapshot builder。
+- **三式合一（v0.40.0 起）**：Python 只取数（一份三式 nongli + 展示真太阳时 + `/chart` hsys 1 + 奇门/太乙 runner），
+  整段快照由 vendored 上游 `buildSanShiUnitedSnapshotText`（`tools/sanshiUnited.js` 按上游 `performRecalcByNongli` 装配）产出；
+  六壬层用 SanShiUnitedMain 自带三函数、占时取奇门盘时柱（随 `timeAlg`），不再另起 `/liureng/gods` 子盘。
 - **复合型**：mundane（`/jieqi/year` seedOnly 求入宫时刻 → 该时刻 `/chart`，输入是 年+入宫节气+地点；上游 v3.11
   右栏 25 张卡由 Python 取数后喂 JS `tools/mundaneCards.js` 调 vendored 卡 builder，3 张需 UI 状态的登记为可选段）、
   sanshiunited、extrareturns（Python 循环逐体拉 `/astroextra/planetreturn` 拼段）。**请求型 builder 一律归

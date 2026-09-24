@@ -16,6 +16,11 @@
         "tool": "babylon.js",
         "key": "ephemerisSource",
         "reason": "同上：同一 opts 包紧接着喂 buildBabylonSnapshotText，babylonAiSnapshot.js:120 用它选 [数理星历] 木星阶梯/锯齿函数（systemA/systemB）；buildHoroscope 不读。已逐行核实有消费方。"
+      },
+      {
+        "tool": "sanshiUnited.js",
+        "key": "nianMing",
+        "reason": "上游同构（SanShiUnitedMain.js:3805-3807）：同一个 liureng 对象既喂 LiuRengMain 的 buildLiuRengReferenceBundle / buildLiuRengSnapshotText（二者不读 nianMing），也喂 buildSanShiUnitedSnapshotText（:1461 读 liureng.nianMing 出【起盘信息】年命行）。已逐行核实有消费方。"
       }
     ]
   },
@@ -610,6 +615,143 @@
           "limits",
           "options",
           "tree"
+        ]
+      }
+    ],
+    "sanshiUnited.js": [
+      {
+        "callee": "buildSanshiLiuRengCastOverride",
+        "module": "../vendor/sanshi/SanShiUnitedMain.js",
+        "line": 171,
+        "arg": 0,
+        "keys": [
+          "nongli"
+        ]
+      },
+      {
+        "callee": "buildLiuRengLayout",
+        "module": "../vendor/sanshi/SanShiUnitedMain.js",
+        "line": 190,
+        "arg": 0,
+        "via_local": "chartForLr",
+        "keys": [
+          "nongli"
+        ]
+      },
+      {
+        "callee": "buildKeData",
+        "module": "../vendor/sanshi/SanShiUnitedMain.js",
+        "line": 191,
+        "arg": 1,
+        "via_local": "chartForLr",
+        "keys": [
+          "nongli"
+        ]
+      },
+      {
+        "callee": "buildSanChuan",
+        "module": "../vendor/sanshi/SanShiUnitedMain.js",
+        "line": 192,
+        "arg": 2,
+        "via_local": "chartForLr",
+        "keys": [
+          "nongli"
+        ]
+      },
+      {
+        "callee": "buildLiuRengReferenceBundle",
+        "module": "../vendor/liureng/LiuRengMain.js",
+        "line": 225,
+        "arg": 0,
+        "via_local": "liureng",
+        "keys": [
+          "fourColumns",
+          "guizi",
+          "nianMing",
+          "nongli",
+          "timezi",
+          "yue"
+        ]
+      },
+      {
+        "callee": "buildLiuRengReferenceBundle",
+        "module": "../vendor/liureng/LiuRengMain.js",
+        "line": 225,
+        "arg": 1,
+        "via_local": "chartForLr",
+        "keys": [
+          "nongli"
+        ]
+      },
+      {
+        "callee": "buildLiuRengSnapshotText",
+        "module": "../vendor/liureng/LiuRengMain.js",
+        "line": 234,
+        "arg": 1,
+        "via_local": "liureng",
+        "keys": [
+          "fourColumns",
+          "guizi",
+          "nianMing",
+          "nongli",
+          "timezi",
+          "yue"
+        ]
+      },
+      {
+        "callee": "buildLiuRengSnapshotText",
+        "module": "../vendor/liureng/LiuRengMain.js",
+        "line": 234,
+        "arg": 3,
+        "via_local": "chartForLr",
+        "keys": [
+          "nongli"
+        ]
+      },
+      {
+        "callee": "buildLiuRengSnapshotText",
+        "module": "../vendor/liureng/LiuRengMain.js",
+        "line": 234,
+        "arg": 7,
+        "keys": [
+          "castOverride"
+        ]
+      },
+      {
+        "callee": "buildSanShiUnitedSnapshotText",
+        "module": "../vendor/sanshi/SanShiUnitedMain.js",
+        "line": 249,
+        "arg": 0,
+        "keys": [
+          "displaySolarTime",
+          "dunjia",
+          "fields",
+          "guirengType",
+          "keData",
+          "liureng",
+          "liurengChartForLr",
+          "liurengRefBundle",
+          "liurengRunYear",
+          "lrCastOpts",
+          "lrCastOverride",
+          "lrLayout",
+          "nongli",
+          "options",
+          "outerData",
+          "sanChuan",
+          "taiyi",
+          "ziweiSihua"
+        ]
+      },
+      {
+        "callee": "buildSanShiUnitedSnapshotText",
+        "module": "../vendor/sanshi/SanShiUnitedMain.js",
+        "line": 249,
+        "arg": 0,
+        "nested_under": "liurengChartForLr",
+        "via_local": "chartForLr",
+        "keys": [
+          "nongli"
         ]
       }
     ],
