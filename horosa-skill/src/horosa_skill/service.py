@@ -1432,11 +1432,12 @@ def _guolao_limit_table(life: float, birth_year: int) -> list[dict[str, Any]]:
 
 
 def _build_guolao_limit_lines(chart: dict[str, Any], payload: dict[str, Any]) -> list[str]:
+    """[大限] 的 Python 兜底（仅当 JS 段 builder 不可用时用；正路是 vendored buildGuolaoLimitSection）。"""
     life = _guolao_life_degree(chart)
-    try:
-        birth_year = int(str(payload.get("date", "")).split("/")[0])
-    except (TypeError, ValueError):
-        birth_year = 0
+    # 🔴 skill 归一后的日期是 YYYY-MM-DD（上游 fieldsToParams 才是 YYYY/MM/DD）：旧版只按 '/' 切，
+    # int('2028-04-06') 失败 → 出生年恒 0 →「（0-12年）」这类年份全错。两种分隔都认。
+    m = re.match(r"\s*(-?\d{1,4})", str(payload.get("date", "")))
+    birth_year = int(m.group(1)) if m else 0
     return [
         f"第{r['index']}限 {r['palace']}：{r['from_age']}-{r['to_age']}岁（{r['from_year']}-{r['to_year']}年），约{r['years']}年"
         for r in _guolao_limit_table(life, birth_year)
@@ -1492,7 +1493,18 @@ def _moira_transit_moment(payload: dict[str, Any]) -> tuple[str, str]:
     return now.strftime("%Y-%m-%d"), time_text
 
 
-def _build_guolao_snapshot_text(payload: dict[str, Any], response: dict[str, Any], pattern_text: str | None = None) -> str:
+def _build_guolao_snapshot_text(
+    payload: dict[str, Any],
+    response: dict[str, Any],
+    pattern_text: str | None = None,
+    *,
+    info_sections: dict[str, Any] | None = None,
+) -> str:
+    """七政四余快照。`info_sections` = JS `guolao_moira` 的 info_sections 动作结果（vendored 上游段 builder）：
+    anchorLines（[起盘信息] 命度/身度/宿主行）/ limitSection（[大限]）/ masters（[三主与化曜]）/ limitCalc（[限法实算]）。
+    段序同上游 _buildGuolaoSnapshotTextV2Core（GuoLaoChartMain.js:2040-2140）：大限 → 三主与化曜 → 限法实算 →
+    （虚实/本命化曜/流年流曜 由 runner 插在 [政余格局] 之前）。"""
+    info = info_sections if isinstance(info_sections, dict) else {}
     chart = response.get("chart", {})
     houses = chart.get("houses") if isinstance(chart, dict) else []
     objects = chart.get("objects") if isinstance(chart, dict) else []
@@ -1518,34 +1530,50 @@ def _build_guolao_snapshot_text(payload: dict[str, Any], response: dict[str, Any
         house_lines.append("")
     gods_lines: list[str] = []
     if isinstance(zi_gods, dict) and zi_gods:
-        for branch, info in zi_gods.items():
-            if not isinstance(info, dict):
+        for branch, god_info in zi_gods.items():
+            if not isinstance(god_info, dict):
                 continue
             gods_lines.append(
-                f"{branch}：神煞={'、'.join(info.get('allGods', []) or []) or '无'}；太岁神={'、'.join(info.get('taisuiGods', []) or []) or '无'}"
+                f"{branch}：神煞={'、'.join(god_info.get('allGods', []) or []) or '无'}；太岁神={'、'.join(god_info.get('taisuiGods', []) or []) or '无'}"
             )
-    return _render_snapshot_text(
-        [
-            (
-                "起盘信息",
-                "\n".join(
-                    [
-                        f"日期：{payload.get('date', '—')} {payload.get('time', '—')}",
-                        f"时区：{payload.get('zone', '—')}",
-                        f"经纬度：{payload.get('lon', '—')} {payload.get('lat', '—')}",
-                    ]
-                ),
-            ),
-            ("七政四余宫位与二十八宿星曜", "\n".join(house_lines).strip() or "无"),
-            ("神煞", "\n".join(gods_lines).strip() or "无"),
-            ("大限", "\n".join(_build_guolao_limit_lines(chart, payload)).strip() or "无"),
-            # 政余格局 (星阙 v2.6.x Moira DSL)：由 vendored guolaoMoira.js (buildLocalMoiraPatterns) 评估，
-            # 经 js_client 注入。盘面物象格局（孛犯太阳/金水相涵/命坐两歧 等）可出；依赖 七政神煞(官福疾)
-            # 的格局受限于上游 guolaoGods 未随 /chart 返回（kinastro qizheng 另路，如实标出，见 AGENTS）。
-            ("政余格局", (pattern_text or "").strip() or "无"),
-            ("相位", "\n".join(_build_guolao_aspect_lines(chart, response)).strip() or "无"),
-        ]
-    )
+    info_lines = [
+        f"日期：{payload.get('date', '—')} {payload.get('time', '—')}",
+        f"时区：{payload.get('zone', '—')}",
+        f"经纬度：{payload.get('lon', '—')} {payload.get('lat', '—')}",
+        # [Q-191/T-134]（上游 GuoLaoChartMain.js:2046）时间基准 + 七政两套时标补注。上游 fieldsToParams 不带
+        # timeAlg（盘面星体恒按输入钟面时刻换算）→ timeBasisLabel(undefined) = 钟表时；日界两键缺省取上游全局缺省 1/1
+        # （defaultAfter23NewDay / defaultLateZiHourUseNextDay，本命四柱 /nongli/time 同口径）。
+        _build_time_basis_line(
+            time_alg=None,
+            late_zi_hour_use_next_day=1 if payload.get("lateZiHourUseNextDay") is None else payload.get("lateZiHourUseNextDay"),
+            after23_new_day=1 if payload.get("after23NewDay") is None else payload.get("after23NewDay"),
+            note=_GUOLAO_TIME_BASIS_NOTE,
+        ),
+        # [Q-231/Q-434]（上游 GuoLaoChartMain.js:2073-2076）命度 / 身度 / 命度宿主·身度宿主（右栏同源事实层）。
+        *[f"{line}" for line in (info.get("anchorLines") or []) if f"{line}".strip()],
+    ]
+    limit_text = f"{info.get('limitSection') or ''}".strip() or "\n".join(_build_guolao_limit_lines(chart, payload)).strip()
+    sections: list[tuple[str, str]] = [
+        ("起盘信息", "\n".join(info_lines)),
+        ("七政四余宫位与二十八宿星曜", "\n".join(house_lines).strip() or "无"),
+        ("神煞", "\n".join(gods_lines).strip() or "无"),
+        ("大限", limit_text or "无"),
+    ]
+    # [Q-435]（上游 GuoLaoChartMain.js:2092-2104）三主化曜 / 难仇恩用 与 五限实算 / 行运法实算：有数据才产段。
+    masters_text = f"{info.get('masters') or ''}".strip()
+    if masters_text:
+        sections.append(("三主与化曜", masters_text))
+    limit_calc_text = f"{info.get('limitCalc') or ''}".strip()
+    if limit_calc_text:
+        sections.append(("限法实算", limit_calc_text))
+    sections += [
+        # 政余格局 (星阙 v2.6.x Moira DSL)：由 vendored guolaoMoira.js (buildLocalMoiraPatterns) 评估，
+        # 经 js_client 注入。盘面物象格局（孛犯太阳/金水相涵/命坐两歧 等）可出；依赖 七政神煞(官福疾)
+        # 的格局受限于上游 guolaoGods 未随 /chart 返回（kinastro qizheng 另路，如实标出，见 AGENTS）。
+        ("政余格局", (pattern_text or "").strip() or "无"),
+        ("相位", "\n".join(_build_guolao_aspect_lines(chart, response)).strip() or "无"),
+    ]
+    return _render_snapshot_text(sections)
 
 
 def _split_degree(value: Any) -> tuple[int, int]:
@@ -3481,7 +3509,61 @@ def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
         body = "\n".join(str(line) for line in derived_self["lines"]).strip()
         if body:
             rendered.append((str(derived_self["title"]), body))
+    # [附加分盘]（上游 v3.11.0 #80，IndiaChart.js:1298-1333）：印度盘之外另挂的分盘简表，上游把它接在整份主盘快照
+    # **末尾**（`${text}\n\n${附加分盘段}`）—— 由 `_attach_india_extra_vargas` 挂 `_indiaExtraVargas`；缺省不选 = 不产段。
+    extra_vargas = response.get("_indiaExtraVargas")
+    if isinstance(extra_vargas, str) and extra_vargas.strip():
+        rendered.append(("附加分盘", extra_vargas.strip()))
     return _render_snapshot_text(rendered)
+
+
+# 挂载分盘可选集（上游 v3.11.0 constants/AstroConst.js:1508-1514 INDIA_MOUNT_VARGA_OPTIONS，逐字）。
+_INDIA_MOUNT_VARGA_OPTIONS: tuple[tuple[int, str], ...] = (
+    (1, "D1 命盘"), (2, "D2 财富"), (3, "D3 兄弟"), (4, "D4 家宅"), (7, "D7 子女"), (9, "D9 婚姻"),
+    (10, "D10 事业"), (12, "D12 父母"), (16, "D16 车乘"), (20, "D20 修行"), (24, "D24 学业"), (27, "D27 体力"),
+    (30, "D30 灾厄"), (40, "D40 母系"), (45, "D45 父系"), (60, "D60 总业"),
+)
+_INDIA_MOUNT_EXTRA_VARGA_MAX = 4  # AstroConst.js:1524 INDIA_MOUNT_EXTRA_VARGA_MAX
+
+
+def _normalize_india_extra_vargas(value: Any) -> tuple[list[int], list[Any]]:
+    """上游 normalizeIndiaExtraVargas（AstroConst.js:1525-1541）逐条移植：字符串按 `,，空白` 切；parseInt；
+    <=1 / 不在可选集 / 重复 / 超上限 4 的项丢弃。返回 (保留, 丢弃)——上游静默丢，skill 把丢弃项回报进 warnings。"""
+    raw: Any = value
+    if isinstance(raw, str):
+        raw = [part for part in re.split(r"[,，\s]+", raw.strip()) if part] if raw.strip() else []
+    if not isinstance(raw, (list, tuple)):
+        return [], ([value] if value not in (None, "", [], ()) else [])
+    allowed = {num for num, _ in _INDIA_MOUNT_VARGA_OPTIONS}
+    out: list[int] = []
+    dropped: list[Any] = []
+    for item in raw:
+        m = re.match(r"\s*([+-]?\d+)", f"{item}")  # JS parseInt：取前导整数
+        num = int(m.group(1)) if m else None
+        if num is None or num <= 1 or num not in allowed or num in out or len(out) >= _INDIA_MOUNT_EXTRA_VARGA_MAX:
+            dropped.append(item)
+            continue
+        out.append(num)
+    return out, dropped
+
+
+def _india_mount_varga_label(chartnum: int) -> str:
+    """上游 indiaMountVargaLabel（AstroConst.js:1516-1522）。"""
+    for num, label in _INDIA_MOUNT_VARGA_OPTIONS:
+        if num == chartnum:
+            return label
+    return f"D{chartnum}"
+
+
+def _india_chart_remote_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """india_chart 的后端请求体：skill 侧开关 → 后端键（上游 IndiaChart.fieldsToParams 同一翻译）。
+
+    `indiaTripataki`（上游挂载齿轮名）→ 后端 `tripataki=1`（IndiaChart.js:123-124；webindiasrv 读 data.get('tripataki')，
+    12 次建盘 ≈0.3-0.8s 故 opt-in）。`indiaExtraVargas` 不下发主盘请求（附加分盘逐张另取）。"""
+    remote = {k: v for k, v in payload.items() if k not in ("indiaExtraVargas", "indiaTripataki")}
+    if payload.get("indiaTripataki") in (True, 1, "1"):
+        remote["tripataki"] = 1
+    return remote
 
 
 def _is_astro_chart_payload(response_data: dict[str, Any]) -> bool:
@@ -5262,12 +5344,86 @@ def _build_bazi_hechong_lines(four: dict[str, Any]) -> list[str]:
     return [line for line in (rel_line(label, rec) for label, rec in pairs) if line]
 
 
+# 跨技法「时间基准」自声明行 —— 逐字移植上游 utils/timeBasisLine.js（v3.11.0 [Q-191/T-134]，全文件）。
+# 各技法 [起盘信息] 段追加一行，写明这张盘的日柱/宫位按哪种时间口径起（同一 23:40 出生在不同技法里
+# 日柱可差一柱——口径差异而非计算错误）。消费方：八字（BaZi.js:361）、七政四余（GuoLaoChartMain.js:1425/2046）。
+_TIME_BASIS_ALG_LABEL = {
+    "0": "真太阳时(经度+均时差校正)",
+    "1": "钟表时(按输入钟面时刻,无真太阳时校正)",
+    "2": "春分定卯时",
+    "3": "平太阳时(仅经度校正,无均时差)",
+}
+# 七政专用补注（timeBasisLine.js:40 GUOLAO_TIME_BASIS_NOTE，逐字）：盘面星体/宫位按输入基准，四柱另按真太阳时。
+_GUOLAO_TIME_BASIS_NOTE = "本页两套时标：盘面星体与宫位按上列基准；四柱由排盘服务按真太阳时(经度+均时差)另算；琴堂逢酉身宫的时支按钟面时刻取"
+
+
+def _time_basis_label(time_alg: Any) -> str:
+    if time_alg is None or f"{time_alg}" == "":
+        return _TIME_BASIS_ALG_LABEL["1"]
+    key = f"{int(time_alg)}" if isinstance(time_alg, bool) else f"{time_alg}"
+    return _TIME_BASIS_ALG_LABEL.get(key, key)
+
+
+def _time_basis_yes_no(value: Any, fallback: str) -> str:
+    # JS yesNo：undefined/null/'' → fallback；0 / '0' / false → 否；其余 → 是（'false' 字串在 JS 里也是「是」）。
+    if value is None or f"{value}" == "":
+        return fallback
+    if value is False or (not isinstance(value, str) and value == 0) or value == "0":
+        return "否"
+    return "是"
+
+
+def _build_time_basis_line(
+    *, time_alg: Any, late_zi_hour_use_next_day: Any, after23_new_day: Any, zone: Any = None, note: str | None = None
+) -> str:
+    """上游 buildTimeBasisLine（timeBasisLine.js:24-37）逐字移植：`；` 连接各项，zone/note 缺省不产。"""
+    parts = [f"时间基准：{_time_basis_label(time_alg)}"]
+    parts.append(f"晚子时归次日：{_time_basis_yes_no(late_zi_hour_use_next_day, '否')}")
+    parts.append(f"23 点换日：{_time_basis_yes_no(after23_new_day, '否')}")
+    if zone is not None and f"{zone}" != "":
+        parts.append(f"时区：{zone}")
+    if note is not None and f"{note}" != "":
+        parts.append(f"{note}")
+    return "；".join(parts)
+
+
+# 生肖（地支 → 属相）：与 lunar-javascript getYearShengXiao / getYearShengXiaoByLiChun 同表。
+_BRANCH_SHENGXIAO = dict(zip("子丑寅卯辰巳午未申酉戌亥", "鼠牛虎兔龙蛇马羊猴鸡狗猪"))
+
+
+def _bazi_shengxiao(nongli: Any, zodiac_boundary: Any) -> tuple[str, bool]:
+    """(生肖, 是否正月初一岁首)。上游本地引擎直接给 nongli.shengXiaoLichun / shengXiaoLunar（lunar.js）；
+    skill 的八字走 Java /bazi/birth，没有这两个字段，但同一 nongli 里有两种岁首的年干支：
+    `yearJieqi`（节气年＝立春岁首）与 `year`（农历年＝正月初一岁首）——取其地支查表即同一口径，
+    且与 [四柱与三元] 的年柱同源（不另起第二套历算）。实测 2028-01-30：year=戊申、yearJieqi=丁未。"""
+    if not isinstance(nongli, dict):
+        return "", False
+    if zodiac_boundary not in (None, "", "lichun", "lunar"):
+        # 上游页面只有两档（缺档 = 立春）；认不出的值不静默吞：按立春出并进 warnings。
+        _degrade(
+            "bazi zodiacBoundary %r unrecognised, using lichun", zodiac_boundary,
+            note=f"八字 zodiacBoundary={zodiac_boundary!r} 无法识别（可选 lichun / lunar），生肖行已按立春岁首给出。",
+        )
+    by_lunar = f"{zodiac_boundary or ''}" == "lunar"
+    if not by_lunar and nongli.get("shengXiaoLichun"):
+        return f"{nongli['shengXiaoLichun']}", False
+    if by_lunar and nongli.get("shengXiaoLunar"):
+        return f"{nongli['shengXiaoLunar']}", True
+    year_gz = f"{nongli.get('year' if by_lunar else 'yearJieqi') or ''}"
+    return (_BRANCH_SHENGXIAO.get(year_gz[1:2], ""), by_lunar)
+
+
 def _build_bazi_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
     bazi = response.get("bazi", response if isinstance(response, dict) else {})
     four = bazi.get("fourColumns", {}) if isinstance(bazi, dict) else {}
     nongli = bazi.get("nongli", {}) if isinstance(bazi, dict) else {}
     time_alg_map = {"0": "真太阳时", "1": "直接时间", "2": "春分定卯时", "3": "平太阳时(仅经度)"}  # 逐字同上游 cntradition/BaZi.js labelMap.timeAlg（v3.11.0 起 3=平太阳时）
     adjust_map = {"0": "不调整节气", "1": "节气按纬度调整"}
+    # adjustJieqi 在 schema 里是 bool：str(False) = 'False' 查不到表，旧版直接把「节气修正：False」印进快照。
+    _adjust_raw = payload.get("adjustJieqi", 0)
+    _adjust_key = f"{int(_adjust_raw)}" if isinstance(_adjust_raw, bool) else f"{_adjust_raw}"
+    # [Q-191/T-135]（BaZi.js:369-375）生肖行：缺档按页面缺省（立春岁首）。
+    shengxiao, shengxiao_by_lunar = _bazi_shengxiao(nongli, payload.get("zodiacBoundary"))
 
     def gz_gods(item: Any) -> str:
         if not isinstance(item, dict):
@@ -5283,10 +5439,22 @@ def _build_bazi_snapshot_text(payload: dict[str, Any], response: dict[str, Any])
         f"经纬度：{payload.get('lon', '—')} {payload.get('lat', '—')}",
         f"性别：{_gender_label(payload.get('gender'))}",
         f"时间算法：{time_alg_map.get(str(payload.get('timeAlg', 0)), payload.get('timeAlg', 0))}",
-        f"节气修正：{adjust_map.get(str(payload.get('adjustJieqi', 0)), payload.get('adjustJieqi', 0))}",
+        # [Q-191/T-134]（上游 BaZi.js:361）时间基准行紧跟时间算法。标签必须是**后端实际生效**的口径：
+        # 调用方没给晚子时 / 23 点换日开关时，skill 不下发、Java /bazi/birth 取缺省 1
+        # （BaZiBirthController.java:95-99），故缺省按 1 标，而不是 buildTimeBasisLine 的缺位回退「否」。
+        _build_time_basis_line(
+            time_alg=payload.get("timeAlg", 0),
+            late_zi_hour_use_next_day=1 if payload.get("lateZiHourUseNextDay") is None else payload.get("lateZiHourUseNextDay"),
+            after23_new_day=1 if payload.get("after23NewDay") is None else payload.get("after23NewDay"),
+        ),
+        f"节气修正：{adjust_map.get(_adjust_key, _adjust_raw)}",
         f"农历：{nongli.get('year', '')}年{'闰' if nongli.get('leap') else ''}{nongli.get('month', '')}{nongli.get('day', '')}".strip() or "农历：未知",
-        f"真太阳时：{nongli.get('birth') or (str(payload.get('date', '')) + ' ' + str(payload.get('time', ''))).strip()}",
     ]
+    if shengxiao:
+        base_lines.append(f"生肖：{shengxiao}（岁首={'正月初一' if shengxiao_by_lunar else '立春'}）")
+    base_lines.append(
+        f"真太阳时：{nongli.get('birth') or (str(payload.get('date', '')) + ' ' + str(payload.get('time', ''))).strip()}"
+    )
     four_lines = [
         f"年柱：{_gz_text(four.get('year'))}",
         f"月柱：{_gz_text(four.get('month'))}",
@@ -5395,7 +5563,9 @@ def _build_ziwei_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
         f"日期：{payload.get('date', '—')} {payload.get('time', '—')}",
         f"时区：{payload.get('zone', '—')}",
         f"经纬度：{payload.get('lon', '—')} {payload.get('lat', '—')}",
-        f"性别：{_gender_label(payload.get('gender'), unknown='—')}",
+        # [Q-193/T-139]（上游 v3.11.0 ZiWeiMain.js:419-420）「未知」在紫微是按男排（Java 缺省 gender=true，
+        # 引擎 male = gender !== 0）：只写「未知」会与命局阴阳自相矛盾。
+        f"性别：{_gender_label(payload.get('gender'), unknown='未知（按男排）')}",
         f"时间算法：{'直接时间' if str(payload.get('timeAlg', 0)) == '1' else '真太阳时'}",
     ]
     # 命主/身主/五行局/斗君/年命（星阙 P0 杂曜与全盘信息一并落盘）。
@@ -6857,6 +7027,79 @@ class HorosaSkillService:
             _degrade("jyotish section build failed: %s", exc)
         return response_data
 
+    def _attach_india_extra_vargas(
+        self, tool_name: str, payload: dict[str, Any], response_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        """[附加分盘]（上游 v3.11.0 #80，IndiaChart.js:1219-1333 buildIndiaSnapshotForFields 的 extraVargas 分支）。
+
+        主盘之外再挂几张分盘（如婚姻 D9 + 子女 D7），每张只出「宫位宫头 + 星与虚点 + 行星」简表（整张分盘快照约
+        2.6 万字，N 张全出会把预算吃穿）。归一（值域/去重/上限 4）后剔掉主盘自身（planIndiaExtraVargas），逐张另取
+        /india/chart?chartnum=N（上游 fetchIndiaVargaBriefLines 同路），段内小标题 `── D9 婚姻 ──`。缺省不选 = 不发请求、不加段。
+        """
+        if tool_name != "india_chart" or not isinstance(response_data, dict):
+            return response_data
+        raw = payload.get("indiaExtraVargas")
+        if raw in (None, "", [], ()):
+            return response_data
+        wanted, dropped = _normalize_india_extra_vargas(raw)
+        if dropped:
+            _degrade(
+                "india extra vargas dropped invalid entries: %s", dropped,
+                note=(
+                    f"印度盘 [附加分盘]：已忽略无效/重复/超上限的分盘 {dropped}"
+                    f"（可选 {'/'.join(str(n) for n, _ in _INDIA_MOUNT_VARGA_OPTIONS if n > 1)}，最多 {_INDIA_MOUNT_EXTRA_VARGA_MAX} 张）。"
+                ),
+            )
+        try:
+            main = int(payload.get("chartnum") or 1)
+        except (TypeError, ValueError):
+            main = 1
+        main = main if main > 0 else 1
+        extras = [n for n in wanted if n != main]
+        if not extras:
+            return response_data
+        base_remote = {
+            k: v for k, v in _india_chart_remote_payload(payload).items() if k not in ("chartnum", "tripataki")
+        }
+        extra_lines: list[str] = []
+        for chartnum in extras:
+            try:
+                varga = self._call_remote("/india/chart", {**base_remote, "chartnum": chartnum})
+            except Exception as exc:  # noqa: BLE001 — 单张附加分盘失败不许带崩主盘
+                _degrade(
+                    "india extra varga D%s fetch failed: %s", chartnum, exc,
+                    note=f"印度盘 [附加分盘] D{chartnum} 本次未能取到（其余分盘与主盘不受影响）。",
+                )
+                continue
+            if not isinstance(varga, dict) or not _is_astro_chart_payload(varga):
+                _degrade(
+                    "india extra varga D%s returned no chart", chartnum,
+                    note=f"印度盘 [附加分盘] D{chartnum} 后端未返回盘面，已跳过。",
+                )
+                continue
+            # 上游 pickIndiaVargaBriefLines：只挑该分盘自己的 宫位宫头 + 星与虚点 + 行星 三段正文（trimEnd + 去空行）。
+            body = [
+                line.rstrip()
+                for block in (
+                    _build_house_cusp_lines(varga),
+                    _build_star_and_lot_position_lines(varga),
+                    _build_planet_section(varga),
+                )
+                for line in "\n".join(f"{item}" for item in (block or [])).split("\n")
+                if line.strip()
+            ]
+            if body:
+                extra_lines.append(f"── {_india_mount_varga_label(chartnum)} ──")
+                extra_lines.extend(body)
+        if not extra_lines:
+            return response_data
+        enriched = dict(response_data)
+        # 上游 ensureSection：首行说明 + 各张简表（ensureSection 会滤掉空行，故各张之间无空行）。
+        enriched["_indiaExtraVargas"] = "\n".join(
+            ["以下为主盘之外另挂的分盘,只列该分盘的宫头与星曜落宫(大运/瑜伽/相位等仍以主盘段为准)。", *extra_lines]
+        )
+        return enriched
+
     # 古典格局派生分析 (星阙 v2.6.7): astrochart/astrochart_like 的 [古典格局] 段来自 /astroextra/analysis
     # (护卫/优势相位/相位动态/逐题主星/偶然尊贵/恒星/行星时/埃及历/巴比伦/格局/分布/气质/almutem/吉化-extraLots)。
     # 与前端同源:按需 fetch、优雅降级(失败→不挂载→该段不出)。[古典](逐曜状态/围攻/围绕)直接读 /chart 响应,无需此 fetch。
@@ -6966,29 +7209,40 @@ class HorosaSkillService:
         return response_data
 
     def _attach_ziwei_extras(self, tool_name: str, payload: dict[str, Any], response_data: dict[str, Any]) -> dict[str, Any]:
-        """紫微 [运限] / [流派叠层]：仅在调用方显式给了 period / schools 时产出。
+        """紫微 [运限概览] / [运限] / [流派叠层]（vendored ziweiSnapshotLayers.js，段序同上游）。
 
-        上游这两段由界面勾选与流派开关驱动（无勾选整段不产）；headless 把同一份选择开成入参，
-        语义一致 —— 不给就不产，故两段列 optional。
+        [运限概览]（上游 v3.11.0 #80，ZiWeiMain.js:597-599）是**无条件段**：有盘就出（全大限 × 各限
+        10 流年的公历年-干支），故这里对每张紫微盘都调 JS。[运限] / [流派叠层] 上游由界面勾选与流派开关
+        驱动（无勾选整段不产）；headless 把同一份选择开成入参 period / schools，不给就不产（optional）。
+        JS 单段失败回 `errors` —— 逐条进 envelope.warnings，不静默。
         """
         if tool_name not in {"ziwei_birth", "ziwei_rules"} or not isinstance(response_data, dict):
-            return response_data
-        period = payload.get("period") if isinstance(payload.get("period"), dict) else None
-        schools = payload.get("schools") if isinstance(payload.get("schools"), dict) else None
-        if not period and not schools:
             return response_data
         chart = response_data.get("chart")
         if not isinstance(chart, dict):
             return response_data
+        period = payload.get("period") if isinstance(payload.get("period"), dict) else None
+        schools = payload.get("schools") if isinstance(payload.get("schools"), dict) else None
         try:
             js = self.js_client.run("ziwei_extras", {"chart": chart, "period": period, "schools": schools})
-            text = f"{(js or {}).get('text') or ''}".strip()
-            if text:
-                enriched = dict(response_data)
-                enriched["_ziweiExtras"] = text
-                return enriched
         except Exception as exc:  # noqa: BLE001 — 富化失败不许影响命盘
-            _degrade("ziwei extras build failed: %s", exc)
+            _degrade(
+                "ziwei extras build failed: %s", exc,
+                note="紫微 [运限概览]/[运限]/[流派叠层] 本次未能产出（JS 引擎失败），命盘其余段不受影响。",
+            )
+            return response_data
+        js = js if isinstance(js, dict) else {}
+        for err in js.get("errors") or []:
+            if isinstance(err, dict):
+                _degrade(
+                    "ziwei extras section %s failed: %s", err.get("section"), err.get("message"),
+                    note=f"紫微 [{err.get('section') or '?'}] 段本次未能产出（{err.get('message') or '未知错误'}），其余段不受影响。",
+                )
+        text = f"{js.get('text') or ''}".strip()
+        if text:
+            enriched = dict(response_data)
+            enriched["_ziweiExtras"] = text
+            return enriched
         return response_data
 
     def _attach_bazi_geju(self, tool_name: str, response_data: dict[str, Any], payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -9357,10 +9611,12 @@ class HorosaSkillService:
             ("太乙命宫行限", "命宫行限"),
         ):
             sections.append((_out, _section_body(taiyi_export, _src, f"（本盘未产出「{_src}」）")))
+        # 段单逐字同上游 sanshiSnapshotSections.js SANSHI_LIURENG_DUANGUA_SECTIONS（v3.11.0 [Q-451/T-414]
+        # 补「七政」:44-45 行 —— 独立六壬快照有 [七政]、三式合一页也有「七政」页签，此前挑段单漏它）。
         for _t in (
             "十二盘式", "常用神煞", "年月神煞", "课体结构", "三传旺衰",
             "空亡真假", "旬空落点", "陷空", "遁干特殊", "年命上神",
-            "毕法（已命中）", "占断向导",
+            "毕法（已命中）", "占断向导", "七政",
         ):
             sections.append((_t, _section_body(liureng_export, _t, f"（本盘未产出「{_t}」）")))
         for _out, _src in (
@@ -9421,7 +9677,133 @@ class HorosaSkillService:
         response = self._call_remote("/chart13", remote_payload)
         return response
 
+    # 七政显示层四键（上游 techniqueMountSettings.js:1159-1175 挂载齿轮；缺省 = GuoLaoChartStyle.GUOLAO_DEFAULT_DISPLAY）。
+    # 值域逐字同上游 normLifeMasterMode / normMinorLimitType / normTongxianBase / normLimitChildBase。
+    # 认不出的值**报错**（不静默归一成缺省）：改这个参数，结果必须变 —— 拼错的值悄悄当缺省用就违背了这一条。
+    _GUOLAO_DISPLAY_KEYS: dict[str, tuple[str, tuple[Any, ...], Any]] = {
+        "guolaoLifeMasterMode": ("lifeMasterMode", ("gong", "du", "dudegrade"), "gong"),
+        "guolaoMinorLimitType": ("minorLimitType", ("", "minor", "month", "tong", "dongwei"), ""),
+        "guolaoTongxianBase": ("tongxianBase", ("tong10", "gu9", "xu11"), "tong10"),
+        "guolaoLimitChildBase": ("limitChildBase", (9, 10), 9),
+    }
+
+    def _guolao_display_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
+        display: dict[str, Any] = {"limitYearBoundary": "gregorian"}
+        for key, (disp_key, allowed, default) in self._GUOLAO_DISPLAY_KEYS.items():
+            raw = payload.get(key)
+            if raw is None or (raw == "" and disp_key != "minorLimitType"):
+                display[disp_key] = default
+                continue
+            value: Any = f"{raw}".strip()
+            if disp_key == "limitChildBase":
+                try:
+                    value = int(raw)
+                except (TypeError, ValueError):
+                    value = raw
+            if value not in allowed:
+                raise ToolValidationError(
+                    bilingual(
+                        f"七政四余 {key} 取值无效：{raw!r}（可选：{'、'.join(repr(a) for a in allowed)}）。",
+                        f"guolao_chart {key} is invalid: {raw!r} (allowed: {', '.join(repr(a) for a in allowed)}).",
+                    ),
+                    code="tool.guolao_invalid_display_setting",
+                    details={"field": key, "value": raw, "allowed": list(allowed)},
+                )
+            display[disp_key] = value
+        return display
+
+    def _guolao_info_sections(
+        self,
+        payload: dict[str, Any],
+        response: dict[str, Any],
+        display: dict[str, Any],
+        moira_rules: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """[起盘信息] 命度/身度/宿主行 + [大限] + [三主与化曜] + [限法实算]（vendored 上游 builder，JS `info_sections`）。
+
+        本命四柱：上游 root 是 Java /chart（Java 把 OnlyFourColumns.getNongli() 挂在 chart.nongli，ChartController.java:84-98）；
+        skill 的 /chart 走 Python 服务、没有 nongli → 另取同一 Java OnlyFourColumns（/nongli/time，同默认 timeAlg=0 真太阳时、
+        日界两键缺省 1/1）挂上去。取不到时事实层照上游回退（年柱按公历年干支、月限行省略）并进 warnings。
+        """
+        date_text = f"{payload.get('date') or ''}"
+        slash_date = date_text.replace("-", "/", 2) if re.match(r"^\d{4}-\d{2}-\d{2}", date_text) else date_text
+        natal_nongli: dict[str, Any] | None = None
+        try:
+            natal_nongli = self._call_remote(
+                "/nongli/time",
+                {
+                    "date": payload.get("date"),
+                    "time": payload.get("time"),
+                    "zone": payload.get("zone"),
+                    "lon": payload.get("lon"),
+                    "lat": payload.get("lat"),
+                    "gpsLat": payload.get("gpsLat"),
+                    "gpsLon": payload.get("gpsLon"),
+                    **_day_boundary_switches(payload),
+                    "timeAlg": 0,
+                    "ad": payload.get("ad", 1),
+                },
+            )
+        except Exception as exc:  # noqa: BLE001 — 本命四柱只影响三主/化曜/月限的取值来源，不许带崩整盘
+            _degrade(
+                "guolao natal nongli (/nongli/time) unavailable: %s", exc,
+                note="七政四余 [三主与化曜] 的生年化曜/命宫配干按公历年干支回退、[限法实算] 月限行省略（本命四柱 /nongli/time 不可用）。",
+            )
+        chart_obj = response.get("chart") if isinstance(response.get("chart"), dict) else {}
+        root = dict(response)
+        if isinstance(natal_nongli, dict) and natal_nongli:
+            root["chart"] = {**chart_obj, "nongli": natal_nongli}
+        transit_date, transit_time = _moira_transit_moment(payload)
+        guolao_params = {
+            "date": slash_date,
+            "time": payload.get("time"),
+            "zone": payload.get("zone"),
+            "lat": payload.get("lat"),
+            "lon": payload.get("lon"),
+            "gpsLat": payload.get("gpsLat"),
+            "gpsLon": payload.get("gpsLon"),
+            "ad": payload.get("ad", 1),
+        }
+        transit_params = {
+            **guolao_params,
+            "date": f"{transit_date}".replace("-", "/", 2),
+            "time": transit_time,
+            "predictive": 1,
+        }
+        fields: dict[str, Any] = {}
+        if payload.get("guolaoLifeMode"):
+            fields["guolaoLifeMode"] = {"value": payload.get("guolaoLifeMode")}
+        try:
+            js = self.js_client.run(
+                "guolao_moira",
+                {
+                    "action": "info_sections",
+                    "chart": root,
+                    "params": guolao_params,
+                    "transitParams": transit_params,
+                    "display": display,
+                    "fields": fields,
+                    "moiraRules": moira_rules or {},
+                },
+            )
+        except Exception as exc:  # noqa: BLE001 — 四段来自 JS；失败 → [大限] 回退 Python 兜底、其余三段缺席，进 warnings
+            _degrade(
+                "guolao info sections build failed: %s", exc,
+                note="七政四余 [大限] 回退内置旧算法（首限四舍童限、元旦年界），[三主与化曜]/[限法实算] 与命度/身度行本次未产出（JS 段 builder 失败）。",
+            )
+            return {}
+        js = js if isinstance(js, dict) else {}
+        for err in js.get("errors") or []:
+            if isinstance(err, dict):
+                _degrade(
+                    "guolao info section %s degraded: %s", err.get("section"), err.get("message"),
+                    note=f"七政四余 [{err.get('section') or '?'}]：{err.get('message') or '未知错误'}",
+                )
+        return js
+
     def _run_guolao_chart_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 显示层四键先校验（非法值在任何后端往返之前就报错）。
+        display = self._guolao_display_settings(payload)
         remote_payload = {
             **payload,
             "tradition": True,
@@ -9465,6 +9847,7 @@ class HorosaSkillService:
         # Java 不可用（A5 冷却快速失败 / 降级）→ 三段缺席并进 envelope.warnings，其余段不受影响（optional 段）。
         moira_sections: dict[str, str] = {}
         moira_rules_slim: dict[str, Any] | None = None
+        moira_rules_full: dict[str, Any] | None = None
         if payload.get("moiraRules", True) is not False:
             try:
                 transit_date, transit_time = _moira_transit_moment(payload)
@@ -9487,13 +9870,17 @@ class HorosaSkillService:
                 if isinstance(sections, dict):
                     moira_sections = {k: f"{v or ''}".strip() for k, v in sections.items()}
                 if isinstance(rules, dict):
-                    moira_rules_slim = {k: rules.get(k) for k in ("weakSolid", "yearStars", "transitYearStars") if k in rules}
+                    moira_rules_full = rules
+                    moira_rules_slim = {k: rules.get(k) for k in ("weakSolid", "yearStars", "transitYearStars", "natalYearStars") if k in rules}
             except Exception as exc:  # noqa: BLE001 — 三段为 optional；说明进 warnings
                 _degrade(
                     "guolao moira rules (/qizheng/moira) unavailable: %s", exc,
                     note="七政四余 [虚实]/[本命化曜]/[流年流曜] 本次未产出（Java /qizheng/moira 不可用或流年盘失败），其余段不受影响。",
                 )
-        snapshot_text = _build_guolao_snapshot_text(remote_payload, response, pattern_text=pattern_text)
+        info_sections = self._guolao_info_sections(payload, response, display, moira_rules_full)
+        snapshot_text = _build_guolao_snapshot_text(
+            remote_payload, response, pattern_text=pattern_text, info_sections=info_sections
+        )
         if dignity_text:
             # 段序对齐上游：紧跟 [七政四余宫位与二十八宿星曜]、在 [神煞] 之前。
             marker = "[神煞]"
@@ -11335,12 +11722,16 @@ class HorosaSkillService:
                     response_data = self._run_local_tool(definition, input_normalized)
                 else:
                     assert definition.endpoint is not None
-                    response_data = self._call_remote(definition.endpoint, input_normalized)
+                    remote_input = (
+                        _india_chart_remote_payload(input_normalized) if tool_name == "india_chart" else input_normalized
+                    )
+                    response_data = self._call_remote(definition.endpoint, remote_input)
                     response_data = self._attach_predictive_chart_context(tool_name, input_normalized, response_data)
                 response_data = self._attach_natal_extras(tool_name, response_data)
                 response_data = self._attach_classical_derived(tool_name, response_data)
                 response_data = self._attach_classical_analysis(tool_name, input_normalized, response_data)
                 response_data = self._attach_jyotish_sections(tool_name, response_data)
+                response_data = self._attach_india_extra_vargas(tool_name, input_normalized, response_data)
                 response_data = self._attach_calendar_extras(tool_name, input_normalized, response_data)
                 response_data = self._attach_bazi_geju(tool_name, response_data, input_normalized)
                 response_data = self._attach_ziwei_extras(tool_name, input_normalized, response_data)

@@ -24,6 +24,13 @@ export function buildJyotishSnapshotLines(chartObj){
 	const fx = (x, d)=>(typeof x === 'number' && Number.isFinite(x)) ? x.toFixed(d) : (x !== undefined && x !== null ? `${x}` : '—');
 	const lordOf = (l)=>(l && (l.label || l.key)) || '—';
 	const out = {};
+	// 🔴 skill 偏离（v3.11.x 同步发现的**上游 bug**，上游 IndiaChart.js HEAD 9b74714b 仍在）：SIGN_CN_S / scS 两行在上游
+	// 定义于下方「印占 P0 接 UI 同步」块（IndiaChart.js:932-933），而 [Q-127/T-35] 三旗盘逐月净分块（:721-732）在它之前
+	// 就调用 scS → const 暂时性死区 ReferenceError：后端一带 jyotish.tripataki（opt-in indiaTripataki）整个
+	// buildJyotishSnapshotLines 抛出，上游 buildIndiaSnapshotText 无 try → 整份印度快照失败；skill 侧则全部 jyotish 段缺席。
+	// 两行原样上提（值逐字不变），其余逐字不动。重新从上游抽取本文件时必须保留此上提，直到上游修掉。
+	const SIGN_CN_S = { Aries: '白羊', Taurus: '金牛', Gemini: '双子', Cancer: '巨蟹', Leo: '狮子', Virgo: '处女', Libra: '天秤', Scorpio: '天蝎', Sagittarius: '射手', Capricorn: '摩羯', Aquarius: '水瓶', Pisces: '双鱼' };
+	const scS = (s)=>SIGN_CN_S[s] || s || '—';
 
 	const p = j.panchanga;
 	if(p){
@@ -241,7 +248,10 @@ export function buildJyotishSnapshotLines(chartObj){
 		[['moon', '月心'], ['saturn', '土心']].forEach(([ck, cl])=>{
 			const c = triY.byCenter[ck];
 			if(c && c.available && Array.isArray(c.months) && c.months.length){
-				triRows.push([cl, c.centerSign ? scS(c.centerSign) : '—', c.months.map((m)=>`${m.index}:${m.score ? m.score.net : '-'}`).join(' ')]);
+				// 🔴 skill 偏离（上游 bug 之二）：后端 tripataki.month_rows 的月序键是 `month`（astrostudy/india/tripataki.py:51），
+				// 上游此处读 `m.index`（只在后端**入参** months 上存在）→ 每格都是「undefined:净分」。优先读 index（上游修键后零变化）、
+				// 缺则读 month。
+				triRows.push([cl, c.centerSign ? scS(c.centerSign) : '—', c.months.map((m)=>`${m.index !== undefined ? m.index : m.month}:${m.score ? m.score.net : '-'}`).join(' ')]);
 			}
 		});
 		if(triRows.length){ out['Tripataki 三旗盘逐月净分'] = gfmTable(['中心', '座', '逐月净分(月序:有效吉−凶)'], triRows); }
@@ -445,8 +455,7 @@ export function buildJyotishSnapshotLines(chartObj){
 	}
 
 	// 印占 P0 接 UI 同步进 AI 挂载:Argala / 座运 Rasi Dashas / 年盘强度·年内大运 / Gochara 从命。
-	const SIGN_CN_S = { Aries: '白羊', Taurus: '金牛', Gemini: '双子', Cancer: '巨蟹', Leo: '狮子', Virgo: '处女', Libra: '天秤', Scorpio: '天蝎', Sagittarius: '射手', Capricorn: '摩羯', Aquarius: '水瓶', Pisces: '双鱼' };
-	const scS = (s)=>SIGN_CN_S[s] || s || '—';
+	// （SIGN_CN_S / scS 两行已上提到函数开头 —— 见该处 🔴 skill 偏离注释。）
 	const arg = j.arudha && j.arudha.argala;
 	if(arg && typeof arg === 'object'){
 		const argRows = Object.keys(arg).sort((a, b)=>(Number(a) - Number(b))).map((h)=>{

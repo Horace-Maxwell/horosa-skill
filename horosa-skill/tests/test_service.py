@@ -1187,6 +1187,47 @@ class FakeJsClient(HorosaJsEngineClient):
                 "birthStars": "本命年柱：丙午\n◆ 本命化曜\n木：化天贵（同归：岁星）",
                 "transitStars": f"流年干支：{payload.get('transitYearGz') or '—'}\n◆ 流年化曜\n火：化天刑",
             }}
+        if tool_name == "guolao_moira" and payload.get("action") == "info_sections":
+            # v3.11.x [Q-231/Q-434/Q-435]：[起盘信息] 命度/身度/宿主行 + [大限] + [三主与化曜] + [限法实算]。
+            # 段体取自真 builder 在上游 guolaoInfoFactsSnapshot.test.js 夹具上的输出（真值由
+            # tests/test_sync311_chinese.py 的真 node 用例守；这里只回形状 + 真内容）。
+            return {
+                "anchorLines": [
+                    "命度：射手 10度42分（寅 · 七政命度点 · 1宫 - 命宫）",
+                    "身度：金牛 12度0分（酉 · 月亮 · 7宫 - 夫妻宫）",
+                    "命度宿主：房 10度42分；身度宿主：亢 12度0分",
+                ],
+                "limitSection": (
+                    "古度限度法（命度十二宫大限）：\n| 限 | 宫 | 起讫岁 | 起讫年 | 年数 |\n| --- | --- | --- | --- | --- |\n"
+                    "| 第1限 | 命宫 | 1-13岁 | 1990-2002年 | 约12.6年 |"
+                ),
+                "masters": (
+                    "◆ 三主 · 命宫配干 · 化曜（主宫主）\n命主(宫主)：木\n命宫宫主：木\n命度度主(宿主曜)：日\n"
+                    "身主(身宫宫主)：金\n命宫配干(五虎遁)：戊寅\n生年化曜(A诀)：水"
+                ),
+                "limitCalc": "◆ 飞限 · 童限 · 小限 · 月限 · 限度（37 岁 · 丙午年）\n飞限：亥；小限：寅；月限：未；限度：25巳08；至：23巳08",
+                "errors": [],
+            }
+        if tool_name == "ziwei_extras":
+            # 紫微 [运限概览]（v3.11.0 #80，有盘就出）/ [运限]（给了 period 才出）/ [流派叠层]（开了流派开关才出）。
+            # 段体取自真引擎在 2028-04-06 09:33 上海盘上的输出；段头按真 preset 取（不手抄）。
+            from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS as _PZ
+
+            def _zw(title: str) -> str:
+                assert title in _PZ["ziwei"], title
+                return f"[{title}]"
+
+            blocks = [
+                f"{_zw('运限概览')}\n全大限 × 流年一览(公历年与干支由代码算出,禁自行推算):\n"
+                "| 虚岁 | 宫位 | 宫干支 | 该限流年（公历年-干支） |\n| --- | --- | --- | --- |\n"
+                "| 2~11 | 命 | 癸亥 | 2029-己酉、2030-庚戌、2031-辛亥、2032-壬子、2033-癸丑、2034-甲寅、2035-乙卯、2036-丙辰、2037-丁巳、2038-戊午 |\n"
+                "要某一年/某月的完整流曜与四化落宫,请在「挂载设置 → 运限」里选定年月(或直接说出年份)。"
+            ]
+            if payload.get("period"):
+                blocks.append(f"{_zw('运限')}\n◆ 大限：甲子（12~21岁），命宫【父母】·对宫【疾厄】")
+            if payload.get("schools"):
+                blocks.append(f"{_zw('流派叠层')}\n· 童限\n  1岁·命宫")
+            return {"text": "\n\n".join(blocks), "errors": []}
         if tool_name == "guolao_moira":
             # 七政四余 政余格局：headless buildLocalMoiraPatterns 的离线替身（喜/忌格各一）。
             return {
@@ -2443,7 +2484,9 @@ def test_guolao_snapshot_has_limit_and_aspect_sections(tmp_path) -> None:
     )
     text = result.data["snapshot_text"]
     assert "大限" in text
-    assert "第1限 命宫" in text
+    # v3.11.x：[大限] 由 vendored 上游 buildGuolaoLimitSection 出（GFM 表，GuoLaoChartMain.js:2191-2201），
+    # 不再是 skill 旧行式「第1限 命宫：…」。
+    assert "| 第1限 | 命宫 |" in text
     assert "相位" in text
 
 
