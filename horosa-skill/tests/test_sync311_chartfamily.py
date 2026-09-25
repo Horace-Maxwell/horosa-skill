@@ -742,13 +742,14 @@ def test_jieqi_explicit_selection_matching_nothing_is_a_true_cancel() -> None:
 
 # ─────────────────────────── live（显式点名的 vendored 实例；AGENTS §8）───────────────────────────
 from test_local_js_tools import make_service as _live_service  # noqa: E402
-from test_local_js_tools import requires_chart, requires_runtime  # noqa: E402
+from test_local_js_tools import requires_chart, requires_runtime, requires_current_runtime_contract  # noqa: E402
 
 
 def _table_rows(lines: list[str], skip: int) -> list[list[str]]:
     return [[cell.strip() for cell in row.strip().strip("|").split("|")] for row in lines[skip:] if row.startswith("|")]
 
 
+@requires_current_runtime_contract
 @requires_chart
 def test_live_derived_chart_label_and_whole_sign_table_round_trip_backend_nr(tmp_path) -> None:
     """chart13（十三分盘，后端 thirteenthchart.py 每宫打 hsysDerived）：[起盘信息] 标「整宫(变换后上升)」；
@@ -771,6 +772,7 @@ def test_live_derived_chart_label_and_whole_sign_table_round_trip_backend_nr(tmp
     assert checked >= 5
 
 
+@requires_current_runtime_contract
 @requires_chart
 def test_live_polar_placidus_fallback_label(tmp_path) -> None:
     """极圈内 Placidus 无解 → 后端兜底 Porphyry 并逐宫打 hsysFallback（flatlib swe.py:337-359）；分宫表表头说真话。"""
@@ -780,6 +782,7 @@ def test_live_polar_placidus_fallback_label(tmp_path) -> None:
     assert _sections(result.data["snapshot_text"])["分宫制宫神星表"][0] == "◆ 当前分宫制(Placidus→回退Porphyry)宫神星表(houseRows)"
 
 
+@requires_current_runtime_contract
 @requires_chart
 def test_live_relative_comp_embeds_both_charts(tmp_path) -> None:
     result = _live_service(tmp_path).run_tool("relative", build_sample_payloads()["relative"], save_result=False)
@@ -791,6 +794,7 @@ def test_live_relative_comp_embeds_both_charts(tmp_path) -> None:
     assert "宫制：整宫制" in secs["关系起盘信息"] and "黄道：回归黄道" in secs["关系起盘信息"]
 
 
+@requires_current_runtime_contract
 @requires_chart
 def test_live_germany_house_frames_mirror_backend_placements(tmp_path) -> None:
     """后端 houseFrames（webgermanysrv.py:99-106 缺省即带）→ [六宫框落宫]：每格 = 后端 frames[key].placements[id]
@@ -811,6 +815,7 @@ def test_live_germany_house_frames_mirror_backend_placements(tmp_path) -> None:
                 assert rows[cn][column] == str(placements[point_id]), (key, point_id)
 
 
+@requires_current_runtime_contract
 @requires_chart
 def test_live_dice_tables_and_top_level_aspects_reach_the_sections(tmp_path) -> None:
     """骰子两盘表带逆行列；后端把 aspects 放在 chartObj 顶层（chart 里没有）——v0.40.0 声明式 deviation 后两盘相位段从顶层取数产出
@@ -829,6 +834,7 @@ def test_live_dice_tables_and_top_level_aspects_reach_the_sections(tmp_path) -> 
     assert secs["天象盘相位"][0] == "| 主体 | 相位 | 对象 | 相态 | 误差 |"
 
 
+@requires_current_runtime_contract
 @requires_runtime
 def test_live_jieqi_24_terms_carry_java_four_pillars(tmp_path) -> None:
     """[二十四节气] 种子行取 Java /jieqi/year（setupBazi）。值级：2028 春分行四柱 = 戊申 乙卯 甲辰 己巳——

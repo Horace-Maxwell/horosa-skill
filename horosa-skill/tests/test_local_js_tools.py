@@ -9,6 +9,7 @@ engine and runs as a pure headless JS tool.
 """
 from __future__ import annotations
 
+import json
 import os
 import pathlib
 import socket
@@ -18,6 +19,7 @@ import pytest
 
 from horosa_skill.config import Settings
 from horosa_skill.engine.client import HorosaApiClient
+from horosa_skill.exports.registry import AI_EXPORT_SETTINGS_VERSION
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.service import HorosaSkillService
 
@@ -80,6 +82,40 @@ _JAVA_LISTENING = _JAVA_EXPLICIT and _server_up(*_JAVA_HOST_PORT)
 _JAVA_USABLE = _JAVA_LISTENING and _java_routes_alive(JAVA_SERVER_ROOT)
 CHART_UP = _CHART_EXPLICIT and _server_up(*_CHART_HOST_PORT)
 RUNTIME_UP = CHART_UP and _JAVA_USABLE
+
+
+def installed_runtime_registry_version(runtime_root: pathlib.Path) -> int | None:
+    """`export_registry_version` stamped into the runtime payload installed under `runtime_root`.
+
+    None when there is no installed payload or the manifest is unreadable (an external vendored instance,
+    for example) — unknown must never turn into a skip.
+    """
+    manifest = runtime_root / "current" / "runtime-manifest.json"
+    try:
+        value = json.loads(manifest.read_text(encoding="utf-8")).get("export_registry_version")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def runtime_contract_is_stale(installed: int | None, tree: int) -> bool:
+    """The live engines were built from a skill older than this tree's export contract — version skew, not a regression."""
+    return installed is not None and installed < tree
+
+
+_INSTALLED_REGISTRY = installed_runtime_registry_version(Settings.from_env().runtime_root)
+# Live tests that pin behaviour shipped by an upstream sync (sync311 goldens, castSeed replay, 地点 line, the
+# vendored 三式合一 snapshot's `kook`) only hold against a runtime built from this contract or newer. Against
+# an older installed payload they must SKIP with the skew spelled out, not fail: the weekly matrix runs
+# main × the public latest release (2026-09-24, Windows maintainer lane: 6 red on v0.39.0 = registry 14 < 15).
+requires_current_runtime_contract = pytest.mark.skipif(
+    runtime_contract_is_stale(_INSTALLED_REGISTRY, AI_EXPORT_SETTINGS_VERSION),
+    reason=(
+        f"installed runtime payload export_registry_version={_INSTALLED_REGISTRY} < this tree's "
+        f"AI_EXPORT_SETTINGS_VERSION={AI_EXPORT_SETTINGS_VERSION}: the engines predate the upstream sync these "
+        "assertions pin (version skew, not a regression)"
+    ),
+)
 
 
 def _runtime_skip_reason() -> str:
@@ -315,6 +351,7 @@ def test_jinkou_runs_via_ken_backend(tmp_path) -> None:
     _assert_clean_export(result)
 
 
+@requires_current_runtime_contract
 @requires_runtime
 def test_sanshiunited_combines_ken_qimen_taiyi(tmp_path) -> None:
     service = make_service(tmp_path)

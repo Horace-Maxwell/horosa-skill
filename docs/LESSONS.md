@@ -16,6 +16,8 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.40.0-dev (2026-09-24) | Windows 复验 lane：main（已同步上游 v3.11，契约 15）× 公开 v0.39.0 runtime（payload 14）→ 6 条 sync311 / sanshiunited live 红——版本偏斜，不是回归；`requires_chart` 只看「活不活、点没点名」，看不出「够不够新」 | `requires_current_runtime_contract`：已装 payload 的 `export_registry_version` < 本树 `AI_EXPORT_SETTINGS_VERSION` 即 skip 并写明偏斜（未知不跳）；挂到 sync311 全部 17 条 live + sanshiunited；每周一矩阵（main × latest）因此不再假红 |
+| v0.40.0-dev (2026-09-24) | Windows 复验：`run_ci_gates` 23/24——benchmark smoke 在 cp1252 管道上 `print(json.dumps(报告, ensure_ascii=False))` 炸；stdio 守卫只扫 print **字面量**，对「打印数据」失明，同盲区 19 个脚本 | 打印数据 = 承诺输出非 ASCII：`ensure_ascii=False`+`print(` 也须 reconfigure；19 脚本补惯用块；windows-smoke 加 benchmark 步骤（唯一非 UTF-8 stdout 的 runner） |
 | v0.40.0 (2026-09) | 首推 windows-smoke 红：tests/ 里 7 处起 node 复算金标的 `subprocess.run(…, text=True)` 没给 encoding，CJK 输出按 cp1252 解炸 | node 调用一律 `encoding="utf-8"`；`test_subprocess_encoding` 扩到 tests/ 的 node 调用（负向对照） |
 | v0.40.0 (2026-09) | 首推 CI 红：ci.yml 两个 stdio 探针把全量面工具数写死 116，四个新工具把它变成 120 | 数字只许一个源：探针从 contracts/mcp_list_budget.json 读 full_tools/compact_tools；docs-sync 扫 README 全量行 + ci.yml 字面数 |
 | v0.40.0 (2026-09) | 审计 P0：报告类 MCP 工具 `output_path` 可写任意路径（提示注入 = 覆盖用户任意文件） | 落盘路径闸：相对路径按输出目录解析、绝对路径须在输出目录 / `HOROSA_REPORT_OUTPUT_ROOTS` 内，越界 `report.output_path_not_allowed` 不写文件；三工具 destructiveHint=True |
@@ -110,6 +112,61 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.40.0-dev / 2026-09-24 — Windows 维护机 lane：main × 公开 v0.39.0 runtime 的 6 条 live 红是版本偏斜——live 闸只看「活不活」，不看「够不够新」
+
+- **背景**：同一轮复验，`verify_runtime_live.py` 用全新根 `rt-lane` 真下载公开 v0.39.0（`horosa-runtime-win32-x64-v0.39.0.zip`，
+  60 s 装 / 21 s 起）：非 ASCII 根拒装、doctor、四引擎、**九客户端全绿（含 codex）**、HTTP 握手、挂客户端不停、自动换端口、stop
+  ——Windows 原生的 12 步全过。唯一红：live pytest `1733 passed / 6 failed / 28 skipped`。
+- **症状 → 定性**：6 条 = `test_sanshiunited_combines_ken_qimen_taiyi`（`taiyi.kook` 为 None）、`test_sync311_chartfamily`
+  派生盘标签「，整宫(变换后上升)」、`test_sync311_newtools` ephemeris 金标两例（行格式差一列）、`test_sync311_shenshu` wuzhao
+  castSeed 复现（断言信息自己写着「旧码不带 castSeed → 后端 random.Random() 真随机」）与 cetian「地点：上海」（引擎回「星阙地点」）。
+  逐条对回提交史：`kook` 随 sanshi 同步（`21e3076` / `5a6148d`，快照改由 vendored 上游 `buildSanShiUnitedSnapshotText` 产出）
+  进 main；其余全是 sync311 钉的上游 v3.11 行为。而 lane 装的是 v0.39.0 payload（`export_registry_version` 14），本树契约
+  `AI_EXPORT_SETTINGS_VERSION` 15——**这些行为要下一版 runtime 才有**。JS 技法在 lane 里走的也是已装 runtime 的 core-js
+  0.39.0（解析顺序 env → installed manifest → bundled，AGENTS §6 早有记载）。结论：偏斜，不是回归，也不是 Windows 问题。
+- **为什么会红而不是跳过**：`requires_chart` / `requires_runtime` 只看两件事——实例活不活、是不是显式点名的（AGENTS §8
+  「默认端口栈不可信」）；「实例够不够新」没有任何闸。`pdSyncRev` 心跳闸只管主限法。于是主干一旦领先于公开 runtime，
+  钉新行为的 live 用例在「main × latest」形状下必红——**托管矩阵每周一（`23 4 * * 1`）就是这个形状**（`actions/checkout`
+  无 `ref` = main，资产 = 公开 latest），下一次跑必红同样 6 条，把真回归淹在里面。
+- **修**：`tests/test_local_js_tools.py` 新增 `requires_current_runtime_contract`——读已装 payload 的 `export_registry_version`
+  （`<runtime_root>/current/runtime-manifest.json`），小于本树 `AI_EXPORT_SETTINGS_VERSION` 即 skip，理由写明
+  「payload N < tree M：引擎早于这些断言钉的上游同步（偏斜，非回归）」；**未知不跳**（外部 vendored 实例没有已装 payload，
+  它的新鲜度由 preflight / mirror 守卫另管）。挂到 sync311 三个模块的全部 17 条 live 用例 + sanshiunited。判定函数纯函数化，
+  `tests/test_live_contract_gate.py` 四条（旧 / 相等或更新 / 未知 / 从清单读）。skip 理由避开 lane 的 `FORBIDDEN_SKIP_REASONS`
+  子串。CI 形状（`HOROSA_RUNTIME_ROOT` 空目录）实测 installed=None → 不跳；指向 `rt-lane` 实测 14 < 15 → 跳。
+- **顺手：一条真 flake 的定性与加固**。门禁复跑 `test_port_bindable_distinguishes_held_from_free` 红一次（首跑绿）：夹具
+  `listening_server` 起 `python -m http.server` 只等 10 s，Windows 全量 pytest 下 CPython 冷起 + Defender 可超过 10 s，到点
+  照样 yield → 下游 `port_bindable(port) is False` 红成一条像产品缺陷的断言。`_bindable_on` 不设 SO_REUSEADDR、语义确定，
+  不是端口探测 bug。夹具改 30 s，到点仍可绑就 `pytest.fail("http.server never started listening … slow spawn, not a port bug")`。
+- **法则**：live 闸要问三件事——活不活、点没点名、**够不够新**；主干领先公开 runtime 是常态，钉新行为的 live 用例必须能
+  说出「我在等下一版 runtime」而不是红。夹具的就绪等待到点必须自己点名，不许静默放行。
+
+### v0.40.0-dev / 2026-09-24 — Windows 维护机复验 main（f05f727）：benchmark smoke 在 cp1252 管道上炸——stdio 守卫对「打印数据」失明
+
+- **背景**：v0.39.0 五件齐、`--check` [OK]，Windows 半边无需补；本机按「原生复验」角色在独立 worktree `hs-lane` 跑
+  `run_ci_gates.py` + `verify_runtime_live.py` + 桌面端占默认端口的真机形状。当天 mac 侧为 windows-smoke 连红四次
+  盲修（node 子进程 encoding、ESM file:// URL），CI 刚转绿。
+- **症状**：门禁 **23/24**——唯一红是 `Run HorosaBench local-only smoke`：`scripts/run_benchmark.py --skip-runtime`
+  在 `print(text)` 处 `UnicodeEncodeError: 'charmap' codec can't encode characters in position 3323-3324`。
+  09-22 同一步还是绿的。
+- **根因**：报告是 `json.dumps(report, ensure_ascii=False)`；基准用例新进了 `休门`（奇门 required_fragments）与
+  `宝剑骑士（逆位）` 等塔罗牌名共 15 种 / 58 处非 cp1252 字符。`run_ci_gates.py` 用管道收子进程输出 → Windows 上
+  子进程 stdout 落回 locale = cp1252 → 首个 CJK 即炸。ubuntu 的 `test` job 是 UTF-8 恒绿；`windows-smoke` **根本不跑
+  这一步**。守卫层面：`tests/test_scripts_stdio.py::test_every_script_that_prints_non_ascii_forces_utf8_stdio`
+  的检测器只扫 **print 字面量**里的非 ASCII（`NON_ASCII_PRINT`），`print(变量)` 打印数据的形状它看不见——同一盲区下
+  共 **19 个脚本**（含 verify_error_recovery / verify_export_section_baseline / verify_silent_* / verify_runtime_release
+  / verify_server_json / build_knowledge_index 等门禁步骤）没有 reconfigure，今天没炸只因它们的数据恰好全是 ASCII。
+- **修**：① 19 个脚本逐一补仓内既有惯用块（`for _stream in (sys.stdout, sys.stderr): … reconfigure(encoding="utf-8",
+  errors="replace")`，紧跟 `import sys`，字节级插入、EOL 原样）；② 守卫检测器扩到「`ensure_ascii=False` + `print(`」
+  （打印数据 = 承诺输出非 ASCII），新增 `test_guard_catches_a_script_that_prints_non_ascii_data`（只写文件不打印的不算、
+  `json.dumps` 默认 ASCII 的不算）；③ ci.yml `windows-smoke` 加同名 benchmark 步骤——它是唯一 stdout 非 UTF-8 的 runner，
+  这类炸只有它能红。验证：定向 23 绿；cp1252 管道下 `run_benchmark.py --skip-runtime` exit 0。
+- **法则**：脚本「打印非 ASCII」有两条路——字面量**和数据**，守卫两条都要看；凡 `ensure_ascii=False` 进了 `print(`，
+  reconfigure 就不是可选项。跨平台守卫要落在**会红的 runner** 上：ubuntu 上恒绿的编码闸等于没有。
+- **本机同轮其它原生证据**：桌面端占着 8899/9999 时 doctor 点名「占着端口的是星阙自己（多半是桌面端）」并列出
+  `HorosaDesktop\embedded-runtime\…` 映像（5ef87cb 在它为之而写的形状上首次真机通过）；lane 用全新根 `rt-lane`
+  （release 模式 `download_problems` 要求真实下载字节 > 0——已装同版本的 `rt-verify` 会短路成假红，故换新根）。
 
 ### v0.40.0 / 2026-09-24 — 首推 windows-smoke 红：测试里起 node 复算金标的子进程按 cp1252 解 CJK
 

@@ -32,11 +32,26 @@ def listening_server():
         port = probe.getsockname()[1]
     proc = subprocess.Popen(
         [sys.executable, "-m", "http.server", str(port), "--bind", "127.0.0.1"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
     )
-    deadline = time.monotonic() + 10
-    while time.monotonic() < deadline and port_bindable(port):
+    # 30 s：Windows 上全量 pytest 跑到这里时 CPython 冷起 + Defender 扫描可让 http.server 超过 10 s 才开始监听
+    # （2026-09-24 维护机门禁复跑：10 s 到点仍可绑 → `port_bindable(port) is False` 红成一条像产品缺陷的断言）。
+    # 到点仍没起来就在这里点名——带上子进程是死是活、退出码和 stderr 尾巴——别让下游断言替它背锅。
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline and port_bindable(port) and proc.poll() is None:
         time.sleep(0.1)
+    if port_bindable(port):
+        state = "still running but not listening" if proc.poll() is None else f"exited rc={proc.returncode}"
+        proc.terminate()
+        try:
+            _, err = proc.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            _, err = proc.communicate()
+        pytest.fail(
+            f"http.server never started listening on 127.0.0.1:{port} within 30 s — child {state}; "
+            f"stderr tail: {(err or '').strip()[-400:]!r} (spawn/environment problem, not a port-probe bug)"
+        )
     # v0.38.1：`ports._run` 有 2 s 结果缓存 —— 监听刚起来时别让上一条用例的 netstat 快照顶掉它。
     from horosa_skill.runtime.ports import clear_run_cache
 

@@ -806,6 +806,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | Windows 用户名带空格（`C:\Users\John Doe`）时 chart/Java 都起不来，`.horosa-local-logs` 里 python 报找不到文件 | 旧模板 `-ArgumentList` 路径元素没引号，被拆成两段 | 升级后 `runtime restart`；判据 = `tests/test_runtime_launcher_templates.py` 的引号断言（v0.38.0 B1） |
 | Codex 里 horosa 一堆报错 / 首轮看不到工具 | 多半是 `startup_timeout_sec`/`tool_timeout_sec` 没写（Codex 默认 10 s/60 s，冷启动与择日扫描都超） | `horosa-skill client check --client codex`（v0.38.0 起缺省也报 `codex_*_timeout_missing`）；重跑 `client config --format codex --write ~/.codex/config.toml` |
 | 矩阵 lane / 自己写的脚本把 live 闸门跑成 `java_routes_dead`，而 Java 明明活着 | `HOROSA_SERVER_ROOT` 被设成 doctor `endpoints[*].url`（带 `/common/time` 探测路径） | 只取 scheme://host:port（`verify_runtime_live.origin_of`）；闸门探的是 `<root>/nongli/time` |
+| live 全套只红在 `test_sync311_*` / sanshiunited 这类「钉上游新行为」的用例（`kook` 为 None、地点行回「星阙地点」、金标行格式差一列、castSeed 不复现） | 主干契约领先于已装 runtime：payload `export_registry_version` < 本树 `AI_EXPORT_SETTINGS_VERSION`（main × 公开 latest 的矩阵形状） | 偏斜非回归：这类用例挂 `requires_current_runtime_contract`（偏斜即 skip 并写明）；要验新行为就装下一版 runtime 或起 vendored 实例 |
 | 改了端口（`HOROSA_PORTS=auto` / `HOROSA_LOCAL_*_PORT`）后 `runtime stop` 退出 0 却 `ok: false`、状态 `stop_requested`、端口仍在听 | 停脚本按端口命名的 pid 文件找进程，此前拿的是裸 os.environ（找默认端口的文件） | v0.38.0 起 start/stop 共用 `_launcher_env()`；升级后 `runtime stop` 即生效；残留进程按 PID 停（`lsof -nP -iTCP:<port> -sTCP:LISTEN`，永不 `pkill -f`） |
 | `doctor` 报 `quarantine:runtime_binaries` / macOS 首次起 runtime 失败且无日志 | 浏览器下载的归档解出的 python / java / node 带 `com.apple.quarantine`，Gatekeeper 首次执行拦下 | 跑报告 `quarantine.fix` 给的 `xattr -dr com.apple.quarantine <current>`，再 `runtime restart`（只报不改，v0.38.0 B6） |
 | 看不懂 doctor 的码 / agent 把 issue 码原样甩给用户 | 码是给脚本的 | `doctor --explain`（stderr 6–10 行人话，stdout 仍纯 JSON）；报告 `advice[]` 每码一句 `user_summary` + `next_action`（码表 `cli._DOCTOR_ADVICE` 与 `manager.DOCTOR_ISSUE_CODES` 锁步） |
@@ -985,6 +986,11 @@ A global stability pass hardened these; keep them true when you touch the releva
   或 `quote`；裸插值在 Windows 上会把 `C:\Users\…` 的反斜杠原样写进 TOML → 整文件不可解析、
   `--write` 拒绝合并（v0.33.0 codex `command` 就这么在 mac/Linux 恒绿、windows-smoke 连红两次）。
   守卫：`tests/test_client_config.py`（windows-smoke 上跑 = 唯一能判红的形状）。
+- **`scripts/*.py` 凡打印非 ASCII——字面量**或数据**——必须重配 stdout/stderr 为 UTF-8。** 惯用块紧跟 `import sys`：
+  `for _stream in (sys.stdout, sys.stderr): _reconfigure = getattr(_stream, "reconfigure", None); if …: _reconfigure(encoding="utf-8", errors="replace")`。
+  `print(json.dumps(x, ensure_ascii=False))` 就是「打印数据」——Windows 管道/控制台是 cp1252，第一个 CJK 即
+  `UnicodeEncodeError`（v0.40.0-dev：benchmark 报告新进中文用例，`run_ci_gates` 23/24，ubuntu 恒绿）。守卫：
+  `tests/test_scripts_stdio.py`（字面量扫描 + `ensure_ascii=False`+`print(` 扫描）；ci.yml `windows-smoke` 跑 benchmark smoke。
 - **`input_normalization` degrades, never crashes.** The date/time regexes are shape-only（they accept
   month `13`, day `45`）, so anything building a `datetime` from them must tolerate `ValueError`（see
   `_combine_date_time`）. IANA-zone→offset conversion uses the *chart date*, not `now()`. `Z`/`UTC`/

@@ -363,9 +363,10 @@ def test_prenatal_syzygy_chart_failure_keeps_upstream_text_and_warns(tmp_path: P
 # fixture 是同一组入参的 live 实抓（只裁掉 builder 不读的键 / CAP 之外的行），所以对一台同版本引擎的实例，
 # 冻结时钟后的整段快照必须与金标逐字节相等；引擎值一漂（重同步了新版 astropy/flatlib）这里先红。
 
-from test_local_js_tools import make_service, requires_chart  # noqa: E402
+from test_local_js_tools import make_service, requires_chart, requires_current_runtime_contract  # noqa: E402
 
 
+@requires_current_runtime_contract
 @requires_chart
 @pytest.mark.parametrize("name", SCENARIOS)
 def test_live_chart_service_reproduces_the_upstream_goldens(tmp_path: Path, frozen: None, name: str) -> None:

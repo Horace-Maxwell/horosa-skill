@@ -171,6 +171,12 @@ jobs:
       - name: Run unit tests
         working-directory: ./horosa-skill
         run: uv run pytest -q
+      # Same step as the Linux test job, on the only runner whose stdout is not UTF-8: the report is
+      # json.dumps(…, ensure_ascii=False) and benchmark cases carry CJK — a script that prints it without
+      # reconfiguring stdout dies here with UnicodeEncodeError (cp1252) while ubuntu stays green.
+      - name: Run HorosaBench local-only smoke
+        working-directory: ./horosa-skill
+        run: uv run python scripts/run_benchmark.py --skip-runtime
       - name: Run Windows OpenClaw smoke
         timeout-minutes: 35
         working-directory: ./horosa-skill

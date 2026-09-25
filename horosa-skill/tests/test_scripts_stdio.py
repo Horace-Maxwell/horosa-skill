@@ -18,11 +18,19 @@ import pytest
 PKG_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = PKG_ROOT / "scripts"
 NON_ASCII_PRINT = re.compile(r"""print\((?:f|rf|fr)?["'][^"']*[^\x00-\x7f]""")
+# print()ing *data* serialised with ensure_ascii=False is the other way a script commits to non-ASCII output:
+# the literal scan cannot see it (v0.40.0-dev: run_benchmark.py printed a report whose cases carry 休门 / 逆位 and
+# died on the Windows maintainer's cp1252 pipe while Linux CI stayed green).
+NON_ASCII_DATA = re.compile(r"ensure_ascii\s*=\s*False")
 RECONFIGURE = 'reconfigure(encoding="utf-8"'
 
 
+def prints_non_ascii(text: str) -> bool:
+    return bool(NON_ASCII_PRINT.search(text)) or (bool(NON_ASCII_DATA.search(text)) and "print(" in text)
+
+
 def scripts_printing_non_ascii_without_utf8_stdio(sources: dict[str, str]) -> list[str]:
-    return sorted(name for name, text in sources.items() if NON_ASCII_PRINT.search(text) and RECONFIGURE not in text)
+    return sorted(name for name, text in sources.items() if prints_non_ascii(text) and RECONFIGURE not in text)
 
 
 def test_every_script_that_prints_non_ascii_forces_utf8_stdio() -> None:
@@ -35,6 +43,18 @@ def test_guard_catches_a_script_without_the_reconfigure() -> None:
     good = 'import sys\nsys.stdout.reconfigure(encoding="utf-8", errors="replace")\nprint("完成")\n'
     ascii_only = 'print("done")\n'
     assert scripts_printing_non_ascii_without_utf8_stdio({"bad.py": bad, "good.py": good, "ascii.py": ascii_only}) == ["bad.py"]
+
+
+def test_guard_catches_a_script_that_prints_non_ascii_data() -> None:
+    """The literal scan is blind to `print(json.dumps(report, ensure_ascii=False))` — the data carries the CJK."""
+    data_bad = 'import json\nprint(json.dumps(report, ensure_ascii=False))\n'
+    data_good = 'import json, sys\nsys.stdout.reconfigure(encoding="utf-8", errors="replace")\nprint(json.dumps(report, ensure_ascii=False))\n'
+    writes_file_only = 'import json\npath.write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")\n'
+    ascii_json = 'import json\nprint(json.dumps(report))\n'
+    found = scripts_printing_non_ascii_without_utf8_stdio(
+        {"data_bad.py": data_bad, "data_good.py": data_good, "file_only.py": writes_file_only, "ascii_json.py": ascii_json}
+    )
+    assert found == ["data_bad.py"]
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")

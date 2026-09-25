@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Any
 
 import pytest
-from test_local_js_tools import make_service, requires_chart, requires_runtime
+from test_local_js_tools import make_service, requires_chart, requires_runtime, requires_current_runtime_contract
 from test_service import FakeClient, FakeJsClient
 
 from horosa_skill.agent_guidance import build_agent_guidance, validate_agent_preflight
@@ -587,6 +587,7 @@ def _live(tmp_path, tool: str, payload: dict):
     return result.data
 
 
+@requires_current_runtime_contract
 @requires_chart
 def test_live_jingjue_same_moment_same_gua(tmp_path) -> None:
     one = _live(tmp_path, "jingjue", BASE)
@@ -594,6 +595,7 @@ def test_live_jingjue_same_moment_same_gua(tmp_path) -> None:
     assert "起筮种子：802202048" in one["snapshot_text"] and one["snapshot_text"] == two["snapshot_text"]
 
 
+@requires_current_runtime_contract
 @requires_chart
 def test_live_taixuan_minute_changes_the_cast(tmp_path) -> None:
     """旧码同一小时内恒同卦（后端缺省种子 yyyyMMddHH）；上游分钟级种子 → 20:05 与 20:48 必异。"""
@@ -603,6 +605,7 @@ def test_live_taixuan_minute_changes_the_cast(tmp_path) -> None:
     assert _section(early["snapshot_text"], "方州部家") != _section(late["snapshot_text"], "方州部家")
 
 
+@requires_current_runtime_contract
 @requires_chart
 def test_live_wuzhao_dunhuang_is_reproducible_and_gender_is_read(tmp_path) -> None:
     one = _live(tmp_path, "wuzhao", {**BASE, "options": {"mode": "dunhuang"}})
@@ -613,6 +616,7 @@ def test_live_wuzhao_dunhuang_is_reproducible_and_gender_is_read(tmp_path) -> No
     assert "行年：辰" in male["snapshot_text"] and "行年：午" in female["snapshot_text"]
 
 
+@requires_current_runtime_contract
 @requires_chart
 @pytest.mark.parametrize("tool", ["beiji", "nanji", "chunzi"])
 def test_live_beiji_nanji_chunzi_read_gender_so_the_gate_asks(tmp_path, tool: str) -> None:
@@ -623,6 +627,7 @@ def test_live_beiji_nanji_chunzi_read_gender_so_the_gate_asks(tmp_path, tool: st
     assert "gender" in {i["field"] for i in validate_agent_preflight(tool, {"date": "1998-02-20"})["ask_if_missing"]}
 
 
+@requires_current_runtime_contract
 @requires_chart
 def test_live_tieban_year_pillar_follows_zone_so_the_gate_asks(tmp_path) -> None:
     """F16 的证据：1990 立春 = 1990-02-04 10:14 CST；10:00 在 +08:00 未过立春、在 -05:00（=15:00 UTC）已过
@@ -633,12 +638,14 @@ def test_live_tieban_year_pillar_follows_zone_so_the_gate_asks(tmp_path) -> None
     assert "zone" in {i["field"] for i in validate_agent_preflight("tieban", {"date": "1990-02-04", "gender": 1})["ask_if_missing"]}
 
 
+@requires_current_runtime_contract
 @requires_chart
 def test_live_wangji_xinyi_fawei_is_the_gua_not_the_wrapper(tmp_path) -> None:
     data = _live(tmp_path, "wangji", BASE)
     assert _section(data["snapshot_text"], "心易发微").startswith("本卦：小過\n變卦：豫\n動爻：3")
 
 
+@requires_current_runtime_contract
 @requires_chart
 def test_live_geomancy_real_chart_uses_the_forwarded_time_place(tmp_path) -> None:
     plain = _live(tmp_path, "geomancy", GEO)
@@ -646,18 +653,21 @@ def test_live_geomancy_real_chart_uses_the_forwarded_time_place(tmp_path) -> Non
     assert plain["time_seed"] == 1212267460 and plain["snapshot_text"] != real["snapshot_text"]
 
 
+@requires_current_runtime_contract
 @requires_chart
 def test_live_xuanshi_figure_by_slug(tmp_path) -> None:
     data = _live(tmp_path, "xuanshi", {"action": "figure", "id": "fig-laozi"})
     assert "名称：老子" in _section(data["snapshot_text"], "条目详情")
 
 
+@requires_current_runtime_contract
 @requires_chart
 def test_live_cetian_place_name_line(tmp_path) -> None:
     data = _live(tmp_path, "cetian", {**BASE, **PLACE, "gender": 1, "pos": "上海"})
     assert "地点：上海" in data["snapshot_text"]
 
 
+@requires_current_runtime_contract
 @requires_runtime
 def test_live_xianqin_yanfa_lunar_month_from_nongli(tmp_path) -> None:
     data = _live(tmp_path, "xianqin", {**BASE, **PLACE, "gender": 1})
