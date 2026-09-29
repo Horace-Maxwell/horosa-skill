@@ -12,21 +12,27 @@ Required shape:
 
 ```json
 {
-  "version": "0.2.0",
+  "version": "<X.Y.Z — equals the release tag>",
   "platforms": {
     "darwin-arm64": {
-      "url": "https://.../horosa-runtime-darwin-arm64.tar.gz",
+      "url": "https://github.com/<owner>/<repo>/releases/download/v<X.Y.Z>/horosa-runtime-darwin-arm64-v<X.Y.Z>.tar.gz",
       "sha256": "...",
-      "archive_type": "tar.gz"
+      "archive_type": "tar.gz",
+      "size": 737084194,
+      "min_os": "11.0"
     },
     "win32-x64": {
-      "url": "https://.../horosa-runtime-win32-x64.zip",
+      "url": "https://github.com/<owner>/<repo>/releases/download/v<X.Y.Z>/horosa-runtime-win32-x64-v<X.Y.Z>.zip",
       "sha256": "...",
-      "archive_type": "zip"
+      "archive_type": "zip",
+      "size": 713054877,
+      "min_os": "10.0.17763"
     }
   }
 }
 ```
+
+A concrete instance is [`runtime-manifest.example.json`](./runtime-manifest.example.json) (its version is a `bump_version.py` site).
 
 Optional per-platform fields (v0.38.0):
 
@@ -61,26 +67,37 @@ Required and normalized fields:
 ```json
 {
   "schema_version": 1,
-  "version": "0.2.0",
-  "platform": "darwin-arm64",
+  "version": "0.40.0",
+  "runtime_payload_version": "0.40.0",
+  "platform": "win32-x64",
   "runtime_layout_version": 1,
-  "export_registry_version": 9,
+  "export_registry_version": 15,
   "services": {
     "backend_url": "http://127.0.0.1:9999",
     "chart_url": "http://127.0.0.1:8899",
-    "start_script": "Horosa-Web/start_horosa_local.sh",
-    "stop_script": "Horosa-Web/stop_horosa_local.sh"
+    "start_script": "Horosa-Web/start_horosa_local.ps1",
+    "stop_script": "Horosa-Web/stop_horosa_local.ps1"
   },
   "runtimes": {
-    "python": "runtime/mac/python/bin/python3",
-    "java": "runtime/mac/java/bin/java"
+    "python": "runtime/windows/python/python.exe",
+    "java": "runtime/windows/java/bin/java.exe",
+    "node": "runtime/windows/node/node.exe"
   },
   "artifacts": {
     "horosa_web_root": "Horosa-Web",
     "astropy_root": "Horosa-Web/astropy",
     "flatlib_root": "Horosa-Web/flatlib-ctrad2/flatlib",
     "swefiles_root": "Horosa-Web/flatlib-ctrad2/flatlib/resources/swefiles",
-    "boot_jar": "runtime/mac/bundle/astrostudyboot.jar"
+    "boot_jar": "runtime/windows/bundle/astrostudyboot.jar",
+    "horosa_core_js_root": "horosa-core-js"
+  },
+  "platform_requirements": {
+    "arch": "x86_64",
+    "min_os": "10.0.17763"
+  },
+  "derived_from": {
+    "platform": "darwin-arm64",
+    "version": "0.40.0"
   }
 }
 ```
@@ -92,4 +109,9 @@ See [`runtime-payload-manifest.example.json`](./runtime-payload-manifest.example
 - Older payload manifests that only contain `version` are still accepted.
 - Installation now normalizes the embedded payload manifest and writes the normalized JSON into the installed runtime.
 - `doctor`, `serve`, and `stop` resolve runtime paths from the installed payload manifest instead of assuming only one layout.
-- `runtimes.node` is optional for now. Add it only when a packaged headless JS runtime is actually bundled.
+- `runtimes.node` and `artifacts.horosa_core_js_root` are **required**: Node 22 is bundled in every payload and install
+  verifies both paths exist (`manager._manifest_defaults` supplies the per-platform defaults; `verify_runtime_release.py` checks the archive).
+- `runtime_payload_version` defaults to `version`; `platform_requirements` (`arch`, `min_os`) and `derived_from`
+  (`platform`, `version` of the seed) are carried through unchanged from derived payloads (v0.38.0 A2): install checks `min_os`
+  before download (release manifest) and again after extraction (payload manifest); `doctor` shows both blocks.
+- The example above is a derived `win32-x64` payload; the darwin seed has the same keys with `runtime/mac/...` paths and no `derived_from`.

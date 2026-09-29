@@ -1,24 +1,35 @@
 {
   "schema_version": 1,
-  "version": "0.2.0",
-  "platform": "darwin-arm64",
+  "version": "0.40.0",
+  "runtime_payload_version": "0.40.0",
+  "platform": "win32-x64",
   "runtime_layout_version": 1,
-  "export_registry_version": 9,
+  "export_registry_version": 15,
   "services": {
     "backend_url": "http://127.0.0.1:9999",
     "chart_url": "http://127.0.0.1:8899",
-    "start_script": "Horosa-Web/start_horosa_local.sh",
-    "stop_script": "Horosa-Web/stop_horosa_local.sh"
+    "start_script": "Horosa-Web/start_horosa_local.ps1",
+    "stop_script": "Horosa-Web/stop_horosa_local.ps1"
   },
   "runtimes": {
-    "python": "runtime/mac/python/bin/python3",
-    "java": "runtime/mac/java/bin/java"
+    "python": "runtime/windows/python/python.exe",
+    "java": "runtime/windows/java/bin/java.exe",
+    "node": "runtime/windows/node/node.exe"
   },
   "artifacts": {
     "horosa_web_root": "Horosa-Web",
     "astropy_root": "Horosa-Web/astropy",
     "flatlib_root": "Horosa-Web/flatlib-ctrad2/flatlib",
     "swefiles_root": "Horosa-Web/flatlib-ctrad2/flatlib/resources/swefiles",
-    "boot_jar": "runtime/mac/bundle/astrostudyboot.jar"
+    "boot_jar": "runtime/windows/bundle/astrostudyboot.jar",
+    "horosa_core_js_root": "horosa-core-js"
+  },
+  "platform_requirements": {
+    "arch": "x86_64",
+    "min_os": "10.0.17763"
+  },
+  "derived_from": {
+    "platform": "darwin-arm64",
+    "version": "0.40.0"
   }
 }

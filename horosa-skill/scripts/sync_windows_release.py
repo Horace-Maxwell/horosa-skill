@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """One-command Windows-side release sync.
 
-The macOS side keeps publishing a new version as the public GitHub `latest` while it is still
-incomplete — darwin-only `runtime-manifest.json`, no win32 zip — which breaks `horosa-skill install`
-for every Windows user (v0.10.0/v0.11.0/v0.12.0/v0.13.0 all did this). The Windows offline runtime is
-built off-CI on a real Windows box, so it can only be produced + uploaded from here. `release-completeness.yml`
-*detects* the gap; this script is the Windows-side *remediation*, packaging the otherwise-manual dance
-(build → download darwin → dual-platform manifest + checksums → verify → upload) into one repeatable,
-idempotent command. It does NOT touch the macOS release flow.
+Origin: the macOS side used to publish a new version as the public GitHub `latest` while it was still
+incomplete — darwin-only `runtime-manifest.json`, no win32 zip — which broke `horosa-skill install` for every
+Windows user (v0.10.0/v0.11.0/v0.12.0/v0.13.0 all did this), and the Windows half could only be built on a real
+Windows box. Since v0.38.0 the Windows half is DERIVED on the hosted runner (`release-runtime.yml`), so this
+script's primary role today is the authoritative `[OK]` / `[GAP]` verdict: the publish job runs `--check --tag vX
+--draft` before flipping a draft public, and operators run `--check` on the public latest afterwards. The
+build/upload path (build → download darwin → dual-platform manifest + checksums → verify → upload) remains the
+Windows-box fallback when the hosted path is down; it must end in `--upload` + `--check`, never a manual flip.
+It does NOT touch the macOS release flow.
 
 Usage (run from the repo root on the Windows build box):
     python horosa-skill/scripts/sync_windows_release.py            # detect + (if needed) build + verify; never uploads

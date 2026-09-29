@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.40.0 (2026-09-29) | 文档全面复审：四路审计报 ~120 条陈旧（契约 v14/v56、闸门 84/8、分组 28/5/10、`export_format`、Windows 构建机叙事、AGENTS 死符号与重复…）——守卫只锁「可派生数字」，锁不住存在性 / 蒸馏 / 手改镜像 / 第三方事实 / 版本站点 | 协议 v3 第 5 件：`docs/DOC_MAP.md` 完备性 + 蒸馏守卫（版本号 + 标题代码锚）+ 生成式镜像 `gen_agent_mirrors.py` + `third_party_facts.json`（verified_on / 120 天 / 每周 issue）+ `bump_version.py` 单清单 + 三把 README 新锁（分组数 / 契约号 / 闸门数） |
 | v0.40.0 (2026-09-29) | 发布前复审：上游已到 v3.11.2（9cd9078f）而 skill 钉的 9b74714b 已不在任何上游分支上（三个修复被并入 v3.11.2 提交）——CI 形状看不见，本机 `--require-upstream` 一跑 51 个 runtime 文件 + 12 个 core-js 漂移 | 上游 HEAD 与 pin 每次发布前必对（`git branch --contains <pin>`）；pin 不在分支上 = 历史被改写，逐文件对账不信 diff；公开发布前 pin 必须在上游公开远端上 |
 | v0.40.0 (2026-09-29) | 「同步了却没同步」第七例：`src/shared/localNongliAdapter.js` 是 v0.9 的自写近似公式，2026 立春算到 10:16（真值 04:02，差 6 小时），奇门本地路由 / 奇门择日扫描 / 七政大限年界都吃它 | `src/shared/` 只许放上游没有对应物的自写件（allowlist 守卫）；有上游同名/同职能文件一律 verbatim vendor；种子值级金标对 lunar-javascript 精确表 + 旧公式负向对照 |
 | v0.40.0 (2026-09-29) | 周一矩阵两条 Windows lane 在 pytest 1500 s 处超时且**没有留下 pytest.log**——分不清慢还是挂 | 预算按主机（Windows 4–5× 慢于 mac）；pytest 输出流式落盘，超时也留尾巴；`test_verify_runtime_live` 两条 |
@@ -99,6 +100,19 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 | v0.20.0 | pin-forward **基线前移**（钉到上一个真 zip 而非冻结 v0.16.1）；黄历/六壬七政 | 滞后从多版降到约一版；黄历依赖 java 端 `/nongli/time` + `/jieqi/year`，直接裸 POST 会因 payload 归一化差异 500，须走 skill 自己的 `_call_remote` 归一化路径验证。 |
 | v0.21.0 | 安装链增强（断点续传/多镜像/进度/uninstall/upgrade/selfcheck） | 新 install UX 往 stdout 打**进度/引导文案，不再是纯 JSON**——脚本化判定改用 `doctor`（仍是干净 JSON）或从混合输出提取末尾 JSON 块的 `asset.sha256`。“版本短路”被 `--force` 绕过，`install --archive --force` 仍做真安装。 |
 | v0.23.0 | darwin-only 复发；vendor 缺 v3.5.x 新顶层件（kin_year_domain/ifa_odu/prepareruntime）+ jar 落后须从当前 Windows workspace 重灌；首建死于 Temurin `releases/latest` 半发布窗口（jdk-17.0.20-ga 无 win 二进制）→ JDK 改走 Adoptium API；kintaiyi game_theory/scipy 吓人 traceback 定性为两平台一致良性噪音 | JDK 解析必须 asset-existence-aware；重灌后必跑 `verify_vendor_runtime_sources.py` + `verify_export_contract_mirror.py`；吓人 traceback 先对照 mac 半边定性再动手；无 Mongo 机器 live 验证按「chart 半边绿 + 占时路径 java 500 属预期」判读。 |
+| v0.33.0 (2026-08) | 功能大扩容（93→97）+ 成熟度升级：tianxing explainAt / qizhengelection 等未接入端点收割，四个现场踩坑 + 一批排除判定 | 收割前先查 skill 自家「明确排除项」；区分「引擎文件存在」与「可 headless」 |
+| v0.28.0 (2026-08-17) | v3.9.2 / v3.9.3 同步轮四条 + 首个「AI 层」批次三条：守卫在做功，坑换了形态 | 同步缺口小了不等于没有——每轮仍跑全量对账 |
+| v0.27.0 (2026-08-13) | 目录 mtime 判源树新旧会误判（Windows 侧补半）：darwin-only 发布后守卫连红三次 | 新旧判定看内容 / 提交，不看 mtime |
+| v0.27.0 (2026-08-13) | 落后上游 4 个 release 而四把守卫全绿：盲区在「根级文件」和「单向键差」 | 同源校验必须比上游 HEAD 的全树，含根级文件与双向键差 |
+| v0.27.0 (2026-08-13) | `execution` 不是算源：技法依据卡若照它写会系统性说错「谁算的」 | 算源只从 compute_sources / 技法算源契约取 |
+| v0.27.0 (2026-08-13) | 一台机器的修复可以无声滞留：`main` 没有 upstream tracking | `main` 必须跟踪 origin/main；每次开工先 fetch 并看 ahead/behind |
+| v0.26.1 (2026-08-05) | 「守卫全绿 + 测试全绿」的 v0.26.0 里躺着 16 个 bug | 发布后做三路对抗性复审；presence 级绿灯挡不住值级错误 |
+| v0.26.0 (2026-08-04) | 上游 v3.7.x 同步：三个**机制**缺口比内容缺口更贵（四把守卫全绿仍少两个技法） | 缺口先修机制（守卫的盲区），再补内容 |
+| v0.25.1 (2026-08) | 第一次真跑全套 live：7 红里 4 个是本机无 Mongo、2 个真段缺陷、1 个隔离没做全 | live 红先分类（环境 / 真缺陷 / 隔离），别一把改测试 |
+| v0.25.1 (2026-08) | 中文首页的数字漂了两代：守卫的徽章正则只认英文标签 | 计数守卫必须同时认中英文形态；README 计数以 collect-only 真值锁 |
+| v0.25.0-dev (2026-08) | 段级欠账回填（批 1 起）：印占 53 段 verbatim vendor 胜过 Python 移植 | 大段导出正文优先 verbatim vendor，不移植 |
+| v0.24.0 (2026-07-31) | 守卫「结构性失明」+ MCP 面三处静默破损：守卫全绿却漏掉 8 个上游版本 | 同源校验比对上游 HEAD，不比对自己的 vendored 拷贝 |
+| v0.22.0 (2026-07-16) | parity lint 常量交叉扩到全部 manifest-stamping 脚本（Windows 侧）：export_registry_version 曾在 linux builder 滞留 | 打戳常量一处真值，parity lint 覆盖所有打戳脚本 |
 
 ## 横切教训
 
@@ -116,6 +130,41 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.40.0 / 2026-09-29 — 文档全面复审与实时更新制度化：`docs/DOC_MAP.md`、`third_party_facts.json`、`gen_agent_mirrors.py`、`bump_version.py`
+
+- **触发**：v0.40.0 发布前，用户要求按全部既往对话与注意点重审所有 harness / skill / 元文档，并把「实时更新文档」做成制度之后再发版。
+  四路只读审计（AGENTS / SKILL + 镜像 + CLAUDE / README + docs / 维护流程）共报约 120 条，其中「曾经为真、后来没人同步」的陈旧事实占七成。
+- **抓到的典型陈旧**：
+  - README×2「契约 v14 镜像 aiExport v56」（真值 15 / 58，两个版本没动）；EN 闸门数 84 / 免闸 8（真值 100 / 10，zh 根本没有免闸行）；
+    三组分组标题 28 / 5 / 10（表内 33 / 13 / 11）；EN 知识域徽章 30（真值 31）；`data.export_format` 早已并入 `export_snapshot`，
+    却仍在 EN README / INPUT_CONTRACTS / EXPORT_AUDIT_GUIDE 里当字段讲；`HOROSA_TOOLSETS` 漏 `export/knowledge` 域与 `reference` 别名。
+  - AGENTS：`mcp[cli]>=1.28.1`（锁 1.30）、「发布三件 + PyPI 自动跑」（PyPI 暂缓）、`setup` 四客户端（九）、`_CLIENT_CONFIG_PATHS` /
+    `HEXAGRAM_PALACE_ELEM` / `release.yml` 等已不存在的符号、上游文档路径指向不在 Horosa-Public 的文件、live 计数 382 / 678 写死、
+    §9 十几条重复且无分节；九条 v0.40.0 台账「版本号在 AGENTS 里、规则不在」。
+  - OPERATIONS 仍教人在 8899 / 9999 起 ken 验证（违反端口铁律）；OFFLINE / REPO_LAYOUT / vendor README 仍讲 Windows 构建机 +
+    `runtime/windows/bundle/wheels`（v0.38.0 起 Windows 半从 darwin 种子在托管 runner 派生）；REPO_LAYOUT 的 `src/tools` 6 文件（实 51）、
+    `src/shared/localNongliAdapter.js`（已退役）；RUNTIME_MANIFEST_SPEC 说 `runtimes.node` 可选（必需）；13 条台账小节没有索引行。
+  - 第三方事实 15 天内变了四件（Windsurf → Devin Desktop 路径、Codex 每工具 5000 B、mcp 1.30 头 API、Actions Node 24）而文档零感知。
+- **根因**：文档更新靠记忆而非守卫——既有守卫只锁「能从代码派生的数字」，锁不住文档存在性、台账→规则的蒸馏、手改的镜像、
+  第三方事实的过期、版本站点清单；而每一条陈旧都恰好落在这些盲区里。
+- **制度（协议 v3，AGENTS §2 第 5 件；一次 change 内全部落地）**：
+  - `docs/DOC_MAP.md`：每份指导性文档一行（用途 / 读者 / 更新触发 / 守卫）；`verify_docs_sync.check_doc_map` 断言仓内每份 guidance doc
+    都有行、每行文件都在（首跑就抓到 `CODE_OF_CONDUCT.md` 漏登记）。
+  - 蒸馏守卫 `check_lessons_distilled`：每个 `### vX` 小节要有索引行；最新 3 个版本的版本号**与小节标题里的代码标识符**必须出现在
+    AGENTS.md——只查版本号时九条 v0.40.0 教训「版本在、规则不在」照样绿（负向对照在 `tests/test_docs_currency.py`）。
+  - 四份客户端镜像改为**生成物**（`gen_agent_mirrors.py`，`--check` 进 docs-sync）：数字从注册表渲染，手改即红。
+  - `contracts/third_party_facts.json`：18 个第三方主题的事实 + `source_url` + `verified_on`；超过 120 天 CI 告警，
+    `docs-currency.yml` 每周一严格模式并开 / 刷新 issue「第三方事实待复核」。
+  - `bump_version.py`：16 个版本站点单一清单 + `--check`（含两份 manifest 示例）；`docs/templates/HANDOFF_TEMPLATE.md`；
+    preflight 新闸「上游 pin 必须在公开远端某分支上」（v0.40.0 悬空 pin 的直接回应）。
+  - 三把 README 新锁：分组标题数 = 表内 ID 数（`check_group_headers`）、契约号 = `exports.registry` 两常量 + payload 示例
+    （`check_export_contract_versions`）、闸门 / 免闸数 = 注册表派生（`check_gate_counts`）；README 版本行改为「本仓版本」措辞
+    （main 领先公开 latest 的窗口里不再声称「已打包并校验」）。
+  - AGENTS §9 按六个主题分 `###` 小节、合并重复（doctor R4 → B6、MCP schema 三合一、按名杀进程 → 身份条）、补九条蒸馏；
+    §7 版本 bump 改为单入口；Compaction gate 改为「章节 > ~120 行必分节」。
+- **法则**：能写成断言的事实不许只写成句子；写不成断言的事实要有 `verified_on` 与到期告警；生成得出的文档不许手改；
+  改代码的同一 change 改文档——`docs/DOC_MAP.md` 的「更新触发」列就是清单。
 
 ### v0.40.0 / 2026-09-29 — 发布前复审：上游 v3.11.2 漏同步、悬空的 pin、六小时偏差的节气种子、Windows 矩阵预算、客户端世界 15 天的变化
 

@@ -12,7 +12,7 @@ Horosa Skill 现在有三层评测：
 
 ## HorosaBench
 
-数据集 = 手写 case + **注册表生成 case**（`generate_tool_cases()`，与 92 工具锁步——新增技法
+数据集 = 手写 case + **注册表生成 case**（`generate_tool_cases()`，与 110 工具注册表锁步（`generate_tool_cases()` 逐工具生成，今 106 条；数字由 `verify_docs_sync` 锁）——新增技法
 没有 bench case 直接红）：
 
 - 手写部分：[`horosa_bench.json`](./../horosa-skill/src/horosa_skill/benchmark/data/horosa_bench.json)

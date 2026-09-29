@@ -16,11 +16,10 @@ That local folder is allowed to exist on disk without being committed to the rep
 | Windows (x64) | `win32-x64` | zip | `build_runtime_release_windows.py` |
 | Linux (x64) 🧪 | `linux-x64` | tar.gz | `build_runtime_release_linux.py` |
 
-> **🧪 Experimental — Linux support:** The `build_runtime_release_linux.py` script handles Java
-> (via jlink) and Node.js automatically, and installs chart-service dependencies via pip when a
-> pre-built Python runtime is available. No `linux-x64` runtime asset has been shipped yet — the
-> build script and verifier are ready, but the first release requires a maintainer-provided Python
-> runtime binary or a CI step that builds one.
+> 🧪 **Linux**: `build_runtime_release_linux.py` / `scaffold_linux_runtime.py` exist as an experimental builder only. No
+> `linux-x64` payload has ever been published and `contracts/release_platforms.json` lists it (with Intel Mac) under
+> `unsupported` → gateway mode (`HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` pointing at a machine that has the runtime).
+> Windows ARM is an **alias**: it installs the `win32-x64` payload under emulation (matrix lane `windows-11-arm`).
 
 ## Runtime Placement Policy
 
@@ -46,34 +45,40 @@ Do not treat these three locations as interchangeable.
   `/qimen/pan` · `/taiyi/pan` · `/jinkou/pan` mounts (奇门 / 太乙 / 金口, and 三式合一's 奇门+太乙)
 - the ken Python dependencies in the wheel/site-packages set, **in addition to** the base chart deps
   (`cn2an` / `sxtwl` / `cnlunar` / `swisseph`): `bidict` (kinqimen), `numpy` · `kerykeion` ·
-  `ephem` (kintaiyi), `pendulum` (kinjinkou). macOS's embedded Python already carries these; the
-  Windows `runtime/windows/bundle/wheels` set MUST include them too or the chart service will fail to
-  mount the ken endpoints.
+  `ephem` (kintaiyi), `pendulum` (kinjinkou). macOS's embedded Python already carries these; the derived
+  Windows payload takes them from `contracts/runtime_python_lock.json` (seed-derived; pyswisseph / sxtwl are
+  built from sdist on the runner) — a missing one means the chart service fails to mount the ken endpoints.
 - Java aggregation layer and boot jar
 - Node runtime for headless JS calculation modules (统摄法 + ken-response → aiExport.js formatting)
 - Swiss Ephemeris data and any other local astronomical assets
 - `runtime-manifest.json`
+- inside the wheel (pyproject force-include, `verify_wheel_contents.py`): `runtime_templates/windows` and the runtime
+  contracts `contracts/jev_thresholds.json` + `contracts/technique_provenance.json`, resolved at runtime by
+  `contracts_locator.py`; `.mcpbignore` whitelists the same files for the `.mcpb` bundle (v0.40.0 P1)
 
 - `horosa_skill-<version>-py3-none-any.whl` — the pure-Python wheel; `uvx --from <its URL> horosa-skill …` is the git-free, PyPI-free zero-install path (v0.38.0). Mirror-aware via `HOROSA_RUNTIME_MIRROR`; asserted + executed by `release-completeness.yml`.
 
 ## Maintainer Workflow
 
-1. Refresh vendored runtime sources inside this repository when needed.
-2. Build the platform runtime archive from the local `vendor/runtime-source` directory.
-3. Upload the generated archive to GitHub Releases.
-4. Generate a release manifest that points to those archives.
-5. Publish the manifest URL for `horosa-skill install`.
-6. Verify the release archives before upload.
+1. Refresh vendored runtime sources inside this repository when needed (`sync_vendored_runtime_sources.sh`).
+2. `publish_release.sh --draft --dispatch` builds the **darwin seed** from `vendor/runtime-source` (via `package_runtime_payload.sh`),
+   puts seed / `.mcpb` / wheel / SBOM on a **draft** release and dispatches `release-runtime.yml`.
+3. The hosted pipeline derives the Windows archive from the seed on `windows-latest`, assembles the dual-platform manifest
+   (tag-pinned URLs + sizes + `min_os`), `SHA256SUMS.txt`, SBOM and provenance attestation, then runs the three-machine matrix.
+4. `sync_windows_release.py --check --tag vX --draft` must print `[OK]`; the publish job flips the draft to `latest` only after the
+   lane-installed archive digests equal the draft assets.
+5. `horosa-skill install` reads `releases/latest/download/runtime-manifest.json`; the completeness guard re-checks every asset every 6 h.
 
-> **Building the Windows archive** (which needs win32 wheels and native Windows verification) is a
-> Windows-only step. A complete, self-contained runbook for a Windows agent (or a person) lives at
-> [`WINDOWS_RELEASE_BUILD_PROMPT.md`](./WINDOWS_RELEASE_BUILD_PROMPT.md) — build, native ken/tongshefa
-> verification, manifest+checksums over both platforms, and release finalization.
+> **Windows fallback only.** Since v0.38.0 the Windows archive is derived on the hosted runner; the self-contained Windows-box runbook
+> [`WINDOWS_RELEASE_BUILD_PROMPT.md`](./WINDOWS_RELEASE_BUILD_PROMPT.md) is the fallback when the hosted path is down, and it must end
+> in `sync_windows_release.py --upload` + `--check`, never a manual manifest or a manual `--latest` flip.
 
 ## Scripts In This Repo
 
+- `horosa-skill/scripts/publish_release.sh`
+  The maintainer-side release entry (`--draft --dispatch`): seed payload → darwin manifest (local check) → SBOM → MCPB → wheel → SHA256SUMS → verify → draft upload → dispatch.
 - `horosa-skill/scripts/build_runtime_release.sh`
-  Builds the macOS and Windows runtime archives, emits `runtime-manifest.json`, writes `SHA256SUMS.txt`, and runs archive verification.
+  **Historical (≤ v0.37.0)**: local dual-platform build in vendor mode; needs Windows-side inputs (`runtime/windows/bundle/wheels`) and stamps `latest` URLs — do not use for a release.
 - `horosa-skill/scripts/package_runtime_payload.sh`
   Assembles the runtime payload tarball from `vendor/runtime-source`.
 - `horosa-skill/scripts/build_runtime_release_windows.ps1`
@@ -87,11 +92,11 @@ Do not treat these three locations as interchangeable.
 - `horosa-skill/scripts/scaffold_linux_runtime.py`
   Creates a Linux runtime directory skeleton with manifest and POSIX shell entrypoints.
 - `horosa-skill/scripts/build_runtime_release_linux.py`
-  Assembles the Linux runtime payload tar.gz from `vendor/runtime-source`, installing Python chart deps (swisseph, numpy, cherrypy, etc.), Node.js, Java (jlink), and generating 邵子神数 verse JSON from CSV.
+  Experimental Linux builder (no payload published; `linux-x64` is `unsupported` in `contracts/release_platforms.json`).
 - `horosa-skill/scripts/sync_vendored_runtime_sources.sh`
-  Pulls the current required runtime subset from a local development tree into `vendor/runtime-source`. It can also ingest Windows preparation inputs from a separate local Windows source repo via `HOROSA_WINDOWS_SOURCE_ROOT`.
+  Pulls the required runtime subset from the read-only Horosa-Public checkout (`HOROSA_SOURCE_ROOT`) into `vendor/runtime-source`; what was pulled is recorded in `contracts/upstream_provenance.json`.
 - `horosa-skill/scripts/sync_windows_release.py`
-  Windows release syncing helper (created during Windows initial release workflow).
+  `--check` = the authoritative completeness / pin-forward verdict (`--tag vX --draft` during a release, bare for the public latest); `--upload` = the Windows-box remediation fallback.
 
 ## Current Windows Reality
 
@@ -137,7 +142,11 @@ on `PYTHONPATH` so `import kinqimen` / `kintaiyi` / `kinjinkou` / `kinwangji` / 
 > (`/shaozi` … `/qizhengkin`, `source: kinastro`) under the trimmed engine-only kinastro; tongshefa /
 > canping / heluo work via the bundled node; `verify_runtime_release.py` passes both archives.
 
-In this macOS development environment, Windows verification is structural rather than native-process execution. The release zip is built and checked for required contents here, and should still be validated on a real Windows machine before public release sign-off — in particular, confirm the chart service boots and `/qimen/pan` · `/taiyi/pan` · `/jinkou/pan` + all 14 神数 `/{key}/pan` respond. (Done for v0.9.1 — see the note above.)
+Windows verification is **native** on every release: `runtime-matrix.yml` installs the derived zip on `windows-latest` and
+`windows-11-arm` (x64 emulation) and boots it, runs the nine client setups, the HTTP handshake, the offline pytest suite
+(`PYTEST_BUDGET_SECONDS` nt 2700 / posix 1500, streamed to `pytest.log`) and the live tool sweep. The runtime root on Windows
+must be pure ASCII (`runtime.path_not_ascii`; lane step `non_ascii_root_refusal`). The same matrix runs on a weekly `schedule`
+(Mondays, `23 4 * * 1`) against `main` × the public latest, and `release-completeness.yml` kicks it if the cron slot was skipped.
 
 ## Example Manifest
 
@@ -159,8 +168,9 @@ For the embedded payload manifest, see [`RUNTIME_MANIFEST_SPEC.md`](./RUNTIME_MA
   pyproject 版本 == release tag。
 - wheel **不含** `horosa-core-js`：它随离线 runtime payload 分发（manifest `artifacts.horosa_core_js_root`），
   `HOROSA_CORE_JS_ROOT` 可覆盖；源码树回退只在 checkout 里有效。
-- 发布顺序（v0.38.0 A5）：tag → `publish_release.sh --draft --dispatch`（draft + 触发 `release-runtime.yml`：派生 Windows 半、
-  双平台清单、真机矩阵）→ `sync_windows_release.py --check --tag vX --draft` [OK] → `gh workflow run release-runtime.yml
-  -f version=X -f publish=true`（转公开；publish 前 `verify_matrix_digests.py` 比对三条 lane 装的 sha 与 draft 资产 digest（v0.38.1 R5）；
+- 发布顺序（v0.38.0 A5，v0.40.0 补齐）：`preflight_release.py` 全绿（含上游 pin 在公开远端）→ tag → `publish_release.sh --draft --dispatch`
+  （draft + 触发 `release-runtime.yml`：派生 Windows 半、双平台清单、真机矩阵）→ 提交 `server.json` 的 mcpb sha 回填（来自这一次 draft 构建）→
+  `sync_windows_release.py --check --tag vX --draft` [OK] → `gh workflow run release-runtime.yml -f version=X -f publish=true -f run_matrix=true`
+  （转公开；publish 前 `verify_matrix_digests.py` 比对三条 lane 装的 sha 与 draft 资产 digest（v0.38.1 R5）；
   GITHUB_TOKEN 产生的 published 事件**不**触发下游 workflow，completeness 由 publish job 显式 dispatch，publish-pypi 开通后同理）→
   `--check` 公开 latest → publish job 再 dispatch 一次 release 模式矩阵（真 https 下载）→ `uvx --from <wheel URL> horosa-skill --version` 烟测。

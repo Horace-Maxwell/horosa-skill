@@ -1,13 +1,12 @@
 ---
 trigger: always_on
 ---
-
-# Horosa Skill — rules for Windsurf (Cascade)
+# Horosa Skill — rules for Devin Desktop (formerly Windsurf; legacy Cascade rules file)
 
 This repo ships Horosa (星阙): 110 real techniques (Western astrology, 八字, 紫微, 六壬, 奇门, 太乙, 六爻, 神数 …)
 as a local-first MCP server + CLI. The **single policy source** is [skills/horosa-agent/SKILL.md](../../skills/horosa-agent/SKILL.md);
-maintainer law is [AGENTS.md](../../AGENTS.md). This file is a thin
-pointer — do not add rules here.
+maintainer law is [AGENTS.md](../../AGENTS.md). This file is **generated** by `horosa-skill/scripts/gen_agent_mirrors.py` —
+edit the template there, never this copy.
 
 1. **Never hand-calculate** a technique (no formulas, no memorised tables, no web lookups). Every chart comes
    from a `horosa_*` MCP tool or the `horosa-skill` CLI.
@@ -25,4 +24,6 @@ pointer — do not add rules here.
 5. **Compact surface.** By default this client sees only the 11 facade tools (`HOROSA_MCP_COMPACT=1`); every
    technique is still reachable by name through `horosa_tool_run(tool_name="qimen", …)` and the full list is the
    `horosa://catalog/techniques` resource — a missing flat `horosa_*` name does not mean the technique is missing.
-   No `horosa` tools at all? `horosa-skill setup --client windsurf` registers everything.
+6. Errors carry structured recovery: on `details.agent_recovery` relay `prompt_to_user` verbatim and stop; on
+   `runtime.*` errors suggest `horosa-skill doctor --explain` (Linux / Intel Mac = gateway mode; Windows runtime root
+   must be pure ASCII). Never retry by flipping a setting the user did not choose.

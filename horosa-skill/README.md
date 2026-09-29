@@ -21,7 +21,7 @@ This subproject is distributed under `GNU AGPL-3.0-only`. See [LICENSE](LICENSE)
 
 ## 四条命令（v0.38.x）
 
-- `uv run horosa-skill setup --client <claude-code|claude-desktop|cursor|vscode|codex|gemini|windsurf|cline|zed>` —— 探网 → 装离线 runtime → 写该客户端配置 → doctor → 回读 → 真起一次 stdio
+- `uv run horosa-skill setup --client <claude-code|claude-desktop|cursor|vscode|codex|gemini|windsurf|cline|zed>`（`windsurf` = Devin Desktop，原 Windsurf，key 保留兼容） —— 探网 → 装离线 runtime → 写该客户端配置 → doctor → 回读 → 真起一次 stdio
 - `uv run horosa-skill client config --format <client>` —— 只生成（不落盘）该客户端的配置块 / 注册命令
 - `uv run horosa-skill client check` —— 体检本机各客户端**实际写着什么**（占位符、超时、路径、版本漂移）
 - `uv run horosa-skill doctor --explain` —— 机器可读体检 + 6–10 行人话；`selfcheck` 起一张盘 → 存 → 读回
@@ -70,7 +70,7 @@ This subproject is distributed under `GNU AGPL-3.0-only`. See [LICENSE](LICENSE)
   - per-tool `export_snapshot`
   - per-tool `export_format`
 
-## 当前已经接进来的技法
+## 运行层示例（非全表，全表见根 README）
 
 完整双语能力矩阵请看根目录 [README.md](../README.md) 和 [README_EN.md](../README_EN.md)。这里保留运行层视角，强调“你在这个子项目里具体能调什么”。
 
@@ -142,11 +142,8 @@ This subproject is distributed under `GNU AGPL-3.0-only`. See [LICENSE](LICENSE)
 - `knowledge_registry`：悬浮知识目录
 - `knowledge_read`：悬浮知识读取器
 
-已接入：
-
-- 星盘悬浮：`planet`、`sign`、`house`、`lot`、`aspect`
-- 大六壬悬浮：`shen`、`house`
-- 奇门悬浮：`stem`、`door`、`star`、`god`
+已接入 31 个域 = 3 个悬浮域（星盘 `planet`/`sign`/`house`/`lot`/`aspect`、大六壬 `shen`/`house`、奇门 `stem`/`door`/`star`/`god`）
++ 27 个技法方法论手册域（上游 HelpDoc 收割，逐条带出处）+ 八字口诀库 `bazi_pithy`（21 类 173 条）；`knowledge_read {"query": …}` 跨域检索。
 
 明确排除：
 
@@ -317,6 +314,11 @@ cp .env.example .env
 - `HOROSA_RUNTIME_START_TIMEOUT_SECONDS`
 - `HOROSA_SKILL_HOST`
 - `HOROSA_SKILL_PORT`
+- `HOROSA_MCP_COMPACT`（=1 精简面 11 个工具）/ `HOROSA_TOOLSETS`（按域裁剪全量面）
+- `HOROSA_MCP_TOKEN` / `HOROSA_MCP_ALLOWED_HOSTS`（streamable-http 的 Bearer 与 Host 白名单）
+- `HOROSA_REPORT_OUTPUT_ROOTS`（报告 `output_path` 允许写入的目录白名单）
+- `HOROSA_RUNTIME_MIRROR`（离线 runtime 下载镜像）
+- `HOROSA_CLARIFY`（澄清闸档位）/ `HOROSA_JEV*`（可选云端决策层，缺省关；密钥永不回显）
 
 ## 相关文档
 

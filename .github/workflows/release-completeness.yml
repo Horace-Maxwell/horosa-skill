@@ -69,7 +69,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! gh api "repos/${REPO}/releases/tags/${TAG}" --jq '.assets[].name' | grep -qx "horosa-skill-sbom.json"; then
-            echo "::error::latest release ${TAG} is missing horosa-skill-sbom.json — OPERATIONS.md lists it as a required asset; generate with scripts/generate_sbom.py and upload (publish_darwin_release.sh does this automatically)."
+            echo "::error::latest release ${TAG} is missing horosa-skill-sbom.json — OPERATIONS.md lists it as a required asset; generate with scripts/generate_sbom.py and upload (publish_release.sh does this automatically)."
             exit 1
           fi
           echo "OK: horosa-skill-sbom.json present on ${TAG}."

@@ -10,7 +10,7 @@
 - 用户确认后，payload 必须包含 `agent_confirmed_settings: true` 和 `clarification_notes`。
 - 如果用户明确说“按星阙默认”，payload 可以包含 `defaults_accepted: true`，但仍建议写明 `clarification_notes`。
 - 任何 AI 客户端都应该先调用 `horosa_agent_guidance` 或 CLI `agent guidance`，再调用真实技法。
-- 计算结果必须以 `export_snapshot.export_text`、`export_format.sections` 和 `summary` 为准，不能用 Shell/Python/Web Search 手写算法替代。
+- 计算结果必须以 `export_snapshot.export_text`、`export_snapshot.sections` 和 `summary` 为准，不能用 Shell/Python/Web Search 手写算法替代。
 
 CLI 查询方式：
 
@@ -129,7 +129,7 @@ IANA 时区会在进入 runtime 前转换为后端稳定接受的固定 offset�
 推运类工具只返回 `ok=true` 还不够。验收时必须检查：
 
 - `export_snapshot.export_text` 非空。
-- `export_format.sections` 包含对应的本命盘、目标盘、相位或表格章节。
+- `export_snapshot.sections` 包含对应的本命盘、目标盘、相位或表格章节。
 - 不要只看 `export_text` 的短预览；这些工具通常先写本命盘，返照盘 / 推运盘 / 流年盘 / 主限表格可能在后续 section。
 - `pd` 的表格有真实行；不能只有标题。
 - `zr` 的时间轴有层级行；不能显示“无数据”。

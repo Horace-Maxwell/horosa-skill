@@ -56,17 +56,27 @@ horosa_report_render {run_id, tool_name:"qimen", format:"docx", ai_report:{execu
 schema 值，可直接放进载荷）；`planetaryarc` 的弧源、神数的性别/地点这类工具自有敏感项闸门会点名问，别替用户默认。
 
 找工具：每个工具描述带 `aka:` 别名（中文口语/拼音/英文）；不确定就 `horosa_dispatch`（路由覆盖全部技法，
-含 8 个择日搜索）或 `horosa_agent_guidance`（响应里的 `server_profile` 告诉你本进程实际平铺了哪些域、
-`HOROSA_TOOLSETS` 有没有拼错、`horosa_tool_run` 在不在）。
+含 10 个择日窗口搜索：`tianxing` + 9 支 `*zeri`）或 `horosa_agent_guidance`（响应里的 `server_profile` 告诉你本进程实际平铺了哪些域、
+`HOROSA_TOOLSETS` 有没有拼错、`horosa_tool_run` 在不在）。`HOROSA_TOOLSETS` 的合法域 = `astro` / `predict` / `chart` / `cn` /
+`shenshu` / `other` / `export` / `knowledge`，别名 `western` / `chinese` / `reference` / `all` / `none`；认不出的词会被丢掉并进 warning。
+
+**精简面（`HOROSA_MCP_COMPACT=1`，11 个门面级工具 = 10 门面 + `horosa_tool_run`）**：Cursor / VS Code / Codex / Gemini / Devin Desktop（原 Windsurf）/
+Cline / Zed 默认拿到它（`setup --surface full|compact` 可改；Claude Code / Claude Desktop 默认全量 120）。`horosa_tool_run(tool_name=<注册键>, …)`
+接受与平铺工具**完全相同**的载荷与闸门字段；`tool_name` 不认识时返回按域分组的 `details.catalog`，不要据此说「没有这个技法」。
 
 tools/list 只广告每个工具的域核心字段 + 自有字段；BirthInput 长尾旋钮（`orbSystem`/`extraBodies`/`termsVariant`…）
 **顶层按名直接传即可、不会被丢**，全表用 `horosa_agent_guidance(tool_name=…)` 查（v0.36.0 两层 schema）。
 
 省 token：技法工具可传 `response_view:"titles"`（只回段标题）或 `"sections"`；完整快照始终已存档（`horosa_memory_show(run_id)` 取回）。`export_snapshot.sections[*]` 只含 `body`；机读数据在 `data.<key>`（`data.pan` / `data.chart` / `data.liureng` …）只出现一次，别去段里找。注意 `horosa_report_from_tool` 会重新起盘——已有 run_id 用 `report_render`。
 
-出错时看 `details.agent_recovery`：`kind` 说谁能修（input=问用户/修入参、retry_or_doctor=重试一次再让用户跑
-`uv run horosa-skill doctor`、runtime/js_engine=装 runtime 或设 HOROSA_NODE_BIN），`next_action` 是机器可读的下一步，
-`prompt_to_user` 双语可直接转述；不要把 `ok:false` 当成「该技法没有此项」。
+出错时看 `details.agent_recovery`：`kind` 说谁能修——`input`（问用户 / 修入参）、`retry_or_doctor`（重试一次再让用户跑
+`uv run horosa-skill doctor`）、`transport`（冷启动 ≤ ~45 s，等几秒重试一次）、`runtime` / `js_engine`（装 runtime 或设 HOROSA_NODE_BIN）、
+`environment`（本机环境：PATH / 编码 / 端口）、`decision_layer`（云端决策层不可用 = 已本地兜底）；`next_action` 是机器可读的下一步，
+`prompt_to_user` 双语可直接转述；不要把 `ok:false` 当成「该技法没有此项」。几条要记住的码：`runtime.starting` → 按 `retry_after_seconds`
+（5 s）原样重试同一调用，三次后 `horosa-skill runtime status`；`runtime.java_backend_unavailable` → 只影响农历/八字/紫微/六壬族，chart 族照常，
+冷却后再试；`runtime.platform_unsupported` → Linux / Intel Mac 没有离线载荷，走网关模式（`HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`
+指向一台受支持的机器）；`runtime.path_not_ascii` → Windows 的 runtime 根必须纯 ASCII（`setx HOROSA_RUNTIME_ROOT C:\horosa` 后重装）；
+`runtime.stop_refused_clients_attached` / `stop_refused_foreign` → 另一个客户端或用户的桌面端还挂在服务上，**不要**自作主张加 `--force`。
 
 **`warnings` 非空 = 结果不完整**（`ok` 仍为 true）：「降级：…」是某个子引擎/可选后端本次失败、对应段缺席；
 「结果不完整：预设 N 段中 M 段未产出」列出缺了哪些段。报告里必须如实转述，不得把缺席的段当成「该技法没有此项」，
@@ -177,6 +187,10 @@ below. When the operator turns it on:
   (`contracts/jev_thresholds.json`): as of v0.39.0 routing fallback and 六壬 topic classification are
   promoted; gender extraction is still shadow-only (recorded, never filled).
 
+**Disclosure when the cloud decision layer is on**: the default scope `meta` sends only the de-identified question text; under
+`HOROSA_JEV_SCOPE=snapshot` export-snapshot text leaves the machine — say so to the user before relying on it. `jev.*` warnings mean the
+deterministic local fallback answered; `horosa-skill jev status` shows the state. Never echo `HOROSA_JEV_API_KEY` (plugin `jevApiKey`).
+
 ## Tool Selection
 
 | User intent | Tool |
@@ -203,7 +217,7 @@ below. When the operator turns it on:
 | 七政择日动盘（十一曜山位 / 日月食 / 方位到达） | `qizhengelection`（action: pan / eclipses / azimuthsearch；date/time 是候选时刻非出生盘） |
 | 生时校正（出生时间不确定） | `india_rectify`（KP 法锚点±半窗扫描；输出证据与排序，采用与否由用户决定） |
 | Harmonic 调波盘 | `harmonic` |
-| 八字 | `bazi_birth` / `bazi_direct`（本地 lunar 引擎优先，同星阙八字页；公元前 / byLon / adjustJieqi 回退 Java 并告警）/ `bazi_inverse`（四柱干支反查候选出生时刻，free of the confirmation gate） |
+| 八字 | `bazi_birth` / `bazi_direct`（本地 lunar 引擎优先，同星阙八字页；公元前 / byLon / adjustJieqi 回退 Java 并告警；南纬出生带 `southMonth`：`none` 不对冲（星阙缺省）/ `chong` 对冲——闸门会点名问，北纬忽略）/ `bazi_inverse`（四柱干支反查候选出生时刻，free of the confirmation gate） |
 | 紫微斗数 | `ziwei_birth` (22 传本 keys + `sihuaSchool`; any non-default 传本 key re-casts on 星阙's local ZiweiCalc; `ziwei_rules` returns the rules library) |
 | 大六壬 / 行年 | `liureng_gods` / `liureng_runyear` |
 | 奇门遁甲 / 太乙 / 金口诀 / 三式合一 | `qimen` / `taiyi` / `jinkou` / `sanshiunited` |
@@ -310,7 +324,8 @@ progress lines and error envelopes go to stderr, so parse stdout only.
 
 Each block: get `uv` → one-command onboarding (installs the offline runtime, writes the client config, then starts
 the server once over stdio with the exact command the client will run) → live check. Replace `cursor` with the
-client at hand (`claude-code` / `claude-desktop` / `vscode` / `codex` / `gemini` / `windsurf` / `cline` / `zed`).
+client at hand (`claude-code` / `claude-desktop` / `vscode` / `codex` / `gemini` / `windsurf` = Devin Desktop, formerly Windsurf — the key is kept
+for compatibility and writes the Devin CLI config / `cline` / `zed`).
 
 **macOS (zsh), no checkout**
 

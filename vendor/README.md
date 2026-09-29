@@ -16,37 +16,27 @@ That means the maintainer should not need to go back to another sibling project 
 
 `runtime-source/` stores the source assets required to package the offline Horosa runtime without reaching outside this project folder.
 
-Current vendored inputs can include:
+Current vendored inputs (`horosa-skill/scripts/sync_vendored_runtime_sources.sh` pulls them from the read-only
+Horosa-Public checkout named by `HOROSA_SOURCE_ROOT`; what was pulled is recorded in
+`horosa-skill/contracts/upstream_provenance.json`):
 
-- `Horosa-Web/start_horosa_local.sh`
-- `Horosa-Web/stop_horosa_local.sh`
-- `Horosa-Web/scripts/repairEmbeddedPythonRuntime.py`
-- `Horosa-Web/astrostudyui/dist-file`
-- `Horosa-Web/astrostudyui/scripts/warmHorosaRuntime.js`
-- `Horosa-Web/astrostudyui/src/utils/aiExport.js`
-- `Horosa-Web/astropy`
-- `Horosa-Web/flatlib-ctrad2`
-- `runtime/mac/python`
-- `runtime/mac/java`
-- `runtime/mac/bundle/astrostudyboot.jar`
-- `runtime/windows/bundle/runtime.manifest.json`
-- `runtime/windows/bundle/wheels`
-- `runtime/windows/bundle/*.url.txt`
-- `prepareruntime/Prepare_Runtime_Windows.ps1`
-- `prepareruntime/Prepare_Runtime_Windows.bat`
+- `Horosa-Web/start_horosa_local.sh` / `stop_horosa_local.sh` — launcher pair (the runtime manager patches the mac launcher for headless use)
+- `Horosa-Web/scripts/` — `repairEmbeddedPythonRuntime.py` and friends
+- `Horosa-Web/astrostudyui/{dist-file,scripts,src}` — built frontend, `warmHorosaRuntime.js`, and the `src/utils` the
+  headless layer mirrors (`aiExport.js`, `localNongliAdapter.js`, …)
+- `Horosa-Web/astropy`, `Horosa-Web/flatlib-ctrad2` — the Python chart service and its ephemeris library
+- `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou,kinwangji,kinwuzhao,taixuanshifa,jingjue,shenyishu,kinastro}` — the ken / 神数
+  engines (MIT; obligations in `AGENTS.md` §11)
+- `runtime/mac/{python,java,bundle/astrostudyboot.jar}` — the embedded runtimes and boot jar of the **darwin-arm64 seed**
 
-## Windows-Specific Note
+## Windows Note
 
-The Windows source repository currently gives this project two important things:
-
-- a Windows runtime preparation flow
-- an offline wheel bundle and runtime manifest template
-
-That is enough to keep the local project folder self-contained for Windows runtime preparation inputs.
-
-It is not the same thing as a fully materialized Windows runtime payload.
-
-The final Windows runtime payload still needs the real packaged Java, Python, backend jar, frontend build output, and eventually Node runtime to be materialized into the release archive layout.
+There are no Windows-specific inputs here any more. Since v0.38.0 the `win32-x64` archive is **derived from the darwin-arm64
+seed** on GitHub's `windows-latest` runner (`release-runtime.yml` → `build_runtime_release_windows.py --seed …`): the
+platform-independent tree comes from the seed, JDK 17 / Node 22 / embedded CPython 3.12 come from the pins in
+`horosa-skill/contracts/runtime_toolchain.json`, and the Python dependency set is
+`horosa-skill/contracts/runtime_python_lock.json` (seed-derived; pyswisseph / sxtwl are built from sdist on the runner).
+The Windows build-box flow in `docs/WINDOWS_RELEASE_BUILD_PROMPT.md` is a fallback for when the hosted path is down.
 
 ## Why This Exists
 

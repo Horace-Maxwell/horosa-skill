@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/badge/platform-macOS%20(arm64)%20%7C%20Windows%20(x64)-0f766e?style=flat-square" alt="Platforms" />
     <img src="https://img.shields.io/badge/runtime-offline%20first-111827?style=flat-square" alt="Offline runtime" />
     <img src="https://img.shields.io/badge/MCP-ready-111827?style=flat-square" alt="MCP ready" />
-    <img src="https://img.shields.io/badge/knowledge-30%20domains%2C%20cited-111827?style=flat-square" alt="Cited knowledge base" />
+    <img src="https://img.shields.io/badge/knowledge-31%20domains%2C%20cited-111827?style=flat-square" alt="Cited knowledge base" />
     <img src="https://img.shields.io/badge/storage-SQLite%20%2B%20JSON-111827?style=flat-square" alt="SQLite and JSON" />
   </p>
 
@@ -31,7 +31,7 @@ It solves six things:
 
 - **Get it and use it** — clone from GitHub, install the full offline runtime from GitHub Releases, then run offline.
 - **A real AI interface** — call genuine Xingque methods over `MCP` or a `JSON-first CLI`, not a loose prompt layer.
-- **Stable & consumable** — every technique returns a uniform envelope + Xingque-style `export_snapshot` / `export_format`; neither machine nor human has to guess fields.
+- **Stable & consumable** — every technique returns a uniform envelope + Xingque-style `export_snapshot` (`export_text` + `sections`); neither machine nor human has to guess fields.
 - **Auditable** — every response carries a technique provenance card; doctrine quotes carry sources; AI readings can be verified claim-by-claim against machine-read chart facts.
 - **Manageable long-term** — one call = one traceable record (run / artifact / manifest / final AI answer).
 - **Light repo** — code, docs, CLI, MCP, tests in Git; the heavy runtime in Releases.
@@ -53,12 +53,12 @@ License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICEN
 
 ## Current stable baseline
 
-**Current public version: `Horosa Skill 0.40.0` (110 callable tools).**
+**Current version: `Horosa Skill 0.40.0` (110 callable tools; the public latest release is on the Releases page).**
 
 This release line brings the capability surface roughly to parity with the desktop app — and adds a trust stack no other metaphysics tool ships:
 
 - **Trust stack (v0.27.0–v0.36.0)** — every response carries a deterministic **technique provenance card** (`data.technique_card`); `horosa_technique_report` renders methods reports and detects cross-technique setting conflicts; a **31-domain knowledge base** (409 cited entries) returns every doctrine entry with a file-and-version citation; a **chart-fact faithfulness evaluator** verifies AI readings claim-by-claim against machine-read chart truth; and **`horosa_hecan`** runs multi-technique synthesis under a divergence-disclosure contract.
-- **Upstream parity (v0.28.0)** — export contract v14 mirrors the desktop app's aiExport v56 (Xingque v3.9.3): four classical-derived sections, BaZi stem/branch combination-clash lines, Zi Wei body palace + BaZi major periods, almanac sub-source labels, derived-chart dedicated sections, and the 天星择日 selected-moment chart.
+- **Upstream parity (since v0.28.0)** — export contract v15 mirrors the desktop app's aiExport v58 (Xingque v3.11.2); v0.28.0 introduced four classical-derived sections, BaZi stem/branch combination-clash lines, Zi Wei body palace + BaZi major periods, almanac sub-source labels, derived-chart dedicated sections, and the 天星择日 selected-moment chart.
 - **Full Western astrology** — natal and derived charts, 10 classic return/progression/timeline tools, 3 v2.4.0 Western additions (Age Point / Distributions / mundane ingress), 7 v2.5.0 progressions (Jayne declination / Vedic sidereal / Planetary Arc / Ages of Man / Balbillus / 129-year system / Persian Directed), plus full **horary** and **electional** judgment engines.
 - **Primary Direction v12, verified methods (v2.6.6)** — the directions table converges on the **5 per-row-verified methods** (Alcabitius / Meridian / Porphyry / Equal-ecliptic / Equal-hour-circle; unverified values fall back to Alcabitius inside the engine), In Zodiaco/In Mundo frames, direct+converse, **22 time keys** (incl. per-chart Simmonite/Kepler/Brahe and dynamic True/Symbolic Solar Arc), antiscia/terms as promissors, **Vertex significator rows**, and **pdYears up to 3000** with per-revolution recurrence rows; the **midpoint chart** is a Hamburg/Uranian 90° dial (8 TNP + planetary pictures / antiscia / midpoint list).
 - **Sidereal zodiac & full India (v2.6.4)** — every Western technique chart supports **47 ayanāṃśa** sidereal modes (default Lahiri, tropical charts unchanged) + a **nakshatra (西洋月宿)** row; Vedic India charts go from 4→**24 house systems** and 6→**47 ayanāṃśa**.
@@ -75,10 +75,10 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `110 / 110 ok=true` |
-| Engineering tests | `1671 / 1671 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 115 live integration tests need a local runtime and auto-skip when services are down) |
-| Forced clarification when params unconfirmed | `84` technique tools trigger `must_ask_user=true` |
-| Safe-exempt tools | `8` registry / knowledge / parser tools are directly readable |
-| Xingque-style export structure | every business technique carries `export_snapshot` / `export_format` (`107` export techniques modeled; contract v14 mirrors desktop aiExport v56) |
+| Engineering tests | `1689 / 1689 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 115 live integration tests need a local runtime and auto-skip when services are down) |
+| Forced clarification when params unconfirmed | `100` technique tools trigger `must_ask_user=true` |
+| Safe-exempt tools | `10` registry / knowledge / parser tools are directly readable |
+| Xingque-style export structure | every business technique carries `export_snapshot` (`107` export techniques modeled; contract v15 mirrors desktop aiExport v58) |
 | Technique provenance | every technique response carries `data.technique_card`; a declared-vs-measured compute mismatch is flagged explicitly |
 | Knowledge base | 31 domains; 236 manual entries, each returned with a file-and-version citation |
 | HorosaBench | 106 registry-locked benchmark cases + chart-fact faithfulness evaluation (wrong-chart and sycophancy adversarial cases go red) |
@@ -86,13 +86,13 @@ Local end-to-end signals:
 | Qi Men / Tai Yi / Jin Kou / Three Styles | unified on `ken`, same as the desktop app |
 | Tong She Fa / Decennials | headless, value-for-value with Xingque (`decennials.test.js` golden) |
 | GitHub CI | Linux unit tests + horosa-core-js JS golden self-check + Windows OpenClaw smoke (**does not cover the cross-tree upstream checks** — those need an upstream checkout and only run via `preflight_release.py` on the maintenance box) |
-| Release runtime | macOS (arm64) + Windows (x64) assets (ken + 14 Shen Shu engines bundled) packaged and verified on every release; other platforms/arches fail install with an explicit unsupported error |
+| Release runtime | macOS (arm64) + Windows (x64) assets (ken + 14 Shen Shu engines bundled) packaged and verified on every release; Windows ARM installs the x64 payload under emulation; Intel Mac / Linux fail install with an explicit unsupported error (gateway mode via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`) |
 
 > About `solarreturn` / `lunarreturn` / `solararc` / `givenyear` / `profection` / `pd` / `pdchart` / `zr`: these predictive tools are verified working in this version and should not be flagged by an agent as "Java `/predict/*` unavailable". If a client still says so, check whether it is on an old runtime, bypassing MCP to hand-compute, or hasn't run `doctor` / `openclaw-check --full`.
 
 ## Capability map (110 tools)
 
-> Every business technique returns a uniform envelope plus a Xingque-style `export_snapshot` / `export_format` and a `data.technique_card` provenance card. Tools marked ⓟ are setting-sensitive and require parameter confirmation before calling.
+> Every business technique returns a uniform envelope plus a Xingque-style `export_snapshot` and a `data.technique_card` provenance card. Tools marked ⓟ are setting-sensitive and require parameter confirmation before calling.
 
 ### Western astrology · natal & derived charts (11)
 
@@ -110,7 +110,7 @@ Local end-to-end signals:
 | `relative` ⓟ | Synastry / relationship | Two-person relationship, composite, relative output |
 | `germany` ⓟ | Cosmobiology / midpoints | Hamburg 90° dial, 8 TNP, midpoint structures and quantitative analysis |
 
-### Western astrology · returns / progressions / timelines (28)
+### Western astrology · returns / progressions / timelines (33)
 
 | Tool ID | Name | Notes |
 | --- | --- | --- |
@@ -148,7 +148,7 @@ Local end-to-end signals:
 | `astrodata` ⓟ | Celebrity chart catalog | offline celebrity birth-data search (FTS/category/Rodden, chart-ready detail) |
 | `xuanshi` | Esoteric-history KB | 7900+ sourced events (original text / reading / citations), 27000+ celestial records, figure graph, dynasty & timeline views (read-only) |
 
-### Western divination · horary / electional (5)
+### Western divination · horary / electional (13)
 
 | Tool ID | Name | Notes |
 | --- | --- | --- |
@@ -166,7 +166,7 @@ Local end-to-end signals:
 | `qizhengzeri` | 七政 election | minute-level interval search (7-state dignities etc., 11 types; adjudicated by the backend swisseph) + the 果老 chart |
 | `indiazeri` | Muhurta election | minute-level interval search (Panchanga limbs, Lagna, the 30 muhurtas, Choghadia, the five doshas — 18 types; backend-adjudicated) |
 
-### Chinese metaphysics core · Three Styles (10)
+### Chinese metaphysics core · Three Styles (11)
 
 | Tool ID | Name | Notes |
 | --- | --- | --- |
@@ -261,7 +261,7 @@ If an agent is unsure of the user's settings before calling a technique, it shou
 
 Calculation tools and `horosa_dispatch` are gated: if the agent didn't confirm settings it gets `agent_guidance.required`, and must pass `agent_confirmed_settings: true` after the user confirms, or `defaults_accepted: true` after the user explicitly accepts defaults. If the response has `details.agent_recovery.prompt_to_user`, the AI client must stop and forward that question to the user — it may not bypass or self-fill.
 
-Standard flow: ① user states a need → ② agent checks if params suffice; if not, call `horosa_agent_guidance` or ask the user → ③ user confirms time/place/topic/whether to accept defaults → ④ agent calls the real tool with `agent_confirmed_settings: true` + `clarification_notes` → ⑤ explain from `export_snapshot` / `export_format`, not from a hand calculation.
+Standard flow: ① user states a need → ② agent checks if params suffice; if not, call `horosa_agent_guidance` or ask the user → ③ user confirms time/place/topic/whether to accept defaults → ④ agent calls the real tool with `agent_confirmed_settings: true` + `clarification_notes` → ⑤ explain from `export_snapshot` (`export_text` + `sections`), not from a hand calculation.
 
 ❌ Blocked (missing confirmation, place, timezone, topic):
 
@@ -324,7 +324,7 @@ Every tool call returns a uniform envelope:
 }
 ```
 
-Techniques wired into the Xingque export protocol also carry `data.export_snapshot` (with `.snapshot_text` / `.sections` / `.selected_sections`), `data.export_format`, and `data.technique_card`. So: the AI doesn't guess structure from free text; repeated calls of one technique return the same contract; `horosa_dispatch`'s aggregation layer carries each sub-result's export contract; and the structure survives into the JSON artifact. Full field tables: [`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md) and [`docs/INPUT_CONTRACTS.md`](./docs/INPUT_CONTRACTS.md).
+Techniques wired into the Xingque export protocol also carry `data.export_snapshot` (with `.export_text` / `.sections` / `.selected_sections`) and `data.technique_card`. So: the AI doesn't guess structure from free text; repeated calls of one technique return the same contract; `horosa_dispatch`'s aggregation layer carries each sub-result's export contract; and the structure survives into the JSON artifact. Full field tables: [`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md) and [`docs/INPUT_CONTRACTS.md`](./docs/INPUT_CONTRACTS.md).
 
 ## Data management: a full local record system
 
@@ -374,7 +374,7 @@ Troubleshooting install: `uv: command not found` -> install uv first (one-liner 
 
 More troubleshooting: if `github.com:443` is unreachable but `api.github.com` works (full recipe incl. mirrors and offline USB: [docs/INSTALL_RESTRICTED_NETWORK.md](./docs/INSTALL_RESTRICTED_NETWORK.md)), download the runtime via the assets API (`curl -s https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/latest` to find your platform archive's `assets[].id`, then `curl -L -H "Accept: application/octet-stream" -o runtime.zip https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/assets/<id>`) and run `uv run horosa-skill install --archive runtime.zip`. If the Java backend (:9999) will not come up — `doctor` reports `services:java_backend_not_running` — the runtime now degrades to **chart-only** instead of locking everything: 三式 ken (qimen/taiyi/jinkou), 神数, geomancy, tarot and the western chart family keep working while nongli/bazi/ziwei/liureng and time-cast flows error until it recovers; `doctor` attaches the captured Java boot error under `java_diagnostics` and `selfcheck` falls back to a chart-side probe. A known Windows cause is proxy/VPN/security software whose WFP filters block `java.exe` loopback (JDK 17's internal pipes prefer AF_UNIX with no TCP fallback on connect — see issue #14); stopping the service is usually not enough, disable it and reboot.
 
-For stdio clients like Claude Desktop: `uv run horosa-skill serve --transport stdio`. Context-constrained clients can set `HOROSA_MCP_COMPACT=1` to expose only the 11 facades, or `HOROSA_TOOLSETS=astro,cn` to flatten just those domains (domains astro/predict/chart/cn/shenshu/other, aliases western/chinese/all/none; unknown tokens are warned about and ignored, an empty result falls back to the full surface; any effective filter also registers `horosa_tool_run`; facades always register). The clarification gate still applies.
+For stdio clients like Claude Desktop: `uv run horosa-skill serve --transport stdio`. Context-constrained clients can set `HOROSA_MCP_COMPACT=1` to expose only the 11 facades, or `HOROSA_TOOLSETS=astro,cn` to flatten just those domains (domains astro/predict/chart/cn/shenshu/other/export/knowledge, aliases western/chinese/reference/all/none; unknown tokens are warned about and ignored, an empty result falls back to the full surface; any effective filter also registers `horosa_tool_run`; facades always register). The clarification gate still applies.
 
 ### Let the dispatcher pick the technique
 
@@ -431,9 +431,9 @@ gives agents without MCP a pure-CLI contract (`tool run --input/--output`, exit 
 | **Claude Desktop** | stdio | `setup --client claude-desktop`, or install the `.mcpb` bundle | full (120) | The `.mcpb` ships as a release asset |
 | **Cursor** | stdio | `setup --client cursor` (or `client config --format cursor` for the official install deep link) | compact (11) | Cursor caps at ~40 tools globally and **drops the rest silently** |
 | **VS Code (Copilot)** | stdio | `setup --client vscode` (writes the user-level `mcp.json`; or `client config --format vscode` for the `vscode:mcp/install` link) | compact (11) | 128-tool cap across all servers; the repo ships `.vscode/mcp.json` |
-| **Codex** | stdio | `setup --client codex` (merges into `~/.codex/config.toml` in place, timeouts included) | compact (11) | Raise `startup_timeout_sec` (default 10 s) and `tool_timeout_sec` (default 60 s) |
+| **Codex** | stdio | `setup --client codex` (merges into `~/.codex/config.toml` in place, timeouts included) | compact (11) | Raise `startup_timeout_sec` (default 10 s) and `tool_timeout_sec` (default 60 s); per-tool inputSchema ≤ 5000 B (0.158 default budget, guarded here) |
 | **Gemini CLI** | stdio | `setup --client gemini` | compact (11) | Tool names ≤63 chars + strict JSON Schema 2020-12 (the advertised layer already conforms) |
-| **Windsurf → Devin Desktop** | stdio | `setup --client windsurf` (writes the Devin CLI file `~/.config/devin/mcp_config.json`; an existing legacy Cascade config is merged in place) | compact (11) | Cascade was removed in 2026-09; Devin Local reads the Devin CLI MCP file; the legacy Cascade cap was 100 tools |
+| **Windsurf → Devin Desktop** | stdio | `setup --client windsurf` (CLI key unchanged; writes Devin's MCP file — macOS/Linux `~/.config/devin/mcp_config.json`, Windows `%APPDATA%\devin\mcp_config.json`, project-level `.devin/mcp_config.json`; a legacy `~/.codeium/windsurf` Cascade config is merged in place) | compact (11) | Cascade was removed in 2026-09; Devin Local reads the Devin CLI MCP file; the legacy Cascade cap was 100 tools |
 | **Cline** | stdio | `setup --client cline` | compact (11) | No tool search; the full surface is heavy |
 | **Zed** | stdio | `setup --client zed` | compact (11) | Config root key is `context_servers` |
 | **OpenClaw / mcporter** | stdio | `client openclaw-setup --workspace ~/.openclaw/workspace` | full (120) | — |
@@ -510,20 +510,20 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 1671 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 1689 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```
 
-The full self-check covers: each tool is callable → returns a uniform envelope → business techniques carry `export_snapshot` / `export_format` + `technique_card` → export text re-parses → the run is written to memory → `memory show/query` retrieves it → report JSON/DOCX/PDF generate and register artifacts → `horosa_dispatch`'s aggregation layer keeps sub-tool export contracts → OpenClaw / mcporter see the MCP tools and complete smoke/full check.
+The full self-check covers: each tool is callable → returns a uniform envelope → business techniques carry `export_snapshot` + `technique_card` → export text re-parses → the run is written to memory → `memory show/query` retrieves it → report JSON/DOCX/PDF generate and register artifacts → `horosa_dispatch`'s aggregation layer keeps sub-tool export contracts → OpenClaw / mcporter see the MCP tools and complete smoke/full check.
 
-> **When auditing predictive / Shen Shu tools, don't read only the short preview.** Their Xingque-style body usually writes the natal chart first, then the return / progressed / annual / primary-direction / Shen Shu tables; a 1200-char prefix may show only the natal chart. Open the full artifact and check each `export_format.sections`. See [`docs/EXPORT_AUDIT_GUIDE.md`](./docs/EXPORT_AUDIT_GUIDE.md).
+> **When auditing predictive / Shen Shu tools, don't read only the short preview.** Their Xingque-style body usually writes the natal chart first, then the return / progressed / annual / primary-direction / Shen Shu tables; a 1200-char prefix may show only the natal chart. Open the full artifact and check each `export_snapshot.sections` entry. See [`docs/EXPORT_AUDIT_GUIDE.md`](./docs/EXPORT_AUDIT_GUIDE.md).
 
 ## Is the output identical to Xingque?
 
 "Identical to Xingque" means two things:
 
-1. **Identical export structure** — business techniques generate a Xingque-style `export_snapshot.export_text`, parsed by `snapshot_parser` into `export_format`; the full self-check confirms no missing or unknown sections. The export contract (v14) mirrors the desktop app's aiExport v56 section-for-section.
+1. **Identical export structure** — business techniques generate a Xingque-style `export_snapshot.export_text`, parsed by `snapshot_parser` into `export_snapshot.sections`; the full self-check confirms no missing or unknown sections. The export contract (v15) mirrors the desktop app's aiExport v58 section-for-section.
 2. **Identical compute path** — the Skill forbids agents from hand-computing charts with shell / Python / web search. Qi Men / Tai Yi / Jin Kou and the Qi Men+Tai Yi in the Three Styles are computed exclusively by the ken backend; the 14 Shen Shu by the kentang engines on the chart service; horary / electional / Balbillus by the vendored Xingque frontend engines — all same-source. The per-response `technique_card` reports the measured compute source and flags any mismatch with the declaration.
 
 > Content fidelity was byte-checked: running Xingque's actual frontend builder on the same chart, the ages / aspects / promittors / significators are identical; only Persian Directed's hit dates differ by ≤1 day (moment's fractional-day truncation + JS↔Python float), which is astrologically negligible and documented (see [`horosa-skill/docs/v091-fidelity-spotcheck.md`](./horosa-skill/docs/v091-fidelity-spotcheck.md)). To prove a specific input matches the Xingque desktop UI field-for-field, put Xingque's golden snapshot for that input into fixtures and diff.
@@ -532,7 +532,7 @@ The full self-check covers: each tool is callable → returns a uniform envelope
 
 **Why isn't the release a pure cloud build?** Because the full runtime depends on locally maintained runtime sources and platform runtimes. Keeping the repo light is a goal, but the full runtime still needs reliable local packaging inputs — hence "light repo + heavy release + explicit verification".
 
-**Why keep stressing `export_snapshot` / `export_format`?** Because one of the project's core values is "let the AI stably consume Xingque output". Without this contract the AI can only read loose text, and retrieval / comparison / write-back / evaluation all become brittle.
+**Why keep stressing `export_snapshot`?** Because one of the project's core values is "let the AI stably consume Xingque output". Without this contract the AI can only read loose text, and retrieval / comparison / write-back / evaluation all become brittle.
 
 **Why keep both SQLite and JSON?** SQLite handles structured indexing and queries; JSON artifacts handle long-term archival — portable, diffable, reviewable.
 

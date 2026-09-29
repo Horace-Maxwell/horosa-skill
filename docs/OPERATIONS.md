@@ -14,103 +14,124 @@
 4. 运行 `uv run horosa-skill doctor`
 5. 运行 `uv run horosa-skill serve`
 
-## 发布前检查
+## 本机门禁（push 前）
 
-**打 tag 之前必须先跑这一条**（AGENTS §7 标为强制；它把跨树校验一并跑完，成功会重写
-`contracts/upstream_provenance.json`，那个 diff 就是「跨树核对真发生过」的 git 证据）：
+本机只认一条镜像 CI 的命令；「顺手跑几把守卫」不算数（v0.39.0 前夜 28 处单语 raise 就是这么漏到 CI 的）：
+
+```bash
+cd horosa-skill
+uv run python scripts/run_ci_gates.py        # 解析 ci.yml test job 的 24 个 `uv run …` 步骤，按 CI 形状（空 runtime 根 + 两个不可达 *_SERVER_ROOT）本机跑一遍
+(cd horosa-core-js && npm test)              # loadcheck（全量 import）+ selfcheck（值级金标）+ handcopy（手抄表审计）
+```
+
+它跳过的只有两步「runner 专用」的零安装 wheel 检查（push 后看 CI）。🔴 **别 `for g in scripts/verify_*.py` 裸跑**：
+`verify_runtime_live.py` 是会下载 730 MB runtime 并起服务的真机 lane，`verify_matrix_digests.py` 需要 publish job 的输入。
+
+## 发布前检查（preflight）
+
+**打 tag 之前必须先跑这一条**（AGENTS §7 强制；它把跨树校验一并跑完，成功会重写 `contracts/upstream_provenance.json`，
+那个 diff 就是「跨树核对真发生过」的 git 证据）：
 
 ```bash
 HOROSA_SOURCE_ROOT=<Horosa-Public checkout> uv run python scripts/preflight_release.py
 ```
 
-它内部已含 verify_upstream_sync（`--require-upstream`）/ verify_export_section_baseline
-（`--source upstream`）/ verify_vendor_runtime_sources / verify_export_contract_mirror /
-verify_docs_sync / verify_builder_parity。此外单独跑：
+它按顺序断言：git 身份 + `origin/main` 无滞留 → HEAD 的 ci.yml 结论为 success → **上游 pin 在上游公开远端上**（v0.40.0 起；
+先 `git -C <Horosa-Public> fetch origin`）→ `verify_upstream_sync --require-upstream --write-state` → `verify_export_section_baseline
+--source upstream` → `verify_vendor_runtime_sources` → `verify_export_contract_mirror` → `verify_technique_provenance` →
+`verify_docs_sync`（含四把文档制度守卫）→ `verify_builder_parity` → `verify_runtime_scripts`（启动器补丁在当前上游树上仍打得上）→
+`verify_no_stray_runtime_dirs`。任一红 = 不打 tag。
 
-- `uv run pytest -q`
-- `cd horosa-core-js && npm test`（loadcheck 全量 import 冒烟 + selfcheck golden）
-- `uv run python scripts/verify_readme_links.py`
-- `uv run python scripts/verify_server_json.py`
-- `uv run python scripts/build_knowledge_index.py --check`
-- `uv run python scripts/run_benchmark.py --skip-runtime`
+## 上游版本升级（re-vendor）Runbook
 
-## ken 技法验证（奇门 / 太乙 / 金口 / 三式合一）
-
-这些技法由 **ken 后端**（`kinqimen`/`kintaiyi`/`kinjinkou`）在 Python chart 服务上计算（`/qimen/pan`、
-`/taiyi/pan`、`/jinkou/pan`），`horosa-core-js` 只负责把 ken 响应重排成 `aiExport.js` 分段。验证需要 chart
-服务在线（`:8899`，以及 Java `:9999`）：
-
-1. 起后端：在 Horosa-Web 下 `HOROSA_SKIP_UI_BUILD=1 ./start_horosa_local.sh`（mac）/ `start_horosa_local.ps1`（Win）。
-2. 确认监听：`:9999`（Java）+ `:8899`（chart/ken）。
-3. `uv run pytest -q`：`tests/test_local_js_tools.py` 里 qimen/taiyi/jinkou/sanshiunited 为集成测试，后端不在时自动 skip；
-   `tongshefa` 始终执行。
-4. 验收标准：每个技法产出其 aiExport.js 分段（奇门：起盘信息/盘型/盘面要素/奇门演卦/八宫详解/九宫方盘；
-   太乙：起盘信息/太乙盘/十六宫标记；金口：起盘信息/金口诀速览/金口诀四位/四位神煞），且 export 契约干净
-   （无 missing/unknown 分段）。
-
-离线运行时必须打包 `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}` 及其依赖（bidict/numpy/kerykeion/ephem/
-pendulum）——见 [`OFFLINE_RUNTIME_RELEASES.md`](./OFFLINE_RUNTIME_RELEASES.md)。
-
-## Runtime Release
-
-Runtime release 采用“轻仓库 + 重 release 资产”模式。
-
-**v0.38.0 起的发布流（A5）**：维护机 `bash horosa-skill/scripts/publish_release.sh --draft --dispatch`（seed + .mcpb + wheel +
-SBOM 上 draft，触发 `release-runtime.yml`）→ 托管 runner 从 seed 派生 Windows 半、装双平台清单（钉 tag + size）、SHA256SUMS、
-SBOM、provenance attestation、`runtime-matrix.yml` 三台真机验证 → `python horosa-skill/scripts/sync_windows_release.py --check
---tag vX.Y.Z --draft` 报 `[OK]` → `gh workflow run release-runtime.yml -f version=X.Y.Z -f publish=true` 转公开 latest →
-`--check` 公开 latest。清单只在两平台齐了才上 release，「缺半」窗口不再存在。
-
-**v0.38.1 起的三道加固（B3）**：① `publish=true` 必须同时 `run_matrix=true`，publish job 不再接受被跳过的矩阵；翻公开前
-`scripts/verify_matrix_digests.py` 把三条 lane 装的归档 sha（lane-report `installed_archive_sha256`）与 draft 资产的 GitHub `digest`
-（退路 SHA256SUMS.txt）逐一比对——公开的字节 = 真机验过的字节。② release / dispatch / schedule 模式的矩阵通过**公开清单 URL** 安装
-（安装器自己的下载链，lane-report 带 `download.bytes`），翻公开后 publish job 再 dispatch 一次 release 模式矩阵。③ 每周矩阵 cron 在
-`23 4 * * 1`；`release-completeness.yml` 的 `weekly-matrix-kick` 在 6 天无矩阵运行时补一次。完整性守卫另用资产 digest 校 SHA256SUMS
-每一行、断言 `min_os`、解包已发布的 `.mcpb`。
-
-- 构建脚本（seed）：[`package_runtime_payload.sh`](./../horosa-skill/scripts/package_runtime_payload.sh)（经 `publish_release.sh`）；
-  Windows 半：[`build_runtime_release_windows.py --seed`](./../horosa-skill/scripts/build_runtime_release_windows.py)（流水线）；
-  旧的 [`build_runtime_release.sh`](./../horosa-skill/scripts/build_runtime_release.sh) 仍可本地双平台构建（vendor 模式后手）
-- 输出目录：`horosa-skill/dist/runtime/`
-- 必要资产：
-  - `horosa-runtime-darwin-arm64-v<version>.tar.gz`
-  - `horosa-runtime-win32-x64-v<version>.zip`
-  - `runtime-manifest.json`
-  - `SHA256SUMS.txt`
-  - `horosa-skill-sbom.json`
-  - `horosa_skill-<version>-py3-none-any.whl`（零安装资产：`uvx --from <URL> horosa-skill …` 免 git、免 PyPI；发布脚本步骤 [5/8]
-    `uv build --wheel` 产出，`release-completeness.yml` 断言在场并真跑 `--version`；v0.38.0 起）
-  - `horosa-skill-<version>.mcpb`（Claude Desktop 一键安装包；`horosa-skill/scripts/build_mcpb.sh`
-    做 validate → pack → sha256。`server.json` 的 mcpb package 直指这个 URL，缺了它注册表那条记录 404。
-    断言在 `release-completeness.yml`）
-
-### 没有 payload 变化的发布：重打，不重建
-
-一次发布若**不含 payload-affecting 变化**（引擎 / core-js / 启动器包内容都没动，改动全在 Python 包
-或安装侧补丁），仍然必须换掉资产文件名与**嵌入清单里的版本**
-（`verify_runtime_release.py::_assert_payload_manifest` 要求嵌入版本 == 发布清单版本）。
-
-Windows 半边尤其只能重打：它的构建输入（`vendor/runtime-source/runtime/windows`、`prepareruntime`）
-**只存在于 Windows 构建机上**，mac 上无从重建。
+上游星阙出新版时按此顺序，缺一步就会出现「同步了却没同步」（LESSONS v0.40.0 两大条的七个形态）：
 
 ```bash
-cd horosa-skill
-gh release download v<old> -p 'horosa-runtime-win32-x64-v<old>.zip'
-uv run python scripts/repack_release_assets.py \
-    --source horosa-runtime-win32-x64-v<old>.zip \
-    --out    horosa-runtime-win32-x64-v<new>.zip \
-    --version <new>
-uv run python scripts/verify_runtime_release.py --manifest <新清单> \
-    --windows-archive horosa-runtime-win32-x64-v<new>.zip
+export HOROSA_SOURCE_ROOT=/path/to/Horosa-Public                # 只读；唯一参照源
+git -C "$HOROSA_SOURCE_ROOT" status --porcelain                # 只允许非 vendored 路径的 WIP；vendored 子树必须干净
+PIN=$(python3 -c 'import json;print(json.load(open("horosa-skill/contracts/upstream_provenance.json"))["upstream_git_sha"])')
+git -C "$HOROSA_SOURCE_ROOT" branch --contains "$PIN"          # 为空 = 上游改写了历史：逐文件核旧内容是否保留，别信 diff 的文件数
+bash horosa-skill/scripts/sync_vendored_runtime_sources.sh      # 重灌 vendor/runtime-source（引擎 / jar / dist-file / 启动脚本）；末尾的 upstream-sync 红是预期
+cd horosa-skill; SRC="$HOROSA_SOURCE_ROOT/Horosa-Web/astrostudyui/src"
+uv run python scripts/revendor_core_js.py "$SRC" --from-manifest --check    # 工单：verbatim 会自动重渲染；curated / bespoke 要人工复核
+uv run python scripts/revendor_core_js.py "$SRC" --from-manifest            # 新上游 import 解析不到 → 在 vendor_manifest.json 加条目或 import_redirect，再跑
+#   bespoke / curated：对上游 diff 逐 hunk 落改动，然后 --restamp <vendor/rel.js>；只有确认 diff 与 skill 无关时才直接 restamp
+(cd horosa-core-js && npm test)
+uv run python scripts/verify_export_contract_mirror.py            # aiExport 版本变了：推进 MIRRORED_UPSTREAM_AIEXPORT_VERSION、回填新段
+uv run python scripts/verify_export_section_baseline.py --source upstream --require-upstream
+uv run python scripts/gen_knowledge_packs.py && uv run python scripts/gen_bazi_pithy_pack.py
+node scripts/build_hover_knowledge_bundle.mjs && uv run python scripts/build_knowledge_index.py
+uv run python scripts/gen_technique_provenance.py && uv run python scripts/gen_technique_provenance.py --check
+uv run python scripts/verify_upstream_sync.py --require-upstream --write-state   # 全绿才写 provenance
+uv run python scripts/run_ci_gates.py                                            # 再做下面的 live 验证
 ```
 
-重打只改 `runtime-payload/runtime-manifest.json` 的版本字段，其余条目**按条目原样搬运**——
-`.ps1` 的 UTF-8 BOM 必须原封不动（丢了 BOM → PowerShell 5.1 按 ANSI 解码 → 启动器不可用，
-v0.25.1 的坑）。守卫：`tests/test_repack_release_assets.py`。
+上游新增的**用户可见口径**（新设置 / 新段 / 缺省变化）逐条进 schema / guidance / 技法卡 / CHANGELOG（v3.11.2 的 `southMonth` 是样板）。
 
-🔴 **绝不要在资产不齐时打 tag。** `releases/latest/download/runtime-manifest.json` 是安装路径的
-唯一入口；一个没有资产的新 tag 会让 `latest` 指向它，于是**每一次新安装都 404**——
-这正是本仓「缺半」台账反复记的那个失败模式。
+## Live 验证 Runbook（发布前必做）
+
+**永远打本仓的 vendored 实例，不打默认端口 `:8899` / `:9999`**（那可能是维护者开着的星阙桌面端，且来源不可考）：
+
+```bash
+bash horosa-skill/scripts/start_vendored_instance.sh --with-java     # chart @ 8877 + java @ 9977；就绪判据 kentang prewarm … failed=0
+cd horosa-skill
+export HOROSA_CHART_SERVER_ROOT=http://127.0.0.1:8877 HOROSA_SERVER_ROOT=http://127.0.0.1:9977
+# HOROSA_RUNTIME_ROOT 必须是空目录：已装的旧载荷会顶替 JS 引擎与「契约够不够新」判定
+HOROSA_RUNTIME_ROOT=$(mktemp -d) HOROSA_SKILL_DATA_DIR=$(mktemp -d) uv run pytest -q -rs -p no:cacheprovider      # 0 failed；skip 只许环境类理由
+HOROSA_RUNTIME_ROOT=$(mktemp -d) HOROSA_SKILL_DATA_DIR=$(mktemp -d) uv run python scripts/section_harness.py      # N tools run; clean=N
+bash horosa-skill/scripts/stop_vendored_instance.sh                  # 只按 pidfile 停 8877/9977；绝不 pkill -f
+```
+
+ken 技法（奇门 / 太乙 / 金口 / 三式合一）由 chart 服务上的 ken 后端算（`/qimen/pan` `/taiyi/pan` `/jinkou/pan`），`horosa-core-js`
+只重排成 aiExport 段——它们的验收就在上面这套 live 里（每技法段齐、`missing_selected_sections == []`、`unknown_detected_sections == []`）。
+
+## Runtime Release Runbook（托管流水线）
+
+Runtime release 采用「轻仓库 + 重 release 资产」模式；v0.38.0 起全部在托管流水线上完成，维护机只做 darwin 种子。
+
+```bash
+# 0. 前提：main 已推送且 ci.yml 绿；上游 pin 已在上游公开远端；版本已 bump（python scripts/bump_version.py X.Y.Z → uv lock → run_ci_gates）
+HOROSA_SOURCE_ROOT=… uv run python scripts/preflight_release.py           # 全绿；若重写了 provenance 就提交它
+git tag vX.Y.Z && git push origin vX.Y.Z
+bash horosa-skill/scripts/publish_release.sh --draft --dispatch           # seed / .mcpb / wheel / SBOM 上 DRAFT；dispatch release-runtime.yml
+#    → 派生 Windows 半 → assemble（双平台清单钉 tag + size、SHA256SUMS、SBOM、attestation）→ runtime-matrix 三台真机（真下载 + 九客户端 + HTTP 握手）
+git add server.json && git commit -m "chore(release): pin mcpb sha" && git push   # mcpb sha 必须来自这一次 --draft 构建（打包不可复现）
+python horosa-skill/scripts/sync_windows_release.py --check --tag vX.Y.Z --draft   # 必须 [OK]；[GAP] 才是权威
+gh workflow run release-runtime.yml -f version=X.Y.Z -f publish=true -f run_matrix=true -f arm_nonblocking=false -f dry_run=false
+#    publish job：三条 lane 装的归档 sha == draft 资产 digest → --check → 翻 latest → dispatch completeness + release 模式矩阵
+python horosa-skill/scripts/sync_windows_release.py --check              # 公开 latest [OK]
+gh release view vX.Y.Z --json assets                                     # 两个归档 + manifest + SHA256SUMS + sbom + mcpb + whl
+```
+
+要点：`publish=true` 必须带 `run_matrix=true`（resolve 直接 fail）；tag 只在 release 仍是 draft 时允许重指；每周一 04:23Z 的 schedule
+矩阵拿 main 打公开 latest（lane pytest 预算按主机：Windows 2700 s / macOS 1500 s，pytest.log 流式落盘）；
+`release-completeness.yml` 每 6 小时校资产（SBOM / mcpb 解包 + sha / wheel 零安装 / 清单 min_os / digest vs SHA256SUMS）。
+Windows 半边由 `build_runtime_release_windows.py --seed` 在 windows-latest 上派生；`build_runtime_release.sh`（vendor 模式双平台本地构建）
+只是 v0.38.0 之前的历史路径，需要 Windows 侧构建输入，别在 mac 上照着跑。
+
+- 必要资产：`horosa-runtime-darwin-arm64-v<version>.tar.gz`、`horosa-runtime-win32-x64-v<version>.zip`、`runtime-manifest.json`、
+  `SHA256SUMS.txt`、`horosa-skill-sbom.json`、`horosa_skill-<version>-py3-none-any.whl`（零安装：`uvx --from <URL> horosa-skill …`）、
+  `horosa-skill-<version>.mcpb`（Claude Desktop 一键包；`server.json` 的 mcpb package 直指它）。
+
+### 矩阵 lane 红了怎么看
+
+```bash
+gh run list --workflow runtime-matrix.yml --limit 5                     # 或 release-runtime.yml；gh run list --commit 要完整 SHA
+gh run download <run-id> -n runtime-matrix-win32-x64 -D /tmp/lane      # darwin-arm64 | win32-x64 | win32-arm64
+python3 -c 'import json;r=json.load(open("/tmp/lane/lane-report.json"));print(r["ok"],r.get("installed_archive_sha256"),r.get("download"));[print(k,v.get("ok"),v.get("seconds"),v.get("problems")) for k,v in r["steps"].items()]'
+tail -40 /tmp/lane/pytest.log                                            # 超时也有尾巴（v0.40.0 起）
+```
+
+- 每周巡检（`runtime-matrix.yml` cron，周一 04:23Z）已有真机 schedule 运行史：2026-09-14、09-21 三 lane 全绿；09-28 两条 Windows lane 在
+  pytest 1500 s 处超时（预算已按主机改 nt 2700 + 流式 `pytest.log`，v0.40.0 的 draft 矩阵首次验证）。查：`gh run list --workflow runtime-matrix.yml --event schedule`。
+
+### 历史：没有 payload 变化的发布「重打，不重建」（≤ v0.37.0）
+
+v0.38.0 前 Windows 半边只能在 Windows 构建机上重打（`repack_release_assets.py`，`.ps1` 的 UTF-8 BOM 必须原封不动，守卫
+`tests/test_repack_release_assets.py`）。托管派生之后每次发布都从 darwin 种子重新派生 Windows 半，这条路径只在托管流水线不可用时作后手。
+
+🔴 **绝不要在资产不齐时打 tag。** `releases/latest/download/runtime-manifest.json` 是安装路径的唯一入口；一个没有资产的新 tag 会让
+`latest` 指向它，于是每一次新安装都 404——这正是「缺半」台账反复记的失败模式（托管流水线的 digest 闸 + `--check` 就是为它而设）。
 
 ## Provenance / Attestation
 
@@ -120,6 +141,22 @@ v0.38.0 起 attestation 由 `release-runtime.yml` 的 `assemble` job 对两份�
 --repo Horace-Maxwell/horosa-skill`。**≤ v0.37.0 的资产没有 attestation**——旧 `release.yml` 是 `runs-on: self-hosted`
 而本仓从未注册过 self-hosted runner（v0.9.2→v0.25.0 的 20 次 tag 触发全部排队 24h 后被取消，零 step 执行；
 实测 v0.26.0 的 manifest 查 attestation 404），该 workflow 已删除。对旧版本别照着跑 verify 再去怀疑资产。
+
+## 文档实时更新制度（v0.40.0 起，AGENTS.md §2 协议 v3）
+
+文档不是「有空再补」的东西：每次改动都由守卫裁定文档有没有跟上。
+
+| 事件 | 你要做的 | 谁在看 |
+| --- | --- | --- |
+| 踩坑 / 修 bug | LESSONS 原文 + 索引行；AGENTS 蒸馏；CHANGELOG；守卫 | `verify_docs_sync.py::check_lessons_distilled` |
+| 新增 / 删除一份指导性文档 | `docs/DOC_MAP.md` 加/删行 | `check_doc_map` |
+| 改 30 秒摘要（薄镜像内容） | 改 `horosa-skill/scripts/gen_agent_mirrors.py` 模板 → `python scripts/gen_agent_mirrors.py` | `check_agent_mirrors_generated` |
+| 任何第三方事实变了（客户端路径 / 超时 / 预算 / SDK / CI 运行时） | `horosa-skill/contracts/third_party_facts.json`：改 `fact`、更新 `verified_on`、修 `affects` 里的代码与文档 | `check_third_party_facts`（CI 警告）+ `.github/workflows/docs-currency.yml`（每周一严格，开 issue） |
+| 发版 | `python scripts/bump_version.py X.Y.Z` → `uv lock` → `verify_docs_sync.py` | `check_versions` / `bump_version.py --check` |
+| 多会话接力 | 复制 `docs/templates/HANDOFF_TEMPLATE.md` 为仓根 `HANDOFF-<主题>.local.md`（gitignored）；开始先读、结束前更新 | 人工（协议 v3 第 5 条） |
+
+复核一条第三方事实的最小动作：打开 `source_url` → 与 `fact` 逐句对 → 变了就改代码与文档、没变也把 `verified_on` 改成今天。
+账本里的 `max_age_days` 是 120：过了这个天数，CI 会在 docs-sync 步骤打 `::warning`，周一的 docs-currency 会把它开成 issue。
 
 ## 故障处理
 
@@ -136,3 +173,11 @@ v0.38.0 起 attestation 由 `release-runtime.yml` 的 `assemble` job 对两份�
 - 奇门/太乙/金口报 `transport.connection_error` 或返回空盘
   - chart 服务（`:8899`）未起或未挂载 ken。确认后端在线，且 `import kinqimen/kintaiyi/kinjinkou` 能成功
     （`vendor` 在 PYTHONPATH 上）。
+- Windows 上 `install` 报 `runtime.path_not_ascii` / doctor 报 `windows:runtime_root_not_ascii`
+  - runtime 根必须纯 ASCII：`HOROSA_RUNTIME_ROOT=C:\horosa` 后重装（随包 JDK 与 Swiss Ephemeris 按 ANSI 读路径；自动迁移未做）
+- 报告工具报 `report.output_path_not_allowed`
+  - `output_path` 是不可信输入：只能落在输出目录或 `HOROSA_REPORT_OUTPUT_ROOTS` 白名单根内（提示注入防线，不是 bug）
+- 工具返回 `runtime.starting`（带 `retry_after_seconds`）
+  - 后端仍在冷启动；按给定秒数重试。首启与 Windows ARM 仿真慢，`HOROSA_RUNTIME_START_TIMEOUT_SECONDS` 缺省已按仿真放大
+- Jev（`HOROSA_JEV*`，默认关）
+  - `horosa-skill jev status` 看开关 / scope / surfaces，`jev events` 看决策台账；`HOROSA_JEV_API_KEY` 永不打印、不进任何配置文件或报告

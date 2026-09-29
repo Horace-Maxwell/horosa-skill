@@ -2,8 +2,8 @@
 
 Why this exists as a *local* script instead of a CI job: the two cross-tree checks below need both
 the vendored trees and upstream HEAD in the same place, and upstream only lives on the maintainer's
-machine. The release workflow that used to own them (`.github/workflows/release.yml`) is
-`runs-on: self-hosted`, and the repo has **zero** self-hosted runners registered — every one of the
+machine. The release workflow that used to own them (`.github/workflows/release.yml`, since deleted) was
+`runs-on: self-hosted`, and the repo had **zero** self-hosted runners registered — every one of the
 20 tag-triggered runs from v0.9.2 through v0.25.0 sat queued for 24h and was auto-cancelled without
 executing a single step. So those gates were never real. Making them a documented, one-command local
 step is the honest version: it can actually run where the data is.
@@ -125,6 +125,32 @@ def ci_gate_failures(sha: str, *, runner=subprocess.run) -> list[str]:
     return [f"HEAD {sha[:7]} 的 ci.yml 结论是 {conclusion}——先修红再发（本机绿 ≠ CI 绿，Windows/macOS runner 各有一套形状）"]
 
 
+def upstream_pin_failures(source_root: Path) -> list[str]:
+    """v0.40.0：钉住的上游提交必须在上游的**公开远端**上（AGENTS §7）。
+
+    v3.11.2 那次上游把三个修复并进发布提交，skill 钉的 9b74714b 从此不在任何分支上；而只要上游维护机没推送，
+    公开发布的 provenance 就指向一个别人取不到的 commit。这里不 fetch（离线也能跑）：只看本地的远端跟踪分支，
+    所以「先 `git -C <上游> fetch origin`」是使用者的责任，失败提示里会写明。
+    """
+    provenance = PKG_ROOT / "contracts" / "upstream_provenance.json"
+    try:
+        pin = str(json.loads(provenance.read_text(encoding="utf-8")).get("upstream_git_sha") or "")
+    except (OSError, ValueError) as exc:
+        return [f"读不到 contracts/upstream_provenance.json 的 upstream_git_sha（{exc}）"]
+    if not pin:
+        return ["contracts/upstream_provenance.json 没有 upstream_git_sha——先跑 verify_upstream_sync.py --require-upstream --write-state"]
+    result = subprocess.run(["git", "-C", str(source_root), "branch", "-r", "--contains", pin],
+                            capture_output=True, text=True, timeout=60, check=False)
+    if result.returncode != 0:
+        return [f"上游仓 `git branch -r --contains {pin[:12]}` 失败：{(result.stderr or result.stdout).strip()[:200]}"]
+    branches = [b.strip() for b in result.stdout.splitlines() if b.strip()]
+    if not branches:
+        return [f"上游 pin {pin[:12]} 不在任何远端跟踪分支上——上游维护机还没推送，或上游改写了历史。"
+                " 先 `git -C <Horosa-Public> fetch origin` 再看；公开发布前 pin 必须在上游公开远端上（AGENTS §7）。"]
+    print(f"  ok — upstream pin {pin[:12]} is on {', '.join(branches[:3])}")
+    return []
+
+
 def git_gate_failures() -> list[str]:
     """发布前的两道 git 闸。此前它们只是 AGENTS §7 里的文字，本轮两条都真实咬过人。"""
     failures: list[str] = []
@@ -182,6 +208,13 @@ def main() -> int:
         failed.append("CI conclusion for HEAD")
     else:
         print("  ok — ci.yml is green on HEAD (or unverifiable: see warning)")
+
+    print("\n=== upstream pin is on the upstream public remote ===", flush=True)
+    pin_failures = upstream_pin_failures(Path(source_root).expanduser())
+    if pin_failures:
+        for item in pin_failures:
+            print(f"  ✗ {item}")
+        failed.append("upstream pin on public remote")
 
     for label, argv, blocking in GATES:
         print(f"\n=== {label} ===", flush=True)

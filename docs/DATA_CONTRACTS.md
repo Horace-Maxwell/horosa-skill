@@ -11,6 +11,8 @@
 - record schema：`horosa.skill.record.v1`
 - run manifest schema：`horosa.skill.run.manifest`
 - runtime manifest：见 [`RUNTIME_MANIFEST_SPEC.md`](./RUNTIME_MANIFEST_SPEC.md)
+- MCP `tools/list` 预算：全量 ≤ 256 KB / 精简 ≤ 30 KB（棘轮只降不升）+ **每工具 inputSchema ≤ 5000 B**（Codex 0.158 缺省
+  `tool_input_schema_max_bytes`，超出即静默剥说明）——`contracts/mcp_list_budget.json`，`verify_mcp_list_budget.py` 锁
 
 ## Tool Envelope
 

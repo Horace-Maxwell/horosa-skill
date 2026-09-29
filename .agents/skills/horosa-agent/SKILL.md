@@ -3,7 +3,7 @@ name: horosa-agent
 description: >-
   Use Horosa (星阙) local metaphysics MCP tools correctly — 110 techniques: Western astrology natal
   chart, solar return, progressions, primary directions, horary, electional 择日, birth-time
-  rectification, 八字 bazi, 紫微斗数 ziwei, 大六壬, 奇门遁甲 qimen, 太乙, 金口诀, 六爻, 梅花心易,
+  rectification, 八字 bazi, 紫微斗数 ziwei, 大六壬, 奇门遁甲 qimen, 太乙, 金口诀, 六爻, 梅易卦义,
   河洛理数, 铁板神数, 塔罗 tarot, 天文地占 geomancy, 老黄历, AstroCartoGraphy, celebrity birth data,
   Chinese esoteric history. Trigger on 起盘 排盘 起课 起卦 算命 推运 看盘 合盘 卜卦 择日 生时校正,
   fortune-telling, divination, chart casting, or any Horosa/星阙 reading. Never hand-calculate.

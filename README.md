@@ -12,7 +12,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-110-1d4ed8?style=for-the-badge" alt="110 tools" />
-  <img src="https://img.shields.io/badge/测试-1671_passed-16a34a?style=for-the-badge" alt="1671 passed" />
+  <img src="https://img.shields.io/badge/测试-1689_passed-16a34a?style=for-the-badge" alt="1689 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
 
@@ -37,7 +37,7 @@
 
 克隆仓库、安装一次离线 runtime，Claude Code / Claude Desktop / Codex / Open WebUI / OpenClaw 等客户端即可通过 **MCP** 或 **JSON-first CLI** 直接调用真实的星阙方法：西洋本命 / 推运 / 卜卦 / 择日，八字 / 紫微 / 大六壬 / 奇门 / 太乙 / 金口诀 / 三式合一，六爻 / 塔罗 / 天文地占 / 灵棋经 / 小六壬 / 飞宫小奇门 / 小成图 / 皇极轨策 / 神数正传，以及全 14 路神数。
 
-算法在本机运行，断网可用；每个技法返回统一 envelope 与星阙式导出结构，**并附一张确定性的技法依据卡**；每次调用自动落成可检索的本地记录。**与星阙桌面端共用同一套后端、逐值同源**（导出契约 v14 镜像桌面端 aiExport v56）。
+算法在本机运行，断网可用；每个技法返回统一 envelope 与星阙式导出结构，**并附一张确定性的技法依据卡**；每次调用自动落成可检索的本地记录。**与星阙桌面端共用同一套后端、逐值同源**（导出契约 v15 镜像桌面端 aiExport v58，星阙 v3.11.2）。
 
 ```
    🖥️  AI 客户端   Claude Code · Claude Desktop · Codex · Open WebUI · OpenClaw
@@ -178,9 +178,9 @@ uv run horosa-skill client check                         # 体检本机各客户
 | 🟠 **Claude Desktop** | stdio | `setup --client claude-desktop`，或安装 `.mcpb` 一键包 | 全量 120 | `.mcpb` 在每个 release 的资产里 |
 | 🟡 **Cursor** | stdio | `setup --client cursor`（或 `client config --format cursor` 拿官方 deep link 点击即装） | 精简 11 | Cursor 全局约 40 工具上限，**超出静默丢弃** |
 | 🔷 **VS Code (Copilot)** | stdio | `setup --client vscode`（写用户级 `mcp.json`；或 `client config --format vscode` 拿 `vscode:mcp/install` 链接） | 精简 11 | 跨所有 server 共 128 工具上限；仓内已带 `.vscode/mcp.json` |
-| 🔵 **Codex** | stdio | `setup --client codex`（原位合并 `~/.codex/config.toml`，含超时） | 精简 11 | 必须调高 `startup_timeout_sec`（默认 10 s）与 `tool_timeout_sec`（默认 60 s） |
+| 🔵 **Codex** | stdio | `setup --client codex`（原位合并 `~/.codex/config.toml`，含超时） | 精简 11 | 必须调高 `startup_timeout_sec`（默认 10 s）与 `tool_timeout_sec`（默认 60 s）；每工具 inputSchema ≤ 5000 B（0.158 缺省预算，本仓守卫） |
 | 🟤 **Gemini CLI** | stdio | `setup --client gemini` | 精简 11 | 工具名 ≤63 字符 + 严格 JSON Schema 2020-12（广告层已按它收敛） |
-| 🌊 **Windsurf → Devin Desktop** | stdio | `setup --client windsurf`（写 Devin CLI 的 `~/.config/devin/mcp_config.json`；已有旧 Cascade 配置则原位合并） | 精简 11 | 2026-09 起 Cascade 已移除，Devin Local 读 Devin CLI 的 MCP 文件；旧 Cascade 100 工具上限 |
+| 🌊 **Windsurf → Devin Desktop** | stdio | `setup --client windsurf`（CLI 键不变；写 Devin 的 MCP 文件：macOS/Linux `~/.config/devin/mcp_config.json`、Windows `%APPDATA%\devin\mcp_config.json`、项目级 `.devin/mcp_config.json`；已有旧 `~/.codeium/windsurf` Cascade 配置则原位合并） | 精简 11 | 2026-09 起 Cascade 已移除，Devin Local 读 Devin CLI 的 MCP 文件；旧 Cascade 100 工具上限 |
 | 🧱 **Cline** | stdio | `setup --client cline` | 精简 11 | 无工具搜索，全量面偏重 |
 | ⚡ **Zed** | stdio | `setup --client zed` | 精简 11 | 配置根键是 `context_servers` |
 | ⚪ **OpenClaw / mcporter** | stdio | `client openclaw-setup --workspace ~/.openclaw/workspace` | 全量 120 | — |
@@ -201,7 +201,7 @@ uv run horosa-skill client check                         # 体检本机各客户
 | Intel Mac | ❌ 不支持 | arm64 载荷**不能**在 Rosetta 下跑（内含 JDK/Python 是原生 arm64）；本轮明确不做 x86_64 载荷，走网关模式 |
 
 > [!TIP]
-> 上下文预算受限的客户端可设 `HOROSA_MCP_COMPACT=1`，只暴露 11 个门面工具（含按名直调的 `horosa_tool_run`，110 个技法仍可按名到达），澄清闸照常生效。或用 `HOROSA_TOOLSETS=astro,cn` 按域裁剪平铺面（合法域 astro/predict/chart/cn/shenshu/other/export/knowledge，别名 western/chinese/all/none；拼错的 token 会告警并忽略、全空回落全量；只要裁剪生效就注册 `horosa_tool_run` 直呼通道；门面工具恒在）。根目录 `server.json` 为 MCP Registry 元数据，普通用户无需手改。
+> 上下文预算受限的客户端可设 `HOROSA_MCP_COMPACT=1`，只暴露 11 个门面工具（含按名直调的 `horosa_tool_run`，110 个技法仍可按名到达），澄清闸照常生效。或用 `HOROSA_TOOLSETS=astro,cn` 按域裁剪平铺面（合法域 astro/predict/chart/cn/shenshu/other/export/knowledge，别名 western/chinese/reference/all/none；拼错的 token 会告警并忽略、全空回落全量；只要裁剪生效就注册 `horosa_tool_run` 直呼通道；门面工具恒在）。根目录 `server.json` 为 MCP Registry 元数据，普通用户无需手改。
 
 > [!TIP]
 > 配好了却在客户端里看不到 horosa？跑 `uv run horosa-skill client check` —— 它读的是各客户端**实际写着什么**，能指出未展开的占位符、缺失的 `--transport stdio`、搬走的目录、以及 Codex 的默认超时。
@@ -251,7 +251,7 @@ uv run horosa-skill client check                         # 体检本机各客户
 </details>
 
 <details>
-<summary>⏳ <b>西洋占星 · 推运 / 返照 / 时运 · 占星地图 / 名人库（28）</b></summary>
+<summary>⏳ <b>西洋占星 · 推运 / 返照 / 时运 · 占星地图 / 名人库（33）</b></summary>
 
 | 工具 ID | 名称 | 说明 |
 | --- | --- | --- |
@@ -291,7 +291,7 @@ uv run horosa-skill client check                         # 体检本机各客户
 </details>
 
 <details>
-<summary>🔯 <b>西洋占卜 · 卜卦 / 择日（5）</b></summary>
+<summary>🔯 <b>西洋占卜 · 卜卦 / 择日（13）</b></summary>
 
 | 工具 ID | 名称 | 说明 |
 | --- | --- | --- |
@@ -312,7 +312,7 @@ uv run horosa-skill client check                         # 体检本机各客户
 </details>
 
 <details>
-<summary>☯️ <b>中文术数主干 · 三式合一（10）</b></summary>
+<summary>☯️ <b>中文术数主干 · 三式合一（11）</b></summary>
 
 | 工具 ID | 名称 | 说明 |
 | --- | --- | --- |
@@ -518,22 +518,23 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 🧰 可调用工具 | 110 / 110 `ok=true` |
-| 🧪 工程测试 | **1671 / 1671 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 115 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 🧪 工程测试 | **1689 / 1689 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 115 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 🛡️ 未确认参数时强制追问 | 100 个技法工具触发 `must_ask_user=true` |
-| 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 107 个导出 technique；契约 v14 镜像桌面端 aiExport v56） |
+| 🔓 免闸直读 | 10 个注册表 / 知识 / 解析类工具不经澄清闸 |
+| 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 107 个导出 technique；契约 v15 镜像桌面端 aiExport v58） |
 | 🧾 技法依据卡 | 每个技法响应附 `data.technique_card`；算源声明与运行实测不符时显式亮警 |
 | 📚 知识库 | 31 域；技法操作手册 236 条逐条带出处（生成器幂等，随上游版本重收割） |
 | 🎯 HorosaBench | 106 条基准用例与工具注册表锁步 + 盘面事实忠实性评测（喂错盘 / 诱导复述判红的对抗用例全过） |
 | 🗄️ 本地 memory / report | 每次技法调用写 1 条本地 run 记录 + 1 份 JSON artifact |
 | 🔄 GitHub CI | Linux 单测 + JS golden 自检 + Windows OpenClaw smoke（**不覆盖跨树上游校验**——那两闸需要上游 checkout，只能在维护机跑 `preflight_release.py`） |
-| 📦 Release runtime | macOS (arm64) + Windows (x64) `v0.40.0` 已打包并校验——Windows 半从 darwin 种子在托管流水线派生、清单只在两半齐了才上线、三台真机（macOS / Windows x64 / Windows ARM）装起跑过；Windows ARM 自动走 x64 仿真；Intel Mac / Linux 安装时明确报不支持并指向网关模式 |
+| 📦 Release runtime | macOS (arm64) + Windows (x64) 随每个 release 打包并校验（本仓版本 `v0.40.0`；公开 latest 以 Releases 页为准）——Windows 半从 darwin 种子在托管流水线派生、清单只在两半齐了才上线、三台真机（macOS / Windows x64 / Windows ARM）装起跑过；Windows ARM 自动走 x64 仿真；Intel Mac / Linux 安装时明确报不支持并指向网关模式 |
 
 第一次 clone 后确认非空壳的最小验证：
 
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 1671 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 1689 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

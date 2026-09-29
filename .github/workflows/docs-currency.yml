@@ -1,0 +1,67 @@
+name: docs-currency
+
+# Weekly "are our third-party facts still current?" patrol (v0.40.0 doc-currency institution).
+# CI only WARNS about stale ledger entries (a calendar cannot be allowed to turn a push red); this job turns the
+# same check strict once a week and files / updates one issue listing every entry older than max_age_days, so the
+# re-verification work is visible instead of remembered. Re-verify = read the source, update the fact + verified_on.
+
+on:
+  schedule:
+    - cron: "37 5 * * 1" # Mondays 05:37 UTC (off the hour: GitHub delays/drops :00 slots)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  stale-facts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        working-directory: ./horosa-skill
+        run: uv sync --dev
+      - name: Strict staleness check over contracts/third_party_facts.json
+        id: stale
+        working-directory: ./horosa-skill
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          uv run python scripts/verify_docs_sync.py --strict-staleness --only third-party-facts 2>&1 | tee "${RUNNER_TEMP}/stale.txt"
+      - name: File or refresh the re-verification issue
+        if: steps.stale.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          TITLE="第三方事实待复核 / third-party facts due for re-verification"
+          BODY_FILE="${RUNNER_TEMP}/body.md"
+          {
+            echo "自动巡检（docs-currency.yml，每周一）：\`contracts/third_party_facts.json\` 里以下条目超过了 \`max_age_days\`。"
+            echo
+            echo "复核 = 重读 source_url → 事实变了就改 \`fact\` 并修 \`affects\` 里的代码/文档 → 更新 \`verified_on\`（AGENTS.md §2 协议 v3 第 5 条）。"
+            echo
+            echo '```'
+            cat "${RUNNER_TEMP}/stale.txt"
+            echo '```'
+            echo
+            echo "Run: https://github.com/${REPO}/actions/runs/${GITHUB_RUN_ID}"
+          } > "${BODY_FILE}"
+          EXISTING=$(gh issue list --repo "${REPO}" --state open --search "\"${TITLE}\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "${EXISTING}" ]; then
+            gh issue comment "${EXISTING}" --repo "${REPO}" --body-file "${BODY_FILE}"
+            echo "refreshed issue #${EXISTING}"
+          else
+            gh issue create --repo "${REPO}" --title "${TITLE}" --body-file "${BODY_FILE}" --label documentation || \
+            gh issue create --repo "${REPO}" --title "${TITLE}" --body-file "${BODY_FILE}"
+          fi
+      - name: Fail the job when facts are stale (visible in the Actions tab)
+        if: steps.stale.outcome == 'failure'
+        run: exit 1

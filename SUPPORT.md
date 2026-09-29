@@ -12,6 +12,11 @@ uv run horosa-skill selfcheck   # 活体验证：起一张盘 → 存 → 读回
 ```
 
 - Runtime not installed → `uv run horosa-skill install` (≈730MB download, resumable).
+- A tool answers `runtime.starting` with `retry_after_seconds` → the backend is still booting (slow on first start and under
+  Windows ARM emulation); retry after that many seconds — it is not an error to report.
+- Windows: the runtime root must be a pure-ASCII path — `install` refuses with `runtime.path_not_ascii` and `doctor` reports
+  `windows:runtime_root_not_ascii` → set `HOROSA_RUNTIME_ROOT=C:\horosa` and re-run `install`.
+- `uv run horosa-skill doctor --explain` prints one plain-language line + `next_action` per issue; paste that block into a report.
 - Backend cold start can take up to ~45s on the first call — retry once before reporting.
 - Behind a slow network? Set `HOROSA_RUNTIME_MIRROR=<mirror-prefix>` and re-run install.
 - github.com unreachable / offline machine → [docs/INSTALL_RESTRICTED_NETWORK.md](./docs/INSTALL_RESTRICTED_NETWORK.md)（镜像 / API 直链 / U 盘搬运）。
@@ -28,6 +33,7 @@ Open a GitHub issue and include / 请求应带信息:
 
 - what you tried to do（想做什么）
 - which command, tool, or client you used（哪条命令 / 哪个工具 / 哪个 AI 客户端）
+- which surface: CLI / MCP stdio / streamable-http, compact (`HOROSA_MCP_COMPACT=1`) or full（哪个面）
 - platform and runtime version（`uv run horosa-skill --version` + OS）
 - the full JSON output of `uv run horosa-skill doctor`（脱敏后）
 - relevant logs or screenshots（相关日志，注意脱敏个人生辰）

@@ -1,13 +1,14 @@
 # Horosa Skill — Agent Rules
 
-These rules are for Codex, Cursor, Claude (incl. Claude Code), OpenClaw, Open WebUI, and any agent
-connected to this repository or its MCP server.
+These rules are for every agent connected to this repository or its MCP server — Claude Code / Claude Desktop, Codex,
+Cursor, VS Code, Zed, Gemini CLI, Devin Desktop (ex-Windsurf), Cline, OpenClaw, Open WebUI … (the current client matrix
+lives in README「接入 AI 客户端」; do not re-list it here).
 
 **本文件只记「现行真相」（current truth），按主题组织。** 逐版本教训原文在
 [`docs/LESSONS.md`](./docs/LESSONS.md)（只增台账）；领域名词在 [`docs/GLOSSARY.md`](./docs/GLOSSARY.md)；
 Claude Code 的薄入口是根 [`CLAUDE.md`](./CLAUDE.md)（与本文 §0 路由一致）。
 
-目录：§0 定向路由 · §1 铁律 · §2 🔴问题记录协议 v2 · §3 AI 客户端行为（指针） · §4 计算模型 ·
+目录：§0 定向路由 · §1 铁律 · §2 🔴问题记录协议 v3 · §3 AI 客户端行为（指针） · §4 计算模型 ·
 §5 新增技法/re-vendor · §6 打包不变量 · §7 发布协议 · §8 本地验证与症状速查 · §9 Stability invariants ·
 §10 上游镜像注记 · §11 MIT 义务 · §12 经验台账
 
@@ -38,32 +39,46 @@ bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 enve
 2. **先问后调**：会改变结果的设置缺失时先问用户；运行时闸门 `agent_guidance.required` 会强制拦截（细则见 SKILL.md）。
 3. **vendor/参照唯一来源 = 开源仓 Horosa-Public**（`HOROSA_SOURCE_ROOT=/Users/horacedong/Desktop/Horosa-Public`，
    sync 脚本默认根不对，必须显式传）。上游星阙工作树**只读**；skill 仓的教训**永不**写进上游树。
-4. **🔴 问题记录协议 v2**（§2）：踩坑必记——台账原文 + 蒸馏规则 + CHANGELOG + 机器守卫，四件套同一 change 完成。
+4. **🔴 问题记录协议 v3**（§2）：踩坑必记——台账原文 + 蒸馏规则 + CHANGELOG + 机器守卫 + **文档实时更新**（DOC_MAP / 第三方事实账本 /
+   生成件），五件套同一 change 完成；文档是否跟上由 `verify_docs_sync.py` 裁定，不靠记忆。
 5. **发布不信绿灯**：release-completeness guard 绿 ≠ 完整（pin-forward 模式下它必绿）；
    `sync_windows_release.py --check` 的 `[GAP]` 才是权威（§7）。
-6. **文档同步交给 CI**：`scripts/verify_docs_sync.py` 强制版本号锁步 × 工具全覆盖 × 链接有效 ×
-   SKILL frontmatter × 无冲突标记。改文档/发版时跑它，别靠肉眼。
+6. **文档同步交给 CI**：`scripts/verify_docs_sync.py` 强制版本号锁步 × 工具/测试/知识计数真值 × 链接有效 × SKILL frontmatter ×
+   无冲突标记 × **DOC_MAP 全覆盖 × LESSONS 蒸馏 × 镜像=生成件 × 第三方事实账本**。改文档/发版时跑它，别靠肉眼；
+   每周一 `docs-currency.yml` 再把账本里超龄的事实开成 issue。
 
-## 2. 🔴 MANDATORY：问题记录协议 v2（every session, read this）
+## 2. 🔴 MANDATORY：问题记录协议 v3（every session, read this）
 
-**This is an enforced rule, not advice.** 任何 agent/维护者在本仓踩到问题、gotcha、意外行为、错误假设，
-或修掉一个 bug，必须在**同一个 change** 里完成四件事，工作才算完成——no exception is too small; if it bit
-you, it will bite the next agent：
+**This is an enforced rule, not advice.** 任何 agent/维护者在本仓踩到问题、gotcha、意外行为、错误假设，或修掉一个 bug，
+必须在**同一个 change** 里完成五件事，工作才算完成——no exception is too small; if it bit you, it will bite the next agent：
 
-1. **台账落原文**：在 [`docs/LESSONS.md`](./docs/LESSONS.md)「台账正文」最上方加一条
-   （`### vX.Y.Z / YYYY-MM — 主题`），写清 **symptom → root cause → fix/guard**，让下一个 agent 秒认。
-2. **蒸馏进现行规则**：把「今后应该怎么做」写进本文对应主题章节（§4–§10），**替换**被取代的旧文本——
-   本文不做叠层叙事（不留「以前 X 现在改成 Y」），历史归台账。教训影响 AI **客户端**调用方式
-   （payload 字段 / 闸门 / section 契约）时，同步 [`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md)
-   及其 `references/`。两文档永不互相矛盾。
-3. **CHANGELOG**：任何代码/行为/构建/CI 变化在 `CHANGELOG.md` `[Unreleased]` 加条目。
-4. **机器守卫**：凡脚本或 CI 能断言的，加代码级 guard（`verify_*` 检查 / CI step / schema 约束 /
-   `require_path`）——对可断言的问题，只写文档**不算完成**。
+1. **台账落原文**：在 [`docs/LESSONS.md`](./docs/LESSONS.md)「台账正文」最上方加一条（`### vX.Y.Z / YYYY-MM-DD — 主题`），
+   写清 **symptom → root cause → fix/guard**，并在文件顶部的索引表加一行。守卫 `check_lessons_distilled`：没有索引行即红。
+2. **蒸馏进现行规则**：把「今后应该怎么做」写进本文对应主题章节（§4–§10），**替换**被取代的旧文本——本文不做叠层叙事
+   （不留「以前 X 现在改成 Y」），历史归台账。守卫：最新三个版本的台账条目必须在本文出现其版本号。教训影响 AI **客户端**
+   调用方式（payload 字段 / 闸门 / section 契约）时，同步 [`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md)
+   及其 `references/`；影响 30 秒摘要时改 `horosa-skill/scripts/gen_agent_mirrors.py` 的模板并重跑（四份薄镜像是**生成件**，
+   守卫 `check_agent_mirrors_generated`：手改镜像即红）。两文档永不互相矛盾。
+3. **CHANGELOG**：任何代码/行为/构建/CI 变化在 `CHANGELOG.md` `[Unreleased]` 加条目（本地 gitignored 文件，随发布转正）。
+4. **机器守卫**：凡脚本或 CI 能断言的，加代码级 guard（`verify_*` 检查 / CI step / schema 约束 / `require_path`），并先用
+   负向对照证明它能抓——对可断言的问题，只写文档**不算完成**。
+5. **文档实时更新**（v0.40.0 起制度化，账本见 [`docs/DOC_MAP.md`](./docs/DOC_MAP.md)）：
+   - 新增 / 删除任何指导性文档 → DOC_MAP 加/删行（用途 · 更新触发 · 守卫）。守卫 `check_doc_map`。
+   - 改了任何**第三方事实**（客户端配置路径 / 超时 / 预算 / SDK API / CI 运行时 / 平台镜像）→ 更新
+     `horosa-skill/contracts/third_party_facts.json` 对应条目的 `fact` 与 `verified_on`，并同步 `affects` 里列出的代码与文档。
+     守卫 `check_third_party_facts`：来源必须是 https、日期合法、路径存在、每个必需主题有条目；超过 `max_age_days`（120 天）
+     的条目在 CI 是 `::warning`，每周一 `.github/workflows/docs-currency.yml` 以 `--strict-staleness` 跑一遍并开 / 刷新 issue。
+     **复核 = 重读 source_url，事实没变也要更新日期**——「上次核对是什么时候」本身就是事实。
+   - 数字（版本 / 工具 / 测试 / 知识 / 镜像份数）永远只写一次真值来源，其余由 `verify_docs_sync.py` 锁定：改数字先改真值。
+     版本号用 `horosa-skill/scripts/bump_version.py <new>`（16 个站点一处清单）。
+   - 会话交接：多会话 / 多模型接力的工作，用 [`docs/templates/HANDOFF_TEMPLATE.md`](./docs/templates/HANDOFF_TEMPLATE.md)
+     生成 `HANDOFF-<主题>.local.md`（gitignored），会话开始先读、结束前更新；本机 memory 的索引行同步。
 
-**Self-audit gate（每次发布 + 每次 "check for bugs"）**：重读本文各主题章节，确认每条仍成立、本轮所学已按
-四件套落盘。未记录的复发问题按回归对待。
-**Compaction gate（每次发布）**：本文任何章节若出现矛盾、被取代文本或明显超长（>~80 行），当场归并——
-叙事移去台账，留下规则。（v1 协议只增不减，曾把本文喂到 900+ 行；v2 用这道门保持可读。）
+**Self-audit gate（每次发布 + 每次 "check for bugs"）**：重读本文各主题章节，确认每条仍成立、本轮所学已按五件套落盘；
+跑 `scripts/verify_docs_sync.py`（含四把文档制度守卫）。未记录的复发问题按回归对待。
+**Compaction gate（每次发布）**：本文任何章节若出现矛盾或被取代文本，当场归并；任何 `##` 章节超过 ~120 行必须按主题分 `###` 子标题，
+叙事移去台账，只留规则（§9 已按六个主题分节）。
+（v1 协议只增不减，曾把本文喂到 900+ 行；v2 用这道门保持可读；v3 把「文档是否跟上」从记忆变成守卫。）
 **Scope rule**：所有教训只进本仓（`AGENTS.md` / `docs/LESSONS.md` / `SKILL.md`）；**never** 写进上游星阙树。
 
 ## 3. AI 客户端行为（属主 = SKILL.md，本节只留一行版）
@@ -152,7 +167,7 @@ runner 不打 ken、`data.route.local=true`、`compute_sources` 标 `local_route
   sanshiunited、extrareturns（Python 循环逐体拉 `/astroextra/planetreturn` 拼段）。**请求型 builder 一律归
   Python——JS 层不发 HTTP。**
 - **纯 headless JS**：tongshefa（无 ken 引擎）。headless 对齐：卦的五行取**京房本宫**
-  （`HEXAGRAM_PALACE_ELEM` 镜像星阙 `GuaConst.js Gua64[i].house.elem`），非上卦——32/64 卦两者不同；
+  （五行取京房本宫，来自 vendored 上游 `getHexElem`——`tools/tongshefa.js` 读 `model.leftElem/rightElem`，skill 不再自维护表），非上卦——32/64 卦两者不同；
   `hexElem(hex)` 用于 `left_elem`/`right_elem`/`main_relation`；aiExport 契约只有 本卦/六爻/潜藏/亲和 四段，
   星阙的 najia/六合/升降 UI 细节**故意**不进导出。
 - **Python port**：`engine/decennials.py`（十年大运，星阙 `utils/decennials.js` 的移植）——JS `Math.round`
@@ -194,7 +209,7 @@ v0.40.0 重跑即复发；现在 `build_hover_knowledge_bundle.mjs` 写相对上
 不等于段级对齐（v0.23.0 曾据此宣称整版对齐而实欠 180 段）。两个数字必须一起读。
 
 🔴 **版本恒等测不出新技法（v0.26.0）。** 上游明文纪律是「新技法键只加键、两把版本闸恒不动」
-（`aiExport.js:306`）——`tianxing`/`qimenzeri` 都在 v50 不变时到货。唯一可能的信号是
+（`aiExport.js` 的「只加键」注释）——`tianxing`/`qimenzeri` 都在 v50 不变时到货。唯一可能的信号是
 `verify_upstream_sync.py` 的 **check 1b 技法键集合差分**（对着 `contracts/upstream_provenance.json`）。
 两个方向基线不同：gained 并上「skill 已登记的键」（登记即已处理，检查自愈），lost 只对 recorded
 （skill 合法持有 `acg`/`astrodata`/`wangji` 等上游无对应键）。
@@ -293,7 +308,7 @@ extract 因 ECE 0.104 > 0.10 未晋升（精度 1.0、填错 0）——闸差一
 镜像），不是裸 dict——出参被 server+client 两侧校验，一旦声明 outputSchema，裸 dict 会被打成协议级
 ToolError，**澄清闸当场报废**。structured output 由 `HOROSA_OUTPUT_SCHEMA=1` **显式开启，默认关**
 （claude-code#25081：带 outputSchema 时工具列表静默消失，至今 stale-closed 未确认修复）；开启前须在真实
-客户端 `/mcp` 确认工具计数不掉。依赖钉 `mcp[cli]>=1.28.1,<2`（SDK v2 是破坏性重写，单独跟踪）；
+客户端 `/mcp` 确认工具计数不掉。依赖钉 `mcp[cli]>=1.29.0,<2`（锁 1.30.0，`pydantic>=2.11` 随之；SDK v2 是破坏性重写，单独跟踪）；
 不新增依赖 sampling/roots/logging（2026-07-28 规范起废弃，本仓未使用）。elicit 必须在任何副作用之前
 （v2 会重放整个工具函数）。
 
@@ -369,7 +384,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   （对上游 READ-ONLY）。**顶层共享件必须显式补**：上游把子逻辑上提为 vendor 根级单文件时（如
   v3.5.0 全年份域的 `Horosa-Web/vendor/kin_year_domain.py`，被 16 个 ken/神数 引擎懒 import），逐引擎
   目录枚举的 sync 清单会漏它 → 重同步后**域外（BC/远期）请求静默 500**。守卫 =
-  `verify_vendor_runtime_sources.py` 断言该文件 + vendored aiExport `AI_EXPORT_SETTINGS_VERSION >= 48`。
+  `verify_vendor_runtime_sources.py` 断言该文件 + vendored aiExport `AI_EXPORT_SETTINGS_VERSION` **等于** `MIRRORED_UPSTREAM_AIEXPORT_VERSION`（今 58）。
   raw vendor 起 chart 服务**不再 hard-fail**：`kentang/registry.py` 现用 `_LazyMountedService`
   （默认 `HOROSA_KENTANG_LAZY=1`），缺引擎只在首请求时响亮 500 + 下次重试；18 个 mount 引擎均在
   vendored 集内，无需再手打 graceful-kentang-mount 补丁（打包脚本仍对 staged 拷贝保留该分支以防旧树）。
@@ -384,7 +399,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 4. 导出契约：`exports/registry.py` preset **逐工具**对齐 builder 实际产段（权威清单 = `aiExport.js` 的
    `EXPORT_TECHNIQUES` + `EXPORT_PRESET_SECTIONS`，不是组件目录；照抄会多列 UI-only 死条目、漏列真产段）。
 5. **条件段双登记**：可能不出现的段**同时**进 preset（出现时不算 unknown）**和** `AI_EXPORT_OPTIONAL_SECTIONS`
-   （缺席时不算 missing）——单进 optional 不够（`exports/parser.py:130`）。段名不一致走
+   （缺席时不算 missing）——单进 optional 不够（`exports/parser.py` 的 optional 处理）。段名不一致走
    `map_legacy_section_title`，快照 byte-identical，不改 vendored builder。
    **按 spread 派生的键（择日十技法 `<x>zeri` = 基底段表 + 择时三段）optional 集必须与段表一起从
    基底继承**（`ZERI_DERIVED_KEYS` 一处定义、两处循环）——只继承段表会把基底的条件段升格成派生键的
@@ -442,7 +457,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
     = 整个事件循环被占住）。分段循环必须 `_progress_tick`（既报进度也是取消检查点）。
     `maxSpanDays` 是**上限**不是旋钮，只能调低。新增客户端格式时同批更新 README×2 的
     Works-with 矩阵（`verify_docs_sync.check_client_matrix` 锁），并在 `client check` 的
-    `_CLIENT_CONFIG_PATHS` 里登记它的配置文件位置。
+    `_client_config_locations` 的路径表里登记它的配置文件位置（三个 OS 各一行，Devin 那样的改名旧路径留作候选）。
 
 16. **新客户端 = 三件套（v0.38.1 B2）**：① `CLIENT_PLACEHOLDER_WHITELIST` 里登记它**真的会展开**的 `${…}` 变量（按它的官方文档，
     不按别家的），`client check` 只放行这一表；② `_client_config_locations` 的路径表（全局 + 项目级，按 `_project_root()` 而非裸 CWD；
@@ -482,7 +497,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   `npm ci --omit=dev`——新增此类测试时确认 CI 装齐了它的 node 依赖。
 - **Windows `PYTHONPATH` 必含 `Horosa-Web/vendor`**（`start_horosa_local.ps1`）让 `import kinqimen/…`
   解析；两个 builder 都 bundle `Horosa-Web/vendor/{kinqimen,kintaiyi,kinjinkou}`。
-- **graceful kentang mount**：打包脚本 patch **staged** `kentang/registry.py`，跳过未 bundle 的引擎
+- **graceful kentang mount（**仅旧树回退分支**；当前上游 registry 已自带）**：打包脚本 patch **staged** `kentang/registry.py`，跳过未 bundle 的引擎
   （`_load_service` 裸 `__import__`，缺引擎会 hard-fail 整个 chart 服务）。
 - **verifier 查真文件**：`verify_runtime_release.py` 的目录性要求（`swefiles/`、`astropy/`、`vendor/kin*/`）
   必须有严格位于其内的真实文件才 pass——空目录条目不算（手工 zip 曾以空 `swefiles/` 蒙混过关）。
@@ -507,7 +522,8 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 - **JDK 下载走 Adoptium API，禁 GitHub `releases/latest`**：temurin17-binaries 的 `releases/latest` 按
   tag 提交日期取，GA 刚打 tag 的窗口内平台二进制可能还没传完（jdk-17.0.20-ga 曾使 win/linux builder
   空手），`/releases` 列表顺序亦不可靠（老版本重发插队到最前）。下载 JDK 的 builder 一律用
-  `api.adoptium.net/v3/binary/latest/17/ga/<os>/x64/jdk/hotspot/normal/eclipse`（只指向已存在的最新 GA
+  `api.adoptium.net/v3/binary/latest/17/ga/<os>/x64/jdk/hotspot/normal/eclipse`（**仅 vendor 回退 / `--resolve-latest` 路径**；种子派生的正式路径
+  用 `contracts/runtime_toolchain.json` 钉死的 JDK URL + sha，构建里不解析 latest）（只指向已存在的最新 GA
   二进制，`curl -fL` 跟随 307）；guard = `verify_builder_parity.py` 断言 win/linux builder 含该 URL 且
   不再引用 `temurin17-binaries/releases/latest`。
 - **kinastro 只 vendor 引擎**：`vendor/kinastro` 带 `--exclude=tools`（26MB cities 地理库对干支神数无用）
@@ -569,17 +585,14 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 ## 7. 发布协议（release law）
 
-- **版本 bump 全覆盖**：发 vX.Y.Z 同一 commit bump 全部——`pyproject.toml`、
-  `src/horosa_skill/__init__.py.__version__`（CLI `--version`）、`server.json`（×2）、`CITATION.cff`、
-  **`horosa-core-js/package.json` 与 `package-lock.json`（含 `packages[""].version`，两处）**——
-  core-js 随每个 runtime payload 分发、自带版本号，此前完全在锁步检查之外，v0.26.0 就漏了 lock
-  （package.json 0.26.0 / lock 0.25.1，直到某次构建的 `npm install` 改写才暴露）——
-  `README.md`/`README_EN.md` 的「当前公开版本」行（工具数/测试数一并更新）。bump 后 `git grep -n "<OLD>"`
-  只应剩合法历史引用（CHANGELOG、台账、Windows 交接文档）。`docs/DATA_CONTRACTS.md` 的
-  `tool envelope: <ver>` 是**独立** schema 版本，不跟包版本连动。CI 守卫：`verify_docs_sync.py`。
-  ⚠️ **lock 只许字符串替换两处版本串，禁 `json.dumps` 整文件重写**——Python 默认把非 ASCII 转义成
-  `\uXXXX`，下次 `npm install` 又按 npm 规范写回真 UTF-8，凭空造一个与版本无关的噪音 diff
-  （v0.27.0 实踩）。
+- **版本 bump 只有一个入口**：`horosa-skill/scripts/bump_version.py <new>`（`SITES` 16 个站点：`pyproject.toml`、`__init__.py`、`uv.lock`、
+  `manifest.json`（mcpb）、`horosa-core-js/package.json` + `package-lock.json`（含 `packages[""].version`）、`contracts/upstream_provenance.json`、
+  `server.json`、`CITATION.cff`、`.claude-plugin/plugin.json`、`README.md`/`README_EN.md`/SKILL/`INSTALL_RESTRICTED_NETWORK` 的钉版本命令与
+  「当前版本」行、两份 manifest 示例 JSON）；`--check` 断言全部站点同版本，CI 由 `verify_docs_sync.check_versions` 锁步。
+  历史行（「自 vX 起」「as of vX」「Since vX」）不是站点，脚本按 `HISTORY_MARKERS` 跳过；bump 后 `git grep -n "<OLD>"` 只应剩合法历史引用
+  （CHANGELOG、台账、Windows 交接文档）。`docs/DATA_CONTRACTS.md` 的 `tool envelope: <ver>` 是**独立** schema 版本，不跟包版本连动。
+  ⚠️ 两个 lock 只许字符串替换本包的版本串（脚本就是这么做的），禁 `json.dumps` 整文件重写——Python 默认把非 ASCII 转义成 `\uXXXX`，
+  下次 `npm install` 又写回真 UTF-8，凭空造噪音 diff（v0.27.0 实踩）；core-js 的 lock 曾在锁步之外漏过一版（v0.26.0）。
 - **README 里的数字只有两种合法形态**：能从代码断言的（工具数、导出 technique 数）→ 当场在
   `verify_docs_sync.py` 里加断言；推不出又没测试覆盖的手测计数（如「memory / report N / N」）→ 改写成
   **不含数字的结构性陈述**。绝不留「只能靠人记得更新」的计数。测试数属第三类（要真跑才知道），故只守
@@ -598,6 +611,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   bump 6→7、v0.22.0 前 linux+scaffold 曾滞留 6，均为该检查射程外时的漏网）。
   改一个 builder / 加一个必需 artifact = 同一 change 里 grep 另一个 builder + 两份 REQUIRED_ENTRIES；
   **新增 manifest-stamping 脚本 = 同一 change 里进 `CONSTANT_STAMPERS`**。
+- **每个上游新子树都要有真文件标记**：三把验证器（vendor 源 `REQUIRED_PATHS` / 发布归档
+  `REQUIRED_ENTRIES` / parity `REQUIRED_ON_BOTH`）各点名一个该子树独有的文件（v3.5.1=`ifa_odu.json`、
+  v0.32.0=xuanshi sqlite、v3.10.0=`astrostudy/{qizheng,india}_election_scan.py`）——没有标记的子树，
+  陈旧树在版本恒等下照样绿（v0.34.0 补 Windows 半边时实测）。
 - **git 身份与 origin 滞留由 preflight 机器闸拦，不再靠人记**（v0.27.0+，两条都真实咬过）：
   `preflight_release.py` 现在先跑 `git_gate_failures()`——① `user.name`/`user.email` 未配或 email 是
   `…@主机名.local` 占位串（git 只在 commit 那刻才猜，作者串错了 GitHub 不归属任何账号）→ 阻断；
@@ -616,9 +633,9 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   `assemble`（`verify_runtime_python_lock --seed`、双平台清单钉 tag + size、`verify_runtime_release --expect-platforms`、
   SHA256SUMS、SBOM、上 draft、`attest-build-provenance`）→ `matrix`（`runtime-matrix.yml` 三台真机装→起→四引擎→
   ——三 lane **都阻断**，含 windows-11-arm（dry run #4 全绿后转阻断；`arm_nonblocking=true` 只是单次逃生口）→
-  `setup` 四客户端→live pytest→停）→ `publish`（`sync_windows_release.py --check --tag vX --draft` 必 `[OK]` →
+  `setup` 九客户端 + Claude Code user scope + HTTP 握手 + 挂着客户端不停 + restart/auto 端口→live pytest→停）→ `publish`（`sync_windows_release.py --check --tag vX --draft` 必 `[OK]` →
   `gh release edit --draft=false --latest` → `gh workflow run release-completeness.yml`（GITHUB_TOKEN 产生的 release 事件不触发任何
-  workflow，completeness / publish-pypi 都得由 publish job 显式 dispatch）→ 再 `--check` 公开 latest）。**清单只在两平台齐了才上到 release**——「缺半」
+  workflow，publish job 因此显式 dispatch `release-completeness.yml` 与 release 模式 `runtime-matrix.yml`；PyPI 暂缓，`publish-pypi.yml` 只手动 dispatch）→ 再 `--check` 公开 latest）。**清单只在两平台齐了才上到 release**——「缺半」
   窗口从根上消灭；`dry_run=true` 以公开资产为 seed 走完全程不上传（流水线自己的验收）。形状锁
   `tests/test_release_pipeline_shape.py`（只手动触发 / 不 `gh release create` / publish 必 needs matrix / draft 不带清单）。
 - **publish 必须与 matrix 同字节，且矩阵必须真下载（v0.38.1 R1/R5）。** `publish=true` 没有 `run_matrix=true` 在 resolve 直接 fail；
@@ -661,7 +678,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   `ci.yml` 里的同名 step 不带 `--require-upstream`，无上游 checkout 时自报 skipped。
   `release.yml` 曾挂在 `push: tags` 上号称覆盖这两闸，但仓库注册的 self-hosted runner 数是 **0**，
   v0.9.2→v0.25.0 的 **20 次 tag 触发全部排队 24h 后被自动 cancelled，零 step 执行**；该 workflow
-  现已改为**仅 `workflow_dispatch`**，不再制造「看起来在跑」的假覆盖。preflight 成功会重写
+  该 workflow 已删除（历史见台账）。preflight 成功会重写
   `contracts/upstream_provenance.json`（v0.26.0 起取代 vendor_sync_state.json，超集：另记上游 commit /
   应用版本 / preset 键集 / core-js 树摘要），**该 diff 就是跨树核对真发生过的 git 证据，随发布一起提交**。
   没跑 preflight 时，`verify_upstream_sync.py`（CI 里那次）会打 `::warning` 指出
@@ -678,30 +695,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
      钉回 v0.16.1）——guard 绿、install 不炸、sha 也对，Windows 用户静默拿到落后 N 版的 runtime。
      **检测**：`sync_windows_release.py --check` 找版本专属 `horosa-runtime-win32-x64-vX.Y.Z.zip`，
      缺 → `[GAP]`（**权威，无视 guard 颜色**）。
-- **修复一律**：Windows 构建机 `git pull` 到发布 commit → `python scripts/sync_windows_release.py`
-  （默认 build+verify 无副作用；`--upload` 才执行 构建→拉 darwin→双平台 manifest+SHA256SUMS→
-  `verify_runtime_release.py`→上传 全链；幂等，已同步则 no-op exit 0）。
-  **`git pull` 刷不到 vendor**：`vendor/runtime-source` 是 gitignored 本地构建输入，跳版必先从当前
-  Windows workspace 重灌，否则打出落后一轮同步的引擎而 `verify_runtime_release.py`（只查文件在不在）
-  照样绿。闸已内建：`sync_windows_release.py` 的 `preflight_vendor_sources()` 在 builder 之前跑
-  `verify_vendor_runtime_sources.py` **和** `verify_export_contract_mirror.py`，任一红即拒绝构建
-  （两把都要——上游「只加键纪律」下版本恒等在陈旧树上照样绿，只有 mirror 的逐键覆盖判得出）。
-  **且每个上游新子树都要有真文件标记**：三把验证器（vendor 源 `REQUIRED_PATHS` / 发布归档
-  `REQUIRED_ENTRIES` / parity `REQUIRED_ON_BOTH`）各点名一个该子树独有的文件（v3.5.1=`ifa_odu.json`、
-  v0.32.0=xuanshi sqlite、v3.10.0=`astrostudy/{qizheng,india}_election_scan.py`）——没有标记的子树，
-  陈旧树在版本恒等下照样绿（v0.34.0 补 Windows 半边时实测）。
-  **推论**：新增只挂 CI 的守卫时，先问这条路径 CI 走不走得到；Windows/离线 runtime 是 off-CI 产物，
-  必须在其本机入口脚本里复跑同一把守卫。发布通常已是 `latest`，补传即恢复
-  Windows install（无需 flip）。pin-forward 跨「引擎升级」版（如 v0.17 新增 `/location/acg` 占星地图、
-  `/astroextra/relative`、名人库 `astrodata-aa.sqlite.gz` ~50MB）时：先从**当前** Windows workspace 重灌
-  `vendor/runtime-source`，再 native-verify 新端点回真数据才打包。
-  **判源树新旧一律按内容，不看目录 mtime**：目录 mtime 只在直接子项增删时变，嵌套更新不冒泡——
-  v0.27.0 那次 workspace 的 `astropy/` 顶层 mtime 停在 07-03（比 08-13 的目标版旧一个月），内容却已是
-  上游 v3.9.1。判据用三样：① 本版新增的 `require_path`/`REQUIRED_ENTRIES` 目标文件在不在
-  （如 `vendor/kin_year_domain.py`、`geomancy/data/ifa_odu.json`）；② 新端点名 grep 得到
-  `astropy/websrv`（如 `electionscan`/`chart12`/`ephemeris`/`draconic`）；③ 构建后 native-verify 这些端点
-  回真数据。缺任一 → 源树真陈旧，先重同步 workspace。
-- **首诊命令**：`gh release view vX.Y.Z --json assets`（应见 darwin tar.gz + win32 zip +
+- **修复一律走托管流水线**：修 → 重新 `publish_release.sh --draft --dispatch` → 矩阵绿 + `--check --tag --draft [OK]` → `publish=true`。
+  Windows 构建机的 vendor 模式（`sync_windows_release.py --upload` 收尾、永不手翻 `--latest`）只在托管路径不可用时用；
+  「目录 mtime 判源树新旧」的坑与判据见台账 v0.27.0。
+- **首诊命令**：`gh release view vX.Y.Z --json assets`（应见七件：darwin tar.gz + win32 zip + wheel + `.mcpb` + `horosa-skill-sbom.json` +
   runtime-manifest.json + SHA256SUMS.txt）+ 确认 `releases/latest/download/runtime-manifest.json` 同时含
   `darwin-arm64` 与 `win32-x64`。
 - **托管 runner 可以起 runtime——但只在 `release-runtime.yml` / `runtime-matrix.yml`，绝不在逐 push 的 `ci.yml`**
@@ -767,7 +764,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
    载荷**，所以裸探针会把好路由误判成坏的，不可作判据。原因是裸探针没带 `ClientApp`/`Signature` 头：
    注册表是 jar 内 classpath 的 `data/rsakey.json`（`RequestHeaderInterceptor` 核 ClientApp + SHA-256 签名），
    **与 Mongo 无关**（v0.36.0 收尾实锤，本机 Mongo 里根本没有注册表）。`_call_remote` 带 app 注册归一化，经它
-   （或 `service.run_tool`）打才作数：实测本机 `doctor issues: []` + live 382 条通过，其中大量走 Java。
+   （或 `service.run_tool`）打才作数：判据 = `doctor issues: []` + 0-skip 全量 live（数字随版本变，见台账）。
    `doctor` 只探 `/common/time`、`selfcheck` 的 compute 步骤有 issue #14 的 chart 侧回退，
    两者仍不足以证明 Java 族技法可用——**要证就跑一条真 Java 技法**（如
    `service.run_tool("nongli_time", {...带 lat...})`）。
@@ -777,7 +774,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
    = **实例起法错**（裸 `java -jar` 用 jar 内写死的 `mongodb.host`），不是「本机无 Mongo」——按上游桌面模式起
    （`--mongodb.ip=127.0.0.1` + `HOROSA_DESKTOP_MONGO_OPTIONAL=1` + `HOROSA_MONGO_FALLBACK_DIR` + `needtranslog=false`，
    `start_vendored_instance.sh --with-java` 已内置）后无 Mongo/Redis 也全 Java 族真数据（v0.36.0 收尾实锤，
-   本 Mac 首次 0-skip 全量 live 678 绿）。`_java_result_code_hint` 已按此三分判别，
+   本 Mac 首次 0-skip 全量 live 全绿）。`_java_result_code_hint` 已按此三分判别，
    认不出的 9999 只给中性提示（v0.26.1+ 台账）。
    **缺 lat 的失败会「时好时坏」**：Java 农历结果按**年**缓存，任何一次带 lat 的请求会焐热该年，
    此后同年无 lat 请求全部成功——复现必须换**冷年份**（v0.26.1 已给五个占时工具加
@@ -855,39 +852,136 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 ## 9. Stability invariants（稳定性不变量 — don't regress these）
 
-A global stability pass hardened these; keep them true when you touch the relevant code:
+A global stability pass hardened these; keep them true when you touch the relevant code. 按六个主题分节——新增不变量放进对应小节，
+同主题已有条目**先合并再加**（Compaction gate，§2）：
 
-- **报告类工具的 `output_path` 是不可信输入（v0.40.0 审计 P0）。** MCP 工具的调用方是模型，`output_path` 可能来自提示注入。落盘一律经 `HorosaSkillService._report_output_path`：相对路径按输出目录解析，绝对路径必须在输出目录或 `HOROSA_REPORT_OUTPUT_ROOTS` 白名单根内，越界 `report.output_path_not_allowed` 且不写文件；三个报告工具 `destructiveHint=True`。新加任何「按调用方给的路径写文件」的工具，都走这个闸（守卫 `tests/test_report_output_path_guard.py`）。
+### 9.1 运行时生命周期 · 端口 · 身份（runtime lifecycle / ports / identity）
+
 - **起与停同源同环境（v0.38.0 A5 真机 lane 首跑抓到）。** 启动器与停脚本的 env 只从 `manager._launcher_env()` 出
   （`HOROSA_SERVER_PORT` / `HOROSA_CHART_PORT` / HOME 族）——上游停脚本按端口命名的 pid 文件找进程，端口不一致 =
   永远停不掉、状态卡 `stop_requested`。守卫 `test_stop_passes_the_same_ports_as_start_to_the_stop_script`；
   生命周期操作只在 stub 上绿过不算数，矩阵 lane 的 stop 步骤要求端口真释放。
-- **doctor 的每个码都要有人话，默认零外网请求（v0.38.0 B6）。** issue 码的真值 = `manager.DOCTOR_ISSUE_CODES`（`missing:*` 前缀族），
-  warning 码 = `cli._DOCTOR_WARNING_CODES`；`cli._DOCTOR_ADVICE` 逐码给 `user_summary` + `next_action`，报告 `advice[]` 与 `--explain`
-  都从它出。`tests/test_doctor_machine_conditions.py` 扫 `doctor()` 源码里新增的 `issues.append("…")` 字面量——不登记必红。
-  默认 `doctor` 只打 127.0.0.1（`trust_env=False`），`--probe-network` 才逐镜像 HEAD 清单 URL（负向对照：默认路径上
-  `_probe_manifest_url` 被替换成 raise 仍必须绿）。quarantine / 长路径余量 / 仿真进程都只**报**不改：修复命令交给用户。
-- **测试 spawn 系统工具用绝对路径；扫真实安装目录的解析器测试要把那层 monkeypatch 掉（v0.38.0 反向「本机绿≠CI绿」）。**
-  裸名 `subprocess.run(["bash"/"uv"…])` 在满负载 Windows 上偶发 `WinError 2`（PATH 搜索输给进程 churn + AV 扫描）——
-  导入期 `BASH = shutil.which("bash")` 解析一次绝对路径再 spawn，缺席即 `skip`（`tests/test_runtime_launcher_patch.py`）。
-  解析器测试（uvx/uv 的 `_windows_*_fallbacks()` 扫 `%LOCALAPPDATA%`/`%APPDATA%`/`%USERPROFILE%`）不 monkeypatch 掉那层，
-  测的就是「本机装没装该工具」——维护机装了就红、无 uvx 的 ubuntu `test` 才绿，**托管 windows-latest lane 同样会红**
-  （`test_resolve_uvx_command_derives_from_the_uv_sibling`）。这是横切教训 #7 的镜像；`scripts/run_ci_gates.py` 是把它
-  提前到本机的 meta-guard。**复验时一次只跑一套重活**（两套 pytest / lane 并发 = 自造 flake），且**别在本 session 的 MCP
-  server 还占着 `.venv\Scripts\horosa-skill.exe` 时跑真 `uv run` 用例**（`uv sync` 删不掉被占的 exe → `test_stdio_probe_*` 假红）。
-- **`setup` 的七步顺序与失败包是契约（v0.38.0 B4）。** `network_probe → install → config → doctor → client_check → stdio_probe →
-  next_steps`，顺序冻结在 `tests/test_cli_output_contract.py::test_setup_public_keys`；失败包只走 stderr、退出码 2，键
-  `step / code / config_untouched / backup_path / retry_command / steps`，**第 3 步之前失败保证 `config_untouched: true`**
-  （`tests/test_setup_command.py` 负向：装失败时预置配置逐字节相等）。`doctor` / `client check` 与 `setup` 永远共用
-  `_doctor_report` / `_client_check_report`（不许各写一套判定）；`stdio_probe` 必须真 spawn 配置里那条命令（进程内
-  `create_mcp_server` 证明不了客户端能起它）；`_build_client_config_payload` 只在 `uv` 启动器与 mcporter/openclaw 形态下解析
-  checkout——wheel 装出来的包旁边没有 pyproject.toml，uvx 形态必须能在没有 checkout 的机器上生成配置（ci.yml wheel 步骤锁）。
-- **平台策略只有一处真值、两处镜像，回退只许公告着做（v0.38.0 A4）。** 真值 = `contracts/release_platforms.json`；镜像 =
-  `manager.SUPPORTED_PAYLOAD_PLATFORMS` / `PLATFORM_FALLBACKS`（wheel 不带 contracts）与 README×2 平台表，各有锁步测试。
-  `install()` 走回退必须返回 `platform_fallback{requested, installed, mode}` + `warnings[runtime.platform_emulated]`（含版本短路那条
-  返回），doctor 必须给 `host_platform / payload_platform / emulated / arch`；**darwin-x64 永不回退到 arm64**（Rosetta 反向不成立，
-  `test_intel_mac_is_refused_even_when_an_arm64_payload_exists` 是负向对照）；平台键看芯片不看宿主 Python（Rosetta 下的 x86_64
-  Python 仍拿 arm64 载荷）；载荷或清单声明的 `min_os` 必须在下载前、解压后各查一次（`runtime.install_os_too_old`）。
+- **启动是异步、幂等、跨进程互斥的。** `start_local_services(wait_seconds=)` 最多阻塞预算秒，
+  超出即 `{"starting": True, retry_after_seconds}` → 工具层的 `runtime.starting`。跨进程锁
+  （`runtime/pidlock.py`）的持有者写成**启动器自己的 pid**，锁的寿命恰等于一次启动；加锁后的每一条
+  出口都在 `finally` 里释放（不释放会让一个长命的 serve 把后续所有启动永久挡死）。
+- **绝不采用身份不符的服务栈，也绝不终止不属于自己的进程。** 「HTTP 200」不是身份证明：
+  归属判定走 `runtime/identity.py` 的三级证据（`/horosaIdentity` 的 app 标记 + 启动 nonce → 监听
+  进程命令行含 runtime 根 → 我方注册表 pid 存活）。`ours` 才用它，**强证据**才允许停/重启它
+  （只有 app 标记 = 可能是用户自己开着的桌面端）。查不到持有者 ≠ 端口空着。
+  握手已下结论的 foreign 分支（nonce 不符 / 别的 app）同样要**点名**持有者（`identity._name_holders_cheaply`：Windows 只走 ctypes 映像，
+  不起 PowerShell），报错措辞按证据**实际证明了什么**来——星阙标记说「另一份星阙实例」，只有什么都没证明时才说「查不出身份」
+  （`_doctor_summary`；v0.39.0 台账）。
+  停脚本按 runtime 根路径限定 kill 范围，永不按进程名杀；管理器里没有任何一条路径可以终止不是我方登记的 pid。
+- **状态文件原子写。** `runtime-state.json` 走 tmp + `os.replace`（`runtime/registry.py`）；
+  一次 `write_text` 会让并发读者读到半个 JSON → 判成「没在跑」→ 再起一次。整份覆盖时保留
+  别的进程写进来的长寿字段（`launch_nonce` / `clients` / `launcher` / `service_pids` / `ports`）。
+- **pid 存活判定在 Windows 上走 ctypes `OpenProcess`，永远不调 `os.kill`。** Windows 的 `os.kill`
+  没有信号 0 语义 —— 对任何非 CTRL 信号它直接 `TerminateProcess`，也就是会把目标**杀掉**而不是探测。
+- **就绪分后端，重启有冷却。** Java 挂/chart 健康时，`start_local_services` 在冷却期
+  （`runtime_java_retry_cooldown_seconds`，默认 120s）内返回 `{degraded, skipped_restart}`，**绝不** stop 健康的
+  chart 服务；`_call_remote` 对 Java 端点冷却期内快速失败 `runtime.java_backend_unavailable`，chart 端点不受
+  影响。新增「探针失败就重启」的路径前先读管理器的降级状态（v0.36.0）。
+- **Java 实例只按上游桌面模式起，「live 需 Mongo」不再是合法理由。** jar 内 `conf/properties/cache/*.properties`
+  把 Mongo 主机写死为 `mongodb.host`；裸 `java -jar` = 每个碰库请求 30s 超时后 9999，被当成环境限制记了十个版本。
+  起法四件（`--mongodb.ip=127.0.0.1`、`HOROSA_DESKTOP_MONGO_OPTIONAL=1`、`HOROSA_MONGO_FALLBACK_DIR`、
+  `needtranslog=false`）由 `start_vendored_instance.sh --with-java` 内置、`test_guard_wiring` 守；app 注册在 jar 内
+  `data/rsakey.json`，与 Mongo 无关。发版前的 live 判据从此是 **0-skip 全量**（数字见台账），
+  `MONGO_PORT=<空端口>` 可模拟干净机器（走文件回退）。
+- **install / upgrade 换目录前必停自己的服务，且永不停陌生人的（v0.38.1 R3）。** `install()` 在 `replace(previous)` 之前先
+  `endpoint_identities`：全不可达直接换；全部 `started_by_us` → `stop_local_services(ignore_clients=True)` → 换 → `start_local_services()`；
+  可达但不是我们起的 → 先问 `identity.holders_outside_runtime_root(port, runtime_root)`：监听者**全部**证明跑在本根之外
+  （映像 / 命令行都不在本根下 —— 用户的桌面端、另一个 runtime root）→ 换目录动不到它们的文件，**放行**、不停任何进程、
+  记 `runtime.install_ports_held_elsewhere`（`held_by` 点名；next_action = 关那份实例或给本 runtime 换端口再 start）；
+  任一证明不了（查不到 / 住在本根下 / 点不出名）→ `runtime.install_refused_running_foreign`，`--force` 不覆盖
+  （**永远不把「查不到」当「在别处」**）。原因：旧清单钉着默认端口 + 桌面端占着它们是最常见形状，原来的
+  拒绝把用户卡死，且提示的 `HOROSA_PORTS=auto` 对它无效（闸探的是旧清单的端口）——见台账 v0.38.1 / 2026-09-15。
+  `tests/test_runtime_manager.py` 锁顺序 `["stop", "swap", "start"]`，并锁「别处 → 放行不 stop」与「部分证明不了 → 仍拒」。
+- **`runtime stop` 不在别的 MCP 客户端脚下抽走服务（v0.38.1 R14）。** 登记表里仍存活的客户端 → `runtime.stop_refused_clients_attached`；
+  `--force` 才停；`restart` / 升级换目录 / `uninstall` 走 `ignore_clients=True`（服务马上回来或本来就要删）。死掉的登记不拦。
+- **stdio server 在客户端关掉 stdin 后 15 s 内退出（v0.38.1 发布后）。** 退出路径上不留非 daemon 线程、不阻塞（runtime 预热线程是 daemon）；
+  孤儿 `serve` 会一直登记为 attached client，让 `runtime stop` / 升级拒绝，还会拖住调用方的 stderr 管道（TS SDK 以 inherit 起 server）。
+  `tests/test_stdio_server_exit.py`（真子进程、不带 `--skip-runtime-start`、真调一次工具）在 Linux 与 Windows CI 上都跑。
+- **Windows 上 runtime 根必须纯 ASCII，交给 java.exe 的参数一律纯 ASCII（v0.38.1）。** 随包 JDK 17 的 java.exe 用 `GetModuleFileNameA`
+  找 java.dll、`GetCommandLineA` 读参数；Swiss Ephemeris（pyswisseph → C `fopen`）拿 UTF-8 路径、Windows 按 ANSI 解——「代码页能表示」
+  也不够（「horosa lane é」下 Java 起来了，星历仍打不开）。所以 ① install 在下载前用 `windows_runtime_path_ok`（纯 ASCII）拒绝
+  （`runtime.path_not_ascii`），doctor 报 `windows:runtime_root_not_ascii`；② 启动器 jar 参数是相对 `$Root` 的字面量 `$JarArg`
+  （`verify_runtime_scripts.audit_windows_launcher` 守）。自动迁移到 ASCII 位置**没做**（ACL / 抢注面，待定）。真机证明：runtime-matrix
+  Windows lane 的 `non_ascii_root_refusal` 步骤 + 「horosa lane runtime」根；三轮失败证据见 LESSONS v0.38.1 ⑥。
+- **子进程文本一律显式解码（v0.38.1 A1/A19）。** `subprocess.run(..., text=True)` 必带 `encoding=`（UTF-8，或 tasklist 的 `oem`）
+  + `errors="replace"`；归属证据优先走不经代码页的 ctypes 映像路径；PowerShell 只允许搬 base64 字节。`tests/test_subprocess_encoding.py`
+  AST 扫描基线 0。
+- **Runtime manager:** close file handles before `shutil.rmtree` on the Windows start path; a missing
+  local `--archive` raises `RuntimeError`（which `install` catches）, not a raw tarfile error.
+
+### 9.2 MCP 面 · schema · 错误信封（MCP surface / schema / errors）
+
+- **MCP schema：一个键要么在 schema 上要么不存在；签名求全、广告求准；每工具 inputSchema ≤ 5000 B。**
+  ① MCP 扁平面按广告签名丢未声明的顶层键（FastMCP arg_model），
+  CLI/tool_run/dispatch 不丢——服务读、文档写、样例带而 schema 没声明的键，MCP 用户会静默拿到另一张盘
+  （PR #17 性别、神数五支性别/地点、`showPdBounds`……共 63 例）。守卫 `tests/test_mcp_flat_surface_keys.py`
+  （样例载荷原始键 ⊆ 广告签名）；反向由 `verify_schema_knob_wiring` 管。枚举参数的描述与表锁步
+  （`test_house_system_docs.py`：hsys 1=Alcabitus、3=Placidus）。
+  ② `__signature__`（校验层）永远声明全模型字段——瘦它 = 静默丢键；
+  `tools/list` 的瘦身只在注册后重写 `Tool.parameters`（`surfaces/mcp_schema.py`：域核心 + 推运目标 + 工具自有
+  字段 + 闸门三键 + `request`）。硬预算全量 ≤256 KB / 精简 ≤30 KB（`verify_mcp_list_budget.py` 棘轮只降不升）；
+  加字段/加描述前先量。enum 只进广告层且与表锁步（v0.36.0）。
+  ③ Codex 0.158 的 `tool_input_schema_max_bytes` 缺省值，超出即静默剥说明。`verify_mcp_list_budget.py`
+  对全量 / 精简两面逐工具硬顶（今日最大 3843 B）；tools/list 总量棘轮照旧。
+- **有档位的旋钮按枚举声明；隐藏字段的两种声明法取并集（v0.40.0）。** 七政 `doubingSu28` 曾声明成 bool：`True` 被后端读成 1（斗柄定房法），
+  上游缺省 2，2–8 七档根本传不进——有档位就 `Literal`/enum + 上游缺省，描述与表锁步。长尾旋钮用模型级 `ADVERTISE_HIDDEN` 或字段级
+  `x-horosa-hidden` 声明不广告（校验照收、tools/list 零字节），`mcp_schema` 的 `unadvertised` 必须是**两者并集**（git 自动合并曾让后一行覆盖
+  前一行，症状只是预算缩了 564 B；`tests/test_mcp_hidden_fields.py` 守）；家族共享的隐藏旋钮放 mixin（`_ChartDayBoundaryKnobs`），
+  不进 `BirthInput`（广告层按「不在 BirthInput 里」判子类自有字段，塞进去 = 同名键被静默踢出 tools/list）。
+- **MCP HTTP 客户端的头经 httpx.AsyncClient（mcp ≥ 1.30 API；v0.40.0）。** 测试与 lane 用 `streamable_http_client(url, http_client=create_mcp_http_client(headers=…))`，
+  留 `streamablehttp_client(url, headers=…)` 退路给 1.29；`pydantic>=2.11` 下限随 1.30。
+- **能算 ≠ 能被找到。** 新技法必须同时带：`engine/synonyms.py` 一条（键集与 TOOL_DEFINITIONS 锁步）、
+  `engine/router.py` 一条规则（或进 `ROUTING_EXEMPT`）、`contracts/router_corpus.json` 至少一句语料
+  （`verify_router_corpus.py` 的 `min_pass` 只升不降）。择日搜索族词面含基底技法名，基底规则一律
+  `and not is_zeri`。`HOROSA_TOOLSETS` 未知 token 告警丢弃、全空回落全量，过滤生效即注册 `horosa_tool_run`。
+- **工具自有的结果敏感项，闸门必须点名问到。** 族策略（ASTRO_BIRTH/SHENSHU/PREDICTIVE）只是底座；有自有旋钮
+  的工具用工厂出专属策略（`_progression_target_policy`）。闸问题要么带 `options`（可枚举者并行 `values`，
+  表单答案只写回这些值），要么字段进 `FREE_TEXT_GATE_FIELDS`；`tests/test_gate_policies.py` 守。
+  加旋钮 = 加问题 + `sensitive_settings.json` 自测 + live 翻转测试（v0.36.0）。
+- **闸门问什么，以 live「改参数结果必变」为准，不以代码转发了什么为准。** 演禽（xianqin）转发了 lat/lon，引擎却不读
+  （上海↔乌鲁木齐逐字节相同）——问地点就是假闸门。给工具挂结果敏感项前先翻转一次；不敏感的项用**反向** live
+  断言钉住（`test_xianqin_ignores_place_so_its_gate_must_not_ask_for_it`），上游哪天读了它会先红（v0.36.0 收尾）。
+- **错误码是接口。** 每个 `code="…"` 必须经 `errors.classify_code` 落到恢复规则（精确表 → 基础设施前缀 →
+  `*_missing_*`/`*invalid*`（修入参）/`*_failed`/`*_unavailable`（重试再体检）后缀），`verify_error_recovery.py`
+  硬红；文案用 `errors.bilingual(zh, en)`，非双语计数只降不升。service 与 MCP 两条错误路径都走
+  `recovery_for`（agent_recovery.kind/prompt_to_user/next_action + details.hint）（v0.36.0）。
+- **错误信封的顶层镜像三键在所有错误路径上一致。** `ToolEnvelope` / `DispatchEnvelope` 的
+  `code`/`message`/`details` 是 `error.*` 的向后兼容镜像（给按顶层键读的 CLI / 旧 agent 提示词）。
+  MCP 面构造的错误（闸门、pydantic 校验）与 `service.run_tool` / `dispatch` 自己构造的错误
+  （`runtime.*` / `transport.*` / `tool.ken_compute_failed` / `tool.internal_error`）**两条路径都要填**——
+  只填一边时，调用方恰恰在最常见的失败上读到 `None`。守卫：
+  `test_mcp_contract.py::test_error_paths_return_a_conformant_envelope` 同时覆盖闸门与闸门之后的失败。
+- **`run_tool` always returns a `ToolEnvelope`, never lets an unexpected exception escape.** Tool
+  execution + snapshot/summary/export post-processing run inside a try that catches `HorosaSkillError`
+  **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`. Only invalid-payload
+  `ValidationError`（raised *before* that try）intentionally surfaces as `tool.invalid_payload`. Do not
+  add a tool/post-processing path that can raise out of `run_tool` — it would crash the CLI, break the
+  MCP session, or abort a whole `dispatch`.
+- **Surfaces never dump a traceback.** CLI file reads（`--ai-report-file` / `--ai-answer-file`）raise
+  clean `typer.BadParameter`; the MCP `horosa_report_*` handlers wrap unexpected renderer/IO errors via
+  `_mcp_internal_error_payload`; subprocess calls carry timeouts（incl. `openclaw-check --full`, 900s）.
+- **`input_normalization` degrades, never crashes.** The date/time regexes are shape-only（they accept
+  month `13`, day `45`）, so anything building a `datetime` from them must tolerate `ValueError`（see
+  `_combine_date_time`）. IANA-zone→offset conversion uses the *chart date*, not `now()`. `Z`/`UTC`/
+  `GMT` → `+00:00`. Compact coords like `121e28` parse as 121°28′（NOT float scientific notation）.
+- **报告类工具的 `output_path` 是不可信输入（v0.40.0 审计 P0）。** MCP 工具的调用方是模型，`output_path` 可能来自提示注入。落盘一律经 `HorosaSkillService._report_output_path`：相对路径按输出目录解析，绝对路径必须在输出目录或 `HOROSA_REPORT_OUTPUT_ROOTS` 白名单根内，越界 `report.output_path_not_allowed` 且不写文件；三个报告工具 `destructiveHint=True`。新加任何「按调用方给的路径写文件」的工具，都走这个闸（守卫 `tests/test_report_output_path_guard.py`）。
+- **Report rendering is atomic.** `render_report` renders to a temp sibling then `os.replace()`s —
+  never write a report format directly to its final `output_path`（a mid-render failure would corrupt it）.
+- **`js_client` keeps the transport contract.** Every Node failure becomes a `ToolTransportError`:
+  missing/unstartable Node → `js_engine.node_unavailable`, timeout → `js_engine.timeout`. The
+  `subprocess.run` call is wrapped — don't let a raw `OSError`/`TimeoutExpired` escape. On the JS side,
+  `bin/cli.mjs` always prints a JSON `{ok:...}` envelope to stdout（never a bare stack trace）and
+  coerces a `null`/scalar parsed payload to `{}` so tools don't null-deref on `payload.field`.
+- **Tracing is best-effort.** `TraceRecorder._write_event` swallows local-write failures（like
+  `_emit_otlp`）; a trace write must never crash or mask the traced operation.
+
+### 9.3 导出 · 快照 · 引擎移植（export / snapshot / vendored engines）
+
 - **导出段只存 body，引擎对象只在 `data.<key>` 存一份。** `export_snapshot.sections[*]` 形状固定为
   `{index, raw_title, title, included, body}`（envelope 0.8.0）；`_pick_section_data` 对未识别段返回
   `None`，绝不兜底整份 `response_data`（v0.36.0：qimen 5 MB / india_chart 101 MB 的来历）。守卫：
@@ -903,47 +997,11 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **声明旋钮 = 交付翻转金标。** 每个新 schema 字段在 `selfcheck.mjs` 至少一条「改它结果必变」+ 一条「写错
   键名结果不变」的负向对照。`js_boundary_contracts` 的子串 oracle 对「同模块另一函数恰有同名参数」的死键
   失明（v0.36.0 heluo `step2`），只当第一道网；生成器已认默认导入与 `opts: local` 嵌套，regen 后仍要翻转验证。
-- **启动是异步、幂等、跨进程互斥的。** `start_local_services(wait_seconds=)` 最多阻塞预算秒，
-  超出即 `{"starting": True, retry_after_seconds}` → 工具层的 `runtime.starting`。跨进程锁
-  （`runtime/pidlock.py`）的持有者写成**启动器自己的 pid**，锁的寿命恰等于一次启动；加锁后的每一条
-  出口都在 `finally` 里释放（不释放会让一个长命的 serve 把后续所有启动永久挡死）。
-- **绝不采用身份不符的服务栈，也绝不终止不属于自己的进程。** 「HTTP 200」不是身份证明：
-  归属判定走 `runtime/identity.py` 的三级证据（`/horosaIdentity` 的 app 标记 + 启动 nonce → 监听
-  进程命令行含 runtime 根 → 我方注册表 pid 存活）。`ours` 才用它，**强证据**才允许停/重启它
-  （只有 app 标记 = 可能是用户自己开着的桌面端）。查不到持有者 ≠ 端口空着。
-  握手已下结论的 foreign 分支（nonce 不符 / 别的 app）同样要**点名**持有者（`identity._name_holders_cheaply`：Windows 只走 ctypes 映像，
-  不起 PowerShell），报错措辞按证据**实际证明了什么**来——星阙标记说「另一份星阙实例」，只有什么都没证明时才说「查不出身份」
-  （`_doctor_summary`；v0.39.0 台账）。
-- **状态文件原子写。** `runtime-state.json` 走 tmp + `os.replace`（`runtime/registry.py`）；
-  一次 `write_text` 会让并发读者读到半个 JSON → 判成「没在跑」→ 再起一次。整份覆盖时保留
-  别的进程写进来的长寿字段（`launch_nonce` / `clients` / `launcher` / `service_pids` / `ports`）。
-- **pid 存活判定在 Windows 上走 ctypes `OpenProcess`，永远不调 `os.kill`。** Windows 的 `os.kill`
-  没有信号 0 语义 —— 对任何非 CTRL 信号它直接 `TerminateProcess`，也就是会把目标**杀掉**而不是探测。
-- **就绪分后端，重启有冷却。** Java 挂/chart 健康时，`start_local_services` 在冷却期
-  （`runtime_java_retry_cooldown_seconds`，默认 120s）内返回 `{degraded, skipped_restart}`，**绝不** stop 健康的
-  chart 服务；`_call_remote` 对 Java 端点冷却期内快速失败 `runtime.java_backend_unavailable`，chart 端点不受
-  影响。新增「探针失败就重启」的路径前先读管理器的降级状态（v0.36.0）。
-- **一个键要么在 schema 上，要么它不存在。** MCP 扁平面按广告签名丢未声明的顶层键（FastMCP arg_model），
-  CLI/tool_run/dispatch 不丢——服务读、文档写、样例带而 schema 没声明的键，MCP 用户会静默拿到另一张盘
-  （PR #17 性别、神数五支性别/地点、`showPdBounds`……共 63 例）。守卫 `tests/test_mcp_flat_surface_keys.py`
-  （样例载荷原始键 ⊆ 广告签名）；反向由 `verify_schema_knob_wiring` 管。枚举参数的描述与表锁步
-  （`test_house_system_docs.py`：hsys 1=Alcabitus、3=Placidus）。
-- **MCP schema 两层：签名求全、广告求准。** `__signature__`（校验层）永远声明全模型字段——瘦它 = 静默丢键；
-  `tools/list` 的瘦身只在注册后重写 `Tool.parameters`（`surfaces/mcp_schema.py`：域核心 + 推运目标 + 工具自有
-  字段 + 闸门三键 + `request`）。硬预算全量 ≤256 KB / 精简 ≤30 KB（`verify_mcp_list_budget.py` 棘轮只降不升）；
-  加字段/加描述前先量。enum 只进广告层且与表锁步（v0.36.0）。
-- **能算 ≠ 能被找到。** 新技法必须同时带：`engine/synonyms.py` 一条（键集与 TOOL_DEFINITIONS 锁步）、
-  `engine/router.py` 一条规则（或进 `ROUTING_EXEMPT`）、`contracts/router_corpus.json` 至少一句语料
-  （`verify_router_corpus.py` 的 `min_pass` 只升不降）。择日搜索族词面含基底技法名，基底规则一律
-  `and not is_zeri`。`HOROSA_TOOLSETS` 未知 token 告警丢弃、全空回落全量，过滤生效即注册 `horosa_tool_run`。
-- **工具自有的结果敏感项，闸门必须点名问到。** 族策略（ASTRO_BIRTH/SHENSHU/PREDICTIVE）只是底座；有自有旋钮
-  的工具用工厂出专属策略（`_progression_target_policy`）。闸问题要么带 `options`（可枚举者并行 `values`，
-  表单答案只写回这些值），要么字段进 `FREE_TEXT_GATE_FIELDS`；`tests/test_gate_policies.py` 守。
-  加旋钮 = 加问题 + `sensitive_settings.json` 自测 + live 翻转测试（v0.36.0）。
-- **错误码是接口。** 每个 `code="…"` 必须经 `errors.classify_code` 落到恢复规则（精确表 → 基础设施前缀 →
-  `*_missing_*`/`*invalid*`（修入参）/`*_failed`/`*_unavailable`（重试再体检）后缀），`verify_error_recovery.py`
-  硬红；文案用 `errors.bilingual(zh, en)`，非双语计数只降不升。service 与 MCP 两条错误路径都走
-  `recovery_for`（agent_recovery.kind/prompt_to_user/next_action + details.hint）（v0.36.0）。
+- **宫主/宫神星只从 `astro_rulers.py` 取。** 它是上游 `wholeSignRulers.js` 的移植（夹具与断言照抄上游 jest），
+  Python 面不许再各自算宫主（上游 #79 双实现漂移）；段内子块（[主宰星链] 尾块「◆ 整宫制宫主表(wholeSignRulers)」）
+  段级棘轮看不见，加子块要配逐字夹具测试。上游 v57 把当前分宫制宫神星表迁出成独立段 [分宫制宫神星表]（行星力量/角续果
+  口径，非主宰依据；分宫制即整宫制时折叠为一句说明），v0.40.0 已随 v58 同步（`astro_rulers.build_house_system_ruler_section_lines`）；
+  名称一律上游单字表（日/月…），v56 旧移植印全名（月亮）而测试也断言错值。
 - **排除上游能力前先在上游源码确认它挂在哪一层。** `/qizheng/moira` 是 Java 聚合层路由，曾因 Python chart
   服务 500 被记成「不存在」两个版本（v0.36.0 C1 接活）。「某服务 500」≠「路由不存在」；台账「维持排除」条目
   必须写判据。Java 端可选富化一律经 `_call_remote` + `_degrade`，段列 optional。
@@ -951,127 +1009,20 @@ A global stability pass hardened these; keep them true when you touch the releva
   三传/紫微主星/卦名动爻/塔罗/奇门值符值使九宫/择日命中区间/推运时段边界/词元兜底），每族至少三条对抗测试；
   HorosaBench `faithfulness` 类 case 跑工具→抽真值→判答案（`expect_ok`/`expect_min_flagged`）。新技法上架时
   若其结果有可抽的机读真值，同批加族或加 case（v0.36.0）。
-- **发布三件：darwin 资产 + PyPI + Windows 半。** `publish-pypi.yml` 随 Release published 自动跑（trusted publishing，
-  一次性 pending publisher 见 docs/OFFLINE_RUNTIME_RELEASES.md）；`verify_wheel_contents.py` 守「uvx 装出来的东西」
-  （知识包/bench/闸表/Windows 启动模板/入口点；core-js 不进 wheel、随 runtime）；`server.json` 只登记 pypi 条目，
-  与 pyproject name/version 锁步、禁 TBD（v0.36.0）。
-- **宫主/宫神星只从 `astro_rulers.py` 取。** 它是上游 `wholeSignRulers.js` 的移植（夹具与断言照抄上游 jest），
-  Python 面不许再各自算宫主（上游 #79 双实现漂移）；段内子块（[主宰星链] 尾块「◆ 整宫制宫主表(wholeSignRulers)」）
-  段级棘轮看不见，加子块要配逐字夹具测试。上游 v57 把当前分宫制宫神星表迁出成独立段 [分宫制宫神星表]（行星力量/角续果
-  口径，非主宰依据；分宫制即整宫制时折叠为一句说明），v0.40.0 已随 v58 同步（`astro_rulers.build_house_system_ruler_section_lines`）；
-  名称一律上游单字表（日/月…），v56 旧移植印全名（月亮）而测试也断言错值。
-- **Java 实例只按上游桌面模式起，「live 需 Mongo」不再是合法理由。** jar 内 `conf/properties/cache/*.properties`
-  把 Mongo 主机写死为 `mongodb.host`；裸 `java -jar` = 每个碰库请求 30s 超时后 9999，被当成环境限制记了十个版本。
-  起法四件（`--mongodb.ip=127.0.0.1`、`HOROSA_DESKTOP_MONGO_OPTIONAL=1`、`HOROSA_MONGO_FALLBACK_DIR`、
-  `needtranslog=false`）由 `start_vendored_instance.sh --with-java` 内置、`test_guard_wiring` 守；app 注册在 jar 内
-  `data/rsakey.json`，与 Mongo 无关。发版前的 live 判据从此是 **0-skip 全量**（本 Mac v0.36.0 收尾 678 绿），
-  `MONGO_PORT=<空端口>` 可模拟干净机器（走文件回退）。
-- **闸门问什么，以 live「改参数结果必变」为准，不以代码转发了什么为准。** 演禽（xianqin）转发了 lat/lon，引擎却不读
-  （上海↔乌鲁木齐逐字节相同）——问地点就是假闸门。给工具挂结果敏感项前先翻转一次；不敏感的项用**反向** live
-  断言钉住（`test_xianqin_ignores_place_so_its_gate_must_not_ask_for_it`），上游哪天读了它会先红（v0.36.0 收尾）。
-- **零安装 = wheel 资产 + 镜像前缀 + 钉版本锁。** 每个 Release 附 `horosa_skill-<ver>-py3-none-any.whl`（发布脚本
-  [5/8] `uv build --wheel`；`release-completeness.yml` 对 ≥ 0.38.0 断言在场并真跑 `uvx --from <URL> horosa-skill --version`）；
-  `HOROSA_RUNTIME_MIRROR` 由 `runtime/mirrors.py` 统一改写清单/归档/wheel 三种 URL；`client config --launcher uvx-wheel`
-  是免 git、免 PyPI 的推荐零安装启动器（`uvx-git` 需要 git + github.com 直连）。文档/`server.json`/examples 里
-  钉版本的 `@v<x>#` / `/v<x>/…whl` / `/v<x>/…mcpb` 由 `verify_docs_sync.check_pinned_install_commands` 锁死；
-  受限网络的三条路成文于 `docs/INSTALL_RESTRICTED_NETWORK.md`（v0.38.0 B3）。
-- **写用户的客户端配置 = 只动自己的键、先备份、原子替换、认不出形状就拒绝；命令一律绝对路径。** `_merge_client_config`
-  按产物根键（`mcpServers`/`servers`/`context_servers`；codex 走 tomlkit）只 upsert `<root>[<server_name>]`，写前 `.horosa-bak`，
-  临时文件 + `os.replace`，非对象/非法 JSON 或没有 server 块的说明产物一律拒写（v0.38.0 B2：此前 vscode/zed/claude-code 的
-  `--write` 会把用户整个 settings.json 覆盖成 payload）。`uv`/`uvx` 启动器都经 `client_tools.resolve_*_command` 写绝对路径——GUI
-  客户端在 Windows 上不继承 shell PATH；`client check` 的 `command_not_on_path` 守。配置路径用 `_client_config_locations`
-  （按 os 与 `%APPDATA%`/`~/Library`/`~/.config` 算），不写死 POSIX 表。Codex 审计「没写超时」与「写太短」都报。
-- **证据的形状不许由偶然决定。** ① CI 里 `shell: pwsh` 的多行 `run:` 块首行必须是 `$PSNativeCommandUseErrorActionPreference = $true`，
-  否则只有最后一条命令算数（`tests/test_ci_workflow_shape.py`）；② 计数守卫的覆盖面是正则规则（`COUNT_PROSE_EN` 认 `real|local`），
-  不是某句话恰好的措辞；③ 仓里有的文件文档不得否认（`verify_docs_sync.check_docker_claims`），Dockerfile 的 `COPY` 必须盖住
-  pyproject force-include 的每个源路径（`tests/test_dockerfile_matches_wheel_includes.py`）。`tool run`/`dispatch`/`ask`/`hecan`
-  的 `--output` 是 stdout JSON 之外的**附加**文件出口（Windows 管道会按代码页重编码），stdout 契约不变（v0.38.0 B0）。
-- **`run_tool` always returns a `ToolEnvelope`, never lets an unexpected exception escape.** Tool
-  execution + snapshot/summary/export post-processing run inside a try that catches `HorosaSkillError`
-  **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`. Only invalid-payload
-  `ValidationError`（raised *before* that try）intentionally surfaces as `tool.invalid_payload`. Do not
-  add a tool/post-processing path that can raise out of `run_tool` — it would crash the CLI, break the
-  MCP session, or abort a whole `dispatch`.
-- **错误信封的顶层镜像三键在所有错误路径上一致。** `ToolEnvelope` / `DispatchEnvelope` 的
-  `code`/`message`/`details` 是 `error.*` 的向后兼容镜像（给按顶层键读的 CLI / 旧 agent 提示词）。
-  MCP 面构造的错误（闸门、pydantic 校验）与 `service.run_tool` / `dispatch` 自己构造的错误
-  （`runtime.*` / `transport.*` / `tool.ken_compute_failed` / `tool.internal_error`）**两条路径都要填**——
-  只填一边时，调用方恰恰在最常见的失败上读到 `None`。守卫：
-  `test_mcp_contract.py::test_error_paths_return_a_conformant_envelope` 同时覆盖闸门与闸门之后的失败。
-- **Surfaces never dump a traceback.** CLI file reads（`--ai-report-file` / `--ai-answer-file`）raise
-  clean `typer.BadParameter`; the MCP `horosa_report_*` handlers wrap unexpected renderer/IO errors via
-  `_mcp_internal_error_payload`; subprocess calls carry timeouts（incl. `openclaw-check --full`, 900s）.
-- **路径/用户值进配置文本必须走序列化器，禁裸 f-string 插值。** `client config` 各格式产物
-  （TOML/JSON/deep-link）里的 command/args/cwd 一律 `json.dumps`（JSON 转义 ⊂ TOML 基本字符串转义）
-  或 `quote`；裸插值在 Windows 上会把 `C:\Users\…` 的反斜杠原样写进 TOML → 整文件不可解析、
-  `--write` 拒绝合并（v0.33.0 codex `command` 就这么在 mac/Linux 恒绿、windows-smoke 连红两次）。
-  守卫：`tests/test_client_config.py`（windows-smoke 上跑 = 唯一能判红的形状）。
-- **`scripts/*.py` 凡打印非 ASCII——字面量**或数据**——必须重配 stdout/stderr 为 UTF-8。** 惯用块紧跟 `import sys`：
-  `for _stream in (sys.stdout, sys.stderr): _reconfigure = getattr(_stream, "reconfigure", None); if …: _reconfigure(encoding="utf-8", errors="replace")`。
-  `print(json.dumps(x, ensure_ascii=False))` 就是「打印数据」——Windows 管道/控制台是 cp1252，第一个 CJK 即
-  `UnicodeEncodeError`（v0.40.0-dev：benchmark 报告新进中文用例，`run_ci_gates` 23/24，ubuntu 恒绿）。守卫：
-  `tests/test_scripts_stdio.py`（字面量扫描 + `ensure_ascii=False`+`print(` 扫描）；ci.yml `windows-smoke` 跑 benchmark smoke。
-- **`input_normalization` degrades, never crashes.** The date/time regexes are shape-only（they accept
-  month `13`, day `45`）, so anything building a `datetime` from them must tolerate `ValueError`（see
-  `_combine_date_time`）. IANA-zone→offset conversion uses the *chart date*, not `now()`. `Z`/`UTC`/
-  `GMT` → `+00:00`. Compact coords like `121e28` parse as 121°28′（NOT float scientific notation）.
-- **Runtime manager:** close file handles before `shutil.rmtree` on the Windows start path; a missing
-  local `--archive` raises `RuntimeError`（which `install` catches）, not a raw tarfile error. Never
-  kill chart services by process-name — the stop script scopes kills by runtime root path; keep it.
-- **`js_client` keeps the transport contract.** Every Node failure becomes a `ToolTransportError`:
-  missing/unstartable Node → `js_engine.node_unavailable`, timeout → `js_engine.timeout`. The
-  `subprocess.run` call is wrapped — don't let a raw `OSError`/`TimeoutExpired` escape. On the JS side,
-  `bin/cli.mjs` always prints a JSON `{ok:...}` envelope to stdout（never a bare stack trace）and
-  coerces a `null`/scalar parsed payload to `{}` so tools don't null-deref on `payload.field`.
-- **Tracing is best-effort.** `TraceRecorder._write_event` swallows local-write failures（like
-  `_emit_otlp`）; a trace write must never crash or mask the traced operation.
-- **`evaluation_lock` self-heals.** `acquire_evaluation_lock` reclaims a stale lock（dead PID on POSIX,
-  or age threshold when liveness is unknown）but never reclaims a *live* owner. **Never call
-  `os.kill(pid, 0)` on Windows** to probe liveness — on Windows `os.kill` maps to `TerminateProcess`,
-  it would *kill* the lock owner. `_pid_liveness` returns `unknown` on Windows（→ age-based reclaim）;
-  keep it that way.
-- **Report rendering is atomic.** `render_report` renders to a temp sibling then `os.replace()`s —
-  never write a report format directly to its final `output_path`（a mid-render failure would corrupt it）.
-- **install / upgrade 换目录前必停自己的服务，且永不停陌生人的（v0.38.1 R3）。** `install()` 在 `replace(previous)` 之前先
-  `endpoint_identities`：全不可达直接换；全部 `started_by_us` → `stop_local_services(ignore_clients=True)` → 换 → `start_local_services()`；
-  可达但不是我们起的 → 先问 `identity.holders_outside_runtime_root(port, runtime_root)`：监听者**全部**证明跑在本根之外
-  （映像 / 命令行都不在本根下 —— 用户的桌面端、另一个 runtime root）→ 换目录动不到它们的文件，**放行**、不停任何进程、
-  记 `runtime.install_ports_held_elsewhere`（`held_by` 点名；next_action = 关那份实例或给本 runtime 换端口再 start）；
-  任一证明不了（查不到 / 住在本根下 / 点不出名）→ `runtime.install_refused_running_foreign`，`--force` 不覆盖
-  （**永远不把「查不到」当「在别处」**）。原因：旧清单钉着默认端口 + 桌面端占着它们是最常见形状，原来的
-  拒绝把用户卡死，且提示的 `HOROSA_PORTS=auto` 对它无效（闸探的是旧清单的端口）——见台账 v0.38.1 / 2026-09-15。
-  `tests/test_runtime_manager.py` 锁顺序 `["stop", "swap", "start"]`，并锁「别处 → 放行不 stop」与「部分证明不了 → 仍拒」。
-- **子进程文本一律显式解码（v0.38.1 A1/A19）。** `subprocess.run(..., text=True)` 必带 `encoding=`（UTF-8，或 tasklist 的 `oem`）
-  + `errors="replace"`；归属证据优先走不经代码页的 ctypes 映像路径；PowerShell 只允许搬 base64 字节。`tests/test_subprocess_encoding.py`
-  AST 扫描基线 0。
-- **Windows 上 runtime 根必须纯 ASCII，交给 java.exe 的参数一律纯 ASCII（v0.38.1）。** 随包 JDK 17 的 java.exe 用 `GetModuleFileNameA`
-  找 java.dll、`GetCommandLineA` 读参数；Swiss Ephemeris（pyswisseph → C `fopen`）拿 UTF-8 路径、Windows 按 ANSI 解——「代码页能表示」
-  也不够（「horosa lane é」下 Java 起来了，星历仍打不开）。所以 ① install 在下载前用 `windows_runtime_path_ok`（纯 ASCII）拒绝
-  （`runtime.path_not_ascii`），doctor 报 `windows:runtime_root_not_ascii`；② 启动器 jar 参数是相对 `$Root` 的字面量 `$JarArg`
-  （`verify_runtime_scripts.audit_windows_launcher` 守）。自动迁移到 ASCII 位置**没做**（ACL / 抢注面，待定）。真机证明：runtime-matrix
-  Windows lane 的 `non_ascii_root_refusal` 步骤 + 「horosa lane runtime」根；三轮失败证据见 LESSONS v0.38.1 ⑥。
-- **`runtime stop` 不在别的 MCP 客户端脚下抽走服务（v0.38.1 R14）。** 登记表里仍存活的客户端 → `runtime.stop_refused_clients_attached`；
-  `--force` 才停；`restart` / 升级换目录 / `uninstall` 走 `ignore_clients=True`（服务马上回来或本来就要删）。死掉的登记不拦。
-- **doctor 默认零外网请求，「最新版本」只读缓存（v0.38.1 R4）。** `latest_version` / `freshness` 来自 `<runtime_root>/.latest-manifest-cache.json`
-  （每次成功抓取发布清单顺手写）；没有缓存就老实 `null` 并提示 `--probe-network`。过期是 warning，不阻断。
-- **stdio server 在客户端关掉 stdin 后 15 s 内退出（v0.38.1 发布后）。** 退出路径上不留非 daemon 线程、不阻塞（runtime 预热线程是 daemon）；
-  孤儿 `serve` 会一直登记为 attached client，让 `runtime stop` / 升级拒绝，还会拖住调用方的 stderr 管道（TS SDK 以 inherit 起 server）。
-  `tests/test_stdio_server_exit.py`（真子进程、不带 `--skip-runtime-start`、真调一次工具）在 Linux 与 Windows CI 上都跑。
-- **未定义名字基线 0（v0.38.1 发布后）。** `scripts/verify_undefined_names.py`（`ruff==0.16.7` 钉死，只选 F821/F822/F823，src/scripts/tests）。
-  只在没人跑的平台上可达的分支就是没测过的代码——这类「运行时必崩」错误靠静态检查兜，不靠 pytest 走到。
-- **lane 永不碰调用者自己的客户端配置（v0.38.1 发布后）。** 九客户端步骤一律 `--config <work>/client-configs/…`；Claude Code user scope
-  步骤用 `Lane.claude_user_scope_env()`（`HOME` / `USERPROFILE` / `CLAUDE_CONFIG_DIR` 指向 `<work>/claude-user-home`）——旧实现继承真 HOME，维护机上
-  `claude mcp add --scope user` 写的是真 `~/.claude.json`，清理那句 `claude mcp remove --scope user horosa` 还会删掉维护者原有的条目（托管 runner 没有
-  `claude`，矩阵从没暴露）。本机用真 `claude` 验过隔离：add / get / remove 全落在隔离目录，真配置 sha 不变。守卫
-  `tests/test_verify_runtime_live.py::test_claude_user_scope_step_never_touches_the_invoking_users_claude_config`。
 - **节气种子只来自 lunar-javascript 精确表，禁近似公式（v0.40.0）。** `vendor/utils/localNongliAdapter.js` verbatim（`buildLocalJieqiYearSeed(year, zone)` 折成当地钟表，
   域外年返 null 走后端实算）；`src/shared/` 不得再出现与上游同名的自写件（allowlist 守卫）。selfcheck 用 2026 立春 04:02:08 vs 旧公式 10:16:32 做负向对照。
-- **每个 MCP 工具的 inputSchema ≤ 5000 B（v0.40.0）。** Codex 0.158 的 `tool_input_schema_max_bytes` 缺省值，超出即静默剥说明。`verify_mcp_list_budget.py`
-  对全量 / 精简两面逐工具硬顶（今日最大 3843 B）；tools/list 总量棘轮照旧。
-- **MCP HTTP 客户端的头经 httpx.AsyncClient（mcp ≥ 1.30 API；v0.40.0）。** 测试与 lane 用 `streamable_http_client(url, http_client=create_mcp_http_client(headers=…))`，
-  留 `streamablehttp_client(url, headers=…)` 退路给 1.29；`pydantic>=2.11` 下限随 1.30。
 - **bespoke vendor 件的每一处偏离都要在文件内标明出处与理由，并有两向测试（v0.40.0）。** `baziSnapshot.js` 的「闰闰」修法 = 只在 month 未带「闰」时加前缀，
   selfcheck 同时断言本地形状不叠字、Java 形状仍加前缀；restamp 只在逐 hunk 复核后做。
+- **移植口径以上游读的那个键为准，测试替身按真实下发参数造（v0.40.0）。** `/nongli/time` 的 `year` 是正月初一口径干支、`yearJieqi` 才是立春
+  口径——六爻以时起卦旧移植取错键；页面 getter 的兜底值不是页面缺省（`fieldVal(f,'timeAlg',1)` 的 1 从不触发，真缺省是字段种子 0）；
+  「缺键透传」会翻转缺省（`after23NewDay` 缺省 1，`undefined` 被 vendored 件当 0）。stub 把纯逻辑桩死会让「六壬择时恒零命中」这类 bug 恒绿——
+  stub 只许替网络 / UI，`revendor_core_js` 的 stub 审计守。
+- **合法的 JSON `null` 是「查无」，不是失败（v0.40.0）。** `_call_remote` 只对传输 / 非 2xx / 非 JSON 重试；`null` 原样交给上层判读，
+  绝不无限重试且每轮真打后端。
+- **vendor 件不补占位段；re-vendor 变换剪尾巴要补回尾部导出（v0.40.0）。** 缺席段由上游 optional 双登记表达，skill 不在导出层「编」段
+  （自拼占位曾藏住 sanshiunited 8 个条件段）；`truncate_before` 剪 React 尾部时由 `_reexport_required` 补回头部已定义名的 `export { … }`
+  列表；`_prune_default_export` 认三种形态（`export default { … }` / `export { … }` / 被剥函数的裸 `export default name;` 整行删），
+  新形态先补变换与 `tests/test_revendor_transform.py`，禁手补空 shim 顶替。
 - **Cross-platform text digests are line-ending independent.** Any sha stamped on one OS and compared on
   another hashes CRLF→LF-normalized bytes: `revendor_core_js._sha256_file`（vendor stamps `upstream_sha256`/
   `derived_sha256`; raw bytes only for non-UTF-8）and `decisions/eval.py::dataset_sha256`（the Jev dataset
@@ -1080,6 +1031,97 @@ A global stability pass hardened these; keep them true when you touch the releva
   can satisfy（v0.39.0 台账）. Don't switch either back to `read_bytes()`; any script that *writes* LF artifacts
   （sources, eval sets, locks, reports）must pass `newline="\n"`
   （`tests/test_decisions_eval.py::test_dataset_sha256_is_line_ending_agnostic`）.
+
+### 9.4 客户端配置 · setup · doctor（client config / setup / doctor）
+
+- **`setup` 的七步顺序与失败包是契约（v0.38.0 B4）。** `network_probe → install → config → doctor → client_check → stdio_probe →
+  next_steps`，顺序冻结在 `tests/test_cli_output_contract.py::test_setup_public_keys`；失败包只走 stderr、退出码 2，键
+  `step / code / config_untouched / backup_path / retry_command / steps`，**第 3 步之前失败保证 `config_untouched: true`**
+  （`tests/test_setup_command.py` 负向：装失败时预置配置逐字节相等）。`doctor` / `client check` 与 `setup` 永远共用
+  `_doctor_report` / `_client_check_report`（不许各写一套判定）；`stdio_probe` 必须真 spawn 配置里那条命令（进程内
+  `create_mcp_server` 证明不了客户端能起它）；`_build_client_config_payload` 只在 `uv` 启动器与 mcporter/openclaw 形态下解析
+  checkout——wheel 装出来的包旁边没有 pyproject.toml，uvx 形态必须能在没有 checkout 的机器上生成配置（ci.yml wheel 步骤锁）。
+- **写用户的客户端配置 = 只动自己的键、先备份、原子替换、认不出形状就拒绝；命令一律绝对路径。** `_merge_client_config`
+  按产物根键（`mcpServers`/`servers`/`context_servers`；codex 走 tomlkit）只 upsert `<root>[<server_name>]`，写前 `.horosa-bak`，
+  临时文件 + `os.replace`，非对象/非法 JSON 或没有 server 块的说明产物一律拒写（v0.38.0 B2：此前 vscode/zed/claude-code 的
+  `--write` 会把用户整个 settings.json 覆盖成 payload）。`uv`/`uvx` 启动器都经 `client_tools.resolve_*_command` 写绝对路径——GUI
+  客户端在 Windows 上不继承 shell PATH；`client check` 的 `command_not_on_path` 守。配置路径用 `_client_config_locations`
+  （按 os 与 `%APPDATA%`/`~/Library`/`~/.config` 算），不写死 POSIX 表。Codex 审计「没写超时」与「写太短」都报。
+- **路径/用户值进配置文本必须走序列化器，禁裸 f-string 插值。** `client config` 各格式产物
+  （TOML/JSON/deep-link）里的 command/args/cwd 一律 `json.dumps`（JSON 转义 ⊂ TOML 基本字符串转义）
+  或 `quote`；裸插值在 Windows 上会把 `C:\Users\…` 的反斜杠原样写进 TOML → 整文件不可解析、
+  `--write` 拒绝合并（v0.33.0 codex `command` 就这么在 mac/Linux 恒绿、windows-smoke 连红两次）。
+  守卫：`tests/test_client_config.py`（windows-smoke 上跑 = 唯一能判红的形状）。
+- **doctor 的每个码都要有人话，默认零外网请求（v0.38.0 B6）。** issue 码的真值 = `manager.DOCTOR_ISSUE_CODES`（`missing:*` 前缀族），
+  warning 码 = `cli._DOCTOR_WARNING_CODES`；`cli._DOCTOR_ADVICE` 逐码给 `user_summary` + `next_action`，报告 `advice[]` 与 `--explain`
+  都从它出。`tests/test_doctor_machine_conditions.py` 扫 `doctor()` 源码里新增的 `issues.append("…")` 字面量——不登记必红。
+  默认 `doctor` 只打 127.0.0.1（`trust_env=False`），`--probe-network` 才逐镜像 HEAD 清单 URL（负向对照：默认路径上
+  `_probe_manifest_url` 被替换成 raise 仍必须绿）。quarantine / 长路径余量 / 仿真进程都只**报**不改：修复命令交给用户。
+  「最新版本」只读缓存（v0.38.1 R4）：`latest_version` / `freshness` 来自 `<runtime_root>/.latest-manifest-cache.json`
+  （每次成功抓取发布清单顺手写）；没有缓存就老实 `null` 并提示 `--probe-network`。过期是 warning，不阻断。
+- **平台策略只有一处真值、两处镜像，回退只许公告着做（v0.38.0 A4）。** 真值 = `contracts/release_platforms.json`；镜像 =
+  `manager.SUPPORTED_PAYLOAD_PLATFORMS` / `PLATFORM_FALLBACKS`（wheel 不带 contracts）与 README×2 平台表，各有锁步测试。
+  `install()` 走回退必须返回 `platform_fallback{requested, installed, mode}` + `warnings[runtime.platform_emulated]`（含版本短路那条
+  返回），doctor 必须给 `host_platform / payload_platform / emulated / arch`；**darwin-x64 永不回退到 arm64**（Rosetta 反向不成立，
+  `test_intel_mac_is_refused_even_when_an_arm64_payload_exists` 是负向对照）；平台键看芯片不看宿主 Python（Rosetta 下的 x86_64
+  Python 仍拿 arm64 载荷）；载荷或清单声明的 `min_os` 必须在下载前、解压后各查一次（`runtime.install_os_too_old`）。
+
+### 9.5 测试 · CI · 跨平台（tests / CI / cross-platform）
+
+- **测试 spawn 系统工具用绝对路径；扫真实安装目录的解析器测试要把那层 monkeypatch 掉（v0.38.0 反向「本机绿≠CI绿」）。**
+  裸名 `subprocess.run(["bash"/"uv"…])` 在满负载 Windows 上偶发 `WinError 2`（PATH 搜索输给进程 churn + AV 扫描）——
+  导入期 `BASH = shutil.which("bash")` 解析一次绝对路径再 spawn，缺席即 `skip`（`tests/test_runtime_launcher_patch.py`）。
+  解析器测试（uvx/uv 的 `_windows_*_fallbacks()` 扫 `%LOCALAPPDATA%`/`%APPDATA%`/`%USERPROFILE%`）不 monkeypatch 掉那层，
+  测的就是「本机装没装该工具」——维护机装了就红、无 uvx 的 ubuntu `test` 才绿，**托管 windows-latest lane 同样会红**
+  （`test_resolve_uvx_command_derives_from_the_uv_sibling`）。这是横切教训 #7 的镜像；`scripts/run_ci_gates.py` 是把它
+  提前到本机的 meta-guard。**复验时一次只跑一套重活**（两套 pytest / lane 并发 = 自造 flake），且**别在本 session 的 MCP
+  server 还占着 `.venv\Scripts\horosa-skill.exe` 时跑真 `uv run` 用例**（`uv sync` 删不掉被占的 exe → `test_stdio_probe_*` 假红）。
+- **证据的形状不许由偶然决定。** ① CI 里 `shell: pwsh` 的多行 `run:` 块首行必须是 `$PSNativeCommandUseErrorActionPreference = $true`，
+  否则只有最后一条命令算数（`tests/test_ci_workflow_shape.py`）；② 计数守卫的覆盖面是正则规则（`COUNT_PROSE_EN` 认 `real|local`），
+  不是某句话恰好的措辞；③ 仓里有的文件文档不得否认（`verify_docs_sync.check_docker_claims`），Dockerfile 的 `COPY` 必须盖住
+  pyproject force-include 的每个源路径（`tests/test_dockerfile_matches_wheel_includes.py`）。`tool run`/`dispatch`/`ask`/`hecan`
+  的 `--output` 是 stdout JSON 之外的**附加**文件出口（Windows 管道会按代码页重编码），stdout 契约不变（v0.38.0 B0）。
+- **`scripts/*.py` 凡打印非 ASCII——字面量**或数据**——必须重配 stdout/stderr 为 UTF-8。** 惯用块紧跟 `import sys`：
+  `for _stream in (sys.stdout, sys.stderr): _reconfigure = getattr(_stream, "reconfigure", None); if …: _reconfigure(encoding="utf-8", errors="replace")`。
+  `print(json.dumps(x, ensure_ascii=False))` 就是「打印数据」——Windows 管道/控制台是 cp1252，第一个 CJK 即
+  `UnicodeEncodeError`（v0.40.0-dev：benchmark 报告新进中文用例，`run_ci_gates` 23/24，ubuntu 恒绿）。守卫：
+  `tests/test_scripts_stdio.py`（字面量扫描 + `ensure_ascii=False`+`print(` 扫描）；ci.yml `windows-smoke` 跑 benchmark smoke。
+- **未定义名字基线 0（v0.38.1 发布后）。** `scripts/verify_undefined_names.py`（`ruff==0.16.7` 钉死，只选 F821/F822/F823，src/scripts/tests）。
+  只在没人跑的平台上可达的分支就是没测过的代码——这类「运行时必崩」错误靠静态检查兜，不靠 pytest 走到。
+- **lane 永不碰调用者自己的客户端配置（v0.38.1 发布后）。** 九客户端步骤一律 `--config <work>/client-configs/…`；Claude Code user scope
+  步骤用 `Lane.claude_user_scope_env()`（`HOME` / `USERPROFILE` / `CLAUDE_CONFIG_DIR` 指向 `<work>/claude-user-home`）——旧实现继承真 HOME，维护机上
+  `claude mcp add --scope user` 写的是真 `~/.claude.json`，清理那句 `claude mcp remove --scope user horosa` 还会删掉维护者原有的条目（托管 runner 没有
+  `claude`，矩阵从没暴露）。本机用真 `claude` 验过隔离：add / get / remove 全落在隔离目录，真配置 sha 不变。守卫
+  `tests/test_verify_runtime_live.py::test_claude_user_scope_step_never_touches_the_invoking_users_claude_config`。
+- **`evaluation_lock` self-heals.** `acquire_evaluation_lock` reclaims a stale lock（dead PID on POSIX,
+  or age threshold when liveness is unknown）but never reclaims a *live* owner. **Never call
+  `os.kill(pid, 0)` on Windows** to probe liveness — on Windows `os.kill` maps to `TerminateProcess`,
+  it would *kill* the lock owner. Windows liveness goes through ctypes `OpenProcess`（`evaluation_lock.py`）— same rule as the
+  runtime registry bullet above; never reintroduce `os.kill` probing.
+- **live 闸问三件事：活不活、点没点名、够不够新（v0.40.0-dev）。** `tests/test_local_js_tools.py::requires_current_runtime_contract` 读已装
+  payload 的 `export_registry_version`，小于本树 `AI_EXPORT_SETTINGS_VERSION` 即 skip 并写明「偏斜，非回归」；**未知不跳**（外部 vendored
+  实例的新鲜度由 preflight / mirror 守卫另管）。main 领先公开 runtime 是常态——托管矩阵每周一就是「main × 公开 latest」形状，
+  `verify_runtime_live.py` 的 lane 报告同样带这一维度。
+- **夹具的就绪等待到点必须 `pytest.fail` 点名原因，不许静默放行（v0.40.0-dev）。** `listening_server` 等 30 s，仍未监听就
+  `pytest.fail("http.server never started listening … slow spawn, not a port bug")`——满负载 Windows 上的慢 spawn 曾被误诊成端口探测缺陷。
+- **子进程测试 import 的是本 checkout（v0.40.0）。** `tests/conftest.py` 会话期把本树 `src` 前置进 `PYTHONPATH`（editable install 指向跑过
+  `uv sync` 的主 checkout，worktree 里 `python -m horosa_skill…` 子进程不经 pytest 的 `pythonpath`）并设 `PYTHONDONTWRITEBYTECODE=1`
+  （同一秒内改回同长度代码会留陈旧 `.pyc`）；`test_subprocess_children_import_this_checkout_not_the_editable_install` 守。
+- **录制-回放夹具：键含所有改变结果的字段，断言的是远端路径（v0.40.0）。** `/chart` 只按 date/time 键控会让「请求错了 hsys」回放出看似正确
+  的答案；离线 `CaptureClient` 记录 `_call_remote` 真正打出去的路径（`/chart` 落成 `/`），断言端点要过 `_chart_server_endpoint`。
+
+### 9.6 发布 · 分发（release / distribution）
+
+- **发布件 = darwin seed + 派生的 win32-x64 + wheel + `.mcpb` + SBOM + 清单 + SHA256SUMS；PyPI 暂缓。** `publish-pypi.yml` 只手动
+  dispatch（用 `GITHUB_TOKEN` 翻公开产生的 published 事件不触发下游）；`verify_wheel_contents.py` 锁 wheel 内容（知识包 / bench / 闸表 /
+  Windows 启动模板 / 入口点 / 运行期契约；core-js 不进 wheel、随 runtime）；`server.json` 登记 pypi 与 mcpb 两个 package，mcpb 的
+  `fileSha256` 必须来自真正上传的那次 `--draft` 构建（`release-completeness.yml` 对齐）。
+- **零安装 = wheel 资产 + 镜像前缀 + 钉版本锁。** 每个 Release 附 `horosa_skill-<ver>-py3-none-any.whl`（发布脚本
+  [5/8] `uv build --wheel`；`release-completeness.yml` 对 ≥ 0.38.0 断言在场并真跑 `uvx --from <URL> horosa-skill --version`）；
+  `HOROSA_RUNTIME_MIRROR` 由 `runtime/mirrors.py` 统一改写清单/归档/wheel 三种 URL；`client config --launcher uvx-wheel`
+  是免 git、免 PyPI 的推荐零安装启动器（`uvx-git` 需要 git + github.com 直连）。文档/`server.json`/examples 里
+  钉版本的 `@v<x>#` / `/v<x>/…whl` / `/v<x>/…mcpb` 由 `verify_docs_sync.check_pinned_install_commands` 锁死；
+  受限网络的三条路成文于 `docs/INSTALL_RESTRICTED_NETWORK.md`（v0.38.0 B3）。
 
 ## 10. 上游镜像注记（upstream 星阙 — skill 必须镜像的行为）
 
@@ -1110,7 +1152,7 @@ A global stability pass hardened these; keep them true when you touch the releva
   （JVM 内存 + Redis + `.horosa-cache/paramhash/`）——新键自动 miss 但类型变更可能命中旧条目，排障时清
   `redis-cli KEYS "*chart*"` + `.horosa-cache/`；⑤ 前端 `chartMem`（`services/astro.js`）按
   `JSON.stringify(values)` 键控，`requestOptions.cache = false` 强刷；⑥ AI 快照必须带规则行（见上）。
-  权威上游文档：`Horosa-Web/docs/global-day-boundary-v2.2.1.md`（在星阙树，非本仓；本节漂移时以上游为准
+  权威上游源：`Horosa-Web/astrostudyui/src/utils/dayBoundary.js` 及其 `__tests__`（Horosa-Public；本节漂移时以上游为准
   同步过来，不从本仓改上游）。
 
 **西占新功能四同步**（上游加占星功能时必查）：新增占星功能默认只渲染成 tab，**不会**自动接入
@@ -1121,7 +1163,7 @@ section builder + `aiExport.js` 段名 + 升 `AI_EXPORT_SETTINGS_VERSION`；预�
 （`models/user.js` fields + 存档复制、`utils/localcharts.js buildLocalChartRecord`、`models/astro.js`
 重建 fields），**铁律：勿连带改坏 pdMethod/主限法**；事盘 module 注册 `utils/localcases.js
 CASE_TYPE_OPTIONS`（`state.extra` 已通用存取）；**陷阱：predictHook 只管 UI 实时刷新，AI 分析不遍历
-hook、走专用 builder**。全链路清单：`Horosa-Web/docs/西占新功能-AI导出与储存接入清单.md`（星阙树）。
+hook、走专用 builder**。全链路以 Horosa-Public 的 `utils/aiExport.js`（预设表）与各 `build*SnapshotText` 为准。
 
 **法奇门叠加层**（qimen 快照 +8 段）：纯前端 JS（`DunJiaFaCalc` / `DunJiaFaDoc`）consume kinqimen 的
 `pan` 叠加 `[六害总览][化解方案][八门化气大阵][用神分论][财富七要][事业七要][恋爱姻缘][孤辰寡宿]`——
@@ -1151,5 +1193,5 @@ ken 引擎开源、**MIT-licensed**，作者 **kentang2017**：
 
 ## 12. 经验台账
 
-逐版本教训**原文**（v2.4.0 批 → v0.14.0 批、发布完整性编年、上游 SSE 陷阱）：
+逐版本教训**原文**（台账正文最新在上，v0.40.0 起；索引表在文件顶部）：
 [`docs/LESSONS.md`](./docs/LESSONS.md)。新教训按 §2 协议：台账落原文 + 蒸馏进本文对应章节。

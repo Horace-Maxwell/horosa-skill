@@ -29,8 +29,21 @@ offered under the repository's current `GNU AGPL-3.0-only` license.
 ```bash
 cd horosa-skill
 uv sync
-uv run pytest
+uv run python scripts/run_ci_gates.py     # the local mirror of CI (pytest + every verify_* gate CI runs) — the only sanctioned local gate
+(cd horosa-core-js && npm test)           # JS goldens / selfcheck / hand-copy guard
 ```
+
+- Do **not** run `scripts/verify_*.py` bare as "a quick check": several are real lanes with side effects
+  (`verify_runtime_live.py` boots a runtime and drives every tool). `run_ci_gates.py` runs exactly what CI runs, in CI's shape.
+- Live tests only run against an instance you name explicitly (`HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`);
+  they never probe the default `:9999` / `:8899` ports (those belong to the user's desktop app) — boot a vendored instance
+  with `scripts/start_vendored_instance.sh`.
+- Windows behaviour is verified on CI (`windows-smoke` + the release matrix), never by hand-porting paths on macOS.
+- A change that fixes a pitfall ships with its lesson in the same PR: `docs/LESSONS.md` entry + the distilled rule in
+  `AGENTS.md` + a machine guard that is proven to catch it (protocol v3, `AGENTS.md` §2). Doc-facing changes must keep
+  `scripts/verify_docs_sync.py` green (counts, versions, links, `docs/DOC_MAP.md`, generated mirrors, third-party facts ledger).
+- Releases are cut by the maintainer through the hosted pipeline (`docs/OPERATIONS.md` → Runtime Release Runbook);
+  `preflight_release.py` needs the upstream Horosa-Public checkout and is not something a PR has to run.
 
 ## Runtime Packaging Changes
 

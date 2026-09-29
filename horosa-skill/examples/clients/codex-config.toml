@@ -17,5 +17,5 @@ tool_timeout_sec = 600
 # （否则 Codex 起的 server 会用另一套目录）；不要写 env_vars（老版本对未知键整段拒收）。
 HOROSA_RUNTIME_ROOT = "/ABS/HOME/.horosa/runtime"
 HOROSA_SKILL_DATA_DIR = "/ABS/HOME/.horosa-skill"
-# HOROSA_MCP_COMPACT = "1"        # 11 门面模式（Codex 无工具搜索，全量技法面较重）
+# HOROSA_MCP_COMPACT = "1"        # 精简面：11 个门面级工具 = 10 门面 + horosa_tool_run（Codex 无工具搜索，全量 120 较重；setup 缺省）
 # HOROSA_TOOLSETS = "astro,cn"    # 或按域裁剪

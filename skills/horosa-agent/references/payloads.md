@@ -72,3 +72,9 @@ Include as much as possible:
   `dirLon`, PD method settings per [`predictive.md`](./predictive.md).
 - Unknown extra fields are accepted (`extra="allow"`) and forwarded where meaningful; tools that don't
   read a flag ignore it harmlessly.
+
+### 八字 `southMonth`（上游 v3.11.2 起）
+
+- `southMonth`: `"none"`（星阙缺省，月柱同北半球）| `"chong"`（月支取对冲之支，月干按年干五虎遁重起；胎元 / 命宫 / 大运随之）。
+- 只对**南纬**出生生效（纬度串带 `s` 或 `gpsLat < 0`）；北纬传了也忽略。闸门会对南纬出生点名追问，别替用户默认。
+- 快照 [四柱与三元] 在南纬出「南半球月令：…」行；技法依据卡回显为「南半球月令」。Java 回退路径（byLon / 公元前）同名参数照发。

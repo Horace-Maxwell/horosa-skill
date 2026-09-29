@@ -5,7 +5,7 @@
 Horosa Skill writes Xingque-style output in two layers:
 
 - `export_snapshot.export_text`: the human-readable Xingque export body.
-- `export_format.sections`: the machine-readable section map parsed from that body.
+- `export_snapshot.sections`: the machine-readable section map parsed from that body.
 
 When auditing a tool, do not rely on a short preview alone. A preview such as the first 1200 characters can be useful for quick inspection, but predictive tools usually write the natal chart first and the return/progression chart after it. If the preview stops inside the natal chart, it can look as if the predictive chart is missing even when the full `export_text` is correct.
 
@@ -15,7 +15,7 @@ Use the full artifact and inspect sections:
 
 1. Open the saved tool artifact JSON.
 2. Read `data.export_snapshot.export_text` in full.
-3. Read `data.export_format.sections`.
+3. Read `data.export_snapshot.sections`.
 4. Confirm the expected natal chart, target chart, aspect, table, or timeline sections are present.
 5. If a user-facing report is needed, render it through `report_render` and confirm the report artifact is registered in memory.
 
@@ -49,4 +49,4 @@ For these tools, `ok=true` is necessary but not sufficient. A client or agent sh
 
 ## Agent Rule
 
-Agents must interpret the full `export_snapshot` and `export_format`, not a hand-written calculation or a truncated preview. If parameters are unclear, call `horosa_agent_guidance` first and ask the user to confirm the missing settings before invoking the real technique.
+Agents must interpret the full `export_snapshot` (`export_text` + `sections`), not a hand-written calculation or a truncated preview. If parameters are unclear, call `horosa_agent_guidance` first and ask the user to confirm the missing settings before invoking the real technique.

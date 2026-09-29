@@ -3,7 +3,7 @@
 Deterministic assertions over the guidance layer:
 
 1. **Version lockstep** — `pyproject.toml`, `src/horosa_skill/__init__.py`, `server.json` (every
-   `version` key), `CITATION.cff`, and the README zh/en "当前公开版本 / Current public version"
+   `version` key), `CITATION.cff`, and the README zh/en "本仓版本 / Current version"
    headlines all carry the same package version.
 2. **Tool coverage** — every tool id in `TOOL_DEFINITIONS` appears (as `` `id` ``) in `README.md`,
    `README_EN.md`, and `skills/horosa-agent/SKILL.md`; the `tools-N` badges and headline tool counts
@@ -15,6 +15,16 @@ Deterministic assertions over the guidance layer:
 5. **Conflict markers** — no `<<<<<<< ` / `=======` / `>>>>>>> ` lines anywhere tracked-ish.
 6. **Skill frontmatter** — both SKILL.md files start with YAML frontmatter carrying `name:` and
    `description:` (required for agent-skill discovery).
+
+7. **Doc-currency institution (v0.40.0, AGENTS.md §2 protocol v3)** — `check_doc_map` (every guidance
+   doc has a row in docs/DOC_MAP.md), `check_lessons_distilled` (every LESSONS section has an index row and
+   the newest three versions are distilled into AGENTS.md), `check_agent_mirrors_generated` (the four thin
+   mirrors equal scripts/gen_agent_mirrors.py's render), `check_third_party_facts` (the ledger
+   contracts/third_party_facts.json is complete, sourced, dated; stale entries are ::warning in CI and errors
+   under `--strict-staleness` — the weekly docs-currency workflow).
+
+CLI: `--strict-staleness` (stale ledger entries fail), `--only <check>` (run a single check by short name,
+e.g. `--only third-party-facts`).
 
 Extend this file whenever a new cross-file doc invariant appears (AGENTS.md §2 rule 4: assertable
 gotchas get a machine guard, not just a doc note).
@@ -39,10 +49,15 @@ from horosa_skill.surfaces.mcp_server import (  # noqa: E402
 )
 
 ERRORS: list[str] = []
+WARNINGS: list[str] = []
 
 
 def err(msg: str) -> None:
     ERRORS.append(msg)
+
+
+def warn(msg: str) -> None:
+    WARNINGS.append(msg)
 
 
 def read(path: Path) -> str:
@@ -124,8 +139,8 @@ def check_versions(version: str) -> None:
 
     # zh README（v0.21 视觉重构后）版本声明在 Release runtime 行；EN 保留 headline 句。
     headline = {
-        ROOT / "README.md": re.compile(r"`v([0-9.]+)` 已打包并校验"),
-        ROOT / "README_EN.md": re.compile(r"Current public version: `Horosa Skill ([0-9.]+)` \((\d+) callable tools\)"),
+        ROOT / "README.md": re.compile(r"本仓版本 `v([0-9.]+)`"),
+        ROOT / "README_EN.md": re.compile(r"Current version: `Horosa Skill ([0-9.]+)` \((\d+) callable tools"),
     }
     for path, pattern in headline.items():
         m = pattern.search(read(path))
@@ -303,6 +318,8 @@ COUNT_DOCS = [
     # v0.33.0 批 III-5 盲区修补：examples/ 客户端文档与 .agents 镜像也写工具数——此前不在扫描面，
     # 计数漂移在这两处永不报警（claude-code.md 的门面数就这样陈旧了两个版本）。
     "horosa-skill/examples/clients/codex.md",
+    "horosa-skill/examples/clients/remote-connectors-oauth-gateway.md",
+    "horosa-skill/examples/clients/README.md",
     "horosa-skill/examples/clients/codex-config.toml",
     "horosa-skill/examples/clients/claude-code.md",
     ".agents/skills/horosa-agent/SKILL.md",
@@ -804,6 +821,7 @@ KNOWLEDGE_CLAIMS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("README_EN.md", r"(\d+) technique operation manuals", ("manual_domains",)),
     ("README_EN.md", r"bazi pithy corpus \((\d+) entries", ("total_entries",)),
     ("AGENTS.md", r"`knowledge_read`（(\d+) 域", ("domains",)),
+    ("README_EN.md", r"badge/knowledge-(\d+)%20domains", ("domains",)),
     ("AGENTS.md", r"（(\d+) 域/(\d+) 条，逐条带出处", ("manual_domains", "manual_entries")),
     ("skills/horosa-agent/SKILL.md", r"`knowledge_read`（(\d+) 域", ("domains",)),
     ("skills/horosa-agent/SKILL.md", r"跨 (\d+) 域全文检索", ("domains",)),
@@ -864,7 +882,308 @@ def check_envelope_schema_version() -> None:
         )
 
 
+# --- 7. doc-currency institution (v0.40.0) ----------------------------------------------------------
+# Four guards that make "keep the docs current" a machine fact instead of a habit (AGENTS.md §2 protocol v3):
+# the doc map must list every guidance doc; every lesson must be indexed and (for the newest versions) distilled;
+# the thin mirrors are build output; third-party facts carry a source and a date and get re-verified on a clock.
+
+import datetime as _dt
+import importlib.util as _ilu
+
+DOC_MAP = ROOT / "docs" / "DOC_MAP.md"
+GUIDANCE_DOC_GLOBS: tuple[str, ...] = (
+    "*.md",  # repo root (CHANGELOG.md is gitignored; *.local.md are gitignored)
+    "docs/*.md",
+    "docs/templates/*.md",
+    "skills/horosa-agent/SKILL.md",
+    "skills/horosa-agent/references/*.md",
+    ".agents/skills/horosa-agent/SKILL.md",
+    ".cursor/rules/*.mdc",
+    ".clinerules/*.md",
+    ".windsurf/rules/*.md",
+    ".github/copilot-instructions.md",
+    "horosa-skill/README.md",
+    "horosa-skill/examples/clients/*.md",
+    "vendor/README.md",
+)
+GUIDANCE_DOC_IGNORE = {"CHANGELOG.md"}
+
+
+def guidance_docs(root: Path = ROOT) -> list[str]:
+    found: set[str] = set()
+    for pattern in GUIDANCE_DOC_GLOBS:
+        for path in root.glob(pattern):
+            rel = path.relative_to(root).as_posix()
+            if path.is_file() and rel not in GUIDANCE_DOC_IGNORE and not rel.endswith(".local.md"):
+                found.add(rel)
+    return sorted(found)
+
+
+def doc_map_rows(text: str) -> set[str]:
+    """Every backticked path at the start of a table row (a row may list several docs: `A` / `B`)."""
+    rows: set[str] = set()
+    for line in text.splitlines():
+        if not line.startswith("| `"):
+            continue
+        first_cell = line.split("|")[1]
+        for m in re.finditer(r"`([^`]+)`", first_cell):
+            rows.add(m.group(1).split("（")[0].strip())
+    return rows
+
+
+def doc_map_problems(docs: list[str], rows: set[str]) -> list[str]:
+    return [f"docs/DOC_MAP.md: `{rel}` is a guidance doc with no row — write its purpose, update trigger and guard" for rel in docs if rel not in rows]
+
+
+def check_doc_map() -> None:
+    if not DOC_MAP.is_file():
+        err("docs/DOC_MAP.md missing — the doc-currency ledger (AGENTS.md §2 v3)")
+        return
+    for problem in doc_map_problems(guidance_docs(), doc_map_rows(read(DOC_MAP))):
+        err(problem)
+
+
+LESSONS_SECTION_RE = re.compile(r"^### (v\d+\.\d+\.\d+(?:-dev)?) / ", re.M)
+LESSONS_INDEX_RE = re.compile(r"^\| (v\d+\.\d+\.\d+(?:-dev)?) ", re.M)
+DISTILL_NEWEST = 3
+
+
+def lessons_distillation_problems(lessons: str, agents: str, *, newest: int = DISTILL_NEWEST) -> list[str]:
+    problems: list[str] = []
+    sections = LESSONS_SECTION_RE.findall(lessons)
+    indexed = set(LESSONS_INDEX_RE.findall(lessons))
+    for version in dict.fromkeys(sections):
+        if version not in indexed:
+            problems.append(f"docs/LESSONS.md: `### {version} / …` has no index row (the table at the top is how the next agent finds it)")
+    recent: list[str] = []
+    for version in sections:  # the ledger is newest-first
+        base = version.replace("-dev", "")
+        if base not in recent:
+            recent.append(base)
+        if len(recent) >= newest:
+            break
+    for version in recent:
+        if version not in agents:
+            problems.append(f"AGENTS.md never mentions {version} — distil the LESSONS entry into the current-truth rules (protocol v3 step 2)")
+    # Per-section anchors for the newest versions: a lesson title that names a code identifier in backticks must leave
+    # that identifier somewhere in AGENTS.md (the audit that motivated this found nine v0.40.0 lessons whose version
+    # string appeared in AGENTS.md while the rule itself never did — version presence alone is too weak a signal).
+    for m in re.finditer(r"^### (v\d+\.\d+\.\d+(?:-dev)?) / [^\n]*?— ([^\n]*)$", lessons, re.M):
+        version, title = m.group(1), m.group(2)
+        if version.replace("-dev", "") not in recent:
+            continue
+        anchors = [a for a in re.findall(r"`([^`]{3,60})`", title) if not a.startswith("v0.")]
+        if anchors and not any(a in agents for a in anchors):
+            problems.append(f"docs/LESSONS.md `### {version} / … — {title[:60]}…`: none of its code anchors {anchors[:3]} appear in AGENTS.md — the rule was not distilled")
+    return problems
+
+
+def check_lessons_distilled() -> None:
+    for problem in lessons_distillation_problems(read(ROOT / "docs" / "LESSONS.md"), read(ROOT / "AGENTS.md")):
+        err(problem)
+
+
+def check_agent_mirrors_generated() -> None:
+    spec = _ilu.spec_from_file_location("gen_agent_mirrors", PKG / "scripts" / "gen_agent_mirrors.py")
+    module = _ilu.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    for rel in module.drift():
+        err(f"{rel}: differs from scripts/gen_agent_mirrors.py's render — the mirrors are build output; edit the template and rerun the generator")
+
+
+THIRD_PARTY_LEDGER = PKG / "contracts" / "third_party_facts.json"
+
+
+def stale_facts(ledger: dict, today: _dt.date, max_age_days: int | None = None) -> list[tuple[str, int]]:
+    """[(id, age_days)] for entries older than max_age_days (ledger's own value unless overridden)."""
+    limit = int(ledger.get("max_age_days", 120) if max_age_days is None else max_age_days)
+    out: list[tuple[str, int]] = []
+    for fact in ledger.get("facts", []):
+        try:
+            verified = _dt.date.fromisoformat(str(fact.get("verified_on")))
+        except ValueError:
+            continue
+        age = (today - verified).days
+        if age > limit:
+            out.append((str(fact.get("id")), age))
+    return out
+
+
+def third_party_fact_problems(ledger: dict, today: _dt.date, root: Path = ROOT) -> list[str]:
+    problems: list[str] = []
+    facts = ledger.get("facts")
+    if not isinstance(facts, list) or not facts:
+        return ["contracts/third_party_facts.json: no facts"]
+    seen_subjects: set[str] = set()
+    ids: set[str] = set()
+    for fact in facts:
+        fid = str(fact.get("id") or "?")
+        if fid in ids:
+            problems.append(f"third_party_facts: duplicate id {fid}")
+        ids.add(fid)
+        for key in ("subject", "fact", "source_url", "verified_on", "affects"):
+            if not fact.get(key):
+                problems.append(f"third_party_facts[{fid}]: missing `{key}`")
+        if not str(fact.get("source_url", "")).startswith("https://"):
+            problems.append(f"third_party_facts[{fid}]: source_url must be an https URL you actually read")
+        try:
+            verified = _dt.date.fromisoformat(str(fact.get("verified_on")))
+            if verified > today:
+                problems.append(f"third_party_facts[{fid}]: verified_on {verified} is in the future")
+        except ValueError:
+            problems.append(f"third_party_facts[{fid}]: verified_on must be YYYY-MM-DD")
+        for rel in fact.get("affects", []) or []:
+            if not (root / rel).exists():
+                problems.append(f"third_party_facts[{fid}]: affects `{rel}` does not exist")
+        seen_subjects.add(str(fact.get("subject")))
+    for subject in ledger.get("required_subjects", []):
+        if subject not in seen_subjects:
+            problems.append(f"third_party_facts: required subject `{subject}` has no entry")
+    return problems
+
+
+def check_third_party_facts(*, strict_staleness: bool = False, today: _dt.date | None = None) -> None:
+    if not THIRD_PARTY_LEDGER.is_file():
+        err("contracts/third_party_facts.json missing — third-party facts must carry a source and a verification date")
+        return
+    ledger = json.loads(read(THIRD_PARTY_LEDGER))
+    now = today or _dt.date.today()
+    for problem in third_party_fact_problems(ledger, now):
+        err(problem)
+    for fid, age in stale_facts(ledger, now):
+        msg = f"third_party_facts[{fid}]: verified {age} days ago (> {ledger.get('max_age_days', 120)}) — re-read its source_url, update fact/verified_on"
+        if strict_staleness:
+            err(msg)
+        else:
+            warn(msg)
+
+
+# ---- v0.40.0 文档复审新增的三把 README 锁 ---------------------------------------------------------
+# ① 分组标题里的「（N）」= 该组表格首列的工具 ID 数（三组曾错：28/33、5/13、10/11，两版没人发现）。
+GROUP_HEADER_ZH = re.compile(r"^<summary>.*?（(\d+)）</b></summary>\s*$")
+GROUP_HEADER_EN = re.compile(r"^### .*\((\d+)\)\s*$")
+_GROUP_NUMBERS = re.compile(r"[（(](\d+)[）)]")
+_ROW_IDS = re.compile(r"`([^`]+)`")
+
+
+def group_header_problems(text: str, *, label: str = "README") -> list[str]:
+    """Every single-number group header must equal the count of backticked IDs in its table's first column."""
+    problems: list[str] = []
+    lines = text.split("\n")
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        m = GROUP_HEADER_ZH.match(line) or GROUP_HEADER_EN.match(line)
+        if not m or len(_GROUP_NUMBERS.findall(line)) != 1:  # 双数字标题（协议 6 + 门面 11）由 check_tool_counts 管
+            i += 1
+            continue
+        ids: set[str] = set()
+        j = i + 1
+        while j < len(lines):
+            nxt = lines[j]
+            if nxt.startswith(("</details>", "### ", "## ", "<summary>")):
+                break
+            if nxt.startswith("| `"):
+                ids.update(_ROW_IDS.findall(nxt.split("|")[1]))
+            j += 1
+        claimed = int(m.group(1))
+        if claimed != len(ids):
+            problems.append(f"{label}:{i + 1}: group header claims {claimed} tools but its table lists {len(ids)} IDs")
+        i = j
+    return problems
+
+
+def check_group_headers() -> None:
+    for name in ("README.md", "README_EN.md"):
+        for problem in group_header_problems(read(ROOT / name), label=name):
+            err(problem)
+
+
+# ② 导出契约号：README 的「契约 vN 镜像 aiExport vM」= exports.registry 的两个常量（v14/v56 陈旧了两版）。
+EXPORT_CONTRACT_CLAIMS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("README.md", re.compile(r"契约 v(\d+) 镜像桌面端 aiExport v(\d+)")),
+    ("README_EN.md", re.compile(r"contract \(?v(\d+)\)? mirrors (?:the desktop app's |desktop )aiExport v(\d+)")),
+)
+
+
+def export_contract_problems(text: str, pattern: re.Pattern[str], *, contract: int, mirrored: int, label: str) -> list[str]:
+    problems: list[str] = []
+    hits = list(pattern.finditer(text))
+    if not hits:
+        problems.append(f"{label}: no export-contract claim matches {pattern.pattern!r} (keep the claim in this lockable form)")
+    for m in hits:
+        if (int(m.group(1)), int(m.group(2))) != (contract, mirrored):
+            problems.append(
+                f"{label}: claims export contract v{m.group(1)} / aiExport v{m.group(2)} but exports.registry says v{contract} / v{mirrored}"
+            )
+    return problems
+
+
+def check_export_contract_versions() -> None:
+    from horosa_skill.exports.registry import AI_EXPORT_SETTINGS_VERSION, MIRRORED_UPSTREAM_AIEXPORT_VERSION
+
+    for name, pattern in EXPORT_CONTRACT_CLAIMS:
+        for problem in export_contract_problems(
+            read(ROOT / name), pattern, contract=AI_EXPORT_SETTINGS_VERSION, mirrored=MIRRORED_UPSTREAM_AIEXPORT_VERSION, label=name
+        ):
+            err(problem)
+    example = ROOT / "docs" / "runtime-payload-manifest.example.json"
+    if example.exists():
+        stamped = json.loads(read(example)).get("export_registry_version")
+        if stamped != AI_EXPORT_SETTINGS_VERSION:
+            err(f"docs/runtime-payload-manifest.example.json: export_registry_version {stamped} != tree {AI_EXPORT_SETTINGS_VERSION}")
+
+
+# ③ 闸门两侧的数字：EN 的 gated 行 + 两份 README 的免闸行（zh 此前没有免闸行，EN 停在 84 / 8）。
+GATE_COUNT_CLAIMS: tuple[tuple[str, re.Pattern[str], str], ...] = (
+    ("README_EN.md", re.compile(r"`(\d+)` technique tools trigger `must_ask_user=true`"), "gated"),
+    ("README.md", re.compile(r"(\d+) 个注册表 / 知识 / 解析类工具"), "exempt"),
+    ("README_EN.md", re.compile(r"`(\d+)` registry / knowledge / parser tools"), "exempt"),
+)
+
+
+def gate_count_problems(text: str, pattern: re.Pattern[str], *, expected: int, label: str) -> list[str]:
+    hits = pattern.findall(text)
+    if not hits:
+        return [f"{label}: no claim matches {pattern.pattern!r} (keep the gate / exempt claim in this lockable form)"]
+    return [f"{label}: claims {hit} but the registry-derived value is {expected}" for hit in hits if int(hit) != expected]
+
+
+def check_gate_counts() -> None:
+    from horosa_skill.agent_guidance import PREFLIGHT_EXEMPT_TOOLS
+
+    expected = {"gated": expected_gated(), "exempt": len(PREFLIGHT_EXEMPT_TOOLS)}
+    for name, pattern, kind in GATE_COUNT_CLAIMS:
+        for problem in gate_count_problems(read(ROOT / name), pattern, expected=expected[kind], label=name):
+            err(problem)
+
+
+ONLY_CHECKS = {
+    "third-party-facts": lambda strict: check_third_party_facts(strict_staleness=strict),
+    "doc-map": lambda strict: check_doc_map(),
+    "lessons": lambda strict: check_lessons_distilled(),
+    "mirrors": lambda strict: check_agent_mirrors_generated(),
+    "group-headers": lambda strict: check_group_headers(),
+    "export-contract": lambda strict: check_export_contract_versions(),
+    "gate-counts": lambda strict: check_gate_counts(),
+}
+
+
 def main() -> None:
+    argv = sys.argv[1:]
+    strict = "--strict-staleness" in argv
+    only = argv[argv.index("--only") + 1] if "--only" in argv and argv.index("--only") + 1 < len(argv) else None
+    if only:
+        if only not in ONLY_CHECKS:
+            raise SystemExit(f"docs-sync: unknown --only {only!r}; choose from {sorted(ONLY_CHECKS)}")
+        ONLY_CHECKS[only](strict)
+        for warning in WARNINGS:
+            print(f"::warning::{warning}")
+        if ERRORS:
+            raise SystemExit(f"docs-sync[{only}]: FAIL\n- " + "\n- ".join(ERRORS))
+        print(f"docs-sync[{only}]: ok")
+        return
     version = expected_version()
     check_versions(version)
     check_tool_coverage()
@@ -886,12 +1205,21 @@ def main() -> None:
     check_envelope_schema_version()
     check_compact_surface_count()
     check_full_surface_counts()
+    check_group_headers()
+    check_export_contract_versions()
+    check_gate_counts()
     check_knowledge_counts()
     check_root_manifest_version()
+    check_doc_map()
+    check_lessons_distilled()
+    check_agent_mirrors_generated()
+    check_third_party_facts(strict_staleness=strict)
+    for warning in WARNINGS:
+        print(f"::warning::{warning}")
     if ERRORS:
         raise SystemExit("docs-sync: FAIL\n- " + "\n- ".join(ERRORS))
     print(f"docs-sync: ok (version {version}, {len(TOOL_DEFINITIONS)} tools, "
-          "links/markers/frontmatter clean)")
+          "links/markers/frontmatter clean, doc map / lessons / mirrors / third-party ledger current)")
 
 
 if __name__ == "__main__":

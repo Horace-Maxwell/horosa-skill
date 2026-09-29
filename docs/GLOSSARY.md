@@ -57,16 +57,18 @@
 | kentang | 把 `ken` + 神数 服务挂载到 chart service 的注册表；离线 payload 只带部分引擎，故需优雅降级（新版 registry 自带惰性挂载 `_LazyMountedService`）。 |
 | chart service（:8899） | Python astropy `websrv`，对外 `/qimen/pan`、`/geomancy/reading`、`/location/acg`、各 `/*/pan` 等端点。 |
 | java 后端（:9999） | `astrostudyboot.jar`，对外 `/chart`、`/nongli/time`、`/jieqi/year` 等；Temurin 17 需 `-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8` 避免 CJK 乱码。 |
+| 端口归属（9999/8899 vs 9977/8877） | `:9999`/`:8899` 是用户桌面端的默认栈——永不 kill、永不当测试对象、连 TCP 都不探；本仓 vendored 测试实例起在 `:9977`/`:8877`（`start_vendored_instance.sh`），矩阵 lane 用 19999/18899；live 门禁只认 `HOROSA_SERVER_ROOT`/`HOROSA_CHART_SERVER_ROOT` 显式点名的实例（AGENTS §8）。 |
+| ASCII runtime 根（Windows） | 随包 JDK 17 与 Swiss Ephemeris 按 ANSI 读路径，Windows 上 runtime 根必须纯 ASCII：`install` 下载前即拒（`runtime.path_not_ascii`），doctor 报 `windows:runtime_root_not_ascii`；修法 `HOROSA_RUNTIME_ROOT=C:\horosa`（自动迁移未做）。 |
 | horosa-core-js | headless Node/JS 层：`tongshefa` 计算 + 把 `ken` 结果格式化成 `aiExport.js` 段。技法 JS（如 yizhangjing/liureng/dunjia）在此，随 repo 走。 |
 | aiExport.js | 星阙的导出段格式化器（各技法的 `[段名]` 富化）。 |
 | 离线 runtime / offline runtime | 打包 Python(embed) + JDK17 + Node + astropy + 引擎 + core-js 的自足运行时，作为 GitHub Release 资产分发。 |
 | `runtime-manifest.json` | 发布清单：映射平台→归档 URL/sha（外层），以及嵌入 payload 的版本/契约（内层）。 |
 | `export_registry_version` | 导出契约版本号，两个 builder 必须同步 stamp（数字漂移由 `verify_builder_parity.py` 拦截）。 |
 | 双平台 manifest | 同时含 `darwin-arm64` + `win32-x64` 两个平台条目。 |
-| pin-forward | mac 侧把新版 manifest 的 `win32-x64` 临时指向上一个已构建 win zip 的策略——守卫绿、install 不坏，但 Windows 落后若干版，直到 Windows 侧补齐真半边。详见 [`LESSONS.md`](./LESSONS.md)。 |
-| release-completeness 守卫 | CI：发布后查 `latest` 是否双平台 / 归档是否 404。 |
+| pin-forward | **必须被抓住的故障形态**：新版 manifest 的 `win32-x64` 指向旧版 zip（历史上曾是 mac 侧的临时策略）。今清单 URL 钉 tag、由托管流水线两半齐了才上线，`sync_windows_release.py --check` 是权威探测器，`[GAP]` 即阻断。详见 [`LESSONS.md`](./LESSONS.md)。 |
+| release-completeness 守卫 | CI（每 6 h + 发布后由 publish job dispatch + 每周 kick 一次 release 模式矩阵）：公开 latest 双平台 / 归档 200 / SBOM · `.mcpb` · wheel 在场 / `min_os` / 资产 digest 与 `server.json` 一致。 |
 | builder-parity lint | CI：查 mac 与 Windows 两个 builder + 验证器契约是否漂移。 |
-| `sync_windows_release.py` | Windows 侧一条命令补齐：检测缺半边 → 构建 → 下载 darwin → 双 manifest + 校验和 → 验证 → 上传。 |
+| `sync_windows_release.py` | 发布完整性裁判：`--check --tag vX --draft`（发布中）/ `--check`（公开 latest）判两半是否齐、URL 是否钉 tag、是否 pin-forward；`--upload` 是托管路径不可用时 Windows 构建机的回退收尾。 |
 
 ## 导出契约与闸门（工程补充）
 
@@ -77,7 +79,7 @@
 | preset / `AI_EXPORT_PRESET_SECTIONS` | 每技法「应出哪些段」的契约表（镜像上游 aiExport.js），在 `exports/registry.py`。 |
 | `AI_EXPORT_OPTIONAL_SECTIONS` | 条件段白名单：段可能不出现时登记于此；条件段必须 preset+optional 双登记。 |
 | missing / unknown_detected_sections | 契约核对两类偏差：预期未出现 / 出现但不在 preset；干净导出 = 两者皆空。 |
-| `MIRRORED_UPSTREAM_AIEXPORT_VERSION` | 机读镜像基线：导出契约对齐到上游 aiExport 第几版（现 48，逐技法对齐；`verify_export_contract_mirror.py` 断言 vendored aiExport 版本 == 本常量）。 |
+| `MIRRORED_UPSTREAM_AIEXPORT_VERSION` | 机读镜像基线：导出契约对齐到上游 aiExport 第几版（v0.40.0 = 58，逐技法对齐；`verify_export_contract_mirror.py` 断言 vendored aiExport 的版本常量 == 本常量；skill 自身的契约号 `AI_EXPORT_SETTINGS_VERSION` 独立计数，今 15）。 |
 | 冻结值（课/局/卦） | 占卦型技法（小六壬/飞宫/小成图/皇极轨策/卜卦）的起卦结果一经起出即冻结——改流派/设置只重排判读，绝不按时重起（重起=伪造用户没见过的盘）。 |
 | 神数正传五流派 | `zhengchuan` 一入口含 铁板/邵子/大定/六亲/铁算心易；`school` 选定；除铁算心易（查询层）外皆需生辰四柱（走 `/nongli/time` 权威柱）。 |
 | agent_guidance 闸门 / `agent_recovery` | 运行时澄清闸：设置未确认返回 `agent_guidance.required`；`details.agent_recovery.prompt_to_user` 可直接转发追问；确认后带 `agent_confirmed_settings`/`defaults_accepted`。 |
@@ -86,3 +88,5 @@
 | FakeClient / FakeJsClient | 离线测试桩（HTTP/JS 层），必须返回真内容（禁裸「无」、禁 generated_template 回退）。 |
 | pdSyncRev | chart 服务心跳回显的主限引擎同步版本号（防陈旧实例静默吞新钥匙）。 |
 | run / artifact / memory | 每次调用落一条可检索记录（SQLite FTS + JSON artifact + AI 回答写回）。 |
+| Jev（TypeSafe） | 可选云端决策层，默认关：只回类型化的选择 / 概率，不生成文本；`HOROSA_JEV_SCOPE=meta` 只发脱敏问题文本，`snapshot` 才发导出快照（faithfulness / hecan 面需要）；决策进 `technique_card.decisions[]`，`horosa-skill jev status` / `jev events` 查看；`HOROSA_JEV_API_KEY` 永不打印、不进配置文件。 |
+| `HOROSA_REPORT_OUTPUT_ROOTS` | 报告类工具允许写入的额外根目录白名单（`output_path` 是不可信输入）；越界报 `report.output_path_not_allowed` 且不落盘。 |

@@ -30,11 +30,11 @@
 ```powershell
 $Root = "$env:TEMP\horosa-report-windows-final"
 $RepoRoot = "$Root\repo"
-$Home = "$Root\home"
+$IsoHome = "$Root\home"   # 不要叫 $IsoHome：那是 PowerShell 只读自动变量，赋值会抛错
 $Workspace = "$Root\workspace"
 $Logs = "$Root\logs"
 Remove-Item -Recurse -Force $Root -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force $RepoRoot, $Home, $Workspace, $Logs | Out-Null
+New-Item -ItemType Directory -Force $RepoRoot, $IsoHome, $Workspace, $Logs | Out-Null
 git clone https://github.com/Horace-Maxwell/horosa-skill.git $RepoRoot\horosa-skill
 Set-Location $RepoRoot\horosa-skill\horosa-skill
 git rev-parse HEAD
@@ -78,7 +78,7 @@ uv run pytest -q
 ### 2. OpenClaw / mcporter 一键接入
 
 ```powershell
-uv run horosa-skill client openclaw-setup --workspace $Workspace --isolate-home $Home
+uv run horosa-skill client openclaw-setup --workspace $Workspace --isolate-home $IsoHome
 ```
 
 期望：
@@ -86,7 +86,7 @@ uv run horosa-skill client openclaw-setup --workspace $Workspace --isolate-home 
 - 返回 JSON，不挂死。
 - `ready_for_openclaw=true`。
 - `config_written_to` 指向 `$Workspace\config\mcporter.json`。
-- `local_home` 指向 `$Home`。
+- `local_home` 指向 `$IsoHome`。
 - `command` 应是 Windows 可执行路径，通常是 `uv.exe` 或 `cmd.exe` 包装后的 Windows 路径。
 - 不得出现 `/bin/zsh`、`export HOME=...`、POSIX shell 语法。
 - `HOME`、`USERPROFILE`、`HOROSA_RUNTIME_ROOT`、`HOROSA_SKILL_DATA_DIR` 都应该是 Windows 绝对路径。
@@ -101,7 +101,7 @@ uv run horosa-skill client openclaw-check --workspace $Workspace
 
 - `ok=true`
 - `server_visible=true`
-- `listed_tool_count >= 43`
+- `listed_tool_count` == `contracts/mcp_list_budget.json` 的 `compact_tools`（精简面 11；`--surface full` 时为 `full_tools` 120）——别写死数字，ci.yml 的 Windows smoke 就是这么读的
 - `knowledge_registry_ok=true`
 - `chart_ok=true`
 - `memory_show_ok=true`
@@ -117,8 +117,7 @@ uv run horosa-skill client openclaw-check --workspace $Workspace --full
 期望：
 
 - `ok=true`
-- `tool_count=39`
-- `passed_tools=39`
+- `tool_count` == `passed_tools` == 技法数（`contracts/mcp_list_budget.json` `full_tools` − 门面数；今日 110）
 - `failed_tools={}`
 - `dispatch.ok=true`
 - `answer_writeback.ok=true`
@@ -134,7 +133,7 @@ $Payload = '{"date":"2028-04-06","time":"09:33:00","zone":"8","lat":"31n13","lon
 $Payload | uv run horosa-skill report from-tool qimen --stdin --format pdf --question "这个事情能不能推进？风险在哪里？"
 ```
 
-> 说明（v0.6.0）：`qimen` / `taiyi` / `jinkou`（及 `sanshiunited` 里的奇门 + 太乙）现在由星阙 `ken` 后端（`kinqimen` / `kintaiyi` / `kinjinkou`）计算，需要本地 chart 服务在线。安装版 runtime 已内置这三个引擎，`doctor` 通过即代表 chart 服务可起；若 `report from-tool qimen` 报无法连接后端，先确认 runtime 为含 ken 引擎的版本（v0.6.0 及以上）、chart 服务已启动，而不是误判算法不可用。
+> 说明（历史注记，v0.6.0 起）：`qimen` / `taiyi` / `jinkou`（及 `sanshiunited` 里的奇门 + 太乙）现在由星阙 `ken` 后端（`kinqimen` / `kintaiyi` / `kinjinkou`）计算，需要本地 chart 服务在线。安装版 runtime 已内置这三个引擎，`doctor` 通过即代表 chart 服务可起；若 `report from-tool qimen` 报无法连接后端，先确认 runtime 为含 ken 引擎的版本（v0.6.0 及以上）、chart 服务已启动，而不是误判算法不可用。
 
 期望：
 
@@ -148,7 +147,9 @@ $Payload | uv run horosa-skill report from-tool qimen --stdin --format pdf --que
 用 `ai_answer_text` 生成报告。可以通过 Python 调 service，避免 CLI 引号麻烦：
 
 ```powershell
-uv run python - <<'PY'
+@'
+# （pwsh 没有 bash heredoc；用 here-string 喂 stdin）
+'@ | Out-Null; uv run python - <<'PY'
 from pathlib import Path
 from horosa_skill.config import Settings
 from horosa_skill.memory.store import MemoryStore
@@ -209,7 +210,9 @@ PY
 可用下面的检查脚本：
 
 ```powershell
-uv run python - <<'PY'
+@'
+# （pwsh 没有 bash heredoc；用 here-string 喂 stdin）
+'@ | Out-Null; uv run python - <<'PY'
 from pathlib import Path
 from docx import Document
 

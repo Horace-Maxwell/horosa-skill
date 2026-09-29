@@ -1,0 +1,241 @@
+{
+  "_comment": "Ledger of third-party facts the skill depends on (client config paths, timeouts, budgets, SDK/API shapes, CI runtimes). Each entry records WHERE the fact was read and WHEN. scripts/verify_docs_sync.py asserts: every subject in `required_subjects` has an entry, every entry has an https source and a valid date, every `affects` path exists, and entries older than `max_age_days` are ::warning in CI and FAIL under --strict-staleness (the weekly docs-currency workflow files an issue). Re-verify = re-read the source, update `fact` if it changed, bump `verified_on`, and fix the code/docs in `affects` — that is the whole institution (AGENTS §2 v3).",
+  "max_age_days": 120,
+  "required_subjects": [
+    "claude-code",
+    "claude-desktop",
+    "codex",
+    "cursor",
+    "vscode",
+    "gemini",
+    "windsurf",
+    "cline",
+    "zed",
+    "openclaw",
+    "remote-connectors",
+    "mcp-python-sdk",
+    "mcpb",
+    "github-actions",
+    "github-runner-images",
+    "uv",
+    "node",
+    "python"
+  ],
+  "facts": [
+    {
+      "id": "claude-code.mcp-add",
+      "subject": "claude-code",
+      "fact": "`claude mcp add --transport http|sse|stdio --scope local|project|user -e KEY=V -- cmd`; `.mcp.json` supports ${VAR} / ${VAR:-default} and per-server `timeout` (ms); tool and property names 1–64 chars; MCP output capped by MAX_MCP_OUTPUT_TOKENS (25000); idle stdio servers reaped after 30 min; plugin manifests may declare mcpServers as .mcpb paths and use ${CLAUDE_PLUGIN_ROOT} / userConfig.",
+      "source_url": "https://docs.claude.com/en/docs/claude-code/mcp",
+      "verified_on": "2026-09-29",
+      "affects": [
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        ".claude-plugin/plugin.json",
+        ".mcp.json"
+      ]
+    },
+    {
+      "id": "claude-desktop.config",
+      "subject": "claude-desktop",
+      "fact": "claude_desktop_config.json under ~/Library/Application Support/Claude (macOS) / %APPDATA%\\Claude (Windows); .mcpb bundles install via Settings → Extensions; GUI clients do not inherit the shell PATH (absolute `uv` path required).",
+      "source_url": "https://claude.com/docs/cowork/changelog",
+      "verified_on": "2026-09-29",
+      "affects": [
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        "horosa-skill/manifest.json",
+        "horosa-skill/examples/clients/claude_desktop_config.json"
+      ]
+    },
+    {
+      "id": "codex.mcp-config",
+      "subject": "codex",
+      "fact": "config.toml [mcp_servers.<name>]: startup_timeout_sec default 10, tool_timeout_sec default 60, `env` table sets vars, `env_vars` forwards Codex's own env (older Codex rejects unknown keys in the table — do not write env_vars); default env whitelist HOME LOGNAME PATH SHELL USER __CF_USER_TEXT_ENCODING LANG LC_ALL TERM TMPDIR TZ; Codex 0.158.0 (2026-09-28) added tool_input_schema_max_bytes default 5000 (oversize inputSchema is compacted: descriptions stripped) and startup_readiness = \"catalog\".",
+      "source_url": "https://learn.chatgpt.com/docs/config-file/config-reference",
+      "verified_on": "2026-09-29",
+      "affects": [
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        "horosa-skill/scripts/verify_mcp_list_budget.py",
+        ".agents/skills/horosa-agent/SKILL.md"
+      ]
+    },
+    {
+      "id": "cursor.mcp-json",
+      "subject": "cursor",
+      "fact": "~/.cursor/mcp.json (global) and .cursor/mcp.json (project); placeholders ${workspaceFolder} ${workspaceFolderBasename} ${env:X} ${userHome} ${pathSeparator}; deep link cursor://anysphere.cursor-deeplink/mcp/install?name=&config=base64; docs table lists `type` (stdio) though examples omit it; ~40-tool practical cap (older observation, not on the docs page).",
+      "source_url": "https://cursor.com/docs/context/mcp",
+      "verified_on": "2026-09-29",
+      "affects": [
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        ".cursor/mcp.json",
+        ".cursor/rules/horosa-skill.mdc"
+      ]
+    },
+    {
+      "id": "vscode.mcp-json",
+      "subject": "vscode",
+      "fact": ".vscode/mcp.json root key `servers`, `type` required, placeholders ${workspaceFolder} ${env:X} ${userHome} ${input:id}; new sandbox fields; 128-tool ceiling shared across servers (Copilot).",
+      "source_url": "https://code.visualstudio.com/docs/agents/reference/mcp-configuration",
+      "verified_on": "2026-09-29",
+      "affects": [
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        ".vscode/mcp.json"
+      ]
+    },
+    {
+      "id": "zed.context-servers",
+      "subject": "zed",
+      "fact": "settings.json `context_servers.<name>` = {command, args (optional since 2026-06), env, timeout (seconds, default 60)}; no `source` field; global context_server_timeout 60.",
+      "source_url": "https://github.com/zed-industries/zed/blob/main/crates/settings_content/src/project.rs",
+      "verified_on": "2026-09-29",
+      "affects": [
+        "horosa-skill/src/horosa_skill/surfaces/cli.py"
+      ]
+    },
+    {
+      "id": "gemini.settings",
+      "subject": "gemini",
+      "fact": "~/.gemini/settings.json and project .gemini/settings.json `mcpServers`; per-server `timeout` in ms (default 600000), `trust` default false; tool FQN is unconditionally mcp_{serverName}_{toolName}, names over 63 chars are middle-truncated; $schema/additionalProperties stripped from schemas.",
+      "source_url": "https://geminicli.com/docs/tools/mcp-server/",
+      "verified_on": "2026-09-29",
+      "affects": [
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        "horosa-skill/scripts/verify_mcp_client_compat.py",
+        "GEMINI.md"
+      ]
+    },
+    {
+      "id": "windsurf.devin-desktop",
+      "subject": "windsurf",
+      "fact": "Windsurf was renamed Devin Desktop on 2026-06-02; Cascade was removed in v3.9.19 (2026-09-08) and Devin Local is the only agent. It reads the Devin CLI MCP files: ~/.config/devin/mcp_config.json (macOS/Linux), %APPDATA%\\devin\\mcp_config.json (Windows), project .devin/mcp_config.json (+ .devin/mcp_config.local.json); root key mcpServers; stdio fields command/args/env/disabled; no per-server timeout. Legacy Cascade read ~/.codeium/windsurf/mcp_config.json with a 100-tool cap. UNVERIFIED: whether Devin Local still reads the legacy `.windsurf/rules/*.md` rules files — the repo keeps that mirror until a Devin rules path is documented.",
+      "source_url": "https://docs.devin.ai/cli/extensibility/mcp/configuration",
+      "verified_on": "2026-09-29",
+      "affects": [
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        ".windsurf/rules/horosa-skill.md",
+        "README.md",
+        "README_EN.md"
+      ]
+    },
+    {
+      "id": "cline.mcp-settings",
+      "subject": "cline",
+      "fact": "cline_mcp_settings.json under the host editor's globalStorage/saoudrizwan.claude-dev/settings/; per-server `timeout` in seconds, default 60, range 1–3600; `type: stdio`; CLI also reads ~/.cline/mcp.json.",
+      "source_url": "https://github.com/cline/cline/blob/main/sdk/packages/shared/src/mcp.ts",
+      "verified_on": "2026-09-29",
+      "affects": [
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        ".clinerules/horosa-skill.md"
+      ]
+    },
+    {
+      "id": "openclaw.mcporter",
+      "subject": "openclaw",
+      "fact": "OpenClaw consumes MCP through mcporter (npm, 0.9.0): `mcporter call <server>.<tool> --config <mcporter.json> --timeout <ms>`; first `npx mcporter` run downloads the package plus a native rolldown binding (~2 min on Windows runners); `mcporter` may hang after printing a result when a child server keeps stdio open (docs/hang-debug.md); MCPORTER_DEBUG_HANG=1 dumps handles.",
+      "source_url": "https://github.com/steipete/mcporter",
+      "verified_on": "2026-09-29",
+      "affects": [
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        ".github/workflows/ci.yml"
+      ]
+    },
+    {
+      "id": "remote-connectors.oauth-only",
+      "subject": "remote-connectors",
+      "fact": "claude.ai custom connectors accept only OAuth (client id/secret), no static Bearer; ChatGPT remote MCP requires OAuth (CIMD; DCR still supported when configured) and search/fetch tools for deep research. The skill offers a static Bearer over streamable-http, so both need an OAuth-terminating HTTPS gateway.",
+      "source_url": "https://developers.openai.com/api/docs/mcp",
+      "verified_on": "2026-09-29",
+      "affects": [
+        "README.md",
+        "README_EN.md",
+        "horosa-skill/examples/clients/remote-connectors-oauth-gateway.md"
+      ]
+    },
+    {
+      "id": "mcp-python-sdk.1x",
+      "subject": "mcp-python-sdk",
+      "fact": "Latest 1.x is 1.30.0 (2026-09-07): `streamablehttp_client(url, headers=…)` deprecated in favour of `streamable_http_client(url, http_client=httpx.AsyncClient)`; pydantic >= 2.11; idle streamable-http sessions closed after 30 min (session_idle_timeout), 10000-session cap; LATEST_PROTOCOL_VERSION 2025-11-25 while the spec's latest revision is 2026-07-28.",
+      "source_url": "https://github.com/modelcontextprotocol/python-sdk/releases/tag/v1.30.0",
+      "verified_on": "2026-09-29",
+      "affects": [
+        "horosa-skill/pyproject.toml",
+        "horosa-skill/tests/test_http_and_clients.py",
+        "horosa-skill/scripts/verify_runtime_live.py"
+      ]
+    },
+    {
+      "id": "mcpb.bundle",
+      "subject": "mcpb",
+      "fact": "@anthropic-ai/mcpb latest 2.1.2 (2025-12-04); manifest_version 0.4 with `uv` server type, optional privacy_policies / compatibility / user_config; `npx mcpb validate` + `mcpb pack`; packing is not byte-reproducible (sha must come from the uploaded build).",
+      "source_url": "https://www.npmjs.com/package/@anthropic-ai/mcpb",
+      "verified_on": "2026-09-29",
+      "affects": [
+        "horosa-skill/scripts/build_mcpb.sh",
+        "horosa-skill/scripts/verify_mcpb_manifest.py",
+        "horosa-skill/manifest.json",
+        "server.json"
+      ]
+    },
+    {
+      "id": "github-actions.node20-removed",
+      "subject": "github-actions",
+      "fact": "Node 20 was removed from GitHub-hosted runners on 2026-09-23; JavaScript actions run on Node 24 and the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION opt-out is gone. Node-24 majors used here: checkout v5, setup-python v6, setup-node v5, upload-artifact v6, download-artifact v7, cache v5, astral-sh/setup-uv v7, attest-build-provenance v3, codeql-action v4, dependency-review-action v5. Avoid download-artifact v8 (no auto-unzip, digest mismatch errors) and setup-uv v10 (cache disabled on release/pull_request_target/workflow_run) until validated on a draft matrix.",
+      "source_url": "https://github.blog/changelog/2026-09-23-node-20-is-no-longer-available-in-github-actions/",
+      "verified_on": "2026-09-29",
+      "affects": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/release-runtime.yml",
+        ".github/workflows/runtime-matrix.yml",
+        ".github/workflows/release-completeness.yml",
+        ".github/workflows/codeql.yml",
+        ".github/workflows/dependency-review.yml",
+        ".github/workflows/publish-pypi.yml",
+        ".github/workflows/runner-probe.yml"
+      ]
+    },
+    {
+      "id": "github-runner-images.labels",
+      "subject": "github-runner-images",
+      "fact": "macos-latest = macOS 26 arm64 (default Python 3.14, cached 3.12); windows-latest = windows-2025 (Python 3.12.10, Node 22, pwsh 7.6); windows-11-arm re-imaged 2026-09-21..30 (default Node 24 / Python 3.13, cached 3.12.10, no uv); ubuntu-latest moves to 26.04 in 2026-11. The workflows pin Python 3.12 and Node 22 explicitly.",
+      "source_url": "https://github.com/actions/runner-images/issues/14602",
+      "verified_on": "2026-09-29",
+      "affects": [
+        ".github/workflows/runtime-matrix.yml",
+        ".github/workflows/runner-probe.yml",
+        "horosa-skill/scripts/verify_runtime_live.py"
+      ]
+    },
+    {
+      "id": "uv.uvx-from",
+      "subject": "uv",
+      "fact": "uv 0.12.14–0.12.20 (2026-09): no semantic change to `uvx --from <wheel URL|path>`; direct-URL dependencies are cached by URL and re-validated per HTTP cache headers (hence the local wheel cache in ~/.horosa/wheels/); 0.12.16 hash-verifies downloads; Windows MAX_PATH fix in 0.12.14.",
+      "source_url": "https://github.com/astral-sh/uv/releases",
+      "verified_on": "2026-09-29",
+      "affects": [
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        "README.md",
+        "README_EN.md"
+      ]
+    },
+    {
+      "id": "node.lts",
+      "subject": "node",
+      "fact": "Node 22 is Maintenance LTS until 2027-04-30 (payload ships the latest-v22.x line); Node 24 Active LTS; Node 26 enters LTS on 2026-10-28.",
+      "source_url": "https://github.com/nodejs/Release/blob/main/schedule.json",
+      "verified_on": "2026-09-29",
+      "affects": [
+        "horosa-skill/scripts/package_runtime_payload.sh"
+      ]
+    },
+    {
+      "id": "python.3.12",
+      "subject": "python",
+      "fact": "Python 3.12 is the runtime floor (requires-python >= 3.12) and the embedded payload interpreter; 3.13 is the default on the new windows-11-arm image, so workflows pin 3.12 explicitly.",
+      "source_url": "https://www.python.org/downloads/",
+      "verified_on": "2026-09-29",
+      "affects": [
+        "horosa-skill/pyproject.toml",
+        ".github/workflows/ci.yml"
+      ]
+    }
+  ]
+}
