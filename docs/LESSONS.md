@@ -16,6 +16,10 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.40.0 (2026-09-29) | 发布前复审：上游已到 v3.11.2（9cd9078f）而 skill 钉的 9b74714b 已不在任何上游分支上（三个修复被并入 v3.11.2 提交）——CI 形状看不见，本机 `--require-upstream` 一跑 51 个 runtime 文件 + 12 个 core-js 漂移 | 上游 HEAD 与 pin 每次发布前必对（`git branch --contains <pin>`）；pin 不在分支上 = 历史被改写，逐文件对账不信 diff；公开发布前 pin 必须在上游公开远端上 |
+| v0.40.0 (2026-09-29) | 「同步了却没同步」第七例：`src/shared/localNongliAdapter.js` 是 v0.9 的自写近似公式，2026 立春算到 10:16（真值 04:02，差 6 小时），奇门本地路由 / 奇门择日扫描 / 七政大限年界都吃它 | `src/shared/` 只许放上游没有对应物的自写件（allowlist 守卫）；有上游同名/同职能文件一律 verbatim vendor；种子值级金标对 lunar-javascript 精确表 + 旧公式负向对照 |
+| v0.40.0 (2026-09-29) | 周一矩阵两条 Windows lane 在 pytest 1500 s 处超时且**没有留下 pytest.log**——分不清慢还是挂 | 预算按主机（Windows 4–5× 慢于 mac）；pytest 输出流式落盘，超时也留尾巴；`test_verify_runtime_live` 两条 |
+| v0.40.0 (2026-09-29) | 15 天里第三方世界的变化：Windsurf 更名 Devin Desktop 且移除 Cascade（配置路径换了）；Codex 0.158 每工具 inputSchema 5000 B 预算（超出静默剥说明）；mcp 1.30 头 API 变更 + pydantic≥2.11；GitHub Actions 删 Node 20 | 客户端路径表加 Devin 路径（旧路径留候选）；`verify_mcp_list_budget` 加每工具 5000 B 硬顶；测试/lane 改 `streamable_http_client`；11 个 action 主版本升到 Node 24 |
 | v0.40.0-dev (2026-09-24) | Windows 复验 lane：main（已同步上游 v3.11，契约 15）× 公开 v0.39.0 runtime（payload 14）→ 6 条 sync311 / sanshiunited live 红——版本偏斜，不是回归；`requires_chart` 只看「活不活、点没点名」，看不出「够不够新」 | `requires_current_runtime_contract`：已装 payload 的 `export_registry_version` < 本树 `AI_EXPORT_SETTINGS_VERSION` 即 skip 并写明偏斜（未知不跳）；挂到 sync311 全部 17 条 live + sanshiunited；每周一矩阵（main × latest）因此不再假红 |
 | v0.40.0-dev (2026-09-24) | Windows 复验：`run_ci_gates` 23/24——benchmark smoke 在 cp1252 管道上 `print(json.dumps(报告, ensure_ascii=False))` 炸；stdio 守卫只扫 print **字面量**，对「打印数据」失明，同盲区 19 个脚本 | 打印数据 = 承诺输出非 ASCII：`ensure_ascii=False`+`print(` 也须 reconfigure；19 脚本补惯用块；windows-smoke 加 benchmark 步骤（唯一非 UTF-8 stdout 的 runner） |
 | v0.40.0 (2026-09) | 首推 windows-smoke 红：tests/ 里 7 处起 node 复算金标的 `subprocess.run(…, text=True)` 没给 encoding，CJK 输出按 cp1252 解炸 | node 调用一律 `encoding="utf-8"`；`test_subprocess_encoding` 扩到 tests/ 的 node 调用（负向对照） |
@@ -112,6 +116,106 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.40.0 / 2026-09-29 — 发布前复审：上游 v3.11.2 漏同步、悬空的 pin、六小时偏差的节气种子、Windows 矩阵预算、客户端世界 15 天的变化
+
+背景：用户要求「再查一遍有没有漏掉的更新 / 适配问题 / 别的问题，一个大版本全包进去」。上一会话把上游同步到 v3.11.1+3 修（pin 9b74714b）
+并做完拍板项，main = 7cde519、CI 绿、未发版。本轮从三处开始：上游树本身、周一 04:23Z 的 schedule 矩阵、以及 2026-09-14 那次九处第三方
+文档核实之后的变化。
+
+1. **上游已到 v3.11.2，且 skill 钉的提交已不在任何上游分支上。**
+   - 症状：Horosa-Public HEAD = 9cd9078f（v3.11.2，2026-09-28，本机未推送）；`git branch --contains 9b74714b` 为空——上游把 v3.11.1 之后的
+     三个修复并进了 v3.11.2 的发布提交（内容全部保留，逐文件核过：22 个文件无一回退，11 个继续演进）。CI 形状下 `verify_upstream_sync`
+     没有上游 checkout，永远绿；本机 `--require-upstream` 一跑：2 个哨兵 + 51 个 runtime 子树文件 + 12 个 core-js 条目漂移、HEAD 领先 1 提交。
+   - v3.11.2 对 skill 有意义的部分（上游 `docs/windows-porting-and-release-checklist.md`「v3.11.2 同步要点」就是清单）：
+     · 八字：新设置**南半球月令** `southMonth`（none 缺省 / chong；只对南纬生效；本地引擎 `flipMonthPillar` 月支 +6、月干五虎遁重起；
+       Java `/bazi/birth` `/bazi/direct` 读同名参数进缓存键）；非东八区按出生**绝对时刻**判交节；「春分定卯时」按直接时间；年柱按立春本身；
+       经纬度「度 + 分」按分 / 60（此前 118e27 → 118.037°，真太阳时偏移最多差 4 分钟）；日柱不再另减一天；公元前岁数虚岁对齐（`alignJavaBaziAges`，
+       Java 回退结果在取数入口 +1）；`:60` 秒进位；农历随时间算法。
+     · 农历 / 节气：交节时刻精确求解（此前系统性晚 ~12 s）并四舍五入到秒；海外出生按北京时间编算的农历表以出生地日期查；**2033 年闰十一月**
+       （此前闰七月；1642 / 2128 / 1813 / 2185 同理）；奇门 / 河洛 / 节气页按当地时间比交节（`buildLocalJieqiYearSeed(year, zone)` 折成当地钟表，
+       `heluoSolarTermOfDate(dateStr, zone, quHuaGong)` 单源）。
+     · 六爻：**间爻按世应位置取**（世应在初四取二三、二五取三四、三上取四五；此前写死三四爻，64 卦中 48 卦把世 / 应本身算进间爻），逐爻带旺衰 /
+       动静 / 空破 / 对世应冲合生克，发动提示「事多阻隔」——`liuyaoFacade.js` / `liuyaoSnapshotEx.js` / `LiuYaoConst.js` verbatim 重 vendor 即得。
+     · 玄学史天象库 `public_data.sqlite` 重生成（84 条年号日期、`julian_date` 置空、`modern_date` 即史料儒略历日期）——随 runtime 载荷。
+     · Java：响应主体保序（同参字节稳定）、组件延迟初始化、crypto v2（`X-Horosa-Crypto` 能力协商；skill 不发该头且置空 `webencrypt.rsaparam.class`，
+       走旧明文路径不变——live 全绿为证）、`/chart` 缓存键加 `_calRev`；启动器 `start_horosa_local.sh` 原生脱离 + 6 个 R5 JVM 旗标
+       （mac 载荷随上游脚本自动获得；skill 的两个补丁锚点仍唯一）。
+     · Python 引擎一批「结果不变」的提速开关（`HOROSA_FAST_JSON_*` / `HOROSA_SWE_LON_MEMO` / … 全是上游 runtime 自己读的 env，不进 skill 的 ENV 注册表）。
+   - 做法：`sync_vendored_runtime_sources.sh`（jar 3.11.1-runtime1 → 3.11.2-runtime1，dist-file / 引擎 / 启动脚本同步）→ `revendor --from-manifest`
+     （9 个 verbatim 重渲染；新 vendor `utils/beijingTimeShift.js`、`utils/perfFlags.js`（headless 下 `flagEnabled` 恒 true = 上游缺省全开）、
+     `bazi/baziAgeText.js`）→ 三个 bespoke 复核：`baziSnapshot.js` 逐 hunk 落上游改动（南半球月令行 / `baziAgeText` / `addDisplayYears` /
+     `alignJavaBaziAges`）后 restamp，两个 guolao 件的上游 diff 只是 [#84] 双触发收敛（UI 调度）→ 直接 restamp → Python：`southMonth` 进
+     `_BAZI_OPTION_VOCAB` / schema / guidance（只在南纬出生时问）/ 技法卡；`time_basis.py` 标签跟 `timeBasisLine.js:5`；`tools/heluo.js` 改调上游单源
+     `heluoSolarTermOfDate`（自带 port 删除）→ 知识包全部重收割（27 手册 / 236 条不变，正文随上游 4 份 HelpDoc 更新）→ `--write-state` 9cd9078f。
+   - 验证：JS loadcheck 365 / selfcheck（+7 条值级：南半球月令 未→丑・己丑；Java 岁数对齐含跨纪元；河洛纽约 2026-02-03 = 立春初候 vs 北京大寒三候；
+     种子 = 精确表；间爻位置；perfFlags）/ handcopy 绿；离线全量绿；**live 全量对 vendored v3.11.2 实例（8877/9977）1766 passed / 14 skipped / 0 failed**；
+     段级 harness 110/110 clean；export 契约 v58 不变（`verify_export_section_baseline --source upstream` 与 mirror 都 ok）。
+   - 教训：**pin 与上游 HEAD 的关系每次发布前必对一次**（`git branch --contains <pin>`）：pin 不在任何分支 = 上游改写了历史，不能靠 `git diff pin..HEAD`
+     的「250 个文件」直觉判断，要逐文件核旧内容是否保留（这次 22 个文件全保留）。规则不变：**公开发布前 pin 必须在上游的公开远端上**（9cd9078f 目前只在维护机）。
+
+2. **「同步了却没同步」第七例：`src/shared/localNongliAdapter.js` 是 v0.9 时代的自写近似公式。**
+   - 症状：v3.11.2 改了上游 `utils/localNongliAdapter.js`，但它不在 manifest 里——因为 skill 一直用的是 `horosa-core-js/src/shared/` 下同名的
+     **自写件**（e75ce07，2026-06）：1900 历元的 `S_TERM_INFO` 定气近似公式（日粒度精度），不是上游的 lunar-javascript 精确节气表。
+     值级：2026 立春 近似公式 = 北京时间 02-04 10:16:32，真值 04:02:08，**差 6 小时 14 分**。
+   - 谁吃它：`tools/qimen.js` 的年种子回退（Python 没给 `jieqi_year_*` 时）、`vendor/divination/zeri/qimenScanEngine.js`（奇门择日扫描，**直接用**）、
+     `vendor/guolao/guolaoMoiraWheelLimits.js`（七政百六大限的立春 / 冬至年界，**直接用**）、`vendor/dunjia/DunJiaCalc.js` 本地路由。交节当日 6 小时内的
+     奇门局数 / 择日命中 / 七政年界都可能与上游不同。
+   - 根因：manifest 全集守卫（v0.40.0 第 5 条）只锁 `vendor/` 树，`src/shared/` 在它视野之外；revendor 的路径推断还主动把上游 import 「relocate」到
+     shared 件上（`../../utils/localNongliAdapter.js → ../../shared/localNongliAdapter.js`），于是每次重 vendor 都把上游 DunJiaCalc 接回旧公式。
+   - 修：`utils/localNongliAdapter.js` verbatim vendor（deviation：`./lunarDomainGuard.js → ../bazi/lunarDomainGuard.js`），删除 shared 件，
+     四个 import 改指 vendor（DunJiaCalc / qimenScanEngine 由流水线重渲染自动改；guolaoMoiraWheelLimits / tools/qimen.js / selfcheck 手改）。
+     行为差：域外年（lunar-javascript 不可靠域）上游返 `null` 走后端实算，旧公式会吐一个近似值——`buildLocalJieqiYearSeed(12000)` 现在必须为 null。
+   - 守卫：selfcheck「jieqi 年种子 = lunar-javascript 精确节气表」（+08 与 −05 两个时区、dayGanzhi、旧公式负向对照 10:16:32 必须 ≠ 真值）；
+     `tests/test_core_js_shared_provenance.py`：`src/shared/` 只许 allowlist 里的自写件，且任何 shared 文件的 basename 不得与 manifest 里的上游文件同名
+     （负向对照：把 `localNongliAdapter.js` 放回 shared 即红）。
+
+3. **八字闰月出生的农历行「闰闰五月」——上游 BaZi.js:317 的缺陷，按声明式偏离修。**
+   - 症状：1990-07-15（闰五月）本地引擎快照 `农历：一九九〇年闰闰五月廿三`（main 上同样如此，与本轮同步无关）。
+   - 根因：`buildNongli`（baziLunarLocal.js:1104）的 month 已是 `${getMonthInChinese()}月`（闰月自带「闰」），而快照的 `nongli.leap ? '闰' : ''` 是给
+     Java 结果（month 不带前缀）写的——两条路合流后闰月双前缀。上游页面同样打出「闰闰」。
+   - 修：只在 month 尚未以「闰」开头时加前缀（bespoke 文件内注释标明偏离与出处）；selfcheck 两向断言（本地形状不叠字、Java 形状仍加前缀）。
+     记入报告的「上游问题」清单，不写回上游。
+
+4. **周一 schedule 矩阵：两条 Windows lane 在 pytest 1500 s 处超时，且什么都没留下。**
+   - 事实：run 36413240575（2026-09-28，7cde519 × 公开 v0.39.0）darwin 583 s 跑完 1771 测试；windows-latest / windows-11-arm 都恰好在 `BUDGET["pytest"]=1500`
+     被杀。v0.38.1 发布矩阵的比例是 mac 226 s : Windows 970 / 1022 s（1210 测试）——Windows 在这套 live 套件上慢 4–5 倍，树长到 1771 测试后 1500 s 必然不够。
+   - 更糟的是产物里**没有 pytest.log**：`subprocess.run(capture_output=True)` 遇 `TimeoutExpired` 时输出全在内存里，lane 只写了「pytest timed out」——
+     分不清是慢还是挂在某条用例上。
+   - 修：`PYTEST_BUDGET_SECONDS = {"nt": 2700, "posix": 1500}`（job 上限 90 min，ARM lane 其余步骤约 400 s，仍有余量）；pytest 改 `Popen(stdout=日志文件)`
+     流式落盘，超时先 kill 再把尾巴 40 行与 `budget_seconds` 写进 step。守卫：`test_pytest_budget_is_host_aware`、`test_live_pytest_keeps_the_partial_log_when_it_times_out`
+     （负向对照 = 旧实现无日志）、成功路径同样落盘。
+   - 教训：**超时预算要按主机测出来的比例定，且超时本身必须留下证据**；「lane 红了」如果不能回答「红在哪一步的哪一行」，等于没跑。
+
+5. **第三方世界 15 天的变化（2026-09-14 → 09-29，逐条读官方页核实）——四条要动手，其余记录。**
+   - **Windsurf → Devin Desktop**（2026-06-02 更名；2026-09-08 v3.9.19 移除 Cascade，Devin Local 成唯一 agent，读 Devin CLI 的 MCP 文件：
+     `~/.config/devin/mcp_config.json` / `%APPDATA%\devin\mcp_config.json` / 项目 `.devin/mcp_config.json`，根键仍 `mcpServers`，字段 command/args/env/disabled）。
+     skill 只写 `~/.codeium/windsurf/mcp_config.json` → 新装 Devin Desktop 永远看不到 horosa。修：路径表 Devin 用户级 → 项目级 → 旧 Cascade 路径（已有文件者原位合并）；
+     提示语 / 精简面理由 / README 行随之改；`test_windsurf_client_points_at_devin_paths_with_legacy_cascade_fallback`。
+   - **Codex 0.158.0（2026-09-28）**：`mcp_servers.<name>.tool_input_schema_max_bytes` 缺省 **5000 B**，超出的 inputSchema 被「压缩」——参数说明静默剥掉。
+     实测全量面最大 3843 B（`horosa_astro_india_rectify`）、精简面 1147 B，今天没有超的；`verify_mcp_list_budget.py` 加**每工具**硬顶 5000 B（两面都查，
+     `tests/test_mcp_list_budget.py` 合成 6 KB 工具必被点名）。同版还有 `startup_readiness = "catalog"`（冷启动首轮看不到工具的缓解）与 0.157 的
+     stdio 描述符收紧（server 及后代进程只继承 stdio）——都不需要改配置。
+   - **mcp Python SDK 1.30.0（2026-09-07）**：`mcp[cli]>=1.29.0,<2` 让 wheel / uvx 用户实际装到 1.30；`streamablehttp_client(url, headers=…)` 弃用、
+     头改经 `httpx.AsyncClient`（`streamable_http_client(url, http_client=create_mcp_http_client(headers=…))`）；pydantic 下限 ≥2.11；streamable-http 空闲会话 30 分钟回收。
+     修：锁升 1.30.0、pydantic 下限 2.11、测试与 lane 改新 API（留旧入口退路）。协议：SDK 仍 2025-11-25，规范最新 2026-07-28——记录，不动。
+   - **GitHub Actions 2026-09-23 移除 Node 20**：runner 强制用 Node 24 跑 node20 action（9-25 的 CI 因此仍绿，但已是「被迫迁移」）。11 个 action 主版本升到
+     各自的 Node 24 主版本（checkout v5 / setup-python v6 / setup-node v5 / upload-artifact v6 / download-artifact v7 / cache v5 / setup-uv v7 /
+     attest-build-provenance v3 / codeql v4 / dependency-review v5）——刻意避开 download-artifact v8（哈希不符即错 + 不再自动解压）与 setup-uv v10
+     （`release` 事件下关缓存）。验证：push CI + 本次发布的 draft 矩阵与 publish job（全部 action 都在这条链上跑过一遍才算数）。
+   - 记录不动：`windows-11-arm` 镜像 9-21～30 换新（缺省 Python 3.13 / Node 24；我们钉 3.12 与 Node 22，9-28 的 lane 已在新镜像上装起 runtime）；Gemini CLI 工具全名
+     无条件 `mcp_horosa_<tool>`（最长 38 < 63；`verify_mcp_client_compat` 前缀改为该形态）；Claude Code 2.1.28x 的 `claude plugin validate` 会查 MCP 条目
+     （horosa 的四个 `user_config` 键都已声明）；mcpb 2.1.2 仍是最新；uv 0.12.14–0.12.20 无 `uvx --from` 语义变化；Node 22 维护 LTS 到 2027-04，Node 26 于 2026-10-28
+     进 LTS（载荷继续随 Node 22 线）。
+   - 教训：**客户端矩阵里的每个名字都要有「上一次核对日期」的意识**——一个被收购改名、一个加了默认预算、一个 SDK 换了 API、一个平台删了运行时，
+     全发生在 15 天里，而 skill 的测试对这四件事一条都不会红。
+
+6. **本轮数字**：上游 diff 250 文件（`9b74714b..9cd9078f`）；runtime-source 重灌 51 文件 + jar；core-js 12 verbatim 重渲染 + 4 新 vendor + 3 bespoke 复核 + 1 自写件退役；
+   知识包 32 文件重收割；离线 pytest 全绿；live 1766 / 14 / 0；harness 110/110；tools/list 全量 254210 B（+southMonth 说明）、精简 15260 B；
+   `verify_upstream_sync --require-upstream --write-state` → 9cd9078f / 3.11.2 / v58。
+
+7. **明确没做（待用户）**：上游 9cd9078f 推到 Horosa-Public 公开远端（pin 公开性，发布前提）；Windows 启动器模板镜像 R5 的 6 个 JVM 旗标（可选项，
+   上游写明「可选对齐」）；自动把 Windows 非 ASCII runtime 根迁到 ASCII 位置；推运区间扫描 / 六爻卦辞补齐（维持不做）。
 
 ### v0.40.0-dev / 2026-09-24 — Windows 维护机 lane：main × 公开 v0.39.0 runtime 的 6 条 live 红是版本偏斜——live 闸只看「活不活」，不看「够不够新」
 

@@ -456,6 +456,11 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 `buildXxxSnapshotText` 是纯 `chart/data→text`（无 canvas/DOM/上传/点击依赖），过了 headless-readiness
 闸再动手。上游有 engine 文件 ≠ 可进公开 skill。
 
+17. **re-vendor 前先对 pin，`src/shared/` 只放上游没有的东西（v0.40.0 复审）**：① `git -C <Horosa-Public> branch --contains <pin>` 为空 = 上游改写了
+    历史（v3.11.2 把三个修复并进发布提交），逐文件核旧内容是否保留，别信 `diff pin..HEAD` 的文件数；② `horosa-core-js/src/shared/` 只许 allowlist 里
+    的自写件（`tests/test_core_js_shared_provenance.py`），basename 与 manifest 里任何上游文件同名即红——`localNongliAdapter.js` 的近似公式在那里躲了 4 个月，
+    revendor 的路径推断还会把上游 import「relocate」到它身上；③ 上游 HelpDoc / 数据改了就重收割知识包（`gen_knowledge_packs.py` 读 HEAD blob）。
+
 ## 6. 打包不变量（offline runtime packaging — 每条都咬过人）
 
 - **运行期要读的仓内数据文件必须随 wheel / MCPB 走，代码不许假定源码树布局（v0.40.0 审计 P1）**：`parents[3] / "contracts"` 在 wheel 安装后指向 site-packages 的父目录，Jev enforce 因此在 v0.39.0 出货版里永不生效、技法算源恒「未标注」。三件套：pyproject `force-include` 进包内副本（`horosa_skill/contracts/`）、`horosa_skill/contracts_locator.py` 先源码树后包内副本、`scripts/verify_wheel_contents.REQUIRED_ENTRIES` 锁条目；MCPB 的 `.mcpbignore` 写 `/contracts/*` 再反选文件（父目录整体忽略时反选无效）；Dockerfile 要 COPY force-include 的源路径（`tests/test_dockerfile_matches_wheel_includes.py` 守）。
@@ -621,6 +626,16 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   GitHub `digest`（退路 SHA256SUMS.txt）逐一比对。release / dispatch / schedule 模式的 lane 一律通过**公开清单 URL** 安装（安装器自己的
   下载链），lane-report 必须带 `download.bytes > 0`——「lane 传了 file:// 就以为验过下载」是 v0.38.1 复审抓到的盲区。翻公开后
   publish job 再 dispatch 一次 release 模式矩阵。
+- **发布前对上游 pin，公开前 pin 必须在上游公开远端（v0.40.0）。** 每次发版先 `HOROSA_SOURCE_ROOT=… verify_upstream_sync.py --require-upstream`
+  （CI 形状没有上游 checkout，这一步永远绿）；上游 HEAD 领先或 pin 不在任何分支 → 先同步（§5 第 17 条），再 `--write-state`。9cd9078f（v3.11.2）
+  在维护机上尚未推送公开远端时，只能做 draft，不翻公开。
+- **矩阵 lane 的预算按主机，超时必须留证据（v0.40.0）。** `PYTEST_BUDGET_SECONDS = {"nt": 2700, "posix": 1500}`（Windows 在 live 套件上慢 4–5×；
+  2026-09-28 的 schedule 跑两条 Windows lane 恰在 1500 s 被杀且无 pytest.log）；pytest 输出流式写 `pytest.log`，超时 step 带尾巴 40 行与 `budget_seconds`。
+  树每长一截就回头看一次 Windows lane 的 pytest 秒数（lane-report `steps.pytest.seconds`）。
+- **GitHub Actions 主版本跟 runner 的 Node（v0.40.0）。** 2026-09-23 起 runner 不再有 Node 20，node20 action 被强制跑在 Node 24 上；仓里 11 个 action
+  已升到各自的 Node 24 主版本（checkout v5 / setup-python v6 / setup-node v5 / upload-artifact v6 / download-artifact v7 / cache v5 / setup-uv v7 /
+  attest v3 / codeql v4 / dependency-review v5）。再升大版本前读它的 breaking 段：download-artifact v8 不再自动解压且哈希不符即错（publish job 的
+  lane 产物比对会断），setup-uv v10 在 `release` 事件下关缓存。任何 action 升级只有跑过一次 draft 矩阵 + publish job 才算验过。
 - **publish job 的每一步都要先在真 draft 上跑过（v0.38.1 发布期）。** draft 对 `GET releases/tags/<tag>` 返回 **404**——draft 期的一切
   API 读取走列表端点（`releases?per_page=100` + `--paginate` + `select(.tag_name == …)`）；completeness 里仍用 `releases/tags` 是对的，它只读已公开的 latest。
   job 级 `permissions:` **整块替换** workflow 级：publish job 翻公开后的 `gh workflow run`（completeness + release 模式矩阵）需要 `actions: write`
@@ -832,6 +847,11 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | 维护机上 `test_runtime_manager.py` 全绿、CI 上四条红在 `runtime.port_conflict_unknown_holder` | v0.37.0 起只 stub `_service_status` 的用例会拿那个 URL **真的**跑归属判定：维护机 9999/8899 上跑着真 runtime → ours；CI 上没人监听 → unknown | 本机复现要连**归属**一起伪装：autouse fixture 把 `identity.probe_identity` 打成返回 None、`listener_pids` 打成返回 `[]`，`pytest -p <plugin>` 挂上去。`_managed_mode` 已内置 classify_endpoint 桩 |
 | `client openclaw-setup` / `openclaw-check` 在 Linux / Intel Mac 上打出 `NameError: name 'details' is not defined` | v0.38.1 错误格式化的 `runtime.platform_unsupported` 分支读了未定义的名字（只在不发载荷的平台可达，没有测试走过） | main 已修（随下一版）；在那之前照网关模式配置 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`，`doctor --explain` 给同样的出路；`verify_undefined_names.py` 守住同类 |
 | OpenClaw smoke / `client openclaw-setup` 报 `client.command_timeout` | 看 `details`：`phase: npx_install` = npx 首次下载 mcporter 超时；`output_complete: true` = 结果已完整打印但进程没退出（进程树里有子进程拖住管道）；两者都不是 = 调用本身没回来 | `npm i -g mcporter`（或 `HOROSA_MCPORTER_BIN`）；`MCPORTER_DEBUG_HANG=1` 重跑看 mcporter 在等哪个句柄，清掉残留 `horosa-skill serve --transport stdio`；其余先 `doctor` |
+| 奇门 / 奇门择日 / 七政大限在**交节当日**与星阙不同 | v0.40.0 前 `src/shared/localNongliAdapter.js` 是近似公式（2026 立春差 6 小时），奇门本地路由 / 择日扫描 / 七政年界都吃它 | 已改为 verbatim vendor 上游 `utils/localNongliAdapter.js`（lunar-javascript 精确表 + 当地钟表折算）；selfcheck 值级金标守着 |
+| 新装的 Devin Desktop（原 Windsurf）里看不到 horosa | 2026-09-08 起 Cascade 被移除，Devin Local 只读 Devin CLI 的 `~/.config/devin/mcp_config.json`（Windows `%APPDATA%\devin\mcp_config.json`），旧 `~/.codeium/windsurf/mcp_config.json` 不再被读 | 0.40.0 起 `setup --client windsurf` 写 Devin 路径（已有旧文件者原位合并）；`client check --client windsurf` 报两处路径 |
+| Codex 里 horosa 工具的参数**没有说明**（模型乱填参数） | Codex ≥ 0.158 对每个工具的 inputSchema 有 5000 B 预算，超出即「压缩」剥掉 description | 今日最大 3843 B，`verify_mcp_list_budget` 硬顶 5000 B；若某天红了先瘦 schema，别加 `tool_input_schema_max_bytes`（老版本 Codex 对未知键整块拒收） |
+| 周一矩阵只有 Windows lane 红、step 是 `Live verification (Windows)`、产物里没有 pytest.log | pytest 预算到顶被杀（旧版无日志） | 看 lane-report `steps.pytest.seconds` 与 `budget_seconds`；预算按主机（nt 2700）；pytest.log 现在流式落盘，超时也有尾巴 |
+| 八字快照农历行「闰闰五月」 | 上游 BaZi.js:317 对本地引擎结果重复加「闰」前缀（上游页面同样如此） | 0.40.0 起 bespoke `baziSnapshot.js` 声明式偏离：month 已带「闰」不再叠加；Java 形状仍加前缀 |
 
 ## 9. Stability invariants（稳定性不变量 — don't regress these）
 
@@ -1044,6 +1064,14 @@ A global stability pass hardened these; keep them true when you touch the releva
   `claude mcp add --scope user` 写的是真 `~/.claude.json`，清理那句 `claude mcp remove --scope user horosa` 还会删掉维护者原有的条目（托管 runner 没有
   `claude`，矩阵从没暴露）。本机用真 `claude` 验过隔离：add / get / remove 全落在隔离目录，真配置 sha 不变。守卫
   `tests/test_verify_runtime_live.py::test_claude_user_scope_step_never_touches_the_invoking_users_claude_config`。
+- **节气种子只来自 lunar-javascript 精确表，禁近似公式（v0.40.0）。** `vendor/utils/localNongliAdapter.js` verbatim（`buildLocalJieqiYearSeed(year, zone)` 折成当地钟表，
+  域外年返 null 走后端实算）；`src/shared/` 不得再出现与上游同名的自写件（allowlist 守卫）。selfcheck 用 2026 立春 04:02:08 vs 旧公式 10:16:32 做负向对照。
+- **每个 MCP 工具的 inputSchema ≤ 5000 B（v0.40.0）。** Codex 0.158 的 `tool_input_schema_max_bytes` 缺省值，超出即静默剥说明。`verify_mcp_list_budget.py`
+  对全量 / 精简两面逐工具硬顶（今日最大 3843 B）；tools/list 总量棘轮照旧。
+- **MCP HTTP 客户端的头经 httpx.AsyncClient（mcp ≥ 1.30 API；v0.40.0）。** 测试与 lane 用 `streamable_http_client(url, http_client=create_mcp_http_client(headers=…))`，
+  留 `streamablehttp_client(url, headers=…)` 退路给 1.29；`pydantic>=2.11` 下限随 1.30。
+- **bespoke vendor 件的每一处偏离都要在文件内标明出处与理由，并有两向测试（v0.40.0）。** `baziSnapshot.js` 的「闰闰」修法 = 只在 month 未带「闰」时加前缀，
+  selfcheck 同时断言本地形状不叠字、Java 形状仍加前缀；restamp 只在逐 hunk 复核后做。
 - **Cross-platform text digests are line-ending independent.** Any sha stamped on one OS and compared on
   another hashes CRLF→LF-normalized bytes: `revendor_core_js._sha256_file`（vendor stamps `upstream_sha256`/
   `derived_sha256`; raw bytes only for non-UTF-8）and `decisions/eval.py::dataset_sha256`（the Jev dataset
