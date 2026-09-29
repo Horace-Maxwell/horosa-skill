@@ -309,7 +309,7 @@ def test_time_basis_line_matches_upstream_contract() -> None:
     assert build_time_basis_line() == "时间基准：钟表时(按输入钟面时刻,无真太阳时校正)；晚子时归次日：否；23 点换日：否"
     assert (
         build_time_basis_line(time_alg="2", late_zi_hour_use_next_day=1, after23_new_day="1", zone="+08:00")
-        == "时间基准：春分定卯时；晚子时归次日：是；23 点换日：是；时区：+08:00"
+        == "时间基准：春分定卯时(尚无独立换算,按钟表时刻)；晚子时归次日：是；23 点换日：是；时区：+08:00"  # v3.11.2 timeBasisLine.js:5 标签
     )
     assert "钟表时" in time_basis_label(1)
 

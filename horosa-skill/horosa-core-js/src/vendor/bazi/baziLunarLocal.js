@@ -1,4 +1,4 @@
-import { Solar, LunarUtil, Lunar, LunarMonth } from 'lunar-javascript';
+import { Solar, LunarUtil, Lunar, LunarMonth, EightChar } from 'lunar-javascript';
 import { isLunarJsYearReliable, lunarDomainNotice } from './lunarDomainGuard.js';
 import { NaYin, SixtyJiaZi } from './ZWConst.js';
 import { calcFourPillarShenSha } from './baziShenShaLocal.js';
@@ -7,6 +7,7 @@ import { computeFenYe } from './baziFenYe.js';
 import { computeGejuYongShen } from './baziGejuYongShen.js';
 import { computeMangPai } from './baziMangPai.js';
 import { parseDateParts } from './dateStrSafe.js';
+import { parseZoneHours, bjShiftMinutes, shiftSolarMinutes } from '../utils/beijingTimeShift.js';
 
 const GANS = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
 const ZHIS = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
@@ -220,24 +221,7 @@ function mod(num, base){
 	return ((num % base) + base) % base;
 }
 
-function parseZoneHours(zone){
-	if(zone === undefined || zone === null || zone === ''){
-		return 8;
-	}
-	if(typeof zone === 'number'){
-		return zone;
-	}
-	const text = `${zone}`;
-	const match = text.match(/^([+-]?)(\d{1,2})(?::?(\d{2}))?/);
-	if(match){
-		const sign = match[1] === '-' ? -1 : 1;
-		const hour = Number(match[2]);
-		const minute = Number(match[3] || 0);
-		return sign * (hour + minute / 60);
-	}
-	const n = Number(text);
-	return Number.isFinite(n) ? n : 8;
-}
+// parseZoneHours / bjShiftMinutes / shiftSolarMinutes 已抽到 ./beijingTimeShift(与节气种子、河洛等同用一份)。
 
 function parseGeoDegrees(value, limit){
 	if(value === undefined || value === null || value === ''){
@@ -352,6 +336,76 @@ function applyApparentSolarTime(parts, params){
 
 function solarFromParts(parts){
 	return Solar.fromYmdHms(parts.year, parts.month, parts.day, parts.hour, parts.minute, parts.second);
+}
+
+// [#92] 年柱 / 月柱 / 交节距离(起运、节后天数)以出生的**绝对时刻**为准。lunar-javascript 的节气表按北京时间
+// (UTC+8)排,非东八区若直接喂当地钟表,交节在当地钟表上偏「8 − 时区」小时(巴黎交节后 2 小时仍判上月)。
+// 故另建一份「出生绝对时刻的北京时间」农历:年 / 月相关读取与上一节 / 下一节(折回当地钟表)取自它,
+// 日 / 时与农历日期仍取当地钟表那份。东八区原样返回 → 逐字节不变。
+const ABS_TIME_LUNAR_GETTERS = [
+	'getYearInGanZhiExact', 'getYearGanExact', 'getYearZhiExact', 'getYearGanIndexExact', 'getYearZhiIndexExact', 'getYearXunExact', 'getYearXunKongExact',
+	'getMonthInGanZhiExact', 'getMonthGanExact', 'getMonthZhiExact', 'getMonthGanIndexExact', 'getMonthZhiIndexExact', 'getMonthXunExact', 'getMonthXunKongExact',
+	'getJieQiTable',
+	'getYearInGanZhiByLiChun', 'getYearGanByLiChun', 'getYearZhiByLiChun', 'getYearGanIndexByLiChun', 'getYearZhiIndexByLiChun', 'getYearShengXiaoByLiChun',
+];
+const ABS_TIME_JIEQI_GETTERS = ['getPrevJie', 'getNextJie', 'getPrevJieQi', 'getNextJieQi', 'getPrevQi', 'getNextQi'];
+// 南纬判定:纬度串带 s(33s52)/ 负的十进制纬度;缺纬度串时看数值 gpsLat。
+export function isSouthLatitude(params){
+	const v = parseGeoDegrees(params && params.lat, 90);
+	if(Number.isFinite(v)){ return v < 0; }
+	const g = parseGeoDegrees(params && params.gpsLat, 90);
+	return Number.isFinite(g) && g < 0;
+}
+// [#93] 南半球月令「对冲」:月支取对冲之支(寅↔申 …),月干按年干五虎遁重起;胎元 / 命宫 / 大运等派生随之由 lunar-javascript 自算。
+function flipMonthPillar(hybrid, base){
+	const zhiIdx = (base.getMonthZhiIndexExact() + 6) % 12;
+	const monthNum = (zhiIdx + 10) % 12 + 1;   // 寅 → 1 … 丑 → 12
+	const ganIdx = ((hybrid.getYearGanIndexExact() % 5) * 2 + 2 + monthNum - 1) % 10;
+	const gan = LunarUtil.GAN[ganIdx + 1];
+	const zhi = LunarUtil.ZHI[zhiIdx + 1];
+	const gz = gan + zhi;
+	hybrid.getMonthZhiIndexExact = ()=>zhiIdx;
+	hybrid.getMonthGanIndexExact = ()=>ganIdx;
+	hybrid.getMonthZhiExact = ()=>zhi;
+	hybrid.getMonthGanExact = ()=>gan;
+	hybrid.getMonthInGanZhiExact = ()=>gz;
+	hybrid.getMonthXunExact = ()=>LunarUtil.getXun(gz);
+	hybrid.getMonthXunKongExact = ()=>LunarUtil.getXunKong(gz);
+}
+function absoluteTimeLunar(localLunar, localSolar, zone, southFlip){
+	const shift = bjShiftMinutes(zone);
+	if(!shift && !southFlip){
+		return localLunar;
+	}
+	const bjLunar = shift ? shiftSolarMinutes(localSolar, shift).getLunar() : localLunar;
+	const hybrid = Object.create(localLunar);
+	if(shift){
+		ABS_TIME_LUNAR_GETTERS.forEach((name)=>{
+			hybrid[name] = function(){ return bjLunar[name].apply(bjLunar, arguments); };
+		});
+		// 上一节 / 下一节:按绝对时刻取,交节时刻折回当地钟表(起运的时长与节后天数都在当地钟表一个坐标里算)
+		const toLocalFrame = (jq)=>{
+			if(!jq || !jq.getSolar){ return jq; }
+			const local = shiftSolarMinutes(jq.getSolar(), -shift);
+			const view = Object.create(jq);
+			view.getSolar = function(){ return local; };
+			return view;
+		};
+		ABS_TIME_JIEQI_GETTERS.forEach((name)=>{
+			if(typeof bjLunar[name] === 'function'){
+				hybrid[name] = function(){ return toLocalFrame(bjLunar[name].apply(bjLunar, arguments)); };
+			}
+		});
+	}
+	if(southFlip){
+		flipMonthPillar(hybrid, bjLunar);
+	}
+	let eightChar = null;
+	hybrid.getEightChar = function(){
+		if(!eightChar){ eightChar = EightChar.fromLunar(hybrid); }
+		return eightChar;
+	};
+	return hybrid;
 }
 
 function shortShiShen(label){
@@ -1036,8 +1090,9 @@ function ziweiLeapMonthFields(zwLunar){
 	}catch(e){ return {}; }
 }
 
-function buildNongli(lunar, solar, apparentSolar, ziweiLunar){
-	const prev = lunar.getPrevJieQi ? lunar.getPrevJieQi(false) : lunar.getPrevJie(false);
+function buildNongli(lunar, solar, apparentSolar, ziweiLunar, jieqiLunar){
+	const jq = jieqiLunar || lunar;   // [#92] 「某节气后第 N 天」按绝对时刻取节气(东八区即 lunar 本身)
+	const prev = jq.getPrevJieQi ? jq.getPrevJieQi(false) : jq.getPrevJie(false);
 	const prevSolar = prev && prev.getSolar ? prev.getSolar() : null;
 	let dayDiff = '';
 	if(prevSolar && solar.subtract){
@@ -1062,7 +1117,7 @@ function buildNongli(lunar, solar, apparentSolar, ziweiLunar){
 		// ziweiMonthDays=生辰农历月总天数(split_days 真半点);ziweiPassedNextJie=闰月内是否已过「节」(solar_term 档)。
 		...ziweiLeapMonthFields(zwLunar),
 		// 生肖两口径(立春=与年柱一致默认 / 正月初一=民俗);纯展示,年柱永按立春不变。
-		shengXiaoLichun: lunar.getYearShengXiaoByLiChun ? lunar.getYearShengXiaoByLiChun() : (lunar.getYearShengXiao ? lunar.getYearShengXiao() : ''),
+		shengXiaoLichun: jq.getYearShengXiaoByLiChun ? jq.getYearShengXiaoByLiChun() : (lunar.getYearShengXiao ? lunar.getYearShengXiao() : ''),
 		shengXiaoLunar: lunar.getYearShengXiao ? lunar.getYearShengXiao() : '',
 		birth: apparentSolar.toYmdHms(),
 		jieqi: prev && prev.getName ? prev.getName() : '',
@@ -1077,7 +1132,7 @@ function buildNongli(lunar, solar, apparentSolar, ziweiLunar){
 // 状态安全:唯一 setter eightChar.setSect 由 after23NewDay 驱动且 after23 在核心键内 → 每个缓存桶
 // 构造时定终身,复用零漂移;daYunList 消费者全只读(map/slice/flatMap)。开关 horosa.perf.baziCoreMemo
 // (localStorage 置 '0' 关=旧行为逐次全算);字节等价由全部八字 golden/压测(同日期×选项笛卡尔)裁决。
-const BAZI_CORE_KEYS = ['date', 'time', 'zone', 'ad', 'lon', 'lat', 'gpsLon', 'gpsLat', 'timeAlg', 'after23NewDay', 'gender'];
+const BAZI_CORE_KEYS = ['date', 'time', 'zone', 'ad', 'lon', 'lat', 'gpsLon', 'gpsLat', 'timeAlg', 'after23NewDay', 'gender', 'southMonth'];
 const baziCoreMemo = new Map();   // key -> bundle(插入序 LRU,8 桶)
 const BAZI_CORE_MEMO_MAX = 8;
 function baziCoreMemoEnabled(){
@@ -1099,7 +1154,9 @@ function buildBaziCore(params){
 	const apparentParts = applyApparentSolarTime(rawParts, params || {});
 	const solar = solarFromParts(apparentParts);
 	const lunar = solar.getLunar();
-	const eightChar = lunar.getEightChar();
+	const southFlip = !!(params && params.southMonth === 'chong' && isSouthLatitude(params));
+	const baziLunar = absoluteTimeLunar(lunar, solar, params && params.zone, southFlip);
+	const eightChar = baziLunar.getEightChar();
 	// 用户语义（拍板，字面直觉版）:
 	//   after23NewDay=1「23点算第二天」= 23点起日柱进位次日 → setSect(1)=Exact 进位
 	//   after23NewDay=0「24点算第二天」= 23点仍属今日、24点才换日柱 → setSect(2)=Exact2 不进位
@@ -1118,7 +1175,7 @@ function buildBaziCore(params){
 	const direction = buildDirection(daYunList, dayGan, solar);
 	const mainDirection = buildMainDirection(daYunList, dayGan);
 	const smallDirection = buildSmallDirection(daYunList, dayGan, solar);
-	return { rawParts, apparentParts, solar, lunar, eightChar, dayPillarShift, gender, yun, daYunList, ziweiLunar, direction, mainDirection, smallDirection };
+	return { rawParts, apparentParts, solar, lunar, baziLunar, eightChar, dayPillarShift, gender, yun, daYunList, ziweiLunar, direction, mainDirection, smallDirection };
 }
 function getBaziCore(params){
 	if(!baziCoreMemoEnabled()){
@@ -1143,7 +1200,7 @@ function getBaziCore(params){
 
 export function buildLocalBaziResult(params){
 	const core = getBaziCore(params);
-	const { rawParts, apparentParts, solar, lunar, eightChar, dayPillarShift, gender, yun, daYunList, ziweiLunar } = core;
+	const { rawParts, apparentParts, solar, lunar, baziLunar, eightChar, dayPillarShift, gender, yun, daYunList, ziweiLunar } = core;
 	const dayGan = eightChar.getDayGan();
 	// v3 第二开关 lateZiHourUseNextDay: 默认 1 (跟现有 lunar.js Exact 行为一致, 时干用次日干起子时)。
 	const lateZiHourUseNextDay = (params && (params.lateZiHourUseNextDay === 0 || params.lateZiHourUseNextDay === '0' || params.lateZiHourUseNextDay === false)) ? 0 : 1;
@@ -1161,7 +1218,7 @@ export function buildLocalBaziResult(params){
 	// 月律分野（人元司令）：节后天数 → 司令藏干（版本可切，纯展示派生）
 	let fenYe = null;
 	try{
-		const prevJie = lunar.getPrevJie();
+		const prevJie = baziLunar.getPrevJie();
 		const daysAfterJie = solar.getJulianDay() - prevJie.getSolar().getJulianDay();
 		const fenyeVersion = (params && params.fenyeVersion === 'fajue') ? 'fajue' : 'common';
 		fenYe = computeFenYe(eightChar.getMonthZhi(), daysAfterJie, fenyeVersion);
@@ -1178,7 +1235,7 @@ export function buildLocalBaziResult(params){
 	// (daYunList/ziweiLunar 已随核心层缓存,见 buildBaziCore)
 	const bazi = {
 		gender: gender === 1 ? 'Male' : 'Female',
-		nongli: buildNongli(lunar, solar, solar, ziweiLunar),
+		nongli: buildNongli(lunar, solar, solar, ziweiLunar, baziLunar),
 		fourColumns,
 			wuxingStat,
 			gejuYongShen,
@@ -1229,7 +1286,8 @@ export function buildLocalNongliLite(params){
 	const apparentParts = applyApparentSolarTime(rawParts, params || {});
 	const solar = solarFromParts(apparentParts);
 	const lunar = solar.getLunar();
-	const eightChar = lunar.getEightChar();
+	const baziLunar = absoluteTimeLunar(lunar, solar, params && params.zone);
+	const eightChar = baziLunar.getEightChar();
 	const dayPillarShift = params && (params.after23NewDay === 1 || params.after23NewDay === '1' || params.after23NewDay === true);
 	eightChar.setSect(dayPillarShift ? 1 : 2);
 	const lateZiHourUseNextDay = (params && (params.lateZiHourUseNextDay === 0 || params.lateZiHourUseNextDay === '0' || params.lateZiHourUseNextDay === false)) ? 0 : 1;
@@ -1242,7 +1300,7 @@ export function buildLocalNongliLite(params){
 	return {
 		bazi: {
 			gender: genderText,
-			nongli: buildNongli(lunar, solar, solar, ziweiLunar),
+			nongli: buildNongli(lunar, solar, solar, ziweiLunar, baziLunar),
 			fourColumns,
 		},
 		gender: genderText,

@@ -1901,6 +1901,14 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
                 "question": "神煞主位、命宫起法、断命流派是否沿用星阙默认？",
                 "options": ["沿用默认（神煞按年柱 · 命宫通行版 · 传统综合）", "指定（键见 options_keys）"],
             },
+            # v3.11.2：南纬出生月令口径会改月柱（胎元/命宫/大运随之）——只在出生地在南半球时才问，北纬不问。
+            {
+                "field": "southMonth",
+                "question": "出生地在南半球：月令是否对冲？（只对南纬生效；星阙默认不对冲，月柱同北半球）",
+                "options": ["不对冲（星阙默认）", "对冲（月支取对冲之支）"],
+                "values": ["none", "chong"],
+                "when": "lat < 0 / 纬度串带 s",
+            },
         ],
         # 上游 BaZi.js:961-985 genParams + techniqueMountSettings.js:1692-1740 缺省。
         safe_defaults=[
@@ -1908,6 +1916,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "after23NewDay", "value": 1, "meaning": _AFTER23_DEFAULT_MEANING},
             {"field": "godKeyPos", "value": "年", "meaning": "星阙默认：按年柱查神煞"},
             {"field": "minggongMethod", "value": "tongxing", "meaning": "星阙默认：命宫通行版"},
+            {"field": "southMonth", "value": "none", "meaning": "星阙默认：南半球月令不对冲（北纬出生无影响）"},
             {"field": "byLon", "value": False, "meaning": "星阙默认（给 true 则整盘走 Java，本地引擎无此算法）"},
         ],
         do_not_assume=["birth time", "timezone", "birthplace"],
@@ -2019,6 +2028,7 @@ _MINGLI_OPTIONS_KEYS: dict[str, dict[str, str]] = {
         "school": "zonghe 传统综合（缺省）| fuyi | geju | tiaohou | bingyao | tongguan | mangpai | nayin（只切 [格局·用神] 主用流派标注）",
         "ageStyle": "nominal 虚岁（缺省）| real 周岁（[大运] 小运表年龄列）",
         "zodiacBoundary": "lichun 立春（缺省）| lunar 正月初一（[起盘信息] 生肖行）",
+        "southMonth": "none 不对冲（缺省）| chong 对冲（只对南纬出生生效：月支取对冲之支、月干五虎遁重起；[起盘信息] 南半球月令行）",
         "cangVersion/fenyeVersion": "common（缺省）| fenye 分野加权 / fajue 法诀版",
         "phaseType": "0 长生火土同（缺省）| 1 水土同 | 2 阳顺阴逆",
         "timeAlg": "0 真太阳时（缺省）| 1 直接时间 | 3 平太阳时（2 春分定卯时上游未实现，报错）",

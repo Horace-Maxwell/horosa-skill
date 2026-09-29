@@ -42,11 +42,18 @@ import { runMundaneCards } from '../src/tools/mundaneCards.js';
 import { zeriRowOpts, withLeafKind } from '../src/tools/zeriSnapshotOpts.js';
 import { runAcgSection } from '../src/tools/acgSection.js';
 import { runBaziLocal } from '../src/tools/baziLocal.js';
+import { alignJavaBaziAges } from '../src/vendor/bazi/baziSnapshot.js';
+import { isSouthLatitude } from '../src/vendor/bazi/baziLunarLocal.js';
+import { heluoSolarTermOfDate } from '../src/vendor/heluo/heluoLocal.js';
+import { jianYaoPositions, jianYaoSpanText } from '../src/vendor/gua/LiuYaoConst.js';
+import { flagEnabled } from '../src/vendor/utils/perfFlags.js';
+import { bjShiftMinutes } from '../src/vendor/utils/beijingTimeShift.js';
+import { Solar as LunarSolar } from 'lunar-javascript';
 import { runZiweiBirth } from '../src/tools/ziweiBirth.js';
 import { runSuzhan } from '../src/tools/suzhan.js';
 import { runSanshiUnited } from '../src/tools/sanshiUnited.js';
 import { calcDunJia } from '../src/vendor/dunjia/DunJiaCalc.js';
-import { buildLocalJieqiYearSeed } from '../src/shared/localNongliAdapter.js';
+import { buildLocalJieqiYearSeed } from '../src/vendor/utils/localNongliAdapter.js';
 import { makeFields } from '../src/shared/fields.js';
 import { buildLiuRengLayout as lrmLayout, buildKeData as lrmKe, buildSanChuanData as lrmSanChuan } from '../src/vendor/liureng/LiuRengMain.js';
 
@@ -1292,6 +1299,96 @@ check('sanshiUnited 值级金标：【大六壬】= 两份上游六壬实现同�
     '三传递生递克：初传→中传 比和；中传→末传 克', '逐传徽记：中传寅(马)',
   ]), `【大六壬】${JSON.stringify(dalr)}`);
   assert(block('起盘信息').includes('月将：戌') && block('起盘信息').includes('四柱：丙午年/辛卯月/戊申日/癸亥时'), `【起盘信息】${JSON.stringify(block('起盘信息'))}`);
+});
+
+// ───────────────────────────── 上游 v3.11.2（Horosa-Public 9cd9078f）同步 · 值级金标 ─────────────────────────────
+check('v3.11.2 南半球月令：南纬 chong 月柱对冲（未→丑、月干五虎遁），none / 北纬逐字不变，快照只在南纬出「南半球月令」行', () => {
+  // 上游 baziLunarLocal.js flipMonthPillar / isSouthLatitude；BaZi.js:406-410 快照行。旧代码：无 southMonth 键 → chong 与 none 同盘、无该行。
+  const syd = { date: '1990-07-15', time: '14:30:00', zone: '+10:00', lat: '33s52', lon: '151e12', gender: 1, timeAlg: 0,
+    after23NewDay: 1, lateZiHourUseNextDay: 1, minggongMethod: 'tongxing', fenyeVersion: 'common', cangVersion: 'common', dayunPrecision: 'precise' };
+  const month = (r) => { const m = r.bazi.fourColumns.month; return `${m.stem.cell}${m.branch.cell}`; };
+  assert(isSouthLatitude(syd) === true && isSouthLatitude({ ...syd, lat: '31n14' }) === false, 'isSouthLatitude 纬度串 s/n');
+  const none = buildLocalBaziResult({ ...syd, southMonth: 'none' });
+  const chong = buildLocalBaziResult({ ...syd, southMonth: 'chong' });
+  assert(month(none) === '癸未', `南纬不对冲月柱 = 北半球同法 癸未，得 ${month(none)}`);
+  // 未 + 6 = 丑；庚年五虎遁 戊寅起 → 丑月 己丑（月干随对冲后的月序重起，不是原月干换支）
+  assert(month(chong) === '己丑', `南纬对冲月柱 己丑，得 ${month(chong)}`);
+  assert(month(buildLocalBaziResult({ ...syd, lat: '31n14', lon: '121e28', zone: '+08:00', southMonth: 'chong' })) === '癸未', '北纬 chong 无效（逐字不变）');
+  const south = runBaziLocal({ params: { ...syd, southMonth: 'chong' }, snapshot: {} }).snapshot_text;
+  const southNone = runBaziLocal({ params: { ...syd, southMonth: 'none' }, snapshot: {} }).snapshot_text;
+  const north = runBaziLocal({ params: { ...syd, lat: '31n14', lon: '121e28', zone: '+08:00' }, snapshot: {} }).snapshot_text;
+  assert(south.includes('\n南半球月令：对冲(月支取对冲之支)\n'), '南纬 chong 快照行');
+  assert(southNone.includes('\n南半球月令：不对冲(月柱同北半球)\n'), '南纬 none 快照行');
+  assert(!north.includes('南半球月令'), '北纬不出该行');
+});
+
+check('八字闰月出生的农历行：本地引擎 month 已带「闰」，不再叠成「闰闰五月」（上游 BaZi.js:317 缺陷，声明式偏离）', () => {
+  const t = runBaziLocal({ params: { date: '1990-07-15', time: '14:30:00', zone: '+08:00', lat: '31n14', lon: '121e28', gender: 1, timeAlg: 0,
+    after23NewDay: 1, lateZiHourUseNextDay: 1, minggongMethod: 'tongxing', fenyeVersion: 'common', cangVersion: 'common', dayunPrecision: 'precise' }, snapshot: {} }).snapshot_text;
+  const line = t.split('\n').find((l) => l.startsWith('农历：'));
+  assert(line === '农历：一九九〇年闰五月廿三', `得 ${line}`);
+  assert(!t.includes('闰闰'), '不得出现叠字');
+  // Java 形状（month 不带前缀）仍按 leap 加「闰」——前缀逻辑本来就是为它写的
+  const jv = runBaziLocal({ params: { date: '1990-07-15', time: '14:30:00', zone: '+08:00', lat: '31n14', lon: '121e28', gender: 1 },
+    java_result: { bazi: { nongli: { year: '一九九〇', month: '五月', day: '廿三', leap: true }, fourColumns: {} }, gender: 'Male' } }).snapshot_text;
+  assert(jv.split('\n').find((l) => l.startsWith('农历：')) === '农历：一九九〇年闰五月廿三', 'Java 形状仍加前缀');
+});
+
+check('v3.11.2 alignJavaBaziAges：Java 回退结果的大运 / 小运岁对齐为虚岁，跨公元纪元不多算一年、不出 0 年', () => {
+  // BaZi.js:725-753（fetchBazi*Cached 取数入口）。旧代码：Java 岁数原样进快照 → 大运 / 小运整体小一岁。
+  const j = { bazi: { nongli: { clockTime: '1990-05-15 10:30:00' }, direction: [{ startYear: 1997, age: 7 }, { startYear: 2007, age: 17 }],
+    smallDirection: [{ year: 1990, age: 0 }, { year: 1991, age: 1 }] } };
+  const a = alignJavaBaziAges(j).bazi;
+  assert(JSON.stringify(a.direction.map((d) => d.age)) === '[8,18]' && JSON.stringify(a.smallDirection.map((d) => d.age)) === '[1,2]', JSON.stringify(a));
+  const bc = alignJavaBaziAges({ bazi: { nongli: { clockTime: '-0010-05-15 10:30:00' }, direction: [{ startYear: -3, age: 7 }, { startYear: 7, age: 17 }] } }).bazi;
+  // 公元前 10 年生：起运 -3 年 = 7 个天文年 → 8 岁；起运公元 7 年：-9(astro) → 7 = 16 年 → 17 岁（直接 7-(-10)+1 会多算不存在的 0 年）
+  assert(JSON.stringify(bc.direction.map((d) => d.age)) === '[8,17]', JSON.stringify(bc.direction));
+  assert(alignJavaBaziAges(null) === null && alignJavaBaziAges({ x: 1 }).x === 1, '无 bazi 原样返回');
+});
+
+check('v3.11.2 heluoSolarTermOfDate 按出生地当地日期比交节：2026-02-03 纽约 / UTC = 立春初候，北京 = 大寒三候', () => {
+  // 上游 heluoLocal.js heluoSolarTermOfDate（HeLuoMain.solarTerm 与 aiAnalysisContext.heluoSolarTermForDate 同源）。
+  // 2026 立春 = 北京时间 02-04 04:02:08 = 纽约 02-03 15:02 / UTC 02-03 20:02 → 当地日期 02-03 已交节。旧 port 不看时区：三地都是大寒。
+  const bj = heluoSolarTermOfDate('2026-02-03', '+08:00', 'tuWangKunGen');
+  const ny = heluoSolarTermOfDate('2026-02-03', '-05:00', 'tuWangKunGen');
+  const utc = heluoSolarTermOfDate('2026-02-03', '+00:00', 'tuWangKunGen');
+  assert(bj.term === '大寒' && bj.hou === 3 && bj.houLabel === '大寒三候·大寒後', JSON.stringify(bj));
+  assert(ny.term === '立春' && ny.hou === 1 && ny.houLabel === '立春初候·立春後', JSON.stringify(ny));
+  assert(utc.term === '立春' && utc.hou === 1, JSON.stringify(utc));
+  assert(heluoSolarTermOfDate('2026-02-04', '+08:00', 'tuWangKunGen').term === '立春', '东八区原路径逐字不变');
+  const r = runHeluo({ date: '2026-02-03', time: '10:00:00', zone: '-05:00', lat: '40n43', lon: '74w00', gender: 1 });
+  assert(r.data && r.data.solarTerm && r.data.solarTerm.term === '立春' && r.data.solarTerm.hou === 1, `heluo 工具带时区：${JSON.stringify((r.data && (r.data.solarTerm || r.data.error)) || r)}`);
+});
+
+check('jieqi 年种子 = lunar-javascript 精确节气表（旧 S_TERM_INFO 近似公式 2026 立春差 6 小时），非东八区折成当地钟表，域外年返 null', () => {
+  // 上游 utils/localNongliAdapter.js buildLocalJieqiYearSeed（v3.11.2 加当地钟表折算）。奇门当前节气 / 择日扫描 / 七政年界都吃它。
+  // 负向对照 = skill 自 v0.9 起的 src/shared/localNongliAdapter.js：1900 历元近似公式（日粒度精度），2026 立春算到 10:16:32（真值 04:02:08）。
+  const table = LunarSolar.fromYmd(2026, 7, 1).getLunar().getJieQiTable();
+  const seed = buildLocalJieqiYearSeed(2026, '+08:00');
+  assert(seed['立春'].time === table['立春'].toYmdHms() && seed['立春'].time === '2026-02-04 04:02:08', JSON.stringify(seed['立春']));
+  assert(seed['立春'].dateKey === '20260204' && seed['立春'].dayGanzhi === '己酉', JSON.stringify(seed['立春']));
+  const S_TERM_INFO = [0, 21208, 42467, 63836, 85337, 107014, 128867, 150921, 173149, 195551, 218072, 240693, 263343, 285989, 308563, 331033, 353350, 375494, 397447, 419210, 440795, 462224, 483532, 504758];
+  const oldLichun = new Date(31556925974.7 * (2026 - 1900) + S_TERM_INFO[2] * 60000 + Date.UTC(1900, 0, 6, 2, 5, 0));
+  const oldBj = new Date(oldLichun.getTime() + 8 * 3600 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+  assert(oldBj === '2026-02-04 10:16:32', `负向对照的旧公式值变了：${oldBj}`);
+  assert(oldBj !== seed['立春'].time, '旧公式与精确表必须不同（否则这条对照证明不了什么）');
+  const ny = buildLocalJieqiYearSeed(2026, '-05:00');
+  assert(bjShiftMinutes('-05:00') === 780 && ny['立春'].time === '2026-02-03 15:02:08' && ny['立春'].dateKey === '20260203' && ny['立春'].dayGanzhi === '戊申', JSON.stringify(ny['立春']));
+  assert(buildLocalJieqiYearSeed(12000, '+08:00') === null, 'lunar-javascript 可靠域外必须返 null（走后端实算），不得吐近似值');
+});
+
+check('v3.11.2 间爻随世应位置取（世初应四→二三 / 二五→三四 / 三上→四五），jianYaoSpanText', () => {
+  // 上游 LiuYaoConst.js jianYaoPositions（旧 liuyaoFacade 写死 [3,4]，64 卦中 48 卦把世 / 应本身算进间爻）。
+  const cases = [[1, 4, [2, 3]], [2, 5, [3, 4]], [3, 6, [4, 5]], [6, 3, [4, 5]], [4, 1, [2, 3]], [null, 4, []]];
+  for (const [shi, ying, want] of cases) {
+    assert(JSON.stringify(jianYaoPositions(shi, ying)) === JSON.stringify(want), `jianYaoPositions(${shi},${ying}) = ${JSON.stringify(jianYaoPositions(shi, ying))}`);
+  }
+  assert(JSON.stringify(jianYaoPositions(1, 4)) !== '[3,4]', '旧写死 [3,4] 对世初应四是错的');
+  assert(jianYaoSpanText(1, 4) === '世初应四之间', jianYaoSpanText(1, 4));
+});
+
+check('perfFlags headless：flagEnabled 恒 true（无 window/localStorage = 上游缺省全开），huangliDay 惰性开关不改输出', () => {
+  assert(typeof window === 'undefined' && flagEnabled('horosa.perf.huangliLazyDetail') === true, 'flagEnabled must default on headlessly');
 });
 
 await Promise.all(pending);

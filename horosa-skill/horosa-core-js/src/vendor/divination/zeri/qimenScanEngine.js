@@ -11,7 +11,7 @@
 //   (lite+calc 约 2-4ms,月窗≈2s;上限窗见 QIMEN_MAX_SPAN_DAYS_TOTAL)。
 import { calcDunJia } from '../../dunjia/DunJiaCalc.js';
 import { buildLocalNongliLite } from '../../bazi/baziLunarLocal.js';
-import { buildLocalJieqiYearSeed } from '../../../shared/localNongliAdapter.js';
+import { buildLocalJieqiYearSeed } from '../../utils/localNongliAdapter.js';
 import { QIMEN_CONDITION_TYPES, makeQimenEvalCtx } from './qimenConditionTypes.js';
 import { makeHourlyScanEngine, zoneOffsetMinutes } from './hourlyScanEngine.js';
 

@@ -1,4 +1,4 @@
-import { buildLocalJieqiYearSeed } from '../shared/localNongliAdapter.js';
+import { buildLocalJieqiYearSeed } from '../vendor/utils/localNongliAdapter.js';
 import { makeFields, normalizeDateTimeInput } from '../shared/fields.js';
 import { unwrapNamedObject, unwrapResultEnvelope } from '../shared/unpack.js';
 import {

@@ -9,7 +9,7 @@
 // longLifeCharFor —— [神煞] 段 buildRulesGodsSection（GuoLaoChartMain.js:1759-1776）以 moira* 别名 import 这两个函数。
 import * as AstroConst from '../../constants/AstroConst.js';
 import { childYearsSpan, longLifeMapForYear } from './guolaoMoiraTables.js';
-import { buildLocalJieqiYearSeed } from '../../shared/localNongliAdapter.js';
+import { buildLocalJieqiYearSeed } from '../utils/localNongliAdapter.js';
 
 export const GUOLAO_LIFE_MODE_ASC = 'asc';
 export const GUOLAO_LIFE_MODE_YUMAO = 'yumao';       // 日出安命(实际日出)

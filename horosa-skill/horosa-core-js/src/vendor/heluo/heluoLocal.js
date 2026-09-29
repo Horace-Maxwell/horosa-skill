@@ -3,6 +3,9 @@
 // 算法依《河洛理数》(陈抟·邵康节) 主篇逐字实现；已对算例验证：
 //   甲子丁卯庚申庚辰(阳男·辰时)→先天天风姤·元堂上九；丁巳丙午壬寅辛丑(阴男)→水风井；壬子年命例 澤地萃(元堂4)→地水師(元堂1)。
 import TIAOWEN from './data/heluoTiaowen.json' with { type: 'json' };
+import { Solar } from 'lunar-javascript';
+import { parseDateParts } from '../bazi/dateStrSafe.js';
+import { bjShiftMinutes, shiftSolarMinutes } from '../utils/beijingTimeShift.js';
 
 // ── 八卦（自下而上三爻 bit：1阳 0阴）──
 const TRIGRAM_BITS = {
@@ -372,6 +375,47 @@ const JIEQI_QUARTER = {
 	秋分: '兌', 寒露: '兌', 霜降: '兌', 立冬: '兌', 小雪: '兌', 大雪: '兌',
 	冬至: '坎', 小寒: '坎', 大寒: '坎', 立春: '坎', 雨水: '坎', 驚蟄: '坎', 惊蛰: '坎',
 };
+// 出生当日所处节气 + 是否四立前 18 日(土用)+ 三候(节气内 5 日一候)→ 化工 / 反化工候选。河洛页与 AI 挂载同用这一份。
+// 日粒度:以出生地当日为准(原口径:交节当天即算已交,土用 / 候数从当日零点量)。节气表按北京时间编;非东八区
+// 改用节气的当地日期、当地零点来比(此前把当地日期直接当北京日期查,海外日期界可差一天)。东八区走原路径,逐字节不变。
+const HELUO_LI_TERMS = ['立春', '立夏', '立秋', '立冬'];
+export function heluoSolarTermOfDate(dateStr, zone, quHuaGong) {
+	try {
+		const hp = parseDateParts(dateStr) || {};
+		const localMidnight = Solar.fromYmd(hp.year, hp.month, hp.day);
+		const shift = bjShiftMinutes(zone);
+		let prev;
+		let jd;
+		let tbl;
+		if (!shift) {
+			// 东八区(及缺时区):原路径逐字节不变 —— 整日比较,交节当天即算已交
+			const lunar = localMidnight.getLunar();
+			prev = lunar.getPrevJieQi(true);
+			jd = localMidnight.getJulianDay();
+			tbl = lunar.getJieQiTable();
+		} else {
+			// 同一「整日」口径换到当地:节气的当地日期 ≤ 出生当地日期即算已交
+			// ⇔ 交节时刻不晚于「当地当日 23:59:59」→ 把它折成北京时间,按时刻取上一个节气(含等于)。
+			const dayEndBj = shiftSolarMinutes(Solar.fromYmdHms(hp.year, hp.month, hp.day, 23, 59, 59), shift);
+			prev = dayEndBj.getLunar().getPrevJieQi(false);
+			const midnightBj = shiftSolarMinutes(localMidnight, shift);
+			jd = midnightBj.getJulianDay();
+			tbl = midnightBj.getLunar().getJieQiTable();
+		}
+		const prevName = prev.getName();
+		const tuyong = HELUO_LI_TERMS.some((n) => {
+			const t = tbl[n];
+			if (!t) return false;
+			const diff = t.getJulianDay() - jd;
+			return diff >= 0 && diff <= 18;
+		});
+		const daysIn = Math.max(0, Math.floor(jd - prev.getSolar().getJulianDay()));
+		const hou = Math.min(3, Math.floor(daysIn / 5) + 1);
+		const houLabel = `${prevName}${['初候', '二候', '三候'][hou - 1]}·${prevName}後`;
+		return { ...solarTermHuagong(prevName, tuyong, { quHuaGong: quHuaGong || 'tuWangKunGen' }), term: prevName, hou, houLabel };
+	} catch (e) { return null; }
+}
+
 // prevJieQiName=出生当下所处节气名；tuyong=是否在四立前18日土用内。返回 {hg:[],fh:[]} 化工/反化工候选。
 export function solarTermHuagong(prevJieQiName, tuyong, opts = {}) {
 	const q = JIEQI_QUARTER[prevJieQiName] || null;

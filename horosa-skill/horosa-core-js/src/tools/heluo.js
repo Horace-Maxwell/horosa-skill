@@ -5,45 +5,16 @@
 // 起命（天地数→卦→元堂→后天）, 起运（大限/流年）, 命运篇 judge, and 爻辞 lookup. This mirrors 星阙's
 // HeLuoMain.js, which calls buildLocalBaziResult → calc → daYun → judge → buildSnapshotText.
 //
-// The 命运篇 section depends on the real 节气 (solar term) at birth, so we port HeLuoMain.solarTerm:
-// it uses lunar-javascript's JieQi table + solarTermHuagong to derive the 化工/三候 context that judge()
-// consumes. snapshot_text is byte-identical to 星阙's heluoLocal.buildSnapshotText; the 先天·…/后天·…
+// The 命运篇 section depends on the real 节气 (solar term) at birth. Since v3.11.2 the upstream keeps that in one
+// place — heluoLocal.heluoSolarTermOfDate(dateStr, zone, quHuaGong) (HeLuoMain.solarTerm and
+// aiAnalysisContext.heluoSolarTermForDate both call it) — so the wrapper calls the vendored single source instead of
+// carrying its own port; it derives the 化工/三候 context that judge() consumes. Non-UTC+8 births compare the term's
+// LOCAL date (the JieQi table is in Beijing time); UTC+8 is byte-identical to the old port. snapshot_text is byte-identical to 星阙's heluoLocal.buildSnapshotText; the 先天·…/后天·…
 // /大限·岁运 dynamic labels are legacy-mapped to the declared aiExport sections 先天卦/后天卦/大限 in
 // the skill's export layer.
-import { Solar } from 'lunar-javascript';
 import { buildLocalBaziResult } from '../vendor/bazi/baziLunarLocal.js';
-import calc, { daYun, judge, buildSnapshotText, solarTermHuagong } from '../vendor/heluo/heluoLocal.js';
+import calc, { daYun, judge, buildSnapshotText, heluoSolarTermOfDate } from '../vendor/heluo/heluoLocal.js';
 import { ganzhiYearBase } from '../vendor/utils/ganzhiYearBase.js';
-
-// 四立 — 土用 window markers, mirrored from HeLuoMain.js.
-const LI_TERMS = ['立春', '立夏', '立秋', '立冬'];
-
-// Ported verbatim from 星阙 HeLuoMain.solarTerm: real 节气(化工/象限+土用) + 三候(节气内 5 日一候).
-// quHuaGong 取化工法（上游 HeLuoMain.js:156 / aiAnalysisContext.heluoSolarTermForDate）：
-// 'tuWangKunGen' 土王寄坤艮（缺省，土用期补坤艮/反乾兑）| 'siFangBoOnly' 直取四方伯（土用期不补）。
-function solarTerm(dateStr, quHuaGong) {
-  try {
-    const [y, m, d] = `${dateStr}`.split('-').map((x) => parseInt(x, 10));
-    const solar = Solar.fromYmd(y, m, d);
-    const lunar = solar.getLunar();
-    const prev = lunar.getPrevJieQi(true);
-    const prevName = prev.getName();
-    const jd = solar.getJulianDay();
-    const tbl = lunar.getJieQiTable();
-    const tuyong = LI_TERMS.some((n) => {
-      const t = tbl[n];
-      if (!t) return false;
-      const diff = t.getJulianDay() - jd;
-      return diff >= 0 && diff <= 18;
-    });
-    const daysIn = Math.max(0, Math.floor(jd - prev.getSolar().getJulianDay()));
-    const hou = Math.min(3, Math.floor(daysIn / 5) + 1);
-    const houLabel = `${prevName}${['初候', '二候', '三候'][hou - 1]}·${prevName}後`;
-    return { ...solarTermHuagong(prevName, tuyong, { quHuaGong: quHuaGong || 'tuWangKunGen' }), term: prevName, hou, houLabel };
-  } catch (error) {
-    return null;
-  }
-}
 
 function pillarGanzhi(pillar) {
   return (pillar && (pillar.ganzi || pillar.ganZhi)) || '';
@@ -154,7 +125,7 @@ export function runHeluo(payload) {
   }
 
   const dy = daYun(chart.xian, chart.hou, birthYear);
-  const st = solarTerm(date, quHuaGong);
+  const st = heluoSolarTermOfDate(date, input.zone, quHuaGong);
   const jg = judge(chart, fourPillars, monthZhi, st);
 
   return {

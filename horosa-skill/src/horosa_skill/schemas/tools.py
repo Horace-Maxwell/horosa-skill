@@ -440,6 +440,11 @@ class BaZiBirthInput(FlexibleModel):
     cangVersion: str | None = None
     # 分野轮值表版本（上游 baziLunarLocal.js:1136）：'fajue' / 缺省 'common'。
     fenyeVersion: str | None = None
+    # v3.11.2 南半球月令（BaZi.js genParams / baziLunarLocal.js flipMonthPillar / Java southMonth）：只对南纬出生生效。
+    southMonth: str | None = Field(
+        default=None,
+        description="南半球月令（只对南纬出生生效，北纬忽略）：none=不对冲（缺省，月柱同北半球）| chong=对冲（月支取对冲之支，月干按年干五虎遁重起，胎元/命宫/大运随之）。",
+    )
     timeAlg: int | None = 0
     # 本地引擎（上游页面主路径）不实现 byLon / adjustJieqi：给了真值即整盘走 Java /bazi/*（唯一实现它们的引擎）并进 warnings。
     byLon: bool | None = False

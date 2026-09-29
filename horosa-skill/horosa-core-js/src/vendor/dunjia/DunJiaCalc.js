@@ -7,7 +7,7 @@ import { LUOSHU_NUM } from './DunJiaFaDoc.js';
 
 
 
-import { buildLocalJieqiYearSeed } from '../../shared/localNongliAdapter.js';
+import { buildLocalJieqiYearSeed } from '../utils/localNongliAdapter.js';
 import { parseDateParts } from '../bazi/dateStrSafe.js';
 
 export const SEX_OPTIONS = [
@@ -3202,3 +3202,6 @@ export function buildDunJiaSnapshotText(pan){
 
 	return lines.join('\n');
 }
+
+// 仅供单测:当前节气解析(种子 → 本地种子 → nongli 兜底),不改任何行为。
+export const __testing__ = { resolveCurrentJieqi };

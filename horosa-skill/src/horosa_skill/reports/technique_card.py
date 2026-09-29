@@ -41,6 +41,7 @@ _RESULT_SENSITIVE_FIELDS: tuple[tuple[str, str, frozenset[str] | None], ...] = (
     ("after23NewDay", "晚子时·日柱开关", _CN_DOMAINS),
     ("lateZiHourUseNextDay", "晚子时·时干开关", _CN_DOMAINS),
     ("guirengType", "贵人法", _CN_DOMAINS),
+    ("southMonth", "南半球月令", _CN_DOMAINS),
     ("timeAlg", "时间算法", None),
     ("pdMethod", "主限法", _ASTRO_DOMAINS),
     ("tradition", "古典口径", _ASTRO_DOMAINS),

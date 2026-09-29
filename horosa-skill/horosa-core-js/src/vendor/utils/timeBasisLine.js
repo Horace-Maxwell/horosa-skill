@@ -2,7 +2,7 @@
 // 是按哪种时间口径起的——八字默认真太阳时(经度+均时差校正),七政/占星按输入钟面时刻与时区换算,
 // 同一个 23:40 出生在不同技法里日柱可差一柱(例:八字丁酉 vs 七政戊戌),这是口径差异而非计算错误。
 // 只追加一行、不改既有字段顺序;消费方:cntradition/BaZi.js、guolao/GuoLaoChartMain.js、astroAiSnapshot.js。
-const TIME_ALG_LABEL = Object.freeze({ '0': '真太阳时(经度+均时差校正)', '1': '钟表时(按输入钟面时刻,无真太阳时校正)', '2': '春分定卯时', '3': '平太阳时(仅经度校正,无均时差)' });
+const TIME_ALG_LABEL = Object.freeze({ '0': '真太阳时(经度+均时差校正)', '1': '钟表时(按输入钟面时刻,无真太阳时校正)', '2': '春分定卯时(尚无独立换算,按钟表时刻)', '3': '平太阳时(仅经度校正,无均时差)' });
 
 export function timeBasisLabel(timeAlg){
 	if(timeAlg === undefined || timeAlg === null || `${timeAlg}` === ''){

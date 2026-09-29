@@ -37,3 +37,28 @@ export function parseYearFromDateStr(str){
 	const p = parseDateParts(str);
 	return p ? p.year : NaN;
 }
+
+// 「显示年」算术(无公元 0 年:公元前 1 年之后即公元 1 年)。直接 y + n / b − a 在跨纪元时多出一个不存在的 0 年
+// (公元前出生、行运跨到公元的盘:流年表出现「0 年」、其后公元年份整体错一年、按年份定位流年错一格)。
+const toAstroYear = (y)=>(y < 0 ? y + 1 : y);
+const fromAstroYear = (a)=>(a <= 0 ? a - 1 : a);
+
+/** 显示年 year 往后(n<0 往前)数 n 年 → 显示年。 */
+export function addDisplayYears(year, n){
+	const y = Number(year);
+	const k = Number(n);
+	if(!Number.isFinite(y) || !Number.isFinite(k)){
+		return NaN;
+	}
+	return fromAstroYear(toAstroYear(y) + k);
+}
+
+/** 显示年 a 到 b 相隔的年数(b − a,跨纪元不多算)。 */
+export function displayYearDiff(a, b){
+	const x = Number(a);
+	const y = Number(b);
+	if(!Number.isFinite(x) || !Number.isFinite(y)){
+		return NaN;
+	}
+	return toAstroYear(y) - toAstroYear(x);
+}

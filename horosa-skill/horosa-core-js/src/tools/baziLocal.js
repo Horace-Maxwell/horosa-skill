@@ -1,5 +1,5 @@
 import { buildLocalBaziResult } from '../vendor/bazi/baziLunarLocal.js';
-import { buildBaziSnapshotText, normalizeBaziResult } from '../vendor/bazi/baziSnapshot.js';
+import { buildBaziSnapshotText, normalizeBaziResult, alignJavaBaziAges } from '../vendor/bazi/baziSnapshot.js';
 
 /**
  * 八字（bazi_birth / bazi_direct）本地优先起盘 + 上游整份快照。
@@ -23,6 +23,10 @@ export function runBaziLocal(payload) {
   const extra = source.snapshot && typeof source.snapshot === 'object' ? source.snapshot : {};
   let raw = source.java_result && typeof source.java_result === 'object' ? source.java_result : null;
   const fromJava = !!raw;
+  if (fromJava) {
+    // BaZi.js:787/829：Java 回退结果在取数入口先把大运 / 小运岁数对齐为虚岁（本地引擎原生口径），再进 normalizeBaziResult。
+    raw = alignJavaBaziAges(raw);
+  }
   if (!raw) {
     try {
       raw = buildLocalBaziResult(params);

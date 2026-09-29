@@ -50,6 +50,25 @@ export const PALACE_TYPES = [
 	{ type: '归魂', moving: [5], shi: 3, ying: 6 },
 ];
 
+// 间爻 = 世应中间的爻(古籍:「间爻者,世应中之二爻也」)。京房世应恒隔两爻,故间爻恒为两爻、随世位而定:
+// 世应在初、四 → 二、三爻;在二、五 → 三、四爻;在三、上 → 四、五爻。不是固定的三、四爻。
+// 世应缺失或同位时返回空数组(不猜)。间爻爻位一律经此取,显示 / AI 快照 / 断语同源。
+export function jianYaoPositions(shi, ying){
+	const a = Number(shi), b = Number(ying);
+	if(!(a >= 1 && a <= 6 && b >= 1 && b <= 6) || a === b){ return []; }
+	const out = [];
+	for(let p = Math.min(a, b) + 1; p < Math.max(a, b); p++){ out.push(p); }
+	return out;
+}
+// 间爻的角色与「发动」断语(显示 / AI 快照共用一份字面量)。间爻发动主事多阻隔(古赋:事阻隔兮间发)。
+export const JIANYAO_ROLE = '中介/媒人/第三方';
+export const JIANYAO_DONG_NOTE = '间爻发动:事多阻隔';
+const YAO_CN = { 1: '初', 2: '二', 3: '三', 4: '四', 5: '五', 6: '上' };
+// 「世初应四之间」式的位置说明;世应缺失时返回空串。
+export function jianYaoSpanText(shi, ying){
+	return (YAO_CN[shi] && YAO_CN[ying]) ? `世${YAO_CN[shi]}应${YAO_CN[ying]}之间` : '';
+}
+
 // 六神(按日干起)
 export const LIUSHEN_CYCLE = ['青龙', '朱雀', '勾陈', '螣蛇', '白虎', '玄武'];
 export const LIUSHEN_START = { 甲: '青龙', 乙: '青龙', 丙: '朱雀', 丁: '朱雀', 戊: '勾陈', 己: '螣蛇', 庚: '白虎', 辛: '白虎', 壬: '玄武', 癸: '玄武' };

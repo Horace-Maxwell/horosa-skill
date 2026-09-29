@@ -4,6 +4,7 @@
 import { Gua64 } from '../gua/GuaConst.js';
 import { analyzeLiuyao } from '../gua/liuyaoFacade.js';
 import { normalizeLiuyaoSettings } from '../gua/liuyaoSchools.js';
+import { JIANYAO_ROLE, JIANYAO_DONG_NOTE, jianYaoSpanText } from '../gua/LiuYaoConst.js';
 import { guaLoreOf } from '../gua/data/tianjiGuaLore.js';
 import { getDoctrine, doctrineSummaryFor } from '../gua/data/liuyaoDoctrineCache.js';
 
@@ -55,7 +56,13 @@ export function duanJueLines(a){
 	if(a.shiYingRel){ out.push(`世应关系：世${a.shiYingRel.shiPos}(${a.shiYingRel.shiYao.liuqin}${a.shiYingRel.shiYao.zhi})${a.shiYingRel.rel || '—'}应${a.shiYingRel.yingPos}(${a.shiYingRel.yingYao.liuqin}${a.shiYingRel.yingYao.zhi})${a.shiYingRel.bothVoid ? '·世应俱空' : ''}${a.shiYingRel.note ? '·' + a.shiYingRel.note : ''}`); }
 	if(a.guaBianDuan){ out.push(`卦变：${a.guaBianDuan.ben}→${a.guaBianDuan.bian}·${a.guaBianDuan.duan}`); }
 	if(a.dongTai){ out.push(`动态：${a.dongTai.tai}(${a.dongTai.count}爻动)${a.dongTai.note ? '·' + a.dongTai.note : ''}`); }
-	if(a.jianYao && a.jianYao.length){ out.push(`间爻：${a.jianYao.map((j) => `第${j.pos}爻${j.liuqin}`).join('、')}(世应之间·中介/媒人/第三方)`); }
+	// 间爻 = 世应中间两爻(随世位而定);逐爻带旺衰 / 动静 / 空破 / 对世对应的冲合生克,发动另起断语(与显示层同一串标签)。
+	if(a.jianYao && a.jianYao.length){
+		const pt = a.palaceType || {};
+		const head = [jianYaoSpanText(pt.shi, pt.ying), JIANYAO_ROLE].filter(Boolean).join('·');
+		const body = a.jianYao.map((j) => `第${j.pos}爻${j.liuqin}${j.zhi}${j.wuxing || ''}${(j.tags && j.tags.length) ? `[${j.tags.join('·')}]` : ''}`).join('、');
+		out.push(`间爻：${body}(${head})${a.jianYao.some((j) => j.moving) ? `；${JIANYAO_DONG_NOTE}` : ''}`);
+	}
 	if(a.shiShen){ out.push(`世身：第${a.shiShen.pos}爻 ${a.shiShen.zhi}${a.shiShen.wuxing}${a.shiShen.liuqin}`); }
 	// 日月生克逐爻(古法以日月为最重要外力):日辰/月建 对每爻 生扶克制冲合刑值墓。显示层新加,AI 同源补齐。
 	if(a.riYue && a.riYue.perYao){

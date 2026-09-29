@@ -2,7 +2,7 @@
 // 为中栏、右栏页签、AI 快照提供单一真值源。默认不改既有输出字段与既有快照行(零回归);新结构走新增字段。
 import { getXunEmpty, getGua64, LiuQi } from './GuaConst.js';
 import { littleEndian } from './guaHelper.js';
-import { LIUCHONG, LIUHE, shengKe, ZHI_YINYANG, TIANGAN, DIZHI, CHANGSHENG_STAGES, CHANGSHENG_START, CHANGSHENG_START_ALT } from './LiuYaoConst.js';
+import { LIUCHONG, LIUHE, shengKe, ZHI_YINYANG, TIANGAN, DIZHI, CHANGSHENG_STAGES, CHANGSHENG_START, CHANGSHENG_START_ALT, jianYaoPositions } from './LiuYaoConst.js';
 import { analyzeGua, fushenForGua, palaceTypeOf, parseYaoName, pureGuaOf, guaChongHe, guaSanHeHui } from './LiuYaoEngine.js';
 import { analyzeYongShen } from './liuyaoYongShen.js';
 import { analyzeDongBian, bianGuaOf } from './liuyaoDongBian.js';
@@ -217,8 +217,21 @@ export function analyzeLiuyao(gua, movingPositions, ctx, settings){
 	const mc = dongbian ? (dongbian.movingCount || 0) : 0;
 	const DONGTAI = { 0: { tai: '尽静', note: '六爻皆静、以日月与用神旺衰定' }, 1: { tai: '独发', note: '一爻独动、力专而显、事之关键' }, 5: { tai: '独静', note: '五动一静、独静之爻为事之枢' }, 6: { tai: '尽发', note: '六爻皆动、以变卦与世用取向定' } };
 	const dongTai = DONGTAI[mc] ? { count: mc, ...DONGTAI[mc] } : { count: mc, tai: '常态', note: '' };
-	// A4 间爻:世应之间(三、四爻),中介/媒人/第三方
-	const jianYao = [3, 4].map((p) => ({ pos: p, liuqin: base.yaos[p - 1] ? base.yaos[p - 1].liuqin : '', zhi: base.yaos[p - 1] ? base.yaos[p - 1].zhi : '' }));
+	// A4 间爻:世应中间的两爻(随世位而定,见 jianYaoPositions;此前误写死三、四爻,48 卦把世爻或应爻本身算进间爻),
+	// 主中介 / 媒人 / 第三方;发动主事多阻隔。逐爻带旺衰、动静、空破与对世 / 对应的冲合生克(间爻为主语)。
+	const shiYao = shiPos ? base.yaos[shiPos - 1] : null;
+	const yingYao = yingPos ? base.yaos[yingPos - 1] : null;
+	const jianYao = jianYaoPositions(shiPos, yingPos).map((p) => {
+		const y = base.yaos[p - 1] || {};
+		const moving = movingSet.has(p), anDong = y.anDong === '暗动', xunKong = !!y.xunKong, yuePo = !!y.yuePo;
+		const toShi = jianRelOf(y, shiYao, '世'), toYing = jianRelOf(y, yingYao, '应');
+		return {
+			pos: p, liuqin: y.liuqin || '', zhi: y.zhi || '', wuxing: y.wuxing || '', wangShuai: y.wangShuai || '',
+			moving, anDong, xunKong, yuePo, toShi, toYing,
+			// 显示 / AI 快照同一串标签:旺衰 · 动静 · 空破 · 对世 · 对应
+			tags: [y.wangShuai || '', moving ? '动' : (anDong ? '暗动' : ''), xunKong ? '空' : '', yuePo ? '月破' : '', toShi, toYing].filter(Boolean),
+		};
+	});
 
 	// 占天时(晴雨)古法:tianshiSchool='ancient' 才产出,'fumu'(通行:父母主雨/子孙主晴)恒 null
 	// —— 通行档走原有用神映射,行为一字不改(零回归)。古法按家分列,不合成单一结论。
@@ -255,6 +268,16 @@ export function analyzeLiuyao(gua, movingPositions, ctx, settings){
 		// —— 占天时古法(按开关;'fumu' 档为 null) ——
 		tianshi,
 	};
+}
+
+// 间爻对世 / 应的关系(间爻为主语):地支六冲、六合优先(与世应关系同口径),否则五行生克。
+// 冲世 / 合世 / 生世 / 克世 / 得世生(世生间爻)/ 受世克(世克间爻)/ 与世比和;对应同理。
+function jianRelOf(j, t, name){
+	if(!j || !t || !j.zhi || !t.zhi){ return ''; }
+	if(LIUCHONG[j.zhi] === t.zhi){ return `冲${name}`; }
+	if(LIUHE[j.zhi] === t.zhi){ return `合${name}`; }
+	const sk = shengKe(j.wuxing, t.wuxing);
+	return sk === '生' ? `生${name}` : sk === '克' ? `克${name}` : sk === '泄' ? `得${name}生` : sk === '耗' ? `受${name}克` : sk === '同' ? `与${name}比和` : '';
 }
 
 // 内卦三爻 → 经卦名(八节内胎用)

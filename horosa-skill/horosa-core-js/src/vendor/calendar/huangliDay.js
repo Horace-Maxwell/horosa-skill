@@ -9,6 +9,7 @@
 // 入参 (y,m,d,hour?) 皆公历；返回规范化 day 对象，供老黄历卡片 / 吉日榜 / 日子馆 / AI 快照复用。
 import { Solar } from 'lunar-javascript';
 import { dayCourse, yearGods } from '../fengshui/zeri.js';
+import { flagEnabled } from '../utils/perfFlags.js';
 
 // lunar 各 get*() 有的返回单值、有的返回数组、偶有空串 —— 统一成干净数组。
 function asArr(v) {
@@ -61,8 +62,27 @@ export function buildHuangliDay(y, m, d, hour = 12) {
 }
 
 function computeHuangliDay(y, m, d, hour = 12) {
-	const solar = Solar.fromYmdHms(y, m, d, Number.isFinite(hour) ? hour : 12, 0, 0);
+	const h = Number.isFinite(hour) ? hour : 12;
+	const solar = Solar.fromYmdHms(y, m, d, h, 0, 0);
 	const lunar = solar.getLunar();
+	// [#81] 九星值日与时辰宜忌懒算:两项占逐日成本约九成,而全年扫描(吉日榜 / 日子馆 / 年度榜)逐日评分都不读它们。
+	// 首次读取才算并记住;懒算只捕获 (y, m, d, h),用到时当场重建同一时刻的 lunar(约 0.1 ms),
+	// 不让日 memo 里的每条记录长期挂着整份 Lunar 对象。getter 写在对象字面量原位置 → 键序、JSON、展开、快照逐字节不变。
+	// 开关 horosa.perf.huangliLazyDetail=0 → 当场用本日 lunar 算(旧口径)。
+	const lazyDetail = flagEnabled('horosa.perf.huangliLazyDetail');
+	let detailLunar = lazyDetail ? null : lunar;
+	const lunarForDetail = () => detailLunar || (detailLunar = Solar.fromYmdHms(y, m, d, h, 0, 0).getLunar());
+	let nineStarVal = null; let nineStarDone = false;
+	let timesVal = null; let timesDone = false;
+	const readNineStar = () => {
+		if (!nineStarDone) { nineStarVal = normalizeNineStar(safe(()=> lunarForDetail().getDayNineStar(), null)); nineStarDone = true; }
+		return nineStarVal;
+	};
+	const readTimes = () => {
+		if (!timesDone) { timesVal = normalizeTimes(lunarForDetail()); timesDone = true; }
+		return timesVal;
+	};
+	if (!lazyDetail) { readNineStar(); readTimes(); }
 	const course = dayCourse(y, m, d);   // 内部：建除/黄黑道/28宿
 	const yg = safe(()=> yearGods(y), null);   // 内部：年神方位
 
@@ -140,7 +160,7 @@ function computeHuangliDay(y, m, d, hour = 12) {
 		// —— 纳音 / 日禄 / 九星 ——
 		nayin: safe(()=> lunar.getDayNaYin(), ''),
 		lu: safe(()=> lunar.getDayLu(), ''),
-		nineStar: normalizeNineStar(safe(()=> lunar.getDayNineStar(), null)),
+		get nineStar() { return readNineStar(); },
 		// —— 物候 / 六曜 / 月相 / 数九 / 三伏 ——
 		hou: safe(()=> lunar.getHou(), ''),
 		liuyao: safe(()=> lunar.getLiuYao(), ''),
@@ -148,7 +168,7 @@ function computeHuangliDay(y, m, d, hour = 12) {
 		shujiu: shujiu ? safe(()=> shujiu.toString(), null) : null,
 		fu: fu ? safe(()=> fu.toString(), null) : null,
 		// —— 时辰吉凶（12/13 时辰宜忌）——
-		times: normalizeTimes(lunar),
+		get times() { return readTimes(); },
 		// —— 年神方位（内部 zeri）——
 		yearGods: yg,
 	};

@@ -10871,10 +10871,13 @@ class HorosaSkillService:
         "school": ("zonghe", "fuyi", "geju", "tiaohou", "bingyao", "tongguan", "mangpai", "nayin"),
         "ageStyle": ("nominal", "real"),
         "zodiacBoundary": ("lichun", "lunar"),
+        # v3.11.2：南半球月令（BaZi.js:1031 genParams 缺省 'none'；baziLunarLocal.js flipMonthPillar 只在 isSouthLatitude 时生效；
+        # Java /bazi/birth /bazi/direct 读同名参数 southMonth=chong|none 进缓存键）。
+        "southMonth": ("none", "chong"),
     }
     _BAZI_OPTION_DEFAULTS: dict[str, Any] = {
         "godKeyPos": "年", "phaseType": 0, "timeAlg": 0, "minggongMethod": "tongxing",
-        "fenyeVersion": "common", "cangVersion": "common", "dayunPrecision": "precise",
+        "fenyeVersion": "common", "cangVersion": "common", "dayunPrecision": "precise", "southMonth": "none",
     }
 
     def _bazi_option(self, payload: dict[str, Any], key: str) -> Any:
@@ -10937,6 +10940,8 @@ class HorosaSkillService:
             "fenyeVersion": self._bazi_option(payload, "fenyeVersion"),
             "cangVersion": self._bazi_option(payload, "cangVersion"),
             "dayunPrecision": self._bazi_option(payload, "dayunPrecision"),
+            # v3.11.2 南半球月令：进 params（本地引擎核心缓存键含它；Java 回退时随 java_payload 一起发）。
+            "southMonth": self._bazi_option(payload, "southMonth"),
         }
         snapshot: dict[str, Any] = {}
         for key in ("school", "ageStyle", "zodiacBoundary"):

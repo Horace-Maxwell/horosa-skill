@@ -5,14 +5,17 @@
 //   · buildBaziPeriodLines 及其常量/查找函数 —— [多运限·指定时段]（BaZi.js:102-265）
 //   · buildBaziSnapshotText —— 整份八字 AI 快照（BaZi.js:267-610）
 //   · normalizeBaziGender / normalizeBaziResult —— 取数后的结果归一（BaZi.js:658-687）
+//   · alignJavaBaziAges —— Java 回退结果的岁数对齐为虚岁（v3.11.2 BaZi.js:725-753；页面在 fetchBazi*Cached 取数入口调用，skill 在 tools/baziLocal.js 的 java_result 入口调用）
+//   · v3.11.2 复核（上游 BaZi.js f7b3dbbb → 45bfa578）：[起盘信息] 南纬「南半球月令」行、小运 / 板块表岁数经 baziAgeText.js 单源、流年年份 addDisplayYears 跨纪元；其余闭包逐字未变。
 // 函数体与模块级常量逐字未改；只有下方 import 按 vendor 树改了路径（上游是 ../../utils/xxx）。
 // 上游页面主路径（fetchBaziCached，BaZi.js:716-755）= 本地 buildLocalBaziResult 优先、抛错才回退 Java
 // /bazi/birth；两条路都经 normalizeBaziResult → buildBaziSnapshotText。编排见 tools/baziLocal.js。
 import { Solar } from 'lunar-javascript';
 import { buildTimeBasisLine } from '../utils/timeBasisLine.js';
-import { buildFlowDays, buildFlowHours, buildFlowMonthsByYear, getSelfZuo } from './baziLunarLocal.js';
+import { buildFlowDays, buildFlowHours, buildFlowMonthsByYear, getSelfZuo, isSouthLatitude } from './baziLunarLocal.js';
 import { filterShenShaByGroups } from './baziShenShaLocal.js';
-import { parseDateParts } from './dateStrSafe.js';
+import { parseDateParts, parseYearFromDateStr, addDisplayYears, displayYearDiff } from './dateStrSafe.js';
+import { baziAgeText, baziAgeValue } from './baziAgeText.js';
 
 function gzText(zhu){
 	if(!zhu){
@@ -252,7 +255,10 @@ function buildBaziSnapshotText(params, result){
 		if(!nongli){
 			return '';
 		}
-		const leap = nongli.leap ? '闰' : '';
+		// ⚠ 声明式偏离（skill）：上游 BaZi.js:317 对 leap 恒加「闰」前缀，而本地引擎 buildNongli（baziLunarLocal.js:1104）的 month 已是
+		// `${lunar.getMonthInChinese()}月`（闰月自带「闰」）→ 上游页面对闰月出生打出「闰闰五月」（1990-07-15 悉尼 / 上海皆可复现）；
+		// Java /bazi/* 的 month 不带前缀，前缀逻辑是为它写的。这里只在 month 尚未带「闰」时才加，其余逐字不变。
+		const leap = nongli.leap && !`${nongli.month || ''}`.startsWith('闰') ? '闰' : '';
 		return `${nongli.year || ''}年${leap}${nongli.month || ''}${nongli.day || ''}`;
 	};
 	const appendIf = (label, value)=>{
@@ -342,6 +348,10 @@ function buildBaziSnapshotText(params, result){
 		lines.push(`| ${label} | ${c.ganzhi} | ${c.cang} | ${c.shishen} | ${c.naying} | ${c.nayingPhase} | ${c.xingYun} | ${c.ziZuo} | ${c.kong} |`);
 	});
 	lines.push(`胎元：${gzText(four.tai)}`);
+	// 南纬出生标明月令口径(北纬不输出)
+	if(isSouthLatitude(params)){
+		lines.push(`南半球月令：${params && params.southMonth === 'chong' ? '对冲(月支取对冲之支)' : '不对冲(月柱同北半球)'}`);
+	}
 	// [Q-367/T-348] 公元前等本地引擎不可用而回退 Java 的域:Java 只识 xingming,tongxing/shufa 都走子平数法表 → 按实际口径如实标注。
 	const _mgLabel = (params && params.minggongMethod === 'shufa') ? '子平数法' : ((result && result.local) ? '通行版' : '子平数法(本域回退)');
 	lines.push(`命宫：${gzText(four.ming)}（起法：${_mgLabel}）`);
@@ -513,7 +523,7 @@ function buildBaziSnapshotText(params, result){
 				const yr = d.yearGanzi || {};
 				const ageVal = d.age === undefined || d.age === null || !Number.isFinite(Number(d.age))
 					? '无'
-					: (realAge ? Math.max(0, Number(d.age) - 1) : Number(d.age));
+					: baziAgeValue(d.age, realAge ? 'real' : 'nominal');
 				lines.push(`| ${d.year !== undefined ? d.year : '无'} | ${ageVal} | ${sub.ganzi || '无'} | ${yr.ganzi || '无'} |`);
 			});
 		}
@@ -526,9 +536,11 @@ function buildBaziSnapshotText(params, result){
 		// （startYear/startAge/dayunGz/yearGzs 组装式不动），旧行标签词（起始年/起始年龄/大运/流年）上移表头。
 		lines.push('| 板块 | 起始年 | 起始年龄 | 大运 | 流年 |');
 		lines.push('| --- | --- | --- | --- | --- |');
+		// 起始年龄随「年龄」档(虚岁默认「N岁」逐字不变 / 周岁「N−1周岁」),与上面小运表同一口径 —— 此前恒写虚岁。
+		const overviewAgeStyle = `${(params && params.ageStyle) || ''}` === 'real' ? 'real' : 'nominal';
 		bazi.direction.forEach((block, idx)=>{
 			const startYear = block && block.startYear !== undefined ? `${block.startYear}` : '';
-			const startAge = block && block.age !== undefined ? `${block.age}` : '';
+			const startAge = block && block.age !== undefined ? baziAgeText(block.age, overviewAgeStyle) : '';
 			const dayunGz = getGz(block ? block.mainDirect : null);
 			const startYearNum = block && block.startYear !== undefined ? Number(block.startYear) : null;
 			const yearGzs = (block && block.subDirect && block.subDirect.length ? block.subDirect : [])
@@ -537,14 +549,14 @@ function buildBaziSnapshotText(params, result){
 					if(!gz){
 						return '';
 					}
-					const yearNum = Number.isFinite(startYearNum) ? startYearNum + subIdx : null;
+					const yearNum = Number.isFinite(startYearNum) ? addDisplayYears(startYearNum, subIdx) : null;   // 跨公元纪元不出 0 年
 					if(Number.isFinite(yearNum)){
 						return `${yearNum}-${gz}`;
 					}
 					return gz;
 				})
 				.filter(Boolean);
-			lines.push(`| 板块${idx + 1} | ${startYear} | ${startAge}岁 | ${dayunGz} | ${yearGzs.join(' ')} |`);
+			lines.push(`| 板块${idx + 1} | ${startYear} | ${startAge} | ${dayunGz} | ${yearGzs.join(' ')} |`);
 		});
 	}
 
@@ -569,6 +581,36 @@ function normalizeBaziGender(gender){
 		return 'Male';
 	}
 	return '';
+}
+
+// [八字·年龄口径] 页面各处(行运面板 / 细盘 / 旧版界面 / AI 快照)把 direction[].age、smallDirection[].age 当虚岁读
+// (出生即 1 岁,本地引擎原生口径)。Java /bazi/birth、/bazi/direct 的大运岁是「起运年 − 出生年」、小运岁从 0 起 ——
+// 公元前 / 域外年份回退 Java 时,页面上的大运 / 流年 / 小运岁数整体小一岁。取数入口统一对齐为虚岁:
+// 大运按天文年差算(公元前 1 年之后即公元 1 年,跨纪元不多算一年),小运逐年 +1。
+export function alignJavaBaziAges(result){
+	const bazi = result && result.bazi;
+	if(!bazi || typeof bazi !== 'object'){
+		return result;
+	}
+	const nongli = bazi.nongli || {};
+	const birthYear = parseYearFromDateStr(nongli.clockTime || nongli.birth || '');
+	(Array.isArray(bazi.direction) ? bazi.direction : []).forEach((d)=>{
+		if(!d){
+			return;
+		}
+		const startYear = Number(d.startYear);
+		if(Number.isFinite(startYear) && Number.isFinite(birthYear) && d.startYear !== null && d.startYear !== ''){
+			d.age = displayYearDiff(birthYear, startYear) + 1;
+		}else if(d.age !== undefined && d.age !== null && Number.isFinite(Number(d.age))){
+			d.age = Number(d.age) + 1;
+		}
+	});
+	(Array.isArray(bazi.smallDirection) ? bazi.smallDirection : []).forEach((d)=>{
+		if(d && d.age !== undefined && d.age !== null && Number.isFinite(Number(d.age))){
+			d.age = Number(d.age) + 1;
+		}
+	});
+	return result;
 }
 
 function normalizeBaziResult(result, params){
