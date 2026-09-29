@@ -37,8 +37,9 @@ BASELINE = PKG_ROOT / "contracts" / "mcp_client_compat.json"
 sys.path.insert(0, str(PKG_ROOT / "src"))
 
 NAME_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
-# Gemini CLI 在同名冲突时前缀 `serverName__`，并把超过 63 字符的名字中段截断成 `___`。
-GEMINI_PREFIX = "horosa__"
+# Gemini CLI 的工具全名**无条件**是 `mcp_{serverName}_{toolName}`（docs 2026-03-10 起，不再只在同名冲突时加前缀），
+# 超过 63 字符的名字中段截断成 `___`——按最长形态算：`mcp_horosa_` + 工具名（2026-09-29 复核；最长 27 + 11 = 38）。
+GEMINI_PREFIX = "mcp_horosa_"
 GEMINI_NAME_LIMIT = 63
 # OpenAI function 描述上限 1024 字符（超出即拒/截断）。
 DESCRIPTION_CHAR_LIMIT = 1024

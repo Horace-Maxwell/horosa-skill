@@ -38,8 +38,20 @@ sys.path.insert(0, str(PKG_ROOT / "src"))
 # instructions_bytes（v0.38.1 C20）：_SERVER_INSTRUCTIONS 发给每个客户端，2048 是自设预算（已 2035/2048）——
 # 棘轮 + 硬顶，防一字破限而无人知。
 HARD_CAPS = {"full_bytes": 256 * 1024, "compact_bytes": 30 * 1024, "instructions_bytes": 2048}
+# Per-tool input schema (v0.40.0): Codex 0.158.0 (2026-09-28) added `mcp_servers.<name>.tool_input_schema_max_bytes`,
+# default 5000 B; a larger schema is "compacted" — parameter descriptions are stripped, silently. Every tool on BOTH
+# surfaces must stay under it (largest today: horosa_astro_india_rectify 3843 B). This is a hard cap, not a ratchet.
+TOOL_INPUT_SCHEMA_CAP_BYTES = 5000
 TOLERANCE = 0.02
 
+
+def input_schema_bytes(tool: dict) -> int:
+    return len(json.dumps(tool.get("inputSchema") or {}, ensure_ascii=False).encode("utf-8"))
+
+
+def oversized_tool_schemas(tools: list[dict], cap: int = TOOL_INPUT_SCHEMA_CAP_BYTES) -> list[tuple[str, int]]:
+    """[(name, bytes)] for every tool whose inputSchema serialises above `cap` — pure, so the test can feed a fat tool."""
+    return sorted(((str(t.get("name")), input_schema_bytes(t)) for t in tools if input_schema_bytes(t) > cap), key=lambda x: -x[1])
 
 def measure() -> dict[str, int]:
     from horosa_skill.config import Settings
@@ -57,6 +69,9 @@ def measure() -> dict[str, int]:
             tools = [tool.model_dump(mode="json") for tool in asyncio.run(mcp.list_tools())]
             sizes[key] = len(json.dumps(tools, ensure_ascii=False).encode("utf-8"))
             sizes[key.replace("_bytes", "_tools")] = len(tools)
+            biggest = max(tools, key=input_schema_bytes)
+            sizes[key.replace("_bytes", "_max_tool_input_schema_bytes")] = input_schema_bytes(biggest)
+            sizes.setdefault("_oversized", {})[key] = oversized_tool_schemas(tools)  # type: ignore[assignment]
     return sizes
 
 
@@ -65,6 +80,7 @@ def main() -> int:
     ap.add_argument("--update-baseline", action="store_true", help="rewrite the baseline after paying size down")
     args = ap.parse_args()
     sizes = measure()
+    oversized = sizes.pop("_oversized", {})
 
     if args.update_baseline:
         BASELINE.parent.mkdir(parents=True, exist_ok=True)
@@ -76,7 +92,7 @@ def main() -> int:
                         "in-process). Hard caps: full ≤ 256 KB, compact ≤ 30 KB; regressions above 2% of the "
                         "baseline fail CI. Refresh with `uv run python scripts/verify_mcp_list_budget.py --update-baseline`."
                     ),
-                    "hard_caps": HARD_CAPS,
+                    "hard_caps": {**HARD_CAPS, "tool_input_schema_bytes": TOOL_INPUT_SCHEMA_CAP_BYTES},
                     **sizes,
                 },
                 ensure_ascii=False,
@@ -93,6 +109,9 @@ def main() -> int:
         return 1
     base = json.loads(BASELINE.read_text(encoding="utf-8"))
     errors: list[str] = []
+    for key, fat in oversized.items():
+        for name, size in fat:
+            errors.append(f"{key}: {name} inputSchema {size} B > {TOOL_INPUT_SCHEMA_CAP_BYTES} B (Codex tool_input_schema_max_bytes default — descriptions would be stripped)")
     for key, cap in HARD_CAPS.items():
         if sizes[key] > cap:
             errors.append(f"{key}: {sizes[key]} B exceeds the hard cap {cap} B")
@@ -115,7 +134,8 @@ def main() -> int:
     print(
         f"mcp tools/list budget OK: full {sizes['full_bytes']} B / {HARD_CAPS['full_bytes']} B "
         f"({sizes['full_tools']} tools), compact {sizes['compact_bytes']} B / {HARD_CAPS['compact_bytes']} B "
-        f"({sizes['compact_tools']} tools), instructions {sizes['instructions_bytes']} B / {HARD_CAPS['instructions_bytes']} B"
+        f"({sizes['compact_tools']} tools), instructions {sizes['instructions_bytes']} B / {HARD_CAPS['instructions_bytes']} B, "
+        f"largest tool inputSchema {sizes['full_max_tool_input_schema_bytes']} B / {TOOL_INPUT_SCHEMA_CAP_BYTES} B"
     )
     return 0
 

@@ -41,7 +41,12 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 
 # Budgets (seconds): the plan's install 10 / start 15 / engines 5 / pytest 25 minutes.
-BUDGET = {"install": 600, "doctor": 120, "start": 900, "engine": 300, "setup": 600, "pytest": 1500, "stop": 180}
+# pytest: the live suite is ~4–5× slower on the hosted Windows runners than on macOS (v0.38.1 release matrix: darwin 226 s vs
+# windows-latest 970 s / windows-11-arm 1022 s for 1210 tests; 2026-09-28 schedule run: darwin 583 s for 1771 tests while BOTH
+# Windows lanes hit the flat 1500 s budget). Budget by host: the number is a ceiling for a healthy run, not a target.
+PYTEST_BUDGET_SECONDS = {"nt": 2700, "posix": 1500}
+BUDGET = {"install": 600, "doctor": 120, "start": 900, "engine": 300, "setup": 600,
+          "pytest": PYTEST_BUDGET_SECONDS["nt" if os.name == "nt" else "posix"], "stop": 180}
 DOCTOR_POLL_SECONDS = 10.0
 
 CONFIRM = {
@@ -539,11 +544,22 @@ class Lane:
                 result["bad_host_status"] = http.post(url, json=body, headers={**headers, "Authorization": f"Bearer {token}", "Host": "evil.example"}).status_code
             import anyio
             from mcp import ClientSession
-            from mcp.client.streamable_http import streamablehttp_client
+            # mcp ≥ 1.30：头经 httpx.AsyncClient；旧入口退路给 1.29 的环境（见 tests/test_http_and_clients.py 同款）
+            try:
+                from mcp.client.streamable_http import streamable_http_client as _open_stream
+                from mcp.shared._httpx_utils import create_mcp_http_client
+
+                def _client(u: str, headers: dict[str, str]):
+                    return _open_stream(u, http_client=create_mcp_http_client(headers=headers))
+            except ImportError:
+                from mcp.client.streamable_http import streamablehttp_client as _legacy_open
+
+                def _client(u: str, headers: dict[str, str]):
+                    return _legacy_open(u, headers=headers)
 
             async def handshake() -> tuple[int, str]:
                 with anyio.fail_after(120):
-                    async with streamablehttp_client(url, headers={"Authorization": f"Bearer {token}"}) as (read, write, _sid):
+                    async with _client(url, {"Authorization": f"Bearer {token}"}) as (read, write, _sid):
                         async with ClientSession(read, write) as session:
                             init = await session.initialize()
                             tools = await session.list_tools()
@@ -658,13 +674,30 @@ class Lane:
         env = self.pytest_env()
         started = time.perf_counter()
         command = [sys.executable, "-m", "pytest", "-q", "-rsf", "-p", "no:cacheprovider", *self.args.pytest_args]
-        try:
-            completed = subprocess.run(command, cwd=str(PKG_ROOT), env=env, capture_output=True, text=True,
-                                       encoding="utf-8", errors="replace", timeout=BUDGET["pytest"])
-        except subprocess.TimeoutExpired:
-            return self.step("pytest", False, seconds=round(time.perf_counter() - started, 1), problems=["pytest timed out"])
-        output = (completed.stdout or "") + "\n" + (completed.stderr or "")
-        (self.work / "pytest.log").write_text(output, encoding="utf-8")
+        # Stream pytest's output straight into pytest.log: the 2026-09-28 schedule run timed out on both Windows lanes and
+        # `subprocess.run(capture_output=True)` left NOTHING behind (the artifact had no pytest.log), so nobody could tell
+        # whether the suite was slow or hung. With the file as stdout the partial log survives a kill.
+        log_path = self.work / "pytest.log"
+        budget = BUDGET["pytest"]
+        timed_out = False
+        with log_path.open("w", encoding="utf-8", errors="replace") as log_file:
+            proc = subprocess.Popen(command, cwd=str(PKG_ROOT), env=env, stdout=log_file, stderr=subprocess.STDOUT)
+            try:
+                returncode = proc.wait(timeout=budget)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                proc.kill()
+                try:
+                    proc.wait(timeout=60)
+                except subprocess.TimeoutExpired:
+                    pass
+                returncode = proc.returncode if proc.returncode is not None else -9
+        output = log_path.read_text(encoding="utf-8", errors="replace")
+        if timed_out:
+            return self.step("pytest", False, seconds=round(time.perf_counter() - started, 1),
+                             problems=[f"pytest timed out after {budget} s (host budget {PYTEST_BUDGET_SECONDS}; partial log kept: {log_path.name})"],
+                             budget_seconds=budget, tail="\n".join(output.splitlines()[-40:]), partial_output_chars=len(output))
+        completed = subprocess.CompletedProcess(command, returncode, output, "")
         counts = pytest_summary(output)
         skips = forbidden_skips(output)
         failures = failed_tests(output)
@@ -675,7 +708,7 @@ class Lane:
             problems.append(f"live gates skipped: {skips[:3]}")
         tail = "\n".join(output.splitlines()[-40:])
         return self.step("pytest", not problems, seconds=round(time.perf_counter() - started, 1), counts=counts, problems=problems,
-                         failed=failures, env={"HOROSA_SERVER_ROOT": env["HOROSA_SERVER_ROOT"], "HOROSA_CHART_SERVER_ROOT": env["HOROSA_CHART_SERVER_ROOT"], "HOROSA_NODE_BIN": env.get("HOROSA_NODE_BIN")},
+                         budget_seconds=budget, failed=failures, env={"HOROSA_SERVER_ROOT": env["HOROSA_SERVER_ROOT"], "HOROSA_CHART_SERVER_ROOT": env["HOROSA_CHART_SERVER_ROOT"], "HOROSA_NODE_BIN": env.get("HOROSA_NODE_BIN")},
                          tail=tail if problems else None)
 
     def stop(self) -> bool:

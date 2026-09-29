@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -234,3 +235,72 @@ def test_claude_user_scope_step_never_touches_the_invoking_users_claude_config(t
             assert Path(env[key]).resolve().is_relative_to(work), f"{name}: {key}={env[key]!r} escapes the lane work dir"
             assert Path(env[key]).resolve() != Path(real_home).resolve()
         assert env.get("HOROSA_RUNTIME_ROOT") == str(lane.runtime_root), f"{name}: the isolated env must still be the lane env"
+
+
+def test_pytest_budget_is_host_aware() -> None:
+    """2026-09-28 schedule matrix: both Windows lanes hit the flat 1500 s pytest budget (darwin needed 583 s for the same 1771
+    tests; Windows runners are 4–5× slower on this suite). The ceiling is per host, and BUDGET reads it for the current one."""
+    assert live.PYTEST_BUDGET_SECONDS["posix"] == 1500
+    assert live.PYTEST_BUDGET_SECONDS["nt"] >= 2700
+    assert live.BUDGET["pytest"] == live.PYTEST_BUDGET_SECONDS["nt" if os.name == "nt" else "posix"]
+
+
+class _FakePytestProc:
+    """Stands in for subprocess.Popen: writes some pytest output to the stdout handle it was given, then either finishes
+    (returncode 0) or times out on the first wait() and dies on kill()."""
+
+    instances: list["_FakePytestProc"] = []
+
+    def __init__(self, command, *, stdout=None, stderr=None, **kwargs):  # noqa: ANN001
+        self.command = command
+        self.returncode = None
+        self.kills = 0
+        self.hang = getattr(_FakePytestProc, "hang", False)
+        stdout.write(getattr(_FakePytestProc, "output", "....F..s\n"))
+        stdout.flush()
+        _FakePytestProc.instances.append(self)
+
+    def wait(self, timeout=None):  # noqa: ANN001
+        if self.hang and self.kills == 0:
+            raise subprocess.TimeoutExpired(cmd=self.command, timeout=timeout)
+        self.returncode = -9 if self.kills else 0
+        return self.returncode
+
+    def kill(self) -> None:
+        self.kills += 1
+
+
+def test_live_pytest_keeps_the_partial_log_when_it_times_out(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Negative control = the 2026-09-28 artifact: `subprocess.run(capture_output=True)` + TimeoutExpired left no pytest.log at
+    all, so nobody could tell a slow suite from a hung one. Now the output streams into pytest.log and the timeout step keeps
+    the tail plus the budget it was measured against."""
+    lane = _lane(tmp_path, "horosa lane")
+    lane.work.mkdir(parents=True, exist_ok=True)
+    lane.args.skip_pytest = False
+    monkeypatch.setattr(lane, "pytest_env", lambda: {"HOROSA_SERVER_ROOT": "http://127.0.0.1:1", "HOROSA_CHART_SERVER_ROOT": "http://127.0.0.1:2"})
+    monkeypatch.setattr(_FakePytestProc, "hang", True, raising=False)
+    monkeypatch.setattr(_FakePytestProc, "output", "....F..s\ntests/test_slow.py::test_x FAILED\n", raising=False)
+    monkeypatch.setattr(live.subprocess, "Popen", _FakePytestProc)
+    monkeypatch.setitem(live.BUDGET, "pytest", 7)
+
+    assert lane.live_pytest() is False
+    step = lane.report["steps"]["pytest"]
+    assert (lane.work / "pytest.log").read_text(encoding="utf-8").startswith("....F..s")
+    assert "timed out after 7 s" in step["problems"][0] and "pytest.log" in step["problems"][0]
+    assert step["budget_seconds"] == 7 and "test_slow.py" in step["tail"]
+    assert _FakePytestProc.instances[-1].kills == 1, "a timed-out pytest must be killed, not left running under the lane"
+
+
+def test_live_pytest_streams_the_log_on_success_too(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    lane = _lane(tmp_path, "horosa lane")
+    lane.work.mkdir(parents=True, exist_ok=True)
+    lane.args.skip_pytest = False
+    monkeypatch.setattr(lane, "pytest_env", lambda: {"HOROSA_SERVER_ROOT": "http://127.0.0.1:1", "HOROSA_CHART_SERVER_ROOT": "http://127.0.0.1:2"})
+    monkeypatch.setattr(_FakePytestProc, "hang", False, raising=False)
+    monkeypatch.setattr(_FakePytestProc, "output", "........\n8 passed in 1.23s\n", raising=False)
+    monkeypatch.setattr(live.subprocess, "Popen", _FakePytestProc)
+
+    assert lane.live_pytest() is True
+    step = lane.report["steps"]["pytest"]
+    assert step["counts"]["passed"] == 8 and step["budget_seconds"] == live.BUDGET["pytest"]
+    assert (lane.work / "pytest.log").read_text(encoding="utf-8").endswith("8 passed in 1.23s\n")

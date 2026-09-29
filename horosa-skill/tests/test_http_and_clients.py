@@ -323,7 +323,19 @@ def test_streamable_http_handshake_end_to_end(tmp_path) -> None:
     import anyio
     import httpx
     from mcp import ClientSession
-    from mcp.client.streamable_http import streamablehttp_client
+    # mcp 1.30.0（wheel/uvx 用户实际解析到的 1.x）：`streamablehttp_client(url, headers=…)` 已弃用，头经 httpx.AsyncClient 传；
+    # 新入口 `streamable_http_client(url, http_client=…)`。留旧入口退路，让 1.29 的锁定环境也能跑。
+    try:
+        from mcp.client.streamable_http import streamable_http_client as _open_stream
+        from mcp.shared._httpx_utils import create_mcp_http_client
+
+        def _client(url: str, headers: dict[str, str]):
+            return _open_stream(url, http_client=create_mcp_http_client(headers=headers))
+    except ImportError:  # pragma: no cover - only on mcp < 1.30
+        from mcp.client.streamable_http import streamablehttp_client as _legacy_open
+
+        def _client(url: str, headers: dict[str, str]):
+            return _legacy_open(url, headers=headers)
 
     from horosa_skill.engine.registry import TOOL_DEFINITIONS
     from horosa_skill.surfaces.mcp_server import FACADE_TOOL_COUNT
@@ -359,7 +371,7 @@ def test_streamable_http_handshake_end_to_end(tmp_path) -> None:
 
         async def handshake() -> int:
             with anyio.fail_after(60):
-                async with streamablehttp_client(url, headers={"Authorization": f"Bearer {token}"}) as (read, write, _sid):
+                async with _client(url, {"Authorization": f"Bearer {token}"}) as (read, write, _sid):
                     async with ClientSession(read, write) as session:
                         await session.initialize()
                         return len((await session.list_tools()).tools)

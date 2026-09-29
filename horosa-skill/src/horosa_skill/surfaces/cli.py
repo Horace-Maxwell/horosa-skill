@@ -1720,7 +1720,7 @@ _CLIENT_RESTART_HINTS = {
     "vscode": "重载 VS Code 窗口（Developer: Reload Window）；Copilot Chat 的工具列表里应出现 horosa。",
     "codex": "重启 codex；首轮可能看不到 horosa 工具（冷启动只等 1 s），第二轮即恢复。",
     "gemini": "重启 gemini；`/mcp` 应列出 horosa。",
-    "windsurf": "重启 Windsurf；Cascade 的 MCP 面板里应看到 horosa。",
+    "windsurf": "重启 Devin Desktop（原 Windsurf）；Devin Local 的 MCP 列表里应看到 horosa（旧版 Cascade 看 MCP 面板）。",
     "cline": "重载 VS Code 窗口；Cline 的 MCP Servers 面板里应看到 horosa。",
     "zed": "重启 Zed；Agent 面板的 Context Servers 里应看到 horosa。",
 }
@@ -2903,7 +2903,7 @@ _CLIENT_COMPACT_REASON = {
     "vscode": "VS Code Copilot 跨所有 server 共 128 个工具上限",
     "codex": "Codex 无工具搜索，全量工具定义每轮都进上下文",
     "gemini": "Gemini CLI 对工具数与 schema 都更严格",
-    "windsurf": "Windsurf 100 个工具上限",
+    "windsurf": "Windsurf（现 Devin Desktop）：旧 Cascade 100 个工具上限，Devin Local 未公布上限且无工具搜索",
     "cline": "Cline 无工具搜索，全量面偏重",
     "zed": "Zed 无工具搜索，全量面偏重",
 }
@@ -2937,7 +2937,8 @@ def _client_config_locations(
 
     项目级候选按 `_project_root(cwd)`（`.git` / `.mcp.json` 所在的最近祖先），不是裸 CWD。
     v0.38.1 C19 追加：`CODEX_HOME`（Codex 官方覆盖变量）、Linux 的 `XDG_CONFIG_HOME`、项目级
-    `.gemini/settings.json`、Cline 装在 Cursor / Windsurf 里时的 globalStorage 根。
+    `.gemini/settings.json`、Cline 装在 Cursor / Windsurf 里时的 globalStorage 根；windsurf 键 = Devin Desktop / Devin CLI 的
+    mcp_config.json（用户级 → 项目级 → 旧 Cascade 路径）。
     """
     # os_name ∈ {"nt", "darwin", "linux"}（默认按本机）；参数化是为了在任何平台上都能测别的平台的路径表。
     if os_name is None:
@@ -2951,6 +2952,7 @@ def _client_config_locations(
         code_user = appdata / "Code" / "User"
         cursor_user = appdata / "Cursor" / "User"
         windsurf_user = appdata / "Windsurf" / "User"
+        devin_user = appdata / "devin" / "mcp_config.json"
         zed = appdata / "Zed" / "settings.json"
     elif os_name == "darwin":
         app_support = home / "Library" / "Application Support"
@@ -2958,6 +2960,7 @@ def _client_config_locations(
         code_user = app_support / "Code" / "User"
         cursor_user = app_support / "Cursor" / "User"
         windsurf_user = app_support / "Windsurf" / "User"
+        devin_user = home / ".config" / "devin" / "mcp_config.json"
         zed = home / ".config" / "zed" / "settings.json"
     else:
         xdg = Path(env.get("XDG_CONFIG_HOME") or (home / ".config"))
@@ -2965,6 +2968,7 @@ def _client_config_locations(
         code_user = xdg / "Code" / "User"
         cursor_user = xdg / "Cursor" / "User"
         windsurf_user = xdg / "Windsurf" / "User"
+        devin_user = xdg / "devin" / "mcp_config.json"
         zed = xdg / "zed" / "settings.json"
     codex_home = Path(env["CODEX_HOME"]) if env.get("CODEX_HOME") else home / ".codex"
     cline_tail = Path("globalStorage") / "saoudrizwan.claude-dev" / "settings" / "cline_mcp_settings.json"
@@ -2975,7 +2979,11 @@ def _client_config_locations(
         "vscode": [code_user / "mcp.json", project / ".vscode" / "mcp.json"],
         "codex": [codex_home / "config.toml"],
         "gemini": [home / ".gemini" / "settings.json", project / ".gemini" / "settings.json"],
-        "windsurf": [home / ".codeium" / "windsurf" / "mcp_config.json"],
+        # Windsurf 于 2026-06-02 更名 Devin Desktop；2026-09-08（v3.9.19）起 Cascade 被移除，唯一 agent = Devin Local，
+        # 它读 Devin CLI 的 MCP 文件（docs.devin.ai/cli/extensibility/mcp/configuration：用户级 ~/.config/devin/mcp_config.json、
+        # Windows %APPDATA%\devin\mcp_config.json、项目级 .devin/mcp_config.json；根键仍是 mcpServers，字段 command/args/env/disabled）。
+        # 旧 Cascade 路径 ~/.codeium/windsurf/mcp_config.json 留作最后候选：已有文件者继续原位合并，新装机写 Devin 路径。
+        "windsurf": [devin_user, project / ".devin" / "mcp_config.json", home / ".codeium" / "windsurf" / "mcp_config.json"],
         "cline": [code_user / cline_tail, cursor_user / cline_tail, windsurf_user / cline_tail],
         "zed": [zed],
     }

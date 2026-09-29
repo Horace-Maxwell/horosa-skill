@@ -31,9 +31,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Verify wheel contents (knowledge packs / bench / gate table / runtime templates / entry point)
@@ -55,7 +55,7 @@ jobs:
             echo "pyproject version ${VERSION} != release tag ${TAG}" >&2
             exit 1
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: horosa-skill-dist
           path: horosa-skill/dist/*
@@ -73,7 +73,7 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: horosa-skill-dist
           path: dist

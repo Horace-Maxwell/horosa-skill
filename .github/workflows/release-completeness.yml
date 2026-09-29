@@ -52,7 +52,7 @@ jobs:
     steps:
       # v0.38.0 A3: the expected platform set comes from horosa-skill/contracts/release_platforms.json
       # (`since`-gated), so this guard needs the repo checked out.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Resolve the published `latest` release
         id: latest
         run: |
@@ -107,7 +107,7 @@ jobs:
       # v0.38.0 B3：wheel 资产是免 git / 免 PyPI 的零安装通路（`uvx --from <wheel URL>`），README / SKILL /
       # server.json 里钉版本的命令直指它。资产要在场，而且那条命令要真的跑通——「文档写了」不算证据。
       # 只对 ≥ 0.38.0 的发布断言：更早的 release 本来就没有这件资产，不该让它们回头变红。
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - name: Assert the wheel asset is present and the zero-install command works
         env:
           TAG: ${{ steps.latest.outputs.tag }}

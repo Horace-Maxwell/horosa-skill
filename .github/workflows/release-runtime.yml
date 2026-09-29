@@ -59,7 +59,7 @@ jobs:
       seed: ${{ steps.info.outputs.seed }}
       windows_zip: ${{ steps.info.outputs.windows_zip }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Resolve tag, seed asset, and the release's draft state
         id: info
         shell: bash
@@ -100,13 +100,13 @@ jobs:
       run:
         shell: pwsh
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Cache pinned toolchain downloads (JDK / Node / embedded CPython)
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: horosa-skill/build/downloads
           key: runtime-toolchain-${{ hashFiles('horosa-skill/contracts/runtime_toolchain.json') }}
@@ -128,7 +128,7 @@ jobs:
           uv run python scripts/build_runtime_release_windows.py --seed "dist\runtime\${{ needs.resolve.outputs.seed }}" --out-dir dist\runtime --python "$env:pythonLocation\python.exe"
           if (-not (Test-Path -LiteralPath "dist\runtime\${{ needs.resolve.outputs.windows_zip }}")) { throw "derived archive missing: ${{ needs.resolve.outputs.windows_zip }}" }
       - name: Upload the derived Windows payload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: windows-payload
           path: horosa-skill/dist/runtime/${{ needs.resolve.outputs.windows_zip }}
@@ -140,9 +140,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install dependencies
@@ -157,7 +157,7 @@ jobs:
           gh release download "${{ needs.resolve.outputs.tag }}" --repo "${GITHUB_REPOSITORY}" -D dist/runtime --clobber \
             -p "${{ needs.resolve.outputs.seed }}" -p '*.mcpb' -p '*.whl' || true
           test -f "dist/runtime/${{ needs.resolve.outputs.seed }}"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: windows-payload
           path: horosa-skill/dist/runtime
@@ -188,7 +188,7 @@ jobs:
             --manifest dist/runtime/runtime-manifest.json \
             --expect-platforms darwin-arm64,win32-x64
       - name: Upload the assembled release set (the matrix installs from this)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: runtime-release-assets
           if-no-files-found: error
@@ -210,7 +210,7 @@ jobs:
             dist/runtime/runtime-manifest.json dist/runtime/SHA256SUMS.txt dist/runtime/horosa-skill-sbom.json
       - name: Attest build provenance (archives + manifest; the step release.yml never got to run)
         if: ${{ !inputs.dry_run }}
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v3
         with:
           subject-path: |
             horosa-skill/dist/runtime/${{ needs.resolve.outputs.seed }}
@@ -242,9 +242,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install dependencies
@@ -253,7 +253,7 @@ jobs:
       # v0.38.1 R5: the bytes the three lanes installed must be the bytes on the draft. Each lane records the sha256 of the
       # archive it installed (lane-report.json → installed_archive_sha256); the draft's assets expose GitHub's own
       # `digest` (sha256:…), with SHA256SUMS.txt as the fallback. Any mismatch or missing lane evidence blocks the flip.
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: runtime-matrix-*
           path: ${{ runner.temp }}/lanes

@@ -3,11 +3,14 @@
   "hard_caps": {
     "full_bytes": 262144,
     "compact_bytes": 30720,
-    "instructions_bytes": 2048
+    "instructions_bytes": 2048,
+    "tool_input_schema_bytes": 5000
   },
   "instructions_bytes": 2035,
-  "full_bytes": 249404,
+  "full_bytes": 254210,
   "full_tools": 120,
-  "compact_bytes": 15035,
-  "compact_tools": 11
+  "full_max_tool_input_schema_bytes": 3843,
+  "compact_bytes": 15260,
+  "compact_tools": 11,
+  "compact_max_tool_input_schema_bytes": 1147
 }

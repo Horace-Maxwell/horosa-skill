@@ -467,3 +467,39 @@ def test_client_check_understands_a_local_wheel_source(tmp_path: Path) -> None:
     stale.write_bytes(b"PK")
     entry["args"][1] = str(stale)
     assert "launcher_version_drift" in [p["code"] for p in _audit_client_entry("horosa", entry, client="cursor")]
+
+
+# ---- v0.40.0：Windsurf → Devin Desktop（2026-06-02 更名；2026-09-08 v3.9.19 移除 Cascade，Devin Local 读 Devin CLI 的 mcp_config.json）----
+def test_windsurf_client_points_at_devin_paths_with_legacy_cascade_fallback(tmp_path: Path) -> None:
+    """docs.devin.ai/cli/extensibility/mcp/configuration：用户级 ~/.config/devin/mcp_config.json（Windows %APPDATA%\\devin\\mcp_config.json）、
+    项目级 .devin/mcp_config.json；根键 mcpServers。旧代码只认 ~/.codeium/windsurf/mcp_config.json —— 新装的 Devin Desktop 永远找不到 horosa。
+    旧路径留作最后候选：已有 Cascade 配置的机器仍原位合并（`_preferred_config_path` 取第一个已存在的）。"""
+    from horosa_skill.surfaces import cli
+
+    home = tmp_path / "home"
+    proj = tmp_path / "proj"
+    mac = cli._client_config_locations("windsurf", os_name="darwin", env={}, home=home, cwd=proj)
+    assert [str(p) for p in mac] == [
+        str(home / ".config" / "devin" / "mcp_config.json"),
+        str(proj / ".devin" / "mcp_config.json"),
+        str(home / ".codeium" / "windsurf" / "mcp_config.json"),
+    ]
+    linux = cli._client_config_locations("windsurf", os_name="linux", env={"XDG_CONFIG_HOME": str(tmp_path / "xdg")}, home=home, cwd=proj)
+    assert str(linux[0]) == str(tmp_path / "xdg" / "devin" / "mcp_config.json")
+    win = cli._client_config_locations("windsurf", os_name="nt", env={"APPDATA": r"C:\Users\张 三\AppData\Roaming"}, home=r"C:\Users\张 三", cwd=r"D:\proj")
+    # 在 POSIX 主机上合成 Windows 形状时 Path 会混用分隔符（既有 Windows 形状用例同样只看片段）——按片段比。
+    assert str(win[0]).replace("\\", "/").endswith("AppData/Roaming/devin/mcp_config.json") and "张 三" in str(win[0])
+    assert str(win[1]).replace("\\", "/").endswith("D:/proj/.devin/mcp_config.json")
+    # legacy machine: only the Cascade file exists → it stays the write target
+    legacy = home / ".codeium" / "windsurf" / "mcp_config.json"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text("{}", encoding="utf-8")
+    import os as _os
+    from unittest import mock
+
+    original = cli._client_config_locations
+    with mock.patch.object(cli, "_client_config_locations", lambda client, **kw: original(client, os_name="darwin", env={}, home=home, cwd=proj)):
+        assert cli._preferred_config_path("windsurf") == legacy
+        legacy.unlink()
+        assert cli._preferred_config_path("windsurf") == home / ".config" / "devin" / "mcp_config.json"
+    assert "Devin" in cli._CLIENT_COMPACT_REASON["windsurf"] and "Devin Desktop" in cli._CLIENT_RESTART_HINTS["windsurf"]

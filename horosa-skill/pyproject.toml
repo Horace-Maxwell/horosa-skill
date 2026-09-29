@@ -12,7 +12,8 @@ dependencies = [
   # camelCase→snake_case、httpx2、强制 opentelemetry）。v2 同时支持 2026-07-28 与更早修订，
   # 故晚迁不掉队；迁移单独跟踪，不随本版本走。
   "mcp[cli]>=1.29.0,<2",
-  "pydantic>=2.8.0",
+  # mcp 1.30.0（wheel/uvx 安装实际解析到的 1.x）要求 pydantic>=2.11；下限跟上，免得旧 pydantic 环境装出一对不兼容的组合。
+  "pydantic>=2.11.0",
   "python-docx>=1.1.2",
   "reportlab>=4.2.0",
   # codex config.toml 的保注释合并（client config --write --format codex 只动 [mcp_servers.<name>]）
