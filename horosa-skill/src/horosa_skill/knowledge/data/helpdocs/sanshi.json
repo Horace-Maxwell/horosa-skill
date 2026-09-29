@@ -6,9 +6,9 @@
   "file": "components/help/SanshiHelpDoc.js",
   "upstream_source_marker": "xingque_help_docs",
   "upstream_app_version": "3.11.2",
-  "upstream_git_sha": "9cd9078f9675"
+  "upstream_git_sha": "2300bbab2780"
  },
- "generated_at": "2026-09-28T21:34:24-04:00",
+ "generated_at": "2026-09-29T15:45:59-04:00",
  "categories": [
   {
    "name": "手册",
