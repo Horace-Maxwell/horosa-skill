@@ -17,7 +17,7 @@ export const SZChart_NiXiangChart = 7;
 
 const DefaultFillColor = 'var(--horosa-suzhan-fill, #fefeef)';
 // 分野 / 方位 / 八卦等表的 color 一律写成 getter(访问时读当前调色板):模块初始化期读 AstroConst.AstroColor 会把亮主题的墨色烘死进常量,
-// 切明暗后重画也换不掉(FL-20260922-3);合同测试 chartThemeFollow.contract 以 AST 锁「组件树零模块级 / 零实例字段调色板烘焙」。
+// 切明暗后重画也换不掉;合同测试 chartThemeFollow.contract 以 AST 锁「组件树零模块级 / 零实例字段调色板烘焙」。
 
 export const SZChart_Circle = 0;
 export const SZChart_Square = 1;

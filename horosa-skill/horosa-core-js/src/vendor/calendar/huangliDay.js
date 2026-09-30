@@ -65,7 +65,7 @@ function computeHuangliDay(y, m, d, hour = 12) {
 	const h = Number.isFinite(hour) ? hour : 12;
 	const solar = Solar.fromYmdHms(y, m, d, h, 0, 0);
 	const lunar = solar.getLunar();
-	// [#81] 九星值日与时辰宜忌懒算:两项占逐日成本约九成,而全年扫描(吉日榜 / 日子馆 / 年度榜)逐日评分都不读它们。
+	// 九星值日与时辰宜忌懒算:两项占逐日成本约九成,而全年扫描(吉日榜 / 日子馆 / 年度榜)逐日评分都不读它们。
 	// 首次读取才算并记住;懒算只捕获 (y, m, d, h),用到时当场重建同一时刻的 lunar(约 0.1 ms),
 	// 不让日 memo 里的每条记录长期挂着整份 Lunar 对象。getter 写在对象字面量原位置 → 键序、JSON、展开、快照逐字节不变。
 	// 开关 horosa.perf.huangliLazyDetail=0 → 当场用本日 lunar 算(旧口径)。

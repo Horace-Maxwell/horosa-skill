@@ -259,7 +259,7 @@
       "mode": "curated",
       "why": "Uranian 虚星表所需子集，**逐值抽取**。块界=下一个顶层 `export const`（上游多数常量不带结尾分号，按分号切会卷进后续声明）；且必须保持上游原序——LIST_URANIAN 引用了排在其后的符号，重排即 ReferenceError before initialization。",
       "extracts": [],
-      "upstream_sha256": "d960a5ea4b9bc9b485bd271a72eda30ad74a54423ec2369d6fa828e10f825d88"
+      "upstream_sha256": "3b6f350372d3d70c8263e50b420e77a92bb5f53aaf663dd07ed3a7b53ef292e9"
     },
     "constants/ZWText.js": {
       "upstream": "constants/ZWText.js",
@@ -1283,7 +1283,7 @@
       "mode": "bespoke",
       "why": "自上游 GuoLaoChartMain.js 逐字抽出的 AI 快照段 builder：buildGuolaoAnchorLines（[起盘信息] 命度/身度/宿主行）/ buildGuolaoMastersSection（[三主与化曜]）/ buildGuolaoLimitCalcSection（[限法实算]）/ buildGuolaoLimitSection（[大限] GFM 表 + 所选行运法结构）。该文件 4350 行，其余是 React 组件与取数编排。与 guolaoMoira.js（同源的政余格局闭包）分文件：各自看守同一源 sha。源一动即红、复核后 --restamp。",
       "derived_from": "components/guolao/GuoLaoChartMain.js",
-      "derived_sha256": "5f7f942591e58263d2704a070605efd49134c52e8360ed6dae990908b589c7cd"
+      "derived_sha256": "bbca952b92f2657f3cedc2c8330bdd6051a2aad1aa734656dcdcb70ab47d8fb4"
     },
     "guolao/guolaoTransit.js": {
       "upstream": "components/guolao/guolaoTransit.js",
@@ -1295,7 +1295,7 @@
       "mode": "bespoke",
       "why": "自上游 GuoLaoChartMain.js verbatim 抽出的政余格局 Moira DSL 闭包，外加 wave3b 同源快照段（与格局闭包共用 msg/objectLon/houseFullLabel/computeAscSignIndex/orderGods 与同一 SNAPSHOT_PREFER_LON 黄仪窗口）：[七政四余宫位与二十八宿星曜] buildHouseSuAndGodsSection、[神煞] buildRulesGodsSection → buildHouseGodsSection、[相位] buildGuolaoAspectSection（含 GUOLAO_ASPECT_LABEL_CN/aspectName/buildAspectRows）与 splitDegree，逐字；buildGuolaoSnapshotTablesForSnapshot 为 skill 桥接（同 buildLocalMoiraPatternsForSnapshot）。normalizeGuolaoLifeMode 取 guolaoMoiraWheelLimits.js 的 GuoLaoChartStyle 逐字版（此前本文件留着只认 yumao/cotrans 的旧平移件）。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
       "derived_from": "components/guolao/GuoLaoChartMain.js",
-      "derived_sha256": "5f7f942591e58263d2704a070605efd49134c52e8360ed6dae990908b589c7cd"
+      "derived_sha256": "bbca952b92f2657f3cedc2c8330bdd6051a2aad1aa734656dcdcb70ab47d8fb4"
     },
     "heluo/heluoLocal.js": {
       "upstream": "utils/heluoLocal.js",
@@ -1338,13 +1338,13 @@
         "INDIA_DASHA_DISPLAY_ONLY_SYSTEMS",
         "normalizeIndiaDashaSystem"
       ],
-      "upstream_sha256": "d960a5ea4b9bc9b485bd271a72eda30ad74a54423ec2369d6fa828e10f825d88"
+      "upstream_sha256": "3b6f350372d3d70c8263e50b420e77a92bb5f53aaf663dd07ed3a7b53ef292e9"
     },
     "india/jyotishSnapshot.js": {
       "mode": "bespoke",
       "why": "自上游 IndiaChart.js 逐字抽出的 Jyotish 快照段构造器（仅剥 React 外壳）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。 🔴 两处声明式偏离（均为上游 HEAD 9b74714b 的 bug，重抽时必须保留，直到上游修复）：① SIGN_CN_S/scS 上提到函数开头——上游三旗盘逐月净分块先于其 const 定义调用 scS（暂时性死区），jyotish.tripataki 一有数据整个 builder 抛出；② 三旗盘月序读 m.index ?? m.month——后端 month_rows 的键是 month，上游读 index 恒 undefined。",
       "derived_from": "components/astro/IndiaChart.js",
-      "derived_sha256": "4fc22b6eb71cdd0a943bf8ef3cbea2d96ba4bead7e7363a7c845fbfe0f244097"
+      "derived_sha256": "9713ba90c7437ec9a93b7a9fc5a2528954fa7dea00db0718930c043e27ab03cf"
     },
     "jinkou/JinKouCalc.js": {
       "upstream": "components/jinkou/JinKouCalc.js",
@@ -2361,13 +2361,13 @@
       "mode": "bespoke",
       "why": "v0.40 mingli F8：自上游 ZiWeiMain.js 逐字抽出的紫微快照主 builder（normalizeGan…getLifeHouse :55-169 + buildZiWeiSnapshotText :407-614），与 ziweiSnapshotLayers.js 同源互补；此前紫微快照是 Python 手写 port（无四化流派/传本设置行、宫位总览无四化括注与庙旺档），22 个传本开关与 sihuaSchool 都进不了快照。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
       "derived_from": "components/ziwei/ZiWeiMain.js",
-      "derived_sha256": "d665c50225e9690dd4ec5e7ba5e888120ecfd34c5ba937cfb4e8b3b867b6f75d"
+      "derived_sha256": "d2949a45f8a82221d3be5b431ae611cc2069cee204da51d584b6c5be6b6d9093"
     },
     "ziwei/ziweiSnapshotLayers.js": {
       "mode": "bespoke",
       "why": "自上游 ZiWeiMain.js 逐字抽出的紫微快照运限层 builder（[运限概览]/[运限]/[流派叠层] + formatLuckLayerLines/findDaxianForYear + 两张模块级常量）；该文件其余是 React 组件，整份 vendor 不可行。此前这些函数手抄在 tools/ziweiExtras.js 里、无源 sha 看守 → 上游 v3.11.0 的 [运限概览] 段与 [运限] 沈氏三限行静默缺了一版。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
       "derived_from": "components/ziwei/ZiWeiMain.js",
-      "derived_sha256": "d665c50225e9690dd4ec5e7ba5e888120ecfd34c5ba937cfb4e8b3b867b6f75d"
+      "derived_sha256": "d2949a45f8a82221d3be5b431ae611cc2069cee204da51d584b6c5be6b6d9093"
     },
     "ziwei/zwLuckItems.js": {
       "mode": "bespoke",
@@ -2733,7 +2733,7 @@
         "ASC",
         "MC"
       ],
-      "upstream_sha256": "d960a5ea4b9bc9b485bd271a72eda30ad74a54423ec2369d6fa828e10f825d88"
+      "upstream_sha256": "3b6f350372d3d70c8263e50b420e77a92bb5f53aaf663dd07ed3a7b53ef292e9"
     },
     "sanshi/sanshiAstroText.js": {
       "upstream": "constants/AstroText.js",

@@ -1,7 +1,7 @@
 {
   "_comment": "vendored 树对到的上游状态。只由 verify_upstream_sync.py --write-state 在**全部检查通过**时写入——红着写等于把失败洗成一条持久的「已核对」声明。",
-  "upstream_git_sha": "2300bbab2780c5433e7c6292be318d7b14294021",
-  "upstream_git_committed_at": "2026-09-29T15:45:59-04:00",
+  "upstream_git_sha": "fd3b68f09faf10b6ac2c81e2a3e81a5ff9c8d637",
+  "upstream_git_committed_at": "2026-09-29T19:50:13-04:00",
   "upstream_app_version": "3.11.2",
   "aiexport_settings_version": 58,
   "skill_mirrored_version": 58,
@@ -110,7 +110,7 @@
   "core_js": {
     "files_compared": 369,
     "files_unmatched": 28,
-    "tree_sha256": "f4c1d5056923d0b48287ebbc9f346aa204882e8bd2e3a2e0bfcb365942fa374f"
+    "tree_sha256": "f29cf8a8e6ee18b118c796341331aacce7d5ff9a384ac5770be9bd691f194aff"
   },
   "runtime_source": {
     "sentinels_verified": 7

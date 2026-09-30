@@ -338,7 +338,7 @@ function solarFromParts(parts){
 	return Solar.fromYmdHms(parts.year, parts.month, parts.day, parts.hour, parts.minute, parts.second);
 }
 
-// [#92] 年柱 / 月柱 / 交节距离(起运、节后天数)以出生的**绝对时刻**为准。lunar-javascript 的节气表按北京时间
+// 年柱 / 月柱 / 交节距离(起运、节后天数)以出生的**绝对时刻**为准。lunar-javascript 的节气表按北京时间
 // (UTC+8)排,非东八区若直接喂当地钟表,交节在当地钟表上偏「8 − 时区」小时(巴黎交节后 2 小时仍判上月)。
 // 故另建一份「出生绝对时刻的北京时间」农历:年 / 月相关读取与上一节 / 下一节(折回当地钟表)取自它,
 // 日 / 时与农历日期仍取当地钟表那份。东八区原样返回 → 逐字节不变。
@@ -356,7 +356,7 @@ export function isSouthLatitude(params){
 	const g = parseGeoDegrees(params && params.gpsLat, 90);
 	return Number.isFinite(g) && g < 0;
 }
-// [#93] 南半球月令「对冲」:月支取对冲之支(寅↔申 …),月干按年干五虎遁重起;胎元 / 命宫 / 大运等派生随之由 lunar-javascript 自算。
+// 南半球月令「对冲」:月支取对冲之支(寅↔申 …),月干按年干五虎遁重起;胎元 / 命宫 / 大运等派生随之由 lunar-javascript 自算。
 function flipMonthPillar(hybrid, base){
 	const zhiIdx = (base.getMonthZhiIndexExact() + 6) % 12;
 	const monthNum = (zhiIdx + 10) % 12 + 1;   // 寅 → 1 … 丑 → 12
@@ -1091,7 +1091,7 @@ function ziweiLeapMonthFields(zwLunar){
 }
 
 function buildNongli(lunar, solar, apparentSolar, ziweiLunar, jieqiLunar){
-	const jq = jieqiLunar || lunar;   // [#92] 「某节气后第 N 天」按绝对时刻取节气(东八区即 lunar 本身)
+	const jq = jieqiLunar || lunar;   // 「某节气后第 N 天」按绝对时刻取节气(东八区即 lunar 本身)
 	const prev = jq.getPrevJieQi ? jq.getPrevJieQi(false) : jq.getPrevJie(false);
 	const prevSolar = prev && prev.getSolar ? prev.getSolar() : null;
 	let dayDiff = '';

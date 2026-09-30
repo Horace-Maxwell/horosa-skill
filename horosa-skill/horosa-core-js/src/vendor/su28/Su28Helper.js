@@ -25,7 +25,7 @@ let suToSign = [
 ];
 
 // 宿色 / 宿底色一律按访问时的调色板求值(getSu28Color / getSu28ColorCircle / getSu28FillColorCircle):此前四个模块级数组在 import 期
-// 就把 AstroConst.AstroColor 读死,切明暗后永远是亮主题的色(FL-20260922-3),已删。
+// 就把 AstroConst.AstroColor 读死,切明暗后永远是亮主题的色,已删。
 export function getSu28Color(i){
 	let sig = suToSign[i];
 	return AstroConst.AstroColor[sig];
