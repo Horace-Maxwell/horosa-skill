@@ -132,7 +132,10 @@ engines** (kinwangji/kinwuzhao/taixuanshifa/jingjue/shenyishu) **+ the shared `k
 kinastro trim) and patch the staged `kentang/registry.py` mount so the chart service still boots and
 gracefully skips any engine that is genuinely absent; `start_horosa_local.ps1` puts `Horosa-Web/vendor`
 on `PYTHONPATH` so `import kinqimen` / `kintaiyi` / `kinjinkou` / `kinwangji` / `kinwuzhao` /
-`taixuanshifa` / `jingjue` / `shenyishu` / `kinastro` resolve.
+`taixuanshifa` / `jingjue` / `shenyishu` / `kinastro` resolve. Before it starts the chart service it also sets
+`HOROSA_EPHE_PATH_FASTPATH=0`: Swiss Ephemeris state is thread-local on Windows, and upstream v3.11.2's ephemeris-path
+fast path would leave CherryPy's pool threads on the default `\sweph\ephe\` path, losing every asteroid (v0.40.0 draft;
+guarded by `scripts/verify_runtime_scripts.py`).
 
 > **✅ v0.9.1 Windows sync DONE (was a v0.9.0 TODO):** the Windows v0.9.1 zip was built **and natively
 > verified on a real Windows machine** (not just structurally on the mac dev box). Confirmed: the bundled

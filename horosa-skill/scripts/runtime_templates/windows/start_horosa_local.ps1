@@ -107,6 +107,11 @@ $env:HOROSA_CHART_PORT = $ChartPort
 $env:PYTHONPATH = "{0};{1};{2}" -f $AstropyRoot, $FlatlibRoot, $VendorRoot
 $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
+# Swiss Ephemeris keeps its state (ephemeris path, open files) per THREAD on Windows (sweodef.h declares it TLS
+# on every platform but __APPLE__; MSVC builds get __declspec(thread)). Upstream v3.11.2's ephemeris-path fast path remembers "path set"
+# process-wide, so CherryPy pool threads never set it, look in the default \sweph\ephe\ and cannot open the
+# asteroid files: Chiron/Ceres vanish and /chart answers "param error" (v0.40.0 draft lanes). Keep it off here.
+$env:HOROSA_EPHE_PATH_FASTPATH = "0"
 
 # Paths are embedded as JSON string literals (a JSON string is a valid Python string literal): the old
 # r"$Var" form breaks on a trailing backslash or an embedded quote. Keep every literal here ASCII.

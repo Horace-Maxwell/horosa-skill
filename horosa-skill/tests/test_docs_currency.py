@@ -91,7 +91,9 @@ def _ledger() -> dict:
 
 
 def test_real_ledger_is_complete_sourced_dated_and_points_at_real_files() -> None:
-    assert ds.third_party_fact_problems(_ledger(), dt.date(2026, 9, 29)) == []
+    # The real ledger is judged against the real date, exactly like the CLI: a frozen "today" turns every
+    # re-verification (bumping verified_on, which the ledger itself asks for) into a "future" failure.
+    assert ds.third_party_fact_problems(_ledger(), dt.date.today()) == []
 
 
 def test_ledger_guard_catches_missing_subject_bad_url_bad_date_and_dead_path() -> None:
@@ -101,6 +103,11 @@ def test_ledger_guard_catches_missing_subject_bad_url_bad_date_and_dead_path() -
     problems = ds.third_party_fact_problems(ledger, dt.date(2026, 9, 29))
     assert any("https" in p for p in problems) and any("YYYY-MM-DD" in p for p in problems)
     assert any("nope/missing.py" in p for p in problems) and any("`zed` has no entry" in p for p in problems)
+    ahead = {"max_age_days": 120, "required_subjects": [], "facts": [
+        {"id": "ahead", "subject": "s", "fact": "f", "source_url": "https://x", "verified_on": "2026-09-30", "affects": ["horosa-skill/pyproject.toml"]},
+    ]}
+    assert ds.third_party_fact_problems(ahead, dt.date(2026, 9, 29)) == ["third_party_facts[ahead]: verified_on 2026-09-30 is in the future"]
+    assert ds.third_party_fact_problems(ahead, dt.date(2026, 9, 30)) == []
 
 
 def test_staleness_is_a_warning_in_ci_and_an_error_under_strict() -> None:

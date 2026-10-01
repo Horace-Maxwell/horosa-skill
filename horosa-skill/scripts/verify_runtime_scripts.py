@@ -13,10 +13,13 @@
    argv 里没有 ROOT，只能靠这个显式标记判归属，漏一个就有一条判不出来的启动路径）；
 3. 补丁后的脚本 `bash -n` 通过（补丁把脚本改坏 = 运行时起不来，比误杀更早暴露但同样致命）；
 4. 上游 `stop_horosa_local.sh` 仍带 ROOT 守卫（漂移警报：上游若哪天删了它，这里先响）；
-5. start/stop 脚本非注释行里没有 `pkill` / `killall`（AGENTS §8「绝不按进程名杀」）。
+5. start/stop 脚本非注释行里没有 `pkill` / `killall`（AGENTS §8「绝不按进程名杀」）；
+6. Windows 启动器在起 chart 之前关掉上游的星历路径短路（`HOROSA_EPHE_PATH_FASTPATH=0`，v0.40.0）——
+   Windows 版 Swiss Ephemeris 的状态是**线程本地**的，短路在进程级记账，CherryPy 池线程从没设过路径 →
+   小行星文件打不开 → Chiron/Ceres 缺失 → /chart「param error」。上游树在场时另查开关名没漂移（改名 = 这行静默失效）。
 
 `--self-test` 跑负向对照：把守卫要抓的东西一个个注回去，每个都必须让它变红。
-上游树缺席（CI 上 vendor/runtime-source 是 gitignored 的本地构建输入）时跳过 1–3，只跑 5。
+上游树缺席（CI 上 vendor/runtime-source 是 gitignored 的本地构建输入）时跳过 1–4 与 6 的开关名漂移警报，只跑 5 与 6 的模板检查。
 """
 from __future__ import annotations
 
@@ -97,6 +100,8 @@ _WIN_PY_START = re.compile(r"^\$PyProc = Start-Process .*$", re.M)
 _WIN_RAW_EMBED = re.compile(r'r"\$[A-Za-z_]+"')
 _WIN_BARE_ARGLIST = re.compile(r"-ArgumentList @\(\$")
 _WIN_JAR_ARG = re.compile(r"^\$JarArg = '(?P<value>[^']+)'\s*$", re.M)
+_WIN_FASTPATH_OFF = re.compile(r'^\$env:HOROSA_EPHE_PATH_FASTPATH = "0"\s*$', re.M)
+UPSTREAM_SWE = REPO_ROOT / "vendor/runtime-source/Horosa-Web/flatlib-ctrad2/flatlib/ephem/swe.py"
 
 
 def audit_windows_launcher(text: str) -> list[str]:
@@ -109,6 +114,9 @@ def audit_windows_launcher(text: str) -> list[str]:
        遇尾反斜杠/引号即碎。
     4. Java 的 -jar 参数必须是相对 $Root 的纯 ASCII 单引号字面量 `$JarArg`（v0.38.1）：JDK 17 的 Windows 启动器经 ANSI
        代码页读命令行，绝对路径里代码页表示不了的字符（en-US 机器上的中文）变成 `?`，Java 后端起不来、只剩 chart。
+    5. 起 chart（`$PyProc = Start-Process`）之前必须 `$env:HOROSA_EPHE_PATH_FASTPATH = "0"`（v0.40.0）：Windows 版
+       Swiss Ephemeris 的星历路径是线程本地的（sweodef.h 的 TLS 只在 __APPLE__ 上为空），上游 v3.11.2 的路径短路在
+       进程级记「已设」，CherryPy 池线程于是从不设路径 → 默认 \\sweph\\ephe\\ 里找不到 seas_18.se1 → 小行星全丢。
     """
     errors: list[str] = []
     java = _WIN_JAVA_START.search(text)
@@ -140,7 +148,27 @@ def audit_windows_launcher(text: str) -> list[str]:
     raw = _WIN_RAW_EMBED.search(code)
     if raw:
         errors.append(f"bootstrap 用 raw 字符串嵌路径（{raw.group(0)}）：尾反斜杠/引号即碎，必须 $(ConvertTo-Json … -Compress)")
+    fastpath_off = _WIN_FASTPATH_OFF.search(code)
+    py_start = _WIN_PY_START.search(code)
+    if not fastpath_off or (py_start and fastpath_off.start() > py_start.start()):
+        errors.append(
+            'Windows 启动器没有在 `$PyProc = Start-Process` 之前设 `$env:HOROSA_EPHE_PATH_FASTPATH = "0"`：'
+            "Windows 版 Swiss Ephemeris 的星历路径是线程本地的，上游路径短路让 CherryPy 池线程从不设路径 → "
+            "Chiron/Ceres 算不出 → /chart「param error」（v0.40.0 draft 两条 Windows lane 红）"
+        )
     return errors
+
+
+def audit_upstream_fastpath_switch(swe_text: str) -> list[str]:
+    """上游开关名漂移警报（纯函数）：Windows 启动器按名字关短路，上游一改名，那行就静默失效。"""
+    if "HOROSA_EPHE_PATH_FASTPATH" in swe_text:
+        return []
+    if "_EPHE_PATH_ACTIVE" in swe_text:
+        return [
+            "上游 flatlib/ephem/swe.py 仍有星历路径短路（_EPHE_PATH_ACTIVE），但开关不再叫 HOROSA_EPHE_PATH_FASTPATH —— "
+            "Windows 启动器关短路的那行已静默失效，按新开关名改启动器模板与本守卫（v0.40.0）"
+        ]
+    return []
 
 
 
@@ -188,6 +216,14 @@ def main() -> int:
                 )
             errors.extend(e for e in audit_patched_launcher(stop_text) if "pkill" in e or "killall" in e)
             notes.append("stop 脚本：ROOT 守卫仍在")
+
+        if UPSTREAM_SWE.is_file():
+            swe_text = UPSTREAM_SWE.read_text(encoding="utf-8")
+            errors.extend(audit_upstream_fastpath_switch(swe_text))
+            notes.append(
+                "上游星历路径短路开关名未漂移" if "HOROSA_EPHE_PATH_FASTPATH" in swe_text
+                else "上游已无星历路径短路（Windows 启动器那行现为空操作，可择机删）"
+            )
     else:
         notes.append("上游树缺席（vendor/runtime-source 是本地构建输入），跳过启动器检查")
 
@@ -197,15 +233,25 @@ def main() -> int:
         if block and "Stop-Process" in block:
             errors.append("Windows 启动器的端口冲突分支出现 Stop-Process —— 它的纪律是**拒绝**而非 kill")
         errors.extend(audit_windows_launcher(win))
-        notes.append("Windows 启动器：端口冲突分支仍是拒绝而非 kill；Java 钉回环、路径参数带引号、bootstrap 路径 JSON 转义")
+        notes.append("Windows 启动器：端口冲突分支仍是拒绝而非 kill；Java 钉回环、路径参数带引号、bootstrap 路径 JSON 转义、星历路径短路已关")
 
     if errors:
-        print("runtime-scripts guard FAILED —— 误杀纪律被破坏：", file=sys.stderr)
+        print("runtime-scripts guard FAILED —— 启动器不变量被破坏（误杀纪律 / Windows 启动器）：", file=sys.stderr)
         for err in errors:
             print(f"  - {err}", file=sys.stderr)
         return 1
     print("runtime-scripts OK: " + "；".join(notes))
     return 0
+
+
+def _move_after_py_start(text: str, line: str) -> str:
+    """把某一行挪到 `$PyProc = Start-Process` 行之后（负向对照：设了，但子进程已经起了）。"""
+    without = text.replace(line, "", 1)
+    anchor = _WIN_PY_START.search(without)
+    if not anchor:
+        return without
+    end = anchor.end() + 1
+    return without[:end] + line + without[end:]
 
 
 def _windows_self_test_cases() -> tuple[str, dict[str, str]]:
@@ -218,6 +264,9 @@ def _windows_self_test_cases() -> tuple[str, dict[str, str]]:
             "$JarArg = '..\\runtime\\windows\\bundle\\astrostudyboot.jar'", '$JarArg = "$RuntimeRoot\\bundle\\astrostudyboot.jar"', 1),
         "Windows: bootstrap 路径去引号": good.replace("('\"{0}\"' -f $PyBootstrapPath)", "@($PyBootstrapPath)", 1),
         "Windows: bootstrap 回到 raw 字符串": good.replace("$(ConvertTo-Json $ChartEntry -Compress)", 'r"$ChartEntry"', 1),
+        "Windows: 删掉关星历路径短路那行": good.replace('$env:HOROSA_EPHE_PATH_FASTPATH = "0"\n', "", 1),
+        "Windows: 短路开关设成 1": good.replace('$env:HOROSA_EPHE_PATH_FASTPATH = "0"', '$env:HOROSA_EPHE_PATH_FASTPATH = "1"', 1),
+        "Windows: 关短路那行挪到起 chart 之后": _move_after_py_start(good, '$env:HOROSA_EPHE_PATH_FASTPATH = "0"\n'),
     }
     for name, text in cases.items():
         assert text != good, f"self-test case did not change the template: {name}"
@@ -233,6 +282,13 @@ def _self_test() -> int:
     for name, text in win_cases.items():
         if not audit_windows_launcher(text):
             failures.append(f"负向对照未被抓到：{name}")
+    swe_good = "_EPHE_PATH_ACTIVE = None\n_EPHE_FASTPATH = os.environ.get('HOROSA_EPHE_PATH_FASTPATH', '1')\n"
+    if audit_upstream_fastpath_switch(swe_good):
+        failures.append("上游开关名基准样本本身就红")
+    if not audit_upstream_fastpath_switch(swe_good.replace("HOROSA_EPHE_PATH_FASTPATH", "HOROSA_EPHE_FASTPATH")):
+        failures.append("负向对照未被抓到：上游把星历路径短路开关改了名")
+    if audit_upstream_fastpath_switch("def ensureEphePath():\n    swisseph.set_ephe_path(SEACTIVE_PATH)\n"):
+        failures.append("上游删掉短路（开关与追踪变量都没了）不该算漂移")
     if not UPSTREAM_START.is_file():
         if failures:
             print("runtime-scripts self-test FAILED:", file=sys.stderr)

@@ -69,6 +69,7 @@ bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 enve
      守卫 `check_third_party_facts`：来源必须是 https、日期合法、路径存在、每个必需主题有条目；超过 `max_age_days`（120 天）
      的条目在 CI 是 `::warning`，每周一 `.github/workflows/docs-currency.yml` 以 `--strict-staleness` 跑一遍并开 / 刷新 issue。
      **复核 = 重读 source_url，事实没变也要更新日期**——「上次核对是什么时候」本身就是事实。
+     对**真台账**的断言一律拿真实日期判（`dt.date.today()`，与 CLI 同）：测试把「今天」冻结在写测试那天，任何一次复核（`verified_on` 往后挪）都会被判「in the future」（v0.40.0 加第一条新事实时撞上）；固定日期只给合成样本用。
    - 数字（版本 / 工具 / 测试 / 知识 / 镜像份数）永远只写一次真值来源，其余由 `verify_docs_sync.py` 锁定：改数字先改真值。
      版本号用 `horosa-skill/scripts/bump_version.py <new>`（16 个站点一处清单）。
    - 会话交接：多会话 / 多模型接力的工作，用 [`docs/templates/HANDOFF_TEMPLATE.md`](./docs/templates/HANDOFF_TEMPLATE.md)
@@ -817,6 +818,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | 维护机上 `test_error_paths_return_a_conformant_envelope` 红、CI 绿 | 默认端口上有活服务，只钉 `HOROSA_RUNTIME_ROOT` 拦不住，本该失败的路径成功了 | 同时把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指到不可达地址（§8 验证流程 4） |
 | Windows 首次启动弹防火墙 / `doctor` 报 `listener:not_loopback_only` | 旧模板起 Java 没钉 `--server.address=127.0.0.1`，绑在 0.0.0.0 | 升级 horosa-skill 后 `runtime restart` 重套模板（每次 start 都会重拷 `.ps1`）；`doctor.listener_scope` 应变为 `loopback_only: true` |
 | Windows 用户名带空格（`C:\Users\John Doe`）时 chart/Java 都起不来，`.horosa-local-logs` 里 python 报找不到文件 | 旧模板 `-ArgumentList` 路径元素没引号，被拆成两段 | 升级后 `runtime restart`；判据 = `tests/test_runtime_launcher_templates.py` 的引号断言（v0.38.0 B1） |
+| 只有 Windows：chart 类工具 `tool.backend_param_error`（/chart 回 `{"err":"param error"}`），chart 日志 `KeyError: 'Chiron'`；同一载荷 mac 全绿 | Swiss Ephemeris 的状态在 Windows 上是**线程本地**的（`sweodef.h`），上游 v3.11.2 的星历路径短路在进程级记「已设」→ CherryPy 池线程从没设过路径 → 默认 `\sweph\ephe\` 里找不到 `seas_18.se1`（行星静默退 Moshier，小行星直接丢） | 启动器模板起 chart 前 `$env:HOROSA_EPHE_PATH_FASTPATH = "0"`（`verify_runtime_scripts.py` 守着）；旧安装升级 skill 后 `runtime restart` 重套模板（v0.40.0） |
 | Codex 里 horosa 一堆报错 / 首轮看不到工具 | 多半是 `startup_timeout_sec`/`tool_timeout_sec` 没写（Codex 默认 10 s/60 s，冷启动与择日扫描都超） | `horosa-skill client check --client codex`（v0.38.0 起缺省也报 `codex_*_timeout_missing`）；重跑 `client config --format codex --write ~/.codex/config.toml` |
 | 矩阵 lane / 自己写的脚本把 live 闸门跑成 `java_routes_dead`，而 Java 明明活着 | `HOROSA_SERVER_ROOT` 被设成 doctor `endpoints[*].url`（带 `/common/time` 探测路径） | 只取 scheme://host:port（`verify_runtime_live.origin_of`）；闸门探的是 `<root>/nongli/time` |
 | live 全套只红在 `test_sync311_*` / sanshiunited 这类「钉上游新行为」的用例（`kook` 为 None、地点行回「星阙地点」、金标行格式差一列、castSeed 不复现） | 主干契约领先于已装 runtime：payload `export_registry_version` < 本树 `AI_EXPORT_SETTINGS_VERSION`（main × 公开 latest 的矩阵形状） | 偏斜非回归：这类用例挂 `requires_current_runtime_contract`（偏斜即 skip 并写明）；要验新行为就装下一版 runtime 或起 vendored 实例 |
@@ -1032,6 +1034,14 @@ A global stability pass hardened these; keep them true when you touch the releva
   can satisfy（v0.39.0 台账）. Don't switch either back to `read_bytes()`; any script that *writes* LF artifacts
   （sources, eval sets, locks, reports）must pass `newline="\n"`
   （`tests/test_decisions_eval.py::test_dataset_sha256_is_line_ending_agnostic`）.
+- **上游的进程级短路 / 缓存若暗含「C 库状态全进程共享」，Windows 上必须单独验（v0.40.0）。** Swiss Ephemeris 把全部状态
+  （星历路径、已开文件、恒星黄道模式…）声明成 TLS（`sweodef.h`：GCC `__thread` / MSVC `__declspec(thread)`，只有 `__APPLE__`
+  为空）——Windows 上 `swe_set_ephe_path` 只对调用线程生效，mac 上才是全进程。上游 v3.11.2 的 `HOROSA_EPHE_PATH_FASTPATH`
+  在进程级记「已设」，CherryPy 池线程于是从不设路径 → 小行星全丢 → /chart「param error」：mac lane 绿、两条 Windows lane 红。
+  Windows 启动器模板起 chart 前设 `$env:HOROSA_EPHE_PATH_FASTPATH = "0"`（上游自带的 kill-switch；不改 vendored 代码）。守卫：
+  `verify_runtime_scripts.py` Windows 不变量 5 + 上游开关名漂移警报（`--self-test` 负向对照）、
+  `tests/test_runtime_launcher_templates.py`；端到端仍靠 release-runtime 的 Windows lane。以后同步上游，凡新增「记住 C 库状态」
+  的开关都按这条审：要么按线程记账，要么 Windows 启动器关掉。
 
 ### 9.4 客户端配置 · setup · doctor（client config / setup / doctor）
 

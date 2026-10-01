@@ -19,7 +19,8 @@
     "github-runner-images",
     "uv",
     "node",
-    "python"
+    "python",
+    "swisseph"
   ],
   "facts": [
     {
@@ -235,6 +236,17 @@
       "affects": [
         "horosa-skill/pyproject.toml",
         ".github/workflows/ci.yml"
+      ]
+    },
+    {
+      "id": "swisseph.thread-local-state",
+      "subject": "swisseph",
+      "fact": "Swiss Ephemeris (libswe, built into pyswisseph) declares all of its state (ephemeris path, open files, sidereal mode) TLS: sweodef.h defines TLS as __thread (GCC) / __declspec(thread) (MSVC) unless __APPLE__, WIN32, DOS32 or TLSOFF is defined. A setuptools/MSVC build only has _WIN32, so on Windows swe_set_ephe_path applies to the calling thread only; on macOS the state is process-wide. Upstream v3.11.2's HOROSA_EPHE_PATH_FASTPATH caches 'path set' process-wide, so the Windows launcher turns it off (verified on windows-latest + windows-11-arm, diag runs 36802700937 / 36803364178).",
+      "source_url": "https://github.com/astrorigin/swisseph/blob/master/sweodef.h",
+      "verified_on": "2026-09-30",
+      "affects": [
+        "horosa-skill/scripts/runtime_templates/windows/start_horosa_local.ps1",
+        "horosa-skill/scripts/verify_runtime_scripts.py"
       ]
     }
   ]

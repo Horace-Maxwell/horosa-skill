@@ -207,7 +207,8 @@ debt ratchets `export_section_debt.json` / `error_recovery_debt.json` / `schema_
 macOS and Windows are both first-class. The Python package, `engine/` routing, and `horosa-core-js`
 formatters are platform-neutral. Platform specifics live in the runtime layer: macOS uses
 `Horosa-Web/start_horosa_local.sh` (`PYTHONPATH_ASTRO` includes `flatlib-ctrad2:astropy:vendor`); Windows
-uses `runtime_templates/windows/start_horosa_local.ps1` (`PYTHONPATH` includes `astropy;flatlib-ctrad2;vendor`).
+uses `runtime_templates/windows/start_horosa_local.ps1` (`PYTHONPATH` includes `astropy;flatlib-ctrad2;vendor`; it also sets
+`HOROSA_EPHE_PATH_FASTPATH=0`, because Swiss Ephemeris keeps its state per thread on Windows — AGENTS §9.3).
 Both put `vendor` on the path so `import kinqimen / kintaiyi / kinjinkou` resolves. On Windows the runtime root must be a
 pure-ASCII path (`runtime.path_not_ascii`), subprocess text is always decoded explicitly, and every release is exercised on
 `windows-latest` + `windows-11-arm` by the matrix (see `OFFLINE_RUNTIME_RELEASES.md`).

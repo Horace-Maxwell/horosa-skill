@@ -237,3 +237,41 @@ def test_guard_catches_an_absolute_or_interpolated_jar_argument() -> None:
     assert interpolated != good and _guard.audit_windows_launcher(interpolated)
     drive = good.replace("$JarArg = '..\\runtime", "$JarArg = 'C:\\runtime", 1)
     assert drive != good and _guard.audit_windows_launcher(drive)
+
+
+def test_windows_launcher_turns_off_the_ephemeris_path_fastpath_before_the_chart_starts() -> None:
+    """v0.40.0 draft: both Windows lanes lost every asteroid (KeyError 'Chiron' → /chart「param error」).
+
+    Swiss Ephemeris declares its state TLS on every platform but __APPLE__ (sweodef.h), so on Windows a path set on
+    one thread is invisible to the others. Upstream v3.11.2's fast path records "path already set" process-wide, so
+    CherryPy pool threads never set it and look in the default \\sweph\\ephe\\. The env var must be in place before
+    `Start-Process` spawns the chart interpreter (children inherit the environment at spawn time).
+    """
+    code = [line for line in _start_text().splitlines() if not line.lstrip().startswith("#")]
+    switch = code.index('$env:HOROSA_EPHE_PATH_FASTPATH = "0"')
+    py_start = next(i for i, line in enumerate(code) if line.startswith("$PyProc = Start-Process"))
+    assert switch < py_start
+    assert not _guard.audit_windows_launcher(_start_text())
+
+
+def test_guard_catches_a_missing_enabled_or_late_fastpath_switch() -> None:
+    good = _start_text()
+    line = '$env:HOROSA_EPHE_PATH_FASTPATH = "0"\n'
+    missing = good.replace(line, "", 1)
+    enabled = good.replace(line, line.replace('"0"', '"1"'), 1)
+    late = _guard._move_after_py_start(good, line)
+    for bad in (missing, enabled, late):
+        assert bad != good
+        assert any("HOROSA_EPHE_PATH_FASTPATH" in e for e in _guard.audit_windows_launcher(bad))
+
+
+def test_upstream_fastpath_switch_drift_alarm() -> None:
+    current = "_EPHE_PATH_ACTIVE = None\n_EPHE_FASTPATH = os.environ.get('HOROSA_EPHE_PATH_FASTPATH', '1')\n"
+    assert not _guard.audit_upstream_fastpath_switch(current)
+    renamed = current.replace("HOROSA_EPHE_PATH_FASTPATH", "HOROSA_EPHE_FASTPATH")
+    assert _guard.audit_upstream_fastpath_switch(renamed), "a renamed switch silently disarms the launcher line"
+    assert not _guard.audit_upstream_fastpath_switch("swisseph.set_ephe_path(SEACTIVE_PATH)\n"), "fast path gone = no alarm"
+    if _guard.UPSTREAM_SWE.is_file():  # maintainer tree only: vendor/runtime-source is gitignored
+        text = _guard.UPSTREAM_SWE.read_text(encoding="utf-8")
+        assert not _guard.audit_upstream_fastpath_switch(text)
+        assert re.search(r"HOROSA_EPHE_PATH_FASTPATH'[^\n]*not in \([^)]*'0'", text), '"0" must still turn it off'

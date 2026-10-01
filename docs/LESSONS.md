@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.40.0 (2026-09-30) | draft 矩阵：mac lane 绿、两条 Windows lane 红（18 / 17 条 chart 类 `param error`，chart 日志 `KeyError: 'Chiron'`）——上游 v3.11.2 的星历路径短路在进程级记「已设」，而 Swiss Ephemeris 在 Windows 上按线程存状态，CherryPy 池线程从没设过路径 | Windows 启动器起 chart 前设 `HOROSA_EPHE_PATH_FASTPATH=0`（上游自带 kill-switch）；`verify_runtime_scripts.py` 不变量 5 + 上游开关名漂移警报 + 负向对照；一次性诊断分支在 x64 + ARM 真 draft 载荷上对照 0/12 → 12/12 |
 | v0.40.0 (2026-09-29) | 文档全面复审：四路审计报 ~120 条陈旧（契约 v14/v56、闸门 84/8、分组 28/5/10、`export_format`、Windows 构建机叙事、AGENTS 死符号与重复…）——守卫只锁「可派生数字」，锁不住存在性 / 蒸馏 / 手改镜像 / 第三方事实 / 版本站点 | 协议 v3 第 5 件：`docs/DOC_MAP.md` 完备性 + 蒸馏守卫（版本号 + 标题代码锚）+ 生成式镜像 `gen_agent_mirrors.py` + `third_party_facts.json`（verified_on / 120 天 / 每周 issue）+ `bump_version.py` 单清单 + 三把 README 新锁（分组数 / 契约号 / 闸门数） |
 | v0.40.0 (2026-09-29) | 发布前复审：上游已到 v3.11.2（9cd9078f）而 skill 钉的 9b74714b 已不在任何上游分支上（三个修复被并入 v3.11.2 提交）——CI 形状看不见，本机 `--require-upstream` 一跑 51 个 runtime 文件 + 12 个 core-js 漂移 | 上游 HEAD 与 pin 每次发布前必对（`git branch --contains <pin>`）；pin 不在分支上 = 历史被改写，逐文件对账不信 diff；公开发布前 pin 必须在上游公开远端上 |
 | v0.40.0 (2026-09-29) | 「同步了却没同步」第七例：`src/shared/localNongliAdapter.js` 是 v0.9 的自写近似公式，2026 立春算到 10:16（真值 04:02，差 6 小时），奇门本地路由 / 奇门择日扫描 / 七政大限年界都吃它 | `src/shared/` 只许放上游没有对应物的自写件（allowlist 守卫）；有上游同名/同职能文件一律 verbatim vendor；种子值级金标对 lunar-javascript 精确表 + 旧公式负向对照 |
@@ -130,6 +131,46 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.40.0 / 2026-09-30 — draft 矩阵两条 Windows lane 红：上游星历路径短路 `HOROSA_EPHE_PATH_FASTPATH` 撞上 Swiss Ephemeris 的线程本地状态（`sweodef.h`）
+
+- **症状**：v0.40.0 draft 的 release-runtime run 36797237395：macOS lane 绿；windows-latest 18 红 / 1758 过，windows-11-arm 17 红；
+  publish 按设计跳过。红的全是 chart 类 live 测试，信封 `tool.backend_param_error`；lane 日志里 724 次 `POST /` 有 628 次回
+  `{"err":"param error"}`，chart 服务栈底是 `KeyError: 'Chiron'`（`perchart.setupPlanets`）——flatlib `getObjectList` 吞掉逐星异常
+  （「个别天体在其星历物理域外…跳过该星」），到 setupPlanets 取凯龙才炸。
+- **先排除的**：载荷不缺文件（zip 里 157 个 swefiles，`seas_18.se1` 与 vendored 同字节）；没有 env 覆盖；lane 路径改动早于 v0.39.0
+  （v0.39.0 Windows lane 绿）；pyswisseph 两版都是 2.10.3.2、都在 Windows 上从 sdist 构建。
+- **根因**（一次性诊断分支 `diag/win-swisseph`，run 36802700937 / 36803364178，windows-latest + windows-11-arm 都下真 draft 载荷）：
+  - 裸 pyswisseph、同一线程：原样 / 正斜杠 / 尾分隔符 / 8.3 短路径 / 无空格副本 / 换 cwd，Sun / Moon / Chiron / Ceres 全 OK；
+  - 主线程 `set_ephe_path` 后 4 个新线程算 Chiron：160 次全错 `SwissEph file 'seas_18.se1' not found in PATH '\sweph\ephe\'`——
+    新线程看到的是**默认路径**。`sweodef.h` 把全部状态声明成 `TLS`：非 `__APPLE__`、非 `WIN32` 时 GCC 取 `__thread`、MSVC 取
+    `__declspec(thread)`（setuptools 只有编译器自带的 `_WIN32`，不定义 `WIN32`）。所以 mac 上是进程全局，Windows 上是每线程一份。
+  - 上游 v3.11.2（9cd9078f）新增星历路径短路：`_EPHE_PATH_ACTIVE` 是进程级 Python 变量，`ensureEphePath` 见它等于 `SEACTIVE_PATH`
+    就跳过真调用 → 只有 import flatlib 的主线程设过路径；CherryPy `thread_pool=30` 的池线程和并行预热线程都在默认路径下算 →
+    行星静默退 Moshier、小行星直接失败。v0.39.0 钉的 0604fa41 没有这段短路——这就是 v0.39.0 绿、v0.40.0 红的唯一差别。
+  - 真实代码路径对照（两台结果相同）：PerChart 跑在新线程上，短路默认 0/7、`HOROSA_EPHE_PATH_FASTPATH=0` 7/7 且与主线程逐值相同；
+    真 CherryPy chart 服务（启动器式 bootstrap）0/12 → 12/12。
+- **修复**：Windows 启动器模板 `runtime_templates/windows/start_horosa_local.ps1`（wheel 里同一份，Windows 每次 start 由
+  `_apply_runtime_overrides` 重拷进载荷）在 `$PyProc = Start-Process` 之前设 `$env:HOROSA_EPHE_PATH_FASTPATH = "0"`——上游自带的
+  kill-switch，回到 v3.11.1 的「每次都真设路径」语义；代价只是上游测的每张盘约 6.6 ms 提速在 Windows 上不吃。vendored 代码一字不改。
+- **守卫**：`verify_runtime_scripts.py` Windows 不变量 5（那行存在、值是 "0"、在起 chart 之前）+ 上游开关名漂移警报（上游树在场时，
+  仍有 `_EPHE_PATH_ACTIVE` 而开关改了名 = 红）；`--self-test` 新增 4 个负向对照（删行 / 设 1 / 挪到起 chart 之后 / 上游改名），
+  全部被抓；`tests/test_runtime_launcher_templates.py` 三条（含对真 vendored `swe.py` 的「'0' 仍是关」断言）。负向对照实测：删掉模板那行
+  → 3 条 pytest 与守卫同时红。端到端守卫仍是 release-runtime 的 Windows lane——它这次抓住了。
+- **诊断时踩的坑**：
+  - 第一版诊断脚本按前缀整段打印 `HOROSA_*` 环境变量，本机试跑时把维护者 shell 里的 `HOROSA_JEV_API_KEY` 打进了本地会话输出
+    （runner 上没有这个变量，GitHub 日志里是空字典，未外泄）。诊断脚本只许打印白名单里的非机密开关，绝不 dump 环境。
+  - 内嵌 Python 带 `._pth`，**不认 `PYTHONPATH`**——诊断脚本要像启动器 bootstrap 那样自己 `sys.path.insert`，否则
+    `ModuleNotFoundError: No module named 'flatlib'`，白跑一轮。
+  - 门禁顺带抓到的定时炸弹：`tests/test_docs_currency.py` 拿冻结的 2026-09-29 当「今天」去校验**真台账**，新事实 `verified_on 2026-09-30`
+    被判「in the future」——任何一次复核都会这样红（台账自己要求复核时挪日期）。改成 `dt.date.today()`（与 CLI 同），「未来日期」的覆盖
+    挪到合成样本的负向对照里；改回冻结日期 → 红，已验。
+  - windows-11-arm 镜像的 `tar.exe` 解这份 zip 会跳过 3 个「文件名不可读」条目并 exit 1（只影响诊断 workflow 自己的解包，产品安装走
+    Python zipfile）；诊断步骤一律 `if: always()`，一步失败不挡后面的对照。
+- **法则**：mac lane 绿不代表 Windows 绿——C 库状态的平台差异藏在编译宏里（这里是 `__APPLE__`），Python 代码里看不出来。上游任何
+  「记住 C 库状态」的进程级短路 / 缓存，同步时都要问一句「这份状态是不是按线程的」。
+- **上游（只报告，不回写）**：星阙 Windows 版若同样用 MSVC 构建的 pyswisseph、并以多线程服务，同一短路会让它在 Windows 上丢小行星；
+  稳妥的修法是把 `_EPHE_PATH_ACTIVE` / `_JPL_FILE_ACTIVE` 改成按线程记账（`threading.local()`），或在 Windows 上默认关掉。
 
 ### v0.40.0 / 2026-09-29 — 文档全面复审与实时更新制度化：`docs/DOC_MAP.md`、`third_party_facts.json`、`gen_agent_mirrors.py`、`bump_version.py`
 

@@ -122,6 +122,12 @@ python3 -c 'import json;r=json.load(open("/tmp/lane/lane-report.json"));print(r[
 tail -40 /tmp/lane/pytest.log                                            # 超时也有尾巴（v0.40.0 起）
 ```
 
+- **只有 Windows 红、mac 绿，chart 类全是 `tool.backend_param_error`**：先在 lane 的 chart 日志里找 `KeyError: 'Chiron'`——那是
+  「C 库状态线程本地」类问题（Swiss Ephemeris 在 Windows 上按线程存星历路径，AGENTS §8 / §9.3；v0.40.0 draft 就是这条）。
+  要在 Windows 上复现，用一次性诊断分支：workflow 只读 draft 资产（`gh release download vX.Y.Z -p 'horosa-runtime-win32-x64-*.zip'`，
+  需要 `contents: write` 才看得见 draft），按启动器 bootstrap 的方式自己 `sys.path.insert`（内嵌 Python 带 `._pth`，不认
+  `PYTHONPATH`），绝不整段打印环境变量；查完删分支。不碰 main / tag / draft。
+
 - 每周巡检（`runtime-matrix.yml` cron，周一 04:23Z）已有真机 schedule 运行史：2026-09-14、09-21 三 lane 全绿；09-28 两条 Windows lane 在
   pytest 1500 s 处超时（预算已按主机改 nt 2700 + 流式 `pytest.log`，v0.40.0 的 draft 矩阵首次验证）。查：`gh run list --workflow runtime-matrix.yml --event schedule`。
 
