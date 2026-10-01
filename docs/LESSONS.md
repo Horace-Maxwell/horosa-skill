@@ -17,6 +17,7 @@
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
 | v0.40.0 (2026-09-30) | draft 矩阵：mac lane 绿、两条 Windows lane 红（18 / 17 条 chart 类 `param error`，chart 日志 `KeyError: 'Chiron'`）——上游 v3.11.2 的星历路径短路在进程级记「已设」，而 Swiss Ephemeris 在 Windows 上按线程存状态，CherryPy 池线程从没设过路径 | Windows 启动器起 chart 前设 `HOROSA_EPHE_PATH_FASTPATH=0`（上游自带 kill-switch）；`verify_runtime_scripts.py` 不变量 5 + 上游开关名漂移警报 + 负向对照；一次性诊断分支在 x64 + ARM 真 draft 载荷上对照 0/12 → 12/12 |
+| v0.40.0 (2026-09-29) | Windows 维护机 tag 前闸：`listening_server` 夹具「探针 bind(0) → 关 → 再让子进程绑同号」在本机（动态端口段 1024–15000）全量 pytest 下 4 次中 2 次 `WinError 10013`；09-28 矩阵两条 Windows lane 1500 s 超时——本机真机 lane 1111 s / 1755 passed，慢不是挂 | 要一个「别人」的监听进程就让它自己绑 0 号并报端口；端口必须外定的 `serve --port` 只对绑不上的早退有界换号；矩阵超时先用流式 pytest.log + `--durations` 分清慢 / 挂，预算只对「慢」有意义 |
 | v0.40.0 (2026-09-29) | 文档全面复审：四路审计报 ~120 条陈旧（契约 v14/v56、闸门 84/8、分组 28/5/10、`export_format`、Windows 构建机叙事、AGENTS 死符号与重复…）——守卫只锁「可派生数字」，锁不住存在性 / 蒸馏 / 手改镜像 / 第三方事实 / 版本站点 | 协议 v3 第 5 件：`docs/DOC_MAP.md` 完备性 + 蒸馏守卫（版本号 + 标题代码锚）+ 生成式镜像 `gen_agent_mirrors.py` + `third_party_facts.json`（verified_on / 120 天 / 每周 issue）+ `bump_version.py` 单清单 + 三把 README 新锁（分组数 / 契约号 / 闸门数） |
 | v0.40.0 (2026-09-29) | 发布前复审：上游已到 v3.11.2（9cd9078f）而 skill 钉的 9b74714b 已不在任何上游分支上（三个修复被并入 v3.11.2 提交）——CI 形状看不见，本机 `--require-upstream` 一跑 51 个 runtime 文件 + 12 个 core-js 漂移 | 上游 HEAD 与 pin 每次发布前必对（`git branch --contains <pin>`）；pin 不在分支上 = 历史被改写，逐文件对账不信 diff；公开发布前 pin 必须在上游公开远端上 |
 | v0.40.0 (2026-09-29) | 「同步了却没同步」第七例：`src/shared/localNongliAdapter.js` 是 v0.9 的自写近似公式，2026 立春算到 10:16（真值 04:02，差 6 小时），奇门本地路由 / 奇门择日扫描 / 七政大限年界都吃它 | `src/shared/` 只许放上游没有对应物的自写件（allowlist 守卫）；有上游同名/同职能文件一律 verbatim vendor；种子值级金标对 lunar-javascript 精确表 + 旧公式负向对照 |
@@ -171,6 +172,35 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   「记住 C 库状态」的进程级短路 / 缓存，同步时都要问一句「这份状态是不是按线程的」。
 - **上游（只报告，不回写）**：星阙 Windows 版若同样用 MSVC 构建的 pyswisseph、并以多线程服务，同一短路会让它在 Windows 上丢小行星；
   稳妥的修法是把 `_EPHE_PATH_ACTIVE` / `_JPL_FILE_ACTIVE` 改成按线程记账（`threading.local()`），或在 Windows 上默认关掉。
+
+### v0.40.0 / 2026-09-29 — Windows 维护机 tag 前闸：`listening_server` 自报抓到真因（WinError 10013 = 探针→再绑的窗口）；矩阵 Windows 超时复验为「慢不是挂」
+
+- **症状**：① `run_ci_gates.py`（独立 worktree @188a472，cp1252 忠实镜像）24 条只红 1 条：
+  `tests/test_runtime_ports_identity.py::test_listener_pids_finds_a_real_listener` **ERROR at setup**；7cde519 给夹具加的自报写得
+  明明白白：探到 10832、`child exited rc=1`、`PermissionError: [WinError 10013] An attempt was made to access a socket in a way
+  forbidden by its access permissions` on `self.socket.bind`。10832 不在本机 `netsh … excludedportrange`（5357 / 8883 / 8884 /
+  50000–50059）里；单独跑恒绿，全量 4 次里中 2 次（09-24 曾按「冷起慢」把等待 10 s→30 s——方向错了：子进程不是慢，是绑不上）。
+  ② 09-28 每周矩阵两条 Windows lane 都 `[pytest] FAIL {"seconds": 1500.0, "problems": ["pytest timed out"]}`，macOS 绿；1d29762
+  已把 nt 预算改成 2700 并让 pytest.log 流式落盘，但从没在真 Windows 机上跑过。
+- **根因**：① 夹具是「探针 `bind(('127.0.0.1', 0))` 拿号 → 关 → 再 spawn `python -m http.server <号>`」——两步之间那个号被别的
+  进程独占（`SO_EXCLUSIVEADDRUSE`）或被系统保留就是 WSAEACCES；本机动态端口段只有 1024–15000（`netsh int ipv4 show dynamicport
+  tcp`），全量 pytest 的端口 churn 把这条窗口撞出来。`tests/test_http_and_clients.py::test_streamable_http_handshake_end_to_end`
+  同一形状（探针拿号 → `serve --port <号>`）。② 慢不是挂：本机 lane（`verify_runtime_live.py` release 模式 × 公开 v0.39.0）
+  12 步全绿，pytest 1111 s / 1755 passed / 0 failed / 49 skipped（18 条版本偏斜）；top-40 合计 466 s，最重三条是
+  `test_service.py::test_all_callable_techniques_*`（110 技法 × docx/pdf/json 渲染：54 / 26 / 21 s），其余是 sync311 live 引擎
+  用例 5–15 s，没有单条病态；hermetic 的两条 doctor 用例各 10 s = 每次 doctor 约 5 s，其中 `process_command`（PowerShell CIM）
+  本机实测 0.45 s/次、netstat 0.07 s——Windows 税在 identity/doctor 路径上反复付（AGENTS §8 已有 doctor 25 s 硬顶那行）。
+- **guard**：① 夹具改成**子进程自己绑 0 号并把端口打印出来**（`ThreadingHTTPServer(('127.0.0.1', 0))` → `print(port, flush=True)`
+  → `serve_forever`），夹具 30 s 内读那一行（读到即已 bind+listen；旧法只等到 bind，netstat 还得再等 listen），没读到照旧自报
+  （死活 / rc / stderr 尾）；`_listener_pids_with_patience` 等下游不变。② streamable-http 用例：serve 没有 `--port 0`，只能有界
+  重试——**仅对「绑不上」签名**（10013 / 10048 / address already in use / EADDRINUSE / attempting to bind）的早退换号重试 3 次，
+  其它早退带 stderr 立刻红，免得吃掉真 serve 缺陷。③ 复验：两模块 ×3 全绿；**两种合成 churn（connect/close；
+  SO_EXCLUSIVEADDRUSE + 探针循环）各 40–60 次都没复现**——真触发比合成模型丰富，证据以自报为准，修法靠消灭窗口而不是调秒数。
+  ④ 矩阵预算不动（维护者的活），本轮只给数字：托管 2 核 runner 约慢本机 2–2.5×（09-28 它 >1500 s 时本机同套 ≈1100 s），
+  估 2200–2800 s，**2700 是边际**；可选减负点 = 三条 110 技法渲染用例在矩阵 lane 上抽样、`process_command` 一次 CIM 查全表。
+- **法则**：**要一个「别人」的监听进程，就让那个进程自己绑 0 号并报端口；「先探再由另一进程绑」在 Windows 上是竞态，不是
+  等待不够**——夹具自报一到「exited rc=1 + bind 异常」就别再加秒数；端口必须外定的服务（`serve --port`）只对绑不上的早退
+  有界换号，其它早退立刻红。**矩阵超时先分「慢 / 挂」**：流式 pytest.log + 本机 `--durations=40` 一跑就分清，预算只对「慢」有意义。
 
 ### v0.40.0 / 2026-09-29 — 文档全面复审与实时更新制度化：`docs/DOC_MAP.md`、`third_party_facts.json`、`gen_agent_mirrors.py`、`bump_version.py`
 

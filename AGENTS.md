@@ -1087,6 +1087,16 @@ A global stability pass hardened these; keep them true when you touch the releva
   （`test_resolve_uvx_command_derives_from_the_uv_sibling`）。这是横切教训 #7 的镜像；`scripts/run_ci_gates.py` 是把它
   提前到本机的 meta-guard。**复验时一次只跑一套重活**（两套 pytest / lane 并发 = 自造 flake），且**别在本 session 的 MCP
   server 还占着 `.venv\Scripts\horosa-skill.exe` 时跑真 `uv run` 用例**（`uv sync` 删不掉被占的 exe → `test_stdio_probe_*` 假红）。
+- **要一个「别人」的监听进程，就让那个进程自己绑 0 号并报端口；「先探再由另一进程绑」在 Windows 上是竞态，不是等待不够
+  （v0.40.0 tag 前闸）。** `listening_server` 曾是「探针 `bind(0)` 拿号 → 关 → 再 spawn `http.server <号>`」，夹具自报抓到
+  `child exited rc=1` + `PermissionError: [WinError 10013]` on bind——探针刚放掉的号在子进程去绑时已被独占 / 保留（本机动态
+  端口段只有 1024–15000，全量 pytest 的 churn 把窗口撞出来；单独跑恒绿）。现在子进程 `ThreadingHTTPServer(('127.0.0.1', 0))`
+  自己拿号、`print(port, flush=True)`，夹具读那一行即已 bind+listen（`tests/test_runtime_ports_identity.py`）。夹具自报一到
+  「exited rc=1 + bind 异常」就别再加秒数。端口必须外定的服务（`serve --port <号>`，没有 `--port 0`）只对「绑不上」签名
+  （10013 / 10048 / EADDRINUSE / attempting to bind）的早退有界换号（3 次），其它早退带 stderr 立刻红
+  （`tests/test_http_and_clients.py::test_streamable_http_handshake_end_to_end`）。合成 churn 两种模型都没复现——证据以自报为准，
+  修法靠消灭窗口。**矩阵 Windows 超时先分「慢 / 挂」**：流式 pytest.log + `--pytest-args=--durations=40` 一跑就分清（本机真机
+  1111 s / 1755 passed，慢在 110 技法渲染三条 + PowerShell CIM 的 `process_command` 0.45 s/次），预算只对「慢」有意义。
 - **证据的形状不许由偶然决定。** ① CI 里 `shell: pwsh` 的多行 `run:` 块首行必须是 `$PSNativeCommandUseErrorActionPreference = $true`，
   否则只有最后一条命令算数（`tests/test_ci_workflow_shape.py`）；② 计数守卫的覆盖面是正则规则（`COUNT_PROSE_EN` 认 `real|local`），
   不是某句话恰好的措辞；③ 仓里有的文件文档不得否认（`verify_docs_sync.check_docker_claims`），Dockerfile 的 `COPY` 必须盖住

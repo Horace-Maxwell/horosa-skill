@@ -13,6 +13,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -24,24 +25,40 @@ from horosa_skill.runtime.ports import find_free_port, listener_pids, port_binda
 from horosa_skill.runtime.procs import pid_alive, process_command
 
 
+# 🔴 子进程**自己**绑 0 号端口，再把拿到的号打印出来。此前是「探针绑 0 → 关 → 再让 `python -m http.server <号>`
+# 去绑同一个号」：两步之间任何人拿走 / 系统保留了那个号，子进程就死在 server_bind 上——2026-09-29 维护机门禁
+# 复跑（v0.40.0 tag 前闸）被 7cde519 加的自报抓了个正着：探到 10832、子进程 exited rc=1、
+# `PermissionError: [WinError 10013]`。本机动态端口段只有 1024–15000，全量 pytest 的端口 churn 让这场竞态
+# 4 次里中 2 次，单独跑永远绿。让绑定发生在唯一会用它的进程里，窗口就不存在；端口号那一行一到，bind+listen
+# 已经完成（TCPServer 构造即绑定并监听），下游也不必再轮询 `port_bindable`。
+_FOREIGN_LISTENER = (
+    "import http.server\n"
+    "http.server.SimpleHTTPRequestHandler.log_message = lambda *a, **k: None\n"
+    "srv = http.server.ThreadingHTTPServer(('127.0.0.1', 0), http.server.SimpleHTTPRequestHandler)\n"
+    "print(srv.server_address[1], flush=True)\n"
+    "srv.serve_forever()\n"
+)
+
+
 @pytest.fixture()
 def listening_server():
     """一个真的、不属于我们的监听进程。"""
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
     proc = subprocess.Popen(
-        [sys.executable, "-m", "http.server", str(port), "--bind", "127.0.0.1"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+        [sys.executable, "-c", _FOREIGN_LISTENER],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
     )
-    # 30 s：Windows 上全量 pytest 跑到这里时 CPython 冷起 + Defender 扫描可让 http.server 超过 10 s 才开始监听
+    # 30 s：Windows 上全量 pytest 跑到这里时 CPython 冷起 + Defender 扫描可让子进程超过 10 s 才开始监听
     # （2026-09-24 维护机门禁复跑：10 s 到点仍可绑 → `port_bindable(port) is False` 红成一条像产品缺陷的断言）。
-    # 到点仍没起来就在这里点名——带上子进程是死是活、退出码和 stderr 尾巴——别让下游断言替它背锅。
-    deadline = time.monotonic() + 30
-    while time.monotonic() < deadline and port_bindable(port) and proc.poll() is None:
-        time.sleep(0.1)
-    if port_bindable(port):
-        state = "still running but not listening" if proc.poll() is None else f"exited rc={proc.returncode}"
+    # 到点仍没报出端口就在这里点名——带上子进程是死是活、退出码和 stderr 尾巴——别让下游断言替它背锅。
+    first_line: dict[str, str] = {}
+    reader = threading.Thread(
+        target=lambda: first_line.__setitem__("v", proc.stdout.readline() if proc.stdout else ""), daemon=True
+    )
+    reader.start()
+    reader.join(30)
+    line = first_line.get("v", "").strip()
+    if not line.isdigit():
+        state = "still running but never reported a port" if proc.poll() is None else f"exited rc={proc.returncode}"
         proc.terminate()
         try:
             _, err = proc.communicate(timeout=10)
@@ -49,9 +66,10 @@ def listening_server():
             proc.kill()
             _, err = proc.communicate()
         pytest.fail(
-            f"http.server never started listening on 127.0.0.1:{port} within 30 s — child {state}; "
+            f"foreign listener never came up within 30 s — child {state}; stdout {line!r}; "
             f"stderr tail: {(err or '').strip()[-400:]!r} (spawn/environment problem, not a port-probe bug)"
         )
+    port = int(line)
     # v0.38.1：`ports._run` 有 2 s 结果缓存 —— 监听刚起来时别让上一条用例的 netstat 快照顶掉它。
     from horosa_skill.runtime.ports import clear_run_cache
 

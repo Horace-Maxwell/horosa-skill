@@ -340,28 +340,46 @@ def test_streamable_http_handshake_end_to_end(tmp_path) -> None:
     from horosa_skill.engine.registry import TOOL_DEFINITIONS
     from horosa_skill.surfaces.mcp_server import FACADE_TOOL_COUNT
 
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
     token = "lane-token-0123456789"
     env = {**os.environ, "HOROSA_RUNTIME_ROOT": str(tmp_path / "rt"), "HOROSA_SKILL_DATA_DIR": str(tmp_path / "data"), "PYTHONIOENCODING": "utf-8"}
     env.pop("HOROSA_MCP_COMPACT", None)
     env.pop("HOROSA_TOOLSETS", None)
-    url = f"http://127.0.0.1:{port}/mcp"
-    proc = subprocess.Popen(
-        [sys.executable, "-m", "horosa_skill.surfaces.cli", "serve", "--transport", "streamable-http", "--host", "127.0.0.1",
-         "--port", str(port), "--token", token, "--skip-runtime-start"],
-        env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
-    )
-    try:
+    # 🔴 与 tests/test_runtime_ports_identity.py 的 listening_server 同一场竞态：探针绑 0 → 关 → 再让 serve 去绑那个号，
+    # 两步之间被别人拿走 / 系统保留就是 WinError 10013 / 10048（2026-09-29 维护机 v0.40.0 tag 前闸在同族夹具上抓到；
+    # 本机动态端口段只有 1024–15000，全量 pytest 的端口 churn 让它 4 次里中 2 次）。serve 没有 `--port 0`（端口要写进
+    # 客户端配置），所以这里只能有界重试——**只对「绑不上」这一种早退换号重试**，其它早退照旧带 stderr 立刻红，
+    # 免得把真正的 serve 缺陷吃掉。
+    bind_failure_marks = ("10013", "10048", "address already in use", "eaddrinuse", "attempting to bind")
+    proc = None
+    port = 0
+    for attempt in range(3):
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "horosa_skill.surfaces.cli", "serve", "--transport", "streamable-http", "--host", "127.0.0.1",
+             "--port", str(port), "--token", token, "--skip-runtime-start"],
+            env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+        )
+        retry_on_new_port = False
         deadline = time.monotonic() + 90
         while time.monotonic() < deadline:
             try:
                 with socket.create_connection(("127.0.0.1", port), timeout=1):
                     break
             except OSError:
-                assert proc.poll() is None, f"serve exited early: {proc.stderr.read()[-800:] if proc.stderr else ''}"
+                if proc.poll() is not None:
+                    err = (proc.stderr.read() if proc.stderr else "")[-800:]
+                    if attempt < 2 and any(mark in err.lower() for mark in bind_failure_marks):
+                        retry_on_new_port = True
+                        break
+                    raise AssertionError(f"serve exited early: {err}")
                 time.sleep(0.5)
+        if not retry_on_new_port:
+            break
+    assert proc is not None
+    url = f"http://127.0.0.1:{port}/mcp"
+    try:
         body = {"jsonrpc": "2.0", "id": 1, "method": "initialize",
                 "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}}
         headers = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
