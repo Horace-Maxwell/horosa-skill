@@ -17,9 +17,14 @@
 6. Windows 启动器在起 chart 之前关掉上游的星历路径短路（`HOROSA_EPHE_PATH_FASTPATH=0`，v0.40.0）——
    Windows 版 Swiss Ephemeris 的状态是**线程本地**的，短路在进程级记账，CherryPy 池线程从没设过路径 →
    小行星文件打不开 → Chiron/Ceres 缺失 → /chart「param error」。上游树在场时另查开关名没漂移（改名 = 这行静默失效）。
+7. Windows 启动器在起 chart 之前把 `SE_EPHE_PATH` 指向载荷自带的 swefiles，目录不在就拒绝启动（v0.40.0 公开后）——
+   没设过路径的线程首次计算时按这个环境变量找星历（libswe 让它压过任何路径参数），否则落到编译期默认 \\sweph\\ephe\\；
+   上游 astroextra 端点（不含行运的星历、产前朔望）直接调 swisseph、不经 flatlib 的 ensureEphePath，只关短路时冷线程
+   照样读默认路径（干净机退 Moshier，有旧星历的机器静默读旧文件）。上游树在场时另查 swefiles 目录仍在原处。
 
 `--self-test` 跑负向对照：把守卫要抓的东西一个个注回去，每个都必须让它变红。
-上游树缺席（CI 上 vendor/runtime-source 是 gitignored 的本地构建输入）时跳过 1–4 与 6 的开关名漂移警报，只跑 5 与 6 的模板检查。
+上游树缺席（CI 上 vendor/runtime-source 是 gitignored 的本地构建输入）时跳过 1–4、6 的开关名漂移警报与 7 的 swefiles
+目录检查，只跑 5、6、7 的模板检查。
 """
 from __future__ import annotations
 
@@ -101,7 +106,12 @@ _WIN_RAW_EMBED = re.compile(r'r"\$[A-Za-z_]+"')
 _WIN_BARE_ARGLIST = re.compile(r"-ArgumentList @\(\$")
 _WIN_JAR_ARG = re.compile(r"^\$JarArg = '(?P<value>[^']+)'\s*$", re.M)
 _WIN_FASTPATH_OFF = re.compile(r'^\$env:HOROSA_EPHE_PATH_FASTPATH = "0"\s*$', re.M)
+_WIN_SE_EPHE_PATH = re.compile(
+    r'^\$env:SE_EPHE_PATH = \[System\.IO\.Path\]::GetFullPath\(\(Join-Path \$FlatlibRoot "flatlib\\resources\\swefiles"\)\)\s*$', re.M
+)
+_WIN_SE_EPHE_CHECK = re.compile(r'^if \(-not \(Test-Path -LiteralPath \$env:SE_EPHE_PATH -PathType Container\)\) \{ throw ', re.M)
 UPSTREAM_SWE = REPO_ROOT / "vendor/runtime-source/Horosa-Web/flatlib-ctrad2/flatlib/ephem/swe.py"
+UPSTREAM_SWEFILES = REPO_ROOT / "vendor/runtime-source/Horosa-Web/flatlib-ctrad2/flatlib/resources/swefiles"
 
 
 def audit_windows_launcher(text: str) -> list[str]:
@@ -117,6 +127,9 @@ def audit_windows_launcher(text: str) -> list[str]:
     5. 起 chart（`$PyProc = Start-Process`）之前必须 `$env:HOROSA_EPHE_PATH_FASTPATH = "0"`（v0.40.0）：Windows 版
        Swiss Ephemeris 的星历路径是线程本地的（sweodef.h 的 TLS 只在 __APPLE__ 上为空），上游 v3.11.2 的路径短路在
        进程级记「已设」，CherryPy 池线程于是从不设路径 → 默认 \\sweph\\ephe\\ 里找不到 seas_18.se1 → 小行星全丢。
+    6. 起 chart 之前还必须 `$env:SE_EPHE_PATH` = 载荷自带的 flatlib\\resources\\swefiles，并在目录缺席时 throw（v0.40.0
+       公开后）：上游 astroextra 端点直接调 swisseph、不经 flatlib，只关短路时冷线程照样读默认路径；libswe 对没设过路径的
+       线程先看这个环境变量（上游桌面端启动器同样设它）。
     """
     errors: list[str] = []
     java = _WIN_JAVA_START.search(text)
@@ -156,6 +169,17 @@ def audit_windows_launcher(text: str) -> list[str]:
             "Windows 版 Swiss Ephemeris 的星历路径是线程本地的，上游路径短路让 CherryPy 池线程从不设路径 → "
             "Chiron/Ceres 算不出 → /chart「param error」（v0.40.0 draft 两条 Windows lane 红）"
         )
+    se_ephe = _WIN_SE_EPHE_PATH.search(code)
+    se_check = _WIN_SE_EPHE_CHECK.search(code)
+    if not se_ephe or (py_start and se_ephe.start() > py_start.start()):
+        errors.append(
+            'Windows 启动器没有在 `$PyProc = Start-Process` 之前设 '
+            '`$env:SE_EPHE_PATH = [System.IO.Path]::GetFullPath((Join-Path $FlatlibRoot "flatlib\\resources\\swefiles"))`：'
+            "上游 astroextra 端点直接调 swisseph、不经 flatlib，没设过路径的 CherryPy 池线程会读编译期默认 \\sweph\\ephe\\"
+            "（干净机退 Moshier、有旧星历的机器静默读旧文件；v0.40.0 公开版冷启 40 个星历响应 39 个偏离自带星历）"
+        )
+    if not se_check or (py_start and se_check.start() > py_start.start()):
+        errors.append("Windows 启动器在起 chart 之前没有检查 SE_EPHE_PATH 目录存在（缺了必须拒绝启动，不能静默换星历）")
     return errors
 
 
@@ -224,6 +248,11 @@ def main() -> int:
                 "上游星历路径短路开关名未漂移" if "HOROSA_EPHE_PATH_FASTPATH" in swe_text
                 else "上游已无星历路径短路（Windows 启动器那行现为空操作，可择机删）"
             )
+        if not (UPSTREAM_SWEFILES.is_dir() and any(UPSTREAM_SWEFILES.glob("*.se1"))):
+            errors.append(
+                "上游树里 flatlib-ctrad2/flatlib/resources/swefiles 不在了（或没有 .se1）—— Windows 启动器的 SE_EPHE_PATH "
+                "指向它，载荷一变就会拒绝启动：按上游新位置改启动器模板与本守卫"
+            )
     else:
         notes.append("上游树缺席（vendor/runtime-source 是本地构建输入），跳过启动器检查")
 
@@ -233,7 +262,7 @@ def main() -> int:
         if block and "Stop-Process" in block:
             errors.append("Windows 启动器的端口冲突分支出现 Stop-Process —— 它的纪律是**拒绝**而非 kill")
         errors.extend(audit_windows_launcher(win))
-        notes.append("Windows 启动器：端口冲突分支仍是拒绝而非 kill；Java 钉回环、路径参数带引号、bootstrap 路径 JSON 转义、星历路径短路已关")
+        notes.append("Windows 启动器：端口冲突分支仍是拒绝而非 kill；Java 钉回环、路径参数带引号、bootstrap 路径 JSON 转义、星历路径短路已关、SE_EPHE_PATH 指向自带星历")
 
     if errors:
         print("runtime-scripts guard FAILED —— 启动器不变量被破坏（误杀纪律 / Windows 启动器）：", file=sys.stderr)
@@ -254,6 +283,13 @@ def _move_after_py_start(text: str, line: str) -> str:
     return without[:end] + line + without[end:]
 
 
+_SE_EPHE_LINE = '$env:SE_EPHE_PATH = [System.IO.Path]::GetFullPath((Join-Path $FlatlibRoot "flatlib\\resources\\swefiles"))\n'
+_SE_EPHE_CHECK_LINE = (
+    'if (-not (Test-Path -LiteralPath $env:SE_EPHE_PATH -PathType Container)) '
+    '{ throw "Swiss Ephemeris files not found: $env:SE_EPHE_PATH" }\n'
+)
+
+
 def _windows_self_test_cases() -> tuple[str, dict[str, str]]:
     good = WINDOWS_START.read_text(encoding="utf-8-sig")
     cases = {
@@ -267,6 +303,10 @@ def _windows_self_test_cases() -> tuple[str, dict[str, str]]:
         "Windows: 删掉关星历路径短路那行": good.replace('$env:HOROSA_EPHE_PATH_FASTPATH = "0"\n', "", 1),
         "Windows: 短路开关设成 1": good.replace('$env:HOROSA_EPHE_PATH_FASTPATH = "0"', '$env:HOROSA_EPHE_PATH_FASTPATH = "1"', 1),
         "Windows: 关短路那行挪到起 chart 之后": _move_after_py_start(good, '$env:HOROSA_EPHE_PATH_FASTPATH = "0"\n'),
+        "Windows: 删掉 SE_EPHE_PATH 那行": good.replace(_SE_EPHE_LINE, "", 1),
+        "Windows: SE_EPHE_PATH 指到别处": good.replace('"flatlib\\resources\\swefiles"', '"flatlib\\resources"', 1),
+        "Windows: SE_EPHE_PATH 挪到起 chart 之后": _move_after_py_start(good, _SE_EPHE_LINE),
+        "Windows: 删掉 swefiles 目录检查": good.replace(_SE_EPHE_CHECK_LINE, "", 1),
     }
     for name, text in cases.items():
         assert text != good, f"self-test case did not change the template: {name}"

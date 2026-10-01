@@ -275,3 +275,93 @@ def test_upstream_fastpath_switch_drift_alarm() -> None:
         text = _guard.UPSTREAM_SWE.read_text(encoding="utf-8")
         assert not _guard.audit_upstream_fastpath_switch(text)
         assert re.search(r"HOROSA_EPHE_PATH_FASTPATH'[^\n]*not in \([^)]*'0'", text), '"0" must still turn it off'
+
+
+_SE_EPHE_LINE = '$env:SE_EPHE_PATH = [System.IO.Path]::GetFullPath((Join-Path $FlatlibRoot "flatlib\\resources\\swefiles"))'
+
+
+def test_windows_launcher_points_every_thread_at_the_bundled_ephemeris_before_the_chart_starts() -> None:
+    """Published v0.40.0, Windows maintainer box: 40 identical /astroextra/ephemeris requests (no transits) fired at a
+    freshly started chart service came back as 2 distinct payloads, 39 of them off the in-process bundled-path
+    reference (Moon up to 5.7e-7 deg: another program's old files in C:\\sweph\\ephe); after 300 /chart requests had touched
+    every pool thread the same burst matched 40/40. Upstream's astroextra endpoints call swisseph directly and never
+    reach flatlib's ensureEphePath, so the fast-path switch alone leaves such a thread on libswe's compiled-in default.
+    SE_EPHE_PATH is what libswe consults for a thread that never set a path; it must be exported before Start-Process
+    (children inherit the environment at spawn) and the launcher must refuse to start if the directory is missing."""
+    code = [line for line in _start_text().splitlines() if not line.lstrip().startswith("#")]
+    flatlib = next(i for i, line in enumerate(code) if line.startswith("$FlatlibRoot = "))
+    env_line = code.index(_SE_EPHE_LINE)
+    check = next(i for i, line in enumerate(code) if line.startswith("if (-not (Test-Path -LiteralPath $env:SE_EPHE_PATH"))
+    py_start = next(i for i, line in enumerate(code) if line.startswith("$PyProc = Start-Process"))
+    assert flatlib < env_line < check < py_start
+    assert "throw" in code[check]
+    assert not _guard.audit_windows_launcher(_start_text())
+
+
+def test_guard_catches_a_missing_misdirected_or_late_se_ephe_path() -> None:
+    good = _start_text()
+    line = _SE_EPHE_LINE + "\n"
+    check = next(text for text in good.splitlines(keepends=True) if text.startswith("if (-not (Test-Path -LiteralPath $env:SE_EPHE_PATH"))
+    cases = {
+        "missing": good.replace(line, "", 1),
+        "elsewhere": good.replace('"flatlib\\resources\\swefiles"', '"flatlib\\resources"', 1),
+        "late": _guard._move_after_py_start(good, line),
+        "no existence check": good.replace(check, "", 1),
+    }
+    for name, bad in cases.items():
+        assert bad != good, name
+        assert any("SE_EPHE_PATH" in e for e in _guard.audit_windows_launcher(bad)), name
+
+
+def _installed_windows_payload() -> tuple[Path, Path] | None:
+    from horosa_skill.config import Settings
+
+    current = Path(Settings.from_env().runtime_root) / "current"
+    python = current / "runtime" / "windows" / "python" / "python.exe"
+    swefiles = current / "Horosa-Web" / "flatlib-ctrad2" / "flatlib" / "resources" / "swefiles"
+    return (python, swefiles) if python.is_file() and swefiles.is_dir() else None
+
+
+_FRESH_THREAD_PROBE = """
+import json, sys, threading
+import swisseph
+swisseph.set_ephe_path(sys.argv[1])  # the main thread sets it, as flatlib does at import
+out = {}
+def worker():  # a thread that never sets a path, like a CherryPy pool thread serving astroextra
+    xx, ret = swisseph.calc_ut(2460676.5, swisseph.SUN, swisseph.FLG_SWIEPH | swisseph.FLG_SPEED)
+    out["swieph"] = bool(ret & swisseph.FLG_SWIEPH)
+    out["file"] = swisseph.get_current_file_data(0)[0] if out["swieph"] else ""
+t = threading.Thread(target=worker)
+t.start()
+t.join(60)
+print(json.dumps(out))
+"""
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Swiss Ephemeris state is thread-local only on Windows builds (sweodef.h)")
+def test_se_ephe_path_reaches_threads_that_never_set_a_path() -> None:
+    """The real payload binaries (the lane's runtime, or the one installed under the default root): with SE_EPHE_PATH a
+    fresh thread reads the bundled planet file; without it, it does not (Moshier on a clean machine, or whatever sits in
+    \\sweph\\ephe\\ on the current drive) - the negative control that proves the variable is what makes the difference."""
+    payload = _installed_windows_payload()
+    if payload is None:
+        pytest.skip("no installed Windows runtime payload (python.exe + swefiles) under the configured runtime root")
+    python, swefiles = payload
+
+    def probe(with_env: bool) -> dict:
+        env = {k: v for k, v in os.environ.items() if k != "SE_EPHE_PATH"}
+        if with_env:
+            env["SE_EPHE_PATH"] = str(swefiles)
+        done = subprocess.run(
+            [str(python), "-B", "-c", _FRESH_THREAD_PROBE, str(swefiles)],
+            env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
+        )
+        assert done.returncode == 0, done.stderr[-800:]
+        return json.loads(done.stdout.strip().splitlines()[-1])
+
+    def from_bundled(result: dict) -> bool:
+        where = os.path.normcase(os.path.normpath(os.path.dirname(result.get("file") or "")))
+        return bool(result.get("swieph")) and where == os.path.normcase(os.path.normpath(str(swefiles)))
+
+    assert from_bundled(probe(with_env=True)), "SE_EPHE_PATH did not reach a thread that never set a path"
+    assert not from_bundled(probe(with_env=False)), "negative control: without SE_EPHE_PATH a fresh thread must NOT find the bundled files"

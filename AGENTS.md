@@ -819,6 +819,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | Windows 首次启动弹防火墙 / `doctor` 报 `listener:not_loopback_only` | 旧模板起 Java 没钉 `--server.address=127.0.0.1`，绑在 0.0.0.0 | 升级 horosa-skill 后 `runtime restart` 重套模板（每次 start 都会重拷 `.ps1`）；`doctor.listener_scope` 应变为 `loopback_only: true` |
 | Windows 用户名带空格（`C:\Users\John Doe`）时 chart/Java 都起不来，`.horosa-local-logs` 里 python 报找不到文件 | 旧模板 `-ArgumentList` 路径元素没引号，被拆成两段 | 升级后 `runtime restart`；判据 = `tests/test_runtime_launcher_templates.py` 的引号断言（v0.38.0 B1） |
 | 只有 Windows：chart 类工具 `tool.backend_param_error`（/chart 回 `{"err":"param error"}`），chart 日志 `KeyError: 'Chiron'`；同一载荷 mac 全绿 | Swiss Ephemeris 的状态在 Windows 上是**线程本地**的（`sweodef.h`），上游 v3.11.2 的星历路径短路在进程级记「已设」→ CherryPy 池线程从没设过路径 → 默认 `\sweph\ephe\` 里找不到 `seas_18.se1`（行星静默退 Moshier，小行星直接丢） | 启动器模板起 chart 前 `$env:HOROSA_EPHE_PATH_FASTPATH = "0"`（`verify_runtime_scripts.py` 守着）；旧安装升级 skill 后 `runtime restart` 重套模板（v0.40.0） |
+| 只有 Windows：服务刚起时同一个星历 / 产前朔望请求几次结果不一样（浮点末位，或事件时刻差秒级），热起来后才稳定 | 上游 astroextra 直接调 swisseph、不经 flatlib：没服务过 flatlib 请求的池线程没设过星历路径，libswe 落到编译期默认 `\sweph\ephe\`（干净机 Moshier；装过别的占星软件的机器读其旧文件）；用户全局 `SE_EPHE_PATH` 指到别处也会这样 | 启动器模板起 chart 前设 `SE_EPHE_PATH` 指向自带 swefiles（`verify_runtime_scripts.py` 不变量 6 守着）；旧安装升级 skill 后 `runtime restart` 重套模板（v0.40.0 公开后） |
 | Codex 里 horosa 一堆报错 / 首轮看不到工具 | 多半是 `startup_timeout_sec`/`tool_timeout_sec` 没写（Codex 默认 10 s/60 s，冷启动与择日扫描都超） | `horosa-skill client check --client codex`（v0.38.0 起缺省也报 `codex_*_timeout_missing`）；重跑 `client config --format codex --write ~/.codex/config.toml` |
 | 矩阵 lane / 自己写的脚本把 live 闸门跑成 `java_routes_dead`，而 Java 明明活着 | `HOROSA_SERVER_ROOT` 被设成 doctor `endpoints[*].url`（带 `/common/time` 探测路径） | 只取 scheme://host:port（`verify_runtime_live.origin_of`）；闸门探的是 `<root>/nongli/time` |
 | live 全套只红在 `test_sync311_*` / sanshiunited 这类「钉上游新行为」的用例（`kook` 为 None、地点行回「星阙地点」、金标行格式差一列、castSeed 不复现） | 主干契约领先于已装 runtime：payload `export_registry_version` < 本树 `AI_EXPORT_SETTINGS_VERSION`（main × 公开 latest 的矩阵形状） | 偏斜非回归：这类用例挂 `requires_current_runtime_contract`（偏斜即 skip 并写明）；要验新行为就装下一版 runtime 或起 vendored 实例 |
@@ -1043,10 +1044,14 @@ A global stability pass hardened these; keep them true when you touch the releva
   Windows 启动器模板起 chart 前设 `$env:HOROSA_EPHE_PATH_FASTPATH = "0"`（上游自带的 kill-switch；不改 vendored 代码）。守卫：
   `verify_runtime_scripts.py` Windows 不变量 5 + 上游开关名漂移警报（`--self-test` 负向对照）、
   `tests/test_runtime_launcher_templates.py`；端到端仍靠 release-runtime 的 Windows lane。以后同步上游，凡新增「记住 C 库状态」
-  的开关都按这条审：要么按线程记账，要么 Windows 启动器关掉。没设过路径的线程落到编译期默认 `\sweph\ephe\`（盘符相对）：干净机
-  找不到文件 → 小行星丢、行星退 Moshier；装过别的占星软件的机器（本维护机 `C:\sweph\ephe`，2001–2014 的旧文件）**不报错、静默读旧
-  星历**（凯龙 0.14″ / 谷神 0.18″）——Windows 复验要比数值，不能只看没报错。星阙桌面端的内嵌 runtime 同中此短路（用其自带解释器离线
-  探针，未碰 8899 / 9999），只报告。
+  的开关都按这条审：要么按线程记账，要么 Windows 启动器关掉。**只关短路不够（v0.40.0 公开后）**：上游 `astroextra`（不含行运的
+  星历、产前朔望）经 `swe_lon` 直接调 swisseph、从不经过 flatlib，没服务过 flatlib 请求的池线程仍没设过路径。libswe 对这种线程
+  首次计算时先看环境变量 `SE_EPHE_PATH`（它连显式 `set_ephe_path` 都压得过），没有才落到编译期默认 `\sweph\ephe\`（盘符相对：
+  干净机退 Moshier，装过别的占星软件的机器如本维护机 `C:\sweph\ephe` **静默读旧星历**）——公开版冷启 40 个星历响应 39 个偏离
+  自带星历。所以 Windows 启动器起 chart 前另设 `$env:SE_EPHE_PATH` 指向自带 swefiles、目录缺席即拒启（与上游桌面端启动器同；
+  也挡住用户全局 `SE_EPHE_PATH` 的劫持），守卫 = 不变量 6 + `test_se_ephe_path_reaches_threads_that_never_set_a_path`（真载荷，
+  含负向对照）。冷启确定性要专门测（刚起时并发同一请求、与进程内参照逐值比）；Windows 复验要比数值，不能只看没报错。
+  离线探针必须带被测进程的真实环境变量——09-30 曾据不带环境的探针误判「星阙桌面端同中」，它的启动器设了 `SE_EPHE_PATH`，不受影响。
 
 ### 9.4 客户端配置 · setup · doctor（client config / setup / doctor）
 

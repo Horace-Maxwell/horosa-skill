@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.40.0 (2026-10-01) | 公开版 Windows 复验（`--check` [OK]、门禁 24/24、release 模式原生 lane 12/12 / 1791 passed）顺带查出：刚起的 chart 服务上 40 个相同的星历请求回来 2 种结果、39 个偏离自带星历——上游 astroextra 直接调 swisseph、不经 flatlib，没服务过 flatlib 的池线程落到默认 `\sweph\ephe\`；7b8da79 的关短路管不到。另更正 09-30「桌面端同中」：它的启动器设了 `SE_EPHE_PATH` | Windows 启动器起 chart 前设 `SE_EPHE_PATH` 指向自带 swefiles（与上游桌面端同；目录缺席即拒启），冷启 40/40 与参照相同；守卫不变量 6 + 4 个负向对照 + 真载荷行为测试（含负向对照）；离线探针必须带被测进程的真实环境 |
 | v0.40.0 (2026-10-01) | 已公开后的 release 模式矩阵 36903587803：ARM lane 1789 过 / 1 红——`test_app_marker_does_not_shadow_the_command_line_evidence` 用假 PID 4242 却没钉 `process_image_path`，托管 runner 上 4242 真有进程 → 拿到别人的映像、不再取命令行 → 证据退成 app_marker | 三条假 PID 用例钉住映像查询；静态守卫：换了 `listener_pids` 字面 PID 的用例必须同时换 `process_image_path`；「4242 被占」模拟复现原错误、修后通过 |
 | v0.40.0 (2026-10-01) | draft 矩阵 36878423196 的 macOS lane（此前一直绿）四条 `ERROR at setup`：「别人」的监听夹具子进程 30 s 没报出端口——1e10587 改成子进程构造完 HTTPServer 才报号，而构造里的 `socket.getfqdn` 反查在托管 macOS runner 上超过 30 s | 先裸 socket bind + listen + 报号，再把 socket 交给 HTTPServer（不走 server_bind，没有反查）；守卫给 getfqdn 下毒，构造在前的写法报不出号 = 负向对照 |
 | v0.40.0 (2026-10-01) | 修完 Windows 线程问题后两条 Windows lane 只剩星历金标 2 红：「留」的顺逆标签互换——上游 `calc_stations` 按留点那一刻≈0 的速度正负定向，是浮点噪声（金标 41 个留错 19 个，mac 绿只因噪声与生成金标时相同）；星历是 v0.40.0 新工具 | 用户拍板 skill 侧声明式偏离：按同一响应的逐日速度复核（覆盖外按交替续推），`directionUpstream` 可审计、判不出就 warning；fixture 增补独立真值（前后半天速度），离线 / live 金标对真值、与平台无关；负向对照 |
@@ -137,6 +138,43 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.40.0 / 2026-10-01 — Windows 公开版冷线程算星历：上游 astroextra 直接调 swisseph、不经 flatlib，只关短路不够——启动器补 `SE_EPHE_PATH`（与上游桌面端同）；更正 09-30「桌面端同中」
+
+- **背景**：v0.40.0 公开（56d70fa，release-runtime 36896659949）后本机复验：`sync_windows_release.py --check` [OK]；worktree @f3f4c59
+  `run_ci_gates.py` 24/24（1690 passed）；release 模式原生 lane（公开 zip 真下载 718,648,986 字节，全新根 `rt-v040` + 28899 / 29999）
+  12 步全绿，pytest 1791 passed / 0 failed / 28 skipped（1095 s）。mac 侧的星历方向偏离（2086b9f）在 Windows 上审过：方向取离留 ≤ 1 天的
+  逐日速度正负；留恰好落在网格点附近时，上游扫描会把它归到下一个区间，下一行仍离它一整天，判向照样对。
+- **症状（复验顺带查出）**：同一公开 runtime 刚起时，40 个相同的 `/astroextra/ephemeris`（不含行运）并发请求回来 2 种结果，只有 1 个与
+  「同一份上游代码在本进程、用自带星历算出的参照」逐值相同，39 个月亮黄经最多差 5.7e-7°；先用 300 个 `/chart` 把 30 个池线程都走一遍
+  flatlib，再打同一批，40/40 相同。
+- **根因**：上游 `astroextra`（不含行运的 `build_ephemeris`、`compute_prenatal_syzygy`）经 `swe_lon` 直接调 `swisseph.calc_ut`，从不经过
+  flatlib 的 `ensureEphePath`（`base_params` / `Datetime` 都是纯计算）；CherryPy 池线程若还没服务过 flatlib 请求，就从没设过路径。libswe
+  对这种线程在首次计算时走 `swe_set_ephe_path(NULL)`：先看环境变量 `SE_EPHE_PATH`，没有才用编译期默认 `\sweph\ephe\`（盘符相对）——本机
+  读到别的占星软件留在 `C:\sweph\ephe` 的旧文件（静默偏差），干净机则行星退 Moshier。7b8da79 关掉的短路只保证「经过 flatlib 的线程每次都
+  设路径」，管不到这些直接调用。上游桌面端没有这个问题：它的启动器（`electron/service-manager.js`）给 chart 进程设了
+  `SE_EPHE_PATH = swefiles`，chart 服务里也没有按线程设路径的钩子（无 `start_thread` 订阅）。
+- **另一面（实测）**：`SE_EPHE_PATH` 连显式 `set_ephe_path(路径)` 都压得过——设成 `C:\sweph\ephe` 时，主线程显式设自带目录也读
+  `C:\sweph\ephe\seas_18.se1`。所以用户机器上若有全局 `SE_EPHE_PATH`（别的占星软件装的），从前会劫持 chart 进程的每一个线程；启动器显式
+  设它，同时堵上了这个口子。
+- **修复**：Windows 启动器模板起 chart 前设
+  `$env:SE_EPHE_PATH = [System.IO.Path]::GetFullPath((Join-Path $FlatlibRoot "flatlib\resources\swefiles"))`，目录不在就 throw 拒绝启动；
+  与 flatlib 传给 `set_ephe_path` 的是同一个目录，别的不变；`HOROSA_EPHE_PATH_FASTPATH=0` 保留（双保险）。存量安装：升级 skill 后
+  `runtime restart`（每次 start 重拷模板）。端到端：同一公开 runtime 用修后的模板重起，冷启同一批 40/40 与参照逐值相同、只有 1 种结果。
+- **守卫**：`verify_runtime_scripts.py` Windows 不变量 6（那行在、指向自带 swefiles、在起 chart 之前，并有目录存在性检查）+ 上游树在场时
+  查 swefiles 目录仍在；`--self-test` 新增 4 个负向对照（删行 / 指到别处 / 挪到起 chart 之后 / 删存在性检查），16 种坏法全抓；
+  `tests/test_runtime_launcher_templates.py` 三条：顺序与目标、守卫负向、**真载荷二进制行为**
+  （`test_se_ephe_path_reaches_threads_that_never_set_a_path`：Windows 上用已装 runtime 的 python + pyswisseph，有 `SE_EPHE_PATH` 时
+  新线程读自带星历、没有时读不到——负向对照证明是这个变量起的作用；没装 runtime 的环境 skip，lane 上必跑）。
+- **更正（09-30 条目「星阙桌面端」）**：当时说桌面端同中此短路是**错的**——离线探针没带桌面端启动器给 chart 进程设的环境变量。带上
+  `SE_EPHE_PATH`（及 `HOROSA_SWISSEPH_PATH` / `HOROSA_SWEPH_PATH`）重跑：新线程读自带星历、与主线程逐值相同；去掉 `SE_EPHE_PATH` 才复现。
+  桌面端不受影响，用户无需设任何变量（本机用户 / 机器级都没设过 `HOROSA_EPHE_PATH_FASTPATH`）。另：Java 后端（astrostudyboot.jar，
+  505 个条目 / 342 个内嵌 jar）里没有 Swiss Ephemeris，桌面端给 Java 设的那三个变量与本仓无关。
+- **mac 侧（只报告）**：本机 vendored 的上游 mac 启动器（08-09 那份）不设 `SE_EPHE_PATH`，manager 的 mac 补丁也不设——mac 的星历状态是
+  全进程的，没有冷线程问题；但用户全局 `SE_EPHE_PATH` 照样会劫持。mac 启动器要不要也显式设，由 mac 侧定。
+- **法则**：① 修线程本地状态的问题，别只修「某条代码路径记账」——找那个库给所有线程的兜底入口（这里是 `SE_EPHE_PATH`），并对照上游
+  自家启动器（桌面端早就这么设）；② 离线探针要带上被测进程真实的环境变量，否则结论可能整个反过来（09-30 的桌面端误判）；③ 冷启确定性
+  要专门测：服务刚起时并发同一请求、与进程内参照逐值比，再和「池线程全热」对照。
+
 ### v0.40.0 / 2026-10-01 — release 模式矩阵 ARM lane 1 红：假 PID 用例没钉 `process_image_path`，托管 runner 上 4242 真有进程
 
 - **症状**：v0.40.0 公开后，publish job 触发的 release 模式矩阵 36903587803：macOS / Windows x64 绿，windows-11-arm 1789 passed / **1 failed**——
@@ -241,7 +279,8 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 - **星阙桌面端（只报告）**：用户自己的桌面端（`%LOCALAPPDATA%\HorosaDesktop\embedded-runtime\4bd95cad…`，Python 3.11.9）是同一份上游
   flatlib，短路默认开、没有任何地方设 0；用它自带的解释器离线跑同一探针，结果与上面相同（新线程读 `C:\sweph\ephe`）。按铁律只做离线
   探针，没碰 8899 / 9999。上游修法见上一条（按线程记账或 Windows 默认关）；用户侧可试用户级环境变量 `HOROSA_EPHE_PATH_FASTPATH=0`
-  后重启桌面端（桌面端启动器是否透传环境变量未验证）。
+  后重启桌面端（桌面端启动器是否透传环境变量未验证）。**更正（10-01）：这条判断错了**——桌面端启动器给 chart 进程设了
+  `SE_EPHE_PATH`，带上它重跑探针，新线程读的就是自带星历；桌面端不受影响，无需设任何变量。见 2026-10-01「冷线程算星历」条目。
 - **复验时踩的坑**：lane 惯用的 18899 / 19999 被另一路工作流的进程（desktop_installer_bundle 的 python）短暂占住 → Java「exited before
   becoming ready」、再起报「port 18899 already in use by PID …」。没碰那个进程，换全新根 `rt-draft2` + 28899 / 29999（先核对不在
   `excludedportrange` 里）。上游 flatlib 在 import 时往 stdout 打一行路径，探针的 JSON 输出要加前缀标记再取。

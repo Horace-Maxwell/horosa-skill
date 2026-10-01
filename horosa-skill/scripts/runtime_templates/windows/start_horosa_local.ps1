@@ -112,6 +112,16 @@ $env:PYTHONIOENCODING = "utf-8"
 # process-wide, so CherryPy pool threads never set it, look in the default \sweph\ephe\ and cannot open the
 # asteroid files: Chiron/Ceres vanish and /chart answers "param error" (v0.40.0 draft lanes). Keep it off here.
 $env:HOROSA_EPHE_PATH_FASTPATH = "0"
+# Also hand every thread the bundled ephemeris directory through the environment. A thread that never called
+# swe_set_ephe_path resolves its path on first use from SE_EPHE_PATH (libswe gives that variable priority over any
+# path argument) and otherwise falls back to the compiled-in default \sweph\ephe\ on the current drive. Upstream's
+# astroextra endpoints (ephemeris without transits, prenatal syzygy) call swisseph directly and never reach flatlib's
+# ensureEphePath, so with only the switch above a pool thread that had not yet served a flatlib request computed them
+# from \sweph\ephe\: Moshier on a clean machine, another program's old files where those exist (published v0.40.0 on
+# the Windows maintainer box: 39 of 40 cold-start ephemeris responses off the bundled reference). It is the directory
+# flatlib already passes to set_ephe_path, and the upstream desktop launcher sets the same variable.
+$env:SE_EPHE_PATH = [System.IO.Path]::GetFullPath((Join-Path $FlatlibRoot "flatlib\resources\swefiles"))
+if (-not (Test-Path -LiteralPath $env:SE_EPHE_PATH -PathType Container)) { throw "Swiss Ephemeris files not found: $env:SE_EPHE_PATH" }
 
 # Paths are embedded as JSON string literals (a JSON string is a valid Python string literal): the old
 # r"$Var" form breaks on a trailing backslash or an embedded quote. Keep every literal here ASCII.
