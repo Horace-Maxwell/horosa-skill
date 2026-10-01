@@ -29,13 +29,24 @@ from horosa_skill.runtime.procs import pid_alive, process_command
 # 去绑同一个号」：两步之间任何人拿走 / 系统保留了那个号，子进程就死在 server_bind 上——2026-09-29 维护机门禁
 # 复跑（v0.40.0 tag 前闸）被 7cde519 加的自报抓了个正着：探到 10832、子进程 exited rc=1、
 # `PermissionError: [WinError 10013]`。本机动态端口段只有 1024–15000，全量 pytest 的端口 churn 让这场竞态
-# 4 次里中 2 次，单独跑永远绿。让绑定发生在唯一会用它的进程里，窗口就不存在；端口号那一行一到，bind+listen
-# 已经完成（TCPServer 构造即绑定并监听），下游也不必再轮询 `port_bindable`。
+# 4 次里中 2 次，单独跑永远绿。让绑定发生在唯一会用它的进程里，窗口就不存在。
+# 🔴 端口号必须在 bind+listen 之后**立刻**报，报号之前不许有任何可能阻塞的调用：HTTPServer 的构造会在 server_bind
+# 里 `socket.getfqdn('127.0.0.1')` 反查主机名，GitHub 托管 macOS 26 runner 上这一步超过 30 s（v0.40.0 draft 矩阵
+# 36878423196 的 macOS lane：四条用例 ERROR at setup，子进程活着、30 s 没报号）。旧夹具没被它卡住只因为不等构造
+# 完成——darwin 的 `listener_pids` 认 `*.*`、bind 之后就算数。所以先用裸 socket 绑定 + 监听 + 报号，再把这个 socket
+# 交给 HTTP 服务器（bind_and_activate=False，不走 server_bind，也就没有反查）。
 _FOREIGN_LISTENER = (
+    "import socket\n"
+    "sock = socket.socket()\n"
+    "sock.bind(('127.0.0.1', 0))\n"
+    "sock.listen(16)\n"
+    "print(sock.getsockname()[1], flush=True)\n"
     "import http.server\n"
     "http.server.SimpleHTTPRequestHandler.log_message = lambda *a, **k: None\n"
-    "srv = http.server.ThreadingHTTPServer(('127.0.0.1', 0), http.server.SimpleHTTPRequestHandler)\n"
-    "print(srv.server_address[1], flush=True)\n"
+    "srv = http.server.ThreadingHTTPServer(sock.getsockname(), http.server.SimpleHTTPRequestHandler, bind_and_activate=False)\n"
+    "srv.socket.close()\n"
+    "srv.socket = sock\n"
+    "srv.server_name, srv.server_port = sock.getsockname()\n"
     "srv.serve_forever()\n"
 )
 
@@ -79,6 +90,50 @@ def listening_server():
     finally:
         proc.terminate()
         proc.wait(timeout=10)
+
+
+_GETFQDN_POISON = (
+    "import socket\n"
+    "def _poisoned(*_a, **_k):\n"
+    "    raise RuntimeError('getfqdn called before the port was reported')\n"
+    "socket.getfqdn = _poisoned\n"
+)
+
+
+def _first_line(proc: subprocess.Popen, timeout: float) -> str:
+    box: dict[str, str] = {}
+    reader = threading.Thread(target=lambda: box.__setitem__("v", proc.stdout.readline() if proc.stdout else ""), daemon=True)
+    reader.start()
+    reader.join(timeout)
+    return box.get("v", "").strip()
+
+
+def test_foreign_listener_reports_its_port_before_any_name_lookup() -> None:
+    """macOS lane 回归（v0.40.0 draft 矩阵 36878423196）：HTTPServer 构造里的 `socket.getfqdn` 反查在托管 macOS runner
+    上超过 30 s，夹具子进程报不出号。让 getfqdn 一被调用就抛错——新夹具照常报号、能答 HTTP；把 HTTPServer 构造放回报号
+    之前（ff41146 的写法）就报不出号——负向对照。"""
+    import urllib.error
+    import urllib.request
+
+    proc = subprocess.Popen([sys.executable, "-c", _GETFQDN_POISON + _FOREIGN_LISTENER],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+    try:
+        line = _first_line(proc, 20)
+        assert line.isdigit(), (line, proc.poll())
+        with pytest.raises(urllib.error.HTTPError) as answered:
+            urllib.request.urlopen(f"http://127.0.0.1:{line}/definitely-not-a-file", timeout=10)
+        assert answered.value.code == 404  # 真在答 HTTP（下游 classify_endpoint 会探它）
+    finally:
+        proc.terminate()
+        proc.wait(timeout=10)
+    constructed_first = (
+        "import http.server\n"
+        "srv = http.server.ThreadingHTTPServer(('127.0.0.1', 0), http.server.SimpleHTTPRequestHandler)\n"
+        "print(srv.server_address[1], flush=True)\n"
+    )
+    old = subprocess.run([sys.executable, "-c", _GETFQDN_POISON + constructed_first],
+                         capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
+    assert old.returncode != 0 and old.stdout == "" and "getfqdn called" in old.stderr
 
 
 # ------------------------------------------------------------------ procs

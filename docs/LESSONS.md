@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.40.0 (2026-10-01) | draft 矩阵 36878423196 的 macOS lane（此前一直绿）四条 `ERROR at setup`：「别人」的监听夹具子进程 30 s 没报出端口——1e10587 改成子进程构造完 HTTPServer 才报号，而构造里的 `socket.getfqdn` 反查在托管 macOS runner 上超过 30 s | 先裸 socket bind + listen + 报号，再把 socket 交给 HTTPServer（不走 server_bind，没有反查）；守卫给 getfqdn 下毒，构造在前的写法报不出号 = 负向对照 |
 | v0.40.0 (2026-10-01) | 修完 Windows 线程问题后两条 Windows lane 只剩星历金标 2 红：「留」的顺逆标签互换——上游 `calc_stations` 按留点那一刻≈0 的速度正负定向，是浮点噪声（金标 41 个留错 19 个，mac 绿只因噪声与生成金标时相同）；星历是 v0.40.0 新工具 | 用户拍板 skill 侧声明式偏离：按同一响应的逐日速度复核（覆盖外按交替续推），`directionUpstream` 可审计、判不出就 warning；fixture 增补独立真值（前后半天速度），离线 / live 金标对真值、与平台无关；负向对照 |
 | v0.40.0 (2026-09-30) | Windows 原生复验 draft（7b8da79 后）：本机与托管 x64 / ARM 都只剩 `test_live_chart_service_reproduces_the_upstream_goldens` 2 条红——diff 只在星历「留与顺逆转向」表：上游 `calc_stations` 方向取根处速度的符号（噪声；mac 金标 41 行错 19、Windows 错 20），时刻落在速度噪声窗口里（冥王星 6.9 s）跨平台差 1 s；另：短路下的池线程读编译期默认 `\sweph\ephe\`，本机那里有别的软件的旧星历 → 静默偏差、不报错 | 只放宽病态的那一格、放宽量取实测窗口：停滞行星体 / 位置逐字节、时刻 ≤ 10 s、方向不比，其余逐字节（退 Moshier 由月相 / 月亮入座按秒抓）；自我退役守卫钉住上游缺陷；产品层方向是否声明式 deviation 待用户拍板；Windows 复验要比数值，不只看没报错 |
 | v0.40.0 (2026-09-30) | draft 矩阵：mac lane 绿、两条 Windows lane 红（18 / 17 条 chart 类 `param error`，chart 日志 `KeyError: 'Chiron'`）——上游 v3.11.2 的星历路径短路在进程级记「已设」，而 Swiss Ephemeris 在 Windows 上按线程存状态，CherryPy 池线程从没设过路径 | Windows 启动器起 chart 前设 `HOROSA_EPHE_PATH_FASTPATH=0`（上游自带 kill-switch）；`verify_runtime_scripts.py` 不变量 5 + 上游开关名漂移警报 + 负向对照；一次性诊断分支在 x64 + ARM 真 draft 载荷上对照 0/12 → 12/12 |
@@ -134,6 +135,23 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.40.0 / 2026-10-01 — macOS lane 四条 ERROR at setup：夹具子进程报号前卡在 `socket.getfqdn`（HTTPServer 构造里的主机名反查）
+
+- **症状**：在 2086b9f 上重跑 draft 矩阵 36878423196，此前一直绿的 macOS lane 红了：1785 passed / 0 failed / **4 errors**，全是
+  `tests/test_runtime_ports_identity.py` 的 `listening_server` 夹具 `ERROR at setup`——「foreign listener never came up within 30 s — child still
+  running but never reported a port; stdout ''; stderr ''」。Linux CI、windows-smoke、两台 Windows lane 与本机 mac 都绿。
+- **根因**：并行会话的 1e10587（消 Windows WinError 10013 竞态，方向对）把夹具改成「子进程自己 `ThreadingHTTPServer(('127.0.0.1', 0))`，
+  构造完再 print 端口」。HTTPServer 的 `server_bind` 在 bind 之后、listen 之前调 `socket.getfqdn('127.0.0.1')` 反查主机名——托管 macOS runner 上
+  这一步超过 30 s，子进程活着却永远到不了 print。旧夹具没被它卡住，只因为它从不等构造完成：探针绑号后轮询 `port_bindable`（bind 一完成就
+  不可绑），而 darwin 的 `listener_pids` 认 netstat 里外部地址 `*.*` 的行、不看状态（macOS 26 runner 把别人的 LISTEN 印成 CLOSED），bind 后
+  就查得到——所以同一天 7b8da79 的 macOS lane（旧夹具）是绿的。
+- **修复**：子进程先裸 `socket` bind + listen + 立刻 print 端口，再把这个 socket 交给 `ThreadingHTTPServer(..., bind_and_activate=False)`
+  （不走 `server_bind`，就没有反查）；报号即「已在监听」的契约不变，WinError 10013 的修法（绑定发生在唯一使用者进程里）也不变。
+- **守卫**：`test_foreign_listener_reports_its_port_before_any_name_lookup`：给子进程的 `socket.getfqdn` 下毒（一调用就抛错）——新夹具照常报号、
+  对 `/definitely-not-a-file` 答 404；「构造在前、报号在后」的写法直接崩、报不出号（负向对照）；把夹具换回 1e10587 的写法，这条红（已验）。
+- **法则**：就绪信号要在满足契约的最早一刻发出（这里是 bind + listen 之后），信号之前不许有可能阻塞的库调用（主机名反查、DNS、证书加载…）；
+  「本机与 Linux CI 都绿」证明不了托管 macOS 的网络栈不慢——跨平台夹具改动要等三平台 lane 都跑过。
 
 ### v0.40.0 / 2026-10-01 — 星历「留」的顺逆方向是浮点噪声：上游 `calc_stations` 按留点时刻的速度正负定向（本仓声明式偏离 `ephemeris_stations.py`）
 

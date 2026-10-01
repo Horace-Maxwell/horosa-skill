@@ -1138,6 +1138,10 @@ A global stability pass hardened these; keep them true when you touch the releva
   （`astroextra_snapshots.py`）不掺偏离。于是方向回到比对里，期望 = 金标 + fixture `station_truth`（前后半天速度变号的独立真值）的方向列
   （`_with_true_station_directions`）。`test_upstream_station_direction_is_still_ill_conditioned` 自我退役：上游改按括号端速度判向、重抓
   fixture 后变红 → 本仓偏离可撤（纠正成了空操作）。同类「在临界点上取值」的字段（边界上定星座、平局取整…）同步上游时一并审。
+- **夹具的就绪信号在满足契约的最早一刻发，之前不许有可能阻塞的库调用（v0.40.0）。** 「别人」的监听子进程先裸 socket bind + listen + 报号，
+  再把 socket 交给 `ThreadingHTTPServer(..., bind_and_activate=False)`：HTTPServer 的 `server_bind` 会 `socket.getfqdn('127.0.0.1')` 反查主机名，
+  托管 macOS runner 上超过 30 s（draft 矩阵 macOS lane 四条 ERROR at setup）。守卫 `test_foreign_listener_reports_its_port_before_any_name_lookup`
+  （getfqdn 被下毒即抛错；构造在前的写法报不出号 = 负向对照）。跨平台夹具改动要等三平台 lane 都跑过才算验过。
 - **夹具的就绪等待到点必须 `pytest.fail` 点名原因，不许静默放行（v0.40.0-dev）。** `listening_server` 等 30 s，仍未监听就
   `pytest.fail("http.server never started listening … slow spawn, not a port bug")`——满负载 Windows 上的慢 spawn 曾被误诊成端口探测缺陷。
 - **子进程测试 import 的是本 checkout（v0.40.0）。** `tests/conftest.py` 会话期把本树 `src` 前置进 `PYTHONPATH`（editable install 指向跑过
