@@ -365,6 +365,50 @@ def test_prenatal_syzygy_chart_failure_keeps_upstream_text_and_warns(tmp_path: P
 
 from test_local_js_tools import make_service, requires_chart, requires_current_runtime_contract  # noqa: E402
 
+# 上游 astroextra.calc_stations 对「速度 = 0」二分求根，停滞这一行天生病态：Swiss Ephemeris 的速度带 5–9e-9 °/日的
+# 数值抖动，停滞处速度的变化率却很小（冥王星 ≈ 4.6e-4 °/日²），根落在一个「速度符号由噪声决定」的窗口里——v0.40.0 payload
+# 实测冥王星 2025-10-13 前后 ±5 s 内速度符号翻 181 次、窗口宽 6.9 s（天王星 3.7 s，木土海 ≈ 0.5 s，水金火 ≤ 0.03 s）。于是：
+#   · 方向 = 根处速度的符号（'Direct' if hit_speed >= 0），纯噪声——mac 金标与 Windows（托管 x64 / ARM 与维护机）在不同
+#     停滞点上翻，**两边都约一半标错**（天王星 2026-02-04 金牛 27°27′ 停滞转顺，mac 金标写 Retrograde）；
+#   · 时刻跨平台差 ±1 s（Windows 实测 south_sidereal 木星 2025-02-04、冥王星 2025-10-13 各差 1 s），上界 = 窗口宽 + 1 s 取整。
+# 所以 live 比对把停滞行单独拿出来：星体、位置逐字节相等，时刻差 ≤ 10 s，方向不比；其余全文照旧逐字节比。引擎漂移由
+# 那些行把关，不靠这 10 s：退回 Moshier 时停滞时刻只挪 1–28 s，但约一半月相时刻、四成月亮入座时刻按秒变。
+# 台账 v0.40.0 / 2026-09-30「停滞方向取根处速度符号」；上游修好方向后由 test_upstream_station_direction_* 提醒恢复比方向。
+_STATION_TABLE_TITLE = "留与顺逆转向："
+_STATION_DIRECTIONS = ("Direct", "Retrograde")
+_STATION_ROW = "| <station> |"
+_STATION_TIME = re.compile(r"\| (\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2}):(\d{2})")
+_STATION_TIME_SLACK_S = 10
+
+
+def _lift_station_rows(text: str) -> tuple[str, list[tuple[int, str, str]]]:
+    """停滞表的数据行换成占位行，原样取出 (本地时刻秒数, 星体, 位置)；表头 / 分隔行 / 其它表、时刻认不出的行一字不动
+    （留在全文里逐字节比）。"""
+    out: list[str] = []
+    rows: list[tuple[int, str, str]] = []
+    in_table = False
+    for line in text.split("\n"):
+        if line == _STATION_TABLE_TITLE:
+            in_table = True
+        elif in_table and not line.startswith("|"):
+            in_table = False
+        if in_table:
+            cells = line.split(" | ")
+            stamp = _STATION_TIME.fullmatch(cells[0]) if len(cells) == 4 and cells[2] in _STATION_DIRECTIONS else None
+            if stamp:
+                day, h, m, s = stamp.groups()  # 上游取整进位可写出 24:00:00，不能交给 strptime
+                seconds = datetime.fromisoformat(day).toordinal() * 86400 + int(h) * 3600 + int(m) * 60 + int(s)
+                rows.append((seconds, cells[1], cells[3]))
+                line = _STATION_ROW
+        out.append(line)
+    return "\n".join(out), rows
+
+
+def _assert_same_stations(got: list[tuple[int, str, str]], want: list[tuple[int, str, str]]) -> None:
+    assert [r[1:] for r in got] == [r[1:] for r in want], "停滞：星体 / 位置应逐行相等"
+    drift = [(g[1], g[0] - w[0]) for g, w in zip(got, want) if g[0] != w[0]]
+    assert all(abs(d) <= _STATION_TIME_SLACK_S for _, d in drift), f"停滞时刻超出噪声窗口（秒）：{drift}"
+
 
 @requires_current_runtime_contract
 @requires_chart
@@ -381,7 +425,75 @@ def test_live_chart_service_reproduces_the_upstream_goldens(tmp_path: Path, froz
     ):
         result = service.run_tool(tool, _payload(sc, **opts), save_result=False)
         _assert_clean(result)
-        assert result.data["snapshot_text"] == sc["golden"][golden_key], tool
+        got, want = result.data["snapshot_text"], sc["golden"][golden_key]
+        if tool == "ephemeris":
+            (got, got_rows), (want, want_rows) = _lift_station_rows(got), _lift_station_rows(want)
+            assert want_rows, "金标里应有停滞行"
+            _assert_same_stations(got_rows, want_rows)
+        assert got == want, tool
+
+
+def test_station_rows_are_lifted_out_and_nothing_else() -> None:
+    for name, sc in FIX["scenarios"].items():
+        golden = sc["golden"]["ephemeris"]
+        lifted, rows = _lift_station_rows(golden)
+        assert len(rows) == len(sc["ephemeris"]["stations"]), name
+        before, after = golden.split("\n"), lifted.split("\n")
+        assert len(before) == len(after), name
+        changed = [b for b, a in zip(before, after) if b != a]
+        assert len(changed) == len(rows) and all(a == _STATION_ROW for b, a in zip(before, after) if b != a), name
+        assert all(c.split(" | ")[2] in _STATION_DIRECTIONS for c in changed), name
+    # 其它表里的同名单词不受影响：只认停滞表；时刻认不出的停滞行留在全文里逐字节比
+    assert _lift_station_rows("x | y | Direct | z") == ("x | y | Direct | z", [])
+    odd = f"{_STATION_TABLE_TITLE}\n| — | 冥 | Direct | 摩羯 1.00° |"
+    assert _lift_station_rows(odd) == (odd, [])
+    # 取整进位写出的 24:00:00 = 次日 00:00:00；跨日的时刻差照样按秒算
+    (_, (a,)) = _lift_station_rows(f"{_STATION_TABLE_TITLE}\n| 2025-01-01 24:00:00 | 冥 | Direct | 摩羯 1.00° |")
+    (_, (b,)) = _lift_station_rows(f"{_STATION_TABLE_TITLE}\n| 2025-01-02 00:00:03 | 冥 | Retrograde | 摩羯 1.00° |")
+    assert b[0] - a[0] == 3 and a[1:] == b[1:]
+
+
+def test_station_comparison_tolerates_the_noise_window_only() -> None:
+    row = (1000, "冥", "摩羯 1.00°")
+    _assert_same_stations([(1000 + _STATION_TIME_SLACK_S, *row[1:])], [row])
+    _assert_same_stations([(1000 - 1, *row[1:])], [row])
+    with pytest.raises(AssertionError, match="噪声窗口"):
+        _assert_same_stations([(1000 + _STATION_TIME_SLACK_S + 1, *row[1:])], [row])
+    with pytest.raises(AssertionError, match="星体 / 位置"):
+        _assert_same_stations([(1000, "冥", "摩羯 1.01°")], [row])
+    with pytest.raises(AssertionError, match="星体 / 位置"):
+        _assert_same_stations([row, row], [row])
+
+
+def test_upstream_station_direction_is_still_ill_conditioned() -> None:
+    """自我退役守卫：同一颗星相邻停滞点必然顺逆交替，区间起点的运动状态（dailyPositions[0] 的速度）一定，
+    每个停滞点「转成什么」就完全确定——这样推出的方向与天文事实一致。fixture 里 mac 实抓的上游标签与之矛盾，
+    证明上游缺陷仍在。上游哪天改成按括号端的速度判向（它对入座已经这么修过：astroextra.py「入座符号取『已知的进入
+    星座』cur_sign,而非由 hit_lon 反推」），重抓 fixture 后这里变红——那时让 _lift_station_rows 把方向留在比对里
+    （时刻的噪声窗口是天生的，那 10 s 不撤）。"""
+    contradicted: list[str] = []
+    for name, sc in FIX["scenarios"].items():
+        eph = sc["ephemeris"]
+        start = eph["dailyPositions"][0]
+        assert start["jd"] == eph["params"]["startDate"]["jd"], name
+        direct = {body: (pos.get("speed") or 0) >= 0 for body, pos in start["positions"].items()}
+        for ev in eph["stations"]:
+            direct[ev["body"]] = not direct[ev["body"]]
+            derived = "Direct" if direct[ev["body"]] else "Retrograde"
+            if derived != ev["direction"]:
+                contradicted.append(f"{name} {ev['datetime']} {ev['body']} upstream={ev['direction']} derived={derived}")
+    hint = "上游停滞方向已与推导一致——把方向放回 live 比对（见本测试 docstring）"
+    assert contradicted, hint
+    # 天文核对的一个锚：天王星 2026-02-04 在金牛 27°27′（黄经 57.46°）停滞转顺。
+    uranus = next(e for e in FIX["scenarios"]["sample"]["ephemeris"]["stations"] if e["body"] == "Uranus")
+    assert round(uranus["lon"], 2) == 57.46 and uranus["datetime"].startswith("2026-02-04")
+    assert any("sample 2026-02-04" in c and "Uranus" in c and "derived=Direct" in c for c in contradicted), (hint, contradicted)
+    # 同一次 mac 实抓里，同一个物理停滞点在两个场景里标反（只差时区 → 日网格不同 → 二分终点不同）：噪声的直接证据
+    by_lon: dict[tuple[str, float], set[str]] = {}
+    for sc in FIX["scenarios"].values():
+        for ev in sc["ephemeris"]["stations"]:
+            by_lon.setdefault((ev["body"], round(ev["lon"], 4)), set()).add(ev["direction"])
+    assert any(len(v) == 2 for v in by_lon.values()), (hint, by_lon)
 
 
 # ─────────────────────────── 注册 / 导出契约 / 路由 / 闸门 ───────────────────────────

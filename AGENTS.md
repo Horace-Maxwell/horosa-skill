@@ -822,6 +822,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | Codex 里 horosa 一堆报错 / 首轮看不到工具 | 多半是 `startup_timeout_sec`/`tool_timeout_sec` 没写（Codex 默认 10 s/60 s，冷启动与择日扫描都超） | `horosa-skill client check --client codex`（v0.38.0 起缺省也报 `codex_*_timeout_missing`）；重跑 `client config --format codex --write ~/.codex/config.toml` |
 | 矩阵 lane / 自己写的脚本把 live 闸门跑成 `java_routes_dead`，而 Java 明明活着 | `HOROSA_SERVER_ROOT` 被设成 doctor `endpoints[*].url`（带 `/common/time` 探测路径） | 只取 scheme://host:port（`verify_runtime_live.origin_of`）；闸门探的是 `<root>/nongli/time` |
 | live 全套只红在 `test_sync311_*` / sanshiunited 这类「钉上游新行为」的用例（`kook` 为 None、地点行回「星阙地点」、金标行格式差一列、castSeed 不复现） | 主干契约领先于已装 runtime：payload `export_registry_version` < 本树 `AI_EXPORT_SETTINGS_VERSION`（main × 公开 latest 的矩阵形状） | 偏斜非回归：这类用例挂 `requires_current_runtime_contract`（偏斜即 skip 并写明）；要验新行为就装下一版 runtime 或起 vendored 实例 |
+| live 只红 `test_live_chart_service_reproduces_the_upstream_goldens` 的 ephemeris，diff 只在「留与顺逆转向」表（Direct / Retrograde 对调、时刻差 1 s） | 上游 `calc_stations` 病态求根：方向 = 根处速度的符号（噪声），时刻落在速度噪声窗口里，跨平台 / 跨日网格各落一处（台账 v0.40.0 / 2026-09-30） | 非回归，live 比对已对停滞行放宽（`_lift_station_rows`）；仍红且报「停滞时刻超出噪声窗口」或星体 / 位置不等才是真漂移 |
 | 改了端口（`HOROSA_PORTS=auto` / `HOROSA_LOCAL_*_PORT`）后 `runtime stop` 退出 0 却 `ok: false`、状态 `stop_requested`、端口仍在听 | 停脚本按端口命名的 pid 文件找进程，此前拿的是裸 os.environ（找默认端口的文件） | v0.38.0 起 start/stop 共用 `_launcher_env()`；升级后 `runtime stop` 即生效；残留进程按 PID 停（`lsof -nP -iTCP:<port> -sTCP:LISTEN`，永不 `pkill -f`） |
 | `doctor` 报 `quarantine:runtime_binaries` / macOS 首次起 runtime 失败且无日志 | 浏览器下载的归档解出的 python / java / node 带 `com.apple.quarantine`，Gatekeeper 首次执行拦下 | 跑报告 `quarantine.fix` 给的 `xattr -dr com.apple.quarantine <current>`，再 `runtime restart`（只报不改，v0.38.0 B6） |
 | 看不懂 doctor 的码 / agent 把 issue 码原样甩给用户 | 码是给脚本的 | `doctor --explain`（stderr 6–10 行人话，stdout 仍纯 JSON）；报告 `advice[]` 每码一句 `user_summary` + `next_action`（码表 `cli._DOCTOR_ADVICE` 与 `manager.DOCTOR_ISSUE_CODES` 锁步） |
@@ -1041,7 +1042,10 @@ A global stability pass hardened these; keep them true when you touch the releva
   Windows 启动器模板起 chart 前设 `$env:HOROSA_EPHE_PATH_FASTPATH = "0"`（上游自带的 kill-switch；不改 vendored 代码）。守卫：
   `verify_runtime_scripts.py` Windows 不变量 5 + 上游开关名漂移警报（`--self-test` 负向对照）、
   `tests/test_runtime_launcher_templates.py`；端到端仍靠 release-runtime 的 Windows lane。以后同步上游，凡新增「记住 C 库状态」
-  的开关都按这条审：要么按线程记账，要么 Windows 启动器关掉。
+  的开关都按这条审：要么按线程记账，要么 Windows 启动器关掉。没设过路径的线程落到编译期默认 `\sweph\ephe\`（盘符相对）：干净机
+  找不到文件 → 小行星丢、行星退 Moshier；装过别的占星软件的机器（本维护机 `C:\sweph\ephe`，2001–2014 的旧文件）**不报错、静默读旧
+  星历**（凯龙 0.14″ / 谷神 0.18″）——Windows 复验要比数值，不能只看没报错。星阙桌面端的内嵌 runtime 同中此短路（用其自带解释器离线
+  探针，未碰 8899 / 9999），只报告。
 
 ### 9.4 客户端配置 · setup · doctor（client config / setup / doctor）
 
@@ -1123,6 +1127,13 @@ A global stability pass hardened these; keep them true when you touch the releva
   payload 的 `export_registry_version`，小于本树 `AI_EXPORT_SETTINGS_VERSION` 即 skip 并写明「偏斜，非回归」；**未知不跳**（外部 vendored
   实例的新鲜度由 preflight / mirror 守卫另管）。main 领先公开 runtime 是常态——托管矩阵每周一就是「main × 公开 latest」形状，
   `verify_runtime_live.py` 的 lane 报告同样带这一维度。
+- **逐字节金标碰上病态求根：只放宽病态的那一格，放宽量 = 实测噪声窗口（v0.40.0）。** 上游 `astroextra.calc_stations` 对速度二分
+  求根、方向取**根处**速度的符号（`hit_speed`，只剩噪声）：Swiss Ephemeris 速度抖动 5–9e-9 °/日，停滞处变化率小，根落在「符号由噪声
+  决定」的窗口里（实测冥王星 6.9 s、天王星 3.7 s、木土海 ≈ 0.5 s、水金火 ≤ 0.03 s）——mac 金标 41 行错 19、Windows 错 20，时刻跨平台差
+  ±1 s。live 比对（`tests/test_sync311_newtools.py::_lift_station_rows`）把停滞行拿出来：星体 / 位置逐字节、时刻 ≤ 10 s、方向不比，其余
+  逐字节；放宽前先证明漂移仍抓得到（退 Moshier 时停滞只挪 1–28 s，但约半数月相、四成月亮入座按秒变）。
+  `test_upstream_station_direction_is_still_ill_conditioned` 自我退役：上游改按括号端速度判向、重抓 fixture 后变红 → 方向放回比对。
+  产品层（停滞表方向约一半错）改不改 = 声明式 deviation，用户拍板。
 - **夹具的就绪等待到点必须 `pytest.fail` 点名原因，不许静默放行（v0.40.0-dev）。** `listening_server` 等 30 s，仍未监听就
   `pytest.fail("http.server never started listening … slow spawn, not a port bug")`——满负载 Windows 上的慢 spawn 曾被误诊成端口探测缺陷。
 - **子进程测试 import 的是本 checkout（v0.40.0）。** `tests/conftest.py` 会话期把本树 `src` 前置进 `PYTHONPATH`（editable install 指向跑过

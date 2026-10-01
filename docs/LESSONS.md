@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.40.0 (2026-09-30) | Windows 原生复验 draft（7b8da79 后）：本机与托管 x64 / ARM 都只剩 `test_live_chart_service_reproduces_the_upstream_goldens` 2 条红——diff 只在星历「留与顺逆转向」表：上游 `calc_stations` 方向取根处速度的符号（噪声；mac 金标 41 行错 19、Windows 错 20），时刻落在速度噪声窗口里（冥王星 6.9 s）跨平台差 1 s；另：短路下的池线程读编译期默认 `\sweph\ephe\`，本机那里有别的软件的旧星历 → 静默偏差、不报错 | 只放宽病态的那一格、放宽量取实测窗口：停滞行星体 / 位置逐字节、时刻 ≤ 10 s、方向不比，其余逐字节（退 Moshier 由月相 / 月亮入座按秒抓）；自我退役守卫钉住上游缺陷；产品层方向是否声明式 deviation 待用户拍板；Windows 复验要比数值，不只看没报错 |
 | v0.40.0 (2026-09-30) | draft 矩阵：mac lane 绿、两条 Windows lane 红（18 / 17 条 chart 类 `param error`，chart 日志 `KeyError: 'Chiron'`）——上游 v3.11.2 的星历路径短路在进程级记「已设」，而 Swiss Ephemeris 在 Windows 上按线程存状态，CherryPy 池线程从没设过路径 | Windows 启动器起 chart 前设 `HOROSA_EPHE_PATH_FASTPATH=0`（上游自带 kill-switch）；`verify_runtime_scripts.py` 不变量 5 + 上游开关名漂移警报 + 负向对照；一次性诊断分支在 x64 + ARM 真 draft 载荷上对照 0/12 → 12/12 |
 | v0.40.0 (2026-09-29) | Windows 维护机 tag 前闸：`listening_server` 夹具「探针 bind(0) → 关 → 再让子进程绑同号」在本机（动态端口段 1024–15000）全量 pytest 下 4 次中 2 次 `WinError 10013`；09-28 矩阵两条 Windows lane 1500 s 超时——本机真机 lane 1111 s / 1755 passed，慢不是挂 | 要一个「别人」的监听进程就让它自己绑 0 号并报端口；端口必须外定的 `serve --port` 只对绑不上的早退有界换号；矩阵超时先用流式 pytest.log + `--durations` 分清慢 / 挂，预算只对「慢」有意义 |
 | v0.40.0 (2026-09-29) | 文档全面复审：四路审计报 ~120 条陈旧（契约 v14/v56、闸门 84/8、分组 28/5/10、`export_format`、Windows 构建机叙事、AGENTS 死符号与重复…）——守卫只锁「可派生数字」，锁不住存在性 / 蒸馏 / 手改镜像 / 第三方事实 / 版本站点 | 协议 v3 第 5 件：`docs/DOC_MAP.md` 完备性 + 蒸馏守卫（版本号 + 标题代码锚）+ 生成式镜像 `gen_agent_mirrors.py` + `third_party_facts.json`（verified_on / 120 天 / 每周 issue）+ `bump_version.py` 单清单 + 三把 README 新锁（分组数 / 契约号 / 闸门数） |
@@ -132,6 +133,52 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.40.0 / 2026-09-30 — Windows 维护机原生复验 v0.40.0 draft：矩阵最后 2 条红是上游 `calc_stations` 的病态求根（停滞方向 = 浮点噪声、时刻 ±1 s），不是 Windows 缺陷；同一星历路径短路在装过别的占星软件的机器上静默读旧星历
+
+- **症状**：7b8da79（启动器关短路）后的 release-runtime run 36807231297：macOS lane 绿；windows-latest（pytest 1433 s）与
+  windows-11-arm（2227 s）都是 1777 passed / **2 failed** / 28 skipped，红的恰是
+  `tests/test_sync311_newtools.py::test_live_chart_service_reproduces_the_upstream_goldens[sample|south_sidereal]`（`AssertionError: ephemeris`）。
+  本机原生 lane（draft 资产 `--assets-dir`）同样 1777 passed、只红这 2 条——凯龙回来了。逐行 diff 只落在星历快照「留与顺逆转向：」表：
+  方向 `Direct` / `Retrograde` 对调（sample 4 行全对调，south_sidereal 37 行里 17 行），外加 south_sidereal 两行时刻差 1 s（木星
+  2025-02-04 06:40:23→24、冥王星 2025-10-13 23:52:09→10）；入座 / 月相 / 食相与其余三个工具逐字节相同。
+- **根因**（上游 `astroextra.calc_stations`，只读核对）：逐日扫速度变号 → `refine_crossing` 对速度二分 24 次 →
+  `'direction': 'Direct' if hit_speed >= 0 else 'Retrograde'`，`hit_speed` 是**根处**的速度。用 draft 载荷自带的 pyswisseph（20230604）实测：
+  - Swiss Ephemeris 的速度带 5–9e-9 °/日的数值抖动，停滞处速度的变化率却很小（冥王星 4.6e-4、天王星 8.7e-4、木星 3.4e-3 °/日²），
+    根落在「速度符号由噪声决定」的窗口里：根附近 ±5 s、10 ms 步长采样，冥王星速度符号翻 181 次、窗口宽 6.9 s；天王星 3.7 s；
+    木星 / 土星 / 海王星 ≈ 0.5 s；水 / 金 / 火 ≤ 0.03 s。
+  - **方向是纯噪声**：按运动交替推真值（区间起点 `dailyPositions[0]` 的速度定初态，每过一个停滞点翻一次），mac 金标 41 行错 19、
+    Windows 41 行错 20——两边都是抛硬币。mac 同一次实抓里，同一个物理停滞点（水星 2026-02-26，352.565°）在 sample 标 Retrograde、
+    在 south_sidereal 标 Direct：两场景只差时区 → 日网格不同 → 二分终点不同 → 噪声不同。天文锚：天王星 2026-02-04 金牛 27°27′
+    停滞转顺，mac 金标写 Retrograde。
+  - **时刻**：跨平台浮点差让二分落在窗口里的不同点，取整到秒后差 ±1 s（上界 = 窗口宽 + 1 s 取整）。
+  - 上游对入座已经这么修过（「入座符号取『已知的进入星座』cur_sign，而非由 hit_lon 反推」）——停滞方向同理应取括号端（`nxt` 处）
+    符号已知的速度。
+- **守卫（只动测试，产品输出不改）**：live 比对的 `_lift_station_rows` 把停滞行拿出来——星体 / 位置逐字节相等、时刻差 ≤ 10 s
+  （实测窗口 6.9 s + 1 s 取整，留余量）、方向不比；其余全文照旧逐字节。放宽前先证明不丢引擎漂移的检出：同一载荷 SWIEPH vs MOSEPH，
+  停滞时刻只挪 1–28 s（中位 4.6 s，单靠它抓不住），但约一半月相时刻、四成月亮入座时刻按秒变——那些行仍逐字节比。离线负向对照两条：
+  `test_station_rows_are_lifted_out_and_nothing_else`（只换停滞数据行；时刻认不出的行留在全文里逐字节比；取整进位的 24:00:00 按次日算）、
+  `test_station_comparison_tolerates_the_noise_window_only`（11 s / 位置差 0.01° / 多一行都红）；自我退役守卫
+  `test_upstream_station_direction_is_still_ill_conditioned`（推导真值与 mac 标签必须矛盾、同一物理停滞点必须在两场景标反——上游修好、
+  重抓 fixture 后变红，届时把方向放回比对，10 s 不撤）。`rt-draft2` 上整文件 49 passed，live 两场景四工具全绿。
+- **产品层（待用户拍板，未做）**：skill 按上游原样渲染方向，用户看到的星历停滞表约一半方向是错的（两个平台都是）。两条路：
+  ① 上游修（推荐，只报告不回写）：`calc_stations` 改用括号端的 `speed`（变号后那一侧）判向，一行改动；② skill 侧声明式 deviation：
+  `build_ephemeris_snapshot_text` 按运动交替重算方向并在快照里写明偏离。偏离上游输出属用户拍板事项。
+- **同一短路的另一面（探针：不起服务、不碰端口）**：`ensureEphePath()` 后主线程与新线程各算 Sun / Moon / Chiron / Ceres，再用
+  `swisseph.get_current_file_data` 看实际读的是哪份文件。draft 载荷自带解释器：短路默认（未设或 `=1`）时新线程读编译期默认路径
+  `\sweph\ephe\`（盘符相对）——本机 `C:\sweph\ephe` 恰有别的占星软件留下的 2001–2014 星历，于是**不报错、静默换数据**：凯龙差 0.14″、
+  谷神差 0.18″、月亮 1e-6°；`=0`（7b8da79 的修法）时新线程读载荷自带文件、与主线程逐值相同。同一缺陷两种症状：干净机（托管 runner）
+  小行星丢、行星退 Moshier；有旧星历的机器静默偏差——「Windows 绿」不能只看没报错，要比数值。
+- **星阙桌面端（只报告）**：用户自己的桌面端（`%LOCALAPPDATA%\HorosaDesktop\embedded-runtime\4bd95cad…`，Python 3.11.9）是同一份上游
+  flatlib，短路默认开、没有任何地方设 0；用它自带的解释器离线跑同一探针，结果与上面相同（新线程读 `C:\sweph\ephe`）。按铁律只做离线
+  探针，没碰 8899 / 9999。上游修法见上一条（按线程记账或 Windows 默认关）；用户侧可试用户级环境变量 `HOROSA_EPHE_PATH_FASTPATH=0`
+  后重启桌面端（桌面端启动器是否透传环境变量未验证）。
+- **复验时踩的坑**：lane 惯用的 18899 / 19999 被另一路工作流的进程（desktop_installer_bundle 的 python）短暂占住 → Java「exited before
+  becoming ready」、再起报「port 18899 already in use by PID …」。没碰那个进程，换全新根 `rt-draft2` + 28899 / 29999（先核对不在
+  `excludedportrange` 里）。上游 flatlib 在 import 时往 stdout 打一行路径，探针的 JSON 输出要加前缀标记再取。
+- **法则**：① 跨平台逐字节金标碰上病态求根（在导数≈0 处求根、取根处导数的符号），先量噪声窗口，只放宽病态的那一格，放宽量取「实测
+  窗口 + 显示取整」，并证明放宽后引擎漂移仍被其它行抓到；② 「取根处导数的符号」类判据就是噪声，方向要从括号端已知的符号取；③ 同一
+  C 库状态缺陷在不同机器上症状不同（报错 vs 静默换数据），Windows 复验要比数值。
 
 ### v0.40.0 / 2026-09-30 — draft 矩阵两条 Windows lane 红：上游星历路径短路 `HOROSA_EPHE_PATH_FASTPATH` 撞上 Swiss Ephemeris 的线程本地状态（`sweodef.h`）
 
