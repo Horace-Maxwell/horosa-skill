@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.40.0 (2026-10-01) | 已公开后的 release 模式矩阵 36903587803：ARM lane 1789 过 / 1 红——`test_app_marker_does_not_shadow_the_command_line_evidence` 用假 PID 4242 却没钉 `process_image_path`，托管 runner 上 4242 真有进程 → 拿到别人的映像、不再取命令行 → 证据退成 app_marker | 三条假 PID 用例钉住映像查询；静态守卫：换了 `listener_pids` 字面 PID 的用例必须同时换 `process_image_path`；「4242 被占」模拟复现原错误、修后通过 |
 | v0.40.0 (2026-10-01) | draft 矩阵 36878423196 的 macOS lane（此前一直绿）四条 `ERROR at setup`：「别人」的监听夹具子进程 30 s 没报出端口——1e10587 改成子进程构造完 HTTPServer 才报号，而构造里的 `socket.getfqdn` 反查在托管 macOS runner 上超过 30 s | 先裸 socket bind + listen + 报号，再把 socket 交给 HTTPServer（不走 server_bind，没有反查）；守卫给 getfqdn 下毒，构造在前的写法报不出号 = 负向对照 |
 | v0.40.0 (2026-10-01) | 修完 Windows 线程问题后两条 Windows lane 只剩星历金标 2 红：「留」的顺逆标签互换——上游 `calc_stations` 按留点那一刻≈0 的速度正负定向，是浮点噪声（金标 41 个留错 19 个，mac 绿只因噪声与生成金标时相同）；星历是 v0.40.0 新工具 | 用户拍板 skill 侧声明式偏离：按同一响应的逐日速度复核（覆盖外按交替续推），`directionUpstream` 可审计、判不出就 warning；fixture 增补独立真值（前后半天速度），离线 / live 金标对真值、与平台无关；负向对照 |
 | v0.40.0 (2026-09-30) | Windows 原生复验 draft（7b8da79 后）：本机与托管 x64 / ARM 都只剩 `test_live_chart_service_reproduces_the_upstream_goldens` 2 条红——diff 只在星历「留与顺逆转向」表：上游 `calc_stations` 方向取根处速度的符号（噪声；mac 金标 41 行错 19、Windows 错 20），时刻落在速度噪声窗口里（冥王星 6.9 s）跨平台差 1 s；另：短路下的池线程读编译期默认 `\sweph\ephe\`，本机那里有别的软件的旧星历 → 静默偏差、不报错 | 只放宽病态的那一格、放宽量取实测窗口：停滞行星体 / 位置逐字节、时刻 ≤ 10 s、方向不比，其余逐字节（退 Moshier 由月相 / 月亮入座按秒抓）；自我退役守卫钉住上游缺陷；产品层方向是否声明式 deviation 待用户拍板；Windows 复验要比数值，不只看没报错 |
@@ -135,6 +136,21 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.40.0 / 2026-10-01 — release 模式矩阵 ARM lane 1 红：假 PID 用例没钉 `process_image_path`，托管 runner 上 4242 真有进程
+
+- **症状**：v0.40.0 公开后，publish job 触发的 release 模式矩阵 36903587803：macOS / Windows x64 绿，windows-11-arm 1789 passed / **1 failed**——
+  `test_runtime_ports_identity.py::test_app_marker_does_not_shadow_the_command_line_evidence`：`'identity.app_marker' == 'process.command_matches_runtime_root'`。
+  同一批资产一小时前的 publish run（36896659949）里 ARM 是绿的；安装 / 启动 / doctor / 引擎 / 重启各步都绿。
+- **根因（测试，不是产品）**：用例把 `identity.listener_pids` 换成 `[4242]`、换了 `process_command` 与 `probe_identity`，却没换
+  `process_image_path`。`_holder_evidence` 先问映像路径：4242 不存在时返回 None → 去取命令行 → 判 ours（命令行含根）；托管 runner 上 4242 恰好是
+  某个真进程时，拿到它的映像（不在根下）→ 不再取命令行 → 证据退成弱的 `identity.app_marker`。同文件另有两条假 PID 用例同病。产品逻辑没问题：
+  真实场景里我方进程的映像就在 runtime 根下（一级证据）。已公开的 v0.40.0 不受影响。
+- **复现**：autouse 夹具把 `process_image_path(4242)` 换成 `C:/Windows/System32/svchost.exe`（模拟 PID 被占）→ 本机得到与 lane 逐字相同的断言错误。
+- **修复 / 守卫**：三条假 PID 用例都钉 `process_image_path → None`；`test_fake_pid_identity_tests_pin_the_image_lookup_too` 静态扫本文件——
+  换了 `listener_pids` 字面 PID 的用例必须同时换 `process_image_path`（去掉一处即红，已验）；「4242 被占」模拟下修后全绿。
+- **法则**：用假 PID 的单测要把**所有**按 PID 查真系统的入口都替换掉（映像、命令行、监听、存活）——漏一个，结论就取决于那台机器上同号进程在不在；
+  「本机 + CI + 前几轮 lane 都绿」证明不了这种依赖不存在。
 
 ### v0.40.0 / 2026-10-01 — macOS lane 四条 ERROR at setup：夹具子进程报号前卡在 `socket.getfqdn`（HTTPServer 构造里的主机名反查）
 

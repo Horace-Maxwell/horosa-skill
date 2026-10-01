@@ -1138,6 +1138,9 @@ A global stability pass hardened these; keep them true when you touch the releva
   （`astroextra_snapshots.py`）不掺偏离。于是方向回到比对里，期望 = 金标 + fixture `station_truth`（前后半天速度变号的独立真值）的方向列
   （`_with_true_station_directions`）。`test_upstream_station_direction_is_still_ill_conditioned` 自我退役：上游改按括号端速度判向、重抓
   fixture 后变红 → 本仓偏离可撤（纠正成了空操作）。同类「在临界点上取值」的字段（边界上定星座、平局取整…）同步上游时一并审。
+- **假 PID 的单测要替换所有按 PID 查真系统的入口（v0.40.0）。** `identity` 先问映像路径（`process_image_path`）再取命令行：只换了
+  `listener_pids` / `process_command` 的用例在托管 runner 上 PID 4242 恰被占时拿到别人的映像、证据退成 `identity.app_marker`（release 模式矩阵
+  ARM lane 红过一次）。守卫 `test_fake_pid_identity_tests_pin_the_image_lookup_too`：换了 `listener_pids` 字面 PID 的用例必须同时换 `process_image_path`。
 - **夹具的就绪信号在满足契约的最早一刻发，之前不许有可能阻塞的库调用（v0.40.0）。** 「别人」的监听子进程先裸 socket bind + listen + 报号，
   再把 socket 交给 `ThreadingHTTPServer(..., bind_and_activate=False)`：HTTPServer 的 `server_bind` 会 `socket.getfqdn('127.0.0.1')` 反查主机名，
   托管 macOS runner 上超过 30 s（draft 矩阵 macOS lane 四条 ERROR at setup）。守卫 `test_foreign_listener_reports_its_port_before_any_name_lookup`

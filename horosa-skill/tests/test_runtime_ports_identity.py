@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import re
 import os
 import shutil
 import socket
@@ -284,6 +285,9 @@ def test_identity_endpoint_absent_falls_through_instead_of_judging_foreign(monke
     """`/horosaIdentity` 只在新载荷上存在。404 必须落到下一级证据，不能当成反面证据。"""
     monkeypatch.setattr("horosa_skill.runtime.identity.probe_identity", lambda url: None)
     monkeypatch.setattr("horosa_skill.runtime.identity.listener_pids", lambda port: [4242])
+    # 假 PID 的映像路径也要钉住：不钉就去查真机上同号的进程（托管 runner 上 4242 可能真有人用 → 拿到别人的映像、
+    # 不再取命令行 → 证据退成 identity.app_marker；v0.40.0 release 模式矩阵 ARM lane 撞上过）。
+    monkeypatch.setattr("horosa_skill.runtime.identity.process_image_path", lambda pid: None)
     monkeypatch.setattr(
         "horosa_skill.runtime.identity.process_command",
         lambda pid: f"/usr/bin/java -Dhorosa.runtime.root={tmp_path} -jar boot.jar",
@@ -411,6 +415,9 @@ def test_app_marker_does_not_shadow_the_command_line_evidence(monkeypatch, tmp_p
         lambda url: {"app": "horosa-chart", "proto": 2, "nonce": ""},
     )
     monkeypatch.setattr("horosa_skill.runtime.identity.listener_pids", lambda port: [4242])
+    # 假 PID 的映像路径也要钉住：不钉就去查真机上同号的进程（托管 runner 上 4242 可能真有人用 → 拿到别人的映像、
+    # 不再取命令行 → 证据退成 identity.app_marker；v0.40.0 release 模式矩阵 ARM lane 撞上过）。
+    monkeypatch.setattr("horosa_skill.runtime.identity.process_image_path", lambda pid: None)
     monkeypatch.setattr(
         "horosa_skill.runtime.identity.process_command",
         lambda pid: f'"{tmp_path}/current/runtime/windows/python/python.exe" webchartsrv.py',
@@ -445,6 +452,9 @@ def test_app_marker_with_a_stranger_command_stays_weak_not_foreign(monkeypatch, 
         lambda url: {"app": "horosa-chart", "proto": 2, "nonce": ""},
     )
     monkeypatch.setattr("horosa_skill.runtime.identity.listener_pids", lambda port: [999])
+    # 假 PID 的映像路径也要钉住：不钉就去查真机上同号的进程（托管 runner 上 4242 可能真有人用 → 拿到别人的映像、
+    # 不再取命令行 → 证据退成 identity.app_marker；v0.40.0 release 模式矩阵 ARM lane 撞上过）。
+    monkeypatch.setattr("horosa_skill.runtime.identity.process_image_path", lambda pid: None)
     monkeypatch.setattr(
         "horosa_skill.runtime.identity.process_command",
         lambda pid: r'"C:\Program Files\Horosa Desktop\horosa.exe" --serve',
@@ -516,3 +526,18 @@ def test_handshake_decided_foreign_branches_name_their_holders_without_powershel
     other = identity.classify_endpoint("http://127.0.0.1:8899", runtime_root=tmp_path / "rt")
     assert (other.verdict, other.evidence) == ("foreign", "identity.other_app")
     assert other.holders and other.holders[0]["pid"] == 19392
+
+
+def test_fake_pid_identity_tests_pin_the_image_lookup_too() -> None:
+    """守卫：本文件里凡是把 `identity.listener_pids` 换成字面 PID 的用例，必须同时换掉 `identity.process_image_path`——
+    否则它查的是真机上同号的进程，PID 被占时结论就变（v0.40.0 release 模式矩阵 ARM lane：4242 被占，app_marker 用例红）。"""
+    import ast
+
+    src = Path(__file__).read_text(encoding="utf-8")
+    offenders = []
+    for node in ast.parse(src).body:
+        if isinstance(node, ast.FunctionDef) and node.name.startswith("test_"):
+            body = ast.get_source_segment(src, node) or ""
+            if re.search(r'identity\.listener_pids", lambda port: \[\d', body) and "identity.process_image_path" not in body:
+                offenders.append(node.name)
+    assert offenders == [], offenders
