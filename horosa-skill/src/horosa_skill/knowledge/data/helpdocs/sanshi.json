@@ -5,10 +5,10 @@
  "source": {
   "file": "components/help/SanshiHelpDoc.js",
   "upstream_source_marker": "xingque_help_docs",
-  "upstream_app_version": "3.11.2",
-  "upstream_git_sha": "fd3b68f09faf"
+  "upstream_app_version": "3.11.3",
+  "upstream_git_sha": "f27c00a93e25"
  },
- "generated_at": "2026-09-29T19:50:13-04:00",
+ "generated_at": "2026-09-30T15:18:26-04:00",
  "categories": [
   {
    "name": "手册",

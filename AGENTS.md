@@ -645,7 +645,8 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   publish job 再 dispatch 一次 release 模式矩阵。
 - **发布前对上游 pin，公开前 pin 必须在上游公开远端（v0.40.0）。** 每次发版先 `HOROSA_SOURCE_ROOT=… verify_upstream_sync.py --require-upstream`
   （CI 形状没有上游 checkout，这一步永远绿）；上游 HEAD 领先或 pin 不在任何分支 → 先同步（§5 第 17 条），再 `--write-state`。9cd9078f（v3.11.2）
-  在维护机上尚未推送公开远端时，只能做 draft，不翻公开。
+  在维护机上尚未推送公开远端时，只能做 draft，不翻公开。上游说「已推」后先 `git -C <Horosa-Public> ls-remote origin main` 核实
+  pin 真在远端再动发布（v0.40.0 发布当天，上游推送前又把已钉的 fd3b68f0 压进 v3.11.3 发布提交 f27c00a9，第三次改写）。
 - **矩阵 lane 的预算按主机，超时必须留证据（v0.40.0）。** `PYTEST_BUDGET_SECONDS = {"nt": 2700, "posix": 1500}`（Windows 在 live 套件上慢 4–5×；
   2026-09-28 的 schedule 跑两条 Windows lane 恰在 1500 s 被杀且无 pytest.log）；pytest 输出流式写 `pytest.log`，超时 step 带尾巴 40 行与 `budget_seconds`。
   树每长一截就回头看一次 Windows lane 的 pytest 秒数（lane-report `steps.pytest.seconds`）。

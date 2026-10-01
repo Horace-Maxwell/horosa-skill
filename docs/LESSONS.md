@@ -265,6 +265,11 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 7. **明确没做（待用户）**：上游 9cd9078f 推到 Horosa-Public 公开远端（pin 公开性，发布前提）；Windows 启动器模板镜像 R5 的 6 个 JVM 旗标（可选项，
    上游写明「可选对齐」）；自动把 Windows 非 ASCII runtime 根迁到 ASCII 位置；推运区间扫描 / 六爻卦辞补齐（维持不做）。
+8. **发布当天第三次改写（2026-09-30）**：上游本地先后出现 2300bbab / 0a8b44f8 / fd3b68f0（skill 曾逐个重钉到 fd3b68f0 并推送 188a472），
+   推送公开远端时却又被压进 **v3.11.3 发布提交 f27c00a9**（父 9cd9078f）——fd3b68f0 再次悬空，preflight 的 pin 闸照设计拦住。
+   在 vendored 子树里 fd3b68f0 → f27c00a9 只有增量（chart 服务分级启动门 + 两份上游测试 + 两处 React 尾部标签，后者在 truncate 之外），
+   jar 随 `RuntimeWire.RUNTIME_VERSION` 3.11.2-runtime1 → 3.11.3-runtime1。按 runbook 重钉 f27c00a9（core-js 369 verbatim 不变、知识包只有戳变）。
+   规则不变且再次被证明必要：**只钉已在公开远端的提交；用户说「已推」后先 `git ls-remote` 核实，再动发布。**
 
 ### v0.40.0-dev / 2026-09-24 — Windows 维护机 lane：main × 公开 v0.39.0 runtime 的 6 条 live 红是版本偏斜——live 闸只看「活不活」，不看「够不够新」
 

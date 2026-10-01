@@ -5,8 +5,8 @@
  "source": {
   "file": "Horosa-Web/astrostudysrv/astrostudy/src/main/java/spacex/astrostudy/helper/bazipithy.json",
   "upstream_source_marker": "xingque_bazi_pithy",
-  "upstream_app_version": "3.11.2",
-  "upstream_git_sha": "fd3b68f09faf"
+  "upstream_app_version": "3.11.3",
+  "upstream_git_sha": "f27c00a93e25"
  },
  "generated_at": "2026-02-22T18:12:59-08:00",
  "categories": [
