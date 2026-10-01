@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.40.0 (2026-10-01) | 修完 Windows 线程问题后两条 Windows lane 只剩星历金标 2 红：「留」的顺逆标签互换——上游 `calc_stations` 按留点那一刻≈0 的速度正负定向，是浮点噪声（金标 41 个留错 19 个，mac 绿只因噪声与生成金标时相同）；星历是 v0.40.0 新工具 | 用户拍板 skill 侧声明式偏离：按同一响应的逐日速度复核（覆盖外按交替续推），`directionUpstream` 可审计、判不出就 warning；fixture 增补独立真值（前后半天速度），离线 / live 金标对真值、与平台无关；负向对照 |
 | v0.40.0 (2026-09-30) | Windows 原生复验 draft（7b8da79 后）：本机与托管 x64 / ARM 都只剩 `test_live_chart_service_reproduces_the_upstream_goldens` 2 条红——diff 只在星历「留与顺逆转向」表：上游 `calc_stations` 方向取根处速度的符号（噪声；mac 金标 41 行错 19、Windows 错 20），时刻落在速度噪声窗口里（冥王星 6.9 s）跨平台差 1 s；另：短路下的池线程读编译期默认 `\sweph\ephe\`，本机那里有别的软件的旧星历 → 静默偏差、不报错 | 只放宽病态的那一格、放宽量取实测窗口：停滞行星体 / 位置逐字节、时刻 ≤ 10 s、方向不比，其余逐字节（退 Moshier 由月相 / 月亮入座按秒抓）；自我退役守卫钉住上游缺陷；产品层方向是否声明式 deviation 待用户拍板；Windows 复验要比数值，不只看没报错 |
 | v0.40.0 (2026-09-30) | draft 矩阵：mac lane 绿、两条 Windows lane 红（18 / 17 条 chart 类 `param error`，chart 日志 `KeyError: 'Chiron'`）——上游 v3.11.2 的星历路径短路在进程级记「已设」，而 Swiss Ephemeris 在 Windows 上按线程存状态，CherryPy 池线程从没设过路径 | Windows 启动器起 chart 前设 `HOROSA_EPHE_PATH_FASTPATH=0`（上游自带 kill-switch）；`verify_runtime_scripts.py` 不变量 5 + 上游开关名漂移警报 + 负向对照；一次性诊断分支在 x64 + ARM 真 draft 载荷上对照 0/12 → 12/12 |
 | v0.40.0 (2026-09-29) | Windows 维护机 tag 前闸：`listening_server` 夹具「探针 bind(0) → 关 → 再让子进程绑同号」在本机（动态端口段 1024–15000）全量 pytest 下 4 次中 2 次 `WinError 10013`；09-28 矩阵两条 Windows lane 1500 s 超时——本机真机 lane 1111 s / 1755 passed，慢不是挂 | 要一个「别人」的监听进程就让它自己绑 0 号并报端口；端口必须外定的 `serve --port` 只对绑不上的早退有界换号；矩阵超时先用流式 pytest.log + `--durations` 分清慢 / 挂，预算只对「慢」有意义 |
@@ -133,6 +134,40 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.40.0 / 2026-10-01 — 星历「留」的顺逆方向是浮点噪声：上游 `calc_stations` 按留点时刻的速度正负定向（本仓声明式偏离 `ephemeris_stations.py`）
+
+- **症状**：Windows 线程本地修复（上一条）后重跑 draft 矩阵 36807231297：x64 / ARM 都从 18 / 17 红降到 2 红（1777 过），只剩
+  `test_live_chart_service_reproduces_the_upstream_goldens[sample|south_sidereal]` 断在 `ephemeris`。差异只在「留与顺逆转向」表：
+  Direct / Retrograde 互换，另有两个留的时刻差 1 秒（见下条 2026-09-30 的实测噪声窗口）；表外逐字节相同。
+- **并行会话**：Windows 维护机上的另一路会话同时查到同一根因，先推了 1e10587 / ff41146（下条：测试侧按实测噪声窗口放宽、方向不比，
+  产品不改、「声明式 deviation 待用户拍板」）。本会话问了用户，用户拍板「skill 侧纠正后再发」；本条在 ff41146 之上 rebase 合并——
+  保留它的 `_lift_station_rows`（时刻 ≤ 10 s 的依据是实测窗口，比本会话起初的「只吸收 ±1 秒」更有根据，后者删去）与自我退役守卫，
+  方向因产品已纠正而放回比对（对 `station_truth`）。两路同推一个 main 时：推前 fetch，非快进就 rebase，绝不强推。
+- **先认错**：上一轮把这两条也归给线程本地（「行星退 Moshier、数值细微偏差」）——错了。一次 lane 里两个原因叠加时，修掉大头之前别把尾巴一起归给它；
+  修完再看剩下的，逐条对 diff。
+- **根因（上游）**：`astroextra.calc_stations` 用 1 天步长找速度变号，`refine_crossing` 二分 24 次（区间 ≈ 5 ms）后在中点取速度，
+  `'direction': 'Direct' if hit_speed >= 0 else 'Retrograde'`。留点上速度本来就≈0：本机实测 |hit_speed| 3e-9–5e-9 °/日，而前后半天是 4e-4–8e-2，
+  所以正负是浮点噪声——随 Swiss Ephemeris 的编译器（mac clang / Windows MSVC）和采样网格起点翻转（同一段代码换个网格起点，本机 4 个错 3 个）。
+  上游自己的金标：sample 4 个错 2 个（天王星 2026-02-04、木星 2026-03-11 实为转顺），south_sidereal 37 个错 17 个；Windows 上错的是另一批。
+  mac lane 一直绿，只因它的噪声与上游生成金标那台相同——**金标把噪声锁进去了**。星历是 v0.40.0 新工具（v0.39.0 没有）。
+- **决定**：用户拍板「skill 侧纠正后再发」（选项：按上游原样发 / skill 侧纠正 / 先修上游再同步）。
+- **修复（声明式偏离，`horosa-skill/src/horosa_skill/engine/ephemeris_stations.py`，`_run_ephemeris_tool` 调用）**：只用上游同一份响应，不多发请求——
+  `dailyPositions` 与 `calc_stations` 是同一张网格（本地零点、1 天步长、同一 `swe_lon`），留点之后第一行的速度正负就是真实方向；逐日表只有前 370 天、
+  留表最长 732 天，覆盖之外按同一行星的留严格交替续推（起点 = 上一个留，或覆盖末行的速度正负）。改过的留带 `directionUpstream`；判不出（响应没有逐日速度）
+  保留上游标签并经 `_degrade` 进 warnings。快照模块 `astroextra_snapshots.py` 仍是上游 builder 的逐字移植，偏离不混进去。SKILL.md 星历行注明「可能与星阙桌面版不同」。
+- **验证**：独立真值 = 每个留前后各半天的上游 `swe_lon` 速度变号（不经交替推算）：纠正后 sample 4/4、south_sidereal 37/37（含覆盖外靠交替推出的十几个），
+  上游标签分别 2/4、20/37。fixture 增补 `stations[*].jd`、只含速度的逐日行（每个留前后各一行 + 覆盖末行）、`station_truth`（同一请求从 vendored v3.11.3 实抓），
+  builder 读的键与金标原文不动。
+- **守卫**：`tests/test_ephemeris_stations.py`（纯函数：留后第一行定向 / 0 速度行跳过 / 覆盖外交替 / 无数据上报；内含上游规则在同一批数据上错 3 个的负向对照）；
+  `tests/test_sync311_newtools.py`：离线 runner 对「金标 + 真值方向列」（`_with_true_station_directions`）逐字比；live 用 `_lift_station_rows` 把停滞行拿出来，
+  星体 / 方向 / 位置逐字节、时刻 ≤ 10 s，其余逐字节——与平台无关；拿掉纠正 → 输出回到上游金标、与真值版对不上（负向对照）；去掉逐日速度 → 沿用上游标签 + warning；
+  `test_upstream_station_direction_is_still_ill_conditioned`（下条）改为提示「上游修好后本仓偏离可撤」。
+- **同一处的第二个平台差**：Windows 两个 lane 上另有两个留的时刻差 1 秒（2025-02-04 木星 06:40:23 / :24、2025-10-13 冥王星 23:52:09 / :10）——二分求根停在噪声窗口里的不同点（窗口实测见下条：冥王星 6.9 s、天王星 3.7 s…），四舍五入到秒进位不同。这不是错，所以不改产品；live 比对按下条的实测窗口放宽时刻（≤ 10 s）。核对 Windows 日志：两台差异全在留表里，表外 0 行。
+- **法则**：金标测试过了 ≠ 结果对。上游输出里凡是「在临界点上取值」（速度≈0 定方向、边界上定星座、平局取整）的字段，金标锁住的可能只是生成那台机器的噪声；
+  这类字段要对独立真值断言，不对金标。
+- **上游（只报告，不回写）**：`calc_stations` 应按变号方向定标签——`prev_speed > 0 >= speed` → Retrograde，`prev_speed < 0 <= speed` → Direct（两行即可）；
+  上游金标随之更正。上游修好后本仓偏离可退役（纠正结果与上游一致时 `directionUpstream` 自然消失）。
 
 ### v0.40.0 / 2026-09-30 — Windows 维护机原生复验 v0.40.0 draft：矩阵最后 2 条红是上游 `calc_stations` 的病态求根（停滞方向 = 浮点噪声、时刻 ±1 s），不是 Windows 缺陷；同一星历路径短路在装过别的占星软件的机器上静默读旧星历
 

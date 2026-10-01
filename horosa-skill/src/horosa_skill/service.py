@@ -56,6 +56,7 @@ from horosa_skill.engine.astroextra_snapshots import (
 from horosa_skill.engine import astro_snapshot as _astro_snap
 from horosa_skill.engine.astroextra_snapshots import _UNDEFINED as _ASTRO_UNDEF
 from horosa_skill.engine.astroextra_snapshots import _js_number as _astro_snap_js_number
+from horosa_skill.engine.ephemeris_stations import correct_station_directions
 from horosa_skill.engine.js_client import HorosaJsEngineClient
 from horosa_skill.engine.registry import TOOL_DEFINITIONS, ToolDefinition
 from horosa_skill.engine.router import select_tools
@@ -13457,6 +13458,17 @@ class HorosaSkillService:
         if eclipse_mode != "max":
             body["eclipseTimeMode"] = eclipse_mode
         response = self._call_remote("/astroextra/ephemeris", body)
+        if isinstance(response, dict) and isinstance(response.get("stations"), list):
+            # 本仓声明式偏离（v0.40.0）：上游按留点那一刻≈0 的速度正负定顺逆，标签是浮点噪声；改按同一响应的逐日速度复核
+            # （engine/ephemeris_stations.py）。判不出的留保留上游标签并明示。
+            stations, unresolved = correct_station_directions(response.get("stations"), response.get("dailyPositions"))
+            if unresolved:
+                _degrade(
+                    "ephemeris: %d station direction(s) could not be re-derived from dailyPositions; upstream labels kept",
+                    len(unresolved),
+                    note=f"降级：{len(unresolved)} 个留的顺逆方向无法按逐日速度复核，沿用上游标签（上游按留点时刻≈0 的速度正负定，可能不准）。",
+                )
+            response = {**response, "stations": stations}
         snapshot_text = build_ephemeris_snapshot_text(
             natal,
             response,

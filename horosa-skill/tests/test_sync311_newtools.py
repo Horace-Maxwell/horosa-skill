@@ -217,6 +217,22 @@ def _assert_clean(result) -> None:
     assert export["unknown_detected_sections"] == []
 
 
+def _with_true_station_directions(golden: str, truth: list[dict]) -> str:
+    """本仓声明式偏离（v0.40.0，engine/ephemeris_stations.py）施加到上游金标上：「留与顺逆转向」表的方向列换成真值。
+
+    上游 calc_stations 按留点那一刻≈0 的速度正负定方向（浮点噪声：金标 sample 4 个错 2 个、south_sidereal 37 个错 17 个，
+    Windows 上错的是另一批）；`station_truth` = 每个留前后各半天的速度变号（fixture 增补，独立于纠正算法）。其余文本逐字不动。
+    """
+    lines = golden.splitlines(keepends=True)
+    start = lines.index("留与顺逆转向：\n") + 3  # 表头 + 分隔行
+    for offset, row in enumerate(truth):
+        cells = lines[start + offset].split(" | ")
+        assert cells[0] == f"| {row['datetime']}", (cells, row)
+        cells[2] = row["direction"]
+        lines[start + offset] = " | ".join(cells)
+    return "".join(lines)
+
+
 @pytest.mark.parametrize("name", SCENARIOS)
 def test_service_runners_reproduce_the_upstream_goldens(tmp_path: Path, frozen: None, name: str) -> None:
     sc = _sc(name)
@@ -231,9 +247,41 @@ def test_service_runners_reproduce_the_upstream_goldens(tmp_path: Path, frozen: 
         client = _LiveFixtureClient(sc)
         result = _service(tmp_path, client).run_tool(tool, _payload(sc, **opts), save_result=False)
         _assert_clean(result)
-        assert result.data["snapshot_text"] == sc["golden"][golden_key], tool
+        expected = sc["golden"][golden_key]
+        if tool == "ephemeris":
+            expected = _with_true_station_directions(expected, sc["station_truth"])
+        assert result.data["snapshot_text"] == expected, tool
         assert result.data["export_snapshot"]["technique"]["key"] == tool
         assert result.data["export_snapshot"]["section_titles_detected"] == R.AI_EXPORT_PRESET_SECTIONS[tool], tool
+    eph = _service(tmp_path, _LiveFixtureClient(sc)).run_tool("ephemeris", _payload(sc, **req["ephemerisOpts"]), save_result=False)
+    stations = eph.data["ephemeris"]["stations"]
+    assert [s["direction"] for s in stations] == [row["direction"] for row in sc["station_truth"]]
+    upstream = [s["direction"] for s in sc["ephemeris"]["stations"]]
+    assert [s.get("directionUpstream") for s in stations] == [
+        up if up != row["direction"] else None for up, row in zip(upstream, sc["station_truth"])
+    ], "directionUpstream marks exactly the corrected stations"
+    assert not eph.warnings
+
+
+@pytest.mark.parametrize("name", SCENARIOS)
+def test_station_directions_without_the_correction_are_upstream_noise(tmp_path: Path, frozen: None, name: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """负向对照：拿掉纠正，输出就是上游金标（噪声标签），与真值版金标对不上——上面那条断言确实咬得住。"""
+    sc = _sc(name)
+    monkeypatch.setattr(S, "correct_station_directions", lambda stations, daily: (list(stations or []), []))
+    result = _service(tmp_path, _LiveFixtureClient(sc)).run_tool("ephemeris", _payload(sc, **sc["request"]["ephemerisOpts"]), save_result=False)
+    assert result.data["snapshot_text"] == sc["golden"]["ephemeris"]
+    assert result.data["snapshot_text"] != _with_true_station_directions(sc["golden"]["ephemeris"], sc["station_truth"])
+
+
+def test_station_directions_degrade_visibly_without_daily_speeds(tmp_path: Path, frozen: None) -> None:
+    """响应里没有逐日速度（如被代理裁掉）：判不出方向的留沿用上游标签，并在 warnings 里明示，不静默。"""
+    sc = _sc("sample")
+    eph = copy.deepcopy(sc["ephemeris"])
+    eph.pop("dailyPositions")
+    client = _LiveFixtureClient(sc, overrides={"/astroextra/ephemeris": eph})
+    result = _service(tmp_path, client).run_tool("ephemeris", _payload(sc, **sc["request"]["ephemerisOpts"]), save_result=False)
+    assert result.ok is True and result.data["snapshot_text"] == sc["golden"]["ephemeris"]
+    assert any("留的顺逆方向无法按逐日速度复核" in w for w in result.warnings), result.warnings
 
 
 def test_request_bodies_mirror_the_upstream_page_requests(tmp_path: Path, frozen: None) -> None:
@@ -371,7 +419,8 @@ from test_local_js_tools import make_service, requires_chart, requires_current_r
 #   · 方向 = 根处速度的符号（'Direct' if hit_speed >= 0），纯噪声——mac 金标与 Windows（托管 x64 / ARM 与维护机）在不同
 #     停滞点上翻，**两边都约一半标错**（天王星 2026-02-04 金牛 27°27′ 停滞转顺，mac 金标写 Retrograde）；
 #   · 时刻跨平台差 ±1 s（Windows 实测 south_sidereal 木星 2025-02-04、冥王星 2025-10-13 各差 1 s），上界 = 窗口宽 + 1 s 取整。
-# 所以 live 比对把停滞行单独拿出来：星体、位置逐字节相等，时刻差 ≤ 10 s，方向不比；其余全文照旧逐字节比。引擎漂移由
+# 所以 live 比对把停滞行单独拿出来：星体、位置逐字节相等，时刻差 ≤ 10 s；其余全文照旧逐字节比。方向：0.40.0 起产品侧声明式偏离
+# （engine/ephemeris_stations.py，用户 2026-10-01 拍板）按逐日速度纠正，方向不再是噪声，按 fixture station_truth 逐字节比。引擎漂移由
 # 那些行把关，不靠这 10 s：退回 Moshier 时停滞时刻只挪 1–28 s，但约一半月相时刻、四成月亮入座时刻按秒变。
 # 台账 v0.40.0 / 2026-09-30「停滞方向取根处速度符号」；上游修好方向后由 test_upstream_station_direction_* 提醒恢复比方向。
 _STATION_TABLE_TITLE = "留与顺逆转向："
@@ -381,8 +430,8 @@ _STATION_TIME = re.compile(r"\| (\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2}):(\d{2})")
 _STATION_TIME_SLACK_S = 10
 
 
-def _lift_station_rows(text: str) -> tuple[str, list[tuple[int, str, str]]]:
-    """停滞表的数据行换成占位行，原样取出 (本地时刻秒数, 星体, 位置)；表头 / 分隔行 / 其它表、时刻认不出的行一字不动
+def _lift_station_rows(text: str) -> tuple[str, list[tuple[int, str, str, str]]]:
+    """停滞表的数据行换成占位行，原样取出 (本地时刻秒数, 星体, 方向, 位置)；表头 / 分隔行 / 其它表、时刻认不出的行一字不动
     （留在全文里逐字节比）。"""
     out: list[str] = []
     rows: list[tuple[int, str, str]] = []
@@ -398,14 +447,14 @@ def _lift_station_rows(text: str) -> tuple[str, list[tuple[int, str, str]]]:
             if stamp:
                 day, h, m, s = stamp.groups()  # 上游取整进位可写出 24:00:00，不能交给 strptime
                 seconds = datetime.fromisoformat(day).toordinal() * 86400 + int(h) * 3600 + int(m) * 60 + int(s)
-                rows.append((seconds, cells[1], cells[3]))
+                rows.append((seconds, cells[1], cells[2], cells[3]))
                 line = _STATION_ROW
         out.append(line)
     return "\n".join(out), rows
 
 
-def _assert_same_stations(got: list[tuple[int, str, str]], want: list[tuple[int, str, str]]) -> None:
-    assert [r[1:] for r in got] == [r[1:] for r in want], "停滞：星体 / 位置应逐行相等"
+def _assert_same_stations(got: list[tuple[int, str, str, str]], want: list[tuple[int, str, str, str]]) -> None:
+    assert [r[1:] for r in got] == [r[1:] for r in want], "停滞：星体 / 方向 / 位置应逐行相等"
     drift = [(g[1], g[0] - w[0]) for g, w in zip(got, want) if g[0] != w[0]]
     assert all(abs(d) <= _STATION_TIME_SLACK_S for _, d in drift), f"停滞时刻超出噪声窗口（秒）：{drift}"
 
@@ -427,6 +476,7 @@ def test_live_chart_service_reproduces_the_upstream_goldens(tmp_path: Path, froz
         _assert_clean(result)
         got, want = result.data["snapshot_text"], sc["golden"][golden_key]
         if tool == "ephemeris":
+            want = _with_true_station_directions(want, sc["station_truth"])  # 声明式偏离：方向 = 真值，与平台无关
             (got, got_rows), (want, want_rows) = _lift_station_rows(got), _lift_station_rows(want)
             assert want_rows, "金标里应有停滞行"
             _assert_same_stations(got_rows, want_rows)
@@ -449,19 +499,21 @@ def test_station_rows_are_lifted_out_and_nothing_else() -> None:
     assert _lift_station_rows(odd) == (odd, [])
     # 取整进位写出的 24:00:00 = 次日 00:00:00；跨日的时刻差照样按秒算
     (_, (a,)) = _lift_station_rows(f"{_STATION_TABLE_TITLE}\n| 2025-01-01 24:00:00 | 冥 | Direct | 摩羯 1.00° |")
-    (_, (b,)) = _lift_station_rows(f"{_STATION_TABLE_TITLE}\n| 2025-01-02 00:00:03 | 冥 | Retrograde | 摩羯 1.00° |")
-    assert b[0] - a[0] == 3 and a[1:] == b[1:]
+    (_, (b,)) = _lift_station_rows(f"{_STATION_TABLE_TITLE}\n| 2025-01-02 00:00:03 | 冥 | Direct | 摩羯 1.00° |")
+    assert b[0] - a[0] == 3 and a[1:] == b[1:] and a[2] == "Direct"
 
 
 def test_station_comparison_tolerates_the_noise_window_only() -> None:
-    row = (1000, "冥", "摩羯 1.00°")
+    row = (1000, "冥", "Direct", "摩羯 1.00°")
     _assert_same_stations([(1000 + _STATION_TIME_SLACK_S, *row[1:])], [row])
     _assert_same_stations([(1000 - 1, *row[1:])], [row])
     with pytest.raises(AssertionError, match="噪声窗口"):
         _assert_same_stations([(1000 + _STATION_TIME_SLACK_S + 1, *row[1:])], [row])
-    with pytest.raises(AssertionError, match="星体 / 位置"):
-        _assert_same_stations([(1000, "冥", "摩羯 1.01°")], [row])
-    with pytest.raises(AssertionError, match="星体 / 位置"):
+    with pytest.raises(AssertionError, match="星体 / 方向 / 位置"):
+        _assert_same_stations([(1000, "冥", "Direct", "摩羯 1.01°")], [row])
+    with pytest.raises(AssertionError, match="星体 / 方向 / 位置"):
+        _assert_same_stations([(1000, "冥", "Retrograde", "摩羯 1.00°")], [row])  # 纠正后方向是确定的，翻了就红
+    with pytest.raises(AssertionError, match="星体 / 方向 / 位置"):
         _assert_same_stations([row, row], [row])
 
 
@@ -469,8 +521,9 @@ def test_upstream_station_direction_is_still_ill_conditioned() -> None:
     """自我退役守卫：同一颗星相邻停滞点必然顺逆交替，区间起点的运动状态（dailyPositions[0] 的速度）一定，
     每个停滞点「转成什么」就完全确定——这样推出的方向与天文事实一致。fixture 里 mac 实抓的上游标签与之矛盾，
     证明上游缺陷仍在。上游哪天改成按括号端的速度判向（它对入座已经这么修过：astroextra.py「入座符号取『已知的进入
-    星座』cur_sign,而非由 hit_lon 反推」），重抓 fixture 后这里变红——那时让 _lift_station_rows 把方向留在比对里
-    （时刻的噪声窗口是天生的，那 10 s 不撤）。"""
+    星座』cur_sign,而非由 hit_lon 反推」），重抓 fixture 后这里变红——那时本仓声明式偏离 engine/ephemeris_stations.py
+    成了空操作、可以撤（时刻的噪声窗口是天生的，那 10 s 不撤）。这里推出的方向还与 station_truth（前后半天速度变号）逐条
+    互证：两种独立推法必须一致。"""
     contradicted: list[str] = []
     for name, sc in FIX["scenarios"].items():
         eph = sc["ephemeris"]
@@ -482,7 +535,9 @@ def test_upstream_station_direction_is_still_ill_conditioned() -> None:
             derived = "Direct" if direct[ev["body"]] else "Retrograde"
             if derived != ev["direction"]:
                 contradicted.append(f"{name} {ev['datetime']} {ev['body']} upstream={ev['direction']} derived={derived}")
-    hint = "上游停滞方向已与推导一致——把方向放回 live 比对（见本测试 docstring）"
+            truth = next(r for r in sc["station_truth"] if (r["datetime"], r["body"]) == (ev["datetime"], ev["body"]))
+            assert derived == truth["direction"], (name, ev["datetime"], ev["body"], derived, truth)
+    hint = "上游停滞方向已与推导一致——本仓声明式偏离 engine/ephemeris_stations.py 可撤（见本测试 docstring）"
     assert contradicted, hint
     # 天文核对的一个锚：天王星 2026-02-04 在金牛 27°27′（黄经 57.46°）停滞转顺。
     uranus = next(e for e in FIX["scenarios"]["sample"]["ephemeris"]["stations"] if e["body"] == "Uranus")
