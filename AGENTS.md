@@ -1117,8 +1117,10 @@ A global stability pass hardened these; keep them true when you touch the releva
   `print(json.dumps(x, ensure_ascii=False))` 就是「打印数据」——Windows 管道/控制台是 cp1252，第一个 CJK 即
   `UnicodeEncodeError`（v0.40.0-dev：benchmark 报告新进中文用例，`run_ci_gates` 23/24，ubuntu 恒绿）。守卫：
   `tests/test_scripts_stdio.py`（字面量扫描 + `ensure_ascii=False`+`print(` 扫描）；ci.yml `windows-smoke` 跑 benchmark smoke。
-- **未定义名字基线 0（v0.38.1 发布后）。** `scripts/verify_undefined_names.py`（`ruff==0.16.7` 钉死，只选 F821/F822/F823，src/scripts/tests）。
-  只在没人跑的平台上可达的分支就是没测过的代码——这类「运行时必崩」错误靠静态检查兜，不靠 pytest 走到。
+- **未定义名字 / 位置 re 参数基线 0（v0.38.1 发布后；`B034` 自 v0.40.0 / 2026-10-05）。** `scripts/verify_undefined_names.py`（`ruff==0.16.7` 钉死，
+  只选 F821/F822/F823/`B034`，src/scripts/tests）。只在没人跑的平台上可达的分支就是没测过的代码——这类「运行时必崩」错误靠静态检查兜，
+  不靠 pytest 走到。`re.split` 的 maxsplit、`re.sub` / `re.subn` 的 count / flags 一律关键字传参：3.13 起位置传参弃用，而 CI 钉 3.12，
+  只有 venv 更新的维护机会看到那行警告。
 - **lane 永不碰调用者自己的客户端配置（v0.38.1 发布后）。** 九客户端步骤一律 `--config <work>/client-configs/…`；Claude Code user scope
   步骤用 `Lane.claude_user_scope_env()`（`HOME` / `USERPROFILE` / `CLAUDE_CONFIG_DIR` 指向 `<work>/claude-user-home`）——旧实现继承真 HOME，维护机上
   `claude mcp add --scope user` 写的是真 `~/.claude.json`，清理那句 `claude mcp remove --scope user horosa` 还会删掉维护者原有的条目（托管 runner 没有

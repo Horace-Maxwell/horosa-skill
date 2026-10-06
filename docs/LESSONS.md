@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.40.0 (2026-10-05) | 换新 Windows 机后在 Python 3.13 venv 里跑门禁：`verify_runtime_python_lock.py:37` 的 `re.split(pat, line, 1)` 报 DeprecationWarning（3.13 起 maxsplit / count / flags 按位置传参弃用，日后变 TypeError）；CI 钉 3.12，永远看不到 | 改 `maxsplit=1`；`verify_undefined_names.py` 规则集加 ruff `B034`（re.split / sub / subn 位置参数，基线 0）+ self-test 红绿对照；修前对本仓报红 = 负向对照 |
 | v0.40.0 (2026-10-01) | 公开版 Windows 复验（`--check` [OK]、门禁 24/24、release 模式原生 lane 12/12 / 1791 passed）顺带查出：刚起的 chart 服务上 40 个相同的星历请求回来 2 种结果、39 个偏离自带星历——上游 astroextra 直接调 swisseph、不经 flatlib，没服务过 flatlib 的池线程落到默认 `\sweph\ephe\`；7b8da79 的关短路管不到。另更正 09-30「桌面端同中」：它的启动器设了 `SE_EPHE_PATH` | Windows 启动器起 chart 前设 `SE_EPHE_PATH` 指向自带 swefiles（与上游桌面端同；目录缺席即拒启），冷启 40/40 与参照相同；守卫不变量 6 + 4 个负向对照 + 真载荷行为测试（含负向对照）；离线探针必须带被测进程的真实环境 |
 | v0.40.0 (2026-10-01) | 已公开后的 release 模式矩阵 36903587803：ARM lane 1789 过 / 1 红——`test_app_marker_does_not_shadow_the_command_line_evidence` 用假 PID 4242 却没钉 `process_image_path`，托管 runner 上 4242 真有进程 → 拿到别人的映像、不再取命令行 → 证据退成 app_marker | 三条假 PID 用例钉住映像查询；静态守卫：换了 `listener_pids` 字面 PID 的用例必须同时换 `process_image_path`；「4242 被占」模拟复现原错误、修后通过 |
 | v0.40.0 (2026-10-01) | draft 矩阵 36878423196 的 macOS lane（此前一直绿）四条 `ERROR at setup`：「别人」的监听夹具子进程 30 s 没报出端口——1e10587 改成子进程构造完 HTTPServer 才报号，而构造里的 `socket.getfqdn` 反查在托管 macOS runner 上超过 30 s | 先裸 socket bind + listen + 报号，再把 socket 交给 HTTPServer（不走 server_bind，没有反查）；守卫给 getfqdn 下毒，构造在前的写法报不出号 = 负向对照 |
@@ -137,6 +138,18 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.40.0 / 2026-10-05 — 只有维护机看得见的弃用：Python 3.13 弃用 `re.split` 位置 maxsplit，CI 钉 3.12 永远不报——undefined-names 闸加 `B034`
+
+- **症状**：换新 Windows 机（venv 是系统 Python 3.13.15）后在独立 worktree 跑 `run_ci_gates.py`，24/24 全绿，但
+  `scripts/verify_runtime_python_lock.py:37` 的 `re.split(r"[<>=!~\[; ]", line, 1)` 打出 DeprecationWarning。
+- **根因**：CPython 3.13 起 `re.split` 的 maxsplit、`re.sub` / `re.subn` 的 count 与 flags 按位置传参即弃用，计划日后改成 TypeError
+  （位置参数还容易把 flags 误当 count）。CI、矩阵、载荷解释器都钉 3.12，所以任何自动化都看不到；只有 venv 更新的维护机会看到一行
+  警告，而警告不会让任何门禁变红。
+- **修 / 守卫**：改成 `maxsplit=1`（全仓只此一处）。`scripts/verify_undefined_names.py` 的规则集从 F821/F822/F823 扩到加 ruff `B034`
+  （同属「运行时会崩」类：现在是弃用，换解释器后就是异常），基线 0；`--self-test` 增一对合成模块（位置 maxsplit 必红、关键字必绿）。
+  负向对照：修第 37 行之前先扩规则跑本仓 → 红、正好报这一行；修后绿；`python -W error::DeprecationWarning` 跑该脚本也通过。
+- **教训**：CI 钉的解释器版本之上的弃用，只能靠静态规则兜，不能指望谁在新 venv 里留意到一行警告。
 
 ### v0.40.0 / 2026-10-01 — Windows 公开版冷线程算星历：上游 astroextra 直接调 swisseph、不经 flatlib，只关短路不够——启动器补 `SE_EPHE_PATH`（与上游桌面端同）；更正 09-30「桌面端同中」
 
