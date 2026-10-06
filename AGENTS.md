@@ -648,6 +648,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   （CI 形状没有上游 checkout，这一步永远绿）；上游 HEAD 领先或 pin 不在任何分支 → 先同步（§5 第 17 条），再 `--write-state`。9cd9078f（v3.11.2）
   在维护机上尚未推送公开远端时，只能做 draft，不翻公开。上游说「已推」后先 `git -C <Horosa-Public> ls-remote origin main` 核实
   pin 真在远端再动发布（v0.40.0 发布当天，上游推送前又把已钉的 fd3b68f0 压进 v3.11.3 发布提交 f27c00a9，第三次改写）。
+  **`--write-state` 只记公开远端取得到的提交（v0.40.1）**：本地上游 HEAD 未推送时，`pin_to_record` 退到最近的已推送祖先——前提是未推送的提交
+  与工作树改动都没碰 `UPSTREAM_INPUT_ROOTS` / `UPSTREAM_INPUT_FILES`（Horosa-Web/、runtime/、scripts/、安装器 package.json），碰了就拒写；
+  preflight 的「pin 在公开远端」排在全部闸之后，验最终的 pin，收尾只在 provenance 真变了才提示提交。守卫：`tests/test_verify_upstream_sync.py`
+  （临时 git 仓 + 裸「公开远端」五种情形、读上游脚本的路径扫描、闸序）。v0.40.1 发布时 preflight 曾把本地未推送的 ecd742f6 写进 pin。
 - **矩阵 lane 的预算按主机，超时必须留证据（v0.40.0）。** `PYTEST_BUDGET_SECONDS = {"nt": 2700, "posix": 1500}`（Windows 在 live 套件上慢 4–5×；
   2026-09-28 的 schedule 跑两条 Windows lane 恰在 1500 s 被杀且无 pytest.log）；pytest 输出流式写 `pytest.log`，超时 step 带尾巴 40 行与 `budget_seconds`。
   树每长一截就回头看一次 Windows lane 的 pytest 秒数（lane-report `steps.pytest.seconds`）。

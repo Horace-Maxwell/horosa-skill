@@ -52,6 +52,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -176,6 +177,70 @@ def missing_upstream_files(
 
 # 上游应用版本的唯一机器可读来源（astrostudyui/package.json 不带版本）。
 UPSTREAM_VERSION_MANIFEST = "Horosa_Desktop_Installer/package.json"
+
+# 本仓从上游读取的全部输入（sync_vendored_runtime_sources.sh、revendor 清单、契约 / 知识生成器、运行时构建器）。
+# 上游本地有未推送的提交时据此判断 pin 记什么：那些提交一个输入都没碰 → vendored 树对「最近一个已推送的祖先」与对本地
+# HEAD 读到的是同一份输入，pin 记那个祖先；碰了 → 拒写（v0.40.1：preflight 把本地未推送的 ecd742f6 写进了 pin，
+# 那个提交只改了 Horosa_Desktop_Installer/scripts/，靠人眼拦下）。清单由 tests/test_verify_upstream_sync.py 的扫描
+# 守卫看着：读上游的脚本里出现清单外的上游路径即红。
+UPSTREAM_INPUT_ROOTS: tuple[str, ...] = ("Horosa-Web/", "runtime/", "scripts/")
+UPSTREAM_INPUT_FILES: tuple[str, ...] = (UPSTREAM_VERSION_MANIFEST,)
+
+
+def touches_inputs(paths: list[str]) -> list[str]:
+    """`paths`（上游相对路径）里属于本仓输入的那些。"""
+    return [p for p in paths if p in UPSTREAM_INPUT_FILES or p.startswith(UPSTREAM_INPUT_ROOTS)]
+
+
+def _public_branches(upstream: Path, sha: str) -> list[str]:
+    """含 `sha` 的远端跟踪分支。不 fetch（离线可跑），与 preflight 的「pin 在公开远端」同一判据。"""
+    out = _git(upstream, "branch", "-r", "--contains", sha)
+    return [b.strip() for b in out.splitlines() if b.strip() and "->" not in b]
+
+
+def _dirty_paths(upstream: Path) -> list[str]:
+    """上游工作树里未提交 / 未跟踪的路径（--no-optional-locks：只读，不刷 index）。"""
+    out = _git(upstream, "--no-optional-locks", "status", "--porcelain", "--untracked-files=all")
+    # _git 会 strip 整段输出：首行「 M path」的前导空格被吃掉，不能按固定第 3 列切——按状态码正则取路径。
+    paths = []
+    for line in out.splitlines():
+        m = re.match(r"^[ MADRCUT?!]{1,2}\s+(.+)$", line)
+        if m:
+            paths.append(m.group(1).split(" -> ")[-1].strip('"'))
+    return paths
+
+
+def pin_to_record(upstream: Path, head: str) -> tuple[str | None, str]:
+    """`--write-state` 该记哪个上游提交：`(sha, 说明)`；sha 为 None = 拒写，说明即失败原因。
+
+    - 输入路径上有未提交 / 未跟踪的改动 → 拒写：比对读的是没有任何提交承载的内容。
+    - HEAD 在公开远端 → 记 HEAD。
+    - HEAD 只在本地（上游维护机还没推）→ 取离 HEAD 最近的已推送祖先：未推送的提交一个输入都没碰 → 记那个祖先；
+      碰了 → 拒写——vendored 内容依赖了别人取不到的上游提交，公开发布前 pin 必须在上游公开远端上（AGENTS §7）。
+    """
+    if not head:
+        return None, "读不到上游 HEAD（git rev-parse HEAD 失败）"
+    dirty = touches_inputs(_dirty_paths(upstream))
+    if dirty:
+        return None, (f"上游工作树的输入路径上有未提交 / 未跟踪的改动（{', '.join(dirty[:5])}"
+                      f"{' …' if len(dirty) > 5 else ''}）——比对读到的内容没有任何提交承载，不写 pin。先让上游提交并推送。")
+    if _public_branches(upstream, head):
+        return head, ""
+    remotes = [r.strip() for r in _git(upstream, "branch", "-r", "--format=%(refname:short)").splitlines()
+               if r.strip() and not r.strip().endswith("/HEAD")]
+    bases = {mb for r in remotes if (mb := _git(upstream, "merge-base", head, r))}
+    if not bases:
+        return None, f"上游 HEAD {head[:12]} 不在任何远端跟踪分支上，也找不到已推送的祖先——先 `git -C <上游> fetch origin`，或让上游推送。"
+    base = min(bases, key=lambda b: int(_git(upstream, "rev-list", "--count", f"{b}..{head}") or "0"))
+    unpushed = int(_git(upstream, "rev-list", "--count", f"{base}..{head}") or "0")
+    delta = [p for p in _git(upstream, "diff", "--name-only", base, head).splitlines() if p]
+    touched = touches_inputs(delta)
+    if touched:
+        return None, (f"上游 HEAD {head[:12]} 不在公开远端（比最近的已推送祖先 {base[:12]} 多 {unpushed} 个未推送提交），"
+                      f"而这些提交改了本仓的输入（{', '.join(touched[:5])}{' …' if len(touched) > 5 else ''}）——"
+                      "vendored 内容依赖别人取不到的上游提交，不写 pin。先让上游推送（AGENTS §7）。")
+    return base, (f"上游 HEAD {head[:12]} 不在公开远端（{unpushed} 个未推送提交，只改了 {', '.join(delta[:3])}"
+                  f"{' …' if len(delta) > 3 else ''}）；它们没碰任何输入 → pin 记最近的已推送祖先 {base[:12]}。")
 
 
 def _sha256(path: Path) -> str:
@@ -501,7 +566,13 @@ def main() -> None:
     # 4. provenance staleness — "which upstream commit is this tree from?" must be machine-answerable.
     upstream_sha = _git(upstream, "rev-parse", "HEAD")
     recorded_sha = provenance.get("upstream_git_sha") or ""
-    if recorded_sha and upstream_sha and recorded_sha != upstream_sha:
+    stands, _ = (pin_to_record(upstream, upstream_sha) if recorded_sha and upstream_sha and recorded_sha != upstream_sha
+                 else (None, ""))
+    if stands and stands == recorded_sha:
+        # HEAD 只多了没碰任何输入的未推送提交：按 --write-state 的同一规则，pin 仍该是记着的那个——不算过时。
+        print(f"::notice::upstream-sync — upstream HEAD {upstream_sha[:12]} is ahead of the recorded pin "
+              f"{recorded_sha[:12]} only by unpushed commits that touch none of this repo's inputs; the record stands.")
+    elif recorded_sha and upstream_sha and recorded_sha != upstream_sha:
         behind = _git(upstream, "rev-list", "--count", f"{recorded_sha}..HEAD") or "?"
         message = (
             f"vendored tree was reconciled against upstream {recorded_sha[:12]} but upstream HEAD is "
@@ -523,6 +594,12 @@ def main() -> None:
 
     # Green only. Writing provenance on a red run turns a failure into a durable claim of currency.
     if args.write_state:
+        # 记的必须是别人取得到的提交：本地 HEAD 未推送时退到已推送祖先（未推送部分没碰输入时），否则拒写。
+        pin_sha, pin_note = pin_to_record(upstream, upstream_sha)
+        if pin_sha is None:
+            raise SystemExit("upstream-sync: FAIL (--write-state)\n- " + pin_note)
+        if pin_note:
+            print(f"::notice::upstream-sync — {pin_note}")
         PROVENANCE.parent.mkdir(parents=True, exist_ok=True)
         PROVENANCE.write_text(
             json.dumps(
@@ -531,8 +608,8 @@ def main() -> None:
                         "vendored 树对到的上游状态。只由 verify_upstream_sync.py --write-state 在**全部检查通过**时"
                         "写入——红着写等于把失败洗成一条持久的「已核对」声明。"
                     ),
-                    "upstream_git_sha": upstream_sha,
-                    "upstream_git_committed_at": _git(upstream, "log", "-1", "--format=%cI"),
+                    "upstream_git_sha": pin_sha,
+                    "upstream_git_committed_at": _git(upstream, "log", "-1", "--format=%cI", pin_sha),
                     "upstream_app_version": _upstream_app_version(upstream),
                     "aiexport_settings_version": upstream_version,
                     "skill_mirrored_version": mirrored,

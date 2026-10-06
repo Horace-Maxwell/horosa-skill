@@ -209,18 +209,23 @@ def main() -> int:
     else:
         print("  ok — ci.yml is green on HEAD (or unverifiable: see warning)")
 
-    print("\n=== upstream pin is on the upstream public remote ===", flush=True)
-    pin_failures = upstream_pin_failures(Path(source_root).expanduser())
-    if pin_failures:
-        for item in pin_failures:
-            print(f"  ✗ {item}")
-        failed.append("upstream pin on public remote")
+    provenance = PKG_ROOT / "contracts" / "upstream_provenance.json"
+    provenance_before = provenance.read_text(encoding="utf-8") if provenance.is_file() else ""
 
     for label, argv, blocking in GATES:
         print(f"\n=== {label} ===", flush=True)
         result = subprocess.run([sys.executable, *argv], cwd=PKG_ROOT)
         if result.returncode != 0:
             (failed if blocking else warned).append(label)
+
+    # 在所有闸**之后**查：verify_upstream_sync --write-state 可能刚改写了 pin，要验的是最终会被提交的那一个
+    # （v0.40.1：这道闸原先排在前面，验的是旧 pin，随后 write-state 把本地未推送的上游 HEAD 写了进去）。
+    print("\n=== upstream pin is on the upstream public remote ===", flush=True)
+    pin_failures = upstream_pin_failures(Path(source_root).expanduser())
+    if pin_failures:
+        for item in pin_failures:
+            print(f"  ✗ {item}")
+        failed.append("upstream pin on public remote")
 
     print()
     for label in warned:
@@ -231,10 +236,21 @@ def main() -> int:
         for label in failed:
             print(f"  - {label}", file=sys.stderr)
         return 1
-    print(
-        "preflight: ok — all gates green. `contracts/upstream_provenance.json` was rewritten; commit it "
-        "with the release so the cross-tree check leaves a git trace."
-    )
+    provenance_after = provenance.read_text(encoding="utf-8") if provenance.is_file() else ""
+    if provenance_after == provenance_before:
+        print("preflight: ok — all gates green. `contracts/upstream_provenance.json` unchanged.")
+    else:
+        def _pin(text: str) -> str:
+            try:
+                return str(json.loads(text).get("upstream_git_sha") or "")[:12] or "?"
+            except ValueError:
+                return "?"
+
+        print(
+            f"preflight: ok — all gates green. `contracts/upstream_provenance.json` was rewritten (pin "
+            f"{_pin(provenance_before)} → {_pin(provenance_after)}; the new pin is on the upstream public remote); "
+            "commit it with the release so the cross-tree check leaves a git trace."
+        )
     return 0
 
 

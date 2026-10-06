@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.40.1 (2026-10-06) | preflight 先查「旧 pin 在公开远端」，随后 `verify_upstream_sync --write-state` 把本地未推送的上游 HEAD（ecd742f6）写进 pin，收尾还提示「提交它」——靠人眼拦下 | `pin_to_record`：HEAD 已推送记 HEAD；未推送且没碰 `UPSTREAM_INPUT_ROOTS` 记最近已推送祖先；碰了 / 输入路径脏则拒写；pin 闸挪到全部闸之后；临时 git 仓五情形 + 路径扫描 + 闸序守卫，负向对照 5 红 |
 | v0.40.1 (2026-10-06) | `bump_version.py 0.40.1` 把 pyproject 的历史注释「# v0.40.0 P1：运行期契约此前不在 wheel 里」也改成了 v0.40.1——历史识别靠 `HISTORY_MARKERS` 关键词，这条注释一个都不含 | 代码站点（pyproject / `__init__.py`）只改版本赋值那一行；测试含通用规则会动两行的负向对照；发版前逐行看 bump 的 diff |
 | v0.40.0 (2026-10-05) | 换新 Windows 机后在 Python 3.13 venv 里跑门禁：`verify_runtime_python_lock.py:37` 的 `re.split(pat, line, 1)` 报 DeprecationWarning（3.13 起 maxsplit / count / flags 按位置传参弃用，日后变 TypeError）；CI 钉 3.12，永远看不到 | 改 `maxsplit=1`；`verify_undefined_names.py` 规则集加 ruff `B034`（re.split / sub / subn 位置参数，基线 0）+ self-test 红绿对照；修前对本仓报红 = 负向对照 |
 | v0.40.0 (2026-10-01) | 公开版 Windows 复验（`--check` [OK]、门禁 24/24、release 模式原生 lane 12/12 / 1791 passed）顺带查出：刚起的 chart 服务上 40 个相同的星历请求回来 2 种结果、39 个偏离自带星历——上游 astroextra 直接调 swisseph、不经 flatlib，没服务过 flatlib 的池线程落到默认 `\sweph\ephe\`；7b8da79 的关短路管不到。另更正 09-30「桌面端同中」：它的启动器设了 `SE_EPHE_PATH` | Windows 启动器起 chart 前设 `SE_EPHE_PATH` 指向自带 swefiles（与上游桌面端同；目录缺席即拒启），冷启 40/40 与参照相同；守卫不变量 6 + 4 个负向对照 + 真载荷行为测试（含负向对照）；离线探针必须带被测进程的真实环境 |
@@ -139,6 +140,29 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.40.1 / 2026-10-06 — preflight 会把本地未推送的上游 HEAD 写进 pin：`pin_to_record` 只记公开远端取得到的提交
+
+- **症状**：发 v0.40.1 时 preflight 全绿，收尾提示「`contracts/upstream_provenance.json` was rewritten; commit it」——diff 里 pin 从 f27c00a9
+  变成 ecd742f6：上游维护机当天 11:13 的**本地未推送**提交（只改 `Horosa_Desktop_Installer/scripts/` 下的打包脚本）。照做就是 v0.40.0
+  教训的原样重演：公开发布的 provenance 指向别人取不到的提交。这次靠人眼看 diff 拦下、复原，没提交。
+- **根因**：preflight 的「upstream pin is on the upstream public remote」排在 GATES **之前**，验的是已提交的旧 pin；随后 GATES 里的
+  `verify_upstream_sync --require-upstream --write-state` 无条件把 `git rev-parse HEAD` 写进 pin。检查对象和最终写入对象不是同一个。
+- **修复**：`verify_upstream_sync.pin_to_record(upstream, head)` 决定记什么——
+  - 输入路径上有未提交 / 未跟踪改动 → 拒写（比对读的内容没有任何提交承载）；
+  - HEAD 在某个远端跟踪分支上 → 记 HEAD；
+  - HEAD 只在本地 → 取离 HEAD 最近的已推送祖先（各远端分支 merge-base 中距 HEAD 最近者）：未推送提交一个输入都没碰 → 记它，碰了 → 拒写。
+  「输入」= `UPSTREAM_INPUT_ROOTS`（Horosa-Web/、runtime/、scripts/）+ `UPSTREAM_INPUT_FILES`（Horosa_Desktop_Installer/package.json）。
+  staleness 检查用同一规则（只多了不碰输入的未推送提交 → 记录仍有效，notice）。preflight 的 pin 闸挪到全部闸之后验最终 pin；收尾只在
+  provenance 真变了才提示提交，并写明 pin 旧 → 新。
+- **守卫**：`tests/test_verify_upstream_sync.py` 新增 8 条——临时 git 仓 + 裸「公开远端」：已推送记 HEAD / 只改安装器脚本退到祖先 / 改了
+  vendored 输入拒写 / 只改版本 manifest 拒写 / 输入路径脏拒写（输入外的脏文件不挡）；读上游的 6 个脚本里出现的上游路径必须都在输入清单内
+  （扫描 + 两条合成负向对照）；preflight 闸序。把 `pin_to_record` 改回「恒记 HEAD」、把 pin 闸挪回前面 → 5 红（已验）。
+  顺带抓到一个真 bug：`_git` 会 strip 整段输出，`git status --porcelain` 首行「 M path」的前导空格被吃掉，按固定第 3 列切路径会切错——改为状态码正则。
+- **实测**（本机上游 HEAD 14823b06：比 f27c00a9 多 2 个只改安装器脚本的未推送提交，另有 SELFCHECK_LOG.md / README_EN.md 未提交）：
+  staleness 给 notice、`--write-state` 退到 f27c00a9，provenance 一字未变；完整 preflight 端到端见提交说明。
+- **法则**：「检查」与「写入」必须作用在同一个对象上——先验旧值、再写新值，等于没验。写持久声明（pin、锁、清单）的地方自己守住前提，
+  不靠上下文里排在前面的另一道闸。
 
 ### v0.40.1 / 2026-10-06 — `bump_version.py` 误改历史注释：代码站点只改版本赋值行
 

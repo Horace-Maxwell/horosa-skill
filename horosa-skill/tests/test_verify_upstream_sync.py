@@ -312,3 +312,124 @@ def test_skill_only_key_demoted_upstream_is_a_notice_not_a_retirement(
     source = _SCRIPT.read_text(encoding="utf-8")
     assert "_skill_only_keys()" in source and "whitelisted_lost" in source
     assert "generic" in guard._skill_only_keys(), "generic 必须在 skill-only 集里（mirror 白名单单源）"
+
+
+# --- v0.40.1: --write-state must never record an upstream commit the public cannot fetch ------------------
+# preflight 原先先查「旧 pin 在公开远端」，随后 --write-state 把本地上游 HEAD（未推送的 ecd742f6，只改了
+# Horosa_Desktop_Installer/scripts/）写进 pin，收尾还提示「提交它」。现在：HEAD 已推送 → 记 HEAD；未推送且没碰
+# 本仓任何输入 → 记最近的已推送祖先；碰了输入（或输入路径上有未提交改动）→ 拒写。
+
+import os
+import subprocess
+
+
+def _g(cwd: Path, *args: str) -> str:
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.invalid",
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.invalid", "GIT_CONFIG_GLOBAL": os.devnull}
+    return subprocess.run(["git", *args], cwd=cwd, env=env, capture_output=True, text=True, check=True).stdout.strip()
+
+
+def _commit(repo: Path, rel: str, text: str, message: str) -> str:
+    target = repo / rel
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text, encoding="utf-8")
+    _g(repo, "add", rel)
+    _g(repo, "commit", "-q", "-m", message)
+    return _g(repo, "rev-parse", "HEAD")
+
+
+@pytest.fixture()
+def upstream_repo(tmp_path: Path) -> tuple[Path, str]:
+    """一个「公开远端」（裸仓）+ 上游工作仓；A 已推送。"""
+    public = tmp_path / "public.git"
+    _g(tmp_path, "init", "-q", "--bare", "-b", "main", str(public))
+    up = tmp_path / "up"
+    _g(tmp_path, "clone", "-q", str(public), str(up))
+    _g(up, "checkout", "-q", "-b", "main")
+    a = _commit(up, "Horosa-Web/astropy/a.py", "a\n", "A")
+    _g(up, "push", "-q", "origin", "main")
+    _g(up, "fetch", "-q", "origin")
+    return up, a
+
+
+def test_a_pushed_head_is_recorded_as_is(upstream_repo: tuple[Path, str]) -> None:
+    up, a = upstream_repo
+    assert guard.pin_to_record(up, a) == (a, "")
+
+
+def test_unpushed_commits_outside_the_inputs_fall_back_to_the_pushed_ancestor(upstream_repo: tuple[Path, str]) -> None:
+    """v0.40.1 的原样：本地多一个只改安装器脚本的未推送提交 → pin 留在已推送的那个。"""
+    up, a = upstream_repo
+    b = _commit(up, "Horosa_Desktop_Installer/scripts/release_lock.sh", "lock\n", "B (local only)")
+    pin, note = guard.pin_to_record(up, b)
+    assert pin == a and b[:12] in note and a[:12] in note
+    assert pin != b, "负向对照：旧逻辑记的就是 b——公开远端上取不到的提交"
+
+
+def test_unpushed_commits_touching_an_input_refuse_to_write(upstream_repo: tuple[Path, str]) -> None:
+    up, _a = upstream_repo
+    _commit(up, "Horosa_Desktop_Installer/scripts/release_lock.sh", "lock\n", "B")
+    c = _commit(up, "Horosa-Web/astropy/b.py", "b\n", "C touches a vendored input")
+    pin, note = guard.pin_to_record(up, c)
+    assert pin is None and "Horosa-Web/astropy/b.py" in note
+
+
+def test_the_version_manifest_alone_is_an_input(upstream_repo: tuple[Path, str]) -> None:
+    up, _a = upstream_repo
+    d = _commit(up, guard.UPSTREAM_VERSION_MANIFEST, '{"version": "9.9.9"}\n', "D bumps the app version")
+    assert guard.pin_to_record(up, d)[0] is None
+
+
+def test_uncommitted_input_changes_refuse_even_on_a_pushed_head(upstream_repo: tuple[Path, str]) -> None:
+    up, a = upstream_repo
+    (up / "Horosa-Web/astropy/a.py").write_text("edited, never committed\n", encoding="utf-8")
+    pin, note = guard.pin_to_record(up, a)
+    assert pin is None and "Horosa-Web/astropy/a.py" in note
+    (up / "Horosa-Web/astropy/a.py").write_text("a\n", encoding="utf-8")
+    # 输入之外的脏文件（v0.40.1 当天上游只有 SELFCHECK_LOG.md 未提交）不挡
+    (up / "Horosa_Desktop_Installer").mkdir(exist_ok=True)
+    (up / "Horosa_Desktop_Installer/SELFCHECK_LOG.md").write_text("log\n", encoding="utf-8")
+    assert guard.pin_to_record(up, a) == (a, "")
+
+
+def test_touches_inputs_classifies_roots_and_files() -> None:
+    paths = ["Horosa-Web/x.py", "runtime/mac/python/bin/python3", "scripts/requirements/mac-python.txt",
+             "Horosa_Desktop_Installer/package.json", "Horosa_Desktop_Installer/scripts/y.sh", "docs/README.md"]
+    assert guard.touches_inputs(paths) == paths[:4]
+
+
+# 读上游的脚本里出现的上游相对路径都必须落在 UPSTREAM_INPUT_ROOTS / FILES 之内——否则「未推送提交没碰输入」的判断会漏。
+# vendor_manifest.json 的 upstream 字段相对 Horosa-Web/astrostudyui/src（revendor_core_js 的 upstream_src 参数），已在根内。
+_UPSTREAM_READERS = (
+    "scripts/sync_vendored_runtime_sources.sh", "scripts/verify_upstream_sync.py", "scripts/gen_knowledge_packs.py",
+    "scripts/gen_bazi_pithy_pack.py", "scripts/verify_export_section_baseline.py", "scripts/build_hover_knowledge_bundle.mjs",
+)
+_UPSTREAM_PATH_PATTERNS = (
+    re.compile(r"\$\{SOURCE_ROOT\}/([^\"\s}]+)"),
+    re.compile(r"upstream\s*/\s*\"([^\"]+)\""),
+    re.compile(r"(?:join|resolve)\(\s*SOURCE_ROOT\s*,\s*\"([^\"]+)\""),
+    re.compile(r"\"((?:Horosa-Web|Horosa_Desktop_Installer)/[^\"]*)\""),
+)
+
+
+def _upstream_paths_outside_inputs(text: str) -> list[str]:
+    found = {m.group(1) for pat in _UPSTREAM_PATH_PATTERNS for m in pat.finditer(text)}
+    return sorted(p for p in found if not guard.touches_inputs([p]) and p.rstrip("/") not in ("Horosa-Web",))
+
+
+def test_every_upstream_path_the_readers_use_is_inside_the_declared_inputs() -> None:
+    root = Path(__file__).resolve().parents[1]
+    offenders = {rel: bad for rel in _UPSTREAM_READERS
+                 if (bad := _upstream_paths_outside_inputs((root / rel).read_text(encoding="utf-8")))}
+    assert offenders == {}, f"读上游的脚本用到了 UPSTREAM_INPUT_ROOTS / FILES 之外的上游路径：{offenders}"
+    # 负向对照：新读一个清单外的上游路径，扫描必须抓到
+    assert _upstream_paths_outside_inputs('x = upstream / "docs/new_source.md"') == ["docs/new_source.md"]
+    assert _upstream_paths_outside_inputs('rsync "${SOURCE_ROOT}/Horosa_Desktop_Installer/scripts/a.sh" .') == [
+        "Horosa_Desktop_Installer/scripts/a.sh"]
+
+
+def test_preflight_checks_the_pin_after_the_gates_that_may_rewrite_it() -> None:
+    """preflight 的「pin 在公开远端」必须验**最终**的 pin：排在 GATES（含 --write-state）之后。"""
+    src = (Path(__file__).resolve().parents[1] / "scripts" / "preflight_release.py").read_text(encoding="utf-8")
+    main = src[src.index("def main() -> int:"):]
+    assert main.index("for label, argv, blocking in GATES:") < main.index("upstream_pin_failures(")
