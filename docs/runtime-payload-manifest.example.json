@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "version": "0.40.0",
-  "runtime_payload_version": "0.40.0",
+  "version": "0.40.1",
+  "runtime_payload_version": "0.40.1",
   "platform": "win32-x64",
   "runtime_layout_version": 1,
   "export_registry_version": 15,
@@ -30,6 +30,6 @@
   },
   "derived_from": {
     "platform": "darwin-arm64",
-    "version": "0.40.0"
+    "version": "0.40.1"
   }
 }

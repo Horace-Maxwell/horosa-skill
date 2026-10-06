@@ -586,7 +586,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 ## 7. 发布协议（release law）
 
-- **版本 bump 只有一个入口**：`horosa-skill/scripts/bump_version.py <new>`（`SITES` 16 个站点：`pyproject.toml`、`__init__.py`、`uv.lock`、
+- **版本 bump 只有一个入口**（代码站点 pyproject / `__init__.py` 只改版本赋值行，历史注释不许动——v0.40.1 误改过；bump 后逐行看 diff）：`horosa-skill/scripts/bump_version.py <new>`（`SITES` 16 个站点：`pyproject.toml`、`__init__.py`、`uv.lock`、
   `manifest.json`（mcpb）、`horosa-core-js/package.json` + `package-lock.json`（含 `packages[""].version`）、`contracts/upstream_provenance.json`、
   `server.json`、`CITATION.cff`、`.claude-plugin/plugin.json`、`README.md`/`README_EN.md`/SKILL/`INSTALL_RESTRICTED_NETWORK` 的钉版本命令与
   「当前版本」行、两份 manifest 示例 JSON）；`--check` 断言全部站点同版本，CI 由 `verify_docs_sync.check_versions` 锁步。

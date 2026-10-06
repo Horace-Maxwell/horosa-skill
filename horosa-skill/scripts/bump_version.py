@@ -70,10 +70,25 @@ def _lock_scoped(path: Path, text: str, old: str, new: str) -> str:
     return text
 
 
+# 代码站点只有一行是版本本身；其余行里的版本号都是历史（如 pyproject 注释「# v0.40.0 P1：运行期契约此前不在 wheel 里」，
+# 不含任何 HISTORY_MARKERS，v0.40.1 的 bump 把它改成了 v0.40.1）。这两个文件只改版本赋值行。
+_VERSION_LINE = {
+    "pyproject.toml": 'version = "{v}"',
+    "__init__.py": '__version__ = "{v}"',
+}
+
+
 def rewrite(text: str, path: Path, old: str, new: str) -> tuple[str, int]:
     if path.name in ("uv.lock", "package-lock.json"):
         out = _lock_scoped(path, text, old, new)
         return out, (1 if out != text else 0)
+    if path.name in _VERSION_LINE:
+        before, after = _VERSION_LINE[path.name].format(v=old), _VERSION_LINE[path.name].format(v=new)
+        lines = text.split("\n")
+        hits = [i for i, line in enumerate(lines) if line == before]
+        for i in hits:
+            lines[i] = after
+        return "\n".join(lines), len(hits)
     lines = text.split("\n")
     changed = 0
     for i, line in enumerate(lines):

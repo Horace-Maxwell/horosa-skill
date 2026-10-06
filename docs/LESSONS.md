@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.40.1 (2026-10-06) | `bump_version.py 0.40.1` 把 pyproject 的历史注释「# v0.40.0 P1：运行期契约此前不在 wheel 里」也改成了 v0.40.1——历史识别靠 `HISTORY_MARKERS` 关键词，这条注释一个都不含 | 代码站点（pyproject / `__init__.py`）只改版本赋值那一行；测试含通用规则会动两行的负向对照；发版前逐行看 bump 的 diff |
 | v0.40.0 (2026-10-05) | 换新 Windows 机后在 Python 3.13 venv 里跑门禁：`verify_runtime_python_lock.py:37` 的 `re.split(pat, line, 1)` 报 DeprecationWarning（3.13 起 maxsplit / count / flags 按位置传参弃用，日后变 TypeError）；CI 钉 3.12，永远看不到 | 改 `maxsplit=1`；`verify_undefined_names.py` 规则集加 ruff `B034`（re.split / sub / subn 位置参数，基线 0）+ self-test 红绿对照；修前对本仓报红 = 负向对照 |
 | v0.40.0 (2026-10-01) | 公开版 Windows 复验（`--check` [OK]、门禁 24/24、release 模式原生 lane 12/12 / 1791 passed）顺带查出：刚起的 chart 服务上 40 个相同的星历请求回来 2 种结果、39 个偏离自带星历——上游 astroextra 直接调 swisseph、不经 flatlib，没服务过 flatlib 的池线程落到默认 `\sweph\ephe\`；7b8da79 的关短路管不到。另更正 09-30「桌面端同中」：它的启动器设了 `SE_EPHE_PATH` | Windows 启动器起 chart 前设 `SE_EPHE_PATH` 指向自带 swefiles（与上游桌面端同；目录缺席即拒启），冷启 40/40 与参照相同；守卫不变量 6 + 4 个负向对照 + 真载荷行为测试（含负向对照）；离线探针必须带被测进程的真实环境 |
 | v0.40.0 (2026-10-01) | 已公开后的 release 模式矩阵 36903587803：ARM lane 1789 过 / 1 红——`test_app_marker_does_not_shadow_the_command_line_evidence` 用假 PID 4242 却没钉 `process_image_path`，托管 runner 上 4242 真有进程 → 拿到别人的映像、不再取命令行 → 证据退成 app_marker | 三条假 PID 用例钉住映像查询；静态守卫：换了 `listener_pids` 字面 PID 的用例必须同时换 `process_image_path`；「4242 被占」模拟复现原错误、修后通过 |
@@ -138,6 +139,19 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.40.1 / 2026-10-06 — `bump_version.py` 误改历史注释：代码站点只改版本赋值行
+
+- **症状**：发 v0.40.1 时 `bump_version.py 0.40.1` 报 pyproject.toml 改了 2 行——除了 `version = "0.40.0"`，还有注释
+  「# v0.40.0 P1：运行期契约（Jev 阈值锁 / 技法算源）此前不在 wheel 里…」，被改成了 v0.40.1，历史就此失真。`--check` 与门禁都绿
+  （它们只查「站点带新版本号」，不查「不该动的没动」）；是提交前逐行看 diff 才看到。
+- **根因**：通用规则把含旧版本号的每一行都换掉，历史行靠 `HISTORY_MARKERS`（as of v / 起 / Since v / 自 v / v0.27.0–）豁免；
+  这条注释一个标记都不含。代码文件里版本只有一处赋值，其余提到版本号的地方都是历史。
+- **修复 / 守卫**：`pyproject.toml` 与 `__init__.py` 只改 `version = "…"` / `__version__ = "…"` 这一行（与锁文件同样限定范围）；
+  `test_bump_version_touches_only_the_version_line_in_code_sites`：两个代码站点各只动一行、注释原样；同一文本按通用规则会动两行（负向对照）；
+  把脚本换回旧版这条红（已验）；在真实的 v0.40.0 文件上跑一遍，两处都只改了版本行。
+- **法则**：批量改版本号的工具只该碰「当前版本」的站点；能精确到行的站点（代码赋值、锁文件条目）就精确到行，关键词豁免只是兜底。
+  bump 之后逐行看 diff，别只信 `--check`。
 
 ### v0.40.0 / 2026-10-05 — 只有维护机看得见的弃用：Python 3.13 弃用 `re.split` 位置 maxsplit，CI 钉 3.12 永远不报——undefined-names 闸加 `B034`
 

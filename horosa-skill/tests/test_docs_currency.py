@@ -153,6 +153,22 @@ def test_bump_version_script_agrees_with_pyproject() -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_bump_version_touches_only_the_version_line_in_code_sites() -> None:
+    """v0.40.1：bump 把 pyproject 的历史注释「# v0.40.0 P1：…」也改成了 v0.40.1（注释里没有任何历史标记词）。
+    代码站点只改版本赋值那一行；同样的文本按通用规则（如 Markdown 站点）会动两行——负向对照。"""
+    spec = importlib.util.spec_from_file_location("bump_version", PKG_ROOT / "scripts" / "bump_version.py")
+    bump = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bump)
+    pyproject = 'name = "horosa-skill"\nversion = "0.40.0"\n# v0.40.0 P1：运行期契约此前不在 wheel 里\n'
+    out, n = bump.rewrite(pyproject, Path("pyproject.toml"), "0.40.0", "0.40.1")
+    assert n == 1 and 'version = "0.40.1"' in out and "# v0.40.0 P1" in out
+    init = '"""v0.40.0 起带运行期契约。"""\n__version__ = "0.40.0"\n# keep v0.40.0 notes\n'
+    out, n = bump.rewrite(init, Path("__init__.py"), "0.40.0", "0.40.1")
+    assert n == 1 and '__version__ = "0.40.1"' in out and "# keep v0.40.0 notes" in out
+    _, generic = bump.rewrite(pyproject, Path("notes.md"), "0.40.0", "0.40.1")
+    assert generic == 2, "the generic rule would have bumped the historical comment too"
+
+
 def test_lessons_guard_requires_code_anchors_of_recent_titles_in_agents() -> None:
     """版本号出现 ≠ 规则蒸馏了：最新版本的台账标题若点名了代码标识符（反引号），AGENTS.md 里至少要出现其中一个。"""
     lessons = ("| 时代 | 条目 | 一句话 |\n| --- | --- | --- |\n| v0.41.0 (2026-10) | a | b |\n\n"

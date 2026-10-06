@@ -12,7 +12,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-110-1d4ed8?style=for-the-badge" alt="110 tools" />
-  <img src="https://img.shields.io/badge/测试-1707_passed-16a34a?style=for-the-badge" alt="1707 passed" />
+  <img src="https://img.shields.io/badge/测试-1708_passed-16a34a?style=for-the-badge" alt="1708 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
 
@@ -109,7 +109,7 @@ uv run horosa-skill serve        # 🚀 启动本地 MCP（默认 http://127.0.0
 `HOROSA_RUNTIME_MIRROR` 对 wheel 与 runtime 一并生效：
 
 ```bash
-WHL="https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.40.0/horosa_skill-0.40.0-py3-none-any.whl"
+WHL="https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.40.1/horosa_skill-0.40.1-py3-none-any.whl"
 uvx --from "$WHL" horosa-skill install                    # 📦 装离线 runtime（同上）
 uvx --from "$WHL" horosa-skill doctor                     # 🩺 体检
 uvx --from "$WHL" horosa-skill setup --client cursor       # 🪄 零安装一条命令接入（自动选 `--launcher uvx-wheel`，配置里写 wheel URL）
@@ -124,7 +124,7 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # 🚀 给客户端直
 > 容器里能跑的是 **MCP 网关**（Python 包 + 知识库 + 记忆），把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`
 > 指向宿主机或另一台装了 runtime 的机器即可。仓库附带**实验性**的 `horosa-skill/Dockerfile` + `docker-compose.yml`
 > （网关镜像：容器内没有离线 runtime，必须设上面两个变量；绑 0.0.0.0 必须给 `HOROSA_MCP_TOKEN`）；
-> 手工起也行：`pip install "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.40.0/horosa_skill-0.40.0-py3-none-any.whl"` 后 `horosa-skill serve --transport streamable-http` 即为网关（PyPI 尚未开通，装的是发布页的 wheel）。
+> 手工起也行：`pip install "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.40.1/horosa_skill-0.40.1-py3-none-any.whl"` 后 `horosa-skill serve --transport streamable-http` 即为网关（PyPI 尚未开通，装的是发布页的 wheel）。
 
 <details>
 <summary>🔧 <b>安装排障与升级 / 卸载</b></summary>
@@ -411,7 +411,7 @@ uv run horosa-skill client check                         # 体检本机各客户
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.40.0",
+  "ok": true, "tool": "qimen", "version": "0.40.1",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -518,7 +518,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 🧰 可调用工具 | 110 / 110 `ok=true` |
-| 🧪 工程测试 | **1707 / 1707 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 115 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 🧪 工程测试 | **1708 / 1708 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 115 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 🛡️ 未确认参数时强制追问 | 100 个技法工具触发 `must_ask_user=true` |
 | 🔓 免闸直读 | 10 个注册表 / 知识 / 解析类工具不经澄清闸 |
 | 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 107 个导出 technique；契约 v15 镜像桌面端 aiExport v58） |
@@ -527,14 +527,14 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 🎯 HorosaBench | 106 条基准用例与工具注册表锁步 + 盘面事实忠实性评测（喂错盘 / 诱导复述判红的对抗用例全过） |
 | 🗄️ 本地 memory / report | 每次技法调用写 1 条本地 run 记录 + 1 份 JSON artifact |
 | 🔄 GitHub CI | Linux 单测 + JS golden 自检 + Windows OpenClaw smoke（**不覆盖跨树上游校验**——那两闸需要上游 checkout，只能在维护机跑 `preflight_release.py`） |
-| 📦 Release runtime | macOS (arm64) + Windows (x64) 随每个 release 打包并校验（本仓版本 `v0.40.0`；公开 latest 以 Releases 页为准）——Windows 半从 darwin 种子在托管流水线派生、清单只在两半齐了才上线、三台真机（macOS / Windows x64 / Windows ARM）装起跑过；Windows ARM 自动走 x64 仿真；Intel Mac / Linux 安装时明确报不支持并指向网关模式 |
+| 📦 Release runtime | macOS (arm64) + Windows (x64) 随每个 release 打包并校验（本仓版本 `v0.40.1`；公开 latest 以 Releases 页为准）——Windows 半从 darwin 种子在托管流水线派生、清单只在两半齐了才上线、三台真机（macOS / Windows x64 / Windows ARM）装起跑过；Windows ARM 自动走 x64 仿真；Intel Mac / Linux 安装时明确报不支持并指向网关模式 |
 
 第一次 clone 后确认非空壳的最小验证：
 
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 1707 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 1708 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 
