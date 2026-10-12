@@ -761,7 +761,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
    全绿**不是完整验证**；服务全起时 0 skipped 才是最强信号。验收 = 各技法产出 aiExport 段 + 干净导出契约
    （`missing_selected_sections == []` 且 `unknown_detected_sections == []`；election 等条件段技法按
    optional 白名单放宽）。`section_harness.py` 的 clean 另要求依据卡 `matches_declaration` 不为 false（算源声明在
-   `gen_technique_provenance.py` 的 `ENGINE_OVERRIDES` / `EXTRA_EVIDENCE` 修，不手改契约）。**service 层绿 ≠ agent 走得通**（v0.40.2-dev 表面审计）：
+   `gen_technique_provenance.py` 的 `ENGINE_OVERRIDES` / `EXTRA_EVIDENCE` 修，不手改契约）。**service 层绿 ≠ agent 走得通**（v0.40.2 表面审计）：
    闸门、技法名写法、参数形状、CLI 退出码、HTTP 鉴权只存在于表面层，发版前另跑 `scripts/surface_audit.py`（全 110 技法 × MCP 全量 /
    精简 / CLI / HTTP + 门面·资源·提示，failed=0）；它在全新数据目录上并行起 CLI，顺带守住记忆库首建的并发迁移（`_ensure_column`）。**反向陷阱：维护机装着 runtime，会让「其实依赖 runtime」的离线测试恒绿，
    只有 CI（唯一无 runtime 的环境）才炸**——离线/线材契约测试**禁以「算成功」为判据**（那是

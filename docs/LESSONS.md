@@ -16,7 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
-| v0.40.2-dev (2026-10-11) | 表面审计（全 110 技法 × MCP 全量 / 精简 / CLI / HTTP + 门面·资源·提示）查出 service 层全绿掩盖的 8 处 agent 可见缺陷：技法名两种写法只收一种且闸门对 MCP 名放行、dispatch/hecan 吞掉平铺出生信息还反问用户、记忆/报告缺参叫 agent 去问用户、精简面 instructions 写 120 工具、19 条 CLI 命令无说明、示例载荷只有 9/110、qimenzeri 依据卡恒「与声明不一致」、全新数据目录并行首起时 ALTER 竞态崩溃 | `resolve_tool_name` 单点解析（闸门先解析再判）；`_lift_flat_birth`；`AGENT_OWNED_OPERATIONS` 回 must_ask_user=false；精简面 instructions 变体；全命令 help + 计数取真值；每技法 live 示例；`ENGINE_OVERRIDES`；`_ensure_column` 吞并发 duplicate column；新 `scripts/surface_audit.py` 发版前跑 |
+| v0.40.2 (2026-10-11) | 表面审计（全 110 技法 × MCP 全量 / 精简 / CLI / HTTP + 门面·资源·提示）查出 service 层全绿掩盖的 8 处 agent 可见缺陷：技法名两种写法只收一种且闸门对 MCP 名放行、dispatch/hecan 吞掉平铺出生信息还反问用户、记忆/报告缺参叫 agent 去问用户、精简面 instructions 写 120 工具、19 条 CLI 命令无说明、示例载荷只有 9/110、qimenzeri 依据卡恒「与声明不一致」、全新数据目录并行首起时 ALTER 竞态崩溃 | `resolve_tool_name` 单点解析（闸门先解析再判）；`_lift_flat_birth`；`AGENT_OWNED_OPERATIONS` 回 must_ask_user=false；精简面 instructions 变体；全命令 help + 计数取真值；每技法 live 示例；`ENGINE_OVERRIDES`；`_ensure_column` 吞并发 duplicate column；新 `scripts/surface_audit.py` 发版前跑 |
 | v0.40.1 (2026-10-06) | preflight 先查「旧 pin 在公开远端」，随后 `verify_upstream_sync --write-state` 把本地未推送的上游 HEAD（ecd742f6）写进 pin，收尾还提示「提交它」——靠人眼拦下 | `pin_to_record`：HEAD 已推送记 HEAD；未推送且没碰 `UPSTREAM_INPUT_ROOTS` 记最近已推送祖先；碰了 / 输入路径脏则拒写；pin 闸挪到全部闸之后；临时 git 仓五情形 + 路径扫描 + 闸序守卫，负向对照 5 红 |
 | v0.40.1 (2026-10-06) | `bump_version.py 0.40.1` 把 pyproject 的历史注释「# v0.40.0 P1：运行期契约此前不在 wheel 里」也改成了 v0.40.1——历史识别靠 `HISTORY_MARKERS` 关键词，这条注释一个都不含 | 代码站点（pyproject / `__init__.py`）只改版本赋值那一行；测试含通用规则会动两行的负向对照；发版前逐行看 bump 的 diff |
 | v0.40.0 (2026-10-05) | 换新 Windows 机后在 Python 3.13 venv 里跑门禁：`verify_runtime_python_lock.py:37` 的 `re.split(pat, line, 1)` 报 DeprecationWarning（3.13 起 maxsplit / count / flags 按位置传参弃用，日后变 TypeError）；CI 钉 3.12，永远看不到 | 改 `maxsplit=1`；`verify_undefined_names.py` 规则集加 ruff `B034`（re.split / sub / subn 位置参数，基线 0）+ self-test 红绿对照；修前对本仓报红 = 负向对照 |
@@ -142,7 +142,7 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
-### v0.40.2-dev / 2026-10-11 — 表面审计：service 层全绿，agent 却在 8 个地方走不通（`resolve_tool_name` / `_ensure_column`）
+### v0.40.2 / 2026-10-11 — 表面审计：service 层全绿，agent 却在 8 个地方走不通（`resolve_tool_name` / `_ensure_column`）
 
 - **起因**：用户要求「CLI、MCP、API 重点再查一遍，确保任何 AI 拿到仓库就能用全部功能」。已有的 live 层（live pytest、`section_harness.py`
   110/110、全面自检）全部直调 `HorosaSkillService.run_tool`——闸门、MCP 参数处理、`horosa_tool_run`、CLI 退出码与文件 I/O、HTTP 鉴权、门面 /
