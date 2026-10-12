@@ -36,6 +36,8 @@ def _isolated(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     for name in ("HOROSA_SERVER_ROOT", "HOROSA_CHART_SERVER_ROOT", "HOROSA_RUNTIME_MIRROR", "HOROSA_PORTS",
                  "HOROSA_RUNTIME_MANIFEST_URL", "HOROSA_MCP_COMPACT"):
         monkeypatch.delenv(name, raising=False)
+    # v0.41.0：setup 第 4 步会把 skill 装进 ~/.agents/skills 等目录——测试绝不能写进维护机真实的 HOME。
+    monkeypatch.setattr("horosa_skill.skill_install.default_home", lambda: tmp_path / "home")
 
 
 def _run(*args: str):
@@ -104,7 +106,7 @@ def test_dry_run_touches_nothing_and_reports_every_step(tmp_path: Path) -> None:
     assert list(report["steps"]) == list(_SETUP_STEPS)
     assert not config.exists(), "dry-run 不许落盘"
     assert not (tmp_path / "runtime-root" / "current").exists(), "dry-run 不许装 runtime"
-    for name in ("network_probe", "install", "config", "client_check", "stdio_probe"):
+    for name in ("network_probe", "install", "config", "skill", "client_check", "stdio_probe"):
         assert report["steps"][name]["skipped"] is True, name
     assert report["steps"]["config"]["path"] == str(config.resolve())
     assert "horosa" in report["steps"]["config"]["server_block"]
@@ -156,6 +158,50 @@ def test_full_offline_flow_is_idempotent(tmp_path: Path) -> None:
     assert config.read_bytes() == first_bytes, "第二次写出的配置必须逐字节相同"
     assert config.with_name("mcp.json.horosa-bak").exists(), "覆盖前必须备份"
     assert second["steps"]["config"]["backup"].endswith("mcp.json.horosa-bak")
+
+
+def test_setup_installs_the_skill_where_the_client_reads_it(tmp_path: Path) -> None:
+    """v0.41.0 第 4 步：skill 进客户端读的目录，幂等；next_steps 告诉用户新开会话才生效。"""
+    config = tmp_path / ".mcp.json"
+    args = ("--client", "claude-code", "--config", str(config), "--skip-install", "--no-probe-network", "--no-stdio-probe")
+    first = _stdout_json(_run(*args))
+    skill = first["steps"]["skill"]
+    assert skill["ok"] is True and skill["targets"][0]["action"] == "installed"
+    dest = tmp_path / "home" / ".claude" / "skills" / "horosa-agent"
+    assert (dest / "SKILL.md").is_file() and (dest / "references").is_dir()
+    assert any("新开一个会话" in item for item in first["next_steps"])
+    assert "skill 已安装" in first["summary"]
+    second = _stdout_json(_run(*args))
+    assert second["steps"]["skill"]["targets"][0]["action"] == "unchanged"
+    assert "skill 已是最新" in second["summary"]
+
+
+def test_setup_skill_step_respects_no_skill_dry_run_and_skill_dir(tmp_path: Path) -> None:
+    config = tmp_path / "mcp.json"
+    base = ("--client", "cursor", "--config", str(config), "--skip-install", "--no-probe-network", "--no-stdio-probe")
+    off = _stdout_json(_run(*base, "--no-skill"))
+    assert off["steps"]["skill"] == {"ok": True, "skipped": True, "reason": "--no-skill", "summary": "skill 未安装（--no-skill）"}
+    plan = _stdout_json(_run(*base, "--dry-run"))
+    assert plan["steps"]["skill"]["targets"][0]["action"] == "would_install"
+    assert not (tmp_path / "home").exists(), "dry-run 不许写 skill"
+    custom = tmp_path / "my-skills"
+    chosen = _stdout_json(_run(*base, "--skill-dir", str(custom)))
+    assert chosen["steps"]["skill"]["targets"][0]["path"] == str(custom / "horosa-agent")
+    assert (custom / "horosa-agent" / "SKILL.md").is_file()
+
+
+def test_a_skill_failure_does_not_fail_the_onboarding(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """skill 只建议性：MCP 配置已写好，skills 目录写不进去也不能让整条 setup 退出 2。"""
+
+    def boom(*_args, **_kwargs):
+        raise PermissionError("read-only skills folder")
+
+    monkeypatch.setattr("horosa_skill.skill_install.install_skill", boom)
+    report = _stdout_json(_run("--client", "cursor", "--config", str(tmp_path / "mcp.json"), "--skip-install",
+                               "--no-probe-network", "--no-stdio-probe"))
+    assert report["ok"] is True
+    assert report["steps"]["skill"]["targets"][0]["action"] == "failed"
+    assert any("skill 没装上" in item for item in report["next_steps"])
 
 
 def test_merge_keeps_the_users_other_keys(tmp_path: Path) -> None:

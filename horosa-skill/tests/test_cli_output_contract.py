@@ -39,8 +39,10 @@ def test_doctor_public_keys() -> None:
 
 
 def test_setup_public_keys(tmp_path, monkeypatch) -> None:
-    """`setup` 输出契约（v0.38.0 B4）：顶层键 + 七步顺序 + 每步 `ok`；失败包键集见 test_setup_command。"""
+    """`setup` 输出契约（v0.38.0 B4；v0.41.0 加第 4 步 skill → 八步）：顶层键 + 步骤顺序 + 每步 `ok`；失败包键集见 test_setup_command。"""
     from horosa_skill.surfaces.cli import _SETUP_STEPS
+
+    monkeypatch.setattr("horosa_skill.skill_install.default_home", lambda: tmp_path / "home")
 
     monkeypatch.setenv("HOROSA_RUNTIME_ROOT", str(tmp_path / "rt"))
     monkeypatch.setenv("HOROSA_SKILL_DATA_DIR", str(tmp_path / "data"))
@@ -52,7 +54,7 @@ def test_setup_public_keys(tmp_path, monkeypatch) -> None:
     missing = sorted(required - set(report))
     assert missing == [], f"setup 公开键缺失（破坏脚本用户）：{missing}"
     assert list(report["steps"]) == list(_SETUP_STEPS) == [
-        "network_probe", "install", "config", "doctor", "client_check", "stdio_probe", "next_steps",
+        "network_probe", "install", "config", "skill", "doctor", "client_check", "stdio_probe", "next_steps",
     ]
     assert all("ok" in step for step in report["steps"].values())
     assert {"kind"} <= set(report["launcher"])

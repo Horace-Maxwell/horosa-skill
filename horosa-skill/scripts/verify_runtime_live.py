@@ -63,8 +63,15 @@ ENGINE_CASES: dict[str, dict[str, Any]] = {
     # Java backend + core-js enrichment (八字)
     "bazi_birth": {"date": "1990-07-15", "time": "14:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gender": 1},
 }
-# v0.38.1 R17：九个客户端全部走一遍 setup（配置 → 回读 → 真起一次 stdio）。
-CLIENTS = ("claude-code", "codex", "cursor", "claude-desktop", "vscode", "gemini", "windsurf", "cline", "zed")
+# v0.38.1 R17：九个客户端全部走一遍 setup（配置 → 回读 → 真起一次 stdio）；v0.41.0 扩到 25 家，顺序 = cli._CLIENT_NAMES
+# （tests/test_client_lockstep.py 锁步）。lane 不 import 包（它测的是装出来的 CLI），所以这里是一份显式副本。
+CLIENTS = (
+    "claude-code", "claude-desktop", "cursor", "vscode", "codex", "gemini", "windsurf", "cline", "zed",
+    "opencode", "goose", "kiro", "copilot-cli", "junie", "qwen", "kimi", "qoder", "codebuddy", "trae", "amp", "warp",
+    "droid", "augment", "deepcode", "dsh",
+)
+# 配置文件名按格式：Codex TOML、Goose YAML、dsh 独立补丁（client check 按文件名认格式），其余 JSON。
+CLIENT_CONFIG_NAMES = {"codex": "config.toml", "goose": "goose-config.yaml", "dsh": "horosa.cordis.yml"}
 FACTORY_START_POLL_SECONDS = 600  # a `starting` answer under the factory budget must turn ready within this
 # A live pytest run that skips for one of these reasons did not test the runtime at all.
 FORBIDDEN_SKIP_REASONS = (
@@ -439,20 +446,28 @@ class Lane:
         configs = self.work / "client-configs"
         configs.mkdir(exist_ok=True)
         for client in CLIENTS:
-            config = configs / ("config.toml" if client == "codex" else f"{client}.json")
+            config = configs / CLIENT_CONFIG_NAMES.get(client, f"{client}.json")
+            # v0.41.0：setup 第 4 步会装 skill。lane 的环境继承真 HOME（uv 缓存要用），所以 skill 必须指进 lane 工作目录——
+            # 否则维护机上本地跑一次 lane 就把 horosa-agent 写进维护者自己的 ~/.agents/skills、~/.claude/skills。
+            skill_dir = self.work / "skills" / client
             started = time.perf_counter()
             code, payload, err = self.cli_json(
                 "setup", "--client", client, "--config", str(config), "--skip-install", "--no-probe-network",
-                timeout=BUDGET["setup"],
+                "--skill-dir", str(skill_dir), timeout=BUDGET["setup"],
             )
             seconds = round(time.perf_counter() - started, 1)
-            ok = code == 0 and bool(payload) and payload.get("ok") is True
             steps = (payload or {}).get("steps") or {}
+            skill_targets = (steps.get("skill") or {}).get("targets") or []
+            skill_ok = bool(skill_targets) and all(t.get("action") in {"installed", "unchanged", "updated", "adopted"} for t in skill_targets) \
+                and (skill_dir / "horosa-agent" / "SKILL.md").is_file()
+            ok = code == 0 and bool(payload) and payload.get("ok") is True and skill_ok
             results[client] = {
                 "ok": ok, "seconds": seconds,
                 "stdio_tools": (steps.get("stdio_probe") or {}).get("tools"),
                 "client_check_problems": (steps.get("client_check") or {}).get("problems"),
-                "failure": None if ok else {"step": (payload or {}).get("step"), "code": (payload or {}).get("code"), "stderr": err},
+                "skill": [t.get("action") for t in skill_targets],
+                "failure": None if ok else {"step": (payload or {}).get("step"), "code": (payload or {}).get("code"), "stderr": err,
+                                            **({} if skill_ok else {"skill": skill_targets})},
             }
             all_ok = all_ok and ok
         return self.step("client_setup", all_ok, results=results)

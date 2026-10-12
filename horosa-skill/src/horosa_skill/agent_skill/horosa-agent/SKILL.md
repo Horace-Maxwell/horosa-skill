@@ -1,0 +1,381 @@
+---
+name: horosa-agent
+description: >-
+  Call Horosa (星阙) local metaphysics tools correctly over MCP or CLI — 110 real techniques: Western
+  natal/predictive astrology (returns, progressions, primary directions, horary 卜卦, election 择日),
+  八字, 紫微, 大六壬, 奇门遁甲, 太乙, 金口诀, 三式合一, 河洛理数, 邵子参评数, 六爻, 天文地占, 塔罗, and
+  the full 14 神数. Use whenever a user asks to 起盘 / 排盘 / 起课 / 起卦 / 算命 / 推运 / 看盘 / 合盘 /
+  卜卦 / 择日 or requests any Horosa/星阙 chart, reading, report, or stored run — and when debugging a
+  user-facing Horosa result. Enforces the clarify-before-call gate and the export-snapshot reading
+  contract; never hand-calculate these methods.
+license: AGPL-3.0-only
+compatibility: Requires the local Horosa Skill MCP server/CLI (Python 3.12 + uv + installed offline runtime)
+metadata:
+  version: "0.40.2"
+---
+
+# Horosa Skill Agent Guide
+
+Use this guide when an AI agent is connected to Horosa Skill through MCP, CLI, Cursor, Claude, Codex,
+OpenClaw, Open WebUI, or another local-first client and needs to call Horosa metaphysics tools,
+generate reports, store memory, or debug user-facing results.
+
+This file is the **single policy source for AI-client behaviour** (repo rules & maintainer law live in
+[`AGENTS.md`](https://github.com/Horace-Maxwell/horosa-skill/blob/main/AGENTS.md)). Detail lives in the reference sheets:
+
+| Reference | Content |
+| --- | --- |
+| [`references/payloads.md`](./references/payloads.md) | Input payload defaults (event/birth JSON), coordinates, gender/timeAlg fields |
+| [`references/late-zi.md`](./references/late-zi.md) | 晚子时/日界 two-switch spec — canonical matrix, how to ask, status |
+| [`references/predictive.md`](./references/predictive.md) | Predictive astrology minimum contracts (returns/progressions/PD), PD engine parity |
+| [`references/chinese-methods.md`](./references/chinese-methods.md) | 大六壬 defaults, current-time casting flow, 奇门法奇门 sections, 中式技法 notes |
+| [`references/reports.md`](./references/reports.md) | Report/memory workflow, one-command CLI report, interpretation style detail |
+| [`references/troubleshooting.md`](./references/troubleshooting.md) | Debug commands, openclaw setup/check, symptom table, cross-platform notes |
+
+## Quickstart — 三步出 Word 报告
+
+```jsonc
+// 1) 起盘（确认设置后）——返回 memory_ref.run_id
+horosa_cn_qimen {date, time, zone:"+08:00", lat:"31n13", lon:"121e28", agent_confirmed_settings:true, clarification_notes:"…"}
+// 2) 读 data.export_snapshot.export_text / sections 写出你的解读（ai_report 各字段）
+// 3) 渲染 —— ai_report 自动写回记忆，无需再调 memory_record_answer
+horosa_report_render {run_id, tool_name:"qimen", format:"docx", ai_report:{executive_summary, answer_text, analysis_sections, recommendations, limitations}}
+```
+
+报告 `output_path` 可省（写到报告输出目录的缺省产物路径）；给了则相对路径按输出目录解析，绝对路径必须在输出目录或
+`HOROSA_REPORT_OUTPUT_ROOTS` 白名单目录内，越界返回 `report.output_path_not_allowed` 且不写文件——别替用户猜别的目录。
+
+七政四余 `guolao_chart` 可传 `guolaoLifeMode`（asc/yumao/cotrans）、`guolaoBodyMode`、`moiraTransitDate`（[流年流曜]
+的流年时刻，缺省今天）；[虚实]/[本命化曜]/[流年流曜] 三段来自 Java 规则层，Java 不可用时缺席并进 `warnings`。
+河洛 `heluo` 可传 `liunianStep2`（ying/sequential）、`ziShuMode`、`jiGongMode` 等取法旋钮（全表见 guidance）。
+只知道四柱不知道生日：`bazi_inverse {pillars:["甲子","丙寅","戊辰","庚申"], fromYear, count}` 反查候选出生时刻
+（免确认门，候选每 60 年重现，请让用户确认年代）。八字口诀层：`knowledge_read {domain:"bazi_pithy", category:"三字诀", key:"甲"}`
+或 `query` 全文检索（21 类 173 条，引必带出处）。
+
+闸门问题带 `options` 的，直接把用户选的那一项原话记进 `clarification_notes`（同名 `values` 是该选项对应的
+schema 值，可直接放进载荷）；`planetaryarc` 的弧源、神数的性别/地点这类工具自有敏感项闸门会点名问，别替用户默认。
+
+找工具：每个工具描述带 `aka:` 别名（中文口语/拼音/英文）；不确定就 `horosa_dispatch`（路由覆盖全部技法，
+含 10 个择日窗口搜索：`tianxing` + 9 支 `*zeri`）或 `horosa_agent_guidance`（响应里的 `server_profile` 告诉你本进程实际平铺了哪些域、
+`HOROSA_TOOLSETS` 有没有拼错、`horosa_tool_run` 在不在）。`HOROSA_TOOLSETS` 的合法域 = `astro` / `predict` / `chart` / `cn` /
+`shenshu` / `other` / `export` / `knowledge`，别名 `western` / `chinese` / `reference` / `all` / `none`；认不出的词会被丢掉并进 warning。
+
+**精简面（`HOROSA_MCP_COMPACT=1`，11 个门面级工具 = 10 门面 + `horosa_tool_run`）**：Cursor / VS Code / Codex / Gemini / Devin Desktop（原 Windsurf）/
+Cline / Zed 默认拿到它（`setup --surface full|compact` 可改；Claude Code / Claude Desktop 默认全量 120）。`horosa_tool_run(tool_name=<注册键>, …)`
+接受与平铺工具**完全相同**的载荷与闸门字段；`tool_name` 不认识时返回按域分组的 `details.catalog`，不要据此说「没有这个技法」。
+
+tools/list 只广告每个工具的域核心字段 + 自有字段；BirthInput 长尾旋钮（`orbSystem`/`extraBodies`/`termsVariant`…）
+**顶层按名直接传即可、不会被丢**，全表用 `horosa_agent_guidance(tool_name=…)` 查（v0.36.0 两层 schema）。
+
+省 token：技法工具可传 `response_view:"titles"`（只回段标题）或 `"sections"`；完整快照始终已存档（`horosa_memory_show(run_id)` 取回）。`export_snapshot.sections[*]` 只含 `body`；机读数据在 `data.<key>`（`data.pan` / `data.chart` / `data.liureng` …）只出现一次，别去段里找。注意 `horosa_report_from_tool` 会重新起盘——已有 run_id 用 `report_render`。
+
+出错时看 `details.agent_recovery`：`kind` 说谁能修——`input`（问用户 / 修入参）、`retry_or_doctor`（重试一次再让用户跑
+`uv run horosa-skill doctor`）、`transport`（冷启动 ≤ ~45 s，等几秒重试一次）、`runtime` / `js_engine`（装 runtime 或设 HOROSA_NODE_BIN）、
+`environment`（本机环境：PATH / 编码 / 端口）、`decision_layer`（云端决策层不可用 = 已本地兜底）；`next_action` 是机器可读的下一步，
+`prompt_to_user` 双语可直接转述；不要把 `ok:false` 当成「该技法没有此项」。几条要记住的码：`runtime.starting` → 按 `retry_after_seconds`
+（5 s）原样重试同一调用，三次后 `horosa-skill runtime status`；`runtime.java_backend_unavailable` → 只影响农历/八字/紫微/六壬族，chart 族照常，
+冷却后再试；`runtime.platform_unsupported` → Linux / Intel Mac 没有离线载荷，走网关模式（`HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`
+指向一台受支持的机器）；`runtime.path_not_ascii` → Windows 的 runtime 根必须纯 ASCII（`setx HOROSA_RUNTIME_ROOT C:\horosa` 后重装）；
+`runtime.stop_refused_clients_attached` / `stop_refused_foreign` → 另一个客户端或用户的桌面端还挂在服务上，**不要**自作主张加 `--force`。
+
+**`warnings` 非空 = 结果不完整**（`ok` 仍为 true）：「降级：…」是某个子引擎/可选后端本次失败、对应段缺席；
+「结果不完整：预设 N 段中 M 段未产出」列出缺了哪些段。报告里必须如实转述，不得把缺席的段当成「该技法没有此项」，
+也不得自行补算；dispatch 的 `warnings` 只汇总哪些工具带说明，细节在 `results.<tool>.warnings`。
+
+**每次给出结论后，把 `data.technique_card` 原样转述成一段技法尾注**（技法 / 口径 / 算源 / 段落 / 版本）——
+它是确定性元数据，`response_view` 精简时也在。要文件就调 `horosa_technique_report`（`run_id` 单次、
+`group_id` 整场，后者还会检出跨技法口径冲突）。细则与两种报告的分界：[`references/reports.md`](./references/reports.md)。
+
+## Core Rule
+
+Horosa Skill is **local-first**. After `horosa-skill install`, algorithms run through the local
+runtime, local headless JS engines, and local storage. Do not tell users that a missing field requires
+MongoDB, port 7897, Xingque Desktop, a remote database, or an external service unless a current
+`doctor` / `openclaw-check` result explicitly says so. If output is missing, describe it as a local
+tool/result/input issue and suggest a concrete recheck.
+
+If the client exposes native Horosa MCP tools (`horosa_cn_qimen`, `horosa_cn_liureng_gods`,
+`horosa_astro_chart`, `horosa_agent_guidance`, `horosa_memory_show`, `horosa_report_render`, …), call
+them directly. If the trace shows `clientToolCount: 0` or no `horosa_*` tools, the MCP server was not
+attached — stop and follow [`references/troubleshooting.md`](./references/troubleshooting.md) (openclaw
+setup/check). CLI fallback is a diagnostic only, and must use the exact `HOME`, `HOROSA_RUNTIME_ROOT`,
+`HOROSA_SKILL_DATA_DIR` env block from the generated mcporter config.
+
+**Never hand-calculate Horosa techniques** with `Exec`, shell, Python, JavaScript snippets, web search,
+or memory-only formulas. If the user asks for a pan/result, call the Horosa MCP or CLI tool and treat
+the returned `export_snapshot` as the source of truth. Manual scripts bypass input normalization,
+true-solar-time and timezone handling, Xingque-compatible defaults, runtime parity fixes, memory, and
+reports — they will disagree with 星阙 and there will be no way to tell why.
+
+## Preferred Agent Workflow
+
+1. Understand the user's question.
+2. Choose the smallest matching Horosa tool (table below).
+3. If required context or result-changing settings are missing, call `horosa_agent_guidance`
+   (CLI: `uv run horosa-skill agent guidance --tool <tool> --intent "..."`). Every tool's
+   `input_contract.example_payload` there is a live-verified call shape: copy its keys, fill in the user's data.
+4. Ask the user one concise clarification question with concrete options when settings are unclear.
+5. Normalize time, place, timezone, and question text.
+6. Call the tool.
+7. Read `export_snapshot.export_text`, `export_snapshot.sections`, and `summary`.
+8. Explain the chart/pan directly in chat from those returned sections only.
+9. If the user wants a file, use the report tools ([`references/reports.md`](./references/reports.md)).
+10. For follow-ups, retrieve prior runs and AI answers with the memory tools.
+
+## Clarification Rule (hard gate)
+
+**If the user omitted a setting that changes the result, ask before calling.** Do not silently pick a
+value just because the schema has a default. Ask when these are missing:
+
+- Time/date/timezone/place for birth/event methods.
+- Gender for Ziwei, Bazi direct/luck flow, LiuReng runyear, or any gender-sensitive report.
+- House system / zodiacal (tropical vs sidereal ayanāṃśa) / traditional settings for astrology charts
+  when the user cares about chart style.
+- Qimen 起局方式、命式性别、拆补/置闰/茅山 method settings when the user expects a non-default pan.
+- LiuReng 贵人体系 and 昼夜贵人 if the user does not accept Xingque defaults; Jinkou 地分 and 贵人体系.
+- SixYao lines, gua code, or 起卦方式.
+- 晚子时/日界 switches when the time is in `[23:00, 24:00)` — see
+  [`references/late-zi.md`](./references/late-zi.md).
+- Predictive targets: `datetime`, `dirLat` / `dirLon` / `dirZone`, primary-direction method settings —
+  see [`references/predictive.md`](./references/predictive.md).
+- Report format and whether AI analysis text is ready.
+
+Allowed shortcuts:
+
+- User says “当前时间” → use current local date/time/timezone.
+- User says “按星阙默认 / 默认 / 快速起盘 / 你来决定” → use documented safe defaults and say so.
+- A stored memory run already contains the setting → reuse it and cite the run.
+
+Runtime enforcement (the gate is in code, not just policy):
+
+- Calculation tools and `horosa_dispatch` reject unconfirmed calls with `agent_guidance.required`.
+- After the user answers, include `agent_confirmed_settings: true`. If the user explicitly accepts
+  defaults, include `defaults_accepted: true`. Add `clarification_notes` summarizing what was confirmed
+  (e.g. `"user accepted Xingque defaults for guirengType and automatic day/night noble-person"`).
+- If a response carries `details.agent_recovery` with `must_ask_user: true`, stop and ask the user with
+  `details.agent_recovery.prompt_to_user`. Do not retry the same tool, and do not call another
+  calculation tool as a workaround, until the user answers or accepts defaults.
+- `must_ask_user: false` (memory / report calls missing `run_id`, `ai_answer`, `format` …) means the fields are
+  yours: fix what `fix_fields` lists and retry. Never ask the user for them; look run ids up with the memory tools.
+- **Never set `agent_confirmed_settings: true` yourself without a real user answer.**
+
+## Do Not Hallucinate Dependencies
+
+Never say: “大六壬 needs MongoDB” / “四课三传 require port 7897” / “you must install Xingque Desktop” /
+“this tool needs a remote database or external service”.
+
+Instead say: “This local run did not return that section — I'll rely on the returned sections, or we
+can rerun `doctor` / `openclaw-check`.” / “The export contract shows the available sections; I won't
+invent missing data.” / “Please provide the missing birth/event time, location, timezone, gender, or
+question context.”
+
+## Optional Cloud Decision Layer (`HOROSA_JEV`)
+
+Horosa can optionally consult TypeSafe Jev — a cloud "System One" decision model — for three narrow
+decisions: routing a request nobody's keyword matched, extracting a setting the user **explicitly
+stated** (e.g. 「我老婆的八字」→ gender female), and classifying a 大六壬 question's topic. It is
+**off by default**; when off, nothing leaves the machine and no response carries any of the fields
+below. When the operator turns it on:
+
+- Every affected result self-reports it: `data.technique_card.decisions[]` (per technique run) and
+  `DispatchEnvelope.decision_layer` (dispatch). Tell the user, once per answer, that the cloud decision
+  layer was consulted, and quote what it decided and whether it was adopted (`adopted` / `reason`).
+- `mode: shadow` means it only recorded what it would have decided — behaviour is unchanged.
+- Jev never computes charts and never explains them. Its `confidence` is distribution concentration,
+  not correctness — do not present it as certainty about the user's life.
+- The clarification gate is unchanged: a value the user did not state is still asked for. If the user
+  disputes an extracted value (`decision.field` / `value` / `evidence`), re-run with the corrected input.
+- If a warning says the decision layer was unavailable, the deterministic path ran instead; no action needed.
+- Which surfaces may actually change behaviour is decided by a measured thresholds lock
+  (`contracts/jev_thresholds.json`): as of v0.39.0 routing fallback and 六壬 topic classification are
+  promoted; gender extraction is still shadow-only (recorded, never filled).
+
+**Disclosure when the cloud decision layer is on**: the default scope `meta` sends only the de-identified question text; under
+`HOROSA_JEV_SCOPE=snapshot` export-snapshot text leaves the machine — say so to the user before relying on it. `jev.*` warnings mean the
+deterministic local fallback answered; `horosa-skill jev status` shows the state. Never echo `HOROSA_JEV_API_KEY` (plugin `jevApiKey`).
+
+## Tool Selection
+
+| User intent | Tool |
+| --- | --- |
+| Natal chart 标准星盘 | `chart` (13-house: `chart13`; 12th-harmonic/Dwadasamsa: `chart12`; Hellenistic: `hellen_chart`) |
+| 老黄历 / 通书择日 | `huangli` (day almanac) · `tongshu` (needs `school` — the five schools can disagree outright on the same day; keys follow the engine: `sanyuanliexiu` 三垣列宿 / `sanyuan` 三元玄空大卦, unknown keys are an error) |
+| 巴比伦占星 Babylonian | `babylon` (no houses/aspects/Asc by design — the reading device is the bīt niṣirti triplicity + planetary numina) |
+| Draconic / Relocation 衍生盘 | `draconic` (node-zeroed) · `relocation` (needs `relocLat`/`relocLon` — without them it degenerates to the natal chart) |
+| 古典占星 dignities reading (v2.6.7) | no separate tool — `chart`/`chart13`/`hellen_chart` exports carry `[古典]` + `[古典格局]` automatically; `india_chart`/`mundane` carry `[古典]` only |
+| Qizheng Siyi / 七政四余 | `guolao_chart` |
+| Indian chart 印度盘 | `india_chart` |
+| Relationship 合盘 | `relative` (`relative` 0–4 picks the comparison; the export carries 比较盘 A/B) |
+| Midpoint/Uranian 中点盘 | `germany` (`rectifyEvents` = dated life events → [校时预览]; Uranian `school` / `orb` / `strictFactors` / `frames` / `declination` via `options_keys`) |
+| Solar/lunar return 返照 | `solarreturn` / `lunarreturn` |
+| Solar arc / given year / profection | `solararc` / `givenyear` / `profection` |
+| Primary directions 主限法 | `pd`, `pdchart` (see `references/predictive.md` for the v12 engine surface) |
+| Zodiacal releasing / Firdaria / Decennials | `zr` / `firdaria` / `decennials` |
+| Age point / distributions / mundane ingress | `agepoint` / `distributions` / `mundane` (year + 入宫节气 + place; `mundaneType` ingress / newmoon / fullmoon / solecl / lunecl / cycles / solunar / vedicmundane / mundanehorary; `mundaneRuleset` ptolemaic / medieval / modern / barbault) |
+| Triplicity rulers / keypoints / lunation phase / extra returns | `triplicityrulers` / `keypoints` / `lunationphase` / `extrareturns` |
+| More progressions (v2.5.0) | `jaynesprog` / `vedicprog` / `planetaryarc` / `planetaryages` / `balbillus` / `yearsystem129` / `persiandirected` |
+| 星历 / 回归轴 / 产前朔望 / 回归黄道二次推运（上游 v3.11） | `ephemeris`（日期窗事件 + 行运触发本命：startDate/endDate/includeTransits/eclipseTimeMode；留的顺逆按逐日速度复核，可能与星阙桌面版的标签不同——改过的留带 `directionUpstream`）/ `returntimeline`（startYear/count 1–40）/ `prenatalsyzygy` / `prog`（targetDate/targetTime/minorVariant；恒星黄道走 `vedicprog`） |
+| Horary 卜卦 / Election 择日 | `horary` (the chart is cast with the chosen `school`'s house system / terms / triplicity, as in 星阙) / `election` (pass `natal` to add [本命合参] + [回归与主限]; topic-specific inputs such as `surgeryPart`, `tradeSide`, `talismanStar`, `crisisBase`) |
+| 择日「找日子」——要在一段时间里搜时刻，而不是评一个候选时刻 | 西占征象 → `tianxing`（`explainAt` 可对单时刻逐叶判读）；奇门 → `qimenzeri`；另有择日十技法的其余八支：黄历 `huanglizeri`（日粒度）/ 八字 `bazizeri` / 太乙 `taiyizeri` / 紫微 `ziweizeri` / 六壬 `liurengzeri` / 三式合一 `sanshizeri`（条件可跨三式）/ 七政 `qizhengzeri` / 印度 Muhurta `indiazeri`。全部要 startDate/endDate + conditions 条件树；条件类键见各工具 agent_guidance（引擎自带词表，别自己编）；单点评估仍用 `election` |
+| 七政择日动盘（十一曜山位 / 日月食 / 方位到达） | `qizhengelection`（action: pan / eclipses / azimuthsearch；date/time 是候选时刻非出生盘） |
+| 生时校正（出生时间不确定） | `india_rectify`（KP 法锚点±半窗扫描；输出证据与排序，采用与否由用户决定） |
+| Harmonic 调波盘 | `harmonic` |
+| 八字 | `bazi_birth` / `bazi_direct`（本地 lunar 引擎优先，同星阙八字页；公元前 / byLon / adjustJieqi 回退 Java 并告警；南纬出生带 `southMonth`：`none` 不对冲（星阙缺省）/ `chong` 对冲——闸门会点名问，北纬忽略）/ `bazi_inverse`（四柱干支反查候选出生时刻，free of the confirmation gate） |
+| 紫微斗数 | `ziwei_birth` (22 传本 keys + `sihuaSchool`; any non-default 传本 key re-casts on 星阙's local ZiweiCalc; `ziwei_rules` returns the rules library) |
+| 大六壬 / 行年 | `liureng_gods` / `liureng_runyear` |
+| 奇门遁甲 / 太乙 / 金口诀 / 三式合一 | `qimen` / `taiyi` / `jinkou` / `sanshiunited` |
+| 统摄法 | `tongshefa` |
+| 邵子参评数 / 河洛理数 | `canping` / `heluo` |
+| 六爻 | `sixyao` |
+| 卦义 | `gua_desc`, `gua_meiyi` |
+| 宿占 | `suzhan` |
+| 一掌经 | `yizhangjing` |
+| 神数正传（铁板 / 邵子 / 大定 / 六亲 / 铁算心易） | `zhengchuan`（school 选流派；除铁算心易外需生辰） |
+| 小六壬 | `xiaoliuren`（三数或占时起课，冻结值；改流派只重排） |
+| 飞宫小奇门 | `feigong`（起支+日干支定局，冻结值；占时可起） |
+| 小成图 | `xiaochengtu`（手动/两数/股价/大衍/占时，大衍须显式 seed，卦为冻结值） |
+| 皇极轨策 | `guice`（十二法起卦，冻结值；十开关流派只重排断法） |
+| 天文地占 geomancy | `geomancy` |
+| 塔罗 tarot | `tarot` (spread keys are the engine's: `single` / `three` / `relation` / `celtic` / …, and must be allowed for the chosen deck; the seed follows 星阙 so the same question + moment re-draws the same cards) |
+| 灵棋经 lingqi | `lingqi`（以起卦时刻确定性掷十二棋；给了 counts 就复排，绝不重掷） |
+| 占星地图 ACG | `acg`（clickLat/clickLon 加落点分析段；eventKind 加世运事件时刻段） |
+| 行星周期（木土合 / 土冥…任意两星合冲时间轴） | `planet_cycles`（无出生盘概念；星对与年区间仍需确认） |
+| 名人库 celebrity data | `astrodata` (read-only, no confirmation gate) |
+| 玄史知识库 Esoteric-history KB | `xuanshi` (action: search / events / event / celestial / figures / dynasty / timeline / graph …; detail actions take the editorial `id`/slug such as `fig-laozi`; read-only, no result-sensitive settings) |
+| Astrology dice 西占游戏 | `otherbu` |
+| 14 神数 | `wangji` / `wuzhao` / `taixuan` / `jingjue` / `shenyishu` / `shaozi` / `tieban` / `fendjing` / `beiji` / `nanji` / `chunzi` / `xianqin` / `cetian` / `qizhengkin` |
+| 节气 / 农历 | `jieqi_year` / `nongli_time` |
+| 出生节气窗（八字起运窗同源） | `jieqi_birth` |
+| 黄历 / 万年历 | `calendar_month` |
+| Hover knowledge + 方法论手册 | `knowledge_registry`, `knowledge_read`（31 域 = hover 三域 + 各技法操作手册域 + 八字断语库，逐条带出处；传 `query` 即跨域全文检索） |
+| Export protocol | `export_registry`, `export_parse` |
+| Natural-language dispatch | `horosa_dispatch` (MCP) |
+| 合参（多技法交叉印证） | `horosa_hecan`（模板制：结论槽留白，分歧必须披露；细则见 [`references/reports.md`](./references/reports.md)） |
+
+Fengshui is intentionally excluded from this public skill surface (not headless-ready).
+
+**引知识必带出处（v0.28.0 反 Barnum 第一机制）**：解读中引用口径/流派/教义时，先用
+`knowledge_read` 取条目并转述其 `citation`（形如「星阙操作手册 · 八字四柱 · 算法与口径」）；
+不知道条目在哪个域时，先 `knowledge_read {"query": "晚子时"}` 跨 31 域全文检索（v0.32.0）——
+命中自带 citation 与可直接回读的 (domain, category, key) 坐标，再精读引用；
+`knowledge_read` 没有的内容按通则推理并**明说无出处**。不许把通则包装成「古籍说」「星阙口径」。
+
+**长词表不在 tools/list**：西占宫制 0–24、卜卦 20 类 / 7 流派、择日 37 用事、七政宿度制 0–8、印占大运 15 体系 / 6 流派、
+世运规则集、紫微传本键、八字盘法键、三式起局 / 起课法、神数逐技法 options——查 `horosa_agent_guidance(tool_name=…)` 的
+`options_keys`；隐藏旋钮照样在顶层按名传（或走 `request` 整包）。
+
+Payload shapes and defaults: [`references/payloads.md`](./references/payloads.md). 中式技法 specifics
+(大六壬 guirengType, current-time casting, 法奇门 sections):
+[`references/chinese-methods.md`](./references/chinese-methods.md).
+
+## Interpretation Style
+
+Answer like a careful consultant: start with the direct conclusion; cite the actual chart/pan sections
+that support it; explain the reasoning path in human language; separate opportunity, risk, timing, and
+suggested action; with no specific question give a comprehensive overall reading, with a specific
+question prioritize it over textbook generalities; mention limitations without hiding behind them.
+Quote the `排盘规则: …` line back to the user when present (see `references/late-zi.md`). Report-body
+style rules: [`references/reports.md`](./references/reports.md).
+
+## Validation Checklist
+
+Before telling the user a result is ready:
+
+- `ok` is `true`; a failed tool returns `ok=False` with an `error.code` (e.g. `tool.internal_error`,
+  `tool.ken_compute_failed`) — it does not throw. Read and relay the error; a failure is not
+  “the tool is unavailable”.
+- `export_snapshot.export_text` present (calculation tools); `export_snapshot.sections` non-empty;
+  no section body is a bare `"无"`.
+- The answer contains no dependency hallucinations (MongoDB, 7897, Xingque Desktop, remote DB).
+- If a report was generated: the artifact path exists with non-zero size.
+- If memory was used: `memory_show` / `memory_query` can retrieve the run.
+
+Anything off → [`references/troubleshooting.md`](./references/troubleshooting.md) (symptom table,
+debug commands, stale-runtime signals like `source: null`).
+
+## Shell-only agents (no MCP)
+
+An agent that can run commands but cannot mount an MCP server (CI bots, `codex exec` without MCP, plain
+shell tools) gets the same contract through the CLI. **stdout is always exactly one JSON document**;
+progress lines and error envelopes go to stderr, so parse stdout only.
+
+| Need | Command |
+| --- | --- |
+| Tool names, `aka:` aliases, input fields | `horosa-skill tool list` |
+| What must be confirmed before a call | `horosa-skill agent guidance --tool qimen --intent "签约择时"` |
+| Run one technique | `horosa-skill tool run qimen --input payload.json --output result.json` |
+| Natural-language routing (several techniques) | `horosa-skill dispatch --input query.json --output result.json` |
+| Re-read a stored run | `horosa-skill memory show <run_id>` |
+| Health / live check | `horosa-skill doctor` · `horosa-skill selfcheck` |
+
+- Technique names: the registry key (`chart`) and the MCP name (`horosa_astro_chart`) both work — in `tool run`,
+  `report from-tool`, hecan `tools` and `horosa_tool_run`. A wrong name exits 2 with `details.catalog` listing every
+  valid one. `tool list` gives each technique's `input_contract.example_payload` (live-verified; replace the values).
+- `dispatch` / `hecan` take the birth data nested (`{"query": …, "birth": {"date": …}}`) or flat at the top level
+  like a technique tool (`{"query": …, "date": …, "time": …}`).
+- Payload files are UTF-8 JSON objects (`{"date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13",
+  "lon": "121e28", …}`). `--stdin` also works on macOS/Linux; on **Windows PowerShell 5.1 use `--input` / `--output`
+  files** — the pipe re-encodes bytes through the console code page and mangles Chinese in both directions.
+- Exit code 0 = an envelope was written: check `ok`; a failed technique is `ok: false` + `error.code`, not an
+  exception and not "the technique has no such item". Exit code 2 = rejected before running (the clarification
+  gate, a malformed payload, a runtime error) — the stderr JSON carries `code` / `message` / `details`.
+- Gate flow: stderr `code: "agent_guidance.required"` → show `details.agent_recovery.prompt_to_user` to the user,
+  then rerun with `agent_confirmed_settings: true` + `clarification_notes` (or `defaults_accepted: true` only when
+  the user explicitly accepts defaults) added to the payload. Never set the flag without a real answer.
+- Envelope keys: `ok`, `tool`, `version`, `input_normalized`, `data` (`export_snapshot`, `technique_card`, the engine
+  object once under `data.<key>`), `summary`, `warnings` (non-empty = incomplete result), `memory_ref` (`run_id`),
+  `error`. `dispatch` wraps per-tool envelopes under `results.<tool>`.
+- Everything above still holds: never hand-calculate, explain only from `export_snapshot.export_text`, quote
+  `data.technique_card` after the answer.
+
+## First 3 commands on a fresh machine
+
+Each block: get `uv` → one-command onboarding (installs the offline runtime, writes the client config, installs this
+skill into the skills folder the client reads, then starts the server once over stdio with the exact command the client
+will run) → live check. Replace `cursor` with the client at hand (`claude-code` / `claude-desktop` / `vscode` / `codex` /
+`gemini` / `windsurf` = Devin Desktop, formerly Windsurf — the key is kept for compatibility and writes the Devin CLI
+config / `cline` / `zed` / `opencode` / `goose` / `kiro` / `copilot-cli` / `junie` / `qwen` / `kimi` / `qoder` /
+`codebuddy` / `trae` (prints an import link — TRAE has no config file) / `amp` / `warp` / `droid` / `augment` / `deepcode` /
+`dsh` (writes a standalone patch for `dsh web --patch`)). `horosa-skill client skill --client <key>` installs only this
+skill (for a hand-wired MCP config).
+
+**macOS (zsh), no checkout**
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source "$HOME/.local/bin/env"   # the installer only edits your shell profile; this puts uvx on PATH in THIS shell
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.40.2/horosa_skill-0.40.2-py3-none-any.whl" horosa-skill setup --client cursor
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.40.2/horosa_skill-0.40.2-py3-none-any.whl" horosa-skill selfcheck
+```
+
+**Windows (PowerShell)**
+
+```powershell
+irm https://astral.sh/uv/install.ps1 | iex
+$env:Path = "$env:USERPROFILE\.local\bin;$env:Path"   # the installer updates PATH for NEW shells only
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.40.2/horosa_skill-0.40.2-py3-none-any.whl" horosa-skill setup --client cursor
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.40.2/horosa_skill-0.40.2-py3-none-any.whl" horosa-skill selfcheck
+```
+
+**Source checkout (any OS)**
+
+```bash
+git clone https://github.com/Horace-Maxwell/horosa-skill && cd horosa-skill/horosa-skill && uv sync
+uv run horosa-skill setup --client cursor
+uv run horosa-skill selfcheck
+```
+
+`setup` is idempotent (re-run after an upgrade), `--dry-run` prints the plan with zero side effects, and a failure
+is a stderr JSON with `step` / `code` / `config_untouched` / `retry_command` (exit 2). No github.com access:
+`HOROSA_RUNTIME_MIRROR=<mirror prefix>` in front of the same commands, or `setup --archive <local runtime archive>`
+— see `docs/INSTALL_RESTRICTED_NETWORK.md`. Windows on ARM installs the x64 payload under emulation automatically;
+Intel Macs and Linux have no payload (gateway mode via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`).
+
+## Maintainer Pointer
+
+Modifying/building/releasing this repo is governed by [`AGENTS.md`](https://github.com/Horace-Maxwell/horosa-skill/blob/main/AGENTS.md) — routing (§0),
+iron laws (§1), and the **🔴 problem-logging protocol v2 (§2)**: every gotcha lands in
+`docs/LESSONS.md` + a distilled rule + `CHANGELOG.md` + a machine guard, in the same change; sync this
+skill doc whenever a lesson is client-facing, and never leave the two contradicting. Engine credit:
+the ken engines (`kinqimen` / `kintaiyi` / `kinjinkou`, MIT, by **kentang2017**) ship their LICENSE
+files inside the runtime and are acknowledged in `README.md` / `README_EN.md` — see AGENTS.md §11.

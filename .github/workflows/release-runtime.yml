@@ -8,6 +8,7 @@ name: release-runtime
 #                    attestation; uploads to the draft — the manifest reaches the release only with BOTH halves
 #   matrix         — runtime-matrix.yml installs the assembled assets on three real machines and runs the runtime
 #   publish        — sync_windows_release.py --check on the draft must say [OK]; only then `gh release edit --draft=false --latest`
+#   mcp-registry   — publish-mcp-registry.yml lists the now-public release on the official MCP Registry (v0.41.0)
 # This closes the "half a release" window for good: nothing public ever lacks its Windows half or its manifest.
 #
 # Dispatch-only. `dry_run=true` seeds from the PUBLIC assets of <version> and never uploads or publishes — the
@@ -287,3 +288,16 @@ jobs:
       # manifest URL, i.e. a real https download of what users will fetch (the artifact-mode run above installed from file://).
       - name: Dispatch the release-mode matrix (real https download of the public assets)
         run: gh workflow run runtime-matrix.yml --repo "${GITHUB_REPOSITORY}" -f tag="${{ needs.resolve.outputs.tag }}"
+
+  # v0.41.0: list the now-public release on the official MCP Registry (MCPB-only entry). After `publish`, never before:
+  # the registry HEADs the .mcpb at publish time and a draft asset 404s. Versions there are immutable, so the called
+  # workflow skips a version that is already listed. Dispatch it alone for a release that is already public.
+  mcp-registry:
+    needs: [resolve, publish]
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/publish-mcp-registry.yml
+    with:
+      tag: ${{ needs.resolve.outputs.tag }}

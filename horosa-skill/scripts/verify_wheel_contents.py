@@ -38,6 +38,9 @@ REQUIRED_ENTRIES = (
     # v0.40.0 P1：运行期契约的包内副本（Jev 阈值锁 / 技法算源）——缺了就是 v0.39.0 那个「enforce 永不生效」的 bug。
     "horosa_skill/contracts/jev_thresholds.json",
     "horosa_skill/contracts/technique_provenance.json",
+    # v0.41.0：`setup` 装进客户端 skills 目录的 skill 副本——缺了，只装 wheel 的用户拿不到「先问后调 / 禁手算」规则。
+    "horosa_skill/agent_skill/horosa-agent/SKILL.md",
+    "horosa_skill/agent_skill/horosa-agent/references/troubleshooting.md",
 )
 MIN_HELPDOC_PACKS = 18
 # v0.38.1 A16：知识包的 `source` 字段曾带着维护者机器的绝对路径（`/Users/<name>/Desktop/…`）进了 wheel ——

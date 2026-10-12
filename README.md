@@ -12,7 +12,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-110-1d4ed8?style=for-the-badge" alt="110 tools" />
-  <img src="https://img.shields.io/badge/测试-1848_passed-16a34a?style=for-the-badge" alt="1848 passed" />
+  <img src="https://img.shields.io/badge/测试-1922_passed-16a34a?style=for-the-badge" alt="1922 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
 
@@ -153,17 +153,22 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # 🚀 给客户端直
 ## 🔌 接入 AI 客户端
 
 `setup --client <客户端>` 一条命令走完接入（v0.38.0）：探网（5 s）→ 装 / 校验离线 runtime → 写配置（自动定位、
-只动 horosa 条目、写前备份 `.horosa-bak`、原子替换）→ doctor → 回读磁盘体检 → **用客户端将要执行的那条命令真起一次
+只动 horosa 条目、写前备份 `.horosa-bak`、原子替换）→ **把 horosa-agent skill 装进该客户端读的 skills 目录**（v0.41.0；
+多数客户端读共享的 `~/.agents/skills`；`--no-skill` 跳过、`--skill-dir` 指定）→ doctor → 回读磁盘体检 → **用客户端将要执行的那条命令真起一次
 stdio server 并数工具** → 打印下一步。失败时 stderr 给出结构化失败包（`step` / `code` / `config_untouched` /
 `backup_path` / `retry_command`），退出码 2；写配置之前失败保证 `config_untouched: true`。只想看配置不落盘用 `client config`：
 
 ```bash
-uv run horosa-skill setup --client cursor                # 🪄 一条命令接入（claude-code / claude-desktop / cursor / vscode / codex / gemini / windsurf / cline / zed）
+uv run horosa-skill setup --client cursor                # 🪄 一条命令接入（25 个客户端，见下方 Works with 表）
 uv run horosa-skill setup --client cursor --dry-run      # 只看计划：零副作用
 uv run horosa-skill client config --format claude-code   # 只生成不落盘：输出 claude mcp add … 命令
 uv run horosa-skill client config --format codex         # config.toml 片段（含超时设置）
-uv run horosa-skill client check                         # 体检本机各客户端**实际写着什么**
+uv run horosa-skill client check                         # 体检本机各客户端**实际写着什么**（含 skill 装没装、是不是本版）
+uv run horosa-skill client skill --client codex          # 只装 skill 规则（手动配过 MCP 的用户；不带 --client = 共享目录）
 ```
+
+skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算），此前只有打开本仓的 agent 读得到；wheel 里现在带一份，`setup` 顺手装好。
+已有同名目录时：由 `npx skills` 等工具以软链接管理的、或不是本工具装的，一律不动；你改过的旧版先备份成 `horosa-agent.horosa-bak` 再更新。
 
 仓根另带 6 份薄镜像——`GEMINI.md`（Gemini CLI）、`.github/copilot-instructions.md`（Copilot）、`.windsurf/rules/`、
 `.clinerules/`、`.cursor/rules/`（Cursor）、`.agents/skills/horosa-agent/`（Codex / agentskills.io）——让这些 agent 打开仓库就知道闸门、读盘规则与精简面下的 `horosa_tool_run` 直呼；策略唯一源仍是 [SKILL.md](./skills/horosa-agent/SKILL.md)，
@@ -175,6 +180,8 @@ uv run horosa-skill client check                         # 体检本机各客户
 | :-- | :-- | :-- | :-- | :-- |
 | 🟣 **Claude Code** | stdio | `setup --client claude-code`（CWD 有 `.mcp.json` 写项目级，否则自动 `claude mcp add --scope user`） | 全量 120 | 项目内直接用仓根 `.mcp.json`；[说明](./horosa-skill/examples/clients/claude-code.md) |
 | 🧩 **Claude Code Plugin** | stdio | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` | 全量 120 | skill + MCP 一步到位；插件装在 `~/.claude/plugins/cache/horosa-skill/horosa/<version>/horosa-skill`，首次运行 `uv run --directory "<那个目录>" horosa-skill install` 装离线 runtime（工具报 `runtime.not_installed` 时会给出带真实路径的这条命令） |
+| 🧷 **Agent Plugins v1**（VS Code · Copilot CLI · Codex · Kiro · OpenHands · Qwen Code） | stdio | `copilot plugin install Horace-Maxwell/horosa-skill`；VS Code「Chat: Install Plugin From Source」填仓库地址；`qwen extensions install Horace-Maxwell/horosa-skill`；Kiro「Import power from GitHub」 | 精简 11 | 仓根 `plugin.json` + `mcp.json`（规范 1.0.0）：命令是 `uvx` + 钉当前版本的 wheel，**需先装 uv**；首次调用前 `uvx --from <wheel> horosa-skill install` 装离线 runtime。Codex 经 `codex plugin marketplace add Horace-Maxwell/horosa-skill` 读同一份清单（未实测）；OpenClaw / Claude Code 仍走 `.claude-plugin/` |
+| 📇 **MCP 官方注册中心** | stdio（`.mcpb`） | 在支持注册中心的客户端里搜 `horosa`（Goose、Junie、Copilot `/mcp search`、PulseMCP、Glama 都从这里取） | 全量 120 | 条目 `io.github.Horace-Maxwell/horosa-skill`，只登记每个 release 的 `.mcpb`（带 sha256，客户端装前校验）；v0.41.0 起每次发版翻公开后自动登记 |
 | 🟠 **Claude Desktop** | stdio | `setup --client claude-desktop`，或安装 `.mcpb` 一键包 | 全量 120 | `.mcpb` 在每个 release 的资产里 |
 | 🟡 **Cursor** | stdio | `setup --client cursor`（或 `client config --format cursor` 拿官方 deep link 点击即装） | 精简 11 | Cursor 全局约 40 工具上限，**超出静默丢弃** |
 | 🔷 **VS Code (Copilot)** | stdio | `setup --client vscode`（写用户级 `mcp.json`；或 `client config --format vscode` 拿 `vscode:mcp/install` 链接） | 精简 11 | 跨所有 server 共 128 工具上限；仓内已带 `.vscode/mcp.json` |
@@ -183,6 +190,22 @@ uv run horosa-skill client check                         # 体检本机各客户
 | 🌊 **Windsurf → Devin Desktop** | stdio | `setup --client windsurf`（CLI 键不变；写 Devin 的 MCP 文件：macOS/Linux `~/.config/devin/mcp_config.json`、Windows `%APPDATA%\devin\mcp_config.json`、项目级 `.devin/mcp_config.json`；已有旧 `~/.codeium/windsurf` Cascade 配置则原位合并） | 精简 11 | 2026-09 起 Cascade 已移除，Devin Local 读 Devin CLI 的 MCP 文件；旧 Cascade 100 工具上限 |
 | 🧱 **Cline** | stdio | `setup --client cline` | 精简 11 | 无工具搜索，全量面偏重 |
 | ⚡ **Zed** | stdio | `setup --client zed` | 精简 11 | 配置根键是 `context_servers` |
+| **OpenCode** | stdio | `setup --client opencode`（写 `~/.config/opencode/opencode.json`（`mcp` 键，命令写成一个数组）） | 精简 11 | 缺省连接 / 调用超时撑不过冷启动与择日扫描，已写 `timeout: 600000` |
+| **Goose** | stdio | `setup --client goose`（写 `~/.config/goose/config.yaml` 的 `extensions`（Windows `%APPDATA%\Block\goose\config\`；只动 horosa 一段）） | 精简 11 | 超时单位是秒，已写 600 |
+| **Kiro** | stdio | `setup --client kiro`（写 `~/.kiro/settings/mcp.json`；skill 装到 `~/.kiro/skills`） | 精简 11 | Kiro CLI 启动缺省只等 5 s：先 `kiro-cli settings mcp.initTimeout 120000` |
+| **GitHub Copilot CLI** | stdio | `setup --client copilot-cli`（写 `~/.copilot/mcp-config.json`（含 `tools: ["*"]`、`timeout`）） | 精简 11 | 只转发 PATH：env 表写入 HOME 与两个 runtime 根，探针按同样形状验证 |
+| **JetBrains Junie** | stdio | `setup --client junie`（写 `~/.junie/mcp/mcp.json`） | 精简 11 | 无超时字段：首次用前 `horosa-skill runtime start` 预热 |
+| **Qwen Code** | stdio | `setup --client qwen`（写 `~/.qwen/settings.json`（保留注释）） | 精简 11 | `discoveryTimeoutMs` 缺省 30 s，已写 120000 |
+| **Kimi Code CLI** | stdio | `setup --client kimi`（写 `~/.kimi-code/mcp.json`） | 精简 11 | 严格 JSON、一条坏整份拒；已写 `startupTimeoutMs` / `toolTimeoutMs` |
+| **Qoder** | stdio | `setup --client qoder`（写 `~/.qoder/settings.json`；skill 装到 `~/.qoder/skills`） | 精简 11 | 旧版 Qoder IDE 只能在界面里配 MCP |
+| **CodeBuddy** | stdio | `setup --client codebuddy`（写它实际读的那一个文件（`~/.codebuddy/.mcp.json` → `mcp.json` → `~/.codebuddy.json` 中第一个存在的）；skill 装到 `~/.codebuddy/skills`） | 精简 11 | 超时只能用环境变量 `MCP_TIMEOUT` / `MCP_TOOL_TIMEOUT` |
+| **TRAE** | stdio | `setup --client trae`（不写文件：打印一键导入链接 `trae://…`（国内版 `trae-cn://`）与可粘贴 JSON；skill 装到 `~/.trae/skills`） | 精简 11 | 所有 MCP 合计 40 个工具上限；command 不能含空格 |
+| **Amp** | stdio | `setup --client amp`（写 `~/.config/amp/settings.json` 的字面量键 `amp.mcpServers`） | 精简 11 | 条目不许多余字段（无超时）：首次用前先预热 |
+| **Warp** | stdio | `setup --client warp`（写 `~/.warp/.mcp.json`（保存即生效）） | 精简 11 | 若同时让 Warp 自动拉起 Claude Code / Codex 的 server，可能出现两份 |
+| **Factory Droid** | stdio | `setup --client droid`（写 `~/.factory/mcp.json`（含 `connectTimeout` / `timeout`）） | 精简 11 | 改完自动重载 |
+| **Augment Auggie CLI** | stdio | `setup --client augment`（写 `~/.augment/settings.json`（保留注释）） | 精简 11 | IDE 扩展用自己的设置面板，不读这个文件 |
+| **Deep Code** | stdio | `setup --client deepcode`（写 `~/.deepcode/settings.json`（严格 JSON；文件有注释则拒写——它会把整份连 API key 一起丢掉）） | 精简 11 | 单次工具调用固定 60 s 上限，长任务会超时；启动超时用 `DEEPCODE_MCP_TIMEOUT` |
+| **DeepSeek Harness（dsh）** | stdio | `setup --client dsh`（生成独立补丁 `~/.horosa/clients/dsh/horosa.cordis.yml`，`dsh web --patch <它>` 启用；不改你的 `cordis.patch.yml`） | 精简 11 | 开发者预览版，格式可能变 |
 | ⚪ **OpenClaw / mcporter** | stdio | `client openclaw-setup --workspace ~/.openclaw/workspace` | 全量 120 | — |
 | 🟢 **Open WebUI · n8n · Dify** | streamable-http | `horosa-skill serve --host 0.0.0.0 --token <随机串>` | 全量 120 | [接入说明](./horosa-skill/examples/clients/openwebui-streamable-http.md)；跨机必须带令牌，且**没有 TLS**，请放反代后面 |
 | 🔶 **ChatGPT / claude.ai 远程连接器** | streamable-http | 同上，再套一层**终结 OAuth 的 HTTPS 网关**（Cloudflare Access / oauth2-proxy）——两家连接器只接 OAuth，本 server 只提供静态 Bearer，网关负责把 OAuth 换成注入 `Authorization: Bearer <HOROSA_MCP_TOKEN>` | 全量 120 | **没有托管端点**；配方见 [说明](./horosa-skill/examples/clients/remote-connectors-oauth-gateway.md) |
@@ -518,7 +541,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 🧰 可调用工具 | 110 / 110 `ok=true` |
-| 🧪 工程测试 | **1848 / 1848 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 115 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 🧪 工程测试 | **1922 / 1922 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 116 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 🛡️ 未确认参数时强制追问 | 100 个技法工具触发 `must_ask_user=true` |
 | 🔓 免闸直读 | 10 个注册表 / 知识 / 解析类工具不经澄清闸 |
 | 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 107 个导出 technique；契约 v15 镜像桌面端 aiExport v58） |
@@ -534,7 +557,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 1848 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 1922 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

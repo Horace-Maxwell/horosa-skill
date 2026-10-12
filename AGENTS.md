@@ -465,14 +465,21 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
     每次 service 调用必须**卸载到工作线程**（FastMCP 1.x 不替你做，`async def` 里直接调同步体
     = 整个事件循环被占住）。分段循环必须 `_progress_tick`（既报进度也是取消检查点）。
     `maxSpanDays` 是**上限**不是旋钮，只能调低。新增客户端格式时同批更新 README×2 的
-    Works-with 矩阵（`verify_docs_sync.check_client_matrix` 锁），并在 `client check` 的
-    `_client_config_locations` 的路径表里登记它的配置文件位置（三个 OS 各一行，Devin 那样的改名旧路径留作候选）。
+    Works-with 矩阵，并在 `client check` 的 `_client_config_locations` 的路径表里登记它的配置文件位置（三个 OS 各一行，
+    Devin 那样的改名旧路径留作候选）。（这里曾写「`verify_docs_sync.check_client_matrix` 锁」——那个函数早已不存在，
+    规则写着有人锁、实际没人锁；v0.41.0 起由 `tests/test_client_lockstep.py` 真锁，见下条。）
 
-16. **新客户端 = 三件套（v0.38.1 B2）**：① `CLIENT_PLACEHOLDER_WHITELIST` 里登记它**真的会展开**的 `${…}` 变量（按它的官方文档，
+16. **新客户端 = 一行事实 + 锁步（v0.41.0）**：v0.41.0 起新客户端写成 `clients_extra.EXTRA_CLIENTS` 的一行（路径 / 根键 / 条目字段名 /
+    超时字段与单位 / 只能用环境变量设的超时进 `notes` / 只转发部分环境的进 `passthrough_env`），再在 `skill_install.CLIENT_SKILL_DIRS`
+    **显式**登记它读的那一个 skills 目录；`tests/test_client_lockstep.py` 把每个键钉到 lane（`verify_runtime_live.CLIENTS`）、生成器各表、
+    README×2 矩阵、示例索引、`setup --help`、第三方事实台账。只写**用户级**文件（项目级 `.mcp.json` 被多家共读，别家的字段会写进别人的配置）；
+    没有文档化用户级文件的（TRAE）打印导入链接、不猜路径；文件里可能有用户别的内容且格式我们读不全的（dsh）只生成独立文件。
+    原 9 家仍按下面的三件套维护。
+16a. **新客户端 = 三件套（v0.38.1 B2）**：① `CLIENT_PLACEHOLDER_WHITELIST` 里登记它**真的会展开**的 `${…}` 变量（按它的官方文档，
     不按别家的），`client check` 只放行这一表；② `_client_config_locations` 的路径表（全局 + 项目级，按 `_project_root()` 而非裸 CWD；
     Windows / macOS / Linux 三形状 + 它自己的覆盖变量如 `CODEX_HOME`）；③ 它的 per-server 超时 / 环境转发规则写进生成器**并**写进
     `client check`（Codex `startup_timeout_sec`/`tool_timeout_sec` + env 表两个绝对根；Cline / Zed `timeout`（秒））；同时加进
-    `verify_runtime_live.CLIENTS`（九家全部在真机 lane 上 `setup` 一遍）与 README×2 矩阵行。配置文件允许注释的客户端（Zed / VS Code）
+    `verify_runtime_live.CLIENTS`（全部客户端——v0.41.0 起 25 家——在真机 lane 上 `setup` 一遍）与 README×2 矩阵行。配置文件允许注释的客户端（Zed / VS Code）
     走 `jsonc.upsert_server_entry`，绝不整文件重排。
 
 **审计前置**（补「未同步技法」缺口前）：先 grep 仓内**明确排除项**（`fengshui`：canvas + 户型图上传 +
@@ -642,7 +649,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   `assemble`（`verify_runtime_python_lock --seed`、双平台清单钉 tag + size、`verify_runtime_release --expect-platforms`、
   SHA256SUMS、SBOM、上 draft、`attest-build-provenance`）→ `matrix`（`runtime-matrix.yml` 三台真机装→起→四引擎→
   ——三 lane **都阻断**，含 windows-11-arm（dry run #4 全绿后转阻断；`arm_nonblocking=true` 只是单次逃生口）→
-  `setup` 九客户端 + Claude Code user scope + HTTP 握手 + 挂着客户端不停 + restart/auto 端口→live pytest→停）→ `publish`（`sync_windows_release.py --check --tag vX --draft` 必 `[OK]` →
+  `setup` 全部客户端（v0.41.0 起 25 家）+ Claude Code user scope + HTTP 握手 + 挂着客户端不停 + restart/auto 端口→live pytest→停）→ `publish`（`sync_windows_release.py --check --tag vX --draft` 必 `[OK]` →
   `gh release edit --draft=false --latest` → `gh workflow run release-completeness.yml`（GITHUB_TOKEN 产生的 release 事件不触发任何
   workflow，publish job 因此显式 dispatch `release-completeness.yml` 与 release 模式 `runtime-matrix.yml`；PyPI 暂缓，`publish-pypi.yml` 只手动 dispatch）→ 再 `--check` 公开 latest）。**清单只在两平台齐了才上到 release**——「缺半」
   窗口从根上消灭；`dry_run=true` 以公开资产为 seed 走完全程不上传（流水线自己的验收）。形状锁
@@ -1070,8 +1077,8 @@ A global stability pass hardened these; keep them true when you touch the releva
 
 ### 9.4 客户端配置 · setup · doctor（client config / setup / doctor）
 
-- **`setup` 的七步顺序与失败包是契约（v0.38.0 B4）。** `network_probe → install → config → doctor → client_check → stdio_probe →
-  next_steps`，顺序冻结在 `tests/test_cli_output_contract.py::test_setup_public_keys`；失败包只走 stderr、退出码 2，键
+- **`setup` 的步骤顺序与失败包是契约（v0.38.0 B4；v0.41.0 加 `skill` → 八步）。** `network_probe → install → config → skill → doctor →
+  client_check → stdio_probe → next_steps`，顺序冻结在 `tests/test_cli_output_contract.py::test_setup_public_keys`；失败包只走 stderr、退出码 2，键
   `step / code / config_untouched / backup_path / retry_command / steps`，**第 3 步之前失败保证 `config_untouched: true`**
   （`tests/test_setup_command.py` 负向：装失败时预置配置逐字节相等）。`doctor` / `client check` 与 `setup` 永远共用
   `_doctor_report` / `_client_check_report`（不许各写一套判定）；`stdio_probe` 必须真 spawn 配置里那条命令（进程内
@@ -1083,6 +1090,11 @@ A global stability pass hardened these; keep them true when you touch the releva
   `--write` 会把用户整个 settings.json 覆盖成 payload）。`uv`/`uvx` 启动器都经 `client_tools.resolve_*_command` 写绝对路径——GUI
   客户端在 Windows 上不继承 shell PATH；`client check` 的 `command_not_on_path` 守。配置路径用 `_client_config_locations`
   （按 os 与 `%APPDATA%`/`~/Library`/`~/.config` 算），不写死 POSIX 表。Codex 审计「没写超时」与「写太短」都报。
+- **`setup` 第 4 步装 skill：只建议性、每客户端一处、绝不覆盖别人的（v0.41.0）。** wheel 带 `skills/horosa-agent` 的生成副本
+  （`gen_agent_mirrors.py`，docs-sync `bundle_drift` 锁）；`skill_install.CLIENT_SKILL_DIRS` 给每个客户端**显式**登记一个目录（读共享
+  `~/.agents/skills` 的就只装那里，`[]` = 不读本机 skill），两处都装会让同时读两处的客户端看到两份。已有目录：软链接与无标记的同名目录不动、
+  用户改过的先 `.horosa-bak`、替换走「暂存目录 → 挪开旧的 → 换入」。失败只进 `notes`，不让 setup 退出 2。**setup 新写的任何路径都要有接缝**：
+  单测经 `skill_install.default_home` 重定向，lane 每次带 `--skill-dir <工作目录>`（lane 继承真 HOME，否则本地跑一次就写进维护者的 `~/.agents`）。
 - **路径/用户值进配置文本必须走序列化器，禁裸 f-string 插值。** `client config` 各格式产物
   （TOML/JSON/deep-link）里的 command/args/cwd 一律 `json.dumps`（JSON 转义 ⊂ TOML 基本字符串转义）
   或 `quote`；裸插值在 Windows 上会把 `C:\Users\…` 的反斜杠原样写进 TOML → 整文件不可解析、
@@ -1136,7 +1148,7 @@ A global stability pass hardened these; keep them true when you touch the releva
   只选 F821/F822/F823/`B034`，src/scripts/tests）。只在没人跑的平台上可达的分支就是没测过的代码——这类「运行时必崩」错误靠静态检查兜，
   不靠 pytest 走到。`re.split` 的 maxsplit、`re.sub` / `re.subn` 的 count / flags 一律关键字传参：3.13 起位置传参弃用，而 CI 钉 3.12，
   只有 venv 更新的维护机会看到那行警告。
-- **lane 永不碰调用者自己的客户端配置（v0.38.1 发布后）。** 九客户端步骤一律 `--config <work>/client-configs/…`；Claude Code user scope
+- **lane 永不碰调用者自己的客户端配置（v0.38.1 发布后）。** 全部客户端的 setup 步骤一律 `--config <work>/client-configs/…`（v0.41.0 起再加 `--skill-dir <work>/skills/<client>`）；Claude Code user scope
   步骤用 `Lane.claude_user_scope_env()`（`HOME` / `USERPROFILE` / `CLAUDE_CONFIG_DIR` 指向 `<work>/claude-user-home`）——旧实现继承真 HOME，维护机上
   `claude mcp add --scope user` 写的是真 `~/.claude.json`，清理那句 `claude mcp remove --scope user horosa` 还会删掉维护者原有的条目（托管 runner 没有
   `claude`，矩阵从没暴露）。本机用真 `claude` 验过隔离：add / get / remove 全落在隔离目录，真配置 sha 不变。守卫
@@ -1179,8 +1191,18 @@ A global stability pass hardened these; keep them true when you touch the releva
 
 - **发布件 = darwin seed + 派生的 win32-x64 + wheel + `.mcpb` + SBOM + 清单 + SHA256SUMS；PyPI 暂缓。** `publish-pypi.yml` 只手动
   dispatch（用 `GITHUB_TOKEN` 翻公开产生的 published 事件不触发下游）；`verify_wheel_contents.py` 锁 wheel 内容（知识包 / bench / 闸表 /
-  Windows 启动模板 / 入口点 / 运行期契约；core-js 不进 wheel、随 runtime）；`server.json` 登记 pypi 与 mcpb 两个 package，mcpb 的
-  `fileSha256` 必须来自真正上传的那次 `--draft` 构建（`release-completeness.yml` 对齐）。
+  Windows 启动模板 / 入口点 / 运行期契约 / skill 副本；core-js 不进 wheel、随 runtime）；`server.json` 只登记 mcpb（PyPI 未开，pypi 条目注册表
+  publish 时必拒），mcpb 的 `fileSha256` 必须来自真正上传的那次 `--draft` 构建（`release-completeness.yml` 对齐）。
+- **官方 MCP Registry：名字按 GitHub 原样大小写、只在翻公开之后登记、只信发布页的 sha（v0.41.0）。** OIDC 授予
+  `io.github.<repository_owner>/*`、前缀比较区分大小写 → `io.github.Horace-Maxwell/horosa-skill`；注册表的 `/v0/validate`
+  （`mcp-publisher validate`）只查 schema 与语义，命名空间 / 包存在 / publisher-provided ≤ 4096 B / 资产 HEAD 都只在 publish 时执行——
+  这些由 `verify_server_json.server_json_problems` 在本地复刻。`release-runtime.yml` 的 `mcp-registry` 作业挂在 `publish` 之后（草稿资产
+  匿名 404），调用 `publish-mcp-registry.yml`：`render_registry_server_json.py` 用公开 `SHA256SUMS.txt` 渲染（tag 处的 server.json 带的是旧 sha）、
+  复刻 HEAD 探测 → 已登记则跳过（版本不可变）→ 钉版本 + sha 的 publisher → OIDC 发布。已公开的版本补登记：手动 dispatch 同一工作流。
+- **Agent Plugins v1 = 仓根 `plugin.json` + `mcp.json`（1.0.0；v0.41.0）。** schema 封闭：清单只许 10 个字段（skills / MCP 按目录约定发现，
+  写进清单是规范外字段）；stdio 条目只许 `type`（必填）/ `command`（单个可执行名，不展开占位符）/ `args` / `env` / `cwd`；Cursor 不展开
+  `${PLUGIN_ROOT}` → 一个占位符都不写，命令是 `uvx` + 钉当前版本的 wheel、精简面。VS Code / Copilot CLI / Codex / OpenHands 优先读它，
+  OpenClaw / Claude Code 仍读 `.claude-plugin/`——两套并存不会重复注册。`verify_client_configs.check_agent_plugin` 锁；`bump_version` 同改两份。
 - **零安装 = wheel 资产 + 镜像前缀 + 钉版本锁。** 每个 Release 附 `horosa_skill-<ver>-py3-none-any.whl`（发布脚本
   [5/8] `uv build --wheel`；`release-completeness.yml` 对 ≥ 0.38.0 断言在场并真跑 `uvx --from <URL> horosa-skill --version`）；
   `HOROSA_RUNTIME_MIRROR` 由 `runtime/mirrors.py` 统一改写清单/归档/wheel 三种 URL；`client config --launcher uvx-wheel`

@@ -330,10 +330,14 @@ progress lines and error envelopes go to stderr, so parse stdout only.
 
 ## First 3 commands on a fresh machine
 
-Each block: get `uv` → one-command onboarding (installs the offline runtime, writes the client config, then starts
-the server once over stdio with the exact command the client will run) → live check. Replace `cursor` with the
-client at hand (`claude-code` / `claude-desktop` / `vscode` / `codex` / `gemini` / `windsurf` = Devin Desktop, formerly Windsurf — the key is kept
-for compatibility and writes the Devin CLI config / `cline` / `zed`).
+Each block: get `uv` → one-command onboarding (installs the offline runtime, writes the client config, installs this
+skill into the skills folder the client reads, then starts the server once over stdio with the exact command the client
+will run) → live check. Replace `cursor` with the client at hand (`claude-code` / `claude-desktop` / `vscode` / `codex` /
+`gemini` / `windsurf` = Devin Desktop, formerly Windsurf — the key is kept for compatibility and writes the Devin CLI
+config / `cline` / `zed` / `opencode` / `goose` / `kiro` / `copilot-cli` / `junie` / `qwen` / `kimi` / `qoder` /
+`codebuddy` / `trae` (prints an import link — TRAE has no config file) / `amp` / `warp` / `droid` / `augment` / `deepcode` /
+`dsh` (writes a standalone patch for `dsh web --patch`)). `horosa-skill client skill --client <key>` installs only this
+skill (for a hand-wired MCP config).
 
 **macOS (zsh), no checkout**
 

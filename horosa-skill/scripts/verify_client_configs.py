@@ -185,11 +185,76 @@ def check_editor_project_configs(errors: list[str], configs: dict | None = None)
                     errors.append(f"{_label(path)}:{name} 的 --directory `{directory}` 展开后没有 pyproject.toml")
 
 
+# v0.41.0：Agent Plugins v1（agent-plugins.org，1.0.0）——VS Code / Copilot CLI / Codex / Kiro / OpenHands 读仓根的
+# `plugin.json` + `mcp.json`。两份 schema 都是**封闭**的：未知字段在清单里「报告并忽略」、在 server 里整条拒收；
+# `command` 是单个可执行名（不展开占位符）；Cursor 不展开 `${PLUGIN_ROOT}` / `${PLUGIN_DATA}`——所以我们一个占位符都不写。
+AGENT_PLUGIN_MANIFEST = REPO_ROOT / "plugin.json"
+AGENT_PLUGIN_MCP = REPO_ROOT / "mcp.json"
+AGENT_PLUGIN_SPEC = "1.0.0"
+_AGENT_PLUGIN_KEYS = {"$schema", "name", "version", "description", "author", "homepage", "repository", "license", "keywords", "extensions"}
+_AGENT_PLUGIN_NAME = re.compile(r"^(?!.*(?:--|\.\.))[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$")
+_AGENT_STDIO_KEYS = {"type", "command", "args", "env", "cwd"}
+
+
+def _pyproject_version() -> str:
+    match = re.search(r'^version = "([^"]+)"', (PKG_ROOT / "pyproject.toml").read_text(encoding="utf-8"), re.M)
+    return match.group(1) if match else "?"
+
+
+def check_agent_plugin(errors: list[str], *, manifest_path: Path = AGENT_PLUGIN_MANIFEST, mcp_path: Path = AGENT_PLUGIN_MCP,
+                       version: str | None = None) -> None:
+    version = version or _pyproject_version()
+    if not manifest_path.is_file() or not mcp_path.is_file():
+        errors.append("Agent Plugins v1 需要仓根 plugin.json 与 mcp.json 两份文件")
+        return
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("$schema") != f"https://agent-plugins.org/schemas/{AGENT_PLUGIN_SPEC}/plugin.schema.json":
+        errors.append(f"plugin.json $schema 必须是 {AGENT_PLUGIN_SPEC}（Codex / VS Code / OpenHands 只认这一版，1.1.0 仍是草案）")
+    stray = sorted(set(manifest) - _AGENT_PLUGIN_KEYS)
+    if stray:
+        errors.append(f"plugin.json 有规范之外的字段 {stray}（skills / mcpServers 按目录约定发现，不写进清单）")
+    if not _AGENT_PLUGIN_NAME.match(str(manifest.get("name") or "")) or len(str(manifest.get("name") or "")) > 64:
+        errors.append(f"plugin.json name `{manifest.get('name')}` 不符合 [a-z0-9.-]、1–64 字符")
+    if manifest.get("version") != version:
+        errors.append(f"plugin.json version {manifest.get('version')!r} != pyproject {version!r}")
+    if set(manifest.get("author") or {}) - {"name", "email", "url"}:
+        errors.append("plugin.json author 只许 name / email / url")
+    mcp = json.loads(mcp_path.read_text(encoding="utf-8"))
+    if set(mcp) != {"$schema", "mcpServers"}:
+        errors.append(f"mcp.json 只许 $schema 与 mcpServers 两个键，现有 {sorted(mcp)}")
+    if mcp.get("$schema") != f"https://agent-plugins.org/schemas/{AGENT_PLUGIN_SPEC}/mcp.schema.json":
+        errors.append(f"mcp.json $schema 必须与 plugin.json 同为 {AGENT_PLUGIN_SPEC}（版本不一致 = 客户端禁用该插件的 MCP）")
+    servers = mcp.get("mcpServers") if isinstance(mcp.get("mcpServers"), dict) else {}
+    if not servers:
+        errors.append("mcp.json 没有任何 server")
+    for name, entry in servers.items():
+        if entry.get("type") != "stdio":
+            errors.append(f"mcp.json:{name} 必须显式 \"type\": \"stdio\"")
+        stray = sorted(set(entry) - _AGENT_STDIO_KEYS)
+        if stray:
+            errors.append(f"mcp.json:{name} 有 stdio 之外的字段 {stray}（schema 封闭，整条 server 会被拒）")
+        command = str(entry.get("command") or "")
+        if not command or any(ch.isspace() for ch in command) or "${" in command or ("/" in command and not command.startswith("./")):
+            errors.append(f"mcp.json:{name} command `{command}` 必须是单个可执行名（不是 shell 行、不展开占位符）")
+        blob = json.dumps(entry, ensure_ascii=False)
+        if "${" in blob:
+            errors.append(f"mcp.json:{name} 含占位符——Cursor 不展开 ${{PLUGIN_ROOT}} / ${{PLUGIN_DATA}}，会原样传给 server")
+        args = [str(a) for a in entry.get("args") or []]
+        if "--transport" not in args or "stdio" not in args:
+            errors.append(f"mcp.json:{name} 的 args 缺 `--transport stdio`")
+        pinned = f"/releases/download/v{version}/horosa_skill-{version}-py3-none-any.whl"
+        if not any(arg.endswith(pinned) for arg in args):
+            errors.append(f"mcp.json:{name} 必须钉当前版本的发布 wheel（…{pinned}）——bump_version 会一起改它")
+        if set(entry.get("env") or {}) & {"PLUGIN_ROOT", "PLUGIN_DATA"}:
+            errors.append(f"mcp.json:{name} env 不许定义 PLUGIN_ROOT / PLUGIN_DATA（客户端导出它们）")
+
+
 def main() -> int:
     errors: list[str] = []
     check_project_config(errors)
     check_plugin_config(errors)
     check_editor_project_configs(errors)
+    check_agent_plugin(errors)
     if errors:
         print("client-config guard FAILED —— 提交的客户端配置连不上：", file=sys.stderr)
         for err in errors:
@@ -197,7 +262,8 @@ def main() -> int:
         return 1
     print(
         "client-config OK: 项目配置无插件占位符、占位符全带默认值、--directory 指向真实包；"
-        "插件配置占位符 ⊆ 插件词表且 user_config 键均已声明；.cursor/.vscode 项目配置占位符 ⊆ 各自词表。"
+        "插件配置占位符 ⊆ 插件词表且 user_config 键均已声明；.cursor/.vscode 项目配置占位符 ⊆ 各自词表；"
+        "Agent Plugins v1 根清单与 mcp.json 符合 1.0.0 封闭 schema、钉当前 wheel。"
     )
     return 0
 

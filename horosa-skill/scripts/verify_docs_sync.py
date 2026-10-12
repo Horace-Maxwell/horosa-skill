@@ -333,6 +333,8 @@ COUNT_DOCS = [
     ".clinerules/horosa-skill.md",
     # 2026-10 表面审计：MCP Registry 的卡片描述（server.json）写「106 technique tools」两个版本没人发现。
     "server.json",
+    # v0.41.0：Agent Plugins v1 的根清单（VS Code / Copilot CLI / Codex / Kiro 读它）也写工具数。
+    "plugin.json",
 ]
 
 
@@ -456,6 +458,8 @@ def check_stale_claims(version: str) -> None:
 PINNED_DOCS = [
     "README.md", "README_EN.md", "docs/INSTALL_RESTRICTED_NETWORK.md",
     "skills/horosa-agent/SKILL.md", ".agents/skills/horosa-agent/SKILL.md", "server.json",
+    # v0.41.0：Agent Plugins v1 的根 mcp.json 钉着当前版本的 wheel（VS Code / Copilot CLI / Codex 装插件时直接执行它）。
+    "mcp.json",
 ]
 PIN_PATTERNS = (
     re.compile(r"horosa-skill@v(\d+\.\d+\.\d+)#"),
@@ -996,6 +1000,10 @@ def check_agent_mirrors_generated() -> None:
     spec.loader.exec_module(module)
     for rel in module.drift():
         err(f"{rel}: differs from scripts/gen_agent_mirrors.py's render — the mirrors are build output; edit the template and rerun the generator")
+    # v0.41.0：wheel 里的 skill 副本（`setup` 装进客户端 skills 目录的就是它）也是生成件——改了 skills/horosa-agent 忘了重跑，
+    # 用户装到的就是旧规则。
+    for rel in module.bundle_drift():
+        err(f"{module.SKILL_BUNDLE_REL}/{rel}: packaged skill bundle differs from skills/horosa-agent — rerun scripts/gen_agent_mirrors.py")
 
 
 THIRD_PARTY_LEDGER = PKG / "contracts" / "third_party_facts.json"

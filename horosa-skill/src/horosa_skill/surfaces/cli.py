@@ -16,6 +16,7 @@ from typing import Mapping, Any, Optional
 import typer
 
 from horosa_skill import __version__
+from horosa_skill import clients_extra
 from horosa_skill.agent_guidance import build_agent_guidance, validate_agent_preflight
 from horosa_skill.config import Settings
 from horosa_skill.benchmark import run_benchmark
@@ -309,7 +310,26 @@ def _merge_client_config(path: Path, payload: object) -> dict[str, Any]:
                 "backup": str(backup) if backup.exists() else None}
     if not isinstance(payload, dict):
         raise typer.BadParameter("这份产物不是对象，无法合并进客户端配置。")
-    root_key = next((key for key in _MERGEABLE_ROOT_KEYS if isinstance(payload.get(key), dict)), None)
+    if payload.get("config_format") == "yaml":
+        return _write_yaml_merge(target, payload)
+    if payload.get("config_format") == "dsh-patch":
+        # 我们自己的独立补丁文件（从不碰 ~/.dsh/cordis.patch.yml）：整份重写，先备份。
+        backup = None
+        if target.exists():
+            backup = target.with_name(f"{target.name}.horosa-bak")
+            backup.write_bytes(target.read_bytes())
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp = target.with_name(f"{target.name}.horosa-tmp")
+        tmp.write_text(clients_extra.render_dsh_patch(payload), encoding="utf-8")
+        os.replace(tmp, target)
+        return {"path": str(target), "format": "dsh-patch", "root_key": "insert", "servers": sorted(payload.get("insert") or {}),
+                "backup": str(backup) if backup else None}
+    # v0.41.0：新客户端的根键（OpenCode `mcp`、Amp 字面量 `amp.mcpServers`）由产物显式声明，不进通用猜测表——
+    # OpenClaw 的产物也是 `{"mcp": {"servers": …}}`，把 `mcp` 放进猜测表会把它的 `servers` 当成一个 server 合并，覆盖用户已有的全部条目。
+    declared = payload.get("root_key")
+    root_key = declared if isinstance(declared, str) and isinstance(payload.get(declared), dict) else next(
+        (key for key in _MERGEABLE_ROOT_KEYS if isinstance(payload.get(key), dict)), None
+    )
     if root_key is None:
         raise typer.BadParameter(
             "这个格式的产物没有可合并的 server 块（mcpServers / servers / context_servers），"
@@ -326,6 +346,12 @@ def _merge_client_config(path: Path, payload: object) -> dict[str, Any]:
             raise typer.BadParameter(f"{target} 不是 UTF-8 文本（{exc}），拒绝合并——请手动把 {root_key} 片段粘进去。") from exc
         from horosa_skill import jsonc as _jsonc
 
+        if _jsonc.is_jsonc_only(text) and payload.get("strict_json"):
+            # v0.41.0：Deep Code 用 JSON.parse 读、失败就整份丢弃（连 API key 一起）——带注释的文件对它已经是坏的，
+            # 保注释插入只会让它继续坏着；拒写并说清楚，比静默写进一份它根本不读的文件好。
+            raise typer.BadParameter(
+                f"{target} 含注释或尾逗号：这个客户端会把整份配置（含 API key）静默丢弃。先删掉注释 / 尾逗号让它成为严格 JSON，再重跑。"
+            )
         if _jsonc.is_jsonc_only(text):
             # 🔴 v0.38.1 C4：Zed 出厂 settings.json / VS Code mcp.json 带注释与尾逗号，此前直接拒写。
             # 文本级插入：只动 <root_key>.<server> 这一段，注释与其它键逐字节保留；写完回读验证。
@@ -370,6 +396,38 @@ def _merge_client_config(path: Path, payload: object) -> dict[str, Any]:
             tmp.unlink()
     return {"path": str(target), "format": written_format, "root_key": root_key,
             "servers": sorted(servers), "backup": str(backup) if backup else None}
+
+
+def _write_yaml_merge(target: Path, payload: dict[str, Any]) -> dict[str, Any]:
+    """YAML 客户端（Goose `extensions:`）：只 upsert `<root_key>.<server>` 一段，其余字节原样；先备份、原子替换（v0.41.0）。"""
+    from horosa_skill import yaml_block
+
+    root_key = str(payload["root_key"])
+    servers = payload[root_key]
+    raw = target.read_bytes() if target.exists() else b""
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise typer.BadParameter(f"{target} 不是 UTF-8 文本（{exc}），拒绝合并——请手动把 {root_key} 片段粘进去。") from exc
+    try:
+        for name, entry in servers.items():
+            text = yaml_block.upsert_child(text, root_key, name, entry)
+    except yaml_block.YamlShapeError as exc:
+        raise typer.BadParameter(f"{target} 的 YAML 形状不认识（{exc}），拒绝合并——请手动把 {root_key} 片段粘进去。") from exc
+    backup: Path | None = None
+    if raw:
+        backup = target.with_name(f"{target.name}.horosa-bak")
+        backup.write_bytes(raw)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_name(f"{target.name}.horosa-tmp")
+    tmp.write_text(text, encoding="utf-8")
+    try:
+        os.replace(tmp, target)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+    return {"path": str(target), "format": "yaml", "root_key": root_key, "servers": sorted(servers),
+            "backup": str(backup) if backup else None}
 
 
 def _client_config_write(path: Path, payload: object) -> Path:
@@ -1704,12 +1762,13 @@ def doctor(
 
 # ---------------------------------------------------------------------------
 # `horosa-skill setup --client <target>`（v0.38.0 B4）：一条命令接入任意 MCP 客户端。
-# 步骤固定、逐步记录、失败包结构化：network_probe → install → config → doctor → client_check → stdio_probe → next_steps。
+# 步骤固定、逐步记录、失败包结构化：network_probe → install → config → skill → doctor → client_check → stdio_probe → next_steps。
 # 🔴 第 3 步（config）之前失败保证 `config_untouched: true`；写过配置的失败包带 `backup_path`。
+# v0.41.0 第 4 步 skill：把 horosa-agent skill 装进该客户端读的 skills 目录（只建议性：装不上不让 setup 失败，next_steps 说清楚）。
 # 输出契约冻结在 tests/test_cli_output_contract.py；行为在 tests/test_setup_command.py。
 # ---------------------------------------------------------------------------
 
-_SETUP_STEPS = ("network_probe", "install", "config", "doctor", "client_check", "stdio_probe", "next_steps")
+_SETUP_STEPS = ("network_probe", "install", "config", "skill", "doctor", "client_check", "stdio_probe", "next_steps")
 _SETUP_NETWORK_TIMEOUT_SECONDS = 5.0
 # uvx-wheel 首跑要下载 wheel 与依赖（顺带焐热 uvx 缓存，客户端首次启动就快了）；uv 形态通常 5–10 s。
 _SETUP_STDIO_TIMEOUT_SECONDS = 300.0
@@ -1723,6 +1782,8 @@ _CLIENT_RESTART_HINTS = {
     "windsurf": "重启 Devin Desktop（原 Windsurf）；Devin Local 的 MCP 列表里应看到 horosa（旧版 Cascade 看 MCP 面板）。",
     "cline": "重载 VS Code 窗口；Cline 的 MCP Servers 面板里应看到 horosa。",
     "zed": "重启 Zed；Agent 面板的 Context Servers 里应看到 horosa。",
+    # v0.41.0：另 16 家的提示与其余事实同住 clients_extra（每家一行）。
+    **{key: spec.restart_hint for key, spec in clients_extra.EXTRA_CLIENTS.items()},
 }
 _SETUP_TRY_PROMPT = (
     "在客户端里试一句：「用八字看看 1990-01-01 12:00 北京出生的人」——Horosa 会先追问缺失的设置"
@@ -1787,6 +1848,10 @@ def _client_probe_env(client_key: str, extra_env: dict[str, str]) -> dict[str, s
     if client_key == "codex":
         base = {key: os.environ[key] for key in _CODEX_PASSTHROUGH_ENV if key in os.environ}
         return {**base, **extra_env}
+    # v0.41.0：Copilot CLI 只转发 PATH——探针按同样的最坏形状起 server，才证明得了「env 表里写的够用」。
+    narrowed = clients_extra.probe_env(client_key, extra_env)
+    if narrowed is not None:
+        return narrowed
     return {**os.environ, **extra_env}
 
 
@@ -1911,6 +1976,78 @@ def _claude_mcp_add(command: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _setup_skill_step(
+    client_key: str | None, *, enabled: bool, skill_dir: Path | None, plan_only: bool, announce: Any,
+) -> dict[str, Any]:
+    """`setup` 第 4 步：把 horosa-agent skill 装进该客户端读的 skills 目录（v0.41.0）。
+
+    🔴 只建议性：任何失败都记进 `targets[*].error` + `notes`，step 仍 ok——MCP 配置已写好，server 的 instructions
+    同样带着「先问后调 / 禁手算」；不能因为 skills 目录写不进去就让整条接入报失败。
+    """
+    from horosa_skill import skill_install
+
+    if not enabled:
+        return {"ok": True, "skipped": True, "reason": "--no-skill", "summary": "skill 未安装（--no-skill）"}
+    if skill_dir is not None:
+        targets = [skill_dir.expanduser()]
+    elif client_key is None:
+        targets = [skill_install.shared_skills_dir()]  # `client skill` 不指定客户端 = 共享目录（读它的客户端最多）
+    else:
+        targets = skill_install.client_skill_dirs(client_key)
+    if not targets:
+        step: dict[str, Any] = {
+            "ok": True, "skipped": True, "reason": f"{client_key} 不从本机文件夹读 skill",
+            "summary": "该客户端不读本机 skill 文件夹（规则随 MCP server 的 instructions 下发）",
+        }
+        if client_key == "claude-desktop":
+            # Claude Desktop 的聊天 / Cowork 只收界面里上传的 ZIP——打好包、告诉用户在哪上传（它的 Code 标签页 = Claude Code）。
+            try:
+                archive = skill_install.export_zip() if not plan_only else None
+            except OSError as exc:
+                step["notes"] = [f"skill ZIP 没打出来（{type(exc).__name__}: {exc}）。"]
+                return step
+            step["zip"] = str(archive) if archive else None
+            step["notes"] = [
+                ("skill 打包成 " + str(archive) + "：" if archive else "（dry-run：不打包）")
+                + "在 Claude Desktop 里 Customize > Skills > + > Create skill > Upload a skill 上传它（需开启 Settings > Capabilities > "
+                "Code execution and file creation）。Code 标签页读的是 ~/.claude/skills，用 `setup --client claude-code` 装。"
+            ]
+            step["summary"] = "skill 已打包成 ZIP（需在 Claude Desktop 里上传）" if archive else step["summary"]
+        return step
+    announce(("计划" if plan_only else "安装") + " horosa-agent skill → " + ", ".join(str(t) for t in targets))
+    results: list[dict[str, Any]] = []
+    notes: list[str] = []
+    for target in targets:
+        try:
+            result = skill_install.install_skill(target, dry_run=plan_only)
+        except (OSError, FileNotFoundError) as exc:
+            result = {"path": str(target / skill_install.SKILL_NAME), "action": "failed", "error": f"{type(exc).__name__}: {exc}"[:300]}
+            notes.append(f"skill 没装上（{result['error']}）：MCP 已可用；可稍后重跑本命令，或手动把 skill 复制到 {target}。")
+        results.append(result)
+        action = result.get("action")
+        if action in {"installed", "updated", "adopted"}:
+            notes.append(f"horosa-agent skill 已装到 {result['path']}：新开一个会话，agent 才会读到「先问后调 / 读快照 / 禁手算」规则。")
+        if result.get("backup"):
+            notes.append(f"你改过的旧 skill 备份在 {result['backup']}。")
+        if action == "skipped":
+            notes.append(f"{result['path']} 已存在且不是本工具装的（{result.get('reason')}），没有覆盖。")
+        if action in {"installed", "updated", "adopted", "unchanged"} and not plan_only:
+            for other in skill_install.duplicate_copies(target):
+                notes.append(
+                    f"另有一份在 {other}：Cursor / VS Code / Codex 同时读 ~/.agents/skills 与 ~/.claude/skills，会列出两份同名 skill"
+                    "（Claude Code 只读后者、其余多数只读前者——只用一类客户端的话删掉另一份即可）。"
+                )
+    done = [r for r in results if r.get("action") in {"installed", "updated", "adopted", "unchanged"}]
+    summary = (
+        "skill 计划安装" if plan_only
+        else "skill 已是最新" if done and all(r.get("action") == "unchanged" for r in done)
+        else "skill 已安装" if done
+        else "skill 未安装（见 next_steps）"
+    )
+    return {"ok": True, "skill": skill_install.SKILL_NAME, "plan_only": plan_only, "targets": results,
+            "notes": notes, "summary": summary, **({"skipped": True, "reason": "dry-run / --no-write"} if plan_only else {})}
+
+
 def _default_setup_launcher(skill_root: Path | None) -> str:
     """源码 checkout 里默认 `uv`；wheel / uvx 装出来的包旁边没有 pyproject.toml → `uvx-wheel`。"""
     try:
@@ -1945,6 +2082,8 @@ def _run_setup(
     stdio_probe: bool,
     write: bool,
     cache_wheel: bool = True,
+    skill: bool = True,
+    skill_dir: Path | None = None,
 ) -> dict[str, Any]:
     from horosa_skill.runtime.manager import _platform_key
 
@@ -2058,10 +2197,15 @@ def _run_setup(
             claude_bin = shutil.which("claude")
             env_flags = [item for key, value in surface_env.items() for item in ("-e", f"{key}={value}")]
             add_command = [claude_bin or "claude", "mcp", "add", "--scope", "user", *env_flags, server_name, "--", *stdio_command]
+    elif target is None and payload.get("config_mode") == "printed":
+        # v0.41.0：没有文档化用户级配置文件的客户端（TRAE）——打印一键导入链接与可粘贴 JSON，不猜路径写文件。
+        mode = "printed"
     elif target is None:
         target = _preferred_config_path(client_key)
-    root_key = "toml_stdio" if client_key == "codex" else next(
-        (key for key in _MERGEABLE_ROOT_KEYS if isinstance(payload.get(key), dict)), None
+    declared_root = payload.get("root_key")
+    root_key = "toml_stdio" if client_key == "codex" else (
+        declared_root if isinstance(declared_root, str) and isinstance(payload.get(declared_root), dict)
+        else next((key for key in _MERGEABLE_ROOT_KEYS if isinstance(payload.get(key), dict)), None)
     )
     config_step: dict[str, Any] = {
         "mode": mode, "path": str(target) if target is not None else None,
@@ -2072,8 +2216,12 @@ def _run_setup(
         config_step["warnings"] = payload["warnings"]
     if add_command is not None:
         config_step["command"] = _format_cli_command(add_command)
+    if mode == "printed" and add_command is None:
+        config_step.update({key: payload[key] for key in ("deep_link", "deep_link_cn", "paste_json", "note") if key in payload})
     if dry_run or not write:
         config_step.update({"ok": True, "skipped": True, "reason": "dry-run" if dry_run else "--no-write"})
+    elif mode == "printed" and add_command is None:
+        config_step.update({"ok": True, "executed": False})
     elif mode == "claude-mcp-add":
         assert add_command is not None
         if shutil.which("claude") is None:
@@ -2108,8 +2256,12 @@ def _run_setup(
         config_step.update({"ok": True, "seconds": seconds, "written": written, "backup": written.get("backup")})
     steps["config"] = config_step
 
-    # ---- 4 doctor
-    announce(4, "doctor", "体检…")
+    # ---- 4 skill
+    steps["skill"] = _setup_skill_step(client_key, enabled=skill, skill_dir=skill_dir, plan_only=dry_run or not write,
+                                       announce=lambda text: announce(4, "skill", text))
+
+    # ---- 5 doctor
+    announce(5, "doctor", "体检…")
     report, seconds = _timed_call(lambda: _doctor_report(settings, manager))
     issues = [str(item) for item in report.get("issues") or []]
     installed = report.get("installed") is True
@@ -2135,12 +2287,14 @@ def _run_setup(
              "platform_supported": report.get("platform_supported")},
         )
 
-    # ---- 5 client_check
+    # ---- 6 client_check
     if dry_run or not write or mode == "printed":
-        reason = "dry-run" if dry_run else "--no-write" if not write else "配置未落盘（claude 不在 PATH，命令已打印）"
+        reason = "dry-run" if dry_run else "--no-write" if not write else (
+            "配置未落盘（claude 不在 PATH，命令已打印）" if client_key == "claude-code" else "该客户端没有可写的配置文件（导入链接 / 粘贴 JSON 已打印）"
+        )
         steps["client_check"] = {"ok": True, "skipped": True, "reason": reason}
     else:
-        announce(5, "client_check", "回读磁盘上的配置…")
+        announce(6, "client_check", "回读磁盘上的配置…")
         check_path = target if mode == "merge" else None
         check, seconds = _timed_call(lambda: _client_check_report([client_key], check_path))
         findings = [f for r in check["clients"] for f in r["findings"] if f.get("entry")]
@@ -2152,16 +2306,21 @@ def _run_setup(
             fail("client_check", "setup.client_check_failed", "写完回读，配置里的 horosa 条目缺失或有问题。",
                  {"findings": findings, "searched": searched})
 
-    # ---- 6 stdio_probe
+    # ---- 7 stdio_probe
     if dry_run or not stdio_probe:
         steps["stdio_probe"] = {"ok": True, "skipped": True, "reason": "dry-run" if dry_run else "--no-stdio-probe"}
     else:
-        announce(6, "stdio_probe", "用客户端将要执行的命令真起一次 MCP server（stdio，不起离线 runtime）…")
+        announce(7, "stdio_probe", "用客户端将要执行的命令真起一次 MCP server（stdio，不起离线 runtime）…")
         expected = int(payload["tool_surface"]["tools"])
         probe_args = [*stdio_command[1:], "--skip-runtime-start"]
         # 🔴 v0.38.1 C14：按**客户端的形状**起——Codex 只给最小环境（∪ 配置里的 env 表），其余客户端继承整个环境；
         # cwd = 项目根（uv 形态 = Codex 的 cwd）。再读 horosa://runtime/status，抓「server 算出的 runtime 根 ≠ 终端里的」。
         configured_env = {**surface_env, **(_codex_env_roots() if client_key == "codex" else {})}
+        # v0.41.0：条目里**实际写着**的 env 才是客户端会交给 server 的（Copilot CLI 的 HOME 与两个 runtime 根、TRAE 的超时变量）。
+        # 只给 Codex 补根的旧写法，在 Copilot CLI 上把「配置写对了」测成 runtime_mismatch（首次真探针实跑抓到）。
+        written = (payload.get(root_key) or {}).get(server_name) if root_key and root_key != "toml_stdio" else None
+        if isinstance(written, dict):
+            configured_env.update({str(k): str(v) for k, v in (_normalize_client_entry(written).get("env") or {}).items()})
         probe_env = _client_probe_env(client_key, configured_env)
         probe_cwd = str(root) if (launcher_key == "uv" and root is not None) else str(_project_root())
         probe, seconds = _timed_call(
@@ -2186,12 +2345,15 @@ def _run_setup(
                  {**probe, "expected_tools": expected, "command": steps["stdio_probe"]["command"],
                   **({"diagnosis": diagnosis} if diagnosis else {})})
 
-    # ---- 7 next_steps
+    # ---- 8 next_steps
     prefix = "uv run horosa-skill" if launcher_key == "uv" else "horosa-skill"
     next_steps: list[str] = []
-    if mode == "printed":
+    if mode == "printed" and config_step.get("command"):
         next_steps.append(f"先执行：{config_step['command']}")
     next_steps.append(_CLIENT_RESTART_HINTS[client_key])
+    if client_key in clients_extra.EXTRA_CLIENTS:
+        next_steps.extend(clients_extra.EXTRA_CLIENTS[client_key].notes)
+    next_steps.extend(steps["skill"].get("notes") or [])
     if issues == ["services:not_running"]:
         next_steps.append(f"离线 runtime 已装好，客户端首次调用时自动启动（冷启动 10–45 s）；想现在就起：`{prefix} runtime start`。")
     elif not installed:
@@ -2217,13 +2379,15 @@ def _run_setup(
         f"配置计划写到 {target}" if (dry_run or not write) and target is not None
         else f"配置已写入 {target}" if mode == "merge" and target is not None
         else "已执行 claude mcp add（用户级）" if mode == "claude-mcp-add" and steps["config"].get("executed")
-        else "注册命令已打印（claude 不在 PATH）" if mode == "printed"
+        else "注册命令已打印（claude 不在 PATH）" if mode == "printed" and client_key == "claude-code"
+        else "导入链接 / 粘贴 JSON 已打印（该客户端没有可写的配置文件）" if mode == "printed"
         else "配置未落盘"
     )
     probe_text = (
         f"stdio 起服务成功（{steps['stdio_probe'].get('tools')} 个工具）" if not steps["stdio_probe"].get("skipped")
         else "stdio 探测已跳过"
     )
+    skill_text = steps["skill"].get("summary") or "skill 未处理"
     ok = all(step.get("ok") for step in steps.values())
     return {
         "ok": ok,
@@ -2236,7 +2400,7 @@ def _run_setup(
         "dry_run": dry_run,
         "steps": steps,
         "next_steps": next_steps,
-        "summary": f"{client_key}：{install_text}；{config_text}；{probe_text}。",
+        "summary": f"{client_key}：{install_text}；{config_text}；{skill_text}；{probe_text}。",
         "recheck_command": f"{prefix} client check --client {client_key}",
     }
 
@@ -2250,7 +2414,8 @@ def _run_setup(
 def setup(
     client: str = typer.Option(
         ..., "--client",
-        help="Target client: claude-code / claude-desktop / cursor / vscode / codex / gemini / windsurf / cline / zed.",
+        help="Target client: claude-code / claude-desktop / cursor / vscode / codex / gemini / windsurf / cline / zed / "
+             + " / ".join(clients_extra.EXTRA_CLIENTS) + ".",
     ),
     launcher: str | None = typer.Option(
         None, "--launcher",
@@ -2278,12 +2443,21 @@ def setup(
         True, "--cache-wheel/--no-cache-wheel",
         help="uvx-wheel launcher only: pre-download the wheel to ~/.horosa/wheels and write that local path (offline-capable cold start).",
     ),
+    skill: bool = typer.Option(
+        True, "--skill/--no-skill",
+        help="Also install the horosa-agent skill (rules: clarify-before-call, read the export snapshot, never hand-calculate) "
+             "into the skills folder this client reads (~/.agents/skills or the client's own).",
+    ),
+    skill_dir: Path | None = typer.Option(
+        None, "--skill-dir", help="Install the skill into this skills folder instead (the skill lands in <dir>/horosa-agent).",
+    ),
 ) -> None:
     try:
         report = _run_setup(
             client=client, launcher=launcher, surface=surface, config=config, scope=scope, server_name=server_name,
             skill_root=skill_root, dry_run=dry_run, skip_install=skip_install, archive=archive, manifest_url=manifest_url,
             probe_network=probe_network, stdio_probe=stdio_probe, write=write, cache_wheel=cache_wheel,
+            skill=skill, skill_dir=skill_dir,
         )
     except _SetupFailure as failure:
         typer.echo(json.dumps(failure.payload, ensure_ascii=False, indent=2), err=True)
@@ -2910,6 +3084,7 @@ _CLIENT_COMPACT_DEFAULT = {
     "zed": True,
     "claude-code": False,
     "claude-desktop": False,
+    **{key: True for key in clients_extra.EXTRA_CLIENTS},
 }
 _CLIENT_COMPACT_REASON = {
     "cursor": "Cursor 全局约 40 个工具上限，超出部分**静默丢弃**（不会报错）",
@@ -2919,13 +3094,18 @@ _CLIENT_COMPACT_REASON = {
     "windsurf": "Windsurf（现 Devin Desktop）：旧 Cascade 100 个工具上限，Devin Local 未公布上限且无工具搜索",
     "cline": "Cline 无工具搜索，全量面偏重",
     "zed": "Zed 无工具搜索，全量面偏重",
+    **{key: spec.compact_reason for key, spec in clients_extra.EXTRA_CLIENTS.items()},
 }
 
 
 # 各客户端配置文件在本机的位置（`client check` 找、`client config` 报 `config_path`、`setup` 写）。
 # v0.38.0 B2 之前是一张 POSIX 路径表：Windows 上 cursor/vscode/gemini/windsurf/cline/zed 一个都找不到，
 # `client check` 在 Windows 只会说「还没配」。现在按 os 与环境变量算真实位置；找不到不是错误。
-_CLIENT_NAMES = ("claude-code", "claude-desktop", "cursor", "vscode", "codex", "gemini", "windsurf", "cline", "zed")
+_CLIENT_NAMES = (
+    "claude-code", "claude-desktop", "cursor", "vscode", "codex", "gemini", "windsurf", "cline", "zed",
+    # v0.41.0：16 家（事实与出处见 clients_extra + contracts/third_party_facts.json；tests/test_client_lockstep.py 锁步）
+    *clients_extra.EXTRA_CLIENTS,
+)
 
 
 def _project_root(start: Path | None = None) -> Path:
@@ -2959,6 +3139,8 @@ def _client_config_locations(
     env = os.environ if env is None else env
     home = Path(home) if home is not None else Path.home()
     project = Path(cwd) if cwd is not None else _project_root()
+    if client in clients_extra.EXTRA_CLIENTS:
+        return clients_extra.locations(client, os_name=os_name, env=env, home=home, project=project)
     if os_name == "nt":
         appdata = Path(env.get("APPDATA") or (home / "AppData" / "Roaming"))
         claude_desktop = appdata / "Claude" / "claude_desktop_config.json"
@@ -3011,8 +3193,28 @@ def _preferred_config_path(client: str) -> Path:
     return next((c for c in candidates if c.is_file()), candidates[0])
 
 
-# 三种根键：mcpServers（多数）/ servers（VS Code）/ context_servers（Zed）。
-_SERVER_ROOT_KEYS = ("mcpServers", "servers", "context_servers", "mcp_servers")
+# 根键：mcpServers（多数）/ servers（VS Code）/ context_servers（Zed）/ mcp_servers（Codex TOML）；
+# v0.41.0 起 mcp（OpenCode）/ 字面量 amp.mcpServers（Amp）/ extensions（Goose YAML）。
+_SERVER_ROOT_KEYS = ("mcpServers", "servers", "context_servers", "mcp_servers", "mcp", "amp.mcpServers", "extensions")
+
+
+def _normalize_client_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    """各家条目形状不同，体检前统一成 {command, args, env, …}（v0.41.0）。
+
+    OpenCode：`command` 是数组（程序 + 参数）、env 叫 `environment`；Goose：`cmd` / `args` / `envs`。
+    不归一的话，`_audit_client_entry` 看不到 args → 缺 `--transport stdio`、版本漂移这些检查全部静默跳过。
+    """
+    out = dict(entry)
+    command = out.get("command")
+    if isinstance(command, list) and command:
+        out["command"] = str(command[0])
+        out["args"] = [str(item) for item in command[1:]] + [str(item) for item in (out.get("args") or [])]
+    elif "cmd" in out and "command" not in out:
+        out["command"] = out.get("cmd")
+    for alias in ("environment", "envs"):
+        if isinstance(out.get(alias), dict) and "env" not in out:
+            out["env"] = out[alias]
+    return out
 
 
 def _iter_client_entries(payload: Any) -> Any:
@@ -3024,7 +3226,7 @@ def _iter_client_entries(payload: Any) -> Any:
         if isinstance(block, dict):
             for name, entry in block.items():
                 if isinstance(entry, dict) and "horosa" in str(name).lower():
-                    yield name, entry
+                    yield name, _normalize_client_entry(entry)
     projects = payload.get("projects")
     if isinstance(projects, dict):
         for project_path, project in projects.items():
@@ -3044,6 +3246,8 @@ CLIENT_PLACEHOLDER_WHITELIST: dict[str, tuple[str, ...]] = {
     "windsurf": (),
     "cline": (),
     "zed": (),
+    # v0.41.0 的 16 家：生成器只写绝对路径，一个占位符都不用（各家展开规则不一，最安全的是不依赖）。
+    **{key: () for key in clients_extra.EXTRA_CLIENTS},
 }
 _PLACEHOLDER_RE = re.compile(r"\$\{([^}]*)\}")
 
@@ -3233,7 +3437,34 @@ def _audit_client_entry(
                     "detail": f"timeout={timeout}（{client} 默认 60 秒）。",
                     "fix": "设 600 以上（秒）。",
                 })
+    problems.extend(clients_extra.audit(client, entry))
     return problems
+
+
+_SKILL_STATE_HINTS = {
+    "absent": "没装：`horosa-skill client skill --client {client}`（或重跑 setup）把规则装进去。",
+    "outdated": "装的是旧版：`horosa-skill client skill --client {client}` 更新。",
+    "modified": "skill 文件被改过；更新时会先备份成 horosa-agent.horosa-bak。",
+    "foreign": "同名文件夹不是本工具装的，没有动它。",
+    "symlink": "由别的工具（如 `npx skills`）以软链接管理，请在那边更新。",
+}
+
+
+def _client_skill_report(client: str) -> list[dict[str, Any]]:
+    from horosa_skill import skill_install
+
+    try:
+        bundle = skill_install.bundle_digests()
+    except FileNotFoundError:
+        return []
+    out: list[dict[str, Any]] = []
+    for skills_dir in skill_install.client_skill_dirs(client):
+        status = skill_install.skill_status(skills_dir, bundle=bundle)
+        hint = _SKILL_STATE_HINTS.get(status["state"])
+        if hint:
+            status["hint"] = hint.format(client=client)
+        out.append(status)
+    return out
 
 
 def _client_check_report(targets: list[str], config_path: Path | None = None) -> dict[str, Any]:
@@ -3254,6 +3485,12 @@ def _client_check_report(targets: list[str], config_path: Path | None = None) ->
 
                     payload = tomllib.loads(path.read_text(encoding="utf-8"))
                     payload = {"mcpServers": (payload.get("mcp_servers") or {})}
+                elif path.name.endswith(".cordis.yml"):
+                    payload = {"mcpServers": clients_extra.read_dsh_patch(path.read_text(encoding="utf-8-sig"))}
+                elif path.suffix in {".yaml", ".yml"}:
+                    from horosa_skill import yaml_block
+
+                    payload = {"extensions": yaml_block.read_children(path.read_text(encoding="utf-8-sig"), "extensions")}
                 else:
                     from horosa_skill import jsonc as _jsonc
 
@@ -3280,6 +3517,8 @@ def _client_check_report(targets: list[str], config_path: Path | None = None) ->
             "configured": bool([f for f in found if f.get("entry")]),
             "findings": found,
             "fix_command": f"uv run horosa-skill client config --format {name}",
+            # v0.41.0：skill 装没装、是不是本版——只报告，不计入 problems（MCP 连得上与否和它无关）。
+            "skill": _client_skill_report(name),
         })
     problems_total = sum(len(f.get("problems") or []) for r in results for f in r["findings"])
     configured = [r["client"] for r in results if r["configured"]]
@@ -3307,6 +3546,33 @@ def client_check(
     客户端里安静地少了这个 server —— 没有任何一处会告诉他们哪一步错了。
     """
     _print_json(_client_check_report([client] if client else list(_CLIENT_NAMES), config_path))
+
+
+@client_app.command(
+    "skill",
+    help="Install / refresh only the horosa-agent skill (no MCP config) into the skills folder a client reads. "
+         "只装 skill 规则文件（手动配过 MCP 的用户用）。",
+)
+def client_skill(
+    client: str = typer.Option(None, "--client", help="Target client (same keys as `setup --client`); default = the shared ~/.agents/skills."),
+    skill_dir: Path | None = typer.Option(None, "--skill-dir", help="Install into this skills folder instead (skill lands in <dir>/horosa-agent)."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Report what would change; write nothing."),
+) -> None:
+    from horosa_skill import skill_install
+
+    if client is not None and client.strip().lower() not in _CLIENT_NAMES:
+        raise typer.BadParameter(f"未知客户端 `{client}`。可选：{', '.join(_CLIENT_NAMES)}")
+    key = client.strip().lower() if client else "shared"
+    step = _setup_skill_step(
+        key if client else None, enabled=True, skill_dir=skill_dir, plan_only=dry_run,
+        announce=lambda text: typer.echo(text, err=True),
+    )
+    step["client"] = key
+    if client is None and skill_dir is None:
+        step["note"] = f"装到共享目录 {skill_install.shared_skills_dir()}；只读自家目录的客户端请加 --client。"
+    _print_json(step)
+    if any(t.get("action") == "failed" for t in step.get("targets") or []):
+        raise typer.Exit(code=2)
 
 
 def _codex_env_roots() -> dict[str, str]:
@@ -3625,10 +3891,17 @@ def _build_client_config_payload(
             root_key: {server_name: entry},
             "tool_surface": tool_surface,
         }
+    elif key in clients_extra.EXTRA_CLIENTS:
+        # v0.41.0：16 家的条目形状 / 根键 / 超时字段都在 clients_extra 一行里；这里只补启动器与工具面。
+        payload = clients_extra.build_payload(
+            key, server_name=server_name, stdio_command=stdio_command, surface_env=surface_env,
+            env_roots=_codex_env_roots(), config_path=_preferred_config_path(key),
+        )
+        payload["tool_surface"] = tool_surface
+        warnings.extend(payload.pop("warnings", []))
     else:
         raise typer.BadParameter(
-            "format must be one of: claude-code / claude-desktop / cursor / vscode / codex / "
-            "gemini / windsurf / cline / zed / mcporter / openclaw"
+            "format must be one of: " + " / ".join((*_CLIENT_NAMES, "mcporter", "openclaw"))
         )
     payload["launcher"] = launcher_info
     if warnings:
@@ -3643,7 +3916,7 @@ def client_config(
         "--format",
         help=(
             "Target client: claude-code / claude-desktop / cursor / vscode / codex / "
-            "gemini / windsurf / cline / zed / mcporter / openclaw."
+            "gemini / windsurf / cline / zed / " + " / ".join(clients_extra.EXTRA_CLIENTS) + " / mcporter / openclaw."
         ),
     ),
     skill_root: Path = typer.Option(

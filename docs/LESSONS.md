@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.41.0 (2026-10-12) | 接入面四缺口：wheel 里没有 skill（只装 wheel 的用户 agent 从没读过规则）；注册表 `/v0/validate` 对旧 server.json 说 valid、publish 会因小写命名空间与不存在的 pypi 包拒两次，且 tag 处的 mcpb sha 是旧的；Agent Plugins schema 封闭；setup 9 → 25 家（各家静默失效的事实各钉一条）。顺带：lane 继承真 HOME、OpenClaw 产物的 `mcp` 根键会被猜测表误合并、AGENTS 说有人锁的 `check_client_matrix` 早已不存在 | 只在发布时执行的规则要在本地复刻；setup 新写的路径都要有接缝；新客户端 = 一行事实 + 锁步测试 |
 | v0.40.2 (2026-10-11) | 表面审计（全 110 技法 × MCP 全量 / 精简 / CLI / HTTP + 门面·资源·提示）查出 service 层全绿掩盖的 8 处 agent 可见缺陷：技法名两种写法只收一种且闸门对 MCP 名放行、dispatch/hecan 吞掉平铺出生信息还反问用户、记忆/报告缺参叫 agent 去问用户、精简面 instructions 写 120 工具、19 条 CLI 命令无说明、示例载荷只有 9/110、qimenzeri 依据卡恒「与声明不一致」、全新数据目录并行首起时 ALTER 竞态崩溃 | `resolve_tool_name` 单点解析（闸门先解析再判）；`_lift_flat_birth`；`AGENT_OWNED_OPERATIONS` 回 must_ask_user=false；精简面 instructions 变体；全命令 help + 计数取真值；每技法 live 示例；`ENGINE_OVERRIDES`；`_ensure_column` 吞并发 duplicate column；新 `scripts/surface_audit.py` 发版前跑 |
 | v0.40.1 (2026-10-06) | preflight 先查「旧 pin 在公开远端」，随后 `verify_upstream_sync --write-state` 把本地未推送的上游 HEAD（ecd742f6）写进 pin，收尾还提示「提交它」——靠人眼拦下 | `pin_to_record`：HEAD 已推送记 HEAD；未推送且没碰 `UPSTREAM_INPUT_ROOTS` 记最近已推送祖先；碰了 / 输入路径脏则拒写；pin 闸挪到全部闸之后；临时 git 仓五情形 + 路径扫描 + 闸序守卫，负向对照 5 红 |
 | v0.40.1 (2026-10-06) | `bump_version.py 0.40.1` 把 pyproject 的历史注释「# v0.40.0 P1：运行期契约此前不在 wheel 里」也改成了 v0.40.1——历史识别靠 `HISTORY_MARKERS` 关键词，这条注释一个都不含 | 代码站点（pyproject / `__init__.py`）只改版本赋值那一行；测试含通用规则会动两行的负向对照；发版前逐行看 bump 的 diff |
@@ -141,6 +142,55 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.41.0 / 2026-10-12 — 接入面四缺口：规则只到得了打开本仓的 agent；注册表 validate 说 valid、publish 会拒（`skill_install` / `server_json_problems` / `check_agent_plugin`）
+
+- **起因**：用户问「上架 DeepSeek 官方 skill 插件、让主流 harness 丝滑接入还差什么」。评估（2026-10-12，22 家客户端 + 17 个分发渠道逐家读官方文档）
+  给出四个零成本缺口，用户四项全批。
+- **症状 → 根因 → 修复**：
+  1. **只装了 wheel 的用户，agent 从没读过规则**。`setup` 只写 MCP 配置；「先问后调 / 读快照 / 禁手算」住在 `skills/horosa-agent/SKILL.md`，
+     只有打开本仓的 agent 读得到——而 wheel 里根本没有这份文件。各家客户端现在都从固定的用户级目录读 Agent Skills（`~/.agents/skills`
+     是共享的那个）。→ wheel 内带生成副本 `src/horosa_skill/agent_skill/horosa-agent/`（`gen_agent_mirrors.py` 生成；climbing 链接改写成
+     GitHub URL；docs-sync `bundle_drift` 锁）；`setup` 第 4 步装 skill（每个客户端只装一处，避免同时读共享目录与自家目录的客户端看到两份）；
+     `client skill` 单装；`client check` 报 skill 状态。已有目录：软链接（`npx skills` 管）不动、无标记的同名目录不动、用户改过的先备份。
+  2. **注册表的 `/v0/validate`（`mcp-publisher validate`）对旧 server.json 说 valid，真 publish 会拒两次**：命名空间写成小写
+     `io.github.horace-maxwell`——OIDC 按 GitHub 原样授予 `io.github.Horace-Maxwell/*`，前缀比较区分大小写（issue #689）；pypi 包不存在。
+     两条都只在 publish 时执行，没发过所以没人见过。另：mcpb 的 sha 在 tag **之后**才回填（不可复现打包），tag 处的 server.json 带旧 sha，
+     而注册表版本不可变——发错一次就永远错。→ MCPB-only + 原样大小写；`verify_server_json.server_json_problems` 加 publish 时规则
+     （大小写 / 禁 pypi / publisher-provided ≤ 4096 B / tag 钉死的资产 URL）；`render_registry_server_json.py` 只信发布页 `SHA256SUMS.txt`
+     并复刻注册表的 HEAD 探测；`publish-mcp-registry.yml`（可复用 + 可手动）挂在 release-runtime 的 `publish` 之后（草稿资产匿名 404），
+     先查「已登记则跳过」，publisher 钉版本 + sha。
+  3. **Agent Plugins v1**（VS Code / Copilot CLI / Codex / Kiro / OpenHands 读仓根 `plugin.json` + `mcp.json`）：schema 封闭——清单里写
+     `skills` / `mcpServers` 是规范外字段，server 少 `type` 或 command 写成 shell 行整条拒收；Cursor 不展开 `${PLUGIN_ROOT}`。→ 两份根文件
+     （1.0.0；command = `uvx`，args 钉当前版本 wheel，零占位符，精简面）；`verify_client_configs.check_agent_plugin` 九类违规负向对照；
+     `bump_version` 同改。
+  4. **`setup` 9 家 → 25 家**（OpenCode / Goose / Kiro / Copilot CLI / Junie / Qwen / Kimi / Qoder / CodeBuddy / Trae / Amp / Warp / Droid /
+     Augment / Deep Code / dsh）。各家只差在几个会静默失效的事实上：OpenCode 命令是**一个数组**、没有 `args` 键（多写的被静默丢弃）、env 叫 `environment`；
+     Goose 是 YAML、缺 `enabled` / `args` 的条目被静默跳过、超时单位是秒；Amp 的根键是字面量 `amp.mcpServers`、条目不许多余字段；
+     CodeBuddy 只读三个文件里第一个存在的（新建首选文件会把用户旧文件里的 server 藏起来）；Deep Code 见注释就把整份配置连 API key 丢掉
+     （→ 有注释则拒写）；Kimi 一条坏整份拒；Copilot CLI 文档说只转发 PATH（→ env 表写 HOME 与 runtime 根，探针按只给 PATH 起）；
+     TRAE 没有用户级文件、全部 MCP 合计 40 个工具（→ 打印 `trae://` 导入链接）；dsh 的补丁文件可能有用户别的补丁与 `!!js` 标签
+     （→ 只生成独立补丁）。缺省超时撑不过 45 s 冷启动 / 几分钟择日扫描的，写进配置并让 `client check` 报缺；只能用环境变量的
+     （Kiro / CodeBuddy / Deep Code）写进 next_steps。中等置信度的 5 家（kiro / junie / qoder / codebuddy / dsh）只写文档确认过的字段。
+     → `clients_extra.EXTRA_CLIENTS`（每家一行事实）+ `tests/test_clients_extra.py`；16 家全部进真机 lane。
+- **实现时当场踩到的**：
+  - **lane 继承真 HOME**：`verify_runtime_live.client_setup` 的 env 只隔离 runtime / data 根（uv 缓存要用 HOME），`setup` 新增的写路径
+    （skill 目录）会在维护机上本地跑 lane 时写进维护者自己的 `~/.agents/skills`。→ lane 每次 setup 带 `--skill-dir <工作目录>`，
+    并要求 SKILL.md 真落盘（负向对照：setup 报 installed 但磁盘没有 → 红）；单测经 `skill_install.default_home` 这一个接缝重定向。
+  - **OpenClaw 的产物也是 `{"mcp": {"servers": …}}`**：把 OpenCode 的 `mcp` 根键加进 `_MERGEABLE_ROOT_KEYS` 的猜测表，会把 `servers`
+    当成一个 server 合并、覆盖用户已有的全部条目。→ 新格式由产物显式声明 `root_key`，不进猜测表。
+  - **AGENTS §5.15 说「`verify_docs_sync.check_client_matrix` 锁 README 矩阵」——这个函数早已不存在**：规则写着有人锁，实际没人锁。
+    → `tests/test_client_lockstep.py`：每个 `setup` 键必须同时出现在 lane、生成器各表、skill 目录表、README×2 矩阵、示例索引、`setup --help`、
+    第三方事实台账（负向对照：lane 少一家即红）。
+  - **YAML 里用 tab 缩进的子行，按空格计缩进为 0**，会被读成新的顶层键——`extensions` 块被截断后照样插入。→ `yaml_block` 见 tab 一律拒写。
+  - **stdio 探针只给 Codex 补 runtime 根**：Copilot CLI 的条目里已经写对了 HOME 与两个根，探针却只拿 `{surface_env}` 起 server → 算出默认根 →
+    `setup.stdio_probe_runtime_mismatch`，把「配置写对了」测成失败。单测全关了探针（`--no-stdio-probe`）所以全绿；25 家真探针本机实跑第一家就红。
+    → 探针的 env = 条目里**实际写着**的 env（客户端真会交给 server 的那份）；回归测试的负向对照红在 runtime_mismatch。
+- **守卫**：`tests/test_skill_install.py`、`tests/test_yaml_block.py`、`tests/test_mcp_registry.py`、`tests/test_client_lockstep.py`、
+  `tests/test_setup_command.py`（skill 步骤 3 条）、`tests/test_verify_client_configs.py`（Agent Plugins 9 条）、`tests/test_verify_runtime_live.py`
+  （lane skill 隔离）；`verify_server_json.py` 对旧 server.json 实跑红两条（负向对照）。
+- **法则**：只在发布时执行的规则，没发布就等于没执行——把对方 publish 时的检查在本地复刻一遍，别信它的 validate 端点。setup 写的每一个
+  新路径（配置之外的）都要有给测试与 lane 用的接缝。
 
 ### v0.40.2 / 2026-10-11 — 表面审计：service 层全绿，agent 却在 8 个地方走不通（`resolve_tool_name` / `_ensure_column`）
 

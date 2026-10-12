@@ -39,7 +39,7 @@ jobs:
       - name: Verify wheel contents (knowledge packs / bench / gate table / runtime templates / entry point)
         working-directory: ./horosa-skill
         run: uv run --no-project --with hatchling python scripts/verify_wheel_contents.py
-      - name: Verify server.json PyPI entry is lockstep with pyproject
+      - name: Verify server.json (registry rules; version lockstep with pyproject)
         working-directory: ./horosa-skill
         run: uv run --no-project python scripts/verify_server_json.py
       - name: Build sdist + wheel

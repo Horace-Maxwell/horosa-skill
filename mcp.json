@@ -1,0 +1,20 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "horosa": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.40.2/horosa_skill-0.40.2-py3-none-any.whl",
+        "horosa-skill",
+        "serve",
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "HOROSA_MCP_COMPACT": "1"
+      }
+    }
+  }
+}

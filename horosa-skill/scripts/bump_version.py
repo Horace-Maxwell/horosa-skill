@@ -39,9 +39,14 @@ SITES: tuple[str, ...] = (
     "server.json",
     "CITATION.cff",
     ".claude-plugin/plugin.json",
+    # v0.41.0：Agent Plugins v1 根清单 + 它的 mcp.json（钉版本的 wheel URL）。
+    "plugin.json",
+    "mcp.json",
     "README.md",
     "README_EN.md",
     "skills/horosa-agent/SKILL.md",
+    # 生成件（scripts/gen_agent_mirrors.py）：与上一行逐行同改，渲染仍相等，docs-sync 的 bundle_drift 才不红。
+    "horosa-skill/src/horosa_skill/agent_skill/horosa-agent/SKILL.md",
     "docs/INSTALL_RESTRICTED_NETWORK.md",
     "docs/runtime-manifest.example.json",
     "docs/runtime-payload-manifest.example.json",

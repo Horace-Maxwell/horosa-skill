@@ -98,16 +98,19 @@ Runtime release 采用「轻仓库 + 重 release 资产」模式；v0.38.0 起�
 HOROSA_SOURCE_ROOT=… uv run python scripts/preflight_release.py           # 全绿；若重写了 provenance 就提交它
 git tag vX.Y.Z && git push origin vX.Y.Z
 bash horosa-skill/scripts/publish_release.sh --draft --dispatch           # seed / .mcpb / wheel / SBOM 上 DRAFT；dispatch release-runtime.yml
-#    → 派生 Windows 半 → assemble（双平台清单钉 tag + size、SHA256SUMS、SBOM、attestation）→ runtime-matrix 三台真机（真下载 + 九客户端 + HTTP 握手）
+#    → 派生 Windows 半 → assemble（双平台清单钉 tag + size、SHA256SUMS、SBOM、attestation）→ runtime-matrix 三台真机（真下载 + 25 个客户端 + HTTP 握手）
 git add server.json && git commit -m "chore(release): pin mcpb sha" && git push   # mcpb sha 必须来自这一次 --draft 构建（打包不可复现）
 python horosa-skill/scripts/sync_windows_release.py --check --tag vX.Y.Z --draft   # 必须 [OK]；[GAP] 才是权威
 gh workflow run release-runtime.yml -f version=X.Y.Z -f publish=true -f run_matrix=true -f arm_nonblocking=false -f dry_run=false
 #    publish job：三条 lane 装的归档 sha == draft 资产 digest → --check → 翻 latest → dispatch completeness + release 模式矩阵
+#    mcp-registry job（v0.41.0）：翻 latest 之后才跑（草稿资产匿名 404）→ 从公开 SHA256SUMS 渲染 server.json → 已登记则跳过 → OIDC 发布
 python horosa-skill/scripts/sync_windows_release.py --check              # 公开 latest [OK]
+curl -s "https://registry.modelcontextprotocol.io/v0.1/servers/io.github.Horace-Maxwell%2Fhorosa-skill/versions/X.Y.Z" | head -c 200   # 注册表已列出
 gh release view vX.Y.Z --json assets                                     # 两个归档 + manifest + SHA256SUMS + sbom + mcpb + whl
 ```
 
-要点：`publish=true` 必须带 `run_matrix=true`（resolve 直接 fail）；tag 只在 release 仍是 draft 时允许重指；每周一 04:23Z 的 schedule
+要点：`publish=true` 必须带 `run_matrix=true`（resolve 直接 fail）；官方 MCP Registry 版本不可变，名字大小写必须与 GitHub owner 一致
+（`io.github.Horace-Maxwell/…`），已公开的版本补登记用 `gh workflow run publish-mcp-registry.yml -f tag=vX.Y.Z`；tag 只在 release 仍是 draft 时允许重指；每周一 04:23Z 的 schedule
 矩阵拿 main 打公开 latest（lane pytest 预算按主机：Windows 2700 s / macOS 1500 s，pytest.log 流式落盘）；
 `release-completeness.yml` 每 6 小时校资产（SBOM / mcpb 解包 + sha / wheel 零安装 / 清单 min_os / digest vs SHA256SUMS）。
 Windows 半边由 `build_runtime_release_windows.py --seed` 在 windows-latest 上派生；`build_runtime_release.sh`（vendor 模式双平台本地构建）

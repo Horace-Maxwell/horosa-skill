@@ -102,8 +102,9 @@ def test_localize_manifest_points_urls_at_local_archives_and_keeps_hashes(tmp_pa
 def test_engine_cases_carry_the_gate_confirmation_and_cover_three_engine_families() -> None:
     assert set(live.ENGINE_CASES) == {"chart", "qimen", "nongli_time", "bazi_birth"}
     assert live.CONFIRM["agent_confirmed_settings"] is True and live.CONFIRM["clarification_notes"]
-    # v0.38.1 R17：四家 → 九家（vscode / gemini / windsurf / cline / zed 此前没有任何真机 lane 跑过 setup）
-    assert {"claude-code", "codex", "cursor", "claude-desktop"} <= set(live.CLIENTS) and len(live.CLIENTS) == 9
+    # v0.38.1 R17：四家 → 九家（vscode / gemini / windsurf / cline / zed 此前没有任何真机 lane 跑过 setup）；v0.41.0 → 25 家
+    # （与 cli._CLIENT_NAMES 的逐项锁步在 tests/test_client_lockstep.py）
+    assert {"claude-code", "codex", "cursor", "claude-desktop"} <= set(live.CLIENTS) and len(live.CLIENTS) == 25
 
 
 def test_origin_of_strips_the_probe_path() -> None:
@@ -142,7 +143,7 @@ def test_pytest_env_carries_origins_and_node_but_not_the_lane_port_overrides(tmp
 def test_lane_covers_every_client_the_cli_knows() -> None:
     from horosa_skill.surfaces.cli import _CLIENT_NAMES
 
-    assert set(live.CLIENTS) == set(_CLIENT_NAMES) and len(live.CLIENTS) == 9
+    assert set(live.CLIENTS) == set(_CLIENT_NAMES) and len(live.CLIENTS) == 25  # v0.41.0：9 → 25
 
 
 def test_http_probe_verdict_requires_401_421_and_the_full_surface() -> None:
@@ -206,6 +207,33 @@ def test_non_ascii_root_refusal_step_does_nothing_off_windows(tmp_path: Path, mo
     # 显式伪装 POSIX：windows-smoke 上 os.name 本来就是 nt（d9e9aa5 的 CI 在那里真跑了一次中文根 install，拿到了拒绝码）
     monkeypatch.setattr(live.os, "name", "posix")
     assert posix.non_ascii_root_refusal() is True and "non_ascii_root_refusal" not in posix.report["steps"]
+
+
+def test_client_setup_keeps_the_skill_inside_the_lane_and_requires_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """v0.41.0：setup 第 4 步装 skill。lane 环境继承真 HOME（uv 缓存要用），所以每个 setup 都必须带 `--skill-dir <lane 工作目录>`——
+    否则维护机上本地跑 lane 会写进维护者自己的 ~/.agents/skills。负向对照：setup 报 ok 但 skill 没落盘 → 本步红。"""
+    lane = _lane(tmp_path, "lane")
+    seen: list[list[str]] = []
+
+    def fake_cli_json(*args, timeout, env=None):  # noqa: ANN002
+        argv = list(args)
+        seen.append(argv)
+        skill_dir = Path(argv[argv.index("--skill-dir") + 1])
+        (skill_dir / "horosa-agent").mkdir(parents=True, exist_ok=True)
+        (skill_dir / "horosa-agent" / "SKILL.md").write_text("x", encoding="utf-8")
+        return 0, {"ok": True, "steps": {"skill": {"targets": [{"action": "installed"}]}, "stdio_probe": {"tools": 11}}}, ""
+
+    monkeypatch.setattr(lane, "cli_json", fake_cli_json)
+    assert lane.client_setup() is True
+    work = lane.work.resolve()
+    assert len(seen) == len(live.CLIENTS)
+    for argv in seen:
+        assert "--skill-dir" in argv, argv
+        assert Path(argv[argv.index("--skill-dir") + 1]).resolve().is_relative_to(work), argv
+
+    hollow = _lane(tmp_path / "again", "lane")
+    monkeypatch.setattr(hollow, "cli_json", lambda *a, timeout, env=None: (0, {"ok": True, "steps": {"skill": {"targets": [{"action": "installed"}]}}}, ""))
+    assert hollow.client_setup() is False, "setup 报 installed 但磁盘上没有 SKILL.md，本步必须红"
 
 
 def test_claude_user_scope_step_never_touches_the_invoking_users_claude_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

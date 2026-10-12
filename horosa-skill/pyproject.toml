@@ -48,6 +48,8 @@ include = [
   "src/horosa_skill/knowledge/data/*.json",
   "src/horosa_skill/benchmark/data/*.json",
   "src/horosa_skill/data/*.json",
+  # v0.41.0：`setup` 装进客户端 skills 目录的 skill 副本（scripts/gen_agent_mirrors.py 生成；verify_wheel_contents.py 守）。
+  "src/horosa_skill/agent_skill/**/*.md",
 ]
 
 # Windows 启动/停止脚本覆盖模板（issue #14 loopback 修补）住在 scripts/ 供 builder 共用；wheel 里没有

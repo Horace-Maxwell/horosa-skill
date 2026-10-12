@@ -75,7 +75,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `110 / 110 ok=true` |
-| Engineering tests | `1848 / 1848 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 115 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `1922 / 1922 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 116 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `100` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `10` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` (`107` export techniques modeled; contract v15 mirrors desktop aiExport v58) |
@@ -403,19 +403,26 @@ uv run horosa-skill export registry
 ## Supported AI clients
 
 `setup --client <client>` does the whole onboarding in one command (v0.38.0): network probe (5 s) → install / verify the
-offline runtime → write the config (auto-located, only the horosa entry, `.horosa-bak` backup, atomic replace) → doctor →
-re-read the file from disk → **start the server once over stdio with the exact command the client will run and count
+offline runtime → write the config (auto-located, only the horosa entry, `.horosa-bak` backup, atomic replace) →
+**install the horosa-agent skill into the skills folder that client reads** (v0.41.0; most clients read the shared
+`~/.agents/skills`; `--no-skill` skips it, `--skill-dir` picks the folder) → doctor → re-read the file from disk → **start the server once over stdio with the exact command the client will run and count
 the tools** → print next steps. On failure a structured envelope goes to stderr (`step` / `code` / `config_untouched` /
 `backup_path` / `retry_command`) with exit code 2; failing before the config step guarantees `config_untouched: true`.
 `client config` only prints a config without writing it:
 
 ```bash
-uv run horosa-skill setup --client cursor                # one-command onboarding (claude-code / claude-desktop / cursor / vscode / codex / gemini / windsurf / cline / zed)
+uv run horosa-skill setup --client cursor                # one-command onboarding (25 clients, see the Works with table below)
 uv run horosa-skill setup --client cursor --dry-run      # plan only: zero side effects
 uv run horosa-skill client config --format claude-code   # print only: the `claude mcp add …` command
 uv run horosa-skill client config --format codex         # config.toml snippet (with timeouts)
-uv run horosa-skill client check                         # audit what each client ACTUALLY has
+uv run horosa-skill client check                         # audit what each client ACTUALLY has (incl. whether the skill is installed and current)
+uv run horosa-skill client skill --client codex          # install only the skill rules (hand-wired MCP; no --client = the shared folder)
 ```
+
+The skill is the rule set agents read (clarify before calling / explain only from the returned snapshot / never hand-calculate);
+before v0.41.0 only agents that opened this repo saw it. The wheel now ships a copy and `setup` installs it. An existing
+folder of the same name is left alone when another tool manages it (a symlink, e.g. `npx skills`) or when horosa-skill did
+not write it; a copy you edited is backed up as `horosa-agent.horosa-bak` before the update.
 
 The repo root also carries 6 thin mirrors — `GEMINI.md` (Gemini CLI), `.github/copilot-instructions.md` (Copilot),
 `.windsurf/rules/`, `.clinerules/`, `.cursor/rules/` (Cursor), `.agents/skills/horosa-agent/` (Codex / agentskills.io) — so those agents know the gate, the reading contract and the compact-surface `horosa_tool_run` call the moment they open the
@@ -428,6 +435,8 @@ gives agents without MCP a pure-CLI contract (`tool run --input/--output`, exit 
 | :-- | :-- | :-- | :-- | :-- |
 | **Claude Code** | stdio | `setup --client claude-code` (writes the project `.mcp.json` when the CWD has one, else runs `claude mcp add --scope user`) | full (120) | The repo ships a project `.mcp.json`; [guide](./horosa-skill/examples/clients/claude-code.md) |
 | **Claude Code Plugin** | stdio | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` | full (120) | Skill + MCP in one step; the plugin lives in `~/.claude/plugins/cache/horosa-skill/horosa/<version>/horosa-skill` — run `uv run --directory "<that dir>" horosa-skill install` once for the offline runtime (a `runtime.not_installed` error prints this command with the real path) |
+| **Agent Plugins v1** (VS Code · Copilot CLI · Codex · Kiro · OpenHands · Qwen Code) | stdio | `copilot plugin install Horace-Maxwell/horosa-skill`; VS Code "Chat: Install Plugin From Source" with the repo URL; `qwen extensions install Horace-Maxwell/horosa-skill`; Kiro "Import power from GitHub" | compact (11) | Root `plugin.json` + `mcp.json` (spec 1.0.0): the command is `uvx` + the wheel pinned to this version, so **uv must be installed**; run `uvx --from <wheel> horosa-skill install` once for the offline runtime. Codex reads the same manifest via `codex plugin marketplace add Horace-Maxwell/horosa-skill` (not tested); OpenClaw / Claude Code keep using `.claude-plugin/` |
+| **Official MCP Registry** | stdio (`.mcpb`) | Search `horosa` in any registry-backed client (Goose, Junie, Copilot `/mcp search`, PulseMCP and Glama all read it) | full (120) | Entry `io.github.Horace-Maxwell/horosa-skill`, listing each release's `.mcpb` only (sha256-pinned; clients verify it before install); from v0.41.0 every release is listed automatically once it goes public |
 | **Claude Desktop** | stdio | `setup --client claude-desktop`, or install the `.mcpb` bundle | full (120) | The `.mcpb` ships as a release asset |
 | **Cursor** | stdio | `setup --client cursor` (or `client config --format cursor` for the official install deep link) | compact (11) | Cursor caps at ~40 tools globally and **drops the rest silently** |
 | **VS Code (Copilot)** | stdio | `setup --client vscode` (writes the user-level `mcp.json`; or `client config --format vscode` for the `vscode:mcp/install` link) | compact (11) | 128-tool cap across all servers; the repo ships `.vscode/mcp.json` |
@@ -436,6 +445,22 @@ gives agents without MCP a pure-CLI contract (`tool run --input/--output`, exit 
 | **Windsurf → Devin Desktop** | stdio | `setup --client windsurf` (CLI key unchanged; writes Devin's MCP file — macOS/Linux `~/.config/devin/mcp_config.json`, Windows `%APPDATA%\devin\mcp_config.json`, project-level `.devin/mcp_config.json`; a legacy `~/.codeium/windsurf` Cascade config is merged in place) | compact (11) | Cascade was removed in 2026-09; Devin Local reads the Devin CLI MCP file; the legacy Cascade cap was 100 tools |
 | **Cline** | stdio | `setup --client cline` | compact (11) | No tool search; the full surface is heavy |
 | **Zed** | stdio | `setup --client zed` | compact (11) | Config root key is `context_servers` |
+| **OpenCode** | stdio | `setup --client opencode` (writes `~/.config/opencode/opencode.json` (`mcp` key, the command as one array)) | compact (11) | default connect / call timeouts are shorter than a cold start or a 择日 scan; writes `timeout: 600000` |
+| **Goose** | stdio | `setup --client goose` (writes `extensions` in `~/.config/goose/config.yaml` (Windows `%APPDATA%\Block\goose\config\`; only the horosa block)) | compact (11) | timeout is in seconds; writes 600 |
+| **Kiro** | stdio | `setup --client kiro` (writes `~/.kiro/settings/mcp.json`; skill goes to `~/.kiro/skills`) | compact (11) | Kiro CLI waits 5 s for startup by default: run `kiro-cli settings mcp.initTimeout 120000` |
+| **GitHub Copilot CLI** | stdio | `setup --client copilot-cli` (writes `~/.copilot/mcp-config.json` (with `tools: ["*"]` and `timeout`)) | compact (11) | passes only PATH: the env table carries HOME and both runtime roots; the probe runs in the same shape |
+| **JetBrains Junie** | stdio | `setup --client junie` (writes `~/.junie/mcp/mcp.json`) | compact (11) | no timeout field: warm up with `horosa-skill runtime start` before first use |
+| **Qwen Code** | stdio | `setup --client qwen` (writes `~/.qwen/settings.json` (comments kept)) | compact (11) | `discoveryTimeoutMs` defaults to 30 s; writes 120000 |
+| **Kimi Code CLI** | stdio | `setup --client kimi` (writes `~/.kimi-code/mcp.json`) | compact (11) | strict JSON, one bad entry rejects the file; writes `startupTimeoutMs` / `toolTimeoutMs` |
+| **Qoder** | stdio | `setup --client qoder` (writes `~/.qoder/settings.json`; skill goes to `~/.qoder/skills`) | compact (11) | the older Qoder IDE configures MCP only in its UI |
+| **CodeBuddy** | stdio | `setup --client codebuddy` (writes the one file it actually reads (first existing of `~/.codebuddy/.mcp.json` → `mcp.json` → `~/.codebuddy.json`); skill goes to `~/.codebuddy/skills`) | compact (11) | timeouts only via env `MCP_TIMEOUT` / `MCP_TOOL_TIMEOUT` |
+| **TRAE** | stdio | `setup --client trae` (writes no file: prints the `trae://…` import link (China edition `trae-cn://`) and paste-ready JSON; skill goes to `~/.trae/skills`) | compact (11) | caps ALL MCP servers combined at 40 tools; the command must not contain spaces |
+| **Amp** | stdio | `setup --client amp` (writes the literal key `amp.mcpServers` in `~/.config/amp/settings.json`) | compact (11) | entries allow no extra fields (no timeout): warm up before first use |
+| **Warp** | stdio | `setup --client warp` (writes `~/.warp/.mcp.json` (picked up on save)) | compact (11) | if Warp also auto-spawns Claude Code / Codex servers, the entry can appear twice |
+| **Factory Droid** | stdio | `setup --client droid` (writes `~/.factory/mcp.json` (with `connectTimeout` / `timeout`)) | compact (11) | reloads automatically |
+| **Augment Auggie CLI** | stdio | `setup --client augment` (writes `~/.augment/settings.json` (comments kept)) | compact (11) | the IDE extensions use their own settings panel, not this file |
+| **Deep Code** | stdio | `setup --client deepcode` (writes `~/.deepcode/settings.json` (strict JSON; refuses a file with comments — Deep Code drops the whole file, API key included)) | compact (11) | tool calls are capped at a fixed 60 s, so long tools time out; startup timeout via `DEEPCODE_MCP_TIMEOUT` |
+| **DeepSeek Harness (dsh)** | stdio | `setup --client dsh` (generates a standalone patch `~/.horosa/clients/dsh/horosa.cordis.yml`; enable it with `dsh web --patch <it>` — your `cordis.patch.yml` is never edited) | compact (11) | developer preview; the format may change |
 | **OpenClaw / mcporter** | stdio | `client openclaw-setup --workspace ~/.openclaw/workspace` | full (120) | — |
 | **Open WebUI · n8n · Dify** | streamable-http | `horosa-skill serve --host 0.0.0.0 --token <random>` | full (120) | [Guide](./horosa-skill/examples/clients/openwebui-streamable-http.md); a token is required off-loopback, and there is **no TLS** — put it behind a reverse proxy |
 | **ChatGPT / claude.ai remote connectors** | streamable-http | As above, plus an **OAuth-terminating HTTPS gateway** (Cloudflare Access / oauth2-proxy) — both connectors speak OAuth only, this server offers a static Bearer token only, so the gateway exchanges the OAuth session for an injected `Authorization: Bearer <HOROSA_MCP_TOKEN>` | full (120) | **No hosted endpoint**; recipe: [guide](./horosa-skill/examples/clients/remote-connectors-oauth-gateway.md) |
@@ -510,7 +535,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 1848 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 1922 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

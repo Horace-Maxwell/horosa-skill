@@ -1,0 +1,21 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "horosa",
+  "version": "0.40.2",
+  "description": "Horosa (星阙) local-first metaphysics: 110 technique tools over MCP (Western astrology, 八字, 紫微, 六壬, 奇门, 太乙, 神数, horary, election, tarot) plus the horosa-agent skill that teaches clarify-before-call and never hand-calculate.",
+  "author": {
+    "name": "Horace Maxwell",
+    "url": "https://github.com/Horace-Maxwell"
+  },
+  "homepage": "https://github.com/Horace-Maxwell/horosa-skill",
+  "repository": "https://github.com/Horace-Maxwell/horosa-skill",
+  "license": "AGPL-3.0-only",
+  "keywords": [
+    "horosa",
+    "xingque",
+    "astrology",
+    "metaphysics",
+    "mcp",
+    "offline"
+  ]
+}

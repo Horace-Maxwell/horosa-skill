@@ -1,0 +1,84 @@
+name: publish-mcp-registry
+
+# v0.41.0: list a PUBLIC release on the official MCP Registry (registry.modelcontextprotocol.io) as an MCPB-only entry.
+# Goose / Junie / Copilot's `/mcp search` / PulseMCP / Glama all read the registry, so this one step reaches all of them.
+#
+# Called by release-runtime.yml right after the draft flips public (the registry HEADs the asset at publish time and draft
+# assets 404 to anonymous requests), and dispatchable by hand for a release that is already public (`-f tag=v0.40.2`).
+#
+#   1. render server.json from the PUBLIC release: tag-pinned identifier + fileSha256 from its SHA256SUMS.txt (the sha in
+#      main is backfilled after the tag, so the tag's copy is stale) + the registry's own HEAD probe
+#      (horosa-skill/scripts/render_registry_server_json.py — it also runs verify_server_json's publish-time rules);
+#   2. skip if that version is already listed (registry versions are immutable; a re-run must be a no-op, not a failure);
+#   3. pinned mcp-publisher (sha256 from the registry's own checksums file) → validate → login github-oidc → publish.
+# OIDC grants exactly `io.github.<repository_owner>/*` with GitHub's casing — hence `io.github.Horace-Maxwell/…` in
+# server.json (verify_server_json.py enforces it). No secrets involved.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Public release tag to list, e.g. v0.40.2"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-mcp-registry-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository_owner == 'Horace-Maxwell'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TAG: ${{ inputs.tag }}
+      REGISTRY: https://registry.modelcontextprotocol.io
+      # Pinned publisher. Bump both together; the sha is the linux_amd64 line of registry_<ver>_checksums.txt from the
+      # same GitHub release. An old publisher can start failing with `invalid audience` after registry auth changes.
+      MCP_PUBLISHER_VERSION: "1.8.1"
+      MCP_PUBLISHER_SHA256: "a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Render server.json from the public release (tag-pinned asset, published sha, HEAD probe)
+        run: python3 horosa-skill/scripts/render_registry_server_json.py --tag "${TAG}" --out "${RUNNER_TEMP}/server.json"
+      - name: Skip if this version is already listed (registry versions are immutable)
+        id: probe
+        run: |
+          set -euo pipefail
+          NAME="$(python3 -c 'import json,sys,urllib.parse; print(urllib.parse.quote(json.load(open(sys.argv[1]))["name"], safe=""))' "${RUNNER_TEMP}/server.json")"
+          CODE="$(curl -s -o /dev/null -w '%{http_code}' "${REGISTRY}/v0.1/servers/${NAME}/versions/${TAG#v}")"
+          echo "registry answered ${CODE} for ${NAME} ${TAG#v}"
+          echo "listed=$([ "${CODE}" = 200 ] && echo true || echo false)" >> "${GITHUB_OUTPUT}"
+      - name: Install the pinned mcp-publisher (sha256-checked)
+        if: steps.probe.outputs.listed != 'true'
+        run: |
+          set -euo pipefail
+          curl -fsSLo "${RUNNER_TEMP}/mcp-publisher.tar.gz" \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          echo "${MCP_PUBLISHER_SHA256}  ${RUNNER_TEMP}/mcp-publisher.tar.gz" | sha256sum -c -
+          tar -xzf "${RUNNER_TEMP}/mcp-publisher.tar.gz" -C "${RUNNER_TEMP}" mcp-publisher
+      - name: Validate, log in with GitHub OIDC, publish
+        if: steps.probe.outputs.listed != 'true'
+        run: |
+          set -euo pipefail
+          "${RUNNER_TEMP}/mcp-publisher" validate "${RUNNER_TEMP}/server.json"
+          "${RUNNER_TEMP}/mcp-publisher" login github-oidc
+          "${RUNNER_TEMP}/mcp-publisher" publish "${RUNNER_TEMP}/server.json"
+      - name: Confirm the listing
+        run: |
+          set -euo pipefail
+          NAME="$(python3 -c 'import json,sys,urllib.parse; print(urllib.parse.quote(json.load(open(sys.argv[1]))["name"], safe=""))' "${RUNNER_TEMP}/server.json")"
+          curl -fsS "${REGISTRY}/v0.1/servers/${NAME}/versions/${TAG#v}" | python3 -c 'import json,sys; d=json.load(sys.stdin); s=d.get("server", d); print("listed:", s["name"], s["version"])'

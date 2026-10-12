@@ -20,7 +20,26 @@
     "uv",
     "node",
     "python",
-    "swisseph"
+    "swisseph",
+    "mcp-registry",
+    "agent-plugins",
+    "opencode",
+    "goose",
+    "kiro",
+    "copilot-cli",
+    "junie",
+    "qwen",
+    "kimi",
+    "qoder",
+    "codebuddy",
+    "trae",
+    "amp",
+    "warp",
+    "droid",
+    "augment",
+    "deepcode",
+    "dsh",
+    "agent-skills"
   ],
   "facts": [
     {
@@ -248,6 +267,235 @@
         "horosa-skill/scripts/runtime_templates/windows/start_horosa_local.ps1",
         "horosa-skill/scripts/verify_runtime_scripts.py",
         "horosa-skill/tests/test_runtime_launcher_templates.py"
+      ]
+    },
+    {
+      "id": "mcp-registry.publish",
+      "subject": "mcp-registry",
+      "fact": "Official MCP Registry (preview; schema 2025-12-11; mcp-publisher 1.8.1 = production 1.8.1). GitHub OIDC grants exactly `io.github.<repository_owner>/*` with GitHub's casing and the permission check is a case-sensitive prefix match (issue #689) → our name must be `io.github.Horace-Maxwell/horosa-skill`. mcpb packages: fileSha256 required (registry does not download/verify it; clients do), identifier must be an https github.com/gitlab.com tag-pinned `releases/download/<tag>/<file>` URL containing 'mcp' (`releases/latest/download` rejected), package `version` optional; publish HEADs the asset (200 or 3xx+Location, no redirect following) so a draft asset 404s. pypi packages must exist with an `mcp-name:` README marker. `_meta…/publisher-provided` ≤ 4096 bytes, other _meta keys dropped; description ≤ 100 chars; versions immutable (republish fails). `/v0/validate` and `mcp-publisher validate` check schema + semantics only (said valid:true for our old pypi+mcpb file). Probe: GET /v0.1/servers/<urlencoded name>/versions/<v> → 200 {server, _meta} when listed.",
+      "source_url": "https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/package-types.mdx",
+      "verified_on": "2026-10-12",
+      "affects": [
+        "server.json",
+        "horosa-skill/scripts/verify_server_json.py",
+        "horosa-skill/scripts/render_registry_server_json.py",
+        ".github/workflows/publish-mcp-registry.yml",
+        ".github/workflows/release-runtime.yml"
+      ]
+    },
+    {
+      "id": "agent-plugins.v1",
+      "subject": "agent-plugins",
+      "fact": "Agent Plugins 1.0.0 (agent-plugins.org; 1.1.0 is a working draft whose schema URL 404s; Codex / VS Code / OpenHands hard-code 1.0.0). Root `plugin.json` with closed keys {$schema, name, version, description, author{name,email,url}, homepage, repository, license, keywords, extensions}; skills discovered as immediate children of `skills/`; MCP only in root `mcp.json` = {$schema, mcpServers}, stdio entries closed {type (required), command (single executable token, no placeholder expansion), args, env, cwd}; only ${PLUGIN_ROOT}/${PLUGIN_DATA} in args/env/cwd — Cursor does not expand them. No portable userConfig/secrets. Clients: VS Code, Copilot CLI (`copilot plugin install owner/repo`), Cursor, Codex (`codex plugin marketplace add owner/repo`), Kiro, OpenClaw, Hermes, OpenHands, NanoClaw, Grok Bot; Qwen Code documents support. VS Code / Copilot CLI / Codex / OpenHands prefer the root manifest over `.claude-plugin/`; OpenClaw and Claude Code keep the Claude format — no client loads both.",
+      "source_url": "https://github.com/agentplugins/agent-plugins-spec/blob/main/spec/1.0.0.md",
+      "verified_on": "2026-10-12",
+      "affects": [
+        "plugin.json",
+        "mcp.json",
+        "horosa-skill/scripts/verify_client_configs.py"
+      ]
+    },
+    {
+      "id": "opencode.mcp-config",
+      "subject": "opencode",
+      "fact": "OpenCode v1.19.0: user file ${XDG_CONFIG_HOME:-~/.config}/opencode/opencode.json[c] (XDG layout on Windows too); JSONC; root `mcp`; stdio entry {type:'local', command:[program, ...args] (ONE array, no `args` key), environment (not env), enabled, timeout ms}; connect/list default 30 s in code (docs say 5 s), calls fall back to the SDK 60 s → write timeout 600000. No tool cap or deferral. Skills: reads ~/.agents/skills, ~/.claude/skills, ~/.config/opencode/skills. Verify: `opencode mcp list`.",
+      "source_url": "https://github.com/anomalyco/opencode/blob/v1.19.0/packages/core/src/v1/config/mcp.ts",
+      "verified_on": "2026-10-12",
+      "affects": [
+        "horosa-skill/src/horosa_skill/clients_extra.py",
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        "horosa-skill/src/horosa_skill/skill_install.py"
+      ]
+    },
+    {
+      "id": "goose.mcp-config",
+      "subject": "goose",
+      "fact": "Goose v1.54.0: user file ${XDG_CONFIG_HOME:-~/.config}/goose/config.yaml on macOS/Linux, %APPDATA%\\Block\\goose\\config\\config.yaml on Windows, GOOSE_PATH_ROOT overrides; YAML holding all settings; root `extensions`; entry {enabled (required), type:stdio, name, cmd, args (required), envs, env_keys, timeout SECONDS (default 300, fixed wall clock per request)}; a malformed entry is skipped silently. Skills: ~/.agents/skills is the canonical writable folder. Verify: `goose info -v`.",
+      "source_url": "https://github.com/aaif-goose/goose/blob/v1.54.0/crates/goose/src/config/paths.rs",
+      "verified_on": "2026-10-12",
+      "affects": [
+        "horosa-skill/src/horosa_skill/clients_extra.py",
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        "horosa-skill/src/horosa_skill/skill_install.py"
+      ]
+    },
+    {
+      "id": "kiro.mcp-config",
+      "subject": "kiro",
+      "fact": "Kiro (IDE + CLI): user file ~/.kiro/settings/mcp.json (KIRO_HOME overrides; Windows path inferred); root mcpServers {command,args,env,disabled}; no timeout field documented for mcp.json; Kiro CLI global mcp.initTimeout defaults to 5000 ms (45 s cold start exceeds it → tell the user `kiro-cli settings mcp.initTimeout 120000`). Skills: ~/.kiro/skills only (no ~/.agents documented). Confidence medium.",
+      "source_url": "https://kiro.dev/docs/mcp/configuration.md",
+      "verified_on": "2026-10-12",
+      "affects": [
+        "horosa-skill/src/horosa_skill/clients_extra.py",
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        "horosa-skill/src/horosa_skill/skill_install.py"
+      ]
+    },
+    {
+      "id": "copilot-cli.mcp-config",
+      "subject": "copilot-cli",
+      "fact": "GitHub Copilot CLI 1.0.95: user file ~/.copilot/mcp-config.json (COPILOT_HOME overrides); root mcpServers {type:'local'|'stdio', command, args, env, tools (listed required → ['*']), timeout ms (discovery + calls, default 30000; connection floored at 60 s)}; docs: 'The PATH variable is automatically inherited … All other environment variables must be configured here' (not checked in source) → write HOME/USERPROFILE + runtime roots, probe with PATH only. Project .mcp.json is shared with Claude Code (never written). Skills: ~/.agents/skills unless COPILOT_HOME is set (then $COPILOT_HOME/skills).",
+      "source_url": "https://github.com/github/docs/blob/main/content/copilot/reference/copilot-cli-reference/cli-command-reference.md",
+      "verified_on": "2026-10-12",
+      "affects": [
+        "horosa-skill/src/horosa_skill/clients_extra.py",
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        "horosa-skill/src/horosa_skill/skill_install.py"
+      ]
+    },
+    {
+      "id": "junie.mcp-config",
+      "subject": "junie",
+      "fact": "JetBrains Junie CLI: user file ~/.junie/mcp/mcp.json (Windows path and JUNIE_HOME effect inferred); root mcpServers {command,args,env}; no timeout fields documented (write none). Its MCP installation assistant searches the official MCP Registry. Skills: ~/.junie/skills and ~/.agents/skills. Confidence medium.",
+      "source_url": "https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html",
+      "verified_on": "2026-10-12",
+      "affects": [
+        "horosa-skill/src/horosa_skill/clients_extra.py",
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        "horosa-skill/src/horosa_skill/skill_install.py"
+      ]
+    },
+    {
+      "id": "qwen.mcp-config",
+      "subject": "qwen",
+      "fact": "Qwen Code v0.25.1: user file ~/.qwen/settings.json (QWEN_HOME overrides); JSON with comments (no trailing commas), holds all settings; root mcpServers {command,args,env,discoveryTimeoutMs (connect+list, default 30000 stdio, 100..300000), timeout (tool call, default 600000)}; top-level mcp.allowed / mcp.excluded filter servers. Skills: ~/.qwen/skills and ~/.agents/skills (source).",
+      "source_url": "https://github.com/QwenLM/qwen-code/blob/main/packages/core/src/tools/mcp-discovery-timeout.ts",
+      "verified_on": "2026-10-12",
+      "affects": [
+        "horosa-skill/src/horosa_skill/clients_extra.py",
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        "horosa-skill/src/horosa_skill/skill_install.py"
+      ]
+    },
+    {
+      "id": "kimi.mcp-config",
+      "subject": "kimi",
+      "fact": "Kimi Code CLI 2.1.1: user file ~/.kimi-code/mcp.json (KIMI_CODE_HOME overrides); strict JSON — ONE invalid entry fails the whole file; root mcpServers {command,args,env,startupTimeoutMs (default 30000), toolTimeoutMs (SDK default 60000)}; no `type` (transport inferred). Skills: ~/.kimi-code/skills and ~/.agents/skills; a loose .md in a skills root registers as a skill.",
+      "source_url": "https://github.com/MoonshotAI/kimi-code/blob/@moonshot-ai/kimi-code@2.1.1/packages/agent-core-v2/src/app/bootstrap/bootstrap.ts",
+      "verified_on": "2026-10-12",
+      "affects": [
+        "horosa-skill/src/horosa_skill/clients_extra.py",
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        "horosa-skill/src/horosa_skill/skill_install.py"
+      ]
+    },
+    {
+      "id": "qoder.mcp-config",
+      "subject": "qoder",
+      "fact": "Qoder CLI / new desktop app: user file ~/.qoder/settings.json (QODER_CONFIG_DIR overrides; Windows inferred); JSON with // comments, holds every CLI setting; root mcpServers {command,args,env,timeout ms (connection + request)}; the older Qoder IDE configures MCP only in its UI. Skills: ~/.qoder/skills (~/.agents/skills home vs project undocumented). Confidence medium.",
+      "source_url": "https://docs.qoder.com/cli/mcp-servers.md",
+      "verified_on": "2026-10-12",
+      "affects": [
+        "horosa-skill/src/horosa_skill/clients_extra.py",
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        "horosa-skill/src/horosa_skill/skill_install.py"
+      ]
+    },
+    {
+      "id": "codebuddy.mcp-config",
+      "subject": "codebuddy",
+      "fact": "Tencent CodeBuddy Code: USER scope reads ONLY the first existing of ~/.codebuddy/.mcp.json, ~/.codebuddy/mcp.json (deprecated), ~/.codebuddy.json (legacy), never merged (CODEBUDDY_CONFIG_DIR replaces ~/.codebuddy); JSONC; root mcpServers {type:'stdio', command, args, env}; timeouts only via process env MCP_TIMEOUT / MCP_TOOL_TIMEOUT; over ~30 tools → deferred loading; output cap MAX_MCP_OUTPUT_TOKENS 20000. Skills: ~/.codebuddy/skills. Confidence medium (docs contradict on `type` and deferral).",
+      "source_url": "https://www.codebuddy.cn/docs/cli/mcp",
+      "verified_on": "2026-10-12",
+      "affects": [
+        "horosa-skill/src/horosa_skill/clients_extra.py",
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        "horosa-skill/src/horosa_skill/skill_install.py"
+      ]
+    },
+    {
+      "id": "trae.mcp-config",
+      "subject": "trae",
+      "fact": "TRAE IDE: NO documented user-level file — Settings > MCP > Add > Create Manually, or deep link trae://trae.ai-ide/mcp-import?type=stdio&name=<n>&config=<urlencoded base64 of the entry JSON> (Trae CN: trae-cn://); project .trae/mcp.json only after 'Enable Project MCP'; entry {command,args,env}; timeouts as env strings START_MCP_TIMEOUT_MS / RUN_MCP_TIMEOUT_MS; command must not contain spaces; HARD caps across all servers: 40 tools, 8000 description chars. Skills: ~/.trae/skills (~/.trae-cn/skills for Trae CN).",
+      "source_url": "https://docs.trae.ai/ide/add-mcp-servers",
+      "verified_on": "2026-10-12",
+      "affects": [
+        "horosa-skill/src/horosa_skill/clients_extra.py",
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        "horosa-skill/src/horosa_skill/skill_install.py"
+      ]
+    },
+    {
+      "id": "amp.mcp-config",
+      "subject": "amp",
+      "fact": "Amp: user file ~/.config/amp/settings.json (or .jsonc; JSONC); the root key is the LITERAL top-level string \"amp.mcpServers\" (a nested amp:{mcpServers} is invalid); stdio entry {command,args,env} with additionalProperties:false — no timeout or other keys. Skills: reads ~/.agents/skills, ~/.config/amp/skills, ~/.claude/skills. Verify: `amp mcp doctor`.",
+      "source_url": "https://ampcode.com/cli-settings.schema.json",
+      "verified_on": "2026-10-12",
+      "affects": [
+        "horosa-skill/src/horosa_skill/clients_extra.py",
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        "horosa-skill/src/horosa_skill/skill_install.py"
+      ]
+    },
+    {
+      "id": "warp.mcp-config",
+      "subject": "warp",
+      "fact": "Warp: user file ~/.warp/.mcp.json on every OS (%USERPROFILE%\\.warp\\.mcp.json; Warp deliberately avoids XDG/AppData); strict JSON; root mcpServers {command,args,env}; no timeout field (tool calls hard-coded 30 min); auto-detects saves. Optional auto-spawn of Claude Code / Codex servers can duplicate an entry. Skills: ~/.agents/skills (recommended by Warp).",
+      "source_url": "https://docs.warp.dev/agents/capabilities/mcp.md",
+      "verified_on": "2026-10-12",
+      "affects": [
+        "horosa-skill/src/horosa_skill/clients_extra.py",
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        "horosa-skill/src/horosa_skill/skill_install.py"
+      ]
+    },
+    {
+      "id": "droid.mcp-config",
+      "subject": "droid",
+      "fact": "Factory Droid: user file ~/.factory/mcp.json; root mcpServers {type:'stdio', command, args, env, connectTimeout ms (stdio default 30000), timeout ms (tool call), disabled}; reloads on change. Skills: ~/.factory/skills, ~/.agents/skills — duplicate names in one bucket are invalid configuration (install one copy).",
+      "source_url": "https://docs.factory.com/harness/mcp.md",
+      "verified_on": "2026-10-12",
+      "affects": [
+        "horosa-skill/src/horosa_skill/clients_extra.py",
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        "horosa-skill/src/horosa_skill/skill_install.py"
+      ]
+    },
+    {
+      "id": "augment.mcp-config",
+      "subject": "augment",
+      "fact": "Augment Auggie CLI 0.36.0: user file ~/.augment/settings.json (JSONC, comments preserved by its own writes); root mcpServers {type:'stdio', command, args, env}; no documented timeout keys (bundle: host init waits 15 s then proceeds; calls 600 s between progress, 1800 s total; a 30 s liveness ping during calls). The IDE extensions use their own settings panel. Skills: ~/.augment/skills, ~/.claude/skills, ~/.agents/skills.",
+      "source_url": "https://docs.augmentcode.com/cli/integrations.md",
+      "verified_on": "2026-10-12",
+      "affects": [
+        "horosa-skill/src/horosa_skill/clients_extra.py",
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        "horosa-skill/src/horosa_skill/skill_install.py"
+      ]
+    },
+    {
+      "id": "deepcode.mcp-config",
+      "subject": "deepcode",
+      "fact": "Deep Code 0.4.3 (recommended in DeepSeek API docs): user file ~/.deepcode/settings.json shared with its VS Code extension; STRICT JSON — JSON.parse with catch→null drops the WHOLE file (API key included) on one comment or trailing comma; root mcpServers {command,args,env} only; startup DEEPCODE_MCP_TIMEOUT process env (default 30000); tool calls FIXED at 60000 ms (not configurable). Skills: ~/.deepcode/skills, ~/.agents/skills.",
+      "source_url": "https://github.com/lessweb/deepcode-cli/blob/main/packages/core/src/mcp/mcp-manager.ts",
+      "verified_on": "2026-10-12",
+      "affects": [
+        "horosa-skill/src/horosa_skill/clients_extra.py",
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        "horosa-skill/src/horosa_skill/skill_install.py"
+      ]
+    },
+    {
+      "id": "dsh.mcp-config",
+      "subject": "dsh",
+      "fact": "DeepSeek Harness 0.2.0-rc.2 (developer preview, breaking changes promised): config ~/.dsh/cordis.patch.yml (DSH_HOME) is a YAML LIST of Cordis patch ops that may hold other user patches and !!js tags — do not edit it; ship a standalone patch [{insert:[{id, name:'@deepseek-ai/dsh-mcp-client', config:{serverName, transport:'stdio', command, args, env, toolCallTimeoutMs (default 60000)}}]}] used via `dsh web --patch <file>`; server instructions over 32 KiB are rejected. Skills: ~/.dsh/skills and ~/.agents/skills ($DSH_AGENTS_HOME).",
+      "source_url": "https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-client/README.md",
+      "verified_on": "2026-10-12",
+      "affects": [
+        "horosa-skill/src/horosa_skill/clients_extra.py",
+        "horosa-skill/src/horosa_skill/surfaces/cli.py",
+        "horosa-skill/src/horosa_skill/skill_install.py"
+      ]
+    },
+    {
+      "id": "agent-skills.user-dirs",
+      "subject": "agent-skills",
+      "fact": "User-level Agent Skills folders, 2026-10-12: ~/.agents/skills is read by Cursor, VS Code Copilot, Codex (the documented USER location; $CODEX_HOME/skills deprecated), Gemini CLI (alias, GEMINI_CLI_HOME relocates), Devin Desktop / Windsurf, Cline, Zed (ONLY there), OpenCode, Goose, Junie, Qwen Code, Kimi Code, Amp, Warp, Droid, Augment, Deep Code, dsh, and Copilot CLI unless COPILOT_HOME is set. Own folder only: Claude Code ~/.claude/skills ($CLAUDE_CONFIG_DIR/skills), Kiro ~/.kiro/skills, Qoder ~/.qoder/skills, CodeBuddy ~/.codebuddy/skills, TRAE ~/.trae/skills. Claude Desktop chat/Cowork take skills only as an uploaded ZIP. Cursor / VS Code / Codex also read ~/.claude/skills, so a copy in both folders is listed twice; Droid treats a duplicate name in one bucket as invalid configuration.",
+      "source_url": "https://github.com/openai/codex/blob/main/codex-rs/ext/skills/src/host_roots.rs",
+      "verified_on": "2026-10-12",
+      "affects": [
+        "horosa-skill/src/horosa_skill/skill_install.py",
+        "horosa-skill/src/horosa_skill/surfaces/cli.py"
       ]
     }
   ]
