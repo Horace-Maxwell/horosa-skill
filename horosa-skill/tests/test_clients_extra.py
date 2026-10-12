@@ -226,3 +226,20 @@ def test_the_stdio_probe_gets_the_env_the_entry_actually_carries(tmp_path: Path,
     assert result.exit_code == 0, result.stderr
     assert seen["env"]["HOROSA_RUNTIME_ROOT"] == str((tmp_path / "rt").resolve())
     assert "SOME_SHELL_ONLY_VAR" not in seen["env"], "Copilot CLI 只转发 PATH——探针不许偷偷继承整个 shell 环境"
+
+
+@pytest.mark.parametrize("client,name,original", [
+    ("goose", "config.yaml", "GOOSE_PROVIDER: openai\r\n# keep\r\nextensions:\r\n  developer:\r\n    enabled: true\r\n"),
+    ("zed", "settings.json", '{\r\n  // keep\r\n  "theme": "dark",\r\n}\r\n'),
+])
+def test_comment_preserving_writes_keep_crlf_files_crlf(tmp_path: Path, client: str, name: str, original: str) -> None:
+    """windows-smoke 首推抓到：保注释写入把已带 CRLF 的文本交给文本模式写 → Windows 上 `\\r\\r\\n`，每跑一次多一倍空行。
+    现在按原字节写、整份统一成原文件的换行（macOS 上旧代码的插入段是 LF，同样红：混合换行）。"""
+    config = tmp_path / name
+    config.write_bytes(original.encode("utf-8"))
+    for _ in range(2):  # 第二遍也不许漂
+        _setup(client, config, "--no-skill")
+    raw = config.read_bytes()
+    assert b"\r\r" not in raw, "换行被翻译了两次"
+    assert raw.count(b"\n") == raw.count(b"\r\n"), "CRLF 文件里混进了 LF 行"
+    assert raw.startswith(original.split("\r\n")[0].encode("utf-8") + b"\r\n")

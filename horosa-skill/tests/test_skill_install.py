@@ -93,7 +93,7 @@ def test_outdated_install_is_replaced_without_leftovers(tmp_path: Path) -> None:
     skills = tmp_path / "skills"
     skill_install.install_skill(skills)
     dest = skills / skill_install.SKILL_NAME
-    (dest / "SKILL.md").write_text("old release\n", encoding="utf-8")
+    (dest / "SKILL.md").write_bytes(b"old release\n")  # 字节写：Windows 文本模式会落成 CRLF，与下面按 LF 算的摘要对不上
     marker_path = dest / skill_install.MARKER_NAME
     marker = json.loads(marker_path.read_text(encoding="utf-8"))
     marker["files"]["SKILL.md"] = skill_install._digest(b"old release\n")

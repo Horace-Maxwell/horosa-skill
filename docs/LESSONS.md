@@ -186,6 +186,11 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   - **stdio 探针只给 Codex 补 runtime 根**：Copilot CLI 的条目里已经写对了 HOME 与两个根，探针却只拿 `{surface_env}` 起 server → 算出默认根 →
     `setup.stdio_probe_runtime_mismatch`，把「配置写对了」测成失败。单测全关了探针（`--no-stdio-probe`）所以全绿；25 家真探针本机实跑第一家就红。
     → 探针的 env = 条目里**实际写着**的 env（客户端真会交给 server 的那份）；回归测试的负向对照红在 runtime_mismatch。
+  - **推上 main 后 windows-smoke 红两条，都是换行**：保注释写入（新 Goose YAML、以及**既有**的 JSONC 分支）把已带 `\r\n` 的文本交给
+    `write_text`，Windows 文本模式再把 `\n` 翻成 `\r\n` → `\r\r\n`，每跑一次多一倍空行（Windows 编辑器存出来的 Zed / VS Code 设置正是 CRLF；
+    JSONC 分支的这个坑从 v0.38.1 起就在，只是没有 CRLF 的测试）。另一条是测试自己用 `write_text` 写文件、按 LF 字节算摘要。
+    → 保注释写入一律按原文件换行拼好、按原字节写（`newline=""` / `write_bytes`）；`test_comment_preserving_writes_keep_crlf_files_crlf`
+    （JSONC 在 macOS 上旧代码就红：插入段是 LF、混合换行；YAML 只有 windows-smoke 能判红）。
 - **守卫**：`tests/test_skill_install.py`、`tests/test_yaml_block.py`、`tests/test_mcp_registry.py`、`tests/test_client_lockstep.py`、
   `tests/test_setup_command.py`（skill 步骤 3 条）、`tests/test_verify_client_configs.py`（Agent Plugins 9 条）、`tests/test_verify_runtime_live.py`
   （lane skill 隔离）；`verify_server_json.py` 对旧 server.json 实跑红两条（负向对照）。

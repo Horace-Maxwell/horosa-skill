@@ -367,6 +367,9 @@ def _merge_client_config(path: Path, payload: object) -> dict[str, Any]:
             backup = target.with_name(f"{target.name}.horosa-bak")
             backup.write_bytes(raw)
             output_text = new_text if new_text.endswith("\n") else new_text + "\n"
+            if "\r\n" in text:
+                # 🔴 v0.41.0 windows-smoke：保注释写入沿用原文件的换行；插入段是 LF，统一成 CRLF 后**按原字节**写（见下方 newline=""）。
+                output_text = output_text.replace("\r\n", "\n").replace("\n", "\r\n")
             written_format = "jsonc"
         else:
             try:
@@ -388,7 +391,9 @@ def _merge_client_config(path: Path, payload: object) -> dict[str, Any]:
         output_text = json.dumps({root_key: dict(servers)}, ensure_ascii=False, indent=2) + "\n"
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_name(f"{target.name}.horosa-tmp")
-    tmp.write_text(output_text, encoding="utf-8")
+    # jsonc 分支已自带原文件的换行，不能再让 Windows 文本模式把 \n 翻成 \r\n（CRLF 文件会变 \r\r\n，每跑一次多一倍空行）；
+    # 纯 JSON 分支照旧走平台换行。
+    tmp.write_text(output_text, encoding="utf-8", newline="" if written_format == "jsonc" else None)
     try:
         os.replace(tmp, target)
     finally:
@@ -420,7 +425,7 @@ def _write_yaml_merge(target: Path, payload: dict[str, Any]) -> dict[str, Any]:
         backup.write_bytes(raw)
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_name(f"{target.name}.horosa-tmp")
-    tmp.write_text(text, encoding="utf-8")
+    tmp.write_bytes(text.encode("utf-8"))  # yaml_block 已按原文件换行拼好；文本模式写会在 Windows 上二次翻译成 \r\r\n
     try:
         os.replace(tmp, target)
     finally:

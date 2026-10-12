@@ -1085,7 +1085,9 @@ A global stability pass hardened these; keep them true when you touch the releva
   `create_mcp_server` 证明不了客户端能起它）；`_build_client_config_payload` 只在 `uv` 启动器与 mcporter/openclaw 形态下解析
   checkout——wheel 装出来的包旁边没有 pyproject.toml，uvx 形态必须能在没有 checkout 的机器上生成配置（ci.yml wheel 步骤锁）。
 - **写用户的客户端配置 = 只动自己的键、先备份、原子替换、认不出形状就拒绝；命令一律绝对路径。** `_merge_client_config`
-  按产物根键（`mcpServers`/`servers`/`context_servers`；codex 走 tomlkit）只 upsert `<root>[<server_name>]`，写前 `.horosa-bak`，
+  按产物根键（`mcpServers`/`servers`/`context_servers`；codex 走 tomlkit；v0.41.0 起新格式由产物显式声明 `root_key`，Goose 的 YAML 走
+  `yaml_block`）只 upsert `<root>[<server_name>]`，写前 `.horosa-bak`；**保注释写入按原文件的换行、按原字节写**（文本模式在 Windows 上会把 CRLF
+  文件写成 `\r\r\n`——windows-smoke 才判得红），
   临时文件 + `os.replace`，非对象/非法 JSON 或没有 server 块的说明产物一律拒写（v0.38.0 B2：此前 vscode/zed/claude-code 的
   `--write` 会把用户整个 settings.json 覆盖成 payload）。`uv`/`uvx` 启动器都经 `client_tools.resolve_*_command` 写绝对路径——GUI
   客户端在 Windows 上不继承 shell PATH；`client check` 的 `command_not_on_path` 守。配置路径用 `_client_config_locations`
