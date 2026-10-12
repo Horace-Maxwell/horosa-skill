@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.40.2-dev (2026-10-11) | 表面审计（全 110 技法 × MCP 全量 / 精简 / CLI / HTTP + 门面·资源·提示）查出 service 层全绿掩盖的 8 处 agent 可见缺陷：技法名两种写法只收一种且闸门对 MCP 名放行、dispatch/hecan 吞掉平铺出生信息还反问用户、记忆/报告缺参叫 agent 去问用户、精简面 instructions 写 120 工具、19 条 CLI 命令无说明、示例载荷只有 9/110、qimenzeri 依据卡恒「与声明不一致」、全新数据目录并行首起时 ALTER 竞态崩溃 | `resolve_tool_name` 单点解析（闸门先解析再判）；`_lift_flat_birth`；`AGENT_OWNED_OPERATIONS` 回 must_ask_user=false；精简面 instructions 变体；全命令 help + 计数取真值；每技法 live 示例；`ENGINE_OVERRIDES`；`_ensure_column` 吞并发 duplicate column；新 `scripts/surface_audit.py` 发版前跑 |
 | v0.40.1 (2026-10-06) | preflight 先查「旧 pin 在公开远端」，随后 `verify_upstream_sync --write-state` 把本地未推送的上游 HEAD（ecd742f6）写进 pin，收尾还提示「提交它」——靠人眼拦下 | `pin_to_record`：HEAD 已推送记 HEAD；未推送且没碰 `UPSTREAM_INPUT_ROOTS` 记最近已推送祖先；碰了 / 输入路径脏则拒写；pin 闸挪到全部闸之后；临时 git 仓五情形 + 路径扫描 + 闸序守卫，负向对照 5 红 |
 | v0.40.1 (2026-10-06) | `bump_version.py 0.40.1` 把 pyproject 的历史注释「# v0.40.0 P1：运行期契约此前不在 wheel 里」也改成了 v0.40.1——历史识别靠 `HISTORY_MARKERS` 关键词，这条注释一个都不含 | 代码站点（pyproject / `__init__.py`）只改版本赋值那一行；测试含通用规则会动两行的负向对照；发版前逐行看 bump 的 diff |
 | v0.40.0 (2026-10-05) | 换新 Windows 机后在 Python 3.13 venv 里跑门禁：`verify_runtime_python_lock.py:37` 的 `re.split(pat, line, 1)` 报 DeprecationWarning（3.13 起 maxsplit / count / flags 按位置传参弃用，日后变 TypeError）；CI 钉 3.12，永远看不到 | 改 `maxsplit=1`；`verify_undefined_names.py` 规则集加 ruff `B034`（re.split / sub / subn 位置参数，基线 0）+ self-test 红绿对照；修前对本仓报红 = 负向对照 |
@@ -140,6 +141,41 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.40.2-dev / 2026-10-11 — 表面审计：service 层全绿，agent 却在 8 个地方走不通（`resolve_tool_name` / `_ensure_column`）
+
+- **起因**：用户要求「CLI、MCP、API 重点再查一遍，确保任何 AI 拿到仓库就能用全部功能」。已有的 live 层（live pytest、`section_harness.py`
+  110/110、全面自检）全部直调 `HorosaSkillService.run_tool`——闸门、MCP 参数处理、`horosa_tool_run`、CLI 退出码与文件 I/O、HTTP 鉴权、门面 /
+  资源 / 提示这些**只存在于表面层**的东西从没被成批跑过。这次对 vendored 实例逐个技法走 MCP 全量面、精简面、`tool run`、HTTP，并扫了全部
+  CLI help、MCP 描述与 instructions、文档里 273 条 `horosa-skill …` 命令。
+- **症状 → 根因 → 修复**（每条都有离线测试，`tests/test_agent_surface_audit.py`；对未改的 main 跑同一测试文件 129/130 红，唯一绿的是「技法缺参仍问用户」这条保持性断言）：
+  1. `tool run horosa_astro_chart` / `horosa_tool_run(tool_name="horosa_astro_chart")` 报 `tool.unknown`——SKILL.md 与 tools/list 教给 agent 的就是
+     MCP 名，执行层只认注册表键；`agent guidance` 却两种都认。更糟：澄清闸对**不认识的名字放行**，只在执行层补认 MCP 名就等于换个写法绕闸。
+     → `engine/registry.resolve_tool_name` 单点解析，闸门 / 执行 / input contract / `report_from_tool` / hecan `tools` 全走它，闸门先解析再判；
+     `tool.unknown` 三处同形带 `details.catalog`。
+  2. `dispatch` / `hecan` 收到平铺的出生信息（技法工具的写法）→ FlexibleModel 当额外字段收下、路由看不见 → 被选技法报缺 date，追问文本让用户
+     「请提供出生日期、时间、时区和地点」——用户给过。→ `DispatchInput._lift_flat_birth`（没给 birth / subject 且有 date 时收进 birth）。
+  3. `memory answer` 缺 `ai_answer`（AI 自己的解读正文）回 `must_ask_user: true` + 「请先确认会影响结果的设置」，而 SKILL.md 规定见 agent_recovery
+     就停下问用户。→ `AGENT_OWNED_OPERATIONS`（记忆 / 报告门面）回 `must_ask_user: false` + `fix_fields`；SKILL.md / AGENTS 改为按 must_ask_user 分流。
+  4. 精简面（Cursor / VS Code / Codex / Gemini / Windsurf / Cline / Zed 的默认）的 server instructions 写「120 tools」，tools/list 只有 11 个。
+     → `_server_instructions(compact=True)` 变体，四态都锁 ≤ 2048 字节。
+  5. CLI：19 条命令（含 `tool run` / `tool list` / `serve` / `doctor` / `dispatch`）在 `--help` 里没有一句说明；`client config --surface` 写「116 个工具」；
+     `knowledge search` 写「24 个域」（实为 31）；`knowledge registry --domain` 只列 astro/liureng/qimen；server.json 写「106 technique tools」；
+     knowledge 两个工具的 MCP 描述还停在「悬浮知识三域」。→ 全部补齐 / 计数取真值 / 去数字；守卫：每条命令与参数必须有 help，
+     `--surface` 的数必须等于真值；docs-sync 的计数守卫扩到 server.json 与「N technique tools」英文写法，README_EN 的
+     「100 technique tools trigger」并入闸门计数断言（此前只认中文）。
+  6. guidance / `tool list` 的 `example_payload` 只有预测族 9 个，其余 101 个 agent 只能照字段表拼。→ 取 `testing_payloads` 的 live 样例
+     （去 gpsLat/gpsLon、换掉自测说明、需确认的一律带确认字段并附 `example_note`）；守卫：110 个示例逐个过闸门与输入模型。
+  7. qimenzeri 的依据卡每次都标「⚠️ 与声明不一致」：声明只写 JS 工具名，runner 实际回 `{scan: local_calcDunJia, pan: kinqimen}`。
+     → `gen_technique_provenance.ENGINE_OVERRIDES`；`section_harness.py` 的 clean 现在要求 `matches_declaration` 不为 false（负向对照：
+     换回旧声明 → `2 tools run; clean=1`）。
+  8. 新审计脚本自己在全新数据目录上 6 路并行 `tool run` 时撞出：两个进程都看到列缺失，后到的 `ALTER TABLE … ADD COLUMN` 报
+     `duplicate column name` 直接崩（exit 1）——两个客户端同时起 stdio server 也会。→ `MemoryStore._ensure_column` 把并发的 duplicate column
+     视为迁移已达成（其余 OperationalError 照抛）；确定性竞态测试对旧代码红。
+- **守卫**：`tests/test_agent_surface_audit.py`（132 条）+ docs-sync 两处扩展（负向对照：server.json 改回 106、README_EN 改成 99 都红）+
+  `scripts/surface_audit.py`（发版前 live：356 项 failed=0；写进 OPERATIONS Live Runbook 与 AGENTS §8）。
+- **法则**：验收在哪一层跑，就只证明了那一层。agent 用的是 CLI / MCP / HTTP 的表面——闸门、名字、参数形状、错误恢复契约都住在那里；
+  service 层 110/110 不能替表面层作证。一个能被 agent 读到的数字（help、描述、instructions、注册表卡片）要么从真值算，要么不写。
 
 ### v0.40.1 / 2026-10-06 — preflight 会把本地未推送的上游 HEAD 写进 pin：`pin_to_record` 只记公开远端取得到的提交
 

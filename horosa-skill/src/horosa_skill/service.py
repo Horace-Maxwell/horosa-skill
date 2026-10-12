@@ -58,7 +58,7 @@ from horosa_skill.engine.astroextra_snapshots import _UNDEFINED as _ASTRO_UNDEF
 from horosa_skill.engine.astroextra_snapshots import _js_number as _astro_snap_js_number
 from horosa_skill.engine.ephemeris_stations import correct_station_directions
 from horosa_skill.engine.js_client import HorosaJsEngineClient
-from horosa_skill.engine.registry import TOOL_DEFINITIONS, ToolDefinition
+from horosa_skill.engine.registry import TOOL_DEFINITIONS, ToolDefinition, resolve_tool_name
 from horosa_skill.engine.router import select_tools
 from horosa_skill.errors import DispatchResolutionError, HorosaSkillError, ToolTransportError, ToolValidationError, bilingual, recovery_for
 from horosa_skill.exports import build_export_registry, get_technique_info, parse_export_content
@@ -16698,8 +16698,16 @@ class HorosaSkillService:
         group_id: str | None = None,
         evaluation_case_id: str | None = None,
     ) -> ToolEnvelope:
-        if tool_name not in TOOL_DEFINITIONS:
-            raise ToolValidationError(f"Unknown tool: {tool_name}", code="tool.unknown", details={"tool_name": tool_name})
+        resolved = resolve_tool_name(tool_name)
+        if resolved is None:
+            from horosa_skill.agent_guidance import unknown_tool_details
+
+            raise ToolValidationError(
+                bilingual(f"未知技法：{tool_name}", f"Unknown tool: {tool_name}"),
+                code="tool.unknown",
+                details=unknown_tool_details(tool_name),
+            )
+        tool_name = resolved
 
         definition = TOOL_DEFINITIONS[tool_name]
         workflow_group_id = group_id or self.tracer.new_group_id()
@@ -17190,6 +17198,8 @@ class HorosaSkillService:
                     },
                 ) from exc
 
+            # 两种写法都收（chart / horosa_astro_chart）；后面按注册表键取存档与模板，所以先归一。
+            request.tool_name = resolve_tool_name(request.tool_name) or request.tool_name
             result = self.run_tool(
                 request.tool_name,
                 request.payload,
@@ -17626,7 +17636,7 @@ class HorosaSkillService:
                 ) from exc
 
             max_tools = max(1, min(int(request.max_tools or 5), 8))
-            preselected = [t for t in (request.tools or []) if t][:max_tools] or None
+            preselected = [resolve_tool_name(t) or t for t in (request.tools or []) if t][:max_tools] or None
             dispatch_payload = request.model_dump(exclude_none=True)
             dispatch_payload.pop("tools", None)
             dispatch_payload.pop("max_tools", None)

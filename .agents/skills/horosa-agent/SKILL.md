@@ -41,11 +41,12 @@ Thin client-agnostic contract. The **single policy source** is
 4. If `horosa` tools are absent from the tool list: first turn after a cold start may simply be too
    early (Codex waits ~1s for optional servers; the runtime warms in ~45s) — retry next turn. Still
    absent → the server is not configured; point the user at `examples/clients/codex.md`.
-5. Errors carry structured recovery: on `details.agent_recovery`, relay `prompt_to_user` verbatim
-   and stop. On transport errors, suggest `horosa-skill doctor` / `horosa-skill selfcheck`.
+5. Errors carry structured recovery: on `details.agent_recovery` with `must_ask_user: true`, relay
+   `prompt_to_user` verbatim and stop; `must_ask_user: false` = fix the listed `fix_fields` yourself and retry
+   (memory / report calls). On transport errors, suggest `horosa-skill doctor` / `horosa-skill selfcheck`.
 6. **Compact surface.** Codex gets the 11 facade tools by default (`HOROSA_MCP_COMPACT=1`); call any technique
-   by name via `horosa_tool_run(tool_name="qimen", …)` — the catalogue is the `horosa://catalog/techniques`
-   resource. A missing flat `horosa_*` name is not a missing technique.
+   by name via `horosa_tool_run(tool_name="qimen", …)` (the MCP name `horosa_cn_qimen` works too) — the catalogue
+   is the `horosa://catalog/techniques` resource. A missing flat `horosa_*` name is not a missing technique.
 
 ## Shell-only agents (no MCP)
 
@@ -55,7 +56,7 @@ payloads as `--input` / `--output` files, never through the pipe (it re-encodes 
 
 | Need | Command |
 | --- | --- |
-| Tool names + `aka:` aliases | `horosa-skill tool list` |
+| Tool names + `aka:` aliases + a live-verified `example_payload` each | `horosa-skill tool list` |
 | What to confirm before a call | `horosa-skill agent guidance --tool qimen` |
 | Run one technique | `horosa-skill tool run qimen --input payload.json --output result.json` |
 | Natural-language routing | `horosa-skill dispatch --input query.json --output result.json` |

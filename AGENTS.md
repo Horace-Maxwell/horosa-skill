@@ -91,9 +91,17 @@ bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 enve
   `summary` 解释，缺什么就说本地未返回该段，不发明依赖。
 - 结果敏感设置缺失 → 先问（给具体选项）；用户说「当前时间」可直接取本地时间；只有用户明说
   「默认 / 按星阙 / 快速起盘 / 你来决定」才可用默认并声明用了默认。
-- 闸门协议：被 `agent_guidance.required` 或 `*.invalid_payload` + `details.agent_recovery` 拦下 → 用
-  `agent_recovery.prompt_to_user` 问用户；答后带 `agent_confirmed_settings: true`（接受默认则
-  `defaults_accepted: true`）+ `clarification_notes`；**绝不自己置 true 蒙混**，不换工具绕行。
+- 闸门协议：被 `agent_guidance.required` 或 `*.invalid_payload` + `details.agent_recovery`（`must_ask_user: true`）拦下 →
+  用 `agent_recovery.prompt_to_user` 问用户；答后带 `agent_confirmed_settings: true`（接受默认则
+  `defaults_accepted: true`）+ `clarification_notes`；**绝不自己置 true 蒙混**，不换工具绕行。记忆 / 报告门面的缺参是
+  调用方自己的字段（`run_id` / `ai_answer` / `format`），recovery 回 `must_ask_user: false` + `fix_fields`——自己补，不问用户
+  （`agent_guidance.AGENT_OWNED_OPERATIONS`）。
+- 技法名两种写法都收（`chart` / `horosa_astro_chart`）：`engine/registry.resolve_tool_name` 是唯一解析点，CLI `tool run`、
+  `horosa_tool_run`、`report_from_tool`、hecan `tools`、澄清闸、input contract 全走它；**闸门必须先解析再判**（闸门只拦已登记的名字，
+  只在执行层认 MCP 名就等于换个写法绕过闸门）。dispatch / hecan 收顶层平铺的出生信息（`DispatchInput._lift_flat_birth`）。
+- 每个技法的 `input_contract.example_payload` 都有（`tool list` / guidance 里）：手写的预测族 9 个之外取 `testing_payloads`
+  的 live 样例；样例要保持 live 可跑（section_harness 每次发布前跑全 110）。精简面的 server instructions 有独立变体
+  （`_server_instructions(compact=True)`），两态都锁 ≤ 2048 字节。
 - 大六壬默认 `guirengType: 2`（星占法贵人）；0/1 需用户明说或既有案例指定。
 - 预测类光有本命数据不够：必须有目标 `datetime` / `dirZone` / `dirLat` / `dirLon` / PD 方法设置
   （逐工具契约表：`references/predictive.md`）。
@@ -752,7 +760,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 4. `uv run pytest`：`@requires_runtime` / `@requires_chart` 集成测试在服务 down 时 **skip**——带 skip 的
    全绿**不是完整验证**；服务全起时 0 skipped 才是最强信号。验收 = 各技法产出 aiExport 段 + 干净导出契约
    （`missing_selected_sections == []` 且 `unknown_detected_sections == []`；election 等条件段技法按
-   optional 白名单放宽）。**反向陷阱：维护机装着 runtime，会让「其实依赖 runtime」的离线测试恒绿，
+   optional 白名单放宽）。`section_harness.py` 的 clean 另要求依据卡 `matches_declaration` 不为 false（算源声明在
+   `gen_technique_provenance.py` 的 `ENGINE_OVERRIDES` / `EXTRA_EVIDENCE` 修，不手改契约）。**service 层绿 ≠ agent 走得通**（v0.40.2-dev 表面审计）：
+   闸门、技法名写法、参数形状、CLI 退出码、HTTP 鉴权只存在于表面层，发版前另跑 `scripts/surface_audit.py`（全 110 技法 × MCP 全量 /
+   精简 / CLI / HTTP + 门面·资源·提示，failed=0）；它在全新数据目录上并行起 CLI，顺带守住记忆库首建的并发迁移（`_ensure_column`）。**反向陷阱：维护机装着 runtime，会让「其实依赖 runtime」的离线测试恒绿，
    只有 CI（唯一无 runtime 的环境）才炸**——离线/线材契约测试**禁以「算成功」为判据**（那是
    `@requires_runtime` 的活）；`tests/test_mcp_contract.py` 已用 autouse fixture 把 `HOROSA_RUNTIME_ROOT`
    钉到空目录强制与 CI 同形，发版前另跑一遍 `HOROSA_RUNTIME_ROOT=<空目录> uv run pytest` 复现该形状。

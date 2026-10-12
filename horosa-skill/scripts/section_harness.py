@@ -9,7 +9,8 @@ is not clean (missing selected sections / unknown detected sections / errors).
     export HOROSA_CHART_SERVER_ROOT=http://127.0.0.1:8877 HOROSA_SERVER_ROOT=http://127.0.0.1:9977   # start_vendored_instance.sh --with-java
     HOROSA_RUNTIME_ROOT=$(mktemp -d) HOROSA_SKILL_DATA_DIR=$(mktemp -d) uv run python scripts/section_harness.py [tool ...] [--json out.json]
 
-Acceptance for a release: `N tools run; clean=N`. HOROSA_RUNTIME_ROOT must be an EMPTY directory (an installed older
+Acceptance for a release: `N tools run; clean=N` (clean = ok, no missing/unknown section, and the technique card's
+measured engine matches its declaration). HOROSA_RUNTIME_ROOT must be an EMPTY directory (an installed older
 payload would otherwise supply the JS engine, see LESSONS v0.40.0 "live 复验跑的是已装 runtime 的旧 JS 引擎").
 Never point it at :8899/:9999 — those may be the maintainer's desktop app.
 """
@@ -66,12 +67,25 @@ def main(argv: list[str]) -> int:
         rec["detected"] = list(exp.get("section_titles_detected") or [])
         rec["missing"] = exp.get("missing_selected_sections") or []
         rec["unknown"] = exp.get("unknown_detected_sections") or []
+        # 依据卡的「实测算源 ≠ 声明」也是债：用户在卡上看到「⚠️ 与声明不一致」。2026-10 表面审计时 qimenzeri
+        # 每次都标 false（声明只写了 JS 工具名），而本 harness 只看段落，从没报过。
+        compute = ((data.get("technique_card") or {}).get("compute") or {})
+        rec["declaration_mismatch"] = compute.get("matches_declaration") is False
+        if rec["declaration_mismatch"]:
+            rec["measured"] = compute.get("measured")
+            rec["declared"] = compute.get("declared_engines")
         report[tool] = rec
     for tool, rec in report.items():
         flag = "" if rec.get("ok") else "  !! " + str(rec.get("error"))
         if rec.get("missing") or rec.get("unknown") or not rec.get("ok"):
             print(f"{tool:22s} tech={rec.get('technique')}{flag}\n    missing={rec.get('missing')}\n    unknown={rec.get('unknown')}")
-    clean = sum(1 for r in report.values() if r.get("ok") and not r.get("missing") and not r.get("unknown"))
+        if rec.get("declaration_mismatch"):
+            print(f"{tool:22s} engine declaration mismatch: measured={rec.get('measured')} declared={rec.get('declared')}"
+                  " (fix ENGINE_OVERRIDES / EXTRA_EVIDENCE in scripts/gen_technique_provenance.py)")
+    clean = sum(
+        1 for r in report.values()
+        if r.get("ok") and not r.get("missing") and not r.get("unknown") and not r.get("declaration_mismatch")
+    )
     print(f"\n{len(report)} tools run; clean={clean}")
     if out_json:
         Path(out_json).write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")

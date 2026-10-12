@@ -135,6 +135,10 @@ ENGINE_OVERRIDES: dict[str, list[str]] = {
     "bazi_direct": ["lunar-local", "java"],
     "ziwei_birth": ["java", "ZiweiCalc"],
     "suzhan": ["java", "chart_service"],
+    # 奇门择日：选中时刻的盘经 _run_qimen_tool 走 ken（kinqimen），本地口径时走 calcDunJia（local_route_calcDunJia）；
+    # 区间扫描恒为本地 calcDunJia（ken 无区间端点）。runner 回 compute_sources = {scan, pan}——只声明 JS 工具名
+    # qimenzeri 会让每张依据卡都标「与声明不一致」（2026-10 表面审计：全 110 技法里唯一一个）。
+    "qimenzeri": ["kinqimen", "local_route_calcDunJia", "local_calcDunJia"],
 }
 
 

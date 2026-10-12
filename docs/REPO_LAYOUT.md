@@ -159,6 +159,7 @@ debt ratchets `export_section_debt.json` / `error_recovery_debt.json` / `schema_
   `gen_runtime_python_lock.py` (fix the generator, never the generated file).
 - **Live** — `start_vendored_instance.sh` / `stop_vendored_instance.sh` (vendored instance on `:9977` / `:8877`),
   `verify_runtime_live.py` (the matrix lane), `section_harness.py` (every tool's sample payload against a live instance),
+  `surface_audit.py` (every tool through MCP full / compact `horosa_tool_run` / CLI `tool run` / HTTP, plus facades, resources, prompts),
   `run_full_self_check.py`, `run_openclaw_full_self_check.py`, `run_benchmark.py`.
 - **Release** — `publish_release.sh` (`--draft --dispatch`: seed → manifest → SBOM → MCPB → wheel → SHA256SUMS → verify → draft →
   dispatch `release-runtime.yml`), `package_runtime_payload.sh` (darwin seed), `build_runtime_release_windows.py` (derives the

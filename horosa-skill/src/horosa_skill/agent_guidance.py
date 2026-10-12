@@ -6,7 +6,8 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from horosa_skill.engine.registry import TOOL_DEFINITIONS
+from horosa_skill.engine.registry import TOOL_DEFINITIONS, resolve_tool_name
+from horosa_skill.errors import bilingual
 from horosa_skill.shenshu_options import options_doc
 from horosa_skill.western_options_doc import western_options_doc
 
@@ -2152,9 +2153,55 @@ def _model_field_contract(tool_name: str) -> dict[str, Any]:
     }
 
 
+# 逐工具示例载荷。手写的只覆盖预测族那 9 个；其余 101 个技法 agent 只能拿字段表自己拼，拼错一次就是一轮
+# 「invalid_payload → 问用户」。testing_payloads 的样例每个都经 live 实例跑通（section_harness / 全面自检），
+# 这里把它们作为示例下发：去掉可由 lat/lon 推导的 gpsLat/gpsLon、把自测说明换成「用户已确认」的写法。
+EXAMPLE_NOTE = (
+    "Shape example from a live-verified run: replace every value with the user's own confirmed data. "
+    "agent_confirmed_settings is valid only after the user answered (defaults_accepted only after they accepted defaults). "
+    "示例取自 live 跑通的载荷：值全部换成用户确认过的数据；agent_confirmed_settings 只能在用户真回答后才带。"
+)
+_EXAMPLE_DERIVED_KEYS = frozenset({"gpsLat", "gpsLon"})
+_EXAMPLE_NOTES_TEXT = "User confirmed the birth/event data and the settings shown in this payload."
+_VERIFIED_EXAMPLES: dict[str, dict[str, Any]] | None = None
+
+
+def _clean_example(value: Any) -> Any:
+    if isinstance(value, dict):
+        cleaned = {key: _clean_example(item) for key, item in value.items() if key not in _EXAMPLE_DERIVED_KEYS}
+        if "clarification_notes" in cleaned:
+            cleaned["clarification_notes"] = _EXAMPLE_NOTES_TEXT
+        return cleaned
+    if isinstance(value, list):
+        return [_clean_example(item) for item in value]
+    return value
+
+
+def verified_example_payload(tool_name: str) -> dict[str, Any] | None:
+    """live 跑通过的示例载荷（深拷贝）；需要确认的技法一律带上确认字段，复制即可过闸。
+
+    返回 None = 没有样例；`{}` 是合法示例（如 ziwei_rules 不需要任何入参）。
+    """
+    global _VERIFIED_EXAMPLES
+    if _VERIFIED_EXAMPLES is None:
+        from horosa_skill.testing_payloads import build_sample_payloads
+
+        _VERIFIED_EXAMPLES = {name: _clean_example(payload) for name, payload in build_sample_payloads().items()}
+    if tool_name not in _VERIFIED_EXAMPLES:
+        return None
+    example = deepcopy(_VERIFIED_EXAMPLES[tool_name])
+    if tool_name not in PREFLIGHT_EXEMPT_TOOLS and not (
+        example.get("agent_confirmed_settings") is True or example.get("defaults_accepted") is True
+    ):
+        example["agent_confirmed_settings"] = True
+        example["clarification_notes"] = _EXAMPLE_NOTES_TEXT
+    return example
+
+
 def build_tool_input_contract(tool_name: str) -> dict[str, Any]:
     """Return the user-facing input contract exposed through CLI, MCP, and docs."""
 
+    tool_name = resolve_tool_name(tool_name) or tool_name
     if tool_name not in TOOL_DEFINITIONS:
         return {
             "schema": INPUT_CONTRACT_SCHEMA,
@@ -2189,6 +2236,13 @@ def build_tool_input_contract(tool_name: str) -> dict[str, Any]:
         contract["example_payload"] = predictive["example_payload"]
     elif policy:
         contract["required_for_real_call"] = contract["technical"]["technical_required_fields"]
+    if not contract["example_payload"]:
+        verified = verified_example_payload(tool_name)
+        if verified is not None:
+            contract["example_payload"] = verified
+            contract["example_source"] = "live_verified_sample"
+    if contract["example_payload"] or contract.get("example_source"):
+        contract["example_note"] = EXAMPLE_NOTE
     return contract
 
 
@@ -2251,6 +2305,20 @@ def technique_index() -> dict[str, list[str]]:
     return {domain: sorted(names) for domain, names in sorted(groups.items())}
 
 
+def unknown_tool_details(tool_name: object) -> dict[str, Any]:
+    """`tool.unknown` 的统一 details（CLI / MCP / service 三处同形）：当场给出全部合法名字与两种写法的说明。"""
+    return {
+        "tool_name": tool_name,
+        "catalog": technique_index(),
+        "accepted_forms": "registry key (chart) or MCP name (horosa_astro_chart)",
+        "hint": (
+            "details.catalog 按域列出全部合法技法名；也可跑 `horosa-skill tool list`，或读资源 horosa://catalog/techniques。"
+            " / details.catalog lists every valid technique by domain; `horosa-skill tool list` and the"
+            " horosa://catalog/techniques resource list them too."
+        ),
+    }
+
+
 def build_technique_catalog(*, label_chars: int = 72) -> str:
     """技法一行索引（按 domain 分组）——精简 MCP 模式下拼进 tool_run 的 docstring，资源面给全文。
 
@@ -2305,6 +2373,9 @@ def _filter_provided_questions(ask_if_missing: list[dict[str, Any]], payload: di
 def validate_agent_preflight(tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Return a structured gate result before a calculation tool is allowed to run."""
 
+    # MCP 名（horosa_astro_chart）先归一到注册表键：下面「不认识的名字放行」只该放行真·非技法名，
+    # 否则换个写法就能绕过闸门。
+    tool_name = resolve_tool_name(tool_name) or tool_name
     if tool_name in PREFLIGHT_EXEMPT_TOOLS:
         return {"ok": True, "tool_name": tool_name, "enforced": False}
     override = _clarify_override(tool_name)
@@ -2363,14 +2434,56 @@ def validate_agent_preflight(tool_name: str, payload: dict[str, Any]) -> dict[st
     }
 
 
+# 记忆 / 报告门面的入参是调用方（AI）自己产的：run_id、ai_answer、format、ai_report……缺了或填错只能 AI 自己补。
+# 旧行为一律给 must_ask_user=true + 「请先确认会影响结果的设置：请补充 `ai_answer`」——SKILL.md 又规定见到
+# agent_recovery 就停下问用户，于是 agent 会去问用户要它自己该写的解读正文。技法 / dispatch / hecan 的缺参
+# 仍然是用户数据（时间、地点、口径），照旧问用户。
+AGENT_OWNED_OPERATIONS = frozenset({
+    "memory_record_answer", "memory_query", "memory_show",
+    "report_template", "report_render", "report_from_tool", "technique_report",
+})
+
+
+def _agent_fixable_recovery(operation: str, errors: list[dict[str, Any]]) -> dict[str, Any]:
+    fix_fields: list[dict[str, Any]] = []
+    for error in errors:
+        if not isinstance(error, dict):
+            continue
+        loc = error.get("loc")
+        field = ".".join(str(part) for part in loc) if isinstance(loc, (list, tuple)) and loc else "(payload)"
+        fix_fields.append({"field": field, "problem": str(error.get("msg") or error.get("type") or "invalid")})
+    return {
+        "must_ask_user": False,
+        "kind": "input",
+        "reason": "invalid_agent_payload",
+        "next_action": "fix_payload_fields_and_retry",
+        "fix_fields": fix_fields[:8],
+        "agent_note": bilingual(
+            f"`{operation}` 的这些字段由调用方（AI）提供：按 fix_fields 补齐或改正后重试，不要拿去问用户。",
+            f"These `{operation}` fields are supplied by the caller (the AI): fix them per fix_fields and retry; do not ask the user for them.",
+        ),
+        "prompt_to_user": "",
+        "ask_if_missing": [],
+        "safe_defaults": [],
+        "do_not_assume": ["Do not invent run IDs or file paths: look them up with horosa_memory_query / `horosa-skill memory query`."],
+    }
+
+
 def build_validation_recovery(
     *,
     operation_name: str,
     errors: list[dict[str, Any]],
     tool_name: str | None = None,
 ) -> dict[str, Any]:
-    """Build a user-askable recovery contract for incomplete or invalid payloads."""
+    """Build a recovery contract for incomplete or invalid payloads.
 
+    Technique / dispatch / hecan inputs are user data (ask the user); memory and report facades take
+    caller-owned fields, so their recovery says `must_ask_user: false` and lists what to fix.
+    """
+
+    operation = (operation_name or "").removeprefix("horosa_")
+    if not tool_name and operation in AGENT_OWNED_OPERATIONS:
+        return _agent_fixable_recovery(operation, errors)
     target = tool_name or operation_name
     if tool_name in TOOL_GUIDANCE or tool_name in {"dispatch", "horosa_dispatch"}:
         gate = validate_agent_preflight(tool_name, {})

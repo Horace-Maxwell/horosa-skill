@@ -354,7 +354,7 @@ class Settings(BaseModel):
     # （runtime.java_backend_unavailable），不再为了再试 Java 先杀掉健康的 chart 服务再全量重启；0 = 关闭冷却。
     runtime_java_retry_cooldown_seconds: float = 120.0
     # MCP 精简工具面：True 时只暴露 11 个门面工具（dispatch/guidance/memory/report 等 + 通用直呼
-    # horosa_tool_run），技法工具不平铺（省 tools/list 上下文预算）；默认 False 保持 97 工具全量平铺。
+    # horosa_tool_run），技法工具不平铺（省 tools/list 上下文预算）；默认 False 保持全量平铺（门面 + 全部技法）。
     mcp_compact: bool = False
     js_engine_timeout_seconds: float = 60.0
     host: str = "127.0.0.1"

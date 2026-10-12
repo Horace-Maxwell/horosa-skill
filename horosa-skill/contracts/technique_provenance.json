@@ -729,7 +729,9 @@
     "qimenzeri": {
       "compute_class": "composite",
       "engines": [
-        "qimenzeri"
+        "kinqimen",
+        "local_route_calcDunJia",
+        "local_calcDunJia"
       ],
       "endpoints": [],
       "export_technique": "qimenzeri",

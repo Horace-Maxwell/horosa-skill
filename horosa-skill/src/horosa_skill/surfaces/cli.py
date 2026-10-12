@@ -30,7 +30,7 @@ from horosa_skill.client_tools import (
     resolve_uvx_command,
     wheel_asset_name, zero_install_wheel_url,
 )
-from horosa_skill.engine.registry import TOOL_DEFINITIONS
+from horosa_skill.engine.registry import TOOL_DEFINITIONS, resolve_tool_name
 from horosa_skill.errors import RuntimeError, ToolValidationError, bilingual
 from horosa_skill.runtime import HorosaRuntimeManager
 from horosa_skill.service import HorosaSkillService
@@ -1689,7 +1689,7 @@ def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager,
     return report
 
 
-@app.command()
+@app.command(help='Environment check: runtime install, ports, disk, node probe, client hints (JSON; `issues: []` = healthy). 环境体检（JSON）。')
 def doctor(
     explain: bool = typer.Option(False, "--explain", help="Also print 6–10 lines of plain-language explanation to stderr (stdout stays pure JSON)."),
     probe_network: bool = typer.Option(False, "--probe-network", help="HEAD the runtime manifest URL through every mirror and report reachability (default: no external request)."),
@@ -2498,7 +2498,7 @@ def runtime_restart(
     _print_json({"ok": True, "stopped": stopped, "started": started})
 
 
-@app.command()
+@app.command(help='Start the MCP server: `--transport stdio` for a client that launches it, streamable-http (default, http://127.0.0.1:8765/mcp) for remote/HTTP clients. 启动 MCP 服务。')
 def serve(
     transport: str = typer.Option(
         "streamable-http",
@@ -2660,14 +2660,17 @@ def serve(
                     pass
 
 
-@tool_app.command("list")
+@tool_app.command("list", help='List all techniques as JSON: registry name, MCP name, description, input contract with an example payload. 列出全部技法。')
 def tool_list() -> None:
     _print_json(_service().list_tools())
 
 
-@tool_app.command("run")
+@tool_app.command("run", help='Run one technique: `tool run <name> --input in.json [--output out.json]`; exit 0 = envelope written (check `ok`), 2 = refused before running (stderr JSON `code`). 直调一个技法。')
 def tool_run(
-    tool_name: str,
+    tool_name: str = typer.Argument(
+        ...,
+        help="Technique name: registry key (chart) or MCP name (horosa_astro_chart); `tool list` shows all. 技法名，两种写法都收。",
+    ),
     stdin: bool = typer.Option(False, "--stdin", help="Read a JSON object from stdin."),
     input_file: Optional[Path] = typer.Option(None, "--input", help="Read a JSON object from a file."),
     save_result: bool = typer.Option(True, help="Persist the result in local memory."),
@@ -2677,8 +2680,18 @@ def tool_run(
     payload = _load_payload(stdin=stdin, input_file=input_file)
     service = _service()
     try:
-        _enforce_agent_preflight(tool_name, payload)
-        result = service.run_tool(tool_name, payload, save_result=save_result, query_text=query_text)
+        # chart 与 horosa_astro_chart 都收；必须在闸门前归一（闸门只拦已登记的名字）。
+        resolved = resolve_tool_name(tool_name)
+        if resolved is None:
+            from horosa_skill.agent_guidance import unknown_tool_details
+
+            raise ToolValidationError(
+                bilingual(f"未知技法：{tool_name}", f"Unknown tool: {tool_name}"),
+                code="tool.unknown",
+                details=unknown_tool_details(tool_name),
+            )
+        _enforce_agent_preflight(resolved, payload)
+        result = service.run_tool(resolved, payload, save_result=save_result, query_text=query_text)
     except ToolValidationError as exc:
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
@@ -2696,7 +2709,7 @@ def agent_guidance(
     _print_json(build_agent_guidance(tool_name=tool_name, intent=intent, include_all=include_all))
 
 
-@export_app.command("registry")
+@export_app.command("registry", help='Show the 星阙 AI export registry (sections and settings per technique). 导出设置注册表。')
 def export_registry(
     technique: str | None = typer.Option(None, help="Return only one technique block."),
     save_result: bool = typer.Option(False, help="Persist the result in local memory."),
@@ -2706,7 +2719,7 @@ def export_registry(
     _print_json(result.model_dump(mode="json"))
 
 
-@export_app.command("parse")
+@export_app.command("parse", help='Parse exported snapshot text into structured sections: JSON {technique, content}. 解析导出快照文本。')
 def export_parse(
     stdin: bool = typer.Option(False, "--stdin", help="Read a JSON object from stdin."),
     input_file: Optional[Path] = typer.Option(None, "--input", help="Read a JSON object from a file."),
@@ -2722,9 +2735,9 @@ def export_parse(
     _print_json(result.model_dump(mode="json"))
 
 
-@knowledge_app.command("registry")
+@knowledge_app.command("registry", help='List the bundled knowledge base: every domain with its categories and keys. 列出知识库全部域 / 分类 / 键。')
 def knowledge_registry(
-    domain: str | None = typer.Option(None, help="Optional knowledge domain filter: astro, liureng, qimen."),
+    domain: str | None = typer.Option(None, help="Optional domain filter, e.g. astro, bazi, qimen, liureng (omit to list every domain)."),
     save_result: bool = typer.Option(False, help="Persist the result in local memory."),
 ) -> None:
     service = _service()
@@ -2732,7 +2745,7 @@ def knowledge_registry(
     _print_json(result.model_dump(mode="json"))
 
 
-@knowledge_app.command("read")
+@knowledge_app.command("read", help='Read cited knowledge: JSON {domain, category, key} for one entry, or {query} for full-text search. 读知识条目（逐条带出处）。')
 def knowledge_read(
     stdin: bool = typer.Option(False, "--stdin", help="Read a JSON object from stdin."),
     input_file: Optional[Path] = typer.Option(None, "--input", help="Read a JSON object from a file."),
@@ -2750,7 +2763,7 @@ def knowledge_read(
 
 @knowledge_app.command("search")
 def knowledge_search(
-    query: str = typer.Argument(..., help="Full-text query across all 24 knowledge domains."),
+    query: str = typer.Argument(..., help="Full-text query across every bundled knowledge domain (`knowledge registry` lists them)."),
     domain: Optional[str] = typer.Option(None, help="Optional domain filter (e.g. bazi, ziwei, qimen)."),
     limit: int = typer.Option(8, help="Max matches to return (1-20)."),
     save_result: bool = typer.Option(False, help="Persist the result in local memory."),
@@ -2768,7 +2781,7 @@ def knowledge_search(
     _print_json(result.model_dump(mode="json"))
 
 
-@app.command()
+@app.command(help='Natural-language routing: JSON {query, birth|subject|flat birth fields, …} → picks and runs the right techniques. 自然语言路由起盘。')
 def dispatch(
     stdin: bool = typer.Option(False, "--stdin", help="Read a JSON object from stdin."),
     input_file: Optional[Path] = typer.Option(None, "--input", help="Read a JSON object from a file."),
@@ -2794,7 +2807,7 @@ def ask(
     dispatch(stdin=stdin, input_file=input_file, output=output)
 
 
-@benchmark_app.command("run")
+@benchmark_app.command("run", help='Run HorosaBench (router, knowledge, per-tool export contract and faithfulness cases). 运行基准评测。')
 def benchmark_run(
     dataset: Optional[Path] = typer.Option(None, help="Optional benchmark dataset JSON path."),
     skip_runtime: bool = typer.Option(False, help="Skip runtime-backed cases and run only local knowledge / metadata checks."),
@@ -2868,7 +2881,7 @@ def benchmark_faithfulness(
         raise typer.Exit(code=1)
 
 
-@trace_app.command("latest")
+@trace_app.command("latest", help='Show the most recent local trace events (sanitized). 查看最近的追踪记录。')
 def trace_latest(
     limit: int = typer.Option(30, help="How many recent trace rows to print from the newest local trace file."),
 ) -> None:
@@ -3654,7 +3667,7 @@ def client_config(
         "--surface",
         help=(
             "Advertised tool surface: `auto`（按客户端上限自动选，见 _CLIENT_COMPACT_DEFAULT）/ "
-            "`full`（116 个工具）/ `compact`（11 个门面工具，全部技法仍可经 horosa_tool_run 到达）。"
+            f"`full`（{FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} 个工具）/ `compact`（{COMPACT_SURFACE_TOOL_COUNT} 个门面工具，全部技法仍可经 horosa_tool_run 到达）。"
         ),
     ),
 ) -> None:
@@ -3667,7 +3680,7 @@ def client_config(
     _print_json(payload)
 
 
-@client_app.command("openclaw-config")
+@client_app.command("openclaw-config", help='Print the OpenClaw / mcporter config for this machine. 生成 OpenClaw 配置。')
 def client_openclaw_config(
     skill_root: Path = typer.Option(
         _package_root(),
@@ -3700,7 +3713,7 @@ def client_openclaw_config(
     _print_json(payload)
 
 
-@client_app.command("openclaw-setup")
+@client_app.command("openclaw-setup", help='Install the Horosa skill and MCP entry into an OpenClaw workspace. 接入 OpenClaw 工作区。')
 def client_openclaw_setup(
     workspace: Path = typer.Option(
         Path.home() / ".openclaw" / "workspace",
@@ -3892,7 +3905,7 @@ def client_openclaw_setup(
         raise typer.Exit(code=2)
 
 
-@client_app.command("openclaw-check")
+@client_app.command("openclaw-check", help="Check an OpenClaw workspace's Horosa skill and MCP entry. 体检 OpenClaw 接入。")
 def client_openclaw_check(
     workspace: Path = typer.Option(
         Path.home() / ".openclaw" / "workspace",
@@ -3999,7 +4012,7 @@ def client_openclaw_check(
         raise typer.Exit(code=2)
 
 
-@report_app.command("template")
+@report_app.command("template", help='Turn a stored run into an AI-fillable report template. 生成可填写的报告模板。')
 def report_template(
     run_id: str = typer.Option(..., "--run-id", help="Run id to turn into an AI-fillable report template."),
     tool: str | None = typer.Option(None, "--tool", help="Optional tool name for dispatch or multi-tool runs."),
@@ -4014,7 +4027,7 @@ def report_template(
     _print_json(result)
 
 
-@report_app.command("render")
+@report_app.command("render", help='Render a stored run (plus optional ai_report JSON) to JSON / DOCX / PDF. 渲染报告文件。')
 def report_render(
     run_id: str = typer.Option(..., "--run-id", help="Run id to render."),
     format_name: str = typer.Option("pdf", "--format", help="Output format: json, docx, or pdf."),
@@ -4076,7 +4089,7 @@ def report_technique(
     _print_json({key: value for key, value in result.items() if key != "document"})
 
 
-@report_app.command("from-tool")
+@report_app.command("from-tool", help='Run a technique and render its report in one step: `report from-tool <name> --input payload.json --format docx`. 起盘并出报告。')
 def report_from_tool(
     tool: str = typer.Argument(..., help="Tool name such as chart, qimen, liureng_gods, or sixyao."),
     format_name: str = typer.Option("pdf", "--format", help="Output format: json, docx, or pdf."),
@@ -4135,7 +4148,7 @@ def report_from_tool(
     _print_json(result)
 
 
-@memory_app.command("query")
+@memory_app.command("query", help='Search stored runs by run id, tool, entity, text or date range. 检索本地运行记录。')
 def memory_query(
     run_id: str | None = typer.Option(None, help="Filter by exact run id."),
     tool: str | None = typer.Option(None, help="Filter by tool name."),
@@ -4165,7 +4178,7 @@ def memory_query(
     _print_json(data)
 
 
-@memory_app.command("show")
+@memory_app.command("show", help='Show one stored run in full (envelope, artifacts, recorded AI answer). 查看单条运行记录。')
 def memory_show(
     run_id: str = typer.Argument(..., help="Exact run id to display."),
     include_payload: bool = typer.Option(True, "--include-payload/--no-include-payload", help="Embed saved JSON payloads in the output."),
@@ -4187,7 +4200,7 @@ def memory_prune(
     _print_json(service.store.prune_unused(unused_days=unused_days, yes=yes))
 
 
-@memory_app.command("answer")
+@memory_app.command("answer", help="Attach the AI's final answer to a stored run: JSON {run_id, ai_answer[, user_question]}. 把 AI 解读写回运行记录。")
 def memory_answer(
     stdin: bool = typer.Option(False, "--stdin", help="Read a JSON object from stdin."),
     input_file: Optional[Path] = typer.Option(None, "--input", help="Read a JSON object from a file."),

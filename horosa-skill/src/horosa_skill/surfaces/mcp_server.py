@@ -22,14 +22,15 @@ from horosa_skill.agent_guidance import (
     build_agent_guidance,
     build_technique_catalog,
     technique_index,
+    unknown_tool_details,
     build_tool_docstring,
     build_validation_recovery,
     validate_agent_preflight,
 )
 from horosa_skill import __version__
 from horosa_skill.config import Settings
-from horosa_skill.engine.registry import TOOL_DEFINITIONS
-from horosa_skill.errors import ToolValidationError, recovery_for
+from horosa_skill.engine.registry import TOOL_DEFINITIONS, resolve_tool_name
+from horosa_skill.errors import ToolValidationError, bilingual, recovery_for
 from horosa_skill.schemas.common import ErrorInfo
 from horosa_skill.exports.registry import build_export_registry
 from horosa_skill.input_normalization import normalize_request_payload
@@ -266,10 +267,28 @@ _JEV_TRIMS = (
 )
 
 
-def _server_instructions(*, decision_layer_on: bool) -> str:
+# 精简面（HOROSA_MCP_COMPACT=1）的 instructions：Cursor / VS Code / Codex / Gemini / Windsurf / Cline / Zed 默认就是
+# 精简面——多数客户端读到的说明书若写「120 tools」，而 tools/list 只给 11 个，模型就不知道技法该怎么到达。
+# 这里把「覆盖面」一行与末段换成精简面的真实用法（同样受 2048 字节预算约束，测试两态都锁）。
+_FULL_COVERS = f"WHAT IT COVERS ({FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} tools)"
+_COMPACT_COVERS = f"WHAT IT COVERS ({len(TOOL_DEFINITIONS)} techniques via horosa_tool_run)"
+_FULL_TAIL = (
+    f"HOROSA_MCP_COMPACT=1 exposes {COMPACT_SURFACE_TOOL_COUNT} facade tools instead of {FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} "
+    "(horosa_tool_run reaches any technique\nby name); HOROSA_TOOLSETS=astro,cn limits which groups are exposed."
+)
+_COMPACT_TAIL = (
+    "horosa_tool_run(tool_name=…, request={…}); names: horosa://catalog/techniques or the\n"
+    "error of a wrong name. chart / horosa_astro_chart both work."
+)
+
+
+def _server_instructions(*, decision_layer_on: bool, compact: bool = False) -> str:
+    text = _SERVER_INSTRUCTIONS
+    if compact:
+        text = text.replace(_FULL_COVERS, _COMPACT_COVERS).replace(_FULL_TAIL, _COMPACT_TAIL)
     if not decision_layer_on:
-        return _SERVER_INSTRUCTIONS
-    text = _SERVER_INSTRUCTIONS.replace(_OFFLINE_CLAIM, _JEV_CLAIM)
+        return text
+    text = text.replace(_OFFLINE_CLAIM, _JEV_CLAIM)
     for old, new in _JEV_TRIMS:
         text = text.replace(old, new)
     return text
@@ -997,7 +1016,9 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
     token = (os.environ.get("HOROSA_MCP_TOKEN", "") or "").strip() or None
     mcp = FastMCP(
         "Horosa Skill",
-        instructions=_server_instructions(decision_layer_on=getattr(service, "decision_layer", None) is not None),
+        instructions=_server_instructions(
+            decision_layer_on=getattr(service, "decision_layer", None) is not None, compact=bool(settings.mcp_compact)
+        ),
         website_url="https://github.com/Horace-Maxwell/horosa-skill",
         icons=[_SERVER_ICON],
         host=settings.host,
@@ -1395,19 +1416,21 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
                 raw_payload = {}
             raw_payload.pop("tool_name", None)
             payload = request if isinstance(request, dict) else raw_payload
-            if tool_name not in TOOL_DEFINITIONS:
+            resolved = resolve_tool_name(tool_name)
+            if resolved is None:
                 return _mcp_error_envelope(
                     ToolValidationError(
-                        f"Unknown tool: {tool_name or '(missing tool_name)'}",
+                        bilingual(
+                            f"未知技法：{tool_name or '（缺 tool_name）'}",
+                            f"Unknown tool: {tool_name or '(missing tool_name)'}",
+                        ),
                         code="tool.unknown",
-                        details={
-                            "tool_name": tool_name,
-                            "catalog": technique_index(),
-                            "hint": "details.catalog 按域列出全部合法技法名；全文见资源 horosa://catalog/techniques。",
-                        },
+                        details=unknown_tool_details(tool_name),
                     ),
                     tool_name=tool_name or "horosa_tool_run",
                 )
+            # 两种写法（chart / horosa_astro_chart）都收；闸门与执行都用注册表键。
+            tool_name = resolved
             error = _agent_preflight_error(tool_name, payload)
             if error is not None:
                 updated = await _maybe_elicit_gate(mcp, tool_name, payload, error)

@@ -117,8 +117,8 @@ class ToolDefinition:
 TOOL_DEFINITIONS: dict[str, ToolDefinition] = {
     "export_registry": ToolDefinition("export_registry", "export", "registry", None, ExportRegistryInput, "返回完整的星阙 AI 导出设置注册表（机读 JSON）。Return the full 星阙 AI export-settings registry as machine-readable JSON.", execution="local"),
     "export_parse": ToolDefinition("export_parse", "export", "parse", None, ExportParseInput, "把星阙 AI 导出文本快照解析为结构化 JSON 段落。Parse a 星阙 AI export text snapshot into structured JSON sections.", execution="local"),
-    "knowledge_registry": ToolDefinition("knowledge_registry", "knowledge", "registry", None, KnowledgeRegistryInput, "列出内置星阙悬浮知识的域 / 分类 / 键。List bundled 星阙 hover-knowledge domains, categories, and keys.", execution="local"),
-    "knowledge_read": ToolDefinition("knowledge_read", "knowledge", "read", None, KnowledgeReadInput, "读取内置星阙悬浮知识（星盘 / 六壬 / 奇门）。Read bundled 星阙 hover knowledge for astrology, 六壬, and 奇门.", execution="local"),
+    "knowledge_registry": ToolDefinition("knowledge_registry", "knowledge", "registry", None, KnowledgeRegistryInput, "列出内置知识库的全部域 / 分类 / 键（悬浮知识 + 技法操作手册 + 八字断语库）。List every bundled knowledge domain (hover knowledge, technique manuals, BaZi pithy sayings) with its categories and keys.", execution="local"),
+    "knowledge_read": ToolDefinition("knowledge_read", "knowledge", "read", None, KnowledgeReadInput, "读内置知识（逐条带出处）：domain+category+key 精读一条，或给 query 跨全部域全文检索。Read cited knowledge: one entry by domain/category/key, or full-text search across every domain with `query`.", execution="local"),
     "qimen": ToolDefinition("qimen", "cn", "qimen", None, QimenInput, "本地起奇门遁甲盘（与前端逐值同源）。Run the local 奇门遁甲 engine with headless frontend parity.", execution="local"),
     "taiyi": ToolDefinition("taiyi", "cn", "taiyi", None, TaiyiInput, "本地起太乙神数盘（与前端逐值同源）。Run the local 太乙 engine with headless frontend parity.", execution="local"),
     "jinkou": ToolDefinition("jinkou", "cn", "jinkou", None, JinKouInput, "本地起金口诀盘（与前端逐值同源）。Run the local 金口诀 engine with headless frontend parity.", execution="local"),
@@ -245,3 +245,20 @@ TOOL_DEFINITIONS: dict[str, ToolDefinition] = {
     "gua_desc": ToolDefinition("gua_desc", "cn", "gua_desc", "/gua/desc", GuaNamesInput, "获取卦义说明。Fetch Gua descriptions."),
     "gua_meiyi": ToolDefinition("gua_meiyi", "cn", "gua_meiyi", "/gua/meiyi", GuaNamesInput, "获取梅花易数卦义。Fetch MeiYi Gua descriptions."),
 }
+
+
+# MCP 名 → 注册表键。agent 从 tools/list、SKILL.md、guidance 学到的是 MCP 名（horosa_astro_chart），
+# CLI `tool run` / `horosa_tool_run` / `report from-tool` / hecan 的 `tools` 收的却是注册表键（chart）。
+# 两种写法都要能到达同一个技法；而且必须在澄清闸**之前**解析——闸门对不认识的名字放行（只拦已登记的技法），
+# 只在执行层才认 MCP 名会让「换个名字就绕过闸门」成立。
+MCP_NAME_ALIASES: dict[str, str] = {definition.mcp_name: name for name, definition in TOOL_DEFINITIONS.items()}
+
+
+def resolve_tool_name(name: object) -> str | None:
+    """技法名两种写法（`chart` / `horosa_astro_chart`）→ 注册表键；认不出返回 None（调用方报 tool.unknown）。"""
+    if not isinstance(name, str):
+        return None
+    text = name.strip()
+    if text in TOOL_DEFINITIONS:
+        return text
+    return MCP_NAME_ALIASES.get(text)

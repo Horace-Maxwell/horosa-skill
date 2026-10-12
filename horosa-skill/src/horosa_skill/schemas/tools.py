@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from horosa_skill.astro_rulers import HOUSE_SYSTEM_LABELS
 
@@ -1952,6 +1952,13 @@ class DispatchSubjectInput(FlexibleModel):
     year: int | str | None = None
 
 
+# dispatch / hecan 自身的顶层字段；其余顶层键在「没给 birth / subject 却给了 date」时视为出生/起课信息。
+_DISPATCH_OWN_FIELDS = frozenset({
+    "query", "subject", "birth", "context", "preferences", "save_result", "tools", "max_tools", "request",
+    "agent_confirmed_settings", "defaults_accepted", "clarification_notes",
+})
+
+
 class DispatchInput(FlexibleModel):
     query: str
     subject: DispatchSubjectInput | None = None
@@ -1959,6 +1966,23 @@ class DispatchInput(FlexibleModel):
     context: dict[str, Any] = Field(default_factory=dict)
     preferences: dict[str, Any] = Field(default_factory=dict)
     save_result: bool = True
+
+    @model_validator(mode="before")
+    @classmethod
+    def _lift_flat_birth(cls, data: Any) -> Any:
+        """顶层平铺的出生信息（技法工具的写法）收进 `birth`。
+
+        技法工具收平铺的 date/time/zone/lat/lon，dispatch / hecan 却要 `{"birth": {...}}`。agent 照技法工具的
+        习惯平铺传过来时，旧行为是 FlexibleModel 把这些键当额外字段收下、路由却看不见 → 被选中的技法报缺 date，
+        而追问文本让用户「请提供出生日期、时间、时区和地点」——用户明明给过。显式给了 birth / subject 时不动。
+        """
+        if not isinstance(data, dict) or data.get("birth") is not None or data.get("subject") is not None:
+            return data
+        if data.get("date") in (None, ""):
+            return data
+        lifted = {key: value for key, value in data.items() if key not in _DISPATCH_OWN_FIELDS}
+        kept = {key: value for key, value in data.items() if key in _DISPATCH_OWN_FIELDS}
+        return {**kept, "birth": lifted}
 
 
 class HecanInput(DispatchInput):

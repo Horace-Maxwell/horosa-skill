@@ -269,7 +269,14 @@ class MemoryStore:
             for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
         }
         if column not in columns:
-            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+            except sqlite3.OperationalError as exc:
+                # 并发初始化：两个进程（两个客户端同时起 stdio server、agent 并行跑 `tool run`）都看到列缺失，
+                # 后到的 ALTER 撞「duplicate column name」——列已由对方加上，迁移目标已达成。2026-10 表面审计在全新
+                # 数据目录上 6 路并行 `tool run` 复现过（exit 1，OperationalError 直接冒到 CLI）。
+                if "duplicate column name" not in f"{exc}".lower():
+                    raise
 
     def create_run(
         self,

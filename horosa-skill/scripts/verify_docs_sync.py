@@ -288,7 +288,9 @@ COUNT_PROSE = re.compile(r"(\d+)\s*(?:个)?\s*(技法|工具|tools\b|techniques\
 # marketplace.json phrased it "97 local Horosa (星阙) technique tools" — `local` instead of `real`, and the
 # noun 20 chars later — and sat stale at 97 through 106 while this file listed it in COUNT_DOCS (v0.38.0).
 # The reach of a count guard must not depend on which adjective a sentence happens to use.
-COUNT_PROSE_EN = re.compile(r"(\d+)\s+(?:real|local)\s+[^,.;]{0,40}?\b(tools?|techniques?)\b")
+# server.json phrased it "106 technique tools" — the noun doubles as the adjective — and sat at 106 through 110 because
+# server.json was not in COUNT_DOCS and this pattern needed `real|local` (2026-10 surface audit).
+COUNT_PROSE_EN = re.compile(r"(\d+)\s+(?:real|local|technique)\s+[^,.;]{0,40}?\b(tools?|techniques?)\b")
 # 「N 个术数/占星技法」逐字出现在 CLAUDE.md / AGENTS.md / banner.svg 三处 —— 用精确短语而不是放宽
 # 通用正则，否则「约 9 个门面工具」这类真·小数字会被误报。
 COUNT_PHRASE_ZH = re.compile(r"(\d+)\s*个术数\s*/?\s*占星技法")
@@ -298,7 +300,8 @@ COUNT_SELFCHECK = re.compile(r"(\d+)\s*/\s*(\d+)\s*`?\s*(?:ok=true|写入|writes
 EMPHASIS = re.compile(r"</?[A-Za-z][^>]*>|\*\*|`")
 # 「N 个技法工具触发 must_ask_user」是**另一个量**（registry 减去 PREFLIGHT_EXEMPT_TOOLS），
 # 不是工具总数——单独算、单独断言，好过打 ignore 标记让它继续陈旧下去。
-GATED_PROSE = re.compile(r"(\d+)\s*个技法工具触发")
+# README_EN 的英文写法（"100 technique tools trigger must_ask_user"）此前不在任何守卫的视野里——两种语言同一真值。
+GATED_PROSE = re.compile(r"(\d+)\s*个技法工具触发|(\d+)\s+technique tools trigger")
 IGNORE_COUNT = "<!-- docs-sync:ignore-count -->"
 # 「Cursor 全局约 40 个工具上限」「128 工具上限」说的是**别的客户端**的容量，不是我们的工具数。
 # 这类行没法像 GATED_PROSE 那样「单独算、单独断言」——第三方的上限不是我们能派生的量。
@@ -328,6 +331,8 @@ COUNT_DOCS = [
     ".github/copilot-instructions.md",
     ".windsurf/rules/horosa-skill.md",
     ".clinerules/horosa-skill.md",
+    # 2026-10 表面审计：MCP Registry 的卡片描述（server.json）写「106 technique tools」两个版本没人发现。
+    "server.json",
 ]
 
 
@@ -353,9 +358,10 @@ def check_tool_counts() -> None:
                 err(f"{rel}:{lineno}: alt says {alt.group(1)} tools, registry has {expected}")
             gated = GATED_PROSE.search(line)
             if gated:
-                if int(gated.group(1)) != expected_gated():
+                gated_count = gated.group(1) or gated.group(2)
+                if int(gated_count) != expected_gated():
                     err(
-                        f"{rel}:{lineno}: claims {gated.group(1)} gated tools, "
+                        f"{rel}:{lineno}: claims {gated_count} gated tools, "
                         f"registry minus PREFLIGHT_EXEMPT_TOOLS is {expected_gated()}"
                     )
                 continue  # a gated-count line is not a total-count line

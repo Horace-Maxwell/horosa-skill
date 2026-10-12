@@ -78,12 +78,16 @@ cd horosa-skill
 export HOROSA_CHART_SERVER_ROOT=http://127.0.0.1:8877 HOROSA_SERVER_ROOT=http://127.0.0.1:9977
 # HOROSA_RUNTIME_ROOT 必须是空目录：已装的旧载荷会顶替 JS 引擎与「契约够不够新」判定
 HOROSA_RUNTIME_ROOT=$(mktemp -d) HOROSA_SKILL_DATA_DIR=$(mktemp -d) uv run pytest -q -rs -p no:cacheprovider      # 0 failed；skip 只许环境类理由
-HOROSA_RUNTIME_ROOT=$(mktemp -d) HOROSA_SKILL_DATA_DIR=$(mktemp -d) uv run python scripts/section_harness.py      # N tools run; clean=N
+HOROSA_RUNTIME_ROOT=$(mktemp -d) HOROSA_SKILL_DATA_DIR=$(mktemp -d) uv run python scripts/section_harness.py      # N tools run; clean=N（含依据卡算源 = 声明）
+uv run python scripts/surface_audit.py                                # 每个技法走 MCP 全量面 / 精简面 / CLI / HTTP + 门面·资源·提示：failed=0
 bash horosa-skill/scripts/stop_vendored_instance.sh                  # 只按 pidfile 停 8877/9977；绝不 pkill -f
 ```
 
 ken 技法（奇门 / 太乙 / 金口 / 三式合一）由 chart 服务上的 ken 后端算（`/qimen/pan` `/taiyi/pan` `/jinkou/pan`），`horosa-core-js`
 只重排成 aiExport 段——它们的验收就在上面这套 live 里（每技法段齐、`missing_selected_sections == []`、`unknown_detected_sections == []`）。
+`section_harness.py` 直调 service，看不见只存在于表面层的东西（澄清闸、MCP 参数处理、`horosa_tool_run`、CLI 退出码与 `--input/--output`、
+HTTP 鉴权、门面 / 资源 / 提示）——那是 `surface_audit.py` 的活；它用的载荷就是 `tool list` / guidance 发给 agent 的 `example_payload`，
+所以示例本身也在这里被 live 验证。
 
 ## Runtime Release Runbook（托管流水线）
 

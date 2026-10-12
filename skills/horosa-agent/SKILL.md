@@ -112,7 +112,8 @@ reports — they will disagree with 星阙 and there will be no way to tell why.
 1. Understand the user's question.
 2. Choose the smallest matching Horosa tool (table below).
 3. If required context or result-changing settings are missing, call `horosa_agent_guidance`
-   (CLI: `uv run horosa-skill agent guidance --tool <tool> --intent "..."`).
+   (CLI: `uv run horosa-skill agent guidance --tool <tool> --intent "..."`). Every tool's
+   `input_contract.example_payload` there is a live-verified call shape: copy its keys, fill in the user's data.
 4. Ask the user one concise clarification question with concrete options when settings are unclear.
 5. Normalize time, place, timezone, and question text.
 6. Call the tool.
@@ -151,9 +152,11 @@ Runtime enforcement (the gate is in code, not just policy):
 - After the user answers, include `agent_confirmed_settings: true`. If the user explicitly accepts
   defaults, include `defaults_accepted: true`. Add `clarification_notes` summarizing what was confirmed
   (e.g. `"user accepted Xingque defaults for guirengType and automatic day/night noble-person"`).
-- If a response carries `details.agent_recovery`, stop and ask the user with
+- If a response carries `details.agent_recovery` with `must_ask_user: true`, stop and ask the user with
   `details.agent_recovery.prompt_to_user`. Do not retry the same tool, and do not call another
   calculation tool as a workaround, until the user answers or accepts defaults.
+- `must_ask_user: false` (memory / report calls missing `run_id`, `ai_answer`, `format` …) means the fields are
+  yours: fix what `fix_fields` lists and retry. Never ask the user for them; look run ids up with the memory tools.
 - **Never set `agent_confirmed_settings: true` yourself without a real user answer.**
 
 ## Do Not Hallucinate Dependencies
@@ -305,6 +308,11 @@ progress lines and error envelopes go to stderr, so parse stdout only.
 | Re-read a stored run | `horosa-skill memory show <run_id>` |
 | Health / live check | `horosa-skill doctor` · `horosa-skill selfcheck` |
 
+- Technique names: the registry key (`chart`) and the MCP name (`horosa_astro_chart`) both work — in `tool run`,
+  `report from-tool`, hecan `tools` and `horosa_tool_run`. A wrong name exits 2 with `details.catalog` listing every
+  valid one. `tool list` gives each technique's `input_contract.example_payload` (live-verified; replace the values).
+- `dispatch` / `hecan` take the birth data nested (`{"query": …, "birth": {"date": …}}`) or flat at the top level
+  like a technique tool (`{"query": …, "date": …, "time": …}`).
 - Payload files are UTF-8 JSON objects (`{"date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13",
   "lon": "121e28", …}`). `--stdin` also works on macOS/Linux; on **Windows PowerShell 5.1 use `--input` / `--output`
   files** — the pipe re-encodes bytes through the console code page and mangles Chinese in both directions.
