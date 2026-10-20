@@ -6,9 +6,10 @@ import json
 import os
 import re
 import tempfile
-import zipfile
 from pathlib import Path
 from typing import Any
+
+from horosa_skill.errors import bilingual
 
 
 HUMAN_RENDER_HIDDEN_SECTION_IDS = {
@@ -56,8 +57,10 @@ def render_report(document: dict[str, Any], *, output_path: Path, format_name: s
         payload = tmp_path.read_bytes()
         os.replace(str(tmp_path), str(output_path))
     except BaseException as exc:
-        tmp_path.unlink(missing_ok=True)
-        if normalized in {"docx", "pdf"}:
+        tmp_path.unlink(missing_ok=True)  # cleanup on ANY exit, cancellation included
+        # Only an ordinary render failure degrades to TXT. Ctrl-C, SystemExit and an MCP cancel (BaseException) must
+        # propagate — before v0.41.1 they came back as a "successful" degraded report.
+        if normalized in {"docx", "pdf"} and isinstance(exc, Exception):
             # 渲染失败降级：自动改存 TXT（纯文本全文），绝不静默丢内容——结果里如实标注降级。
             degraded = _render_txt_degraded(document, output_path)
             if degraded is not None:
@@ -144,16 +147,12 @@ def _split_markdown_blocks(text: str) -> list[tuple[str, Any]]:
 
 
 def _render_docx(document: dict[str, Any], output_path: Path) -> None:
-    try:
-        from docx import Document
-        from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
-        from docx.oxml import OxmlElement
-        from docx.oxml.ns import qn
-        from docx.shared import Inches, Pt, RGBColor
-    except ModuleNotFoundError:
-        _render_docx_fallback(document, output_path)
-        return
+    from docx import Document
+    from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.shared import Inches, Pt, RGBColor
 
     doc = Document()
     font_name = _docx_font_name()
@@ -455,19 +454,15 @@ def _render_docx(document: dict[str, Any], output_path: Path) -> None:
 
 
 def _render_pdf(document: dict[str, Any], output_path: Path) -> None:
-    try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib import colors
-        from reportlab.lib.enums import TA_CENTER
-        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-        from reportlab.lib.units import mm
-        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-        from reportlab.pdfbase import pdfmetrics
-        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-        from reportlab.pdfbase.ttfonts import TTFont
-    except ModuleNotFoundError:
-        _render_pdf_fallback(document, output_path)
-        return
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    from reportlab.pdfbase.ttfonts import TTFont
 
     font_name, bold_font_name = _register_pdf_fonts(pdfmetrics, UnicodeCIDFont, TTFont)
 
@@ -796,8 +791,15 @@ def _register_pdf_fonts(pdfmetrics: Any, UnicodeCIDFont: Any, TTFont: Any) -> tu
     try:
         pdfmetrics.registerFont(UnicodeCIDFont(fallback))
         return fallback, fallback
-    except Exception:
-        return "Helvetica", "Helvetica"
+    except Exception as exc:  # noqa: BLE001 - reportlab raises various errors for a missing CID resource
+        # v0.41.1：此前静默退到 Helvetica——它画不了中文，结果是一份整页方块却标着 format: pdf 的「成功」报告。
+        # 抛出去交给 render_report：降级成全文 TXT，并在 degrade_reason 里写清原因。
+        raise RuntimeError(
+            bilingual(
+                "PDF 注册不到任何能显示中文的字体（STSong-Light 不可用）。",
+                "No CJK-capable font could be registered for the PDF (STSong-Light unavailable).",
+            )
+        ) from exc
 
 
 def _core_prop_text(value: Any, limit: int = 255) -> str:
@@ -844,129 +846,3 @@ def _steps_text(value: Any) -> str:
     if isinstance(value, list):
         return "\n".join(f"{index}. {item}" for index, item in enumerate(value, start=1) if str(item).strip())
     return str(value or "")
-
-
-def _render_docx_fallback(document: dict[str, Any], output_path: Path) -> None:
-    ai_report = document.get("ai_report") if isinstance(document.get("ai_report"), dict) else {}
-    human_executive_summary = _human_ai_value(ai_report, "executive_summary")
-    human_consultation_basis = _human_ai_value(ai_report, "consultation_basis")
-    human_reading_steps = _human_ai_list(ai_report, "reading_steps")
-    paragraphs: list[tuple[str, str]] = [("Title", str(document.get("title") or "结构化咨询报告"))]
-    paragraphs.extend(
-        [
-            ("Heading1", "解读目标"),
-            ("Normal", _display_question(document, ai_report)),
-        ]
-    )
-    if human_consultation_basis:
-        paragraphs.append(("Heading1", "起盘依据"))
-        paragraphs.append(("Normal", str(human_consultation_basis or "")))
-    if human_reading_steps:
-        paragraphs.append(("Heading1", "解盘步骤"))
-        paragraphs.append(("Normal", _steps_text(human_reading_steps)))
-    if human_executive_summary:
-        paragraphs.append(("Heading1", "总览摘要"))
-        paragraphs.append(("Normal", str(human_executive_summary or "")))
-    if ai_report.get("answer_text") and str(ai_report.get("answer_text")) != str(human_executive_summary or ""):
-        paragraphs.append(("Heading1", "完整解盘正文"))
-        paragraphs.append(("Normal", str(ai_report.get("answer_text") or "")))
-    if ai_report.get("analysis_focus") or ai_report.get("direct_answer"):
-        paragraphs.append(("Heading1", "核心结论"))
-        if ai_report.get("analysis_focus"):
-            paragraphs.append(("Normal", f"分析焦点：{ai_report.get('analysis_focus')}"))
-        if ai_report.get("direct_answer"):
-            paragraphs.append(("Normal", f"直接回答：{ai_report.get('direct_answer')}"))
-    for section in _human_sections(document):
-        if isinstance(section, dict):
-            paragraphs.append(("Heading1", str(section.get("title") or "章节")))
-            paragraphs.extend(("Normal", item) for item in _paragraphs(str(section.get("body") or "")))
-    document_xml = "\n".join(_docx_paragraph(style, text) for style, text in paragraphs)
-    with zipfile.ZipFile(output_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("[Content_Types].xml", _DOCX_CONTENT_TYPES)
-        archive.writestr("_rels/.rels", _DOCX_RELS)
-        archive.writestr("word/_rels/document.xml.rels", _DOCX_DOCUMENT_RELS)
-        archive.writestr("word/styles.xml", _DOCX_STYLES)
-        archive.writestr("word/document.xml", f"{_DOCX_DOCUMENT_PREFIX}{document_xml}{_DOCX_DOCUMENT_SUFFIX}")
-
-
-def _docx_paragraph(style: str, text: str) -> str:
-    style_xml = f'<w:pPr><w:pStyle w:val="{style}"/></w:pPr>' if style != "Normal" else ""
-    runs = "".join(f"<w:r><w:t>{html.escape(part)}</w:t></w:r>" for part in str(text).split("\n"))
-    return f"<w:p>{style_xml}{runs}</w:p>"
-
-
-def _render_pdf_fallback(document: dict[str, Any], output_path: Path) -> None:
-    ai_report = document.get("ai_report") if isinstance(document.get("ai_report"), dict) else {}
-    human_executive_summary = _human_ai_value(ai_report, "executive_summary")
-    human_consultation_basis = _human_ai_value(ai_report, "consultation_basis")
-    human_reading_steps = _human_ai_list(ai_report, "reading_steps")
-    lines = [
-        str(document.get("title") or "结构化咨询报告"),
-        f"解读目标: {_display_question(document, ai_report)}",
-    ]
-    if human_consultation_basis:
-        lines.append(f"起盘依据: {human_consultation_basis}")
-    if human_reading_steps:
-        lines.append(f"解盘步骤: {_steps_text(human_reading_steps)}")
-    if human_executive_summary:
-        lines.append(f"总览摘要: {human_executive_summary}")
-    if ai_report.get("answer_text") and str(ai_report.get("answer_text")) != str(human_executive_summary or ""):
-        lines.append(f"完整解盘正文: {ai_report.get('answer_text')}")
-    for section in _human_sections(document)[:8]:
-        if isinstance(section, dict):
-            lines.append(str(section.get("title") or "Section"))
-            lines.extend(_paragraphs(str(section.get("body") or ""))[:8])
-    ascii_lines = [_pdf_safe(line)[:110] for line in lines[:60]]
-    text_stream = "BT /F1 10 Tf 50 790 Td 14 TL " + " T* ".join(f"({_pdf_escape(line)}) Tj" for line in ascii_lines) + " ET"
-    stream_bytes = text_stream.encode("latin-1", errors="replace")
-    objects = [
-        b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-        b"<< /Length " + str(len(stream_bytes)).encode("ascii") + b" >>\nstream\n" + stream_bytes + b"\nendstream",
-    ]
-    chunks = [b"%PDF-1.4\n"]
-    offsets: list[int] = []
-    for index, obj in enumerate(objects, start=1):
-        offsets.append(sum(len(chunk) for chunk in chunks))
-        chunks.append(f"{index} 0 obj\n".encode("ascii") + obj + b"\nendobj\n")
-    xref_offset = sum(len(chunk) for chunk in chunks)
-    chunks.append(f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode("ascii"))
-    for offset in offsets:
-        chunks.append(f"{offset:010d} 00000 n \n".encode("ascii"))
-    chunks.append(f"trailer << /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n".encode("ascii"))
-    output_path.write_bytes(b"".join(chunks))
-
-
-def _pdf_safe(value: str) -> str:
-    normalized = re.sub(r"\s+", " ", str(value)).strip()
-    return normalized.encode("latin-1", errors="replace").decode("latin-1")
-
-
-def _pdf_escape(value: str) -> str:
-    return str(value).replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-
-
-_DOCX_CONTENT_TYPES = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
-  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
-</Types>"""
-_DOCX_RELS = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
-</Relationships>"""
-_DOCX_DOCUMENT_RELS = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>"""
-_DOCX_DOCUMENT_PREFIX = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>"""
-_DOCX_DOCUMENT_SUFFIX = """<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>"""
-_DOCX_STYLES = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:style w:type="paragraph" w:styleId="Normal"><w:name w:val="Normal"/></w:style>
-  <w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style>
-  <w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="28"/></w:rPr></w:style>
-</w:styles>"""

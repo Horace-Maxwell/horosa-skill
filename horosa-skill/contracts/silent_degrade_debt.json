@@ -1,5 +1,21 @@
 {
   "_comment": "Ratchet baseline for bare `logger.warning(` calls inside src/horosa_skill. A degrade site must call service._degrade(...) so the note reaches envelope.warnings; new bare warnings fail CI. Refresh with `uv run python scripts/verify_silent_degrades.py --update-baseline`.",
   "total": 0,
-  "per_file": {}
+  "per_file": {},
+  "silent_excepts": {
+    "_comment": "Broad excepts that pass / continue / return a constant and call nothing (probes whose None/False is the answer are here on purpose). New ones fail CI; pay down with _degrade.",
+    "total": 25,
+    "per_file": {
+      "config.py": 1,
+      "engine/client.py": 2,
+      "reports/renderers.py": 1,
+      "runtime/identity.py": 1,
+      "runtime/manager.py": 9,
+      "runtime/procs.py": 3,
+      "service.py": 3,
+      "surfaces/cli.py": 2,
+      "surfaces/mcp_server.py": 1,
+      "tracing.py": 2
+    }
+  }
 }

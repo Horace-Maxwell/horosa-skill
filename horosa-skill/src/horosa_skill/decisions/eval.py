@@ -413,4 +413,3 @@ def summarize_runs(judged_runs: list[list[Judged]]) -> dict[str, Any]:
             if a.raw_choice != b.raw_choice:
                 flips += 1
     return {"runs": len(judged_runs), "flip_rate": round(flips / total, 4) if total else 0.0}
-

@@ -428,6 +428,8 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
     （契约 == 生成器输出，`--check` + `test_technique_provenance_generator.py` 守；别手改契约——经 helper 间接调用的
     证据写 `EXTRA_EVIDENCE`、逐工具说明写 `NOTE_OVERRIDES`，v0.40.0 前手改的条目重跑即丢）。
     `verify_technique_provenance.py` 不声明即红；ken-backed 必须真调 `_require_ken_pan`。技法依据卡按它标注「这盘是谁算的」。
+    共享 runner 表 `SHARED_RUNNER` 写错名字 = 扫不到证据 = 被兜底成 `local_data`「不起盘」（v0.41.1 前 keypoints / lunationphase /
+    triplicityrulers 就这样挂了两个月）；生成器现在对非空值断言存在，一行转发的 runner（如 balbillus）也要映射到真正干活的那个。
 11. **入 `TOOL_EXPORT_TECHNIQUE_MAP`**（v0.33.0 教训）：bench 的「新增技法自动获得用例」只覆盖这张表，
     runner 自己 `_augment_export_payload` 不经过它 → 功能全绿、bench 静默不覆盖。守卫
     `test_every_business_tool_is_in_export_technique_map`（工具 − 表 = 显式非业务清单）已锁死；
@@ -1019,6 +1021,11 @@ A global stability pass hardened these; keep them true when you touch the releva
   （「结果不完整：预设 N 段中 M 段未产出」），dispatch 汇总一行。包内裸 `logger.warning(` 基线 **0**
   （`scripts/verify_silent_degrades.py`；启动期通知用 `logger.log(WARNING)` 并注明无调用方）。MCP
   elicitation 每个出口写 `details.elicitation.status`，纯函数 `_apply_gate_decision` 可离线测（v0.36.0）。
+  同一脚本的第二条规则 `silent_handler`（v0.41.1）：处理体只有 pass / continue / 返回或赋值常量、且什么都不调用的宽 `except` 按文件计数入棘轮
+  （基线 = 「拿不到就是答案」的探针，每处带注释）。新增一处要么改 `_degrade`，要么在同一 change 里写明理由并 `--update-baseline`。
+- **重试 / 回退只许改写法，不许改值（v0.41.1）。** `_java_chart_payload_candidates` 曾在 `param error` 后把 `gpsLon` 取 `abs()` 重试——
+  西经变东经、盘照样起得出来。候选只能换格式（日期分隔符、`zone` 写法、省掉可选键），任何承载结果的数值（经纬度、时刻、时区偏移）必须原样；
+  `test_service.py` 的经度符号断言是负向对照。
 - **`tools/*.js` 只准引用 vendor 常量，不准抄。** 顶层字面量若与所 import 的 vendor 模块导出同名（规范化）
   或深相等，`npm test` 的 `test/handcopy.mjs` 即红（v0.36.0：liureng.js 曾抄 24 张 LRConst 表，vendor 修了
   六亲、消费点仍旧值）。改 vendor 真值时，金标打在**工具输出**（消费点）上，不只打在那张表上。

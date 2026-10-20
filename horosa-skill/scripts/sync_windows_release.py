@@ -119,7 +119,9 @@ def fetch_manifest(tag: str | None = None, *, draft: bool = False) -> dict | Non
             subprocess.run(["gh", "release", "download", tag, "--repo", REPO, "--pattern", "runtime-manifest.json",
                             "--dir", tmp, "--clobber"], check=True, capture_output=True)
             return json.loads((Path(tmp) / "runtime-manifest.json").read_text(encoding="utf-8"))
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 - fail closed (→ [GAP]), but say why: a `gh` auth error is not a missing asset
+        detail = exc.stderr.decode("utf-8", "replace").strip() if isinstance(exc, subprocess.CalledProcessError) and exc.stderr else str(exc)
+        print(f"fetch_manifest({tag or 'latest'}): {type(exc).__name__}: {detail[:300]}", file=sys.stderr)
         return None
 
 

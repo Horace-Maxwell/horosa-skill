@@ -78,3 +78,50 @@ def test_missing_preset_sections_are_announced_in_warnings_and_summary(tmp_path)
     assert f"{len(missing)} 段未产出" in notes[0]
     assert envelope.summary[-1] == notes[0]
     assert envelope.summary[0] != notes[0]  # the headline stays the headline (dispatch reads summary[:1])
+
+
+def _silent_guard():
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / "verify_silent_degrades.py"
+    spec = importlib.util.spec_from_file_location("verify_silent_degrades", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_silent_except_rule_flags_quiet_broad_handlers_and_spares_reporting_ones() -> None:
+    """v0.41.1 — the `logger.warning(` regex cannot see a handler that says nothing; the AST rule does."""
+    guard = _silent_guard()
+    quiet = {
+        "except Exception:\n        pass": True,
+        "except:\n        return None": True,
+        "except (ValueError, BaseException):\n        return {}": True,
+        "except Exception:\n        out = ''": True,
+        "except Exception as exc:\n        _degrade('x failed: %s', exc)": False,
+        "except Exception:\n        logger.debug('x', exc_info=True)\n        return None": False,
+        "except Exception:\n        raise": False,
+        "except ValueError:\n        pass": False,  # narrow: an expected, named failure
+        "except Exception as exc:\n        return str(exc)": False,
+    }
+    for handler, expected in quiet.items():
+        source = f"def f():\n    try:\n        g()\n    {handler}\n"
+        assert bool(guard.scan_silent_excepts(source)) is expected, handler
+
+
+def test_silent_except_ratchet_fails_when_a_file_exceeds_its_baseline(tmp_path, monkeypatch, capsys) -> None:
+    """Negative control: the real tree passes against the committed baseline and fails against a zeroed one."""
+    import json
+    import sys
+
+    guard = _silent_guard()
+    monkeypatch.setattr(sys, "argv", ["verify_silent_degrades.py"])
+    assert guard.main() == 0
+    zeroed = json.loads(guard.BASELINE.read_text(encoding="utf-8"))
+    zeroed["silent_excepts"]["per_file"] = {}
+    fake = tmp_path / "silent_degrade_debt.json"
+    fake.write_text(json.dumps(zeroed), encoding="utf-8")
+    monkeypatch.setattr(guard, "BASELINE", fake)
+    assert guard.main() == 1
+    assert "silent broad except(s)" in capsys.readouterr().err

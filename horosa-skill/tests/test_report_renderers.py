@@ -74,3 +74,40 @@ def test_render_failure_degrades_to_txt(tmp_path: Path, monkeypatch) -> None:
     assert result["degraded_from"] == "pdf" and "字体炸了" in result["degrade_reason"]
     txt = Path(result["path"])
     assert txt.suffix == ".txt" and "备用纯文本" in txt.read_text(encoding="utf-8")
+
+
+def test_cancellation_during_a_render_propagates_instead_of_degrading(tmp_path, monkeypatch) -> None:
+    """v0.41.1：取消 / Ctrl-C 是 BaseException，必须原样抛出并清掉临时文件——此前被当成渲染失败降级成「成功」的 TXT。"""
+    import pytest
+
+    from horosa_skill.reports import renderers
+
+    def cancelled(*_args, **_kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(renderers, "_render_pdf", cancelled)
+    target = tmp_path / "report.pdf"
+    with pytest.raises(KeyboardInterrupt):
+        renderers.render_report({"plain_text": "x"}, output_path=target, format_name="pdf")
+    assert not target.exists() and not target.with_suffix(".txt").exists()
+    assert [p.name for p in tmp_path.iterdir()] == [], "temp file must be cleaned up"
+
+
+def test_a_pdf_without_any_cjk_font_degrades_to_txt_instead_of_tofu(tmp_path, monkeypatch) -> None:
+    """v0.41.1：一个中文字体都注册不上时，此前静默用 Helvetica 出一份满页方块的「成功」PDF；现在走既有的 TXT 降级并写明原因。"""
+    from pathlib import Path as _Path
+
+    from horosa_skill.reports import renderers
+
+    monkeypatch.setattr(_Path, "exists", lambda self: False)  # no system font file anywhere
+
+    import reportlab.pdfbase.cidfonts as cidfonts
+
+    def no_cid(*_a, **_k):
+        raise ValueError("CID resource missing")
+
+    monkeypatch.setattr(cidfonts, "UnicodeCIDFont", no_cid)
+    result = renderers.render_report({"plain_text": "中文正文"}, output_path=tmp_path / "r.pdf", format_name="pdf")
+    assert result["format"] == "txt" and result["degraded_from"] == "pdf"
+    assert "CJK" in result["degrade_reason"]
+    assert (tmp_path / "r.txt").read_text(encoding="utf-8") == "中文正文"

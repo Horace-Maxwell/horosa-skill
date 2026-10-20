@@ -427,10 +427,8 @@ class FakeClient(HorosaApiClient):
         if endpoint == "/liureng/gods":
             return {"liureng": {"layout": "ok", "fourColumns": {"year": {"ganzi": "丙午"}}}}
         if endpoint == "/liureng/runyear":
-            return {
-                "liureng": {"layout": "ok", "fourColumns": {"year": {"ganzi": "丙午"}}},
-                "runyear": {"year": "甲子", "age": 38},
-            }
+            # 真后端只回裸 {age, ageCycle, year}（tests/test_sync311_sanshi.py 的 live 断言）；替身照真形状回。
+            return {"year": "甲子", "age": 38, "ageCycle": 38}
         if endpoint == "/germany/midpoint":
             return {
                 "midpoints": [
@@ -2228,24 +2226,6 @@ def test_java_chart_payload_candidates_cover_windows_runtime_variants() -> None:
         "gpsLon": -174.5,
     } in candidates
     assert {
-        "date": "2028/04/06",
-        "time": "09:33:00",
-        "zone": "+08:00",
-        "lat": "41n26",
-        "lon": "174w30",
-        "gpsLat": -41.433333,
-        "gpsLon": 174.5,
-    } in candidates
-    assert {
-        "date": "2028-04-06",
-        "time": "09:33:00",
-        "zone": "8",
-        "lat": "41n26",
-        "lon": "174w30",
-        "gpsLat": -41.433333,
-        "gpsLon": 174.5,
-    } in candidates
-    assert {
         "date": "2028-04-06",
         "time": "09:33:00",
         "zone": "8",
@@ -2268,15 +2248,12 @@ def test_java_chart_payload_candidates_cover_windows_runtime_variants() -> None:
         "gpsLat": -41.433333,
         "gpsLon": -174.5,
     } in candidates
-    assert {
-        "date": "2028/04/06",
-        "time": "09:33:00",
-        "zone": "+08:00",
-        "lat": -41.433333,
-        "lon": 174.5,
-        "gpsLat": -41.433333,
-        "gpsLon": 174.5,
-    } in candidates
+    # v0.41.1：重试阶梯只许换写法，不许换地点——任何候选都不能把西经改成东经（旧阶梯有 abs(gpsLon) 两族，纽约会被算成中亚还报成功）。
+    for candidate in candidates:
+        for key in ("gpsLon", "lon"):
+            value = candidate.get(key)
+            if isinstance(value, (int, float)):
+                assert value < 0, f"candidate flipped the longitude sign: {candidate}"
 
 
 def test_calendar_month_snapshot_sections_and_cross_month_filter(tmp_path) -> None:

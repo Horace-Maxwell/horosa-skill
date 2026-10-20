@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.41.1-dev (2026-10-20) | 可维护性重构第 2 批：经度重试梯子把西经改成东经还算出了结果；宽 `except` 什么都不说时 `logger.warning` 棘轮看不见（审计 12 处）；算源生成器把 3 个技法指向不存在的 runner、声明成「不起盘」；PDF 无中文字体时静默出豆腐块 | 重试只许改写法、不许改值；静默也要能被数出来；名字映射要断言存在 |
 | v0.41.1-dev (2026-10-20) | 可维护性重构第 0 批：直接 `uv run pytest` 会打到桌面版 8899/9999（conftest 不钉后端）；`run_ci_gates` 漏跑多行步骤；拆分前立 monkeypatch 目标守卫 | 护栏要在 CI 看不见的地方也成立；拆之前先堵「拆错了安静变绿」 |
 | v0.41.0 (2026-10-12) | 接入面四缺口：wheel 里没有 skill（只装 wheel 的用户 agent 从没读过规则）；注册表 `/v0/validate` 对旧 server.json 说 valid、publish 会因小写命名空间与不存在的 pypi 包拒两次，且 tag 处的 mcpb sha 是旧的；Agent Plugins schema 封闭；setup 9 → 25 家（各家静默失效的事实各钉一条）。顺带：lane 继承真 HOME、OpenClaw 产物的 `mcp` 根键会被猜测表误合并、AGENTS 说有人锁的 `check_client_matrix` 早已不存在 | 只在发布时执行的规则要在本地复刻；setup 新写的路径都要有接缝；新客户端 = 一行事实 + 锁步测试 |
 | v0.40.2 (2026-10-11) | 表面审计（全 110 技法 × MCP 全量 / 精简 / CLI / HTTP + 门面·资源·提示）查出 service 层全绿掩盖的 8 处 agent 可见缺陷：技法名两种写法只收一种且闸门对 MCP 名放行、dispatch/hecan 吞掉平铺出生信息还反问用户、记忆/报告缺参叫 agent 去问用户、精简面 instructions 写 120 工具、19 条 CLI 命令无说明、示例载荷只有 9/110、qimenzeri 依据卡恒「与声明不一致」、全新数据目录并行首起时 ALTER 竞态崩溃 | `resolve_tool_name` 单点解析（闸门先解析再判）；`_lift_flat_birth`；`AGENT_OWNED_OPERATIONS` 回 must_ask_user=false；精简面 instructions 变体；全命令 help + 计数取真值；每技法 live 示例；`ENGINE_OVERRIDES`；`_ensure_column` 吞并发 duplicate column；新 `scripts/surface_audit.py` 发版前跑 |
@@ -143,6 +144,32 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.41.1-dev / 2026-10-20 — 可维护性重构第 2 批：重试梯子改了结果、静默吞错数不出来、算源指向不存在的 runner（`silent_handler` / `SHARED_RUNNER`）
+
+- **起因**：第 2 批 = 防御性代码审计里「不必要 / 有害」的那部分。每条先证明再动：能实测的实测，留下的写清为什么留。
+- **症状 → 根因 → 修复**：
+  1. **经度重试梯子会把西经改成东经，而且「成功」**：`_java_chart_payload_candidates` 在 Java 回 `param error` 时依次重试若干写法，
+     其中两族把 `gpsLon` 取了 `abs()`——纽约 −74° 变成 +74°（里海），盘照样起得出来，调用方不会知道。实测（纽约 / 布宜诺斯艾利斯 / 檀香山三地 ×
+     110 技法，330 次运行、534 次远端调用）一次重试都没有发生，更没有落到这两族。→ 删掉；测试改为「候选里的经度符号一律与输入一致」（负向对照：
+     恢复旧梯子即红）。其余写法（斜杠日期 / `zone` 写法 / 只给 gps）只改**格式**不改**值**，留下并写进 docstring。
+  2. **宽 `except` 什么都不说时，`verify_silent_degrades.py` 的 `logger.warning(` 棘轮看不见**：v0.36.0 清完 35 处 `logger.warning` 后，
+     `except Exception: pass` / `return ""` 这种连日志都不写的处理，审计（AST，不是 grep）数出 12 处；4 处在 `service.py`——
+     相关人物的 `/nongli/time`、天星 [选中时刻星盘]、迁移盘本命四轴对比三条富化路径，正是 v0.36.0 要清掉的那一类。
+     → 这 3 处改 `_degrade(...)` 进 `envelope.warnings`（第 4 处是属性读取，改 `getattr`）；doctor 端点身份与 uninstall 停服失败改为报告字段
+     （`endpoints_error` / `stop_error`）；记忆存储的 JSON 读取收窄到 `OSError` / `ValueError`。名人库检索反过来是**报两次**（`_degrade` +
+     旧 `_warnings` 通道，措辞不同去重不掉），并成一条。同一脚本加第二条 AST 规则 `silent_handler`：处理体只有 pass / continue / 返回或赋值常量、
+     且不调用任何东西的宽 `except` 按文件计数入棘轮（基线 25，全是「拿不到就是答案」的探针，逐条带注释）。
+  3. **算源生成器 `SHARED_RUNNER` 把 keypoints / lunationphase / triplicityrulers 指向三个从没存在过的 runner 名**（2026-08 起）：AST 扫不到证据 →
+     兜底判成 `local_data`「不起盘：读本地离线库」，技法依据卡照此对用户说。它们实际是 `/chart` 铸盘 + vendored progextra builder 推算；
+     balbillus（一行转发）同样缺证据。→ 映射改到 `_run_progextra_js_tool`、四者归 `composite`；生成器对 `SHARED_RUNNER` 的非空值断言存在。
+  4. **PDF 找不到任何中文字体时静默退 Helvetica**，产出一份全是豆腐块的 PDF 且报告 `ok`。→ 改为抛错，`render_report` 走既有的降级路径
+     （`degraded_from: pdf` + 原因）；取消信号（`BaseException`）不再被当成渲染失败吞掉。
+  5. 其余：解密失败在严格路径上抛 `transport.decrypt_failed`（此前返回原始密文当 JSON 解）；`openclaw-check --full` 从 wheel 安装运行时
+     说明脚本只随源码仓分发（此前只回 Python 的 "can't open file"）；坏的记忆产物 JSON 带 `payload_error`；`fetch_manifest` 把失败原因打到 stderr
+     （判定仍是关闭式的 `[GAP]`）。
+- **法则**：重试只许改**写法**、不许改**值**——会改变结果的回退等于静默换题；「静默」也要能被机器数出来，不然清理完一种写法，另一种照旧；
+  名字到实现的映射表要断言目标存在，否则写错名字的后果是「安静地判成最保守的那一类」。
 
 ### v0.41.1-dev / 2026-10-20 — 可维护性重构第 0 批：测试会打到桌面版、门禁镜像漏跑多行步骤（`ci_test_steps` / `useless_patch_reason`）
 

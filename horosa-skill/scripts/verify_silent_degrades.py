@@ -15,12 +15,21 @@ a time. Need a warning that genuinely has no caller to tell (a startup/config no
 `logger.info` or `logger.log(logging.WARNING, ...)` with a comment saying why the caller does
 not need it; the regex is deliberately literal.
 
+Second rule (v0.41.1): **silent broad excepts**. The `logger.warning(` regex cannot see a handler that says nothing
+at all — `except Exception: pass`, `continue`, `return ""` — and that is exactly how four enrichment paths in
+service.py stayed silent after the v0.36.0 sweep (the 2026-10 audit found 12). A broad handler (`except Exception` /
+`BaseException` / bare) whose body only passes, continues, returns a constant / empty literal or assigns one, and
+calls nothing (no `_degrade`, no logger, no raise), is counted per file and ratcheted the same way. Probes whose
+`None` / `False` *is* the answer are in the baseline on purpose; a new one needs `--update-baseline` in the same
+change — a visible decision, not an accident.
+
 Baseline lives in `contracts/silent_degrade_debt.json` (git-tracked, per-file). Refresh after
 paying debt with `--update-baseline`. Stdlib-only. Wired into CI.
 """
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 import sys
@@ -48,6 +57,55 @@ def scan() -> dict[str, list[int]]:
     return found
 
 
+_BROAD = {"Exception", "BaseException"}
+
+
+def _is_broad(handler: ast.ExceptHandler) -> bool:
+    kind = handler.type
+    if kind is None:
+        return True
+    names = kind.elts if isinstance(kind, ast.Tuple) else [kind]
+    return any(isinstance(n, ast.Name) and n.id in _BROAD for n in names)
+
+
+def _is_quiet_value(node: ast.expr | None) -> bool:
+    if node is None or isinstance(node, ast.Constant):
+        return True
+    return isinstance(node, ast.List | ast.Dict | ast.Tuple | ast.Set) and not getattr(node, "elts", getattr(node, "keys", None))
+
+
+def silent_handler(handler: ast.ExceptHandler) -> bool:
+    """True when a broad handler swallows quietly: no call, no raise, only pass / continue / constant return or assign."""
+    if not _is_broad(handler):
+        return False
+    for stmt in handler.body:
+        if any(isinstance(node, ast.Call | ast.Raise) for node in ast.walk(stmt)):
+            return False
+        if isinstance(stmt, ast.Pass | ast.Continue | ast.Break):
+            continue
+        if isinstance(stmt, ast.Return) and _is_quiet_value(stmt.value):
+            continue
+        if isinstance(stmt, ast.Assign) and _is_quiet_value(stmt.value):
+            continue
+        if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant):  # a bare string / docstring-ish note
+            continue
+        return False
+    return True
+
+
+def scan_silent_excepts(source: str) -> list[int]:
+    return [node.lineno for node in ast.walk(ast.parse(source)) if isinstance(node, ast.ExceptHandler) and silent_handler(node)]
+
+
+def scan_silent_excepts_tree() -> dict[str, list[int]]:
+    found: dict[str, list[int]] = {}
+    for path in sorted(SRC_DIR.rglob("*.py")):
+        lines = scan_silent_excepts(path.read_text(encoding="utf-8"))
+        if lines:
+            found[path.relative_to(SRC_DIR).as_posix()] = lines
+    return found
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--update-baseline", action="store_true", help="rewrite the baseline after paying debt")
@@ -55,6 +113,8 @@ def main() -> int:
 
     found = scan()
     total = sum(len(v) for v in found.values())
+    quiet = scan_silent_excepts_tree()
+    quiet_total = sum(len(v) for v in quiet.values())
 
     if args.update_baseline:
         BASELINE.parent.mkdir(parents=True, exist_ok=True)
@@ -69,6 +129,12 @@ def main() -> int:
                     ),
                     "total": total,
                     "per_file": {k: len(v) for k, v in sorted(found.items())},
+                    "silent_excepts": {
+                        "_comment": "Broad excepts that pass / continue / return a constant and call nothing (probes whose "
+                                    "None/False is the answer are here on purpose). New ones fail CI; pay down with _degrade.",
+                        "total": quiet_total,
+                        "per_file": {k: len(v) for k, v in sorted(quiet.items())},
+                    },
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -76,7 +142,7 @@ def main() -> int:
             + "\n",
             encoding="utf-8",
         )
-        print(f"baseline updated: {total} bare logger.warning call(s) across {len(found)} file(s)")
+        print(f"baseline updated: {total} bare logger.warning call(s), {quiet_total} silent broad except(s)")
         return 0
 
     if not BASELINE.is_file():
@@ -97,22 +163,33 @@ def main() -> int:
                 f"{allowed}. In a degrade branch call `_degrade(fmt, *args[, note=...])` instead — the "
                 f"caller must see the note in envelope.warnings, not just the log."
             )
+    quiet_base = base.get("silent_excepts") or {}
+    quiet_per_file: dict[str, int] = quiet_base.get("per_file", {})
+    for name, lines in sorted(quiet.items()):
+        allowed = quiet_per_file.get(name, 0)
+        if len(lines) > allowed:
+            errors.append(
+                f"{name}: {len(lines)} silent broad except(s) at line(s) {lines}, baseline allows {allowed}. "
+                "A broad handler must tell the caller (`_degrade(...)`, a report field, a raise); if its None/False is "
+                "genuinely the answer (a probe), say so in a comment and refresh the baseline in the same change."
+            )
     if errors:
         print("silent-degrade ratchet FAILED:", file=sys.stderr)
         for err in errors:
             print(f"  - {err}", file=sys.stderr)
         return 1
 
-    if total < int(base.get("total", total)):
+    if total < int(base.get("total", total)) or quiet_total < int(quiet_base.get("total", quiet_total)):
         print(
-            f"silent-degrade debt dropped {base.get('total')} → {total}. "
+            f"silent-degrade debt dropped (warnings {base.get('total')} → {total}, quiet excepts "
+            f"{quiet_base.get('total')} → {quiet_total}). "
             "Run `uv run python scripts/verify_silent_degrades.py --update-baseline` to lock the gain in.",
             file=sys.stderr,
         )
         return 1
 
     print(
-        f"silent-degrade ratchet OK: {total} bare logger.warning call(s) across {len(found)} file(s), "
+        f"silent-degrade ratchet OK: {total} bare logger.warning call(s), {quiet_total} silent broad except(s), "
         "at or under the baseline."
     )
     return 0

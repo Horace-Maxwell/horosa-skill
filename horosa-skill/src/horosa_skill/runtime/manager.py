@@ -166,8 +166,8 @@ def host_os_version() -> str:
             return f"{win.major}.{win.minor}.{win.build}"
         if sys.platform == "darwin":
             return platform.mac_ver()[0] or ""
-    except Exception:  # noqa: BLE001 - a version we cannot read must never block an install
-        return ""
+    except Exception:  # noqa: BLE001 - both calls practically never raise; if one does, an unknown version
+        return ""  # must not block an install (an empty version makes the min_os check skip, not fail)
     return ""
 
 
@@ -654,7 +654,7 @@ class HorosaRuntimeManager:
         In-process timestamp first; falls back to the runtime state file so a fresh CLI process after an
         MCP server's degraded start does not immediately tear the healthy chart service down again.
         """
-        cooldown = float(self.settings.runtime_java_retry_cooldown_seconds or 0.0)
+        cooldown = float(self.settings.runtime_java_retry_cooldown_seconds)
         if cooldown <= 0:
             return 0.0
         if self._last_degraded_start_at is not None:
@@ -1157,10 +1157,12 @@ class HorosaRuntimeManager:
                 "next_action": "确认无误后追加 --yes 执行删除；用户数据默认保留（--purge-data 才删 memory/runs/traces）。",
             }
 
+        stop_error: str | None = None
         try:
             self.stop_local_services(ignore_clients=True)
-        except Exception:  # noqa: BLE001 - 卸载前停服务尽力而为，失败不阻断删除
-            pass
+        except Exception as exc:  # noqa: BLE001 - 卸载前停服务尽力而为，失败不阻断删除
+            # v0.41.1：记下来——随后删除若在 Windows 上撞文件锁，用户要知道是「服务没停掉」。
+            stop_error = f"{type(exc).__name__}: {exc}"
         removed: list[str] = []
         for text in removal_plan:
             path = Path(text)
@@ -1174,9 +1176,10 @@ class HorosaRuntimeManager:
                 raise RuntimeInstallError(
                     f"Failed to remove {path}: {exc}",
                     code="runtime.uninstall_failed",
-                    details={"path": text, "removed_so_far": removed},
+                    details={"path": text, "removed_so_far": removed, **({"stop_error": stop_error} if stop_error else {})},
                 ) from exc
-        return {"ok": True, "dry_run": False, "removed": removed, "purge_data": purge_data}
+        return {"ok": True, "dry_run": False, "removed": removed, "purge_data": purge_data,
+                **({"stop_error": stop_error} if stop_error else {})}
 
     def doctor(self) -> dict[str, Any]:
         with self.tracer.span(workflow_name="runtime.doctor", metadata={"entrypoint": "runtime.doctor"}) as trace:
@@ -1985,6 +1988,7 @@ class HorosaRuntimeManager:
     def _quarantine_report(self, manifest: dict[str, Any] | None) -> dict[str, Any]:
         """python / java / node 三个可执行文件是否带 com.apple.quarantine（仅 macOS；只查不改）。"""
         report: dict[str, Any] = {"checked": [], "flagged": [], "fix": None}
+        # 平台判断与调用方的 _host_is_darwin() 看似重复，但 doctor 路径不经那层直接调本函数，所以留在这里。
         if sys.platform != "darwin" or not self.current_dir.exists():
             return report
         for key in ("python", "java", "node"):
@@ -2570,7 +2574,7 @@ horosa_owns_pid() {
             with loopback_httpx_client(url, timeout=1.5, follow_redirects=True) as client:
                 response = client.get(url)
                 return response.status_code < 500
-        except Exception:
+        except Exception:  # noqa: BLE001 - 可达性探针：连不上本身就是答案
             return False
 
     def _backend_reachable(self, backend_url: str) -> bool:
@@ -2800,7 +2804,7 @@ horosa_owns_pid() {
             if not excerpt:
                 return None
             return {"log_dir": str(latest), "excerpt": excerpt[:12]}
-        except Exception:
+        except Exception:  # noqa: BLE001 - 附加诊断：读不到日志不该把原始启动错误换掉
             return None
 
     # 启动器日志：Popen 的 stdout/stderr 都往这里追加（O_APPEND，多进程写不会互相截断）。

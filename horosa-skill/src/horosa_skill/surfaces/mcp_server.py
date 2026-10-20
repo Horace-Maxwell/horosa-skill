@@ -315,6 +315,9 @@ def _tool_title(tool_name: str) -> str | None:
 
 
 def _normalize_mcp_request(raw_request: Any, model: type[BaseModel]) -> dict[str, Any]:
+    # 与 service.run_tool / 各门面的归一化 + 校验是**有意重复**：两步都幂等，但这一层产出 MCP 形状的
+    # 校验错误（_validation_error），那一层产出带 agent_recovery 的 tool.invalid_payload；两种形状都被
+    # MCP 健壮性测试钉住。合并之前先审测试，别顺手删。
     payload = raw_request
     if isinstance(payload, BaseModel):
         payload = payload.model_dump(exclude_none=True)

@@ -456,7 +456,7 @@ def _write_codex_toml_merge(target: Path, toml_snippet: str) -> Path:
             else:
                 raw = raw_bytes.decode("utf-8-sig")
             existing = tomlkit.parse(raw)
-        except (UnicodeDecodeError, Exception) as exc:  # noqa: BLE001 - 解析失败=用户文件形状未知，绝不覆盖
+        except Exception as exc:  # noqa: BLE001 - 解码或解析失败 = 用户文件形状未知，绝不覆盖（UnicodeDecodeError 本就是 Exception）
             raise typer.BadParameter(
                 f"{target} 不是合法 TOML 或编码无法识别（{exc}），拒绝合并——请手动把生成片段粘进去。"
             ) from exc
@@ -960,7 +960,8 @@ def _doctor_summary(report: dict[str, Any]) -> dict[str, Any]:
     if ready_for_openclaw:
         # 🔴 措辞改为客户端无关：doctor 是给**任何** MCP 客户端的用户看的（Claude Code/Desktop、
         # Cursor、VS Code、Codex、Gemini CLI…），把「去开 OpenClaw」当成唯一下一步，对其余客户端
-        # 的用户既没用又误导。`ready_for_openclaw` 这个键名保留一版作兼容别名。
+        # 的用户既没用又误导。`ready_for_openclaw` 键名是 doctor / status JSON 的公开字段（测试与
+        # docs/WINDOWS_REPORT_STABILITY_PROMPT.md 都引用它），保留不改名；语义已是「任何客户端都可用」。
         user_summary = "Ready. The offline runtime is installed and the local Horosa endpoints are responding."
         if report.get("emulated") is True:
             # v0.38.0 A4: Windows on ARM runs the win32-x64 payload under emulation — worth saying once.
@@ -1224,8 +1225,8 @@ def _friendly_runtime_error_payload(
 
     next_action = "Review the error details below and rerun the command."
     user_summary = f"{action_label} did not finish successfully."
-    code = exc.code or ""
-    details = exc.details if isinstance(exc.details, dict) else {}
+    code = exc.code  # HorosaSkillError guarantees a code and a dict `details`
+    details = exc.details
     command = [str(part) for part in details.get("command", [])]
     command_text = " ".join(command).lower()
     if code == "client.command_not_found" and "mcporter" in command_text:
@@ -1714,8 +1715,8 @@ def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager,
         try:
             with _budget.timed("endpoint_identities"):
                 report["endpoints"] = manager.endpoint_identities(manager.load_installed_manifest())
-        except Exception:  # noqa: BLE001 - 体检不能因为归属判定失败就整份报废
-            pass
+        except Exception as exc:  # noqa: BLE001 - 体检不能因为归属判定失败就整份报废，但失败本身要如实入报告（v0.41.1）
+            report["endpoints_error"] = f"{type(exc).__name__}: {exc}"
     report["port_conflicts"] = _doctor_port_holders(report)
     # 监听范围（v0.38.0 B1）：绑 0.0.0.0 的服务不是"坏"，但 Windows 上会弹防火墙、暴露到局域网 —— 进 warnings 而非 issues。
     report["listener_scope"] = _doctor_listener_scope(settings)
@@ -1904,7 +1905,8 @@ def _stdio_probe(*, command: str, args: list[str], env: dict[str, str], timeout:
                             text = next((c.text for c in resource.contents if getattr(c, "text", None)), None)
                             parsed = json.loads(text) if text else None
                             runtime_status = parsed if isinstance(parsed, dict) else None
-                        except Exception:  # noqa: BLE001 - 老版本 server 没有这个资源；探针本身不因此失败
+                        except Exception:  # noqa: BLE001 - 探针起的可能是客户端钉住的旧版 server：
+                            # 资源 horosa://runtime/status 自 v0.38.1 才有。等最低受支持版本都带它，这层就能去掉。
                             runtime_status = None
                         return {
                             "ok": True,
@@ -2154,7 +2156,7 @@ def _run_setup(
                 lambda: manager.install(archive=archive, manifest_url=manifest_url, progress=_install_progress_printer())
             )
         except RuntimeError as exc:
-            fail("install", exc.code or "runtime.install_failed", str(exc), exc.details if isinstance(exc.details, dict) else {})
+            fail("install", exc.code, str(exc), exc.details)
         except OSError as exc:
             fail("install", "runtime.install_io_error", str(exc), {})
         steps["install"] = {
@@ -2546,7 +2548,7 @@ def selfcheck() -> None:
         report["steps"]["error"] = {"code": exc.code, "message": str(exc), "details": exc.details}
         if exc.code in {"runtime.not_installed", "runtime.platform_unsupported"}:
             # 修复命令按安装上下文生成（checkout / wheel / 插件 / MCPB），平台死胡同直接给网关出路。
-            report["next_action"] = str((exc.details or {}).get("next_action") or "运行 `uv run horosa-skill install` 安装离线 runtime 后重试。")
+            report["next_action"] = str(exc.details.get("next_action") or "运行 `uv run horosa-skill install` 安装离线 runtime 后重试。")
         else:
             report["next_action"] = "运行 `uv run horosa-skill doctor` 定位。"
     _print_json(report)
@@ -4226,6 +4228,31 @@ def client_openclaw_check(
 
     if full:
         script_path = _package_root() / "scripts" / "run_openclaw_full_self_check.py"
+        if not script_path.is_file():
+            # 全量自检脚本只在源码仓里（不进 wheel）：uvx / pip 装的包跑 --full 以前只回一句 Python 的
+            # "can't open file"。现在说清楚为什么、下一步怎么走；快速体检（不带 --full）照常可用。
+            typer.echo(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "code": "openclaw_check.full_unavailable",
+                        "message": bilingual(
+                            "全量自检脚本只随源码仓分发，当前安装（wheel / uvx）里没有它。",
+                            "The exhaustive self-check script ships with the source checkout only, not with this install.",
+                        ),
+                        "next_action": (
+                            "Run the quick check without --full, or clone "
+                            "https://github.com/Horace-Maxwell/horosa-skill and run "
+                            "`uv run horosa-skill client openclaw-check --full` from its horosa-skill/ directory."
+                        ),
+                        "details": {"expected_script": str(script_path)},
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                err=True,
+            )
+            raise typer.Exit(code=2)
         command = [
             sys.executable,
             str(script_path),

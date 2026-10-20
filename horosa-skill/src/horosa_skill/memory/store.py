@@ -826,7 +826,7 @@ class MemoryStore:
                 continue
             try:
                 raw_payload = json.loads(path.read_text(encoding="utf-8"))
-            except Exception:
+            except (OSError, ValueError):  # unreadable / not JSON: leave that artifact as written, refresh the rest
                 continue
             base_payload = raw_payload
             if isinstance(raw_payload, dict) and raw_payload.get("record_meta"):
@@ -965,8 +965,9 @@ class MemoryStore:
             if record["exists"]:
                 try:
                     record["payload"] = json.loads(path.read_text(encoding="utf-8"))
-                except Exception:
+                except (OSError, ValueError) as exc:  # 读不了 / 坏 JSON：payload 置空，但把原因交给调用方
                     record["payload"] = None
+                    record["payload_error"] = f"{type(exc).__name__}: {exc}"
         return record
 
     def _artifact_summary(self, artifacts: list[dict[str, Any]]) -> dict[str, Any]:

@@ -635,6 +635,34 @@ def test_friendly_payload_for_platform_unsupported_carries_the_dead_end_advice(t
     assert "HOROSA_SERVER_ROOT" in fallback["next_action"]
 
 
+def test_openclaw_full_check_from_a_wheel_install_explains_instead_of_a_python_traceback(monkeypatch, tmp_path: Path) -> None:
+    # v0.41.1：全量自检脚本不进 wheel；uvx / pip 装的包跑 `--full` 以前只回 Python 的 "can't open file"。
+    from typer.testing import CliRunner
+
+    workspace = tmp_path / "workspace"
+    config_path = workspace / "config" / "mcporter.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(cli, "_package_root", lambda: tmp_path / "site-packages")
+    monkeypatch.setenv("HOROSA_SKILL_DATA_DIR", str(tmp_path / "data"))
+    calls: list[str] = []
+    real_run = subprocess.run
+
+    def spy_run(command, *args, **kwargs):
+        calls.append(" ".join(map(str, command)))
+        return real_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(cli.subprocess, "run", spy_run)
+
+    result = CliRunner().invoke(cli.app, ["client", "openclaw-check", "--workspace", str(workspace), "--full"])
+
+    assert result.exit_code == 2
+    assert not [c for c in calls if "run_openclaw_full_self_check" in c]  # never launched the missing script
+    payload = json.loads(result.stderr if hasattr(result, "stderr") else result.output)
+    assert payload["code"] == "openclaw_check.full_unavailable"
+    assert "without --full" in payload["next_action"]
+
+
 def test_openclaw_smoke_fetches_npx_mcporter_before_the_first_timed_call(monkeypatch, tmp_path: Path) -> None:
     # v0.38.1 发布后：Windows CI 的 OpenClaw smoke 第一跳 `npx mcporter call …` 在 150 s 处超时，stderr 里是
     # 「npm warn exec … will be installed: mcporter@0.9.0」——npx 首次安装（含原生打包器绑定）算在了工具调用的预算里。

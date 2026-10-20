@@ -73,3 +73,21 @@ def test_client_sends_signed_encrypted_request_and_decrypts_response() -> None:
     result = client.call("/jieqi/year", {"year": 2026})
 
     assert result["Result"]["ok"] is True
+
+
+def test_an_undecryptable_response_is_its_own_error_but_the_probe_still_sees_a_live_server() -> None:
+    """v0.41.1：解不开的加密响应此前原样交给 json.loads，报成误导人的 transport.invalid_json；现在 call 报
+    transport.decrypt_failed。probe 保持宽松（服务确实在应答），否则会误触发一次重启。"""
+    import pytest
+
+    from horosa_skill.errors import ToolTransportError
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, headers={"Encrypted": "1"}, text="not-a-valid-ciphertext")
+
+    client = HorosaApiClient("http://127.0.0.1:9999", transport=httpx.MockTransport(handler))
+    with pytest.raises(ToolTransportError) as excinfo:
+        client.call("/chart", {"date": "2028-04-06"})
+    assert excinfo.value.code == "transport.decrypt_failed"
+    assert excinfo.value.details["endpoint"] == "/chart"
+    assert client.probe() is True

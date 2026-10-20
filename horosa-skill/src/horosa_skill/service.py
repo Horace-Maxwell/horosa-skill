@@ -61,7 +61,7 @@ from horosa_skill.engine.router import select_tools
 from horosa_skill.errors import DispatchResolutionError, HorosaSkillError, ToolTransportError, ToolValidationError, bilingual, recovery_for
 from horosa_skill.exports import build_export_registry, get_technique_info, parse_export_content
 from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS, MIRRORED_UPSTREAM_AIEXPORT_VERSION
-from horosa_skill.input_normalization import normalize_request_payload
+from horosa_skill.input_normalization import _GENDER_FEMALE_LABELS, _GENDER_MALE_LABELS, normalize_request_payload
 from horosa_skill.knowledge import build_knowledge_registry, read_knowledge_entry, search_knowledge
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill import predictive_text as _ptext
@@ -181,13 +181,14 @@ def _degrade_collector() -> Iterator[list[str]]:
 
 
 def _gender_label(value: Any, *, unknown: str = "未知") -> str:
-    """性别值 → 中文标签（PR #17 @xipfs 的 _gender_label 收编）：True/1/'1'/'男'/'male'/'M'/'乾'→男；
-    False/0/'0'/'女'/'female'/'F'/'坤'→女；其余（含 None/-1）→ unknown。"""
+    """性别值 → 中文标签（PR #17 @xipfs 的 _gender_label 收编）：True/1/'1'/男类词→男；False/0/'0'/女类词→女；其余（含 None/-1）→ unknown。
+
+    词表只有一份：`input_normalization._GENDER_*_LABELS`（v0.41.1 前这里另抄了一份，已经漂移——「男性」「boy」只在那边）。"""
     if isinstance(value, str):
         key = value.strip().lower()
-        if key in {"1", "男", "male", "m", "nan", "乾"}:
+        if key in _GENDER_MALE_LABELS:
             return "男"
-        if key in {"0", "女", "female", "f", "nv", "坤"}:
+        if key in _GENDER_FEMALE_LABELS:
             return "女"
         return unknown
     if value is True or value == 1:
@@ -499,6 +500,14 @@ def _java_chart_payload(endpoint: str, payload: dict[str, Any]) -> dict[str, Any
 
 
 def _java_chart_payload_candidates(endpoint: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Payload variants `_call_remote` retries on a `200001 param error`, validated payload first.
+
+    Each variant must describe the SAME chart — only the spelling changes (date separator, `+08:00` vs `8`, compact vs
+    decimal coordinates, with / without gps fields) — because older desktop builds reachable in external mode
+    (`HOROSA_SERVER_ROOT`) accept different spellings. 🔴 v0.41.1: two families used to retry with `abs(gpsLon)`,
+    i.e. a western birth re-cast at an eastern longitude and returned `ok=True` (New York → Central Asia). No incident
+    ever needed it; a live probe of all 110 techniques at three western-hemisphere places hit zero param errors.
+    """
     first = _java_chart_payload(endpoint, payload)
     if endpoint not in _JAVA_CHART_DATE_ENDPOINTS and endpoint not in _JAVA_DATE_FALLBACK_ENDPOINTS:
         return [first]
@@ -541,12 +550,6 @@ def _java_chart_payload_candidates(endpoint: str, payload: dict[str, Any]) -> li
                 candidate["zone"] = zone_value
             add(candidate)
 
-            gps_lon = candidate.get("gpsLon")
-            if isinstance(gps_lon, (int, float)) and gps_lon < 0:
-                absolute_lon = dict(candidate)
-                absolute_lon["gpsLon"] = abs(gps_lon)
-                add(absolute_lon)
-
             gps_lat = candidate.get("gpsLat")
             gps_lon = candidate.get("gpsLon")
             if isinstance(gps_lat, (int, float)) and isinstance(gps_lon, (int, float)):
@@ -560,12 +563,6 @@ def _java_chart_payload_candidates(endpoint: str, payload: dict[str, Any]) -> li
                 decimal_lat_lon["lat"] = gps_lat
                 decimal_lat_lon["lon"] = gps_lon
                 add(decimal_lat_lon)
-
-                if gps_lon < 0:
-                    decimal_abs_lon = dict(decimal_lat_lon)
-                    decimal_abs_lon["lon"] = abs(gps_lon)
-                    decimal_abs_lon["gpsLon"] = abs(gps_lon)
-                    add(decimal_abs_lon)
 
             without_gps = {key: value for key, value in candidate.items() if key not in {"gpsLat", "gpsLon"}}
             add(without_gps)
@@ -891,13 +888,12 @@ def _liureng_gods_payload(tool_name: str, payload: dict[str, Any], time_alg: int
     return base
 
 
-def _liureng_runyear_from(response: Any) -> dict[str, Any] | None:
-    """`/liureng/runyear` 真实回包是裸 {age, ageCycle, year}（LiuRengHelper.runYear）；兼容包了一层的旧形状。"""
-    if not isinstance(response, dict):
-        return None
-    wrapped = response.get("runyear") or response.get("runYear")
-    if isinstance(wrapped, dict):
-        return wrapped
+def _liureng_runyear_from(response: dict[str, Any]) -> dict[str, Any] | None:
+    """`/liureng/runyear` 的回包是裸 {age, ageCycle, year}（LiuRengHelper.runYear；`_call_remote` 保证是 dict）。
+
+    v0.41.1 去掉了「包了一层 runyear/runYear」的兼容分支：真后端从没回过那个形状，只有一个旧测试替身在回——那条测试
+    因此「因为错误的原因通过」（tests/test_sync311_sanshi.py 对真后端的 live 断言是「该端点只回裸 …」）。
+    """
     return response if response.get("year") else None
 
 
@@ -7969,11 +7965,10 @@ class HorosaSkillService:
         return current
 
     def _java_cooldown_remaining(self) -> float:
+        # getattr: test stubs without the method. A broken state file is already absorbed inside the manager
+        # (`load_runtime_state` → None, bad timestamp → 0.0), so no broad except here.
         probe = getattr(self.runtime_manager, "java_backend_cooldown_remaining", None)
-        try:
-            return float(probe()) if callable(probe) else 0.0
-        except Exception:  # noqa: BLE001 — a broken state file must not turn into a new failure mode
-            return 0.0
+        return float(probe()) if callable(probe) else 0.0
 
     @staticmethod
     def _java_unavailable_error(endpoint: str, remaining: float) -> ToolTransportError:
@@ -8085,6 +8080,8 @@ class HorosaSkillService:
                             )
                             if isinstance(restarted, dict) and restarted.get("starting"):
                                 raise self._runtime_starting_error(endpoint, restarted) from exc
+                            # start_local_services 已等到端口可达才返回；这一秒留给「already_running 但刚拒绝过连接」
+                            # 的竞态（进程在、监听还没恢复）。没测过去掉它的后果之前不动。
                             time.sleep(1.0)
                             break
                         raise
@@ -8854,7 +8851,12 @@ class HorosaSkillService:
                         year_jieqi = str((person_nongli or {}).get("yearJieqi") or "")
                         if year_jieqi[:1] in self._TIAN_GAN:
                             year_gan = year_jieqi[0]
-                    except Exception:
+                    except Exception as exc:  # noqa: BLE001 - one person's lookup must not sink the whole pan
+                        # v0.41.1：此前静默丢人——用户明说的相关人员从「八门化气大阵」护持行里消失，调用方无从知道。
+                        _degrade(
+                            "faRelatedPeople %s /nongli/time failed: %s", name, exc,
+                            note=f"降级：相关人员「{name}」的出生年干没算出来（/nongli/time 失败：{exc}），八门化气大阵的护持行缺这一人。",
+                        )
                         year_gan = ""
             if year_gan:
                 normalized.append({"name": name, "yearGan": year_gan})
@@ -9461,14 +9463,16 @@ class HorosaSkillService:
             }
             moment_payload = {k: v for k, v in moment_payload.items() if v is not None}
             chart_env = self.run_tool("chart", moment_payload, save_result=False)
-            body = ""
-            if chart_env.ok and isinstance(chart_env.data, dict):
-                body = f"{chart_env.data.get('snapshot_text') or ''}".strip()
+            if not chart_env.ok:
+                _degrade("tianxing [选中时刻星盘] sub-chart failed: %s", chart_env.error.code if chart_env.error else "unknown")
+                return ""
+            body = f"{chart_env.data.get('snapshot_text') or ''}".strip()
             if not body:
                 return ""
             headerless = re.sub(r"^\[(.+?)\]$", r"· \1", body, flags=re.MULTILINE)
             return f"[选中时刻星盘]\n选中命中：{pick}\n{headerless}"
-        except Exception:  # noqa: BLE001 - 星盘正文失败不阻断搜索段（上游同款 try 包裹）
+        except Exception as exc:  # noqa: BLE001 - 星盘正文失败不阻断搜索段（上游同款 try 包裹），但要让调用方知道少了这一段
+            _degrade("tianxing [选中时刻星盘] sub-chart failed: %s", exc)
             return ""
 
     def _run_qimenzeri_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -10916,10 +10920,9 @@ class HorosaSkillService:
         candidates: list[Path] = []
         if env_path:
             candidates.append(Path(env_path).expanduser())
-        try:
-            candidates.append(Path(self.runtime_manager.current_dir) / self._ASTRODATA_RELATIVE)
-        except Exception:  # noqa: BLE001 - runtime manager optional in offline tests
-            pass
+        current_dir = getattr(self.runtime_manager, "current_dir", None)  # stub managers in offline tests have none
+        if current_dir:
+            candidates.append(Path(current_dir) / self._ASTRODATA_RELATIVE)
         # src/horosa_skill/service.py → parents[3] = 仓根（vendor/runtime-source 所在）。
         candidates.append(Path(__file__).resolve().parents[3] / "vendor" / "runtime-source" / self._ASTRODATA_RELATIVE)
         for cand in candidates:
@@ -11299,7 +11302,8 @@ class HorosaSkillService:
             }
         except sqlite3.Error as exc:
             # 老版本库缺 person_fts / birth_year·has_time 列，或检索式仍非法 → 优雅降级，不让整工具 ok=False。
-            _degrade("astrodata query failed: %s", exc)
+            # 一次失败只报一条（v0.41.1）：此前 _degrade 与旧的 `_warnings` 通道各报一次、措辞不同、去重不掉 → 调用方看到两条。
+            _degrade("astrodata query failed: %s", exc, note=f"名人库检索降级：{exc}")
             snapshot_text = _render_snapshot_text([
                 ("检索条件", "名人库检索未能完成（数据库版本过旧或检索式无效）；请改用英文姓名关键词，或更新离线 runtime。"),
             ])
@@ -11307,7 +11311,6 @@ class HorosaSkillService:
                 "astrodata": {"available": True, "results": [], "error": "query_failed"},
                 "snapshot_text": snapshot_text,
                 "export_snapshot": self._augment_export_payload(technique="astrodata", snapshot_text=snapshot_text),
-                "_warnings": [f"名人库检索降级：{exc}"],
             }
         finally:
             con.close()
@@ -12749,8 +12752,8 @@ class HorosaSkillService:
                 n, r = natal_angles.get(angle_id), reloc_angles.get(angle_id)
                 if n or r:
                     lines.append(f"{angle_id}：本命 {_angle_text(n)} → 重置后 {_angle_text(r)}")
-        except Exception:  # noqa: BLE001 - 角点对比失败不阻断重置盘本体
-            pass
+        except Exception as exc:  # noqa: BLE001 - 角点对比失败不阻断重置盘本体，但四轴对比行缺了要说
+            _degrade("relocation natal-angle comparison failed: %s", exc)
         return {
             **chart_wrap,
             "relocLat": response.get("relocLat"),
@@ -15671,7 +15674,9 @@ class HorosaSkillService:
     def _installed_runtime_version(self) -> str | None:
         try:
             manifest = self.runtime_manager.load_installed_manifest()
-        except Exception:  # noqa: BLE001 - 没装 runtime 是正常状态，不是错误
+        except Exception:  # noqa: BLE001 - 每次技法调用都走这里（技法卡）：
+            # 没装 / 坏 JSON 已由 load_installed_manifest 自己返回 None；这里兜的是字段类型异常（int() 失败）
+            # 与没有该方法的桩 manager——版本号只是卡片上的一栏，拿不到就是 None，不该连整张卡一起丢。
             return None
         if isinstance(manifest, dict):
             version = manifest.get("version")
@@ -16393,7 +16398,7 @@ class HorosaSkillService:
                 trace["artifact_path"] = memory_ref.artifact_path
                 # run_id 要到存档时才存在，所以技法卡的 refs 只能在这里补。存档里的那份没有自己的
                 # run_id（自指），这是正常的——取回时 run_id 本来就是你用来取它的那把钥匙。
-                card = envelope.data.get("technique_card") if isinstance(envelope.data, dict) else None
+                card = envelope.data.get("technique_card")
                 if isinstance(card, dict):
                     card["refs"] = {
                         "run_id": effective_run_id,
@@ -16561,7 +16566,7 @@ class HorosaSkillService:
         roots: list[Path] = []
         if self.settings.output_dir is not None:
             roots.append(Path(self.settings.output_dir).expanduser().resolve())
-        for extra in getattr(self.settings, "report_output_roots", None) or []:
+        for extra in self.settings.report_output_roots:
             roots.append(Path(extra).expanduser().resolve())
         return roots
 
@@ -17580,7 +17585,7 @@ class HorosaSkillService:
                 except ToolValidationError as exc:
                     # 决策层兜底选中的工具随后因缺参被拒时，调用方必须能看到「这个工具是谁选的」——否则一个
                     # 无匹配请求会以「huanglizeri 缺 startDate」的面目出现，而路由这一步的自陈全丢。
-                    if decision_records_out and isinstance(exc.details, dict) and "decision_layer" not in exc.details:
+                    if decision_records_out and "decision_layer" not in exc.details:
                         exc.details["decision_layer"] = self._decision_layer_view(decision_records_out)
                     raise
                 result_export_contracts[tool_name] = _build_dispatch_export_contract(results[tool_name])

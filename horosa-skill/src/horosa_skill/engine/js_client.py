@@ -24,7 +24,7 @@ class HorosaJsEngineClient:
                 return self._run_with_engine_root(node_bin=node_bin, engine_root=engine_root, tool_name=tool_name, payload=payload)
             except ToolTransportError as exc:
                 errors.append({"code": exc.code, "message": str(exc), "details": exc.details})
-                error_obj = exc.details.get("error") if isinstance(exc.details, dict) else None
+                error_obj = exc.details.get("error")
                 message = error_obj.get("message") if isinstance(error_obj, dict) else ""
                 if "Unsupported horosa-core-js tool" not in str(message):
                     raise

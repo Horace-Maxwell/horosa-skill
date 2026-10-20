@@ -88,4 +88,3 @@ class FailingJev(DecisionProvider):
     def decide(self, *, state: Any, questions: Mapping[str, Question], surface: str = "") -> Answers:
         self.calls += 1
         raise self.error
-

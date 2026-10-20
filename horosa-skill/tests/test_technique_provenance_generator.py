@@ -17,3 +17,16 @@ SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "gen_technique_proven
 def test_committed_provenance_contract_equals_generator_output() -> None:
     proc = subprocess.run([sys.executable, str(SCRIPT), "--check"], capture_output=True, text=True, timeout=120)
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_progextra_tools_are_declared_as_chart_plus_js_builder_not_local_data() -> None:
+    """v0.41.1 — SHARED_RUNNER named three runners that never existed, so AST found no evidence and the fallback
+    declared keypoints / lunationphase / triplicityrulers 「不起盘：读本地离线库」. They cast /chart and run the
+    vendored progextra builder; balbillus (a one-line forwarder) was likewise missing its evidence."""
+    import json
+
+    tools = json.loads((SCRIPT.parents[1] / "contracts" / "technique_provenance.json").read_text(encoding="utf-8"))["tools"]
+    for name in ("keypoints", "lunationphase", "triplicityrulers", "balbillus"):
+        assert tools[name]["compute_class"] == "composite", name
+        assert tools[name]["engines"] == ["progextra"], name
+        assert tools[name]["endpoints"] == ["/chart"], name

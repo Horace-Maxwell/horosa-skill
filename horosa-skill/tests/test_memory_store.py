@@ -215,3 +215,18 @@ def test_prune_unused_dry_run_then_delete(tmp_path) -> None:
     assert store.query_runs(run_id=run_id) == []
     assert store.query_runs(run_id=used_id), "点用过的 run 保留"
     assert all(not p.exists() for p in artifact_paths), "磁盘产物随删"
+
+
+def test_unreadable_artifact_payload_reports_why_instead_of_a_bare_none(tmp_path) -> None:
+    """A corrupt artifact JSON used to come back as `payload: None` with no reason (broad `except: None`)."""
+    settings = Settings(server_root="http://127.0.0.1:9", db_path=tmp_path / "memory.db", output_dir=tmp_path / "runs")
+    store = MemoryStore(settings)
+    run_id = store.create_run(entrypoint="tool", query_text="test", group_id="g")
+    ref = store.record_tool_result(
+        run_id=run_id, tool_name="chart", ok=True, input_normalized={}, envelope_dict={"ok": True},
+        summary=[], warnings=[], error=None, trace_id="t", group_id="g", evaluation_case_id=None,
+    )
+    Path(ref.artifact_path).write_text("{not json", encoding="utf-8")
+    artifact = next(a for a in store.query_runs(tool="chart", include_payload=True)[0]["artifacts"] if a["kind"] == "tool_result")
+    assert artifact["payload"] is None
+    assert artifact["payload_error"].startswith("JSONDecodeError")

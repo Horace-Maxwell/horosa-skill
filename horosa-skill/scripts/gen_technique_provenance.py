@@ -32,7 +32,9 @@ tree = ast.parse(SRC.read_text(encoding="utf-8"))
 cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name.endswith("Service"))
 FUNCS = {n.name: n for n in cls.body if isinstance(n, ast.FunctionDef)}
 
-# 共享 runner：这些工具没有 `_run_<name>_tool`，走族级 runner。
+# 共享 runner：这些工具没有自己的 `_run_<name>_tool`（或只有一行转发），证据从族级 runner 取。
+# 写错名字 = AST 扫不到任何证据 = 被兜底判成 local_data「不起盘」（v0.41.1 前 keypoints / lunationphase /
+# triplicityrulers 三个就这样从 2026-08 挂到 2026-10），所以下面对非 None 的值做存在性断言。
 SHARED_RUNNER = {
     **{k: "_run_shenshu_tool" for k in (
         "wangji", "wuzhao", "taixuan", "jingjue", "shenyishu", "shaozi", "tieban", "fendjing",
@@ -40,9 +42,9 @@ SHARED_RUNNER = {
     )},
     "liureng_gods": "_run_liureng_tool",
     "liureng_runyear": "_run_liureng_tool",
-    "keypoints": "_run_keypoints_tool",
-    "lunationphase": "_run_lunationphase_tool",
-    "triplicityrulers": "_run_triplicityrulers_tool",
+    # /chart 起本命盘 + vendored 星阙前端 builder（horosa-core-js progextra）推算并出快照。
+    # balbillus 有自己的 `_run_balbillus_tool`，但只是一行转发，证据同样在 progextra runner 里。
+    **{k: "_run_progextra_js_tool" for k in ("keypoints", "lunationphase", "triplicityrulers", "balbillus")},
     "export_registry": None,
     "export_parse": None,
     "knowledge_registry": None,
@@ -61,6 +63,8 @@ CLASS = {
     # 两条腿算权不同，`compute_sources` 逐项写明。落到兜底会被判成 local_data「不起盘」——
     # 那是**不诚实**的：它们确实铸盘，只是盘不是搜索算的。
     "composite": {"sanshiunited", "mundane", "extrareturns", "qimenzeri", "tianxing",
+                  # progextra 族：chart 服务铸本命盘一条腿 + JS builder 在盘上推算一条腿。
+                  "keypoints", "lunationphase", "triplicityrulers", "balbillus",
                   "huanglizeri", "bazizeri", "taiyizeri", "ziweizeri", "liurengzeri", "sanshizeri",
                   "qizhengzeri", "indiazeri", "guolao_chart",
                   # v0.40 mingli：八字 = 本地 lunar.js 引擎优先、域外/byLon/adjustJieqi 回退 Java（上游 BaZi.js:716-755）；
@@ -70,12 +74,9 @@ CLASS = {
     # Python port：星阙前端算法的 Python 移植。
     "python_port": {"decennials"},
     # frontend 读数型 Python 移植：读已算好的 chart 对象再排版。
-    "frontend_read_port": {"planetaryages", "yearsystem129", "persiandirected", "balbillus"},
+    "frontend_read_port": {"planetaryages", "yearsystem129", "persiandirected"},
     # 神数族：kentang 引擎挂在 chart 服务上，后端直出 snapshot。
-    "chart_service_shenshu": set(SHARED_RUNNER) - {"liureng_gods", "liureng_runyear", "keypoints",
-                                                   "lunationphase", "triplicityrulers",
-                                                   "export_registry", "export_parse",
-                                                   "knowledge_registry", "knowledge_read"},
+    "chart_service_shenshu": {k for k, runner in SHARED_RUNNER.items() if runner == "_run_shenshu_tool"},
     # 本地数据检索：不算盘，只读本地库/注册表。
     "local_data": {"astrodata", "export_registry", "export_parse", "knowledge_registry", "knowledge_read"},
     # 后端算、JS 只排版：runner 同时有端点与 JS 调用时启发式会误判 headless_js，这里显式点名。
@@ -100,6 +101,8 @@ NOTE_OVERRIDES = {
     "suzhan": "人事十二宫八字公式起盘（缺省）走 Java /chart（ChartController 附农历四柱，时支定宫序）；ASC 档或 Java 不可用走 chart 服务；vendored buildSuzhanSnapshotText 出快照（compute_sources.chart = java | chart_service）",
     "ziwei_birth": "Java /ziwei/birth 起盘（流派非通用时附四化表）；22 个传本开关任一非缺省 → 本地 vendored ZiweiCalc 重排盘核心 + 重算格局（同星阙 buildZiweiSnapshotForParams，ZiWeiMain.js:716-822）；vendored buildZiWeiSnapshotText 出快照（compute_sources.chart = java | ZiweiCalc）",
     "acg": "chart 服务 /location/acg*（ACGraph）算行星线、落点与世运事件；vendored JS acgSnapshot 只排 [占星地图] 段",
+    **{k: "chart 服务 /chart 铸本命盘；技法本身由 vendored 星阙前端 builder（horosa-core-js progextra）在盘上推算并直出快照"
+       for k in ("keypoints", "lunationphase", "triplicityrulers", "balbillus")},
     "bazi_inverse": "Java BaZiHelper.getBirthes 逐年回推；Python 只校验四柱干支、转发与排版",
     "guolao_chart": (
         "盘面 /chart（Python chart 服务）+ 政余格局/庙旺 headless JS + [虚实]/[本命化曜]/[流年流曜] 走 Java "
@@ -142,6 +145,11 @@ ENGINE_OVERRIDES: dict[str, list[str]] = {
 }
 
 
+_missing_runners = sorted({r for r in SHARED_RUNNER.values() if r and r not in FUNCS})
+if _missing_runners:
+    raise SystemExit(f"SHARED_RUNNER names runner(s) that do not exist in service.py: {_missing_runners}")
+
+
 def evidence(fn: ast.FunctionDef | None) -> tuple[list[str], list[str], list[str]]:
     if fn is None:
         return [], [], []
@@ -182,7 +190,7 @@ def classify(name: str, definition, js, eps) -> str:
 
 out: dict[str, dict] = {}
 for name, definition in sorted(TOOL_DEFINITIONS.items()):
-    fn = FUNCS.get(f"_run_{name}_tool") or FUNCS.get(SHARED_RUNNER.get(name) or "")
+    fn = FUNCS.get(SHARED_RUNNER[name] or "") if name in SHARED_RUNNER else FUNCS.get(f"_run_{name}_tool")
     js, eps, ken = evidence(fn)
     if definition.endpoint:
         eps = sorted(set(eps) | {definition.endpoint})

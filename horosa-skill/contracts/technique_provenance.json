@@ -56,11 +56,15 @@
       "notes": "纯 headless JS，无后端引擎"
     },
     "balbillus": {
-      "compute_class": "frontend_read_port",
-      "engines": [],
-      "endpoints": [],
+      "compute_class": "composite",
+      "engines": [
+        "progextra"
+      ],
+      "endpoints": [
+        "/chart"
+      ],
       "export_technique": "balbillus",
-      "notes": "读已算好的 chart 对象再排版的 Python 移植"
+      "notes": "chart 服务 /chart 铸本命盘；技法本身由 vendored 星阙前端 builder（horosa-core-js progextra）在盘上推算并直出快照"
     },
     "bazi_birth": {
       "compute_class": "composite",
@@ -504,11 +508,15 @@
       "notes": "ken 后端算、JS 只格式化；健康结果带 pan.source/jinkou.source == 引擎名，runner 必须调 _require_ken_pan"
     },
     "keypoints": {
-      "compute_class": "local_data",
-      "engines": [],
-      "endpoints": [],
+      "compute_class": "composite",
+      "engines": [
+        "progextra"
+      ],
+      "endpoints": [
+        "/chart"
+      ],
       "export_technique": "keypoints",
-      "notes": "不起盘：读本地离线库 / 内置注册表"
+      "notes": "chart 服务 /chart 铸本命盘；技法本身由 vendored 星阙前端 builder（horosa-core-js progextra）在盘上推算并直出快照"
     },
     "knowledge_read": {
       "compute_class": "local_data",
@@ -576,11 +584,15 @@
       "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
     },
     "lunationphase": {
-      "compute_class": "local_data",
-      "engines": [],
-      "endpoints": [],
+      "compute_class": "composite",
+      "engines": [
+        "progextra"
+      ],
+      "endpoints": [
+        "/chart"
+      ],
       "export_technique": "lunationphase",
-      "notes": "不起盘：读本地离线库 / 内置注册表"
+      "notes": "chart 服务 /chart 铸本命盘；技法本身由 vendored 星阙前端 builder（horosa-core-js progextra）在盘上推算并直出快照"
     },
     "mundane": {
       "compute_class": "composite",
@@ -973,11 +985,15 @@
       "notes": "纯 headless JS，无后端引擎"
     },
     "triplicityrulers": {
-      "compute_class": "local_data",
-      "engines": [],
-      "endpoints": [],
+      "compute_class": "composite",
+      "engines": [
+        "progextra"
+      ],
+      "endpoints": [
+        "/chart"
+      ],
       "export_technique": "triplicityrulers",
-      "notes": "不起盘：读本地离线库 / 内置注册表"
+      "notes": "chart 服务 /chart 铸本命盘；技法本身由 vendored 星阙前端 builder（horosa-core-js progextra）在盘上推算并直出快照"
     },
     "vedicprog": {
       "compute_class": "python_chart_backend",

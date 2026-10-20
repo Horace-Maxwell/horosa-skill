@@ -13,7 +13,7 @@ import httpx
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-from horosa_skill.errors import ToolTransportError
+from horosa_skill.errors import bilingual, ToolTransportError
 
 DEFAULT_SIGNATURE_KEY = "FE45AB6E29EF"
 DEFAULT_CLIENT_CHANNEL = "1"
@@ -239,12 +239,25 @@ class HorosaApiClient:
             "Signature": signature,
         }
 
-    def _decode_response_text(self, response: httpx.Response) -> str:
+    def _decode_response_text(self, response: httpx.Response, *, strict: bool = False, endpoint: str | None = None) -> str:
+        """Decrypt an `Encrypted: 1` body. Lenient by default (probe / HTTP-error bodies: best-effort text);
+        `strict=True` (the success path of `call`) turns a decrypt failure into its own error — v0.41.1: the ciphertext
+        used to be handed to `json.loads` and surfaced as a misleading `transport.invalid_json`."""
         payload_text = response.text
         if response.headers.get("Encrypted") == "1":
             try:
                 return _decrypt_response_payload(payload_text)
-            except Exception:
+            except Exception as exc:  # noqa: BLE001 - any cipher / encoding failure means "could not decrypt"
+                if strict:
+                    raise ToolTransportError(
+                        bilingual(
+                            "本地 Horosa 后端的加密响应解不开（客户端与后端的加密约定不一致，常见于 runtime 与 skill 版本不配套）。",
+                            "Could not decrypt the local Horosa backend's encrypted response (client and backend disagree on the "
+                            "cipher — usually a runtime / skill version mismatch).",
+                        ),
+                        code="transport.decrypt_failed",
+                        details={"endpoint": endpoint, "message": f"{type(exc).__name__}: {exc}"},
+                    ) from exc
                 return payload_text
         return payload_text
 
@@ -269,8 +282,8 @@ class HorosaApiClient:
         try:
             with loopback_httpx_client(self.server_root, timeout=self.timeout, transport=self.transport) as client:
                 response = client.post(url, content=encoded_payload, headers=headers)
-                response_text = self._decode_response_text(response)
                 response.raise_for_status()
+                response_text = self._decode_response_text(response, strict=True, endpoint=endpoint)
                 data = json.loads(response_text)
                 if not isinstance(data, dict):
                     raise ToolTransportError(
