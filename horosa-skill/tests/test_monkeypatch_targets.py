@@ -107,6 +107,13 @@ def test_guard_flags_a_reexport_only_name_and_passes_a_used_one() -> None:
     assert useless_patch_reason(module_attr_use, "datetime") is None
 
 
-@pytest.mark.parametrize("dotted", ["horosa_skill.service", "horosa_skill.surfaces.cli", "horosa_skill.runtime.manager"])
+# service 拆包后（v0.41.1）测试只 patch 用到名字的子模块，包根门面上不再有 patch 点——那正是想要的结果。
+@pytest.mark.parametrize("dotted", [
+    "horosa_skill.service._clock",
+    "horosa_skill.service.runners.predictive",
+    "horosa_skill.service.api.dispatch",
+    "horosa_skill.surfaces.cli",
+    "horosa_skill.runtime.manager",
+])
 def test_scanner_sees_the_big_modules(dotted: str) -> None:
     assert any(module == dotted for _f, _l, module, _a in _patch_targets()), f"no patch sites found on {dotted}"

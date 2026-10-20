@@ -11,14 +11,14 @@ This document maps the tree and shows how a tool call actually flows through the
 
 ## Compute model (read this first)
 
-A tool call resolves through `HorosaSkillService.run_tool` (`horosa-skill/src/horosa_skill/service.py`),
+A tool call resolves through `HorosaSkillService.run_tool` (`horosa-skill/src/horosa_skill/service/api/tools.py`),
 which dispatches by the tool's `execution` mode in `engine/registry.py`:
 
 - **remote** → HTTP to the local runtime. Two backends: the Java aggregation layer (`:9999`,
   `self.client`) and the Python chart service (`:8899`, `self.chart_client`). The chart service hosts
   the astrology engines (`/chart`, `/predict/*`, `/india/*`, `/germany/*`, `/jieqi/*`) **and the ken
   engines** (`/qimen/pan`, `/taiyi/pan`, `/jinkou/pan`); the set of chart-routed endpoints is
-  `_PYTHON_CHART_ENDPOINTS` in `service.py`.
+  `_PYTHON_CHART_ENDPOINTS` in `service/endpoints.py`.
 - **local** → computed in-process or via the bundled Node engine (`engine/js_client.py` →
   `horosa-core-js`).
 
@@ -87,10 +87,16 @@ an instance named explicitly via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROO
 
 ### src/horosa_skill/ (Python)
 
-- `service.py` — `HorosaSkillService`: tool dispatch, remote/chart routing (`_call_remote`,
-  `_PYTHON_CHART_ENDPOINTS`), the per-technique `_run_*_tool` runners (including the ken runners for
-  qimen/taiyi/jinkou and the `sanshiunited` aggregator), snapshot builders, export-contract attachment,
-  summaries, memory write-back, and the report output-path guard (`_report_output_path`).
+- `service/` — `HorosaSkillService` (a package since v0.41.1; import path unchanged). `__init__.py` composes the class
+  from mixins and re-exports the names other code reads:
+  - `remote.py` — `_call_remote`, Java cooldown, ken / election-scan response guards (`_require_ken_pan`).
+  - `enrich.py` — post-run `_attach_*` enrichers and the technique card.
+  - `runners/` — one module per technique family with its `_run_*_tool` runners (`sanshi.py` holds the ken runners for
+    qimen/taiyi/jinkou and the `sanshiunited` aggregator; `zeri.py`, `predictive.py`, `mundane.py`, …).
+  - `api/` — `tools.py` (`list_tools`, `run_tool`), `reports.py` (memory + reports, `_report_output_path` guard),
+    `dispatch.py` (`dispatch`, `hecan`, decision-layer surfaces).
+  - pure layers: `text/` (snapshot builders), `options_zeri.py` / `options_cn.py`, `endpoints.py` (`_PYTHON_CHART_ENDPOINTS`),
+    `export.py`, `envelope.py`, `_common.py`, `_context.py` (`_degrade`, progress), `_clock.py` (the one place that reads "now").
 - `config.py` — `Settings` (server/chart roots, ports, runtime root, timeouts, `HOROSA_*` flag registry) + `from_env`.
 - `agent_guidance/` — the clarification gate (a package since v0.41.1; import path unchanged). One-way layers:
   `base.py` (shared constants, `SENSITIVE_SETTINGS` from `data/sensitive_settings.json`, `PREFLIGHT_EXEMPT_TOOLS`) →

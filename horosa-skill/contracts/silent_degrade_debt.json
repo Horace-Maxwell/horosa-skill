@@ -12,7 +12,8 @@
       "runtime/identity.py": 1,
       "runtime/manager.py": 9,
       "runtime/procs.py": 3,
-      "service/__init__.py": 3,
+      "service/enrich.py": 1,
+      "service/runners/zeri.py": 2,
       "surfaces/cli.py": 2,
       "surfaces/mcp_server.py": 1,
       "tracing.py": 2

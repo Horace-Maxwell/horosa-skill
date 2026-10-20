@@ -1,5 +1,5 @@
 // 皇极轨策 formatter —— 十二法起卦·演数四位·卦变断法·三要十应·元会运世·大定起数，纯函数进程内，零后端。
-// 卦为【冻结值】：起卦一经起出即不重起，改流派/十开关只重排断法。占时四柱由 service.py 前置
+// 卦为【冻结值】：起卦一经起出即不重起，改流派/十开关只重排断法。占时四柱由 Python service 层 前置
 // /nongli/time 拼 ctx（立春界年柱 + 农历月日 + 时支）后传入，JS 层不发 HTTP（AGENTS §4）。
 import { qiGua } from '../vendor/guice/core/guiceQiGua.js';
 import { buildGuicePan } from '../vendor/guice/core/guicePan.js';

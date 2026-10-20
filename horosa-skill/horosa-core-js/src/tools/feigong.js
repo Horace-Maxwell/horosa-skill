@@ -1,6 +1,6 @@
 // 飞宫小奇门 formatter —— 时上起青龙·甲乘龙飞九宫，纯函数进程内计算，零后端。
 // 局为【冻结值】：起支（时支/选支/数取/年支）一经定局即不重起；命宫年龄性别只重排命宫目。
-// 占时起局（时支 + 日干支）由 service.py 前置 /nongli/time 派生后传入，JS 层不发 HTTP（AGENTS §4）。
+// 占时起局（时支 + 日干支）由 Python service 层 前置 /nongli/time 派生后传入，JS 层不发 HTTP（AGENTS §4）。
 import { resolveQiZhi, buildJu } from '../vendor/feigong/feigongJu.js';
 import { buildFeiGongSnapshotText } from '../vendor/feigong/feigongSnapshot.js';
 

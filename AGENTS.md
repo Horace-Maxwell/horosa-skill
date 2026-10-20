@@ -122,7 +122,7 @@ bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 enve
 
 **ken 是唯一算权，JS 只格式化。** `qimen` / `taiyi` / `jinkou`（及 `sanshiunited` 的奇门+太乙腿）由星阙
 **ken 后端**（`kinqimen` / `kintaiyi` / `kinjinkou`，挂在 chart 服务 `:8899` 的 `/qimen/pan` ·
-`/taiyi/pan` · `/jinkou/pan`）计算，与星阙桌面端逐值同源。`service.py::_run_{qimen,taiyi,jinkou}_tool`
+`/taiyi/pan` · `/jinkou/pan`）计算，与星阙桌面端逐值同源。`service/runners/sanshi.py::_run_{qimen,taiyi,jinkou}_tool`
 先取 JS 脚手架前置（qimen 要 nongli+jieqi，jinkou 要 liureng），`_call_remote` 打 ken 端点，再把
 `ken_response` 交给 `js_client.run(...)`；`horosa-core-js` 的 `tools/{qimen,taiyi,jinkou}.js` 用星阙的
 `normalizeKinqimenData` / `normalizeBackendPan` / `normalizeKinjinkouData` 把 ken 响应叠到本地脚手架，
@@ -137,13 +137,13 @@ runner 不打 ken、`data.route.local=true`、`compute_sources` 标 `local_route
 **⚠️ ken 端点失败也回 HTTP 200 — 只认 `source`，永不信状态码。** chart 服务的 `web{qimen,taiyi,jinkou}srv.py`
 把一切异常包成 `{"ResultCode": -1/1, "Result": "<engine> ... failed"}`（字符串 `Result`）照样 200 返回；
 `_call_remote` 不 raise、`_unwrap_result` 原样放行，转给 JS 后 formatter guard（`ken.selected || ken.raw`）
-为假 → **静默回退本地旧引擎 = 错结果无报错**。守卫：`service.py::_require_ken_pan` 在每次 ken
+为假 → **静默回退本地旧引擎 = 错结果无报错**。守卫：`service/remote.py::_require_ken_pan` 在每次 ken
 `_call_remote` 后断言 `ken_response.get("source") == engine`，否则 raise `tool.ken_compute_failed`。
 **新增 ken-backed 技法必须同样调 `_require_ken_pan`。**
 🔴 **同族第二例（v0.26.0）：`/electionscan/scan`。** 它把失败包成
 `{"ResultCode": -1, "Result": {"err": …}}`，而 `HorosaPlainJsonClient` 只看**顶层** `err` → 不加守卫时
 `span_too_large`/`invalid_conditions` 会**静默退化成「零命中」**：一个看起来完全合理的空结果。
-守卫 = `service.py::_require_electionscan_ok`。凡「200 也回失败信封」的端点，一律照此办理。
+守卫 = `service/remote.py::_require_electionscan_ok`。凡「200 也回失败信封」的端点，一律照此办理。
 同类静默失败还有一种形状：**传错数据结构不报错、只是匹配不到**——`scanQimen` 吃的是**编译后**的条件树
 （`{type:'all', conditions}`），传 UI 树（`{kind:'group', joiner, children}`）安静地产出零命中。
 真机跑一遍才能发现，离线桩不会。
@@ -152,7 +152,7 @@ runner 不打 ken、`data.route.local=true`、`compute_sources` 标 `local_route
 测试 fake 返回带正确 `source` 的 body，见 `FakeClient`）。
 
 **端点注册法则：任何打 chart 服务的 `_call_remote(endpoint)` 必须把 endpoint 加进
-`service.py::_PYTHON_CHART_ENDPOINTS`。** chart 服务族 = `/chart` · `/predict/*` · `/astroextra/*` ·
+`service/endpoints.py::_PYTHON_CHART_ENDPOINTS`。** chart 服务族 = `/chart` · `/predict/*` · `/astroextra/*` ·
 `/india/*` · `/germany/*` · `/jieqi/*` · `/*/pan`（ken + 14 神数）等。漏登记 → 请求落到 Java `:9999`
 通路（500，或读 `_java_runtime_ready` 触发二次探针，直接打挂 `test_service_*runtime*`）。判据：进了该 set
 才复用 `_chart_runtime_ready` 缓存、首调后不再探针。
@@ -402,7 +402,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 1. `schemas/tools.py` 输入模型（神数用 split 年月日时分 + `options` passthrough 的 `ShenShuInput` 模式；
    `BirthInput` `extra="allow"`，声明字段主要为 discoverability + guidance）。
-2. `service.py` `_run_*_tool` runner；远端端点进 `_PYTHON_CHART_ENDPOINTS`；ken-backed 加 `_require_ken_pan`。
+2. `service/runners/<族>.py` 里加 `_run_*_tool` runner（mixin 方法；跨族只经 `self.` 调）；远端端点进 `_PYTHON_CHART_ENDPOINTS`；ken-backed 加 `_require_ken_pan`。
 3. `engine/registry.py` TOOL_DEFINITIONS 注册；`router.py` 分派词做互斥检查（**卜卦含「卦」字**：梅易/卦
    分支必须排除 卜卦/horary/起卦/占问 短语，否则「卜卦问婚姻」误路由 `gua_desc`——同类新词照此办理）。
 4. 导出契约：`exports/registry.py` preset **逐工具**对齐 builder 实际产段（权威清单 = `aiExport.js` 的
@@ -1026,6 +1026,12 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **`TOOL_GUIDANCE` 的条目可能被多个工具共用（v0.41.1）。** chart 族五个、神数几组都指向同一个策略 dict；往条目里加字段一律写时复制
   （`TOOL_GUIDANCE[t] = {**TOOL_GUIDANCE[t], ...}`），别原地写——`test_options_keys_never_leak_onto_tools_that_share_a_policy_dict` 锁。
   `agent_guidance` 自 v0.41.1 是包（`base` → `policies` → `tool_table` → `contracts` → `catalog` → `preflight`），导入路径不变。
+- **`service` 自 v0.41.1 是包，`HorosaSkillService` 由 16 个 mixin 组合（`remote` / `enrich` / `runners/*` / `api/*`），导入路径不变。**
+  分层：`_context` · `_clock` · `_common` · `endpoints` → `options_*` → `text/*` → `export` · `envelope` → mixin 层；runner 之间、`api/*` 与
+  runner 之间只经 `self.` 互调（测试在实例上替换 `run_tool` / `_run_qimen_tool`），下层不反向依赖 mixin，mixin 成员不重名
+  （`tests/test_service_structure.py` 三条锁 + 门面对外名单冻结）。读「现在」一律 `_clock.now(...)`（冻结时间的夹具 patch 那里）。
+  **monkeypatch 打在用到名字的子模块上**（如 `service.runners.predictive.correct_station_directions`），包根门面上的同名 re-export 够不着
+  ——`tests/test_monkeypatch_targets.py` 抓「只 re-export 不使用」的 patch 点。按路径读源码的扫描（端点登记、算源生成 / 校验）扫整个包。
 - **重试 / 回退只许改写法，不许改值（v0.41.1）。** `_java_chart_payload_candidates` 曾在 `param error` 后把 `gpsLon` 取 `abs()` 重试——
   西经变东经、盘照样起得出来。候选只能换格式（日期分隔符、`zone` 写法、省掉可选键），任何承载结果的数值（经纬度、时刻、时区偏移）必须原样；
   `test_service.py` 的经度符号断言是负向对照。
@@ -1240,7 +1246,7 @@ A global stability pass hardened these; keep them true when you touch the releva
 
 - **状态（as of v0.23.0）**：晚子时双开关（`after23NewDay` 日柱 / `lateZiHourUseNextDay` 时干）**已全链
   穿透**——神数 14 路（`ShenShuInput`）、`bazi_*` / `ziwei_birth` / `liureng_*` / `jinkou` / `qimen` /
-  `taiyi` / `sanshiunited` / `jieqi_year` / `nongli_time`（schema 字段 + `service.py` 白名单转发），以及
+  `taiyi` / `sanshiunited` / `jieqi_year` / `nongli_time`（schema 字段 + service 层白名单转发），以及
   v0.23.0 补线的 **`canping` / `heluo`**（`CanPingInput`/`HeLuoInput` schema + `tools/{canping,heluo}.js`
   的 `baziParams` 透传给 `buildLocalBaziResult`）。验证：`references/late-zi.md` 四象限矩阵
   （`2026-05-27 23:30:00` × 两开关），heluo 两开关皆可见（日 辛丑↔壬寅、时干 戊子↔庚子）、canping 只用

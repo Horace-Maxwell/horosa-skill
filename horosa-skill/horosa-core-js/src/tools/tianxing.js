@@ -1,7 +1,7 @@
 // tianxing 天星择日·征象搜索: compile the condition tree and format the AI snapshot.
 //
 // The *search* itself is NOT here — it is `POST /electionscan/scan` on the Python chart service, and per
-// AGENTS §5 ("请求型 builder 一律归 Python") the month-splitting orchestration lives in service.py. This
+// AGENTS §5 ("请求型 builder 一律归 Python") the month-splitting orchestration lives in the Python service layer. This
 // module is the branch-3 half: a verbatim-vendored pure formatter whose 段头 must stay byte-identical to
 // 星阙, plus the vendored condition-tree compiler so validation messages come from the same table the
 // backend uses instead of a re-encoded copy that goes stale.

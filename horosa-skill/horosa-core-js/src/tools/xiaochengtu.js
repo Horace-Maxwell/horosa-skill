@@ -1,6 +1,6 @@
 // 小成图 formatter —— 洛书九宫佈局·正旁推·四象·应期·股市研判，纯函数进程内计算，零后端。
 // 卦为【冻结值】：起卦（手动 manual / 两数 number / 股价 stock / 大衍 dayan / 占时 time）一经起出即不重起。
-// 占时=梅花时间卦（年支序+农历月+日 为上数、加时支序为下数），由 service.py 前置 /nongli/time 算 upNum/loNum
+// 占时=梅花时间卦（年支序+农历月+日 为上数、加时支序为下数），由 Python service 层 前置 /nongli/time 算 upNum/loNum
 // 后作 number 模式传入。大衍 dayan 须显式 seed 或 manualCounts，禁静默随机（不吐用户没见过的卦）。
 import { qiGuaManual, qiGuaByNumbers, qiGuaByStock, qiGuaByDaYan } from '../vendor/xiaochengtu/xiaochengtuQiGua.js';
 import { buildPan } from '../vendor/xiaochengtu/xiaochengtuPan.js';

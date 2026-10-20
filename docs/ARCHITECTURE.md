@@ -31,15 +31,17 @@ flowchart TD
 奇门遁甲（`qimen`）、太乙神数（`taiyi`）、金口诀（`jinkou`）以及三式合一（`sanshiunited`）里的奇门 + 太乙，统一由星阙的 **ken 后端**计算，与星阙桌面端同源：
 
 - `kinqimen` / `kintaiyi` / `kinjinkou` 三个引擎挂载在本地 Python chart 服务上，对外暴露 `/qimen/pan`、`/taiyi/pan`、`/jinkou/pan`。
-- `service.py` 的 `_run_{qimen,taiyi,jinkou}_tool` 先取必要 scaffold（qimen 取 nongli/jieqi，jinkou 取 liureng），再调用对应 ken 端点，把 `ken_response` 传给 `horosa-core-js`。
+- `service/runners/sanshi.py` 的 `_run_{qimen,taiyi,jinkou}_tool` 先取必要 scaffold（qimen 取 nongli/jieqi，jinkou 取 liureng），再调用对应 ken 端点，把 `ken_response` 传给 `horosa-core-js`。
 - `horosa-core-js` 不再自己起盘，只做 **ken-response → aiExport.js** 的格式化：用星阙的 `normalizeKinqimenData` / `normalizeBackendPan` / `normalizeKinjinkouData` 把 ken 结果叠加到本地 scaffold 上，再由 `build*SnapshotText` 输出 `export_snapshot` 所需的 section。
 - ken 是唯一计算权威，JS 是表现层；若 `ken_response` 缺失或结构不完整，JS 会退回本地 scaffold 以保证不崩，但正常路径始终以 ken 为准。
 - 这三个引擎已随离线 runtime 一起打包（`vendor/{kinqimen,kintaiyi,kinjinkou}`），macOS / Windows 均可断网运行；`tongshefa` 仍是纯 headless JS（无 ken 引擎）。
 
 ## 核心模块
 
-- `src/horosa_skill/service.py`
-  - 调度 tool、dispatch、export contract、memory write-back
+- `src/horosa_skill/service/`（v0.41.1 起是包，导入路径不变）
+  - 调度 tool、dispatch、export contract、memory write-back。`HorosaSkillService`（`__init__.py`）由 mixin 组合：`remote`（`_call_remote`）、
+    `enrich`（跑完后的 `_attach_*`）、`runners/*`（每族一个模块的 `_run_*_tool`）、`api/*`（`run_tool` / `dispatch` / `hecan` / 记忆与报告）；
+    纯函数层 `text/*`（快照文本）、`options_*`、`endpoints`、`export`、`envelope`、`_common`、`_context`（降级收集器 / 进度）、`_clock`
 - `src/horosa_skill/runtime/`
   - `manager.py`（install / doctor / start / stop）、`identity.py`（端点归属三级证据：app 标记 + nonce → 监听进程命令行 / 映像 → 注册表 pid）、
     `registry.py`（原子状态文件）、`ports.py` / `procs.py` / `pidlock.py` / `mirrors.py`

@@ -1,5 +1,5 @@
 // 神数正传 formatter —— 铁板/邵子/大定/六亲/铁算心易 五流派，纯函数进程内计算。
-// 四柱由 service.py 前置 /nongli/time 取权威柱后作 pillars 传入（JS 不发 HTTP，AGENTS §4）。
+// 四柱由 Python service 层 前置 /nongli/time 取权威柱后作 pillars 传入（JS 不发 HTTP，AGENTS §4）。
 // 条文正文库（铁板/邵子）体积大、按需异步载入（loadTiebanVerses/loadShaoziVerses）→ runner async。
 // 大定流派需 bazi 推运表（小运/大运/岁君·年粒度）：取自 vendored bazi 链，四柱仍以权威柱为准。
 import { calcTieban, loadTiebanVerses } from '../vendor/zhengchuan/zhengchuanTiebanLocal.js';

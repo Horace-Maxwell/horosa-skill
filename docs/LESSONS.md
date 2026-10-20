@@ -146,7 +146,7 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
-### v0.41.1-dev / 2026-10-20 — 可维护性重构第 3 批：拆大模块；共享策略 dict 被原地写（`TOOL_GUIDANCE` 写时复制）
+### v0.41.1-dev / 2026-10-20 — 可维护性重构第 3 批：拆大模块；共享策略 dict 被原地写（`TOOL_GUIDANCE` 写时复制 / `_clock`）
 
 - **做法（每拆一个模块都一样）**：AST 按顶层语句切块（前导注释跟着语句走、原相对顺序不变），逐模块重算 import，检查兄弟模块间无环；
   只搬不改名（AGENTS / LESSONS 里引用的名字照样 grep 得到）；导入路径不变（包的 `__init__` 显式 re-export 公开名）；
@@ -157,6 +157,15 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   （chart / chart12 / chart13 / draconic / hellen_chart 一组，神数五个一组…）。今天被注入的工具恰好都不共用，所以没出事；
   哪天给 chart13 加 options_keys，同组五个工具会一起带上。→ 注入改为写时复制；`test_options_keys_never_leak_onto_tools_that_share_a_policy_dict`
   锁「带 options_keys 的条目不与别的工具共用对象」（负向对照：恢复原地写并给 chart13 注入即红）。
+- **`service.py`（17 650 行）→ 包 `service/`（34 个文件，最大 1 320 行）**：`HorosaSkillService` 由 16 个 mixin 组合，导入路径不变。
+  三步：① `git mv` 成 `service/__init__.py` 零改动，把按路径读源码的三处扫描（端点登记测试、算源生成 / 校验）改扫整个包——只扫
+  `__init__` 时「调用了却没登记」会安静漏掉；② 22 处 `datetime.now(` 收口到 `_clock.now(...)`，冻结时间的夹具改 patch `_clock`
+  （负向对照：夹具仍 patch 包根 → 7 条金标红）；③ 按审计清单逐节点分配、`symtable` 求每块真正读的模块级名字（局部变量
+  `now` 曾被误当成要 import 的名字）后一次搬完。两处 monkeypatch 改打用到名字的子模块（包根的 re-export 够不着）。
+  新守卫 `tests/test_service_structure.py`：时钟只经 `_clock`、门面对外名单冻结（67 个）、mixin 成员不重名、runner 之间 /
+  api 与 runner 之间不 import（只经 `self.`），各有负向对照。
+  **自己踩的**：在 scratch 里干跑时用 `PYTHONPATH` 指向拆好的副本跑 pytest——212 条全绿，但 pyproject 的 `pythonpath = ["src"]`
+  把仓里的旧代码排在前面，测的根本不是副本（两处「包根已没有这个名字」的 patch 也照样过，才露馅）。干跑只能信纯 `python -c`。
 - **没做的**：审计建议把 9 条择日指引的重复字段收成工厂函数（约省 160 行）。没做——每条是要整条读的声明式数据，而且上一条正说明
   共享对象在这张表里会被原地写；省下的行数不值这个风险。
 - **法则**：import 期对模块级共享对象的原地写，一律写时复制；拆分只搬不改，表面逐字比对兜底。

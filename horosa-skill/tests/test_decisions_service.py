@@ -213,12 +213,12 @@ def test_zhan_category_is_filled_in_enforce_and_only_reported_in_shadow(tmp_path
 
 def test_a_bug_in_the_decision_surface_degrades_instead_of_failing_the_technique(tmp_path: Path, monkeypatch) -> None:
     """负向对照（v0.39.0 开发期真事故）：问题构造抛 QuestionSpecError 曾把 liureng_gods 打成 tool.internal_error。"""
-    import horosa_skill.service as service_module
+    import horosa_skill.service.api.dispatch as dispatch_module  # 用它的那个模块（v0.41.1 service 拆包）
 
     def boom() -> None:
         raise ValueError("bad question spec")
 
-    monkeypatch.setattr(service_module, "build_zhan_question", boom)
+    monkeypatch.setattr(dispatch_module, "build_zhan_question", boom)
     service = _service(tmp_path, DecisionLayer(_policy("enforce", ("zhancat",)), FakeJev({}), thresholds=LOCK), RecordingJs())
     result = service.dispatch({"query": "六壬起课问下个月生意能不能赚钱", "birth": BIRTH, "save_result": False, "agent_confirmed_settings": True})
     envelope = result.results["liureng_gods"]

@@ -269,7 +269,10 @@ def test_service_runners_reproduce_the_upstream_goldens(tmp_path: Path, frozen: 
 def test_station_directions_without_the_correction_are_upstream_noise(tmp_path: Path, frozen: None, name: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """负向对照：拿掉纠正，输出就是上游金标（噪声标签），与真值版金标对不上——上面那条断言确实咬得住。"""
     sc = _sc(name)
-    monkeypatch.setattr(S, "correct_station_directions", lambda stations, daily: (list(stations or []), []))
+    # patch 用它的那个模块（v0.41.1 service 拆包）：包根的同名 re-export 够不着 runner。
+    from horosa_skill.service.runners import predictive as predictive_runners
+
+    monkeypatch.setattr(predictive_runners, "correct_station_directions", lambda stations, daily: (list(stations or []), []))
     result = _service(tmp_path, _LiveFixtureClient(sc)).run_tool("ephemeris", _payload(sc, **sc["request"]["ephemerisOpts"]), save_result=False)
     assert result.data["snapshot_text"] == sc["golden"]["ephemeris"]
     assert result.data["snapshot_text"] != _with_true_station_directions(sc["golden"]["ephemeris"], sc["station_truth"])

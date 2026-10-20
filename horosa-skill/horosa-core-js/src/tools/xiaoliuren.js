@@ -1,6 +1,6 @@
 // 小六壬 formatter —— 三数起三传（主流六宫/道门九宫），纯函数进程内计算，零后端。
 // 起课为【冻结值】：三数一经起出即不重起，改流派只重排判读。占时起数（农历月/日/时支序）由
-// service.py 前置 /nongli/time 派生后作 nums 传入，JS 层不发 HTTP（AGENTS §4）。
+// Python service 层 前置 /nongli/time 派生后作 nums 传入，JS 层不发 HTTP（AGENTS §4）。
 import { qiKe } from '../vendor/xiaoliuren/xiaoliurenKe.js';
 import { buildXiaoLiuRenSnapshotText } from '../vendor/xiaoliuren/xiaoliurenSnapshot.js';
 
