@@ -40,7 +40,7 @@ def test_doctor_public_keys() -> None:
 
 def test_setup_public_keys(tmp_path, monkeypatch) -> None:
     """`setup` 输出契约（v0.38.0 B4；v0.41.0 加第 4 步 skill → 八步）：顶层键 + 步骤顺序 + 每步 `ok`；失败包键集见 test_setup_command。"""
-    from horosa_skill.surfaces.cli import _SETUP_STEPS
+    from horosa_skill.surfaces.setup_flow import _SETUP_STEPS
 
     monkeypatch.setattr("horosa_skill.skill_install.default_home", lambda: tmp_path / "home")
 

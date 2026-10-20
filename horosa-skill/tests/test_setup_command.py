@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import tarfile
 import time
@@ -18,10 +19,12 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from horosa_skill.surfaces import cli as cli_module
+from horosa_skill.surfaces import runtime_helpers as runtime_helpers
+from horosa_skill.surfaces import setup_flow as setup_flow
 from horosa_skill.surfaces import doctor as doctor_checks
 from horosa_skill.client_config import payload as client_payload
-from horosa_skill.surfaces.cli import _SETUP_STEPS, app
+from horosa_skill.surfaces.cli import app
+from horosa_skill.surfaces.setup_flow import _SETUP_STEPS
 
 runner = CliRunner()
 
@@ -297,10 +300,10 @@ def test_uvx_wheel_launcher_honours_the_mirror(tmp_path: Path, monkeypatch: pyte
 
 
 def test_default_launcher_is_uv_inside_a_checkout_and_uvx_wheel_elsewhere(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    assert cli_module._default_setup_launcher(None) == "uv"
-    assert cli_module._default_setup_launcher(tmp_path) == "uvx-wheel"
-    monkeypatch.setattr(cli_module, "_package_root", lambda: tmp_path)
-    assert cli_module._default_setup_launcher(None) == "uvx-wheel", "wheel 装出来的包旁边没有 pyproject.toml"
+    assert setup_flow._default_setup_launcher(None) == "uv"
+    assert setup_flow._default_setup_launcher(tmp_path) == "uvx-wheel"
+    monkeypatch.setattr(runtime_helpers, "_package_root", lambda: tmp_path)
+    assert setup_flow._default_setup_launcher(None) == "uvx-wheel", "wheel 装出来的包旁边没有 pyproject.toml"
 
 
 # ---------------------------------------------------------------- claude-code scopes
@@ -331,8 +334,8 @@ def test_claude_code_user_scope_runs_claude_mcp_add(tmp_path: Path, monkeypatch:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
     fake_claude = tmp_path / "claude"
-    real_which = cli_module.shutil.which
-    monkeypatch.setattr(cli_module.shutil, "which", lambda name, *a, **k: str(fake_claude) if name == "claude" else real_which(name, *a, **k))
+    real_which = shutil.which
+    monkeypatch.setattr(shutil, "which", lambda name, *a, **k: str(fake_claude) if name == "claude" else real_which(name, *a, **k))
     seen: dict[str, list[str]] = {}
 
     def fake_add(command: list[str]):
@@ -344,7 +347,7 @@ def test_claude_code_user_scope_runs_claude_mcp_add(tmp_path: Path, monkeypatch:
         )
         return subprocess.CompletedProcess(command, 0, stdout="Added stdio MCP server horosa", stderr="")
 
-    monkeypatch.setattr(cli_module, "_claude_mcp_add", fake_add)
+    monkeypatch.setattr(setup_flow, "_claude_mcp_add", fake_add)
 
     report = _stdout_json(_run("--client", "claude-code", "--skip-install", "--no-probe-network", "--no-stdio-probe"))
 
@@ -358,10 +361,10 @@ def test_claude_code_user_scope_runs_claude_mcp_add(tmp_path: Path, monkeypatch:
 
 def test_claude_code_without_claude_on_path_prints_the_command(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)
-    real_which = cli_module.shutil.which
-    monkeypatch.setattr(cli_module.shutil, "which", lambda name, *a, **k: None if name == "claude" else real_which(name, *a, **k))
+    real_which = shutil.which
+    monkeypatch.setattr(shutil, "which", lambda name, *a, **k: None if name == "claude" else real_which(name, *a, **k))
     calls: list[list[str]] = []
-    monkeypatch.setattr(cli_module, "_claude_mcp_add", lambda command: calls.append(command))
+    monkeypatch.setattr(setup_flow, "_claude_mcp_add", lambda command: calls.append(command))
 
     report = _stdout_json(_run("--client", "claude-code", "--skip-install", "--no-probe-network", "--no-stdio-probe"))
 
@@ -395,7 +398,7 @@ def test_stdio_probe_spawns_the_client_shaped_command_and_counts_tools(tmp_path:
 def test_stdio_probe_failure_carries_the_stderr_tail() -> None:
     import sys
 
-    probe = cli_module._stdio_probe(
+    probe = setup_flow._stdio_probe(
         command=sys.executable, args=["-c", "import sys; sys.stderr.write('boom: no such server\\n'); sys.exit(3)"],
         env={"PATH": "/usr/bin"}, timeout=30,
     )
@@ -416,9 +419,9 @@ def test_manifest_probe_handles_file_urls_without_network(tmp_path: Path) -> Non
 def test_codex_probe_env_is_minimal_and_carries_only_the_configured_horosa_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HOROSA_RUNTIME_ROOT", "/from/shell")
     monkeypatch.setenv("HOROSA_MCP_TOKEN", "secret")
-    codex = cli_module._client_probe_env("codex", {"HOROSA_RUNTIME_ROOT": "/from/config"})
+    codex = setup_flow._client_probe_env("codex", {"HOROSA_RUNTIME_ROOT": "/from/config"})
     assert codex["HOROSA_RUNTIME_ROOT"] == "/from/config" and "HOROSA_MCP_TOKEN" not in codex and "PATH" in codex
-    inherit = cli_module._client_probe_env("cursor", {"HOROSA_MCP_COMPACT": "1"})
+    inherit = setup_flow._client_probe_env("cursor", {"HOROSA_MCP_COMPACT": "1"})
     assert inherit["HOROSA_MCP_TOKEN"] == "secret" and inherit["HOROSA_MCP_COMPACT"] == "1"
 
 
@@ -428,11 +431,11 @@ def test_runtime_mismatch_is_detected_when_the_server_computes_another_root(tmp_
 
     settings = Settings(runtime_root=tmp_path / "custom-root", db_path=tmp_path / "m.db", output_dir=tmp_path / "runs")
     probe = {"ok": True, "runtime_status": {"installed": False, "runtime_root": str(tmp_path / "default-root")}}
-    detail = cli_module._probe_runtime_mismatch(probe, settings)
+    detail = setup_flow._probe_runtime_mismatch(probe, settings)
     assert detail and "custom-root" in detail and "default-root" in detail
     same = {"ok": True, "runtime_status": {"installed": False, "runtime_root": str(tmp_path / "custom-root")}}
-    assert cli_module._probe_runtime_mismatch(same, settings) is None
-    assert cli_module._probe_runtime_mismatch({"ok": True, "runtime_status": None}, settings) is None, "老 server 没有该资源 → 不判"
+    assert setup_flow._probe_runtime_mismatch(same, settings) is None
+    assert setup_flow._probe_runtime_mismatch({"ok": True, "runtime_status": None}, settings) is None, "老 server 没有该资源 → 不判"
 
 
 def _fake_wheel_bytes(version: str, *, good: bool = True) -> bytes:
@@ -504,7 +507,7 @@ def test_probe_stderr_diagnosis_recognises_the_windows_file_lock() -> None:
     """v0.39.0 Windows 维护机：挂着的 horosa MCP 会话占着 venv 的 horosa-skill.exe，客户端的 `uv run` 同步 venv 删不掉它。"""
     import re
 
-    diagnosis = cli_module._diagnose_probe_stderr(_WINDOWS_FILE_LOCK_STDERR)
+    diagnosis = setup_flow._diagnose_probe_stderr(_WINDOWS_FILE_LOCK_STDERR)
     assert diagnosis is not None and diagnosis["cause"] == "windows_file_in_use"
     assert diagnosis["locked_file"] == "C:\\Users\\me\\src\\horosa-skill\\.venv\\Scripts\\horosa-skill.exe"
     for text in (diagnosis["explanation"], diagnosis["next_action"]):
@@ -512,18 +515,18 @@ def test_probe_stderr_diagnosis_recognises_the_windows_file_lock() -> None:
     localized = _WINDOWS_FILE_LOCK_STDERR.replace(
         "The process cannot access the file because it is being used by another process.", "另一个程序正在使用此文件，进程无法访问。"
     )
-    assert cli_module._diagnose_probe_stderr(localized)["cause"] == "windows_file_in_use", "中文 Windows：中间那句本地化，两头不变"
+    assert setup_flow._diagnose_probe_stderr(localized)["cause"] == "windows_file_in_use", "中文 Windows：中间那句本地化，两头不变"
     pyd = "error: failed to remove file `C:\\v\\Lib\\site-packages\\pydantic_core\\_core.pyd`: in use (os error 32)"
-    assert cli_module._diagnose_probe_stderr(pyd)["locked_file"].endswith("_core.pyd"), "已加载的扩展模块同理"
-    assert cli_module._diagnose_probe_stderr("boom: no such server\n") is None
-    assert cli_module._diagnose_probe_stderr("error: failed to remove file `C:\\x.exe`: Access is denied. (os error 5)") is None, "权限/杀软是另一类"
-    assert cli_module._diagnose_probe_stderr("") is None
+    assert setup_flow._diagnose_probe_stderr(pyd)["locked_file"].endswith("_core.pyd"), "已加载的扩展模块同理"
+    assert setup_flow._diagnose_probe_stderr("boom: no such server\n") is None
+    assert setup_flow._diagnose_probe_stderr("error: failed to remove file `C:\\x.exe`: Access is denied. (os error 5)") is None, "权限/杀软是另一类"
+    assert setup_flow._diagnose_probe_stderr("") is None
 
 
 def test_setup_names_the_windows_file_lock_when_the_probe_dies_on_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config = tmp_path / "mcp.json"
     monkeypatch.setattr(
-        cli_module,
+        setup_flow,
         "_stdio_probe",
         lambda **kwargs: {"ok": False, "error": "ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)",
                           "stderr_tail": _WINDOWS_FILE_LOCK_STDERR},

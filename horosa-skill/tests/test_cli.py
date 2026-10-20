@@ -11,6 +11,7 @@ import typer
 
 from horosa_skill.config import Settings
 from horosa_skill.surfaces import cli
+from horosa_skill.surfaces import runtime_helpers as runtime_helpers
 from horosa_skill.surfaces import openclaw_smoke
 from horosa_skill.client_config import openclaw as client_openclaw
 from horosa_skill.client_config import payload as client_payload
@@ -47,7 +48,7 @@ def test_stdio_serve_skips_eager_runtime_start(monkeypatch) -> None:
     warmups: list[_ManagerStub] = []
 
     monkeypatch.setattr(cli.Settings, "from_env", classmethod(lambda cls: settings))
-    monkeypatch.setattr(cli, "_runtime_manager", lambda settings_arg: manager)
+    monkeypatch.setattr(runtime_helpers, "_runtime_manager", lambda settings_arg: manager)
     monkeypatch.setattr(cli, "_start_stdio_runtime_warmup", lambda manager_arg: warmups.append(manager_arg))
     monkeypatch.setattr(cli, "run_mcp_server", lambda settings_arg, transport, service=None: None)
 
@@ -74,7 +75,7 @@ def test_streamable_http_serve_keeps_the_runtime_warm_by_default(monkeypatch, tm
     manager = _ManagerStub()
 
     monkeypatch.setattr(cli.Settings, "from_env", classmethod(lambda cls: settings))
-    monkeypatch.setattr(cli, "_runtime_manager", lambda settings_arg: manager)
+    monkeypatch.setattr(runtime_helpers, "_runtime_manager", lambda settings_arg: manager)
     monkeypatch.setattr(cli, "run_mcp_server", lambda settings_arg, transport, service=None: None)
     monkeypatch.setattr("horosa_skill.runtime.ports.port_bindable", lambda *a, **k: True)
 
@@ -91,7 +92,7 @@ def test_streamable_http_serve_stops_runtime_when_asked(monkeypatch, tmp_path) -
     manager = _ManagerStub()
 
     monkeypatch.setattr(cli.Settings, "from_env", classmethod(lambda cls: settings))
-    monkeypatch.setattr(cli, "_runtime_manager", lambda settings_arg: manager)
+    monkeypatch.setattr(runtime_helpers, "_runtime_manager", lambda settings_arg: manager)
     monkeypatch.setattr(cli, "run_mcp_server", lambda settings_arg, transport, service=None: None)
     monkeypatch.setattr("horosa_skill.runtime.ports.port_bindable", lambda *a, **k: True)
 
@@ -277,7 +278,7 @@ def test_openclaw_setup_bootstraps_workspace_and_runs_smoke(monkeypatch, tmp_pat
         return {"ok": True, "server_visible": True, "listed_tool_count": 43}
 
     monkeypatch.setattr(client_openclaw, "resolve_uv_command", lambda: ["/usr/local/bin/uv"])
-    monkeypatch.setattr(cli, "_runtime_manager", lambda settings_arg: ManagerStub())
+    monkeypatch.setattr(runtime_helpers, "_runtime_manager", lambda settings_arg: ManagerStub())
     monkeypatch.setattr(openclaw_smoke, "_run_openclaw_smoke_check", fake_smoke_check)
     monkeypatch.setattr(cli, "_print_json", lambda data: captured.setdefault("report", data))
 
@@ -364,7 +365,7 @@ def test_doctor_adds_user_facing_summary(monkeypatch, tmp_path: Path) -> None:
             return None
 
     monkeypatch.setattr(cli.Settings, "from_env", classmethod(lambda cls: settings))
-    monkeypatch.setattr(cli, "_runtime_manager", lambda settings_arg: ManagerStub())
+    monkeypatch.setattr(runtime_helpers, "_runtime_manager", lambda settings_arg: ManagerStub())
     monkeypatch.setattr(cli, "_print_json", lambda data: captured.setdefault("report", data))
 
     cli.doctor()
@@ -646,7 +647,7 @@ def test_openclaw_full_check_from_a_wheel_install_explains_instead_of_a_python_t
     config_path = workspace / "config" / "mcporter.json"
     config_path.parent.mkdir(parents=True)
     config_path.write_text("{}", encoding="utf-8")
-    monkeypatch.setattr(cli, "_package_root", lambda: tmp_path / "site-packages")
+    monkeypatch.setattr(runtime_helpers, "_package_root", lambda: tmp_path / "site-packages")
     monkeypatch.setenv("HOROSA_SKILL_DATA_DIR", str(tmp_path / "data"))
     calls: list[str] = []
     real_run = subprocess.run

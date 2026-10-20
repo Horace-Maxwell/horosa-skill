@@ -21,7 +21,7 @@ from horosa_skill.config import Settings
 from horosa_skill.errors import RuntimeInstallError
 from horosa_skill.runtime import manager as manager_module
 from horosa_skill.runtime.manager import DOCTOR_ISSUE_CODES, HorosaRuntimeManager
-from horosa_skill.surfaces import cli as cli_module
+from horosa_skill.surfaces import runtime_helpers as runtime_helpers
 from horosa_skill.surfaces import doctor as doctor_checks
 from horosa_skill.surfaces.cli import app
 
@@ -299,13 +299,13 @@ def test_quarantine_check_is_skipped_off_macos_and_when_not_installed(tmp_path: 
 def test_emulated_process_becomes_a_warning_with_advice(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(manager_module, "arch_report", lambda: {"process": "x64", "native": "arm64", "emulated": True})
     settings = Settings.from_env()
-    report = doctor_checks._doctor_report(settings, cli_module._runtime_manager(settings))
+    report = doctor_checks._doctor_report(settings, runtime_helpers._runtime_manager(settings))
     codes = [w["code"] for w in report["warnings"]]
     assert "platform:emulated_process" in codes
     assert any(a["code"] == "platform:emulated_process" for a in report["advice"])
 
     monkeypatch.setattr(manager_module, "arch_report", lambda: {"process": "arm64", "native": "arm64", "emulated": False})
-    report = doctor_checks._doctor_report(settings, cli_module._runtime_manager(settings))
+    report = doctor_checks._doctor_report(settings, runtime_helpers._runtime_manager(settings))
     assert "platform:emulated_process" not in [w["code"] for w in report["warnings"]]
 
 

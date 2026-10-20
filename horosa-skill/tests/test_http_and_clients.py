@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import os
 
 import pytest
@@ -225,7 +226,7 @@ def test_client_check_flags_codex_cwd_missing(tmp_path) -> None:
 
 def test_client_check_catches_a_command_not_on_path(monkeypatch) -> None:
     """裸命令名靠 PATH，而 GUI 客户端在 Windows 上不继承 shell PATH（v0.38.0 B2）。"""
-    monkeypatch.setattr(cli.shutil, "which", lambda name: None)
+    monkeypatch.setattr(shutil, "which", lambda name: None)
     codes = _audit({"command": "uvx", "args": ["--from", "git+https://x", "horosa-skill", "serve", "--transport", "stdio"]})
     assert "command_not_on_path" in codes
     # 绝对路径不查 PATH（负向对照）

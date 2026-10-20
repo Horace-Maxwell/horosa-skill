@@ -19,6 +19,8 @@ from typer.testing import CliRunner
 
 from horosa_skill import clients_extra, skill_install
 from horosa_skill.surfaces import cli
+from horosa_skill.surfaces import runtime_helpers as runtime_helpers
+from horosa_skill.surfaces import setup_flow as setup_flow
 from horosa_skill.client_config import locations as client_locations
 from horosa_skill.client_config import payload as client_payload
 from horosa_skill.surfaces.cli import app
@@ -118,14 +120,14 @@ def test_copilot_cli_carries_home_and_the_probe_gets_only_path(tmp_path: Path, m
     monkeypatch.setenv("HOME", str(tmp_path / "realhome"))
     monkeypatch.setenv("SOME_SHELL_ONLY_VAR", "x")
     payload, _cmd, _env = client_payload._build_client_config_payload(
-        format_name="copilot-cli", skill_root=cli._package_root(), server_name="horosa", launcher="uvx-wheel", surface="auto",
+        format_name="copilot-cli", skill_root=runtime_helpers._package_root(), server_name="horosa", launcher="uvx-wheel", surface="auto",
     )
     entry = payload["mcpServers"]["horosa"]
     assert entry["tools"] == ["*"] and entry["timeout"] >= 600000 and entry["type"] == "local"
     if cli.os.name != "nt":
         assert entry["env"]["HOME"] == str(tmp_path / "realhome")
     assert {"HOROSA_RUNTIME_ROOT", "HOROSA_SKILL_DATA_DIR", "HOROSA_MCP_COMPACT"} <= set(entry["env"])
-    probe = cli._client_probe_env("copilot-cli", entry["env"])
+    probe = setup_flow._client_probe_env("copilot-cli", entry["env"])
     assert "SOME_SHELL_ONLY_VAR" not in probe and "PATH" in probe, "探针必须按 Copilot 的最坏形状（只给 PATH）起 server"
     problems = clients_extra.audit("copilot-cli", {**entry, "env": {}}, os_name="posix")
     assert {p["code"] for p in problems} >= {"copilot_cli_env_home_missing"}
@@ -222,7 +224,7 @@ def test_the_stdio_probe_gets_the_env_the_entry_actually_carries(tmp_path: Path,
         return {"ok": True, "tools": 11, "server_name": "horosa", "server_version": "x",
                 "runtime_status": {"runtime_root": env.get("HOROSA_RUNTIME_ROOT", str(Path.home() / ".horosa" / "runtime"))}}
 
-    monkeypatch.setattr(cli, "_stdio_probe", fake_probe)
+    monkeypatch.setattr(setup_flow, "_stdio_probe", fake_probe)
     result = runner.invoke(app, ["setup", "--client", "copilot-cli", "--config", str(tmp_path / "mcp-config.json"), "--skip-install",
                                  "--no-probe-network", "--launcher", "uvx-wheel", "--no-cache-wheel", "--no-skill"])
     assert result.exit_code == 0, result.stderr

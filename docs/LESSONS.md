@@ -175,6 +175,10 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   被测试 patch 的名字（`_probe_manifest_url`、`DOCTOR_BUDGET_SECONDS`、`_run_openclaw_smoke_check`、`_run_subprocess_json` 等）全部改经
   模块属性调用、测试改指新模块；`cli.subprocess.run` 这类 patch 打在共享模块对象上，搬走的代码照样被拦住（前提：代码写
   `subprocess.run(...)`，不写 `from subprocess import run`）。模块别名避开命令函数名（`doctor` 是命令，别名用 `doctor_checks`）。
+- **`cli.py` 第三段：`setup` 流程 → `surfaces/setup_flow.py`；`_runtime_manager` / `_package_root` / 下载进度 → `surfaces/runtime_helpers.py`**
+  （cli.py 2 292 → 1 659 行，剩下的基本就是 Typer 命令树）。setup 要用的这三样原本住在 cli.py，直接搬 setup 会成环；单独成一个小模块、
+  一律经模块属性调用后，测试替换 manager / 包目录只有一个 patch 点。测试里 `cli.shutil.which` 这种借 cli 之名 patch 标准库的写法改成直接
+  patch `shutil`（cli.py 已不再 import 它；同一个模块对象，语义不变）。
 - **没做的**：审计建议把 9 条择日指引的重复字段收成工厂函数（约省 160 行）。没做——每条是要整条读的声明式数据，而且上一条正说明
   共享对象在这张表里会被原地写；省下的行数不值这个风险。
 - **法则**：import 期对模块级共享对象的原地写，一律写时复制；拆分只搬不改，表面逐字比对兜底。

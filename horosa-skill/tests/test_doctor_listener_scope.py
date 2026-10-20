@@ -9,6 +9,7 @@ import pytest
 from horosa_skill.config import Settings
 from horosa_skill.runtime import ports
 from horosa_skill.surfaces import cli
+from horosa_skill.surfaces import runtime_helpers as runtime_helpers
 from horosa_skill.surfaces import doctor as doctor_checks
 
 
@@ -60,7 +61,7 @@ def test_doctor_reports_listener_scope_and_warns(monkeypatch: pytest.MonkeyPatch
         return [{"local_address": "0.0.0.0", "pid": 77}] if port == settings.local_backend_port else [{"local_address": "127.0.0.1", "pid": 78}]
 
     monkeypatch.setattr(cli.Settings, "from_env", classmethod(lambda cls: settings))
-    monkeypatch.setattr(cli, "_runtime_manager", lambda settings_arg: ManagerStub())
+    monkeypatch.setattr(runtime_helpers, "_runtime_manager", lambda settings_arg: ManagerStub())
     monkeypatch.setattr(cli, "_print_json", lambda data: captured.setdefault("report", data))
     monkeypatch.setattr(ports, "listener_bindings", fake_bindings)
     cli.doctor()
