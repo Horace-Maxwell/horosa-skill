@@ -410,3 +410,27 @@ def test_technique_report_is_not_advertised_read_only(tmp_path) -> None:
     assert tools["horosa_report_render"].annotations.idempotentHint is True
     assert tools["horosa_report_from_tool"].annotations.idempotentHint is False
     assert tools["horosa_memory_record_answer"].annotations.destructiveHint is False
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "method"),
+    [("horosa_memory_query", "query_memory"), ("horosa_memory_show", "show_memory"), ("horosa_hecan", "hecan")],
+)
+def test_facades_resolve_the_service_method_at_call_time(tmp_path, tool_name, method) -> None:
+    """v0.41.1：七个门面改成表驱动注册后，service 方法必须在**调用时**按名取——在建好 server 之后替换实例上的方法
+    （测试与诊断都这么做）也要生效；注册时捕获绑定方法会让替换静默失效。"""
+    settings, svc = _make(tmp_path)
+    mcp = M.create_mcp_server(svc, settings)
+    seen: list[str] = []
+
+    def _replacement(payload):
+        seen.append(method)
+        return {"ok": True, "replaced": method}
+
+    setattr(svc, method, _replacement)
+
+    async def _call():
+        return await mcp.call_tool(tool_name, {"run_id": "r", "query": "q", "limit": 1})
+
+    payload = json.loads(_text(anyio.run(_call)))
+    assert seen == [method] and payload.get("replaced") == method, payload

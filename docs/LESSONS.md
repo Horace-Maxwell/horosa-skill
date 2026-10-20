@@ -215,6 +215,9 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   并发上限与兜底 → `mcp_runner`（`_MAX_CONCURRENT_TOOLS` / `_TOOL_LIMITER` 经 `global` 读，必须与 `_tool_limiter` 同住，测试改指它），
   elicitation → `mcp_elicitation`，HTTP 安全 → `mcp_auth`。文件本身不能挪（MCPB 入口），`_SERVER_INSTRUCTIONS` 留原处（docs-sync 从这里读）。
   两个模块都要 logger 时各自建、名字钉成原来的 `horosa_skill.surfaces.mcp_server`。
+  随后七个形状相同的门面（记忆三件、报告模板 / 渲染、合参、技法依据报告）改为 `_register_service_facade` 表驱动注册；service 方法按名
+  **在调用时**取——测试会在建好 server 之后替换实例上的方法，注册时捕获绑定方法会让替换静默失效（`test_facades_resolve_the_service_method_at_call_time`，
+  负向对照：改成注册时绑定即红）。tools/list 逐字不变。
   **自己踩的**：给新模块写 docstring 时把旗标写成了 `HOROSA_MCP_MAX_CONCURRENT`（真名多一个 `_TOOLS`）——`test_env_registry_covers_all_flags_code_reads`
   扫源码里每个 `HOROSA_*` 字面量，当场红。文档串里的旗标名也是契约。
 - **`schemas/tools.py`（2 089 行）→ 包 `schemas/tools/`**：`base` 之上按技法族分 7 个模块（最大 413 行），`__init__` 显式 re-export。

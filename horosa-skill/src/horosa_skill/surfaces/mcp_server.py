@@ -228,6 +228,24 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
         meta=_tool_meta("horosa_dispatch"),
     )(horosa_dispatch)
 
+    def _register_service_facade(*, name: str, method: str, model: type, title: str, annotations: Any, doc: str) -> None:
+        """门面工具 = 归一化入参 → service.<method>(payload)，统一兜底、签名、注解（v0.41.1 起表驱动）。
+
+        method 按名在**调用时**取（`getattr(service, method)`）：测试会在建好 server 之后替换实例上的方法。
+        """
+
+        async def facade(**kwargs: Any) -> dict[str, Any]:
+            def _run() -> dict[str, Any]:
+                return getattr(service, method)(_normalize_mcp_request(_merge_mcp_arguments(kwargs), model))
+
+            return await _guarded_facade(mcp, name, _run)
+
+        facade.__name__ = facade.__qualname__ = name
+        facade.__doc__ = doc
+        facade.__signature__ = _signature_for_input_model(model)
+        facade.__annotations__ = {"return": dict[str, Any]}
+        mcp.tool(name=name, title=title, annotations=annotations)(facade)
+
     async def horosa_agent_guidance(**kwargs: Any) -> dict[str, Any]:
         def _run() -> dict[str, Any]:
             payload = _normalize_mcp_request(_merge_mcp_arguments(kwargs), AgentGuidanceInput)
@@ -254,161 +272,114 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
         meta=_tool_meta("horosa_agent_guidance"),
     )(horosa_agent_guidance)
 
-    async def horosa_memory_record_answer(**kwargs: Any) -> dict[str, Any]:
-        def _run() -> dict[str, Any]:
-            return service.record_ai_answer(
-                _normalize_mcp_request(_merge_mcp_arguments(kwargs), MemoryAnswerInput)
-            )
-
-        return await _guarded_facade(mcp, "horosa_memory_record_answer", _run)
-    horosa_memory_record_answer.__doc__ = (
-        "Attach your final AI answer to a stored run (by run_id) without rendering a report. "
-        "Use this only when you are NOT calling horosa_report_render — that one already writes "
-        "the ai_report back to memory itself."
-    )
-    horosa_memory_record_answer.__signature__ = _signature_for_input_model(MemoryAnswerInput)
-    horosa_memory_record_answer.__annotations__ = {"return": dict[str, Any]}
-    mcp.tool(
+    _register_service_facade(
         name="horosa_memory_record_answer",
+        method="record_ai_answer",
+        model=MemoryAnswerInput,
         title="回写 AI 结论 / record answer",
         annotations=_ANN_RENDER,
-    )(horosa_memory_record_answer)
-
-    async def horosa_memory_query(**kwargs: Any) -> dict[str, Any]:
-        def _run() -> dict[str, Any]:
-            return service.query_memory(
-                _normalize_mcp_request(_merge_mcp_arguments(kwargs), MemoryQueryInput)
-            )
-
-        return await _guarded_facade(mcp, "horosa_memory_query", _run)
-    horosa_memory_query.__doc__ = (
-        "Search past Horosa runs stored locally (every tool call is recorded). Filters combine with AND:\n"
-        "  text — full-text over question / answer / snapshot (SQLite FTS5 trigram: Chinese substrings "
-        "match, no word segmentation needed)\n"
-        "  entity — the subject a run is about, i.e. a person's name (e.g. \"张三\")\n"
-        "  tool — technique tool name (e.g. \"qimen\", \"bazi_birth\")\n"
-        "  artifact_kind — stored artifact type: report_json / report_docx / report_pdf / snapshot\n"
-        "  after / before — ISO dates bounding when the run happened; limit + offset paginate\n"
-        "Examples: {\"entity\": \"张三\", \"tool\": \"bazi_birth\", \"limit\": 5} · "
-        "{\"text\": \"事业\", \"after\": \"2026-01-01\"}\n"
-        "Returns run summaries with run_id — pass that to horosa_memory_show or horosa_report_render."
+        doc=(
+            "Attach your final AI answer to a stored run (by run_id) without rendering a report. "
+            "Use this only when you are NOT calling horosa_report_render — that one already writes "
+            "the ai_report back to memory itself."
+        ),
     )
-    horosa_memory_query.__signature__ = _signature_for_input_model(MemoryQueryInput)
-    horosa_memory_query.__annotations__ = {"return": dict[str, Any]}
-    mcp.tool(
+
+    _register_service_facade(
         name="horosa_memory_query",
+        method="query_memory",
+        model=MemoryQueryInput,
         title="检索历史记录 / search runs",
         annotations=_ANN_QUERY,
-    )(horosa_memory_query)
-
-    async def horosa_memory_show(**kwargs: Any) -> dict[str, Any]:
-        def _run() -> dict[str, Any]:
-            return service.show_memory(
-                _normalize_mcp_request(_merge_mcp_arguments(kwargs), MemoryShowInput)
-            )
-
-        return await _guarded_facade(mcp, "horosa_memory_show", _run)
-    horosa_memory_show.__doc__ = (
-        "Fetch one stored run in full by run_id: the normalized input, the export snapshot, any AI "
-        "answer written back, and the paths of generated artifacts (JSON/DOCX/PDF). Use it to resume "
-        "a past reading without re-casting the chart."
+        doc=(
+            "Search past Horosa runs stored locally (every tool call is recorded). Filters combine with AND:\n"
+            "  text — full-text over question / answer / snapshot (SQLite FTS5 trigram: Chinese substrings "
+            "match, no word segmentation needed)\n"
+            "  entity — the subject a run is about, i.e. a person's name (e.g. \"张三\")\n"
+            "  tool — technique tool name (e.g. \"qimen\", \"bazi_birth\")\n"
+            "  artifact_kind — stored artifact type: report_json / report_docx / report_pdf / snapshot\n"
+            "  after / before — ISO dates bounding when the run happened; limit + offset paginate\n"
+            "Examples: {\"entity\": \"张三\", \"tool\": \"bazi_birth\", \"limit\": 5} · "
+            "{\"text\": \"事业\", \"after\": \"2026-01-01\"}\n"
+            "Returns run summaries with run_id — pass that to horosa_memory_show or horosa_report_render."
+        ),
     )
-    horosa_memory_show.__signature__ = _signature_for_input_model(MemoryShowInput)
-    horosa_memory_show.__annotations__ = {"return": dict[str, Any]}
-    mcp.tool(
+
+    _register_service_facade(
         name="horosa_memory_show",
+        method="show_memory",
+        model=MemoryShowInput,
         title="查看单次记录 / show run",
         annotations=_ANN_QUERY,
-    )(horosa_memory_show)
-
-    async def horosa_report_template(**kwargs: Any) -> dict[str, Any]:
-        def _run() -> dict[str, Any]:
-            return service.report_template(
-                _normalize_mcp_request(_merge_mcp_arguments(kwargs), ReportTemplateInput)
-            )
-
-        return await _guarded_facade(mcp, "horosa_report_template", _run)
-    horosa_report_template.__doc__ = (
-        "Return the empty ai_report skeleton for a stored run (run_id + tool_name): which analysis "
-        "fields to fill (direct_answer / executive_summary / analysis_sections / evidence / "
-        "recommendations / limitations) and which export sections are available as evidence. "
-        "Fill it from the run's export snapshot, then pass it to horosa_report_render."
+        doc=(
+            "Fetch one stored run in full by run_id: the normalized input, the export snapshot, any AI "
+            "answer written back, and the paths of generated artifacts (JSON/DOCX/PDF). Use it to resume "
+            "a past reading without re-casting the chart."
+        ),
     )
-    horosa_report_template.__signature__ = _signature_for_input_model(ReportTemplateInput)
-    horosa_report_template.__annotations__ = {"return": dict[str, Any]}
-    mcp.tool(
+
+    _register_service_facade(
         name="horosa_report_template",
+        method="report_template",
+        model=ReportTemplateInput,
         title="报告骨架 / report template",
         annotations=_ANN_QUERY,
-    )(horosa_report_template)
-
-    async def horosa_report_render(**kwargs: Any) -> dict[str, Any]:
-        def _run() -> dict[str, Any]:
-            return service.report_render(
-                _normalize_mcp_request(_merge_mcp_arguments(kwargs), ReportRenderInput)
-            )
-
-        return await _guarded_facade(mcp, "horosa_report_render", _run)
-    horosa_report_render.__doc__ = (
-        "Render a stored run into a DOCX/PDF/JSON report. Preferred when you already have a run_id "
-        "(from a prior tool call): pass run_id + format + your ai_report; the ai_report is auto "
-        "written back to memory (no separate memory_record_answer call needed)."
+        doc=(
+            "Return the empty ai_report skeleton for a stored run (run_id + tool_name): which analysis "
+            "fields to fill (direct_answer / executive_summary / analysis_sections / evidence / "
+            "recommendations / limitations) and which export sections are available as evidence. "
+            "Fill it from the run's export snapshot, then pass it to horosa_report_render."
+        ),
     )
-    horosa_report_render.__signature__ = _signature_for_input_model(ReportRenderInput)
-    horosa_report_render.__annotations__ = {"return": dict[str, Any]}
-    mcp.tool(
+
+    _register_service_facade(
         name="horosa_report_render",
+        method="report_render",
+        model=ReportRenderInput,
         title="渲染报告 / render report",
         annotations=_ANN_REPORT_WRITE,
-    )(horosa_report_render)
-
-    async def horosa_hecan(**kwargs: Any) -> dict[str, Any]:
-        def _run() -> dict[str, Any]:
-            return service.hecan(_normalize_mcp_request(_merge_mcp_arguments(kwargs), HecanInput))
-
-        return await _guarded_facade(mcp, "horosa_hecan", _run)
-    horosa_hecan.__doc__ = (
-        "合参 / cross-technique synthesis: run SEVERAL techniques on one question (router-selected or "
-        "explicit `tools`, capped by max_tools) under one group, then return a synthesis TEMPLATE — "
-        "per-technique evidence tables, cross-technique setting-consistency verdicts, and ai_fillable "
-        "slots (per-technique conclusion / convergence / divergence / final answer). Fill it from the "
-        "real exported sections; divergence must be disclosed, never averaged. This returns a template, "
-        "not a finished reading."
+        doc=(
+            "Render a stored run into a DOCX/PDF/JSON report. Preferred when you already have a run_id "
+            "(from a prior tool call): pass run_id + format + your ai_report; the ai_report is auto "
+            "written back to memory (no separate memory_record_answer call needed)."
+        ),
     )
-    horosa_hecan.__signature__ = _signature_for_input_model(HecanInput)
-    horosa_hecan.__annotations__ = {"return": dict[str, Any]}
-    mcp.tool(
+
+    _register_service_facade(
         name="horosa_hecan",
+        method="hecan",
+        model=HecanInput,
         title="合参 / cross-technique synthesis",
         annotations=_ANN_CALC,
-    )(horosa_hecan)
-
-    async def horosa_technique_report(**kwargs: Any) -> dict[str, Any]:
-        def _run() -> dict[str, Any]:
-            return service.technique_report(
-                _normalize_mcp_request(_merge_mcp_arguments(kwargs), TechniqueReportInput)
-            )
-
-        return await _guarded_facade(mcp, "horosa_technique_report", _run)
-    horosa_technique_report.__doc__ = (
-        "Render the DETERMINISTIC method/provenance report for stored runs: which techniques ran, "
-        "which result-sensitive settings were in force (晚子时 switches, 贵人法, ayanamsa, …), which "
-        "engine actually computed each one, section coverage, and the version chain. Pass run_id for "
-        "one call or group_id to cover a whole session (it then also flags cross-technique setting "
-        "conflicts). format = markdown | json | docx | pdf.\n\n"
-        "This is NOT the consulting report: it needs no ai_report and never contains an interpretation. "
-        "Use horosa_report_render for the AI-authored reading."
+        doc=(
+            "合参 / cross-technique synthesis: run SEVERAL techniques on one question (router-selected or "
+            "explicit `tools`, capped by max_tools) under one group, then return a synthesis TEMPLATE — "
+            "per-technique evidence tables, cross-technique setting-consistency verdicts, and ai_fillable "
+            "slots (per-technique conclusion / convergence / divergence / final answer). Fill it from the "
+            "real exported sections; divergence must be disclosed, never averaged. This returns a template, "
+            "not a finished reading."
+        ),
     )
-    horosa_technique_report.__signature__ = _signature_for_input_model(TechniqueReportInput)
-    horosa_technique_report.__annotations__ = {"return": dict[str, Any]}
-    mcp.tool(
+
+    _register_service_facade(
         name="horosa_technique_report",
+        method="technique_report",
+        model=TechniqueReportInput,
         title="技法依据报告 / technique provenance report",
         # 🔴 readOnlyHint=False：`format = docx | pdf` 时它**往磁盘写文件**。标 readOnly 的后果不是
         # 目录审核不过，而是自动放行只读工具的客户端（Claude Code 白名单、Cline auto-approve、
         # VS Code）会在不问用户的情况下落盘。idempotent 仍为真（同参数同产物），openWorld 恒 False。
         annotations=_ANN_REPORT_WRITE,
-    )(horosa_technique_report)
+        doc=(
+            "Render the DETERMINISTIC method/provenance report for stored runs: which techniques ran, "
+            "which result-sensitive settings were in force (晚子时 switches, 贵人法, ayanamsa, …), which "
+            "engine actually computed each one, section coverage, and the version chain. Pass run_id for "
+            "one call or group_id to cover a whole session (it then also flags cross-technique setting "
+            "conflicts). format = markdown | json | docx | pdf.\n\n"
+            "This is NOT the consulting report: it needs no ai_report and never contains an interpretation. "
+            "Use horosa_report_render for the AI-authored reading."
+        ),
+    )
 
     # horosa_report_from_run 已下线：与 horosa_report_render 逐行同义（同一 ReportRenderInput
     # → service.report_render），两个同义工具挤占 tools/list 并造成「该用哪个」歧义。
