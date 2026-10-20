@@ -25,6 +25,8 @@ from horosa_skill.config import Settings
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.service import HorosaSkillService
 from horosa_skill.surfaces import mcp_server as M
+from horosa_skill.surfaces import mcp_errors
+from horosa_skill.surfaces import mcp_runner
 
 
 def _make(tmp_path, **kw):
@@ -167,8 +169,8 @@ def test_event_loop_stays_responsive_during_a_tool_call(tmp_path) -> None:
 
 def test_concurrency_is_capped(tmp_path, monkeypatch) -> None:
     """并发有上限：每个在跑的工具持一个 JS 子进程或一条后端连接，不设限会打满本机。"""
-    monkeypatch.setattr(M, "_MAX_CONCURRENT_TOOLS", 2)
-    monkeypatch.setattr(M, "_TOOL_LIMITER", None)
+    monkeypatch.setattr(mcp_runner, "_MAX_CONCURRENT_TOOLS", 2)
+    monkeypatch.setattr(mcp_runner, "_TOOL_LIMITER", None)
     live = 0
     peak = 0
 
@@ -190,7 +192,7 @@ def test_concurrency_is_capped(tmp_path, monkeypatch) -> None:
                 tg.start_soon(mcp.call_tool, "horosa_cn_qimen", dict(_QIMEN))
 
     anyio.run(_many)
-    monkeypatch.setattr(M, "_TOOL_LIMITER", None)
+    monkeypatch.setattr(mcp_runner, "_TOOL_LIMITER", None)
     assert peak <= 2, f"同时在跑 {peak} 个，超过上限 2"
 
 
@@ -368,7 +370,7 @@ def test_elicitation_times_out_and_falls_back_to_the_structured_gate(monkeypatch
         async def elicit(self, **_kw):
             await anyio.sleep(30)
 
-    gate = M._agent_preflight_error("liureng_gods", {"date": "2026-05-18"})
+    gate = mcp_errors._agent_preflight_error("liureng_gods", {"date": "2026-05-18"})
     assert gate is not None
 
     async def _run():

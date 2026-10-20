@@ -15,7 +15,7 @@
       "service/enrich.py": 1,
       "service/runners/zeri.py": 2,
       "surfaces/doctor.py": 1,
-      "surfaces/mcp_server.py": 1,
+      "surfaces/mcp_runner.py": 1,
       "surfaces/setup_flow.py": 1,
       "tracing.py": 2
     }

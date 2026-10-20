@@ -11,14 +11,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from horosa_skill.surfaces.mcp_server import (
-    _ELICIT_CANCEL,
-    _ELICIT_DEFAULTS,
-    _ELICIT_PROVIDE,
-    _apply_gate_decision,
-    _gate_elicitation_schema,
-    _maybe_elicit_gate,
-)
+from horosa_skill.surfaces.mcp_elicitation import _ELICIT_CANCEL, _ELICIT_DEFAULTS, _ELICIT_PROVIDE, _apply_gate_decision, _gate_elicitation_schema
+from horosa_skill.surfaces.mcp_server import _maybe_elicit_gate
 
 
 class _Session:

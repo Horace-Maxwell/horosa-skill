@@ -278,7 +278,7 @@ zhengchuan 的动态 JSON import 属性，都是这么被抹掉又被测试抓�
 恰好解析到后者 → 静默 `undefined`。一律 `import_redirect` 钉死。
 ⚠️ 「已 vendored」≠「是当前的」——查依赖要查新模块 import 的**具体符号**，不是查文件在不在。
 
-**MCP 服务器面法则**（`surfaces/mcp_server.py`）：全部工具带 **tool annotations**（口径：openWorldHint
+**MCP 服务器面法则**（`surfaces/mcp_server.py` 注册工具；注解 / 工具集在 `mcp_surface.py`、入参归一在 `mcp_requests.py`、错误信封在 `mcp_errors.py`、并发与兜底在 `mcp_runner.py`、elicitation 在 `mcp_elicitation.py`）：全部工具带 **tool annotations**（口径：openWorldHint
 一律 False（local-first）；查询类 readOnly+idempotent=True；技法计算类 readOnly=False、destructive=False、
 idempotent=False——默认写一条本地 run 记录，必须如实标注，目录审核会核）；澄清闸走 **elicitation 双轨**
 （客户端声明能力→原生表单，「按星阙默认」一跳闭环、「补充设置」只回带备注**绝不代答术数参数**；

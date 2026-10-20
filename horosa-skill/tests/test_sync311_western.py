@@ -757,7 +757,7 @@ def test_germany_uranian_keys_are_declared_validated_and_forwarded(tmp_path: Pat
     （school/orb/personalOrb/strictFactors/frames/declination/davison；后端 webgermanysrv.midpoint 读）。声明后 MCP 扁平面
     顶层照收、流派写错报错。负向对照：旧 GermanyInput 未声明 → 扁平面签名无这些键、school 写错静默当 classic。"""
     from horosa_skill.schemas.tools import GermanyInput
-    from horosa_skill.surfaces.mcp_server import _signature_for_input_model
+    from horosa_skill.surfaces.mcp_requests import _signature_for_input_model
 
     keys = {"school", "orb", "personalOrb", "strictFactors", "frames", "declination", "davison"}
     assert keys <= set(_signature_for_input_model(GermanyInput).parameters)

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from horosa_skill.errors import RECOVERY_KINDS, RECOVERY_TABLE, ToolValidationError, bilingual, classify_code, recovery_for
 from horosa_skill.service import _with_operational_recovery
-from horosa_skill.surfaces.mcp_server import _mcp_error_envelope, _mcp_error_payload
+from horosa_skill.surfaces.mcp_errors import _mcp_error_envelope, _mcp_error_payload
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "horosa_skill"
 

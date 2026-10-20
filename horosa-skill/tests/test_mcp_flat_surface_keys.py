@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.input_normalization import normalize_request_payload
-from horosa_skill.surfaces.mcp_server import _signature_for_input_model
+from horosa_skill.surfaces.mcp_requests import _signature_for_input_model
 from horosa_skill.testing_payloads import build_sample_payloads
 
 

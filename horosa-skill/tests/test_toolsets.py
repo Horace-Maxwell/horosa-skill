@@ -12,7 +12,8 @@ from horosa_skill.config import Settings
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.service import HorosaSkillService
-from horosa_skill.surfaces.mcp_server import _resolve_toolsets, _server_profile, create_mcp_server
+from horosa_skill.surfaces.mcp_server import create_mcp_server
+from horosa_skill.surfaces.mcp_surface import _resolve_toolsets, _server_profile
 
 
 def _names(tmp_path, monkeypatch, toolsets: str) -> set[str]:

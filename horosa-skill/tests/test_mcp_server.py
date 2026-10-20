@@ -4,12 +4,9 @@ import pytest
 
 from horosa_skill.errors import ToolValidationError
 from horosa_skill.schemas.tools import AgentGuidanceInput, BirthInput, DispatchInput, KnowledgeReadInput, KnowledgeRegistryInput, MemoryQueryInput, ReportRenderInput
-from horosa_skill.surfaces.mcp_server import (
-    COMPACT_SURFACE_TOOL_COUNT,
-    _agent_preflight_error,
-    _merge_mcp_arguments,
-    _normalize_mcp_request,
-)
+from horosa_skill.surfaces.mcp_errors import _agent_preflight_error
+from horosa_skill.surfaces.mcp_requests import _merge_mcp_arguments, _normalize_mcp_request
+from horosa_skill.surfaces.mcp_server import COMPACT_SURFACE_TOOL_COUNT
 
 
 def test_normalize_mcp_request_accepts_json_string_for_empty_request() -> None:
@@ -200,7 +197,7 @@ def test_mcp_compact_mode_exposes_facade_plus_tool_run(tmp_path) -> None:
 
 
 def test_mcp_compact_tool_run_executes_and_keeps_gate(tmp_path) -> None:
-    from horosa_skill.surfaces.mcp_server import _agent_preflight_error
+    from horosa_skill.surfaces.mcp_errors import _agent_preflight_error
 
     settings, service = _make_service(tmp_path)
     # 直呼本地无网工具：export_registry。

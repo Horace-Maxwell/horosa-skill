@@ -19,11 +19,7 @@ from horosa_skill.config import Settings
 from horosa_skill.surfaces import cli
 from horosa_skill.client_config import audit as client_audit
 from horosa_skill.client_config import locations as client_locations
-from horosa_skill.surfaces.mcp_server import (
-    StaticTokenVerifier,
-    build_auth_settings,
-    build_transport_security,
-)
+from horosa_skill.surfaces.mcp_auth import StaticTokenVerifier, build_auth_settings, build_transport_security
 
 
 # ---------------------------------------------------------------- typer 默认值陷阱
