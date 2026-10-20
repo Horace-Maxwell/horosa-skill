@@ -94,9 +94,16 @@ class HorosaJsEngineClient:
                     },
                 },
             ) from exc
+        # 形状闸必须先于 .get("ok")：stdout 是 JSON 数组/标量时旧序会抛 AttributeError，破坏「失败一律 ToolTransportError」契约。
+        if not isinstance(parsed, dict):
+            raise ToolTransportError(
+                "horosa-core-js returned an invalid result shape.",
+                code="js_engine.invalid_shape",
+                details={"tool": tool_name},
+            )
 
         if completed.returncode != 0 or parsed.get("ok") is not True:
-            error_obj = parsed.get("error") if isinstance(parsed, dict) else None
+            error_obj = parsed.get("error")
             raise ToolTransportError(
                 "本地 JS 引擎执行失败。",
                 code="js_engine.execution_failed",
@@ -112,12 +119,6 @@ class HorosaJsEngineClient:
                 },
             )
 
-        if not isinstance(parsed, dict):
-            raise ToolTransportError(
-                "horosa-core-js returned an invalid result shape.",
-                code="js_engine.invalid_shape",
-                details={"tool": tool_name},
-            )
         parsed.pop("ok", None)
         return parsed
 
