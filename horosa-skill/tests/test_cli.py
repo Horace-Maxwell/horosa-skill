@@ -11,6 +11,7 @@ import typer
 
 from horosa_skill.config import Settings
 from horosa_skill.surfaces import cli
+from horosa_skill.surfaces import openclaw_smoke
 from horosa_skill.client_config import openclaw as client_openclaw
 from horosa_skill.client_config import payload as client_payload
 
@@ -277,7 +278,7 @@ def test_openclaw_setup_bootstraps_workspace_and_runs_smoke(monkeypatch, tmp_pat
 
     monkeypatch.setattr(client_openclaw, "resolve_uv_command", lambda: ["/usr/local/bin/uv"])
     monkeypatch.setattr(cli, "_runtime_manager", lambda settings_arg: ManagerStub())
-    monkeypatch.setattr(cli, "_run_openclaw_smoke_check", fake_smoke_check)
+    monkeypatch.setattr(openclaw_smoke, "_run_openclaw_smoke_check", fake_smoke_check)
     monkeypatch.setattr(cli, "_print_json", lambda data: captured.setdefault("report", data))
 
     original_home = os.environ.get("HOME")
@@ -462,7 +463,7 @@ def test_openclaw_check_wraps_runtime_error_for_users(monkeypatch, tmp_path: Pat
 
     monkeypatch.setattr(cli.Settings, "from_env", classmethod(lambda cls: settings))
     monkeypatch.setattr(
-        cli,
+        openclaw_smoke,
         "_run_openclaw_smoke_check",
         lambda **kwargs: (_ for _ in ()).throw(
             cli.RuntimeError(
@@ -494,7 +495,7 @@ def test_run_subprocess_json_accepts_diagnostic_prefix(monkeypatch, tmp_path: Pa
 
     monkeypatch.setattr(cli.subprocess, "run", fake_run)
 
-    payload = cli._run_subprocess_json(["mcporter", "list"], cwd=tmp_path)
+    payload = openclaw_smoke._run_subprocess_json(["mcporter", "list"], cwd=tmp_path)
 
     assert payload == {"status": "ok", "tools": []}
 
@@ -529,10 +530,10 @@ def test_openclaw_smoke_falls_back_to_headless_tool_when_chart_fails(monkeypatch
             return {"ok": True}
         raise AssertionError(command)
 
-    monkeypatch.setattr(cli, "resolve_mcporter_command", lambda: ["mcporter"])
-    monkeypatch.setattr(cli, "_run_subprocess_json", fake_run_subprocess_json)
+    monkeypatch.setattr(openclaw_smoke, "resolve_mcporter_command", lambda: ["mcporter"])
+    monkeypatch.setattr(openclaw_smoke, "_run_subprocess_json", fake_run_subprocess_json)
 
-    report = cli._run_openclaw_smoke_check(
+    report = openclaw_smoke._run_openclaw_smoke_check(
         workspace_root=workspace,
         config_path=config_path,
         output_path=output_path,
@@ -590,8 +591,8 @@ def test_openclaw_check_uses_extended_timeout_for_tool_calls(monkeypatch, tmp_pa
         raise AssertionError(command)
 
     monkeypatch.setattr(cli.Settings, "from_env", classmethod(lambda cls: settings))
-    monkeypatch.setattr(cli, "resolve_mcporter_command", lambda: ["mcporter"])
-    monkeypatch.setattr(cli, "_run_subprocess_json", fake_run_subprocess_json)
+    monkeypatch.setattr(openclaw_smoke, "resolve_mcporter_command", lambda: ["mcporter"])
+    monkeypatch.setattr(openclaw_smoke, "_run_subprocess_json", fake_run_subprocess_json)
 
     cli.client_openclaw_check(workspace=workspace, config=config_path, full=False, output=tmp_path / "report.json")
 
@@ -610,7 +611,7 @@ def test_run_subprocess_json_times_out_cleanly(monkeypatch, tmp_path: Path) -> N
     monkeypatch.setattr(cli.subprocess, "run", fake_run)
 
     with pytest.raises(cli.RuntimeError) as exc_info:
-        cli._run_subprocess_json(["mcporter", "list"], cwd=tmp_path, timeout_seconds=1)
+        openclaw_smoke._run_subprocess_json(["mcporter", "list"], cwd=tmp_path, timeout_seconds=1)
 
     assert exc_info.value.code == "client.command_timeout"
     assert exc_info.value.details["timeout_seconds"] == 1
@@ -624,7 +625,7 @@ def test_friendly_payload_for_platform_unsupported_carries_the_dead_end_advice(t
 
     advice = _platform_dead_end_advice("linux-x64")
     exc = cli.RuntimeError("no payload for linux-x64", code="runtime.platform_unsupported", details=advice)
-    payload = cli._friendly_runtime_error_payload(
+    payload = openclaw_smoke._friendly_runtime_error_payload(
         exc, action_label="OpenClaw setup", workspace_root=tmp_path / "ws", config_path=None
     )
     assert payload["code"] == "runtime.platform_unsupported"
@@ -633,7 +634,7 @@ def test_friendly_payload_for_platform_unsupported_carries_the_dead_end_advice(t
     assert payload["retry_command"]
 
     bare = cli.RuntimeError("no payload", code="runtime.platform_unsupported", details=None)
-    fallback = cli._friendly_runtime_error_payload(bare, action_label="OpenClaw check", workspace_root=None, config_path=None)
+    fallback = openclaw_smoke._friendly_runtime_error_payload(bare, action_label="OpenClaw check", workspace_root=None, config_path=None)
     assert "HOROSA_SERVER_ROOT" in fallback["next_action"]
 
 
@@ -686,16 +687,16 @@ def test_openclaw_smoke_fetches_npx_mcporter_before_the_first_timed_call(monkeyp
         return {"ok": True}
 
     npx = str(tmp_path / "bin" / ("npx.cmd" if os.name == "nt" else "npx"))
-    monkeypatch.setattr(cli, "resolve_mcporter_command", lambda: [npx, "mcporter"])
+    monkeypatch.setattr(openclaw_smoke, "resolve_mcporter_command", lambda: [npx, "mcporter"])
     monkeypatch.setattr(cli.subprocess, "run", fake_run)
-    monkeypatch.setattr(cli, "_run_subprocess_json", fake_run_subprocess_json)
+    monkeypatch.setattr(openclaw_smoke, "_run_subprocess_json", fake_run_subprocess_json)
 
-    report = cli._run_openclaw_smoke_check(
+    report = openclaw_smoke._run_openclaw_smoke_check(
         workspace_root=workspace, config_path=config_path, output_path=tmp_path / "smoke.json", include_list=False
     )
 
-    assert events[0] == ("warmup", [npx, "mcporter", "--version"], cli.NPX_MCPORTER_WARMUP_TIMEOUT_SECONDS)
-    assert cli.NPX_MCPORTER_WARMUP_TIMEOUT_SECONDS > 150
+    assert events[0] == ("warmup", [npx, "mcporter", "--version"], openclaw_smoke.NPX_MCPORTER_WARMUP_TIMEOUT_SECONDS)
+    assert openclaw_smoke.NPX_MCPORTER_WARMUP_TIMEOUT_SECONDS > 150
     assert [kind for kind, _command, _timeout in events].count("warmup") == 1
     assert all(kind == "json" for kind, _command, _timeout in events[1:])
     assert events[1][1][:3] == [npx, "mcporter", "call"]
@@ -711,21 +712,21 @@ def test_openclaw_smoke_skips_the_warmup_for_an_installed_mcporter(monkeypatch, 
     def forbidden_run(*args, **kwargs):
         raise AssertionError("an installed mcporter needs no npx warm-up")
 
-    monkeypatch.setattr(cli, "resolve_mcporter_command", lambda: [str(tmp_path / "mcporter")])
+    monkeypatch.setattr(openclaw_smoke, "resolve_mcporter_command", lambda: [str(tmp_path / "mcporter")])
     monkeypatch.setattr(cli.subprocess, "run", forbidden_run)
     monkeypatch.setattr(
-        cli,
+        openclaw_smoke,
         "_run_subprocess_json",
         lambda command, *, cwd, timeout_seconds=180.0: (
             {"ok": True, "memory_ref": {"run_id": "r", "artifact_path": "a"}} if any("chart" in c for c in command) else {"ok": True}
         ),
     )
-    report = cli._run_openclaw_smoke_check(
+    report = openclaw_smoke._run_openclaw_smoke_check(
         workspace_root=workspace, config_path=config_path, output_path=tmp_path / "smoke.json", include_list=False
     )
     assert report["npx_warmup_seconds"] is None
-    assert cli._is_npx_mcporter(["npx", "mcporter"]) and cli._is_npx_mcporter(["C:\\node\\npx.cmd", "mcporter"])
-    assert not cli._is_npx_mcporter(["mcporter"]) and not cli._is_npx_mcporter(["npx", "other-package"])
+    assert openclaw_smoke._is_npx_mcporter(["npx", "mcporter"]) and openclaw_smoke._is_npx_mcporter(["C:\\node\\npx.cmd", "mcporter"])
+    assert not openclaw_smoke._is_npx_mcporter(["mcporter"]) and not openclaw_smoke._is_npx_mcporter(["npx", "other-package"])
 
 
 def test_npx_warmup_timeout_names_the_install_phase(monkeypatch, tmp_path: Path) -> None:
@@ -734,11 +735,11 @@ def test_npx_warmup_timeout_names_the_install_phase(monkeypatch, tmp_path: Path)
 
     monkeypatch.setattr(cli.subprocess, "run", slow_run)
     with pytest.raises(cli.RuntimeError) as exc_info:
-        cli._warm_npx_mcporter(["npx", "mcporter"], cwd=tmp_path)
+        openclaw_smoke._warm_npx_mcporter(["npx", "mcporter"], cwd=tmp_path)
     assert exc_info.value.code == "client.command_timeout"
     assert exc_info.value.details["phase"] == "npx_install"
     assert "will be installed" in exc_info.value.details["stderr"]
-    payload = cli._friendly_runtime_error_payload(exc_info.value, action_label="OpenClaw setup", workspace_root=tmp_path)
+    payload = openclaw_smoke._friendly_runtime_error_payload(exc_info.value, action_label="OpenClaw setup", workspace_root=tmp_path)
     assert "npx" in payload["user_summary"] and "npm i -g mcporter" in payload["next_action"]
 
 
@@ -752,11 +753,11 @@ def test_run_subprocess_json_timeout_reports_a_complete_result_that_did_not_exit
 
     monkeypatch.setattr(cli.subprocess, "run", hung_after_output)
     with pytest.raises(cli.RuntimeError) as exc_info:
-        cli._run_subprocess_json(["mcporter", "call", "horosa.horosa_knowledge_registry"], cwd=tmp_path, timeout_seconds=1)
+        openclaw_smoke._run_subprocess_json(["mcporter", "call", "horosa.horosa_knowledge_registry"], cwd=tmp_path, timeout_seconds=1)
     details = exc_info.value.details
     assert details["output_complete"] is True
     assert details["stdout"] == complete.decode("utf-8")
-    payload = cli._friendly_runtime_error_payload(exc_info.value, action_label="OpenClaw setup", workspace_root=tmp_path)
+    payload = openclaw_smoke._friendly_runtime_error_payload(exc_info.value, action_label="OpenClaw setup", workspace_root=tmp_path)
     assert "complete result" in payload["user_summary"]
     assert "MCPORTER_DEBUG_HANG=1" in payload["next_action"]
 
@@ -765,6 +766,6 @@ def test_run_subprocess_json_timeout_reports_a_complete_result_that_did_not_exit
 
     monkeypatch.setattr(cli.subprocess, "run", never_finished)
     with pytest.raises(cli.RuntimeError) as partial:
-        cli._run_subprocess_json(["mcporter", "call", "x"], cwd=tmp_path, timeout_seconds=1)
+        openclaw_smoke._run_subprocess_json(["mcporter", "call", "x"], cwd=tmp_path, timeout_seconds=1)
     assert partial.value.details["output_complete"] is False
-    assert "did not return in time" in cli._friendly_runtime_error_payload(partial.value, action_label="OpenClaw setup")["user_summary"]
+    assert "did not return in time" in openclaw_smoke._friendly_runtime_error_payload(partial.value, action_label="OpenClaw setup")["user_summary"]

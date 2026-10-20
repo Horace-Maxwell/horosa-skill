@@ -9,6 +9,7 @@ import pytest
 from horosa_skill.config import Settings
 from horosa_skill.runtime import ports
 from horosa_skill.surfaces import cli
+from horosa_skill.surfaces import doctor as doctor_checks
 
 
 def _settings(tmp_path: Path) -> Settings:
@@ -20,7 +21,7 @@ def test_wildcard_binding_becomes_a_warning_with_a_fix() -> None:
         "java_backend": {"port": 9999, "bindings": [{"local_address": "0.0.0.0", "pid": 1}], "loopback_only": False},
         "python_chart": {"port": 8899, "bindings": [{"local_address": "127.0.0.1", "pid": 2}], "loopback_only": True},
     }
-    warnings = cli._listener_scope_warnings(scope)
+    warnings = doctor_checks._listener_scope_warnings(scope)
     assert [w["code"] for w in warnings] == ["listener:not_loopback_only"]
     assert "java_backend" in warnings[0]["detail"] and "0.0.0.0" in warnings[0]["detail"]
     assert "runtime restart" in warnings[0]["fix"]
@@ -28,8 +29,8 @@ def test_wildcard_binding_becomes_a_warning_with_a_fix() -> None:
 
 def test_loopback_and_unknown_scopes_raise_no_warning() -> None:
     """Negative controls: loopback-only is clean; 'could not tell' (None) is not a warning either."""
-    assert cli._listener_scope_warnings({"java_backend": {"port": 9999, "bindings": [{"local_address": "127.0.0.1", "pid": 1}], "loopback_only": True}}) == []
-    assert cli._listener_scope_warnings({"java_backend": {"port": 9999, "bindings": [], "loopback_only": None}}) == []
+    assert doctor_checks._listener_scope_warnings({"java_backend": {"port": 9999, "bindings": [{"local_address": "127.0.0.1", "pid": 1}], "loopback_only": True}}) == []
+    assert doctor_checks._listener_scope_warnings({"java_backend": {"port": 9999, "bindings": [], "loopback_only": None}}) == []
 
 
 def test_doctor_reports_listener_scope_and_warns(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

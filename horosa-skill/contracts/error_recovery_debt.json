@@ -27,7 +27,7 @@
     "service/runners/shenshu.py": 3,
     "service/runners/western.py": 5,
     "service/runners/zeri.py": 7,
-    "surfaces/cli.py": 2
+    "surfaces/openclaw_smoke.py": 2
   },
   "codes_seen": 187
 }

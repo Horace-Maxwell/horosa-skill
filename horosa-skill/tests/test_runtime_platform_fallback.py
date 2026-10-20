@@ -310,7 +310,7 @@ def test_platform_key_ignores_the_wow64_variable_off_windows(monkeypatch) -> Non
 
 
 def test_cli_platform_supported_includes_fallback_hosts(monkeypatch) -> None:
-    from horosa_skill.surfaces.cli import _platform_supported
+    from horosa_skill.surfaces.doctor import _platform_supported
 
     monkeypatch.setattr("horosa_skill.runtime.manager._platform_key", lambda: "win32-arm64")
     assert _platform_supported({"installed": False}) is True

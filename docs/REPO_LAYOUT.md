@@ -119,7 +119,9 @@ an instance named explicitly via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROO
 - `knowledge/` — bundled Xingque hover knowledge (`store.py` + `data/`).
 - `reports/` — JSON / DOCX / PDF report builder + renderers.
 - `surfaces/` — `mcp_server.py` (MCP stdio/HTTP, compact surface, toolsets), `mcp_schema.py` (advertised-schema
-  slimming), `cli.py` (JSON CLI: setup / client / doctor / runtime / jev / …).
+  slimming), `cli.py` (JSON CLI: the Typer command tree — setup / client / doctor / runtime / jev / …), `doctor.py`
+  (the doctor / `runtime status` checks, `_DOCTOR_ADVICE`, budgeted report), `openclaw_smoke.py` (the OpenClaw smoke check
+  through mcporter).
 - `client_config/` — the client-config library behind `setup` / `client config|check` (split out of `cli.py` in v0.41.1):
   `locations.py` (where the nine original clients keep their config, compact defaults, restart hints), `merge.py` (write
   our entry into JSON / JSONC / Codex TOML / Goose YAML, touching only our key), `audit.py` (`client check`),

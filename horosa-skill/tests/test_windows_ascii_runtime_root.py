@@ -17,7 +17,7 @@ from horosa_skill.config import Settings
 from horosa_skill.errors import RECOVERY_TABLE, RuntimeInstallError
 from horosa_skill.runtime import manager as manager_module
 from horosa_skill.runtime.manager import HorosaRuntimeManager
-from horosa_skill.surfaces import cli as cli_module
+from horosa_skill.surfaces import doctor as doctor_checks
 
 
 @pytest.mark.parametrize(
@@ -99,7 +99,7 @@ def test_doctor_reports_the_non_ascii_root_as_an_issue_with_advice(tmp_path: Pat
     _as_windows(monkeypatch)
     report = HorosaRuntimeManager(_settings(tmp_path, tmp_path / "张三" / "runtime")).doctor()
     assert "windows:runtime_root_not_ascii" in report["issues"]
-    advice = cli_module._advice_for("windows:runtime_root_not_ascii")
+    advice = doctor_checks._advice_for("windows:runtime_root_not_ascii")
     assert "HOROSA_RUNTIME_ROOT" in advice["next_action"] and "doctor 报了" not in advice["user_summary"]
     clean = HorosaRuntimeManager(_settings(tmp_path, tmp_path / "horosa lane" / "runtime")).doctor()
     assert "windows:runtime_root_not_ascii" not in clean["issues"]

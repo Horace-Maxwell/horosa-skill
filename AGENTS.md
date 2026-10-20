@@ -850,7 +850,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 | live 只红 `test_live_chart_service_reproduces_the_upstream_goldens` 的 ephemeris，diff 只在「留与顺逆转向」表（Direct / Retrograde 对调、时刻差 1 s） | 上游 `calc_stations` 病态求根：方向 = 根处速度的符号（噪声），时刻落在速度噪声窗口里，跨平台 / 跨日网格各落一处（台账 v0.40.0 / 2026-09-30） | 非回归。0.40.0 起产品侧已按逐日速度纠正方向（`engine/ephemeris_stations.py`），live 比对停滞行时刻 ≤ 10 s、方向对 `station_truth`（`_lift_station_rows`）；仍红且报「停滞时刻超出噪声窗口」或星体 / 方向 / 位置不等才是真问题 |
 | 改了端口（`HOROSA_PORTS=auto` / `HOROSA_LOCAL_*_PORT`）后 `runtime stop` 退出 0 却 `ok: false`、状态 `stop_requested`、端口仍在听 | 停脚本按端口命名的 pid 文件找进程，此前拿的是裸 os.environ（找默认端口的文件） | v0.38.0 起 start/stop 共用 `_launcher_env()`；升级后 `runtime stop` 即生效；残留进程按 PID 停（`lsof -nP -iTCP:<port> -sTCP:LISTEN`，永不 `pkill -f`） |
 | `doctor` 报 `quarantine:runtime_binaries` / macOS 首次起 runtime 失败且无日志 | 浏览器下载的归档解出的 python / java / node 带 `com.apple.quarantine`，Gatekeeper 首次执行拦下 | 跑报告 `quarantine.fix` 给的 `xattr -dr com.apple.quarantine <current>`，再 `runtime restart`（只报不改，v0.38.0 B6） |
-| 看不懂 doctor 的码 / agent 把 issue 码原样甩给用户 | 码是给脚本的 | `doctor --explain`（stderr 6–10 行人话，stdout 仍纯 JSON）；报告 `advice[]` 每码一句 `user_summary` + `next_action`（码表 `cli._DOCTOR_ADVICE` 与 `manager.DOCTOR_ISSUE_CODES` 锁步） |
+| 看不懂 doctor 的码 / agent 把 issue 码原样甩给用户 | 码是给脚本的 | `doctor --explain`（stderr 6–10 行人话，stdout 仍纯 JSON）；报告 `advice[]` 每码一句 `user_summary` + `next_action`（码表 `doctor._DOCTOR_ADVICE` 与 `manager.DOCTOR_ISSUE_CODES` 锁步） |
 | Windows 装到 OneDrive / 长用户名下 `runtime.install_long_path` | 最深载荷条目近 200 字符 + 安装临时目录 | `doctor.windows.headroom_chars`（按 `.hi-XXXXXXXX/x/` 前缀估，v0.38.0 起比旧 `.horosa-install-…/extract/` 多约 20 字符）为负即会拒：`HOROSA_RUNTIME_ROOT=C:\horosa` 或 `LongPathsEnabled=1` |
 | 慢网 / 企业代理下 `runtime.install_download_failed` | 每块 1 MiB 之间的读超时 120 s、每镜像 3 次 | `HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS` / `HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS`；`doctor --probe-network` 看哪个镜像通（默认 doctor 零外网请求） |
 | `setup` 在第 1 步 `network_probe` 就失败（5 s 内，`setup.network_unreachable`） | 清单 URL 经所有镜像都取不到（github.com:443 不通 / 代理拦 HEAD） | 失败包 `details.next_action` 给三条路：`HOROSA_RUNTIME_MIRROR=<前缀>`、`--archive <本地归档>`、`--no-probe-network` 跳过预检；`retry_command` 已带后者（v0.38.0 B4） |
@@ -1119,7 +1119,7 @@ A global stability pass hardened these; keep them true when you touch the releva
   `--write` 拒绝合并（v0.33.0 codex `command` 就这么在 mac/Linux 恒绿、windows-smoke 连红两次）。
   守卫：`tests/test_client_config.py`（windows-smoke 上跑 = 唯一能判红的形状）。
 - **doctor 的每个码都要有人话，默认零外网请求（v0.38.0 B6）。** issue 码的真值 = `manager.DOCTOR_ISSUE_CODES`（`missing:*` 前缀族），
-  warning 码 = `cli._DOCTOR_WARNING_CODES`；`cli._DOCTOR_ADVICE` 逐码给 `user_summary` + `next_action`，报告 `advice[]` 与 `--explain`
+  warning 码 = `surfaces/doctor.py::_DOCTOR_WARNING_CODES`；`_DOCTOR_ADVICE`（同模块）逐码给 `user_summary` + `next_action`，报告 `advice[]` 与 `--explain`
   都从它出。`tests/test_doctor_machine_conditions.py` 扫 `doctor()` 源码里新增的 `issues.append("…")` 字面量——不登记必红。
   默认 `doctor` 只打 127.0.0.1（`trust_env=False`），`--probe-network` 才逐镜像 HEAD 清单 URL（负向对照：默认路径上
   `_probe_manifest_url` 被替换成 raise 仍必须绿）。quarantine / 长路径余量 / 仿真进程都只**报**不改：修复命令交给用户。

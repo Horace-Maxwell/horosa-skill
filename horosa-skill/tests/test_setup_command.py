@@ -19,6 +19,7 @@ import pytest
 from typer.testing import CliRunner
 
 from horosa_skill.surfaces import cli as cli_module
+from horosa_skill.surfaces import doctor as doctor_checks
 from horosa_skill.client_config import payload as client_payload
 from horosa_skill.surfaces.cli import _SETUP_STEPS, app
 
@@ -404,9 +405,9 @@ def test_stdio_probe_failure_carries_the_stderr_tail() -> None:
 
 def test_manifest_probe_handles_file_urls_without_network(tmp_path: Path) -> None:
     manifest = tmp_path / "runtime-manifest.json"
-    assert cli_module._probe_manifest_url(manifest.resolve().as_uri())["ok"] is False
+    assert doctor_checks._probe_manifest_url(manifest.resolve().as_uri())["ok"] is False
     manifest.write_text("{}", encoding="utf-8")
-    assert cli_module._probe_manifest_url(manifest.resolve().as_uri())["ok"] is True
+    assert doctor_checks._probe_manifest_url(manifest.resolve().as_uri())["ok"] is True
 
 
 # ---------------------------------------------------------------- v0.38.1 C14 / C15

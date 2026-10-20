@@ -157,7 +157,7 @@ def test_intel_mac_is_told_rosetta_will_not_work() -> None:
 # ---------------------------------------------------------------- D8 doctor
 
 def test_doctor_names_the_port_holder_and_promises_not_to_kill_it() -> None:
-    from horosa_skill.surfaces.cli import _doctor_port_holders, _doctor_summary
+    from horosa_skill.surfaces.doctor import _doctor_port_holders, _doctor_summary
 
     report = {
         "installed": True,
@@ -181,7 +181,7 @@ def test_doctor_names_another_horosa_instance_instead_of_calling_it_unidentifiab
     """v0.39.0 Windows 维护机：星阙桌面端占着默认端口 → 握手答出 horosa-chart / horosa-backend、nonce 不是本工具这份
     → foreign / identity.nonce_mismatch。旧摘要只看 holders（那个分支不收集）→「被一个查不出身份的进程占着」，
     把用户自己的桌面端说成不明进程，next_action 还叫人「关掉上面点名的进程」。"""
-    from horosa_skill.surfaces.cli import _doctor_port_holders, _doctor_summary
+    from horosa_skill.surfaces.doctor import _doctor_port_holders, _doctor_summary
 
     desktop = "C:\\Users\\u\\AppData\\Local\\HorosaDesktop\\embedded-runtime\\x\\rt\\python\\python.exe"
     report = {
@@ -214,7 +214,7 @@ def test_doctor_names_another_horosa_instance_instead_of_calling_it_unidentifiab
 
 def test_doctor_flags_unexpanded_placeholders_before_anything_else() -> None:
     """宿主没替换 user_config 时，症状是「装了却全是 not_installed」—— doctor 必须当面点破。"""
-    from horosa_skill.surfaces.cli import _doctor_summary
+    from horosa_skill.surfaces.doctor import _doctor_summary
 
     summary = _doctor_summary({
         "installed": True, "issues": [], "endpoints": [],
@@ -227,7 +227,7 @@ def test_doctor_flags_unexpanded_placeholders_before_anything_else() -> None:
 
 def test_doctor_ready_next_action_is_client_agnostic() -> None:
     """doctor 是给**任何** MCP 客户端的用户看的，不能把「去开 OpenClaw」当成唯一下一步。"""
-    from horosa_skill.surfaces.cli import _doctor_summary
+    from horosa_skill.surfaces.doctor import _doctor_summary
 
     summary = _doctor_summary({"installed": True, "issues": [], "endpoints": []})
     assert summary["status"] == "ready"

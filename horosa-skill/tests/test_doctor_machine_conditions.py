@@ -22,6 +22,7 @@ from horosa_skill.errors import RuntimeInstallError
 from horosa_skill.runtime import manager as manager_module
 from horosa_skill.runtime.manager import DOCTOR_ISSUE_CODES, HorosaRuntimeManager
 from horosa_skill.surfaces import cli as cli_module
+from horosa_skill.surfaces import doctor as doctor_checks
 from horosa_skill.surfaces.cli import app
 
 from test_runtime_manager import create_runtime_archive
@@ -50,9 +51,9 @@ def _settings(tmp_path: Path) -> Settings:
 
 
 def test_every_doctor_code_has_advice() -> None:
-    for code in (*DOCTOR_ISSUE_CODES, *cli_module._DOCTOR_WARNING_CODES):
+    for code in (*DOCTOR_ISSUE_CODES, *doctor_checks._DOCTOR_WARNING_CODES):
         key = code.replace("*", "x")
-        advice = cli_module._advice_for(key)
+        advice = doctor_checks._advice_for(key)
         assert "doctor 报了" not in advice["user_summary"], f"{code} 没有人话"
         assert advice["next_action"]
 
@@ -71,17 +72,17 @@ def test_issue_codes_in_source_are_all_registered() -> None:
 
 def test_warning_codes_in_source_are_all_registered() -> None:
     source = (
-        inspect.getsource(cli_module._listener_scope_warnings)
-        + inspect.getsource(cli_module._arch_warnings)
-        + inspect.getsource(cli_module._internal_port_env_warnings)
-        + inspect.getsource(cli_module._payload_outdated_warnings)
+        inspect.getsource(doctor_checks._listener_scope_warnings)
+        + inspect.getsource(doctor_checks._arch_warnings)
+        + inspect.getsource(doctor_checks._internal_port_env_warnings)
+        + inspect.getsource(doctor_checks._payload_outdated_warnings)
     )
     literal = set(re.findall(r'"code": "([^"]+)"', source))
-    assert literal == set(cli_module._DOCTOR_WARNING_CODES)
+    assert literal == set(doctor_checks._DOCTOR_WARNING_CODES)
 
 
 def test_unknown_code_gets_a_generic_but_actionable_line() -> None:
-    advice = cli_module._advice_for("something:new")
+    advice = doctor_checks._advice_for("something:new")
     assert "--explain" in advice["next_action"]
 
 
@@ -103,7 +104,7 @@ def test_doctor_makes_no_external_request_by_default(monkeypatch: pytest.MonkeyP
     def boom(*args, **kwargs):
         raise AssertionError("doctor must not probe the network by default")
 
-    monkeypatch.setattr(cli_module, "_probe_manifest_url", boom)
+    monkeypatch.setattr(doctor_checks, "_probe_manifest_url", boom)
     result = runner.invoke(app, ["doctor"])
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout)["network_probe"] is None
@@ -116,7 +117,7 @@ def test_doctor_makes_no_external_request_by_default(monkeypatch: pytest.MonkeyP
         seen["kwargs"] = kwargs
         return canned
 
-    monkeypatch.setattr(cli_module, "_probe_manifest_url", fake_probe)
+    monkeypatch.setattr(doctor_checks, "_probe_manifest_url", fake_probe)
     result = runner.invoke(app, ["doctor", "--probe-network", "--explain"])
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout)["network_probe"] == canned
@@ -150,10 +151,10 @@ def test_probe_reports_every_mirror_when_asked_to(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setattr(httpx, "Client", FakeClient)
     url = "https://github.com/Horace-Maxwell/horosa-skill/releases/latest/download/runtime-manifest.json"
-    every = cli_module._probe_manifest_url(url, stop_at_first_success=False)
+    every = doctor_checks._probe_manifest_url(url, stop_at_first_success=False)
     assert len(every["attempts"]) == 2 and every["ok"] is True
     calls.clear()
-    first = cli_module._probe_manifest_url(url)
+    first = doctor_checks._probe_manifest_url(url)
     assert len(first["attempts"]) == 1 and len(calls) == 1
 
 
@@ -298,13 +299,13 @@ def test_quarantine_check_is_skipped_off_macos_and_when_not_installed(tmp_path: 
 def test_emulated_process_becomes_a_warning_with_advice(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(manager_module, "arch_report", lambda: {"process": "x64", "native": "arm64", "emulated": True})
     settings = Settings.from_env()
-    report = cli_module._doctor_report(settings, cli_module._runtime_manager(settings))
+    report = doctor_checks._doctor_report(settings, cli_module._runtime_manager(settings))
     codes = [w["code"] for w in report["warnings"]]
     assert "platform:emulated_process" in codes
     assert any(a["code"] == "platform:emulated_process" for a in report["advice"])
 
     monkeypatch.setattr(manager_module, "arch_report", lambda: {"process": "arm64", "native": "arm64", "emulated": False})
-    report = cli_module._doctor_report(settings, cli_module._runtime_manager(settings))
+    report = doctor_checks._doctor_report(settings, cli_module._runtime_manager(settings))
     assert "platform:emulated_process" not in [w["code"] for w in report["warnings"]]
 
 
@@ -362,11 +363,11 @@ def test_internal_port_env_mismatch_is_a_doctor_warning(tmp_path: Path, monkeypa
     settings = _settings(tmp_path)
     monkeypatch.delenv("HOROSA_SERVER_PORT", raising=False)
     monkeypatch.delenv("HOROSA_CHART_PORT", raising=False)
-    assert cli_module._internal_port_env_warnings(settings) == []
+    assert doctor_checks._internal_port_env_warnings(settings) == []
     monkeypatch.setenv("HOROSA_SERVER_PORT", str(settings.local_backend_port))
-    assert cli_module._internal_port_env_warnings(settings) == []
+    assert doctor_checks._internal_port_env_warnings(settings) == []
     monkeypatch.setenv("HOROSA_CHART_PORT", "12345")
-    warnings = cli_module._internal_port_env_warnings(settings)
+    warnings = doctor_checks._internal_port_env_warnings(settings)
     assert [w["code"] for w in warnings] == ["env:internal_port_override"]
     assert "HOROSA_CHART_PORT=12345" in warnings[0]["detail"] and "HOROSA_LOCAL_CHART_PORT" in warnings[0]["fix"]
 
@@ -393,18 +394,18 @@ def test_environment_probe_takes_the_node_path_from_the_manifest_defaults(tmp_pa
         probed.append(path)
         return {"exists": path.exists(), "runnable": True}
 
-    monkeypatch.setattr(cli_module, "_probe_executable", fake_probe)
-    monkeypatch.setattr(cli_module, "_probe_uv", lambda: {"exists": True, "runnable": True})
-    report = cli_module._doctor_environment_context(settings)
+    monkeypatch.setattr(doctor_checks, "_probe_executable", fake_probe)
+    monkeypatch.setattr(doctor_checks, "_probe_uv", lambda: {"exists": True, "runnable": True})
+    report = doctor_checks._doctor_environment_context(settings)
     assert probed == [node] and report["probes"]["node"]["exists"] is True
     assert "runtime/win/" not in str(node)
 
 
 def test_doctor_report_carries_its_time_budget(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
-    report = cli_module._doctor_report(settings, HorosaRuntimeManager(settings))
+    report = doctor_checks._doctor_report(settings, HorosaRuntimeManager(settings))
     budget = report["budget"]
-    assert budget["seconds"] == cli_module.DOCTOR_BUDGET_SECONDS == 25.0
+    assert budget["seconds"] == doctor_checks.DOCTOR_BUDGET_SECONDS == 25.0
     assert {"manager.doctor", "environment"} <= set(budget["timings"])
     assert isinstance(budget["skipped"], list)
 
@@ -414,9 +415,9 @@ def test_doctor_skips_subprocess_probes_once_the_budget_is_gone(tmp_path: Path, 
     from horosa_skill.runtime import ports
 
     ports.clear_run_cache()
-    monkeypatch.setattr(cli_module, "DOCTOR_BUDGET_SECONDS", 0.0)
+    monkeypatch.setattr(doctor_checks, "DOCTOR_BUDGET_SECONDS", 0.0)
     settings = _settings(tmp_path)
-    report = cli_module._doctor_report(settings, HorosaRuntimeManager(settings))
+    report = doctor_checks._doctor_report(settings, HorosaRuntimeManager(settings))
     assert report["budget"]["seconds"] == 0.0
     assert report["budget"]["skipped"], "listener_bindings 的 netstat/ss 必须被预算挡住并记录"
     ports.clear_run_cache()
@@ -471,7 +472,7 @@ def test_export_registry_drift_alone_marks_the_payload_outdated(tmp_path: Path) 
 def test_payload_outdated_is_a_warning_with_a_context_specific_upgrade_command(tmp_path: Path) -> None:
     manager = _installed_manager(tmp_path)
     manager._remember_latest_manifest({"version": "9.9.9", "platforms": {}}, "x")
-    report = cli_module._doctor_report(_settings(tmp_path), manager)
+    report = doctor_checks._doctor_report(_settings(tmp_path), manager)
     warning = next(w for w in report["warnings"] if w["code"] == "runtime:payload_outdated")
     assert "9.9.9" in warning["detail"] and "horosa-skill upgrade" in warning["fix"]
     assert any(a["code"] == "runtime:payload_outdated" for a in report["advice"])
@@ -483,8 +484,8 @@ def test_probe_network_success_refreshes_the_latest_manifest_cache(tmp_path: Pat
     remote = tmp_path / "remote-manifest.json"
     remote.write_text(json.dumps({"version": "9.9.9", "platforms": {"darwin-arm64": {"url": "x", "sha256": ""}}}), encoding="utf-8")
     canned = {"ok": True, "url": remote.resolve().as_uri(), "attempts": [{"url": remote.resolve().as_uri(), "ok": True}]}
-    monkeypatch.setattr(cli_module, "_probe_manifest_url", lambda url, **kwargs: canned)
-    report = cli_module._doctor_report(_settings(tmp_path), manager, probe_network=True)
+    monkeypatch.setattr(doctor_checks, "_probe_manifest_url", lambda url, **kwargs: canned)
+    report = doctor_checks._doctor_report(_settings(tmp_path), manager, probe_network=True)
     assert report["latest_version"] == "9.9.9"
     assert manager.latest_manifest_cache()["version"] == "9.9.9"
     assert "runtime:payload_outdated" in [w["code"] for w in report["warnings"]]
@@ -495,9 +496,9 @@ def test_default_doctor_never_touches_the_network_for_freshness(tmp_path: Path, 
         raise AssertionError("default doctor must not refresh the manifest cache over the network")
 
     manager = _installed_manager(tmp_path)
-    monkeypatch.setattr(cli_module, "_probe_manifest_url", boom)
-    monkeypatch.setattr(cli_module, "_refresh_latest_manifest_cache", boom)
-    report = cli_module._doctor_report(_settings(tmp_path), manager)
+    monkeypatch.setattr(doctor_checks, "_probe_manifest_url", boom)
+    monkeypatch.setattr(doctor_checks, "_refresh_latest_manifest_cache", boom)
+    report = doctor_checks._doctor_report(_settings(tmp_path), manager)
     assert report["latest_version"] is None and report["network_probe"] is None
 
 
