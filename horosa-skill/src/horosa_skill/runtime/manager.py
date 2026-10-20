@@ -1527,6 +1527,9 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             except subprocess.TimeoutExpired as exc:
                 # 🔴 此前没有 timeout：mac 的停脚本来自只读的上游树，它要是哪天多等一轮，`uninstall --yes`
                 # 与 `runtime stop` 就会无限期挂住。超时按「没停干净」处理，把还活着的持有者点出来。
+                # TimeoutExpired.stdout 即便 text=True 也是 bytes（POSIX 上原样带出已读到的输出）→ 自己解码。
+                partial = exc.stdout or ""
+                partial_text = partial.decode("utf-8", errors="replace") if isinstance(partial, bytes) else str(partial)
                 self._write_runtime_state({
                     "managed": True, "status": "stop_requested", "updated_at": self._utc_now(),
                     "manifest_version": manifest.get("version") if manifest else None,
@@ -1535,7 +1538,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                     "ok": False, "already_stopped": False, "code": "runtime.stop_timeout",
                     "message": f"停止脚本 {stop_budget:.0f} 秒内未返回。",
                     "command": command,
-                    "stdout": ((exc.stdout or b"") if isinstance(exc.stdout, bytes) else (exc.stdout or "")).__str__()[-4000:],
+                    "stdout": partial_text[-4000:],
                     "stderr": "", "returncode": None,
                     "survivors": [
                         {"port": port, "holders": port_holders(port)}

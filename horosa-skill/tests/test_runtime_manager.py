@@ -1924,6 +1924,25 @@ def test_stop_reports_a_timeout_with_the_survivors_instead_of_hanging(tmp_path: 
     assert manager.load_runtime_state()["status"] == "stop_requested"
 
 
+@pytest.mark.parametrize(
+    ("partial", "expected"),
+    [(None, ""), ("stopping java\n", "stopping java\n"), ("stopping java\n中".encode(), "stopping java\n中")],
+)
+def test_stop_timeout_decodes_the_partial_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, partial: object, expected: str
+) -> None:
+    """TimeoutExpired.stdout 即便 text=True 也是 bytes（POSIX）；此前 `.__str__()` 把它报成 "b'…'" 字面量。"""
+    manager = _manager_with_runtime(tmp_path)
+    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None: _endpoints(verdict="ours"))
+
+    def fake_run(command, **kwargs):  # noqa: ANN001
+        raise subprocess.TimeoutExpired(command, kwargs.get("timeout") or 0, output=partial)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr("horosa_skill.runtime.manager.port_holders", lambda port: [])
+    assert manager.stop_local_services()["stdout"] == expected
+
+
 def test_launcher_patch_write_failure_is_a_structured_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """v0.38.1 A15：runtime 目录只读 / 属于别的用户时，补丁写入失败此前是裸 PermissionError traceback。"""
     manager = _manager_with_runtime(tmp_path)
