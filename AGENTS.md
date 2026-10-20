@@ -400,7 +400,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 **布线清单**（每个新技法照单走完）：
 
-1. `schemas/tools.py` 输入模型（神数用 split 年月日时分 + `options` passthrough 的 `ShenShuInput` 模式；
+1. `schemas/tools/<族>.py` 输入模型（v0.41.1 起按技法族分模块，`__init__` 显式 re-export；神数用 split 年月日时分 + `options` passthrough 的 `ShenShuInput` 模式；
    `BirthInput` `extra="allow"`，声明字段主要为 discoverability + guidance）。
 2. `service/runners/<族>.py` 里加 `_run_*_tool` runner（mixin 方法；跨族只经 `self.` 调）；远端端点进 `_PYTHON_CHART_ENDPOINTS`；ken-backed 加 `_require_ken_pan`。
 3. `engine/registry.py` TOOL_DEFINITIONS 注册；`router.py` 分派词做互斥检查（**卜卦含「卦」字**：梅易/卦

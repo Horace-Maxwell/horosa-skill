@@ -43,7 +43,16 @@ from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
 PKG_ROOT = SCRIPTS.parent
-SCHEMA_FILE = PKG_ROOT / "src" / "horosa_skill" / "schemas" / "tools.py"
+# 输入模型自 v0.41.1 是包 schemas/tools/（按技法族分模块）。声明从包里每个模块读；草堆排除整个包——只排除某一个文件时，
+# 「只在兄弟 schema 模块里出现过的字段名」会被当成有人消费（schema 自己提到自己不算接线）。
+SCHEMA_DIR = PKG_ROOT / "src" / "horosa_skill" / "schemas" / "tools"
+
+
+def _schema_files() -> list[Path]:
+    files = sorted(SCHEMA_DIR.rglob("*.py"))
+    if not files:
+        raise SystemExit(f"no schema modules under {SCHEMA_DIR} — the scan would pass vacuously")
+    return files
 BASELINE = PKG_ROOT / "contracts" / "schema_knob_debt.json"
 
 SEARCH_ROOTS = (
@@ -63,9 +72,8 @@ STRUCTURAL_FIELDS = frozenset(
 
 
 def _declared_fields() -> dict[str, list[str]]:
-    tree = ast.parse(SCHEMA_FILE.read_text(encoding="utf-8"))
     out: dict[str, list[str]] = {}
-    for node in tree.body:
+    for node in (n for path in _schema_files() for n in ast.parse(path.read_text(encoding="utf-8")).body):
         if not isinstance(node, ast.ClassDef):
             continue
         names = [
@@ -84,7 +92,7 @@ def _haystack() -> str:
         if not root.is_dir():
             continue
         for path in root.rglob("*"):
-            if path.suffix not in SEARCH_SUFFIXES or path == SCHEMA_FILE:
+            if path.suffix not in SEARCH_SUFFIXES or SCHEMA_DIR in path.parents:
                 continue
             if "__pycache__" in path.parts or "node_modules" in path.parts:
                 continue

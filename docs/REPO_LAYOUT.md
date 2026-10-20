@@ -112,7 +112,9 @@ an instance named explicitly via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROO
 - `exports/` — `registry.py` (the `aiExport.js`-mirroring `AI_EXPORT_PRESET_SECTIONS` per technique,
   `AI_EXPORT_SETTINGS_VERSION` / `MIRRORED_UPSTREAM_AIEXPORT_VERSION`) + `parser.py` (parse snapshot text into
   structured sections, with missing/unknown-section checks).
-- `schemas/` — `tools.py` (per-tool pydantic input models) + `common.py`.
+- `schemas/` — `tools/` (per-tool pydantic input models, a package since v0.41.1: `base.py` with `BirthInput`, then one module
+  per technique family — `astro`, `predictive`, `cn_mingli`, `cn_divination`, `election`, `shenshu` — and `facades.py`;
+  `from horosa_skill.schemas.tools import X` keeps working) + `common.py`.
 - `runtime/` — `manager.py` (install / upgrade / doctor / start / stop), `identity.py` (endpoint ownership evidence),
   `registry.py` (atomic state file), `ports.py` / `procs.py` / `pidlock.py` / `mirrors.py`.
 - `memory/store.py` — SQLite + JSON artifacts + run manifests + AI-answer write-back.

@@ -420,7 +420,7 @@ class ZeriRunners:
             "pos": payload.get("pos"),
         }
         # 🔴 起局三开关（timeAlg / after23NewDay / lateZiHourUseNextDay）是 QimenInput 继承来的
-        # **顶层**字段（schemas/tools.py:397-400，各带描述），agent 照 schema 传顶层是正确用法。
+        # **顶层**字段（schemas/tools/cn_divination.py 的 QimenInput，各带描述），agent 照 schema 传顶层是正确用法。
         # 扫描引擎只从 `options` 读（qimenScanEngine.js:124-126），此前顶层写法被静默丢弃 →
         # 命中区间用默认起局算、而同一次调用里的**展示盘**走 _run_qimen_tool 是honor 顶层的，
         # 于是两者不同局；[奇门择日配置] 段还会打出一个根本没用上的设置标签。

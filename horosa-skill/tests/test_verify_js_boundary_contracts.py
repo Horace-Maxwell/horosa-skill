@@ -126,7 +126,9 @@ def test_the_deleted_invented_knobs_are_really_gone() -> None:
     rather than leaving them "harmlessly present" is that a described knob is a promise the agent
     has no way to test.
     """
-    schema = (PKG_ROOT / "src" / "horosa_skill" / "schemas" / "tools.py").read_text(encoding="utf-8")
+    schema_dir = PKG_ROOT / "src" / "horosa_skill" / "schemas" / "tools"  # 包（v0.41.1 起）：扫全部模块
+    schema = "\n".join(path.read_text(encoding="utf-8") for path in sorted(schema_dir.rglob("*.py")))
+    assert "class BirthInput" in schema, "scanned the wrong place: the check would pass vacuously"
     for invented in ("receptionMode:", "almutenScheme:", "dignityScheme:", "medicalCritical:"):
         assert invented not in schema, f"{invented} is back in the schema with no engine that reads it"
 
@@ -144,4 +146,9 @@ def test_a_name_alone_is_not_evidence_the_old_way_would_have_passed() -> None:
     declared = module._declared_fields()
     assert "ElectionInput" in declared and "HoraryInput" in declared
     # The scan must be discriminating, not vacuous: it rejects a name nothing consumes.
-    assert "definitelyNotAConsumedFieldName" not in module._haystack()
+    haystack = module._haystack()
+    assert "definitelyNotAConsumedFieldName" not in haystack
+    # Schema modules mention their own field names; none of that may count as a consumer (v0.41.1, schemas/tools is a
+    # package): a baselined unwired knob appears only inside the schema package, so it must not be in the haystack.
+    unwired = json.loads((PKG_ROOT / "contracts" / "schema_knob_debt.json").read_text(encoding="utf-8"))["unwired"]
+    assert unwired and all(entry.split(".", 1)[1] not in haystack for entry in unwired[:3])

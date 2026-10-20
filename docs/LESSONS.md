@@ -185,6 +185,10 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   两个模块都要 logger 时各自建、名字钉成原来的 `horosa_skill.surfaces.mcp_server`。
   **自己踩的**：给新模块写 docstring 时把旗标写成了 `HOROSA_MCP_MAX_CONCURRENT`（真名多一个 `_TOOLS`）——`test_env_registry_covers_all_flags_code_reads`
   扫源码里每个 `HOROSA_*` 字面量，当场红。文档串里的旗标名也是契约。
+- **`schemas/tools.py`（2 089 行）→ 包 `schemas/tools/`**：`base` 之上按技法族分 7 个模块（最大 413 行），`__init__` 显式 re-export。
+  先改两处按路径读它的守卫：`verify_schema_knob_wiring.py` 读包内全部声明、草堆排除**整个**包（只排除一个文件时，兄弟 schema 模块里
+  提到的字段名会被当成「有人消费」）；`test_verify_js_boundary_contracts` 扫全部模块并断言真扫到了 `BirthInput`。pydantic 的 JSON schema
+  不受模块归属影响——MCP 两面 tools/list（含全部输入 schema）逐字一致。
 - **没做的**：审计建议把 9 条择日指引的重复字段收成工厂函数（约省 160 行）。没做——每条是要整条读的声明式数据，而且上一条正说明
   共享对象在这张表里会被原地写；省下的行数不值这个风险。
 - **法则**：import 期对模块级共享对象的原地写，一律写时复制；拆分只搬不改，表面逐字比对兜底。
