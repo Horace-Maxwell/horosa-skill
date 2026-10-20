@@ -1023,6 +1023,9 @@ A global stability pass hardened these; keep them true when you touch the releva
   elicitation 每个出口写 `details.elicitation.status`，纯函数 `_apply_gate_decision` 可离线测（v0.36.0）。
   同一脚本的第二条规则 `silent_handler`（v0.41.1）：处理体只有 pass / continue / 返回或赋值常量、且什么都不调用的宽 `except` 按文件计数入棘轮
   （基线 = 「拿不到就是答案」的探针，每处带注释）。新增一处要么改 `_degrade`，要么在同一 change 里写明理由并 `--update-baseline`。
+- **`TOOL_GUIDANCE` 的条目可能被多个工具共用（v0.41.1）。** chart 族五个、神数几组都指向同一个策略 dict；往条目里加字段一律写时复制
+  （`TOOL_GUIDANCE[t] = {**TOOL_GUIDANCE[t], ...}`），别原地写——`test_options_keys_never_leak_onto_tools_that_share_a_policy_dict` 锁。
+  `agent_guidance` 自 v0.41.1 是包（`base` → `policies` → `tool_table` → `contracts` → `catalog` → `preflight`），导入路径不变。
 - **重试 / 回退只许改写法，不许改值（v0.41.1）。** `_java_chart_payload_candidates` 曾在 `param error` 后把 `gpsLon` 取 `abs()` 重试——
   西经变东经、盘照样起得出来。候选只能换格式（日期分隔符、`zone` 写法、省掉可选键），任何承载结果的数值（经纬度、时刻、时区偏移）必须原样；
   `test_service.py` 的经度符号断言是负向对照。

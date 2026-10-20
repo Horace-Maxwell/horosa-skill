@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.41.1-dev (2026-10-20) | 可维护性重构第 3 批：拆大模块（`agent_guidance` → 包）；拆的时候发现 options_keys 注入原地写进被多个工具共用的策略 dict | 拆分 = 只搬不改名、对外表面逐字比对；import 期对共享对象的原地写一律写时复制 |
 | v0.41.1-dev (2026-10-20) | 可维护性重构第 2 批：经度重试梯子把西经改成东经还算出了结果；宽 `except` 什么都不说时 `logger.warning` 棘轮看不见（审计 12 处）；算源生成器把 3 个技法指向不存在的 runner、声明成「不起盘」；PDF 无中文字体时静默出豆腐块 | 重试只许改写法、不许改值；静默也要能被数出来；名字映射要断言存在 |
 | v0.41.1-dev (2026-10-20) | 可维护性重构第 0 批：直接 `uv run pytest` 会打到桌面版 8899/9999（conftest 不钉后端）；`run_ci_gates` 漏跑多行步骤；拆分前立 monkeypatch 目标守卫 | 护栏要在 CI 看不见的地方也成立；拆之前先堵「拆错了安静变绿」 |
 | v0.41.0 (2026-10-12) | 接入面四缺口：wheel 里没有 skill（只装 wheel 的用户 agent 从没读过规则）；注册表 `/v0/validate` 对旧 server.json 说 valid、publish 会因小写命名空间与不存在的 pypi 包拒两次，且 tag 处的 mcpb sha 是旧的；Agent Plugins schema 封闭；setup 9 → 25 家（各家静默失效的事实各钉一条）。顺带：lane 继承真 HOME、OpenClaw 产物的 `mcp` 根键会被猜测表误合并、AGENTS 说有人锁的 `check_client_matrix` 早已不存在 | 只在发布时执行的规则要在本地复刻；setup 新写的路径都要有接缝；新客户端 = 一行事实 + 锁步测试 |
@@ -145,7 +146,22 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
-### v0.41.1-dev / 2026-10-20 — 可维护性重构第 2 批：重试梯子改了结果、静默吞错数不出来、算源指向不存在的 runner（`silent_handler` / `SHARED_RUNNER`）
+### v0.41.1-dev / 2026-10-20 — 可维护性重构第 3 批：拆大模块；共享策略 dict 被原地写（`TOOL_GUIDANCE` 写时复制）
+
+- **做法（每拆一个模块都一样）**：AST 按顶层语句切块（前导注释跟着语句走、原相对顺序不变），逐模块重算 import，检查兄弟模块间无环；
+  只搬不改名（AGENTS / LESSONS 里引用的名字照样 grep 得到）；导入路径不变（包的 `__init__` 显式 re-export 公开名）；
+  对外表面（CLI 帮助树、MCP 两面、闸门、guidance、25 家客户端配置）重录后逐字比对。
+- **`agent_guidance.py`（2554 行）→ 包 `agent_guidance/`**：`base` → `policies` → `tool_table` → `contracts` → `catalog` → `preflight`
+  单向依赖。唯一的路径坑：`data/sensitive_settings.json` 的相对路径深了一层（`parents[1]`）。
+- **拆的时候看到的坑**：import 期两个循环把 `options_keys` **原地**写进 `TOOL_GUIDANCE[tool]`，而好几组工具共用同一个策略 dict
+  （chart / chart12 / chart13 / draconic / hellen_chart 一组，神数五个一组…）。今天被注入的工具恰好都不共用，所以没出事；
+  哪天给 chart13 加 options_keys，同组五个工具会一起带上。→ 注入改为写时复制；`test_options_keys_never_leak_onto_tools_that_share_a_policy_dict`
+  锁「带 options_keys 的条目不与别的工具共用对象」（负向对照：恢复原地写并给 chart13 注入即红）。
+- **没做的**：审计建议把 9 条择日指引的重复字段收成工厂函数（约省 160 行）。没做——每条是要整条读的声明式数据，而且上一条正说明
+  共享对象在这张表里会被原地写；省下的行数不值这个风险。
+- **法则**：import 期对模块级共享对象的原地写，一律写时复制；拆分只搬不改，表面逐字比对兜底。
+
+：重试梯子改了结果、静默吞错数不出来、算源指向不存在的 runner（`silent_handler` / `SHARED_RUNNER`）
 
 - **起因**：第 2 批 = 防御性代码审计里「不必要 / 有害」的那部分。每条先证明再动：能实测的实测，留下的写清为什么留。
 - **症状 → 根因 → 修复**：

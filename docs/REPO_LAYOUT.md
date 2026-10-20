@@ -92,7 +92,11 @@ an instance named explicitly via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROO
   qimen/taiyi/jinkou and the `sanshiunited` aggregator), snapshot builders, export-contract attachment,
   summaries, memory write-back, and the report output-path guard (`_report_output_path`).
 - `config.py` — `Settings` (server/chart roots, ports, runtime root, timeouts, `HOROSA_*` flag registry) + `from_env`.
-- `agent_guidance.py` — the clarification gate: family policies + tool-specific policies, `PREFLIGHT_EXEMPT_TOOLS`.
+- `agent_guidance/` — the clarification gate (a package since v0.41.1; import path unchanged). One-way layers:
+  `base.py` (shared constants, `SENSITIVE_SETTINGS` from `data/sensitive_settings.json`, `PREFLIGHT_EXEMPT_TOOLS`) →
+  `policies.py` (family policies) → `tool_table.py` (`TOOL_GUIDANCE`, one entry per tool) → `contracts.py` (input contracts,
+  tool docstrings, verified examples) → `catalog.py` (`build_agent_guidance`) → `preflight.py` (`validate_agent_preflight`,
+  `build_validation_recovery`).
 - `engine/`
   - `registry.py` — `TOOL_DEFINITIONS` (name → domain/action/endpoint/`execution`/input model).
   - `client.py` — HTTP clients (`HorosaApiClient`, `HorosaPlainJsonClient`) for `:9999` / `:8899`.

@@ -17,7 +17,7 @@ class FlexibleModel(BaseModel):
 def _unadvertised() -> Any:
     """已声明（MCP 顶层按名可传、进 pydantic 校验层）但不进 tools/list 广告层的旋钮（长词表 → 预算）。
 
-    键表与取值由 horosa_agent_guidance 的 options_keys 给（agent_guidance.py），广告层只在 `request`
+    键表与取值由 horosa_agent_guidance 的 options_keys 给（agent_guidance/tool_table.py），广告层只在 `request`
     描述里计数「另 N 个高级旋钮」（surfaces/mcp_schema.py 的 x-horosa-hidden）。
     """
     return Field(default=None, json_schema_extra={"x-horosa-hidden": True})

@@ -75,7 +75,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `110 / 110 ok=true` |
-| Engineering tests | `1933 / 1933 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 116 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `1934 / 1934 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 116 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `100` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `10` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` (`107` export techniques modeled; contract v15 mirrors desktop aiExport v58) |
@@ -535,7 +535,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 1933 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 1934 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

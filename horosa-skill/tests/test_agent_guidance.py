@@ -130,3 +130,16 @@ def test_validation_recovery_returns_prompt_for_incomplete_payload() -> None:
     assert recovery["must_ask_user"] is True
     assert "调用 `chart` 前需要先确认" in recovery["prompt_to_user"]
     assert any(item["field"] == "date/time/place" for item in recovery["ask_if_missing"])
+
+
+def test_options_keys_never_leak_onto_tools_that_share_a_policy_dict() -> None:
+    # v0.41.1：好几组工具共用同一个策略 dict（chart / chart12 / chart13 / draconic / hellen_chart 等）。
+    # options_keys 若原地写进 TOOL_GUIDANCE[tool]，会悄悄挂到同组所有工具上；注入改为写时复制，这里锁住结果。
+    from collections import defaultdict
+
+    owners: dict[int, list[str]] = defaultdict(list)
+    for tool, entry in TOOL_GUIDANCE.items():
+        owners[id(entry)].append(tool)
+    leaked = {tool: owners[id(entry)] for tool, entry in TOOL_GUIDANCE.items()
+              if entry.get("options_keys") is not None and len(owners[id(entry)]) > 1}
+    assert not leaked, f"options_keys sits on a dict shared by several tools: {leaked}"

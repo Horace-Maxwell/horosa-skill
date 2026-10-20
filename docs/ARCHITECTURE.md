@@ -43,8 +43,9 @@ flowchart TD
 - `src/horosa_skill/runtime/`
   - `manager.py`（install / doctor / start / stop）、`identity.py`（端点归属三级证据：app 标记 + nonce → 监听进程命令行 / 映像 → 注册表 pid）、
     `registry.py`（原子状态文件）、`ports.py` / `procs.py` / `pidlock.py` / `mirrors.py`
-- `src/horosa_skill/agent_guidance.py`
-  - 澄清闸策略（族策略 + 工具专属策略、`PREFLIGHT_EXEMPT_TOOLS`）——`agent_guidance.required` 从这里出
+- `src/horosa_skill/agent_guidance/`（v0.41.1 起是包，导入路径 `horosa_skill.agent_guidance.X` 不变）
+  - 澄清闸策略（族策略 + 工具专属策略、`PREFLIGHT_EXEMPT_TOOLS`）——`agent_guidance.required` 从这里出；
+    `base` 常量与敏感设置表 → `policies` 族策略 → `tool_table` 逐工具指引 → `contracts` 输入契约 → `catalog` 汇总 → `preflight` 闸门判定
 - `src/horosa_skill/decisions/`
   - 可选云端决策层（TypeSafe Jev，默认关）：`policy.py`（scope / surfaces）、`redact.py`、`ledger.py`、`eval.py`（`contracts/jev_thresholds.json` 阈值锁）、`fake.py`（离线替身）
 - `src/horosa_skill/contracts_locator.py`

@@ -1,0 +1,141 @@
+"""澄清闸与工具指引（agent guidance）。v0.41.1 起从单文件拆成包，导入路径 `horosa_skill.agent_guidance.X` 不变。
+
+依赖单向（上层只依赖下层）：
+  base        共用常量 + 敏感设置表（data/sensitive_settings.json）+ HOROSA_CLARIFY 逃生舱
+  policies    各族澄清策略（神数 / 本命 / 推运 / 择日 / 奇门…）
+  tool_table  TOOL_GUIDANCE：110 个技法逐工具的指引表 + options_keys 注入 + 记忆 / 报告指引
+  contracts   输入契约 / 工具 docstring / 已验证示例（推运族输入契约也在这里）
+  catalog     技法索引与目录、build_agent_guidance
+  preflight   闸门判定 validate_agent_preflight、校验失败的 agent_recovery、敏感设置自测
+"""
+from __future__ import annotations
+
+from horosa_skill.agent_guidance.base import (
+    COMMON_BIRTH_FIELDS,
+    COMMON_LOCATION_FIELDS,
+    CONFIRMATION_FIELDS,
+    GATE_FAILURE_CODE,
+    GLOBAL_AGENT_RULES,
+    GUIDANCE_SCHEMA,
+    INPUT_CONTRACT_SCHEMA,
+    PREFLIGHT_EXEMPT_TOOLS,
+    SENSITIVE_SETTINGS,
+)
+from horosa_skill.agent_guidance.catalog import (
+    SOFTWARE_USAGE_HELP,
+    assert_guidance_covers_registered_tools,
+    build_agent_guidance,
+    build_technique_catalog,
+    technique_index,
+    unknown_tool_details,
+)
+from horosa_skill.agent_guidance.contracts import (
+    COMMON_ASTRO_PAYLOAD_EXAMPLE,
+    EXAMPLE_NOTE,
+    PREDICTIVE_INPUT_CONTRACTS,
+    build_tool_docstring,
+    build_tool_input_contract,
+    verified_example_payload,
+)
+from horosa_skill.agent_guidance.policies import (
+    ASTRO_BIRTH_POLICY,
+    ASTRO_CHART_POLICY,
+    BALBILLUS_POLICY,
+    EPHEMERIS_POLICY,
+    EXTRARETURNS_POLICY,
+    FREE_TEXT_GATE_FIELDS,
+    JAYNESPROG_POLICY,
+    KEYPOINTS_POLICY,
+    PD_POLICY,
+    PDCHART_POLICY,
+    PERSIANDIRECTED_POLICY,
+    PLANETARYAGES_POLICY,
+    PLANETARYARC_POLICY,
+    PREDICTIVE_POLICY,
+    PRENATALSYZYGY_POLICY,
+    PROFECTION_POLICY,
+    PROG_POLICY,
+    RETURNTIMELINE_POLICY,
+    SHENSHU_GENDER_POLICY,
+    SHENSHU_GENDER_ZONE_POLICY,
+    SHENSHU_PLACE_POLICY,
+    SHENSHU_POLICY,
+    SHENSHU_ZONE_POLICY,
+    SOLARARC_POLICY,
+    SOLARRETURN_POLICY,
+    TRIPLICITYRULERS_POLICY,
+    VEDICPROG_POLICY,
+    ZERI_SNAPSHOT_SAFE_DEFAULTS,
+    ZR_POLICY,
+)
+from horosa_skill.agent_guidance.preflight import (
+    AGENT_OWNED_OPERATIONS,
+    build_validation_recovery,
+    run_sensitive_settings_selftests,
+    validate_agent_preflight,
+)
+from horosa_skill.agent_guidance.tool_table import (
+    LIURENG_CAST_METHODS,
+    REPORT_AND_MEMORY_GUIDANCE,
+    TOOL_GUIDANCE,
+)
+
+__all__ = [
+    "AGENT_OWNED_OPERATIONS",
+    "ASTRO_BIRTH_POLICY",
+    "ASTRO_CHART_POLICY",
+    "BALBILLUS_POLICY",
+    "COMMON_ASTRO_PAYLOAD_EXAMPLE",
+    "COMMON_BIRTH_FIELDS",
+    "COMMON_LOCATION_FIELDS",
+    "CONFIRMATION_FIELDS",
+    "EPHEMERIS_POLICY",
+    "EXAMPLE_NOTE",
+    "EXTRARETURNS_POLICY",
+    "FREE_TEXT_GATE_FIELDS",
+    "GATE_FAILURE_CODE",
+    "GLOBAL_AGENT_RULES",
+    "GUIDANCE_SCHEMA",
+    "INPUT_CONTRACT_SCHEMA",
+    "JAYNESPROG_POLICY",
+    "KEYPOINTS_POLICY",
+    "LIURENG_CAST_METHODS",
+    "PDCHART_POLICY",
+    "PD_POLICY",
+    "PERSIANDIRECTED_POLICY",
+    "PLANETARYAGES_POLICY",
+    "PLANETARYARC_POLICY",
+    "PREDICTIVE_INPUT_CONTRACTS",
+    "PREDICTIVE_POLICY",
+    "PREFLIGHT_EXEMPT_TOOLS",
+    "PRENATALSYZYGY_POLICY",
+    "PROFECTION_POLICY",
+    "PROG_POLICY",
+    "REPORT_AND_MEMORY_GUIDANCE",
+    "RETURNTIMELINE_POLICY",
+    "SENSITIVE_SETTINGS",
+    "SHENSHU_GENDER_POLICY",
+    "SHENSHU_GENDER_ZONE_POLICY",
+    "SHENSHU_PLACE_POLICY",
+    "SHENSHU_POLICY",
+    "SHENSHU_ZONE_POLICY",
+    "SOFTWARE_USAGE_HELP",
+    "SOLARARC_POLICY",
+    "SOLARRETURN_POLICY",
+    "TOOL_GUIDANCE",
+    "TRIPLICITYRULERS_POLICY",
+    "VEDICPROG_POLICY",
+    "ZERI_SNAPSHOT_SAFE_DEFAULTS",
+    "ZR_POLICY",
+    "assert_guidance_covers_registered_tools",
+    "build_agent_guidance",
+    "build_technique_catalog",
+    "build_tool_docstring",
+    "build_tool_input_contract",
+    "build_validation_recovery",
+    "run_sensitive_settings_selftests",
+    "technique_index",
+    "unknown_tool_details",
+    "validate_agent_preflight",
+    "verified_example_payload",
+]
