@@ -27,10 +27,18 @@ sys.path.insert(0, str(REPO / "src"))
 from horosa_skill.engine.registry import TOOL_DEFINITIONS  # noqa: E402
 from horosa_skill.service import TOOL_EXPORT_TECHNIQUE_MAP  # noqa: E402
 
-SRC = REPO / "src/horosa_skill/service.py"
-tree = ast.parse(SRC.read_text(encoding="utf-8"))
-cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name.endswith("Service"))
-FUNCS = {n.name: n for n in cls.body if isinstance(n, ast.FunctionDef)}
+# service 是包（v0.41.1 起）：runner 分散在各 mixin 类里。扫包内**每个**类的方法——只扫 __init__.py 或「第一个
+# 以 Service 结尾的类」会得到空证据，生成器就把一切兜底成 local_data（与 SHARED_RUNNER 写错名同一类事故）。
+SRC = REPO / "src/horosa_skill/service"
+FUNCS: dict[str, ast.FunctionDef] = {}
+for _path in sorted(SRC.rglob("*.py")):
+    for _cls in (n for n in ast.parse(_path.read_text(encoding="utf-8")).body if isinstance(n, ast.ClassDef)):
+        for _fn in (n for n in _cls.body if isinstance(n, ast.FunctionDef)):
+            if _fn.name in FUNCS:
+                raise SystemExit(f"method {_fn.name} defined twice in the service package (mixins must be disjoint)")
+            FUNCS[_fn.name] = _fn
+if "_run_qimen_tool" not in FUNCS:
+    raise SystemExit(f"no runners found under {SRC} — the scan is pointed at the wrong place")
 
 # 共享 runner：这些工具没有自己的 `_run_<name>_tool`（或只有一行转发），证据从族级 runner 取。
 # 写错名字 = AST 扫不到任何证据 = 被兜底判成 local_data「不起盘」（v0.41.1 前 keypoints / lunationphase /
@@ -147,7 +155,7 @@ ENGINE_OVERRIDES: dict[str, list[str]] = {
 
 _missing_runners = sorted({r for r in SHARED_RUNNER.values() if r and r not in FUNCS})
 if _missing_runners:
-    raise SystemExit(f"SHARED_RUNNER names runner(s) that do not exist in service.py: {_missing_runners}")
+    raise SystemExit(f"SHARED_RUNNER names runner(s) that do not exist in the service package: {_missing_runners}")
 
 
 def evidence(fn: ast.FunctionDef | None) -> tuple[list[str], list[str], list[str]]:

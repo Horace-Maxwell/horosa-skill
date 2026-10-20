@@ -100,8 +100,12 @@ from horosa_skill.schemas.tools import (
 )
 from horosa_skill.shenshu_options import SHENSHU_OPTION_KNOBS, resolve_shenshu_options
 from horosa_skill.tracing import TraceRecorder
+from horosa_skill.service import _clock  # 「现在」的唯一出口（测试冻结时间 patch 这里）
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("horosa_skill.service")  # 显式名：模块拆进子包后日志名不变
+# 源码树布局下的仓根：service/<模块>.py → [0] service [1] horosa_skill [2] src [3] horosa-skill [4] 仓根
+# （与拆包前 service.py 的 parents[3] 同一目录）。wheel 安装时那里没有 vendor/，调用方逐个候选判存在。
+_REPO_ROOT = Path(__file__).resolve().parents[4]
 
 # ---- 降级说明收集器（v0.36.0 A2）----
 # 35 处「富化失败不许带崩主盘」的 except 分支此前只写 logger.warning：日志里有、信封里没有，agent 看到的是
@@ -1534,7 +1538,7 @@ def _predictive_common_sections_text(
     notes = _PREDICTIVE_METHOD_NOTES.get(technique or "")
     if not notes:
         return ""
-    now = datetime.now()
+    now = _clock.now()
     moment_lines = [f"导出时刻：{now.strftime('%Y-%m-%d %H:%M')}"]
     birth_text = f"{payload.get('date') or ''} {payload.get('time') or ''}".strip()
     if birth_text:
@@ -1828,7 +1832,7 @@ def _build_export_provenance(technique: str, snapshot_text: str | None) -> dict[
         "upstream_source_marker": "aiExport.js",
         # v0.36.0 C6：快照排版口径 = 镜像的上游 aiExport 版本（与 exports.registry 常量锁步；v57 切换时同批动）
         "astro_snapshot_format_version": MIRRORED_UPSTREAM_AIEXPORT_VERSION,
-        "build_timestamp": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "build_timestamp": _clock.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "snapshot_text_present": bool(snapshot_text),
     }
 
@@ -1963,7 +1967,7 @@ def _moira_transit_moment(payload: dict[str, Any]) -> tuple[str, str]:
         offset = sign * timedelta(hours=int(m.group(2)), minutes=int(m.group(3) or 0))
     elif re.fullmatch(r"-?\d{1,2}(\.\d+)?", zone):
         offset = timedelta(hours=float(zone))
-    now = datetime.now(timezone.utc) + offset
+    now = _clock.now(timezone.utc) + offset
     return now.strftime("%Y-%m-%d"), time_text
 
 
@@ -4489,7 +4493,7 @@ def _agepoint_moment_line(response: dict[str, Any], birth: Any, now: datetime | 
     birth_dt = _js_date_parse(birth)
     if birth_dt is None or not points:
         return ""
-    cur_age = ((now or datetime.now()) - birth_dt).total_seconds() / (365.2425 * 24 * 3600)
+    cur_age = ((now or _clock.now()) - birth_dt).total_seconds() / (365.2425 * 24 * 3600)
     current = None
     for point in points:
         age = _finite_number(point.get("age"))
@@ -4507,7 +4511,7 @@ def _agepoint_moment_line(response: dict[str, Any], birth: Any, now: datetime | 
 def _distributions_moment_line(response: dict[str, Any], now: datetime | None = None) -> str:
     """上游 AstroDistributions.js:57-67：今日所在分配段（起止可解析且含今日才出）。"""
     rows = response.get("dist") if isinstance(response.get("dist"), list) else []
-    moment = now or datetime.now()
+    moment = now or _clock.now()
     for row in rows:
         if not isinstance(row, dict):
             continue
@@ -4642,7 +4646,7 @@ _ARC_SOURCES = ("Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Sun")
 def _planetaryarc_default_datetime(now: datetime | None = None) -> str:
     """上游 AstroPlanetaryArc.js:46 todayStr()：[Q-174/T-114] 缺省目标时刻 = 「明天此刻」（与页面构造期
     dt.addDate(1) 同律；函数名叫 today 但取的是 now+24h）。"""
-    return ((now or datetime.now()) + timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+    return ((now or _clock.now()) + timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _build_planetaryarc_snapshot_text(response: dict[str, Any], payload: dict[str, Any] | None = None) -> str:
@@ -4737,7 +4741,7 @@ def _build_planetaryages_snapshot_text(
     obj_by_id = {o.get("id"): o for o in objects if isinstance(o, dict)}
     reference = _persian_birth_date(as_of) if as_of else None
     if reference is None:
-        reference = (now or datetime.now()).replace(microsecond=0)
+        reference = (now or _clock.now()).replace(microsecond=0)
     cur_age = _full_years_between(params.get("birth"), reference)
     lines = ["托勒密人生七阶：各年龄带由一颗古典行星主管，当前年龄所落之带为主运行星。"]
     if cur_age is not None:
@@ -4975,7 +4979,7 @@ def _build_persiandirected_snapshot_text(
     age_basis = f"按推运时间 {dt_str}"
     if current_age is None:
         # 上游 moment().format('YYYY-MM-DD HH:mm:ss') 截到秒再解析 → 这里同样去掉微秒。
-        current_age = _persian_directed_age_years(birth, (now or datetime.now()).replace(microsecond=0))
+        current_age = _persian_directed_age_years(birth, (now or _clock.now()).replace(microsecond=0))
         age_basis = "按导出时刻"
     near = _select_nearby_persian_hits(hits, current_age, 12)
     if near:
@@ -6692,7 +6696,7 @@ def _pd_display_rows(rows: Any, pd_method: str, show_pd_bounds: Any) -> list[lis
 
 def _upstream_now_wall_clock() -> datetime:
     """上游 `new DateTime()` 的「此刻」：[Q-141] 缺省钟面 = 真实此刻换算到 +08:00（DateTime 缺省时区）。"""
-    return datetime.now(timezone(timedelta(hours=8))).replace(tzinfo=None)
+    return _clock.now(timezone(timedelta(hours=8))).replace(tzinfo=None)
 
 
 # 上游 predictiveAiSnapshot.js:106-139 pickInfoBlocks 的块标题白名单（[本命盘配置]「信息」子块）。
@@ -7159,7 +7163,7 @@ def _pd_source_rows(response: dict[str, Any]) -> Any:
 
 def _pd_nearest_line(rows: list[list[Any]], params: dict[str, Any], chart_wrap: dict[str, Any], now: datetime | None = None) -> str:
     """AstroDirectMain.js:405-418：表中日期距今最近行（[当前时点] 定位行）。"""
-    moment = now or datetime.now()
+    moment = now or _clock.now()
     method = f"{params.get('pdMethod') or 'core_alchabitius'}"
     best = None
     for row in rows:
@@ -7517,7 +7521,7 @@ def _zr_current_period_line(items: Any, now: datetime | None = None) -> str:
     """AstroZR.js:221-231 zrCurrentPeriodLine：「当前所处：L1 X期（…至…）/ L2 Y期（…至…）」。"""
     if not isinstance(items, list):
         return ""
-    moment = now or datetime.now().astimezone()
+    moment = now or _clock.now().astimezone()
     l1 = _zr_period_bounds(items, moment)
     if not l1:
         return ""
@@ -10923,8 +10927,8 @@ class HorosaSkillService:
         current_dir = getattr(self.runtime_manager, "current_dir", None)  # stub managers in offline tests have none
         if current_dir:
             candidates.append(Path(current_dir) / self._ASTRODATA_RELATIVE)
-        # src/horosa_skill/service.py → parents[3] = 仓根（vendor/runtime-source 所在）。
-        candidates.append(Path(__file__).resolve().parents[3] / "vendor" / "runtime-source" / self._ASTRODATA_RELATIVE)
+        # 仓根 vendor/runtime-source（源码树里随 sync 脚本落地的上游运行时源码）。
+        candidates.append(_REPO_ROOT / "vendor" / "runtime-source" / self._ASTRODATA_RELATIVE)
         for cand in candidates:
             if cand.is_file():
                 return cand
@@ -12836,7 +12840,7 @@ class HorosaSkillService:
         if minor_variant is not None:
             _require_option(minor_variant, tuple(_ptext.MINOR_VARIANT_LABEL), field="minorVariant", tool="progression")
         return {
-            "targetDate": f"{payload.get('targetDate') or datetime.now().strftime('%Y-%m-%d')}".strip(),
+            "targetDate": f"{payload.get('targetDate') or _clock.now().strftime('%Y-%m-%d')}".strip(),
             "targetTime": f"{payload.get('targetTime') or '12:00:00'}".strip(),
             "minorVariant": minor_variant or _ptext.DEFAULT_MINOR_VARIANT,
         }
@@ -12878,7 +12882,7 @@ class HorosaSkillService:
             target_date=target["targetDate"],
             target_time=target["targetTime"],
             minor_variant=target["minorVariant"],
-            now=datetime.now(),
+            now=_clock.now(),
             method_notes=_PREDICTIVE_METHOD_NOTES["vedicprog"],
         )
         if not snapshot_text:
@@ -12946,7 +12950,7 @@ class HorosaSkillService:
         """
         natal_payload = self._astroextra_natal_payload(payload)
         natal = self._call_remote("/chart", natal_payload)
-        today = datetime.now()
+        today = _clock.now()
         start_date = self._astroextra_date(payload, "startDate", code="tool.ephemeris_invalid_window") or today.strftime("%Y-%m-%d")
         end_date = self._astroextra_date(payload, "endDate", code="tool.ephemeris_invalid_window") or (
             today + timedelta(days=90)
@@ -12993,7 +12997,7 @@ class HorosaSkillService:
             start_date=start_date,
             end_date=end_date,
             include_transits=include_transits,
-            now=datetime.now(),
+            now=_clock.now(),
             method_notes=_PREDICTIVE_METHOD_NOTES["ephemeris"],
         )
         if not snapshot_text:
@@ -13030,7 +13034,7 @@ class HorosaSkillService:
         natal = self._call_remote("/chart", natal_payload)
         start_year = payload.get("startYear")
         if start_year in (None, "", 0):
-            start_year = datetime.now().year
+            start_year = _clock.now().year
         count = payload.get("count")
         if count in (None, "", 0):
             count = 12
@@ -13063,7 +13067,7 @@ class HorosaSkillService:
             rows,
             start_year=start_year,
             count=count,
-            now=datetime.now(),
+            now=_clock.now(),
             method_notes=_PREDICTIVE_METHOD_NOTES["returntimeline"],
         )
         if not snapshot_text:
@@ -13109,7 +13113,7 @@ class HorosaSkillService:
             natal,
             syzygy,
             syzygy_chart,
-            now=datetime.now(),
+            now=_clock.now(),
             method_notes=_PREDICTIVE_METHOD_NOTES["prenatalsyzygy"],
         )
         syzygy_objects = []
@@ -13145,7 +13149,7 @@ class HorosaSkillService:
             target_date = self._astroextra_date({"datetime": parts[0]}, "datetime", code="tool.prog_invalid_option")
             if not target_time_raw and len(parts) > 1:
                 target_time_raw = parts[1]
-        target_date = target_date or datetime.now().strftime("%Y-%m-%d")
+        target_date = target_date or _clock.now().strftime("%Y-%m-%d")
         target_time = "12:00:00"
         if target_time_raw:
             time_match = re.fullmatch(r"(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?", target_time_raw)
@@ -13182,7 +13186,7 @@ class HorosaSkillService:
             target_date=target_date,
             target_time=target_time,
             minor_variant=minor_variant,
-            now=datetime.now(),
+            now=_clock.now(),
             method_notes=_PREDICTIVE_METHOD_NOTES["prog"],
         )
         if not snapshot_text:
@@ -13479,12 +13483,12 @@ class HorosaSkillService:
             # 流年年份缺省=「今年」（webcetiansrv.py:496-500 datetime.now()）：同一盘明年再算结果就变。
             # 书法（默认）下显式钉住当年并记进技法卡，读者看得到这份结果是按哪一年起的流年。
             if remote_payload.get("method", "book") == "book" and "liunianYear" not in remote_payload:
-                remote_payload["liunianYear"] = datetime.now().year
+                remote_payload["liunianYear"] = _clock.now().year
                 settings_applied["liunianYear"] = {"label": "流年年份（未指定→取今年）", "value": remote_payload["liunianYear"]}
         elif key == "qizhengkin":
             # 大运所在年缺省=「今年」（webqizhengkinsrv.py:546 datetime.now()）：同 cetian，钉住并入卡。
             if "qizhengKinCurrentYear" not in remote_payload and "currentYear" not in remote_payload:
-                remote_payload["qizhengKinCurrentYear"] = datetime.now().year
+                remote_payload["qizhengKinCurrentYear"] = _clock.now().year
                 settings_applied["qizhengKinCurrentYear"] = {
                     "label": "大运所在年（未指定→取今年）", "value": remote_payload["qizhengKinCurrentYear"],
                 }

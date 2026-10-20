@@ -12,7 +12,7 @@
     "reports/renderers.py": 1,
     "runtime/manager.py": 26,
     "runtime/pidlock.py": 1,
-    "service.py": 47,
+    "service/__init__.py": 47,
     "surfaces/cli.py": 4
   },
   "codes_seen": 187

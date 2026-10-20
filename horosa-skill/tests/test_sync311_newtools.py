@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 
 from horosa_skill import service as S
+from horosa_skill.service import _clock
 from horosa_skill.agent_guidance import validate_agent_preflight
 from horosa_skill.config import Settings
 from horosa_skill.engine import astroextra_snapshots as A
@@ -197,7 +198,8 @@ class _FrozenDatetime(datetime):
 
 @pytest.fixture()
 def frozen(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(S, "datetime", _FrozenDatetime)
+    # 服务层的「现在」只经 service._clock 读（v0.41.1）；patch 包根的 datetime 已经够不着拆进子模块的代码。
+    monkeypatch.setattr(_clock, "datetime", _FrozenDatetime)
 
 
 def _service(tmp_path: Path, client: HorosaApiClient) -> S.HorosaSkillService:

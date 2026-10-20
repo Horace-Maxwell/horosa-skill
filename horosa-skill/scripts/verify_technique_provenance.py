@@ -29,7 +29,7 @@ from pathlib import Path
 
 PKG_ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = PKG_ROOT / "contracts" / "technique_provenance.json"
-SERVICE = PKG_ROOT / "src" / "horosa_skill" / "service.py"
+SERVICE = PKG_ROOT / "src" / "horosa_skill" / "service"  # 包（v0.41.1 起）：runner 分散在各 mixin 类里
 
 
 def _load_tools() -> set[str]:
@@ -47,13 +47,15 @@ def _chart_endpoints() -> set[str]:
 
 
 def runners_calling_require_ken_pan() -> set[str]:
-    """扫 service.py，返回「函数体里调过 `_require_ken_pan` 的 `_run_*_tool`」的工具名。"""
-    tree = ast.parse(SERVICE.read_text(encoding="utf-8"))
-    service_cls = next(
-        node for node in tree.body if isinstance(node, ast.ClassDef) and node.name.endswith("Service")
-    )
+    """扫 service 包内每个类，返回「函数体里调过 `_require_ken_pan` 的 `_run_*_tool`」的工具名。"""
+    funcs = [
+        func
+        for path in sorted(SERVICE.rglob("*.py"))
+        for cls in ast.parse(path.read_text(encoding="utf-8")).body if isinstance(cls, ast.ClassDef)
+        for func in cls.body
+    ]
     out: set[str] = set()
-    for func in service_cls.body:
+    for func in funcs:
         if not isinstance(func, ast.FunctionDef):
             continue
         if not (func.name.startswith("_run_") and func.name.endswith("_tool")):

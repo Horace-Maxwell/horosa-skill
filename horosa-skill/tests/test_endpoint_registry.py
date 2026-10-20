@@ -14,7 +14,13 @@ import re
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.service import _PYTHON_CHART_ENDPOINTS, _SHENSHU_ENDPOINTS
 
-SERVICE_PATH = pathlib.Path(__file__).resolve().parents[1] / "src" / "horosa_skill" / "service.py"
+# service 是包（v0.41.1 起）：扫包内全部模块。只扫 __init__.py 时「登记了却没调用」会误红，而「调用了却没登记」
+# 会安静地漏掉子模块里的字面量——后者正是本闸要抓的。
+SERVICE_DIR = pathlib.Path(__file__).resolve().parents[1] / "src" / "horosa_skill" / "service"
+
+
+def _service_source() -> str:
+    return "\n".join(path.read_text(encoding="utf-8") for path in sorted(SERVICE_DIR.rglob("*.py")))
 
 # 须经 chart 服务的路由前缀：Python 端点缺登记就会被静默发往 Java。⚠ 不等于「Java 不挂载」——`/jieqi/year`
 # 两端都有且数据不同（Java 聚合层给 jieqi24 逐节气补 bazi.fourColumns 与 chart.nongli，Python 端无），要 Java
@@ -50,7 +56,7 @@ CHART_ONLY_PREFIXES = (
 def _call_site_endpoints() -> set[str]:
     # 调用点 = service.py 字面量调用 ∪ ToolDefinition 声明式端点（经 `_call_remote(definition.endpoint, …)`）
     # ∪ 神数端点映射表（经 `_call_remote(_SHENSHU_ENDPOINTS[name], …)`）。
-    text = SERVICE_PATH.read_text(encoding="utf-8")
+    text = _service_source()
     literals = set(re.findall(r"_call_remote\(\s*[\"']([^\"']+)[\"']", text))
     # 分发表形态的调用点：xuanshi 一类「action → 端点全路径」表把字面量存在表里、_call_remote 传变量。
     # 表里存的就是全路径字面量，等价于调用点——一并采集，端点守卫才不把它们误判成死项。
