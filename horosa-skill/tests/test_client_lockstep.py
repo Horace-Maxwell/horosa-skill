@@ -17,6 +17,8 @@ import pytest
 
 from horosa_skill import skill_install
 from horosa_skill.surfaces import cli
+from horosa_skill.client_config import audit as client_audit
+from horosa_skill.client_config import locations as client_locations
 
 PKG_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PKG_ROOT.parent
@@ -26,7 +28,7 @@ assert _spec is not None and _spec.loader is not None
 live = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(live)
 
-CLIENTS = cli._CLIENT_NAMES
+CLIENTS = client_locations._CLIENT_NAMES
 
 
 def test_every_client_runs_through_setup_on_the_real_lanes() -> None:
@@ -35,13 +37,13 @@ def test_every_client_runs_through_setup_on_the_real_lanes() -> None:
 
 def test_every_client_has_its_generator_facts() -> None:
     for client in CLIENTS:
-        assert client in cli._CLIENT_COMPACT_DEFAULT, client
-        assert client in cli._CLIENT_RESTART_HINTS, client
-        assert client in cli.CLIENT_PLACEHOLDER_WHITELIST, client
-        if cli._CLIENT_COMPACT_DEFAULT[client]:
-            assert client in cli._CLIENT_COMPACT_REASON, client
+        assert client in client_locations._CLIENT_COMPACT_DEFAULT, client
+        assert client in client_locations._CLIENT_RESTART_HINTS, client
+        assert client in client_audit.CLIENT_PLACEHOLDER_WHITELIST, client
+        if client_locations._CLIENT_COMPACT_DEFAULT[client]:
+            assert client in client_locations._CLIENT_COMPACT_REASON, client
         for os_name in ("darwin", "linux", "nt"):
-            assert cli._client_config_locations(client, os_name=os_name, env={}, home=Path("/h"), cwd=Path("/p")), (client, os_name)
+            assert client_locations._client_config_locations(client, os_name=os_name, env={}, home=Path("/h"), cwd=Path("/p")), (client, os_name)
         assert client in skill_install.CLIENT_SKILL_DIRS, f"{client}: skill 目录要显式登记（[] = 不读本机 skill），别靠缺省落到共享目录"
 
 

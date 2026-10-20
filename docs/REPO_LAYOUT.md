@@ -120,6 +120,11 @@ an instance named explicitly via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROO
 - `reports/` — JSON / DOCX / PDF report builder + renderers.
 - `surfaces/` — `mcp_server.py` (MCP stdio/HTTP, compact surface, toolsets), `mcp_schema.py` (advertised-schema
   slimming), `cli.py` (JSON CLI: setup / client / doctor / runtime / jev / …).
+- `client_config/` — the client-config library behind `setup` / `client config|check` (split out of `cli.py` in v0.41.1):
+  `locations.py` (where the nine original clients keep their config, compact defaults, restart hints), `merge.py` (write
+  our entry into JSON / JSONC / Codex TOML / Goose YAML, touching only our key), `audit.py` (`client check`),
+  `payload.py` (the entry each client gets, launchers, pinned-wheel cache), `openclaw.py` (mcporter / openclaw.json).
+  The other sixteen clients are rows in `clients_extra.py`.
 - `decisions/` — optional cloud decision layer (TypeSafe Jev, off by default): `policy.py`, `redact.py`, `ledger.py`,
   `eval.py`, `fake.py`.
 - `contracts_locator.py` — finds `contracts/` in a checkout, or the wheel/MCPB copies of `jev_thresholds.json` and

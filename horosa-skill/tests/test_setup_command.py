@@ -19,6 +19,7 @@ import pytest
 from typer.testing import CliRunner
 
 from horosa_skill.surfaces import cli as cli_module
+from horosa_skill.client_config import payload as client_payload
 from horosa_skill.surfaces.cli import _SETUP_STEPS, app
 
 runner = CliRunner()
@@ -453,10 +454,10 @@ def test_cache_wheel_downloads_validates_and_records_a_digest(tmp_path: Path) ->
         calls.append(url)
         dest.write_bytes(_fake_wheel_bytes(__version__))
 
-    path, warning = cli_module._cache_wheel("https://example.invalid/x.whl", dest_dir=tmp_path, fetch=fetch)
+    path, warning = client_payload._cache_wheel("https://example.invalid/x.whl", dest_dir=tmp_path, fetch=fetch)
     assert warning is None and path == tmp_path / f"horosa_skill-{__version__}-py3-none-any.whl" and path.is_file()
     assert (tmp_path / f"{path.name}.sha256").read_text(encoding="utf-8").split()[1] == path.name
-    again, _ = cli_module._cache_wheel("https://example.invalid/x.whl", dest_dir=tmp_path, fetch=fetch)
+    again, _ = client_payload._cache_wheel("https://example.invalid/x.whl", dest_dir=tmp_path, fetch=fetch)
     assert again == path and calls == ["https://example.invalid/x.whl"], "已有合法缓存不再下载"
 
 
@@ -466,21 +467,21 @@ def test_cache_wheel_rejects_a_wrong_version_and_falls_back_to_the_url(tmp_path:
     def fetch(url: str, dest: Path) -> None:
         dest.write_bytes(_fake_wheel_bytes(__version__, good=False))
 
-    path, warning = cli_module._cache_wheel("https://example.invalid/x.whl", dest_dir=tmp_path, fetch=fetch)
+    path, warning = client_payload._cache_wheel("https://example.invalid/x.whl", dest_dir=tmp_path, fetch=fetch)
     assert path is None and warning and "URL" in warning
     assert not list(tmp_path.glob("*.whl")), "坏文件不留在缓存目录"
 
     def boom(url: str, dest: Path) -> None:
         raise OSError("offline")
 
-    path, warning = cli_module._cache_wheel("https://example.invalid/x.whl", dest_dir=tmp_path, fetch=boom)
+    path, warning = client_payload._cache_wheel("https://example.invalid/x.whl", dest_dir=tmp_path, fetch=boom)
     assert path is None and "offline" in (warning or "")
 
 
 def test_uvx_wheel_payload_uses_the_cached_wheel_when_given(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(cli_module, "resolve_uvx_command", lambda: ["/opt/uv/bin/uvx"])
+    monkeypatch.setattr(client_payload, "resolve_uvx_command", lambda: ["/opt/uv/bin/uvx"])
     wheel = tmp_path / "horosa_skill-x.whl"
-    payload, command, _ = cli_module._build_client_config_payload(
+    payload, command, _ = client_payload._build_client_config_payload(
         format_name="cursor", skill_root=Path.cwd(), server_name="horosa", launcher="uvx-wheel", surface="auto", wheel_source=str(wheel),
     )
     assert command[:3] == ["/opt/uv/bin/uvx", "--from", str(wheel)] and payload["launcher"]["wheel_cached_path"] == str(wheel)

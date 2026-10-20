@@ -166,6 +166,11 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   api 与 runner 之间不 import（只经 `self.`），各有负向对照。
   **自己踩的**：在 scratch 里干跑时用 `PYTHONPATH` 指向拆好的副本跑 pytest——212 条全绿，但 pyproject 的 `pythonpath = ["src"]`
   把仓里的旧代码排在前面，测的根本不是副本（两处「包根已没有这个名字」的 patch 也照样过，才露馅）。干跑只能信纯 `python -c`。
+- **`cli.py` 第一段：客户端配置库 → 包 `client_config/`**（`locations` / `merge` / `openclaw` / `payload` / `audit`，单向依赖；cli.py 4 522 → 3 387 行）。
+  命令定义仍在 cli.py（Typer 树顺序天然不变），只搬 helper。被测试 patch、又在两个模块里被调用的名字（`_client_config_locations`）
+  一律经模块属性调（`client_locations._client_config_locations(...)`），一个 patch 点覆盖全部调用方；`resolve_uv(x)_command` 不能统一
+  patch `client_tools`——`resolve_uvx_command` 内部调 `resolve_uv_command`，统一 patch 会改变测试语义——所以按消费方模块逐个改 patch 点。
+  测试改指新模块用 AST 精确改写（`cli.X` 读、`setattr` 目标、`from cli import X`），28 条第三方事实的 `affects` 补上新包路径。
 - **没做的**：审计建议把 9 条择日指引的重复字段收成工厂函数（约省 160 行）。没做——每条是要整条读的声明式数据，而且上一条正说明
   共享对象在这张表里会被原地写；省下的行数不值这个风险。
 - **法则**：import 期对模块级共享对象的原地写，一律写时复制；拆分只搬不改，表面逐字比对兜底。

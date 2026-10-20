@@ -141,7 +141,7 @@ def test_pytest_env_carries_origins_and_node_but_not_the_lane_port_overrides(tmp
 
 
 def test_lane_covers_every_client_the_cli_knows() -> None:
-    from horosa_skill.surfaces.cli import _CLIENT_NAMES
+    from horosa_skill.client_config.locations import _CLIENT_NAMES
 
     assert set(live.CLIENTS) == set(_CLIENT_NAMES) and len(live.CLIENTS) == 25  # v0.41.0：9 → 25
 

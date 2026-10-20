@@ -16,6 +16,10 @@ import pytest
 from typer.testing import CliRunner
 
 from horosa_skill.surfaces.cli import app
+from horosa_skill.client_config import audit as client_audit
+from horosa_skill.client_config import locations as client_locations
+from horosa_skill.client_config import merge as client_merge
+from horosa_skill.client_config import payload as client_payload
 
 runner = CliRunner()
 
@@ -104,9 +108,8 @@ def test_json_write_still_merges_mcp_servers(tmp_path: Path) -> None:
 
 # ---- v0.36.0 C4：PyPI 分发 → `--launcher uvx`；v0.38.0 B2：写绝对路径，找不到才退回裸名并警告 ----
 def test_client_config_launcher_uvx_emits_absolute_command_when_found(monkeypatch: pytest.MonkeyPatch) -> None:
-    from horosa_skill.surfaces import cli
 
-    monkeypatch.setattr(cli, "resolve_uvx_command", lambda: ["/opt/uv/bin/uvx"])
+    monkeypatch.setattr(client_payload, "resolve_uvx_command", lambda: ["/opt/uv/bin/uvx"])
     payload = _payload("--format", "claude-desktop", "--launcher", "uvx")
     server = payload["mcpServers"]["horosa"]
     assert server["command"] == "/opt/uv/bin/uvx"
@@ -118,12 +121,11 @@ def test_client_config_launcher_uvx_emits_absolute_command_when_found(monkeypatc
 
 
 def test_client_config_launcher_uvx_warns_when_uvx_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    from horosa_skill.surfaces import cli
 
     def missing() -> list[str]:
         raise FileNotFoundError("uvx not found")
 
-    monkeypatch.setattr(cli, "resolve_uvx_command", missing)
+    monkeypatch.setattr(client_payload, "resolve_uvx_command", missing)
     payload = _payload("--format", "claude-desktop", "--launcher", "uvx")
     assert payload["mcpServers"]["horosa"]["command"] == "uvx"
     assert any("uvx" in w for w in payload["warnings"])
@@ -206,42 +208,39 @@ def test_json_write_is_atomic_when_replace_fails(tmp_path: Path, monkeypatch: py
 
 
 def test_openclaw_note_only_formats_refuse_to_write_prose_as_config(tmp_path: Path) -> None:
-    from horosa_skill.surfaces import cli
 
     with pytest.raises(Exception):
-        cli._merge_client_config(tmp_path / "x.json", {"note": "只有说明，没有 server 块"})
+        client_merge._merge_client_config(tmp_path / "x.json", {"note": "只有说明，没有 server 块"})
     assert not (tmp_path / "x.json").exists()
 
 
 # ---- v0.38.0 B2：各 OS 的真实配置路径 ----
 def test_client_config_locations_windows_shapes() -> None:
-    from horosa_skill.surfaces import cli
 
     env = {"APPDATA": r"C:\Users\张 三\AppData\Roaming"}
-    for client in cli._CLIENT_NAMES:
-        paths = [str(p) for p in cli._client_config_locations(client, os_name="nt", env=env, home=r"C:\Users\张 三", cwd=r"D:\proj")]
+    for client in client_locations._CLIENT_NAMES:
+        paths = [str(p) for p in client_locations._client_config_locations(client, os_name="nt", env=env, home=r"C:\Users\张 三", cwd=r"D:\proj")]
         assert paths, client
         assert all("张 三" in p or p.startswith("D:") for p in paths), (client, paths)
-    zed = str(cli._client_config_locations("zed", os_name="nt", env=env, home=r"C:\Users\张 三")[0])
+    zed = str(client_locations._client_config_locations("zed", os_name="nt", env=env, home=r"C:\Users\张 三")[0])
     assert zed.endswith("settings.json") and "Zed" in zed and "Roaming" in zed
-    vscode = str(cli._client_config_locations("vscode", os_name="nt", env=env, home=r"C:\Users\张 三")[0])
+    vscode = str(client_locations._client_config_locations("vscode", os_name="nt", env=env, home=r"C:\Users\张 三")[0])
     assert "Code" in vscode and vscode.endswith("mcp.json") and "Roaming" in vscode
-    cline = str(cli._client_config_locations("cline", os_name="nt", env=env, home=r"C:\Users\张 三")[0])
+    cline = str(client_locations._client_config_locations("cline", os_name="nt", env=env, home=r"C:\Users\张 三")[0])
     assert "saoudrizwan.claude-dev" in cline and "Roaming" in cline
 
 
 def test_client_config_locations_darwin_and_linux_shapes(tmp_path: Path) -> None:
-    from horosa_skill.surfaces import cli
 
     # env={}：Linux runner 设了 XDG_CONFIG_HOME=/home/runner/.config（v0.38.1 C19 起会覆盖合成 home）；本机没设所以曾只在 CI 红
-    mac = str(cli._client_config_locations("claude-desktop", os_name="darwin", home=tmp_path, env={})[0])
+    mac = str(client_locations._client_config_locations("claude-desktop", os_name="darwin", home=tmp_path, env={})[0])
     assert mac == str(tmp_path / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json")
-    linux = str(cli._client_config_locations("claude-desktop", os_name="linux", home=tmp_path, env={})[0])
+    linux = str(client_locations._client_config_locations("claude-desktop", os_name="linux", home=tmp_path, env={})[0])
     assert linux == str(tmp_path / ".config" / "Claude" / "claude_desktop_config.json")
     # as_posix(): on a Windows host str(Path) uses backslashes and this assertion went red on every Windows run
-    assert cli._client_config_locations("zed", os_name="darwin", home=tmp_path, env={})[0].as_posix().endswith(".config/zed/settings.json")
+    assert client_locations._client_config_locations("zed", os_name="darwin", home=tmp_path, env={})[0].as_posix().endswith(".config/zed/settings.json")
     with pytest.raises(Exception):
-        cli._client_config_locations("roo", os_name="darwin", home=tmp_path)
+        client_locations._client_config_locations("roo", os_name="darwin", home=tmp_path)
 
 
 def test_client_config_reports_a_real_config_path_for_every_json_client(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -251,12 +250,11 @@ def test_client_config_reports_a_real_config_path_for_every_json_client(monkeypa
 
 
 def test_codex_toml_round_trips_spaced_cjk_windows_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    from horosa_skill.surfaces import cli
 
     root = tmp_path / "张 三" / "horosa-skill"
     root.mkdir(parents=True)
     (root / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
-    monkeypatch.setattr(cli, "resolve_uv_command", lambda: [r"C:\Users\张 三\AppData\Local\Programs\uv\uv.exe"])
+    monkeypatch.setattr(client_payload, "resolve_uv_command", lambda: [r"C:\Users\张 三\AppData\Local\Programs\uv\uv.exe"])
     payload = _payload("--format", "codex", "--skill-root", str(root))
     server = tomllib.loads(payload["toml_stdio"])["mcp_servers"]["horosa"]
     assert server["command"] == r"C:\Users\张 三\AppData\Local\Programs\uv\uv.exe"
@@ -266,10 +264,9 @@ def test_codex_toml_round_trips_spaced_cjk_windows_paths(monkeypatch: pytest.Mon
 # ---- v0.38.0 B3：免 git / 免 PyPI 的零安装 → `--launcher uvx-wheel`（镜像感知、钉版本）----
 def test_launcher_uvx_wheel_emits_pinned_release_url(monkeypatch: pytest.MonkeyPatch) -> None:
     from horosa_skill import __version__
-    from horosa_skill.surfaces import cli
 
     monkeypatch.delenv("HOROSA_RUNTIME_MIRROR", raising=False)
-    monkeypatch.setattr(cli, "resolve_uvx_command", lambda: ["/opt/uv/bin/uvx"])
+    monkeypatch.setattr(client_payload, "resolve_uvx_command", lambda: ["/opt/uv/bin/uvx"])
     payload = _payload("--format", "claude-desktop", "--launcher", "uvx-wheel")
     server = payload["mcpServers"]["horosa"]
     expected = f"https://github.com/Horace-Maxwell/horosa-skill/releases/download/v{__version__}/horosa_skill-{__version__}-py3-none-any.whl"
@@ -281,11 +278,9 @@ def test_launcher_uvx_wheel_emits_pinned_release_url(monkeypatch: pytest.MonkeyP
 
 
 def test_launcher_uvx_wheel_uses_the_first_mirror_when_set(monkeypatch: pytest.MonkeyPatch) -> None:
-    from horosa_skill import __version__
-    from horosa_skill.surfaces import cli
 
     monkeypatch.setenv("HOROSA_RUNTIME_MIRROR", "https://mirror.example/gh, https://m2.example.org/")
-    monkeypatch.setattr(cli, "resolve_uvx_command", lambda: ["/opt/uv/bin/uvx"])
+    monkeypatch.setattr(client_payload, "resolve_uvx_command", lambda: ["/opt/uv/bin/uvx"])
     payload = _payload("--format", "cursor", "--launcher", "uvx-wheel")
     url = payload["mcpServers"]["horosa"]["args"][1]
     assert url.startswith("https://mirror.example/gh/Horace-Maxwell/horosa-skill/releases/download/v")
@@ -303,12 +298,11 @@ def test_claude_code_command_keeps_a_spaced_checkout_path_as_one_argument(tmp_pa
     """README 教的是复制粘贴这条命令：`/Users/x/My Projects/horosa-skill` 不带引号会被 shell 拆成两个参数。"""
     import shlex
 
-    from horosa_skill.surfaces import cli
 
     root = tmp_path / "My Projects" / "horosa-skill"
     root.mkdir(parents=True)
     (root / "pyproject.toml").write_text("[project]\nname = 'horosa-skill'\n", encoding="utf-8")
-    monkeypatch.setattr(cli, "resolve_uv_command", lambda: ["/opt/u v/bin/uv"])
+    monkeypatch.setattr(client_payload, "resolve_uv_command", lambda: ["/opt/u v/bin/uv"])
     payload = _payload("--format", "claude-code", "--skill-root", str(root), "--surface", "compact")
     argv = shlex.split(payload["command"])
     assert argv[:4] == ["claude", "mcp", "add", "horosa"]
@@ -318,7 +312,7 @@ def test_claude_code_command_keeps_a_spaced_checkout_path_as_one_argument(tmp_pa
 
 
 def test_codex_merge_accepts_a_utf16_config(tmp_path: Path) -> None:
-    from horosa_skill.surfaces.cli import _write_codex_toml_merge
+    from horosa_skill.client_config.merge import _write_codex_toml_merge
 
     target = tmp_path / "config.toml"
     target.write_bytes("[other]\nx = 1\n".encode("utf-16"))  # Notepad / Out-File 形状：BOM ff fe
@@ -331,7 +325,7 @@ def test_codex_merge_accepts_a_utf16_config(tmp_path: Path) -> None:
 def test_codex_merge_refuses_undecodable_bytes_without_a_traceback(tmp_path: Path) -> None:
     import typer
 
-    from horosa_skill.surfaces.cli import _write_codex_toml_merge
+    from horosa_skill.client_config.merge import _write_codex_toml_merge
 
     target = tmp_path / "config.toml"
     garbage = b"\xff\xfe" + b"\x00\xd8" * 4  # UTF-16 BOM + 孤立代理项 → UnicodeDecodeError
@@ -359,7 +353,7 @@ def test_cline_and_zed_entries_carry_a_600_second_timeout() -> None:
 
 @pytest.mark.parametrize("client", ["cline", "zed"])
 def test_client_check_flags_missing_or_short_timeouts_for_cline_and_zed(client: str) -> None:
-    from horosa_skill.surfaces.cli import _audit_client_entry
+    from horosa_skill.client_config.audit import _audit_client_entry
 
     base = {"command": "/opt/uv/bin/uv", "args": ["run", "horosa-skill", "serve", "--transport", "stdio"]}
     codes = [p["code"] for p in _audit_client_entry("horosa", base, client=client)]
@@ -381,7 +375,7 @@ def test_codex_toml_declares_absolute_runtime_and_data_roots(monkeypatch: pytest
 
 
 def test_client_check_flags_a_codex_entry_without_the_env_roots() -> None:
-    from horosa_skill.surfaces.cli import _audit_client_entry
+    from horosa_skill.client_config.audit import _audit_client_entry
 
     entry = {"command": "/opt/uv/bin/uv", "args": ["run", "horosa-skill", "serve", "--transport", "stdio"],
              "startup_timeout_sec": 120, "tool_timeout_sec": 600, "env": {"HOROSA_MCP_COMPACT": "1"}}
@@ -391,30 +385,29 @@ def test_client_check_flags_a_codex_entry_without_the_env_roots() -> None:
 
 
 def test_placeholders_are_judged_per_client(tmp_path: Path) -> None:
-    from horosa_skill.surfaces import cli
 
     args = ["run", "--directory", "${workspaceFolder}/horosa-skill", "horosa-skill", "serve", "--transport", "stdio"]
     project = tmp_path / "proj"
     (project / "horosa-skill").mkdir(parents=True)
     (project / "horosa-skill" / "pyproject.toml").write_text("[project]\nname='horosa-skill'\n", encoding="utf-8")
     (project / ".vscode").mkdir()
-    ok = cli._audit_client_entry("horosa", {"command": "/opt/uv/bin/uv", "args": args}, client="vscode", config_dir=project / ".vscode")
+    ok = client_audit._audit_client_entry("horosa", {"command": "/opt/uv/bin/uv", "args": args}, client="vscode", config_dir=project / ".vscode")
     assert [p["code"] for p in ok] == [], ok
     # 负向对照：VS Code 不展开 Claude Code 的变量 —— 旧判定放行它（只要 blob 里有 ${CLAUDE_PROJECT_DIR）。
     bad_args = ["run", "--directory", "${CLAUDE_PROJECT_DIR:-.}/horosa-skill", "horosa-skill", "serve", "--transport", "stdio"]
-    bad = cli._audit_client_entry("horosa", {"command": "/opt/uv/bin/uv", "args": bad_args}, client="vscode", config_dir=project / ".vscode")
+    bad = client_audit._audit_client_entry("horosa", {"command": "/opt/uv/bin/uv", "args": bad_args}, client="vscode", config_dir=project / ".vscode")
     assert "unexpanded_placeholder" in [p["code"] for p in bad]
     # Cursor 认 ${env:…}；Claude Code 认 ${CLAUDE_PROJECT_DIR:-.}
     env_args = ["run", "--directory", "${env:HOROSA_CHECKOUT:-" + str(project) + "}/horosa-skill", "horosa-skill", "serve", "--transport", "stdio"]
-    assert "unexpanded_placeholder" not in [p["code"] for p in cli._audit_client_entry("horosa", {"command": "/opt/uv/bin/uv", "args": env_args}, client="cursor", config_dir=project / ".cursor")]
-    assert "unexpanded_placeholder" not in [p["code"] for p in cli._audit_client_entry("horosa", {"command": "/opt/uv/bin/uv", "args": bad_args}, client="claude-code", config_dir=project)]
+    assert "unexpanded_placeholder" not in [p["code"] for p in client_audit._audit_client_entry("horosa", {"command": "/opt/uv/bin/uv", "args": env_args}, client="cursor", config_dir=project / ".cursor")]
+    assert "unexpanded_placeholder" not in [p["code"] for p in client_audit._audit_client_entry("horosa", {"command": "/opt/uv/bin/uv", "args": bad_args}, client="claude-code", config_dir=project)]
     # 展开后目录不存在 → directory_missing（此前含占位符就跳过检查）
-    missing = cli._audit_client_entry("horosa", {"command": "/opt/uv/bin/uv", "args": ["run", "--directory", "${workspaceFolder}/elsewhere", "horosa-skill", "serve", "--transport", "stdio"]}, client="cursor", config_dir=project / ".cursor")
+    missing = client_audit._audit_client_entry("horosa", {"command": "/opt/uv/bin/uv", "args": ["run", "--directory", "${workspaceFolder}/elsewhere", "horosa-skill", "serve", "--transport", "stdio"]}, client="cursor", config_dir=project / ".cursor")
     assert "directory_missing" in [p["code"] for p in missing]
 
 
 def test_project_root_walks_up_to_git_or_mcp_json(tmp_path: Path) -> None:
-    from horosa_skill.surfaces.cli import _project_root
+    from horosa_skill.client_config.locations import _project_root
 
     repo = tmp_path / "repo"
     (repo / ".git").mkdir(parents=True)
@@ -429,33 +422,31 @@ def test_project_root_walks_up_to_git_or_mcp_json(tmp_path: Path) -> None:
 
 
 def test_project_level_config_locations_follow_the_project_root(tmp_path: Path) -> None:
-    from horosa_skill.surfaces import cli
 
     repo = tmp_path / "repo"
     (repo / ".git").mkdir(parents=True)
     sub = repo / "horosa-skill"
     sub.mkdir()
-    paths = cli._client_config_locations("cursor", os_name="darwin", home=tmp_path / "home", cwd=cli._project_root(sub))
+    paths = client_locations._client_config_locations("cursor", os_name="darwin", home=tmp_path / "home", cwd=client_locations._project_root(sub))
     assert paths[-1] == repo / ".cursor" / "mcp.json"
 
 
 def test_config_locations_honour_codex_home_xdg_and_secondary_cline_hosts(tmp_path: Path) -> None:
-    from horosa_skill.surfaces import cli
 
     env = {"CODEX_HOME": str(tmp_path / "codex-home"), "XDG_CONFIG_HOME": str(tmp_path / "xdg")}
-    assert cli._client_config_locations("codex", os_name="linux", env=env, home=tmp_path)[0] == tmp_path / "codex-home" / "config.toml"
-    assert cli._client_config_locations("zed", os_name="linux", env=env, home=tmp_path)[0] == tmp_path / "xdg" / "zed" / "settings.json"
-    assert cli._client_config_locations("claude-desktop", os_name="linux", env={}, home=tmp_path)[0] == tmp_path / ".config" / "Claude" / "claude_desktop_config.json"
-    gemini = cli._client_config_locations("gemini", os_name="darwin", home=tmp_path, cwd=tmp_path / "proj")
+    assert client_locations._client_config_locations("codex", os_name="linux", env=env, home=tmp_path)[0] == tmp_path / "codex-home" / "config.toml"
+    assert client_locations._client_config_locations("zed", os_name="linux", env=env, home=tmp_path)[0] == tmp_path / "xdg" / "zed" / "settings.json"
+    assert client_locations._client_config_locations("claude-desktop", os_name="linux", env={}, home=tmp_path)[0] == tmp_path / ".config" / "Claude" / "claude_desktop_config.json"
+    gemini = client_locations._client_config_locations("gemini", os_name="darwin", home=tmp_path, cwd=tmp_path / "proj")
     assert gemini[-1] == tmp_path / "proj" / ".gemini" / "settings.json"
-    cline = [p.as_posix() for p in cli._client_config_locations("cline", os_name="darwin", home=tmp_path)]
+    cline = [p.as_posix() for p in client_locations._client_config_locations("cline", os_name="darwin", home=tmp_path)]
     assert any("/Code/User/" in p for p in cline) and any("/Cursor/User/" in p for p in cline) and any("/Windsurf/User/" in p for p in cline)
     assert all(p.endswith("saoudrizwan.claude-dev/settings/cline_mcp_settings.json") for p in cline)
 
 
 def test_client_check_understands_a_local_wheel_source(tmp_path: Path) -> None:
     from horosa_skill import __version__
-    from horosa_skill.surfaces.cli import _audit_client_entry
+    from horosa_skill.client_config.audit import _audit_client_entry
 
     wheel = tmp_path / f"horosa_skill-{__version__}-py3-none-any.whl"
     entry = {"command": "/opt/uv/bin/uvx", "args": ["--from", str(wheel), "horosa-skill", "serve", "--transport", "stdio"]}
@@ -474,19 +465,18 @@ def test_windsurf_client_points_at_devin_paths_with_legacy_cascade_fallback(tmp_
     """docs.devin.ai/cli/extensibility/mcp/configuration：用户级 ~/.config/devin/mcp_config.json（Windows %APPDATA%\\devin\\mcp_config.json）、
     项目级 .devin/mcp_config.json；根键 mcpServers。旧代码只认 ~/.codeium/windsurf/mcp_config.json —— 新装的 Devin Desktop 永远找不到 horosa。
     旧路径留作最后候选：已有 Cascade 配置的机器仍原位合并（`_preferred_config_path` 取第一个已存在的）。"""
-    from horosa_skill.surfaces import cli
 
     home = tmp_path / "home"
     proj = tmp_path / "proj"
-    mac = cli._client_config_locations("windsurf", os_name="darwin", env={}, home=home, cwd=proj)
+    mac = client_locations._client_config_locations("windsurf", os_name="darwin", env={}, home=home, cwd=proj)
     assert [str(p) for p in mac] == [
         str(home / ".config" / "devin" / "mcp_config.json"),
         str(proj / ".devin" / "mcp_config.json"),
         str(home / ".codeium" / "windsurf" / "mcp_config.json"),
     ]
-    linux = cli._client_config_locations("windsurf", os_name="linux", env={"XDG_CONFIG_HOME": str(tmp_path / "xdg")}, home=home, cwd=proj)
+    linux = client_locations._client_config_locations("windsurf", os_name="linux", env={"XDG_CONFIG_HOME": str(tmp_path / "xdg")}, home=home, cwd=proj)
     assert str(linux[0]) == str(tmp_path / "xdg" / "devin" / "mcp_config.json")
-    win = cli._client_config_locations("windsurf", os_name="nt", env={"APPDATA": r"C:\Users\张 三\AppData\Roaming"}, home=r"C:\Users\张 三", cwd=r"D:\proj")
+    win = client_locations._client_config_locations("windsurf", os_name="nt", env={"APPDATA": r"C:\Users\张 三\AppData\Roaming"}, home=r"C:\Users\张 三", cwd=r"D:\proj")
     # 在 POSIX 主机上合成 Windows 形状时 Path 会混用分隔符（既有 Windows 形状用例同样只看片段）——按片段比。
     assert str(win[0]).replace("\\", "/").endswith("AppData/Roaming/devin/mcp_config.json") and "张 三" in str(win[0])
     assert str(win[1]).replace("\\", "/").endswith("D:/proj/.devin/mcp_config.json")
@@ -494,12 +484,11 @@ def test_windsurf_client_points_at_devin_paths_with_legacy_cascade_fallback(tmp_
     legacy = home / ".codeium" / "windsurf" / "mcp_config.json"
     legacy.parent.mkdir(parents=True)
     legacy.write_text("{}", encoding="utf-8")
-    import os as _os
     from unittest import mock
 
-    original = cli._client_config_locations
-    with mock.patch.object(cli, "_client_config_locations", lambda client, **kw: original(client, os_name="darwin", env={}, home=home, cwd=proj)):
-        assert cli._preferred_config_path("windsurf") == legacy
+    original = client_locations._client_config_locations
+    with mock.patch.object(client_locations, "_client_config_locations", lambda client, **kw: original(client, os_name="darwin", env={}, home=home, cwd=proj)):
+        assert client_locations._preferred_config_path("windsurf") == legacy
         legacy.unlink()
-        assert cli._preferred_config_path("windsurf") == home / ".config" / "devin" / "mcp_config.json"
-    assert "Devin" in cli._CLIENT_COMPACT_REASON["windsurf"] and "Devin Desktop" in cli._CLIENT_RESTART_HINTS["windsurf"]
+        assert client_locations._preferred_config_path("windsurf") == home / ".config" / "devin" / "mcp_config.json"
+    assert "Devin" in client_locations._CLIENT_COMPACT_REASON["windsurf"] and "Devin Desktop" in client_locations._CLIENT_RESTART_HINTS["windsurf"]

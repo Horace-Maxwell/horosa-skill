@@ -133,7 +133,7 @@ def test_editor_project_configs_pass_and_the_whitelist_is_locked_to_the_cli() ->
     errors: list[str] = []
     module.check_editor_project_configs(errors)
     assert errors == []
-    from horosa_skill.surfaces.cli import CLIENT_PLACEHOLDER_WHITELIST
+    from horosa_skill.client_config.audit import CLIENT_PLACEHOLDER_WHITELIST
 
     for client, allowed in module.EDITOR_PLACEHOLDER_WHITELIST.items():
         assert tuple(allowed) == tuple(CLIENT_PLACEHOLDER_WHITELIST[client]), client

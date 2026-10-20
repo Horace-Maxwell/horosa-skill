@@ -477,7 +477,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
     README×2 矩阵、示例索引、`setup --help`、第三方事实台账。只写**用户级**文件（项目级 `.mcp.json` 被多家共读，别家的字段会写进别人的配置）；
     没有文档化用户级文件的（TRAE）打印导入链接、不猜路径；文件里可能有用户别的内容且格式我们读不全的（dsh）只生成独立文件。
     原 9 家仍按下面的三件套维护。
-16a. **新客户端 = 三件套（v0.38.1 B2）**：① `CLIENT_PLACEHOLDER_WHITELIST` 里登记它**真的会展开**的 `${…}` 变量（按它的官方文档，
+16a. **新客户端 = 三件套（v0.38.1 B2；v0.41.1 起这些表与函数住在 `client_config/`——`locations` / `merge` / `audit` / `payload` / `openclaw`，命令仍在 cli.py）**：① `CLIENT_PLACEHOLDER_WHITELIST` 里登记它**真的会展开**的 `${…}` 变量（按它的官方文档，
     不按别家的），`client check` 只放行这一表；② `_client_config_locations` 的路径表（全局 + 项目级，按 `_project_root()` 而非裸 CWD；
     Windows / macOS / Linux 三形状 + 它自己的覆盖变量如 `CODEX_HOME`）；③ 它的 per-server 超时 / 环境转发规则写进生成器**并**写进
     `client check`（Codex `startup_timeout_sec`/`tool_timeout_sec` + env 表两个绝对根；Cline / Zed `timeout`（秒））；同时加进

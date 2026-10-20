@@ -16,6 +16,8 @@ import typer
 
 from horosa_skill.config import Settings
 from horosa_skill.surfaces import cli
+from horosa_skill.client_config import audit as client_audit
+from horosa_skill.client_config import locations as client_locations
 from horosa_skill.surfaces.mcp_server import (
     StaticTokenVerifier,
     build_auth_settings,
@@ -159,7 +161,7 @@ def test_server_info_reports_our_version_not_the_sdk_version(tmp_path) -> None:
 # ---------------------------------------------------------------- client check
 
 def _audit(entry: dict, client: str = "cursor", config_dir=None) -> list[str]:
-    return [p["code"] for p in cli._audit_client_entry("horosa", entry, client=client, config_dir=config_dir)]
+    return [p["code"] for p in client_audit._audit_client_entry("horosa", entry, client=client, config_dir=config_dir)]
 
 
 def test_client_check_catches_an_unexpanded_placeholder() -> None:
@@ -237,7 +239,7 @@ def test_client_check_searches_the_located_windows_paths(monkeypatch, tmp_path) 
     located.write_text(json.dumps({"servers": {"horosa": {"type": "stdio", "command": "/opt/uv/bin/uv",
                                                           "args": ["run", "horosa-skill", "serve", "--transport", "stdio"]}}}),
                        encoding="utf-8")
-    monkeypatch.setattr(cli, "_client_config_locations", lambda name, **kw: [located] if name == "vscode" else [tmp_path / "none.json"])
+    monkeypatch.setattr(client_locations, "_client_config_locations", lambda name, **kw: [located] if name == "vscode" else [tmp_path / "none.json"])
     result = CliRunner().invoke(cli.app, ["client", "check", "--client", "vscode"])
     assert result.exit_code == 0, result.output
     report = json.loads(result.output)
@@ -272,7 +274,7 @@ def test_client_check_passes_a_good_entry(tmp_path) -> None:
 def test_client_check_finds_nested_claude_code_project_entries() -> None:
     """Claude Code 把项目级 server 存在 projects.<path>.mcpServers 下，不是顶层。"""
     payload = {"projects": {"/some/repo": {"mcpServers": {"horosa": {"command": "uv", "args": []}}}}}
-    found = list(cli._iter_client_entries(payload))
+    found = list(client_audit._iter_client_entries(payload))
     assert len(found) == 1 and found[0][0].endswith("::horosa")
 
 
@@ -302,10 +304,10 @@ def test_committed_client_configs_are_clean() -> None:
         path = repo_root / rel
         assert path.is_file(), f"{rel} 应随仓提交（打开仓即用）"
         payload = json.loads(path.read_text(encoding="utf-8"))
-        entries = list(cli._iter_client_entries(payload))
+        entries = list(client_audit._iter_client_entries(payload))
         assert entries, f"{rel} 里没有 horosa 条目"
         for entry_name, entry in entries:
-            problems = cli._audit_client_entry(entry_name, entry, client=client, config_dir=path.parent)
+            problems = client_audit._audit_client_entry(entry_name, entry, client=client, config_dir=path.parent)
             assert problems == [], f"{rel}: {[p['code'] for p in problems]}"
 
 

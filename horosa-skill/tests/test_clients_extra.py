@@ -19,6 +19,8 @@ from typer.testing import CliRunner
 
 from horosa_skill import clients_extra, skill_install
 from horosa_skill.surfaces import cli
+from horosa_skill.client_config import locations as client_locations
+from horosa_skill.client_config import payload as client_payload
 from horosa_skill.surfaces.cli import app
 
 runner = CliRunner()
@@ -92,7 +94,7 @@ def test_codebuddy_writes_the_one_file_it_actually_reads(tmp_path: Path) -> None
     legacy = home / ".codebuddy.json"
     legacy.parent.mkdir(parents=True, exist_ok=True)
     legacy.write_text(json.dumps({"mcpServers": {"mine": {"command": "x"}}}), encoding="utf-8")
-    candidates = cli._client_config_locations("codebuddy", os_name="darwin", env={}, home=home, cwd=tmp_path)
+    candidates = client_locations._client_config_locations("codebuddy", os_name="darwin", env={}, home=home, cwd=tmp_path)
     assert candidates == [home / ".codebuddy" / ".mcp.json", home / ".codebuddy" / "mcp.json", legacy]
     chosen = next(c for c in candidates if c.is_file())
     assert chosen == legacy, "只有旧文件在时必须写旧文件——新建 .mcp.json 会让 CodeBuddy 看不到用户原有的 server"
@@ -115,7 +117,7 @@ def test_deepcode_refuses_a_file_with_comments(tmp_path: Path) -> None:
 def test_copilot_cli_carries_home_and_the_probe_gets_only_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HOME", str(tmp_path / "realhome"))
     monkeypatch.setenv("SOME_SHELL_ONLY_VAR", "x")
-    payload, _cmd, _env = cli._build_client_config_payload(
+    payload, _cmd, _env = client_payload._build_client_config_payload(
         format_name="copilot-cli", skill_root=cli._package_root(), server_name="horosa", launcher="uvx-wheel", surface="auto",
     )
     entry = payload["mcpServers"]["horosa"]
@@ -174,11 +176,11 @@ def test_check_flags_a_missing_timeout_for_each_client_that_needs_one(client: st
 
 def test_locations_follow_each_clients_own_overrides() -> None:
     home = Path("/h")
-    assert cli._client_config_locations("goose", os_name="nt", env={"APPDATA": "C:/A"}, home=home, cwd=home)[0] == Path("C:/A/Block/goose/config/config.yaml")
-    assert cli._client_config_locations("goose", os_name="darwin", env={}, home=home, cwd=home)[0] == home / ".config" / "goose" / "config.yaml"
-    assert cli._client_config_locations("opencode", os_name="nt", env={"XDG_CONFIG_HOME": "/x"}, home=home, cwd=home)[0] == Path("/x/opencode/opencode.json")
-    assert cli._client_config_locations("copilot-cli", os_name="linux", env={"COPILOT_HOME": "/c"}, home=home, cwd=home) == [Path("/c/mcp-config.json")]
-    assert cli._client_config_locations("warp", os_name="nt", env={}, home=home, cwd=home) == [home / ".warp" / ".mcp.json"]
+    assert client_locations._client_config_locations("goose", os_name="nt", env={"APPDATA": "C:/A"}, home=home, cwd=home)[0] == Path("C:/A/Block/goose/config/config.yaml")
+    assert client_locations._client_config_locations("goose", os_name="darwin", env={}, home=home, cwd=home)[0] == home / ".config" / "goose" / "config.yaml"
+    assert client_locations._client_config_locations("opencode", os_name="nt", env={"XDG_CONFIG_HOME": "/x"}, home=home, cwd=home)[0] == Path("/x/opencode/opencode.json")
+    assert client_locations._client_config_locations("copilot-cli", os_name="linux", env={"COPILOT_HOME": "/c"}, home=home, cwd=home) == [Path("/c/mcp-config.json")]
+    assert client_locations._client_config_locations("warp", os_name="nt", env={}, home=home, cwd=home) == [home / ".warp" / ".mcp.json"]
 
 
 def test_skill_folders_install_one_copy_per_client() -> None:
@@ -186,7 +188,7 @@ def test_skill_folders_install_one_copy_per_client() -> None:
     shared = home / ".agents" / "skills"
     own = {"kiro": home / ".kiro" / "skills", "qoder": home / ".qoder" / "skills", "codebuddy": home / ".codebuddy" / "skills",
            "trae": home / ".trae" / "skills", "claude-code": home / ".claude" / "skills"}
-    for client in cli._CLIENT_NAMES:
+    for client in client_locations._CLIENT_NAMES:
         dirs = skill_install.client_skill_dirs(client, env={}, home=home)
         assert len(dirs) <= 1 or client == "trae", (client, dirs)
         if client in own:

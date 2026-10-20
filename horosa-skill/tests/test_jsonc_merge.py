@@ -11,7 +11,7 @@ import pytest
 from typer.testing import CliRunner
 
 from horosa_skill import jsonc
-from horosa_skill.surfaces import cli as cli_module
+from horosa_skill.client_config import audit as client_audit
 from horosa_skill.surfaces.cli import app
 
 runner = CliRunner()
@@ -131,6 +131,6 @@ def test_client_check_reads_commented_configs(tmp_path: Path) -> None:
     target = tmp_path / "settings.json"
     target.write_text(ZED_TEMPLATE, encoding="utf-8")
     _write("zed", target)
-    report = cli_module._client_check_report(["zed"], target)
+    report = client_audit._client_check_report(["zed"], target)
     finding = next(f for f in report["clients"][0]["findings"] if f.get("entry") == "horosa")
     assert finding["ok"] is True, finding

@@ -3,6 +3,7 @@
   "non_bilingual_messages": 107,
   "per_file": {
     "agent_guidance/catalog.py": 1,
+    "client_config/openclaw.py": 2,
     "client_tools.py": 2,
     "engine/client.py": 6,
     "engine/js_client.py": 4,
@@ -26,7 +27,7 @@
     "service/runners/shenshu.py": 3,
     "service/runners/western.py": 5,
     "service/runners/zeri.py": 7,
-    "surfaces/cli.py": 4
+    "surfaces/cli.py": 2
   },
   "codes_seen": 187
 }

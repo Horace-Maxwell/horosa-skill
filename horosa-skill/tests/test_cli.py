@@ -11,6 +11,8 @@ import typer
 
 from horosa_skill.config import Settings
 from horosa_skill.surfaces import cli
+from horosa_skill.client_config import openclaw as client_openclaw
+from horosa_skill.client_config import payload as client_payload
 
 
 class _ManagerStub:
@@ -146,7 +148,7 @@ def test_resolve_skill_root_accepts_package_dir(tmp_path: Path) -> None:
     skill_root.mkdir()
     (skill_root / "pyproject.toml").write_text("[project]\nname='horosa-skill'\n", encoding="utf-8")
 
-    assert cli._resolve_skill_root(skill_root) == skill_root.resolve()
+    assert client_payload._resolve_skill_root(skill_root) == skill_root.resolve()
 
 
 def test_resolve_skill_root_accepts_repo_root(tmp_path: Path) -> None:
@@ -155,16 +157,16 @@ def test_resolve_skill_root_accepts_repo_root(tmp_path: Path) -> None:
     skill_root.mkdir(parents=True)
     (skill_root / "pyproject.toml").write_text("[project]\nname='horosa-skill'\n", encoding="utf-8")
 
-    assert cli._resolve_skill_root(repo_root) == skill_root.resolve()
+    assert client_payload._resolve_skill_root(repo_root) == skill_root.resolve()
 
 
 def test_build_openclaw_config_uses_uv_stdio_by_default(tmp_path: Path, monkeypatch) -> None:
     skill_root = tmp_path / "horosa-skill"
     skill_root.mkdir()
     uv_bin = str((tmp_path / "bin" / "uv").resolve())
-    monkeypatch.setattr(cli, "resolve_uv_command", lambda: [uv_bin])
+    monkeypatch.setattr(client_openclaw, "resolve_uv_command", lambda: [uv_bin])
 
-    payload = cli._build_openclaw_config(
+    payload = client_openclaw._build_openclaw_config(
         skill_root=skill_root,
         server_name="horosa",
         format_name="mcporter",
@@ -182,9 +184,9 @@ def test_build_openclaw_config_supports_isolated_home(tmp_path: Path, monkeypatc
     home_dir = tmp_path / "home"
     skill_root.mkdir()
     monkeypatch.setattr(cli.os, "name", "posix", raising=False)
-    monkeypatch.setattr(cli, "resolve_uv_command", lambda: ["python", "-m", "uv"])
+    monkeypatch.setattr(client_openclaw, "resolve_uv_command", lambda: ["python", "-m", "uv"])
 
-    payload = cli._build_openclaw_config(
+    payload = client_openclaw._build_openclaw_config(
         skill_root=skill_root,
         server_name="horosa",
         format_name="openclaw",
@@ -209,9 +211,9 @@ def test_build_openclaw_config_supports_isolated_home_on_windows(tmp_path: Path,
     skill_root.mkdir()
 
     monkeypatch.setattr(cli.os, "name", "nt", raising=False)
-    monkeypatch.setattr(cli, "resolve_uv_command", lambda: [r"C:\Program Files\uv\uv.exe"])
+    monkeypatch.setattr(client_openclaw, "resolve_uv_command", lambda: [r"C:\Program Files\uv\uv.exe"])
 
-    payload = cli._build_openclaw_config(
+    payload = client_openclaw._build_openclaw_config(
         skill_root=skill_root,
         server_name="horosa",
         format_name="mcporter",
@@ -273,7 +275,7 @@ def test_openclaw_setup_bootstraps_workspace_and_runs_smoke(monkeypatch, tmp_pat
         )
         return {"ok": True, "server_visible": True, "listed_tool_count": 43}
 
-    monkeypatch.setattr(cli, "resolve_uv_command", lambda: ["/usr/local/bin/uv"])
+    monkeypatch.setattr(client_openclaw, "resolve_uv_command", lambda: ["/usr/local/bin/uv"])
     monkeypatch.setattr(cli, "_runtime_manager", lambda settings_arg: ManagerStub())
     monkeypatch.setattr(cli, "_run_openclaw_smoke_check", fake_smoke_check)
     monkeypatch.setattr(cli, "_print_json", lambda data: captured.setdefault("report", data))

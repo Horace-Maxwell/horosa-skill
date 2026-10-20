@@ -3,8 +3,8 @@ source on 2026-10-12 (contracts/third_party_facts.json `clients-2026-10.*` carri
 
 Why a table and not more `elif` branches in cli.py: the nine original clients each grew bespoke code over five releases;
 sixteen more in the same style would bury the facts that actually differ (file path, root key, entry field names, the
-timeout field and its unit). Here each client is data; `surfaces/cli.py` asks this module for locations, the payload,
-the audit and the probe environment, and `tests/test_client_lockstep.py` pins every key to the docs, the lanes and the
+timeout field and its unit). Here each client is data; `client_config/` (and the setup flow in `surfaces/cli.py`) asks this
+module for locations, the payload, the audit and the probe environment, and `tests/test_client_lockstep.py` pins every key to the docs, the lanes and the
 ledger.
 
 Rules every row follows:
