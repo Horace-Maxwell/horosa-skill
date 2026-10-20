@@ -435,11 +435,6 @@ def _write_yaml_merge(target: Path, payload: dict[str, Any]) -> dict[str, Any]:
             "backup": str(backup) if backup else None}
 
 
-def _client_config_write(path: Path, payload: object) -> Path:
-    """向后兼容的薄包装：返回写入路径（详情见 `_merge_client_config`）。"""
-    return Path(_merge_client_config(path, payload)["path"])
-
-
 def _write_codex_toml_merge(target: Path, toml_snippet: str) -> Path:
     """把生成的 `[mcp_servers.<name>]` 片段合并进已有 config.toml：只 upsert 该 server 表，
     其余内容（含注释）逐字保留（tomlkit）；覆盖前先备份 `<file>.horosa-bak`。目标不存在/为空

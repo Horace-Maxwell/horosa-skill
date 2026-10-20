@@ -13,7 +13,6 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import statistics
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -415,9 +414,3 @@ def summarize_runs(judged_runs: list[list[Judged]]) -> dict[str, Any]:
                 flips += 1
     return {"runs": len(judged_runs), "flip_rate": round(flips / total, 4) if total else 0.0}
 
-
-def latency_summary(judged: list[Judged]) -> dict[str, float]:
-    values = [item.latency_ms for item in judged if item.latency_ms]
-    if not values:
-        return {"p50": 0, "p95": 0, "mean": 0.0}
-    return {"p50": _percentile(values, 0.5), "p95": _percentile(values, 0.95), "mean": round(statistics.fmean(values), 1)}

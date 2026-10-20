@@ -1,4 +1,4 @@
-"""离线桩：`FakeJev`（按问题 id 脚本化答案）/ `FailingJev`（固定抛错）/ `RecordedJev`（按请求摘要回放）。
+"""离线桩：`FakeJev`（按问题 id 脚本化答案）/ `FailingJev`（固定抛错）。评测回放在 `decisions/eval.ResponseCache`。
 
 桩管形状，真值归 live smoke 与评测；桩返回的答案必须过 `parse_answers` 的同一套校验，
 所以桩和真传输在解析层零分叉。
@@ -6,13 +6,10 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Callable, Mapping
-from pathlib import Path
 from typing import Any
 
-from horosa_skill.decisions.errors import JevError, JevUnavailable
+from horosa_skill.decisions.errors import JevError
 from horosa_skill.decisions.layer import DecisionProvider
 from horosa_skill.decisions.questions import Answers, Choice, Question, Score, parse_answers
 
@@ -21,10 +18,6 @@ FAKE_MODEL = "jev-1.13.0"
 
 def choice_answer(choice: str, *, confidence: float = 0.95, probabilities: Mapping[str, float] | None = None) -> dict[str, Any]:
     return {"type": "choice", "choice": choice, "confidence": confidence, "probabilities": dict(probabilities or {choice: 1.0})}
-
-
-def score_answer(score: float, *, confidence: float = 0.9, probabilities: Mapping[str, float] | None = None) -> dict[str, Any]:
-    return {"type": "score", "score": score, "confidence": confidence, "probabilities": dict(probabilities or {str(int(round(score))): 1.0}), "legend": {}}
 
 
 def noul_answer(noul: float) -> dict[str, Any]:
@@ -96,34 +89,3 @@ class FailingJev(DecisionProvider):
         self.calls += 1
         raise self.error
 
-
-def request_digest(state: Any, questions: Mapping[str, Question], model: str) -> str:
-    body = {"model": model, "state": state, "questions": {qid: q.to_json() for qid, q in questions.items()}}
-    return hashlib.sha256(json.dumps(body, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")).hexdigest()
-
-
-class RecordedJev(DecisionProvider):
-    """评测回放：`cache.jsonl` 每行 {digest, response}；缺记录 → JevUnavailable（永不静默编造）。"""
-
-    def __init__(self, cache_path: Path, *, model: str = FAKE_MODEL) -> None:
-        self.cache_path = Path(cache_path)
-        self.model = model
-        self._cache: dict[str, dict[str, Any]] = {}
-        if self.cache_path.is_file():
-            for line in self.cache_path.read_text(encoding="utf-8").splitlines():
-                try:
-                    row = json.loads(line)
-                except ValueError:
-                    continue
-                if isinstance(row, dict) and isinstance(row.get("digest"), str) and isinstance(row.get("response"), dict):
-                    self._cache[row["digest"]] = row["response"]
-
-    def __len__(self) -> int:
-        return len(self._cache)
-
-    def decide(self, *, state: Any, questions: Mapping[str, Question], surface: str = "") -> Answers:
-        digest = request_digest(state, questions, self.model)
-        response = self._cache.get(digest)
-        if response is None:
-            raise JevUnavailable("本请求没有录制过的响应（先跑 `jev_eval measure`）/ no recorded response for this request (run `jev_eval measure` first)", code="jev.replay_missing")
-        return parse_answers(questions, response, latency_ms=0)

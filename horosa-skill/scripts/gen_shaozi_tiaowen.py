@@ -39,7 +39,7 @@ def main(argv: list[str]) -> int:
     # utf-8-sig strips the BOM on the 條文號碼 header.
     with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.reader(handle)
-        header = next(reader, None)  # 條文號碼, 卦, 條文
+        next(reader, None)  # skip the header row  # 條文號碼, 卦, 條文
         for row in reader:
             if len(row) < 3:
                 continue

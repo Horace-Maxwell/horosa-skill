@@ -158,6 +158,11 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   3. **拆大模块的头号隐患：re-export 让 monkeypatch 静默失效**（审计计数 cli 55 处、manager 39 处、service 三处冻结时间等）。
      → `tests/test_monkeypatch_targets.py`：被 patch 的名字若在目标模块里只被 import、从不使用 → 红（`useless_patch_reason`，负向对照内置）。
 - **法则**：护栏要在 CI 看不见的地方也成立——「CI 上那个端口没人」不等于「测试不会去连」；拆分之前先把「拆错了会安静变绿」的路堵上。
+- **第 1 批（删死代码，约 690 行）**：`service.py` 里 v0.40.0 起被 `engine/astro_snapshot.py` 取代的旧「古典 / 古典格局」实现（含一处静默 `except`）
+  与 6 个孤立辅助；其余模块 18 处无引用的函数 / 常量 / 导入；4 个历史构建脚本（本地双平台、Linux 实验、重打）连同只为它们存在的测试与守卫条目；
+  preflight 永远为空的「非阻断闸」分支、`run_ci_gates` 的死 `SKIP`。每项都经全仓 grep + 覆盖率 + `ruff F821` 兜底，对外表面与 110 技法 live 信封逐字一致。
+  **live 比对踩到的**：上游 `/predict/dice` 用 `set()` 收星体再遍历，顺序随 chart 进程的哈希种子变——同一实例内稳定、换实例就变。
+  比对 live 结果时 `diceChart` 要按多重集合比较（导出正文不受影响）；别把它误判成回归。
 
 ### v0.41.0 / 2026-10-12 — 接入面四缺口：规则只到得了打开本仓的 agent；注册表 validate 说 valid、publish 会拒（`skill_install` / `server_json_problems` / `check_agent_plugin`）
 

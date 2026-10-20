@@ -430,24 +430,6 @@ PREDICTIVE_POLICY = _policy(
     do_not_assume=["target date/year", "birth time", "timezone"],
 )
 
-EVENT_METHOD_POLICY = _policy(
-    intent="Event-time Chinese method pan calculation.",
-    required_context=COMMON_LOCATION_FIELDS + ["question/topic"],
-    ask_if_missing=[
-        {"field": "date/time", "question": "是用当前时间，还是你要指定一个起盘时间？", "options": ["当前时间", "指定时间"]},
-        {"field": "location", "question": "起盘地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
-        {"field": "question", "question": "这次主要问什么事？", "options": ["事业/财务", "感情/关系", "健康", "出行/失物/选择", "整体局势"]},
-        {"field": "after23NewDay", "question": "23 点后是否按次日换日？", "options": ["按星阙默认", "23 点后换日", "23 点后不换日"], "values": [None, 1, 0]},
-        {"field": "lateZiHourUseNextDay", "question": "晚子时（23-24点）时柱是否按次日日干起子时？", "options": ["按星阙默认（次日）", "按当日"], "values": [None, 0]},
-    ],
-    safe_defaults=[
-        {"field": "ad", "value": 1, "meaning": "公历"},
-        {"field": "after23NewDay", "value": 1, "meaning": _AFTER23_DEFAULT_MEANING},
-    ],
-    do_not_assume=["location for location-sensitive methods", "question context"],
-)
-
-
 def _progression_target_policy(
     *,
     intent: str,

@@ -14,10 +14,9 @@ That local folder is allowed to exist on disk without being committed to the rep
 |---|---|---|---|
 | macOS (Apple Silicon) | `darwin-arm64` | tar.gz | `package_runtime_payload.sh` |
 | Windows (x64) | `win32-x64` | zip | `build_runtime_release_windows.py` |
-| Linux (x64) 🧪 | `linux-x64` | tar.gz | `build_runtime_release_linux.py` |
 
-> 🧪 **Linux**: `build_runtime_release_linux.py` / `scaffold_linux_runtime.py` exist as an experimental builder only. No
-> `linux-x64` payload has ever been published and `contracts/release_platforms.json` lists it (with Intel Mac) under
+> 🧪 **Linux**: no `linux-x64` payload has ever been published (the experimental builder was removed in v0.41.1; it is in git
+> history) and `contracts/release_platforms.json` lists it (with Intel Mac) under
 > `unsupported` → gateway mode (`HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` pointing at a machine that has the runtime).
 > Windows ARM is an **alias**: it installs the `win32-x64` payload under emulation (matrix lane `windows-11-arm`).
 
@@ -77,8 +76,6 @@ Do not treat these three locations as interchangeable.
 
 - `horosa-skill/scripts/publish_release.sh`
   The maintainer-side release entry (`--draft --dispatch`): seed payload → darwin manifest (local check) → SBOM → MCPB → wheel → SHA256SUMS → verify → draft upload → dispatch.
-- `horosa-skill/scripts/build_runtime_release.sh`
-  **Historical (≤ v0.37.0)**: local dual-platform build in vendor mode; needs Windows-side inputs (`runtime/windows/bundle/wheels`) and stamps `latest` URLs — do not use for a release.
 - `horosa-skill/scripts/package_runtime_payload.sh`
   Assembles the runtime payload tarball from `vendor/runtime-source`.
 - `horosa-skill/scripts/build_runtime_release_windows.ps1`
@@ -89,10 +86,6 @@ Do not treat these three locations as interchangeable.
   Validates that the generated runtime archives really contain the required runtime payload layout.
 - `horosa-skill/scripts/scaffold_windows_runtime.py`
   Creates a Windows runtime directory skeleton with manifest and PowerShell entrypoints.
-- `horosa-skill/scripts/scaffold_linux_runtime.py`
-  Creates a Linux runtime directory skeleton with manifest and POSIX shell entrypoints.
-- `horosa-skill/scripts/build_runtime_release_linux.py`
-  Experimental Linux builder (no payload published; `linux-x64` is `unsupported` in `contracts/release_platforms.json`).
 - `horosa-skill/scripts/sync_vendored_runtime_sources.sh`
   Pulls the required runtime subset from the read-only Horosa-Public checkout (`HOROSA_SOURCE_ROOT`) into `vendor/runtime-source`; what was pulled is recorded in `contracts/upstream_provenance.json`.
 - `horosa-skill/scripts/sync_windows_release.py`

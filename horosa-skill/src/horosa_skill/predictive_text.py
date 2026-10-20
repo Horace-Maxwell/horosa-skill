@@ -85,26 +85,6 @@ def js_fmt_num(value: Any, digits: int = 2) -> str:
     return js_to_fixed(number, digits)
 
 
-def sign_name(value: Any) -> str:
-    """AstroExtraCommon.js:63 `signName`：AstroTxtMsg[id] || id || '-'（AstroMsg 是字形表，文本快照用不到）。"""
-    key = js_str(value)
-    return UPSTREAM_ASTRO_TXT_MSG.get(key) or key or "-"
-
-
-def fmt_degree(item: dict[str, Any] | None) -> str:
-    """AstroExtraCommon.js:75 `fmtDegree`：`<座> <座内度 toFixed(2)>°`。"""
-    if not item:
-        return "-"
-    signlon = item.get("signlon") if "signlon" in item else None
-    if signlon is None:
-        try:
-            signlon = float(item.get("lon")) % 30
-        except (TypeError, ValueError):
-            signlon = None
-    return f"{sign_name(item.get('sign'))} {js_fmt_num(signlon, 2)}°"
-
-
-
 def prog_method_tab(method: dict[str, Any]) -> str:
     """astroProgSnapshot.js:28 / AstroJaynesProgressions.js:26 `methodTab`。"""
     name = method.get("method")
@@ -305,10 +285,6 @@ def js_datetime_jdn(text: str, zone: Any = "+08:00") -> float | None:
 # ── 上游 utils/profectionSummary.js（[Q-105] 年/月/日小限 + 多起点，纯前端派生）──────────────────
 
 # :13-24 选项（与页面控件 / 挂载齿轮同值域）。
-PROFECTION_GRAIN_OPTIONS: tuple[tuple[str, str], ...] = (("y", "年"), ("m", "月"), ("d", "日"))
-PROFECTION_START_OPTIONS: tuple[tuple[str, str], ...] = (
-    ("asc", "上升（默认）"), ("sect", "区分光（昼日夜月）"), ("fortune", "福点"), ("moon", "月亮"), ("mc", "天顶"),
-)
 PROFECTION_GRAIN_CN: dict[str, str] = {"y": "年", "m": "月", "d": "日"}
 PROFECTION_START_CN: dict[str, str] = {"asc": "上升", "sect": "区分光", "fortune": "福点", "moon": "月亮", "mc": "天顶"}
 # 座序庙主（divination/data/signs.js 的 domicile）→ 行星 id。

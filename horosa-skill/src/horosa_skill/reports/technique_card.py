@@ -17,7 +17,6 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from functools import lru_cache
-from pathlib import Path
 from horosa_skill.contracts_locator import contract_path
 from typing import Any
 

@@ -22,7 +22,6 @@ from __future__ import annotations
 import base64
 import json
 import os
-import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -246,15 +245,6 @@ _HOME_VARS = {"nt": ("USERPROFILE", "APPDATA", "LOCALAPPDATA", "SYSTEMROOT", "TE
 
 def locations(key: str, *, os_name: str, env: Mapping[str, str], home: Path, project: Path) -> list[Path]:
     return EXTRA_CLIENTS[key].locations(os_name, env, home, project)
-
-
-def preferred_path(key: str, *, os_name: str | None = None, env: Mapping[str, str] | None = None,
-                   home: Path | None = None, project: Path | None = None) -> Path:
-    """The file `setup` writes: the first that exists (each client's own read order), else the first candidate."""
-    os_name = os_name or ("nt" if os.name == "nt" else ("darwin" if sys.platform == "darwin" else "linux"))
-    candidates = locations(key, os_name=os_name, env=os.environ if env is None else env,
-                           home=home or Path.home(), project=project or Path.cwd())
-    return next((c for c in candidates if c.is_file()), candidates[0])
 
 
 def _home_env(os_name: str, environ: Mapping[str, str]) -> dict[str, str]:

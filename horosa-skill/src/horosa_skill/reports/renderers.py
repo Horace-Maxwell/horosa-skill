@@ -493,7 +493,6 @@ def _render_pdf(document: dict[str, Any], output_path: Path) -> None:
         textColor=ink,
         spaceAfter=4,
     )
-    small = ParagraphStyle("HorosaSmall", parent=base, fontSize=8.2, leading=12, textColor=muted)
     cover_title = ParagraphStyle(
         "HorosaCoverTitle",
         parent=styles["Title"],
@@ -749,10 +748,6 @@ def _docx_apply_base_styles(doc: Any, font_name: str, qn: Any, Pt: Any, RGBColor
         style._element.rPr.rFonts.set(qn("w:eastAsia"), font_name)
         style.font.size = Pt(size)
         style.font.color.rgb = RGBColor.from_string(color)
-
-
-def _docx_heading(doc: Any, text: str, level: int) -> None:
-    doc.add_heading(text, level=level)
 
 
 def _paragraphs(text: str) -> list[str]:

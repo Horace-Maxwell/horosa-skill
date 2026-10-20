@@ -202,10 +202,10 @@ def upsert_server_entry(text: str, root_key: str, name: str, entry: Any, *, inde
     root = next((m for m in members if m[0] == root_key), None)
     unit = " " * indent
     if root is not None:
-        _, _, value_start, value_end = root
+        _, _, value_start, _ = root
         if text[value_start] != "{":
             raise ValueError(bilingual(f"`{root_key}` 的值不是对象。", f"`{root_key}` is not an object."))
-        inner, inner_close = _object_members(text, value_start)
+        inner, _ = _object_members(text, value_start)
         existing = next((m for m in inner if m[0] == name), None)
         block_indent = _indent_of(text, root[1])
         entry_indent = block_indent + unit

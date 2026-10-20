@@ -63,9 +63,7 @@ SHARED_MANIFEST_CONSTANTS = ("schema_version", "runtime_layout_version", "export
 CONSTANT_STAMPERS = {
     "macOS builder": MAC_BUILDER,
     "Windows builder": WIN_BUILDER,
-    "Linux builder": SCRIPTS / "build_runtime_release_linux.py",
     "Windows scaffold": SCRIPTS / "scaffold_windows_runtime.py",
-    "Linux scaffold": SCRIPTS / "scaffold_linux_runtime.py",
 }
 
 # The N-way cross-check above only proves the stampers agree with *each other* — five scripts can be
@@ -82,7 +80,6 @@ ANCHORED_CONSTANTS = {"export_registry_version": ("AI_EXPORT_SETTINGS_VERSION", 
 # JDK-downloading builders). The mac builder vendors runtime/mac/java and is exempt.
 JDK_DOWNLOADING_BUILDERS = {
     "Windows builder": WIN_BUILDER,
-    "Linux builder": SCRIPTS / "build_runtime_release_linux.py",
 }
 ADOPTIUM_API_NEEDLE = "api.adoptium.net/v3/binary/latest/17/ga/"
 GITHUB_TEMURIN_LATEST_NEEDLE = "temurin17-binaries/releases/latest"

@@ -34,30 +34,28 @@ from pathlib import Path
 
 PKG_ROOT = Path(__file__).resolve().parents[1]
 
-# (label, argv, blocking)：blocking=False 的闸失败只警告，不阻止打 tag。
-GATES: tuple[tuple[str, list[str], bool], ...] = (
+# (label, argv)：每一道都是硬闸——任何一道失败都不许打 tag（「失败只警告」的非阻断闸 v0.38.0 A2 起已不存在）。
+GATES: tuple[tuple[str, list[str]], ...] = (
     (
         "upstream sync (contract version + sentinel sha256 + core-js per-file)",
         ["scripts/verify_upstream_sync.py", "--require-upstream", "--write-state"],
-        True,
     ),
     (
         "export-section debt ratchet against upstream",
         ["scripts/verify_export_section_baseline.py", "--source", "upstream", "--require-upstream"],
-        True,
     ),
     # 打包输入闸（v0.38.0 A2 起阻断）：Windows 半边改为从 darwin 种子在托管 runner 上派生，
     # runtime/windows 与 prepareruntime 不再是输入，mac 维护机上这一闸不再恒红——所以它回到硬闸。
-    ("vendored runtime inputs", ["scripts/verify_vendor_runtime_sources.py"], True),
-    ("export-contract mirror", ["scripts/verify_export_contract_mirror.py"], True),
-    ("technique compute-source declarations", ["scripts/verify_technique_provenance.py"], True),
-    ("docs sync", ["scripts/verify_docs_sync.py"], True),
-    ("runtime-builder parity", ["scripts/verify_builder_parity.py"], True),
+    ("vendored runtime inputs", ["scripts/verify_vendor_runtime_sources.py"]),
+    ("export-contract mirror", ["scripts/verify_export_contract_mirror.py"]),
+    ("technique compute-source declarations", ["scripts/verify_technique_provenance.py"]),
+    ("docs sync", ["scripts/verify_docs_sync.py"]),
+    ("runtime-builder parity", ["scripts/verify_builder_parity.py"]),
     # 误杀纪律：上游 mac 启动器按命令行子串 kill -9，会杀掉用户的星阙桌面端；修复走安装时补丁，
     # 这一闸验的是「补丁在**当前上游树**上仍然打得上且结果正确」——preflight 是唯一能看到
     # vendor/runtime-source（gitignored 的本地构建输入）的运行器。
-    ("runtime launcher kill discipline", ["scripts/verify_runtime_scripts.py"], True),
-    ("no stray runtime log dirs", ["scripts/verify_no_stray_runtime_dirs.py"], True),
+    ("runtime launcher kill discipline", ["scripts/verify_runtime_scripts.py"]),
+    ("no stray runtime log dirs", ["scripts/verify_no_stray_runtime_dirs.py"]),
 )
 
 
@@ -188,7 +186,6 @@ def main() -> int:
         return 2
 
     failed: list[str] = []
-    warned: list[str] = []
 
     print("\n=== git identity + origin currency ===", flush=True)
     git_failures = git_gate_failures()
@@ -212,11 +209,11 @@ def main() -> int:
     provenance = PKG_ROOT / "contracts" / "upstream_provenance.json"
     provenance_before = provenance.read_text(encoding="utf-8") if provenance.is_file() else ""
 
-    for label, argv, blocking in GATES:
+    for label, argv in GATES:
         print(f"\n=== {label} ===", flush=True)
         result = subprocess.run([sys.executable, *argv], cwd=PKG_ROOT)
         if result.returncode != 0:
-            (failed if blocking else warned).append(label)
+            failed.append(label)
 
     # 在所有闸**之后**查：verify_upstream_sync --write-state 可能刚改写了 pin，要验的是最终会被提交的那一个
     # （v0.40.1：这道闸原先排在前面，验的是旧 pin，随后 write-state 把本地未推送的上游 HEAD 写了进去）。
@@ -228,9 +225,6 @@ def main() -> int:
         failed.append("upstream pin on public remote")
 
     print()
-    for label in warned:
-        print(f"::warning::preflight: {label} 未通过（非阻断）—— 该闸的输入只在 Windows 构建机上；"
-              f"发布 Windows 半时由 sync_windows_release.py --upload 负责，判据是它 --check 的 [GAP]/[OK]。")
     if failed:
         print("preflight: FAIL — do not tag. Failing gates:", file=sys.stderr)
         for label in failed:

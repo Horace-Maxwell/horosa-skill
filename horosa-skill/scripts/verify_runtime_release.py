@@ -180,7 +180,7 @@ _MANAGER_PY = Path(__file__).resolve().parents[1] / "src" / "horosa_skill" / "ru
 
 
 def payload_longest_entry_limit(manager_py: Path = _MANAGER_PY) -> int:
-    """从源码正则读 PAYLOAD_LONGEST_ENTRY_CHARS（脚本可能在没装包的 python3 下跑：publish_release.sh / build_runtime_release.sh）。"""
+    """从源码正则读 PAYLOAD_LONGEST_ENTRY_CHARS（脚本可能在没装包的 python3 下跑：publish_release.sh）。"""
     match = re.search(r"^PAYLOAD_LONGEST_ENTRY_CHARS\s*=\s*(\d+)", manager_py.read_text(encoding="utf-8"), re.M)
     if not match:
         raise SystemExit(f"PAYLOAD_LONGEST_ENTRY_CHARS not found in {manager_py}")

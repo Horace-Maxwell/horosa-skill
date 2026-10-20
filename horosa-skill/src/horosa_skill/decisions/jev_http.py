@@ -14,7 +14,7 @@ import json
 import random
 import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
 
@@ -47,7 +47,6 @@ class RetryPolicy:
     backoff_max: float = 5.0
     backoff_jitter: float = 0.25
     timeout: float = 30.0  # 整次调用（含重试）的总预算，秒
-    http_statuses: frozenset[int] = field(default_factory=lambda: frozenset({408, 429} | set(range(500, 600))))
     respect_retry_after: bool = True
     retry_after_cap: float = 60.0
 

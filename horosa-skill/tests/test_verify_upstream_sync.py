@@ -432,4 +432,4 @@ def test_preflight_checks_the_pin_after_the_gates_that_may_rewrite_it() -> None:
     """preflight 的「pin 在公开远端」必须验**最终**的 pin：排在 GATES（含 --write-state）之后。"""
     src = (Path(__file__).resolve().parents[1] / "scripts" / "preflight_release.py").read_text(encoding="utf-8")
     main = src[src.index("def main() -> int:"):]
-    assert main.index("for label, argv, blocking in GATES:") < main.index("upstream_pin_failures(")
+    assert main.index("for label, argv in GATES:") < main.index("upstream_pin_failures(")

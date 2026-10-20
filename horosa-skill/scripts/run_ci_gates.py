@@ -5,7 +5,8 @@ commits while every local run was "green" — the local ritual was pytest + docs
 Parses `.github/workflows/ci.yml`, takes every `run:` step of the `test` job that invokes `uv run …`
 (pytest, verify_* scripts, build_knowledge_index --check, run_benchmark …), and executes it from
 horosa-skill/ in CI shape (HOROSA_RUNTIME_ROOT → empty temp dir, both *_SERVER_ROOT unreachable).
-Exit 0 only when every step passes. Steps that need a runner-only resource are skipped by name (SKIP).
+Exit 0 only when every step passes. Runner-only steps (`HOME=$(mktemp -d) uvx …`, the wheel-build block) never start
+with `uv run`, so `ci_test_steps` leaves them out by shape — no name list to keep in sync.
 """
 
 from __future__ import annotations
@@ -27,8 +28,6 @@ from pathlib import Path
 PKG_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PKG_ROOT.parent
 CI = REPO_ROOT / ".github" / "workflows" / "ci.yml"
-# steps whose commands only make sense on the hosted runner (git+file:// rev, HOME=$(mktemp) uvx from a built wheel)
-SKIP = ("Zero-install path works", "Zero-install path from the wheel works")
 
 
 def ci_test_steps(text: str) -> list[tuple[str, str]]:
@@ -79,9 +78,6 @@ def main(argv: list[str] | None = None) -> int:
         failed: list[str] = []
         for name, command in steps:
             if only and not any(token in command or token in name for token in only):
-                continue
-            if any(name.startswith(skip) for skip in SKIP):
-                print(f"=== SKIP (runner-only): {name}")
                 continue
             print(f"\n=== {name}\n$ {command}", flush=True)
             result = subprocess.run(command, shell=True, cwd=PKG_ROOT, env=env)

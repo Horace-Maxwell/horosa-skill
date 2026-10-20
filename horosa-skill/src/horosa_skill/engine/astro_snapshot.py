@@ -212,15 +212,6 @@ def fixed_num(value: Any, digits: int) -> str:
     return fmt_num(num, digits)
 
 
-def section_text(title: str, lines: list[Any]) -> str:
-    """astroAiSnapshot.js:1263-1269 buildSectionText：逐行 trim、去空行；全空 → ''（不产段）。"""
-    clean = [f"{line}".strip() for line in lines or []]
-    clean = [line for line in clean if line]
-    if not clean:
-        return ""
-    return "[" + title + "]\n" + "\n".join(clean)
-
-
 def clean_lines(lines: list[Any]) -> list[str]:
     """buildSectionText 的行清洗（给 service 侧按 (title, body) 装配用）。"""
     return [line for line in (f"{item}".strip() for item in lines or []) if line]
@@ -977,19 +968,6 @@ def build_lots_section(chart_obj: Any) -> list[str]:
 
 
 # ─────────────────────── [12分度]（astroAiSnapshot.js:952-1006）───────────────────────
-
-
-def _norm360(value: Any) -> float:
-    v = math.fmod(_js_number(value), 360)
-    if v < 0:
-        v += 360
-    return v
-
-
-def dodeca_lon_of(lon: Any) -> float:
-    """astroAiSnapshot.js:980-983 dodecaLonOf：floor(度/30)*30 + (度%30)*12。"""
-    base = _norm360(lon)
-    return _norm360(math.floor(base / 30) * 30 + math.fmod(base, 30) * 12)
 
 
 def build_dodeca_lines(dodeca: Any) -> list[str]:
@@ -1884,10 +1862,8 @@ __all__ = [
     "build_star_and_lot_position_lines",
     "classical_backend_overrides",
     "clean_lines",
-    "dodeca_lon_of",
     "field_value",
     "format_speed",
     "lifespan_name",
     "round3",
-    "section_text",
 ]

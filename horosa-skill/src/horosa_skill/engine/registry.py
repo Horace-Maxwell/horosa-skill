@@ -15,7 +15,6 @@ from horosa_skill.schemas.tools import (
     BaZiBirthInput,
     BaZiDirectInput,
     AstroChartInput,
-    BirthInput,
     CanPingInput,
     DecennialsInput,
     DistributionsInput,

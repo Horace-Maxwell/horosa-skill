@@ -18,7 +18,7 @@ def _load(name: str):
     return module
 
 
-BUILDERS = ["build_runtime_release_windows", "build_runtime_release_linux"]
+BUILDERS = ["build_runtime_release_windows"]
 
 
 @pytest.mark.parametrize("builder_name", BUILDERS)

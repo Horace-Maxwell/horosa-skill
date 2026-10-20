@@ -34,7 +34,6 @@ for _stream in (sys.stdout, sys.stderr):
         _reconfigure(encoding="utf-8", errors="replace")
 
 ROOT = Path(__file__).resolve().parents[2]
-TECHNIQUE_COUNT_SOURCE = ROOT / "horosa-skill" / "src" / "horosa_skill" / "engine" / "registry.py"
 
 # rel path → (client display name, `setup --client` key, depth of the mirror below the repo root, frontmatter or "")
 MIRRORS: dict[str, tuple[str, str, int, str]] = {

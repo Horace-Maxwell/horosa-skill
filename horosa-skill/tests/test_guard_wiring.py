@@ -33,9 +33,7 @@ RUNNERS = (
     SCRIPTS / "publish_release.sh",
     SCRIPTS / "preflight_release.py",
     SCRIPTS / "sync_windows_release.py",
-    SCRIPTS / "build_runtime_release.sh",
     SCRIPTS / "build_runtime_release_windows.ps1",
-    SCRIPTS / "scaffold_linux_runtime.py",
     SCRIPTS / "run_full_self_check.py",
 )
 

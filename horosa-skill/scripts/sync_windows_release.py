@@ -47,7 +47,6 @@ SKILL_ROOT = Path(__file__).resolve().parents[1]          # horosa-skill/
 REPO_ROOT = SKILL_ROOT.parent                              # repo root
 SCRIPTS = SKILL_ROOT / "scripts"
 DIST = SKILL_ROOT / "dist" / "runtime"
-PLATFORMS = ("darwin-arm64", "win32-x64")
 CONTRACT_PATH = SKILL_ROOT / "contracts" / "release_platforms.json"
 WHEEL_SINCE = "0.38.0"  # the pure-Python wheel became a required asset with the zero-install path (B3)
 
@@ -106,12 +105,6 @@ def release_assets(tag: str) -> list[str]:
     return [a["name"] for a in data.get("assets", [])]
 
 
-def fetch_latest_manifest_platforms() -> list[str] | None:
-    """Return the platform keys in the live latest manifest, or None if it 404s / is unparseable."""
-    manifest = fetch_manifest()
-    return list(manifest.get("platforms", {}).keys()) if manifest else None
-
-
 def fetch_manifest(tag: str | None = None, *, draft: bool = False) -> dict | None:
     """The release manifest: `releases/latest/download` for the public latest, `gh release download` for a
     specific (possibly draft) tag. None when absent / unparseable."""
@@ -163,9 +156,6 @@ def assess_from(tag: str, assets: list[str], manifest: dict | None, contract: di
         "wheel_required": wheel_required, "has_wheel": wheel in assets, "wheel": wheel,
         "manifest_platforms": list(platforms_in_manifest.keys()),
         "manifest_dual": all(p in platforms_in_manifest for p in expected),
-        # legacy keys kept for callers/tests written against the two-platform shape
-        "has_win_zip": per_platform.get("win32-x64", {}).get("present", False),
-        "has_darwin_tar": per_platform.get("darwin-arm64", {}).get("present", False),
         "win_zip": f"horosa-runtime-win32-x64-v{version}.zip",
         "darwin_tar": f"horosa-runtime-darwin-arm64-v{version}.tar.gz",
     }

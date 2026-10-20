@@ -220,7 +220,6 @@ WINDOWS_LOCAL_CACHE_CONFIG = "offline"
 WINDOWS_BOOT_CACHE_CONFIG_PATH = "BOOT-INF/classes/conf/properties/cache/caches.json"
 WINDOWS_BOOT_WEBPARAMS_PATH = "BOOT-INF/classes/conf/properties/param/webparams.properties"
 WINDOWS_BOOT_LOG4J_PATH = "BOOT-INF/classes/log4j2.xml"
-WINDOWS_BOOT_BOUNDLESS_PREFIX = "BOOT-INF/lib/boundless-"
 WINDOWS_LOCAL_CACHE_FACTORY_CLASS_PATH = "BOOT-INF/classes/horosa/offline/LocalCacheFactory.class"
 WINDOWS_LOCAL_CACHE_FACTORY_INNER_CLASS_PATH = "BOOT-INF/classes/horosa/offline/LocalCacheFactory$LocalCache.class"
 WINDOWS_LOCAL_CACHE_FACTORY_CLASS_B64 = (
@@ -2527,25 +2526,6 @@ horosa_owns_pid() {
             WINDOWS_LOCAL_CACHE_FACTORY_CLASS_PATH: base64.b64decode(WINDOWS_LOCAL_CACHE_FACTORY_CLASS_B64),
             WINDOWS_LOCAL_CACHE_FACTORY_INNER_CLASS_PATH: base64.b64decode(WINDOWS_LOCAL_CACHE_FACTORY_INNER_CLASS_B64),
         }
-
-    def _extract_boot_lib(self, jar_path: Path, prefix: str, target_path: Path) -> None:
-        try:
-            with zipfile.ZipFile(jar_path) as archive:
-                for entry in archive.infolist():
-                    if entry.filename.startswith(prefix) and entry.filename.endswith(".jar"):
-                        target_path.write_bytes(archive.read(entry.filename))
-                        return
-        except (OSError, zipfile.BadZipFile) as exc:
-            raise RuntimeValidationError(
-                "Runtime archive could not be read while preparing Windows compatibility classes.",
-                code="runtime.windows_patch_invalid_archive",
-                details={"archive": str(jar_path), "error": str(exc)},
-            ) from exc
-        raise RuntimeValidationError(
-            "Runtime archive does not contain the bundled `boundless` library required for Windows compatibility.",
-            code="runtime.windows_patch_missing_boundless",
-            details={"archive": str(jar_path)},
-        )
 
     def _rewrite_zip_archive(self, archive_path: Path, replacements: dict[str, bytes]) -> None:
         temp_path = archive_path.with_suffix(f"{archive_path.suffix}.tmp")

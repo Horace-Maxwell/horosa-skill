@@ -166,8 +166,8 @@ debt ratchets `export_section_debt.json` / `error_recovery_debt.json` / `schema_
   Windows zip from the seed; runs on `windows-latest`), `generate_release_manifest.py`, `generate_sbom.py`, `build_mcpb.sh`,
   `verify_runtime_release.py`, `verify_matrix_digests.py` (lane-installed sha == draft assets before publish),
   `sync_windows_release.py` (`--check` = completeness / pin-forward verdict; `--upload` = Windows-box fallback),
-  `runtime_seed.py`, `scaffold_windows_runtime.py`; `build_runtime_release.sh`, `build_runtime_release_linux.py`,
-  `scaffold_linux_runtime.py`, `repack_release_assets.py` are historical / experimental.
+  `runtime_seed.py`, `scaffold_windows_runtime.py`. (The historical local builders and the Linux experimental builder were
+  removed in v0.41.1; they are in git history.)
 - **Docs institution** — `verify_docs_sync.py` (versions, counts, links, DOC_MAP, lessons distillation, generated mirrors,
   third-party facts ledger), `gen_agent_mirrors.py`, `bump_version.py` (15 version sites, `--check`), `verify_readme_links.py`.
 - **Other verifiers** — `verify_vendor_runtime_sources.py`, `verify_server_json.py`, `verify_builder_parity.py`,

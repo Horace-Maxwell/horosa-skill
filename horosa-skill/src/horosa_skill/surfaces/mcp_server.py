@@ -21,7 +21,6 @@ from pydantic import BaseModel, Field, ValidationError, WithJsonSchema, create_m
 from horosa_skill.agent_guidance import (
     build_agent_guidance,
     build_technique_catalog,
-    technique_index,
     unknown_tool_details,
     build_tool_docstring,
     build_validation_recovery,

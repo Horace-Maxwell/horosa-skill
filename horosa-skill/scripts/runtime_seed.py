@@ -10,7 +10,7 @@ PyPI ships none — pyswisseph / sxtwl for cp312 Windows). Nothing here needs `v
 
 Public helpers (imported by build_runtime_release_windows.py --seed and by the tests):
     verify_seed / materialize_seed / derive_manifest / copy_platform_tree / split_site_packages /
-    copy_pure_site_packages / fetch_native_wheels / unpack_wheels / assert_binary_arch / jlink_image /
+    copy_pure_site_packages / fetch_native_wheels / assert_binary_arch / jlink_image /
     find_jdk_home / load_toolchain / load_lock
 """
 
@@ -26,7 +26,6 @@ import struct
 import subprocess
 import sys
 import tarfile
-import zipfile
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -109,10 +108,6 @@ class SeedTree:
     @property
     def boot_jar(self) -> Path:
         return self.root / "runtime" / "mac" / "bundle" / "astrostudyboot.jar"
-
-    @property
-    def python_root(self) -> Path:
-        return self.root / "runtime" / "mac" / "python"
 
     def site_packages(self, python_minor: str) -> Path:
         return self.root / SEED_PYTHON_SITE.format(minor=python_minor)
@@ -316,16 +311,8 @@ def fetch_native_wheels(lock: dict, platform_key: str, dest: Path, *, python: st
     return got
 
 
-def unpack_wheels(wheels_root: Path, site_packages: Path) -> None:
-    site_packages.mkdir(parents=True, exist_ok=True)
-    for wheel in sorted(wheels_root.glob("*.whl")):
-        with zipfile.ZipFile(wheel) as zf:
-            zf.extractall(site_packages)
-
-
 # --- binaries --------------------------------------------------------------------------------------
 
-_MACHO_MAGIC = {0xFEEDFACF: "64", 0xCFFAEDFE: "64le", 0xFEEDFACE: "32", 0xCEFAEDFE: "32le"}
 _FAT_MAGIC = {0xCAFEBABE, 0xBEBAFECA}
 _CPU_ARM64 = 0x0100000C
 _CPU_X86_64 = 0x01000007

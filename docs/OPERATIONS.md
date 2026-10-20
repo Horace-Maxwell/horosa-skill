@@ -113,8 +113,7 @@ gh release view vX.Y.Z --json assets                                     # 两�
 （`io.github.Horace-Maxwell/…`），已公开的版本补登记用 `gh workflow run publish-mcp-registry.yml -f tag=vX.Y.Z`；tag 只在 release 仍是 draft 时允许重指；每周一 04:23Z 的 schedule
 矩阵拿 main 打公开 latest（lane pytest 预算按主机：Windows 2700 s / macOS 1500 s，pytest.log 流式落盘）；
 `release-completeness.yml` 每 6 小时校资产（SBOM / mcpb 解包 + sha / wheel 零安装 / 清单 min_os / digest vs SHA256SUMS）。
-Windows 半边由 `build_runtime_release_windows.py --seed` 在 windows-latest 上派生；`build_runtime_release.sh`（vendor 模式双平台本地构建）
-只是 v0.38.0 之前的历史路径，需要 Windows 侧构建输入，别在 mac 上照着跑。
+Windows 半边由 `build_runtime_release_windows.py --seed` 在 windows-latest 上派生。v0.38.0 之前的本地双平台构建脚本与 Linux 实验构建器已于 v0.41.1 删除（git 历史可找回）。
 
 - 必要资产：`horosa-runtime-darwin-arm64-v<version>.tar.gz`、`horosa-runtime-win32-x64-v<version>.zip`、`runtime-manifest.json`、
   `SHA256SUMS.txt`、`horosa-skill-sbom.json`、`horosa_skill-<version>-py3-none-any.whl`（零安装：`uvx --from <URL> horosa-skill …`）、
@@ -140,8 +139,8 @@ tail -40 /tmp/lane/pytest.log                                            # 超�
 
 ### 历史：没有 payload 变化的发布「重打，不重建」（≤ v0.37.0）
 
-v0.38.0 前 Windows 半边只能在 Windows 构建机上重打（`repack_release_assets.py`，`.ps1` 的 UTF-8 BOM 必须原封不动，守卫
-`tests/test_repack_release_assets.py`）。托管派生之后每次发布都从 darwin 种子重新派生 Windows 半，这条路径只在托管流水线不可用时作后手。
+v0.38.0 前 Windows 半边只能在 Windows 构建机上重打（`repack_release_assets.py`，`.ps1` 的 UTF-8 BOM 必须原封不动）。托管派生之后每次发布都从
+darwin 种子重新派生 Windows 半；那个重打脚本已于 v0.41.1 删除（托管流水线不可用时从 git 历史取回）。
 
 🔴 **绝不要在资产不齐时打 tag。** `releases/latest/download/runtime-manifest.json` 是安装路径的唯一入口；一个没有资产的新 tag 会让
 `latest` 指向它，于是每一次新安装都 404——这正是「缺半」台账反复记的失败模式（托管流水线的 digest 闸 + `--check` 就是为它而设）。

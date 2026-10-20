@@ -185,7 +185,6 @@ def _normalize_zone_value(value: Any, *, payload: dict[str, Any] | None = None, 
 # 得 +09:00；统一前的新疆出生仍按 +06:00）。归并时在载荷里留 geoZone（原地理时区）+ zoneAdvisory='cn-unified'，
 # 技法卡与 warnings 据此回显。退出口：cnUnifiedZone=false（上游 kill-switch 是 localStorage 'horosa.tz.cnUnified'='0'），
 # 或直接给偏移 "+06:00"（偏移不归并）。
-CN_UNIFIED_ZONE_SINCE = "1949-10-01"
 _CN_UNIFIED_SINCE_YMD = (1949, 10, 1)
 _CN_UNIFY = {"Asia/Urumqi": "Asia/Shanghai"}
 _OPT_OUT_VALUES = (False, 0, "0", "false", "False", "no", "off")
