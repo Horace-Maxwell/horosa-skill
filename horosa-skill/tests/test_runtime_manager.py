@@ -2163,6 +2163,31 @@ def test_rmtree_force_clears_read_only_bits(tmp_path: Path) -> None:
     assert not victim.exists()
 
 
+def test_uninstall_removes_read_only_runtime_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """嵌入式 JDK 的部分文件在 Windows 上带只读位；uninstall 此前用裸 shutil.rmtree → PermissionError → runtime.uninstall_failed。"""
+    import stat
+
+    from horosa_skill.runtime import manager as manager_module
+
+    manager = _manager_with_runtime(tmp_path)
+    monkeypatch.setattr(manager, "stop_local_services", lambda **kwargs: {"ok": True, "already_stopped": True})
+    read_only = manager.current_dir / "runtime" / "java" / "lib" / "ct.sym"
+    read_only.parent.mkdir(parents=True, exist_ok=True)
+    read_only.write_text("x", encoding="utf-8")
+    read_only.chmod(stat.S_IREAD)
+    forced: list[Path] = []
+    real_rmtree_force = manager_module._rmtree_force
+
+    def spy(path: Path) -> None:
+        forced.append(Path(path))
+        real_rmtree_force(path)
+
+    monkeypatch.setattr("horosa_skill.runtime.manager._rmtree_force", spy)
+    result = manager.uninstall(yes=True)
+    assert result["ok"] is True and not manager.current_dir.exists()
+    assert manager.current_dir in forced, "目录要走清只读位的 _rmtree_force（POSIX 上只读文件本可直接删，靠这条锁住）"
+
+
 def test_restart_failure_after_a_successful_swap_is_a_warning(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     manager = _manager_with_runtime(tmp_path)
     monkeypatch.setattr(manager, "endpoint_identities", lambda endpoints=None: _endpoints(verdict="ours"))

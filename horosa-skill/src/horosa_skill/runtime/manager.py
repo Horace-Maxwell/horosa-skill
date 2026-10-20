@@ -957,7 +957,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             path = Path(text)
             try:
                 if path.is_dir():
-                    shutil.rmtree(path)
+                    _rmtree_force(path)  # 嵌入式 JDK 的部分文件在 Windows 上带只读位，裸 rmtree 会 PermissionError
                 elif path.exists():
                     path.unlink()
                 removed.append(text)
