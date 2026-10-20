@@ -14,7 +14,7 @@ GitHub Releases；MCP 全量面 120 = 110 技法 + 10 门面，`HOROSA_MCP_COMPA
    `contracts/third_party_facts.json` / 生成件镜像），同一 change 完成；是否跟上由 `verify_docs_sync.py` 裁定。
 5. 发布不信绿灯：pin-forward 下 guard 必绿；`sync_windows_release.py --check` 的 `[GAP]` 才权威。
 6. 文档同步交给 CI：改文档/发版跑 `cd horosa-skill && uv run python scripts/verify_docs_sync.py`（仓根没有 `scripts/`）；push 前本机门禁
-   只认 `uv run python scripts/run_ci_gates.py`（24 步 CI 镜像）——别裸跑 `verify_*.py` 全集，`verify_runtime_live.py` 是会下载 runtime 的真 lane。
+   只认 `uv run python scripts/run_ci_gates.py`（25 步 CI 镜像）——别裸跑 `verify_*.py` 全集，`verify_runtime_live.py` 是会下载 runtime 的真 lane。
 8. `:9999` / `:8899` 是用户桌面版星阙的端口——永不 kill、永不对其测试；本仓 vendored 测试实例用 8877 / 9977（`scripts/start_vendored_instance.sh`）。
 7. 会话开始：仓根若有 `HANDOFF-*.local.md` 先读它（多会话接力的现场状态）；会话结束前更新它与本机 memory。
 

@@ -1118,6 +1118,16 @@ A global stability pass hardened these; keep them true when you touch the releva
 
 ### 9.5 测试 · CI · 跨平台（tests / CI / cross-platform）
 
+- **测试会话永不连桌面版：`tests/conftest.py` 拒连 127.0.0.1:8899/9999、两个后端默认 :9（v0.41.1 重构第 0 批）。** 直接 `uv run pytest` 曾经
+  不钉后端：34 处 `Settings(...)` 用默认端口，没设 `*_SERVER_ROOT` 的代码回落到桌面版——维护机上真发请求（`test_uninstall_dry_run_then_execute`
+  一条就探 20 s），CI 上那两个端口没人所以永远看不见。conftest 把两个根 setdefault 成 :9（与 `run_ci_gates.py` 同形，显式的 8877/9977 不受影响），
+  并在进程内把连这两个端口一律当「没人在听」（`tests/test_desktop_port_guard.py`）。自写的调 service 脚本同理：开头断言两个根已设且不是 8899/9999。
+- **本机门禁镜像也跑多行步骤：`run_ci_gates.ci_test_steps` 收「每一行都是 `uv run …`」的 `run: |` 块（v0.41.1）。** 旧解析器跳过所有多行块，
+  两行的 `verify_runtime_scripts.py`（+ `--self-test`）从没在本机跑过，文档却写「每个 verify_* 都跑」；测试只核单行步骤，所以同样看不见。
+  现在 `tests/test_guard_wiring.py` 要求 ci.yml test 作业里点名的**每一个** `verify_*.py` 都进镜像（镜像 25 步）。
+- **monkeypatch 目标必须被它所在的模块用到（`tests/test_monkeypatch_targets.py` 的 `useless_patch_reason`）。** 函数挪走、旧模块只留 re-export 时，
+  `monkeypatch.setattr("horosa_skill.A.f", …)` 照样成功却不起作用，测试「因为错误的原因通过」。拆大模块时：被 patch 的名字跟着代码走，
+  或让调用方经模块查名（`module.f()`），别靠 re-export 兜。
 - **测试 spawn 系统工具用绝对路径；扫真实安装目录的解析器测试要把那层 monkeypatch 掉（v0.38.0 反向「本机绿≠CI绿」）。**
   裸名 `subprocess.run(["bash"/"uv"…])` 在满负载 Windows 上偶发 `WinError 2`（PATH 搜索输给进程 churn + AV 扫描）——
   导入期 `BASH = shutil.which("bash")` 解析一次绝对路径再 spawn，缺席即 `skip`（`tests/test_runtime_launcher_patch.py`）。

@@ -18,8 +18,47 @@ PYTHONPATH so every child imports the code under test.
 
 from __future__ import annotations
 
+import errno
 import os
+import socket
 from pathlib import Path
+
+# 🔴 Tests never talk to 127.0.0.1:8899 / :9999 — the maintainer's desktop app lives there (AGENTS iron rule 8).
+# `run_ci_gates.py` pins both backends to the unreachable :9, but a plain `uv run pytest` did not: 34 tests build
+# `Settings(...)` with the default ports, and code without an explicit *_SERVER_ROOT falls back to them, so on a machine
+# with the desktop app open those tests sent real requests to it (2026-10-20 audit). Now (1) both roots default to :9
+# exactly as in CI — children spawned by tests inherit that — and (2) any in-process connect to the desktop ports is
+# refused as if nothing listened, which is what CI sees. Live runs name their instance explicitly (8877/9977) and are
+# untouched: setdefault never overrides an explicit value.
+for _var in ("HOROSA_SERVER_ROOT", "HOROSA_CHART_SERVER_ROOT"):
+    if not os.environ.get(_var):
+        os.environ[_var] = "http://127.0.0.1:9"
+
+DESKTOP_PORTS = frozenset({8899, 9999})
+_LOOPBACK = frozenset({"127.0.0.1", "localhost", "::1", "0.0.0.0", "::"})
+_real_connect = socket.socket.connect
+_real_connect_ex = socket.socket.connect_ex
+DESKTOP_REFUSAL = "tests never connect to the maintainer's desktop app on 127.0.0.1:8899/9999"
+
+
+def _is_desktop(address: object) -> bool:
+    return isinstance(address, tuple) and len(address) >= 2 and address[1] in DESKTOP_PORTS and str(address[0]) in _LOOPBACK
+
+
+def _guarded_connect(self: socket.socket, address: object) -> None:
+    if _is_desktop(address):
+        raise ConnectionRefusedError(errno.ECONNREFUSED, DESKTOP_REFUSAL)
+    _real_connect(self, address)
+
+
+def _guarded_connect_ex(self: socket.socket, address: object) -> int:
+    if _is_desktop(address):
+        return errno.ECONNREFUSED
+    return _real_connect_ex(self, address)
+
+
+socket.socket.connect = _guarded_connect  # type: ignore[method-assign]
+socket.socket.connect_ex = _guarded_connect_ex  # type: ignore[method-assign]
 
 REPO_CORE_JS_ROOT = Path(__file__).resolve().parents[1] / "horosa-core-js"
 REPO_SRC = Path(__file__).resolve().parents[1] / "src"

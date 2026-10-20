@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.41.1-dev (2026-10-20) | 可维护性重构第 0 批：直接 `uv run pytest` 会打到桌面版 8899/9999（conftest 不钉后端）；`run_ci_gates` 漏跑多行步骤；拆分前立 monkeypatch 目标守卫 | 护栏要在 CI 看不见的地方也成立；拆之前先堵「拆错了安静变绿」 |
 | v0.41.0 (2026-10-12) | 接入面四缺口：wheel 里没有 skill（只装 wheel 的用户 agent 从没读过规则）；注册表 `/v0/validate` 对旧 server.json 说 valid、publish 会因小写命名空间与不存在的 pypi 包拒两次，且 tag 处的 mcpb sha 是旧的；Agent Plugins schema 封闭；setup 9 → 25 家（各家静默失效的事实各钉一条）。顺带：lane 继承真 HOME、OpenClaw 产物的 `mcp` 根键会被猜测表误合并、AGENTS 说有人锁的 `check_client_matrix` 早已不存在 | 只在发布时执行的规则要在本地复刻；setup 新写的路径都要有接缝；新客户端 = 一行事实 + 锁步测试 |
 | v0.40.2 (2026-10-11) | 表面审计（全 110 技法 × MCP 全量 / 精简 / CLI / HTTP + 门面·资源·提示）查出 service 层全绿掩盖的 8 处 agent 可见缺陷：技法名两种写法只收一种且闸门对 MCP 名放行、dispatch/hecan 吞掉平铺出生信息还反问用户、记忆/报告缺参叫 agent 去问用户、精简面 instructions 写 120 工具、19 条 CLI 命令无说明、示例载荷只有 9/110、qimenzeri 依据卡恒「与声明不一致」、全新数据目录并行首起时 ALTER 竞态崩溃 | `resolve_tool_name` 单点解析（闸门先解析再判）；`_lift_flat_birth`；`AGENT_OWNED_OPERATIONS` 回 must_ask_user=false；精简面 instructions 变体；全命令 help + 计数取真值；每技法 live 示例；`ENGINE_OVERRIDES`；`_ensure_column` 吞并发 duplicate column；新 `scripts/surface_audit.py` 发版前跑 |
 | v0.40.1 (2026-10-06) | preflight 先查「旧 pin 在公开远端」，随后 `verify_upstream_sync --write-state` 把本地未推送的上游 HEAD（ecd742f6）写进 pin，收尾还提示「提交它」——靠人眼拦下 | `pin_to_record`：HEAD 已推送记 HEAD；未推送且没碰 `UPSTREAM_INPUT_ROOTS` 记最近已推送祖先；碰了 / 输入路径脏则拒写；pin 闸挪到全部闸之后；临时 git 仓五情形 + 路径扫描 + 闸序守卫，负向对照 5 红 |
@@ -142,6 +143,21 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.41.1-dev / 2026-10-20 — 可维护性重构第 0 批：测试会打到桌面版、门禁镜像漏跑多行步骤（`ci_test_steps` / `useless_patch_reason`）
+
+- **起因**：用户要求「全量扫之前用 ChatGPT 时留下的防御性代码，不必要的精简删去」+「把整个仓库做成更好长期维护的样子，已有功能都不能丢」。
+  五路只读审计（死代码 / 防御性代码 / service.py 拆分 / 其余大模块拆分 / 脚本测试 CI 文档）+ 重构前录下对外表面基准（CLI 帮助、MCP 两面、25 家客户端配置、
+  110 技法契约与闸门、110 技法 live 完整信封；两次录制逐字节一致）。每批重构后重录并逐字比对。
+- **症状 → 根因 → 修复**：
+  1. **本会话录基准时把计算请求发到了用户桌面版的 8899**：只 unset 了 `*_SERVER_ROOT`，闸门放行的技法回落到默认端口。审计随后发现测试本身也会：
+     `tests/conftest.py` 不钉后端，34 处 `Settings(...)` 用默认端口，`test_uninstall_dry_run_then_execute` 一条探 20 s。CI 两个端口上没人，所以从未暴露。
+     → conftest 两根 setdefault 成 :9 + 进程内拒连 8899/9999（`tests/test_desktop_port_guard.py`；那条测试 20 s → 0.06 s，侧证它此前确实在探桌面版）。
+  2. **`run_ci_gates.py` 跳过所有 `run: |` 多行步骤**：`verify_runtime_scripts.py` 与其 `--self-test` 从未在本机跑过，文档却写「全部门禁」；守护它的测试也只看单行步骤。
+     → `ci_test_steps` 收「每行都是 `uv run`」的多行块（镜像 24 → 25 步）；测试改成 test 作业里点名的每个 `verify_*.py` 都必须进镜像。
+  3. **拆大模块的头号隐患：re-export 让 monkeypatch 静默失效**（审计计数 cli 55 处、manager 39 处、service 三处冻结时间等）。
+     → `tests/test_monkeypatch_targets.py`：被 patch 的名字若在目标模块里只被 import、从不使用 → 红（`useless_patch_reason`，负向对照内置）。
+- **法则**：护栏要在 CI 看不见的地方也成立——「CI 上那个端口没人」不等于「测试不会去连」；拆分之前先把「拆错了会安静变绿」的路堵上。
 
 ### v0.41.0 / 2026-10-12 — 接入面四缺口：规则只到得了打开本仓的 agent；注册表 validate 说 valid、publish 会拒（`skill_install` / `server_json_problems` / `check_agent_plugin`）
 

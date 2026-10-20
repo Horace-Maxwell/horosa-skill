@@ -32,17 +32,34 @@ SKIP = ("Zero-install path works", "Zero-install path from the wheel works")
 
 
 def ci_test_steps(text: str) -> list[tuple[str, str]]:
-    """[(step name, command)] for the `test` job — single-line `run:` steps only (multi-line ones are runner glue)."""
+    """[(step name, command)] for the `test` job: single-line `run: uv run …` steps, plus multi-line `run: |` blocks whose
+    every line is a `uv run …` command (joined with &&). Blocks with any other line are runner glue (wheel build, temp
+    dirs) and stay CI-only.
+
+    🔴 2026-10 audit: the old parser skipped every `run: |` block, so `verify_runtime_scripts.py` (+ its --self-test) — a
+    two-line step — never ran locally while the docs said the mirror runs every verify_* gate.
+    """
     job = re.search(r"^  test:\n(.*?)(?=^  [a-z_-]+:\n|\Z)", text, re.S | re.M)
     if not job:
         raise SystemExit("ci.yml: no `test` job")
     steps: list[tuple[str, str]] = []
     name = ""
-    for line in job.group(1).splitlines():
+    lines = job.group(1).splitlines()
+    for index, line in enumerate(lines):
         stripped = line.strip()
         if stripped.startswith("- name:"):
             name = stripped[len("- name:"):].strip()
-        elif stripped.startswith("run:") and not stripped.endswith("|"):
+        elif stripped == "run: |":
+            indent = len(line) - len(line.lstrip()) + 2
+            block = []
+            for follow in lines[index + 1:]:
+                if follow.strip() and len(follow) - len(follow.lstrip()) < indent:
+                    break
+                if follow.strip():
+                    block.append(follow.strip())
+            if block and all(command.startswith("uv run") for command in block):
+                steps.append((name, " && ".join(block)))
+        elif stripped.startswith("run:"):
             command = stripped[len("run:"):].strip()
             if command.startswith("uv run"):
                 steps.append((name, command))

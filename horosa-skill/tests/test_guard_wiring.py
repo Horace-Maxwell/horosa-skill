@@ -217,8 +217,11 @@ def test_run_ci_gates_mirrors_the_ci_test_job() -> None:
     assert any("uv run pytest" in c for c in commands), "pytest 必须在镜像里"
     verify_in_ci = {c.split("scripts/")[1].split()[0] for c in commands if "scripts/verify_" in c}
     assert len(verify_in_ci) >= 12, verify_in_ci
-    # every verify_* the CI test job runs as a single-line step is reachable locally through the mirror
+    # every verify_* the CI test job runs — single-line OR inside a `run: |` block — is reachable locally through the mirror
+    # (2026-10 audit: the old assertion only looked at single-line steps, so the two-line verify_runtime_scripts.py step
+    # was invisible to both the mirror and this test).
     ci = (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8").split("\n  windows-smoke:")[0]
-    single_line = set(re.findall(r"run: uv run python scripts/(verify_[a-z_]+\.py)", ci))
-    assert single_line <= verify_in_ci, single_line - verify_in_ci
+    named_in_ci = set(re.findall(r"uv run python scripts/(verify_[a-z_]+\.py)", ci))
+    assert named_in_ci <= verify_in_ci, named_in_ci - verify_in_ci
+    assert any("verify_runtime_scripts.py --self-test" in c for c in commands), "the two-line launcher step must be mirrored"
     assert "run_ci_gates.py" in (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8"), "AGENTS §8 必须指明 push 前跑它"
