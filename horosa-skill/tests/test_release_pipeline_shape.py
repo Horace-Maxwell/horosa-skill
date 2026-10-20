@@ -188,8 +188,11 @@ def test_publish_requires_the_matrix_and_the_same_bytes() -> None:
 def test_completeness_checks_digests_min_os_and_the_mcpb_bundle() -> None:
     check = _job(COMPLETENESS, "check-latest-release-complete")
     assert "verify_mcpb_manifest.py --bundle" in check, "R8: unpack the published bundle"
-    assert ".digest" in check and "SHA256SUMS.txt says" in check, "R15: SHA256SUMS lines vs GitHub's asset digests"
-    assert "min_os" in check and "(0, 38, 1)" in check, "R16: min_os asserted from 0.38.1 on"
+    # v0.41.1: the manifest checks moved out of an untestable heredoc into scripts/verify_published_release.py
+    assert "verify_published_release.py --tag" in check, "the workflow must run the tested script"
+    script = (REPO_ROOT / "horosa-skill" / "scripts" / "verify_published_release.py").read_text(encoding="utf-8")
+    assert ".digest" in script and "SHA256SUMS.txt says" in script, "R15: SHA256SUMS lines vs GitHub's asset digests"
+    assert "min_os" in script and "(0, 38, 1)" in script, "R16: min_os asserted from 0.38.1 on"
 
 
 def test_ci_wheel_path_runs_a_real_stdio_probe_on_both_os() -> None:

@@ -10,7 +10,7 @@ import asyncio
 import json
 
 import pytest
-from test_service import FakeClient, FakeJsClient
+from fakes import FakeClient, FakeJsClient
 
 from horosa_skill.astro_sidereal import INDIA_HOUSE_SYSTEM_LABELS
 from horosa_skill.config import Settings

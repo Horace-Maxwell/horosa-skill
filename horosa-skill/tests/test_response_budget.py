@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from test_service import FakeClient, FakeJsClient
+from fakes import FakeClient, FakeJsClient
 
 from horosa_skill.config import Settings
 from horosa_skill.memory.store import MemoryStore

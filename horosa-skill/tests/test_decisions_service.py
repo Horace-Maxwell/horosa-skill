@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from test_service import FakeClient, FakeJsClient
+from fakes import FakeClient, FakeJsClient
 
 from horosa_skill.config import Settings
 from horosa_skill.decisions.errors import JevError

@@ -21,7 +21,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from test_service import CaptureClient, FakeClient, FakeJsClient
+from fakes import CaptureClient, FakeClient, FakeJsClient
 
 from horosa_skill.config import Settings
 from horosa_skill.engine import astro_snapshot as snap

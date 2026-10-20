@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
-from test_service import FakeClient
+from fakes import FakeClient
 
 from horosa_skill.config import Settings
 from horosa_skill.exports.registry import AI_EXPORT_OPTIONAL_SECTIONS, AI_EXPORT_PRESET_SECTIONS

@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 
 import pytest
-from test_service import FakeClient
+from fakes import FakeClient
 
 from horosa_skill.config import Settings
 from horosa_skill.errors import ToolValidationError

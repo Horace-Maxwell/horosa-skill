@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.41.1-dev (2026-10-20) | 可维护性重构第 4 批：测试替身挪出 test_service；ci.yml 补只读权限与并发（main 每提交一组，否则排队会丢结果）；发布巡检的 75 行 heredoc 变成有单测的 `verify_published_release.py` | 并发组键决定谁会被排队丢掉；工作流里的检查要能被测试碰到 |
 | v0.41.1-dev (2026-10-20) | 可维护性重构第 3 批：拆大模块（`agent_guidance` → 包）；拆的时候发现 options_keys 注入原地写进被多个工具共用的策略 dict | 拆分 = 只搬不改名、对外表面逐字比对；import 期对共享对象的原地写一律写时复制 |
 | v0.41.1-dev (2026-10-20) | 可维护性重构第 2 批：经度重试梯子把西经改成东经还算出了结果；宽 `except` 什么都不说时 `logger.warning` 棘轮看不见（审计 12 处）；算源生成器把 3 个技法指向不存在的 runner、声明成「不起盘」；PDF 无中文字体时静默出豆腐块 | 重试只许改写法、不许改值；静默也要能被数出来；名字映射要断言存在 |
 | v0.41.1-dev (2026-10-20) | 可维护性重构第 0 批：直接 `uv run pytest` 会打到桌面版 8899/9999（conftest 不钉后端）；`run_ci_gates` 漏跑多行步骤；拆分前立 monkeypatch 目标守卫 | 护栏要在 CI 看不见的地方也成立；拆之前先堵「拆错了安静变绿」 |
@@ -145,6 +146,21 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.41.1-dev / 2026-10-20 — 可维护性重构第 4 批：测试替身、CI 权限与并发、发布巡检脚本化（`verify_published_release` / `ci_permission_and_concurrency_problems`）
+
+- **测试替身挪到 `tests/fakes.py`**：`FakeClient` / `FakeJsClient` / `CaptureClient`（约 1 500 行）原住在 5 000 行的 `test_service.py` 里，
+  十七个测试文件从那里导入。pytest 不收集 `fakes.py`；以后新替身也放这里，别再从测试模块互相导入。
+- **`ci.yml` 补上 `permissions: contents: read` 与 `concurrency`**：同一 PR 连推只留最新一次；**main 上每个提交各占一组**——共用一组时，
+  即使不开 cancel-in-progress，GitHub 也会让后来的排队、并取消仍在排队的那次，main 上就会有提交拿不到 CI 结果。
+  `tests/test_ci_workflow_shape.py` 锁这两条（负向对照：共用组 + 不区分 PR 即红）。
+- **`release-completeness.yml` 的约 75 行 heredoc Python → `scripts/verify_published_release.py`**：判据与报错原文不变，查不完整的
+  每种形状（缺平台、pin-forward、digest 对不上、min_os、Content-Length、HTTP 非 200、不可达、SHA256SUMS 漏列、版本不符）都有单测；
+  本机对已公开的 v0.41.0 跑出与工作流同一行 OK，篡改版本号即红。守卫接线测试的「运行者」名单加上这个工作流。
+- **没做的**：脚本公共模块（44 份 4 行 UTF-8 设置、29 份脚本加载器、9 个棘轮骨架）——这些脚本要能脱离包单独跑（CI 按路径调、
+  发布 shell 调、测试按路径加载），共用一个 import 换来的是路径耦合，省的是每份两三行；composite action——重复的环境搭建大半在只有
+  发版时才跑的工作流里，改了没法在发版前验证。
+- **法则**：并发组键决定的不只是「取消谁」，还决定「谁会被排队丢掉」；工作流里的检查逻辑要能被测试碰到。
 
 ### v0.41.1-dev / 2026-10-20 — 可维护性重构第 3 批：拆大模块；共享策略 dict 被原地写（`TOOL_GUIDANCE` 写时复制 / `_clock`）
 

@@ -52,7 +52,7 @@ from horosa_skill.service import (
 )
 from horosa_skill.testing_payloads import build_sample_payloads
 from horosa_skill.time_basis import build_time_basis_line, time_basis_label
-from test_service import FakeClient, FakeJsClient
+from fakes import FakeClient, FakeJsClient
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "astro_v2_baseline_chartobj.json"
 

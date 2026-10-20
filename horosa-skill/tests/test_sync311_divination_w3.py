@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 from test_local_js_tools import make_service, requires_chart
-from test_service import FakeClient, FakeJsClient
+from fakes import FakeClient, FakeJsClient
 
 import horosa_skill.service as service_module
 from horosa_skill.config import Settings

@@ -13,7 +13,7 @@ from __future__ import annotations
 import shutil
 
 import pytest
-from test_service import CaptureClient
+from fakes import CaptureClient
 from test_sync311_mingli import _SH, _row, _section, _service
 
 from horosa_skill.agent_guidance import TOOL_GUIDANCE, build_agent_guidance

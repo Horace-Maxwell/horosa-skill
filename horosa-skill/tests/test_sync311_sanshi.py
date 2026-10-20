@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from test_service import CaptureClient, FakeJsClient
+from fakes import CaptureClient, FakeJsClient
 
 import horosa_skill.service as svc
 from horosa_skill.config import Settings

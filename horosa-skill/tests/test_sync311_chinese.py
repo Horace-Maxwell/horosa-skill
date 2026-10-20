@@ -13,7 +13,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from test_service import CaptureClient, FakeClient, FakeJsClient
+from fakes import CaptureClient, FakeClient, FakeJsClient
 
 # service 的私有助手按「svc.X」在用例里取（而不是顶层 from-import）：负向对照在旧代码上跑时，缺哪个助手
 # 只红用它的那几条，而不是整个文件 import 失败 —— 否则「旧代码会红」对每条用例都成了同一个无信息的原因。

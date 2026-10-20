@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 from test_local_js_tools import make_service, requires_chart, requires_runtime, requires_current_runtime_contract
-from test_service import FakeClient, FakeJsClient
+from fakes import FakeClient, FakeJsClient
 
 from horosa_skill.agent_guidance import build_agent_guidance, validate_agent_preflight
 from horosa_skill.config import Settings

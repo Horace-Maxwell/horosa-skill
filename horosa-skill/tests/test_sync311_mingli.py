@@ -15,7 +15,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from test_service import CaptureClient, FakeClient, FakeJsClient
+from fakes import CaptureClient, FakeClient, FakeJsClient
 
 from horosa_skill.agent_guidance import TOOL_GUIDANCE, build_agent_guidance
 from horosa_skill.config import Settings

@@ -112,7 +112,7 @@ gh release view vX.Y.Z --json assets                                     # 两�
 要点：`publish=true` 必须带 `run_matrix=true`（resolve 直接 fail）；官方 MCP Registry 版本不可变，名字大小写必须与 GitHub owner 一致
 （`io.github.Horace-Maxwell/…`），已公开的版本补登记用 `gh workflow run publish-mcp-registry.yml -f tag=vX.Y.Z`；tag 只在 release 仍是 draft 时允许重指；每周一 04:23Z 的 schedule
 矩阵拿 main 打公开 latest（lane pytest 预算按主机：Windows 2700 s / macOS 1500 s，pytest.log 流式落盘）；
-`release-completeness.yml` 每 6 小时校资产（SBOM / mcpb 解包 + sha / wheel 零安装 / 清单 min_os / digest vs SHA256SUMS）。
+`release-completeness.yml` 每 6 小时校资产（SBOM / mcpb 解包 + sha / wheel 零安装 / 清单 min_os / digest vs SHA256SUMS）；清单那一段是 `scripts/verify_published_release.py`（有单测，本机可对任意 tag 复跑：先下载 `runtime-manifest.json` 与 `SHA256SUMS.txt`，再 `python3 horosa-skill/scripts/verify_published_release.py --tag vX.Y.Z --repo Horace-Maxwell/horosa-skill --manifest … --sums …`）。
 Windows 半边由 `build_runtime_release_windows.py --seed` 在 windows-latest 上派生。v0.38.0 之前的本地双平台构建脚本与 Linux 实验构建器已于 v0.41.1 删除（git 历史可找回）。
 
 - 必要资产：`horosa-runtime-darwin-arm64-v<version>.tar.gz`、`horosa-runtime-win32-x64-v<version>.zip`、`runtime-manifest.json`、

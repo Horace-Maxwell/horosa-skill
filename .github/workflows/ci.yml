@@ -5,6 +5,16 @@ on:
     branches: ["main"]
   pull_request:
 
+# 测试作业只读仓库；不需要写任何东西（v0.41.1）。
+permissions:
+  contents: read
+
+# 同一个 PR 连推只留最新一次（旧的取消）；main 上每个提交各占一组——共用一组时 GitHub 会让后来的排队、
+# 并取消排队中的那次，main 就会丢掉某些提交的验证结果（tests/test_ci_workflow_shape.py 锁）。
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     runs-on: ubuntu-latest

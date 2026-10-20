@@ -1144,6 +1144,9 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **monkeypatch 目标必须被它所在的模块用到（`tests/test_monkeypatch_targets.py` 的 `useless_patch_reason`）。** 函数挪走、旧模块只留 re-export 时，
   `monkeypatch.setattr("horosa_skill.A.f", …)` 照样成功却不起作用，测试「因为错误的原因通过」。拆大模块时：被 patch 的名字跟着代码走，
   或让调用方经模块查名（`module.f()`），别靠 re-export 兜。
+- **测试替身住 `tests/fakes.py`，别从测试模块互相导入（v0.41.1）。** `ci.yml` 只读（`permissions: contents: read`），并发组 PR 按 ref、
+  main 按提交 sha——共用组会让 main 的排队运行被丢掉（`ci_permission_and_concurrency_problems` 锁）。发布后完整性巡检的清单检查在
+  `scripts/verify_published_release.py`（`verify_published_release` 有单测，本机可复跑），工作流只调它。
 - **测试 spawn 系统工具用绝对路径；扫真实安装目录的解析器测试要把那层 monkeypatch 掉（v0.38.0 反向「本机绿≠CI绿」）。**
   裸名 `subprocess.run(["bash"/"uv"…])` 在满负载 Windows 上偶发 `WinError 2`（PATH 搜索输给进程 churn + AV 扫描）——
   导入期 `BASH = shutil.which("bash")` 解析一次绝对路径再 spawn，缺席即 `skip`（`tests/test_runtime_launcher_patch.py`）。

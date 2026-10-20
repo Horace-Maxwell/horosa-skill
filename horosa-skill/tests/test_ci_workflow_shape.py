@@ -203,3 +203,39 @@ def test_guard_catches_a_literal_probe_count() -> None:
     assert literal_probe_counts("if ($r['steps']['stdio_probe']['tools'] -ne 116) { throw 'x' }") == ["['tools'] -ne 116"]
     assert literal_probe_counts('assert probe["tools"] == 116 == probe["expected_tools"]') == ['probe["tools"] == 116']
 
+
+
+def ci_permission_and_concurrency_problems(text: str) -> list[str]:
+    """ci.yml must be read-only, and its concurrency must never queue or cancel runs on main (v0.41.1).
+
+    A shared group on main — even with cancel-in-progress false — makes GitHub queue the next run and cancel whatever
+    is still queued, so some main commits silently get no CI result. On main each commit needs its own group.
+    """
+    problems = []
+    if not re.search(r"^permissions:\n  contents: read\n", text, re.M):
+        problems.append("top-level `permissions: contents: read` missing")
+    group = re.search(r"^concurrency:\n  group: (.+)\n  cancel-in-progress: (.+)\n", text, re.M)
+    if group is None:
+        problems.append("top-level concurrency block missing")
+    else:
+        if "github.sha" not in group.group(1):
+            problems.append("concurrency group is not per-commit outside pull requests (main runs would queue / cancel)")
+        if "pull_request" not in group.group(2):
+            problems.append("cancel-in-progress is not limited to pull requests")
+    return problems
+
+
+def test_ci_is_read_only_and_never_drops_a_main_run() -> None:
+    assert ci_permission_and_concurrency_problems((WORKFLOWS / "ci.yml").read_text(encoding="utf-8")) == []
+
+
+def test_concurrency_check_catches_a_shared_main_group() -> None:
+    shared = (
+        "permissions:\n  contents: read\n\n"
+        "concurrency:\n  group: ci-${{ github.ref }}\n  cancel-in-progress: false\n"
+    )
+    assert ci_permission_and_concurrency_problems(shared) == [
+        "concurrency group is not per-commit outside pull requests (main runs would queue / cancel)",
+        "cancel-in-progress is not limited to pull requests",
+    ]
+    assert "top-level `permissions: contents: read` missing" in ci_permission_and_concurrency_problems("concurrency:\n")

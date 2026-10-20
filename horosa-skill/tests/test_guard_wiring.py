@@ -30,6 +30,8 @@ RUNNERS = (
     # v0.38.0 A5：托管发布流水线与真机矩阵也是守卫的运行者（verify_runtime_live / verify_runtime_python_lock --seed …）
     REPO_ROOT / ".github/workflows/release-runtime.yml",
     REPO_ROOT / ".github/workflows/runtime-matrix.yml",
+    # v0.41.1：发布后的完整性巡检（每 6 小时 + 发版时）跑 verify_published_release.py。
+    REPO_ROOT / ".github/workflows/release-completeness.yml",
     SCRIPTS / "publish_release.sh",
     SCRIPTS / "preflight_release.py",
     SCRIPTS / "sync_windows_release.py",

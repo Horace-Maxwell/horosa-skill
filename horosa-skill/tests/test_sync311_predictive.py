@@ -15,7 +15,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from test_service import FakeClient, FakeJsClient
+from fakes import FakeClient, FakeJsClient
 
 from horosa_skill import predictive_text as P
 from horosa_skill import service as S
