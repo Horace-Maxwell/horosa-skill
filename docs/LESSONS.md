@@ -189,6 +189,10 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   先改两处按路径读它的守卫：`verify_schema_knob_wiring.py` 读包内全部声明、草堆排除**整个**包（只排除一个文件时，兄弟 schema 模块里
   提到的字段名会被当成「有人消费」）；`test_verify_js_boundary_contracts` 扫全部模块并断言真扫到了 `BirthInput`。pydantic 的 JSON schema
   不受模块归属影响——MCP 两面 tools/list（含全部输入 schema）逐字一致。
+- **`runtime/manager.py` 一期（3 015 → 2 536 行）**：安装后打的两个载荷补丁搬成 mixin——Windows boot jar（两个 base64 内嵌 class、
+  缓存 / webparams / log4j 改写、按条目重写 jar）→ `windows_jar_patch.py`，macOS 启动器（「只杀自己起的 pid」）→ `mac_launcher_patch.py`；
+  `_apply_runtime_overrides` 与 `_runtime_template_root`（路径深度）、`PAYLOAD_LONGEST_ENTRY_CHARS`（发布脚本按正则读源码）留在 manager。
+  安装 / 生命周期 / 诊断的 mixin 拆分（审计的二、三期）**没做**：那是事故最多的代码，等哪次真要改生命周期时一起做。
 - **没做的**：审计建议把 9 条择日指引的重复字段收成工厂函数（约省 160 行）。没做——每条是要整条读的声明式数据，而且上一条正说明
   共享对象在这张表里会被原地写；省下的行数不值这个风险。
 - **法则**：import 期对模块级共享对象的原地写，一律写时复制；拆分只搬不改，表面逐字比对兜底。

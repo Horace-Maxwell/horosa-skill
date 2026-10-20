@@ -115,7 +115,8 @@ an instance named explicitly via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROO
 - `schemas/` — `tools/` (per-tool pydantic input models, a package since v0.41.1: `base.py` with `BirthInput`, then one module
   per technique family — `astro`, `predictive`, `cn_mingli`, `cn_divination`, `election`, `shenshu` — and `facades.py`;
   `from horosa_skill.schemas.tools import X` keeps working) + `common.py`.
-- `runtime/` — `manager.py` (install / upgrade / doctor / start / stop), `identity.py` (endpoint ownership evidence),
+- `runtime/` — `manager.py` (install / upgrade / doctor / start / stop; the post-install payload patches it applies live in
+  `windows_jar_patch.py` and `mac_launcher_patch.py`, mixed into `HorosaRuntimeManager`), `identity.py` (endpoint ownership evidence),
   `registry.py` (atomic state file), `ports.py` / `procs.py` / `pidlock.py` / `mirrors.py`.
 - `memory/store.py` — SQLite + JSON artifacts + run manifests + AI-answer write-back.
 - `knowledge/` — bundled Xingque hover knowledge (`store.py` + `data/`).
