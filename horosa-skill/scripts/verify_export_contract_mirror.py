@@ -18,7 +18,7 @@ upstream HEAD) that let ~20 techniques drift silently before v0.23.0:
 
 Deliberately NOT a per-section diff: internal preset↔builder consistency is already asserted by the
 offline contract tests (missing/unknown == []); this guard's unique job is the cross-tree version + key
-alignment. Run in CI alongside verify_docs_sync.py.
+alignment. Run by preflight_release.py and sync_windows_release.py (not in CI: it needs the upstream tree).
 
 ⚠️ 本守卫的盲区（v0.31.0 实证）：它只比 vendored 镜像的版本常量与 key 集合——上游**加段不 bump
 版本**时（v3.9.5 horary +9、常量原地 56）本守卫全绿穿透。同步健康的权威判据是

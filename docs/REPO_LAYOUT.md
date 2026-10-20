@@ -193,7 +193,7 @@ debt ratchets `export_section_debt.json` / `error_recovery_debt.json` / `schema_
   `runtime_seed.py`, `scaffold_windows_runtime.py`. (The historical local builders and the Linux experimental builder were
   removed in v0.41.1; they are in git history.)
 - **Docs institution** — `verify_docs_sync.py` (versions, counts, links, DOC_MAP, lessons distillation, generated mirrors,
-  third-party facts ledger), `gen_agent_mirrors.py`, `bump_version.py` (15 version sites, `--check`), `verify_readme_links.py`.
+  third-party facts ledger), `gen_agent_mirrors.py`, `bump_version.py` (the `SITES` version checklist, `--check`), `verify_readme_links.py`.
 - **Other verifiers** — `verify_vendor_runtime_sources.py`, `verify_server_json.py`, `verify_builder_parity.py`,
   `verify_client_configs.py`, `verify_error_recovery.py`, `verify_mcp_list_budget.py`, `verify_mcp_client_compat.py`,
   `verify_mcpb_manifest.py`, `verify_schema_knob_wiring.py`, `verify_silent_degrades.py`, `verify_silent_returns.py`,

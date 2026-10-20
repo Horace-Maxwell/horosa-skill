@@ -24,7 +24,8 @@ uv run python scripts/run_ci_gates.py        # 解析 ci.yml test job 的 24 个
 (cd horosa-core-js && npm test)              # loadcheck（全量 import）+ selfcheck（值级金标）+ handcopy（手抄表审计）
 ```
 
-它跳过的只有两步「runner 专用」的零安装 wheel 检查（push 后看 CI）。🔴 **别 `for g in scripts/verify_*.py` 裸跑**：
+它只镜像 test 作业里的 `uv run …` 步骤（每个 `verify_*.py` 都在内，`tests/test_guard_wiring.py` 锁）；不在镜像里的是装依赖、上面单列的两步 npm，
+以及两步「runner 专用」的零安装检查（push 后看 CI）。🔴 **别 `for g in scripts/verify_*.py` 裸跑**：
 `verify_runtime_live.py` 是会下载 730 MB runtime 并起服务的真机 lane，`verify_matrix_digests.py` 需要 publish job 的输入。
 
 ## 发布前检查（preflight）
@@ -36,11 +37,11 @@ uv run python scripts/run_ci_gates.py        # 解析 ci.yml test job 的 24 个
 HOROSA_SOURCE_ROOT=<Horosa-Public checkout> uv run python scripts/preflight_release.py
 ```
 
-它按顺序断言：git 身份 + `origin/main` 无滞留 → HEAD 的 ci.yml 结论为 success → **上游 pin 在上游公开远端上**（v0.40.0 起；
-先 `git -C <Horosa-Public> fetch origin`）→ `verify_upstream_sync --require-upstream --write-state` → `verify_export_section_baseline
---source upstream` → `verify_vendor_runtime_sources` → `verify_export_contract_mirror` → `verify_technique_provenance` →
+它按顺序断言：git 身份 + `origin/main` 无滞留 → HEAD 的 ci.yml 结论为 success → `verify_upstream_sync --require-upstream --write-state`
+→ `verify_export_section_baseline --source upstream` → `verify_vendor_runtime_sources` → `verify_export_contract_mirror` → `verify_technique_provenance` →
 `verify_docs_sync`（含四把文档制度守卫）→ `verify_builder_parity` → `verify_runtime_scripts`（启动器补丁在当前上游树上仍打得上）→
-`verify_no_stray_runtime_dirs`。任一红 = 不打 tag。
+`verify_no_stray_runtime_dirs` → 最后才查**上游 pin 在上游公开远端上**（v0.40.1 起放到最后：`--write-state` 可能刚改写了 pin，要验的是最终
+会被提交的那一个；先 `git -C <Horosa-Public> fetch origin`）。任一红 = 不打 tag。
 
 ## 上游版本升级（re-vendor）Runbook
 

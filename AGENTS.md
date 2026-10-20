@@ -41,8 +41,8 @@ bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 enve
    sync 脚本默认根不对，必须显式传）。上游星阙工作树**只读**；skill 仓的教训**永不**写进上游树。
 4. **🔴 问题记录协议 v3**（§2）：踩坑必记——台账原文 + 蒸馏规则 + CHANGELOG + 机器守卫 + **文档实时更新**（DOC_MAP / 第三方事实账本 /
    生成件），五件套同一 change 完成；文档是否跟上由 `verify_docs_sync.py` 裁定，不靠记忆。
-5. **发布不信绿灯**：release-completeness guard 绿 ≠ 完整（pin-forward 模式下它必绿）；
-   `sync_windows_release.py --check` 的 `[GAP]` 才是权威（§7）。
+5. **发布不信绿灯**：release-completeness guard 绿 ≠ 完整——它只巡检**已公开**的 latest，草稿期看不到（v0.38.0 起它会拒清单 URL
+   钉到别的 tag 的 pin-forward）；发版期 `sync_windows_release.py --check [--tag vX --draft]` 的 `[GAP]` 才是权威（§7）。
 6. **文档同步交给 CI**：`scripts/verify_docs_sync.py` 强制版本号锁步 × 工具/测试/知识计数真值 × 链接有效 × SKILL frontmatter ×
    无冲突标记 × **DOC_MAP 全覆盖 × LESSONS 蒸馏 × 镜像=生成件 × 第三方事实账本**。改文档/发版时跑它，别靠肉眼；
    每周一 `docs-currency.yml` 再把账本里超龄的事实开成 issue。
@@ -71,7 +71,7 @@ bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 enve
      **复核 = 重读 source_url，事实没变也要更新日期**——「上次核对是什么时候」本身就是事实。
      对**真台账**的断言一律拿真实日期判（`dt.date.today()`，与 CLI 同）：测试把「今天」冻结在写测试那天，任何一次复核（`verified_on` 往后挪）都会被判「in the future」（v0.40.0 加第一条新事实时撞上）；固定日期只给合成样本用。
    - 数字（版本 / 工具 / 测试 / 知识 / 镜像份数）永远只写一次真值来源，其余由 `verify_docs_sync.py` 锁定：改数字先改真值。
-     版本号用 `horosa-skill/scripts/bump_version.py <new>`（16 个站点一处清单）。
+     版本号用 `horosa-skill/scripts/bump_version.py <new>`（站点一处清单 `SITES`）。
    - 会话交接：多会话 / 多模型接力的工作，用 [`docs/templates/HANDOFF_TEMPLATE.md`](./docs/templates/HANDOFF_TEMPLATE.md)
      生成 `HANDOFF-<主题>.local.md`（gitignored），会话开始先读、结束前更新；本机 memory 的索引行同步。
 
@@ -120,6 +120,8 @@ bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 enve
 
 ## 4. 计算模型铁律（compute model）
 
+### 4.1 算权：ken 后端、本地路由与端点登记
+
 **ken 是唯一算权，JS 只格式化。** `qimen` / `taiyi` / `jinkou`（及 `sanshiunited` 的奇门+太乙腿）由星阙
 **ken 后端**（`kinqimen` / `kintaiyi` / `kinjinkou`，挂在 chart 服务 `:8899` 的 `/qimen/pan` ·
 `/taiyi/pan` · `/jinkou/pan`）计算，与星阙桌面端逐值同源。`service/runners/sanshi.py::_run_{qimen,taiyi,jinkou}_tool`
@@ -156,6 +158,8 @@ runner 不打 ken、`data.route.local=true`、`compute_sources` 标 `local_route
 `/india/*` · `/germany/*` · `/jieqi/*` · `/*/pan`（ken + 14 神数）等。漏登记 → 请求落到 Java `:9999`
 通路（500，或读 `_java_runtime_ready` 触发二次探针，直接打挂 `test_service_*runtime*`）。判据：进了该 set
 才复用 `_chart_runtime_ready` 缓存、首调后不再探针。
+
+### 4.2 算源普查（每个技法由谁算）与算源标注
 
 **工具算源普查**（决定改哪一层）：
 
@@ -199,6 +203,8 @@ runner 不打 ken、`data.route.local=true`、`compute_sources` 标 `local_route
 `_require_ken_pan`（反之亦然）；算盘端点必须已在 `_PYTHON_CHART_ENDPOINTS`。
 **运行期实测优先于声明**：`data.technique_card` 以 `pan.source` / `jinkou.source` / `compute_sources`
 为准，与声明不符时标 `matches_declaration: false`——ken 端点失败也回 200，静默回退正是这个形状。
+
+### 4.3 知识包与上游同步守卫
 
 **知识包（v0.28.0 起，v0.35.0 收紧）**：方法论手册域由 `scripts/gen_knowledge_packs.py` 从上游 HelpDoc 收割
 （27 域/236 条，逐条带出处；幂等 = generated_at 取上游 commit 时间；**正文读上游 HEAD blob、不读工作区**，
@@ -278,6 +284,8 @@ zhengchuan 的动态 JSON import 属性，都是这么被抹掉又被测试抓�
 恰好解析到后者 → 静默 `undefined`。一律 `import_redirect` 钉死。
 ⚠️ 「已 vendored」≠「是当前的」——查依赖要查新模块 import 的**具体符号**，不是查文件在不在。
 
+### 4.4 MCP 面、决策层与错误信封
+
 **MCP 服务器面法则**（`surfaces/mcp_server.py` 注册工具；注解 / 工具集在 `mcp_surface.py`、入参归一在 `mcp_requests.py`、错误信封在 `mcp_errors.py`、并发与兜底在 `mcp_runner.py`、elicitation 在 `mcp_elicitation.py`）：全部工具带 **tool annotations**（口径：openWorldHint
 一律 False（local-first）；查询类 readOnly+idempotent=True；技法计算类 readOnly=False、destructive=False、
 idempotent=False——默认写一条本地 run 记录，必须如实标注，目录审核会核）；澄清闸走 **elicitation 双轨**
@@ -328,6 +336,8 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 ## 5. 新增技法 / re-vendor（集成决策树 + 布线清单）
 
+### 5.1 同步健康判据与四分决策树
+
 **同步健康的权威判据（v0.31.0 教训）**：`AI_EXPORT_SETTINGS_VERSION` 锁步**不可信**——上游可以加段
 不 bump 版本（v3.9.5 给 horary +9 段、常量原地 56）。判断是否漂移只认两个：
 `verify_upstream_sync.py --require-upstream`（sentinel sha256）与
@@ -352,6 +362,8 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
    Python 铸 **traditional** chart（`tradition:1, predictive:0`）并把**整个** `/chart` 响应作为
    `payload.chart` 传入——`buildFacts(result)` 读 `result.chart.objects`/`result.objectMap`/`result.aspects`，
    只传 `chart.objects` 会崩。
+
+### 5.2 vendoring 变换规则
 
 **vendoring 变换规则**：
 
@@ -397,6 +409,8 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   raw vendor 起 chart 服务**不再 hard-fail**：`kentang/registry.py` 现用 `_LazyMountedService`
   （默认 `HOROSA_KENTANG_LAZY=1`），缺引擎只在首请求时响亮 500 + 下次重试；18 个 mount 引擎均在
   vendored 集内，无需再手打 graceful-kentang-mount 补丁（打包脚本仍对 staged 拷贝保留该分支以防旧树）。
+
+### 5.3 布线清单
 
 **布线清单**（每个新技法照单走完）：
 
@@ -468,8 +482,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
     = 整个事件循环被占住）。分段循环必须 `_progress_tick`（既报进度也是取消检查点）。
     `maxSpanDays` 是**上限**不是旋钮，只能调低。新增客户端格式时同批更新 README×2 的
     Works-with 矩阵，并在 `client check` 的 `_client_config_locations` 的路径表里登记它的配置文件位置（三个 OS 各一行，
-    Devin 那样的改名旧路径留作候选）。（这里曾写「`verify_docs_sync.check_client_matrix` 锁」——那个函数早已不存在，
-    规则写着有人锁、实际没人锁；v0.41.0 起由 `tests/test_client_lockstep.py` 真锁，见下条。）
+    Devin 那样的改名旧路径留作候选）。（`tests/test_client_lockstep.py` 锁，见下条。）
 
 16. **新客户端 = 一行事实 + 锁步（v0.41.0）**：v0.41.0 起新客户端写成 `clients_extra.EXTRA_CLIENTS` 的一行（路径 / 根键 / 条目字段名 /
     超时字段与单位 / 只能用环境变量设的超时进 `notes` / 只转发部分环境的进 `passthrough_env`），再在 `skill_install.CLIENT_SKILL_DIRS`
@@ -603,10 +616,14 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 ## 7. 发布协议（release law）
 
-- **版本 bump 只有一个入口**（代码站点 pyproject / `__init__.py` 只改版本赋值行，历史注释不许动——v0.40.1 误改过；bump 后逐行看 diff）：`horosa-skill/scripts/bump_version.py <new>`（`SITES` 16 个站点：`pyproject.toml`、`__init__.py`、`uv.lock`、
+### 7.1 版本、README 数字与构建锁步
+
+- **版本 bump 只有一个入口**（代码站点 pyproject / `__init__.py` 只改版本赋值行，历史注释不许动——v0.40.1 误改过；bump 后逐行看 diff）：`horosa-skill/scripts/bump_version.py <new>`（`SITES` 清单：`pyproject.toml`、`__init__.py`、`uv.lock`、
   `manifest.json`（mcpb）、`horosa-core-js/package.json` + `package-lock.json`（含 `packages[""].version`）、`contracts/upstream_provenance.json`、
-  `server.json`、`CITATION.cff`、`.claude-plugin/plugin.json`、`README.md`/`README_EN.md`/SKILL/`INSTALL_RESTRICTED_NETWORK` 的钉版本命令与
-  「当前版本」行、两份 manifest 示例 JSON）；`--check` 断言全部站点同版本，CI 由 `verify_docs_sync.check_versions` 锁步。
+  `server.json`、`CITATION.cff`、`.claude-plugin/plugin.json`、仓根 Agent Plugins 的 `plugin.json` + `mcp.json`、`README.md` / `README_EN.md` /
+  `skills/horosa-agent/SKILL.md`（及 wheel 内生成的 `agent_skill/horosa-agent/SKILL.md`）/ `docs/INSTALL_RESTRICTED_NETWORK.md` 的钉版本命令与
+  「当前版本」行、`docs/runtime-manifest.example.json` + `docs/runtime-payload-manifest.example.json`；这里不写数量——
+  `tests/test_bump_version_sites_documented.py` 锁「每个站点都在这条里点名」）；`--check` 断言全部站点同版本，CI 由 `verify_docs_sync.check_versions` 锁步。
   历史行（「自 vX 起」「as of vX」「Since vX」）不是站点，脚本按 `HISTORY_MARKERS` 跳过；bump 后 `git grep -n "<OLD>"` 只应剩合法历史引用
   （CHANGELOG、台账、Windows 交接文档）。`docs/DATA_CONTRACTS.md` 的 `tool envelope: <ver>` 是**独立** schema 版本，不跟包版本连动。
   ⚠️ 两个 lock 只许字符串替换本包的版本串（脚本就是这么做的），禁 `json.dumps` 整文件重写——Python 默认把非 ASCII 转义成 `\uXXXX`，
@@ -638,6 +655,9 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   `…@主机名.local` 占位串（git 只在 commit 那刻才猜，作者串错了 GitHub 不归属任何账号）→ 阻断；
   ② fetch 后 `HEAD..origin/main` 非空（另一台机器的工作会被本次发布落下；此闸首跑当天就抓到
   构建机推的一个 commit）→ 阻断，离线 fetch 失败只警告。`git branch -u origin/main` 保持配置。
+
+### 7.2 发布流水线：draft → 托管派生 → 真机矩阵 → 公开
+
 - **推送之后看 CI 结论；发布前 CI 必须绿（v0.38.0 教训：主干红了 19 个 commit 没人看）。** 本机全量门禁绿只证明「在维护机上绿」；
   `preflight_release.py` 的 CI 闸用 `gh run list --commit <HEAD>` 取 ci.yml 结论，非 success（红 / 未跑 / 进行中）即阻断，
   `publish_release.sh --draft` 同样先查。写新守卫时按三种 runner 的形状各想一遍：路径分隔符（`Path.as_posix()`）、行尾
@@ -695,6 +715,9 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   否则升级后客户端装到的还是旧包（`verify_server_json.py` 逐个 package 查，不只查第一个）。
   Windows 半边由流水线派生；构建机 vendor 模式 `sync_windows_release.py --upload` 只是托管路径不可用时的后手，
   判据始终是 `--check` 的 `[GAP]`/`[OK]`。
+
+### 7.3 发布前检查与发布事故
+
 - **发 tag 前必须在有上游 checkout 的机器上跑 `scripts/preflight_release.py`**（`HOROSA_SOURCE_ROOT`
   指向 Horosa-Public）。跨树两闸（`verify_upstream_sync --require-upstream`、
   `verify_export_section_baseline --source upstream --require-upstream`）**只有那里能做真**——
@@ -715,7 +738,8 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
      skill 层 Python/docs 无妨）才合法；新版本出现可疑同尺寸 win zip 时，range-read 校 embedded manifest
      的 version + `export_registry_version` + 该 diff 条件后再信。
   3. **pin-forward（最隐蔽）**：新版 manifest 列了 `win32-x64` 但指向**上一版** zip（v0.17.0/v0.18.0 均
-     钉回 v0.16.1）——guard 绿、install 不炸、sha 也对，Windows 用户静默拿到落后 N 版的 runtime。
+     钉回 v0.16.1）——当年 guard 绿、install 不炸、sha 也对，Windows 用户静默拿到落后 N 版的 runtime（v0.38.0 起
+     release-completeness 会因 URL 钉到别的 tag 而红，但只在公开之后）。
      **检测**：`sync_windows_release.py --check` 找版本专属 `horosa-runtime-win32-x64-vX.Y.Z.zip`，
      缺 → `[GAP]`（**权威，无视 guard 颜色**）。
 - **修复一律走托管流水线**：修 → 重新 `publish_release.sh --draft --dispatch` → 矩阵绿 + `--check --tag --draft [OK]` → `publish=true`。
@@ -733,6 +757,8 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
   `>>>>>>> <sha>` 留上 main）；`verify_docs_sync.py` 在 CI 里也查。
 
 ## 8. 本地验证与排障
+
+### 8.1 验证流程
 
 - **tests/ 里起 node 的子进程必须 `encoding="utf-8"`（v0.40.0 首推 windows-smoke 红）**：`text=True` 在 Windows 按控制台代码页解，CJK 金标 JSON 直接 UnicodeDecodeError；`tests/test_subprocess_encoding.py` 的 node 扫描守着（负向对照），本机 macOS 复现不了，只有 Windows job 抓得到。起 node ESM 一律经 `tests/node_esm.py`（模块路径传 Path → `file://` URL；Windows 不认裸盘符路径 `ERR_UNSUPPORTED_ESM_URL_SCHEME`），别处不许再写 `--input-type=module`。
 - **工作流 / 文档里的计数必须有真值文件（v0.40.0 首推 CI 红）**：ci.yml 的 stdio 探针工具数从 `contracts/mcp_list_budget.json` 读（`full_tools` / `compact_tools`），README 客户端表的「全量 N」由 `verify_docs_sync.check_full_surface_counts` 对同一契约锁；`run_ci_gates.py` 不跑「wheel 真起 stdio」两步，推之前核它们的断言值。
@@ -807,6 +833,8 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
    `tool.<name>_cast_geo_required` 前置闸，缺谁报谁）。
 6. **`pkill` 法则**：bundled 与 live 星阙都跑 `webchartsrv.py`——`pkill -f webchartsrv.py` 会连星阙
    `:8899` 一起杀。按端口/PID 停；stop 脚本已按 runtime root 限定 kill 范围，保持住。
+
+### 8.2 症状速查表
 
 **症状速查表**：
 
@@ -1144,6 +1172,8 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **monkeypatch 目标必须被它所在的模块用到（`tests/test_monkeypatch_targets.py` 的 `useless_patch_reason`）。** 函数挪走、旧模块只留 re-export 时，
   `monkeypatch.setattr("horosa_skill.A.f", …)` 照样成功却不起作用，测试「因为错误的原因通过」。拆大模块时：被 patch 的名字跟着代码走，
   或让调用方经模块查名（`module.f()`），别靠 re-export 兜。
+- **现行文档里点名的路径 / 工作流 / `check_*` 必须真存在（`tests/test_doc_references.py` 的 `dangling_references`，v0.41.1）；bump 规则点名每个
+  站点、不写数量（`undocumented_sites`）；本文每个 `##` / `###` 块 ≤ 120 行（`oversized_chunks`）。** 历史叙述归 LESSONS，现行文档只写现在成立的事。
 - **测试替身住 `tests/fakes.py`，别从测试模块互相导入（v0.41.1）。** `ci.yml` 只读（`permissions: contents: read`），并发组 PR 按 ref、
   main 按提交 sha——共用组会让 main 的排队运行被丢掉（`ci_permission_and_concurrency_problems` 锁）。发布后完整性巡检的清单检查在
   `scripts/verify_published_release.py`（`verify_published_release` 有单测，本机可复跑），工作流只调它。

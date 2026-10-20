@@ -9,7 +9,7 @@
 | `CLAUDE.md` | Claude Code 30 秒入口：铁律速览 + 路由 | 铁律 / 路由 / 协议版本变化 | `check_links`、`check_tool_counts`（技法数） |
 | `AGENTS.md` | 全部 agent / 维护者的现行规则（§0–§12） | 每条教训（LESSONS → 蒸馏）、每次发布的 compaction gate | `check_lessons_distilled`、`check_links`、`check_conflict_markers` |
 | `README.md` | 中文用户首页：能力、安装、客户端矩阵、平台表、状态 | 版本 / 工具数 / 测试数 / 客户端或平台事实变化 | `check_versions`、`check_tool_coverage`、`check_test_count_*`、`check_platform_table`、`check_client_matrix_connectors`、`check_docker_claims`、`check_knowledge_counts`、`check_group_headers`、`check_export_contract_versions`、`check_gate_counts`（v0.40.0 三把新锁） |
-| `README_EN.md` | 英文首页（与中文逐节对齐） | 同上 | 同上 |
+| `README_EN.md` | 英文首页（与中文覆盖同一组事实，章节组织不同） | 同上 | 同上 |
 | `README.zh-CN.md` | 简短中文指针 | 极少 | `check_links` |
 | `docs/LESSONS.md` | 只增台账：symptom → root cause → fix/guard 原文 | 每次踩坑（协议 v3 第 1 条） | `check_lessons_distilled`（每节必有索引行；最新三版必有 AGENTS 蒸馏） |
 | `docs/DOC_MAP.md` | 本表 | 新增 / 删除任何指导性文档 | `check_doc_map` |

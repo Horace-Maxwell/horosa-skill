@@ -1,7 +1,3 @@
-> **Demoted to fallback runbook (v0.38.0 A2)**: the Windows half is derived from the darwin seed on a hosted runner
-> (`build_runtime_release_windows.py --seed …`, see docs/OFFLINE_RUNTIME_RELEASES.md). Use this document only when the
-> hosted path is unavailable and a Windows box must build in vendor mode.
-
 # Windows runtime build & release — Claude Code handoff prompt
 
 > ⚠️ **状态（2026-09-29）**：这是**后手**。v0.38.0 起 Windows 半边由托管流水线从 darwin 种子派生（`release-runtime.yml` → `build_runtime_release_windows.py --seed`），

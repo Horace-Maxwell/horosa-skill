@@ -1,11 +1,11 @@
 # 经验台账（LESSONS — append-only ledger）
 
 > **读者**：维护者 / 在本仓改代码或发版的任何 agent。**何时读**：需要某条现行规则的历史来龙去脉、或按
-> 「问题记录协议 v2」（见 [`AGENTS.md`](../AGENTS.md) §2）落一条新教训时。
+> 「问题记录协议 v3」（见 [`AGENTS.md`](../AGENTS.md) §2）落一条新教训时。
 >
 > 本文件是**只增不删**的编年台账：每条教训的原文永久保存在这里；「现行真相」的蒸馏版规则住在
 > [`AGENTS.md`](../AGENTS.md) 对应主题章节。两者分工：查历史 → 这里；照着干 → `AGENTS.md`。
-> 新条目**加在「台账正文」最上方**，标题格式 `### vX.Y.Z / YYYY-MM — 主题`，正文保持
+> 新条目**加在「台账正文」最上方**，标题格式 `### vX.Y.Z / YYYY-MM-DD — 主题`，正文保持
 > 症状 → 根因 → 守卫 三要素。
 >
 > 注：v0.15.0–v0.19.0 各轮的教训当时直接蒸馏进了 `AGENTS.md` 主题章节与 `CHANGELOG.md`
@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.41.1-dev (2026-10-20) | 可维护性重构第 5 批：铁律 5 的 pin-forward 理由、bump 站点数、preflight 顺序、协议版本号等 10 处陈旧事实；新守卫锁「bump 站点都点名」「文档点名的东西都在」 | 文档里的数字从源头推导或不写；点名的东西要有机器核实 |
 | v0.41.1-dev (2026-10-20) | 可维护性重构第 4 批：测试替身挪出 test_service；ci.yml 补只读权限与并发（main 每提交一组，否则排队会丢结果）；发布巡检的 75 行 heredoc 变成有单测的 `verify_published_release.py` | 并发组键决定谁会被排队丢掉；工作流里的检查要能被测试碰到 |
 | v0.41.1-dev (2026-10-20) | 可维护性重构第 3 批：拆大模块（`agent_guidance` → 包）；拆的时候发现 options_keys 注入原地写进被多个工具共用的策略 dict | 拆分 = 只搬不改名、对外表面逐字比对；import 期对共享对象的原地写一律写时复制 |
 | v0.41.1-dev (2026-10-20) | 可维护性重构第 2 批：经度重试梯子把西经改成东经还算出了结果；宽 `except` 什么都不说时 `logger.warning` 棘轮看不见（审计 12 处）；算源生成器把 3 个技法指向不存在的 runner、声明成「不起盘」；PDF 无中文字体时静默出豆腐块 | 重试只许改写法、不许改值；静默也要能被数出来；名字映射要断言存在 |
@@ -146,6 +147,21 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.41.1-dev / 2026-10-20 — 可维护性重构第 5 批：文档里的陈旧事实与两把引用守卫（`undocumented_sites` / `dangling_references`）
+
+- **改正的陈旧事实**：铁律 5「pin-forward 下 guard 必绿」（v0.38.0 A3 起 release-completeness 会拒钉到别的 tag 的清单 URL；规则本身仍成立——
+  它只巡检已公开的 latest，草稿期看不到）；bump 站点「16 个」（`SITES` 实为 19，v0.41.0 加的仓根 `plugin.json` / `mcp.json` 与 wheel 内 SKILL 副本
+  都没写进规则）；OPERATIONS 的 preflight 顺序（v0.40.1 起上游 pin 在最后查）与「本机镜像只跳过两步」（还跳过装依赖与两步 npm）；
+  LESSONS 头「协议 v2」与标题日期格式；CLAUDE.md 铁律编号 6 → 8 → 7；DOC_MAP 说英文 README「与中文逐节对齐」（章节组织并不相同）；
+  `verify_export_contract_mirror.py` 文档串说「在 CI 里跑」（只在 preflight / sync_windows_release）；AGENTS 里一段历史叙述改回现行事实。
+- **新守卫**：`tests/test_bump_version_sites_documented.py`——`SITES` 每个站点都必须在 AGENTS 的 bump 规则里点名、规则里不写数量
+  （对旧文本跑：6 个站点没点名 + 有数量，红）；`tests/test_doc_references.py`——现行文档（不含 LESSONS）里反引号点名的测试 / 脚本 /
+  源码 / 契约路径、工作流名和 `check_*` / `verify_*` 名必须真存在（`release.yml` 作为已删除的历史工作流列白名单）；
+  `tests/test_agents_compaction.py`（`oversized_chunks`）——AGENTS 自己的「章节超 ~120 行要分 `###`」只写在文字里，§4 / §5 / §7 / §8
+  长到 208 / 168 / 131 / 148 行；按主题补了 `###` 子标题（只加标题、不动正文），守卫按每个标题块量。
+- **没做的**：README 两份技法目录改由数据文件生成——每个工具 ID 必须出现在两份 README 里、每组「（N）」等于该组行数，docs-sync 早已锁住；生成化要把约 340 行双语正文搬进 JSON，换来的保护很少。AGENTS 里其余带版本号的历史叙述（审计数出 34 处）没有整体搬回 LESSONS：它们大多嵌在规则正文里充当出处，机械搬移会把规则和理由拆开，留待逐条编辑（这次只改了明显过时的那一处）。
+- **法则**：文档里的数字从源头推导或干脆不写；文档里点名的东西要有机器去核实它还在。
 
 ### v0.41.1-dev / 2026-10-20 — 可维护性重构第 4 批：测试替身、CI 权限与并发、发布巡检脚本化（`verify_published_release` / `ci_permission_and_concurrency_problems`）
 

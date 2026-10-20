@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bump the package version everywhere it is pinned — the 15-file checklist as code (v0.40.0 doc-currency institution).
+"""Bump the package version everywhere it is pinned — the `SITES` checklist as code (v0.40.0 doc-currency institution).
 
 `scripts/verify_docs_sync.py` (check_versions / check_pinned_install_commands / check_root_manifest_version) is the JUDGE that
 every site agrees; this script is the HAND that performs the bump so the file list lives in exactly one place instead of in
