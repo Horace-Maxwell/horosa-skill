@@ -195,7 +195,7 @@ def test_ken_backed_tools_are_declared_as_such(tool_name: str) -> None:
     assert declared[tool_name]["engines"], "ken 工具必须写明引擎名，卡片要用它比对实测 pan.source"
 
 
-def test_technique_report_docx_and_pdf_carry_the_report_body(tmp_path) -> None:
+def test_technique_report_docx_and_pdf_carry_the_report_body(tmp_path, monkeypatch) -> None:
     # 技法依据报告没有 ai_report：此前 DOCX/PDF 只渲染出封面与目录（一致性检查、技法一览、各技法卡全丢），
     # markdown 版却是全的。DOCX/PDF 必须带出同一份正文。
     import zipfile
@@ -216,15 +216,40 @@ def test_technique_report_docx_and_pdf_carry_the_report_body(tmp_path) -> None:
     assert "结构化解读 · 行动建议 · 风险提示" not in xml  # 不冒充咨询报告封面
     assert "**" not in xml and "`" not in xml
 
-    pdf = tmp_path / "t.pdf"
-    result = render_report(report, output_path=pdf, format_name="pdf")
-    assert result["format"] == "pdf"
-    # 只有封面 + 目录的旧产物约 3 KB；带正文与两张表后明显更大。
-    assert result["file_size"] > 2 * _pdf_size_without_body(tmp_path, report)
+    # PDF 看交给 reportlab 的正文本身，不看文件大小：大小随嵌入的中文字体变（苹方 / Noto / STSong 的子集开销差几倍），
+    # 「带正文 > 2 × 不带正文」在 Linux 只有 1.83 倍、macOS 1.94 倍，CI 与矩阵因此红过（v0.41.2）。
+    pdf_text = _pdf_story_text(tmp_path / "t.pdf", report, monkeypatch)
+    for expected in ("一致性检查", "技法一览", "口径不一致", "qimen", "liureng"):
+        assert expected in pdf_text, expected
+    # 负向对照：只有标题的文档（= 旧缺陷「只剩封面和目录」的形状）拿不出这些正文。
+    bare = _pdf_story_text(tmp_path / "bare.pdf", {"title": report["title"]}, monkeypatch)
+    assert not any(expected in bare for expected in ("一致性检查", "技法一览", "口径不一致"))
 
 
-def _pdf_size_without_body(tmp_path, report) -> int:
+def _pdf_story_text(path, document, monkeypatch) -> str:
+    """渲染 PDF，并收集交给 SimpleDocTemplate.build 的全部段落与表格文字（与字体无关）。"""
+    from reportlab.platypus import SimpleDocTemplate
+
     from horosa_skill.reports.renderers import render_report
 
-    out = tmp_path / "empty.pdf"
-    return render_report({"title": report["title"]}, output_path=out, format_name="pdf")["file_size"]
+    captured: list[str] = []
+    original_build = SimpleDocTemplate.build
+
+    def _collect(flowable) -> None:
+        if hasattr(flowable, "getPlainText"):
+            captured.append(flowable.getPlainText())
+        for row in getattr(flowable, "_cellvalues", None) or []:
+            for cell in row:
+                for item in cell if isinstance(cell, (list, tuple)) else [cell]:
+                    captured.append(item.getPlainText() if hasattr(item, "getPlainText") else str(item))
+
+    def spy_build(self, flowables, *args, **kwargs):
+        for flowable in flowables:
+            _collect(flowable)
+        return original_build(self, flowables, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(SimpleDocTemplate, "build", spy_build)
+        result = render_report(document, output_path=path, format_name="pdf")
+    assert result["format"] == "pdf"
+    return "\n".join(captured)

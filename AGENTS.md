@@ -1183,6 +1183,8 @@ A global stability pass hardened these; keep them true when you touch the releva
   或让调用方经模块查名（`module.f()`），别靠 re-export 兜。
 - **现行文档里点名的路径 / 工作流 / `check_*` 必须真存在（`tests/test_doc_references.py` 的 `dangling_references`，v0.41.1）；bump 规则点名每个
   站点、不写数量（`undocumented_sites`）；本文每个 `##` / `###` 块 ≤ 120 行（`oversized_chunks`）。** 历史叙述归 LESSONS，现行文档只写现在成立的事。
+- **测试看内容，不拿文件大小 / 耗时当替身（v0.41.2）。** PDF 字节数大头是嵌入的中文字体子集，随机器漂几倍；要证「正文进了 PDF」就收集交给
+  reportlab 的段落与表格文字（`tests/test_technique_card.py` 的 `_pdf_story_text`）。只在一台机器上校准过的阈值不是断言。
 - **测试替身住 `tests/fakes.py`，别从测试模块互相导入（v0.41.1）。** `ci.yml` 只读（`permissions: contents: read`），并发组 PR 按 ref、
   main 按提交 sha——共用组会让 main 的排队运行被丢掉（`ci_permission_and_concurrency_problems` 锁）。发布后完整性巡检的清单检查在
   `scripts/verify_published_release.py`（`verify_published_release` 有单测，本机可复跑），工作流只调它。
