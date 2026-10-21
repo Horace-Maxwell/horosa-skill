@@ -336,5 +336,7 @@ def build_tool_docstring(tool_name: str) -> str:
         lines.append("时点 / 目标字段 · Timing/target fields: " + field_notes)
     output_contract = contract.get("output_contract") or []
     if output_contract:
-        lines.append("预期输出段 / Expected output sections: " + ", ".join(str(item) for item in output_contract) + ".")
+        # 多数策略给段名列表；择日族等给一整句说明——整句直接用，不能按字符拆开再逗号拼。
+        sections = output_contract if isinstance(output_contract, str) else ", ".join(str(item) for item in output_contract)
+        lines.append("预期输出段 / Expected output sections: " + sections + ".")
     return "\n".join(lines)

@@ -143,3 +143,16 @@ def test_options_keys_never_leak_onto_tools_that_share_a_policy_dict() -> None:
     leaked = {tool: owners[id(entry)] for tool, entry in TOOL_GUIDANCE.items()
               if entry.get("options_keys") is not None and len(owners[id(entry)]) > 1}
     assert not leaked, f"options_keys sits on a dict shared by several tools: {leaked}"
+
+
+def test_tool_docstring_keeps_a_sentence_output_contract_whole() -> None:
+    # 择日族等策略的 output_contract 是一整句；旧实现按字符逗号拼接，`__doc__` 里成了「按, 条, 件, …」。
+    from horosa_skill.agent_guidance import TOOL_GUIDANCE
+
+    sentence_tools = [name for name, policy in TOOL_GUIDANCE.items() if isinstance(policy.get("output_contract"), str)]
+    assert sentence_tools, "expected at least one sentence-form output_contract"
+    for name in sentence_tools:
+        contract = TOOL_GUIDANCE[name]["output_contract"]
+        doc = build_tool_docstring(name)
+        assert contract in doc, name
+        assert ", ".join(contract[:3]) not in doc, name
