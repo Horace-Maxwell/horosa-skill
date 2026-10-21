@@ -125,3 +125,22 @@ def test_silent_except_ratchet_fails_when_a_file_exceeds_its_baseline(tmp_path, 
     monkeypatch.setattr(guard, "BASELINE", fake)
     assert guard.main() == 1
     assert "silent broad except(s)" in capsys.readouterr().err
+
+
+def test_lingqi_engine_failure_is_an_error_not_an_empty_success(tmp_path) -> None:
+    # 灵棋是纯 JS 技法：旧实现把 ToolTransportError 吞成 `result = {}`，回 ok + 空快照（只剩缺段提示），
+    # 真正的失败原因（引擎起不来 / 超时）丢了。主计算失败必须是失败。
+    from horosa_skill.errors import ToolTransportError
+
+    service = _service(tmp_path)
+    original = service.js_client.run
+
+    def failing(tool_name: str, payload: dict) -> dict:
+        if tool_name == "lingqi":
+            raise ToolTransportError("node exited 1", code="js_engine.failed")
+        return original(tool_name, payload)
+
+    service.js_client.run = failing
+    envelope = service.run_tool("lingqi", build_sample_payloads()["lingqi"], save_result=False)
+    assert envelope.ok is False
+    assert envelope.error is not None and envelope.error.code == "js_engine.failed"

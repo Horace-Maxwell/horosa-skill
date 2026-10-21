@@ -509,14 +509,12 @@ class CnDivinationRunners:
         day_ganzhi = self._lingqi_day_ganzhi(payload)
         if day_ganzhi:
             js_payload["dayGanZi"] = day_ganzhi
-        try:
-            result = self.js_client.run("lingqi", js_payload)
-        except ToolTransportError:
-            result = {}
-        snapshot_text = result.get("snapshot_text") if isinstance(result, dict) else ""
+        # 引擎失败就是本技法失败：照其他 JS 技法上抛传输错误，不回一份 ok 的空盘。
+        result = self.js_client.run("lingqi", js_payload)
+        snapshot_text = result.get("snapshot_text")
         return {
-            "counts": (isinstance(result, dict) and result.get("counts")) or js_payload.get("counts"),
-            "seed": (isinstance(result, dict) and result.get("seed")) or None,
+            "counts": result.get("counts") or js_payload.get("counts"),
+            "seed": result.get("seed") or None,
             "category": js_payload["category"],
             "day_ganzhi": day_ganzhi,
             "snapshot_text": snapshot_text,
