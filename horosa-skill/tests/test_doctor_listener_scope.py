@@ -48,7 +48,7 @@ def test_doctor_reports_listener_scope_and_warns(monkeypatch: pytest.MonkeyPatch
         def runtime_mode(self) -> str:
             return "managed"
 
-        def endpoint_identities(self, manifest, *, endpoints=None):
+        def endpoint_identities(self, *, endpoints=None):
             return [{"label": "java_backend", "reachable": True, "identity": None}]
 
         def load_installed_manifest(self, *, strict: bool = False):

@@ -661,7 +661,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                     # java.exe / python.exe 锁着文件 → WinError 32/5；macOS 上旧进程继续从已删路径服务、新载荷永远
                     # 不启动（本机就是活例：已装 0.3.0、doctor 说 ready、从不提示过期）。不是我们起的服务一律拒绝，
                     # `--force` 也不例外 ——「不杀陌生人」是不变量。
-                    was_running = self._stop_own_services_before_swap(self.load_installed_manifest(), warnings=install_warnings)
+                    was_running = self._stop_own_services_before_swap(warnings=install_warnings)
                 self._remove_previous_dir(previous_dir)
                 if self.current_dir.exists():
                     self.current_dir.replace(previous_dir)
@@ -736,7 +736,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
     # ---- v0.38.1 R3：升级就地（先停自己的服务，再换目录，再拉起） --------------------------------
 
     def _stop_own_services_before_swap(
-        self, installed_manifest: dict[str, Any] | None, *, warnings: list[dict[str, Any]] | None = None
+        self, *, warnings: list[dict[str, Any]] | None = None
     ) -> bool:
         """返回 True = 之前在跑且已由我们停下（换完目录要重新拉起）。
 
@@ -748,7 +748,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         对「旧清单钉着被占端口」无效（探的是旧清单的端口），桌面端 + 默认端口这一最常见组合会原地卡死。
         证明不了在别处 → 仍拒。
         """
-        endpoints = self.endpoint_identities(installed_manifest)
+        endpoints = self.endpoint_identities()
         reachable = [item for item in endpoints if item.get("reachable")]
         if not reachable:
             return False
@@ -1004,7 +1004,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             java_path = self._relative_manifest_path(manifest, "runtimes", "java")
             start_script = self._relative_manifest_path(manifest, "services", "start_script")
             stop_script = self._relative_manifest_path(manifest, "services", "stop_script")
-            endpoints = self._service_status(manifest)
+            endpoints = self._service_status()
 
             issues = []
             if manifest_issue:
@@ -1097,7 +1097,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         if mode == "external":
             # 外部模式：地址是用户给的，只探不起不停。
             manifest = self.load_installed_manifest() if self.current_dir.exists() else None
-            endpoints = self.endpoint_identities(manifest)
+            endpoints = self.endpoint_identities()
             reachable = self._all_services_reachable(endpoints)
             if not reachable:
                 raise RuntimeInstallError(
@@ -1144,7 +1144,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                             },
                         )
                 patched_files: list[str] = []
-                initial_status = self.endpoint_identities(manifest)
+                initial_status = self.endpoint_identities()
                 # 可达但不是我们的 → 报冲突并退出；绝不采用、绝不代为终止。
                 self._require_no_foreign_holders(initial_status)
                 if self._all_services_reachable(initial_status):
@@ -1208,7 +1208,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                 if not try_pid_lock(lock_path, stale_after_seconds=960.0, owner="runtime-start"):
                     holder = describe_lock(lock_path)
                     waited = self._wait_for_service_state(
-                        expected_reachable=True, timeout_seconds=budget, manifest=manifest
+                        expected_reachable=True, timeout_seconds=budget
                     )
                     if waited["ready"]:
                         return {
@@ -1265,7 +1265,6 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                         command=command,
                         script=script,
                         env=env,
-                        manifest=manifest,
                         wait_seconds=budget,
                     )
                     if readiness.get("starting"):
@@ -1311,7 +1310,6 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                             command=command,
                             script=script,
                             env=env,
-                            manifest=manifest,
                             wait_seconds=budget,
                         )
                     degraded = bool(readiness.get("degraded"))
@@ -1433,13 +1431,13 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                 "reason": "external_mode",
                 "message": "外部模式（HOROSA_SERVER_ROOT/HOROSA_CHART_SERVER_ROOT 已显式设置）下不会停止任何服务。",
                 "command": None, "stdout": "", "stderr": "", "returncode": 0,
-                "endpoints": self.endpoint_identities(None), "trace_id": None, "group_id": None,
+                "endpoints": self.endpoint_identities(), "trace_id": None, "group_id": None,
             }
         with self.tracer.span(workflow_name="runtime.stop", metadata={"entrypoint": "runtime.stop"}) as trace:
             self._require_runtime()
             manifest = self.load_installed_manifest(strict=True)
             script = self.current_dir / self._relative_manifest_path(manifest, "services", "stop_script")
-            initial_status = self.endpoint_identities(manifest)
+            initial_status = self.endpoint_identities()
             reachable_now = [item for item in initial_status if item.get("reachable")]
             not_ours = [
                 item for item in reachable_now
@@ -1549,7 +1547,6 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             shutdown = self._wait_for_service_state(
                 expected_reachable=False,
                 timeout_seconds=max(3.0, min(self.settings.runtime_start_timeout_seconds, 10.0)),
-                manifest=manifest,
             )
             if completed.returncode == 0 and shutdown["ready"]:
                 self._clear_runtime_state()
@@ -2151,12 +2148,12 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         defaults = self._manifest_defaults()
         return Path(defaults[section][key])
 
-    def _service_status(self, manifest: dict[str, Any] | None) -> list[dict[str, Any]]:
+    def _service_status(self) -> list[dict[str, Any]]:
+        # 探的必须是**现在**会起的那组地址：settings 的 URL 跟着 HOROSA_LOCAL_BACKEND_PORT / HOROSA_LOCAL_CHART_PORT /
+        # HOROSA_PORTS=auto 走，启动器与技法客户端用的也是它。安装时写进清单的 services.*_url 只是当时的快照 —— 旧实现
+        # 优先读它，装完再换端口，启停 / doctor 就一直探旧端口（stop 判「已停」、清掉 state，新端口上的服务却还在跑）。
         backend_url = self.settings.server_root.rstrip("/")
         chart_url = self.settings.chart_server_root.rstrip("/")
-        if manifest and isinstance(manifest.get("services"), dict):
-            backend_url = str(manifest["services"].get("backend_url") or backend_url)
-            chart_url = str(manifest["services"].get("chart_url") or chart_url)
         explicit_backend_url = os.environ.get("HOROSA_SERVER_ROOT", "").strip()
         explicit_chart_url = os.environ.get("HOROSA_CHART_SERVER_ROOT", "").strip()
         if explicit_backend_url:
@@ -2204,7 +2201,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         return str(nonce) if nonce else None
 
     def endpoint_identities(
-        self, manifest: dict[str, Any] | None, *, endpoints: list[dict[str, Any]] | None = None
+        self, *, endpoints: list[dict[str, Any]] | None = None
     ) -> list[dict[str, Any]]:
         """给每个端点补上归属判定。
 
@@ -2212,7 +2209,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         `_wait_for_service_state` 的 0.25 秒轮询里 —— 判定要跑 netstat/ps 子进程，放进轮询会把
         一次启动的开销翻好几倍。
         """
-        items = endpoints if endpoints is not None else self._service_status(manifest)
+        items = endpoints if endpoints is not None else self._service_status()
         state = self.load_runtime_state() or {}
         nonce = self._launch_nonce()
         service_pids = state.get("service_pids") or []
@@ -2409,7 +2406,6 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         command: list[str],
         script: Path,
         env: dict[str, str],
-        manifest: dict[str, Any] | None,
         wait_seconds: float | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
         """启动并在预算内等待就绪。预算用尽仍未就绪时 readiness["starting"]=True。
@@ -2429,7 +2425,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         self._record_launcher(proc.pid, log_path)
 
         deadline = started_at + budget
-        endpoints = self._service_status(manifest)
+        endpoints = self._service_status()
         java_dead_deadline: float | None = None
         while True:
             if all(item["reachable"] for item in endpoints):
@@ -2442,12 +2438,12 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             effective_deadline = min(deadline, java_dead_deadline) if java_dead_deadline else deadline
             if exited:
                 # 启动器退出后再看最后一眼：它可能刚把服务拉起来。
-                endpoints = self._service_status(manifest)
+                endpoints = self._service_status()
                 break
             if time.monotonic() >= effective_deadline:
                 break
             time.sleep(0.25)
-            endpoints = self._service_status(manifest)
+            endpoints = self._service_status()
 
         returncode = proc.poll()
         output = self._read_launcher_log(log_path)
@@ -2498,15 +2494,14 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         *,
         expected_reachable: bool,
         timeout_seconds: float,
-        manifest: dict[str, Any] | None,
     ) -> dict[str, Any]:
         deadline = time.monotonic() + max(timeout_seconds, 0.1)
-        endpoints = self._service_status(manifest)
+        endpoints = self._service_status()
         while time.monotonic() < deadline:
             if all(item["reachable"] == expected_reachable for item in endpoints):
                 return {"ready": True, "endpoints": endpoints}
             time.sleep(0.25)
-            endpoints = self._service_status(manifest)
+            endpoints = self._service_status()
         return {"ready": all(item["reachable"] == expected_reachable for item in endpoints), "endpoints": endpoints}
 
     def _write_runtime_state(self, payload: dict[str, Any]) -> None:

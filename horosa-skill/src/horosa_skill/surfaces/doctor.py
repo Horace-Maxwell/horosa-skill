@@ -573,7 +573,7 @@ def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager,
     if settings.runtime_current_dir.exists():
         try:
             with _budget.timed("endpoint_identities"):
-                report["endpoints"] = manager.endpoint_identities(manager.load_installed_manifest())
+                report["endpoints"] = manager.endpoint_identities()
         except Exception as exc:  # noqa: BLE001 - 体检不能因为归属判定失败就整份报废，但失败本身要如实入报告（v0.41.1）
             report["endpoints_error"] = f"{type(exc).__name__}: {exc}"
     report["port_conflicts"] = _doctor_port_holders(report)

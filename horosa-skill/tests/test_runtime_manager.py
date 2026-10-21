@@ -244,13 +244,13 @@ def test_doctor_reports_installed_runtime(tmp_path: Path) -> None:
     assert any(item["label"] == "horosa_core_js_root" for item in report["files"])
 
 
-def test_service_status_prefers_explicit_env_urls_over_manifest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_service_status_prefers_explicit_env_urls(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     settings = Settings(
         runtime_root=tmp_path / "runtime-root",
         db_path=tmp_path / "memory.db",
         output_dir=tmp_path / "runs",
-        server_root="http://127.0.0.1:34528",
-        chart_server_root="http://127.0.0.1:34529",
+        server_root="http://127.0.0.1:19999",
+        chart_server_root="http://127.0.0.1:18899",
     )
     manager = HorosaRuntimeManager(settings)
     seen: dict[str, str] = {}
@@ -260,17 +260,46 @@ def test_service_status_prefers_explicit_env_urls_over_manifest(tmp_path: Path, 
     monkeypatch.setattr(manager, "_backend_reachable", lambda url: seen.setdefault("backend", url) or True)
     monkeypatch.setattr(manager, "_http_reachable", lambda url: seen.setdefault("chart", url) or True)
 
-    manager._service_status(
-        {
-            "services": {
-                "backend_url": "http://127.0.0.1:9999",
-                "chart_url": "http://127.0.0.1:8899",
-            }
-        }
-    )
+    manager._service_status()
 
     assert seen["backend"] == "http://127.0.0.1:34528/common/time"
     assert seen["chart"] == "http://127.0.0.1:34529"
+
+
+def test_probes_follow_the_current_ports_not_the_install_time_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """装完再换端口（HOROSA_LOCAL_*_PORT / HOROSA_PORTS=auto）：启动器与技法客户端用新端口，探针也必须用新端口。
+
+    旧实现优先读安装时写进清单的 services.*_url：stop 探旧端口判「已停」并清掉 state，新端口上的服务继续跑；
+    start 探旧端口超时或误判别人占用。
+    """
+    monkeypatch.delenv("HOROSA_SERVER_ROOT", raising=False)
+    monkeypatch.delenv("HOROSA_CHART_SERVER_ROOT", raising=False)
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+        server_root="http://127.0.0.1:19999",
+        chart_server_root="http://127.0.0.1:18899",
+    )
+    manager = HorosaRuntimeManager(settings)
+    settings.runtime_current_dir.mkdir(parents=True, exist_ok=True)
+    (settings.runtime_current_dir / "runtime-manifest.json").write_text(
+        json.dumps({
+            "version": "1.2.3",
+            "services": {"backend_url": "http://127.0.0.1:9999", "chart_url": "http://127.0.0.1:8899"},
+        }),
+        encoding="utf-8",
+    )
+    seen: dict[str, str] = {}
+    monkeypatch.setattr(manager, "_backend_reachable", lambda url: seen.setdefault("backend", url) and False)
+    monkeypatch.setattr(manager, "_http_reachable", lambda url: seen.setdefault("chart", url) and False)
+
+    endpoints = manager.endpoint_identities()
+
+    assert seen == {"backend": "http://127.0.0.1:19999/common/time", "chart": "http://127.0.0.1:18899"}
+    assert [item["url"] for item in endpoints] == ["http://127.0.0.1:19999/common/time", "http://127.0.0.1:18899"]
 
 
 def _stub_popen(monkeypatch, *, seen: dict, returncode=None, writes: bytes = b""):
@@ -316,7 +345,7 @@ def test_run_start_command_spawns_the_launcher_detached(tmp_path: Path, monkeypa
     monkeypatch.setattr(
         manager,
         "_service_status",
-        lambda manifest: [
+        lambda: [
             {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": True},
             {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": True},
         ],
@@ -328,7 +357,6 @@ def test_run_start_command_spawns_the_launcher_detached(tmp_path: Path, monkeypa
         command=["/bin/bash", str(script)],
         script=script,
         env={"HOME": str(tmp_path)},
-        manifest=None,
     )
 
     assert seen.get("start_new_session") is True, "POSIX 上必须开新会话，否则父进程一退启动器跟着死"
@@ -357,7 +385,7 @@ def test_run_start_command_uses_detached_process_group_on_windows(tmp_path: Path
     monkeypatch.setattr(
         manager,
         "_service_status",
-        lambda manifest: [
+        lambda: [
             {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": True},
             {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": True},
         ],
@@ -369,7 +397,6 @@ def test_run_start_command_uses_detached_process_group_on_windows(tmp_path: Path
         command=["powershell", "-File", str(script)],
         script=script,
         env={"HOME": str(tmp_path)},
-        manifest=None,
     )
 
     assert "creationflags" in seen
@@ -399,7 +426,7 @@ def test_run_start_command_returns_starting_instead_of_blocking(tmp_path: Path, 
     monkeypatch.setattr(
         manager,
         "_service_status",
-        lambda manifest: [
+        lambda: [
             {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": False},
             {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": False},
         ],
@@ -412,7 +439,6 @@ def test_run_start_command_returns_starting_instead_of_blocking(tmp_path: Path, 
         command=["/bin/bash", str(script)],
         script=script,
         env={"HOME": str(tmp_path)},
-        manifest=None,
         wait_seconds=0.5,
     )
     elapsed = time.monotonic() - started
@@ -495,7 +521,7 @@ def test_start_and_stop_runtime_updates_state(tmp_path: Path) -> None:
     manager.install(archive=str(archive))
     service_state = {"running": False}
 
-    def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+    def fake_service_status(self: HorosaRuntimeManager) -> list[dict[str, object]]:
         reachable = service_state["running"]
         return [
             {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": reachable},
@@ -507,7 +533,6 @@ def test_start_and_stop_runtime_updates_state(tmp_path: Path) -> None:
         *,
         expected_reachable: bool,
         timeout_seconds: float,
-        manifest: dict | None,
     ) -> dict[str, object]:
         service_state["running"] = expected_reachable
         return {
@@ -634,7 +659,7 @@ def test_start_runtime_does_not_treat_partial_service_state_as_already_running(t
         ]
     )
 
-    def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+    def fake_service_status(self: HorosaRuntimeManager) -> list[dict[str, object]]:
         return next(service_states)
 
     def fake_wait_for_service_state(
@@ -642,7 +667,6 @@ def test_start_runtime_does_not_treat_partial_service_state_as_already_running(t
         *,
         expected_reachable: bool,
         timeout_seconds: float,
-        manifest: dict | None,
     ) -> dict[str, object]:
         return {
             "ready": True,
@@ -671,7 +695,7 @@ def test_doctor_marks_partial_service_state_as_not_running(tmp_path: Path) -> No
     manager = HorosaRuntimeManager(settings)
     manager.install(archive=str(archive))
 
-    def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+    def fake_service_status(self: HorosaRuntimeManager) -> list[dict[str, object]]:
         return [
             {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": True},
             {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": False},
@@ -699,7 +723,7 @@ def test_start_runtime_succeeds_when_script_returns_nonzero_but_services_become_
     manager.install(archive=str(archive))
     reachable = {"value": False}
 
-    def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+    def fake_service_status(self: HorosaRuntimeManager) -> list[dict[str, object]]:
         return [
             {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": reachable["value"]},
             {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": reachable["value"]},
@@ -735,7 +759,7 @@ def test_start_runtime_does_not_stop_the_healthy_half_before_relaunching(tmp_pat
     manager.install(archive=str(archive))
     chart_up = {"value": False}
 
-    def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+    def fake_service_status(self: HorosaRuntimeManager) -> list[dict[str, object]]:
         return [
             {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": True},
             {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": chart_up["value"]},
@@ -743,9 +767,9 @@ def test_start_runtime_does_not_stop_the_healthy_half_before_relaunching(tmp_pat
 
     # java 可达那半边是我们自己的，冲突检查必须放行。
     manager._service_status = MethodType(fake_service_status, manager)
-    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest, endpoints=None: [
+    monkeypatch.setattr(manager, "endpoint_identities", lambda endpoints=None: [
         {**item, "identity": {"verdict": "ours", "evidence": "identity.nonce_match", "started_by_us": True}}
-        for item in fake_service_status(manager, manifest)
+        for item in fake_service_status(manager)
     ])
 
     stop_calls: list[str] = []
@@ -773,7 +797,7 @@ def test_start_runtime_retries_after_failed_launch_with_stale_state(tmp_path: Pa
     manager = HorosaRuntimeManager(settings)
     manager.install(archive=str(archive))
 
-    def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+    def fake_service_status(self: HorosaRuntimeManager) -> list[dict[str, object]]:
         return [
             {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": False},
             {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": False},
@@ -810,7 +834,6 @@ def test_start_runtime_retries_after_failed_launch_with_stale_state(tmp_path: Pa
         command: list[str],
         script: Path,
         env: dict[str, str],
-        manifest: dict | None,
         wait_seconds: float | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
         return next(run_results)
@@ -987,7 +1010,7 @@ def test_start_runtime_reports_patched_files_on_windows(tmp_path: Path, monkeypa
         encoding="utf-8",
     )
 
-    def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+    def fake_service_status(self: HorosaRuntimeManager) -> list[dict[str, object]]:
         return [
             {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": False},
             {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": False},
@@ -998,7 +1021,6 @@ def test_start_runtime_reports_patched_files_on_windows(tmp_path: Path, monkeypa
         *,
         expected_reachable: bool,
         timeout_seconds: float,
-        manifest: dict | None,
     ) -> dict[str, object]:
         return {
             "ready": True,
@@ -1010,7 +1032,7 @@ def test_start_runtime_reports_patched_files_on_windows(tmp_path: Path, monkeypa
 
     reachable = {"value": False}
 
-    def flipping_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+    def flipping_service_status(self: HorosaRuntimeManager) -> list[dict[str, object]]:
         return [
             {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": reachable["value"]},
             {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": reachable["value"]},
@@ -1050,7 +1072,7 @@ def test_start_runtime_skips_windows_jar_patch_when_services_are_already_running
     manager.install(archive=str(archive))
     monkeypatch.setattr("horosa_skill.runtime.manager.os.name", "nt", raising=False)
 
-    def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+    def fake_service_status(self: HorosaRuntimeManager) -> list[dict[str, object]]:
         return [
             {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": True},
             {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": True},
@@ -1098,7 +1120,7 @@ def test_start_runtime_sets_windows_home_env_defaults(tmp_path: Path, monkeypatc
     monkeypatch.delenv("HOMEDRIVE", raising=False)
     monkeypatch.delenv("HOMEPATH", raising=False)
 
-    def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+    def fake_service_status(self: HorosaRuntimeManager) -> list[dict[str, object]]:
         return [
             {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": False},
             {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": False},
@@ -1112,7 +1134,6 @@ def test_start_runtime_sets_windows_home_env_defaults(tmp_path: Path, monkeypatc
         command: list[str],
         script: Path,
         env: dict[str, str],
-        manifest: dict | None,
         wait_seconds: float | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
         captured_env.update(env)
@@ -1152,7 +1173,7 @@ def test_start_runtime_serializes_concurrent_calls(tmp_path: Path) -> None:
     release = threading.Event()
     run_start_calls: list[str] = []
 
-    def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+    def fake_service_status(self: HorosaRuntimeManager) -> list[dict[str, object]]:
         return [
             {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": service_state["running"]},
             {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": service_state["running"]},
@@ -1164,7 +1185,6 @@ def test_start_runtime_serializes_concurrent_calls(tmp_path: Path) -> None:
         command: list[str],
         script: Path,
         env: dict[str, str],
-        manifest: dict | None,
         wait_seconds: float | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
         run_start_calls.append("start")
@@ -1293,7 +1313,7 @@ def test_install_skips_download_when_version_matches(tmp_path: Path, monkeypatch
     # --force 恢复真实安装路径（会再次走 materialize）。
     monkeypatch.undo()
     # v0.38.1 R3 起换目录前会探端口归属；这里钉成「不可达」让用例不依赖本机 9999/8899 上跑着什么。
-    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="ours", reachable=False))
+    monkeypatch.setattr(manager, "endpoint_identities", lambda endpoints=None: _endpoints(verdict="ours", reachable=False))
     forced = manager.install(manifest_url=manifest.resolve().as_uri(), force=True)
     assert forced["ok"] is True and forced["changed"] is True
 
@@ -1428,7 +1448,7 @@ def test_run_start_command_accepts_chart_only_as_degraded(tmp_path: Path) -> Non
     )
     manager = HorosaRuntimeManager(settings)
     manager._service_status = MethodType(
-        lambda self, manifest: _chart_only_endpoints(), manager
+        lambda self: _chart_only_endpoints(), manager
     )
     _install_fake_spawn(manager, returncode=0, output="java backend process exited (exit code 1)\n")
     script = tmp_path / "start.fake"
@@ -1438,7 +1458,6 @@ def test_run_start_command_accepts_chart_only_as_degraded(tmp_path: Path) -> Non
         command=["/bin/true"],
         script=script,
         env=os.environ.copy(),
-        manifest=None,
     )
     assert completed.returncode == 0
     assert readiness["ready"] is True
@@ -1463,7 +1482,7 @@ def test_start_local_services_reports_degraded_chart_only(tmp_path: Path) -> Non
         stop_calls.append(True)
         return real_stop()
 
-    def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+    def fake_service_status(self: HorosaRuntimeManager) -> list[dict[str, object]]:
         return [
             {"label": "java_backend", "url": "http://127.0.0.1:9999/common/time", "reachable": False},
             {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": False},
@@ -1475,7 +1494,6 @@ def test_start_local_services_reports_degraded_chart_only(tmp_path: Path) -> Non
         command: list[str],
         script: Path,
         env: dict[str, str],
-        manifest: dict | None,
         wait_seconds: float | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
         completed = subprocess.CompletedProcess(args=command, returncode=1, stdout="java backend process exited (exit code 1)", stderr="")
@@ -1520,7 +1538,7 @@ def test_doctor_names_dead_java_and_surfaces_boot_excerpt(tmp_path: Path) -> Non
         encoding="utf-8",
     )
 
-    def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+    def fake_service_status(self: HorosaRuntimeManager) -> list[dict[str, object]]:
         return _chart_only_endpoints()
 
     manager._service_status = MethodType(fake_service_status, manager)
@@ -1548,7 +1566,7 @@ def test_start_local_services_skips_restart_during_java_cooldown(tmp_path: Path)
     manager = HorosaRuntimeManager(settings)
     manager.install(archive=str(archive))
 
-    def fake_service_status(self: HorosaRuntimeManager, manifest: dict | None) -> list[dict[str, object]]:
+    def fake_service_status(self: HorosaRuntimeManager) -> list[dict[str, object]]:
         return [
             {"label": "java_backend", "url": "http://127.0.0.1:9999", "reachable": False},
             {"label": "python_chart", "url": "http://127.0.0.1:8899", "reachable": True},
@@ -1625,7 +1643,7 @@ def test_start_refuses_when_a_foreign_process_holds_the_port(tmp_path: Path, mon
     """
     manager = _manager_with_runtime(tmp_path)
     monkeypatch.setattr(manager, "endpoint_identities",
-                        lambda manifest, endpoints=None: _endpoints(verdict="foreign"))
+                        lambda endpoints=None: _endpoints(verdict="foreign"))
     spawned: list[str] = []
     monkeypatch.setattr(manager, "_spawn_start_command",
                         lambda **kw: spawned.append("spawn"))
@@ -1642,7 +1660,7 @@ def test_start_refuses_when_a_foreign_process_holds_the_port(tmp_path: Path, mon
 def test_start_refuses_an_unidentifiable_holder_unless_trusted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     manager = _manager_with_runtime(tmp_path)
     monkeypatch.setattr(manager, "endpoint_identities",
-                        lambda manifest, endpoints=None: _endpoints(verdict="unknown"))
+                        lambda endpoints=None: _endpoints(verdict="unknown"))
 
     with pytest.raises(RuntimeInstallError) as excinfo:
         manager.start_local_services(wait_seconds=0.2)
@@ -1665,7 +1683,7 @@ def test_stop_passes_the_same_ports_as_start_to_the_stop_script(tmp_path: Path, 
     manager.settings.local_chart_port = 18899
     monkeypatch.delenv("HOROSA_SERVER_PORT", raising=False)
     monkeypatch.delenv("HOROSA_CHART_PORT", raising=False)
-    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest, endpoints=None: _endpoints(verdict="ours", reachable=True))
+    monkeypatch.setattr(manager, "endpoint_identities", lambda endpoints=None: _endpoints(verdict="ours", reachable=True))
     monkeypatch.setattr(manager, "_wait_for_service_state", lambda **kw: {"ready": True, "endpoints": _endpoints(verdict="ours", reachable=False)})
     seen: dict[str, object] = {}
 
@@ -1695,7 +1713,7 @@ def test_stop_refuses_services_we_did_not_start(tmp_path: Path, monkeypatch: pyt
     for entry in weak:
         entry["identity"]["evidence"] = "identity.app_marker"
         entry["identity"]["started_by_us"] = False
-    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest, endpoints=None: weak)
+    monkeypatch.setattr(manager, "endpoint_identities", lambda endpoints=None: weak)
     ran: list[str] = []
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: ran.append("stop"))
 
@@ -1716,7 +1734,7 @@ def test_external_mode_never_starts_or_stops_a_local_runtime(tmp_path: Path, mon
     monkeypatch.setenv("HOROSA_SERVER_ROOT", "http://198.51.100.7:9999")
     assert manager.runtime_mode() == "external"
     monkeypatch.setattr(manager, "endpoint_identities",
-                        lambda manifest, endpoints=None: _endpoints(verdict="unknown", reachable=False))
+                        lambda endpoints=None: _endpoints(verdict="unknown", reachable=False))
     spawned: list[str] = []
     monkeypatch.setattr(manager, "_spawn_start_command", lambda **kw: spawned.append("spawn"))
 
@@ -1746,8 +1764,8 @@ def test_second_process_does_not_launch_while_a_start_is_in_flight(tmp_path: Pat
     """
     manager = _manager_with_runtime(tmp_path)
     monkeypatch.setattr(manager, "endpoint_identities",
-                        lambda manifest, endpoints=None: _endpoints(verdict="ours", reachable=False))
-    monkeypatch.setattr(manager, "_service_status", lambda manifest: _endpoints(verdict="ours", reachable=False))
+                        lambda endpoints=None: _endpoints(verdict="ours", reachable=False))
+    monkeypatch.setattr(manager, "_service_status", lambda: _endpoints(verdict="ours", reachable=False))
     spawned: list[str] = []
     monkeypatch.setattr(manager, "_spawn_start_command", lambda **kw: spawned.append("spawn"))
 
@@ -1768,8 +1786,8 @@ def test_start_lock_is_released_when_the_start_fails(tmp_path: Path, monkeypatch
     """失败路径也必须释放锁 —— 否则本进程（一个长命的 serve）会把后续所有启动永久挡死。"""
     manager = _manager_with_runtime(tmp_path)
     monkeypatch.setattr(manager, "endpoint_identities",
-                        lambda manifest, endpoints=None: _endpoints(verdict="ours", reachable=False))
-    monkeypatch.setattr(manager, "_service_status", lambda manifest: _endpoints(verdict="ours", reachable=False))
+                        lambda endpoints=None: _endpoints(verdict="ours", reachable=False))
+    monkeypatch.setattr(manager, "_service_status", lambda: _endpoints(verdict="ours", reachable=False))
 
     def boom(**_kw):
         raise RuntimeInstallError("nope", code="runtime.start_failed", details={})
@@ -1889,7 +1907,7 @@ def test_start_failure_context_attaches_quarantine_and_the_launcher_log(tmp_path
 def test_stop_reports_a_timeout_with_the_survivors_instead_of_hanging(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """停脚本此前没有 timeout：它多等一轮，`uninstall --yes` / `runtime stop` 就无限期挂住。"""
     manager = _manager_with_runtime(tmp_path)
-    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None: _endpoints(verdict="ours"))
+    monkeypatch.setattr(manager, "endpoint_identities", lambda endpoints=None: _endpoints(verdict="ours"))
     seen: dict[str, object] = {}
 
     def fake_run(command, **kwargs):  # noqa: ANN001
@@ -1952,7 +1970,7 @@ def test_install_over_a_running_runtime_stops_swaps_and_restarts(tmp_path: Path,
     已删路径服务、新载荷永远不启动。新顺序必须是 stop → swap → start。"""
     manager = _manager_with_runtime(tmp_path)
     order: list[str] = []
-    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="ours"))
+    monkeypatch.setattr(manager, "endpoint_identities", lambda endpoints=None: _endpoints(verdict="ours"))
     monkeypatch.setattr(manager, "stop_local_services", lambda force=False, **kwargs: (order.append("stop"), {"ok": True})[1])
     real_apply = manager._apply_runtime_overrides
 
@@ -1970,7 +1988,7 @@ def test_install_over_a_running_runtime_stops_swaps_and_restarts(tmp_path: Path,
 
 def test_install_over_a_stopped_runtime_neither_stops_nor_restarts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     manager = _manager_with_runtime(tmp_path)
-    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="ours", reachable=False))
+    monkeypatch.setattr(manager, "endpoint_identities", lambda endpoints=None: _endpoints(verdict="ours", reachable=False))
 
     def must_not(*args, **kwargs):  # noqa: ANN002, ANN003
         raise AssertionError("nothing was running; stop/start must not be called")
@@ -1992,7 +2010,7 @@ def test_install_refuses_to_replace_a_runtime_someone_else_is_running(tmp_path: 
     installed = json.loads(manifest_path.read_text(encoding="utf-8"))
     installed["version"] = "1.0.0"
     manifest_path.write_text(json.dumps(installed), encoding="utf-8")
-    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="foreign"))
+    monkeypatch.setattr(manager, "endpoint_identities", lambda endpoints=None: _endpoints(verdict="foreign"))
 
     def must_not_stop(force=False):  # noqa: ANN001
         raise AssertionError("must never stop a stranger")
@@ -2020,7 +2038,7 @@ def test_install_proceeds_when_the_busy_ports_belong_to_another_runtime_root(tmp
     installed = json.loads(manifest_path.read_text(encoding="utf-8"))
     installed["version"] = "1.0.0"
     manifest_path.write_text(json.dumps(installed), encoding="utf-8")
-    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="foreign"))
+    monkeypatch.setattr(manager, "endpoint_identities", lambda endpoints=None: _endpoints(verdict="foreign"))
     other_root = tmp_path / "other-root" / "current"
     monkeypatch.setattr(
         "horosa_skill.runtime.manager.holders_outside_runtime_root",
@@ -2050,7 +2068,7 @@ def test_install_still_refuses_when_only_some_busy_ports_are_provably_elsewhere(
     installed = json.loads(manifest_path.read_text(encoding="utf-8"))
     installed["version"] = "1.0.0"
     manifest_path.write_text(json.dumps(installed), encoding="utf-8")
-    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="foreign"))
+    monkeypatch.setattr(manager, "endpoint_identities", lambda endpoints=None: _endpoints(verdict="foreign"))
     monkeypatch.setattr(
         "horosa_skill.runtime.manager.holders_outside_runtime_root",
         lambda port, root: [{"pid": 1, "image": "C:/elsewhere/java.exe", "command": "java"}] if port == 9999 else None,
@@ -2070,7 +2088,7 @@ def test_install_stop_failure_leaves_current_untouched(tmp_path: Path, monkeypat
     manager = _manager_with_runtime(tmp_path)
     marker = manager.current_dir / "MARKER"
     marker.write_text("keep", encoding="utf-8")
-    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="ours"))
+    monkeypatch.setattr(manager, "endpoint_identities", lambda endpoints=None: _endpoints(verdict="ours"))
     monkeypatch.setattr(manager, "stop_local_services", lambda force=False, **kwargs: {"ok": False, "code": "runtime.stop_timeout", "survivors": []})
     with pytest.raises(RuntimeInstallError) as excinfo:
         manager.install(archive=_archive_of(tmp_path), force=True)
@@ -2082,7 +2100,7 @@ def test_install_stop_failure_leaves_current_untouched(tmp_path: Path, monkeypat
 def test_previous_dir_cleanup_failure_is_a_warning_not_a_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Windows 常见：句柄未释放时旧目录删不掉。新载荷已就位 → ok + warning，不回滚、不报错。"""
     manager = _manager_with_runtime(tmp_path)
-    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="ours", reachable=False))
+    monkeypatch.setattr(manager, "endpoint_identities", lambda endpoints=None: _endpoints(verdict="ours", reachable=False))
 
     def locked_rmtree(path: Path) -> None:
         raise PermissionError(32, "The process cannot access the file because it is being used by another process", str(path))
@@ -2102,7 +2120,7 @@ def test_locked_previous_dir_aborts_before_touching_current(tmp_path: Path, monk
     stale.write_text("old", encoding="utf-8")
     marker = manager.current_dir / "MARKER"
     marker.write_text("keep", encoding="utf-8")
-    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="ours", reachable=False))
+    monkeypatch.setattr(manager, "endpoint_identities", lambda endpoints=None: _endpoints(verdict="ours", reachable=False))
     monkeypatch.setattr("horosa_skill.runtime.manager._rmtree_force", lambda path: (_ for _ in ()).throw(PermissionError(5, "Access is denied", str(path))))
     monkeypatch.setattr("horosa_skill.runtime.manager.port_holders", lambda port: [{"pid": 7, "command": "java"}])
     with pytest.raises(RuntimeInstallError) as excinfo:
@@ -2128,7 +2146,7 @@ def test_rmtree_force_clears_read_only_bits(tmp_path: Path) -> None:
 
 def test_restart_failure_after_a_successful_swap_is_a_warning(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     manager = _manager_with_runtime(tmp_path)
-    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="ours"))
+    monkeypatch.setattr(manager, "endpoint_identities", lambda endpoints=None: _endpoints(verdict="ours"))
     monkeypatch.setattr(manager, "stop_local_services", lambda force=False, **kwargs: {"ok": True})
 
     def failing_start(wait_seconds=None):  # noqa: ANN001
@@ -2173,7 +2191,7 @@ def test_install_over_http_records_the_real_download(tmp_path: Path) -> None:
 
 def test_install_from_a_local_archive_records_no_download(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     manager = _manager_with_runtime(tmp_path)
-    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="ours", reachable=False))
+    monkeypatch.setattr(manager, "endpoint_identities", lambda endpoints=None: _endpoints(verdict="ours", reachable=False))
     assert manager.install(archive=str(tmp_path / "runtime-payload.tar.gz"), force=True)["download"] is None
 
 
@@ -2184,7 +2202,7 @@ def test_stop_is_refused_while_another_client_is_attached(tmp_path: Path, monkey
     from horosa_skill.runtime import registry
 
     manager = _manager_with_runtime(tmp_path)
-    monkeypatch.setattr(manager, "endpoint_identities", lambda manifest=None, endpoints=None: _endpoints(verdict="ours"))
+    monkeypatch.setattr(manager, "endpoint_identities", lambda endpoints=None: _endpoints(verdict="ours"))
     client = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
     try:
         registry.attach_client(manager.settings.runtime_state_path, pid=client.pid, transport="stdio")

@@ -31,7 +31,7 @@ class _ManagerStub:
     def runtime_mode(self) -> str:
         return "managed"
 
-    def endpoint_identities(self, manifest, *, endpoints=None) -> list[dict[str, object]]:
+    def endpoint_identities(self, *, endpoints=None) -> list[dict[str, object]]:
         return []
 
     def load_runtime_state(self, *, strict: bool = False) -> dict[str, object] | None:
@@ -355,7 +355,7 @@ def test_doctor_adds_user_facing_summary(monkeypatch, tmp_path: Path) -> None:
         def runtime_mode(self) -> str:
             return "managed"
 
-        def endpoint_identities(self, manifest, *, endpoints=None) -> list[dict[str, object]]:
+        def endpoint_identities(self, *, endpoints=None) -> list[dict[str, object]]:
             return [{"label": "java_backend", "reachable": False, "identity": None}]
 
         def load_installed_manifest(self, *, strict: bool = False) -> dict[str, object] | None:

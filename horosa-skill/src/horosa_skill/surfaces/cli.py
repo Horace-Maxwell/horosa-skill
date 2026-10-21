@@ -526,7 +526,7 @@ def runtime_status() -> None:
     from horosa_skill.runtime import budget as _budget
 
     with _budget.scope(STATUS_BUDGET_SECONDS) as status_budget:
-        endpoints = manager.endpoint_identities(manifest) if installed else []
+        endpoints = manager.endpoint_identities() if installed else []
     report: dict[str, Any] = {
         "ok": True,
         "installed": installed,
