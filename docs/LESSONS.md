@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.41.2-dev (2026-10-20) | 同日另一条清理分支（Windows 维护机）与已发布的 v0.41.1 重构撞车；结构拆分作废，把 v0.41.1 没覆盖的 13 处缺陷逐条移植：畸形清单崩 doctor、换端口后探旧端口、停脚本超时输出 `b'…'`、Windows 卸载删不掉只读 JDK、引擎非对象 JSON、tool_run 吞坏 request、Codex 非数字超时崩 client check、技法依据报告 DOCX/PDF 空白、八字全零误判、整句 output_contract 逐字拼接、灵棋吞引擎失败、**测试碰用户真实 runtime 与数据目录**（拒连端口挡不住文件系统）、scripts 的 CP1252 解码与 CRLF 写入 | 每条先红后绿的回归测试；conftest 把默认数据目录 / runtime 根换成临时目录（`test_test_isolation`）；scripts/ 的子进程编码与 `write_text` 换行两条守卫 |
 | v0.41.1-dev (2026-10-20) | 可维护性重构第 5 批：铁律 5 的 pin-forward 理由、bump 站点数、preflight 顺序、协议版本号等 10 处陈旧事实；新守卫锁「bump 站点都点名」「文档点名的东西都在」 | 文档里的数字从源头推导或不写；点名的东西要有机器核实 |
 | v0.41.1-dev (2026-10-20) | 可维护性重构第 4 批：测试替身挪出 test_service；ci.yml 补只读权限与并发（main 每提交一组，否则排队会丢结果）；发布巡检的 75 行 heredoc 变成有单测的 `verify_published_release.py` | 并发组键决定谁会被排队丢掉；工作流里的检查要能被测试碰到 |
 | v0.41.1-dev (2026-10-20) | 可维护性重构第 3 批：拆大模块（`agent_guidance` → 包）；拆的时候发现 options_keys 注入原地写进被多个工具共用的策略 dict | 拆分 = 只搬不改名、对外表面逐字比对；import 期对共享对象的原地写一律写时复制 |
@@ -147,6 +148,33 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.41.2-dev / 2026-10-20 — v0.41.1 重构之后的 13 处缺陷移植：测试碰用户真实 runtime（`_never_touch_the_users_real_dirs`）、探针读安装期端口（`endpoint_identities`）…
+
+- **起因**：同一天两条可维护性清理并行——mac 侧发布了 v0.41.1（service / cli / mcp_server / schemas / agent_guidance 拆包），
+  Windows 维护机上的另一条分支（`refactor/maintainability-cleanup`，100 个提交）按另一种布局拆了同一批文件。两种拆法无法合并，
+  以已发布的 main 为准：那条分支的结构拆分作废，只把 v0.41.1 没覆盖到的缺陷修复按 main 的新布局逐条重做（能 cherry-pick 的直接摘，
+  冲突的手工移植）。v0.41.1 已覆盖、本批不再重复的：SHARED_RUNNER 三个错名、三处静默 except、docx/reportlab 手写兜底、monkeypatch 目标守卫。
+- **移植的缺陷（每条一个先在旧代码上红的回归测试）**：
+  1. 清单段非对象 / 版本字段非数字：段类型查的是合并后的 `{**defaults, **raw}`（恒为 dict），`int()` 直接抛——doctor 整个崩。
+  2. 装完换端口：`_service_status` 优先读安装时写进清单的 `services.*_url`，启动器与技法客户端却用 settings → stop 探旧端口判「已停」
+     并清掉 runtime-state，新端口上的服务继续跑。探针只看 settings；`endpoint_identities` 等一路的 manifest 参数随之删掉。
+  3. 停脚本超时：`TimeoutExpired.stdout` 恒为 bytes，`str()` 出 `b'…'`。4. Windows 上 `uninstall` 用裸 `rmtree`，内嵌 JDK 只读文件删不掉。
+  5. 引擎 stdout 是合法 JSON 但不是对象：`.get("ok")` 在形状检查之前 → AttributeError 而非 `js_engine.invalid_shape`。
+  6. `horosa_tool_run` 把坏的字符串 request 换成 `{}` 执行。7. Codex 超时写成 `"2m"`：`client check` 崩在 `float()`。
+  8. 技法依据报告没有 ai_report，DOCX/PDF 只剩封面与目录。9. 八字读不出四柱：五行计数恒有五个键，按 dict 真值判空恒真 →「木最旺也最弱」。
+  10. 整句 output_contract 被逐字逗号拼进 docstring。11. 灵棋把 `ToolTransportError` 吞成 ok + 空快照。
+  12. **测试碰用户真实 runtime 与数据目录**：`Settings()` 默认落在 `%APPDATA%/HorosaSkill`、`%LOCALAPPDATA%/Horosa/runtime`。
+      v0.41.1 的 conftest 拒连 8899/9999 只挡住网络；`test_operational_errors_carry_agent_recovery`（server_root 指向 :1、没给 runtime_root）
+      在维护机上会去「启动」真 runtime、改写它的 boot jar（Windows 上 Java 锁着 → WinError 5、残留 324 MB `.jar.tmp`；mac 上不锁，改写直接成功），
+      测试也一直往真 traces 写记录。修：Settings 默认目录改为调用时解析，conftest autouse `_never_touch_the_users_real_dirs` 换成临时目录；
+      `_rewrite_zip_archive` 失败即删临时副本。
+  13. scripts/：14 处 `text=True` 不带 encoding（cp1252 下 git 的 CJK 输出让 gen_knowledge_packs 静默当成「没有 HelpDoc」）、
+      50 处 `write_text` 不带 newline（Windows 上生成件 / 基线 / 发布清单写成 CRLF）。
+- **守卫**：`tests/test_test_isolation.py`（去掉夹具即红）；`tests/test_subprocess_encoding.py` 扫描扩到 scripts/ 并新增 write_text 必须带
+  newline 的规则（撤回脚本改动即红）。
+- **教训**：两个会话同时做同一件「全仓重构」必然撞车——大范围结构改动开工前先 `git fetch` 看 main，做的过程中也要定期看；
+  能独立成立的缺陷修复要尽早单独提交推送，别和结构拆分绑在一条长分支上。
 
 ### v0.41.1-dev / 2026-10-20 — 可维护性重构第 5 批：文档里的陈旧事实与两把引用守卫（`undocumented_sites` / `dangling_references`）
 

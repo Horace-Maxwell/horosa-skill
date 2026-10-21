@@ -232,6 +232,11 @@ v0.40.0 重跑即复发；现在 `build_hover_knowledge_bundle.mjs` 写相对上
 `_upstream_preset.py` 必须扫成员赋值，且跑在 spread 解析之后）；**provenance 只在全绿时写**
 （红着写等于把失败洗成持久的「已核对」声明——v0.25.0 就这么发出去过）。
 
+🔴 **判空看值、判型看边界、主计算失败必须是失败（v0.41.2 移植的缺陷）。** 恒有固定键的 dict 判空要看值（五行计数全 0 也「非空」）；
+类型检查放在合并 / 转换**之前**的原始数据上（对 `{**defaults, **raw}` 判型恒真，真正会炸的是合并本身）；只有可选增强许 `_degrade`，
+主引擎调用不许吞成 ok + 空结果；安装期写进清单的快照（`services.*_url`）不得压过实时 settings——探针、启动器、技法客户端只认同一组地址
+（`endpoint_identities` 探的就是当前端口）。
+
 🔴 **四条会反复咬人的写法（v0.26.1 一次性踩齐）。**
 ① **`x is not None` 当守卫 = 解析失败即放行**（`_day_span` 让 `'…T00:00'` 跳过整个上限）——解析失败必须报错。
 ② **只读 payload 的某个子字段，不看顶层同名字段** —— schema 声明为顶层的东西 agent 一定会传顶层，
@@ -1166,6 +1171,10 @@ A global stability pass hardened these; keep them true when you touch the releva
   不钉后端：34 处 `Settings(...)` 用默认端口，没设 `*_SERVER_ROOT` 的代码回落到桌面版——维护机上真发请求（`test_uninstall_dry_run_then_execute`
   一条就探 20 s），CI 上那两个端口没人所以永远看不见。conftest 把两个根 setdefault 成 :9（与 `run_ci_gates.py` 同形，显式的 8877/9977 不受影响），
   并在进程内把连这两个端口一律当「没人在听」（`tests/test_desktop_port_guard.py`）。自写的调 service 脚本同理：开头断言两个根已设且不是 8899/9999。
+- **测试也永不读写用户真实的数据目录与 runtime（v0.41.2）。** 拒连端口挡不住文件系统：`Settings()` 默认落在 `%APPDATA%/HorosaSkill` 与
+  `%LOCALAPPDATA%/Horosa/runtime`（mac/Linux：`~/.horosa-skill` / `~/.horosa/runtime`），维护机上那里是真 runtime、真记忆库——曾有用例去「启动」
+  真 runtime、改写它的 boot jar。conftest 的 autouse `_never_touch_the_users_real_dirs` 把两个默认目录换成临时目录（Settings 默认值调用时解析），
+  `tests/test_test_isolation.py` 守；要测默认路径解析本身的用例自己再 monkeypatch。
 - **本机门禁镜像也跑多行步骤：`run_ci_gates.ci_test_steps` 收「每一行都是 `uv run …`」的 `run: |` 块（v0.41.1）。** 旧解析器跳过所有多行块，
   两行的 `verify_runtime_scripts.py`（+ `--self-test`）从没在本机跑过，文档却写「每个 verify_* 都跑」；测试只核单行步骤，所以同样看不见。
   现在 `tests/test_guard_wiring.py` 要求 ci.yml test 作业里点名的**每一个** `verify_*.py` 都进镜像（镜像 25 步）。
