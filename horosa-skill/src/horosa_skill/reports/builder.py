@@ -770,8 +770,10 @@ class ReportBuilder:
         day_master = self._day_master_text(pillars.get("日柱"))
         element_counts = self._bazi_element_counts(pillars)
         element_text = "、".join(f"{name}{count}" for name, count in element_counts.items() if count)
-        strongest = max(element_counts, key=element_counts.get) if element_counts else ""
-        weakest = min(element_counts, key=element_counts.get) if element_counts else ""
+        # 计数恒有五个键：按 dict 真值判空恒真，读不出四柱时全 0、max/min 都落在「木」——必须看值。
+        has_elements = any(element_counts.values())
+        strongest = max(element_counts, key=element_counts.get) if has_elements else ""
+        weakest = min(element_counts, key=element_counts.get) if has_elements else ""
         focus_text = self._focus_text(question)
         subject_profile = self._bazi_subject_profile(input_normalized=input_normalized, pillars=pillars, day_master=day_master)
         consultation_basis = self._bazi_consultation_basis(
@@ -783,7 +785,7 @@ class ReportBuilder:
         core_lines = [
             f"四柱为：{self._format_pillars(pillars)}。" if pillars else "四柱信息已从星阙导出中读取。",
             f"日主为{day_master}，报告会以日主承载力、月令环境、五行流动和神煞提示为主线。" if day_master else "报告会以四柱结构、五行流动和神煞提示为主线。",
-            f"从明面干支粗略计数看，五行分布为：{element_text}；其中{strongest}相对突出，{weakest}相对需要被留意。" if element_counts else "五行强弱需要结合藏干、月令、大运流年继续细化。",
+            f"从明面干支粗略计数看，五行分布为：{element_text}；其中{strongest}相对突出，{weakest}相对需要被留意。" if has_elements else "五行强弱需要结合藏干、月令、大运流年继续细化。",
         ]
         evidence = self._evidence_from_sections(export_sections, limit=12)
         start_info = self._section_by_title(export_sections, "起盘信息")
@@ -1410,7 +1412,7 @@ class ReportBuilder:
         )
 
     def _bazi_element_reading(self, counts: dict[str, int]) -> str:
-        if not counts:
+        if not any(counts.values()):
             return "五行信息不足，建议回到原始八字输出补齐四柱与藏干后再判断。"
         sorted_counts = sorted(counts.items(), key=lambda item: item[1], reverse=True)
         strongest = "、".join(name for name, count in sorted_counts if count == sorted_counts[0][1])
