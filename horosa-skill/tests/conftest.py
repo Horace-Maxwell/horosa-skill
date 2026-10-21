@@ -23,6 +23,8 @@ import os
 import socket
 from pathlib import Path
 
+import pytest
+
 # 🔴 Tests never talk to 127.0.0.1:8899 / :9999 — the maintainer's desktop app lives there (AGENTS iron rule 8).
 # `run_ci_gates.py` pins both backends to the unreachable :9, but a plain `uv run pytest` did not: 34 tests build
 # `Settings(...)` with the default ports, and code without an explicit *_SERVER_ROOT falls back to them, so on a machine
@@ -69,3 +71,21 @@ if REPO_CORE_JS_ROOT.is_dir():
 _pythonpath = [part for part in os.environ.get("PYTHONPATH", "").split(os.pathsep) if part]
 if str(REPO_SRC) not in _pythonpath:
     os.environ["PYTHONPATH"] = os.pathsep.join([str(REPO_SRC), *_pythonpath])
+
+
+@pytest.fixture(autouse=True)
+def _never_touch_the_users_real_dirs(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory) -> None:
+    """测试永不读写用户真实的数据目录与 runtime。
+
+    `Settings()` / `Settings.from_env()` 没给 data_dir / runtime_root 时落到 `%APPDATA%/HorosaSkill` 与
+    `%LOCALAPPDATA%/Horosa/runtime`（mac/Linux：`~/.horosa-skill` 与 `~/.horosa/runtime`）。维护机上那里装着真 runtime、
+    真记忆库：测试会往真 traces 里写记录；server_root 指向无人监听的端口、又没给 runtime_root 的用例更会去「启动」
+    真 runtime、改写它的 boot jar（2026-10-20 Windows 实测：jar 被运行中的 Java 锁着 → WinError 5，残留 324 MB 临时文件；
+    mac 上 jar 不被锁，改写会直接成功）。拒连 8899/9999 只挡住了网络，挡不住这条文件系统路径。
+    CI 上两个目录是空的，所以只在维护机咬人。要测默认路径解析本身的用例自己再 monkeypatch。
+    """
+    from horosa_skill import config
+
+    base = tmp_path_factory.mktemp("user-dirs")
+    monkeypatch.setattr(config, "_default_home_dir", lambda: base / "data")
+    monkeypatch.setattr(config, "_default_runtime_root", lambda: base / "runtime")

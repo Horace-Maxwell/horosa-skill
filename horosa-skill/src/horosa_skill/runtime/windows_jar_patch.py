@@ -350,30 +350,35 @@ class WindowsBootJarPatchMixin:
 
     def _rewrite_zip_archive(self, archive_path: Path, replacements: dict[str, bytes]) -> None:
         temp_path = archive_path.with_suffix(f"{archive_path.suffix}.tmp")
-        with zipfile.ZipFile(archive_path) as source, zipfile.ZipFile(temp_path, "w") as target:
-            target.comment = source.comment
-            seen: set[str] = set()
-            for info in source.infolist():
-                seen.add(info.filename)
-                data = replacements.get(info.filename, source.read(info.filename))
-                new_info = zipfile.ZipInfo(info.filename, date_time=info.date_time)
-                new_info.compress_type = info.compress_type
-                new_info.comment = info.comment
-                new_info.extra = info.extra
-                new_info.internal_attr = info.internal_attr
-                new_info.external_attr = info.external_attr
-                new_info.create_system = info.create_system
-                new_info.flag_bits = info.flag_bits
-                target.writestr(new_info, data)
+        try:
+            with zipfile.ZipFile(archive_path) as source, zipfile.ZipFile(temp_path, "w") as target:
+                target.comment = source.comment
+                seen: set[str] = set()
+                for info in source.infolist():
+                    seen.add(info.filename)
+                    data = replacements.get(info.filename, source.read(info.filename))
+                    new_info = zipfile.ZipInfo(info.filename, date_time=info.date_time)
+                    new_info.compress_type = info.compress_type
+                    new_info.comment = info.comment
+                    new_info.extra = info.extra
+                    new_info.internal_attr = info.internal_attr
+                    new_info.external_attr = info.external_attr
+                    new_info.create_system = info.create_system
+                    new_info.flag_bits = info.flag_bits
+                    target.writestr(new_info, data)
 
-            for entry_name, data in replacements.items():
-                if entry_name in seen:
-                    continue
-                new_info = zipfile.ZipInfo(entry_name)
-                new_info.compress_type = zipfile.ZIP_DEFLATED
-                new_info.external_attr = 0o644 << 16
-                target.writestr(new_info, data)
-        temp_path.replace(archive_path)
+                for entry_name, data in replacements.items():
+                    if entry_name in seen:
+                        continue
+                    new_info = zipfile.ZipInfo(entry_name)
+                    new_info.compress_type = zipfile.ZIP_DEFLATED
+                    new_info.external_attr = 0o644 << 16
+                    target.writestr(new_info, data)
+            temp_path.replace(archive_path)
+        except BaseException:
+            # boot jar 约 300 MB：写一半 / 换不过去（Windows 上 Java 正锁着它 → WinError 5）时别把临时副本留在 runtime 里。
+            temp_path.unlink(missing_ok=True)
+            raise
 
     def _boot_jar_supports_patch(self, jar_path: Path) -> bool:
         if not zipfile.is_zipfile(jar_path):

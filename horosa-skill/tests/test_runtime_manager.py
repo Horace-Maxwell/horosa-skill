@@ -2212,3 +2212,28 @@ def test_stop_is_refused_while_another_client_is_attached(tmp_path: Path, monkey
     # 客户端死了 → 登记不算数 → 不再拒绝
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Done())
     assert manager.stop_local_services().get("refused") is not True
+
+
+def test_boot_jar_rewrite_removes_its_temp_copy_when_the_swap_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """换不过去（Windows 上运行中的 Java 锁着 boot jar → WinError 5）时不许把 ~300 MB 的临时副本留在 runtime 里。"""
+    import zipfile
+
+    settings = Settings(runtime_root=tmp_path / "runtime-root", db_path=tmp_path / "memory.db", output_dir=tmp_path / "runs")
+    manager = HorosaRuntimeManager(settings)
+    jar = tmp_path / "astrostudyboot.jar"
+    with zipfile.ZipFile(jar, "w") as archive:
+        archive.writestr("BOOT-INF/classes/a.txt", b"old")
+    original = jar.read_bytes()
+
+    real_replace = Path.replace
+
+    def locked(self: Path, target):  # noqa: ANN001
+        if self.name.endswith(".jar.tmp"):
+            raise PermissionError(5, "Access is denied")
+        return real_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", locked)
+    with pytest.raises(PermissionError):
+        manager._rewrite_zip_archive(jar, {"BOOT-INF/classes/a.txt": b"new"})
+    assert not (tmp_path / "astrostudyboot.jar.tmp").exists()
+    assert jar.read_bytes() == original

@@ -334,8 +334,9 @@ FIELD_ENV_MAP = {
 class Settings(BaseModel):
     server_root: str = Field(default="http://127.0.0.1:9999")
     chart_server_root: str = Field(default="http://127.0.0.1:8899")
-    data_dir: Path = Field(default_factory=_default_home_dir)
-    runtime_root: Path = Field(default_factory=_default_runtime_root)
+    # 调用时才解析默认目录（不在类定义时捕获函数对象）：测试的 conftest 把它们换成临时目录，永不碰用户真实数据。
+    data_dir: Path = Field(default_factory=lambda: _default_home_dir())
+    runtime_root: Path = Field(default_factory=lambda: _default_runtime_root())
     db_path: Path | None = None
     output_dir: Path | None = None
     # 报告类工具 output_path 的额外白名单根（v0.40.0 P0；输出目录恒在白名单内）。
