@@ -1962,6 +1962,18 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         return self._normalize_manifest_data(manifest, manifest_path=manifest_path)
 
+    @staticmethod
+    def _manifest_int(manifest: dict[str, Any], key: str, default: int, *, manifest_path: Path) -> int:
+        # 非数字的版本字段与非对象的段同理：报 runtime.manifest_invalid，别让 int() 的 ValueError 把 doctor 整个崩掉。
+        try:
+            return int(manifest.get(key, default))
+        except (TypeError, ValueError):
+            raise RuntimeValidationError(
+                bilingual(f"运行时清单字段 `{key}` 必须是整数。", f"Runtime manifest field `{key}` must be an integer."),
+                code="runtime.manifest_invalid",
+                details={"manifest_path": str(manifest_path), "field": key},
+            ) from None
+
     def _normalize_manifest_data(self, manifest: Any, *, manifest_path: Path) -> dict[str, Any]:
         if not isinstance(manifest, dict) or "version" not in manifest:
             raise RuntimeValidationError(
@@ -1970,17 +1982,30 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                 details={"manifest_path": str(manifest_path)},
             )
 
+        # 🔴 类型检查必须落在**合并之前**的原始段上：合并后的 `{**defaults, **raw}` 恒为 dict，而非 dict 的原始段
+        # 在合并时就抛 TypeError —— load_installed_manifest 接不住，doctor 整个崩掉，而不是报 runtime.manifest_invalid。
+        sections: dict[str, dict[str, Any]] = {}
+        for section_name in ("services", "runtimes", "artifacts"):
+            raw_section = manifest.get(section_name) or {}
+            if not isinstance(raw_section, dict):
+                raise RuntimeValidationError(
+                    f"Runtime manifest section `{section_name}` must be an object.",
+                    code="runtime.manifest_invalid",
+                    details={"manifest_path": str(manifest_path), "section": section_name},
+                )
+            sections[section_name] = raw_section
+
         defaults = self._manifest_defaults()
         normalized = {
-            "schema_version": int(manifest.get("schema_version", 1)),
+            "schema_version": self._manifest_int(manifest, "schema_version", 1, manifest_path=manifest_path),
             "version": str(manifest["version"]),
             "platform": str(manifest.get("platform") or self.settings.runtime_platform or _platform_key()),
-            "runtime_layout_version": int(manifest.get("runtime_layout_version", 1)),
+            "runtime_layout_version": self._manifest_int(manifest, "runtime_layout_version", 1, manifest_path=manifest_path),
             "runtime_payload_version": str(manifest.get("runtime_payload_version") or manifest["version"]),
-            "export_registry_version": int(manifest.get("export_registry_version", 6)),
-            "services": {**defaults["services"], **(manifest.get("services") or {})},
-            "runtimes": {**defaults["runtimes"], **(manifest.get("runtimes") or {})},
-            "artifacts": {**defaults["artifacts"], **(manifest.get("artifacts") or {})},
+            "export_registry_version": self._manifest_int(manifest, "export_registry_version", 6, manifest_path=manifest_path),
+            "services": {**defaults["services"], **sections["services"]},
+            "runtimes": {**defaults["runtimes"], **sections["runtimes"]},
+            "artifacts": {**defaults["artifacts"], **sections["artifacts"]},
         }
         # Optional blocks carried through unchanged (derived payloads, v0.38.0 A2): what the payload was
         # built from and what host it needs — doctor shows them, install checks `min_os`.
@@ -1988,14 +2013,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             if isinstance(manifest.get(optional), dict):
                 normalized[optional] = dict(manifest[optional])
         for section_name in ("services", "runtimes", "artifacts"):
-            section = normalized[section_name]
-            if not isinstance(section, dict):
-                raise RuntimeValidationError(
-                    f"Runtime manifest section `{section_name}` must be an object.",
-                    code="runtime.manifest_invalid",
-                    details={"manifest_path": str(manifest_path), "section": section_name},
-                )
-            for key, value in section.items():
+            for key, value in normalized[section_name].items():
                 if not isinstance(value, str) or not value.strip():
                     raise RuntimeValidationError(
                         f"Runtime manifest field `{section_name}.{key}` must be a non-empty string.",

@@ -562,6 +562,40 @@ def test_doctor_reports_invalid_manifest_and_runtime_state_without_crashing(tmp_
     assert "runtime.state_invalid" in report["issues"]
 
 
+@pytest.mark.parametrize(
+    ("raw", "detail_key", "detail_value"),
+    [
+        # 段的类型检查此前查的是与缺省值合并后的结果（恒为 dict）；非对象的段在合并时抛 TypeError。
+        ({"version": "1.2.3", "services": ["not", "an", "object"]}, "section", "services"),
+        # 版本字段直接 int()：非数字抛 ValueError，同样没人接。
+        ({"version": "1.2.3", "export_registry_version": "fifteen"}, "field", "export_registry_version"),
+        ({"version": "1.2.3", "schema_version": None}, "field", "schema_version"),
+    ],
+)
+def test_doctor_reports_a_malformed_manifest_instead_of_crashing(
+    tmp_path: Path, raw: dict, detail_key: str, detail_value: str
+) -> None:
+    """畸形清单一律报 runtime.manifest_invalid（doctor 给出路），不许让 TypeError / ValueError 把 doctor 整个崩掉。"""
+    settings = Settings(
+        runtime_root=tmp_path / "runtime-root",
+        db_path=tmp_path / "memory.db",
+        output_dir=tmp_path / "runs",
+    )
+    manager = HorosaRuntimeManager(settings)
+    settings.runtime_current_dir.mkdir(parents=True, exist_ok=True)
+    (settings.runtime_current_dir / "runtime-manifest.json").write_text(json.dumps(raw), encoding="utf-8")
+
+    assert manager.load_installed_manifest() is None
+    with pytest.raises(RuntimeValidationError) as excinfo:
+        manager.load_installed_manifest(strict=True)
+    assert excinfo.value.code == "runtime.manifest_invalid"
+    assert excinfo.value.details[detail_key] == detail_value
+    report = manager.doctor()
+    assert report["manifest"] is None
+    assert report["manifest_issue"]["code"] == "runtime.manifest_invalid"
+    assert "runtime.manifest_invalid" in report["issues"]
+
+
 def test_start_runtime_raises_for_invalid_installed_manifest(tmp_path: Path) -> None:
     settings = Settings(
         runtime_root=tmp_path / "runtime-root",
