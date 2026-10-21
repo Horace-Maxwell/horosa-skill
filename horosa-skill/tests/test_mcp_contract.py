@@ -116,6 +116,31 @@ def test_tool_run_keeps_the_clarification_gate_and_recovery_contract() -> None:
     assert body["details"]["agent_recovery"]["prompt_to_user"]
 
 
+def test_tool_run_reads_a_string_request_like_every_other_tool() -> None:
+    """`request` 是字符串时，horosa_tool_run 与其余工具一样经 `_normalize_mcp_request` 的同一套解析。
+
+    FastMCP 会先把「合法 JSON 对象」字符串解析成 dict；剩下仍是字符串到达工具体的（坏 JSON、JSON 标量）此前被
+    tool_run 静默换成 `{}`：无闸工具拿空载荷跑出 ok=True 的**别的**结果，有闸工具回一条与真实问题无关的
+    agent_guidance.required。其余工具对同样的输入回 tool.invalid_payload。
+    """
+    server = _server(compact=True)
+
+    def call(arguments: dict) -> dict:
+        return _payload(asyncio.run(server.call_tool("horosa_tool_run", arguments)))
+
+    for request in ("{not json", "5"):
+        for tool_name in ("export_registry", "qimen"):
+            body = call({"tool_name": tool_name, "request": request})
+            assert body["ok"] is False and body["code"] == "tool.invalid_payload", (tool_name, request, body)
+            assert body["tool"] == tool_name and body["details"]["agent_recovery"]["prompt_to_user"]
+    assert call({"tool_name": "export_registry", "request": ""})["ok"] is True, "空串 = 空载荷，与 _normalize_mcp_request 一致"
+    confirmed = {"date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28",
+                 "agent_confirmed_settings": True}
+    _assert_passed_the_mcp_surface(call({"tool_name": "qimen", "request": json.dumps(confirmed)}))
+    del confirmed["agent_confirmed_settings"]
+    assert call({"tool_name": "qimen", "request": json.dumps(confirmed)})["code"] == "agent_guidance.required"
+
+
 def test_tool_run_rejects_unknown_tool_names_structurally() -> None:
     body = _payload(asyncio.run(_server(compact=True).call_tool("horosa_tool_run", {"tool_name": "nope"})))
     assert body["code"] == "tool.unknown"

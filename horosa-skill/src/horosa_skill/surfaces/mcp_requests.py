@@ -12,6 +12,12 @@ from horosa_skill.input_normalization import normalize_request_payload
 
 
 def _normalize_mcp_request(raw_request: Any, model: type[BaseModel]) -> dict[str, Any]:
+    normalized = model.model_validate(normalize_request_payload(_request_object(raw_request)))
+    return normalized.model_dump(exclude_none=True)
+
+
+def _request_object(raw_request: Any) -> dict[str, Any]:
+    """整包载荷（`request` 或合并后的参数）→ dict：BaseModel / None / JSON 对象字符串都收，其余 → tool.invalid_payload。"""
     # 与 service.run_tool / 各门面的归一化 + 校验是**有意重复**：两步都幂等，但这一层产出 MCP 形状的
     # 校验错误（_validation_error），那一层产出带 agent_recovery 的 tool.invalid_payload；两种形状都被
     # MCP 健壮性测试钉住。合并之前先审测试，别顺手删。
@@ -51,9 +57,7 @@ def _normalize_mcp_request(raw_request: Any, model: type[BaseModel]) -> dict[str
             },
         )
 
-    payload = normalize_request_payload(payload)
-    normalized = model.model_validate(payload)
-    return normalized.model_dump(exclude_none=True)
+    return payload
 
 
 # 输入归一化能吸收的字段：`input_normalization.normalize_request_payload` 会把这些键的数字/别名

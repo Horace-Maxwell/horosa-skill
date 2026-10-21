@@ -52,6 +52,7 @@ from horosa_skill.surfaces.mcp_errors import (
 from horosa_skill.surfaces.mcp_requests import (
     _merge_mcp_arguments,
     _normalize_mcp_request,
+    _request_object,
     _signature_for_input_model,
     _tool_run_signature,
 )
@@ -527,16 +528,10 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
         async def horosa_tool_run(**kwargs: Any) -> ToolEnvelope:
             # tool_name 必须在合并之前取走：它是 `request` 的**兄弟**参数，而 `_merge_mcp_arguments`
             # 在 request 存在时会整体改用 request 作为载荷（否则 `{tool_name, request}` 这种最常见的
-            # 调法会把 tool_name 丢掉）。未显式给出的公共字段是 None，一并剔除，避免 None 被当作
-            # 「用户已提供该设置」而影响澄清闸的追问过滤。
+            # 调法会把 tool_name 丢掉）。未显式给出的公共字段是 None，由 `_merge_mcp_arguments` 剔除，
+            # 避免 None 被当作「用户已提供该设置」而影响澄清闸的追问过滤。
             tool_name = str(kwargs.pop("tool_name", "") or "")
-            request = kwargs.get("request")
-            kwargs = {key: value for key, value in kwargs.items() if value is not None}
             raw_payload = _merge_mcp_arguments(kwargs)
-            if not isinstance(raw_payload, dict):
-                raw_payload = {}
-            raw_payload.pop("tool_name", None)
-            payload = request if isinstance(request, dict) else raw_payload
             resolved = resolve_tool_name(tool_name)
             if resolved is None:
                 return _mcp_error_envelope(
@@ -552,6 +547,13 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
                 )
             # 两种写法（chart / horosa_astro_chart）都收；闸门与执行都用注册表键。
             tool_name = resolved
+            try:
+                # `request` 是字符串时与其余工具同一套解析（FastMCP 只预解析得了合法 JSON 对象；坏 JSON / 标量
+                # 仍以字符串到这里）——此前这里把它静默换成 {}，载荷整份丢失。闸门须看解析后的载荷。
+                payload = _request_object(raw_payload)
+            except ToolValidationError as exc:
+                return _mcp_error_envelope(exc, tool_name=tool_name)
+            payload.pop("tool_name", None)
             error = _agent_preflight_error(tool_name, payload)
             if error is not None:
                 updated = await _maybe_elicit_gate(mcp, tool_name, payload, error)
