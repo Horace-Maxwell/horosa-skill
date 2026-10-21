@@ -323,6 +323,14 @@ def read_dsh_patch(text: str) -> dict[str, dict[str, Any]]:
     return out
 
 
+
+def timeout_too_short(value: object, minimum: float) -> bool:
+    """客户端配置里的超时值：读不成数字（如 `"2m"`）与数字太小同样算「太短」——按配置问题报，不让体检崩。"""
+    try:
+        return float(value) < minimum  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return True
+
 def audit(key: str, entry: Mapping[str, Any], *, os_name: str | None = None) -> list[dict[str, str]]:
     """Client-specific findings for one (normalised) entry: missing / too-short timeouts, Copilot's env, TRAE's spaces."""
     spec = EXTRA_CLIENTS.get(key)
@@ -341,11 +349,7 @@ def audit(key: str, entry: Mapping[str, Any], *, os_name: str | None = None) -> 
                 "fix": f"在该条目{'的 env 表' if rule.where == 'env' else ''}里加 `{rule.field}` ≥ {int(rule.minimum)}（{rule.unit}），或重跑 `horosa-skill setup --client {key}`。",
             })
             continue
-        try:
-            too_short = float(value) < rule.minimum
-        except (TypeError, ValueError):
-            too_short = True
-        if too_short:
+        if timeout_too_short(value, rule.minimum):
             problems.append({
                 "code": f"{code}_{rule.field}_too_short",
                 "detail": f"{rule.field}={value}（{rule.why}）。",

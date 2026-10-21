@@ -203,7 +203,7 @@ def _audit_client_entry(
                 "detail": "没写 startup_timeout_sec（Codex 默认 10 秒，首次启动要解压 runtime）。",
                 "fix": "在 [mcp_servers.<name>] 里加 `startup_timeout_sec = 120`。",
             })
-        elif float(startup) < 120:
+        elif clients_extra.timeout_too_short(startup, 120):
             problems.append({
                 "code": "codex_startup_timeout_too_short",
                 "detail": f"startup_timeout_sec={startup}（默认 10 秒）。",
@@ -216,7 +216,7 @@ def _audit_client_entry(
                 "detail": "没写 tool_timeout_sec（Codex 默认 60 秒，择日类扫描本来就要几分钟）。",
                 "fix": "在 [mcp_servers.<name>] 里加 `tool_timeout_sec = 600`。",
             })
-        elif float(tool_timeout) < 600:
+        elif clients_extra.timeout_too_short(tool_timeout, 600):
             problems.append({
                 "code": "codex_tool_timeout_too_short",
                 "detail": f"tool_timeout_sec={tool_timeout}（默认 60 秒）。",
@@ -248,17 +248,12 @@ def _audit_client_entry(
                 "detail": f"没写 timeout（{client} 默认 60 秒；择日类扫描与首次冷启动都可能超）。",
                 "fix": "在该 server 条目里加 `\"timeout\": 600`（秒）。",
             })
-        else:
-            try:
-                too_short = float(timeout) < 600
-            except (TypeError, ValueError):
-                too_short = True
-            if too_short:
-                problems.append({
-                    "code": f"{client}_tool_timeout_too_short",
-                    "detail": f"timeout={timeout}（{client} 默认 60 秒）。",
-                    "fix": "设 600 以上（秒）。",
-                })
+        elif clients_extra.timeout_too_short(timeout, 600):
+            problems.append({
+                "code": f"{client}_tool_timeout_too_short",
+                "detail": f"timeout={timeout}（{client} 默认 60 秒）。",
+                "fix": "设 600 以上（秒）。",
+            })
     problems.extend(clients_extra.audit(client, entry))
     return problems
 

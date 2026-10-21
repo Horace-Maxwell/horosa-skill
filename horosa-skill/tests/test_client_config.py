@@ -384,6 +384,23 @@ def test_client_check_flags_a_codex_entry_without_the_env_roots() -> None:
     assert "codex_env_roots_missing" not in [p["code"] for p in _audit_client_entry("horosa", entry, client="codex")]
 
 
+def test_client_check_reports_a_non_numeric_codex_timeout_instead_of_crashing(tmp_path: Path) -> None:
+    """手写的 `startup_timeout_sec = "2m"` 是配置问题，不该让 `client check` 以 ValueError traceback 退出——
+    与 cline / zed 及 16 家新客户端一样按「太短」报（Codex 读不了它，等于用默认 10 / 60 秒）。"""
+    config = tmp_path / "config.toml"
+    config.write_text(
+        '[mcp_servers.horosa]\ncommand = "/opt/uv/bin/uv"\nargs = ["run", "horosa-skill", "serve", "--transport", "stdio"]\n'
+        'startup_timeout_sec = "2m"\ntool_timeout_sec = "ten minutes"\n'
+        '[mcp_servers.horosa.env]\nHOROSA_RUNTIME_ROOT = "/r"\nHOROSA_SKILL_DATA_DIR = "/d"\n',
+        encoding="utf-8",
+    )
+    report = client_audit._client_check_report(["codex"], config)
+    finding = report["clients"][0]["findings"][0]
+    codes = [p["code"] for p in finding["problems"]]
+    assert codes == ["codex_startup_timeout_too_short", "codex_tool_timeout_too_short"], finding
+    assert "startup_timeout_sec=2m" in finding["problems"][0]["detail"]
+
+
 def test_placeholders_are_judged_per_client(tmp_path: Path) -> None:
 
     args = ["run", "--directory", "${workspaceFolder}/horosa-skill", "horosa-skill", "serve", "--transport", "stdio"]
