@@ -193,3 +193,38 @@ def test_ken_backed_tools_are_declared_as_such(tool_name: str) -> None:
     )["tools"]
     assert declared[tool_name]["compute_class"] == "ken_backed"
     assert declared[tool_name]["engines"], "ken 工具必须写明引擎名，卡片要用它比对实测 pan.source"
+
+
+def test_technique_report_docx_and_pdf_carry_the_report_body(tmp_path) -> None:
+    # 技法依据报告没有 ai_report：此前 DOCX/PDF 只渲染出封面与目录（一致性检查、技法一览、各技法卡全丢），
+    # markdown 版却是全的。DOCX/PDF 必须带出同一份正文。
+    import zipfile
+
+    from horosa_skill.reports.renderers import render_report
+
+    first = _card()
+    second = _card(tool_name="liureng", technique_key="liureng",
+                   input_normalized={"date": "2028-04-06", "after23NewDay": 0, "agent_confirmed_settings": True})
+    report = build_technique_report(cards=[first, second], scope="group", scope_id="g1")
+
+    docx = tmp_path / "t.docx"
+    render_report(report, output_path=docx, format_name="docx")
+    with zipfile.ZipFile(docx) as z:
+        xml = z.read("word/document.xml").decode("utf-8")
+    for expected in ("一致性检查", "技法一览", "口径不一致", "qimen", "liureng", "技法依据报告"):
+        assert expected in xml, expected
+    assert "结构化解读 · 行动建议 · 风险提示" not in xml  # 不冒充咨询报告封面
+    assert "**" not in xml and "`" not in xml
+
+    pdf = tmp_path / "t.pdf"
+    result = render_report(report, output_path=pdf, format_name="pdf")
+    assert result["format"] == "pdf"
+    # 只有封面 + 目录的旧产物约 3 KB；带正文与两张表后明显更大。
+    assert result["file_size"] > 2 * _pdf_size_without_body(tmp_path, report)
+
+
+def _pdf_size_without_body(tmp_path, report) -> int:
+    from horosa_skill.reports.renderers import render_report
+
+    out = tmp_path / "empty.pdf"
+    return render_report({"title": report["title"]}, output_path=out, format_name="pdf")["file_size"]

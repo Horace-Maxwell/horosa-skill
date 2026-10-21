@@ -41,6 +41,8 @@ def render_report(document: dict[str, Any], *, output_path: Path, format_name: s
     fd, tmp_name = tempfile.mkstemp(dir=str(output_path.parent), prefix=f".{output_path.name}.", suffix=".tmp")
     os.close(fd)
     tmp_path = Path(tmp_name)
+    if normalized in {"docx", "pdf"} and _is_technique_report(document):
+        document = _technique_report_human_document(document)
     try:
         if normalized == "json":
             tmp_path.write_text(json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -73,6 +75,51 @@ def render_report(document: dict[str, Any], *, output_path: Path, format_name: s
         "format": normalized,
         "file_size": len(payload),
         "sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
+def _is_technique_report(document: dict[str, Any]) -> bool:
+    from horosa_skill.reports.technique_card import TECHNIQUE_REPORT_SCHEMA
+
+    return document.get("schema") == TECHNIQUE_REPORT_SCHEMA
+
+
+def _technique_report_human_document(report: dict[str, Any]) -> dict[str, Any]:
+    """技法依据报告 → DOCX/PDF 人读文档。
+
+    技法依据报告没有 ai_report，渲染器只画 ai_report 块与 human_visible 段，直接渲染会只剩封面和目录。
+    这里取 markdown 版（同一份确定性元数据），按 `## ` 拆成人读段；管道表照常成真表格，行内 `**` / 反引号去掉。
+    """
+    from horosa_skill.reports.technique_card import render_technique_report_markdown
+
+    sections: list[dict[str, Any]] = []
+    title, body = "概览", []
+
+    def flush() -> None:
+        if any(line.strip() for line in body):
+            sections.append({
+                "id": f"technique_report_{len(sections) + 1}",
+                "title": title,
+                "body": "\n".join(body).strip(),
+                "human_visible": True,
+            })
+
+    for line in render_technique_report_markdown(report).splitlines():
+        if line.startswith("# "):
+            continue
+        if line.startswith("## "):
+            flush()
+            title, body = line[3:].strip(), []
+            continue
+        body.append(line.replace("**", "").replace("`", ""))
+    flush()
+    return {
+        "title": report.get("title"),
+        "cover_label": "技法依据报告",
+        "cover_meta": "算源 · 口径 · 导出契约 · 一致性检查",
+        "intro_heading": "报告说明",
+        "user_question": "本报告只列确定性的技法依据（算源、口径、导出契约与一致性检查），不含任何解读。",
+        "sections": sections,
     }
 
 
@@ -344,7 +391,7 @@ def _render_docx(document: dict[str, Any], output_path: Path) -> None:
         cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
     p = cover.cell(0, 0).paragraphs[0]
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = p.add_run("专业咨询报告")
+    run = p.add_run(str(document.get("cover_label") or "专业咨询报告"))
     style_run(run, size=9.5, color="DBE8E3")
     p = cover.cell(1, 0).paragraphs[0]
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -352,7 +399,7 @@ def _render_docx(document: dict[str, Any], output_path: Path) -> None:
     style_run(run, size=27, bold=True, color="FFFFFF")
     p = cover.cell(2, 0).paragraphs[0]
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    meta = "结构化解读 · 行动建议 · 风险提示"
+    meta = str(document.get("cover_meta") or "结构化解读 · 行动建议 · 风险提示")
     run = p.add_run(meta)
     style_run(run, size=9.5, color="DBE8E3")
     doc.add_paragraph()
@@ -378,7 +425,7 @@ def _render_docx(document: dict[str, Any], output_path: Path) -> None:
     update_fields.set(qn("w:val"), "true")
     doc.add_paragraph()
 
-    add_heading_block("解读目标")
+    add_heading_block(str(document.get("intro_heading") or "解读目标"))
     add_text(display_question)
 
     if human_consultation_basis:
@@ -617,10 +664,10 @@ def _render_pdf(document: dict[str, Any], output_path: Path) -> None:
     human_analysis_sections = _human_ai_list(ai_report, "analysis_sections")
     human_recommendations = _human_ai_list(ai_report, "recommendations")
     human_limitations = _human_ai_list(ai_report, "limitations")
-    metadata = ["结构化解读 · 行动建议 · 风险提示"]
+    metadata = [str(document.get("cover_meta") or "结构化解读 · 行动建议 · 风险提示")]
     cover = Table(
         [
-            [Paragraph("专业咨询报告", cover_meta)],
+            [Paragraph(_esc(str(document.get("cover_label") or "专业咨询报告")), cover_meta)],
             [Paragraph(_esc(str(document.get("title") or "结构化咨询报告")), cover_title)],
             [Paragraph(_esc(" / ".join(metadata)), cover_meta)],
         ],
@@ -643,7 +690,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path) -> None:
     story.append(cover)
     story.append(Spacer(1, 14))
 
-    add_heading("解读目标")
+    add_heading(str(document.get("intro_heading") or "解读目标"))
     add_body(display_question)
     if human_consultation_basis:
         add_note_card("起盘依据", str(human_consultation_basis or ""), accent=green)
