@@ -41,6 +41,18 @@ def test_no_text_mode_subprocess_call_relies_on_the_console_code_page() -> None:
     assert hits == [], "这些子进程调用 text=True 却没写 encoding=：Windows 上会按 cp1252/cp936 解码 → " + ", ".join(hits)
 
 
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+
+
+def test_no_script_subprocess_call_relies_on_the_console_code_page() -> None:
+    # 维护脚本同理：gen_knowledge_packs 的 `git show HEAD:…HelpDoc.js` 在 cp1252 控制台上解 CJK 时读线程抛
+    # UnicodeDecodeError、stdout 变 None，被当成「没有 HelpDoc 组件」静默吞掉；gen_bazi_pithy_pack 直接崩。
+    hits: list[str] = []
+    for path in sorted(SCRIPTS.glob("*.py")):
+        hits.extend(text_mode_calls_without_encoding(path.read_text(encoding="utf-8"), f"scripts/{path.name}"))
+    assert hits == [], "这些脚本的子进程调用 text=True 却没写 encoding=：" + ", ".join(hits)
+
+
 def test_guard_catches_the_old_shape() -> None:
     """负向对照：把一处旧写法放回去必红；带 encoding= 或非文本模式的调用不误报。"""
     bad = "import subprocess\nsubprocess.run(['x'], capture_output=True, text=True, timeout=5)\n"
@@ -133,3 +145,30 @@ def test_node_esm_helper_turns_module_paths_into_file_urls_and_rejects_bare_stri
         with pytest.raises(ValueError):
             node_esm.esm_argv("import(process.argv[1])", bad)
 
+
+
+# ── 生成件 / 基线 / 发布资产按 LF 写（AGENTS §9.3）。`Path.write_text` 不给 newline 时 Windows 上按 CRLF 写：维护机上
+# 每次重生成都把镜像、基线、契约弄成「已修改」，Windows 构建出的载荷 runtime-manifest.json / 发布清单也带 CRLF。
+def write_text_calls_without_newline(source: str, filename: str = "<memory>") -> list[str]:
+    hits: list[str] = []
+    for node in ast.walk(ast.parse(source, filename=filename)):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "write_text"
+            and "newline" not in {kw.arg for kw in node.keywords}
+        ):
+            hits.append(f"{filename}:{node.lineno}")
+    return hits
+
+
+def test_scripts_write_text_with_explicit_lf() -> None:
+    hits: list[str] = []
+    for path in sorted(SCRIPTS.glob("*.py")):
+        hits.extend(write_text_calls_without_newline(path.read_text(encoding="utf-8"), f"scripts/{path.name}"))
+    assert hits == [], "这些 write_text 没写 newline=（Windows 上会写成 CRLF）：" + ", ".join(hits)
+
+
+def test_lf_guard_catches_the_old_shape() -> None:
+    assert len(write_text_calls_without_newline("p.write_text(s, encoding='utf-8')\n")) == 1
+    assert write_text_calls_without_newline("p.write_text(s, encoding='utf-8', newline='\\n')\n") == []

@@ -581,7 +581,7 @@ def main() -> None:
     report = run_self_check(rounds=max(args.rounds, 1))
     text = json.dumps(report, ensure_ascii=False, indent=2)
     if args.output:
-        args.output.write_text(text, encoding="utf-8")
+        args.output.write_text(text, encoding="utf-8", newline="\n")
     print(text)
 
 

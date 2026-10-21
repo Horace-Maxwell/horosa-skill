@@ -38,7 +38,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     sbom = build_sbom(args.project_root.resolve(), args.runtime_manifest.resolve() if args.runtime_manifest else None)
-    args.output.write_text(json.dumps(sbom, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    args.output.write_text(json.dumps(sbom, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
     print(f"sbom: wrote {args.output}")
 
 

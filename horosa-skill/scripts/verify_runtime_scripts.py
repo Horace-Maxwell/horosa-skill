@@ -217,7 +217,7 @@ def main() -> int:
             return 1
         if applied:
             errors.extend(audit_patched_launcher(tmp.read_text(encoding="utf-8")))
-            probe = subprocess.run(["bash", "-n", str(tmp)], capture_output=True, text=True)
+            probe = subprocess.run(["bash", "-n", str(tmp)], capture_output=True, text=True, encoding="utf-8", errors="replace")
             if probe.returncode != 0:
                 errors.append(f"补丁后的启动器 bash -n 不通过：{probe.stderr.strip()[:200]}")
             notes.append("mac 启动器：补丁已验（守卫在 kill 之前、root 标记齐、语法有效）")

@@ -98,7 +98,7 @@ def main() -> None:
             raise SystemExit("Knowledge index is out of date.")
         print("knowledge-index: up to date")
         return
-    args.output.write_text(text, encoding="utf-8")
+    args.output.write_text(text, encoding="utf-8", newline="\n")
     print(f"knowledge-index: wrote {args.output}")
 
 

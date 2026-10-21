@@ -29,7 +29,7 @@ def main() -> None:
     )
     text = json.dumps(report, ensure_ascii=False, indent=2)
     if args.output:
-        args.output.write_text(text + "\n", encoding="utf-8")
+        args.output.write_text(text + "\n", encoding="utf-8", newline="\n")
     print(text)
 
 

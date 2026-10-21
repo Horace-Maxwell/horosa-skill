@@ -147,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
         text = path.read_text(encoding="utf-8")
         out, n = rewrite(text, path, old, new)
         if n:
-            path.write_text(out, encoding="utf-8")
+            path.write_text(out, encoding="utf-8", newline="\n")
             total += n
             print(f"{rel}: {n} line(s)")
     print(f"bump-version: {old} → {new} ({total} lines across {len(SITES)} sites); now run `uv lock` and scripts/verify_docs_sync.py")

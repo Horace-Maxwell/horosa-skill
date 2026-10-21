@@ -99,10 +99,10 @@ def self_test() -> list[str]:
     problems: list[str] = []
     with tempfile.TemporaryDirectory(prefix="horosa-undefined-names-") as tmp:
         root = Path(tmp)
-        (root / "bad_module.py").write_text(BAD_MODULE, encoding="utf-8")
-        (root / "good_module.py").write_text(GOOD_MODULE, encoding="utf-8")
-        (root / "bad_re_module.py").write_text(BAD_RE_MODULE, encoding="utf-8")
-        (root / "good_re_module.py").write_text(GOOD_RE_MODULE, encoding="utf-8")
+        (root / "bad_module.py").write_text(BAD_MODULE, encoding="utf-8", newline="\n")
+        (root / "good_module.py").write_text(GOOD_MODULE, encoding="utf-8", newline="\n")
+        (root / "bad_re_module.py").write_text(BAD_RE_MODULE, encoding="utf-8", newline="\n")
+        (root / "good_re_module.py").write_text(GOOD_RE_MODULE, encoding="utf-8", newline="\n")
         red = run_ruff(["bad_module.py"], root)
         green = run_ruff(["good_module.py"], root)
         red_re = run_ruff(["bad_re_module.py"], root)

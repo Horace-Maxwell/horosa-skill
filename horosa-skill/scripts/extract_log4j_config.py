@@ -31,4 +31,4 @@ if updated == text:
     raise SystemExit(2)
 path = pathlib.Path(out)
 path.parent.mkdir(parents=True, exist_ok=True)
-path.write_text(updated, encoding="utf-8")
+path.write_text(updated, encoding="utf-8", newline="\n")

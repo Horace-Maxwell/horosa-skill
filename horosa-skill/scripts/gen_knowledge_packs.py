@@ -157,7 +157,7 @@ def _split_tabs(source: str) -> list[tuple[str, str]]:
 def _git(upstream: Path, *args: str) -> str | None:
     """stdout on success, None on any failure（区分「空输出」与「不是 git 树」）。"""
     try:
-        out = subprocess.run(["git", "-C", str(upstream), *args], capture_output=True, text=True, timeout=30)
+        out = subprocess.run(["git", "-C", str(upstream), *args], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
     except (OSError, subprocess.SubprocessError):
         return None
     return out.stdout if out.returncode == 0 else None
@@ -257,7 +257,7 @@ def main() -> int:
             "categories": [{"name": "手册", "entries": entries}],
         }
         (OUT_DIR / f"{domain}.json").write_text(
-            json.dumps(payload, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
+            json.dumps(payload, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n"
         )
         written += 1
         total_entries += len(entries)

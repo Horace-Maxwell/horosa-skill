@@ -61,7 +61,7 @@ GATES: tuple[tuple[str, list[str]], ...] = (
 
 def _git(*args: str) -> tuple[int, str]:
     result = subprocess.run(
-        ["git", "-C", str(PKG_ROOT.parent), *args], capture_output=True, text=True, timeout=60, check=False
+        ["git", "-C", str(PKG_ROOT.parent), *args], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60, check=False
     )
     return result.returncode, (result.stdout or "").strip()
 
@@ -138,7 +138,7 @@ def upstream_pin_failures(source_root: Path) -> list[str]:
     if not pin:
         return ["contracts/upstream_provenance.json 没有 upstream_git_sha——先跑 verify_upstream_sync.py --require-upstream --write-state"]
     result = subprocess.run(["git", "-C", str(source_root), "branch", "-r", "--contains", pin],
-                            capture_output=True, text=True, timeout=60, check=False)
+                            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60, check=False)
     if result.returncode != 0:
         return [f"上游仓 `git branch -r --contains {pin[:12]}` 失败：{(result.stderr or result.stdout).strip()[:200]}"]
     branches = [b.strip() for b in result.stdout.splitlines() if b.strip()]

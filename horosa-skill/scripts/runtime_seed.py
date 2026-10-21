@@ -124,7 +124,7 @@ def materialize_seed(archive: Path, cache_root: Path) -> SeedTree:
         target.mkdir(parents=True, exist_ok=True)
         with tarfile.open(archive, "r:gz") as tar:
             tar.extractall(target, filter="data")
-        marker.write_text(archive.name, encoding="utf-8")
+        marker.write_text(archive.name, encoding="utf-8", newline="\n")
     root = target / "runtime-payload"
     manifest = json.loads((root / "runtime-manifest.json").read_text(encoding="utf-8"))
     return SeedTree(root=root, manifest=manifest)
@@ -261,7 +261,7 @@ def resolve_pip_python(explicit: str | None = None) -> str:
         if not Path(candidate).exists():
             continue
         try:
-            completed = subprocess.run([candidate, "-m", "pip", "--version"], capture_output=True, text=True, timeout=60)
+            completed = subprocess.run([candidate, "-m", "pip", "--version"], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
         except (OSError, subprocess.TimeoutExpired):
             continue
         if completed.returncode == 0:
@@ -372,7 +372,7 @@ def find_jdk_home(extracted: Path) -> Path:
 
 def _jlink_major(jlink: Path) -> int | None:
     try:
-        out = subprocess.run([str(jlink), "--version"], capture_output=True, text=True, timeout=60).stdout.strip()
+        out = subprocess.run([str(jlink), "--version"], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         return None
     match = re.match(r"(\d+)", out)

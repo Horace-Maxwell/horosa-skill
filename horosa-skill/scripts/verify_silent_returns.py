@@ -81,7 +81,7 @@ def main() -> int:
                 indent=2,
             )
             + "\n",
-            encoding="utf-8",
+            encoding="utf-8", newline="\n",
         )
         print(f"baseline updated: {total} silent empty return(s) across {len(found)} file(s)")
         return 0

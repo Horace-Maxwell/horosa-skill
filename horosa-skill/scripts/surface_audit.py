@@ -211,7 +211,7 @@ def cli_surface(report: Report, tools: list[str]) -> None:
 
     def one(tool: str) -> tuple[str, bool, Any]:
         source, target = work / f"{tool}.in.json", work / f"{tool}.out.json"
-        source.write_text(json.dumps(example_payload(tool), ensure_ascii=False), encoding="utf-8")
+        source.write_text(json.dumps(example_payload(tool), ensure_ascii=False), encoding="utf-8", newline="\n")
         proc = subprocess.run([*command, "tool", "run", tool, "--input", str(source), "--output", str(target)], capture_output=True,
                               text=True, encoding="utf-8", errors="replace", env=env, timeout=900)
         if proc.returncode != 0 or not target.is_file():
@@ -227,11 +227,11 @@ def cli_surface(report: Report, tools: list[str]) -> None:
     with ThreadPoolExecutor(6) as pool:
         for tool, ok, detail in pool.map(one, tools):
             report.check("cli", tool, ok, detail)
-    (work / "unknown.json").write_text("{}", encoding="utf-8")
+    (work / "unknown.json").write_text("{}", encoding="utf-8", newline="\n")
     unknown = subprocess.run([*command, "tool", "run", "no_such_tool", "--input", str(work / "unknown.json")], capture_output=True,
                              text=True, encoding="utf-8", errors="replace", env=env, timeout=300)
     report.check("cli", "unknown tool: exit 2 + catalog", unknown.returncode == 2 and '"catalog"' in unknown.stderr, unknown.stderr[-200:])
-    (work / "birth.json").write_text(json.dumps(BIRTH), encoding="utf-8")
+    (work / "birth.json").write_text(json.dumps(BIRTH), encoding="utf-8", newline="\n")
     gated = subprocess.run([*command, "tool", "run", "horosa_astro_chart", "--input", str(work / "birth.json")], capture_output=True,
                            text=True, encoding="utf-8", errors="replace", env=env, timeout=300)
     report.check("cli", "gate holds for the MCP-style name", gated.returncode == 2 and "agent_guidance.required" in gated.stderr, gated.stderr[-200:])
@@ -296,7 +296,7 @@ def main(argv: list[str] | None = None) -> int:
         asyncio.run(http_surface(report))
     print(report.summary())
     if args.json:
-        args.json.write_text(json.dumps(report.rows, ensure_ascii=False, indent=1), encoding="utf-8")
+        args.json.write_text(json.dumps(report.rows, ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")
     return 0 if all(row["ok"] for row in report.rows) else 1
 
 

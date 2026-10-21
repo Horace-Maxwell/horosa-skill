@@ -307,7 +307,7 @@ class Lane:
             manifest = json.loads((assets / "runtime-manifest.json").read_text(encoding="utf-8"))
             localized = localize_manifest(manifest, assets)
             lane_manifest = self.work / "lane-manifest.json"
-            lane_manifest.write_text(json.dumps(localized, ensure_ascii=False, indent=2), encoding="utf-8")
+            lane_manifest.write_text(json.dumps(localized, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
             source_args = ["--manifest-url", lane_manifest.resolve().as_uri()]
         else:
             source_args = ["--manifest-url", self.args.manifest_url] if self.args.manifest_url else []
@@ -359,7 +359,7 @@ class Lane:
         if code != 0 or not payload:
             self.step(name, False, code=code, stderr=err)
             return False, {}
-        (self.work / f"{name}.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        (self.work / f"{name}.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
         return True, payload
 
     def doctor_after_install(self) -> bool:
@@ -423,7 +423,7 @@ class Lane:
         for tool, base in ENGINE_CASES.items():
             payload_path = self.work / f"{tool}.in.json"
             out_path = self.work / f"{tool}.out.json"
-            payload_path.write_text(json.dumps({**base, **CONFIRM}, ensure_ascii=False), encoding="utf-8")
+            payload_path.write_text(json.dumps({**base, **CONFIRM}, ensure_ascii=False), encoding="utf-8", newline="\n")
             started = time.perf_counter()
             code, envelope, err = self.cli_json("tool", "run", tool, "--input", str(payload_path), "--output", str(out_path),
                                                 timeout=BUDGET["engine"])
@@ -818,7 +818,7 @@ def main(argv: list[str] | None = None) -> int:
     text = json.dumps(report, ensure_ascii=False, indent=2)
     if args.out:
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-        Path(args.out).write_text(text + "\n", encoding="utf-8")
+        Path(args.out).write_text(text + "\n", encoding="utf-8", newline="\n")
     print(text)
     return 0 if report["ok"] else 1
 

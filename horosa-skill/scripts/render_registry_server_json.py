@@ -134,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
     if problems:
         print("registry server.json: FAIL\n- " + "\n- ".join(problems), file=sys.stderr)
         return 1
-    args.out.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    args.out.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
     package = payload["packages"][0]
     print(f"registry server.json: ok → {args.out} ({payload['name']} {payload['version']}, sha {package['fileSha256'][:12]}…)")
     return 0

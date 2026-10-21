@@ -159,7 +159,7 @@ def write_bundle(root: Path = ROOT) -> list[str]:
             stale.unlink()
     for rel, text in expected.items():
         (bundle / rel).parent.mkdir(parents=True, exist_ok=True)
-        (bundle / rel).write_text(text, encoding="utf-8")
+        (bundle / rel).write_text(text, encoding="utf-8", newline="\n")
     return sorted(expected)
 
 
@@ -177,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
     for rel in MIRRORS:
         path = ROOT / rel
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(render(rel), encoding="utf-8")
+        path.write_text(render(rel), encoding="utf-8", newline="\n")
         print(f"wrote {rel}")
     for rel in write_bundle():
         print(f"wrote {SKILL_BUNDLE_REL}/{rel}")

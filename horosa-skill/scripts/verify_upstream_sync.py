@@ -294,7 +294,7 @@ def _skill_mirror_version() -> int:
 def _git(upstream: Path, *args: str) -> str:
     try:
         out = subprocess.run(
-            ["git", "-C", str(upstream), *args], capture_output=True, text=True, timeout=30, check=False
+            ["git", "-C", str(upstream), *args], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30, check=False
         )
         return out.stdout.strip() if out.returncode == 0 else ""
     except (OSError, subprocess.SubprocessError):
@@ -627,7 +627,7 @@ def main() -> None:
                 indent=2,
             )
             + "\n",
-            encoding="utf-8",
+            encoding="utf-8", newline="\n",
         )
 
     app_version = _upstream_app_version(upstream) or "?"

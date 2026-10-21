@@ -99,7 +99,7 @@ def main() -> int:
                 indent=2,
             )
             + "\n",
-            encoding="utf-8",
+            encoding="utf-8", newline="\n",
         )
         print(f"baseline updated: full {sizes['full_bytes']} B ({sizes['full_tools']} tools), compact {sizes['compact_bytes']} B ({sizes['compact_tools']} tools), instructions {sizes['instructions_bytes']} B")
         return 0

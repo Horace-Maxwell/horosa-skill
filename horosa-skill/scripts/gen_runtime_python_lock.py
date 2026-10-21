@@ -240,7 +240,7 @@ def main() -> int:
         print(f"check-index: {misses} native dist(s) without a wheel (they are marked \"sdist\" and built on the target runner)")
     if args.write:
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(lock, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        args.output.write_text(json.dumps(lock, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
         print(f"wrote {args.output}")
     return 0
 

@@ -36,7 +36,7 @@ LABEL = "八字断语库 · 口诀 21 类"
 
 
 def _git(root: Path, *args: str) -> str:
-    return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, check=True).stdout
+    return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stdout
 
 
 def build(upstream: Path) -> dict:
@@ -95,7 +95,7 @@ def main() -> int:
             return 1
         print(f"gen-bazi-pithy-pack: up to date ({len(payload['categories'])} categories, {total} entries)")
         return 0
-    OUT.write_text(rendered, encoding="utf-8")
+    OUT.write_text(rendered, encoding="utf-8", newline="\n")
     print(f"gen-bazi-pithy-pack: wrote {OUT.relative_to(REPO)} ({len(payload['categories'])} categories, {total} entries, upstream {payload['source']['upstream_git_sha']})")
     return 0
 

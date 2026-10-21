@@ -330,7 +330,7 @@ def build() -> dict[str, Any]:
 def main() -> int:
     contract = build()
     CONTRACT.parent.mkdir(parents=True, exist_ok=True)
-    CONTRACT.write_text(json.dumps(contract, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    CONTRACT.write_text(json.dumps(contract, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
     sites = sum(len(v) for v in contract["tools"].values())
     keys = sum(len(s["keys"]) for v in contract["tools"].values() for s in v)
     print(

@@ -140,7 +140,7 @@ def main() -> int:
                 indent=2,
             )
             + "\n",
-            encoding="utf-8",
+            encoding="utf-8", newline="\n",
         )
         print(f"baseline updated: {total} bare logger.warning call(s), {quiet_total} silent broad except(s)")
         return 0

@@ -60,7 +60,7 @@ def main() -> int:
 
     if args.update_baseline:
         data["min_pass"] = passed
-        CORPUS.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        CORPUS.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
         print(f"baseline updated: min_pass = {passed}/{total}")
         for line in failures:
             print(f"  still failing: {line}")

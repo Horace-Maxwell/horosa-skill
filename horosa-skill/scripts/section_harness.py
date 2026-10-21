@@ -88,7 +88,7 @@ def main(argv: list[str]) -> int:
     )
     print(f"\n{len(report)} tools run; clean={clean}")
     if out_json:
-        Path(out_json).write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
+        Path(out_json).write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")
     return 0 if clean == len(report) else 1
 
 

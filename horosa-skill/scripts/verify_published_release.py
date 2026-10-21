@@ -49,7 +49,7 @@ def asset_digests(repo: str, tag: str) -> dict[str, str]:
     """GitHub's sha256 `digest` per uploaded asset name (assets without one are left out)."""
     api = subprocess.run(
         ["gh", "api", f"repos/{repo}/releases/tags/{tag}", "--jq", '.assets[] | "\\(.name) \\(.digest // \"\")"'],
-        capture_output=True, text=True, check=False,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
     ).stdout
     return {
         line.split()[0]: line.split()[1].removeprefix("sha256:")

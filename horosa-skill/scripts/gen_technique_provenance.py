@@ -236,7 +236,7 @@ if "--check" in sys.argv[1:]:
         raise SystemExit(1)
     print(f"technique_provenance.json == generator output ({len(out)} tools)")
     raise SystemExit(0)
-CONTRACT.write_text(rendered, encoding="utf-8")
+CONTRACT.write_text(rendered, encoding="utf-8", newline="\n")
 counts: dict[str, int] = {}
 for entry in out.values():
     counts[entry["compute_class"]] = counts.get(entry["compute_class"], 0) + 1

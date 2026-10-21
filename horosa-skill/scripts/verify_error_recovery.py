@@ -101,7 +101,7 @@ def main() -> int:
                 indent=2,
             )
             + "\n",
-            encoding="utf-8",
+            encoding="utf-8", newline="\n",
         )
         print(f"baseline updated: {total} non-bilingual message(s), {len(codes)} codes seen")
         if unclassified:

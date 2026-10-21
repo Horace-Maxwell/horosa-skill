@@ -708,7 +708,7 @@ def _write_manifest(files: dict[str, dict]) -> None:
             indent=2,
         )
         + "\n",
-        encoding="utf-8",
+        encoding="utf-8", newline="\n",
     )
 
 
@@ -828,7 +828,7 @@ def run_manifest(upstream_src: Path, only: str | None, check: bool) -> int:
             problems += 1
         else:
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(new_text, encoding="utf-8")
+            target.write_text(new_text, encoding="utf-8", newline="\n")
 
     summary = ", ".join(f"{k}={v}" for k, v in stats.items())
     print(f"\nrevendor-manifest: {'FAIL' if problems else 'ok'} ({summary}; {problems} need attention)")
@@ -955,7 +955,7 @@ def main() -> None:
         print(f"{rel} → {target.relative_to(REPO_ROOT)}: {status} ({delta:+d} lines) [{'; '.join(notes) or 'verbatim'}]")
         if not args.check and status != "unchanged":
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(new_text, encoding="utf-8")
+            target.write_text(new_text, encoding="utf-8", newline="\n")
 
 
 if __name__ == "__main__":

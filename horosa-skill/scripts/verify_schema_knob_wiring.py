@@ -139,7 +139,7 @@ def main() -> int:
                 indent=2,
             )
             + "\n",
-            encoding="utf-8",
+            encoding="utf-8", newline="\n",
         )
         print(f"baseline updated: {len(dead)} unwired schema knob(s)")
         return 0

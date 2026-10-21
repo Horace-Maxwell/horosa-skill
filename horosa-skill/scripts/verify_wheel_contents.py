@@ -71,7 +71,7 @@ def host_path_hits(entries: dict[str, bytes]) -> list[str]:
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="horosa-wheel-") as tmp:
         completed = subprocess.run(
-            ["uv", "build", "--wheel", "-o", tmp], cwd=PKG_ROOT, capture_output=True, text=True, check=False
+            ["uv", "build", "--wheel", "-o", tmp], cwd=PKG_ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False
         )
         if completed.returncode != 0:
             print("wheel-contents: `uv build --wheel` failed:", file=sys.stderr)

@@ -57,7 +57,7 @@ def download(url: str, dest: Path) -> Path:
     partial.unlink(missing_ok=True)
     subprocess.run(["curl", "-fL", url, "-o", str(partial)], check=True)
     partial.replace(dest)
-    stamp.write_text(url, encoding="utf-8")
+    stamp.write_text(url, encoding="utf-8", newline="\n")
     return dest
 
 
@@ -66,7 +66,7 @@ def latest_node_win_url() -> str:
         ["curl", "-fsSL", "https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt"],
         check=True,
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8", errors="replace",
     )
     lines = completed.stdout.splitlines()
     for line in lines:
@@ -88,7 +88,7 @@ def latest_temurin_jdk_url() -> str:
     # saw. Fall back to the API URL (still correct, just not cache-keyable) if the probe fails.
     try:
         head = subprocess.run(
-            ["curl", "-fsI", TEMURIN_JDK_API], check=True, capture_output=True, text=True, timeout=60
+            ["curl", "-fsI", TEMURIN_JDK_API], check=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60
         )
         for line in head.stdout.splitlines():
             if line.lower().startswith("location:"):
@@ -174,7 +174,7 @@ def _make_kentang_mount_graceful(registry_path: Path) -> None:
         "            print(f\"[kentang] skipping {spec.get('mount')}: {_exc}\", file=_sys.stderr)\n"
     )
     if needle in text:
-        registry_path.write_text(text.replace(needle, replacement), encoding="utf-8")
+        registry_path.write_text(text.replace(needle, replacement), encoding="utf-8", newline="\n")
 
 
 def unpack_wheels(wheels_root: Path, site_packages: Path) -> None:
@@ -228,7 +228,7 @@ def write_manifest(version: str) -> None:
     }
     (PAYLOAD_ROOT / "runtime-manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
+        encoding="utf-8", newline="\n",
     )
 
 
@@ -500,7 +500,7 @@ def stage_from_seed(seed, tree, lock: dict, toolchain: dict, payload_root: Path,
         start_script="Horosa-Web/start_horosa_local.ps1", stop_script="Horosa-Web/stop_horosa_local.ps1",
         platform_requirements={"arch": "x86_64", "min_os": toolchain["platforms"][platform_key].get("min_os")},
     )
-    (payload_root / "runtime-manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    (payload_root / "runtime-manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
     return {"version": manifest["version"], "pure_dists": len(pure), "native_wheels": sorted(wheels), "jlink": jlink, "skip_sdist": skip_sdist}
 
 

@@ -167,7 +167,7 @@ def main() -> None:
                 indent=2,
             )
             + "\n",
-            encoding="utf-8",
+            encoding="utf-8", newline="\n",
         )
         print(f"export-section-baseline: baseline updated ({totals['missing_sections']} missing sections)")
         return

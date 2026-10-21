@@ -241,7 +241,7 @@ def check_test_count_is_real() -> None:
     try:
         out = subprocess.run(
             [sys.executable, "-m", "pytest", "--collect-only", "-q"],
-            cwd=PKG, capture_output=True, text=True, timeout=180,
+            cwd=PKG, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180,
         ).stdout
     except Exception as exc:  # noqa: BLE001 — 环境问题不该让文档守卫变红
         print(f"::notice::test-count truth check skipped ({exc})")

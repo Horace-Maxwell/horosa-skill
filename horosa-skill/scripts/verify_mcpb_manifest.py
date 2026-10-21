@@ -175,7 +175,7 @@ def validate_with_npx() -> list[str]:
     try:
         result = subprocess.run(
             ["npx", "-y", MCPB_PACKAGE, "validate", str(MANIFEST)],
-            capture_output=True, text=True, timeout=180, cwd=str(PKG_ROOT), check=False,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180, cwd=str(PKG_ROOT), check=False,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         print(f"mcpb-manifest: skipping npx validate ({type(exc).__name__}: {exc})")

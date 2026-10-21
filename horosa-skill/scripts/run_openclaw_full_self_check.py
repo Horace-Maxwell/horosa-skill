@@ -220,7 +220,7 @@ def main() -> int:
     if not config_path.exists():
         report["server_visible"] = False
         report["bootstrap_error"] = f"mcporter config not found: {config_path}"
-        output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 1
 
@@ -232,7 +232,7 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001
         report["server_visible"] = False
         report["bootstrap_error"] = str(exc)
-        output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 1
 
@@ -342,7 +342,7 @@ def main() -> int:
         and report["report_export"].get("ok") is True
     )
 
-    output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0 if report["ok"] else 1
 
