@@ -357,8 +357,9 @@ AI 送回来的**标识**（段名、知识库键）经 `canonical_name` 按词�
 干→幹、丑→醜、冲→衝、克→克（应剋）、斗→鬥、凶→兇、占→佔、咸→鹹、历→歷——所以最后一步按**原文逐位定字**
 （`data/horosa_char_rules.json`：每字一个缺省 + 普通义白名单，冲→沖、克→剋、历→曆、钟→鐘，干 / 丑 / 斗 / 占 / 凶 / 咸 / 表保持，
 引书「云」后跟冒号保持）。**不能靠词组表**：最长匹配先吃掉前一个字（「真实干支」切出「实干」→ 真實幹支），补不完。
-这套机制与上游星阙「界面简繁」（`hantRules.js`）相同，规则 ⊇ 上游；偏离逐条写在 JSON 的 `deviations`（克、咸、占有点、农历年、
-密码表等，上游那几处会转错），`test_character_rules_cover_upstream_except_documented_deviations` 在有上游 checkout 时核对。
+这套机制与上游星阙「界面简繁」（`hantRules.js`，Horosa-Public f9884a19 起含 克 / 咸 / 后 / 合）相同，规则 ⊇ 上游；偏离逐条写在 JSON 的
+`deviations`（天干 + 克己、驿马克 钉回「剋」，凶恶、凶暴、占有、谋干），`test_character_rules_cover_upstream_except_documented_deviations`
+在有上游 checkout 时核对。白名单词会跨在术数词上误吃（「甲克己土」里的「克己」、「驿马克身」里的「马克」）：加更长的词把它钉回来，不删白名单。
 其余字的词组级修正（回歸、聖杯、神后、合中、卷舌、三台…）在 `data/horosa_s2t.txt`。
 
 **新增东西时的同步义务**（每条都有测试会红）：

@@ -90,6 +90,9 @@ GOLDEN = {
     "农历年月日": "農曆年月日",
     "查密码表": "查密碼表",
     "占有点": "佔有點",
+    # 白名单词跨在术数词上（甲 + 克 + 己土、驿马 + 克 + 身）：更长的词把它钉回「剋」
+    "甲克己土，驿马克身，克己助人，马克斯，克洛诺斯": "甲剋己土，驛馬剋身，克己助人，馬克斯，克洛諾斯",
+    "辛来有克劳病多，刑克难守": "辛來有剋勞病多，刑剋難守",
     # 钟 / 表（与上游一致）
     "城钟，手表，钟情，星历表": "城鐘，手錶，鍾情，星曆表",
 }
@@ -166,8 +169,8 @@ def test_character_rules_cover_upstream_except_documented_deviations() -> None:
         assert char in ours, f"上游新增了「{char}」的规则，本仓还没有"
         assert ours[char].get("default") == default and bool(ours[char].get("quote")) == quote, char
         for word, traditional in words.items():
-            if word in deviations:
-                continue
+            if word in deviations or char not in word or len(word) != len(traditional):
+                continue  # 上游里不含该字 / 不等长的词条在它自己的索引里也被跳过（惰性条目）
             assert ours[char]["words"].get(word) == traditional, f"{char}: 上游 {word}→{traditional}，本仓 {ours[char]['words'].get(word)}"
 
 
