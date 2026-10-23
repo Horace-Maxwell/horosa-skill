@@ -14,7 +14,7 @@
       "registryType": "mcpb",
       "identifier": "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.42.0/horosa-skill-0.42.0.mcpb",
       "version": "0.42.0",
-      "fileSha256": "273c33ebeca8769c24a9a0f9415f56f51b7145276764f156191481952cae31c1",
+      "fileSha256": "fa3dd4f68c5543e8eea75fb4fe52a198c5c5fdd5d0eabb3370168951c639ade6",
       "transport": {
         "type": "stdio"
       },
