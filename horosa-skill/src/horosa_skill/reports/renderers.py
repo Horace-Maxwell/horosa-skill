@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from horosa_skill.errors import bilingual
+from horosa_skill.textscript import SIMPLIFIED, TRADITIONAL_HK
 
 
 HUMAN_RENDER_HIDDEN_SECTION_IDS = {
@@ -29,7 +30,10 @@ HUMAN_RENDER_HIDDEN_SECTION_IDS = {
 }
 
 
-def render_report(document: dict[str, Any], *, output_path: Path, format_name: str) -> dict[str, Any]:
+def render_report(
+    document: dict[str, Any], *, output_path: Path, format_name: str, script: str = SIMPLIFIED
+) -> dict[str, Any]:
+    """`script` 只决定 DOCX/PDF 选哪套字形的字体（繁体用 TC/HK 字体）；文字本身由调用方先转好。"""
     normalized = format_name.lower()
     if normalized not in {"json", "docx", "pdf", "markdown"}:
         raise ValueError("format must be one of: json, docx, pdf, markdown")
@@ -53,9 +57,9 @@ def render_report(document: dict[str, Any], *, output_path: Path, format_name: s
 
             tmp_path.write_text(render_technique_report_markdown(document), encoding="utf-8")
         elif normalized == "docx":
-            _render_docx(document, tmp_path)
+            _render_docx(document, tmp_path, script)
         else:  # pdf
-            _render_pdf(document, tmp_path)
+            _render_pdf(document, tmp_path, script)
         payload = tmp_path.read_bytes()
         os.replace(str(tmp_path), str(output_path))
     except BaseException as exc:
@@ -193,7 +197,7 @@ def _split_markdown_blocks(text: str) -> list[tuple[str, Any]]:
     return blocks
 
 
-def _render_docx(document: dict[str, Any], output_path: Path) -> None:
+def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMPLIFIED) -> None:
     from docx import Document
     from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
     from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -202,7 +206,7 @@ def _render_docx(document: dict[str, Any], output_path: Path) -> None:
     from docx.shared import Inches, Pt, RGBColor
 
     doc = Document()
-    font_name = _docx_font_name()
+    font_name = _docx_font_name(script)
     for section in doc.sections:
         section.top_margin = Inches(0.65)
         section.bottom_margin = Inches(0.62)
@@ -500,7 +504,7 @@ def _render_docx(document: dict[str, Any], output_path: Path) -> None:
     doc.save(str(output_path))
 
 
-def _render_pdf(document: dict[str, Any], output_path: Path) -> None:
+def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPLIFIED) -> None:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_CENTER
@@ -511,7 +515,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path) -> None:
     from reportlab.pdfbase.cidfonts import UnicodeCIDFont
     from reportlab.pdfbase.ttfonts import TTFont
 
-    font_name, bold_font_name = _register_pdf_fonts(pdfmetrics, UnicodeCIDFont, TTFont)
+    font_name, bold_font_name = _register_pdf_fonts(pdfmetrics, UnicodeCIDFont, TTFont, script)
 
     styles = getSampleStyleSheet()
     page_width, page_height = A4
@@ -752,7 +756,9 @@ def _render_pdf(document: dict[str, Any], output_path: Path) -> None:
     ).build(story, onFirstPage=on_page, onLaterPages=on_page)
 
 
-def _docx_font_name() -> str:
+def _docx_font_name(script: str = SIMPLIFIED) -> str:
+    if script != SIMPLIFIED:
+        return _docx_traditional_font_name(script)
     # 中文字体候选（按平台常见优先级）：Win 微软雅黑 → Mac 苹方/宋体 → Arial Unicode → Noto CJK。
     # 返回的字体名同时用于 w:eastAsia，确保 CJK 字形真实存在，异机打开不豆腐。
     if Path("C:/Windows/Fonts/msyh.ttc").exists() or Path("C:/Windows/Fonts/msyh.ttf").exists():
@@ -766,6 +772,23 @@ def _docx_font_name() -> str:
     for noto in ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"):
         if Path(noto).exists():
             return "Noto Sans CJK SC"
+    return "Arial"
+
+
+def _docx_traditional_font_name(script: str) -> str:
+    # 繁体用繁体字形的字体（简体字体也能显示多数繁体字，但字形是大陆规范，台港读者一眼看出不对）。
+    hk = script == TRADITIONAL_HK
+    if Path("C:/Windows/Fonts/msjh.ttc").exists() or Path("C:/Windows/Fonts/msjh.ttf").exists():
+        return "Microsoft JhengHei"
+    if Path("/System/Library/Fonts/PingFang.ttc").exists():
+        return "PingFang HK" if hk else "PingFang TC"
+    if Path("/System/Library/Fonts/Supplemental/Songti.ttc").exists():
+        return "Songti TC"
+    if Path("/System/Library/Fonts/Supplemental/Arial Unicode.ttf").exists():
+        return "Arial Unicode MS"
+    for noto in ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"):
+        if Path(noto).exists():
+            return "Noto Sans CJK HK" if hk else "Noto Sans CJK TC"
     return "Arial"
 
 
@@ -802,7 +825,68 @@ def _esc(value: str) -> str:
     return html.escape(str(value)).replace("\n", "<br/>")
 
 
-def _register_pdf_fonts(pdfmetrics: Any, UnicodeCIDFont: Any, TTFont: Any) -> tuple[str, str]:
+def _ttc_face(TTFont: Any, path: Path, families: tuple[str, ...]) -> int | None:
+    """在 TTC 集合里按字体族名找子字体（常规体优先）；找不到返回 None。索引会随系统版本变，不能写死。"""
+    found: int | None = None
+    for index in range(32):
+        try:
+            face = TTFont(f"HorosaProbe{index}", str(path), subfontIndex=index).face
+        except Exception:  # noqa: BLE001 - 越界或该子字体 reportlab 不支持：结束扫描
+            break
+        family = face.familyName.decode("utf-8", "replace") if isinstance(face.familyName, bytes) else str(face.familyName)
+        name = face.name.decode("utf-8", "replace") if isinstance(face.name, bytes) else str(face.name)
+        if family in families:
+            if "Regular" in name or "Light" in name:
+                return index
+            found = index if found is None else found
+    return found
+
+
+def _register_pdf_traditional_fonts(pdfmetrics: Any, UnicodeCIDFont: Any, TTFont: Any, script: str) -> tuple[str, str]:
+    hk = script == TRADITIONAL_HK
+    noto = ("Noto Sans CJK HK", "Noto Sans CJK TC") if hk else ("Noto Sans CJK TC", "Noto Sans CJK HK")
+    candidates: list[tuple[str, tuple[str, ...] | None]] = [
+        ("C:/Windows/Fonts/msjh.ttc", ("Microsoft JhengHei",)),
+        ("C:/Windows/Fonts/msjh.ttf", None),
+        ("C:/Windows/Fonts/mingliu.ttc", ("PMingLiU", "MingLiU")),
+        ("/System/Library/Fonts/Supplemental/Songti.ttc", ("Songti TC",)),
+        ("/System/Library/Fonts/STHeiti Light.ttc", ("Heiti TC",)),
+        ("/System/Library/Fonts/Supplemental/Arial Unicode.ttf", None),
+        ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", noto),
+        ("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc", noto),
+    ]
+    for index, (candidate, families) in enumerate(candidates):
+        path = Path(candidate)
+        if not path.exists():
+            continue
+        font_name = f"HorosaSansTC{index}"
+        try:
+            if families is None:
+                pdfmetrics.registerFont(TTFont(font_name, str(path)))
+            else:
+                face = _ttc_face(TTFont, path, families)
+                if face is None:
+                    continue
+                pdfmetrics.registerFont(TTFont(font_name, str(path), subfontIndex=face))
+            return font_name, font_name
+        except Exception:  # noqa: BLE001 - 这一款载不了就试下一款
+            continue
+    fallback = "MSung-Light"  # reportlab 自带的繁体 CID 字体（Adobe-CNS1）
+    try:
+        pdfmetrics.registerFont(UnicodeCIDFont(fallback))
+        return fallback, fallback
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(
+            bilingual(
+                "PDF 注册不到任何能显示繁体中文的字体（MSung-Light 不可用）。",
+                "No Traditional-Chinese-capable font could be registered for the PDF (MSung-Light unavailable).",
+            )
+        ) from exc
+
+
+def _register_pdf_fonts(pdfmetrics: Any, UnicodeCIDFont: Any, TTFont: Any, script: str = SIMPLIFIED) -> tuple[str, str]:
+    if script != SIMPLIFIED:
+        return _register_pdf_traditional_fonts(pdfmetrics, UnicodeCIDFont, TTFont, script)
     candidates = [
         "C:/Windows/Fonts/msyh.ttc",
         "C:/Windows/Fonts/msyh.ttf",

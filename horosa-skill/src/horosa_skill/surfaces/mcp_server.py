@@ -57,6 +57,7 @@ from horosa_skill.surfaces.mcp_requests import (
     _tool_run_signature,
 )
 from horosa_skill.surfaces.mcp_runner import (
+    HorosaFastMCP,
     _guarded_facade,
     _run_tool_blocking,
 )
@@ -165,7 +166,7 @@ def _server_instructions(*, decision_layer_on: bool, compact: bool = False) -> s
 
 def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMCP:
     token = (os.environ.get("HOROSA_MCP_TOKEN", "") or "").strip() or None
-    mcp = FastMCP(
+    mcp = HorosaFastMCP(
         "Horosa Skill",
         instructions=_server_instructions(
             decision_layer_on=getattr(service, "decision_layer", None) is not None, compact=bool(settings.mcp_compact)
@@ -185,6 +186,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
     # **MCP SDK 自己的版本**（实测 "1.29.0"）。每个客户端的 server 列表因此显示
     # 「Horosa Skill 1.29.0」—— 看起来就像我们的版本号，而用户报 bug 时会照抄它。
     mcp._mcp_server.version = __version__
+    mcp.output_script = settings.output_script
 
     async def horosa_dispatch(**kwargs: Any) -> DispatchEnvelope:
         raw_payload = _merge_mcp_arguments(kwargs)

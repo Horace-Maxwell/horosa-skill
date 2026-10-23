@@ -7,6 +7,7 @@ from importlib.resources import files
 from typing import Any
 
 from horosa_skill.errors import ToolValidationError
+from horosa_skill.textscript import fold_to_simplified, looks_traditional
 
 
 ASTRO_LABELS = {
@@ -433,6 +434,29 @@ def build_knowledge_registry(domain: str | None = None) -> dict[str, Any]:
 
 
 def read_knowledge_entry(payload: dict[str, Any]) -> dict[str, Any]:
+    """按原值查；查不到、且类目 / 键里有繁体专用字时，折回简体**再查一次**（繁体输出模式下 AI 会把看到的繁体键原样送回）。
+
+    只在原值失败后才折：知识库里本来就有繁体原名的键（上游古籍条目）照旧按原名命中，简体输入的行为逐字不变。
+    """
+    try:
+        return _read_knowledge_entry(payload)
+    except ToolValidationError as exc:
+        if not str(exc.code or "").startswith("knowledge."):
+            raise
+        folded = {
+            **payload,
+            **{field: fold_to_simplified(str(payload[field])) for field in ("domain", "category", "key")
+               if isinstance(payload.get(field), str) and looks_traditional(payload[field])},
+        }
+        if folded == payload:
+            raise
+        try:
+            return _read_knowledge_entry(folded)
+        except ToolValidationError:
+            raise exc from None
+
+
+def _read_knowledge_entry(payload: dict[str, Any]) -> dict[str, Any]:
     bundles = load_knowledge_bundles()
     domain = f"{payload.get('domain') or ''}".strip()
     category = f"{payload.get('category') or ''}".strip()
@@ -689,6 +713,17 @@ def _search_snippet(body: str, query: str, width: int = 45) -> str:
 
 
 def search_knowledge(payload: dict[str, Any]) -> dict[str, Any]:
+    """全文检索；繁体写的检索词一条也没命中时，折回简体再搜一次（知识库正文以简体为主）。"""
+    result = _search_knowledge(payload)
+    query = f"{payload.get('query') or ''}".strip()
+    if result.get("total_matched") == 0 and looks_traditional(query):
+        retried = _search_knowledge({**payload, "query": fold_to_simplified(query)})
+        if retried.get("total_matched"):
+            return {**retried, "query": query, "query_folded": retried.get("query")}
+    return result
+
+
+def _search_knowledge(payload: dict[str, Any]) -> dict[str, Any]:
     """`knowledge_read` 的 query 模式：跨全部知识域全文检索。
 
     排序确定性：得分（key 全等 100 > key 含 40 > 标题含 30 > 正文出现次数封顶 10）降序，

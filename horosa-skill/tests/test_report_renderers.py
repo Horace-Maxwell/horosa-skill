@@ -64,7 +64,7 @@ def test_render_failure_degrades_to_txt(tmp_path: Path, monkeypatch) -> None:
     # 渲染器异常 → 自动改存 TXT（UTF-8 全文），结果标注降级来源与原因，绝不静默丢内容。
     import horosa_skill.reports.renderers as renderers
 
-    def boom(document, output_path):  # noqa: ARG001
+    def boom(document, output_path, *_args):  # noqa: ARG001
         raise RuntimeError("字体炸了")
 
     monkeypatch.setattr(renderers, "_render_pdf", boom)

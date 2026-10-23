@@ -525,6 +525,39 @@
         "horosa-skill/src/horosa_skill/surfaces/cli.py",
         "horosa-skill/src/horosa_skill/client_config"
       ]
+    },
+    {
+      "id": "opencc.release-1.4.2",
+      "subject": "opencc",
+      "fact": "OpenCC 1.4.2 (PyPI `opencc`, uploaded 2026-08-22, Apache-2.0) ships wheels for macOS x86_64/arm64, manylinux x86_64/aarch64 and win_amd64 only — no win_arm64, so installing it on Windows ARM falls back to a C++ sdist build. Its s2tw / s2hk configs are: normalize CJK compatibility ideographs → mmseg segmentation on STPhrases → (STPhrases ∪ generated regional phrases, then STCharacters) → (TW|HK VariantsPhrases, then Variants). Horosa bundles the text dictionaries instead of the package; without the Horosa term table its longest-match converter equals official s2tw/s2hk on 2 072 209 characters of real output (2026-10-22).",
+      "source_url": "https://pypi.org/pypi/opencc/1.4.2/json",
+      "verified_on": "2026-10-22",
+      "affects": [
+        "horosa-skill/src/horosa_skill/textscript/converter.py",
+        "horosa-skill/src/horosa_skill/textscript/data/opencc/SOURCE.json"
+      ]
+    },
+    {
+      "id": "mcpb.user-config-boolean",
+      "subject": "mcpb",
+      "fact": "MCPB manifest user_config types are string / number / boolean (checkbox) / directory / file, referenced as ${user_config.KEY} in env; the spec does not state the string form a boolean takes when substituted, so a boolean setting must be parsed leniently (true/false, 1/0, on/off, yes/no).",
+      "source_url": "https://github.com/modelcontextprotocol/mcpb/blob/main/MANIFEST.md",
+      "verified_on": "2026-10-22",
+      "affects": [
+        "horosa-skill/manifest.json",
+        "horosa-skill/src/horosa_skill/textscript/__init__.py"
+      ]
+    },
+    {
+      "id": "claude-code.plugin-userconfig-types",
+      "subject": "claude-code",
+      "fact": "Claude Code plugin.json userConfig options are strict objects (unknown key = plugin fails to load) with type string / number / boolean / directory / file; `options` (a fixed picker for string fields) needs Claude Code v2.1.271+ and older versions cannot load a plugin that declares it, so Horosa uses a boolean for the Traditional-output switch.",
+      "source_url": "https://code.claude.com/docs/en/plugins-reference",
+      "verified_on": "2026-10-22",
+      "affects": [
+        ".claude-plugin/plugin.json",
+        ".claude-plugin/mcp.json"
+      ]
     }
   ]
 }

@@ -1,0 +1,78 @@
+# Open Chinese Convert (OpenCC) Dictionary
+# File: HKVariants.txt
+# Format: key	value(s) (values separated by spaces)
+# License: Apache-2.0 (see LICENSE)
+# Source: https://github.com/ByVoid/OpenCC
+# Used in configs: s2hk.json, t2hk.json
+# Also used to generate HKVariantsRev.txt. See data/scripts/reverse.py for
+# the reverse dictionary generation algorithm.
+
+僞	偽
+兌	兑
+叄	叁
+只	只 衹
+啓	啓 啟
+喫	吃
+囪	囱
+妝	妝 粧
+媼	媪
+嬀	媯
+悅	悦
+慍	愠
+戶	户
+# @reverse-prefer: 才
+才	才
+挩	捝
+搵	揾
+敓	敚
+敘	敍 敘
+柺	枴
+# @reverse-prefer: 核
+核	核
+梲	棁
+棱	稜 棱
+榲	榅
+檯	枱
+氳	氲
+涗	涚
+溫	温
+溼	濕
+潙	溈
+潨	潀
+# @reverse-prefer: 煙
+煙	煙
+熅	煴
+爲	為
+癡	痴
+皁	皂
+祕	秘
+稅	税
+竈	灶
+糉	粽 糉 糭
+線	線 綫
+縕	緼
+纔	才 纔
+脣	唇
+脫	脱
+膃	腽
+臥	卧
+臺	台
+菸	煙 菸
+蒕	蒀
+蔥	葱
+蔿	蒍
+蘊	藴
+蛻	蜕
+衆	眾
+衛	衞
+覈	核 覈
+說	説
+踊	踴
+轀	輼
+醞	醖
+鉢	缽
+鉤	鈎
+銳	鋭
+鍼	針
+閱	閲
+鰮	鰛

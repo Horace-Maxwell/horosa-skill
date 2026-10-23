@@ -302,6 +302,7 @@ def _run_setup(
     surface: str,
     config: Path | None,
     scope: str,
+    output_script: str = "zh-Hans",
     server_name: str,
     skill_root: Path | None,
     dry_run: bool,
@@ -408,7 +409,7 @@ def _run_setup(
             wheel_source = str(cached) if cached else None
         payload, stdio_command, surface_env = _build_client_config_payload(
             format_name=client_key, skill_root=root, server_name=server_name, launcher=launcher_key, surface=surface,
-            wheel_source=wheel_source,
+            wheel_source=wheel_source, output_script=output_script,
         )
         if wheel_cache_note:
             payload.setdefault("warnings", []).append(wheel_cache_note)

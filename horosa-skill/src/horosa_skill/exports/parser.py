@@ -14,6 +14,7 @@ from horosa_skill.exports.registry import (
     normalize_section_title,
     unique_list,
 )
+from horosa_skill.textscript import canonical_name
 
 # 上游 `exportKey === 'jieqi' || isJieQiSplitSettingKey(exportKey)`（aiExport.js:3552）。
 JIEQI_EXPORT_KEYS = frozenset({"jieqi", *JIEQI_SETTING_PRESETS})
@@ -189,7 +190,13 @@ def parse_export_content(
 
     forbidden = {normalize_section_title(item) for item in technique_info["forbidden_sections"]}
     preset_sections = [normalize_section_title(item) for item in technique_info["preset_sections"]]
-    requested = selected_sections[:] if selected_sections else technique_info["preset_sections"][:]
+    # 段名可能是 AI 从繁体输出里抄回来的：对回本技法的原名（原名本就可能是繁体，所以按词表反查，不一律繁转简）。
+    known_titles = set(technique_info["preset_sections"]) | set(technique_info.get("optional_sections") or [])
+    requested = (
+        [canonical_name(s, known_titles) if isinstance(s, str) else s for s in selected_sections]
+        if selected_sections
+        else technique_info["preset_sections"][:]
+    )
     selected_normalized = unique_list(
         [
             map_legacy_section_title(technique, item)

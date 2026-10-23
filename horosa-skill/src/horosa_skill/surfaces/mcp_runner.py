@@ -11,6 +11,8 @@ from pydantic import ValidationError
 
 from horosa_skill.errors import ToolValidationError
 from horosa_skill.service import progress_sink
+from horosa_skill.textscript import SIMPLIFIED
+from horosa_skill.textscript.localize import localize
 from horosa_skill.surfaces.mcp_errors import (
     _mcp_error_payload,
     _mcp_internal_error_payload,
@@ -101,3 +103,32 @@ async def _guarded_facade(
         return _mcp_validation_error_payload(operation_name, None, exc)
     except Exception as exc:  # noqa: BLE001 - 兜底也必须是 envelope，不能变 isError 裸文本
         return _mcp_internal_error_payload(exc)
+
+
+# 不转繁体的工具：给 AI 的协议与注册表（段名、知识库键、选项要原样送回），以及回显用户自己贴来的导出文本。
+UNLOCALIZED_TOOLS = frozenset({
+    "horosa_agent_guidance", "horosa_export_registry", "horosa_knowledge_registry", "horosa_export_parse",
+})
+
+
+class HorosaFastMCP(FastMCP):
+    """FastMCP + 输出文字转换。所有工具（含错误信封）都经 `call_tool` 出门，所以只在这一处转换。
+
+    取工具的**原始返回值**（`convert_result=False`），按 textscript.localize 的白名单转完，再交回 SDK 自己的
+    `convert_result` 序列化——内容块与 structuredContent 的形状与简体时完全一致。简体时直接走父类，零开销。
+    依赖 mcp 1.30 的 `_tool_manager.call_tool(..., convert_result=)` 与 `Tool.fn_metadata.convert_result`；
+    SDK 改了这两处，tests/test_textscript.py 的内存客户端用例会红。
+    """
+
+    output_script: str = SIMPLIFIED
+
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+        script = self.output_script
+        tool = self._tool_manager.get_tool(name) if script != SIMPLIFIED and name not in UNLOCALIZED_TOOLS else None
+        if tool is None:
+            return await super().call_tool(name, arguments)
+        raw = await self._tool_manager.call_tool(name, arguments, context=self.get_context(), convert_result=False)
+        # 一份结果可达数百 KB 文本（合参 / 调度会带多个技法），转换放进线程，别卡住事件循环上的 ping / cancel。
+        converted = await anyio.to_thread.run_sync(localize, raw, script)
+        return tool.fn_metadata.convert_result(converted)
+

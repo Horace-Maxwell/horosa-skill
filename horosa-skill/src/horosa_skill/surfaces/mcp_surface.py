@@ -169,6 +169,8 @@ def _server_profile(settings: Settings) -> dict[str, Any]:
         "toolsets_unknown": resolved["unknown"],
         "technique_tools_registered": registered,
         "tool_run_registered": compact or effective is not None,
+        # 结果里给人读的字段用哪种文字（zh-Hans / zh-Hant / zh-Hant-HK）；选项、设置值、段名入参始终是简体。
+        "output_script": settings.output_script,
         "hint": "技法工具未平铺时用 horosa_tool_run(tool_name=…) 直呼；HOROSA_TOOLSETS 合法域见 toolsets_effective。",
     }
 

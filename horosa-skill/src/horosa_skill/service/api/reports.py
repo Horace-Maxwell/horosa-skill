@@ -22,6 +22,8 @@ from horosa_skill.schemas.tools import (
     TechniqueReportInput,
 )
 from horosa_skill.service.export import TOOL_EXPORT_TECHNIQUE_MAP
+from horosa_skill.textscript import REPORT_LANGUAGE, TRADITIONAL_HK, parse_script
+from horosa_skill.textscript.localize import localize_document
 
 
 class ReportsAPI:
@@ -142,6 +144,19 @@ class ReportsAPI:
                 "summary": ["已读取对应 run 的本地完整记录。"],
             }
 
+    def _report_language(self, request: Any) -> str:
+        """报告语言：调用方写了就用它，没写跟全局输出文字走（繁体时是 zh-TW / zh-HK，模板据此让 AI 用繁体写）。"""
+        if "language" in request.model_fields_set and request.language:
+            return str(request.language)
+        return REPORT_LANGUAGE[self.settings.output_script]
+
+    def _report_script(self, language: str) -> str:
+        """报告落盘用的文字：zh-TW / zh-HK / zh-CN 这类语言标签直接决定；其它语言（如 en）跟全局设置。"""
+        script = parse_script(language) if str(language).strip() else None
+        if script is None and str(language).strip().lower() in {"zh-mo", "zh-hant-mo"}:
+            script = TRADITIONAL_HK
+        return script or self.settings.output_script
+
     def report_template(self, payload: dict[str, Any]) -> dict[str, Any]:
         with self.tracer.span(
             workflow_name="report.template",
@@ -164,7 +179,7 @@ class ReportsAPI:
             template = self.report_builder.build_template(
                 run=run,
                 source_artifact=source_artifact,
-                language=request.language,
+                language=self._report_language(request),
             )
             template["trace_id"] = trace["trace_id"]
             template["group_id"] = trace["group_id"]
@@ -225,7 +240,7 @@ class ReportsAPI:
                     template = self.report_builder.build_template(
                         run=run,
                         source_artifact=source_artifact,
-                        language=request.language,
+                        language=self._report_language(request),
                     )
                     trace["run_id"] = request.run_id
                     trace["tool_name"] = source_tool_name
@@ -247,10 +262,12 @@ class ReportsAPI:
                 )
                 if answer_writeback:
                     run, source_artifact = self._load_report_source(request.run_id, request.tool_name)
+                language = self._report_language(request)
+                script = self._report_script(language)
                 document = self.report_builder.build_document(
                     run=run,
                     source_artifact=source_artifact,
-                    language=request.language,
+                    language=language,
                     title=request.title,
                     ai_report=normalized_ai_report,
                     include_raw_json=request.include_raw_json,
@@ -264,7 +281,9 @@ class ReportsAPI:
                         format_name=normalized_format,
                     ),
                 )
-                rendered = render_report(document, output_path=output_path, format_name=normalized_format)
+                # 报告是给人读的整份文本：存档里仍是简体原文，只有落盘的这一份按设置转文字。
+                document = localize_document(document, script)
+                rendered = render_report(document, output_path=output_path, format_name=normalized_format, script=script)
                 artifact = self.store.record_report_artifact(
                     run_id=request.run_id,
                     tool_name=tool_name,
@@ -351,7 +370,7 @@ class ReportsAPI:
                 template = self.report_builder.build_template(
                     run=run,
                     source_artifact=source_artifact,
-                    language=request.language,
+                    language=self._report_language(request),
                 )
                 trace["run_id"] = result.memory_ref.run_id
                 trace["tool_name"] = request.tool_name
@@ -378,7 +397,8 @@ class ReportsAPI:
                     "run_id": result.memory_ref.run_id,
                     "tool_name": request.tool_name,
                     "format": normalized_format,
-                    "language": request.language,
+                    # 只转发调用方真写了的 language：缺省值转过去会被当成「显式 zh-CN」，盖掉全局的繁体设置。
+                    **({"language": request.language} if "language" in request.model_fields_set else {}),
                     "title": request.title,
                     "ai_report": normalized_ai_report,
                     "include_raw_json": request.include_raw_json,
@@ -611,8 +631,10 @@ class ReportsAPI:
             suffix = "md" if normalized_format == "markdown" else normalized_format
             base = self.store.default_report_path(run_id=str(scope_id), tool_name="technique", format_name="json")
             output_path = self._report_output_path(request.output_path, default=base.with_suffix(f".{suffix}"))
+            script = self.settings.output_script
+            document = localize_document(document, script)
             try:
-                rendered = render_report(document, output_path=output_path, format_name=normalized_format)
+                rendered = render_report(document, output_path=output_path, format_name=normalized_format, script=script)
             except ValueError as exc:
                 raise ToolValidationError(
                     str(exc), code="report.technique.render_failed", details={"format": normalized_format}

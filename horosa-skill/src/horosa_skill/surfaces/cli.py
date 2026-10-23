@@ -205,6 +205,25 @@ def _emit_json(data: object, output: Optional[Path] = None) -> None:
     _print_json(data)
 
 
+# 打印 JSON 却**不**转文字的命令：诊断 / 配置 / 给 AI 的协议与注册表（段名、键、选项要原样送回）。
+# 其余打印结果的命令都必须经 `_localized`——tests/test_textscript.py 按 AST 核对，新命令不归类就红。
+UNLOCALIZED_COMMANDS = frozenset({
+    "jev_status", "jev_events", "uninstall", "doctor", "setup", "selfcheck", "runtime_status",
+    "runtime_start", "runtime_restart", "tool_list", "agent_guidance", "export_registry", "export_parse",
+    "knowledge_registry", "benchmark_run", "benchmark_faithfulness", "trace_latest", "client_check", "client_skill",
+    "client_config", "client_openclaw_config", "client_openclaw_setup", "client_openclaw_check", "report_template",
+    "memory_prune", "memory_answer",
+})
+
+
+def _localized(data: object) -> object:
+    """结果类命令的输出按 HOROSA_OUTPUT_SCRIPT 转文字（简体时原样返回）；协议类命令（agent / registry / doctor）不经过这里。"""
+    from horosa_skill.config import output_script_from_env
+    from horosa_skill.textscript.localize import localize
+
+    return localize(data, output_script_from_env())
+
+
 def _print_json(data: object) -> None:
     text = json.dumps(data, ensure_ascii=False, indent=2)
     stream = getattr(sys.stdout, "buffer", None)
@@ -360,6 +379,11 @@ def setup(
         help="uv（源码 checkout 内默认）/ uvx-wheel（零安装，其余情况默认）/ uvx-git / uvx。",
     ),
     surface: str = typer.Option("auto", "--surface", help="auto（按客户端上限）/ full / compact。"),
+    output_script: str = typer.Option(
+        "zh-Hans",
+        "--output-script",
+        help="结果文字：zh-Hans（简体，缺省）/ zh-Hant（繁体·台湾字形）/ zh-Hant-HK（繁体·香港字形）。写进客户端配置的 HOROSA_OUTPUT_SCRIPT；重跑 setup 不带它就回到简体。",
+    ),
     config: Path | None = typer.Option(None, "--config", help="Write this file instead of the client's default location."),
     scope: str = typer.Option(
         "auto", "--scope",
@@ -393,6 +417,7 @@ def setup(
     try:
         report = _run_setup(
             client=client, launcher=launcher, surface=surface, config=config, scope=scope, server_name=server_name,
+            output_script=str(_opt(output_script, "zh-Hans")),
             skill_root=skill_root, dry_run=dry_run, skip_install=skip_install, archive=archive, manifest_url=manifest_url,
             probe_network=probe_network, stdio_probe=stdio_probe, write=write, cache_wheel=cache_wheel,
             skill=skill, skill_dir=skill_dir,
@@ -807,7 +832,7 @@ def tool_run(
     except ToolValidationError as exc:
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
-    _emit_json(result.model_dump(mode="json"), output)
+    _emit_json(_localized(result.model_dump(mode="json")), output)
 
 
 @agent_app.command("guidance")
@@ -870,7 +895,7 @@ def knowledge_read(
     except ToolValidationError as exc:
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
-    _print_json(result.model_dump(mode="json"))
+    _print_json(_localized(result.model_dump(mode="json")))
 
 
 @knowledge_app.command("search")
@@ -890,7 +915,7 @@ def knowledge_search(
     except ToolValidationError as exc:
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
-    _print_json(result.model_dump(mode="json"))
+    _print_json(_localized(result.model_dump(mode="json")))
 
 
 @app.command(help='Natural-language routing: JSON {query, birth|subject|flat birth fields, …} → picks and runs the right techniques. 自然语言路由起盘。')
@@ -907,7 +932,7 @@ def dispatch(
     except ToolValidationError as exc:
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
-    _emit_json(result.model_dump(mode="json"), output)
+    _emit_json(_localized(result.model_dump(mode="json")), output)
 
 
 @app.command(help="Friendly alias of `dispatch` for natural-language use.")
@@ -950,7 +975,7 @@ def hecan(
     except ToolValidationError as exc:
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
-    _emit_json(result, output)
+    _emit_json(_localized(result), output)
 
 
 @benchmark_app.command("faithfulness", help="盘面事实忠实性校验：AI 答案 vs 已存 run 的机读真值（supported/invented/contradicted）。Verify an AI answer against a stored run's computed chart facts.")
@@ -1082,10 +1107,16 @@ def client_config(
             f"`full`（{FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} 个工具）/ `compact`（{COMPACT_SURFACE_TOOL_COUNT} 个门面工具，全部技法仍可经 horosa_tool_run 到达）。"
         ),
     ),
+    output_script: str = typer.Option(
+        "zh-Hans",
+        "--output-script",
+        help="结果文字：zh-Hans（简体，缺省）/ zh-Hant（繁体·台湾字形）/ zh-Hant-HK（繁体·香港字形）。写进客户端配置的 HOROSA_OUTPUT_SCRIPT；重跑 setup 不带它就回到简体。",
+    ),
 ) -> None:
     """按客户端生成即用 MCP 配置（自动注入真实绝对路径，无手填占位符）。"""
     payload, _stdio_command, _surface_env = _build_client_config_payload(
         format_name=format_name, skill_root=skill_root, server_name=server_name, launcher=launcher, surface=surface,
+        output_script=str(_opt(output_script, "zh-Hans")),
     )
     if write is not None:
         payload["written"] = _merge_client_config(write, payload)
@@ -1495,7 +1526,7 @@ def report_render(
     except ToolValidationError as exc:
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
-    _print_json(result)
+    _print_json(_localized(result))
 
 
 @report_app.command("technique", help="技法依据报告：本次/本会话用了什么技法、什么口径、谁算的（确定性，无需 AI 正文）。Deterministic method/provenance report — no ai_report needed.")
@@ -1523,7 +1554,7 @@ def report_technique(
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
     # 报告正文已落盘；命令行只回摘要 + 一致性结论（把整篇 markdown 打进 stdout 会淹掉真正要看的告警）。
-    _print_json({key: value for key, value in result.items() if key != "document"})
+    _print_json(_localized({key: value for key, value in result.items() if key != "document"}))
 
 
 @report_app.command("from-tool", help='Run a technique and render its report in one step: `report from-tool <name> --input payload.json --format docx`. 起盘并出报告。')
@@ -1582,7 +1613,7 @@ def report_from_tool(
     except ToolValidationError as exc:
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
-    _print_json(result)
+    _print_json(_localized(result))
 
 
 @memory_app.command("query", help='Search stored runs by run id, tool, entity, text or date range. 检索本地运行记录。')
@@ -1612,7 +1643,7 @@ def memory_query(
     )
     if worthy_only:
         data = [record for record in data if service.store.is_memory_worthy(record)]
-    _print_json(data)
+    _print_json(_localized(data))
 
 
 @memory_app.command("show", help='Show one stored run in full (envelope, artifacts, recorded AI answer). 查看单条运行记录。')
@@ -1625,7 +1656,7 @@ def memory_show(
     if not data:
         typer.echo(json.dumps({"ok": False, "code": "memory.run.not_found", "message": f"Run not found: {run_id}", "details": {}}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
-    _print_json(data[0])
+    _print_json(_localized(data[0]))
 
 
 @memory_app.command("prune", help="清理长期未点用的 run（默认 dry-run 只打印计划；--yes 才删）。Prune runs never recalled within N days.")

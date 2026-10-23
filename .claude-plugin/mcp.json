@@ -17,7 +17,8 @@
         "HOROSA_INSTALL_CONTEXT": "plugin",
         "HOROSA_PLUGIN_ROOT": "${CLAUDE_PLUGIN_ROOT}",
         "HOROSA_JEV": "${user_config.jevMode}",
-        "HOROSA_JEV_API_KEY": "${user_config.jevApiKey}"
+        "HOROSA_JEV_API_KEY": "${user_config.jevApiKey}",
+        "HOROSA_OUTPUT_SCRIPT": "${user_config.traditionalChinese}"
       }
     }
   }

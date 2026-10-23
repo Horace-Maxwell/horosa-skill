@@ -25,6 +25,7 @@ GitHub Releases；MCP 全量面 120 = 110 技法 + 10 门面，`HOROSA_MCP_COMPA
 | 作为 AI 客户端调用技法 / 出报告 | [skills/horosa-agent/SKILL.md](./skills/horosa-agent/SKILL.md)（唯一策略源） |
 | 本仓开发 / 验证 / 发布操作 | `/horosa-dev` skill（`.claude/skills/horosa-dev/SKILL.md`，维护者本地、不随仓分发）+ AGENTS.md §6–§8 |
 | 改代码 / 新增技法 / re-vendor | AGENTS.md §4–§5 |
+| 加输出字段 / CLI 命令 / 报告格式 / 新术语（繁体输出要同步） | AGENTS.md §4.5 |
 | 发布事故（缺半 / repack / pin-forward） | AGENTS.md §7 |
 | 按症状排障 | AGENTS.md §8 症状速查表 |
 | 查历史教训 / 查名词 | [docs/LESSONS.md](./docs/LESSONS.md) / [docs/GLOSSARY.md](./docs/GLOSSARY.md) |

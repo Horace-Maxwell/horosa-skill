@@ -41,7 +41,8 @@
         "HOROSA_INSTALL_CONTEXT": "mcpb",
         "HOROSA_PLUGIN_ROOT": "${__dirname}",
         "HOROSA_JEV": "${user_config.jev_mode}",
-        "HOROSA_JEV_API_KEY": "${user_config.jev_api_key}"
+        "HOROSA_JEV_API_KEY": "${user_config.jev_api_key}",
+        "HOROSA_OUTPUT_SCRIPT": "${user_config.traditional_chinese}"
       }
     }
   },
@@ -70,6 +71,13 @@
       "type": "directory",
       "title": "Local runs & reports directory",
       "description": "Where run records, report artifacts and the SQLite index are stored. Leave empty for ~/.horosa-skill.",
+      "required": false
+    },
+    "traditional_chinese": {
+      "type": "boolean",
+      "title": "繁體中文輸出 / Traditional Chinese output",
+      "description": "勾选后，排盘结果、提示与报告里给人读的文字改用繁体（台湾字形）；不勾 = 简体，与原来逐字相同。香港字形：环境变量 HOROSA_OUTPUT_SCRIPT=zh-Hant-HK。Ticked: readable text in results, prompts and reports is converted to Traditional Chinese (Taiwan forms). Unticked = Simplified, unchanged.",
+      "default": false,
       "required": false
     }
   },

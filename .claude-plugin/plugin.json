@@ -49,6 +49,13 @@
       "description": "只在决策层不是 off 时使用。由客户端保存，永不写入 Horosa 的文件、日志或结果。",
       "sensitive": true,
       "required": false
+    },
+    "traditionalChinese": {
+      "type": "boolean",
+      "title": "繁體中文輸出 / Traditional Chinese output",
+      "description": "勾选后，排盘结果、提示与报告里给人读的文字改用繁体（台湾字形）；不勾 = 简体，与原来逐字相同。香港字形：环境变量 HOROSA_OUTPUT_SCRIPT=zh-Hant-HK。",
+      "default": false,
+      "required": false
     }
   }
 }

@@ -1,0 +1,20 @@
+{
+  "_comment": "Verbatim copies of OpenCC data/dictionary/*.txt and LICENSE from the PyPI sdist opencc-1.4.2.tar.gz (Apache-2.0). Do not edit; to update, copy the files from a newer sdist, refresh these hashes, and rerun the official-OpenCC comparison (tests/fixtures/textscript/opencc_reference.json).",
+  "project": "OpenCC (Open Chinese Convert)",
+  "upstream": "https://github.com/BYVoid/OpenCC",
+  "license": "Apache-2.0",
+  "source": "https://pypi.org/project/opencc/1.4.2/ (sdist opencc-1.4.2.tar.gz)",
+  "source_sha256": "47977905f131d7d9cfcec29fba5d841154907e1da73103105a4a68744e0f4f1a",
+  "copied_on": "2026-10-22",
+  "files": {
+    "HKVariants.txt": "e5cd4345303224587102f2c9e4d2b67d2b7e349c6ce9152e4a118f4656cf7302",
+    "HKVariantsPhrases.txt": "e23019c35405065d7ea174fe7487e0bde064b1af56532b3986033c9bb98e555c",
+    "STCharacters.txt": "a0ca1601c70648cf48b33c3c6210ccbecc5c7eead4b4c3daf76587ba2c03582b",
+    "STPhrases.txt": "f6eab5e5c6dd7640597878d3dfc6599ee1279d2bc91561eadd8e114194e2925a",
+    "TSCharacters.txt": "737c21c66f55a419dd6956cb3089476cdefc5a36877452631617696df1e5d925",
+    "TSPhrases.txt": "362fa1b9a7d6edd04b462a32e12c9fef3adae822ab1dee9c83561cc37c06cb1f",
+    "TWVariants.txt": "e187278e119c427ca561180ac5da5b20e9f8681190458f35c327ce499e95a6a5",
+    "TWVariantsPhrases.txt": "36df033675a2e9152927fa8419f0732a061cb4909c5060f25a5cfc9b08ffff06",
+    "LICENSE": "b534e465949558eec2597b04f5092b5e161236a68dfbfd04d547592ac3964308"
+  }
+}

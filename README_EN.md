@@ -75,7 +75,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `110 / 110 ok=true` |
-| Engineering tests | `1977 / 1977 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 116 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `2050 / 2050 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 116 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `100` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `10` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` (`107` export techniques modeled; contract v15 mirrors desktop aiExport v58) |
@@ -374,6 +374,8 @@ Troubleshooting install: `uv: command not found` -> install uv first (one-liner 
 
 More troubleshooting: if `github.com:443` is unreachable but `api.github.com` works (full recipe incl. mirrors and offline USB: [docs/INSTALL_RESTRICTED_NETWORK.md](./docs/INSTALL_RESTRICTED_NETWORK.md)), download the runtime via the assets API (`curl -s https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/latest` to find your platform archive's `assets[].id`, then `curl -L -H "Accept: application/octet-stream" -o runtime.zip https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/assets/<id>`) and run `uv run horosa-skill install --archive runtime.zip`. If the Java backend (:9999) will not come up — `doctor` reports `services:java_backend_not_running` — the runtime now degrades to **chart-only** instead of locking everything: 三式 ken (qimen/taiyi/jinkou), 神数, geomancy, tarot and the western chart family keep working while nongli/bazi/ziwei/liureng and time-cast flows error until it recovers; `doctor` attaches the captured Java boot error under `java_diagnostics` and `selfcheck` falls back to a chart-side probe. A known Windows cause is proxy/VPN/security software whose WFP filters block `java.exe` loopback (JDK 17's internal pipes prefer AF_UNIX with no TCP fallback on connect — see issue #14); stopping the service is usually not enough, disable it and reboot.
 
+**Traditional Chinese output**: tick "繁體中文輸出 / Traditional Chinese output" in the Claude Desktop extension or Claude Code plugin settings, or set `HOROSA_OUTPUT_SCRIPT=zh-Hant` (`zh-Hant-HK` for Hong Kong forms; `setup --client <name> --output-script zh-Hant` writes it into the client config). Readable text (chart text, section titles, prompts, reports) is converted; echoed input, setting values, options and error codes stay as they are, so an AI that sends them back still matches. Unset = Simplified, byte-for-byte unchanged.
+
 For stdio clients like Claude Desktop: `uv run horosa-skill serve --transport stdio`. Context-constrained clients can set `HOROSA_MCP_COMPACT=1` to expose only the 11 facades, or `HOROSA_TOOLSETS=astro,cn` to flatten just those domains (domains astro/predict/chart/cn/shenshu/other/export/knowledge, aliases western/chinese/reference/all/none; unknown tokens are warned about and ignored, an empty result falls back to the full surface; any effective filter also registers `horosa_tool_run`; facades always register). The clarification gate still applies.
 
 ### Let the dispatcher pick the technique
@@ -535,7 +537,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 1977 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 2050 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

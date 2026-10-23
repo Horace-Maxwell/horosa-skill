@@ -277,6 +277,11 @@ question prioritize it over textbook generalities; mention limitations without h
 Quote the `排盘规则: …` line back to the user when present (see `references/late-zi.md`). Report-body
 style rules: [`references/reports.md`](./references/reports.md).
 
+**Traditional Chinese output** (`horosa_agent_guidance` → `server_profile.output_script` is `zh-Hant` / `zh-Hant-HK`):
+section text, titles, prompts and reports arrive in Traditional (`data.export_snapshot.output_script` marks it); answer the
+user in Traditional too. Option values, setting values, error codes and echoed input stay as listed — send them back
+unchanged. Section names and knowledge keys copied from the Traditional text are accepted as-is.
+
 ## Validation Checklist
 
 Before telling the user a result is ready:

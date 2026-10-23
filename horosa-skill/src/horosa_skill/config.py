@@ -66,6 +66,8 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     "HOROSA_TRACE_OTLP_ENDPOINT": "stable",
     "HOROSA_TECHNIQUE_CARD": "stable",
     "HOROSA_OUTPUT_SCHEMA": "stable",
+    # 输出文字：缺省简体（逐字节不变）；zh-Hant = 繁体（台湾字形）、zh-Hant-HK = 繁体（香港字形）。只转给人读的字段，见 textscript/localize.py。
+    "HOROSA_OUTPUT_SCRIPT": "stable",
     "HOROSA_ASTRODATA_DB": "stable",
     "HOROSA_NODE_BIN": "stable",
     "HOROSA_CORE_JS_ROOT": "experimental",
@@ -261,6 +263,30 @@ def _env_bool(name: str, default: bool) -> bool:
     return default
 
 
+def _env_script(name: str) -> str:
+    """输出文字设置。认不出的值（拼错）回落简体并告警一次——宁可照旧输出，也不在拼写错误时报错拒绝服务。"""
+    from horosa_skill.textscript import SIMPLIFIED, parse_script
+
+    raw_value = _env_text(name)
+    script = parse_script(raw_value)
+    if script is None:
+        if name not in _warned_unexpanded:
+            _warned_unexpanded.add(name)
+            # 启动期配置通知：还没有工具调用可挂告警（同 _env_text 的未展开占位符）。
+            logger.log(
+                logging.WARNING,
+                "%s=%r 认不出（可选 zh-Hans / zh-Hant / zh-Hant-HK，或 true/false）——按简体输出。",
+                name, raw_value,
+            )
+        return SIMPLIFIED
+    return script
+
+
+def output_script_from_env() -> str:
+    """不构造整份 Settings、只读输出文字设置（CLI 打印结果时用）。"""
+    return _env_script("HOROSA_OUTPUT_SCRIPT")
+
+
 # 自动挑端口的备用区间：默认口被占时从这里往上找。避开常见开发端口（3000/5000/8000/8080）。
 _AUTO_BACKEND_BASE = 19999
 _AUTO_CHART_BASE = 18899
@@ -328,6 +354,7 @@ FIELD_ENV_MAP = {
     "trace_capture_payloads": "HOROSA_TRACE_CAPTURE_PAYLOADS",
     "trace_capture_ai_answers": "HOROSA_TRACE_CAPTURE_AI_ANSWERS",
     "trace_otlp_endpoint": "HOROSA_TRACE_OTLP_ENDPOINT",
+    "output_script": "HOROSA_OUTPUT_SCRIPT",
 }
 
 
@@ -366,6 +393,8 @@ class Settings(BaseModel):
     trace_capture_payloads: bool = False
     trace_capture_ai_answers: bool = False
     trace_otlp_endpoint: str | None = None
+    # 输出文字（textscript.SCRIPTS 之一）。只在结果离开进程时转换；存档、门禁、引擎永远是简体。
+    output_script: str = "zh-Hans"
     # Settings provenance（v0.33.0 批 II-3）：每字段的取值来源（env:<NAME> / derived:<字段> / default），
     # doctor 三列（字段/值/来源）据此呈现——「这项配置为什么是这个值」一眼可答。exclude 不入序列化。
     settings_provenance: dict[str, str] = Field(default_factory=dict, exclude=True)
@@ -418,6 +447,7 @@ class Settings(BaseModel):
             trace_capture_payloads=_env_bool("HOROSA_TRACE_CAPTURE_PAYLOADS", False),
             trace_capture_ai_answers=_env_bool("HOROSA_TRACE_CAPTURE_AI_ANSWERS", False),
             trace_otlp_endpoint=_env_text("HOROSA_TRACE_OTLP_ENDPOINT"),
+            output_script=_env_script("HOROSA_OUTPUT_SCRIPT"),
             settings_provenance={
                 field: (f"env:{env_name}" if _env_text(env_name) is not None else (
                     # 三个路径字段无独立 env 时由 data_dir 派生（而非模型默认）

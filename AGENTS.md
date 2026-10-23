@@ -339,6 +339,42 @@ ToolError，**澄清闸当场报废**。structured output 由 `HOROSA_OUTPUT_SCH
 runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 raw-node JSON import 继续用
 `with`（不用废弃的 `assert`）。
 
+### 4.5 输出文字：简体（缺省）/ 繁体（v0.42.0，`src/horosa_skill/textscript/`）——**以后加东西必须同步**
+
+**模型**：存档、引擎、门禁、内部逻辑永远是简体原文；只在结果**离开进程**时按 `HOROSA_OUTPUT_SCRIPT`
+（`zh-Hans` 缺省 / `zh-Hant` 台湾字形 / `zh-Hant-HK` 香港字形；设置界面是一个布尔勾选：MCPB `traditional_chinese`、
+插件 `traditionalChinese`；`setup` / `client config --output-script`）转换。缺省简体 = **逐字节不变**、转换器根本不跑
+（`test_simplified_server_never_calls_the_converter`）。出口只有三处：MCP（`HorosaFastMCP.call_tool`，全部工具含错误信封）、
+CLI（`_localized`）、报告落盘（`localize_document` + `render_report(script=)` 选繁体字形字体）。
+
+**只转给人读的字段**（`textscript/localize.py` 白名单 `TEXT_KEYS`）；回显入参、引擎原始 `data`、设置值、选项、错误码、
+给 AI 的协议（guidance / registry / 报告模板 / 合参契约）一字不动——AI 会把这些原样送回下一次调用。
+AI 送回来的**标识**（段名、知识库键）经 `canonical_name` 按词表反查对回原名：上游段名本就有「命宮」「佈局」「大运·歲運」，
+**不能一律繁转简**；检索词才用繁转简（`fold_to_simplified`），且只在原值零命中时再试一次。
+
+**转换器**：OpenCC 1.4.2 文本字典（vendored，`data/opencc/SOURCE.json` 记哈希）+ 纯 Python 最长匹配；不装 `opencc` 包
+（无 Windows ARM64 轮子）。去掉术数规则时与官方 opencc 逐字相同（600 句参考样本锁住）。**OpenCC 在术数字上系统性转错**——
+干→幹、丑→醜、冲→衝、克→克（应剋）、斗→鬥、凶→兇、占→佔、咸→鹹、历→歷——所以最后一步按**原文逐位定字**
+（`data/horosa_char_rules.json`：每字一个缺省 + 普通义白名单，冲→沖、克→剋、历→曆、钟→鐘，干 / 丑 / 斗 / 占 / 凶 / 咸 / 表保持，
+引书「云」后跟冒号保持）。**不能靠词组表**：最长匹配先吃掉前一个字（「真实干支」切出「实干」→ 真實幹支），补不完。
+这套机制与上游星阙「界面简繁」（`hantRules.js`）相同，规则 ⊇ 上游；偏离逐条写在 JSON 的 `deviations`（克、咸、占有点、农历年、
+密码表等，上游那几处会转错），`test_character_rules_cover_upstream_except_documented_deviations` 在有上游 checkout 时核对。
+其余字的词组级修正（回歸、聖杯、神后、合中、卷舌、三台…）在 `data/horosa_s2t.txt`。
+
+**新增东西时的同步义务**（每条都有测试会红）：
+1. **新输出字段**含中文 → 先归类：转（`TEXT_KEYS`）/ 保持原文（`KEEP_KEYS`）/ 协议整棵不进（`SKIP_KEYS`）。没归类
+   `unclassified_text_paths` 报出路径，`test_every_chinese_string_in_real_outputs_is_classified` 红。正文直接放在 `data` 里的工具进
+   `DATA_TEXT_TOOLS`；协议类工具进 `PROTOCOL_TOOLS`（信封 `tool` 字段）与 `mcp_runner.UNLOCALIZED_TOOLS`（MCP 名）。
+2. **新 CLI 命令**打印结果 → 经 `_localized`，或进 `cli.UNLOCALIZED_COMMANDS` 并说明为什么（AST 守卫）。
+3. **新报告格式 / 渲染路径** → 经 `localize_document` 后再落盘；DOCX/PDF 的繁体字体候选在 `renderers._register_pdf_traditional_fonts`，
+   新字体必须先核字形覆盖（简体用的 Songti SC 缺 966 个繁体字，直接拿来渲染繁体会出方块）。
+4. **新技法 / 新术语** → 用 110 技法真实输出跑一遍残差（看术数字是否被转成普通义）：术数字的普通义例外进
+   `horosa_char_rules.json` 该字的白名单（偏离上游要写 `deviations`），其余字的词组错进 `horosa_s2t.txt`，并补金样（`GOLDEN`）；
+   `test_every_character_rule_is_well_formed_and_takes_effect` / `test_every_term_table_entry_is_well_formed_and_takes_effect` 保证每行都生效。
+   **上游改了 `hantRules.js`** → 上游比对测试会红：把新规则并进来，或写进 `deviations` 说明为什么不跟。
+5. **接受段名 / 键的新入参** → 用 `canonical_name(value, 该技法的词表)` 对回原名（`test_every_section_title_survives_a_round_trip`）。
+6. **升级 OpenCC 字典** → 从新 sdist 原样拷贝、刷新 `SOURCE.json`、用官方 opencc 重生成 `tests/fixtures/textscript/opencc_reference.json`。
+
 ## 5. 新增技法 / re-vendor（集成决策树 + 布线清单）
 
 ### 5.1 同步健康判据与四分决策树

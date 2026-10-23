@@ -105,7 +105,7 @@ def _cache_wheel(url: str, *, version: str | None = None, dest_dir: Path | None 
 
 def _build_client_config_payload(
     *, format_name: str, skill_root: Path, server_name: str, launcher: str, surface: str,
-    wheel_source: str | None = None,
+    wheel_source: str | None = None, output_script: str = "zh-Hans",
 ) -> tuple[dict[str, Any], list[str], dict[str, str]]:
     """`client config` 的产物，也是 `setup` 第 3 步（v0.38.0 B4）。返回 (payload, stdio 命令, 工具面 env)。
 
@@ -175,7 +175,16 @@ def _build_client_config_payload(
     if surface_key not in {"auto", "full", "compact"}:
         raise typer.BadParameter("`--surface` must be `auto`, `full` or `compact`.")
     use_compact = _CLIENT_COMPACT_DEFAULT.get(key, False) if surface_key == "auto" else surface_key == "compact"
-    surface_env = {"HOROSA_MCP_COMPACT": "1"} if use_compact else {}
+    from horosa_skill.textscript import SIMPLIFIED, parse_script
+
+    script = parse_script(output_script)
+    if script is None:
+        raise typer.BadParameter("`--output-script` must be `zh-Hans`, `zh-Hant` or `zh-Hant-HK`.")
+    # 输出文字与工具面走同一条 env 通道：每家客户端写 env 的方式（JSON env / TOML 表 / CLI -e）已经在下面分好了。
+    surface_env = {
+        **({"HOROSA_MCP_COMPACT": "1"} if use_compact else {}),
+        **({"HOROSA_OUTPUT_SCRIPT": script} if script != SIMPLIFIED else {}),
+    }
     tool_surface = {
         "mode": "compact" if use_compact else "full",
         "tools": COMPACT_SURFACE_TOOL_COUNT if use_compact else FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS),
@@ -268,6 +277,7 @@ def _build_client_config_payload(
                 "\n"
                 f"[mcp_servers.{server_name}.env]\n"
                 + ("HOROSA_MCP_COMPACT = \"1\"          # " + tool_surface["reason"] + "\n" if use_compact else "")
+                + (f"HOROSA_OUTPUT_SCRIPT = {json.dumps(script)}   # 结果里给人读的文字用繁体\n" if script != SIMPLIFIED else "")
                 # 🔴 v0.38.1 C6：Codex 不转发你 shell 里的 HOROSA_*。runtime 根与数据目录显式写成绝对路径
                 # （与 MCPB / 插件的 user_config 一致），否则 Codex 起的 server 会算出另一个 runtime 根。
                 # 不写 `env_vars`：老版本 Codex 对未知键 deny_unknown_fields，会整块拒收这个 server。
@@ -367,6 +377,8 @@ def _build_client_config_payload(
             "format must be one of: " + " / ".join((*_CLIENT_NAMES, "mcporter", "openclaw"))
         )
     payload["launcher"] = launcher_info
+    if script != SIMPLIFIED and key in {"mcporter", "openclaw"}:
+        warnings.append(f"{key} 的配置不带 env：繁体输出请在启动 serve 的环境里设 HOROSA_OUTPUT_SCRIPT={script}。")
     if warnings:
         payload["warnings"] = warnings
     return payload, stdio_command, surface_env
