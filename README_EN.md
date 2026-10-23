@@ -53,7 +53,7 @@ License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICEN
 
 ## Current stable baseline
 
-**Current version: `Horosa Skill 0.42.0` (110 callable tools; the public latest release is on the Releases page).**
+**Current version: `Horosa Skill 0.43.0` (110 callable tools; the public latest release is on the Releases page).**
 
 This release line brings the capability surface roughly to parity with the desktop app — and adds a trust stack no other metaphysics tool ships:
 
@@ -318,7 +318,7 @@ Every tool call returns a uniform envelope:
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.42.0",
+  "ok": true, "tool": "qimen", "version": "0.43.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -361,7 +361,7 @@ No checkout needed: **zero-install (no git, no PyPI)** — every release ships a
 straight from its URL; `HOROSA_RUNTIME_MIRROR` rewrites the wheel URL and the runtime URLs alike:
 
 ```bash
-WHL="https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.42.0/horosa_skill-0.42.0-py3-none-any.whl"
+WHL="https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.43.0/horosa_skill-0.43.0-py3-none-any.whl"
 uvx --from "$WHL" horosa-skill install                    # install the offline runtime (same as above)
 uvx --from "$WHL" horosa-skill doctor                     # health check
 uvx --from "$WHL" horosa-skill setup --client cursor       # zero-install one-command onboarding (picks `--launcher uvx-wheel`, writes the wheel URL)
@@ -372,7 +372,7 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # stdio for clients; `
 > The PyPI channel (`uvx horosa-skill …`) is wired but **not yet live** (it needs the maintainer's one-time Trusted Publisher setup); once on, the commands get shorter and behave the same.
 
 > [!NOTE]
-> 🐳 **Docker / Linux (experimental)**: the offline runtime is published for macOS (arm64) and Windows (x64) only — there is no Linux payload. What runs in a container is the **MCP gateway** (Python package + knowledge base + memory) pointed at a host or another machine that has the runtime via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`. An **experimental** `horosa-skill/Dockerfile` + `docker-compose.yml` ship with the repo (gateway image: no offline runtime inside the container, so those two variables are mandatory; binding 0.0.0.0 requires `HOROSA_MCP_TOKEN`); by hand, `pip install "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.42.0/horosa_skill-0.42.0-py3-none-any.whl"` (the release wheel — PyPI is not open yet) then `horosa-skill serve --transport streamable-http` is the gateway.
+> 🐳 **Docker / Linux (experimental)**: the offline runtime is published for macOS (arm64) and Windows (x64) only — there is no Linux payload. What runs in a container is the **MCP gateway** (Python package + knowledge base + memory) pointed at a host or another machine that has the runtime via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`. An **experimental** `horosa-skill/Dockerfile` + `docker-compose.yml` ship with the repo (gateway image: no offline runtime inside the container, so those two variables are mandatory; binding 0.0.0.0 requires `HOROSA_MCP_TOKEN`); by hand, `pip install "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.43.0/horosa_skill-0.43.0-py3-none-any.whl"` (the release wheel — PyPI is not open yet) then `horosa-skill serve --transport streamable-http` is the gateway.
 
 Troubleshooting install: `uv: command not found` -> install uv first (one-liner above); slow/broken network -> re-run `install` (resumes from the partial download) or set `HOROSA_RUNTIME_MIRROR=<mirror-prefix>`; low disk / busy ports / an unfamiliar doctor code -> `doctor --explain` adds 6–10 plain-language lines on stderr (stdout stays JSON) and `advice[]` gives every issue / warning code a `user_summary` + `next_action`, `--probe-network` checks the manifest URL through every mirror (the default makes no external request); macOS: the runtime will not start and leaves no log, or `doctor` reports `quarantine:runtime_binaries` -> the browser-downloaded archive carries Gatekeeper's quarantine attribute, run the `xattr -dr com.apple.quarantine <runtime/current>` command from `quarantine.fix`, then `runtime restart`; Windows `runtime.path_not_ascii` (or doctor issue `windows:runtime_root_not_ascii`; bazi / ziwei / liureng fail and chart-side techniques report parameter errors) -> the runtime path contains non-ASCII characters (the default path under a Chinese user name does) and the bundled Java 17 and Swiss Ephemeris access files through narrow-character APIs: `setx HOROSA_RUNTIME_ROOT C:\horosa`, open a new terminal, restart your AI client, rerun `install` / `setup`; Windows `runtime.install_long_path` -> `doctor.windows.headroom_chars` below zero means install will refuse: set `HOROSA_RUNTIME_ROOT=C:\horosa` or enable `LongPathsEnabled` (v0.38.0 shortens the install temp prefix, ~20 characters more headroom); slow or proxied downloads -> `HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS` (default 120) and `HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS` (default 3, per mirror); a Windows Firewall prompt on first start or `doctor` warning `listener:not_loopback_only` -> the old launcher bound Java to 0.0.0.0; after upgrading run `uv run horosa-skill runtime restart` to re-apply the template (pins 127.0.0.1); services not starting under a Windows user name with spaces/CJK -> fixed in v0.38.0 (every path argument is quoted), `runtime restart` after upgrading; Codex showing a pile of errors or no tools on the first turn -> usually the timeouts are unset (Codex defaults 10 s/60 s): `uv run horosa-skill client check --client codex` names the missing keys and `client config --format codex --write ~/.codex/config.toml` merges the fix in place; `uvx` works in a terminal but a GUI client cannot start it -> GUI clients do not inherit your shell PATH, rerun `client config` (it now writes absolute paths) and `client check` reports `command_not_on_path`; upgrade -> `uv run horosa-skill upgrade` (skips the download when already current); uninstall -> `uv run horosa-skill uninstall` (dry-run by default).
 
@@ -410,7 +410,7 @@ uv run horosa-skill export registry
 
 `setup --client <client>` does the whole onboarding in one command (v0.38.0): network probe (5 s) → install / verify the
 offline runtime → write the config (auto-located, only the horosa entry, `.horosa-bak` backup, atomic replace) →
-**install the horosa-agent skill into the skills folder that client reads** (v0.42.0; most clients read the shared
+**install the horosa-agent skill into the skills folder that client reads** (v0.43.0; most clients read the shared
 `~/.agents/skills`; `--no-skill` skips it, `--skill-dir` picks the folder) → doctor → re-read the file from disk → **start the server once over stdio with the exact command the client will run and count
 the tools** → print next steps. On failure a structured envelope goes to stderr (`step` / `code` / `config_untouched` /
 `backup_path` / `retry_command`) with exit code 2; failing before the config step guarantees `config_untouched: true`.
@@ -426,7 +426,7 @@ uv run horosa-skill client skill --client codex          # install only the skil
 ```
 
 The skill is the rule set agents read (clarify before calling / explain only from the returned snapshot / never hand-calculate);
-before v0.42.0 only agents that opened this repo saw it. The wheel now ships a copy and `setup` installs it. An existing
+before v0.43.0 only agents that opened this repo saw it. The wheel now ships a copy and `setup` installs it. An existing
 folder of the same name is left alone when another tool manages it (a symlink, e.g. `npx skills`) or when horosa-skill did
 not write it; a copy you edited is backed up as `horosa-agent.horosa-bak` before the update.
 
@@ -442,7 +442,7 @@ gives agents without MCP a pure-CLI contract (`tool run --input/--output`, exit 
 | **Claude Code** | stdio | `setup --client claude-code` (writes the project `.mcp.json` when the CWD has one, else runs `claude mcp add --scope user`) | full (120) | The repo ships a project `.mcp.json`; [guide](./horosa-skill/examples/clients/claude-code.md) |
 | **Claude Code Plugin** | stdio | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` | full (120) | Skill + MCP in one step; the plugin lives in `~/.claude/plugins/cache/horosa-skill/horosa/<version>/horosa-skill` — run `uv run --directory "<that dir>" horosa-skill install` once for the offline runtime (a `runtime.not_installed` error prints this command with the real path) |
 | **Agent Plugins v1** (VS Code · Copilot CLI · Codex · Kiro · OpenHands · Qwen Code) | stdio | `copilot plugin install Horace-Maxwell/horosa-skill`; VS Code "Chat: Install Plugin From Source" with the repo URL; `qwen extensions install Horace-Maxwell/horosa-skill`; Kiro "Import power from GitHub" | compact (11) | Root `plugin.json` + `mcp.json` (spec 1.0.0): the command is `uvx` + the wheel pinned to this version, so **uv must be installed**; run `uvx --from <wheel> horosa-skill install` once for the offline runtime. Codex reads the same manifest via `codex plugin marketplace add Horace-Maxwell/horosa-skill` (not tested); OpenClaw / Claude Code keep using `.claude-plugin/` |
-| **Official MCP Registry** | stdio (`.mcpb`) | Search `horosa` in any registry-backed client (Goose, Junie, Copilot `/mcp search`, PulseMCP and Glama all read it) | full (120) | Entry `io.github.Horace-Maxwell/horosa-skill`, listing each release's `.mcpb` only (sha256-pinned; clients verify it before install); from v0.42.0 every release is listed automatically once it goes public |
+| **Official MCP Registry** | stdio (`.mcpb`) | Search `horosa` in any registry-backed client (Goose, Junie, Copilot `/mcp search`, PulseMCP and Glama all read it) | full (120) | Entry `io.github.Horace-Maxwell/horosa-skill`, listing each release's `.mcpb` only (sha256-pinned; clients verify it before install); from v0.43.0 every release is listed automatically once it goes public |
 | **Claude Desktop** | stdio | `setup --client claude-desktop`, or install the `.mcpb` bundle | full (120) | The `.mcpb` ships as a release asset |
 | **Cursor** | stdio | `setup --client cursor` (or `client config --format cursor` for the official install deep link) | compact (11) | Cursor caps at ~40 tools globally and **drops the rest silently** |
 | **VS Code (Copilot)** | stdio | `setup --client vscode` (writes the user-level `mcp.json`; or `client config --format vscode` for the `vscode:mcp/install` link) | compact (11) | 128-tool cap across all servers; the repo ships `.vscode/mcp.json` |

@@ -6,7 +6,7 @@
       "command": "uvx",
       "args": [
         "--from",
-        "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.42.0/horosa_skill-0.42.0-py3-none-any.whl",
+        "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.43.0/horosa_skill-0.43.0-py3-none-any.whl",
         "horosa-skill",
         "serve",
         "--transport",

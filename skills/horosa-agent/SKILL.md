@@ -11,7 +11,7 @@ description: >-
 license: AGPL-3.0-only
 compatibility: Requires the local Horosa Skill MCP server/CLI (Python 3.12 + uv + installed offline runtime)
 metadata:
-  version: "0.42.0"
+  version: "0.43.0"
 ---
 
 # Horosa Skill Agent Guide
@@ -360,8 +360,8 @@ skill (for a hand-wired MCP config).
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source "$HOME/.local/bin/env"   # the installer only edits your shell profile; this puts uvx on PATH in THIS shell
-uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.42.0/horosa_skill-0.42.0-py3-none-any.whl" horosa-skill setup --client cursor
-uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.42.0/horosa_skill-0.42.0-py3-none-any.whl" horosa-skill selfcheck
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.43.0/horosa_skill-0.43.0-py3-none-any.whl" horosa-skill setup --client cursor
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.43.0/horosa_skill-0.43.0-py3-none-any.whl" horosa-skill selfcheck
 ```
 
 **Windows (PowerShell)**
@@ -369,8 +369,8 @@ uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.
 ```powershell
 irm https://astral.sh/uv/install.ps1 | iex
 $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"   # the installer updates PATH for NEW shells only
-uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.42.0/horosa_skill-0.42.0-py3-none-any.whl" horosa-skill setup --client cursor
-uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.42.0/horosa_skill-0.42.0-py3-none-any.whl" horosa-skill selfcheck
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.43.0/horosa_skill-0.43.0-py3-none-any.whl" horosa-skill setup --client cursor
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.43.0/horosa_skill-0.43.0-py3-none-any.whl" horosa-skill selfcheck
 ```
 
 **Source checkout (any OS)**
