@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.43.0-dev (2026-10-23) | 完整排盘 PDF 报告：reportlab `multiBuild` 复用同一份 story，长段落第二遍抛 LayoutError，报告静默降级成 TXT；`Songti.ttc` 第 0 号子字体是 Songti SC Black，正文整本粗体；延迟出页的 canvas 把书签都钉在第 1 页；CLI 报告 `--language` 缺省 zh-CN 盖掉繁体设置；繁体报告里渲染器写死的标签（目录 / 页脚…）仍是简体；知识库隔离测试查错了字段（`data.input_normalized` 是引擎回显）而「因为错误的原因通过」 | 每遍现组 story、目录自绘两遍稳定；字体常规 / 粗体成对注册；CLI 只在给了时才传语言；隔离断言查信封 / 存档 / 引擎请求三处并做负向对照；渲染器字面量过 `t()` 只转一次（已转的文字再转不幂等） |
 | v0.42.0-dev (2026-10-22) | 加「繁体输出」：OpenCC 在术数字上系统性转错（年干→年幹、子丑合→子醜合、日冲→日衝、金克木不变成剋、斗君→鬥君、吉凶星→兇星）；上游段名本就含繁体（命宮、佈局），一律繁转简会把它们折坏；简体 PDF 用的 Songti SC 缺 966 个繁体字；知识精读的正文直接放在 data 里，白名单漏转；两条守卫因样本里没有可转的字而「因为错误的原因通过」 | 按原文逐位定字（与上游界面简繁同一机制，规则 ⊇ 上游、偏离有理由）；标识按词表反查；繁体选 TC 字体并核字形；所有中文字段必须归类（`unclassified_text_paths`）；负向对照的样本必须真会变 |
 | v0.41.2-dev (2026-10-21) | PDF 正文测试断言「带正文 > 2 × 不带正文」的文件大小：大小随嵌入字体漂（Linux 1.83 倍、macOS 1.94 倍），main CI 与发布后矩阵红 | 看内容不看大小（`_pdf_story_text` 收集交给 reportlab 的文字）；只在一台机器上校准的阈值不是断言 |
 | v0.41.2-dev (2026-10-20) | 同日另一条清理分支（Windows 维护机）与已发布的 v0.41.1 重构撞车；结构拆分作废，把 v0.41.1 没覆盖的 13 处缺陷逐条移植：畸形清单崩 doctor、换端口后探旧端口、停脚本超时输出 `b'…'`、Windows 卸载删不掉只读 JDK、引擎非对象 JSON、tool_run 吞坏 request、Codex 非数字超时崩 client check、技法依据报告 DOCX/PDF 空白、八字全零误判、整句 output_contract 逐字拼接、灵棋吞引擎失败、**测试碰用户真实 runtime 与数据目录**（拒连端口挡不住文件系统）、scripts 的 CP1252 解码与 CRLF 写入 | 每条先红后绿的回归测试；conftest 把默认数据目录 / runtime 根换成临时目录（`test_test_isolation`）；scripts/ 的子进程编码与 `write_text` 换行两条守卫 |
@@ -150,6 +151,39 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.43.0-dev / 2026-10-23 — 完整排盘 PDF 报告与自备知识库：flowable 不能排两遍（`compose(pages)` 每遍现组）、Songti SC Black 当正文、知识库隔离测试查错字段
+
+- **起因**：用户要「根据各个技法直接出完整精美 PDF 报告」，以及「自定义知识库，每次计算时按选择加入上下文」。
+  报告加 `style:"chart"`（不经 AI，全部导出段 + 基本信息 + 附录，封面 / 目录 / 书签 / 「第 N 页 / 共 M 页」）；知识库是数据目录下
+  `knowledge/` 的 `.md` / `.txt`，技法入参 `knowledge` 点名（条目名 / `#标签` / `auto`），正文挂 `data.knowledge_context`。
+- **坑 1 · 两遍排版复用 story**：为了目录页码与「共 M 页」，第一版用 `TableOfContents` + `multiBuild` 跑多遍。星盘这类长报告在第二遍抛
+  `LayoutError: Flowable <Paragraph> … too large on page 5`——单遍 `build` 正常。reportlab 的 flowable 被 wrap / split 过会改内部状态，
+  `multiBuild` 每遍都排同一批对象（同一个段落对象被处理了 7 次）。报告渲染失败按设计降级成 TXT，所以表面上只是「PDF 变成了 txt」。
+  修复：story 组装包进 `compose(pages)`，每遍现组；目录自绘（标题按出现顺序编键 `h0, h1…`，第一遍页码留空、行高不变，第二遍填上一遍
+  `afterFlowable` 记下的书签页），页码与总页数两遍相同即停。
+- **坑 2 · 字体**：`Songti.ttc` 第 0 号子字体是 **Songti SC Black**——之前一直拿它当正文，整本是粗体。改为按 PostScript 名挑常规 + 粗体成对
+  注册（`registerFontFamily`，`<b>` 才有真粗体）；繁体走 TC 一组。
+- **坑 3 · 书签页码**：为了「共 M 页」试过延迟出页的 canvas，结果每个书签都落在第 1 页（书签在出页前登记）。改为排两遍、第二遍把上一遍的
+  总页数写进页脚。
+- **坑 4 · CLI 报告语言**：`report render / template / from-tool` 的 `--language` 缺省 `zh-CN` 总被传下去，盖掉 `HOROSA_OUTPUT_SCRIPT=zh-Hant`
+  推出的 `zh-TW`（v0.42.0 就有）。改为只在给了时才传。
+- **坑 5 · 测试因为错误的原因通过**：「knowledge 不进回显入参」断言查的是 `result.data["input_normalized"]`——那是小六壬引擎自己的回显；
+  信封上的是 `result.input_normalized`。负向对照（`pop` 改 `get`）照样绿才发现。改为查信封、存档文件、引擎请求（`CaptureClient`）三处，
+  再做负向对照两条红。
+- **坑 6 · 繁体报告里渲染器自己的标签没转**（v0.42.0 就有）：「目录」「解读目标」「完整盘面」「附录」、页脚「第 N 页」是写死在渲染器里的简体，
+  `localize_document` 只转文档字段，碰不到它们；技法依据报告的人读版 / markdown 由模板现生成，模板标签同样漏转。不能「整段再转一次」：
+  用真实输出测过，对已是繁体的文字再转**不幂等**（萬里 → 萬裡、征戰 → 徵戰、台輔 → 臺輔，1 154 句里 8 句变）。修复：渲染器字面量逐个过
+  `t()`（`_labeler`，只转一次）；技法依据报告改为把简体原文交给 `render_report`，生成人读版 / markdown 后整体转一次。
+- **坑 7 · 基类加隐藏字段漏进门面**：`knowledge` 加在 FlexibleModel 上、标 `x-horosa-hidden`，技法工具的广告白名单会摘掉它，但 8 个门面
+  只过可移植化、不过白名单，各漏出一个无描述属性——`verify_mcp_client_compat` 棘轮红（487 → 495）。改为 `apply_advertised_schemas` 最后一遍对
+  全部工具摘隐藏字段；`horosa_tool_run` 的 `knowledge` 是新概念，单独给一句描述。另一处：隐藏字段会计入 `request` 描述的「另 N 个高级旋钮」，
+  44 个原本 0 旋钮的技法各多出 66 B（全量面 +2.9 KB，仍在 2% 容差内、守卫没红，是按工具比对大小才发现）——通用参数不计数。
+  最终 tools/list 全量 254 210 → 254 871 B、精简面 15 260 → 15 796 B（两个 `style` 与三个 `knowledge` 参数本身，描述已压到最短），更新基线。
+- **法则**：reportlab 每次 `build` 都给一份新组的 story；目录 / 总页数这类回填靠「两遍排版 + 自己记页码」，不靠复用对象。
+  附加上下文类入参在校验前取走，隔离要在「信封 / 存档 / 引擎请求」三处都断言。
+- **守卫**：`tests/test_user_knowledge_and_chart_report.py`（19 条：条目解析与目录安全、点名 / 预算 / 截断、增删精读检索、run_tool 隔离、
+  引擎请求、registry / read 的 user 域、CLI、chart 报告每段标题进 story 且目录页码 = 书签页码、analysis 仍需解读、CLI 语言转发、繁体标签只转一次、门面不带 knowledge 且不计入旋钮数）。
 
 ### v0.42.0-dev / 2026-10-22 — 繁体输出：OpenCC 在术数字上系统性转错，按原文逐位定字（`horosa_char_rules.json`）、上游段名本就含繁体（`canonical_name`）、新字段必须归类（`unclassified_text_paths`）
 

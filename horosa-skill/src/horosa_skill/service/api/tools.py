@@ -35,7 +35,10 @@ from horosa_skill.service.envelope import (
     _missing_sections_warning,
     _with_operational_recovery,
 )
-from horosa_skill.service.export import _attach_export_contract
+from horosa_skill.service.export import TOOL_EXPORT_TECHNIQUE_MAP, _attach_export_contract
+from horosa_skill.knowledge import user as user_knowledge
+from horosa_skill.knowledge.user import build_context as build_user_knowledge_context
+from horosa_skill.knowledge.user import missing_warning as user_knowledge_missing_warning
 from horosa_skill.service.text.chart_family import (
     _apply_chart_request_defaults,
     _india_apply_school_presets,
@@ -57,6 +60,16 @@ class ToolsAPI:
             for tool in TOOL_DEFINITIONS.values()
         ]
 
+    def _user_knowledge_summary(self) -> dict[str, Any]:
+        entries = user_knowledge.list_entries(self.settings)
+        return {
+            "dir": str(user_knowledge.knowledge_dir(self.settings)),
+            "count": len(entries),
+            "entries": [entry.summary() for entry in entries[:200]],
+            "how_to_use": "计算时传 knowledge=[条目 id / 标题 / #标签 / auto]，选中的正文挂在 data.knowledge_context；"
+                          "精读一条：knowledge_read(domain=\"user\", key=…)。往文件夹里放 .md / .txt 即可新增。",
+        }
+
     def _run_local_tool(self, definition: ToolDefinition, payload: dict[str, Any]) -> dict[str, Any]:
         if definition.name == "export_registry":
             return build_export_registry(technique=payload.get("technique"))
@@ -76,11 +89,32 @@ class ToolsAPI:
                     details={"tool_name": definition.name, "technique": payload.get("technique")},
                 ) from exc
         if definition.name == "knowledge_registry":
-            return build_knowledge_registry(domain=payload.get("domain"))
+            if f"{payload.get('domain') or ''}".strip() == user_knowledge.USER_DOMAIN:
+                return {"domain": user_knowledge.USER_DOMAIN, "user_knowledge": self._user_knowledge_summary()}
+            registry = build_knowledge_registry(domain=payload.get("domain"))
+            if not payload.get("domain"):
+                registry = {**registry, "user_knowledge": self._user_knowledge_summary()}
+            return registry
         if definition.name == "knowledge_read":
             # query 模式（v0.30.0）：跨全部知识域全文检索；不给 query 走精读老路。
+            domain = f"{payload.get('domain') or ''}".strip()
             if f"{payload.get('query') or ''}".strip():
-                return search_knowledge(payload)
+                if domain == user_knowledge.USER_DOMAIN:
+                    matches = sorted(user_knowledge.search_matches(self.settings, payload["query"]),
+                                     key=lambda m: (-m["score"], m["key"]))
+                    limit = max(1, min(int(payload.get("limit") or 8), 20))
+                    return {"mode": "search", "query": payload["query"], "domain": domain, "limit": limit,
+                            "total_matched": len(matches), "matches": matches[:limit]}
+                result = search_knowledge(payload)
+                mine = [] if domain else user_knowledge.search_matches(self.settings, payload["query"])
+                if mine:
+                    # 自备条目与内置条目同一套分数，合并后按分数重排、截到 limit。
+                    merged = sorted([*result.get("matches", []), *mine], key=lambda m: (-m["score"], m["domain"], m["key"]))
+                    result = {**result, "matches": merged[: int(result.get("limit") or 8)],
+                              "total_matched": int(result.get("total_matched") or 0) + len(mine)}
+                return result
+            if domain == user_knowledge.USER_DOMAIN:
+                return user_knowledge.read_entry(self.settings, payload.get("key") or payload.get("category") or "")
             return read_knowledge_entry(payload)
         if definition.name == "qimen":
             return self._run_qimen_tool(payload)
@@ -254,6 +288,11 @@ class ToolsAPI:
         ) as trace, _degrade_collector() as degrade_notes, decision_records(), _run_query_scope(query_text):
             try:
                 payload = normalize_request_payload(payload)
+                # 自备知识库点名只决定附加上下文：校验前取走，绝不进 input_normalized / 引擎请求 / 存档 subject。
+                knowledge_selection = None
+                if isinstance(payload, dict) and "knowledge" in payload:
+                    payload = dict(payload)
+                    knowledge_selection = payload.pop("knowledge")
                 validated = definition.input_model.model_validate(payload)
             except ValidationError as exc:
                 trace["error_code"] = "tool.invalid_payload"
@@ -303,6 +342,13 @@ class ToolsAPI:
                 # 技法依据卡：必须在 save_result **之前**挂，memory 才存到全量卡；
                 # `_apply_response_view` 在存档之后裁剪，且显式豁免这个键（见那里的说明）。
                 response_data = self._attach_technique_card(tool_name, input_normalized, response_data)
+                knowledge_context = None
+                if knowledge_selection not in (None, "", []) and isinstance(response_data, dict):
+                    knowledge_context = build_user_knowledge_context(
+                        self.settings, knowledge_selection, tool_name=tool_name,
+                        technique=TOOL_EXPORT_TECHNIQUE_MAP.get(tool_name), domain=definition.domain,
+                    )
+                    response_data = {**response_data, "knowledge_context": knowledge_context}
                 summary = _generic_summary(tool_name, response_data)
                 # 工具内部经 `_warnings` 上抛的降级说明（如子引擎不可用）落入 envelope.warnings，
                 # 不静默：调用方能看到「结果不完整」而 ok 仍为 True（优雅降级 ≠ 无声降级）。
@@ -316,6 +362,8 @@ class ToolsAPI:
                 if zone_note and zone_note not in warnings:
                     warnings.append(zone_note)
                 # 预设段缺席 → warnings + summary 各一条：agent 不翻 export_snapshot 也知道结果不完整。
+                if knowledge_context is not None and (knowledge_note := user_knowledge_missing_warning(knowledge_context)):
+                    warnings.append(knowledge_note)
                 missing_note = _missing_sections_warning(response_data)
                 if missing_note:
                     warnings.append(missing_note)

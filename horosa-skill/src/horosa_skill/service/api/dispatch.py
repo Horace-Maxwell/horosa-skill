@@ -442,6 +442,8 @@ class DispatchAPI:
                     "agent_confirmed_settings": request.agent_confirmed_settings,
                     "defaults_accepted": request.defaults_accepted,
                     "clarification_notes": request.clarification_notes,
+                    # 自备知识库点名随确认三键一起传给每个技法（各自按本技法解析 `auto`）。
+                    "knowledge": request.knowledge,
                 }.items()
                 if value is not None
             }

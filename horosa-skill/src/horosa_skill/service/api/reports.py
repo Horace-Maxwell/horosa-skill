@@ -144,6 +144,16 @@ class ReportsAPI:
                 "summary": ["已读取对应 run 的本地完整记录。"],
             }
 
+    def _report_style(self, request: Any) -> str:
+        style = str(getattr(request, "style", "") or "analysis").strip().lower()
+        if style not in {"analysis", "chart"}:
+            raise ToolValidationError(
+                bilingual(f"不认识的报告样式：{style}（可选 analysis / chart）", f"Unknown report style: {style} (analysis / chart)"),
+                code="report.invalid_style",
+                details={"style": style, "allowed": ["analysis", "chart"]},
+            )
+        return style
+
     def _report_language(self, request: Any) -> str:
         """报告语言：调用方写了就用它，没写跟全局输出文字走（繁体时是 zh-TW / zh-HK，模板据此让 AI 用繁体写）。"""
         if "language" in request.model_fields_set and request.language:
@@ -236,7 +246,8 @@ class ReportsAPI:
                     ai_report=request.ai_report,
                     ai_answer_text=request.ai_answer_text,
                 )
-                if not normalized_ai_report and not self._run_has_report_ai(run):
+                chart_style = self._report_style(request) == "chart"
+                if not chart_style and not normalized_ai_report and not self._run_has_report_ai(run):
                     template = self.report_builder.build_template(
                         run=run,
                         source_artifact=source_artifact,
@@ -271,6 +282,7 @@ class ReportsAPI:
                     title=request.title,
                     ai_report=normalized_ai_report,
                     include_raw_json=request.include_raw_json,
+                    style="chart" if chart_style else "analysis",
                 )
                 tool_name = str(document["source"]["tool_name"])
                 output_path = self._report_output_path(
@@ -365,7 +377,7 @@ class ReportsAPI:
                 ai_report=request.ai_report,
                 ai_answer_text=request.ai_answer_text,
             )
-            if not normalized_ai_report:
+            if not normalized_ai_report and self._report_style(request) != "chart":
                 run, source_artifact = self._load_report_source(result.memory_ref.run_id, request.tool_name)
                 template = self.report_builder.build_template(
                     run=run,
@@ -397,6 +409,7 @@ class ReportsAPI:
                     "run_id": result.memory_ref.run_id,
                     "tool_name": request.tool_name,
                     "format": normalized_format,
+                    "style": self._report_style(request),
                     # 只转发调用方真写了的 language：缺省值转过去会被当成「显式 zh-CN」，盖掉全局的繁体设置。
                     **({"language": request.language} if "language" in request.model_fields_set else {}),
                     "title": request.title,
@@ -632,13 +645,14 @@ class ReportsAPI:
             base = self.store.default_report_path(run_id=str(scope_id), tool_name="technique", format_name="json")
             output_path = self._report_output_path(request.output_path, default=base.with_suffix(f".{suffix}"))
             script = self.settings.output_script
-            document = localize_document(document, script)
             try:
+                # 技法依据报告交简体原文：渲染器生成人读版 / markdown 后整体转一次（模板标签也要转，见 render_report）。
                 rendered = render_report(document, output_path=output_path, format_name=normalized_format, script=script)
             except ValueError as exc:
                 raise ToolValidationError(
                     str(exc), code="report.technique.render_failed", details={"format": normalized_format}
                 ) from exc
+            document = localize_document(document, script)
 
             result = {
                 "ok": True,

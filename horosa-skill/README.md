@@ -63,6 +63,10 @@ This subproject is distributed under `GNU AGPL-3.0-only`. See [LICENSE](LICENSE)
 - 结构化报告导出
   - report template
   - JSON / DOCX / PDF artifacts
+  - `style=chart` 完整排盘报告（不经 AI，全部盘面段落 + 目录 / 书签 / 页码）
+- 自备知识库
+  - `knowledge mine / add / remove`
+  - 计算时 `knowledge=[条目名 / #标签 / auto]` → `data.knowledge_context`
   - report artifact 回写本地 manifest
 - 星阙 AI 导出协议机器建模
   - export registry

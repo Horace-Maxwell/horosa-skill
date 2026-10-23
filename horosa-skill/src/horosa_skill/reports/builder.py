@@ -177,7 +177,12 @@ class ReportBuilder:
         title: str | None = None,
         ai_report: dict[str, Any] | None = None,
         include_raw_json: bool = False,
+        style: str = "analysis",
     ) -> dict[str, Any]:
+        """style="analysis"（缺省）= AI 解盘报告；style="chart" = 完整排盘报告（不要 AI 答复也能出，只放真实盘面）。
+
+        两种都把技法的**全部**导出段作为「完整盘面」收进人读版（此前人读版一段盘面都没有），并附技法依据 / 自备参考资料 / 来源。
+        """
         payload = self._payload(source_artifact)
         data = payload.get("data") if isinstance(payload, dict) else {}
         source = self._source_meta(run=run, source_artifact=source_artifact, payload=payload)
@@ -219,7 +224,13 @@ class ReportBuilder:
 
         generated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
         technique_title = source.get("technique_label") or source.get("technique") or source.get("tool_name")
-        report_title = title or f"结构化咨询报告 · {technique_title}"
+        chart_style = style == "chart"
+        report_title = title or (f"{technique_title} · 完整排盘报告" if chart_style else f"结构化咨询报告 · {technique_title}")
+        has_caller_answer = bool(
+            run.get("ai_answer_text")
+            or isinstance(run.get("ai_answer_structured"), dict) and run.get("ai_answer_structured")
+            or (ai_report and any(v not in (None, "", [], {}) for v in ai_report.values()))
+        )
         sections = [
             {
                 "id": "report_metadata",
@@ -314,7 +325,9 @@ class ReportBuilder:
                 "items": {},
             },
         ]
+        sections.append(self._chart_basis_section(input_normalized if isinstance(input_normalized, dict) else {}, source))
         sections.extend(self._document_sections_from_export_format(export_format))
+        sections.extend(self._appendix_sections(data if isinstance(data, dict) else {}, source=source, provenance=provenance))
         sections.append(
             {
                 "id": "provenance",
@@ -365,8 +378,24 @@ class ReportBuilder:
             plain_text=plain_text,
         )
 
+        presentation: dict[str, Any] = {}
+        if chart_style:
+            when = " ".join(str(input_normalized.get(k)) for k in ("date", "time") if isinstance(input_normalized, dict) and input_normalized.get(k))
+            presentation = {
+                "cover_label": "完整排盘报告",
+                "cover_meta": " · ".join(part for part in (when, str(technique_title or ""), "星阙 Horosa") if part),
+                "intro_heading": "报告说明",
+                "intro_text": (
+                    "本报告由星阙引擎的排盘结果直接生成：收录全部盘面段落与技法依据，"
+                    + ("并附 AI 解读。" if has_caller_answer else "不含 AI 解读（需要解读时把盘面交给 AI，或用 analysis 报告）。")
+                    + (f"\n所问：{user_question}" if user_question else "")
+                ),
+            }
         return {
             "schema": REPORT_DOCUMENT_SCHEMA,
+            "style": "chart" if chart_style else "analysis",
+            "show_ai": (not chart_style) or has_caller_answer,
+            **presentation,
             "title": report_title,
             "language": language,
             "generated_at": generated_at,
@@ -500,9 +529,68 @@ class ReportBuilder:
                     "title": str(section.get("title") or f"导出章节 {index}"),
                     "body": str(body or ""),
                     "items": section,
+                    # 人读版收录全部盘面段（「完整盘面」一部分）；正文是引擎原文，不截断。
+                    "human_visible": True,
+                    "group": "chart",
                 }
             )
         return result
+
+    _BASIS_FIELDS = (
+        ("name", "姓名"), ("gender", "性别"), ("date", "日期"), ("time", "时间"), ("zone", "时区"),
+        ("pos", "地点"), ("place", "地点"), ("lat", "纬度"), ("lon", "经度"), ("question", "所问"),
+        ("datetime", "推运目标时刻"),
+    )
+
+    def _chart_basis_section(self, input_normalized: dict[str, Any], source: dict[str, Any]) -> dict[str, Any]:
+        rows = [("技法", str(source.get("technique_label") or source.get("tool_name") or ""))]
+        seen: set[str] = set()
+        for key, label in self._BASIS_FIELDS:
+            value = input_normalized.get(key)
+            if value in (None, "") or label in seen:
+                continue
+            if key == "gender":
+                value = {"1": "男", "0": "女", "male": "男", "female": "女"}.get(str(value).lower(), value)
+            seen.add(label)
+            rows.append((label, str(value)))
+        body = "| 项目 | 内容 |\n| --- | --- |\n" + "\n".join(f"| {k} | {v.replace('|', '／')} |" for k, v in rows)
+        return {"id": "chart_basis", "title": "基本信息", "body": body, "items": dict(rows), "human_visible": True, "group": "basis"}
+
+    def _appendix_sections(self, data: dict[str, Any], *, source: dict[str, Any], provenance: dict[str, Any]) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        card = data.get("technique_card") if isinstance(data.get("technique_card"), dict) else {}
+        if card:
+            compute = card.get("compute") if isinstance(card.get("compute"), dict) else {}
+            versions = card.get("versions") if isinstance(card.get("versions"), dict) else {}
+            settings = card.get("settings") if isinstance(card.get("settings"), dict) else {}
+            lines = ["| 项目 | 内容 |", "| --- | --- |"]
+            technique = card.get("technique") if isinstance(card.get("technique"), dict) else {}
+            lines.append(f"| 技法 | {technique.get('label') or source.get('technique_label') or ''} |")
+            engines = compute.get("measured") or compute.get("declared_engines") or []
+            if isinstance(engines, dict):
+                engines = [f"{k}={v}" for k, v in engines.items()]
+            if engines:
+                lines.append(f"| 计算引擎 | {'、'.join(str(e) for e in engines)} |")
+            for key, item in settings.items():
+                if isinstance(item, dict) and item.get("label"):
+                    lines.append(f"| {item['label']} | {item.get('value')} |")
+            for key, label in (("skill", "排盘程序版本"), ("runtime", "离线计算包版本"), ("export_settings", "导出设置版本")):
+                if versions.get(key) not in (None, ""):
+                    lines.append(f"| {label} | {versions[key]} |")
+            out.append({"id": "technique_basis", "title": "技法依据", "body": "\n".join(lines), "items": card,
+                        "human_visible": True, "group": "appendix"})
+        knowledge = data.get("knowledge_context") if isinstance(data.get("knowledge_context"), dict) else {}
+        entries = [e for e in knowledge.get("entries") or [] if isinstance(e, dict)]
+        if entries:
+            body = "\n\n".join(f"### {e.get('title') or e.get('id')}\n{e.get('text') or ''}" for e in entries)
+            out.append({"id": "user_knowledge", "title": "自备参考资料",
+                        "body": "以下是使用者自己的资料，随本次计算一并附上，不是引擎输出。\n\n" + body,
+                        "items": knowledge, "human_visible": True, "group": "appendix"})
+        citation = provenance.get("citation") if isinstance(provenance, dict) else None
+        if citation:
+            out.append({"id": "chart_source", "title": "来源", "body": str(citation), "items": {},
+                        "human_visible": True, "group": "appendix"})
+        return out
 
     def _merge_ai_report(
         self,

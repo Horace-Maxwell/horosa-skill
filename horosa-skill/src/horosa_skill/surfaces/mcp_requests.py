@@ -5,7 +5,7 @@ import json
 from inspect import Parameter, Signature
 from typing import Annotated, Any
 
-from pydantic import BaseModel, WithJsonSchema
+from pydantic import BaseModel, Field, WithJsonSchema
 
 from horosa_skill.errors import ToolValidationError
 from horosa_skill.input_normalization import normalize_request_payload
@@ -210,6 +210,8 @@ _TOOL_RUN_COMMON_FIELDS: tuple[tuple[str, Any, str], ...] = (
     ("agent_confirmed_settings", bool | None, "用户已确认设置→true"),
     ("defaults_accepted", bool | None, "用户接受默认→true"),
     ("clarification_notes", str | None, "确认摘要"),
+    # 唯一带描述的公共字段：其余是人人认得的起盘字段；这个是新概念，不写描述模型不知道传什么（也守住无描述属性棘轮）。
+    ("knowledge", Annotated[list[str] | str | None, Field(description="自备知识库：条目名,#标签,auto")], "自备知识库：条目名 / #标签 / auto"),
 )
 
 

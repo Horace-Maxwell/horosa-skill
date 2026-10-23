@@ -160,7 +160,9 @@ def advertised_technique_schema(tool_name: str, full_schema: dict[str, Any]) -> 
                 keep.append(key)
     else:
         keep = [f for f in model.model_fields if f in props and f not in unadvertised]
-    hidden = sorted(set(props) - set(keep) - {"request"})
+    # `knowledge`（自备知识库）是全技法通用的附加参数，不是本技法的旋钮：不计数，否则 44 个原本没有隐藏旋钮的技法
+    # 平白多一句「另 1 个高级旋钮」（全量面 +2.9 KB）。它在 SKILL.md、dispatch / hecan / tool_run 的 schema 与 agent_guidance 的 server_profile 里说明。
+    hidden = sorted(set(props) - set(keep) - {"request", "knowledge"})
     out: dict[str, Any] = {}
     for key in keep:
         if key in CORE_DOC:
@@ -186,6 +188,7 @@ def advertised_dispatch_schema(*, hecan: bool) -> dict[str, Any]:
         "agent_confirmed_settings": {"type": "boolean", "description": CORE_DOC["agent_confirmed_settings"]},
         "defaults_accepted": {"type": "boolean", "description": CORE_DOC["defaults_accepted"]},
         "clarification_notes": {"type": "string", "description": CORE_DOC["clarification_notes"]},
+        "knowledge": {"type": ["array", "string"], "items": {"type": "string"}, "description": "自备知识库：条目名,#标签,auto"},
         "request": {"type": ["object", "string"], "description": "整包载荷（对象或 JSON 串）"},
     }
     if hecan:
@@ -300,6 +303,13 @@ def apply_advertised_schemas(mcp: Any) -> dict[str, int]:
     # 🔴 最后对**全部**工具跑一遍可移植化 —— 包括 8 个门面与 horosa_tool_run。
     # 此前只有技法 + dispatch/hecan 被重写，门面直接把 pydantic 的原始 schema
     # （anyOf:[…,{null}] / default:null / title / $ref）发上线；而在精简面下门面**就是**全部工具。
+    # 门面不走技法的广告白名单，基类上的隐藏字段（`knowledge`）也要在这里摘掉，否则 8 个门面各漏一个无描述属性。
     for tool in manager.list_tools():
-        tool.parameters = portable_schema(tool.parameters or {})
+        params = tool.parameters or {}
+        props = params.get("properties")
+        if isinstance(props, dict):
+            params = {**params, "properties": {
+                k: v for k, v in props.items() if not (isinstance(v, dict) and v.get("x-horosa-hidden"))
+            }}
+        tool.parameters = portable_schema(params)
     return hidden

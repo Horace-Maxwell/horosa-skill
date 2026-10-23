@@ -85,7 +85,7 @@ class DispatchSubjectInput(FlexibleModel):
 # dispatch / hecan 自身的顶层字段；其余顶层键在「没给 birth / subject 却给了 date」时视为出生/起课信息。
 _DISPATCH_OWN_FIELDS = frozenset({
     "query", "subject", "birth", "context", "preferences", "save_result", "tools", "max_tools", "request",
-    "agent_confirmed_settings", "defaults_accepted", "clarification_notes",
+    "agent_confirmed_settings", "defaults_accepted", "clarification_notes", "knowledge",
 })
 
 
@@ -198,6 +198,10 @@ class ReportRenderInput(FlexibleModel):
     run_id: str
     tool_name: str | None = None
     format: str = "pdf"
+    style: str = Field(
+        default="analysis",
+        description="analysis=AI 解盘报告（缺省）；chart=完整排盘报告，无需 AI 解读",
+    )
     language: str = "zh-CN"
     title: str | None = None
     ai_report: dict[str, Any] = Field(default_factory=dict)
@@ -210,6 +214,10 @@ class ReportFromToolInput(FlexibleModel):
     tool_name: str
     payload: dict[str, Any]
     format: str = "pdf"
+    style: str = Field(
+        default="analysis",
+        description="analysis=AI 解盘报告（缺省）；chart=完整排盘报告，无需 AI 解读",
+    )
     language: str = "zh-CN"
     title: str | None = None
     question: str | None = None

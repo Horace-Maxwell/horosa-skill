@@ -12,7 +12,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-110-1d4ed8?style=for-the-badge" alt="110 tools" />
-  <img src="https://img.shields.io/badge/测试-2052_passed-16a34a?style=for-the-badge" alt="2052 passed" />
+  <img src="https://img.shields.io/badge/测试-2071_passed-16a34a?style=for-the-badge" alt="2071 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
 
@@ -86,7 +86,8 @@
 - 🪙 **精简的响应体量。** 导出契约单份化，同一份快照不再重复；大盘单次响应体量较早期显著下降。可用 `response_view=titles|sections` 仅取段标题或指定段，完整快照始终已归档。
 - ⏳ **主限法可推至 3000 年。** 逐位核验的核5方位法 + 22 项时间钥匙 + In Zodiaco / In Mundo + 宿命点(Vertex)应星 + 映点 / 界作迫星，多圈复发行。
 - 🗄️ **完整的本地记录系统。** SQLite 全文检索（trigram，中文子串可命中）+ JSON artifact 归档；按人名 / 技法 / 日期区间 / 全文组合检索，跨会话找回历史。
-- 📄 **结构化报告导出。** 一条命令生成 DOCX / PDF / JSON；Markdown 表格渲染为真 Word 表格，含导航大纲、目录、页码与中文字体。
+- 📄 **结构化报告导出。** 一条命令生成 DOCX / PDF / JSON；Markdown 表格渲染为真 Word 表格，含导航大纲、目录、页码与中文字体；`style=chart` 不经 AI 直接出完整排盘报告。
+- 📚 **自备知识库。** 自己的笔记放进知识库文件夹，计算时按名 / 标签 / `auto` 点选，随结果附进 AI 上下文。
 - 🔁 **成熟的安装与升级链。** 断点续传、多镜像回退、实时进度；版本短路（已最新则跳过下载）；`upgrade` / `uninstall` / `selfcheck` / `doctor` 环境体检齐备。
 - 🔗 **同源后端。** 奇门 / 太乙 / 金口诀走星阙 `ken` 后端；14 路神数走 chart 服务上挂载的 kentang 引擎；结果由 headless JS 层重排为 `aiExport.js` 段结构。
 
@@ -521,6 +522,13 @@ TypeSafe 的 Jev（System One 决策模型，只回类型化的选择/概率，�
 - 🔎 SQLite 全文检索（trigram，中文子串可命中）+ 热路径索引 + WAL 并发；按人名 / 技法 / 日期区间 / 全文组合检索，支持分页。
 - 📄 `report_render` 生成 DOCX / PDF / JSON：Markdown 表格渲染为真 Word 表格（跨页重复表头）、导航大纲、目录、页码、中文字体，异常自动降级保全文。
 - 🧾 `report technique` 生成技法依据报告（机器元数据），与咨询报告（AI 终稿）分轨，互不混入。
+- 🗂️ **完整排盘报告**：`report render --style chart`（或 `report_render {style:"chart"}`）不经 AI 解读，直接把该技法的全部盘面段落排成 PDF / DOCX——封面、基本信息、可点击目录与书签、「第 N 页 / 共 M 页」、技法依据附录。
+- 📚 **自备知识库**：把自己的笔记（`.md` / `.txt`）放进 `horosa-skill knowledge mine` 列出的文件夹（或 `knowledge add <名> --file …`），计算时传 `knowledge:["条目名", "#标签", "auto"]`，选中的正文随结果挂在 `data.knowledge_context` 供 AI 参考（不进引擎、不改盘面；总字数受 `HOROSA_USER_KNOWLEDGE_MAX_CHARS` 限）。
+
+```bash
+uv run horosa-skill knowledge add 八字/滴天髓笔记 --file ./notes.md --techniques bazi_birth --tags 古籍
+uv run horosa-skill knowledge mine
+```
 
 ```bash
 uv run horosa-skill memory query                 # 按 tool / entity / run_id / 全文 检索
@@ -544,7 +552,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 🧰 可调用工具 | 110 / 110 `ok=true` |
-| 🧪 工程测试 | **2052 / 2052 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 116 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 🧪 工程测试 | **2071 / 2071 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 116 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 🛡️ 未确认参数时强制追问 | 100 个技法工具触发 `must_ask_user=true` |
 | 🔓 免闸直读 | 10 个注册表 / 知识 / 解析类工具不经澄清闸 |
 | 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 107 个导出 technique；契约 v15 镜像桌面端 aiExport v58） |
@@ -560,7 +568,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 2052 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 2071 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

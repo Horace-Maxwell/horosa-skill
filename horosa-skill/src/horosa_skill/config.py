@@ -68,6 +68,9 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     "HOROSA_OUTPUT_SCHEMA": "stable",
     # 输出文字：缺省简体（逐字节不变）；zh-Hant = 繁体（台湾字形）、zh-Hant-HK = 繁体（香港字形）。只转给人读的字段，见 textscript/localize.py。
     "HOROSA_OUTPUT_SCRIPT": "stable",
+    # 自备知识库（knowledge/user.py）：文件夹（缺省 <data_dir>/knowledge）与每次计算带入的总字数上限。
+    "HOROSA_USER_KNOWLEDGE_DIR": "stable",
+    "HOROSA_USER_KNOWLEDGE_MAX_CHARS": "stable",
     "HOROSA_ASTRODATA_DB": "stable",
     "HOROSA_NODE_BIN": "stable",
     "HOROSA_CORE_JS_ROOT": "experimental",
@@ -355,6 +358,8 @@ FIELD_ENV_MAP = {
     "trace_capture_ai_answers": "HOROSA_TRACE_CAPTURE_AI_ANSWERS",
     "trace_otlp_endpoint": "HOROSA_TRACE_OTLP_ENDPOINT",
     "output_script": "HOROSA_OUTPUT_SCRIPT",
+    "user_knowledge_dir": "HOROSA_USER_KNOWLEDGE_DIR",
+    "user_knowledge_max_chars": "HOROSA_USER_KNOWLEDGE_MAX_CHARS",
 }
 
 
@@ -395,6 +400,9 @@ class Settings(BaseModel):
     trace_otlp_endpoint: str | None = None
     # 输出文字（textscript.SCRIPTS 之一）。只在结果离开进程时转换；存档、门禁、引擎永远是简体。
     output_script: str = "zh-Hans"
+    # 自备知识库：None = <data_dir>/knowledge（knowledge/user.py::knowledge_dir 推导）；单次计算带入的总字数上限。
+    user_knowledge_dir: Path | None = None
+    user_knowledge_max_chars: int = 12_000
     # Settings provenance（v0.33.0 批 II-3）：每字段的取值来源（env:<NAME> / derived:<字段> / default），
     # doctor 三列（字段/值/来源）据此呈现——「这项配置为什么是这个值」一眼可答。exclude 不入序列化。
     settings_provenance: dict[str, str] = Field(default_factory=dict, exclude=True)
@@ -448,10 +456,12 @@ class Settings(BaseModel):
             trace_capture_ai_answers=_env_bool("HOROSA_TRACE_CAPTURE_AI_ANSWERS", False),
             trace_otlp_endpoint=_env_text("HOROSA_TRACE_OTLP_ENDPOINT"),
             output_script=_env_script("HOROSA_OUTPUT_SCRIPT"),
+            user_knowledge_dir=_env_path("HOROSA_USER_KNOWLEDGE_DIR", data_dir / "knowledge"),
+            user_knowledge_max_chars=_env_int("HOROSA_USER_KNOWLEDGE_MAX_CHARS", 12_000, minimum=500, maximum=200_000),
             settings_provenance={
                 field: (f"env:{env_name}" if _env_text(env_name) is not None else (
                     # 三个路径字段无独立 env 时由 data_dir 派生（而非模型默认）
-                    "derived:data_dir" if field in {"db_path", "output_dir", "trace_dir"}
+                    "derived:data_dir" if field in {"db_path", "output_dir", "trace_dir", "user_knowledge_dir"}
                     # 两个 URL 无独立 env 时由端口派生（auto 模式下端口本身也是探出来的）
                     else "derived:local_backend_port" if field == "server_root"
                     else "derived:local_chart_port" if field == "chart_server_root"

@@ -154,6 +154,17 @@ def _resolve_toolsets(raw: str) -> dict[str, Any]:
     return {"requested": tokens, "effective": effective, "unknown": unknown}
 
 
+def _user_knowledge_profile(settings: Settings) -> dict[str, Any]:
+    from horosa_skill.knowledge import user as user_knowledge
+
+    entries = user_knowledge.list_entries(settings)
+    return {
+        "count": len(entries),
+        "entries": [entry.id for entry in entries[:50]],
+        "use": "knowledge=[条目 id / 标题 / #标签 / auto] 传给任一技法；正文在 data.knowledge_context",
+    }
+
+
 def _server_profile(settings: Settings) -> dict[str, Any]:
     """本进程实际暴露了什么（经 horosa_agent_guidance 可查；_SERVER_INSTRUCTIONS 没预算放它）。"""
     resolved = _resolve_toolsets(os.environ.get("HOROSA_TOOLSETS", ""))
@@ -171,6 +182,8 @@ def _server_profile(settings: Settings) -> dict[str, Any]:
         "tool_run_registered": compact or effective is not None,
         # 结果里给人读的字段用哪种文字（zh-Hans / zh-Hant / zh-Hant-HK）；选项、设置值、段名入参始终是简体。
         "output_script": settings.output_script,
+        # 自备知识库：有几条、在哪；计算时传 knowledge=[条目 / #标签 / auto] 才会带进结果（缺省不带）。
+        "user_knowledge": _user_knowledge_profile(settings),
         "hint": "技法工具未平铺时用 horosa_tool_run(tool_name=…) 直呼；HOROSA_TOOLSETS 合法域见 toolsets_effective。",
     }
 

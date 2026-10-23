@@ -117,6 +117,23 @@ RECOVERY_KINDS: dict[str, dict[str, _Any]] = {
 
 # 精确码表：语义明确、需要专门指路的码。
 RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
+    # 自备知识库（knowledge/user.py）：都是使用者自己能改的输入问题，不是「重试 / 体检」。
+    "knowledge.user_not_found": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "自备知识库里没有这一条。`horosa-skill knowledge mine` 列出全部条目（id / 标题 / 标签）。",
+            "That entry is not in your knowledge folder. `horosa-skill knowledge mine` lists every entry (id / title / tags).",
+        ),
+        "next_action": "pick_entry_from_list",
+    },
+    "knowledge.user_exists": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "已有同名条目。换个名字，或确认要覆盖后加 --overwrite。",
+            "An entry with that name already exists. Pick another name, or pass --overwrite to replace it.",
+        ),
+        "next_action": "rename_or_overwrite",
+    },
     "tool.backend_param_error": {
         "kind": "input",
         "prompt_to_user": bilingual(

@@ -30,10 +30,26 @@ HUMAN_RENDER_HIDDEN_SECTION_IDS = {
 }
 
 
+def _labeler(script: str) -> Any:
+    """渲染器自己写死的标签（目录 / 完整盘面 / 页脚…）按输出文字转一次。
+
+    只用于字面量：文档里的文字调用方已转好，对繁体再转一次不幂等（萬里 → 萬裡、征戰 → 徵戰），绝不能整段再过一遍。
+    """
+    if script == SIMPLIFIED:
+        return str
+    from horosa_skill.textscript import convert
+
+    return lambda text: convert(text, script)
+
+
 def render_report(
     document: dict[str, Any], *, output_path: Path, format_name: str, script: str = SIMPLIFIED
 ) -> dict[str, Any]:
-    """`script` 只决定 DOCX/PDF 选哪套字形的字体（繁体用 TC/HK 字体）；文字本身由调用方先转好。"""
+    """`script` 决定 DOCX/PDF 选哪套字形的字体（繁体用 TC/HK 字体）与渲染器自带标签的写法。
+
+    咨询 / 排盘报告的文字由调用方先转好；**技法依据报告传简体原文**——它的人读版与 markdown 由模板现生成，模板里的标签
+    也要转，所以在这里生成之后整体转一次（先转再生成会让模板标签漏转，生成后再转已转的部分又不幂等）。
+    """
     normalized = format_name.lower()
     if normalized not in {"json", "docx", "pdf", "markdown"}:
         raise ValueError("format must be one of: json, docx, pdf, markdown")
@@ -45,8 +61,14 @@ def render_report(
     fd, tmp_name = tempfile.mkstemp(dir=str(output_path.parent), prefix=f".{output_path.name}.", suffix=".tmp")
     os.close(fd)
     tmp_path = Path(tmp_name)
-    if normalized in {"docx", "pdf"} and _is_technique_report(document):
-        document = _technique_report_human_document(document)
+    technique_report = _is_technique_report(document)
+    if technique_report:
+        from horosa_skill.textscript.localize import localize_document
+
+        if normalized in {"docx", "pdf"}:
+            document = _technique_report_human_document(document)
+        if normalized != "markdown":
+            document = localize_document(document, script)
     try:
         if normalized == "json":
             tmp_path.write_text(json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -55,7 +77,7 @@ def render_report(
             # 由 DOCX/PDF 渲染器承载，且 references/reports.md 明令正文不带机器元数据。
             from horosa_skill.reports.technique_card import render_technique_report_markdown
 
-            tmp_path.write_text(render_technique_report_markdown(document), encoding="utf-8")
+            tmp_path.write_text(_labeler(script)(render_technique_report_markdown(document)), encoding="utf-8")
         elif normalized == "docx":
             _render_docx(document, tmp_path, script)
         else:  # pdf
@@ -205,6 +227,7 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
     from docx.oxml.ns import qn
     from docx.shared import Inches, Pt, RGBColor
 
+    t = _labeler(script)
     doc = Document()
     font_name = _docx_font_name(script)
     for section in doc.sections:
@@ -281,9 +304,9 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
         table.autofit = False
         set_table_full_width(table)
         table.alignment = WD_TABLE_ALIGNMENT.CENTER
-        col_width = Inches(6.25 / cols)
-        for column in table.columns:
-            column.width = col_width
+        widths = [Inches(w) for w in _column_widths(header, rows, 6.25, 0.5 if cols <= 8 else 6.25 / cols)]
+        for column, width in zip(table.columns, widths):
+            column.width = width
         header_row = table.rows[0]
         # 跨页重复表头
         tr_pr = header_row._tr.get_or_add_trPr()
@@ -291,7 +314,7 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
         tbl_header.set(qn("w:val"), "true")
         tr_pr.append(tbl_header)
         for idx, cell in enumerate(header_row.cells):
-            cell.width = col_width
+            cell.width = widths[idx]
             set_cell_shading(cell, "EEF6F2")
             set_cell_border(cell)
             p = cell.paragraphs[0]
@@ -300,23 +323,44 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
         for data_row in rows:
             row = table.add_row()
             for idx, cell in enumerate(row.cells):
-                cell.width = col_width
+                cell.width = widths[idx]
                 set_cell_border(cell)
-                p = cell.paragraphs[0]
-                run = p.add_run(data_row[idx] if idx < len(data_row) else "")
-                style_run(run, size=9.6, color="14211F")
+                add_inline_runs(cell.paragraphs[0], data_row[idx] if idx < len(data_row) else "", size=9.6)
         doc.add_paragraph()
 
+    def add_inline_runs(paragraph: Any, text: str, *, size: float = 10.2, color: str = "14211F", bold_label: bool = False) -> None:
+        # **粗体** 成粗体 run，`代码` 去反引号；「键：值」行键加粗（与 PDF 同一口径）。
+        labelled = _LABEL_LINE_RE.match(text) if bold_label else None
+        if labelled:
+            style_run(paragraph.add_run(labelled.group(1) + labelled.group(2)), size=size, bold=True, color=color)
+            text = labelled.group(3)
+        for index, piece in enumerate(_MD_BOLD_RE.split(text)):
+            if piece:
+                style_run(paragraph.add_run(_MD_CODE_RE.sub(r"\1", piece)), size=size, bold=index % 2 == 1, color=color)
+
     def add_text(text: str, *, style: str = "Normal") -> None:
-        # 正文按块渲染：Markdown 管道表成真表格，其余成段落。
+        # 正文按块渲染：Markdown 管道表成真表格；其余逐行认标题 / 列表 / 引用 / 键值行。
         for kind, payload in _split_markdown_blocks(text):
             if kind == "table":
                 add_data_table(payload["header"], payload["rows"])
                 continue
-            for paragraph in _paragraphs(payload):
-                p = doc.add_paragraph(style=style)
-                run = p.add_run(paragraph)
-                style_run(run, size=10.2, color="14211F")
+            for line_kind, marker, body in _md_lines(payload):
+                if line_kind in {"blank", "rule"}:
+                    continue
+                if line_kind == "heading":
+                    p = doc.add_paragraph()
+                    p.paragraph_format.space_before = Pt(6)
+                    style_run(p.add_run(body.replace("**", "")), size=11, bold=True, color="0F766E")
+                elif line_kind in {"bullet", "ordered"}:
+                    p = doc.add_paragraph(style="List Bullet" if line_kind == "bullet" else "List Number")
+                    add_inline_runs(p, body)
+                elif line_kind == "quote":
+                    p = doc.add_paragraph(style=style)
+                    p.paragraph_format.left_indent = Inches(0.25)
+                    add_inline_runs(p, body, size=9.8, color="66706D")
+                else:
+                    p = doc.add_paragraph(style=style)
+                    add_inline_runs(p, body, bold_label=True)
 
     def set_outline_level(paragraph: Any, level: int) -> None:
         # 给段落挂大纲级别（0=一级）：Word 导航窗格/自动目录识别 outlineLvl，无需换 Heading 视觉样式。
@@ -375,7 +419,7 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
     pass_through_tables: list[dict[str, Any]] = []
 
     ai_report = document.get("ai_report") if isinstance(document.get("ai_report"), dict) else {}
-    display_question = _display_question(document, ai_report)
+    display_question = str(document.get("intro_text") or "") or _display_question(document, ai_report, t)
     human_executive_summary = _human_ai_value(ai_report, "executive_summary")
     human_consultation_basis = _human_ai_value(ai_report, "consultation_basis")
     human_reading_steps = _human_ai_list(ai_report, "reading_steps")
@@ -395,29 +439,29 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
         cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
     p = cover.cell(0, 0).paragraphs[0]
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = p.add_run(str(document.get("cover_label") or "专业咨询报告"))
+    run = p.add_run(str(document.get("cover_label") or t("专业咨询报告")))
     style_run(run, size=9.5, color="DBE8E3")
     p = cover.cell(1, 0).paragraphs[0]
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = p.add_run(str(document.get("title") or "结构化咨询报告"))
+    run = p.add_run(str(document.get("title") or t("结构化咨询报告")))
     style_run(run, size=27, bold=True, color="FFFFFF")
     p = cover.cell(2, 0).paragraphs[0]
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    meta = str(document.get("cover_meta") or "结构化解读 · 行动建议 · 风险提示")
+    meta = str(document.get("cover_meta") or t("结构化解读 · 行动建议 · 风险提示"))
     run = p.add_run(meta)
     style_run(run, size=9.5, color="DBE8E3")
     doc.add_paragraph()
 
     # 目录：TOC 域（取大纲级别 1-2），Word 打开时经 updateFields 自动生成、可点击跳转。
     toc_head = doc.add_paragraph()
-    toc_run = toc_head.add_run("目录")
+    toc_run = toc_head.add_run(t("目录"))
     style_run(toc_run, size=13, bold=True, color="0F766E")
     toc_paragraph = doc.add_paragraph()
     fld = OxmlElement("w:fldSimple")
     fld.set(qn("w:instr"), 'TOC \\o "1-2" \\h \\z \\u')
     placeholder = OxmlElement("w:r")
     placeholder_text = OxmlElement("w:t")
-    placeholder_text.text = "（打开文档后目录将自动更新）"
+    placeholder_text.text = t("（打开文档后目录将自动更新）")
     placeholder.append(placeholder_text)
     fld.append(placeholder)
     toc_paragraph._p.append(fld)
@@ -429,49 +473,62 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
     update_fields.set(qn("w:val"), "true")
     doc.add_paragraph()
 
-    add_heading_block(str(document.get("intro_heading") or "解读目标"))
+    add_heading_block(str(document.get("intro_heading") or t("解读目标")))
     add_text(display_question)
+    human_sections = [s for s in _human_sections(document) if isinstance(s, dict)]
+    for section in human_sections:
+        if section.get("group") == "basis":
+            add_heading_block(str(section.get("title") or t("基本信息")))
+            add_text(str(section.get("body") or ""))
+    show_ai = document.get("show_ai", True) is not False
 
-    if human_consultation_basis:
-        add_card("起盘依据", str(human_consultation_basis or ""), accent="0F766E")
-    if human_reading_steps:
-        add_card("解盘步骤", _steps_text(human_reading_steps), accent="2563EB")
-    if ai_report.get("analysis_focus") or ai_report.get("direct_answer"):
+    if show_ai and human_consultation_basis:
+        add_card(t("起盘依据"), str(human_consultation_basis or ""), accent="0F766E")
+    if show_ai and human_reading_steps:
+        add_card(t("解盘步骤"), _steps_text(human_reading_steps), accent="2563EB")
+    if show_ai and (ai_report.get("analysis_focus") or ai_report.get("direct_answer")):
         add_card(
-            "核心结论",
+            t("核心结论"),
             str(ai_report.get("direct_answer") or ai_report.get("analysis_focus") or ""),
         )
-    if human_executive_summary:
-        add_heading_block("总览摘要")
+    if show_ai and human_executive_summary:
+        add_heading_block(t("总览摘要"))
         add_text(str(human_executive_summary or ""))
-    if ai_report.get("answer_text") and str(ai_report.get("answer_text")) != str(human_executive_summary or ""):
-        add_heading_block("完整解盘正文")
+    if show_ai and ai_report.get("answer_text") and str(ai_report.get("answer_text")) != str(human_executive_summary or ""):
+        add_heading_block(t("完整解盘正文"))
         add_text(str(ai_report.get("answer_text") or ""))
-    if human_analysis_sections:
-        add_heading_block("正文解读")
+    if show_ai and human_analysis_sections:
+        add_heading_block(t("正文解读"))
         for section in human_analysis_sections:
             if isinstance(section, dict):
-                add_heading_block(str(section.get("title") or "分析"), level=2)
+                add_heading_block(str(section.get("title") or t("分析")), level=2)
                 add_text(str(section.get("body") or section.get("content") or ""))
             else:
                 add_text(str(section))
-    if human_recommendations:
-        add_card("建议", "\n".join(f"- {item}" for item in human_recommendations), accent="B7791F")
-    if human_limitations:
-        add_heading_block("限制与注意事项")
+    if show_ai and human_recommendations:
+        add_card(t("建议"), "\n".join(f"- {item}" for item in human_recommendations), accent="B7791F")
+    if show_ai and human_limitations:
+        add_heading_block(t("限制与注意事项"))
         add_text("\n".join(f"- {item}" for item in human_limitations))
 
-    for section in _human_sections(document):
-        if not isinstance(section, dict):
+    parts = {"chart": t("完整盘面"), "appendix": t("附录")}
+    current_group: str | None = None
+    for section in human_sections:
+        group = section.get("group")
+        if group == "basis":
             continue
-        add_heading_block(str(section.get("title") or "章节"))
+        if group in parts and group != current_group:
+            doc.add_page_break()
+            add_heading_block(parts[group])
+        current_group = group
+        add_heading_block(str(section.get("title") or t("章节")), level=2 if group in parts else 1)
         add_text(str(section.get("body") or ""))
 
     # 文档元数据：文件属性可检索/归档（标题/作者/主题/关键词/创建时间）。
     # OOXML core property 单项硬限 255 字符；search_index 里可能混入整段长文本，先滤短词再截断。
     source_meta = document.get("source") if isinstance(document.get("source"), dict) else {}
     props = doc.core_properties
-    props.title = _core_prop_text(document.get("title") or "结构化咨询报告")
+    props.title = _core_prop_text(document.get("title") or t("结构化咨询报告"))
     props.author = "Horosa Skill"
     props.subject = _core_prop_text(source_meta.get("technique_label") or source_meta.get("tool_name") or "")
     keywords = document.get("search_index") if isinstance(document.get("search_index"), dict) else {}
@@ -484,7 +541,7 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
     footer = doc.sections[0].footer
     footer_p = footer.paragraphs[0]
     footer_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    title_run = footer_p.add_run(f"{props.title}　·　第 ")
+    title_run = footer_p.add_run(f"{props.title}　·　{t('第')} ")  # 标题已转过，不能再转（不幂等）
     style_run(title_run, size=8, color="66706D")
     for instr in ("PAGE", "NUMPAGES"):
         fld_page = OxmlElement("w:fldSimple")
@@ -496,26 +553,91 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
         fld_page.append(run_el)
         footer_p._p.append(fld_page)
         if instr == "PAGE":
-            mid_run = footer_p.add_run(" 页 / 共 ")
+            mid_run = footer_p.add_run(t(" 页 / 共 "))
             style_run(mid_run, size=8, color="66706D")
-    tail_run = footer_p.add_run(" 页")
+    tail_run = footer_p.add_run(t(" 页"))
     style_run(tail_run, size=8, color="66706D")
 
     doc.save(str(output_path))
 
 
+_MD_HEADING_RE = re.compile(r"^(#{1,4})\s+(.*)$")
+_MD_BULLET_RE = re.compile(r"^\s*[-*•·]\s+(.*)$")
+_MD_ORDERED_RE = re.compile(r"^\s*(\d{1,3})[.)、]\s+(.*)$")
+_MD_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+_MD_CODE_RE = re.compile(r"`([^`]+)`")
+_LABEL_LINE_RE = re.compile(r"^([^：:|*`\[\]]{1,14})([：:])(.+)$")
+
+
+def _md_inline(text: str) -> str:
+    """一行 Markdown → reportlab 段落标记：先转义，再还原 **粗体** 与 `代码`（引擎正文里常见的两种）。"""
+    escaped = _esc(text)
+    escaped = _MD_BOLD_RE.sub(r"<b>\1</b>", escaped)
+    return _MD_CODE_RE.sub(r'<font color="#0f766e">\1</font>', escaped)
+
+
+def _md_lines(text: str) -> list[tuple[str, str, str]]:
+    """正文逐行分类：(kind, marker, text)，kind ∈ heading / bullet / ordered / quote / rule / blank / text。"""
+    out: list[tuple[str, str, str]] = []
+    for raw in (text or "").splitlines():
+        line = raw.rstrip()
+        stripped = line.strip()
+        if not stripped:
+            out.append(("blank", "", ""))
+        elif stripped in {"---", "***", "___", "==", "==="}:
+            out.append(("rule", "", ""))
+        elif (m := _MD_HEADING_RE.match(stripped)):
+            out.append(("heading", m.group(1), m.group(2).strip()))
+        elif stripped.startswith("[") and stripped.endswith("]") and len(stripped) <= 40:
+            out.append(("heading", "###", stripped[1:-1]))
+        elif (m := _MD_BULLET_RE.match(line)):
+            out.append(("bullet", "•", m.group(1)))
+        elif (m := _MD_ORDERED_RE.match(line)):
+            out.append(("ordered", f"{m.group(1)}.", m.group(2)))
+        elif stripped.startswith(">"):
+            out.append(("quote", "", stripped.lstrip("> ").strip()))
+        else:
+            out.append(("text", "", stripped))
+    return out
+
+
+def _visual_width(text: str) -> int:
+    return sum(2 if ord(ch) > 0x2E7F else 1 for ch in text)
+
+
+def _column_widths(header: list[str], rows: list[list[str]], total: float, minimum: float) -> list[float]:
+    """按每列内容的视觉宽度（CJK 记 2）分配列宽：短列不被拉宽、长列多拿空间，每列不低于 minimum。"""
+    cols = max(1, len(header))
+    weights = []
+    for index in range(cols):
+        cells = [header[index] if index < len(header) else ""] + [row[index] if index < len(row) else "" for row in rows]
+        longest = max((_visual_width(str(cell)) for cell in cells), default=1)
+        weights.append(min(max(longest, 4), 60))
+    scale = total / sum(weights)
+    widths = [max(w * scale, minimum) for w in weights]
+    overflow = sum(widths) - total
+    if overflow > 0:
+        flexible = [i for i, w in enumerate(widths) if w > minimum]
+        flex_total = sum(widths[i] - minimum for i in flexible) or 1
+        for i in flexible:
+            widths[i] -= overflow * (widths[i] - minimum) / flex_total
+    return widths
+
+
 def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPLIFIED) -> None:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
-    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import mm
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.platypus import CondPageBreak, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.platypus.flowables import HRFlowable
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.cidfonts import UnicodeCIDFont
     from reportlab.pdfbase.ttfonts import TTFont
 
     font_name, bold_font_name = _register_pdf_fonts(pdfmetrics, UnicodeCIDFont, TTFont, script)
+    t = _labeler(script)
 
     styles = getSampleStyleSheet()
     page_width, page_height = A4
@@ -529,6 +651,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
     paper = colors.HexColor("#fbfaf5")
     pale = colors.HexColor("#eef6f2")
     line = colors.HexColor("#d8ded9")
+    stripe = colors.HexColor("#f7faf8")
 
     base = ParagraphStyle(
         "HorosaBody",
@@ -577,162 +700,266 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
         spaceBefore=8,
         spaceAfter=5,
     )
-    story: list[Any] = []
+    part_style = ParagraphStyle("HorosaPart", parent=heading, fontSize=19, leading=26, textColor=colors.white)
+    inner_heading = ParagraphStyle("HorosaInnerHeading", parent=base, fontName=bold_font_name, fontSize=10.4,
+                                   leading=16, textColor=green, spaceBefore=6, spaceAfter=2)
+    bullet_style = ParagraphStyle("HorosaBullet", parent=base, leftIndent=14, bulletIndent=3, spaceAfter=2)
+    quote_style = ParagraphStyle("HorosaQuote", parent=base, leftIndent=12, textColor=muted, fontSize=9.2)
+    toc_styles = [
+        ParagraphStyle("HorosaToc0", parent=base, fontName=bold_font_name, fontSize=10, leading=14, leftIndent=0,
+                       spaceBefore=3, spaceAfter=0),
+        ParagraphStyle("HorosaToc1", parent=base, fontSize=8.8, leading=11.5, leftIndent=14, textColor=muted,
+                       spaceBefore=0, spaceAfter=0),
+    ]
+    toc_page_styles = [ParagraphStyle(f"{style.name}Page", parent=style, leftIndent=0, alignment=TA_RIGHT)
+                       for style in toc_styles]
 
-    def add_heading(text: str, style: ParagraphStyle = heading) -> None:
-        block = Table(
-            [[Paragraph(_esc(text), style)]],
-            colWidths=[content_width],
-            style=TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, -1), pale),
-                    ("BOX", (0, 0), (-1, -1), 0.55, line),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 9),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 9),
-                    ("TOPPADDING", (0, 0), (-1, -1), 6),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ]
-            ),
+    def toc_table(entries: list[tuple[int, str, str]], pages: dict[str, int]) -> Any:
+        # 自绘目录：第一遍页码还不知道就留空（行高不变，版面与第二遍一致），第二遍填上一遍记下的页码。
+        rows = []
+        for level, text, key in entries:
+            depth = min(level, len(toc_styles) - 1)
+            page = pages.get(key)
+            rows.append([
+                Paragraph(f'<a href="#{key}">{_esc(text)}</a>', toc_styles[depth]),
+                Paragraph(str(page) if page else "", toc_page_styles[depth]),
+            ])
+        return Table(
+            rows,
+            colWidths=[content_width - 18 * mm, 18 * mm],
+            style=TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 1),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                *[("LINEBELOW", (0, r), (-1, r), 0.3, line) for r, (lv, _, _) in enumerate(entries) if lv == 0],
+            ]),
         )
-        story.append(Spacer(1, 8))
-        story.append(block)
-        story.append(Spacer(1, 5))
 
-    table_cell = ParagraphStyle("HorosaTableCell", parent=base, fontSize=8.6, leading=12, spaceAfter=0)
-    table_head = ParagraphStyle("HorosaTableHead", parent=table_cell, fontName=bold_font_name, textColor=green)
+    def compose(pages: dict[str, int]) -> list[Any]:
+        # 每遍排版都现组一份 story：flowable 被 wrap/split 过就不能再排（multiBuild 复用同一批对象会 LayoutError）。
+        story: list[Any] = []
+        entries: list[tuple[int, str, str]] = []
+        toc_at: int | None = None
 
-    def add_data_table(header: list[str], rows: list[list[str]]) -> None:
-        # Markdown 管道表 → PDF 真表格：表头底纹 + repeatRows 跨页重复表头 + 细网格。
-        cols = max(1, len(header))
-        data = [[Paragraph(_esc(h), table_head) for h in header]]
-        for row in rows:
-            data.append([Paragraph(_esc(row[idx] if idx < len(row) else ""), table_cell) for idx in range(cols)])
-        story.append(
-            Table(
-                data,
-                colWidths=[content_width / cols] * cols,
-                repeatRows=1,
-                style=TableStyle(
-                    [
-                        ("BACKGROUND", (0, 0), (-1, 0), pale),
-                        ("GRID", (0, 0), (-1, -1), 0.4, line),
-                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                        ("LEFTPADDING", (0, 0), (-1, -1), 5),
-                        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-                        ("TOPPADDING", (0, 0), (-1, -1), 3),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-                    ]
-                ),
-            )
-        )
-        story.append(Spacer(1, 6))
+        def mark(flowable: Any, level: int, text: str) -> Any:
+            # 目录 / 书签登记：afterFlowable 看见这个标记就记一条（标题块是 Table，不是 Paragraph）。
+            # 键按出现顺序编号，各遍一致——上一遍记下的页码才能对回这一遍的同一个标题。
+            key = f"h{len(entries)}"
+            entries.append((level, text, key))
+            flowable._horosa_toc = (level, text, key)
+            return flowable
 
-    def add_body(text: str) -> None:
-        for kind, payload in _split_markdown_blocks(text):
-            if kind == "table":
-                add_data_table(payload["header"], payload["rows"])
-                continue
-            for paragraph in _paragraphs(payload):
-                story.append(Paragraph(_esc(paragraph), base))
-                story.append(Spacer(1, 4))
-
-    def add_note_card(title_text: str, body_text: str, *, accent: Any = green) -> None:
-        rows = [
-            [Paragraph(_esc(title_text), ParagraphStyle("CardTitle", parent=subheading, textColor=accent))],
-            *[[Paragraph(_esc(paragraph), base)] for paragraph in _paragraphs(body_text)],
-        ]
-        story.append(
-            Table(
-                rows,
+        def add_heading(text: str, style: ParagraphStyle = heading, *, level: int = 0) -> None:
+            block = Table(
+                [[Paragraph(_esc(text), style)]],
                 colWidths=[content_width],
                 style=TableStyle(
                     [
-                        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-                        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#dfe7e1")),
-                        ("LINEBEFORE", (0, 0), (0, -1), 3, accent),
-                        ("LEFTPADDING", (0, 0), (-1, -1), 11),
-                        ("RIGHTPADDING", (0, 0), (-1, -1), 11),
-                        ("TOPPADDING", (0, 0), (-1, -1), 7),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+                        ("BACKGROUND", (0, 0), (-1, -1), pale),
+                        ("BOX", (0, 0), (-1, -1), 0.55, line),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 9),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 9),
+                        ("TOPPADDING", (0, 0), (-1, -1), 6),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
                     ]
                 ),
             )
-        )
-        story.append(Spacer(1, 9))
+            story.append(CondPageBreak(60 * mm if level == 0 else 40 * mm))  # 标题不落在页底孤零零一行
+            story.append(Spacer(1, 8))
+            story.append(mark(block, level, text))
+            story.append(Spacer(1, 5))
 
-    ai_report = document.get("ai_report") if isinstance(document.get("ai_report"), dict) else {}
-    display_question = _display_question(document, ai_report)
-    human_executive_summary = _human_ai_value(ai_report, "executive_summary")
-    human_consultation_basis = _human_ai_value(ai_report, "consultation_basis")
-    human_reading_steps = _human_ai_list(ai_report, "reading_steps")
-    human_analysis_sections = _human_ai_list(ai_report, "analysis_sections")
-    human_recommendations = _human_ai_list(ai_report, "recommendations")
-    human_limitations = _human_ai_list(ai_report, "limitations")
-    metadata = [str(document.get("cover_meta") or "结构化解读 · 行动建议 · 风险提示")]
-    cover = Table(
-        [
-            [Paragraph(_esc(str(document.get("cover_label") or "专业咨询报告")), cover_meta)],
-            [Paragraph(_esc(str(document.get("title") or "结构化咨询报告")), cover_title)],
-            [Paragraph(_esc(" / ".join(metadata)), cover_meta)],
-        ],
-        colWidths=[content_width],
-        style=TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#11231f")),
-                ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#24443e")),
-                ("LEFTPADDING", (0, 0), (-1, -1), 20),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 20),
-                ("TOPPADDING", (0, 0), (0, 0), 20),
-                ("BOTTOMPADDING", (0, 0), (0, 0), 8),
-                ("TOPPADDING", (0, 1), (0, 1), 10),
-                ("BOTTOMPADDING", (0, 1), (0, 1), 12),
-                ("TOPPADDING", (0, 2), (0, 2), 8),
-                ("BOTTOMPADDING", (0, 2), (0, 2), 20),
+        def add_part(text: str) -> None:
+            story.append(PageBreak())
+            block = Table(
+                [[Paragraph(_esc(text), part_style)]],
+                colWidths=[content_width],
+                style=TableStyle([
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#11231f")),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 14),
+                    ("TOPPADDING", (0, 0), (-1, -1), 12),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
+                ]),
+            )
+            story.append(mark(block, 0, text))
+            story.append(Spacer(1, 10))
+
+        table_cell = ParagraphStyle("HorosaTableCell", parent=base, fontSize=8.6, leading=12, spaceAfter=0)
+        table_head = ParagraphStyle("HorosaTableHead", parent=table_cell, fontName=bold_font_name, textColor=green)
+
+        def add_data_table(header: list[str], rows: list[list[str]]) -> None:
+            # Markdown 管道表 → PDF 真表格：按内容分配列宽、表头底纹 + repeatRows 跨页重复表头 + 隔行浅底。
+            cols = max(1, len(header))
+            data = [[Paragraph(_md_inline(h), table_head) for h in header]]
+            for row in rows:
+                data.append([Paragraph(_md_inline(row[idx] if idx < len(row) else ""), table_cell) for idx in range(cols)])
+            table_style = [
+                ("BACKGROUND", (0, 0), (-1, 0), pale),
+                ("GRID", (0, 0), (-1, -1), 0.4, line),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
             ]
-        ),
-    )
-    story.append(cover)
-    story.append(Spacer(1, 14))
+            table_style += [("BACKGROUND", (0, r), (-1, r), stripe) for r in range(2, len(data), 2)]
+            story.append(
+                Table(
+                    data,
+                    colWidths=_column_widths(header, rows, content_width, 12 * mm if cols <= 8 else content_width / cols),
+                    repeatRows=1,
+                    style=TableStyle(table_style),
+                )
+            )
+            story.append(Spacer(1, 6))
 
-    add_heading(str(document.get("intro_heading") or "解读目标"))
-    add_body(display_question)
-    if human_consultation_basis:
-        add_note_card("起盘依据", str(human_consultation_basis or ""), accent=green)
-    if human_reading_steps:
-        add_note_card("解盘步骤", _steps_text(human_reading_steps), accent=colors.HexColor("#2563eb"))
-    if ai_report.get("analysis_focus") or ai_report.get("direct_answer"):
-        add_note_card(
-            "核心结论",
-            str(ai_report.get("direct_answer") or ai_report.get("analysis_focus") or ""),
-            accent=green,
+        def add_text(text: str) -> None:
+            for kind, marker, body in _md_lines(text):
+                if kind == "blank":
+                    story.append(Spacer(1, 3))
+                elif kind == "rule":
+                    story.append(HRFlowable(width="100%", thickness=0.5, color=line, spaceBefore=4, spaceAfter=4))
+                elif kind == "heading":
+                    story.append(Paragraph(_md_inline(body), inner_heading))
+                elif kind in {"bullet", "ordered"}:
+                    story.append(Paragraph(_md_inline(body), bullet_style, bulletText=marker))
+                elif kind == "quote":
+                    story.append(Paragraph(_md_inline(body), quote_style))
+                elif (labelled := _LABEL_LINE_RE.match(body)) and "<" not in labelled.group(1):
+                    # 「日期：…」「时间算法：…」这类键值行：键加粗，扫读快。
+                    story.append(Paragraph(f"<b>{_esc(labelled.group(1))}</b>{_esc(labelled.group(2))}{_md_inline(labelled.group(3))}", base))
+                else:
+                    story.append(Paragraph(_md_inline(body), base))
+
+        def add_body(text: str) -> None:
+            for kind, payload in _split_markdown_blocks(text):
+                if kind == "table":
+                    add_data_table(payload["header"], payload["rows"])
+                else:
+                    add_text(payload)
+
+        def add_note_card(title_text: str, body_text: str, *, accent: Any = green) -> None:
+            rows = [
+                [Paragraph(_esc(title_text), ParagraphStyle("CardTitle", parent=subheading, textColor=accent))],
+                *[[Paragraph(_md_inline(paragraph), base)] for paragraph in _paragraphs(body_text)],
+            ]
+            story.append(
+                Table(
+                    rows,
+                    colWidths=[content_width],
+                    style=TableStyle(
+                        [
+                            ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                            ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#dfe7e1")),
+                            ("LINEBEFORE", (0, 0), (0, -1), 3, accent),
+                            ("LEFTPADDING", (0, 0), (-1, -1), 11),
+                            ("RIGHTPADDING", (0, 0), (-1, -1), 11),
+                            ("TOPPADDING", (0, 0), (-1, -1), 7),
+                            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+                        ]
+                    ),
+                )
+            )
+            story.append(Spacer(1, 9))
+
+        ai_report = document.get("ai_report") if isinstance(document.get("ai_report"), dict) else {}
+        show_ai = document.get("show_ai", True) is not False
+        display_question = str(document.get("intro_text") or "") or _display_question(document, ai_report, t)
+        human_executive_summary = _human_ai_value(ai_report, "executive_summary")
+        human_consultation_basis = _human_ai_value(ai_report, "consultation_basis")
+        human_reading_steps = _human_ai_list(ai_report, "reading_steps")
+        human_analysis_sections = _human_ai_list(ai_report, "analysis_sections")
+        human_recommendations = _human_ai_list(ai_report, "recommendations")
+        human_limitations = _human_ai_list(ai_report, "limitations")
+        metadata = [str(document.get("cover_meta") or t("结构化解读 · 行动建议 · 风险提示"))]
+        cover = Table(
+            [
+                [Paragraph(_esc(str(document.get("cover_label") or t("专业咨询报告"))), cover_meta)],
+                [Paragraph(_esc(str(document.get("title") or t("结构化咨询报告"))), cover_title)],
+                [Paragraph(_esc(" / ".join(metadata)), cover_meta)],
+            ],
+            colWidths=[content_width],
+            style=TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#11231f")),
+                    ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#24443e")),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 20),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 20),
+                    ("TOPPADDING", (0, 0), (0, 0), 20),
+                    ("BOTTOMPADDING", (0, 0), (0, 0), 8),
+                    ("TOPPADDING", (0, 1), (0, 1), 10),
+                    ("BOTTOMPADDING", (0, 1), (0, 1), 12),
+                    ("TOPPADDING", (0, 2), (0, 2), 8),
+                    ("BOTTOMPADDING", (0, 2), (0, 2), 20),
+                ]
+            ),
         )
-    if human_executive_summary:
-        add_heading("总览摘要")
-        add_body(str(human_executive_summary or ""))
-    if ai_report.get("answer_text") and str(ai_report.get("answer_text")) != str(human_executive_summary or ""):
-        add_heading("完整解盘正文")
-        add_body(str(ai_report.get("answer_text") or ""))
-    if human_analysis_sections:
-        add_heading("正文解读")
-        for section in human_analysis_sections:
-            if isinstance(section, dict):
-                add_heading(str(section.get("title") or "分析"), subheading)
-                body_parts = []
-                body_parts.append(str(section.get("body") or section.get("content") or ""))
-                add_body("\n".join(body_parts))
-            else:
-                add_body(str(section))
-    if human_recommendations:
-        add_note_card("建议", "\n".join(f"- {item}" for item in human_recommendations), accent=amber)
-    if human_limitations:
-        add_heading("限制与注意事项")
-        add_body("\n".join(f"- {item}" for item in human_limitations))
+        story.append(cover)
+        story.append(Spacer(1, 14))
 
-    for section in _human_sections(document):
-        if not isinstance(section, dict):
-            continue
-        add_heading(str(section.get("title") or "章节"))
-        add_body(str(section.get("body") or ""))
+        human_sections = [s for s in _human_sections(document) if isinstance(s, dict)]
+        if len(human_sections) >= 4:
+            story.append(Paragraph(_esc(t("目录")), subheading))
+            toc_at = len(story)  # 目录表等全部标题登记完再插进来
+            story.append(PageBreak())
+
+        add_heading(str(document.get("intro_heading") or t("解读目标")))
+        add_body(display_question)
+        for section in human_sections:
+            if section.get("group") == "basis":
+                add_heading(str(section.get("title") or t("起盘信息")))
+                add_body(str(section.get("body") or ""))
+        if show_ai:
+            if human_consultation_basis:
+                add_note_card(t("起盘依据"), str(human_consultation_basis or ""), accent=green)
+            if human_reading_steps:
+                add_note_card(t("解盘步骤"), _steps_text(human_reading_steps), accent=colors.HexColor("#2563eb"))
+            if ai_report.get("analysis_focus") or ai_report.get("direct_answer"):
+                add_note_card(
+                    t("核心结论"),
+                    str(ai_report.get("direct_answer") or ai_report.get("analysis_focus") or ""),
+                    accent=green,
+                )
+            if human_executive_summary:
+                add_heading(t("总览摘要"))
+                add_body(str(human_executive_summary or ""))
+            if ai_report.get("answer_text") and str(ai_report.get("answer_text")) != str(human_executive_summary or ""):
+                add_heading(t("完整解盘正文"))
+                add_body(str(ai_report.get("answer_text") or ""))
+            if human_analysis_sections:
+                add_heading(t("正文解读"))
+                for section in human_analysis_sections:
+                    if isinstance(section, dict):
+                        add_heading(str(section.get("title") or t("分析")), subheading, level=1)
+                        add_body(str(section.get("body") or section.get("content") or ""))
+                    else:
+                        add_body(str(section))
+            if human_recommendations:
+                add_note_card(t("建议"), "\n".join(f"- {item}" for item in human_recommendations), accent=amber)
+            if human_limitations:
+                add_heading(t("限制与注意事项"))
+                add_body("\n".join(f"- {item}" for item in human_limitations))
+
+        parts = {"chart": t("完整盘面"), "appendix": t("附录")}
+        current_group: str | None = None
+        for section in human_sections:
+            group = section.get("group")
+            if group == "basis":
+                continue
+            if group in parts and group != current_group:
+                add_part(parts[group])
+            current_group = group
+            add_heading(str(section.get("title") or t("章节")), level=1 if group in parts else 0)
+            add_body(str(section.get("body") or ""))
+        if toc_at is not None:
+            story.insert(toc_at, toc_table(entries, pages))
+        return story
+
+    title_text =str(document.get("title") or t("咨询报告"))
+
+    page_total = {"value": 0}
 
     def on_page(canvas: Any, doc: Any) -> None:
         canvas.saveState()
@@ -742,18 +969,44 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
         canvas.rect(0, page_height - 8, page_width, 8, fill=1, stroke=0)
         canvas.setFont(font_name, 7.5)
         canvas.setFillColor(muted)
-        canvas.drawString(left_margin, 10 * mm, str(document.get("title") or "咨询报告"))
-        canvas.drawRightString(page_width - right_margin, 10 * mm, f"第 {doc.page} 页")
+        canvas.drawString(left_margin, 10 * mm, title_text)
+        total = page_total["value"]
+        canvas.drawRightString(page_width - right_margin, 10 * mm,
+                               t(f"第 {doc.page} 页 / 共 {total} 页") if total else t(f"第 {doc.page} 页"))
         canvas.restoreState()
 
-    SimpleDocTemplate(
+    class _Doc(SimpleDocTemplate):
+        def afterFlowable(self, flowable: Any) -> None:  # reportlab 回调名
+            entry = getattr(flowable, "_horosa_toc", None)
+            if entry is None:
+                return
+            level, text, key = entry
+            self.canv.bookmarkPage(key)
+            self.canv.addOutlineEntry(text, key, level=level, closed=level > 0)
+            pages_seen[key] = self.page
+
+    doc = _Doc(
         str(output_path),
         pagesize=A4,
         rightMargin=right_margin,
         leftMargin=left_margin,
         topMargin=top_margin,
         bottomMargin=bottom_margin,
-    ).build(story, onFirstPage=on_page, onLaterPages=on_page)
+        title=title_text,
+        author="Horosa 星阙",
+    )
+    # 「共 M 页」与目录页码：先排一遍拿到总页数和各标题页码，再排一遍写进页脚 / 目录。
+    # 不用「延迟出页」的 canvas：那会把每个书签都钉在第 1 页。
+    pages: dict[str, int] = {}
+    pages_seen: dict[str, int] = {}
+    for _ in range(3):
+        pages_seen.clear()
+        doc.build(compose(pages), onFirstPage=on_page, onLaterPages=on_page)
+        stable = pages_seen == pages and page_total["value"] == doc.page
+        pages = dict(pages_seen)
+        page_total["value"] = doc.page
+        if stable:
+            break
 
 
 def _docx_font_name(script: str = SIMPLIFIED) -> str:
@@ -825,100 +1078,87 @@ def _esc(value: str) -> str:
     return html.escape(str(value)).replace("\n", "<br/>")
 
 
-def _ttc_face(TTFont: Any, path: Path, families: tuple[str, ...]) -> int | None:
-    """在 TTC 集合里按字体族名找子字体（常规体优先）；找不到返回 None。索引会随系统版本变，不能写死。"""
-    found: int | None = None
+# PDF 字体候选：(常规体路径, 常规体字面名, 粗体路径, 粗体字面名)。字面名 None = 取第 0 号子字体。
+# 正文用常规体、标题与 **强调** 用粗体（此前一律取集合第 0 号 = Songti SC Black，整本 PDF 看起来全是粗体）。
+# TTC 里的子字体顺序随系统版本会变，所以按字面名找，不写死序号。
+_PDF_FONT_CANDIDATES: dict[str, list[tuple[str, tuple[str, ...] | None, str | None, tuple[str, ...] | None]]] = {
+    "sc": [
+        ("C:/Windows/Fonts/msyh.ttc", None, "C:/Windows/Fonts/msyhbd.ttc", None),
+        ("C:/Windows/Fonts/msyh.ttf", None, "C:/Windows/Fonts/msyhbd.ttf", None),
+        ("C:/Windows/Fonts/simhei.ttf", None, None, None),
+        ("C:/Windows/Fonts/simsun.ttc", None, None, None),
+        ("/System/Library/Fonts/Supplemental/Songti.ttc", ("STSongti-SC-Regular", "STSongti-SC-Light"),
+         "/System/Library/Fonts/Supplemental/Songti.ttc", ("STSongti-SC-Bold", "STSongti-SC-Black")),
+        ("/System/Library/Fonts/STHeiti Light.ttc", ("STHeitiSC-Light",),
+         "/System/Library/Fonts/STHeiti Medium.ttc", ("STHeitiSC-Medium",)),
+        ("/System/Library/Fonts/Supplemental/Arial Unicode.ttf", None, None, None),
+        ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", ("NotoSansCJKsc-Regular",),
+         "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc", ("NotoSansCJKsc-Bold",)),
+        ("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc", ("NotoSansCJKsc-Regular",),
+         "/usr/share/fonts/noto-cjk/NotoSansCJK-Bold.ttc", ("NotoSansCJKsc-Bold",)),
+    ],
+    "tc": [
+        ("C:/Windows/Fonts/msjh.ttc", None, "C:/Windows/Fonts/msjhbd.ttc", None),
+        ("C:/Windows/Fonts/msjh.ttf", None, "C:/Windows/Fonts/msjhbd.ttf", None),
+        ("C:/Windows/Fonts/mingliu.ttc", None, None, None),
+        ("/System/Library/Fonts/Supplemental/Songti.ttc", ("STSongti-TC-Regular", "STSongti-TC-Light"),
+         "/System/Library/Fonts/Supplemental/Songti.ttc", ("STSongti-TC-Bold",)),
+        ("/System/Library/Fonts/STHeiti Light.ttc", ("STHeitiTC-Light",),
+         "/System/Library/Fonts/STHeiti Medium.ttc", ("STHeitiTC-Medium",)),
+        ("/System/Library/Fonts/Supplemental/Arial Unicode.ttf", None, None, None),
+        ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", ("NotoSansCJKtc-Regular", "NotoSansCJKhk-Regular"),
+         "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc", ("NotoSansCJKtc-Bold", "NotoSansCJKhk-Bold")),
+        ("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc", ("NotoSansCJKtc-Regular", "NotoSansCJKhk-Regular"),
+         "/usr/share/fonts/noto-cjk/NotoSansCJK-Bold.ttc", ("NotoSansCJKtc-Bold", "NotoSansCJKhk-Bold")),
+    ],
+}
+
+
+def _face_index(TTFont: Any, path: str, names: tuple[str, ...] | None) -> int | None:
+    """TTC 里按字面名（按偏好顺序）找子字体序号；names 为 None 取 0；找不到返回 None。"""
+    if names is None or not path.lower().endswith(".ttc"):
+        return 0
+    found: dict[str, int] = {}
     for index in range(32):
         try:
-            face = TTFont(f"HorosaProbe{index}", str(path), subfontIndex=index).face
-        except Exception:  # noqa: BLE001 - 越界或该子字体 reportlab 不支持：结束扫描
+            face = TTFont(f"HorosaProbe{index}", path, subfontIndex=index).face
+        except Exception:  # noqa: BLE001 - 越界或 reportlab 读不了这个子字体：探测到此为止（探针，None 即答案）
             break
-        family = face.familyName.decode("utf-8", "replace") if isinstance(face.familyName, bytes) else str(face.familyName)
         name = face.name.decode("utf-8", "replace") if isinstance(face.name, bytes) else str(face.name)
-        if family in families:
-            if "Regular" in name or "Light" in name:
-                return index
-            found = index if found is None else found
-    return found
+        found.setdefault(name, index)
+    return next((found[n] for n in names if n in found), None)
 
 
-def _register_pdf_traditional_fonts(pdfmetrics: Any, UnicodeCIDFont: Any, TTFont: Any, script: str) -> tuple[str, str]:
-    hk = script == TRADITIONAL_HK
-    noto = ("Noto Sans CJK HK", "Noto Sans CJK TC") if hk else ("Noto Sans CJK TC", "Noto Sans CJK HK")
-    candidates: list[tuple[str, tuple[str, ...] | None]] = [
-        ("C:/Windows/Fonts/msjh.ttc", ("Microsoft JhengHei",)),
-        ("C:/Windows/Fonts/msjh.ttf", None),
-        ("C:/Windows/Fonts/mingliu.ttc", ("PMingLiU", "MingLiU")),
-        ("/System/Library/Fonts/Supplemental/Songti.ttc", ("Songti TC",)),
-        ("/System/Library/Fonts/STHeiti Light.ttc", ("Heiti TC",)),
-        ("/System/Library/Fonts/Supplemental/Arial Unicode.ttf", None),
-        ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", noto),
-        ("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc", noto),
-    ]
-    for index, (candidate, families) in enumerate(candidates):
-        path = Path(candidate)
-        if not path.exists():
-            continue
-        font_name = f"HorosaSansTC{index}"
-        try:
-            if families is None:
-                pdfmetrics.registerFont(TTFont(font_name, str(path)))
-            else:
-                face = _ttc_face(TTFont, path, families)
-                if face is None:
-                    continue
-                pdfmetrics.registerFont(TTFont(font_name, str(path), subfontIndex=face))
-            return font_name, font_name
-        except Exception:  # noqa: BLE001 - 这一款载不了就试下一款
-            continue
-    fallback = "MSung-Light"  # reportlab 自带的繁体 CID 字体（Adobe-CNS1）
+def _load_ttf(TTFont: Any, font_name: str, path: str, names: tuple[str, ...] | None) -> Any | None:
+    if not Path(path).exists():
+        return None
+    index = _face_index(TTFont, path, names)
+    if index is None:
+        return None
     try:
-        pdfmetrics.registerFont(UnicodeCIDFont(fallback))
-        return fallback, fallback
-    except Exception as exc:  # noqa: BLE001
-        raise RuntimeError(
-            bilingual(
-                "PDF 注册不到任何能显示繁体中文的字体（MSung-Light 不可用）。",
-                "No Traditional-Chinese-capable font could be registered for the PDF (MSung-Light unavailable).",
-            )
-        ) from exc
+        return TTFont(font_name, path, subfontIndex=index) if path.lower().endswith(".ttc") else TTFont(font_name, path)
+    except Exception:  # noqa: BLE001 - 这一款载不了就换下一款（探针，None 即答案）
+        return None
 
 
 def _register_pdf_fonts(pdfmetrics: Any, UnicodeCIDFont: Any, TTFont: Any, script: str = SIMPLIFIED) -> tuple[str, str]:
-    if script != SIMPLIFIED:
-        return _register_pdf_traditional_fonts(pdfmetrics, UnicodeCIDFont, TTFont, script)
-    candidates = [
-        "C:/Windows/Fonts/msyh.ttc",
-        "C:/Windows/Fonts/msyh.ttf",
-        "C:/Windows/Fonts/simhei.ttf",
-        "C:/Windows/Fonts/simsun.ttc",
-        "C:/Windows/Fonts/simsun.ttf",
-        # macOS 中文正体候选（苹方/宋体优先于 Arial Unicode）
-        "/System/Library/Fonts/PingFang.ttc",
-        "/System/Library/Fonts/Supplemental/Songti.ttc",
-        "/System/Library/Fonts/STHeiti Light.ttc",
-        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
-        "/System/Library/Fonts/Supplemental/AppleGothic.ttf",
-        "/System/Library/Fonts/SFNS.ttf",
-        # Linux Noto CJK
-        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-    ]
-    for index, candidate in enumerate(candidates):
-        path = Path(candidate)
-        if not path.exists():
+    """返回 (正文字体, 粗体字体) 并登记字体族（<b> 才能真的变粗）。繁体只选繁体字形字体（简体字体缺上千个繁体字）。"""
+    kind = "sc" if script == SIMPLIFIED else "tc"
+    for index, (regular_path, regular_names, bold_path, bold_names) in enumerate(_PDF_FONT_CANDIDATES[kind]):
+        regular = _load_ttf(TTFont, f"Horosa{kind.upper()}{index}", regular_path, regular_names)
+        if regular is None:
             continue
-        font_name = f"HorosaSans{index}"
-        try:
-            if path.suffix.lower() == ".ttc":
-                # TTC 集合字体需指定子字体索引（0=常规），否则 reportlab 拒载。
-                pdfmetrics.registerFont(TTFont(font_name, str(path), subfontIndex=0))
-            else:
-                pdfmetrics.registerFont(TTFont(font_name, str(path)))
-            return font_name, font_name
-        except Exception:
-            continue
-    fallback = "STSong-Light"
+        pdfmetrics.registerFont(regular)
+        bold_name = regular.fontName
+        if bold_path:
+            bold = _load_ttf(TTFont, f"Horosa{kind.upper()}{index}B", bold_path, bold_names)
+            if bold is not None:
+                pdfmetrics.registerFont(bold)
+                bold_name = bold.fontName
+        pdfmetrics.registerFontFamily(regular.fontName, normal=regular.fontName, bold=bold_name,
+                                      italic=regular.fontName, boldItalic=bold_name)
+        return regular.fontName, bold_name
+    fallback = "STSong-Light" if kind == "sc" else "MSung-Light"  # reportlab 自带 CID 字体（Adobe-GB1 / Adobe-CNS1）
     try:
         pdfmetrics.registerFont(UnicodeCIDFont(fallback))
         return fallback, fallback
@@ -927,8 +1167,8 @@ def _register_pdf_fonts(pdfmetrics: Any, UnicodeCIDFont: Any, TTFont: Any, scrip
         # 抛出去交给 render_report：降级成全文 TXT，并在 degrade_reason 里写清原因。
         raise RuntimeError(
             bilingual(
-                "PDF 注册不到任何能显示中文的字体（STSong-Light 不可用）。",
-                "No CJK-capable font could be registered for the PDF (STSong-Light unavailable).",
+                f"PDF 注册不到任何能显示中文的字体（{fallback} 不可用）。",
+                f"No CJK-capable font could be registered for the PDF ({fallback} unavailable).",
             )
         ) from exc
 
@@ -965,12 +1205,12 @@ def _human_ai_list(ai_report: dict[str, Any], key: str) -> list[Any]:
     return value if isinstance(value, list) else []
 
 
-def _display_question(document: dict[str, Any], ai_report: dict[str, Any]) -> str:
+def _display_question(document: dict[str, Any], ai_report: dict[str, Any], t: Any = str) -> str:
     raw_question = str(document.get("user_question") or "").strip()
     if raw_question:
         return raw_question
     focus = str(ai_report.get("analysis_focus") or "").strip()
-    return focus or "整体综合解盘"
+    return focus or t("整体综合解盘")
 
 
 def _steps_text(value: Any) -> str:

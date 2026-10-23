@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import os
 import subprocess
 import sys
@@ -212,7 +213,7 @@ UNLOCALIZED_COMMANDS = frozenset({
     "runtime_start", "runtime_restart", "tool_list", "agent_guidance", "export_registry", "export_parse",
     "knowledge_registry", "benchmark_run", "benchmark_faithfulness", "trace_latest", "client_check", "client_skill",
     "client_config", "client_openclaw_config", "client_openclaw_setup", "client_openclaw_check", "report_template",
-    "memory_prune", "memory_answer",
+    "memory_prune", "memory_answer", "knowledge_mine", "knowledge_add", "knowledge_remove",
 })
 
 
@@ -918,6 +919,63 @@ def knowledge_search(
     _print_json(_localized(result.model_dump(mode="json")))
 
 
+def _split_option(value: Optional[str]) -> list[str]:
+    return [item.strip() for item in re.split(r"[,，、]", value or "") if item.strip()]
+
+
+@knowledge_app.command("mine", help="List your own knowledge entries (the folder you can drop .md / .txt files into). 列出自备知识库。")
+def knowledge_mine() -> None:
+    from horosa_skill.knowledge import user as user_knowledge
+
+    settings = Settings.from_env()
+    entries = user_knowledge.list_entries(settings)
+    _print_json({
+        "ok": True,
+        "dir": str(user_knowledge.knowledge_dir(settings)),
+        "count": len(entries),
+        "entries": [entry.summary() for entry in entries],
+        "how_to_use": "计算时传 knowledge=[条目 id / 标题 / #标签 / auto]；往这个文件夹放 .md / .txt 即可新增（可选 front matter：title / techniques / tags）。",
+    })
+
+
+@knowledge_app.command("add", help="Add a note to your own knowledge base (from a file or --text). 往自备知识库加一条。")
+def knowledge_add(
+    entry_id: str = typer.Argument(..., help="Entry name; may contain one folder level, e.g. 八字/滴天髓笔记."),
+    source: Optional[Path] = typer.Option(None, "--file", help="Read the entry text from this UTF-8 file."),
+    text: Optional[str] = typer.Option(None, "--text", help="Entry text given inline."),
+    title: Optional[str] = typer.Option(None, help="Display title (defaults to the entry name)."),
+    techniques: Optional[str] = typer.Option(None, help="Comma-separated tools / techniques / domains that `knowledge=auto` should pick this for, e.g. bazi,ziwei_birth; `*` = all."),
+    tags: Optional[str] = typer.Option(None, help="Comma-separated tags, selectable as `#tag`."),
+    overwrite: bool = typer.Option(False, "--overwrite", help="Replace an existing entry with the same name."),
+) -> None:
+    from horosa_skill.knowledge import user as user_knowledge
+
+    if (source is None) == (text is None):
+        raise typer.BadParameter("give exactly one of --file or --text")
+    body = source.read_text(encoding="utf-8") if source is not None else str(text)
+    try:
+        entry = user_knowledge.add_entry(
+            Settings.from_env(), text=body, entry_id=entry_id, title=title,
+            techniques=_split_option(techniques), tags=_split_option(tags), overwrite=bool(_opt(overwrite, False)),
+        )
+    except ToolValidationError as exc:
+        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
+        raise typer.Exit(code=2)
+    _print_json({"ok": True, "entry": entry.summary(), "path": str(entry.path)})
+
+
+@knowledge_app.command("remove", help="Delete one entry from your own knowledge base (by name or title). 删除自备知识库的一条。")
+def knowledge_remove(entry_id: str = typer.Argument(..., help="Entry name or title (`knowledge mine` lists them).")) -> None:
+    from horosa_skill.knowledge import user as user_knowledge
+
+    try:
+        path = user_knowledge.remove_entry(Settings.from_env(), entry_id)
+    except ToolValidationError as exc:
+        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
+        raise typer.Exit(code=2)
+    _print_json({"ok": True, "removed": str(path)})
+
+
 @app.command(help='Natural-language routing: JSON {query, birth|subject|flat birth fields, …} → picks and runs the right techniques. 自然语言路由起盘。')
 def dispatch(
     stdin: bool = typer.Option(False, "--stdin", help="Read a JSON object from stdin."),
@@ -1484,11 +1542,11 @@ def client_openclaw_check(
 def report_template(
     run_id: str = typer.Option(..., "--run-id", help="Run id to turn into an AI-fillable report template."),
     tool: str | None = typer.Option(None, "--tool", help="Optional tool name for dispatch or multi-tool runs."),
-    language: str = typer.Option("zh-CN", "--language", help="Report language tag."),
+    language: str | None = typer.Option(None, "--language", help="Report language tag (zh-CN / zh-TW / zh-HK …); omit to follow HOROSA_OUTPUT_SCRIPT."),
 ) -> None:
     service = _service()
     try:
-        result = service.report_template({"run_id": run_id, "tool_name": tool, "language": language})
+        result = service.report_template({"run_id": run_id, "tool_name": tool, **({"language": language} if language else {})})
     except ToolValidationError as exc:
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
@@ -1502,7 +1560,8 @@ def report_render(
     tool: str | None = typer.Option(None, "--tool", help="Optional tool name for dispatch or multi-tool runs."),
     output: Path | None = typer.Option(None, "--output", help="Optional output path. Defaults to the Horosa memory output directory."),
     title: str | None = typer.Option(None, "--title", help="Optional report title."),
-    language: str = typer.Option("zh-CN", "--language", help="Report language tag."),
+    language: str | None = typer.Option(None, "--language", help="Report language tag (zh-CN / zh-TW / zh-HK …); omit to follow HOROSA_OUTPUT_SCRIPT."),
+    style: str = typer.Option("analysis", "--style", help="analysis (AI report; without an AI answer you get the template) / chart (complete chart report rendered right away)."),
     include_raw_json: bool = typer.Option(False, "--include-raw-json/--no-include-raw-json", help="Embed the full source envelope in the report JSON."),
     stdin: bool = typer.Option(False, "--stdin", help="Read optional ai_report JSON from stdin."),
     input_file: Optional[Path] = typer.Option(None, "--input", help="Read optional ai_report JSON from a file."),
@@ -1516,7 +1575,8 @@ def report_render(
                 "run_id": run_id,
                 "tool_name": tool,
                 "format": format_name,
-                "language": language,
+                **({"language": language} if language else {}),
+                "style": style,
                 "title": title,
                 "ai_report": ai_report,
                 "include_raw_json": include_raw_json,
@@ -1564,7 +1624,8 @@ def report_from_tool(
     output: Path | None = typer.Option(None, "--output", help="Optional output path. Defaults to the Horosa memory output directory."),
     question: str | None = typer.Option(None, "--question", help="Optional user question to store with this report run."),
     title: str | None = typer.Option(None, "--title", help="Optional report title."),
-    language: str = typer.Option("zh-CN", "--language", help="Report language tag."),
+    language: str | None = typer.Option(None, "--language", help="Report language tag (zh-CN / zh-TW / zh-HK …); omit to follow HOROSA_OUTPUT_SCRIPT."),
+    style: str = typer.Option("analysis", "--style", help="analysis (AI report; without an AI answer you get the template) / chart (complete chart report rendered right away)."),
     ai_answer_text: str | None = typer.Option(None, "--ai-answer-text", help="Free-form AI analysis text to render directly into the final report."),
     ai_answer_file: Optional[Path] = typer.Option(None, "--ai-answer-file", help="Read free-form AI analysis text from a UTF-8 file."),
     ai_report_file: Optional[Path] = typer.Option(None, "--ai-report-file", help="Read structured ai_report JSON from a UTF-8 file."),
@@ -1601,7 +1662,8 @@ def report_from_tool(
                 "tool_name": tool,
                 "payload": payload,
                 "format": format_name,
-                "language": language,
+                **({"language": language} if language else {}),
+                "style": style,
                 "title": title,
                 "question": question,
                 "ai_report": ai_report,

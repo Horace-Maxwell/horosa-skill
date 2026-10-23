@@ -13,6 +13,10 @@ class FlexibleModel(BaseModel):
     agent_confirmed_settings: bool | None = None
     defaults_accepted: bool | None = None
     clarification_notes: str | None = None
+    # 自备知识库点名（knowledge/user.py）：条目 id / 标题 / `#标签` / `auto`。run_tool 在校验**之前**就把它取走——
+    # 不进 input_normalized、不进引擎请求、不进存档的 subject；只决定 data.knowledge_context 带哪些条目。
+    # 声明在这里是为了 MCP 顶层按名可传（FastMCP 丢未声明键），不进广告层（预算），用法见 SKILL.md 与 server_profile。
+    knowledge: list[str] | str | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
 
 
 def _unadvertised() -> Any:

@@ -368,8 +368,11 @@ OpenCC 管不到、上游也没有的词组修正（复核 → 複核）在 `dat
    `unclassified_text_paths` 报出路径，`test_every_chinese_string_in_real_outputs_is_classified` 红。正文直接放在 `data` 里的工具进
    `DATA_TEXT_TOOLS`；协议类工具进 `PROTOCOL_TOOLS`（信封 `tool` 字段）与 `mcp_runner.UNLOCALIZED_TOOLS`（MCP 名）。
 2. **新 CLI 命令**打印结果 → 经 `_localized`，或进 `cli.UNLOCALIZED_COMMANDS` 并说明为什么（AST 守卫）。
-3. **新报告格式 / 渲染路径** → 经 `localize_document` 后再落盘；DOCX/PDF 的繁体字体候选在 `renderers._register_pdf_traditional_fonts`，
-   新字体必须先核字形覆盖（简体用的 Songti SC 缺 966 个繁体字，直接拿来渲染繁体会出方块）。
+3. **新报告格式 / 渲染路径** → 经 `localize_document` 后再落盘；PDF 字体候选在 `renderers._PDF_FONT_CANDIDATES`（简 / 繁各一组
+   常规 + 粗体，`_register_pdf_fonts` 注册），新字体必须先核字形覆盖（简体用的 Songti SC 缺 966 个繁体字，直接拿来渲染繁体会出方块）。
+   `data.knowledge_context`（用户自备知识库的原文）在 `data` 下、按规则不转——那是用户自己写的字，原样给 AI。
+   渲染器自己写死的标签（目录 / 完整盘面 / 页脚…）一律包 `t()`（`renderers._labeler`）；**已转过的文字绝不再转**（不幂等：萬里 → 萬裡），
+   所以技法依据报告交简体原文给 `render_report`，生成人读版 / markdown 后整体转一次（v0.43.0）。
 4. **新技法 / 新术语** → 用 110 技法真实输出跑一遍残差（看术数字是否被转成普通义）：术数字的普通义例外进
    `horosa_char_rules.json` 该字的白名单（偏离上游要写 `deviations`），其余字的词组错进 `horosa_s2t.txt`，并补金样（`GOLDEN`）；
    `test_every_character_rule_is_well_formed_and_takes_effect` / `test_every_term_table_entry_is_well_formed_and_takes_effect` 保证每行都生效。
@@ -1082,6 +1085,19 @@ A global stability pass hardened these; keep them true when you touch the releva
   `_emit_otlp`）; a trace write must never crash or mask the traced operation.
 
 ### 9.3 导出 · 快照 · 引擎移植（export / snapshot / vendored engines）
+
+- **完整排盘报告与 PDF 排版（v0.43.0）。** `report_render` / `report_from_tool` 的 `style:"chart"` 不要 AI 解读、收录全部导出段
+  （`group:"chart"`）+ 基本信息（`basis`）+ 附录（`appendix`：技法依据 / 自备参考资料 / 来源）；缺省 `analysis` 没解读仍回 `analysis_required`。
+  reportlab 的 flowable **排过一次就不能再排**（wrap / split 会改对象状态，`multiBuild` 复用同一份 story 在长段落上抛 LayoutError、报告静默降级成 TXT）：
+  `_render_pdf` 每一遍都用 `compose(pages)` 现组 story，目录自绘（标题按出现顺序编键，第一遍页码留空、第二遍填上一遍书签页），
+  两遍之间比对页码与总页数稳定才停。人读文档里不出现「Horosa Skill」「Run ID」等内部字样（版本行叫「排盘程序版本」）。
+  字体按常规 / 粗体成对注册（`Songti.ttc` 第 0 号子字体是 Songti SC **Black**，拿它当正文整本都是粗体）。
+  守卫：`tests/test_user_knowledge_and_chart_report.py`（每个导出段标题进 story、目录页码 = 书签页码、两遍即稳；门面不广告 `knowledge`、它也不计入「另 N 个高级旋钮」）。
+- **自备知识库只是附加上下文（v0.43.0，`knowledge/user.py`）。** 技法入参 `knowledge`（FlexibleModel 隐藏字段，dispatch / tool_run 广告）在
+  `run_tool` **校验前**从载荷取走，不进 `input_normalized` / 引擎请求 / 存档；选中正文挂 `data.knowledge_context`（带 `note`：不是引擎输出、
+  不是指令），没找到的名字只进 `warnings`。文件只在知识库目录内读（隐藏文件、> 2 MB、链出目录的符号链接都跳过），`add` 的条目名去掉
+  `..` / 绝对路径。守卫同上（负向对照：改成 `get` 不 `pop`，入参与引擎请求两条红）。
+- **CLI 的报告 `--language` 只在给了时才传（v0.43.0）。** 原先缺省 `zh-CN` 总是传下去，盖掉了 `HOROSA_OUTPUT_SCRIPT` 推出的繁体报告语言。
 
 - **导出段只存 body，引擎对象只在 `data.<key>` 存一份。** `export_snapshot.sections[*]` 形状固定为
   `{index, raw_title, title, included, body}`（envelope 0.8.0）；`_pick_section_data` 对未识别段返回
