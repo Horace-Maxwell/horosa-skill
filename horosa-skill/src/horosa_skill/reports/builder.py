@@ -621,7 +621,7 @@ class ReportBuilder:
     _BASIS_FIELDS = (
         ("name", "姓名"), ("gender", "性别"), ("date", "日期"), ("time", "时间"), ("zone", "时区"),
         ("pos", "地点"), ("place", "地点"), ("lat", "纬度"), ("lon", "经度"), ("question", "所问"),
-        ("datetime", "推运目标时刻"),
+        ("askEvent", "所问"), ("datetime", "推运目标时刻"), ("year", "年份"), ("ingressTerm", "入宫节气"),
     )
 
     def _chart_basis_section(self, input_normalized: dict[str, Any], source: dict[str, Any]) -> dict[str, Any]:
@@ -640,6 +640,12 @@ class ReportBuilder:
                 value = _coord_text(value)
             seen.add(label)
             rows.append((label, str(value)))
+        # 合盘：甲乙双方各一行（入参是 inner / outer 两份出生资料，顶层没有日期，封面此前只剩「技法」一格）。
+        for key, label in (("inner", "甲方"), ("outer", "乙方")):
+            person = input_normalized.get(key)
+            if isinstance(person, dict) and person.get("date"):
+                parts = [str(person.get(k)) for k in ("name", "date", "time") if person.get(k) not in (None, "")]
+                rows.append((label, " ".join(parts)))
         body = "| 项目 | 内容 |\n| --- | --- |\n" + "\n".join(f"| {k} | {v.replace('|', '／')} |" for k, v in rows)
         return {"id": "chart_basis", "title": "基本信息", "body": body, "items": dict(rows), "human_visible": True, "group": "basis"}
 

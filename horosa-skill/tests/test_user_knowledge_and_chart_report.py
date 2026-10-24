@@ -378,6 +378,8 @@ def _flat(item) -> list:
         return [leaf for sub in item for leaf in _flat(sub)]
     if hasattr(item, "_cellvalues"):
         return [leaf for row in item._cellvalues for leaf in _flat(row)]
+    if isinstance(getattr(item, "_content", None), list):  # KeepTogether（短表整张不拆）
+        return [leaf for sub in item._content for leaf in _flat(sub)]
     return [item]
 
 

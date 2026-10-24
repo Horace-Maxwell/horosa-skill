@@ -1128,7 +1128,8 @@ A global stability pass hardened these; keep them true when you touch the releva
     rlPyCairo 的 renderPM）嵌位图——新增图元要在那里补上；DOCX 纸张 A4。
   - 版式：Frame 四边各有 6 pt 内边距——满宽元素用 `content_width`（版心 − 12），别用版心宽（会右出框）。
     封面（基本信息卡 + 报告说明），条目少的目录排在封面下方、多的另起一页；宽而矮的表转竖排（四柱）、全空列不印、表头不折行、短值窄表按内容定宽；
-    以西文为主的段落不走 CJK 断行（`_mostly_latin`）；引擎没给的段只在技法依据表里列一行「本次未产出」；
+    以西文为主的段落不走 CJK 断行（`_mostly_latin`）；列宽下限含本列最长数字 / 西文串（`_UNBREAKABLE_RE`）；≤14 行的表整张不拆；
+    键值行的键 ≤14 字，15–24 字须带括注或数字（否则是句子）；DOCX 封面无页脚、目录域预填章名、键值行成两列表；
     连续「键：值」行成对照表（冒号前是时刻的不算）；长小数人读版四舍五入到 4 位；全角标点不落行首（`_extend_kinsoku` + `wordWrap="CJK"`）；
     段内小标题进书签第三级（不进目录）。报告标题经 `_report_technique_name`（去页签名 / 分组前缀）。
   - 守卫：`tests/test_report_polish.py`、`tests/test_user_knowledge_and_chart_report.py`。

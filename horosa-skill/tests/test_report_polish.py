@@ -312,3 +312,54 @@ def test_wheel_labels_never_overlap_even_on_a_small_crowded_wheel() -> None:
 def test_key_value_keys_with_bracketed_tags_still_form_a_table() -> None:
     assert renderers._LABEL_LINE_RE.match("金 (12th; 5R12R)：1°双子54分")
     assert not renderers._LABEL_LINE_RE.match("清明后第3天；调候：无")  # 含分号的是句子，不当键
+    assert not renderers._LABEL_LINE_RE.match("本报告由星阙引擎的排盘结果直接生成：收录全部盘面段落")  # 长的纯中文前缀是句子
+    assert renderers._LABEL_LINE_RE.match("时间算法：真太阳时")
+
+
+def test_columns_are_wide_enough_for_their_longest_number() -> None:
+    widths = renderers._column_widths(["宫位", "主星", "大限"], [["夫妻宫 · 帝旺", "天府陷、文曲庙、咸池" * 3, "112~121"]], 300, 30)
+    assert widths[2] >= len("112~121") * 4.6 + 11 - 0.01  # 「112~12 / 1」不再被拆开
+
+
+def test_cover_shows_who_and_when_for_synastry_ingress_and_divination() -> None:
+    b = builder.ReportBuilder()
+    pair = b._chart_basis_section({"inner": {"name": "甲", "date": "2028-04-06", "time": "09:33:00"},
+                                   "outer": {"name": "乙", "date": "1992-03-02", "time": "08:18:00"}}, {"technique_label": "关系盘"})
+    assert pair["items"]["甲方"] == "甲 2028-04-06 09:33:00" and pair["items"]["乙方"].startswith("乙 1992-03-02")
+    items = b._chart_basis_section({"year": 2025, "ingressTerm": "春分"}, {})["items"]
+    assert items["年份"] == "2025" and items["入宫节气"] == "春分"
+    assert b._chart_basis_section({"askEvent": "求财"}, {})["items"]["所问"] == "求财"
+
+
+def test_docx_cover_has_no_footer_toc_has_titles_and_key_values_are_tables(tmp_path: Path) -> None:
+    from docx import Document
+
+    document = {"title": "八字 · 完整排盘报告", "style": "chart", "sections": [
+        {"id": "a", "title": "起盘信息", "body": "日期：2028-04-06\n时区：+08:00\n时间算法：真太阳时", "human_visible": True, "group": "chart"},
+        {"id": "b", "title": "四柱与三元", "body": "年柱：戊申", "human_visible": True, "group": "chart"},
+    ]}
+    renderers.render_report(document, output_path=tmp_path / "k.docx", format_name="docx")
+    docx = Document(str(tmp_path / "k.docx"))
+    assert docx.sections[0].different_first_page_header_footer is True
+    xml = docx.element.xml
+    assert "起盘信息" in xml.split("fldSimple")[1] and "四柱与三元" in xml.split("fldSimple")[1]  # 目录域的缓存结果是各章标题
+    kv = [t for t in docx.tables if len(t.columns) == 2 and t.rows and t.rows[0].cells[0].text == "日期"]
+    assert kv and [r.cells[0].text for r in kv[0].rows] == ["日期", "时区", "时间算法"]
+
+
+def test_short_tables_are_kept_whole(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from reportlab.platypus import KeepTogether, SimpleDocTemplate
+
+    stories: list[list] = []
+    original = SimpleDocTemplate.build
+
+    def spy(doc, flowables, *args, **kwargs):
+        stories.append(list(flowables))
+        return original(doc, flowables, *args, **kwargs)
+
+    monkeypatch.setattr(SimpleDocTemplate, "build", spy)
+    table = "| 步序 | 起运年 | 干支 |\n| --- | --- | --- |\n" + "\n".join(f"| 第{i}步 | {2027 + i * 10} | 甲子 |" for i in range(1, 11))
+    document = {"title": "大运", "style": "chart", "sections": [{"id": "a", "title": "大运", "body": table, "human_visible": True, "group": "chart"}]}
+    renderers.render_report(document, output_path=tmp_path / "t.pdf", format_name="pdf")
+    # 十行的大运表整张不拆：拆开时常剩「第10步」一行孤零零在下一页顶上。
+    assert any(isinstance(f, KeepTogether) for f in stories[-1])
