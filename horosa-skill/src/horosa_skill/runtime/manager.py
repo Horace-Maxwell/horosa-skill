@@ -2098,12 +2098,34 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(source, destination)
                     patched.append(str(destination))
+                patched.extend(self._install_app_control_shims(manifest, template_root))
 
         boot_jar = self.current_dir / self._relative_manifest_path(manifest, "artifacts", "boot_jar")
         if boot_jar.is_file() and self._boot_jar_supports_patch(boot_jar):
             self._patch_windows_boot_jar(manifest, boot_jar)
             patched.append(str(boot_jar))
         return patched
+
+    def _install_app_control_shims(self, manifest: dict[str, Any] | None, template_root: Path) -> list[str]:
+        """Windows：把应用控制替身拷进随包 Python 的 site-packages（每次 start 重拷，与启动器模板同一条路；v0.43.1-dev）。
+
+        Smart App Control 会拒绝加载载荷里流行度不够的原生扩展（实测 astropy 的 `_parse_times.pyd`，一拦太乙 / 三式合一全挂）。
+        替身只在真扩展被拦时生效，结果不变，见 `templates/windows/python/_horosa_app_control.py`。
+        """
+        runtimes = manifest.get("runtimes") if isinstance(manifest, dict) else None
+        python_rel = runtimes.get("python") if isinstance(runtimes, dict) else None
+        shim_root = template_root / "python"
+        if not python_rel or not shim_root.is_dir():
+            return []
+        site_packages = self.current_dir / Path(python_rel).parent / "Lib" / "site-packages"
+        if not site_packages.is_dir():
+            return []
+        copied: list[str] = []
+        for source in sorted(shim_root.iterdir()):
+            if source.suffix in {".py", ".pth"}:
+                shutil.copy2(source, site_packages / source.name)
+                copied.append(str(site_packages / source.name))
+        return copied
 
     def _runtime_template_root(self) -> Path:
         # 包内副本（wheel / uvx 安装）优先；源码树回退（scripts/runtime_templates 是 builder 共用的原件）。

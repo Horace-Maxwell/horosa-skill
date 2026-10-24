@@ -16,7 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
-| v0.43.1-dev (2026-10-23) | Windows 原生复验 v0.43.0：开着 Smart App Control 的 Windows 11 拒绝运行 uv 给新环境现生成的 `Scripts\*.exe`（`os error 4551`，同机时拦时放），门禁镜像第一步、以及用户的 `uv run … horosa-skill serve` / `uvx … horosa-skill` 都可能起不来；PDF 报告里《灵棋经》等条文的 13 个扩展 B 字，微软雅黑缺 12 个，画成方块 | `python -m horosa_skill` 入口 + `--entry auto|script|module`（SAC 开着自动用 module）+ setup 探针认 4551 + doctor 报 `smart_app_control` + 门禁镜像在 Windows 走 `python -m pytest`；PDF 按字补 SimSun-ExtB / MingLiU-ExtB（`_pdf_glyph_fallback`）；知识库测试 `os.symlink` 在普通用户 Windows 上 WinError 1314（CI 是管理员看不见），`skill_install` 不认 junction | 测试改造 junction；判链接 `is_symlink() or is_junction()` |
+| v0.43.1-dev (2026-10-23) | Windows 原生复验 v0.43.0：开着 Smart App Control 的 Windows 11 拒绝运行 uv 给新环境现生成的 `Scripts\*.exe`（`os error 4551`，同机时拦时放），门禁镜像第一步、以及用户的 `uv run … horosa-skill serve` / `uvx … horosa-skill` 都可能起不来；PDF 报告里《灵棋经》等条文的 13 个扩展 B 字，微软雅黑缺 12 个，画成方块 | `python -m horosa_skill` 入口 + `--entry auto|script|module`（SAC 开着自动用 module）+ setup 探针认 4551 + doctor 报 `smart_app_control` + 门禁镜像在 Windows 走 `python -m pytest`；PDF 按字补 SimSun-ExtB / MingLiU-ExtB（`_pdf_glyph_fallback`）；知识库测试 `os.symlink` 在普通用户 Windows 上 WinError 1314（CI 是管理员看不见），`skill_install` 不认 junction；release lane 里 SAC 还拒绝加载载荷的 `astropy/time/_parse_times.pyd`（太乙 / 三式合一全挂，同哈希在旧根放行） | 测试改造 junction；判链接 `is_symlink() or is_junction()`；随包 Python 的应用控制替身（被拦才生效，astropy 落回纯 Python 解析器，结果逐位相同） |
 | v0.43.0-dev (2026-10-23) | 完整排盘 PDF 报告：reportlab `multiBuild` 复用同一份 story，长段落第二遍抛 LayoutError，报告静默降级成 TXT；`Songti.ttc` 第 0 号子字体是 Songti SC Black，正文整本粗体；延迟出页的 canvas 把书签都钉在第 1 页；CLI 报告 `--language` 缺省 zh-CN 盖掉繁体设置；繁体报告里渲染器写死的标签（目录 / 页脚…）仍是简体；知识库隔离测试查错了字段（`data.input_normalized` 是引擎回显）而「因为错误的原因通过」 | 每遍现组 story、目录自绘两遍稳定；字体常规 / 粗体成对注册；CLI 只在给了时才传语言；隔离断言查信封 / 存档 / 引擎请求三处并做负向对照；渲染器字面量过 `t()` 只转一次（已转的文字再转不幂等） |
 | v0.42.0-dev (2026-10-22) | 加「繁体输出」：OpenCC 在术数字上系统性转错（年干→年幹、子丑合→子醜合、日冲→日衝、金克木不变成剋、斗君→鬥君、吉凶星→兇星）；上游段名本就含繁体（命宮、佈局），一律繁转简会把它们折坏；简体 PDF 用的 Songti SC 缺 966 个繁体字；知识精读的正文直接放在 data 里，白名单漏转；两条守卫因样本里没有可转的字而「因为错误的原因通过」 | 按原文逐位定字（与上游界面简繁同一机制，规则 ⊇ 上游、偏离有理由）；标识按词表反查；繁体选 TC 字体并核字形；所有中文字段必须归类（`unclassified_text_paths`）；负向对照的样本必须真会变 |
 | v0.41.2-dev (2026-10-21) | PDF 正文测试断言「带正文 > 2 × 不带正文」的文件大小：大小随嵌入字体漂（Linux 1.83 倍、macOS 1.94 倍），main CI 与发布后矩阵红 | 看内容不看大小（`_pdf_story_text` 收集交给 reportlab 的文字）；只在一台机器上校准的阈值不是断言 |
@@ -184,15 +184,33 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   知识库 loader 本身没问题（`resolve()` 在 Windows 上连 junction 一起解析）。
 - **修复 3**：测试 `_link_outside` 先试符号链接、Windows 上另建 junction（两种形状都断言读不到）；`skill_status` 认
   `is_symlink() or is_junction()`；`test_skill_install` 加 Windows 上真建 junction 的用例（原 symlink 用例在本机一直 skip）。
+- **根因 4 · 载荷里的原生扩展也会被拦（release lane 才看得见）**：v0.43.0 release 模式 lane（全新根 `rt-v043`，公开 zip 真下载）
+  12 步 11 绿，live pytest 2154 passed / 3 failed——`test_taiyi_runs_via_ken_backend`、`test_sanshiunited_combines_ken_qimen_taiyi`
+  与上面的 symlink 用例。chart 服务 stderr：`ImportError: DLL load failed while importing _parse_times: An Application Control policy has
+  blocked this file`。用 `LoadLibraryExW(DONT_RESOLVE_DLL_REFERENCES)` 扫整棵载荷：258 个原生文件拦 2 个——`astropy/time/_parse_times.pyd`
+  （官方 astropy 7.2.0 abi3 wheel 原件，17 KB、无签名）与 `pendulum/_pendulum.cp312-win_amd64.pyd`。**同一哈希**在 10 月初装的默认根里放行、
+  在 10-21 lane 全绿过的 `rt-v0412` 里**现在**被拦——判定按文件实例缓存且会被重新评估，用户新装 / 升级 runtime 后随时可能撞上。
+  pendulum 自带纯 Python 回退（ImportError 被它自己接住）；astropy 没有：`astropy.time.formats` 顶层 `from . import _parse_times`，一拦
+  `astropy.time` 整个起不来 → kintaiyi（`from astropy.coordinates import SkyCoord, FK5`）挂 → 太乙 / 三式合一全挂。换 wheel 解决不了（已是官方原件），
+  也不能改上游引擎。
+- **修复 4**：`scripts/runtime_templates/windows/python/`（`_horosa_app_control.py` + `horosa_app_control.pth`）由 manager 每次 start 拷进随包 Python 的
+  site-packages（`_install_app_control_shims`，与启动器模板同一条「每次 start 重拷」的路，已装的 runtime 升级 skill 即生效）。它是一个只认
+  `astropy.time._parse_times` 的 meta-path 包装：真扩展能加载就原样用；被拦（`(os error 4551)` / 「Application Control」）时换成替身——dtype 与真扩展
+  逐字段相同、`create_parser` 返回恒抛的解析器，astropy 的 `TimeString.set_jds` 接住异常落回 `get_jds_python`（它的参照实现），并在 stderr 留一行。
+  本机对照：被拦的根装上替身后 `Time('2026-02-17T21:50:07')` 的 JD 与能加载真扩展的根逐位相同（2461089.4098032406），`SkyCoord` 正常导入。
 - **守卫**：`tests/test_windows_app_control.py`（module 入口真能跑、只换 `serve` 前一位、auto 跟随 SAC 四态、`--entry script` 压过 auto 且
   非 SAC 机生成物不变、英文 / 中文 stderr 都认得、文件锁形状不受影响、注册表值映射、doctor 字段、门禁镜像只在 Windows 改写）；
   `tests/test_pdf_glyph_fallback.py`（只包主字体缺的字、标记与 ASCII 不动、无候选时逐字节不变、Windows 上真嵌入 SimSun-ExtB 且无生僻字时不嵌）。
   `tests/conftest.py::_host_smart_app_control_is_unknown`（第一版没钉，两条断言 `horosa-skill serve` 的旧用例在本机红、CI 上绿——
   生成物随维护机状态变就是隔离漏洞）；`tests/test_user_knowledge_and_chart_report.py::_link_outside`、`tests/test_skill_install.py::test_a_junctioned_skill_on_windows_is_left_alone`。
+  `tests/test_app_control_runtime_shim.py`（被拦 → 替身 + stderr 留痕、别的 ImportError 原样抛、能加载就原样用、只包登记的模块、dtype 与真扩展同形、
+  manager 拷进 site-packages）；端到端 = 开发分支对全新根重跑 release lane，太乙 / 三式合一 live 用例转绿。
   负向对照 7 条（拆掉诊断分支 / auto 恒 script / 门禁不改写 / 配置不改写 / 补字恒原样 / loader 不查目录外 / 只认 is_symlink）各自变红。
 - **法则**：Windows 上凡是「现生成的 exe」都可能被应用控制拦，能用解释器 `-m` 的入口就留一条 `-m` 的路；判据只认 `(os error 4551)` 这段
   不本地化的尾巴。PDF 字体覆盖要拿真进报告的文本量，不拿包内全部文本（词典会把数字放大一百倍）。
   「链接」在 Windows 上有两种：符号链接（要特权）与目录联接（不要）；判链接一律 `is_symlink() or is_junction()`，测试里造链接要有 junction 的路。
+  应用控制的判定不只看哈希：同一文件在一个根里放行、另一个根里被拦，过一阵还会变——「上次 lane 绿」不代表这台机器上的下一次安装能起来，
+  离线全绿更看不见（CI 不装载荷）。载荷里每加一个没有纯 Python 回退的原生扩展，都要想好被拦时的退路。
 
 ### v0.43.0-dev / 2026-10-23 — 完整排盘 PDF 报告与自备知识库：flowable 不能排两遍（`compose(pages)` 每遍现组）、Songti SC Black 当正文、知识库隔离测试查错字段
 

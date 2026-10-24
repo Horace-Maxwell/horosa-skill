@@ -929,6 +929,7 @@ OpenCC 管不到、上游也没有的词组修正（复核 → 複核）在 `dat
 | 慢网 / 企业代理下 `runtime.install_download_failed` | 每块 1 MiB 之间的读超时 120 s、每镜像 3 次 | `HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS` / `HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS`；`doctor --probe-network` 看哪个镜像通（默认 doctor 零外网请求） |
 | `setup` 在第 1 步 `network_probe` 就失败（5 s 内，`setup.network_unreachable`） | 清单 URL 经所有镜像都取不到（github.com:443 不通 / 代理拦 HEAD） | 失败包 `details.next_action` 给三条路：`HOROSA_RUNTIME_MIRROR=<前缀>`、`--archive <本地归档>`、`--no-probe-network` 跳过预检；`retry_command` 已带后者（v0.38.0 B4） |
 | `setup` 在 `stdio_probe` 失败（`setup.stdio_probe_failed`） | 客户端将要执行的那条命令起不来 server：命令路径不对、uvx 首跑下载失败、工具数与工具面不符 | 看失败包 `details.command` 与 `details.stderr_tail`；uvx 形态可先手跑 `uvx --refresh --from <wheel URL> horosa-skill --version`；checkout 内改 `--launcher uv`（v0.38.0 B4） |
+| 只有 Windows：太乙 / 三式合一报 `runtime.*` 或空的 `taiyi` 段，chart 服务 stderr 是 `DLL load failed while importing _parse_times: An Application Control policy has blocked this file` | Smart App Control 拒绝加载载荷里的 `astropy/time/_parse_times.pyd`（无签名、流行度不够；同一文件在旧根放行、新装 / 升级后被拦） | v0.43.1-dev 起 manager 每次 start 把应用控制替身拷进随包 Python（astropy 落回纯 Python 解析器，结果不变）：升级 skill 后 `runtime restart`；stderr 应改见 `horosa: Windows Application Control blocked … using the pure-Python fallback` |
 | Windows：客户端里 horosa 起不来 / `setup` 在 `stdio_probe` 失败带 `diagnosis.cause = windows_app_control_blocked`；终端里 `uv run …` 报 `Failed to spawn: … (os error 4551)` | Smart App Control（应用控制）拒绝运行 uv 给该环境现生成的 `Scripts\*.exe`（trampoline 无签名、无云端信誉，同机时拦时放）；`python.exe` 不受影响 | `setup` / `client config` 加 `--entry module`（SAC 开着时 `--entry auto` 已自动这样写）→ 配置变成 `… python -m horosa_skill serve`；终端里同样改用 `uv run python -m horosa_skill …`；doctor `windows.smart_app_control` 看状态；不必关闭 SAC（v0.43.1-dev 台账） |
 | Windows：`setup`（或 lane 的客户端步骤）在 `stdio_probe` 失败，失败包带 `details.diagnosis.cause = windows_file_in_use`（stderr 尾巴是 `failed to remove file …\Scripts\horosa-skill.exe … (os error 32)`） | 另一个已挂着的 horosa MCP 会话（`uv run … serve`）占着 venv 里的 exe / 已加载的 .pyd；客户端那条 `uv run` 要先把 venv 同步到当前版本（`git pull` 换过版本号就会触发），删不掉被占文件，server 未启动即退出。macOS/Linux 可替换运行中的文件，不会遇到 | 关掉（或重启）挂着 horosa 的会话再重跑；终端里的 `uv run` 可临时 `UV_NO_SYNC=1`（依赖未变时安全）；维护机复验一律在**独立 git worktree**（自有 venv）里跑门禁与 lane，别和本机开着的 MCP 会话抢同一个 venv（v0.39.0 台账） |
 | `setup --client claude-code` 只打印了命令没注册（`config_mode: printed`） | `claude` 不在 PATH（GUI 装的 Claude Code 没把 CLI 放进 shell PATH） | 复制 `steps.config.command` 到有 `claude` 的终端执行，或 `--scope project` 写当前项目的 `.mcp.json`（v0.38.0 B4） |
@@ -1185,6 +1186,10 @@ A global stability pass hardened these; keep them true when you touch the releva
 
 ### 9.4 客户端配置 · setup · doctor（client config / setup / doctor）
 
+- **随包 Python 的应用控制替身（v0.43.1-dev，`manager._install_app_control_shims`）。** Smart App Control 可能拒绝加载载荷里流行度不够的原生扩展，
+  且判定按文件实例、会变。`scripts/runtime_templates/windows/python/` 每次 start 拷进 site-packages；`_STUBS` 只登记**有纯 Python 等价路径**的模块
+  （现为 `astropy.time._parse_times`），替身必须与真扩展同形且只在 4551 时生效。载荷新增没有回退的原生依赖前，先想好被拦时的退路。
+  守卫 `tests/test_app_control_runtime_shim.py`；端到端只有 Windows release lane 看得见（离线门禁不装载荷）。
 - **Windows 上留一条不经 trampoline 的入口（v0.43.1-dev）。** `python -m horosa_skill` ≡ `horosa-skill`（`horosa_skill/__main__.py`）。
   `client config` / `setup` 的 `--entry auto`（缺省）在 Smart App Control 为「开」时写 `… python -m horosa_skill serve`，其余情况生成物逐字节不变；
   `--entry script|module` 显式压过。`setup` 探针认 `(os error 4551)`（只锚这段不本地化的尾巴）→ `windows_app_control_blocked`，给改写后的命令。
