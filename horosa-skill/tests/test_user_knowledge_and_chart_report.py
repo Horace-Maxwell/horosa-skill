@@ -132,28 +132,85 @@ def test_budget_is_shared_and_truncation_is_marked(tmp_path: Path) -> None:
 # ── 增删 / 精读 / 检索 ────────────────────────────────────────────────────
 
 
-def test_add_entry_stays_inside_the_folder_and_refuses_silent_overwrite(tmp_path: Path) -> None:
+def test_add_entry_validates_names_instead_of_rewriting_them(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     root = tmp_path / "kb"
-    entry = user_knowledge.add_entry(settings, text="正文", entry_id="../../逃出去/笔记", techniques=["bazi_birth"], tags=["t"])
-    assert entry.path.resolve().is_relative_to(root.resolve())
-    assert entry.id == "逃出去/笔记" and entry.techniques == {"bazi_birth"} and entry.tags == {"t"}
-    with pytest.raises(ToolValidationError) as exists:
-        user_knowledge.add_entry(settings, text="新正文", entry_id="逃出去/笔记")
-    assert exists.value.code == "knowledge.user_exists"
-    assert user_knowledge.add_entry(settings, text="新正文", entry_id="逃出去/笔记", overwrite=True).text == "新正文"
-    with pytest.raises(ToolValidationError) as invalid:
-        user_knowledge.add_entry(settings, text="x", entry_id="../..")
-    assert invalid.value.code == "knowledge.user_invalid_id"
+    entry = user_knowledge.add_entry(settings, text="正文", entry_id="八字/笔记", techniques=["bazi_birth"], tags=["#t"])
+    assert entry.path == root / "八字" / "笔记.md" and entry.techniques == {"bazi_birth"} and entry.tags == {"t"}
+    # 不合法的名字直接拒绝并说明原因——此前被悄悄改写（../../逃出去/笔记 → 逃出去/笔记），两个名字可能写到同一个文件。
+    for bad in ("../../逃出去/笔记", "../..", ".私密", "a/CON", "a:b", "x/" * 6 + "y"):
+        with pytest.raises(ToolValidationError) as invalid:
+            user_knowledge.add_entry(settings, text="x", entry_id=bad)
+        assert invalid.value.code == "knowledge.user_invalid_id", bad
     with pytest.raises(ToolValidationError) as empty:
         user_knowledge.add_entry(settings, text="  ", entry_id="空")
     assert empty.value.code == "knowledge.user_empty"
+    with pytest.raises(ToolValidationError) as injected:
+        user_knowledge.add_entry(settings, text="x", entry_id="注入", title="标题\ntechniques: *")
+    assert injected.value.code == "knowledge.user_invalid_meta"
+    # 「滴天髓 v1.2」与「滴天髓 v1.3」是两条：扩展名是追加的，不再被 with_suffix 吃掉「.2」「.3」后撞成同一个文件。
+    a = user_knowledge.add_entry(settings, text="一", entry_id="滴天髓 v1.2")
+    b = user_knowledge.add_entry(settings, text="二", entry_id="滴天髓 v1.3")
+    assert a.path != b.path and a.path.read_text(encoding="utf-8").endswith("一\n")
+    # 写进去的元数据读回来一字不差（引号、冒号、井号都安全）。
+    tricky = user_knowledge.add_entry(settings, text="正文", entry_id="怪标题", title='C# 笔记: "通神" #1', tags=["子平 真诠"])
+    assert tricky.title == 'C# 笔记: "通神" #1' and tricky.tags == {"子平 真诠"}
 
-    removed = user_knowledge.remove_entry(settings, "笔记")  # 标题也认
-    assert not removed.exists()
+
+def test_overwrite_keeps_the_old_version_in_the_trash_and_merges_metadata(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    root = tmp_path / "kb"
+    _write(root, "旧笔记.txt", "---\ntitle: 旧标题\ntechniques: bazi\ntags: 古籍\n---\n旧正文")
+    with pytest.raises(ToolValidationError) as exists:
+        user_knowledge.add_entry(settings, text="新正文", entry_id="旧笔记")
+    assert exists.value.code == "knowledge.user_exists"
+    entry = user_knowledge.add_entry(settings, text="新正文", entry_id="旧笔记", overwrite=True)
+    # 覆盖的是原文件本身（.txt 不会多出一个 .md 同名条目），没给的 title / techniques / tags 沿用旧值。
+    assert entry.path == root / "旧笔记.txt" and entry.text == "新正文"
+    assert entry.title == "旧标题" and entry.techniques == {"bazi"} and entry.tags == {"古籍"}
+    assert [e.id for e in user_knowledge.list_entries(settings)] == ["旧笔记"]
+    trash = user_knowledge.list_trash(settings)
+    assert len(trash) == 1 and trash[0]["reason"] == "overwrite" and trash[0]["file"] == "旧笔记.txt"
+    # 回收站在数据目录的状态区，不在用户的知识库文件夹里。
+    assert not any(p.name == "manifest.json" for p in root.rglob("*"))
+
+
+def test_remove_goes_to_the_trash_and_restore_brings_it_back(tmp_path: Path) -> None:
+    _seed(tmp_path / "kb")
+    settings = _settings(tmp_path)
+    removed = user_knowledge.remove_entry(settings, "求财心得")  # 唯一标题也认
+    assert removed["id"] == "占卜/求财心得" and not Path(removed["path"]).exists()
+    assert not (tmp_path / "kb" / "占卜").exists()  # 删空的子文件夹顺手收掉
     with pytest.raises(ToolValidationError) as gone:
-        user_knowledge.remove_entry(settings, "笔记")
+        user_knowledge.remove_entry(settings, "求财心得")
     assert gone.value.code == "knowledge.user_not_found"
+    restored = user_knowledge.restore_entry(settings, removed["trash_id"])
+    assert restored["restored"] == "占卜/求财心得.txt"
+    assert user_knowledge.read_entry(settings, "占卜/求财心得")["text"] == "小六壬遇速喜，求财宜速。"
+    assert user_knowledge.list_trash(settings) == []
+    with pytest.raises(ToolValidationError) as missing:
+        user_knowledge.restore_entry(settings, "../../etc")
+    assert missing.value.code == "knowledge.user_trash_not_found"
+
+
+def test_one_resolver_for_select_read_and_remove_and_ambiguity_is_an_error(tmp_path: Path) -> None:
+    root = tmp_path / "kb"
+    _write(root, "x.md", "顶层 x")
+    _write(root, "sub/x.md", "子目录里的 x（标题默认也是 x）")
+    _write(root, "z.md", "---\ntitle: 共同标题\n---\nz")
+    _write(root, "w.md", "---\ntitle: 共同标题\n---\nw")
+    settings = _settings(tmp_path)
+    # 「x」精确等于顶层的 id：选取、精读、删除都指向同一个文件（此前 remove 按排序删到了 sub/x.md）。
+    assert user_knowledge.build_context(settings, "x", tool_name="chart")["entries"][0]["id"] == "x"
+    assert user_knowledge.read_entry(settings, "x")["key"] == "x"
+    assert user_knowledge.remove_entry(settings, "x")["id"] == "x" and (root / "sub/x.md").exists()
+    with pytest.raises(ToolValidationError) as ambiguous:
+        user_knowledge.remove_entry(settings, "共同标题")
+    assert ambiguous.value.code == "knowledge.user_ambiguous" and set(ambiguous.value.details["candidates"]) == {"z", "w"}
+    assert (root / "z.md").exists() and (root / "w.md").exists()  # 歧义时一个都不删
+    context = user_knowledge.build_context(settings, "共同标题", tool_name="chart")
+    assert context["entries"] == [] and context["ambiguous"][0]["name"] == "共同标题"
+    assert any("对应多条" in w for w in user_knowledge.context_warnings(context))
 
 
 def test_read_and_search_user_entries(tmp_path: Path) -> None:
@@ -186,7 +243,15 @@ def test_run_tool_attaches_selected_knowledge_without_touching_the_chart(tmp_pat
     assert result.data["export_snapshot"] == plain.data["export_snapshot"]
     assert any("不存在" in w for w in result.warnings)
     stored = "\n".join(f.read_text(encoding="utf-8") for f in (tmp_path / "runs").rglob("*.json"))
-    assert stored and not re.search(r'"knowledge"\s*:', stored)
+    # 存档只记引用、不存正文。此前这里只查 `"knowledge":` 键——它从来不在存档里，真正装着全文的
+    # `knowledge_context` 一直被存下来，断言却是绿的（因为错误的原因通过）。
+    assert stored and "knowledge_context" in stored
+    assert "欲识三元万法宗" not in stored and "先看盘面再看资料" not in stored
+    stored_run = json.loads(next((tmp_path / "runs").rglob("*_xiaoliuren_1.json")).read_text(encoding="utf-8"))
+    refs = stored_run["data"]["knowledge_context"]["entries"]
+    assert [ref["id"] for ref in refs] == ["滴天髓笔记", "通用"]
+    assert all("text" not in ref and ref["text_stored"] is False and len(ref["sha256"]) == 64 for ref in refs)
+    assert result.data["knowledge_context"]["entries"][0]["text"] == "天道：欲识三元万法宗。"  # 交给 AI 的那份仍有全文
 
 
 def test_knowledge_selection_never_reaches_the_engine_request(tmp_path: Path) -> None:
@@ -250,6 +315,17 @@ def test_cli_knowledge_add_mine_remove(tmp_path: Path, monkeypatch) -> None:
 
 
 # ── 完整排盘报告 ───────────────────────────────────────────────────────────
+
+
+def test_chart_style_refuses_tools_without_a_chart(tmp_path: Path) -> None:
+    # 解析 / 注册表 / 知识检索没有盘面：此前照样出一份只有封面、标题是工具 id 的「完整排盘报告」。
+    service = _service(tmp_path)
+    with pytest.raises(ToolValidationError) as refused:
+        service.report_from_tool({"tool_name": "export_registry", "payload": {}, "format": "pdf", "style": "chart"})
+    assert refused.value.code == "report.no_chart_content"
+    with pytest.raises(ToolValidationError) as rules:  # 规则库查询：段落有标题、内容是「无」，同样不出空壳报告
+        service.report_from_tool({"tool_name": "ziwei_rules", "payload": {}, "format": "pdf", "style": "chart"})
+    assert rules.value.code == "report.no_chart_content"
 
 
 class _PdfSpy:
@@ -321,18 +397,31 @@ def test_chart_style_report_renders_every_section_without_an_ai_answer(tmp_path:
     assert rendered["format"] == "pdf" and Path(rendered["artifact_path"]).read_bytes().startswith(b"%PDF")
     texts = spy.texts()
     joined = "\n".join(texts)
-    for title in titles:
-        assert title in texts, title  # 每个导出章节都有自己的标题块
+    from horosa_skill.service._common import _missing_detail_text
+
+    sections = run.data["export_snapshot"]["sections"]
+    produced = [s["title"] for s in sections if str(s.get("body") or "").strip() not in ("", _missing_detail_text(s["title"]))]
+    unproduced = [s["title"] for s in sections if s["title"] not in produced]
+    assert produced and unproduced  # 假客户端下两种都有，两条路径都验到
+    for title in produced:
+        assert title in texts, title  # 每个有内容的导出章节都有自己的标题块
+    # 引擎没给内容的段：不再各占一个标题 + 一段写给 AI 的护栏话，统一列进附录「本次未产出」。
+    assert "本次未产出" in texts and all(title in joined for title in unproduced)
+    assert "不能臆造外部依赖" not in joined
     assert "完整盘面" in texts and "附录" in texts and "基本信息" in texts and "技法依据" in texts
-    assert "自备参考资料" in texts and "先看盘面再看资料。" in joined
+    # 自备资料只列引用（标题 / 条目 / 字数），正文不随报告印出。
+    assert "自备参考资料" in texts and "通用" in joined and "先看盘面再看资料。" not in joined
     assert "完整排盘报告" in joined
+    assert not any(t in joined for t in ("False", "True", "aiExport", "settings v"))  # 附录不漏机器值
     # 没有 AI 解读就不出 AI 章节，也不出内部字样。
     assert not any(t in texts for t in ("核心结论", "起盘依据", "解盘步骤", "总览摘要"))
     assert not any(term in joined for term in ("Run ID", "report_metadata", "Horosa Skill"))
     # 两遍排版：第二遍目录页码 = 实际书签页码（第一遍留空）。
     assert spy.builds == 2
     toc = spy.toc()
-    outline_pages = [(title, str(page)) for title, _, page in spy.outline]
+    # 段内小标题（◆ / [x]）只进书签第三级、不进目录：目录对照只看前两级。
+    outline_pages = [(title, str(page)) for title, level, page in spy.outline if level <= 1]
+    assert any(level == 2 for _, level, _ in spy.outline)
     assert toc and toc == outline_pages
 
     docx = service.report_render({"run_id": run.memory_ref.run_id, "tool_name": "chart", "format": "docx", "style": "chart"})
@@ -403,7 +492,8 @@ def test_traditional_reports_convert_the_renderers_own_labels_exactly_once(tmp_p
     texts = spy.texts()
     assert {"目錄", "完整盤面", "附錄"} <= set(texts)
     assert not {"目录", "完整盘面", "附录"} & set(texts)
-    assert convert("星盘", "zh-Hant") + " · " + convert("完整排盘报告", "zh-Hant") in texts  # 标题只转一次
+    # 封面大标题是技法名、小标签是「完整排盘报告」（各转一次；整份标题在页脚与 PDF 元数据里）。
+    assert convert("星盘", "zh-Hant") in texts and convert("完整排盘报告", "zh-Hant") in texts
 
     docx = service.report_render({"run_id": run.memory_ref.run_id, "tool_name": "chart", "format": "docx", "style": "chart"})
     with zipfile.ZipFile(Path(docx["artifact_path"])) as archive:

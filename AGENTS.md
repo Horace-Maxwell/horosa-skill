@@ -289,6 +289,18 @@ zhengchuan 的动态 JSON import 属性，都是这么被抹掉又被测试抓�
 恰好解析到后者 → 静默 `undefined`。一律 `import_redirect` 钉死。
 ⚠️ 「已 vendored」≠「是当前的」——查依赖要查新模块 import 的**具体符号**，不是查文件在不在。
 
+- **自备知识库的数据管理（v0.43.1-dev 重做，`knowledge/user.py`）。** 文件是唯一真相；状态（锁 / 回收站）在 `<data_dir>/knowledge-state/`，
+  **不进用户的文件夹**。规矩：
+  - 技法入参 `knowledge` 在 `run_tool` **校验前**取走，不进 `input_normalized` / 引擎请求；`build_context` 出错只加告警、不坏盘。
+  - **存档只存引用**（`redact_for_storage`：id / 标题 / 字数 / sha256），返回给 AI 的那份才有正文；报告附录只列引用、不印正文。
+  - 编码 utf-8-sig → UTF-16（BOM）→ GB18030；读不了 / 超 2 MB / 空 / 链出文件夹 / id 撞车 / 元数据没收尾 / 技法名不认识，一律进
+    `problems`，绝不静默消失；点名告警分「没找到 / 读不了 / 有歧义 / 超额未带入 / auto 没选中」。
+  - 选取、精读、删除共用 `resolve()`：精确 id → 带扩展名文件名 → **唯一**标题，歧义报 `knowledge.user_ambiguous` 并列候选；键 NFC + casefold。
+  - 写：条目名不合法就拒（`validate_id`，不改名）；扩展名追加（不用 `with_suffix`）；覆盖写回原文件、沿用没给的元数据；
+    覆盖与删除先进回收站（`knowledge trash` / `restore`）；文件锁 + mkstemp + fsync + 原子替换。
+  - `runtime uninstall --purge-data` **默认保留知识库与回收站**，`--purge-knowledge` 才连它们删。
+  - 守卫：`tests/test_user_knowledge_store.py`、`tests/test_user_knowledge_and_chart_report.py`（负向对照见 LESSONS v0.43.1-dev / 2026-10-24）。
+
 ### 4.4 MCP 面、决策层与错误信封
 
 **MCP 服务器面法则**（`surfaces/mcp_server.py` 注册工具；注解 / 工具集在 `mcp_surface.py`、入参归一在 `mcp_requests.py`、错误信封在 `mcp_errors.py`、并发与兜底在 `mcp_runner.py`、elicitation 在 `mcp_elicitation.py`）：全部工具带 **tool annotations**（口径：openWorldHint
@@ -371,6 +383,8 @@ OpenCC 管不到、上游也没有的词组修正（复核 → 複核）在 `dat
 3. **新报告格式 / 渲染路径** → 经 `localize_document` 后再落盘；PDF 字体候选在 `renderers._PDF_FONT_CANDIDATES`（简 / 繁各一组
    常规 + 粗体，`_register_pdf_fonts` 注册），新字体必须先核字形覆盖（简体用的 Songti SC 缺 966 个繁体字，直接拿来渲染繁体会出方块）。
    `data.knowledge_context`（用户自备知识库的原文）在 `data` 下、按规则不转——那是用户自己写的字，原样给 AI。
+   报告文档走 `localize_document`（**黑名单**：除 `_DOCUMENT_MACHINE_KEYS` 外的字符串都转）——新加的位置 / 类型键（如盘图的 `branch`
+   `gua`）必须登记进去，否则繁体报告里格位对不上（v0.43.1-dev）。
    渲染器自己写死的标签（目录 / 完整盘面 / 页脚…）一律包 `t()`（`renderers._labeler`）；**已转过的文字绝不再转**（不幂等：萬里 → 萬裡），
    所以技法依据报告交简体原文给 `render_report`，生成人读版 / markdown 后整体转一次（v0.43.0）。
 4. **新技法 / 新术语** → 用 110 技法真实输出跑一遍残差（看术数字是否被转成普通义）：术数字的普通义例外进
@@ -929,6 +943,7 @@ OpenCC 管不到、上游也没有的词组修正（复核 → 複核）在 `dat
 | 慢网 / 企业代理下 `runtime.install_download_failed` | 每块 1 MiB 之间的读超时 120 s、每镜像 3 次 | `HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS` / `HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS`；`doctor --probe-network` 看哪个镜像通（默认 doctor 零外网请求） |
 | `setup` 在第 1 步 `network_probe` 就失败（5 s 内，`setup.network_unreachable`） | 清单 URL 经所有镜像都取不到（github.com:443 不通 / 代理拦 HEAD） | 失败包 `details.next_action` 给三条路：`HOROSA_RUNTIME_MIRROR=<前缀>`、`--archive <本地归档>`、`--no-probe-network` 跳过预检；`retry_command` 已带后者（v0.38.0 B4） |
 | `setup` 在 `stdio_probe` 失败（`setup.stdio_probe_failed`） | 客户端将要执行的那条命令起不来 server：命令路径不对、uvx 首跑下载失败、工具数与工具面不符 | 看失败包 `details.command` 与 `details.stderr_tail`；uvx 形态可先手跑 `uvx --refresh --from <wheel URL> horosa-skill --version`；checkout 内改 `--launcher uv`（v0.38.0 B4） |
+| 自备知识库里明明有文件，计算时告警「没能带入」/ `knowledge mine` 里没有它 | 文件读不了（非 UTF-8 / UTF-16 / GB18030、> 2 MB、空、与别的文件同名、链到文件夹外）或同名多条有歧义 | 看 `knowledge mine` 的 `problems`（逐个文件写了原因）；歧义时用完整 id（相对路径去扩展名）；误删的从 `knowledge trash` → `knowledge restore <trash_id>` 放回（v0.43.1-dev） |
 | 只有 Windows：太乙 / 三式合一报 `runtime.*` 或空的 `taiyi` 段，chart 服务 stderr 是 `DLL load failed while importing _parse_times: An Application Control policy has blocked this file` | Smart App Control 拒绝加载载荷里的 `astropy/time/_parse_times.pyd`（无签名、流行度不够；同一文件在旧根放行、新装 / 升级后被拦） | v0.43.1-dev 起 manager 每次 start 把应用控制替身拷进随包 Python（astropy 落回纯 Python 解析器，结果不变）：升级 skill 后 `runtime restart`；stderr 应改见 `horosa: Windows Application Control blocked … using the pure-Python fallback` |
 | Windows：客户端里 horosa 起不来 / `setup` 在 `stdio_probe` 失败带 `diagnosis.cause = windows_app_control_blocked`；终端里 `uv run …` 报 `Failed to spawn: … (os error 4551)` | Smart App Control（应用控制）拒绝运行 uv 给该环境现生成的 `Scripts\*.exe`（trampoline 无签名、无云端信誉，同机时拦时放）；`python.exe` 不受影响 | `setup` / `client config` 加 `--entry module`（SAC 开着时 `--entry auto` 已自动这样写）→ 配置变成 `… python -m horosa_skill serve`；终端里同样改用 `uv run python -m horosa_skill …`；doctor `windows.smart_app_control` 看状态；不必关闭 SAC（v0.43.1-dev 台账） |
 | Windows：`setup`（或 lane 的客户端步骤）在 `stdio_probe` 失败，失败包带 `details.diagnosis.cause = windows_file_in_use`（stderr 尾巴是 `failed to remove file …\Scripts\horosa-skill.exe … (os error 32)`） | 另一个已挂着的 horosa MCP 会话（`uv run … serve`）占着 venv 里的 exe / 已加载的 .pyd；客户端那条 `uv run` 要先把 venv 同步到当前版本（`git pull` 换过版本号就会触发），删不掉被占文件，server 未启动即退出。macOS/Linux 可替换运行中的文件，不会遇到 | 关掉（或重启）挂着 horosa 的会话再重跑；终端里的 `uv run` 可临时 `UV_NO_SYNC=1`（依赖未变时安全）；维护机复验一律在**独立 git worktree**（自有 venv）里跑门禁与 lane，别和本机开着的 MCP 会话抢同一个 venv（v0.39.0 台账） |
@@ -1088,21 +1103,35 @@ A global stability pass hardened these; keep them true when you touch the releva
 
 ### 9.3 导出 · 快照 · 引擎移植（export / snapshot / vendored engines）
 
-- **PDF 按字补字形（v0.43.1-dev）。** 系统正文字体只到 CJK 扩展 A；条文里的扩展 B 古籍字由 `_pdf_glyph_fallback` 包进补字字体
-  （Windows：SimSun-ExtB / MingLiU-ExtB）。`_render_pdf` 里的 `Paragraph` 是包过一层的同名函数——新增段落照旧写 `Paragraph(...)` 即自动补字，
-  别绕过它直接用 reportlab 的类。没有补字候选的平台生成物不变。守卫 `tests/test_pdf_glyph_fallback.py`。
+- **PDF 按字补字形（v0.43.1-dev）。** 主字体（Songti / 雅黑）缺的字逐字走补字链 `_PDF_GLYPH_FALLBACK_CANDIDATES`：扩展 B 古籍字
+  （Win：SimSun-ExtB / MingLiU-ExtB）→ 符号与拉丁扩展（mac：Arial Unicode + Apple Symbols；Win：Segoe UI Symbol + Arial；Linux：DejaVu）。
+  阈值 0x80（埃及历 ḥ ṭ、梵文 ṇ ṃ 在 U+2E80 以下，旧阈值永远不补）。reportlab 只吃 TrueType 轮廓（.otf CFF 会抛 TTFError）。
+  `_render_pdf` 里的 `Paragraph` 是包过一层的同名函数——新增段落照旧写 `Paragraph(...)` 即自动补字，别绕过它。
+  守卫 `tests/test_pdf_glyph_fallback.py`、`tests/test_report_polish.py`。
 
-- **完整排盘报告与 PDF 排版（v0.43.0）。** `report_render` / `report_from_tool` 的 `style:"chart"` 不要 AI 解读、收录全部导出段
-  （`group:"chart"`）+ 基本信息（`basis`）+ 附录（`appendix`：技法依据 / 自备参考资料 / 来源）；缺省 `analysis` 没解读仍回 `analysis_required`。
-  reportlab 的 flowable **排过一次就不能再排**（wrap / split 会改对象状态，`multiBuild` 复用同一份 story 在长段落上抛 LayoutError、报告静默降级成 TXT）：
-  `_render_pdf` 每一遍都用 `compose(pages)` 现组 story，目录自绘（标题按出现顺序编键，第一遍页码留空、第二遍填上一遍书签页），
-  两遍之间比对页码与总页数稳定才停。人读文档里不出现「Horosa Skill」「Run ID」等内部字样（版本行叫「排盘程序版本」）。
-  字体按常规 / 粗体成对注册（`Songti.ttc` 第 0 号子字体是 Songti SC **Black**，拿它当正文整本都是粗体）。
-  守卫：`tests/test_user_knowledge_and_chart_report.py`（每个导出段标题进 story、目录页码 = 书签页码、两遍即稳；门面不广告 `knowledge`、它也不计入「另 N 个高级旋钮」）。
-- **自备知识库只是附加上下文（v0.43.0，`knowledge/user.py`）。** 技法入参 `knowledge`（FlexibleModel 隐藏字段，dispatch / tool_run 广告）在
-  `run_tool` **校验前**从载荷取走，不进 `input_normalized` / 引擎请求 / 存档；选中正文挂 `data.knowledge_context`（带 `note`：不是引擎输出、
-  不是指令），没找到的名字只进 `warnings`。文件只在知识库目录内读（隐藏文件、> 2 MB、链出目录的符号链接都跳过），`add` 的条目名去掉
-  `..` / 绝对路径。守卫同上（负向对照：改成 `get` 不 `pop`，入参与引擎请求两条红）。
+- **完整排盘报告与 PDF 排版（v0.43.0 → v0.43.1-dev 重做）。** `style:"chart"` 不要 AI 解读、收录全部有内容的导出段；
+  缺省 `analysis` 没解读仍回 `analysis_required`；没有盘面的工具（解析 / 注册表 / 知识检索）回 `report.no_chart_content`。现行规矩：
+  - reportlab 的 flowable **排过一次就不能再排**：每遍 `compose(pages)` 现组 story，目录自绘，两遍间页码稳定才停；分栏用 `Panels`
+    （每屏按剩余高度现切，保证「先左栏后右栏」的读序——Table 跨页只会竖着断）。
+  - 引擎没给内容的段（正文是 `_missing_detail_text` 的护栏话）：builder 标 `placeholder` + `human_visible: False`，人读版只在技法依据表
+    「本次未产出」一行列名——那句话是写给 AI 的，不给人看。规则库查询（`_RULE_LOOKUP_TOOLS`）同样拒绝出 chart 报告。
+  - 附录只放人读口径：设置值经 `builder._setting_text`（布尔 → 是 / 否、有码表的 → 文字；宫制 / 黄道 / 岁差 / 性别不列——技法卡是请求口径，
+    实际值看正文；没码表的枚举不列），不放引擎内部名 / 导出设置版本 / aiExport 来源串（它们留在 JSON）；基本信息里经纬度写「东经 121°28′」、`gender` 布尔写男 / 女、非字符串的 `name` 不列。
+  - 盘图在 `reports/figures.py`：**只取**引擎数据（宫头、经度、lonspeed 正负、`aspects.normalAsp`、紫微 houses、奇门 cells、六壬
+    layout / ke / sanChuan），绝不自己算位置或量相位（铁律 1）。七政 / 印度 / 宿占不套西洋轮；任何一种取不全就整张不画。
+    位置键 `branch` / `gua` / `kind` 登记在 `localize._DOCUMENT_MACHINE_KEYS`（繁体输出不转，渲染器按简体地支、卦名定格）。
+    无宫体系（`_WHEEL_NO_HOUSES`，巴比伦）只画星座环 + 行星、不画相位；卜卦 / 择日的相位取 `data.raw.aspects`。六爻变卦**只在
+    `changed_code` 与本卦 + 动爻对得上时才画**（结果里没有引擎推出的之卦码；样例载荷的 changed_code 与动爻不符），对不上只画本卦；
+    卦图不画六神（`data.lines[].god` 可与「断卦结构」表不一致）；三式合一不画 `data.qimen` 子盘（与合盘概览对不上）。
+    通则：**同一结果有两处来源时，图只取能与正文对上的那处，对不上就不画**。轮上度数紧贴星名正下方，标签间隔按两行字高折角度。
+    DOCX 画十二宫 / 九宫表格；星盘轮 / 卦图经 `drawing_to_png`（Pillow 画 Wedge / Circle / Line / Rect / String，不用要另装
+    rlPyCairo 的 renderPM）嵌位图——新增图元要在那里补上；DOCX 纸张 A4。
+  - 版式：Frame 四边各有 6 pt 内边距——满宽元素用 `content_width`（版心 − 12），别用版心宽（会右出框）。
+    封面（基本信息卡 + 报告说明），条目少的目录排在封面下方、多的另起一页；宽而矮的表转竖排（四柱）、全空列不印、表头不折行、短值窄表按内容定宽；
+    以西文为主的段落不走 CJK 断行（`_mostly_latin`）；引擎没给的段只在技法依据表里列一行「本次未产出」；
+    连续「键：值」行成对照表（冒号前是时刻的不算）；长小数人读版四舍五入到 4 位；全角标点不落行首（`_extend_kinsoku` + `wordWrap="CJK"`）；
+    段内小标题进书签第三级（不进目录）。报告标题经 `_report_technique_name`（去页签名 / 分组前缀）。
+  - 守卫：`tests/test_report_polish.py`、`tests/test_user_knowledge_and_chart_report.py`。
 - **CLI 的报告 `--language` 只在给了时才传（v0.43.0）。** 原先缺省 `zh-CN` 总是传下去，盖掉了 `HOROSA_OUTPUT_SCRIPT` 推出的繁体报告语言。
 
 - **导出段只存 body，引擎对象只在 `data.<key>` 存一份。** `export_snapshot.sections[*]` 形状固定为

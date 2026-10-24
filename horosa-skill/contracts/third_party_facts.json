@@ -573,6 +573,17 @@
         "horosa-skill/scripts/run_ci_gates.py",
         "horosa-skill/scripts/runtime_templates/windows/python/_horosa_app_control.py"
       ]
+    },
+    {
+      "id": "reportlab.cjk-fonts-and-kinsoku",
+      "subject": "reportlab",
+      "fact": "reportlab TTFont loads TrueType-outline .ttf/.ttc only (CFF-outline .otf such as macOS STIX*.otf raises TTFError 'postscript outlines are not supported'); renderPM PNG export needs the separate rlPyCairo/_renderPM backend (absent in a plain install); Pillow is a hard reportlab dependency, so DOCX images are drawn with Pillow instead. reportlab.lib.textsplit.ALL_CANNOT_START contains ASCII , : ; but not the full-width ，：；？！）》, so wordWrap='CJK' still starts lines with them unless the table is extended. macOS system font coverage measured 2026-10-24: Songti.ttc lacks Latin Extended Additional (ḥ ṭ ṇ ṃ), Yijing hexagrams (U+4DC0–4DFF), trigrams, planet symbols and ✓ ✗ ⚠ ⟷; Supplemental/Arial Unicode.ttf covers ḥṭṇṃṛṣḍṁ ✓✗ ☰☴ ♃☿♄ ▶◀⇄; Apple Symbols.ttf covers ䷀–䷿ ⚊⚋ ⚠ ⟷ ♃☿♄; neither covers ȧ ᵢ or CJK Ext-B (Windows: SimSun-ExtB / MingLiU-ExtB; Segoe UI Symbol for symbols).",
+      "source_url": "https://docs.reportlab.com/reportlab/userguide/ch3_fonts/",
+      "verified_on": "2026-10-24",
+      "affects": [
+        "horosa-skill/src/horosa_skill/reports/renderers.py",
+        "horosa-skill/src/horosa_skill/reports/figures.py"
+      ]
     }
   ]
 }

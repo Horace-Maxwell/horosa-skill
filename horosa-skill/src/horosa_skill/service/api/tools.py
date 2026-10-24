@@ -38,12 +38,19 @@ from horosa_skill.service.envelope import (
 from horosa_skill.service.export import TOOL_EXPORT_TECHNIQUE_MAP, _attach_export_contract
 from horosa_skill.knowledge import user as user_knowledge
 from horosa_skill.knowledge.user import build_context as build_user_knowledge_context
-from horosa_skill.knowledge.user import missing_warning as user_knowledge_missing_warning
 from horosa_skill.service.text.chart_family import (
     _apply_chart_request_defaults,
     _india_apply_school_presets,
     _india_chart_remote_payload,
 )
+
+
+def _redact_knowledge_text(envelope: dict[str, Any]) -> dict[str, Any]:
+    """存档只记自备资料的引用，不存正文（隐私：删了笔记，旧存档里不该还有全文；报告分享出去也不该带上）。"""
+    data = envelope.get("data")
+    if isinstance(data, dict) and isinstance(data.get("knowledge_context"), dict):
+        envelope = {**envelope, "data": {**data, "knowledge_context": user_knowledge.redact_for_storage(data["knowledge_context"])}}
+    return envelope
 
 
 class ToolsAPI:
@@ -61,13 +68,11 @@ class ToolsAPI:
         ]
 
     def _user_knowledge_summary(self) -> dict[str, Any]:
-        entries = user_knowledge.list_entries(self.settings)
         return {
-            "dir": str(user_knowledge.knowledge_dir(self.settings)),
-            "count": len(entries),
-            "entries": [entry.summary() for entry in entries[:200]],
+            **user_knowledge.overview(self.settings, limit=200),
             "how_to_use": "计算时传 knowledge=[条目 id / 标题 / #标签 / auto]，选中的正文挂在 data.knowledge_context；"
-                          "精读一条：knowledge_read(domain=\"user\", key=…)。往文件夹里放 .md / .txt 即可新增。",
+                          "精读一条：knowledge_read(domain=\"user\", key=…)。往文件夹里放 .md / .txt 即可新增；"
+                          "problems 列出没能读入的文件和原因。",
         }
 
     def _run_local_tool(self, definition: ToolDefinition, payload: dict[str, Any]) -> dict[str, Any]:
@@ -343,12 +348,21 @@ class ToolsAPI:
                 # `_apply_response_view` 在存档之后裁剪，且显式豁免这个键（见那里的说明）。
                 response_data = self._attach_technique_card(tool_name, input_normalized, response_data)
                 knowledge_context = None
+                knowledge_failure: str | None = None
                 if knowledge_selection not in (None, "", []) and isinstance(response_data, dict):
-                    knowledge_context = build_user_knowledge_context(
-                        self.settings, knowledge_selection, tool_name=tool_name,
-                        technique=TOOL_EXPORT_TECHNIQUE_MAP.get(tool_name), domain=definition.domain,
-                    )
-                    response_data = {**response_data, "knowledge_context": knowledge_context}
+                    card = response_data.get("technique_card") if isinstance(response_data.get("technique_card"), dict) else {}
+                    try:
+                        knowledge_context = build_user_knowledge_context(
+                            self.settings, knowledge_selection, tool_name=tool_name,
+                            technique=TOOL_EXPORT_TECHNIQUE_MAP.get(tool_name), domain=definition.domain,
+                            technique_label=str((card.get("technique") or {}).get("label") or "") or None,
+                        )
+                        response_data = {**response_data, "knowledge_context": knowledge_context}
+                    except Exception as exc:  # noqa: BLE001 - 附加资料出错绝不该让一张算好的盘作废
+                        knowledge_failure = bilingual(
+                            f"自备知识库这次没能带入（{type(exc).__name__}: {exc}）；盘面结果不受影响。",
+                            f"Your knowledge entries could not be attached ({type(exc).__name__}: {exc}); the chart is unaffected.",
+                        )
                 summary = _generic_summary(tool_name, response_data)
                 # 工具内部经 `_warnings` 上抛的降级说明（如子引擎不可用）落入 envelope.warnings，
                 # 不静默：调用方能看到「结果不完整」而 ok 仍为 True（优雅降级 ≠ 无声降级）。
@@ -362,8 +376,10 @@ class ToolsAPI:
                 if zone_note and zone_note not in warnings:
                     warnings.append(zone_note)
                 # 预设段缺席 → warnings + summary 各一条：agent 不翻 export_snapshot 也知道结果不完整。
-                if knowledge_context is not None and (knowledge_note := user_knowledge_missing_warning(knowledge_context)):
-                    warnings.append(knowledge_note)
+                if knowledge_context is not None:
+                    warnings.extend(user_knowledge.context_warnings(knowledge_context))
+                if knowledge_failure:
+                    warnings.append(knowledge_failure)
                 missing_note = _missing_sections_warning(response_data)
                 if missing_note:
                     warnings.append(missing_note)
@@ -444,7 +460,7 @@ class ToolsAPI:
                     tool_name=tool_name,
                     ok=envelope.ok,
                     input_normalized=input_normalized,
-                    envelope_dict=envelope.model_dump(mode="json"),
+                    envelope_dict=_redact_knowledge_text(envelope.model_dump(mode="json")),
                     summary=envelope.summary,
                     warnings=envelope.warnings,
                     error=envelope.error.model_dump(mode="json") if envelope.error else None,

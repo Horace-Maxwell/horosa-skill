@@ -25,6 +25,9 @@ from horosa_skill.service.export import TOOL_EXPORT_TECHNIQUE_MAP
 from horosa_skill.textscript import REPORT_LANGUAGE, TRADITIONAL_HK, parse_script
 from horosa_skill.textscript.localize import localize_document
 
+# 查规则库的工具（不起盘）：导出段有标题但内容是「无」，出成「完整排盘报告」只是一份空壳（v0.43 第二轮评审）。
+_RULE_LOOKUP_TOOLS = frozenset({"ziwei_rules"})
+
 
 class ReportsAPI:
     def record_ai_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -285,6 +288,20 @@ class ReportsAPI:
                     style="chart" if chart_style else "analysis",
                 )
                 tool_name = str(document["source"]["tool_name"])
+                if chart_style and (tool_name in _RULE_LOOKUP_TOOLS or not document.get("figures") and not any(
+                    section.get("group") == "chart" for section in document.get("sections") or []
+                )):
+                    # 解析 / 注册表 / 知识检索这类工具没有盘面：此前照样出一份只有封面的「完整排盘报告」。
+                    raise ToolValidationError(
+                        bilingual(
+                            f"`{tool_name}` 没有盘面可排成完整排盘报告（它返回的是解析结果 / 清单 / 知识条目）。"
+                            "直接读工具结果，或对起盘类技法出报告。",
+                            f"`{tool_name}` has no chart to lay out as a complete chart report (it returns parsed text / "
+                            "a registry / knowledge entries). Read the tool result directly, or report on a charting technique.",
+                        ),
+                        code="report.no_chart_content",
+                        details={"tool_name": tool_name, "style": "chart"},
+                    )
                 output_path = self._report_output_path(
                     request.output_path,
                     default=self.store.default_report_path(

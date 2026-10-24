@@ -120,6 +120,8 @@ _DOCUMENT_MACHINE_KEYS = frozenset({
     "generated_at", "created_at", "language", "trace_id", "group_id", "versions", "version", "input_normalized",
     "raw_json", "raw", "data", "payload", "declared_engines", "declared_endpoints", "measured", "value",
     "declared_class", "matches_declaration", "format_source",
+    # 盘图规格（reports/figures.py）的位置 / 类型键：渲染器按简体地支、卦名定格，转了就对不上格位。
+    "branch", "gua", "kind", "emphasis", "cell_style",
 })
 
 

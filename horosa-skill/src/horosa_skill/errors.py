@@ -126,6 +126,40 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "pick_entry_from_list",
     },
+    "knowledge.user_ambiguous": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "这个名字对应自备知识库里的多条（details.candidates）。用完整 id（相对路径去扩展名）指定其中一条。",
+            "That name matches several of your knowledge entries (details.candidates). Use the full id (relative path without extension).",
+        ),
+        "next_action": "pick_one_candidate_by_full_id",
+    },
+    "knowledge.user_unreadable": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "文件在知识库里，但读不了（编码不是 UTF-8 / UTF-16 / GB18030、超过 2 MB、是空的，或与别的文件同名）。原因在 details.reason；改好文件后重试，`horosa-skill knowledge mine` 的 problems 列出全部。",
+            "The file is in your knowledge folder but cannot be used (not UTF-8 / UTF-16 / GB18030, over 2 MB, empty, or clashing with another file). See details.reason; `horosa-skill knowledge mine` lists every problem.",
+        ),
+        "next_action": "fix_the_file_then_retry",
+    },
+    "knowledge.user_too_large": {
+        "kind": "input",
+        "prompt_to_user": bilingual("单条资料上限 2 MB。拆成几条再加。", "One entry is limited to 2 MB. Split it into several entries."),
+        "next_action": "split_entry",
+    },
+    "knowledge.user_invalid_meta": {
+        "kind": "input",
+        "prompt_to_user": bilingual("标题 / 标签 / 技法名里不能有换行。", "Titles, tags and technique names may not contain line breaks."),
+        "next_action": "fix_metadata",
+    },
+    "knowledge.user_trash_not_found": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "回收站里没有这一项。`horosa-skill knowledge trash` 列出可恢复的版本（trash_id）。",
+            "No such item in the knowledge trash. `horosa-skill knowledge trash` lists restorable versions (trash_id).",
+        ),
+        "next_action": "pick_trash_id_from_list",
+    },
     "knowledge.user_exists": {
         "kind": "input",
         "prompt_to_user": bilingual(
@@ -395,6 +429,14 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         "next_action": "use_relative_output_path_or_allowlist_root",
     },
     "report.source_not_found": {"kind": "input", "next_action": "query_memory_for_run_id"},
+    "report.no_chart_content": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "这个工具没有盘面，排不出完整排盘报告。直接读它的结果；要报告就对起盘类技法（八字、星盘、奇门…）出。",
+            "This tool has no chart, so there is no complete chart report. Read its result directly, or report on a charting technique.",
+        ),
+        "next_action": "read_tool_result_or_pick_charting_technique",
+    },
     "report.from_tool.unsaved_result": {"kind": "input", "next_action": "rerun_with_save_result_true"},
     "report.technique.no_cards": {
         "kind": "input",

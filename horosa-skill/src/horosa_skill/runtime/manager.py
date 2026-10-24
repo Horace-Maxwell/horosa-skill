@@ -963,28 +963,55 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             "payload_outdated": bool(outdated) or erv_outdated,
         }
 
-    def uninstall(self, *, purge_data: bool = False, yes: bool = False) -> dict[str, Any]:
+    def uninstall(self, *, purge_data: bool = False, purge_knowledge: bool = False, yes: bool = False) -> dict[str, Any]:
         """卸载离线 runtime：默认 dry-run 返回将删清单；yes=True 才执行（先停服务再删）。
 
-        purge_data=True 时额外删除用户数据目录（memory.db/runs/traces）——不可恢复，需显式选择。
+        purge_data=True 时额外删除用户数据目录里的 memory.db / runs / traces / reports 等——不可恢复，需显式选择。
+        **自备知识库（用户亲手写的笔记）与其回收站默认保留**：此前 --purge-data 整个删掉数据目录，连同
+        `<data_dir>/knowledge/`，而提示语只说删 memory/runs/traces（v0.43 知识库审查 H1）。要连它一起删须再给
+        purge_knowledge=True。
         """
+        from horosa_skill.knowledge.user import STATE_DIRNAME, knowledge_dir
+
         removal_plan: list[str] = []
+        kept: list[str] = []
         for path in (self.current_dir, self.runtime_root / "previous", self.runtime_root / "downloads"):
             if path.exists():
                 removal_plan.append(str(path))
         state_path = self.settings.runtime_state_path
         if state_path.exists():
             removal_plan.append(str(state_path))
-        if purge_data and self.settings.data_dir.exists():
-            removal_plan.append(str(self.settings.data_dir))
+        data_dir = self.settings.data_dir
+        if purge_data and data_dir.exists():
+            notes_dir = knowledge_dir(self.settings)
+            protected = {notes_dir.resolve(), (data_dir / STATE_DIRNAME).resolve()}
+            if purge_knowledge or not any(path.exists() for path in protected):
+                # 显式连知识库一起删，或根本没有知识库 / 回收站：整个数据目录删掉（与此前一致）。
+                removal_plan.append(str(data_dir))
+                if notes_dir.exists() and not notes_dir.resolve().is_relative_to(data_dir.resolve()):
+                    removal_plan.append(str(notes_dir))
+            else:
+                for child in sorted(data_dir.iterdir()):
+                    resolved = child.resolve()
+                    # 知识库 / 状态目录本身，或包含它们的子目录（知识库配在数据目录更深处时）：整体保留，不深入挑删。
+                    if any(p.is_relative_to(resolved) for p in protected):
+                        kept.append(str(child))
+                        continue
+                    if str(child) not in removal_plan:
+                        removal_plan.append(str(child))
 
         if not yes:
             return {
                 "ok": True,
                 "dry_run": True,
                 "would_remove": removal_plan,
+                "kept": kept,
                 "purge_data": purge_data,
-                "next_action": "确认无误后追加 --yes 执行删除；用户数据默认保留（--purge-data 才删 memory/runs/traces）。",
+                "purge_knowledge": purge_knowledge,
+                "next_action": (
+                    "确认无误后追加 --yes 执行删除；用户数据默认保留（--purge-data 删 memory/runs/traces/reports，"
+                    "自备知识库与其回收站仍保留，除非再加 --purge-knowledge）。"
+                ),
             }
 
         stop_error: str | None = None
@@ -1008,8 +1035,8 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                     code="runtime.uninstall_failed",
                     details={"path": text, "removed_so_far": removed, **({"stop_error": stop_error} if stop_error else {})},
                 ) from exc
-        return {"ok": True, "dry_run": False, "removed": removed, "purge_data": purge_data,
-                **({"stop_error": stop_error} if stop_error else {})}
+        return {"ok": True, "dry_run": False, "removed": removed, "kept": kept, "purge_data": purge_data,
+                "purge_knowledge": purge_knowledge, **({"stop_error": stop_error} if stop_error else {})}
 
     def doctor(self) -> dict[str, Any]:
         with self.tracer.span(workflow_name="runtime.doctor", metadata={"entrypoint": "runtime.doctor"}) as trace:

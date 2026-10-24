@@ -213,7 +213,7 @@ UNLOCALIZED_COMMANDS = frozenset({
     "runtime_start", "runtime_restart", "tool_list", "agent_guidance", "export_registry", "export_parse",
     "knowledge_registry", "benchmark_run", "benchmark_faithfulness", "trace_latest", "client_check", "client_skill",
     "client_config", "client_openclaw_config", "client_openclaw_setup", "client_openclaw_check", "report_template",
-    "memory_prune", "memory_answer", "knowledge_mine", "knowledge_add", "knowledge_remove",
+    "memory_prune", "memory_answer", "knowledge_mine", "knowledge_add", "knowledge_remove", "knowledge_trash", "knowledge_restore",
 })
 
 
@@ -342,13 +342,14 @@ def upgrade(
 
 @app.command(help="Uninstall the offline runtime (dry-run by default; --yes to execute). 卸载 runtime（默认只打印将删清单）。")
 def uninstall(
-    purge_data: bool = typer.Option(False, "--purge-data", help="Also delete user data (memory.db / runs / traces). 同时删除用户数据（不可恢复）。"),
+    purge_data: bool = typer.Option(False, "--purge-data", help="Also delete user data (memory.db / runs / traces / reports). Your knowledge folder and its trash are KEPT unless --purge-knowledge is also given. 同时删除用户数据（不可恢复；自备知识库默认保留）。"),
+    purge_knowledge: bool = typer.Option(False, "--purge-knowledge", help="With --purge-data: also delete your own knowledge notes and their trash. 连自备知识库一起删（不可恢复）。"),
     yes: bool = typer.Option(False, "--yes", help="Actually delete. Without this flag only the removal plan is printed."),
 ) -> None:
     settings = Settings.from_env()
     manager = runtime_helpers._runtime_manager(settings)
     try:
-        result = manager.uninstall(purge_data=purge_data, yes=yes)
+        result = manager.uninstall(purge_data=purge_data, purge_knowledge=purge_knowledge, yes=yes)
     except RuntimeError as exc:
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
         raise typer.Exit(code=2)
@@ -932,57 +933,94 @@ def _split_option(value: Optional[str]) -> list[str]:
     return [item.strip() for item in re.split(r"[,，、]", value or "") if item.strip()]
 
 
-@knowledge_app.command("mine", help="List your own knowledge entries (the folder you can drop .md / .txt files into). 列出自备知识库。")
+@knowledge_app.command("mine", help="List your own knowledge entries (the folder you can drop .md / .txt files into) and any files that could not be read. 列出自备知识库（含读不了的文件与原因）。")
 def knowledge_mine() -> None:
     from horosa_skill.knowledge import user as user_knowledge
 
-    settings = Settings.from_env()
-    entries = user_knowledge.list_entries(settings)
     _print_json({
         "ok": True,
-        "dir": str(user_knowledge.knowledge_dir(settings)),
-        "count": len(entries),
-        "entries": [entry.summary() for entry in entries],
-        "how_to_use": "计算时传 knowledge=[条目 id / 标题 / #标签 / auto]；往这个文件夹放 .md / .txt 即可新增（可选 front matter：title / techniques / tags）。",
+        **user_knowledge.overview(Settings.from_env(), limit=10_000),
+        "how_to_use": "计算时传 knowledge=[条目 id / 标题 / #标签 / auto]；往这个文件夹放 .md / .txt 即可新增（可选 front matter：title / techniques / tags）。problems 是没能读入的文件与原因；trash 是回收站件数（`knowledge trash`）。",
     })
+
+
+def _knowledge_error(exc: ToolValidationError) -> None:
+    typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
+    raise typer.Exit(code=2)
 
 
 @knowledge_app.command("add", help="Add a note to your own knowledge base (from a file or --text). 往自备知识库加一条。")
 def knowledge_add(
-    entry_id: str = typer.Argument(..., help="Entry name; may contain one folder level, e.g. 八字/滴天髓笔记."),
-    source: Optional[Path] = typer.Option(None, "--file", help="Read the entry text from this UTF-8 file."),
+    entry_id: str = typer.Argument(..., help="Entry name; may contain folder levels, e.g. 八字/滴天髓笔记."),
+    source: Optional[Path] = typer.Option(None, "--file", help="Read the entry text from this file (UTF-8 / UTF-16 / GB18030)."),
     text: Optional[str] = typer.Option(None, "--text", help="Entry text given inline."),
-    title: Optional[str] = typer.Option(None, help="Display title (defaults to the entry name)."),
-    techniques: Optional[str] = typer.Option(None, help="Comma-separated tools / techniques / domains that `knowledge=auto` should pick this for, e.g. bazi,ziwei_birth; `*` = all."),
+    title: Optional[str] = typer.Option(None, help="Display title (defaults to the entry name, or the existing title when overwriting)."),
+    techniques: Optional[str] = typer.Option(None, help="Comma-separated tools / techniques / domains / Chinese technique names that `knowledge=auto` should pick this for, e.g. bazi,ziwei_birth,八字; `*` = all."),
     tags: Optional[str] = typer.Option(None, help="Comma-separated tags, selectable as `#tag`."),
-    overwrite: bool = typer.Option(False, "--overwrite", help="Replace an existing entry with the same name."),
+    overwrite: bool = typer.Option(False, "--overwrite", help="Replace an existing entry with the same name (the old version goes to the trash)."),
 ) -> None:
     from horosa_skill.knowledge import user as user_knowledge
 
     if (source is None) == (text is None):
         raise typer.BadParameter("give exactly one of --file or --text")
-    body = source.read_text(encoding="utf-8") if source is not None else str(text)
+    if source is not None:
+        try:
+            raw = source.read_bytes()
+        except OSError as exc:
+            _knowledge_error(ToolValidationError(bilingual(f"读不了文件：{source}（{exc}）", f"Cannot read {source}: {exc}"),
+                                                 code="knowledge.user_unreadable", details={"file": str(source)}))
+        decoded = user_knowledge.decode_bytes(raw)
+        if decoded is None:
+            _knowledge_error(ToolValidationError(
+                bilingual(f"{source} 不是 UTF-8 / UTF-16 / GB18030 文本", f"{source} is not UTF-8 / UTF-16 / GB18030 text"),
+                code="knowledge.user_unreadable", details={"file": str(source)}))
+        body = decoded[0]
+    else:
+        body = str(text)
     try:
         entry = user_knowledge.add_entry(
             Settings.from_env(), text=body, entry_id=entry_id, title=title,
-            techniques=_split_option(techniques), tags=_split_option(tags), overwrite=bool(_opt(overwrite, False)),
+            techniques=_split_option(techniques) if techniques is not None else None,
+            tags=_split_option(tags) if tags is not None else None, overwrite=bool(_opt(overwrite, False)),
         )
     except ToolValidationError as exc:
-        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
+        _knowledge_error(exc)
     _print_json({"ok": True, "entry": entry.summary(), "path": str(entry.path)})
 
 
-@knowledge_app.command("remove", help="Delete one entry from your own knowledge base (by name or title). 删除自备知识库的一条。")
-def knowledge_remove(entry_id: str = typer.Argument(..., help="Entry name or title (`knowledge mine` lists them).")) -> None:
+@knowledge_app.command("remove", help="Move one entry to the knowledge trash (by id, file name or unique title; `knowledge restore` brings it back). 删除一条（进回收站，可恢复）。")
+def knowledge_remove(entry_id: str = typer.Argument(..., help="Entry id, file name or unique title (`knowledge mine` lists them).")) -> None:
     from horosa_skill.knowledge import user as user_knowledge
 
     try:
-        path = user_knowledge.remove_entry(Settings.from_env(), entry_id)
+        removed = user_knowledge.remove_entry(Settings.from_env(), entry_id)
     except ToolValidationError as exc:
-        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
-    _print_json({"ok": True, "removed": str(path)})
+        _knowledge_error(exc)
+    _print_json({"ok": True, "removed": removed["path"], **removed,
+                 "restore": f"horosa-skill knowledge restore {removed['trash_id']}"})
+
+
+@knowledge_app.command("trash", help="List the knowledge trash (removed and overwritten versions, newest first). 列出知识库回收站。")
+def knowledge_trash() -> None:
+    from horosa_skill.knowledge import user as user_knowledge
+
+    settings = Settings.from_env()
+    items = user_knowledge.list_trash(settings)
+    _print_json({"ok": True, "dir": str(user_knowledge.trash_dir(settings)), "count": len(items), "items": items})
+
+
+@knowledge_app.command("restore", help="Put a trashed entry back where it was. 从回收站放回一条。")
+def knowledge_restore(
+    trash_id: str = typer.Argument(..., help="trash_id from `knowledge trash` (or from the remove result)."),
+    overwrite: bool = typer.Option(False, "--overwrite", help="Replace a file now at that path (it goes to the trash first)."),
+) -> None:
+    from horosa_skill.knowledge import user as user_knowledge
+
+    try:
+        restored = user_knowledge.restore_entry(Settings.from_env(), trash_id, overwrite=bool(_opt(overwrite, False)))
+    except ToolValidationError as exc:
+        _knowledge_error(exc)
+    _print_json({"ok": True, **restored})
 
 
 @app.command(help='Natural-language routing: JSON {query, birth|subject|flat birth fields, …} → picks and runs the right techniques. 自然语言路由起盘。')

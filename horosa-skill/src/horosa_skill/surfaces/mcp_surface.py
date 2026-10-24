@@ -157,10 +157,11 @@ def _resolve_toolsets(raw: str) -> dict[str, Any]:
 def _user_knowledge_profile(settings: Settings) -> dict[str, Any]:
     from horosa_skill.knowledge import user as user_knowledge
 
-    entries = user_knowledge.list_entries(settings)
+    summary = user_knowledge.overview(settings, limit=50)
     return {
-        "count": len(entries),
-        "entries": [entry.id for entry in entries[:50]],
+        "count": summary["count"],
+        "entries": [entry["id"] for entry in summary["entries"]],
+        "problems": len(summary["problems"]),
         "use": "knowledge=[条目 id / 标题 / #标签 / auto] 传给任一技法；正文在 data.knowledge_context",
     }
 
