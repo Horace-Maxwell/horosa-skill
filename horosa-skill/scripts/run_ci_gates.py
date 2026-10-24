@@ -65,6 +65,23 @@ def ci_test_steps(text: str) -> list[tuple[str, str]]:
     return steps
 
 
+# Windows 的 Smart App Control 可能拒绝执行 uv 给新 venv 现生成的 `Scripts\pytest.exe`（trampoline 没有签名也没有云端信誉：
+# `Failed to spawn: pytest … (os error 4551)`，同一台机器上时拦时放）。本机镜像在 Windows 上改走等价的模块入口——同一批测试、
+# 同一组参数；ci_test_steps 仍原样返回 ci.yml 的命令（镜像的对照面不变）。
+_CONSOLE_SCRIPT_MODULES = {"pytest": "pytest"}
+
+
+def local_command(command: str, *, windows: bool | None = None) -> str:
+    """ci.yml 的命令 → 本机实际执行的命令。非 Windows 原样；Windows 上 `uv run <console-script>` 换成 `uv run python -m <module>`。"""
+    if not (os.name == "nt" if windows is None else windows):
+        return command
+    for script, module in _CONSOLE_SCRIPT_MODULES.items():
+        prefix = f"uv run {script}"
+        if command == prefix or command.startswith(prefix + " "):
+            return f"uv run python -m {module}" + command[len(prefix):]
+    return command
+
+
 def main(argv: list[str] | None = None) -> int:
     only = set(argv or [])
     steps = ci_test_steps(CI.read_text(encoding="utf-8"))
@@ -79,8 +96,11 @@ def main(argv: list[str] | None = None) -> int:
         for name, command in steps:
             if only and not any(token in command or token in name for token in only):
                 continue
+            actual = local_command(command)
             print(f"\n=== {name}\n$ {command}", flush=True)
-            result = subprocess.run(command, shell=True, cwd=PKG_ROOT, env=env)
+            if actual != command:
+                print(f"  (Windows: 实际执行 `{actual}`——同一批测试，绕开可能被应用控制拦下的 uv trampoline)", flush=True)
+            result = subprocess.run(actual, shell=True, cwd=PKG_ROOT, env=env)
             if result.returncode != 0:
                 failed.append(name)
                 print(f"!!! FAILED: {name}", flush=True)

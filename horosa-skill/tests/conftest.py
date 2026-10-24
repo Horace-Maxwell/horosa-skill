@@ -74,6 +74,18 @@ if str(REPO_SRC) not in _pythonpath:
 
 
 @pytest.fixture(autouse=True)
+def _host_smart_app_control_is_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    """生成的客户端配置不许随维护机的 Smart App Control 状态变（v0.43.1-dev）。
+
+    `--entry auto` 在 SAC 为「开」的 Windows 上写 `python -m horosa_skill`；不钉住，断言 `horosa-skill serve` 的用例在这类维护机上红、
+    CI（没有 SAC）上绿。要测 SAC 分支的用例自己 monkeypatch `manager.smart_app_control_state`；真读注册表走 `read_smart_app_control_state`。
+    """
+    from horosa_skill.runtime import manager
+
+    monkeypatch.setattr(manager, "smart_app_control_state", lambda: None)
+
+
+@pytest.fixture(autouse=True)
 def _never_touch_the_users_real_dirs(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory) -> None:
     """测试永不读写用户真实的数据目录与 runtime。
 

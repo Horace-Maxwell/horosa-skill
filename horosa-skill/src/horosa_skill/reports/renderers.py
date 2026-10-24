@@ -638,6 +638,12 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
 
     font_name, bold_font_name = _register_pdf_fonts(pdfmetrics, UnicodeCIDFont, TTFont, script)
     t = _labeler(script)
+    # 主字体缺字形的生僻字（Ext-B 起，如《灵棋经》里的 𡛸 𤣥 𥦗）交给补字字体画——不补就是方块。下面所有 Paragraph 都经它。
+    patch_glyphs = _pdf_glyph_fallback(pdfmetrics, TTFont, font_name, bold_font_name, script)
+    _Paragraph = Paragraph
+
+    def Paragraph(text: str, *args: Any, **kwargs: Any) -> Any:  # noqa: N802 - 与 reportlab 同名，下文调用点不变
+        return _Paragraph(patch_glyphs(text), *args, **kwargs)
 
     styles = getSampleStyleSheet()
     page_width, page_height = A4
@@ -1076,6 +1082,57 @@ def _paragraphs(text: str) -> list[str]:
 
 def _esc(value: str) -> str:
     return html.escape(str(value)).replace("\n", "<br/>")
+
+
+# 补字字体：系统正文字体（微软雅黑 / 正黑 / 宋体）只收到 CJK 基本区 + 扩展 A，扩展 B 起的古籍字（《灵棋经》《天机》条文里实有 13 个）
+# 画出来是方块。Windows 自带的 SimSun-ExtB / MingLiU-ExtB 正好收这些字（2026-10-23 本机实测：13 个里微软雅黑缺 12、SimSun-ExtB 缺 0）。
+# 按文字族挑：繁体先用细明体 ExtB（台港字形）。没有任何候选的平台（macOS / Linux 默认装）行为不变。
+_PDF_GLYPH_FALLBACK_CANDIDATES: dict[str, tuple[str, ...]] = {
+    "sc": ("C:/Windows/Fonts/simsunb.ttf", "C:/Windows/Fonts/mingliub.ttc"),
+    "tc": ("C:/Windows/Fonts/mingliub.ttc", "C:/Windows/Fonts/simsunb.ttf"),
+}
+_GLYPH_FALLBACK_FROM = 0x2E80  # CJK 部首起；ASCII 与标记（<b>、&amp;、href 键）永远不会被包
+
+
+def _wrap_missing_glyphs(markup: str, primary: Any, fallback: Any, fallback_font: str) -> str:
+    """把主字体画不了、补字字体画得了的字连成段，包进 `<font name=…>`；其余逐字节不变。primary / fallback 支持 `in`（码位集合）。"""
+    out: list[str] = []
+    run: list[str] = []
+    for ch in markup:
+        code = ord(ch)
+        if code >= _GLYPH_FALLBACK_FROM and code not in primary and code in fallback:
+            run.append(ch)
+            continue
+        if run:
+            out.append(f'<font name="{fallback_font}">{"".join(run)}</font>')
+            run = []
+        out.append(ch)
+    if run:
+        out.append(f'<font name="{fallback_font}">{"".join(run)}</font>')
+    return "".join(out)
+
+
+def _pdf_glyph_fallback(pdfmetrics: Any, TTFont: Any, font_name: str, bold_font_name: str, script: str) -> Any:
+    """返回给 Paragraph 标记补字的函数；主字体不是 TTF（reportlab 自带 CID 回退）或本机没有补字字体时返回原样函数。"""
+    identity = lambda markup: markup  # noqa: E731
+    try:
+        primary = set(pdfmetrics.getFont(font_name).face.charToGlyph)
+        bold = set(pdfmetrics.getFont(bold_font_name).face.charToGlyph) if bold_font_name != font_name else primary
+    except Exception:  # noqa: BLE001 - CID 字体没有 face/charToGlyph：不补字（探针，原样即答案）
+        return identity
+    kind = "sc" if script == SIMPLIFIED else "tc"
+    for index, path in enumerate(_PDF_GLYPH_FALLBACK_CANDIDATES[kind]):
+        font = _load_ttf(TTFont, f"HorosaGlyph{kind.upper()}{index}", path, None)
+        if font is None:
+            continue
+        pdfmetrics.registerFont(font)
+        # `<b>` 里的补字段同样落在补字字体上（它没有粗体），否则 reportlab 找不到该族的粗体映射直接抛错。
+        pdfmetrics.registerFontFamily(font.fontName, normal=font.fontName, bold=font.fontName,
+                                      italic=font.fontName, boldItalic=font.fontName)
+        covered = set(font.face.charToGlyph)
+        drawable = primary & bold  # 常规体与粗体都有的字才不需要补
+        return lambda markup: _wrap_missing_glyphs(markup, drawable, covered, font.fontName)
+    return identity
 
 
 # PDF 字体候选：(常规体路径, 常规体字面名, 粗体路径, 粗体字面名)。字面名 None = 取第 0 号子字体。

@@ -281,6 +281,11 @@ _TRANSPORT_ALIASES = {
     "shttp": "streamable-http",
 }
 _TRANSPORTS = {"streamable-http", "stdio", "sse"}
+_ENTRY_HELP = (
+    "How the config starts the server: auto（缺省：Windows 开着 Smart App Control 时用 module，否则 script）/ "
+    "script（`horosa-skill serve`）/ module（`python -m horosa_skill serve`——uv 现生成的 horosa-skill.exe 被应用控制拦下"
+    "（os error 4551）时用它，功能相同）。"
+)
 
 
 def _normalized_transport(value: str) -> str:
@@ -385,6 +390,10 @@ def setup(
         "--output-script",
         help="结果文字：zh-Hans（简体，缺省）/ zh-Hant（繁体·台湾字形）/ zh-Hant-HK（繁体·香港字形）。写进客户端配置的 HOROSA_OUTPUT_SCRIPT；重跑 setup 不带它就回到简体。",
     ),
+    entry: str = typer.Option(
+        "auto", "--entry",
+        help=_ENTRY_HELP,
+    ),
     config: Path | None = typer.Option(None, "--config", help="Write this file instead of the client's default location."),
     scope: str = typer.Option(
         "auto", "--scope",
@@ -418,7 +427,7 @@ def setup(
     try:
         report = _run_setup(
             client=client, launcher=launcher, surface=surface, config=config, scope=scope, server_name=server_name,
-            output_script=str(_opt(output_script, "zh-Hans")),
+            output_script=str(_opt(output_script, "zh-Hans")), entry=str(_opt(entry, "auto")),
             skill_root=skill_root, dry_run=dry_run, skip_install=skip_install, archive=archive, manifest_url=manifest_url,
             probe_network=probe_network, stdio_probe=stdio_probe, write=write, cache_wheel=cache_wheel,
             skill=skill, skill_dir=skill_dir,
@@ -1170,11 +1179,12 @@ def client_config(
         "--output-script",
         help="结果文字：zh-Hans（简体，缺省）/ zh-Hant（繁体·台湾字形）/ zh-Hant-HK（繁体·香港字形）。写进客户端配置的 HOROSA_OUTPUT_SCRIPT；重跑 setup 不带它就回到简体。",
     ),
+    entry: str = typer.Option("auto", "--entry", help=_ENTRY_HELP),
 ) -> None:
     """按客户端生成即用 MCP 配置（自动注入真实绝对路径，无手填占位符）。"""
     payload, _stdio_command, _surface_env = _build_client_config_payload(
         format_name=format_name, skill_root=skill_root, server_name=server_name, launcher=launcher, surface=surface,
-        output_script=str(_opt(output_script, "zh-Hans")),
+        output_script=str(_opt(output_script, "zh-Hans")), entry=str(_opt(entry, "auto")),
     )
     if write is not None:
         payload["written"] = _merge_client_config(write, payload)

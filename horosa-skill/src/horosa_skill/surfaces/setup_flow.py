@@ -162,15 +162,57 @@ _WINDOWS_FILE_LOCK_RE = re.compile(
     r"failed to remove file [`'\"](?P<path>[^`'\"\r\n]+)[`'\"]\s*:[^\r\n]*?\(os error 32\)",
     re.IGNORECASE,
 )
+# uv 的 `error: Failed to spawn: `horosa-skill`` / 旧版无反引号；`(os error 4551)` 不本地化，中间的系统描述会本地化。
+_WINDOWS_SPAWN_RE = re.compile(r"Failed to spawn:\s*`?(?P<name>[^`\r\n]+?)`?\s*(?:\r?\n|$)", re.IGNORECASE)
 
 
-def _diagnose_probe_stderr(stderr_tail: str) -> dict[str, Any] | None:
+def _diagnose_app_control(stderr_tail: str, command: list[str] | None) -> dict[str, Any] | None:
+    """Windows 应用控制（Smart App Control / WDAC）拒绝执行 uv 现生成的 trampoline：`(os error 4551)`。
+
+    `ERROR_SYSTEM_INTEGRITY_POLICY_VIOLATION`：uv / uvx 每建一个环境就现写一份 `Scripts\\horosa-skill.exe`，内容随安装路径变，
+    云端永远没有它的信誉，开着 Smart App Control 的机器可能拒绝运行（同一台机器上时拦时放）。出路是不经 trampoline：
+    `python -m horosa_skill`（环境里的 python.exe 是解释器自带的那份）。
+    """
+    if "(os error 4551)" not in (stderr_tail or ""):
+        return None
+    spawned = _WINDOWS_SPAWN_RE.search(stderr_tail or "")
+    blocked = spawned.group("name").strip() if spawned else None
+    from horosa_skill.client_config.payload import module_entry_command
+
+    module_command = module_entry_command(list(command)) if command else None
+    if module_command == list(command or []):
+        module_command = None
+    return {
+        "cause": "windows_app_control_blocked",
+        "blocked_program": blocked,
+        **({"module_command": _format_cli_command(module_command)} if module_command else {}),
+        "explanation": bilingual(
+            f"Windows 应用控制（Smart App Control）拒绝运行 `{blocked or 'horosa-skill.exe'}`：这是 uv 为该环境现生成的启动器，"
+            "没有数字签名、也没有云端信誉，所以 MCP server 还没启动就被系统拦下（os error 4551）。",
+            f"Windows Application Control (Smart App Control) refused to run `{blocked or 'horosa-skill.exe'}`: uv generates "
+            "this launcher per environment, so it is unsigned and has no cloud reputation, and the OS blocked it before "
+            "the MCP server started (os error 4551).",
+        ),
+        "next_action": bilingual(
+            "加 `--entry module` 重跑本命令：配置改写成 `… python -m horosa_skill serve`（venv 自带的 python.exe 不受影响），"
+            "功能完全相同。不必为此关闭 Smart App Control。",
+            "Re-run this command with `--entry module`: the config then starts `… python -m horosa_skill serve` (the venv's "
+            "own python.exe is not affected) with identical behaviour. There is no need to turn Smart App Control off.",
+        ),
+    }
+
+
+def _diagnose_probe_stderr(stderr_tail: str, command: list[str] | None = None) -> dict[str, Any] | None:
     """把 stdio 探针 stderr 里**可识别的环境性原因**翻成可操作的诊断；认不出返回 None（stderr_tail 原样保留）。
 
     Windows 独有（v0.39.0 维护机复验撞到）：一个已挂着的 horosa MCP 会话（`uv run … serve`）占着 venv 里的
     `Scripts\\horosa-skill.exe`（或已加载的 .pyd）；客户端这条 `uv run` 要先把 venv 同步到当前版本，删不掉被占文件
     → uv 在 MCP server 启动前就退出，stderr 只剩一屏构建噪声。macOS / Linux 能替换运行中的文件，不会遇到。
+    另一种 Windows 独有形状见 `_diagnose_app_control`（应用控制拦 trampoline，v0.43.1）。
     """
+    app_control = _diagnose_app_control(stderr_tail, command)
+    if app_control:
+        return app_control
     match = _WINDOWS_FILE_LOCK_RE.search(stderr_tail or "")
     if not match:
         return None
@@ -303,6 +345,7 @@ def _run_setup(
     config: Path | None,
     scope: str,
     output_script: str = "zh-Hans",
+    entry: str = "auto",
     server_name: str,
     skill_root: Path | None,
     dry_run: bool,
@@ -409,7 +452,7 @@ def _run_setup(
             wheel_source = str(cached) if cached else None
         payload, stdio_command, surface_env = _build_client_config_payload(
             format_name=client_key, skill_root=root, server_name=server_name, launcher=launcher_key, surface=surface,
-            wheel_source=wheel_source, output_script=output_script,
+            wheel_source=wheel_source, output_script=output_script, entry=entry,
         )
         if wheel_cache_note:
             payload.setdefault("warnings", []).append(wheel_cache_note)
@@ -568,7 +611,9 @@ def _run_setup(
                  {**probe, "host_runtime_root": str(settings.runtime_root), "command": steps["stdio_probe"]["command"]})
         if not probe_ok:
             # 起不来时先认环境性原因（Windows 文件锁），认出来就给人话 + 可执行的下一步，而不是一屏 uv 构建噪声。
-            diagnosis = None if probe.get("ok") else _diagnose_probe_stderr(str(probe.get("stderr_tail") or ""))
+            diagnosis = None if probe.get("ok") else _diagnose_probe_stderr(
+                str(probe.get("stderr_tail") or ""), command=[stdio_command[0], *probe_args],
+            )
             if diagnosis:
                 steps["stdio_probe"]["diagnosis"] = diagnosis
             fail("stdio_probe", "setup.stdio_probe_failed",

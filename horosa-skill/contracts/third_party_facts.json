@@ -558,6 +558,20 @@
         ".claude-plugin/plugin.json",
         ".claude-plugin/mcp.json"
       ]
+    },
+    {
+      "id": "windows.smart-app-control",
+      "subject": "windows",
+      "fact": "Windows 11 Smart App Control blocks apps that are unsigned and whose cloud reputation is unknown (state in HKLM\\SYSTEM\\CurrentControlSet\\Control\\CI\\Policy VerifiedAndReputablePolicyState: 0 off / 1 on / 2 evaluation); a blocked spawn surfaces as os error 4551 (ERROR_SYSTEM_INTEGRITY_POLICY_VIOLATION). uv/uvx per-environment Scripts\\*.exe trampolines can be blocked while the interpreter's own python.exe is not. Recent Windows updates let users re-enable it from Windows Security without a clean install.",
+      "source_url": "https://support.microsoft.com/en-us/topic/what-is-smart-app-control-285ea03d-fa88-4d56-882e-6698afdb7003",
+      "verified_on": "2026-10-23",
+      "affects": [
+        "horosa-skill/src/horosa_skill/__main__.py",
+        "horosa-skill/src/horosa_skill/client_config/payload.py",
+        "horosa-skill/src/horosa_skill/surfaces/setup_flow.py",
+        "horosa-skill/src/horosa_skill/runtime/manager.py",
+        "horosa-skill/scripts/run_ci_gates.py"
+      ]
     }
   ]
 }

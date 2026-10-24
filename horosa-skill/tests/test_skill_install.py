@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -142,6 +143,22 @@ def test_a_symlinked_skill_managed_by_another_tool_is_left_alone(tmp_path: Path)
     result = skill_install.install_skill(skills)
     assert result["action"] == "skipped" and result["state"] == "symlink"
     assert (real / "SKILL.md").read_text(encoding="utf-8") == "managed by npx skills\n"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="directory junctions are Windows-only")
+def test_a_junctioned_skill_on_windows_is_left_alone(tmp_path: Path) -> None:
+    """Windows 普通用户建不了符号链接，别的工具常用目录联接；`is_symlink()` 对 junction 是 False（v0.43.1-dev）。
+    取 bundle 原样内容当对方目录：不认 junction 时它会被判成 current_unmarked，marker 就写进了对方的真目录。"""
+    import _winapi
+
+    real = tmp_path / "elsewhere" / skill_install.SKILL_NAME
+    shutil.copytree(skill_install.bundled_skill_root(), real)
+    skills = tmp_path / "skills"
+    skills.mkdir()
+    _winapi.CreateJunction(str(real), str(skills / skill_install.SKILL_NAME))
+    result = skill_install.install_skill(skills)
+    assert result["action"] == "skipped" and result["state"] == "symlink", result
+    assert not (real / skill_install.MARKER_NAME).exists(), "不许往别的工具的真目录里写 marker"
 
 
 def test_an_identical_unmarked_copy_is_adopted_not_rewritten(tmp_path: Path) -> None:

@@ -929,6 +929,7 @@ OpenCC 管不到、上游也没有的词组修正（复核 → 複核）在 `dat
 | 慢网 / 企业代理下 `runtime.install_download_failed` | 每块 1 MiB 之间的读超时 120 s、每镜像 3 次 | `HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS` / `HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS`；`doctor --probe-network` 看哪个镜像通（默认 doctor 零外网请求） |
 | `setup` 在第 1 步 `network_probe` 就失败（5 s 内，`setup.network_unreachable`） | 清单 URL 经所有镜像都取不到（github.com:443 不通 / 代理拦 HEAD） | 失败包 `details.next_action` 给三条路：`HOROSA_RUNTIME_MIRROR=<前缀>`、`--archive <本地归档>`、`--no-probe-network` 跳过预检；`retry_command` 已带后者（v0.38.0 B4） |
 | `setup` 在 `stdio_probe` 失败（`setup.stdio_probe_failed`） | 客户端将要执行的那条命令起不来 server：命令路径不对、uvx 首跑下载失败、工具数与工具面不符 | 看失败包 `details.command` 与 `details.stderr_tail`；uvx 形态可先手跑 `uvx --refresh --from <wheel URL> horosa-skill --version`；checkout 内改 `--launcher uv`（v0.38.0 B4） |
+| Windows：客户端里 horosa 起不来 / `setup` 在 `stdio_probe` 失败带 `diagnosis.cause = windows_app_control_blocked`；终端里 `uv run …` 报 `Failed to spawn: … (os error 4551)` | Smart App Control（应用控制）拒绝运行 uv 给该环境现生成的 `Scripts\*.exe`（trampoline 无签名、无云端信誉，同机时拦时放）；`python.exe` 不受影响 | `setup` / `client config` 加 `--entry module`（SAC 开着时 `--entry auto` 已自动这样写）→ 配置变成 `… python -m horosa_skill serve`；终端里同样改用 `uv run python -m horosa_skill …`；doctor `windows.smart_app_control` 看状态；不必关闭 SAC（v0.43.1-dev 台账） |
 | Windows：`setup`（或 lane 的客户端步骤）在 `stdio_probe` 失败，失败包带 `details.diagnosis.cause = windows_file_in_use`（stderr 尾巴是 `failed to remove file …\Scripts\horosa-skill.exe … (os error 32)`） | 另一个已挂着的 horosa MCP 会话（`uv run … serve`）占着 venv 里的 exe / 已加载的 .pyd；客户端那条 `uv run` 要先把 venv 同步到当前版本（`git pull` 换过版本号就会触发），删不掉被占文件，server 未启动即退出。macOS/Linux 可替换运行中的文件，不会遇到 | 关掉（或重启）挂着 horosa 的会话再重跑；终端里的 `uv run` 可临时 `UV_NO_SYNC=1`（依赖未变时安全）；维护机复验一律在**独立 git worktree**（自有 venv）里跑门禁与 lane，别和本机开着的 MCP 会话抢同一个 venv（v0.39.0 台账） |
 | `setup --client claude-code` 只打印了命令没注册（`config_mode: printed`） | `claude` 不在 PATH（GUI 装的 Claude Code 没把 CLI 放进 shell PATH） | 复制 `steps.config.command` 到有 `claude` 的终端执行，或 `--scope project` 写当前项目的 `.mcp.json`（v0.38.0 B4） |
 | Windows ARM（骁龙本）上 `install` 成功但结果带 `runtime.platform_emulated`、`doctor` 报 `emulated: true` | 不是故障：本机没有原生载荷，自动装了 win32-x64 载荷走 Windows 11 x64 仿真（v0.38.0 A4） | 正常使用；冷启动更慢，矩阵里 `HOROSA_RUNTIME_START_TIMEOUT_SECONDS=900`；若报 `install_missing_platform` 说明清单连 win32-x64 都缺，先查发布完整性 |
@@ -1086,6 +1087,10 @@ A global stability pass hardened these; keep them true when you touch the releva
 
 ### 9.3 导出 · 快照 · 引擎移植（export / snapshot / vendored engines）
 
+- **PDF 按字补字形（v0.43.1-dev）。** 系统正文字体只到 CJK 扩展 A；条文里的扩展 B 古籍字由 `_pdf_glyph_fallback` 包进补字字体
+  （Windows：SimSun-ExtB / MingLiU-ExtB）。`_render_pdf` 里的 `Paragraph` 是包过一层的同名函数——新增段落照旧写 `Paragraph(...)` 即自动补字，
+  别绕过它直接用 reportlab 的类。没有补字候选的平台生成物不变。守卫 `tests/test_pdf_glyph_fallback.py`。
+
 - **完整排盘报告与 PDF 排版（v0.43.0）。** `report_render` / `report_from_tool` 的 `style:"chart"` 不要 AI 解读、收录全部导出段
   （`group:"chart"`）+ 基本信息（`basis`）+ 附录（`appendix`：技法依据 / 自备参考资料 / 来源）；缺省 `analysis` 没解读仍回 `analysis_required`。
   reportlab 的 flowable **排过一次就不能再排**（wrap / split 会改对象状态，`multiBuild` 复用同一份 story 在长段落上抛 LayoutError、报告静默降级成 TXT）：
@@ -1180,6 +1185,11 @@ A global stability pass hardened these; keep them true when you touch the releva
 
 ### 9.4 客户端配置 · setup · doctor（client config / setup / doctor）
 
+- **Windows 上留一条不经 trampoline 的入口（v0.43.1-dev）。** `python -m horosa_skill` ≡ `horosa-skill`（`horosa_skill/__main__.py`）。
+  `client config` / `setup` 的 `--entry auto`（缺省）在 Smart App Control 为「开」时写 `… python -m horosa_skill serve`，其余情况生成物逐字节不变；
+  `--entry script|module` 显式压过。`setup` 探针认 `(os error 4551)`（只锚这段不本地化的尾巴）→ `windows_app_control_blocked`，给改写后的命令。
+  新增任何「客户端照抄执行」的命令形态，都要能套 `module_entry_command`（只换 `serve` 前一位）。守卫 `tests/test_windows_app_control.py`。
+
 - **`setup` 的步骤顺序与失败包是契约（v0.38.0 B4；v0.41.0 加 `skill` → 八步）。** `network_probe → install → config → skill → doctor →
   client_check → stdio_probe → next_steps`，顺序冻结在 `tests/test_cli_output_contract.py::test_setup_public_keys`；失败包只走 stderr、退出码 2，键
   `step / code / config_untouched / backup_path / retry_command / steps`，**第 3 步之前失败保证 `config_untouched: true`**
@@ -1220,6 +1230,13 @@ A global stability pass hardened these; keep them true when you touch the releva
   Python 仍拿 arm64 载荷）；载荷或清单声明的 `min_os` 必须在下载前、解压后各查一次（`runtime.install_os_too_old`）。
 
 ### 9.5 测试 · CI · 跨平台（tests / CI / cross-platform）
+
+- **本机门禁镜像在 Windows 上走 `python -m pytest`（v0.43.1-dev）。** `run_ci_gates.local_command`：ci.yml 的 `uv run pytest …` 在 Windows 上实际执行
+  `uv run python -m pytest …`（应用控制可能拦新 venv 的 `pytest.exe`）；镜像对照面（`ci_test_steps`）不变。新增 console-script 型步骤时登记进
+  `_CONSOLE_SCRIPT_MODULES`。
+- **Windows 的「链接」有两种（v0.43.1-dev）。** 符号链接要特权（普通用户 `WinError 1314`，托管 runner 是管理员所以 CI 看不见），目录联接（junction）不要，
+  且 `Path.is_symlink()` 对它是 False。产品里判「这是别人链过来的」一律 `is_symlink() or is_junction()`（`skill_install.skill_status`）；
+  测试里造链接先试 symlink、Windows 上再建 junction（`_winapi.CreateJunction`），别 `pytest.skip` 了事——skip 掉的正是 Windows 用户会遇到的形状。
 
 - **测试会话永不连桌面版：`tests/conftest.py` 拒连 127.0.0.1:8899/9999、两个后端默认 :9（v0.41.1 重构第 0 批）。** 直接 `uv run pytest` 曾经
   不钉后端：34 处 `Settings(...)` 用默认端口，没设 `*_SERVER_ROOT` 的代码回落到桌面版——维护机上真发请求（`test_uninstall_dry_run_then_execute`

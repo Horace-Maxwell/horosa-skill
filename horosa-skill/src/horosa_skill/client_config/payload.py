@@ -103,9 +103,50 @@ def _cache_wheel(url: str, *, version: str | None = None, dest_dir: Path | None 
         return None, f"wheel 预下载失败（{type(exc).__name__}: {exc}）；配置里保留 URL，客户端冷启动时再取。"
 
 
+ENTRY_CHOICES = ("auto", "script", "module")
+
+
+def resolve_entry(entry: str) -> tuple[str, str]:
+    """配置里用哪种入口起 server：`script` = `horosa-skill serve`，`module` = `python -m horosa_skill serve`。
+
+    `auto`：Windows 的 Smart App Control 处于「开」时选 module，其余一律 script（与 v0.43.0 及以前逐字节相同）。
+    原因：uv / uvx 给每个环境现生成的 `Scripts\\horosa-skill.exe`（trampoline）内容随安装路径变，永远没有云端信誉，
+    Smart App Control 可能拒绝执行它（`os error 4551`，Windows 原生复验撞到）；环境里的 `python.exe` 是解释器
+    自带的那份，不受影响。两种入口跑的是同一个 Typer app（`horosa_skill/__main__.py`）。
+    """
+    key = (entry or "auto").strip().lower()
+    if key not in ENTRY_CHOICES:
+        raise typer.BadParameter("`--entry` must be `auto`, `script` or `module`.")
+    if key == "module":
+        return key, "用户指定"
+    if key == "script":
+        return key, "用户指定（Smart App Control 开着的 Windows 上可能被拦，见 --entry module）"
+    from horosa_skill.runtime.manager import smart_app_control_state
+
+    if smart_app_control_state() == "on":
+        return "module", (
+            "本机 Smart App Control 已开启：uv 现生成的 horosa-skill.exe 可能被拦（os error 4551），改用 python -m horosa_skill"
+        )
+    return "script", "缺省入口 horosa-skill"
+
+
+def module_entry_command(command: list[str]) -> list[str]:
+    """把 stdio 命令里 `serve` 前面那个 `horosa-skill` 换成 `python -m horosa_skill`，其余参数原样。
+
+    `uv run --directory <pkg> python …` 用该项目 venv 的解释器；`uvx --from <src> python …` 用该工具环境的解释器——
+    两者都已装好 horosa_skill。只认 `serve` 前一位：uvx-git 的 URL、`--directory` 的路径里也含 horosa-skill 字样。
+    """
+    if "serve" not in command:
+        return list(command)
+    index = command.index("serve") - 1
+    if index < 0 or command[index] != "horosa-skill":
+        return list(command)
+    return [*command[:index], "python", "-m", "horosa_skill", *command[index + 1:]]
+
+
 def _build_client_config_payload(
     *, format_name: str, skill_root: Path, server_name: str, launcher: str, surface: str,
-    wheel_source: str | None = None, output_script: str = "zh-Hans",
+    wheel_source: str | None = None, output_script: str = "zh-Hans", entry: str = "auto",
 ) -> tuple[dict[str, Any], list[str], dict[str, str]]:
     """`client config` 的产物，也是 `setup` 第 3 步（v0.38.0 B4）。返回 (payload, stdio 命令, 工具面 env)。
 
@@ -170,6 +211,10 @@ def _build_client_config_payload(
             "--transport",
             "stdio",
         ]
+    entry_key, entry_reason = resolve_entry(entry)
+    if entry_key == "module":
+        stdio_command = module_entry_command(stdio_command)
+    launcher_info["entry"] = {"mode": entry_key, "reason": entry_reason, "override": "--entry script / --entry module"}
     key = format_name.strip().lower()
     surface_key = surface.strip().lower()
     if surface_key not in {"auto", "full", "compact"}:

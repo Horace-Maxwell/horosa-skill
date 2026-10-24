@@ -80,7 +80,9 @@ def skill_status(skills_dir: Path, *, bundle: dict[str, str] | None = None) -> d
     dest = Path(skills_dir).expanduser() / SKILL_NAME
     expected = bundle if bundle is not None else bundle_digests()
     out: dict[str, Any] = {"path": str(dest), "bundle_version": __version__}
-    if dest.is_symlink():
+    # Windows 的目录联接（junction）在 Python 里 `is_symlink()` 是 False——普通用户建不了符号链接，别的工具在 Windows 上
+    # 常用 junction 链过来；不认它就会把对方的真目录当成自己的写 marker / 替换（v0.43.1-dev）。
+    if dest.is_symlink() or dest.is_junction():
         out.update(state="symlink", target=os.readlink(dest))
         return out
     if not dest.exists():

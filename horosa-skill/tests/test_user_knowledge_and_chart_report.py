@@ -48,6 +48,24 @@ def _seed(root: Path) -> None:
     _write(root, "通用.md", "---\ntechniques: *\n---\n先看盘面再看资料。\n")
 
 
+def _link_outside(outside_file: Path, root: Path) -> None:
+    """在知识库里放指向目录外的链接，断言它不被读到。
+
+    Windows 普通用户建不了文件符号链接（`WinError 1314`，要开发者模式或管理员；托管 runner 是管理员，所以 CI 一直绿、维护机红——
+    v0.43.1-dev 台账）。Windows 上另建一个目录联接（junction，无需特权，也是普通用户真能造出来的形状）。
+    """
+    try:
+        os.symlink(outside_file, root / "链接.md")
+    except OSError:
+        if os.name != "nt":
+            raise
+    if os.name == "nt":
+        import _winapi
+
+        _winapi.CreateJunction(str(outside_file.parent), str(root / "联接目录"))
+        assert (root / "联接目录" / outside_file.name).exists(), "junction 建好了，读不到是 loader 的功劳"
+
+
 # ── 条目读取 ───────────────────────────────────────────────────────────────
 
 
@@ -58,7 +76,7 @@ def test_entries_parse_front_matter_subfolders_and_skip_unsafe_files(tmp_path: P
     _write(root, "空.md", "---\ntitle: 空\n---\n")
     (root / "大.md").write_bytes(b"x" * (user_knowledge.MAX_FILE_BYTES + 1))
     outside = _write(tmp_path / "outside", "外.md", "目录外的文件")
-    os.symlink(outside, root / "链接.md")
+    _link_outside(outside, root)
 
     entries = {e.id: e for e in user_knowledge.list_entries(_settings(tmp_path))}
     assert set(entries) == {"滴天髓笔记", "占卜/求财心得", "通用"}

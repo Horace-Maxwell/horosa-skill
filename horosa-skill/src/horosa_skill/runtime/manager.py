@@ -231,6 +231,41 @@ def _windows_long_paths_enabled() -> bool:
         return False
 
 
+_SMART_APP_CONTROL_STATES = {0: "off", 1: "on", 2: "evaluation"}
+
+
+def smart_app_control_state() -> str | None:
+    """`--entry auto` 与 doctor 读的入口（测试会话把它钉成 None，见 tests/conftest.py）；真读注册表见下。"""
+    return read_smart_app_control_state()
+
+
+def read_smart_app_control_state() -> str | None:
+    """Windows 11 Smart App Control：`on` / `evaluation` / `off`；非 Windows 或读不到（Windows 10、无此键）返回 None。
+
+    注册表 `HKLM\\SYSTEM\\CurrentControlSet\\Control\\CI\\Policy` 的 `VerifiedAndReputablePolicyState`（0 关 / 1 开 / 2 评估）。
+    `on` 时没有签名也没有云端信誉的程序会被拒绝执行——uv 现生成的 `Scripts\\*.exe` 就属于这类（os error 4551），
+    所以 `client config` / `setup` 的 `--entry auto` 据此改写成 `python -m horosa_skill`。
+    """
+    if os.name != "nt":
+        return None
+    try:
+        import winreg  # type: ignore[import-not-found]
+
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\CI\Policy") as key:
+            value, _ = winreg.QueryValueEx(key, "VerifiedAndReputablePolicyState")
+    except Exception:  # noqa: BLE001 - 读不到 = 不知道，按缺省入口走（探针，None 即答案；已进 silent_degrade 基线）
+        return None
+    return smart_app_control_label(value)
+
+
+def smart_app_control_label(value: Any) -> str | None:
+    """注册表原值 → `on` / `evaluation` / `off`；认不出的值返回 None（不猜）。"""
+    try:
+        return _SMART_APP_CONTROL_STATES.get(int(value))
+    except (TypeError, ValueError):
+        return None
+
+
 # v0.38.0 B6：安装临时目录与 doctor 的长路径余量估算共用这几个常量（tests/test_doctor_machine_conditions.py 锁步）。
 _INSTALL_TEMP_PREFIX = ".hi-"
 _INSTALL_EXTRACT_DIRNAME = "x"
@@ -327,6 +362,7 @@ def windows_path_report(runtime_root: Path) -> dict[str, Any] | None:
     projected = root_length + 1 + _INSTALL_TEMP_OVERHEAD + PAYLOAD_LONGEST_ENTRY_CHARS
     headroom = WINDOWS_PATH_LIMIT - projected
     ascii_ok = windows_runtime_path_ok(runtime_root)
+    app_control = smart_app_control_state()
     return {
         "long_paths_enabled": enabled,
         "runtime_root_length": root_length,
@@ -341,6 +377,11 @@ def windows_path_report(runtime_root: Path) -> dict[str, Any] | None:
         "runtime_root_ascii": ascii_ok,
         "path_fix": None if ascii_ok else (
             "`setx HOROSA_RUNTIME_ROOT C:\\horosa`（纯英文路径），新开终端并重启 AI 客户端后重跑 install / setup。"
+        ),
+        "smart_app_control": app_control,
+        "app_control_note": None if app_control != "on" else (
+            "Smart App Control 已开启：uv 现生成的 horosa-skill.exe 可能被拦（os error 4551）。`setup` / `client config` "
+            "缺省（--entry auto）已改写成 `python -m horosa_skill`；手写的配置照此改即可，不必关闭 Smart App Control。"
         ),
     }
 

@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.43.1-dev (2026-10-23) | Windows 原生复验 v0.43.0：开着 Smart App Control 的 Windows 11 拒绝运行 uv 给新环境现生成的 `Scripts\*.exe`（`os error 4551`，同机时拦时放），门禁镜像第一步、以及用户的 `uv run … horosa-skill serve` / `uvx … horosa-skill` 都可能起不来；PDF 报告里《灵棋经》等条文的 13 个扩展 B 字，微软雅黑缺 12 个，画成方块 | `python -m horosa_skill` 入口 + `--entry auto|script|module`（SAC 开着自动用 module）+ setup 探针认 4551 + doctor 报 `smart_app_control` + 门禁镜像在 Windows 走 `python -m pytest`；PDF 按字补 SimSun-ExtB / MingLiU-ExtB（`_pdf_glyph_fallback`）；知识库测试 `os.symlink` 在普通用户 Windows 上 WinError 1314（CI 是管理员看不见），`skill_install` 不认 junction | 测试改造 junction；判链接 `is_symlink() or is_junction()` |
 | v0.43.0-dev (2026-10-23) | 完整排盘 PDF 报告：reportlab `multiBuild` 复用同一份 story，长段落第二遍抛 LayoutError，报告静默降级成 TXT；`Songti.ttc` 第 0 号子字体是 Songti SC Black，正文整本粗体；延迟出页的 canvas 把书签都钉在第 1 页；CLI 报告 `--language` 缺省 zh-CN 盖掉繁体设置；繁体报告里渲染器写死的标签（目录 / 页脚…）仍是简体；知识库隔离测试查错了字段（`data.input_normalized` 是引擎回显）而「因为错误的原因通过」 | 每遍现组 story、目录自绘两遍稳定；字体常规 / 粗体成对注册；CLI 只在给了时才传语言；隔离断言查信封 / 存档 / 引擎请求三处并做负向对照；渲染器字面量过 `t()` 只转一次（已转的文字再转不幂等） |
 | v0.42.0-dev (2026-10-22) | 加「繁体输出」：OpenCC 在术数字上系统性转错（年干→年幹、子丑合→子醜合、日冲→日衝、金克木不变成剋、斗君→鬥君、吉凶星→兇星）；上游段名本就含繁体（命宮、佈局），一律繁转简会把它们折坏；简体 PDF 用的 Songti SC 缺 966 个繁体字；知识精读的正文直接放在 data 里，白名单漏转；两条守卫因样本里没有可转的字而「因为错误的原因通过」 | 按原文逐位定字（与上游界面简繁同一机制，规则 ⊇ 上游、偏离有理由）；标识按词表反查；繁体选 TC 字体并核字形；所有中文字段必须归类（`unclassified_text_paths`）；负向对照的样本必须真会变 |
 | v0.41.2-dev (2026-10-21) | PDF 正文测试断言「带正文 > 2 × 不带正文」的文件大小：大小随嵌入字体漂（Linux 1.83 倍、macOS 1.94 倍），main CI 与发布后矩阵红 | 看内容不看大小（`_pdf_story_text` 收集交给 reportlab 的文字）；只在一台机器上校准的阈值不是断言 |
@@ -151,6 +152,47 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.43.1-dev / 2026-10-23 — Windows 原生复验：Smart App Control 拦 uv trampoline（`os error 4551`）、PDF 扩展 B 生僻字画成方块、测试与 skill 安装不认 Windows 的链接形状
+
+- **起因**：v0.42.0 / v0.43.0 发布后在 Windows 维护机做原生复验（`sync_windows_release.py --check` [OK]）。新建 worktree 跑
+  `run_ci_gates.py`，第一步 `uv run pytest -q` 30 秒就红：`error: Failed to spawn: pytest / cause: An Application Control policy has
+  blocked this file. (os error 4551)`，其余 24 步全绿。
+- **根因 1 · 应用控制**：本机 Smart App Control 处于「开」（`HKLM\SYSTEM\CurrentControlSet\Control\CI\Policy`
+  `VerifiedAndReputablePolicyState = 1`）。它放行有签名或有云端信誉的程序；uv / uvx 给每个环境现写的 `Scripts\*.exe`（trampoline）
+  内容随安装路径变，**永远没有信誉**。实测同一台机器上时拦时放：hs-lane 里 `pytest.exe` 被拦、`horosa-skill.exe` / `ruff.exe` 放行，
+  10-20 那次是 `horosa-skill.exe` 被拦。用户机器上同样会撞——客户端配置里的 `uv run --directory … horosa-skill serve`、
+  `uvx --from … horosa-skill serve` 都经 trampoline，被拦时 MCP server 根本不启动，`setup` 探针只看到一屏看不懂的 stderr。
+  环境里的 `python.exe` 是解释器自带的那份（PSF 签名 / 各机同一哈希），不受影响：`uv run python -m pytest`、
+  `uv run python -m horosa_skill …`、`uvx --from … python -m horosa_skill …` 本机都实测可用。
+- **修复 1**：加 `horosa_skill/__main__.py`（`python -m horosa_skill` ≡ `horosa-skill`）；`client config` / `setup` 加 `--entry auto|script|module`，
+  `auto` 在 Smart App Control 为「开」时写 `… python -m horosa_skill serve`，其余情况生成物与以前**逐字节相同**；`setup` 探针认出 `(os error 4551)`
+  报 `diagnosis.cause = windows_app_control_blocked`（带被拦程序与改写后的命令，`next_action` = 加 `--entry module` 重跑，不必关 SAC）；
+  doctor 的 `windows` 块加 `smart_app_control` / `app_control_note`；`run_ci_gates.py` 在 Windows 上把 `uv run pytest` 换成等价的
+  `uv run python -m pytest`（`ci_test_steps` 仍原样返回 ci.yml 的命令）。微软文档（support.microsoft.com「What is Smart App Control」）说明
+  新版 Windows 关掉后可在 Windows 安全中心重新打开，但关安全功能不是本工具该给的建议——给能绕开 trampoline 的入口。
+- **根因 2 · PDF 字体**：拿包内全部文本（src + horosa-core-js/src）对 Windows 字体量字形：缺的全是扩展 B 起的字，绝大多数来自 OpenCC
+  词典（不会进报告）；真进报告的是 `lingqiJing.js` / `tianjiDoctrine.js` 里的 13 个古籍字——微软雅黑缺 12、正黑缺 13，PDF 里画成方块。
+  Windows 自带的 SimSun-ExtB 一个不缺（细明体 ExtB 缺 1）。reportlab 的 TTF 不会按字回退。
+- **修复 2**：`_render_pdf` 里所有 `Paragraph` 经 `_pdf_glyph_fallback`：常规体与粗体都画不了、补字字体画得了的字连成段包进
+  `<font name=…>`（补字字体登记成自映射的字体族，`<b>` 里的补字段不抛错）；候选按文字族排序（简体 SimSun-ExtB 优先，繁体 MingLiU-ExtB 优先）；
+  主字体是 reportlab 自带 CID 字体或本机没有候选（macOS / Linux 默认）时原样返回，生成物不变。
+- **根因 3 · 符号链接在 Windows 上是特权**：v0.43.0 的知识库测试用 `os.symlink` 造「指向目录外的链接」，本机（普通用户、没开开发者模式）
+  `WinError 1314` 直接红；托管 Windows runner 是管理员，所以 CI 一直绿。普通用户在 Windows 上能造的是**目录联接**（junction）——
+  而 `Path.is_symlink()` 对 junction 是 False。顺着查到 `skill_install.skill_status` 只认 `is_symlink()`：别的工具若用 junction 把
+  horosa-agent 链进 skills 目录，内容又恰好与 bundle 相同，会被判成 `current_unmarked`，marker 写进对方的真目录。
+  知识库 loader 本身没问题（`resolve()` 在 Windows 上连 junction 一起解析）。
+- **修复 3**：测试 `_link_outside` 先试符号链接、Windows 上另建 junction（两种形状都断言读不到）；`skill_status` 认
+  `is_symlink() or is_junction()`；`test_skill_install` 加 Windows 上真建 junction 的用例（原 symlink 用例在本机一直 skip）。
+- **守卫**：`tests/test_windows_app_control.py`（module 入口真能跑、只换 `serve` 前一位、auto 跟随 SAC 四态、`--entry script` 压过 auto 且
+  非 SAC 机生成物不变、英文 / 中文 stderr 都认得、文件锁形状不受影响、注册表值映射、doctor 字段、门禁镜像只在 Windows 改写）；
+  `tests/test_pdf_glyph_fallback.py`（只包主字体缺的字、标记与 ASCII 不动、无候选时逐字节不变、Windows 上真嵌入 SimSun-ExtB 且无生僻字时不嵌）。
+  `tests/conftest.py::_host_smart_app_control_is_unknown`（第一版没钉，两条断言 `horosa-skill serve` 的旧用例在本机红、CI 上绿——
+  生成物随维护机状态变就是隔离漏洞）；`tests/test_user_knowledge_and_chart_report.py::_link_outside`、`tests/test_skill_install.py::test_a_junctioned_skill_on_windows_is_left_alone`。
+  负向对照 7 条（拆掉诊断分支 / auto 恒 script / 门禁不改写 / 配置不改写 / 补字恒原样 / loader 不查目录外 / 只认 is_symlink）各自变红。
+- **法则**：Windows 上凡是「现生成的 exe」都可能被应用控制拦，能用解释器 `-m` 的入口就留一条 `-m` 的路；判据只认 `(os error 4551)` 这段
+  不本地化的尾巴。PDF 字体覆盖要拿真进报告的文本量，不拿包内全部文本（词典会把数字放大一百倍）。
+  「链接」在 Windows 上有两种：符号链接（要特权）与目录联接（不要）；判链接一律 `is_symlink() or is_junction()`，测试里造链接要有 junction 的路。
 
 ### v0.43.0-dev / 2026-10-23 — 完整排盘 PDF 报告与自备知识库：flowable 不能排两遍（`compose(pages)` 每遍现组）、Songti SC Black 当正文、知识库隔离测试查错字段
 
