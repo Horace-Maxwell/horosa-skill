@@ -314,7 +314,8 @@ class EnrichMixin:
             "indiaAyanamsa": echo.get("ayanamsa") or req_ayan,
         }
         # [大运Dasha] 体系 + [起盘信息] 流派头行的页面口径（上游 fields：indiaDashaSystem / indiaSchool /
-        # indiaDashaVariants + 出生时刻供扩展大运推日期）。
+        # indiaDashaVariants + 出生时刻供扩展大运推日期）。chartnum = 所绘分盘：上游 buildIndiaSnapshotText(result, fields,
+        # params.chartnum, hook)（IndiaChart.js:1348）据它印「当前分盘 / 分盘」两行；不传则恒为「命盘 / D1」。
         params = {
             "dashaSystem": src.get("dashaSystem"),
             "indiaSchool": src.get("indiaSchool"),
@@ -322,6 +323,7 @@ class EnrichMixin:
             "date": src.get("date"),
             "time": src.get("time"),
             "ad": src.get("ad", 1),
+            "chartnum": src.get("chartnum"),
             "calibreOverrides": calibre_overrides,
         }
         try:

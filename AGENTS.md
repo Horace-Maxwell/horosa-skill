@@ -1189,6 +1189,8 @@ A global stability pass hardened these; keep them true when you touch the releva
   口径——六爻以时起卦旧移植取错键；页面 getter 的兜底值不是页面缺省（`fieldVal(f,'timeAlg',1)` 的 1 从不触发，真缺省是字段种子 0）；
   「缺键透传」会翻转缺省（`after23NewDay` 缺省 1，`undefined` 被 vendored 件当 0）。stub 把纯逻辑桩死会让「六壬择时恒零命中」这类 bug 恒绿——
   stub 只许替网络 / UI，`revendor_core_js` 的 stub 审计守。
+- **调 vendored builder 要对齐上游调用点的实参（v0.44.2）**：漏传只落兜底（印度表头漏 `chartnum` → D9 盘恒印「命盘 / D1」）；文本与结构化数据矛盾
+  先查本仓接线，定性「上游口径」须在 Horosa-Public 找到同样输出的调用点（`test_india_school_header_names_the_requested_varga`）。
 - **合法的 JSON `null` 是「查无」，不是失败（v0.40.0）。** `_call_remote` 只对传输 / 非 2xx / 非 JSON 重试；`null` 原样交给上层判读，
   绝不无限重试且每轮真打后端。
 - **vendor 件不补占位段；re-vendor 变换剪尾巴要补回尾部导出（v0.40.0）。** 缺席段由上游 optional 双登记表达，skill 不在导出层「编」段

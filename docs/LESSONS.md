@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.44.2-dev (2026-10-26) | 印度律盘 `chartnum: 9` 的 [起盘信息] 仍写「当前分盘：命盘 / 分盘：D1」：`_attach_jyotish_sections` 没把 `chartnum` 交给 vendored `buildIndiaSchoolHeaderLines`，落到兜底 1；上一条台账误记为「上游文本口径」 | 传请求 `chartnum`（上游 `buildIndiaSnapshotText(…, params.chartnum, …)` 同）；回归测试修前红；调 vendored builder 要对齐上游调用点的实参 |
 | v0.44.1-dev (2026-10-26) | 剩下几种盘图：太乙结果其实一直带 `pan.palace16`（v0.44.0 未做清单的理由错了）；七政罗计命名要跟引擎换位后的 id 走；宫的 sign 在 `chart.houses` 不在 objects | 太乙十六宫 / 七政方盘 / 七政择日动盘 / 南印方盘 / 90° 度盘 / 合盘双圈 / 择时盘；正文有同一份位置表就逐项对照、对不上不画；负向对照 6 条全红 |
 | v0.43.1-dev (2026-10-24) | 两份独立评审：110 份完整排盘报告（符号缺字、护栏话外露、附录机器值、0 张盘图、版面浪费、行首标点）与自备知识库（卸载删笔记、GBK 静默消失、删错文件、覆盖无备份、存档留全文、旧测试因错误原因通过） | 补字链 + 盘图（只取引擎数据）+ 版式重做；知识库单一解析器、回收站、编码链、问题清单、存档只存引用、卸载默认保留；第二轮再修巴比伦无宫、变卦不手推、DOCX 位图、出框 12 pt；第三轮再修卦图六神 / 三式子盘两处图文矛盾；47 条负向对照 |
 | v0.43.1-dev (2026-10-23) | Windows 原生复验 v0.43.0：开着 Smart App Control 的 Windows 11 拒绝运行 uv 给新环境现生成的 `Scripts\*.exe`（`os error 4551`，同机时拦时放），门禁镜像第一步、以及用户的 `uv run … horosa-skill serve` / `uvx … horosa-skill` 都可能起不来；PDF 报告里《灵棋经》等条文的 13 个扩展 B 字，微软雅黑缺 12 个，画成方块 | `python -m horosa_skill` 入口 + `--entry auto|script|module`（SAC 开着自动用 module）+ setup 探针认 4551 + doctor 报 `smart_app_control` + 门禁镜像在 Windows 走 `python -m pytest`；PDF 按字补 SimSun-ExtB / MingLiU-ExtB（`_pdf_glyph_fallback`）；知识库测试 `os.symlink` 在普通用户 Windows 上 WinError 1314（CI 是管理员看不见），`skill_install` 不认 junction；release lane 里 SAC 还拒绝加载载荷的 `astropy/time/_parse_times.pyd`（太乙 / 三式合一全挂，同哈希在旧根放行） | 测试改造 junction；判链接 `is_symlink() or is_junction()`；随包 Python 的应用控制替身（被拦才生效，astropy 落回纯 Python 解析器，结果逐位相同） |
@@ -154,6 +155,25 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.44.2-dev / 2026-10-26 — 印度律盘选了 D9，[起盘信息] 仍写「当前分盘：命盘 / 分盘：D1」：富化层没把 `chartnum` 交给 vendored 表头 builder
+
+- **症状**：`india_chart` 带 `chartnum: 9`，`data.params.varga` 是 D9、`chart.objects` 与「行星」段都是 D9 位置，唯独「起盘信息」开头两行
+  写「当前分盘：命盘」「分盘：D1」——同一份导出自相矛盾，读盘的人 / AI 会以为看的是本命盘。上一条台账（盘图补齐）已看到这一行，
+  却记成「上游文本口径」放过了。
+- **根因**：两行由 vendored `buildIndiaSchoolHeaderLines(fields, chartnum, hook)`（`horosa-core-js/src/vendor/india/jyotishSnapshot.js`）产出，
+  `tools/indiaJyotish.js` 照传 `params.chartnum`；但 `service/enrich.py::_attach_jyotish_sections` 拼给 JS 的 `params` 只有大运体系 / 流派 /
+  出生时刻 / 口径覆盖，**没有 `chartnum`** → `resolveIndiaFractal(undefined)` 落到兜底 1。上游没有这个问题：Horosa-Public
+  `IndiaChart.js` 页面路径 `buildIndiaSnapshotText(result, fields, params.chartnum, hook)`、无头 `buildIndiaSnapshotForFields` 都传所绘分盘。
+  所以是 skill 的接线缺参，不是上游口径。
+- **修复**：`_attach_jyotish_sections` 把请求的 `chartnum` 一并交给 JS（与上游同取请求值，与 `_attach_india_extra_vargas` 判主盘同口径）。
+  无头路径 hook 为空，标签按上游 `resolveIndiaLabel` 写「9分盘」。
+- **守卫**：`tests/test_sync311_western.py::test_india_school_header_names_the_requested_varga`（chartnum 9 → 「当前分盘：9分盘 / 分盘：D9」且不含
+  「命盘」；缺省仍「命盘 / D1」）。负向对照：修前此测试红（表头「命盘 / D1」，请求体里 chartnum 确为 9）。另：worktree 里没装
+  `horosa-core-js/node_modules` 时 JS 富化整体降级，这条测试也会红——但那是「因为错误的原因红」，先 `npm ci` 再看红因。
+  live：vendored 实例（8877 / 9977）上 chartnum 9 / 1 各跑一次，表头与「行星」段同为 D9 / D1。
+- **教训**：调 vendored builder 时，逐个对照上游调用点的**实参**，不只对函数体——少传一个参数不报错，只会落到 builder 的兜底值（这里是 1 = 命盘）。
+  文本与结构化数据自相矛盾时，先查本仓接线再下「上游口径」的结论；要定性为上游行为，须在 Horosa-Public 找到产生同样输出的调用点。
 
 ### v0.44.1-dev / 2026-10-26 — 剩下几种盘图补齐（太乙十六宫 / 七政四余 / 七政择日动盘 / 南印方盘 / 90° 度盘 / 合盘双圈 / 择时盘）；「结果里没有结构化数据」的旧判断是错的
 

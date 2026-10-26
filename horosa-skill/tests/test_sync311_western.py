@@ -422,6 +422,22 @@ def test_india_school_line_presets_and_prashna_fields(tmp_path: Path) -> None:
     assert "prashnaMatter" not in client.bodies("/india/chart")[0]
 
 
+def test_india_school_header_names_the_requested_varga(tmp_path: Path) -> None:
+    """[起盘信息] 的「当前分盘 / 分盘」两行取所绘分盘：上游 buildIndiaSnapshotText(result, fields, params.chartnum, hook)
+    （IndiaChart.js:1348；无头 buildIndiaSnapshotForFields:1264 同）。负向对照：富化层曾不把 chartnum 交给
+    vendored buildIndiaSchoolHeaderLines → chartnum 9 的盘（行星已是 D9）表头仍印「命盘 / D1」。"""
+    client = _india_client()
+    service = _service(tmp_path, client)
+    result = service.run_tool("india_chart", {**INDIA_BIRTH, "chartnum": 9}, save_result=False)
+    assert result.ok, result.error
+    assert client.bodies("/india/chart")[0]["chartnum"] == 9
+    info = _section(result.data["snapshot_text"], "起盘信息")
+    assert "当前分盘：9分盘\n分盘：D9\n" in info
+    assert "命盘" not in info and "分盘：D1" not in info
+    default = _section(service.run_tool("india_chart", INDIA_BIRTH, save_result=False).data["snapshot_text"], "起盘信息")
+    assert "当前分盘：命盘\n分盘：D1\n" in default
+
+
 def test_india_school_presets_mirror_the_vendored_table() -> None:
     """Python 侧只镜像 INDIA_SCHOOL_DEFAULTS 的 ayanamsa/hsys 两列（取盘前要用、JS 在取盘后才跑）；镜像必须与
     vendored india/indiaConst.js（curated，upstream_sha256 看守 AstroConst.js）逐值一致 —— 上游改表这里先红。"""
