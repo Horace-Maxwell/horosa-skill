@@ -450,21 +450,20 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
     pass_through_tables: list[dict[str, Any]] = []
 
     def add_figures(figures: list[dict[str, Any]]) -> None:
-        # 盘图：紫微 / 六壬十二宫、奇门九宫画成 Word 表格；星盘轮 / 卦图画成位图（与 PDF 同一份规格）。
+        # 盘图：十二宫 / 九宫格子盘画成 Word 表格；星盘轮 / 卦图 / 太乙盘 / 90° 度盘画成位图（与 PDF 同一份规格）。
         from horosa_skill.reports import figures as figure_kit
 
         image_fonts = _drawing_font_files(script)
         for figure in figures:
             kind = figure.get("kind")
-            if kind in {"wheel", "hexagram"}:
+            if kind in figure_kit.DRAWN_KINDS:
                 # 矢量图转位图嵌进 Word（Pillow 画，不依赖 renderPM）；拿不到字体文件就跳过图、留文字说明。
                 if image_fonts is None:
                     continue
                 from reportlab.lib import colors as rl_colors
 
                 regular, bold = image_fonts["names"]
-                drawing = (figure_kit.wheel_drawing(figure, 380, regular, bold, rl_colors) if kind == "wheel"
-                           else figure_kit.hexagram_drawing(figure, 420, regular, bold, rl_colors))
+                drawing = figure_kit.figure_drawing(figure, 420 if kind in {"hexagram", "taiyi"} else 380, regular, bold, rl_colors)
                 png = figure_kit.drawing_to_png(drawing, image_fonts["files"])
                 if png is None:
                     continue
@@ -472,14 +471,10 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
 
                 picture = doc.add_paragraph()
                 picture.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                picture.add_run().add_picture(io.BytesIO(png), width=Inches(4.6 if kind == "wheel" else 4.2))
+                picture.add_run().add_picture(io.BytesIO(png), width=Inches(4.2 if kind == "hexagram" else 4.6))
                 caption = doc.add_paragraph()
                 caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                notes = [figure.get("title")]
-                if kind == "wheel" and figure.get("aspects"):
-                    notes.append(t("内圈连线为引擎给出的相位：蓝 = 六合，绿 = 三分，红 = 刑 / 冲；R = 逆行。"))
-                elif kind == "hexagram":
-                    notes.append(figure.get("text"))
+                notes = [figure.get("title"), *figure_kit.figure_notes(figure, t)]
                 style_run(caption.add_run("　".join(str(n) for n in notes if n)), size=8.6, color="66706D")
                 continue
             grid = 4 if kind == "grid12" else 3
@@ -492,7 +487,7 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
                     cell.width = width
                     set_cell_border(cell, color="C9D3CE")
             for item in figure.get("cells") or []:
-                position = (figure_kit.GRID12_POS if kind == "grid12" else figure_kit.GRID9_POS).get(item.get("branch") or item.get("gua"))
+                position = figure_kit.grid_position(figure, item)
                 if not position:
                     continue
                 cell = table.cell(*position)
@@ -524,9 +519,9 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
             caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
             notes = [figure.get("text"), *(figure.get("lines") or []), figure.get("title")]
             style_run(caption.add_run("　".join(str(x) for x in notes if x)), size=8.6, color="66706D")
-        if image_fonts is None and any(f.get("kind") in {"wheel", "hexagram"} for f in figures):
+        if image_fonts is None and any(f.get("kind") in figure_kit.DRAWN_KINDS for f in figures):
             note = doc.add_paragraph()
-            style_run(note.add_run(t("星盘图 / 卦图见同一报告的 PDF 版；下文为完整的位置与相位表。")), size=9, color="66706D")
+            style_run(note.add_run(t("图形盘图（星盘 / 卦象 / 太乙盘 / 度盘）见同一报告的 PDF 版；下文为完整的位置与相位表。")), size=9, color="66706D")
 
     ai_report = document.get("ai_report") if isinstance(document.get("ai_report"), dict) else {}
     display_question = str(document.get("intro_text") or "") or _display_question(document, ai_report, t)

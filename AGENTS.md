@@ -1119,11 +1119,16 @@ A global stability pass hardened these; keep them true when you touch the releva
     实际值看正文；没码表的枚举不列），不放引擎内部名 / 导出设置版本 / aiExport 来源串（它们留在 JSON）；基本信息里经纬度写「东经 121°28′」、`gender` 布尔写男 / 女、非字符串的 `name` 不列。
   - 盘图在 `reports/figures.py`：**只取**引擎数据（宫头、经度、lonspeed 正负、`aspects.normalAsp`、紫微 houses、奇门 cells、六壬
     layout / ke / sanChuan），绝不自己算位置或量相位（铁律 1）。七政 / 印度 / 宿占不套西洋轮；任何一种取不全就整张不画。
-    位置键 `branch` / `gua` / `kind` 登记在 `localize._DOCUMENT_MACHINE_KEYS`（繁体输出不转，渲染器按简体地支、卦名定格）。
+    位置键 `branch` / `gua` / `kind` / `layout` 登记在 `localize._DOCUMENT_MACHINE_KEYS`（繁体输出不转，渲染器按简体地支、卦名定格）。
     无宫体系（`_WHEEL_NO_HOUSES`，巴比伦）只画星座环 + 行星、不画相位；卜卦 / 择日的相位取 `data.raw.aspects`。六爻变卦**只在
     `changed_code` 与本卦 + 动爻对得上时才画**（结果里没有引擎推出的之卦码；样例载荷的 changed_code 与动爻不符），对不上只画本卦；
     卦图不画六神（`data.lines[].god` 可与「断卦结构」表不一致）；三式合一不画 `data.qimen` 子盘（与合盘概览对不上）。
     通则：**同一结果有两处来源时，图只取能与正文对上的那处，对不上就不画**。轮上度数紧贴星名正下方，标签间隔按两行字高折角度。
+  - v0.44.1 补齐：太乙十六宫（`pan.palace16` / 三式的 `data.taiyi`，对照正文「十六宫标记」）、七政四余地支方盘（星名跟引擎换位后的
+    id 走、对照庙旺表的曜 → 地支）、七政择日动盘（对照「择日动盘」每行的宫）、南印方盘（按 `params.varga` 的分盘、宫的 sign 在
+    `chart.houses`）、量化盘 90° 度盘（因子集同正文、对照折叠值）、合盘双圈（轴线不穿外圈）、择日画 `data.base` 那一刻的盘。
+    新图种只改 `figures.py`：PDF / DOCX 共用 `DRAWN_KINDS` / `figure_drawing` / `figure_notes` / `grid_position`。
+    下结论「结果里没有某数据」前先 dump 一份真实结果（v0.44.0 把太乙误列进未做清单）。
     DOCX 画十二宫 / 九宫表格；星盘轮 / 卦图经 `drawing_to_png`（Pillow 画 Wedge / Circle / Line / Rect / String，不用要另装
     rlPyCairo 的 renderPM）嵌位图——新增图元要在那里补上；DOCX 纸张 A4。
   - 版式：Frame 四边各有 6 pt 内边距——满宽元素用 `content_width`（版心 − 12），别用版心宽（会右出框）。

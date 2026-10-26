@@ -70,11 +70,15 @@ def test_wheel_titles_and_tradition_exclusions() -> None:
                                        "推运盘-太阳返照")
     assert [w["title"] for w in returned] == ["太阳返照盘", "本命盘"]
     assert figures._chart_title("量化盘（汉堡学派中点）") == "量化盘（汉堡学派中点）" and figures._chart_title("星运-Balbillus") == "Balbillus 盘"
-    pair = figures.extract_figures("relative", {"inner": {"chart": _wheel_chart()}, "outer": {"chart": _wheel_chart(10)}}, "关系盘")
-    assert [w["title"] for w in pair] == ["甲方星盘", "乙方星盘"]
+    # 合盘画成一张双圈：内圈甲方宫位与行星，外圈乙方行星（不再是两张各自的星盘）。
+    pair, = figures.extract_figures("relative", {"inner": {"chart": _wheel_chart(), "params": {"name": "张三"}},
+                                                 "outer": {"chart": _wheel_chart(10)}}, "关系盘")
+    assert pair["title"] == "比较盘：内圈 张三 · 外圈 乙方" and pair["axes"][0]["lon"] == 85.0
+    assert [b["lon"] for b in pair["outer_bodies"]] == [b["lon"] for b in figures._wheel(_wheel_chart(10), "")["bodies"]]
+    assert pair["aspects"] == []  # 跨盘相位不连线（见正文「A对B相位」）
     seasons = figures.extract_figures("jieqi_year", {"charts": {k: {"chart": _wheel_chart()} for k in ("夏至", "冬至", "春分", "秋分")}}, "节气盘")
     assert [w["title"] for w in seasons] == ["春分盘", "夏至盘", "秋分盘", "冬至盘"]
-    # 七政四余 / 印度 / 宿占不套西洋轮（宫制、星名、盘式都不同）。
+    # 七政四余 / 印度 / 宿占不套西洋轮（宫制、星名、盘式都不同）；它们自己的方盘要引擎给的落座（sign），这里的假盘没有。
     assert figures.extract_figures("guolao_chart", {"chart": _wheel_chart()}, "七政四余") == []
     assert figures.extract_figures("india_chart", {"chart": _wheel_chart()}, "印度律盘") == []
     # 缺宫的盘宁可不画。

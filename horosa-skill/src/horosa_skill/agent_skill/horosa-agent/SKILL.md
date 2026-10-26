@@ -46,7 +46,7 @@ horosa_report_render {run_id, tool_name:"qimen", format:"docx", ai_report:{execu
 `HOROSA_REPORT_OUTPUT_ROOTS` 白名单目录内，越界返回 `report.output_path_not_allowed` 且不写文件——别替用户猜别的目录。
 
 **完整排盘报告**（用户只要「把盘出成 PDF」、不要解读）：`report_render` / `report_from_tool` 传 `style:"chart"`——
-不要 `ai_report`，收录全部盘面段落 + 盘图（星盘轮 / 紫微十二宫 / 奇门九宫 / 六壬天地盘 / 六爻卦图，取自引擎数据）+ 基本信息 + 技法依据附录，
+不要 `ai_report`，收录全部盘面段落 + 盘图（星盘轮 / 合盘双圈 / 紫微 / 奇门 / 六壬 / 六爻 / 太乙 / 七政 / 南印方盘 / 90° 度盘，择日画选中时刻的盘；取自引擎数据）+ 基本信息 + 技法依据附录，
 带目录 / 书签 / 页码；引擎没产出的段只在附录「本次未产出」列名。缺省 `style:"analysis"` 仍是解读报告，
 没有 AI 解读时返回 `mode:"analysis_required"`。别为了出盘面 PDF 编一份解读塞进 `ai_report`。解析 / 注册表 / 知识检索 / 紫微规则库类工具没有盘面，
 出 chart 报告会回 `report.no_chart_content`——直接读工具结果。
