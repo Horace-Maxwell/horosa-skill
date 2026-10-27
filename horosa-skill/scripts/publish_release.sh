@@ -156,8 +156,10 @@ echo "=== dispatch release-runtime.yml（version=${VERSION} publish=false run_ma
 gh workflow run release-runtime.yml --repo "${REPO}" -f "version=${VERSION}" -f publish=false -f run_matrix=true -f arm_nonblocking=false -f dry_run=false
 sleep 8
 RUN_ID="$(gh run list --repo "${REPO}" --workflow release-runtime.yml --limit 1 --json databaseId -q '.[0].databaseId')"
-echo "run ${RUN_ID}：gh run watch ${RUN_ID} --repo ${REPO} --exit-status"
-gh run watch "${RUN_ID}" --repo "${REPO}" --exit-status
+echo "run ${RUN_ID}：gh run watch ${RUN_ID} --repo ${REPO} --interval 60 --exit-status"
+# 默认每 3 秒刷一次（每次几个 API 调用）；流水线要跑 40 分钟以上，再叠加别处的 watch 会撞
+# GitHub 二级限流（HTTP 403 rate limit，v0.44.2 踩过），所以放慢到 60 秒。
+gh run watch "${RUN_ID}" --repo "${REPO}" --interval 60 --exit-status
 echo
 echo "流水线绿了。判据仍是：python horosa-skill/scripts/sync_windows_release.py --check --tag ${TAG} --draft → [OK]；"
 echo "然后 gh workflow run release-runtime.yml -f version=${VERSION} -f publish=true 转公开，再 --check 公开 latest。"

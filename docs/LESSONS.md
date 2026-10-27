@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.44.2 (2026-10-27) | 发 v0.44.2 时 `publish_release.sh --dispatch` 的 `gh run watch`（默认 3 秒刷新）加上另开的两个 watch 盯同一条 40 分钟的流水线，撞 GitHub 二级限流：所有 `gh` 调用 HTTP 403，脚本的 watch 也以 exit 1 退出（流水线本身不受影响） | 脚本 watch 加 `--interval 60`（守卫 `test_publish_script_watches_the_pipeline_slowly`）；同一条 run 只留一个 watcher；撞了就停掉所有轮询、几分钟后低频再查 |
 | v0.44.2-dev (2026-10-26) | 印度律盘 `chartnum: 9` 的 [起盘信息] 仍写「当前分盘：命盘 / 分盘：D1」：`_attach_jyotish_sections` 没把 `chartnum` 交给 vendored `buildIndiaSchoolHeaderLines`，落到兜底 1；上一条台账误记为「上游文本口径」 | 传请求 `chartnum`（上游 `buildIndiaSnapshotText(…, params.chartnum, …)` 同）；回归测试修前红；调 vendored builder 要对齐上游调用点的实参 |
 | v0.44.1-dev (2026-10-26) | 剩下几种盘图：太乙结果其实一直带 `pan.palace16`（v0.44.0 未做清单的理由错了）；七政罗计命名要跟引擎换位后的 id 走；宫的 sign 在 `chart.houses` 不在 objects | 太乙十六宫 / 七政方盘 / 七政择日动盘 / 南印方盘 / 90° 度盘 / 合盘双圈 / 择时盘；正文有同一份位置表就逐项对照、对不上不画；负向对照 6 条全红 |
 | v0.43.1-dev (2026-10-24) | 两份独立评审：110 份完整排盘报告（符号缺字、护栏话外露、附录机器值、0 张盘图、版面浪费、行首标点）与自备知识库（卸载删笔记、GBK 静默消失、删错文件、覆盖无备份、存档留全文、旧测试因错误原因通过） | 补字链 + 盘图（只取引擎数据）+ 版式重做；知识库单一解析器、回收站、编码链、问题清单、存档只存引用、卸载默认保留；第二轮再修巴比伦无宫、变卦不手推、DOCX 位图、出框 12 pt；第三轮再修卦图六神 / 三式子盘两处图文矛盾；47 条负向对照 |
@@ -155,6 +156,19 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.44.2 / 2026-10-27 — 发版时几个 `gh run watch` 同盯一条流水线，撞 GitHub 二级限流
+
+- **症状**：v0.44.2 草稿流水线（release-runtime run 40534877176）跑到矩阵时，`gh run view` / `gh release view` / `sync_windows_release.py --check`
+  全部 `HTTP 403: API rate limit exceeded`；`publish_release.sh --dispatch` 末尾的 `gh run watch` 也因此 exit 1。`gh api rate_limit` 显示 core 额度
+  还剩 3377/5000——是二级（并发 / 频率）限流，不是小时额度用尽。流水线本身照常跑，没受影响。
+- **根因**：`gh run watch` 默认每 3 秒刷新一次，每次要读 run 与各 job。脚本自己在 watch，维护者（这次是我）又另开了两个 watch 盯同一条 run，
+  三路各 3 秒、持续 40 分钟以上。
+- **修复**：`publish_release.sh` 的 watch 改 `--interval 60`。
+- **守卫**：`tests/test_release_pipeline_shape.py::test_publish_script_watches_the_pipeline_slowly`（脚本里每条 `gh run watch` 都带 `--interval` 且 ≥ 30）。
+  负向对照：去掉 `--interval 60` → 此测试红；放回 → 绿。
+- **教训**：同一条 run 只留一个 watcher；脚本已在 watch 时，另开的会话 / 终端用 `gh run view` 低频查（≥ 2 分钟）。撞了二级限流就停掉所有轮询，
+  等几分钟再低频查；别加更多重试。
 
 ### v0.44.2-dev / 2026-10-26 — 印度律盘选了 D9，[起盘信息] 仍写「当前分盘：命盘 / 分盘：D1」：富化层没把 `chartnum` 交给 vendored 表头 builder
 

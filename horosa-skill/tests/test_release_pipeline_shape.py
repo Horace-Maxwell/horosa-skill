@@ -117,6 +117,16 @@ def test_publish_script_only_ever_makes_drafts() -> None:
     assert "gh run watch" in PUBLISH
 
 
+def test_publish_script_watches_the_pipeline_slowly() -> None:
+    # The pipeline runs 40+ minutes; gh's default 3 s refresh plus any other watcher hit GitHub's secondary
+    # rate limit during v0.44.2 (HTTP 403 on every gh call until it cooled down).
+    watches = [line for line in PUBLISH.splitlines() if line.startswith("gh run watch")]
+    assert watches, "publish_release.sh --dispatch watches the run"
+    for line in watches:
+        parts = line.split()
+        assert "--interval" in parts and int(parts[parts.index("--interval") + 1]) >= 30, line
+
+
 def test_the_never_run_self_hosted_release_workflow_is_gone() -> None:
     assert not (WORKFLOWS / "release.yml").exists(), "release.yml (self-hosted, 20 cancelled tag runs) must not come back"
     assert not (REPO_ROOT / "horosa-skill" / "scripts" / "publish_darwin_release.sh").exists()
