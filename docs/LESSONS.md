@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.44.2 (2026-10-27) | 发版期定时 completeness（40552300999）红：main 的 server.json 已回填新 draft 的 mcpb sha，公开 latest 仍是上一版，两者必然对不上 | 窗口性误报：从回填提交推上 main 到翻公开之间的定时 / 手动 completeness 都会红；翻公开后 publish job 派发的那次绿才是判据。未改 workflow（候选修法见条目） |
 | v0.44.2 (2026-10-27) | 发 v0.44.2 时 `publish_release.sh --dispatch` 的 `gh run watch`（默认 3 秒刷新）加上另开的两个 watch 盯同一条 40 分钟的流水线，撞 GitHub 二级限流：所有 `gh` 调用 HTTP 403，脚本的 watch 也以 exit 1 退出（流水线本身不受影响） | 脚本 watch 加 `--interval 60`（守卫 `test_publish_script_watches_the_pipeline_slowly`）；同一条 run 只留一个 watcher；撞了就停掉所有轮询、几分钟后低频再查 |
 | v0.44.2-dev (2026-10-26) | 印度律盘 `chartnum: 9` 的 [起盘信息] 仍写「当前分盘：命盘 / 分盘：D1」：`_attach_jyotish_sections` 没把 `chartnum` 交给 vendored `buildIndiaSchoolHeaderLines`，落到兜底 1；上一条台账误记为「上游文本口径」 | 传请求 `chartnum`（上游 `buildIndiaSnapshotText(…, params.chartnum, …)` 同）；回归测试修前红；调 vendored builder 要对齐上游调用点的实参 |
 | v0.44.1-dev (2026-10-26) | 剩下几种盘图：太乙结果其实一直带 `pan.palace16`（v0.44.0 未做清单的理由错了）；七政罗计命名要跟引擎换位后的 id 走；宫的 sign 在 `chart.houses` 不在 objects | 太乙十六宫 / 七政方盘 / 七政择日动盘 / 南印方盘 / 90° 度盘 / 合盘双圈 / 择时盘；正文有同一份位置表就逐项对照、对不上不画；负向对照 6 条全红 |
@@ -156,6 +157,16 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.44.2 / 2026-10-27 — 发版期定时 completeness 红：main 已回填新 sha，公开 latest 还是上一版
+
+- **症状**：17:37 UTC 的定时 `release-completeness.yml`（run 40552300999）红：「server.json mcpb fileSha256 (16a2e29d…) != sha256 of the published
+  horosa-skill-0.44.1.mcpb (6eb42903…)」。当时 v0.44.2 还在 draft（publish 流水线在跑矩阵），mcpb sha 回填提交 ba21dd8 已在 main。
+- **根因**：该检查拿 main 上 server.json 的 mcpb sha 与**公开 latest** 的 .mcpb 比。回填提交必须在 draft 构建后、翻公开前推上 main，
+  所以这段窗口里 main 指向新版、latest 仍是旧版，必然不等。与「release 事件读 tag 处 server.json（回填前）」是同类窗口误报。
+- **处置**：翻公开后 publish job 派发的 completeness（40555102494）绿，即为判据；无需修复发布。
+- **未改**：workflow 可以在 server.json 的 `version` 新于 latest 时跳过 sha 比对（只发 `::notice::`），但这会放宽一道发布守卫，等维护者定夺。
+- **教训**：发版期间看到 completeness 红，先看它比对的是哪一版：main 已是新 sha、latest 仍是旧版 → 窗口误报，以翻公开后那次为准。
 
 ### v0.44.2 / 2026-10-27 — 发版时几个 `gh run watch` 同盯一条流水线，撞 GitHub 二级限流
 

@@ -768,6 +768,7 @@ OpenCC 管不到、上游也没有的词组修正（复核 → 複核）在 `dat
 - **盯流水线只留一个 watcher、刷新放慢（v0.44.2）。** `gh run watch` 默认 3 秒刷新；`publish_release.sh --dispatch` 已在 watch 时再开 watch
   会撞 GitHub 二级限流（全部 `gh` 调用 403，core 额度还剩一大半）。脚本用 `--interval 60`（守卫 `test_publish_script_watches_the_pipeline_slowly`）；
   其他地方查进度用 `gh run view`，间隔 ≥ 2 分钟；撞了就停掉所有轮询，过几分钟再查。
+  回填 mcpb sha 推上 main 之后、翻公开之前，定时 completeness 会因「main 的 sha ≠ 公开 latest（旧版）的 .mcpb」红——窗口误报，以翻公开后 publish job 派发的那次为准。
 - **发布步骤只允许以脚本形态存在**（v0.27.0：SBOM 生成器一直在仓里、却因发布流程是手打清单而漏传）：
   维护机半边一律走 `scripts/publish_release.sh`（步骤见上；无参数是安全默认，只构建校验）。资产契约由
   `release-completeness.yml` 断言（manifest 双平台 + 两包可达 + **SBOM 在场** + **`.mcpb` 在场**）。
