@@ -6,6 +6,7 @@ import os
 from typing import Any
 
 import anyio
+from mcp import types as mcp_types
 from mcp.server.fastmcp import FastMCP
 from pydantic import ValidationError
 
@@ -124,11 +125,37 @@ class HorosaFastMCP(FastMCP):
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
         script = self.output_script
-        tool = self._tool_manager.get_tool(name) if script != SIMPLIFIED and name not in UNLOCALIZED_TOOLS else None
+        tool = self._tool_manager.get_tool(name)
         if tool is None:
             return await super().call_tool(name, arguments)
         raw = await self._tool_manager.call_tool(name, arguments, context=self.get_context(), convert_result=False)
-        # 一份结果可达数百 KB 文本（合参 / 调度会带多个技法），转换放进线程，别卡住事件循环上的 ping / cancel。
-        converted = await anyio.to_thread.run_sync(localize, raw, script)
-        return tool.fn_metadata.convert_result(converted)
+        if script != SIMPLIFIED and name not in UNLOCALIZED_TOOLS:
+            # 一份结果可达数百 KB 文本（合参 / 调度会带多个技法），转换放进线程，别卡住事件循环上的 ping / cancel。
+            raw = await anyio.to_thread.run_sync(localize, raw, script)
+        return _with_file_link(raw, tool.fn_metadata.convert_result(raw), self._client_protocol())
+
+    def _client_protocol(self) -> str:
+        try:
+            params = self.get_context().session.client_params
+        except ValueError:  # 不在请求上下文里（FastMCP：Context is not available outside of a request）就当老客户端
+            return ""
+        return str(getattr(params, "protocolVersion", "") or "")
+
+
+# resource_link 内容块随 MCP 2025-06-18 修订进入规范。只给协商到该修订或更新的客户端：更早的客户端按旧联合类型
+# 校验整个结果，多一个不认识的块可能让整条结果作废（与 outputSchema 让 Claude Code 工具列表消失同一类风险）。
+RESOURCE_LINK_SINCE = "2025-06-18"
+
+
+def _with_file_link(raw: Any, converted: Any, protocol: str) -> Any:
+    """报告类工具（结果里有 `file` 文件卡）在 JSON 正文之外再附一个 resource_link，客户端可直接打开 / 附带文件。"""
+    card = raw.get("file") if isinstance(raw, dict) else None
+    if not isinstance(card, dict) or not card.get("uri") or not protocol or protocol < RESOURCE_LINK_SINCE:
+        return converted
+    link = mcp_types.ResourceLink(type="resource_link", uri=card["uri"], name=str(card.get("name") or "report"),
+                                  mimeType=card.get("mime"), size=card.get("bytes"))
+    if isinstance(converted, tuple):
+        content, structured = converted
+        return [*content, link], structured
+    return [*converted, link]
 

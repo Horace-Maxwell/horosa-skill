@@ -23,6 +23,7 @@ from horosa_skill.schemas.tools import (
     AgentGuidanceInput,
     DispatchInput,
     HecanInput,
+    KnowledgeSearchInput,
     MemoryAnswerInput,
     MemoryQueryInput,
     MemoryShowInput,
@@ -81,9 +82,9 @@ from horosa_skill.surfaces.mcp_surface import (
 # 门面工具数（非技法工具：dispatch / guidance / tool_run / memory×3 / report×2 / export×… 等）。
 # 🔴 计数单一真值：以前 marketplace 说 97、instructions 说 106、字节契约说 115、实际 116 —— 四处
 # 互不相同且都「有人守」。默认平铺面 = FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)，任何文案都从这里算。
-FACADE_TOOL_COUNT = 10
+FACADE_TOOL_COUNT = 11
 
-# 精简面工具数 = 10 门面 + horosa_tool_run。README×2 的「11 个门面/11 facades」由 verify_docs_sync 锁步到此常量。
+# 精简面工具数 = 11 门面 + horosa_tool_run。README×2 的「11 个门面/11 facades」由 verify_docs_sync 锁步到此常量。
 COMPACT_SURFACE_TOOL_COUNT = FACADE_TOOL_COUNT + 1
 
 
@@ -231,7 +232,8 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
         meta=_tool_meta("horosa_dispatch"),
     )(horosa_dispatch)
 
-    def _register_service_facade(*, name: str, method: str, model: type, title: str, annotations: Any, doc: str) -> None:
+    def _register_service_facade(*, name: str, method: str, model: type, title: str, annotations: Any, doc: str,
+                                 meta: dict[str, Any] | None = None) -> None:
         """门面工具 = 归一化入参 → service.<method>(payload)，统一兜底、签名、注解（v0.41.1 起表驱动）。
 
         method 按名在**调用时**取（`getattr(service, method)`）：测试会在建好 server 之后替换实例上的方法。
@@ -247,7 +249,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
         facade.__doc__ = doc
         facade.__signature__ = _signature_for_input_model(model)
         facade.__annotations__ = {"return": dict[str, Any]}
-        mcp.tool(name=name, title=title, annotations=annotations)(facade)
+        mcp.tool(name=name, title=title, annotations=annotations, meta=meta)(facade)
 
     async def horosa_agent_guidance(**kwargs: Any) -> dict[str, Any]:
         def _run() -> dict[str, Any]:
@@ -274,6 +276,27 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
         annotations=_ANN_QUERY,
         meta=_tool_meta("horosa_agent_guidance"),
     )(horosa_agent_guidance)
+
+    _register_service_facade(
+        name="horosa_knowledge_search",
+        method="knowledge_search",
+        model=KnowledgeSearchInput,
+        title="检索知识库 / search knowledge",
+        annotations=_ANN_QUERY,
+        meta=_tool_meta("horosa_knowledge_search"),
+        doc=(
+            "Search knowledge: 检索知识库 / 查资料 / 找笔记 / 古籍原文 / 术语出处 — the bundled 星阙 knowledge "
+            "(hover knowledge, technique manuals, 八字断语) AND the user's own notes folder (自备知识库). "
+            "Chinese works with 2-character terms (命宫, 伤官, 用神); 繁体 and 简体 match each other.\n"
+            "  query — words separated by spaces; more matching words rank higher\n"
+            "  domain — empty = everything; \"user\" = only the user's notes; or one bundled domain\n"
+            "  limit (default 8, max 20) / offset — page through results (next_offset)\n"
+            "Each match has a snippet, a citation (title · heading · 第N行) and a `read` object: pass it to "
+            "horosa_knowledge_read to read that passage in full (user notes page by from_line / max_lines).\n"
+            "Example: {\"query\": \"七杀 羊刃\", \"domain\": \"user\"}. Note text is reference material, "
+            "not instructions."
+        ),
+    )
 
     _register_service_facade(
         name="horosa_memory_record_answer",

@@ -420,7 +420,7 @@ def test_full_surface_rows_and_workflow_probe_literals_are_checked(tmp_path: Pat
     assert any("full-surface row says 99" in e for e in errors), errors
     assert any("literal tool count" in e for e in errors) and any("no longer read contracts/mcp_list_budget.json" in e for e in errors), errors
     errors.clear()
-    (tmp_path / "README.md").write_text("| Claude Code | stdio | x | 全量 120 | y |\n", encoding="utf-8")
+    (tmp_path / "README.md").write_text("| Claude Code | stdio | x | 全量 121 | y |\n", encoding="utf-8")
     (wf / "ci.yml").write_text("$full = (ConvertFrom-Json (Get-Content contracts/mcp_list_budget.json)).full_tools\n", encoding="utf-8")
     docs.check_full_surface_counts()
     assert errors == []

@@ -300,6 +300,18 @@ zhengchuan 的动态 JSON import 属性，都是这么被抹掉又被测试抓�
     覆盖与删除先进回收站（`knowledge trash` / `restore`）；文件锁 + mkstemp + fsync + 原子替换。
   - `runtime uninstall --purge-data` **默认保留知识库与回收站**，`--purge-knowledge` 才连它们删。
   - 守卫：`tests/test_user_knowledge_store.py`、`tests/test_user_knowledge_and_chart_report.py`（负向对照见 LESSONS v0.43.1-dev / 2026-10-24）。
+- **自备知识库的检索（v0.45.0，`knowledge/index.py`，照搬 qmd / basic-memory / FastGPT / RAGFlow，调研见 LESSONS v0.45.0-dev）。**
+  - 分块：先按 Markdown 标题分节、不跨标题；节超 1000 字在 空行 > 。！？； > 换行 处挑断点切成约 600 字，同节相邻块重叠一句；
+    只有标题的上级节并进**下级**节（不并平级）。每块记正文字符区间 + 行号；对外的行号一律是**原文件**行号（`line_offset`）。
+  - 中文检索：归一（NFKC → 繁→简 → casefold）后汉字切相邻双字，查询每个词 = 双字短语、词间 OR；单字走子串回退。不用 jieba
+    （现代汉语词典切错古籍），不用 trigram（两字词查不到）。FTS5 只找候选，分数自己算 BM25（Lucene IDF）——FTS5 的 bm25()
+    对过半块都有的词给 0 分。
+  - 索引在 `<data_dir>/knowledge-state/index.sqlite`，contentless（不存正文、只存区间）+ secure_delete + 回滚日志；按条目 sha256 增量同步，
+    文件没了整条删；刚改过 2 秒内的文件不进扫描缓存（racy-clean）。索引坏 / FTS5 不可用 → 记 `problems`、退回逐条子串，不报错。
+  - 计算时：装得下整条就整条；装不下**只带与本盘导出正文相关的块**（零分块不凑数），每段【标题 · 第几行】；`?检索词` 跨库带最相关几段。
+  - 工具：`horosa_knowledge_search`（门面，常驻）检索 → `horosa_knowledge_read(domain="user", key, from_line, max_lines)` 按行翻页；
+    内置与自备结果用 RRF（k=60）合并，不比分数。CLI `knowledge search`（兼检索测试）/ `knowledge index [--rebuild]`。
+  - 守卫：`tests/test_user_knowledge_index.py`（每条都有负向对照；其中四条第一版「因为错误的原因通过」，见 LESSONS）。
 
 ### 4.4 MCP 面、决策层与错误信封
 
@@ -1041,6 +1053,11 @@ A global stability pass hardened these; keep them true when you touch the releva
 
 ### 9.2 MCP 面 · schema · 错误信封（MCP surface / schema / errors）
 
+- **工具面（v0.45.0）**：全量面 = 110 技法 + 11 门面，精简面 = 11 门面 + `horosa_tool_run`。新加的非技法工具做成门面，
+  **别塞进 `TOOL_DEFINITIONS`**（那里每一项都计入技法总数）。检索与精读分两个工具（`horosa_knowledge_search` / `horosa_knowledge_read`）。常驻（`anthropic/alwaysLoad`）：
+  guidance / dispatch / tool_run / knowledge_search。报告结果带 `file` 文件卡；MCP 层只给协商到 2025-06-18 及以后的客户端追加
+  `resource_link`（老客户端按旧联合类型校验，多一个块可能整条作废）。守卫 `tests/test_mcp_tool_design.py`。
+
 - **MCP schema：一个键要么在 schema 上要么不存在；签名求全、广告求准；每工具 inputSchema ≤ 5000 B。**
   ① MCP 扁平面按广告签名丢未声明的顶层键（FastMCP arg_model），
   CLI/tool_run/dispatch 不丢——服务读、文档写、样例带而 schema 没声明的键，MCP 用户会静默拿到另一张盘
@@ -1106,43 +1123,6 @@ A global stability pass hardened these; keep them true when you touch the releva
   `_emit_otlp`）; a trace write must never crash or mask the traced operation.
 
 ### 9.3 导出 · 快照 · 引擎移植（export / snapshot / vendored engines）
-
-- **PDF 按字补字形（v0.43.1-dev）。** 主字体（Songti / 雅黑）缺的字逐字走补字链 `_PDF_GLYPH_FALLBACK_CANDIDATES`：扩展 B 古籍字
-  （Win：SimSun-ExtB / MingLiU-ExtB）→ 符号与拉丁扩展（mac：Arial Unicode + Apple Symbols；Win：Segoe UI Symbol + Arial；Linux：DejaVu）。
-  阈值 0x80（埃及历 ḥ ṭ、梵文 ṇ ṃ 在 U+2E80 以下，旧阈值永远不补）。reportlab 只吃 TrueType 轮廓（.otf CFF 会抛 TTFError）。
-  `_render_pdf` 里的 `Paragraph` 是包过一层的同名函数——新增段落照旧写 `Paragraph(...)` 即自动补字，别绕过它。
-  守卫 `tests/test_pdf_glyph_fallback.py`、`tests/test_report_polish.py`。
-
-- **完整排盘报告与 PDF 排版（v0.43.0 → v0.43.1-dev 重做）。** `style:"chart"` 不要 AI 解读、收录全部有内容的导出段；
-  缺省 `analysis` 没解读仍回 `analysis_required`；没有盘面的工具（解析 / 注册表 / 知识检索）回 `report.no_chart_content`。现行规矩：
-  - reportlab 的 flowable **排过一次就不能再排**：每遍 `compose(pages)` 现组 story，目录自绘，两遍间页码稳定才停；分栏用 `Panels`
-    （每屏按剩余高度现切，保证「先左栏后右栏」的读序——Table 跨页只会竖着断）。
-  - 引擎没给内容的段（正文是 `_missing_detail_text` 的护栏话）：builder 标 `placeholder` + `human_visible: False`，人读版只在技法依据表
-    「本次未产出」一行列名——那句话是写给 AI 的，不给人看。规则库查询（`_RULE_LOOKUP_TOOLS`）同样拒绝出 chart 报告。
-  - 附录只放人读口径：设置值经 `builder._setting_text`（布尔 → 是 / 否、有码表的 → 文字；宫制 / 黄道 / 岁差 / 性别不列——技法卡是请求口径，
-    实际值看正文；没码表的枚举不列），不放引擎内部名 / 导出设置版本 / aiExport 来源串（它们留在 JSON）；基本信息里经纬度写「东经 121°28′」、`gender` 布尔写男 / 女、非字符串的 `name` 不列。
-  - 盘图在 `reports/figures.py`：**只取**引擎数据（宫头、经度、lonspeed 正负、`aspects.normalAsp`、紫微 houses、奇门 cells、六壬
-    layout / ke / sanChuan），绝不自己算位置或量相位（铁律 1）。七政 / 印度 / 宿占不套西洋轮；任何一种取不全就整张不画。
-    位置键 `branch` / `gua` / `kind` / `layout` 登记在 `localize._DOCUMENT_MACHINE_KEYS`（繁体输出不转，渲染器按简体地支、卦名定格）。
-    无宫体系（`_WHEEL_NO_HOUSES`，巴比伦）只画星座环 + 行星、不画相位；卜卦 / 择日的相位取 `data.raw.aspects`。六爻变卦**只在
-    `changed_code` 与本卦 + 动爻对得上时才画**（结果里没有引擎推出的之卦码；样例载荷的 changed_code 与动爻不符），对不上只画本卦；
-    卦图不画六神（`data.lines[].god` 可与「断卦结构」表不一致）；三式合一不画 `data.qimen` 子盘（与合盘概览对不上）。
-    通则：**同一结果有两处来源时，图只取能与正文对上的那处，对不上就不画**。轮上度数紧贴星名正下方，标签间隔按两行字高折角度。
-  - v0.44.1 补齐：太乙十六宫（`pan.palace16` / 三式的 `data.taiyi`，对照正文「十六宫标记」）、七政四余地支方盘（星名跟引擎换位后的
-    id 走、对照庙旺表的曜 → 地支）、七政择日动盘（对照「择日动盘」每行的宫）、南印方盘（按 `params.varga` 的分盘、宫的 sign 在
-    `chart.houses`）、量化盘 90° 度盘（因子集同正文、对照折叠值）、合盘双圈（轴线不穿外圈）、择日画 `data.base` 那一刻的盘。
-    新图种只改 `figures.py`：PDF / DOCX 共用 `DRAWN_KINDS` / `figure_drawing` / `figure_notes` / `grid_position`。
-    下结论「结果里没有某数据」前先 dump 一份真实结果（v0.44.0 把太乙误列进未做清单）。
-    DOCX 画十二宫 / 九宫表格；星盘轮 / 卦图经 `drawing_to_png`（Pillow 画 Wedge / Circle / Line / Rect / String，不用要另装
-    rlPyCairo 的 renderPM）嵌位图——新增图元要在那里补上；DOCX 纸张 A4。
-  - 版式：Frame 四边各有 6 pt 内边距——满宽元素用 `content_width`（版心 − 12），别用版心宽（会右出框）。
-    封面（基本信息卡 + 报告说明），条目少的目录排在封面下方、多的另起一页；宽而矮的表转竖排（四柱）、全空列不印、表头不折行、短值窄表按内容定宽；
-    以西文为主的段落不走 CJK 断行（`_mostly_latin`）；列宽下限含本列最长数字 / 西文串（`_UNBREAKABLE_RE`）；≤14 行的表整张不拆；
-    键值行的键 ≤14 字，15–24 字须带括注或数字（否则是句子）；DOCX 封面无页脚、目录域预填章名、键值行成两列表；
-    连续「键：值」行成对照表（冒号前是时刻的不算）；长小数人读版四舍五入到 4 位；全角标点不落行首（`_extend_kinsoku` + `wordWrap="CJK"`）；
-    段内小标题进书签第三级（不进目录）。报告标题经 `_report_technique_name`（去页签名 / 分组前缀）。
-  - 守卫：`tests/test_report_polish.py`、`tests/test_user_knowledge_and_chart_report.py`。
-- **CLI 的报告 `--language` 只在给了时才传（v0.43.0）。** 原先缺省 `zh-CN` 总是传下去，盖掉了 `HOROSA_OUTPUT_SCRIPT` 推出的繁体报告语言。
 
 - **导出段只存 body，引擎对象只在 `data.<key>` 存一份。** `export_snapshot.sections[*]` 形状固定为
   `{index, raw_title, title, included, body}`（envelope 0.8.0）；`_pick_section_data` 对未识别段返回
@@ -1224,6 +1204,49 @@ A global stability pass hardened these; keep them true when you touch the releva
   也挡住用户全局 `SE_EPHE_PATH` 的劫持），守卫 = 不变量 6 + `test_se_ephe_path_reaches_threads_that_never_set_a_path`（真载荷，
   含负向对照）。冷启确定性要专门测（刚起时并发同一请求、与进程内参照逐值比）；Windows 复验要比数值，不能只看没报错。
   离线探针必须带被测进程的真实环境变量——09-30 曾据不带环境的探针误判「星阙桌面端同中」，它的启动器设了 `SE_EPHE_PATH`，不受影响。
+
+### 9.3.1 报告 · 盘图 · PDF（reports / figures）
+
+- **PDF 按字补字形（v0.43.1-dev）。** 主字体（Songti / 雅黑）缺的字逐字走补字链 `_PDF_GLYPH_FALLBACK_CANDIDATES`：扩展 B 古籍字
+  （Win：SimSun-ExtB / MingLiU-ExtB）→ 符号与拉丁扩展（mac：Arial Unicode + Apple Symbols；Win：Segoe UI Symbol + Arial；Linux：DejaVu）。
+  阈值 0x80（埃及历 ḥ ṭ、梵文 ṇ ṃ 在 U+2E80 以下，旧阈值永远不补）。reportlab 只吃 TrueType 轮廓（.otf CFF 会抛 TTFError）。
+  `_render_pdf` 里的 `Paragraph` 是包过一层的同名函数——新增段落照旧写 `Paragraph(...)` 即自动补字，别绕过它。
+  守卫 `tests/test_pdf_glyph_fallback.py`、`tests/test_report_polish.py`。
+
+- **完整排盘报告与 PDF 排版（v0.43.0 → v0.43.1-dev 重做）。** `style:"chart"` 不要 AI 解读、收录全部有内容的导出段；
+  缺省 `analysis` 没解读仍回 `analysis_required`；没有盘面的工具（解析 / 注册表 / 知识检索）回 `report.no_chart_content`。现行规矩：
+  - reportlab 的 flowable **排过一次就不能再排**：每遍 `compose(pages)` 现组 story，目录自绘，两遍间页码稳定才停；分栏用 `Panels`
+    （每屏按剩余高度现切，保证「先左栏后右栏」的读序——Table 跨页只会竖着断）。
+  - 引擎没给内容的段（正文是 `_missing_detail_text` 的护栏话）：builder 标 `placeholder` + `human_visible: False`，人读版只在技法依据表
+    「本次未产出」一行列名——那句话是写给 AI 的，不给人看。规则库查询（`_RULE_LOOKUP_TOOLS`）同样拒绝出 chart 报告。
+  - 附录只放人读口径：设置值经 `builder._setting_text`（布尔 → 是 / 否、有码表的 → 文字；宫制 / 黄道 / 岁差 / 性别不列——技法卡是请求口径，
+    实际值看正文；没码表的枚举不列），不放引擎内部名 / 导出设置版本 / aiExport 来源串（它们留在 JSON）；基本信息里经纬度写「东经 121°28′」、`gender` 布尔写男 / 女、非字符串的 `name` 不列。
+  - 盘图在 `reports/figures.py`：**只取**引擎数据（宫头、经度、lonspeed 正负、`aspects.normalAsp`、紫微 houses、奇门 cells、六壬
+    layout / ke / sanChuan），绝不自己算位置或量相位（铁律 1）。七政 / 印度 / 宿占不套西洋轮；任何一种取不全就整张不画。
+    位置键 `branch` / `gua` / `kind` / `layout` 登记在 `localize._DOCUMENT_MACHINE_KEYS`（繁体输出不转，渲染器按简体地支、卦名定格）。
+    无宫体系（`_WHEEL_NO_HOUSES`，巴比伦）只画星座环 + 行星、不画相位；卜卦 / 择日的相位取 `data.raw.aspects`。六爻变卦**只在
+    `changed_code` 与本卦 + 动爻对得上时才画**（结果里没有引擎推出的之卦码；样例载荷的 changed_code 与动爻不符），对不上只画本卦；
+    卦图不画六神（`data.lines[].god` 可与「断卦结构」表不一致）；三式合一不画 `data.qimen` 子盘（与合盘概览对不上）。
+    通则：**同一结果有两处来源时，图只取能与正文对上的那处，对不上就不画**。轮上度数紧贴星名正下方，标签间隔按两行字高折角度。
+  - v0.44.1 补齐：太乙十六宫（`pan.palace16` / 三式的 `data.taiyi`，对照正文「十六宫标记」）、七政四余地支方盘（星名跟引擎换位后的
+    id 走、对照庙旺表的曜 → 地支）、七政择日动盘（对照「择日动盘」每行的宫）、南印方盘（按 `params.varga` 的分盘、宫的 sign 在
+    `chart.houses`）、量化盘 90° 度盘（因子集同正文、对照折叠值）、合盘双圈（轴线不穿外圈）、择日画 `data.base` 那一刻的盘。
+    新图种只改 `figures.py`：PDF / DOCX 共用 `DRAWN_KINDS` / `figure_drawing` / `figure_notes` / `grid_position`。
+    下结论「结果里没有某数据」前先 dump 一份真实结果（v0.44.0 把太乙误列进未做清单）。
+  - **报告骨架（v0.45.0，全部技法共用）**：封面基本信息 + 「关键设置」（技法卡里的结果敏感口径，人读规则同附录）→ 核心结论 / 总览摘要
+    （AI，STORM 式 lead）→ 完整盘面（盘图 + 导出段，标题前印段号 `E{n}`，n = 导出段序号，与报告模板 `cite_id` 同号）→ 「AI 解读」部分
+    （注明不是引擎输出；起盘依据 / 正文解读 / 建议 / 不确定处与限制）→ 附录。PDF 里 AI 文字的 `[E3]` 链到该段（只链报告里真有的段号，
+    悬空目标 reportlab 会报错）；DOCX 盘图带替代文字（`docPr descr`）。守卫 `tests/test_report_structure.py`。
+    DOCX 画十二宫 / 九宫表格；星盘轮 / 卦图经 `drawing_to_png`（Pillow 画 Wedge / Circle / Line / Rect / String，不用要另装
+    rlPyCairo 的 renderPM）嵌位图——新增图元要在那里补上；DOCX 纸张 A4。
+  - 版式：Frame 四边各有 6 pt 内边距——满宽元素用 `content_width`（版心 − 12），别用版心宽（会右出框）。
+    封面（基本信息卡 + 报告说明），条目少的目录排在封面下方、多的另起一页；宽而矮的表转竖排（四柱）、全空列不印、表头不折行、短值窄表按内容定宽；
+    以西文为主的段落不走 CJK 断行（`_mostly_latin`）；列宽下限含本列最长数字 / 西文串（`_UNBREAKABLE_RE`）；≤14 行的表整张不拆；
+    键值行的键 ≤14 字，15–24 字须带括注或数字（否则是句子）；DOCX 封面无页脚、目录域预填章名、键值行成两列表；
+    连续「键：值」行成对照表（冒号前是时刻的不算）；长小数人读版四舍五入到 4 位；全角标点不落行首（`_extend_kinsoku` + `wordWrap="CJK"`）；
+    段内小标题进书签第三级（不进目录）。报告标题经 `_report_technique_name`（去页签名 / 分组前缀）。
+  - 守卫：`tests/test_report_polish.py`、`tests/test_user_knowledge_and_chart_report.py`。
+- **CLI 的报告 `--language` 只在给了时才传（v0.43.0）。** 原先缺省 `zh-CN` 总是传下去，盖掉了 `HOROSA_OUTPUT_SCRIPT` 推出的繁体报告语言。
 
 ### 9.4 客户端配置 · setup · doctor（client config / setup / doctor）
 

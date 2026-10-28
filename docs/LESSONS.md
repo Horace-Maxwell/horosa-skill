@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.45.0-dev (2026-10-27) | 用户要「看 GitHub 上最好的生产级自定义知识库怎么做，直接借鉴」，并把所有技法的报告与工具调用也照最好的做：五路调研（qmd / basic-memory / Cherry Studio / RAGFlow / Dify / FastGPT / MaxKB / Anthropic 与 MCP 规范 / kerykeion / STORM）；实现时 FTS5 bm25 对常见词给 0 分、executescript 吞事务、零分段凑预算、`knowledge_read` 在技法表里 | 自备知识库：标题分块 + 中文双字 FTS5 + 自算 BM25 + 增量同步 + 长条目只带相关段 + 检索 / 精读两个工具；报告：E 段号与可点引用、数据在前、AI 层单独标注、封面关键设置、替代文字；工具：文件卡 + 按协议版本的 resource_link、检索门面常驻；四条守卫第一版「因为错误的原因通过」，改到负向对照会红 |
 | v0.44.2 (2026-10-27) | 发版期定时 completeness（40552300999）红：main 的 server.json 已回填新 draft 的 mcpb sha，公开 latest 仍是上一版，两者必然对不上 | 窗口性误报：从回填提交推上 main 到翻公开之间的定时 / 手动 completeness 都会红；翻公开后 publish job 派发的那次绿才是判据。未改 workflow（候选修法见条目） |
 | v0.44.2 (2026-10-27) | 发 v0.44.2 时 `publish_release.sh --dispatch` 的 `gh run watch`（默认 3 秒刷新）加上另开的两个 watch 盯同一条 40 分钟的流水线，撞 GitHub 二级限流：所有 `gh` 调用 HTTP 403，脚本的 watch 也以 exit 1 退出（流水线本身不受影响） | 脚本 watch 加 `--interval 60`（守卫 `test_publish_script_watches_the_pipeline_slowly`）；同一条 run 只留一个 watcher；撞了就停掉所有轮询、几分钟后低频再查 |
 | v0.44.2-dev (2026-10-26) | 印度律盘 `chartnum: 9` 的 [起盘信息] 仍写「当前分盘：命盘 / 分盘：D1」：`_attach_jyotish_sections` 没把 `chartnum` 交给 vendored `buildIndiaSchoolHeaderLines`，落到兜底 1；上一条台账误记为「上游文本口径」 | 传请求 `chartnum`（上游 `buildIndiaSnapshotText(…, params.chartnum, …)` 同）；回归测试修前红；调 vendored builder 要对齐上游调用点的实参 |
@@ -157,6 +158,43 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.45.0-dev / 2026-10-27 — 照生产级开源实现重做自备知识库检索、报告骨架与工具面
+
+- **起因**：用户「再次检查 github 看看现在做的最好的类似自定义的知识库（可以直接实际用在生产上的）到底怎么做的，直接借鉴他们的」，
+  随后「所有技法的报告也是同样做，找出最好的结构以及工具调用方法」。此前的自备知识库：整条笔记从开头截到 12k 字，检索是数子串次数，
+  没有分块 / 排序 / 索引。
+- **调研**（五路并行，2026-10-27，读代码不跑代码）：
+  - 本地 Markdown 知识库：tobi/qmd（MIT，分块打分断点、增量同步、query→get 两工具）最值得抄；basicmachines-co/basic-memory（AGPL，
+    FTS5 + 中文单字 / 双字列）；Cherry Studio（AGPL，抄 qmd 分块，trigram + LIKE 回退）；Khoj / Obsidian 插件次之（Smart Connections 许可有竞业条款，不抄）。
+  - 生产 RAG 平台：RAGFlow（中文先切词再全文、引用 `[ID:n]`、检索测试页）、Dify（父子分块）、FastGPT（每块带标题路径、RRF k=60）、
+    MaxKB（jieba + 停用词）；Open WebUI 的 BM25 按空格切，中文几乎无效。Anthropic Contextual Retrieval：块前加上下文，失败率降 35–49%。
+  - 中文全文的实测（本机 uv Python，SQLite 3.50.4）：trigram 查不到两字词；unicode61 把整段汉字当一个词；jieba 把「伤官见官」切错；
+    预切相邻双字 + FTS5 两字四字都中、索引最小。FTS5 `bm25()` 对过半行都有的词 IDF = 1e-6（`fts5_aux.c`）。
+  - 报告：kerykeion / Astrologer-API 把「数据 / 图 / 给 LLM 的上下文」分开、数据层不做解读；STORM 行内 `[1]` 引用 + 能单独读的 lead；
+    Anthropic citations 的 content_block 定位；Word 无障碍要替代文字与重复表头。商业软件（问真 / 文墨天机 / Solar Fire）的版式查不到公开样张。
+  - 工具调用：检索与精读分两个工具（OpenAI search/fetch、qmd、Context7）；`anthropic/alwaysLoad` 常驻核心工具、描述关键词前置；
+    报告用 `resource_link` 返回文件而不是 base64；elicitation 本仓已有（枚举字段 + 只回写策略声明的值），MRTR 要 SDK 2.x，本次不做。
+- **实现中踩到的**：
+  - FTS5 的 bm25() 在小知识库里给常见词 0 分（两块的笔记查「休门」得 0.0，像没命中）→ FTS5 只找候选，分数自算 BM25（Lucene IDF 恒正）。
+  - `sqlite3.executescript` 先隐式 COMMIT：在 `BEGIN IMMEDIATE` 里建表，随后的 COMMIT 报「no transaction is active」→ 逐条 execute。
+  - 挑相关段时把零分块也塞进预算（凑满 12k）→ 只带有分的块（qmd / RAGFlow 都只给命中的），一块都不相关才退回从头取。
+  - 想加 `knowledge_search` 进 `TOOL_DEFINITIONS`：那张表每一项都计入「110 技法」→ 做成第 11 个门面（全量 121、精简 12）。
+  - 报告的 `resource_link` 是 2025-06-18 修订才有的内容块：只给协商到该版本的客户端（与 outputSchema 让工具列表消失同一类风险）。
+  - 门禁抓到的：新参数没写描述（严格客户端拒收整张工具表的那类债，只减不增）→ 补描述；检索门面继承了基类的三个闸门字段 → 不进广告层；
+    协议探测写成宽 except → 收窄到 ValueError；新错误文案不是双语 → `bilingual()`；AGENTS §9.3 超 120 行 → 报告类拆成 §9.3.1。
+    全量 tools/list 现 257 KB，硬上限 256 KiB 的 98%——再加工具前先给长描述瘦身。
+- **「因为错误的原因通过」的守卫（第一版负向对照不红，已改）**：
+  1. 隐私：断言「删掉的句子不在索引文件里」——句子在索引里本来就是空格隔开的双字，原样永远找不到 → 改查「还在的笔记」的双字串（普通 FTS 表会存它）。
+  2. 查询语法：把短语引号去掉也不红——FTS5 运算符只认大写、我们的归一已全转小写，真正挡语法的是切词白名单 → 负向对照改为破坏切词。
+  3. WAL：断言「没有 -wal 文件」——最后一个连接关闭时 SQLite 自己删 -wal，WAL 模式也通过 → 删掉这条断言，不留抓不住东西的守卫。
+  4. 删除：断言「删掉的条目检索不到」——检索先按当前目录过滤，索引不删也检索不到 → 改查索引里该条目的块已删。
+- **守卫**：`tests/test_user_knowledge_index.py`（13 条）、`tests/test_mcp_tool_design.py`（3 条）、`tests/test_report_structure.py`（4 条），
+  每条都做了负向对照（破坏实现 → 红，恢复 → 绿）。旧测试按新行为改：长条目不再「已截断：原文 N 字」而是段落 + 行号；PDF 盘面段标题带段号。
+- **没做 / 留待以后**：向量检索（小模型多为现代汉语、古籍效果差，BM25 对术语足够，真有改写漏查再加 RRF）；MRTR（需 mcp SDK 2.x）；
+  带标签的 PDF（reportlab 不支持 PDF/UA）；内置知识库的检索仍是旧的子串计分（只把它和自备结果做了 RRF 融合）。
+- **教训**：抄「生产上的做法」要抄到数字与边界（分块大小、重叠只在节内、IDF 公式、只给命中段），不只抄名字；第三方组件的默认行为
+  （FTS5 IDF 夹紧、executescript 自动提交、SQLite 关库删 WAL）要用最小实验确认后再写守卫，否则守卫会「因为错误的原因通过」。
 
 ### v0.44.2 / 2026-10-27 — 发版期定时 completeness 红：main 已回填新 sha，公开 latest 还是上一版
 

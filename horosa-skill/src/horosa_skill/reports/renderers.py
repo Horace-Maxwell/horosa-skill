@@ -471,10 +471,12 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
 
                 picture = doc.add_paragraph()
                 picture.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                picture.add_run().add_picture(io.BytesIO(png), width=Inches(4.2 if kind == "hexagram" else 4.6))
+                shape = picture.add_run().add_picture(io.BytesIO(png), width=Inches(4.2 if kind == "hexagram" else 4.6))
+                notes = [figure.get("title"), *figure_kit.figure_notes(figure, t)]
+                # 替代文字（读屏软件念的那句）：图名 + 图例说明，只描述盘的结构、不做解读（Word 无障碍指南）。
+                shape._inline.docPr.set("descr", "；".join(str(n) for n in notes if n)[:1000])
                 caption = doc.add_paragraph()
                 caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                notes = [figure.get("title"), *figure_kit.figure_notes(figure, t)]
                 style_run(caption.add_run("　".join(str(n) for n in notes if n)), size=8.6, color="66706D")
                 continue
             grid = 4 if kind == "grid12" else 3
@@ -568,7 +570,9 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
     # Word 打开时照常按 updateFields 重建成带页码、可点击的目录。
     placeholder = OxmlElement("w:r")
     toc_lines = [t("目录（Word 中右键「更新域」生成页码）")] + [
-        str(section.get("title") or "") for section in _human_sections(document) if section.get("group") != "basis"
+        (f"{section['cite_id']} · " if section.get("group") == "chart" and section.get("cite_id") else "")
+        + str(section.get("title") or "")
+        for section in _human_sections(document) if section.get("group") != "basis"
     ]
     for index, line in enumerate(toc_lines):
         if index:
@@ -596,10 +600,7 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
             add_text(str(section.get("body") or ""))
     show_ai = document.get("show_ai", True) is not False
 
-    if show_ai and human_consultation_basis:
-        add_card(t("起盘依据"), str(human_consultation_basis or ""), accent="0F766E")
-    if show_ai and human_reading_steps:
-        add_card(t("解盘步骤"), _steps_text(human_reading_steps), accent="2563EB")
+    # 骨架与 PDF 同（v0.45.0，数据在前）：结论摘要 → 完整盘面（E 段号）→ AI 分节解读 → 附录。
     if show_ai and (ai_report.get("analysis_focus") or ai_report.get("direct_answer")):
         add_card(
             t("核心结论"),
@@ -608,29 +609,49 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
     if show_ai and human_executive_summary:
         add_heading_block(t("总览摘要"))
         add_text(str(human_executive_summary or ""))
-    if show_ai and ai_report.get("answer_text") and str(ai_report.get("answer_text")) != str(human_executive_summary or ""):
-        add_heading_block(t("完整解盘正文"))
-        add_text(str(ai_report.get("answer_text") or ""))
-    if show_ai and human_analysis_sections:
-        add_heading_block(t("正文解读"))
-        for section in human_analysis_sections:
-            if isinstance(section, dict):
-                add_heading_block(str(section.get("title") or t("分析")), level=2)
-                add_text(str(section.get("body") or section.get("content") or ""))
-            else:
-                add_text(str(section))
-    if show_ai and human_recommendations:
-        add_card(t("建议"), "\n".join(f"- {item}" for item in human_recommendations), accent="B7791F")
-    if show_ai and human_limitations:
-        add_heading_block(t("限制与注意事项"))
-        add_text("\n".join(f"- {item}" for item in human_limitations))
+    answer_text = str(ai_report.get("answer_text") or "")
+    has_ai_body = show_ai and bool(
+        human_consultation_basis or human_reading_steps or human_analysis_sections or human_recommendations
+        or human_limitations or (answer_text and answer_text != str(human_executive_summary or ""))
+    )
+
+    def add_ai_body() -> None:
+        doc.add_page_break()
+        add_heading_block(t("AI 解读"))
+        note = doc.add_paragraph()
+        style_run(note.add_run(t("以下是 AI 依据上方盘面所作的解读，不是排盘引擎的输出；方括号里的 E 段号指向盘面原文。")),
+                  size=9, color="66706D")
+        if human_consultation_basis:
+            add_card(t("起盘依据"), str(human_consultation_basis or ""), accent="0F766E")
+        if human_reading_steps:
+            add_card(t("解盘步骤"), _steps_text(human_reading_steps), accent="2563EB")
+        if answer_text and answer_text != str(human_executive_summary or ""):
+            add_heading_block(t("完整解盘正文"), level=2)
+            add_text(answer_text)
+        if human_analysis_sections:
+            add_heading_block(t("正文解读"), level=2)
+            for section in human_analysis_sections:
+                if isinstance(section, dict):
+                    add_heading_block(str(section.get("title") or t("分析")), level=2)
+                    add_text(str(section.get("body") or section.get("content") or ""))
+                else:
+                    add_text(str(section))
+        if human_recommendations:
+            add_card(t("建议"), "\n".join(f"- {item}" for item in human_recommendations), accent="B7791F")
+        if human_limitations:
+            add_heading_block(t("不确定处与限制"), level=2)
+            add_text("\n".join(f"- {item}" for item in human_limitations))
 
     parts = {"chart": t("完整盘面"), "appendix": t("附录")}
     current_group: str | None = None
+    ai_body_done = not has_ai_body
     for section in human_sections:
         group = section.get("group")
         if group == "basis":
             continue
+        if group == "appendix" and not ai_body_done:
+            add_ai_body()
+            ai_body_done = True
         if group in parts and group != current_group:
             doc.add_page_break()
             add_heading_block(parts[group])
@@ -639,8 +660,12 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
                 add_heading_block(t("盘图"), level=2)
                 add_figures(figures)
         current_group = group
-        add_heading_block(str(section.get("title") or t("章节")), level=2 if group in parts else 1)
+        cite = str(section.get("cite_id") or "") if group == "chart" else ""
+        title = str(section.get("title") or t("章节"))
+        add_heading_block(f"{cite} · {title}" if cite else title, level=2 if group in parts else 1)
         add_text(str(section.get("body") or ""))
+    if not ai_body_done:
+        add_ai_body()
 
     # 文档元数据：文件属性可检索/归档（标题/作者/主题/关键词/创建时间）。
     # OOXML core property 单项硬限 255 字符；search_index 里可能混入整段长文本，先滤短词再截断。
@@ -780,11 +805,21 @@ def _display_number(text: str) -> str:
     return _EMOJI_RE.sub("▸", _LONG_FLOAT_RE.sub(lambda m: f"{float(m.group(0)):.4f}", text))
 
 
-def _md_inline(text: str) -> str:
-    """一行 Markdown → reportlab 段落标记：先转义，再还原 **粗体** 与 `代码`（引擎正文里常见的两种）。"""
+_CITE_RE = re.compile(r"\[(E\d+)\]")
+
+
+def _md_inline(text: str, anchors: frozenset[str] = frozenset()) -> str:
+    """一行 Markdown → reportlab 段落标记：先转义，再还原 **粗体** 与 `代码`（引擎正文里常见的两种）。
+
+    anchors = 本报告里真有的盘面段号：AI 正文里的 [E3] 变成跳到该段的内部链接（STORM 式行内引用）；
+    报告里没有的段号原样留字，不生成指向空处的链接（reportlab 对悬空目标会报错）。"""
     escaped = _esc(_display_number(text))
     escaped = _MD_BOLD_RE.sub(r"<b>\1</b>", escaped)
-    return _MD_CODE_RE.sub(r'<font color="#0f766e">\1</font>', escaped)
+    escaped = _MD_CODE_RE.sub(r'<font color="#0f766e">\1</font>', escaped)
+    if anchors:
+        escaped = _CITE_RE.sub(lambda m: f'<a href="#{m.group(1)}" color="#0f766e">[{m.group(1)}]</a>'
+                               if m.group(1) in anchors else m.group(0), escaped)
+    return escaped
 
 
 def _md_lines(text: str) -> list[tuple[str, str, str]]:
@@ -882,6 +917,13 @@ def _panel_count(widths: list[int], *, budget: int) -> int:
 
 
 def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPLIFIED) -> None:
+    cite_anchors = frozenset(
+        str(section.get("cite_id")) for section in _human_sections(document) if section.get("group") == "chart" and section.get("cite_id")
+    )
+
+    def inline(text: str) -> str:
+        return _md_inline(text, cite_anchors)
+
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_CENTER, TA_RIGHT
@@ -1000,7 +1042,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
         spans: list[tuple[int, int]] = []
         per_row = 3
         for key, value in pairs:
-            cell = [Paragraph(_esc(key), cover_key), Paragraph(_md_inline(value), cover_value)]
+            cell = [Paragraph(_esc(key), cover_key), Paragraph(inline(value), cover_value)]
             if _visual_width(value) > 24:
                 if row:
                     cells.append(row + [""] * (per_row - len(row)))
@@ -1037,6 +1079,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
     bullet_style = ParagraphStyle("HorosaBullet", parent=base, leftIndent=14, bulletIndent=3, spaceAfter=2,
                                   bulletFontName=font_name)  # 列表序号与正文同一字体（缺省是不嵌入的 Helvetica）
     quote_style = ParagraphStyle("HorosaQuote", parent=base, leftIndent=12, textColor=muted, fontSize=9.2)
+    muted_note = ParagraphStyle("HorosaMutedNote", parent=base, fontSize=8.8, leading=13, textColor=muted)
     kv_label = ParagraphStyle("HorosaKvLabel", parent=base, fontName=bold_font_name, fontSize=8.8, leading=13,
                               textColor=muted, spaceAfter=0)
     kv_value = ParagraphStyle("HorosaKvValue", parent=base, fontSize=9.4, leading=13.6, spaceAfter=0)
@@ -1109,10 +1152,11 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
             flowable._horosa_toc = (level, text, key)
             return flowable
 
-        def add_heading(text: str, style: ParagraphStyle = heading, *, level: int = 0) -> None:
+        def add_heading(text: str, style: ParagraphStyle = heading, *, level: int = 0, anchor: str = "") -> None:
             # 章节标题：左侧色条 + 细底线，不再整块铺底色（满篇浅绿框太重，层级反而看不出来）。
+            # anchor = 盘面段号（E3）：AI 正文里的 [E3] 链到这里。
             block = Table(
-                [[Paragraph(_esc(text), section_styles[min(level, 1)])]],
+                [[Paragraph((f'<a name="{anchor}"/>' if anchor else "") + _esc(text), section_styles[min(level, 1)])]],
                 colWidths=[content_width],
                 style=TableStyle(
                     [
@@ -1179,7 +1223,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
             if header:
                 head_row: list[Any] = []
                 for p in range(panels):
-                    head_row += [Paragraph(_md_inline(h), table_head) if p < max(used_panels, 1) else "" for h in header]
+                    head_row += [Paragraph(inline(h), table_head) if p < max(used_panels, 1) else "" for h in header]
                     head_row += [""] if p < panels - 1 else []
                 data.append(head_row)
             for r in range(per_panel):
@@ -1188,7 +1232,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                     index = p * per_panel + r
                     cells = rows[index] if index < len(rows) else [""] * cols
                     style = table_cell if header else list_cell
-                    row_cells += [Paragraph(_md_inline(cells[c] if c < len(cells) else ""), style) for c in range(cols)]
+                    row_cells += [Paragraph(inline(cells[c] if c < len(cells) else ""), style) for c in range(cols)]
                     row_cells += [""] if p < panels - 1 else []
                 data.append(row_cells)
             col_widths: list[float] = []
@@ -1273,9 +1317,9 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                 story.append(Panels(header, rows, panels, widths))
                 story.append(Spacer(1, 6))
                 return
-            data = [[Paragraph(_md_inline(h), table_head) for h in header]]
+            data = [[Paragraph(inline(h), table_head) for h in header]]
             for row in rows:
-                data.append([Paragraph(_md_inline(row[idx] if idx < len(row) else ""), table_cell) for idx in range(cols)])
+                data.append([Paragraph(inline(row[idx] if idx < len(row) else ""), table_cell) for idx in range(cols)])
             # 短值的窄表（五行力量：木 / 7.7%）不拉满整行：按内容定宽、靠左，省得两列各占半页空着。
             natural = sum(w * 4.6 + 14 for w in col_max)
             table_width = content_width if was_transposed or natural > content_width * 0.6 else max(natural * 1.25, content_width * 0.4)
@@ -1295,7 +1339,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
             # 连续的「键：值」行（起盘信息、命宫、节气…）排成两列对照表：键一列对齐，值不再被行距拉散。
             # 键列固定 30mm（同一报告里各段对齐），键特别长才放宽，封顶 44mm。
             label_width = min(max(max(_visual_width(k) for k, _ in pairs) * 1.75 * mm + 8 * mm, 30 * mm), 44 * mm)
-            data = [[Paragraph(_esc(k), kv_label), Paragraph(_md_inline(v), kv_value)] for k, v in pairs]
+            data = [[Paragraph(_esc(k), kv_label), Paragraph(inline(v), kv_value)] for k, v in pairs]
             story.append(
                 Table(
                     data,
@@ -1334,7 +1378,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                     add_listing(list(pending_lines))
                 else:
                     for line_text in pending_lines:
-                        story.append(Paragraph(_md_inline(line_text), base))
+                        story.append(Paragraph(inline(line_text), base))
                 pending_lines.clear()
 
             for kind, marker, body in _md_lines(text):
@@ -1358,13 +1402,13 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                     story.append(HRFlowable(width="100%", thickness=0.5, color=line, spaceBefore=4, spaceAfter=4))
                 elif kind == "heading":
                     # 段内小标题：进 PDF 书签（第三级），不进目录（目录只到两级，保证一页放得下）。
-                    sub = Paragraph(_md_inline(body), inner_heading)
+                    sub = Paragraph(inline(body), inner_heading)
                     sub._horosa_outline = (2, _plain(body))
                     story.append(sub)
                 elif kind in {"bullet", "ordered"}:
-                    story.append(Paragraph(_md_inline(body), bullet_style, bulletText=marker))
+                    story.append(Paragraph(inline(body), bullet_style, bulletText=marker))
                 elif kind == "quote":
-                    story.append(Paragraph(_md_inline(body), quote_style))
+                    story.append(Paragraph(inline(body), quote_style))
             flush()
 
         def add_body(text: str) -> None:
@@ -1377,7 +1421,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
         def add_note_card(title_text: str, body_text: str, *, accent: Any = green) -> None:
             rows = [
                 [Paragraph(_esc(title_text), ParagraphStyle("CardTitle", parent=subheading, textColor=accent))],
-                *[[Paragraph(_md_inline(paragraph), base)] for paragraph in _paragraphs(body_text)],
+                *[[Paragraph(inline(paragraph), base)] for paragraph in _paragraphs(body_text)],
             ]
             story.append(
                 Table(
@@ -1453,7 +1497,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
         if chart_style and display_question.strip():
             story.append(
                 Table(
-                    [[Paragraph(_md_inline(paragraph), cover_note_style)] for paragraph in _paragraphs(display_question)],
+                    [[Paragraph(inline(paragraph), cover_note_style)] for paragraph in _paragraphs(display_question)],
                     colWidths=[content_width],
                     style=TableStyle([
                         ("LINEBEFORE", (0, 0), (0, -1), 2.4, amber),
@@ -1481,20 +1525,31 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
             story.append(PageBreak())
             add_heading(str(document.get("intro_heading") or t("解读目标")))
             add_body(display_question)
-        if show_ai:
+        # 报告骨架（v0.45.0，数据在前）：结论摘要 → 完整盘面（盘图 + E 段号原文）→ AI 分节解读 → 附录。
+        # 摘要照 STORM 的 lead：能单独读、句句带段号；细读放在盘面之后，读者先看到「算出了什么」再看「怎么解」。
+        if show_ai and (ai_report.get("analysis_focus") or ai_report.get("direct_answer")):
+            add_note_card(
+                t("核心结论"),
+                str(ai_report.get("direct_answer") or ai_report.get("analysis_focus") or ""),
+                accent=green,
+            )
+        if show_ai and human_executive_summary:
+            add_heading(t("总览摘要"))
+            add_body(str(human_executive_summary or ""))
+        has_ai_body = show_ai and bool(
+            human_consultation_basis or human_reading_steps or human_analysis_sections or human_recommendations
+            or human_limitations
+            or (ai_report.get("answer_text") and str(ai_report.get("answer_text")) != str(human_executive_summary or ""))
+        )
+
+        def add_ai_body() -> None:
+            add_part(t("AI 解读"))
+            story.append(Paragraph(_esc(t("以下是 AI 依据上方盘面所作的解读，不是排盘引擎的输出；方括号里的 E 段号指向盘面原文。")), muted_note))
+            story.append(Spacer(1, 4))
             if human_consultation_basis:
                 add_note_card(t("起盘依据"), str(human_consultation_basis or ""), accent=green)
             if human_reading_steps:
                 add_note_card(t("解盘步骤"), _steps_text(human_reading_steps), accent=colors.HexColor("#2563eb"))
-            if ai_report.get("analysis_focus") or ai_report.get("direct_answer"):
-                add_note_card(
-                    t("核心结论"),
-                    str(ai_report.get("direct_answer") or ai_report.get("analysis_focus") or ""),
-                    accent=green,
-                )
-            if human_executive_summary:
-                add_heading(t("总览摘要"))
-                add_body(str(human_executive_summary or ""))
             if ai_report.get("answer_text") and str(ai_report.get("answer_text")) != str(human_executive_summary or ""):
                 add_heading(t("完整解盘正文"))
                 add_body(str(ai_report.get("answer_text") or ""))
@@ -1509,15 +1564,19 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
             if human_recommendations:
                 add_note_card(t("建议"), "\n".join(f"- {item}" for item in human_recommendations), accent=amber)
             if human_limitations:
-                add_heading(t("限制与注意事项"))
+                add_heading(t("不确定处与限制"))
                 add_body("\n".join(f"- {item}" for item in human_limitations))
 
         parts = {"chart": t("完整盘面"), "appendix": t("附录")}
         current_group: str | None = None
+        ai_body_done = not has_ai_body
         for section in human_sections:
             group = section.get("group")
             if group == "basis":
                 continue
+            if group == "appendix" and not ai_body_done:
+                add_ai_body()
+                ai_body_done = True
             if group in parts and group != current_group:
                 add_part(parts[group], new_page=group != "appendix")
                 if group == "chart" and figures:
@@ -1526,8 +1585,12 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
             current_group = group
             if group == "appendix":
                 story.append(CondPageBreak(70 * mm))  # 附录小表（技法依据 ~10 行）不被拆成「标题 + 两行」留在页底
-            add_heading(str(section.get("title") or t("章节")), level=1 if group in parts else 0)
+            cite = str(section.get("cite_id") or "") if group == "chart" else ""
+            title = str(section.get("title") or t("章节"))
+            add_heading(f"{cite} · {title}" if cite else title, level=1 if group in parts else 0, anchor=cite)
             add_body(str(section.get("body") or ""))
+        if not ai_body_done:
+            add_ai_body()
         if figures and current_group is None:  # 没有盘面段（极少数工具）：盘图跟在封面后
             add_part(parts["chart"])
             add_heading(t("盘图"), level=1)

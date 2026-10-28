@@ -18,7 +18,7 @@ edit the template there, never this copy.
 4. No `horosa` tools in the list? One command registers everything:
    `horosa-skill setup --client cline` (`uv run horosa-skill setup --client cline` inside this checkout),
    then `horosa-skill doctor` for the machine-readable health report.
-5. **Compact surface.** By default this client sees only the 11 facade tools (`HOROSA_MCP_COMPACT=1`); every
+5. **Compact surface.** By default this client sees only the 12 facade tools (`HOROSA_MCP_COMPACT=1`); every
    technique is still reachable by name through `horosa_tool_run(tool_name="qimen", …)` and the full list is the
    `horosa://catalog/techniques` resource — a missing flat `horosa_*` name does not mean the technique is missing.
 6. Errors carry structured recovery: on `details.agent_recovery` relay `prompt_to_user` verbatim and stop; on

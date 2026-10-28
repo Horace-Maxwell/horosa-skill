@@ -123,7 +123,7 @@ def test_budget_is_shared_and_truncation_is_marked(tmp_path: Path) -> None:
     settings = _settings(tmp_path, user_knowledge_max_chars=1000)
     context = user_knowledge.build_context(settings, ["长", "短"], tool_name="chart")
     long_entry, short_entry = context["entries"]
-    assert long_entry["truncated"] is True and "已截断：原文 3000 字" in long_entry["text"]
+    assert long_entry["truncated"] is True and long_entry["selection"] == "relevant" and long_entry["passages"]
     assert short_entry["truncated"] is False and short_entry["text"] == "乙" * 100
     assert sum(len(e["text"]) for e in context["entries"]) <= 1000
     assert context["max_chars"] == 1000
@@ -405,8 +405,10 @@ def test_chart_style_report_renders_every_section_without_an_ai_answer(tmp_path:
     produced = [s["title"] for s in sections if str(s.get("body") or "").strip() not in ("", _missing_detail_text(s["title"]))]
     unproduced = [s["title"] for s in sections if s["title"] not in produced]
     assert produced and unproduced  # 假客户端下两种都有，两条路径都验到
+    numbered = {s["title"]: f"E{i}" for i, s in enumerate(sections, start=1)}
     for title in produced:
-        assert title in texts, title  # 每个有内容的导出章节都有自己的标题块
+        # 每个有内容的导出章节都有自己的标题块，标题前印段号（v0.45.0：与报告模板的 cite_id 同号，AI 引用 [E3] 跳到这里）
+        assert f"{numbered[title]} · {title}" in texts, title
     # 引擎没给内容的段：不再各占一个标题 + 一段写给 AI 的护栏话，统一列进附录「本次未产出」。
     assert "本次未产出" in texts and all(title in joined for title in unproduced)
     assert "不能臆造外部依赖" not in joined

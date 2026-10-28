@@ -54,7 +54,7 @@ def test_every_extra_client_round_trips_through_setup_and_check(tmp_path: Path) 
         assert report["ok"] is True, key
         check = report["steps"]["client_check"]
         assert check["configured"] is True and check["problems"] == 0, (key, check)
-        assert report["tools"] == 11 and report["surface"] == "compact", key
+        assert report["tools"] == 12 and report["surface"] == "compact", key
 
 
 def test_opencode_command_is_one_array_with_environment(tmp_path: Path) -> None:
@@ -221,7 +221,7 @@ def test_the_stdio_probe_gets_the_env_the_entry_actually_carries(tmp_path: Path,
 
     def fake_probe(*, command, args, env, timeout, cwd=None):  # noqa: ANN001
         seen["env"] = dict(env)
-        return {"ok": True, "tools": 11, "server_name": "horosa", "server_version": "x",
+        return {"ok": True, "tools": 12, "server_name": "horosa", "server_version": "x",
                 "runtime_status": {"runtime_root": env.get("HOROSA_RUNTIME_ROOT", str(Path.home() / ".horosa" / "runtime"))}}
 
     monkeypatch.setattr(setup_flow, "_stdio_probe", fake_probe)

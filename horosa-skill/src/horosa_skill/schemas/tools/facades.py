@@ -147,12 +147,29 @@ class KnowledgeReadInput(FlexibleModel):
     key: str | None = None
     query: str | None = None
     limit: int | None = None
+    offset: int | None = Field(default=None, description="Skip this many search matches (legacy query mode; page with next_offset).")
+    # domain="user"（自备知识库）按原文件行号翻页（v0.45.0）；行号与检索结果 / 计算时带入段落的「第几行」一致。
+    from_line: int | None = Field(default=None, description='domain="user" only: first line to read, as a line number of the original file (search hits give it in read.from_line).')
+    max_lines: int | None = Field(default=None, description='domain="user" only: at most this many lines; the result says next_from_line when more remain.')
     aspect_degree: int | str | None = None
     object_a: str | None = None
     object_b: str | None = None
     jiang_name: str | None = None
     tian_branch: str | None = None
     di_branch: str | None = None
+
+
+class KnowledgeSearchInput(FlexibleModel):
+    """horosa_knowledge_search（v0.45.0）：检索与精读分开（qmd query→get、OpenAI search→fetch、Context7 两步式）。"""
+
+    query: str = Field(description="Words separated by spaces, e.g. 七杀 羊刃; two-character Chinese terms work and 繁/简 match each other.")
+    domain: str = Field(default="", description='Empty = bundled knowledge AND the user\'s notes; "user" = only the user\'s notes; or one bundled domain.')
+    limit: int | None = Field(default=None, description="Matches per page (default 8, max 20).")
+    offset: int | None = Field(default=None, description="Skip this many matches; pass the previous result's next_offset.")
+    # 检索不过澄清闸：基类的三个闸门字段对它没有意义，不进广告层（照样能传，不报错）。
+    agent_confirmed_settings: bool | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
+    defaults_accepted: bool | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
+    clarification_notes: str | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
 
 
 class AgentGuidanceInput(FlexibleModel):

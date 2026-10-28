@@ -116,7 +116,7 @@ def test_dry_run_touches_nothing_and_reports_every_step(tmp_path: Path) -> None:
     assert report["steps"]["config"]["path"] == str(config.resolve())
     assert "horosa" in report["steps"]["config"]["server_block"]
     assert report["steps"]["doctor"]["advisory"] is True
-    assert report["surface"] == "compact" and report["tools"] == 11
+    assert report["surface"] == "compact" and report["tools"] == 12
 
 
 def test_unknown_client_is_rejected_before_anything_happens(tmp_path: Path) -> None:
@@ -385,7 +385,7 @@ def test_stdio_probe_spawns_the_client_shaped_command_and_counts_tools(tmp_path:
     config = tmp_path / "mcp.json"
     report = _stdout_json(_run("--client", "cursor", "--config", str(config), "--skip-install", "--no-probe-network"))
     probe = report["steps"]["stdio_probe"]
-    assert probe["ok"] is True and probe["tools"] == 11 == probe["expected_tools"], probe
+    assert probe["ok"] is True and probe["tools"] == 12 == probe["expected_tools"], probe
     assert probe["command"].endswith("serve --transport stdio --skip-runtime-start")
     assert probe["server_name"] == "Horosa Skill"
     assert probe["env_shape"] == "inherit" and Path(probe["cwd"]).is_dir()

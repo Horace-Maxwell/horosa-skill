@@ -75,7 +75,7 @@ def _tool_annotations(tool_name: str) -> mcp_types.ToolAnnotations:
 
 # 入口型工具：即使客户端把 MCP 工具全部 deferred（Claude Code 的工具搜索默认行为），这几个也常驻，
 # 保证模型永远看得见「怎么问路」和「有哪些技法」。键名是 Claude Code 侧的 _meta 约定。
-_ALWAYS_LOAD_TOOLS = {"horosa_agent_guidance", "horosa_dispatch", "horosa_tool_run"}
+_ALWAYS_LOAD_TOOLS = {"horosa_agent_guidance", "horosa_dispatch", "horosa_tool_run", "horosa_knowledge_search"}
 _ALWAYS_LOAD_META = {"anthropic/alwaysLoad": True}
 
 
@@ -162,7 +162,9 @@ def _user_knowledge_profile(settings: Settings) -> dict[str, Any]:
         "count": summary["count"],
         "entries": [entry["id"] for entry in summary["entries"]],
         "problems": len(summary["problems"]),
-        "use": "knowledge=[条目 id / 标题 / #标签 / auto] 传给任一技法；正文在 data.knowledge_context",
+        "use": "knowledge=[条目 id / 标题 / #标签 / auto / ?检索词] 传给任一技法，正文在 data.knowledge_context；"
+               "查资料用 horosa_knowledge_search，精读用 horosa_knowledge_read(domain=\"user\", key, from_line)",
+        "search_index": summary.get("search_index"),
     }
 
 

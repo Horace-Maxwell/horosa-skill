@@ -214,6 +214,7 @@ UNLOCALIZED_COMMANDS = frozenset({
     "knowledge_registry", "benchmark_run", "benchmark_faithfulness", "trace_latest", "client_check", "client_skill",
     "client_config", "client_openclaw_config", "client_openclaw_setup", "client_openclaw_check", "report_template",
     "memory_prune", "memory_answer", "knowledge_mine", "knowledge_add", "knowledge_remove", "knowledge_trash", "knowledge_restore",
+    "knowledge_index",
 })
 
 
@@ -911,22 +912,40 @@ def knowledge_read(
 
 @knowledge_app.command("search")
 def knowledge_search(
-    query: str = typer.Argument(..., help="Full-text query across every bundled knowledge domain (`knowledge registry` lists them)."),
-    domain: Optional[str] = typer.Option(None, help="Optional domain filter (e.g. bazi, ziwei, qimen)."),
+    query: str = typer.Argument(..., help="Words separated by spaces; two-character Chinese terms work, 繁/简 match each other."),
+    domain: Optional[str] = typer.Option(None, help='Optional filter: "user" = only your own notes, or one bundled domain (e.g. bazi, qimen).'),
     limit: int = typer.Option(8, help="Max matches to return (1-20)."),
-    save_result: bool = typer.Option(False, help="Persist the result in local memory."),
+    offset: int = typer.Option(0, help="Skip this many matches (page with next_offset)."),
 ) -> None:
-    """Search bundled knowledge (hover + technique manuals); every match carries a citation."""
-    payload: dict[str, Any] = {"query": query, "limit": limit}
+    """Search bundled knowledge AND your own notes; every match carries a score, a citation and how to read it in full.
+    Doubles as the retrieval test (like RAGFlow / Dify hit testing): see which passages a query would bring. 检索（兼检索测试）。"""
+    payload: dict[str, Any] = {"query": query, "limit": limit, "offset": offset}
     if domain:
         payload["domain"] = domain
-    service = _service()
     try:
-        result = service.run_tool("knowledge_read", payload, save_result=save_result)
+        result = _service().knowledge_search(payload)
     except ToolValidationError as exc:
-        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
-    _print_json(_localized(result.model_dump(mode="json")))
+        _knowledge_error(exc)
+    _print_json(_localized({"ok": True, **result}))
+
+
+@knowledge_app.command("index", help="Show (or --rebuild) the search index of your own notes: entries, passages, engine. 自备知识库检索索引的状态 / 重建。")
+def knowledge_index(
+    rebuild: bool = typer.Option(False, "--rebuild", help="Throw the index away and rebuild it from the notes folder (the notes are never touched)."),
+) -> None:
+    from horosa_skill.knowledge import index as kindex
+    from horosa_skill.knowledge import user as user_knowledge
+
+    settings = Settings.from_env()
+    path = kindex.index_path(settings)
+    if rebuild and path.exists():
+        path.unlink()  # 索引是派生数据，删了照笔记重建；笔记文件夹从不动
+    catalog = user_knowledge.indexed_catalog(settings, rebuild=rebuild)
+    _print_json({
+        "ok": True, "dir": str(catalog.root), "index": str(path), "entries": len(catalog.entries),
+        "engine": "fts5-bm25" if catalog.index_ok else "substring", "sync": catalog.index_report,
+        "problems": [p.as_dict() for p in catalog.problems if p.kind == "index"],
+    })
 
 
 def _split_option(value: Optional[str]) -> list[str]:

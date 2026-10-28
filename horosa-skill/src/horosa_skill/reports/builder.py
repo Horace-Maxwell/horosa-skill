@@ -126,6 +126,10 @@ class ReportBuilder:
                 "输出应像一次完整咨询后的结论，而不是字段解释、技术日志或模板说明。",
                 "必须先直接回答用户问的事情，再说明盘面依据、推理步骤、风险边界和下一步建议。",
                 "每个关键判断都尽量绑定 evidence 或 source_section_title；不要脱离盘面编造结论。",
+                "引用盘面时在句末写段号，如「……日主偏弱 [E3]」：段号见 source_export_sections[].cite_id，报告里每个盘面段"
+                "标题前印的就是它（PDF 里可点击跳转）。引用用户自备笔记写「（用户笔记《标题》第几行）」。没有依据的句子只能写成背景或不确定处。",
+                "executive_summary 是放在报告最前面的结论摘要：不超过四段、每段至少一个段号；分节细读写进 analysis_sections。",
+                "limitations 写「不确定处」：出生时间误差会改变什么、流派口径不同处、盘面没覆盖的问题——照实写，不要凑。",
             ],
             "conversation_brief": conversation_brief,
             "coverage_contract": coverage_contract,
@@ -152,6 +156,7 @@ class ReportBuilder:
                 "analysis_sections": [
                     {
                         "title": section["title"],
+                        "cite_id": section["cite_id"],
                         "body": "",
                         "evidence_lines": [],
                         "relevance_to_question": "",
@@ -386,7 +391,10 @@ class ReportBuilder:
                 "items": {},
             },
         ]
-        sections.append(self._chart_basis_section(input_normalized if isinstance(input_normalized, dict) else {}, source))
+        sections.append(self._chart_basis_section(
+            input_normalized if isinstance(input_normalized, dict) else {}, source,
+            card=data.get("technique_card") if isinstance(data, dict) and isinstance(data.get("technique_card"), dict) else {},
+        ))
         chart_sections = self._document_sections_from_export_format(export_format)
         sections.extend(chart_sections)
         sections.extend(self._appendix_sections(
@@ -575,6 +583,7 @@ class ReportBuilder:
                 body = "\n".join(str(line) for line in lines)
             section_payload = {
                 "id": section.get("id") or f"section_{index}",
+                "cite_id": f"E{index}",  # 段号：报告里的盘面段与 AI 引用 [E3] 用同一个编号（与 _document_sections_from_export_format 同序）
                 "title": str(section.get("title") or f"Section {index}"),
                 "line_count": len(lines),
             }
@@ -607,6 +616,7 @@ class ReportBuilder:
             result.append(
                 {
                     "id": section.get("id") or f"export_section_{index}",
+                    "cite_id": f"E{index}",
                     "title": title,
                     "body": str(body or ""),
                     "items": section,
@@ -624,7 +634,9 @@ class ReportBuilder:
         ("askEvent", "所问"), ("datetime", "推运目标时刻"), ("year", "年份"), ("ingressTerm", "入宫节气"),
     )
 
-    def _chart_basis_section(self, input_normalized: dict[str, Any], source: dict[str, Any]) -> dict[str, Any]:
+    def _chart_basis_section(
+        self, input_normalized: dict[str, Any], source: dict[str, Any], *, card: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         rows = [("技法", str(source.get("technique_label") or source.get("tool_name") or ""))]
         seen: set[str] = set()
         for key, label in self._BASIS_FIELDS:
@@ -646,6 +658,17 @@ class ReportBuilder:
             if isinstance(person, dict) and person.get("date"):
                 parts = [str(person.get(k)) for k in ("name", "date", "time") if person.get(k) not in (None, "")]
                 rows.append((label, " ".join(parts)))
+        # 关键设置放在封面（改了结论就变的口径：晚子时开关、贵人法、主限法……）——读者先知道「这盘按什么算的」再往下读
+        # （kerykeion / Astro.com 报告头都先列口径）。只列读者看得懂的（与附录「技法依据」同一套人读规则）。
+        settings = (card or {}).get("settings") if isinstance((card or {}).get("settings"), dict) else {}
+        key_settings = []
+        for key, item in settings.items():
+            if isinstance(item, dict) and item.get("label"):
+                text = _setting_text(str(key), item.get("value"))
+                if text:
+                    key_settings.append(f"{item['label']}：{text}")
+        if key_settings:
+            rows.append(("关键设置", "；".join(key_settings)))
         body = "| 项目 | 内容 |\n| --- | --- |\n" + "\n".join(f"| {k} | {v.replace('|', '／')} |" for k, v in rows)
         return {"id": "chart_basis", "title": "基本信息", "body": body, "items": dict(rows), "human_visible": True, "group": "basis"}
 
@@ -684,8 +707,11 @@ class ReportBuilder:
             rows = ["| 资料 | 条目 | 字数 | 带入方式 |", "| --- | --- | --- | --- |"]
             for e in entries:
                 how = str(e.get("matched_by") or "")
-                how = "自动（auto）" if how == "auto" else f"标签 #{how[4:]}" if how.startswith("tag:") else "点名"
-                chars = f"{e.get('chars')}" + ("（带入时截断）" if e.get("truncated") else "")
+                how = ("自动（auto）" if how == "auto" else f"标签 #{how[4:]}" if how.startswith("tag:")
+                       else f"检索「{how[7:]}」" if how.startswith("search:") else "点名")
+                passages = [str(p.get("lines")) for p in e.get("passages") or [] if isinstance(p, dict) and p.get("lines")]
+                chars = f"{e.get('chars')}" + (f"（带入相关段落：第{'、'.join(passages)}行）" if e.get("truncated") and passages
+                                               else "（带入时截断）" if e.get("truncated") else "")
                 rows.append(f"| {str(e.get('title') or '').replace('|', '／')} | {str(e.get('id') or '').replace('|', '／')} | {chars} | {how} |")
             out.append({"id": "user_knowledge", "title": "自备参考资料",
                         "body": "本次计算附带了使用者自己的以下资料（不是引擎输出；正文不随报告印出）：\n\n" + "\n".join(rows),

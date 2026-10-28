@@ -584,6 +584,39 @@
         "horosa-skill/src/horosa_skill/reports/renderers.py",
         "horosa-skill/src/horosa_skill/reports/figures.py"
       ]
+    },
+    {
+      "id": "sqlite.fts5-cjk-bm25",
+      "subject": "sqlite",
+      "fact": "SQLite FTS5: the `trigram` tokenizer (SQLite ≥ 3.34) cannot match substrings shorter than 3 characters through the index (2-character Chinese terms such as 命宫 find nothing), and `unicode61` treats a whole run of CJK characters as one token; the built-in bm25() clamps IDF to 1e-6 for any term present in more than half of the rows (fts5_aux.c), so scores are only comparable within one query; `contentless_delete=1` needs SQLite ≥ 3.43; FTS5 operators (AND / OR / NOT / NEAR) are upper-case only. python-build-standalone (uv) and python.org Windows builds compile FTS5 in.",
+      "source_url": "https://www.sqlite.org/fts5.html",
+      "verified_on": "2026-10-27",
+      "affects": [
+        "horosa-skill/src/horosa_skill/knowledge/index.py"
+      ]
+    },
+    {
+      "id": "mcp-spec.resource-link",
+      "subject": "mcp-spec",
+      "fact": "The `resource_link` content block (uri, name, mimeType, size) in tool results entered the MCP specification with revision 2025-06-18; servers should only send it to clients that negotiated that revision or later. Current revision 2026-07-28 (MRTR `input_required` replaces server-initiated elicitation; needs SDK 2.x).",
+      "source_url": "https://modelcontextprotocol.io/specification/2025-06-18/server/tools",
+      "verified_on": "2026-10-27",
+      "affects": [
+        "horosa-skill/src/horosa_skill/surfaces/mcp_runner.py",
+        "horosa-skill/src/horosa_skill/service/api/reports.py"
+      ]
+    },
+    {
+      "id": "claude-code.tool-search",
+      "subject": "claude-code",
+      "fact": "Claude Code defers MCP tools behind tool search by default; `_meta[\"anthropic/alwaysLoad\"]: true` keeps a tool loaded; tool search matches only the first 4,096 characters of a tool description, so keywords go first; MCP results above 10k tokens warn and are capped at MAX_MCP_OUTPUT_TOKENS (25,000).",
+      "source_url": "https://code.claude.com/docs/en/mcp",
+      "verified_on": "2026-10-27",
+      "affects": [
+        "horosa-skill/src/horosa_skill/surfaces/mcp_surface.py",
+        "horosa-skill/src/horosa_skill/surfaces/mcp_server.py",
+        "horosa-skill/src/horosa_skill/knowledge/user.py"
+      ]
     }
   ]
 }

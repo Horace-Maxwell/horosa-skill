@@ -68,17 +68,17 @@ def test_mirror_drift_is_detected(tmp_path: Path) -> None:
     for rel in gen.MIRRORS:
         target = tmp_path / rel
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(gen.render(rel, techniques=110, compact=11), encoding="utf-8")
-    assert gen.drift(tmp_path, techniques=110, compact=11) == []
-    (tmp_path / "GEMINI.md").write_text(gen.render("GEMINI.md", techniques=110, compact=11).replace("Never hand-calculate", "Hand-calculate freely"), encoding="utf-8")
-    assert gen.drift(tmp_path, techniques=110, compact=11) == ["GEMINI.md"]
+        target.write_text(gen.render(rel, techniques=110, compact=12), encoding="utf-8")
+    assert gen.drift(tmp_path, techniques=110, compact=12) == []
+    (tmp_path / "GEMINI.md").write_text(gen.render("GEMINI.md", techniques=110, compact=12).replace("Never hand-calculate", "Hand-calculate freely"), encoding="utf-8")
+    assert gen.drift(tmp_path, techniques=110, compact=12) == ["GEMINI.md"]
     (tmp_path / ".clinerules" / "horosa-skill.md").unlink()
-    assert set(gen.drift(tmp_path, techniques=110, compact=11)) == {"GEMINI.md", ".clinerules/horosa-skill.md"}
+    assert set(gen.drift(tmp_path, techniques=110, compact=12)) == {"GEMINI.md", ".clinerules/horosa-skill.md"}
 
 
 def test_generated_mirrors_still_satisfy_the_thin_mirror_contract() -> None:
     for rel in gen.MIRRORS:
-        text = gen.render(rel, techniques=110, compact=11)
+        text = gen.render(rel, techniques=110, compact=12)
         assert len(text.rstrip("\n").splitlines()) <= ds.AGENT_MIRROR_MAX_LINES, rel
         for keyword in ds.AGENT_MIRROR_KEYWORDS:
             assert keyword in text, (rel, keyword)

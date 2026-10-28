@@ -49,9 +49,21 @@ uv run horosa-skill report technique --group-id <group_id> --format markdown
    `executive_summary`, `analysis_sections`, `evidence`, `recommendations`, `limitations`.
 4. Passing `ai_report` to `report_render`/`report_from_tool` auto-writes the answer back to the run —
    only call `horosa_memory_record_answer` when you store an answer WITHOUT rendering a report.
-5. Call `horosa_report_render` with `format` = `json`, `docx`, or `pdf`.
+5. Call `horosa_report_render` with `format` = `json`, `docx`, or `pdf`. The result's `file` card has the
+   absolute path, a `file://` URI, MIME type, size and sha256; clients on MCP 2025-06-18 or newer also get a
+   `resource_link` block — hand the user that link / path instead of pasting the file.
 6. Confirm the returned artifact exists and is retrievable via `horosa_memory_show` /
    `horosa_memory_query`.
+
+**Cite the chart by section number.** Every exported section has a `cite_id` (`E1`, `E2`, …) in the
+template's `source_export_sections`; the report prints it in front of that section's heading, and in the
+PDF a `[E3]` in your text is a link to it. End each judgement with the section it rests on
+(「……日主偏弱 [E3]」); a sentence with no `[E…]` must read as background or as uncertainty. Cite the
+user's own notes as 「（用户笔记《标题》第几行）」. `executive_summary` goes at the front of the report
+(at most four paragraphs, each with a citation); the topic-by-topic reading (`analysis_sections`) comes
+after the full chart; `limitations` is printed as 「不确定处与限制」 — birth-time sensitivity, school
+differences, questions the chart does not cover. The report labels your part as AI interpretation, separate
+from the engine text.
 
 **Human-facing DOCX/PDF reports read as consulting reports.** Do not put machine metadata, run IDs,
 schema names, raw JSON, or provenance tables into the visible body unless the user asks — those belong

@@ -154,8 +154,10 @@ def test_budget_is_fair_counts_the_marker_and_caps_the_entry_count(tmp_path: Pat
     long_entry, short_entry = context["entries"]
     assert short_entry["text"] == "乙" * 100 and long_entry["truncated"] is True
     total = sum(len(e["text"]) for e in context["entries"])
-    assert 950 <= total <= 1000  # 截断标记也算进预算，且预算几乎用满
-    assert 'knowledge_read(domain="user", key="长")' in long_entry["text"]
+    assert 850 <= total <= 1000  # 出处小标题、截断标记都算进预算，且预算几乎用满
+    # v0.45.0：长条目带的是「段落 + 出处小标题（行号）」，不是从头截断；还要读就照 read_more 翻页。
+    assert long_entry["text"].startswith("【") and long_entry["passages"][0]["lines"]
+    assert long_entry["selection"] == "relevant" and 'knowledge_read(domain="user", key="长"' in long_entry["read_more"]
 
     for i in range(20):
         _put(root, f"多/{i:02d}.md", f"---\ntechniques: '*'\n---\n第 {i} 条")

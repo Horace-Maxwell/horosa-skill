@@ -70,10 +70,62 @@ class ToolsAPI:
     def _user_knowledge_summary(self) -> dict[str, Any]:
         return {
             **user_knowledge.overview(self.settings, limit=200),
-            "how_to_use": "计算时传 knowledge=[条目 id / 标题 / #标签 / auto]，选中的正文挂在 data.knowledge_context；"
-                          "精读一条：knowledge_read(domain=\"user\", key=…)。往文件夹里放 .md / .txt 即可新增；"
+            "how_to_use": "计算时传 knowledge=[条目 id / 标题 / #标签 / auto / ?检索词]，选中的正文挂在 data.knowledge_context"
+                          "（长条目只带与本盘相关的段落，每段标标题与行号）；检索：horosa_knowledge_search；精读一条："
+                          "knowledge_read(domain=\"user\", key=…, from_line=…)。往文件夹里放 .md / .txt 即可新增；"
                           "problems 列出没能读入的文件和原因。",
         }
+
+    def knowledge_search(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """门面 horosa_knowledge_search：检索内置知识与自备知识库，返回排好序的片段 + 出处 + 精读参数。"""
+        from horosa_skill.schemas.tools.facades import KnowledgeSearchInput
+
+        try:
+            request = KnowledgeSearchInput.model_validate(payload)
+        except ValidationError as exc:
+            raise ToolValidationError(bilingual("知识检索的参数不对。", "Invalid payload for knowledge search."),
+                                      code="knowledge.search.invalid_payload", details={"errors": exc.errors()}) from exc
+        result = self._search_knowledge(request.model_dump())
+        matches = result.get("matches") or []
+        result["how_to_read"] = (
+            "精读一条：horosa_knowledge_read，参数取命中项的 read 字段（自备笔记带 from_line，从命中段开始读）；"
+            "内置条目用 domain + category + key。" if matches else
+            "没有命中：换个说法、拆成更短的词（两个字也能查），或去掉 domain 过滤。"
+        )
+        return result
+
+    def _search_knowledge(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """内置知识 + 自备知识库一起检索。两边分数不同尺度（内置是命中计分、自备是 bm25），按名次做倒数排名融合
+        （RRF，k=60：Cormack 2009；Elasticsearch / FastGPT / Cherry Studio 同值），不拿分数直接比。"""
+        query = f"{payload.get('query') or ''}".strip()
+        domain = f"{payload.get('domain') or ''}".strip()
+        try:
+            limit = max(1, min(int(payload.get("limit") or 8), 20))
+            offset = max(0, int(payload.get("offset") or 0))
+        except (TypeError, ValueError):
+            limit, offset = 8, 0
+        if not query:
+            raise ToolValidationError(bilingual("检索词是空的：给 query 一个词。", "knowledge search requires a non-empty `query`"),
+                                      code="knowledge.search.empty_query", details={})
+        if domain == user_knowledge.USER_DOMAIN:
+            mine = user_knowledge.search_user(self.settings, query, limit=limit, offset=offset)
+            return {"mode": "search", "query": query, "domain": domain, "limit": limit, "offset": offset,
+                    "total_matched": mine["total_matched"], "next_offset": mine["next_offset"],
+                    "engine": mine["engine"], "matches": mine["matches"]}
+        builtin = search_knowledge({**payload, "query": query, "limit": 20})
+        mine = user_knowledge.search_user(self.settings, query, limit=20) if not domain else {"matches": [], "total_matched": 0}
+        fused: dict[tuple[str, str, str, str], tuple[float, dict[str, Any]]] = {}
+        for ranked in (builtin.get("matches") or [], mine["matches"]):
+            for rank, match in enumerate(ranked):
+                key = (str(match.get("domain")), str(match.get("category")), str(match.get("key")), str(match.get("lines") or ""))
+                previous = fused.get(key, (0.0, match))[0]
+                fused[key] = (previous + 1 / (60 + rank + 1), match)
+        ordered = [m for _, m in sorted(fused.values(), key=lambda pair: (-pair[0], str(pair[1].get("domain")), str(pair[1].get("key"))))]
+        total = int(builtin.get("total_matched") or 0) + int(mine.get("total_matched") or 0)
+        page = ordered[offset: offset + limit]
+        return {**{k: v for k, v in builtin.items() if k not in ("matches", "total_matched", "limit")},
+                "mode": "search", "query": query, "limit": limit, "offset": offset, "total_matched": total,
+                "next_offset": offset + len(page) if offset + len(page) < len(ordered) else None, "matches": page}
 
     def _run_local_tool(self, definition: ToolDefinition, payload: dict[str, Any]) -> dict[str, Any]:
         if definition.name == "export_registry":
@@ -100,26 +152,14 @@ class ToolsAPI:
             if not payload.get("domain"):
                 registry = {**registry, "user_knowledge": self._user_knowledge_summary()}
             return registry
+        if definition.name == "knowledge_read" and f"{payload.get('query') or ''}".strip():
+            # 检索已有专门的门面 horosa_knowledge_search（v0.45.0）；knowledge_read 带 query 的老用法照旧可用。
+            return self._search_knowledge(payload)
         if definition.name == "knowledge_read":
-            # query 模式（v0.30.0）：跨全部知识域全文检索；不给 query 走精读老路。
             domain = f"{payload.get('domain') or ''}".strip()
-            if f"{payload.get('query') or ''}".strip():
-                if domain == user_knowledge.USER_DOMAIN:
-                    matches = sorted(user_knowledge.search_matches(self.settings, payload["query"]),
-                                     key=lambda m: (-m["score"], m["key"]))
-                    limit = max(1, min(int(payload.get("limit") or 8), 20))
-                    return {"mode": "search", "query": payload["query"], "domain": domain, "limit": limit,
-                            "total_matched": len(matches), "matches": matches[:limit]}
-                result = search_knowledge(payload)
-                mine = [] if domain else user_knowledge.search_matches(self.settings, payload["query"])
-                if mine:
-                    # 自备条目与内置条目同一套分数，合并后按分数重排、截到 limit。
-                    merged = sorted([*result.get("matches", []), *mine], key=lambda m: (-m["score"], m["domain"], m["key"]))
-                    result = {**result, "matches": merged[: int(result.get("limit") or 8)],
-                              "total_matched": int(result.get("total_matched") or 0) + len(mine)}
-                return result
             if domain == user_knowledge.USER_DOMAIN:
-                return user_knowledge.read_entry(self.settings, payload.get("key") or payload.get("category") or "")
+                return user_knowledge.read_entry(self.settings, payload.get("key") or payload.get("category") or "",
+                                                 from_line=payload.get("from_line"), max_lines=payload.get("max_lines"))
             return read_knowledge_entry(payload)
         if definition.name == "qimen":
             return self._run_qimen_tool(payload)
@@ -351,11 +391,14 @@ class ToolsAPI:
                 knowledge_failure: str | None = None
                 if knowledge_selection not in (None, "", []) and isinstance(response_data, dict):
                     card = response_data.get("technique_card") if isinstance(response_data.get("technique_card"), dict) else {}
+                    snapshot = response_data.get("export_snapshot") if isinstance(response_data.get("export_snapshot"), dict) else {}
                     try:
                         knowledge_context = build_user_knowledge_context(
                             self.settings, knowledge_selection, tool_name=tool_name,
                             technique=TOOL_EXPORT_TECHNIQUE_MAP.get(tool_name), domain=definition.domain,
                             technique_label=str((card.get("technique") or {}).get("label") or "") or None,
+                            # 长条目按「与这张盘相关」挑段落：拿本次导出正文当检索依据。
+                            focus=str(snapshot.get("export_text") or ""),
                         )
                         response_data = {**response_data, "knowledge_context": knowledge_context}
                     except Exception as exc:  # noqa: BLE001 - 附加资料出错绝不该让一张算好的盘作废

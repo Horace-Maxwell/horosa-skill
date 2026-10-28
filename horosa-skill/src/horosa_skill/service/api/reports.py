@@ -29,6 +29,35 @@ from horosa_skill.textscript.localize import localize_document
 _RULE_LOOKUP_TOOLS = frozenset({"ziwei_rules"})
 
 
+
+_REPORT_MIME = {
+    "pdf": "application/pdf",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "json": "application/json",
+    "md": "text/markdown",
+    "markdown": "text/markdown",
+    "txt": "text/plain",
+}
+
+
+def _file_card(path: Any, format_name: str | None = None) -> dict[str, Any] | None:
+    """报告落盘后的文件卡：绝对路径 + file:// URI + MIME + 字节数 + sha256。
+
+    MCP 层据它给新版客户端附一个 `resource_link` 内容块（不把 PDF 以 base64 塞进结果：claude.ai 单次结果约 15 万字、
+    Claude Code 约 25k token）；老客户端照样从这里读路径。"""
+    import hashlib
+
+    if not path:
+        return None
+    target = Path(str(path)).expanduser().resolve()
+    if not target.is_file():
+        return None
+    data = target.read_bytes()
+    kind = (format_name or target.suffix.lstrip(".")).lower()
+    return {"path": str(target), "uri": target.as_uri(), "name": target.name,
+            "mime": _REPORT_MIME.get(kind, "application/octet-stream"),
+            "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+
 class ReportsAPI:
     def record_ai_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
         with self.tracer.span(
@@ -342,6 +371,7 @@ class ReportsAPI:
 
             result = {
                 **artifact,
+                "file": _file_card(artifact.get("artifact_path"), normalized_format),
                 "document_schema": document["schema"],
                 "title": document["title"],
                 "source": document["source"],
@@ -681,6 +711,7 @@ class ReportsAPI:
                 "artifact_path": rendered["path"],
                 "format": rendered["format"],
                 "file_size": rendered.get("file_size"),
+                "file": _file_card(rendered["path"], rendered["format"]),
                 "document": document,
                 "summary": [
                     f"已生成技法依据报告（{document['technique_count']} 个技法）：{rendered['path']}",

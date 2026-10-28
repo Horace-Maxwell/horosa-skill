@@ -318,7 +318,7 @@ cp .env.example .env
 - `HOROSA_RUNTIME_START_TIMEOUT_SECONDS`
 - `HOROSA_SKILL_HOST`
 - `HOROSA_SKILL_PORT`
-- `HOROSA_MCP_COMPACT`（=1 精简面 11 个工具）/ `HOROSA_TOOLSETS`（按域裁剪全量面）
+- `HOROSA_MCP_COMPACT`（=1 精简面 12 个工具）/ `HOROSA_TOOLSETS`（按域裁剪全量面）
 - `HOROSA_MCP_TOKEN` / `HOROSA_MCP_ALLOWED_HOSTS`（streamable-http 的 Bearer 与 Host 白名单）
 - `HOROSA_REPORT_OUTPUT_ROOTS`（报告 `output_path` 允许写入的目录白名单）
 - `HOROSA_RUNTIME_MIRROR`（离线 runtime 下载镜像）

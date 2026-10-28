@@ -101,7 +101,7 @@ uv run horosa-skill client openclaw-check --workspace $Workspace
 
 - `ok=true`
 - `server_visible=true`
-- `listed_tool_count` == `contracts/mcp_list_budget.json` 的 `compact_tools`（精简面 11；`--surface full` 时为 `full_tools` 120）——别写死数字，ci.yml 的 Windows smoke 就是这么读的
+- `listed_tool_count` == `contracts/mcp_list_budget.json` 的 `compact_tools`（精简面 12；`--surface full` 时为 `full_tools` 120）——别写死数字，ci.yml 的 Windows smoke 就是这么读的
 - `knowledge_registry_ok=true`
 - `chart_ok=true`
 - `memory_show_ok=true`

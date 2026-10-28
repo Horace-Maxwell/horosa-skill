@@ -127,7 +127,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         safe_defaults=[{"field": "domain", "value": None, "meaning": "return all domains"}],
     ),
     "knowledge_read": _policy(
-        intent="Read bundled Xingque hover knowledge.",
+        intent="Read one bundled Xingque knowledge entry, or one of the user's own notes (domain=\"user\", key, from_line/max_lines). Search first with horosa_knowledge_search.",
         required_context=["domain", "category", "key or structured lookup fields"],
         ask_if_missing=[
             {"field": "domain", "question": "要读哪个知识域？", "options": ["astro", "liureng", "qimen"]},

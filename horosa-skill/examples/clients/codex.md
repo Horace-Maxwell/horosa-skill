@@ -59,7 +59,7 @@ HOROSA_SKILL_DATA_DIR = "/Users/<you>/.horosa-skill"
 
 Codex 没有工具搜索，全量 120（110 技法 + 10 门面）平铺会占相当的上下文。二选一：
 
-- `HOROSA_MCP_COMPACT = "1"`：11 个门面级工具 = 10 门面 + `horosa_tool_run` 直呼通道（110 技法全部可达；`setup --client codex` 的缺省）。
+- `HOROSA_MCP_COMPACT = "1"`：12 个门面级工具 = 11 门面 + `horosa_tool_run` 直呼通道（110 技法全部可达；`setup --client codex` 的缺省）。
 - `HOROSA_TOOLSETS = "astro,cn"`：按域裁剪平铺面（合法域 astro / predict / chart / cn / shenshu / other / export / knowledge，别名 western / chinese / reference / all / none；`horosa_agent_guidance` 响应的 `server_profile.toolsets_effective` 告诉你实际生效了什么）。
 
 也可用 Codex 侧 `enabled_tools` 只放行高频入口，例如：
