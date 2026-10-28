@@ -224,6 +224,11 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   碰上，只是 CI 用锁文件里的旧 click 看不见。typer 0.27.3 起正常（它自带 click 副本）→ 依赖下限抬到 `typer>=0.27.3`。连带：两条测试
   用 `isinstance(command, click.Group)` 遍历命令树，typer 自带 click 后一个也不认，`test_skill_shell_contract` 因此**因为错误的原因通过**
   （只查到根命令）→ 改鸭子类型（`hasattr(command, "commands")`），负向对照：退回 isinstance 就红。
+- **发版时 CI 才红的一条（2026-10-28，v0.45.1 推送后）**：`test_report_pdf_has_a_structure_tree_language_and_ua_identifier` 硬断言
+  `pdfuaid:part=1`，本机有苹方 / 宋体 TTF 一直绿；CI 的 Ubuntu 没有中文 TTF → 退回 CID 字体 → 代码**正确地**不声称 UA → 测试红。
+  测试把「本机有字体」当成了前提。改成断言「声称 UA ⇔ 嵌了 TrueType（`/FontFile2`）」，另加一条把字体候选清空、强走 CID 那一支的测试
+  （结构树照写、无 pdfuaid）——两支在任何机器上都跑。负向对照：`ua_claim` 恒 True → CID 测试红；恒 False → 本机主测试红。
+  规则：**依赖本机字体 / 系统资源的断言，要么把两支都钉住，要么用条件断言**；本机 25 步全绿不代表 Linux CI 绿。
 - **教训**：加依赖先查**每个**目标平台、**最低系统版本**的轮子（不只查有没有 win_arm64）；能在已有依赖里做的结构性功能（PDF 结构树）
   优先不加依赖。测试用了可选依赖就把它放进 dev 组，或者让测试不依赖它——不能让守卫在 CI 里悄悄 skip。CI 用锁文件、用户用最新版：
   锁里的依赖版本落后时，CI 绿不代表用户那边好——重新锁一次常能把线上已有的问题翻出来。

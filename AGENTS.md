@@ -1248,6 +1248,7 @@ A global stability pass hardened these; keep them true when you touch the releva
   - **带标签 PDF（v0.45.1，`reports/pdf_tagging.py`）**：结构树在 reportlab 里自写（pikepdf 新版要 macOS 14/15，不加）。新加任何会**画东西**的
     flowable / 表 / onPage 回调，必须进标签或标 Artifact：段落用渲染器的 `Paragraph`（按样式名定 H/P），表用 `Table`（= 版式表）或
     `tagging.data_table`，盘图走 `pdf_flowables(table=, figure=)`。`tests/test_pdf_tagged.py` 逐个运算符查；本机可设 `HOROSA_VERAPDF` 跑 veraPDF。
+    只有嵌了 TTF 才声称 PDF/UA——CI 的 Ubuntu 没中文 TTF 走 CID 支，测试别假定本机字体（两支都钉住，v0.45.1 发版时 CI 红过）。
     DOCX 画十二宫 / 九宫表格；星盘轮 / 卦图经 `drawing_to_png`（Pillow 画 Wedge / Circle / Line / Rect / String，不用要另装
     rlPyCairo 的 renderPM）嵌位图——新增图元要在那里补上；DOCX 纸张 A4。
   - 版式：Frame 四边各有 6 pt 内边距——满宽元素用 `content_width`（版心 − 12），别用版心宽（会右出框）。

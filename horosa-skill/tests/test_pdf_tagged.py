@@ -67,11 +67,23 @@ def test_report_pdf_has_a_structure_tree_language_and_ua_identifier(tmp_path: Pa
     pdf = _report(tmp_path)
     assert b"/StructTreeRoot" in pdf and b"/MarkInfo" in pdf and b"/Marked true" in pdf
     assert b"/Lang (zh-CN)" in pdf and b"/DisplayDocTitle true" in pdf
-    assert b"<pdfuaid:part>1</pdfuaid:part>" in pdf  # 嵌入的 TTF 字体 → 可以声称 PDF/UA-1
+    # 嵌入了 TrueType 字体才声称 PDF/UA-1；CI 的 Linux 镜像没有中文 TTF，走 CID 退回那一支（下一个测试两支都钉住）。
+    assert (b"<pdfuaid:part>1</pdfuaid:part>" in pdf) == (b"/FontFile2" in pdf)
     for tag in (b"/S /Document", b"/S /H1", b"/S /P", b"/S /Table", b"/S /TH", b"/S /TD", b"/S /Figure", b"/S /Link"):
         assert tag in pdf, tag
     assert b"/Alt (" in pdf or b"/Alt <" in pdf  # 盘图有替代文字
     assert b"/StructParent " in pdf and b"/OBJR" in pdf  # 链接注释进了结构树
+
+
+def test_cid_fallback_keeps_the_tags_but_drops_the_ua_claim(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """没有可嵌入的中文 TTF（如 CI 的 Ubuntu）→ 退回不嵌入的 CID 字体：结构树照写，但不能声称 PDF/UA-1（UA 要求字体嵌入）。"""
+    from horosa_skill.reports import renderers
+
+    monkeypatch.setattr(renderers, "_PDF_FONT_CANDIDATES", {"sc": [], "tc": []})
+    pdf = _report(tmp_path)
+    assert b"/STSong-Light" in pdf and b"/FontFile2" not in pdf
+    assert b"/StructTreeRoot" in pdf and b"/Lang (zh-CN)" in pdf
+    assert b"pdfuaid" not in pdf
 
 
 def test_every_painted_thing_is_tagged_or_an_artifact(tmp_path: Path) -> None:
