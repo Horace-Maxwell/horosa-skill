@@ -319,7 +319,7 @@ wheels = [
 
 [[package]]
 name = "horosa-skill"
-version = "0.45.0"
+version = "0.45.1"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
