@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.45.1 (2026-10-28) | 发版矩阵 windows-11-arm（仿真 x64）pytest 在 2700 s 被杀，~98%、零失败；v0.45.0 时已占 96% 无人察觉；同批 windows-latest 反而更快 | 只给 `--expect-emulated` lane 加 900 s（3600），守卫同时校验仍装得进 job 的 90 分钟；lane 脚本取自派发提交（main），不必挪 tag |
 | v0.45.1-dev (2026-10-28) | MCP SDK 1.x → 2.3 + 澄清闸走 MRTR：`mcp.get_context()` 没了、模型属性改 snake_case（`model_dump()` 量出来的不是线上形状）、`read_resource` 不收 AnyUrl（setup 探针把异常吞成 None）、`streamable_http_client` 只给两个流、调用结果是 `CallToolResult` | 上下文放 ContextVar；量线上形状一律 `by_alias=True`；探针传字符串；闸门三条路（MRTR / 服务端发起 / 结构化错误），真 SDK 客户端两种协议各跑一遍端到端；篡改 requestState 被 SDK 拒（-32602） |
 | v0.45.1-dev (2026-10-27) | 补上 v0.45.0 列为「没做」的三项：内置知识检索仍是子串计分；向量检索；带标签 PDF。pikepdf 新版 macOS 轮子要 macOS 14/15（本仓承诺 11 起）；reportlab 开源版不打标签；FTS5 的 bm25 不再用；向量测试缺 numpy 会整文件跳过 | 内置检索同一套归一 + BM25（精确键仍压过一切）；可选 `[vectors]`（bge-small-zh int8，钉提交号 + sha256，RRF 定序决胜）；PDF 在 reportlab 里自写结构树（无新依赖）→ veraPDF PDF/UA-1 PASS；dev 组加 numpy 让替身测试在 CI 真跑 |
 | v0.45.0-dev (2026-10-27) | 用户要「看 GitHub 上最好的生产级自定义知识库怎么做，直接借鉴」，并把所有技法的报告与工具调用也照最好的做：五路调研（qmd / basic-memory / Cherry Studio / RAGFlow / Dify / FastGPT / MaxKB / Anthropic 与 MCP 规范 / kerykeion / STORM）；实现时 FTS5 bm25 对常见词给 0 分、executescript 吞事务、零分段凑预算、`knowledge_read` 在技法表里 | 自备知识库：标题分块 + 中文双字 FTS5 + 自算 BM25 + 增量同步 + 长条目只带相关段 + 检索 / 精读两个工具；报告：E 段号与可点引用、数据在前、AI 层单独标注、封面关键设置、替代文字；工具：文件卡 + 按协议版本的 resource_link、检索门面常驻；四条守卫第一版「因为错误的原因通过」，改到负向对照会红 |
@@ -160,6 +161,21 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.45.1 / 2026-10-28 — 发版矩阵：windows-11-arm 的 pytest 撞 2700 s 天花板（零失败）
+
+- **现象**：v0.45.1 draft 流水线（40713503527）windows-11-arm lane 红，其余 lane 与 assemble 全绿；草稿资产 `--check` [OK]。
+  lane-report 里安装 / 引擎 / 25 个客户端 / HTTP / 重启全 ok，唯一的问题是 `pytest timed out after 2700 s`，日志停在 ~98%、零个 F。
+- **根因**：这条 lane 在 Windows ARM 上**仿真 x64** 跑整套 live pytest，是最慢也最抖的一条。v0.45.0 时它已经用了 2580 / 2700 s
+  （96%）——发版时没人看余量。v0.45.1 加了几十条测试，同批 windows-latest 反而从 1707 s 降到 1389 s：不是套件变慢，是仿真 lane
+  本来就贴着线。
+- **修**：`verify_runtime_live.py` 加 `EMULATED_PYTEST_EXTRA_SECONDS = 900`，只对 `--expect-emulated` 的 lane 生效（2700 → 3600 s）；
+  其余 lane 的天花板不动，仍是「健康运行的上限」。矩阵 lane 的脚本取自**派发 publish 的那个提交（main）**，不是 tag——所以不用挪 tag、
+  不用重做 draft，直接在 main 上修再派发 publish。
+- **守卫**：`tests/test_verify_runtime_live.py::test_emulated_lane_gets_the_extra_pytest_budget_and_it_fits_the_job`——仿真 lane 拿到加时；
+  并读 `runtime-matrix.yml` 的 `timeout-minutes`，要求加时后的预算仍给其余步骤留 ≥15 分钟（这次其余步骤约 14 分钟）。负向对照：
+  调用处退回 `BUDGET["pytest"]` → 红；加时改成 2000 s（超出 job 超时）→ 红。
+- **规则**：发版后看一眼各 lane 的 pytest 秒数对预算的占比；>90% 就提前加，别等它在发版那天越线。
 
 ### v0.45.1-dev / 2026-10-28 — MCP SDK 1.x → 2.3，澄清闸在 2026-07-28 客户端上走 MRTR
 

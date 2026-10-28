@@ -837,6 +837,8 @@ OpenCC 管不到、上游也没有的词组修正（复核 → 複核）在 `dat
   export-fixture 契约 + core-js JS golden，别在它里面造「boot runtime」job；真机证据来自矩阵三 lane
   （macos-latest / windows-latest / windows-11-arm，`scripts/verify_runtime_live.py`：chart-only 降级在任何 lane 都算失败，
   live pytest 的闸门 skip 理由不得出现）。**维护者本机 live 全套仍是 tag 前闸**（§8），矩阵是发布前的第二道、每周一次的第三道。
+  pytest 预算按主机：nt 2700 / posix 1500，仿真的 windows-11-arm 另加 `EMULATED_PYTEST_EXTRA_SECONDS`（v0.45.1 发版时它在 2700 s 处
+  零失败被杀，v0.45.0 已占 96%）；发版后看各 lane 占比，>90% 就提前加，加完要装得进 job 超时。lane 脚本取自派发提交，不是 tag。
 - **合并后查冲突标记**：每次 fetch/ff 后 `git grep -nE '^(<<<<<<<|=======|>>>>>>>)'`（v0.11.0 曾把
   `>>>>>>> <sha>` 留上 main）；`verify_docs_sync.py` 在 CI 里也查。
 

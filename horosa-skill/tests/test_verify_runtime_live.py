@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -317,6 +318,28 @@ def test_live_pytest_keeps_the_partial_log_when_it_times_out(tmp_path: Path, mon
     assert "timed out after 7 s" in step["problems"][0] and "pytest.log" in step["problems"][0]
     assert step["budget_seconds"] == 7 and "test_slow.py" in step["tail"]
     assert _FakePytestProc.instances[-1].kills == 1, "a timed-out pytest must be killed, not left running under the lane"
+
+
+def test_emulated_lane_gets_the_extra_pytest_budget_and_it_fits_the_job(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """v0.45.1 draft：windows-11-arm（x64 仿真）pytest 在 2700 s 处被杀，进度 ~98%、零失败；windows-latest 同批只用 1389 s。
+    只给仿真 lane 加时，并且加完仍要在 runtime-matrix.yml 的 job 超时里留出 ≥15 分钟给安装 / 启动 / 客户端步骤。"""
+    lane = _lane(tmp_path, "horosa lane")
+    lane.work.mkdir(parents=True, exist_ok=True)
+    lane.args.skip_pytest = False
+    lane.args.expect_emulated = True
+    monkeypatch.setattr(lane, "pytest_env", lambda: {"HOROSA_SERVER_ROOT": "http://127.0.0.1:1", "HOROSA_CHART_SERVER_ROOT": "http://127.0.0.1:2"})
+    monkeypatch.setattr(_FakePytestProc, "hang", False, raising=False)
+    monkeypatch.setattr(_FakePytestProc, "output", "........\n8 passed in 1.23s\n", raising=False)
+    monkeypatch.setattr(live.subprocess, "Popen", _FakePytestProc)
+
+    assert lane.live_pytest() is True
+    assert lane.report["steps"]["pytest"]["budget_seconds"] == live.BUDGET["pytest"] + live.EMULATED_PYTEST_EXTRA_SECONDS
+    assert live.EMULATED_PYTEST_EXTRA_SECONDS > 0
+
+    workflow = (Path(live.__file__).resolve().parents[2] / ".github" / "workflows" / "runtime-matrix.yml").read_text(encoding="utf-8")
+    job_minutes = int(re.search(r"timeout-minutes:\s*(\d+)", workflow).group(1))
+    emulated_budget = live.PYTEST_BUDGET_SECONDS["nt"] + live.EMULATED_PYTEST_EXTRA_SECONDS
+    assert emulated_budget <= (job_minutes - 15) * 60, (emulated_budget, job_minutes)
 
 
 def test_live_pytest_streams_the_log_on_success_too(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

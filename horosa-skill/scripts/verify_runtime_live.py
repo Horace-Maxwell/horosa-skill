@@ -45,6 +45,10 @@ for _stream in (sys.stdout, sys.stderr):
 # windows-latest 970 s / windows-11-arm 1022 s for 1210 tests; 2026-09-28 schedule run: darwin 583 s for 1771 tests while BOTH
 # Windows lanes hit the flat 1500 s budget). Budget by host: the number is a ceiling for a healthy run, not a target.
 PYTEST_BUDGET_SECONDS = {"nt": 2700, "posix": 1500}
+# windows-11-arm runs the x64 payload under emulation and is the slowest, noisiest lane: v0.45.0 needed 2580 s of 2700, v0.45.1's
+# draft hit the ceiling at ~98% with zero failures while windows-latest took 1389 s. Only that lane gets the extra; the job
+# timeout (runtime-matrix.yml, 90 min) must still cover it plus ~15 min of install / start / client steps.
+EMULATED_PYTEST_EXTRA_SECONDS = 900
 BUDGET = {"install": 600, "doctor": 120, "start": 900, "engine": 300, "setup": 600,
           "pytest": PYTEST_BUDGET_SECONDS["nt" if os.name == "nt" else "posix"], "stop": 180}
 DOCTOR_POLL_SECONDS = 10.0
@@ -687,7 +691,7 @@ class Lane:
         # `subprocess.run(capture_output=True)` left NOTHING behind (the artifact had no pytest.log), so nobody could tell
         # whether the suite was slow or hung. With the file as stdout the partial log survives a kill.
         log_path = self.work / "pytest.log"
-        budget = BUDGET["pytest"]
+        budget = BUDGET["pytest"] + (EMULATED_PYTEST_EXTRA_SECONDS if self.args.expect_emulated else 0)
         timed_out = False
         with log_path.open("w", encoding="utf-8", errors="replace") as log_file:
             proc = subprocess.Popen(command, cwd=str(PKG_ROOT), env=env, stdout=log_file, stderr=subprocess.STDOUT)
