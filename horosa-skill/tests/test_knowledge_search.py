@@ -77,3 +77,17 @@ def test_scan_covers_all_domains() -> None:
     assert domains >= 24
     # 扫描条目数必须显著大于域数——每域都被走到（liureng 散装 + 手册 + hover 全算）。
     assert result["total_scanned"] > domains * 2
+
+
+def test_multi_word_queries_rank_entries_with_every_word_first() -> None:
+    """v0.45.1：正文按 BM25 计分（与自备知识库同一套归一）。旧检索把整串「伤官 配印」当一个子串找，一条都不中。"""
+    result = search_knowledge({"query": "伤官 配印", "limit": 20})
+    assert result["total_matched"] >= 1
+    hits = [("伤官" in m["snippet"]) + ("配印" in m["snippet"]) for m in result["matches"]]
+    assert hits[0] >= 1 and hits == sorted(hits, reverse=True) or max(hits) == 1  # 两词都中的排在只中一个的前面
+
+
+def test_body_relevance_never_outranks_an_exact_key() -> None:
+    result = search_knowledge({"query": "休门", "limit": 20})
+    assert result["matches"][0]["key"] == "休门" and result["matches"][0]["score"] >= 100
+    assert all(m["score"] < 100 for m in result["matches"][1:] if m["key"] != "休门")

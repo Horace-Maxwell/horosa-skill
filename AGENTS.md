@@ -312,6 +312,9 @@ zhengchuan 的动态 JSON import 属性，都是这么被抹掉又被测试抓�
   - 工具：`horosa_knowledge_search`（门面，常驻）检索 → `horosa_knowledge_read(domain="user", key, from_line, max_lines)` 按行翻页；
     内置与自备结果用 RRF（k=60）合并，不比分数。CLI `knowledge search`（兼检索测试）/ `knowledge index [--rebuild]`。
   - 守卫：`tests/test_user_knowledge_index.py`（每条都有负向对照；其中四条第一版「因为错误的原因通过」，见 LESSONS）。
+  - **可选向量（v0.45.1，`knowledge/vectors.py`）**：`[vectors]` 额外依赖 + `knowledge index --vectors` 下载（钉提交号 + sha256）才开；
+    任何一环缺了就是纯 BM25、不报错。RRF 同分按 BM25 名次定序。测试用概念替身，dev 组带 numpy（别让守卫在 CI 里 skip）。
+  - 内置知识检索（`knowledge/store.py`）与自备同一套归一 + BM25；正文分封顶 60，精确键（100）永远在前。
 
 ### 4.4 MCP 面、决策层与错误信封
 
@@ -1237,6 +1240,9 @@ A global stability pass hardened these; keep them true when you touch the releva
     （AI，STORM 式 lead）→ 完整盘面（盘图 + 导出段，标题前印段号 `E{n}`，n = 导出段序号，与报告模板 `cite_id` 同号）→ 「AI 解读」部分
     （注明不是引擎输出；起盘依据 / 正文解读 / 建议 / 不确定处与限制）→ 附录。PDF 里 AI 文字的 `[E3]` 链到该段（只链报告里真有的段号，
     悬空目标 reportlab 会报错）；DOCX 盘图带替代文字（`docPr descr`）。守卫 `tests/test_report_structure.py`。
+  - **带标签 PDF（v0.45.1，`reports/pdf_tagging.py`）**：结构树在 reportlab 里自写（pikepdf 新版要 macOS 14/15，不加）。新加任何会**画东西**的
+    flowable / 表 / onPage 回调，必须进标签或标 Artifact：段落用渲染器的 `Paragraph`（按样式名定 H/P），表用 `Table`（= 版式表）或
+    `tagging.data_table`，盘图走 `pdf_flowables(table=, figure=)`。`tests/test_pdf_tagged.py` 逐个运算符查；本机可设 `HOROSA_VERAPDF` 跑 veraPDF。
     DOCX 画十二宫 / 九宫表格；星盘轮 / 卦图经 `drawing_to_png`（Pillow 画 Wedge / Circle / Line / Rect / String，不用要另装
     rlPyCairo 的 renderPM）嵌位图——新增图元要在那里补上；DOCX 纸张 A4。
   - 版式：Frame 四边各有 6 pt 内边距——满宽元素用 `content_width`（版心 − 12），别用版心宽（会右出框）。

@@ -19,12 +19,21 @@ dependencies = [
   # codex config.toml 的保注释合并（client config --write --format codex 只动 [mcp_servers.<name>]）
   "tomlkit>=0.12.0",
   "tzdata>=2025.2",
-  "typer>=0.16.0",
+  # typer 0.24 + click 8.5（2026-08）：位置参数的 help 在 `--help` 里整段消失；0.27.3 起正常。uvx 装新环境会拿最新 click，必须抬下限。
+  "typer>=0.27.3",
 ]
 
 [project.optional-dependencies]
+# 可选向量检索（knowledge/vectors.py）：三个包在 macOS arm64 / Windows x64 / Windows ARM64 都有 cp312 轮子
+# （onnxruntime 1.24.2 起才有 win_arm64）。不用 fastembed：它的 py-rust-stemmers 没有 win_arm64 轮子。
+vectors = [
+  "onnxruntime>=1.24.2",
+  "tokenizers>=0.20",
+  "numpy>=1.26",
+]
 dev = [
   "pytest>=8.3.0",
+  "numpy>=1.26",
   # scripts/verify_undefined_names.py (F821/F822/F823) — exact pin: the gate must not change under a lint upgrade
   "ruff==0.16.7",
 ]
@@ -33,6 +42,8 @@ dev = [
 dev = [
   "pytest>=8.3.0",
   "ruff==0.16.7",
+  # 向量检索的融合 / 存取测试用概念替身嵌入（tests/test_user_knowledge_vectors.py），只要 numpy；onnxruntime 不进 CI。
+  "numpy>=1.26",
 ]
 
 [project.scripts]

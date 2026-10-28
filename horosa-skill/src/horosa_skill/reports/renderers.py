@@ -942,7 +942,17 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
     t = _labeler(script)
     # 主字体缺字形的生僻字（Ext-B 起，如《灵棋经》里的 𡛸 𤣥 𥦗）交给补字字体画——不补就是方块。下面所有 Paragraph 都经它。
     patch_glyphs = _pdf_glyph_fallback(pdfmetrics, TTFont, font_name, bold_font_name, script)
-    _Paragraph = Paragraph
+    # 带标签 PDF（PDF/UA-1，reports/pdf_tagging.py）：段落打 P / H 标签，版式表的底色与框线标 Artifact，数据表格子是 TH / TD。
+    from horosa_skill.reports import pdf_tagging as tagging
+
+    _Paragraph = tagging.TaggedParagraph
+    Table = tagging.layout_table  # noqa: N806 - 下文所有版式表沿用原名；数据表显式用 tagging.data_table
+    heading_tags = {
+        "HorosaCoverTitle": "H1", "HorosaPart": "H1",
+        "HorosaHeading": "H2", "HorosaSection0": "H2", "HorosaTocTitle": "H2",
+        "HorosaSection1": "H3", "HorosaSubHeading": "H3", "HorosaCoverSection": "H3", "CardTitle": "H3",
+        "HorosaInnerHeading": "H4",
+    }
 
     latin_styles: dict[str, Any] = {}
 
@@ -956,7 +966,9 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                 args = (latin_styles[style.name], *args[1:])
             else:
                 kwargs["style"] = latin_styles[style.name]
-        return _Paragraph(patch_glyphs(text), *args, **kwargs)
+        paragraph = _Paragraph(patch_glyphs(text), *args, **kwargs)
+        paragraph.pdf_tag = heading_tags.get(str(getattr(paragraph.style, "name", "")).removesuffix("Latin"), "P")
+        return paragraph
 
     styles = getSampleStyleSheet()
     page_width, page_height = A4
@@ -1136,7 +1148,8 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
         from horosa_skill.reports.figures import pdf_flowables
 
         return pdf_flowables(figures, content_width=content_width, font=font_name, bold_font=bold_font_name,
-                             styles=figure_styles, colors=colors, paragraph=Paragraph, esc=_esc, t=t)
+                             styles=figure_styles, colors=colors, paragraph=Paragraph, esc=_esc, t=t,
+                             table=tagging.layout_table, figure=tagging.TaggedFigure)
 
     def compose(pages: dict[str, int]) -> list[Any]:
         # 每遍排版都现组一份 story：flowable 被 wrap/split 过就不能再排（multiBuild 复用同一批对象会 LayoutError）。
@@ -1149,12 +1162,15 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
             # 键按出现顺序编号，各遍一致——上一遍记下的页码才能对回这一遍的同一个标题。
             key = f"h{len(entries)}"
             entries.append((level, text, key))
+            dest_labels[key] = f"跳到「{text}」"
             flowable._horosa_toc = (level, text, key)
             return flowable
 
         def add_heading(text: str, style: ParagraphStyle = heading, *, level: int = 0, anchor: str = "") -> None:
             # 章节标题：左侧色条 + 细底线，不再整块铺底色（满篇浅绿框太重，层级反而看不出来）。
             # anchor = 盘面段号（E3）：AI 正文里的 [E3] 链到这里。
+            if anchor:
+                dest_labels[anchor] = f"跳到盘面段「{text}」"
             block = Table(
                 [[Paragraph((f'<a name="{anchor}"/>' if anchor else "") + _esc(text), section_styles[min(level, 1)])]],
                 colWidths=[content_width],
@@ -1256,7 +1272,8 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                 ("TOPPADDING", (0, 0), (-1, -1), 1.6),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 1.6),
             ]
-            return Table(data, colWidths=col_widths, style=TableStyle(style), hAlign="LEFT")
+            return tagging.data_table(data, colWidths=col_widths, style=TableStyle(style), hAlign="LEFT",
+                                      header_rows=1 if header else 0)
 
         class Panels(Flowable):
             """长清单 / 窄长表分栏排：每到一页按剩余高度现算这一屏每栏放几行，放不下的留给下一屏。
@@ -1323,8 +1340,9 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
             # 短值的窄表（五行力量：木 / 7.7%）不拉满整行：按内容定宽、靠左，省得两列各占半页空着。
             natural = sum(w * 4.6 + 14 for w in col_max)
             table_width = content_width if was_transposed or natural > content_width * 0.6 else max(natural * 1.25, content_width * 0.4)
-            table = Table(
+            table = tagging.data_table(
                 data,
+                header_rows=1,
                 colWidths=(_label_first_widths(header, rows, content_width) if was_transposed
                            else _column_widths(header, rows, table_width, min(12 * mm, table_width / cols * 0.6))),
                 repeatRows=1,
@@ -1341,8 +1359,10 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
             label_width = min(max(max(_visual_width(k) for k, _ in pairs) * 1.75 * mm + 8 * mm, 30 * mm), 44 * mm)
             data = [[Paragraph(_esc(k), kv_label), Paragraph(inline(v), kv_value)] for k, v in pairs]
             story.append(
-                Table(
+                tagging.data_table(  # 键列是行表头（TH Scope=Row）
                     data,
+                    header_rows=0,
+                    header_cols=1,
                     colWidths=[label_width, content_width - label_width],
                     style=TableStyle([
                         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -1399,7 +1419,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                 if kind == "blank":
                     story.append(Spacer(1, 3))
                 elif kind == "rule":
-                    story.append(HRFlowable(width="100%", thickness=0.5, color=line, spaceBefore=4, spaceAfter=4))
+                    story.append(tagging.ArtifactHR(width="100%", thickness=0.5, color=line, spaceBefore=4, spaceAfter=4))
                 elif kind == "heading":
                     # 段内小标题：进 PDF 书签（第三级），不进目录（目录只到两级，保证一页放得下）。
                     sub = Paragraph(inline(body), inner_heading)
@@ -1605,6 +1625,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
     # 页脚：报告名 + 起盘时刻（几份报告打印混在一起时能分开）；没有时刻的技法只印报告名。
     footer_text = "　·　".join(part for part in (title_text, str(document.get("footer_meta") or "")) if part)
 
+    @tagging.artifact
     def on_cover(canvas: Any, doc: Any) -> None:
         canvas.showOutline()  # 打开就显示书签栏
         canvas.saveState()
@@ -1612,6 +1633,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
         canvas.rect(0, 0, page_width, page_height, fill=1, stroke=0)
         canvas.restoreState()
 
+    @tagging.artifact
     def on_page(canvas: Any, doc: Any) -> None:
         canvas.saveState()
         canvas.setFillColor(paper)
@@ -1654,6 +1676,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
         topMargin=top_margin,
         bottomMargin=bottom_margin,
         title=title_text,
+        lang="zh-CN" if script == SIMPLIFIED else "zh-HK" if script == TRADITIONAL_HK else "zh-TW",
         author="Horosa 星阙",
         subject=str(document.get("footer_meta") or document.get("cover_meta") or ""),
         creator="Horosa 星阙",
@@ -1662,10 +1685,19 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
     # 不用「延迟出页」的 canvas：那会把每个书签都钉在第 1 页。
     pages: dict[str, int] = {}
     pages_seen: dict[str, int] = {}
+    # 链接的替代文字（读屏念「跳到哪」）：目录项与 [E3] 引用的去处；字体退回不嵌入的 CID 字体时不声称 PDF/UA。
+    dest_labels: dict[str, str] = {}
+    ua_claim = isinstance(pdfmetrics.getFont(font_name), TTFont)
+
+    class canvas_class(tagging.TaggingCanvas):  # noqa: N801 - reportlab 的 canvasmaker
+        pass
+
+    canvas_class.dest_labels = dest_labels
+    canvas_class.ua_claim = ua_claim
     for _ in range(3):
         pages_seen.clear()
         doc._horosa_level = 0
-        doc.build(compose(pages), onFirstPage=on_cover, onLaterPages=on_page)
+        doc.build(compose(pages), onFirstPage=on_cover, onLaterPages=on_page, canvasmaker=canvas_class)
         stable = pages_seen == pages and page_total["value"] == doc.page
         pages = dict(pages_seen)
         page_total["value"] = doc.page

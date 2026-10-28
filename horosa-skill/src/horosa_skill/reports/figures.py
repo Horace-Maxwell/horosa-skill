@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import math
+from contextvars import ContextVar
 from typing import Any
 
 # 西洋星盘轮：只给西洋体系画。七政四余 / 印度 / 宿占另有盘式（宫制、星名、方向都不同），套西洋轮是误导。
@@ -946,10 +947,41 @@ def grid_position(spec: dict[str, Any], cell: dict[str, Any]) -> tuple[int, int]
     return table.get(str(cell.get("branch")))
 
 
+
+# 带标签 PDF 时由 pdf_flowables 设：盘图里的表一律走它（版式表：底色 / 框线标 Artifact）。ContextVar = 并发渲染互不串。
+_TABLE_FACTORY: ContextVar[Any] = ContextVar("horosa_pdf_table_factory", default=None)
+
+
+def _table(*args: Any, **kwargs: Any) -> Any:
+    factory = _TABLE_FACTORY.get()
+    if factory is None:
+        from reportlab.platypus import Table as factory
+    return factory(*args, **kwargs)
+
+
+def _alt(spec: dict[str, Any], t: Any) -> str:
+    """盘图的替代文字：图名 + 图例说明（只描述盘的结构，不做解读）。"""
+    return "；".join(str(n) for n in [spec.get("title"), *figure_notes(spec, t)] if n)[:1000]
+
+
 def pdf_flowables(figures: list[dict[str, Any]], *, content_width: float, font: str, bold_font: str,
-                  styles: dict[str, Any], colors: Any, paragraph: Any, esc: Any, t: Any) -> list[Any]:
-    """盘图 → flowable 列表（每张：图 + 图题）。styles 需含 cell / cell_muted / cell_strong / cell_title / cell_big / center* / caption。"""
-    from reportlab.platypus import KeepTogether, Spacer, Table, TableStyle
+                  styles: dict[str, Any], colors: Any, paragraph: Any, esc: Any, t: Any,
+                  table: Any = None, figure: Any = None) -> list[Any]:
+    """盘图 → flowable 列表（每张：图 + 图题）。styles 需含 cell / cell_muted / cell_strong / cell_title / cell_big / center* / caption。
+
+    table / figure：带标签 PDF 的钩子（reports/pdf_tagging.py）——table 造版式表（底色与框线标 Artifact），
+    figure(drawing, alt) 把矢量图包成带替代文字的 Figure。不给就是普通 reportlab 对象。"""
+    token = _TABLE_FACTORY.set(table)
+    try:
+        return _pdf_flowables(figures, content_width=content_width, font=font, bold_font=bold_font, styles=styles,
+                              colors=colors, paragraph=paragraph, esc=esc, t=t, figure=figure or (lambda d, alt: d))
+    finally:
+        _TABLE_FACTORY.reset(token)
+
+
+def _pdf_flowables(figures: list[dict[str, Any]], *, content_width: float, font: str, bold_font: str,
+                   styles: dict[str, Any], colors: Any, paragraph: Any, esc: Any, t: Any, figure: Any) -> list[Any]:
+    from reportlab.platypus import KeepTogether, Spacer, TableStyle
 
     out: list[Any] = []
     wheels = [f for f in figures if f.get("kind") == "wheel"]
@@ -959,33 +991,33 @@ def pdf_flowables(figures: list[dict[str, Any]], *, content_width: float, font: 
     size = min(content_width * 0.74, 400.0) if per_row == 1 else content_width / 2 - 6
     for i in range(0, len(wheels), per_row):
         chunk = wheels[i:i + per_row]
-        cells = [[wheel_drawing(w, size, font, bold_font, colors) for w in chunk] + [""] * (per_row - len(chunk)),
+        cells = [[figure(wheel_drawing(w, size, font, bold_font, colors), _alt(w, t)) for w in chunk] + [""] * (per_row - len(chunk)),
                  [paragraph(esc(w.get("title") or ""), styles["caption"]) for w in chunk] + [""] * (per_row - len(chunk))]
-        block = [Table(cells, colWidths=[content_width / per_row] * per_row,
+        block = [_table(cells, colWidths=[content_width / per_row] * per_row,
                        style=TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER"), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                                          ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 2)]))]
         notes = list(dict.fromkeys(note for w in chunk for note in figure_notes(w, t)))  # 两张同图例只写一次
         block += [paragraph(esc(note), styles["caption"]) for note in notes]
         block.append(Spacer(1, 10))
         out.append(KeepTogether(block))
-    for figure in figures:
-        kind = figure.get("kind")
+    for spec in figures:
+        kind = spec.get("kind")
         if kind == "grid12":
-            out.append(KeepTogether([_grid12(figure, content_width, styles, colors, paragraph, esc),
-                                     *[paragraph(esc(line), styles["caption"]) for line in figure_notes(figure, t)],
-                                     paragraph(esc(figure.get("title") or ""), styles["caption"]), Spacer(1, 10)]))
+            out.append(KeepTogether([_grid12(spec, content_width, styles, colors, paragraph, esc),
+                                     *[paragraph(esc(line), styles["caption"]) for line in figure_notes(spec, t)],
+                                     paragraph(esc(spec.get("title") or ""), styles["caption"]), Spacer(1, 10)]))
         elif kind == "grid9":
-            block = [_grid9(figure, content_width, styles, colors, paragraph, esc)]
-            for line in [figure.get("text"), *(figure.get("lines") or []), figure.get("title")]:
+            block = [_grid9(spec, content_width, styles, colors, paragraph, esc)]
+            for line in [spec.get("text"), *(spec.get("lines") or []), spec.get("title")]:
                 if line:
                     block.append(paragraph(esc(str(line)), styles["caption"]))
             block.append(Spacer(1, 10))
             out.append(KeepTogether(block))
         elif kind in DRAWN_KINDS - {"wheel"}:
             width = content_width if kind == "hexagram" else min(content_width * 0.8, 420.0)
-            block = [Table([[figure_drawing(figure, width, font, bold_font, colors)]], colWidths=[content_width],
-                           style=TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))]
-            for line in [*figure_notes(figure, t), figure.get("title")]:
+            block = [_table([[figure(figure_drawing(spec, width, font, bold_font, colors), _alt(spec, t))]],
+                            colWidths=[content_width], style=TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))]
+            for line in [*figure_notes(spec, t), spec.get("title")]:
                 if line:
                     block.append(paragraph(esc(str(line)), styles["caption"]))
             block.append(Spacer(1, 10))
@@ -1011,7 +1043,7 @@ def _cell_paragraphs(cell: dict[str, Any], styles: dict[str, Any], paragraph: An
 
 
 def _center_paragraphs(center: dict[str, Any], width: float, styles: dict[str, Any], colors: Any, paragraph: Any, esc: Any) -> list[Any]:
-    from reportlab.platypus import Spacer, Table, TableStyle
+    from reportlab.platypus import Spacer, TableStyle
 
     out = [paragraph(esc(center.get("title") or ""), styles["center_title"])]
     columns = center.get("columns") or []
@@ -1020,7 +1052,7 @@ def _center_paragraphs(center: dict[str, Any], width: float, styles: dict[str, A
         for r in range(3):
             style = styles["cell_strong"] if r == 1 else styles["cell"]
             rows.append([paragraph(esc((col.get("lines") or ["", "", ""])[r]), style) for col in columns])
-        out.append(Table(rows, colWidths=[width * 0.42 / len(columns)] * len(columns), style=TableStyle([
+        out.append(_table(rows, colWidths=[width * 0.42 / len(columns)] * len(columns), style=TableStyle([
             ("ALIGN", (0, 0), (-1, -1), "CENTER"), ("GRID", (0, 1), (-1, -1), 0.4, colors.HexColor("#c9d3ce")),
             ("TOPPADDING", (0, 0), (-1, -1), 1.5), ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
         ])))
@@ -1030,7 +1062,7 @@ def _center_paragraphs(center: dict[str, Any], width: float, styles: dict[str, A
 
 
 def _grid12(figure: dict[str, Any], width: float, styles: dict[str, Any], colors: Any, paragraph: Any, esc: Any) -> Any:
-    from reportlab.platypus import Table, TableStyle
+    from reportlab.platypus import TableStyle
 
     liureng = figure.get("cell_style") == "liureng"
     grid: list[list[Any]] = [["" for _ in range(4)] for _ in range(4)]
@@ -1053,11 +1085,11 @@ def _grid12(figure: dict[str, Any], width: float, styles: dict[str, Any], colors
                       ("BOX", (col, row), (col, row), 1.2, colors.HexColor("#0f766e"))]
     grid[1][1] = _center_paragraphs(figure.get("center") or {}, width, styles, colors, paragraph, esc)
     height = 26 * 2.835 if liureng else None
-    return Table(grid, colWidths=[width / 4] * 4, rowHeights=[height] * 4 if height else None, style=TableStyle(style))
+    return _table(grid, colWidths=[width / 4] * 4, rowHeights=[height] * 4 if height else None, style=TableStyle(style))
 
 
 def _grid9(figure: dict[str, Any], width: float, styles: dict[str, Any], colors: Any, paragraph: Any, esc: Any) -> Any:
-    from reportlab.platypus import Table, TableStyle
+    from reportlab.platypus import TableStyle
 
     grid: list[list[Any]] = [["" for _ in range(3)] for _ in range(3)]
     style = [
@@ -1081,7 +1113,7 @@ def _grid9(figure: dict[str, Any], width: float, styles: dict[str, Any], colors:
             style += [("BACKGROUND", (col, row), (col, row), colors.HexColor("#eef6f2")),
                       ("BOX", (col, row), (col, row), 1.2, colors.HexColor("#0f766e"))]
     # 与六壬 / 紫微盘同宽；每格同高（行高取三行里最高的那格），格内自上而下排，不再出现某行贴边。
-    return Table(grid, colWidths=[width / 3] * 3, rowHeights=[33 * 2.835] * 3, style=TableStyle(style))
+    return _table(grid, colWidths=[width / 3] * 3, rowHeights=[33 * 2.835] * 3, style=TableStyle(style))
 
 
 # ───────────────────────────── DOCX 位图（不依赖 renderPM） ─────────────────────────────

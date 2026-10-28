@@ -932,18 +932,31 @@ def knowledge_search(
 @knowledge_app.command("index", help="Show (or --rebuild) the search index of your own notes: entries, passages, engine. 自备知识库检索索引的状态 / 重建。")
 def knowledge_index(
     rebuild: bool = typer.Option(False, "--rebuild", help="Throw the index away and rebuild it from the notes folder (the notes are never touched)."),
+    vectors_on: bool = typer.Option(False, "--vectors", help="Turn on optional vector search: download + verify the bge-small-zh model (24 MB, pinned sha256) and embed every passage. Needs the [vectors] extra (onnxruntime, tokenizers, numpy)."),
 ) -> None:
     from horosa_skill.knowledge import index as kindex
     from horosa_skill.knowledge import user as user_knowledge
+    from horosa_skill.knowledge import vectors
 
     settings = Settings.from_env()
     path = kindex.index_path(settings)
+    if vectors_on:
+        if not vectors.deps_available():
+            _print_json({"ok": False, "code": "knowledge.vectors_missing_deps", "vectors": vectors.status(settings)})
+            raise typer.Exit(code=2)
+        try:
+            vectors.download(settings)
+        except Exception as exc:  # noqa: BLE001 - 下载 / 校验失败照实报告，索引照旧可用（纯 BM25）
+            _print_json({"ok": False, "code": "knowledge.vectors_download_failed",
+                         "message": f"{type(exc).__name__}: {exc}", "vectors": vectors.status(settings)})
+            raise typer.Exit(code=2) from exc
     if rebuild and path.exists():
         path.unlink()  # 索引是派生数据，删了照笔记重建；笔记文件夹从不动
     catalog = user_knowledge.indexed_catalog(settings, rebuild=rebuild)
     _print_json({
         "ok": True, "dir": str(catalog.root), "index": str(path), "entries": len(catalog.entries),
-        "engine": "fts5-bm25" if catalog.index_ok else "substring", "sync": catalog.index_report,
+        "engine": user_knowledge._engine(settings, catalog), "sync": catalog.index_report,
+        "vectors": vectors.status(settings),
         "problems": [p.as_dict() for p in catalog.problems if p.kind == "index"],
     })
 

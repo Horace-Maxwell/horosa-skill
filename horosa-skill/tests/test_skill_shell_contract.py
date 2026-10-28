@@ -50,7 +50,7 @@ def audit_commands(text: str) -> list[str]:
         command: click.Command | None = root
         path: list[str] = []
         index = 0
-        while index < len(tokens) and isinstance(command, click.Group):
+        while index < len(tokens) and hasattr(command, "commands"):  # typer 0.27 自带 click 副本：别用 isinstance(click.Group)
             name = tokens[index]
             if name.startswith("-"):
                 break
@@ -64,7 +64,7 @@ def audit_commands(text: str) -> list[str]:
             index += 1
         if command is None:
             continue
-        if isinstance(command, click.Group):
+        if hasattr(command, "commands"):  # typer 0.27 自带 click 副本：别用 isinstance(click.Group)
             problems.append(f"`horosa-skill {' '.join(path)}` is a command group, not a runnable command")
             continue
         allowed = {opt for param in command.params for opt in (*param.opts, *param.secondary_opts)} | {"--help"}

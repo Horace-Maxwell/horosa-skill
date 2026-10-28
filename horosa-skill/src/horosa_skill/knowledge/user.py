@@ -717,7 +717,7 @@ def build_context(
             query = kindex.parse_query(token[1:])
             search_terms.extend(query.terms)
             hits, _ = kindex.search(settings, {e.id: e for e in catalog.entries}, query, limit=SEARCH_PASSAGES,
-                                    use_index=catalog.index_ok)
+                                    use_index=catalog.index_ok, raw_query=token[1:])
             if not hits:
                 missing.append(token)
             for hit in hits:
@@ -1142,7 +1142,8 @@ def search_user(settings: Any, query: str, *, limit: int = 8, offset: int = 0) -
     catalog = indexed_catalog(settings)
     parsed = kindex.parse_query(query)
     by_id = {e.id: e for e in catalog.entries}
-    hits, total = kindex.search(settings, by_id, parsed, limit=limit, offset=offset, use_index=catalog.index_ok)
+    hits, total = kindex.search(settings, by_id, parsed, limit=limit, offset=offset, use_index=catalog.index_ok,
+                                raw_query=query)
     matches = []
     for hit in hits:
         entry = by_id[hit.entry_id]
@@ -1158,7 +1159,15 @@ def search_user(settings: Any, query: str, *, limit: int = 8, offset: int = 0) -
         })
     return {"matches": matches, "total_matched": total, "offset": offset, "limit": limit,
             "next_offset": offset + len(matches) if offset + len(matches) < total else None,
-            "engine": "fts5-bm25" if catalog.index_ok else "substring"}
+            "engine": _engine(settings, catalog)}
+
+
+def _engine(settings: Any, catalog: Catalog) -> str:
+    from horosa_skill.knowledge import vectors
+
+    if not catalog.index_ok:
+        return "substring"
+    return "fts5-bm25+vectors" if vectors.ready(settings) else "fts5-bm25"
 
 
 def search_matches(settings: Any, query: str) -> list[dict[str, Any]]:

@@ -12,7 +12,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-110-1d4ed8?style=for-the-badge" alt="110 tools" />
-  <img src="https://img.shields.io/badge/测试-2166_passed-16a34a?style=for-the-badge" alt="2166 passed" />
+  <img src="https://img.shields.io/badge/测试-2177_passed-16a34a?style=for-the-badge" alt="2177 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
 
@@ -524,7 +524,7 @@ TypeSafe 的 Jev（System One 决策模型，只回类型化的选择/概率，�
 - 📄 `report_render` 生成 DOCX / PDF / JSON：Markdown 表格渲染为真 Word 表格（跨页重复表头）、导航大纲、目录、页码、中文字体，异常自动降级保全文。
 - 🧾 `report technique` 生成技法依据报告（机器元数据），与咨询报告（AI 终稿）分轨，互不混入。
 - 🗂️ **完整排盘报告**：`report render --style chart`（或 `report_render {style:"chart"}`）不经 AI 解读，直接把该技法的全部盘面段落排成 PDF / DOCX——封面、基本信息、盘图（星盘轮 / 合盘双圈 / 紫微十二宫 / 奇门九宫 / 六壬天地盘 / 六爻卦图 / 太乙十六宫 / 七政四余方盘 / 南印方盘 / 量化盘 90° 度盘；择日结果画选中时刻的盘；全部取自引擎数据）、可点击目录与书签、「第 N 页 / 共 M 页」、技法依据附录。
-- 📚 **自备知识库**：把自己的笔记（`.md` / `.txt`）放进 `horosa-skill knowledge mine` 列出的文件夹（或 `knowledge add <名> --file …`），计算时传 `knowledge:["条目名", "#标签", "auto"]`，选中的正文随结果挂在 `data.knowledge_context` 供 AI 参考（不进引擎、不改盘面；总字数受 `HOROSA_USER_KNOWLEDGE_MAX_CHARS` 限）。GBK / UTF-16 文件也能读，读不了的在 `knowledge mine` 的 `problems` 里写明原因；删除与覆盖先进回收站（`knowledge trash` / `knowledge restore`）；运行存档只记引用、不存笔记正文；`runtime uninstall --purge-data` 默认保留知识库。
+- 📚 **自备知识库**：把自己的笔记（`.md` / `.txt`）放进 `horosa-skill knowledge mine` 列出的文件夹（或 `knowledge add <名> --file …`），计算时传 `knowledge:["条目名", "#标签", "auto"]`，选中的正文随结果挂在 `data.knowledge_context` 供 AI 参考（不进引擎、不改盘面；总字数受 `HOROSA_USER_KNOWLEDGE_MAX_CHARS` 限）。GBK / UTF-16 文件也能读，读不了的在 `knowledge mine` 的 `problems` 里写明原因；删除与覆盖先进回收站（`knowledge trash` / `knowledge restore`）；运行存档只记引用、不存笔记正文；`runtime uninstall --purge-data` 默认保留知识库。检索：`horosa_knowledge_search` / `horosa-skill knowledge search "词"`（两字词即可、繁简互通，标出处行号）；长笔记计算时只带与本盘相关的段落。可选向量检索（换了说法也能找到）：装 `horosa-skill[vectors]` 后运行 `horosa-skill knowledge index --vectors`（下载并校验 24 MB 的 bge-small-zh 模型）。
 
 ```bash
 uv run horosa-skill knowledge add 八字/滴天髓笔记 --file ./notes.md --techniques bazi_birth --tags 古籍
@@ -554,7 +554,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 🧰 可调用工具 | 110 / 110 `ok=true` |
-| 🧪 工程测试 | **2166 / 2166 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 116 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 🧪 工程测试 | **2177 / 2177 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 116 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 🛡️ 未确认参数时强制追问 | 100 个技法工具触发 `must_ask_user=true` |
 | 🔓 免闸直读 | 10 个注册表 / 知识 / 解析类工具不经澄清闸 |
 | 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 107 个导出 technique；契约 v15 镜像桌面端 aiExport v58） |
@@ -570,7 +570,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 2166 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 2177 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

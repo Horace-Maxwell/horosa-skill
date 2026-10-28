@@ -265,11 +265,11 @@ def _create(conn: sqlite3.Connection) -> None:
     # 逐条 execute：executescript 会先隐式 COMMIT，把调用方的 BEGIN IMMEDIATE 事务提前结束。
     for statement in (
         "CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT)",
-        "CREATE TABLE IF NOT EXISTS entries(entry_id TEXT PRIMARY KEY, sha256 TEXT NOT NULL, title TEXT NOT NULL, "
-        "tags TEXT NOT NULL, chunks INTEGER NOT NULL)",
-        "CREATE TABLE IF NOT EXISTS chunks(rowid INTEGER PRIMARY KEY, entry_id TEXT NOT NULL, ordinal INTEGER NOT NULL, "
-        "char_start INTEGER NOT NULL, char_end INTEGER NOT NULL, line_start INTEGER NOT NULL, line_end INTEGER NOT NULL, "
-        "heading TEXT NOT NULL)",
+        ("CREATE TABLE IF NOT EXISTS entries(entry_id TEXT PRIMARY KEY, sha256 TEXT NOT NULL, title TEXT NOT NULL, "
+         "tags TEXT NOT NULL, chunks INTEGER NOT NULL)"),
+        ("CREATE TABLE IF NOT EXISTS chunks(rowid INTEGER PRIMARY KEY, entry_id TEXT NOT NULL, ordinal INTEGER NOT NULL, "
+         "char_start INTEGER NOT NULL, char_end INTEGER NOT NULL, line_start INTEGER NOT NULL, line_end INTEGER NOT NULL, "
+         "heading TEXT NOT NULL)"),
         "CREATE INDEX IF NOT EXISTS chunks_entry ON chunks(entry_id)",
     ):
         conn.execute(statement)
@@ -286,7 +286,7 @@ def _create(conn: sqlite3.Connection) -> None:
 
 
 def _reset(conn: sqlite3.Connection) -> None:
-    for table in ("chunk_fts", "chunks", "entries"):
+    for table in ("chunk_vec", "chunk_fts", "chunks", "entries"):
         conn.execute(f"DROP TABLE IF EXISTS {table}")
     _create(conn)
     conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('schema', ?)", (SCHEMA_VERSION,))
@@ -300,6 +300,7 @@ class SyncReport:
     unchanged: int = 0
     chunks: int = 0
     engine: str = "fts5"
+    vectors: int = 0  # 本次新算了多少块的向量（可选向量检索就绪时，knowledge/vectors.py）
 
     def as_dict(self) -> dict[str, Any]:
         return dict(self.__dict__)
@@ -359,12 +360,87 @@ def sync(settings: Any, entries: Iterable[Any], *, rebuild: bool = False) -> Syn
             conn.execute("ROLLBACK")
             raise
         report.chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+        from horosa_skill.knowledge import vectors
+
+        if vectors.ready(settings):
+            report.vectors = _sync_vectors(settings, conn, {entry.id: entry for entry in entries})
     return report
+
+
+def _sync_vectors(settings: Any, conn: sqlite3.Connection, entries: dict[str, Any]) -> int:
+    """给还没有向量的块补算（在 FTS 事务提交之后、分批提交：算向量慢，别占着写锁）。
+
+    嵌入文本 = 「条目标题 › 标题路径」+ 块正文：块前加上下文是 Anthropic Contextual Retrieval 的省钱版
+    （不用 LLM 生成，直接用标题路径）。换了模型的旧向量整表作废。"""
+    from horosa_skill.knowledge import vectors
+
+    conn.execute("CREATE TABLE IF NOT EXISTS chunk_vec(rowid INTEGER PRIMARY KEY, model TEXT NOT NULL, vec BLOB NOT NULL)")
+    conn.execute("DELETE FROM chunk_vec WHERE model != ? OR rowid NOT IN (SELECT rowid FROM chunks)", (vectors.MODEL_NAME,))
+    missing = conn.execute(
+        "SELECT c.rowid, c.entry_id, c.char_start, c.char_end, c.heading FROM chunks c "
+        "LEFT JOIN chunk_vec v ON v.rowid = c.rowid WHERE v.rowid IS NULL ORDER BY c.rowid"
+    ).fetchall()
+    rows = [(rowid, entries[eid], a, b, json.loads(h)) for rowid, eid, a, b, h in missing if eid in entries]
+    if not rows:
+        return 0
+    model = vectors.embedder(settings)
+    done = 0
+    for start in range(0, len(rows), 64):
+        batch = rows[start:start + 64]
+        texts = [" › ".join([entry.title, *heading]) + "\n" + entry.text[a:b] for _, entry, a, b, heading in batch]
+        matrix = model.embed(texts)
+        conn.execute("BEGIN IMMEDIATE")
+        conn.executemany("INSERT OR REPLACE INTO chunk_vec(rowid, model, vec) VALUES(?,?,?)",
+                         [(rowid, vectors.MODEL_NAME, matrix[i].tobytes()) for i, (rowid, *_rest) in enumerate(batch)])
+        conn.execute("COMMIT")
+        done += len(batch)
+    return done
+
+
+def _vector_rank(settings: Any, query: Query, raw_query: str) -> list[tuple[str, int, float]]:
+    """查询向量与全部块向量的余弦（暴力算：几千块、512 维，毫秒级），过 MIN_COSINE 的前 50 个。"""
+    import numpy as np
+
+    from horosa_skill.knowledge import vectors
+
+    with contextlib.closing(_connect(index_path(settings))) as conn:
+        if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='chunk_vec'").fetchone():
+            return []
+        rows = conn.execute("SELECT c.entry_id, c.ordinal, v.vec FROM chunk_vec v JOIN chunks c ON c.rowid = v.rowid "
+                            "WHERE v.model = ?", (vectors.MODEL_NAME,)).fetchall()
+    if not rows:
+        return []
+    matrix = np.frombuffer(b"".join(r[2] for r in rows), dtype=np.float32).reshape(len(rows), -1)
+    query_vector = vectors.embedder(settings).embed([raw_query], query=True)[0]
+    sims = matrix @ query_vector
+    order = np.argsort(-sims, kind="stable")[:50]
+    return [(rows[i][0], rows[i][1], float(sims[i])) for i in order if sims[i] >= vectors.MIN_COSINE]
+
+
+RRF_K = 60  # Cormack, Clarke & Büttcher 2009；Elasticsearch / FastGPT / Cherry Studio 同值
+
+
+def _fuse(lexical: list[tuple[str, int, float]], semantic: list[tuple[str, int, float]]) -> list[tuple[str, int, float]]:
+    """倒数排名融合：只看名次不看分数（BM25 与余弦不同尺度）。同分按 BM25 名次、再按向量名次、再按 (条目, 块) 定序——
+    调研里同分靠插入顺序决胜就排错过一次。返回分数归一到 0–1（最高者为 1）。"""
+    fused: dict[tuple[str, int], list[float]] = {}
+    for weight_list, position in ((lexical, 0), (semantic, 1)):
+        for rank, (eid, ordinal, _) in enumerate(weight_list):
+            slot = fused.setdefault((eid, ordinal), [0.0, float("inf"), float("inf")])
+            slot[0] += 1 / (RRF_K + rank + 1)
+            slot[1 + position] = min(slot[1 + position], rank)
+    if not fused:
+        return []
+    best = max(v[0] for v in fused.values())
+    ordered = sorted(fused.items(), key=lambda kv: (-kv[1][0], kv[1][1], kv[1][2], kv[0]))
+    return [(eid, ordinal, slot[0] / best) for (eid, ordinal), slot in ordered]
 
 
 def _drop_entry(conn: sqlite3.Connection, entry_id: str) -> None:
     rowids = [r for (r,) in conn.execute("SELECT rowid FROM chunks WHERE entry_id=?", (entry_id,))]
     conn.executemany("DELETE FROM chunk_fts WHERE rowid=?", [(r,) for r in rowids])
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE name='chunk_vec'").fetchone():
+        conn.executemany("DELETE FROM chunk_vec WHERE rowid=?", [(r,) for r in rowids])
     conn.execute("DELETE FROM chunks WHERE entry_id=?", (entry_id,))
     conn.execute("DELETE FROM entries WHERE entry_id=?", (entry_id,))
 
@@ -385,11 +461,11 @@ def stored_chunks(settings: Any, entry_id: str) -> list[Chunk]:
 class Hit:
     entry_id: str
     chunk: Chunk
-    score: float  # 0–1（BM25 / (1 + BM25)），只在同一次检索里可比；不同知识库、不同查询之间别拿它当阈值
+    score: float  # 0–1（BM25 / (1 + BM25)；开了向量检索时是 RRF 融合分，最高者为 1），只在同一次检索里可比
 
 
 def search(settings: Any, entries: dict[str, Any], query: Query, *, limit: int = 8, offset: int = 0,
-           per_entry: int = PER_ENTRY_HITS, use_index: bool = True) -> tuple[list[Hit], int]:
+           per_entry: int = PER_ENTRY_HITS, use_index: bool = True, raw_query: str = "") -> tuple[list[Hit], int]:
     """块级检索：返回 (这一页的命中, 总命中数)。同一条目最多 per_entry 块。entries = {id: UserKnowledgeEntry}。
 
     use_index=False（索引没对齐）时逐条子串计分；块从正文现切，不读索引里可能过期的区间。"""
@@ -415,6 +491,11 @@ def search(settings: Any, entries: dict[str, Any], query: Query, *, limit: int =
                  if (hit[0], hit[1]) not in seen]
         ranked.extend((eid, o, score * 0.5) for eid, o, score in extra)  # 单字命中排在词命中之后
         ranked.sort(key=lambda r: -r[2])
+    from horosa_skill.knowledge import vectors
+
+    if use_index and raw_query.strip() and vectors.ready(settings):
+        # 可选向量检索：与 BM25 做 RRF；只靠向量进来的候选已过 MIN_COSINE（换了说法的查询靠它补回来）。
+        ranked = _fuse(ranked, _vector_rank(settings, query, raw_query))
     chunk_cache: dict[str, list[Chunk]] = {}
     hits: list[Hit] = []
     per: Counter[str] = Counter()
@@ -513,7 +594,7 @@ def relevant_chunks(entry: Any, chunks: list[Chunk], focus: str, budget: int) ->
         return []
     focus_grams = set(grams(focus))
     block_grams = [set(grams(entry.text[c.start:c.end])) for c in chunks]
-    heading_grams = [set(g for h in c.heading for g in grams(h)) for c in chunks]
+    heading_grams = [{g for h in c.heading for g in grams(h)} for c in chunks]
     df: Counter[str] = Counter(g for bag in block_grams for g in bag)
     n = len(chunks)
     scores = []

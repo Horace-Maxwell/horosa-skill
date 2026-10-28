@@ -196,7 +196,7 @@ def _commands() -> list[tuple[str, click.Command]]:
 
     def walk(command: click.Command, path: list[str]) -> None:
         found.append((" ".join(path), command))
-        if isinstance(command, click.Group):
+        if hasattr(command, "commands"):  # typer 0.27 自带 click 副本：别用 isinstance(click.Group)
             for name, sub in command.commands.items():
                 walk(sub, path + [name])
 

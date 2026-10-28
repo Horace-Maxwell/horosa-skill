@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.45.1-dev (2026-10-27) | 补上 v0.45.0 列为「没做」的三项：内置知识检索仍是子串计分；向量检索；带标签 PDF。pikepdf 新版 macOS 轮子要 macOS 14/15（本仓承诺 11 起）；reportlab 开源版不打标签；FTS5 的 bm25 不再用；向量测试缺 numpy 会整文件跳过 | 内置检索同一套归一 + BM25（精确键仍压过一切）；可选 `[vectors]`（bge-small-zh int8，钉提交号 + sha256，RRF 定序决胜）；PDF 在 reportlab 里自写结构树（无新依赖）→ veraPDF PDF/UA-1 PASS；dev 组加 numpy 让替身测试在 CI 真跑 |
 | v0.45.0-dev (2026-10-27) | 用户要「看 GitHub 上最好的生产级自定义知识库怎么做，直接借鉴」，并把所有技法的报告与工具调用也照最好的做：五路调研（qmd / basic-memory / Cherry Studio / RAGFlow / Dify / FastGPT / MaxKB / Anthropic 与 MCP 规范 / kerykeion / STORM）；实现时 FTS5 bm25 对常见词给 0 分、executescript 吞事务、零分段凑预算、`knowledge_read` 在技法表里 | 自备知识库：标题分块 + 中文双字 FTS5 + 自算 BM25 + 增量同步 + 长条目只带相关段 + 检索 / 精读两个工具；报告：E 段号与可点引用、数据在前、AI 层单独标注、封面关键设置、替代文字；工具：文件卡 + 按协议版本的 resource_link、检索门面常驻；四条守卫第一版「因为错误的原因通过」，改到负向对照会红 |
 | v0.44.2 (2026-10-27) | 发版期定时 completeness（40552300999）红：main 的 server.json 已回填新 draft 的 mcpb sha，公开 latest 仍是上一版，两者必然对不上 | 窗口性误报：从回填提交推上 main 到翻公开之间的定时 / 手动 completeness 都会红；翻公开后 publish job 派发的那次绿才是判据。未改 workflow（候选修法见条目） |
 | v0.44.2 (2026-10-27) | 发 v0.44.2 时 `publish_release.sh --dispatch` 的 `gh run watch`（默认 3 秒刷新）加上另开的两个 watch 盯同一条 40 分钟的流水线，撞 GitHub 二级限流：所有 `gh` 调用 HTTP 403，脚本的 watch 也以 exit 1 退出（流水线本身不受影响） | 脚本 watch 加 `--interval 60`（守卫 `test_publish_script_watches_the_pipeline_slowly`）；同一条 run 只留一个 watcher；撞了就停掉所有轮询、几分钟后低频再查 |
@@ -158,6 +159,43 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.45.1-dev / 2026-10-27 — 补齐 v0.45.0 没做的：内置知识检索升级、可选向量检索、带标签的 PDF（PDF/UA-1）
+
+- **起因**：用户「按照你的计划，把之前没做的全都做了」（v0.45.0 收尾时列了：向量检索、MRTR / SDK 2.x、PDF/UA、内置知识库检索升级）。
+  本条记前三项；SDK 2.x + MRTR 另起一条。
+- **内置知识检索**：532 条、约 40 万字，进程内一次归一（`knowledge/store.py::_normalized_entries`）+ BM25（与自备知识库同一套
+  `normalize` / Lucene IDF）。多词查询（「伤官 配印」旧检索一条不中）按词计分；正文分 ×5 封顶 60，key 全等（100）仍排第一。
+  繁体查询一律折简体再查并回报 `query_folded`（旧逻辑只在零命中时重试）。
+- **可选向量检索**（`knowledge/vectors.py`）：调研实测 bge-small-zh-v1.5 int8 ONNX（24 MB，MIT）在 6 条换说法的查询上 5 条排第一，
+  BM25 有一条完全没中；onnxruntime + tokenizers + numpy 三平台都有 cp312 轮子（fastembed 的 py-rust-stemmers 没有 win_arm64，不用）。
+  做成 `horosa-skill[vectors]`，模型只在 `knowledge index --vectors` 时下载：钉 HF 提交号 + 两份文件 sha256，对不上不用；
+  `HOROSA_EMBED_MODEL_DIR` 可指向离线放好的目录；`HOROSA_KNOWLEDGE_VECTORS=0` 关。向量存在索引库 `chunk_vec`，嵌入文本前加
+  「标题 › 标题路径」（Contextual Retrieval 的省钱版）；检索 = BM25 名次与余弦名次 RRF（k=60），**同分按 BM25 名次再按向量名次再按
+  (条目, 块) 定序**——调研里同分靠插入顺序决胜排错过一次；只靠向量进来的候选要余弦 ≥ 0.5。
+- **带标签 PDF**：调研确认开源 reportlab 不打标签（结构树在商业版 rlextra），「画时打标记 + pikepdf 事后建树」能过 veraPDF；
+  但 **pikepdf 10.0–10.13 的 macOS 轮子要 macOS 14、10.14 起要 15**，本仓承诺 macOS 11 起——硬依赖会让老 Mac 装不上。
+  改为在 reportlab 自己的对象模型里写树（`reports/pdf_tagging.py`，无新依赖）：段落 P / H1–H6（不跳级），数据表 TH（Scope）/ TD
+  （格内段落不再自打标签，标记内容不嵌套），版式表与页眉页脚 / 分隔线是 Artifact，盘图是带替代文字的 Figure，链接注释带
+  /StructParent 经 OBJR 进树、/Contents 写「跳到哪」；catalog 写 StructTreeRoot / MarkInfo / Lang / Metadata（XMP 含 pdfuaid:part=1）、
+  DisplayDocTitle；中文字体退回不嵌入的 CID 字体时照样打标签但不声称 PDF/UA。本机 veraPDF 1.30.3：分析报告与排盘报告都 **PASS ua1**。
+- **实现中踩到的**：reportlab 把 Python 的 True 格式化成 `True`（不是合法 PDF）→ 布尔写字节 `b"true"`；页对象的可写键在类属性
+  `__NoDefault__`，按实例覆盖才能加 StructParents / Tabs；页内容流是 ASCII85 套 Flate、`endstream` 前没有换行（测试解析时要照这个解）；
+  字体流里碰巧有「BT」字节（只看纯 ASCII 的流）。
+- **守卫**：`tests/test_knowledge_search.py`（多词查询、精确键压过正文）、`tests/test_user_knowledge_vectors.py`（概念替身：一个双字都不同的
+  换说法查询靠向量找回且纯 BM25 确实找不到；向量随增删同步；同分定序；模型文件被改就不用；真模型那条在有模型时跑）、
+  `tests/test_pdf_tagged.py`（结构树 / 语言 / UA 标识 / 各类标签；**页面上每个绘制运算符都在标记内容里**；`HOROSA_VERAPDF` 时跑 veraPDF）。
+  负向对照：整串当一个词 / 正文分不封顶 / 不融合 / 同分按向量名次 / 不删向量 / 不验 sha / 换回普通 canvas / 页脚不标 Artifact /
+  表格底色不标 Artifact / 去掉 MarkInfo——全红。向量测试要 numpy：dev 依赖组加了 numpy，否则 `importorskip` 让整个文件在 CI 静默跳过
+  （「因为错误的原因通过」的另一种形状：根本没跑）。
+- **顺带抓到的线上问题（click 8.5）**：加 `[vectors]` 重新 `uv lock` 时 click 8.3.2 → 8.5.0（huggingface-hub 也依赖 click，锁是全局一份）。
+  typer 0.24 + click 8.5 下 **`--help` 里位置参数的说明整段消失**——`uvx` 装新环境本来就会拿最新 click，所以已发布版本的用户多半已经
+  碰上，只是 CI 用锁文件里的旧 click 看不见。typer 0.27.3 起正常（它自带 click 副本）→ 依赖下限抬到 `typer>=0.27.3`。连带：两条测试
+  用 `isinstance(command, click.Group)` 遍历命令树，typer 自带 click 后一个也不认，`test_skill_shell_contract` 因此**因为错误的原因通过**
+  （只查到根命令）→ 改鸭子类型（`hasattr(command, "commands")`），负向对照：退回 isinstance 就红。
+- **教训**：加依赖先查**每个**目标平台、**最低系统版本**的轮子（不只查有没有 win_arm64）；能在已有依赖里做的结构性功能（PDF 结构树）
+  优先不加依赖。测试用了可选依赖就把它放进 dev 组，或者让测试不依赖它——不能让守卫在 CI 里悄悄 skip。CI 用锁文件、用户用最新版：
+  锁里的依赖版本落后时，CI 绿不代表用户那边好——重新锁一次常能把线上已有的问题翻出来。
 
 ### v0.45.0-dev / 2026-10-27 — 照生产级开源实现重做自备知识库检索、报告骨架与工具面
 

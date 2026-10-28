@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from functools import lru_cache
 from importlib.resources import files
@@ -702,6 +703,14 @@ def _iter_search_entries():
                 )
 
 
+@lru_cache(maxsize=1)
+def _normalized_entries() -> tuple[tuple[str, str, str, str, str, str, str], ...]:
+    """检索语料：(domain, category, key, title, body, citation, 归一后的「标题 + 正文」)。bundle 是只读打包数据，进程内算一次。"""
+    from horosa_skill.knowledge import index as kindex
+
+    return tuple((*row, kindex.normalize(f"{row[3]}\n{row[4]}")) for row in _iter_search_entries())
+
+
 def _search_snippet(body: str, query: str, width: int = 45) -> str:
     pos = body.find(query)
     if pos < 0:
@@ -713,20 +722,19 @@ def _search_snippet(body: str, query: str, width: int = 45) -> str:
 
 
 def search_knowledge(payload: dict[str, Any]) -> dict[str, Any]:
-    """全文检索；繁体写的检索词一条也没命中时，折回简体再搜一次（知识库正文以简体为主）。"""
-    result = _search_knowledge(payload)
+    """全文检索。繁体写的检索词折成简体再搜（正文以简体为主；key / 标题的精确匹配与摘要定位也要用简体），
+    结果里 `query` 留原词、`query_folded` 写折后的词。正文计分本身已繁简互通（knowledge/index.normalize）。"""
     query = f"{payload.get('query') or ''}".strip()
-    if result.get("total_matched") == 0 and looks_traditional(query):
-        retried = _search_knowledge({**payload, "query": fold_to_simplified(query)})
-        if retried.get("total_matched"):
-            return {**retried, "query": query, "query_folded": retried.get("query")}
-    return result
+    if looks_traditional(query):
+        folded = _search_knowledge({**payload, "query": fold_to_simplified(query)})
+        return {**folded, "query": query, "query_folded": folded.get("query")}
+    return _search_knowledge(payload)
 
 
 def _search_knowledge(payload: dict[str, Any]) -> dict[str, Any]:
     """`knowledge_read` 的 query 模式：跨全部知识域全文检索。
 
-    排序确定性：得分（key 全等 100 > key 含 40 > 标题含 30 > 正文出现次数封顶 10）降序，
+    排序确定性：得分（key 全等 100 > key 含 40 > 标题含 30 > 正文 BM25×5 封顶 60）降序，
     同分按 (domain, category, key) 字典序——同一 query 永远同一结果，评测可 golden。
     """
     query = f"{payload.get('query') or ''}".strip()
@@ -749,21 +757,35 @@ def _search_knowledge(payload: dict[str, Any]) -> dict[str, Any]:
         limit = 8
     limit = max(1, min(limit, 20))
 
-    scored: list[tuple[int, str, str, str, dict[str, Any]]] = []
-    scanned = 0
-    for domain, category, key, title, body, citation in _iter_search_entries():
-        if domain_filter and domain != domain_filter:
-            continue
-        scanned += 1
-        score = 0
+    # v0.45.1：正文改用与自备知识库同一套归一 + BM25（knowledge/index.py）——多词查询（「伤官 配印」）按词计分、
+    # 繁简互通、按正文长度归一，不再「出现次数封顶 10」；key / 标题全等仍压过一切（精确键查找是主用法）。
+    from horosa_skill.knowledge import index as kindex
+
+    parsed = kindex.parse_query(query)
+    terms = [t for t in parsed.terms if t]
+    corpus = [row for row in _normalized_entries() if not domain_filter or row[0] == domain_filter]
+    scanned = len(corpus)
+    n_docs = max(scanned, 1)
+    avg_len = (sum(len(row[6]) for row in corpus) / n_docs) if corpus else 1.0
+    df = {term: sum(1 for row in corpus if term in row[6]) for term in terms}
+    scored: list[tuple[float, str, str, str, dict[str, Any]]] = []
+    for domain, category, key, title, body, citation, folded in corpus:
+        score = 0.0
         if key == query:
             score += 100
         elif query in key:
             score += 40
         if query in title:
             score += 30
-        occurrences = body.count(query)
-        score += min(occurrences, 10)
+        relevance = 0.0
+        length = max(len(folded), 1)
+        for term in terms:
+            tf = folded.count(term)
+            if not tf:
+                continue
+            idf = math.log(1 + (n_docs - df[term] + 0.5) / (df[term] + 0.5))
+            relevance += idf * tf * (kindex.BM25_K1 + 1) / (tf + kindex.BM25_K1 * (1 - kindex.BM25_B + kindex.BM25_B * length / avg_len))
+        score += min(round(relevance * 5, 2), 60.0)  # 正文分封顶 60：全文再相关也排在精确键（100）之后
         if score <= 0:
             continue
         scored.append((
@@ -774,7 +796,7 @@ def _search_knowledge(payload: dict[str, Any]) -> dict[str, Any]:
                 "key": key,
                 "title": title,
                 "score": score,
-                "snippet": _search_snippet(body, query),
+                "snippet": _search_snippet(body, query) if query in body else kindex.snippet(body, terms, 120),
                 "citation": citation,
             },
         ))

@@ -71,6 +71,9 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     # 自备知识库（knowledge/user.py）：文件夹（缺省 <data_dir>/knowledge）与每次计算带入的总字数上限。
     "HOROSA_USER_KNOWLEDGE_DIR": "stable",
     "HOROSA_USER_KNOWLEDGE_MAX_CHARS": "stable",
+    # 可选向量检索（knowledge/vectors.py，v0.45.1）：=0 关；模型目录（离线放好的 bge-small-zh 两份文件，缺省在状态目录下）。
+    "HOROSA_KNOWLEDGE_VECTORS": "stable",
+    "HOROSA_EMBED_MODEL_DIR": "stable",
     "HOROSA_ASTRODATA_DB": "stable",
     "HOROSA_NODE_BIN": "stable",
     "HOROSA_CORE_JS_ROOT": "experimental",
