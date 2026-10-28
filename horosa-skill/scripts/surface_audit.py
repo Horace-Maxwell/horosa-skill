@@ -97,7 +97,7 @@ def example_payload(tool: str) -> dict[str, Any]:
 
 def envelope_of(result: Any) -> dict[str, Any]:
     if getattr(result, "structuredContent", None):
-        content = result.structuredContent
+        content = result.structured_content
         return content.get("result", content) if isinstance(content, dict) and set(content) == {"result"} else content
     for block in getattr(result, "content", []) or []:
         if getattr(block, "type", "") == "text":
@@ -240,7 +240,8 @@ def cli_surface(report: Report, tools: list[str]) -> None:
 async def http_surface(report: Report) -> None:
     import httpx
     from mcp import ClientSession
-    from mcp.client.streamable_http import streamablehttp_client
+    from mcp.client.streamable_http import streamable_http_client
+    from mcp.shared._httpx_utils import create_mcp_http_client
 
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -259,7 +260,8 @@ async def http_surface(report: Report) -> None:
         unauthorized = httpx.post(url, json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
                                   headers={"Accept": "application/json, text/event-stream"}, timeout=10)
         report.check("http", "no token -> 401", unauthorized.status_code == 401, unauthorized.status_code)
-        async with streamablehttp_client(url, headers={"Authorization": f"Bearer {token}"}) as (read, write, _):
+        async with streamable_http_client(url, http_client=create_mcp_http_client(
+                headers={"Authorization": f"Bearer {token}"})) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 listed = (await session.list_tools()).tools

@@ -114,6 +114,7 @@ def test_compact_tool_run_accepts_the_mcp_spelling(tmp_path) -> None:
 
     def call(name: str) -> dict:
         result = asyncio.run(server.call_tool("horosa_tool_run", {"tool_name": name, "request": {}}))
+        result = getattr(result, "content", result)  # mcp 2.x：CallToolResult
         blocks = result[0] if isinstance(result, tuple) else result
         return json.loads(blocks[0].text)
 

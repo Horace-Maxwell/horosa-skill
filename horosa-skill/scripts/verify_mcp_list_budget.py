@@ -66,7 +66,7 @@ def measure() -> dict[str, int]:
         for key, compact in (("full_bytes", False), ("compact_bytes", True)):
             settings = Settings(db_path=Path(tmp) / f"{key}.db", output_dir=Path(tmp) / "runs", mcp_compact=compact)
             mcp = create_mcp_server(HorosaSkillService(settings, store=MemoryStore(settings)), settings)
-            tools = [tool.model_dump(mode="json") for tool in asyncio.run(mcp.list_tools())]
+            tools = [tool.model_dump(mode="json", by_alias=True) for tool in asyncio.run(mcp.list_tools())]
             sizes[key] = len(json.dumps(tools, ensure_ascii=False).encode("utf-8"))
             sizes[key.replace("_bytes", "_tools")] = len(tools)
             biggest = max(tools, key=input_schema_bytes)

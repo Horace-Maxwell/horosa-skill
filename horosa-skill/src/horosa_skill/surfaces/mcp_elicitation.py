@@ -1,6 +1,8 @@
 """MCP elicitation：闸门缺设置时在客户端里弹表单问用户（星阙默认 / 我来补 / 取消），并把选择回填进请求；任何失败都不变成新的失败。"""
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import os
 import re
@@ -8,14 +10,22 @@ from typing import Any, Literal
 
 import anyio
 from mcp import types as mcp_types
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
+from mcp.types.version import MODERN_PROTOCOL_VERSIONS
 from pydantic import BaseModel, Field, create_model
+
+from horosa_skill.surfaces.mcp_runner import current_context
 
 logger = logging.getLogger("horosa_skill.surfaces.mcp_server")  # 拆分前的日志名，不变
 
 
 # ---------------------------------------------------------------------------
-# MCP elicitation（双轨澄清闸）
+# MCP elicitation（三轨澄清闸，v0.45.1 起）
+#
+# 1. 协议 2026-07-28 的客户端（无会话）：工具直接返回 InputRequiredResult（MRTR）——客户端弹表单问用户，带
+#    inputResponses 重发原请求；SDK 给 requestState 加密封装、绑定工具名 + 参数摘要 + TTL，我们再核对问题摘要。
+# 2. 更早修订且声明了 elicitation 能力的客户端：服务端发起 elicitation/create（下面的老路，行为不变）。
+# 3. 都不行：结构化闸门错误（agent_guidance.required）——永远兜底。
 #
 # 客户端声明 elicitation 能力（Claude Code ≥2.1.76 / Cursor / VS Code）时，闸门拦截不再只回
 # 结构化错误，而是先用原生表单问一次用户：
@@ -164,58 +174,108 @@ def _apply_gate_decision(
     return None
 
 
-async def _maybe_elicit_gate(
-    mcp: FastMCP, tool_name: str, payload: dict[str, Any], gate_error: dict[str, Any]
-) -> dict[str, Any] | None:
-    """Try resolving a tripped clarification gate via native MCP elicitation.
+GATE_INPUT_KEY = "horosa_gate"
 
-    Returns an updated payload to proceed with, or None to fall back to the structured
-    gate error (which may be enriched with the user's form answer in details.user_notes).
-    Every exit leaves ``details.elicitation.status`` behind (disabled / unsupported / declined /
-    cancelled / answered / defaults / failed): a swallowed exception used to look exactly like
-    "the client never supported elicitation" (v0.36.0 A2).
+
+def _gate_prompt(tool_name: str, gate_error: dict[str, Any]) -> str:
+    return (gate_error.get("details", {}).get("agent_recovery", {}).get("prompt_to_user")
+            or f"调用 {tool_name} 前需要确认会影响结果的设置。")
+
+
+def _question_digest(tool_name: str, prompt: str, schema: dict[str, Any]) -> str:
+    """表单身份：重试时问题必须还是同一张表（SDK 只绑定工具名 + 参数，不知道我们问了什么）。"""
+    blob = json.dumps({"tool": tool_name, "prompt": prompt, "schema": schema}, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _client_supports_form(ctx: Any) -> bool:
+    caps = ctx.client_capabilities
+    elicitation = getattr(caps, "elicitation", None) if caps is not None else None
+    if elicitation is None:
+        return False
+    # 2025-11-25 起分 form / url；只声明了空对象的老客户端按规范视为支持 form。
+    return elicitation.form is not None or elicitation.url is None
+
+
+def _apply_form_answer(payload: dict[str, Any], gate_error: dict[str, Any], content: dict[str, Any]) -> dict[str, Any] | None:
+    decision = f"{content.get('decision') or ''}"
+    notes = str(content.get("notes") or "").strip()
+    answers = {k: v for k, v in content.items() if k not in {"decision", "notes"}}
+    updated = _apply_gate_decision(payload, gate_error, decision, notes, answers=answers)
+    if updated is not None:
+        status = "defaults" if decision == _ELICIT_DEFAULTS else "answered_form"
+    else:
+        status = "cancelled" if decision == _ELICIT_CANCEL else "answered"
+    _note_elicitation(gate_error, status, decision=decision)
+    return updated
+
+
+async def _maybe_elicit_gate(
+    mcp: MCPServer, tool_name: str, payload: dict[str, Any], gate_error: dict[str, Any]
+) -> dict[str, Any] | mcp_types.InputRequiredResult | None:
+    """Try resolving a tripped clarification gate by asking the user through the client.
+
+    Returns an updated payload to proceed with, an `InputRequiredResult` the tool must return as-is
+    (2026-07-28 clients: the client asks the user and retries with `inputResponses`), or None to fall
+    back to the structured gate error (which may be enriched with the user's form answer in
+    details.user_notes). Every exit leaves ``details.elicitation.status`` behind (disabled /
+    unsupported / declined / cancelled / answered / defaults / stale / failed): a swallowed exception
+    used to look exactly like "the client never supported elicitation" (v0.36.0 A2).
     """
     if not _elicitation_enabled():
         _note_elicitation(gate_error, "disabled")
         return None
     try:
-        ctx = mcp.get_context()
-        session = ctx.session
-        if not session.check_client_capability(
-            mcp_types.ClientCapabilities(elicitation=mcp_types.ElicitationCapability())
-        ):
+        ctx = current_context()
+        if ctx is None or ctx._request_context is None:
+            _note_elicitation(gate_error, "unsupported", reason="no request context")
+            return None
+        prompt = _gate_prompt(tool_name, gate_error)
+        schema_model = _gate_elicitation_schema(gate_error)
+        schema = schema_model.model_json_schema()
+        digest = _question_digest(tool_name, prompt, schema)
+        responses = ctx.input_responses or {}
+        if GATE_INPUT_KEY in responses:
+            # MRTR 第二轮：requestState 已由 SDK 验过封装（篡改 / 过期 → -32602 不会到这里）；再核对问的是不是同一张表。
+            try:
+                state = json.loads(ctx.request_state or "{}")
+            except json.JSONDecodeError:
+                state = {}
+            if state.get("q") != digest:
+                _note_elicitation(gate_error, "stale", reason="answer was for a different question")
+                return None
+            answer = responses[GATE_INPUT_KEY]
+            if getattr(answer, "action", None) != "accept" or not getattr(answer, "content", None):
+                _note_elicitation(gate_error, "declined", action=f"{getattr(answer, 'action', '')}")
+                return None
+            return _apply_form_answer(payload, gate_error, dict(answer.content))
+        if not _client_supports_form(ctx):
             _note_elicitation(gate_error, "unsupported")
             return None
-        prompt = (
-            gate_error.get("details", {}).get("agent_recovery", {}).get("prompt_to_user")
-            or f"调用 {tool_name} 前需要确认会影响结果的设置。"
-        )
+        if ctx.protocol_version in MODERN_PROTOCOL_VERSIONS:
+            _note_elicitation(gate_error, "input_required")
+            return mcp_types.InputRequiredResult(
+                input_requests={GATE_INPUT_KEY: mcp_types.ElicitRequest(
+                    params=mcp_types.ElicitRequestFormParams(message=prompt, requested_schema=schema))},
+                request_state=json.dumps({"q": digest, "tool": tool_name}),
+            )
         budget = _elicit_timeout_seconds()
         result = None
         if budget > 0:
             with anyio.move_on_after(budget):
-                result = await ctx.elicit(message=prompt, schema=_gate_elicitation_schema(gate_error))
+                result = await ctx.elicit(message=prompt, schema=schema_model)
             if result is None:
                 # 超时 = 没人在那头。把结构化闸门原样交回，agent 照常「先问后调」。
                 _note_elicitation(gate_error, "timeout", timeout_seconds=f"{budget:g}")
                 return None
         else:
-            result = await ctx.elicit(message=prompt, schema=_gate_elicitation_schema(gate_error))
+            result = await ctx.elicit(message=prompt, schema=schema_model)
         if result.action != "accept" or result.data is None:
             _note_elicitation(gate_error, "declined", action=f"{result.action}")
             return None
-        decision = f"{getattr(result.data, 'decision', '') or ''}"
-        notes = str(getattr(result.data, "notes", "") or "").strip()
         data_fields = getattr(result.data, "model_dump", None)
         raw_answers = data_fields() if callable(data_fields) else dict(getattr(result.data, "__dict__", {}) or {})
-        answers = {k: v for k, v in raw_answers.items() if k not in {"decision", "notes"}}
-        updated = _apply_gate_decision(payload, gate_error, decision, notes, answers=answers)
-        if updated is not None:
-            status = "defaults" if decision == _ELICIT_DEFAULTS else "answered_form"
-        else:
-            status = "cancelled" if decision == _ELICIT_CANCEL else "answered"
-        _note_elicitation(gate_error, status, decision=decision)
-        return updated
+        return _apply_form_answer(payload, gate_error, raw_answers)
     except Exception as exc:  # noqa: BLE001 — elicitation must never become a new failure mode
         # 记进 details 就是给调用方的交代；日志用 info（包内 logger.warning 只留给未上抛的真降级）。
         logger.info("MCP elicitation for %s failed: %s", tool_name, exc)

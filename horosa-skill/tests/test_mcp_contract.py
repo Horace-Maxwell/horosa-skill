@@ -44,6 +44,7 @@ def _server(*, compact: bool = False):
 
 
 def _payload(result) -> dict:
+    result = getattr(result, "content", result)  # mcp 2.x：CallToolResult
     content = result[0] if not isinstance(result, tuple) else result[0][0]
     return json.loads(content.text)
 
@@ -67,19 +68,19 @@ def test_every_tool_is_discoverable_and_callable_shaped(compact: bool) -> None:
     assert missing_description == [], f"tools with no description (invisible to model): {missing_description}"
     assert missing_title == [], f"tools with no title (client shows the raw id): {missing_title}"
     for tool in tools:
-        properties = tool.inputSchema.get("properties", {})
+        properties = tool.input_schema.get("properties", {})
         assert "kwargs" not in properties, (
             f"{tool.name} advertises a raw `kwargs` param — its __signature__ is missing, so FastMCP "
             "introspected **kwargs and the tool is effectively uncallable"
         )
         assert tool.annotations is not None, f"{tool.name} has no annotations"
-        assert tool.annotations.openWorldHint is False, f"{tool.name} must be local-first (openWorld=False)"
+        assert tool.annotations.open_world_hint is False, f"{tool.name} must be local-first (openWorld=False)"
 
 
 def test_compact_mode_exposes_a_usable_universal_runner() -> None:
     tools = asyncio.run(_server(compact=True).list_tools())
     runner = next(t for t in tools if t.name == "horosa_tool_run")
-    properties = runner.inputSchema.get("properties", {})
+    properties = runner.input_schema.get("properties", {})
     assert "tool_name" in properties and "request" in properties
     # 公共起盘字段必须直接可填，否则每次调用都得包一层 request
     for field in ("date", "time", "zone", "lat", "lon"):
@@ -165,7 +166,7 @@ def test_advertised_schema_is_faithful_but_validation_is_loose() -> None:
     """
     tools = asyncio.run(_server().list_tools())
     qimen = next(t for t in tools if t.name == "horosa_cn_qimen")
-    schema = qimen.inputSchema
+    schema = qimen.input_schema
     assert not schema.get("required"), "MCP 层不应有必填参数（必填语义走 [required] 标记 + 内层校验）"
     assert schema["properties"]["date"]["description"].startswith("[required]")
     # v0.37.0：广告层收窄成**恰一个** type。数组 type（["string","number"]）被 Gemini/Vertex 的
@@ -272,13 +273,13 @@ def test_error_paths_return_a_conformant_envelope() -> None:
 
 def test_structured_output_is_opt_in_and_keeps_the_gate_working(monkeypatch: pytest.MonkeyPatch) -> None:
     default_tools = asyncio.run(_server().list_tools())
-    assert all(t.outputSchema is None for t in default_tools), (
+    assert all(t.output_schema is None for t in default_tools), (
         "outputSchema 默认必须关闭——claude-code#25081（带 outputSchema 时工具列表静默消失）未确认修复"
     )
     monkeypatch.setenv("HOROSA_OUTPUT_SCHEMA", "1")
     server = _server()
     opted_in = asyncio.run(server.list_tools())
-    assert any(t.outputSchema for t in opted_in)
+    assert any(t.output_schema for t in opted_in)
     gate = _payload(
         asyncio.run(
             server.call_tool(

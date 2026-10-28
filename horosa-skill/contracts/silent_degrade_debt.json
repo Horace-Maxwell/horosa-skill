@@ -4,7 +4,7 @@
   "per_file": {},
   "silent_excepts": {
     "_comment": "Broad excepts that pass / continue / return a constant and call nothing (probes whose None/False is the answer are here on purpose). New ones fail CI; pay down with _degrade.",
-    "total": 27,
+    "total": 26,
     "per_file": {
       "config.py": 1,
       "engine/client.py": 2,
@@ -15,7 +15,6 @@
       "service/enrich.py": 1,
       "service/runners/zeri.py": 2,
       "surfaces/doctor.py": 1,
-      "surfaces/mcp_runner.py": 1,
       "surfaces/setup_flow.py": 1,
       "tracing.py": 2
     }

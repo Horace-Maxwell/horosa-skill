@@ -181,15 +181,16 @@
       ]
     },
     {
-      "id": "mcp-python-sdk.1x",
+      "id": "mcp-python-sdk.2x",
       "subject": "mcp-python-sdk",
-      "fact": "Latest 1.x is 1.30.0 (2026-09-07): `streamablehttp_client(url, headers=…)` deprecated in favour of `streamable_http_client(url, http_client=httpx.AsyncClient)`; pydantic >= 2.11; idle streamable-http sessions closed after 30 min (session_idle_timeout), 10000-session cap; LATEST_PROTOCOL_VERSION 2025-11-25 while the spec's latest revision is 2026-07-28.",
-      "source_url": "https://github.com/modelcontextprotocol/python-sdk/releases/tag/v1.30.0",
-      "verified_on": "2026-09-29",
+      "fact": "mcp 2.3.0 (2026-10-02, Production/Stable; 1.x stays in maintenance, 1.30.0 2026-09-07). FastMCP is now mcp.server.mcpserver.MCPServer (keyword-only construction; host/port/streamable_http_path/transport_security go to run()); mcp.get_context() removed (Context is passed to call_tool); model attributes are snake_case (dump wire shape with by_alias=True); ClientSession.read_resource takes a str URI; streamable_http_client(url, http_client=) yields (read, write); in-process tests use mcp.client.Client(server, mode='legacy'|'2026-07-28'). MRTR: a tool may return InputRequiredResult(input_requests={key: ElicitRequest(...)}, request_state=...); the SDK seals request_state (AEAD, TTL, tool + argument digest) and rejects tampering with -32602; ctx.input_responses / ctx.request_state on the retry.",
+      "source_url": "https://py.sdk.modelcontextprotocol.io/migration/",
+      "verified_on": "2026-10-28",
       "affects": [
         "horosa-skill/pyproject.toml",
-        "horosa-skill/tests/test_http_and_clients.py",
-        "horosa-skill/scripts/verify_runtime_live.py"
+        "horosa-skill/src/horosa_skill/surfaces/mcp_runner.py",
+        "horosa-skill/src/horosa_skill/surfaces/mcp_server.py",
+        "horosa-skill/src/horosa_skill/surfaces/mcp_elicitation.py"
       ]
     },
     {

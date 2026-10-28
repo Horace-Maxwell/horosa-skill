@@ -70,8 +70,8 @@ def test_stdio_handshake_lists_every_tool(tmp_path) -> None:
     init, tools = anyio.run(_with_session, _server_params(tmp_path), body)
 
     # 握手成功 = stdout 里没有一个杂字节（多一个字节帧就解析不了）。
-    assert init.serverInfo.name == "Horosa Skill"
-    assert init.serverInfo.version == __version__, "serverInfo 报的必须是我们的版本，不是 MCP SDK 的"
+    assert init.server_info.name == "Horosa Skill"
+    assert init.server_info.version == __version__, "serverInfo 报的必须是我们的版本，不是 MCP SDK 的"
     assert init.instructions and len(init.instructions.encode("utf-8")) <= INSTRUCTIONS_BUDGET_BYTES
     assert init.capabilities.tools is not None
     assert len(tools) == FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)
@@ -94,8 +94,8 @@ def test_stdio_tools_all_pass_the_cross_client_audit(tmp_path) -> None:
                     "name": tool.name,
                     "description": tool.description,
                     "title": tool.title,
-                    "annotations": tool.annotations.model_dump() if tool.annotations else None,
-                    "inputSchema": tool.inputSchema,
+                    "annotations": tool.annotations.model_dump(by_alias=True) if tool.annotations else None,
+                    "inputSchema": tool.input_schema,
                 }
             )
         )
@@ -120,7 +120,7 @@ def test_stdio_bad_request_is_recoverable_not_iserror(tmp_path) -> None:
         return await session.call_tool("horosa_knowledge_registry", {"request": "{bad json"})
 
     result = anyio.run(_with_session, _server_params(tmp_path), body)
-    assert result.isError is not True, "坏 payload 必须是信封，不能变 isError 裸文本"
+    assert result.is_error is not True, "坏 payload 必须是信封，不能变 isError 裸文本"
     payload = json.loads(result.content[0].text)
     assert payload["ok"] is False
     assert payload["code"] == "tool.invalid_payload"

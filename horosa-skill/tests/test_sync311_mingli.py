@@ -317,14 +317,14 @@ def test_ziwei_option_fields_are_accepted_but_not_advertised(tmp_path) -> None:
         mcp = create_mcp_server(HorosaSkillService(settings, store=_Store(settings)), settings)
         tools = {t.name: t for t in asyncio.run(mcp.list_tools())}
     ziwei = tools["horosa_cn_ziwei_birth"]
-    assert "daxianSpan" not in ziwei.inputSchema["properties"] and "sihuaSchool" in ziwei.inputSchema["properties"]
-    bazi_props = tools["horosa_cn_bazi_birth"].inputSchema["properties"]   # FlexibleModel 分支（同紫微）
+    assert "daxianSpan" not in ziwei.input_schema["properties"] and "sihuaSchool" in ziwei.input_schema["properties"]
+    bazi_props = tools["horosa_cn_bazi_birth"].input_schema["properties"]   # FlexibleModel 分支（同紫微）
     assert "minggongMethod" not in bazi_props and "cnUnifiedZone" not in bazi_props and "godKeyPos" in bazi_props
-    suzhan_props = tools["horosa_cn_suzhan"].inputSchema["properties"]     # BirthInput 子类分支
+    suzhan_props = tools["horosa_cn_suzhan"].input_schema["properties"]     # BirthInput 子类分支
     assert "nongliTimeAlg" not in suzhan_props and "houseStartMode" in suzhan_props
     assert "nongliTimeAlg" in SuZhanInput.model_fields
     assert "daxianSpan" in ZiWeiBirthInput.model_fields and "minggongMethod" in BaZiBirthInput.model_fields
-    assert "个高级旋钮" in ziwei.inputSchema["properties"]["request"]["description"]
+    assert "个高级旋钮" in ziwei.input_schema["properties"]["request"]["description"]
     # 键表经 horosa_agent_guidance（按 MCP 名查）到达 agent —— 广告层不列、guidance 必须列。
     keys = build_agent_guidance(tool_name="horosa_cn_ziwei_birth")["tools"]["ziwei_birth"]["options_keys"]
     assert "daxianSpan" in keys and "sihuaSchool" in keys

@@ -33,7 +33,7 @@ def _server(tmp_path, *, compact: bool = False):
 
 
 def _listed(mcp) -> dict[str, dict]:
-    return {tool.name: tool.model_dump(mode="json") for tool in asyncio.run(mcp.list_tools())}
+    return {tool.name: tool.model_dump(mode="json", by_alias=True) for tool in asyncio.run(mcp.list_tools())}
 
 
 @pytest.fixture(scope="module")
@@ -114,7 +114,7 @@ def test_hidden_knob_passed_at_top_level_still_reaches_run_tool(tmp_path) -> Non
     knob = next(f for f in hidden if "int" in str(BirthInput.model_fields[f].annotation) or "bool" in str(BirthInput.model_fields[f].annotation))
     payload = {**build_sample_payloads()["chart"], knob: 1}
     result = asyncio.run(mcp.call_tool("horosa_astro_chart", payload))
-    # FastMCP 1.x：声明了 outputSchema 时返回 (content, structured)，否则返回 content 序列
+    result = getattr(result, "content", result)  # mcp 2.x：CallToolResult
     if isinstance(result, tuple):
         content, structured = result
         envelope = structured if isinstance(structured, dict) else json.loads(content[0].text)

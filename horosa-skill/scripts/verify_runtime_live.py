@@ -559,26 +559,20 @@ class Lane:
                 result["bad_host_status"] = http.post(url, json=body, headers={**headers, "Authorization": f"Bearer {token}", "Host": "evil.example"}).status_code
             import anyio
             from mcp import ClientSession
-            # mcp ≥ 1.30：头经 httpx.AsyncClient；旧入口退路给 1.29 的环境（见 tests/test_http_and_clients.py 同款）
-            try:
-                from mcp.client.streamable_http import streamable_http_client as _open_stream
-                from mcp.shared._httpx_utils import create_mcp_http_client
+            # mcp 2.x：头经 httpx2.AsyncClient；streamable_http_client 只给出 (read, write)（见 tests/test_http_and_clients.py 同款）
+            from mcp.client.streamable_http import streamable_http_client as _open_stream
+            from mcp.shared._httpx_utils import create_mcp_http_client
 
-                def _client(u: str, headers: dict[str, str]):
-                    return _open_stream(u, http_client=create_mcp_http_client(headers=headers))
-            except ImportError:
-                from mcp.client.streamable_http import streamablehttp_client as _legacy_open
-
-                def _client(u: str, headers: dict[str, str]):
-                    return _legacy_open(u, headers=headers)
+            def _client(u: str, headers: dict[str, str]):
+                return _open_stream(u, http_client=create_mcp_http_client(headers=headers))
 
             async def handshake() -> tuple[int, str]:
                 with anyio.fail_after(120):
-                    async with _client(url, {"Authorization": f"Bearer {token}"}) as (read, write, _sid):
+                    async with _client(url, {"Authorization": f"Bearer {token}"}) as (read, write):
                         async with ClientSession(read, write) as session:
                             init = await session.initialize()
                             tools = await session.list_tools()
-                            return len(tools.tools), init.serverInfo.version
+                            return len(tools.tools), init.server_info.version
 
             try:
                 result["tools"], result["server_version"] = anyio.run(handshake)

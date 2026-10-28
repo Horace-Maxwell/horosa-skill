@@ -4,7 +4,8 @@ import json
 import os
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp import types as mcp_types
+from mcp.server.mcpserver import MCPServer
 from pydantic import ValidationError
 
 from horosa_skill import __version__
@@ -58,7 +59,7 @@ from horosa_skill.surfaces.mcp_requests import (
     _tool_run_signature,
 )
 from horosa_skill.surfaces.mcp_runner import (
-    HorosaFastMCP,
+    HorosaMCPServer,
     _guarded_facade,
     _run_tool_blocking,
 )
@@ -165,28 +166,23 @@ def _server_instructions(*, decision_layer_on: bool, compact: bool = False) -> s
     return text
 
 
-def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMCP:
+def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPServer:
     token = (os.environ.get("HOROSA_MCP_TOKEN", "") or "").strip() or None
-    mcp = HorosaFastMCP(
-        "Horosa Skill",
+    # SDK 2.x：全部按关键字传（位置参数里插进了 title / description——位置传的 instructions 会落成 serverInfo.title，
+    # 模型就收不到说明书了）；host / port / 路径 / transport_security 改到 run() 上传（见 run_mcp_server）。
+    # version 直接给构造器：1.x 的 FastMCP 不透传，serverInfo.version 曾回落成 SDK 自己的版本号（「Horosa Skill 1.29.0」）。
+    mcp = HorosaMCPServer(
+        name="Horosa Skill",
+        version=__version__,
         instructions=_server_instructions(
             decision_layer_on=getattr(service, "decision_layer", None) is not None, compact=bool(settings.mcp_compact)
         ),
         website_url="https://github.com/Horace-Maxwell/horosa-skill",
         icons=[_SERVER_ICON],
-        host=settings.host,
-        port=settings.port,
-        streamable_http_path="/mcp",
-        mount_path="/",
         log_level=settings.log_level,
-        transport_security=build_transport_security(settings.host, settings.port),
         auth=build_auth_settings(settings.host, settings.port, token),
         token_verifier=StaticTokenVerifier(token) if token else None,
     )
-    # 🔴 FastMCP 不把 version 透给 lowlevel Server，于是 initialize 的 serverInfo.version 回落成
-    # **MCP SDK 自己的版本**（实测 "1.29.0"）。每个客户端的 server 列表因此显示
-    # 「Horosa Skill 1.29.0」—— 看起来就像我们的版本号，而用户报 bug 时会照抄它。
-    mcp._mcp_server.version = __version__
     mcp.output_script = settings.output_script
 
     async def horosa_dispatch(**kwargs: Any) -> DispatchEnvelope:
@@ -195,6 +191,8 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
             error = _agent_preflight_error("dispatch", raw_payload)
             if error is not None:
                 updated = await _maybe_elicit_gate(mcp, "dispatch", raw_payload, error)
+                if isinstance(updated, mcp_types.InputRequiredResult):
+                    return updated  # MRTR：客户端问完用户带 inputResponses 重发
                 if updated is None:
                     return _gate_to_dispatch_envelope(error)
                 raw_payload = updated
@@ -419,6 +417,8 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
                 error = _agent_preflight_error(tool_name, payload)
                 if error is not None:
                     updated = await _maybe_elicit_gate(mcp, tool_name, payload, error)
+                    if isinstance(updated, mcp_types.InputRequiredResult):
+                        return updated  # MRTR：客户端问完用户带 inputResponses 重发
                     if updated is None:
                         return error
                     raw_payload = dict(raw_payload)
@@ -582,6 +582,8 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
             error = _agent_preflight_error(tool_name, payload)
             if error is not None:
                 updated = await _maybe_elicit_gate(mcp, tool_name, payload, error)
+                if isinstance(updated, mcp_types.InputRequiredResult):
+                    return updated  # MRTR：客户端问完用户带 inputResponses 重发
                 if updated is None:
                     return _gate_to_envelope(error, tool_name=tool_name)
                 payload = updated
@@ -638,6 +640,8 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
                     error = _agent_preflight_error(tool_name, raw_payload)
                     if error is not None:
                         updated = await _maybe_elicit_gate(mcp, tool_name, raw_payload, error)
+                        if isinstance(updated, mcp_types.InputRequiredResult):
+                            return updated  # MRTR：客户端问完用户带 inputResponses 重发
                         if updated is None:
                             return _gate_to_envelope(error, tool_name=tool_name)
                         raw_payload = updated
@@ -678,7 +682,15 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> FastMC
 def run_mcp_server(settings: Settings, *, transport: str, service: HorosaSkillService | None = None) -> None:
     service = service or HorosaSkillService(settings)
     server = create_mcp_server(service, settings)
-    server.run(transport=transport)
+    if transport == "stdio":
+        server.run(transport="stdio")
+        return
+    network = {"host": settings.host, "port": settings.port,
+               "transport_security": build_transport_security(settings.host, settings.port)}
+    if transport == "sse":
+        server.run(transport="sse", **network)
+    else:
+        server.run(transport=transport, streamable_http_path="/mcp", **network)
 
 
 def main() -> None:

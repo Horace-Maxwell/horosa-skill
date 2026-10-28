@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.45.1-dev (2026-10-28) | MCP SDK 1.x → 2.3 + 澄清闸走 MRTR：`mcp.get_context()` 没了、模型属性改 snake_case（`model_dump()` 量出来的不是线上形状）、`read_resource` 不收 AnyUrl（setup 探针把异常吞成 None）、`streamable_http_client` 只给两个流、调用结果是 `CallToolResult` | 上下文放 ContextVar；量线上形状一律 `by_alias=True`；探针传字符串；闸门三条路（MRTR / 服务端发起 / 结构化错误），真 SDK 客户端两种协议各跑一遍端到端；篡改 requestState 被 SDK 拒（-32602） |
 | v0.45.1-dev (2026-10-27) | 补上 v0.45.0 列为「没做」的三项：内置知识检索仍是子串计分；向量检索；带标签 PDF。pikepdf 新版 macOS 轮子要 macOS 14/15（本仓承诺 11 起）；reportlab 开源版不打标签；FTS5 的 bm25 不再用；向量测试缺 numpy 会整文件跳过 | 内置检索同一套归一 + BM25（精确键仍压过一切）；可选 `[vectors]`（bge-small-zh int8，钉提交号 + sha256，RRF 定序决胜）；PDF 在 reportlab 里自写结构树（无新依赖）→ veraPDF PDF/UA-1 PASS；dev 组加 numpy 让替身测试在 CI 真跑 |
 | v0.45.0-dev (2026-10-27) | 用户要「看 GitHub 上最好的生产级自定义知识库怎么做，直接借鉴」，并把所有技法的报告与工具调用也照最好的做：五路调研（qmd / basic-memory / Cherry Studio / RAGFlow / Dify / FastGPT / MaxKB / Anthropic 与 MCP 规范 / kerykeion / STORM）；实现时 FTS5 bm25 对常见词给 0 分、executescript 吞事务、零分段凑预算、`knowledge_read` 在技法表里 | 自备知识库：标题分块 + 中文双字 FTS5 + 自算 BM25 + 增量同步 + 长条目只带相关段 + 检索 / 精读两个工具；报告：E 段号与可点引用、数据在前、AI 层单独标注、封面关键设置、替代文字；工具：文件卡 + 按协议版本的 resource_link、检索门面常驻；四条守卫第一版「因为错误的原因通过」，改到负向对照会红 |
 | v0.44.2 (2026-10-27) | 发版期定时 completeness（40552300999）红：main 的 server.json 已回填新 draft 的 mcpb sha，公开 latest 仍是上一版，两者必然对不上 | 窗口性误报：从回填提交推上 main 到翻公开之间的定时 / 手动 completeness 都会红；翻公开后 publish job 派发的那次绿才是判据。未改 workflow（候选修法见条目） |
@@ -159,6 +160,36 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.45.1-dev / 2026-10-28 — MCP SDK 1.x → 2.3，澄清闸在 2026-07-28 客户端上走 MRTR
+
+- **起因**：v0.45.0「没做」清单里的最后一项：MRTR 需要 SDK 2.x。调研（2.3.0，2026-10-02，Production/Stable）：迁移基本是机械的，
+  新依赖全是纯 Python（mcp-types / httpx2 / opentelemetry-api），编译件与 1.x 相同（win_arm64 照常）；同一服务按
+  `MCP-Protocol-Version` 同时服务 2026-07-28（无会话、`server/discover`）与更早修订（initialize + 会话）。
+- **改了什么**：`HorosaFastMCP` → `HorosaMCPServer(MCPServer)`；构造器全关键字（位置参数里插进了 title / description，位置传的
+  instructions 会变成 serverInfo.title），`version=` 直接给构造器（1.x 要手动改 lowlevel）；host / port / 路径 / transport_security
+  移到 `run()`；`mcp.get_context()` 没了 → `call_tool(name, arguments, context)` 把上下文放进 ContextVar，进度 tick、elicitation、
+  resource_link 的协议版本都从它取；`convert_result` 返回 `CallToolResult | InputRequiredResult`（后者原样放行，不转繁体、不加链接）。
+- **澄清闸三条路**（`_maybe_elicit_gate`）：① 2026-07-28 客户端：返回 `InputRequiredResult`（`horosa_gate` 一张表单 + requestState
+  记问题摘要）——SDK 自己给 requestState 做 AEAD 封装、绑定工具名 + 参数摘要 + TTL，篡改 / 过期回 -32602；重试时我们再核对
+  问题摘要（SDK 不知道问的是什么），对不上记 `stale`。② 更早修订且声明了 elicitation：照旧服务端发起 `ctx.elicit`（带超时）。
+  ③ 都不行：结构化闸门错误（`agent_guidance.required`）。用户在表单里选的仍只写回策略声明过的值。
+- **迁移中踩到的**：
+  - 2.x 模型属性是 snake_case：`.inputSchema` 等直接读会 AttributeError；更隐蔽的是 **`tool.model_dump()` 给出 snake_case 键**——
+    字节预算 / 客户端兼容两道守卫量的就不再是线上形状 → 一律 `model_dump(mode="json", by_alias=True)`。
+  - `ClientSession.read_resource(AnyUrl(...))` 在 2.x 校验失败，setup 的 stdio 探针把异常吞成 `runtime_status=None`（测试抓到了）→ 传字符串。
+  - `streamable_http_client` 只给 `(read, write)`；`create_connected_server_and_client_session` 没了 → `mcp.client.Client(mcp)`
+    （进程内；`mode="legacy"` 强制握手时代，`mode="2026-07-28"` 强制新协议）。
+  - 直接调 `server.call_tool` 的测试拿到的是 `CallToolResult`（不再是内容块列表或 `(content, structured)` 元组）。
+  - 客户端把 MCPError 包在嵌套的 anyio ExceptionGroup 里；门禁按旧目标版本查未定义名，`BaseExceptionGroup` 被报 F821 → 鸭子类型展开。
+  - 宽 except 少了一个（`_progress_tick_for` 不再 try get_context），静默降级棘轮下调到 26。
+- **守卫**：`tests/test_mcp_elicitation.py` 新增 MRTR 单测（新协议返回 input_required 而非推送；重试只在同一张表时采用答案；拒绝记录）
+  与**端到端**（真 SDK 客户端进程内，2026-07-28 与 legacy 各一遍：客户端被问到、答「按星阙默认」后越过闸门；篡改 requestState
+  被 SDK 拒）；全量 MCP 测试（stdio 一致性、HTTP 握手、预算、兼容、文字转换、文件链接）照旧全绿。
+- **没验到**：哪家客户端真的已开 MRTR（调研：Claude Code 二进制里有 MRTR 客户端代码但未确认默认开；Claude Desktop / Codex 未证实）——
+  所以服务端发起与结构化错误两条老路都保留。
+- **教训**：SDK 大版本迁移时，**凡是「拿 SDK 对象量形状」的守卫都要重新确认它量的还是线上形状**；吞异常的探针要有测试看它的输出
+  （这次是 setup 测试断言 `runtime_status` 是 dict 才抓到）。
 
 ### v0.45.1-dev / 2026-10-27 — 补齐 v0.45.0 没做的：内置知识检索升级、可选向量检索、带标签的 PDF（PDF/UA-1）
 

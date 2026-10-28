@@ -8,12 +8,12 @@ requires-python = ">=3.12"
 dependencies = [
   "cryptography>=45.0.0",
   "httpx>=0.28.0",
-  # 钉在 1.x：SDK v2.0.0（2026-07-28）是破坏性重写（FastMCP→MCPServer、装饰器→构造器、
-  # camelCase→snake_case、httpx2、强制 opentelemetry）。v2 同时支持 2026-07-28 与更早修订，
-  # 故晚迁不掉队；迁移单独跟踪，不随本版本走。
-  "mcp[cli]>=1.29.0,<2",
-  # mcp 1.30.0（wheel/uvx 安装实际解析到的 1.x）要求 pydantic>=2.11；下限跟上，免得旧 pydantic 环境装出一对不兼容的组合。
-  "pydantic>=2.11.0",
+  # SDK 2.x（v0.45.1 迁移，docs/LESSONS.md）：FastMCP → MCPServer；同一服务按 MCP-Protocol-Version 同时服务 2026-07-28
+  # （MRTR：input_required 多轮）与更早修订（initialize + 会话 + 服务端发起的 elicitation）。新依赖都是纯 Python
+  # （mcp-types / httpx2 / opentelemetry-api），编译件与 1.x 相同，win_arm64 照常。
+  "mcp[cli]>=2.3.0,<3",
+  # mcp 2.3 要求 pydantic>=2.12；下限跟上，免得旧 pydantic 环境装出一对不兼容的组合。
+  "pydantic>=2.12.0",
   "python-docx>=1.1.2",
   "reportlab>=4.2.0",
   # codex config.toml 的保注释合并（client config --write --format codex 只动 [mcp_servers.<name>]）

@@ -66,6 +66,7 @@ def test_guidance_tool_carries_server_profile(tmp_path, monkeypatch) -> None:
     settings = Settings(db_path=tmp_path / "memory.db", output_dir=tmp_path / "runs")
     mcp = create_mcp_server(HorosaSkillService(settings, store=MemoryStore(settings)), settings)
     result = asyncio.run(mcp.call_tool("horosa_agent_guidance", {"include_all": False}))
+    result = getattr(result, "content", result)  # mcp 2.x：CallToolResult
     if isinstance(result, tuple):
         content, structured = result
         payload = structured if isinstance(structured, dict) else json.loads(content[0].text)

@@ -537,7 +537,7 @@ def test_knowledge_stays_off_facades_and_out_of_the_hidden_knob_count(tmp_path: 
 
     settings = _settings(tmp_path)
     mcp = create_mcp_server(HorosaSkillService(settings, store=MemoryStore(settings)), settings)
-    tools = {tool.name: tool.inputSchema for tool in asyncio.run(mcp.list_tools())}
+    tools = {tool.name: tool.input_schema for tool in asyncio.run(mcp.list_tools())}
     facades = ["horosa_memory_query", "horosa_memory_show", "horosa_report_render", "horosa_report_template", "horosa_technique_report"]
     assert all("knowledge" not in tools[name]["properties"] for name in facades)
     assert tools["horosa_report_render"]["properties"]["style"]["description"]

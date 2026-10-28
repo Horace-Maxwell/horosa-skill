@@ -127,7 +127,7 @@ def _surface(compact: bool) -> list[dict[str, Any]]:
             chart_server_root="http://127.0.0.1:9",
         )
         mcp = create_mcp_server(HorosaSkillService(settings, store=MemoryStore(settings)), settings)
-        return [tool.model_dump(mode="json") for tool in asyncio.run(mcp.list_tools())]
+        return [tool.model_dump(mode="json", by_alias=True) for tool in asyncio.run(mcp.list_tools())]
 
 
 def measure() -> dict[str, Any]:

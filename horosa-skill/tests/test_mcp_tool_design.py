@@ -26,7 +26,7 @@ def _server(tmp_path: Path):
 
 
 def test_knowledge_search_is_its_own_always_loaded_read_only_tool(tmp_path: Path) -> None:
-    from mcp.shared.memory import create_connected_server_and_client_session
+    from mcp.client import Client
 
     notes = tmp_path / "data" / "knowledge"
     notes.mkdir(parents=True)
@@ -34,23 +34,23 @@ def test_knowledge_search_is_its_own_always_loaded_read_only_tool(tmp_path: Path
     mcp, _ = _server(tmp_path)
 
     async def run() -> tuple[dict, dict]:
-        async with create_connected_server_and_client_session(mcp._mcp_server) as client:
+        async with Client(mcp) as client:
             tools = {tool.name: tool for tool in (await client.list_tools()).tools}
             result = await client.call_tool("horosa_knowledge_search", {"query": "休门", "domain": "user"})
             return tools, json.loads(result.content[0].text)
 
     tools, result = asyncio.run(run())
     search = tools["horosa_knowledge_search"]
-    assert search.annotations.readOnlyHint is True and search.annotations.destructiveHint is False
+    assert search.annotations.read_only_hint is True and search.annotations.destructive_hint is False
     assert (search.meta or {}).get("anthropic/alwaysLoad") is True  # 不被工具搜索延后
     assert search.description.startswith("Search knowledge")  # 关键词放最前（工具搜索只看描述开头）
-    assert "from_line" in json.dumps(tools["horosa_knowledge_read"].inputSchema)
+    assert "from_line" in json.dumps(tools["horosa_knowledge_read"].input_schema)
     match = result["matches"][0]
     assert match["key"] == "笔记" and match["heading"] == "休门" and match["read"]["from_line"] == 1
 
 
 def test_report_results_carry_a_file_card_and_a_resource_link_for_new_clients(tmp_path: Path) -> None:
-    from mcp.shared.memory import create_connected_server_and_client_session
+    from mcp.client import Client
 
     from horosa_skill.service.api.reports import _file_card
 
@@ -62,13 +62,13 @@ def test_report_results_carry_a_file_card_and_a_resource_link_for_new_clients(tm
     service.report_render = lambda payload: {"ok": True, "artifact_path": str(pdf), "file": card}
 
     async def run():
-        async with create_connected_server_and_client_session(mcp._mcp_server) as client:
+        async with Client(mcp) as client:
             return await client.call_tool("horosa_report_render", {"run_id": "x", "format": "pdf"})
 
     result = asyncio.run(run())
     links = [block for block in result.content if block.type == "resource_link"]
     assert json.loads(result.content[0].text)["file"]["sha256"] == card["sha256"]
-    assert len(links) == 1 and str(links[0].uri) == card["uri"] and links[0].mimeType == "application/pdf"
+    assert len(links) == 1 and str(links[0].uri) == card["uri"] and links[0].mime_type == "application/pdf"
 
 
 def test_old_protocol_clients_get_no_resource_link() -> None:

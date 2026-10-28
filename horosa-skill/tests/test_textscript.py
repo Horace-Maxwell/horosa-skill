@@ -411,9 +411,9 @@ def _server(tmp_path: Path, script: str):
 
 
 async def _calls(mcp) -> dict:
-    from mcp.shared.memory import create_connected_server_and_client_session
+    from mcp.client import Client
 
-    async with create_connected_server_and_client_session(mcp._mcp_server) as client:
+    async with Client(mcp) as client:
         out = {}
         for name, args in (
             ("horosa_knowledge_read", {"query": "紫微斗数", "limit": 2}),

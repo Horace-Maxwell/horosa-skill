@@ -127,9 +127,8 @@ def _stdio_probe(*, command: str, args: list[str], env: dict[str, str], timeout:
                         tools = await session.list_tools()
                         runtime_status: dict[str, Any] | None = None
                         try:
-                            from pydantic import AnyUrl
-
-                            resource = await session.read_resource(AnyUrl("horosa://runtime/status"))
+                            # mcp 2.x 的 ReadResourceRequestParams.uri 只收字符串（传 AnyUrl 校验失败，被下面吞成 None）。
+                            resource = await session.read_resource("horosa://runtime/status")
                             text = next((c.text for c in resource.contents if getattr(c, "text", None)), None)
                             parsed = json.loads(text) if text else None
                             runtime_status = parsed if isinstance(parsed, dict) else None
@@ -139,8 +138,8 @@ def _stdio_probe(*, command: str, args: list[str], env: dict[str, str], timeout:
                         return {
                             "ok": True,
                             "tools": len(tools.tools),
-                            "server_name": init.serverInfo.name,
-                            "server_version": init.serverInfo.version,
+                            "server_name": init.server_info.name,
+                            "server_version": init.server_info.version,
                             "runtime_status": runtime_status,
                         }
 

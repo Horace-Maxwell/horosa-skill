@@ -357,9 +357,14 @@ extract 因 ECE 0.104 > 0.10 未晋升（精度 1.0、填错 0）——闸差一
 镜像），不是裸 dict——出参被 server+client 两侧校验，一旦声明 outputSchema，裸 dict 会被打成协议级
 ToolError，**澄清闸当场报废**。structured output 由 `HOROSA_OUTPUT_SCHEMA=1` **显式开启，默认关**
 （claude-code#25081：带 outputSchema 时工具列表静默消失，至今 stale-closed 未确认修复）；开启前须在真实
-客户端 `/mcp` 确认工具计数不掉。依赖钉 `mcp[cli]>=1.29.0,<2`（锁 1.30.0，`pydantic>=2.11` 随之；SDK v2 是破坏性重写，单独跟踪）；
-不新增依赖 sampling/roots/logging（2026-07-28 规范起废弃，本仓未使用）。elicit 必须在任何副作用之前
-（v2 会重放整个工具函数）。
+客户端 `/mcp` 确认工具计数不掉。依赖 `mcp[cli]>=2.3.0,<3`（v0.45.1 从 1.x 迁来，`pydantic>=2.12`）：类名 `MCPServer`
+（1.x 的 FastMCP），构造器全按关键字传（位置参数里插了 title / description），host / port / transport_security 在 `run()` 上传；
+SDK 去掉了 `mcp.get_context()`——请求上下文由 `HorosaMCPServer.call_tool` 放进 `mcp_runner._CURRENT_CONTEXT`，
+进度 / 撤单 / elicitation / 协议版本都从 `current_context()` 取；模型属性是 snake_case（`.input_schema`、`.is_error`），
+量线上形状用 `model_dump(by_alias=True)`；`read_resource` 只收字符串 URI。不新增依赖 sampling/roots/logging（2026-07-28 起废弃）。
+**澄清闸三条路**（`mcp_elicitation._maybe_elicit_gate`）：2026-07-28 客户端 → 返回 `InputRequiredResult`（MRTR；SDK 封装 / 验证
+requestState，我们再核对问题摘要）；更早修订且声明了 elicitation → 服务端发起 `ctx.elicit`；都不行 → 结构化闸门错误。
+elicit 必须在任何副作用之前（MRTR 的重试会重放整个工具函数）。
 
 **Node 地板 ≥ 20.10**：数算 JSON 走 `import X from './x.json' with { type: 'json' }`；`src/tools/index.js`
 顶层 import 使旧 Node **语法级**炸掉整个模块图（qimen/taiyi/jinkou/tongshefa 全挂，不只数算）。bundled
@@ -371,7 +376,7 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 **模型**：存档、引擎、门禁、内部逻辑永远是简体原文；只在结果**离开进程**时按 `HOROSA_OUTPUT_SCRIPT`
 （`zh-Hans` 缺省 / `zh-Hant` 台湾字形 / `zh-Hant-HK` 香港字形；设置界面是一个布尔勾选：MCPB `traditional_chinese`、
 插件 `traditionalChinese`；`setup` / `client config --output-script`）转换。缺省简体 = **逐字节不变**、转换器根本不跑
-（`test_simplified_server_never_calls_the_converter`）。出口只有三处：MCP（`HorosaFastMCP.call_tool`，全部工具含错误信封）、
+（`test_simplified_server_never_calls_the_converter`）。出口只有三处：MCP（`HorosaMCPServer.call_tool`，全部工具含错误信封）、
 CLI（`_localized`）、报告落盘（`localize_document` + `render_report(script=)` 选繁体字形字体）。
 
 **只转给人读的字段**（`textscript/localize.py` 白名单 `TEXT_KEYS`）；回显入参、引擎原始 `data`、设置值、选项、错误码、

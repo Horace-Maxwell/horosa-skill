@@ -40,6 +40,7 @@ def _make(tmp_path, **kw):
 
 
 def _text(result) -> str:
+    result = getattr(result, "content", result)  # mcp 2.x：CallToolResult
     blocks = result[0] if isinstance(result, tuple) else result
     if isinstance(blocks, list) and blocks:
         return getattr(blocks[0], "text", "") or ""
@@ -201,26 +202,37 @@ def test_concurrency_is_capped(tmp_path, monkeypatch) -> None:
 # --------------------------------------------------------------------------------------
 
 class _FakeSession:
+    """mcp 2.x：`Context.report_progress` 交给 `session.report_progress`，没有 progressToken 时由会话自己不发。"""
+
     def __init__(self) -> None:
         self.notes: list[dict] = []
+        self.token: str | None = "tok"
 
-    async def send_progress_notification(self, **kw) -> None:
-        self.notes.append(kw)
+    async def report_progress(self, progress, total=None, message=None) -> None:
+        if self.token is None:
+            return
+        self.notes.append({"progress": progress, "total": total, "message": message})
 
 
 def _fake_ctx(mcp, session, *, token: str | None):
-    from mcp.server.fastmcp import Context
+    from types import SimpleNamespace
 
-    meta = type("Meta", (), {"progressToken": token})()
-    req = type("Req", (), {
-        "meta": meta, "session": session, "request_id": "r",
-        "lifespan_context": None, "request": None,
-    })()
-    return Context(request_context=req, fastmcp=mcp)
+    from mcp.server.mcpserver import Context
+
+    session.token = token
+    req = SimpleNamespace(session=session, request_id="r", protocol_version="2025-11-25")
+    return Context(request_context=req, mcp_server=mcp)
 
 
-def _fake_mcp(ctx):
-    return type("FakeMcp", (), {"get_context": lambda _self: ctx})()
+async def _in_request(ctx, fn):
+    """像 HorosaMCPServer.call_tool 那样把请求上下文放进 ContextVar（SDK 2.x 去掉了 mcp.get_context()）。"""
+    from horosa_skill.surfaces.mcp_runner import _CURRENT_CONTEXT
+
+    token = _CURRENT_CONTEXT.set(ctx)
+    try:
+        return await fn()
+    finally:
+        _CURRENT_CONTEXT.reset(token)
 
 
 def test_segment_loop_reports_progress(tmp_path) -> None:
@@ -237,7 +249,7 @@ def test_segment_loop_reports_progress(tmp_path) -> None:
         return {"ok": True}
 
     async def _run():
-        return await M._run_tool_blocking(_fake_mcp(ctx), _scan)
+        return await _in_request(ctx, lambda: M._run_tool_blocking(mcp, _scan))
 
     anyio.run(_run)
     assert len(session.notes) == 4, session.notes
@@ -259,7 +271,7 @@ def test_progress_is_silent_without_a_progress_token(tmp_path) -> None:
         return {"ok": True}
 
     async def _run():
-        return await M._run_tool_blocking(_fake_mcp(ctx), _scan)
+        return await _in_request(ctx, lambda: M._run_tool_blocking(mcp, _scan))
 
     anyio.run(_run)
     assert ran == [0, 1, 2]
@@ -300,7 +312,7 @@ def test_cancelled_request_stops_the_scan_at_a_segment_boundary(tmp_path) -> Non
                     scope.cancel()
 
                 tg.start_soon(_cancel_soon)
-                await M._run_tool_blocking(_fake_mcp(ctx), _scan)
+                await _in_request(ctx, lambda: M._run_tool_blocking(mcp, _scan))
         # 被 abandon 的线程若没停会继续跑；给它足够时间暴露出来。
         await anyio.sleep(1.4)
 
@@ -361,11 +373,16 @@ def test_elicitation_times_out_and_falls_back_to_the_structured_gate(monkeypatch
     """
     monkeypatch.setenv("HOROSA_MCP_ELICIT_TIMEOUT_SECONDS", "0.3")
 
+    from types import SimpleNamespace
+
     class _Hanging:
-        class session:
-            @staticmethod
-            def check_client_capability(_):
-                return True
+        """握手时代的客户端：声明了 form elicitation，表单发出去却没人答。"""
+
+        _request_context = object()
+        protocol_version = "2025-11-25"
+        input_responses = None
+        request_state = None
+        client_capabilities = SimpleNamespace(elicitation=SimpleNamespace(form=SimpleNamespace(), url=None))
 
         async def elicit(self, **_kw):
             await anyio.sleep(30)
@@ -375,9 +392,9 @@ def test_elicitation_times_out_and_falls_back_to_the_structured_gate(monkeypatch
 
     async def _run():
         started = time.perf_counter()
-        out = await M._maybe_elicit_gate(
-            _fake_mcp(_Hanging()), "liureng_gods", {"date": "2026-05-18"}, gate
-        )
+        out = await _in_request(_Hanging(), lambda: M._maybe_elicit_gate(
+            None, "liureng_gods", {"date": "2026-05-18"}, gate
+        ))
         return out, time.perf_counter() - started
 
     out, elapsed = anyio.run(_run)
@@ -400,16 +417,16 @@ def test_technique_report_is_not_advertised_read_only(tmp_path) -> None:
     mcp = M.create_mcp_server(svc, settings)
     tools = {t.name: t for t in anyio.run(mcp.list_tools)}
     ann = tools["horosa_technique_report"].annotations
-    assert ann is not None and ann.readOnlyHint is False
-    assert ann.openWorldHint is False
+    assert ann is not None and ann.read_only_hint is False
+    assert ann.open_world_hint is False
     # v0.40.0 P0：三个报告类工具按 output_path 覆盖磁盘文件（已限定在输出目录 / 白名单根内）→ 如实标 destructive，
     # 客户端对它们保留确认摩擦；report_from_tool 还会重新起盘 + 新 run → 非幂等。memory_record_answer 只追加，仍非 destructive。
     for name in ("horosa_report_render", "horosa_technique_report", "horosa_report_from_tool"):
         a = tools[name].annotations
-        assert a is not None and a.destructiveHint is True and a.readOnlyHint is False, name
-    assert tools["horosa_report_render"].annotations.idempotentHint is True
-    assert tools["horosa_report_from_tool"].annotations.idempotentHint is False
-    assert tools["horosa_memory_record_answer"].annotations.destructiveHint is False
+        assert a is not None and a.destructive_hint is True and a.read_only_hint is False, name
+    assert tools["horosa_report_render"].annotations.idempotent_hint is True
+    assert tools["horosa_report_from_tool"].annotations.idempotent_hint is False
+    assert tools["horosa_memory_record_answer"].annotations.destructive_hint is False
 
 
 @pytest.mark.parametrize(
