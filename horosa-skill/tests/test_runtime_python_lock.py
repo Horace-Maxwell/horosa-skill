@@ -58,3 +58,14 @@ def test_missing_wheel_verdict_is_caught() -> None:
 def test_requirement_names_strip_specifiers_and_comments() -> None:
     assert guard.requirement_names("# c\nnumpy==2.4.2\npyswisseph>=2.10,<3\nopencc-python-reimplemented>=0.1.7 # x\n") == [
         "numpy", "pyswisseph", "opencc-python-reimplemented"]
+
+
+def test_requirements_provenance_header_names_the_recorded_upstream_pin() -> None:
+    """sync_vendored_runtime_sources.sh 每次都把上游 HEAD 写进本文件首行；上游 HEAD 只在本地（未推送提交）时，这一行就记了一个
+    别人取不到的 sha，而 contracts/upstream_provenance.json 的 pin（--write-state 拒写未推送且碰了输入的提交）还是旧的——两份
+    「来源」说法不一致（2026-10-30 同步上游未推送的 219d8a67 / 8964bfd5 时撞上，见 LESSONS）。首行 sha 必须等于记录的 pin。
+    负向对照（实跑）：首行改成 8964bfd5503bfa7835257a3fe4c3b937a8c4c3fc → 红。"""
+    pin = json.loads((PKG_ROOT / "contracts" / "upstream_provenance.json").read_text(encoding="utf-8"))["upstream_git_sha"]
+    head = REQUIREMENTS.splitlines()[0]
+    assert head.startswith("# source: Horosa-Public scripts/requirements/mac-python.txt @ "), head
+    assert head.rsplit("@ ", 1)[1].strip() == pin, (head, pin)

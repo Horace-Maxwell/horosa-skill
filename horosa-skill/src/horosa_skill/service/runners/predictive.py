@@ -174,6 +174,173 @@ class PredictiveRunners:
             payload, "distributions", "/predict/dist", lambda body: self._call_remote("/predict/dist", body)
         )
 
+    # ── 推运图族四法（上游 v3.13.0 之后 219d8a67 / 8964bfd5）：演进推运 Néroman / 推运图 Bezza / 周日小限 Jay / 双黄道 Michon ──
+    # 后端 astrostudy/directed_figures.py 按定义算（/astroextra/<接口>，JS 层不发 HTTP）；vendored 上游
+    # utils/directedFigures.js buildDirectedFigureText 经 AstroDirectedFigures.snapshotText（tools/progextra.js）排版。
+    # 设置名 = 上游挂载齿轮字段 = 星阙页保存键（techniqueMountSettings.js NEROMAN_FIELDS…MICHON_FIELDS、directionPageSettings.js），
+    # 值域 = 齿轮 select 选项 / number 的 min–max。认不出就报错——上游 directedFigureRequestFields 的 num(…, 缺省) 会静默回落缺省。
+    _DIRECTED_FIGURE_ENDPOINTS: dict[str, str] = {
+        "neroman": "/astroextra/neroman",
+        "bezzafigure": "/astroextra/bezzafigure",
+        "jayprofection": "/astroextra/jayprofection",
+        "michon": "/astroextra/michon",
+    }
+    _DIRECTED_FIGURE_SELECTS: dict[str, dict[str, tuple[Any, ...]]] = {
+        "neroman": {"nerKeepDec": (False, True), "nerOrb": (0.5, 1, 2, 3)},
+        "bezzafigure": {"bezzaOrb": (0.5, 1, 2, 3, 5)},
+        "jayprofection": {"jayFrom": (-1, 0, 12, 24, 36, 48, 60, 72, 84, 96, 108, 120)},
+        "michon": {"michonOrb": (0.5, 1, 1.5, 2), "michonSwap": (False, True), "michonEqual": (False, True)},
+    }
+    _DIRECTED_FIGURE_RANGES: dict[str, dict[str, tuple[float, float]]] = {
+        "neroman": {"nerK": (1, 5000), "nerT0": (0.01, 10)},
+    }
+    # 出厂值 = directedFigures.js NEROMAN_DEFAULTS / BEZZA_DEFAULTS / JAY_DEFAULTS / MICHON_DEFAULTS（按页面键；与后端缺省同值）。
+    _DIRECTED_FIGURE_DEFAULTS: dict[str, dict[str, Any]] = {
+        "neroman": {"nerK": 273.18, "nerT0": 0.75, "nerKeepDec": False, "nerOrb": 1},
+        "bezzafigure": {"bezzaOrb": 1},
+        "jayprofection": {"jayFrom": -1},
+        "michon": {"michonOrb": 1, "michonSwap": False, "michonEqual": False},
+    }
+    # 双黄道与目标时刻无关（techniqueMountSettings MICHON_FIELDS 不收目标日期；请求体照上游仍带「今日 12:00」）。
+    _DIRECTED_FIGURE_TARGETED = frozenset({"neroman", "bezzafigure", "jayprofection"})
+    _BOOL_TEXT = {"true": True, "1": True, "false": False, "0": False}
+
+    def _directed_figure_settings(self, payload: dict[str, Any], technique: str) -> dict[str, Any]:
+        """页面键口径（缺省补齐）。bool 收 true/false/1/0（上游 DF_BOOL），数值收数或数字串。"""
+        settings = dict(self._DIRECTED_FIGURE_DEFAULTS[technique])
+        for field, allowed in self._DIRECTED_FIGURE_SELECTS[technique].items():
+            value = payload.get(field)
+            if value is None or value == "":
+                continue
+            if allowed[0] is False:
+                parsed = value if isinstance(value, bool) else self._BOOL_TEXT.get(f"{value}".strip().lower())
+                if parsed is None and isinstance(value, (int, float)) and value in (0, 1):
+                    parsed = bool(value)
+                value = parsed if parsed is not None else value
+            else:
+                # bool 不是数（False == 0 会混进 jayFrom 的 0 档）：原样转字符串让值域闸报错。
+                number = None if isinstance(value, bool) else _finite_number(value)
+                value = (int(number) if number == int(number) else number) if number is not None else f"{value}"
+            _require_option(value, allowed, field=field, tool=technique)
+            settings[field] = value
+        for field, (low, high) in self._DIRECTED_FIGURE_RANGES.get(technique, {}).items():
+            value = payload.get(field)
+            if value is None or value == "":
+                continue
+            number = _finite_number(value)
+            if number is None or not low <= number <= high:
+                raise ToolValidationError(
+                    f"{technique} 的 {field}={value!r} 须在 {low}–{high} 之间 / {field} must be a number within {low}-{high}.",
+                    code="tool.predictive_invalid_option",
+                    details={"tool": technique, "field": field, "value": value, "allowed": [low, high]},
+                )
+            settings[field] = int(number) if number == int(number) else number
+        return settings
+
+    @staticmethod
+    def _directed_figure_request_fields(technique: str, settings: dict[str, Any]) -> dict[str, Any]:
+        """= 上游 directedFigureRequestFields(key, directedFigureOptsFromSettings(key, settings))（缺省值照发）。
+        progextra 用 vendored 上游函数在 JS 侧重算一遍，runner 逐键比对（不一致即报错）——这份移植漂移不会静默。"""
+        if technique == "neroman":
+            return {"nerK": settings["nerK"], "nerT0": settings["nerT0"], "nerKeepDec": 1 if settings["nerKeepDec"] else 0, "orb": settings["nerOrb"]}
+        if technique == "bezzafigure":
+            return {"orb": settings["bezzaOrb"]}
+        if technique == "jayprofection":
+            return {"jayFrom": int(settings["jayFrom"])}
+        return {"orb": settings["michonOrb"], "mzSwap": 1 if settings["michonSwap"] else 0, "mzEqual": 1 if settings["michonEqual"] else 0}
+
+    def _directed_figure_target(self, payload: dict[str, Any], technique: str) -> dict[str, str]:
+        """上游 buildDirectedFigureSnapshotText：targetDate 空 = 本盘时区今日（today(chartZone)）、targetTime 空 = 12:00:00。"""
+        if technique in self._DIRECTED_FIGURE_TARGETED:
+            target_date = self._astroextra_date(payload, "targetDate", code="tool.directed_invalid_target")
+            raw_time = f"{payload.get('targetTime') or ''}".strip()
+        else:
+            target_date, raw_time = None, ""
+        target_time = "12:00:00"
+        if raw_time:
+            match = re.fullmatch(r"(\d{1,2}):(\d{2})(?::(\d{2}))?", raw_time)
+            if not match or int(match.group(1)) > 23 or int(match.group(2)) > 59 or int(match.group(3) or 0) > 59:
+                raise ToolValidationError(
+                    f"targetTime 不是合法时刻（要 HH:mm:ss）：{raw_time!r} / targetTime is not a valid time (expected HH:mm:ss).",
+                    code="tool.directed_invalid_target",
+                    details={"field": "targetTime", "value": payload.get("targetTime")},
+                )
+            target_time = f"{int(match.group(1)):02d}:{match.group(2)}:{match.group(3) or '00'}"
+        return {"targetDate": target_date or _today_for_chart(payload.get("zone")), "targetTime": target_time}
+
+    def _run_directed_figure_tool(
+        self, payload: dict[str, Any], technique: str, fetch: Callable[[dict[str, Any]], dict[str, Any]]
+    ) -> dict[str, Any]:
+        endpoint = self._DIRECTED_FIGURE_ENDPOINTS[technique]
+        settings = self._directed_figure_settings(payload, technique)
+        request_fields = self._directed_figure_request_fields(technique, settings)
+        target = self._directed_figure_target(payload, technique)
+        knob_keys = set(self._DIRECTED_FIGURE_DEFAULTS[technique]) | {"orb", "mzSwap", "mzEqual", "withChart"}
+        natal_payload = {k: v for k, v in self._astroextra_natal_payload(payload).items() if k not in knob_keys}
+        # withChart: 0 —— 后端缺省另起一张「推运外圈」整盘（星阙页面双盘绘图用，~100 KB）；快照正文不读它，headless 不要。
+        body = {**self._astroextra_chart_params(natal_payload), **target, **request_fields, "withChart": 0}
+        response = fetch(body)
+        natal_header = self._natal_header(technique, payload)
+        chart_obj = natal_header or _ptext.payload_chart_wrap(payload)
+        js: Any = None
+        try:
+            js = self.js_client.run("progextra", self._progextra_payload(technique, chart_obj, settings, response))
+            snapshot_text, moment_lines, js_error = self._progextra_unpack(technique, js)
+        except Exception as exc:
+            _degrade("progextra JS engine failed (technique=%s): %s", technique, exc)
+            snapshot_text, moment_lines, js_error = "", [], f"{exc}"
+        js_request = js.get("request_fields") if isinstance(js, dict) else None
+        if snapshot_text and js_request != request_fields:
+            raise ToolValidationError(
+                f"{technique} 的请求体与上游 directedFigureRequestFields 不一致（Python 发 {request_fields}，上游算 {js_request}）"
+                f" / {technique}: request fields diverge from the vendored upstream mapping",
+                code="tool.directed_request_mismatch",
+                details={"tool": technique, "sent": request_fields, "upstream": js_request},
+            )
+        if not snapshot_text:
+            raise ToolValidationError(
+                f"{endpoint} 没有返回可排版的{technique}结果（上游此时显示「缺失」）{f'：{js_error}' if js_error else ''}"
+                f" / {endpoint} returned no {technique} result to format",
+                code=f"tool.{technique}_empty",
+                details={"tool": technique, "endpoint": endpoint, "settings": settings, "js_error": js_error},
+            )
+        result: dict[str, Any] = {
+            "settings": settings,
+            "request": request_fields,
+            "target": target if technique in self._DIRECTED_FIGURE_TARGETED else None,
+            "raw": response,
+            "snapshot_text": snapshot_text,
+        }
+        if natal_header:
+            result["natalHeader"] = natal_header
+        result["_moment_lines"] = moment_lines
+        result["export_snapshot"] = self._augment_export_payload(technique=technique, snapshot_text=snapshot_text)
+        return result
+
+    def _run_neroman_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 演进推运（Néroman）：对数时标弧 K·ln(1 + 年龄 ⁄ t0)，各点赤经逆行减弧。
+        return self._run_directed_figure_tool(
+            payload, "neroman", lambda body: self._call_remote("/astroextra/neroman", body)
+        )
+
+    def _run_bezzafigure_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 推运图（Bezza）：真太阳弧下的 Placidus 世俗推进与四类接触。
+        return self._run_directed_figure_tool(
+            payload, "bezzafigure", lambda body: self._call_remote("/astroextra/bezzafigure", body)
+        )
+
+    def _run_jayprofection_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 周日小限（Jay）：赤经中天每年 +30°。
+        return self._run_directed_figure_tool(
+            payload, "jayprofection", lambda body: self._call_remote("/astroextra/jayprofection", body)
+        )
+
+    def _run_michon_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 双黄道（Michon）：回归 / 恒星黄道叠合的五类谐波族。
+        return self._run_directed_figure_tool(
+            payload, "michon", lambda body: self._call_remote("/astroextra/michon", body)
+        )
+
     def _progression_target(self, payload: dict[str, Any]) -> dict[str, Any]:
         """目标时刻型推运（vedicprog/jaynesprog）的请求三键，缺省与上游 builder 同律（F10）：
 

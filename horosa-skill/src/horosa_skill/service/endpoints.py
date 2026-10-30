@@ -87,6 +87,11 @@ _PYTHON_CHART_ENDPOINTS = {
     "/predict/agepoint",
     "/predict/dist",
     "/astroextra/jaynesprog",
+    # 推运图族四法（上游 v3.13.0 之后：astrostudy/directed_figures.py）。
+    "/astroextra/neroman",
+    "/astroextra/bezzafigure",
+    "/astroextra/jayprofection",
+    "/astroextra/michon",
     "/astroextra/progressions",
     "/astroextra/planetreturn",
     "/astroextra/analysis",

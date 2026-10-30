@@ -1,6 +1,6 @@
 {
   "_comment": "Router corpus ratchet (v0.36.0 B2): natural-language queries (zh + en) → the technique tool(s) horosa_dispatch must pick, verified by scripts/verify_router_corpus.py. `min_pass` may only go up; refresh with --update-baseline after improving the router. Expected values are what a user would mean, not what the router happens to do.",
-  "min_pass": 111,
+  "min_pass": 119,
   "cases": [
     {
       "query": "帮我起一个奇门遁甲盘看出行",
@@ -666,6 +666,54 @@
       "query": "恒星黄道二次推运",
       "expect": [
         "vedicprog"
+      ]
+    },
+    {
+      "query": "用演进推运看我今年的人生节点",
+      "expect": [
+        "neroman"
+      ]
+    },
+    {
+      "query": "Néroman evolved directions for my chart",
+      "expect": [
+        "neroman"
+      ]
+    },
+    {
+      "query": "推运图看近期应期",
+      "expect": [
+        "bezzafigure"
+      ]
+    },
+    {
+      "query": "Bezza directed figure contacts",
+      "expect": [
+        "bezzafigure"
+      ]
+    },
+    {
+      "query": "周日小限看今年落宫",
+      "expect": [
+        "jayprofection"
+      ]
+    },
+    {
+      "query": "Jay diurnal profection this year",
+      "expect": [
+        "jayprofection"
+      ]
+    },
+    {
+      "query": "双黄道看本命叠合",
+      "expect": [
+        "michon"
+      ]
+    },
+    {
+      "query": "Michon double zodiac superpositions",
+      "expect": [
+        "michon"
       ]
     }
   ]

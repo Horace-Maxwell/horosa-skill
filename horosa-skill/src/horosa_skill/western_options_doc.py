@@ -155,6 +155,11 @@ def _static_doc(tool_name: str) -> dict[str, str]:
         return {
             "relative": "关系盘 0–4（缺省 0）：" + " ".join(f"{k}={label}" for k, label in RELATIVE_MODES) + "。",
         }
+    if tool_name in {"neroman", "bezzafigure", "jayprofection", "michon"}:
+        # 推运图族四法：后端 directed_figures._natal_from_request 强制 zodiacal=0（双黄道用自带 J2000 26°37′18″ 岁差）。
+        note = "不改结果：本法只按回归黄道算（后端强制 zodiacal=0"
+        note += "；双黄道的恒星黄道用其自带岁差 J2000.0 时 26°37′18″）" if tool_name == "michon" else "）"
+        return {"zodiacal": f"{note}；传 1 只改 [起盘信息] 的「黄道」行。", "siderealAyanamsa": f"{note}。"}
     return {}
 
 

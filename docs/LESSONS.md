@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.46.1-dev (2026-10-30) | 同步上游**未推送**的 219d8a67 / 8964bfd5（推运图族四法）：四个新工具让 tools/list 冲到 267 KB（硬顶 256 KB）；runner 必须手算上游 JS 定义的请求体；sync 脚本把未公开 sha 写进需求文件首行；「jay」是「jayne」的前缀、「周日小限」含「小限」、OpenCC 把「周日小限」转成「週日」 | 广告层按工具隐藏不影响结果的域核心键 + 收紧共用尾巴（260 223 B）；progextra 回传 vendored 上游算的 `request_fields`、runner 逐键比对（`tool.directed_request_mismatch`）；需求文件首行 sha == 记录的 pin（测试）；路由互斥 + 语料 8 例；定字表 + 金样 |
 | v0.46.0 (2026-10-30) | main CI windows-smoke 两红：整盘 JSON 进 node argv（WinError 206）、`time.tzset`（POSIX 专有）；本机全绿 | `esm_argv` 全平台拦 > 24 000 字符；tzset 必须带 `hasattr` 条件（AST 守卫，负向对照收紧过） |
 | v0.46.0-dev (2026-10-30) | 上游 v3.11.3 → v3.13.0：vendor 清单全绿，手抄件十余处静默过期（印占分盘标签表、写死的缺省 / 文案、民用历日期运算、yearsystem129 后端字段已删仍在读）；顺带查出印度 Tajika 缺省缺席、金口诀昼夜粗判 | `audit_upstream_ports.py` + 台账（变了的上游名字 ∩ skill 提到的 → 必须有结论，审到当前 pin）；`also_derived_from` 多源看守；手抄表逐值 / civil 移植差分测试 |
 | v0.45.1 (2026-10-28) | 发版矩阵 windows-11-arm（仿真 x64）pytest 在 2700 s 被杀，~98%、零失败；v0.45.0 时已占 96% 无人察觉；同批 windows-latest 反而更快 | 只给 `--expect-emulated` lane 加 900 s（3600），守卫同时校验仍装得进 job 的 90 分钟；lane 脚本取自派发提交（main），不必挪 tag |
@@ -163,6 +164,43 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.46.1-dev / 2026-10-30 — 推运图族四法（上游未推送的 219d8a67 + 8964bfd5）：tools/list 超顶、`request_fields` 移植要运行期比对
+
+- **现象**：
+  - 上游本地多出三个未推送提交（简报说两个：25eb4c4f 测试分片 + 219d8a67 四法；同步期间又多了 8964bfd5 版式提交，改了
+    `directed_figures.py` 与 `AstroDirectedFigures.js`）。sync 脚本按**工作树**拷，于是拷到的是 HEAD = 8964bfd5；它还把 HEAD sha
+    写进 `contracts/upstream_python_requirements.txt` 首行——一个公开远端上不存在的 sha，而 provenance pin 仍是 965af0f4。
+    （`verify_upstream_sync.py --write-state` 本来就拒写「未推送且碰了输入」的提交——`pin_to_record`，这一层没漏。）
+  - 四个新工具（每个 BirthInput 工具 ≈ 2 KB 广告层）让全量 tools/list 从 259 401 B 冲到 267 149 B，超 256 KB 硬顶 5 KB。
+  - 上游无头路径是「请求型」（`buildDirectedFigureSnapshotText` 自己 fetch），skill 的 JS 层不发 HTTP，于是 Python 必须**手算**
+    `directedFigureRequestFields ∘ directedFigureOptsFromSettings` 的请求体——又一份手抄件。
+  - 路由：`jay` 是 `jayne`（赤纬推运）的前缀；「周日小限」含「小限」会同时点亮 profection；「推运图」字面像「某推运的图」。
+  - 繁体：OpenCC 把「周日小限」「十二年一周」转成「週日小限」「一週」（天球周日运动 ≠ 星期日；一周 = 一圈）。
+  - 截断 vendor `AstroDirectedFigures.js`：孤儿 import 清理只认具名 / namespace 形态，`import React, { Component }`、`moment`、
+    `UpdatingBadge`、`styles.less`、`AstroDoubleChart` 这类**默认导入**全留下 → 必须逐个 `stub_import ""`。
+- **根因**：全量面的硬顶早已只剩 ~2.7 KB（v0.46.0 已 259 401 B）；新技法的「核心字段」里有对它根本不起作用的键（四法后端强制回归黄道，
+  `zodiacal` / `siderealAyanamsa` 只改盘头）。手算请求体的漂移没有任何信号：值错了后端照样算出一张「合理」的盘。
+- **修**：
+  - 广告层：`advertised_technique_schema` 允许模型 `ADVERTISE_HIDDEN` 列域核心键（四法隐藏 zodiacal / siderealAyanamsa，照收、guidance 有说明）；
+    新工具只广告核心 + `targetDate` + 闸门三键；共用尾巴收紧（描述尾行「旋钮/输出段：…」、`request`「另 N 个高级旋钮可顶层按名传」、
+    `ad` 描述、岁差制只举三制、描述 / 自有字段截断 200→150 / 72→64 字）→ 260 223 B（125 工具），硬顶、棘轮容差都没动，`--update-baseline` 记新基线。
+  - 请求体：`tools/progextra.js` 对四法用 vendored 上游 `directedFigureOptsFromSettings` + 合并规则 + `directedFigureRequestFields` 重算
+    `request_fields` 回传，runner 与自己发出的逐键比对，不一致即 `tool.directed_request_mismatch`（不是 ok=true 照返）。
+  - 路由：`_JAY_WORDS` 排除进 profection 规则；「推运图」只在没有更具体命中时归 bezzafigure（与「流年」同一兜底）；语料 +8（119/119）。
+  - 定字表 `周` 白名单 +「周日小限」「十二年一周」（deviations 写明），GOLDEN +1。
+- **守卫**（负向对照均实跑）：
+  - `tests/test_sync313_directed.py`：金标 = **上游源本身**在 node 里跑（上游 `directedFigures.js` 直接 import、`AstroDirectedFigures.js`
+    用上游 @babel 抽三函数、fetch 换成回放实抓回包并记请求体），夹具 `fixtures/sync313_directed_live.json`；vendored 引擎 / Python 请求体 /
+    缺省 / 值域（对上游 `directionPageSettings.js` 的 oneOf、min–max）逐项对。对照：vendored `fmtN(r.arc, 4)`→3 红 4；progextra 去掉
+    合并规则红 4（custom）；缺省 `nerT0` 0.7 红；值域去掉 bezzaOrb 5 红；目标日改本机今日红；runner 不剥页面键红 3；夹具改一字红。
+    运行期比对本身的对照：把移植改坏（orb + 0.5）→ `tool.directed_request_mismatch`。
+  - `tests/test_runtime_python_lock.py::test_requirements_provenance_header_names_the_recorded_upstream_pin`：需求文件首行 sha == 记录的 pin
+    （对照：首行改成 8964bfd5 → 红）。
+  - selfcheck.mjs 一条值级金标（页面键 → 口径键、空串齿轮回落缺省、过点事件 ±10 岁窗）。
+- **没做 / 遗留**：pin 不能前移（上游提交未公开）：upstream-sync 的技法键 / 运行时漂移与端口审计台账「to-pin」两项按设计红，等上游推送后
+  `verify_upstream_sync.py --require-upstream --write-state` + 端口审计台账前移（判词草稿在会话 scratch）。孤儿 import 清理认默认导入
+  会让 395 份 verbatim 件里别的文件也变（大面积重渲染），这轮只用声明式 stub，没改流水线。
 
 ### v0.46.0 / 2026-10-30 — main CI：windows-smoke 两红（argv 过长、time.tzset），本机全绿
 

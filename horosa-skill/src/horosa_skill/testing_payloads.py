@@ -140,6 +140,11 @@ def build_sample_payloads() -> dict[str, dict]:
         "keypoints": {**chart_birth, "predictive": 0},
         "lunationphase": {**chart_birth, "predictive": 0},
         "extrareturns": {**chart_birth, "predictive": 0},
+        # 推运图族四法（上游 v3.13.0 之后）：目标日写死（缺省=今天会让样例随日期漂移）；双黄道与目标时刻无关。
+        "neroman": {**chart_birth, "predictive": 0, "targetDate": "2028-04-06"},
+        "bezzafigure": {**chart_birth, "predictive": 0, "targetDate": "2028-04-06"},
+        "jayprofection": {**chart_birth, "predictive": 0, "targetDate": "2028-04-06"},
+        "michon": {**chart_birth, "predictive": 0},
         "horary": {**chart_birth, "hsys": 0, "tradition": True, "predictive": 0, "category": "marriage"},
         "election": {**chart_birth, "hsys": 0, "tradition": True, "predictive": 0, "topicId": "marriage"},
         # 择日搜索族：窗口 + 条件树。tianxing 的 signs 用**星座序号**（后端 int()，传 "Aries" 直接 invalid_conditions）。

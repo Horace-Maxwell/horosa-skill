@@ -17,6 +17,8 @@ import { buildLunationPhaseSnapshotText } from '../vendor/astroextra/lunationPha
 import { buildYearSystem129SnapshotText } from '../vendor/astroextra/yearSystem129.js';
 import { buildAgePointSnapshotFromResult } from '../vendor/astroextra/AstroAgePoint.js';
 import { buildDistributionsSnapshotFromResult } from '../vendor/astroextra/AstroDistributions.js';
+import { directedFigureOptsFromSettings, snapshotText as directedFigureSnapshotText } from '../vendor/astroextra/AstroDirectedFigures.js';
+import { DIRECTED_FIGURE_KEYS, directedFigureRequestFields } from '../vendor/utils/directedFigures.js';
 
 const BUILDERS = {
   balbillus: buildBalbillusSnapshotText,
@@ -37,6 +39,19 @@ const FROM_RESULT_BUILDERS = {
   distributions: buildDistributionsSnapshotFromResult,
 };
 
+// 推运图族四法（上游 v3.13.0 之后：neroman / bezzafigure / jayprofection / michon）：Python 拉 /astroextra/<接口> 后把回包作
+// payload.result、页面键口径（nerK / nerT0 / nerKeepDec / nerOrb / bezzaOrb / jayFrom / michonOrb / michonSwap / michonEqual）作
+// payload.options 交来。正文 = 上游 AstroDirectedFigures.snapshotText(key, chartObj, result)（astroAiSnapshot stub 掉 → 只剩
+// buildDirectedFigureText 正文，[起盘信息]/[当前时点]/[方法说明] 由 Python 公共段出）；另按上游 buildDirectedFigureSnapshotText 的合并
+// 规则（页面保存值为底、非空齿轮值覆盖）重算 directedFigureRequestFields 回传 request_fields，runner 与自己发出的请求体逐键比对。
+function directedFigureRequest(key, settings) {
+  const base = directedFigureOptsFromSettings(key, {});
+  const own = directedFigureOptsFromSettings(key, settings);
+  const merged = { ...base };
+  Object.keys(own).forEach((k) => { if (own[k] !== undefined && own[k] !== null && own[k] !== '') { merged[k] = own[k]; } });
+  return directedFigureRequestFields(key, merged);
+}
+
 export function runProgExtra(payload) {
   const input = payload && typeof payload === 'object' ? payload : {};
   const technique = `${input.technique || ''}`;
@@ -44,7 +59,10 @@ export function runProgExtra(payload) {
   const options = input.options && typeof input.options === 'object' ? input.options : {};
   const fromResult = FROM_RESULT_BUILDERS[technique];
   const result = input.result && typeof input.result === 'object' ? input.result : {};
-  const builder = fromResult ? (chart, opts) => fromResult(chart, result, opts) : BUILDERS[technique];
+  const directed = DIRECTED_FIGURE_KEYS.includes(technique);
+  const builder = directed
+    ? (chart) => directedFigureSnapshotText(technique, chart, result)
+    : (fromResult ? (chart, opts) => fromResult(chart, result, opts) : BUILDERS[technique]);
   if (!builder) {
     return { tool: 'progextra', technique, data: { ok: false, reason: 'unknown_technique' }, snapshot_text: '' };
   }
@@ -74,5 +92,9 @@ export function runProgExtra(payload) {
   }
   const moment_lines = Array.isArray(globalThis.__horosaProgMomentLines) ? globalThis.__horosaProgMomentLines : [];
   globalThis.__horosaProgMomentLines = [];
-  return { tool: 'progextra', technique, data: { ok: true, options }, snapshot_text, moment_lines };
+  const out = { tool: 'progextra', technique, data: { ok: true, options }, snapshot_text, moment_lines };
+  if (directed) {
+    out.request_fields = directedFigureRequest(technique, options);
+  }
+  return out;
 }

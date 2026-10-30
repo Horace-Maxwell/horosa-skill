@@ -3032,6 +3032,103 @@
           "why": "避免与 Python 层重复产段；上游调用点自带 typeof 守卫。buildCurrentMomentLines 只截获 builder 的 [当前时点] 定位行回传 Python"
         }
       ]
+    },
+    "utils/directedFigures.js": {
+      "upstream": "utils/directedFigures.js",
+      "mode": "verbatim",
+      "why": "上游 v3.13.0+ 推运图族四法（演进推运 Néroman / 推运图 Bezza / 周日小限 Jay / 双黄道 Michon）的单一来源：技法键、后端接口、缺省、选项名、请求体映射 directedFigureRequestFields 与「结果 → 快照正文」buildDirectedFigureText。计算全在后端 astrostudy/directed_figures.py（/astroextra/<接口>，Python 侧发请求）。",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroConst.js",
+          "to": "../../constants/AstroConst.js",
+          "why": "树里有两个 AstroConst.js（AGENTS §4.3）：上游写法在 vendor 树里会解析到 32 行 Uranian 子集（没有 LIST_SIGNS）→ signOfLon 静默 undefined。钉死到共享 shim。"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroText.js",
+          "to": "../../constants/AstroText.js",
+          "why": "AstroTxtMsg 单字名表在共享 shim（与 AstroAgePoint.js 同一份）。"
+        }
+      ]
+    },
+    "astroextra/AstroDirectedFigures.js": {
+      "upstream": "components/astro/AstroDirectedFigures.js",
+      "mode": "verbatim",
+      "why": "上游推运图族四子页。纯逻辑段（directedFigureOptsFromSettings 页面键→口径、snapshotText 正文装配、buildDirectedFigureSnapshotText 合并规则）在 React 类之前；tools/progextra.js 的 DIRECTED_FIGURE 分支用 directedFigureOptsFromSettings + snapshotText（_reexport_required 自动补 export）排版 Python 拉回的 /astroextra/<接口> 结果。",
+      "deviations": [
+        {
+          "kind": "truncate_before",
+          "anchor": "^const sm = \\(id, on\\)=>",
+          "why": "剥掉 React 子页（DirectedFigurePage 及四个子类）；锚点是正则，找不到会报错而非悄悄剪错。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "react",
+          "stub": "",
+          "why": "React 组件基类，只服务被截掉的子页。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "moment",
+          "stub": "",
+          "why": "只服务子页的日期控件。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../xq-ui.js",
+          "stub": "",
+          "why": "UI 组件库，只服务 React 尾部（模块级 `const { Option } = Select;` 另由 replace_text 删）。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../common/UpdatingBadge.js",
+          "stub": "",
+          "why": "子页角标组件。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../../css/styles.less.js",
+          "stub": "",
+          "why": "样式表，headless 无意义。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./AstroDoubleChart.js",
+          "stub": "",
+          "why": "本命 + 推运双盘绘图组件，只服务子页。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "const { Option } = Select;\n",
+          "to": "",
+          "why": "模块级 UI 解构，只服务 React 尾部。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./AstroExtraCommon.js",
+          "stub": "// headless stub：AstroExtraCommon 是页面公共件；纯逻辑段只在请求型包装 fetchDirectedFigure 里用 unwrapResult / chartParams。\n// skill 的请求在 Python 侧发（AGENTS §4.2：JS 层不发 HTTP），这条路径不可达——调到即抛明确错误，不留空 stub。\nconst headlessUnreachable = (name) => () => { throw new Error(`headless: AstroExtraCommon.${name} 不可达（请求在 Python 侧发，见 service/runners/predictive.py）`); };\nconst unwrapResult = headlessUnreachable('unwrapResult');\nconst chartParams = headlessUnreachable('chartParams');",
+          "why": "只服务请求型包装（Python 侧发请求）；AGENTS §5.2 stub 审计：保留代码仍引用的绑定由 stub 定义同名、调到即抛。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./astroProgSnapshot.js",
+          "stub": "// headless stub：today / chartZone 只服务 buildDirectedFigureSnapshotText 的「目标时刻缺省 = 本盘时区今日」——skill 由\n// Python 侧按同一口径（_today_for_chart(zone)）先定好 targetDate 再发请求，这条路径不可达。\nconst headlessUnreachableProg = (name) => () => { throw new Error(`headless: astroProgSnapshot.${name} 不可达（目标时刻在 Python 侧定）`); };\nconst today = headlessUnreachableProg('today');\nconst chartZone = headlessUnreachableProg('chartZone');",
+          "why": "astroProgSnapshot 拖进 request / DateTime 组件 / AstroProgChart；只有请求型包装用到，调到即抛。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../../utils/directionPageSettings.js",
+          "stub": "// headless stub：星阙页面保存值（localStorage）在 headless 下不存在 = 全新安装：load() 返回空记录，各口径回落\n// directedFigures.js 的 *_DEFAULTS（directedFigureRequestFields 的 num(…, DEFAULTS) 兜底），与页面首装同值。\nconst DIRECTION_PAGE_SETTINGS = { load: () => ({}) };",
+          "why": "directionPageSettings 拖进全部星运页口径模块（triplicityRulers / profectionSummary / decennials …）；headless 无页面保存值，空记录 = 缺省。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../../utils/astroAiSnapshot.js",
+          "stub": "// headless stub：上游 [YB] 三段补厚用它产 [起盘信息]/[当前时点]/[方法说明]，但 skill 的 Python 层\n// 已经产这三段（_predictive_setup_section_text / _predictive_common_sections_text），再让 JS 产一遍会重段。\n// 上游每个调用点都写了 typeof …==='function' 守卫：未定义的 helper 回退 []（不产段）。唯一例外是\n// buildCurrentMomentLines——它收下 builder 自算的 [当前时点] 定位行（extraLines，如「当前主限」），交给\n// tools/progextra.js 回传 Python 追加进 [当前时点]（= 上游 buildCurrentMomentLines(chartObj, extraLines)），自身仍返 []。\nconst astroAiSnapshot = {\n\tbuildCurrentMomentLines: (chartObj, extraLines) => {\n\t\tglobalThis.__horosaProgMomentLines = Array.isArray(extraLines) ? extraLines.filter(Boolean).map((l) => `${l}`) : [];\n\t\treturn [];\n\t},\n};",
+          "why": "避免与 Python 层重复产段；上游调用点自带 typeof 守卫。buildCurrentMomentLines 只截获 builder 的 [当前时点] 定位行回传 Python"
+        }
+      ]
     }
   }
 }

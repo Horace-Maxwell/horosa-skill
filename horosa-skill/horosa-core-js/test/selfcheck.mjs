@@ -1446,6 +1446,30 @@ check('progextra(yearsystem129 / agepoint / distributions) — v3.13.0 builders 
   assert(JSON.stringify(d.moment_lines) === JSON.stringify(['当前伙伴星：土四分·左（1998-07-29 15:16:36 ~ 2009-02-09 17:06:44）']), JSON.stringify(d.moment_lines));
 });
 
+// 推运图族四法（上游 v3.13.0 之后 219d8a67）：后端 /astroextra/<接口> 结果作 payload.result，vendored AstroDirectedFigures.snapshotText
+// + directedFigures.buildDirectedFigureText 排版；request_fields = 上游合并规则（页面保存值为底、非空齿轮值覆盖）+ directedFigureRequestFields。
+// 实抓回包上逐字等于上游的金标在 tests/test_sync313_directed.py；这里钉 skill 自己的接线：页面键 → 口径键、缺省回落、事件 ±10 岁窗。
+check('progextra(neroman / bezzafigure / jayprofection / michon) — directed figures + request_fields', () => {
+  const chart0 = { params: {}, chart: {} };
+  const ner = { target: '2026-10-30 12:00:00', age: 31.41, arc: 1026.72154, k: 300, t0: 0.75, keepDeclination: true, orb: 1,
+    evolved: [{ id: 'Sun', natalLon: 71.88, lon: 121.41 }, { id: 'MC', natalLon: 332.9, lon: 30.22 }],
+    contacts: [{ evolved: 'Sun', natal: 'Moon', asp: 0, orb: 0.29 }],
+    events: [{ age: 21.62, date: '2017-01-14 13:28:13', mover: 'MC', asp: 90, target: 'North Node' }, { age: 2.1, date: '1997-07-10 00:00:00', mover: 'MC', asp: 0, target: 'MC' }] };
+  const n = runProgExtra({ technique: 'neroman', chart: chart0, options: { nerK: 300, nerKeepDec: true, nerOrb: '' }, result: ner });
+  assert(n.snapshot_text.includes('演进弧：1026.7215°(弧 = 300.00 × ln(1 + 年龄 ⁄ 0.75),各点赤经逆行减弧)\n换到赤道：保留本命赤纬'), n.snapshot_text);
+  assert(n.snapshot_text.includes('| 日 | 双子 11.88° | 狮子 1.41° |') && n.snapshot_text.includes('| 日 | 合 | 月 | 0.29 |'), n.snapshot_text);
+  assert(n.snapshot_text.includes('| 21.62 | 2017-01-14 13:28:13 | 中天 | 刑 | 北交 |') && !n.snapshot_text.includes('| 2.10 |'), 'events outside ±10 years of age are dropped');
+  // 空串齿轮值 = 未改：回落缺省 orb 1（上游 buildDirectedFigureSnapshotText 合并规则）；nerT0 缺省 0.75。
+  assert(JSON.stringify(n.request_fields) === JSON.stringify({ nerK: 300, nerT0: 0.75, nerKeepDec: 1, orb: 1 }), JSON.stringify(n.request_fields));
+  const jay = runProgExtra({ technique: 'jayprofection', chart: chart0, options: { jayFrom: 36 }, result: { rows: [] } });
+  assert(jay.snapshot_text === '' && JSON.stringify(jay.request_fields) === JSON.stringify({ jayFrom: 36 }), 'no rows → "" (上游「缺失」)');
+  const mic = runProgExtra({ technique: 'michon', chart: chart0, options: { michonSwap: 'true', michonEqual: 0 }, result: { superpositions: [] } });
+  assert(JSON.stringify(mic.request_fields) === JSON.stringify({ orb: 1, mzSwap: 1, mzEqual: 0 }), JSON.stringify(mic.request_fields));
+  const bez = runProgExtra({ technique: 'bezzafigure', chart: chart0, options: {}, result: { target: 't', age: 1, arc: 1, orb: 2, points: [{ id: 'Tyche', lon: 127.35, hp0: 13.9214, hp1: 16.0912, dp: 102.49 }], contacts: [] } });
+  assert(bez.snapshot_text.includes('| 福点(世俗) | 狮子 7.35° | 13.921 | 16.091 | 巨蟹 12.49° |') && bez.snapshot_text.includes('当前弧 ±2.0° 内无接触'), bez.snapshot_text);
+  assert(JSON.stringify(bez.request_fields) === JSON.stringify({ orb: 1 }), 'bezza default orb');
+});
+
 if (failures > 0) {
   console.error(`\nselfcheck: ${failures} failure(s)`);
   process.exit(1);

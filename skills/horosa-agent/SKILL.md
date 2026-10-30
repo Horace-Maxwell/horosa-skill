@@ -1,7 +1,7 @@
 ---
 name: horosa-agent
 description: >-
-  Call Horosa (星阙) local metaphysics tools correctly over MCP or CLI — 110 real techniques: Western
+  Call Horosa (星阙) local metaphysics tools correctly over MCP or CLI — 114 real techniques: Western
   natal/predictive astrology (returns, progressions, primary directions, horary 卜卦, election 择日),
   八字, 紫微, 大六壬, 奇门遁甲, 太乙, 金口诀, 三式合一, 河洛理数, 邵子参评数, 六爻, 天文地占, 塔罗, and
   the full 14 神数. Use whenever a user asks to 起盘 / 排盘 / 起课 / 起卦 / 算命 / 推运 / 看盘 / 合盘 /
@@ -231,6 +231,7 @@ deterministic local fallback answered; `horosa-skill jev status` shows the state
 | Age point / distributions / mundane ingress | `agepoint` / `distributions` / `mundane` (year + 入宫节气 + place; `mundaneType` ingress / newmoon / fullmoon / solecl / lunecl / cycles / solunar / vedicmundane / mundanehorary; `mundaneRuleset` ptolemaic / medieval / modern / barbault) |
 | Triplicity rulers / keypoints / lunation phase / extra returns | `triplicityrulers` / `keypoints` / `lunationphase` / `extrareturns` |
 | More progressions (v2.5.0) | `jaynesprog` / `vedicprog` / `planetaryarc` / `planetaryages` / `balbillus` / `yearsystem129` / `persiandirected` |
+| 推运图族：演进推运 / 推运图 / 周日小限 / 双黄道 | `neroman`（Néroman 对数时标弧：`nerK` / `nerT0` / `nerKeepDec` / `nerOrb`）/ `bezzafigure`（Bezza 真太阳弧世俗推进：`bezzaOrb`）/ `jayprofection`（Jay 赤经中天每年 +30°：`jayFrom`）—— 三者 `targetDate` 缺省=本盘时区今天；`michon`（Michon 双黄道：`michonOrb` / `michonSwap` / `michonEqual`，与目标时刻无关）。四法只按回归黄道算 |
 | 星历 / 回归轴 / 产前朔望 / 回归黄道二次推运（上游 v3.11） | `ephemeris`（日期窗事件 + 行运触发本命：startDate/endDate/includeTransits/eclipseTimeMode；留的顺逆按逐日速度复核，可能与星阙桌面版的标签不同——改过的留带 `directionUpstream`）/ `returntimeline`（startYear/count 1–40）/ `prenatalsyzygy` / `prog`（targetDate/targetTime/minorVariant；恒星黄道走 `vedicprog`） |
 | Horary 卜卦 / Election 择日 | `horary` (the chart is cast with the chosen `school`'s house system / terms / triplicity, as in 星阙) / `election` (pass `natal` to add [本命合参] + [回归与主限]; topic-specific inputs such as `surgeryPart`, `tradeSide`, `talismanStar`, `crisisBase`) |
 | 择日「找日子」——要在一段时间里搜时刻，而不是评一个候选时刻 | 西占征象 → `tianxing`（`explainAt` 可对单时刻逐叶判读）；奇门 → `qimenzeri`；另有择日十技法的其余八支：黄历 `huanglizeri`（日粒度）/ 八字 `bazizeri` / 太乙 `taiyizeri` / 紫微 `ziweizeri` / 六壬 `liurengzeri` / 三式合一 `sanshizeri`（条件可跨三式）/ 七政 `qizhengzeri` / 印度 Muhurta `indiazeri`。全部要 startDate/endDate + conditions 条件树；条件类键见各工具 agent_guidance（引擎自带词表，别自己编）；单点评估仍用 `election` |

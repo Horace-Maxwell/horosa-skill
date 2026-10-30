@@ -17,11 +17,17 @@
 | `returntimeline` (回归轴) | `startYear` + `count` (1–40) | yearly solar/lunar return table |
 | `prenatalsyzygy` (产前朔望) | birth data only | the prenatal new/full moon, its degree and chart |
 | `prog` (回归黄道二次推运) | `targetDate` (default = today, like 星阙) + optional `targetTime` / `minorVariant` | secondary / tertiary / minor progression tables; sidereal → use `vedicprog` |
+| `neroman` / `bezzafigure` / `jayprofection` (演进推运 / 推运图 / 周日小限) | `targetDate` (default = today in the chart's zone) + optional `targetTime` (12:00:00) | [演进位置]/[演进对本命相位]/[天顶与上升过本命点] · [推运图位置]/[推运图接触] · [当前小限]/[逐年小限] |
+| `michon` (双黄道) | birth data only (no target date) | [叠合] (12 superpositions) + [互动] (pairs with a harmonic family) |
 
 **Upstream defaults the tools mirror (v0.40.0)** — ask only if the user cares, otherwise say the default was used:
 
 - `jaynesprog` / `vedicprog` / `prog`: `targetDate` = today; `minorVariant` = `synodic` (朔望月/年; `sidereal` / `engine` also).
 - `planetaryarc`: `datetime` = tomorrow at this time; `arcSource` = Moon.
+- 推运图族（上游 v3.13.0 之后）: `neroman` `nerK` 273.18 / `nerT0` 0.75 / `nerKeepDec` false (按黄经度数) / `nerOrb` 1;
+  `bezzafigure` `bezzaOrb` 1 (0.5 / 1 / 2 / 3 / 5); `jayprofection` `jayFrom` -1 (= current 12-year round; 0 / 12 … 120);
+  `michon` `michonOrb` 1 (0.5 / 1 / 1.5 / 2), `michonSwap` false (modern rulers; true = 水金互换), `michonEqual` false (chart houses; true = equal houses).
+  All four compute on the tropical zodiac only (`zodiacal` = 1 only changes the [起盘信息] header text). Out-of-range values are rejected (`tool.predictive_invalid_option`).
 - `persiandirected`: `rateKey` = persian (1°/年; `prophected` / `naibod`), `direction` = direct, `maxYears` = 90.
 - `zr`: `basePoint` = Pars Fortuna; output depth `aiMode` (`l1_all` default … `l4_in_l3`, with `aiL1Idx`–`aiL3Idx`).
 - `profection`: [小限摘要] grain `profGrain` y/m/d, start `profStart` asc/sect/fortune/moon/mc.

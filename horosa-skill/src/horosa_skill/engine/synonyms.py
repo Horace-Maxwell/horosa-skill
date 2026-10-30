@@ -77,6 +77,11 @@ TOOL_SYNONYMS: dict[str, tuple[str, ...]] = {
     "lunationphase": ("月相推运", "次限月相", "lunation phase", "progressed lunation"),
     "extrareturns": ("多重回归", "行星回归", "土星回归", "木星回归", "saturn return", "jupiter return", "planet returns"),
     "persiandirected": ("波斯向运", "象征向运", "persian directed", "symbolic direction"),
+    # 推运图族四法（上游 v3.13.0 之后 219d8a67）。
+    "neroman": ("演进推运", "演进弧", "Néroman", "neroman", "evolved directions"),
+    "bezzafigure": ("推运图", "Bezza", "bezzafigure", "directed figure"),
+    "jayprofection": ("周日小限", "Jay profection", "diurnal profection", "jayprofection"),
+    "michon": ("双黄道", "Michon", "double zodiac", "michon"),
     # ---- 卜卦 / 择日 ----
     "horary": ("卜卦占星", "卜卦", "占问", "horary", "horary astrology"),
     "election": ("择日", "择吉", "选时", "electional", "election astrology", "electional astrology"),

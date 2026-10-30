@@ -34,6 +34,11 @@ _PROG_WORDS = [
     "secondary progression", "tertiary progression", "minor progression", "progressed chart",
 ]
 _PROG_EXCLUDE = ["恒星", "印度", "vedic", "sidereal", "赤纬", "jayne", "declination", "月相", "lunation"]
+# 推运图族四法（上游 v3.13.0 之后）。「jay」不能单列：它是「jayne」（赤纬推运）的前缀。
+_JAY_WORDS = ["周日小限", "jay profection", "jayprofection", "diurnal profection"]
+_NEROMAN_WORDS = ["演进推运", "neroman", "néroman", "evolved direction", "演进弧"]
+_MICHON_WORDS = ["双黄道", "michon", "double zodiac", "回归恒星叠合"]
+_BEZZA_WORDS = ["bezza", "bezzafigure", "directed figure", "推运图(bezza)", "推运图（bezza）"]
 
 
 def select_tools(request: DispatchInput) -> list[str]:
@@ -154,7 +159,8 @@ def select_tools(request: DispatchInput) -> list[str]:
             add("pdchart")
         else:
             add("pd")
-    if _contains_any(text, ["profection", "小限"]):
+    # 「周日小限」（Jay）含「小限」二字、「diurnal profection」含 profection → 排除，否则一句话点亮两个工具。
+    if _contains_any(text, ["profection", "小限"]) and not _contains_any(text, _JAY_WORDS):
         add("profection")
     # 「流年」是中式通用词（八字直断/紫微/六壬都用）：只在没有更具体技法命中时才指西占指定年推运。
     if _contains_any(text, ["given year", "givenyear"]) or ("流年" in text and not selected):
@@ -203,6 +209,16 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("yearsystem129")
     if _contains_any(text, ["波斯向运", "persian directed", "persiandirected", "象征向运"]):
         add("persiandirected")
+    if _contains_any(text, _NEROMAN_WORDS):
+        add("neroman")
+    if _contains_any(text, _JAY_WORDS):
+        add("jayprofection")
+    if _contains_any(text, _MICHON_WORDS):
+        add("michon")
+    # 「推运图」是上游 Bezza 一法的中文名，但字面也像「某某推运的图」：只在没有更具体的推运技法命中时才归 Bezza
+    # （与「流年」→ givenyear 同一条兜底纪律）。
+    if _contains_any(text, _BEZZA_WORDS) or ("推运图" in text and not selected):
+        add("bezzafigure")
     # 卜卦盘 的「起卦」通用词会被小成图/小六壬/飞宫/皇极轨策的「…起卦」误触 → 显式排除新式起卦技法。
     if _contains_any(text, ["卜卦", "horary", "占问", "起卦"]) and not _contains_any(
         text,

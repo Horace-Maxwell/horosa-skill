@@ -24,6 +24,24 @@ _SYNC311_ASTROEXTRA_STUBS = {
 _SYNC313_LIVE = json.loads((Path(__file__).parent / "fixtures" / "sync313_predictive_live.json").read_text(encoding="utf-8"))
 _SYNC311_ASTROEXTRA_STUBS["/predict/agepoint"] = _SYNC313_LIVE["agepoint"]["default"]
 _SYNC311_ASTROEXTRA_STUBS["/predict/dist"] = _SYNC313_LIVE["dist"]["default"]
+# 推运图族四法（上游 v3.13.0 之后）：/astroextra/<接口> 回**真实**响应（fixtures/sync313_directed_live.json 的 default 场景，
+# vendored 实例实抓）；值级真相归 tests/test_sync313_directed.py 的上游金标。
+_DIRECTED_LIVE = json.loads((Path(__file__).parent / "fixtures" / "sync313_directed_live.json").read_text(encoding="utf-8"))["scenarios"]
+for _tech, _scen in _DIRECTED_LIVE.items():
+    _SYNC311_ASTROEXTRA_STUBS[f"/astroextra/{_tech}"] = _scen["default"]["response"]
+# 桩版 directedFigureRequestFields ∘ directedFigureOptsFromSettings（页面键 → 后端口径键；真函数由真 node 用例守）。
+_DIRECTED_MAIN_LIST = {"neroman": "evolved", "bezzafigure": "points", "jayprofection": "rows", "michon": "superpositions"}
+
+
+def _fake_directed_request(technique: str, o: dict) -> dict:
+    flag = lambda v: 1 if v in (True, 1, "1", "true") else 0  # noqa: E731 - 桩
+    if technique == "neroman":
+        return {"nerK": o.get("nerK", 273.18), "nerT0": o.get("nerT0", 0.75), "nerKeepDec": flag(o.get("nerKeepDec")), "orb": o.get("nerOrb", 1)}
+    if technique == "bezzafigure":
+        return {"orb": o.get("bezzaOrb", 1)}
+    if technique == "jayprofection":
+        return {"jayFrom": int(o.get("jayFrom", -1))}
+    return {"orb": o.get("michonOrb", 1), "mzSwap": flag(o.get("michonSwap")), "mzEqual": flag(o.get("michonEqual"))}
 
 
 class FakeClient(HorosaApiClient):
@@ -1277,6 +1295,12 @@ class FakeJsClient(HorosaJsEngineClient):
             # 后端结果，空则上游返回 ''）。正文 = 真 builder 在 chart_1998_predictive.json / sync313_predictive_live.json 上的
             # 逐字输出（截前几行；值级真相由 tests/test_sync313_predictive.py 的真 node 用例守）。
             result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
+            if technique in _DIRECTED_MAIN_LIST:
+                text = _DIRECTED_LIVE[technique]["default"]["upstream"]["text"] if result.get(_DIRECTED_MAIN_LIST[technique]) else ""
+                return {
+                    "tool": "progextra", "technique": technique, "data": {"ok": True}, "snapshot_text": text,
+                    "moment_lines": [], "request_fields": _fake_directed_request(technique, payload.get("options") or {}),
+                }
             if technique == "agepoint" and not ((result.get("agepoint") or {}).get("points")):
                 return {"tool": "progextra", "technique": technique, "data": {"ok": True}, "snapshot_text": ""}
             if technique == "distributions" and not result.get("dist"):

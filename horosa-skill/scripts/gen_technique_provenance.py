@@ -90,7 +90,7 @@ CLASS = {
     # 本地数据检索：不算盘，只读本地库/注册表。
     "local_data": {"astrodata", "export_registry", "export_parse", "knowledge_registry", "knowledge_read"},
     # 后端算、JS 只排版：runner 同时有端点与 JS 调用时启发式会误判 headless_js，这里显式点名。
-    "python_chart_backend": {"acg", "agepoint", "distributions"},
+    "python_chart_backend": {"acg", "agepoint", "distributions", "neroman", "bezzafigure", "jayprofection", "michon"},
 }
 NOTES = {
     "ken_backed": "ken 后端算、JS 只格式化；健康结果带 pan.source/jinkou.source == 引擎名，runner 必须调 _require_ken_pan",
@@ -117,6 +117,8 @@ NOTE_OVERRIDES = {
     # （horosa-core-js progextra FROM_RESULT_BUILDERS）按回包排版。
     "agepoint": "chart 服务 /predict/agepoint 算年龄点与事件；vendored 星阙前端 buildAgePointSnapshotFromResult（horosa-core-js progextra）按回包排版",
     "distributions": "chart 服务 /predict/dist 算界推运与伙伴星；vendored 星阙前端 buildDistributionsSnapshotFromResult（horosa-core-js progextra）按回包排版",
+    **{k: f"chart 服务 /astroextra/{k}（astrostudy/directed_figures.py）按定义算；vendored 星阙前端 buildDirectedFigureText（horosa-core-js progextra）按回包排版"
+       for k in ("neroman", "bezzafigure", "jayprofection", "michon")},
     "bazi_inverse": "Java BaZiHelper.getBirthes 逐年回推；Python 只校验四柱干支、转发与排版",
     "guolao_chart": (
         "盘面 /chart（Python chart 服务）+ 政余格局/庙旺 headless JS + [虚实]/[本命化曜]/[流年流曜] 走 Java "
@@ -135,6 +137,8 @@ EXTRA_EVIDENCE: dict[str, dict[str, list[str]]] = {
     "mundane": {"engines": ["mundane_cards"]},
     # agepoint / distributions：runner 经 _run_predict_result_tool 把 /predict/* 回包交给 progextra 的 FROM_RESULT_BUILDERS。
     **{k: {"engines": ["progextra"]} for k in ("agepoint", "distributions")},  # 世俗盘右栏卡（tools/mundaneCards.js）
+    # 推运图族四法：各自 runner 把 /astroextra/<接口> 回包经 _run_directed_figure_tool 交给 progextra（同 agepoint）。
+    **{k: {"engines": ["progextra"]} for k in ("neroman", "bezzafigure", "jayprofection", "michon")},
     # ken 族里「上游同判据路由到本地引擎」的合法算源（v3.11 sanshi chunk）：qimen 按 isQimenLocalRoute（本地家/飞盘/
     # 混合/报数/七组本地口径）走 calcDunJia、jinkou 按 schoolsAllDefault（五项流派任一非缺省）走 buildJinKouData ——
     # 两者都不打 ken，runner 回 compute_sources = 下列名字。不声明的话依据卡会把合法路由误标「与声明不一致」；

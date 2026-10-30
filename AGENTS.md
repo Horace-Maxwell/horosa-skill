@@ -16,7 +16,7 @@ Claude Code 的薄入口是根 [`CLAUDE.md`](./CLAUDE.md)（与本文 §0 路由
 
 ## 0. 30 秒定向与路由
 
-Horosa Skill 把星阙（Horosa）的 **110 个**术数/占星技法打包成 local-first 的 **MCP server + CLI**：
+Horosa Skill 把星阙（Horosa）的 **114 个**术数/占星技法打包成 local-first 的 **MCP server + CLI**：
 算法跑在本机离线 runtime（Java 聚合层 `:9999` + Python chart 服务 `:8899`（含 ken/kentang 引擎）+
 bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 envelope + 星阙式
 `export_snapshot`/`export_format`；仓库保持轻量，重 runtime 走 GitHub Releases 分发。
@@ -171,7 +171,11 @@ runner 不打 ken、`data.route.local=true`、`compute_sources` 标 `local_route
   字面 1 的兜底从不触发；无头路径 `record.timeAlg ?? 0`（aiAnalysisContext.js:603）与挂载齿轮缺省 0 同口径。
   找缺省要追字段的**种子**，不是 getter 的兜底值（此前据兜底值写成缺省 1，钟表时出盘多个版本）。
 - **backend predict/astroextra 型**：harmonic / agepoint / distributions / jaynesprog / vedicprog /
-  planetaryarc 等——Python `_call_remote` + Python snapshot builder。
+  planetaryarc 等——Python `_call_remote` + Python snapshot builder。推运图族四法（neroman / bezzafigure / jayprofection / michon，
+  v0.46.1）后端 `/astroextra/<接口>` 算、vendored 上游 `AstroDirectedFigures.snapshotText` 排版（progextra）。
+- **上游无头路径是「请求型」**（builder 自己 fetch，如 `buildDirectedFigureSnapshotText`）时，请求体只能由 Python 手算——这是一份
+  手抄件。让 JS 工具用 vendored 上游函数把同一份设置重算成 `request_fields` 回传，runner 与自己发出的逐键比对，不一致即报错
+  （`tool.directed_request_mismatch`；v0.46.1）——值错了后端照样算出一张「合理」的盘，没有这一步漂移零信号。
 - **三式合一（v0.40.0 起）**：Python 只取数（一份三式 nongli + 展示真太阳时 + `/chart` hsys 1 + 奇门/太乙 runner），
   整段快照由 vendored 上游 `buildSanShiUnitedSnapshotText`（`tools/sanshiUnited.js` 按上游 `performRecalcByNongli` 装配）产出；
   六壬层用 SanShiUnitedMain 自带三函数、占时取奇门盘时柱（随 `timeAlg`），不再另起 `/liureng/gods` 子盘。
@@ -339,6 +343,12 @@ idempotent=False——默认写一条本地 run 记录，必须如实标注，�
 归一化前被拒、且都绕过 `agent_recovery`。内联 `$defs` 时**绝不能残留 `$ref`**（模型自引用会让 pydantic
 构不出 arg model，服务器起不来）。
 
+**tools/list 预算（v0.46.1）**：全量面硬顶 256 KB 已近满（v0.46.1 推运图族四法之后 260 223 B，余量 ~1.9 KB）；一个 BirthInput 技法工具的广告层
+≈ 1.9–2.7 KB。新工具只广告域核心 + 推运目标字段 + 闸门三键，口径旋钮一律 `ADVERTISE_HIDDEN`（guidance `options_keys` 必须有说明，
+`test_guidance_documents_house_systems_hidden_knobs_and_gate_vocab` 守）；对该技法**不改结果**的域核心键（如只按回归黄道算的四法的
+`zodiacal` / `siderealAyanamsa`）也可列进 `ADVERTISE_HIDDEN`——广告层会剔除，校验层照收。硬顶与 2% 容差永不为放新工具而抬；新增工具后
+`verify_mcp_list_budget.py --update-baseline` 记新基线（docs-sync 的 README「全量 N」读它的 `full_tools`）。再加工具前先找结构性省法。
+
 **决策层法则（v0.39.0，`src/horosa_skill/decisions/`，可选云端 TypeSafe Jev）**：本仓唯一会把用户文本送出本机的路径，
 六条硬规则各有守卫：① `HOROSA_JEV=off`（缺省）= **零字节变化**——不建对象、不读 key、信封/卡片/instructions 逐字节等于
 今天（`tests/test_decisions_service.py` 影子不变性）；② **代码持有权限，模型只供证据**：确定性路由是权威（S1 只在
@@ -415,7 +425,7 @@ OpenCC 管不到、上游也没有的词组修正（复核 → 複核）在 `dat
    `gua`）必须登记进去，否则繁体报告里格位对不上（v0.43.1-dev）。
    渲染器自己写死的标签（目录 / 完整盘面 / 页脚…）一律包 `t()`（`renderers._labeler`）；**已转过的文字绝不再转**（不幂等：萬里 → 萬裡），
    所以技法依据报告交简体原文给 `render_report`，生成人读版 / markdown 后整体转一次（v0.43.0）。
-4. **新技法 / 新术语** → 用 110 技法真实输出跑一遍残差（看术数字是否被转成普通义）：术数字的普通义例外进
+4. **新技法 / 新术语** → 用 114 技法真实输出跑一遍残差（看术数字是否被转成普通义）：术数字的普通义例外进
    `horosa_char_rules.json` 该字的白名单（偏离上游要写 `deviations`），其余字的词组错进 `horosa_s2t.txt`，并补金样（`GOLDEN`）；
    `test_every_character_rule_is_well_formed_and_takes_effect` / `test_every_term_table_entry_is_well_formed_and_takes_effect` 保证每行都生效。
    **上游改了 `hantRules.js`** → 上游比对测试会红：把新规则并进来，或写进 `deviations` 说明为什么不跟。
@@ -499,7 +509,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
   守。v0.40.0 前 32 份 JSON 只登记 1 份，上游 v3.11.0 改 `hellenisticData.json` 日/月中年（39.5→69.5/66.5）零信号滞留。
   Python 侧若手抄了同一张表（如 `predictive_text.PLANETARY_YEARS`），测试要与 vendored JSON 互锚。
 - **重同步 `vendor/runtime-source`**：`sync_vendored_runtime_sources.sh` + 显式 `HOROSA_SOURCE_ROOT`
-  （对上游 READ-ONLY）。**顶层共享件必须显式补**：上游把子逻辑上提为 vendor 根级单文件时（如
+  （对上游 READ-ONLY）。脚本拷的是上游**工作树**、把 HEAD sha 写进 `contracts/upstream_python_requirements.txt` 首行；上游 HEAD 有未推送提交时 pin 不能前移（`--write-state` 的 `pin_to_record` 拒写），首行要改回记录的 pin（`test_requirements_provenance_header_names_the_recorded_upstream_pin`，v0.46.1）。**顶层共享件必须显式补**：上游把子逻辑上提为 vendor 根级单文件时（如
   v3.5.0 全年份域的 `Horosa-Web/vendor/kin_year_domain.py`，被 16 个 ken/神数 引擎懒 import），逐引擎
   目录枚举的 sync 清单会漏它 → 重同步后**域外（BC/远期）请求静默 500**。守卫 =
   `verify_vendor_runtime_sources.py` 断言该文件 + vendored aiExport `AI_EXPORT_SETTINGS_VERSION` **等于** `MIRRORED_UPSTREAM_AIEXPORT_VERSION`（今 60）。
@@ -517,7 +527,9 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
    `BirthInput` `extra="allow"`，声明字段主要为 discoverability + guidance）。
 2. `service/runners/<族>.py` 里加 `_run_*_tool` runner（mixin 方法；跨族只经 `self.` 调）；远端端点进 `_PYTHON_CHART_ENDPOINTS`；ken-backed 加 `_require_ken_pan`。
 3. `engine/registry.py` TOOL_DEFINITIONS 注册；`router.py` 分派词做互斥检查（**卜卦含「卦」字**：梅易/卦
-   分支必须排除 卜卦/horary/起卦/占问 短语，否则「卜卦问婚姻」误路由 `gua_desc`——同类新词照此办理）。
+   分支必须排除 卜卦/horary/起卦/占问 短语，否则「卜卦问婚姻」误路由 `gua_desc`——同类新词照此办理；「周日小限」含「小限」
+   要从 profection 排除、`jay` 是 `jayne` 的前缀不能单列、「推运图」这类字面泛化的名字只在没有更具体命中时兜底，v0.46.1）。
+   路由语料 `contracts/router_corpus.json` 每个新工具至少一中一英两例，`verify_router_corpus.py --update-baseline` 锁住。
 4. 导出契约：`exports/registry.py` preset **逐工具**对齐 builder 实际产段（权威清单 = `aiExport.js` 的
    `EXPORT_TECHNIQUES` + `EXPORT_PRESET_SECTIONS`，不是组件目录；照抄会多列 UI-only 死条目、漏列真产段）。
 5. **条件段双登记**：可能不出现的段**同时**进 preset（出现时不算 unknown）**和** `AI_EXPORT_OPTIONAL_SECTIONS`
@@ -907,7 +919,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
    （`missing_selected_sections == []` 且 `unknown_detected_sections == []`；election 等条件段技法按
    optional 白名单放宽）。`section_harness.py` 的 clean 另要求依据卡 `matches_declaration` 不为 false（算源声明在
    `gen_technique_provenance.py` 的 `ENGINE_OVERRIDES` / `EXTRA_EVIDENCE` 修，不手改契约）。**service 层绿 ≠ agent 走得通**（v0.40.2 表面审计）：
-   闸门、技法名写法、参数形状、CLI 退出码、HTTP 鉴权只存在于表面层，发版前另跑 `scripts/surface_audit.py`（全 110 技法 × MCP 全量 /
+   闸门、技法名写法、参数形状、CLI 退出码、HTTP 鉴权只存在于表面层，发版前另跑 `scripts/surface_audit.py`（全 114 技法 × MCP 全量 /
    精简 / CLI / HTTP + 门面·资源·提示，failed=0）；它在全新数据目录上并行起 CLI，顺带守住记忆库首建的并发迁移（`_ensure_column`）。**反向陷阱：维护机装着 runtime，会让「其实依赖 runtime」的离线测试恒绿，
    只有 CI（唯一无 runtime 的环境）才炸**——离线/线材契约测试**禁以「算成功」为判据**（那是
    `@requires_runtime` 的活）；`tests/test_mcp_contract.py` 已用 autouse fixture 把 `HOROSA_RUNTIME_ROOT`
@@ -1087,7 +1099,7 @@ A global stability pass hardened these; keep them true when you touch the releva
 
 ### 9.2 MCP 面 · schema · 错误信封（MCP surface / schema / errors）
 
-- **工具面（v0.45.0）**：全量面 = 110 技法 + 11 门面，精简面 = 11 门面 + `horosa_tool_run`。新加的非技法工具做成门面，
+- **工具面（v0.45.0）**：全量面 = 114 技法 + 11 门面，精简面 = 11 门面 + `horosa_tool_run`。新加的非技法工具做成门面，
   **别塞进 `TOOL_DEFINITIONS`**（那里每一项都计入技法总数）。检索与精读分两个工具（`horosa_knowledge_search` / `horosa_knowledge_read`）。常驻（`anthropic/alwaysLoad`）：
   guidance / dispatch / tool_run / knowledge_search。报告结果带 `file` 文件卡；MCP 层只给协商到 2025-06-18 及以后的客户端追加
   `resource_link`（老客户端按旧联合类型校验，多一个块可能整条作废）。守卫 `tests/test_mcp_tool_design.py`。
@@ -1383,7 +1395,7 @@ A global stability pass hardened these; keep them true when you touch the releva
   （10013 / 10048 / EADDRINUSE / attempting to bind）的早退有界换号（3 次），其它早退带 stderr 立刻红
   （`tests/test_http_and_clients.py::test_streamable_http_handshake_end_to_end`）。合成 churn 两种模型都没复现——证据以自报为准，
   修法靠消灭窗口。**矩阵 Windows 超时先分「慢 / 挂」**：流式 pytest.log + `--pytest-args=--durations=40` 一跑就分清（本机真机
-  1111 s / 1755 passed，慢在 110 技法渲染三条 + PowerShell CIM 的 `process_command` 0.45 s/次），预算只对「慢」有意义。
+  1111 s / 1755 passed，慢在 110 技法渲染三条 + PowerShell CIM 的 `process_command` 0.45 s/次），预算只对「慢」有意义。 <!-- docs-sync:ignore-count -->
 - **证据的形状不许由偶然决定。** ① CI 里 `shell: pwsh` 的多行 `run:` 块首行必须是 `$PSNativeCommandUseErrorActionPreference = $true`，
   否则只有最后一条命令算数（`tests/test_ci_workflow_shape.py`）；② 计数守卫的覆盖面是正则规则（`COUNT_PROSE_EN` 认 `real|local`），
   不是某句话恰好的措辞；③ 仓里有的文件文档不得否认（`verify_docs_sync.check_docker_claims`），Dockerfile 的 `COPY` 必须盖住

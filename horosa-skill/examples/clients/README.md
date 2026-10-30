@@ -5,8 +5,8 @@
 
 | key | 客户端 | 配置落点 | 工具面缺省 | 示例 / 备注 |
 | --- | --- | --- | --- | --- |
-| `claude-code` | Claude Code | `claude mcp add`（scope local / project / user）或 `.mcp.json`；插件 `.claude-plugin/` | 全量 120 | [claude-code.md](./claude-code.md) |
-| `claude-desktop` | Claude Desktop | `claude_desktop_config.json`（GUI 不继承 shell PATH → 绝对 `uv` 路径）或 `.mcpb` 一键包 | 全量 120 | [claude_desktop_config.json](./claude_desktop_config.json) |
+| `claude-code` | Claude Code | `claude mcp add`（scope local / project / user）或 `.mcp.json`；插件 `.claude-plugin/` | 全量 125 | [claude-code.md](./claude-code.md) |
+| `claude-desktop` | Claude Desktop | `claude_desktop_config.json`（GUI 不继承 shell PATH → 绝对 `uv` 路径）或 `.mcpb` 一键包 | 全量 125 | [claude_desktop_config.json](./claude_desktop_config.json) |
 | `codex` | Codex CLI | `~/.codex/config.toml` `[mcp_servers.horosa]`（含 startup / tool 超时与 env 根） | 精简 11 | [codex.md](./codex.md) · [codex-config.toml](./codex-config.toml) |
 | `cursor` | Cursor | `~/.cursor/mcp.json` / 项目 `.cursor/mcp.json`；deep link | 精简 11 | `client config --format cursor` |
 | `vscode` | VS Code（Copilot） | `.vscode/mcp.json` `servers` | 精简 11 | `client config --format vscode` |
@@ -31,7 +31,7 @@
 | `deepcode` | Deep Code | `~/.deepcode/settings.json`（严格 JSON；调用固定 60 s 上限） | 精简 11 | `client config --format deepcode` |
 | `dsh` | DeepSeek Harness | 独立补丁 `~/.horosa/clients/dsh/horosa.cordis.yml`（`dsh web --patch`） | 精简 11 | `client config --format dsh` |
 | — | OpenClaw（经 mcporter） | `client openclaw-setup --workspace …` | 全技法 | [openclaw-mcp.md](./openclaw-mcp.md) |
-| — | Open WebUI / 任何 streamable-http 客户端 | `serve --transport streamable-http --token …` | 全量 120 | [openwebui-streamable-http.md](./openwebui-streamable-http.md) |
+| — | Open WebUI / 任何 streamable-http 客户端 | `serve --transport streamable-http --token …` | 全量 125 | [openwebui-streamable-http.md](./openwebui-streamable-http.md) |
 | — | claude.ai / ChatGPT 连接器 | 只接 OAuth：需要终结 OAuth 的 HTTPS 网关 | 同 HTTP | [remote-connectors-oauth-gateway.md](./remote-connectors-oauth-gateway.md) |
 
 第三方事实（路径 / 超时 / 预算）的来源与核实日期记在 [`contracts/third_party_facts.json`](../../contracts/third_party_facts.json)。

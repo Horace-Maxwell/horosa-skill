@@ -347,6 +347,57 @@ KEYPOINTS_POLICY = _progression_target_policy(
     do_not_assume=["mode"],
     extra_defaults=[{"field": "mode", "value": "soul", "meaning": "身（月亮起，上游缺省）"}],
 )
+# 推运图族四法（上游 v3.13.0 之后 219d8a67；缺省 = utils/directedFigures.js *_DEFAULTS = 后端缺省，设置名 = 挂载齿轮字段）。
+# 四法都按回归黄道算（后端强制 zodiacal=0；zodiacal 只改 [起盘信息] 的盘头文字）。
+_DIRECTED_TARGET_DEFAULTS = [
+    {"field": "targetDate", "value": "今天", "meaning": "缺省推到本盘时区今日（上游 today(chartZone)）"},
+    {"field": "targetTime", "value": "12:00:00", "meaning": "目标时刻缺省正午"},
+]
+_DIRECTED_TROPICAL_NOTE = {"field": "zodiacal", "value": 0, "meaning": "本法只按回归黄道算（后端强制）；传 1 只改盘头文字，不改结果"}
+NEROMAN_POLICY = _progression_target_policy(
+    intent="演进推运（Néroman）：对数时标弧 K × ln(1 + 年龄 ⁄ t0) 让全部点赤经逆行，本命 + 目标日期；出演进位置、对本命相位、天顶 / 上升过本命点年表。",
+    targets=[_TARGET_DATE_QUESTION],
+    do_not_assume=["target date"],
+    extra_defaults=[
+        *_DIRECTED_TARGET_DEFAULTS,
+        {"field": "nerK", "value": 273.18, "meaning": "弧常数 K（1–5000）"},
+        {"field": "nerT0", "value": 0.75, "meaning": "出生前年数 t0（0.01–10；0.75 = 孕期）"},
+        {"field": "nerKeepDec", "value": False, "meaning": "换到赤道：按黄经度数（true = 保留本命赤纬）"},
+        {"field": "nerOrb", "value": 1, "meaning": "演进对本命相位容许度（0.5 / 1 / 2 / 3）"},
+        _DIRECTED_TROPICAL_NOTE,
+    ],
+)
+BEZZAFIGURE_POLICY = _progression_target_policy(
+    intent="推运图（Bezza）：真太阳弧下整盘按 Placidus 世俗时位推进，本命 + 目标日期；出各点本命 / 推运时位与当前弧前后的四类接触。",
+    targets=[_TARGET_DATE_QUESTION],
+    do_not_assume=["target date"],
+    extra_defaults=[
+        *_DIRECTED_TARGET_DEFAULTS,
+        {"field": "bezzaOrb", "value": 1, "meaning": "接触窗 = 当前弧 ±（0.5 / 1 / 2 / 3 / 5 度）"},
+        _DIRECTED_TROPICAL_NOTE,
+    ],
+)
+JAYPROFECTION_POLICY = _progression_target_policy(
+    intent="周日小限（Jay）：赤经中天每年 +30°（十二年一周），本命 + 目标日期；出当前小限各点与十二年逐年表（落宫按本盘宫制）。",
+    targets=[_TARGET_DATE_QUESTION],
+    do_not_assume=["target date"],
+    extra_defaults=[
+        *_DIRECTED_TARGET_DEFAULTS,
+        {"field": "jayFrom", "value": -1, "meaning": "逐年表起始年龄：当前所在的十二年一轮（0 / 12 … 120 指定起点）"},
+        _DIRECTED_TROPICAL_NOTE,
+    ],
+)
+MICHON_POLICY = _progression_target_policy(
+    intent="双黄道（Michon）：回归 / 恒星黄道叠合（回归第 k 座叠恒星第 k − 1 座），守护星距角归五类谐波族；只需本命，与目标时刻无关。",
+    targets=[],
+    do_not_assume=[],
+    extra_defaults=[
+        {"field": "michonOrb", "value": 1, "meaning": "容许度（0.5 / 1 / 1.5 / 2 度）"},
+        {"field": "michonSwap", "value": False, "meaning": "现代守护（true = 水金互换）"},
+        {"field": "michonEqual", "value": False, "meaning": "本盘宫制（true = 等宫，上升居第一宫正中）"},
+        _DIRECTED_TROPICAL_NOTE,
+    ],
+)
 
 
 def _predictive_policy_with_defaults(extra_defaults: list[dict[str, Any]]) -> dict[str, Any]:

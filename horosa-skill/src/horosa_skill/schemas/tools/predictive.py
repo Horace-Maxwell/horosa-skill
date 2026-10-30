@@ -1,6 +1,8 @@
 """推运族输入：返照 / 太阳弧 / 主限 / 小限 / 黄道释放 / 年龄点 / 各类推运 / 星历 / progextra 族 / 多重回归 / 129 年 / 波斯向运 / 法达 / 十年期。"""
 from __future__ import annotations
 
+from typing import ClassVar
+
 from pydantic import Field
 
 from horosa_skill.schemas.tools.base import BirthInput
@@ -75,6 +77,54 @@ class VedicProgInput(BirthInput):
     targetTime: str | None = "12:00:00"
     orb: float | None = 1.5
     minorVariant: str | None = Field(default=None, description=_MINOR_VARIANT_DESC)
+
+
+# ── 推运图族四法（上游 v3.13.0 之后 219d8a67：utils/directedFigures.js + 后端 astrostudy/directed_figures.py）──
+# 设置名 = 上游挂载齿轮字段 = 星阙页保存键（techniqueMountSettings.js NEROMAN_FIELDS…MICHON_FIELDS），值域 = 齿轮选项；
+# 缺省 = directedFigures.js *_DEFAULTS（= 后端缺省）。四法都按回归黄道算（后端 _natal_from_request 强制 zodiacal=0）——
+# 黄道 / 岁差制只影响 [起盘信息] 的盘头文字，故不进广告层（照收）。口径旋钮全量见 horosa_agent_guidance。
+_DIRECTED_TARGET_TIME_DESC = "目标时刻 HH:mm:ss（缺省 12:00:00）"
+_DIRECTED_TROPICAL_ONLY = frozenset({"zodiacal", "siderealAyanamsa"})
+
+
+class NeromanInput(BirthInput):
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = _DIRECTED_TROPICAL_ONLY | {"targetTime", "nerK", "nerT0", "nerKeepDec", "nerOrb"}
+    predictive: bool | None = False
+    targetDate: str | None = Field(default=None, description=_TARGET_DATE_DESC)
+    targetTime: str | None = Field(default=None, description=_DIRECTED_TARGET_TIME_DESC)
+    nerK: float | None = Field(default=None, description="弧常数 K：1–5000（缺省 273.18）；弧 = K × ln(1 + 年龄 ⁄ t0)")
+    nerT0: float | None = Field(default=None, description="出生前年数 t0：0.01–10（缺省 0.75 = 孕期）")
+    nerKeepDec: bool | int | str | None = Field(
+        default=None, description="换到赤道：false 按黄经度数（缺省）| true 保留本命赤纬（真实赤经减弧、赤纬不变）"
+    )
+    nerOrb: float | None = Field(default=None, description="演进对本命相位容许度：0.5 | 1（缺省）| 2 | 3（度）")
+
+
+class BezzaFigureInput(BirthInput):
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = _DIRECTED_TROPICAL_ONLY | {"targetTime", "bezzaOrb"}
+    predictive: bool | None = False
+    targetDate: str | None = Field(default=None, description=_TARGET_DATE_DESC)
+    targetTime: str | None = Field(default=None, description=_DIRECTED_TARGET_TIME_DESC)
+    bezzaOrb: float | None = Field(default=None, description="接触窗（当前弧 ±）：0.5 | 1（缺省）| 2 | 3 | 5（度）")
+
+
+class JayProfectionInput(BirthInput):
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = _DIRECTED_TROPICAL_ONLY | {"targetTime", "jayFrom"}
+    predictive: bool | None = False
+    targetDate: str | None = Field(default=None, description=_TARGET_DATE_DESC)
+    targetTime: str | None = Field(default=None, description=_DIRECTED_TARGET_TIME_DESC)
+    jayFrom: int | None = Field(
+        default=None, description="逐年表起始年龄：-1 当前所在的十二年一轮（缺省）| 0 | 12 | 24 … 120（12 的倍数）"
+    )
+
+
+class MichonInput(BirthInput):
+    # 双黄道与目标时刻无关（上游挂载齿轮不收目标日期）。
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = _DIRECTED_TROPICAL_ONLY | {"michonOrb", "michonSwap", "michonEqual"}
+    predictive: bool | None = False
+    michonOrb: float | None = Field(default=None, description="容许度：0.5 | 1（缺省）| 1.5 | 2（度），距角离该族精确角在此以内才归族")
+    michonSwap: bool | int | str | None = Field(default=None, description="守护：false 现代守护（缺省）| true 水金互换（金牛/天秤与双子/处女对调）")
+    michonEqual: bool | int | str | None = Field(default=None, description="宫位：false 本盘宫制（缺省）| true 等宫（上升居第一宫正中）")
 
 
 # ── 上游 v3.11 星运四键（[Q-106/T-10] 星历/回归轴/产前朔望 + [#80] 回归黄道二次推运）──

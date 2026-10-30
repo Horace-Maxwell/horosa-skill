@@ -122,6 +122,17 @@
       "export_technique": "beiji",
       "notes": "kentang 神数引擎挂在 Python chart 服务上，后端直出 snapshot（真身在 Result.snapshot）"
     },
+    "bezzafigure": {
+      "compute_class": "python_chart_backend",
+      "engines": [
+        "progextra"
+      ],
+      "endpoints": [
+        "/astroextra/bezzafigure"
+      ],
+      "export_technique": "bezzafigure",
+      "notes": "chart 服务 /astroextra/bezzafigure（astrostudy/directed_figures.py）按定义算；vendored 星阙前端 buildDirectedFigureText（horosa-core-js progextra）按回包排版"
+    },
     "calendar_month": {
       "compute_class": "java_backend",
       "engines": [],
@@ -466,6 +477,17 @@
       "export_technique": "jaynesprog",
       "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
     },
+    "jayprofection": {
+      "compute_class": "python_chart_backend",
+      "engines": [
+        "progextra"
+      ],
+      "endpoints": [
+        "/astroextra/jayprofection"
+      ],
+      "export_technique": "jayprofection",
+      "notes": "chart 服务 /astroextra/jayprofection（astrostudy/directed_figures.py）按定义算；vendored 星阙前端 buildDirectedFigureText（horosa-core-js progextra）按回包排版"
+    },
     "jieqi_birth": {
       "compute_class": "python_chart_backend",
       "engines": [],
@@ -599,6 +621,17 @@
       "export_technique": "lunationphase",
       "notes": "chart 服务 /chart 铸本命盘；技法本身由 vendored 星阙前端 builder（horosa-core-js progextra）在盘上推算并直出快照"
     },
+    "michon": {
+      "compute_class": "python_chart_backend",
+      "engines": [
+        "progextra"
+      ],
+      "endpoints": [
+        "/astroextra/michon"
+      ],
+      "export_technique": "michon",
+      "notes": "chart 服务 /astroextra/michon（astrostudy/directed_figures.py）按定义算；vendored 星阙前端 buildDirectedFigureText（horosa-core-js progextra）按回包排版"
+    },
     "mundane": {
       "compute_class": "composite",
       "engines": [
@@ -626,6 +659,17 @@
       ],
       "export_technique": "nanji",
       "notes": "kentang 神数引擎挂在 Python chart 服务上，后端直出 snapshot（真身在 Result.snapshot）"
+    },
+    "neroman": {
+      "compute_class": "python_chart_backend",
+      "engines": [
+        "progextra"
+      ],
+      "endpoints": [
+        "/astroextra/neroman"
+      ],
+      "export_technique": "neroman",
+      "notes": "chart 服务 /astroextra/neroman（astrostudy/directed_figures.py）按定义算；vendored 星阙前端 buildDirectedFigureText（horosa-core-js progextra）按回包排版"
     },
     "nongli_time": {
       "compute_class": "java_backend",

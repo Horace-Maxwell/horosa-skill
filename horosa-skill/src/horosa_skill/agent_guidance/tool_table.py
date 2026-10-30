@@ -1,4 +1,4 @@
-"""TOOL_GUIDANCE：每个技法工具一条指引（110 条），以及注入到条目里的 options_keys 文档与记忆 / 报告门面的指引。"""
+"""TOOL_GUIDANCE：每个技法工具一条指引（114 条），以及注入到条目里的 options_keys 文档与记忆 / 报告门面的指引。"""
 from __future__ import annotations
 
 from typing import Any
@@ -15,11 +15,15 @@ from horosa_skill.agent_guidance.policies import (
     ASTRO_BIRTH_POLICY,
     ASTRO_CHART_POLICY,
     BALBILLUS_POLICY,
+    BEZZAFIGURE_POLICY,
     DISTRIBUTIONS_POLICY,
     EPHEMERIS_POLICY,
     EXTRARETURNS_POLICY,
     JAYNESPROG_POLICY,
+    JAYPROFECTION_POLICY,
     KEYPOINTS_POLICY,
+    MICHON_POLICY,
+    NEROMAN_POLICY,
     PD_POLICY,
     PDCHART_POLICY,
     PERSIANDIRECTED_POLICY,
@@ -853,6 +857,10 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     "keypoints": KEYPOINTS_POLICY,
     "lunationphase": ASTRO_BIRTH_POLICY,
     "extrareturns": EXTRARETURNS_POLICY,
+    "neroman": NEROMAN_POLICY,
+    "bezzafigure": BEZZAFIGURE_POLICY,
+    "jayprofection": JAYPROFECTION_POLICY,
+    "michon": MICHON_POLICY,
     "horary": _policy(
         intent="卜卦 / horary：盘的时刻是「提问的当下」（占者收到问题、心中疑问成形的那一刻），不是当事人的出生时间。按问题类别取事项宫。",
         required_context=["提问时刻 date/time/zone", "提问地点 lon/lat", "问题类别 category"],

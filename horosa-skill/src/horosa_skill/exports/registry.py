@@ -79,6 +79,8 @@ AI_EXPORT_SECTION_MIGRATION_KEYS = [
     "jieqi", "otherbu", "tongshefa", "tongshu",
     # 上游 v3.11 星运四键（aiExport.js:309-311,374 在迁移键表内；新技法键老用户无存档，迁移对其为 no-op，照登记）
     "ephemeris", "returntimeline", "prenatalsyzygy", "prog",
+    # 上游 v3.13.0 之后（219d8a67）推运图族四法：presets.js 迁移键表同批登记
+    "neroman", "bezzafigure", "jayprofection", "michon",
 ]
 MODULE_SNAPSHOT_PREFIX = "horosa.ai.snapshot.module.v1."
 AI_EXPORT_PLANET_INFO_DEFAULT = {"showHouse": 1, "showRuler": 1}
@@ -119,6 +121,10 @@ AI_EXPORT_PLANET_INFO_TECHNIQUES = {
     "keypoints",
     "lunationphase",
     "extrareturns",
+    "neroman",
+    "bezzafigure",
+    "jayprofection",
+    "michon",
     "jieqi",
     "jieqi_meta",
     "jieqi_chunfen",
@@ -199,6 +205,10 @@ AI_EXPORT_TECHNIQUES = [
     {"key": "keypoints", "label": "星运-数字相位"},
     {"key": "lunationphase", "label": "星运-月相"},
     {"key": "extrareturns", "label": "星运-多重回归"},
+    {"key": "neroman", "label": "星运-演进推运"},
+    {"key": "bezzafigure", "label": "星运-推运图"},
+    {"key": "jayprofection", "label": "星运-周日小限"},
+    {"key": "michon", "label": "星运-双黄道"},
     {"key": "horary", "label": "卜卦盘"},
     {"key": "election", "label": "择日盘"},
     {"key": "tianxing", "label": "天星择日"},
@@ -371,6 +381,12 @@ AI_EXPORT_PRESET_SECTIONS = {
     "lunationphase": ["起盘信息", "月相推运", "当前时点", "方法说明"],
     # v0.33.0 批 I-3：+日月返照年表（timelineStartYear/Count 时产；条件段双登记）。
     "extrareturns": ["起盘信息", "多重回归", "当前时点", "方法说明", "日月返照年表"],
+    # 推运图族四法（上游 presets.js，219d8a67）：正文段由 vendored buildDirectedFigureText 恒出（无数据整段报错），
+    # [起盘信息]/[当前时点]/[方法说明] 由 Python 公共段出——无条件段。
+    "neroman": ["起盘信息", "演进推运", "演进位置", "演进对本命相位", "天顶与上升过本命点", "当前时点", "方法说明"],
+    "bezzafigure": ["起盘信息", "推运图", "推运图位置", "推运图接触", "当前时点", "方法说明"],
+    "jayprofection": ["起盘信息", "周日小限", "当前小限", "逐年小限", "当前时点", "方法说明"],
+    "michon": ["起盘信息", "双黄道", "叠合", "互动", "当前时点", "方法说明"],
     # 上游 v50 的 19 段。此前 vendored 的 divination/ 闭包缺 27 个文件、另有 33 个内容陈旧，
     # 解读层的 9 段整体缺席（其中 2 段还需 renaissance 档口径才产）。
     # 上游 v3.9.5「卜卦盘全面改进」：19 → 28 段（+9），版本常量未 bump 仍是 56 —— 段序照抄上游，

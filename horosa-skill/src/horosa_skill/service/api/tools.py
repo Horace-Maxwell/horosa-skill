@@ -251,6 +251,14 @@ class ToolsAPI:
             return self._run_distributions_tool(payload)
         if definition.name == "jaynesprog":
             return self._run_jaynesprog_tool(payload)
+        if definition.name == "neroman":
+            return self._run_neroman_tool(payload)
+        if definition.name == "bezzafigure":
+            return self._run_bezzafigure_tool(payload)
+        if definition.name == "jayprofection":
+            return self._run_jayprofection_tool(payload)
+        if definition.name == "michon":
+            return self._run_michon_tool(payload)
         if definition.name == "vedicprog":
             return self._run_vedicprog_tool(payload)
         if definition.name == "ephemeris":

@@ -45,7 +45,7 @@ CORE_DOC: dict[str, str] = {
     "zone": "时区偏移，如 +08:00",
     "lat": "纬度 31n13 / 31.22",
     "lon": "经度 121e28 / 121.47",
-    "ad": "1=公元（默认） -1=公元前",
+    "ad": "-1=公元前（缺省 1）",
     "hsys": "宫制索引（见 enum；1=Alcabitus，3=Placidus）",
     "zodiacal": "0=回归（默认） 1=恒星",
     "siderealAyanamsa": "恒星黄道岁差制（zodiacal=1 时）",
@@ -53,7 +53,7 @@ CORE_DOC: dict[str, str] = {
     "pos": "地点显示名",
     "gender": "性别 1/男 0/女",
     "timeAlg": "0=真太阳时 1=钟表时",
-    "response_view": "响应裁剪（完整结果已存档）",
+    "response_view": "响应裁剪（全文已存档）",
     "agent_confirmed_settings": "用户已确认设置→true",
     "defaults_accepted": "用户接受默认→true",
     "clarification_notes": "确认摘要",
@@ -64,8 +64,10 @@ CORE_TYPE: dict[str, Any] = {
     "pos": "string", "gender": ["integer", "string"], "timeAlg": "integer", "response_view": "string",
     "agent_confirmed_settings": "boolean", "defaults_accepted": "boolean", "clarification_notes": "string",
 }
-OWN_FIELD_DOC_LIMIT = 72  # 字符；工具自有字段描述超长截断（全文见 horosa_agent_guidance）
-DESCRIPTION_CHAR_LIMIT = 200  # 字符；技法双语描述超长截断（全文在 guidance / 技法目录资源）
+# 两个截断上限 v0.46.x 收紧（72→64、200→150）：推运图族四法 +4 工具后全量面逼近 256 KB 硬顶，截掉的只是广告层的长尾文字，
+# 全文仍在 horosa_agent_guidance / 技法目录资源（verify_mcp_list_budget.py 量）。
+OWN_FIELD_DOC_LIMIT = 64  # 字符；工具自有字段描述超长截断（全文见 horosa_agent_guidance）
+DESCRIPTION_CHAR_LIMIT = 150  # 字符；技法双语描述超长截断（全文在 guidance / 技法目录资源）
 
 
 def _enum_for(field: str, tool_name: str) -> dict[str, Any]:
@@ -82,7 +84,8 @@ def _enum_for(field: str, tool_name: str) -> dict[str, Any]:
         return {"enum": ["full", "sections", "titles"]}
     if field == "siderealAyanamsa":
         # 47 制的 enum 每工具 600 B × 80 工具 = 48 KB，超预算；只给常用键，全表见 guidance。
-        common = [k for k in ("lahiri", "raman", "krishnamurti", "fagan_bradley", "yukteshwar") if k in SIDEREAL_AYANAMSA_LABELS]
+        # 只举三制：印度标准 lahiri、西方恒星派 fagan_bradley、raman（v0.46.x 预算收紧，其余见 guidance）。
+        common = [k for k in ("lahiri", "fagan_bradley", "raman") if k in SIDEREAL_AYANAMSA_LABELS]
         return {"description": f"岁差制（zodiacal=1）：{'/'.join(common)}…共 {len(SIDEREAL_AYANAMSA_LABELS)} 制见 guidance"}
     return {}
 
@@ -121,7 +124,8 @@ def _own_property(field: str, full_prop: dict[str, Any], required: bool) -> dict
 def _request_property(hidden: list[str], tool_name: str) -> dict[str, Any]:
     text = "整包载荷"
     if hidden:
-        text += f"；另 {len(hidden)} 个高级旋钮顶层按名可传（全表见 guidance）"
+        # 「见 guidance」不再重复：工具描述末行已指 horosa_agent_guidance（v0.46.x 预算）。
+        text += f"；另 {len(hidden)} 个高级旋钮可顶层按名传"
     return {"type": ["object", "string"], "description": text}
 
 
@@ -155,6 +159,9 @@ def advertised_technique_schema(tool_name: str, full_schema: dict[str, Any]) -> 
         core = DOMAIN_CORE.get(definition.domain, ASTRO_CORE)
         targets = list(PREDICTIVE_INPUT_CONTRACTS.get(tool_name, {}).get("required_fields") or [])
         own = [f for f in model.model_fields if f not in BirthInput.model_fields and f not in unadvertised]
+        # 域核心也许按工具声明「不广告」（推运图族四法只按回归黄道算 → zodiacal / siderealAyanamsa 只改盘头文字）；
+        # 推运目标字段与闸门三键永远广告。
+        core = tuple(key for key in core if key not in unadvertised)
         for key in (*core, *targets, *own, *GATE_KEYS):
             if key in props and key not in keep:
                 keep.append(key)
@@ -200,7 +207,7 @@ def advertised_dispatch_schema(*, hecan: bool) -> dict[str, Any]:
 def advertised_description(tool_name: str) -> str:
     definition = TOOL_DEFINITIONS[tool_name]
     aka = aka_line(tool_name, limit=4)
-    tail = f"口径/输出段/全部旋钮：horosa_agent_guidance(tool_name=\"{tool_name}\")"
+    tail = f"旋钮/输出段：horosa_agent_guidance(tool_name=\"{tool_name}\")"
     desc = definition.description.strip()
     if len(desc) > DESCRIPTION_CHAR_LIMIT:
         desc = desc[: DESCRIPTION_CHAR_LIMIT - 1] + "…"
